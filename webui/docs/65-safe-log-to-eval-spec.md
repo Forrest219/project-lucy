@@ -6,8 +6,8 @@
 | Document type | Product / API / Security Eval Data Contract Spec |
 | Version | v0.3 |
 | Written date | 2026-08-03；v0.3 更新 2026-08-03（从通用 Log-to-Eval 收窄为权限 / 安全负样本闭环） |
-| Related blueprint | `docs/lucy-202608-reliable-delivery-upgrade-spec.md` |
-| Related execution control | `docs/lucy-202608-upgrade-execution-control.md` |
+| Related blueprint | `docs/specs/lucy-202608-reliable-delivery-upgrade-spec.md` |
+| Related execution control | `docs/specs/lucy-202608-upgrade-execution-control.md` |
 | Related work order | `webui/docs/plans/wo-202608-04-safe-log-to-eval.md` |
 | Scope | Security Candidate Pool、denied / forbidden logs、Reviewer Evidence、P0 negative Eval promotion、redaction |
 
@@ -126,7 +126,7 @@ Candidate extraction writes or links:
 Create:
 
 ```text
-scripts/verify-202608-safe-log-to-security-eval.mjs
+scripts/smoke/verify-202608-safe-log-to-security-eval.mjs
 ```
 
 The script must verify:

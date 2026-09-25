@@ -9,7 +9,7 @@
 | 适用范围 | Lucy WebUI 数据库接入模块：`/connections` 连接卡片、本地目录刷新结果、Schema 资产列表、Manifest 缺失诊断与相关测试 |
 | 架构决议 | `刷新本地目录` 的结果必须回到当前 Connection Card 内展示；状态摘要、Schema 资产上下文和 warning 诊断按从结论到排障的顺序渐进呈现，不再使用悬浮式状态控件或独立的大块结果面板 |
 | 事实源 | `webui/src/pages/connections/ConnectionOverview.tsx`、`webui/src/components/catalog/*`、`webui/src/lib/types.ts`、`webui/server/ktx.ts`、`ktx.yaml`、`semantic-layer/<connection>/_schema/<schema>.yaml` |
-| 关联文档 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/21-connection-catalog-upload-ux-spec.md`、`webui/docs/25-connection-module-terminology-ia-refresh-spec.md`、`webui/docs/27-connection-overview-ops-ux-cleanup-spec.md`、`docs/DEVELOPMENT.md` |
+| 关联文档 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/21-connection-catalog-upload-ux-spec.md`、`webui/docs/25-connection-module-terminology-ia-refresh-spec.md`、`webui/docs/27-connection-overview-ops-ux-cleanup-spec.md`、`docs/governance/DEVELOPMENT.md` |
 
 ## 1. 决策摘要
 

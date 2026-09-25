@@ -9,7 +9,7 @@
 | 适用范围 | Lucy WebUI 全局菜单、系统概览、数据接入、语义建模、语义发布、质量评测、访问治理、审计与风险相关页面 |
 | 关联工单 | `webui/docs/plans/wo-M36-data-agent-ops-platform-global-ux.md` |
 | 事实源 | 截图目录：`inbox/lucy-screenshots/01-system-overview.png` 至 `16-admin-config-audit.png`；现有 IA：`webui/docs/06-navigation-ia.md`、`webui/docs/37-sidebar-navigation-ia-consolidation-spec.md` |
-| 关联规范 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/06-navigation-ia.md`、`webui/docs/14-agent-admin-enterprise-delivery-spec.md`、`webui/docs/15-role-admin-spec.md`、`webui/docs/19-system-overview-runtime-monitoring-spec.md`、`webui/docs/23-semantic-asset-publish-export-spec.md`、`webui/docs/35-semantic-publish-workbench-ia-spec.md`、`webui/docs/36-business-wiki-read-edit-workbench-spec.md`、`webui/docs/37-sidebar-navigation-ia-consolidation-spec.md`、`webui/docs/38-data-heatmap-tab-subsumption-spec.md`、`docs/DEVELOPMENT.md` |
+| 关联规范 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/06-navigation-ia.md`、`webui/docs/14-agent-admin-enterprise-delivery-spec.md`、`webui/docs/15-role-admin-spec.md`、`webui/docs/19-system-overview-runtime-monitoring-spec.md`、`webui/docs/23-semantic-asset-publish-export-spec.md`、`webui/docs/35-semantic-publish-workbench-ia-spec.md`、`webui/docs/36-business-wiki-read-edit-workbench-spec.md`、`webui/docs/37-sidebar-navigation-ia-consolidation-spec.md`、`webui/docs/38-data-heatmap-tab-subsumption-spec.md`、`docs/governance/DEVELOPMENT.md` |
 
 ## 1. 背景
 

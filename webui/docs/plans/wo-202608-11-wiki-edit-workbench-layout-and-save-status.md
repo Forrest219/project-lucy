@@ -26,7 +26,7 @@
 
 必须先阅读：
 
-- `../docs/DEVELOPMENT.md`
+- `../docs/governance/DEVELOPMENT.md`
 - `docs/00-product-terminology-standard.md`
 - `docs/79-wiki-edit-workbench-layout-and-save-status-spec.md`
 - `src/pages/WikiEditor.tsx`

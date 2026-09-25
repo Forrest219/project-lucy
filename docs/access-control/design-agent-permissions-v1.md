@@ -10,7 +10,7 @@
 | 委托人 | zhangxingchen |
 | 基于材料 | project-lucy/webui/config/access.yaml v1.0, project-lucy/webui/docs/07-mcp-auth-proxy-spec.md v1.0, project-lucy/docs/user-guide/product-intro.html v1.0 |
 | 适用范围 | Builder / Reviewer / Minimax M3 直接进入实现 |
-| 输出位置 | project-lucy/docs/design-agent-permissions.md |
+| 输出位置 | project-lucy/docs/design/design-agent-permissions.md |
 
 ---
 

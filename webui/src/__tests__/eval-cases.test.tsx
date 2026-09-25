@@ -89,7 +89,7 @@ describe("CaseList M43 Eval YAML exchange", () => {
           headers: {
             "Content-Type": "text/yaml",
             "Content-Disposition": "attachment; filename=\"kx_financial-eval-suite.yaml\"",
-            "X-Lucy-Runner-Command": "node scripts/lucy-eval-runner.mjs --suite kx_financial-eval-suite.yaml --output result.json"
+            "X-Lucy-Runner-Command": "node scripts/eval/lucy-eval-runner.mjs --suite kx_financial-eval-suite.yaml --output result.json"
           }
         });
       }

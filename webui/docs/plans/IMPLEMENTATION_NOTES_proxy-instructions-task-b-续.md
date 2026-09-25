@@ -213,7 +213,7 @@ M  .mcp.json
 - `webui/config/access.yaml`（上一轮已落地，本轮不重做）
 - `webui/server/proxy/mcp-proxy.ts`（Task A 范围）
 - `webui/docs/07-mcp-auth-proxy-spec.md`（Phase 2 范畴）
-- `CLAUDE.md` / `AGENTS.md` / `docs/DEVELOPMENT.md`（Phase 4 范畴）
+- `CLAUDE.md` / `AGENTS.md` / `docs/governance/DEVELOPMENT.md`（Phase 4 范畴）
 - `~/.zshrc`（用户主目录配置，超出仓库范围）
 - `workhorse` 部署（架构师维护范畴）
 

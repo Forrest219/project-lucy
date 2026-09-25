@@ -6,7 +6,7 @@
 
 必须先阅读：
 
-- `../docs/DEVELOPMENT.md`
+- `../docs/governance/DEVELOPMENT.md`
 - `docs/00-product-terminology-standard.md`
 - `docs/67-sidebar-brand-navigation-polish-spec.md`
 - `docs/68-sidebar-brand-navigation-followup-spec.md`

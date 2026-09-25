@@ -9,7 +9,7 @@
 | 适用范围 | Lucy WebUI 数据库接入、语义层维护、Catalog YAML 上传、语义资产发布、Review 与 lint 自动化 |
 | 架构决议 | 将“数据库接入”和“语义层维护”的职责边界从口头 know-how 固化为产品术语、UI 文案、API asset kind、上传结构校验、lint gate 与 Review checklist |
 | 事实源 | `ktx.yaml`、`semantic-layer/<connection>/_schema/<schema>.yaml`、`semantic-layer/<connection>/<table>.yaml`、`.ktx-ui/**` sidecar |
-| 关联文档 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/04-data-model.md`、`webui/docs/21-connection-catalog-upload-ux-spec.md`、`webui/docs/23-semantic-asset-publish-export-spec.md`、`webui/docs/24-yaml-delivery-runbook-spec.md`、`webui/docs/25-connection-module-terminology-ia-refresh-spec.md`、`webui/docs/26-database-connection-operations-runbook-spec.md`、`docs/DEVELOPMENT.md` |
+| 关联文档 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/04-data-model.md`、`webui/docs/21-connection-catalog-upload-ux-spec.md`、`webui/docs/23-semantic-asset-publish-export-spec.md`、`webui/docs/24-yaml-delivery-runbook-spec.md`、`webui/docs/25-connection-module-terminology-ia-refresh-spec.md`、`webui/docs/26-database-connection-operations-runbook-spec.md`、`docs/governance/DEVELOPMENT.md` |
 
 ## 1. 决策摘要
 

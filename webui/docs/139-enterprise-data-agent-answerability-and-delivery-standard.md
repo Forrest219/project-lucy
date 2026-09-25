@@ -174,7 +174,7 @@ FUNCTION answerEnterpriseQuestion(question):
 | AG-07 | 部分可回答时仍产生覆盖全部子问题状态的最终回复 |
 | AG-08 | 所有数值结论可追溯到 Source、指标、期间和情景 |
 
-新增 eval 必须遵循 `docs/eval-quiz-conventions.md`，客户日志只能抽象成脱敏合成 case，不能提交
+新增 eval 必须遵循 `docs/governance/eval-quiz-conventions.md`，客户日志只能抽象成脱敏合成 case，不能提交
 原始问题、明细数据、Token、IP 或内部库表内容。
 
 ## 10. 验证机制

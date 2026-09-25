@@ -21,8 +21,8 @@ Read these documents before coding:
 - `webui/docs/17-static-catalog-loading-spec.md`
 - `webui/docs/12-semantic-layer-maintenance-ux-refresh.md`
 - `webui/docs/03-api-spec.md`
-- `docs/DEVELOPMENT.md`
-- `docs/customer-deployment-guide.md`
+- `docs/governance/DEVELOPMENT.md`
+- `docs/runbooks/customer-deployment-guide.md`
 
 Read these backend files:
 

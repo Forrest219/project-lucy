@@ -9,7 +9,7 @@
 | 适用范围 | Lucy WebUI 数据库接入模块：`/connections`、`/connections/whitelist`、`AddSchemaDrawer`、本地 Catalog 刷新 API |
 | 架构决议 | Zero AI Dependency for Core Pipeline；静态 YAML 文件为 Source of Truth；废弃 WebUI 自动触发 `ktx ingest` CLI 子进程 |
 | 事实源 | `ktx.yaml`、`semantic-layer/**/*.yaml`、`.ktx-ui/**` sidecar |
-| 关联文档 | `webui/docs/10-deployment-connection-ux-refresh.md`、`webui/docs/11-connection-whitelist-test-ux-refresh.md`、`webui/docs/16-ingest-first-class-ux-spec.md`、`webui/docs/03-api-spec.md`、`docs/DEVELOPMENT.md` |
+| 关联文档 | `webui/docs/10-deployment-connection-ux-refresh.md`、`webui/docs/11-connection-whitelist-test-ux-refresh.md`、`webui/docs/16-ingest-first-class-ux-spec.md`、`webui/docs/03-api-spec.md`、`docs/governance/DEVELOPMENT.md` |
 
 ## 1. 决策摘要
 

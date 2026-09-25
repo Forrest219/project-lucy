@@ -8,7 +8,7 @@
 | 撰写日期 | 2026-08-05 |
 | 撰写人 | Composer |
 | 委托人 | zhangxingchen |
-| 基于材料 | `docs/DEVELOPMENT.md` Design System 约束、`webui/docs/design-system/*` 章节；Spec 101 按钮 PR 勾选增补 |
+| 基于材料 | `docs/governance/DEVELOPMENT.md` Design System 约束、`webui/docs/design-system/*` 章节；Spec 101 按钮 PR 勾选增补 |
 | 适用范围 | PR 描述、交付说明、评审记录中的规范符合性说明 |
 | 输出位置 | `webui/docs/design-system/30-pr-compliance-template.md` |
 

@@ -27,7 +27,7 @@
 | 撰写日期 | 2026-08-08 |
 | 撰写人 | Cursor Agent |
 | 委托人 | xingchen |
-| 基于材料 | `docs/access-governance-design.md` §3.2/§6.1、`docs/design-agent-permissions.md`、`webui/docs/07-mcp-auth-proxy-spec.md`、`webui/server/proxy/{acl,mcp-proxy}.ts`、`webui/config/access.yaml`（含 `superstore_region_huadong` VIEW 变通）、`docs/lucy-202608-reliable-delivery-upgrade-spec.md`（Dynamic RLS 已移出 202608） |
+| 基于材料 | `docs/design/access-governance-design.md` §3.2/§6.1、`docs/design/design-agent-permissions.md`、`webui/docs/07-mcp-auth-proxy-spec.md`、`webui/server/proxy/{acl,mcp-proxy}.ts`、`webui/config/access.yaml`（含 `superstore_region_huadong` VIEW 变通）、`docs/specs/lucy-202608-reliable-delivery-upgrade-spec.md`（Dynamic RLS 已移出 202608） |
 | 适用范围 | **仅历史参考**；实施与审批以 `design-upgrade.md` 为准 |
 | 输出位置 | `docs/access-control/feasibility-row-acl.SUPERSEDED.md` |
 
@@ -364,11 +364,11 @@ roles:
 
 | 文档 | 动作 |
 |---|---|
-| `docs/access-governance-design.md` §3.2 | 重写为本方案语义；去掉「缺字段全 deny」默认说法 |
+| `docs/design/access-governance-design.md` §3.2 | 重写为本方案语义；去掉「缺字段全 deny」默认说法 |
 | `webui/docs/07-mcp-auth-proxy-spec.md` | 删除「不实现行级」非目标，改为 Phase 边界 + deny reasons |
 | `webui/docs/15-role-admin-spec.md` / `14-...` | 同步非目标与预览字段 |
 | `webui/docs/00-product-terminology-standard.md` | 登记 **Row Policy（行级策略）**、与 Segment / Filter 的区别 |
-| `docs/vision.md` | 产品愿景更新需产品确认：从「不做行级」改为「表级 + 可选 Static Row Policy」 |
+| `docs/governance/vision.md` | 产品愿景更新需产品确认：从「不做行级」改为「表级 + 可选 Static Row Policy」 |
 | 202608 系列 | 保持「不做 Dynamic RLS」；本方案不复活已删 POC |
 
 ---

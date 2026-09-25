@@ -28,7 +28,7 @@ Quick local render:
 helm lint deploy/k8s/helm/lucy
 helm template lucy deploy/k8s/helm/lucy \
   -f deploy/k8s/helm/lucy/examples/values.local-test.yaml
-bash scripts/helm-lucy-gate.sh
+bash scripts/gates/helm-lucy-gate.sh
 ```
 
 K3s test profile (external 8276/8277, container 5174/7879):
@@ -41,7 +41,7 @@ helm template lucy deploy/k8s/helm/lucy \
 Customer deployment steps are in:
 
 ```text
-docs/customer-k8s-deployer-quickstart.md
+docs/runbooks/customer-k8s-deployer-quickstart.md
 ```
 
 Origin evidence: this chart was promoted from the internal draft at

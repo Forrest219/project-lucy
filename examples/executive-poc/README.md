@@ -2,7 +2,7 @@
 
 **Internal-only.** 面向 CFO / COO / CIO 的 Lucy 能力演示包：独立 MySQL 数据库、语义层、Wiki、Eval、ACL。**不**进入默认客户部署路径。
 
-规范：[`docs/lucy-poc-demo-isolation-spec.md`](../../docs/lucy-poc-demo-isolation-spec.md)
+规范：[`docs/specs/lucy-poc-demo-isolation-spec.md`](../../docs/specs/lucy-poc-demo-isolation-spec.md)
 
 ## 快速启动
 
@@ -14,7 +14,7 @@ npm run smoke:p0:executive-poc    # 构建、冒烟、tear down
 手动：
 
 ```bash
-docker compose -f docker-compose.executive-poc.yml up -d --build
+docker compose -f deploy/compose/docker-compose.executive-poc.yml up -d --build
 curl http://127.0.0.1:55178/api/health
 ```
 

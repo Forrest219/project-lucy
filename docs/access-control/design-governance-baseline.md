@@ -5,8 +5,8 @@
 | 文档类型 | Design（权限模型方案） |
 | 版本 | v1.1 |
 | 撰写日期 | 2026-06-22；v1.1 更新 2026-06-22：§3.3 末尾澄清「实现细化采用 schema whitelist 而非 4 字段 blacklist」，登记白名单覆盖范围 |
-| 基于材料 | `docs/lucy-platform-goal-checklist.md`、`docs/project-overview.md`、`webui/config/access.yaml`、`docs/design-agent-permissions.md v1.2`、`webui/docs/07-mcp-auth-proxy-spec.md`、`webui/server/proxy/acl.ts`、`webui/server/admin/agents.ts`、`webui/src/lib/types.ts`、`webui/src/pages/admin/AgentDetail.tsx`、`webui/src/pages/admin/AgentList.tsx`、`inbox/spec-audit-2026-06-21.md`、`inbox/spec-remediation-plan-2026-06-21.md`、`inbox/security-write-path-builder-contract-2026-06-21.md` |
-| 落位 | `docs/access-control/design-governance-baseline.md`（由 `docs/access-governance-design.md` 迁入域档案；根路径留跳转桩） |
+| 基于材料 | `docs/specs/lucy-platform-goal-checklist.md`、`docs/governance/project-overview.md`、`webui/config/access.yaml`、`docs/design/design-agent-permissions.md v1.2`、`webui/docs/07-mcp-auth-proxy-spec.md`、`webui/server/proxy/acl.ts`、`webui/server/admin/agents.ts`、`webui/src/lib/types.ts`、`webui/src/pages/admin/AgentDetail.tsx`、`webui/src/pages/admin/AgentList.tsx`、`inbox/spec-audit-2026-06-21.md`、`inbox/spec-remediation-plan-2026-06-21.md`、`inbox/security-write-path-builder-contract-2026-06-21.md` |
+| 落位 | `docs/access-control/design-governance-baseline.md`（由 `docs/design/access-governance-design.md` 迁入域档案；根路径留跳转桩） |
 | 适用范围 | product-lucy 权限治理闭环：runtime ACL、admin 写入路径、迁移与防回退、长期演进 |
 | 读者 | thinker / builder / reviewer / PM |
 
@@ -202,8 +202,8 @@ VIEW。
 | 5 | `config_change_log` 导出端点：`GET /api/admin/config-audit/export.csv`（与 audit 导出对齐） | `webui/server/admin/config-audit.ts` | CSV 流返回，header `Content-Disposition` | ConfigAudit.tsx 已存在 |
 | 6 | 验证现有 `scripts/lint-spec.mjs` 的 `accessRolePolicy` 检查在 §3.1 落地后仍覆盖——模板展开后落盘的仍是普通 yaml role，理论上无需改动 lint 逻辑；并按 §3.3 新增规则补「yaml 中出现 `role-template` / `templateId` 等非标字段时 fail」的验收用例 | `scripts/lint-spec.mjs`（新增规则 + 用例）、`webui/server/admin/agents.ts`（回归） | `npm run lint:spec` 退出码 = 1 当且仅当模板指针字段存在；用模板创建 Agent 后 `git diff access.yaml` 无指针字段 | §3.1 落地 |
 | 7 | Role 模板库实施 §3.1 | `webui/server/admin/role-templates.ts`、`webui/src/lib/types.ts`、`AgentList.tsx` 新建弹窗 | 选模板创建 Agent 不写 `role-template` 字段 | §3.1 |
-| 8 | 文档迁移：本 inbox 文档闭环后迁 `docs/access-governance-design.md`，并更新 `project-overview §10` | `docs/access-governance-design.md`、`docs/project-overview.md` | inbox 文件删除或留 `已迁移` 标签 | §1-§5 全部 P0/P1 闭环 |
-| 9 | 长期演进 §3.2 spec 锚点：仅补 `docs/access-governance-design.md` 第二节，不实现 | `docs/access-governance-design.md` | 文档节存在，代码无对应字段 | §3.2 spec 锚点 |
+| 8 | 文档迁移：本 inbox 文档闭环后迁 `docs/design/access-governance-design.md`，并更新 `project-overview §10` | `docs/design/access-governance-design.md`、`docs/governance/project-overview.md` | inbox 文件删除或留 `已迁移` 标签 | §1-§5 全部 P0/P1 闭环 |
+| 9 | 长期演进 §3.2 spec 锚点：仅补 `docs/design/access-governance-design.md` 第二节，不实现 | `docs/design/access-governance-design.md` | 文档节存在，代码无对应字段 | §3.2 spec 锚点 |
 | 10 | 重读 `spec-remediation-plan §8` 的第一轮交付封口：低风险文案修复包已交付；本方案 1-3 完成后，回复 Opus 8.1「admin 写入路径安全项」已闭环 | 沟通产物 / issue 关闭 | spec-audit §8.1 异议关闭 | §1-§5 |
 
 ---
@@ -221,7 +221,7 @@ VIEW。
 7. `config_change_log` 包含 agent_create / agent_patch / agent_delete / token_create / token_revoke / enabled_tables_update 六类事件；token 明文绝不出现。
 8. role selector 命中 0 source、role allow tools 含 `*`、role 缺 connections 时 preview 返回 400，UI 阻止保存。
 9. `npm run lint:spec` 在 `.github/workflows/lucy-release.yml` 的 `spec-and-webui` job 中已经是 release gate（既有事实，非本方案新增）；exit code 非 0 时 CI fail，不允许合并。本方案的任何交付（含 §3.1 角色模板库）不得新增绕过该 gate 的路径（本地 skip flag、CI 条件跳过、单独 workflow 分支）。新增的 `role-template` 字段检查复用同一脚本，无需新建 workflow step。
-10. `docs/project-overview.md` 已同步更新本节整改完成状态。
+10. `docs/governance/project-overview.md` 已同步更新本节整改完成状态。
 
 ---
 
@@ -264,8 +264,8 @@ VIEW。
 本方案是 spec-audit / spec-remediation-plan / builder 契约包的**总结 + 增量**。闭环路径：
 
 1. 团队评审本方案，重点在 §3 三个增量和 §4 的 10 项清单。
-2. 评审通过后，按 §4 序号执行；每个工作项仍按 `docs/DEVELOPMENT.md` 的计划流程（Plan → Builder → Reviewer → UAT）。
-3. §5 验收通过后，把本 inbox 文档迁 `docs/access-governance-design.md`；在 `docs/project-overview.md §10` 第 1 项后追加「✅ 2026-06-22 P0-1 Admin Role-First 已闭环；剩余 Role 模板库 / Policy 表达式 / lint:spec 见 `docs/access-governance-design.md`」。
+2. 评审通过后，按 §4 序号执行；每个工作项仍按 `docs/governance/DEVELOPMENT.md` 的计划流程（Plan → Builder → Reviewer → UAT）。
+3. §5 验收通过后，把本 inbox 文档迁 `docs/design/access-governance-design.md`；在 `docs/governance/project-overview.md §10` 第 1 项后追加「✅ 2026-06-22 P0-1 Admin Role-First 已闭环；剩余 Role 模板库 / Policy 表达式 / lint:spec 见 `docs/design/access-governance-design.md`」。
 4. `inbox/spec-audit-2026-06-21.md §8.1` 中 Opus 关于「admin 写入路径安全」的修正意见可在项目周报或 issue 中正式关闭。
 
 — 完

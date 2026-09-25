@@ -6,7 +6,7 @@
 
 必须先阅读：
 
-- `../docs/DEVELOPMENT.md`
+- `../docs/governance/DEVELOPMENT.md`
 - `docs/00-product-terminology-standard.md`
 - `docs/14-agent-admin-enterprise-delivery-spec.md`
 - `docs/15-role-admin-spec.md`

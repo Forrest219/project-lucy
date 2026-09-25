@@ -9,7 +9,7 @@
 | 适用范围 | Lucy WebUI Help Center：`/help`、`docs/SYSTEM_HANDBOOK.md` §0 常见问题速查、Help TOC、目录深链与相关前端测试 |
 | 架构决议 | 把 §0 常见问题速查升级为按用户场景分组（开发者 / 管理员 / 接入协作者）的快速解答入口；每条 Q&A 一句话答 + 跳到正文章节深链；保留 Help API 单一事实源、不引入搜索依赖、不暴露到 MCP 工具面；不新增第二份 Q&A 入口 |
 | 事实源 | `docs/SYSTEM_HANDBOOK.md` §0 line 27–46（已有 13 条 Q&A）、line 1585–1742 §6 FAQ、`webui/server/help.ts` `parseHelpToc` line 116–144、`webui/server/help.ts` `SECTION_ALIASES` line 12–54、`webui/src/components/MarkdownPreview.tsx` 翻译防御范围、`webui/scripts/lint-terminology.mjs` 高风险词扫描范围、2026-08-02 用户反馈 + Codex 交叉审阅 6 项发现 |
-| 关联文档 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/30-help-markdown-rendering-spec.md`、`webui/docs/33-help-center-layout-polish-spec.md`、`docs/DEVELOPMENT.md` |
+| 关联文档 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/30-help-markdown-rendering-spec.md`、`webui/docs/33-help-center-layout-polish-spec.md`、`docs/governance/DEVELOPMENT.md` |
 
 ## 1. 背景
 

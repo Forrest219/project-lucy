@@ -100,7 +100,7 @@ cd /Users/zhangxingchen/Projects/project-lucy/webui && npm test -- server/__test
 **Files:**
 - Create: `webui/server/access-governance-gate.ts`
 - Create: `webui/server/__tests__/access-governance-gate.test.ts`
-- Create: `scripts/verify-202608-access-governance-gate.mjs`
+- Create: `scripts/smoke/verify-202608-access-governance-gate.mjs`
 - Modify: `webui/server/admin/agents.ts`
 - Modify: `webui/server/admin/roles.ts`
 - Modify: `webui/server/admin/tokens.ts`
@@ -116,7 +116,7 @@ cd /Users/zhangxingchen/Projects/project-lucy/webui && npm test -- server/__test
 
 ```bash
 cd /Users/zhangxingchen/Projects/project-lucy/webui && npm test -- server/__tests__/access-governance-gate.test.ts server/__tests__/admin-agents.test.ts server/__tests__/admin-roles.test.ts server/__tests__/admin-tokens.test.ts
-cd /Users/zhangxingchen/Projects/project-lucy && node scripts/verify-202608-access-governance-gate.mjs
+cd /Users/zhangxingchen/Projects/project-lucy && node scripts/smoke/verify-202608-access-governance-gate.mjs
 ```
 
 **Expected:** high-risk Agent / Role / Token changes are blocked or require valid override evidence.
@@ -127,7 +127,7 @@ cd /Users/zhangxingchen/Projects/project-lucy && node scripts/verify-202608-acce
 - Create: `webui/server/eval/security-candidates.ts`
 - Create: `webui/server/__tests__/security-eval-candidates.test.ts`
 - Create: `webui/src/__tests__/security-eval-candidates.test.tsx`
-- Create: `scripts/verify-202608-safe-log-to-security-eval.mjs`
+- Create: `scripts/smoke/verify-202608-safe-log-to-security-eval.mjs`
 - Modify: `webui/server/eval/db.ts`
 - Modify: Eval route registration
 
@@ -142,7 +142,7 @@ cd /Users/zhangxingchen/Projects/project-lucy && node scripts/verify-202608-acce
 
 ```bash
 cd /Users/zhangxingchen/Projects/project-lucy/webui && npm test -- server/__tests__/security-eval-candidates.test.ts src/__tests__/security-eval-candidates.test.tsx
-cd /Users/zhangxingchen/Projects/project-lucy && node scripts/verify-202608-safe-log-to-security-eval.mjs
+cd /Users/zhangxingchen/Projects/project-lucy && node scripts/smoke/verify-202608-safe-log-to-security-eval.mjs
 ```
 
 **Expected:** denied logs can become reviewed P0 security regression cases; unreviewed candidates cannot enter formal Eval.

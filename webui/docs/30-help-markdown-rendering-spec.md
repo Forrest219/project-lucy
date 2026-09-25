@@ -8,8 +8,8 @@
 | 撰写日期 | 2026-07-31 |
 | 适用范围 | Lucy WebUI Help Center：`/help`、`docs/SYSTEM_HANDBOOK.md`、Help Markdown 渲染器、目录深链与相关前端测试 |
 | 架构决议 | Help Center 必须把系统手册按实际 Markdown 渲染，尤其是表格、代码块、列表、链接和标题；P0 阶段采用本地、无外部依赖的受控 Markdown 渲染增强，不改变 Help API 的单一事实源与只读边界 |
-| 事实源 | `docs/SYSTEM_HANDBOOK.md`、`docs/design-system-handbook-help.md`、`webui/src/pages/HelpCenter.tsx`、`webui/src/components/MarkdownPreview.tsx`、`webui/src/__tests__/help-center.test.tsx`、`webui/src/__tests__/wiki.test.tsx` |
-| 关联文档 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/24-yaml-delivery-runbook-spec.md`、`docs/design-system-handbook-help.md`、`docs/DEVELOPMENT.md` |
+| 事实源 | `docs/SYSTEM_HANDBOOK.md`、`docs/design/design-system-handbook-help.md`、`webui/src/pages/HelpCenter.tsx`、`webui/src/components/MarkdownPreview.tsx`、`webui/src/__tests__/help-center.test.tsx`、`webui/src/__tests__/wiki.test.tsx` |
+| 关联文档 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/24-yaml-delivery-runbook-spec.md`、`docs/design/design-system-handbook-help.md`、`docs/governance/DEVELOPMENT.md` |
 
 ## 1. 决策摘要
 
@@ -79,7 +79,7 @@ Example:
 | Help Center 复用轻量 Markdown preview | `webui/src/pages/HelpCenter.tsx` 调用 `MarkdownPreview` | Help 文档复杂度已经超过 Wiki 预览最小能力 |
 | 现有 renderer 缺少 table block | `webui/src/components/MarkdownPreview.tsx` | 所有系统手册表格都会退化 |
 | 现有测试没有覆盖表格 | `webui/src/__tests__/help-center.test.tsx`、`webui/src/__tests__/wiki.test.tsx` | 回归无法被自动发现 |
-| 设计规范已预留 P1 表格增强 | `docs/design-system-handbook-help.md` | 本次 M26 将该项提前作为 P0 修复 |
+| 设计规范已预留 P1 表格增强 | `docs/design/design-system-handbook-help.md` | 本次 M26 将该项提前作为 P0 修复 |
 
 ## 5. Rendering Contract
 

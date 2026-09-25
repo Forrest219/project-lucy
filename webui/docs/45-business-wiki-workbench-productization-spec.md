@@ -9,7 +9,7 @@
 | 关联页面 | `/wiki` |
 | 关联工单 | `webui/docs/plans/wo-M42-business-wiki-workbench-productization.md` |
 | 事实源 | 浏览器核查：`http://localhost:5174/wiki`、`/wiki?key=global%2Fksc-financial-analysis-playbook.md`、`/wiki?key=global%2Fnew-note.md`；源码定位：`webui/src/pages/WikiEditor.tsx`、`webui/src/components/WikiReadView.tsx`、`webui/src/components/WikiEditView.tsx`、`webui/src/components/WikiTree.tsx`、`webui/src/lib/wiki.ts`、`webui/src/app/app.css` |
-| 关联规范 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/13-business-wiki-ux-refactor.md`、`webui/docs/36-business-wiki-read-edit-workbench-spec.md`、`webui/docs/37-sidebar-navigation-ia-consolidation-spec.md`、`webui/docs/42-page-header-standardization-spec.md`、`docs/DEVELOPMENT.md` |
+| 关联规范 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/13-business-wiki-ux-refactor.md`、`webui/docs/36-business-wiki-read-edit-workbench-spec.md`、`webui/docs/37-sidebar-navigation-ia-consolidation-spec.md`、`webui/docs/42-page-header-standardization-spec.md`、`docs/governance/DEVELOPMENT.md` |
 
 ## 1. 问题背景
 

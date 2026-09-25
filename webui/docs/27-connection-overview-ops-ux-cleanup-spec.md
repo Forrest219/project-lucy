@@ -9,7 +9,7 @@
 | 适用范围 | Lucy WebUI 数据库接入模块：`/connections` 连接概览、添加 Schema Drawer、上传 YAML Drawer、连通测试 Drawer、相关 API contract、术语 lint 与 Vitest |
 | 架构决议 | 连接概览必须明确区分 Connection 级操作、Schema 级操作与行级操作；行内上传 Manifest 必须绑定当前 Schema；连通测试必须把可排障的原始输出作为一等诊断内容展示 |
 | 事实源 | `webui/src/pages/connections/ConnectionOverview.tsx`、`webui/src/components/catalog/CatalogAssetUploadDrawer.tsx`、`webui/src/components/AddSchemaDrawer.tsx`、`webui/src/components/connections/ConnectionTestResultPanel.tsx`、`webui/server/ktx.ts` |
-| 关联文档 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/11-connection-whitelist-test-ux-refresh.md`、`webui/docs/21-connection-catalog-upload-ux-spec.md`、`webui/docs/25-connection-module-terminology-ia-refresh-spec.md`、`webui/docs/26-database-connection-operations-runbook-spec.md`、`docs/DEVELOPMENT.md` |
+| 关联文档 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/11-connection-whitelist-test-ux-refresh.md`、`webui/docs/21-connection-catalog-upload-ux-spec.md`、`webui/docs/25-connection-module-terminology-ia-refresh-spec.md`、`webui/docs/26-database-connection-operations-runbook-spec.md`、`docs/governance/DEVELOPMENT.md` |
 
 ## 1. 决策摘要
 

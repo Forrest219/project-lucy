@@ -26,7 +26,7 @@
 
 必须先阅读：
 
-- `../../docs/DEVELOPMENT.md`
+- `../../docs/governance/DEVELOPMENT.md`
 - `docs/00-product-terminology-standard.md`
 - `docs/80-wiki-version-history-list-first-ux-spec.md`
 - `docs/55-business-wiki-version-history-restore-spec.md`（§8.2–8.3）

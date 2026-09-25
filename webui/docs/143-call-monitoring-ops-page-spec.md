@@ -359,5 +359,5 @@ Protected terms：`MCP`、`P95`、tool name、`requestId`、`traceId`、Agent / 
 - `webui/docs/00-product-terminology-standard.md` §4.6（本 Spec 已要求登记）
 - `webui/docs/06-navigation-ia.md`（运行状态分组）
 - `webui/src/app/navigation.ts` + navigation / Help 测试
-- `docs/webui-feature-map.md` / `docs/webui-impl-status.md`（若仍维护）
+- `docs/webui/webui-feature-map.md` / `docs/webui/webui-impl-status.md`（若仍维护）
 - 本文件收入 `webui/docs/README.md` 索引

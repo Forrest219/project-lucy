@@ -7,7 +7,7 @@
 | 版本 | v0.1 |
 | 撰写日期 | 2026-08-26 |
 | 委托人 | xingchen |
-| 基于材料 | 当前 eval 能力调查结论；[`docs/design-eval-monitoring.md`](../design-eval-monitoring.md)；[`webui/docs/46-eval-yaml-exchange-and-result-archive-spec.md`](../../webui/docs/46-eval-yaml-exchange-and-result-archive-spec.md)；[`docs/lucy-aicon-online-capability-scorecard.md`](../lucy-aicon-online-capability-scorecard.md) §4.3 |
+| 基于材料 | 当前 eval 能力调查结论；[`docs/design/design-eval-monitoring.md`](../design/design-eval-monitoring.md)；[`webui/docs/46-eval-yaml-exchange-and-result-archive-spec.md`](../../webui/docs/46-eval-yaml-exchange-and-result-archive-spec.md)；[`docs/specs/lucy-aicon-online-capability-scorecard.md`](../specs/lucy-aicon-online-capability-scorecard.md) §4.3 |
 | 事实源代码 | [`webui/server/eval/monitor.ts`](../../webui/server/eval/monitor.ts)、[`webui/server/eval/runner.ts`](../../webui/server/eval/runner.ts)、[`webui/src/pages/eval/Monitor.tsx`](../../webui/src/pages/eval/Monitor.tsx)、[`webui/src/pages/publish/PublishWorkbench.tsx`](../../webui/src/pages/publish/PublishWorkbench.tsx) |
 | 输出位置 | `docs/plans/2026-08-26-eval-accuracy-closed-loop-and-change-triggered-regression.md` |
 
@@ -259,7 +259,7 @@ P0：**不**因 FAIL 自动 revert Publish。
 
 | 模块 | 关系 |
 |---|---|
-| [`design-eval-monitoring.md`](../design-eval-monitoring.md) | 补齐其 D2 告警「只配不发」与设计稿 cron 之外的 **Webhook + 连续判定**；cron 仍不在本方案 |
+| [`design-eval-monitoring.md`](../design/design-eval-monitoring.md) | 补齐其 D2 告警「只配不发」与设计稿 cron 之外的 **Webhook + 连续判定**；cron 仍不在本方案 |
 | Spec 46 YAML 交换 | 变更钩子走服务器 runner；无 Agent 时 blocked + 本地 runner 指引不变 |
 | Safe Log-to-Security-Eval | 正交；本方案不消费 access_log |
 | `smoke:p0:business-eval` CI | 仍只做 catalog 可读；本方案不把 LLM full eval 塞进默认 CI |

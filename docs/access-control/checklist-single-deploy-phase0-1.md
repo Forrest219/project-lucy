@@ -8,14 +8,14 @@
 | 撰写日期 | 2026-08-09 |
 | 撰写人 | Cursor Agent |
 | 委托人 | xingchen |
-| 基于材料 | [`adr-post-p15-roadmap-freeze.md`](adr-post-p15-roadmap-freeze.md) §2.2 P1–P3；[`runbook-row-policy.md`](runbook-row-policy.md) proven 置真检查单；`docker-compose.demo.yml` / `docker-compose.ac-p1-by01-proven-off.yml`；demo 模板 `examples/docker-demo/project-template/webui/config/access.yaml`；`scripts/ac-p15-uat-runbook.mjs` fixture 流程 |
+| 基于材料 | [`adr-post-p15-roadmap-freeze.md`](adr-post-p15-roadmap-freeze.md) §2.2 P1–P3；[`runbook-row-policy.md`](runbook-row-policy.md) proven 置真检查单；`deploy/compose/docker-compose.demo.yml` / `deploy/compose/docker-compose.ac-p1-by01-proven-off.yml`；demo 模板 `examples/docker-demo/project-template/webui/config/access.yaml`；`scripts/smoke/ac-p15-uat-runbook.mjs` fixture 流程 |
 | 适用范围 | AC-P1.5 后「单机部署 / proven / 真实配置」轨道的 **Phase 0 边界冻结**与 **Phase 1 proven-off 可复现部署**；**不含** proven 置真、真实客户 `access.yaml` 合入 main |
 | 输出位置 | `docs/access-control/checklist-single-deploy-phase0-1.md` |
 
 > **底线：** 在用户真实测试通过，且 **Phase 3 / Phase 4 门禁签字**之前，不污染 `main`。  
 > Phase 1 签字**仅**授权进入 Phase 2，**不**授权 merge。  
 > 默认栈 **不得** 设置 `LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN=true`。  
-> **禁止默认使用：** `docker-compose.ac-p1-by01.yml`（proven=true，仅 BY-01 行集抽检 overlay）。
+> **禁止默认使用：** `deploy/compose/docker-compose.ac-p1-by01.yml`（proven=true，仅 BY-01 行集抽检 overlay）。
 
 ---
 
@@ -55,7 +55,7 @@ Phase 3–4：[`checklist-single-deploy-phase3-4.md`](checklist-single-deploy-ph
 
 | 场景 | 动作 |
 |---|---|
-| 误开 proven | 去掉 proven=true overlay，或叠加 `docker-compose.ac-p1-by01-proven-off.yml`，`up -d` 重建 `lucy` |
+| 误开 proven | 去掉 proven=true overlay，或叠加 `deploy/compose/docker-compose.ac-p1-by01-proven-off.yml`，`up -d` 重建 `lucy` |
 | 配置编不过 / degrade | 回滚上一份可编译 `access.yaml`；见 [`runbook-row-policy.md`](runbook-row-policy.md) 路径 A/C/D |
 | 整栈放弃 | `docker compose -p lucy-single-deploy-p1 down`（加 `-v` 会删 demo 数据卷，慎用） |
 
@@ -75,11 +75,11 @@ Phase 3–4：[`checklist-single-deploy-phase3-4.md`](checklist-single-deploy-ph
 
 | 文件 | 角色 |
 |---|---|
-| `docker-compose.demo.yml` | 单机 baseline：MySQL demo + Lucy WebUI/Proxy |
-| `docker-compose.ac-p1-by01-proven-off.yml` | **显式** `LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN=false` |
-| `docker-compose.ac-p1-by01.yml` | **禁止**作 Phase 1 默认（proven=true） |
-| `docker-compose.gate-c-uat.yml` | Gate C / BY 抽检专用；Phase 1 **不必**叠加 |
-| `docker-compose.customer-config.yml` | Phase 2 真实配置挂载；Phase 1 **不必**叠加 |
+| `deploy/compose/docker-compose.demo.yml` | 单机 baseline：MySQL demo + Lucy WebUI/Proxy |
+| `deploy/compose/docker-compose.ac-p1-by01-proven-off.yml` | **显式** `LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN=false` |
+| `deploy/compose/docker-compose.ac-p1-by01.yml` | **禁止**作 Phase 1 默认（proven=true） |
+| `deploy/compose/docker-compose.gate-c-uat.yml` | Gate C / BY 抽检专用；Phase 1 **不必**叠加 |
+| `deploy/compose/docker-compose.customer-config.yml` | Phase 2 真实配置挂载；Phase 1 **不必**叠加 |
 
 ### 2.2 推荐环境变量（可按主机改端口）
 
@@ -96,12 +96,12 @@ export LUCY_DEMO_MYSQL_HOST_PORT=53306
 在仓库根目录：
 
 ```bash
-# 可选：用脚本锁定 buildx，减少错架构构建（见 docs/DEVELOPMENT.md）
+# 可选：用脚本锁定 buildx，减少错架构构建（见 docs/governance/DEVELOPMENT.md）
 # npm run demo:rebuild
 
 docker compose \
-  -f docker-compose.demo.yml \
-  -f docker-compose.ac-p1-by01-proven-off.yml \
+  -f deploy/compose/docker-compose.demo.yml \
+  -f deploy/compose/docker-compose.ac-p1-by01-proven-off.yml \
   -p lucy-single-deploy-p1 \
   up -d --build
 ```
@@ -110,8 +110,8 @@ docker compose \
 
 ```bash
 docker compose \
-  -f docker-compose.demo.yml \
-  -f docker-compose.ac-p1-by01-proven-off.yml \
+  -f deploy/compose/docker-compose.demo.yml \
+  -f deploy/compose/docker-compose.ac-p1-by01-proven-off.yml \
   -p lucy-single-deploy-p1 \
   up -d --force-recreate --no-deps lucy
 ```
@@ -153,7 +153,7 @@ curl -sS -o /dev/null -w "%{http_code}\n" "$WEBUI/api/admin/agents"
 
 **背景（必读）：** demo 模板 `examples/docker-demo/project-template/webui/config/access.yaml` 仅有 `demo_readonly`（表级 allow，等价行域 TRUE / 无 scoped、无 constraints）。  
 Phase 1 **不**叠加 `customer-config` / `gate-c-uat`，因此 **不能**假设开箱即有 FinalRows≠TRUE 源。  
-unproven 验收必须先造**临时 fixture**（与 [`scripts/ac-p15-uat-runbook.mjs`](../../scripts/ac-p15-uat-runbook.mjs) 的 ensureAgent → constraints → token → MCP → revoke/cleanup 同构；可手跑下列 curl，或对已起的 Phase 1 栈设置 `ACP15_WEBUI_BASE` / `ACP15_MCP_BASE` 后裁剪跑该脚本）。
+unproven 验收必须先造**临时 fixture**（与 [`scripts/smoke/ac-p15-uat-runbook.mjs`](../../scripts/smoke/ac-p15-uat-runbook.mjs) 的 ensureAgent → constraints → token → MCP → revoke/cleanup 同构；可手跑下列 curl，或对已起的 Phase 1 栈设置 `ACP15_WEBUI_BASE` / `ACP15_MCP_BASE` 后裁剪跑该脚本）。
 
 #### 2.5.1 验收勾选
 
@@ -240,7 +240,7 @@ unset TOKEN
 
 ```bash
 ACP15_WEBUI_BASE="$WEBUI" ACP15_MCP_BASE="$MCP" \
-  node scripts/ac-p15-uat-runbook.mjs
+  node scripts/smoke/ac-p15-uat-runbook.mjs
 # 证据默认写入 inbox/20260809-ac-p15-uat/；Phase 1 签字可引用其中 MCP-1，
 # 或把关键 JSON 复制到 inbox/YYYYMMDD-single-deploy-p1/（注意脚本已对 token redaction）。
 ```
@@ -250,15 +250,15 @@ ACP15_WEBUI_BASE="$WEBUI" ACP15_MCP_BASE="$MCP" \
 ```bash
 # 停止（保留 volume）
 docker compose \
-  -f docker-compose.demo.yml \
-  -f docker-compose.ac-p1-by01-proven-off.yml \
+  -f deploy/compose/docker-compose.demo.yml \
+  -f deploy/compose/docker-compose.ac-p1-by01-proven-off.yml \
   -p lucy-single-deploy-p1 \
   down
 
 # 若误叠加了 proven=true overlay：改回仅 proven-off 后 recreate lucy
 docker compose \
-  -f docker-compose.demo.yml \
-  -f docker-compose.ac-p1-by01-proven-off.yml \
+  -f deploy/compose/docker-compose.demo.yml \
+  -f deploy/compose/docker-compose.ac-p1-by01-proven-off.yml \
   -p lucy-single-deploy-p1 \
   up -d --force-recreate --no-deps lucy
 ```
@@ -279,7 +279,7 @@ docker compose \
 | 禁止项 | 原因 |
 |---|---|
 | 默认 `docker-compose.yml` / `demo.yml` 写入 `proven=true` | 污染产品默认；违反运维变更边界 |
-| Phase 1 使用 `docker-compose.ac-p1-by01.yml` 当日常栈 | 那是抽检 overlay |
+| Phase 1 使用 `deploy/compose/docker-compose.ac-p1-by01.yml` 当日常栈 | 那是抽检 overlay |
 | 因 Phase 1 签字而 merge `main` | Phase 1 只开门到 Phase 2；merge 见 Phase 4 |
 | 无 fixture 时把「demo_readonly 开箱查询成功」当成 unproven 验收 | 模板行域为 TRUE，不会触发 unproven |
 | 把客户真实 `access.yaml` 直接改仓库默认并合入 | 属 Phase 2+，且默认仍应不合生产事实源 |

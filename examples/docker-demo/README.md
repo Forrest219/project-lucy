@@ -2,13 +2,13 @@
 
 Self-contained POC stack: **independent database**, **YAML context**, **eval suite**, and **smoke gates** — not part of the default `docker-compose.yml` customer path.
 
-See `docs/lucy-poc-demo-isolation-spec.md` for the full boundary between customer default and POC demo.
+See `docs/specs/lucy-poc-demo-isolation-spec.md` for the full boundary between customer default and POC demo.
 
 ## Contents
 
 | Path | Purpose |
 |---|---|
-| `docker-compose.demo.yml` | Runs Lucy plus demo MySQL |
+| `deploy/compose/docker-compose.demo.yml` | Runs Lucy plus demo MySQL |
 | `examples/docker-demo/mysql/01-init.sql` | Seeds Superstore-style demo data |
 | `examples/docker-demo/mysql/_baseline.json` | Numeric gold for smoke / demo eval |
 | `examples/docker-demo/project-template/ktx.yaml` | Demo KTX project (`demo-mysql` → `demo-db`) |
@@ -54,7 +54,7 @@ The smoke test validates:
 | Publish | 宿主 `57881→7879` | `LUCY_DEMO_PROXY_HOST_PORT` |
 | Advertise | `http://127.0.0.1:57881/mcp` (`LUCY_PUBLIC_MCP_URL`) | WebUI `/overview` 与 Agent 复制的唯一 URL |
 
-`docker-compose.demo.yml` 默认注入的 `LUCY_PUBLIC_MCP_URL` 与宿主 `57881` 对齐。若改 `LUCY_DEMO_PROXY_HOST_PORT`，必须同时设置 `LUCY_PUBLIC_MCP_URL=http://127.0.0.1:<新端口>/mcp`（或你的反代 URL）。`npm run smoke:p0:demo` 会断言 `GET /api/project.mcpEndpoint` 与宿主 proxy 端口一致。
+`deploy/compose/docker-compose.demo.yml` 默认注入的 `LUCY_PUBLIC_MCP_URL` 与宿主 `57881` 对齐。若改 `LUCY_DEMO_PROXY_HOST_PORT`，必须同时设置 `LUCY_PUBLIC_MCP_URL=http://127.0.0.1:<新端口>/mcp`（或你的反代 URL）。`npm run smoke:p0:demo` 会断言 `GET /api/project.mcpEndpoint` 与宿主 proxy 端口一致。
 
 ## Template Root
 
@@ -66,7 +66,7 @@ compose file should remove this variable; Lucy will fall back to the on-disk
 ## Eval
 
 POC eval lives under `project-template/evals/demo_superstore/`. Compose bind-mounts
-`./examples/docker-demo/project-template/evals` → `/data/lucy/evals` (read-only).
+`../../examples/docker-demo/project-template/evals` → `/data/lucy/evals` (read-only).
 
 Regenerate data baseline after changing seed/rows:
 

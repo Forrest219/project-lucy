@@ -31,7 +31,7 @@ Quick checks:
   kubectl exec -n {{ .Release.Namespace }} deploy/{{ include "lucy.fullname" . }} -- ktx --version
 
 For the full deployer runbook see
-  docs/customer-k8s-deployer-quickstart.md
+  docs/runbooks/customer-k8s-deployer-quickstart.md
 
 {{- if not .Values.env.LUCY_PUBLIC_MCP_URL }}
 

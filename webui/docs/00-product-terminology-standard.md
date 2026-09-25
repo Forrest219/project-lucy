@@ -9,7 +9,7 @@
 | 适用范围 | Lucy WebUI、API 用户可见错误、Toast、Modal、Drawer、表格列名、导航、测试断言、Spec、Plan、Runbook、交付文档 |
 | 维护者 | Product / UX / Architecture Review |
 | 优先级 | 高于单模块 Spec。单模块 Spec 可新增术语，但不得覆盖本标准中的固定术语 |
-| 关联文档 | `webui/docs/06-navigation-ia.md`、`webui/docs/17-static-catalog-loading-spec.md`、`webui/docs/21-connection-catalog-upload-ux-spec.md`、`webui/docs/25-connection-module-terminology-ia-refresh-spec.md`、`webui/docs/98-access-control-p0-runtime-spec.md`、`docs/access-control/design-upgrade.md`、`docs/DEVELOPMENT.md` |
+| 关联文档 | `webui/docs/06-navigation-ia.md`、`webui/docs/17-static-catalog-loading-spec.md`、`webui/docs/21-connection-catalog-upload-ux-spec.md`、`webui/docs/25-connection-module-terminology-ia-refresh-spec.md`、`webui/docs/98-access-control-p0-runtime-spec.md`、`docs/access-control/design-upgrade.md`、`docs/governance/DEVELOPMENT.md` |
 
 ## 1. 目标
 
@@ -270,8 +270,8 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 |---|---|---|---|
 | 语义维护工作台 | `webui/src/app/App.tsx:114`（v0.1 及之前） | M36 §4 已将 Lucy WebUI 心智从「资源维护」升级为「运维控制台」 | Data Agent Ops Control Plane |
 | 运维控制面 | `webui/docs/39-data-agent-ops-platform-global-ux-spec.md` §1 背景 line 25（v0.1） | M37 顺手统一为「运维控制台」，避免 spec 39 ↔ spec 40 漂移 | Data Agent 运维控制台 |
-| KTX WebUI 治理控制台 | `docs/webui-module-guide.md:19`（v1.3 及之前） | 品牌已切到 Lucy | Data Agent Ops Control Plane |
-| 本地治理工作台 | `docs/project-overview.md:67` | 同上 | Data Agent Ops Control Plane |
+| KTX WebUI 治理控制台 | `docs/webui/webui-module-guide.md:19`（v1.3 及之前） | 品牌已切到 Lucy | Data Agent Ops Control Plane |
+| 本地治理工作台 | `docs/governance/project-overview.md:67` | 同上 | Data Agent Ops Control Plane |
 
 ### 3.1 Review 与 Approval 的边界
 
@@ -597,7 +597,7 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Role`、`Agent`
 
 ### 4.9 可选 Agent Chat（A3）
 
-可选用户侧流式对话端设计见 `docs/design-lucy-agent-chat-a3.md`。该能力为 Lucy MCP 之上的附属验证层，**不是** Lucy WebUI 治理台的一部分，也不得写成 Lucy 自身回答业务问题。
+可选用户侧流式对话端设计见 `docs/design/design-lucy-agent-chat-a3.md`。该能力为 Lucy MCP 之上的附属验证层，**不是** Lucy WebUI 治理台的一部分，也不得写成 Lucy 自身回答业务问题。
 
 | Canonical Term | UI 主术语 | 允许补充说法 | 禁止文案 | 说明 |
 |---|---|---|---|---|

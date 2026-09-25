@@ -20,10 +20,10 @@ Read these documents before coding:
 - `webui/docs/07-mcp-auth-proxy-spec.md`
 - `webui/docs/14-agent-admin-enterprise-delivery-spec.md`
 - `webui/docs/19-system-overview-runtime-monitoring-spec.md`
-- `docs/agent-integration-guide.md`
-- `docs/deployment-docker.md`
-- `docs/customer-deployment-guide.md`
-- `docs/DEVELOPMENT.md`
+- `docs/runbooks/agent-integration-guide.md`
+- `docs/runbooks/deployment-docker.md`
+- `docs/runbooks/customer-deployment-guide.md`
+- `docs/governance/DEVELOPMENT.md`
 
 Read these backend files:
 
@@ -633,10 +633,10 @@ Expected: PASS.
 **Files:**
 
 - Modify: `webui/docs/03-api-spec.md`
-- Modify: `docs/deployment-docker.md`
-- Modify: `docs/agent-integration-guide.md`
-- Modify: `docs/customer-deployment-guide.md`
-- Modify: `docs/project-overview.md`
+- Modify: `docs/runbooks/deployment-docker.md`
+- Modify: `docs/runbooks/agent-integration-guide.md`
+- Modify: `docs/runbooks/customer-deployment-guide.md`
+- Modify: `docs/governance/project-overview.md`
 
 **Step 1: Update WebUI API spec**
 
@@ -644,7 +644,7 @@ In `webui/docs/03-api-spec.md`, extend the `GET /api/project` response with `mcp
 
 **Step 2: Update deployment docs**
 
-In `docs/deployment-docker.md`, add `LUCY_PUBLIC_MCP_URL` to runtime environment documentation:
+In `docs/runbooks/deployment-docker.md`, add `LUCY_PUBLIC_MCP_URL` to runtime environment documentation:
 
 ```text
 LUCY_PUBLIC_MCP_URL | unset | Public MCP endpoint shown in WebUI and generated Agent configs
@@ -654,7 +654,7 @@ Clarify that `LUCY_PROXY_HOST` / `LUCY_PROXY_PORT` are listen settings, while `L
 
 **Step 3: Update agent integration docs**
 
-In `docs/agent-integration-guide.md`, replace `http://<host>:7879/mcp` as the primary customer instruction with:
+In `docs/runbooks/agent-integration-guide.md`, replace `http://<host>:7879/mcp` as the primary customer instruction with:
 
 ```text
 Use the MCP endpoint shown by Lucy WebUI. Deployment owners provide it through LUCY_PUBLIC_MCP_URL.
@@ -664,7 +664,7 @@ Keep local demo endpoints as examples only.
 
 **Step 4: Update customer deployment docs**
 
-In `docs/customer-deployment-guide.md`, add deployment-method agnostic guidance:
+In `docs/runbooks/customer-deployment-guide.md`, add deployment-method agnostic guidance:
 
 - Docker Compose sets env under `services.lucy.environment`.
 - K8s/Helm sets env or values.
@@ -673,7 +673,7 @@ In `docs/customer-deployment-guide.md`, add deployment-method agnostic guidance:
 
 **Step 5: Update project overview**
 
-In `docs/project-overview.md`, update the MCP endpoint copy capability note so it says the endpoint is runtime-configured rather than inferred by page code.
+In `docs/governance/project-overview.md`, update the MCP endpoint copy capability note so it says the endpoint is runtime-configured rather than inferred by page code.
 
 **Step 6: Run doc-adjacent checks if available**
 
@@ -797,6 +797,6 @@ git commit -m "fix(webui): use configured MCP endpoint in runtime pages"
 git add webui/src/pages/admin/AgentList.tsx webui/src/pages/admin/NewToken.tsx webui/src/__tests__/agent-list.test.tsx webui/src/__tests__/new-token.test.tsx
 git commit -m "fix(webui): use configured MCP endpoint in agent snippets"
 
-git add webui/docs/03-api-spec.md docs/deployment-docker.md docs/agent-integration-guide.md docs/customer-deployment-guide.md docs/project-overview.md
+git add webui/docs/03-api-spec.md docs/runbooks/deployment-docker.md docs/runbooks/agent-integration-guide.md docs/runbooks/customer-deployment-guide.md docs/governance/project-overview.md
 git commit -m "docs: document public MCP endpoint configuration"
 ```

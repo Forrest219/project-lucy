@@ -8,7 +8,7 @@
 | 撰写日期 | 2026-08-08；v1.2 2026-08-25 |
 | 撰写人 | Cursor Agent |
 | 委托人 | zhangxingchen |
-| 基于材料 | `docs/test-layers-and-release-gates.md`；`docs/qa/lucy-webui-e2e-test-suite.md`；KSC Financial 主题接入实跑；Spider2-lite Pilot（`evals/spider2_lite_sqlite/`）；`docs/DEVELOPMENT.md` |
+| 基于材料 | `docs/governance/test-layers-and-release-gates.md`；`docs/qa/lucy-webui-e2e-test-suite.md`；KSC Financial 主题接入实跑；Spider2-lite Pilot（`evals/spider2_lite_sqlite/`）；`docs/governance/DEVELOPMENT.md` |
 | 适用范围 | 所有 Lucy 端到端验证：先读本指引选测试集，再打开对应分表执行 |
 | 输出位置 | `docs/qa/e2e-sop.md` |
 
@@ -33,8 +33,8 @@ New terms:
 
 1. 用 §2 对照「你要证明什么」→ 选定测试集 ID。  
 2. 打开 §3 分表链接，按该分表 Phase / 用例跑。  
-3. 分层与 `npm` 门禁总表仍以 [`docs/test-layers-and-release-gates.md`](../test-layers-and-release-gates.md) 为准；**本指引不替代三层模型**。  
-4. 浏览器步骤默认仅在任务 / 分表明确要求时执行（[`docs/DEVELOPMENT.md`](../DEVELOPMENT.md)）。
+3. 分层与 `npm` 门禁总表仍以 [`docs/governance/test-layers-and-release-gates.md`](../governance/test-layers-and-release-gates.md) 为准；**本指引不替代三层模型**。  
+4. 浏览器步骤默认仅在任务 / 分表明确要求时执行（[`docs/governance/DEVELOPMENT.md`](../governance/DEVELOPMENT.md)）。
 
 ---
 
@@ -54,7 +54,7 @@ New terms:
 | [`selector-contract.md`](selector-contract.md) | `E2E-WEBUI` 的 selector 事实源 |
 | [`impact-map.json`](impact-map.json) | 路由/组件/API → WebUI E2E 用例 |
 | [`changelog.md`](changelog.md) | E2E / selector 变更日志 |
-| [`../eval-quiz-conventions.md`](../eval-quiz-conventions.md) | eval / gold **怎么写**（不是怎么跑 E2E） |
+| [`../governance/eval-quiz-conventions.md`](../governance/eval-quiz-conventions.md) | eval / gold **怎么写**（不是怎么跑 E2E） |
 | [`../../evals/spider2_lite_sqlite/README.md`](../../evals/spider2_lite_sqlite/README.md) | Spider2-lite Pilot suite 资产与 npm 门禁（被 ONBOARD / AGENT 分表引用） |
 | [`../plans/wo-202608-58-spider2-lite-sqlite-stress-harness.md`](../plans/wo-202608-58-spider2-lite-sqlite-stress-harness.md) | Spider2 工单背景；**跑 E2E 以本指引 + 分表为准** |
 
@@ -115,5 +115,5 @@ flowchart TB
 ## 6. 相关入口
 
 - QA 目录地图：[`README.md`](README.md)  
-- 测试分层与 npm 门禁：[`../test-layers-and-release-gates.md`](../test-layers-and-release-gates.md)  
-- 旧主题接入路径桩：[`../sop-semantic-upload-mcp-eval-e2e.md`](../sop-semantic-upload-mcp-eval-e2e.md) → 现分表 `suite-semantic-onboard-mcp-eval.md`
+- 测试分层与 npm 门禁：[`../governance/test-layers-and-release-gates.md`](../governance/test-layers-and-release-gates.md)  
+- 旧主题接入路径桩：[`../runbooks/sop-semantic-upload-mcp-eval-e2e.md`](../runbooks/sop-semantic-upload-mcp-eval-e2e.md) → 现分表 `suite-semantic-onboard-mcp-eval.md`

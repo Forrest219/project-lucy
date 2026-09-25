@@ -8,8 +8,8 @@
 | 撰写日期 | 2026-08-01 |
 | 关联页面 | `/eval/cases`、`/eval/cases/:domain`、`/eval/runs`、`/eval/monitor` |
 | 关联工单 | `webui/docs/plans/wo-M43-eval-yaml-exchange-and-result-archive.md` |
-| 事实源 | `evals/<domain>/eval/<domain>-eval-cases.yaml`、`.ktx-ui/eval/**`、`scripts/eval-runner.mjs`、`webui/server/eval/**`、`webui/src/pages/eval/**` |
-| 关联规范 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/03-api-spec.md`、`webui/docs/04-data-model.md`、`docs/eval-quiz-conventions.md`、`docs/design-eval-monitoring.md`、`docs/DEVELOPMENT.md` |
+| 事实源 | `evals/<domain>/eval/<domain>-eval-cases.yaml`、`.ktx-ui/eval/**`、`scripts/eval/eval-runner.mjs`、`webui/server/eval/**`、`webui/src/pages/eval/**` |
+| 关联规范 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/03-api-spec.md`、`webui/docs/04-data-model.md`、`docs/governance/eval-quiz-conventions.md`、`docs/design/design-eval-monitoring.md`、`docs/governance/DEVELOPMENT.md` |
 
 ## 1. 问题背景
 

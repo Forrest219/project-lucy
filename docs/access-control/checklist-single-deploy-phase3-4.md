@@ -8,7 +8,7 @@
 | 撰写日期 | 2026-08-09 |
 | 撰写人 | Cursor Agent |
 | 委托人 | xingchen |
-| 基于材料 | [`adr-post-p15-roadmap-freeze.md`](adr-post-p15-roadmap-freeze.md) §2.2；[`checklist-single-deploy-phase0-1.md`](checklist-single-deploy-phase0-1.md)；[`checklist-single-deploy-phase2.md`](checklist-single-deploy-phase2.md)；[`runbook-row-policy.md`](runbook-row-policy.md)；[`release-notes-ac-p1.md`](release-notes-ac-p1.md) / [`release-notes-ac-p15.md`](release-notes-ac-p15.md)；`docker-compose.ac-p1-by01.yml` |
+| 基于材料 | [`adr-post-p15-roadmap-freeze.md`](adr-post-p15-roadmap-freeze.md) §2.2；[`checklist-single-deploy-phase0-1.md`](checklist-single-deploy-phase0-1.md)；[`checklist-single-deploy-phase2.md`](checklist-single-deploy-phase2.md)；[`runbook-row-policy.md`](runbook-row-policy.md)；[`release-notes-ac-p1.md`](release-notes-ac-p1.md) / [`release-notes-ac-p15.md`](release-notes-ac-p15.md)；`deploy/compose/docker-compose.ac-p1-by01.yml` |
 | 适用范围 | **Phase 3**：目标环境 proven 运维置真、行集抽检、回滚；**Phase 4**：验证后可否 / 如何合 `main` 的门禁。均**不**授权 TokenScope / Dynamic RLS / AC-P2+ |
 | 输出位置 | `docs/access-control/checklist-single-deploy-phase3-4.md` |
 
@@ -61,7 +61,7 @@ Phase 3 抽检的 FinalRows≠TRUE 源必须来自下列之一（勾选其一）
 | **B** | 若必须换 project 或改用 demo 空栈：在 **P3 启动后**按 [Phase 1 §2.5.2](checklist-single-deploy-phase0-1.md) **重新**创建临时 Agent + constraints + token；抽检结束删除。**不得**假设 P2 的 scoped/constraints 会自动出现在新栈 |
 
 - [ ] 已确认路径 A 或 B；路径 A 时 `customer-config/`（或 P2 写入的 runtime 配置）对 P3 进程可见  
-- [ ] **禁止：** P2 用 `docker-compose.yml` + `customer-config`，P3 无说明地改用 `docker-compose.demo.yml` 新 project 却仍声称「抽检 P2 配置」
+- [ ] **禁止：** P2 用 `docker-compose.yml` + `customer-config`，P3 无说明地改用 `deploy/compose/docker-compose.demo.yml` 新 project 却仍声称「抽检 P2 配置」
 
 ### 2.1 置真前硬门禁（须全部满足）
 
@@ -78,9 +78,9 @@ Phase 3 抽检的 FinalRows≠TRUE 源必须来自下列之一（勾选其一）
 | 文件 | Phase 3 角色 |
 |---|---|
 | `COMPOSE_BASELINE` 内文件 | **不变**：与 Phase 2 相同的 baseline / customer-config / demo 等 |
-| `docker-compose.ac-p1-by01.yml` | **仅**置真 overlay：`LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN=true` |
-| `docker-compose.ac-p1-by01-proven-off.yml` | 回滚：替换 proven=true overlay，**不**改 baseline |
-| `docker-compose.gate-c-uat.yml` | 可选：若 P2 已用则 P3/回滚须同样带上；不得只在置真步突然加入又弄丢配置 |
+| `deploy/compose/docker-compose.ac-p1-by01.yml` | **仅**置真 overlay：`LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN=true` |
+| `deploy/compose/docker-compose.ac-p1-by01-proven-off.yml` | 回滚：替换 proven=true overlay，**不**改 baseline |
+| `deploy/compose/docker-compose.gate-c-uat.yml` | 可选：若 P2 已用则 P3/回滚须同样带上；不得只在置真步突然加入又弄丢配置 |
 
 ### 2.3 置真启动命令（沿用 Phase 2 身份）
 
@@ -93,7 +93,7 @@ Phase 3 抽检的 FinalRows≠TRUE 源必须来自下列之一（勾选其一）
 # 规则：与 P2 启动完全相同的 baseline/overrides，仅将 proven-off 换为 proven=true
 docker compose \
   "${COMPOSE_BASELINE[@]}" \
-  -f docker-compose.ac-p1-by01.yml \
+  -f deploy/compose/docker-compose.ac-p1-by01.yml \
   -p "$COMPOSE_PROJECT" \
   up -d --build
 
@@ -108,7 +108,7 @@ docker compose -p "$COMPOSE_PROJECT" exec lucy \
 
 ```bash
 # ❌ 丢掉 customer-config / 换 project，P2 配置不会出现
-docker compose -f docker-compose.demo.yml -f docker-compose.ac-p1-by01.yml \
+docker compose -f deploy/compose/docker-compose.demo.yml -f deploy/compose/docker-compose.ac-p1-by01.yml \
   -p lucy-single-deploy-p3 up -d --build
 ```
 
@@ -131,14 +131,14 @@ docker compose -f docker-compose.demo.yml -f docker-compose.ac-p1-by01.yml \
 
 ### 2.5 回滚（演练结束必须执行）
 
-**对称规则：** 使用与 §2.3 **完全相同**的 `COMPOSE_BASELINE` + `COMPOSE_PROJECT`，**仅**将 `docker-compose.ac-p1-by01.yml` 替换为 `docker-compose.ac-p1-by01-proven-off.yml`。  
-禁止在回滚时改成 `docker-compose.demo.yml` 或其它 baseline（会替换挂载 / 端口 / image / demo-db，破坏 customer-config 路径）。
+**对称规则：** 使用与 §2.3 **完全相同**的 `COMPOSE_BASELINE` + `COMPOSE_PROJECT`，**仅**将 `deploy/compose/docker-compose.ac-p1-by01.yml` 替换为 `deploy/compose/docker-compose.ac-p1-by01-proven-off.yml`。  
+禁止在回滚时改成 `deploy/compose/docker-compose.demo.yml` 或其它 baseline（会替换挂载 / 端口 / image / demo-db，破坏 customer-config 路径）。
 
 ```bash
 # 关 proven：baseline 不变，仅 proven overlay → proven-off
 docker compose \
   "${COMPOSE_BASELINE[@]}" \
-  -f docker-compose.ac-p1-by01-proven-off.yml \
+  -f deploy/compose/docker-compose.ac-p1-by01-proven-off.yml \
   -p "$COMPOSE_PROJECT" \
   up -d --force-recreate --no-deps lucy
 
@@ -149,7 +149,7 @@ docker compose -p "$COMPOSE_PROJECT" exec lucy \
 # 可选：整栈停止（保留 volume；仍用同一 baseline）
 docker compose \
   "${COMPOSE_BASELINE[@]}" \
-  -f docker-compose.ac-p1-by01-proven-off.yml \
+  -f deploy/compose/docker-compose.ac-p1-by01-proven-off.yml \
   -p "$COMPOSE_PROJECT" \
   down
 ```
@@ -175,7 +175,7 @@ docker compose \
 ### 3.1 总原则
 
 1. **默认产品姿态不变：** `LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN` 未设置或为 false。  
-2. **proven=true 只存在于**文档说明的运维 overlay / 客户私有 compose，**不**进入默认 `docker-compose.yml` / `docker-compose.demo.yml`。  
+2. **proven=true 只存在于**文档说明的运维 overlay / 客户私有 compose，**不**进入默认 `docker-compose.yml` / `deploy/compose/docker-compose.demo.yml`。  
 3. **客户生产 `access.yaml` 事实源**默认留在客户挂载目录；仓库最多收 **example / 模板**，并标明非生产。  
 4. **Draft vs Merge：**  
    - **允许**提前开 **draft** PR（含纯文档 / proven-off 说明），便于评审文稿。  
@@ -187,7 +187,7 @@ docker compose \
 | 类别 | 示例 |
 |---|---|
 | 文档 / Checklist / Runbook 补丁 | 本文、Phase 0/1 清单、安装说明澄清 |
-| proven-off 显式 overlay 与命令 | 已有 `docker-compose.ac-p1-by01-proven-off.yml` |
+| proven-off 显式 overlay 与命令 | 已有 `deploy/compose/docker-compose.ac-p1-by01-proven-off.yml` |
 | 体验 / 可运维性（无新权限模型） | 错误文案、Admin 提示、sticky-bar 类 bugfix |
 | **示例**配置（可选） | `customer-config.example/` 增加 scoped + constraints **样例**；注释写明需 Phase 3 运维置真才取数 |
 | 已在 feature 分支验证过的 AC-P0/P1/P1.5 代码 | 仅当产品决定把该分支合入；**仍**默认 proven=false |
@@ -235,14 +235,14 @@ docker compose \
 
 ```bash
 # 自 main 工作树：默认 demo 不得带 proven=true
-docker compose -f docker-compose.demo.yml config | rg -i "FORCED_PREDICATE_PROVEN" || true
+docker compose -f deploy/compose/docker-compose.demo.yml config | rg -i "FORCED_PREDICATE_PROVEN" || true
 # 若无输出：未设置（视为 false）— 合格
 # 若有 true：BLOCK，立即回滚该变更
 
 # 显式 proven-off 仍可用（示例；不代替客户向 baseline）
 docker compose \
-  -f docker-compose.demo.yml \
-  -f docker-compose.ac-p1-by01-proven-off.yml \
+  -f deploy/compose/docker-compose.demo.yml \
+  -f deploy/compose/docker-compose.ac-p1-by01-proven-off.yml \
   -p lucy-main-smoke-proven-off \
   config | rg "LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN"
 # 期望含 false

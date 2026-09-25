@@ -6,8 +6,8 @@
 
 必须先阅读：
 
-- `../docs/DEVELOPMENT.md`
-- `../docs/lucy-202608-upgrade-execution-control.md`
+- `../docs/governance/DEVELOPMENT.md`
+- `../docs/specs/lucy-202608-upgrade-execution-control.md`
 - `docs/00-product-terminology-standard.md`
 - `docs/07-mcp-auth-proxy-spec.md`
 - `docs/14-agent-admin-enterprise-delivery-spec.md`
@@ -34,7 +34,7 @@
 9. 新增测试：
    - `server/__tests__/access-governance-gate.test.ts`
    - 回归 `admin-agents` / `admin-roles` / `admin-tokens`。
-10. 新增自检脚本：`../scripts/verify-202608-access-governance-gate.mjs`。
+10. 新增自检脚本：`../scripts/smoke/verify-202608-access-governance-gate.mjs`。
 
 ## Implementation Notes
 
@@ -66,7 +66,7 @@ Root verifier:
 
 ```bash
 cd /Users/zhangxingchen/Projects/project-lucy
-node scripts/verify-202608-access-governance-gate.mjs
+node scripts/smoke/verify-202608-access-governance-gate.mjs
 npm run lint:terminology
 ```
 

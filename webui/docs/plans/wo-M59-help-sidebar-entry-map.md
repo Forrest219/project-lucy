@@ -23,7 +23,7 @@ Read these documents before editing:
 - `webui/docs/33-help-center-layout-polish-spec.md`
 - `webui/docs/60-help-qa-section-spec.md` v0.2（§0 / §6 边界与翻译防御）
 - `docs/SYSTEM_HANDBOOK.md` §1 line 47–129 与顶部目录 line 10–25
-- `docs/DEVELOPMENT.md`
+- `docs/governance/DEVELOPMENT.md`
 
 Inspect these implementation files:
 

@@ -14,7 +14,7 @@
 
 必须先阅读：
 
-- `../docs/DEVELOPMENT.md`
+- `../docs/governance/DEVELOPMENT.md`
 - `docs/00-product-terminology-standard.md`
 - `docs/06-navigation-ia.md`
 - `docs/40-lucy-webui-positioning-control-plane.md`

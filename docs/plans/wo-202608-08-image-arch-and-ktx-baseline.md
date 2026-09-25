@@ -1,6 +1,6 @@
 # WO-202608-08 镜像架构一致性与 KTX 版本基线修复
 
-> 对应规格：[`docs/lucy-202608-08-image-arch-and-ktx-baseline-fix.md`](../lucy-202608-08-image-arch-and-ktx-baseline-fix.md) **v1.0**
+> 对应规格：[`docs/specs/lucy-202608-08-image-arch-and-ktx-baseline-fix.md`](../specs/lucy-202608-08-image-arch-and-ktx-baseline-fix.md) **v1.0**
 >
 > 范围：修正 `FROM --platform=$BUILDPLATFORM` 导致的「元数据 amd64 / 层内 arm64」坏镜像；对齐 Release CI KTX 默认到 `0.16.0`；为客户 amd64 交付增加 ELF 门禁。结束后 **仅 code review**，不做浏览器验证。
 
@@ -9,7 +9,7 @@
 ```bash
 cd /Users/zhangxingchen/Projects/project-lucy
 git rev-parse --short HEAD
-rg -n 'FROM --platform|BUILDPLATFORM|TARGETPLATFORM' Dockerfile docker-compose*.yml scripts/rebuild-demo-lucy.sh
+rg -n 'FROM --platform|BUILDPLATFORM|TARGETPLATFORM' Dockerfile docker-compose*.yml scripts/demo/rebuild-demo-lucy.sh
 rg -n '0\.13\.0|0\.16\.0' .github/workflows/lucy-release.yml Dockerfile docker-compose.yml
 ```
 
@@ -23,11 +23,11 @@ rg -n '0\.13\.0|0\.16\.0' .github/workflows/lucy-release.yml Dockerfile docker-c
 
 - demo / postgres-demo：`TARGETPLATFORM`/`TARGETARCH`（arm64 默认）
 - 根 `docker-compose.yml`：显式 amd64 默认
-- `scripts/rebuild-demo-lucy.sh`：导出并断言 `TARGETPLATFORM`
+- `scripts/demo/rebuild-demo-lucy.sh`：导出并断言 `TARGETPLATFORM`
 
 ### Step 3 — ELF 断言脚本
 
-新增 `scripts/assert-image-elf-arch.sh`（spec §4.4）。
+新增 `scripts/release/assert-image-elf-arch.sh`（spec §4.4）。
 
 ### Step 4 — Release workflow
 
@@ -37,11 +37,11 @@ rg -n '0\.13\.0|0\.16\.0' .github/workflows/lucy-release.yml Dockerfile docker-c
 
 更新：
 
-- `docs/lucy-customer-amd64-offline-delivery-spec.md`
+- `docs/specs/lucy-customer-amd64-offline-delivery-spec.md`
 - `docs/plans/wo-202608-07-customer-amd64-delivery.md`
-- `docs/version-matrix.md`
-- `docs/DEVELOPMENT.md`
-- `docs/lucy-202608-05-demo-builder-arm-default-spec.md`（交叉引用：Dockerfile 契约由本 WO 替换）
+- `docs/governance/version-matrix.md`
+- `docs/governance/DEVELOPMENT.md`
+- `docs/specs/lucy-202608-05-demo-builder-arm-default-spec.md`（交叉引用：Dockerfile 契约由本 WO 替换）
 
 声明旧 `customer-amd64-0.16.0` 离线包作废。
 
@@ -50,14 +50,14 @@ rg -n '0\.13\.0|0\.16\.0' .github/workflows/lucy-release.yml Dockerfile docker-c
 ```bash
 rg -n 'FROM --platform=\$BUILDPLATFORM' Dockerfile   # 无
 rg -n '0\.13\.0' .github/workflows/lucy-release.yml  # 无（KTX 相关）
-bash -n scripts/rebuild-demo-lucy.sh scripts/assert-image-elf-arch.sh
+bash -n scripts/demo/rebuild-demo-lucy.sh scripts/release/assert-image-elf-arch.sh
 
 # 若本地仍有坏镜像 tag：
-bash scripts/assert-image-elf-arch.sh project-lucy:customer-amd64-0.16.0 amd64 ; test $? -ne 0
+bash scripts/release/assert-image-elf-arch.sh project-lucy:customer-amd64-0.16.0 amd64 ; test $? -ne 0
 
 # 可选 demo 重建（有缓存）：
 npm run demo:rebuild
-bash scripts/assert-image-elf-arch.sh project-lucy:demo arm64
+bash scripts/release/assert-image-elf-arch.sh project-lucy:demo arm64
 ```
 
 ### Step 7 — Code review only

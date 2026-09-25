@@ -8,9 +8,9 @@
 | 撰写日期 | 2026-06-19 |
 | 撰写人 | Codex |
 | 委托人 | zhangxingchen |
-| 基于材料 | project-lucy/docs/design-agent-permissions.md v1.0，project-lucy/docs/review-module1-agent-permissions.md v1.0，当前 webui/server/admin 与 webui/server/proxy 实现 |
+| 基于材料 | project-lucy/docs/design/design-agent-permissions.md v1.0，project-lucy/docs/reviews/review-module1-agent-permissions.md v1.0，当前 webui/server/admin 与 webui/server/proxy 实现 |
 | 适用范围 | Module 1 本地单用户 UAT；验证 token 身份识别、ACL 放行/拒绝、审计记录、撤销失效闭环，并通过攻击方反向测试识别安全防护边界 |
-| 输出位置 | project-lucy/docs/uat-agent-permissions.md |
+| 输出位置 | project-lucy/docs/uat/uat-agent-permissions.md |
 
 ---
 

@@ -9,7 +9,7 @@
 | 关联页面 | `/catalog/:conn/:schema/:table` |
 | 关联工单 | `webui/docs/plans/wo-M54-table-semantic-workbench-online-editing-actionbar-version-history.md` |
 | 事实来源 | 2026-08-02 用户反馈、浏览器核查、`docs/ui-ux-feedback/pages/catalog.md` |
-| 关联规范 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/42-page-header-standardization-spec.md`、`webui/docs/48-catalog-and-table-semantic-workbench-productization-spec.md`、`webui/docs/54-table-semantic-workbench-command-density-refactor-spec.md`、`docs/DEVELOPMENT.md` |
+| 关联规范 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/42-page-header-standardization-spec.md`、`webui/docs/48-catalog-and-table-semantic-workbench-productization-spec.md`、`webui/docs/54-table-semantic-workbench-command-density-refactor-spec.md`、`docs/governance/DEVELOPMENT.md` |
 
 ## 1. Background
 

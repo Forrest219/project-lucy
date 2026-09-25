@@ -26,7 +26,7 @@
 
 必须先阅读：
 
-- `../docs/DEVELOPMENT.md`
+- `../docs/governance/DEVELOPMENT.md`
 - `docs/00-product-terminology-standard.md`
 - `docs/74-wiki-workbench-secondary-feedback-fixes-spec.md`
 - `src/components/WikiTree.tsx`

@@ -9,7 +9,7 @@
 | 适用范围 | Lucy Help Center 系统手册、语义层 YAML 交付、Catalog 上传/发布验收、Agent 自检协议 |
 | 架构决议 | 将 YAML 文件用途、规范、常见错误和 GO/NO-GO checklist 内置进系统手册；把人工配置、自助运维和 Agent 检查统一到同一套可执行 runbook |
 | 事实源 | `docs/SYSTEM_HANDBOOK.md`、`semantic-layer/**/*.yaml`、`ktx.yaml`、`webui/config/access.yaml`、`evals/**/*.yaml`、`wiki/**/*.md` |
-| 关联文档 | `docs/design-system-handbook-help.md`、`webui/docs/17-static-catalog-loading-spec.md`、`webui/docs/21-connection-catalog-upload-ux-spec.md`、`webui/docs/23-semantic-asset-publish-export-spec.md`、`webui/docs/03-api-spec.md`、`docs/DEVELOPMENT.md` |
+| 关联文档 | `docs/design/design-system-handbook-help.md`、`webui/docs/17-static-catalog-loading-spec.md`、`webui/docs/21-connection-catalog-upload-ux-spec.md`、`webui/docs/23-semantic-asset-publish-export-spec.md`、`webui/docs/03-api-spec.md`、`docs/governance/DEVELOPMENT.md` |
 
 ## 1. 决策摘要
 
@@ -42,7 +42,7 @@
 | 非目标 | 理由 |
 |---|---|
 | 本规格不直接实现上传拦截器 | M20 首要目标是文档与自检标准；运行时代码校验可作为 P1 |
-| 不把开发规则写进 `CLAUDE.md` | 开发治理由 `AGENTS.md` / `docs/DEVELOPMENT.md` 承载 |
+| 不把开发规则写进 `CLAUDE.md` | 开发治理由 `AGENTS.md` / `docs/governance/DEVELOPMENT.md` 承载 |
 | 不把 YAML 运维 runbook 写进 `webui/config/data-qa-instructions.md` | 该文件是数据问答 runtime instructions，不能混入配置交付规则正文 |
 | 不要求 Agent 自动修改客户 YAML | Agent 可检查并给修复建议；是否落盘仍由用户确认 |
 

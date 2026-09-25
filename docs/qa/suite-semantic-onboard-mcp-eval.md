@@ -8,7 +8,7 @@
 | 撰写日期 | 2026-08-08 |
 | 撰写人 | Cursor Agent |
 | 委托人 | zhangxingchen |
-| 基于材料 | KSC Financial 端到端执行；Spider2-lite Pilot（`sandbox.s2_*`）；`docs/design-schema-onboarding.md`；Spec 123；`docs/eval-quiz-conventions.md`；父指引 `docs/qa/e2e-sop.md` |
+| 基于材料 | KSC Financial 端到端执行；Spider2-lite Pilot（`sandbox.s2_*`）；`docs/design/design-schema-onboarding.md`；Spec 123；`docs/governance/eval-quiz-conventions.md`；父指引 `docs/qa/e2e-sop.md` |
 | 适用范围 | 测试集 `E2E-ONBOARD-EVAL`：任意新 domain / 主题将上传包接入目标 Lucy，并用 MCP 作答 eval 对照 gold |
 | 输出位置 | `docs/qa/suite-semantic-onboard-mcp-eval.md` |
 | 父指引 | [`e2e-sop.md`](e2e-sop.md) |
@@ -35,7 +35,7 @@ New terms:
 - **本主题复跑**（例如 `ksc_financial` 回归）
 - **新主题首跑**（换 connection / schema / 表 / wiki / eval suite）
 
-不替代产品 Spec；本文件是**操作规程**。浏览器步骤默认仅在任务明确要求「模拟人工 / 浏览器验证」时执行（见 `docs/DEVELOPMENT.md` 浏览器测试约束）。
+不替代产品 Spec；本文件是**操作规程**。浏览器步骤默认仅在任务明确要求「模拟人工 / 浏览器验证」时执行（见 `docs/governance/DEVELOPMENT.md` 浏览器测试约束）。
 
 ---
 
@@ -279,12 +279,12 @@ Manifest 单文件也可走 Catalog 上传：`POST /api/catalog/assets/upload`�
 
 ## 13. 相关文档
 
-- [`docs/design-schema-onboarding.md`](../design-schema-onboarding.md) — 添加 Schema
+- [`docs/design/design-schema-onboarding.md`](../design/design-schema-onboarding.md) — 添加 Schema
 - [`webui/docs/123-publish-workbench-activation-ia-spec.md`](../webui/docs/123-publish-workbench-activation-ia-spec.md) — 生效台（无上传）
 - [`webui/docs/03-api-spec.md`](../webui/docs/03-api-spec.md) — schemas / enabled-tables / semantic-assets / wiki / admin roles
-- [`docs/eval-quiz-conventions.md`](../eval-quiz-conventions.md) — eval / gold 约定
+- [`docs/governance/eval-quiz-conventions.md`](../governance/eval-quiz-conventions.md) — eval / gold 约定
 - [`webui/docs/07-mcp-auth-proxy-spec.md`](../webui/docs/07-mcp-auth-proxy-spec.md) — MCP 鉴权与 instructions
-- [`docs/DEVELOPMENT.md`](../DEVELOPMENT.md) — 浏览器测试约束与落位规则
+- [`docs/governance/DEVELOPMENT.md`](../governance/DEVELOPMENT.md) — 浏览器测试约束与落位规则
 - [`evals/spider2_lite_sqlite/README.md`](../../evals/spider2_lite_sqlite/README.md) — Spider2 Pilot suite
 - [`suite-agent-mcp.md`](suite-agent-mcp.md) — Agent 抽样（Spider2 可选）
 
@@ -317,10 +317,10 @@ Manifest 单文件也可走 Catalog 上传：`POST /api/catalog/assets/upload`�
 |---|---|
 | 0 预检 | `npm run smoke:p1:spider2-lite-runtime`（connection + `sl validate` + 行数探针）；无 SR → **blocked** |
 | 1 Schema/白名单 | 幂等 reseed：`npm run spider2-lite:reseed-sandbox`；`enabled_tables` 含全部 `sandbox.s2_*`；`schemas` 含 `sandbox` |
-| 2 语义 | Manifest `sandbox.yaml` **已含 Pilot FK join graph**（`scripts/spider2-lite-inject-sandbox-joins.py`）+ 10 overlays；目标实例 sync + `admin reindex` |
+| 2 语义 | Manifest `sandbox.yaml` **已含 Pilot FK join graph**（`scripts/eval/spider2-lite-inject-sandbox-joins.py`）+ 10 overlays；目标实例 sync + `admin reindex` |
 | 3 Wiki | `wiki/global/spider2-ecommerce-rfm.md`（须含非空 `summary`） |
 | 4 ACL | role 含 `sandbox` `prefix: s2_*`（demo token / `ksc_financial_readonly` 已扩）；工具含 `lucy_*` 与 `sl_*` |
-| 5 MCP vs gold | catalog：`npm run smoke:p0:spider2-lite-eval`；sample eval：`python3 scripts/e2e-spider2-lite-eval-v2.py`（Lucy + SR SQL oracle） |
+| 5 MCP vs gold | catalog：`npm run smoke:p0:spider2-lite-eval`；sample eval：`python3 scripts/eval/e2e-spider2-lite-eval-v2.py`（Lucy + SR SQL oracle） |
 
 ### 14.3 脚本化门禁（登记于 test-layers）
 
@@ -328,7 +328,7 @@ Manifest 单文件也可走 Catalog 上传：`POST /api/catalog/assets/upload`�
 |---|---|
 | G-cat | `npm run smoke:p0:spider2-lite-eval` |
 | G-rt | `npm run smoke:p1:spider2-lite-runtime` |
-| G-plat + datapath | `node scripts/p1-endpoint-smoke.mjs --proxy-url $MCP_BASE --token $MCP_TOKEN --connection starrocks-r1 --source s2_sakila_payment`；再 `lucy_query` 校验 `payment_count=16049` |
+| G-plat + datapath | `node scripts/smoke/p1-endpoint-smoke.mjs --proxy-url $MCP_BASE --token $MCP_TOKEN --connection starrocks-r1 --source s2_sakila_payment`；再 `lucy_query` 校验 `payment_count=16049` |
 | MCP-direct / Cursor 抽样 | 转 [`suite-agent-mcp.md`](suite-agent-mcp.md) §5（`npm run e2e:spider2-lite:sample`，默认 demo token） |
 
 **政策**：可选 gated；**不**进客户 headless 硬门禁；**不**进 `e2e:sow-trust-standard`。缺依赖写 blocked，禁止假 pass。

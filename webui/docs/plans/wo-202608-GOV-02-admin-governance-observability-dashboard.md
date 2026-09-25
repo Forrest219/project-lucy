@@ -18,9 +18,9 @@
 
 必须先阅读：
 
-- `../docs/DEVELOPMENT.md`
-- `../docs/lucy-202608-reliable-delivery-upgrade-spec.md`
-- `../docs/lucy-202608-upgrade-execution-control.md`
+- `../docs/governance/DEVELOPMENT.md`
+- `../docs/specs/lucy-202608-reliable-delivery-upgrade-spec.md`
+- `../docs/specs/lucy-202608-upgrade-execution-control.md`
 - `docs/00-product-terminology-standard.md`
 - `docs/69-admin-governance-observability-spec.md`
 - `server/admin/audit.ts`

@@ -19,7 +19,7 @@
 
 必须先阅读：
 
-- `docs/DEVELOPMENT.md`
+- `docs/governance/DEVELOPMENT.md`
 - `docs/00-product-terminology-standard.md`
 - `docs/75-admin-governance-usage-overview-spec.md`
 - `src/pages/admin/GovernanceOverview.tsx`

@@ -8,7 +8,7 @@
 | 撰写日期 | 2026-08-27 |
 | 撰写人 | Thinker / Composer |
 | 委托人 | xingchen（Data scientist / Researcher） |
-| 基于材料 | 上次：`https://github.com/Forrest219/lucy-customer-delivery`（手册仓库）；历史上曾挂过 Release Asset `lucy-k8s-integration-delivery-20260727-v2.tar.gz`，但**客户侧实际用法是 tar.gz 单独给、GitHub 只当手册**；本仓库 `deploy/k8s/helm/lucy/`、`docs/customer-k8s-deployer-quickstart.md` 等；镜像：`project-lucy:customer-amd64-0.16.0`（`inbox/customer-amd64-offline-package/image/*.tar`） |
+| 基于材料 | 上次：`https://github.com/Forrest219/lucy-customer-delivery`（手册仓库）；历史上曾挂过 Release Asset `lucy-k8s-integration-delivery-20260727-v2.tar.gz`，但**客户侧实际用法是 tar.gz 单独给、GitHub 只当手册**；本仓库 `deploy/k8s/helm/lucy/`、`docs/runbooks/customer-k8s-deployer-quickstart.md` 等；镜像：`project-lucy:customer-amd64-0.16.0`（`inbox/customer-amd64-offline-package/image/*.tar`） |
 | 适用范围 | 客户已有 K8s + Helm；本轮更新手册仓库 + 另产一版可单独发送的 integration tar.gz |
 | 输出位置 | 本 WO：`docs/plans/wo-202608-27-customer-k8s-delivery.md`；手册：`Forrest219/lucy-customer-delivery`；大包：`inbox/customer-k8s-integration-build/*.tar.gz`（另渠道发送，默认**不**上传 GitHub Release） |
 
@@ -46,7 +46,7 @@
 
 - Lucy chart 从 draft 晋升到正式 `deploy/k8s/helm/lucy/`（chart v0.1.0, appVersion 0.16.0），并通过 kind e2e。契约字段（端口 5174/7879、单副本、Recreate、RWO PVC、不暴露 7878）已固化。
 - 若源码 / 镜像 / customer-config 有相关更新（需 Builder 第一步核对 diff 决定，见 §8 Step 1 与 §12 Q1），本轮需刷镜像 tar；否则仅刷说明 / 契约 / 验收脚本。
-- 中文集成说明需要根据 chart 契约与最新 `docs/customer-k8s-deployer-quickstart.md` 内容做一次同步。
+- 中文集成说明需要根据 chart 契约与最新 `docs/runbooks/customer-k8s-deployer-quickstart.md` 内容做一次同步。
 
 ### 1.3 本轮目标
 
@@ -74,10 +74,10 @@
 | 历史 GitHub Release `…20260727-v2` | **不动**；本轮**默认不**再 `gh release create` 上传大包 | 大包另渠道；旧 Release 仅历史痕迹 |
 | 单独发送的 tar.gz | **新产**到 `inbox/customer-k8s-integration-build/`，命名沿用 `lucy-k8s-integration-delivery-YYYYMMDD-vN.tar.gz` | 飞书/网盘/邮件等另送 |
 | `deploy/k8s/helm/lucy/` 正式 chart | **作为 supported 主交付物**复制到包内 `helm/lucy/`（chart 0.2.x）；随镜像同版本门禁 | v1.3 决策：Chart 与镜像绑定交付，见 `K8S_CONTRACT.md` |
-| `docs/customer-k8s-deployer-quickstart.md` | **压缩翻译**为中文的 `集成说明.md`（保留端口 / 契约 / 验收 / 排障 5 项） | 长文档不适合客户 IT；本次改为中文精简版 |
-| `docs/customer-deployment-guide.md` / `admin-guide.md` / `security-guide.md` | **原样**放入 `reference/`（英文全文，供合作方 / 售前查阅） | 保留深度参考 |
-| `docs/lucy-customer-amd64-offline-delivery-spec.md` | **不动** | Docker Compose 交付路径，与本轮无关 |
-| `inbox/customer-amd64-offline-package/image/project-lucy-customer-amd64-0.16.0-image.tar` | **默认不复用**；2026-08-27 已证实该 tar 为 arm64 ELF 坏包。必须 `bash scripts/build-customer-amd64-image.sh` 重建并通过 G1–G4 后再入包 | 见 [`docs/customer-amd64-image-build-checklist.md`](../customer-amd64-image-build-checklist.md) |
+| `docs/runbooks/customer-k8s-deployer-quickstart.md` | **压缩翻译**为中文的 `集成说明.md`（保留端口 / 契约 / 验收 / 排障 5 项） | 长文档不适合客户 IT；本次改为中文精简版 |
+| `docs/runbooks/customer-deployment-guide.md` / `admin-guide.md` / `security-guide.md` | **原样**放入 `reference/`（英文全文，供合作方 / 售前查阅） | 保留深度参考 |
+| `docs/specs/lucy-customer-amd64-offline-delivery-spec.md` | **不动** | Docker Compose 交付路径，与本轮无关 |
+| `inbox/customer-amd64-offline-package/image/project-lucy-customer-amd64-0.16.0-image.tar` | **默认不复用**；2026-08-27 已证实该 tar 为 arm64 ELF 坏包。必须 `bash scripts/release/build-customer-amd64-image.sh` 重建并通过 G1–G4 后再入包 | 见 [`docs/runbooks/customer-amd64-image-build-checklist.md`](../runbooks/customer-amd64-image-build-checklist.md) |
 | `customer-config.example/` | **复用**为 `customer-config-template/`（进包，去掉 secret 文件） | 上次交付已有类似模板，本次保持 |
 | `inbox/k8s-helm-draft/validation/validation-notes.md` | **不动** | 内部验证证据；chart 已晋升，草稿保留为历史 |
 | `docs/plans/wo-202608-07-customer-amd64-delivery.md`（Docker 包 WO） | **不动**；作为姊妹范式交叉引用 | 结构学习范例 |
@@ -111,7 +111,7 @@
 
 - **基线**：`project-lucy:customer-amd64-0.16.0`，`linux/amd64`，bundled `@kaelio/ktx@0.16.0`
 - **是否需要重构建**：Builder 第一步跑 `git log --since=2026-07-27 -- <关键源码路径>`（见 §8 Step 1）判断
-- **默认必须重构建**：按 [`docs/customer-amd64-image-build-checklist.md`](../customer-amd64-image-build-checklist.md) 跑 `scripts/build-customer-amd64-image.sh`（G1–G4）。历史 `inbox/…/customer-amd64-*.tar` **禁止盲复用**。
+- **默认必须重构建**：按 [`docs/runbooks/customer-amd64-image-build-checklist.md`](../runbooks/customer-amd64-image-build-checklist.md) 跑 `scripts/release/build-customer-amd64-image.sh`（G1–G4）。历史 `inbox/…/customer-amd64-*.tar` **禁止盲复用**。
 - **仅当**本地已有**本轮**刚通过 G2–G4 的同 digest 镜像时，才可跳过 rebuild，但仍须在出包前当场重跑 G2–G4。
 - **镜像分发问题**：本包**只**放 image tar + digest，**不假设**客户镜像分发方式（客户 IT 会根据自有 registry / containerd 环境自己 `docker load` 或 `docker load && docker tag && docker push`）
 
@@ -145,8 +145,8 @@
 | `验收命令.sh` | 客户 IT 现场执行 | 包根 | Bash + 中文注释 |
 | `RELEASE_NOTES.md` | 客户 IT + 项目管理 | 包根 | 中文 |
 | `reference/helm-chart/` | 客户平台工程审阅契约 | 包内 | 英文（chart 原样） |
-| `reference/深度参考-K8s部署指南.md` | 合作方 / 售前 | 包内 | 中文（`docs/customer-k8s-deployer-quickstart.md` 翻译精简） |
-| `reference/管理指南.md` / `reference/安全指南.md` | 客户运维 | 包内 | 中文（`docs/admin-guide.md` / `docs/security-guide.md` 翻译精简） |
+| `reference/深度参考-K8s部署指南.md` | 合作方 / 售前 | 包内 | 中文（`docs/runbooks/customer-k8s-deployer-quickstart.md` 翻译精简） |
+| `reference/管理指南.md` / `reference/安全指南.md` | 客户运维 | 包内 | 中文（`docs/runbooks/admin-guide.md` / `docs/runbooks/security-guide.md` 翻译精简） |
 
 ---
 
@@ -182,9 +182,9 @@ lucy-k8s-integration-delivery-20260827-v1/
 │   │   ├── examples/
 │   │   │   └── values.local-test.yaml            # kind-only，明确标注
 │   │   └── templates/                             # 与仓库一致
-│   ├── 深度参考-K8s部署指南.md                    # docs/customer-k8s-deployer-quickstart.md 中文精简
-│   ├── 管理指南.md                                # docs/admin-guide.md 中文精简
-│   └── 安全指南.md                                # docs/security-guide.md 中文精简
+│   ├── 深度参考-K8s部署指南.md                    # docs/runbooks/customer-k8s-deployer-quickstart.md 中文精简
+│   ├── 管理指南.md                                # docs/runbooks/admin-guide.md 中文精简
+│   └── 安全指南.md                                # docs/runbooks/security-guide.md 中文精简
 ```
 
 ### 4.1 排除清单
@@ -215,7 +215,7 @@ lucy-k8s-integration-delivery-20260827-v1/
 | Platform | `linux/amd64` | 与上次一致 |
 | Bundled KTX | `@kaelio/ktx@0.16.0` | Dockerfile ARG |
 | 平台断言 | `docker image inspect --format '{{.Os}}/{{.Architecture}}'` = `linux/amd64` | 硬门禁 |
-| ELF 断言 | `bash scripts/assert-image-elf-arch.sh <image-tag> amd64` + runtime smoke | **出包前必跑**；见 [`docs/customer-amd64-image-build-checklist.md`](../customer-amd64-image-build-checklist.md) |
+| ELF 断言 | `bash scripts/release/assert-image-elf-arch.sh <image-tag> amd64` + runtime smoke | **出包前必跑**；见 [`docs/runbooks/customer-amd64-image-build-checklist.md`](../runbooks/customer-amd64-image-build-checklist.md) |
 | 元数据落包 | `image/image-inspect.json` + `image/image-digest.txt` | 客户可复核 |
 
 ### 5.2 K8s 部署契约（`K8s部署契约.md` 必须覆盖字段）
@@ -380,7 +380,7 @@ Usage: bash 验收命令.sh [--namespace <ns>] [--release <name>] [--public-mcp-
   ```
 - **产出**：`inbox/customer-k8s-integration-build/git-since-last-delivery.log`
 - **验证 / 分支**：
-  - **默认走重构建**：`bash scripts/build-customer-amd64-image.sh`（G1–G4）。历史 `inbox/customer-amd64-offline-package/image/*.tar` **禁止盲复用**（2026-08-27 坏包事故）。
+  - **默认走重构建**：`bash scripts/release/build-customer-amd64-image.sh`（G1–G4）。历史 `inbox/customer-amd64-offline-package/image/*.tar` **禁止盲复用**（2026-08-27 坏包事故）。
   - 仅当本地镜像 **本轮** 已当场通过 G2–G4（同 digest）时，才可跳过 rebuild；出包前仍须再跑一遍 G2–G4。
   - 构建失败（Hub 超时等）→ 停工，**不得**用旧坏包顶替。
 
@@ -437,7 +437,7 @@ Usage: bash 验收命令.sh [--namespace <ns>] [--release <name>] [--public-mcp-
 - **验证**：
   ```bash
   test "$(jq -r '.[0].Os + "/" + .[0].Architecture' $PKG/image/image-inspect.json)" = "linux/amd64"
-  bash scripts/assert-image-elf-arch.sh project-lucy:customer-amd64-0.16.0 amd64
+  bash scripts/release/assert-image-elf-arch.sh project-lucy:customer-amd64-0.16.0 amd64
   ```
 
 ### Step 6 — 准备 `customer-config-template/`
@@ -473,9 +473,9 @@ Usage: bash 验收命令.sh [--namespace <ns>] [--release <name>] [--public-mcp-
   cp -R deploy/k8s/helm/lucy/. $PKG/reference/helm-chart/
 
   # 中文精简版（Builder 翻译）
-  # $PKG/reference/深度参考-K8s部署指南.md  ← docs/customer-k8s-deployer-quickstart.md
-  # $PKG/reference/管理指南.md              ← docs/admin-guide.md
-  # $PKG/reference/安全指南.md              ← docs/security-guide.md
+  # $PKG/reference/深度参考-K8s部署指南.md  ← docs/runbooks/customer-k8s-deployer-quickstart.md
+  # $PKG/reference/管理指南.md              ← docs/runbooks/admin-guide.md
+  # $PKG/reference/安全指南.md              ← docs/runbooks/security-guide.md
   ```
 - **产出**：`reference/` 子树
 - **验证**：`ls $PKG/reference/helm-chart/templates/*.yaml` 与 `deploy/k8s/helm/lucy/templates/` 完全一致；三个翻译文档存在且包含元数据表
@@ -616,7 +616,7 @@ Usage: bash 验收命令.sh [--namespace <ns>] [--release <name>] [--public-mcp-
 |---|---|---|---|
 | G1 | 判定 diff 完成 | 检查 Step 1 log 存在 | 存在，且路径决策明确 |
 | G2 | 镜像元数据 | `docker image inspect --format '{{.Os}}/{{.Architecture}}'` | `linux/amd64` |
-| G3 | **ELF 门禁（硬门禁）** | `bash scripts/assert-image-elf-arch.sh <tag> amd64` | exit 0；**node + tini** 均为 x86-64 |
+| G3 | **ELF 门禁（硬门禁）** | `bash scripts/release/assert-image-elf-arch.sh <tag> amd64` | exit 0；**node + tini** 均为 x86-64 |
 | G3b | **运行时 smoke（硬门禁）** | `docker run --rm --platform linux/amd64 --entrypoint /bin/sh <tag> -c 'echo ok'` | exit 0 |
 | G4 | KTX 版本 | `docker run --rm --platform linux/amd64 --entrypoint ktx <tag> --version` | 含 `0.16.0` |
 | G4 | image 元数据落包 | `test -f image/image-digest.txt && test -f image/image-inspect.json` | 存在 |
@@ -725,4 +725,4 @@ Step 1 判定的两条路径决定后续 12 步的工作量：
 - **reference/helm-chart**：本仓库 `deploy/k8s/helm/lucy/` 的只读快照，随包分发但明示"仅参考，客户仍用自有 Chart"。
 - **K8s 部署契约**（`K8s部署契约.md`）：端口 5174/7879、单副本、Recreate、RWO PVC、不暴露 7878、SecurityContext 的硬约束集合；跨 Chart 实现（我方 chart / 客户自研 chart）统一遵守。
 
-UI / 客户可见文案：本次交付包内所有中文文档必须与 `docs/customer-k8s-deployer-quickstart.md` 的英文术语保持双向对齐（Deployment / Service / PVC / MCP Proxy / bundled KTX / customer context package / `/data/lucy`）；不新造未在标准中登记的产品概念。
+UI / 客户可见文案：本次交付包内所有中文文档必须与 `docs/runbooks/customer-k8s-deployer-quickstart.md` 的英文术语保持双向对齐（Deployment / Service / PVC / MCP Proxy / bundled KTX / customer context package / `/data/lucy`）；不新造未在标准中登记的产品概念。

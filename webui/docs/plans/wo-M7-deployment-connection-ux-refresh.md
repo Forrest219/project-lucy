@@ -15,9 +15,9 @@
 Read these files before coding:
 
 - `webui/docs/10-deployment-connection-ux-refresh.md`
-- `docs/design-webui-ui-refresh.md`
-- `docs/design-db-connection.md`
-- `docs/design-schema-onboarding.md`
+- `docs/design/design-webui-ui-refresh.md`
+- `docs/design/design-db-connection.md`
+- `docs/design/design-schema-onboarding.md`
 - `webui/src/pages/Onboarding.tsx`
 - `webui/src/pages/connections/ConnectionOverview.tsx`
 - `webui/src/pages/connections/constants.ts` (create)

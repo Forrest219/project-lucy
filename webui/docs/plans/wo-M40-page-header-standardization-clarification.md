@@ -34,7 +34,7 @@
 
 **默认建议**：否。`/wiki` 是**一级路由例外**，因为它本身就是工作台 / 编辑器（不是详情页），breadcrumbs 提供"我在哪篇 Wiki"的层级上下文比返回按钮更有价值。
 
-## Q8. 是否同步更新 `docs/webui-feature-map.md`？
+## Q8. 是否同步更新 `docs/webui/webui-feature-map.md`？
 
 **默认建议**：不更新。本规格是组件级 polish，不影响任何 feature map 字段（页面是否存在、能力清单、路由路径都未变）。
 

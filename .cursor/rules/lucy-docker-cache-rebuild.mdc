@@ -31,7 +31,7 @@ npm run demo:upgrade -- --fresh
 或分步：
 
 1. 缓存构建镜像（补 `BUILDPLATFORM=linux/arm64`，避免 macOS buildx 空平台 bug）：
-   `docker compose -f docker-compose.demo.yml build --build-arg BUILDPLATFORM=linux/arm64 lucy`
+   `docker compose -f deploy/compose/docker-compose.demo.yml build --build-arg BUILDPLATFORM=linux/arm64 lucy`
 2. **清空运行时配置（每次必做）**：`npm run demo:upgrade -- --fresh`（停容器并删除 named volume `project-lucy_lucy-demo-data` 或当前 compose project 对应的 `*_lucy-demo-data`），让 entrypoint 从 demo template 重新 seed。
 3. 校验：容器 `healthy`；host 与容器 `/app` 关键源码哈希一致；确认 `/data/lucy` 已重新播种（如存在 `.lucy-seed` 与 `ktx.yaml`）。
 

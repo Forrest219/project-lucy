@@ -4,7 +4,7 @@ This directory shows the recommended customer-owned configuration package shape 
 headless Docker deployments.
 
 Use it as a template for a real `customer-config/` directory, then mount that
-directory to `/data/lucy` with `docker-compose.customer-config.yml`.
+directory to `/data/lucy` with `deploy/compose/docker-compose.customer-config.yml`.
 
 Do not commit real secret files. Runtime credentials should live in
 `.ktx/secrets/`, Docker secrets, or the customer's secret store.

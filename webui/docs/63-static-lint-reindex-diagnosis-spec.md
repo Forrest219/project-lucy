@@ -7,8 +7,8 @@
 | 版本 | v0.1 |
 | 撰写日期 | 2026-08-03 |
 | 202608 状态 | Deferred；不属于 202608 Governance & Observability 主线 |
-| 关联蓝图 | `docs/lucy-202608-reliable-delivery-upgrade-spec.md` |
-| 关联总控 | `docs/lucy-202608-upgrade-execution-control.md` |
+| 关联蓝图 | `docs/specs/lucy-202608-reliable-delivery-upgrade-spec.md` |
+| 关联总控 | `docs/specs/lucy-202608-upgrade-execution-control.md` |
 | 关联工单 | `webui/docs/plans/wo-202608-02-static-lint-reindex-diagnosis.md` |
 | 适用范围 | semantic-layer static lint、Reindex failure diagnosis、patch draft、impact diff |
 

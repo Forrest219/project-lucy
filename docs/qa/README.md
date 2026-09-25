@@ -21,7 +21,7 @@ docs/qa/
   selector-contract.md / impact-map.json / changelog.md
 ```
 
-分层与 `npm` 门禁总表：[`docs/test-layers-and-release-gates.md`](../test-layers-and-release-gates.md)。
+分层与 `npm` 门禁总表：[`docs/governance/test-layers-and-release-gates.md`](../governance/test-layers-and-release-gates.md)。
 
 | 文档 | 角色 |
 |---|---|

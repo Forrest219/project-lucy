@@ -28,12 +28,12 @@
 | Chart 0.2.0 | HTTP 探针、端口分离、`image.digest` |
 | 契约文档 | `deploy/k8s/K8S_CONTRACT.md` |
 | 运维文档 | `helm/lucy/UPGRADE.md`、`ROLLBACK.md` |
-| H1 静态门禁 | `scripts/helm-lucy-gate.sh` |
-| H5 验收 | `scripts/k8s-acceptance.sh` |
-| 门禁编排 | `scripts/k8s-release-gate.sh` |
+| H1 静态门禁 | `scripts/gates/helm-lucy-gate.sh` |
+| H5 验收 | `scripts/gates/k8s-acceptance.sh` |
+| 门禁编排 | `scripts/gates/k8s-release-gate.sh` |
 | 测试 profile | `examples/values.k3s-test.yaml` |
 | npm 入口 | `gate:k8s-static`、`gate:k8s-release`、`gate:k8s-acceptance` |
-| 打包脚本骨架 | `scripts/build-k8s-delivery-package.sh` |
+| 打包脚本骨架 | `scripts/gates/build-k8s-delivery-package.sh` |
 
 ## 3. 待执行（按优先级）
 
@@ -42,7 +42,7 @@
 - [ ] 合并 PR #32 + 本 WO 追加 commit
 - [ ] `lucy-test`：清 pending helm 状态
 - [ ] `helm upgrade` + `values.k3s-test.yaml` + `--atomic --wait`
-- [ ] `bash scripts/k8s-acceptance.sh --namespace lucy-test --release lucy --public-mcp-url http://10.69.95.109:8277/mcp --token …`
+- [ ] `bash scripts/gates/k8s-acceptance.sh --namespace lucy-test --release lucy --public-mcp-url http://10.69.95.109:8277/mcp --token …`
 - [ ] 归档 `inbox/lucy-test-upgrade-YYYYMMDD.md`
 
 ### P1 — 门禁补全
@@ -50,8 +50,8 @@
 - [ ] H2 kind 全新安装自动化（`scripts/k8s-fresh-install-gate.sh`）
 - [ ] H3 N-1 升级 gate（load 旧镜像 tar → upgrade → 验收）
 - [ ] H4 回滚 gate（故意坏 tag → `helm rollback` → 验收）
-- [ ] 更新 `docs/customer-delivery-preflight-checklist.md` H2–H6 为硬门禁
-- [ ] `docs/release-ci.md` 增加 `npm run gate:k8s-static` 到 release 路径
+- [ ] 更新 `docs/runbooks/customer-delivery-preflight-checklist.md` H2–H6 为硬门禁
+- [ ] `docs/governance/release-ci.md` 增加 `npm run gate:k8s-static` 到 release 路径
 
 ### P1 — 镜像与打包
 
@@ -92,7 +92,7 @@
 npm run gate:k8s-static
 
 # 集群可用时（lucy-test）
-bash scripts/k8s-release-gate.sh \
+bash scripts/gates/k8s-release-gate.sh \
   --with-cluster \
   --namespace lucy-test \
   --release lucy \
@@ -101,7 +101,7 @@ bash scripts/k8s-release-gate.sh \
   --token "<bearer>"
 
 # 出 v2 包前
-bash scripts/build-k8s-delivery-package.sh \
+bash scripts/gates/build-k8s-delivery-package.sh \
   --image-tag project-lucy:customer-amd64-0.16.0-20260901-b893a0c \
   --output inbox/customer-k8s-integration-build/lucy-k8s-integration-delivery-20260901-v2.tar.gz
 ```

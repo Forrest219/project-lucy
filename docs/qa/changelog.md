@@ -9,8 +9,8 @@
 
 ### 新增
 - 规范：[`smoke-test-design-upgrade-spec.md`](smoke-test-design-upgrade-spec.md)（Fast Smoke Tier 0 与 Full Smoke Tier 1 升级方案）
-- Fast Smoke 自动化脚本：`scripts/fast-smoke.mjs`、`scripts/verify-license-baseline.mjs`
-- Full Smoke 闭环验证：`scripts/p1-governance-smoke.mjs`、`scripts/p1-publish-regression-smoke.mjs`
+- Fast Smoke 自动化脚本：`scripts/smoke/fast-smoke.mjs`、`scripts/release/verify-license-baseline.mjs`
+- Full Smoke 闭环验证：`scripts/smoke/p1-governance-smoke.mjs`、`scripts/smoke/p1-publish-regression-smoke.mjs`
 - WebUI L1 E2E 扩充：`webui/tests/e2e/specs/smoke.spec.ts` 增补 Onboarding / Token 看板 / Audit 筛选 / Stepper
 
 ### 影响映射更新
@@ -34,7 +34,7 @@
 
 ### 修改
 - `demo_agent` / `ksc_financial_readonly`：ACL 追加 `sandbox` `prefix: s2_`（保留 KSC `ai.*`）
-- `scripts/e2e-spider2-lite-sample.mjs`：默认 mcp-direct + `lucy-demo-agent-token`，移除 Claude CLI 依赖
+- `scripts/eval/e2e-spider2-lite-sample.mjs`：默认 mcp-direct + `lucy-demo-agent-token`，移除 Claude CLI 依赖
 - `docs/qa/suite-agent-mcp.md` §5、suite README / ONBOARD §14 交叉引用同步
 
 ### 影响映射更新
@@ -64,8 +64,8 @@
 - `docs/qa/suite-agent-mcp.md`：分表 `E2E-AGENT`
 
 ### 修改
-- `docs/qa/README.md` / `docs/test-layers-and-release-gates.md` / `docs/README.md`：改为「总指引 + 分表」结构
-- 旧路径 `docs/qa/semantic-onboard-mcp-eval-sop.md`、`docs/sop-semantic-upload-mcp-eval-e2e.md` 改为迁移桩
+- `docs/qa/README.md` / `docs/governance/test-layers-and-release-gates.md` / `docs/README.md`：改为「总指引 + 分表」结构
+- 旧路径 `docs/qa/semantic-onboard-mcp-eval-sop.md`、`docs/runbooks/sop-semantic-upload-mcp-eval-e2e.md` 改为迁移桩
 
 ### 影响映射更新
 - 无（非 WebUI selector 变更）
@@ -79,9 +79,9 @@
 - `docs/qa/README.md`：QA / E2E 文档地图
 
 ### 修改
-- `docs/test-layers-and-release-gates.md`：§1 增加跨层 E2E 文档索引表
+- `docs/governance/test-layers-and-release-gates.md`：§1 增加跨层 E2E 文档索引表
 - `docs/README.md`：§7 指向 `qa/` 下套件与 SOP
-- 旧路径 `docs/sop-semantic-upload-mcp-eval-e2e.md` 改为迁移桩
+- 旧路径 `docs/runbooks/sop-semantic-upload-mcp-eval-e2e.md` 改为迁移桩
 
 ### 影响映射更新
 - 无（非 WebUI selector 变更）
@@ -122,7 +122,7 @@
 ### 修改
 - **webui/package.json**：新增 `e2e:install` / `e2e:fixture` / `e2e:smoke` / `e2e:impacted` / `e2e:nightly` / `e2e:release` / `e2e:report` / `e2e:selector-contract` 8 个脚本；devDependencies 加 `@playwright/test@^1.62.1`（已 `npm install` 同步 lockfile）；`e2e:install` 安装 Chromium / WebKit / Firefox，与 release 浏览器矩阵一致；`pree2e:*` 自动先跑 selector 守门和 fixture 初始化
 - **webui/playwright.config.ts**：移至 webui 根；testDir 指向 `tests/e2e/specs`；webServer.env 同时设 `KTX_PROJECT_ROOT`（server 优先读这个）
-- **scripts/init-e2e-fixture.sh**：修正路径 bug——fixture 源从 SRC（真实仓库）读，不再依赖 DEST（刚 clone 完还没有 webui/tests/e2e）
+- **scripts/demo/init-e2e-fixture.sh**：修正路径 bug——fixture 源从 SRC（真实仓库）读，不再依赖 DEST（刚 clone 完还没有 webui/tests/e2e）
 - **webui/tests/e2e/fixtures/data/ktx-fixture.yaml**：从 list 改 map 格式（与真实 ktx.yaml 一致）
 - **webui/tests/e2e/fixtures/helpers/reset.ts**：ESM 兼容（`import.meta.url` 替代 `__dirname`），新增 warn 模式供 L1 只读用例使用
 - **webui/tests/e2e/fixtures/helpers/terminology.ts**：从 forbidden 列表移除 `待发布变更`（section 标题合规，误报）
@@ -212,7 +212,7 @@
 
 #### 2. helper 路径 bug 修复
 
-- **`webui/tests/e2e/fixtures/helpers/reset.ts`**：`REPO_ROOT = resolve(__dirname, "../../../../")`（4 级）→ `"../../../../../"`（5 级）。原 4 级定位到 `webui/`，导致 `INIT_SCRIPT` 解析为不存在的 `webui/scripts/init-e2e-fixture.sh`，L3 `resetFixture()` 必 throw。修复后 L3 跑得到 fixture 初始化。
+- **`webui/tests/e2e/fixtures/helpers/reset.ts`**：`REPO_ROOT = resolve(__dirname, "../../../../")`（4 级）→ `"../../../../../"`（5 级）。原 4 级定位到 `webui/`，导致 `INIT_SCRIPT` 解析为不存在的 `webui/scripts/demo/init-e2e-fixture.sh`，L3 `resetFixture()` 必 throw。修复后 L3 跑得到 fixture 初始化。
 
 #### 3. 主文档同步
 
@@ -249,7 +249,7 @@
   - **不是** 测试本身不符合产品契约（spec 期望的 `add-schema-preview-btn` → 预览 → `add-schema-confirm-btn` → 成功，**完全对齐** `AddSchemaDrawer.tsx:178-220` 的 3 段 stepper 行为）
   - **是** **产品真实架构问题** + **测试基础设施缺口**（被 E2E 准确捕获）
 - **复现路径**：
-  1. 跑 `bash scripts/init-e2e-fixture.sh` 初始化 fixture
+  1. 跑 `bash scripts/demo/init-e2e-fixture.sh` 初始化 fixture
   2. 跑 `cd webui && npx playwright test --grep "@nightly" --project=chromium`
   3. 在 `/connections` 点 `add-schema-mysql-aliyun` → 填 `finance_mart` → 点 `add-schema-preview-btn`（dryRun=200，5ms）→ 点 `add-schema-confirm-btn`（dryRun=false，触发 pre-flight `ktx connection test`，4.6s 后 ECONNREFUSED → 400）
   4. 终端日志可见 `[WebServer] POST /api/connections/mysql-aliyun/schemas ... 400 (4657ms)` 紧跟 `connect ECONNREFUSED 127.0.0.1:3306`

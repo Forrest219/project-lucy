@@ -9,7 +9,7 @@
 | 适用范围 | Lucy WebUI 语义资产自助上传、Dry-Run、发布、下载与审计：`/connections`、`/sources`、`/review`、新增语义资产发布入口 |
 | 架构决议 | WebUI 从“受控上传 schema manifest”升级为“Staged Publish with Validate Gate + Sanitized Export with Secrets Hard Block” |
 | 事实源 | `/data/lucy` 或项目根下的 `ktx.yaml`、`semantic-layer/**/*.yaml`、`wiki/`、`evals/`、`.ktx-ui/**` sidecar；`.ktx/secrets/**` 永不进入 WebUI 导出或审计正文 |
-| 关联文档 | `webui/docs/17-static-catalog-loading-spec.md`、`webui/docs/21-connection-catalog-upload-ux-spec.md`、`webui/docs/12-semantic-layer-maintenance-ux-refresh.md`、`webui/docs/03-api-spec.md`、`docs/customer-deployment-guide.md`、`docs/DEVELOPMENT.md` |
+| 关联文档 | `webui/docs/17-static-catalog-loading-spec.md`、`webui/docs/21-connection-catalog-upload-ux-spec.md`、`webui/docs/12-semantic-layer-maintenance-ux-refresh.md`、`webui/docs/03-api-spec.md`、`docs/runbooks/customer-deployment-guide.md`、`docs/governance/DEVELOPMENT.md` |
 
 ## 1. 决策摘要
 

@@ -9,7 +9,7 @@
 | 适用范围 | Lucy WebUI 与 Agent 接入配置：`/onboarding`、`/connections`、`/admin/agents`、Token 首秀、MCP config 复制 |
 | 架构决议 | MCP endpoint 是部署/runtime 配置，不是前端页面推断结果；所有 UI 与配置片段必须从同一个后端 runtime 字段读取 |
 | 事实源 | `LUCY_PUBLIC_MCP_URL`；未配置时的本地开发 fallback；未来可扩展为 runtime config file |
-| 关联文档 | `webui/docs/07-mcp-auth-proxy-spec.md`、`webui/docs/14-agent-admin-enterprise-delivery-spec.md`、`webui/docs/19-system-overview-runtime-monitoring-spec.md`、`docs/agent-integration-guide.md`、`docs/deployment-docker.md`、`docs/customer-deployment-guide.md` |
+| 关联文档 | `webui/docs/07-mcp-auth-proxy-spec.md`、`webui/docs/14-agent-admin-enterprise-delivery-spec.md`、`webui/docs/19-system-overview-runtime-monitoring-spec.md`、`docs/runbooks/agent-integration-guide.md`、`docs/runbooks/deployment-docker.md`、`docs/runbooks/customer-deployment-guide.md` |
 
 ## 1. 决策摘要
 

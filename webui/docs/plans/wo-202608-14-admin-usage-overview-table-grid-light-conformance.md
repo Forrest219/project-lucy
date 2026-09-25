@@ -30,7 +30,7 @@
 
 在 `/Users/zhangxingchen/Projects/project-lucy/webui` 执行本工单。先读 Spec **82 v1.0**。
 
-必须先阅读：`../docs/DEVELOPMENT.md`、`docs/design-system/11-components-data-grid.md`、`docs/82-admin-usage-overview-table-grid-light-conformance-spec.md`、`src/pages/admin/GovernanceOverview.tsx`、`src/app/app.css`、`src/__tests__/admin-governance-observability.test.tsx`。
+必须先阅读：`../docs/governance/DEVELOPMENT.md`、`docs/design-system/11-components-data-grid.md`、`docs/82-admin-usage-overview-table-grid-light-conformance-spec.md`、`src/pages/admin/GovernanceOverview.tsx`、`src/app/app.css`、`src/__tests__/admin-governance-observability.test.tsx`。
 
 ## Non-Negotiable Boundaries
 

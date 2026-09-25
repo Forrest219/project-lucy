@@ -27,7 +27,7 @@ export function classifyConnectionError(raw: string | undefined | null): Connect
       summary:
         "目标库不支持 MySQL 的 max_execution_time 会话变量（常见于 StarRocks MySQL 协议端口）。",
       actions: [
-        "请使用已包含 ktx StarRocks 兼容补丁的 Lucy 镜像（scripts/patch-ktx-mysql-starrocks-compat.js）",
+        "请使用已包含 ktx StarRocks 兼容补丁的 Lucy 镜像（scripts/runtime/patch-ktx-mysql-starrocks-compat.js）",
         "新建连接时数据库类型请选择 StarRocks（MySQL 协议）",
         "升级后重新测试连接并拉取 live catalog"
       ]
@@ -39,7 +39,7 @@ export function classifyConnectionError(raw: string | undefined | null): Connect
       title: "KTX Python Runtime 未就绪",
       summary: "内网环境无法在线下载 uv，live catalog 与部分查询能力不可用。",
       actions: [
-        "换用已通过 G4b  bake-in runtime 的交付镜像（scripts/build-customer-amd64-image.sh）",
+        "换用已通过 G4b  bake-in runtime 的交付镜像（scripts/release/build-customer-amd64-image.sh）",
         "检查 /api/health 中 ktxRuntime.ready 是否为 true",
         "勿依赖容器启动时从 github.com 下载 uv"
       ]

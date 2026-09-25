@@ -6,7 +6,7 @@
 | 状态 | Approved for planning |
 | 撰写日期 | 2026-08-02 |
 | 触发来源 | `/catalog/demo-mysql/dataforai/superstore_orders` 浏览器核查与用户补充反馈 |
-| 关联规范 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/42-page-header-standardization-spec.md`、`webui/docs/48-catalog-and-table-semantic-workbench-productization-spec.md`、`webui/docs/50-table-semantic-workbench-ui-ux-hardening-spec.md`、`webui/docs/51-table-semantic-workbench-ia-separation-spec.md`、`docs/DEVELOPMENT.md` |
+| 关联规范 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/42-page-header-standardization-spec.md`、`webui/docs/48-catalog-and-table-semantic-workbench-productization-spec.md`、`webui/docs/50-table-semantic-workbench-ui-ux-hardening-spec.md`、`webui/docs/51-table-semantic-workbench-ia-separation-spec.md`、`docs/governance/DEVELOPMENT.md` |
 | 主要页面 | `/catalog/:conn/:schema/:table` |
 | 主要文件 | `webui/src/pages/TableEditor.tsx`、`webui/src/app/app.css`、`webui/src/__tests__/table-editor.test.tsx` |
 

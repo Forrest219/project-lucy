@@ -8,8 +8,8 @@
 
 必须先阅读：
 
-- `../docs/DEVELOPMENT.md`
-- `../docs/lucy-202608-upgrade-execution-control.md`
+- `../docs/governance/DEVELOPMENT.md`
+- `../docs/specs/lucy-202608-upgrade-execution-control.md`
 - `docs/00-product-terminology-standard.md`
 - `docs/04-data-model.md`
 - `docs/48-catalog-and-table-semantic-workbench-productization-spec.md`

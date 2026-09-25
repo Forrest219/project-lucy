@@ -8,7 +8,7 @@
 | Written date | 2026-08-03；v0.2 更新 2026-08-03（按 202608 Governance & Observability 主线收窄）；v0.3 更新 2026-08-03（删除 Dynamic RLS / CLS POC 超前设计，P2 聚焦当前访问治理复核与发布证据）；v0.4 更新 2026-08-20（对齐 Spec 62 v0.5：P0 Kernel Landed；Closure 缺口为 evidence 完整度 / purge / 术语） |
 | Goal | 提升 Lucy 成为可信赖的企业级 data agent 平台 |
 | Scope | `/admin` 访问治理现状、202608 Governance & Observability specs / plans、权限管理与 Agent 管理相关需求边界、已实现能力与差距 |
-| Related blueprint | `docs/lucy-202608-reliable-delivery-upgrade-spec.md` |
+| Related blueprint | `docs/specs/lucy-202608-reliable-delivery-upgrade-spec.md` |
 | Related plan | `docs/plans/2026-08-20-trace-evidence-p0-plan.md`（P0）；`docs/plans/2026-08-03-lucy-enterprise-data-agent-access-governance-plan.md`（全量 P0–P2） |
 
 ---

@@ -6,8 +6,8 @@
 | 文档类型 | Architecture / API / Data Contract Spec |
 | 版本 | v0.5.1 |
 | 撰写日期 | 2026-08-03；v0.2 更新 2026-08-03（补充 SQLite 并发与测试数据库隔离要求）；v0.3 更新 2026-08-03（补充 retention、auto_vacuum 与热库数据黑白名单）；v0.4 更新 2026-08-03（对齐 202608 Governance & Observability 主线）；v0.5 更新 2026-08-20（钉死 P0 最低充分条件、Implementation Status、Kernel Landed / P0 Closed 两档验收；明确 AC-P0 `policyVersion` 不进本 P0）；v0.5.1 更新 2026-08-20（增补与完整性 P0 / IP0 关系小节；交叉引用 `docs/access-control/integrity-p0-decision.md`） |
-| 关联蓝图 | `docs/lucy-202608-reliable-delivery-upgrade-spec.md` |
-| 关联总控 | `docs/lucy-202608-upgrade-execution-control.md` |
+| 关联蓝图 | `docs/specs/lucy-202608-reliable-delivery-upgrade-spec.md` |
+| 关联总控 | `docs/specs/lucy-202608-upgrade-execution-control.md` |
 | 关联完整性口径 | `docs/access-control/integrity-p0-decision.md` |
 | 关联 P0 计划 | `docs/plans/2026-08-20-trace-evidence-p0-plan.md` |
 | 关联工单 | `webui/docs/plans/wo-202608-01-trace-evidence-kernel.md`（Kernel Landed）；P0 Closure 见上述 P0 计划 T2–T4 |

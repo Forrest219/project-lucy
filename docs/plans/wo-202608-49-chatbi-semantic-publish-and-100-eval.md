@@ -95,7 +95,7 @@ flowchart TD
 ### Phase 3 — Eval 跑测（默认 A）
 
 ```bash
-node scripts/eval-runner.mjs \
+node scripts/eval/eval-runner.mjs \
   --cases ~/Desktop/lucy_upload/eval/chatbi_intl-eval-cases.yaml \
   --case <id>... \
   --format json
@@ -226,5 +226,5 @@ node scripts/eval-runner.mjs \
 | `~/Desktop/lucy_upload/teach-screenshots/` | 成功路径教学截图 |
 | `.cursor/skills/lucy-*-author` | 配置生成 Skill（中文要求） |
 | `webui/docs/23-semantic-asset-publish-export-spec.md` | 发布规格 |
-| `scripts/eval-runner.mjs` | Eval runner |
-| `docker-compose.demo.yml` | demo WebUI `:55176` |
+| `scripts/eval/eval-runner.mjs` | Eval runner |
+| `deploy/compose/docker-compose.demo.yml` | demo WebUI `:55176` |

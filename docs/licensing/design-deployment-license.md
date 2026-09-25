@@ -66,7 +66,7 @@ Payload 字段：
 ```
 
 - `expires_at: null` 表示永久许可
-- 厂商侧脚本 `scripts/license-issue.mjs` 使用 `LUCY_LICENSE_SIGNING_SECRET` 签发
+- 厂商侧脚本 `scripts/release/license-issue.mjs` 使用 `LUCY_LICENSE_SIGNING_SECRET` 签发
 - 客户镜像/compose 注入 `LUCY_LICENSE_VERIFY_SECRET`（与 signing secret 同值，按客户交付）
 
 ## 6. 事实源
@@ -154,7 +154,7 @@ on authenticated MCP tools/call (data-touching tools only)
 | 持久化 | `webui/server/license/store.ts` |
 | 快照/enforcement | `webui/server/license/entitlement.ts` |
 | Admin API | `webui/server/license/routes.ts` |
-| 签发 CLI | `scripts/license-issue.mjs` |
+| 签发 CLI | `scripts/release/license-issue.mjs` |
 | WebUI | `/admin/license` |
 | Agent 门禁 | `webui/server/admin/agents.ts` |
 | MCP 门禁 | `webui/server/proxy/mcp-proxy.ts` |

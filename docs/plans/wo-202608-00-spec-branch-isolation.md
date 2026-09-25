@@ -14,9 +14,9 @@
 
 Before running commands, read:
 
-- `docs/DEVELOPMENT.md`
-- `docs/lucy-202608-reliable-delivery-upgrade-spec.md`
-- `docs/lucy-202608-upgrade-execution-control.md`
+- `docs/governance/DEVELOPMENT.md`
+- `docs/specs/lucy-202608-reliable-delivery-upgrade-spec.md`
+- `docs/specs/lucy-202608-upgrade-execution-control.md`
 - `docs/plans/README.md`
 
 Hard constraints:
@@ -46,9 +46,9 @@ Target worktree:
 The patch for this task must include only these files or directories:
 
 ```text
-docs/lucy-202608-reliable-delivery-upgrade-spec.md
-docs/lucy-202608-upgrade-execution-control.md
-docs/lucy-202608-access-governance-gap-analysis.md
+docs/specs/lucy-202608-reliable-delivery-upgrade-spec.md
+docs/specs/lucy-202608-upgrade-execution-control.md
+docs/specs/lucy-202608-access-governance-gap-analysis.md
 docs/plans/2026-08-03-lucy-enterprise-data-agent-access-governance-plan.md
 docs/plans/README.md
 docs/plans/wo-202608-00-spec-branch-isolation.md
@@ -65,7 +65,7 @@ webui/docs/plans/wo-202608-03-tiered-publish-gate.md
 webui/docs/plans/wo-202608-04-safe-log-to-eval.md
 webui/docs/plans/wo-202608-05-fde-copilot-candidate.md
 docs/README.md
-docs/project-overview.md
+docs/governance/project-overview.md
 webui/docs/README.md
 webui/docs/plans/README.md
 ```
@@ -108,10 +108,10 @@ Run from current worktree:
 
 ```bash
 cd /Users/zhangxingchen/Projects/project-lucy
-git diff -- docs/README.md docs/project-overview.md webui/docs/README.md webui/docs/plans/README.md > /tmp/lucy-202608-specs.patch
-git diff --no-index /dev/null docs/lucy-202608-reliable-delivery-upgrade-spec.md >> /tmp/lucy-202608-specs.patch
-git diff --no-index /dev/null docs/lucy-202608-upgrade-execution-control.md >> /tmp/lucy-202608-specs.patch
-git diff --no-index /dev/null docs/lucy-202608-access-governance-gap-analysis.md >> /tmp/lucy-202608-specs.patch
+git diff -- docs/README.md docs/governance/project-overview.md webui/docs/README.md webui/docs/plans/README.md > /tmp/lucy-202608-specs.patch
+git diff --no-index /dev/null docs/specs/lucy-202608-reliable-delivery-upgrade-spec.md >> /tmp/lucy-202608-specs.patch
+git diff --no-index /dev/null docs/specs/lucy-202608-upgrade-execution-control.md >> /tmp/lucy-202608-specs.patch
+git diff --no-index /dev/null docs/specs/lucy-202608-access-governance-gap-analysis.md >> /tmp/lucy-202608-specs.patch
 git diff --no-index /dev/null docs/plans/2026-08-03-lucy-enterprise-data-agent-access-governance-plan.md >> /tmp/lucy-202608-specs.patch
 git diff --no-index /dev/null docs/plans/README.md >> /tmp/lucy-202608-specs.patch
 git diff --no-index /dev/null docs/plans/wo-202608-00-spec-branch-isolation.md >> /tmp/lucy-202608-specs.patch
@@ -198,7 +198,7 @@ Expected changed paths are only the allowlist paths in section 2.
 Also run:
 
 ```bash
-git diff --name-only | grep -Ev '^(docs/lucy-202608-|docs/plans/|webui/docs/(README.md|plans/README.md|plans/wo-202608-|6[2-6]-|69-admin-governance-observability-spec.md)|docs/README.md|docs/project-overview.md)$' || true
+git diff --name-only | grep -Ev '^(docs/lucy-202608-|docs/plans/|webui/docs/(README.md|plans/README.md|plans/wo-202608-|6[2-6]-|69-admin-governance-observability-spec.md)|docs/README.md|docs/governance/project-overview.md)$' || true
 ```
 
 Expected:
@@ -227,7 +227,7 @@ Run:
 
 ```bash
 cd /Users/zhangxingchen/Projects/project-lucy-202608-governance-specs
-rg -n "Governance & Observability|202608-GOV|busyTimeout|:memory:|Test Runner Boundaries|Work Order|high-entropy|P0 security candidate|Browser check: not required|Deferred" docs/lucy-202608-upgrade-execution-control.md webui/docs/62-trace-evidence-kernel-spec.md webui/docs/64-tiered-publish-gate-spec.md webui/docs/65-safe-log-to-eval-spec.md webui/docs/69-admin-governance-observability-spec.md webui/docs/plans/wo-202608-*.md
+rg -n "Governance & Observability|202608-GOV|busyTimeout|:memory:|Test Runner Boundaries|Work Order|high-entropy|P0 security candidate|Browser check: not required|Deferred" docs/specs/lucy-202608-upgrade-execution-control.md webui/docs/62-trace-evidence-kernel-spec.md webui/docs/64-tiered-publish-gate-spec.md webui/docs/65-safe-log-to-eval-spec.md webui/docs/69-admin-governance-observability-spec.md webui/docs/plans/wo-202608-*.md
 ```
 
 Expected evidence:
@@ -244,9 +244,9 @@ Run:
 
 ```bash
 cd /Users/zhangxingchen/Projects/project-lucy-202608-governance-specs
-git add docs/lucy-202608-reliable-delivery-upgrade-spec.md \
-  docs/lucy-202608-upgrade-execution-control.md \
-  docs/lucy-202608-access-governance-gap-analysis.md \
+git add docs/specs/lucy-202608-reliable-delivery-upgrade-spec.md \
+  docs/specs/lucy-202608-upgrade-execution-control.md \
+  docs/specs/lucy-202608-access-governance-gap-analysis.md \
   docs/plans/2026-08-03-lucy-enterprise-data-agent-access-governance-plan.md \
   docs/plans/README.md \
   docs/plans/wo-202608-00-spec-branch-isolation.md \
@@ -263,7 +263,7 @@ git add docs/lucy-202608-reliable-delivery-upgrade-spec.md \
   webui/docs/plans/wo-202608-04-safe-log-to-eval.md \
   webui/docs/plans/wo-202608-05-fde-copilot-candidate.md \
   docs/README.md \
-  docs/project-overview.md \
+  docs/governance/project-overview.md \
   webui/docs/README.md \
   webui/docs/plans/README.md
 git diff --staged --name-only

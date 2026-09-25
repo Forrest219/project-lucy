@@ -241,7 +241,7 @@ jobs:
               TAG="customer-multiarch-${LUCY_VERSION}-$(date +%Y%m%d)-${GITHUB_SHA::7}"
             fi
           fi
-          node scripts/lucy-version-governance.mjs --release-tag "$TAG"
+          node scripts/release/lucy-version-governance.mjs --release-tag "$TAG"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
       - name: Set up QEMU (for cross-platform builds)
         uses: docker/setup-qemu-action@v3
@@ -301,7 +301,7 @@ jobs:
           docker pull --platform linux/amd64 "${IMAGE_REF}"
           META="$(docker image inspect "${IMAGE_REF}" --format '{{.Os}}/{{.Architecture}}')"
           test "${META}" = "linux/amd64"
-          bash scripts/assert-image-elf-arch.sh "${IMAGE_REF}" amd64
+          bash scripts/release/assert-image-elf-arch.sh "${IMAGE_REF}" amd64
           docker run --rm --network=none --platform linux/amd64 --entrypoint /bin/sh "${IMAGE_REF}" -c \
             "test -x /home/lucy/.ktx/runtime/${KTX_VERSION}/.venv/bin/python"
           docker run --rm --network=none --platform linux/amd64 --entrypoint ktx "${IMAGE_REF}" --version | tee release/ktx-version.txt
@@ -309,7 +309,7 @@ jobs:
           IMAGE_LUCY_VERSION="$(docker run --rm --network=none --platform linux/amd64 --entrypoint printenv "${IMAGE_REF}" LUCY_VERSION)"
           test "${IMAGE_LUCY_VERSION}" = "${LUCY_VERSION}"
           printf '%s\n' "${IMAGE_LUCY_VERSION}" > release/lucy-version.txt
-          bash scripts/g8-image-k8s-contract-gate.sh "${IMAGE_REF}"
+          bash scripts/gates/g8-image-k8s-contract-gate.sh "${IMAGE_REF}"
           docker image inspect "${IMAGE_REF}" --format '{{.Id}}' > release/image-config-id.txt
       - name: Write release notes
         env:

@@ -8,7 +8,7 @@
 | 撰写日期 | 2026-08-29 |
 | 撰写人 | Cursor Agent |
 | 委托人 | xingchen |
-| 基于材料 | Lucy 最新升级功能集（Spec 124/127/130/131/132/134/135/136、PR #25 部署许可、CFO v2 Executive POC、实时 Catalog Auto-reload）、`docs/test-layers-and-release-gates.md`、`docs/qa/lucy-webui-e2e-test-suite.md`、`webui/docs/00-product-terminology-standard.md` |
+| 基于材料 | Lucy 最新升级功能集（Spec 124/127/130/131/132/134/135/136、PR #25 部署许可、CFO v2 Executive POC、实时 Catalog Auto-reload）、`docs/governance/test-layers-and-release-gates.md`、`docs/qa/lucy-webui-e2e-test-suite.md`、`webui/docs/00-product-terminology-standard.md` |
 | 适用范围 | Lucy 本地开发、PR 门禁（Fast Smoke）、Nightly 构建、版本发布及客户镜像交付（Full Smoke） |
 | 输出位置 | `docs/qa/smoke-test-design-upgrade-spec.md` |
 

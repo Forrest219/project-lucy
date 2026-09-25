@@ -345,10 +345,10 @@ git commit -m "feat: surface MCP execution runtime diagnostics"
 
 **Files:**
 
-- Modify: `docs/lucy-mcp-execution-runtime-ack-debug-spec.md`
+- Modify: `docs/specs/lucy-mcp-execution-runtime-ack-debug-spec.md`
 - Modify: `webui/docs/03-api-spec.md`
 - Modify: `inbox/2026-09-08-finbp-nbcb-funds-mcp-runtime-runbook.md`
-- Optional Modify: `docs/project-overview.md` if this spec should be listed in the project index.
+- Optional Modify: `docs/governance/project-overview.md` if this spec should be listed in the project index.
 
 **Step 1: Update docs from implementation**
 
@@ -374,7 +374,7 @@ Expected: pass.
 **Step 4: Final commit**
 
 ```bash
-git add docs/lucy-mcp-execution-runtime-ack-debug-spec.md inbox/2026-09-08-finbp-nbcb-funds-mcp-runtime-runbook.md docs/project-overview.md
+git add docs/specs/lucy-mcp-execution-runtime-ack-debug-spec.md inbox/2026-09-08-finbp-nbcb-funds-mcp-runtime-runbook.md docs/governance/project-overview.md
 git commit -m "docs: document MCP execution runtime debug upgrade"
 ```
 

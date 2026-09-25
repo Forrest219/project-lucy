@@ -33,7 +33,7 @@
 
 必须先阅读：
 
-- `../docs/DEVELOPMENT.md`
+- `../docs/governance/DEVELOPMENT.md`
 - `docs/00-product-terminology-standard.md`
 - `docs/15-role-admin-spec.md`（§5.3）
 - `docs/59-role-admin-ops-ux-clarification-spec.md`

@@ -18,8 +18,8 @@ Read these documents before editing:
 
 - `webui/docs/24-yaml-delivery-runbook-spec.md`
 - `docs/SYSTEM_HANDBOOK.md`
-- `docs/design-system-handbook-help.md`
-- `docs/DEVELOPMENT.md`
+- `docs/design/design-system-handbook-help.md`
+- `docs/governance/DEVELOPMENT.md`
 - `webui/docs/17-static-catalog-loading-spec.md`
 - `webui/docs/21-connection-catalog-upload-ux-spec.md`
 - `webui/docs/23-semantic-asset-publish-export-spec.md`
@@ -457,7 +457,7 @@ Expected:
 
 - Modify: `webui/docs/README.md`
 - Modify: `webui/docs/plans/README.md`
-- Optionally Modify: `docs/project-overview.md`
+- Optionally Modify: `docs/governance/project-overview.md`
 
 **Step 1: Register spec**
 

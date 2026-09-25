@@ -8,9 +8,9 @@
 | 撰写日期 | 2026-06-19 |
 | 撰写人 | Claude Reviewer |
 | 委托人 | zhangxingchen |
-| 基于材料 | project-lucy/docs/design-agent-permissions.md, webui/server/admin/*, webui/src/pages/admin/* |
+| 基于材料 | project-lucy/docs/design/design-agent-permissions.md, webui/server/admin/*, webui/src/pages/admin/* |
 | 适用范围 | Builder 修复参考；合并前必读 |
-| 输出位置 | project-lucy/docs/review-module1-agent-permissions.md |
+| 输出位置 | project-lucy/docs/reviews/review-module1-agent-permissions.md |
 
 ---
 

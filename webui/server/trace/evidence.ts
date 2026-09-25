@@ -130,7 +130,7 @@ export interface ListTraceEventsFilter {
   limit?: number;
 }
 
-// Retention defaults are referenced from `docs/lucy-202608-reliable-delivery-upgrade-spec.md`
+// Retention defaults are referenced from `docs/specs/lucy-202608-reliable-delivery-upgrade-spec.md`
 // and `webui/docs/62-trace-evidence-kernel-spec.md`. We expose them so the verifier
 // can assert them at runtime without hard-coding magic numbers.
 export const TRACE_RETENTION_DAYS = 365;

@@ -24,7 +24,7 @@
 
 请在 `/Users/zhangxingchen/Projects/project-lucy/webui` 执行本工单。先读 Spec **84 v1.0**。
 
-必须先阅读：`../docs/DEVELOPMENT.md`、`docs/00-product-terminology-standard.md`、`docs/design-system/10-components-button.md`、`docs/84-…`、本 Plan、`GovernanceOverview.tsx`、`governance-observability.ts`、前后端 `admin-governance-observability` 测试、`docs/ui-ux-feedback/pages/admin-governance.md`。
+必须先阅读：`../docs/governance/DEVELOPMENT.md`、`docs/00-product-terminology-standard.md`、`docs/design-system/10-components-button.md`、`docs/84-…`、本 Plan、`GovernanceOverview.tsx`、`governance-observability.ts`、前后端 `admin-governance-observability` 测试、`docs/ui-ux-feedback/pages/admin-governance.md`。
 
 ## Non-Negotiable Boundaries
 

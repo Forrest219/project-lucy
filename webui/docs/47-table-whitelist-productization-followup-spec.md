@@ -9,7 +9,7 @@
 | 关联页面 | `/connections/whitelist` |
 | 关联工单 | `webui/docs/plans/wo-M45-table-whitelist-productization-followup.md` |
 | 浏览器复核记录 | `inbox/whitelist-page-browser-check-2026-08-01.md` |
-| 关联规范 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/03-api-spec.md`、`webui/docs/34-table-whitelist-catalog-reload-layout-stability-spec.md`、`docs/DEVELOPMENT.md` |
+| 关联规范 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/03-api-spec.md`、`webui/docs/34-table-whitelist-catalog-reload-layout-stability-spec.md`、`docs/governance/DEVELOPMENT.md` |
 
 ## 1. 背景
 

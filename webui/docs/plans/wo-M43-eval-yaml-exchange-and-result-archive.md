@@ -6,7 +6,7 @@
 | 标题 | 质量评测 Eval YAML 上传 / 下载、本地运行指引与可选结果归档 |
 | 来源 Spec | `webui/docs/46-eval-yaml-exchange-and-result-archive-spec.md` |
 | 撰写日期 | 2026-08-01 |
-| 适用范围 | `webui/src/pages/eval/CaseList.tsx`、`webui/src/pages/eval/RunList.tsx`、`webui/src/pages/eval/RunDetail.tsx`、`webui/server/eval/cases.ts`、`webui/server/eval/runner.ts`、`webui/server/eval/db.ts`、`webui/src/lib/types.ts`、`webui/server/__tests__/eval-*.test.ts`、`webui/src/__tests__/eval-cases.test.tsx`、必要时 `scripts/eval-runner.mjs` |
+| 适用范围 | `webui/src/pages/eval/CaseList.tsx`、`webui/src/pages/eval/RunList.tsx`、`webui/src/pages/eval/RunDetail.tsx`、`webui/server/eval/cases.ts`、`webui/server/eval/runner.ts`、`webui/server/eval/db.ts`、`webui/src/lib/types.ts`、`webui/server/__tests__/eval-*.test.ts`、`webui/src/__tests__/eval-cases.test.tsx`、必要时 `scripts/eval/eval-runner.mjs` |
 | 上游工单 | Module 2 Eval 配置与监控、M36 Data Agent Ops Platform Global UX、M40 PageHeader Standardization |
 
 ## 目标

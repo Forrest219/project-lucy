@@ -3,7 +3,7 @@
 ## When to rollback
 
 - `helm upgrade --atomic` timed out and auto-rolled back, but the cluster is still unhealthy.
-- New pod starts but fails acceptance (`scripts/k8s-acceptance.sh`).
+- New pod starts but fails acceptance (`scripts/gates/k8s-acceptance.sh`).
 - Wrong image digest was deployed under a reused mutable tag.
 - v1/v2 package upgrade failed — roll back to last known-good revision, then plan v3 retry.
 
@@ -87,4 +87,4 @@ For customer deliveries, archive:
 - Timestamp and operator
 
 Store under `inbox/` or your release evidence package per
-[`docs/customer-delivery-preflight-checklist.md`](../../../docs/customer-delivery-preflight-checklist.md).
+[`docs/runbooks/customer-delivery-preflight-checklist.md`](../../../../docs/runbooks/customer-delivery-preflight-checklist.md).

@@ -1,6 +1,6 @@
 # wo-M44 Connection Overview Visual Simplification
 
-> Codex / Claude Code 直投工单。执行前请阅读 `AGENTS.md`、`docs/DEVELOPMENT.md`、`webui/docs/00-product-terminology-standard.md` 和 `webui/docs/44-connection-overview-productization-spec.md` v0.2。
+> Codex / Claude Code 直投工单。执行前请阅读 `AGENTS.md`、`docs/governance/DEVELOPMENT.md`、`webui/docs/00-product-terminology-standard.md` 和 `webui/docs/44-connection-overview-productization-spec.md` v0.2。
 
 ## 0. 背景
 

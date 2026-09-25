@@ -805,7 +805,7 @@ npm run lint:spec
 | Admin 审计 UI | 裁决原因筛选项补 `capability_forbidden` |
 | Security Eval | 新增 AC-SEC-CLS / CAP / KEY / SCOPE 用例 |
 | 术语标准 | 登记本文 Terminology Compliance 表全部条目 |
-| `docs/vision.md` / `webui-feature-map.md` | AC-P0+P1 交付后再更新「不做行级」口径 |
+| `docs/governance/vision.md` / `webui-feature-map.md` | AC-P0+P1 交付后再更新「不做行级」口径 |
 
 ---
 

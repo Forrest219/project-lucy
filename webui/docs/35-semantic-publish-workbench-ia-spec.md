@@ -9,7 +9,7 @@
 | 关联页面 | `/review` -> `/publish/workbench`, `/publish/history` |
 | 关联工单 | `webui/docs/plans/wo-M32-semantic-publish-workbench-ia.md` |
 | 事实源 | 用户截图：当前 `/review` 页面；用户设计输入：一级菜单改为 `语义发布`，二级菜单仅保留 `发布工作台` 与 `发布记录` |
-| 关联规范 | `webui/docs/00-product-terminology-standard.md`, `webui/docs/06-navigation-ia.md`, `webui/docs/23-semantic-asset-publish-export-spec.md`, `webui/docs/24-yaml-delivery-runbook-spec.md`, `webui/docs/29-connection-semantic-boundary-automation-spec.md`, `docs/DEVELOPMENT.md` |
+| 关联规范 | `webui/docs/00-product-terminology-standard.md`, `webui/docs/06-navigation-ia.md`, `webui/docs/23-semantic-asset-publish-export-spec.md`, `webui/docs/24-yaml-delivery-runbook-spec.md`, `webui/docs/29-connection-semantic-boundary-automation-spec.md`, `docs/governance/DEVELOPMENT.md` |
 
 > **修订（Spec 112，2026-08-06；Spec 119，2026-08-07；Spec 121，2026-08-07；Spec 123，2026-08-07）：** PageHeader 动作密度见 [`112-publish-workbench-flow-and-gate-ia-spec.md`](112-publish-workbench-flow-and-gate-ia-spec.md)。双栏 + 变更详情 Drawer 见 [`119-publish-workbench-queue-gate-ia-spec.md`](119-publish-workbench-queue-gate-ia-spec.md)。确认侧栏路径见 [`121-publish-workbench-cta-confirm-spec.md`](121-publish-workbench-cta-confirm-spec.md)。**语义生效台**（去本页上传/导出；「生效准备」；「同步索引并生效」；「更多」全量重建 `force:true`）见 [`123-publish-workbench-activation-ia-spec.md`](123-publish-workbench-activation-ia-spec.md)。本 Spec §6.1–6.4 中「四按钮常驻 / 工作台上传与导出」以 Spec 123 为准；导航、Validate Gate fail-closed 与 `/review` 重定向不变。
 

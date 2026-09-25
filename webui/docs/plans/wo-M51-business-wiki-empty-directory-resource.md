@@ -1,6 +1,6 @@
 # M51 — Business Wiki Empty Directory Resource
 
-> codex 直投 prompt：请在 `/Users/forrest/Projects/project-lucy/webui` 开工。先读 `../docs/53-business-wiki-empty-directory-resource-spec.md`、`../docs/52-business-wiki-directory-tree-and-density-spec.md`、`../docs/49-business-wiki-md-library-operations-spec.md`、`../docs/00-product-terminology-standard.md`、`../../docs/DEVELOPMENT.md` 和本工单。目标是让 `/wiki` 支持空目录独立存在，并将 `新建目录` 与 `新建文档` 拆成两个独立操作。必须新增后端目录持久化，不再只依赖 Markdown key 推导目录。
+> codex 直投 prompt：请在 `/Users/forrest/Projects/project-lucy/webui` 开工。先读 `../docs/53-business-wiki-empty-directory-resource-spec.md`、`../docs/52-business-wiki-directory-tree-and-density-spec.md`、`../docs/49-business-wiki-md-library-operations-spec.md`、`../docs/00-product-terminology-standard.md`、`../../docs/governance/DEVELOPMENT.md` 和本工单。目标是让 `/wiki` 支持空目录独立存在，并将 `新建目录` 与 `新建文档` 拆成两个独立操作。必须新增后端目录持久化，不再只依赖 Markdown key 推导目录。
 
 ## 0. 背景
 
@@ -60,7 +60,7 @@ git -C /Users/forrest/Projects/project-lucy status --short
 - `../docs/52-business-wiki-directory-tree-and-density-spec.md`
 - `../docs/49-business-wiki-md-library-operations-spec.md`
 - `../docs/00-product-terminology-standard.md`
-- `../../docs/DEVELOPMENT.md`
+- `../../docs/governance/DEVELOPMENT.md`
 
 如果工作树已有无关脏改动，只记录并避开，不得回滚。
 

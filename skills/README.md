@@ -49,8 +49,8 @@ publish_targets:
 ## 验证命令
 
 ```bash
-node scripts/p1-skills-smoke.mjs
-node --test scripts/p1-skills-smoke.test.mjs
+node scripts/smoke/p1-skills-smoke.mjs
+node --test scripts/smoke/p1-skills-smoke.test.mjs
 ```
 
 smoke 会写出 `inbox/p1-skills-evidence.json`。如有失败，`blockers[]` 会列出阻断原因、文件和检查项。

@@ -17,7 +17,7 @@
 Read these documents before editing:
 
 - `AGENTS.md`
-- `docs/DEVELOPMENT.md`
+- `docs/governance/DEVELOPMENT.md`
 - `webui/docs/00-product-terminology-standard.md`
 - `webui/docs/03-api-spec.md`
 - `webui/docs/13-business-wiki-ux-refactor.md`

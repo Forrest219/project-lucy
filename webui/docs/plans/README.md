@@ -177,7 +177,7 @@ M0 → M1 → M2 → M3 →（M4、M5 可并行）→ M6。M6 依赖 M3 已完�
   - GOV-02 只动 `webui/server/admin/governance-observability.ts` + `webui/src/pages/admin/**`；先交 server 五个聚合 API，再交 Dashboard UI。
   - GOV-04 只动 `webui/server/eval/security-candidates.ts` + `webui/src/pages/eval/**`；先交 candidate pool / reviewer / promotion preview，再交轻量 UI。
 - 两个任务都**不做浏览器验证**，只跑各自工单内的 Vitest + 根目录 verifier + `lint:terminology` / `lint:ia-boundary`。
-- 总控细节（v0.6、并行边界、文件 ownership、Verification Matrix）见 `docs/lucy-202608-upgrade-execution-control.md`。
+- 总控细节（v0.6、并行边界、文件 ownership、Verification Matrix）见 `docs/specs/lucy-202608-upgrade-execution-control.md`。
 
 ## 6. 如何把工单喂给 codex
 

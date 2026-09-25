@@ -10,7 +10,7 @@
 | 状态 | **已批准落盘**（决策基线；非实现 Spec） |
 | 适用范围 | 售前 / 对内对齐 / 路线图升格；界定「必须承诺」与「已知限制」 |
 | 输出位置 | `docs/access-control/integrity-p0-decision.md` |
-| 相关 | [`gap-analysis-202608.md`](gap-analysis-202608.md)；[`../lucy-202608-reliable-delivery-upgrade-spec.md`](../lucy-202608-reliable-delivery-upgrade-spec.md)；[`webui/docs/62-trace-evidence-kernel-spec.md`](../../webui/docs/62-trace-evidence-kernel-spec.md) §4.1（与 IP0 关系）；[`../plans/2026-08-20-trace-evidence-p0-plan.md`](../plans/2026-08-20-trace-evidence-p0-plan.md) |
+| 相关 | [`gap-analysis-202608.md`](gap-analysis-202608.md)；[`../specs/lucy-202608-reliable-delivery-upgrade-spec.md`](../specs/lucy-202608-reliable-delivery-upgrade-spec.md)；[`webui/docs/62-trace-evidence-kernel-spec.md`](../../webui/docs/62-trace-evidence-kernel-spec.md) §4.1（与 IP0 关系）；[`../plans/2026-08-20-trace-evidence-p0-plan.md`](../plans/2026-08-20-trace-evidence-p0-plan.md) |
 
 ---
 
@@ -106,7 +106,7 @@ IP0-6 口径表随发布冻结
 | Trace | Spec 62 / WO-01 为 202608 P0；append-only；禁止热存原始 SQL AST / 结果样本 / Token 明文 |
 | 上游最终 SQL 与 ACL | UAT：主要检请求参数，**不**校验上游最终 SQL 真实表集合 |
 
-参考：`docs/security-guide.md`、`webui/docs/07-mcp-auth-proxy-spec.md`、`webui/docs/08-mcp-audit-question-tracing-spec.md`、`docs/access-control/uat-agent-permissions-v1.md` §4.6。
+参考：`docs/runbooks/security-guide.md`、`webui/docs/07-mcp-auth-proxy-spec.md`、`webui/docs/08-mcp-audit-question-tracing-spec.md`、`docs/access-control/uat-agent-permissions-v1.md` §4.6。
 
 ---
 
@@ -125,7 +125,7 @@ IP0-6 口径表随发布冻结
 
 1. 产品确认后，为 **IP0-3 / IP0-4** 另批实现 Spec（建议落 `webui/docs/`）与 WO。
 2. IP0-2：在 Admin / 发布证据中增加问询绑定覆盖率披露，不改「漏报不阻断查询」语义。
-3. 售前 / `docs/security-guide.md` / 客户材料引用本文件 §1–§2，避免口径漂移。
+3. 售前 / `docs/runbooks/security-guide.md` / 客户材料引用本文件 §1–§2，避免口径漂移。
 4. 术语若新增「查询指纹 / 授权触达对账」等产品概念，先登记 `webui/docs/00-product-terminology-standard.md`。
 
 ---

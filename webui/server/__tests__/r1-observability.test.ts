@@ -43,7 +43,7 @@ describe("GET /api/r1/observability", () => {
       agent: "hermes",
       target: "lucy-mcp-proxy",
       dataset: "r1_doris_benchmark",
-      generatedBy: "scripts/lucy-r1-hermes-report.mjs",
+      generatedBy: "scripts/smoke/lucy-r1-hermes-report.mjs",
       inputs: {
         cases: "evals/r1_doris_benchmark/eval/r1_doris_benchmark-eval-cases.yaml",
         results: "inbox/hermes-r1-results.json",
@@ -334,7 +334,7 @@ describe("GET /api/r1/observability", () => {
       agent: "hermes",
       target: "lucy-mcp-proxy",
       dataset: "r1_doris_benchmark",
-      generatedBy: "scripts/lucy-r1-hermes-report.mjs",
+      generatedBy: "scripts/smoke/lucy-r1-hermes-report.mjs",
       inputs: {
         cases: "evals/r1_doris_benchmark/eval/r1_doris_benchmark-eval-cases.yaml",
         results: "inbox/hermes-r1-results.json",
@@ -425,7 +425,7 @@ describe("GET /api/r1/observability", () => {
       agent: "hermes",
       target: "lucy-mcp-proxy",
       dataset: "r1_doris_benchmark",
-      generatedBy: "scripts/lucy-r1-hermes-report.mjs",
+      generatedBy: "scripts/smoke/lucy-r1-hermes-report.mjs",
       inputs: {
         cases: "evals/r1_doris_benchmark/eval/r1_doris_benchmark-eval-cases.yaml",
         results: "inbox/hermes-r1-results.json",
@@ -517,7 +517,7 @@ describe("GET /api/r1/observability", () => {
       agent: "hermes",
       target: "lucy-mcp-proxy",
       dataset: "r1_doris_benchmark",
-      generatedBy: "scripts/lucy-r1-hermes-report.mjs",
+      generatedBy: "scripts/smoke/lucy-r1-hermes-report.mjs",
       inputs: {
         cases: "evals/r1_doris_benchmark/eval/r1_doris_benchmark-eval-cases.yaml",
         results: "inbox/hermes-r1-results.json",
@@ -600,7 +600,7 @@ describe("GET /api/r1/observability", () => {
       agent: "hermes",
       target: "lucy-mcp-proxy",
       dataset: "r1_doris_benchmark",
-      generatedBy: "scripts/lucy-r1-hermes-report.mjs",
+      generatedBy: "scripts/smoke/lucy-r1-hermes-report.mjs",
       inputs: {
         cases: "evals/r1_doris_benchmark/eval/r1_doris_benchmark-eval-cases.yaml",
         results: "inbox/hermes-r1-results.json",
@@ -683,7 +683,7 @@ describe("GET /api/r1/observability", () => {
       target: "lucy-mcp-proxy",
       dataset: "r1_doris_benchmark",
       checkedAt: "2026-07-02T00:00:00.000Z",
-      generatedBy: "scripts/lucy-r1-hermes-report.mjs",
+      generatedBy: "scripts/smoke/lucy-r1-hermes-report.mjs",
       inputs: {
         cases: "evals/r1_doris_benchmark/eval/r1_doris_benchmark-eval-cases.yaml",
         results: "inbox/hermes-r1-results.json",
@@ -767,7 +767,7 @@ describe("GET /api/r1/observability", () => {
       target: "lucy-mcp-proxy",
       dataset: "r1_doris_benchmark",
       checkedAt: "2026-07-02T00:00:00.000Z",
-      generatedBy: "scripts/lucy-r1-hermes-report.mjs",
+      generatedBy: "scripts/smoke/lucy-r1-hermes-report.mjs",
       inputs: {
         cases: "evals/r1_doris_benchmark/eval/r1_doris_benchmark-eval-cases.yaml",
         results: "inbox/hermes-r1-results.json",
@@ -913,7 +913,7 @@ describe("GET /api/r1/observability", () => {
       agent: "hermes",
       target: "lucy-mcp-proxy",
       dataset: "smoke_dataset",
-      generatedBy: "scripts/lucy-r1-hermes-report.mjs",
+      generatedBy: "scripts/smoke/lucy-r1-hermes-report.mjs",
       inputs: {
         cases: "evals/smoke/eval/smoke-eval-cases.yaml",
         results: "inbox/hermes-r1-results.json",

@@ -21,7 +21,7 @@
 
 ### Task 1: 前端徽标
 
-必须先阅读：`../docs/DEVELOPMENT.md`、`docs/00-product-terminology-standard.md`、`docs/87-…`、本 Plan、`GovernanceOverview.tsx`、`Onboarding.tsx`（新鲜度规则）、`admin-governance-observability.test.tsx`。
+必须先阅读：`../docs/governance/DEVELOPMENT.md`、`docs/00-product-terminology-standard.md`、`docs/87-…`、本 Plan、`GovernanceOverview.tsx`、`Onboarding.tsx`（新鲜度规则）、`admin-governance-observability.test.tsx`。
 
 - [ ] PageHeader actions：`统计时间` 在左、segmented 在右，`flex items-center gap-3`。
 - [ ] 三组 query 成功后取 max `dataUpdatedAt`；相对时间规则对齐 overview。

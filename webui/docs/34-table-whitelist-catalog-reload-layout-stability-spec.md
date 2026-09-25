@@ -9,7 +9,7 @@
 | 关联页面 | `/connections/whitelist` |
 | 关联工单 | `webui/docs/plans/wo-M31-table-whitelist-catalog-reload-layout-stability.md` |
 | 事实源 | 截图审阅：截图 1 `/connections` 连接概览、截图 2 `/connections/whitelist` 表白名单、截图 3 `/connections/whitelist` 点击 `刷新本地目录` 后 |
-| 关联规范 | `webui/docs/00-product-terminology-standard.md`, `webui/docs/11-connection-whitelist-test-ux-refresh.md`, `webui/docs/17-static-catalog-loading-spec.md`, `webui/docs/25-connection-module-terminology-ia-refresh-spec.md`, `webui/docs/28-catalog-reload-result-ops-ux-spec.md`, `webui/docs/31-connection-manifest-upload-affordance-spec.md`, `docs/DEVELOPMENT.md` |
+| 关联规范 | `webui/docs/00-product-terminology-standard.md`, `webui/docs/11-connection-whitelist-test-ux-refresh.md`, `webui/docs/17-static-catalog-loading-spec.md`, `webui/docs/25-connection-module-terminology-ia-refresh-spec.md`, `webui/docs/28-catalog-reload-result-ops-ux-spec.md`, `webui/docs/31-connection-manifest-upload-affordance-spec.md`, `docs/governance/DEVELOPMENT.md` |
 
 ## 1. 背景
 

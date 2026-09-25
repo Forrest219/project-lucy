@@ -6,8 +6,8 @@
 | Document type | Product / API / UX Spec |
 | Version | v0.3 |
 | Written date | 2026-08-04 |
-| Related blueprint | `docs/lucy-202608-reliable-delivery-upgrade-spec.md` |
-| Related execution control | `docs/lucy-202608-upgrade-execution-control.md` |
+| Related blueprint | `docs/specs/lucy-202608-reliable-delivery-upgrade-spec.md` |
+| Related execution control | `docs/specs/lucy-202608-upgrade-execution-control.md` |
 | Related page | `/admin/governance` |
 | Related plan | `docs/plans/wo-202608-GOV-02a-admin-governance-usage-overview-dashboard.md` |
 | Fact source | `http://127.0.0.1:55176/admin/governance`（历史核查）、`webui/server/admin/governance-observability.ts`、`webui/src/pages/admin/GovernanceOverview.tsx`、`webui/server/admin/audit.ts`（`access_log`/`access_log_sources` schema）、`webui/server/admin/agents.ts`（`access.yaml` 解析） |

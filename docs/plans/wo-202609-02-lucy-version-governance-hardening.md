@@ -13,8 +13,8 @@
 ### Task 1: Add the SSOT gate
 
 **Files:**
-- Create: `scripts/lucy-version-governance.mjs`
-- Create: `scripts/lucy-version-governance.test.mjs`
+- Create: `scripts/release/lucy-version-governance.mjs`
+- Create: `scripts/release/lucy-version-governance.test.mjs`
 - Modify: `package.json`
 
 1. Write tests for valid product versions, accepted customer/release tags, rejected mismatches, and committed projection drift.
@@ -25,7 +25,7 @@
 ### Task 2: Bind build and release images to `VERSION`
 
 **Files:**
-- Modify: `scripts/build-customer-amd64-image.sh`
+- Modify: `scripts/release/build-customer-amd64-image.sh`
 - Modify: `.github/workflows/lucy-release.yml`
 
 1. Reject invalid `LUCY_VERSION` and customer image tags whose product segment differs.
@@ -35,8 +35,8 @@
 ### Task 3: Make release metadata consume the SSOT
 
 **Files:**
-- Modify: `scripts/release-artifacts.mjs`
-- Modify: `scripts/release-artifacts.test.mjs`
+- Modify: `scripts/release/release-artifacts.mjs`
+- Modify: `scripts/release/release-artifacts.test.mjs`
 - Modify: `package-lock.json`
 
 1. Include `VERSION` in the customer source bundle.
@@ -50,9 +50,9 @@
 - Modify: `deploy/k8s/helm/lucy/templates/_helpers.tpl`
 - Modify: `deploy/k8s/helm/lucy/templates/configmap.yaml`
 - Modify: `deploy/k8s/helm/lucy/templates/NOTES.txt`
-- Modify: `scripts/helm-lucy-gate.sh`
-- Modify: `scripts/build-k8s-delivery-package.sh`
-- Modify: `scripts/build-k8s-delivery-package.test.mjs`
+- Modify: `scripts/gates/helm-lucy-gate.sh`
+- Modify: `scripts/gates/build-k8s-delivery-package.sh`
+- Modify: `scripts/gates/build-k8s-delivery-package.test.mjs`
 - Modify: `deploy/k8s/K8S_CONTRACT.md`
 
 1. Fail Helm rendering when `lucy.version` differs from `Chart.appVersion`.
@@ -63,7 +63,7 @@
 ### Task 5: Clarify policy and validate runtime projections
 
 **Files:**
-- Modify: `docs/version-matrix.md`
+- Modify: `docs/governance/version-matrix.md`
 - Modify: `webui/server/lucy-version.ts`
 - Modify: `webui/src/lib/lucyVersion.ts`
 - Modify: `webui/vite.config.ts`
@@ -77,7 +77,7 @@
 
 1. Run `npm run lint:version`, its Node tests, `npm run lint:spec`, and release/package regression tests.
 2. Run targeted WebUI tests and a custom-version production build.
-3. Run `bash scripts/helm-lucy-gate.sh`.
+3. Run `bash scripts/gates/helm-lucy-gate.sh`.
 4. Run `bash -n` on modified shell scripts and validate the workflow YAML parse.
-5. Run `bash scripts/build-customer-amd64-image.sh`; require G1-G4c and G8 to pass, or report an environmental blocker with the exact gate reached.
+5. Run `bash scripts/release/build-customer-amd64-image.sh`; require G1-G4c and G8 to pass, or report an environmental blocker with the exact gate reached.
 

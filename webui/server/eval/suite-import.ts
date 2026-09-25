@@ -333,7 +333,7 @@ export async function downloadEvalSuiteYaml(projectRoot: string, domain: string)
   return {
     suite,
     yaml: suiteToYaml(suite),
-    runnerCommand: `EVAL_AGENT_ADAPTER=hermes node scripts/lucy-eval-runner.mjs --suite ${domain}-eval-suite.yaml --output result.json --adapter hermes`
+    runnerCommand: `EVAL_AGENT_ADAPTER=hermes node scripts/eval/lucy-eval-runner.mjs --suite ${domain}-eval-suite.yaml --output result.json --adapter hermes`
   };
 }
 

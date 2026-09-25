@@ -17,7 +17,7 @@
 Read these documents before editing:
 
 - `AGENTS.md`
-- `docs/DEVELOPMENT.md`
+- `docs/governance/DEVELOPMENT.md`
 - `webui/docs/00-product-terminology-standard.md`
 - `webui/docs/06-navigation-ia.md`
 - `webui/docs/37-sidebar-navigation-ia-consolidation-spec.md`

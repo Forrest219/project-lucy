@@ -8,7 +8,7 @@
 | 撰写日期 | 2026-08-05 |
 | 撰写人 | Composer |
 | 委托人 | zhangxingchen |
-| 基于材料 | `/help` 无搜索能力反馈；`/connections`「已发现表数」语义无处可查；`docs/design-system-handbook-help.md` M15-P1-2；`webui/docs/73-connections-terminology-and-upload-drawer-consistency-spec.md` |
+| 基于材料 | `/help` 无搜索能力反馈；`/connections`「已发现表数」语义无处可查；`docs/design/design-system-handbook-help.md` M15-P1-2；`webui/docs/73-connections-terminology-and-upload-drawer-consistency-spec.md` |
 | 适用范围 | `/help` 手册内关键词搜索；连接概览 KPI / 列头术语写入系统手册并可被搜索命中 |
 | 输出位置 | `webui/docs/111-help-center-search-and-connection-kpi-glossary-spec.md` |
 
@@ -17,7 +17,7 @@
 | Spec 编号 | 111 |
 | 关联工单 | `webui/docs/plans/wo-202608-44-help-center-search-and-connection-kpi-glossary.md` |
 | 关联页面 | `/help`、`/connections`（仅术语说明，不改连接页 UI） |
-| 关联设计 | `docs/design-system-handbook-help.md` §5.3 / M15-P1-2 |
+| 关联设计 | `docs/design/design-system-handbook-help.md` §5.3 / M15-P1-2 |
 | 状态 | Implemented |
 | 日期 | 2026-08-05 |
 

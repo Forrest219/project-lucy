@@ -1,9 +1,9 @@
 # project-lucy Agent 开发入口
 
-本仓库的开发治理规则见 [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)。
+本仓库的开发治理规则见 [`docs/governance/DEVELOPMENT.md`](docs/governance/DEVELOPMENT.md)。
 数据问答运行时指导走 Lucy MCP Proxy 的 `initialize` instructions 注入（内容来源 [`webui/config/data-qa-instructions.md`](webui/config/data-qa-instructions.md)，机制见 [`webui/docs/07-mcp-auth-proxy-spec.md`](webui/docs/07-mcp-auth-proxy-spec.md) §4.4），不再由 [`CLAUDE.md`](CLAUDE.md) 承载——`CLAUDE.md` 现在只做指引，不得再写入数据问答规则正文；如发现回归，请改回纯引用。
 
-Vibe coding 双核角色协作（thinker / builder）的角色库见 [`agents/README.md`](agents/README.md)，按需调用，非必经流程。
+Vibe coding 双核角色协作（thinker / builder）的可选完整交付流水线见 [`docs/agent-pipeline.md`](docs/agent-pipeline.md)，按需调用，非必经流程。
 
 ## KTX 依赖边界与开发优先级
 
@@ -18,7 +18,7 @@ KTX 是 Lucy 引用的上游依赖。本仓库只使用 KTX 提供的 CLI、接�
 
 ## 浏览器测试约束
 
-正式治理见 [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) 的“验证策略：浏览器测试约束”。
+正式治理见 [`docs/governance/DEVELOPMENT.md`](docs/governance/DEVELOPMENT.md) 的“验证策略：浏览器测试约束”。
 
 简要规则：正常开发任务默认不需要做浏览器测试；Lucy 项目默认不需要做移动窄屏测试。只有在用户、当前任务说明或已批准计划明确要求浏览器测试 / 移动窄屏验证时，才执行对应测试。
 
@@ -37,4 +37,4 @@ KTX 是 Lucy 引用的上游依赖。本仓库只使用 KTX 提供的 CLI、接�
 `inbox/` 定位为 tmp 文件夹，进程结束后可随时删除。
 
 项目本身的正式 spec、代码、配置、运行时上下文不属于此约定；这些文件仍按
-[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) 的落位规则维护。
+[`docs/governance/DEVELOPMENT.md`](docs/governance/DEVELOPMENT.md) 的落位规则维护。

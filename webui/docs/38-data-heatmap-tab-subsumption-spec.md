@@ -10,7 +10,7 @@
 | 关联工单 | `webui/docs/plans/wo-M35-data-heatmap-tab-subsumption.md` |
 | 关联页面 | `/admin/audit`（默认 log tab，新增 heatmap tab）、`/admin/audit-sources`（兼容重定向） |
 | 事实源 | 代码：`webui/src/pages/admin/Audit.tsx`、`webui/src/pages/admin/AuditSources.tsx`、`webui/src/lib/types.ts:467`、`webui/src/__tests__/app-shell.test.tsx`；规范：`webui/docs/37-sidebar-navigation-ia-consolidation-spec.md` |
-| 关联规范 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/06-navigation-ia.md`、`webui/docs/37-sidebar-navigation-ia-consolidation-spec.md`、`webui/docs/14-agent-admin-enterprise-delivery-spec.md`、`webui/docs/15-role-admin-spec.md`、`docs/DEVELOPMENT.md` |
+| 关联规范 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/06-navigation-ia.md`、`webui/docs/37-sidebar-navigation-ia-consolidation-spec.md`、`webui/docs/14-agent-admin-enterprise-delivery-spec.md`、`webui/docs/15-role-admin-spec.md`、`docs/governance/DEVELOPMENT.md` |
 
 ## 1. 背景
 

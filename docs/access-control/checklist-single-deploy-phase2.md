@@ -8,7 +8,7 @@
 | 撰写日期 | 2026-08-09 |
 | 撰写人 | Cursor Agent |
 | 委托人 | xingchen |
-| 基于材料 | [`adr-post-p15-roadmap-freeze.md`](adr-post-p15-roadmap-freeze.md) §2.2 P3；[`checklist-single-deploy-phase0-1.md`](checklist-single-deploy-phase0-1.md)；[`checklist-single-deploy-phase3-4.md`](checklist-single-deploy-phase3-4.md)；[`docs/admin-guide.md`](../admin-guide.md)；Spec 99 / Spec 100；`customer-config.example/` |
+| 基于材料 | [`adr-post-p15-roadmap-freeze.md`](adr-post-p15-roadmap-freeze.md) §2.2 P3；[`checklist-single-deploy-phase0-1.md`](checklist-single-deploy-phase0-1.md)；[`checklist-single-deploy-phase3-4.md`](checklist-single-deploy-phase3-4.md)；[`docs/runbooks/admin-guide.md`](../runbooks/admin-guide.md)；Spec 99 / Spec 100；`customer-config.example/` |
 | 适用范围 | Phase 1 之后、Phase 3 proven 置真之前：在 **proven=false** 下落地真实（或近似真实）Role `scoped` / Agent `constraints`，并登记供 Phase 3 复用的 Compose 身份 |
 | 输出位置 | `docs/access-control/checklist-single-deploy-phase2.md` |
 
@@ -32,7 +32,7 @@
 
 | 路径 | 适用 | Compose 倾向 |
 |---|---|---|
-| **A（推荐）** | 客户向单机 / 真实职责包 | `docker-compose.yml` + `docker-compose.customer-config.yml` + proven-off |
+| **A（推荐）** | 客户向单机 / 真实职责包 | `docker-compose.yml` + `deploy/compose/docker-compose.customer-config.yml` + proven-off |
 | **B（最小）** | 仍用 Phase 1 demo 栈；**优先 Agent Constraints**；若要 Role scoped 须**新建 v2 Role**（不可 PATCH 升级 `demo_readonly`） | 复用 Phase 1 的 `COMPOSE_*` / `WEBUI` / `MCP`；**不**换新 project 丢数据 |
 
 两条路径 **proven 均为 false**。勾选其一并贯穿 Phase 2→3。
@@ -62,7 +62,7 @@ Phase 3 应 `source` **同一份**文件，禁止凭记忆改端口。
 export COMPOSE_PROJECT=lucy-single-deploy-p2
 export COMPOSE_BASELINE=(
   -f docker-compose.yml
-  -f docker-compose.customer-config.yml
+  -f deploy/compose/docker-compose.customer-config.yml
 )
 # 以 `docker compose … port` / `ps` 核对后填写（示例为常见宿主映射）
 export WEBUI="http://127.0.0.1:5174"
@@ -74,7 +74,7 @@ export MCP="http://127.0.0.1:7879/mcp"
 ```bash
 export COMPOSE_PROJECT=lucy-single-deploy-p1
 export COMPOSE_BASELINE=(
-  -f docker-compose.demo.yml
+  -f deploy/compose/docker-compose.demo.yml
 )
 # 与 Phase 1 的 LUCY_DEMO_*_HOST_PORT 一致
 export WEBUI="http://127.0.0.1:${LUCY_DEMO_WEBUI_HOST_PORT:-55176}"
@@ -90,7 +90,7 @@ export MCP="http://127.0.0.1:${LUCY_DEMO_PROXY_HOST_PORT:-57881}/mcp"
 
 ### 3.1 准备配置包
 
-参照 [`docs/admin-guide.md`](../admin-guide.md) §3：
+参照 [`docs/runbooks/admin-guide.md`](../runbooks/admin-guide.md) §3：
 
 ```bash
 # 若尚无客户目录：从示例复制（勿把生产 secrets 提交进 git）
@@ -141,7 +141,7 @@ npm run smoke:p0:headless-config -- --root customer-config --require-secret-file
 
 docker compose \
   "${COMPOSE_BASELINE[@]}" \
-  -f docker-compose.ac-p1-by01-proven-off.yml \
+  -f deploy/compose/docker-compose.ac-p1-by01-proven-off.yml \
   -p "$COMPOSE_PROJECT" \
   up -d --build
 ```
@@ -180,7 +180,7 @@ source inbox/YYYYMMDD-single-deploy-p1/00-compose-identity.env 2>/dev/null || tr
 
 docker compose \
   "${COMPOSE_BASELINE[@]}" \
-  -f docker-compose.ac-p1-by01-proven-off.yml \
+  -f deploy/compose/docker-compose.ac-p1-by01-proven-off.yml \
   -p "$COMPOSE_PROJECT" \
   up -d
 # proven 保持 false
@@ -238,7 +238,7 @@ source inbox/YYYYMMDD-single-deploy-p2/00-compose-identity.env   # 使用其中�
 ```bash
 source inbox/YYYYMMDD-single-deploy-p2/00-compose-identity.env
 ACP15_WEBUI_BASE="$WEBUI" ACP15_MCP_BASE="$MCP" \
-  node scripts/ac-p15-uat-runbook.mjs
+  node scripts/smoke/ac-p15-uat-runbook.mjs
 # 注意脚本默认 Agent id / 证据目录；勿覆盖 P2 证据前先改路径或复制结果
 ```
 
@@ -264,7 +264,7 @@ ACP15_WEBUI_BASE="$WEBUI" ACP15_MCP_BASE="$MCP" \
 |---|---|
 | Role/Constraints 编不过 / degrade | 回滚上一份可编译 `access.yaml`（customer-config 或 Admin 撤销）；见 [`runbook-row-policy.md`](runbook-row-policy.md) 路径 A/C/D |
 | 误开 proven | **同一** `COMPOSE_BASELINE` + proven-off recreate `lucy`（对称规则，见 Phase 3/4 §2.5） |
-| 放弃本环境 | `docker compose "${COMPOSE_BASELINE[@]}" -f docker-compose.ac-p1-by01-proven-off.yml -p "$COMPOSE_PROJECT" down`（`-v` 慎用） |
+| 放弃本环境 | `docker compose "${COMPOSE_BASELINE[@]}" -f deploy/compose/docker-compose.ac-p1-by01-proven-off.yml -p "$COMPOSE_PROJECT" down`（`-v` 慎用） |
 
 ---
 

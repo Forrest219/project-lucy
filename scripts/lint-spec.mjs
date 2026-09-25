@@ -40,7 +40,7 @@ function extractFrontmatter(text) {
 function routeStatus() {
   const check = "route-status";
   const app = read("webui/src/app/App.tsx");
-  const status = read("docs/webui-impl-status.md");
+  const status = read("docs/webui/webui-impl-status.md");
   const routePaths = new Set([...app.matchAll(/<Route\b[^>]*\bpath=["'`]([^"'`]+)["'`]/g)].map((match) => match[1]));
   const navTargets = new Set([...app.matchAll(/\bto:\s*["'`]([^"'`]+)["'`]/g)].map((match) => match[1]));
   const routes = [
@@ -69,7 +69,7 @@ function routeStatus() {
   ];
   for (const pattern of stalePatterns) {
     if (new RegExp(pattern).test(status)) {
-      add(check, "fail", `docs/webui-impl-status.md: stale status matched /${pattern}/`);
+      add(check, "fail", `docs/webui/webui-impl-status.md: stale status matched /${pattern}/`);
     }
   }
   if (!results.some((item) => item.check === check && item.level === "fail")) {
@@ -172,7 +172,7 @@ function validateQuizLinks(check, file, doc) {
 
 function evalSchemaVersion() {
   const check = "eval-schema-version";
-  const conventions = read("docs/eval-quiz-conventions.md");
+  const conventions = read("docs/governance/eval-quiz-conventions.md");
   const current = conventions.match(/\|\s*v(\d+\.\d+)\s*\|/)?.[1] ?? "1.4";
   const currentValue = parseVersion(current);
   const files = walk("evals", (file) => file.endsWith("-eval-cases.yaml"));

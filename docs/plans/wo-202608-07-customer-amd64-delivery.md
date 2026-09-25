@@ -1,6 +1,6 @@
 # WO-202608-07 客户 amd64 离线交付执行计划
 
-> 对应规格：[`docs/lucy-customer-amd64-offline-delivery-spec.md`](../lucy-customer-amd64-offline-delivery-spec.md)
+> 对应规格：[`docs/specs/lucy-customer-amd64-offline-delivery-spec.md`](../specs/lucy-customer-amd64-offline-delivery-spec.md)
 >
 > 范围：客户硬件为 x86_64 (AMD) 单机，网络无公网 registry / 无 docker buildx，需要把 main HEAD 当前 Lucy 离线交付过去。
 
@@ -64,7 +64,7 @@ test "$(docker image inspect project-lucy:customer-amd64-0.16.0 \
   --format '{{.Os}}/{{.Architecture}}')" = "linux/amd64" \
   || { echo "FAIL: 镜像不是 linux/amd64"; exit 1; }
 
-bash scripts/assert-image-elf-arch.sh project-lucy:customer-amd64-0.16.0 amd64
+bash scripts/release/assert-image-elf-arch.sh project-lucy:customer-amd64-0.16.0 amd64
 
 docker run --rm --platform linux/amd64 --entrypoint /bin/sh project-lucy:customer-amd64-0.16.0 -c 'echo ok'
 
@@ -102,7 +102,7 @@ mkdir -p $PKG/docs
 mkdir -p $PKG/customer-config
 
 cp docker-compose.yml              $PKG/
-cp docker-compose.customer-config.yml $PKG/
+cp deploy/compose/docker-compose.customer-config.yml $PKG/
 # image tag override（强制指向 project-lucy:customer-amd64-0.16.0）
 # 见 inbox/customer-amd64-offline-package/docker-compose.customer-amd64.yml
 cp customer-config.example/README.md   $PKG/customer-config/
@@ -120,14 +120,14 @@ echo "客户把数据库密码写入 customer-config/.ktx/secrets/customer-db-pa
   > $PKG/customer-config/.ktx/secrets/README
 
 # docs/
-cp docs/customer-deployment-guide.md $PKG/docs/lucy-customer-deployment-guide.md
-cp docs/deployment-docker.md          $PKG/docs/lucy-deployment-docker.md
-cp docs/admin-guide.md                $PKG/docs/lucy-admin-guide.md
-cp docs/security-guide.md             $PKG/docs/lucy-security-guide.md
+cp docs/runbooks/customer-deployment-guide.md $PKG/docs/lucy-customer-deployment-guide.md
+cp docs/runbooks/deployment-docker.md          $PKG/docs/lucy-deployment-docker.md
+cp docs/runbooks/admin-guide.md                $PKG/docs/lucy-admin-guide.md
+cp docs/runbooks/security-guide.md             $PKG/docs/lucy-security-guide.md
 
 # 本次新写的两个文档
-cp docs/customer-amd64-docker-deploy-runbook.md $PKG/docs/
-cp docs/lucy-customer-amd64-offline-delivery-spec.md $PKG/docs/
+cp docs/runbooks/customer-amd64-docker-deploy-runbook.md $PKG/docs/
+cp docs/specs/lucy-customer-amd64-offline-delivery-spec.md $PKG/docs/
 
 # .env.example（基于 docker-compose.yml 提取）
 # 见下方 §6 .env.example 模板
@@ -144,7 +144,7 @@ sha256sum \
   image/project-lucy-customer-amd64-0.16.0-image.tar \
   customer-config/README.md \
   customer-config/ktx.yaml \
-  docs/customer-amd64-docker-deploy-runbook.md \
+  docs/runbooks/customer-amd64-docker-deploy-runbook.md \
   > SHA256SUMS
 
 # 把 customer-config 子树和 docs 子树单独算一次
@@ -199,16 +199,16 @@ docker compose -f docker-compose.yml -f docker-compose.customer-config.yml down 
 ## 4. 回滚预案
 
 - **构建失败**：回到 main HEAD，删除 `lucy-amd64` builder 重来；或者换 `KTX_VERSION`（pinned 0.16.0 是默认，不要换）。
-- **冒烟失败**：先看 `inbox/customer-amd64-build/build.log` 末尾报错；按 `docs/DEVELOPMENT.md` 红线修代码，绝不绕过冒烟。
+- **冒烟失败**：先看 `inbox/customer-amd64-build/build.log` 末尾报错；按 `docs/governance/DEVELOPMENT.md` 红线修代码，绝不绕过冒烟。
 - **客户装机失败**：让客户 IT 把 `docker compose logs lucy` 发回，对照部署 runbook 第 6 节排障表。最常见原因 = `customer-config/ktx.yaml` 仍含 `<CHANGE-ME-*>` / secret 文件没建。
 
 ## 5. 落位
 
 | 产物 | 路径 |
 |---|---|
-| 规格 | `docs/lucy-customer-amd64-offline-delivery-spec.md` |
+| 规格 | `docs/specs/lucy-customer-amd64-offline-delivery-spec.md` |
 | 本工单（plan） | `docs/plans/wo-202608-07-customer-amd64-delivery.md` |
-| 部署 runbook | `docs/customer-amd64-docker-deploy-runbook.md` |
+| 部署 runbook | `docs/runbooks/customer-amd64-docker-deploy-runbook.md` |
 | 构建日志 | `inbox/customer-amd64-build/build.log` |
 | 构建元数据 | `inbox/customer-amd64-build/buildx-metadata.json` |
 | 镜像 ID | `inbox/customer-amd64-build/image-id.txt` |
@@ -282,5 +282,5 @@ curl -sf http://localhost:5174/api/health
 docker compose exec lucy ktx --version
 ```
 
-详细排障与回滚路径见 `docs/customer-amd64-docker-deploy-runbook.md`。
+详细排障与回滚路径见 `docs/runbooks/customer-amd64-docker-deploy-runbook.md`。
 ```

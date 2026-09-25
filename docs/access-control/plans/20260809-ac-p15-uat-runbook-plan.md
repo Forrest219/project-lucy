@@ -12,7 +12,7 @@
 | 适用范围 | Gate C 前：Admin API + Playwright 模拟用户操作；证据落 `inbox/20260809-ac-p15-uat/` |
 | 输出位置 | `docs/access-control/plans/20260809-ac-p15-uat-runbook-plan.md` |
 
-> **For Agent:** 执行脚本 `scripts/ac-p15-uat-runbook.mjs`；完成后更新 `uat-ac-p15.md` / Runbook 签字栏（自动化项）。
+> **For Agent:** 执行脚本 `scripts/smoke/ac-p15-uat-runbook.mjs`；完成后更新 `uat-ac-p15.md` / Runbook 签字栏（自动化项）。
 
 ---
 
@@ -27,7 +27,7 @@
 | Compose project | `lucy-ac-p1-by01` |
 | WebUI | `http://127.0.0.1:55176` |
 | MCP Proxy | `http://127.0.0.1:57881/mcp` |
-| 默认 proven | 启动时以 `docker-compose.ac-p1-by01-proven-off.yml` 或 env `false` 为准；MCP 注入抽检再临时置真 |
+| 默认 proven | 启动时以 `deploy/compose/docker-compose.ac-p1-by01-proven-off.yml` 或 env `false` 为准；MCP 注入抽检再临时置真 |
 | 证据目录 | `inbox/20260809-ac-p15-uat/` |
 
 前置：
@@ -84,7 +84,7 @@ docker restart lucy-ac-p1-by01-lucy-1
 
 ```bash
 # 仓库根
-node scripts/ac-p15-uat-runbook.mjs
+node scripts/smoke/ac-p15-uat-runbook.mjs
 # 环境变量可选：
 #   ACP15_WEBUI_BASE=http://127.0.0.1:55176
 #   ACP15_SKIP_UI=1          # 仅 API

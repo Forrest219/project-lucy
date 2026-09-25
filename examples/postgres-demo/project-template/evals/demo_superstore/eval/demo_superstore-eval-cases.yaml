@@ -18,7 +18,7 @@ metadata:
     - examples/postgres-demo/postgres/_baseline.json
     - examples/postgres-demo/project-template/semantic-layer/demo-postgres/superstore_orders.yaml
     - wiki/global/demo-superstore.md
-    - docs/eval-quiz-conventions.md v1.4
+    - docs/governance/eval-quiz-conventions.md v1.4
   scope: demo-postgres 自包含 Superstore：基础指标、区域、segment、反模式
   output_path: evals/demo_superstore/eval/demo_superstore-eval-cases.yaml
   data_source: semantic_layer

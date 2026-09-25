@@ -19,8 +19,8 @@ Read these documents before editing:
 - `webui/docs/00-product-terminology-standard.md`
 - `webui/docs/25-connection-module-terminology-ia-refresh-spec.md`
 - `webui/docs/28-catalog-reload-result-ops-ux-spec.md`
-- `docs/starrocks-r1-support-plan.md`
-- `docs/DEVELOPMENT.md`
+- `docs/specs/starrocks-r1-support-plan.md`
+- `docs/governance/DEVELOPMENT.md`
 
 Inspect these implementation files:
 

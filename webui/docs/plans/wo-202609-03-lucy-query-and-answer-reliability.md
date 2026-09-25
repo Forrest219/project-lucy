@@ -35,7 +35,7 @@
 | 新增纯函数 canonicalizer | `webui/server/proxy/lucy-query-normalization.ts` | 新 unit suite 覆盖 QE-01..04 |
 | Proxy 在审计/ACL/上游前调用 canonicalizer | `webui/server/proxy/mcp-proxy.ts` | malformed/conflict 请求不出站 |
 | contract smoke 断言 `order_by` 和实际 SQL | `webui/server/__tests__/mcp-proxy-smoke.test.ts` | QE-05 |
-| CLI contract 同步 | `scripts/lucy-r1-mcp-contract-smoke.mjs` 及测试 | 结构化与字符串化 filter parity |
+| CLI contract 同步 | `scripts/smoke/lucy-r1-mcp-contract-smoke.mjs` 及测试 | 结构化与字符串化 filter parity |
 
 退出门槛：QE-01..06 全绿；失败 reason 稳定且无敏感值。
 

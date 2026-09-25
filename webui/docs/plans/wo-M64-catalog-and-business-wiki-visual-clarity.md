@@ -16,7 +16,7 @@
 
 必须先阅读：
 
-- `../docs/DEVELOPMENT.md`
+- `../docs/governance/DEVELOPMENT.md`
 - `docs/00-product-terminology-standard.md`
 - `docs/48-catalog-and-table-semantic-workbench-productization-spec.md`
 - `docs/49-business-wiki-md-library-operations-spec.md`

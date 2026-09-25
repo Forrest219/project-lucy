@@ -16,11 +16,11 @@ webui/coverage
 
 # A3 optional Agent Chat — must never enter Lucy image build context
 agent-chat
-docker-compose.agent-chat.yml
-docs/design-lucy-agent-chat-a3.md
-docs/runbook-lucy-agent-chat-a3.md
-scripts/agent-chat-a3-smoke.mjs
-scripts/agent-chat-a3-smoke.test.mjs
+deploy/compose/docker-compose.agent-chat.yml
+docs/design/design-lucy-agent-chat-a3.md
+docs/runbooks/runbook-lucy-agent-chat-a3.md
+scripts/smoke/agent-chat-a3-smoke.mjs
+scripts/smoke/agent-chat-a3-smoke.test.mjs
 
 # Internal / per-developer test context — never enter customer image seed path.
 # Demo stacks use examples/*/project-template (still copied). Customer seed uses

@@ -8,7 +8,7 @@
 
 **Source Spec:** [../41-system-overview-enterprise-ops-polish-spec.md](../41-system-overview-enterprise-ops-polish-spec.md)
 
-> M38 is intentionally skipped here because spec 40 reserves M38 for `docs/vision.md` and `docs/webui-module-guide.md` positioning narrative cleanup. M39 is the next implementation work order for the system overview polish.
+> M38 is intentionally skipped here because spec 40 reserves M38 for `docs/governance/vision.md` and `docs/webui/webui-module-guide.md` positioning narrative cleanup. M39 is the next implementation work order for the system overview polish.
 
 ---
 
@@ -17,7 +17,7 @@
 Read these documents before editing:
 
 - `AGENTS.md`
-- `docs/DEVELOPMENT.md`
+- `docs/governance/DEVELOPMENT.md`
 - `webui/docs/00-product-terminology-standard.md`
 - `webui/docs/19-system-overview-runtime-monitoring-spec.md`
 - `webui/docs/22-public-mcp-endpoint-runtime-config-spec.md`

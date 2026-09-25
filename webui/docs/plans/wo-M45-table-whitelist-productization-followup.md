@@ -1,6 +1,6 @@
 # wo-M45 Table Whitelist Productization Follow-up
 
-> Codex / Claude Code 直投工单。执行前请阅读 `AGENTS.md`、`docs/DEVELOPMENT.md`、`webui/docs/00-product-terminology-standard.md` 和 `webui/docs/47-table-whitelist-productization-followup-spec.md` v0.1。
+> Codex / Claude Code 直投工单。执行前请阅读 `AGENTS.md`、`docs/governance/DEVELOPMENT.md`、`webui/docs/00-product-terminology-standard.md` 和 `webui/docs/47-table-whitelist-productization-followup-spec.md` v0.1。
 
 ## 0. 背景
 

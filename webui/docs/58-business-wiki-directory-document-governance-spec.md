@@ -9,7 +9,7 @@
 | 关联页面 | `/wiki` |
 | 关联工单 | `webui/docs/plans/wo-M56-business-wiki-directory-document-governance.md` |
 | 事实来源 | 2026-08-02 用户反馈、Docker 重建后浏览器复核、`docs/ui-ux-feedback/pages/wiki.md` |
-| 关联规范 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/49-business-wiki-md-library-operations-spec.md`、`webui/docs/53-business-wiki-empty-directory-resource-spec.md`、`webui/docs/55-business-wiki-version-history-restore-spec.md`、`docs/DEVELOPMENT.md` |
+| 关联规范 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/49-business-wiki-md-library-operations-spec.md`、`webui/docs/53-business-wiki-empty-directory-resource-spec.md`、`webui/docs/55-business-wiki-version-history-restore-spec.md`、`docs/governance/DEVELOPMENT.md` |
 
 ## 1. Background
 

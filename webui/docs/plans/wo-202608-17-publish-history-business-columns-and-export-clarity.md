@@ -24,7 +24,7 @@
 
 请在 `/Users/zhangxingchen/Projects/project-lucy/webui` 执行本工单。先读 Spec **85 v1.0**。
 
-必须先阅读：`../docs/DEVELOPMENT.md`、`docs/00-product-terminology-standard.md`、`docs/design-system/11-components-data-grid.md`、`docs/85-…`、本 Plan、`PublishHistory.tsx`、`semantic-asset-export.ts`、`publish-history.test.tsx`、`api.semantic-asset-export.test.ts`。
+必须先阅读：`../docs/governance/DEVELOPMENT.md`、`docs/00-product-terminology-standard.md`、`docs/design-system/11-components-data-grid.md`、`docs/85-…`、本 Plan、`PublishHistory.tsx`、`semantic-asset-export.ts`、`publish-history.test.tsx`、`api.semantic-asset-export.test.ts`。
 
 ## Non-Negotiable Boundaries
 

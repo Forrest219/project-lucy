@@ -614,7 +614,7 @@ Monitor：
     "status": "passed",
     "agent": "hermes",
     "target": "lucy-mcp-proxy",
-    "generatedBy": "scripts/lucy-r1-hermes-report.mjs",
+    "generatedBy": "scripts/smoke/lucy-r1-hermes-report.mjs",
     "dataset": "r1_doris_benchmark",
     "caseDataset": "r1_doris_benchmark",
     "accuracy": 0.96,

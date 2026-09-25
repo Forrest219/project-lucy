@@ -9,7 +9,7 @@
 | 适用范围 | Lucy WebUI 品牌区副标题、`<title>` 标签、术语标准、相关设计 spec 备注、关键测试断言 |
 | 关联工单 | `webui/docs/plans/wo-M37-lucy-webui-positioning-control-plane.md` |
 | 事实源 | `webui/docs/39-data-agent-ops-platform-global-ux-spec.md` §4 目标产品心智；`webui/src/app/App.tsx:113-114` 当前品牌区实现；`webui/src/__tests__/app-shell.test.tsx:124-127` 当前测试断言 |
-| 关联规范 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/06-navigation-ia.md`、`webui/docs/39-data-agent-ops-platform-global-ux-spec.md`、`docs/vision.md`、`docs/design-webui-ui-refresh.md`、`docs/webui-module-guide.md`、`docs/project-overview.md` |
+| 关联规范 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/06-navigation-ia.md`、`webui/docs/39-data-agent-ops-platform-global-ux-spec.md`、`docs/governance/vision.md`、`docs/design/design-webui-ui-refresh.md`、`docs/webui/webui-module-guide.md`、`docs/governance/project-overview.md` |
 
 ---
 
@@ -24,7 +24,7 @@ M36 主工单聚焦 5+1 导航内的 UX 改造（运维驾驶舱、待处理事�
 但在此之前，WebUI 最先被用户感知的定位文案已经滞后：
 
 - `webui/src/app/App.tsx:113-114` 品牌区副标题仍是「语义维护工作台」——与 M36 §4 目标心智冲突。
-- `docs/design-webui-ui-refresh.md:119,616,630` 三处「Phase 1 默认保留 KTX WebUI」备注与新定位冲突。
+- `docs/design/design-webui-ui-refresh.md:119,616,630` 三处「Phase 1 默认保留 KTX WebUI」备注与新定位冲突。
 - `webui/docs/00-product-terminology-standard.md` v0.1 未登记 `Data Agent Ops Control Plane`，且「语义维护工作台」未标弃用。
 - `webui/src/__tests__/app-shell.test.tsx:124-127` 只断言 `Lucy WebUI` 出现 / `KTX WebUI` 不出现，缺新定位断言兜底回归。
 
@@ -34,7 +34,7 @@ M36 主工单聚焦 5+1 导航内的 UX 改造（运维驾驶舱、待处理事�
 
 1. 副标题措辞定为「Data Agent Ops Control Plane」（英文 brand term，主）+「Data Agent 运维控制台」（中文 caption，副）。
 2. `<title>` **不**扩展，保持 `Lucy WebUI`。
-3. `docs/vision.md` / `docs/webui-module-guide.md` 改写由 M38 单独承接，本 spec **不**列入 M37 范围。
+3. `docs/governance/vision.md` / `docs/webui/webui-module-guide.md` 改写由 M38 单独承接，本 spec **不**列入 M37 范围。
 4. 英文 brand term DOM 节点加 `translate="no"` + `notranslate` 浏览器翻译防御。
 5. **顺手统一**动作：spec 39 §1 背景 line 25 现有「运维控制面」在 M37 内一并改为「运维控制台」，出 spec 39 v0.2 修订。
 
@@ -47,10 +47,10 @@ M36 主工单聚焦 5+1 导航内的 UX 改造（运维驾驶舱、待处理事�
 | P0 | `design-webui-ui-refresh.md` 三处「Phase 1 保留 KTX WebUI」备注改为已升级 | 防止后续 reviewer 被旧备注带偏 |
 | P0 | `app-shell.test.tsx` 增加新定位断言 | 防止副标题回流 |
 | P0 | 顺手统一：spec 39 §1 背景 line 25「运维控制面」→「运维控制台」并出 v0.2 修订 | 避免 spec 39 ↔ spec 40 出现「控制面」vs「控制台」混用 |
-| P2 | `docs/project-overview.md:67`、`webui/docs/06-navigation-ia.md:3,26` 顶部小修 | 局部更新，不推翻结构 |
+| P2 | `docs/governance/project-overview.md:67`、`webui/docs/06-navigation-ia.md:3,26` 顶部小修 | 局部更新，不推翻结构 |
 | P2 | `docs/user-guide/*.html` 批量替换「KTX WebUI」→「Lucy WebUI」 | 工作量大，独立安排 |
 
-> **M38 承接（不在本 spec）**：`docs/vision.md` / `docs/webui-module-guide.md` 改写为 Data Agent Ops Control Plane 叙事，由 M38 单独出 spec / plan 推进。`<title>` 保持 `Lucy WebUI` 不扩展。
+> **M38 承接（不在本 spec）**：`docs/governance/vision.md` / `docs/webui/webui-module-guide.md` 改写为 Data Agent Ops Control Plane 叙事，由 M38 单独出 spec / plan 推进。`<title>` 保持 `Lucy WebUI` 不扩展。
 
 ## 3. 目标与非目标
 
@@ -105,7 +105,7 @@ M36 主工单聚焦 5+1 导航内的 UX 改造（运维驾驶舱、待处理事�
 
 ### 4.3 设计 spec 备注修订
 
-`docs/design-webui-ui-refresh.md` 三处过期备注改为：
+`docs/design/design-webui-ui-refresh.md` 三处过期备注改为：
 
 - §5.2 左侧导航：原「顶部品牌区暂不拍板最终品牌文案。Phase 1 默认保留当前 KTX WebUI 主标题，只把副标题从视觉上弱化；若产品确认切换品牌，再单独改为 Lucy。」改为「顶部品牌区已升级为 `Data Agent Ops Control Plane`（中文 caption：`Data Agent 运维控制台`），详见 spec 40 与 `39-data-agent-ops-platform-global-ux-spec.md` §4 / v0.2。」
 - §10「未来工作 · P0 优先级」：原「**品牌口径**：Phase 1 保留 KTX WebUI，不改为 Lucy；只改善视觉层级。」改为「**品牌口径（已完成）**：品牌区副标题已升级为 `Data Agent Ops Control Plane`（spec 40 / M37）。后续仅当 brand term 再次调整时回到本节。」
@@ -115,8 +115,8 @@ M36 主工单聚焦 5+1 导航内的 UX 改造（运维驾驶舱、待处理事�
 
 | 文件 | 改动 | 承接工单 |
 |---|---|---|
-| `docs/webui-module-guide.md:5,19,21` | 文档名 / 产品简介 / 核心问题描述从「KTX WebUI · 治理控制台 · Semantic/Knowledge/Quality Pack 叙事」改为「Lucy WebUI · Data Agent Ops Control Plane · 6 维心智叙事」；版本号升 v1.4 | M38 |
-| `docs/vision.md:55,103` | 架构图中「Lucy WebUI（治理控制台）」改为「Lucy WebUI（Data Agent Ops Control Plane）」；§3 各层说明补一句「运维控制台覆盖 Runtime / Assets / Change / Quality / Access / Audit 六维」 | M38 |
+| `docs/webui/webui-module-guide.md:5,19,21` | 文档名 / 产品简介 / 核心问题描述从「KTX WebUI · 治理控制台 · Semantic/Knowledge/Quality Pack 叙事」改为「Lucy WebUI · Data Agent Ops Control Plane · 6 维心智叙事」；版本号升 v1.4 | M38 |
+| `docs/governance/vision.md:55,103` | 架构图中「Lucy WebUI（治理控制台）」改为「Lucy WebUI（Data Agent Ops Control Plane）」；§3 各层说明补一句「运维控制台覆盖 Runtime / Assets / Change / Quality / Access / Audit 六维」 | M38 |
 
 > 本 spec §4.4 仅作为「承接关系登记」，**不**进入 M37 的 task 范围。Reviewer 在拍板 M37 完成后，需独立起草 M38 spec / plan 推进此节。
 
@@ -124,7 +124,7 @@ M36 主工单聚焦 5+1 导航内的 UX 改造（运维驾驶舱、待处理事�
 
 | 文件 | 改动 |
 |---|---|
-| `docs/project-overview.md:67` | 目录注释「Lucy WebUI 本地治理工作台」→「Lucy WebUI 本地 Data Agent Ops Control Plane」 |
+| `docs/governance/project-overview.md:67` | 目录注释「Lucy WebUI 本地治理工作台」→「Lucy WebUI 本地 Data Agent Ops Control Plane」 |
 | `webui/docs/06-navigation-ia.md:3,26` | 顶部「本文定义 KTX WebUI 的导航口径」改为「本文定义 Lucy WebUI 的导航口径」；骨架不推翻 |
 | `docs/user-guide/*.html` | 批量替换「KTX WebUI」→「Lucy WebUI」，批量替换「语义维护工作台」→「Data Agent Ops Control Plane」 |
 
@@ -169,7 +169,7 @@ it("renders the Data Agent Ops Control Plane tagline in the brand block", () => 
 | 品牌区 | `webui/src/app/App.tsx:113-114` 渲染为 `Lucy WebUI` + `Data Agent Ops Control Plane`（`translate="no"` + `notranslate`）+ `Data Agent 运维控制台` |
 | 浏览器 tab | `webui/index.html:6` `<title>` 保持 `Lucy WebUI`（不扩展） |
 | 术语标准 | `00-product-terminology-standard.md` v0.2 第 3 节新增 `Data Agent Ops Control Plane` 行；「语义维护工作台」与「运维控制面」列入弃用别名 |
-| 设计 spec 备注 | `docs/design-webui-ui-refresh.md` 三处过期备注全部更新 |
+| 设计 spec 备注 | `docs/design/design-webui-ui-refresh.md` 三处过期备注全部更新 |
 | spec 39 顺手统一 | `39-data-agent-ops-platform-global-ux-spec.md` 元数据升 v0.2，§1 背景 line 25 一处「运维控制面」→「运维控制台」 |
 | 测试 | `app-shell.test.tsx` 新增 `Data Agent Ops Control Plane` + `Data Agent 运维控制台` 断言；同步断言 `语义维护工作台` 不再出现 |
 | Lint | `cd webui && npm run lint:terminology` 通过；`npm run lint:ia-boundary` 通过 |
@@ -177,7 +177,7 @@ it("renders the Data Agent Ops Control Plane tagline in the brand block", () => 
 | Test | `npm test` 通过 |
 | Build | `npm run build` 通过 |
 
-> **不在 M37 验收（由 M38 承接）**：`docs/webui-module-guide.md` 升 v1.4 + 开篇叙事更新；`docs/vision.md:55,103` 升级。
+> **不在 M37 验收（由 M38 承接）**：`docs/webui/webui-module-guide.md` 升 v1.4 + 开篇叙事更新；`docs/governance/vision.md:55,103` 升级。
 
 ## 6. 关联与风险
 
@@ -186,9 +186,9 @@ it("renders the Data Agent Ops Control Plane tagline in the brand block", () => 
 - 上游：`webui/docs/39-data-agent-ops-platform-global-ux-spec.md`（M36 主 spec，v0.1）——本 spec 是其 §4 目标心智在品牌区 / 术语 / 文档的最小落地。
 - 配套：`webui/docs/00-product-terminology-standard.md` v0.1 → v0.2 修订（Task 1）。
 - 同源历史：
-  - `docs/vision.md` v1.2 §3 lines 55、103（架构图 + 各层说明）—— M38 承接（见 §4.4）。
-  - `docs/design-webui-ui-refresh.md` lines 119、616、630（三处过期备注）—— M37 Task 3 改写。
-  - `docs/webui-module-guide.md` v1.3 lines 5、19、21（文档名 / 产品简介 / 核心问题）—— M38 承接。
+  - `docs/governance/vision.md` v1.2 §3 lines 55、103（架构图 + 各层说明）—— M38 承接（见 §4.4）。
+  - `docs/design/design-webui-ui-refresh.md` lines 119、616、630（三处过期备注）—— M37 Task 3 改写。
+  - `docs/webui/webui-module-guide.md` v1.3 lines 5、19、21（文档名 / 产品简介 / 核心问题）—— M38 承接。
 
 ### 6.2 风险
 
@@ -214,7 +214,7 @@ Deprecated aliases (kept for traceability only, must not appear in new code / do
 
 - `语义维护工作台`：v0.1 及以前的 WebUI 副标题；2026-08-01 起被 `Data Agent Ops Control Plane` 替代。
 - `KTX WebUI 治理控制台`：v0.x 叙事；替代为 `Data Agent Ops Control Plane`。
-- `本地治理工作台`：散见于 `docs/project-overview.md` 等处；并入新定位。
+- `本地治理工作台`：散见于 `docs/governance/project-overview.md` 等处；并入新定位。
 - `运维控制面`：M36 期间的中文叙事；M37 顺手统一为 `运维控制台`，2026-08-01 起新文档应使用后者。
 
 Browser translation defense is mandatory for:
@@ -252,8 +252,8 @@ Notes:
 
 **本 spec 落盘后需 reviewer 在 M38 拍板的项**：
 
-1. M38 spec 范围：`docs/webui-module-guide.md` v1.4 改写 + `docs/vision.md` 架构图更新 + 是否有额外文档需纳入。
-2. M38 是否同时启动 `docs/project-overview.md:67` + `webui/docs/06-navigation-ia.md:3,26` 顶部小修（spec 40 §4.5 的 P2 内容）。
+1. M38 spec 范围：`docs/webui/webui-module-guide.md` v1.4 改写 + `docs/governance/vision.md` 架构图更新 + 是否有额外文档需纳入。
+2. M38 是否同时启动 `docs/governance/project-overview.md:67` + `webui/docs/06-navigation-ia.md:3,26` 顶部小修（spec 40 §4.5 的 P2 内容）。
 3. 客户侧手册 `docs/user-guide/*.html` 批量替换的批次排期。
 
 ## 9. 分阶段交付
@@ -261,7 +261,7 @@ Notes:
 | 阶段 | 范围 | 承接工单 | 成功标志 |
 |---|---|---|---|
 | Phase 1 | 00 术语标准 v0.2 + 品牌区副标题（App.tsx + app.css 两条新 class）+ `design-webui-ui-refresh.md` 三处备注 + app-shell 测试断言 + spec 39 v0.2 顺手统一 + `webui/docs/README.md` / `webui/docs/plans/README.md` 索引同步 | M37 | 验收标准中 P0 五项全部满足 + README 索引已登记；lint / type / test / build 通过；视觉 QA 三行品牌区无溢出 |
-| Phase 2 | `webui-module-guide.md` v1.4 + `docs/vision.md:55,103` 升级 | M38（待起草） | vision / module-guide 文档侧品牌叙事一致；reviewer 拍板措辞与 spec 40 §4.4 一致 |
-| Phase 3 | `docs/project-overview.md:67` + `webui/docs/06-navigation-ia.md:3,26` 顶部小修 + `docs/user-guide/*.html` 批量替换 | 后续批次 | P2 全部满足；外链手册与仓库内文档叙事一致 |
+| Phase 2 | `webui-module-guide.md` v1.4 + `docs/governance/vision.md:55,103` 升级 | M38（待起草） | vision / module-guide 文档侧品牌叙事一致；reviewer 拍板措辞与 spec 40 §4.4 一致 |
+| Phase 3 | `docs/governance/project-overview.md:67` + `webui/docs/06-navigation-ia.md:3,26` 顶部小修 + `docs/user-guide/*.html` 批量替换 | 后续批次 | P2 全部满足；外链手册与仓库内文档叙事一致 |
 
 Phase 1 必须在 M37 内完成；Phase 2 由 M38 单独承接（本 spec §4.4 仅作关联登记）；Phase 3 留作 P2 单独批次。

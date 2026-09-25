@@ -17,7 +17,7 @@
 Read these documents before editing:
 
 - `AGENTS.md`
-- `docs/DEVELOPMENT.md`
+- `docs/governance/DEVELOPMENT.md`
 - `webui/docs/00-product-terminology-standard.md`
 - `webui/docs/11-connection-whitelist-test-ux-refresh.md`
 - `webui/docs/28-catalog-reload-result-ops-ux-spec.md`

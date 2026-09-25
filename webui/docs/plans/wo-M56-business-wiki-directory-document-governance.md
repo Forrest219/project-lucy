@@ -1,6 +1,6 @@
 # M56 — Business Wiki Directory and Document Governance
 
-> codex 直投 prompt：请在 `/Users/forrest/Projects/project-lucy/webui` 开工。先读 `../docs/58-business-wiki-directory-document-governance-spec.md`、`../docs/49-business-wiki-md-library-operations-spec.md`、`../docs/53-business-wiki-empty-directory-resource-spec.md`、`../docs/55-business-wiki-version-history-restore-spec.md`、`../docs/00-product-terminology-standard.md`、`../../docs/DEVELOPMENT.md` 和本工单。目标是修复 `/wiki` 的顶层目录创建、目录删除、文档移动目录、下载作用域和上传预检表达。结束后必须做 code review；浏览器验证仅在用户明确要求或 Docker 重建后执行。
+> codex 直投 prompt：请在 `/Users/forrest/Projects/project-lucy/webui` 开工。先读 `../docs/58-business-wiki-directory-document-governance-spec.md`、`../docs/49-business-wiki-md-library-operations-spec.md`、`../docs/53-business-wiki-empty-directory-resource-spec.md`、`../docs/55-business-wiki-version-history-restore-spec.md`、`../docs/00-product-terminology-standard.md`、`../../docs/governance/DEVELOPMENT.md` 和本工单。目标是修复 `/wiki` 的顶层目录创建、目录删除、文档移动目录、下载作用域和上传预检表达。结束后必须做 code review；浏览器验证仅在用户明确要求或 Docker 重建后执行。
 
 ## 0. 背景
 
@@ -62,7 +62,7 @@ git -C /Users/forrest/Projects/project-lucy status --short
 - `../docs/53-business-wiki-empty-directory-resource-spec.md`
 - `../docs/55-business-wiki-version-history-restore-spec.md`
 - `../docs/00-product-terminology-standard.md`
-- `../../docs/DEVELOPMENT.md`
+- `../../docs/governance/DEVELOPMENT.md`
 - `../../docs/ui-ux-feedback/pages/wiki.md`
 
 如果工作树已有无关脏改动，只记录并避开，不得回滚。

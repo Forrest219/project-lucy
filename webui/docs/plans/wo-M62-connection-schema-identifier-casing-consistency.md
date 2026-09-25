@@ -6,7 +6,7 @@
 
 要求阅读：
 
-- `../docs/DEVELOPMENT.md`
+- `../docs/governance/DEVELOPMENT.md`
 - `docs/00-product-terminology-standard.md`（§2.6 浏览器翻译防御 + §3 Schema 行）
 - `docs/69-connection-schema-identifier-casing-consistency-spec.md`
 - `docs/plans/wo-M61-sidebar-brand-navigation-followup.md`

@@ -9,7 +9,7 @@
 | 关联页面 | `/wiki` |
 | 关联工单 | `webui/docs/plans/wo-M47-business-wiki-md-library-operations.md` |
 | 事实来源 | 2026-08-01 浏览器核查、用户截图、`inbox/m42-wiki-browser-check-2026-08-01.md`、M42 代码审阅 |
-| 关联规范 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/45-business-wiki-workbench-productization-spec.md`、`docs/DEVELOPMENT.md` |
+| 关联规范 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/45-business-wiki-workbench-productization-spec.md`、`docs/governance/DEVELOPMENT.md` |
 
 ## 1. 背景
 

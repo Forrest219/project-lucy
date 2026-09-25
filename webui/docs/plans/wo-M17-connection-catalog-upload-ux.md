@@ -20,7 +20,7 @@ Read these documents before coding:
 - `webui/docs/17-static-catalog-loading-spec.md`
 - `webui/docs/11-connection-whitelist-test-ux-refresh.md`
 - `webui/docs/03-api-spec.md`
-- `docs/DEVELOPMENT.md`
+- `docs/governance/DEVELOPMENT.md`
 
 Read these backend files:
 

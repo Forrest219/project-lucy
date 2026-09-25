@@ -1,6 +1,6 @@
 # values.gate-fresh.yaml — kind / gate fresh-install profile.
 #
-# Used by scripts/k8s-release-gate.sh for H2 render validation.
+# Used by scripts/gates/k8s-release-gate.sh for H2 render validation.
 # For live cluster install, copy and customize before helm upgrade --install.
 
 image:

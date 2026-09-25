@@ -67,12 +67,12 @@ service:
 
 **Forbidden in probes:**
 
-- `exec /app/scripts/docker-healthcheck.sh` (designed for Docker HEALTHCHECK, not Kubelet timeouts)
+- `exec /app/scripts/runtime/docker-healthcheck.sh` (designed for Docker HEALTHCHECK, not Kubelet timeouts)
 - StarRocks connectivity checks
 - `ktx admin reindex`
 - MCP `tools/list`
 
-Run deep checks in post-deploy acceptance (`scripts/k8s-acceptance.sh`), not in probes.
+Run deep checks in post-deploy acceptance (`scripts/gates/k8s-acceptance.sh`), not in probes.
 
 Recommended defaults (chart `0.2.x`):
 
@@ -195,11 +195,11 @@ kubectl delete pvc lucy         # unless backed up and intentionally resetting
 
 Before any K8s delivery:
 
-1. `bash scripts/build-customer-amd64-image.sh` (G1–G4c + **G8** image-only)
-2. `bash scripts/helm-lucy-gate.sh` (H1a universal + H1b k3s profile)
-3. `bash scripts/verify-k8s-package.sh` (K6 package integrity)
-4. `bash scripts/k8s-upgrade-gate.sh` (H3; `--test-rollback` for H4)
-5. `bash scripts/k8s-release-gate.sh --with-cluster --test-upgrade …` (orchestrator)
-6. Post-deploy: `bash scripts/k8s-acceptance.sh` (H5)
+1. `bash scripts/release/build-customer-amd64-image.sh` (G1–G4c + **G8** image-only)
+2. `bash scripts/gates/helm-lucy-gate.sh` (H1a universal + H1b k3s profile)
+3. `bash scripts/gates/verify-k8s-package.sh` (K6 package integrity)
+4. `bash scripts/gates/k8s-upgrade-gate.sh` (H3; `--test-rollback` for H4)
+5. `bash scripts/gates/k8s-release-gate.sh --with-cluster --test-upgrade …` (orchestrator)
+6. Post-deploy: `bash scripts/gates/k8s-acceptance.sh` (H5)
 
-See [`docs/customer-delivery-preflight-checklist.md`](../../docs/customer-delivery-preflight-checklist.md).
+See [`docs/runbooks/customer-delivery-preflight-checklist.md`](../../docs/runbooks/customer-delivery-preflight-checklist.md).

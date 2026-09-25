@@ -319,7 +319,7 @@ export async function spawnEvalRun(
 
   // Build runner args
   const casesPath = `evals/${domain}/eval/${domain}-eval-cases.yaml`;
-  const args: string[] = ["scripts/eval-runner.mjs", "--cases", casesPath, "--format", "json", "--adapter", agentAdapter];
+  const args: string[] = ["scripts/eval/eval-runner.mjs", "--cases", casesPath, "--format", "json", "--adapter", agentAdapter];
   for (const id of caseIds) {
     args.push("--case", id);
   }

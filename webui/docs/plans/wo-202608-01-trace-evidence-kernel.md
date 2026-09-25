@@ -6,9 +6,9 @@
 
 必须先阅读：
 
-- `../docs/DEVELOPMENT.md`
-- `../docs/lucy-202608-reliable-delivery-upgrade-spec.md`
-- `../docs/lucy-202608-upgrade-execution-control.md`
+- `../docs/governance/DEVELOPMENT.md`
+- `../docs/specs/lucy-202608-reliable-delivery-upgrade-spec.md`
+- `../docs/specs/lucy-202608-upgrade-execution-control.md`
 - `docs/00-product-terminology-standard.md`
 - `docs/07-mcp-auth-proxy-spec.md`
 - `docs/08-mcp-audit-question-tracing-spec.md`

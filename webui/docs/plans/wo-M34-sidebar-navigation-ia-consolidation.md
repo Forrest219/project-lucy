@@ -19,7 +19,7 @@
 Read these documents before editing:
 
 - `AGENTS.md`
-- `docs/DEVELOPMENT.md`
+- `docs/governance/DEVELOPMENT.md`
 - `webui/docs/00-product-terminology-standard.md`
 - `webui/docs/06-navigation-ia.md`
 - `webui/docs/37-sidebar-navigation-ia-consolidation-spec.md`
@@ -298,7 +298,7 @@ Expected: PASS.
 
 落地动作（本 Task 范围内）：
 
-- 在 `webui/docs/05-task-list.md` 或 `docs/DEVELOPMENT.md` 的 v1.9.0 区块中显式登记 `M34-cleanup-compat-connection-test`，描述 = `移除侧边栏 "连同测试（兼容）" 主导航项，依赖 M25 完成`。
+- 在 `webui/docs/05-task-list.md` 或 `docs/governance/DEVELOPMENT.md` 的 v1.9.0 区块中显式登记 `M34-cleanup-compat-connection-test`，描述 = `移除侧边栏 "连同测试（兼容）" 主导航项，依赖 M25 完成`。
 - 提交时在 PR 描述里附这条登记项的 diff。
 
 **Step 8: Run tests**
@@ -770,7 +770,7 @@ git commit -m "refactor(webui): consolidate sidebar to 5 lifecycle groups + 1 da
 - [ ] `00-product-terminology-standard.md` is committed in the **same PR** as the code changes; reviewer blocks merge if 00 is out of sync.
 - [ ] `06-navigation-ia.md` reflects the 5+1 structure.
 - [ ] `webui/docs/user-guide.html` is aligned.
-- [ ] v1.9.0 cleanup entry for `连通测试（兼容）` is registered in `05-task-list.md` / `docs/DEVELOPMENT.md`, with M25 完成 as a hard dependency.
+- [ ] v1.9.0 cleanup entry for `连通测试（兼容）` is registered in `05-task-list.md` / `docs/governance/DEVELOPMENT.md`, with M25 完成 as a hard dependency.
 - [ ] No route, no API path, no API payload was modified.
 - [ ] No new CSS class was invented beyond the two scoped ones (`pl-nav-section--top`, `pl-nav-link--compat`).
 - [ ] `npm test`, `npx tsc --noEmit`, `npm run build` pass.

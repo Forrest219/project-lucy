@@ -34,7 +34,7 @@
 
 必须先阅读：
 
-- `../docs/DEVELOPMENT.md`
+- `../docs/governance/DEVELOPMENT.md`
 - `docs/00-product-terminology-standard.md`
 - `docs/59-role-admin-ops-ux-clarification-spec.md`
 - `docs/76-role-admin-list-clarity-followup-spec.md`（**v1.1**）

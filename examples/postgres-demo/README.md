@@ -2,13 +2,13 @@
 
 Self-contained POC stack for PostgreSQL driver validation: **independent database**, **YAML context**, **eval suite**, and **smoke gates** — not part of the default `docker-compose.yml` customer path.
 
-See `docs/lucy-poc-demo-isolation-spec.md` for the full boundary between customer default and POC demo.
+See `docs/specs/lucy-poc-demo-isolation-spec.md` for the full boundary between customer default and POC demo.
 
 ## Contents
 
 | Path | Purpose |
 |---|---|
-| `docker-compose.postgres-demo.yml` | Runs Lucy plus PostgreSQL |
+| `deploy/compose/docker-compose.postgres-demo.yml` | Runs Lucy plus PostgreSQL |
 | `examples/postgres-demo/postgres/01-init.sql` | Seeds Superstore-style demo data in schema `dataforai` |
 | `examples/postgres-demo/postgres/_baseline.json` | Numeric gold for smoke / demo eval |
 | `examples/postgres-demo/project-template/ktx.yaml` | Demo KTX project config for `driver: postgres` |
@@ -59,7 +59,7 @@ compose file should remove this variable; Lucy will fall back to the on-disk
 ## Eval
 
 POC eval lives under `project-template/evals/demo_superstore/`. Compose bind-mounts
-`./examples/postgres-demo/project-template/evals` → `/data/lucy/evals` (read-only).
+`../../examples/postgres-demo/project-template/evals` → `/data/lucy/evals` (read-only).
 
 Gold baseline: `examples/postgres-demo/postgres/_baseline.json` (same generator as MySQL demo).
 
@@ -79,7 +79,7 @@ For manual compose runs, create the secret file before starting the stack:
 mkdir -p secrets
 printf '%s' '<postgres-password>' > secrets/postgres-password
 # Pin Engine default builder so a leftover lucy-amd64 selection cannot hijack the build.
-BUILDX_BUILDER=default docker compose -f docker-compose.postgres-demo.yml up -d --build
+BUILDX_BUILDER=default docker compose -f deploy/compose/docker-compose.postgres-demo.yml up -d --build
 ```
 
 To keep the secret outside the repository, point the compose file at another
@@ -88,7 +88,7 @@ directory:
 ```bash
 LUCY_POSTGRES_DEMO_SECRET_DIR=/path/to/demo-secrets \
 BUILDX_BUILDER=default \
-docker compose -f docker-compose.postgres-demo.yml up -d --build
+docker compose -f deploy/compose/docker-compose.postgres-demo.yml up -d --build
 ```
 
 ## KTX Candidate Version

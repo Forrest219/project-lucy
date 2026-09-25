@@ -13,7 +13,7 @@
 | 输出位置 | `docs/access-control/uat-ac-p15.md` |
 
 > 勾选规则：关键路径须人工勾选；已有自动化覆盖的项可标「自动化」并抽检。  
-> **自动化执行：** `node scripts/ac-p15-uat-runbook.mjs` → **13/13 PASS**（2026-08-09，环境 `lucy-ac-p1-by01`）。  
+> **自动化执行：** `node scripts/smoke/ac-p15-uat-runbook.mjs` → **13/13 PASS**（2026-08-09，环境 `lucy-ac-p1-by01`）。  
 > **Gate C 总签：** **xingchen 批准**（2026-08-09；见 `inbox/20260809-ac-p15-gate-c-signoff.md`）。
 
 ---
@@ -50,7 +50,7 @@
 | UI dryRun | 变更 diff FinalRows 摘要 | ✅ UI-2 | [x] 截图 |
 
 ```bash
-node scripts/ac-p15-uat-runbook.mjs
+node scripts/smoke/ac-p15-uat-runbook.mjs
 # 证据：inbox/20260809-ac-p15-uat/
 ```
 

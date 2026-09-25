@@ -8,7 +8,7 @@
 | 撰写日期 | 2026-08-05 |
 | 撰写人 | Composer |
 | 委托人 | zhangxingchen |
-| 基于材料 | `webui/docs/111-help-center-search-and-connection-kpi-glossary-spec.md`（v1.0）；`docs/design-system-handbook-help.md` M15-P1-2 |
+| 基于材料 | `webui/docs/111-help-center-search-and-connection-kpi-glossary-spec.md`（v1.0）；`docs/design/design-system-handbook-help.md` M15-P1-2 |
 | 适用范围 | `/help` 手册搜索落地 + 连接概览 KPI 术语写入手册并可搜索命中 |
 | 输出位置 | `webui/docs/plans/wo-202608-44-help-center-search-and-connection-kpi-glossary.md` |
 

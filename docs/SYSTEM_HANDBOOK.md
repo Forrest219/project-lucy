@@ -152,7 +152,7 @@ KTX CLI / MCP daemon
 | 文件系统为 SSOT | WebUI 是编辑器，不是业务事实数据库 | `ktx.yaml`、`semantic-layer/`、`wiki/`、`evals/`、`webui/config/access.yaml` |
 | DryRun + Diff 预览落盘 | 写类操作默认预览，必须显式 `dryRun:false` 才写入 | 表编辑、Wiki、Agent/Role、Token、白名单、schema 添加 |
 | 安全边界集中 | 所有写入走 `webui/server/fs-safe.ts` | 白名单目录、黑名单目录、路径穿越、symlink 逃逸 |
-| 运行时指导与开发规则分离 | 数据问答 rules 由 Proxy initialize 注入；开发规则在 `AGENTS.md` / `docs/DEVELOPMENT.md` | 禁止把数据问答规则正文写回 `CLAUDE.md` |
+| 运行时指导与开发规则分离 | 数据问答 rules 由 Proxy initialize 注入；开发规则在 `AGENTS.md` / `docs/governance/DEVELOPMENT.md` | 禁止把数据问答规则正文写回 `CLAUDE.md` |
 
 ### 1.4 目录与事实源地图
 
@@ -972,7 +972,7 @@ tags:
 sl_refs:
   - mysql-aliyun/dataforai/superstore_orders
 refs:
-  - docs/mysql-comment-maintenance.md
+  - docs/runbooks/mysql-comment-maintenance.md
 usage_mode: agent_context
 ---
 
@@ -1580,7 +1580,7 @@ Lucy 维护的 YAML 文件分 7 类。每一类都有明确的路径、维护者
 | 走 `fs-safe` 白名单 | 任何 WebUI 写入都走 `webui/server/fs-safe.ts`；手工 `cat > ...` 也要保证目标在允许目录内 |
 | 不要混目录 | manifest 文件只能在 `_schema/`，overlay 只能在 `semantic-layer/<conn>/`；不要把 overlay 写进 `_schema/`，也不要新建一个语义表目录 |
 | 默认产物不写进 `webui/config/data-qa-instructions.md` | 数据问答运行时指导由 `webui/config/data-qa-instructions.md` 单独维护，与本节交付规则解耦 |
-| 默认产物不写进 `CLAUDE.md` / `AGENTS.md` | 开发治理规则由 `AGENTS.md` 与 `docs/DEVELOPMENT.md` 承载，运行时数据问答规则由 Proxy initialize 注入 |
+| 默认产物不写进 `CLAUDE.md` / `AGENTS.md` | 开发治理规则由 `AGENTS.md` 与 `docs/governance/DEVELOPMENT.md` 承载，运行时数据问答规则由 Proxy initialize 注入 |
 
 最小安全示例（使用脱敏占位符，不含真实凭据）：
 

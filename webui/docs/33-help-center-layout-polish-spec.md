@@ -9,7 +9,7 @@
 | 适用范围 | Lucy WebUI Help Center：`/help`、Help Header、TOC、正文阅读区、Markdown 表格、深链滚动与相关前端测试 |
 | 架构决议 | Help Center 必须从“Markdown 原文展示页”升级为可长期自助阅读的企业级文档中心；优先修复深链定位、Header metadata、双侧栏拥挤、正文阅读宽度和首屏信息噪音，不改变 Help API 的固定单一事实源 |
 | 事实源 | 浏览器审阅 `http://127.0.0.1:55176/help?section=database-connection-acl-sync`、用户截图、`webui/src/pages/HelpCenter.tsx`、`webui/src/components/MarkdownPreview.tsx`、`webui/src/app/app.css`、`docs/SYSTEM_HANDBOOK.md` |
-| 关联文档 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/30-help-markdown-rendering-spec.md`、`docs/design-system-handbook-help.md`、`docs/DEVELOPMENT.md` |
+| 关联文档 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/30-help-markdown-rendering-spec.md`、`docs/design/design-system-handbook-help.md`、`docs/governance/DEVELOPMENT.md` |
 
 ## 1. 决策摘要
 

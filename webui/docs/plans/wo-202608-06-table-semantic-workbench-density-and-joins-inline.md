@@ -26,7 +26,7 @@
 
 必须先阅读：
 
-- `../docs/DEVELOPMENT.md`
+- `../docs/governance/DEVELOPMENT.md`
 - `docs/00-product-terminology-standard.md`
 - `docs/design-system/10-components-button.md`
 - `docs/design-system/11-components-data-grid.md`

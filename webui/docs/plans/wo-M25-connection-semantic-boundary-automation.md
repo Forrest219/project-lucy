@@ -16,7 +16,7 @@
 
 Read these documents before coding:
 
-- `docs/DEVELOPMENT.md`
+- `docs/governance/DEVELOPMENT.md`
 - `webui/docs/00-product-terminology-standard.md`
 - `webui/docs/04-data-model.md`
 - `webui/docs/21-connection-catalog-upload-ux-spec.md`

@@ -8,7 +8,7 @@
 | 撰写日期 | 2026-08-20 |
 | 撰写人 | Composer |
 | 委托人 | xingchen |
-| 基于材料 | 产品确认：WebUI 需支持新建连接；门禁沿用现状（Q1=B）；表单可收一次明文密码并写入 `.ktx/secrets/`（Q2=B）；`docs/design-db-connection.md` §八；`webui/docs/26-database-connection-operations-runbook-spec.md`；`AddSchemaDrawer` / `addSchema` 既有 dryRun 模式；ADR-05 / ADR-11 |
+| 基于材料 | 产品确认：WebUI 需支持新建连接；门禁沿用现状（Q1=B）；表单可收一次明文密码并写入 `.ktx/secrets/`（Q2=B）；`docs/design/design-db-connection.md` §八；`webui/docs/26-database-connection-operations-runbook-spec.md`；`AddSchemaDrawer` / `addSchema` 既有 dryRun 模式；ADR-05 / ADR-11 |
 | 适用范围 | `/connections` 新建连接入口；`POST /api/connections`；受控 secrets 写入通道；术语 / 手册 / 安全边界修订清单 |
 | 输出位置 | `webui/docs/124-connection-create-admin-spec.md` |
 
@@ -17,7 +17,7 @@
 | Spec 编号 | 124 |
 | 关联工单 | `webui/docs/plans/wo-202608-58-connection-create-admin.md`（实现工单；本轮仅设计） |
 | 关联页面 | `/connections`（主）；兼容空态：`/connections/enabled-tables`、`/connections/test` |
-| 上游 Spec / 设计 | `docs/design-db-connection.md`；Spec 26；ADR-05；ADR-11；Spec 107 / 117（Schema 抽屉模式） |
+| 上游 Spec / 设计 | `docs/design/design-db-connection.md`；Spec 26；ADR-05；ADR-11；Spec 107 / 117（Schema 抽屉模式） |
 | 状态 | Designed（未实现） |
 | 日期 | 2026-08-20 |
 | 范围 | WebUI 新建物理连接配置（host/port/user + 一次性密码落盘）；**不**做编辑凭据、**不**引入 WebUI 登录鉴权。删除连接见 Spec 127。 |
@@ -30,7 +30,7 @@
 
 ## 1. 背景
 
-当前「数据库接入」模块只管理**已在 `ktx.yaml` 声明**的连接：连通测试、添加/移除 Schema、启用表范围、Manifest 上传、本地 Catalog 刷新。新建连接（host / port / username / password / driver）被 `docs/design-db-connection.md` §八与 Spec 26 明确划为 Non-Goal，运维须手改 `ktx.yaml` 并在 `.ktx/secrets/` 落密码。
+当前「数据库接入」模块只管理**已在 `ktx.yaml` 声明**的连接：连通测试、添加/移除 Schema、启用表范围、Manifest 上传、本地 Catalog 刷新。新建连接（host / port / username / password / driver）被 `docs/design/design-db-connection.md` §八与 Spec 26 明确划为 Non-Goal，运维须手改 `ktx.yaml` 并在 `.ktx/secrets/` 落密码。
 
 产品目标变更：**允许在 WebUI 新建连接**，且表述为「只支持管理员维护」。
 
@@ -131,12 +131,12 @@ Protected DOM：`Connection ID`、driver/engine、host、`file:` 路径、`.ktx/
 
 | 文档 | 现状 | 实现时动作 |
 |---|---|---|
-| `docs/design-db-connection.md` §八 | 不做新建连接；不做密码管理 | 修订为：允许 Create；密码仅一次性写入、不可管理/回读 |
+| `docs/design/design-db-connection.md` §八 | 不做新建连接；不做密码管理 | 修订为：允许 Create；密码仅一次性写入、不可管理/回读 |
 | Spec 26 | Non-Goal：不在 WebUI 实现新建连接表单 / secret UI | 改为 Goal；区分「创建写入」与「secret 管理 UI」 |
 | ADR-11 | 新增 schema 不接管新建连接 | 保持「Add Schema 不创建连接」；另增本 Spec 专责 Create |
 | ADR-05 | 无登录 | 不改；在本 Spec 与手册记录暴露面风险 |
 | `SYSTEM_HANDBOOK` FAQ | 「没有新建连接按钮是安全边界」 | 改为：有按钮；手工 YAML 仍为高级/灾备路径 |
-| `docs/webui-feature-map.md` | 「不接管新建连接」 | 更新为已设计 / 实现后改状态 |
+| `docs/webui/webui-feature-map.md` | 「不接管新建连接」 | 更新为已设计 / 实现后改状态 |
 
 ## 6. UX 设计
 
@@ -311,12 +311,12 @@ safeRemoveSecretPasswordIfExists(projectRoot, connId): Promise<void> // 仅回�
 
 ### 8.3 文档触点（实现时必须改）
 
-- [`docs/design-db-connection.md`](../../docs/design-db-connection.md) §八
+- [`docs/design/design-db-connection.md`](../../docs/design/design-db-connection.md) §八
 - [`webui/docs/26-database-connection-operations-runbook-spec.md`](26-database-connection-operations-runbook-spec.md)
 - [`docs/SYSTEM_HANDBOOK.md`](../../docs/SYSTEM_HANDBOOK.md) §3.2 / FAQ / 职责边界
-- [`docs/design-schema-onboarding.md`](../../docs/design-schema-onboarding.md)（交叉引用：Create ≠ Add Schema）
+- [`docs/design/design-schema-onboarding.md`](../../docs/design/design-schema-onboarding.md)（交叉引用：Create ≠ Add Schema）
 - [`webui/docs/01-architecture.md`](01-architecture.md)（ADR-11 旁注或新增 ADR）
-- [`docs/webui-feature-map.md`](../../docs/webui-feature-map.md)、[`docs/webui-module-guide.md`](../../docs/webui-module-guide.md)
+- [`docs/webui/webui-feature-map.md`](../../docs/webui/webui-feature-map.md)、[`docs/webui/webui-module-guide.md`](../../docs/webui/webui-module-guide.md)
 - Help 相关测试与 `wo-M58` FAQ 断言
 
 ## 9. 工作量评估（实现轮；非日历时间）

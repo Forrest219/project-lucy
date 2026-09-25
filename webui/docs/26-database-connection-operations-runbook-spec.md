@@ -10,8 +10,8 @@
 | 撰写日期 | 2026-07-31 |
 | 适用范围 | Lucy Help Center 系统手册、数据库接入模块、客户 headless 配置包、Agent 访问治理配置 |
 | 架构决议 | 系统手册必须显性说明：WebUI 不负责新建物理数据库连接；新增连接由运维在 `ktx.yaml` 与 secret 文件中完成，WebUI 只管理已声明连接的连通测试、Schema、表白名单、YAML 资产和本地 Catalog 状态 |
-| 事实源 | `docs/SYSTEM_HANDBOOK.md`、`ktx.yaml.example`、`customer-config.example/ktx.yaml`、`webui/config/access.yaml`、`docs/customer-deployment-guide.md`、`docs/admin-guide.md` |
-| 关联文档 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/25-connection-module-terminology-ia-refresh-spec.md`、`webui/docs/17-static-catalog-loading-spec.md`、`webui/docs/21-connection-catalog-upload-ux-spec.md`、`webui/docs/24-yaml-delivery-runbook-spec.md`、`docs/design-db-connection.md`、`docs/design-schema-onboarding.md`、`docs/DEVELOPMENT.md` |
+| 事实源 | `docs/SYSTEM_HANDBOOK.md`、`ktx.yaml.example`、`customer-config.example/ktx.yaml`、`webui/config/access.yaml`、`docs/runbooks/customer-deployment-guide.md`、`docs/runbooks/admin-guide.md` |
+| 关联文档 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/25-connection-module-terminology-ia-refresh-spec.md`、`webui/docs/17-static-catalog-loading-spec.md`、`webui/docs/21-connection-catalog-upload-ux-spec.md`、`webui/docs/24-yaml-delivery-runbook-spec.md`、`docs/design/design-db-connection.md`、`docs/design/design-schema-onboarding.md`、`docs/governance/DEVELOPMENT.md` |
 
 ## 1. 决策摘要
 

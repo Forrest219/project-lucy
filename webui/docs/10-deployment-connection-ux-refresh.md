@@ -41,13 +41,13 @@ Do not claim live database connectivity unless the page has actually run `POST /
 
 | Spec | Assessment | Required update |
 |---|---|---|
-| `docs/design-webui-ui-refresh.md` | Still valid as the broad workbench UI direction. It already says high-frequency tool pages should avoid repeated long titles. | No rewrite. This incremental spec becomes the concrete implementation slice for `/onboarding` and `/connections`. |
-| `docs/design-db-connection.md` | Still valid for database connection API and security boundaries. It does not cover the new PM-level connection-card visual language. | Reference this spec as the UX refresh for connection overview. No API change. |
-| `docs/design-schema-onboarding.md` | Mostly aligned. It already designs Add Schema as a three-step drawer. Current implementation uses drawer behavior but modal CSS classes. | Treat this spec as the visual/interaction refinement: true right-side slide-over, clearer step states, less harsh error panel styling. |
-| `docs/webui-feature-map.md` | Feature status is accurate, but the current gap list should point to the UX refresh. | Add this spec to the related docs / remaining focus list after implementation planning. |
+| `docs/design/design-webui-ui-refresh.md` | Still valid as the broad workbench UI direction. It already says high-frequency tool pages should avoid repeated long titles. | No rewrite. This incremental spec becomes the concrete implementation slice for `/onboarding` and `/connections`. |
+| `docs/design/design-db-connection.md` | Still valid for database connection API and security boundaries. It does not cover the new PM-level connection-card visual language. | Reference this spec as the UX refresh for connection overview. No API change. |
+| `docs/design/design-schema-onboarding.md` | Mostly aligned. It already designs Add Schema as a three-step drawer. Current implementation uses drawer behavior but modal CSS classes. | Treat this spec as the visual/interaction refinement: true right-side slide-over, clearer step states, less harsh error panel styling. |
+| `docs/webui/webui-feature-map.md` | Feature status is accurate, but the current gap list should point to the UX refresh. | Add this spec to the related docs / remaining focus list after implementation planning. |
 | `webui/docs/03-api-spec.md` | No endpoint change required. | No update unless implementation later adds persisted connection status. |
 | `webui/docs/04-data-model.md` | No model change required. | No update. |
-| `docs/webui-impl-status.md` | Current feature state remains "implemented"; this work is an enhancement. | Update only after code lands, changing last reviewed date / tests if desired. |
+| `docs/webui/webui-impl-status.md` | Current feature state remains "implemented"; this work is an enhancement. | Update only after code lands, changing last reviewed date / tests if desired. |
 
 ## 3. UX Principles
 

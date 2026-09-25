@@ -7,8 +7,8 @@
 | 版本 | v0.1 |
 | 撰写日期 | 2026-08-03 |
 | 202608 状态 | Deferred；不属于 202608 Governance & Observability 主线 |
-| 关联蓝图 | `docs/lucy-202608-reliable-delivery-upgrade-spec.md` |
-| 关联总控 | `docs/lucy-202608-upgrade-execution-control.md` |
+| 关联蓝图 | `docs/specs/lucy-202608-reliable-delivery-upgrade-spec.md` |
+| 关联总控 | `docs/specs/lucy-202608-upgrade-execution-control.md` |
 | 关联工单 | `webui/docs/plans/wo-202608-05-fde-copilot-candidate.md` |
 | 适用范围 | FDE Copilot 候选补全、证据引用、冲突提示、unverified candidate 隔离区 |
 

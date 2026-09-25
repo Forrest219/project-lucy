@@ -1,6 +1,6 @@
 # values.gate-ci.yaml — kind CI profile for H3 N-1 in-place upgrade gate.
 #
-# Used by scripts/k8s-kind-h3-gate.sh on GitHub Actions (kind + local image).
+# Used by scripts/gates/k8s-kind-h3-gate.sh on GitHub Actions (kind + local image).
 # NOT for customer production clusters.
 
 image:

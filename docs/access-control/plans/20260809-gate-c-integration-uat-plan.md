@@ -4,7 +4,7 @@
 
 **Goal:** 在 Docker/本地集成环境中启动 Lucy WebUI + MCP Proxy + DataPlane，完成 AC-P0 Gate C 的真实环境 UAT 与 Runbook 演练留证。
 
-**Architecture:** 以 `docker-compose.demo.yml` 的持久化 demo 环境作为集成底座，先跑现有 P0 demo smoke 证明 WebUI/KTX/MCP 基线可用，再注入 AC-P0 专用 Role/Agent/Token fixture。数据面通过 MCP JSON-RPC 真实调用，控制面通过 Admin UI/API 真实保存，降级恢复通过实际改坏/回滚 `access.yaml` 验证。
+**Architecture:** 以 `deploy/compose/docker-compose.demo.yml` 的持久化 demo 环境作为集成底座，先跑现有 P0 demo smoke 证明 WebUI/KTX/MCP 基线可用，再注入 AC-P0 专用 Role/Agent/Token fixture。数据面通过 MCP JSON-RPC 真实调用，控制面通过 Admin UI/API 真实保存，降级恢复通过实际改坏/回滚 `access.yaml` 验证。
 
 **Tech Stack:** Docker Compose, Lucy WebUI/API, Lucy MCP Proxy, KTX, MySQL demo data, Admin UI, MCP JSON-RPC, `inbox/` evidence files.
 
@@ -29,7 +29,7 @@
 
 | 项 | 默认值 |
 |---|---|
-| Compose file | `docker-compose.demo.yml` |
+| Compose file | `deploy/compose/docker-compose.demo.yml` |
 | Compose project | `lucy-gate-c-uat` |
 | WebUI/API | `http://127.0.0.1:55176` |
 | MCP Proxy | `http://127.0.0.1:57881/mcp` |
@@ -93,8 +93,8 @@ mkdir -p inbox/20260809-gate-c-uat
 ### Task 1: 启动持久化 Docker 集成环境
 
 **Files:**
-- Read: `docker-compose.demo.yml`
-- Read: `scripts/rebuild-demo-lucy.sh`
+- Read: `deploy/compose/docker-compose.demo.yml`
+- Read: `scripts/demo/rebuild-demo-lucy.sh`
 - Evidence: `inbox/20260809-gate-c-uat/00-compose-up.txt`
 
 **Steps:**
@@ -110,12 +110,12 @@ mkdir -p inbox/20260809-gate-c-uat
    LUCY_DEMO_WEBUI_HOST_PORT=55176 \
    LUCY_DEMO_PROXY_HOST_PORT=57881 \
    LUCY_DEMO_MYSQL_HOST_PORT=53306 \
-   docker compose -f docker-compose.demo.yml -p lucy-gate-c-uat up -d --build
+   docker compose -f deploy/compose/docker-compose.demo.yml -p lucy-gate-c-uat up -d --build
    ```
 
 3. 记录容器：
    ```bash
-   docker compose -f docker-compose.demo.yml -p lucy-gate-c-uat ps
+   docker compose -f deploy/compose/docker-compose.demo.yml -p lucy-gate-c-uat ps
    ```
 
 4. 验证 WebUI/API：

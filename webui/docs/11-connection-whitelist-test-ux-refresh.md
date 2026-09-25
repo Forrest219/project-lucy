@@ -44,8 +44,8 @@ Do not invent database health state. `/connections/test` should show "not tested
 | `webui/docs/10-deployment-connection-ux-refresh.md` | Still valid for `/onboarding` and `/connections`. This spec extends the same database access workflow into the two child pages. | No rewrite. Treat this as M8 continuation. |
 | `webui/docs/03-api-spec.md` | Current endpoints are sufficient for the frontend-first pass. | Update only if implementation adds richer table metadata to `/api/connections/:connId/tables` or structured diagnostics to connection test. |
 | `webui/docs/04-data-model.md` | Existing `ConnectionInfo`, `SourceSummary`, and `ConnectionTestResult` cover the minimum product experience. | No required update for the first pass. |
-| `docs/design-db-connection.md` | Still the database-connection source of truth. | Reference this spec for final WebUI interaction shape. |
-| `docs/webui-feature-map.md` | Should list this as the completion pass for connection whitelist/test. | Update after the implementation plan is accepted or code lands. |
+| `docs/design/design-db-connection.md` | Still the database-connection source of truth. | Reference this spec for final WebUI interaction shape. |
+| `docs/webui/webui-feature-map.md` | Should list this as the completion pass for connection whitelist/test. | Update after the implementation plan is accepted or code lands. |
 
 ## 3. UX Principles
 

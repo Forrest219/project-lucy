@@ -57,7 +57,7 @@ git -C /Users/forrest/Projects/project-lucy status --short
 - `../docs/49-business-wiki-md-library-operations-spec.md`
 - `../docs/00-product-terminology-standard.md`
 - `../docs/45-business-wiki-workbench-productization-spec.md`
-- `../../docs/DEVELOPMENT.md`
+- `../../docs/governance/DEVELOPMENT.md`
 
 如果工作树已有无关脏改动，只记录并避开，不得回滚。
 

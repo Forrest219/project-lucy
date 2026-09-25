@@ -17,11 +17,11 @@
 Read these documents before editing:
 
 - `webui/docs/30-help-markdown-rendering-spec.md`
-- `docs/design-system-handbook-help.md`
+- `docs/design/design-system-handbook-help.md`
 - `docs/SYSTEM_HANDBOOK.md`
 - `webui/docs/00-product-terminology-standard.md`
 - `webui/docs/24-yaml-delivery-runbook-spec.md`
-- `docs/DEVELOPMENT.md`
+- `docs/governance/DEVELOPMENT.md`
 
 Inspect these implementation files:
 

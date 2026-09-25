@@ -21,7 +21,7 @@ Read these documents before editing:
 - `webui/docs/33-help-center-layout-polish-spec.md`
 - `webui/docs/00-product-terminology-standard.md`
 - `docs/SYSTEM_HANDBOOK.md` §0 line 27–46（13 条 Q&A 起点）+ §6 line 1585–1742（保持不变）
-- `docs/DEVELOPMENT.md`
+- `docs/governance/DEVELOPMENT.md`
 
 Inspect these implementation files:
 

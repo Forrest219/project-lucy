@@ -9,7 +9,7 @@
 | 适用范围 | Lucy WebUI 系统概览、`/onboarding` 兼容路由、全局侧边栏、PageHeader、待处理事项、质量快照、访问风险、MCP 配置展示 |
 | 关联工单 | `webui/docs/plans/wo-M39-system-overview-enterprise-ops-polish.md` |
 | 事实源 | 用户截图审阅：`http://localhost:5174/onboarding`；`webui/src/pages/Onboarding.tsx`；`webui/src/app/App.tsx`；`webui/src/lib/opsDashboard.ts` |
-| 关联规范 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/19-system-overview-runtime-monitoring-spec.md`、`webui/docs/22-public-mcp-endpoint-runtime-config-spec.md`、`webui/docs/37-sidebar-navigation-ia-consolidation-spec.md`、`webui/docs/39-data-agent-ops-platform-global-ux-spec.md`、`webui/docs/40-lucy-webui-positioning-control-plane.md`、`docs/DEVELOPMENT.md` |
+| 关联规范 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/19-system-overview-runtime-monitoring-spec.md`、`webui/docs/22-public-mcp-endpoint-runtime-config-spec.md`、`webui/docs/37-sidebar-navigation-ia-consolidation-spec.md`、`webui/docs/39-data-agent-ops-platform-global-ux-spec.md`、`webui/docs/40-lucy-webui-positioning-control-plane.md`、`docs/governance/DEVELOPMENT.md` |
 
 ---
 

@@ -54,7 +54,7 @@
 ### Phase 3 — Docs / 术语 / 台账
 
 - `00-product-terminology-standard.md` §4.1 登记 Remove Schema 等。
-- `docs/design-schema-onboarding.md`：交叉引用 Spec 117。
+- `docs/design/design-schema-onboarding.md`：交叉引用 Spec 117。
 - `03-api-spec.md` 补 endpoint。
 - `webui/docs/README.md`、`plans/README.md` 索引。
 - `docs/ui-ux-feedback/pages/connections.md`：`UX-CONNECTIONS-034` → Fixed。

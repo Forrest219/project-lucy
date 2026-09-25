@@ -6,8 +6,8 @@
 | Document type | Product / API / UX Spec |
 | Version | v0.2 |
 | Written date | 2026-08-03；v0.2 更新 2026-08-03（P2 收敛为只读风险复核候选项与统一 Release Readiness Evidence Package，移除动态隔离超前引用） |
-| Related blueprint | `docs/lucy-202608-reliable-delivery-upgrade-spec.md` |
-| Related execution control | `docs/lucy-202608-upgrade-execution-control.md` |
+| Related blueprint | `docs/specs/lucy-202608-reliable-delivery-upgrade-spec.md` |
+| Related execution control | `docs/specs/lucy-202608-upgrade-execution-control.md` |
 | Scope | Admin Audit Trace read model、Agent / Role / Token observability dashboard、risk review candidates、release readiness evidence package |
 
 ## 1. Background

@@ -3,7 +3,7 @@
 本目录是 KTX Local WebUI 的**架构与规格交付物**（source of truth 仍是 `../README.md` 的产品 MVP 方案）。
 文档按「先架构、后规格、再任务」的顺序组织，供后续实现（含 Mulan 特工队）直接消费。
 
-**写作要求**（落位、重要功能伪代码、Terminology Compliance）：见仓库根 [`docs/DEVELOPMENT.md`](../../docs/DEVELOPMENT.md) 的「Spec 落位规则」「Spec 内容规格」「全系统术语规范」。
+**写作要求**（落位、重要功能伪代码、Terminology Compliance）：见仓库根 [`docs/governance/DEVELOPMENT.md`](../../docs/governance/DEVELOPMENT.md) 的「Spec 落位规则」「Spec 内容规格」「全系统术语规范」。
 
 | 文档 | 作用 | 读者 |
 | --- | --- | --- |

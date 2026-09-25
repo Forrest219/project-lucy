@@ -141,9 +141,9 @@ GRANT SELECT ON ALL TABLES IN SCHEMA public TO lucy_readonly;</pre>
       <p><code>customer-config/semantic-layer/&lt;connection&gt;/_schema/</code> 保存物理表 manifest，描述表名、字段、类型和基础描述；<code>customer-config/semantic-layer/&lt;connection&gt;/&lt;source&gt;.yaml</code> 保存人工 overlay，维护 grain、measures、segments、joins 和业务解释。</p>
       <p>每次新增表、指标、Join 或 Wiki 口径后，运行配置包检查、reindex 和 validate，确保 Agent 能检索到最新语义：</p>
       <pre>npm run smoke:p0:headless-config -- --root customer-config --require-secret-files
-docker compose -f docker-compose.yml -f docker-compose.customer-config.yml exec lucy \
+docker compose -f docker-compose.yml -f deploy/compose/docker-compose.customer-config.yml exec lucy \
   ktx --project-dir /data/lucy admin reindex --force --output json
-docker compose -f docker-compose.yml -f docker-compose.customer-config.yml exec lucy \
+docker compose -f docker-compose.yml -f deploy/compose/docker-compose.customer-config.yml exec lucy \
   ktx --project-dir /data/lucy sl validate &lt;source-name&gt; --connection-id &lt;connection-id&gt;</pre>
     </section>
 

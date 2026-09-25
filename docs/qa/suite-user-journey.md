@@ -50,7 +50,7 @@ New terms:
 
 | 旅程 | 默认 | 写入 |
 |---|---|---|
-| ENG / ADM | `WEBUI_BASE`（Docker 常 `http://127.0.0.1:55176`）；`LUCY_PROJECT_DIR` → fixture（`scripts/init-e2e-fixture.sh`） | 只写 fixture；真实仓库只读 |
+| ENG / ADM | `WEBUI_BASE`（Docker 常 `http://127.0.0.1:55176`）；`LUCY_PROJECT_DIR` → fixture（`scripts/demo/init-e2e-fixture.sh`） | 只写 fixture；真实仓库只读 |
 | ANA | 本会话已鉴权 Lucy MCP；先 `lucy_catalog` | 只读 |
 | ONB | 与 ANA 同实例 | 可复制 MCP 配置；不改 `customer-config` |
 
@@ -136,7 +136,7 @@ n. 操作：用户做什么（界面中文文案，不用内部函数名）
 
 ### 4.2 前置
 
-- Fixture 已初始化：`bash scripts/init-e2e-fixture.sh`；WebUI 以 `LUCY_PROJECT_DIR` 指向该副本启动。
+- Fixture 已初始化：`bash scripts/demo/init-e2e-fixture.sh`；WebUI 以 `LUCY_PROJECT_DIR` 指向该副本启动。
 - `ktx.yaml` 中 `CONN_ID` 的 `schemas` **不含** `SCHEMA`。
 - `wiki/WIKI_DIR/WIKI_FILE` 不存在。
 - 浏览器无残留未保存草稿。
@@ -271,7 +271,7 @@ n. 操作：用户做什么（界面中文文案，不用内部函数名）
 
 ### 4.5 清理
 
-- 重置 fixture：`bash scripts/init-e2e-fixture.sh`（或该环境约定的 reset）。
+- 重置 fixture：`bash scripts/demo/init-e2e-fixture.sh`（或该环境约定的 reset）。
 - 不要在真实仓库 `git checkout` 来撤 E2E 写入。
 
 ### 4.6 已知漂移（执行时勿用旧文案）

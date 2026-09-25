@@ -8,7 +8,7 @@
 | 撰写日期 | 2026-08-09 |
 | 撰写人 | Cursor Agent（code） |
 | 委托人 | xingchen |
-| 基于材料 | commit `1dbe20f`；`checklist-single-deploy-phase0-1.md` / `phase2.md` / `phase3-4.md`；`uat-ac-p1.md` BY-01；`scripts/ac-p15-uat-runbook.mjs` |
+| 基于材料 | commit `1dbe20f`；`checklist-single-deploy-phase0-1.md` / `phase2.md` / `phase3-4.md`；`uat-ac-p1.md` BY-01；`scripts/smoke/ac-p15-uat-runbook.mjs` |
 | 适用范围 | 将三份 Checklist **按序执行**并产出可审计测试报告；**不**在本计划内 merge `main` |
 | 输出位置 | `docs/access-control/plans/20260809-single-deploy-landing-plan.md` |
 
@@ -103,8 +103,8 @@ export LUCY_DEMO_PROXY_HOST_PORT=57881
 export LUCY_DEMO_MYSQL_HOST_PORT=53306
 
 docker compose \
-  -f docker-compose.demo.yml \
-  -f docker-compose.ac-p1-by01-proven-off.yml \
+  -f deploy/compose/docker-compose.demo.yml \
+  -f deploy/compose/docker-compose.ac-p1-by01-proven-off.yml \
   -p lucy-single-deploy-p1 \
   up -d --build
 ```
@@ -142,7 +142,7 @@ docker compose \
 ```bash
 source inbox/20260809-single-deploy-p2/00-compose-identity.env
 # baseline 不变；仅 proven-off → proven=true
-docker compose "${COMPOSE_BASELINE[@]}" -f docker-compose.ac-p1-by01.yml \
+docker compose "${COMPOSE_BASELINE[@]}" -f deploy/compose/docker-compose.ac-p1-by01.yml \
   -p "$COMPOSE_PROJECT" up -d --build
 ```
 
@@ -168,7 +168,7 @@ docker compose "${COMPOSE_BASELINE[@]}" -f docker-compose.ac-p1-by01.yml \
 回滚：
 
 ```bash
-docker compose "${COMPOSE_BASELINE[@]}" -f docker-compose.ac-p1-by01-proven-off.yml \
+docker compose "${COMPOSE_BASELINE[@]}" -f deploy/compose/docker-compose.ac-p1-by01-proven-off.yml \
   -p "$COMPOSE_PROJECT" up -d --force-recreate --no-deps lucy
 ```
 
@@ -204,7 +204,7 @@ docker compose "${COMPOSE_BASELINE[@]}" -f docker-compose.ac-p1-by01-proven-off.
 | P3-00…P3-07 | 3 | Docker + WebUI + Cursor MCP | 置真取数 ⊆ 域 + 回滚 unproven |
 | P4-01 | 4 | 文档/diff 审阅 | 门禁材料齐；不 merge |
 
-自动化辅助：`ACP15_WEBUI_BASE` / `ACP15_MCP_BASE` + `node scripts/ac-p15-uat-runbook.mjs`（证据复制到阶段目录，勿覆盖）。
+自动化辅助：`ACP15_WEBUI_BASE` / `ACP15_MCP_BASE` + `node scripts/smoke/ac-p15-uat-runbook.mjs`（证据复制到阶段目录，勿覆盖）。
 
 ---
 

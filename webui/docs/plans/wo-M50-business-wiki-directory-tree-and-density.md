@@ -1,6 +1,6 @@
 # M50 — Business Wiki Directory Tree and Density
 
-> codex 直投 prompt：请在 `/Users/forrest/Projects/project-lucy/webui` 开工。先读 `../docs/52-business-wiki-directory-tree-and-density-spec.md`、`../docs/49-business-wiki-md-library-operations-spec.md`、`../docs/00-product-terminology-standard.md`、`../../docs/DEVELOPMENT.md` 和本工单。目标是修复 `/wiki` 目录层级不可发现、目录计数无单位、默认首页大面积留白问题。保持 Wiki 存储和 API 契约不变，目录由 Markdown key 推导，不新增空目录持久化。
+> codex 直投 prompt：请在 `/Users/forrest/Projects/project-lucy/webui` 开工。先读 `../docs/52-business-wiki-directory-tree-and-density-spec.md`、`../docs/49-business-wiki-md-library-operations-spec.md`、`../docs/00-product-terminology-standard.md`、`../../docs/governance/DEVELOPMENT.md` 和本工单。目标是修复 `/wiki` 目录层级不可发现、目录计数无单位、默认首页大面积留白问题。保持 Wiki 存储和 API 契约不变，目录由 Markdown key 推导，不新增空目录持久化。
 
 ## 0. 背景
 
@@ -52,7 +52,7 @@ git -C /Users/forrest/Projects/project-lucy status --short
 - `../docs/52-business-wiki-directory-tree-and-density-spec.md`
 - `../docs/49-business-wiki-md-library-operations-spec.md`
 - `../docs/00-product-terminology-standard.md`
-- `../../docs/DEVELOPMENT.md`
+- `../../docs/governance/DEVELOPMENT.md`
 
 如果工作树已有无关脏改动，只记录并避开，不得回滚。
 

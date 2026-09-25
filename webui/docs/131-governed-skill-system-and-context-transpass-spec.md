@@ -8,7 +8,7 @@
 | 撰写日期 | 2026-08-29 |
 | 撰写人 | Claude / Codex |
 | 委托人 | 张星晨 |
-| 基于材料 | `lucy-skills/docs/01-spec.md`、`webui/docs/07-mcp-auth-proxy-spec.md`、`webui/docs/08-mcp-audit-question-tracing-spec.md`、`webui/docs/62-trace-evidence-kernel-spec.md`、`webui/docs/98-access-control-p0-runtime-spec.md` |
+| 基于材料 | `docs/specs/lucy-skills-mcp-spec.md`、`webui/docs/07-mcp-auth-proxy-spec.md`、`webui/docs/08-mcp-audit-question-tracing-spec.md`、`webui/docs/62-trace-evidence-kernel-spec.md`、`webui/docs/98-access-control-p0-runtime-spec.md` |
 | 适用范围 | Lucy MCP Proxy (`webui/server/proxy/`)、Skill 资产格式 (`skills/`)、ACL 与审计引擎、WebUI Skill Studio 与客户端导出 |
 | 输出位置 | /Users/zhangxingchen/Projects/project-lucy/webui/docs/131-governed-skill-system-and-context-transpass-spec.md |
 

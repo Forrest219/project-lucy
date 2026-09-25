@@ -110,7 +110,7 @@ server: {
 
 **位置**: M37 Final Verification Checklist lines 478-497
 
-**证据**: Task 6 Step 3 lines 437-448 给了五条命令和 Expected；但 Final Verification lines 480-487 多数是文件状态检查，没有对应命令，例如检查 `webui/index.html:6`、`docs/vision.md` / `docs/webui-module-guide.md` untouched、5+1 IA untouched。
+**证据**: Task 6 Step 3 lines 437-448 给了五条命令和 Expected；但 Final Verification lines 480-487 多数是文件状态检查，没有对应命令，例如检查 `webui/index.html:6`、`docs/governance/vision.md` / `docs/webui/webui-module-guide.md` untouched、5+1 IA untouched。
 
 **问题**: Prompt 要求“每一项是否可一键验证（命令 + Expected 都有）”。当前 checklist 可以人工审，但不是每项一键验证。
 
@@ -120,7 +120,7 @@ server: {
 grep -n "<title>Lucy WebUI</title>" webui/index.html
 grep -n "Data Agent Ops Control Plane" webui/src/app/App.tsx webui/src/__tests__/app-shell.test.tsx
 grep -n "运维控制面" webui/docs/39-data-agent-ops-platform-global-ux-spec.md || echo "OK"
-git diff -- docs/vision.md docs/webui-module-guide.md
+git diff -- docs/governance/vision.md docs/webui/webui-module-guide.md
 ```
 
 并逐条写 Expected。
@@ -168,7 +168,7 @@ git diff -- docs/vision.md docs/webui-module-guide.md
 
 ## 🟢 Nits
 
-- spec 40 §6.1 line 187 已列 `docs/vision.md`，但没有显式标 §3 / lines 55,103；建议补 anchors，方便 M38 接手。
+- spec 40 §6.1 line 187 已列 `docs/governance/vision.md`，但没有显式标 §3 / lines 55,103；建议补 anchors，方便 M38 接手。
 - `webui/docs/README.md` 当前标题和开头仍写 `KTX WebUI`（lines 1-3）。这不是 M37 P0，但和本轮定位升级相邻，建议在后续 P2 / M38 一并收口。
 - M37 Task 1 Step 4 line 134 在第一颗 commit 就写“M37 已完成”；如果坚持 6 个小 commit，建议改成“自 M37 起”或放到最终 docs commit，避免中间 commit 的事实口径提前。
 
@@ -187,13 +187,13 @@ git diff -- docs/vision.md docs/webui-module-guide.md
    证据：spec 40 §4.1.1 line 90 要求英文 brand term 防御，M37 Task 2 Step 1 lines 176-181 对 brand term span 加了 `translate="no"` + `notranslate`；中文 caption 不加防御的口径在 spec 40 line 90 和 M37 line 188 一致。blocker 是 spec 40 §7 示例错位，见 🔴 1。
 
 5. **边界守住：PASS**
-   证据：M37 plan 只检查 `webui/index.html` 并明确不修改 `<title>`（lines 31、81、483），未把 `docs/vision.md` / `docs/webui-module-guide.md` 放入改动范围（lines 89、497）。`git diff` / `git add` 清单覆盖术语、App、CSS、设计 spec、测试、spec 39、README indexes（lines 141-150、221-242、283-292、349-350、382-395、472-473）。
+   证据：M37 plan 只检查 `webui/index.html` 并明确不修改 `<title>`（lines 31、81、483），未把 `docs/governance/vision.md` / `docs/webui/webui-module-guide.md` 放入改动范围（lines 89、497）。`git diff` / `git add` 清单覆盖术语、App、CSS、设计 spec、测试、spec 39、README indexes（lines 141-150、221-242、283-292、349-350、382-395、472-473）。
 
 6. **验收可执行：FAIL**
    证据：Final Verification 不是每项都有命令 + Expected，见 🟡 2；视觉 QA URL 与 Vite 配置冲突，见 🔴 3。
 
 7. **跨 spec 用词漂移：PASS with caveat**
-   证据：当前 `运维控制面` 仅作为旧词出现在 spec 39 line 25 及 spec 40 / M37 的弃用、修订语境；`docs/vision.md` §3 的 `治理控制台` 在 spec 40 §4.4 lines 118-119 已登记给 M38。caveat 是 spec 40 §6.1 可补更精确 anchors，见 🟢。
+   证据：当前 `运维控制面` 仅作为旧词出现在 spec 39 line 25 及 spec 40 / M37 的弃用、修订语境；`docs/governance/vision.md` §3 的 `治理控制台` 在 spec 40 §4.4 lines 118-119 已登记给 M38。caveat 是 spec 40 §6.1 可补更精确 anchors，见 🟢。
 
 8. **Commit 消息规范：PASS**
    证据：M37 Task 1-6 commit messages 分别是 `docs(terminology):`、`feat(webui):`、`docs(spec):`、`test(webui):`、`docs(spec):`、`docs(webui):`，见 lines 150、242、292、350、395、473；未看到 Task 2 + Task 3 合并 commit 残留。
@@ -208,13 +208,13 @@ git diff -- docs/vision.md docs/webui-module-guide.md
     证据：M37 Task 6 Step 1 给 `webui/docs/README.md` 追加 3 列表格行，当前 README 表也是 3 列（`webui/docs/README.md:6-7`），格式正确；plans README 现有工单表也是 3 列（`webui/docs/plans/README.md:67-99`），Task 6 Step 2 要求匹配现有格式。但 spec 40 §9 未登记 index sync，见 🟡 3。
 
 12. **M38 衔接：PASS**
-    证据：spec 40 §4.4 lines 114-121、§8 lines 241-245、§9 lines 252-255 三处均把 `docs/vision.md` / `docs/webui-module-guide.md` 交给 M38；未看到 spec 40 §4 P0 内容漏标为 M38。
+    证据：spec 40 §4.4 lines 114-121、§8 lines 241-245、§9 lines 252-255 三处均把 `docs/governance/vision.md` / `docs/webui/webui-module-guide.md` 交给 M38；未看到 spec 40 §4 P0 内容漏标为 M38。
 
 ## ✅ 已确认（PASS）
 
 - M37 plan 没有要求修改 `webui/index.html` `<title>`；当前 `webui/index.html:6` 为 `<title>Lucy WebUI</title>`。
 - M37 plan 没有把 M36 大改造交付物重新纳入范围；Non-negotiable boundaries lines 56-68 覆盖 M36 UX、5+1 IA、runtime/config、依赖等关键边界。
-- M37 plan 的设计 spec 备注三处与当前 `docs/design-webui-ui-refresh.md` 现状对得上：line 119、line 616、line 630。
+- M37 plan 的设计 spec 备注三处与当前 `docs/design/design-webui-ui-refresh.md` 现状对得上：line 119、line 616、line 630。
 - M37 plan 的 app-shell 测试位置与当前现状对得上：`webui/src/__tests__/app-shell.test.tsx:124-127` 断言 `Lucy WebUI` 存在、`KTX WebUI` 不存在。
 - M37 plan 的 README 追加行列数与当前索引表列数匹配：`webui/docs/README.md:6-7` 是 3 列，`webui/docs/plans/README.md:67-99` 是 3 列工单表。
 
@@ -278,7 +278,7 @@ git diff -- docs/vision.md docs/webui-module-guide.md
  M webui/src/pages/connections/TableWhitelist.tsx
  M webui/src/pages/eval/CaseEditor.tsx
 ?? docs/qa/
-?? scripts/init-e2e-fixture.sh
+?? scripts/demo/init-e2e-fixture.sh
 ?? webui/docs/27-connection-overview-ops-ux-cleanup-spec.md
 ?? webui/docs/31-connection-manifest-upload-affordance-spec.md
 ?? webui/docs/32-connection-overview-actionbar-visual-noise-spec.md

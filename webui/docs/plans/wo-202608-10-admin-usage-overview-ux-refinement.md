@@ -31,7 +31,7 @@
 
 请在 `/Users/zhangxingchen/Projects/project-lucy/webui` 执行本工单。先读 Spec **78 v1.1**。
 
-必须先阅读：`../docs/DEVELOPMENT.md`、`docs/00-product-terminology-standard.md`、`docs/06-navigation-ia.md`、`docs/75-…`、`docs/78-…`（v1.1）、`GovernanceOverview.tsx`、`navigation.ts`、`governance-observability.ts`、前后端 `admin-governance-observability` 测试、`navigation.test.ts`。
+必须先阅读：`../docs/governance/DEVELOPMENT.md`、`docs/00-product-terminology-standard.md`、`docs/06-navigation-ia.md`、`docs/75-…`、`docs/78-…`（v1.1）、`GovernanceOverview.tsx`、`navigation.ts`、`governance-observability.ts`、前后端 `admin-governance-observability` 测试、`navigation.test.ts`。
 
 ## Non-Negotiable Boundaries
 

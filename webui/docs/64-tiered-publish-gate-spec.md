@@ -6,8 +6,8 @@
 | Document type | Product / API / Access Governance Spec |
 | Version | v0.2 |
 | Written date | 2026-08-03；v0.2 更新 2026-08-03（由通用 Publish Gate 收窄为 Agent / Role / Token / access policy 治理门禁） |
-| Related blueprint | `docs/lucy-202608-reliable-delivery-upgrade-spec.md` |
-| Related execution control | `docs/lucy-202608-upgrade-execution-control.md` |
+| Related blueprint | `docs/specs/lucy-202608-reliable-delivery-upgrade-spec.md` |
+| Related execution control | `docs/specs/lucy-202608-upgrade-execution-control.md` |
 | Related work order | `webui/docs/plans/wo-202608-03-tiered-publish-gate.md` |
 | Scope | Agent / Role / Token / `access.yaml` governance gate, risk tiers, override evidence |
 
@@ -129,7 +129,7 @@ Override evidence uses `evidence_events.relation = "reviewer_override"`.
 Create:
 
 ```text
-scripts/verify-202608-access-governance-gate.mjs
+scripts/smoke/verify-202608-access-governance-gate.mjs
 ```
 
 The script must verify:

@@ -1,6 +1,6 @@
 # Default values for the Lucy Helm chart.
 #
-# This chart is the Kubernetes counterpart of `docker-compose.yml` + `docker-compose.customer-config.yml`.
+# This chart is the Kubernetes counterpart of `docker-compose.yml` + `deploy/compose/docker-compose.customer-config.yml`.
 # It is single-replica only and uses Deployment strategy Recreate so that the
 # RWO PVC mounted at /data/lucy is never shared between two pods.
 #

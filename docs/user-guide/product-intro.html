@@ -724,7 +724,7 @@
         <div class="hero-stat-label">细粒度 Agent 权限管控</div>
       </div>
     </div>
-    <p style="margin-top:18px;font-size:12px;color:var(--text3);text-align:center;">* 行业基准估算，非 Lucy 内部 Eval 实测结果；Lucy Business Eval 当前为 partial 状态，完整闭环尚未生效（详见 <code>docs/lucy-platform-goal-checklist.md</code> Capability Checklist）。</p>
+    <p style="margin-top:18px;font-size:12px;color:var(--text3);text-align:center;">* 行业基准估算，非 Lucy 内部 Eval 实测结果；Lucy Business Eval 当前为 partial 状态，完整闭环尚未生效（详见 <code>docs/specs/lucy-platform-goal-checklist.md</code> Capability Checklist）。</p>
   </div>
 </section>
 
@@ -1062,7 +1062,7 @@
         <div class="scope-item"><span class="x">✕</span> BI 可视化（图表 / Dashboard 给人看）</div>
         <div class="scope-item"><span class="x">✕</span> 数据写操作（所有数据源只读）</div>
       </div>
-      <p class="scope-note">安全红线进入 <code>docs/eval-quiz-conventions.md</code> 的 <code>safety_contract</code>：一旦生成 SQL 命中 <code>UPDATE / DELETE / INSERT / DROP / ALTER / TRUNCATE</code> 等写操作，Runner 必须判定为 <code>logic_regression</code> 并阻断流水线。</p>
+      <p class="scope-note">安全红线进入 <code>docs/governance/eval-quiz-conventions.md</code> 的 <code>safety_contract</code>：一旦生成 SQL 命中 <code>UPDATE / DELETE / INSERT / DROP / ALTER / TRUNCATE</code> 等写操作，Runner 必须判定为 <code>logic_regression</code> 并阻断流水线。</p>
     </div>
   </div>
 </section>

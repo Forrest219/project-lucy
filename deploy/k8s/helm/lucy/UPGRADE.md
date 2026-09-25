@@ -150,7 +150,7 @@ If you previously maintained your own Chart (e.g. with `runtime-preflight`):
 3. Replace exec probes with HTTP `/api/health`.
 4. Set `workingDir: /data/lucy` and `runAsUser: 10001`.
 5. Ensure `LUCY_PUBLIC_MCP_URL` is in Helm values, not applied via `kubectl set env`.
-6. Run `bash scripts/helm-lucy-gate.sh` on rendered manifests before applying.
+6. Run `bash scripts/gates/helm-lucy-gate.sh` on rendered manifests before applying.
 
 ## Do not
 

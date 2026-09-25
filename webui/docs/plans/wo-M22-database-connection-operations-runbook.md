@@ -23,11 +23,11 @@ Read these documents before editing:
 - `webui/docs/17-static-catalog-loading-spec.md`
 - `webui/docs/21-connection-catalog-upload-ux-spec.md`
 - `webui/docs/24-yaml-delivery-runbook-spec.md`
-- `docs/customer-deployment-guide.md`
-- `docs/admin-guide.md`
-- `docs/design-db-connection.md`
-- `docs/design-schema-onboarding.md`
-- `docs/DEVELOPMENT.md`
+- `docs/runbooks/customer-deployment-guide.md`
+- `docs/runbooks/admin-guide.md`
+- `docs/design/design-db-connection.md`
+- `docs/design/design-schema-onboarding.md`
+- `docs/governance/DEVELOPMENT.md`
 
 Read these Help files:
 
@@ -390,7 +390,7 @@ Expected: PASS.
 
 - Modify: `webui/docs/README.md`
 - Modify: `webui/docs/plans/README.md`
-- Optional Modify: `docs/product-docs-index.md` if it already tracks the latest WebUI module specs
+- Optional Modify: `docs/governance/product-docs-index.md` if it already tracks the latest WebUI module specs
 
 **Step 1: Register the new spec**
 

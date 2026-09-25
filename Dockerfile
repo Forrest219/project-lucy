@@ -57,7 +57,7 @@ RUN apt-get update \
 RUN npm install -g "@kaelio/ktx@${KTX_VERSION}"
 
 # StarRocks / MySQL-protocol engines may reject SET SESSION max_execution_time (P0-1/P0-2).
-COPY scripts/patch-ktx-mysql-starrocks-compat.js /tmp/patch-ktx-mysql-starrocks-compat.js
+COPY scripts/runtime/patch-ktx-mysql-starrocks-compat.js /tmp/patch-ktx-mysql-starrocks-compat.js
 RUN node /tmp/patch-ktx-mysql-starrocks-compat.js && rm /tmp/patch-ktx-mysql-starrocks-compat.js
 
 # K8s upgrade contract: run as UID 10001 to match legacy PVC ownership (.git).
@@ -100,6 +100,6 @@ VOLUME ["/data/lucy"]
 EXPOSE 5174 7879
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-  CMD /app/scripts/docker-healthcheck.sh
+  CMD /app/scripts/runtime/docker-healthcheck.sh
 
-ENTRYPOINT ["tini", "--", "/app/scripts/docker-entrypoint.sh"]
+ENTRYPOINT ["tini", "--", "/app/scripts/runtime/docker-entrypoint.sh"]

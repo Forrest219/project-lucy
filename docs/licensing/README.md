@@ -7,6 +7,6 @@
 | 设计 | [`design-deployment-license.md`](design-deployment-license.md) |
 | 数据 ACL | [`../access-control/README.md`](../access-control/README.md) |
 
-厂商签发：`scripts/license-issue.mjs`
+厂商签发：`scripts/release/license-issue.mjs`
 
 客户激活：WebUI `/admin/license`（所有者）

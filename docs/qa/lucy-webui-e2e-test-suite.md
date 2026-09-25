@@ -9,7 +9,7 @@
 | 落位 | `docs/qa/`（项目正式 spec，与 `inbox/` 临时区分离） |
 | 适用范围 | Lucy WebUI 在 `http://127.0.0.1:55176` 下的端到端交互；覆盖 `/connections`、`/connections/whitelist`、`/connections/test`、`/`、`/sources/:conn/:schema/:table`、`/joins/:conn/:schema/:table`、`/wiki`、`/publish/workbench`、`/publish/history`（含旧 `/review` 重定向） |
 | 测试层级 | **真实浏览器 E2E**（Playwright Chromium 主跑 / WebKit 回归 / Firefox 次回归），不替代也不允许改写为 Vitest/单元/Mock 断言 |
-| 关联规范 | [`webui/docs/00-product-terminology-standard.md`](../webui/docs/00-product-terminology-standard.md)（系统术语事实源）<br>[`webui/docs/06-navigation-ia.md`](../webui/docs/06-navigation-ia.md)（导航 IA）<br>[`webui/docs/21-connection-catalog-upload-ux-spec.md`](../webui/docs/21-connection-catalog-upload-ux-spec.md)（数据接入）<br>[`webui/docs/25-connection-module-terminology-ia-refresh-spec.md`](../webui/docs/25-connection-module-terminology-ia-refresh-spec.md)（连接模块术语 IA）<br>[`webui/docs/12-semantic-layer-maintenance-ux-refresh.md`](../webui/docs/12-semantic-layer-maintenance-ux-refresh.md)（语义建模）<br>[`webui/docs/35-semantic-publish-workbench-ia-spec.md`](../webui/docs/35-semantic-publish-workbench-ia-spec.md)（语义发布）<br>[`webui/docs/36-business-wiki-read-edit-workbench-spec.md`](../webui/docs/36-business-wiki-read-edit-workbench-spec.md)（业务 Wiki 工作台）<br>[`webui/docs/23-semantic-asset-publish-export-spec.md`](../webui/docs/23-semantic-asset-publish-export-spec.md)（语义资产发布与导出）<br>[`webui/docs/37-sidebar-navigation-ia-consolidation-spec.md`](../webui/docs/37-sidebar-navigation-ia-consolidation-spec.md)（侧栏导航 IA 收敛 · v0.4）<br>[`docs/DEVELOPMENT.md`](../DEVELOPMENT.md) |
+| 关联规范 | [`webui/docs/00-product-terminology-standard.md`](../webui/docs/00-product-terminology-standard.md)（系统术语事实源）<br>[`webui/docs/06-navigation-ia.md`](../webui/docs/06-navigation-ia.md)（导航 IA）<br>[`webui/docs/21-connection-catalog-upload-ux-spec.md`](../webui/docs/21-connection-catalog-upload-ux-spec.md)（数据接入）<br>[`webui/docs/25-connection-module-terminology-ia-refresh-spec.md`](../webui/docs/25-connection-module-terminology-ia-refresh-spec.md)（连接模块术语 IA）<br>[`webui/docs/12-semantic-layer-maintenance-ux-refresh.md`](../webui/docs/12-semantic-layer-maintenance-ux-refresh.md)（语义建模）<br>[`webui/docs/35-semantic-publish-workbench-ia-spec.md`](../webui/docs/35-semantic-publish-workbench-ia-spec.md)（语义发布）<br>[`webui/docs/36-business-wiki-read-edit-workbench-spec.md`](../webui/docs/36-business-wiki-read-edit-workbench-spec.md)（业务 Wiki 工作台）<br>[`webui/docs/23-semantic-asset-publish-export-spec.md`](../webui/docs/23-semantic-asset-publish-export-spec.md)（语义资产发布与导出）<br>[`webui/docs/37-sidebar-navigation-ia-consolidation-spec.md`](../webui/docs/37-sidebar-navigation-ia-consolidation-spec.md)（侧栏导航 IA 收敛 · v0.4）<br>[`docs/governance/DEVELOPMENT.md`](../governance/DEVELOPMENT.md) |
 | 维护约定 | 任何 UI 改名 / 新增页面 / 新增按钮 / 新增 API 行为必须 ① 更新 §5 Selector 契约表 ② 触发 §7 变更影响映射重算 ③ 追加 / 修改对应 E2E 用例；不更新即不通过 review |
 
 ---
@@ -109,7 +109,7 @@ webui/
   "scripts": {
     // ... 已有
     "e2e:install": "playwright install --with-deps chromium webkit firefox",
-    "e2e:fixture": "bash ../scripts/init-e2e-fixture.sh",
+    "e2e:fixture": "bash ../scripts/demo/init-e2e-fixture.sh",
     "e2e:smoke": "playwright test --grep @pr-smoke --project=chromium",
     "pree2e:smoke": "npm run e2e:selector-contract && npm run e2e:fixture",
     "e2e:impacted": "playwright test --grep '@pr-smoke|@pr-impacted' --project=chromium",
@@ -463,7 +463,7 @@ v0.1 §测试数据 / 夹具约定打算 `git stash` / `cp` 还原 tracked 文�
 
 ```bash
 #!/usr/bin/env bash
-# scripts/init-e2e-fixture.sh
+# scripts/demo/init-e2e-fixture.sh
 set -euo pipefail
 DEST="${1:-/tmp/lucy-e2e-fixture}"
 SRC="${2:-/Users/zhangxingchen/Projects/project-lucy}"
@@ -582,7 +582,7 @@ E2E-<模块>-<序号>[-<变体>]
 **涉及 Selector**：`workbench-pending-count` / `workbench-validate` / `workbench-reindex` / `workbench-upload-semantic-asset` / `workbench-publish-and-reindex` / `workbench-reindex-result` / `add-schema-mysql-aliyun` / `add-schema-drawer-step-1..4` / `catalog-upload-input` / `wiki-tree` / `wiki-mode-read` / `sl-ref-badge-mysql-aliyun-dataforai-superstore_orders` / `wiki-save-preflight-drawer` / `breadcrumb`
 
 **前置条件**：
-- Fixture Project `/tmp/lucy-e2e-fixture` 已由 `scripts/init-e2e-fixture.sh` 初始化
+- Fixture Project `/tmp/lucy-e2e-fixture` 已由 `scripts/demo/init-e2e-fixture.sh` 初始化
 - WebUI 进程 `LUCY_PROJECT_DIR=/tmp/lucy-e2e-fixture` 启动
 - 当前 `ktx.yaml` 中 `mysql-aliyun.schemas` 不含 `finance_mart`
 - `wiki/finance-playbook.md` 不存在

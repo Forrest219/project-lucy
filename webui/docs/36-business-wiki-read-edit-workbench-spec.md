@@ -9,7 +9,7 @@
 | 关联页面 | `/wiki` |
 | 关联工单 | `webui/docs/plans/wo-M33-business-wiki-read-edit-workbench.md` |
 | 事实源 | 截图审阅：`/wiki?key=global%2Fnew-note.md`；代码审阅：`webui/src/pages/WikiEditor.tsx`、`webui/src/components/FrontmatterForm.tsx`、`webui/src/components/WikiInspector.tsx`、`webui/src/components/SlRefPicker.tsx`、`webui/src/app/app.css` |
-| 关联规范 | `webui/docs/00-product-terminology-standard.md`, `webui/docs/03-api-spec.md`, `webui/docs/06-navigation-ia.md`, `webui/docs/13-business-wiki-ux-refactor.md`, `webui/docs/29-connection-semantic-boundary-automation-spec.md`, `docs/DEVELOPMENT.md` |
+| 关联规范 | `webui/docs/00-product-terminology-standard.md`, `webui/docs/03-api-spec.md`, `webui/docs/06-navigation-ia.md`, `webui/docs/13-business-wiki-ux-refactor.md`, `webui/docs/29-connection-semantic-boundary-automation-spec.md`, `docs/governance/DEVELOPMENT.md` |
 
 ## 1. 背景
 

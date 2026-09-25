@@ -204,7 +204,7 @@ function hermesFromStructuredReport(value: unknown, reportPath: string, threshol
     && caseDataset === dataset
     && caseDataset === "r1_doris_benchmark";
   const perCaseIdentityGatePassed = gates?.perCaseIdentity === true;
-  const generatedByGatePassed = generatedBy === "scripts/lucy-r1-hermes-report.mjs";
+  const generatedByGatePassed = generatedBy === "scripts/smoke/lucy-r1-hermes-report.mjs";
   const questionCountGatePassed = minQuestions !== undefined && minQuestions >= 30 && totalQuestions !== undefined && totalQuestions >= minQuestions;
   const accuracyGatePassed = accuracy !== undefined && accuracy >= threshold;
   const coreMetricGatePassed = coreMetricAccuracy === 1;
@@ -237,7 +237,7 @@ function hermesFromStructuredReport(value: unknown, reportPath: string, threshol
   if (!datasetIdentityGatePassed) gateErrors.push('dataset must be "r1_doris_benchmark"');
   if (!caseDatasetIdentityGatePassed) gateErrors.push('inputs.caseDataset must be "r1_doris_benchmark" and gates.caseDatasetIdentity must be true');
   if (!perCaseIdentityGatePassed) gateErrors.push("gates.perCaseIdentity must be true");
-  if (!generatedByGatePassed) gateErrors.push('generatedBy must be "scripts/lucy-r1-hermes-report.mjs"');
+  if (!generatedByGatePassed) gateErrors.push('generatedBy must be "scripts/smoke/lucy-r1-hermes-report.mjs"');
   if (!questionCountGatePassed) gateErrors.push("summary.totalQuestions must be >= summary.minQuestions and summary.minQuestions must be >= 30");
   if (!accuracyGatePassed) gateErrors.push("summary.accuracy must be >= threshold");
   if (!coreMetricGatePassed) gateErrors.push("summary.coreMetricAccuracy must be 1.0");

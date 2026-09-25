@@ -1,0 +1,143 @@
+# Lucy Version Matrix
+
+| 元数据 | 内容 |
+|---|---|
+| 文档名称 | Lucy Version Matrix |
+| 文档类型 | Release Metadata / Compatibility Matrix |
+| 版本 | v0.4 |
+| 撰写日期 | 2026-06-21；2026-07-06；2026-08-03（增补：Helm/K8s single-replica supported baseline）；2026-09-02（拆分 Lucy 产品版本与 KTX；基线 0.17.0） |
+| 适用范围 | Lucy release、Docker image、bundled KTX runtime 和 MCP client 兼容性追踪 |
+
+## 1. Current Baseline
+
+| Component | Current Baseline | Evidence |
+|---|---|---|
+| **Lucy product version** | **`0.17.0`** | repo-root `VERSION`, `Chart.yaml` `appVersion`, `/api/health.data.lucyVersion`, WebUI sidebar |
+| Lucy source | `main` after P0 release baseline | commit `e8863b8` established P0 Docker baseline |
+| Lucy package | `project-lucy-eval@0.17.0` | `package.json` (aligned with product version) |
+| WebUI package | `webui@1.0.0` | `webui/package.json` (npm package only; not customer-facing) |
+| Bundled KTX npm package | `@kaelio/ktx@0.16.0` | `Dockerfile`, `docker-compose.yml`, `npm run smoke:p0:docker` |
+| KTX Python runtime | `0.16.0`, feature `core` | `Dockerfile` runs `ktx admin runtime install --yes --feature core` |
+| Node runtime | `node:22-bookworm-slim` | `Dockerfile` |
+| Docker deployment | Single-node Docker Compose | `docker-compose.yml`, `deploy/compose/docker-compose.demo.yml`, `deploy/compose/docker-compose.postgres-demo.yml` |
+| Headless customer config | `customer-config/` bind mount to `/data/lucy` | `deploy/compose/docker-compose.customer-config.yml`, `customer-config.example/`, `npm run smoke:p0:headless-config` |
+| Demo DB | `mysql:8.4`, `postgres:16-alpine` | `deploy/compose/docker-compose.demo.yml`, `deploy/compose/docker-compose.postgres-demo.yml` |
+| Customer DB path | MySQL validated locally | `npm run smoke:p0:customer` |
+| Kubernetes / Helm deployment | Single-replica only; `Recreate` strategy; RWO PVC at `/data/lucy`; multi-arch manifest list `linux/amd64` (primary) + `linux/arm64` (secondary) | `deploy/k8s/helm/lucy/`, `docs/runbooks/customer-k8s-deployer-quickstart.md`, `.github/workflows/lucy-release.yml` |
+| Image architecture baseline | `linux/amd64` primary; `linux/arm64` secondary; metadata **and** layer ELF must match | `Dockerfile` (`TARGETPLATFORM` + `TARGETARCH`), `scripts/release/assert-image-elf-arch.sh`, `.github/workflows/lucy-release.yml` (`buildx` + QEMU) |
+| MCP endpoint | Lucy MCP Proxy on container `7879` | `docs/runbooks/deployment-docker.md`, `docs/runbooks/customer-k8s-deployer-quickstart.md`, `npm run smoke:p0:demo` |
+| Release CI | GitHub Actions release gates; multi-arch manifest list push via `docker buildx` | `.github/workflows/lucy-release.yml`, `docs/governance/release-ci.md` |
+
+## 1.1 When to bump Lucy product version
+
+`VERSION` / `appVersion` / image tag **product segment** change only when shipping a **customer-visible delivery**. Everyday `main` commits do **not** auto-bump.
+
+| Trigger | Bump | Example |
+|---|---|---|
+| Customer delivery package / offline image / K8s tar that the customer will deploy | **Increment the second component by 1** (`0.17.0` → `0.18.0`) | ACL fix + audit hardening shipped as next tar |
+| Large capability jump, breaking config/migration, or bundled KTX major change | **Increment the second component by 10** (`0.17.0` → `0.27.0`) | New permission model; HA chart; KTX 0.17+ with breaking MCP |
+| Docs-only handbook refresh with **same** image digest | **No** product bump; package name may still use date (`20260903-v1`) | README / RELEASE_NOTES only |
+| Internal CI / demo rebuild, no customer handoff | **No** bump | `npm run demo:upgrade` |
+| Bundled KTX upgrade alone | Bump `bundledKtxVersion` / `KTX_VERSION`; **also** bump Lucy product version (customer must tell builds apart) | KTX `0.16.0` → `0.17.0` and Lucy `0.18.0` |
+
+Lucy versions use numeric `X.Y.Z` syntax so npm, Helm, and container tooling can parse them, but the bump policy is a Lucy release-train policy rather than SemVer compatibility signaling. The current `0.Y.0` line increments `Y` as specified above; `Z` remains `0` and is reserved until this matrix defines a separate repack/hotfix policy.
+
+**SSOT:** edit repo-root `VERSION` first, then align `package.json` + `package-lock.json`, `Dockerfile` `ARG LUCY_VERSION` default, Helm `appVersion` + `lucy.version` + default `image.tag`, and the guarded WebUI fallbacks. Run `npm run lint:version`; release/build jobs must fail when any projection, image tag, or embedded image environment differs. Customer image tag format:
+
+`project-lucy:customer-amd64-<LUCY_VERSION>-<YYYYMMDD>-<gitSha>`
+
+Do **not** put KTX version in the product segment of the tag. KTX remains in `/api/health.data.bundledKtxVersion` and Helm `lucy.bundledKtxVersion`.
+
+## 2. Runtime Compatibility
+
+| Surface | Required Version / Behavior | Gate |
+|---|---|---|
+| KTX CLI | `ktx --version` returns `@kaelio/ktx 0.16.0` | `npm run smoke:p0:docker` |
+| KTX Python runtime | `ktx sl query --execute` runs without interactive install | `npm run smoke:p0:demo`, `npm run smoke:p0:postgres-demo` |
+| KTX semantic layer validate | CLI `ktx sl validate` works | `npm run smoke:p0:demo`, `npm run smoke:p0:postgres-demo`, `npm run smoke:p0:customer` |
+| KTX MCP tools | `connection_list`, `sl_read_source`, `sl_query`, `wiki_search` are available | `npm run smoke:p0:demo`, `npm run smoke:p0:postgres-demo`, `npm run smoke:p0:customer` |
+| `sl_validate` MCP tool | Not exposed by KTX `0.16.0` MCP `tools/list` | validate via CLI gate |
+| Lucy MCP Proxy | Bearer auth, ACL filtering, `kx_catalog`, `sl_read_source`, `sl_query` | `npm run smoke:p0:demo` |
+| KTX candidate upgrade | Candidate version must pass Docker/demo/business gates | `npm run compat:ktx-upgrade -- --candidate <version>` |
+
+## 3. Supported Deployment Matrix
+
+| Deployment | Status | Notes |
+|---|---|---|
+| Docker Compose single node | supported baseline | P0 release baseline |
+| Docker Compose customer config package | supported baseline | maintain `customer-config/`, bind mount to `/data/lucy`, run `smoke:p0:headless-config` |
+| Docker Compose demo DB | supported smoke/demo path | MySQL demo DB + Lucy |
+| Docker Compose external MySQL | supported with customer config package | edit `customer-config/ktx.yaml`, use `file:/data/lucy/.ktx/secrets/<name>` |
+| Docker Compose external PostgreSQL | supported with customer config package | edit `customer-config/ktx.yaml`, use `file:/data/lucy/.ktx/secrets/<name>` |
+| Kubernetes / Helm (single-replica) | supported baseline | `deploy/k8s/helm/lucy/`, `Recreate` strategy, RWO PVC; HA not supported yet |
+| Hosted SaaS / multi-tenant | not supported | future product line |
+
+## 4. Database Matrix
+
+| Database | Status | Gate |
+|---|---|---|
+| MySQL demo (`mysql:8.4`) | verified | `npm run smoke:p0:demo` |
+| Aliyun RDS MySQL | verified locally | `npm run smoke:p0:customer` |
+| PostgreSQL demo (`postgres:16-alpine`) | verified | `npm run smoke:p0:postgres-demo` |
+| ClickHouse | not verified for Lucy P0 | future compatibility gate |
+| Snowflake | not verified for Lucy P0 | future compatibility gate |
+
+## 5. MCP Client Matrix
+
+| Client | Status | Notes |
+|---|---|---|
+| Generic HTTP MCP client | verified by script | `scripts/smoke/p0-demo-docker-smoke.mjs` uses JSON-RPC over HTTP |
+| Claude Code | verified manually | 2026-06-24 Forrest 验收：可通过 Lucy MCP Proxy 完成 `tools/list` 与 `sl_read_source`/`sl_query` 基础调用。2026-08-20：Streamable HTTP 有限 SSE / progress 帧选择与 Cursor 同类问题，见 Spec 07 §4.3 / §6.1.0 |
+| Codex | verified manually | 2026-06-24 Forrest 验收：可通过 Lucy MCP Proxy 完成 `tools/list` 与 `sl_read_source`/`sl_query` 基础调用 |
+| Openclaw | verified manually | 2026-06-24 Forrest 验收：可通过 Lucy MCP Proxy 完成 `tools/list` 与 `sl_read_source`/`sl_query` 基础调用（对有限 SSE / progressToken 较宽松，不易复现 Cursor/Claude Code 超时） |
+| Hermes | verified manually | 2026-06-24 Forrest 验收：可通过 Lucy MCP Proxy 完成 `tools/list` 与 `sl_read_source`/`sl_query` 基础调用 |
+| Cursor | verified manually | 2026-06-24 Forrest 验收：可通过 Lucy MCP Proxy 完成 `tools/list` 与 `sl_read_source`/`sl_query` 基础调用。后续实锤：有限 SSE + progress 首帧误判 → `-32001`；修复见 Spec 07 §4.3 / §6.1.0 |
+| Claude Desktop stdio | documented for local KTX in development docs | Not a Docker P0 customer path |
+| Cloud-hosted agent | not verified | Requires public URL, TLS, and access control |
+
+## 6. Release Metadata Template
+
+Every Lucy release should record:
+
+```yaml
+lucy:
+  version: "0.17.0"
+  git_commit: <git-sha>
+  docker_image: <registry/image:tag>
+ktx:
+  npm_package: "@kaelio/ktx"
+  npm_version: "0.16.0"
+  git_sha: <optional-upstream-sha>
+  python_runtime_feature: core
+runtime:
+  node_image: node:22-bookworm-slim
+  docker_compose: v2
+databases:
+  verified:
+    - mysql:8.4-demo
+    - postgres:16-alpine-demo
+gates:
+  required:
+    - npm run smoke:p0
+    - npm run smoke:p0:docker
+    - npm run smoke:p0:demo
+    - npm run smoke:p0:postgres-demo
+    - npm run smoke:p0:business-eval
+    - npm run audit:ktx-diff
+  optional_customer:
+    - npm run smoke:p0:customer
+  ktx_upgrade:
+    - npm run compat:ktx-upgrade -- --candidate <ktx-version>
+```
+
+## 7. Update Rule
+
+Update this matrix when any of these changes:
+
+- Lucy **product** version (`VERSION` / `appVersion`) or git commit used for a customer delivery.
+- Docker base image.
+- Bundled KTX version.
+- KTX Python runtime feature level.
+- Supported database or MCP client.
+- Required release gates.
+- Supported deployment topology (e.g. when K8s/Helm graduates from single-replica to HA).

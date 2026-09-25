@@ -18,7 +18,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 // helpers/ → fixtures/ → e2e/ → tests/ → webui/ → repo root（5 级）
 const REPO_ROOT = resolve(__dirname, "../../../../../");
-const INIT_SCRIPT = resolve(REPO_ROOT, "scripts/init-e2e-fixture.sh");
+const INIT_SCRIPT = resolve(REPO_ROOT, "scripts/demo/init-e2e-fixture.sh");
 
 /**
  * process-level guard：在所有 reset / setup 调用前断言。
@@ -47,13 +47,13 @@ export function assertFixtureOnly(opts: { warnIfMissing?: boolean } = {}): void 
     if (allow) {
       console.warn(
         `[E2E-GUARD-WARN] Fixture dir not found: ${FIXTURE_ROOT}. ` +
-          `Set LUCY_E2E_GUARD_MODE=strict (default) or init fixture via scripts/init-e2e-fixture.sh.`
+          `Set LUCY_E2E_GUARD_MODE=strict (default) or init fixture via scripts/demo/init-e2e-fixture.sh.`
       );
       return;
     }
     throw new Error(
       `[E2E-GUARD] Fixture dir not found: ${FIXTURE_ROOT}. ` +
-        `Run scripts/init-e2e-fixture.sh first.`
+        `Run scripts/demo/init-e2e-fixture.sh first.`
     );
   }
   // 二次确认 fixture 不是真实项目目录的 symlink

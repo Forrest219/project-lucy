@@ -24,7 +24,7 @@
 
 请在 `/Users/zhangxingchen/Projects/project-lucy/webui` 执行本工单。先读 Spec **86 v1.0**。
 
-必读：`../docs/DEVELOPMENT.md`、`docs/00-product-terminology-standard.md`、`docs/06-navigation-ia.md`、`docs/86-…`、本 Plan、`App.tsx`、`navigation.ts`、`GovernanceOverview.tsx`、相关测试、`docs/ui-ux-feedback/pages/admin-governance.md`。
+必读：`../docs/governance/DEVELOPMENT.md`、`docs/00-product-terminology-standard.md`、`docs/06-navigation-ia.md`、`docs/86-…`、本 Plan、`App.tsx`、`navigation.ts`、`GovernanceOverview.tsx`、相关测试、`docs/ui-ux-feedback/pages/admin-governance.md`。
 
 ## Non-Negotiable Boundaries
 

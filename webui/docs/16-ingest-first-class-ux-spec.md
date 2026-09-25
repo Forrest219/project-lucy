@@ -8,7 +8,7 @@
 | 撰写日期 | 2026-07-28 |
 | 适用范围 | Lucy WebUI 数据库接入模块：`/connections`、`/connections/whitelist`、Add Schema ingest 闭环 |
 | 事实源 | `ktx ingest <connection>`、`semantic-layer/<connection>/_schema/*.yaml`、`ktx.yaml connections[].schemas/enabled_tables` |
-| 关联文档 | `webui/docs/10-deployment-connection-ux-refresh.md`、`webui/docs/11-connection-whitelist-test-ux-refresh.md`、`webui/docs/03-api-spec.md`、`docs/DEVELOPMENT.md` |
+| 关联文档 | `webui/docs/10-deployment-connection-ux-refresh.md`、`webui/docs/11-connection-whitelist-test-ux-refresh.md`、`webui/docs/03-api-spec.md`、`docs/governance/DEVELOPMENT.md` |
 
 ## 1. 结论
 

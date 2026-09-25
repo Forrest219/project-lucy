@@ -8,7 +8,7 @@
 | 撰写日期 | 2026-08-01 |
 | 关联页面 | 全站所有使用 `PageHeader` 的路由（系统概览 / 数据接入 / 语义建模 / 语义发布 / 质量评测 / 访问治理） |
 | 关联工单 | `webui/docs/plans/wo-M40-page-header-standardization.md` |
-| 关联规范 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/01-architecture.md`、`webui/docs/06-navigation-ia.md`、`webui/docs/19-system-overview-runtime-monitoring-spec.md`、`webui/docs/27-connection-overview-ops-ux-cleanup-spec.md`、`webui/docs/39-data-agent-ops-platform-global-ux-spec.md`、`docs/DEVELOPMENT.md` |
+| 关联规范 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/01-architecture.md`、`webui/docs/06-navigation-ia.md`、`webui/docs/19-system-overview-runtime-monitoring-spec.md`、`webui/docs/27-connection-overview-ops-ux-cleanup-spec.md`、`webui/docs/39-data-agent-ops-platform-global-ux-spec.md`、`docs/governance/DEVELOPMENT.md` |
 
 ## 1. 背景
 
@@ -262,7 +262,7 @@ md 断点（≥768px）：
 | Q5 | `pl-page-header-actions--stacked`（Onboarding 用）是否需要重命名以匹配新版网格？ | 不重命名；保留 modifier，Onboarding 仍按列布局刷新菜单 |
 | Q6 | `Audit.tsx` 的 heatmap 子分支（`tab === "heatmap"`）是否走 `backAction`？ | 否；保留多级 breadcrumbs `["访问治理", "访问日志", "数据热力"]`；log 主分支删除 breadcrumbs |
 | Q7 | `WikiEditor.tsx` 的 `breadcrumbs={["语义建模", "业务 Wiki", key]}` 是否需要 `backAction`？ | 否；`/wiki` 是**一级路由例外**，因为它本身就是工作台 / 编辑器（不是详情页），breadcrumbs 提供"我在哪篇 Wiki"的层级上下文比返回按钮更有价值 |
-| Q8 | 是否在 PR 中同步更新 `docs/webui-feature-map.md`？ | 否；本页规格属于组件级 polish，不影响 feature map |
+| Q8 | 是否在 PR 中同步更新 `docs/webui/webui-feature-map.md`？ | 否；本页规格属于组件级 polish，不影响 feature map |
 | Q9 | `WikiEditor` 与 `TableEditor` 的 `badges` 是否需要保留？ | 保留；未超过 ≤ 4 上限 |
 | Q10 | `TableEditor.tsx`（注意：原 SPEC 笔误为 `TitleEditor`，以下以 `TableEditor` 为准）的 title 含模板字符串与动态值，truncate 策略？ | 保留 ReactNode 形态；不加 `truncate`；不靠 `title` 属性兜底（避免 table 名过长截断后无悬停值）。可在表格名上加 `truncate` 单独控制（既有） |
 | Q11 | 既有 `__tests__/app-shell.test.tsx` 中 snapshot 是否需要更新？ | 保留测试用例；snapshot 整体重生成；新增断言覆盖 `backAction` 路径与重复抑制路径 |

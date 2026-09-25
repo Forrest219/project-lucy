@@ -8,10 +8,10 @@
 
 必须先阅读：
 
-- `docs/DEVELOPMENT.md`
-- `docs/lucy-202608-reliable-delivery-upgrade-spec.md`
-- `docs/lucy-202608-upgrade-execution-control.md`
-- `docs/lucy-202608-access-governance-gap-analysis.md`
+- `docs/governance/DEVELOPMENT.md`
+- `docs/specs/lucy-202608-reliable-delivery-upgrade-spec.md`
+- `docs/specs/lucy-202608-upgrade-execution-control.md`
+- `docs/specs/lucy-202608-access-governance-gap-analysis.md`
 - `docs/plans/2026-08-03-lucy-enterprise-data-agent-access-governance-plan.md` Task 6 / 7
 - `webui/docs/00-product-terminology-standard.md`
 - `webui/docs/69-admin-governance-observability-spec.md`

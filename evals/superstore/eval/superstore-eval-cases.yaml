@@ -8,9 +8,9 @@ metadata:
   requester: project-lucy 团队
   based_on:
     - superstore semantic layer
-    - docs/eval-quiz-conventions.md v1.3
+    - docs/governance/eval-quiz-conventions.md v1.3
     - superstore-eval-cases.yaml v1.2 legacy migration
-  scope: Superstore 数据集 agent eval cases（含 quiz_cases 人工测验题）；eval cases 供 CI gate / regression Runner 使用；quiz_cases 由 scripts/render-quiz.mjs 渲染为 HTML
+  scope: Superstore 数据集 agent eval cases（含 quiz_cases 人工测验题）；eval cases 供 CI gate / regression Runner 使用；quiz_cases 由 scripts/eval/render-quiz.mjs 渲染为 HTML
   output_path: evals/superstore/eval/superstore-eval-cases.yaml
   snapshot_date: 2026-06-18
   snapshot_batch: superstore_20260617_120212

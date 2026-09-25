@@ -218,7 +218,7 @@ webui/config/access.yaml         # 新增 local_dev_full_access role + 本地用
        }
        ```
        这份文件本身不含明文，可以正常提交。
-   - **若实测发现插值不生效或行为不稳定**：不要硬上。改为保持根目录 `.mcp.json` 不直接配置 proxy（可以删除 `mcpServers` 内容或保留一个注释说明），并在收尾说明里写清楚"插值不可用，原因是 XXX"，把这个结论原样转告 Claude——Claude 会在 Phase 4 更新 `docs/DEVELOPMENT.md` 的 Onboarding 流程时采用你的实测结论决定最终方案，**不要自己决定走哪条路径，只需要把实测结果如实报告**。
+   - **若实测发现插值不生效或行为不稳定**：不要硬上。改为保持根目录 `.mcp.json` 不直接配置 proxy（可以删除 `mcpServers` 内容或保留一个注释说明），并在收尾说明里写清楚"插值不可用，原因是 XXX"，把这个结论原样转告 Claude——Claude 会在 Phase 4 更新 `docs/governance/DEVELOPMENT.md` 的 Onboarding 流程时采用你的实测结论决定最终方案，**不要自己决定走哪条路径，只需要把实测结果如实报告**。
    - 不管走哪条路径，`mcpServers` 的 key 名统一改成 `lucy`（不要继续用现在的 `ktx`）。
 
 4. 验证本地链路：重启 Claude Code（让它重新加载 `.mcp.json`），确认能连上 `:7879`（用 `kx_catalog` 或任意只读工具调用确认鉴权通过）。

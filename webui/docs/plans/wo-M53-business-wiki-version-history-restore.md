@@ -1,6 +1,6 @@
 # M53 — Business Wiki Version History and Restore
 
-> codex 直投 prompt：请在 `/Users/forrest/Projects/project-lucy/webui` 开工。先读 `../docs/55-business-wiki-version-history-restore-spec.md`、`../docs/49-business-wiki-md-library-operations-spec.md`、`../docs/53-business-wiki-empty-directory-resource-spec.md`、`../docs/00-product-terminology-standard.md`、`../../docs/DEVELOPMENT.md` 和本工单。目标是为 `/wiki` Markdown 文档增加最近 5 版版本记录、历史预览和恢复到指定版本能力。必须保证历史快照不进入 `GET /api/wiki` pages，也不暴露给 `wiki_search`。
+> codex 直投 prompt：请在 `/Users/forrest/Projects/project-lucy/webui` 开工。先读 `../docs/55-business-wiki-version-history-restore-spec.md`、`../docs/49-business-wiki-md-library-operations-spec.md`、`../docs/53-business-wiki-empty-directory-resource-spec.md`、`../docs/00-product-terminology-standard.md`、`../../docs/governance/DEVELOPMENT.md` 和本工单。目标是为 `/wiki` Markdown 文档增加最近 5 版版本记录、历史预览和恢复到指定版本能力。必须保证历史快照不进入 `GET /api/wiki` pages，也不暴露给 `wiki_search`。
 
 ## 0. 背景
 
@@ -53,7 +53,7 @@ git -C /Users/forrest/Projects/project-lucy status --short
 - `../docs/49-business-wiki-md-library-operations-spec.md`
 - `../docs/53-business-wiki-empty-directory-resource-spec.md`
 - `../docs/00-product-terminology-standard.md`
-- `../../docs/DEVELOPMENT.md`
+- `../../docs/governance/DEVELOPMENT.md`
 
 如果工作树已有无关脏改动，只记录并避开，不得回滚。
 

@@ -1,6 +1,6 @@
 # Demo Superstore Eval Suite
 
-POC 专用 eval，**仅**用于 `docker-compose.demo.yml` 自包含 Superstore 数据集（1000 行）。
+POC 专用 eval，**仅**用于 `deploy/compose/docker-compose.demo.yml` 自包含 Superstore 数据集（1000 行）。
 
 - **Connection**: `demo-postgres`
 - **Gold 来源**: `examples/docker-demo/mysql/_baseline.json`（seed=42, rows=1000）

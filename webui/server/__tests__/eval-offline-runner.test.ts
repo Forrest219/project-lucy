@@ -30,7 +30,7 @@ function runNode(args: string[], cwd: string): Promise<{ stdout: string; stderr:
   });
 }
 
-describe("scripts/lucy-eval-runner.mjs", () => {
+describe("scripts/eval/lucy-eval-runner.mjs", () => {
   it("generates Result JSON accepted by the import parser", async () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), "lucy-offline-runner-"));
     try {
@@ -38,7 +38,7 @@ describe("scripts/lucy-eval-runner.mjs", () => {
       const resultPath = path.join(dir, "result.json");
       await writeFile(suitePath, SUITE, "utf8");
 
-      await runNode(["scripts/lucy-eval-runner.mjs", "--suite", suitePath, "--output", resultPath], path.resolve(".."));
+      await runNode(["scripts/eval/lucy-eval-runner.mjs", "--suite", suitePath, "--output", resultPath], path.resolve(".."));
 
       const resultText = await readFile(resultPath, "utf8");
       const parsed = parseEvalResultImport(resultText);

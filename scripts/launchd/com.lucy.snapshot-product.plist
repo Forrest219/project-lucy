@@ -3,11 +3,11 @@
   Lucy WebUI 定时截图库 — launchd plist 模板（reviewer 审查用）
 
   关联文档：
-    - docs/webui-snapshot-product.md §7（调度接口契约）
-    - docs/webui-snapshot-product.md §11（验收口径 #10）
+    - docs/webui/webui-snapshot-product.md §7（调度接口契约）
+    - docs/webui/webui-snapshot-product.md §11（验收口径 #10）
 
   落位：scripts/launchd/com.lucy.snapshot-product.plist
-  加载：仅在用户显式执行 `bash scripts/install-snapshot-product-launchd.sh --bootstrap`
+  加载：仅在用户显式执行 `bash scripts/launchd/install-snapshot-product-launchd.sh --bootstrap`
         时由安装脚本替换路径占位符后写到 ~/Library/LaunchAgents/ 并 launchctl bootstrap。
   默认安装行为：仅生成 plist，不注册（spec §验收 10 强制要求"不要擅自 bootstrap"）。
 

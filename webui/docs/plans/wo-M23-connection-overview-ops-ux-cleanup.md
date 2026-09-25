@@ -21,7 +21,7 @@ Read these documents before editing:
 - `webui/docs/21-connection-catalog-upload-ux-spec.md`
 - `webui/docs/25-connection-module-terminology-ia-refresh-spec.md`
 - `webui/docs/26-database-connection-operations-runbook-spec.md`
-- `docs/DEVELOPMENT.md`
+- `docs/governance/DEVELOPMENT.md`
 
 Inspect these implementation files:
 

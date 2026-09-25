@@ -34,8 +34,8 @@
 
 | ID | 严重级别 | 问题 | 当前证据 | 底线影响 |
 |---|---|---|---|---|
-| A3-01 | P0 | Runbook 生成的 `agent-chat/.env`、Hermes home 未被根 `.dockerignore` 排除，`Dockerfile` 的 `COPY . .` 可将 L2/L3/LLM 密钥和运行态打入 Lucy 镜像 | `docs/runbook-lucy-agent-chat-a3.md`；`.dockerignore`；`Dockerfile` | 直接破坏 Lucy 干净交付并泄漏凭据 |
-| A3-02 | P1 | A3 默认端口映射绑定所有宿主网卡；fresh Open WebUI 未受控创建首个管理员 | `docker-compose.agent-chat.yml` | 未授权访问或管理员权 |
+| A3-01 | P0 | Runbook 生成的 `agent-chat/.env`、Hermes home 未被根 `.dockerignore` 排除，`Dockerfile` 的 `COPY . .` 可将 L2/L3/LLM 密钥和运行态打入 Lucy 镜像 | `docs/runbooks/runbook-lucy-agent-chat-a3.md`；`.dockerignore`；`Dockerfile` | 直接破坏 Lucy 干净交付并泄漏凭据 |
+| A3-02 | P1 | A3 默认端口映射绑定所有宿主网卡；fresh Open WebUI 未受控创建首个管理员 | `deploy/compose/docker-compose.agent-chat.yml` | 未授权访问或管理员权 |
 | A3-03 | P1 | 多个 Open WebUI 账号共享同一 L3 身份；Lucy turn fallback 按 `userId + tokenHashPrefix`，并发可串单 | design spec；`mcp-proxy.ts` near-neighbor Map | 审计无法证明同一次提问 |
 | A3-04 | P1 | “默认关闭持久 memory”未通过 Hermes 显式配置锁定 | `hermes-home.example/config.yaml` | 共享记忆/用户画像漂移 |
 | A3-05 | P1 | V-5 只查配置文本，未核验模型实际可调用工具集合 | design / A3 smoke | 高危工具可能仍可用 |
@@ -170,19 +170,19 @@ function validateA3(case):
 
 ### Phase 0 / Wave 1：Lucy 交付隔离硬门禁
 
-**Files:** `.dockerignore`；`scripts/lucy-delivery-isolation-smoke.mjs` + test；`package.json`；`scripts/p0-smoke.mjs`；`docs/test-layers-and-release-gates.md`
+**Files:** `.dockerignore`；`scripts/smoke/lucy-delivery-isolation-smoke.mjs` + test；`package.json`；`scripts/gates/p0-smoke.mjs`；`docs/governance/test-layers-and-release-gates.md`
 
 **Local gate:** 锚定 `.dockerignore`；临时 fixture 测 ignore（禁止写真实 `agent-chat/`）；A3 文件不存在时仍 PASS。
 
 **Docker gate:** 至少检查 `project-lucy:p0-smoke` 与 compose 运行镜像 `project-lucy:local`。
 
-**Denylist:** `/app/agent-chat`、`/app/docker-compose.agent-chat.yml`、A3 design/runbook、A3 smoke 脚本。
+**Denylist:** `/app/agent-chat`、`/app/deploy/compose/docker-compose.agent-chat.yml`、A3 design/runbook、A3 smoke 脚本。
 
 **接线:** `smoke:p0:delivery-isolation`；由 `smoke:p0` / `smoke:p0:docker` 调用。
 
 ### Phase 1-A / Wave 2：清客户包悬空入口（不做独立 tar）
 
-**Files:** `scripts/release-artifacts.mjs` + test；`docs/deployment-docker.md`；`docs/test-layers-and-release-gates.md`
+**Files:** `scripts/release/release-artifacts.mjs` + test；`docs/runbooks/deployment-docker.md`；`docs/governance/test-layers-and-release-gates.md`
 
 - **仅** staging 内根 `package.json` 剥离 `smoke:agent-chat:a3*`。
 - **不改**仓库根 `package.json` 的 A3 开发脚本；测试断言根文件未被改写。
@@ -190,7 +190,7 @@ function validateA3(case):
 
 ### Phase 1-B / Wave 3：pin、loopback、memory、volume 验收
 
-**Files:** `docker-compose.agent-chat.yml`；`agent-chat/.env.example`；`hermes-home.example/config.yaml`；Runbook；A3 smoke
+**Files:** `deploy/compose/docker-compose.agent-chat.yml`；`agent-chat/.env.example`；`hermes-home.example/config.yaml`；Runbook；A3 smoke
 
 见 ADR-A3-03/04/05。
 
@@ -236,12 +236,12 @@ Follows `webui/docs/00-product-terminology-standard.md`. No new product terms. D
 
 ## 10. 参考
 
-- `docs/design-lucy-agent-chat-a3.md`
-- `docs/runbook-lucy-agent-chat-a3.md`
-- `docs/agent-integration-guide.md`
+- `docs/design/design-lucy-agent-chat-a3.md`
+- `docs/runbooks/runbook-lucy-agent-chat-a3.md`
+- `docs/runbooks/agent-integration-guide.md`
 - `webui/docs/09-lucy-r1-mcp-tool-contract.md`
 - `webui/docs/62-trace-evidence-kernel-spec.md`
-- `docs/test-layers-and-release-gates.md`
-- `scripts/release-artifacts.mjs`
+- `docs/governance/test-layers-and-release-gates.md`
+- `scripts/release/release-artifacts.mjs`
 - `.dockerignore` / `Dockerfile`
 - Cursor plan: A3 Plan Corrections（审阅修正冻结源）

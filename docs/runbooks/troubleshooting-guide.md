@@ -1,0 +1,64 @@
+# Lucy Troubleshooting Guide
+
+| 元数据 | 内容 |
+|---|---|
+| 文档名称 | Lucy Troubleshooting Guide |
+| 文档类型 | Product / Troubleshooting Guide |
+| 版本 | v0.4 |
+| 撰写日期 | 2026-06-22；2026-07-06；2026-08-28 增补内网 uv / MCP 未就绪；2026-09-01 增补 StarRocks max_execution_time |
+| 适用范围 | Docker deployment、WebUI、KTX runtime、MCP Proxy、agent access |
+
+## 1. Fast Checks
+
+```bash
+docker compose ps
+docker compose logs lucy
+curl -fsS http://127.0.0.1:5174/api/health
+curl -fsS "http://127.0.0.1:5174/api/r1/observability?hours=24&slowMs=30000"
+npm run smoke:p0:headless-config -- --root customer-config --require-secret-files
+npm run security:baseline
+```
+
+## 2. Common Issues
+
+| Symptom | First Check | Likely Fix |
+|---|---|---|
+| WebUI unavailable | host port mapping | change `LUCY_WEBUI_HOST_PORT` |
+| MCP returns 401 | bearer token missing or revoked | create a new Agent token |
+| MCP returns 403 | role/table/tool ACL | update role table selectors or tools |
+| KTX version mismatch | `/api/health.data.bundledKtxVersion` | rebuild image with intended `KTX_VERSION` |
+| Query asks to install runtime | KTX Python runtime missing | rebuild image; Dockerfile should run `ktx admin runtime install --yes --feature core` |
+| `ktx could not download uv`（客户内网查询失败） | 镜像未 bake-in Python/uv runtime，现场尝试公网下载失败 | **换用通过 G4b 的新交付镜像**；不要让客户开外网重试或在内网 `docker build`。出包机必须跑 `scripts/release/build-customer-amd64-image.sh`（含 G4b） |
+| `Unknown system variable 'max_execution_time'`（StarRocks / MySQL 协议） | ktx MySQL 连接器设置 MySQL 5.7+ 会话变量，StarRocks 不支持 | 使用含 `scripts/runtime/patch-ktx-mysql-starrocks-compat.js` 的镜像；WebUI 建连选 **StarRocks（MySQL 协议）**；验证 `node scripts/release/verify-ktx-starrocks-patch.cjs` |
+| `/api/health` → `ktxRuntime.ready: false` | runtime 未 bake-in 或损坏 | 重建镜像（Dockerfile 含 `ktx admin runtime install` + healthcheck runtime gate） |
+| WebUI「Lucy MCP 未就绪」/ `mcpEndpoint.status=fallback` | 未设置合法 `LUCY_PUBLIC_MCP_URL` | 在 values / 环境变量中配置外部可达 `https://…/mcp`；Helm 客户 registry 路径下空 URL 会 fail 渲染 |
+| Demo DB fails | MySQL healthcheck/logs | rerun `npm run smoke:p0:demo` after cleanup |
+| Semantic validate fails | source/table mismatch | run WebUI review and `ktx sl validate` |
+| Customer config not visible in container | bind mount path | run `docker compose -f docker-compose.yml -f deploy/compose/docker-compose.customer-config.yml config` and confirm `./customer-config:/data/lucy` |
+| Reindex fails on wiki summary | wiki frontmatter | add `title` and `summary` frontmatter to every wiki Markdown file |
+| New table not available to agent | config package not reindexed or ACL missing | run `ktx admin reindex --force`, `ktx sl validate`, and update `webui/config/access.yaml` role selectors |
+
+## 3. Release Gate Failures
+
+| Gate | Debug Command |
+|---|---|
+| spec lint | `npm run lint:spec` |
+| security baseline | `npm run security:baseline` |
+| Docker smoke | `npm run smoke:p0:docker` |
+| Headless config | `npm run smoke:p0:headless-config -- --root customer-config --require-secret-files` |
+| Demo E2E | `npm run smoke:p0:demo` |
+| Business eval catalog | `npm run smoke:p0:business-eval` |
+| KTX candidate | `npm run compat:ktx-upgrade -- --candidate <version>` |
+| R1 readiness | `npm run r1:readiness:strict` |
+
+## 4. Escalation Packet
+
+When escalating an issue, include:
+
+- Lucy git commit.
+- bundled KTX version.
+- Docker image tag.
+- command that failed.
+- redacted logs.
+- WebUI `/api/health` response.
+- relevant Agent id and token label, not token plaintext.

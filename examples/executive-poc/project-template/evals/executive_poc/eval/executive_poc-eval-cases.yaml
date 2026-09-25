@@ -16,7 +16,7 @@ metadata:
   requester: xingchen
   based_on:
     - examples/executive-poc/mysql/_baseline.json
-    - docs/eval-quiz-conventions.md v1.4
+    - docs/governance/eval-quiz-conventions.md v1.4
   scope: demo-exec-mysql 内部 Executive POC CFO-first v2
   output_path: evals/executive_poc/eval/executive_poc-eval-cases.yaml
   data_source: semantic_layer

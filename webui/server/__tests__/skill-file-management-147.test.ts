@@ -17,7 +17,7 @@ function tokenHash(token: string): string {
 
 describe("Spec 147 static gates", () => {
   it("SC-147-01 sync-demo-skills-template copies answer-style and keeps dockerignore/Dockerfile", async () => {
-    const result = spawnSync("bash", [path.join(REPO_ROOT, "scripts/sync-demo-skills-template.sh")], {
+    const result = spawnSync("bash", [path.join(REPO_ROOT, "scripts/demo/sync-demo-skills-template.sh")], {
       cwd: REPO_ROOT,
       encoding: "utf8"
     });

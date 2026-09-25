@@ -9,7 +9,7 @@
 | 适用范围 | Lucy WebUI 数据库接入模块：`/connections`、`/connections/whitelist`、`/connections/test`、连接卡片、上传 YAML Drawer、本地 Catalog reload 结果提示、语义资产包导出入口 |
 | 架构决议 | 数据库接入模块以 Connection 为核心业务对象；Schema / Manifest / Catalog 等数据产品术语不得被浏览器翻译或本地文案误译；连通测试和白名单维护应回到连接上下文中，孤立页面仅作为兼容入口 |
 | 事实源 | `ktx.yaml`、`semantic-layer/<connection>/_schema/<schema>.yaml`、`semantic-layer/<connection>/<table>.yaml`、`.ktx-ui/**` sidecar |
-| 关联文档 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/21-connection-catalog-upload-ux-spec.md`、`webui/docs/22-public-mcp-endpoint-runtime-config-spec.md`、`webui/docs/17-static-catalog-loading-spec.md`、`webui/docs/11-connection-whitelist-test-ux-refresh.md`、`webui/docs/03-api-spec.md`、`docs/DEVELOPMENT.md` |
+| 关联文档 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/21-connection-catalog-upload-ux-spec.md`、`webui/docs/22-public-mcp-endpoint-runtime-config-spec.md`、`webui/docs/17-static-catalog-loading-spec.md`、`webui/docs/11-connection-whitelist-test-ux-refresh.md`、`webui/docs/03-api-spec.md`、`docs/governance/DEVELOPMENT.md` |
 
 ## 1. 决策摘要
 

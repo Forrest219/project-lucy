@@ -19,7 +19,7 @@ Read these documents before coding:
 - `webui/docs/10-deployment-connection-ux-refresh.md`
 - `webui/docs/11-connection-whitelist-test-ux-refresh.md`
 - `webui/docs/03-api-spec.md`
-- `docs/DEVELOPMENT.md`
+- `docs/governance/DEVELOPMENT.md`
 
 Read these implementation files:
 

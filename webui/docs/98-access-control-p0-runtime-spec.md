@@ -490,7 +490,7 @@ npm run lint:terminology
 | `14-agent-admin-…` / `15-role-admin-spec.md` | `roles[]`；capability preview；版本迁移；`runtimeAck`；禁双并集摘要 | **WP-S1 草稿（v0.2 §0）** |
 | 审计 schema / Admin 筛选项 | §10.3 已写入 Spec 07 §0.5；`capability_forbidden` 筛选契约已登记；UI 实现属 WP-I6 | WP-S1 契约 + Gate B 后 WP-I6 |
 | Security Eval | AC-SEC-SL/CLS/CAP/KEY/SCOPE | WP-I7 |
-| `docs/vision.md` / feature map | 「不做行级」口径 | AC-P0+P1 退出后 |
+| `docs/governance/vision.md` / feature map | 「不做行级」口径 | AC-P0+P1 退出后 |
 
 ### 12.1 design-upgrade §9 逐条对照（WP-S1 验收）
 

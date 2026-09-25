@@ -11,7 +11,7 @@
 | 后续修订 | v0.2：Data Heatmap 已下沉为 `/admin/audit?tab=heatmap` 内的 Tab，由 `38-data-heatmap-tab-subsumption-spec.md` / `wo-M35` 跟踪；访问治理分组从 5 项收敛为 4 项 |
 | 关联页面 | `/`、`/onboarding`、`/connections`、`/connections/whitelist`、`/connections/test`、`/wiki`、`/publish/workbench`、`/publish/history`、`/eval/cases`、`/eval/runs`、`/eval/monitor`、`/admin/agents`、`/admin/roles`、`/admin/audit`、`/admin/audit-sources`、`/admin/config-audit` |
 | 事实源 | 代码：`webui/src/app/App.tsx`（`navGroups` + `Routes`）；规范：`webui/docs/06-navigation-ia.md`、`webui/docs/00-product-terminology-standard.md` |
-| 关联规范 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/06-navigation-ia.md`、`webui/docs/25-connection-module-terminology-ia-refresh-spec.md`、`webui/docs/26-database-connection-operations-runbook-spec.md`、`webui/docs/14-agent-admin-enterprise-delivery-spec.md`、`webui/docs/15-role-admin-spec.md`、`webui/docs/19-system-overview-runtime-monitoring-spec.md`、`docs/DEVELOPMENT.md` |
+| 关联规范 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/06-navigation-ia.md`、`webui/docs/25-connection-module-terminology-ia-refresh-spec.md`、`webui/docs/26-database-connection-operations-runbook-spec.md`、`webui/docs/14-agent-admin-enterprise-delivery-spec.md`、`webui/docs/15-role-admin-spec.md`、`webui/docs/19-system-overview-runtime-monitoring-spec.md`、`docs/governance/DEVELOPMENT.md` |
 
 ## 1. 背景
 

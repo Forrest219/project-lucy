@@ -142,7 +142,7 @@ export LUCY_DEMO_AGENT_TOKEN=lucy-demo-agent-token
 
 若 Cursor 当前版本不支持 `${env:…}` 展开，则使用 **用户级** `~/.cursor/mcp.json` 写 Bearer（不进仓库）。
 
-对齐文档：`docs/agent-integration-guide.md` §3 通用客户端（MCP Config）。
+对齐文档：`docs/runbooks/agent-integration-guide.md` §3 通用客户端（MCP Config）。
 
 ### 3.2 前置条件（已部分完成）
 
@@ -226,7 +226,7 @@ evals/chatbi_intl/eval/chatbi_intl-eval-cases.yaml
 # 本地 runner（需 claude 或配置的 runner）
 EVAL_KTX_MCP_URL=http://127.0.0.1:57881/mcp
 EVAL_KTX_MCP_TOKEN=$LUCY_DEMO_AGENT_TOKEN
-node scripts/eval-runner.mjs \
+node scripts/eval/eval-runner.mjs \
   --cases <suite.yaml> \
   --format json \
   > eval/results/<run_id>/lucy-runner.json
@@ -313,7 +313,7 @@ node scripts/eval-runner.mjs \
 | 路径 | 说明 |
 |---|---|
 | `docs/plans/wo-202608-49-….md` | 发布+Eval 执行计划 |
-| `docs/agent-integration-guide.md` | Agent / MCP 接入 |
+| `docs/runbooks/agent-integration-guide.md` | Agent / MCP 接入 |
 | `webui/docs/46-eval-yaml-exchange-and-result-archive-spec.md` | 评测套件 YAML / 结果归档 |
 | `~/Desktop/lucy_upload/eval/` | 用例、脚本、HTML |
 | `http://127.0.0.1:55176` | WebUI（评测用例 / 访问日志） |

@@ -8,7 +8,7 @@
 | 撰写日期 | 2026-08-08 |
 | 撰写人 | Cursor Agent |
 | 委托人 | zhangxingchen |
-| 基于材料 | spider2-lite；`docs/test-layers-and-release-gates.md`；`docs/qa/e2e-sop.md` + ONBOARD §14 + AGENT §5；Phase 0/2 ETL；§11 已批并首期执行 |
+| 基于材料 | spider2-lite；`docs/governance/test-layers-and-release-gates.md`；`docs/qa/e2e-sop.md` + ONBOARD §14 + AGENT §5；Phase 0/2 ETL；§11 已批并首期执行 |
 | 适用范围 | Spider2-lite local→StarRocks sandbox 的 **分层长期 E2E**（非一次性评测）；跑 E2E 以 QA 分表为准；不替代现有业务 eval / SOW Trust |
 | 输出位置 | `docs/plans/wo-202608-58-spider2-lite-sqlite-stress-harness.md` |
 
@@ -37,7 +37,7 @@
 | 135 题物料可本地复现 | `inbox/spider2-lite-sqlite/` 目录齐全；`instance_id` 列表与上游 `spider2-lite.jsonl` 的 `local*` 一致 |
 | 旁路基线可跑通 | 对 Pilot 子集跑通 Spider 官方 `evaluate.py --mode exec_result`（或等价 CSV 比对），写出分数 JSON |
 | Lucy 路径可行性有明确结论 | Gate G0 通过：Pilot 表已入 `sandbox`，且 `starrocks-r1` 只读可见 |
-| Pilot Lucy eval 可抽样执行 | ≥8 条改编 case 能被 `scripts/eval-runner.mjs` 消费；结果落 `inbox/` |
+| Pilot Lucy eval 可抽样执行 | ≥8 条改编 case 能被 `scripts/eval/eval-runner.mjs` 消费；结果落 `inbox/` |
 | 不污染产品回归 | 默认 **不进** P0/P1 CI gate；不把原始 sqlite/blob 提交进 git；不写生产 schema（`ods`/`dwd`/`ads` 等） |
 
 ## 2. 默认假设
@@ -194,7 +194,7 @@ evals/spider2_lite_sqlite/          # 仅当决定入库时创建；默认先只
 
 1. 在 `compare-pilot.md` 写清：分数不可对标 Spider 官方榜（设置不同）。
 2. 引用上游 MIT；注明未用 Gold SQL 做 SFT。
-3. 确认 `inbox/` 大文件未被 stage；若创建 `evals/spider2_lite_sqlite/`，补 `docs/eval-quiz-conventions` 覆盖矩阵标签。
+3. 确认 `inbox/` 大文件未被 stage；若创建 `evals/spider2_lite_sqlite/`，补 `docs/governance/eval-quiz-conventions` 覆盖矩阵标签。
 
 ## 7. Non-Goals
 
@@ -204,7 +204,7 @@ evals/spider2_lite_sqlite/          # 仅当决定入库时创建；默认先只
 - 不上传分数到 Spider leaderboard（除非另有研究需求）。
 - 不把「裸 SQL 成功率」宣传成 Lucy 产品准确率。
 - 不在本 WO 实现通用 SQLite driver（若要做，单独立项）。
-- **不向 `sandbox` 以外的 StarRocks database 装 Spider 数据**；不把本实验当作 StarRocks release-verified 认证替代（认证仍走 `docs/starrocks-r1-support-plan.md`）。
+- **不向 `sandbox` 以外的 StarRocks database 装 Spider 数据**；不把本实验当作 StarRocks release-verified 认证替代（认证仍走 `docs/specs/starrocks-r1-support-plan.md`）。
 
 ## 8. 风险与缓解
 
@@ -241,7 +241,7 @@ evals/spider2_lite_sqlite/          # 仅当决定入库时创建；默认先只
 ## 11. Spider2-lite @ StarRocks — 长期 E2E 方案（对齐测试分层）
 
 > 取代原先「一次性改编 17 题 + 抽样就结束」的设计。本 suite 必须能**重复装载、重复评测、按层进门禁**。  
-> **跑法事实源（规范）**：[`docs/qa/e2e-sop.md`](../qa/e2e-sop.md) + ONBOARD §14 + AGENT §5；命令登记 [`docs/test-layers-and-release-gates.md`](../test-layers-and-release-gates.md)。  
+> **跑法事实源（规范）**：[`docs/qa/e2e-sop.md`](../qa/e2e-sop.md) + ONBOARD §14 + AGENT §5；命令登记 [`docs/governance/test-layers-and-release-gates.md`](../governance/test-layers-and-release-gates.md)。  
 > **本 §11 只保留设计决策与资产布局**；逐步操作以 QA 分表为准，避免双轨手册。
 
 ### 11.1 定位：三层各测什么（互不替代）
@@ -317,7 +317,7 @@ smoke:p1:release-readiness      ← 默认不硬依赖 spider2；可用 --allow-
 | Case id | 稳定：`spider2_lite-<instance_id>`（如 `spider2_lite-local056`），便于跨月对比 |
 | 题干 | 英文上游 + 固定前置约束句（connection / `sandbox.s2_*`）；禁止每次手改题意 |
 | Gold | **只认** `evals/.../gold/starrocks_pilot/`；上游 Spider CSV 仅校准参考 |
-| Drift 纪律 | 复用 `docs/eval-quiz-conventions.md`：`data_drift`/`schema_drift`/`logic_regression`/`tool_error`；禁止静默改金标 |
+| Drift 纪律 | 复用 `docs/governance/eval-quiz-conventions.md`：`data_drift`/`schema_drift`/`logic_regression`/`tool_error`；禁止静默改金标 |
 | expected_source | 有 overlay measure 的标 `semantic_layer`；其余 `raw_sql_fallback`——长期通过 **加 measure** 把题「升级」到 SL，而不是一次性写死 |
 | 覆盖矩阵 | 在 suite metadata 声明六维 + Spider 维（D1/D3/D6…）；新增题必须挂矩阵标签 |
 | 抽样集 | 版本化 `sample_case_ids` 写在 YAML metadata 或 `evals/.../sample-ids.txt`，周更跑同一集合 |
@@ -349,7 +349,7 @@ smoke:p1:release-readiness      ← 默认不硬依赖 spider2；可用 --allow-
 
 | Step | 层级 | 内容 | 验证 |
 |---|---|---|---|
-| **A1** | 资产 | 幂等化现有 ETL → `scripts/spider2-lite-sandbox-reseed.*`；文档化输入（Drive sqlite / inbox path） | 二次 reseed mismatches=0 |
+| **A1** | 资产 | 幂等化现有 ETL → `scripts/eval/spider2-lite-sandbox-reseed.*`；文档化输入（Drive sqlite / inbox path） | 二次 reseed mismatches=0 |
 | **A2** | Runtime | `p1-spider2-lite-runtime-smoke`：connection + validate 10 overlay + 5 表行数 | 无 SR → blocked JSON |
 | **A3** | Business | 17 题 YAML 入 `evals/spider2_lite_sqlite/` + SR gold 校准协议；`sample_case_ids`（8 题）写入 metadata | G-cat list=17 |
 | **A4** | Platform | 专用 ACL 角色/token（仅 sandbox.s2_*）；endpoint 冒烟说明写入 README | 越权失败为预期 |

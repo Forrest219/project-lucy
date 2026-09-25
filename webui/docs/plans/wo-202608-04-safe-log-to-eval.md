@@ -8,7 +8,7 @@
 > - **没有** `server/eval/security-candidates.ts`；
 > - **没有** `server/__tests__/security-eval-candidates.test.ts`；
 > - **没有** `src/__tests__/security-eval-candidates.test.tsx`；
-> - **没有** `scripts/verify-202608-safe-log-to-security-eval.mjs`；
+> - **没有** `scripts/smoke/verify-202608-safe-log-to-security-eval.mjs`；
 > - 没有 `security_eval_candidate` / `security_eval_candidate_review` 表，没有对应的 `/api/eval/security-candidates/*` 路由。
 >
 > minimax 接到本工单后**第一件事**就是 `ls` / `grep` 确认以上文件/路由确实不存在，然后从零实现并自检。**不要假定已有脚手架**。
@@ -21,9 +21,9 @@
 
 必须先阅读：
 
-- `../docs/DEVELOPMENT.md`
-- `../docs/eval-quiz-conventions.md`
-- `../docs/lucy-202608-upgrade-execution-control.md`
+- `../docs/governance/DEVELOPMENT.md`
+- `../docs/governance/eval-quiz-conventions.md`
+- `../docs/specs/lucy-202608-upgrade-execution-control.md`
 - `docs/00-product-terminology-standard.md`
 - `docs/46-eval-yaml-exchange-and-result-archive-spec.md`
 - `docs/65-safe-log-to-eval-spec.md`
@@ -47,7 +47,7 @@ git status --short
 test -f webui/server/eval/security-candidates.ts            && echo "FAIL: security-candidates.ts 已存在" || echo "OK: security-candidates.ts 缺"
 test -f webui/server/__tests__/security-eval-candidates.test.ts   && echo "FAIL: server 测试已存在" || echo "OK: server 测试缺"
 test -f webui/src/__tests__/security-eval-candidates.test.tsx    && echo "FAIL: UI 测试已存在"   || echo "OK: UI 测试缺"
-test -f scripts/verify-202608-safe-log-to-security-eval.mjs && echo "FAIL: verifier 已存在" || echo "OK: verifier 缺"
+test -f scripts/smoke/verify-202608-safe-log-to-security-eval.mjs && echo "FAIL: verifier 已存在" || echo "OK: verifier 缺"
 grep -RIn "security_eval_candidate" webui/server/eval webui/server/index.ts || echo "OK: security_eval_candidate 表 / 路由未注册"
 grep -RIn "/api/eval/security-candidates" webui/server || echo "OK: /api/eval/security-candidates 路由未注册"
 ```
@@ -71,7 +71,7 @@ grep -RIn "/api/eval/security-candidates" webui/server || echo "OK: /api/eval/se
 8. 新增测试：
    - `server/__tests__/security-eval-candidates.test.ts`
    - `src/__tests__/security-eval-candidates.test.tsx`
-9. 新增自检脚本：`../scripts/verify-202608-safe-log-to-security-eval.mjs`。
+9. 新增自检脚本：`../scripts/smoke/verify-202608-safe-log-to-security-eval.mjs`。
 
 ## Allowed Files
 
@@ -80,7 +80,7 @@ Expected files (新建, P1 缺口 — 当前全部不存在):
 - `webui/server/eval/security-candidates.ts` — candidate pool、redaction、reviewer、promotion preview / commit 全部主流程。
 - `webui/server/__tests__/security-eval-candidates.test.ts`
 - `webui/src/__tests__/security-eval-candidates.test.tsx`
-- `scripts/verify-202608-safe-log-to-security-eval.mjs` — 根目录 verifier，与 `docs/lucy-202608-upgrade-execution-control.md` §7 Verification Matrix 中的 GOV-04 行命令口径一致。
+- `scripts/smoke/verify-202608-safe-log-to-security-eval.mjs` — 根目录 verifier，与 `docs/specs/lucy-202608-upgrade-execution-control.md` §7 Verification Matrix 中的 GOV-04 行命令口径一致。
 
 May modify (最小化、只为接入本工单):
 
@@ -131,7 +131,7 @@ Root verifier:
 
 ```bash
 cd /Users/zhangxingchen/Projects/project-lucy
-node scripts/verify-202608-safe-log-to-security-eval.mjs
+node scripts/smoke/verify-202608-safe-log-to-security-eval.mjs
 npm run lint:terminology
 ```
 
@@ -147,7 +147,7 @@ Browser check: not required.
   - [ ] `webui/server/eval/security-candidates.ts`
   - [ ] `webui/server/__tests__/security-eval-candidates.test.ts`
   - [ ] `webui/src/__tests__/security-eval-candidates.test.tsx`
-  - [ ] `scripts/verify-202608-safe-log-to-security-eval.mjs`
+  - [ ] `scripts/smoke/verify-202608-safe-log-to-security-eval.mjs`
   - [ ] Eval SQLite 中新增 `security_eval_candidate` 与 `security_eval_candidate_review` 两张表的迁移
 - [ ] `/api/eval/security-candidates*` 五个路由在 eval 路由注册文件中出现，并已注册到 OpenAPI / 路由清单。
 - [ ] 所有 SQLite 测试使用 `:memory:` 或独立 temp SQLite 文件，未触碰生产 `.ktx-ui/eval/**`。

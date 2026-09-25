@@ -10,8 +10,8 @@
 
 **Canonical Spec:** `webui/docs/62-trace-evidence-kernel-spec.md` v0.5.1  
 **Integrity baseline:** `docs/access-control/integrity-p0-decision.md`（IP0；扩展且不替代本工程 P0）  
-**Blueprint:** `docs/lucy-202608-reliable-delivery-upgrade-spec.md` §5  
-**Execution control:** `docs/lucy-202608-upgrade-execution-control.md`（GOV-01）  
+**Blueprint:** `docs/specs/lucy-202608-reliable-delivery-upgrade-spec.md` §5  
+**Execution control:** `docs/specs/lucy-202608-upgrade-execution-control.md`（GOV-01）  
 **Kernel work order (historical):** `webui/docs/plans/wo-202608-01-trace-evidence-kernel.md`
 
 ---
@@ -67,8 +67,8 @@ Global constraints:
 - Create: `docs/plans/2026-08-20-trace-evidence-p0-plan.md`（本文件）
 - Modify: `webui/docs/00-product-terminology-standard.md`
 - Modify: `docs/access-control/gap-analysis-202608.md`
-- Modify: `docs/lucy-202608-upgrade-execution-control.md`
-- Modify: `docs/lucy-202608-reliable-delivery-upgrade-spec.md`
+- Modify: `docs/specs/lucy-202608-upgrade-execution-control.md`
+- Modify: `docs/specs/lucy-202608-reliable-delivery-upgrade-spec.md`
 - Modify: `docs/plans/README.md`
 
 **Steps:**
@@ -149,7 +149,7 @@ Global constraints:
 
 **Files:**
 
-- Modify: `docs/lucy-202608-upgrade-execution-control.md`
+- Modify: `docs/specs/lucy-202608-upgrade-execution-control.md`
 - Modify: `docs/access-control/gap-analysis-202608.md`
 - Optional: create `webui/docs/plans/wo-202608-01b-trace-evidence-p0-closure.md` when T2–T4 start coding
 

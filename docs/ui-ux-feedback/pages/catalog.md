@@ -162,7 +162,7 @@ Catalog 筛选工具栏复用启用表范围的容器、小框和搜索框尺寸
 4. Verify table rows show 1px grid lines between rows.
 
 ### Notes
-Fixed in `webui/src/pages/Catalog.tsx` and `webui/src/app/app.css`. Verified in browser on 2026-08-02 after rebuilding `docker-compose.demo.yml`: `/catalog` and `/connections/enabled-tables` both use a 360x38 search input, 8px input radius, 1px toolbar/input borders, collapsed table layout, 1px data-cell row grid lines, and no horizontal overflow.
+Fixed in `webui/src/pages/Catalog.tsx` and `webui/src/app/app.css`. Verified in browser on 2026-08-02 after rebuilding `deploy/compose/docker-compose.demo.yml`: `/catalog` and `/connections/enabled-tables` both use a 360x38 search input, 8px input radius, 1px toolbar/input borders, collapsed table layout, 1px data-cell row grid lines, and no horizontal overflow.
 
 ## UX-CATALOG-007: Catalog row columns and primary action feel disconnected
 
@@ -191,7 +191,7 @@ Catalog 表格不使用固定百分比列宽；列距按内容自然分布。Cat
 5. Verify no horizontal overflow is introduced.
 
 ### Notes
-Fixed in `webui/src/pages/Catalog.tsx`, `webui/src/app/app.css`, and `webui/src/__tests__/catalog.test.tsx`. Verified in browser on 2026-08-02 after rebuilding `docker-compose.demo.yml`: Catalog uses `table-layout: auto`, `表名` and `语义状态` have no measured column gap, row action renders as unframed `pl-inline-link` text `维护语义 ↗`, and action/header alignment matches enabled tables with a 12px left inset.
+Fixed in `webui/src/pages/Catalog.tsx`, `webui/src/app/app.css`, and `webui/src/__tests__/catalog.test.tsx`. Verified in browser on 2026-08-02 after rebuilding `deploy/compose/docker-compose.demo.yml`: Catalog uses `table-layout: auto`, `表名` and `语义状态` have no measured column gap, row action renders as unframed `pl-inline-link` text `维护语义 ↗`, and action/header alignment matches enabled tables with a 12px left inset.
 
 ## UX-CATALOG-008: Catalog and enabled table scope grids use divergent implementation
 

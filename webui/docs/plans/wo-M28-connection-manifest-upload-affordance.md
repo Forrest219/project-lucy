@@ -13,7 +13,7 @@
 必读：
 
 - `AGENTS.md`
-- `docs/DEVELOPMENT.md`
+- `docs/governance/DEVELOPMENT.md`
 - `webui/docs/00-product-terminology-standard.md`
 - `webui/docs/29-connection-semantic-boundary-automation-spec.md`
 - `webui/docs/31-connection-manifest-upload-affordance-spec.md`
@@ -34,7 +34,7 @@
 
 ```bash
 git status --short
-sed -n '1,220p' docs/DEVELOPMENT.md
+sed -n '1,220p' docs/governance/DEVELOPMENT.md
 sed -n '1,260p' webui/docs/00-product-terminology-standard.md
 sed -n '1,240p' webui/docs/31-connection-manifest-upload-affordance-spec.md
 ```

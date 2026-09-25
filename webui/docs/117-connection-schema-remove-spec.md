@@ -8,7 +8,7 @@
 | 撰写日期 | 2026-08-06 |
 | 撰写人 | Composer |
 | 委托人 | zhangxingchen |
-| 基于材料 | `:55176/connections` 浏览器核查（仅「+ 添加 Schema」、无移除）；`docs/design-schema-onboarding.md` v1 Non-Goal；批准改善方案（Phase 1 必做 + Phase 2 可选清文件） |
+| 基于材料 | `:55176/connections` 浏览器核查（仅「+ 添加 Schema」、无移除）；`docs/design/design-schema-onboarding.md` v1 Non-Goal；批准改善方案（Phase 1 必做 + Phase 2 可选清文件） |
 | 适用范围 | `/connections` Schema 行「移除 Schema」；`POST /api/connections/:connId/schemas/remove`；本地 Manifest / overlay 可选清理；Wiki 仅影响预览 |
 | 输出位置 | `webui/docs/117-connection-schema-remove-spec.md` |
 
@@ -18,7 +18,7 @@
 | 关联工单 | `wo-202608-50-connection-schema-remove` |
 | 关联页面 | `/connections` |
 | 关联台账 | `docs/ui-ux-feedback/pages/connections.md`（`UX-CONNECTIONS-034`） |
-| 上游 Spec | M6 / `docs/design-schema-onboarding.md`（ADR-11）；Spec 21 / 107 / 116；`03-api-spec.md` schemas |
+| 上游 Spec | M6 / `docs/design/design-schema-onboarding.md`（ADR-11）；Spec 21 / 107 / 116；`03-api-spec.md` schemas |
 | 状态 | Implemented |
 | 日期 | 2026-08-06 |
 | 范围 | 从连接配置卸载 Schema（必清 `schemas` + 前缀 `enabled_tables`）；dryRun 影响面；可选删 Manifest/overlay；Wiki 只告警不删 |
@@ -180,6 +180,6 @@ New terms:
 
 ## 10. 交叉引用
 
-- 修订 `docs/design-schema-onboarding.md`：删除「不做删除」为历史；指向本 Spec。
+- 修订 `docs/design/design-schema-onboarding.md`：删除「不做删除」为历史；指向本 Spec。
 - Spec 116：本操作主动 prune 前缀 enabled，与「不自动 prune 孤儿」不冲突（用户显式确认）。
 - Phase 3（Wiki 失效标黄 / 发布校验）不在本 Spec。

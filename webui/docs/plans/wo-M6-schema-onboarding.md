@@ -4,7 +4,7 @@
 
 ## codex 直投 prompt
 ```
-工作目录:/Users/forrest/Projects/project-lucy/webui。先读 docs/codex/README.md、docs/02-arch-spec.md、docs/03-api-spec.md、docs/design-schema-onboarding.md(本工单 spec)。
+工作目录:/Users/forrest/Projects/project-lucy/webui。先读 docs/codex/README.md、docs/02-arch-spec.md、docs/03-api-spec.md、docs/design/design-schema-onboarding.md(本工单 spec)。
 任务:M6 Schema Onboarding(给已有连接添加 schema)。
 关键约束:写入只经 fs-safe;YAML 就地补丁(ADR-01 / ADR-11);不接管新建连接;不写 .ktx/secrets/;POST schemas 默认 dryRun=true,必须显式 false 才落盘;写入前先跑 ktx connection test;写后不自动触发 ingest。
 完成后 npm test 贴结果,按 DoD 收尾,停下交回,不要继续 M7。
@@ -14,11 +14,11 @@
 在「连接概览」加「+ 添加 schema」入口,让数据工程师在 webui 内完成「输入 schema 名 → 测连通 → 写回 ktx.yaml → 触发 ingest」,不接触凭据、不直接编辑 YAML。
 
 ## 必读
-- `../../docs/design-schema-onboarding.md`(本工单 spec,ADR-11 全文)
+- `../../docs/design/design-schema-onboarding.md`(本工单 spec,ADR-11 全文)
 - `../02-arch-spec.md §3.6(project.ts) §3.1(fs-safe)`
 - `../03-api-spec.md §1(envelope) §2(connections 端点段)`
 - `../01-architecture.md §6 ADR-01 / ADR-09 / ADR-11`
-- `../../docs/design-db-connection.md §四(ALLOW_FILES 扩展)、§八(不做的事)`
+- `../../docs/design/design-db-connection.md §四(ALLOW_FILES 扩展)、§八(不做的事)`
 
 ## 交付文件
 ```
@@ -114,9 +114,9 @@ fastify.post<{ Params: { connId: string }; Body: AddSchemaBody }>(
 
 ### T6.5 — 文档
 
-- `docs/webui-module-guide.md` v1.3:在「数据库接入 / 连接概览」段后加「#### 添加 schema」子节(对齐 v1.2 风格,文案参见设计稿 §七)
-- `docs/webui-feature-map.md` §4:加一行「| 给已有连接添加 schema | 🔧 M6 开发中 | 在 webui 内给连接加 schema | 详见 `docs/design-schema-onboarding.md` |」
-- `docs/webui-impl-status.md`:在「数据库接入」段加一行状态「🔧 开发中」
+- `docs/webui/webui-module-guide.md` v1.3:在「数据库接入 / 连接概览」段后加「#### 添加 schema」子节(对齐 v1.2 风格,文案参见设计稿 §七)
+- `docs/webui/webui-feature-map.md` §4:加一行「| 给已有连接添加 schema | 🔧 M6 开发中 | 在 webui 内给连接加 schema | 详见 `docs/design/design-schema-onboarding.md` |」
+- `docs/webui/webui-impl-status.md`:在「数据库接入」段加一行状态「🔧 开发中」
 
 ### T6.6 — 安全 / 边界回归
 

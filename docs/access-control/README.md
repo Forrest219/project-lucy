@@ -8,7 +8,7 @@
 | 撰写日期 | 2026-08-08 |
 | 撰写人 | Cursor Agent |
 | 委托人 | xingchen |
-| 基于材料 | `docs/DEVELOPMENT.md` Spec 落位规则；访问权限升级设计 v1.1.2 |
+| 基于材料 | `docs/governance/DEVELOPMENT.md` Spec 落位规则；访问权限升级设计 v1.1.2 |
 | 适用范围 | 权限域文档入口；现行基线与交叉引用 |
 | 输出位置 | `docs/access-control/README.md` |
 
@@ -81,13 +81,13 @@
 
 | 旧路径 | 新路径 |
 |---|---|
-| `docs/design-access-control-upgrade.md` | `docs/access-control/design-upgrade.md` |
-| `docs/design-row-level-acl-feasibility.md` | `docs/access-control/feasibility-row-acl.SUPERSEDED.md` |
-| `docs/access-governance-design.md` | `docs/access-control/design-governance-baseline.md` |
-| `docs/design-agent-permissions.md` | `docs/access-control/design-agent-permissions-v1.md` |
-| `docs/uat-agent-permissions.md` | `docs/access-control/uat-agent-permissions-v1.md` |
-| `docs/review-module1-agent-permissions.md` | `docs/access-control/review-agent-permissions-v1.md` |
-| `docs/lucy-202608-access-governance-gap-analysis.md` | `docs/access-control/gap-analysis-202608.md` |
+| `docs/design/design-access-control-upgrade.md` | `docs/access-control/design-upgrade.md` |
+| `docs/design/design-row-level-acl-feasibility.md` | `docs/access-control/feasibility-row-acl.SUPERSEDED.md` |
+| `docs/design/access-governance-design.md` | `docs/access-control/design-governance-baseline.md` |
+| `docs/design/design-agent-permissions.md` | `docs/access-control/design-agent-permissions-v1.md` |
+| `docs/uat/uat-agent-permissions.md` | `docs/access-control/uat-agent-permissions-v1.md` |
+| `docs/reviews/review-module1-agent-permissions.md` | `docs/access-control/review-agent-permissions-v1.md` |
+| `docs/specs/lucy-202608-access-governance-gap-analysis.md` | `docs/access-control/gap-analysis-202608.md` |
 
 ---
 

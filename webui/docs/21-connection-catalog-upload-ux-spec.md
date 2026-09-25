@@ -9,7 +9,7 @@
 | 适用范围 | Lucy WebUI 数据库接入模块：`/connections`、`/connections/whitelist`、`AddSchemaDrawer`、本地 YAML Catalog 资产上传与刷新 |
 | 架构决议 | 继续坚持 Zero AI Dependency for Core Pipeline；`ktx.yaml` 与 `semantic-layer/**/*.yaml` 仍为 Source of Truth；WebUI 增加受控 YAML 上传入口，替代“分析师维护后交给运维手工上传目录”的低效流程 |
 | 事实源 | `ktx.yaml`、`semantic-layer/<connection>/_schema/<schema>.yaml`、`semantic-layer/<connection>/<table>.yaml`、`.ktx-ui/**` sidecar |
-| 关联文档 | `webui/docs/17-static-catalog-loading-spec.md`、`webui/docs/16-ingest-first-class-ux-spec.md`、`webui/docs/11-connection-whitelist-test-ux-refresh.md`、`webui/docs/03-api-spec.md`、`docs/DEVELOPMENT.md` |
+| 关联文档 | `webui/docs/17-static-catalog-loading-spec.md`、`webui/docs/16-ingest-first-class-ux-spec.md`、`webui/docs/11-connection-whitelist-test-ux-refresh.md`、`webui/docs/03-api-spec.md`、`docs/governance/DEVELOPMENT.md` |
 
 > **交叉引用（Spec 107）**：本规格默认「刷新本地目录 / Manifest 路径不连物理库」仍然成立。Owner 在 `/connections` 经 `GET /api/connections/:connId/live-schemas` 的**按需只读库内目录**（库内表数、添加 Schema 候选）是受控例外，详见 [`107-connection-live-catalog-discovery-spec.md`](107-connection-live-catalog-discovery-spec.md)。
 

@@ -293,7 +293,7 @@ ON enterprise multi-part answer:
 - R1 token 的 `tools/list` 不暴露 `sl_query` / `sl_read_source`。
 - `lucy_catalog` 不泄露不可见 source。
 - contract smoke 必须包含禁止工具、不可见 source、禁止 measure/table 三类负样本。
-- contract smoke evidence 必须由 `scripts/lucy-r1-mcp-contract-smoke.mjs` 生成，并保留 `checkDetails`：三类负样本、上游语义工具隐藏列表、隐藏工具列表、禁止工具直调拒绝 reason、catalog 泄露列表、禁止 measure/table 拒绝 reason、`runtimeArgumentValidation.probes`、limit cap 数值和 Lucy metadata 判断。
+- contract smoke evidence 必须由 `scripts/smoke/lucy-r1-mcp-contract-smoke.mjs` 生成，并保留 `checkDetails`：三类负样本、上游语义工具隐藏列表、隐藏工具列表、禁止工具直调拒绝 reason、catalog 泄露列表、禁止 measure/table 拒绝 reason、`runtimeArgumentValidation.probes`、limit cap 数值和 Lucy metadata 判断。
 - 直接调用禁止工具必须返回 `tool_forbidden` 或 `tool_forbidden_global`。
 - `lucy_query` 访问禁止 measure/table 必须返回 `table_forbidden:*` 或等价拒绝 reason。
 - `lucy_query` malformed arguments probe 必须返回 `invalid_arguments:*`，且不能打到 Doris/目标源。

@@ -8,7 +8,7 @@
 | 撰写日期 | 2026-08-20 |
 | 撰写人 | Composer |
 | 委托人 | xingchen |
-| 基于材料 | Token 设备绑定与定向吊销优化方案；Spec 07 / 08；`docs/security-guide.md` |
+| 基于材料 | Token 设备绑定与定向吊销优化方案；Spec 07 / 08；`docs/runbooks/security-guide.md` |
 | 适用范围 | MCP Proxy 访问审计网络上下文；Agent Token 设备元数据；按 Token 定向吊销；过期强制与吊销即时生效 |
 | 输出位置 | `webui/docs/124-token-device-security-and-audit-context-spec.md` |
 

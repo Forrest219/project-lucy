@@ -6,7 +6,7 @@
 | 状态 | Approved for planning |
 | 撰写日期 | 2026-08-02 |
 | 触发来源 | `/catalog/demo-mysql/dataforai/superstore_orders` 浏览器巡检与用户批准优化清单 |
-| 关联规范 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/42-page-header-standardization-spec.md`、`webui/docs/48-catalog-and-table-semantic-workbench-productization-spec.md`、`docs/DEVELOPMENT.md` |
+| 关联规范 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/42-page-header-standardization-spec.md`、`webui/docs/48-catalog-and-table-semantic-workbench-productization-spec.md`、`docs/governance/DEVELOPMENT.md` |
 | 主要页面 | `/catalog`、`/catalog/:conn/:schema/:table` |
 | 主要文件 | `webui/src/pages/TableEditor.tsx`、`webui/src/pages/Catalog.tsx`、`webui/src/app/app.css`、`webui/src/__tests__/table-editor.test.tsx`、`webui/src/__tests__/catalog.test.tsx` |
 
@@ -292,7 +292,7 @@ Lint / static tests:
 
 Browser validation:
 
-Per `docs/DEVELOPMENT.md`, browser validation is required for this work because the source issue was browser-observed UI/UX behavior and keyboard navigation. Desktop viewport validation is sufficient unless a later plan explicitly asks for mobile.
+Per `docs/governance/DEVELOPMENT.md`, browser validation is required for this work because the source issue was browser-observed UI/UX behavior and keyboard navigation. Desktop viewport validation is sufficient unless a later plan explicitly asks for mobile.
 
 Minimum browser checks:
 

@@ -40,7 +40,7 @@ type ResultImportResponse = {
 };
 
 function runnerCommandFor(domain: string, adapter = "hermes"): string {
-  return `EVAL_AGENT_ADAPTER=${adapter} node scripts/lucy-eval-runner.mjs --suite ${domain || "eval"}-eval-suite.yaml --output result.json --adapter ${adapter}`;
+  return `EVAL_AGENT_ADAPTER=${adapter} node scripts/eval/lucy-eval-runner.mjs --suite ${domain || "eval"}-eval-suite.yaml --output result.json --adapter ${adapter}`;
 }
 
 function filenameFromContentDisposition(value: string | null, fallback: string): string {

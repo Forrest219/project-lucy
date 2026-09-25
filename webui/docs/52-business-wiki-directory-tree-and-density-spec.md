@@ -9,7 +9,7 @@
 | 关联页面 | `/wiki` |
 | 关联工单 | `webui/docs/plans/wo-M50-business-wiki-directory-tree-and-density.md` |
 | 事实来源 | 2026-08-02 浏览器核查、用户截图、`docs/ui-ux-feedback/pages/wiki.md` |
-| 关联规范 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/45-business-wiki-workbench-productization-spec.md`、`webui/docs/49-business-wiki-md-library-operations-spec.md`、`docs/DEVELOPMENT.md` |
+| 关联规范 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/45-business-wiki-workbench-productization-spec.md`、`webui/docs/49-business-wiki-md-library-operations-spec.md`、`docs/governance/DEVELOPMENT.md` |
 
 ## 1. 背景
 

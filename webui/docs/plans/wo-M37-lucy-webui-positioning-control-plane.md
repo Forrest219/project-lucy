@@ -19,14 +19,14 @@
 Read these documents before editing:
 
 - `AGENTS.md`
-- `docs/DEVELOPMENT.md`
+- `docs/governance/DEVELOPMENT.md`
 - `webui/docs/00-product-terminology-standard.md`
 - `webui/docs/06-navigation-ia.md`
 - `webui/docs/39-data-agent-ops-platform-global-ux-spec.md` (only §4 目标产品心智)
 - `webui/docs/40-lucy-webui-positioning-control-plane.md` (this work order's source spec)
-- `docs/vision.md` §3 系统架构
-- `docs/design-webui-ui-refresh.md` §5.2 与 §10
-- `docs/webui-module-guide.md` 产品简介
+- `docs/governance/vision.md` §3 系统架构
+- `docs/design/design-webui-ui-refresh.md` §5.2 与 §10
+- `docs/webui/webui-module-guide.md` 产品简介
 
 Inspect these implementation files:
 
@@ -42,12 +42,12 @@ Inspect these documentation files:
 - `webui/docs/06-navigation-ia.md`
 - `webui/docs/README.md`
 - `webui/docs/plans/README.md`
-- `docs/DEVELOPMENT.md`
-- `docs/vision.md`
-- `docs/design-webui-ui-refresh.md`
-- `docs/webui-module-guide.md`
-- `docs/project-overview.md`
-- `docs/product-docs-index.md`
+- `docs/governance/DEVELOPMENT.md`
+- `docs/governance/vision.md`
+- `docs/design/design-webui-ui-refresh.md`
+- `docs/webui/webui-module-guide.md`
+- `docs/governance/project-overview.md`
+- `docs/governance/product-docs-index.md`
 
 Inspect these tests and extend them:
 
@@ -81,14 +81,14 @@ Non-negotiable boundaries:
 1. 升级 `webui/docs/00-product-terminology-standard.md` 到 v0.2，第 3 节新增 `Data Agent Ops Control Plane` 主术语，把「语义维护工作台」与「运维控制面」标为弃用别名。
 2. 修改 `webui/src/app/App.tsx:113-114` 品牌区副标题为 `Data Agent Ops Control Plane`（英文 brand term + `translate="no"` + `notranslate`）+ 中文 caption `Data Agent 运维控制台` 作为下一行；`app.css` 追加 `.pl-brand-eyebrow` 与 `.pl-brand-tagline` 两条新 class。
 3. **不**修改 `webui/index.html` 的 `<title>`（保持 `Lucy WebUI`）。
-4. 修改 `docs/design-webui-ui-refresh.md` 三处过期备注（§5.2、§10 P0 列表、§10 待确认问题表）。
+4. 修改 `docs/design/design-webui-ui-refresh.md` 三处过期备注（§5.2、§10 P0 列表、§10 待确认问题表）。
 5. 修改 `webui/src/__tests__/app-shell.test.tsx` 新增 `Data Agent Ops Control Plane` + `Data Agent 运维控制台` 断言（同时断言 `语义维护工作台` 不再出现）。
 6. 顺手统一：`webui/docs/39-data-agent-ops-platform-global-ux-spec.md` 元数据升 v0.2，§1 背景 line 25 一处「运维控制面」→「运维控制台」。
 7. 修改 `webui/docs/README.md` 在「文档索引」表追加 40 号 spec 行；`webui/docs/plans/README.md` 追加 M37 行。
 8. 收尾验证 `npm run lint:terminology` / `npm run lint:ia-boundary` / `npx tsc --noEmit` / `npm test` / `npm run build` 全部通过。
 9. 收尾说明必须列出修改文件清单、验证命令与结果。
 
-**范围红线**：`docs/vision.md` 与 `docs/webui-module-guide.md` 改写**不**在 M37 范围；由 M38 单独承接（spec 40 §4.4 仅作关联登记）。
+**范围红线**：`docs/governance/vision.md` 与 `docs/webui/webui-module-guide.md` 改写**不**在 M37 范围；由 M38 单独承接（spec 40 §4.4 仅作关联登记）。
 
 ---
 
@@ -124,8 +124,8 @@ After the §3 table (and before `### 3.1 Review 与 Approval 的边界`), add:
 |---|---|---|---|
 | 语义维护工作台 | `webui/src/app/App.tsx:114`（v0.1 及之前） | M36 §4 已将 Lucy WebUI 心智从「资源维护」升级为「运维控制台」 | Data Agent Ops Control Plane |
 | 运维控制面 | `webui/docs/39-data-agent-ops-platform-global-ux-spec.md` §1 背景 line 25（v0.1） | M37 顺手统一为「运维控制台」，避免 spec 39 ↔ spec 40 漂移 | Data Agent 运维控制台 |
-| KTX WebUI 治理控制台 | `docs/webui-module-guide.md:19`（v1.3 及之前） | 品牌已切到 Lucy | Data Agent Ops Control Plane |
-| 本地治理工作台 | `docs/project-overview.md:67` | 同上 | Data Agent Ops Control Plane |
+| KTX WebUI 治理控制台 | `docs/webui/webui-module-guide.md:19`（v1.3 及之前） | 品牌已切到 Lucy | Data Agent Ops Control Plane |
+| 本地治理工作台 | `docs/governance/project-overview.md:67` | 同上 | Data Agent Ops Control Plane |
 ```
 
 **Step 4: Update §7 迁移优先级 P0 list**
@@ -268,7 +268,7 @@ git commit -m "feat(webui): update brand block to Data Agent Ops Control Plane"
 
 **Files:**
 
-- Modify: `docs/design-webui-ui-refresh.md`
+- Modify: `docs/design/design-webui-ui-refresh.md`
 
 **Step 1: Update §5.2 左侧导航 paragraph**
 
@@ -300,7 +300,7 @@ If the table is in pure markdown table form and the trailing caption does not fi
 
 ```bash
 cd /Users/zhangxingchen/Projects/project-lucy
-git diff --stat docs/design-webui-ui-refresh.md
+git diff --stat docs/design/design-webui-ui-refresh.md
 ```
 
 Expected: only the three target sections are modified, no other content touched.
@@ -308,7 +308,7 @@ Expected: only the three target sections are modified, no other content touched.
 **Step 5: Commit**
 
 ```bash
-git add docs/design-webui-ui-refresh.md
+git add docs/design/design-webui-ui-refresh.md
 git commit -m "docs(spec): refresh stale brand positioning notes"
 ```
 
@@ -537,7 +537,7 @@ git commit -m "docs(webui): register M37 spec and plan in index"
   Expected: 0 命中（仅检查这些文件未被修改）。
 - [ ] **5+1 IA 未动** — `cd webui && grep -c "数据接入\|语义建模\|语义发布\|质量评测\|访问治理\|系统概览" src/app/App.tsx`。
   Expected: 与 baseline 一致。
-- [ ] **vision.md / webui-module-guide.md 未动** — `cd /Users/zhangxingchen/Projects/project-lucy && git diff -- docs/vision.md docs/webui-module-guide.md`。
+- [ ] **vision.md / webui-module-guide.md 未动** — `cd /Users/zhangxingchen/Projects/project-lucy && git diff -- docs/governance/vision.md docs/webui/webui-module-guide.md`。
   Expected: 无 diff 输出。
 
 ## Reviewer Checklist
