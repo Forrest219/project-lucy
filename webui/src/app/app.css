@@ -1560,6 +1560,9 @@
   .pl-inspector-title-row { @apply grid gap-3 rounded-md border border-border-default bg-bg-base p-3; }
   .pl-segmented-control { @apply grid grid-cols-3 gap-1 rounded-md border border-border-default bg-bg-muted p-1; }
   .pl-segmented-control--cols-2 { @apply grid-cols-2; }
+  .pl-segmented-control--auto {
+    @apply flex w-fit max-w-full flex-wrap;
+  }
   .pl-segmented-control-item { @apply rounded-sm px-2 py-1.5 text-sm text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary; }
   .pl-segmented-control-item--active { @apply bg-bg-surface text-fg-default shadow-sm; }
   .pl-inspector-header { @apply grid gap-2; }

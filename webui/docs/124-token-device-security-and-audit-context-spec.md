@@ -96,7 +96,7 @@ tokens:
     label: cursor-laptop-xingchen
     created: "2026-08-20"
     device_name: "xingchen-mbp"   # optional remark only; omit when empty
-    expires_at: "2026-12-31T00:00:00.000Z"  # enforced by Proxy
+    expires_at: "2026-12-31T00:00:00.000Z"  # required for new tokens; max 365 days; enforced by Proxy
 ```
 
 派生（不写 YAML）：`last_used` / `last_tool` / `last_outcome` / `last_ip` / `last_user_agent` / `last_client` / `last_client_version` / `last_device_name_seen` / `distinct_ips_7d`。
@@ -114,7 +114,7 @@ tokens:
 
 ## 7. UI
 
-- **New Token**：可选「设备名备注」；引导配置 `x-lucy-device-name` 与一台安装一个 Token。
+- **New Token**：可选「设备名备注」；`expires_at` 默认 90 天且最长 365 天；引导配置 `x-lucy-device-name` 与一台安装一个 Token。
 - **Agent Token Tab**：分开展示备注 / Agent 类型 / 最近设备名 / 最近 IP；单条与批量撤销。
 - **Audit 调用流水**：展示/筛选访问 IP、User-Agent、运行时设备名、客户端版本。
 

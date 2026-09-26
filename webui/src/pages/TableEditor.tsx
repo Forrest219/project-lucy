@@ -1821,7 +1821,7 @@ export function TableEditor() {
   );
 
   return (
-    <div className="pl-page-stack">
+    <div className="pl-page-stack notranslate" translate="no">
       <PageHeader
         backAction={
           <Link to="/catalog" className="pl-page-header-back">

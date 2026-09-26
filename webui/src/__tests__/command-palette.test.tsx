@@ -25,6 +25,7 @@ vi.mock("../pages/WikiEditor", () => ({ WikiEditor: () => <StubPage name="WikiEd
 vi.mock("../pages/admin/AgentList", () => ({ AgentList: () => <StubPage name="AgentList" /> }));
 vi.mock("../pages/admin/AgentDetail", () => ({ AgentDetail: () => <StubPage name="AgentDetail" /> }));
 vi.mock("../pages/admin/NewToken", () => ({ NewToken: () => <StubPage name="NewToken" /> }));
+vi.mock("../pages/admin/Tokens", () => ({ Tokens: () => <StubPage name="Tokens" /> }));
 vi.mock("../pages/admin/Audit", () => ({ Audit: () => <StubPage name="Audit" /> }));
 vi.mock("../pages/admin/AuditSources", () => ({ AuditSources: () => <StubPage name="AuditSources" /> }));
 vi.mock("../pages/admin/McpPlayground", () => ({ McpPlayground: () => <StubPage name="McpPlayground" /> }));
@@ -318,7 +319,7 @@ describe("CommandPalette", () => {
     fireEvent.keyDown(input, { key: "ArrowDown" });
     fireEvent.keyDown(input, { key: "Enter" });
     expect(screen.queryByTestId("command-palette")).not.toBeInTheDocument();
-    expect(screen.getByTestId("route-page")).toHaveTextContent("AgentList");
+    expect(screen.getByTestId("route-page")).toHaveTextContent("Tokens");
   });
 
   it("ignores Enter while an IME composition is active", () => {

@@ -35,6 +35,19 @@ fi
 echo "[init] Cloning $SRC -> $DEST"
 git clone --depth 1 "file://$SRC" "$DEST"
 
+# access.yaml is intentionally gitignored in the real project. Seed the
+# disposable fixture from the committed example so admin and ACL E2E routes
+# do not start in policy_degraded_global.
+ACCESS_FIXTURE="$SRC/webui/config/access.yaml.example"
+ACCESS_TARGET="$DEST/webui/config/access.yaml"
+if [[ -f "$ACCESS_FIXTURE" ]]; then
+  cp "$ACCESS_FIXTURE" "$ACCESS_TARGET"
+  echo "[init] access.yaml seeded from committed example"
+else
+  echo "[E2E-GUARD] missing $ACCESS_FIXTURE" >&2
+  exit 2
+fi
+
 # 写入 E2E fixture 凭据（占位字符串，绝不读真实 .ktx/secrets/*）
 mkdir -p "$DEST/.ktx/secrets"
 echo "e2e-fixture-password" > "$DEST/.ktx/secrets/mysql-aliyun-password"

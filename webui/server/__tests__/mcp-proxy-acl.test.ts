@@ -13,7 +13,8 @@ const testState = vi.hoisted(() => ({
   recordMcpToolsCallMock: vi.fn(() => ({ callEventId: 1, policyEventId: 2 }))
 }));
 
-vi.mock("../project.js", () => ({
+vi.mock("../project.js", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../project.js")>(),
   resolveProjectRoot: vi.fn(() => testState.projectRoot)
 }));
 

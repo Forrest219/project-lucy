@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy Security Guide |
 | 文档类型 | Security / Operations Guide |
-| 版本 | v0.3 |
-| 撰写日期 | 2026-06-22；2026-07-06；2026-08-20 |
+| 版本 | v0.4 |
+| 撰写日期 | 2026-06-22；2026-07-06；2026-08-20；2026-09-26 |
 | 适用范围 | Docker 部署、MCP Proxy、Agent token、ACL、audit、secrets |
 
 ## 1. Security Model
@@ -30,6 +30,7 @@ Rules:
 - Prefer one Token per client installation for targeted revoke.
 - Token revocation is persisted in `.ktx-ui/audit.sqlite` and immediately invalidates the Proxy access-config cache.
 - `expires_at` is enforced by the MCP Proxy (expired tokens receive 401).
+- Newly issued tokens require `expires_at`; WebUI defaults to 90 days and the API rejects values beyond 365 calendar days. Legacy null values remain readable only for compatibility and must be rotated before production launch.
 - Disabled agents must be denied before tool-level checks.
 - Do not commit token plaintext, `.ktx/secrets/`, or `.ktx-ui/*.sqlite*`.
 
@@ -78,6 +79,13 @@ Audit captures:
 
 Set `LUCY_TRUST_PROXY=1` only behind a trusted reverse proxy so `X-Forwarded-For` may be used for `client_ip`.
 
+## 4.1 WebUI HTTP hardening
+
+- Production HTTPS deployments must set `LUCY_WEBUI_COOKIE_SECURE=1`; this enables `Secure` session cookies and HSTS.
+- Lucy emits CSP, clickjacking, MIME sniffing, referrer, permissions and cross-origin isolation headers on WebUI/API responses.
+- Browser state-changing API requests must be same-origin. `LUCY_TRUST_PROXY=1` also controls whether `X-Forwarded-Host` may participate in that comparison.
+- Token-creation responses are `private, no-store`; plaintext must never be persisted in logs, screenshots or evidence packages.
+
 Sensitive payload handling:
 
 - Full raw SQL/query payloads are rejected by ACL for proxy tool calls.
@@ -112,6 +120,7 @@ Required before customer release:
 npm run r1:readiness:strict
 npm run lint:spec
 npm run security:baseline
+npm --prefix webui audit --omit=dev --registry=https://registry.npmjs.org
 npm run smoke:p0:docker
 npm run smoke:p0:headless-config
 npm run smoke:p0:demo

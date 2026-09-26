@@ -405,7 +405,10 @@ describe("probeConnection", () => {
     const result = await probeConnection(probeInput, {
       testConnectionFn: async (_root, connId) => failTest(connId)
     });
-    expect(result).toMatchObject({ status: "error", message: "Access denied" });
+    expect(result).toMatchObject({
+      status: "error",
+      message: "用户名或密码不正确，或账号无目标库权限。 建议：核对凭据与 schema"
+    });
     await expect(readFile(path.join(projectRoot, "ktx.yaml"), "utf8")).resolves.toBe(before);
   });
 });

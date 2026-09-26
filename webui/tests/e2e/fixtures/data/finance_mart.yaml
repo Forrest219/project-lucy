@@ -3,10 +3,9 @@
 # 此文件作为 E2E spec 的粘贴输入；可被 CatalogAssetUploadDrawer 解析。
 # 真实表结构：fact_revenue / dim_account / dim_product
 
-schema: finance_mart
-version: 1
 tables:
-  - name: fact_revenue
+  fact_revenue:
+    table: finance_mart.fact_revenue
     comment: "事实表：营收交易"
     columns:
       - name: order_id
@@ -28,7 +27,8 @@ tables:
       - name: order_date
         type: date
 
-  - name: dim_account
+  dim_account:
+    table: finance_mart.dim_account
     comment: "维度表：客户账户"
     columns:
       - name: account_id
@@ -39,7 +39,8 @@ tables:
       - name: region
         type: string
 
-  - name: dim_product
+  dim_product:
+    table: finance_mart.dim_product
     comment: "维度表：产品"
     columns:
       - name: product_id

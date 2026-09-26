@@ -259,6 +259,75 @@ describe("GET /api/admin/audit", () => {
     }
   });
 
+  it("filters calls, CSV, and evidence packs by user plus exact token hash prefix", async () => {
+    const { writeLog } = await import("../proxy/audit");
+    await writeLog({
+      ts: "2026-06-21T09:00:00.000Z",
+      userId: "analyst_zhang",
+      tokenLabel: "shared-label",
+      tokenHashPrefix: "sha256:aaaa0000",
+      tool: "sl_query",
+      outcome: "ok",
+      durationMs: 10,
+      requestId: "matching-token"
+    });
+    await writeLog({
+      ts: "2026-06-21T09:01:00.000Z",
+      userId: "analyst_zhang",
+      tokenLabel: "shared-label",
+      tokenHashPrefix: "sha256:bbbb1111",
+      tool: "sl_query",
+      outcome: "ok",
+      durationMs: 11,
+      requestId: "other-token"
+    });
+    await writeLog({
+      ts: "2026-06-21T09:02:00.000Z",
+      userId: "other_agent",
+      tokenLabel: "shared-label",
+      tokenHashPrefix: "sha256:aaaa0000",
+      tool: "sl_query",
+      outcome: "ok",
+      durationMs: 12,
+      requestId: "other-agent"
+    });
+
+    const { buildServer } = await import("../index");
+    const app = buildServer();
+    await app.ready();
+    try {
+      const filter = "user=analyst_zhang&tokenHashPrefix=sha256%3Aaaaa0000";
+      const calls = await request(app.server).get(`/api/admin/audit?${filter}`).expect(200);
+      expect(calls.body.data.total).toBe(1);
+      expect(calls.body.data.entries[0].requestId).toBe("matching-token");
+
+      const csv = await request(app.server).get(`/api/admin/audit/export?${filter}`).expect(200);
+      expect(csv.text).toContain("matching-token");
+      expect(csv.text).not.toContain("other-token");
+      expect(csv.text).not.toContain("other-agent");
+
+      const pack = await request(app.server)
+        .get(`/api/admin/audit/export-pack?${filter}`)
+        .buffer(true)
+        .parse((res, callback) => {
+          const chunks: Buffer[] = [];
+          res.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
+          res.on("end", () => callback(null, Buffer.concat(chunks)));
+        })
+        .expect(200);
+      const entries = parseStoredZipEntries(pack.body as Buffer);
+      const manifestEntry = [...entries.entries()].find(([name]) => name.endsWith("manifest.json"));
+      expect(manifestEntry).toBeDefined();
+      const manifest = JSON.parse(manifestEntry![1].toString("utf8")) as { filter: Record<string, unknown> };
+      expect(manifest.filter).toMatchObject({
+        user: "analyst_zhang",
+        tokenHashPrefix: "sha256:aaaa0000"
+      });
+    } finally {
+      await app.close();
+    }
+  });
+
   it("filters callSource=playground (auto includeProtocol) vs callSource=agent", async () => {
     const { writeLog } = await import("../proxy/audit");
     await writeLog({

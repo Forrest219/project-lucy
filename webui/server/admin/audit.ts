@@ -93,6 +93,7 @@ const PROTOCOL_TOOL_LIST = PROTOCOL_TOOLS.map((tool) => `'${tool}'`).join(", ");
 
 type AccessLogFilterQuery = {
   user?: string;
+  tokenHashPrefix?: string;
   tool?: string;
   outcome?: string;
   since?: string;
@@ -135,6 +136,7 @@ function buildAccessLogFilter(q: AccessLogFilterQuery): {
 } {
   const params: Record<string, string | null> = {
     user: q.user ?? null,
+    tokenHashPrefix: q.tokenHashPrefix ?? null,
     tool: q.tool ?? null,
     outcome: q.outcome ?? null,
     since: q.since ?? null,
@@ -152,6 +154,7 @@ function buildAccessLogFilter(q: AccessLogFilterQuery): {
 
   const baseConditions: string[] = [];
   if (params.user) baseConditions.push("user_id = @user");
+  if (params.tokenHashPrefix) baseConditions.push("token_hash_prefix = @tokenHashPrefix");
   if (params.tool) baseConditions.push("tool = @tool");
   if (params.outcome) baseConditions.push("outcome = @outcome");
   if (params.since) baseConditions.push("ts >= @since");
@@ -1039,6 +1042,7 @@ function filterSnapshotForManifest(
 ): Record<string, unknown> {
   return {
     user: q.user ?? null,
+    tokenHashPrefix: q.tokenHashPrefix ?? null,
     tool: q.tool ?? null,
     outcome: q.outcome ?? null,
     since: q.since ?? null,

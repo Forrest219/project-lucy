@@ -6,7 +6,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Audit } from "../pages/admin/Audit";
 
-function renderAudit() {
+function renderAudit(initialUrl = "/admin/audit?tab=calls") {
   const client = new QueryClient({
     defaultOptions: {
       queries: { retry: false }
@@ -14,7 +14,7 @@ function renderAudit() {
   });
   render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={["/admin/audit?tab=calls"]}>
+      <MemoryRouter initialEntries={[initialUrl]}>
         <Audit />
       </MemoryRouter>
     </QueryClientProvider>
@@ -181,5 +181,58 @@ describe("Audit", () => {
     });
     expect(await screen.findByTestId("audit-call-source-playground-9")).toHaveTextContent("受控试调");
     expect(screen.getByRole("columnheader", { name: "调用来源" })).toBeInTheDocument();
+  });
+
+  it("keeps an exact Token filter visible and applies it to calls and exports", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/api/admin/agents")) {
+        return new Response(JSON.stringify({
+          ok: true,
+          data: { agents: [{ id: "analyst_zhang", name: "张分析师", enabled: true, tokens: [] }] }
+        }));
+      }
+      if (url.startsWith("/api/admin/audit")) {
+        return new Response(JSON.stringify({
+          ok: true,
+          data: {
+            total: 0,
+            entries: [],
+            summary: { businessCalls: 0, protocolCalls: 0, deniedCalls: 0, dataBearingCalls: 0 }
+          }
+        }));
+      }
+      return new Response(JSON.stringify({ ok: false }), { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderAudit("/admin/audit?view=calls&range=7d&user=analyst_zhang&tokenHashPrefix=sha256%3Aaaaa0000");
+
+    const chip = await screen.findByTestId("audit-token-filter");
+    expect(chip).toHaveTextContent("sha256:aaaa0000");
+    await waitFor(() => {
+      const call = fetchMock.mock.calls
+        .map((entry) => String(entry[0]))
+        .find((url) => url.startsWith("/api/admin/audit?"));
+      expect(call).toContain("user=analyst_zhang");
+      expect(call).toContain("tokenHashPrefix=sha256%3Aaaaa0000");
+    });
+    expect(screen.getByTestId("audit-export-current")).toHaveAttribute(
+      "href",
+      expect.stringContaining("tokenHashPrefix=sha256%3Aaaaa0000")
+    );
+    expect(screen.getByTestId("audit-export-current")).toHaveClass("pl-btn--secondary");
+    expect(screen.getByTestId("audit-export-current").className).not.toMatch(/pl-btn--primary/);
+    expect(screen.getByTestId("audit-export-pack")).toHaveAttribute(
+      "href",
+      expect.stringContaining("tokenHashPrefix=sha256%3Aaaaa0000")
+    );
+    expect(screen.getByTestId("audit-export-pack")).toHaveClass("pl-btn--secondary");
+    expect(screen.getByTestId("audit-export-pack").className).not.toMatch(/pl-btn--primary/);
+
+    fireEvent.click(screen.getByRole("button", { name: "近 24 小时" }));
+    expect(await screen.findByTestId("audit-token-filter")).toHaveTextContent("sha256:aaaa0000");
+    fireEvent.click(screen.getByRole("button", { name: "清除 Token 筛选" }));
+    await waitFor(() => expect(screen.queryByTestId("audit-token-filter")).not.toBeInTheDocument());
   });
 });

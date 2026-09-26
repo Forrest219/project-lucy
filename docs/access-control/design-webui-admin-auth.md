@@ -43,7 +43,9 @@
 
 ### 4.1 规则
 
-- `expires_at` 缺省 / `null` → 永不过期（现状兼容）
+- 新建 Token 的 `expires_at` 必填；管理页默认 90 天，服务端最多接受 365 个日历日
+- 新建请求缺省 / `null` / 空字符串 → `EXPIRES_AT_REQUIRED`；超过上限 → `EXPIRES_AT_TOO_FAR`
+- 历史配置中的 `expires_at` 缺省 / `null` 仍按永不过期读取，仅作向后兼容；正式上线前应人工轮换
 - 可解析时间戳且 `<= now` → 视为未识别身份（401），与撤销同等拒绝面
 - 不可解析字符串 → **fail-closed**（拒绝）
 - 日期-only `YYYY-MM-DD`（NewToken date picker）在创建时规范化为当日 `T23:59:59.999Z`
@@ -51,6 +53,7 @@
 ### 4.2 落点
 
 - `webui/server/proxy/identity.ts`
+- `webui/server/admin/token-expiry-policy.ts`
 - 手册 FAQ / §6.5 同步改为「会自动失效」
 - Spec 07 `token_expired` 保持；HTTP 层仍可与 revoked/unknown 统一 401（本轮不强制区分响应体）
 

@@ -391,7 +391,8 @@ async function runMcpCases() {
   // Create short-lived token (plaintext kept in-memory only; evidence is redacted).
   const version = await getAgentVersion();
   const tok = await api("POST", `/api/admin/agents/${AGENT_ID}/tokens`, {
-    label: "acp15-uat-T1"
+    label: "acp15-uat-T1",
+    expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
   });
   const token = tok.json?.data?.token ?? tok.json?.data?.plainToken ?? tok.json?.data?.plaintext;
   await saveJson("07-token-create.json", tok, token ? [token] : []);

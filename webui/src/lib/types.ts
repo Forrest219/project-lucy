@@ -916,7 +916,7 @@ export type CreateAgentBody = {
   role: string;
 };
 
-export type CreateTokenBody = { label: string; device_name?: string | null; expires_at?: string | null };
+export type CreateTokenBody = { label: string; device_name?: string | null; expires_at: string };
 
 export type CreateTokenResponse = {
   token: string;
@@ -924,7 +924,7 @@ export type CreateTokenResponse = {
   label: string;
   device_name?: string | null;
   created: string;
-  expires_at?: string | null;
+  expires_at: string;
 };
 
 export type TokenInventoryItem = {
@@ -1015,6 +1015,7 @@ export type AuditLogEntry = {
 
 export type AuditQuery = {
   user?: string;
+  tokenHashPrefix?: string;
   tool?: string;
   outcome?: "ok" | "error" | "denied";
   since?: string;

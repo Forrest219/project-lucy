@@ -115,6 +115,7 @@ import { registerUiUsageRoutes } from "./admin/ui-usage.js";
 import { registerAuthRoutes, registerAdminAccountRoutes } from "./auth/routes.js";
 import { registerBrandingRoutes } from "./branding.js";
 import { requireWebuiAuthHook } from "./auth/guard.js";
+import { registerWebSecurity } from "./web-security.js";
 import { registerSkillsRoutes } from "./admin/skills.js";
 import { registerCaseRoutes } from "./eval/cases.js";
 import { registerSecurityCandidateRoutes } from "./eval/security-candidates.js";
@@ -474,6 +475,7 @@ export function buildServer() {
   const writtenFiles: SessionWrittenFile[] = [];
   const changedSources = new Map<string, { conn: string; schema: string; table: string }>();
 
+  registerWebSecurity(app);
   app.addHook("onRequest", requireWebuiAuthHook);
 
   app.setErrorHandler((error: SupportedError, _request, reply) => {

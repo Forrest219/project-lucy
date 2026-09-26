@@ -18,6 +18,7 @@
 |---|---|
 | v1.0 | 初稿：primary/secondary/ghost/danger 与同组层级 |
 | v1.1 | Spec 101：选中态分离、Header 动作预算、`pl-icon-btn`、loading/disabled 可解释性 |
+| v1.2 | 登记 `pl-segmented-control--auto`（动态选项数量）；明确并列导出/维护操作统一 secondary |
 
 ## 1. 设计目标
 
@@ -76,6 +77,7 @@
 - 主按钮位置在同一产品区域内保持一致（推荐右侧 / 组末，除非页面 Spec 另有声明）。
 - 当断点导致换行时，保持视觉顺序和语义顺序一致。
 - Segmented control：浅底轨道 + 选中项白底浮起；**不得**用主色实心填充冒充 primary。
+- Segmented control 修饰：固定列数用 `pl-segmented-control--cols-2`；**动态选项数量**用 `pl-segmented-control--auto`（`flex` + 内容自适应宽度 + 空间不足时换行），典型场景为访问日志「时间范围」（`aria-label="时间范围"`）与评测用例「评测域」（`aria-label="评测域"`）。`--auto` 容器必须带 `role="group"` 与中文 `aria-label`；选项用 `pl-segmented-control-item`，选中项追加 `pl-segmented-control-item--active` 并设 `aria-pressed="true"`，其余选项 `aria-pressed="false"`。
 - ToolBar 节奏（参考 Attu）：主创建类动作偏左或 Header 右区主位；搜索/筛选偏右；刷新为 icon。
 
 ## 6. 适配 Lucy 当前页面的落地约定
@@ -83,7 +85,8 @@
 - `/connections`：`+ 添加 Schema` 为 `secondary` 文案按钮；`刷新本地目录` 为 `pl-icon-btn`（Spec 101）。
 - `/overview`：`复制 MCP 配置` 与 `查看配置` 为并列 `secondary`；`刷新首页数据` 为 `pl-icon-btn`，与「上次更新」徽标同组邻接。
 - `/wiki` 阅读态：唯一 `primary` = `编辑`（Spec 81）。
-- `/eval/cases`：域名切换用 `pl-segmented-control`，禁止 primary 表示选中（Spec 101）。
+- `/eval/cases`：评测域切换用 `pl-segmented-control pl-segmented-control--auto`（`role="group"`、`aria-label="评测域"`），禁止 primary 表示选中（Spec 101）。
+- `/admin/audit`：Header 三个导出入口（当前视图 CSV、关联视图 CSV、审计证据包 Manifest）为同组平行维护操作，统一 `secondary`，不得出现 `primary`；时间范围用 `pl-segmented-control--auto` 表达选中状态，Header 可见动作保持 ≤ 3。
 - 后续新增「复制/刷新/查看/新增」类组合：并列维护用 `secondary`；纯工具刷新/复制优先 icon-btn。
 
 ## 7. Do / Don’t

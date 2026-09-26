@@ -58,6 +58,10 @@ defaults:
 let projectRoot: string;
 let prevRoot: string | undefined;
 
+function expiryInDays(days: number): string {
+  return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+}
+
 async function makeProject(yamlContent = ACCESS_YAML) {
   const root = await mkdtemp(path.join(os.tmpdir(), "ktx-admin-tokens-"));
   await mkdir(path.join(root, "webui", "config"), { recursive: true });
@@ -87,7 +91,7 @@ describe("POST /api/admin/agents/:userId/tokens", () => {
     await app.ready();
     const res = await request(app.server)
       .post("/api/admin/agents/zhangsan/tokens")
-      .send({ label: "cursor-test" })
+      .send({ label: "cursor-test", expires_at: expiryInDays(30) })
       .expect(200);
 
     expect(res.body.ok).toBe(true);
@@ -95,6 +99,9 @@ describe("POST /api/admin/agents/:userId/tokens", () => {
     expect(token).toMatch(/^[0-9a-f]{64}$/);
     expect(hash).toMatch(/^sha256:[0-9a-f]{64}$/);
     expect(label).toBe("cursor-test");
+    expect(res.headers["cache-control"]).toBe("private, no-store");
+    expect(res.headers.pragma).toBe("no-cache");
+    expect(res.headers.expires).toBe("0");
     expect(res.body.data.policyRuntimeAck).toBe(true);
     expect(res.body.data.runtimeAck).toBe(res.body.data.policyRuntimeAck);
     await app.close();
@@ -105,7 +112,7 @@ describe("POST /api/admin/agents/:userId/tokens", () => {
     await app.ready();
     const res = await request(app.server)
       .post("/api/admin/agents/zhangsan/tokens")
-      .send({ label: "cursor-desk", device_name: "xingchen-mbp" })
+      .send({ label: "cursor-desk", device_name: "xingchen-mbp", expires_at: expiryInDays(30) })
       .expect(200);
 
     expect(res.body.data.device_name).toBe("xingchen-mbp");
@@ -120,7 +127,7 @@ describe("POST /api/admin/agents/:userId/tokens", () => {
     await app.ready();
     const res = await request(app.server)
       .post("/api/admin/agents/zhangsan/tokens")
-      .send({ label: "hermes-only" })
+      .send({ label: "hermes-only", expires_at: expiryInDays(30) })
       .expect(200);
 
     expect(res.body.data.device_name).toBeNull();
@@ -135,7 +142,7 @@ describe("POST /api/admin/agents/:userId/tokens", () => {
     await app.ready();
     const res = await request(app.server)
       .post("/api/admin/agents/zhangsan/tokens")
-      .send({ label: "cursor-test" })
+      .send({ label: "cursor-test", expires_at: expiryInDays(30) })
       .expect(200);
 
     const plainToken = res.body.data.token as string;
@@ -151,7 +158,7 @@ describe("POST /api/admin/agents/:userId/tokens", () => {
     await app.ready();
     const res = await request(app.server)
       .post("/api/admin/agents/zhangsan/tokens")
-      .send({ label: "hermes-laptop" })
+      .send({ label: "hermes-laptop", expires_at: expiryInDays(30) })
       .expect(409);
     expect(res.body.ok).toBe(false);
     expect(res.body.error.code).toBe("TOKEN_LABEL_TAKEN");
@@ -163,7 +170,7 @@ describe("POST /api/admin/agents/:userId/tokens", () => {
     await app.ready();
     const res = await request(app.server)
       .post("/api/admin/agents/nobody/tokens")
-      .send({ label: "x" })
+      .send({ label: "x", expires_at: expiryInDays(30) })
       .expect(404);
     expect(res.body.error.code).toBe("AGENT_NOT_FOUND");
     await app.close();
@@ -173,8 +180,8 @@ describe("POST /api/admin/agents/:userId/tokens", () => {
     const app = buildServer();
     await app.ready();
     const [resA, resB] = await Promise.all([
-      request(app.server).post("/api/admin/agents/zhangsan/tokens").send({ label: "concurrent-a" }),
-      request(app.server).post("/api/admin/agents/zhangsan/tokens").send({ label: "concurrent-b" })
+      request(app.server).post("/api/admin/agents/zhangsan/tokens").send({ label: "concurrent-a", expires_at: expiryInDays(30) }),
+      request(app.server).post("/api/admin/agents/zhangsan/tokens").send({ label: "concurrent-b", expires_at: expiryInDays(30) })
     ]);
 
     expect(resA.status).toBe(200);
@@ -186,6 +193,54 @@ describe("POST /api/admin/agents/:userId/tokens", () => {
     expect(yaml).toContain("label: concurrent-a");
     expect(yaml).toContain("label: concurrent-b");
     expect(yaml).toContain("label: hermes-laptop");
+    await app.close();
+  });
+
+  it("requires a future expiry no more than 365 calendar days away", async () => {
+    const app = buildServer();
+    await app.ready();
+
+    const missing = await request(app.server)
+      .post("/api/admin/agents/zhangsan/tokens")
+      .send({ label: "missing-expiry" })
+      .expect(400);
+    expect(missing.body.error.code).toBe("EXPIRES_AT_REQUIRED");
+
+    const past = await request(app.server)
+      .post("/api/admin/agents/zhangsan/tokens")
+      .send({ label: "past-expiry", expires_at: "2020-01-01T00:00:00.000Z" })
+      .expect(400);
+    expect(past.body.error.code).toBe("EXPIRES_AT_INVALID");
+
+    const tooFar = await request(app.server)
+      .post("/api/admin/agents/zhangsan/tokens")
+      .send({ label: "too-far", expires_at: expiryInDays(366) })
+      .expect(400);
+    expect(tooFar.body.error.code).toBe("EXPIRES_AT_TOO_FAR");
+
+    await request(app.server)
+      .post("/api/admin/agents/zhangsan/tokens")
+      .send({ label: "max-boundary", expires_at: expiryInDays(365) })
+      .expect(200);
+    await app.close();
+  });
+
+  it("serializes a create with a revoke without losing unrelated tokens", async () => {
+    const app = buildServer();
+    await app.ready();
+    const [created, revoked] = await Promise.all([
+      request(app.server)
+        .post("/api/admin/agents/zhangsan/tokens")
+        .send({ label: "concurrent-create", expires_at: expiryInDays(30) }),
+      request(app.server).delete("/api/admin/agents/zhangsan/tokens/hermes-laptop")
+    ]);
+
+    expect(created.status).toBe(200);
+    expect(revoked.status).toBe(200);
+    const yaml = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
+    expect(yaml).toContain("label: concurrent-create");
+    expect(yaml).not.toContain("label: hermes-laptop");
+    expect(yaml).not.toContain(created.body.data.token);
     await app.close();
   });
 });
@@ -275,7 +330,7 @@ describe("Access Governance Gate — Token endpoints", () => {
     const beforeYaml = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
     const res = await request(app.server)
       .post("/api/admin/agents/zhangsan/tokens")
-      .send({ dryRun: true, label: "preview-only" })
+      .send({ dryRun: true, label: "preview-only", expires_at: expiryInDays(30) })
       .expect(200);
 
     expect(res.body.data.dryRun).toBe(true);
@@ -295,7 +350,7 @@ describe("Access Governance Gate — Token endpoints", () => {
     await app.ready();
     const res = await request(app.server)
       .post("/api/admin/agents/zhangsan/tokens")
-      .send({ label: "new-laptop" })
+      .send({ label: "new-laptop", expires_at: expiryInDays(30) })
       .expect(200);
     expect(res.body.data.gate).toBeDefined();
     expect(res.body.data.gate.targetKind).toBe("token");
@@ -310,7 +365,7 @@ describe("Access Governance Gate — Token endpoints", () => {
     await app.ready();
     const res = await request(app.server)
       .post("/api/admin/agents/zhangsan/tokens")
-      .send({ label: "trace-failure-still-writes" })
+      .send({ label: "trace-failure-still-writes", expires_at: expiryInDays(30) })
       .expect(200);
 
     expect(res.body.data.gate).toBeDefined();

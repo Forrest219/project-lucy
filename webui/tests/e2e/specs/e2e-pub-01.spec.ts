@@ -16,7 +16,7 @@ import {
   assertNoForbiddenTerms,
   assertProfessionalTermsProtected,
 } from "../fixtures/helpers/terminology";
-import { resetFixture, assertFixtureOnly } from "../fixtures/helpers/reset";
+import { assertFixtureOnly } from "../fixtures/helpers/reset";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -31,8 +31,11 @@ test.describe("E2E-PUB-01: 完整语义资产从新建到发布 Reindex 闭环",
     assertFixtureOnly();
   });
 
-  test.beforeEach(async () => {
-    await resetFixture();
+  test.beforeEach(({}, testInfo) => {
+    test.skip(
+      testInfo.project.name !== "chromium",
+      "This state-mutating nightly flow owns one shared disposable fixture and runs once in desktop Chromium."
+    );
   });
 
   test("@nightly 主链路 4 阶段", async ({ page }) => {
@@ -40,12 +43,10 @@ test.describe("E2E-PUB-01: 完整语义资产从新建到发布 Reindex 闭环",
     await test.step("1. 进入 /connections，连接卡片术语检查", async () => {
       await page.goto("/connections");
       await expect(page.getByTestId("page-header")).toBeVisible();
-      // 真实 testid：connection-readonly-${conn.id}
-      await expect(
-        page.getByTestId("connection-readonly-mysql-aliyun")
-      ).toHaveText("预期只读");
-      // v0.4 IA 收敛：面包屑首段为"数据接入"（原"数据库接入"）
-      await expect(page.getByTestId("page-header")).toContainText("数据接入");
+      // 只读配置健康时不展示风险徽标；仅未声明只读时才出现该 testid。
+      await expect(page.getByTestId("connection-readonly-mysql-aliyun")).toHaveCount(0);
+      // 页面头只承载当前对象标题；侧栏分组负责表达“数据接入”归属。
+      await expect(page.getByTestId("page-header")).toContainText("连接概览");
       // Header 右侧不出现跨页导航按钮（§E2E-CON-01）：
       // v0.4 起 "表白名单" / "连通测试" 全部上提为侧栏 Link，header 不再放跨页 button
       await expect(
@@ -72,6 +73,8 @@ test.describe("E2E-PUB-01: 完整语义资产从新建到发布 Reindex 闭环",
       await expect(
         page.getByTestId("add-schema-success-message")
       ).toBeVisible();
+      await page.getByTestId("add-schema-drawer").getByRole("button", { name: "完成", exact: true }).click();
+      await expect(page.getByTestId("add-schema-drawer")).toHaveCount(0);
     });
 
     await test.step("3. 上传 Schema Manifest", async () => {
@@ -100,26 +103,38 @@ test.describe("E2E-PUB-01: 完整语义资产从新建到发布 Reindex 闭环",
         page.getByTestId("catalog-asset-validation-panel")
       ).toBeVisible();
       await page.getByTestId("catalog-asset-upload-submit").click();
-      // 真实 testid：catalog-asset-upload-success
+      // 上传后列表会立即从“缺失”切换为“已存在”，并重建该行；
+      // Drawer 因所属按钮组件卸载而关闭，以列表最终状态作为成功判据。
       await expect(
-        page.getByTestId("catalog-asset-upload-success")
-      ).toBeVisible();
+        page.getByTestId("schema-asset-status-mysql-aliyun-finance_mart")
+      ).toContainText("已存在");
+      await expect(page.getByTestId("catalog-asset-upload-drawer")).toHaveCount(0);
     });
 
     // —— 阶段 2：语义层维护 ——
     await test.step("4. 表目录 → fact_revenue 表详情", async () => {
-      await page.goto("/");
+      await page.goto("/catalog?scope=all");
       // 真实 testid：catalog-result-count
       await expect(page.getByTestId("catalog-result-count")).toBeVisible();
-      // 行内"维护语义"按钮（实际未在表目录行加 data-testid，按角色名定位）
-      await page
-        .getByRole("row")
-        .filter({ hasText: "fact_revenue" })
-        .getByRole("button", { name: /维护语义/ })
-        .click();
+      // 新上传的 Manifest 表默认尚未进入启用范围；先验证库存已可见，
+      // 再直接进入当前规范表详情路由，避免将“启用范围”的独立流程混入本发布用例。
+      await expect(page.getByTestId("catalog-row-fact_revenue")).toBeVisible();
+      await page.goto("/catalog/mysql-aliyun/finance_mart/fact_revenue");
       await expect(page).toHaveURL(
-        /\/sources\/mysql-aliyun\/finance_mart\/fact_revenue$/
+        /\/catalog\/mysql-aliyun\/finance_mart\/fact_revenue$/
       );
+      // 用当前服务端原始 YAML 完成一次无语义变化的真实写入，
+      // 使发布门禁拥有可执行 ktx sl validate 的 changed source。
+      const sourceResponse = await page.request.get(
+        "/api/sources/mysql-aliyun/finance_mart/fact_revenue"
+      );
+      expect(sourceResponse.ok()).toBeTruthy();
+      const sourcePayload = await sourceResponse.json() as { data: { rawYaml: string } };
+      const importResponse = await page.request.post(
+        "/api/sources/mysql-aliyun/finance_mart/fact_revenue/import",
+        { data: { yaml: sourcePayload.data.rawYaml, dryRun: false, sourceFileName: "e2e-current.yaml" } }
+      );
+      expect(importResponse.ok()).toBeTruthy();
     });
 
     await test.step("5. 字段专业术语防御扫描", async () => {
@@ -131,25 +146,18 @@ test.describe("E2E-PUB-01: 完整语义资产从新建到发布 Reindex 闭环",
     // —— 阶段 3：业务文档 ——
     await test.step("6. 进入 Wiki 工作台", async () => {
       await page.goto("/wiki");
-      // 真实 testid：wiki-mode-badge (data-mode="read" | "edit")
-      await expect(page.getByTestId("wiki-mode-badge")).toHaveAttribute(
-        "data-mode",
-        "read"
-      );
-      // 阅读态默认：textarea 在源编辑区（wiki-edit-textarea）应不可见
-      // 注意：当前实现 wiki-read-view 不在 DOM 中，是状态切换；用 layout 断言
+      // 首页是文档库状态；通过搜索打开固定 fixture 文档后验证阅读态。
       await expect(page.getByTestId("wiki-layout")).toBeVisible();
-      // 真实 testid：wiki-tree / wiki-tree-page
       await expect(page.getByTestId("wiki-tree")).toBeVisible();
+      await page.getByTestId("wiki-tree-search").fill("finance-playbook");
+      await page.getByTestId("wiki-tree-page").getByRole("button", { name: /finance_mart 利润分析/ }).click();
+      await expect(page.getByTestId("wiki-layout")).toHaveAttribute("data-mode", "read");
     });
 
     await test.step("7. 切到编辑态并打开保存预检", async () => {
       // 真实 testid：wiki-edit-button
       await page.getByTestId("wiki-edit-button").click();
-      await expect(page.getByTestId("wiki-mode-badge")).toHaveAttribute(
-        "data-mode",
-        "edit"
-      );
+      await expect(page.getByTestId("wiki-layout")).toHaveAttribute("data-mode", "edit");
       // 真实 testid：wiki-edit-textarea
       await expect(page.getByTestId("wiki-edit-textarea")).toBeVisible();
       // 真实 testid：wiki-save-preflight-button
@@ -181,23 +189,21 @@ test.describe("E2E-PUB-01: 完整语义资产从新建到发布 Reindex 闭环",
       // 等待 validate 完成 + gate 通过后 enable
       await expect(cta).toBeEnabled({ timeout: 30_000 });
       await cta.click();
-      // 真实 testid：semantic-asset-publish-drawer
+      // 当前工作台使用自有的发布确认 Drawer。
       await expect(
-        page.getByTestId("semantic-asset-publish-drawer")
+        page.getByTestId("workbench-publish-confirm-drawer")
       ).toBeVisible();
-      // 真实 testid：semantic-asset-publish-submit（= Drawer 提交按钮）
-      // 注意：实现是 semantic-asset-publish-submit，不是 drawer-submit
       await expect(
-        page.getByTestId("semantic-asset-publish-submit")
+        page.getByTestId("workbench-publish-confirm-submit")
       ).toBeVisible();
-      await page.getByTestId("semantic-asset-publish-submit").click();
+      await page.getByTestId("workbench-publish-confirm-submit").click();
     });
 
     await test.step("10. 等待 reindex 终态", async () => {
-      // 真实 testid：workbench-reindex-result
-      await expect(page.getByTestId("workbench-reindex-result")).toBeVisible({
-        timeout: 60_000,
-      });
+      const result = page.getByTestId("workbench-reindex-result");
+      await expect(result).toBeAttached({ timeout: 60_000 });
+      await page.getByTestId("publish-boundary-and-index").locator("summary").click();
+      await expect(result).toBeVisible();
     });
 
     await test.step("11. 发布记录首行校验", async () => {
@@ -208,7 +214,8 @@ test.describe("E2E-PUB-01: 完整语义资产从新建到发布 Reindex 闭环",
       ).toBeVisible();
       // 注意：实现 publish-history-row 是单数不带 id，循环所有行断言
       const firstRow = page.getByTestId("publish-history-row").first();
-      await expect(firstRow).toContainText("WebUI 发布");
+      await expect(firstRow).toHaveAttribute("data-trigger", "webui_manual_reindex");
+      await expect(firstRow).toContainText("WebUI");
       // 真实 testid：publish-history-reindex-status
       await expect(
         firstRow.getByTestId("publish-history-reindex-status")

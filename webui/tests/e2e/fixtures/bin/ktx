@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Deterministic E2E-only KTX shim. The browser suite validates Lucy's workflow
+# and never connects to a customer database; real KTX integration is covered
+# outside this disposable fixture.
+set -euo pipefail
+
+if [[ "${1:-} ${2:-}" == "connection test" ]]; then
+  echo "Status: ok (E2E fixture)"
+  exit 0
+fi
+
+echo "E2E fixture KTX command completed: $*"

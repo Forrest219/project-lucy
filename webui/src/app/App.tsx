@@ -363,7 +363,7 @@ export function AppFrame() {
                         data-testid={`nav-link-${item.id}`}
                       >
                         <ItemIcon aria-hidden="true" className="size-4" />
-                        <span>{item.label}</span>
+                        <span className="notranslate" translate="no">{item.label}</span>
                       </Link>
                     );
                   })}

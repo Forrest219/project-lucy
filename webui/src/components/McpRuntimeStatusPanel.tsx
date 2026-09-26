@@ -25,9 +25,9 @@ function executionStatusForConnection(
     if (canary.decisionReason === "upstream_error") return "error";
     return "unknown";
   }
-  if (status?.execution.missingConnections?.includes(connectionId)) return "stale";
-  if (status?.execution.loadedConnectionIds?.includes(connectionId)) return "ok";
-  return status?.execution.status ?? "unknown";
+  if (status?.execution?.missingConnections?.includes(connectionId)) return "stale";
+  if (status?.execution?.loadedConnectionIds?.includes(connectionId)) return "ok";
+  return status?.execution?.status ?? "unknown";
 }
 
 function executionChip(status: ExecutionRuntimeStatus): Pick<RuntimeChip, "value" | "tone"> {
@@ -57,8 +57,9 @@ export function McpRuntimeStatusPanel({
   compact?: boolean;
   onRecheck: () => void;
 }) {
-  const configured = Boolean(connectionId && status?.config.connectionIds.includes(connectionId));
-  const catalogRun = connectionId ? status?.catalog.lastByConnection[connectionId] : undefined;
+  const testConnectionId = connectionId || "unselected";
+  const configured = Boolean(connectionId && status?.config?.connectionIds?.includes(connectionId));
+  const catalogRun = connectionId ? status?.catalog?.lastByConnection?.[connectionId] : undefined;
   const executionStatus = executionStatusForConnection(status, connectionId, canary);
   const execution = executionChip(executionStatus);
   const chips: RuntimeChip[] = [
@@ -74,8 +75,8 @@ export function McpRuntimeStatusPanel({
     },
     {
       label: "Policy Runtime",
-      value: status?.policy.healthy ? "已确认" : status ? "降级" : "加载中",
-      tone: status?.policy.healthy ? "done" : status ? "validation_failed" : "not_started"
+      value: status?.policy?.healthy ? "已确认" : status ? "降级" : "加载中",
+      tone: status?.policy?.healthy ? "done" : status ? "validation_failed" : "not_started"
     },
     { label: "MCP Execution", ...execution }
   ];
@@ -94,7 +95,7 @@ export function McpRuntimeStatusPanel({
   return (
     <section
       className={compact ? "grid gap-2" : "pl-panel grid gap-3"}
-      data-testid={`mcp-runtime-status-${connectionId || "unselected"}`}
+      data-testid={`mcp-runtime-status-${testConnectionId}`}
       aria-label="执行运行时状态"
     >
       <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -114,7 +115,7 @@ export function McpRuntimeStatusPanel({
             disabled={!connectionId || pending}
             data-loading={pending ? "true" : undefined}
             aria-busy={pending}
-            data-testid={`mcp-runtime-recheck-${connectionId || "unselected"}`}
+            data-testid={`mcp-runtime-recheck-${testConnectionId}`}
             onClick={onRecheck}
           >
             {pending ? "检测中..." : "重新检测执行层"}

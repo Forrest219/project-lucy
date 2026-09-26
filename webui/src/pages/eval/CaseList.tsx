@@ -418,15 +418,21 @@ export function CaseList() {
       </div>
 
       {/* Domain tabs */}
-      <div className="flex gap-2 flex-wrap">
+      <div
+        className="pl-segmented-control pl-segmented-control--auto"
+        data-testid="eval-domain-selector"
+        role="group"
+        aria-label="评测域"
+      >
         {domains.map((d) => (
           <button
             key={d.domain}
             type="button"
-            className={`pl-btn text-sm ${d.domain === activeDomain ? "pl-btn--primary" : "pl-btn--ghost"}`}
+            className={`pl-segmented-control-item${d.domain === activeDomain ? " pl-segmented-control-item--active" : ""}`}
+            aria-pressed={d.domain === activeDomain}
             onClick={() => navigate(`/eval/cases/${d.domain}`)}
           >
-            {d.domain}
+            <span className="notranslate" translate="no">{d.domain}</span>
             <span className="ml-1 text-xs opacity-70">({d.caseCount})</span>
           </button>
         ))}

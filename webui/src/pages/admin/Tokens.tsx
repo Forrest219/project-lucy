@@ -79,7 +79,7 @@ export function Tokens() {
 
   function getExpiryDisplay(expiresAt: string | null, status: TokenInventoryItem["status"]) {
     if (!expiresAt) {
-      return { text: "永不过期", badgeClass: "text-fg-muted", isExpired: false };
+      return { text: "存量永不过期，需轮换", badgeClass: "text-warning font-medium", isExpired: false };
     }
     const ts = Date.parse(expiresAt);
     if (Number.isNaN(ts)) {
@@ -408,7 +408,7 @@ export function Tokens() {
                       <td className="py-3 px-3 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <Link
-                            to={`/admin/audit?search=${encodeURIComponent(token.label)}`}
+                            to={`/admin/audit?view=calls&range=7d&user=${encodeURIComponent(token.agent.id)}&tokenHashPrefix=${encodeURIComponent(token.hashPrefix)}`}
                             className="pl-btn pl-btn--ghost text-xs p-1 notranslate"
                             translate="no"
                             title="查看调用流水"

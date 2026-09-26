@@ -16,7 +16,8 @@ const testState = vi.hoisted(() => ({
   recordMcpToolsCallMock: vi.fn(() => ({ callEventId: 1, policyEventId: 2 }))
 }));
 
-vi.mock("../project.js", () => ({
+vi.mock("../project.js", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../project.js")>(),
   resolveProjectRoot: vi.fn(() => testState.projectRoot)
 }));
 
@@ -228,7 +229,8 @@ describe("MCP proxy — Trace / Evidence Kernel integration (202608-01)", () => 
 
   it("writes trace events for allowed non-catalog tools on the upstream failure path", async () => {
     await withProxy(async (port) => {
-      const res = await callTool(port, TOKEN, "trace-read-source-1", "sl_read_source", {
+      const res = await callTool(port, TOKEN, "trace-read-source-1", "lucy_read_source", {
+        connectionId: "mysql-aliyun",
         sourceName: "dataforai.superstore_orders"
       });
       expect(res.status).toBe(200);
@@ -236,7 +238,7 @@ describe("MCP proxy — Trace / Evidence Kernel integration (202608-01)", () => 
     });
 
     const calls = testState.recordMcpToolsCallMock.mock.calls;
-    const matched = calls.find(([, input]) => (input as { toolName?: string }).toolName === "sl_read_source");
+    const matched = calls.find(([, input]) => (input as { toolName?: string }).toolName === "lucy_read_source");
     expect(matched).toBeDefined();
     const input = matched?.[1] as { requestId?: string; status?: string; traceId?: string; policyDecision?: { allowed?: boolean; source?: string } };
     expect(input.requestId).toBe("trace-read-source-1");

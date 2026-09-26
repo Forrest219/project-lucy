@@ -93,8 +93,8 @@ afterEach(async () => {
   await rm(projectRoot, { recursive: true, force: true });
 });
 
-describe("lucy_query SSE early headers (Cursor Streamable HTTP)", () => {
-  it("flushes text/event-stream headers before upstream body completes (no Content-Length)", async () => {
+describe("lucy_query SSE normalization (Cursor Streamable HTTP)", () => {
+  it("buffers the upstream SSE result and returns a finite JSON response", async () => {
     let releaseUpstreamBody!: () => void;
     const upstreamBodyGate = new Promise<void>((resolve) => {
       releaseUpstreamBody = resolve;
@@ -109,10 +109,9 @@ describe("lucy_query SSE early headers (Cursor Streamable HTTP)", () => {
         "cache-control": "no-cache, no-transform",
         "mcp-session-id": "upstream-session"
       });
-      // Headers only (no SSE comment body). Proxy must flush these to the client
-      // before the JSON-RPC event is ready — Cursor hangs on lone `:\n\n` chunks.
+      // Hold the final event so the test can verify that the proxy does not send
+      // a partial SSE response before it can normalize the JSON-RPC result.
       res.flushHeaders?.();
-      // Hold the SSE event until the client has observed proxy response headers.
       await upstreamBodyGate;
       upstreamBodyReleased = true;
       res.write(
@@ -149,7 +148,8 @@ describe("lucy_query SSE early headers (Cursor Streamable HTTP)", () => {
         }
       });
 
-      const { res, body } = await new Promise<{
+      let responseObserved = false;
+      const responsePromise = new Promise<{
         res: IncomingMessage;
         body: string;
       }>((resolve, reject) => {
@@ -167,18 +167,7 @@ describe("lucy_query SSE early headers (Cursor Streamable HTTP)", () => {
             }
           },
           (res) => {
-            // Headers must arrive while upstream is still holding the body.
-            try {
-              expect(upstreamBodyReleased).toBe(false);
-              expect(String(res.headers["content-type"] ?? "")).toContain("text/event-stream");
-              expect(res.headers["content-length"]).toBeUndefined();
-              expect(String(res.headers["x-accel-buffering"] ?? "").toLowerCase()).toBe("no");
-            } catch (err) {
-              reject(err);
-              res.resume();
-              return;
-            }
-            releaseUpstreamBody();
+            responseObserved = true;
             let buf = "";
             res.setEncoding("utf8");
             res.on("data", (chunk) => {
@@ -192,12 +181,18 @@ describe("lucy_query SSE early headers (Cursor Streamable HTTP)", () => {
         req.end(payload);
       });
 
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(responseObserved).toBe(false);
+      releaseUpstreamBody();
+      const { res, body } = await responsePromise;
+
       expect(res.statusCode).toBe(200);
-      // No lone SSE comment prefix — first body bytes should be the message event.
-      expect(body.startsWith(":")).toBe(false);
-      expect(body.trimStart().startsWith("event: message")).toBe(true);
+      expect(String(res.headers["content-type"] ?? "")).toContain("application/json");
+      expect(Number(res.headers["content-length"])).toBe(Buffer.byteLength(body));
+      expect(body.startsWith("{")).toBe(true);
       expect(body).toContain("sse-early-1");
       expect(body).toContain("East");
+      expect(body).toContain("_meta");
       expect(upstreamBodyReleased).toBe(true);
     } finally {
       releaseUpstreamBody();
@@ -284,7 +279,7 @@ describe("lucy_query SSE early headers (Cursor Streamable HTTP)", () => {
         req.end(payload);
       });
 
-      expect(body).toContain("event: message");
+      expect(body.startsWith("{")).toBe(true);
       expect(body).toContain("sse-progress-1");
       expect(body).toContain("East");
       expect(body).not.toContain("notifications/progress");

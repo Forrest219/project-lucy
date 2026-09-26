@@ -4,10 +4,12 @@
 // 真实项目仓库只读：WebUI 进程通过 LUCY_PROJECT_DIR 指向 /tmp/lucy-e2e-fixture
 
 import { defineConfig, devices } from "@playwright/test";
+import { resolve } from "node:path";
 
 const BASE_URL = process.env.LUCY_E2E_BASE_URL ?? "http://127.0.0.1:5173";
 const PROJECT_DIR = process.env.LUCY_E2E_PROJECT_DIR ?? "/tmp/lucy-e2e-fixture";
 const BACKEND_URL = process.env.LUCY_E2E_BACKEND_URL ?? BASE_URL;
+const E2E_BIN = resolve(import.meta.dirname, "tests/e2e/fixtures/bin");
 
 if (PROJECT_DIR === "/Users/zhangxingchen/Projects/project-lucy") {
   throw new Error(
@@ -57,6 +59,7 @@ export default defineConfig({
       LUCY_PROJECT_DIR: PROJECT_DIR,
       LUCY_E2E_PROJECT_DIR: PROJECT_DIR,
       LUCY_E2E_BACKEND_URL: BACKEND_URL,
+      PATH: `${E2E_BIN}:${process.env.PATH ?? ""}`,
     },
     stdout: "pipe",
     stderr: "pipe",

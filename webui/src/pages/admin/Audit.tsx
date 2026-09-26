@@ -849,6 +849,7 @@ const FILTER_PERSIST_FIELDS = [
   "user",
   "tool",
   "outcome",
+  "tokenHashPrefix",
   "tableSearch",
   "key",
   "sessionId",
@@ -1311,6 +1312,7 @@ export function Audit() {
   const user = searchParams.get("user") ?? "";
   const tool = searchParams.get("tool") ?? "";
   const outcome = searchParams.get("outcome") ?? "";
+  const tokenHashPrefix = searchParams.get("tokenHashPrefix") ?? "";
   const decisionReasonPrefix = searchParams.get("decisionReasonPrefix") ?? "";
   const tableSearch = searchParams.get("tableSearch") ?? "";
   const sessionId = searchParams.get("sessionId") ?? "";
@@ -1434,12 +1436,6 @@ export function Audit() {
     writeFilterSnapshot(snapshot);
   }
 
-  function setRange(nextRange: RangePreset) {
-    setUntil("");
-    setTimePreset(nextRange === "1h" ? "1h" : nextRange === "24h" ? "24h" : "7d");
-    updateParam("range", nextRange);
-  }
-
   function applyTimePreset(preset: TimePreset) {
     setTimePreset(preset);
     if (preset === "1h") {
@@ -1509,6 +1505,7 @@ export function Audit() {
     user
       || tool
       || outcome
+      || tokenHashPrefix
       || decisionReasonPrefix
       || tableSearch
       || keySearch
@@ -1589,6 +1586,7 @@ export function Audit() {
 
   const callsQueryStr = buildQuery({
     user: resolvedUserFilter || user || undefined,
+    tokenHashPrefix: tokenHashPrefix || undefined,
     tool: tool || undefined,
     outcome: outcome || undefined,
     decisionReasonPrefix: decisionReasonPrefix || undefined,
@@ -1657,6 +1655,7 @@ export function Audit() {
   });
   const callExportFilterQuery = buildQuery({
     user: resolvedUserFilter || user || undefined,
+    tokenHashPrefix: tokenHashPrefix || undefined,
     tool: tool || undefined,
     outcome: outcome || undefined,
     since: localDateTimeValueToIso(since),
@@ -1718,37 +1717,11 @@ export function Audit() {
         }
         actions={
           <div className="flex flex-wrap items-center gap-3">
-            <span className="text-xs text-fg-muted whitespace-nowrap" data-testid="audit-stats-time">
-              统计时间：{statsTimeLabel}
-            </span>
-            <div
-              className="pl-segmented-control pl-segmented-control--cols-2"
-              role="group"
-              aria-label="统计窗口"
-              data-testid="audit-window-control"
-            >
-              <button
-                type="button"
-                className={range === "24h" ? "pl-segmented-control-item pl-segmented-control-item--active" : "pl-segmented-control-item"}
-                aria-pressed={range === "24h"}
-                onClick={() => setRange("24h")}
-              >
-                24 小时
-              </button>
-              <button
-                type="button"
-                className={range === "7d" ? "pl-segmented-control-item pl-segmented-control-item--active" : "pl-segmented-control-item"}
-                aria-pressed={range === "7d"}
-                onClick={() => setRange("7d")}
-              >
-                7 天
-              </button>
-            </div>
             <a
               href={primaryExport.href}
               download
-              className="pl-btn pl-btn--primary text-sm"
-              data-testid="audit-export-primary"
+              className="pl-btn pl-btn--secondary text-sm"
+              data-testid="audit-export-current"
               title={primaryExport.title}
             >
               {primaryExport.label}
@@ -1757,7 +1730,7 @@ export function Audit() {
               href={secondaryExport.href}
               download
               className="pl-btn pl-btn--secondary text-sm"
-              data-testid="audit-export-secondary"
+              data-testid="audit-export-related"
               title={secondaryExport.title}
             >
               {secondaryExport.label}
@@ -1765,7 +1738,7 @@ export function Audit() {
             <a
               href={exportPackUrl}
               download
-              className="pl-btn pl-btn--primary text-sm"
+              className="pl-btn pl-btn--secondary text-sm"
               data-testid="audit-export-pack"
               title="导出审计证据包 zip（含 Manifest）"
             >
@@ -1840,22 +1813,48 @@ export function Audit() {
         </div>
       </div>
 
-      {/* Time preset pills */}
-      <div className="flex flex-wrap items-center gap-1.5" data-testid="audit-time-presets">
-        {(["1h", "24h", "7d", "today", "custom"] as TimePreset[]).map((preset) => (
-          <button
-            key={preset}
-            type="button"
-            className={`pl-btn text-xs h-8 px-3 ${timePreset === preset ? "pl-btn--primary" : "pl-btn--ghost"}`}
-            data-testid={`audit-time-preset-${preset}`}
-            onClick={() => applyTimePreset(preset)}
-          >
-            {TIME_PRESET_LABELS[preset]}
-          </button>
-        ))}
+      {/* Time range segmented control + stats meta */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div
+          className="pl-segmented-control pl-segmented-control--auto"
+          data-testid="audit-time-presets"
+          role="group"
+          aria-label="时间范围"
+        >
+          {(["1h", "24h", "7d", "today", "custom"] as TimePreset[]).map((preset) => (
+            <button
+              key={preset}
+              type="button"
+              className={`pl-segmented-control-item${timePreset === preset ? " pl-segmented-control-item--active" : ""}`}
+              data-testid={`audit-time-preset-${preset}`}
+              aria-pressed={timePreset === preset}
+              onClick={() => applyTimePreset(preset)}
+            >
+              {TIME_PRESET_LABELS[preset]}
+            </button>
+          ))}
+        </div>
+        <span className="text-xs text-fg-muted whitespace-nowrap" data-testid="audit-stats-time">
+          统计时间：{statsTimeLabel}
+        </span>
       </div>
 
       <div className="pl-admin-filterbar" data-testid="audit-shared-filters">
+        {tab === "calls" && tokenHashPrefix ? (
+          <div className="pl-badge flex items-center gap-2" data-testid="audit-token-filter">
+            <span><span className="notranslate" translate="no">Token</span>：</span>
+            <code className="notranslate" translate="no">{tokenHashPrefix}</code>
+            <button
+              type="button"
+              className="pl-inline-link notranslate"
+              translate="no"
+              onClick={() => updateParam("tokenHashPrefix", "")}
+              aria-label="清除 Token 筛选"
+            >
+              清除
+            </button>
+          </div>
+        ) : null}
         <input
           className="pl-input w-44 notranslate"
           translate="no"

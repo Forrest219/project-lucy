@@ -34,7 +34,7 @@ type McpEndpointStub = {
 
 type FetchOptions = {
   mcpEndpoint?: McpEndpointStub;
-  tokenResponse?: { token: string; label: string; expires_at?: string | null };
+  tokenResponse?: { token: string; label: string; expires_at?: string };
   projectError?: boolean;
 };
 
@@ -51,7 +51,7 @@ const DEFAULT_TOKEN_RESPONSE = {
   hash: "sha256:hash",
   label: "hermes-laptop",
   created: "2026-06-20T00:00:00.000Z",
-  expires_at: null
+  expires_at: "2026-09-18T23:59:59.999Z"
 };
 
 function stubNewTokenFetch(opts: FetchOptions = {}) {
@@ -270,18 +270,19 @@ describe("NewToken", () => {
     expect(screen.getByTestId("snippet-active")).toHaveTextContent("http://127.0.0.1:7879/mcp");
   });
 
-  it("updates expiry date when clicking expiry preset buttons", async () => {
+  it("defaults expiry to 90 days and enforces the 365-day UI boundary", async () => {
     stubNewTokenFetch();
     renderNewToken();
 
     const dateInput = screen.getByLabelText(/过期时间/) as HTMLInputElement;
-    expect(dateInput.value).toBe("");
+    const today = Date.now();
+    expect(dateInput.value).toBe(new Date(today + 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
+    expect(dateInput.min).toBe(new Date(today + 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
+    expect(dateInput.max).toBe(new Date(today + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
+    expect(screen.queryByRole("button", { name: "永不过期" })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "30 天" }));
-    expect(dateInput.value).not.toBe("");
-
-    fireEvent.click(screen.getByRole("button", { name: "永不过期" }));
-    expect(dateInput.value).toBe("");
+    expect(dateInput.value).toBe(new Date(today + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
   });
 
   it("supports standalone agent selection when accessed from /admin/tokens/new", async () => {

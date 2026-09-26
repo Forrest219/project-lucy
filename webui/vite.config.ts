@@ -39,7 +39,12 @@ export default defineConfig({
     host: "127.0.0.1",
     port: 5173,
     proxy: {
-      "/api": "http://127.0.0.1:5174"
+      "/api": {
+        target: "http://127.0.0.1:5174",
+        // Preserve the browser-visible host so the backend Origin/Host CSRF
+        // check remains valid when requests pass through the local dev proxy.
+        changeOrigin: false
+      }
     }
   }
 });

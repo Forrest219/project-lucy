@@ -1090,7 +1090,7 @@ PUT /api/wiki/:key
 
 - 新设备或新客户端首次接入
 - 怀疑泄露、长期未用、人员交接 → 新建并撤销旧 `Token`（轮换）
-- 需要到期自动失效 → 设置 `expires_at`
+- 新建客户端凭据 → 必须设置 `expires_at`；管理页默认 90 天，最长 365 天
 
 **不适合：**
 
@@ -1295,7 +1295,7 @@ Token 发行规则：
 
 | 操作 | 行为 |
 | --- | --- |
-| 新建 token | 生成 32 字节随机明文；HTTP 响应只显示一次 |
+| 新建 token | 生成 32 字节随机明文；必须设置 `expires_at`（默认 90 天、最长 365 天）；HTTP 响应只显示一次且禁止缓存 |
 | 落盘 | `access.yaml` 只保存 `sha256:<hex>` |
 | 撤销 token | 先写 `.ktx-ui/audit.sqlite.revoked_tokens`，再从 YAML 删除 |
 | 删除 Agent | 先撤销该 Agent 所有 token，再删除 YAML user |
@@ -1309,7 +1309,7 @@ Token 发行规则：
 1. Bearer token 现场 `sha256`。
 2. 与 `access.yaml` 中 token hash 匹配。
 3. 检查 token 是否在 `revoked_tokens`。
-4. 检查 `expires_at`（缺省则永不过期）。
+4. 检查 `expires_at`（新建 Token 必填；仅历史配置缺省时按永不过期兼容读取，并应在上线前轮换）。
 5. 解析 user 的 role。
 6. role 通过 `connections` + `tableSelectors` 解析成 effective sources/tables。
 7. `tools/list` 只展示允许工具。

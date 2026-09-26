@@ -44,15 +44,20 @@
     "better-sqlite3": "^12.11.1",
     "clsx": "^2.1.1",
     "diff": "^9.0.0",
-    "fastify": "^5.8.5",
+    "fastify": "^5.12.5",
     "gray-matter": "^4.0.3",
     "lucide-react": "^1.28.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
-    "react-router-dom": "^7.17.0",
+    "react-router-dom": "^7.18.4",
     "sonner": "^1.7.1",
     "yaml": "^2.9.0",
     "zod": "^4.4.3"
+  },
+  "overrides": {
+    "fast-uri": "3.1.6",
+    "find-my-way": "9.9.0",
+    "js-yaml": "3.15.2"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",

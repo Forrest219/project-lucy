@@ -16,8 +16,9 @@ import {
   type AccessGovernanceGateDecision,
   type AccessGovernanceOverrideRequest
 } from "../access-governance-gate.js";
-import { invalidateAccessConfigCache, isTokenExpired, normalizeExpiresAtInput } from "../proxy/identity.js";
+import { invalidateAccessConfigCache, isTokenExpired } from "../proxy/identity.js";
 import { actorIdFromRequest } from "../auth/guard.js";
+import { normalizeNewTokenExpiry, TokenExpiryPolicyError } from "./token-expiry-policy.js";
 
 const ACCESS_YAML_REL = "webui/config/access.yaml";
 
@@ -286,7 +287,7 @@ export function registerTokenRoutes(app: FastifyInstance) {
       dryRun?: boolean;
       label: string;
       device_name?: string | null;
-      expires_at?: string | null;
+      expires_at: string;
       override?: AccessGovernanceOverrideRequest;
     };
   }>("/api/admin/agents/:userId/tokens", async (request, reply) => {
@@ -294,14 +295,18 @@ export function registerTokenRoutes(app: FastifyInstance) {
     const { label } = request.body ?? {};
     const deviceNameRaw = request.body?.device_name;
     const dryRun = request.body?.dryRun === true;
-    let expires_at: string | null = null;
+    reply.header("Cache-Control", "private, no-store");
+    reply.header("Pragma", "no-cache");
+    reply.header("Expires", "0");
+
+    let expires_at: string;
     try {
-      expires_at = normalizeExpiresAtInput(request.body?.expires_at);
+      expires_at = normalizeNewTokenExpiry(request.body?.expires_at);
     } catch (error) {
       return reply.status(400).send({
         ok: false,
         error: {
-          code: "EXPIRES_AT_INVALID",
+          code: error instanceof TokenExpiryPolicyError ? error.code : "EXPIRES_AT_INVALID",
           message: error instanceof Error ? error.message : "expires_at invalid"
         }
       });
@@ -355,7 +360,7 @@ export function registerTokenRoutes(app: FastifyInstance) {
               userId,
               label,
               device_name: deviceName,
-              expires_at: expires_at ?? null
+              expires_at
             }
           }
         };
@@ -401,7 +406,7 @@ export function registerTokenRoutes(app: FastifyInstance) {
         label,
         created,
         ...(deviceName ? { device_name: deviceName } : {}),
-        ...(expires_at !== undefined ? { expires_at: expires_at ?? null } : {})
+        expires_at
       };
 
       const updatedUser = { ...user, tokens: [...user.tokens, newToken] };
@@ -423,7 +428,7 @@ export function registerTokenRoutes(app: FastifyInstance) {
           label,
           device_name: deviceName,
           hashPrefix: tokenHash.slice(0, 19),
-          expires_at: expires_at ?? null
+          expires_at
         },
         requestId: request.id
       });
@@ -439,7 +444,7 @@ export function registerTokenRoutes(app: FastifyInstance) {
           label,
           device_name: deviceName,
           created,
-          expires_at: expires_at ?? null,
+          expires_at,
           ...runtime,
           gate
         }

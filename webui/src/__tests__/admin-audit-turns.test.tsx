@@ -261,7 +261,7 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
     expect(screen.getByTestId("audit-access-context-42")).toHaveTextContent("203.0.113.9");
   });
 
-  it("shows tab-aware primary and secondary exports on both tabs (Spec 140)", async () => {
+  it("shows tab-aware current and related exports as secondary actions on both tabs (Spec 140)", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
@@ -282,11 +282,16 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
     renderAudit("/admin/audit?view=calls&range=7d");
 
     expect(await screen.findByTestId("audit-tab-calls")).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByTestId("audit-export-primary")).toHaveClass("pl-btn--primary");
-    expect(screen.getByTestId("audit-export-primary")).toHaveTextContent("导出调用流水");
-    expect(screen.getByTestId("audit-export-primary")).toHaveAttribute("href", expect.stringMatching(/^\/api\/admin\/audit\/export\?/));
-    expect(screen.getByTestId("audit-export-secondary")).toHaveTextContent("导出问询记录");
-    expect(screen.getByTestId("audit-export-secondary")).toHaveAttribute("href", expect.stringMatching(/^\/api\/admin\/audit\/turns\/export\?/));
+    expect(screen.getByTestId("audit-export-current")).toHaveClass("pl-btn--secondary");
+    expect(screen.getByTestId("audit-export-current").className).not.toMatch(/pl-btn--primary/);
+    expect(screen.getByTestId("audit-export-current")).toHaveTextContent("导出调用流水");
+    expect(screen.getByTestId("audit-export-current")).toHaveAttribute("href", expect.stringMatching(/^\/api\/admin\/audit\/export\?/));
+    expect(screen.getByTestId("audit-export-related")).toHaveClass("pl-btn--secondary");
+    expect(screen.getByTestId("audit-export-related").className).not.toMatch(/pl-btn--primary/);
+    expect(screen.getByTestId("audit-export-related")).toHaveTextContent("导出问询记录");
+    expect(screen.getByTestId("audit-export-related")).toHaveAttribute("href", expect.stringMatching(/^\/api\/admin\/audit\/turns\/export\?/));
+    expect(screen.getByTestId("audit-export-pack")).toHaveClass("pl-btn--secondary");
+    expect(screen.getByTestId("audit-export-pack").className).not.toMatch(/pl-btn--primary/);
     expect(screen.getByTestId("audit-granularity-help")).toHaveTextContent("调用流水按一次工具调用展开");
     expect(screen.getByTestId("audit-export-metadata")).toHaveAttribute("href", "/api/admin/audit/export-metadata?kind=calls");
     expect(screen.getByRole("link", { name: "查看审计口径" })).toHaveAttribute("href", "/help?section=admin-audit-turns-vs-calls");
@@ -294,11 +299,16 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
     cleanup();
     renderAudit("/admin/audit?range=7d");
     expect(await screen.findByTestId("audit-tab-turns")).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByTestId("audit-export-primary")).toHaveClass("pl-btn--primary");
-    expect(screen.getByTestId("audit-export-primary")).toHaveTextContent("导出问询记录");
-    expect(screen.getByTestId("audit-export-primary")).toHaveAttribute("href", expect.stringMatching(/^\/api\/admin\/audit\/turns\/export\?/));
-    expect(screen.getByTestId("audit-export-secondary")).toHaveTextContent("导出调用流水");
-    expect(screen.getByTestId("audit-export-secondary")).toHaveAttribute("href", expect.stringMatching(/^\/api\/admin\/audit\/export\?/));
+    expect(screen.getByTestId("audit-export-current")).toHaveClass("pl-btn--secondary");
+    expect(screen.getByTestId("audit-export-current").className).not.toMatch(/pl-btn--primary/);
+    expect(screen.getByTestId("audit-export-current")).toHaveTextContent("导出问询记录");
+    expect(screen.getByTestId("audit-export-current")).toHaveAttribute("href", expect.stringMatching(/^\/api\/admin\/audit\/turns\/export\?/));
+    expect(screen.getByTestId("audit-export-related")).toHaveClass("pl-btn--secondary");
+    expect(screen.getByTestId("audit-export-related").className).not.toMatch(/pl-btn--primary/);
+    expect(screen.getByTestId("audit-export-related")).toHaveTextContent("导出调用流水");
+    expect(screen.getByTestId("audit-export-related")).toHaveAttribute("href", expect.stringMatching(/^\/api\/admin\/audit\/export\?/));
+    expect(screen.getByTestId("audit-export-pack")).toHaveClass("pl-btn--secondary");
+    expect(screen.getByTestId("audit-export-pack").className).not.toMatch(/pl-btn--primary/);
     expect(screen.getByTestId("audit-granularity-help")).toHaveTextContent("问询记录按一次用户问询聚合");
     expect(screen.getByTestId("audit-export-metadata")).toHaveAttribute("href", "/api/admin/audit/export-metadata?kind=turns");
   });
@@ -386,8 +396,8 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
     expect(screen.getByRole("columnheader", { name: "问询 ID" })).toBeInTheDocument();
     expect(turnsTable.querySelector("th.w-14.whitespace-nowrap")).not.toBeNull();
     expect(screen.getByTestId("audit-turn-id-inf_test_1")).toHaveTextContent("inf_test_1");
-    expect(screen.getByTestId("audit-export-primary")).toHaveTextContent("导出问询记录");
-    expect(screen.getByTestId("audit-export-secondary")).toHaveTextContent("导出调用流水");
+    expect(screen.getByTestId("audit-export-current")).toHaveTextContent("导出问询记录");
+    expect(screen.getByTestId("audit-export-related")).toHaveTextContent("导出调用流水");
 
     cleanup();
     renderAudit("/admin/audit?tab=calls&hours=168");
@@ -569,7 +579,7 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
         expect(latest).toMatch(/since=2026-08-25T06%3A30%3A00\.000Z|since=2026-08-25T06:30:00\.000Z/);
       }
     });
-    const exportLink = screen.getByTestId("audit-export-primary");
+    const exportLink = screen.getByTestId("audit-export-current");
     expect(exportLink.getAttribute("href")).toMatch(/since=/);
   });
 
@@ -628,7 +638,7 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
       expect(callUrls.some((u) => u.includes("key=lucy_test"))).toBe(true);
     });
 
-    const exportHref = screen.getByTestId("audit-export-primary").getAttribute("href") ?? "";
+    const exportHref = screen.getByTestId("audit-export-current").getAttribute("href") ?? "";
     expect(exportHref).toContain("key=lucy_test");
 
     fireEvent.click(await screen.findByTestId("audit-turn-drawer-close"));
@@ -718,10 +728,10 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
 
     renderAudit("/admin/audit?range=7d");
 
-    const windowControl = await screen.findByTestId("audit-window-control");
-    expect(windowControl).toHaveAttribute("role", "group");
-    expect(screen.getByRole("button", { name: "7 天" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("button", { name: "24 小时" })).toHaveAttribute("aria-pressed", "false");
+    const timePresets = await screen.findByTestId("audit-time-presets");
+    expect(timePresets).toHaveAttribute("role", "group");
+    expect(screen.getByRole("button", { name: "近 7 天" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "近 24 小时" })).toHaveAttribute("aria-pressed", "false");
 
     const openBtn = await screen.findByTestId("audit-turn-open-inf_test_1");
     fireEvent.click(openBtn);
@@ -753,5 +763,44 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
       expect(screen.queryByTestId("audit-clear-filters")).not.toBeInTheDocument();
     });
     expect(screen.getByPlaceholderText("Agent 名称或 ID")).toHaveValue("");
+  });
+
+  it("expresses time range presets as a segmented control with pressed state", async () => {
+    stubEmptyAuditApis();
+    renderAudit("/admin/audit?range=7d");
+
+    const presets = await screen.findByTestId("audit-time-presets");
+    expect(presets).toHaveClass("pl-segmented-control", "pl-segmented-control--auto");
+    expect(presets).toHaveAttribute("role", "group");
+    expect(presets).toHaveAttribute("aria-label", "时间范围");
+
+    const active = screen.getByTestId("audit-time-preset-7d");
+    expect(active).toHaveClass("pl-segmented-control-item", "pl-segmented-control-item--active");
+    expect(active).toHaveAttribute("aria-pressed", "true");
+    for (const preset of ["1h", "24h", "today", "custom"]) {
+      const item = screen.getByTestId(`audit-time-preset-${preset}`);
+      expect(item).toHaveAttribute("aria-pressed", "false");
+      expect(item.className).not.toMatch(/pl-segmented-control-item--active/);
+    }
+    for (const preset of ["1h", "24h", "7d", "today", "custom"]) {
+      expect(screen.getByTestId(`audit-time-preset-${preset}`).className).not.toMatch(/pl-btn--primary/);
+    }
+
+    fireEvent.click(screen.getByRole("button", { name: "近 24 小时" }));
+    await waitFor(() => {
+      expect(screen.getByTestId("audit-time-preset-24h")).toHaveAttribute("aria-pressed", "true");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "今日" }));
+    await waitFor(() => {
+      expect(screen.getByTestId("audit-time-preset-today")).toHaveAttribute("aria-pressed", "true");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "自定义" }));
+    await waitFor(() => {
+      expect(screen.getByTestId("audit-time-preset-custom")).toHaveAttribute("aria-pressed", "true");
+    });
+    expect(screen.getByTestId("audit-since").className).not.toMatch(/sr-only/);
+    expect(screen.getByTestId("audit-until").className).not.toMatch(/sr-only/);
   });
 });
