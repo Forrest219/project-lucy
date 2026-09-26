@@ -50,8 +50,10 @@ ENV NODE_ENV=production \
 
 WORKDIR /app
 
+# python3/make/g++ : fallback compile for native addons (better-sqlite3 via node-gyp)
+# when prebuild-install cannot reach GitHub release assets (restricted networks).
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends bash ca-certificates curl git tini \
+  && apt-get install -y --no-install-recommends bash ca-certificates curl git tini python3 make g++ \
   && rm -rf /var/lib/apt/lists/*
 
 RUN npm install -g "@kaelio/ktx@${KTX_VERSION}"
@@ -63,6 +65,30 @@ RUN node /tmp/patch-ktx-mysql-starrocks-compat.js && rm /tmp/patch-ktx-mysql-sta
 # K8s upgrade contract: run as UID 10001 to match legacy PVC ownership (.git).
 RUN groupadd -g 10001 lucy \
   && useradd -u 10001 -g 10001 -m -d /home/lucy -s /bin/bash lucy
+
+# uv bootstrap for `ktx admin runtime install`: ktx pins uv 0.11.21 and would
+# download it from GitHub release assets, which are unreachable on some
+# corporate/restricted networks (objects.githubusercontent.com timeouts).
+# Pre-place the binary at the documented air-gapped path so ktx skips the
+# download; fall back to the gh-proxy mirror when github.com is blocked.
+ARG UV_VERSION=0.11.21
+RUN set -eux; \
+  case "${TARGETARCH}" in \
+    arm64) uv_asset="uv-aarch64-unknown-linux-gnu" ;; \
+    amd64) uv_asset="uv-x86_64-unknown-linux-gnu" ;; \
+    *) echo "unsupported TARGETARCH=${TARGETARCH}" >&2; exit 1 ;; \
+  esac; \
+  uv_dir="/home/lucy/.ktx/runtime/uv/${UV_VERSION}"; \
+  mkdir -p "${uv_dir}"; \
+  if ! curl -fsSL --max-time 60 -o /tmp/uv.tar.gz \
+      "https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/${uv_asset}.tar.gz"; then \
+    curl -fsSL -o /tmp/uv.tar.gz \
+      "https://gh-proxy.com/https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/${uv_asset}.tar.gz"; \
+  fi; \
+  tar xzf /tmp/uv.tar.gz -C "${uv_dir}" --strip-components=1; \
+  chmod 755 "${uv_dir}/uv"; \
+  rm /tmp/uv.tar.gz; \
+  chown -R lucy:lucy /home/lucy/.ktx
 
 RUN su lucy -s /bin/bash -c 'ktx admin runtime install --yes --feature core'
 
