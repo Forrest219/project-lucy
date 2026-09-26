@@ -4,13 +4,18 @@
 |---|---|
 | 文档名称 | Lucy WebUI 数据网格规范（Data Grid） |
 | 文档类型 | Spec |
-| 版本 | v1.0 |
+| 版本 | v1.1 |
 | 撰写日期 | 2026-08-04 |
 | 撰写人 | Codex |
 | 委托人 | zhangxingchen |
 | 基于材料 | `webui/src/app/app.css`、`/connections` `/connections/enabled-tables` `/catalog` 网格一致性核查、`webui/docs/72-connections-catalog-grid-visual-consistency-spec.md` |
 | 适用范围 | Lucy WebUI 所有数据网格（Table/Data Grid）组件与页面 |
 | 输出位置 | `webui/docs/design-system/11-components-data-grid.md` |
+
+| 版本 | 变更 |
+|---|---|
+| v1.0 | 初稿：Base Contract、Frame and Overflow、Typography、对齐、列宽、可访问性 |
+| v1.1 | 宽度约束（frame/scroll 必须 `min-width: 0`）、滚动区可访问性分级、行高例外 |
 
 ## 1. 目的
 
@@ -45,9 +50,10 @@ L1 页面数据网格外框与滚动层：
 
 - `pl-data-grid-frame`：边框、圆角、surface 背景与 padding 的视觉容器；不设置固定高度。
 - `pl-data-grid-scroll`：唯一普通横向滚动层；不得在其外层再包一层 `overflow-x-auto`。
+- **宽度约束**：frame 与 scroll 层在 grid/flex 页面中必须携带 `min-width: 0`（`min-w-0`）与 `max-w-full`，scroll 层另需 `w-full`。宽表只允许撑开局部滚动层，页面根节点（`documentElement`）不得因宽表出现横向滚动。
 - 高列数 / 高行数的访问日志网格可叠加 `pl-audit-grid-scroll`（有界双向滚动 + sticky 表头），但禁止嵌套第二层滚动元素。
 - 宽表允许横向滚动；禁止为了单屏展示牺牲完整 ID、调查列或可读性。
-- 确实可能滚动的区域（配置审计、访问日志）必须可聚焦（`tabIndex={0}`）并具备业务化 `aria-label`；普通不滚动表格不增加无意义 tab stop。
+- **滚动区可访问性分级**：只有真实或高概率产生横向滚动的区域（配置审计、访问日志、Token 凭据、评测用例列表等宽表）才设置 `role="region"`、业务化 `aria-label` 和 `tabIndex={0}`；普通不滚动表格不得产生额外 Tab 停靠点。
 
 桌面验收基线：1440×900、1280×800。移动端 / 窄于 1280 不在本契约范围内。配置审计的关键字段允许换行完整保留；访问日志保留宽表滚动（含「访问上下文」等调查列）。
 
@@ -73,6 +79,7 @@ L1 页面数据网格外框与滚动层：
 
 - 默认目标行高约 `33px`（由 line-height + padding 推导）
 - 同一页面同类网格不得出现明显密度跳变
+- **行高例外**：多行安全信息（如 Token 凭据的设备 / IP / 客户端上下文）与行内表单控件（如告警阈值输入框）允许按内容自然撑高行；不得为了对齐默认行高而截断或压缩这些内容，也不得通过页面私有样式重建整套表格基线。
 
 ### 4.4 信息层级（名称列 vs 数量列）
 

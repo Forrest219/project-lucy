@@ -178,4 +178,31 @@ describe("Monitor", () => {
       expect(body.config.domains.superstore.consecutiveFailThreshold).toBe(20);
     });
   });
+
+  it("wraps monitor tables in the shared data grid frame", async () => {
+    stubMonitorFetch();
+    renderMonitor();
+
+    expect(await screen.findByRole("heading", { name: "趋势监控" })).toBeInTheDocument();
+
+    const failuresFrame = await screen.findByTestId("monitor-top-failures-grid-frame");
+    expect(failuresFrame).toHaveClass("pl-data-grid-frame");
+    expect(screen.getByTestId("monitor-top-failures-grid-scroll")).toHaveClass("pl-data-grid-scroll");
+    const failuresTable = screen.getByTestId("monitor-top-failures-table");
+    expect(failuresTable).toHaveClass("pl-data-grid", "pl-data-table");
+    expect(failuresTable).toHaveTextContent("case_sales");
+
+    const thresholdsFrame = screen.getByTestId("monitor-thresholds-grid-frame");
+    expect(thresholdsFrame).toHaveClass("pl-data-grid-frame");
+    expect(screen.getByTestId("monitor-thresholds-grid-scroll")).toHaveClass("pl-data-grid-scroll");
+    expect(screen.getByTestId("monitor-thresholds-table")).toHaveClass("pl-data-grid", "pl-data-table");
+
+    // 阈值输入框可按 label 访问和编辑
+    const yellowInput = screen.getByLabelText("superstore 黄线（%）");
+    fireEvent.change(yellowInput, { target: { value: "85" } });
+    expect(yellowInput).toHaveValue(85);
+    const streakInput = screen.getByLabelText("superstore 连续失败告警次数");
+    fireEvent.change(streakInput, { target: { value: "5" } });
+    expect(streakInput).toHaveValue(5);
+  });
 });

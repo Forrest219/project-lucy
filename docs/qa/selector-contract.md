@@ -757,8 +757,9 @@
 | `audit-turn-calls-card` | audit-turn-calls-card | `pages/admin/Audit.tsx` |
 | `audit-turn-calls-table` | audit-turn-calls-table | `pages/admin/Audit.tsx` |
 | `audit-stats-time` | audit-stats-time | `pages/admin/Audit.tsx` |
-| `audit-window-control` | audit-window-control | `pages/admin/Audit.tsx` |
-| `audit-export-csv` | audit-export-csv | `pages/admin/Audit.tsx` |
+| `audit-export-current` | 审计当前视图导出入口 | `pages/admin/Audit.tsx` |
+| `audit-export-related` | 审计关联视图导出入口 | `pages/admin/Audit.tsx` |
+| `audit-export-pack` | 审计证据包导出 | `pages/admin/Audit.tsx` |
 | `audit-view-tabs` | audit-view-tabs | `pages/admin/Audit.tsx` |
 | `audit-tab-turns` | audit-tab-turns | `pages/admin/Audit.tsx` |
 | `audit-tab-calls` | audit-tab-calls | `pages/admin/Audit.tsx` |
@@ -863,6 +864,11 @@
 | `create-token-btn` | create-token-btn | `pages/admin/Tokens.tsx` |
 | `token-kpis` | token-kpis | `pages/admin/Tokens.tsx` |
 | `tokens-table` | tokens-table | `pages/admin/Tokens.tsx` |
+| `tokens-grid-frame` | Token 凭据网格外框 | `pages/admin/Tokens.tsx` |
+| `tokens-grid-scroll` | Token 凭据网格滚动层 | `pages/admin/Tokens.tsx` |
+| `admin-accounts-grid-frame` | 登录账户网格外框 | `pages/admin/AdminAccounts.tsx` |
+| `admin-accounts-grid-scroll` | 登录账户网格滚动层 | `pages/admin/AdminAccounts.tsx` |
+| `admin-accounts-table` | 登录账户表格 | `pages/admin/AdminAccounts.tsx` |
 | `start-onboarding-assistant-btn` | start-onboarding-assistant-btn | `pages/connections/ConnectionOverview.tsx` |
 | `create-connection-btn` | create-connection-btn | `pages/connections/ConnectionOverview.tsx` |
 | `connections-empty-state` | connections-empty-state | `pages/connections/ConnectionOverview.tsx` |
@@ -887,6 +893,10 @@
 | `whitelist-missing-manifest-summary-link` | whitelist-missing-manifest-summary-link | `pages/connections/TableWhitelist.tsx` |
 | `case-list-coverage` | case-list-coverage | `pages/eval/CaseList.tsx` |
 | `case-list-coverage-card` | case-list-coverage-card | `pages/eval/CaseList.tsx` |
+| `eval-domain-selector` | 评测域选择器 | `pages/eval/CaseList.tsx` |
+| `eval-cases-grid-frame` | 评测用例网格外框 | `pages/eval/CaseList.tsx` |
+| `eval-cases-grid-scroll` | 评测用例网格滚动层 | `pages/eval/CaseList.tsx` |
+| `eval-cases-table` | 评测用例表格 | `pages/eval/CaseList.tsx` |
 | `monitor-trend-chart` | monitor-trend-chart | `pages/eval/Monitor.tsx` |
 | `monitor-threshold-yellow-line` | monitor-threshold-yellow-line | `pages/eval/Monitor.tsx` |
 | `monitor-threshold-yellow-label` | monitor-threshold-yellow-label | `pages/eval/Monitor.tsx` |
@@ -899,6 +909,12 @@
 | `monitor-trend-empty-actions` | monitor-trend-empty-actions | `pages/eval/Monitor.tsx` |
 | `monitor-below-red-callout` | monitor-below-red-callout | `pages/eval/Monitor.tsx` |
 | `monitor-below-red-drilldown` | monitor-below-red-drilldown | `pages/eval/Monitor.tsx` |
+| `monitor-top-failures-grid-frame` | 失败用例网格外框 | `pages/eval/Monitor.tsx` |
+| `monitor-top-failures-grid-scroll` | 失败用例网格滚动层 | `pages/eval/Monitor.tsx` |
+| `monitor-top-failures-table` | 失败用例表格 | `pages/eval/Monitor.tsx` |
+| `monitor-thresholds-grid-frame` | 告警阈值网格外框 | `pages/eval/Monitor.tsx` |
+| `monitor-thresholds-grid-scroll` | 告警阈值网格滚动层 | `pages/eval/Monitor.tsx` |
+| `monitor-thresholds-table` | 告警阈值表格 | `pages/eval/Monitor.tsx` |
 | `publish-history-scope` | publish-history-scope | `pages/publish/PublishHistory.tsx` |
 | `publish-history-scale` | publish-history-scale | `pages/publish/PublishHistory.tsx` |
 | `publish-history-export-csv` | publish-history-export-csv | `pages/publish/PublishHistory.tsx` |
@@ -1110,3 +1126,69 @@
 | `breadcrumb` | PageHeader 内部 | 全部用例 | 提议改为面包屑组件单独 testid，避免与 page-header 混淆 |
 
 > 实现 PR 落地后，spec 中相应 `getByRole` / `getByText` fallback 可以替换为 `getByTestId`，稳定性大幅提升。
+
+## 10. 现行实现补录（2026-09-26）
+
+以下选择器已存在于实现中，本次补录用于恢复发布矩阵的双向契约校验；不改变页面行为。
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `create-connection-engine-hint` | 创建连接引擎提示 | `components/CreateConnectionDrawer.tsx` |
+| `create-connection-probe-override` | 连接探测覆盖提示 | `components/CreateConnectionDrawer.tsx` |
+| `mcp-runtime-status-chips` | MCP 运行时状态组 | `components/McpRuntimeStatusPanel.tsx` |
+| `mcp-runtime-remediation` | MCP 运行时整改提示 | `components/McpRuntimeStatusPanel.tsx` |
+| `role-effective-digest-text` | Role 有效权限摘要 | `components/RoleEffectiveDigest.tsx` |
+| `capability-preview-details` | 能力预览详情 | `components/RoleEffectiveDigest.tsx` |
+| `capability-preview-body` | 能力预览正文 | `components/RoleEffectiveDigest.tsx` |
+| `capability-row` | 能力预览行 | `components/RoleEffectiveDigest.tsx` |
+| `connection-test-guidance` | 连接测试整改提示 | `components/connections/ConnectionTestResultPanel.tsx` |
+| `setup-token-card` | 接入向导 Token 卡片 | `components/onboarding/Step6ConnectAgent.tsx` |
+| `setup-regenerate-token-btn` | 接入向导重新签发 Token | `components/onboarding/Step6ConnectAgent.tsx` |
+| `setup-active-token` | 接入向导当前 Token | `components/onboarding/Step6ConnectAgent.tsx` |
+| `setup-copy-token-btn` | 接入向导复制 Token | `components/onboarding/Step6ConnectAgent.tsx` |
+| `setup-agent-select` | 接入向导 Agent 选择 | `components/onboarding/Step6ConnectAgent.tsx` |
+| `setup-generate-token-btn` | 接入向导签发 Token | `components/onboarding/Step6ConnectAgent.tsx` |
+| `setup-mcp-fallback-notice` | MCP 地址回退提示 | `components/onboarding/Step6ConnectAgent.tsx` |
+| `setup-mcp-endpoint-diagnostic` | MCP 地址诊断 | `components/onboarding/Step6ConnectAgent.tsx` |
+| `setup-mcp-config-snippet` | MCP 配置片段 | `components/onboarding/Step6ConnectAgent.tsx` |
+| `agent-lucy-admin-role-warning` | Agent 管理角色风险提示 | `pages/admin/AgentDetail.tsx`、`AgentList.tsx` |
+| `audit-granularity-help` | 审计粒度帮助 | `pages/admin/Audit.tsx` |
+| `audit-export-metadata` | 审计导出元数据 | `pages/admin/Audit.tsx` |
+| `audit-token-filter` | Token hash 前缀过滤条件 | `pages/admin/Audit.tsx` |
+| `governance-usage-view` | 治理使用视图 | `pages/admin/GovernanceOverview.tsx` |
+| `governance-view-access` | 治理访问视图 | `pages/admin/GovernanceOverview.tsx` |
+| `governance-view-interface` | 治理界面视图 | `pages/admin/GovernanceOverview.tsx` |
+| `governance-interface-error` | 治理界面错误 | `pages/admin/GovernanceOverview.tsx` |
+| `governance-interface-loading` | 治理界面加载态 | `pages/admin/GovernanceOverview.tsx` |
+| `governance-interface-usage` | 治理界面使用摘要 | `pages/admin/GovernanceOverview.tsx` |
+| `governance-interface-metrics` | 治理界面指标 | `pages/admin/GovernanceOverview.tsx` |
+| `governance-interface-unmapped` | 未映射界面入口 | `pages/admin/GovernanceOverview.tsx` |
+| `governance-interface-rank-grid` | 界面排行 | `pages/admin/GovernanceOverview.tsx` |
+| `governance-interface-groups` | 界面分组 | `pages/admin/GovernanceOverview.tsx` |
+| `governance-interface-menus` | 界面菜单 | `pages/admin/GovernanceOverview.tsx` |
+| `governance-interface-pages` | 界面页面 | `pages/admin/GovernanceOverview.tsx` |
+| `mcp-runtime-connection` | MCP Playground 连接 | `pages/admin/McpPlayground.tsx` |
+| `new-token-expiry-policy-notice` | Token 有效期策略提示 | `pages/admin/NewToken.tsx` |
+| `call-monitor-slo-status` | 调用监控 SLO 状态 | `pages/ops/CallMonitor.tsx` |
+| `call-monitor-page` | 调用监控页面 | `pages/ops/CallMonitor.tsx` |
+| `call-monitor-stats-time` | 调用监控统计时间 | `pages/ops/CallMonitor.tsx` |
+| `call-monitor-controls` | 调用监控控制区 | `pages/ops/CallMonitor.tsx` |
+| `call-monitor-range-24h` | 24 小时时间窗 | `pages/ops/CallMonitor.tsx` |
+| `call-monitor-range-1h` | 1 小时时间窗 | `pages/ops/CallMonitor.tsx` |
+| `call-monitor-auto-refresh` | 调用监控自动刷新 | `pages/ops/CallMonitor.tsx` |
+| `call-monitor-refresh` | 调用监控手动刷新 | `pages/ops/CallMonitor.tsx` |
+| `call-monitor-error` | 调用监控错误态 | `pages/ops/CallMonitor.tsx` |
+| `call-monitor-kpis` | 调用监控 KPI | `pages/ops/CallMonitor.tsx` |
+| `call-monitor-empty` | 调用监控空态 | `pages/ops/CallMonitor.tsx` |
+| `call-monitor-top-tools` | 高频工具 | `pages/ops/CallMonitor.tsx` |
+| `call-monitor-recent-failures` | 最近失败 | `pages/ops/CallMonitor.tsx` |
+| `call-monitor-link-errors` | 错误审计链接 | `pages/ops/CallMonitor.tsx` |
+| `call-monitor-link-denied` | 拒绝审计链接 | `pages/ops/CallMonitor.tsx` |
+| `workbench-validation-badge` | 发布校验状态 | `pages/publish/PublishWorkbench.tsx` |
+| `workbench-validation-pending` | 发布校验等待态 | `pages/publish/PublishWorkbench.tsx` |
+| `workbench-validation-banner` | 发布校验提示 | `pages/publish/PublishWorkbench.tsx` |
+| `workbench-validation-rest-files` | 发布校验其余文件 | `pages/publish/PublishWorkbench.tsx` |
+| `mcp-runtime-status-${testConnectionId}` | MCP 运行时状态（模板） | `components/McpRuntimeStatusPanel.tsx` |
+| `mcp-runtime-recheck-${testConnectionId}` | MCP 运行时复检（模板） | `components/McpRuntimeStatusPanel.tsx` |
+| `call-monitor-tool-${row.tool}` | 工具统计行（模板） | `pages/ops/CallMonitor.tsx` |
+| `call-monitor-failure-${row.id}` | 失败调用行（模板） | `pages/ops/CallMonitor.tsx` |

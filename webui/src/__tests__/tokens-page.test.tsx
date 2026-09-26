@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Tokens } from "../pages/admin/Tokens";
@@ -146,5 +146,44 @@ describe("Tokens (/admin/tokens)", () => {
         expect.objectContaining({ method: "DELETE" })
       );
     });
+  });
+
+  it("links audit logs by agent and exact token hash prefix", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(JSON.stringify({ ok: true, data: MOCK_TOKENS_RESPONSE }))
+      )
+    );
+
+    renderTokens();
+    const row = await screen.findByTestId("token-row-cursor-desk-xingchen");
+    const auditLink = within(row).getByRole("link", { name: /审计日志/ });
+    expect(auditLink).toHaveAttribute(
+      "href",
+      "/admin/audit?view=calls&range=7d&user=analyst_zhang&tokenHashPrefix=sha256%3Aaaaa0000"
+    );
+  });
+
+  it("wraps the token inventory table in the shared data grid frame", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(JSON.stringify({ ok: true, data: MOCK_TOKENS_RESPONSE }))
+      )
+    );
+
+    renderTokens();
+
+    await screen.findByTestId("token-row-cursor-desk-xingchen");
+    const frame = screen.getByTestId("tokens-grid-frame");
+    expect(frame).toHaveClass("pl-data-grid-frame");
+    expect(frame.className).not.toMatch(/overflow-x-auto/);
+    const scroll = screen.getByTestId("tokens-grid-scroll");
+    expect(scroll).toHaveClass("pl-data-grid-scroll");
+    expect(scroll).toHaveAttribute("role", "region");
+    const table = screen.getByTestId("tokens-table");
+    expect(table).toHaveClass("pl-data-grid", "pl-data-table");
+    expect(table).toHaveTextContent("cursor-desk-xingchen");
   });
 });

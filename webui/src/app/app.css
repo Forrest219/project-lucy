@@ -737,16 +737,16 @@
   .pl-catalog-table-wrap { @apply max-w-full overflow-x-auto; }
   .pl-catalog-result-count { @apply whitespace-nowrap text-sm text-fg-muted; }
   .pl-catalog-filter-select { @apply w-full; min-width: 7.9375rem; }
-  .pl-data-grid { @apply w-full border-collapse text-sm; table-layout: auto; }
+  .pl-data-grid { @apply w-full border-collapse; table-layout: auto; }
   .pl-data-grid thead th { @apply border-b border-border-default bg-bg-base px-3 py-2 text-left text-xs font-semibold tracking-wide text-fg-muted; }
-  .pl-data-grid tbody td { @apply border-b border-border-default px-3 py-2 align-middle text-fg-default; }
+  .pl-data-grid tbody td { @apply border-b border-border-default px-3 py-2 align-middle text-xs font-medium leading-4 text-fg-default; }
   .pl-data-grid tbody tr:hover { @apply bg-bg-muted; }
   /* Shared L1 data-grid frame + ordinary horizontal scroll (admin agents / config-audit / audit). */
   .pl-data-grid-frame {
-    @apply rounded-md border border-border-default bg-bg-surface p-4;
+    @apply min-w-0 max-w-full rounded-md border border-border-default bg-bg-surface p-4;
   }
   .pl-data-grid-scroll {
-    @apply max-w-full overflow-x-auto;
+    @apply w-full min-w-0 max-w-full overflow-x-auto;
   }
   .pl-data-grid-scroll:focus-visible {
     @apply outline-none ring-2 ring-primary ring-offset-2;

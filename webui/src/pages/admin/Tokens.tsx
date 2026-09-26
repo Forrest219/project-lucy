@@ -249,20 +249,27 @@ export function Tokens() {
         </div>
 
         {/* High Density Token Inventory Table */}
-        <div className="pl-data-grid-frame overflow-x-auto">
-          <table className="pl-table w-full text-left border-collapse" data-testid="tokens-table">
+        <section className="pl-data-grid-frame" data-testid="tokens-grid-frame">
+          <div
+            className="pl-data-grid-scroll"
+            data-testid="tokens-grid-scroll"
+            role="region"
+            aria-label="凭据表格，可横向滚动"
+            tabIndex={0}
+          >
+          <table className="pl-data-grid pl-data-table w-full" data-testid="tokens-table">
             <thead>
-              <tr className="border-b border-border-default bg-bg-muted/50 text-xs font-semibold text-fg-muted">
-                <th className="py-2.5 px-3"><span className="notranslate" translate="no">Token</span> 标签 / 备注</th>
-                <th className="py-2.5 px-3">所属 <span className="notranslate" translate="no">Agent</span></th>
-                <th className="py-2.5 px-3"><span className="notranslate" translate="no">Token</span> 前缀</th>
-                <th className="py-2.5 px-3">生效角色</th>
-                <th className="py-2.5 px-3">最近活跃</th>
-                <th className="py-2.5 px-3">过期时间</th>
-                <th className="py-2.5 px-3 text-right">操作</th>
+              <tr>
+                <th><span className="notranslate" translate="no">Token</span> 标签 / 备注</th>
+                <th>所属 <span className="notranslate" translate="no">Agent</span></th>
+                <th><span className="notranslate" translate="no">Token</span> 前缀</th>
+                <th>生效角色</th>
+                <th>最近活跃</th>
+                <th>过期时间</th>
+                <th className="text-right">操作</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-border-default text-sm">
+            <tbody>
               {isLoading ? (
                 <tr>
                   <td colSpan={7} className="py-8 text-center text-fg-muted text-sm">
@@ -434,7 +441,8 @@ export function Tokens() {
               )}
             </tbody>
           </table>
-        </div>
+          </div>
+        </section>
       </div>
 
       {/* Revoke Confirmation Modal */}

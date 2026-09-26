@@ -2,7 +2,7 @@
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Audit } from "../pages/admin/Audit";
 
@@ -33,7 +33,15 @@ function renderAudit(initialEntry = "/admin/audit") {
 function renderAuditWithProbe(initialEntry: string) {
   function Probe() {
     const location = useLocation();
-    return <div data-testid="probe-location" data-search={location.search} />;
+    const navigate = useNavigate();
+    return (
+      <>
+        <div data-testid="probe-location" data-search={location.search} />
+        <button type="button" data-testid="probe-back" onClick={() => navigate(-1)}>
+          back
+        </button>
+      </>
+    );
   }
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } }
@@ -802,5 +810,25 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
     });
     expect(screen.getByTestId("audit-since").className).not.toMatch(/sr-only/);
     expect(screen.getByTestId("audit-until").className).not.toMatch(/sr-only/);
+  });
+
+  it("keeps the selected time preset in sync with URL history navigation", async () => {
+    stubEmptyAuditApis();
+    renderAuditWithProbe("/admin/audit?range=7d");
+
+    expect(await screen.findByTestId("audit-time-preset-7d")).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.click(screen.getByRole("button", { name: "近 24 小时" }));
+    await waitFor(() => {
+      expect(screen.getByTestId("probe-location")).toHaveAttribute("data-search", "?range=24h");
+      expect(screen.getByTestId("audit-time-preset-24h")).toHaveAttribute("aria-pressed", "true");
+    });
+
+    fireEvent.click(screen.getByTestId("probe-back"));
+    await waitFor(() => {
+      expect(screen.getByTestId("probe-location")).toHaveAttribute("data-search", "?range=7d");
+      expect(screen.getByTestId("audit-time-preset-7d")).toHaveAttribute("aria-pressed", "true");
+      expect(screen.getByTestId("audit-time-preset-24h")).toHaveAttribute("aria-pressed", "false");
+    });
   });
 });

@@ -2,7 +2,7 @@
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CaseList } from "../pages/eval/CaseList";
 import { RunList } from "../pages/eval/RunList";
@@ -62,6 +62,105 @@ describe("CaseList M34 IA", () => {
     // M40: 一级根页面不再渲染面包屑
     expect(screen.queryByRole("navigation", { name: "面包屑" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Case 管理" })).not.toBeInTheDocument();
+  });
+
+  it("expresses eval domain switching as a segmented control", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/eval/domains") {
+          return new Response(JSON.stringify({
+            ok: true,
+            data: {
+              domains: [
+                { domain: "kx_financial", filePath: "evals/kx_financial/eval/kx_financial-eval-cases.yaml", caseCount: 3 },
+                { domain: "kx_ops", filePath: "evals/kx_ops/eval/kx_ops-eval-cases.yaml", caseCount: 5 }
+              ]
+            }
+          }));
+        }
+        if (url.startsWith("/api/eval/cases/")) {
+          return new Response(JSON.stringify({ ok: true, data: { cases: [] } }));
+        }
+        if (url.startsWith("/api/eval/runs")) {
+          return new Response(JSON.stringify({ ok: true, data: { total: 0, runs: [] } }));
+        }
+        return new Response(JSON.stringify({ ok: true, data: {} }));
+      })
+    );
+
+    function Probe() {
+      const location = useLocation();
+      return <div data-testid="probe-location" data-pathname={location.pathname} />;
+    }
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={["/eval/cases"]}>
+          <Routes>
+            <Route path="/eval/cases" element={<><CaseList /><Probe /></>} />
+            <Route path="/eval/cases/:domain" element={<><CaseList /><Probe /></>} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+
+    const selector = await screen.findByTestId("eval-domain-selector");
+    expect(selector).toHaveClass("pl-segmented-control", "pl-segmented-control--auto");
+    expect(selector).toHaveAttribute("role", "group");
+    expect(selector).toHaveAttribute("aria-label", "评测域");
+
+    const active = screen.getByRole("button", { name: /kx_financial/ });
+    expect(active).toHaveClass("pl-segmented-control-item", "pl-segmented-control-item--active");
+    expect(active).toHaveAttribute("aria-pressed", "true");
+    expect(active.className).not.toMatch(/pl-btn--primary/);
+
+    const other = screen.getByRole("button", { name: /kx_ops/ });
+    expect(other).toHaveAttribute("aria-pressed", "false");
+    expect(other.className).not.toMatch(/pl-segmented-control-item--active/);
+    expect(other.className).not.toMatch(/pl-btn--primary/);
+
+    fireEvent.click(other);
+    await waitFor(() => {
+      expect(screen.getByTestId("probe-location")).toHaveAttribute("data-pathname", "/eval/cases/kx_ops");
+    });
+  });
+
+  it("wraps the case list table in the shared data grid frame", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/eval/domains") {
+          return new Response(JSON.stringify({
+            ok: true,
+            data: { domains: [{ domain: "kx_financial", filePath: "evals/kx_financial/eval/kx_financial-eval-cases.yaml", caseCount: 1 }] }
+          }));
+        }
+        if (url === "/api/eval/cases/kx_financial") {
+          return new Response(JSON.stringify({
+            ok: true,
+            data: { cases: [{ id: "kx-income-001", case_type: "single_turn", question: "查询收入", expected_measures: ["operating_revenue"] }] }
+          }));
+        }
+        if (url.startsWith("/api/eval/runs")) {
+          return new Response(JSON.stringify({ ok: true, data: { total: 0, runs: [] } }));
+        }
+        return new Response(JSON.stringify({ ok: true, data: {} }));
+      })
+    );
+
+    renderCaseList();
+
+    const frame = await screen.findByTestId("eval-cases-grid-frame");
+    expect(frame).toHaveClass("pl-data-grid-frame");
+    const scroll = screen.getByTestId("eval-cases-grid-scroll");
+    expect(scroll).toHaveClass("pl-data-grid-scroll");
+    expect(scroll).toHaveAttribute("role", "region");
+    const table = screen.getByTestId("eval-cases-table");
+    expect(table).toHaveClass("pl-data-grid", "pl-data-table");
+    expect(table).toHaveTextContent("kx-income-001");
   });
 });
 

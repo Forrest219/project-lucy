@@ -109,28 +109,29 @@ export function AdminAccounts() {
         </div>
       )}
 
-      <div className="pl-card overflow-x-auto">
-        <table className="w-full text-sm">
+      <section className="pl-data-grid-frame" data-testid="admin-accounts-grid-frame">
+        <div className="pl-data-grid-scroll" data-testid="admin-accounts-grid-scroll">
+        <table className="pl-data-grid pl-data-table w-full" data-testid="admin-accounts-table">
           <thead>
-            <tr className="text-left text-fg-muted border-b border-[var(--pl-border)]">
-              <th className="py-2 pr-3">账户 id</th>
-              <th className="py-2 pr-3">显示名</th>
-              <th className="py-2 pr-3">角色</th>
-              <th className="py-2 pr-3">状态</th>
-              {isOwner && authRequired && <th className="py-2">操作</th>}
+            <tr>
+              <th>账户 id</th>
+              <th>显示名</th>
+              <th>角色</th>
+              <th>状态</th>
+              {isOwner && authRequired && <th>操作</th>}
             </tr>
           </thead>
           <tbody>
             {(query.data?.admins ?? []).map((row) => (
-              <tr key={row.id} className="border-b border-[var(--pl-border)]/60">
-                <td className="py-2 pr-3 font-mono notranslate" translate="no">
+              <tr key={row.id}>
+                <td className="font-mono notranslate" translate="no">
                   {row.id}
                 </td>
-                <td className="py-2 pr-3">{row.displayName}</td>
-                <td className="py-2 pr-3">{roleLabel(row.role)}</td>
-                <td className="py-2 pr-3">{row.enabled ? "启用" : "已禁用"}</td>
+                <td>{row.displayName}</td>
+                <td>{roleLabel(row.role)}</td>
+                <td>{row.enabled ? "启用" : "已禁用"}</td>
                 {isOwner && authRequired && (
-                  <td className="py-2 flex flex-wrap gap-2">
+                  <td className="flex flex-wrap gap-2">
                     <button
                       type="button"
                       className="pl-btn pl-btn--ghost"
@@ -159,7 +160,8 @@ export function AdminAccounts() {
             ))}
           </tbody>
         </table>
-      </div>
+        </div>
+      </section>
 
       {isOwner && authRequired && (
         <form className="pl-card grid gap-3 p-4" onSubmit={onCreate}>

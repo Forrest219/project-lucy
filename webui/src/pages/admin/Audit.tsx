@@ -1361,8 +1361,9 @@ export function Audit() {
 
   useEffect(() => {
     setSince(sinceLocalFromHours(hours));
+    setTimePreset(range);
     setPage(0);
-  }, [hours]);
+  }, [hours, range]);
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), 1000);

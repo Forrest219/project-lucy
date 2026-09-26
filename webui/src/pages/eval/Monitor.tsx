@@ -451,26 +451,30 @@ export function Monitor() {
           {topFails.length === 0 ? (
             <div className="pl-empty-state">暂无失败用例集中项</div>
           ) : (
-            <table className="w-full text-sm">
+          <section className="pl-data-grid-frame" data-testid="monitor-top-failures-grid-frame">
+            <div className="pl-data-grid-scroll" data-testid="monitor-top-failures-grid-scroll">
+            <table className="pl-data-grid pl-data-table w-full" data-testid="monitor-top-failures-table">
             <thead>
-              <tr className="border-b border-border-default text-left text-xs text-fg-muted">
-                <th className="px-3 py-2">Case ID</th>
-                <th className="px-3 py-2">失败次数</th>
-                <th className="px-3 py-2">最近失败</th>
+              <tr>
+                <th>Case ID</th>
+                <th>失败次数</th>
+                <th>最近失败</th>
               </tr>
             </thead>
             <tbody>
               {topFails.map((item) => (
-                <tr key={item.caseId} className="border-b border-border-default">
-                  <td className="px-3 py-2 font-mono text-xs">{item.caseId}</td>
-                  <td className="px-3 py-2 font-medium text-danger">{item.failCount}</td>
-                  <td className="px-3 py-2 text-xs text-fg-muted">
+                <tr key={item.caseId}>
+                  <td className="font-mono text-xs">{item.caseId}</td>
+                  <td className="font-medium text-danger">{item.failCount}</td>
+                  <td className="text-xs text-fg-muted">
                     {new Date(item.lastFailAt).toLocaleString("zh-CN")}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+            </div>
+          </section>
           )}
         </section>
       </div>
@@ -481,27 +485,30 @@ export function Monitor() {
           <div className="pl-empty-state">无 domain</div>
         ) : (
           <div className="grid gap-3">
-            <table className="w-full text-sm">
+            <section className="pl-data-grid-frame" data-testid="monitor-thresholds-grid-frame">
+              <div className="pl-data-grid-scroll" data-testid="monitor-thresholds-grid-scroll">
+            <table className="pl-data-grid pl-data-table w-full" data-testid="monitor-thresholds-table">
               <thead>
-                <tr className="border-b border-border-default text-left text-xs text-fg-muted">
-                  <th className="px-3 py-2">Domain</th>
-                  <th className="px-3 py-2">黄线（%）</th>
-                  <th className="px-3 py-2">红线（%）</th>
-                  <th className="px-3 py-2">连续失败告警次数</th>
+                <tr>
+                  <th>Domain</th>
+                  <th>黄线（%）</th>
+                  <th>红线（%）</th>
+                  <th>连续失败告警次数</th>
                 </tr>
               </thead>
               <tbody>
                 {domains.map((d) => {
                   const dc = currentConfig.domains[d.domain] ?? { passRateYellow: 0.9, passRateRed: 0.8, consecutiveFailThreshold: 3 };
                   return (
-                    <tr key={d.domain} className="border-b border-border-default">
-                      <td className="px-3 py-2 font-medium">{d.domain}</td>
-                      <td className="px-3 py-2">
+                    <tr key={d.domain}>
+                      <td className="font-medium">{d.domain}</td>
+                      <td>
                         <input
                           className="pl-input w-20 text-sm"
                           type="number"
                           min={0}
                           max={100}
+                          aria-label={`${d.domain} 黄线（%）`}
                           value={Math.round(dc.passRateYellow * 100)}
                           onChange={(e) => {
                             const percent = clampNumber(e.target.value, 0, 100);
@@ -519,12 +526,13 @@ export function Monitor() {
                           }}
                         />
                       </td>
-                      <td className="px-3 py-2">
+                      <td>
                         <input
                           className="pl-input w-20 text-sm"
                           type="number"
                           min={0}
                           max={100}
+                          aria-label={`${d.domain} 红线（%）`}
                           value={Math.round(dc.passRateRed * 100)}
                           onChange={(e) => {
                             const percent = clampNumber(e.target.value, 0, 100);
@@ -542,12 +550,13 @@ export function Monitor() {
                           }}
                         />
                       </td>
-                      <td className="px-3 py-2">
+                      <td>
                         <input
                           className="pl-input w-20 text-sm"
                           type="number"
                           min={1}
                           max={20}
+                          aria-label={`${d.domain} 连续失败告警次数`}
                           value={dc.consecutiveFailThreshold}
                           onChange={(e) => {
                             const v = clampNumber(e.target.value, 1, 20);
@@ -569,6 +578,8 @@ export function Monitor() {
                 })}
               </tbody>
             </table>
+              </div>
+            </section>
             <div className="flex justify-end">
               {invalidThresholdConfig ? <p className="pl-error mr-auto">黄线必须高于红线。</p> : null}
               <button

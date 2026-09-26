@@ -460,17 +460,24 @@ export function CaseList() {
       {loadingCases ? (
         <div className="pl-notice">加载中…</div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        <section className="pl-data-grid-frame" data-testid="eval-cases-grid-frame">
+          <div
+            className="pl-data-grid-scroll"
+            data-testid="eval-cases-grid-scroll"
+            role="region"
+            aria-label="评测用例列表"
+            tabIndex={0}
+          >
+          <table className="pl-data-grid pl-data-table w-full" data-testid="eval-cases-table">
             <thead>
-              <tr className="border-b border-border text-left text-xs text-fg-muted">
-                <th className="px-3 py-2">ID</th>
-                <th className="px-3 py-2">类型</th>
-                <th className="px-3 py-2">问题</th>
-                <th className="px-3 py-2">指标</th>
-                <th className="px-3 py-2">关联 Quiz</th>
-                <th className="px-3 py-2">最近运行</th>
-                <th className="px-3 py-2">操作</th>
+              <tr>
+                <th>ID</th>
+                <th>类型</th>
+                <th>问题</th>
+                <th>指标</th>
+                <th>关联 Quiz</th>
+                <th>最近运行</th>
+                <th>操作</th>
               </tr>
             </thead>
             <tbody>
@@ -482,22 +489,22 @@ export function CaseList() {
                 filteredCases.map((c) => (
                   <tr
                     key={c.id}
-                    className="border-b border-border hover:bg-bg-muted/50 cursor-pointer"
+                    className="cursor-pointer"
                     onClick={() => navigate(`/eval/cases/${activeDomain}/${c.id}`)}
                   >
-                    <td className="px-3 py-2 font-mono text-xs">{c.id}</td>
-                    <td className="px-3 py-2 text-xs text-fg-muted">{c.case_type}</td>
-                    <td className="px-3 py-2 max-w-xs truncate text-fg-muted">{c.question ?? "(multi_turn)"}</td>
-                    <td className="px-3 py-2 text-xs text-fg-muted">{c.expected_measures?.join(", ") ?? "—"}</td>
-                    <td className="px-3 py-2 text-xs text-fg-muted">{c.linked_quiz_questions?.join(", ") ?? "—"}</td>
-                    <td className="px-3 py-2 text-xs">
+                    <td className="font-mono text-xs">{c.id}</td>
+                    <td className="text-xs text-fg-muted">{c.case_type}</td>
+                    <td className="max-w-xs truncate text-fg-muted">{c.question ?? "(multi_turn)"}</td>
+                    <td className="text-xs text-fg-muted">{c.expected_measures?.join(", ") ?? "—"}</td>
+                    <td className="text-xs text-fg-muted">{c.linked_quiz_questions?.join(", ") ?? "—"}</td>
+                    <td className="text-xs">
                       {latestStatusByCase.get(c.id) ? (
                         <span className={`pl-status-badge ${latestStatusByCase.get(c.id) === "PASS" ? "pl-status-done" : "pl-status-validation_failed"}`}>
                           {latestStatusByCase.get(c.id)}
                         </span>
                       ) : "—"}
                     </td>
-                    <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+                    <td onClick={(e) => e.stopPropagation()}>
                       <button
                         type="button"
                         className="pl-btn pl-btn--ghost text-xs mr-2"
@@ -522,8 +529,9 @@ export function CaseList() {
               )}
             </tbody>
           </table>
-          <div className="text-xs text-fg-muted mt-2 px-3">共 {filteredCases.length} 个 case</div>
-        </div>
+          </div>
+          <div className="text-xs text-fg-muted mt-2">共 {filteredCases.length} 个 case</div>
+        </section>
       )}
     </div>
   );
