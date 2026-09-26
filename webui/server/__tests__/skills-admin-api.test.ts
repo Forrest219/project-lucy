@@ -1,7 +1,7 @@
 import Fastify from "fastify";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { registerSkillsRoutes } from "../admin/skills.js";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { invalidateSkillsCache } from "../skills/loader.js";
@@ -78,6 +78,15 @@ Body content
     expect(json.ok).toBe(true);
     expect(json.skill.name).toBe("superstore-profit");
     expect(json.skill.content).toContain("# Profit SOP");
+    expect(json.skill.file_version).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  it("GET detail never falls back to a matching name in another domain", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/skills/not-superstore/superstore-profit"
+    });
+    expect(res.statusCode).toBe(404);
   });
 
   it("POST /api/skills/validate validates arbitrary markdown", async () => {
@@ -160,9 +169,11 @@ status: draft
     const json = res.json();
     expect(json.ok).toBe(true);
     expect(json.skill.uri).toBe("lucy-skill://acceptance/new-skill");
+    expect(json.skill.roles_allowed).toEqual([]);
     const { readFile } = await import("node:fs/promises");
     const text = await readFile(path.join(projectRoot, "skills", "acceptance", "new-skill.md"), "utf8");
     expect(text).toContain("name: new-skill");
+    expect(text).toContain("roles_allowed: []");
   });
 
   it("rejects create with path traversal or missing name (SC-147-02)", async () => {
@@ -181,7 +192,7 @@ status: draft
     expect(missing.statusCode).toBe(400);
   });
 
-  it("PUT renames skill and removes old path (SC-147-03)", async () => {
+  it("PUT preserves the original entry path and rejects identity changes", async () => {
     const created = await app.inject({
       method: "POST",
       url: "/api/skills",
@@ -189,28 +200,118 @@ status: draft
     });
     expect(created.statusCode).toBe(201);
 
+    const createdSkill = created.json().skill;
     const updated = await app.inject({
       method: "PUT",
       url: "/api/skills/acceptance/rename-me",
-      payload: { name: "renamed", domain: "acceptance", status: "draft", content: "# B\n" }
+      payload: {
+        name: "rename-me",
+        domain: "acceptance",
+        expected_version: createdSkill.file_version,
+        status: "draft",
+        content: "# B\n"
+      }
     });
     expect(updated.statusCode).toBe(200);
-    expect(updated.json().skill.name).toBe("renamed");
+    expect(updated.json().skill.name).toBe("rename-me");
+    expect(updated.json().skill.relativePath).toBe(createdSkill.relativePath);
+    expect(await readFile(path.join(projectRoot, createdSkill.relativePath), "utf8")).toContain("# B");
 
-    const { access } = await import("node:fs/promises");
-    await expect(access(path.join(projectRoot, "skills", "acceptance", "rename-me.md"))).rejects.toThrow();
-    await access(path.join(projectRoot, "skills", "acceptance", "renamed.md"));
+    const rename = await app.inject({
+      method: "PUT",
+      url: "/api/skills/acceptance/rename-me",
+      payload: {
+        name: "renamed",
+        domain: "acceptance",
+        expected_version: updated.json().skill.file_version,
+        content: "# C\n"
+      }
+    });
+    expect(rename.statusCode).toBe(409);
+    expect(rename.json().error).toContain("skill_identity_immutable");
+    await access(path.join(projectRoot, "skills", "acceptance", "rename-me.md"));
+  });
+
+  it("updates an underscore domain SKILL.md without moving it", async () => {
+    const dir = path.join(projectRoot, "skills", "legacy_domain");
+    await mkdir(dir, { recursive: true });
+    const entry = path.join(dir, "SKILL.md");
+    await writeFile(entry, `---\nname: legacy-skill\ntitle: Legacy\ndomain: legacy_domain\nstatus: draft\nroles_allowed: []\n---\nOld\n`);
+    invalidateSkillsCache();
+    const detail = await app.inject({ method: "GET", url: "/api/skills/legacy_domain/legacy-skill" });
+    const updated = await app.inject({
+      method: "PUT",
+      url: "/api/skills/legacy_domain/legacy-skill",
+      payload: {
+        name: "legacy-skill",
+        domain: "legacy_domain",
+        expected_version: detail.json().skill.file_version,
+        content: "New"
+      }
+    });
+    expect(updated.statusCode).toBe(200);
+    expect(updated.json().skill.relativePath).toBe("skills/legacy_domain/SKILL.md");
+    expect(await readFile(entry, "utf8")).toContain("New");
+    await expect(access(path.join(dir, "legacy-skill.md"))).rejects.toThrow();
+  });
+
+  it("does not overwrite a malformed file at the canonical create path", async () => {
+    const dir = path.join(projectRoot, "skills", "acceptance");
+    await mkdir(dir, { recursive: true });
+    const target = path.join(dir, "occupied.md");
+    await writeFile(target, "not frontmatter\n");
+    invalidateSkillsCache();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/skills",
+      payload: { name: "occupied", domain: "acceptance", content: "# replacement\n" }
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toContain("skill_path_conflict");
+    expect(await readFile(target, "utf8")).toBe("not frontmatter\n");
+  });
+
+  it("rejects stale updates and raw frontmatter identity mismatches", async () => {
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/skills",
+      payload: { name: "versioned", domain: "acceptance", content: "# A\n" }
+    });
+    const version = created.json().skill.file_version;
+    const first = await app.inject({
+      method: "PUT",
+      url: "/api/skills/acceptance/versioned",
+      payload: { expected_version: version, content: "# B\n" }
+    });
+    expect(first.statusCode).toBe(200);
+    const stale = await app.inject({
+      method: "PUT",
+      url: "/api/skills/acceptance/versioned",
+      payload: { expected_version: version, content: "# C\n" }
+    });
+    expect(stale.statusCode).toBe(409);
+    expect(stale.json().error).toContain("skill_write_conflict");
+
+    const mismatchedRaw = `---\nname: other\ntitle: Other\ndomain: acceptance\nstatus: draft\nroles_allowed: []\n---\nBody\n`;
+    const mismatch = await app.inject({
+      method: "PUT",
+      url: "/api/skills/acceptance/versioned",
+      payload: { expected_version: first.json().skill.file_version, rawContent: mismatchedRaw }
+    });
+    expect(mismatch.statusCode).toBe(409);
+    expect(mismatch.json().error).toContain("skill_identity_immutable");
   });
 
   it("DELETE removes skill (SC-147-04)", async () => {
-    await app.inject({
+    const created = await app.inject({
       method: "POST",
       url: "/api/skills",
       payload: { name: "to-delete", domain: "acceptance", status: "draft", content: "# D\n" }
     });
     const del = await app.inject({
       method: "DELETE",
-      url: "/api/skills/acceptance/to-delete"
+      url: "/api/skills/acceptance/to-delete",
+      payload: { expected_version: created.json().skill.file_version }
     });
     expect(del.statusCode).toBe(200);
     const get = await app.inject({

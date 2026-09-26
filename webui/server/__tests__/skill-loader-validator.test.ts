@@ -86,6 +86,7 @@ domain: test_domain
       filePath: "/workspace/skills/invalid.md",
       content: "content",
       raw: "raw",
+      file_version: "v1",
     };
 
     const res = await validateSkill(invalidSkill);

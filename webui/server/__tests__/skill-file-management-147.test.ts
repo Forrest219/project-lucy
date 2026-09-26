@@ -56,7 +56,8 @@ describe("Spec 147 static gates", () => {
       relativePath: "skills/d/s.md",
       filePath: "/tmp/s.md",
       content: "",
-      raw: ""
+      raw: "",
+      file_version: "v1"
     };
 
     beforeEach(async () => {

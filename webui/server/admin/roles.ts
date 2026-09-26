@@ -34,6 +34,8 @@ import {
 } from "../access-governance-gate.js";
 import { actorIdFromRequest } from "../auth/guard.js";
 import type { FastifyRequest } from "fastify";
+import { loadAllSkills } from "../skills/loader.js";
+import { summarizeRoleSkillAccess } from "../proxy/skill-acl.js";
 
 type RoleSource = "yaml" | "template";
 
@@ -621,6 +623,11 @@ export function registerRoleRoutes(app: FastifyInstance) {
       resolved.source === "template" ? { role: resolved.role } : undefined
     );
     const sourceNames = sourceNamesFromPreview(preview);
+    const skillAccess = summarizeRoleSkillAccess(
+      resolved.id,
+      resolved.role.allow?.tools ?? [],
+      await loadAllSkills()
+    );
     return {
       ok: true,
       data: {
@@ -635,7 +642,8 @@ export function registerRoleRoutes(app: FastifyInstance) {
           description: resolved.role.description,
           allow: resolved.role.allow ?? {}
         },
-        effectivePermissions: preview.ok ? effectivePermissionsToPreview(preview.permissions) : undefined
+        effectivePermissions: preview.ok ? effectivePermissionsToPreview(preview.permissions) : undefined,
+        skillAccess
       }
     };
   });

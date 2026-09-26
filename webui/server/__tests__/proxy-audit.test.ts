@@ -97,7 +97,13 @@ describe("proxy audit log", () => {
       expect(columns.map((column) => column.name)).toEqual(expect.arrayContaining([
         "turn_attribution_mode",
         "turn_attribution_confidence",
-        "turn_attribution_reason"
+        "turn_attribution_reason",
+        "skill_uri",
+        "skill_version",
+        "skill_file_version",
+        "skill_action",
+        "skill_roles_allowed",
+        "matched_role_id"
       ]));
       const turnColumns = migratedDb.prepare("PRAGMA table_info(conversation_turns)").all() as Array<{ name: string }>;
       expect(turnColumns.map((column) => column.name)).toContain("session_id");
@@ -123,6 +129,45 @@ describe("proxy audit log", () => {
       expect(turn.session_id).toBe("legacy-session-migration");
     } finally {
       migratedDb.close();
+    }
+  });
+
+  it("persists Skill authorization evidence", async () => {
+    const { writeLog } = await import("../proxy/audit");
+    await writeLog({
+      ts: new Date().toISOString(),
+      userId: "skill-audit-test",
+      tool: "resources/read",
+      outcome: "ok",
+      durationMs: 2,
+      requestId: "skill-audit-1",
+      skillUri: "lucy-skill://finance/dupont",
+      skillVersion: "1.2.0",
+      skillFileVersion: "abc123",
+      skillAction: "read",
+      skillRolesAllowed: ["finance_reader"],
+      matchedRoleId: "finance_reader",
+      decisionReason: "allowed"
+    });
+
+    const database = new Database(auditDbPath, { readonly: true });
+    try {
+      const row = database.prepare(`
+        SELECT skill_uri, skill_version, skill_file_version, skill_action,
+               skill_roles_allowed, matched_role_id, decision_reason
+        FROM access_log WHERE request_id = ?
+      `).get("skill-audit-1") as Record<string, string>;
+      expect(row).toMatchObject({
+        skill_uri: "lucy-skill://finance/dupont",
+        skill_version: "1.2.0",
+        skill_file_version: "abc123",
+        skill_action: "read",
+        matched_role_id: "finance_reader",
+        decision_reason: "allowed"
+      });
+      expect(JSON.parse(row.skill_roles_allowed)).toEqual(["finance_reader"]);
+    } finally {
+      database.close();
     }
   });
 

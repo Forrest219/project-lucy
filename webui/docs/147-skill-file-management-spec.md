@@ -4,7 +4,7 @@
 |---|---|
 | 文档名称 | WebUI 管理 Skill 文件 Spec |
 | 文档类型 | Spec |
-| 版本 | v1.0 |
+| 版本 | v1.1 |
 | 撰写日期 | 2026-09-24 |
 | 撰写人 | Composer |
 | 委托人 | xingchen |
@@ -18,7 +18,7 @@
 | 关联工单 | `webui/docs/plans/wo-202609-24-skill-file-management.md` |
 | 关联页面 | `/skills`（业务上下文 / 业务 Skill） |
 | 上游 Spec | Spec 144（Agent 可见性仍权威）；Spec 131 Phase 4 切片 |
-| 状态 | Draft |
+| 状态 | Implemented；安全加固见 Spec 151 |
 | 日期 | 2026-09-24 |
 
 ### Changelog
@@ -26,6 +26,7 @@
 | 版本 | 变更 |
 |---|---|
 | v1.0 | 初稿：Demo 灌入、WebUI 文件管理、Demo Token Skill 工具授权 |
+| v1.1 | Spec 151 加固：身份不可变、原路径保存、并发版本、显式角色授权 |
 
 ## 1. 背景
 
@@ -60,8 +61,10 @@ Spec 144 交付了只读「业务 Skill」页与 Agent 已发布过滤。Demo �
 ### 4.2 文件路径（T2–T5）
 
 - 新建：`skills/<domain>/<name>.md`。
-- `domain`、`name`：小写字母、数字、连字符；拒绝 `..`、绝对路径、写出 `skills/`。
-- 编辑：写回原 `relativePath`；改 domain/name 时写新路径并删除旧入口文件，不删 `references/`。
+- `domain`、`name`：小写字母、数字、连字符、下划线；拒绝 `..`、绝对路径、写出 `skills/`。
+- 编辑：`domain`、`name` 只读，始终写回原 `relativePath`；普通保存不得移动文件。
+- 重命名：显式新建新 Skill，确认后删除旧 Skill，不提供隐式搬移。
+- 更新、删除：携带 `expected_version`；过期返回 `409 skill_write_conflict`。
 - 删除：确认后删除入口文件。
 
 ### 4.3 校验（T6）
@@ -74,6 +77,7 @@ Spec 144 交付了只读「业务 Skill」页与 Agent 已发布过滤。Demo �
 
 - 状态字段仍是 frontmatter `status`。
 - Agent 可见性沿用 Spec 144 `canAccessSkill`。
+- 授权事实源、同角色闭合与通道能力沿用 Spec 151；新建默认无人可见。
 
 ### 4.5 Demo 工具（T7）
 
@@ -92,7 +96,7 @@ Spec 144 交付了只读「业务 Skill」页与 Agent 已发布过滤。Demo �
 |---|---|
 | SC-147-01 | 复制步骤在临时目录生成 `skills/answer-style/SKILL.md`；`.dockerignore` 仍含 `skills/`；客户 `Dockerfile` 仍 `.gitkeep` |
 | SC-147-02 | 缺 `name` 或 domain/name 含 `..` 时创建拒绝；合法创建写入 `skills/<domain>/<name>.md` |
-| SC-147-03 | 更新写回原文件；改 name 后旧路径不存在、新路径可读 |
+| SC-147-03 | 更新写回原文件；`domain` / `name` 不一致返回 `skill_identity_immutable`，不得搬移 |
 | SC-147-04 | 删除后 GET 404；loader 不再返回该 URI |
 | SC-147-05 | `published` 且角色匹配时 `canAccessSkill` 放行；`draft` → `skill_not_published`；`deprecated` → `skill_deprecated` |
 | SC-147-06 | 已发布无 `eval_cases` 保存成功且 `validation.valid === false`；损坏 frontmatter 保存失败 |

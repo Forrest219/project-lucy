@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import { loadAllSkills, getSkillByUri, getSkillByName, parseSkillMarkdown, invalidateSkillsCache } from "../skills/loader.js";
+import { loadAllSkills, getSkillByUri, parseSkillMarkdown, invalidateSkillsCache } from "../skills/loader.js";
 import { validateSkill } from "../skills/validator.js";
 import { exportSkillPackage } from "../skills/exporter.js";
 import {
@@ -172,8 +172,7 @@ export function registerSkillsRoutes(app: FastifyInstance): void {
     async (req: FastifyRequest<{ Params: { domain: string; name: string } }>, reply: FastifyReply) => {
       const { domain, name } = req.params;
       try {
-        let skill = await getSkillByUri(`lucy-skill://${domain}/${name}`);
-        if (!skill) skill = await getSkillByName(name);
+        const skill = await getSkillByUri(`lucy-skill://${domain}/${name}`);
         if (!skill) {
           return reply.status(404).send({
             ok: false,
@@ -208,10 +207,21 @@ export function registerSkillsRoutes(app: FastifyInstance): void {
 
   app.delete(
     "/api/skills/:domain/:name",
-    async (req: FastifyRequest<{ Params: { domain: string; name: string } }>, reply: FastifyReply) => {
+    async (
+      req: FastifyRequest<{
+        Params: { domain: string; name: string };
+        Body: { expected_version?: string };
+      }>,
+      reply: FastifyReply
+    ) => {
       try {
         const projectRoot = await resolveProjectRoot();
-        const result = await deleteSkillFile(projectRoot, req.params.domain, req.params.name);
+        const result = await deleteSkillFile(
+          projectRoot,
+          req.params.domain,
+          req.params.name,
+          req.body?.expected_version
+        );
         return reply.send({ ok: true, ...result });
       } catch (err) {
         return writeErrorReply(reply, err);

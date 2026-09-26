@@ -33,6 +33,7 @@ export type SkillAsset = {
   description: string;
   uri: string;
   relativePath: string;
+  file_version: string;
   content: string;
   validation: SkillValidationResult;
 };
@@ -56,6 +57,7 @@ export type SkillWritePayload = {
   eval_cases?: string[];
   prerequisites?: SkillPrerequisites;
   rawContent?: string;
+  expected_version?: string;
 };
 
 async function fetchSkillsJson<T>(path: string, init?: RequestInit): Promise<T> {
@@ -98,9 +100,14 @@ export function updateSkill(
   });
 }
 
-export function deleteSkill(domain: string, name: string): Promise<{ ok: true; uri: string }> {
+export function deleteSkill(
+  domain: string,
+  name: string,
+  expectedVersion: string
+): Promise<{ ok: true; uri: string }> {
   return fetchSkillsJson(`/api/skills/${encodeURIComponent(domain)}/${encodeURIComponent(name)}`, {
-    method: "DELETE"
+    method: "DELETE",
+    body: JSON.stringify({ expected_version: expectedVersion })
   });
 }
 
@@ -124,7 +131,8 @@ export function skillStatusBadgeClass(status: SkillStatus): string {
 
 export function rolesAllowedSummary(rolesAllowed: string[]): { label: string; roles: string[] } {
   if (rolesAllowed.includes("*")) {
-    return { label: "全部角色", roles: [] };
+    return { label: "所有角色可见", roles: [] };
   }
+  if (rolesAllowed.length === 0) return { label: "无人可见", roles: [] };
   return { label: "", roles: rolesAllowed };
 }

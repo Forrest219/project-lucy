@@ -184,6 +184,7 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Role Connection Allow-list | 允许的连接 | 数据库连接 | Connections（裸露主标签）、链接 | Role 可使用的连接；`allow.connections` |
 | Role MCP Tool Allow-list | 允许的 MCP 工具 | 工具权限 | Tools（裸露）、MCP Tools（无中文主标签） | Role 显式工具清单；禁止 `*` |
 | Role Table Selector | 可访问的表范围 | 表授权范围 | Table Selectors（裸露）、selector（主按钮文案） | `allow.tableSelectors` |
+| Confirm Permission Changes | 确认权限变更 | 权限变更确认 | 变更预览（作为一级页签）、权限审批 | Role dryRun 成功后、正式写入前的结构化确认 Drawer（Spec 150） |
 | Catalog Bound Scope | 启用目录绑定 | catalog_bound、目录通配 | `tables: ["*"]`、静默 prefix 扩权、全连接 `*` | Spec 131：`allow.source_scope: catalog_bound`；仅已声明 connections ∩ enabled_tables |
 | Lucy Admin Role | Lucy 运维数据面角色 | lucy_admin | WebUI 所有者、登录管理员、超管（作本 Role 主称） | Spec 131 预置 MCP 数据面 Role / 参考模板；与 WebUI Admin 正交 |
 | Exact Table Names | 指定表名 | 精确授权这些表 | names（裸露 radio） | selector `names` |
@@ -623,6 +624,9 @@ Skill 是与语义资产、业务 Wiki 并列的受治理上下文。导航与�
 | Create Skill | 新建 Skill | 新建技能、创建技巧 | Spec 147；写入 `skills/<domain>/<name>.md` |
 | Save Skill | 保存 Skill | 发布技能（作保存按钮文案） | Spec 147；写回 frontmatter + Markdown；状态字段仍是 `status` |
 | Delete Skill | 删除 Skill | 删除技能、移除技巧 | Spec 147；删除入口文件，不删共享 `references/` |
+| Accessible Roles | 可访问角色 | 授权角色（辅助说明） | Skill 编辑页的 Role 多选；对象授权事实源为 `roles_allowed` |
+| All Roles Visible | 所有角色可见 | 全员可用、公开（作主标签） | 显式写入 `roles_allowed: ["*"]`；开启时需要二次确认 |
+| No Roles Visible | 无人可见 | 私有（含义不明确） | 缺失或空 `roles_allowed`；新建 Skill 默认状态 |
 
 Protected terms（DOM 须 `translate="no"` + `notranslate`）：`Skill`、`lucy-skill://`、`lucy_skill_read`、`domain`、`roles_allowed`、Skill 文件路径、`SKILL.md`。
 

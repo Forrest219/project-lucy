@@ -651,6 +651,8 @@ export interface EffectivePermissions {
   capabilities: EffectiveCapability[];
   /** Spec 98 §5.1 EffectiveMetaTools */
   metaTools: string[];
+  /** Per-role Meta grants, retained so Skill audience and channel grants cannot be stitched across Roles. */
+  roleMetaTools?: Record<string, string[]>;
   capabilityDigest: string;
   sourceMapVersion: string;
   snapshotHash: string;
@@ -707,6 +709,7 @@ function makePermissions(input: Omit<EffectivePermissions, "snapshotHash">): Eff
     rolesJson: input.rolesJson,
     resolvedJson: input.resolvedJson,
     legacyAllow: input.legacyAllow,
+    roleMetaTools: input.roleMetaTools ?? null,
     agentConstraintsBySource: input.agentConstraintsBySource ?? null,
     finalRowsBySource: input.finalRowsBySource ?? null
   };
@@ -1153,6 +1156,7 @@ async function resolveEffectivePermissions(
         sources,
         capabilities,
         metaTools: uniqueSorted(meta),
+        roleMetaTools: { __legacy__: uniqueSorted(meta) },
         capabilityDigest: capabilityDigest(capabilities),
         sourceMapVersion,
         rolesJson: null,
@@ -1200,6 +1204,9 @@ async function resolveEffectivePermissions(
 
   const capabilityTools = new Set(capabilities.map((capability) => capability.tool));
   const metaTools = uniqueSorted(compiledRoles.flatMap((role) => role.metaTools));
+  const roleMetaTools = Object.fromEntries(
+    compiledRoles.map((role) => [role.roleId, uniqueSorted(role.metaTools)])
+  );
   const tools = uniqueSorted([...capabilityTools, ...metaTools]);
   const sources = sourcesFromCapabilities(capabilities);
   const tables = uniqueSorted(sources.map((source) => source.table));
@@ -1217,6 +1224,7 @@ async function resolveEffectivePermissions(
     tables,
     sources,
     capabilities,
+    roleMetaTools,
     sourceMapVersion,
     agentConstraintsBySource: agentConstraintsBySource ?? null,
     finalRowsBySource
@@ -1232,6 +1240,7 @@ async function resolveEffectivePermissions(
       sources,
       capabilities,
       metaTools,
+      roleMetaTools,
       capabilityDigest: capabilityDigest(capabilities),
       sourceMapVersion,
       rolesJson,

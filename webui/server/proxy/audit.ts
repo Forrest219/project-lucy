@@ -45,6 +45,12 @@ export interface AccessLogEntry {
   permissionSnapshotHash?: string;
   effectiveTablesCount?: number;
   decisionReason?: string;
+  skillUri?: string;
+  skillVersion?: string;
+  skillFileVersion?: string;
+  skillAction?: "discover" | "read";
+  skillRolesAllowed?: string[];
+  matchedRoleId?: string;
   /** Spec 98 §10.3 — EffectivePolicy version at decision time. */
   policyVersion?: string;
   /** Spec 98 §10.3 — capability digest (also stored on permission_snapshots). */
@@ -114,7 +120,13 @@ const ACCESS_LOG_COLUMNS = [
   ["client_version", "TEXT"],
   ["device_name", "TEXT"],
   ["policy_version", "TEXT"],
-  ["capability_digest", "TEXT"]
+  ["capability_digest", "TEXT"],
+  ["skill_uri", "TEXT"],
+  ["skill_version", "TEXT"],
+  ["skill_file_version", "TEXT"],
+  ["skill_action", "TEXT"],
+  ["skill_roles_allowed", "TEXT"],
+  ["matched_role_id", "TEXT"]
 ] as const;
 const PERMISSION_SNAPSHOT_COLUMNS = [
   ["capability_digest", "TEXT"],
@@ -343,9 +355,9 @@ export async function writeLog(entry: AccessLogEntry): Promise<number> {
   if (!insertStmt) {
     insertStmt = database.prepare(`
       INSERT INTO access_log
-        (ts, user_id, token_label, token_hash_prefix, lucy_session_id, lucy_turn_id, turn_attribution_mode, turn_attribution_confidence, turn_attribution_reason, lucy_platform, client, client_version, client_ip, user_agent, device_name, tool, tables, args_summary, query_hash, query_length, query_operation, query_preview, query_artifact_ref, generated_sql, outcome, error_detail, duration_ms, response_bytes, response_row_count, response_column_count, response_truncated, request_id, trace_id, role_ids, permission_snapshot_hash, effective_tables_count, decision_reason, policy_version, capability_digest)
+        (ts, user_id, token_label, token_hash_prefix, lucy_session_id, lucy_turn_id, turn_attribution_mode, turn_attribution_confidence, turn_attribution_reason, lucy_platform, client, client_version, client_ip, user_agent, device_name, tool, tables, args_summary, query_hash, query_length, query_operation, query_preview, query_artifact_ref, generated_sql, outcome, error_detail, duration_ms, response_bytes, response_row_count, response_column_count, response_truncated, request_id, trace_id, role_ids, permission_snapshot_hash, effective_tables_count, decision_reason, policy_version, capability_digest, skill_uri, skill_version, skill_file_version, skill_action, skill_roles_allowed, matched_role_id)
       VALUES
-        (@ts, @userId, @tokenLabel, @tokenHashPrefix, @lucySessionId, @lucyTurnId, @turnAttributionMode, @turnAttributionConfidence, @turnAttributionReason, @lucyPlatform, @client, @clientVersion, @clientIp, @userAgent, @deviceName, @tool, @tables, @argsSummary, @queryHash, @queryLength, @queryOperation, @queryPreview, @queryArtifactRef, @generatedSql, @outcome, @errorDetail, @durationMs, @responseBytes, @responseRowCount, @responseColumnCount, @responseTruncated, @requestId, @traceId, @roleIds, @permissionSnapshotHash, @effectiveTablesCount, @decisionReason, @policyVersion, @capabilityDigest)
+        (@ts, @userId, @tokenLabel, @tokenHashPrefix, @lucySessionId, @lucyTurnId, @turnAttributionMode, @turnAttributionConfidence, @turnAttributionReason, @lucyPlatform, @client, @clientVersion, @clientIp, @userAgent, @deviceName, @tool, @tables, @argsSummary, @queryHash, @queryLength, @queryOperation, @queryPreview, @queryArtifactRef, @generatedSql, @outcome, @errorDetail, @durationMs, @responseBytes, @responseRowCount, @responseColumnCount, @responseTruncated, @requestId, @traceId, @roleIds, @permissionSnapshotHash, @effectiveTablesCount, @decisionReason, @policyVersion, @capabilityDigest, @skillUri, @skillVersion, @skillFileVersion, @skillAction, @skillRolesAllowed, @matchedRoleId)
     `);
   }
   const result = insertStmt.run({
@@ -389,9 +401,20 @@ export async function writeLog(entry: AccessLogEntry): Promise<number> {
     policyVersion: entry.policyVersion ?? null,
     capabilityDigest: entry.capabilityDigest
       ?? entry.permissionSnapshot?.capabilityDigest
-      ?? null
+      ?? null,
+    skillUri: entry.skillUri ?? null,
+    skillVersion: entry.skillVersion ?? null,
+    skillFileVersion: entry.skillFileVersion ?? null,
+    skillAction: entry.skillAction ?? null,
+    skillRolesAllowed: entry.skillRolesAllowed ? JSON.stringify(entry.skillRolesAllowed) : null,
+    matchedRoleId: entry.matchedRoleId ?? null
   });
   return Number(result.lastInsertRowid);
+}
+
+/** Ensures the idempotent access-log migration completed before returning Skill bodies. */
+export async function ensureSkillAuditReady(): Promise<void> {
+  await getDb();
 }
 
 export async function writeAuthFailureLog(entry: AuthFailureLogEntry): Promise<number> {

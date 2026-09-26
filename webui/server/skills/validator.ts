@@ -2,6 +2,7 @@ import { access, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { parse } from "yaml";
 import { resolveProjectRoot } from "../project.js";
+import { isSkillSegment } from "./identifiers.js";
 import type { SkillAsset, SkillValidationIssue, SkillValidationResult } from "./types.js";
 
 async function fileExists(filePath: string): Promise<boolean> {
@@ -20,11 +21,11 @@ export async function validateSkill(skill: SkillAsset, customProjectRoot?: strin
   // 1. Basic field checks
   if (!skill.name || skill.name.trim() === "") {
     issues.push({ type: "error", field: "name", message: "Skill name is required" });
-  } else if (!/^[a-zA-Z0-9_-]+$/.test(skill.name)) {
+  } else if (!isSkillSegment(skill.name)) {
     issues.push({
       type: "error",
       field: "name",
-      message: `Skill name "${skill.name}" must contain only alphanumeric characters, dashes, and underscores`,
+      message: `Skill name "${skill.name}" must use lowercase letters, digits, dashes, and underscores`,
     });
   }
 
@@ -34,6 +35,20 @@ export async function validateSkill(skill: SkillAsset, customProjectRoot?: strin
 
   if (!skill.domain || skill.domain.trim() === "") {
     issues.push({ type: "error", field: "domain", message: "Skill domain is required" });
+  } else if (!isSkillSegment(skill.domain)) {
+    issues.push({
+      type: "error",
+      field: "domain",
+      message: `Skill domain "${skill.domain}" must use lowercase letters, digits, dashes, and underscores`,
+    });
+  }
+
+  if (skill.roles_allowed.includes("*") && skill.roles_allowed.length > 1) {
+    issues.push({
+      type: "error",
+      field: "roles_allowed",
+      message: "roles_allowed wildcard must not be combined with role ids",
+    });
   }
 
   if (!skill.version || skill.version.trim() === "") {

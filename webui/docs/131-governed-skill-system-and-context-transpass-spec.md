@@ -200,21 +200,13 @@ eval_cases:
 ## 4. 企业级权限管控与全链路审计 (Governance, ACL & Audit)
 
 ### 4.1 Token / Role 级 Skill 访问控制 (Skill ACL)
-扩展 `webui/server/proxy/acl.ts`，新增 Skill 级别的权限控制逻辑：
+> 本节由 Spec 151 修订。原拟议的 `allowed_skills`、`denied_skills`、`allowed_domains` 与 `allow_all_skills` 从未成为运行时契约，现正式废弃。
 
-```typescript
-export interface RoleSkillPolicy {
-  allow_all_skills?: boolean;
-  allowed_domains?: string[];
-  allowed_skills?: string[]; // 例如 ["superstore/*", "kx_financial/dupont-analysis"]
-  denied_skills?: string[];
-}
-```
-
-- **求值规则**：
-  1. 若 `denied_skills` 命中，则**立即拒绝 (Deny)**。
-  2. 若 `allow_all_skills === true`，则允许。
-  3. 检查 `allowed_domains` 或 `allowed_skills` 是否包含该 Skill，未明确声明则默认为拒绝（Fail-Closed 原则）。
+- Skill frontmatter 的 `roles_allowed` 是对象授权唯一事实源；缺失或空集合表示无人可见。
+- Role 只通过 `lucy_skill_search` / `lucy_skill_read` 授予发现 / 读取通道。
+- 多 Role identity 必须由同一个 Role 同时满足对象授权和通道能力，禁止跨 Role 拼权。
+- 显式 `["*"]` 表示所有 Role 可见；无 Role 的 legacy direct-allow identity 仅可通过该通配符匹配。
+- 完整算法、稳定拒绝原因与协议映射见 Spec 151 §2–§3。
 
 ### 4.2 审计日志增强 (`access_log` Schema Extension)
 在 `.ktx-ui/audit.sqlite` 的 `access_log` 表中扩充 Skill 调用与上下文跟踪字段：

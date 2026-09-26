@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { parse } from "yaml";
@@ -55,7 +56,7 @@ export function parseSkillMarkdown(rawContent: string, filePath: string, project
   const status = parsed.status === "published" || parsed.status === "deprecated" ? parsed.status : "draft";
   const roles_allowed = Array.isArray(parsed.roles_allowed)
     ? parsed.roles_allowed.map(r => String(r).trim()).filter(Boolean)
-    : ["*"];
+    : [];
   const triggers = Array.isArray(parsed.triggers)
     ? parsed.triggers.map(t => String(t).trim()).filter(Boolean)
     : [];
@@ -91,6 +92,7 @@ export function parseSkillMarkdown(rawContent: string, filePath: string, project
     filePath,
     content: bodyContent.trim(),
     raw: rawContent,
+    file_version: createHash("sha256").update(rawContent).digest("hex"),
   };
 }
 

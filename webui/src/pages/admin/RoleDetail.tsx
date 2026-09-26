@@ -1134,6 +1134,24 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
                 capabilityDigest={detail.effectivePermissions?.capabilityDigest}
               />
             )}
+            {detail?.skillAccess ? (
+              <section className="pl-card grid gap-2 text-xs" data-testid="role-skill-access-summary" aria-label="业务 Skill 摘要">
+                <h3 className="font-medium">业务 Skill</h3>
+                <dl className="grid grid-cols-3 gap-2 text-center">
+                  <div><dt className="text-fg-muted">可检索</dt><dd className="mt-1 font-semibold">{detail.skillAccess.discoverable.length}</dd></div>
+                  <div><dt className="text-fg-muted">可读取</dt><dd className="mt-1 font-semibold">{detail.skillAccess.readable.length}</dd></div>
+                  <div><dt className="text-fg-muted">通道不完整</dt><dd className="mt-1 font-semibold">{detail.skillAccess.declaredWithoutChannel.length}</dd></div>
+                </dl>
+                {detail.skillAccess.declared.length > 0 ? (
+                  <ul className="max-h-28 space-y-1 overflow-auto text-fg-muted">
+                    {detail.skillAccess.declared.map((uri) => <li key={uri} className="notranslate break-all font-mono" translate="no">{uri}</li>)}
+                  </ul>
+                ) : (
+                  <p className="text-fg-muted">没有声明给此角色的业务 Skill。</p>
+                )}
+                <p className="text-fg-muted">授权修改请前往 Skill 编辑页。</p>
+              </section>
+            ) : null}
           </div>
         )}
 

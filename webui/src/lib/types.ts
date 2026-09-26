@@ -703,6 +703,14 @@ export type RoleDetail = Role & {
     allow: RoleAllowConfig;
   };
   effectivePermissions?: EffectivePermissionsPreview;
+  skillAccess?: {
+    discoverEnabled: boolean;
+    readEnabled: boolean;
+    declared: string[];
+    discoverable: string[];
+    readable: string[];
+    declaredWithoutChannel: string[];
+  };
 };
 
 /** Spec 99 §8 — TRUE / all, or scoped digest (Role API may also include predicates). */
@@ -997,6 +1005,12 @@ export type AuditLogEntry = {
   decisionReason?: string;
   policyVersion?: string;
   capabilityDigest?: string;
+  skillUri?: string;
+  skillVersion?: string;
+  skillFileVersion?: string;
+  skillAction?: "discover" | "read";
+  skillRolesAllowed?: string[];
+  matchedRoleId?: string;
 };
 
 export type AuditQuery = {

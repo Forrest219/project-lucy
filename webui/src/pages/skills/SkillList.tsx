@@ -5,6 +5,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "../../components/PageHeader";
 import { MarkdownPreview } from "../../components/MarkdownPreview";
 import { queryKeys } from "../../lib/queryKeys";
+import { apiGet } from "../../lib/apiClient";
+import type { Role } from "../../lib/types";
 import {
   createSkill,
   deleteSkill,
@@ -24,6 +26,7 @@ import {
  */
 
 type EditorMode = "view" | "edit" | "create";
+type RolesResponse = { roles: Role[] };
 
 type DraftForm = {
   name: string;
@@ -31,7 +34,8 @@ type DraftForm = {
   title: string;
   version: string;
   status: SkillStatus;
-  rolesAllowedText: string;
+  rolesAllowed: string[];
+  allowAllRoles: boolean;
   triggersText: string;
   description: string;
   content: string;
@@ -44,7 +48,8 @@ function emptyDraft(): DraftForm {
     title: "",
     version: "1.0.0",
     status: "draft",
-    rolesAllowedText: "*",
+    rolesAllowed: [],
+    allowAllRoles: false,
     triggersText: "",
     description: "",
     content: ""
@@ -58,7 +63,8 @@ function draftFromSkill(skill: SkillAsset): DraftForm {
     title: skill.title,
     version: skill.version,
     status: skill.status,
-    rolesAllowedText: skill.roles_allowed.join(", "),
+    rolesAllowed: skill.roles_allowed.filter((role) => role !== "*"),
+    allowAllRoles: skill.roles_allowed.includes("*"),
     triggersText: skill.triggers.join(", "),
     description: skill.description,
     content: skill.content
@@ -66,10 +72,6 @@ function draftFromSkill(skill: SkillAsset): DraftForm {
 }
 
 function payloadFromDraft(draft: DraftForm): SkillWritePayload {
-  const roles = draft.rolesAllowedText
-    .split(/[,，]/)
-    .map((s) => s.trim())
-    .filter(Boolean);
   const triggers = draft.triggersText
     .split(/[,，]/)
     .map((s) => s.trim())
@@ -80,7 +82,7 @@ function payloadFromDraft(draft: DraftForm): SkillWritePayload {
     title: draft.title.trim() || draft.name.trim(),
     version: draft.version.trim() || "1.0.0",
     status: draft.status,
-    roles_allowed: roles.length > 0 ? roles : ["*"],
+    roles_allowed: draft.allowAllRoles ? ["*"] : draft.rolesAllowed,
     triggers,
     description: draft.description.trim(),
     content: draft.content
@@ -179,8 +181,8 @@ function SkillViewBody({ skill }: { skill: SkillAsset }) {
             {skill.version}
           </span>
         </DetailRow>
-        <DetailRow label="文件路径" testId="skill-detail-path">
-          <code className="notranslate" translate="no">
+        <DetailRow label="文件路径">
+          <code className="notranslate" data-testid="skill-detail-path" translate="no">
             {skill.relativePath}
           </code>
         </DetailRow>
@@ -262,12 +264,22 @@ function Field({
 function SkillEditorForm({
   draft,
   onChange,
-  nameLocked
+  identityLocked,
+  availableRoles
 }: {
   draft: DraftForm;
   onChange: (next: DraftForm) => void;
-  nameLocked: boolean;
+  identityLocked: boolean;
+  availableRoles: Role[];
 }) {
+  const knownRoleIds = new Set(availableRoles.map((role) => role.id));
+  const unknownRoles = draft.rolesAllowed.filter((role) => !knownRoleIds.has(role));
+  const toggleRole = (roleId: string, checked: boolean) => {
+    const nextRoles = checked
+      ? [...new Set([...draft.rolesAllowed, roleId])]
+      : draft.rolesAllowed.filter((role) => role !== roleId);
+    onChange({ ...draft, rolesAllowed: nextRoles });
+  };
   return (
     <div className="grid gap-3" data-testid="skill-editor-form">
       <div className="grid gap-3 sm:grid-cols-2">
@@ -276,7 +288,7 @@ function SkillEditorForm({
             className="pl-input notranslate"
             translate="no"
             value={draft.name}
-            disabled={nameLocked}
+            disabled={identityLocked}
             onChange={(e) => onChange({ ...draft, name: e.target.value })}
             data-testid="skill-field-name"
           />
@@ -286,6 +298,7 @@ function SkillEditorForm({
             className="pl-input notranslate"
             translate="no"
             value={draft.domain}
+            disabled={identityLocked}
             onChange={(e) => onChange({ ...draft, domain: e.target.value })}
             data-testid="skill-field-domain"
           />
@@ -319,16 +332,51 @@ function SkillEditorForm({
             <option value="deprecated">已停用</option>
           </select>
         </Field>
-        <Field label="角色授权">
-          <input
-            className="pl-input notranslate"
-            translate="no"
-            value={draft.rolesAllowedText}
-            onChange={(e) => onChange({ ...draft, rolesAllowedText: e.target.value })}
-            placeholder="* 或 role-a, role-b"
-            data-testid="skill-field-roles"
-          />
-        </Field>
+        <fieldset className="grid gap-2 text-sm" data-testid="skill-field-roles">
+          <legend className="pl-eyebrow">可访问角色</legend>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={draft.allowAllRoles}
+              onChange={(event) => {
+                if (
+                  event.target.checked
+                  && !window.confirm("确认将此 Skill 设置为所有角色可见？")
+                ) return;
+                onChange({
+                  ...draft,
+                  allowAllRoles: event.target.checked,
+                  rolesAllowed: event.target.checked ? [] : draft.rolesAllowed
+                });
+              }}
+              data-testid="skill-role-all"
+            />
+            所有角色可见
+          </label>
+          <div className="grid max-h-36 gap-1 overflow-y-auto rounded-md border border-border-default p-2">
+            {availableRoles.map((role) => (
+              <label key={role.id} className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={draft.rolesAllowed.includes(role.id)}
+                  disabled={draft.allowAllRoles}
+                  onChange={(event) => toggleRole(role.id, event.target.checked)}
+                  data-testid="skill-role-option"
+                />
+                <span className="notranslate" translate="no">{role.id}</span>
+              </label>
+            ))}
+            {availableRoles.length === 0 ? <span className="text-fg-muted">暂无可选角色</span> : null}
+          </div>
+          {!draft.allowAllRoles && draft.rolesAllowed.length === 0 ? (
+            <span className="text-xs text-fg-muted" data-testid="skill-role-none">无人可见</span>
+          ) : null}
+          {unknownRoles.length > 0 ? (
+            <span className="text-xs text-warning-strong" data-testid="skill-role-unknown">
+              未配置角色：<span className="notranslate" translate="no">{unknownRoles.join("、")}</span>
+            </span>
+          ) : null}
+        </fieldset>
       </div>
       <Field label="触发词">
         <input
@@ -371,6 +419,11 @@ export function SkillList() {
     queryKey: queryKeys.skills,
     queryFn: fetchSkills
   });
+  const rolesQuery = useQuery({
+    queryKey: ["admin", "roles", "skill-options"],
+    queryFn: () => apiGet<RolesResponse>("/api/admin/roles?includeTemplates=false")
+  });
+  const availableRoles = rolesQuery.data?.roles ?? [];
 
   const skills = useMemo(() => skillsQuery.data?.skills ?? [], [skillsQuery.data]);
   const selectedSkill = useMemo(
@@ -426,7 +479,10 @@ export function SkillList() {
         return createSkill(payload);
       }
       if (!selectedSkill) throw new Error("未选择 Skill");
-      return updateSkill(selectedSkill.domain, selectedSkill.name, payload);
+      return updateSkill(selectedSkill.domain, selectedSkill.name, {
+        ...payload,
+        expected_version: selectedSkill.file_version
+      });
     },
     onSuccess: async (result) => {
       setFormError(null);
@@ -444,7 +500,7 @@ export function SkillList() {
   const deleteMutation = useMutation({
     mutationFn: async () => {
       if (!selectedSkill) throw new Error("未选择 Skill");
-      return deleteSkill(selectedSkill.domain, selectedSkill.name);
+      return deleteSkill(selectedSkill.domain, selectedSkill.name, selectedSkill.file_version);
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.skills });
@@ -603,7 +659,12 @@ export function SkillList() {
               ) : null}
               {mode === "view" && selectedSkill ? <SkillViewBody skill={selectedSkill} /> : null}
               {(mode === "edit" || mode === "create") && (
-                <SkillEditorForm draft={draft} onChange={setDraft} nameLocked={false} />
+                <SkillEditorForm
+                  draft={draft}
+                  onChange={setDraft}
+                  identityLocked={mode === "edit"}
+                  availableRoles={availableRoles}
+                />
               )}
               {mode === "view" && selectedSkill && !selectedSkill.validation.valid ? (
                 <p className="pl-notice mt-3" data-testid="skill-validation-banner">

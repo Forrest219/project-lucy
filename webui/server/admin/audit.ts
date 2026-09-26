@@ -76,7 +76,13 @@ const ACCESS_LOG_COLUMNS = [
   ["client_version", "TEXT"],
   ["device_name", "TEXT"],
   ["policy_version", "TEXT"],
-  ["capability_digest", "TEXT"]
+  ["capability_digest", "TEXT"],
+  ["skill_uri", "TEXT"],
+  ["skill_version", "TEXT"],
+  ["skill_file_version", "TEXT"],
+  ["skill_action", "TEXT"],
+  ["skill_roles_allowed", "TEXT"],
+  ["matched_role_id", "TEXT"]
 ] as const;
 const PERMISSION_SNAPSHOT_COLUMNS = [
   ["capability_digest", "TEXT"],
@@ -626,6 +632,12 @@ interface QueryRow {
   decision_reason: string | null;
   policy_version: string | null;
   capability_digest: string | null;
+  skill_uri: string | null;
+  skill_version: string | null;
+  skill_file_version: string | null;
+  skill_action: "discover" | "read" | null;
+  skill_roles_allowed: string | null;
+  matched_role_id: string | null;
 }
 
 const ACCESS_LOG_CSV_HEADERS = [
@@ -668,7 +680,13 @@ const ACCESS_LOG_CSV_HEADERS = [
   "effective_tables_count",
   "decision_reason",
   "policy_version",
-  "capability_digest"
+  "capability_digest",
+  "skill_uri",
+  "skill_version",
+  "skill_file_version",
+  "skill_action",
+  "skill_roles_allowed",
+  "matched_role_id"
 ] as const;
 
 type CsvFieldMetadata = {
@@ -919,6 +937,42 @@ const ACCESS_LOG_FIELD_METADATA: Record<(typeof ACCESS_LOG_CSV_HEADERS)[number],
     format: "sha256|null",
     description: "Agent 可用能力边界的摘要。",
     trigger: "权限策略编译结果可提供能力摘要时输出。"
+  },
+  skill_uri: {
+    label: "Skill URI",
+    format: "string|null",
+    description: "当前裁决对应的完整 Skill URI。",
+    trigger: "访问单个 Skill 或记录 Skill 裁决证据时输出。"
+  },
+  skill_version: {
+    label: "Skill 语义版本",
+    format: "string|null",
+    description: "访问时 frontmatter 声明的 Skill 版本。",
+    trigger: "访问单个 Skill 时输出。"
+  },
+  skill_file_version: {
+    label: "Skill 文件版本",
+    format: "sha256|null",
+    description: "访问时 Skill 入口文件的 SHA-256 摘要。",
+    trigger: "访问单个 Skill 时输出。"
+  },
+  skill_action: {
+    label: "Skill 动作",
+    format: "discover|read|null",
+    description: "Skill 裁决的发现或读取动作。",
+    trigger: "Skill 目录、检索或正文读取链路输出。"
+  },
+  skill_roles_allowed: {
+    label: "可访问角色快照",
+    format: "JSON string|null",
+    description: "访问时 Skill 的 roles_allowed 集合。",
+    trigger: "访问单个 Skill 时输出。"
+  },
+  matched_role_id: {
+    label: "命中 Role ID",
+    format: "string|null",
+    description: "同时满足对象授权与通道能力的 Role ID。",
+    trigger: "Skill 裁决允许且存在闭合 Role 时输出。"
   }
 };
 
@@ -966,7 +1020,13 @@ function renderAccessLogCsv(rows: QueryRow[]): string {
         row.effective_tables_count ?? "",
         csvCell(row.decision_reason),
         csvCell(row.policy_version),
-        csvCell(row.capability_digest)
+        csvCell(row.capability_digest),
+        csvCell(row.skill_uri),
+        csvCell(row.skill_version),
+        csvCell(row.skill_file_version),
+        csvCell(row.skill_action),
+        csvCell(row.skill_roles_allowed),
+        csvCell(row.matched_role_id)
       ].join(",")
     )
   ];
@@ -1957,7 +2017,13 @@ export function registerAuditRoutes(app: FastifyInstance) {
       effectiveTablesCount: row.effective_tables_count ?? undefined,
       decisionReason: row.decision_reason ?? undefined,
       policyVersion: row.policy_version ?? undefined,
-      capabilityDigest: row.capability_digest ?? undefined
+      capabilityDigest: row.capability_digest ?? undefined,
+      skillUri: row.skill_uri ?? undefined,
+      skillVersion: row.skill_version ?? undefined,
+      skillFileVersion: row.skill_file_version ?? undefined,
+      skillAction: row.skill_action ?? undefined,
+      skillRolesAllowed: row.skill_roles_allowed ? (JSON.parse(row.skill_roles_allowed) as string[]) : undefined,
+      matchedRoleId: row.matched_role_id ?? undefined
     }));
 
     return {

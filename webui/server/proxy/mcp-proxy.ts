@@ -4,7 +4,7 @@ import { createServer, request as httpRequest, type IncomingMessage, type Server
 import path from "node:path";
 import { identifyRequestDetailed, setSessionClient, type Identity } from "./identity.js";
 import { extractRequestClientMeta } from "./request-client-meta.js";
-import { writeLog, writeAccessLogSources, writeConversationTurn, purgeExpiredConversationTurns, writeAuthFailureLog, type AccessLogSourceRecord } from "./audit.js";
+import { ensureSkillAuditReady, writeLog, writeAccessLogSources, writeConversationTurn, purgeExpiredConversationTurns, writeAuthFailureLog, type AccessLogSourceRecord } from "./audit.js";
 import { allowedToolNames, check as aclCheck, effectivePermissions, extractTables, extractSourceRefs, resolveSourceRefsForTables, kxCatalog, lucyCatalog, permissionSnapshot, type SourceRef } from "./acl.js";
 import {
   redactQuestionText,
@@ -16,7 +16,8 @@ import {
 import { buildAccessLogAuditMeta } from "./audit-meta.js";
 import { canAccessWikiKey, canonicalWikiKey, searchAccessibleWikiPages } from "./wiki-acl.js";
 import { loadAllSkills, getSkillByUri, getSkillByName } from "../skills/loader.js";
-import { canAccessSkill, filterAccessibleSkills } from "./skill-acl.js";
+import type { SkillAsset } from "../skills/types.js";
+import { canAccessSkill, filterAccessibleSkills, type SkillAclDecision, type SkillAclAction } from "./skill-acl.js";
 import { readProject, resolveProjectRoot } from "../project.js";
 import { readKtxYamlDigest, recordExecutionRuntimeObservation } from "../mcp-runtime-state.js";
 import {
@@ -199,6 +200,18 @@ function recordAudit(entry: Parameters<typeof writeLog>[0], sources?: SourceRef[
     .catch((err) => {
       console.error("[lucy-proxy] failed to write audit log", err);
     });
+}
+
+function skillAuditFields(skill: SkillAsset, action: SkillAclAction, decision?: SkillAclDecision) {
+  return {
+    skillUri: skill.uri,
+    skillVersion: skill.version,
+    skillFileVersion: skill.file_version,
+    skillAction: action,
+    skillRolesAllowed: skill.roles_allowed,
+    matchedRoleId: decision?.matchedRoleId,
+    decisionReason: decision?.reason ?? (decision?.allowed ? "allowed" : undefined)
+  };
 }
 
 /**
@@ -1281,7 +1294,7 @@ async function buildRoleAwareInstructions(identity: Identity): Promise<string | 
     let accessibleSkills: Awaited<ReturnType<typeof filterAccessibleSkills>> = [];
     try {
       const allSkills = await loadAllSkills();
-      accessibleSkills = await filterAccessibleSkills(identity, allSkills);
+      accessibleSkills = await filterAccessibleSkills(identity, allSkills, "discover");
     } catch {
       // Best-effort loading of skills for instructions
     }
@@ -2625,12 +2638,31 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
     }
   }
 
+  const skillReadRequest = rpcMethod === "resources/read"
+    || rpcMethod === "prompts/get"
+    || (rpcMethod === "tools/call" && toolName === "lucy_skill_read");
+  if (skillReadRequest) {
+    try {
+      await ensureSkillAuditReady();
+    } catch (error) {
+      console.error("[lucy-proxy] Skill audit schema unavailable; denying content read", error);
+      const responseBody = JSON.stringify({
+        jsonrpc: "2.0",
+        id: requestId,
+        error: { code: -32003, message: "Access denied: skill_audit_unavailable" }
+      });
+      res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+      res.end(responseBody);
+      return;
+    }
+  }
+
   // ─── Spec 131: Governed Skills MCP Protocol Interceptions ───
   if (rpcMethod === "resources/list") {
     let resources: Array<{ uri: string; name: string; description: string; mimeType: string }> = [];
     try {
       const allSkills = await loadAllSkills();
-      const accessible = await filterAccessibleSkills(identity, allSkills);
+      const accessible = await filterAccessibleSkills(identity, allSkills, "discover");
       resources = accessible.map((s) => ({
         uri: s.uri,
         name: s.name,
@@ -2660,6 +2692,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       requestId,
       ...requestMeta,
       ...(await auditMeta(identity, "allowed")),
+      skillAction: "discover"
     });
     return;
   }
@@ -2693,7 +2726,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       return;
     }
 
-    const decision = await canAccessSkill(identity, skill);
+    const decision = await canAccessSkill(identity, skill, "read");
     if (!decision.allowed) {
       const errPayload = {
         jsonrpc: "2.0",
@@ -2715,6 +2748,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
         requestId,
         ...requestMeta,
         ...(await auditMeta(identity, decision.reason ?? "denied_skill_acl")),
+        ...skillAuditFields(skill, "read", decision),
       });
       return;
     }
@@ -2746,6 +2780,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       requestId,
       ...requestMeta,
       ...(await auditMeta(identity, "allowed")),
+      ...skillAuditFields(skill, "read", decision),
     });
     return;
   }
@@ -2754,7 +2789,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
     let prompts: Array<{ name: string; description: string; arguments?: Array<{ name: string; description: string; required: boolean }> }> = [];
     try {
       const allSkills = await loadAllSkills();
-      const accessible = await filterAccessibleSkills(identity, allSkills);
+      const accessible = await filterAccessibleSkills(identity, allSkills, "discover");
       prompts = accessible.map((s) => ({
         name: s.name,
         description: s.description,
@@ -2789,6 +2824,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       requestId,
       ...requestMeta,
       ...(await auditMeta(identity, "allowed")),
+      skillAction: "discover"
     });
     return;
   }
@@ -2822,7 +2858,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       return;
     }
 
-    const decision = await canAccessSkill(identity, skill);
+    const decision = await canAccessSkill(identity, skill, "read");
     if (!decision.allowed) {
       const errPayload = {
         jsonrpc: "2.0",
@@ -2844,6 +2880,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
         requestId,
         ...requestMeta,
         ...(await auditMeta(identity, decision.reason ?? "denied_skill_acl")),
+        ...skillAuditFields(skill, "read", decision),
       });
       return;
     }
@@ -2878,6 +2915,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       requestId,
       ...requestMeta,
       ...(await auditMeta(identity, "allowed")),
+      ...skillAuditFields(skill, "read", decision),
     });
     return;
   }
@@ -2888,7 +2926,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
     const domainFilter = typeof rawArgs?.domain === "string" ? rawArgs.domain.trim().toLowerCase() : "";
 
     const allSkills = await loadAllSkills();
-    const accessible = await filterAccessibleSkills(identity, allSkills);
+    const accessible = await filterAccessibleSkills(identity, allSkills, "discover");
 
     const matches = accessible.filter((s) => {
       if (domainFilter && s.domain.toLowerCase() !== domainFilter) return false;
@@ -2929,6 +2967,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       requestId,
       ...requestMeta,
       ...(await auditMeta(identity, "allowed")),
+      skillAction: "discover"
     });
     recordMcpTraceForTool({
       traceId,
@@ -2973,7 +3012,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       return;
     }
 
-    const decision = await canAccessSkill(identity, skill);
+    const decision = await canAccessSkill(identity, skill, "read");
     if (!decision.allowed) {
       const responseBody = jsonRpcToolResult(requestId, `Access denied: ${decision.reason ?? "denied_skill_acl"}`, { isError: true });
       res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
@@ -2991,6 +3030,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
         requestId,
         ...requestMeta,
         ...(await auditMeta(identity, decision.reason ?? "denied_skill_acl")),
+        ...skillAuditFields(skill, "read", decision),
       });
       return;
     }
@@ -3010,6 +3050,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       requestId,
       ...requestMeta,
       ...(await auditMeta(identity, "allowed")),
+      ...skillAuditFields(skill, "read", decision),
     });
     recordMcpTraceForTool({
       traceId,
@@ -3121,6 +3162,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
         requestId,
         ...requestMeta,
         ...(await auditMeta(identity, "local_initialize_fallback")),
+        skillAction: "discover"
       });
       return;
     }
@@ -3260,6 +3302,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       requestId,
       ...requestMeta,
       ...(await auditMeta(identity, initResult.injectionFailed ? "instructions_injection_failed" : "allowed")),
+      skillAction: "discover"
     });
     return;
   }

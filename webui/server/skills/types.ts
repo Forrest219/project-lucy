@@ -35,6 +35,8 @@ export interface SkillAsset {
   filePath: string;
   content: string;
   raw: string;
+  /** SHA-256 of the exact entry-file bytes; used for optimistic concurrency. */
+  file_version: string;
 }
 
 export interface SkillValidationIssue {

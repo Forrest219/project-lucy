@@ -366,6 +366,36 @@ not for agents
     expect(readJson.result?.content?.[0]?.text).toContain("Mock Profit Analysis SOP");
   });
 
+  it("uses search for discovery and read for body access", async () => {
+    await writeFile(
+      path.join(projectRoot, "webui", "config", "access.yaml"),
+      ACCESS_YAML.replace("        - lucy_skill_read\n", "")
+    );
+    const { invalidateAccessConfigCache } = await import("../proxy/identity.js");
+    const { resetEffectivePolicyForTests } = await import("../proxy/acl.js");
+    invalidateAccessConfigCache();
+    resetEffectivePolicyForTests();
+
+    const post = (body: unknown) => fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${TOKEN}`, "content-type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    const list = await post({ jsonrpc: "2.0", id: "split-list", method: "resources/list", params: {} });
+    const listJson = await list.json() as { result?: { resources?: Array<{ name: string }> } };
+    expect(listJson.result?.resources?.some((resource) => resource.name === "mock-profit-skill")).toBe(true);
+
+    const read = await post({
+      jsonrpc: "2.0",
+      id: "split-read",
+      method: "resources/read",
+      params: { uri: "lucy-skill://superstore/mock-profit-skill" }
+    });
+    const readJson = await read.json() as { error?: { code: number; message: string } };
+    expect(readJson.error?.code).toBe(-32003);
+    expect(readJson.error?.message).toContain("skill_channel_forbidden:read");
+  });
+
   it("hides draft skills from all agent channels (Spec 144)", { timeout: 20000 }, async () => {    const post = (body: unknown) =>
       fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
         method: "POST",
