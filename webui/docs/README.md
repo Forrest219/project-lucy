@@ -130,6 +130,7 @@
 | [142-overview-focus-and-restraint-spec.md](142-overview-focus-and-restraint-spec.md) | `/overview` 聚焦精简：只保留系统状态 / 待处理事项 / MCP 接入；删除质量快照与访问风险（Implemented v1.0） | 产品 / UX / Frontend |
 | [143-call-monitoring-ops-page-spec.md](143-call-monitoring-ops-page-spec.md) | 调用监控运维页：运行状态分组、`/ops/calls` 准实时 MCP 吞吐/成败/时效盯盘、SLO 红标与访问日志下钻（Implemented） | 产品 / UX / API / Ops / Frontend / Backend |
 | [146-restore-row-policy-proxy-wiring-spec.md](146-restore-row-policy-proxy-wiring-spec.md) | Row Policy Proxy 接线恢复：修复 `68db68a` 抹掉的 `forced_filters` 注入与 explain 诊断（安全修复） | Backend / Security |
+| [150-role-permission-configuration-structure-spec.md](150-role-permission-configuration-structure-spec.md) | Role 权限配置结构化重构：可访问的表 / 允许的 MCP 工具 / 行级策略独立编辑面，共享草稿与确认权限变更 Drawer | 产品 / UX / IA / Frontend / Accessibility |
 | [151-business-skill-authorization-and-file-safety-spec.md](151-business-skill-authorization-and-file-safety-spec.md) | 业务 Skill 授权与文件安全加固：`roles_allowed` 单一事实源、同角色闭合、身份不可变、并发版本与审计证据 | 产品 / API / 安全 / Frontend / Audit |
 
 ## 与原 README 的关键校正

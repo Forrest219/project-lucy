@@ -5,6 +5,8 @@
  * 由 server/__tests__/role-permission-draft-parity.test.ts 静态 import 断言。
  */
 
+import type { RoleUserReference } from "./types";
+
 // ─── AbsoluteDeny ────────────────────────────────────────────────────────────
 
 /**
@@ -41,7 +43,8 @@ export const READONLY_QA_WIKI_PRESET = [
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-export type ScopeMode = "names" | "prefix" | "catalog_bound";
+/** Spec 150: v2 editing supports explicit names or catalog binding only. */
+export type ScopeMode = "names" | "catalog_bound";
 
 export type PresetName = "只读问答" | "只读问答 + 知识库";
 
@@ -66,6 +69,31 @@ export interface TableGrant {
   name: string;
   /** 行级策略谓词列表。空或 undefined 表示全部行。 */
   predicates?: RowPolicyPredicateDraft[];
+}
+
+export type PermissionSection = "overview" | "tables" | "tools" | "rowPolicy" | "usage";
+
+export type RolePermissionDraft = {
+  roleId: string;
+  description: string;
+  scope:
+    | { mode: "names"; tables: TableGrant[] }
+    | { mode: "catalog_bound"; connections: string[] };
+  tools: string[];
+};
+
+export type PermissionRisk = "expanded" | "contracted" | "mixed" | "unchanged";
+
+export interface PermissionImpactSummary {
+  tablesAdded: string[];
+  tablesRemoved: string[];
+  toolsAdded: string[];
+  toolsRemoved: string[];
+  rowPoliciesChanged: string[];
+  rejectedToolsRemoved: string[];
+  catalogBoundChange: "enabled" | "disabled" | null;
+  risk: PermissionRisk;
+  affectedAgents: RoleUserReference[];
 }
 
 /** 输出给 access.yaml 的 names selector（草稿形态）。 */
@@ -160,7 +188,7 @@ export function partitionGrantableTools(tools: string[]): PartitionedTools {
 
 /**
  * 从已选表或手工列表推导连接列表。
- * - names / prefix：连接 = 已选表的连接去重（顺序保留首次出现）。
+ * - names：连接 = 已选表的连接去重（顺序保留首次出现）。
  * - catalog_bound：连接 = 调用方传入的手工列表，不从空表树推导。
  */
 export function deriveConnections(
@@ -265,15 +293,12 @@ export function groupTableGrants(tables: TableGrant[]): NamesSelectorDraft[] {
 /**
  * 扩权模式的警示文案。
  * - names：null（无扩权）。
- * - prefix：「此后同前缀的新表自动进入」。
  * - catalog_bound：「已声明连接上，后续新启用的表自动进入，并走扩权审计」。
  */
 export function expansionNotice(mode: ScopeMode): string | null {
   switch (mode) {
     case "names":
       return null;
-    case "prefix":
-      return "此后同前缀的新表自动进入";
     case "catalog_bound":
       return "已声明连接上，后续新启用的表自动进入，并走扩权审计";
   }
@@ -308,8 +333,6 @@ export interface TableAllowOutput {
   tableSelectors?: TableAllowSelector[];
   /** Present only for catalog_bound. */
   source_scope?: "catalog_bound";
-  /** Non-empty prefix string when mode is "prefix" and admin has entered one. */
-  prefixRule?: string;
 }
 
 export interface BuildTableAllowInput {
@@ -317,8 +340,6 @@ export interface BuildTableAllowInput {
   tables: TableGrant[];
   /** Connections passed explicitly for catalog_bound mode. */
   manualConnections?: string[];
-  /** Prefix string (informational; does not change selector shape). */
-  prefixRule?: string;
 }
 
 /**
@@ -333,7 +354,6 @@ export function buildTableAllow({
   mode,
   tables,
   manualConnections,
-  prefixRule,
 }: BuildTableAllowInput): TableAllowOutput {
   if (mode === "catalog_bound") {
     return {
@@ -364,11 +384,120 @@ export function buildTableAllow({
     };
   });
 
-  const output: TableAllowOutput = { connections, tableSelectors };
-  if (mode === "prefix" && prefixRule) {
-    output.prefixRule = prefixRule;
+  return { connections, tableSelectors };
+}
+
+// ─── Spec 150 shared draft / impact helpers ────────────────────────────────
+
+export function permissionTableKey(table: Pick<TableGrant, "connection" | "schema" | "name">): string {
+  return `${table.connection}/${table.schema}/${table.name}`;
+}
+
+function normalizedPredicate(predicate: RowPolicyPredicateDraft): RowPolicyPredicateDraft {
+  const field = predicate.field.trim();
+  if (predicate.op === "in") {
+    const values = (Array.isArray(predicate.value) ? predicate.value : String(predicate.value).split(","))
+      .map((value) => String(value).trim())
+      .filter(Boolean);
+    return { field, op: "in", value: [...new Set(values)].sort() };
   }
-  return output;
+  const value = Array.isArray(predicate.value) ? String(predicate.value[0] ?? "") : String(predicate.value);
+  return { field, op: "eq", value: value.trim() };
+}
+
+export function normalizeRolePermissionDraft(draft: RolePermissionDraft): RolePermissionDraft {
+  const tools = [...new Set(draft.tools.map((tool) => tool.trim()).filter(Boolean))].sort();
+  if (draft.scope.mode === "catalog_bound") {
+    return {
+      roleId: draft.roleId.trim(),
+      description: draft.description.trim(),
+      scope: {
+        mode: "catalog_bound",
+        connections: [...new Set(draft.scope.connections.map((connection) => connection.trim()).filter(Boolean))].sort(),
+      },
+      tools,
+    };
+  }
+
+  const tables = draft.scope.tables
+    .map((table) => ({
+      connection: table.connection.trim(),
+      schema: table.schema.trim(),
+      name: table.name.trim(),
+      ...(table.predicates?.length
+        ? { predicates: table.predicates.map(normalizedPredicate).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))) }
+        : {}),
+    }))
+    .filter((table) => table.connection && table.schema && table.name)
+    .sort((a, b) => permissionTableKey(a).localeCompare(permissionTableKey(b)));
+
+  return {
+    roleId: draft.roleId.trim(),
+    description: draft.description.trim(),
+    scope: { mode: "names", tables },
+    tools,
+  };
+}
+
+export function rolePermissionDraftHash(draft: RolePermissionDraft): string {
+  return JSON.stringify(normalizeRolePermissionDraft(draft));
+}
+
+function policyHash(table: TableGrant | undefined): string {
+  if (!table?.predicates?.length) return "";
+  return JSON.stringify(table.predicates.map(normalizedPredicate).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))));
+}
+
+export function derivePermissionImpact(
+  baseline: RolePermissionDraft,
+  draft: RolePermissionDraft,
+  rejectedToolsRemoved: string[] = [],
+  affectedAgents: RoleUserReference[] = []
+): PermissionImpactSummary {
+  const before = normalizeRolePermissionDraft(baseline);
+  const after = normalizeRolePermissionDraft(draft);
+  const beforeTables = before.scope.mode === "names" ? before.scope.tables : [];
+  const afterTables = after.scope.mode === "names" ? after.scope.tables : [];
+  const beforeByKey = new Map(beforeTables.map((table) => [permissionTableKey(table), table]));
+  const afterByKey = new Map(afterTables.map((table) => [permissionTableKey(table), table]));
+  const tablesAdded = [...afterByKey.keys()].filter((key) => !beforeByKey.has(key));
+  const tablesRemoved = [...beforeByKey.keys()].filter((key) => !afterByKey.has(key));
+  const rowPoliciesChanged = [...new Set([...beforeByKey.keys(), ...afterByKey.keys()])]
+    .filter((key) => beforeByKey.has(key) && afterByKey.has(key))
+    .filter((key) => policyHash(beforeByKey.get(key)) !== policyHash(afterByKey.get(key)));
+  const rowPolicyExpanded = rowPoliciesChanged.some((key) => {
+    const beforePolicy = beforeByKey.get(key)?.predicates?.length ?? 0;
+    const afterPolicy = afterByKey.get(key)?.predicates?.length ?? 0;
+    return beforePolicy > 0 && (afterPolicy === 0 || policyHash(beforeByKey.get(key)) !== policyHash(afterByKey.get(key)));
+  });
+  const rowPolicyContracted = rowPoliciesChanged.some((key) => {
+    const beforePolicy = beforeByKey.get(key)?.predicates?.length ?? 0;
+    const afterPolicy = afterByKey.get(key)?.predicates?.length ?? 0;
+    return afterPolicy > 0 && (beforePolicy === 0 || policyHash(beforeByKey.get(key)) !== policyHash(afterByKey.get(key)));
+  });
+  const beforeTools = new Set(before.tools);
+  const afterTools = new Set(after.tools);
+  const toolsAdded = after.tools.filter((tool) => !beforeTools.has(tool));
+  const toolsRemoved = before.tools.filter((tool) => !afterTools.has(tool));
+  const catalogBoundChange = before.scope.mode === after.scope.mode
+    ? null
+    : after.scope.mode === "catalog_bound" ? "enabled" : "disabled";
+
+  const expanded = tablesAdded.length > 0 || toolsAdded.length > 0 || catalogBoundChange === "enabled" || rowPolicyExpanded;
+  const contracted = tablesRemoved.length > 0 || toolsRemoved.length > 0 || rejectedToolsRemoved.length > 0 || catalogBoundChange === "disabled" || rowPolicyContracted;
+  const risk: PermissionRisk = expanded && contracted ? "mixed" : expanded ? "expanded" : contracted ? "contracted" : "unchanged";
+
+  return {
+    tablesAdded,
+    tablesRemoved,
+    toolsAdded,
+    toolsRemoved,
+    rowPoliciesChanged,
+    rejectedToolsRemoved: [...new Set(rejectedToolsRemoved)].sort(),
+    catalogBoundChange,
+    risk,
+    affectedAgents: affectedAgents.map((agent) => ({ ...agent })),
+  };
 }
 
 // ─── Effective digest ─────────────────────────────────────────────────────────

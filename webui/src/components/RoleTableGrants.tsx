@@ -1,22 +1,6 @@
-/**
- * T5 — 表树、行策略、高级扩权
- *
- * 表达：连接 → Schema → 表 的树，每张已选表的行策略，以及高级区（前缀/目录绑定）。
- * 写回：调用 groupTableGrants、deriveConnections、expansionNotice（from rolePermissionDraft）。
- * buildTableAllow 供外层 formToAllow 调用，本组件通过 onAllowChange 将构建好的值上抛。
- */
-
-import { type ChangeEvent, useCallback, useRef, useState } from "react";
-import {
-  type BuildTableAllowInput,
-  type RowPolicyPredicateDraft,
-  type ScopeMode,
-  type TableGrant,
-  buildTableAllow,
-  expansionNotice,
-} from "../lib/rolePermissionDraft";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
+import { useMemo, useState } from "react";
+import type { RolePermissionDraft, TableGrant } from "../lib/rolePermissionDraft";
+import { permissionTableKey } from "../lib/rolePermissionDraft";
 
 export interface ConnectionSchema {
   id: string;
@@ -24,512 +8,196 @@ export interface ConnectionSchema {
 }
 
 export interface RoleTableGrantsProps {
-  /** Initial scope mode. */
-  initialMode?: ScopeMode;
-  /** Initial selected tables (with optional row policies). */
-  initialTables?: TableGrant[];
-  /** Available connections for tree rendering. */
+  value: RolePermissionDraft["scope"];
   connections: ConnectionSchema[];
-  /**
-   * Candidate table names keyed by `"${connection}\0${schema}"`.
-   * Empty record means candidates not loaded yet.
-   */
   candidateTablesByKey: Record<string, string[]>;
-  /** Whether candidate table data loaded successfully. */
   candidatesLoaded: boolean;
-  /** Initial manual connections for catalog_bound mode. */
-  initialManualConnections?: string[];
-  /**
-   * Called whenever mode, tables, or manual connections change.
-   * Provides the ready-to-save allow spec via buildTableAllow, and the current scope mode.
-   */
-  onAllowChange?: (allow: ReturnType<typeof buildTableAllow>, mode: ScopeMode) => void;
+  onChange: (next: RolePermissionDraft["scope"]) => void;
+  disabled?: boolean;
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function tableKey(t: TableGrant): string {
-  return `${t.connection}\0${t.schema}\0${t.name}`;
+function hasTable(tables: TableGrant[], connection: string, schema: string, name: string): boolean {
+  return tables.some((table) => table.connection === connection && table.schema === schema && table.name === name);
 }
-
-function opLabel(op: "eq" | "in"): string {
-  return op === "eq" ? "等于" : "属于";
-}
-
-function predicatesToDisplay(preds?: RowPolicyPredicateDraft[]): string {
-  if (!preds || preds.length === 0) return "";
-  return preds
-    .map((p) => {
-      const val = Array.isArray(p.value) ? p.value.join("、") : p.value;
-      return `${p.field} ${opLabel(p.op)} ${val}`;
-    })
-    .join("；");
-}
-
-// ─── Sub-component: RowPolicyEditor ──────────────────────────────────────────
-
-interface RowPolicyEditorProps {
-  table: TableGrant;
-  expanded: boolean;
-  onToggleExpand: () => void;
-  onPredicatesChange: (preds: RowPolicyPredicateDraft[]) => void;
-  otherSelectedTables: TableGrant[];
-}
-
-function RowPolicyEditor({
-  table,
-  expanded,
-  onToggleExpand,
-  onPredicatesChange,
-  otherSelectedTables,
-}: RowPolicyEditorProps) {
-  const preds = table.predicates ?? [];
-  const hasPolicies = preds.length > 0;
-
-  // For "套用到其他已选表" dialog
-  const [applyToOpen, setApplyToOpen] = useState(false);
-  const [applyToChecked, setApplyToChecked] = useState<Set<string>>(new Set());
-
-  // Collapsed summary: must not contain row_access / all / scoped / op as visible text
-  const collapsedLabel = "行权限：全部行";
-
-  function handleAddPredicate() {
-    onPredicatesChange([...preds, { field: "", op: "eq", value: "" }]);
-  }
-
-  function handleRemovePredicate(idx: number) {
-    const next = preds.filter((_, i) => i !== idx);
-    onPredicatesChange(next);
-  }
-
-  function handleFieldChange(idx: number, field: string) {
-    const next = preds.map((p, i) => (i === idx ? { ...p, field } : p));
-    onPredicatesChange(next);
-  }
-
-  function handleOpChange(idx: number, op: "eq" | "in") {
-    const next = preds.map((p, i) => (i === idx ? { ...p, op, value: op === "in" ? [] : "" } : p));
-    onPredicatesChange(next);
-  }
-
-  function handleValueChange(idx: number, value: string) {
-    const next = preds.map((p, i) => (i === idx ? { ...p, value } : p));
-    onPredicatesChange(next);
-  }
-
-  function handleApplyTo() {
-    // Copy current predicates to all checked tables
-    const targets = otherSelectedTables.filter((t) => applyToChecked.has(tableKey(t)));
-    targets.forEach(() => {
-      // Notify parent via callback; parent manages the actual state
-      // This is handled by the parent onPredicatesChange pattern
-    });
-    // We surface onApplyTo result via a returned list
-    setApplyToOpen(false);
-  }
-
-  return (
-    <div data-testid={`row-policy-editor-${table.name}`} className="ml-4 mt-1 text-sm">
-      {/* Collapsed summary — must NOT render row_access / all / scoped / op as visible text */}
-      <button
-        type="button"
-        aria-expanded={expanded}
-        aria-label={`展开 ${table.name} 行策略`}
-        onClick={onToggleExpand}
-        className="flex items-center gap-1 text-xs text-text-secondary hover:text-text-primary"
-      >
-        <span>{expanded ? "▾" : "▸"}</span>
-        {/* Collapsed: only show "行权限：全部行" or summary of set policy. Neither contains row_access/all/scoped/op */}
-        {!expanded && (
-          <span data-testid={`row-policy-collapsed-label-${table.name}`}>
-            {hasPolicies ? `行权限：${predicatesToDisplay(preds)}` : collapsedLabel}
-          </span>
-        )}
-      </button>
-
-      {expanded && (
-        <div className="mt-2 space-y-2 rounded border border-border-default bg-bg-subtle p-3">
-          <div className="text-xs font-medium text-text-secondary">行策略条件</div>
-
-          {preds.map((pred, idx) => (
-            <div key={idx} className="flex items-center gap-2">
-              <input
-                aria-label={`${table.name} 条件 ${idx + 1} 字段`}
-                value={pred.field}
-                onChange={(e) => handleFieldChange(idx, e.target.value)}
-                placeholder="字段名"
-                className="w-28 rounded border border-border-default px-2 py-1 text-xs"
-              />
-              {/* Operator: 等于 / 属于. Store as eq / in. */}
-              <select
-                aria-label={`${table.name} 条件 ${idx + 1} 运算符`}
-                value={pred.op}
-                onChange={(e) => handleOpChange(idx, e.target.value as "eq" | "in")}
-                className="rounded border border-border-default px-1 py-1 text-xs"
-              >
-                <option value="eq">等于</option>
-                <option value="in">属于</option>
-              </select>
-              <input
-                aria-label={`${table.name} 条件 ${idx + 1} 取值`}
-                value={Array.isArray(pred.value) ? pred.value.join(", ") : (pred.value as string)}
-                onChange={(e) => handleValueChange(idx, e.target.value)}
-                placeholder="值"
-                className="w-28 rounded border border-border-default px-2 py-1 text-xs"
-              />
-              <button
-                type="button"
-                onClick={() => handleRemovePredicate(idx)}
-                className="text-xs text-red-500"
-              >
-                删除
-              </button>
-            </div>
-          ))}
-
-          <button
-            type="button"
-            onClick={handleAddPredicate}
-            className="text-xs text-primary"
-          >
-            + 添加条件
-          </button>
-
-          {otherSelectedTables.length > 0 && preds.length > 0 && (
-            <div>
-              <button
-                type="button"
-                onClick={() => setApplyToOpen(!applyToOpen)}
-                className="text-xs text-primary"
-              >
-                套用到其他已选表
-              </button>
-              {applyToOpen && (
-                <div className="mt-2 rounded border border-border-default bg-bg-base p-2">
-                  <div className="mb-1 text-xs text-text-secondary">选择要套用的表：</div>
-                  {otherSelectedTables.map((t) => (
-                    <label key={tableKey(t)} className="flex items-center gap-1 text-xs">
-                      <input
-                        type="checkbox"
-                        checked={applyToChecked.has(tableKey(t))}
-                        onChange={(e) => {
-                          const next = new Set(applyToChecked);
-                          if (e.target.checked) next.add(tableKey(t));
-                          else next.delete(tableKey(t));
-                          setApplyToChecked(next);
-                        }}
-                      />
-                      {t.connection} / {t.schema} / {t.name}
-                    </label>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={handleApplyTo}
-                    className="mt-1 text-xs text-primary"
-                  >
-                    确认套用
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Main component ────────────────────────────────────────────────────────────
 
 export function RoleTableGrants({
-  initialMode = "names",
-  initialTables = [],
+  value,
   connections,
   candidateTablesByKey,
   candidatesLoaded,
-  initialManualConnections = [],
-  onAllowChange,
+  onChange,
+  disabled = false,
 }: RoleTableGrantsProps) {
-  const [mode, setModeState] = useState<ScopeMode>(initialMode);
-  const [selectedTables, setSelectedTables] = useState<TableGrant[]>(initialTables);
-  const [manualConnections, setManualConnections] = useState<string[]>(initialManualConnections);
-  const [expandedPolicies, setExpandedPolicies] = useState<Set<string>>(new Set());
-  const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [prefixInput, setPrefixInput] = useState("");
+  const [search, setSearch] = useState("");
+  const [confirmMode, setConfirmMode] = useState<"enable" | "disable" | null>(null);
+  const tables = value.mode === "names" ? value.tables : [];
+  const selectedKeys = useMemo(() => new Set(tables.map(permissionTableKey)), [tables]);
 
-  // Ref to track last emitted allow value
-  const lastEmittedRef = useRef<string>("");
+  function replaceTables(nextTables: TableGrant[]) {
+    onChange({ mode: "names", tables: nextTables });
+  }
 
-  const notice = expansionNotice(mode);
-
-  const emitChange = useCallback(
-    (nextMode: ScopeMode, nextTables: TableGrant[], nextManual: string[], nextPrefix: string) => {
-      if (!onAllowChange) return;
-      const input: BuildTableAllowInput = {
-        mode: nextMode,
-        tables: nextTables,
-        manualConnections: nextManual,
-        prefixRule: nextPrefix || undefined,
-      };
-      const result = buildTableAllow(input);
-      const key = JSON.stringify(result);
-      if (key !== lastEmittedRef.current) {
-        lastEmittedRef.current = key;
-        onAllowChange(result, nextMode);
+  function toggleTable(connection: string, schema: string, name: string, checked: boolean) {
+    if (disabled || value.mode !== "names") return;
+    if (checked) {
+      if (!hasTable(tables, connection, schema, name)) {
+        replaceTables([...tables, { connection, schema, name }]);
       }
-    },
-    [onAllowChange]
-  );
-
-  function setMode(next: ScopeMode) {
-    setModeState(next);
-    emitChange(next, selectedTables, manualConnections, prefixInput);
-  }
-
-  function handleTableToggle(conn: string, schema: string, name: string, checked: boolean) {
-    let next: TableGrant[];
-    if (checked) {
-      next = [...selectedTables, { connection: conn, schema, name }];
-    } else {
-      next = selectedTables.filter(
-        (t) => !(t.connection === conn && t.schema === schema && t.name === name)
-      );
-      // Remove expanded state too
-      const key = `${conn}\0${schema}\0${name}`;
-      setExpandedPolicies((prev) => {
-        const s = new Set(prev);
-        s.delete(key);
-        return s;
-      });
+      return;
     }
-    setSelectedTables(next);
-    emitChange(mode, next, manualConnections, prefixInput);
+    replaceTables(tables.filter((table) => permissionTableKey(table) !== `${connection}/${schema}/${name}`));
   }
 
-  function handlePredicatesChange(
-    conn: string,
-    schema: string,
-    name: string,
-    preds: RowPolicyPredicateDraft[]
-  ) {
-    const next = selectedTables.map((t) =>
-      t.connection === conn && t.schema === schema && t.name === name
-        ? { ...t, predicates: preds.length > 0 ? preds : undefined }
-        : t
-    );
-    setSelectedTables(next);
-    emitChange(mode, next, manualConnections, prefixInput);
+  function setSchema(connection: string, schema: string, names: string[], selected: boolean) {
+    if (disabled || value.mode !== "names") return;
+    const schemaKeys = new Set(names.map((name) => `${connection}/${schema}/${name}`));
+    const kept = tables.filter((table) => !schemaKeys.has(permissionTableKey(table)));
+    replaceTables(selected ? [...kept, ...names.map((name) => ({ connection, schema, name }))] : kept);
   }
 
-  function handleManualConnectionToggle(connId: string, checked: boolean) {
-    let next: string[];
-    if (checked) {
-      next = manualConnections.includes(connId) ? manualConnections : [...manualConnections, connId];
-    } else {
-      next = manualConnections.filter((c) => c !== connId);
-    }
-    setManualConnections(next);
-    emitChange(mode, selectedTables, next, prefixInput);
+  function confirmScopeChange() {
+    if (confirmMode === "enable") onChange({ mode: "catalog_bound", connections: [] });
+    if (confirmMode === "disable") onChange({ mode: "names", tables: [] });
+    setConfirmMode(null);
   }
 
-  function handlePrefixInput(e: ChangeEvent<HTMLInputElement>) {
-    const val = e.target.value;
-    setPrefixInput(val);
-    emitChange(mode, selectedTables, manualConnections, val);
+  function toggleCatalogConnection(connection: string, checked: boolean) {
+    if (disabled || value.mode !== "catalog_bound") return;
+    const next = checked
+      ? value.connections.includes(connection) ? value.connections : [...value.connections, connection]
+      : value.connections.filter((item) => item !== connection);
+    onChange({ mode: "catalog_bound", connections: next });
   }
 
-  function handlePrefixToggle(checked: boolean) {
-    const nextMode = checked ? "prefix" : "names";
-    setModeState(nextMode);
-    emitChange(nextMode, selectedTables, manualConnections, prefixInput);
-  }
-
-  function handleCatalogBoundToggle(checked: boolean) {
-    setMode(checked ? "catalog_bound" : "names");
-  }
-
-  function togglePolicyExpand(key: string) {
-    setExpandedPolicies((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  }
-
-  // ── Render ─────────────────────────────────────────────────────────────────
-
-  const isCatalogBound = mode === "catalog_bound";
-  const isPrefix = mode === "prefix";
+  const normalizedSearch = search.trim().toLowerCase();
 
   return (
-    <div data-testid="role-table-grants" className="space-y-4">
-      {/* ── Expansion notice (OUTSIDE advanced section, visible immediately) ── */}
-      {notice && (
-        <div
-          data-testid="table-grants-expansion-notice"
-          className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-800"
-        >
-          {notice}
+    <div data-testid="role-table-grants" className="grid gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-medium">已选 {tables.length} 张表</p>
+          <p className="text-xs text-fg-muted">连接会根据明确选择的表自动推导。</p>
         </div>
-      )}
+        {value.mode === "names" ? (
+          <input
+            aria-label="搜索可访问的表"
+            className="pl-input notranslate max-w-xs"
+            translate="no"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="搜索连接、Schema 或表名"
+            disabled={disabled}
+          />
+        ) : null}
+      </div>
 
-      {/* ── Catalog-bound: manual connection checkboxes ── */}
-      {isCatalogBound && (
-        <div data-testid="table-grants-manual-connections" className="space-y-1">
-          <div className="text-xs font-medium text-text-secondary">手工勾选连接：</div>
-          {connections.map((conn) => (
-            <label key={conn.id} className="flex items-center gap-2 text-sm">
+      {value.mode === "catalog_bound" ? (
+        <div className="grid gap-3" data-testid="table-grants-manual-connections">
+          <div className="rounded-md border border-warning-strong bg-warning-soft p-3 text-sm text-warning-strong">
+            已声明连接上，后续新启用的表自动进入，并走扩权审计。必须显式选择至少一个连接。
+          </div>
+          {connections.map((connection) => (
+            <label key={connection.id} className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
-                aria-label={conn.id}
-                checked={manualConnections.includes(conn.id)}
-                onChange={(e) => handleManualConnectionToggle(conn.id, e.target.checked)}
+                checked={value.connections.includes(connection.id)}
+                onChange={(event) => toggleCatalogConnection(connection.id, event.target.checked)}
+                disabled={disabled}
+                aria-label={`允许的连接 ${connection.id}`}
               />
-              {conn.id}
+              <span className="notranslate font-mono" translate="no">{connection.id}</span>
             </label>
           ))}
         </div>
+      ) : (
+        <div data-testid="table-grants-tree" className="grid gap-3">
+          {connections.map((connection) => {
+            const matchingSchemas = connection.schemas.filter((schema) => {
+              if (!normalizedSearch) return true;
+              const candidates = candidateTablesByKey[`${connection.id}\0${schema}`] ?? [];
+              return connection.id.toLowerCase().includes(normalizedSearch)
+                || schema.toLowerCase().includes(normalizedSearch)
+                || candidates.some((table) => table.toLowerCase().includes(normalizedSearch));
+            });
+            if (matchingSchemas.length === 0) return null;
+            return (
+              <section key={connection.id} className="rounded-lg border border-border-default p-3">
+                <h3 className="notranslate text-sm font-semibold" translate="no">{connection.id}</h3>
+                <div className="mt-3 grid gap-3">
+                  {matchingSchemas.map((schema) => {
+                    const allCandidates = candidateTablesByKey[`${connection.id}\0${schema}`] ?? [];
+                    const candidates = normalizedSearch
+                      ? allCandidates.filter((table) =>
+                          connection.id.toLowerCase().includes(normalizedSearch)
+                          || schema.toLowerCase().includes(normalizedSearch)
+                          || table.toLowerCase().includes(normalizedSearch))
+                      : allCandidates;
+                    const allSelected = allCandidates.length > 0
+                      && allCandidates.every((name) => selectedKeys.has(`${connection.id}/${schema}/${name}`));
+                    return (
+                      <div key={schema} className="rounded-md bg-bg-subtle p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="notranslate text-xs font-medium" translate="no">{schema}</span>
+                          <div className="flex gap-2">
+                            <button type="button" className="pl-btn pl-btn--ghost text-xs" onClick={() => setSchema(connection.id, schema, allCandidates, true)} disabled={disabled || allSelected || allCandidates.length === 0}>全选</button>
+                            <button type="button" className="pl-btn pl-btn--ghost text-xs" onClick={() => setSchema(connection.id, schema, allCandidates, false)} disabled={disabled || !allCandidates.some((name) => selectedKeys.has(`${connection.id}/${schema}/${name}`))}>清除</button>
+                          </div>
+                        </div>
+                        <div className="mt-2 grid gap-1 sm:grid-cols-2">
+                          {candidates.map((name) => (
+                            <label key={name} className="flex items-center gap-2 text-sm">
+                              <input type="checkbox" aria-label={name} checked={selectedKeys.has(`${connection.id}/${schema}/${name}`)} onChange={(event) => toggleTable(connection.id, schema, name, event.target.checked)} disabled={disabled} />
+                              <span className="notranslate" translate="no">{name}</span>
+                            </label>
+                          ))}
+                          {candidates.length === 0 ? <p className="text-xs text-fg-muted">{candidatesLoaded ? "没有匹配的表" : "候选表加载中…"}</p> : null}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            );
+          })}
+        </div>
       )}
 
-      {/* ── Table tree: connection → schema → table ── */}
-      <div data-testid="table-grants-tree" className="space-y-3">
-        {connections.map((conn) => (
-          <div key={conn.id} className="rounded border border-border-default p-2">
-            <div className="mb-1 text-sm font-medium">{conn.id}</div>
-            {conn.schemas.map((schema) => {
-              const key = `${conn.id}\0${schema}`;
-              const candidates: string[] = candidateTablesByKey[key] ?? [];
+      {value.mode === "names" && tables.length > 0 ? (
+        <details>
+          <summary className="cursor-pointer text-sm font-medium">查看已选表</summary>
+          <ul className="mt-2 grid gap-1 text-xs text-fg-muted">
+            {tables.map((table) => (
+              <li key={permissionTableKey(table)} className="notranslate" translate="no">
+                {permissionTableKey(table)}{table.predicates?.length ? ` · ${table.predicates.length} 条行级策略条件` : ""}
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
 
-              return (
-                <div key={schema} className="ml-3">
-                  <div className="text-xs text-text-secondary">{schema}</div>
-                  <div className="ml-3 space-y-1">
-                    {candidates.map((tableName) => {
-                      const tkey = tableKey({ connection: conn.id, schema, name: tableName });
-                      const isChecked = selectedTables.some(
-                        (t) => t.connection === conn.id && t.schema === schema && t.name === tableName
-                      );
-                      const thisTable = selectedTables.find(
-                        (t) => t.connection === conn.id && t.schema === schema && t.name === tableName
-                      );
-
-                      return (
-                        <div key={tableName}>
-                          <label className="flex items-center gap-2 text-sm">
-                            <input
-                              type="checkbox"
-                              aria-label={tableName}
-                              checked={isChecked}
-                              disabled={isCatalogBound}
-                              onChange={(e) =>
-                                handleTableToggle(conn.id, schema, tableName, e.target.checked)
-                              }
-                            />
-                            <span translate="no" className="notranslate">
-                              {tableName}
-                            </span>
-                          </label>
-
-                          {/* Row policy editor — only for selected tables */}
-                          {isChecked && thisTable && (
-                            <RowPolicyEditor
-                              table={thisTable}
-                              expanded={expandedPolicies.has(tkey)}
-                              onToggleExpand={() => togglePolicyExpand(tkey)}
-                              onPredicatesChange={(preds) =>
-                                handlePredicatesChange(conn.id, schema, tableName, preds)
-                              }
-                              otherSelectedTables={selectedTables.filter(
-                                (t) =>
-                                  !(
-                                    t.connection === conn.id &&
-                                    t.schema === schema &&
-                                    t.name === tableName
-                                  )
-                              )}
-                            />
-                          )}
-                        </div>
-                      );
-                    })}
-
-                    {/* Manual table name input: only when candidates failed to load */}
-                    {!candidatesLoaded && (
-                      <div className="mt-1 text-xs text-text-secondary">
-                        候选表加载失败，请手工补填表名：
-                        <input
-                          aria-label={`${conn.id}/${schema} 手工填写表名`}
-                          translate="no"
-                          className="ml-2 rounded border border-border-default px-2 py-0.5 text-xs notranslate"
-                          placeholder="表名"
-                        />
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        ))}
-      </div>
-
-      {/* ── Advanced section (collapsed by default) ── */}
-      <details
-        data-testid="table-grants-advanced"
-        open={advancedOpen}
-        onToggle={(e) => setAdvancedOpen((e.target as HTMLDetailsElement).open)}
-      >
-        <summary className="cursor-pointer text-sm text-text-secondary">高级</summary>
-        <div className="mt-2 space-y-4 rounded border border-border-default p-3">
-          {/* 按前缀匹配 */}
-          <div>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                aria-label="按前缀匹配"
-                checked={isPrefix}
-                onChange={(e) => handlePrefixToggle(e.target.checked)}
-              />
-              按前缀匹配
-            </label>
-            {isPrefix && (
-              <div className="ml-6 mt-1 space-y-1">
-                <div className="text-xs text-text-secondary">
-                  {/* Fixed sentence required by T5 spec */}
-                  此条件覆盖这条规则命中的每一张表，包括以后新进来的表。
-                </div>
-                <input
-                  aria-label="表名前缀"
-                  value={prefixInput}
-                  onChange={handlePrefixInput}
-                  placeholder="例如 poc_"
-                  className="rounded border border-border-default px-2 py-1 text-xs"
-                />
-              </div>
-            )}
-          </div>
-
-          {/* 启用目录绑定 */}
-          <div>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                aria-label="启用目录绑定"
-                checked={isCatalogBound}
-                onChange={(e) => handleCatalogBoundToggle(e.target.checked)}
-              />
+      <details data-testid="table-grants-advanced">
+        <summary className="cursor-pointer text-sm font-medium">高级设置</summary>
+        <div className="mt-2 rounded-md border border-border-default p-3">
+          <label className="flex items-start gap-2 text-sm">
+            <input type="checkbox" aria-label="启用目录绑定" checked={value.mode === "catalog_bound"} onChange={(event) => setConfirmMode(event.target.checked ? "enable" : "disable")} disabled={disabled} />
+            <span>
               启用目录绑定
-            </label>
-            {isCatalogBound && (
-              <div className="ml-6 mt-1 text-xs text-text-secondary">
-                {/* Fixed sentence required by T5 spec */}
-                此条件覆盖这条规则命中的每一张表，包括以后新进来的表。
-              </div>
-            )}
-          </div>
+              <span className="mt-1 block text-xs text-fg-muted">这是高权限范围。切换模式会清空当前明确表与行级策略，不会保留隐藏授权。</span>
+            </span>
+          </label>
         </div>
       </details>
+
+      {confirmMode ? (
+        <div className="rounded-md border border-warning-strong bg-warning-soft p-3" role="alertdialog" aria-label="确认切换表范围模式">
+          <p className="text-sm font-medium text-warning-strong">{confirmMode === "enable" ? "确认启用目录绑定？" : "确认关闭目录绑定？"}</p>
+          <p className="mt-1 text-xs text-warning-strong">切换后将从空范围开始，当前明确表和行级策略不会保留。</p>
+          <div className="mt-3 flex justify-end gap-2">
+            <button type="button" className="pl-btn pl-btn--ghost text-xs" onClick={() => setConfirmMode(null)}>取消</button>
+            <button type="button" className="pl-btn pl-btn--primary text-xs" onClick={confirmScopeChange}>确认切换</button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

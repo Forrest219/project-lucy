@@ -839,6 +839,19 @@
 | `role-detail-invalid-warnings` | role-detail-invalid-warnings | `pages/admin/RoleDetail.tsx` |
 | `role-allowed-tools-label` | role-allowed-tools-label | `pages/admin/RoleDetail.tsx` |
 | `role-allowed-tools-list` | role-allowed-tools-list | `pages/admin/RoleDetail.tsx` |
+| `role-boundary-summary` | 共享生效边界摘要 | `pages/admin/RoleDetail.tsx` |
+| `row-policy-tool-warning` | 行级策略与工具不兼容警告 | `pages/admin/RoleDetail.tsx` |
+| `legacy-prefix-migration` | 旧版 prefix 迁移提示或阻断 | `pages/admin/RoleDetail.tsx` |
+| `role-table-grants` | 明确表授权编辑面 | `components/RoleTableGrants.tsx` |
+| `table-grants-tree` | 连接 / Schema / 表选择树 | `components/RoleTableGrants.tsx` |
+| `table-grants-manual-connections` | 目录绑定连接选择区 | `components/RoleTableGrants.tsx` |
+| `table-grants-advanced` | 表范围高级设置 | `components/RoleTableGrants.tsx` |
+| `role-custom-tools` | 自定义 MCP 工具折叠区 | `components/RoleToolGrants.tsx` |
+| `role-row-policy-panel` | 行级策略表清单 | `components/RoleRowPolicyPanel.tsx` |
+| `row-policy-catalog-bound-disabled` | 目录绑定下行级策略禁用提示 | `components/RoleRowPolicyPanel.tsx` |
+| `row-policy-drawer` | 单表行级策略编辑 Drawer | `components/RoleRowPolicyPanel.tsx` |
+| `role-permission-review-drawer` | 保存前权限变更确认 Drawer | `components/RolePermissionReviewDrawer.tsx` |
+| `role-review-rejected-tools` | 保存时移除系统禁止工具提示 | `components/RolePermissionReviewDrawer.tsx` |
 | `role-metric-grid` | role-metric-grid | `pages/admin/RoleList.tsx` |
 | `role-invalid-notice` | role-invalid-notice | `pages/admin/RoleList.tsx` |
 | `role-filter-connection` | role-filter-connection | `pages/admin/RoleList.tsx` |

@@ -136,57 +136,49 @@ export function RoleToolGrants({
       <p className="text-xs text-fg-muted" aria-live="polite">
         已选 {selectedGrantableCount} 个
       </p>
+      {value.length > 0 ? (
+        <ul className="notranslate flex flex-wrap gap-2" translate="no" aria-label="当前选择的 MCP 工具">
+          {value.map((tool) => (
+            <li key={tool} className="notranslate rounded-full bg-bg-subtle px-2 py-1 font-mono text-xs text-fg-muted" translate="no">{tool}</li>
+          ))}
+        </ul>
+      ) : <p className="text-xs text-fg-muted">当前未授权任何工具。</p>}
 
-      {/* 查数与解释 group */}
-      {dataPlaneGroup.length > 0 ? (
-        <div className="grid gap-2">
-          <div className="text-sm font-medium">查数与解释</div>
-          <div className="grid gap-1">
-            {dataPlaneGroup.map((tool) => (
-              <label key={tool.name} className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  className="mt-0.5"
-                  checked={value.includes(tool.name)}
-                  onChange={(e) => toggleTool(tool.name, e.target.checked)}
-                  disabled={disabled}
-                />
-                <span>
-                  <span className="notranslate font-mono text-xs" translate="no">
-                    {tool.name}
-                  </span>
-                  {tool.name === "sl_validate" ? (
-                    <span className="ml-1 text-xs text-fg-muted">建模能力</span>
-                  ) : null}
-                </span>
-              </label>
-            ))}
-          </div>
-        </div>
-      ) : null}
+      <details data-testid="role-custom-tools">
+        <summary className="notranslate cursor-pointer text-sm font-medium" translate="no">自定义 MCP 工具</summary>
+        <div className="mt-3 grid gap-4 rounded-md border border-border-default p-3">
+          {dataPlaneGroup.length > 0 ? (
+            <div className="grid gap-2">
+              <div className="text-sm font-medium">查数与解释</div>
+              <div className="grid gap-1">
+                {dataPlaneGroup.map((tool) => (
+                  <label key={tool.name} className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" className="mt-0.5" checked={value.includes(tool.name)} onChange={(e) => toggleTool(tool.name, e.target.checked)} disabled={disabled} />
+                    <span>
+                      <span className="notranslate font-mono text-xs" translate="no">{tool.name}</span>
+                      {tool.name === "sl_validate" ? <span className="ml-1 text-xs text-fg-muted">建模能力</span> : null}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          ) : null}
 
-      {/* 目录与知识 group */}
-      {metaGroup.length > 0 ? (
-        <div className="grid gap-2">
-          <div className="text-sm font-medium">目录与知识</div>
-          <div className="grid gap-1">
-            {metaGroup.map((tool) => (
-              <label key={tool.name} className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  className="mt-0.5"
-                  checked={value.includes(tool.name)}
-                  onChange={(e) => toggleTool(tool.name, e.target.checked)}
-                  disabled={disabled}
-                />
-                <span className="notranslate font-mono text-xs" translate="no">
-                  {tool.name}
-                </span>
-              </label>
-            ))}
-          </div>
+          {metaGroup.length > 0 ? (
+            <div className="grid gap-2">
+              <div className="text-sm font-medium">目录与知识</div>
+              <div className="grid gap-1">
+                {metaGroup.map((tool) => (
+                  <label key={tool.name} className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" className="mt-0.5" checked={value.includes(tool.name)} onChange={(e) => toggleTool(tool.name, e.target.checked)} disabled={disabled} />
+                    <span className="notranslate font-mono text-xs" translate="no">{tool.name}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
-      ) : null}
+      </details>
 
       {/* System-denied static sentence — no checkbox */}
       <p className="text-xs text-fg-muted">

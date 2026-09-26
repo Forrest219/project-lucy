@@ -47,12 +47,16 @@ afterEach(() => cleanup());
 describe("RoleToolGrants", () => {
   it("no sl_query checkbox (globalDenied: true prevents render)", () => {
     render(<Controlled />);
+    fireEvent.click(screen.getByText("自定义 MCP 工具"));
     expect(screen.queryByRole("checkbox", { name: /sl_query/ })).not.toBeInTheDocument();
   });
 
   it("clicking 只读问答: sl_validate not in selected set, count 已选 6 个, no /16, bottom sentence", () => {
     // Start with sl_validate selected — verifies stampPreset replaces rather than merges
     render(<Controlled initial={["sl_validate"]} />);
+
+    const custom = screen.getByTestId("role-custom-tools");
+    expect(custom).not.toHaveAttribute("open");
 
     // No sl_query checkbox before or after preset click
     expect(screen.queryByRole("checkbox", { name: /sl_query/ })).not.toBeInTheDocument();
