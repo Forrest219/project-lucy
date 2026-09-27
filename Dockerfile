@@ -11,7 +11,9 @@
 # FROM must use TARGETPLATFORM (not BUILDPLATFORM). Binding BUILDPLATFORM made
 # cross-builds label the image as amd64 while installing arm64 ELFs (or the
 # reverse) — confirmed on customer-amd64 offline packages. Cross-arch builds
-# rely on QEMU/buildx; customer amd64 packages must be built on amd64 native.
+# rely on QEMU/buildx; arm64 hosts may build customer amd64 packages this way
+# provided G1-G4 gates pass (esp. the ELF arch gate). See the customer amd64
+# offline delivery spec v0.3+.
 # Plain docker build / compose do not always inject TARGETPLATFORM — callers
 # must pass it (compose files and demo/rebuild scripts do).
 ARG TARGETPLATFORM=linux/amd64
@@ -33,6 +35,20 @@ ARG TARGETARCH=amd64
 #   UV_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple/
 #   UV_INDEX_URL=https://mirrors.cloud.tencent.com/pypi/simple/
 ARG UV_INDEX_URL=
+# Optional Debian apt mirror for the build-time toolchain install (China /
+# corporate-restricted networks where deb.debian.org crawls or stalls).
+# Pass the mirror HOST only — the image's /debian path components are kept, so
+# APT_MIRROR=mirrors.tuna.tsinghua.edu.cn yields mirrors.tuna.../debian.
+# Default empty → keep stock deb.debian.org sources. Examples:
+#   APT_MIRROR=mirrors.tuna.tsinghua.edu.cn
+#   APT_MIRROR=mirrors.aliyun.com
+ARG APT_MIRROR=
+# Optional npm registry mirror for build-time installs (npm install -g / npm ci).
+# Default empty → keep stock registry.npmjs.org. Example:
+#   NPM_REGISTRY=registry.npmmirror.com
+# Mirrors are build-time only (per-command flags); the shipped image keeps no
+# mirror config, so runtime behavior on customer networks is unchanged.
+ARG NPM_REGISTRY=
 
 ENV NODE_ENV=production \
     LUCY_VERSION=${LUCY_VERSION} \
@@ -52,11 +68,19 @@ WORKDIR /app
 
 # python3/make/g++ : fallback compile for native addons (better-sqlite3 via node-gyp)
 # when prebuild-install cannot reach GitHub release assets (restricted networks).
-RUN apt-get update \
+RUN set -eux; \
+  if [ -n "${APT_MIRROR}" ]; then \
+    if [ -f /etc/apt/sources.list.d/debian.sources ]; then \
+      sed -i "s|deb.debian.org|${APT_MIRROR}|g" /etc/apt/sources.list.d/debian.sources; \
+    else \
+      sed -i "s|deb.debian.org|${APT_MIRROR}|g" /etc/apt/sources.list; \
+    fi; \
+  fi; \
+  apt-get update \
   && apt-get install -y --no-install-recommends bash ca-certificates curl git tini python3 make g++ \
   && rm -rf /var/lib/apt/lists/*
 
-RUN npm install -g "@kaelio/ktx@${KTX_VERSION}"
+RUN npm install -g "@kaelio/ktx@${KTX_VERSION}" ${NPM_REGISTRY:+--registry="https://${NPM_REGISTRY}"}
 
 # StarRocks / MySQL-protocol engines may reject SET SESSION max_execution_time (P0-1/P0-2).
 COPY scripts/runtime/patch-ktx-mysql-starrocks-compat.js /tmp/patch-ktx-mysql-starrocks-compat.js
@@ -71,11 +95,15 @@ RUN groupadd -g 10001 lucy \
 # corporate/restricted networks (objects.githubusercontent.com timeouts).
 # Pre-place the binary at the documented air-gapped path so ktx skips the
 # download; fall back to the gh-proxy mirror when github.com is blocked.
+# Use the musl static build: the glibc build segfaults under qemu-user
+# cross-arch emulation (uncaught target signal 11, verified 2026-09-27 on
+# Apple Silicon + Docker Desktop), which blocks customer amd64 builds on
+# arm64 hosts. Static musl uv runs identically on glibc bookworm.
 ARG UV_VERSION=0.11.21
 RUN set -eux; \
   case "${TARGETARCH}" in \
-    arm64) uv_asset="uv-aarch64-unknown-linux-gnu" ;; \
-    amd64) uv_asset="uv-x86_64-unknown-linux-gnu" ;; \
+    arm64) uv_asset="uv-aarch64-unknown-linux-musl" ;; \
+    amd64) uv_asset="uv-x86_64-unknown-linux-musl" ;; \
     *) echo "unsupported TARGETARCH=${TARGETARCH}" >&2; exit 1 ;; \
   esac; \
   uv_dir="/home/lucy/.ktx/runtime/uv/${UV_VERSION}"; \
@@ -93,10 +121,10 @@ RUN set -eux; \
 RUN su lucy -s /bin/bash -c 'ktx admin runtime install --yes --feature core'
 
 COPY package.json package-lock.json ./
-RUN npm ci --include=dev
+RUN npm ci --include=dev ${NPM_REGISTRY:+--registry="https://${NPM_REGISTRY}"}
 
 COPY webui/package.json webui/package-lock.json ./webui/
-RUN cd webui && npm ci --include=dev
+RUN cd webui && npm ci --include=dev ${NPM_REGISTRY:+--registry="https://${NPM_REGISTRY}"}
 
 COPY . .
 
