@@ -132,6 +132,7 @@
 | [146-restore-row-policy-proxy-wiring-spec.md](146-restore-row-policy-proxy-wiring-spec.md) | Row Policy Proxy 接线恢复：修复 `68db68a` 抹掉的 `forced_filters` 注入与 explain 诊断（安全修复） | Backend / Security |
 | [150-role-permission-configuration-structure-spec.md](150-role-permission-configuration-structure-spec.md) | Role 权限配置结构化重构：可访问的表 / 允许的 MCP 工具 / 行级策略独立编辑面，共享草稿与确认权限变更 Drawer | 产品 / UX / IA / Frontend / Accessibility |
 | [151-business-skill-authorization-and-file-safety-spec.md](151-business-skill-authorization-and-file-safety-spec.md) | 业务 Skill 授权与文件安全加固：`roles_allowed` 单一事实源、同角色闭合、身份不可变、并发版本与审计证据 | 产品 / API / 安全 / Frontend / Audit |
+| [152-catalog-connection-schema-tree-p0-spec.md](152-catalog-connection-schema-tree-p0-spec.md) | `/catalog` Connection → Schema 可折叠范围树 P0：替代位置下拉、保留右侧语义资产表格，并用匿名聚合验证定位成本 | 产品 / UX / Frontend / Observability |
 
 ## 与原 README 的关键校正
 

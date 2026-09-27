@@ -1,11 +1,22 @@
-import { useEffect, useMemo, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import {
+  CatalogScopeTree,
+  type CatalogScopeConnectionNode
+} from "../components/CatalogScopeTree";
 import { SelectField } from "../components/SelectField";
 import { StatusBadge } from "../components/StatusBadge";
 import { PageHeader } from "../components/PageHeader";
 import { RowMoreMenu } from "../components/RowMoreMenu";
 import { apiGet } from "../lib/apiClient";
+import {
+  CATALOG_SEARCH_COMMIT_MS,
+  createCatalogVisitId,
+  recordCatalogNavigationEvent,
+  type CatalogNavigationContextLevel,
+  type CatalogNavigationEventType
+} from "../lib/catalogNavigationUsage";
 import { queryKeys } from "../lib/queryKeys";
 import type { CompletionStatus, SourcesResponse, SourceSummary } from "../lib/types";
 
@@ -18,10 +29,6 @@ const STATUS_LABELS: Record<CompletionStatus, string> = {
 
 type StatusFilter = CompletionStatus | "all" | "incomplete";
 type ScopeFilter = "enabled" | "all" | "disabled";
-
-function unique(values: string[]) {
-  return Array.from(new Set(values)).sort();
-}
 
 function parseStatusParam(raw: string | null): StatusFilter {
   if (!raw || raw === "all") return "all";
@@ -45,6 +52,14 @@ function matchesScopeFilter(enabled: boolean, filter: ScopeFilter): boolean {
   if (filter === "all") return true;
   if (filter === "enabled") return enabled;
   return !enabled;
+}
+
+function matchesCatalogSearch(table: SourceSummary, search: string): boolean {
+  const needle = search.trim().toLowerCase();
+  if (!needle) return true;
+  return `${table.conn}/${table.schema}/${table.table} ${table.columnNames.join(" ")}`
+    .toLowerCase()
+    .includes(needle);
 }
 
 function structureLabel(table: SourceSummary): string {
@@ -94,6 +109,7 @@ function catalogEmptyMessage(input: {
   total: number;
   scope: ScopeFilter;
   enabledCount: number;
+  onEnabledScopeExit: () => void;
 }): { title: string; detail: ReactNode } {
   if (input.total === 0) {
     return {
@@ -104,19 +120,23 @@ function catalogEmptyMessage(input: {
   if (input.scope === "enabled" && input.enabledCount === 0) {
     return {
       title: "当前没有已启用的语义资产",
-          detail: (
-            <>
-              默认只展示已进入语义层的表。请先在{" "}
-              <Link to="/connections/enabled-tables" className="pl-inline-link">
-                启用表范围
-              </Link>{" "}
-              勾选表，或将启用范围切换为「全部」查看{" "}
-              <span className="notranslate" translate="no">
-                Manifest
-              </span>{" "}
-              库存。
-            </>
-          )
+      detail: (
+        <>
+          默认只展示已进入语义层的表。请先在{" "}
+          <Link
+            to="/connections/enabled-tables"
+            className="pl-inline-link"
+            onClick={input.onEnabledScopeExit}
+          >
+            启用表范围
+          </Link>{" "}
+          勾选表，或将启用范围切换为「全部」查看{" "}
+          <span className="notranslate" translate="no">
+            Manifest
+          </span>{" "}
+          库存。
+        </>
+      )
     };
   }
   return {
@@ -134,6 +154,10 @@ export function Catalog() {
   const scope = parseScopeParam(searchParams.get("scope"));
   const status = parseStatusParam(searchParams.get("completion"));
   const search = searchParams.get("q") ?? "";
+  const [visitId] = useState(createCatalogVisitId);
+  const visitStartedRef = useRef(false);
+  const outcomeRecordedRef = useRef(false);
+  const lastCommittedSearchRef = useRef(search);
 
   function patchSearchParams(patch: {
     connection?: string;
@@ -166,27 +190,6 @@ export function Catalog() {
 
   const tables = data?.tables ?? [];
   const enabledCount = useMemo(() => tables.filter((table) => table.enabled).length, [tables]);
-  const connections = useMemo(() => unique(tables.map((table) => table.conn)), [tables]);
-  const connectionOptions = useMemo(
-    () => [
-      { value: "all", label: "全部连接" },
-      ...connections.map((value) => ({ value, label: value }))
-    ],
-    [connections]
-  );
-  const schemas = useMemo(
-    () =>
-      unique(
-        tables
-          .filter((table) => connection === "all" || table.conn === connection)
-          .map((table) => table.schema)
-      ),
-    [connection, tables]
-  );
-  const schemaOptions = useMemo(
-    () => [{ value: "all", label: "全部 Schema" }, ...schemas.map((value) => ({ value, label: value }))],
-    [schemas]
-  );
   const scopeOptions = useMemo(
     () => [
       { value: "enabled", label: "已启用" },
@@ -204,34 +207,95 @@ export function Catalog() {
     []
   );
 
+  function recordEvent(eventType: CatalogNavigationEventType, contextLevel?: CatalogNavigationContextLevel) {
+    recordCatalogNavigationEvent({ visitId, eventType, contextLevel });
+  }
+
+  function currentContextLevel(): CatalogNavigationContextLevel {
+    if (connection === "all") return "root";
+    if (schema === "all") return "connection";
+    return "schema";
+  }
+
+  function recordOutcome(eventType: "row_open" | "enabled_scope_exit") {
+    if (outcomeRecordedRef.current) return;
+    outcomeRecordedRef.current = true;
+    recordEvent(eventType, currentContextLevel());
+  }
+
   useEffect(() => {
-    if (schema !== "all" && !schemas.includes(schema)) {
+    if (!data || visitStartedRef.current) return;
+    visitStartedRef.current = true;
+    recordCatalogNavigationEvent({ visitId, eventType: "visit_start" });
+  }, [data, visitId]);
+
+  useEffect(() => {
+    if (!data || search === lastCommittedSearchRef.current) return;
+    const handle = window.setTimeout(() => {
+      lastCommittedSearchRef.current = search;
+      recordCatalogNavigationEvent({ visitId, eventType: "search_commit" });
+    }, CATALOG_SEARCH_COMMIT_MS);
+    return () => window.clearTimeout(handle);
+  }, [data, search, visitId]);
+
+  const baseFiltered = useMemo(
+    () => tables.filter((table) =>
+      matchesScopeFilter(table.enabled, scope) &&
+      matchesStatusFilter(table.completion, status) &&
+      matchesCatalogSearch(table, search)
+    ),
+    [scope, search, status, tables]
+  );
+
+  const treeConnections = useMemo<CatalogScopeConnectionNode[]>(() => {
+    const nodes = new Map<string, CatalogScopeConnectionNode>();
+    for (const table of tables) {
+      let connectionNode = nodes.get(table.conn);
+      if (!connectionNode) {
+        connectionNode = { name: table.conn, count: 0, schemas: [] };
+        nodes.set(table.conn, connectionNode);
+      }
+      if (!connectionNode.schemas.some((candidate) => candidate.name === table.schema)) {
+        connectionNode.schemas.push({ name: table.schema, count: 0 });
+      }
+    }
+    for (const table of baseFiltered) {
+      const connectionNode = nodes.get(table.conn);
+      if (!connectionNode) continue;
+      connectionNode.count += 1;
+      const schemaNode = connectionNode.schemas.find((candidate) => candidate.name === table.schema);
+      if (schemaNode) schemaNode.count += 1;
+    }
+    return Array.from(nodes.values());
+  }, [baseFiltered, tables]);
+
+  useEffect(() => {
+    if (!data) return;
+    const connectionNode = treeConnections.find((candidate) => candidate.name === connection);
+    if (connection !== "all" && !connectionNode) {
+      patchSearchParams({ connection: "all", schema: "all" });
+      return;
+    }
+    if (
+      schema !== "all" &&
+      (connection === "all" || !connectionNode?.schemas.some((candidate) => candidate.name === schema))
+    ) {
       patchSearchParams({ schema: "all" });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only reset invalid schema when options change
-  }, [schema, schemas]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- normalize only after the source tree changes
+  }, [connection, data, schema, treeConnections]);
 
   const filtered = useMemo(() => {
-    const needle = search.trim().toLowerCase();
-    return tables.filter((table) => {
-      if (!matchesScopeFilter(table.enabled, scope)) {
-        return false;
-      }
+    return baseFiltered.filter((table) => {
       if (connection !== "all" && table.conn !== connection) {
         return false;
       }
       if (schema !== "all" && table.schema !== schema) {
         return false;
       }
-      if (!matchesStatusFilter(table.completion, status)) {
-        return false;
-      }
-      if (!needle) {
-        return true;
-      }
-      return `${table.conn}/${table.schema}/${table.table} ${table.columnNames.join(" ")}`.toLowerCase().includes(needle);
+      return true;
     });
-  }, [connection, schema, scope, search, status, tables]);
+  }, [baseFiltered, connection, schema]);
 
   const groupedTables = useMemo(() => {
     const groups = new Map<string, { conn: string; schema: string; rows: SourceSummary[] }>();
@@ -247,6 +311,24 @@ export function Catalog() {
     return Array.from(groups.values());
   }, [filtered]);
 
+  function selectRoot() {
+    if (connection === "all" && schema === "all") return;
+    recordEvent("tree_select", "root");
+    patchSearchParams({ connection: "all", schema: "all" });
+  }
+
+  function selectConnection(nextConnection: string) {
+    if (connection === nextConnection && schema === "all") return;
+    recordEvent("tree_select", "connection");
+    patchSearchParams({ connection: nextConnection, schema: "all" });
+  }
+
+  function selectSchema(nextConnection: string, nextSchema: string) {
+    if (connection === nextConnection && schema === nextSchema) return;
+    recordEvent("tree_select", "schema");
+    patchSearchParams({ connection: nextConnection, schema: nextSchema });
+  }
+
   if (isLoading) {
     return <p className="pl-notice">正在加载语义资产...</p>;
   }
@@ -255,7 +337,12 @@ export function Catalog() {
     return <p className="pl-error">语义资产加载失败：{error instanceof Error ? error.message : "未知错误"}</p>;
   }
 
-  const empty = catalogEmptyMessage({ total: tables.length, scope, enabledCount });
+  const empty = catalogEmptyMessage({
+    total: tables.length,
+    scope,
+    enabledCount,
+    onEnabledScopeExit: () => recordOutcome("enabled_scope_exit")
+  });
 
   return (
     <div className="pl-page-stack">
@@ -264,8 +351,22 @@ export function Catalog() {
         description="管理表、字段、指标、分群与关联等结构化语义资产。"
       />
 
-      <section className="pl-panel">
-        <div className="pl-whitelist-toolbar" role="toolbar" aria-label="语义资产工具栏">
+      <section className="pl-catalog-workspace">
+        <aside className="pl-catalog-scope-panel">
+          <CatalogScopeTree
+            activeConnection={connection}
+            activeSchema={schema}
+            connections={treeConnections}
+            onSelectConnection={selectConnection}
+            onSelectRoot={selectRoot}
+            onSelectSchema={selectSchema}
+            onToggleConnection={() => recordEvent("tree_toggle", "connection")}
+            totalCount={baseFiltered.length}
+          />
+        </aside>
+
+        <div className="pl-panel pl-catalog-main">
+          <div className="pl-whitelist-toolbar" role="toolbar" aria-label="语义资产工具栏">
           <div className="pl-whitelist-filter-area">
             <label className="grid gap-1.5 text-sm pl-whitelist-search">
               <span>搜索</span>
@@ -278,36 +379,16 @@ export function Catalog() {
               />
             </label>
             <label className="grid gap-1.5 text-sm">
-              <span className="notranslate" translate="no">连接筛选</span>
-              <SelectField
-                className="notranslate pl-catalog-filter-select"
-                translate="no"
-                ariaLabel="连接筛选"
-                value={connection}
-                onValueChange={(value) => patchSearchParams({ connection: value, schema: "all" })}
-                options={connectionOptions}
-                placeholder="全部连接"
-              />
-            </label>
-            <label className="grid gap-1.5 text-sm">
-              <span className="notranslate" translate="no">Schema 筛选</span>
-              <SelectField
-                className="notranslate pl-catalog-filter-select"
-                translate="no"
-                ariaLabel="Schema 筛选"
-                value={schema}
-                onValueChange={(value) => patchSearchParams({ schema: value })}
-                options={schemaOptions}
-                placeholder="全部 Schema"
-              />
-            </label>
-            <label className="grid gap-1.5 text-sm">
               <span>启用范围</span>
               <SelectField
                 className="pl-catalog-filter-select"
                 ariaLabel="启用范围"
                 value={scope}
-                onValueChange={(value) => patchSearchParams({ scope: value as ScopeFilter })}
+                onValueChange={(value) => {
+                  const nextScope = value as ScopeFilter;
+                  if (nextScope !== scope) recordEvent("scope_change");
+                  patchSearchParams({ scope: nextScope });
+                }}
                 options={scopeOptions}
                 placeholder="已启用"
               />
@@ -318,7 +399,11 @@ export function Catalog() {
                 className="pl-catalog-filter-select"
                 ariaLabel="语义状态"
                 value={status}
-                onValueChange={(v) => patchSearchParams({ completion: v as StatusFilter })}
+                onValueChange={(value) => {
+                  const nextStatus = value as StatusFilter;
+                  if (nextStatus !== status) recordEvent("completion_change");
+                  patchSearchParams({ completion: nextStatus });
+                }}
                 options={statusOptions}
                 placeholder="全部状态"
               />
@@ -372,6 +457,7 @@ export function Catalog() {
                           className="pl-catalog-table-name-link notranslate"
                           translate="no"
                           data-testid={`catalog-row-edit-${table.table}`}
+                          onClick={() => recordOutcome(table.enabled ? "row_open" : "enabled_scope_exit")}
                           title={fullRef}
                         >
                           {table.table}
@@ -400,6 +486,7 @@ export function Catalog() {
                             translate="no"
                             to={editorHref}
                             data-testid={`catalog-row-maintain-${table.table}`}
+                            onClick={() => recordOutcome("row_open")}
                           >
                             维护语义 ↗
                           </Link>
@@ -410,6 +497,7 @@ export function Catalog() {
                             translate="no"
                             to={enabledTablesHref(table)}
                             data-testid={`catalog-row-enable-scope-${table.table}`}
+                            onClick={() => recordOutcome("enabled_scope_exit")}
                           >
                             去启用表范围 ↗
                           </Link>
@@ -431,7 +519,8 @@ export function Catalog() {
             ))}
           </table>
         </div>
-        )}
+          )}
+        </div>
       </section>
     </div>
   );

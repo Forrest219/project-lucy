@@ -12,6 +12,40 @@ export const UI_PAGE_VIEW_UNKNOWN = "unknown";
 const WINDOW_24H = 24;
 const WINDOW_7D = 168;
 
+export const CATALOG_NAVIGATION_EVENT_TYPES = [
+  "visit_start",
+  "tree_select",
+  "tree_toggle",
+  "search_commit",
+  "scope_change",
+  "completion_change",
+  "row_open",
+  "enabled_scope_exit"
+] as const;
+
+export const CATALOG_NAVIGATION_CONTEXT_LEVELS = ["root", "connection", "schema"] as const;
+
+export type CatalogNavigationEventType = typeof CATALOG_NAVIGATION_EVENT_TYPES[number];
+export type CatalogNavigationContextLevel = typeof CATALOG_NAVIGATION_CONTEXT_LEVELS[number];
+
+export type CatalogNavigationEventInput = {
+  visitId: string;
+  eventType: CatalogNavigationEventType;
+  contextLevel: CatalogNavigationContextLevel | null;
+};
+
+const CATALOG_SEMANTIC_ACTIONS = [
+  "tree_select",
+  "tree_toggle",
+  "search_commit",
+  "scope_change",
+  "completion_change"
+] as const satisfies readonly CatalogNavigationEventType[];
+
+type CatalogSemanticAction = typeof CATALOG_SEMANTIC_ACTIONS[number];
+const CATALOG_OUTCOMES = new Set<CatalogNavigationEventType>(["row_open", "enabled_scope_exit"]);
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export type UiUsageRankRow = {
   id: string;
   label: string;
@@ -225,6 +259,39 @@ export function parseUsageHours(value: unknown): 24 | 168 {
   return WINDOW_7D;
 }
 
+export function parseCatalogNavigationEvent(input: {
+  visitId?: unknown;
+  eventType?: unknown;
+  contextLevel?: unknown;
+}): CatalogNavigationEventInput | null {
+  const visitId = typeof input.visitId === "string" ? input.visitId.trim() : "";
+  if (!UUID_RE.test(visitId)) return null;
+  if (
+    typeof input.eventType !== "string" ||
+    !CATALOG_NAVIGATION_EVENT_TYPES.includes(input.eventType as CatalogNavigationEventType)
+  ) {
+    return null;
+  }
+  const eventType = input.eventType as CatalogNavigationEventType;
+  const contextLevel = input.contextLevel === undefined || input.contextLevel === null
+    ? null
+    : typeof input.contextLevel === "string" &&
+        CATALOG_NAVIGATION_CONTEXT_LEVELS.includes(input.contextLevel as CatalogNavigationContextLevel)
+      ? input.contextLevel as CatalogNavigationContextLevel
+      : undefined;
+  if (contextLevel === undefined) return null;
+
+  if (eventType === "tree_toggle") {
+    if (contextLevel !== "connection") return null;
+  } else if (eventType === "tree_select" || eventType === "row_open" || eventType === "enabled_scope_exit") {
+    if (contextLevel === null) return null;
+  } else if (contextLevel !== null) {
+    return null;
+  }
+
+  return { visitId, eventType, contextLevel };
+}
+
 async function ensureUiPageViews(db: Awaited<ReturnType<typeof getAuditDb>>): Promise<void> {
   db.exec(`
     CREATE TABLE IF NOT EXISTS ui_page_views (
@@ -237,6 +304,131 @@ async function ensureUiPageViews(db: Awaited<ReturnType<typeof getAuditDb>>): Pr
     );
     CREATE INDEX IF NOT EXISTS idx_ui_page_views_ts ON ui_page_views(ts);
   `);
+}
+
+async function ensureCatalogNavigationEvents(db: Awaited<ReturnType<typeof getAuditDb>>): Promise<void> {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS ui_catalog_navigation_events (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      ts             TEXT NOT NULL,
+      visit_id       TEXT NOT NULL,
+      event_type     TEXT NOT NULL,
+      context_level  TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_ui_catalog_navigation_events_ts
+      ON ui_catalog_navigation_events(ts);
+    CREATE INDEX IF NOT EXISTS idx_ui_catalog_navigation_events_visit
+      ON ui_catalog_navigation_events(visit_id, id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_ui_catalog_navigation_events_visit_start
+      ON ui_catalog_navigation_events(visit_id)
+      WHERE event_type = 'visit_start';
+  `);
+}
+
+export async function recordCatalogNavigationEvent(
+  input: CatalogNavigationEventInput & { now?: Date }
+): Promise<{ recorded: boolean }> {
+  const db = await getAuditDb();
+  await ensureCatalogNavigationEvents(db);
+  const statement = input.eventType === "visit_start"
+    ? `INSERT OR IGNORE INTO ui_catalog_navigation_events
+         (ts, visit_id, event_type, context_level) VALUES (?, ?, ?, ?)`
+    : `INSERT INTO ui_catalog_navigation_events
+         (ts, visit_id, event_type, context_level) VALUES (?, ?, ?, ?)`;
+  const result = db.prepare(statement).run(
+    (input.now ?? new Date()).toISOString(),
+    input.visitId,
+    input.eventType,
+    input.contextLevel
+  );
+  return { recorded: result.changes > 0 };
+}
+
+function quantile(values: number[], fraction: number): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const position = (sorted.length - 1) * fraction;
+  const lower = Math.floor(position);
+  const upper = Math.ceil(position);
+  if (lower === upper) return sorted[lower] ?? 0;
+  const lowerValue = sorted[lower] ?? 0;
+  const upperValue = sorted[upper] ?? lowerValue;
+  return Number((lowerValue + (upperValue - lowerValue) * (position - lower)).toFixed(2));
+}
+
+export async function queryCatalogNavigationOverview(hours: 24 | 168, now = new Date()) {
+  const window = buildMetricWindow(hours, now);
+  const db = await getAuditDb();
+  await ensureCatalogNavigationEvents(db);
+  const rows = db.prepare(`
+    SELECT id, visit_id, event_type, context_level
+    FROM ui_catalog_navigation_events
+    WHERE ts >= ? AND ts < ?
+    ORDER BY ts ASC, id ASC
+  `).all(window.startIso, window.endIso) as Array<{
+    id: number;
+    visit_id: string;
+    event_type: CatalogNavigationEventType;
+    context_level: CatalogNavigationContextLevel | null;
+  }>;
+
+  const startedVisits = new Set(
+    rows.filter((row) => row.event_type === "visit_start").map((row) => row.visit_id)
+  );
+  const eventsByVisit = new Map<string, typeof rows>();
+  for (const row of rows) {
+    if (!startedVisits.has(row.visit_id)) continue;
+    const events = eventsByVisit.get(row.visit_id) ?? [];
+    events.push(row);
+    eventsByVisit.set(row.visit_id, events);
+  }
+
+  const actionCounts = Object.fromEntries(
+    CATALOG_SEMANTIC_ACTIONS.map((eventType) => [eventType, 0])
+  ) as Record<CatalogSemanticAction, number>;
+  const treeSelectionsByLevel: Record<CatalogNavigationContextLevel, number> = {
+    root: 0,
+    connection: 0,
+    schema: 0
+  };
+  const actionsBeforeOutcome: number[] = [];
+  let rowOpenVisits = 0;
+  let enabledScopeExitVisits = 0;
+
+  for (const events of eventsByVisit.values()) {
+    if (events.some((event) => event.event_type === "row_open")) rowOpenVisits += 1;
+    if (events.some((event) => event.event_type === "enabled_scope_exit")) enabledScopeExitVisits += 1;
+
+    for (const event of events) {
+      if (CATALOG_SEMANTIC_ACTIONS.includes(event.event_type as CatalogSemanticAction)) {
+        actionCounts[event.event_type as CatalogSemanticAction] += 1;
+      }
+      if (event.event_type === "tree_select" && event.context_level) {
+        treeSelectionsByLevel[event.context_level] += 1;
+      }
+    }
+
+    const outcomeIndex = events.findIndex((event) => CATALOG_OUTCOMES.has(event.event_type));
+    if (outcomeIndex >= 0) {
+      actionsBeforeOutcome.push(
+        events
+          .slice(0, outcomeIndex)
+          .filter((event) => CATALOG_SEMANTIC_ACTIONS.includes(event.event_type as CatalogSemanticAction))
+          .length
+      );
+    }
+  }
+
+  return {
+    windowHours: hours,
+    visits: eventsByVisit.size,
+    rowOpenVisits,
+    enabledScopeExitVisits,
+    medianSemanticActionsBeforeOutcome: quantile(actionsBeforeOutcome, 0.5),
+    p75SemanticActionsBeforeOutcome: quantile(actionsBeforeOutcome, 0.75),
+    actionCounts,
+    treeSelectionsByLevel
+  };
 }
 
 export async function recordUiPageView(input: {
@@ -339,6 +531,26 @@ export function registerUiUsageRoutes(app: FastifyInstance): void {
   app.get<{ Querystring: { hours?: string } }>("/api/admin/ui-usage/overview", async (request) => {
     const hours = parseUsageHours(request.query.hours);
     const data = await queryUiUsageOverview(hours);
+    return { ok: true, data };
+  });
+
+  app.post<{
+    Body: { visitId?: unknown; eventType?: unknown; contextLevel?: unknown };
+  }>("/api/admin/ui-usage/catalog-navigation-event", async (request, reply) => {
+    const input = parseCatalogNavigationEvent(request.body ?? {});
+    if (!input) {
+      return reply.status(400).send({
+        ok: false,
+        error: { code: "CATALOG_NAVIGATION_EVENT_INVALID", message: "无法记录这次语义资产导航" }
+      });
+    }
+    const result = await recordCatalogNavigationEvent(input);
+    return { ok: true, data: result };
+  });
+
+  app.get<{ Querystring: { hours?: string } }>("/api/admin/ui-usage/catalog-navigation", async (request) => {
+    const hours = parseUsageHours(request.query.hours);
+    const data = await queryCatalogNavigationOverview(hours);
     return { ok: true, data };
   });
 }

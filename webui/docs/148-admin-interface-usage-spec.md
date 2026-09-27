@@ -29,6 +29,10 @@
 - 不记录停留时长，不做导出，不清理历史，不外发。
 - 不做浏览器验收。
 
+### 3.1 Spec 152 窄范围例外
+
+`/catalog` Connection → Schema 树 P0 为验证定位假设，新增独立的匿名交互事件与聚合接口。它不改变本 Spec 的页面访问口径：`ui_page_views` 仍不记录点击来源、查询串、业务对象名或停留时长。P0 事件使用独立表，且只允许固定动作枚举、节点层级和单次页面访问随机 ID；权威契约见 Spec 152 §6。
+
 ## 4. Terminology Compliance
 
 本功能遵循 `webui/docs/00-product-terminology-standard.md`，并在 §4.5 登记下列术语。

@@ -5,10 +5,14 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { navGroups } from "../../src/app/navigation";
 import { getAuditDb, resetAuditDbForTests } from "../admin/audit";
 import {
+  CATALOG_NAVIGATION_EVENT_TYPES,
   UI_USAGE_GROUPS,
   UI_USAGE_MENUS,
   classifyUsagePathname,
+  parseCatalogNavigationEvent,
+  queryCatalogNavigationOverview,
   queryUiUsageOverview,
+  recordCatalogNavigationEvent,
   recordUiPageView
 } from "../admin/ui-usage";
 import { resetAdminsCache } from "../auth/admins-store";
@@ -160,5 +164,116 @@ describe("ui usage recording", () => {
     expect(invalid.statusCode).toBe(401);
     expect(JSON.stringify(denied.json())).not.toContain("secret");
     await locked.close();
+  });
+});
+
+describe("catalog navigation P0 recording", () => {
+  const visitA = "123e4567-e89b-42d3-a456-426614174000";
+  const visitB = "123e4567-e89b-42d3-a456-426614174001";
+
+  it("accepts only the fixed anonymous event contract", () => {
+    expect(CATALOG_NAVIGATION_EVENT_TYPES).toContain("tree_select");
+    expect(parseCatalogNavigationEvent({
+      visitId: visitA,
+      eventType: "tree_select",
+      contextLevel: "schema"
+    })).toEqual({ visitId: visitA, eventType: "tree_select", contextLevel: "schema" });
+    expect(parseCatalogNavigationEvent({ visitId: "not-a-uuid", eventType: "visit_start" })).toBeNull();
+    expect(parseCatalogNavigationEvent({ visitId: visitA, eventType: "tree_select" })).toBeNull();
+    expect(parseCatalogNavigationEvent({
+      visitId: visitA,
+      eventType: "tree_toggle",
+      contextLevel: "schema"
+    })).toBeNull();
+    expect(parseCatalogNavigationEvent({
+      visitId: visitA,
+      eventType: "search_commit",
+      contextLevel: "root"
+    })).toBeNull();
+    expect(parseCatalogNavigationEvent({
+      visitId: visitA,
+      eventType: "unknown",
+      contextLevel: null
+    })).toBeNull();
+  });
+
+  it("stores no account or business object fields and aggregates actions before outcomes", async () => {
+    const at = (minute: number) => new Date(`2026-09-27T10:${String(minute).padStart(2, "0")}:00.000Z`);
+    await recordCatalogNavigationEvent({ visitId: visitA, eventType: "visit_start", contextLevel: null, now: at(0) });
+    const duplicate = await recordCatalogNavigationEvent({
+      visitId: visitA,
+      eventType: "visit_start",
+      contextLevel: null,
+      now: at(1)
+    });
+    expect(duplicate.recorded).toBe(false);
+    await recordCatalogNavigationEvent({ visitId: visitA, eventType: "tree_select", contextLevel: "connection", now: at(2) });
+    await recordCatalogNavigationEvent({ visitId: visitA, eventType: "tree_select", contextLevel: "schema", now: at(3) });
+    await recordCatalogNavigationEvent({ visitId: visitA, eventType: "search_commit", contextLevel: null, now: at(4) });
+    await recordCatalogNavigationEvent({ visitId: visitA, eventType: "row_open", contextLevel: "schema", now: at(5) });
+    await recordCatalogNavigationEvent({ visitId: visitB, eventType: "visit_start", contextLevel: null, now: at(6) });
+    await recordCatalogNavigationEvent({ visitId: visitB, eventType: "scope_change", contextLevel: null, now: at(7) });
+    await recordCatalogNavigationEvent({ visitId: visitB, eventType: "enabled_scope_exit", contextLevel: "root", now: at(8) });
+
+    const db = await getAuditDb();
+    const columns = db.prepare("PRAGMA table_info(ui_catalog_navigation_events)").all() as Array<{ name: string }>;
+    expect(columns.map((column) => column.name)).toEqual([
+      "id",
+      "ts",
+      "visit_id",
+      "event_type",
+      "context_level"
+    ]);
+    const stored = JSON.stringify(db.prepare("SELECT * FROM ui_catalog_navigation_events").all());
+    expect(stored).not.toContain("admin_id");
+    expect(stored).not.toContain("mysql-aliyun");
+    expect(stored).not.toContain("dataforai");
+
+    const overview = await queryCatalogNavigationOverview(24, new Date("2026-09-27T11:00:00.000Z"));
+    expect(overview).toEqual({
+      windowHours: 24,
+      visits: 2,
+      rowOpenVisits: 1,
+      enabledScopeExitVisits: 1,
+      medianSemanticActionsBeforeOutcome: 2,
+      p75SemanticActionsBeforeOutcome: 2.5,
+      actionCounts: {
+        tree_select: 2,
+        tree_toggle: 0,
+        search_commit: 1,
+        scope_change: 1,
+        completion_change: 0
+      },
+      treeSelectionsByLevel: { root: 0, connection: 1, schema: 1 }
+    });
+  });
+
+  it("validates and serves the event endpoints without returning visit ids", async () => {
+    const app = buildServer();
+    await app.ready();
+    const invalid = await app.inject({
+      method: "POST",
+      url: "/api/admin/ui-usage/catalog-navigation-event",
+      payload: { visitId: visitA, eventType: "tree_select", contextLevel: "table" }
+    });
+    expect(invalid.statusCode).toBe(400);
+    expect(invalid.json().error.code).toBe("CATALOG_NAVIGATION_EVENT_INVALID");
+
+    const recorded = await app.inject({
+      method: "POST",
+      url: "/api/admin/ui-usage/catalog-navigation-event",
+      payload: { visitId: visitA, eventType: "visit_start" }
+    });
+    expect(recorded.statusCode).toBe(200);
+    expect(recorded.json().data.recorded).toBe(true);
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/admin/ui-usage/catalog-navigation?hours=24"
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data.windowHours).toBe(24);
+    expect(JSON.stringify(response.json())).not.toContain(visitA);
+    await app.close();
   });
 });

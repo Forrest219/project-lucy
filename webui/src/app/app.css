@@ -735,6 +735,31 @@
 
   /* Catalog 紧凑表格（数据网格） */
   .pl-catalog-table-wrap { @apply max-w-full overflow-x-auto; }
+  .pl-catalog-workspace {
+    @apply grid items-start gap-4;
+    grid-template-columns: 240px minmax(0, 1fr);
+  }
+  .pl-catalog-scope-panel {
+    @apply sticky top-[88px] h-[calc(100vh-112px)] overflow-auto rounded-md border border-border-default bg-bg-subtle p-3;
+  }
+  .pl-catalog-main { @apply min-w-0; }
+  .pl-catalog-scope-tree { @apply grid gap-2; }
+  .pl-catalog-scope-tree-title { @apply m-0 text-sm font-medium text-fg-default; }
+  .pl-catalog-tree-list,
+  .pl-catalog-tree-group { @apply m-0 grid list-none gap-0.5 p-0; }
+  .pl-catalog-tree-group { @apply pl-5; }
+  .pl-catalog-tree-row { @apply grid min-w-0 grid-cols-[20px_minmax(0,1fr)] items-center; }
+  .pl-catalog-tree-toggle {
+    @apply inline-flex size-5 items-center justify-center rounded-sm text-xs text-fg-muted hover:bg-bg-muted hover:text-fg-default;
+  }
+  .pl-catalog-tree-item {
+    @apply flex min-h-8 w-full min-w-0 items-center justify-between gap-2 rounded-sm border border-transparent px-2 py-1 text-left text-sm text-fg-default hover:bg-bg-muted;
+  }
+  .pl-catalog-tree-item:focus-visible { @apply border-primary outline-none ring-2 ring-primary/20; }
+  .pl-catalog-tree-item--schema { @apply text-xs; }
+  .pl-catalog-tree-item--active { @apply border-border-default bg-bg-surface font-medium text-primary; }
+  .pl-catalog-tree-label { @apply min-w-0 truncate; }
+  .pl-catalog-tree-count { @apply shrink-0 whitespace-nowrap text-xs font-normal tabular-nums text-fg-muted; }
   .pl-catalog-result-count { @apply whitespace-nowrap text-sm text-fg-muted; }
   .pl-catalog-filter-select { @apply w-full; min-width: 7.9375rem; }
   .pl-data-grid { @apply w-full border-collapse; table-layout: auto; }
@@ -902,6 +927,10 @@
   .pl-catalog-empty p { @apply text-fg-muted; }
   /* Catalog 表内标签等宽居中，避免列抖动；不影响其它页面 StatusBadge */
   .pl-catalog-table .pl-status-badge { @apply min-w-[64px] justify-center whitespace-nowrap; }
+
+  @media (min-width: 1440px) {
+    .pl-catalog-workspace { grid-template-columns: 260px minmax(0, 1fr); }
+  }
 
   /* 行内 More 菜单（lucide-react MoreHorizontal） */
   .pl-row-more { @apply relative inline-block; }

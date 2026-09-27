@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { readFileSync } from "node:fs";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Catalog } from "../pages/Catalog";
 import type { SourceSummary } from "../lib/types";
@@ -35,6 +35,11 @@ function makeSummary(overrides: Partial<SourceSummary> = {}): SourceSummary {
   };
 }
 
+function LocationProbe() {
+  const location = useLocation();
+  return <output data-testid="catalog-location">{location.pathname}{location.search}</output>;
+}
+
 function renderCatalog(tables: SourceSummary[], entry = "/catalog") {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } }
@@ -50,6 +55,12 @@ function renderCatalog(tables: SourceSummary[], entry = "/catalog") {
           { status: 200, headers: { "Content-Type": "application/json" } }
         );
       }
+      if (url.endsWith("/api/admin/ui-usage/catalog-navigation-event")) {
+        return new Response(
+          JSON.stringify({ ok: true, data: { recorded: true } }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      }
       return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND" } }), { status: 404 });
     })
   );
@@ -58,6 +69,7 @@ function renderCatalog(tables: SourceSummary[], entry = "/catalog") {
     <MemoryRouter initialEntries={[entry]}>
       <QueryClientProvider client={client}>
         <Catalog />
+        <LocationProbe />
       </QueryClientProvider>
     </MemoryRouter>
   );
@@ -102,15 +114,17 @@ describe("Catalog density (M- Catalog table refactor)", () => {
     expect(within(header).queryByRole("link", { name: "审阅" })).not.toBeInTheDocument();
   });
 
-  it("shows search before connection and Schema filters in the filter bar", async () => {
+  it("uses the tree as the only connection and Schema selector", async () => {
     renderCatalog([makeSummary()]);
 
     await screen.findByTestId("catalog-table");
     const searchInput = screen.getByPlaceholderText("搜索表名或字段名...");
-    const connectionTrigger = screen.getByLabelText("连接筛选");
-    const schemaTrigger = screen.getByLabelText("Schema 筛选");
-    expect(searchInput.compareDocumentPosition(connectionTrigger) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(connectionTrigger.compareDocumentPosition(schemaTrigger) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const tree = screen.getByTestId("catalog-scope-tree");
+    expect(tree.compareDocumentPosition(searchInput) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByLabelText("连接筛选")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Schema 筛选")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("启用范围")).toBeInTheDocument();
+    expect(screen.getByLabelText("语义状态")).toBeInTheDocument();
   });
 
   it("renders structure, authorized agents, and formatted semantic-updated columns", async () => {
@@ -365,6 +379,16 @@ describe("Catalog enabled scope (Spec 104)", () => {
       "/connections/enabled-tables?connection=mysql-aliyun&schema=dataforai"
     );
     expect(screen.queryByTestId("catalog-row-maintain-superstore_people")).not.toBeInTheDocument();
+    fireEvent.click(enableLink);
+    await waitFor(() => {
+      const payloads = vi.mocked(fetch).mock.calls
+        .filter(([input]) => String(input).endsWith("/api/admin/ui-usage/catalog-navigation-event"))
+        .map(([, init]) => JSON.parse(String(init?.body)) as Record<string, string>);
+      expect(payloads).toContainEqual(expect.objectContaining({
+        eventType: "enabled_scope_exit",
+        contextLevel: "root"
+      }));
+    });
   });
 
   it("keeps incomplete deep link inside enabled scope so disabled gaps stay hidden", async () => {
@@ -379,5 +403,138 @@ describe("Catalog enabled scope (Spec 104)", () => {
     const empty = await screen.findByTestId("catalog-empty-state");
     expect(empty).toHaveTextContent("没有匹配的语义资产");
     expect(screen.queryByTestId("catalog-row-superstore_people")).not.toBeInTheDocument();
+  });
+});
+
+describe("Catalog Connection → Schema scope tree (Spec 152)", () => {
+  const treeTables = [
+    makeSummary({ conn: "conn-a", schema: "schema-a", table: "orders", enabled: true, completion: "done" }),
+    makeSummary({ conn: "conn-a", schema: "schema-b", table: "returns", enabled: false, completion: "partial" }),
+    makeSummary({ conn: "conn-b", schema: "schema-c", table: "customers", enabled: true, completion: "partial" })
+  ];
+
+  it("keeps the full tree while counts follow non-location filters, including zero counts", async () => {
+    renderCatalog(treeTables);
+
+    await screen.findByTestId("catalog-table");
+    expect(screen.getByTestId("catalog-tree-root")).toHaveTextContent("2 张表");
+    expect(screen.getByTestId("catalog-tree-connection-0")).toHaveTextContent("conn-a1 张表");
+    expect(screen.getByTestId("catalog-tree-connection-1")).toHaveTextContent("conn-b1 张表");
+    expect(screen.queryByTestId("catalog-tree-schema-0-0")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("catalog-tree-toggle-0"));
+    expect(screen.getByTestId("catalog-tree-schema-0-0")).toHaveTextContent("schema-a1 张表");
+    expect(screen.getByTestId("catalog-tree-schema-0-1")).toHaveTextContent("schema-b0 张表");
+
+    fireEvent.change(screen.getByPlaceholderText("搜索表名或字段名..."), {
+      target: { value: "no_match" }
+    });
+    expect(screen.getByTestId("catalog-tree-root")).toHaveTextContent("0 张表");
+    expect(screen.getByTestId("catalog-tree-schema-0-0")).toHaveTextContent("schema-a0 张表");
+    expect(screen.getByTestId("catalog-tree-schema-0-1")).toHaveTextContent("schema-b0 张表");
+    expect(screen.getByTestId("catalog-empty-state")).toBeInTheDocument();
+  });
+
+  it("writes tree selection to the URL, preserves other filters, and clears location from the root", async () => {
+    renderCatalog(treeTables, "/catalog?scope=all&completion=incomplete");
+    await screen.findByTestId("catalog-table");
+
+    fireEvent.click(screen.getByTestId("catalog-tree-connection-0"));
+    await waitFor(() => {
+      expect(screen.getByTestId("catalog-location")).toHaveTextContent("connection=conn-a");
+    });
+    expect(screen.getByTestId("catalog-location")).toHaveTextContent("scope=all");
+    expect(screen.getByTestId("catalog-location")).toHaveTextContent("completion=incomplete");
+    expect(screen.getByTestId("catalog-tree-connection-0")).toHaveAttribute("aria-selected", "true");
+
+    fireEvent.click(screen.getByTestId("catalog-tree-schema-0-1"));
+    await waitFor(() => {
+      expect(screen.getByTestId("catalog-location")).toHaveTextContent("schema=schema-b");
+    });
+    expect(screen.getByTestId("catalog-tree-schema-0-1")).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByTestId("catalog-row-returns")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("catalog-tree-root"));
+    await waitFor(() => {
+      expect(screen.getByTestId("catalog-location").textContent).not.toContain("connection=");
+    });
+    expect(screen.getByTestId("catalog-location").textContent).not.toContain("schema=");
+    expect(screen.getByTestId("catalog-location")).toHaveTextContent("scope=all");
+  });
+
+  it("auto-expands a valid deep link and normalizes invalid location params", async () => {
+    const valid = renderCatalog(treeTables, "/catalog?connection=conn-b&schema=schema-c&scope=all");
+    await screen.findByTestId("catalog-table");
+    expect(screen.getByTestId("catalog-tree-connection-1")).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByTestId("catalog-tree-schema-1-0")).toHaveAttribute("aria-selected", "true");
+    valid.clear();
+    cleanup();
+
+    renderCatalog(treeTables, "/catalog?connection=missing&schema=secret&scope=all");
+    await screen.findByTestId("catalog-table");
+    await waitFor(() => {
+      expect(screen.getByTestId("catalog-location").textContent).not.toContain("connection=");
+    });
+    expect(screen.getByTestId("catalog-location").textContent).not.toContain("schema=");
+    expect(screen.getByTestId("catalog-location")).toHaveTextContent("scope=all");
+  });
+
+  it("supports the WAI-ARIA tree keyboard sequence", async () => {
+    renderCatalog(treeTables);
+    await screen.findByTestId("catalog-table");
+    const root = screen.getByTestId("catalog-tree-root");
+    root.focus();
+    fireEvent.keyDown(root, { key: "ArrowRight" });
+    const connection = screen.getByTestId("catalog-tree-connection-0");
+    expect(connection).toHaveFocus();
+
+    fireEvent.keyDown(connection, { key: "ArrowRight" });
+    expect(connection).toHaveAttribute("aria-expanded", "true");
+    fireEvent.keyDown(connection, { key: "ArrowRight" });
+    const schema = screen.getByTestId("catalog-tree-schema-0-0");
+    expect(schema).toHaveFocus();
+    fireEvent.keyDown(schema, { key: "ArrowLeft" });
+    expect(connection).toHaveFocus();
+    fireEvent.keyDown(connection, { key: "End" });
+    expect(screen.getByTestId("catalog-tree-connection-1")).toHaveFocus();
+  });
+
+  it("records anonymous semantic actions and only the first outcome", async () => {
+    renderCatalog(treeTables, "/catalog?scope=all");
+    await screen.findByTestId("catalog-table");
+    await waitFor(() => {
+      const calls = vi.mocked(fetch).mock.calls.filter(([input]) =>
+        String(input).endsWith("/api/admin/ui-usage/catalog-navigation-event")
+      );
+      expect(calls.length).toBeGreaterThan(0);
+    });
+
+    fireEvent.click(screen.getByTestId("catalog-tree-toggle-0"));
+    fireEvent.click(screen.getByTestId("catalog-tree-connection-0"));
+    fireEvent.click(screen.getByTestId("catalog-tree-schema-0-0"));
+    fireEvent.change(screen.getByPlaceholderText("搜索表名或字段名..."), {
+      target: { value: "order_id" }
+    });
+    await new Promise((resolve) => window.setTimeout(resolve, 550));
+    fireEvent.click(screen.getByTestId("catalog-row-maintain-orders"));
+
+    await waitFor(() => {
+      const payloads = vi.mocked(fetch).mock.calls
+        .filter(([input]) => String(input).endsWith("/api/admin/ui-usage/catalog-navigation-event"))
+        .map(([, init]) => JSON.parse(String(init?.body)) as Record<string, string>);
+      expect(payloads.map((payload) => payload.eventType)).toEqual(expect.arrayContaining([
+        "visit_start",
+        "tree_toggle",
+        "tree_select",
+        "search_commit",
+        "row_open"
+      ]));
+      expect(payloads.filter((payload) => payload.eventType === "row_open")).toHaveLength(1);
+      const storedPayload = JSON.stringify(payloads);
+      expect(storedPayload).not.toContain("conn-a");
+      expect(storedPayload).not.toContain("schema-a");
+      expect(storedPayload).not.toContain("orders");
+      expect(storedPayload).not.toContain("order_id");
+    });
   });
 });
