@@ -55,6 +55,38 @@ const tableFixture: SourceSummary = {
   semanticUpdatedAtSource: "manifest"
 };
 
+const roleFixture = {
+  id: "demo_readonly",
+  description: "Demo Superstore readonly agent",
+  source: "yaml",
+  tools: ["lucy_catalog", "lucy_query"],
+  connections: ["demo-mysql"],
+  sourceNames: ["dataforai.superstore_orders"],
+  sourceCount: 1,
+  invalid: true,
+  warnings: ["role_resolution_failed:demo_readonly"],
+  usageCount: 1,
+  users: [{ id: "demo_agent", name: "Demo Agent", enabled: true, tokenCount: 1 }],
+  configUpdatedAt: "2026-09-26T15:04:29.430Z",
+  role: {
+    description: "Demo Superstore readonly agent",
+    allow: {
+      connections: ["demo-mysql"],
+      tools: ["lucy_catalog", "lucy_query"]
+    }
+  },
+  effectivePermissions: {
+    sources: [
+      {
+        connectionId: "demo-mysql",
+        schema: "dataforai",
+        sourceName: "superstore_orders",
+        table: "dataforai.superstore_orders"
+      }
+    ]
+  }
+};
+
 function stubDrawerFetch() {
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
@@ -81,6 +113,9 @@ function stubDrawerFetch() {
           }
         })
       );
+    }
+    if (url === "/api/admin/roles/demo_readonly") {
+      return new Response(JSON.stringify({ ok: true, data: roleFixture }));
     }
     if (url.startsWith("/api/eval/runs/")) {
       return new Response(
@@ -187,6 +222,43 @@ describe("ObjectDetailDrawer", () => {
     expect(body).toHaveTextContent("张三");
     expect(body).toHaveTextContent("analyst");
     expect(body).toHaveTextContent("启用");
+  });
+
+  it("renders a role drawer from the unwrapped Role detail API payload", async () => {
+    stubDrawerFetch();
+    renderAt("/?object=role&roleId=demo_readonly");
+
+    const body = await screen.findByTestId("object-detail-role-body");
+    expect(body).toHaveTextContent("demo_readonly");
+    expect(body).toHaveTextContent("demo-mysql");
+    expect(body).toHaveTextContent("2 个 (lucy_catalog, lucy_query)");
+    expect(body).toHaveTextContent("1 个 source");
+    expect(body).toHaveTextContent("1 个 Agent 引用 (Demo Agent)");
+    expect(body).toHaveTextContent("权限解析失败：当前配置无法生成有效的数据源 / MCP 工具边界。");
+    expect(body).toHaveTextContent("role_resolution_failed:demo_readonly");
+  });
+
+  it("shows a recoverable role drawer error for a malformed success payload", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              id: "demo_readonly",
+              description: "Malformed role payload"
+            }
+          })
+        )
+      )
+    );
+
+    renderAt("/?object=role&roleId=demo_readonly");
+
+    const error = await screen.findByTestId("object-detail-role-invalid");
+    expect(error).toHaveTextContent("角色详情数据不完整");
+    expect(screen.getByTestId("object-detail-close")).toBeInTheDocument();
   });
 
   it("renders agent created date and config updated time when provided", async () => {

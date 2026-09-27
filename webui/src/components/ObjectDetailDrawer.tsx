@@ -22,7 +22,6 @@ import type {
 } from "../lib/types";
 
 type AgentsResponse = { agents: Agent[]; version?: string };
-type RoleDetailResponse = { role: RoleDetailType };
 
 const TABLE_NOT_FOUND_TITLE = "未找到该表";
 const AGENT_NOT_FOUND_TITLE = "未找到该 Agent";
@@ -267,10 +266,51 @@ function AgentDetailBody({ target }: { target: AgentTarget }) {
 
 type RoleTarget = Extract<NonNullable<ReturnType<typeof parseObjectDetailSearch>>, { kind: "role" }>;
 
+function isRoleDetail(value: unknown): value is RoleDetailType {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<RoleDetailType>;
+  const isStringArray = (items: unknown): items is string[] =>
+    Array.isArray(items) && items.every((item) => typeof item === "string");
+  const hasValidUsers = Array.isArray(candidate.users) && candidate.users.every(
+    (user) =>
+      Boolean(user) &&
+      typeof user === "object" &&
+      typeof user.id === "string" &&
+      typeof user.name === "string"
+  );
+
+  return typeof candidate.id === "string" && candidate.id.length > 0
+    && isStringArray(candidate.connections)
+    && isStringArray(candidate.tools)
+    && isStringArray(candidate.sourceNames)
+    && isStringArray(candidate.warnings)
+    && typeof candidate.sourceCount === "number"
+    && Number.isFinite(candidate.sourceCount)
+    && typeof candidate.usageCount === "number"
+    && Number.isFinite(candidate.usageCount)
+    && hasValidUsers
+    && Boolean(candidate.role)
+    && typeof candidate.role === "object";
+}
+
+function roleWarningDiagnosis(warning: string): { diagnosis: string; technical: string } {
+  const technical = warning.trim();
+  if (technical.startsWith("role_resolution_failed")) {
+    return {
+      diagnosis: "权限解析失败：当前配置无法生成有效的数据源 / MCP 工具边界。",
+      technical
+    };
+  }
+  return {
+    diagnosis: "权限配置需检查：系统返回了未识别的校验信息。",
+    technical
+  };
+}
+
 function RoleDetailBody({ target }: { target: RoleTarget }) {
   const roleQuery = useQuery({
     queryKey: ["admin", "roles", target.roleId],
-    queryFn: () => apiGet<RoleDetailResponse>(`/api/admin/roles/${encodeURIComponent(target.roleId)}`),
+    queryFn: () => apiGet<RoleDetailType>(`/api/admin/roles/${encodeURIComponent(target.roleId)}`),
     retry: false
   });
 
@@ -290,13 +330,23 @@ function RoleDetailBody({ target }: { target: RoleTarget }) {
       </div>
     );
   }
-  const role = roleQuery.data?.role;
+  const role = roleQuery.data;
   if (!role) {
     return (
       <div className="pl-drawer-error" data-testid="object-detail-role-not-found">
         <strong>{ROLE_NOT_FOUND_TITLE}</strong>
         <p className="mt-2">
           Role <code className="notranslate" translate="no">{target.roleId}</code> 不存在。
+        </p>
+      </div>
+    );
+  }
+  if (!isRoleDetail(role)) {
+    return (
+      <div className="pl-drawer-error" data-testid="object-detail-role-invalid">
+        <strong>角色详情数据不完整</strong>
+        <p className="mt-2">
+          Role <code className="notranslate" translate="no">{target.roleId}</code> 的返回数据缺少必要字段，请关闭后重试。
         </p>
       </div>
     );
@@ -328,13 +378,24 @@ function RoleDetailBody({ target }: { target: RoleTarget }) {
         label="生效数据源"
         value={`${effective?.sources?.length ?? role.sourceCount ?? 0} 个 source`}
       />
-      {role.warnings && role.warnings.length > 0 ? (
+      {role.warnings.length > 0 ? (
         <div className="grid gap-1">
           <span className="pl-eyebrow text-danger">警告 / 诊断</span>
-          <ul className="grid gap-1 text-xs text-danger">
-            {role.warnings.map((w, idx) => (
-              <li key={idx}>⚠ {w}</li>
-            ))}
+          <ul className="grid gap-2 text-xs text-danger">
+            {role.warnings.map((warning, idx) => {
+              const { diagnosis, technical } = roleWarningDiagnosis(warning);
+              return (
+                <li key={idx} className="grid gap-1">
+                  <span>{diagnosis}</span>
+                  <span className="text-fg-muted">
+                    技术详情：{" "}
+                    <code className="notranslate rounded bg-bg-subtle px-1 py-0.5 font-mono text-[11px]" translate="no">
+                      {technical}
+                    </code>
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         </div>
       ) : null}
