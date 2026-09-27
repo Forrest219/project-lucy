@@ -70,7 +70,7 @@ function renderHelp(path = "/help") {
                 title: "问询记录与调用流水怎么选、怎么导出"
               },
               {
-                id: "webui-admin-break-glass",
+                id: "admin-break-glass",
                 level: 4,
                 title: "丢失管理员账号或密码时如何恢复（break-glass）"
               },
