@@ -40,11 +40,21 @@ const SECTION_ALIASES: Array<[RegExp, string]> = [
   [/访问治理 Admin/, "admin-governance"],
   [/什么时候配置角色、Agent 和 Token|Role \/ Agent \/ Token 怎么选/, "admin-role-agent-token-guide"],
   [/问询记录与调用流水怎么选|问询.*调用流水/, "admin-audit-turns-vs-calls"],
+  [/^WebUI 管理员登录$/, "admin-webui-login"],
+  [/break-glass|管理员账号或密码/i, "admin-break-glass"],
   [/^Agent$/, "admin-agents"],
   [/Role 权限模板|角色配置/, "admin-roles"],
   [/Bearer Token|Token 发行/, "admin-tokens"],
   [/热库与冷库|SQL 留存边界/, "admin-audit-hot-cold-store"],
   [/MCP 访问日志|问题簇|审计/, "admin-audit"],
+  [/业务 Skill 治理工作台/, "business-skill-workbench"],
+  // H3「语义资产范围树」不配 alias，让 H4 独占该 slug：H4 是真正的操作指引，
+  // 深链指向父级章节会跳过内容。若两者都需要稳定 id，须给 H3 单独一条更精确的规则。
+  [/^语义资产范围树（连接与 Schema）$/, "semantic-asset-scope-tree"],
+  [/^角色列表与筛选$/, "admin-role-list"],
+  [/^接入向导六步流程$/, "onboarding-setup-assistant"],
+  [/^行级策略（行授予与最终行约束）$/, "row-policy"],
+  [/^MCP 会话保持与上游连接归属$/, "mcp-upstream-session"],
   [/质量评测 Eval/, "eval"],
   [/Eval Case|Case 维护/, "eval-cases"],
   [/Run 试跑|运行历史/, "eval-runs"],
@@ -94,6 +104,8 @@ const DEPLOYMENT_CHECKLIST_HEADING_TITLES = new Set(["系统概览待处理事�
 const ADMIN_GOVERNANCE_HEADING_TITLES = new Set([
   "什么时候配置角色、Agent 和 Token",
   "问询记录与调用流水怎么选、怎么导出",
+  "WebUI 管理员登录",
+  "丢失管理员账号或密码时如何恢复（break-glass）",
   "审计热库与冷库（SQL 留存边界）"
 ]);
 
@@ -107,6 +119,17 @@ const SEMANTIC_AUTHORING_HEADING_TITLES = new Set([
 ]);
 
 const YAML_DELIVERY_EXTRA_HEADING_TITLES = new Set(["配置作者 Skills"]);
+
+// Spec 153 / 152 的 H4 章节。放行规则与既有集合保持一致：只有登记在册的
+// level-4 标题才进入 TOC，避免把手册内部的实现细节标题也暴露到侧栏。
+const CONTEXT_ASSET_HEADING_TITLES = new Set([
+  "业务 Skill 治理工作台",
+  "语义资产范围树（连接与 Schema）",
+  "角色列表与筛选",
+  "接入向导六步流程",
+  "行级策略（行授予与最终行约束）",
+  "MCP 会话保持与上游连接归属"
+]);
 
 export type HelpTocItem = {
   id: string;
@@ -205,6 +228,8 @@ export function parseHelpToc(markdown: string): HelpTocItem[] {
       rawLevel === 4 && SEMANTIC_AUTHORING_HEADING_TITLES.has(cleanTitle);
     const yamlDeliveryExtraSubheading =
       rawLevel === 4 && YAML_DELIVERY_EXTRA_HEADING_TITLES.has(cleanTitle);
+    const contextAssetSubheading =
+      rawLevel === 4 && CONTEXT_ASSET_HEADING_TITLES.has(cleanTitle);
     if (
       !match ||
       rawLevel < 2 ||
@@ -214,7 +239,8 @@ export function parseHelpToc(markdown: string): HelpTocItem[] {
         !deploymentChecklistSubheading &&
         !adminGovernanceSubheading &&
         !semanticAuthoringSubheading &&
-        !yamlDeliveryExtraSubheading)
+        !yamlDeliveryExtraSubheading &&
+        !contextAssetSubheading)
     )
       continue;
     // 3.7.x 子标题为兼容性保留 level 3；3.2.x 运维 Runbook 子标题按真实 level 4 输出。

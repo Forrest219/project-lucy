@@ -148,6 +148,69 @@ describe("Help handbook", () => {
     ]);
   });
 
+  it("routes every bundled handbook H4 into the parsed TOC", async () => {
+    // 门禁：handbook 里新写的 H4 若没登记进 help.ts 的白名单，会被 parseHelpToc
+    // 静默丢弃——内容还在，但侧栏不可达、正文被并入相邻章节，搜索也会命中错章节。
+    // 以运行时 TOC 为准，不在测试里复刻白名单常量，避免两边一起漂移。
+    const handbook = await readHelpHandbook();
+
+    const h4Titles = [...handbook.markdown.matchAll(/^####\s+(.+)$/gm)].map((m) =>
+      m[1]!.trim()
+    );
+    const tocTitles = new Set(
+      handbook.toc.map((t) => t.title.replace(/^\d+(?:\.\d+)*\.?\s*/, "").trim())
+    );
+
+    // 3.7.x 系列由 help.ts 的数字前缀规则单独放行，标题带号，单独豁免。
+    const unregistered = h4Titles.filter((title) => {
+      const clean = title.replace(/^\d+(?:\.\d+)*\.?\s*/, "").trim();
+      if (tocTitles.has(title) || tocTitles.has(clean)) return false;
+      return !/^3\.7\.\d+/.test(clean);
+    });
+
+    expect(
+      unregistered,
+      "这些 H4 未通过 help.ts 白名单放行，需加入对应的 HEADING_TITLES 集合与 SECTION_ALIASES"
+    ).toEqual([]);
+  });
+
+  it("exposes stable non-hash ids for every bundled handbook H4", async () => {
+    // stableSlug 对纯中文标题会回退到 SHA1，产出 10 位十六进制 id：
+    // 无语义、且标题微调即静默改变，会打断已发布的深链。
+    const handbook = await readHelpHandbook();
+    const h4InToc = handbook.toc.filter((t) => t.level === 4);
+    expect(h4InToc.length).toBeGreaterThan(0);
+
+    for (const item of h4InToc) {
+      expect(item.id, `H4「${item.title}」应命中 SECTION_ALIASES`).not.toMatch(/^[0-9a-f]{10}$/);
+      expect(item.id, `H4「${item.title}」应命中 SECTION_ALIASES`).toMatch(/^[a-z][a-z0-9-]*$/);
+    }
+  });
+
+  it("exposes the admin login and break-glass sections as reachable level-4 entries", async () => {
+    // 回归：这两章正文早已存在，但曾因漏配白名单而不可达（搜索错落到审计章节）。
+    const handbook = await readHelpHandbook();
+    const byId = new Map(handbook.toc.filter((t) => t.level === 4).map((t) => [t.id, t]));
+
+    expect(byId.get("admin-webui-login")?.title).toBe("WebUI 管理员登录");
+    expect(byId.get("admin-break-glass")?.title).toBe(
+      "丢失管理员账号或密码时如何恢复（break-glass）"
+    );
+  });
+
+  it("routes break-glass and admin-login searches to their own sections", async () => {
+    // 回归：修复前这两个词会命中 admin-audit-turns-vs-calls（问询记录与调用流水）。
+    const handbook = await readHelpHandbook();
+
+    for (const [query, expectedId] of [
+      ["break-glass", "admin-break-glass"],
+      ["管理员登录", "admin-webui-login"]
+    ] as const) {
+      const first = searchHelpMarkdown(handbook.markdown, query, { limit: 1 }).items[0];
+      expect(first?.sectionId, `搜索「${query}」应命中 ${expectedId}`).toBe(expectedId);
+    }
+  });
+
   it("maps §0 sub-sections to stable alias ids", () => {
     const toc = parseHelpToc([
       "## 0. 常见问题速查",
