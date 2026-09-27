@@ -182,30 +182,30 @@ async function verifyProxyAgentPath(baseline) {
     throw new Error(`proxy tools/list failed: HTTP ${list.res.status} ${JSON.stringify(list.body?.error ?? list.body)}`);
   }
   const names = (list.body?.result?.tools ?? []).map((tool) => tool.name).sort();
-  const required = ["kx_catalog", "sl_query", "sl_read_source", "wiki_search"];
+  const required = ["lucy_catalog", "lucy_query", "lucy_read_source", "wiki_search"];
   const missing = required.filter((name) => !names.includes(name));
   if (missing.length) throw new Error(`proxy tools/list missing: ${missing.join(", ")}`);
   if (names.includes("sql_execution")) throw new Error("proxy tools/list exposed denied sql_execution tool");
   console.log(`[p0-demo-smoke] proxy tools: ${names.join(", ")}`);
 
   const read = await rpc(sessionId, "tools/call", {
-    name: "sl_read_source",
+    name: "lucy_read_source",
     arguments: {
       connectionId: "demo-mysql",
       sourceName: "superstore_orders"
     }
   });
   if (!read.res.ok || read.body?.error) {
-    throw new Error(`proxy sl_read_source failed: HTTP ${read.res.status} ${JSON.stringify(read.body?.error ?? read.body)}`);
+    throw new Error(`proxy lucy_read_source failed: HTTP ${read.res.status} ${JSON.stringify(read.body?.error ?? read.body)}`);
   }
   const readText = JSON.stringify(read.body?.result ?? {});
   if (!readText.includes("total_sales") || !readText.includes("active_rows")) {
-    throw new Error("proxy sl_read_source did not include expected demo semantic layer content");
+    throw new Error("proxy lucy_read_source did not include expected demo semantic layer content");
   }
-  console.log("[p0-demo-smoke] proxy sl_read_source returned demo semantic layer content");
+  console.log("[p0-demo-smoke] proxy lucy_read_source returned demo semantic layer content");
 
   const call = await rpc(sessionId, "tools/call", {
-    name: "sl_query",
+    name: "lucy_query",
     arguments: {
       connectionId: "demo-mysql",
       measures: ["superstore_orders.total_sales"],
@@ -216,14 +216,14 @@ async function verifyProxyAgentPath(baseline) {
     }
   });
   if (!call.res.ok || call.body?.error) {
-    throw new Error(`proxy sl_query failed: HTTP ${call.res.status} ${JSON.stringify(call.body?.error ?? call.body)}`);
+    throw new Error(`proxy lucy_query failed: HTTP ${call.res.status} ${JSON.stringify(call.body?.error ?? call.body)}`);
   }
   const structured = call.body?.result?.structuredContent;
   if (!structured || !Array.isArray(structured.rows)) {
-    throw new Error("proxy sl_query did not return expected demo rows");
+    throw new Error("proxy lucy_query did not return expected demo rows");
   }
-  assertRegionSales("proxy sl_query", structured.headers, structured.rows, baseline);
-  console.log(`[p0-demo-smoke] proxy sl_query returned ${structured.rows.length} baseline-matched rows`);
+  assertRegionSales("proxy lucy_query", structured.headers, structured.rows, baseline);
+  console.log(`[p0-demo-smoke] proxy lucy_query returned ${structured.rows.length} baseline-matched rows`);
 }
 
 async function main() {

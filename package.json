@@ -61,6 +61,8 @@
     "upgrade-uat:bootstrap": "bash scripts/upgrade/upgrade-uat-bootstrap.sh",
     "upgrade-uat:snapshot": "node scripts/upgrade/upgrade-uat-snapshot.mjs write",
     "upgrade-uat:verify": "node scripts/upgrade/upgrade-uat-verify.mjs",
+    "uat:mcp-session": "node scripts/uat/mcp-session-regression.mjs",
+    "uat:mcp-session:test": "node --test scripts/uat/mcp-session-regression.test.mjs",
     "smoke:p0:customer": "node scripts/smoke/p0-customer-path-smoke.mjs",
     "smoke:p0:demo": "node scripts/smoke/p0-demo-docker-smoke.mjs",
     "demo:rebuild": "bash scripts/demo/rebuild-demo-lucy.sh",
