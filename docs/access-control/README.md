@@ -36,6 +36,7 @@
 | **完整性口径** | [`integrity-p0-decision.md`](integrity-p0-decision.md) **v1.0** | 企业完整性 P0 承诺 / 已知限制；扩展而非替代 202608 工程 P0 |
 | **P0 实施计划** | [`plans/wo-202608-59-access-control-p0.md`](plans/wo-202608-59-access-control-p0.md) | 可交付开发任务计划 |
 | **WebUI 登录 / Token 失效** | [`design-webui-admin-auth.md`](design-webui-admin-auth.md) · [`plans/wo-202608-62-webui-admin-auth-and-token-expiry.md`](plans/wo-202608-62-webui-admin-auth-and-token-expiry.md) | Token `expires_at` 强制；多管理员本地登录 |
+| 行级策略后续顺序 | [`adr-row-policy-next-iteration.md`](adr-row-policy-next-iteration.md) | 已确认：当前维持静态行级策略；下一次增量候选为可复用静态策略引用；动态数据策略另批 |
 | 实现契约 | [`webui/docs/07-mcp-auth-proxy-spec.md`](../../webui/docs/07-mcp-auth-proxy-spec.md) | Runtime ACL / Proxy（AC-P0 须更新） |
 | Admin 契约 | [`webui/docs/14-agent-admin-enterprise-delivery-spec.md`](../../webui/docs/14-agent-admin-enterprise-delivery-spec.md)、[`15-role-admin-spec.md`](../../webui/docs/15-role-admin-spec.md) | Agent / Role Admin |
 | Role 权限配置结构 | [`webui/docs/150-role-permission-configuration-structure-spec.md`](../../webui/docs/150-role-permission-configuration-structure-spec.md) | Role 详情三个独立编辑面、共享草稿、保存确认 Drawer；不改运行时契约 |
@@ -57,6 +58,7 @@
 | `gap-analysis-202608.md` | 202608 Governance 差距分析（不含 Dynamic RLS） |
 | `proposal-access-onboarding-simplification-202609.md` | **待审批**：访问治理「加人 / 开权限」体验简化（意图优先 + 渐进披露；与 Spec 133 顺序裁决） |
 | `integrity-p0-decision.md` | 企业完整性 P0 决策备忘（承诺表 / 已知限制 / 与工程 P0 对齐） |
+| `adr-row-policy-next-iteration.md` | 行级策略后续迭代 ADR；记录静态策略引用与动态数据策略的开工顺序 |
 | `feasibility-row-acl.SUPERSEDED.md` | **SUPERSEDED**；不得作为实施依据 |
 | `plans/` | 本域 Work Order |
 
