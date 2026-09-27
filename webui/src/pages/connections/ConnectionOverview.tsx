@@ -608,7 +608,7 @@ export function ConnectionOverview() {
               <p className="text-sm text-fg-muted">暂无连接配置。</p>
               <h3 className="text-base font-bold text-fg-default">欢迎使用 Lucy 数据库接入向导</h3>
               <p className="text-xs text-fg-muted notranslate" translate="no">
-                一步只做一件事：从物理连接、Schema Manifest 挂载、启用表配置到 AI 客户端 MCP 接入，轻松完成配置。也可在 <code className="notranslate" translate="no">ktx.yaml</code> 中手工添加。
+                一步只做一件事：从物理连接、上传 Schema Manifest、启用表配置到 Agent 客户端 MCP 接入，轻松完成配置。也可在 <code className="notranslate" translate="no">ktx.yaml</code> 中手工添加。
               </p>
             </div>
             <div className="flex justify-center gap-3">
@@ -723,15 +723,6 @@ export function ConnectionOverview() {
                     </span>
                   </div>
                   <div className="pl-connection-card-meta notranslate" translate="no">
-                    {isAssistantInProgress ? (
-                      <span
-                        className="pl-assistant-badge text-[11px] bg-primary/10 text-primary px-2 py-0.5 rounded font-medium notranslate"
-                        translate="no"
-                        data-testid={`assistant-progress-badge-${conn.id}`}
-                      >
-                        {formatAssistantProgressLabel(cardAssistantStep)}
-                      </span>
-                    ) : null}
                     {(() => {
                       const healthQuery = healthByConnectionId.get(conn.id);
                       const healthResult = healthQuery?.data;
@@ -1034,32 +1025,6 @@ export function ConnectionOverview() {
                                         >
                                           查看 Manifest
                                         </button>
-                                        <button
-                                          type="button"
-                                          className="pl-row-action-link"
-                                          disabled={downloadingManifestKey === rowManifestKey}
-                                          onClick={() => void downloadManifest(conn.id, schema)}
-                                          data-testid={`download-manifest-${conn.id}-${schema}`}
-                                        >
-                                          {downloadingManifestKey === rowManifestKey ? "下载中..." : "下载"}
-                                        </button>
-                                        <button
-                                          type="button"
-                                          className="pl-row-action-link"
-                                          onClick={async () => {
-                                            try {
-                                              const asset = await fetchCatalogSchemaManifest(conn.id, schema);
-                                              openReuploadDrawer(asset);
-                                            } catch (openError) {
-                                              toast.error(
-                                                `读取失败：${openError instanceof Error ? openError.message : "未知错误"}`
-                                              );
-                                            }
-                                          }}
-                                          data-testid={`reupload-manifest-${conn.id}-${schema}`}
-                                        >
-                                          重新上传
-                                        </button>
                                         <Link
                                           className="pl-row-action-link"
                                           to={`/connections/enabled-tables?connection=${encodeURIComponent(conn.id)}&schema=${encodeURIComponent(schema)}`}
@@ -1089,15 +1054,52 @@ export function ConnectionOverview() {
                                         {expanded ? "收起详情" : "查看详情"}
                                       </button>
                                     ) : null}
-                                    <button
-                                      type="button"
-                                      className="pl-row-action-link pl-row-action-link--danger notranslate"
-                                      translate="no"
-                                      onClick={() => setRemoveTarget({ connection: conn, schema })}
-                                      data-testid={`remove-schema-${conn.id}-${schema}`}
-                                    >
-                                      移除 Schema
-                                    </button>
+                                    <details className="pl-row-action-more">
+                                      <summary className="pl-row-action-link notranslate" translate="no" aria-label={`更多 Schema 操作：${schema}`}>更多</summary>
+                                      <div className="pl-row-action-more-menu">
+                                        {hasReadableManifest ? (
+                                          <>
+                                            <button
+                                              type="button"
+                                              className="pl-row-action-link notranslate"
+                                              translate="no"
+                                              disabled={downloadingManifestKey === rowManifestKey}
+                                              onClick={() => void downloadManifest(conn.id, schema)}
+                                              data-testid={`download-manifest-${conn.id}-${schema}`}
+                                            >
+                                              {downloadingManifestKey === rowManifestKey ? "下载中..." : "下载 Manifest"}
+                                            </button>
+                                            <button
+                                              type="button"
+                                              className="pl-row-action-link notranslate"
+                                              translate="no"
+                                              onClick={async () => {
+                                                try {
+                                                  const asset = await fetchCatalogSchemaManifest(conn.id, schema);
+                                                  openReuploadDrawer(asset);
+                                                } catch (openError) {
+                                                  toast.error(
+                                                    `读取失败：${openError instanceof Error ? openError.message : "未知错误"}`
+                                                  );
+                                                }
+                                              }}
+                                              data-testid={`reupload-manifest-${conn.id}-${schema}`}
+                                            >
+                                              重新上传 Manifest
+                                            </button>
+                                          </>
+                                        ) : null}
+                                        <button
+                                          type="button"
+                                          className="pl-row-action-link pl-row-action-link--danger notranslate"
+                                          translate="no"
+                                          onClick={() => setRemoveTarget({ connection: conn, schema })}
+                                          data-testid={`remove-schema-${conn.id}-${schema}`}
+                                        >
+                                          移除 Schema
+                                        </button>
+                                      </div>
+                                    </details>
                                   </div>
                                 </td>
                               </tr>
@@ -1370,6 +1372,8 @@ export function ConnectionOverview() {
         }}
         initialStep={assistantStep}
         initialConnectionId={assistantConnId}
+        initialConnection={connections.find((connection) => connection.id === assistantConnId) ?? null}
+        initialSources={sourcesQuery.data ?? null}
         existingIds={connections.map((c) => c.id)}
       />
     </div>

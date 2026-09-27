@@ -4,7 +4,7 @@
 |---|---|
 | 文档名称 | Lucy Onboarding Setup Assistant Spec (接入向导与双轨配置体验设计规范) |
 | 文档类型 | Spec |
-| 版本 | v1.0 |
+| 版本 | v1.1 |
 | 撰写日期 | 2026-08-29 |
 | 撰写人 | Claude |
 | 委托人 | xingchen |
@@ -18,8 +18,8 @@
 | 关联工单 | `webui/docs/plans/wo-202608-65-onboarding-setup-assistant.md` |
 | 关联页面 | 接入向导独立流（`/onboarding` 或全局 Setup Modal）；`/connections`（入口与卡片续配态）；`/catalog`、`/wiki`、`/publish/workbench`、`/admin/mcp-playground` |
 | 上游 Spec / 设计 | `webui/docs/00-product-terminology-standard.md`；`webui/docs/06-navigation-ia.md`；Spec 124（新建连接）；Spec 123（发布工作台）；Spec 99（MCP 调试台） |
-| 状态 | Designed（设计就绪） |
-| 日期 | 2026-08-29 |
+| 状态 | Implemented |
+| 日期 | 2026-09-27 |
 | 范围 | 端到端接入向导 6 步状态机；通俗文案与术语标准；断点续配与专业控制台双轨联动；**现有页面结构与 API 100% 兼容保留** |
 
 ---
@@ -47,7 +47,7 @@
 flowchart TD
     subgraph OnboardingFlow [Setup Assistant 模式 (6 步向导)]
         S1["Step 1: 连接数据库\n(网络与凭据 · 核心必填)"]
-        S2["Step 2: 挂载资产清单\n(Schema Manifest · 核心推荐)"]
+        S2["Step 2: 上传 Schema Manifest\n(物理表与字段定义 · 核心推荐)"]
         S3["Step 3: 选择启用表\n(启用表范围 · 核心必填)"]
         S4["Step 4: 丰富业务语义\n(Table YAML · 可选增强)"]
         S5["Step 5: 注入业务知识\n(业务 Wiki · 可选增强)"]
@@ -83,11 +83,73 @@ flowchart TD
 | 步骤 | 阶段目标 | 步骤性质 | 准入条件 (Guards) | 跳过/兜底策略 (Fallback) | 转移出口 (Next Step) |
 |---|---|---|---|---|---|
 | **Step 1: 连接数据库** | 建立物理网络与凭据连通 | **核心必填** | 填写有效连接参数且连通测试为 OK | 阻断：必须连通测试通过 | 进入 Step 2 |
-| **Step 2: 挂载资产清单** | 挂载 Schema Manifest | **核心推荐** | 已写入 Connection 与初始 Schema | 支持「稍后挂载」，降级为只读数据库基本元数据 | 进入 Step 3 |
+| **Step 2: 上传 Schema Manifest** | 上传 Schema Manifest | **核心推荐** | 已写入 Connection 与初始 Schema | 支持「稍后上传」，降级为只读数据库基本元数据 | 进入 Step 3 |
 | **Step 3: 选择启用表** | 圈定进入语义层的表范围 | **核心必填** | 存在可用的表候选（来自 Manifest 或库内扫描） | 默认全选当前 Schema 下发现的所有物理表 | 进入 Step 4 |
 | **Step 4: 丰富业务语义** | 补充指标/分群 YAML Overlay | **可选增强** | 存在至少 1 张已启用表 | **可跳过**：默认使用基础字段投影与直通统计 | 进入 Step 5 |
 | **Step 5: 注入业务知识** | 上传业务 Wiki Markdown | **可选增强** | 无前置依赖 | **可跳过**：跳过时不创建任何 Wiki 文档 | 进入 Step 6 |
 | **Step 6: 连接 Agent 客户端** | 复制 MCP 配置与首问验证 | **闭环验证** | 资产索引已自动完成编译 | 一键复制 Cursor / Claude Code / Codex 配置，提供 Hello World 提示词 | 完成并流转至 MCP 调试台或控制台 |
+
+---
+
+## 核心流程（伪代码）
+
+```text
+openAssistant(connectionId):
+  snapshot = read(project.connections, sources.tables, sources.manifestSchemas,
+                  connectionProbe, mcpRuntime)
+  requiredStep = first unmet required guard in [connection, manifest, enabledTables]
+  optionalDraftStep = localDraft(connectionId).step or requiredStep
+
+  if requiredStep <= 3:
+    currentStep = requiredStep          # 本地草稿不得越过必填门禁
+  else:
+    currentStep = max(requiredStep, optionalDraftStep)
+
+  schema = snapshot.connection.schemas.first
+  enabledTables = snapshot.connection.enabledTables
+  availableTables = snapshot.sources.tables filtered by connectionId + schema
+
+advance(step):
+  Step 1:
+    require valid fields
+    require latest probe matches current field fingerprint and probe.status == ok
+    create connection; refresh project snapshot
+  Step 2:
+    upload Schema Manifest OR explicitly skip; refresh sources snapshot
+  Step 3:
+    require availableTables.count > 0
+    require selectedTables.count > 0
+    show affected scope; write enabled_tables; refresh project + sources snapshot
+  Step 4:
+    require enabledTables.count > 0
+    save semantic overlay OR explicitly adopt defaults/skip
+  Step 5:
+    save non-empty Business Wiki content OR explicitly skip
+  Step 6:
+    serviceReady = probe.ok
+      AND manifest.present
+      AND enabledTables.count > 0
+      AND runtime.config.loaded
+      AND runtime.catalog.synced
+      AND runtime.policy.healthy
+      AND runtime.execution.loaded(connectionId)
+      AND endpoint.valid
+    if NOT serviceReady:
+      show blocker list; never claim AI Q&A readiness
+    clientReady = serviceReady AND valid credential exists/generated
+
+closeAssistant():
+  if current step has unsaved input:
+    require explicit discard confirmation
+  restore focus to the control that opened the dialog
+```
+
+关键失败分支：
+
+- `/api/sources` 与连接配置不一致时，向导显示阻断态并要求同步，不得以空数组覆盖 `enabled_tables`。
+- 连通测试失败时仅允许修改参数或退出，不得创建正式连接。
+- 运行时未确认连接时，Step 6 显示具体阻断项，不得展示“已接入就绪”。
+- Token 签发必须显示所属 Agent、继承的 Role、有效期；宽权限 Agent 需要额外确认。
 
 ---
 
@@ -105,16 +167,16 @@ flowchart TD
   - 主机（Host）、端口（Port）、数据库（Database）、用户名（Username）、数据库密码（Password）
   - 初始 <span translate="no" className="notranslate">Schema</span>
 - **即时反馈**：点击「测试连接」按钮，毫秒级就地反馈（如：`✓ 连通成功 (12ms)`）。
-- **主 CTA**：`[继续：挂载数据资产清单 ->]`
+- **主 CTA**：`[继续：上传 Schema Manifest ->]`
 
-### 3.2 Step 2：挂载数据资产清单（Schema Manifest）
+### 3.2 Step 2：上传 Schema Manifest
 - **核心比喻**：“让 AI 读懂物理表结构与字段含义的地图”
-- **页面标题**：挂载数据资产清单 <span translate="no" className="notranslate">(Schema Manifest)</span>
+- **页面标题**：上传 <span translate="no" className="notranslate">Schema Manifest</span>
 - **说明文案**：“告诉 Lucy 您的数据库中有哪些表和字段。上传 <span translate="no" className="notranslate">Schema Manifest</span> YAML 文件，Agent 将以此为索引理解您的数据结构。”
 - **交互组件**：
   - 拖拽/点击上传卡片（支持 `.yaml` / `.yml`）。
-  - 辅助引导：`还没有清单文件？可使用 ddl-export 工具快速生成，或 [下载示例模板]`。
-- **逃生按钮**：`[稍后挂载清单]`（点击后进入 Step 3，连接保留待挂载状态）。
+  - 辅助引导：`还没有 Schema Manifest？可使用 ddl-export 工具快速生成，或 [下载示例模板]`。
+- **逃生按钮**：`[稍后上传 Schema Manifest]`（点击后进入 Step 3，连接保留待上传状态）。
 - **主 CTA**：`[继续：选择开放数据表 ->]`
 
 ### 3.3 Step 3：选择启用表（Enable Tables）
@@ -132,7 +194,7 @@ flowchart TD
 - **页面标题**：丰富业务语义 <span translate="no" className="notranslate">(Semantic Modeling)</span> `[可选]`
 - **说明文案**：“为选中的数据表补充业务指标（Metric）、分析维度（Dimension）与常用过滤分群。如果暂不配置，Lucy 会使用基础字段为您提供通用查询。”
 - **交互组件**：
-  - 极简视图：系统自动基于表字段推荐常用度量（如 `sum(amount)`、`count(*)`）。
+  - 基础视图：采用已上传的字段语义继续；不得暗示系统自动生成了未经用户确认的业务指标。
   - 高级视图：支持拖拽上传单表 `<table>.yaml` overlay 文件。
 - **逃生机制**：左侧提供明显的 Apple 风格幽灵按钮 `[跳过此步，使用默认语义]`。
 - **主 CTA**：`[继续：补充业务知识 ->]`
@@ -145,12 +207,12 @@ flowchart TD
   - 拖拽上传 `.md` 文件区域。
   - 示例模板提示与预览。
 - **逃生机制**：提供 `[稍后在“业务 Wiki”中设置]` / `[跳过此步]`。
-- **主 CTA**：`[继续：连接 AI 客户端 ->]`
+- **主 CTA**：`[保存并继续：连接 Agent 客户端 ->]`
 
 ### 3.6 Step 6：连接您的 Agent，体验首条问答（Connect MCP & Hello World）
 - **核心目标**：交付立竿见影的成就感（Aha Moment）与闭环体验。
-- **页面标题**：🎉 接入就绪！连接您的 AI 客户端
-- **说明文案**：“Lucy 已自动完成语义资产编译与索引同步。将以下标准 <span translate="no" className="notranslate">MCP</span> 配置添加到您的 AI 工具，即可开启智能问答。”
+- **页面标题**：连接 Agent 客户端
+- **说明文案**：只有连接探测、Schema Manifest、启用表范围、Catalog、Policy Runtime、MCP Execution 与 MCP Endpoint 全部通过时，才能展示“服务链路已就绪”；否则逐项列出阻断原因。凭据签发完成后，客户端才进入可用状态。
 - **客户端选项卡（Tabs）**：
   - **Cursor 标签页**：提供 `~/.cursor/mcp.json` 代码块与一键复制按钮。
   - **Claude Code 标签页**：提供 `claude mcp add ...` 命令行。
@@ -168,7 +230,7 @@ flowchart TD
 |---|---|---|---|---|
 | **Connection** | 连接 | 数据库安全连接 | 链接、联接 | 无须特指，普通中文 |
 | **Schema** | Schema | 数据库 Schema | 架构、模式 | `<span translate="no" className="notranslate">Schema</span>` |
-| **Manifest** | Manifest | 数据资产清单 (描述物理表与字段) | 舱单、财政部舱单、清单 | `<span translate="no" className="notranslate">Schema Manifest</span>` |
+| **Manifest** | Manifest | 描述物理表与字段的 YAML 资产 | 舱单、财政部舱单、清单 | `<span translate="no" className="notranslate">Schema Manifest</span>` |
 | **Enabled Tables** | 启用表范围 | 开放给 AI 的数据表 | 表白名单、白表、表白 | `<span translate="no" className="notranslate">enabled_tables</span>` |
 | **Semantic Overlay** | 业务语义 | 指标与维度定义 | 语义图层、报价 | `<span translate="no" className="notranslate">semantic overlay</span>` |
 | **Business Wiki** | 业务 Wiki | 业务说明书 / 口径文档 | 维基百科、百度百科 | `<span translate="no" className="notranslate">Business Wiki</span>` |

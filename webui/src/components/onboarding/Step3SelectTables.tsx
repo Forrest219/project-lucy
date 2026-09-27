@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { CheckSquare, Square, Table2, AlertCircle } from "lucide-react";
-import { apiGet, apiPost } from "../../lib/apiClient";
+import { apiGet, apiPut } from "../../lib/apiClient";
+import { queryKeys } from "../../lib/queryKeys";
 import type { SourcesResponse, SourceSummary } from "../../lib/types";
 
 export type Step3SelectTablesProps = {
@@ -23,20 +24,31 @@ export function Step3SelectTables({
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const { data: sourcesData, isLoading } = useQuery({
-    queryKey: ["sources", connectionId],
+    queryKey: queryKeys.sources,
     queryFn: () => apiGet<SourcesResponse>("/api/sources")
   });
 
-  const availableTables: SourceSummary[] = (sourcesData?.sources || []).filter(
-    (s) => s.conn === connectionId && (!schema || s.schema === schema)
+  const availableTables: SourceSummary[] = useMemo(
+    () =>
+      (sourcesData?.tables || []).filter(
+        (s) => s.conn === connectionId && (!schema || s.schema === schema)
+      ),
+    [connectionId, schema, sourcesData?.tables]
   );
+  const availableKey = availableTables.map(
+    (table) => table.qualifiedName || `${table.schema}.${table.table}`
+  ).join("|");
 
-  // If no initial selection provided and tables loaded, default to selecting all
+  // Initialize exactly once per loaded table set. Existing enabled_tables win;
+  // otherwise a brand-new empty scope follows the spec and defaults to all.
   useEffect(() => {
-    if (availableTables.length > 0 && selected.size === 0 && !initialTables) {
-      setSelected(new Set(availableTables.map((t) => t.qualifiedName || `${t.schema}.${t.table}`)));
-    }
-  }, [availableTables, initialTables, selected.size]);
+    if (isLoading || availableTables.length === 0) return;
+    const availableNames = new Set(
+      availableTables.map((table) => table.qualifiedName || `${table.schema}.${table.table}`)
+    );
+    const persisted = (initialTables ?? []).filter((table) => availableNames.has(table));
+    setSelected(new Set(persisted.length > 0 ? persisted : Array.from(availableNames)));
+  }, [availableKey, connectionId, schema, isLoading]);
 
   const toggleTable = (qualName: string) => {
     setSelected((prev) => {
@@ -59,12 +71,13 @@ export function Step3SelectTables({
   };
 
   const saveMutation = useMutation({
-    mutationFn: () =>
-      apiPost(`/api/connections/${encodeURIComponent(connectionId)}/enabled-tables`, {
-        enabledTables: Array.from(selected)
+    mutationFn: (tables: string[]) =>
+      apiPut(`/api/connections/${encodeURIComponent(connectionId)}/enabled-tables`, {
+        enabledTables: tables,
+        dryRun: false
       }),
-    onSuccess: () => {
-      onSuccess(Array.from(selected));
+    onSuccess: (_data, tables) => {
+      onSuccess(tables);
     },
     onError: (err) => {
       setSaveError(err instanceof Error ? err.message : String(err));
@@ -88,6 +101,7 @@ export function Step3SelectTables({
               type="button"
               className="pl-btn pl-btn--ghost text-xs py-1 px-2"
               onClick={selectAll}
+              disabled={availableTables.length === 0}
               data-testid="setup-select-all"
             >
               全选
@@ -96,6 +110,7 @@ export function Step3SelectTables({
               type="button"
               className="pl-btn pl-btn--ghost text-xs py-1 px-2"
               onClick={selectNone}
+              disabled={availableTables.length === 0}
               data-testid="setup-select-none"
             >
               清空
@@ -112,7 +127,7 @@ export function Step3SelectTables({
             <Table2 className="w-8 h-8 text-fg-muted mx-auto" />
             <p className="text-xs text-fg-default font-medium">暂未发现数据表</p>
             <p className="text-xs text-fg-muted max-w-sm mx-auto notranslate" translate="no">
-              若在上一阶段跳过了 Manifest 挂载，可稍后在「连接概览」中上传 YAML 或刷新本地目录。
+              若在上一阶段跳过了上传 Schema Manifest，可稍后在「连接概览」中上传 YAML 或刷新本地目录。
             </p>
           </div>
         ) : (
@@ -121,23 +136,26 @@ export function Step3SelectTables({
               const qualName = tbl.qualifiedName || `${tbl.schema}.${tbl.table}`;
               const isChecked = selected.has(qualName);
               return (
-                <div
+                <button
+                  type="button"
                   key={qualName}
-                  className={`p-3 rounded border cursor-pointer flex items-start gap-3 transition-colors ${
+                  className={`p-3 rounded border cursor-pointer flex items-start gap-3 text-left transition-colors ${
                     isChecked
                       ? "bg-primary/5 border-primary/40 text-fg-default"
                       : "bg-bg-surface border-border-default text-fg-muted hover:border-border-hover"
                   }`}
                   onClick={() => toggleTable(qualName)}
+                  aria-pressed={isChecked}
+                  data-setup-dirty
                   data-testid={`setup-table-item-${qualName}`}
                 >
-                  <button type="button" className="mt-0.5 text-primary">
+                  <span className="mt-0.5 text-primary" aria-hidden="true">
                     {isChecked ? (
                       <CheckSquare className="w-4 h-4" />
                     ) : (
                       <Square className="w-4 h-4 text-fg-muted" />
                     )}
-                  </button>
+                  </span>
                   <div className="min-w-0 flex-1">
                     <div className="text-xs font-semibold text-fg-default truncate notranslate" translate="no">
                       {tbl.table}
@@ -146,7 +164,7 @@ export function Step3SelectTables({
                       {qualName} · {tbl.columnCount} 个字段
                     </div>
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>
@@ -158,6 +176,14 @@ export function Step3SelectTables({
           <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
           <span>{saveError}</span>
         </div>
+      ) : null}
+
+      {!isLoading && (availableTables.length === 0 || selected.size === 0) ? (
+        <p className="pl-notice text-xs" id="setup-step3-disabled-reason" role="status">
+          {availableTables.length === 0
+            ? "尚未发现可启用的数据表，请先上传 Schema Manifest 或刷新本地目录。"
+            : "请至少选择 1 张数据表后再继续。"}
+        </p>
       ) : null}
 
       <div className="flex items-center justify-between p-4 bg-bg-surface rounded-lg border border-border-default">
@@ -172,8 +198,13 @@ export function Step3SelectTables({
         <button
           type="button"
           className="pl-btn pl-btn--primary"
-          disabled={saveMutation.isPending}
-          onClick={() => saveMutation.mutate()}
+          disabled={isLoading || availableTables.length === 0 || selected.size === 0 || saveMutation.isPending}
+          aria-describedby={
+            !isLoading && (availableTables.length === 0 || selected.size === 0)
+              ? "setup-step3-disabled-reason"
+              : undefined
+          }
+          onClick={() => saveMutation.mutate(Array.from(selected))}
           data-testid="setup-step3-next"
         >
           {saveMutation.isPending ? "正在保存..." : "确认并继续：定义业务语义 →"}

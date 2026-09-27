@@ -84,12 +84,13 @@ export function Step5BusinessWiki({
 
         <div className="space-y-3">
           <div>
-            <label className="block text-xs font-medium text-fg-default mb-1">
+            <label htmlFor="setup-wiki-path" className="block text-xs font-medium text-fg-default mb-1">
               文档相对路径
             </label>
             <input
               type="text"
               className="pl-input w-full notranslate"
+              id="setup-wiki-path"
               translate="no"
               value={wikiPath}
               onChange={(e) => setWikiPath(e.target.value)}
@@ -98,11 +99,12 @@ export function Step5BusinessWiki({
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-fg-default mb-1">
+            <label htmlFor="setup-wiki-content" className="block text-xs font-medium text-fg-default mb-1">
               或直接编写业务文档内容：
             </label>
             <textarea
               className="pl-input w-full font-mono text-xs h-32 notranslate"
+              id="setup-wiki-content"
               translate="no"
               placeholder={`# 核心指标口径说明\n\n- 活跃用户：近 30 天产生至少一次有效访问的用户。\n- 净收入：订单总额扣除退款与折扣。`}
               value={content}
@@ -140,22 +142,20 @@ export function Step5BusinessWiki({
             onClick={onSkip}
             data-testid="setup-step5-skip"
           >
-            稍后在“业务 Wiki”中设置
+            跳过并稍后设置
           </button>
           <button
             type="button"
             className="pl-btn pl-btn--primary"
-            disabled={content.trim().length > 0 && saveMutation.isPending}
+            disabled={!wikiPath.trim() || !content.trim() || saveMutation.isPending}
             onClick={() => {
-              if (content.trim()) {
+              if (wikiPath.trim() && content.trim()) {
                 saveMutation.mutate();
-              } else {
-                onSuccess();
               }
             }}
             data-testid="setup-step5-next"
           >
-            {saveMutation.isPending ? "正在保存..." : "继续：连接 AI 客户端 →"}
+            {saveMutation.isPending ? "正在保存..." : "保存并继续：连接 Agent 客户端 →"}
           </button>
         </div>
       </div>

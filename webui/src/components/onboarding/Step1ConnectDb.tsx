@@ -4,6 +4,7 @@ import { Eye, EyeOff, Lock, CheckCircle2, AlertCircle } from "lucide-react";
 import { apiPost } from "../../lib/apiClient";
 import { defaultPortForDriver, validateConnectionId } from "../../lib/connectionId";
 import { validateSchemaName } from "../../lib/schemas";
+import { formatProbeFailure } from "../../lib/setupAssistant";
 import type { CreateConnectionResult, ProbeConnectionResult } from "../../lib/types";
 
 export type Step1ConnectDbProps = {
@@ -37,6 +38,7 @@ export function Step1ConnectDb({
   const [schema, setSchema] = useState(initialValues?.schema || "");
   const [showPassword, setShowPassword] = useState(false);
   const [probeResult, setProbeResult] = useState<ProbeConnectionResult | null>(null);
+  const [verifiedProbeFingerprint, setVerifiedProbeFingerprint] = useState<string | null>(null);
   const [touched, setTouched] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -51,16 +53,30 @@ export function Step1ConnectDb({
   const canProbe = Boolean(
     host.trim() && !portIssue && database.trim() && username.trim() && password.length > 0
   );
+  const probeFingerprint = JSON.stringify({
+    driver,
+    engine: engine.trim(),
+    host: host.trim(),
+    port: portNum,
+    database: database.trim(),
+    username: username.trim(),
+    password,
+    schema: schema.trim()
+  });
+  const probeVerified = Boolean(
+    probeResult?.status === "ok" && verifiedProbeFingerprint === probeFingerprint
+  );
 
   const canSubmit = Boolean(
     id.trim() &&
       !idIssue &&
       canProbe &&
+      probeVerified &&
       (!schema.trim() || !schemaIssue)
   );
 
   const probeMutation = useMutation({
-    mutationFn: () =>
+    mutationFn: ({ fingerprint: _fingerprint }: { fingerprint: string }) =>
       apiPost<ProbeConnectionResult>("/api/connections/probe", {
         driver,
         ...(engine.trim() ? { engine: engine.trim() } : {}),
@@ -71,11 +87,13 @@ export function Step1ConnectDb({
         password,
         ...(schema.trim() ? { schema: schema.trim() } : {})
       }),
-    onSuccess: (res) => {
+    onSuccess: (res, variables) => {
       setProbeResult(res);
+      setVerifiedProbeFingerprint(res.status === "ok" ? variables.fingerprint : null);
       setSubmitError(null);
     },
     onError: (err) => {
+      setVerifiedProbeFingerprint(null);
       setProbeResult({
         status: "error",
         message: err instanceof Error ? err.message : String(err)
@@ -114,16 +132,19 @@ export function Step1ConnectDb({
     setDriver(nextDriver);
     setPort(String(defaultPortForDriver(nextDriver)));
   };
+  const probeFailure =
+    probeResult?.status === "error" ? formatProbeFailure(probeResult.message) : null;
 
   return (
     <div className="space-y-6" data-testid="setup-step-1">
       <div className="bg-bg-subtle p-4 rounded-lg border border-border-default space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-medium text-fg-default mb-1">
-              连接 ID <span className="text-danger">*</span>
+            <label htmlFor="setup-conn-id" className="block text-xs font-medium text-fg-default mb-1">
+              连接 ID <span className="text-danger" aria-hidden="true">*</span>
             </label>
             <input
+              id="setup-conn-id"
               type="text"
               className="pl-input w-full notranslate"
               translate="no"
@@ -133,18 +154,21 @@ export function Step1ConnectDb({
                 setId(e.target.value);
                 setTouched(true);
               }}
+              required
+              aria-invalid={Boolean(touched && idIssue)}
+              aria-describedby={touched && idIssue ? "setup-conn-id-error" : undefined}
               data-testid="setup-conn-id"
             />
             {touched && idIssue ? (
-              <p className="text-xs text-danger mt-1">{idIssue.message}</p>
+              <p className="text-xs text-danger mt-1" id="setup-conn-id-error">{idIssue.message}</p>
             ) : null}
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-fg-default mb-1">
+            <span id="setup-driver-label" className="block text-xs font-medium text-fg-default mb-1">
               数据库类型
-            </label>
-            <div className="flex gap-2">
+            </span>
+            <div className="flex gap-2" role="group" aria-labelledby="setup-driver-label">
               <button
                 type="button"
                 className={`flex-1 py-1.5 px-3 text-xs rounded border transition-colors notranslate ${
@@ -154,6 +178,8 @@ export function Step1ConnectDb({
                 }`}
                 translate="no"
                 onClick={() => handleDriverChange("mysql")}
+                aria-pressed={driver === "mysql"}
+                data-setup-dirty
               >
                 MySQL / Doris / StarRocks
               </button>
@@ -166,6 +192,8 @@ export function Step1ConnectDb({
                 }`}
                 translate="no"
                 onClick={() => handleDriverChange("postgres")}
+                aria-pressed={driver === "postgres"}
+                data-setup-dirty
               >
                 PostgreSQL
               </button>
@@ -175,41 +203,49 @@ export function Step1ConnectDb({
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="md:col-span-2">
-            <label className="block text-xs font-medium text-fg-default mb-1">
-              主机地址 <span className="text-danger">*</span>
+            <label htmlFor="setup-host" className="block text-xs font-medium text-fg-default mb-1">
+              主机地址 <span className="text-danger" aria-hidden="true">*</span>
             </label>
             <input
+              id="setup-host"
               type="text"
               className="pl-input w-full notranslate"
               translate="no"
               placeholder="127.0.0.1 或 db.example.com"
               value={host}
               onChange={(e) => setHost(e.target.value)}
+              required
               data-testid="setup-host"
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-fg-default mb-1">
-              端口 <span className="text-danger">*</span>
+            <label htmlFor="setup-port" className="block text-xs font-medium text-fg-default mb-1">
+              端口 <span className="text-danger" aria-hidden="true">*</span>
             </label>
             <input
+              id="setup-port"
               type="text"
               className="pl-input w-full notranslate"
               translate="no"
               value={port}
               onChange={(e) => setPort(e.target.value)}
+              required
+              inputMode="numeric"
+              aria-invalid={Boolean(portIssue)}
+              aria-describedby={portIssue ? "setup-port-error" : undefined}
               data-testid="setup-port"
             />
-            {portIssue ? <p className="text-xs text-danger mt-1">{portIssue}</p> : null}
+            {portIssue ? <p className="text-xs text-danger mt-1" id="setup-port-error">{portIssue}</p> : null}
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-medium text-fg-default mb-1">
-              数据库名 <span className="text-danger">*</span>
+            <label htmlFor="setup-database" className="block text-xs font-medium text-fg-default mb-1">
+              数据库名 <span className="text-danger" aria-hidden="true">*</span>
             </label>
             <input
+              id="setup-database"
               type="text"
               className="pl-input w-full notranslate"
               translate="no"
@@ -219,59 +255,71 @@ export function Step1ConnectDb({
                 setDatabase(e.target.value);
                 if (!schema) setSchema(e.target.value);
               }}
+              required
               data-testid="setup-database"
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-fg-default mb-1 notranslate" translate="no">
+            <label htmlFor="setup-schema" className="block text-xs font-medium text-fg-default mb-1 notranslate" translate="no">
               初始 Schema (可选)
             </label>
             <input
+              id="setup-schema"
               type="text"
               className="pl-input w-full notranslate"
               translate="no"
               placeholder={database || "留空默认同数据库名"}
               value={schema}
               onChange={(e) => setSchema(e.target.value)}
+              aria-invalid={Boolean(schemaIssue)}
+              aria-describedby={schemaIssue ? "setup-schema-error" : undefined}
               data-testid="setup-schema"
             />
+            {schemaIssue ? <p className="text-xs text-danger mt-1" id="setup-schema-error">{schemaIssue.message}</p> : null}
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-medium text-fg-default mb-1">
-              用户名 <span className="text-danger">*</span>
+            <label htmlFor="setup-username" className="block text-xs font-medium text-fg-default mb-1">
+              用户名 <span className="text-danger" aria-hidden="true">*</span>
             </label>
             <input
+              id="setup-username"
               type="text"
               className="pl-input w-full notranslate"
               translate="no"
               placeholder="root / readonly_user"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
+              required
+              autoComplete="username"
               data-testid="setup-username"
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-fg-default mb-1">
-              数据库密码 <span className="text-danger">*</span>
+            <label htmlFor="setup-password" className="block text-xs font-medium text-fg-default mb-1">
+              数据库密码 <span className="text-danger" aria-hidden="true">*</span>
             </label>
             <div className="relative">
               <input
+                id="setup-password"
                 type={showPassword ? "text" : "password"}
                 className="pl-input w-full pr-8 notranslate"
                 translate="no"
                 placeholder="安全密码（一次性写入）"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                required
+                autoComplete="current-password"
                 data-testid="setup-password"
               />
               <button
                 type="button"
                 className="absolute right-2 top-2 text-fg-muted hover:text-fg-default"
                 onClick={() => setShowPassword(!showPassword)}
-                tabIndex={-1}
+                aria-label={showPassword ? "隐藏数据库密码" : "显示数据库密码"}
+                title={showPassword ? "隐藏数据库密码" : "显示数据库密码"}
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -286,27 +334,36 @@ export function Step1ConnectDb({
             type="button"
             className="pl-btn pl-btn--outline text-xs"
             disabled={!canProbe || probeMutation.isPending}
-            onClick={() => probeMutation.mutate()}
+            onClick={() => probeMutation.mutate({ fingerprint: probeFingerprint })}
+            aria-describedby={!canProbe ? "setup-probe-requirement" : undefined}
             data-testid="setup-probe-btn"
           >
             {probeMutation.isPending ? "正在探测..." : "测试连接"}
           </button>
           {probeMutation.isPending ? (
-            <span className="text-xs text-fg-muted">正在进行连通探测...</span>
+            <span className="text-xs text-fg-muted" role="status" aria-live="polite">正在进行连通探测...</span>
           ) : probeResult ? (
             probeResult.status === "ok" ? (
-              <span className="flex items-center gap-1.5 text-xs text-success-strong font-medium">
+              <span className="flex items-center gap-1.5 text-xs text-success-strong font-medium" role="status" aria-live="polite">
                 <CheckCircle2 className="w-4 h-4 text-success" />
                 连通测试成功 {probeResult.latencyMs != null ? `(${probeResult.latencyMs} ms)` : ""}
               </span>
             ) : (
-              <span className="flex items-center gap-1.5 text-xs text-danger">
-                <AlertCircle className="w-4 h-4" />
-                连通失败：{probeResult.message}
-              </span>
+              <div className="text-xs text-danger" role="alert" aria-live="assertive">
+                <span className="flex items-center gap-1.5">
+                  <AlertCircle className="w-4 h-4" aria-hidden="true" />
+                  {probeFailure?.summary}
+                </span>
+                <details className="mt-1 text-fg-muted">
+                  <summary className="cursor-pointer font-medium">技术详情</summary>
+                  <code className="mt-1 block max-w-lg overflow-x-auto whitespace-pre-wrap break-all notranslate" translate="no">
+                    {probeFailure?.technicalDetail}
+                  </code>
+                </details>
+              </div>
             )
           ) : (
-            <span className="text-xs text-fg-muted">建议先进行连通测试以验证网络与凭据。</span>
+            <span className="text-xs text-fg-muted" id="setup-probe-requirement">请先完成连通测试，验证网络与凭据后才能继续。</span>
           )}
         </div>
 
@@ -314,12 +371,19 @@ export function Step1ConnectDb({
           type="button"
           className="pl-btn pl-btn--primary"
           disabled={!canSubmit || createMutation.isPending}
+          aria-describedby={!canSubmit ? "setup-step1-next-requirement" : undefined}
           onClick={() => createMutation.mutate()}
           data-testid="setup-step1-next"
         >
-          {createMutation.isPending ? "正在创建..." : "继续：挂载资产清单 →"}
+          {createMutation.isPending ? "正在创建..." : "继续：上传 Schema Manifest →"}
         </button>
       </div>
+
+      {!canSubmit ? (
+        <p className="sr-only" id="setup-step1-next-requirement">
+          请填写有效参数并完成一次成功的连通测试。
+        </p>
+      ) : null}
 
       {submitError ? (
         <div className="p-3 bg-danger/10 border border-danger/30 rounded text-xs text-danger" role="alert">

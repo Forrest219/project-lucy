@@ -73,7 +73,7 @@ export function Step2UploadManifest({
         <div className="border-2 border-dashed border-border-default hover:border-primary/50 rounded-lg p-6 text-center bg-bg-surface transition-colors">
           <FileUp className="w-8 h-8 text-fg-muted mx-auto mb-2" />
           <p className="text-xs font-medium text-fg-default mb-1">
-            拖拽或选择本地 <span translate="no" className="notranslate">.yaml</span> 清单文件
+            拖拽或选择本地 <span translate="no" className="notranslate">Schema Manifest YAML</span> 文件
           </p>
           <p className="text-xs text-fg-muted mb-3 notranslate" translate="no">
             通常由 ddl-export 工具生成，描述该 Schema 的表结构与字段定义
@@ -119,11 +119,12 @@ export function Step2UploadManifest({
       <div className="flex items-center justify-between p-4 bg-bg-surface rounded-lg border border-border-default">
         <button
           type="button"
-          className="pl-btn pl-btn--ghost text-xs"
+          className="pl-btn pl-btn--ghost text-xs notranslate"
+          translate="no"
           onClick={onSkip}
           data-testid="setup-step2-skip"
         >
-          稍后挂载清单（跳过）
+          稍后上传 Schema Manifest
         </button>
 
         <button
@@ -133,7 +134,7 @@ export function Step2UploadManifest({
           onClick={() => uploadMutation.mutate()}
           data-testid="setup-step2-next"
         >
-          {uploadMutation.isPending ? "正在上传..." : "上传并继续：选择启用表 →"}
+          {uploadMutation.isPending ? "正在上传..." : "上传 Schema Manifest 并继续 →"}
         </button>
       </div>
     </div>

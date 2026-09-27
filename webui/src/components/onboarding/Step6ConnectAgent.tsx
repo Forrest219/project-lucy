@@ -4,8 +4,21 @@ import { Link } from "react-router-dom";
 import { Copy, Check, ExternalLink, Sparkles, CheckCircle2, Key, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { apiGet, apiPost } from "../../lib/apiClient";
-import { buildClientConfigs, buildHelloWorldPrompt, type ClientType } from "../../lib/setupAssistant";
-import type { Agent, CreateTokenResponse, ProjectInfo } from "../../lib/types";
+import {
+  buildClientConfigs,
+  buildHelloWorldPrompt,
+  deriveSetupReadiness,
+  type ClientType
+} from "../../lib/setupAssistant";
+import { queryKeys } from "../../lib/queryKeys";
+import type {
+  Agent,
+  ConnectionTestResult,
+  CreateTokenResponse,
+  McpRuntimeStatus,
+  ProjectInfo,
+  SourcesResponse
+} from "../../lib/types";
 
 export type Step6ConnectAgentProps = {
   connectionId: string;
@@ -24,10 +37,33 @@ export function Step6ConnectAgent({
   const [copiedToken, setCopiedToken] = useState(false);
   const [generatedToken, setGeneratedToken] = useState<CreateTokenResponse | null>(null);
   const [selectedAgentId, setSelectedAgentId] = useState<string>("");
+  const [expiresInDays, setExpiresInDays] = useState(7);
+  const [broadScopeAcknowledged, setBroadScopeAcknowledged] = useState(false);
 
   const { data: projectData } = useQuery({
-    queryKey: ["project"],
+    queryKey: queryKeys.project,
     queryFn: () => apiGet<ProjectInfo>("/api/project")
+  });
+
+  const sourcesQuery = useQuery({
+    queryKey: queryKeys.sources,
+    queryFn: () => apiGet<SourcesResponse>("/api/sources")
+  });
+
+  const runtimeQuery = useQuery({
+    queryKey: queryKeys.mcpRuntime,
+    queryFn: () => apiGet<McpRuntimeStatus>("/api/admin/mcp-runtime/status")
+  });
+
+  const healthQuery = useQuery({
+    queryKey: queryKeys.connectionHealth(connectionId),
+    queryFn: () =>
+      apiPost<ConnectionTestResult>(
+        `/api/connections/${encodeURIComponent(connectionId)}/test`,
+        {}
+      ),
+    enabled: Boolean(connectionId),
+    retry: false
   });
 
   const agentsQuery = useQuery({
@@ -39,21 +75,27 @@ export function Step6ConnectAgent({
 
   const defaultAgent = useMemo(() => {
     if (agents.length === 0) return null;
-    const adminAgent = agents.find(
-      (a) => a.id.toLowerCase() === "admin" || a.id.toLowerCase().includes("admin")
+    const enabledAgent = agents.find(
+      (a) => a.enabled !== false && a.role?.toLowerCase() !== "admin" && !a.id.toLowerCase().includes("admin")
     );
-    if (adminAgent) return adminAgent;
-    const enabledAgent = agents.find((a) => a.enabled !== false);
     return enabledAgent || agents[0];
   }, [agents]);
 
   const activeAgentId = selectedAgentId || defaultAgent?.id || (agents[0]?.id ?? "");
+  const activeAgent = agents.find((agent) => agent.id === activeAgentId) ?? null;
+  const hasBroadScope = Boolean(
+    activeAgent &&
+      (activeAgent.role?.toLowerCase() === "admin" ||
+        activeAgent.id.toLowerCase().includes("admin") ||
+        activeAgent.allow?.tables?.includes("*") ||
+        activeAgent.allow?.tools?.includes("*"))
+  );
 
   const tokenMutation = useMutation({
     mutationFn: (agentId: string) => {
       const randomSuffix = Math.random().toString(36).slice(2, 6);
       const label = `onboard-${connectionId || "admin"}-${randomSuffix}`;
-      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const expiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
       return apiPost<CreateTokenResponse>(`/api/admin/agents/${encodeURIComponent(agentId)}/tokens`, {
         label,
         device_name: "接入向导体验",
@@ -62,7 +104,7 @@ export function Step6ConnectAgent({
     },
     onSuccess: (data) => {
       setGeneratedToken(data);
-      toast.success("已成功签发管理端体验 Token，并自动注入下方配置！");
+      toast.success("体验 Token 已签发，并自动注入下方配置。");
     },
     onError: (err: Error) => {
       toast.error(`生成 Token 失败: ${err.message}`);
@@ -72,6 +114,10 @@ export function Step6ConnectAgent({
   const handleGenerateToken = () => {
     if (!activeAgentId) {
       toast.error("未找到可用的 Agent，请先在 Agent 管理中创建");
+      return;
+    }
+    if (hasBroadScope && !broadScopeAcknowledged) {
+      toast.error("请先确认该 Agent 的高权限范围。");
       return;
     }
     tokenMutation.mutate(activeAgentId);
@@ -86,6 +132,18 @@ export function Step6ConnectAgent({
   const helloPrompt = buildHelloWorldPrompt(connectionId, defaultTable);
   const endpointFallback = endpointInfo?.status === "fallback";
   const endpointInvalid = endpointInfo?.status === "invalid" || (!endpointUrl && Boolean(projectData));
+  const connection = projectData?.connections.find((item) => item.id === connectionId) ?? null;
+  const probeStatus = healthQuery.isLoading
+    ? "pending"
+    : healthQuery.data?.status ?? "unknown";
+  const readiness = deriveSetupReadiness({
+    connection,
+    sources: sourcesQuery.data,
+    runtime: runtimeQuery.data,
+    probeStatus,
+    endpointReady: Boolean(endpointUrl) && !endpointInvalid && !endpointFallback,
+    credentialReady: Boolean(generatedToken)
+  });
 
   const copyToClipboard = async (text: string, isPrompt = false, isToken = false) => {
     try {
@@ -113,15 +171,37 @@ export function Step6ConnectAgent({
 
   return (
     <div className="space-y-6" data-testid="setup-step-6">
-      <div className="p-4 bg-success/10 border border-success/30 rounded-lg flex items-center gap-3">
-        <CheckCircle2 className="w-5 h-5 text-success shrink-0" />
+      <div
+        className={`p-4 rounded-lg flex items-start gap-3 border ${
+          readiness.serviceReady
+            ? "bg-success/10 border-success/30"
+            : "bg-warning/10 border-warning/30"
+        }`}
+        role={readiness.serviceReady ? "status" : "alert"}
+        data-testid="setup-readiness-summary"
+      >
+        {readiness.serviceReady ? (
+          <CheckCircle2 className="w-5 h-5 text-success shrink-0" />
+        ) : (
+          <RefreshCw className={`w-5 h-5 text-warning shrink-0 ${healthQuery.isLoading ? "animate-spin" : ""}`} />
+        )}
         <div className="text-xs">
           <span className="font-semibold text-fg-default">
-            数据库 <span className="notranslate" translate="no">{connectionId}</span> 已接入就绪！
+            {readiness.serviceReady ? (
+              <>数据库 <span className="notranslate" translate="no">{connectionId}</span> 的服务链路已就绪</>
+            ) : (
+              <>数据库 <span className="notranslate" translate="no">{connectionId}</span> 尚未完成运行时检查</>
+            )}
           </span>
-          <p className="text-fg-muted mt-0.5 notranslate" translate="no">
-            Schema Manifest 与语义资产已完成索引同步，随时可接受 AI 问答。
-          </p>
+          {readiness.serviceReady ? (
+            <p className="text-fg-muted mt-0.5">服务端已可用；签发凭据后即可完成客户端接入。</p>
+          ) : (
+            <ul className="text-fg-muted mt-1 space-y-0.5 list-disc list-inside" data-testid="setup-readiness-issues">
+              {readiness.issues.map((issue) => (
+                <li key={issue.code}>{issue.message}</li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
 
@@ -158,7 +238,8 @@ export function Step6ConnectAgent({
           <div className="space-y-3 bg-bg-surface p-3.5 rounded border border-success/30">
             <div className="flex items-center justify-between text-xs">
               <span className="text-fg-muted notranslate" translate="no">
-                已为 <span className="font-semibold text-fg-default notranslate" translate="no">{activeAgentId}</span> 签发管理员体验 Token（有效期 30 天）：
+                已为 <span className="font-semibold text-fg-default notranslate" translate="no">{activeAgentId}</span> 签发体验 Token
+                {generatedToken.expires_at ? `（有效期至 ${generatedToken.expires_at}）` : ""}：
               </span>
               <button
                 type="button"
@@ -202,44 +283,79 @@ export function Step6ConnectAgent({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="space-y-1">
                 <p className="text-xs text-fg-default font-medium notranslate" translate="no">
-                  一键签发管理端免配置体验 Token
+                  签发短期体验 Token
                 </p>
                 <p className="text-[11px] text-fg-muted notranslate" translate="no">
-                  大数据管理员专人配置，无需手动前往权限中心。点击即可生成 30 天有效凭据并自动注入配置。
+                  凭据继承所选 Agent 的 Role 与数据范围。默认有效期 7 天，请遵循最小权限原则。
                 </p>
               </div>
 
-              <div className="flex items-center gap-2 shrink-0">
-                {agents.length > 1 ? (
+              <div className="flex flex-col items-end gap-2 shrink-0">
+                <div className="flex items-center gap-2">
                   <select
                     className="pl-input text-xs py-1 px-2 h-8 notranslate"
                     translate="no"
                     value={activeAgentId}
-                    onChange={(e) => setSelectedAgentId(e.target.value)}
+                    onChange={(e) => {
+                      setSelectedAgentId(e.target.value);
+                      setBroadScopeAcknowledged(false);
+                    }}
                     aria-label="选择所属 Agent"
                     data-testid="setup-agent-select"
+                    disabled={agents.length === 0}
                   >
+                    {agents.length === 0 ? <option value="" className="notranslate" translate="no">暂无可用 Agent</option> : null}
                     {agents.map((ag) => (
                       <option key={ag.id} value={ag.id} className="notranslate" translate="no">
-                        {ag.name || ag.id} ({ag.id})
+                        {ag.name || ag.id} ({ag.role || "未绑定 Role"})
                       </option>
                     ))}
                   </select>
-                ) : null}
 
-                <button
-                  type="button"
-                  className="pl-btn pl-btn--primary text-xs py-1.5 px-3 flex items-center gap-1.5 shrink-0 notranslate"
-                  translate="no"
-                  onClick={handleGenerateToken}
-                  disabled={tokenMutation.isPending || !activeAgentId}
-                  data-testid="setup-generate-token-btn"
-                >
-                  <Sparkles className={`w-3.5 h-3.5 ${tokenMutation.isPending ? "animate-spin" : ""}`} />
-                  <span className="notranslate" translate="no">{tokenMutation.isPending ? "签发中..." : "一键签发 Token"}</span>
-                </button>
+                  <select
+                    className="pl-input text-xs py-1 px-2 h-8 notranslate"
+                    translate="no"
+                    value={expiresInDays}
+                    onChange={(event) => setExpiresInDays(Number(event.target.value))}
+                    aria-label="Token 有效期"
+                    data-testid="setup-token-expiry"
+                  >
+                    <option value={1}>1 天</option>
+                    <option value={7}>7 天</option>
+                    <option value={30}>30 天</option>
+                  </select>
+
+                  <button
+                    type="button"
+                    className="pl-btn pl-btn--primary text-xs py-1.5 px-3 flex items-center gap-1.5 shrink-0 notranslate"
+                    translate="no"
+                    onClick={handleGenerateToken}
+                    disabled={tokenMutation.isPending || !activeAgentId || (hasBroadScope && !broadScopeAcknowledged)}
+                    data-testid="setup-generate-token-btn"
+                  >
+                    <Sparkles className={`w-3.5 h-3.5 ${tokenMutation.isPending ? "animate-spin" : ""}`} />
+                    <span className="notranslate" translate="no">{tokenMutation.isPending ? "签发中..." : "签发体验 Token"}</span>
+                  </button>
+                </div>
+                {activeAgent ? (
+                  <p className="text-[11px] text-fg-muted">
+                    当前 Role：<span className="font-medium text-fg-default notranslate" translate="no">{activeAgent.role || "未绑定"}</span>
+                  </p>
+                ) : null}
               </div>
             </div>
+            {hasBroadScope ? (
+              <label className="flex items-start gap-2 p-2.5 rounded border border-warning/40 bg-warning/10 text-xs text-fg-default">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={broadScopeAcknowledged}
+                  onChange={(event) => setBroadScopeAcknowledged(event.target.checked)}
+                  data-testid="setup-token-broad-ack"
+                />
+                <span className="notranslate" translate="no">该 Agent 具有管理员或通配权限。我已确认这是本次体验所需的最小权限范围。</span>
+              </label>
+            ) : null}
           </div>
         )}
       </div>
@@ -247,7 +363,7 @@ export function Step6ConnectAgent({
       <div className="bg-bg-subtle p-5 rounded-lg border border-border-default space-y-4">
         <div className="flex items-center justify-between">
           <span className="text-xs font-semibold text-fg-default notranslate" translate="no">
-            选择您的 AI 客户端配置 MCP：
+            选择您的 Agent 客户端并配置 MCP：
           </span>
           <div className="flex gap-1 bg-bg-surface p-1 rounded border border-border-default">
             {(["cursor", "claude_code", "codex", "json"] as ClientType[]).map((type) => (
@@ -261,6 +377,7 @@ export function Step6ConnectAgent({
                 }`}
                 translate="no"
                 onClick={() => setActiveTab(type)}
+                aria-pressed={activeTab === type}
                 data-testid={`setup-mcp-tab-${type}`}
               >
                 {configs[type].label}

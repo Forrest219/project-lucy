@@ -1065,6 +1065,14 @@
   .pl-schema-asset-table button.pl-row-action-link:disabled { @apply cursor-wait opacity-60; }
   .pl-schema-asset-table .pl-row-action-link--muted { @apply text-fg-muted; }
   .pl-schema-asset-table .pl-row-action-link--danger { @apply text-danger-strong hover:text-danger-strong; }
+  .pl-row-action-more { @apply relative; }
+  .pl-row-action-more > summary { @apply cursor-pointer list-none; }
+  .pl-row-action-more > summary::-webkit-details-marker { display: none; }
+  .pl-row-action-more > summary::after { content: "▾"; @apply ml-1 text-[10px] text-fg-muted; }
+  .pl-row-action-more[open] > summary::after { content: "▴"; }
+  .pl-row-action-more-menu {
+    @apply absolute right-0 z-20 mt-1 grid min-w-36 gap-2 rounded-md border border-border-default bg-bg-surface p-2 shadow-lg;
+  }
   .pl-schema-asset-status { @apply rounded-pill border px-2 py-0.5 text-xs font-semibold; }
   .pl-schema-asset-status--success { @apply border-success-strong bg-success-soft text-success-strong; }
   .pl-schema-asset-status--warning { @apply border-warning-strong bg-warning-soft text-warning-strong; }
