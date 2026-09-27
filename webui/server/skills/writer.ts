@@ -2,11 +2,12 @@ import { access } from "node:fs/promises";
 import path from "node:path";
 import { stringify } from "yaml";
 import { auditedRemoveFile, auditedWriteFile } from "../admin/config-audit-write.js";
+import { previewDiff } from "../diff.js";
 import { getAccessConfig } from "../proxy/identity.js";
 import { SKILL_SEGMENT_RE } from "./identifiers.js";
 import { getSkillByUri, invalidateSkillsCache, parseSkillMarkdown } from "./loader.js";
 import { validateSkill } from "./validator.js";
-import type { SkillAsset, SkillStatus, SkillWithValidation } from "./types.js";
+import type { SkillAsset, SkillStatus, SkillValidationResult, SkillWithValidation } from "./types.js";
 
 export class SkillWriteError extends Error {
   statusCode: number;
@@ -35,6 +36,24 @@ export type SkillWriteInput = {
   content?: string;
   rawContent?: string;
   expected_version?: string;
+};
+
+export type SkillWritePreview = {
+  operation: "create" | "update";
+  uri: string;
+  relativePath: string;
+  proposedMarkdown: string;
+  diff: string;
+  validation: SkillValidationResult;
+  impact: {
+    status: { from: SkillStatus | null; to: SkillStatus };
+    rolesAllowed: { from: string[]; to: string[] };
+    enteredWildcard: boolean;
+    exitedWildcard: boolean;
+    affectedRoleIds: string[];
+    affectedAgentCount: number;
+  };
+  expectedVersion: string | null;
 };
 
 function assertSegment(kind: "domain" | "name", value: string): string {
@@ -160,10 +179,12 @@ async function withValidation(skill: SkillAsset): Promise<SkillWithValidation> {
   return { ...skill, validation: await validateSkill(skill) };
 }
 
-export async function createSkillFile(
+type PreparedCreate = { relPath: string; raw: string; parsed: SkillAsset };
+
+async function prepareCreateSkillFile(
   projectRoot: string,
   input: SkillWriteInput
-): Promise<SkillWithValidation> {
+): Promise<PreparedCreate> {
   let relPath: string;
   let raw: string;
   let parsed: SkillAsset;
@@ -194,29 +215,22 @@ export async function createSkillFile(
   if (await getSkillByUri(parsed.uri)) {
     throw new SkillWriteError(`skill_uri_conflict:${parsed.uri}`, 409);
   }
-  const authSummary = await authorizationAuditSummary([], parsed.roles_allowed);
-  await auditedWriteFile(projectRoot, relPath, raw, {
-    enabled: true,
-    changeType: "skill_create",
-    assetKind: "skill",
-    actorType: "ui_admin",
-    source: "skills_api",
-    targetId: parsed.uri,
-    operation: "create",
-    newSummary: { ...authSummary, file_version: parsed.file_version }
-  });
-  invalidateSkillsCache();
-  const saved = await getSkillByUri(parsed.uri);
-  if (!saved) throw new SkillWriteError("Skill was written but could not be reloaded", 500);
-  return withValidation(saved);
+  return { relPath, raw, parsed };
 }
 
-export async function updateSkillFile(
+type PreparedUpdate = {
+  relPath: string;
+  raw: string;
+  parsed: SkillAsset;
+  existing: SkillAsset;
+};
+
+async function prepareUpdateSkillFile(
   projectRoot: string,
   domain: string,
   name: string,
   input: SkillWriteInput
-): Promise<SkillWithValidation> {
+): Promise<PreparedUpdate> {
   const oldUri = `lucy-skill://${assertSegment("domain", domain)}/${assertSegment("name", name)}`;
   const existing = await getSkillByUri(oldUri);
   if (!existing) throw new SkillWriteError(`Skill not found: ${oldUri}`, 404);
@@ -247,6 +261,91 @@ export async function updateSkillFile(
   if (parsed.uri !== oldUri) {
     throw new SkillWriteError("skill_identity_immutable", 409);
   }
+  return { relPath, raw, parsed, existing };
+}
+
+function previewImpact(
+  from: SkillAsset | null,
+  to: SkillAsset,
+  authSummary: Awaited<ReturnType<typeof authorizationAuditSummary>>
+): SkillWritePreview["impact"] {
+  return {
+    status: { from: from?.status ?? null, to: to.status },
+    rolesAllowed: { from: from?.roles_allowed ?? [], to: to.roles_allowed },
+    enteredWildcard: authSummary.entered_wildcard,
+    exitedWildcard: authSummary.exited_wildcard,
+    affectedRoleIds: authSummary.affected_role_ids,
+    affectedAgentCount: authSummary.affected_agent_count ?? 0
+  };
+}
+
+export async function previewCreateSkillFile(
+  projectRoot: string,
+  input: SkillWriteInput
+): Promise<SkillWritePreview> {
+  const { relPath, raw, parsed } = await prepareCreateSkillFile(projectRoot, input);
+  const authSummary = await authorizationAuditSummary([], parsed.roles_allowed);
+  return {
+    operation: "create",
+    uri: parsed.uri,
+    relativePath: relPath,
+    proposedMarkdown: raw,
+    diff: previewDiff("", raw, relPath),
+    validation: await validateSkill(parsed),
+    impact: previewImpact(null, parsed, authSummary),
+    expectedVersion: null
+  };
+}
+
+export async function previewUpdateSkillFile(
+  projectRoot: string,
+  domain: string,
+  name: string,
+  input: SkillWriteInput
+): Promise<SkillWritePreview> {
+  const { relPath, raw, parsed, existing } = await prepareUpdateSkillFile(projectRoot, domain, name, input);
+  const authSummary = await authorizationAuditSummary(existing.roles_allowed, parsed.roles_allowed);
+  return {
+    operation: "update",
+    uri: parsed.uri,
+    relativePath: relPath,
+    proposedMarkdown: raw,
+    diff: previewDiff(existing.raw, raw, relPath),
+    validation: await validateSkill(parsed),
+    impact: previewImpact(existing, parsed, authSummary),
+    expectedVersion: existing.file_version
+  };
+}
+
+export async function createSkillFile(
+  projectRoot: string,
+  input: SkillWriteInput
+): Promise<SkillWithValidation> {
+  const { relPath, raw, parsed } = await prepareCreateSkillFile(projectRoot, input);
+  const authSummary = await authorizationAuditSummary([], parsed.roles_allowed);
+  await auditedWriteFile(projectRoot, relPath, raw, {
+    enabled: true,
+    changeType: "skill_create",
+    assetKind: "skill",
+    actorType: "ui_admin",
+    source: "skills_api",
+    targetId: parsed.uri,
+    operation: "create",
+    newSummary: { ...authSummary, file_version: parsed.file_version }
+  });
+  invalidateSkillsCache();
+  const saved = await getSkillByUri(parsed.uri);
+  if (!saved) throw new SkillWriteError("Skill was written but could not be reloaded", 500);
+  return withValidation(saved);
+}
+
+export async function updateSkillFile(
+  projectRoot: string,
+  domain: string,
+  name: string,
+  input: SkillWriteInput
+): Promise<SkillWithValidation> {
+  const { relPath, raw, parsed, existing } = await prepareUpdateSkillFile(projectRoot, domain, name, input);
 
   const oldAuthSummary = await authorizationAuditSummary(existing.roles_allowed, existing.roles_allowed);
   const newAuthSummary = await authorizationAuditSummary(existing.roles_allowed, parsed.roles_allowed);

@@ -1046,13 +1046,18 @@
 | `publish-impact-table-${tableName}` | publish-impact-table-${tableName} (template) | `pages/publish/PublishWorkbench.tsx` |
 | `publish-post-eval-${domain}` | publish-post-eval-${domain} (template) | `pages/publish/PublishWorkbench.tsx` |
 
-## 7.1 业务 Skill（Spec 151）
+## 7.1 业务 Skill（Spec 151 / 153）
 
 | Test ID | 元素 | 出现位置 |
 |---|---|---|
 | `skills-page` | 业务 Skill 页面根 | `pages/skills/SkillList.tsx` |
 | `skills-create` | 新建 Skill | `pages/skills/SkillList.tsx` |
-| `skills-section` | Skill 列表区 | `pages/skills/SkillList.tsx` |
+| `skills-workbench` | 统一 Skill 工作台 | `pages/skills/SkillList.tsx` |
+| `skills-explorer` | 领域与 Skill 浏览器 | `pages/skills/SkillList.tsx` |
+| `skills-search` | 浏览器搜索 | `pages/skills/SkillList.tsx` |
+| `skills-all` | 全部 Skill 范围 | `pages/skills/SkillList.tsx` |
+| `skills-domain` | 领域范围节点 | `pages/skills/SkillList.tsx` |
+| `skills-section` | Skill 治理总览 | `pages/skills/SkillList.tsx` |
 | `skills-error` | 列表错误 | `pages/skills/SkillList.tsx` |
 | `skills-empty` | 空态 | `pages/skills/SkillList.tsx` |
 | `skills-table` | Skill 表格 | `pages/skills/SkillList.tsx` |
@@ -1061,13 +1066,14 @@
 | `skill-status` | 状态 | `pages/skills/SkillList.tsx` |
 | `skill-roles-summary` | 可访问角色摘要 | `pages/skills/SkillList.tsx` |
 | `skill-validation` | 校验状态 | `pages/skills/SkillList.tsx` |
-| `skill-detail-drawer` | 详情/编辑 Drawer | `pages/skills/SkillList.tsx` |
-| `skill-detail-title` | Drawer 标题 | `pages/skills/SkillList.tsx` |
-| `skill-detail-close` | Drawer 关闭 | `pages/skills/SkillList.tsx` |
+| `skill-detail` | 主区阅读态 | `pages/skills/SkillList.tsx` |
+| `skill-detail-back` | 返回领域治理总览 | `pages/skills/SkillList.tsx` |
+| `skill-detail-title` | 阅读态标题 | `pages/skills/SkillList.tsx` |
 | `skill-detail-content` | 正文详情 | `pages/skills/SkillList.tsx` |
 | `skill-detail-path` | Skill 文件路径 | `pages/skills/SkillList.tsx` |
-| `skill-detail-footer-close` | 详情页底部关闭 | `pages/skills/SkillList.tsx` |
+| `skill-detail-validation-issues` | 中文校验问题 | `pages/skills/SkillList.tsx` |
 | `skill-editor-form` | 编辑表单 | `pages/skills/SkillList.tsx` |
+| `skill-metadata-toggle` | 元数据与授权折叠区 | `pages/skills/SkillList.tsx` |
 | `skill-field-name` | Skill name | `pages/skills/SkillList.tsx` |
 | `skill-field-domain` | Skill domain | `pages/skills/SkillList.tsx` |
 | `skill-field-title` | 标题 | `pages/skills/SkillList.tsx` |
@@ -1081,13 +1087,18 @@
 | `skill-field-triggers` | 触发词 | `pages/skills/SkillList.tsx` |
 | `skill-field-description` | 说明 | `pages/skills/SkillList.tsx` |
 | `skill-field-content` | Markdown 正文 | `pages/skills/SkillList.tsx` |
+| `skill-markdown-preview` | Markdown 渲染预览 | `pages/skills/SkillList.tsx` |
 | `skill-form-error` | 保存错误 | `pages/skills/SkillList.tsx` |
-| `skill-validation-banner` | 保存后校验提示 | `pages/skills/SkillList.tsx` |
+| `skill-dirty` | 未保存修改状态 | `pages/skills/SkillList.tsx` |
 | `skill-edit` | 编辑动作 | `pages/skills/SkillList.tsx` |
-| `skill-save` | 保存动作 | `pages/skills/SkillList.tsx` |
+| `skill-save` | 保存并预检动作 | `pages/skills/SkillList.tsx` |
 | `skill-cancel-edit` | 取消编辑 | `pages/skills/SkillList.tsx` |
 | `skill-delete` | 删除动作 | `pages/skills/SkillList.tsx` |
 | `skill-delete-confirm` | 删除确认 | `pages/skills/SkillList.tsx` |
+| `skill-preflight` | 保存 Skill 前预检 | `pages/skills/SkillList.tsx` |
+| `skill-preflight-diff` | 预检 Diff | `pages/skills/SkillList.tsx` |
+| `skill-wildcard-ack` | 所有角色可见确认 | `pages/skills/SkillList.tsx` |
+| `skill-preflight-confirm` | 确认写入 | `pages/skills/SkillList.tsx` |
 | `role-skill-access-summary` | Role 详情只读业务 Skill 摘要 | `pages/admin/RoleDetail.tsx` |
 
 ## 8. Rename History

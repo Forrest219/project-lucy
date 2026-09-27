@@ -624,6 +624,9 @@ Skill 是与语义资产、业务 Wiki 并列的受治理上下文。导航与�
 | Create Skill | 新建 Skill | 新建技能、创建技巧 | Spec 147；写入 `skills/<domain>/<name>.md` |
 | Save Skill | 保存 Skill | 发布技能（作保存按钮文案） | Spec 147；写回 frontmatter + Markdown；状态字段仍是 `status` |
 | Delete Skill | 删除 Skill | 删除技能、移除技巧 | Spec 147；删除入口文件，不删共享 `references/` |
+| Skill Governance Overview | Skill 治理总览 | Skill 首页、Skill Hub | Spec 153；`/skills` 默认主工作区，展示全部或领域范围内的治理摘要 |
+| Skill Save Preflight | 保存 Skill 前预检 | 发布 Skill、直接保存 | Spec 153；写入前只读展示 Diff、校验、状态与授权影响；按钮为「保存并预检」 |
+| Markdown Source / Rendered Preview | Markdown 源码 / 渲染预览 | 原文框 / 效果区 | Spec 153；Skill 编辑态双栏标签 |
 | Accessible Roles | 可访问角色 | 授权角色（辅助说明） | Skill 编辑页的 Role 多选；对象授权事实源为 `roles_allowed` |
 | All Roles Visible | 所有角色可见 | 全员可用、公开（作主标签） | 显式写入 `roles_allowed: ["*"]`；开启时需要二次确认 |
 | No Roles Visible | 无人可见 | 私有（含义不明确） | 缺失或空 `roles_allowed`；新建 Skill 默认状态 |

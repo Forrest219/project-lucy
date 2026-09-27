@@ -40,6 +40,8 @@ export interface SkillAsset {
 }
 
 export interface SkillValidationIssue {
+  /** Stable machine-readable identifier; UI copy must not depend on message text. */
+  code: string;
   type: "error" | "warning";
   field: string;
   message: string;

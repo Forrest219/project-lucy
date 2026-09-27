@@ -68,6 +68,21 @@ Body content
     expect(json.skills[0].validation).toBeDefined();
   });
 
+  it("GET /api/skills?includeContent=false returns governance summaries", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/skills?includeContent=false"
+    });
+    expect(res.statusCode).toBe(200);
+    const json = res.json();
+    expect(json.ok).toBe(true);
+    expect(json.skills[0].name).toBe("superstore-profit");
+    expect(json.skills[0].validation).toBeDefined();
+    expect(json.skills[0]).not.toHaveProperty("content");
+    expect(json.skills[0]).not.toHaveProperty("raw");
+    expect(json.skills[0]).not.toHaveProperty("filePath");
+  });
+
   it("GET /api/skills/:domain/:name returns single skill details", async () => {
     const res = await app.inject({
       method: "GET",
@@ -174,6 +189,74 @@ status: draft
     const text = await readFile(path.join(projectRoot, "skills", "acceptance", "new-skill.md"), "utf8");
     expect(text).toContain("name: new-skill");
     expect(text).toContain("roles_allowed: []");
+  });
+
+  it("previews create without writing and reports validation and authorization impact", async () => {
+    const target = path.join(projectRoot, "skills", "acceptance", "preview-only.md");
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/skills/preview",
+      payload: {
+        name: "preview-only",
+        domain: "acceptance",
+        title: "Preview Only",
+        status: "published",
+        roles_allowed: ["*"],
+        content: "# Preview\n"
+      }
+    });
+    expect(res.statusCode).toBe(200);
+    const json = res.json();
+    expect(json.ok).toBe(true);
+    expect(json.preview.operation).toBe("create");
+    expect(json.preview.uri).toBe("lucy-skill://acceptance/preview-only");
+    expect(json.preview.proposedMarkdown).toContain("name: preview-only");
+    expect(json.preview.diff).toContain("# Preview");
+    expect(json.preview.validation.valid).toBe(false);
+    expect(json.preview.validation.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "skill_eval_required", field: "eval_cases" })
+    ]));
+    expect(json.preview.impact.enteredWildcard).toBe(true);
+    expect(json.preview.impact.status).toEqual({ from: null, to: "published" });
+    await expect(access(target)).rejects.toThrow();
+  });
+
+  it("previews update without writing and rejects stale versions", async () => {
+    const detail = await app.inject({
+      method: "GET",
+      url: "/api/skills/superstore/superstore-profit"
+    });
+    const skill = detail.json().skill;
+    const entry = path.join(projectRoot, skill.relativePath);
+    const before = await readFile(entry, "utf8");
+
+    const preview = await app.inject({
+      method: "POST",
+      url: "/api/skills/superstore/superstore-profit/preview",
+      payload: {
+        name: skill.name,
+        domain: skill.domain,
+        expected_version: skill.file_version,
+        status: "draft",
+        roles_allowed: [],
+        content: "# Changed only in preview\n"
+      }
+    });
+    expect(preview.statusCode).toBe(200);
+    const json = preview.json();
+    expect(json.preview.operation).toBe("update");
+    expect(json.preview.diff).toContain("Changed only in preview");
+    expect(json.preview.impact.status).toEqual({ from: "published", to: "draft" });
+    expect(json.preview.impact.exitedWildcard).toBe(true);
+    expect(await readFile(entry, "utf8")).toBe(before);
+
+    const stale = await app.inject({
+      method: "POST",
+      url: "/api/skills/superstore/superstore-profit/preview",
+      payload: { expected_version: "stale", content: "# stale" }
+    });
+    expect(stale.statusCode).toBe(409);
+    expect(stale.json().error).toBe("skill_write_conflict");
   });
 
   it("rejects create with path traversal or missing name (SC-147-02)", async () => {

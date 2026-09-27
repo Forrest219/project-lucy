@@ -34,6 +34,7 @@ export const queryKeys = {
     ["semantic-assets", "releases", releaseId] as const,
   // Spec 144 read-only 业务 Skill assets (`GET /api/skills`).
   skills: ["skills"] as const,
+  skill: (domain: string, name: string) => ["skills", domain, name] as const,
   // M36 Data Agent Ops Platform. The Onboarding page aggregates multiple
   // existing endpoints; we keep a dedicated cache key so the dashboard
   // sections can be invalidated independently from per-module queries.

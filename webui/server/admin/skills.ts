@@ -5,6 +5,8 @@ import { exportSkillPackage } from "../skills/exporter.js";
 import {
   createSkillFile,
   deleteSkillFile,
+  previewCreateSkillFile,
+  previewUpdateSkillFile,
   SkillWriteError,
   updateSkillFile,
   type SkillWriteInput
@@ -30,7 +32,10 @@ function writeErrorReply(reply: FastifyReply, err: unknown) {
 }
 
 export function registerSkillsRoutes(app: FastifyInstance): void {
-  app.get("/api/skills", async (_req: FastifyRequest, reply: FastifyReply) => {
+  app.get("/api/skills", async (
+    req: FastifyRequest<{ Querystring: { includeContent?: string } }>,
+    reply: FastifyReply
+  ) => {
     try {
       const skills = await loadAllSkills();
       const withValidation: SkillWithValidation[] = await Promise.all(
@@ -39,12 +44,28 @@ export function registerSkillsRoutes(app: FastifyInstance): void {
           return { ...skill, validation };
         })
       );
-      return reply.send({ ok: true, count: withValidation.length, skills: withValidation });
+      const skillsForResponse = req.query.includeContent === "false"
+        ? withValidation.map(({ content: _content, raw: _raw, filePath: _filePath, ...summary }) => summary)
+        : withValidation;
+      return reply.send({ ok: true, count: skillsForResponse.length, skills: skillsForResponse });
     } catch (err) {
       return reply.status(500).send({
         ok: false,
         error: err instanceof Error ? err.message : String(err)
       });
+    }
+  });
+
+  app.post("/api/skills/preview", async (
+    req: FastifyRequest<{ Body: SkillWriteInput }>,
+    reply: FastifyReply
+  ) => {
+    try {
+      const projectRoot = await resolveProjectRoot();
+      const preview = await previewCreateSkillFile(projectRoot, req.body ?? {});
+      return reply.send({ ok: true, preview });
+    } catch (err) {
+      return writeErrorReply(reply, err);
     }
   });
 
@@ -75,9 +96,10 @@ export function registerSkillsRoutes(app: FastifyInstance): void {
             valid: false,
             issues: [
               {
+                code: "skill_frontmatter_invalid",
                 type: "error",
                 field: "frontmatter",
-                message: "Failed to parse YAML frontmatter or missing required 'name' field"
+                message: "无法解析 YAML frontmatter，或缺少必填的 name 字段。"
               }
             ]
           });
@@ -199,6 +221,27 @@ export function registerSkillsRoutes(app: FastifyInstance): void {
         const projectRoot = await resolveProjectRoot();
         const skill = await updateSkillFile(projectRoot, req.params.domain, req.params.name, req.body ?? {});
         return reply.send({ ok: true, skill });
+      } catch (err) {
+        return writeErrorReply(reply, err);
+      }
+    }
+  );
+
+  app.post(
+    "/api/skills/:domain/:name/preview",
+    async (
+      req: FastifyRequest<{ Params: { domain: string; name: string }; Body: SkillWriteInput }>,
+      reply: FastifyReply
+    ) => {
+      try {
+        const projectRoot = await resolveProjectRoot();
+        const preview = await previewUpdateSkillFile(
+          projectRoot,
+          req.params.domain,
+          req.params.name,
+          req.body ?? {}
+        );
+        return reply.send({ ok: true, preview });
       } catch (err) {
         return writeErrorReply(reply, err);
       }

@@ -115,6 +115,8 @@ POST   /api/connections/probe
 
 GET    /api/skills
 GET    /api/skills/:domain/:name
+POST   /api/skills/preview
+POST   /api/skills/:domain/:name/preview
 POST   /api/skills/validate
 POST   /api/skills/reload
 POST   /api/skills/export

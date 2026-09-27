@@ -2744,3 +2744,93 @@
     grid-template-columns: minmax(0, 1fr) minmax(96px, 1fr);
   }
 }
+
+/* Spec 153 — unified Skill governance workbench. The visual language is
+   intentionally shared with the Wiki explorer and existing data grid. */
+@layer components {
+  .pl-skill-workbench {
+    grid-template-columns: 260px minmax(0, 1fr);
+    align-items: start;
+  }
+  .pl-skill-explorer {
+    @apply sticky top-[88px] grid h-[calc(100vh-112px)] content-start gap-3 overflow-auto rounded-md border border-border-default bg-bg-subtle p-3;
+  }
+  .pl-skill-explorer-header { @apply flex items-center justify-between gap-2 text-sm; }
+  .pl-skill-explorer-header strong { @apply font-semibold text-fg-default; }
+  .pl-skill-explorer-header span { @apply rounded-pill bg-bg-muted px-2 py-0.5 text-xs text-fg-muted; }
+  .pl-skill-explorer-search { @apply text-sm; }
+  .pl-skill-tree { @apply m-0 grid list-none gap-1 p-0; }
+  .pl-skill-tree-all,
+  .pl-skill-tree-domain,
+  .pl-skill-tree-skill {
+    @apply flex min-w-0 items-center justify-between gap-2 rounded-sm px-2 py-1.5 text-left text-sm text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary;
+  }
+  .pl-skill-tree-all { @apply mb-2 w-full font-medium; }
+  .pl-skill-tree-domain { @apply min-w-0 flex-1 font-medium; }
+  .pl-skill-tree-skill { @apply w-full pl-7 text-xs; }
+  .pl-skill-tree-all:hover,
+  .pl-skill-tree-domain:hover,
+  .pl-skill-tree-skill:hover { @apply bg-bg-muted text-fg-default; }
+  .pl-skill-tree-active { @apply bg-bg-muted font-semibold text-fg-default; }
+  .pl-skill-tree-domain-row { @apply flex min-w-0 items-center gap-0.5; }
+  .pl-skill-tree-caret {
+    @apply inline-flex size-7 shrink-0 items-center justify-center rounded-sm text-xs text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary;
+  }
+  .pl-skill-tree-caret:hover { @apply bg-bg-muted text-fg-default; }
+  .pl-skill-tree-items { @apply m-0 grid list-none gap-0.5 p-0; }
+  .pl-skill-main { @apply grid min-w-0 gap-3 border-l border-border-default pl-6; }
+  .pl-skill-main-card { @apply grid min-w-0 gap-4 rounded-md border border-border-default bg-bg-surface p-5; }
+  .pl-skill-overview-header { @apply flex flex-wrap items-end justify-between gap-4 border-b border-border-default pb-4; }
+  .pl-skill-overview-header h2 { @apply mt-1 text-xl font-semibold text-fg-default; }
+  .pl-skill-overview-header p { @apply mt-1 text-sm text-fg-muted; }
+  .pl-skill-filters { @apply flex flex-wrap items-end gap-2; }
+  .pl-skill-filters label { @apply grid gap-1 text-xs font-medium text-fg-muted; }
+  .pl-skill-filters .pl-input { @apply min-w-32 text-sm; }
+  .pl-skill-pagination { @apply flex items-center justify-between gap-3 border-t border-border-default pt-3 text-xs text-fg-muted; }
+  .pl-skill-pagination div { @apply flex gap-1; }
+  .pl-skill-detail-header,
+  .pl-skill-edit-header { @apply flex flex-wrap items-start justify-between gap-4 border-b border-border-default pb-4; }
+  .pl-skill-detail-header > div:first-child,
+  .pl-skill-edit-header > div:first-child { @apply grid gap-1; }
+  .pl-skill-detail-header h2,
+  .pl-skill-edit-header h2 { @apply text-2xl font-semibold text-fg-default; }
+  .pl-skill-detail-actions,
+  .pl-skill-edit-header > div:last-child { @apply flex flex-wrap items-center justify-end gap-2; }
+  .pl-skill-meta-strip { @apply flex flex-wrap items-center gap-x-4 gap-y-2 rounded-md border border-border-default bg-bg-muted px-3 py-2 text-sm text-fg-muted; }
+  .pl-skill-detail-grid { @apply grid gap-4 rounded-md border border-border-default bg-bg-base p-4 md:grid-cols-2; }
+  .pl-skill-validation-panel { @apply grid gap-2 rounded-md border border-warning-strong bg-warning-soft p-3 text-sm; }
+  .pl-skill-validation-panel ul,
+  .pl-skill-preflight-warning ul { @apply m-0 grid list-none gap-1 p-0; }
+  .pl-skill-read-layout { @apply grid min-w-0 grid-cols-[minmax(0,1fr)_200px] items-start gap-6; }
+  .pl-skill-read-layout--no-toc { @apply grid-cols-1; }
+  .pl-skill-markdown { @apply min-w-0 rounded-md border border-border-default bg-bg-base p-5; }
+  .pl-skill-toc { @apply sticky top-[88px] grid gap-2 border-l border-border-default pl-4 text-sm; }
+  .pl-skill-toc ul { @apply m-0 grid list-none gap-1 p-0; }
+  .pl-skill-toc a { @apply text-fg-muted no-underline hover:text-primary; }
+  .pl-skill-toc-sub { @apply pl-3 text-xs; }
+  .pl-skill-edit-shell { @apply content-start; }
+  .pl-skill-editor { @apply grid gap-4; }
+  .pl-skill-metadata-form { @apply grid gap-4 border-t border-border-default pt-3; }
+  .pl-skill-field-grid { @apply grid gap-3 md:grid-cols-2; }
+  .pl-skill-role-field { @apply grid gap-2 rounded-md border border-border-default bg-bg-base p-3 text-sm; }
+  .pl-skill-role-options { @apply grid max-h-40 gap-1 overflow-y-auto rounded-md border border-border-default bg-bg-surface p-2 md:grid-cols-2; }
+  .pl-skill-structured-grid { @apply grid gap-3 md:grid-cols-2; }
+  .pl-skill-list-field { @apply grid content-start gap-2 rounded-md border border-border-default bg-bg-base p-3; }
+  .pl-skill-list-field-row { @apply grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2; }
+  .pl-skill-markdown-editor { @apply grid min-h-[520px] grid-cols-2 overflow-hidden rounded-md border border-border-default; }
+  .pl-skill-markdown-editor > section { @apply grid min-w-0 grid-rows-[auto_minmax(0,1fr)]; }
+  .pl-skill-markdown-editor > section + section { @apply border-l border-border-default; }
+  .pl-skill-markdown-editor header { @apply border-b border-border-default bg-bg-muted px-4 py-2 text-sm text-fg-default; }
+  .pl-skill-markdown-editor textarea { @apply min-h-[480px] resize-y rounded-none border-0 bg-bg-base p-4 font-mono text-sm leading-relaxed focus:ring-inset; }
+  .pl-skill-markdown-preview { @apply min-h-[480px] overflow-auto bg-bg-surface p-4; }
+  .pl-dialog-overlay { @apply fixed inset-0 z-50 bg-fg-default/40; }
+  .pl-dialog-content { @apply fixed left-1/2 top-1/2 z-50 grid max-h-[85vh] w-[min(720px,calc(100vw-48px))] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-auto rounded-md border border-border-default bg-bg-surface p-6 shadow-lg; }
+  .pl-dialog-actions { @apply flex flex-wrap items-center justify-end gap-2 border-t border-border-default pt-4; }
+  .pl-skill-preflight-warning { @apply grid gap-2 rounded-md border border-warning-strong bg-warning-soft p-3 text-sm text-warning-strong; }
+  .pl-skill-preflight-impact { @apply grid gap-2 rounded-md border border-border-default bg-bg-base p-3 text-sm; }
+  .pl-skill-preflight-impact > div { @apply grid grid-cols-[96px_minmax(0,1fr)] gap-3; }
+  .pl-skill-preflight-impact dt { @apply font-medium text-fg-muted; }
+  .pl-skill-preflight-impact dd { @apply m-0 text-fg-default; }
+  .pl-skill-preflight-diff { @apply mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded-md border border-border-default bg-bg-base p-3 font-mono text-xs leading-relaxed text-fg-default; }
+  .pl-skill-wildcard-confirm { @apply flex items-start gap-2 rounded-md border border-warning-strong bg-warning-soft p-3 text-sm font-medium text-warning-strong; }
+}

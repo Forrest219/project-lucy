@@ -20,47 +20,51 @@ export async function validateSkill(skill: SkillAsset, customProjectRoot?: strin
 
   // 1. Basic field checks
   if (!skill.name || skill.name.trim() === "") {
-    issues.push({ type: "error", field: "name", message: "Skill name is required" });
+    issues.push({ code: "skill_name_required", type: "error", field: "name", message: "Skill 名称不能为空。" });
   } else if (!isSkillSegment(skill.name)) {
     issues.push({
+      code: "skill_name_invalid",
       type: "error",
       field: "name",
-      message: `Skill name "${skill.name}" must use lowercase letters, digits, dashes, and underscores`,
+      message: `Skill 名称“${skill.name}”只能使用小写字母、数字、连字符和下划线。`,
     });
   }
 
   if (!skill.title || skill.title.trim() === "") {
-    issues.push({ type: "error", field: "title", message: "Skill title is required" });
+    issues.push({ code: "skill_title_required", type: "error", field: "title", message: "Skill 标题不能为空。" });
   }
 
   if (!skill.domain || skill.domain.trim() === "") {
-    issues.push({ type: "error", field: "domain", message: "Skill domain is required" });
+    issues.push({ code: "skill_domain_required", type: "error", field: "domain", message: "Skill 域不能为空。" });
   } else if (!isSkillSegment(skill.domain)) {
     issues.push({
+      code: "skill_domain_invalid",
       type: "error",
       field: "domain",
-      message: `Skill domain "${skill.domain}" must use lowercase letters, digits, dashes, and underscores`,
+      message: `Skill 域“${skill.domain}”只能使用小写字母、数字、连字符和下划线。`,
     });
   }
 
   if (skill.roles_allowed.includes("*") && skill.roles_allowed.length > 1) {
     issues.push({
+      code: "skill_roles_wildcard_mixed",
       type: "error",
       field: "roles_allowed",
-      message: "roles_allowed wildcard must not be combined with role ids",
+      message: "全部角色通配符不能与具体角色 ID 同时使用。",
     });
   }
 
   if (!skill.version || skill.version.trim() === "") {
-    issues.push({ type: "warning", field: "version", message: "Skill version is missing, defaulting to 1.0.0" });
+    issues.push({ code: "skill_version_defaulted", type: "warning", field: "version", message: "Skill 版本为空，将使用默认值 1.0.0。" });
   }
 
   const validStatuses = ["draft", "published", "deprecated"];
   if (!validStatuses.includes(skill.status)) {
     issues.push({
+      code: "skill_status_invalid",
       type: "error",
       field: "status",
-      message: `Invalid status "${skill.status}". Must be one of: ${validStatuses.join(", ")}`,
+      message: `状态“${skill.status}”无效，必须为 ${validStatuses.join("、")} 之一。`,
     });
   }
 
@@ -109,9 +113,10 @@ export async function validateSkill(skill: SkillAsset, customProjectRoot?: strin
 
       if (!found && !customProjectRoot) {
         issues.push({
+          code: "skill_source_unverified",
           type: "warning",
           field: "prerequisites.sources",
-          message: `Source "${source}" could not be verified in semantic-layer directory`,
+          message: `无法在 semantic-layer 目录中确认语义源“${source}”。`,
         });
       }
     }
@@ -134,9 +139,10 @@ export async function validateSkill(skill: SkillAsset, customProjectRoot?: strin
       }
       if (!exists) {
         issues.push({
+          code: "skill_wiki_missing",
           type: "error",
           field: "prerequisites.wiki_docs",
-          message: `Referenced wiki document "${wikiDoc}" does not exist in wiki/ directory`,
+          message: `引用的 Wiki 文档“${wikiDoc}”不在 wiki/ 目录中。`,
         });
       }
     }
@@ -146,9 +152,10 @@ export async function validateSkill(skill: SkillAsset, customProjectRoot?: strin
   if (skill.status === "published") {
     if (!skill.eval_cases || skill.eval_cases.length === 0) {
       issues.push({
+        code: "skill_eval_required",
         type: "error",
         field: "eval_cases",
-        message: 'Published skill must have at least one eval case defined in "eval_cases"',
+        message: "已发布 Skill 至少需要配置一个 eval_cases 评测用例。",
       });
     } else {
       for (const evalCase of skill.eval_cases) {
@@ -166,9 +173,10 @@ export async function validateSkill(skill: SkillAsset, customProjectRoot?: strin
         }
         if (!exists && !customProjectRoot) {
           issues.push({
+            code: "skill_eval_missing",
             type: "warning",
             field: "eval_cases",
-            message: `Eval case file "${evalCase}" not found under evals/ directory`,
+            message: `未在 evals/ 目录中找到评测用例文件“${evalCase}”。`,
           });
         }
       }

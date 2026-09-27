@@ -66,7 +66,28 @@ async function installSkillApi(page: Page, options: { conflictOnUpdate?: boolean
     }
     if (url.pathname === "/api/skills" && method === "GET") {
       const skills = current ? [current] : [];
-      await route.fulfill({ json: { ok: true, count: skills.length, skills } });
+      await route.fulfill({ json: { ok: true, count: skills.length, skills: skills.map(({ content: _content, raw: _raw, filePath: _filePath, ...summary }) => summary) } });
+      return;
+    }
+    if (url.pathname === "/api/skills/preview" && method === "POST") {
+      const roles = (body.roles_allowed as string[]) || [];
+      await route.fulfill({ json: { ok: true, preview: {
+        operation: "create",
+        uri: `lucy-skill://${body.domain}/${body.name}`,
+        relativePath: `skills/${body.domain}/${body.name}.md`,
+        proposedMarkdown: "---\n---\n",
+        diff: "+ create Skill",
+        validation: { valid: true, issues: [] },
+        impact: {
+          status: { from: null, to: body.status || "draft" },
+          rolesAllowed: { from: [], to: roles },
+          enteredWildcard: roles.includes("*"),
+          exitedWildcard: false,
+          affectedRoleIds: roles.includes("*") ? ["analyst", "finance"] : roles,
+          affectedAgentCount: roles.length
+        },
+        expectedVersion: null
+      } } });
       return;
     }
     if (url.pathname === "/api/skills" && method === "POST") {
@@ -89,6 +110,35 @@ async function installSkillApi(page: Page, options: { conflictOnUpdate?: boolean
         relativePath: "skills/finance_ops/quarter-close.md",
       };
       await route.fulfill({ json: { ok: true, skill: current } });
+      return;
+    }
+    if (url.pathname === "/api/skills/finance_ops/quarter-close/preview" && method === "POST") {
+      const roles = (body.roles_allowed as string[]) || [];
+      await route.fulfill({ json: { ok: true, preview: {
+        operation: "update",
+        uri: "lucy-skill://finance_ops/quarter-close",
+        relativePath: "skills/finance_ops/quarter-close.md",
+        proposedMarkdown: "---\n---\n",
+        diff: "+ update Skill",
+        validation: { valid: true, issues: [] },
+        impact: {
+          status: { from: current?.status || "draft", to: body.status || "draft" },
+          rolesAllowed: { from: current?.roles_allowed || [], to: roles },
+          enteredWildcard: !current?.roles_allowed.includes("*") && roles.includes("*"),
+          exitedWildcard: Boolean(current?.roles_allowed.includes("*")) && !roles.includes("*"),
+          affectedRoleIds: roles,
+          affectedAgentCount: roles.length
+        },
+        expectedVersion: current?.file_version || "file-v1"
+      } } });
+      return;
+    }
+    if (url.pathname === "/api/skills/finance_ops/quarter-close" && method === "GET") {
+      if (!current) {
+        await route.fulfill({ status: 404, json: { ok: false, error: "not found" } });
+      } else {
+        await route.fulfill({ json: { ok: true, skill: current } });
+      }
       return;
     }
     await route.fulfill({ status: 404, json: { ok: false, error: { code: "NOT_FOUND", message: url.pathname } } });
@@ -114,24 +164,26 @@ test.describe("Spec 151 business Skill WebUI", () => {
     await analyst.uncheck();
     await expect(page.getByTestId("skill-role-none")).toBeVisible();
 
-    page.once("dialog", async (dialog) => {
-      expect(dialog.message()).toContain("所有角色可见");
-      await dialog.accept();
-    });
     await page.getByTestId("skill-role-all").check();
     await expect(page.getByTestId("skill-role-option").first()).toBeDisabled();
     await page.getByTestId("skill-save").click();
+    await expect(page.getByTestId("skill-preflight")).toBeVisible();
+    await expect(page.getByTestId("skill-preflight-confirm")).toBeDisabled();
+    await page.getByTestId("skill-wildcard-ack").check();
+    await page.getByTestId("skill-preflight-confirm").click();
 
     await expect.poll(() => api.writes.length).toBe(1);
     expect(api.writes[0]?.body.roles_allowed).toEqual(["*"]);
     await expect(page.getByTestId("skill-detail-path")).toContainText("skills/finance_ops/quarter-close.md");
 
     await page.getByTestId("skill-edit").click();
+    await page.getByTestId("skill-metadata-toggle").click();
     await expect(page.getByTestId("skill-field-name")).toBeDisabled();
     await expect(page.getByTestId("skill-field-domain")).toBeDisabled();
     await page.getByTestId("skill-role-all").uncheck();
     await page.getByLabel("analyst").check();
     await page.getByTestId("skill-save").click();
+    await page.getByTestId("skill-preflight-confirm").click();
 
     await expect.poll(() => api.writes.length).toBe(2);
     expect(api.writes[1]?.body.expected_version).toBe("file-v1");
@@ -157,6 +209,7 @@ test.describe("Spec 151 business Skill WebUI", () => {
     await page.getByTestId("skill-edit").click();
     await page.getByTestId("skill-field-content").fill("new content");
     await page.getByTestId("skill-save").click();
+    await page.getByTestId("skill-preflight-confirm").click();
 
     await expect(page.getByTestId("skill-form-error")).toContainText("skill_write_conflict");
     expect(api.writes[0]?.body.expected_version).toBe("stale-file-version");
