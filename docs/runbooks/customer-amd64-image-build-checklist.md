@@ -179,8 +179,8 @@ docker run --rm --network=none --platform linux/amd64 \
 
 | 构建机 | 做法 |
 |---|---|
-| amd64 native（强烈推荐） | `bash scripts/release/build-customer-amd64-image.sh` |
-| Apple Silicon (arm64) | 可用 `lucy-amd64` builder + QEMU，**但必须**过 G2–G4b；不得以 metadata 代替 ELF；Hub 超时不得用旧坏包顶替 |
+| amd64 native（强烈推荐） | `bash scripts/release/build-customer-amd64-image.sh`，或 GHA `customer-amd64-native` job（lucy-release.yml，原生 amd64 runner 构建 + 全套 G1–G4b/G8 门禁） |
+| Apple Silicon (arm64) | **仅限无 baked runtime 需求的场景**。QEMU 用户态模拟无法执行 ktx CLI 的完整 ESM 模块图（`qemu: uncaught target signal 11` 段错误，2026-09-27 实测：Docker Desktop on Apple Silicon，含 uv/glibc、node 大图两例）。含 `ktx admin runtime install`（G4b 离线 runtime）的镜像**必须**在 amd64 native 构建；本地 QEMU 只做 G1/G2 结构核验 |
 
 构建后恢复 demo builder：`docker buildx use default`。
 
