@@ -856,9 +856,15 @@ export type TokenSummary = {
 export type AgentStats = {
   /** Spec 128 HR-1: null when metricsState=unavailable; do not coerce to 0 */
   callsLast7d: number | null;
+  /** Windowed non-protocol calls; drives Agent activity. */
+  businessCallsLast7d?: number | null;
+  /** Windowed MCP handshake/discovery requests. */
+  protocolCallsLast7d?: number | null;
   /** Spec 128 HR-1: null when metricsState=unavailable */
   deniedLast7d: number | null;
   lastSeen?: string;
+  /** All-time latest non-protocol call. */
+  lastBusinessSeen?: string;
   /**
    * Distinct tokens that have appeared in `access_log` for this user
    * inside the last 7 days. May be `undefined` for legacy backends
@@ -867,11 +873,16 @@ export type AgentStats = {
    * Spec 128 HR-1: null when metricsState=unavailable.
    */
   activeTokensLast7d?: number | null;
+  /** Explicit replacement name for activeTokensLast7d. */
+  usedCredentialsLast7d?: number | null;
   /**
    * Number of token rows still present in `access.yaml` for this agent
    * (regardless of expiry). Mirrors `Agent.tokens.length`.
    */
   configuredTokens?: number;
+  availableTokens?: number;
+  credentialMetricsState?: "ok" | "partial" | "unavailable";
+  credentialMetricsReason?: "token_prefix_collision" | "audit_unavailable";
   /** Spec 128 §3.1: ok or unavailable */
   metricsState?: "ok" | "unavailable";
   topTables: Array<{ table: string; calls: number }>;
@@ -887,17 +898,34 @@ export type AgentsResponseSummary = {
   agentCount: number;
   enabledAgentCount: number;
   activeAgentCountLast7d?: number | null;
+  businessActiveAgentCountLast7d?: number | null;
   configuredTokenCount: number;
+  availableTokenCount?: number;
   /** Spec 128 HR-1: null when metricsState=unavailable */
   activeTokenCountLast7d: number | null;
+  usedCredentialCountLast7d?: number | null;
+  usedCredentialState?: "ok" | "partial" | "unavailable";
+  usedCredentialReason?: "token_prefix_collision" | "audit_unavailable";
   /** Spec 128 HR-1: null when metricsState=unavailable */
   callsLast7d: number | null;
+  businessCallsLast7d?: number | null;
+  protocolCallsLast7d?: number | null;
   /** Spec 128 HR-1: null when metricsState=unavailable */
   deniedLast7d: number | null;
   /** Spec 128 §3.1: ok or unavailable */
   metricsState?: "ok" | "unavailable";
   windowStart?: string;
   windowEnd?: string;
+  auditCompleteness?: {
+    state: "ok" | "partial" | "unavailable";
+    scope: "current_process";
+    observedSince: string;
+    pendingWrites: number;
+    failedWrites: number;
+    successfulWrites: number;
+    lastSuccessfulWriteAt?: string;
+    lastFailureAt?: string;
+  };
 };
 
 export type AgentPatch = {

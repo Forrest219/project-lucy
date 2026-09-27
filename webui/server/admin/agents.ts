@@ -33,6 +33,9 @@ import {
 import { invalidateAccessConfigCache } from "../proxy/identity.js";
 import { actorIdFromRequest } from "../auth/guard.js";
 import { enforceAgentSeatLimit } from "../license/routes.js";
+import { isTokenExpired } from "../proxy/identity.js";
+import { MCP_PROTOCOL_METHOD_SQL_LIST } from "../proxy/mcp-request-classification.js";
+import { readAuditWriteHealth, type AuditWriteHealthSnapshot } from "../proxy/audit-write-health.js";
 
 /** Spec 129: Agent write paths must not materialize reference templates into access.yaml. */
 
@@ -197,17 +200,29 @@ function computeVersion(raw: string, mtimeMs: number): string {
 export interface AgentStatsSummary {
   /** Spec 128 HR-1: null when state=unavailable; UI must not coerce to 0. */
   callsLast7d: number | null;
+  /** Non-protocol calls in the window; drives business activity. */
+  businessCallsLast7d: number | null;
+  /** initialize / notifications/initialized / tools/list rows in the window. */
+  protocolCallsLast7d: number | null;
   /** Spec 128 HR-1: null when state=unavailable. */
   deniedLast7d: number | null;
   lastSeen?: string;
+  /** All-time latest non-protocol call. */
+  lastBusinessSeen?: string;
   /** Number of distinct `token_hash_prefix` values that appear in
    * `access_log` for this user inside the last 7 days. Excludes rows
    * where `token_hash_prefix` is null (uncorrelated protocol traffic).
    * Spec 128 HR-1: null when state=unavailable. */
   activeTokensLast7d: number | null;
+  /** Semantically explicit alias for activeTokensLast7d. */
+  usedCredentialsLast7d: number | null;
   /** Number of token rows still present in `access.yaml` (configured
    * regardless of expiry). */
   configuredTokens: number;
+  /** Current configured tokens that can authenticate now. */
+  availableTokens: number;
+  credentialMetricsState: "ok" | "partial" | "unavailable";
+  credentialMetricsReason?: "token_prefix_collision" | "audit_unavailable";
   topTables: Array<{ table: string; calls: number }>;
   /** Spec 128 §3.1 — ok when queries succeeded, unavailable on DB failure. */
   metricsState: "ok" | "unavailable";
@@ -223,8 +238,35 @@ interface AgentConfigTimeline {
 }
 
 /** Spec 128 Task 7: global DISTINCT token count, not sum of per-agent counts. */
-async function getGlobalActiveTokenCount(): Promise<number | null> {
-  const win = build7dWindow();
+type MetricWindow = ReturnType<typeof build7dWindow>;
+
+function canonicalTokenPrefix(hash: string | undefined): string | null {
+  return hash ? hash.slice(0, 19) : null;
+}
+
+function hasTokenPrefixCollision(users: YamlUser[]): boolean {
+  const seen = new Set<string>();
+  for (const user of users) {
+    for (const token of user.tokens) {
+      const prefix = canonicalTokenPrefix(token.hash);
+      if (!prefix) continue;
+      if (seen.has(prefix)) return true;
+      seen.add(prefix);
+    }
+  }
+  return false;
+}
+
+function hasUserTokenPrefixCollision(user: YamlUser): boolean {
+  return hasTokenPrefixCollision([{ ...user, tokens: user.tokens }]);
+}
+
+function availableTokenCount(user: YamlUser, nowMs = Date.now()): number {
+  if (user.enabled === false) return 0;
+  return user.tokens.filter((token) => !isTokenExpired(token.expires_at, nowMs)).length;
+}
+
+async function getGlobalActiveTokenCount(win: MetricWindow): Promise<number | null> {
   try {
     const db = await getAuditDb();
     const row = db.prepare(`
@@ -239,79 +281,130 @@ async function getGlobalActiveTokenCount(): Promise<number | null> {
   }
 }
 
-async function getStats(userId: string, configuredTokenCount: number): Promise<AgentStatsSummary> {
-  // Spec 128 HR-5: use centralized window helper; no inline datetime('now','-7 days')
-  const win = build7dWindow();
+function unavailableStats(user: YamlUser, win: MetricWindow): AgentStatsSummary {
+  return {
+    callsLast7d: null,
+    businessCallsLast7d: null,
+    protocolCallsLast7d: null,
+    deniedLast7d: null,
+    activeTokensLast7d: null,
+    usedCredentialsLast7d: null,
+    configuredTokens: user.tokens.length,
+    availableTokens: availableTokenCount(user, Date.parse(win.endIso)),
+    credentialMetricsState: "unavailable",
+    credentialMetricsReason: "audit_unavailable",
+    topTables: [],
+    metricsState: "unavailable",
+    windowStart: win.startIso,
+    windowEnd: win.endIso
+  };
+}
+
+async function getStatsMap(
+  users: YamlUser[],
+  win: MetricWindow = build7dWindow()
+): Promise<Map<string, AgentStatsSummary>> {
+  const result = new Map<string, AgentStatsSummary>();
+  if (users.length === 0) return result;
+  // Spec 128 HR-5: one request-wide window and bulk aggregation; no per-agent N+1.
   try {
     const db = await getAuditDb();
-    const row = db
+    const placeholders = users.map(() => "?").join(", ");
+    const rows = db
       .prepare(
-        `SELECT COUNT(*) AS calls7, SUM(CASE WHEN outcome='denied' THEN 1 ELSE 0 END) AS denied7, MAX(ts) AS last_seen
-         FROM access_log WHERE user_id = ? AND ts >= ? AND ts < ?`
-      )
-      .get(userId, win.startIso, win.endIso) as { calls7: number; denied7: number; last_seen: string | null } | undefined;
-
-    // `token_hash_prefix` IS NOT NULL keeps uncorrelated protocol traffic
-    // (e.g. tools/list without a token) out of the active-token denominator.
-    // `idx_al_user_token_ts` covers (user_id, token_hash_prefix, ts).
-    const activeTokensRow = db
-      .prepare(
-        `SELECT COUNT(DISTINCT token_hash_prefix) AS active_tokens
+        `SELECT
+           user_id,
+           SUM(CASE WHEN ts >= ? AND ts < ? THEN 1 ELSE 0 END) AS calls7,
+           SUM(CASE WHEN ts >= ? AND ts < ? AND tool NOT IN (${MCP_PROTOCOL_METHOD_SQL_LIST}) THEN 1 ELSE 0 END) AS business_calls7,
+           SUM(CASE WHEN ts >= ? AND ts < ? AND tool IN (${MCP_PROTOCOL_METHOD_SQL_LIST}) THEN 1 ELSE 0 END) AS protocol_calls7,
+           SUM(CASE WHEN ts >= ? AND ts < ? AND tool NOT IN (${MCP_PROTOCOL_METHOD_SQL_LIST}) AND outcome='denied' THEN 1 ELSE 0 END) AS denied7,
+           COUNT(DISTINCT CASE WHEN ts >= ? AND ts < ? AND token_hash_prefix IS NOT NULL THEN token_hash_prefix END) AS active_tokens,
+           MAX(ts) AS last_seen,
+           MAX(CASE WHEN tool NOT IN (${MCP_PROTOCOL_METHOD_SQL_LIST}) THEN ts END) AS last_business_seen
          FROM access_log
-         WHERE user_id = ? AND token_hash_prefix IS NOT NULL
-           AND ts >= ? AND ts < ?`
+         WHERE user_id IN (${placeholders})
+         GROUP BY user_id`
       )
-      .get(userId, win.startIso, win.endIso) as { active_tokens: number | null } | undefined;
+      .all(
+        win.startIso, win.endIso,
+        win.startIso, win.endIso,
+        win.startIso, win.endIso,
+        win.startIso, win.endIso,
+        win.startIso, win.endIso,
+        ...users.map((user) => user.id)
+      ) as Array<{
+        user_id: string;
+        calls7: number | null;
+        business_calls7: number | null;
+        protocol_calls7: number | null;
+        denied7: number | null;
+        active_tokens: number | null;
+        last_seen: string | null;
+        last_business_seen: string | null;
+      }>;
+    const rowsByUser = new Map(rows.map((row) => [row.user_id, row]));
 
     const topRows = db
       .prepare(
-        `SELECT tables, COUNT(*) AS cnt FROM access_log
-         WHERE user_id = ? AND ts >= ? AND ts < ? AND tables IS NOT NULL
-         GROUP BY tables ORDER BY cnt DESC LIMIT 10`
+        `SELECT user_id, tables, COUNT(*) AS cnt FROM access_log
+         WHERE user_id IN (${placeholders}) AND ts >= ? AND ts < ?
+           AND tool NOT IN (${MCP_PROTOCOL_METHOD_SQL_LIST}) AND tables IS NOT NULL
+         GROUP BY user_id, tables`
       )
-      .all(userId, win.startIso, win.endIso) as Array<{ tables: string; cnt: number }>;
+      .all(...users.map((user) => user.id), win.startIso, win.endIso) as Array<{
+        user_id: string;
+        tables: string;
+        cnt: number;
+      }>;
 
-    // Parse table JSON arrays and aggregate
-    const tableCounts = new Map<string, number>();
+    const tableCountsByUser = new Map<string, Map<string, number>>();
     for (const r of topRows) {
       try {
         const parsed = JSON.parse(r.tables) as string[];
+        const tableCounts = tableCountsByUser.get(r.user_id) ?? new Map<string, number>();
         for (const t of parsed) {
           tableCounts.set(t, (tableCounts.get(t) ?? 0) + r.cnt);
         }
+        tableCountsByUser.set(r.user_id, tableCounts);
       } catch {
         // skip
       }
     }
-    const topTables = [...tableCounts.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 3)
-      .map(([table, calls]) => ({ table, calls }));
 
-    return {
-      callsLast7d: row?.calls7 ?? 0,
-      deniedLast7d: row?.denied7 ?? 0,
-      lastSeen: row?.last_seen ?? undefined,
-      activeTokensLast7d: activeTokensRow?.active_tokens ?? 0,
-      configuredTokens: configuredTokenCount,
-      topTables,
-      metricsState: "ok",
-      windowStart: win.startIso,
-      windowEnd: win.endIso
-    };
+    for (const user of users) {
+      const row = rowsByUser.get(user.id);
+      const tokenPrefixCollision = hasUserTokenPrefixCollision(user);
+      const topTables = [...(tableCountsByUser.get(user.id)?.entries() ?? [])]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+        .map(([table, calls]) => ({ table, calls }));
+      result.set(user.id, {
+        callsLast7d: row?.calls7 ?? 0,
+        businessCallsLast7d: row?.business_calls7 ?? 0,
+        protocolCallsLast7d: row?.protocol_calls7 ?? 0,
+        deniedLast7d: row?.denied7 ?? 0,
+        lastSeen: row?.last_seen ?? undefined,
+        lastBusinessSeen: row?.last_business_seen ?? undefined,
+        activeTokensLast7d: row?.active_tokens ?? 0,
+        usedCredentialsLast7d: tokenPrefixCollision ? null : row?.active_tokens ?? 0,
+        configuredTokens: user.tokens.length,
+        availableTokens: availableTokenCount(user, Date.parse(win.endIso)),
+        credentialMetricsState: tokenPrefixCollision ? "partial" : "ok",
+        credentialMetricsReason: tokenPrefixCollision ? "token_prefix_collision" : undefined,
+        topTables,
+        metricsState: "ok",
+        windowStart: win.startIso,
+        windowEnd: win.endIso
+      });
+    }
   } catch {
-    // Spec 128 HR-1: DB failure → null values + state=unavailable; do NOT coerce to 0
-    return {
-      callsLast7d: null,
-      deniedLast7d: null,
-      activeTokensLast7d: null,
-      configuredTokens: configuredTokenCount,
-      topTables: [],
-      metricsState: "unavailable",
-      windowStart: win.startIso,
-      windowEnd: win.endIso
-    };
+    for (const user of users) result.set(user.id, unavailableStats(user, win));
   }
+  return result;
+}
+
+async function getStats(user: YamlUser, win: MetricWindow = build7dWindow()): Promise<AgentStatsSummary> {
+  return (await getStatsMap([user], win)).get(user.id) ?? unavailableStats(user, win);
 }
 
 export type TokenUsageSnapshot = {
@@ -701,23 +794,38 @@ function defaultActor(request?: FastifyRequest): AccessGovernanceApprover {
 function buildAgentsSummary(
   agents: Array<Awaited<ReturnType<typeof userToAgentWithPermissions>>>,
   /** Spec 128 Task 7: global DISTINCT active token count from audit DB. */
-  globalActiveTokenCount: number | null
+  globalActiveTokenCount: number | null,
+  tokenPrefixCollision: boolean,
+  auditWriteHealth: AuditWriteHealthSnapshot
 ): {
   agentCount: number;
   enabledAgentCount: number;
   activeAgentCountLast7d: number | null;
+  businessActiveAgentCountLast7d: number | null;
   configuredTokenCount: number;
+  availableTokenCount: number;
   activeTokenCountLast7d: number | null;
+  usedCredentialCountLast7d: number | null;
+  usedCredentialState: "ok" | "partial" | "unavailable";
+  usedCredentialReason?: "token_prefix_collision" | "audit_unavailable";
   callsLast7d: number | null;
+  businessCallsLast7d: number | null;
+  protocolCallsLast7d: number | null;
   deniedLast7d: number | null;
   metricsState: "ok" | "unavailable";
+  auditCompleteness: Omit<AuditWriteHealthSnapshot, "state"> & {
+    state: "ok" | "partial" | "unavailable";
+  };
   windowStart?: string;
   windowEnd?: string;
 } {
   let enabledAgentCount = 0;
   let activeAgentCountLast7d = 0;
   let configuredTokenCount = 0;
+  let availableTokenCount = 0;
   let callsLast7d = 0;
+  let businessCallsLast7d = 0;
+  let protocolCallsLast7d = 0;
   let deniedLast7d = 0;
   let anyUnavailable = globalActiveTokenCount === null;
   let windowStart: string | undefined;
@@ -726,13 +834,16 @@ function buildAgentsSummary(
   for (const agent of agents) {
     if (agent.enabled) enabledAgentCount += 1;
     configuredTokenCount += agent.tokens.length;
+    availableTokenCount += agent.stats?.availableTokens ?? 0;
     const stats = agent.stats;
     if (!stats || stats.metricsState === "unavailable") {
       anyUnavailable = true;
       continue;
     }
-    if ((stats.callsLast7d ?? 0) > 0) activeAgentCountLast7d += 1;
+    if ((stats.businessCallsLast7d ?? 0) > 0) activeAgentCountLast7d += 1;
     callsLast7d += stats.callsLast7d ?? 0;
+    businessCallsLast7d += stats.businessCallsLast7d ?? 0;
+    protocolCallsLast7d += stats.protocolCallsLast7d ?? 0;
     deniedLast7d += stats.deniedLast7d ?? 0;
     // All agents share the same window; take the first populated one
     if (!windowStart && stats.windowStart) windowStart = stats.windowStart;
@@ -744,11 +855,19 @@ function buildAgentsSummary(
       agentCount: agents.length,
       enabledAgentCount,
       activeAgentCountLast7d: null,
+      businessActiveAgentCountLast7d: null,
       configuredTokenCount,
+      availableTokenCount,
       activeTokenCountLast7d: null,
+      usedCredentialCountLast7d: null,
+      usedCredentialState: "unavailable",
+      usedCredentialReason: "audit_unavailable",
       callsLast7d: null,
+      businessCallsLast7d: null,
+      protocolCallsLast7d: null,
       deniedLast7d: null,
       metricsState: "unavailable",
+      auditCompleteness: { ...auditWriteHealth, state: "unavailable" },
       windowStart,
       windowEnd
     };
@@ -758,12 +877,20 @@ function buildAgentsSummary(
     agentCount: agents.length,
     enabledAgentCount,
     activeAgentCountLast7d,
+    businessActiveAgentCountLast7d: activeAgentCountLast7d,
     configuredTokenCount,
+    availableTokenCount,
     // Spec 128 Task 7: use global DISTINCT, not sum of per-agent counts.
     activeTokenCountLast7d: globalActiveTokenCount,
+    usedCredentialCountLast7d: tokenPrefixCollision ? null : globalActiveTokenCount,
+    usedCredentialState: tokenPrefixCollision ? "partial" : "ok",
+    usedCredentialReason: tokenPrefixCollision ? "token_prefix_collision" : undefined,
     callsLast7d,
+    businessCallsLast7d,
+    protocolCallsLast7d,
     deniedLast7d,
     metricsState: "ok",
+    auditCompleteness: auditWriteHealth,
     windowStart,
     windowEnd
   };
@@ -832,21 +959,29 @@ export function registerAgentRoutes(app: FastifyInstance) {
     const projectRoot = await resolveProjectRoot();
     const { config, version } = await readAccessYaml(projectRoot);
     const userIds = config.users.map((user) => user.id);
-    const [tokenUsage, timelineMap] = await Promise.all([
+    const window = build7dWindow();
+    const [tokenUsage, timelineMap, statsMap, globalActiveTokenCount] = await Promise.all([
       getLastUsedMap(userIds),
-      getAgentConfigTimelineMap(userIds)
+      getAgentConfigTimelineMap(userIds),
+      getStatsMap(config.users, window),
+      getGlobalActiveTokenCount(window)
     ]);
-    const [agents, globalActiveTokenCount] = await Promise.all([
-      Promise.all(
-        config.users.map(async (user) => {
-          const stats = await getStats(user.id, user.tokens.length);
-          return userToAgentWithPermissions(user, stats, tokenUsage.get(user.id), timelineMap.get(user.id));
-        })
-      ),
-      // Spec 128 Task 7: global DISTINCT active tokens, not sum of per-agent counts.
-      getGlobalActiveTokenCount()
-    ]);
-    const summary = buildAgentsSummary(agents, globalActiveTokenCount);
+    const agents = await Promise.all(
+      config.users.map((user) =>
+        userToAgentWithPermissions(
+          user,
+          statsMap.get(user.id) ?? unavailableStats(user, window),
+          tokenUsage.get(user.id),
+          timelineMap.get(user.id)
+        )
+      )
+    );
+    const summary = buildAgentsSummary(
+      agents,
+      globalActiveTokenCount,
+      hasTokenPrefixCollision(config.users),
+      readAuditWriteHealth()
+    );
     return { ok: true, data: { agents, version, summary } };
   });
 
@@ -983,7 +1118,7 @@ export function registerAgentRoutes(app: FastifyInstance) {
     if (!user) {
       return reply.status(404).send({ ok: false, error: { code: "AGENT_NOT_FOUND", message: `Agent '${request.params.userId}' not found` } });
     }
-    const stats = await getStats(user.id, user.tokens.length);
+    const stats = await getStats(user);
     const [tokenUsage, timelineMap] = await Promise.all([
       getLastUsedMap([user.id]),
       getAgentConfigTimelineMap([user.id])
@@ -1132,7 +1267,7 @@ export function registerAgentRoutes(app: FastifyInstance) {
     }
 
     // Access Governance Gate — Tiered Access Governance Gate (P1 / 64).
-    const stats = await getStats(existingUser.id, existingUser.tokens.length);
+    const stats = await getStats(existingUser);
     const gateInput = await buildAgentGateInput({
       targetKind: "agent",
       targetId: updatedUser.id,
@@ -1140,7 +1275,7 @@ export function registerAgentRoutes(app: FastifyInstance) {
       newUser: updatedUser,
       oldRoleOverrides: existingRoles,
       newRoleOverrides: newConfig.roles,
-      callsLast7d: stats.callsLast7d ?? 0
+      callsLast7d: stats.businessCallsLast7d ?? 0
     });
     const gate = evaluateAccessGovernanceGate(gateInput);
 
@@ -1233,13 +1368,13 @@ export function registerAgentRoutes(app: FastifyInstance) {
 
     // Access Governance Gate — Agent deletion. Removing a high-traffic Agent
     // or a Role-binding is a P2 cleanup that should be evidence-recorded.
-    const stats = await getStats(user.id, user.tokens.length);
+    const stats = await getStats(user);
     const gateInput = await buildAgentGateInput({
       targetKind: "agent",
       targetId: user.id,
       oldUser: user,
       newUser: { id: user.id, role: undefined, allow: undefined },
-      callsLast7d: stats.callsLast7d ?? 0
+      callsLast7d: stats.businessCallsLast7d ?? 0
     });
     const gate = evaluateAccessGovernanceGate(gateInput);
 

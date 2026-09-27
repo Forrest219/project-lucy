@@ -29,6 +29,7 @@ import {
   type EvidenceEventRow
 } from "../trace/evidence.js";
 import { readQueryArtifact } from "../audit/query-artifact-store.js";
+import { MCP_PROTOCOL_METHODS as PROTOCOL_TOOLS } from "../proxy/mcp-request-classification.js";
 
 // Per-user lazy-rebuild debounce: GET /turns can be polled frequently (UI refresh, multiple
 // users in one window); skip re-running the full delete+reinsert rebuild if we just did it.
@@ -88,7 +89,6 @@ const PERMISSION_SNAPSHOT_COLUMNS = [
   ["capability_digest", "TEXT"],
   ["tool_classification_version", "TEXT"]
 ] as const;
-const PROTOCOL_TOOLS = ["tools/list", "initialize", "notifications/initialized"] as const;
 const PROTOCOL_TOOL_LIST = PROTOCOL_TOOLS.map((tool) => `'${tool}'`).join(", ");
 
 type AccessLogFilterQuery = {

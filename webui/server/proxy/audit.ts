@@ -6,6 +6,7 @@ import { resolveProjectRoot } from "../project.js";
 import { prepareTraceDatabase } from "../trace/evidence.js";
 import { resolveSourceRefsForTables } from "./acl.js";
 import { scrubArgsSummaryJson } from "./audit-privacy.js";
+import { MCP_PROTOCOL_METHODS as PROTOCOL_TOOLS } from "./mcp-request-classification.js";
 
 export interface AccessLogEntry {
   ts: string;
@@ -993,8 +994,6 @@ export async function searchAccessLogs(options: {
 }
 
 // ─── Phase 3: conversation_turns (optional reported questions) ──────────────
-
-const PROTOCOL_TOOLS = ["tools/list", "initialize", "notifications/initialized"] as const;
 
 export interface ConversationTurnRecord {
   turnId: string;

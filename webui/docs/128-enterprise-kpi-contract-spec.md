@@ -4,7 +4,7 @@
 |---|---|
 | 文档名称 | Enterprise KPI Contract Spec |
 | 文档类型 | Spec |
-| 版本 | v1.0 |
+| 版本 | v1.1（Spec 155 修订） |
 | 撰写日期 | 2026-08-26 |
 | 撰写人 | Composer |
 | 委托人 | zhangxingchen |
@@ -44,6 +44,14 @@ passRate = PASS / total_cases   (total_cases = PASS + FAIL + SKIP)
 ### Decision 4 — Token prefix 歧义
 
 若 prefix→token 映射不唯一（一个 prefix 对应多个配置 Token），KPI `state=partial`，`value=null`；**永远不能声称精确的全局去重数**。
+
+### Decision 5 — Agent 活跃只由业务调用驱动
+
+Agent 页的活跃 Agent 与调用量主 KPI 排除 `initialize`、`notifications/initialized`、`tools/list`。协议请求单独展示，不得因客户端启动、重连或工具发现而把 Agent 标为业务活跃。`callsLast7d` 作为全量兼容字段保留，新 UI 使用 `businessCallsLast7d`。
+
+### Decision 6 — 凭据生命周期不等于日志活跃
+
+Agent 页分别展示配置 Token、可用 Token、近 N 使用过的凭据。最后一项是 access_log hash prefix 去重，不能命名为当前“活跃 Token”，也不能作为当前可用凭据数量。
 
 ## 3. 类型定义
 
@@ -108,7 +116,7 @@ export interface MetricContract {
 
 出现在列表页顶部 `.pl-metric-grid`，使用 `MetricCard` 组件，**每张必须有 ⓘ**。
 
-- AgentList: agent-count, active-agent-count, active-token-count, calls-7d
+- AgentList: agent-count, business-active-agent-count, available-token-count, used-credential-count, business-calls-7d, protocol-requests-7d
 - GovernanceOverview: agent-count, active-agent-count, configured-token-count, active-token-count, configured-table-count, active-table-count, calls, p95-latency
 - EvalRunList: total-cases, pass-rate, skip-count, fail-count
 
@@ -131,6 +139,23 @@ Permission Summary 等配置摘要卡（如 Role Source Count），`kind: "summa
 
 ## 7. 窗口一致性
 
-`agents.ts` 和 `governance-observability.ts` 的 7d 窗口查询**必须使用相同的 `metric-window.ts`** 生成，确保两页的 calls/active agents/active tokens 在同一时间窗口内一致。
+`agents.ts` 和 `governance-observability.ts` 的 7d 窗口查询**必须使用相同的 `metric-window.ts`** 生成，确保业务调用、协议请求、活跃 Agent 和使用过的凭据使用一致边界。
 
 跨页一致性由服务端测试 `webui/server/__tests__/metric-window.test.ts` 验证。
+
+## 8. 核心流程（伪代码）
+
+```text
+window = buildMetricWindowOnce()
+result = readAuditMetrics(window)
+
+if result.readFailed:
+  return state=unavailable, value=null
+if metric is usedCredentialCount and configuredPrefixCollision:
+  return state=partial, value=null
+if metric is business activity:
+  value = count(rows where tool not in PROTOCOL_METHODS)
+else if metric is protocol requests:
+  value = count(rows where tool in PROTOCOL_METHODS)
+return state=ok, value
+```

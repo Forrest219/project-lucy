@@ -62,21 +62,32 @@ vi.mock("../admin/audit.js", () => ({
           })
         };
       }
-      if (sql.includes("COUNT(*) AS calls7")) {
+      if (sql.includes("AS business_calls7")) {
         const CUTOFF = Date.now() - 7 * 24 * 60 * 60 * 1000;
         return {
-          get: vi.fn((userId: string) => {
-            const matched = auditRows.filter(
-              (row) => row.user_id === userId && new Date(row.ts).getTime() >= CUTOFF
-            );
-            return {
-              calls7: matched.length,
-              denied7: matched.filter((row) => row.outcome === "denied").length,
-              last_seen: matched
-                .map((row) => row.ts)
-                .sort()
-                .at(-1) ?? null
-            };
+          all: vi.fn((...args: unknown[]) => {
+            const userIds = args.slice(10) as string[];
+            const protocol = new Set(["initialize", "notifications/initialized", "tools/list"]);
+            return userIds.flatMap((userId) => {
+              const allForUser = auditRows.filter((row) => row.user_id === userId);
+              if (allForUser.length === 0) return [];
+              const matched = allForUser.filter((row) => new Date(row.ts).getTime() >= CUTOFF);
+              const business = matched.filter((row) => !protocol.has(row.tool));
+              return [{
+                user_id: userId,
+                calls7: matched.length,
+                business_calls7: business.length,
+                protocol_calls7: matched.length - business.length,
+                denied7: business.filter((row) => row.outcome === "denied").length,
+                active_tokens: new Set(matched.map((row) => row.token_hash_prefix).filter(Boolean)).size,
+                last_seen: allForUser.map((row) => row.ts).sort().at(-1) ?? null,
+                last_business_seen: allForUser
+                  .filter((row) => !protocol.has(row.tool))
+                  .map((row) => row.ts)
+                  .sort()
+                  .at(-1) ?? null
+              }];
+            });
           })
         };
       }
@@ -229,7 +240,79 @@ describe("GET /api/admin/agents", () => {
     expect(res.body.data.agent.stats.configuredTokens).toBe(1);
     // 拒绝计数应独立于 active-token 去重：窗口内 3 条记录（aaaa/aaaa/bbbb），全部 ok
     expect(res.body.data.agent.stats.callsLast7d).toBe(3);
+    expect(res.body.data.agent.stats.businessCallsLast7d).toBe(3);
+    expect(res.body.data.agent.stats.protocolCallsLast7d).toBe(0);
     expect(res.body.data.agent.stats.deniedLast7d).toBe(0);
+    await app.close();
+  });
+
+  it("separates protocol requests from business usage and keeps all-time last access", async () => {
+    auditRows.push(
+      { user_id: "zhangsan", token_hash_prefix: "sha256:aaaa", ts: "2026-07-01T08:00:00.000Z", tool: "sl_query", outcome: "ok" },
+      { user_id: "zhangsan", token_hash_prefix: "sha256:aaaa", ts: "2026-08-02T08:00:00.000Z", tool: "initialize", outcome: "ok" },
+      { user_id: "zhangsan", token_hash_prefix: "sha256:aaaa", ts: "2026-08-02T08:00:01.000Z", tool: "notifications/initialized", outcome: "ok" },
+      { user_id: "zhangsan", token_hash_prefix: "sha256:aaaa", ts: "2026-08-02T08:00:02.000Z", tool: "tools/list", outcome: "ok" }
+    );
+
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server).get("/api/admin/agents/zhangsan").expect(200);
+    expect(res.body.data.agent.stats).toMatchObject({
+      callsLast7d: 3,
+      businessCallsLast7d: 0,
+      protocolCallsLast7d: 3,
+      lastSeen: "2026-08-02T08:00:02.000Z",
+      lastBusinessSeen: "2026-07-01T08:00:00.000Z"
+    });
+    await app.close();
+  });
+
+  it("distinguishes configured and currently available tokens", async () => {
+    await rm(projectRoot, { recursive: true, force: true });
+    projectRoot = await makeProject(ACCESS_YAML.replace(
+      "created: 2026-06-18",
+      "created: 2026-06-18\n        expires_at: 2026-07-01T00:00:00.000Z"
+    ));
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server).get("/api/admin/agents").expect(200);
+    expect(res.body.data.agents[0].stats.configuredTokens).toBe(1);
+    expect(res.body.data.agents[0].stats.availableTokens).toBe(0);
+    expect(res.body.data.summary.availableTokenCount).toBe(0);
+    await app.close();
+  });
+
+  it("marks used-credential metrics partial when configured token prefixes collide", async () => {
+    await rm(projectRoot, { recursive: true, force: true });
+    const collisionYaml = ACCESS_YAML.replace(
+      `      - hash: "sha256:aaaa"
+        label: hermes-laptop
+        created: 2026-06-18`,
+      `      - hash: "sha256:123456789012aaaaaaaa"
+        label: hermes-laptop
+        created: 2026-06-18
+      - hash: "sha256:123456789012bbbbbbbb"
+        label: cursor-laptop
+        created: 2026-06-19`
+    );
+    projectRoot = await makeProject(collisionYaml);
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server).get("/api/admin/agents").expect(200);
+    expect(res.body.data.agents[0].stats).toMatchObject({
+      usedCredentialsLast7d: null,
+      credentialMetricsState: "partial",
+      credentialMetricsReason: "token_prefix_collision"
+    });
+    expect(res.body.data.summary).toMatchObject({
+      usedCredentialCountLast7d: null,
+      usedCredentialState: "partial",
+      usedCredentialReason: "token_prefix_collision"
+    });
     await app.close();
   });
 

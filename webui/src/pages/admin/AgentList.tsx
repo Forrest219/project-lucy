@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -105,7 +105,7 @@ export function isTokenRecentlyActive(token: Agent["tokens"][number], now: Date 
  * without reaching into `Date.now` directly.
  */
 export function activeTokenCount(agent: Agent, now: Date = new Date()): number {
-  const backend = agent.stats?.activeTokensLast7d;
+  const backend = agent.stats?.usedCredentialsLast7d ?? agent.stats?.activeTokensLast7d;
   // null means unavailable; undefined means legacy backend (pre-M55) — use fallback
   if (typeof backend === "number") return backend;
   if (backend === null) return 0; // unavailable; caller checks metricsState separately
@@ -127,18 +127,25 @@ export function summarizeAgents(
   let configuredTokens = 0;
   let activeTokenCountLast7d = 0;
   let callsLast7d = 0;
+  let businessCallsLast7d = 0;
+  let protocolCallsLast7d = 0;
+  let availableTokens = 0;
   let deniedLast7d = 0;
   let anyUnavailable = false;
   for (const agent of agents) {
     if (agent.enabled) enabledAgentCount += 1;
     configuredTokens += configuredTokenCount(agent);
+    availableTokens += agent.stats?.availableTokens ?? (agent.enabled ? configuredTokenCount(agent) : 0);
     if (agent.stats?.metricsState === "unavailable") {
       anyUnavailable = true;
       continue;
     }
-    if ((agent.stats?.callsLast7d ?? 0) > 0) activeAgentCountLast7d += 1;
+    const businessCalls = agent.stats?.businessCallsLast7d ?? agent.stats?.callsLast7d ?? 0;
+    if (businessCalls > 0) activeAgentCountLast7d += 1;
     activeTokenCountLast7d += activeTokenCount(agent, now);
     callsLast7d += agent.stats?.callsLast7d ?? 0;
+    businessCallsLast7d += businessCalls;
+    protocolCallsLast7d += agent.stats?.protocolCallsLast7d ?? 0;
     deniedLast7d += agent.stats?.deniedLast7d ?? 0;
   }
   if (anyUnavailable) {
@@ -146,9 +153,15 @@ export function summarizeAgents(
       agentCount: agents.length,
       enabledAgentCount,
       activeAgentCountLast7d: null,
+      businessActiveAgentCountLast7d: null,
       configuredTokenCount: configuredTokens,
+      availableTokenCount: availableTokens,
       activeTokenCountLast7d: null,
+      usedCredentialCountLast7d: null,
+      usedCredentialState: "unavailable",
       callsLast7d: null,
+      businessCallsLast7d: null,
+      protocolCallsLast7d: null,
       deniedLast7d: null,
       metricsState: "unavailable"
     };
@@ -157,25 +170,53 @@ export function summarizeAgents(
     agentCount: agents.length,
     enabledAgentCount,
     activeAgentCountLast7d,
+    businessActiveAgentCountLast7d: activeAgentCountLast7d,
     configuredTokenCount: configuredTokens,
+    availableTokenCount: availableTokens,
     activeTokenCountLast7d,
+    usedCredentialCountLast7d: activeTokenCountLast7d,
+    usedCredentialState: "ok",
     callsLast7d,
+    businessCallsLast7d,
+    protocolCallsLast7d,
     deniedLast7d,
     metricsState: "ok"
   };
 }
 
 
-function LastSeen({ lastSeen }: { lastSeen?: string | null }) {
+function LastSeen({
+  lastSeen,
+  unavailable = false,
+  emptyLabel = "未访问",
+  ariaPrefix = "最近访问"
+}: {
+  lastSeen?: string | null;
+  unavailable?: boolean;
+  emptyLabel?: string;
+  ariaPrefix?: string;
+}) {
+  if (unavailable) {
+    return <span className="text-fg-muted" title="审计数据不可用">—</span>;
+  }
   const { label, title } = formatLastSeen(lastSeen);
   if (!title) {
-    return <span className="text-fg-muted">{label}</span>;
+    return <span className="text-fg-muted">{label === "未访问" ? emptyLabel : label}</span>;
   }
   return (
-    <span title={title} aria-label={`最近访问：${title}`}>
+    <span title={title} aria-label={`${ariaPrefix}：${title}`}>
       {label}
     </span>
   );
+}
+
+function formatStatsTimeLabel(updatedAt: number, now: Date): string {
+  if (!updatedAt) return "未知";
+  const diffMs = Math.max(0, now.getTime() - updatedAt);
+  if (diffMs < 5_000) return "刚刚";
+  if (diffMs < 60_000) return `${Math.floor(diffMs / 1000)} 秒前`;
+  if (diffMs < 15 * 60_000) return `${Math.floor(diffMs / 60_000)} 分钟前`;
+  return new Date(updatedAt).toLocaleTimeString("zh-CN", { hour12: false });
 }
 
 function RoleSummaryCard({ role }: { role: Role | undefined }) {
@@ -417,23 +458,36 @@ export function AgentList() {
   const [filterEnabled, setFilterEnabled] = useState<"all" | "enabled" | "disabled">("all");
   const [filterRole, setFilterRole] = useState<"all" | "unbound" | string>("all");
   const [filterActivity, setFilterActivity] = useState<"all" | "active" | "inactive">("all");
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [now, setNow] = useState(() => new Date());
 
-  const { data, isLoading, error } = useQuery({
+  const agentsQuery = useQuery({
     queryKey: ["admin", "agents"],
-    queryFn: () => apiGet<AgentsResponse>("/api/admin/agents")
+    queryFn: () => apiGet<AgentsResponse>("/api/admin/agents"),
+    refetchInterval: autoRefresh ? 30_000 : false,
+    refetchIntervalInBackground: false
   });
+  const { data, isLoading, error } = agentsQuery;
   const { data: rolesData } = useQuery({
     queryKey: ["admin", "roles", { includeTemplates: false }],
     queryFn: () => apiGet<RolesResponse>("/api/admin/roles?includeTemplates=false")
   });
 
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(new Date()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
   const agents = data?.agents ?? [];
   const summary = data?.summary ?? summarizeAgents(agents);
   // Spec 128 HR-1: metricsState=unavailable means null values; do not coerce to 0
   const auditMetricsState: "ok" | "unavailable" = summary.metricsState === "unavailable" ? "unavailable" : "ok";
-  const activeAgentCountLast7d = summary.activeAgentCountLast7d ?? agents.filter((agent) => (agent.stats?.callsLast7d ?? 0) > 0).length;
-  const activeTokenTotal = summary.activeTokenCountLast7d;
-  const callsLast7dTotal = summary.callsLast7d;
+  const activeAgentCountLast7d = summary.businessActiveAgentCountLast7d ?? summary.activeAgentCountLast7d;
+  const usedCredentialTotal = summary.usedCredentialCountLast7d ?? summary.activeTokenCountLast7d;
+  const businessCallsLast7dTotal = summary.businessCallsLast7d ?? summary.callsLast7d;
+  const protocolCallsLast7dTotal = summary.protocolCallsLast7d ?? 0;
+  const usedCredentialState = summary.usedCredentialState ?? auditMetricsState;
+  const statsTimeLabel = formatStatsTimeLabel(agentsQuery.dataUpdatedAt, now);
   const isFilterActive = search !== "" || filterEnabled !== "all" || filterRole !== "all" || filterActivity !== "all";
   function clearFilters() {
     setSearch("");
@@ -458,11 +512,12 @@ export function AgentList() {
     const matchRole =
       filterRole === "all" ||
       (filterRole === "unbound" ? !a.role : a.role === filterRole);
-    const callsLast7d = a.stats?.callsLast7d ?? 0;
+    const metricsAvailable = a.stats?.metricsState !== "unavailable";
+    const callsLast7d = a.stats?.businessCallsLast7d ?? a.stats?.callsLast7d ?? 0;
     const matchActivity =
       filterActivity === "all" ||
-      (filterActivity === "active" && callsLast7d > 0) ||
-      (filterActivity === "inactive" && callsLast7d === 0);
+      (metricsAvailable && filterActivity === "active" && callsLast7d > 0) ||
+      (metricsAvailable && filterActivity === "inactive" && callsLast7d === 0);
     return matchSearch && matchEnabled && matchRole && matchActivity;
   });
 
@@ -478,10 +533,54 @@ export function AgentList() {
             管理 <span className="notranslate" translate="no">Agent</span> 身份、角色、<span className="notranslate" translate="no">Token</span> 及数据访问边界。
           </>
         }
+        badges={
+          <div className="flex flex-wrap items-center gap-2">
+            <span data-testid="agent-stats-time">统计时间：{statsTimeLabel}</span>
+            <span
+              className={`pl-badge ${summary.auditCompleteness?.state === "partial" ? "pl-badge--warning" : ""}`}
+              data-testid="agent-audit-completeness"
+              title="仅反映当前 Lucy 进程观测到的审计写入状态"
+            >
+              审计写入完整性：{summary.auditCompleteness?.state === "unavailable" ? "不可用" : summary.auditCompleteness?.state === "partial" ? "需关注" : "正常"}
+            </span>
+          </div>
+        }
         actions={
-          <button type="button" className="pl-btn pl-btn--primary" onClick={() => setShowNew(true)}>新建 Agent</button>
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-2 text-sm text-fg-muted">
+              <input
+                type="checkbox"
+                checked={autoRefresh}
+                onChange={(event) => setAutoRefresh(event.target.checked)}
+                data-testid="agent-auto-refresh"
+              />
+              自动刷新
+            </label>
+            <button
+              type="button"
+              className="pl-btn pl-btn--secondary"
+              onClick={() => void agentsQuery.refetch()}
+              disabled={agentsQuery.isFetching}
+              data-testid="agent-refresh"
+            >
+              刷新
+            </button>
+            <button type="button" className="pl-btn pl-btn--primary" onClick={() => setShowNew(true)}>新建 Agent</button>
+          </div>
         }
       />
+
+      {summary.auditCompleteness?.state === "partial" ? (
+        <div className="pl-notice" data-testid="agent-audit-partial-notice">
+          当前进程观测到 {summary.auditCompleteness.pendingWrites} 条审计写入尚未完成、{summary.auditCompleteness.failedWrites} 条失败；近窗统计可能不完整。
+        </div>
+      ) : null}
+
+      {usedCredentialState === "partial" ? (
+        <div className="pl-notice" data-testid="agent-credential-partial-notice">
+          当前配置存在相同的 <span className="notranslate" translate="no">Token hash prefix</span>，近 7 天使用过的凭据无法可靠映射到唯一凭据，已隐藏精确值。
+        </div>
+      ) : null}
 
       <div className="pl-metric-grid" data-testid="agent-metric-grid">
         {/* D1: config-class — always ok, reads directly from config response */}
@@ -498,8 +597,8 @@ export function AgentList() {
           label={<span>近 7 天活跃 <span className="notranslate" translate="no">Agent</span></span>}
           labelText="近 7 天活跃 Agent"
           value={activeAgentCountLast7d ?? 0}
-          help="近 7 天访问日志中至少出现过一次的去重 Agent 数。"
-          subValue={auditMetricsState === "ok" ? "近 7 天有访问记录" : undefined}
+          help="近 7 天至少出现过一次非协议业务调用的去重 Agent 数。"
+          subValue={auditMetricsState === "ok" ? "仅按业务调用判定" : undefined}
           state={auditMetricsState}
           helpId="active-agent-count"
           testId="metric-active-agent-count"
@@ -507,25 +606,42 @@ export function AgentList() {
         <MetricCard
           label={
             <span>
-              近 7 天活跃 <span className="notranslate" translate="no">Token</span>
+              可用 <span className="notranslate" translate="no">Token</span>
             </span>
           }
-          labelText="近 7 天活跃 Token"
-          value={activeTokenTotal ?? 0}
-          help="近 7 天访问日志中出现过的去重 Token 数，不代表配置 Token 总数。"
-          subValue={auditMetricsState === "ok" ? "访问日志中去重 token" : undefined}
-          state={auditMetricsState}
+          labelText="可用 Token"
+          value={summary.availableTokenCount ?? 0}
+          help="当前 Agent 已启用且 Token 未过期的配置凭据数。"
+          subValue={`配置 ${summary.configuredTokenCount} 个`}
           helpId="active-token-count"
           testId="metric-active-token-count"
         />
         <MetricCard
-          label="近 7 天调用量"
-          value={callsLast7dTotal ?? 0}
-          help="近 7 天经 MCP Proxy 记录的调用次数合计。"
-          subValue={auditMetricsState === "ok" ? <span><span className="notranslate" translate="no">MCP</span> 调用</span> : undefined}
+          label="近 7 天使用过的凭据"
+          value={usedCredentialTotal ?? 0}
+          help="近 7 天访问日志中出现过的去重凭据 hash prefix；可能包含已删除或已吊销凭据。"
+          subValue={usedCredentialState === "ok" ? "按访问日志去重" : undefined}
+          state={usedCredentialState}
+          helpId="used-credentials"
+          testId="metric-used-credentials"
+        />
+        <MetricCard
+          label="近 7 天业务调用量"
+          value={businessCallsLast7dTotal ?? 0}
+          help="近 7 天非协议 MCP 调用次数；用于判定真实业务使用。"
+          subValue={auditMetricsState === "ok" ? "排除握手与工具发现" : undefined}
           state={auditMetricsState}
-          helpId="calls"
-          testId="metric-calls"
+          helpId="business-calls"
+          testId="metric-business-calls"
+        />
+        <MetricCard
+          label="近 7 天协议请求量"
+          value={protocolCallsLast7dTotal ?? 0}
+          help="近 7 天 initialize、notifications/initialized 与 tools/list 请求数。"
+          subValue={auditMetricsState === "ok" ? "连接与工具发现" : undefined}
+          state={auditMetricsState}
+          helpId="protocol-calls"
+          testId="metric-protocol-calls"
         />
       </div>
 
@@ -581,8 +697,8 @@ export function AgentList() {
                 aria-label="近 7 天活跃"
               >
                 <option value="all">全部</option>
-                <option value="active">有访问</option>
-                <option value="inactive">无访问</option>
+                <option value="active">有业务调用</option>
+                <option value="inactive">无业务调用</option>
               </select>
             </label>
           </div>
@@ -638,10 +754,13 @@ export function AgentList() {
                     配置 <span className="notranslate" translate="no">Token</span>
                   </th>
                   <th scope="col">
-                    近 7 天活跃 <span className="notranslate" translate="no">Token</span>
+                    可用 <span className="notranslate" translate="no">Token</span>
                   </th>
-                  <th scope="col">近 7 天调用量</th>
-                  <th scope="col">最近访问时间</th>
+                  <th scope="col">近 7 天使用过的凭据</th>
+                  <th scope="col">近 7 天业务调用量</th>
+                  <th scope="col">近 7 天协议请求量</th>
+                  <th scope="col">最近业务使用</th>
+                  <th scope="col">最近 <span className="notranslate" translate="no">MCP</span> 访问</th>
                   <th scope="col">操作</th>
                 </tr>
               </thead>
@@ -649,9 +768,13 @@ export function AgentList() {
                 {filtered.map((agent, index) => {
                   const legacyWildcard =
                     agent.allow?.tables?.includes("*") || agent.allow?.tools?.includes("*");
-                  const callsLast7d = agent.stats?.callsLast7d ?? 0;
-                  const activeTokens = activeTokenCount(agent);
+                  const metricsUnavailable = agent.stats?.metricsState === "unavailable";
+                  const callsLast7d = agent.stats?.businessCallsLast7d ?? agent.stats?.callsLast7d;
+                  const protocolCallsLast7d = agent.stats?.protocolCallsLast7d;
+                  const usedCredentials = agent.stats?.usedCredentialsLast7d ?? agent.stats?.activeTokensLast7d;
+                  const credentialState = agent.stats?.credentialMetricsState ?? (metricsUnavailable ? "unavailable" : "ok");
                   const configuredTokens = configuredTokenCount(agent);
+                  const availableTokens = agent.stats?.availableTokens ?? (agent.enabled ? configuredTokens : 0);
 
                   return (
                     <tr key={agent.id} data-testid={`agent-row-${agent.id}`}>
@@ -695,6 +818,9 @@ export function AgentList() {
                         >
                           {agent.enabled ? "启用" : "禁用"}
                         </span>
+                        {metricsUnavailable ? (
+                          <span className="pl-agent-list-table-meta" data-testid={`agent-metrics-unavailable-${agent.id}`}>数据不可用</span>
+                        ) : null}
                       </td>
                       <td className="pl-agent-list-table-num notranslate" translate="no">
                         {configuredTokens}
@@ -704,16 +830,42 @@ export function AgentList() {
                         translate="no"
                         data-testid={`agent-active-tokens-${agent.id}`}
                       >
-                        {activeTokens}
+                        {availableTokens}
+                      </td>
+                      <td
+                        className="pl-agent-list-table-num notranslate"
+                        translate="no"
+                        data-testid={`agent-used-credentials-${agent.id}`}
+                        title={credentialState === "partial" ? "Token hash prefix 冲突，无法可靠映射唯一凭据" : undefined}
+                      >
+                        {credentialState === "ok" ? usedCredentials ?? 0 : "—"}
                       </td>
                       <td
                         className="pl-agent-list-table-num"
                         data-testid={`agent-calls-7d-${agent.id}`}
                       >
-                        {callsLast7d}
+                        {metricsUnavailable ? "—" : callsLast7d ?? 0}
+                      </td>
+                      <td
+                        className="pl-agent-list-table-num"
+                        data-testid={`agent-protocol-calls-7d-${agent.id}`}
+                      >
+                        {metricsUnavailable ? "—" : protocolCallsLast7d ?? 0}
                       </td>
                       <td>
-                        <LastSeen lastSeen={agent.stats?.lastSeen} />
+                        <LastSeen
+                          lastSeen={agent.stats?.lastBusinessSeen}
+                          unavailable={metricsUnavailable}
+                          emptyLabel="未使用"
+                          ariaPrefix="最近业务使用"
+                        />
+                      </td>
+                      <td>
+                        <LastSeen
+                          lastSeen={agent.stats?.lastSeen}
+                          unavailable={metricsUnavailable}
+                          ariaPrefix="最近 MCP 访问"
+                        />
                       </td>
                       <td>
                         <div className="pl-agent-list-row-actions">

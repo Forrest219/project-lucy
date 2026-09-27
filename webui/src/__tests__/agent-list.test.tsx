@@ -149,6 +149,39 @@ describe("AgentList", () => {
     expect(seen.getAttribute("title")?.length ?? 0).toBeGreaterThan(0);
   });
 
+  it("renders unavailable row metrics as dashes and does not classify the row as inactive", async () => {
+    stubAgentsEndpoints([
+      makeAgent({
+        id: "unknown1",
+        name: "指标未知",
+        stats: {
+          callsLast7d: null,
+          businessCallsLast7d: null,
+          protocolCallsLast7d: null,
+          deniedLast7d: null,
+          activeTokensLast7d: null,
+          usedCredentialsLast7d: null,
+          configuredTokens: 0,
+          availableTokens: 0,
+          credentialMetricsState: "unavailable",
+          metricsState: "unavailable",
+          topTables: []
+        }
+      })
+    ]);
+
+    renderAgentList();
+    await screen.findByTestId("agent-row-unknown1");
+    expect(screen.getByTestId("agent-calls-7d-unknown1")).toHaveTextContent("—");
+    expect(screen.getByTestId("agent-protocol-calls-7d-unknown1")).toHaveTextContent("—");
+    expect(screen.getByTestId("agent-metrics-unavailable-unknown1")).toHaveTextContent("数据不可用");
+
+    fireEvent.change(screen.getByRole("combobox", { name: "近 7 天活跃" }), {
+      target: { value: "inactive" }
+    });
+    expect(screen.queryByTestId("agent-row-unknown1")).not.toBeInTheDocument();
+  });
+
   it("renders legacy wildcard warning for legacy ACL agents", async () => {
     stubAgentsEndpoints([
       makeAgent({
@@ -351,9 +384,14 @@ describe("AgentList", () => {
           ],
           stats: {
             callsLast7d: 10,
+            businessCallsLast7d: 7,
+            protocolCallsLast7d: 3,
             deniedLast7d: 0,
             activeTokensLast7d: 1,
+            usedCredentialsLast7d: 1,
             configuredTokens: 1,
+            availableTokens: 1,
+            credentialMetricsState: "ok",
             topTables: []
           }
         })
@@ -377,14 +415,16 @@ describe("AgentList", () => {
     renderAgentList();
     await screen.findByRole("heading", { name: "Agent" });
 
-    // 顶部 4 个指标：存量 → 活跃覆盖 → 调用强度（Spec 98）
+    // 顶部指标：配置存量 → 业务活跃 → 凭据生命周期 → 业务/协议调用
     expect(screen.getByTestId("metric-agent-count")).toHaveTextContent("Agent 总数");
     expect(screen.getByTestId("metric-active-agent-count")).toHaveTextContent("近 7 天活跃 Agent");
     expect(screen.getByTestId("metric-active-agent-count")).toHaveTextContent("1");
-    expect(screen.getByTestId("metric-active-token-count")).toHaveTextContent("近 7 天活跃 Token");
+    expect(screen.getByTestId("metric-active-token-count")).toHaveTextContent("可用 Token");
     expect(screen.getByTestId("metric-active-token-count")).toHaveTextContent("1");
-    expect(screen.getByTestId("metric-calls")).toHaveTextContent("近 7 天调用量");
-    expect(screen.getByTestId("metric-calls")).toHaveTextContent("10");
+    expect(screen.getByTestId("metric-used-credentials")).toHaveTextContent("近 7 天使用过的凭据");
+    expect(screen.getByTestId("metric-business-calls")).toHaveTextContent("近 7 天业务调用量");
+    expect(screen.getByTestId("metric-business-calls")).toHaveTextContent("7");
+    expect(screen.getByTestId("metric-protocol-calls")).toHaveTextContent("3");
 
     const metricOrder = [
       ...document.querySelectorAll("[data-testid='agent-metric-grid'] > [data-testid^='metric-']")
@@ -393,10 +433,12 @@ describe("AgentList", () => {
       "metric-agent-count",
       "metric-active-agent-count",
       "metric-active-token-count",
-      "metric-calls"
+      "metric-used-credentials",
+      "metric-business-calls",
+      "metric-protocol-calls"
     ]);
     expect(screen.getByTestId("metric-help-agent-count")).toBeInTheDocument();
-    expect(screen.getByTestId("metric-help-calls")).toBeInTheDocument();
+    expect(screen.getByTestId("metric-help-business-calls")).toBeInTheDocument();
     expect(screen.getByTestId("metric-agent-count")).toHaveClass("pl-metric-card--with-help");
 
     // 拒绝指标不再出现在 KPI 区
@@ -691,9 +733,12 @@ describe("AgentList", () => {
       "角色",
       "当前状态",
       "配置 Token",
-      "近 7 天活跃 Token",
-      "近 7 天调用量",
-      "最近访问时间",
+      "可用 Token",
+      "近 7 天使用过的凭据",
+      "近 7 天业务调用量",
+      "近 7 天协议请求量",
+      "最近业务使用",
+      "最近 MCP 访问",
       "操作"
     ]);
   });
@@ -763,9 +808,15 @@ describe("agentList helpers", () => {
       agentCount: 2,
       enabledAgentCount: 1,
       activeAgentCountLast7d: 2,
+      businessActiveAgentCountLast7d: 2,
       configuredTokenCount: 1,
+      availableTokenCount: 1,
       activeTokenCountLast7d: 1,
+      usedCredentialCountLast7d: 1,
+      usedCredentialState: "ok",
       callsLast7d: 8,
+      businessCallsLast7d: 8,
+      protocolCallsLast7d: 0,
       deniedLast7d: 1,
       metricsState: "ok"
     });

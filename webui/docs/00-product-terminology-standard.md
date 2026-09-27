@@ -457,11 +457,18 @@ Connection (连接)
 | Active Agent | 近 N 活跃 Agent | 活跃 Agent（叙述） | 最近活跃 Agent（主标签）；卡底「近 N 有调用」藏窗口 | N 进**标题** |
 | Agent Active Rate | Agent 活跃率 | 活跃 / 总数 | — | 并入活跃 Agent 卡副行，不独立成卡 |
 | Configured Token Count | 配置 Token | 已下发凭证 | access.yaml 配置数（主 hint） | 不随窗口变 |
-| Active Token | 近 N 活跃 Token | 活跃 Token（叙述） | 近 7 天活跃 Token（写死）；卡底藏窗口 | N 进标题 |
+| Available Token Count | 可用 Token | 当前可用凭据 | 活跃 Token、有效 Token（未说明 Agent 状态） | Agent 已启用且 Token 未过期的当前配置数 |
+| Used Credential Count | 近 N 使用过的凭据 | 近窗凭据 | 近 N 活跃 Token | access_log 去重 hash prefix；可能包含已删除/已吊销凭据；有 prefix 碰撞时为部分可信 |
+| Active Token | 近 N 使用过的凭据 | 活跃 Token（仅兼容历史字段叙述） | 近 7 天活跃 Token（写死）；卡底藏窗口 | Deprecated UI term；新 UI 使用 Used Credential Count |
 | Token Active Rate | Token 活跃率 | 活跃 / 配置 | access_log 去重 prefix | 并入活跃 Token 卡副行 |
 | Authorized Table Count | 授权表 | 角色已授权表 | 配置表（本页主标签）、白名单表、启用表（本页禁止混用） | ACL 授权去重；≠ 启用表范围；不随窗口变 |
 | Active Table Count | 近 N 活跃表 | 活跃表（叙述） | 热门表（与排行区分）；卡底藏窗口 | N 进标题；活跃率分母=授权表 |
-| Call Volume | 近 N 调用量 | 调用量（叙述） | 最近调用 | 跟随窗口；hint 可留「MCP 调用」 |
+| Business Call Volume | 近 N 业务调用量 | 业务调用量 | 近 N 调用量（未说明口径）、最近调用 | 排除 initialize、notifications/initialized、tools/list；用于 Agent 活跃判定 |
+| Protocol Request Volume | 近 N 协议请求量 | 协议请求量 | 工具调用量 | 仅 initialize、notifications/initialized、tools/list；保留用于连接诊断 |
+| Last MCP Access | 最近 MCP 访问 | 最近访问时间 | 最近业务使用（混用） | 全历史最后一条 access_log；协议请求也会更新 |
+| Last Business Use | 最近业务使用 | 最近业务调用 | 最近访问时间（混用） | 全历史最后一条非协议调用 |
+| Audit Write Completeness | 审计写入完整性 | 数据完整性 | 日志完整（绝对保证） | 只表达当前 Lucy 进程观测到的 pending / failed 写入状态 |
+| Call Volume | 近 N 调用量 | 调用量（叙述） | 最近调用 | 调用监控页沿用；定义为 Business Call Volume |
 | Typical Request Latency | 多数请求耗时 | P95（次级括注） | 响应上限（P95）作主标签；平均响应时长、AVG(duration_ms) | hint：95% 的请求在此时间内完成 |
 | Agent Call Ranking | Agent 调用排行 · 近 N | Agent 使用排行 | 近窗口调用；实现向排序说明 | 条形图 Top 10；跟随窗口 |
 | Token Call Ranking | Token 调用排行 · 近 N | Token 使用摘要 | 不重复展示顶部 KPI | 按窗口 `calls` 降序 |

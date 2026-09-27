@@ -39,6 +39,7 @@ import { assertLicenseAllowsMcp, loadLicenseSnapshot } from "../license/entitlem
 import { canonicalizeLucyQueryArgs } from "./lucy-query-normalization.js";
 import { applyLucyQueryForcedFilters, buildExplainForcedPredicateDiagnostics } from "./row-policy.js";
 import { TurnCorrelationRegistry } from "./turn-correlation.js";
+import { beginAuditWrite, completeAuditWrite, failAuditWrite } from "./audit-write-health.js";
 
 const KTX_HOST = process.env.LUCY_PROXY_UPSTREAM_HOST ?? "127.0.0.1";
 const KTX_PORT = Number(process.env.LUCY_PROXY_UPSTREAM_PORT ?? 7878);
@@ -364,13 +365,18 @@ function toSourceRecords(refs: SourceRef[]): AccessLogSourceRecord[] {
 }
 
 function recordAudit(entry: Parameters<typeof writeLog>[0], sources?: SourceRef[]): void {
+  beginAuditWrite();
   writeLog(entry)
     .then((accessLogId) => {
       if (sources && sources.length > 0) {
         return writeAccessLogSources(accessLogId, entry.ts, entry.userId, entry.tool, toSourceRecords(sources));
       }
     })
+    .then(() => {
+      completeAuditWrite();
+    })
     .catch((err) => {
+      failAuditWrite();
       console.error("[lucy-proxy] failed to write audit log", err);
     });
 }
