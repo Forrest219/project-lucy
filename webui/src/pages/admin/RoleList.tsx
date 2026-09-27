@@ -111,20 +111,6 @@ export function roleStatusBadges(role: Role): Array<{ key: string; label: string
   return badges;
 }
 
-export function roleWarningDiagnosis(warning: string): { diagnosis: string; technical: string } {
-  const trimmed = warning.trim();
-  if (trimmed.startsWith("role_resolution_failed")) {
-    return {
-      diagnosis: "权限解析失败：当前配置无法生成有效的数据源 / MCP 工具边界。",
-      technical: trimmed
-    };
-  }
-  return {
-    diagnosis: "权限配置需检查：系统返回了未识别的校验信息。",
-    technical: trimmed
-  };
-}
-
 export type RoleSummary = {
   formalCount: number;
   inUseCount: number;
@@ -171,160 +157,6 @@ function badgeClass(tone: string): string {
   }
 }
 
-function RoleCard({ role, onDelete }: { role: Role; onDelete: () => void }) {
-  const isTemplate = role.source === "template";
-  const inUse = (role.usageCount ?? 0) > 0;
-  const tools = role.tools ?? [];
-  const badges = roleStatusBadges(role);
-  const connections = role.connections?.length ?? 0;
-
-  return (
-    <div
-      data-testid="role-card"
-      data-role-id={role.id}
-      data-source={role.source}
-      className={`pl-card ${role.invalid ? "border-danger-strong" : ""}`}
-    >
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0 flex-1 grid gap-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-semibold notranslate" translate="no">
-              {role.id}
-            </span>
-            {badges.map((badge) => (
-              <span
-                key={badge.key}
-                className={`pl-status-badge ${badgeClass(badge.tone)}`}
-                data-testid={badge.testId}
-              >
-                {badge.label}
-              </span>
-            ))}
-          </div>
-          {role.description && (
-            <p className="text-sm text-fg-muted">
-              <span className="text-fg-muted">说明：</span>
-              {role.description}
-            </p>
-          )}
-          <div className="text-sm text-fg-muted">
-            <span>数据范围：</span>
-            {role.sourceCount} 个 source · {connections} 个 connection
-          </div>
-          <div className="text-sm text-fg-muted">
-            <span
-              className="notranslate"
-              translate="no"
-              data-testid={`role-allowed-tools-count-${role.id}`}
-            >
-              允许的 MCP 工具：{tools.length} 个
-            </span>
-          </div>
-          {tools.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {tools.slice(0, 6).map((tool) => (
-                <span key={tool} className="pl-status-badge pl-status-included notranslate" translate="no">
-                  {tool}
-                </span>
-              ))}
-              {tools.length > 6 && (
-                <span className="pl-status-badge pl-status-not_started">+{tools.length - 6}</span>
-              )}
-            </div>
-          )}
-          {(role.warnings?.length ?? 0) > 0 && (
-            <ul className="grid gap-1 text-xs" data-testid={`role-warnings-${role.id}`}>
-              {role.warnings!.map((w, idx) => {
-                const { diagnosis, technical } = roleWarningDiagnosis(w);
-                return (
-                  <li key={idx} className="grid gap-0.5 text-danger">
-                    <span data-testid={`role-warning-diagnosis-${role.id}-${idx}`}>{diagnosis}</span>
-                    {isTemplate && (
-                      <span className="text-fg-muted" data-testid={`role-warning-template-note-${role.id}-${idx}`}>
-                        该条目是参考模板；当前环境可能缺少对应连接或表，不代表已落盘正式 Role 故障。
-                      </span>
-                    )}
-                    <span className="inline-flex flex-wrap items-center gap-1 text-fg-muted">
-                      <span>技术详情：</span>
-                      <code
-                        className="notranslate rounded bg-bg-subtle px-1 py-0.5 font-mono text-[11px]"
-                        translate="no"
-                        data-testid={`role-warning-tech-${role.id}-${idx}`}
-                      >
-                        {technical}
-                      </code>
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-          <div className="text-sm text-fg-muted">
-            <span>
-              引用 <span className="notranslate" translate="no">Agent</span>：{role.usageCount ?? 0} 个
-            </span>
-            {inUse && (role.users?.length ?? 0) > 0 && (
-              <span>
-                {" "}
-                ·{" "}
-                <span className="notranslate" translate="no">
-                  {role.users!.map((u) => u.id).join(", ")}
-                </span>
-              </span>
-            )}
-          </div>
-          {isTemplate ? (
-            <div className="text-sm text-fg-muted">内置参考模板</div>
-          ) : role.configUpdatedAt ? (
-            <div className="text-sm text-fg-muted">
-              配置最近写入：{formatConfigUpdatedAt(role.configUpdatedAt)}
-            </div>
-          ) : null}
-        </div>
-        <div className="flex flex-col items-end gap-2 shrink-0">
-          {isTemplate ? (
-            <>
-              <Link
-                to={`/admin/roles/${encodeURIComponent(role.id)}`}
-                className="pl-btn pl-btn--ghost text-sm"
-              >
-                查看
-              </Link>
-            </>
-          ) : (
-            <>
-              <Link
-                to={`/admin/roles/${encodeURIComponent(role.id)}`}
-                className="pl-btn pl-btn--ghost text-sm"
-              >
-                编辑
-              </Link>
-              <Link
-                to={`/admin/roles/${encodeURIComponent(role.id)}?mode=copy`}
-                className="pl-btn pl-btn--ghost text-sm"
-                aria-label={`基于 ${role.id} 新建 Role`}
-                title="基于此 Role 创建新的正式 Role"
-              >
-                基于此新建
-              </Link>
-              <button
-                type="button"
-                className="pl-btn pl-btn--danger text-sm"
-                onClick={onDelete}
-                aria-label={`删除 ${role.id}`}
-                disabled={inUse}
-                title={inUse ? "无法删除被引用的 role" : undefined}
-              >
-                删除
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export function RoleList() {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
@@ -332,6 +164,7 @@ export function RoleList() {
   const [connectionFilter, setConnectionFilter] = useState("");
   const [toolFilter, setToolFilter] = useState("");
   const [tableFilter, setTableFilter] = useState("");
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["admin", "roles"],
@@ -391,6 +224,11 @@ export function RoleList() {
 
   const filterLabel = FILTER_OPTIONS.find((opt) => opt.value === sourceFilter)?.label ?? sourceFilter;
   const capabilityActive = Boolean(connectionFilter || toolFilter || tableFilter.trim());
+  const hasActiveFilters = Boolean(search.trim() || sourceFilter !== "formal" || capabilityActive);
+  const advancedFilterCount =
+    Number(Boolean(connectionFilter)) +
+    Number(Boolean(toolFilter)) +
+    Number(Boolean(tableFilter.trim()));
   const unresolvedTableRoles = useMemo(
     () =>
       tableFilter.trim()
@@ -409,6 +247,15 @@ export function RoleList() {
 
   function handleDelete(role: Role) {
     navigate(`/admin/roles/${encodeURIComponent(role.id)}?mode=delete`);
+  }
+
+  function clearFilters() {
+    setSearch("");
+    setSourceFilter("formal");
+    setConnectionFilter("");
+    setToolFilter("");
+    setTableFilter("");
+    setAdvancedOpen(false);
   }
 
   return (
@@ -467,50 +314,88 @@ export function RoleList() {
             </option>
           ))}
         </select>
-        <select
-          className="pl-input w-44"
-          value={connectionFilter}
-          onChange={(e) => setConnectionFilter(e.target.value)}
-          aria-label="按连接筛选"
-          data-testid="role-filter-connection"
+        <button
+          type="button"
+          className="pl-btn pl-btn--ghost text-sm"
+          aria-expanded={advancedOpen}
+          aria-controls="role-advanced-filters"
+          data-testid="role-advanced-filters-toggle"
+          onClick={() => setAdvancedOpen((open) => !open)}
         >
-          <option value="">全部连接</option>
-          {connectionOptions.map((id) => (
-            <option key={id} value={id} className="notranslate" translate="no">
-              {id}
-            </option>
-          ))}
-        </select>
-        <select
-          className="pl-input w-48 notranslate"
-          translate="no"
-          value={toolFilter}
-          onChange={(e) => setToolFilter(e.target.value)}
-          aria-label="按 MCP 工具筛选"
-          data-testid="role-filter-tool"
-        >
-          <option value="" className="notranslate" translate="no">
-            全部 MCP 工具
-          </option>
-          {toolOptions.map((name) => (
-            <option key={name} value={name}>
-              {name}
-            </option>
-          ))}
-        </select>
-        <input
-          className="pl-input w-44"
-          placeholder="按表名筛选"
-          value={tableFilter}
-          onChange={(e) => setTableFilter(e.target.value)}
-          aria-label="按表筛选"
-          data-testid="role-filter-table"
-        />
+          {advancedOpen
+            ? advancedFilterCount > 0
+              ? `收起高级（${advancedFilterCount}）`
+              : "收起高级"
+            : advancedFilterCount > 0
+              ? `高级筛选（${advancedFilterCount}）`
+              : "高级筛选"}
+        </button>
+        {hasActiveFilters ? (
+          <button
+            type="button"
+            className="pl-btn pl-btn--ghost text-sm"
+            data-testid="role-clear-filters"
+            onClick={clearFilters}
+          >
+            清除筛选
+          </button>
+        ) : null}
       </div>
 
-      {(sourceFilter !== "formal" || capabilityActive) && (
+      {advancedOpen ? (
+        <div
+          id="role-advanced-filters"
+          className="pl-admin-filterbar flex flex-wrap gap-2"
+          role="group"
+          aria-label="高级筛选"
+          data-testid="role-advanced-filters"
+        >
+          <select
+            className="pl-input w-44"
+            value={connectionFilter}
+            onChange={(e) => setConnectionFilter(e.target.value)}
+            aria-label="按连接筛选"
+            data-testid="role-filter-connection"
+          >
+            <option value="">全部连接</option>
+            {connectionOptions.map((id) => (
+              <option key={id} value={id} className="notranslate" translate="no">
+                {id}
+              </option>
+            ))}
+          </select>
+          <select
+            className="pl-input w-48 notranslate"
+            translate="no"
+            value={toolFilter}
+            onChange={(e) => setToolFilter(e.target.value)}
+            aria-label="按 MCP 工具筛选"
+            data-testid="role-filter-tool"
+          >
+            <option value="" className="notranslate" translate="no">
+              全部 MCP 工具
+            </option>
+            {toolOptions.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+          <input
+            className="pl-input w-44"
+            placeholder="按表名筛选"
+            value={tableFilter}
+            onChange={(e) => setTableFilter(e.target.value)}
+            aria-label="按表筛选"
+            data-testid="role-filter-table"
+          />
+        </div>
+      ) : null}
+
+      {hasActiveFilters && (
         <div className="text-xs text-fg-muted" data-testid="role-current-filter">
           当前筛选：{filterLabel}
+          {search.trim() ? ` · 搜索 ${search.trim()}` : ""}
           {connectionFilter ? ` · 连接 ${connectionFilter}` : ""}
           {toolFilter ? ` · 工具 ${toolFilter}` : ""}
           {tableFilter.trim() ? ` · 表 ${tableFilter.trim()}` : ""}
@@ -539,12 +424,26 @@ export function RoleList() {
                 新建第一个 Role
               </Link>
             </div>
-          ) : sourceFilter === "needs-repair" && !search.trim() && !capabilityActive ? (
-            "没有正式 Role 待修复"
-          ) : tableFilter.trim() ? (
-            "没有匹配当前表条件的 Role"
           ) : (
-            "没有匹配的 Role"
+            <div className="text-center py-8">
+              <p className="text-fg-muted mb-4">
+                {sourceFilter === "needs-repair" && !search.trim() && !capabilityActive
+                  ? "没有正式 Role 待修复"
+                  : tableFilter.trim()
+                    ? "没有匹配当前表条件的 Role"
+                    : "没有匹配的 Role"}
+              </p>
+              {hasActiveFilters ? (
+                <button
+                  type="button"
+                  className="pl-btn pl-btn--ghost text-sm"
+                  data-testid="role-clear-filters-empty"
+                  onClick={clearFilters}
+                >
+                  清除筛选
+                </button>
+              ) : null}
+            </div>
           )}
         </div>
       ) : (
@@ -654,12 +553,6 @@ export function RoleList() {
                                   href: `/admin/roles/${encodeURIComponent(role.id)}?mode=copy`,
                                   testId: `role-menu-copy-${role.id}`
                                 },
-                                {
-                                  kind: "link",
-                                  label: "快捷抽屉预览",
-                                  href: buildObjectDetailSearch({ kind: "role", roleId: role.id }),
-                                  testId: `role-menu-preview-${role.id}`
-                                },
                                 ...(isTemplate
                                   ? []
                                   : [
@@ -684,12 +577,6 @@ export function RoleList() {
             </div>
           </section>
 
-          {/* Keep card elements for backward-compatibility with existing tests and card-based expectations */}
-          <div data-testid="role-list">
-            {filtered.map((role) => (
-              <RoleCard key={role.id} role={role} onDelete={() => handleDelete(role)} />
-            ))}
-          </div>
         </>
       )}
     </div>

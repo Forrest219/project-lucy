@@ -360,11 +360,11 @@
 | `onboarding-delivery-banner` | 上线检查 banner |
 | `permissions-tree` | 权限树 |
 | `plaintext-token` | 明文 token |
-| `role-card` | 角色卡 |
 | `role-detail` | 角色详情 |
 | `role-diff` | 角色 diff |
 | `role-dirty-bar` | 角色 dirty 浮条 |
-| `role-list` | 角色列表 |
+| `role-list-table` | 角色列表 Data Grid |
+| `role-row-${roleId}` | 角色行（模板） |
 | `role-summary-card` | 角色摘要卡 |
 | `roles-page` | 角色页 |
 | `route-page` | 通用 route 页根 |

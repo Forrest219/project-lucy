@@ -40,12 +40,8 @@ function makeRole(overrides: Partial<Role> = {}): Role {
   };
 }
 
-function findCard(roleId: string): HTMLElement {
-  const card = screen
-    .getAllByTestId("role-card")
-    .find((node) => node.getAttribute("data-role-id") === roleId);
-  if (!card) throw new Error(`role card ${roleId} not found`);
-  return card;
+function findRow(roleId: string): HTMLElement {
+  return screen.getByTestId(`role-row-${roleId}`);
 }
 
 const TEMPLATE_ROLE: Role = {
@@ -133,17 +129,17 @@ describe("RoleList", () => {
     expect(screen.queryByRole("navigation", { name: "面包屑" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "角色配置" })).not.toBeInTheDocument();
 
-    const analystCard = await waitFor(() => findCard("analyst_a"));
+    const analystCard = await waitFor(() => findRow("analyst_a"));
     expect(within(analystCard).getByText("analyst_a")).toBeInTheDocument();
     expect(within(analystCard).getByText("正式")).toBeInTheDocument();
     expect(within(analystCard).getByText("使用中")).toBeInTheDocument();
     expect(within(analystCard).queryByText("正在服务 Agent")).not.toBeInTheDocument();
     expect(within(analystCard).queryByText(/^in use$/)).not.toBeInTheDocument();
-    expect(findCardOrNull("wiki_only_a")).toBeNull();
+    expect(findRowOrNull("wiki_only_a")).toBeNull();
 
     const filter = (await screen.findByLabelText("筛选角色范围")) as HTMLSelectElement;
     fireEvent.change(filter, { target: { value: "templates" } });
-    const templateCard = await waitFor(() => findCard("wiki_only_a"));
+    const templateCard = await waitFor(() => findRow("wiki_only_a"));
     expect(within(templateCard).getByText("wiki_only_a")).toBeInTheDocument();
     expect(within(templateCard).getByText("参考模板")).toBeInTheDocument();
     expect(within(templateCard).queryByText(/^template$/)).not.toBeInTheDocument();
@@ -169,7 +165,7 @@ describe("RoleList", () => {
     ]);
 
     renderRoleList();
-    await waitFor(() => findCard("metrics_in_use"));
+    await waitFor(() => findRow("metrics_in_use"));
 
     expect(screen.queryByText(/YAML role/)).not.toBeInTheDocument();
     expect(screen.getByTestId("role-metric-grid")).toBeInTheDocument();
@@ -198,7 +194,7 @@ describe("RoleList", () => {
     ]);
 
     renderRoleList();
-    await waitFor(() => findCard("strip_in_use"));
+    await waitFor(() => findRow("strip_in_use"));
     expect(screen.queryByTestId("role-status-strip")).not.toBeInTheDocument();
     expect(document.body.textContent ?? "").not.toMatch(/参考模板仅用于低频创建辅助/);
     expect(screen.queryByTestId("summary")).not.toBeInTheDocument();
@@ -226,7 +222,7 @@ describe("RoleList", () => {
   it("uses 待修复 for invalid yaml roles and never renders 禁用/已停用", async () => {
     stubRoles([INVALID_YAML_ROLE]);
     renderRoleList();
-    const card = await waitFor(() => findCard("broken_yaml"));
+    const card = await waitFor(() => findRow("broken_yaml"));
     expect(within(card).getByText("待修复")).toBeInTheDocument();
     expect(within(card).queryByText(/^invalid$/)).not.toBeInTheDocument();
     expect(within(card).queryByText("禁用")).not.toBeInTheDocument();
@@ -238,11 +234,11 @@ describe("RoleList", () => {
     renderRoleList();
     const filter = (await screen.findByLabelText("筛选角色范围")) as HTMLSelectElement;
     fireEvent.change(filter, { target: { value: "templates" } });
-    const card = await waitFor(() => findCard("wiki_only"));
-    expect(within(card).getByText("参考模板")).toBeInTheDocument();
-    expect(within(card).getByText("内置参考模板")).toBeInTheDocument();
-    expect(within(card).queryByText(/^Template$/)).not.toBeInTheDocument();
-    expect(within(card).queryByText(/^template$/)).not.toBeInTheDocument();
+    const row = await waitFor(() => findRow("wiki_only"));
+    expect(within(row).getByText("参考模板")).toBeInTheDocument();
+    expect(within(row).getByText("内置模板")).toBeInTheDocument();
+    expect(within(row).queryByText(/^Template$/)).not.toBeInTheDocument();
+    expect(within(row).queryByText(/^template$/)).not.toBeInTheDocument();
   });
 
   it("uses 使用中 for in-use yaml roles and never renders in use / 正在服务 Agent", async () => {
@@ -254,7 +250,7 @@ describe("RoleList", () => {
       })
     ]);
     renderRoleList();
-    const card = await waitFor(() => findCard("in_use_role"));
+    const card = await waitFor(() => findRow("in_use_role"));
     expect(within(card).getByText("使用中")).toBeInTheDocument();
     expect(within(card).queryByText("正在服务 Agent")).not.toBeInTheDocument();
     expect(within(card).queryByText(/^in use$/)).not.toBeInTheDocument();
@@ -279,50 +275,48 @@ describe("RoleList", () => {
     ]);
 
     renderRoleList();
-    await waitFor(() => findCard("scope_in_use"));
+    await waitFor(() => findRow("scope_in_use"));
     const filter = (await screen.findByLabelText("筛选角色范围")) as HTMLSelectElement;
 
     expect(filter.value).toBe("formal");
-    expect(findCardOrNull("scope_in_use")).not.toBeNull();
-    expect(findCardOrNull("scope_unused")).not.toBeNull();
-    expect(findCardOrNull("broken_yaml")).not.toBeNull();
-    expect(findCardOrNull("lucy_r1_exact_readonly")).toBeNull();
+    expect(findRowOrNull("scope_in_use")).not.toBeNull();
+    expect(findRowOrNull("scope_unused")).not.toBeNull();
+    expect(findRowOrNull("broken_yaml")).not.toBeNull();
+    expect(findRowOrNull("lucy_r1_exact_readonly")).toBeNull();
 
     // 使用中：仅 yaml + usageCount > 0
     fireEvent.change(filter, { target: { value: "in-use" } });
-    expect(findCardOrNull("scope_in_use")).not.toBeNull();
-    expect(findCardOrNull("scope_template_in_use")).toBeNull();
-    expect(findCardOrNull("scope_unused")).toBeNull();
-    expect(findCardOrNull("broken_yaml")).toBeNull();
+    expect(findRowOrNull("scope_in_use")).not.toBeNull();
+    expect(findRowOrNull("scope_template_in_use")).toBeNull();
+    expect(findRowOrNull("scope_unused")).toBeNull();
+    expect(findRowOrNull("broken_yaml")).toBeNull();
 
     // 待修复：仅 formal invalid
     fireEvent.change(filter, { target: { value: "needs-repair" } });
-    expect(findCardOrNull("broken_yaml")).not.toBeNull();
-    expect(findCardOrNull("lucy_r1_exact_readonly")).toBeNull();
-    expect(findCardOrNull("scope_in_use")).toBeNull();
+    expect(findRowOrNull("broken_yaml")).not.toBeNull();
+    expect(findRowOrNull("lucy_r1_exact_readonly")).toBeNull();
+    expect(findRowOrNull("scope_in_use")).toBeNull();
 
     // 未引用：仅 valid unused yaml
     fireEvent.change(filter, { target: { value: "unused" } });
-    expect(findCardOrNull("scope_unused")).not.toBeNull();
-    expect(findCardOrNull("scope_in_use")).toBeNull();
-    expect(findCardOrNull("broken_yaml")).toBeNull();
+    expect(findRowOrNull("scope_unused")).not.toBeNull();
+    expect(findRowOrNull("scope_in_use")).toBeNull();
+    expect(findRowOrNull("broken_yaml")).toBeNull();
 
-    // 参考模板：模板 invalid 诊断仍可见
+    // 参考模板：模板 invalid 仍保留待修复状态，诊断详情下沉到对象详情抽屉
     fireEvent.change(filter, { target: { value: "templates" } });
-    expect(findCardOrNull("scope_template_in_use")).not.toBeNull();
-    const invalidTemplate = findCard("lucy_r1_exact_readonly");
+    expect(findRowOrNull("scope_template_in_use")).not.toBeNull();
+    const invalidTemplate = findRow("lucy_r1_exact_readonly");
     expect(within(invalidTemplate).getByText("待修复")).toBeInTheDocument();
-    expect(within(invalidTemplate).getByText(/权限解析失败/)).toBeInTheDocument();
-    expect(within(invalidTemplate).getByText(/不代表已落盘正式 Role 故障/)).toBeInTheDocument();
-    expect(within(invalidTemplate).getByText(/role_resolution_failed/)).toBeInTheDocument();
-    expect(findCardOrNull("scope_in_use")).toBeNull();
-    expect(findCardOrNull("broken_yaml")).toBeNull();
+    expect(within(invalidTemplate).queryByText(/role_resolution_failed/)).not.toBeInTheDocument();
+    expect(findRowOrNull("scope_in_use")).toBeNull();
+    expect(findRowOrNull("broken_yaml")).toBeNull();
   });
 
   it("shows 没有正式 Role 待修复 when needs-repair filter has no formal invalid roles", async () => {
     stubRoles([makeRole({ id: "healthy_only" }), INVALID_TEMPLATE_ROLE]);
     renderRoleList();
-    await waitFor(() => findCard("healthy_only"));
+    await waitFor(() => findRow("healthy_only"));
     const filter = (await screen.findByLabelText("筛选角色范围")) as HTMLSelectElement;
     fireEvent.change(filter, { target: { value: "needs-repair" } });
     expect(await screen.findByText("没有正式 Role 待修复")).toBeInTheDocument();
@@ -332,7 +326,7 @@ describe("RoleList", () => {
     expect(screen.queryByText("没有正式 Role 待修复")).not.toBeInTheDocument();
   });
 
-  it("renders labeled card fields, 基于此新建, and Asia/Shanghai config time", async () => {
+  it("renders one canonical table row with actions and Asia/Shanghai config time", async () => {
     stubRoles([
       makeRole({
         id: "demo_readonly",
@@ -346,14 +340,24 @@ describe("RoleList", () => {
       })
     ]);
     renderRoleList();
-    const card = await waitFor(() => findCard("demo_readonly"));
-    expect(within(card).getByText(/说明：/)).toBeInTheDocument();
-    expect(within(card).getByText(/数据范围：/)).toBeInTheDocument();
-    expect(within(card).getByText(/允许的 MCP 工具：/)).toBeInTheDocument();
-    expect(card.textContent).toMatch(/引用\s*Agent：\s*2\s*个/);
-    expect(within(card).getByText("配置最近写入：2026-08-04 14:32")).toBeInTheDocument();
-    expect(within(card).getByRole("link", { name: `基于 demo_readonly 新建 Role` })).toBeInTheDocument();
-    expect(within(card).queryByRole("link", { name: /^复制$/ })).not.toBeInTheDocument();
+    const row = await waitFor(() => findRow("demo_readonly"));
+    expect(screen.getByTestId("role-list-table")).toBeInTheDocument();
+    expect(screen.queryByTestId("role-card")).not.toBeInTheDocument();
+    expect(within(row).getByText("Demo Superstore readonly agent")).toBeInTheDocument();
+    expect(within(row).getByText("3 个 source · 1 个 conn")).toBeInTheDocument();
+    expect(within(row).getByTestId("role-allowed-tools-count-demo_readonly")).toHaveTextContent("1 个");
+    expect(row.textContent).toMatch(/2 个/);
+    expect(row.textContent).toMatch(/Demo, Zhao/);
+    expect(within(row).getByText("2026-08-04 14:32")).toBeInTheDocument();
+    expect(within(row).getByRole("link", { name: "编辑" })).toBeInTheDocument();
+    expect(within(row).getByTestId("role-id-link-demo_readonly").getAttribute("href"))
+      .toContain("object=role&roleId=demo_readonly");
+
+    fireEvent.click(within(row).getByRole("button", { name: "demo_readonly 的更多操作" }));
+    expect(screen.getByRole("menuitem", { name: "基于此新建" }))
+      .toHaveAttribute("href", "/admin/roles/demo_readonly?mode=copy");
+    expect(screen.queryByRole("menuitem", { name: "快捷抽屉预览" })).not.toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "删除" })).toBeDisabled();
   });
 
   it("filters by search text on id and description", async () => {
@@ -362,16 +366,16 @@ describe("RoleList", () => {
       makeRole({ id: "engineer_search", description: "数据工程师" })
     ]);
     renderRoleList();
-    await waitFor(() => findCard("analyst_search"));
+    await waitFor(() => findRow("analyst_search"));
 
     const search = screen.getByPlaceholderText(/搜索/);
     fireEvent.change(search, { target: { value: "工程" } });
-    expect(findCardOrNull("analyst_search")).toBeNull();
-    expect(findCardOrNull("engineer_search")).not.toBeNull();
+    expect(findRowOrNull("analyst_search")).toBeNull();
+    expect(findRowOrNull("engineer_search")).not.toBeNull();
 
     fireEvent.change(search, { target: { value: "analy" } });
-    expect(findCardOrNull("analyst_search")).not.toBeNull();
-    expect(findCardOrNull("engineer_search")).toBeNull();
+    expect(findRowOrNull("analyst_search")).not.toBeNull();
+    expect(findRowOrNull("engineer_search")).toBeNull();
   });
 
   it("clicking 新建 Role navigates to /admin/roles/new", async () => {
@@ -381,36 +385,33 @@ describe("RoleList", () => {
     expect(await screen.findByTestId("new-role")).toBeInTheDocument();
   });
 
-  it("template list card no longer shows 复制为 YAML Role as a primary action", async () => {
+  it("template table row uses 查看 and keeps copy as a secondary action", async () => {
     stubRoles([TEMPLATE_ROLE]);
     renderRoleList();
     const filter = (await screen.findByLabelText("筛选角色范围")) as HTMLSelectElement;
     fireEvent.change(filter, { target: { value: "templates" } });
-    const card = await waitFor(() => findCard("wiki_only"));
-    const buttons = within(card).queryAllByRole("link");
+    const row = await waitFor(() => findRow("wiki_only"));
+    const buttons = within(row).queryAllByRole("link");
     expect(buttons.find((b) => b.textContent?.includes("复制为 YAML Role"))).toBeUndefined();
-    expect(within(card).getByRole("link", { name: "查看" })).toBeInTheDocument();
+    expect(within(row).getByRole("link", { name: "查看" })).toBeInTheDocument();
+    fireEvent.click(within(row).getByRole("button", { name: "wiki_only 的更多操作" }));
+    expect(screen.getByRole("menuitem", { name: "基于此新建" })).toBeInTheDocument();
   });
 
-  it("renders user-readable diagnosis for template role_resolution_failed under 参考模板", async () => {
+  it("keeps invalid template status concise in the table", async () => {
     stubRoles([INVALID_TEMPLATE_ROLE]);
     renderRoleList();
     const filter = (await screen.findByLabelText("筛选角色范围")) as HTMLSelectElement;
     fireEvent.change(filter, { target: { value: "templates" } });
-    const card = await waitFor(() => findCard("lucy_r1_exact_readonly"));
-    expect(within(card).getByText(/权限解析失败/)).toBeInTheDocument();
-    expect(within(card).getByText(/不代表已落盘正式 Role 故障/)).toBeInTheDocument();
-    const techNode = within(card).getByText(/role_resolution_failed/);
-    expect(techNode).toBeInTheDocument();
-    expect(techNode.getAttribute("translate")).toBe("no");
-    expect(techNode.className).toContain("notranslate");
-    expect(within(card).getByText(/仅允许访问 POC 数据源/)).toBeInTheDocument();
+    const row = await waitFor(() => findRow("lucy_r1_exact_readonly"));
+    expect(within(row).getByText("待修复")).toBeInTheDocument();
+    expect(within(row).getByText(/仅允许访问 POC 数据源/)).toBeInTheDocument();
     expect(
-      within(card).queryByText(/exact 6-tool controlled data service surface/)
+      within(row).queryByText(/role_resolution_failed/)
     ).not.toBeInTheDocument();
   });
 
-  it("filters by connection, MCP tool, and table; empty sourceNames miss table filter", async () => {
+  it("keeps search and status visible while advanced capability filters are collapsed", async () => {
     stubRoles([
       makeRole({
         id: "with_table",
@@ -434,34 +435,71 @@ describe("RoleList", () => {
       })
     ]);
     renderRoleList();
-    await screen.findByTestId("role-list");
+    await screen.findByTestId("role-list-table");
+
+    const toggle = screen.getByTestId("role-advanced-filters-toggle");
+    expect(screen.getByLabelText("搜索 role")).toBeInTheDocument();
+    expect(screen.getByLabelText("筛选角色范围")).toBeInTheDocument();
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(toggle).toHaveAttribute("aria-controls", "role-advanced-filters");
+    expect(screen.queryByTestId("role-advanced-filters")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("role-filter-connection")).not.toBeInTheDocument();
+
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByTestId("role-advanced-filters")).toHaveAttribute("aria-label", "高级筛选");
 
     fireEvent.change(screen.getByTestId("role-filter-connection"), { target: { value: "mysql-aliyun" } });
-    expect(findCardOrNull("with_table")).toBeTruthy();
-    expect(findCardOrNull("other_conn")).toBeNull();
+    expect(toggle).toHaveTextContent("收起高级（1）");
+    expect(findRowOrNull("with_table")).toBeTruthy();
+    expect(findRowOrNull("other_conn")).toBeNull();
+
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByTestId("role-advanced-filters")).not.toBeInTheDocument();
+    expect(screen.getByTestId("role-current-filter")).toHaveTextContent("连接 mysql-aliyun");
+
+    fireEvent.click(toggle);
 
     fireEvent.change(screen.getByTestId("role-filter-connection"), { target: { value: "" } });
     fireEvent.change(screen.getByTestId("role-filter-tool"), { target: { value: "wiki_search" } });
-    expect(findCardOrNull("other_conn")).toBeTruthy();
-    expect(findCardOrNull("with_table")).toBeNull();
+    expect(findRowOrNull("other_conn")).toBeTruthy();
+    expect(findRowOrNull("with_table")).toBeNull();
 
     fireEvent.change(screen.getByTestId("role-filter-tool"), { target: { value: "" } });
     fireEvent.change(screen.getByTestId("role-filter-table"), { target: { value: "superstore" } });
-    expect(findCardOrNull("with_table")).toBeTruthy();
-    expect(findCardOrNull("unresolved")).toBeNull();
+    expect(findRowOrNull("with_table")).toBeTruthy();
+    expect(findRowOrNull("unresolved")).toBeNull();
     expect(screen.getByTestId("role-current-filter").textContent).toMatch(/无法解析表范围/);
 
     fireEvent.change(screen.getByLabelText("搜索 role"), { target: { value: "wiki_search" } });
     fireEvent.change(screen.getByTestId("role-filter-table"), { target: { value: "" } });
-    expect(findCardOrNull("other_conn")).toBeTruthy();
-    expect(findCardOrNull("with_table")).toBeNull();
+    expect(findRowOrNull("other_conn")).toBeTruthy();
+    expect(findRowOrNull("with_table")).toBeNull();
+
+    fireEvent.click(screen.getByTestId("role-clear-filters"));
+    expect((screen.getByLabelText("搜索 role") as HTMLInputElement).value).toBe("");
+    expect((screen.getByLabelText("筛选角色范围") as HTMLSelectElement).value).toBe("formal");
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByTestId("role-clear-filters")).not.toBeInTheDocument();
+    expect(findRowOrNull("with_table")).toBeTruthy();
+    expect(findRowOrNull("other_conn")).toBeTruthy();
+  });
+
+  it("offers clear filters from a filtered empty state", async () => {
+    stubRoles([makeRole({ id: "healthy_only" })]);
+    renderRoleList();
+    await screen.findByTestId("role-row-healthy_only");
+
+    fireEvent.change(screen.getByLabelText("搜索 role"), { target: { value: "missing" } });
+    expect(await screen.findByText("没有匹配的 Role")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("role-clear-filters-empty"));
+
+    expect(await screen.findByTestId("role-row-healthy_only")).toBeInTheDocument();
+    expect((screen.getByLabelText("搜索 role") as HTMLInputElement).value).toBe("");
   });
 });
 
-function findCardOrNull(roleId: string): HTMLElement | null {
-  try {
-    return findCard(roleId);
-  } catch {
-    return null;
-  }
+function findRowOrNull(roleId: string): HTMLElement | null {
+  return screen.queryByTestId(`role-row-${roleId}`);
 }
