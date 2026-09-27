@@ -201,6 +201,110 @@ jobs:
       - run: npm ci
       - run: npm run compat:ktx-upgrade -- --baseline 0.16.0 --candidate "$KTX_VERSION"
 
+  customer-amd64-native:
+    # Native single-arch amd64 customer image build + full runtime gates.
+    # arm64 dev hosts (Apple Silicon + Docker Desktop qemu-user) segfault when
+    # executing the ktx CLI module graph, so all ktx-executing gates (G4/G4b,
+    # container smoke) must run here on real amd64; Mac only re-verifies
+    # structure (G1/G2) and assembles the offline delivery package.
+    runs-on: ubuntu-latest
+    needs:
+      - docker-smoke
+    if: ${{ startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Resolve versions
+        id: v
+        run: |
+          set -euo pipefail
+          LUCY_VERSION="$(tr -d '[:space:]' < VERSION)"
+          npm run lint:version
+          echo "lucy=${LUCY_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "date=$(date +%Y%m%d)" >> "$GITHUB_OUTPUT"
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ vars.LUCY_IMAGE_REGISTRY || 'ghcr.io' }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build & push single-arch amd64 customer image (once)
+        id: build-push
+        env:
+          REGISTRY: ${{ vars.LUCY_IMAGE_REGISTRY || 'ghcr.io' }}
+          IMAGE_NAMESPACE: ${{ vars.LUCY_IMAGE_NAMESPACE || 'kaelio' }}
+          LUCY_VERSION: ${{ steps.v.outputs.lucy }}
+        run: |
+          set -euo pipefail
+          TAG="customer-amd64-${LUCY_VERSION}-${{ steps.v.outputs.date }}-${GITHUB_SHA::7}"
+          IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/project-lucy:${TAG}"
+          # Native amd64 runner: plain docker build, no QEMU/binfmt involved.
+          docker build \
+            --platform linux/amd64 \
+            --build-arg "KTX_VERSION=${KTX_VERSION}" \
+            --build-arg "LUCY_VERSION=${LUCY_VERSION}" \
+            --build-arg "TARGETPLATFORM=linux/amd64" \
+            --build-arg "TARGETARCH=amd64" \
+            --tag "${IMAGE}" \
+            .
+          docker push "${IMAGE}"
+          # Resolve pushed digest via RepoDigests (layers already local; pull is instant)
+          DIGEST="$(docker pull "${IMAGE}" --quiet >/dev/null && docker image inspect "${IMAGE}" --format '{{index .RepoDigests 0}}' | sed 's/.*@//')"
+          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+          echo "ref=${IMAGE}@${DIGEST}" >> "$GITHUB_OUTPUT"
+          mkdir -p release
+          {
+            echo "git_sha=${GITHUB_SHA}"
+            echo "image=${IMAGE}"
+            echo "manifest_digest=${DIGEST}"
+            echo "lucy_version=${LUCY_VERSION}"
+            echo "ktx_version=${KTX_VERSION}"
+            echo "platforms=linux/amd64"
+            echo "build_host=native-amd64-gha"
+          } > release/image-identity.txt
+      - name: Gate native amd64 image (G1/G2/G3/G4/G4b/G8)
+        env:
+          IMAGE_REF: ${{ steps.build-push.outputs.ref }}
+          KTX_VERSION: ${{ env.KTX_VERSION }}
+          LUCY_VERSION: ${{ steps.v.outputs.lucy }}
+        run: |
+          set -euo pipefail
+          # G1: metadata arch
+          META="$(docker image inspect "${IMAGE_REF}" --format '{{.Os}}/{{.Architecture}}')"
+          test "${META}" = "linux/amd64"
+          # G2: ELF arch of node + tini (metadata alone is not proof)
+          bash scripts/release/assert-image-elf-arch.sh "${IMAGE_REF}" amd64
+          # G3: runtime smoke
+          docker run --rm --network=none --platform linux/amd64 --entrypoint /bin/sh "${IMAGE_REF}" -c "echo ok"
+          # G4: ktx CLI version (requires native amd64; segfaults under qemu-user)
+          docker run --rm --network=none --platform linux/amd64 --entrypoint ktx "${IMAGE_REF}" --version | tee release/ktx-version.txt
+          grep -q "${KTX_VERSION}" release/ktx-version.txt
+          # G4b: baked Python runtime for offline customers
+          docker run --rm --network=none --platform linux/amd64 --entrypoint /bin/sh "${IMAGE_REF}" -c \
+            "test -x /home/lucy/.ktx/runtime/${KTX_VERSION}/.venv/bin/python && /home/lucy/.ktx/runtime/${KTX_VERSION}/.venv/bin/python --version" | tee release/python-version.txt
+          # LUCY_VERSION baked correctly
+          IMAGE_LUCY_VERSION="$(docker run --rm --network=none --platform linux/amd64 --entrypoint printenv "${IMAGE_REF}" LUCY_VERSION)"
+          test "${IMAGE_LUCY_VERSION}" = "${LUCY_VERSION}"
+          printf '%s\n' "${IMAGE_LUCY_VERSION}" > release/lucy-version.txt
+          # G8: K8s contract gate
+          bash scripts/gates/g8-image-k8s-contract-gate.sh "${IMAGE_REF}"
+          docker image inspect "${IMAGE_REF}" --format '{{.Id}}' > release/image-config-id.txt
+      - name: Container-level smoke (native amd64)
+        run: npm run smoke:p0:docker
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: customer-amd64-native-evidence
+          path: release/
+
   release-package:
     runs-on: ubuntu-latest
     needs:
