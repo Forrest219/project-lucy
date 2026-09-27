@@ -4,7 +4,7 @@
 |---|---|
 | 文档名称 | Lucy Customer amd64 Offline Delivery Spec |
 | 文档类型 | Customer Delivery / Packaging Spec |
-| 版本 | v0.2（2026-08-27：强制 G2–G4；作废坏包与盲复用） |
+| 版本 | v0.3（2026-09-27：构建主机放宽——QEMU 路径受限允许；与 build checklist K1 对齐）<br>v0.2（2026-08-27：强制 G2–G4；作废坏包与盲复用） |
 | 撰写日期 | 2026-08-04 |
 | 适用范围 | 客户 IT 现场无公网 registry / 无 buildx，单机 x86_64 (AMD) 主机上的 Lucy 离线交付 |
 
@@ -46,7 +46,7 @@
 
 ### 2.2 单架构构建命令
 
-构建必须在 amd64 native 上完成，**禁止**用 QEMU 跨架构模拟（避免 npm ci / ktx install 出问题，且速度更快）。
+构建**推荐**在 amd64 native 上完成（更快、规避 QEMU 下 npm ci / ktx install 的兼容风险）。Apple Silicon (arm64) 主机可用 `lucy-amd64` builder + QEMU 跨架构构建出客户包，但**必须**完整通过 G1–G4 硬门禁（不得以元数据代替 ELF 校验），且构建后须恢复 default builder（见下文 `--use` 禁令）。此口径与 [`customer-amd64-image-build-checklist.md`](../runbooks/customer-amd64-image-build-checklist.md) K1 一致。
 
 ```bash
 # 一次性创建 buildx builder。禁止加 --use：
