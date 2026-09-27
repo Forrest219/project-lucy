@@ -60,6 +60,12 @@ if ! docker buildx inspect "$BUILDER" >/dev/null 2>&1; then
 fi
 
 echo "[build-customer-amd64] building (see ${LOG})..."
+# Optional network mirrors (China / corporate-restricted networks). Empty by
+# default → stock deb.debian.org / registry.npmjs.org / pypi.org.
+EXTRA_ARGS=()
+[[ -n "${APT_MIRROR:-}" ]] && EXTRA_ARGS+=(--build-arg "APT_MIRROR=${APT_MIRROR}")
+[[ -n "${NPM_REGISTRY:-}" ]] && EXTRA_ARGS+=(--build-arg "NPM_REGISTRY=${NPM_REGISTRY}")
+[[ -n "${UV_INDEX_URL:-}" ]] && EXTRA_ARGS+=(--build-arg "UV_INDEX_URL=${UV_INDEX_URL}")
 set +e
 docker buildx build \
   --builder "$BUILDER" \
@@ -68,6 +74,7 @@ docker buildx build \
   --build-arg "LUCY_VERSION=${LUCY_VERSION}" \
   --build-arg "TARGETPLATFORM=linux/amd64" \
   --build-arg "TARGETARCH=amd64" \
+  "${EXTRA_ARGS[@]}" \
   -f "$DOCKERFILE_GEN" \
   --tag "$IMAGE" \
   --load \
