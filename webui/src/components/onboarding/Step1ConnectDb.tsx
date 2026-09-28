@@ -2,7 +2,13 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Eye, EyeOff, Lock, CheckCircle2, AlertCircle } from "lucide-react";
 import { apiPost } from "../../lib/apiClient";
-import { defaultPortForDriver, validateConnectionId } from "../../lib/connectionId";
+import {
+  DATABASE_TYPES,
+  getDatabaseTypeConfig,
+  validateConnectionId,
+  type DatabaseType,
+  type DatabaseTypeConfig
+} from "../../lib/connectionId";
 import { validateSchemaName } from "../../lib/schemas";
 import { formatProbeFailure } from "../../lib/setupAssistant";
 import type { CreateConnectionResult, ProbeConnectionResult } from "../../lib/types";
@@ -10,7 +16,8 @@ import type { CreateConnectionResult, ProbeConnectionResult } from "../../lib/ty
 export type Step1ConnectDbProps = {
   initialValues?: {
     id?: string;
-    driver?: "mysql" | "postgres";
+    driver?: DatabaseTypeConfig["driver"];
+    databaseType?: DatabaseType;
     engine?: string;
     host?: string;
     port?: string;
@@ -27,15 +34,19 @@ export function Step1ConnectDb({
   existingIds = [],
   onSuccess
 }: Step1ConnectDbProps) {
+  const initialType = getDatabaseTypeConfig(initialValues?.databaseType || initialValues?.driver || "mysql");
   const [id, setId] = useState(initialValues?.id || "");
-  const [driver, setDriver] = useState<"mysql" | "postgres">(initialValues?.driver || "mysql");
-  const [engine, setEngine] = useState(initialValues?.engine || "");
+  const [databaseType, setDatabaseType] = useState<DatabaseType>(initialType.key);
+  const [driver, setDriver] = useState<DatabaseTypeConfig["driver"]>(initialType.driver);
+  const [engine, setEngine] = useState(initialValues?.engine || initialType.engine);
+  const [wireProtocol, setWireProtocol] = useState(initialType.wireProtocol);
   const [host, setHost] = useState(initialValues?.host || "");
-  const [port, setPort] = useState(initialValues?.port || String(defaultPortForDriver("mysql")));
+  const [port, setPort] = useState(initialValues?.port || String(initialType.defaultPort ?? ""));
   const [database, setDatabase] = useState(initialValues?.database || "");
   const [username, setUsername] = useState(initialValues?.username || "");
   const [password, setPassword] = useState("");
   const [schema, setSchema] = useState(initialValues?.schema || "");
+  const [schemaEdited, setSchemaEdited] = useState(Boolean(initialValues?.schema));
   const [showPassword, setShowPassword] = useState(false);
   const [probeResult, setProbeResult] = useState<ProbeConnectionResult | null>(null);
   const [verifiedProbeFingerprint, setVerifiedProbeFingerprint] = useState<string | null>(null);
@@ -50,17 +61,20 @@ export function Step1ConnectDb({
       ? "端口须为 1–65535 的整数"
       : null;
 
-  const canProbe = Boolean(
-    host.trim() && !portIssue && database.trim() && username.trim() && password.length > 0
-  );
+  const isSqlite = databaseType === "sqlite";
+  const canProbe = isSqlite
+    ? Boolean(database.trim())
+    : Boolean(host.trim() && !portIssue && database.trim() && username.trim() && password.length > 0);
   const probeFingerprint = JSON.stringify({
+    databaseType,
     driver,
     engine: engine.trim(),
-    host: host.trim(),
-    port: portNum,
+    wireProtocol: wireProtocol.trim(),
+    host: isSqlite ? "" : host.trim(),
+    port: isSqlite ? "" : portNum,
     database: database.trim(),
-    username: username.trim(),
-    password,
+    username: isSqlite ? "" : username.trim(),
+    password: isSqlite ? "" : password,
     schema: schema.trim()
   });
   const probeVerified = Boolean(
@@ -80,11 +94,17 @@ export function Step1ConnectDb({
       apiPost<ProbeConnectionResult>("/api/connections/probe", {
         driver,
         ...(engine.trim() ? { engine: engine.trim() } : {}),
-        host: host.trim(),
-        port: portNum,
+        ...(wireProtocol.trim() ? { wireProtocol: wireProtocol.trim() } : {}),
+        readonly: !isSqlite,
+        ...(isSqlite
+          ? {}
+          : {
+              host: host.trim(),
+              port: portNum,
+              username: username.trim(),
+              password
+            }),
         database: database.trim(),
-        username: username.trim(),
-        password,
         ...(schema.trim() ? { schema: schema.trim() } : {})
       }),
     onSuccess: (res, variables) => {
@@ -107,17 +127,22 @@ export function Step1ConnectDb({
         id: id.trim(),
         driver,
         ...(engine.trim() ? { engine: engine.trim() } : {}),
-        readonly: true,
-        host: host.trim(),
-        port: portNum,
+        ...(wireProtocol.trim() ? { wireProtocol: wireProtocol.trim() } : {}),
+        readonly: !isSqlite,
+        ...(isSqlite
+          ? {}
+          : {
+              host: host.trim(),
+              port: portNum,
+              username: username.trim(),
+              password
+            }),
         database: database.trim(),
-        username: username.trim(),
-        password,
-        schemas: schema.trim() ? [schema.trim()] : [database.trim()],
+        schemas: schema.trim() ? [schema.trim()] : isSqlite ? ["main"] : [database.trim()],
         dryRun: false
       }),
     onSuccess: (res) => {
-      const createdSchema = schema.trim() || database.trim();
+      const createdSchema = schema.trim() || (isSqlite ? "main" : database.trim());
       onSuccess({
         connectionId: res.connection.id,
         schema: createdSchema
@@ -128,9 +153,21 @@ export function Step1ConnectDb({
     }
   });
 
-  const handleDriverChange = (nextDriver: "mysql" | "postgres") => {
-    setDriver(nextDriver);
-    setPort(String(defaultPortForDriver(nextDriver)));
+  const handleDatabaseTypeChange = (nextKey: DatabaseType) => {
+    const config = getDatabaseTypeConfig(nextKey);
+    const prevConfig = getDatabaseTypeConfig(databaseType);
+    const prevDefaultPort = prevConfig.defaultPort != null ? String(prevConfig.defaultPort) : "";
+    const nextDefaultPort = config.defaultPort != null ? String(config.defaultPort) : "";
+    setDatabaseType(config.key);
+    setDriver(config.driver);
+    setEngine(config.engine);
+    setWireProtocol(config.wireProtocol);
+    if (!schemaEdited) {
+      setSchema(config.key === "sqlite" ? "" : database);
+    }
+    if (!port.trim() || port === prevDefaultPort) {
+      setPort(nextDefaultPort);
+    }
   };
   const probeFailure =
     probeResult?.status === "error" ? formatProbeFailure(probeResult.message) : null;
@@ -165,42 +202,33 @@ export function Step1ConnectDb({
           </div>
 
           <div>
-            <span id="setup-driver-label" className="block text-xs font-medium text-fg-default mb-1">
+            <label htmlFor="setup-driver" className="block text-xs font-medium text-fg-default mb-1">
               数据库类型
-            </span>
-            <div className="flex gap-2" role="group" aria-labelledby="setup-driver-label">
-              <button
-                type="button"
-                className={`flex-1 py-1.5 px-3 text-xs rounded border transition-colors notranslate ${
-                  driver === "mysql"
-                    ? "bg-bg-surface border-primary text-primary font-medium shadow-sm"
-                    : "border-border-default text-fg-muted hover:bg-bg-surface"
-                }`}
-                translate="no"
-                onClick={() => handleDriverChange("mysql")}
-                aria-pressed={driver === "mysql"}
-                data-setup-dirty
-              >
-                MySQL / Doris / StarRocks
-              </button>
-              <button
-                type="button"
-                className={`flex-1 py-1.5 px-3 text-xs rounded border transition-colors notranslate ${
-                  driver === "postgres"
-                    ? "bg-bg-surface border-primary text-primary font-medium shadow-sm"
-                    : "border-border-default text-fg-muted hover:bg-bg-surface"
-                }`}
-                translate="no"
-                onClick={() => handleDriverChange("postgres")}
-                aria-pressed={driver === "postgres"}
-                data-setup-dirty
-              >
-                PostgreSQL
-              </button>
-            </div>
+            </label>
+            <select
+              id="setup-driver"
+              className="pl-input w-full notranslate"
+              translate="no"
+              value={databaseType}
+              onChange={(e) => handleDatabaseTypeChange(e.target.value as DatabaseType)}
+              data-testid="setup-driver"
+              data-setup-dirty
+            >
+              {DATABASE_TYPES.map((item) => (
+                <option key={item.key} value={item.key}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+            {databaseType === "starrocks" || databaseType === "doris" ? (
+              <p className="text-xs text-fg-muted mt-1" data-testid="setup-engine-hint">
+                底层走 MySQL 协议；超时策略与原生 MySQL 不同，请优先选此类型而非 MySQL。
+              </p>
+            ) : null}
           </div>
         </div>
 
+        {!isSqlite ? (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="md:col-span-2">
             <label htmlFor="setup-host" className="block text-xs font-medium text-fg-default mb-1">
@@ -238,22 +266,23 @@ export function Step1ConnectDb({
             {portIssue ? <p className="text-xs text-danger mt-1" id="setup-port-error">{portIssue}</p> : null}
           </div>
         </div>
+        ) : null}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label htmlFor="setup-database" className="block text-xs font-medium text-fg-default mb-1">
-              数据库名 <span className="text-danger" aria-hidden="true">*</span>
+              {isSqlite ? "数据库文件路径" : "数据库名"} <span className="text-danger" aria-hidden="true">*</span>
             </label>
             <input
               id="setup-database"
               type="text"
               className="pl-input w-full notranslate"
               translate="no"
-              placeholder="如：analytics_db"
+              placeholder={isSqlite ? "例如 db/analytics.sqlite" : "如：analytics_db"}
               value={database}
               onChange={(e) => {
                 setDatabase(e.target.value);
-                if (!schema) setSchema(e.target.value);
+                if (!isSqlite && !schemaEdited) setSchema(e.target.value);
               }}
               required
               data-testid="setup-database"
@@ -268,9 +297,12 @@ export function Step1ConnectDb({
               type="text"
               className="pl-input w-full notranslate"
               translate="no"
-              placeholder={database || "留空默认同数据库名"}
+              placeholder={isSqlite ? "留空默认为 main" : database || "留空默认同数据库名"}
               value={schema}
-              onChange={(e) => setSchema(e.target.value)}
+              onChange={(e) => {
+                setSchema(e.target.value);
+                setSchemaEdited(true);
+              }}
               aria-invalid={Boolean(schemaIssue)}
               aria-describedby={schemaIssue ? "setup-schema-error" : undefined}
               data-testid="setup-schema"
@@ -279,6 +311,7 @@ export function Step1ConnectDb({
           </div>
         </div>
 
+        {!isSqlite ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label htmlFor="setup-username" className="block text-xs font-medium text-fg-default mb-1">
@@ -326,6 +359,7 @@ export function Step1ConnectDb({
             </div>
           </div>
         </div>
+        ) : null}
       </div>
 
       <div className="flex items-center justify-between p-4 bg-bg-surface rounded-lg border border-border-default">

@@ -813,6 +813,16 @@ export function ConnectionOverview() {
                         {lastRun?.status === "failed" ? <span> · 失败</span> : null}
                       </span>
                     ) : null}
+                    {isAssistantInProgress ? (
+                      <span
+                        className="pl-connection-meta-tag notranslate"
+                        translate="no"
+                        title={formatAssistantProgressLabel(cardAssistantStep)}
+                        data-testid={`connection-assistant-banner-${conn.id}`}
+                      >
+                        接入进度 {cardAssistantStep}/6
+                      </span>
+                    ) : null}
                   </div>
                   <dl className="pl-connection-kv-grid pl-connection-kv-grid--compact" data-testid={`connection-kv-${conn.id}`}>
                     <div className="pl-connection-kv">
@@ -850,35 +860,6 @@ export function ConnectionOverview() {
                   </dl>
                 </div>
                 <div className="pl-connection-card-body">
-                  {isAssistantInProgress ? (
-                    <div
-                      className="flex items-center justify-between p-3 bg-primary/5 border border-primary/20 rounded-lg mb-3 notranslate"
-                      translate="no"
-                      data-testid={`connection-assistant-banner-${conn.id}`}
-                    >
-                      <div className="text-xs text-fg-default">
-                        <span className="font-semibold text-primary mr-2">
-                          {formatAssistantProgressLabel(cardAssistantStep)}
-                        </span>
-                        <span className="text-fg-muted">
-                          可继续向导完成该连接的快速初始化配置。
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        className="pl-btn pl-btn--outline text-xs text-primary border-primary/40 hover:bg-primary/10 notranslate"
-                        onClick={() => {
-                          setAssistantConnId(conn.id);
-                          setAssistantStep(cardAssistantStep);
-                          setAssistantOpen(true);
-                        }}
-                        data-testid={`resume-assistant-${conn.id}`}
-                        translate="no"
-                      >
-                        ⚡ 继续向导
-                      </button>
-                    </div>
-                  ) : null}
                   {showRefreshWarning ? (
                     <div
                       className="pl-connection-refresh-warning notranslate"
@@ -1221,6 +1202,21 @@ export function ConnectionOverview() {
                     className="pl-connection-card-schema-actions"
                     data-testid={`connection-card-schema-actions-${conn.id}`}
                   >
+                    {isAssistantInProgress ? (
+                      <button
+                        type="button"
+                        className="pl-btn pl-btn--secondary notranslate"
+                        onClick={() => {
+                          setAssistantConnId(conn.id);
+                          setAssistantStep(cardAssistantStep);
+                          setAssistantOpen(true);
+                        }}
+                        data-testid={`resume-assistant-${conn.id}`}
+                        translate="no"
+                      >
+                        继续向导
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       className="pl-btn pl-btn--secondary notranslate"

@@ -166,7 +166,7 @@ export function SetupAssistantModal({
       onKeyDown={handleDialogKeyDown}
       data-testid="setup-assistant-modal"
     >
-      <div ref={dialogRef} className="pl-modal-panel max-w-3xl my-8 p-0 overflow-hidden shadow-2xl border border-border-default rounded-xl bg-bg-surface">
+      <div ref={dialogRef} className="pl-modal-panel max-w-5xl my-8 p-0 overflow-hidden shadow-2xl border border-border-default rounded-xl bg-bg-surface">
         {/* Header with Title & Stepper */}
         <div className="bg-bg-subtle px-6 py-5 border-b border-border-default">
           <div className="flex items-start justify-between">
@@ -207,13 +207,12 @@ export function SetupAssistantModal({
             </button>
           </div>
 
-          {/* Stepper Bar */}
-          <div className="mt-5 flex items-center justify-between gap-2">
+          <nav aria-label="接入步骤" className="mt-5 grid grid-cols-6 gap-3">
             {SETUP_STEPS.map((s) => {
               const isCompleted = s.step < step;
               const isCurrent = s.step === step;
               return (
-                <div key={s.step} className="flex-1 flex flex-col items-center gap-1.5">
+                <div key={s.step} className="flex min-w-0 flex-col items-center gap-1.5">
                   <div
                     className={`w-full h-1.5 rounded-full transition-colors ${
                       isCompleted
@@ -225,7 +224,7 @@ export function SetupAssistantModal({
                     aria-hidden="true"
                   />
                   <span
-                    className={`text-[10px] truncate max-w-[80px] text-center notranslate ${
+                    className={`w-full text-center text-xs leading-snug notranslate ${
                       isCurrent
                         ? "font-bold text-primary"
                         : isCompleted
@@ -243,7 +242,7 @@ export function SetupAssistantModal({
                 </div>
               );
             })}
-          </div>
+          </nav>
         </div>
 
         {/* Step Body */}

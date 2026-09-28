@@ -1372,7 +1372,8 @@ describe("ConnectionOverview", () => {
     expect(within(footerActions).getByRole("button", { name: "重新拉取库内目录" })).toBeInTheDocument();
     expect(
       within(footerActions).getAllByRole("button").map((button) => button.textContent?.trim())
-    ).toEqual(["+ 添加 Schema", "重新拉取库内目录", "同步配置变更", "删除连接"]);
+    ).toEqual(["继续向导", "+ 添加 Schema", "重新拉取库内目录", "同步配置变更", "删除连接"]);
+    expect(within(footerActions).getByRole("button", { name: "继续向导" })).toHaveClass("pl-btn--secondary");
     expect(within(footerActions).getByRole("button", { name: /\+ 添加 Schema/ })).toHaveClass("pl-btn--secondary");
     const liveRefreshButton = within(footerActions).getByRole("button", { name: "重新拉取库内目录" });
     expect(liveRefreshButton).toHaveClass("pl-btn--secondary");

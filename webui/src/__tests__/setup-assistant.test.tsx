@@ -397,6 +397,116 @@ describe("SetupAssistantModal Component", () => {
     vi.restoreAllMocks();
   });
 
+  it("shows full step titles and separates database types in a select", () => {
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <SetupAssistantModal open onClose={vi.fn()} initialStep={1} />
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+
+    const stepper = screen.getByRole("navigation", { name: "接入步骤" });
+    expect(stepper).toHaveTextContent("上传 Schema Manifest");
+    expect(stepper).toHaveTextContent("连接 Agent 客户端");
+    expect(stepper.querySelector(".truncate")).toBeNull();
+    expect(screen.queryByRole("button", { name: "MySQL / Doris / StarRocks" })).not.toBeInTheDocument();
+
+    const driver = screen.getByLabelText("数据库类型");
+    expect(driver).toHaveValue("mysql");
+    expect(screen.getByRole("option", { name: "StarRocks（MySQL 协议）" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Apache Doris" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "PostgreSQL" })).toBeInTheDocument();
+
+    fireEvent.change(driver, { target: { value: "starrocks" } });
+    expect(screen.getByTestId("setup-port")).toHaveValue("9030");
+    expect(screen.getByTestId("setup-engine-hint")).toBeInTheDocument();
+
+    fireEvent.change(driver, { target: { value: "sqlite" } });
+    expect(screen.queryByTestId("setup-host")).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/数据库文件路径/)).toBeInTheDocument();
+  });
+
+  it("uses main as the default SQLite schema after switching from a server database", async () => {
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <SetupAssistantModal open onClose={vi.fn()} initialStep={1} />
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+
+    fireEvent.change(screen.getByTestId("setup-conn-id"), {
+      target: { value: "local-sqlite" }
+    });
+    fireEvent.change(screen.getByTestId("setup-database"), {
+      target: { value: "analytics_db" }
+    });
+    expect(screen.getByTestId("setup-schema")).toHaveValue("analytics_db");
+
+    fireEvent.change(screen.getByTestId("setup-driver"), {
+      target: { value: "sqlite" }
+    });
+    expect(screen.getByTestId("setup-schema")).toHaveValue("");
+    fireEvent.change(screen.getByTestId("setup-database"), {
+      target: { value: "db/analytics.sqlite" }
+    });
+
+    fireEvent.click(screen.getByTestId("setup-probe-btn"));
+    await screen.findByText(/连通测试成功/);
+    fireEvent.click(screen.getByTestId("setup-step1-next"));
+    await screen.findByTestId("setup-step-2");
+
+    const sqliteCalls = vi.mocked(global.fetch).mock.calls.filter(
+      ([input, init]) =>
+        (String(input) === "/api/connections/probe" || String(input) === "/api/connections") &&
+        (init?.method || "GET") === "POST"
+    );
+    const probeBody = JSON.parse(String(sqliteCalls[0]?.[1]?.body));
+    const createBody = JSON.parse(String(sqliteCalls[1]?.[1]?.body));
+    expect(probeBody).toMatchObject({
+      driver: "sqlite",
+      engine: "sqlite",
+      wireProtocol: "sqlite",
+      readonly: false,
+      database: "db/analytics.sqlite"
+    });
+    expect(probeBody).not.toHaveProperty("host");
+    expect(probeBody).not.toHaveProperty("password");
+    expect(createBody).toMatchObject({
+      driver: "sqlite",
+      engine: "sqlite",
+      wireProtocol: "sqlite",
+      readonly: false,
+      database: "db/analytics.sqlite",
+      schemas: ["main"],
+      dryRun: false
+    });
+    expect(createBody).not.toHaveProperty("host");
+    expect(createBody).not.toHaveProperty("password");
+  });
+
+  it("preserves a manually entered schema when switching database types", () => {
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <SetupAssistantModal open onClose={vi.fn()} initialStep={1} />
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+
+    fireEvent.change(screen.getByTestId("setup-database"), {
+      target: { value: "analytics_db" }
+    });
+    fireEvent.change(screen.getByTestId("setup-schema"), {
+      target: { value: "custom_schema" }
+    });
+    fireEvent.change(screen.getByTestId("setup-driver"), {
+      target: { value: "sqlite" }
+    });
+    expect(screen.getByTestId("setup-schema")).toHaveValue("custom_schema");
+  });
+
   it("renders Step 1 and advances through probe and creation", async () => {
     const onClose = vi.fn();
     const { container } = render(
@@ -817,6 +927,10 @@ describe("ConnectionOverview Setup Assistant Bridge", () => {
     await waitFor(() => {
       expect(screen.getByTestId("resume-assistant-demo-db")).toBeInTheDocument();
     });
+    const progress = screen.getByTestId("connection-assistant-banner-demo-db");
+    expect(progress.className).not.toMatch(/border|rounded|bg-primary/);
+    expect(progress).toHaveTextContent("接入进度 2/6");
+    expect(screen.getByTestId("resume-assistant-demo-db")).toHaveTextContent("继续向导");
 
     // Click resume
     fireEvent.click(screen.getByTestId("resume-assistant-demo-db"));
