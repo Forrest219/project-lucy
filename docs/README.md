@@ -29,6 +29,8 @@
 | `specs/lucy-platform-goal-checklist.md` | POC → 可部署 MCP 平台的产品化验收清单 |
 | `governance/product-docs-index.md` | 客户交付文档子索引（admin/user/agent 接入/安全/排障指南） |
 | `SYSTEM_HANDBOOK.md` | WebUI 内置系统手册 / Help Center 内容源（根目录保留，运行时被 `webui/server/help.ts` 按 `docs/SYSTEM_HANDBOOK.md` 读取） |
+| `user-guide/lucy-architecture-diagram.html` | 产品架构总览全屏图（权威；`/help` §1.6 与 `/api/help/diagrams/lucy-architecture-diagram`） |
+| `user-guide/lucy-docs-flows.html` | 摄取与服务流程全屏图（权威；`/help` §1.6 与 `/api/help/diagrams/lucy-docs-flows`） |
 | `agent-pipeline.md` | Vibe coding 双核角色协作的可选完整交付流水线（按需启用） |
 
 ## 2. 设计（Design — 未实现/在建功能的技术方案）→ `design/` + `specs/`

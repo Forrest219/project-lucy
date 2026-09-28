@@ -67,6 +67,8 @@ The existing HTML help center remains under:
 
 ```text
 docs/user-guide/
+  lucy-architecture-diagram.html   # product architecture overview (canonical)
+  lucy-docs-flows.html             # ingestion + serving flows (canonical)
 ```
 
-The Markdown guides above are the release-facing source of truth for productization work. The HTML help center can be regenerated or refreshed from these docs in a later documentation pass.
+The Markdown guides above are the release-facing source of truth for productization work. The HTML help center can be regenerated or refreshed from these docs in a later documentation pass. In-app Help (`/help`) also surfaces the two architecture diagrams via `SYSTEM_HANDBOOK.md` §1.6.

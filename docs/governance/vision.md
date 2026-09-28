@@ -108,6 +108,13 @@ Lucy 的 context compiler 最小交付单元由四类 context pack 组成：
 - **审计存储层**：SQLite 保留近期热数据用于快速查询；历史数据归档至对象存储，保留 180 天以上。
 - **Eval 闭环**：语义层或 Skill 发生变更时自动触发 Eval Runner，结果写入 Ops Dashboard，形成准确率质量门禁。
 
+产品架构的权威全屏图见：
+
+- [`docs/user-guide/lucy-architecture-diagram.html`](../user-guide/lucy-architecture-diagram.html)
+- [`docs/user-guide/lucy-docs-flows.html`](../user-guide/lucy-docs-flows.html)
+
+WebUI `/help?section=product-architecture-diagrams` 同步入口。
+
 ---
 
 ## 4. 关键设计决策

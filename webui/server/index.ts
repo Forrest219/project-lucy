@@ -92,7 +92,7 @@ import {
   type WikiUploadInput,
   type WikiWriteInput
 } from "./wiki";
-import { readHelpHandbook, searchHelpHandbook } from "./help.js";
+import { readHelpDiagram, readHelpHandbook, searchHelpHandbook } from "./help.js";
 import { registerAgentRoutes } from "./admin/agents.js";
 import { registerRoleRoutes } from "./admin/roles.js";
 import { registerTokenRoutes } from "./admin/tokens.js";
@@ -981,6 +981,14 @@ export function buildServer() {
       ok: true,
       data: await searchHelpHandbook(request.query.q ?? "", { limit })
     };
+  });
+
+  // Product architecture HTML diagrams (SSOT: docs/user-guide/*.html).
+  app.get<{
+    Params: { id?: string };
+  }>("/api/help/diagrams/:id", async (request, reply) => {
+    const diagram = await readHelpDiagram(request.params.id ?? "");
+    return reply.type("text/html; charset=utf-8").send(diagram.html);
   });
 
   app.get("/api/joins/candidates", async () => {

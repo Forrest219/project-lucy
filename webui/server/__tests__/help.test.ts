@@ -981,4 +981,76 @@ describe("Help search", () => {
 
     await app.close();
   });
+
+  it("aliases 产品架构图 to a stable section id", () => {
+    const toc = parseHelpToc(["### 1.6 产品架构图（摄取与服务）"].join("\n"));
+    expect(toc[0]).toMatchObject({
+      id: "product-architecture-diagrams",
+      level: 3,
+      title: "1.6 产品架构图（摄取与服务）"
+    });
+  });
+
+  it("the bundled handbook documents the product architecture diagrams", async () => {
+    const realAppRoot = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "../../.."
+    );
+    const handbook = await readHelpHandbook(realAppRoot);
+
+    expect(handbook.markdown).toContain("### 1.6 产品架构图（摄取与服务）");
+    expect(handbook.markdown).toContain("/api/help/diagrams/lucy-architecture-diagram");
+    expect(handbook.markdown).toContain("/api/help/diagrams/lucy-docs-flows");
+    expect(handbook.markdown).toContain("docs/user-guide/lucy-architecture-diagram.html");
+    expect(handbook.markdown).toContain("docs/user-guide/lucy-docs-flows.html");
+    expect(handbook.toc.some((item) => item.id === "product-architecture-diagrams")).toBe(true);
+
+    const byArchitecture = await searchHelpHandbook("产品架构图", { appRoot: realAppRoot });
+    expect(
+      byArchitecture.items.some((item) => item.sectionId === "product-architecture-diagrams")
+    ).toBe(true);
+  });
+
+  it("serves the whitelisted architecture diagram HTML and rejects unknown ids", async () => {
+    const realAppRoot = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "../../.."
+    );
+    await makeProject();
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_APP_ROOT = realAppRoot;
+
+    const app = await buildFreshServer();
+    await app.ready();
+
+    const architecture = await request(app.server)
+      .get("/api/help/diagrams/lucy-architecture-diagram")
+      .expect(200);
+    expect(architecture.headers["content-type"]).toMatch(/text\/html/);
+    expect(architecture.text).toContain("Lucy 架构");
+
+    const flows = await request(app.server)
+      .get("/api/help/diagrams/lucy-docs-flows")
+      .expect(200);
+    expect(flows.headers["content-type"]).toMatch(/text\/html/);
+    expect(flows.text).toContain("摄取");
+
+    const missing = await request(app.server)
+      .get("/api/help/diagrams/not-a-real-diagram")
+      .expect(404);
+    expect(missing.body).toMatchObject({
+      ok: false,
+      error: {
+        code: "ERR_HELP_DIAGRAM_NOT_FOUND"
+      }
+    });
+
+    // Encoded traversal segments must still miss the whitelist (not open arbitrary files).
+    const escapeAttempt = await request(app.server)
+      .get("/api/help/diagrams/%2e%2e%2fktx.yaml")
+      .expect(404);
+    expect(escapeAttempt.body.error.code).toBe("ERR_HELP_DIAGRAM_NOT_FOUND");
+
+    await app.close();
+  });
 });

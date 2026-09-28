@@ -5,13 +5,14 @@
 | 文档类型 | System Handbook |
 | 适用对象 | 使用者、管理员、运维人员、接入 Agent 的协作者、开发者 |
 | 事实来源 | `webui/server/`、`webui/src/`、`semantic-layer/`、`webui/config/`、`ktx.yaml.example`、`webui/docs/01-17` |
-| 当前日期 | 2026-08-26 |
+| 当前日期 | 2026-09-28 |
 
 ## 目录
 
 - [0. 常见问题速查](#0-常见问题速查)
 - [1. 系统概述与架构拓扑](#1-系统概述与架构拓扑)
   - [1.5 WebUI 入口速查（运行状态侧栏地图）](#15-webui-入口速查运行状态侧栏地图)
+  - [1.6 产品架构图（摄取与服务）](#16-产品架构图摄取与服务)
 - [2. 快速上手](#2-快速上手)
 - [3. 功能模块操作指南](#3-功能模块操作指南)
   - [3.1 部署向导与上线检查](#31-部署向导与上线检查)
@@ -97,6 +98,7 @@
 | 问题 | 快速答案 | 详见 |
 | --- | --- | --- |
 | `MCP` 返回 401 是什么原因？ | 通常是未带 `Bearer` `token`、`token` hash 不匹配、`token` 已撤销、`expires_at` 已到期、环境变量未展开或进程读取了另一份 `access` 配置。 | [6.5 MCP 返回 401](#65-mcp-返回-401) |
+| Lucy 整体架构是什么样的？ | 先看两张产品架构图：一张是控制面/运行时总览，一张是摄取流与服务流。WebUI 内打开 `/help?section=product-architecture-diagrams`，或点开下方全屏图。 | [1.6 产品架构图（摄取与服务）](#16-产品架构图摄取与服务) |
 | 本地开发应该访问哪个端口？ | 页面端口以启动日志为准；常见开发入口是 `Vite 5173`，`API 5174`，`Lucy MCP Proxy 7879`。`Docker` / demo 宿主端口可能是 `55176` 等映射端口。 | [2.2 本地启动](#22-本地启动)、[4.1 接入地址](#41-接入地址) |
 | 为什么 Visible Scope 没有我刚启用的表？ | 检查 `enabled_tables`、`role` 的 `tableSelectors`、以及是否**新开** MCP session；扩权后旧 session 不会自动刷新 Scope。 | [Agent 可见性与 ACL 同步](#agent-可见性与-acl-同步)、[6.2 JSON-RPC Access denied / decision_reason 怎么查？](#62-json-rpc-access-denied--decisionreason-怎么查) |
 | `order_by` 为什么没按我想的降序？ | 结构化参数请用 `direction: desc|asc`；仅写 `dir` 可能被忽略，导致默认升序。 | [6.12 `order_by` 排序无效或排反](#612-order_by-排序无效或排反) |
@@ -218,6 +220,27 @@ KTX CLI / MCP daemon
 | 系统设置 | 登录账户 | `/admin/admins` | 管理 `WebUI` 登录账户，并配置所有者或运维角色。 |
 
 > 事实源唯一为 `webui/src/app/navigation.ts` 的 `navGroups`。
+
+### 1.6 产品架构图（摄取与服务）
+
+这两张图是 Lucy 产品架构的**权威视图**（优先于帮助文档站 `product-intro.html` 内的简化示意）。在 `/help` 中可直接打开全屏图：
+
+| 图 | 看什么 | 全屏打开 |
+| --- | --- | --- |
+| Lucy 架构总览 | 控制面（WebUI）与运行时（MCP Proxy / KTX / 数据源 / Agent）如何分层协作 | [/api/help/diagrams/lucy-architecture-diagram](/api/help/diagrams/lucy-architecture-diagram) |
+| 摄取与服务流程 | 摄取侧：数据源 → 语义/Wiki/Skill → Eval 门禁；服务侧：Agent 提问 → 鉴权/上下文/SQL → 可信答案 | [/api/help/diagrams/lucy-docs-flows](/api/help/diagrams/lucy-docs-flows) |
+
+仓库内静态副本（可离线用浏览器打开）：
+
+- `docs/user-guide/lucy-architecture-diagram.html`
+- `docs/user-guide/lucy-docs-flows.html`
+
+一句话心智模型：
+
+1. **摄取**：把库表与业务口径编译成 Semantic / Wiki / Skill / Eval 上下文包。
+2. **服务**：Agent 只经 Lucy MCP Proxy 拿上下文并跑只读查询；不直连业务库。
+
+部署端口与进程拓扑见上文 [1.2 架构拓扑](#12-架构拓扑)。侧栏入口地图见 [1.5 WebUI 入口速查](#15-webui-入口速查运行状态侧栏地图)。
 
 ## 2. 快速上手
 

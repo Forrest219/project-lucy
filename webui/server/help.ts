@@ -1,13 +1,25 @@
-import { readFile, stat } from "node:fs/promises";
+import { readFile, realpath, stat } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { assertReadable } from "./fs-safe.js";
 
 const HANDBOOK_REL_PATH = "docs/SYSTEM_HANDBOOK.md";
 const DEFAULT_APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const HEADING_RE = /^(#{1,6})\s+(.+?)\s*#*\s*$/;
 const FENCE_RE = /^```/;
+
+/** Whitelisted product architecture HTML diagrams (SSOT under docs/user-guide/). */
+export const HELP_DIAGRAM_IDS = [
+  "lucy-architecture-diagram",
+  "lucy-docs-flows"
+] as const;
+
+export type HelpDiagramId = (typeof HELP_DIAGRAM_IDS)[number];
+
+const HELP_DIAGRAM_REL_PATHS: Record<HelpDiagramId, string> = {
+  "lucy-architecture-diagram": "docs/user-guide/lucy-architecture-diagram.html",
+  "lucy-docs-flows": "docs/user-guide/lucy-docs-flows.html"
+};
 
 const SECTION_ALIASES: Array<[RegExp, string]> = [
   [/常见问题速查/, "faq-quick-reference"],
@@ -15,6 +27,7 @@ const SECTION_ALIASES: Array<[RegExp, string]> = [
   [/面向管理员/, "faq-admin"],
   [/面向接入协作者|面向接入 Agent 的协作者|接入 Agent 的协作者/, "faq-agent-integration"],
   [/系统概述与架构拓扑/, "system-overview"],
+  [/产品架构图/, "product-architecture-diagrams"],
   [/快速上手/, "quick-start"],
   [/部署向导与上线检查/, "deployment-checklist"],
   [/系统概览待处理事项/, "overview-action-required"],
@@ -168,6 +181,57 @@ export class HelpDocNotFoundError extends Error {
   }
 }
 
+export class HelpDiagramNotFoundError extends Error {
+  code = "ERR_HELP_DIAGRAM_NOT_FOUND";
+  statusCode = 404;
+
+  constructor(id: string) {
+    super(`Help diagram "${id}" was not found`);
+    this.name = "HelpDiagramNotFoundError";
+  }
+}
+
+export type HelpDiagram = {
+  id: HelpDiagramId;
+  sourcePath: string;
+  html: string;
+};
+
+function isHelpDiagramId(value: string): value is HelpDiagramId {
+  return (HELP_DIAGRAM_IDS as readonly string[]).includes(value);
+}
+
+export async function readHelpDiagram(
+  id: string,
+  appRoot = resolveHelpAppRoot()
+): Promise<HelpDiagram> {
+  if (!isHelpDiagramId(id)) {
+    throw new HelpDiagramNotFoundError(id);
+  }
+  const sourcePath = HELP_DIAGRAM_REL_PATHS[id];
+  let target: string;
+  try {
+    target = await assertHelpAppReadable(appRoot, sourcePath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      throw new HelpDiagramNotFoundError(id);
+    }
+    throw error;
+  }
+
+  let html: string;
+  try {
+    html = await readFile(target, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      throw new HelpDiagramNotFoundError(id);
+    }
+    throw error;
+  }
+
+  return { id, sourcePath, html };
+}
+
 export class HelpQueryTooLongError extends Error {
   code = "ERR_HELP_QUERY_TOO_LONG";
   statusCode = 400;
@@ -180,6 +244,41 @@ export class HelpQueryTooLongError extends Error {
 
 export function resolveHelpAppRoot(env: NodeJS.ProcessEnv = process.env): string {
   return path.resolve(env.LUCY_APP_ROOT ?? DEFAULT_APP_ROOT);
+}
+
+function isWithin(candidate: string, root: string): boolean {
+  const relative = path.relative(root, candidate);
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+/**
+ * Resolve a fixed relative path under the Lucy app root (handbook + architecture
+ * diagrams). Independent of content-root / project-root fs-safe write rules.
+ */
+async function assertHelpAppReadable(appRoot: string, relPath: string): Promise<string> {
+  if (!relPath || path.isAbsolute(relPath)) {
+    throw Object.assign(new Error("Help path must be relative to the app root"), {
+      code: "FORBIDDEN_PATH",
+      statusCode: 403
+    });
+  }
+  const normalized = path.normalize(relPath).replaceAll(path.sep, "/");
+  if (normalized === "." || normalized === ".." || normalized.startsWith("../")) {
+    throw Object.assign(new Error("Path traversal is not allowed"), {
+      code: "FORBIDDEN_PATH",
+      statusCode: 403
+    });
+  }
+
+  const rootReal = await realpath(appRoot);
+  const target = path.resolve(rootReal, normalized);
+  if (!isWithin(target, rootReal)) {
+    throw Object.assign(new Error("Resolved path escapes the app root"), {
+      code: "FORBIDDEN_PATH",
+      statusCode: 403
+    });
+  }
+  return target;
 }
 
 function stableSlug(title: string): string {
@@ -259,7 +358,7 @@ export function parseHelpToc(markdown: string): HelpTocItem[] {
 export async function readHelpHandbook(appRoot = resolveHelpAppRoot()): Promise<HelpHandbook> {
   let target: string;
   try {
-    target = await assertReadable(appRoot, HANDBOOK_REL_PATH);
+    target = await assertHelpAppReadable(appRoot, HANDBOOK_REL_PATH);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       throw new HelpDocNotFoundError();
