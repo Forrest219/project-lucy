@@ -222,6 +222,22 @@ describe("admin governance observability", () => {
     await app.close();
   });
 
+  it("keeps activity counts when latency aggregation fails", async () => {
+    const db = await getAuditDb();
+    db.exec("ALTER TABLE access_log RENAME COLUMN duration_ms TO duration_ms_hidden");
+    const app = buildServer();
+    await app.ready();
+    const res = await app.inject({ method: "GET", url: "/api/admin/governance/overview?hours=168" });
+    expect(res.statusCode).toBe(200);
+    const usage = JSON.parse(res.payload).data.usageOverview;
+    expect(usage.p95LatencyMs).toBeNull();
+    expect(usage.metricsState).toBe("unavailable");
+    expect(usage.activeAgentCount).toBe(1);
+    expect(usage.activeTokenCount).toBe(1);
+    expect(usage.activeTableCount).toBe(1);
+    await app.close();
+  });
+
   it("falls back to access_log.tables when access_log_sources has no rows", async () => {
     resetAuditDbForTests();
     await rm(process.env.LUCY_AUDIT_DB!, { force: true });

@@ -4,6 +4,7 @@
 //
 // Spec 143: pinned top-level「系统概览」was folded into the「运行状态」group
 // together with「调用监控」(`/ops/calls`).
+// Spec 156:「使用概况」(`/admin/usage`) moved into the same group.
 //
 // Extracted in M59 to satisfy Help Sidebar Entry Map spec v0.2 §4.1.
 // M60 Sidebar Brand Navigation Polish: added stable `id` fields + `iconKey`
@@ -97,6 +98,15 @@ export const navGroups: Array<{
         active: (path) => path === "/ops/calls" || path.startsWith("/ops/calls/"),
         description: "准实时查看 MCP 工具调用量、成败与请求时效。",
         keywords: ["MCP", "调用", "延迟", "P95", "失败", "拒绝"]
+      },
+      {
+        id: "admin-governance",
+        label: "使用概况",
+        to: "/admin/usage",
+        iconKey: "governanceOverview",
+        active: (path) => path === "/admin/usage" || path === "/admin/governance",
+        description: "查看 Agent、Token、数据表的活跃率，以及 WebUI 页面访问情况。",
+        keywords: ["Governance", "Dashboard", "使用概况", "活跃率", "界面使用"]
       }
     ]
   },
@@ -234,15 +244,6 @@ export const navGroups: Array<{
     id: "governance",
     title: "访问治理",
     items: [
-      {
-        id: "admin-governance",
-        label: "使用概况",
-        to: "/admin/usage",
-        iconKey: "governanceOverview",
-        active: (path) => path === "/admin/usage" || path === "/admin/governance",
-        description: "查看 Agent、Token 和数据表的活跃度、调用量与响应耗时。",
-        keywords: ["Governance", "Dashboard", "使用概况"]
-      },
       {
         id: "admin-agents",
         label: "Agent",

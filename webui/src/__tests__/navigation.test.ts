@@ -75,6 +75,7 @@ describe("navigation (shared sidebar config)", () => {
     expect(flat).toEqual([
       { group: "运行状态", id: "overview", label: "系统概览", to: "/overview" },
       { group: "运行状态", id: "ops-calls", label: "调用监控", to: "/ops/calls" },
+      { group: "运行状态", id: "admin-governance", label: "使用概况", to: "/admin/usage" },
       { group: "数据接入", id: "connections-overview", label: "连接概览", to: "/connections" },
       { group: "数据接入", id: "connections-enabled-tables", label: "启用表范围", to: "/connections/enabled-tables" },
       { group: "业务上下文", id: "semantic-catalog", label: "语义资产", to: "/catalog" },
@@ -86,7 +87,6 @@ describe("navigation (shared sidebar config)", () => {
       { group: "质量评测", id: "eval-runs", label: "运行历史", to: "/eval/runs" },
       { group: "质量评测", id: "eval-monitor", label: "趋势监控", to: "/eval/monitor" },
       { group: "质量评测", id: "eval-security-candidates", label: "安全评测候选", to: "/eval/security-candidates" },
-      { group: "访问治理", id: "admin-governance", label: "使用概况", to: "/admin/usage" },
       { group: "访问治理", id: "admin-agents", label: "Agent", to: "/admin/agents" },
       { group: "访问治理", id: "admin-tokens", label: "Token 凭据", to: "/admin/tokens" },
       { group: "访问治理", id: "admin-roles", label: "角色权限", to: "/admin/roles" },
@@ -139,7 +139,7 @@ describe("navigation (shared sidebar config)", () => {
       "eval-runs": "查看评测运行记录、通过率、结果明细与失败诊断。",
       "eval-monitor": "监控评测通过率、失败集中度与质量漂移趋势。",
       "eval-security-candidates": "从访问拒绝日志中提取权限与数据隔离场景，审定后转为安全评测用例。",
-      "admin-governance": "查看 Agent、Token 和数据表的活跃度、调用量与响应耗时。",
+      "admin-governance": "查看 Agent、Token、数据表的活跃率，以及 WebUI 页面访问情况。",
       "admin-agents": "管理 Agent 身份、角色、Token 及数据访问边界。",
       "admin-tokens": "全局查看、签发与定向吊销 Agent 访问凭据。",
       "admin-roles": "管理角色的数据库连接、数据表与 MCP 工具授权范围。",
@@ -190,6 +190,7 @@ describe("navigation (shared sidebar config)", () => {
     it("returns the owning group id for representative routes", () => {
       expect(findGroupIdForPathname("/overview")).toBe("runtime-status");
       expect(findGroupIdForPathname("/ops/calls")).toBe("runtime-status");
+      expect(findGroupIdForPathname("/admin/usage")).toBe("runtime-status");
       expect(findGroupIdForPathname("/connections")).toBe("connections");
       expect(findGroupIdForPathname("/connections/enabled-tables")).toBe("connections");
       expect(findGroupIdForPathname("/connections/whitelist")).toBe("connections");
@@ -203,7 +204,6 @@ describe("navigation (shared sidebar config)", () => {
       expect(findGroupIdForPathname("/eval/cases")).toBe("evaluation");
       expect(findGroupIdForPathname("/eval/runs/abc")).toBe("evaluation");
       expect(findGroupIdForPathname("/eval/monitor")).toBe("evaluation");
-      expect(findGroupIdForPathname("/admin/usage")).toBe("governance");
       expect(findGroupIdForPathname("/admin/agents")).toBe("governance");
       expect(findGroupIdForPathname("/admin/tokens")).toBe("governance");
       expect(findGroupIdForPathname("/admin/roles")).toBe("governance");

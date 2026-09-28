@@ -123,6 +123,26 @@ describe("ui usage recording", () => {
     expect(week.pages.find((row) => row.id === "wiki")?.visits).toBe(1);
   });
 
+  it("counts historical usage page views under the current runtime-status group", async () => {
+    const now = new Date("2026-09-24T12:00:00.000Z");
+    await queryUiUsageOverview(24, now);
+    const db = await getAuditDb();
+    db.prepare(`
+      INSERT INTO ui_page_views (ts, admin_id, page_key, menu_id, group_id)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(now.toISOString(), "owner", "admin-usage", "admin-governance", "governance");
+    db.prepare(`
+      INSERT INTO ui_page_views (ts, admin_id, page_key, menu_id, group_id)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(now.toISOString(), "owner", "help", null, "runtime-status");
+
+    const overview = await queryUiUsageOverview(24, new Date(now.getTime() + 1000));
+    expect(overview.groups.find((row) => row.id === "runtime-status")?.visits).toBe(1);
+    expect(overview.groups.find((row) => row.id === "governance")?.visits).toBe(0);
+    expect(overview.groups.reduce((sum, row) => sum + row.visits, 0)).toBe(1);
+    expect(overview.menus.find((row) => row.id === "admin-governance")?.visits).toBe(1);
+  });
+
   it("records open mode as local-admin and rejects a logged-out required session", async () => {
     const app = buildServer();
     await app.ready();

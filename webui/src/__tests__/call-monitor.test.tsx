@@ -100,6 +100,7 @@ describe("CallMonitor page", () => {
       "/admin/audit?view=calls&range=24h&outcome=error"
     );
     expect(screen.getByTestId("call-monitor-auto-refresh")).toBeChecked();
+    expect(document.body.textContent ?? "").not.toContain("活跃率");
 
     fireEvent.click(screen.getByTestId("call-monitor-range-1h"));
     await waitFor(() => {

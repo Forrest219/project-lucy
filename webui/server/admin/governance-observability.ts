@@ -865,7 +865,7 @@ export function registerGovernanceObservabilityRoutes(app: FastifyInstance): voi
       agentActiveRate,
       agentActiveRatePartial: agentRatePartial,
       configuredTokenCount: configuredTokens,
-      activeTokenCount: tokenRatePartial ? null : (activeTokenCount ?? null),
+      activeTokenCount: activeTokenCount ?? null,
       tokenActiveRate,
       tokenActiveRatePartial: tokenRatePartial,
       tokenPrefixAmbiguous,

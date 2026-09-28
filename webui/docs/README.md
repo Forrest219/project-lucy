@@ -135,6 +135,7 @@
 | [152-catalog-connection-schema-tree-p0-spec.md](152-catalog-connection-schema-tree-p0-spec.md) | `/catalog` Connection → Schema 可折叠范围树 P0：替代位置下拉、保留右侧语义资产表格，并用匿名聚合验证定位成本 | 产品 / UX / Frontend / Observability |
 | [153-unified-skill-workbench-spec.md](153-unified-skill-workbench-spec.md) | `/skills` 统一工作台：领域浏览器、治理总览、主区阅读/编辑、Markdown 双栏、脏数据保护与写入预检 | 产品 / UX / API / Frontend / Accessibility |
 | [154-role-list-p0-p1-remediation-spec.md](154-role-list-p0-p1-remediation-spec.md) | `/admin/roles` P0/P1 修复：快捷详情防白屏、Data Grid 唯一列表、高级筛选收敛与空结果恢复 | 产品 / UX / IA / Frontend / Accessibility |
+| [156-runtime-status-usage-boundary-spec.md](156-runtime-status-usage-boundary-spec.md) | 使用概况并入运行状态；健康 KPI 只留 `/ops/calls`，资产活跃留在数据访问视图；分组排行按当前目录归类，资产卡不再被 P95 连坐（Accepted v1.3） | 产品 / UX / IA / Frontend / Docs |
 
 ## 与原 README 的关键校正
 

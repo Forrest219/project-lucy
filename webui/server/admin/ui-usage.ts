@@ -75,6 +75,7 @@ export const UI_USAGE_GROUPS: GroupDefinition[] = [
 export const UI_USAGE_MENUS: MenuDefinition[] = [
   { id: "overview", label: "系统概览" },
   { id: "ops-calls", label: "调用监控" },
+  { id: "admin-governance", label: "使用概况" },
   { id: "connections-overview", label: "连接概览" },
   { id: "connections-enabled-tables", label: "启用表范围" },
   { id: "semantic-catalog", label: "语义资产" },
@@ -86,7 +87,6 @@ export const UI_USAGE_MENUS: MenuDefinition[] = [
   { id: "eval-runs", label: "运行历史" },
   { id: "eval-monitor", label: "趋势监控" },
   { id: "eval-security-candidates", label: "安全评测候选" },
-  { id: "admin-governance", label: "使用概况" },
   { id: "admin-agents", label: "Agent" },
   { id: "admin-tokens", label: "Token 凭据" },
   { id: "admin-roles", label: "角色权限" },
@@ -117,7 +117,7 @@ const PAGE = {
   evalRunDetail: { pageKey: "eval-run-detail", label: "运行详情", menuId: "eval-runs", groupId: "evaluation" },
   evalMonitor: { pageKey: "eval-monitor", label: "趋势监控", menuId: "eval-monitor", groupId: "evaluation" },
   evalSecurity: { pageKey: "eval-security-candidates", label: "安全评测候选", menuId: "eval-security-candidates", groupId: "evaluation" },
-  usage: { pageKey: "admin-usage", label: "使用概况", menuId: "admin-governance", groupId: "governance" },
+  usage: { pageKey: "admin-usage", label: "使用概况", menuId: "admin-governance", groupId: "runtime-status" },
   agents: { pageKey: "admin-agents", label: "Agent", menuId: "admin-agents", groupId: "governance" },
   agentDetail: { pageKey: "agent-detail", label: "Agent 详情", menuId: "admin-agents", groupId: "governance" },
   issueTokenAgent: { pageKey: "issue-token", label: "签发 Token", menuId: "admin-agents", groupId: "governance" },
@@ -468,6 +468,22 @@ function rankByVisits(
     });
 }
 
+function groupVisitsByCurrentCatalog(pageCounts: Map<string, number>): Map<string, number> {
+  const groupIdByPageKey = new Map<string, string>();
+  for (const page of UI_USAGE_PAGES) {
+    if (page.groupId && !groupIdByPageKey.has(page.pageKey)) {
+      groupIdByPageKey.set(page.pageKey, page.groupId);
+    }
+  }
+  const visits = new Map<string, number>();
+  for (const [pageKey, count] of pageCounts) {
+    const groupId = groupIdByPageKey.get(pageKey);
+    if (!groupId) continue;
+    visits.set(groupId, (visits.get(groupId) ?? 0) + count);
+  }
+  return visits;
+}
+
 export async function queryUiUsageOverview(hours: 24 | 168, now = new Date()) {
   const window = buildMetricWindow(hours, now);
   const db = await getAuditDb();
@@ -487,7 +503,7 @@ export async function queryUiUsageOverview(hours: 24 | 168, now = new Date()) {
     unmapped_views: number | null;
   };
 
-  const countRows = (column: "menu_id" | "group_id" | "page_key") => {
+  const countRows = (column: "menu_id" | "page_key") => {
     const rows = db.prepare(`
       SELECT ${column} AS id, COUNT(*) AS visits
       FROM ui_page_views
@@ -503,7 +519,7 @@ export async function queryUiUsageOverview(hours: 24 | 168, now = new Date()) {
     visitorCount: totals.visitor_count ?? 0,
     activeMenuCount: totals.active_menu_count ?? 0,
     unmappedViews: totals.unmapped_views ?? 0,
-    groups: rankByVisits(UI_USAGE_GROUPS, countRows("group_id")),
+    groups: rankByVisits(UI_USAGE_GROUPS, groupVisitsByCurrentCatalog(countRows("page_key"))),
     menus: rankByVisits(UI_USAGE_MENUS, countRows("menu_id")),
     pages: rankByVisits(
       UI_USAGE_PAGES.map((page) => ({ id: page.pageKey, label: page.label })),

@@ -443,11 +443,11 @@ Connection (连接)
 
 ### 4.5 访问治理 / 使用概况
 
-`/admin/usage` 页面（侧栏项 `admin-governance`；旧 path `/admin/governance` redirect）术语来自 Spec 78 / 84，并由 Spec 86 修订路由与 KPI 主标签。Spec 148 增补「界面使用」视图（`?view=interface`）：
+`/admin/usage` 页面（侧栏项 `admin-governance`，位于运行状态；旧 path `/admin/governance` redirect）术语来自 Spec 78 / 84，并由 Spec 86 修订路由与 KPI 主标签。Spec 148 增补「界面使用」视图（`?view=interface`）。Spec 156 将侧栏从访问治理移入运行状态，数据访问视图不再展示调用量、ACL 拒绝次数与多数请求耗时：
 
 | Canonical Term | UI 主术语 | 允许补充说法 | 禁止文案 | 说明 |
 |---|---|---|---|---|
-| Usage Overview Page | 使用概况 | 访问使用概况 | 治理概览（本页主标题）、风控看板 | 主路由 `/admin/usage` |
+| Usage Overview Page | 使用概况 | 访问使用概况 | 治理概览（本页主标题）、风控看板、运行体征（作本页 H1） | 主路由 `/admin/usage`；侧栏位于运行状态；逻辑归属路径为 `运行状态 / 使用概况`；一级根页面不渲染面包屑；页头说明随数据访问 / 界面使用切换；见 Spec 42 / 156 |
 | Agent Admin Page Title | Agent | — | Agent 实例（弃用主标签） | `/admin/agents` 侧栏与 H1 |
 | Agent Display Name | 显示名 | Agent 名称 | 列表主列用 Agent | 人读名称；详情可编辑、新建表单 |
 | Agent User ID | 用户 ID | 用户 id | Agent 标识（与显示名混用） | 技术标识；搜索、详情只读 |
@@ -471,7 +471,7 @@ Connection (连接)
 | Call Volume | 近 N 调用量 | 调用量（叙述） | 最近调用 | 调用监控页沿用；定义为 Business Call Volume |
 | Typical Request Latency | 多数请求耗时 | P95（次级括注） | 响应上限（P95）作主标签；平均响应时长、AVG(duration_ms) | hint：95% 的请求在此时间内完成 |
 | Agent Call Ranking | Agent 调用排行 · 近 N | Agent 使用排行 | 近窗口调用；实现向排序说明 | 条形图 Top 10；跟随窗口 |
-| Token Call Ranking | Token 调用排行 · 近 N | Token 使用摘要 | 不重复展示顶部 KPI | 按窗口 `calls` 降序 |
+| Token Call Ranking | Token 调用排行 · 近 N | Token 使用摘要 | 不重复展示顶部 KPI | 仅含当前配置 Token，按窗口 `calls` 降序；百分比按当前排行行合计；未配置或历史凭证不进入排行 |
 | Table Call Ranking | 表调用排行 · 近 N | 最受访问表（Top 10） | 仅统计已结构化…（主副文案） | 条形图 Top 10 |
 | Stats Snapshot Time | 统计时间 | — | 上次更新（本页主标签） | 三组 query 成功后的快照新鲜度；相对时间对齐系统概览；位于时间窗口切换左侧 |
 | Device Name Remark | 设备名备注 | 备注 | Device（裸露作主标签）、绑定设备（暗示硬件强绑定） | 签发时可选；不写 access_log；见 Spec 124 |
@@ -500,7 +500,7 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 |---|---|---|---|
 | System Overview | 系统概览 | 系统总览混用 | 全局运行状态页 |
 | Runtime Status | 运行状态 | 运行时间状态 | 服务运行健康情况 |
-| Runtime Status Group | 运行状态 | 把「系统概览」继续当作分组名承载多页；监控中心 | 侧栏分组；含系统概览 + 调用监控；见 Spec 143 |
+| Runtime Status Group | 运行状态 | 把「系统概览」继续当作分组名承载多页；监控中心 | 侧栏分组；含系统概览 + 调用监控 + 使用概况；见 Spec 143 / 156 |
 | Call Monitoring Page | 调用监控 | 日志调用监控看板、调用看板、流量大屏、监控看板（作 H1） | 主路由 `/ops/calls`；侧栏与 H1；准实时 MCP 工具调用盯盘；见 Spec 143 |
 | Call Monitor Success Rate | 成功率 | 与评测「通过率」混用 | MCP 工具调用 `ok / businessCalls`；仅调用监控主标签 |
 | Call Monitor Error Rate | 错误率 | 失败率（与拒绝混用） | `error / businessCalls` |

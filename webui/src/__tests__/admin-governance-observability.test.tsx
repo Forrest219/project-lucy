@@ -6,15 +6,19 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { GovernanceOverview } from "../pages/admin/GovernanceOverview";
 
-function renderPage() {
+function renderPage(initial = "/admin/usage") {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[initial]}>
         <GovernanceOverview />
       </MemoryRouter>
     </QueryClientProvider>
   );
+}
+
+function requestUrl(input: RequestInfo | URL): string {
+  return typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
 }
 
 function stubFetch() {
@@ -149,43 +153,38 @@ describe("GovernanceOverview", () => {
     expect(await screen.findByText("Agent A")).toBeInTheDocument();
 
     expect(screen.getByTestId("governance-usage-overview")).toHaveClass("pl-page-stack");
+    expect(screen.getByText(/活跃率与调用排行/)).toBeInTheDocument();
     expect(screen.getByTestId("governance-usage-metrics")).toHaveClass("pl-usage-metric-groups");
+    expect(screen.queryByRole("navigation", { name: "面包屑" })).not.toBeInTheDocument();
 
-    // Spec 135: two-tier layout — primary (运行体征) and secondary (资产与活跃)
-    for (const groupTestId of [
-      "governance-usage-metrics-primary",
-      "governance-usage-metrics-secondary"
-    ] as const) {
-      expect(screen.getByTestId(groupTestId)).toHaveClass("pl-metric-grid", "pl-metric-grid--three");
-      expect(screen.getByTestId(groupTestId).querySelectorAll(":scope > .pl-metric-card")).toHaveLength(3);
-    }
+    expect(screen.getByTestId("governance-usage-metrics-secondary")).toHaveClass("pl-metric-grid", "pl-metric-grid--three");
+    expect(screen.getByTestId("governance-usage-metrics-secondary").querySelectorAll(":scope > .pl-metric-card")).toHaveLength(3);
+    expect(screen.queryByTestId("governance-usage-metrics-primary")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("运行体征")).not.toBeInTheDocument();
+    expect(screen.queryByText("多数请求耗时")).not.toBeInTheDocument();
+    expect(screen.queryByText(/ACL 拒绝次数/)).not.toBeInTheDocument();
+    expect(screen.queryByText("近 7 天调用量")).not.toBeInTheDocument();
+    expect(screen.queryByText("近 24 小时调用量")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("metric-calls")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("metric-acl-denied")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("metric-p95-latency")).not.toBeInTheDocument();
+    expect(screen.getByTestId("usage-call-monitor-link")).toHaveAttribute("href", "/ops/calls?range=24h");
+    expect(screen.getByText(/调用监控的窗口是近 1 小时或近 24 小时/)).toBeInTheDocument();
     expect(screen.getByTestId("governance-usage-rank-grid")).toHaveClass("pl-usage-rank-grid");
     expect(screen.getByTestId("governance-agent-usage")).toHaveClass("pl-panel");
     expect(screen.getByTestId("governance-token-usage")).toHaveClass("pl-panel");
     expect(screen.getByTestId("governance-popular-tables")).toHaveClass("pl-panel");
 
-    // Spec 135: Tier 1 primary metrics
-    expect(screen.getByTestId("metric-calls")).toHaveTextContent("近 7 天调用量");
-    expect(screen.getByTestId("metric-acl-denied")).toHaveTextContent("近 7 天 ACL 拒绝次数");
-    expect(screen.getByTestId("metric-p95-latency")).toHaveTextContent("多数请求耗时");
-
-    // Spec 135: Tier 2 compound asset cards
     expect(screen.getByTestId("metric-agent-asset")).toHaveTextContent("Agent");
     expect(screen.getByTestId("metric-token-asset")).toHaveTextContent("Token");
     expect(screen.getByTestId("metric-table-asset")).toHaveTextContent("授权表");
-
-    // Active / total compound values visible in secondary cards
     expect(within(screen.getByTestId("metric-agent-asset")).getByText("1")).toBeInTheDocument();
     expect(within(screen.getByTestId("metric-agent-asset")).getByText(/50%/)).toBeInTheDocument();
 
-    // Metric order: primary (calls, denied, p95) then secondary (agent, token, table)
     const metricOrder = Array.from(
       screen.getByTestId("governance-usage-metrics").querySelectorAll(":scope .pl-metric-card")
     ).map((card) => card.getAttribute("data-testid"));
     expect(metricOrder).toEqual([
-      "metric-calls",
-      "metric-acl-denied",
-      "metric-p95-latency",
       "metric-agent-asset",
       "metric-token-asset",
       "metric-table-asset"
@@ -193,7 +192,6 @@ describe("GovernanceOverview", () => {
 
     expect(within(screen.getByTestId("metric-token-asset")).getByText("Token")).toBeInTheDocument();
     expect(screen.getByTestId("metric-help-agent-asset")).toBeInTheDocument();
-    expect(screen.getByTestId("metric-help-p95-latency")).toBeInTheDocument();
     expect(screen.getByTestId("metric-agent-asset")).toHaveClass("pl-metric-card--with-help");
     // Compound card has subValue in <small>
     expect(screen.getByTestId("metric-agent-asset").querySelectorAll(":scope > small")).toHaveLength(1);
@@ -209,6 +207,7 @@ describe("GovernanceOverview", () => {
     expect(screen.getByRole("heading", { name: /Agent 调用排行 · 近 7 天/ })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /Token 调用排行 · 近 7 天/ })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /表调用排行 · 近 7 天/ })).toBeInTheDocument();
+    expect(screen.getByTestId("governance-token-usage")).toHaveTextContent("仅含当前配置 Token；百分比按本排行合计");
     expect(screen.getByText("active-token")).toBeInTheDocument();
     expect(screen.getByText("quiet-token")).toBeInTheDocument();
     expect(screen.getByText("mysql.dataforai.kx_fact_financial_amount")).toBeInTheDocument();
@@ -269,20 +268,17 @@ describe("GovernanceOverview", () => {
 
     await screen.findByText("Agent A");
     await waitFor(() => {
-      expect(within(screen.getByTestId("metric-calls")).getByText("3")).toBeInTheDocument();
-      expect(within(screen.getByTestId("metric-p95-latency")).getByText("120 ms")).toBeInTheDocument();
+      expect(within(screen.getByTestId("metric-agent-asset")).getByText("1")).toBeInTheDocument();
+      expect(within(screen.getByTestId("metric-table-asset")).getByText("2")).toBeInTheDocument();
     });
-    // Compound agent asset card present in 7d window
-    expect(screen.getByTestId("metric-agent-asset")).toBeInTheDocument();
+    expect(screen.getByTestId("usage-call-monitor-link")).toHaveAttribute("href", "/ops/calls?range=24h");
 
     fireEvent.click(screen.getByTestId("governance-window-24h"));
 
     await waitFor(() => {
-      expect(within(screen.getByTestId("metric-calls")).getByText("1")).toBeInTheDocument();
-      expect(within(screen.getByTestId("metric-p95-latency")).getByText("40 ms")).toBeInTheDocument();
+      expect(within(screen.getByTestId("metric-table-asset")).getByText("1")).toBeInTheDocument();
     });
-    // Compound asset cards still present after window switch
-    expect(screen.getByTestId("metric-agent-asset")).toBeInTheDocument();
+    expect(screen.getByTestId("usage-call-monitor-link")).toHaveAttribute("href", "/ops/calls?range=24h");
     expect(screen.getByRole("heading", { name: /Agent 调用排行 · 近 24 小时/ })).toBeInTheDocument();
     expect(fetchMock.mock.calls.some(([input]) => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : String(input);
@@ -291,7 +287,7 @@ describe("GovernanceOverview", () => {
   });
 
   it("shows interface rankings including zero-visit menus and pages", async () => {
-    stubFetch();
+    const fetchMock = stubFetch();
     renderPage();
 
     fireEvent.click(await screen.findByTestId("governance-view-interface"));
@@ -302,12 +298,181 @@ describe("GovernanceOverview", () => {
     expect(screen.getByTestId("governance-interface-unmapped")).toHaveTextContent("另有 1 次页面打开未能对应到已知页面");
     expect(within(screen.getByTestId("governance-interface-menu-rank")).getByText("趋势监控")).toBeInTheDocument();
     expect(within(screen.getByTestId("governance-interface-page-rank")).getByText("趋势监控")).toBeInTheDocument();
+    expect(screen.getByText(/页面访问、访问账户与菜单使用/)).toBeInTheDocument();
     expect(screen.queryByTestId("governance-usage-rank-grid")).not.toBeInTheDocument();
 
+    const callsBeforeWindow = fetchMock.mock.calls.length;
     fireEvent.click(screen.getByTestId("governance-window-24h"));
     await waitFor(() => {
       expect(screen.getByTestId("metric-interface-page-views")).toHaveTextContent("2");
     });
+    const laterUrls = fetchMock.mock.calls.slice(callsBeforeWindow).map(([input]) => String(input));
+    expect(laterUrls.some((url) => url.includes("/api/admin/governance/"))).toBe(false);
+    expect(laterUrls.some((url) => url.includes("/api/admin/ui-usage/overview"))).toBe(true);
     expect(screen.getByRole("heading", { name: "菜单访问排行 · 近 24 小时" })).toBeInTheDocument();
+  });
+
+  it("does not request data-access APIs when opened on the interface view", async () => {
+    const fetchMock = stubFetch();
+    renderPage("/admin/usage?view=interface");
+    expect(await screen.findByRole("heading", { name: "菜单访问排行 · 近 7 天" })).toBeInTheDocument();
+    const urls = fetchMock.mock.calls.map(([input]) => String(input));
+    expect(urls.some((url) => url.includes("/api/admin/governance/"))).toBe(false);
+    expect(urls.some((url) => url.includes("/api/admin/ui-usage/overview"))).toBe(true);
+  });
+
+  it("keeps asset cards visible when health metrics are unavailable", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = requestUrl(input);
+      if (url.includes("/api/admin/governance/overview")) {
+        return new Response(JSON.stringify({
+          ok: true,
+          data: {
+            windowHours: 168,
+            usageOverview: {
+              agentCount: 2,
+              activeAgentCount: 1,
+              agentActiveRate: 50,
+              configuredTokenCount: 3,
+              activeTokenCount: 2,
+              tokenActiveRate: 66,
+              configuredTableCount: 4,
+              activeTableCount: 1,
+              hasOpenEndedTableScope: false,
+              tableRate: 25,
+              calls: null,
+              denied: null,
+              p95LatencyMs: null,
+              avgLatencyMs: null,
+              metricsState: "unavailable"
+            },
+            popularTables: []
+          }
+        }));
+      }
+      return new Response(JSON.stringify({ ok: true, data: { agents: [], tokens: [] } }));
+    }));
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId("metric-agent-asset")).toHaveTextContent("1");
+    });
+    expect(screen.getByTestId("metric-token-asset")).toHaveTextContent("2");
+    expect(screen.getByTestId("metric-table-asset")).toHaveTextContent("1");
+  });
+
+  it("marks only the agent card unavailable when its count is null", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = requestUrl(input);
+      if (url.includes("/api/admin/governance/overview")) {
+        return new Response(JSON.stringify({
+          ok: true,
+          data: {
+            windowHours: 168,
+            usageOverview: {
+              agentCount: 2,
+              activeAgentCount: null,
+              agentActiveRate: null,
+              agentActiveRatePartial: false,
+              configuredTokenCount: 3,
+              activeTokenCount: 2,
+              tokenActiveRate: 66,
+              configuredTableCount: 4,
+              activeTableCount: 1,
+              hasOpenEndedTableScope: false,
+              tableRate: 25,
+              calls: 9,
+              p95LatencyMs: 10,
+              avgLatencyMs: 8,
+              metricsState: "unavailable"
+            },
+            popularTables: []
+          }
+        }));
+      }
+      return new Response(JSON.stringify({ ok: true, data: { agents: [], tokens: [] } }));
+    }));
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId("metric-token-asset")).toHaveTextContent("2");
+    });
+    expect(screen.getByTestId("metric-agent-asset")).toHaveAttribute("data-metric-state", "unavailable");
+    expect(screen.getByTestId("metric-agent-asset")).toHaveTextContent("数据源不可用");
+    expect(screen.getByTestId("metric-table-asset")).toHaveTextContent("1");
+  });
+
+  it.each([
+    {
+      name: "token",
+      usageOverrides: {
+        activeTokenCount: null,
+        tokenActiveRate: null,
+        tokenActiveRatePartial: true,
+        tokenPrefixAmbiguous: true
+      },
+      unavailableTestId: "metric-token-asset",
+      availableTestIds: ["metric-agent-asset", "metric-table-asset"]
+    },
+    {
+      name: "table",
+      usageOverrides: {
+        activeTableCount: null,
+        tableRate: null,
+        tableRatePartial: true,
+        hasOpenEndedTableScope: true
+      },
+      unavailableTestId: "metric-table-asset",
+      availableTestIds: ["metric-agent-asset", "metric-token-asset"]
+    }
+  ])("prioritizes unavailable over partial for the $name card", async ({
+    usageOverrides,
+    unavailableTestId,
+    availableTestIds
+  }) => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = requestUrl(input);
+      if (url.includes("/api/admin/governance/overview")) {
+        return new Response(JSON.stringify({
+          ok: true,
+          data: {
+            windowHours: 168,
+            usageOverview: {
+              agentCount: 2,
+              activeAgentCount: 1,
+              agentActiveRate: 50,
+              agentActiveRatePartial: false,
+              configuredTokenCount: 3,
+              activeTokenCount: 2,
+              tokenActiveRate: 66,
+              tokenActiveRatePartial: false,
+              tokenPrefixAmbiguous: false,
+              configuredTableCount: 4,
+              activeTableCount: 1,
+              tableRate: 25,
+              tableRatePartial: false,
+              hasOpenEndedTableScope: false,
+              calls: 9,
+              p95LatencyMs: 10,
+              avgLatencyMs: 8,
+              metricsState: "unavailable",
+              ...usageOverrides
+            },
+            popularTables: []
+          }
+        }));
+      }
+      return new Response(JSON.stringify({ ok: true, data: { agents: [], tokens: [] } }));
+    }));
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByTestId(unavailableTestId)).toHaveAttribute("data-metric-state", "unavailable");
+      for (const testId of availableTestIds) {
+        expect(screen.getByTestId(testId)).not.toHaveAttribute("data-metric-state");
+      }
+    });
+    expect(screen.getByTestId(unavailableTestId)).toHaveTextContent("数据源不可用");
+    for (const testId of availableTestIds) {
+      expect(screen.getByTestId(testId)).not.toHaveTextContent("数据不完整");
+    }
   });
 });

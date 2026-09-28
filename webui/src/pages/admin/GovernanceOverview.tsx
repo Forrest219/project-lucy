@@ -90,6 +90,16 @@ function formatRate(value: number): string {
   return `${value}%`;
 }
 
+function assetCardState(
+  loaded: boolean,
+  count: number | null | undefined,
+  partial: boolean
+): "ok" | "partial" | "unavailable" {
+  if (!loaded || count == null) return "unavailable";
+  if (partial) return "partial";
+  return "ok";
+}
+
 function windowLabel(hours: WindowHours): string {
   return hours === 24 ? "近 24 小时" : "近 7 天";
 }
@@ -187,17 +197,21 @@ export function GovernanceOverview() {
     setSearchParams(params, { replace: true });
   };
 
+  const accessEnabled = view === "access";
   const overviewQuery = useQuery({
     queryKey: ["admin", "governance", "overview", hours],
-    queryFn: () => apiGet<OverviewResponse>(`/api/admin/governance/overview?hours=${hours}`)
+    queryFn: () => apiGet<OverviewResponse>(`/api/admin/governance/overview?hours=${hours}`),
+    enabled: accessEnabled
   });
   const agentsQuery = useQuery({
     queryKey: ["admin", "governance", "agents", hours],
-    queryFn: () => apiGet<{ agents: AgentRow[] }>(`/api/admin/governance/agents?hours=${hours}`)
+    queryFn: () => apiGet<{ agents: AgentRow[] }>(`/api/admin/governance/agents?hours=${hours}`),
+    enabled: accessEnabled
   });
   const tokensQuery = useQuery({
     queryKey: ["admin", "governance", "tokens", hours],
-    queryFn: () => apiGet<{ tokens: TokenRow[] }>(`/api/admin/governance/tokens?hours=${hours}`)
+    queryFn: () => apiGet<{ tokens: TokenRow[] }>(`/api/admin/governance/tokens?hours=${hours}`),
+    enabled: accessEnabled
   });
   const interfaceQuery = useQuery({
     queryKey: ["admin", "ui-usage", hours],
@@ -233,9 +247,7 @@ export function GovernanceOverview() {
 
   const usage = overview?.usageOverview;
   const popularTables = overview?.popularTables ?? [];
-
-  // Spec 128 HR-1: unavailable when server reports metricsState=unavailable
-  const auditMetricsState = usage?.metricsState === "unavailable" ? "unavailable" as const : "ok" as const;
+  const assetLoaded = overviewQuery.isSuccess;
 
   const agents = useMemo(() => {
     const rows = [...(agentsData?.agents ?? [])];
@@ -260,39 +272,22 @@ export function GovernanceOverview() {
 
   const windowText = windowLabel(hours);
 
-  // p95 is unavailable or no_data based on calls
-  const p95MetricState = auditMetricsState === "unavailable"
-    ? "unavailable" as const
-    : ((usage?.calls ?? 0) > 0 ? "ok" as const : "no_data" as const);
-  const p95Value = p95MetricState === "ok" ? `${usage?.p95LatencyMs ?? 0} ms` : "—";
-  const p95Hint = p95MetricState === "ok" ? (
-    <span>95% 的请求在此时间内完成（<span className="notranslate" translate="no">P95</span>）</span>
-  ) : (
-    "当前窗口无调用"
+  const agentCardState = assetCardState(assetLoaded, usage?.activeAgentCount, Boolean(usage?.agentActiveRatePartial));
+  const tokenCardState = assetCardState(
+    assetLoaded,
+    usage?.activeTokenCount,
+    Boolean(usage?.tokenActiveRatePartial || usage?.tokenPrefixAmbiguous)
   );
-
-  // Spec 128 HR-4 + Task 6: table rate is partial when open-ended scope or HR-4 violation.
-  const tableRateState = auditMetricsState === "unavailable"
-    ? "unavailable" as const
-    : usage?.tableRatePartial
-      ? "partial" as const
-      : ((usage?.calls ?? 0) === 0 && (usage?.activeTableCount ?? 0) === 0 ? "no_data" as const : "ok" as const);
-  const activeTableRate = tableRateState === "ok" && usage?.tableRate != null
+  const tableCardState = assetCardState(
+    assetLoaded,
+    usage?.activeTableCount,
+    Boolean(usage?.tableRatePartial || usage?.hasOpenEndedTableScope)
+  );
+  const activeTableRate = tableCardState === "ok" && usage?.tableRate != null
     ? formatRate(usage.tableRate)
     : null;
 
-  // Spec 128 HR-4: partial when active > configured
-  const agentRateState = usage?.agentActiveRatePartial ? "partial" as const : auditMetricsState;
-  // Spec 128 D4: partial when token prefixes are ambiguous
-  const tokenRateState = (usage?.tokenActiveRatePartial || usage?.tokenPrefixAmbiguous) ? "partial" as const : auditMetricsState;
-
-  // Spec 128 Task 7: denied count from audit DB, exposed in usageOverview.
-  const deniedCount = usage?.denied ?? null;
-  const deniedState = auditMetricsState;
-  const deniedTone = (deniedCount ?? 0) > 0 ? "warning" as const : undefined;
-
-  // Compound card values for Tier 2
-  const agentCompoundValue = auditMetricsState !== "unavailable" ? (
+  const agentCompoundValue = agentCardState !== "unavailable" ? (
     <span className="tabular-nums">
       <span className="text-fg-muted text-base font-normal">活跃 </span>
       <span>{usage?.activeAgentCount ?? 0}</span>
@@ -300,7 +295,7 @@ export function GovernanceOverview() {
     </span>
   ) : 0;
 
-  const tokenCompoundValue = auditMetricsState !== "unavailable" ? (
+  const tokenCompoundValue = tokenCardState !== "unavailable" ? (
     <span className="tabular-nums">
       <span className="text-fg-muted text-base font-normal">活跃 </span>
       <span>{usage?.activeTokenCount ?? 0}</span>
@@ -308,7 +303,7 @@ export function GovernanceOverview() {
     </span>
   ) : 0;
 
-  const tableCompoundValue = auditMetricsState !== "unavailable" ? (
+  const tableCompoundValue = tableCardState !== "unavailable" ? (
     <span className="tabular-nums">
       <span className="text-fg-muted text-base font-normal">活跃 </span>
       <span>{usage?.activeTableCount ?? 0}</span>
@@ -353,9 +348,13 @@ export function GovernanceOverview() {
       <PageHeader
         title="使用概况"
         description={
-          <span>
-            查看 <span className="notranslate" translate="no">Agent</span>、<span className="notranslate" translate="no">Token</span> 和数据表的活跃度、调用量与响应耗时。
-          </span>
+          view === "interface" ? (
+            <span>查看 WebUI 近 24 小时或近 7 天的页面访问、访问账户与菜单使用。</span>
+          ) : (
+            <span>
+              查看 <span className="notranslate" translate="no">Agent</span>、<span className="notranslate" translate="no">Token</span> 和数据表近 24 小时或近 7 天的活跃率与调用排行。
+            </span>
+          )
         }
         actions={
           <div
@@ -436,50 +435,13 @@ export function GovernanceOverview() {
       ) : null}
 
       {view === "access" ? <>
+      <p className="text-sm text-fg-muted">
+        调用是否报错、被拒绝或变慢，到调用监控查看。调用监控的窗口是近 1 小时或近 24 小时。{" "}
+        <Link className="pl-link" to="/ops/calls?range=24h" data-testid="usage-call-monitor-link">
+          打开调用监控
+        </Link>
+      </p>
       <div className="pl-usage-metric-groups" data-testid="governance-usage-metrics">
-        {/* ── Tier 1: 运行体征（Primary） ── */}
-        <div
-          className="pl-metric-grid pl-metric-grid--three"
-          aria-label="运行体征"
-          data-testid="governance-usage-metrics-primary"
-        >
-          <MetricCard
-            label={<span>{windowText}调用量</span>}
-            labelText={`${windowText}调用量`}
-            value={usage?.calls ?? 0}
-            help={`当前时间窗（${windowText}）内经 MCP Proxy 记录的所有调用次数（含成功、拒绝、错误）。`}
-            subValue={auditMetricsState === "ok" ? <span><span className="notranslate" translate="no">MCP</span> 调用</span> : undefined}
-            state={auditMetricsState}
-            helpId="calls"
-            testId="metric-calls"
-          />
-          <MetricCard
-            label={<span>{windowText} <span className="notranslate" translate="no">ACL</span> 拒绝次数</span>}
-            labelText={`${windowText} ACL 拒绝次数`}
-            value={deniedCount ?? 0}
-            tone={deniedTone}
-            help={
-              <span>
-                当前时间窗内访问日志中 <span className="notranslate" translate="no">outcome='denied'</span> 的记录数，直接查询审计库（Task 7），不含认证失败（<span className="notranslate" translate="no">auth_error</span>）。
-              </span>
-            }
-            subValue={deniedState === "ok" ? <span>来自审计库直查</span> : undefined}
-            state={deniedState}
-            helpId="acl-denied"
-            testId="metric-acl-denied"
-          />
-          <MetricCard
-            label="多数请求耗时"
-            value={p95Value}
-            help="当前时间窗内 95% 的请求完成耗时上限（P95），用于感知尾部延迟。"
-            subValue={p95MetricState === "ok" ? p95Hint : undefined}
-            state={p95MetricState}
-            helpId="p95-latency"
-            testId="metric-p95-latency"
-          />
-        </div>
-
-        {/* ── Tier 2: 资产与活跃画像（Secondary Compound） ── */}
         <div
           className="pl-metric-grid pl-metric-grid--three"
           aria-label="资产与活跃"
@@ -494,9 +456,9 @@ export function GovernanceOverview() {
                 {windowText}活跃 <span className="notranslate" translate="no">Agent</span> / 已配置 <span className="notranslate" translate="no">Agent</span> 总数（含未启用）。活跃率 = 有访问记录的 <span className="notranslate" translate="no">Agent</span> / 总数。
               </span>
             }
-            subValue={agentRateState === "ok" ? <span>活跃率 {formatRate(usage?.agentActiveRate ?? 0)}</span> : undefined}
-            state={agentRateState}
-            unavailableReason={agentRateState === "partial" ? "活跃数超过配置数，数据异常" : undefined}
+            subValue={agentCardState === "ok" ? <span>活跃率 {formatRate(usage?.agentActiveRate ?? 0)}</span> : undefined}
+            state={agentCardState}
+            unavailableReason={agentCardState === "partial" ? "活跃数超过配置数，数据异常" : undefined}
             helpId="agent-asset"
             testId="metric-agent-asset"
           />
@@ -509,10 +471,10 @@ export function GovernanceOverview() {
                 {windowText}活跃 <span className="notranslate" translate="no">Token</span> / 已下发凭证总数（含未启用 <span className="notranslate" translate="no">Agent</span> 的 <span className="notranslate" translate="no">Token</span>）。D4：若多个 <span className="notranslate" translate="no">Token</span> 共享同一前缀，计数存在歧义（<span className="notranslate" translate="no">partial</span>）。
               </span>
             }
-            subValue={tokenRateState === "ok" ? <span>活跃率 {formatRate(usage?.tokenActiveRate ?? 0)}</span> : undefined}
-            state={tokenRateState}
+            subValue={tokenCardState === "ok" ? <span>活跃率 {formatRate(usage?.tokenActiveRate ?? 0)}</span> : undefined}
+            state={tokenCardState}
             unavailableReason={
-              tokenRateState === "partial"
+              tokenCardState === "partial"
                 ? (usage?.tokenPrefixAmbiguous ? "配置 Token 前缀存在冲突（D4），计数存在歧义" : "活跃 Token 数超过配置数，数据异常")
                 : undefined
             }
@@ -528,11 +490,11 @@ export function GovernanceOverview() {
                 {windowText}活跃授权表数 / 角色权限中明确授权的表数。活跃率 = 活跃授权表 / 已解析授权表；存在前缀授权时显示 <span className="notranslate" translate="no">partial</span>（口径未完全解析）。{usage?.hasOpenEndedTableScope ? "（含前缀授权）" : ""}
               </span>
             }
-            subValue={tableRateState === "ok" && activeTableRate != null
+            subValue={tableCardState === "ok" && activeTableRate != null
               ? <span>活跃率 {activeTableRate}</span>
               : undefined}
-            state={tableRateState}
-            unavailableReason={tableRateState === "partial" ? "含前缀/通配符授权，活跃率无法精确计算" : undefined}
+            state={tableCardState}
+            unavailableReason={tableCardState === "partial" ? "含前缀/通配符授权，活跃率无法精确计算" : undefined}
             helpId="table-asset"
             testId="metric-table-asset"
           />
@@ -565,7 +527,7 @@ export function GovernanceOverview() {
                 <span className="notranslate" translate="no">Token</span> 调用排行 · {windowText}
               </h2>
               <p className="pl-notice">
-                看哪些 <span className="notranslate" translate="no">Token</span> 调用最多，便于回收闲置凭证。
+                仅含当前配置 <span className="notranslate" translate="no">Token</span>；百分比按本排行合计，未配置或历史凭证不在排行内。
               </p>
             </div>
           </div>
