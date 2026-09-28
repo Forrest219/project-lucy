@@ -409,7 +409,7 @@ export function Step1ConnectDb({
           onClick={() => createMutation.mutate()}
           data-testid="setup-step1-next"
         >
-          {createMutation.isPending ? "正在创建..." : "继续：上传 Schema Manifest →"}
+          {createMutation.isPending ? "正在创建..." : "继续：准备表结构 →"}
         </button>
       </div>
 

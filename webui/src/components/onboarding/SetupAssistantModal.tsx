@@ -44,6 +44,7 @@ export function SetupAssistantModal({
   const [enabledTables, setEnabledTables] = useState<string[]>([]);
   const [dirty, setDirty] = useState(false);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  const [manifestTables, setManifestTables] = useState<number | null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const openerRef = useRef<HTMLElement | null>(null);
@@ -83,6 +84,7 @@ export function SetupAssistantModal({
       }
       setDirty(false);
       setShowDiscardConfirm(false);
+      setManifestTables(null);
     } else if (!open) {
       hydrationKeyRef.current = "";
     }
@@ -100,6 +102,12 @@ export function SetupAssistantModal({
       openerRef.current?.focus();
     };
   }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const focusTimer = window.setTimeout(() => titleRef.current?.focus(), 0);
+    return () => window.clearTimeout(focusTimer);
+  }, [open, step]);
 
   if (!open) return null;
 
@@ -254,6 +262,11 @@ export function SetupAssistantModal({
             if ((event.target as HTMLElement).closest("[data-setup-dirty]")) setDirty(true);
           }}
         >
+          {manifestTables !== null && step >= 3 ? (
+            <p className="mb-4 text-xs text-success-strong" data-testid="setup-manifest-parsed-count">
+              已解析 {manifestTables} 张表
+            </p>
+          ) : null}
           {showDiscardConfirm ? (
             <div className="mb-4 p-3 border border-warning/40 bg-warning/10 rounded-lg" role="alert" data-testid="setup-discard-confirm">
               <p className="text-sm font-medium text-fg-default">放弃未保存的更改？</p>
@@ -283,8 +296,22 @@ export function SetupAssistantModal({
             <Step2UploadManifest
               connectionId={connectionId}
               schema={schema}
-              onSuccess={() => handleStepChange(3)}
-              onSkip={() => handleStepChange(3)}
+              onSuccess={(tables) => {
+                setManifestTables(tables);
+                handleStepChange(3);
+              }}
+              onSchemaResolved={(next) => setSchema(next)}
+              onExit={() => {
+                if (connectionId) {
+                  setAssistantDraft(connectionId, {
+                    step: 2,
+                    connectionId,
+                    targetSchema: schema,
+                    selectedTables: enabledTables
+                  });
+                }
+                onClose();
+              }}
             />
           )}
 
@@ -306,7 +333,6 @@ export function SetupAssistantModal({
               connectionId={connectionId}
               enabledTables={enabledTables}
               onSuccess={() => handleStepChange(5)}
-              onSkip={() => handleStepChange(5)}
               onBack={() => handleStepChange(3)}
             />
           )}

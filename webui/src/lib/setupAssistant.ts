@@ -35,7 +35,7 @@ export const SETUP_STEPS: StepMeta[] = [
   {
     step: 2,
     key: "upload_manifest",
-    title: "上传 Schema Manifest",
+    title: "准备表结构",
     subtitle: "上传描述数据库表与字段的 Schema Manifest",
     isOptional: false
   },
@@ -118,14 +118,16 @@ export function inferCurrentStep(options: {
 export type SetupAssistantResumeState = {
   step: SetupStep;
   schema: string;
+  schemaUnresolved: boolean;
   hasManifest: boolean;
   enabledTables: string[];
   availableTables: SourceSummary[];
 };
 
 /**
- * Rebuild the resumable wizard state from backend assets. Local draft progress
- * may only advance optional steps after all required guards still pass.
+ * Rebuild the resumable wizard state from backend assets. A pending Catalog
+ * reload keeps the user on step 2. Local draft progress may only advance
+ * optional steps after all required guards still pass.
  */
 export function deriveAssistantResumeState(options: {
   connection?: ConnectionInfo | null;
@@ -133,10 +135,12 @@ export function deriveAssistantResumeState(options: {
   draft?: SetupAssistantDraft | null;
 }): SetupAssistantResumeState {
   const connection = options.connection ?? null;
+  const draft = options.draft ?? null;
   if (!connection) {
     return {
       step: 1,
       schema: "",
+      schemaUnresolved: false,
       hasManifest: false,
       enabledTables: [],
       availableTables: []
@@ -145,32 +149,49 @@ export function deriveAssistantResumeState(options: {
 
   const sourceTables = options.sources?.tables ?? [];
   const connectionTables = sourceTables.filter((table) => table.conn === connection.id);
-  const schema =
-    connection.schemas[0] ?? connectionTables[0]?.schema ?? "";
-  const availableTables = connectionTables.filter(
-    (table) => !schema || table.schema === schema
+  const manifestSchemas = (options.sources?.manifestSchemas ?? []).filter(
+    (manifest) => manifest.conn === connection.id && manifest.schema.trim()
   );
+  const explicitSchemas = connection.schemas.filter((schema) => schema.trim());
+  let schema = "";
+  let schemaUnresolved = false;
+  if (draft?.targetSchema?.trim()) {
+    schema = draft.targetSchema.trim();
+  } else if (explicitSchemas.length === 1) {
+    schema = explicitSchemas[0];
+  } else if (explicitSchemas.length === 0 && manifestSchemas.length === 1) {
+    schema = manifestSchemas[0].schema;
+  } else {
+    schemaUnresolved = true;
+  }
+
+  const availableTables = schema
+    ? connectionTables.filter((table) => table.schema === schema)
+    : [];
   const hasManifest = Boolean(
-    options.sources?.manifestSchemas?.some(
-      (manifest) =>
-        manifest.conn === connection.id && (!schema || manifest.schema === schema)
-    ) || availableTables.length > 0
+    schema &&
+      (manifestSchemas.some((manifest) => manifest.schema === schema) || availableTables.length > 0)
   );
+  const recoveryPending = draft?.recovery === "manifest_written_reload_pending";
   const requiredStep = inferCurrentStep({
     connection,
-    hasManifest,
+    hasManifest: hasManifest && !schemaUnresolved,
     enabledTableCount: connection.enabledTables.length
   });
-  const draftStep = options.draft?.step ?? requiredStep;
-  const step = (
-    requiredStep <= 3
-      ? requiredStep
-      : Math.max(requiredStep, draftStep)
-  ) as SetupStep;
+  const draftStep = draft?.step ?? requiredStep;
+  let step: SetupStep;
+  if (recoveryPending || schemaUnresolved || !hasManifest) {
+    step = 2;
+  } else if (requiredStep <= 3) {
+    step = requiredStep;
+  } else {
+    step = Math.max(requiredStep, draftStep) as SetupStep;
+  }
 
   return {
     step,
     schema,
+    schemaUnresolved,
     hasManifest,
     enabledTables: [...connection.enabledTables],
     availableTables
@@ -428,6 +449,8 @@ export function buildHelloWorldPrompt(connectionId?: string, defaultTable?: stri
 // LocalStorage helpers for draft persistence
 const DRAFT_KEY_PREFIX = "lucy_setup_draft_";
 
+export type SetupAssistantRecovery = "manifest_written_reload_pending";
+
 export type SetupAssistantDraft = {
   connectionId?: string;
   step?: SetupStep;
@@ -435,7 +458,18 @@ export type SetupAssistantDraft = {
   selectedTables?: string[];
   skippedSteps?: SetupStep[];
   updatedAt?: string;
+  targetSchema?: string;
+  recovery?: SetupAssistantRecovery | null;
 };
+
+export function canReadDatabaseStructure(connection?: Pick<ConnectionInfo, "driver" | "wireProtocol" | "engine"> | null): boolean {
+  const protocol = (connection?.wireProtocol ?? "").toLowerCase();
+  if (protocol === "mysql" || protocol === "postgres") return true;
+  const engine = (connection?.engine ?? "").toLowerCase();
+  if (engine === "starrocks" || engine === "doris" || engine.includes("postgres")) return true;
+  const driver = (connection?.driver ?? "").toLowerCase();
+  return driver === "mysql" || driver === "postgres";
+}
 
 export function getAssistantDraft(connectionId: string): SetupAssistantDraft | null {
   try {

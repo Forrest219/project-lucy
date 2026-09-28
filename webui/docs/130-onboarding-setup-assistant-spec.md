@@ -22,6 +22,8 @@
 | 日期 | 2026-09-27 |
 | 范围 | 端到端接入向导 6 步状态机；通俗文案与术语标准；断点续配与专业控制台双轨联动；**现有页面结构与 API 100% 兼容保留** |
 
+2026-09-28：第 2 步上传请求与第 4 步表级 YAML 入口以 [Spec 158](158-setup-assistant-schema-manifest-upload-contract-spec.md) 为准。本文其余已实现描述保持不变。无现成 YAML 的选表路径见 [Spec 157](157-setup-assistant-live-structure-ux-spec.md)。
+
 ---
 
 ## 1. 业务背景与问题分析
@@ -115,14 +117,17 @@ advance(step):
     require latest probe matches current field fingerprint and probe.status == ok
     create connection; refresh project snapshot
   Step 2:
-    upload Schema Manifest OR explicitly skip; refresh sources snapshot
+    upload Schema Manifest via POST /api/catalog/assets/upload
+      with assetKind schema_manifest (Spec 158), OR explicitly skip
+    refresh sources snapshot
   Step 3:
     require availableTables.count > 0
     require selectedTables.count > 0
     show affected scope; write enabled_tables; refresh project + sources snapshot
   Step 4:
     require enabledTables.count > 0
-    save semantic overlay OR explicitly adopt defaults/skip
+    adopt basic field semantics OR explicitly skip
+    do not upload semantic overlay inside the assistant (Spec 158)
   Step 5:
     save non-empty Business Wiki content OR explicitly skip
   Step 6:
@@ -190,6 +195,9 @@ closeAssistant():
 - **主 CTA**：`[继续：定义业务语义 ->]`
 
 ### 3.4 Step 4：丰富业务语义（Semantic Overlay · 可选步骤）
+
+向导内不再提供表级 YAML 上传。基础模式进入下一步；单表导入与语义资产上传留在既有入口。见 Spec 158。
+
 - **核心比喻**：“教 AI 计算口径与核心业务指标”
 - **页面标题**：丰富业务语义 <span translate="no" className="notranslate">(Semantic Modeling)</span> `[可选]`
 - **说明文案**：“为选中的数据表补充业务指标（Metric）、分析维度（Dimension）与常用过滤分群。如果暂不配置，Lucy 会使用基础字段为您提供通用查询。”

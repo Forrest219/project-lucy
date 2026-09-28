@@ -136,6 +136,11 @@ export function Step6ConnectAgent({
   const probeStatus = healthQuery.isLoading
     ? "pending"
     : healthQuery.data?.status ?? "unknown";
+  const manifestPresent =
+    (sourcesQuery.data?.manifestSchemas ?? []).some((item) => item.conn === connectionId) ||
+    (sourcesQuery.data?.tables ?? []).some((item) => item.conn === connectionId);
+  const structureReady =
+    manifestPresent && (connection?.enabledTables.length ?? 0) > 0;
   const readiness = deriveSetupReadiness({
     connection,
     sources: sourcesQuery.data,
@@ -144,6 +149,14 @@ export function Step6ConnectAgent({
     endpointReady: Boolean(endpointUrl) && !endpointInvalid && !endpointFallback,
     credentialReady: Boolean(generatedToken)
   });
+  const actionsLocked = !readiness.serviceReady;
+  const headline = readiness.clientReady
+    ? "可以开始问数"
+    : readiness.serviceReady
+      ? "服务链路已就绪"
+      : structureReady
+        ? "表结构已准备"
+        : "表结构尚未准备";
 
   const copyToClipboard = async (text: string, isPrompt = false, isToken = false) => {
     try {
@@ -186,12 +199,8 @@ export function Step6ConnectAgent({
           <RefreshCw className={`w-5 h-5 text-warning shrink-0 ${healthQuery.isLoading ? "animate-spin" : ""}`} />
         )}
         <div className="text-xs">
-          <span className="font-semibold text-fg-default">
-            {readiness.serviceReady ? (
-              <>数据库 <span className="notranslate" translate="no">{connectionId}</span> 的服务链路已就绪</>
-            ) : (
-              <>数据库 <span className="notranslate" translate="no">{connectionId}</span> 尚未完成运行时检查</>
-            )}
+          <span className="font-semibold text-fg-default" data-testid="setup-readiness-headline">
+            {headline}
           </span>
           {readiness.serviceReady ? (
             <p className="text-fg-muted mt-0.5">服务端已可用；签发凭据后即可完成客户端接入。</p>
@@ -330,7 +339,7 @@ export function Step6ConnectAgent({
                     className="pl-btn pl-btn--primary text-xs py-1.5 px-3 flex items-center gap-1.5 shrink-0 notranslate"
                     translate="no"
                     onClick={handleGenerateToken}
-                    disabled={tokenMutation.isPending || !activeAgentId || (hasBroadScope && !broadScopeAcknowledged)}
+                    disabled={tokenMutation.isPending || !activeAgentId || actionsLocked || (hasBroadScope && !broadScopeAcknowledged)}
                     data-testid="setup-generate-token-btn"
                   >
                     <Sparkles className={`w-3.5 h-3.5 ${tokenMutation.isPending ? "animate-spin" : ""}`} />
@@ -418,7 +427,7 @@ export function Step6ConnectAgent({
               translate="no"
               onClick={() => copyToClipboard(currentConfig.snippet, false)}
               data-testid="setup-copy-config-btn"
-              disabled={!endpointUrl || endpointInvalid}
+              disabled={actionsLocked || !endpointUrl || endpointInvalid}
             >
               {copiedSnippet ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
               <span className="notranslate" translate="no">{copiedSnippet ? "已复制配置" : "复制配置"}</span>
@@ -445,6 +454,7 @@ export function Step6ConnectAgent({
               className="pl-btn pl-btn--ghost text-xs py-1 px-2 flex items-center gap-1 text-primary hover:text-primary-hover"
               onClick={() => copyToClipboard(helloPrompt, true)}
               data-testid="setup-copy-prompt-btn"
+              disabled={actionsLocked || !readiness.clientReady}
             >
               {copiedPrompt ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
               <span>{copiedPrompt ? "已复制提示词" : "复制提示词"}</span>

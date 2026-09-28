@@ -19,6 +19,7 @@ import {
   formatProbeFailure
 } from "../lib/setupAssistant";
 import { SetupAssistantModal } from "../components/onboarding/SetupAssistantModal";
+import { Step2UploadManifest } from "../components/onboarding/Step2UploadManifest";
 import { Step4SemanticOverlay } from "../components/onboarding/Step4SemanticOverlay";
 import { ConnectionOverview } from "../pages/connections/ConnectionOverview";
 import { assertNoForbiddenTerms } from "./forbidden-terms";
@@ -163,6 +164,60 @@ describe("Setup Assistant Library & Utilities", () => {
     ).toBe(2);
   });
 
+  it("keeps an unresolved schema and a pending catalog sync on step 2", () => {
+    const connection: ConnectionInfo = {
+      id: "demo-mysql",
+      schemas: ["billing", "finance"],
+      enabledTables: ["billing.orders"]
+    };
+    const sources: SourcesResponse = {
+      manifestSchemas: [
+        {
+          conn: "demo-mysql",
+          schema: "billing",
+          filePath: "semantic-layer/demo-mysql/_schema/billing.yaml",
+          tableCount: 1,
+          mtime: "2026-09-27T00:00:00.000Z"
+        }
+      ],
+      tables: [
+        {
+          conn: "demo-mysql",
+          schema: "billing",
+          table: "orders",
+          qualifiedName: "billing.orders",
+          filePath: "semantic-layer/demo-mysql/billing/orders.yaml",
+          columnCount: 1,
+          columnNames: ["id"],
+          hasTableDesc: false,
+          hasGrain: false,
+          measureCount: 0,
+          joinCount: 0,
+          wikiRefCount: 0,
+          completion: "partial",
+          mtime: "2026-09-27T00:00:00.000Z",
+          enabled: true,
+          authorizedAgentCount: 1,
+          semanticUpdatedAt: "2026-09-27T00:00:00.000Z",
+          semanticUpdatedAtSource: "manifest"
+        }
+      ]
+    };
+
+    const unresolved = deriveAssistantResumeState({ connection, sources });
+    expect(unresolved.schema).toBe("");
+    expect(unresolved.schemaUnresolved).toBe(true);
+    expect(unresolved.step).toBe(2);
+
+    const pending = deriveAssistantResumeState({
+      connection: { ...connection, schemas: ["billing"] },
+      sources,
+      draft: { step: 6, recovery: "manifest_written_reload_pending", targetSchema: "billing" }
+    });
+    expect(pending.step).toBe(2);
+    expect(pending.schema).toBe("billing");
+  });
+
   it("reports service readiness blockers instead of claiming a broken execution layer is ready", () => {
     const connection: ConnectionInfo = {
       id: "demo-mysql",
@@ -297,10 +352,6 @@ describe("SetupAssistantModal Component", () => {
           );
         }
 
-        if (url === "/api/catalog/assets" && method === "POST") {
-          return new Response(JSON.stringify({ ok: true, data: { ok: true } }));
-        }
-
         if (url === "/api/sources" && method === "GET") {
           return new Response(
             JSON.stringify({
@@ -381,13 +432,47 @@ describe("SetupAssistantModal Component", () => {
                   configured: true,
                   diagnostics: []
                 },
-                connections: []
+                connections: [
+                  {
+                    id: "test-conn",
+                    schemas: ["test_db"],
+                    enabledTables: ["test_db.users"]
+                  }
+                ]
               }
             })
           );
         }
 
-        return new Response(JSON.stringify({ ok: true, data: {} }));
+        if (url === "/api/admin/mcp-runtime/status" && method === "GET") {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                endpoint: { upstreamHost: "127.0.0.1", upstreamPort: 7879 },
+                config: { connectionIds: ["test-conn"] },
+                catalog: {
+                  connectionIds: ["test-conn"],
+                  lastByConnection: { "test-conn": { id: "reload-1", status: "success" } }
+                },
+                policy: { healthy: true },
+                execution: { status: "ok", loadedConnectionIds: ["test-conn"], missingConnections: [] }
+              }
+            })
+          );
+        }
+
+        if (url === "/api/connections/test-conn/test" && method === "POST") {
+          return new Response(JSON.stringify({ ok: true, data: { status: "ok", latencyMs: 15 } }));
+        }
+
+        return new Response(
+          JSON.stringify({
+            ok: false,
+            error: { code: "NOT_FOUND", message: `Route ${method} ${url} not found` }
+          }),
+          { status: 404 }
+        );
       })
     );
   });
@@ -407,7 +492,7 @@ describe("SetupAssistantModal Component", () => {
     );
 
     const stepper = screen.getByRole("navigation", { name: "接入步骤" });
-    expect(stepper).toHaveTextContent("上传 Schema Manifest");
+    expect(stepper).toHaveTextContent("准备表结构");
     expect(stepper).toHaveTextContent("连接 Agent 客户端");
     expect(stepper.querySelector(".truncate")).toBeNull();
     expect(screen.queryByRole("button", { name: "MySQL / Doris / StarRocks" })).not.toBeInTheDocument();
@@ -561,7 +646,13 @@ describe("SetupAssistantModal Component", () => {
             })
           );
         }
-        return new Response(JSON.stringify({ ok: true, data: {} }));
+        return new Response(
+          JSON.stringify({
+            ok: false,
+            error: { code: "NOT_FOUND", message: "Route not found" }
+          }),
+          { status: 404 }
+        );
       })
     );
 
@@ -642,7 +733,7 @@ describe("SetupAssistantModal Component", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it("blocks Step 4 with zero tables and requires table plus YAML in custom mode", () => {
+  it("blocks Step 4 with zero tables and continues with basic field semantics", () => {
     const onSuccess = vi.fn();
     const { rerender } = render(
       <QueryClientProvider client={queryClient}>
@@ -650,14 +741,13 @@ describe("SetupAssistantModal Component", () => {
           connectionId="test-conn"
           enabledTables={[]}
           onSuccess={onSuccess}
-          onSkip={vi.fn()}
           onBack={vi.fn()}
         />
       </QueryClientProvider>
     );
     expect(screen.getByTestId("setup-step4-table-guard")).toBeInTheDocument();
     expect(screen.getByTestId("setup-step4-next")).toBeDisabled();
-    expect(screen.getByTestId("setup-step4-skip")).toBeDisabled();
+    expect(screen.queryByTestId("setup-overlay-mode-custom")).not.toBeInTheDocument();
 
     rerender(
       <QueryClientProvider client={queryClient}>
@@ -665,17 +755,18 @@ describe("SetupAssistantModal Component", () => {
           connectionId="test-conn"
           enabledTables={["test_db.users"]}
           onSuccess={onSuccess}
-          onSkip={vi.fn()}
           onBack={vi.fn()}
         />
       </QueryClientProvider>
     );
-    fireEvent.click(screen.getByTestId("setup-overlay-mode-custom"));
-    expect(screen.getByTestId("setup-step4-next")).toBeDisabled();
-    fireEvent.change(screen.getByTestId("setup-overlay-textarea"), {
-      target: { value: "measures:\n  - name: total" }
-    });
+    expect(screen.getByTestId("setup-step4-overlay-guidance")).toHaveTextContent("semantic overlay");
     expect(screen.getByTestId("setup-step4-next")).not.toBeDisabled();
+    fireEvent.click(screen.getByTestId("setup-step4-next"));
+    expect(onSuccess).toHaveBeenCalledTimes(1);
+    const catalogCalls = vi.mocked(global.fetch).mock.calls.filter(([input]) =>
+      String(input).includes("/api/catalog/assets")
+    );
+    expect(catalogCalls).toHaveLength(0);
   });
 
   it("allows skipping Step 2, selecting tables in Step 3, skipping Step 4 & 5, and finishing at Step 6", async () => {
@@ -688,9 +779,22 @@ describe("SetupAssistantModal Component", () => {
       </QueryClientProvider>
     );
 
-    // Step 2: Skip
     expect(screen.getByTestId("setup-step-2")).toBeInTheDocument();
-    fireEvent.click(screen.getByTestId("setup-step2-skip"));
+    expect(screen.getByTestId("setup-step2-exit")).toHaveTextContent("结束并稍后继续");
+    fireEvent.click(screen.getByTestId("setup-step2-exit"));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(getAssistantDraft("test-conn")?.step).toBe(2);
+    expect(screen.queryByTestId("setup-step-3")).not.toBeInTheDocument();
+    cleanup();
+
+    onClose.mockClear();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <SetupAssistantModal open onClose={onClose} initialStep={3} initialConnectionId="test-conn" />
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
 
     // Step 3: Select tables
     await waitFor(() => {
@@ -699,6 +803,7 @@ describe("SetupAssistantModal Component", () => {
     await waitFor(() => {
       expect(screen.getByTestId("setup-table-item-test_db.users")).toBeInTheDocument();
     });
+    fireEvent.click(screen.getByTestId("setup-table-item-test_db.users"));
     fireEvent.click(screen.getByTestId("setup-step3-next"));
 
     // Step 4: Skip semantic overlay
@@ -714,7 +819,7 @@ describe("SetupAssistantModal Component", () => {
       enabledTables: ["test_db.users"],
       dryRun: false
     });
-    fireEvent.click(screen.getByTestId("setup-step4-skip"));
+    fireEvent.click(screen.getByTestId("setup-step4-next"));
 
     // Step 5: Skip business wiki
     await waitFor(() => {
@@ -860,6 +965,306 @@ describe("SetupAssistantModal Component", () => {
 
     // Regenerate button is available
     expect(screen.getByTestId("setup-regenerate-token-btn")).toBeInTheDocument();
+  });
+});
+
+describe("Setup Assistant manifest upload contract", () => {
+  let queryClient: QueryClient;
+
+  beforeEach(() => {
+    localStorage.clear();
+    queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } }
+    });
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  function validation(overrides: Record<string, unknown> = {}) {
+    return {
+      valid: true,
+      connectionId: "mysql-aliyun",
+      schema: "chatbi",
+      assetKind: "schema_manifest",
+      assetType: "schemaManifest",
+      targetPath: "semantic-layer/mysql-aliyun/_schema/chatbi.yaml",
+      exists: false,
+      originalFilename: "chatbi.yaml",
+      sizeBytes: 24,
+      sha256: "abc",
+      tables: 8,
+      tableNames: ["orders"],
+      warnings: [],
+      errors: [],
+      ...overrides
+    };
+  }
+
+  function installFetch(uploadExistsOnFirstTry: boolean) {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        const method = init?.method || "GET";
+        const body = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {};
+        if (url === "/api/catalog/assets/validate" && method === "POST") {
+          if (String(body.content).includes("not-yaml")) {
+            return new Response(JSON.stringify({
+              ok: true,
+              data: validation({
+                valid: false,
+                tables: 0,
+                tableNames: [],
+                errors: [{ code: "YAML_PARSE_FAILED", message: "YAML 无法解析" }]
+              })
+            }));
+          }
+          return new Response(JSON.stringify({
+            ok: true,
+            data: validation({ exists: uploadExistsOnFirstTry })
+          }));
+        }
+        if (url === "/api/catalog/assets/upload" && method === "POST") {
+          if (body.confirmOverwrite !== true && uploadExistsOnFirstTry) {
+            return new Response(JSON.stringify({
+              ok: false,
+              error: {
+                code: "TARGET_EXISTS",
+                message: "目标 YAML 已存在，请确认覆盖后重试。"
+              },
+              data: { validation: validation({ exists: true }) }
+            }), { status: 409 });
+          }
+          return new Response(JSON.stringify({
+            ok: true,
+            data: {
+              uploaded: true,
+              validation: validation({ exists: Boolean(body.confirmOverwrite) }),
+              record: { tables: 8 },
+              reload: { id: "reload-1", status: "success" }
+            }
+          }));
+        }
+        if (url === "/api/sources" && method === "GET") {
+          return new Response(JSON.stringify({ ok: true, data: { tables: [], manifestSchemas: [] } }));
+        }
+        return new Response(
+          JSON.stringify({
+            ok: false,
+            error: { code: "NOT_FOUND", message: `Route ${method} ${url} not found` }
+          }),
+          { status: 404 }
+        );
+      })
+    );
+  }
+
+  function catalogCalls() {
+    return vi.mocked(global.fetch).mock.calls
+      .map(([input, init]) => ({
+        url: String(input),
+        method: init?.method || "GET",
+        body: init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : null
+      }))
+      .filter((call) => call.url.startsWith("/api/catalog/assets"));
+  }
+
+  it("uploads through /api/catalog/assets/upload with schema_manifest", async () => {
+    installFetch(false);
+    const onSuccess = vi.fn();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <Step2UploadManifest
+          connectionId="mysql-aliyun"
+          schema="chatbi"
+          onSuccess={onSuccess}
+          onExit={vi.fn()}
+        />
+      </QueryClientProvider>
+    );
+
+    fireEvent.change(screen.getByTestId("setup-manifest-textarea"), {
+      target: { value: "tables:\n  orders:\n    table: chatbi.orders\n" }
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("setup-step2-next")).toBeEnabled();
+    });
+    fireEvent.click(screen.getByTestId("setup-step2-next"));
+    await waitFor(() => {
+      expect(onSuccess).toHaveBeenCalledWith(8);
+    });
+
+    const calls = catalogCalls();
+    expect(calls.map((call) => `${call.method} ${call.url}`)).toEqual([
+      "POST /api/catalog/assets/validate",
+      "POST /api/catalog/assets/upload"
+    ]);
+    expect(calls[0]?.body).toMatchObject({
+      connectionId: "mysql-aliyun",
+      schema: "chatbi",
+      assetKind: "schema_manifest",
+      filename: "chatbi.yaml"
+    });
+    expect(calls[0]?.body).not.toHaveProperty("confirmOverwrite");
+    expect(calls[1]?.body).toMatchObject({
+      connectionId: "mysql-aliyun",
+      schema: "chatbi",
+      assetKind: "schema_manifest",
+      filename: "chatbi.yaml",
+      content: expect.stringContaining("orders")
+    });
+    expect(calls[1]?.body).not.toHaveProperty("confirmOverwrite");
+    expect(calls.some((call) => call.url === "/api/catalog/assets")).toBe(false);
+  });
+
+  it("keeps invalid YAML on step 2 and does not upload", async () => {
+    installFetch(false);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <Step2UploadManifest
+          connectionId="mysql-aliyun"
+          schema="chatbi"
+          onSuccess={vi.fn()}
+          onExit={vi.fn()}
+        />
+      </QueryClientProvider>
+    );
+    fireEvent.change(screen.getByTestId("setup-manifest-textarea"), {
+      target: { value: "not-yaml: [" }
+    });
+    await waitFor(() => {
+      expect(screen.getByText("YAML 无法解析")).toBeInTheDocument();
+    });
+    expect(screen.getByTestId("setup-step2-next")).toBeDisabled();
+    expect(catalogCalls().some((call) => call.url.endsWith("/upload"))).toBe(false);
+    expect(screen.queryByText(/Route POST \/api\/catalog\/assets not found/)).not.toBeInTheDocument();
+  });
+
+  it("sends confirmOverwrite only on the upload after overwrite confirmation", async () => {
+    installFetch(true);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <Step2UploadManifest
+          connectionId="mysql-aliyun"
+          schema="chatbi"
+          onSuccess={vi.fn()}
+          onExit={vi.fn()}
+        />
+      </QueryClientProvider>
+    );
+    fireEvent.change(screen.getByTestId("setup-manifest-textarea"), {
+      target: { value: "tables:\n  orders:\n    table: chatbi.orders\n" }
+    });
+    const overwrite = await screen.findByTestId("setup-manifest-confirm-overwrite");
+    expect(screen.getByTestId("setup-step2-next")).toBeDisabled();
+    fireEvent.click(overwrite);
+    expect(screen.getByTestId("setup-step2-next")).toBeEnabled();
+    fireEvent.click(screen.getByTestId("setup-step2-next"));
+    await waitFor(() => {
+      expect(catalogCalls().some((call) => call.url.endsWith("/upload"))).toBe(true);
+    });
+    const uploads = catalogCalls().filter((call) => call.url.endsWith("/upload"));
+    expect(uploads).toHaveLength(1);
+    expect(uploads[0]?.body).toMatchObject({ confirmOverwrite: true, assetKind: "schema_manifest" });
+  });
+
+  it("retries upload with confirmOverwrite after TARGET_EXISTS", async () => {
+    installFetch(false);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        const method = init?.method || "GET";
+        const body = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {};
+        if (url === "/api/catalog/assets/validate" && method === "POST") {
+          return new Response(JSON.stringify({ ok: true, data: validation({ exists: false }) }));
+        }
+        if (url === "/api/catalog/assets/upload" && method === "POST") {
+          if (body.confirmOverwrite !== true) {
+            return new Response(JSON.stringify({
+              ok: false,
+              error: { code: "TARGET_EXISTS", message: "目标 YAML 已存在，请确认覆盖后重试。" },
+              data: { validation: validation({ exists: true }) }
+            }), { status: 409 });
+          }
+          return new Response(JSON.stringify({
+            ok: true,
+            data: {
+              uploaded: true,
+              validation: validation({ exists: true }),
+              record: { tables: 8 },
+              reload: { id: "reload-1", status: "success" }
+            }
+          }));
+        }
+        return new Response(
+          JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: "Route not found" } }),
+          { status: 404 }
+        );
+      })
+    );
+    const onSuccess = vi.fn();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <Step2UploadManifest
+          connectionId="mysql-aliyun"
+          schema="chatbi"
+          onSuccess={onSuccess}
+          onExit={vi.fn()}
+        />
+      </QueryClientProvider>
+    );
+    fireEvent.change(screen.getByTestId("setup-manifest-textarea"), {
+      target: { value: "tables:\n  orders:\n    table: chatbi.orders\n" }
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("setup-step2-next")).toBeEnabled();
+    });
+    fireEvent.click(screen.getByTestId("setup-step2-next"));
+    expect(await screen.findByText("目标 YAML 已存在，请确认覆盖后重试。")).toBeInTheDocument();
+    expect(onSuccess).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId("setup-manifest-confirm-overwrite"));
+    fireEvent.click(screen.getByTestId("setup-step2-next"));
+    await waitFor(() => {
+      expect(onSuccess).toHaveBeenCalledWith(8);
+    });
+    const uploads = catalogCalls().filter((call) => call.url.endsWith("/upload"));
+    expect(uploads[0]?.body).not.toHaveProperty("confirmOverwrite");
+    expect(uploads[1]?.body).toMatchObject({ confirmOverwrite: true });
+  });
+
+  it("shows the parsed table count after the wizard advances", async () => {
+    installFetch(false);
+    const connection: ConnectionInfo = {
+      id: "mysql-aliyun",
+      schemas: ["chatbi"],
+      enabledTables: []
+    };
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <SetupAssistantModal
+            open
+            onClose={vi.fn()}
+            initialConnection={connection}
+            initialSources={{ tables: [], manifestSchemas: [] }}
+          />
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+    expect(await screen.findByTestId("setup-step-2")).toBeInTheDocument();
+    fireEvent.change(screen.getByTestId("setup-manifest-textarea"), {
+      target: { value: "tables:\n  orders:\n    table: chatbi.orders\n" }
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("setup-step2-next")).toBeEnabled();
+    });
+    fireEvent.click(screen.getByTestId("setup-step2-next"));
+    expect(await screen.findByTestId("setup-manifest-parsed-count")).toHaveTextContent("已解析 8 张表");
+    expect(screen.getByTestId("setup-step-3")).toBeInTheDocument();
   });
 });
 

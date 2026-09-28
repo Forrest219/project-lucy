@@ -647,6 +647,8 @@
 | `setup-host` | setup-host | `components/onboarding/Step1ConnectDb.tsx` |
 | `setup-port` | setup-port | `components/onboarding/Step1ConnectDb.tsx` |
 | `setup-database` | setup-database | `components/onboarding/Step1ConnectDb.tsx` |
+| `setup-driver` | setup-driver | `components/onboarding/Step1ConnectDb.tsx` |
+| `setup-engine-hint` | setup-engine-hint | `components/onboarding/Step1ConnectDb.tsx` |
 | `setup-schema` | setup-schema | `components/onboarding/Step1ConnectDb.tsx` |
 | `setup-username` | setup-username | `components/onboarding/Step1ConnectDb.tsx` |
 | `setup-password` | setup-password | `components/onboarding/Step1ConnectDb.tsx` |
@@ -655,18 +657,24 @@
 | `setup-step-2` | setup-step-2 | `components/onboarding/Step2UploadManifest.tsx` |
 | `setup-manifest-file-input` | setup-manifest-file-input | `components/onboarding/Step2UploadManifest.tsx` |
 | `setup-manifest-textarea` | setup-manifest-textarea | `components/onboarding/Step2UploadManifest.tsx` |
-| `setup-step2-skip` | setup-step2-skip | `components/onboarding/Step2UploadManifest.tsx` |
+| `setup-step2-exit` | setup-step2-exit | `components/onboarding/Step2UploadManifest.tsx` |
+| `setup-step2-status` | setup-step2-status | `components/onboarding/Step2UploadManifest.tsx` |
+| `setup-step2-secondary` | setup-step2-secondary | `components/onboarding/Step2UploadManifest.tsx` |
+| `setup-step2-upload` | setup-step2-upload | `components/onboarding/Step2UploadManifest.tsx` |
+| `setup-downgrade-preview` | setup-downgrade-preview | `components/onboarding/Step2UploadManifest.tsx` |
+| `setup-downgrade-confirm` | setup-downgrade-confirm | `components/onboarding/Step2UploadManifest.tsx` |
+| `setup-schema-${item.schema}` | setup-schema-${item.schema} | `components/onboarding/Step2UploadManifest.tsx` |
 | `setup-step2-next` | setup-step2-next | `components/onboarding/Step2UploadManifest.tsx` |
 | `setup-step-3` | setup-step-3 | `components/onboarding/Step3SelectTables.tsx` |
 | `setup-select-all` | setup-select-all | `components/onboarding/Step3SelectTables.tsx` |
 | `setup-select-none` | setup-select-none | `components/onboarding/Step3SelectTables.tsx` |
+| `setup-table-search` | setup-table-search | `components/onboarding/Step3SelectTables.tsx` |
+| `setup-step3-resync` | setup-step3-resync | `components/onboarding/Step3SelectTables.tsx` |
 | `setup-step3-next` | setup-step3-next | `components/onboarding/Step3SelectTables.tsx` |
 | `setup-step-4` | setup-step-4 | `components/onboarding/Step4SemanticOverlay.tsx` |
-| `setup-overlay-mode-auto` | setup-overlay-mode-auto | `components/onboarding/Step4SemanticOverlay.tsx` |
-| `setup-overlay-mode-custom` | setup-overlay-mode-custom | `components/onboarding/Step4SemanticOverlay.tsx` |
-| `setup-overlay-table-select` | setup-overlay-table-select | `components/onboarding/Step4SemanticOverlay.tsx` |
-| `setup-overlay-textarea` | setup-overlay-textarea | `components/onboarding/Step4SemanticOverlay.tsx` |
-| `setup-step4-skip` | setup-step4-skip | `components/onboarding/Step4SemanticOverlay.tsx` |
+| `setup-manifest-confirm-overwrite` | setup-manifest-confirm-overwrite | `components/onboarding/Step2UploadManifest.tsx` |
+| `setup-manifest-parsed-count` | setup-manifest-parsed-count | `components/onboarding/SetupAssistantModal.tsx` |
+| `setup-step4-overlay-guidance` | setup-step4-overlay-guidance | `components/onboarding/Step4SemanticOverlay.tsx` |
 | `setup-step4-next` | setup-step4-next | `components/onboarding/Step4SemanticOverlay.tsx` |
 | `setup-step-5` | setup-step-5 | `components/onboarding/Step5BusinessWiki.tsx` |
 | `setup-wiki-file-input` | setup-wiki-file-input | `components/onboarding/Step5BusinessWiki.tsx` |
@@ -675,6 +683,7 @@
 | `setup-step5-skip` | setup-step5-skip | `components/onboarding/Step5BusinessWiki.tsx` |
 | `setup-step5-next` | setup-step5-next | `components/onboarding/Step5BusinessWiki.tsx` |
 | `setup-step-6` | setup-step-6 | `components/onboarding/Step6ConnectAgent.tsx` |
+| `setup-readiness-headline` | setup-readiness-headline | `components/onboarding/Step6ConnectAgent.tsx` |
 | `setup-copy-config-btn` | setup-copy-config-btn | `components/onboarding/Step6ConnectAgent.tsx` |
 | `setup-copy-prompt-btn` | setup-copy-prompt-btn | `components/onboarding/Step6ConnectAgent.tsx` |
 | `setup-goto-playground` | setup-goto-playground | `components/onboarding/Step6ConnectAgent.tsx` |
@@ -1203,3 +1212,33 @@
 | `mcp-runtime-recheck-${testConnectionId}` | MCP 运行时复检（模板） | `components/McpRuntimeStatusPanel.tsx` |
 | `call-monitor-tool-${row.tool}` | 工具统计行（模板） | `pages/ops/CallMonitor.tsx` |
 | `call-monitor-failure-${row.id}` | 失败调用行（模板） | `pages/ops/CallMonitor.tsx` |
+## 2026-09-27 · Setup / Catalog / Role / Agent 增量合同
+
+| testid | 页面 / 组件 | 用途 |
+|---|---|---|
+| `catalog-scope-tree` | CatalogScopeTree | Catalog 连接与 Schema 范围树容器 |
+| `catalog-tree-root` | CatalogScopeTree | 全部连接根节点 |
+| `catalog-tree-toggle-${connectionIndex}` | CatalogScopeTree | 展开或收起连接节点 |
+| `catalog-tree-connection-${connectionIndex}` | CatalogScopeTree | 连接节点 |
+| `catalog-tree-schema-${connectionIndex}-${schemaIndex}` | CatalogScopeTree | Schema 节点 |
+| `object-detail-role-invalid` | ObjectDetailDrawer | 无效 Role 关联提示 |
+| `setup-discard-confirm` | SetupAssistantModal | 放弃向导确认操作 |
+| `setup-discard-close` | SetupAssistantModal | 关闭放弃确认框 |
+| `setup-step4-table-guard` | Step4SemanticOverlay | 语义步骤选表前置门禁 |
+| `setup-readiness-summary` | Step6ConnectAgent | 接入准备度摘要 |
+| `setup-readiness-issues` | Step6ConnectAgent | 接入阻塞项列表 |
+| `setup-token-expiry` | Step6ConnectAgent | Token 过期时间 |
+| `setup-token-broad-ack` | Step6ConnectAgent | 宽权限 Token 确认 |
+| `agent-stats-time` | AgentList | Agent 统计时间 |
+| `agent-audit-completeness` | AgentList | 审计完整性摘要 |
+| `agent-auto-refresh` | AgentList | 自动刷新开关 |
+| `agent-refresh` | AgentList | 手动刷新 |
+| `agent-audit-partial-notice` | AgentList | 审计数据不完整提示 |
+| `agent-credential-partial-notice` | AgentList | 凭据统计不完整提示 |
+| `agent-metrics-unavailable-${agent.id}` | AgentList | Agent 指标不可用提示 |
+| `agent-used-credentials-${agent.id}` | AgentList | Agent 已使用凭据数 |
+| `agent-protocol-calls-7d-${agent.id}` | AgentList | Agent 七日协议调用量 |
+| `role-advanced-filters-toggle` | RoleList | 展开高级筛选 |
+| `role-clear-filters` | RoleList | 清空筛选条件 |
+| `role-advanced-filters` | RoleList | 高级筛选区域 |
+| `role-clear-filters-empty` | RoleList | 空态清空筛选入口 |

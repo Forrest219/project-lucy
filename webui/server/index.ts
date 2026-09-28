@@ -15,6 +15,7 @@ import {
   listLiveSchemas,
   LiveCatalogConnectionNotFoundError
 } from "./live-catalog";
+import { previewSchemaStructure, SchemaStructureError } from "./schema-structure";
 import {
   addSchema,
   createConnection,
@@ -1188,6 +1189,26 @@ export function buildServer() {
       }
     }
     return { ok: true, data: { tables: tables.sort() } };
+  });
+
+  app.post<{
+    Params: { connId: string };
+    Body: { schema?: string };
+  }>("/api/connections/:connId/schema-structure", async (request) => {
+    const projectRoot = await resolveProjectRoot();
+    const schema = request.body?.schema;
+    if (typeof schema !== "string" || !schema.trim()) {
+      throw enabledTableError("BAD_REQUEST", "schema is required");
+    }
+    try {
+      const data = await previewSchemaStructure(projectRoot, request.params.connId, schema);
+      return { ok: true, data };
+    } catch (err) {
+      if (err instanceof SchemaStructureError) {
+        throw enabledTableError(err.code, err.message);
+      }
+      throw err;
+    }
   });
 
   app.get<{

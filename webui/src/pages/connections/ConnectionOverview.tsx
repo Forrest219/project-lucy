@@ -33,8 +33,9 @@ import { DeleteConnectionDrawer } from "../../components/DeleteConnectionDrawer"
 import { RemoveSchemaDrawer } from "../../components/RemoveSchemaDrawer";
 import { SetupAssistantModal } from "../../components/onboarding";
 import {
-  inferCurrentStep,
+  deriveAssistantResumeState,
   formatAssistantProgressLabel,
+  getAssistantDraft,
   type SetupStep
 } from "../../lib/setupAssistant";
 import {
@@ -691,11 +692,12 @@ export function ConnectionOverview() {
             const headerTimestampIso = lastRun?.startedAt ?? null;
             const engine = engineLabel(conn.engine ?? conn.driver);
             const engineTone = engineKey(conn.engine ?? conn.driver);
-            const cardAssistantStep = inferCurrentStep({
+            const cardAssistantState = deriveAssistantResumeState({
               connection: conn,
-              hasManifest: schemaRows.some((r) => r.assetState.label === "已存在"),
-              enabledTableCount: conn.enabledTables.length
+              sources: sourcesQuery.data ?? null,
+              draft: getAssistantDraft(conn.id)
             });
+            const cardAssistantStep = cardAssistantState.step;
             const isAssistantInProgress = cardAssistantStep < 6;
             const showCatalogRunStatus = shouldShowCatalogRunStatus(
               lastRun,

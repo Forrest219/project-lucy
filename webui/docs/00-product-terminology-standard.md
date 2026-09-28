@@ -392,6 +392,21 @@ Connection (连接)
 | 资产包导入 / 导出 | Consumer | Consumer | Owner |
 | validate / reindex | 基础刷新后可触发 | 语义变更后必须触发 | 发布 gate 必须触发 |
 
+接入向导主文案（Spec 157 / 158）：
+
+| 说法 | 用途 | 不使用 |
+|---|---|---|
+| 准备表结构 | 第 2 步标题和第 1 步出口 | 把「上传 Schema Manifest」当作唯一步骤名 |
+| 从数据库读取表结构 | 尚无 Schema Manifest 时的主按钮 | 自动生成清单、跳过 Manifest |
+| 使用已有 Schema Manifest | 已有资产时的默认主动作 | 请重新上传、强制替换 |
+| 我已有 Schema Manifest | 展开上传 | 裸「上传 YAML」 |
+| 替换已有 Schema Manifest | 主动覆盖入口，确认后再写入 | 自动覆盖 |
+| 结束并稍后继续 | 关闭并保留第 2 步断点 | 稍后上传 Schema Manifest |
+| 暂不补充业务语义，使用数据库字段信息继续 | 第 4 步默认动作 | 采用基础字段语义、自动生成语义 |
+| 表结构已准备 | 仅 Schema Manifest 与启用表已满足 | 问答已就绪、服务已就绪 |
+| 服务链路已就绪 | 运行时门禁通过 | 仅结构满足时使用 |
+| 客户端已就绪 | 服务已就绪且已有有效凭据 | 尚未签发凭据时使用 |
+
 按钮、Drawer 标题、Toast 主动作不得裸用 `上传 YAML`。必须写明 `上传 Schema Manifest`、`上传 semantic overlay` 或 `上传资产包`；说明文中使用 `YAML 资产` 总称时，必须在同一段落中说明具体类型。
 
 入口归属：
