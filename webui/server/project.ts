@@ -27,6 +27,8 @@ import type {
   RemoveSchemaResult
 } from "./model";
 import { previewDiff } from "./diff";
+import { assertEndpointGate, type EndpointFlags } from "./connection-endpoint-gate.js";
+import { withKtxYamlWriteLock } from "./ktx-yaml-write-lock.js";
 import type { ConnectionTestResult } from "./ktx";
 
 export type ProjectOptions = {
@@ -281,11 +283,15 @@ function wireProtocol(conn: Record<string, unknown>, engine?: string): Connectio
   const explicit = normalizedString(conn.wire_protocol ?? conn.protocol);
   if (explicit === "mysql" || explicit === "mysql-wire") return "mysql";
   if (explicit === "postgres" || explicit === "postgresql") return "postgres";
+  if (explicit === "sqlserver" || explicit === "mssql") return "sqlserver";
+  if (explicit === "oracle") return "oracle";
   if (explicit === "native") return "native";
   const driver = normalizedString(conn.driver);
   if (engine === "doris" || engine === "starrocks") return "mysql";
   if (driver?.includes("mysql")) return "mysql";
   if (driver?.includes("postgres")) return "postgres";
+  if (driver?.includes("sqlserver") || driver?.includes("mssql")) return "sqlserver";
+  if (driver?.includes("oracle")) return "oracle";
   return "unknown";
 }
 
@@ -394,6 +400,8 @@ export async function readConnections(projectRoot: string): Promise<ConnectionIn
 
 export type WriteKtxYamlOptions = {
   dryRun?: boolean;
+  /** Internal re-entry marker for callers already holding withKtxYamlWriteLock. */
+  lockHeld?: boolean;
 };
 
 export type WriteKtxYamlResult = {
@@ -407,6 +415,11 @@ export async function writeKtxYaml(
   mutator: (doc: ReturnType<typeof parseDocument>) => void,
   opts: WriteKtxYamlOptions = {}
 ): Promise<WriteKtxYamlResult> {
+  if (!opts.dryRun && !opts.lockHeld) {
+    return withKtxYamlWriteLock(() =>
+      writeKtxYaml(root, mutator, { ...opts, lockHeld: true })
+    );
+  }
   const filePath = path.join(root, "ktx.yaml");
   const oldText = await readFile(filePath, "utf8");
   const doc = parseDocument(oldText, { keepSourceTokens: true });
@@ -1211,6 +1224,9 @@ export type CreateConnectionOptions = {
   recordConfigChange?: typeof import("./admin/audit").recordConfigChange;
   testConnectionFn?: typeof testConnection;
   execFileImpl?: Parameters<typeof testConnection>[2];
+  endpointFlags?: EndpointFlags;
+  /** Set only by the write-lock re-entry. Callers must not pass this. */
+  endpointLockHeld?: boolean;
 };
 
 function requiredNonEmptyString(value: unknown, field: string): string {
@@ -1365,10 +1381,18 @@ function connectionInfoFromInput(
     wireProtocol = "mysql";
   } else if (input.wireProtocol === "postgres" || input.wireProtocol === "postgresql") {
     wireProtocol = "postgres";
+  } else if (input.wireProtocol === "sqlserver" || input.wireProtocol === "mssql") {
+    wireProtocol = "sqlserver";
+  } else if (input.wireProtocol === "oracle") {
+    wireProtocol = "oracle";
   } else if (engine === "doris" || engine === "starrocks" || input.driver === "mysql") {
     wireProtocol = "mysql";
   } else if (input.driver === "postgres") {
     wireProtocol = "postgres";
+  } else if (input.driver === "sqlserver") {
+    wireProtocol = "sqlserver";
+  } else if (input.driver === "oracle") {
+    wireProtocol = "oracle";
   }
   return {
     id: input.id,
@@ -1410,7 +1434,13 @@ export async function createConnection(
   dryRun: boolean,
   options: CreateConnectionOptions = {}
 ): Promise<CreateConnectionPreview | CreateConnectionResult> {
+  if (dryRun === false && !options.endpointLockHeld) {
+    return withKtxYamlWriteLock(() =>
+      createConnection(root, rawInput, false, { ...options, endpointLockHeld: true })
+    );
+  }
   const input = validateCreateConnectionInput(rawInput);
+  const gate = await assertEndpointGate(root, input, options.endpointFlags);
   const isSqlite = input.driver === "sqlite";
   const hasPasswordInput = typeof input.password === "string" && input.password.length > 0;
   const secretRelPath = connectionSecretRelPath(input.id);
@@ -1444,7 +1474,7 @@ export async function createConnection(
       await safeWriteNewSecretPassword(root, secretRelPath, input.password!);
       secretWritten = true;
     }
-    await writeKtxYaml(root, mutator, { dryRun: false });
+    await writeKtxYaml(root, mutator, { dryRun: false, lockHeld: true });
     yamlWritten = true;
   } catch (error) {
     if (yamlWritten) {
@@ -1496,7 +1526,9 @@ export async function createConnection(
         port: input.port,
         database: input.database,
         username: input.username,
-        testStatus
+        testStatus,
+        ...(gate.acknowledgedSeparateEndpoint ? { acknowledgedSeparateEndpoint: true } : {}),
+        ...(gate.acknowledgedDifferentDatabase ? { acknowledgedDifferentDatabase: true } : {})
       },
       diff
     });

@@ -392,6 +392,36 @@ function previewPayload() {
   );
 }
 
+function endpointGatePayload(
+  reason: "multiple" | "username_differs" | "reuse_existing_credentials" = "reuse_existing_credentials",
+  matches = [
+    {
+      id: "mysql-aliyun",
+      driver: "mysql",
+      host: "127.0.0.1",
+      port: "3306",
+      database: "dataforai",
+      username: "lucy_ro",
+      schemas: ["dataforai"]
+    }
+  ]
+) {
+  return new Response(
+    JSON.stringify({
+      ok: false,
+      error: {
+        code: "ENDPOINT_ALREADY_CONNECTED",
+        message:
+          reason === "multiple"
+            ? "请选择要把 Schema 加到哪一条连接。"
+            : "主机端口已有连接。添加 Schema 将使用已有凭据，新输入的密码不会保存。",
+        detail: { reason, schema: "analytics", matches }
+      }
+    }),
+    { status: 409, headers: { "content-type": "application/json" } }
+  );
+}
+
 describe("CreateConnectionDrawer UX", () => {
   it("shows human-readable id rules instead of a raw regex", () => {
     renderDrawer();
@@ -506,5 +536,231 @@ describe("CreateConnectionDrawer UX", () => {
       /\.pl-connection-field-pair\s*\{[^}]*grid-template-rows:\s*auto\s+auto\s+auto/s
     );
     expect(css).toMatch(/\.pl-connection-field--pair\s*\{[^}]*grid-template-rows:\s*subgrid/s);
+  });
+});
+
+describe("CreateConnectionDrawer endpoint gate", () => {
+  it("shows add schema instead of a new-connection preview when the host port is already connected", async () => {
+    stubFetch({
+      "POST /api/connections": () =>
+        new Response(
+          JSON.stringify({
+            ok: false,
+            error: {
+              code: "ENDPOINT_ALREADY_CONNECTED",
+              message: "主机端口已有连接。添加 Schema 将使用已有凭据，新输入的密码不会保存。",
+              detail: {
+                reason: "reuse_existing_credentials",
+                schema: "analytics",
+                matches: [
+                  {
+                    id: "mysql-aliyun",
+                    driver: "mysql",
+                    host: "127.0.0.1",
+                    port: "3306",
+                    database: "dataforai",
+                    username: "lucy_ro",
+                    schemas: ["dataforai"]
+                  }
+                ]
+              }
+            }
+          }),
+          { status: 409, headers: { "content-type": "application/json" } }
+        )
+    });
+    renderDrawer();
+    fillRequiredFields();
+    fireEvent.click(screen.getByTestId("create-connection-preview-btn"));
+    expect(await screen.findByTestId("endpoint-gate-panel")).toHaveTextContent("将使用已有凭据，新输入的密码不会保存");
+    expect(screen.getByTestId("endpoint-gate-add-schema")).toBeInTheDocument();
+    expect(screen.getByTestId("endpoint-gate-separate")).toBeInTheDocument();
+    expect(screen.queryByTestId("create-connection-preview-btn")).not.toBeVisible();
+  });
+
+  it("refreshes live schemas and adds the schema to the existing connection", async () => {
+    const live = vi.fn(() =>
+      new Response(
+        JSON.stringify({
+          ok: true,
+          data: {
+            status: "ok",
+            connectionId: "mysql-aliyun",
+            schemas: [{ schema: "analytics", tableCount: 3 }],
+            fetchedAt: "2026-09-28T00:00:00.000Z",
+            cached: false,
+            wireProtocol: "mysql"
+          }
+        })
+      )
+    );
+    const add = vi.fn(() =>
+      new Response(JSON.stringify({ ok: true, data: { written: true } }))
+    );
+    const { onClose } = renderDrawer();
+    stubFetch({
+      "POST /api/connections": () => endpointGatePayload(),
+      "GET /api/connections/mysql-aliyun/live-schemas?refresh=1": live,
+      "POST /api/connections/mysql-aliyun/schemas": add
+    });
+    fillRequiredFields();
+    fireEvent.click(screen.getByTestId("create-connection-preview-btn"));
+    fireEvent.click(await screen.findByTestId("endpoint-gate-add-schema"));
+
+    await waitFor(() => expect(add).toHaveBeenCalledWith({ schema: "analytics", dryRun: false }));
+    expect(live).toHaveBeenCalledOnce();
+    expect(toastMocks.success).toHaveBeenCalledWith("已添加 Schema: analytics");
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it("offers a separate connection only after a fresh lookup cannot find the schema", async () => {
+    const createBodies: unknown[] = [];
+    stubFetch({
+      "POST /api/connections": (body) => {
+        createBodies.push(body);
+        if ((body as { dryRun?: boolean }).dryRun === false) {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                written: true,
+                connection: { id: "demo-mysql", driver: "mysql", schemas: ["analytics"], enabledTables: [] },
+                test: { status: "ok" }
+              }
+            })
+          );
+        }
+        return endpointGatePayload();
+      },
+      "GET /api/connections/mysql-aliyun/live-schemas?refresh=1": () =>
+        new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              status: "ok",
+              connectionId: "mysql-aliyun",
+              schemas: [],
+              fetchedAt: "2026-09-28T00:00:00.000Z",
+              cached: false,
+              wireProtocol: "mysql"
+            }
+          })
+        )
+    });
+    renderDrawer();
+    fillRequiredFields();
+    fireEvent.click(screen.getByTestId("create-connection-preview-btn"));
+    fireEvent.click(await screen.findByTestId("endpoint-gate-add-schema"));
+    expect(await screen.findByText("已有连接看不到该 Schema。")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("endpoint-gate-separate"));
+
+    await screen.findByTestId("create-connection-success");
+    expect(createBodies[1]).toMatchObject({
+      dryRun: false,
+      password: "s3cret",
+      acknowledgeSeparateConnection: true
+    });
+  });
+
+  it("allows retrying a failed live lookup without recreating the gate", async () => {
+    let attempts = 0;
+    const add = vi.fn(() =>
+      new Response(JSON.stringify({ ok: true, data: { written: true } }))
+    );
+    stubFetch({
+      "POST /api/connections": () => endpointGatePayload(),
+      "GET /api/connections/mysql-aliyun/live-schemas?refresh=1": () => {
+        attempts += 1;
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data:
+              attempts === 1
+                ? {
+                    status: "error",
+                    connectionId: "mysql-aliyun",
+                    schemas: [],
+                    fetchedAt: "2026-09-28T00:00:00.000Z",
+                    cached: false,
+                    reason: "temporary timeout",
+                    wireProtocol: "mysql"
+                  }
+                : {
+                    status: "ok",
+                    connectionId: "mysql-aliyun",
+                    schemas: [{ schema: "analytics", tableCount: 3 }],
+                    fetchedAt: "2026-09-28T00:00:01.000Z",
+                    cached: false,
+                    wireProtocol: "mysql"
+                  }
+          })
+        );
+      },
+      "POST /api/connections/mysql-aliyun/schemas": add
+    });
+    renderDrawer();
+    fillRequiredFields();
+    fireEvent.click(screen.getByTestId("create-connection-preview-btn"));
+    fireEvent.click(await screen.findByTestId("endpoint-gate-add-schema"));
+    expect(await screen.findByText("temporary timeout")).toBeInTheDocument();
+    expect(screen.queryByTestId("endpoint-gate-separate")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("endpoint-gate-retry-live"));
+
+    await waitFor(() => expect(add).toHaveBeenCalledOnce());
+    expect(attempts).toBe(2);
+  });
+
+  it("requires choosing one existing connection before adding with multiple matches", async () => {
+    const add = vi.fn(() =>
+      new Response(JSON.stringify({ ok: true, data: { written: true } }))
+    );
+    const matches = [
+      {
+        id: "mysql-a",
+        driver: "mysql",
+        host: "127.0.0.1",
+        port: "3306",
+        database: "dataforai",
+        username: "lucy_ro",
+        schemas: ["dataforai"]
+      },
+      {
+        id: "mysql-b",
+        driver: "mysql",
+        host: "127.0.0.1",
+        port: "3306",
+        database: "other",
+        username: "lucy_ro",
+        schemas: ["other"]
+      }
+    ];
+    stubFetch({
+      "POST /api/connections": () => endpointGatePayload("multiple", matches),
+      "GET /api/connections/mysql-b/live-schemas?refresh=1": () =>
+        new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              status: "ok",
+              connectionId: "mysql-b",
+              schemas: [{ schema: "analytics", tableCount: 1 }],
+              fetchedAt: "2026-09-28T00:00:00.000Z",
+              cached: false,
+              wireProtocol: "mysql"
+            }
+          })
+        ),
+      "POST /api/connections/mysql-b/schemas": add
+    });
+    renderDrawer();
+    fillRequiredFields();
+    fireEvent.click(screen.getByTestId("create-connection-preview-btn"));
+    const addButton = await screen.findByTestId("endpoint-gate-add-schema");
+    expect(addButton).toBeDisabled();
+    fireEvent.click(screen.getByTestId("endpoint-gate-match-mysql-b"));
+    expect(addButton).not.toBeDisabled();
+    fireEvent.click(addButton);
+
+    await waitFor(() => expect(add).toHaveBeenCalledWith({ schema: "analytics", dryRun: false }));
   });
 });

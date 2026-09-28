@@ -135,7 +135,9 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Connection ID | 连接 ID | — | 连接名（作主标签）、Connection Name（作主标签） | `connections.<id>` 键 |
 | Connection Password | 数据库密码 | — | 密钥、Token（作连接表单主标签） | 仅新建表单一次性输入；写入后不可回显（Spec 124） |
 | Password File Reference | 密码文件引用 | — | 明文密码（配置态主标签） | `ktx.yaml` 中 `password: file:…` |
-| Connection Create Preview | 新建预览 | — | — | dryRun：脱敏 diff + 将写入的 secret 相对路径（Spec 124） |
+| Endpoint Already Connected | 主机端口已有连接 | — | 重复数据源、IP 冲突、端点唯一 | 软门禁发现同端点已有卡片。不是唯一约束（Spec 160） |
+| Separate Connection Acknowledgement | 仍要新建连接 | — | 强制新建、忽略重复 | 唯一匹配下显式创建第二条连接（Spec 160） |
+| Different Database Acknowledgement | 新建连接 | — | 再建一张数据库、追加 Schema | 同一主机端口上的另一个 database。提交前说明会多一张卡片（Spec 160） |
 | Connection Test | 连通测试 | 按钮可用“测试连接” | 替代测试 | 验证凭据、网络、驱动配置是否可用 |
 | Connection Health Summary | 连通健康 | 健康摘要 | 数据库健康度（作主标签）、DB Health | `/connections` 卡右侧摘要（Spec 108） |
 | Connectivity Probe | 连通探测 | 进页探测 | 心跳、Ping（作主标签） | 打开连接概览时自动 `connection test` |
@@ -309,6 +311,9 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Connection Create Preview | 新建预览 | — | dryRun 脱敏 diff 与 secret 路径预告 |
 | Table Whitelist | 启用表范围 | 白表、表白、表白名单（主导航禁用） | `enabled_tables` 的 UI 管理入口 |
 | Add Schema | 添加 Schema | 添加架构、添加模式 | 向连接配置追加 Schema |
+| Endpoint Already Connected | 主机端口已有连接 | 重复数据源、IP 冲突、端点唯一 | 软门禁发现同端点已有卡片。不是唯一约束（Spec 160） |
+| Separate Connection Acknowledgement | 仍要新建连接 | 强制新建、忽略重复 | 唯一匹配下显式创建第二条连接（Spec 160） |
+| Different Database Acknowledgement | 新建连接 | 再建一张数据库、追加 Schema | 同一主机端口上的另一个 database。提交前说明会多一张卡片（Spec 160） |
 | Target Schema | 目标 Schema | 目标架构、目标模式 | 上传或添加流程中的目标 Schema |
 | Manifest Status | Manifest 状态 | 清单状态、舱单状态 | Schema manifest 是否存在 |
 | Missing Manifest | 缺失 Manifest | 财政部舱单、缺失清单 | 本地 manifest 文件不存在 |

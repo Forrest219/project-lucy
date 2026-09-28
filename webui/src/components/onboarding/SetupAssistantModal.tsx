@@ -284,6 +284,7 @@ export function SetupAssistantModal({
           {step === 1 && (
             <Step1ConnectDb
               existingIds={existingIds}
+              onClose={onClose}
               onSuccess={({ connectionId: newId, schema: newSchema }) => {
                 setConnectionId(newId);
                 setSchema(newSchema);

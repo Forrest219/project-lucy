@@ -45,7 +45,7 @@ afterEach(() => {
 
 describe("listLiveSchemas", () => {
   it("aggregates mysql schemas and filters system schemas", async () => {
-    const runSqlImpl = vi.fn(async () =>
+    const runSqlImpl = vi.fn(async (_root: string, _connectionId: string, _sql: string) =>
       okSql([
         ["information_schema", 100],
         ["dataforai", 28],
@@ -157,7 +157,7 @@ describe("listLiveSchemas", () => {
   });
 
   it("uses postgres catalog SQL when wireProtocol is postgres", async () => {
-    const runSqlImpl = vi.fn(async () =>
+    const runSqlImpl = vi.fn(async (_root: string, _connectionId: string, _sql: string) =>
       okSql([
         ["public", 4],
         ["pg_catalog", 99]
@@ -183,6 +183,62 @@ describe("listLiveSchemas", () => {
     expect(result.status).toBe("ok");
     expect(result.schemas).toEqual([{ schema: "public", tableCount: 4 }]);
     expect(String(runSqlImpl.mock.calls[0]?.[2] ?? "")).toContain("pg_catalog.pg_class");
+  });
+
+  it("uses SQL Server catalog SQL when wireProtocol is sqlserver", async () => {
+    const runSqlImpl = vi.fn(async (_root: string, _connectionId: string, _sql: string) =>
+      okSql([["dbo", 7]])
+    );
+    const result = await listLiveSchemas(
+      "/project",
+      "demo-sqlserver",
+      {},
+      {
+        readConnectionsImpl: async () => [
+          {
+            id: "demo-sqlserver",
+            driver: "sqlserver",
+            engine: "sqlserver",
+            wireProtocol: "sqlserver",
+            schemas: ["dbo"],
+            enabledTables: []
+          }
+        ],
+        runSqlImpl
+      }
+    );
+    expect(result.status).toBe("ok");
+    expect(result.wireProtocol).toBe("sqlserver");
+    expect(result.schemas).toEqual([{ schema: "dbo", tableCount: 7 }]);
+    expect(String(runSqlImpl.mock.calls[0]?.[2] ?? "")).toContain("sys.tables");
+  });
+
+  it("uses Oracle catalog SQL when wireProtocol is oracle", async () => {
+    const runSqlImpl = vi.fn(async (_root: string, _connectionId: string, _sql: string) =>
+      okSql([["APP", 5]])
+    );
+    const result = await listLiveSchemas(
+      "/project",
+      "demo-oracle",
+      {},
+      {
+        readConnectionsImpl: async () => [
+          {
+            id: "demo-oracle",
+            driver: "oracle",
+            engine: "oracle",
+            wireProtocol: "oracle",
+            schemas: ["APP"],
+            enabledTables: []
+          }
+        ],
+        runSqlImpl
+      }
+    );
+    expect(result.status).toBe("ok");
+    expect(result.wireProtocol).toBe("oracle");
+    expect(result.schemas).toEqual([{ schema: "APP", tableCount: 5 }]);
+    expect(String(runSqlImpl.mock.calls[0]?.[2] ?? "")).toContain("all_tables");
   });
 
   it("returns status error when ktx sql JSON cannot be parsed", async () => {

@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Eye, EyeOff, Lock } from "lucide-react";
 import { toast } from "sonner";
-import { ApiError, apiPost } from "../lib/apiClient";
+import { ApiError, apiGet, apiPost } from "../lib/apiClient";
 import {
   CONNECTION_ID_RULE_HINT,
   DATABASE_TYPES,
@@ -13,6 +13,13 @@ import {
 import { queryKeys } from "../lib/queryKeys";
 import { SCHEMA_NAME_RULE_HINT, validateSchemaName } from "../lib/schemas";
 import { formatConnectionProbeMessage, classifyConnectionError } from "../lib/connectionErrors";
+import {
+  readEndpointGate,
+  singleConflictSchema,
+  type EndpointGateState
+} from "../lib/connectionEndpointGate";
+import { EndpointConflictPanel } from "./connections/EndpointConflictPanel";
+import type { LiveSchemasResponse } from "../lib/types";
 import type {
   CreateConnectionPreview,
   CreateConnectionResult,
@@ -27,6 +34,41 @@ export type CreateConnectionDrawerProps = {
   onClose: () => void;
   existingIds?: string[];
 };
+
+type EndpointFlags = {
+  acknowledgeSeparateConnection?: boolean;
+  acknowledgeDifferentDatabase?: boolean;
+};
+
+function connectionRequest(
+  form: FormState,
+  portNumber: number,
+  schemas: string[],
+  dryRun: boolean,
+  flags: EndpointFlags
+) {
+  const isSqlite = form.databaseType === "sqlite" || form.driver === "sqlite";
+  return {
+    id: form.id.trim(),
+    driver: form.driver,
+    ...(form.engine.trim() ? { engine: form.engine.trim() } : {}),
+    ...(form.wireProtocol.trim() ? { wireProtocol: form.wireProtocol.trim() } : {}),
+    readonly: isSqlite ? false : form.readonly,
+    ...(isSqlite
+      ? {}
+      : {
+          host: form.host.trim(),
+          port: portNumber,
+          username: form.username.trim(),
+          ...(dryRun ? {} : form.password ? { password: form.password } : {})
+        }),
+    database: form.database.trim(),
+    schemas,
+    dryRun,
+    ...(flags.acknowledgeSeparateConnection ? { acknowledgeSeparateConnection: true } : {}),
+    ...(flags.acknowledgeDifferentDatabase ? { acknowledgeDifferentDatabase: true } : {})
+  };
+}
 
 const STEP_LABELS = ["输入连接信息", "新建预览", "确认创建"];
 
@@ -105,6 +147,7 @@ export function CreateConnectionDrawer({
   existingIds = []
 }: CreateConnectionDrawerProps) {
   const queryClient = useQueryClient();
+  const gateEpoch = useRef(0);
   const [form, setForm] = useState<FormState>(INITIAL_FORM);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [previewAttempted, setPreviewAttempted] = useState(false);
@@ -113,6 +156,12 @@ export function CreateConnectionDrawer({
   const [probeResult, setProbeResult] = useState<ProbeConnectionResult | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [step, setStep] = useState<Step>("input");
+  const [gate, setGate] = useState<EndpointGateState | null>(null);
+  const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
+  const [live, setLive] = useState<{ status: "idle" | "checking" | "missing" | "error"; message?: string }>({
+    status: "idle"
+  });
+  const [writeFlags, setWriteFlags] = useState<EndpointFlags>({});
   const [preview, setPreview] = useState<CreateConnectionPreview | null>(null);
   const [created, setCreated] = useState<CreateConnectionResult | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -160,30 +209,28 @@ export function CreateConnectionDrawer({
   const show = (field: string) => Boolean(touched[field] || previewAttempted || probeAttempted);
 
   const previewMutation = useMutation({
-    mutationFn: () =>
-      apiPost<CreateConnectionPreview>("/api/connections", {
-        id: form.id.trim(),
-        driver: form.driver,
-        ...(form.engine.trim() ? { engine: form.engine.trim() } : {}),
-        ...(form.wireProtocol.trim() ? { wireProtocol: form.wireProtocol.trim() } : {}),
-        readonly: isSqlite ? false : form.readonly,
-        ...(isSqlite
-          ? {}
-          : {
-              host: form.host.trim(),
-              port: portNumber,
-              username: form.username.trim()
-            }),
-        database: form.database.trim(),
-        schemas: schemasParsed.schemas,
-        dryRun: true
-      }),
-    onSuccess: (data) => {
+    mutationFn: (input: { flags: EndpointFlags; epoch: number }) =>
+      apiPost<CreateConnectionPreview>(
+        "/api/connections",
+        connectionRequest(form, portNumber, schemasParsed.schemas, true, input.flags)
+      ),
+    onSuccess: (data, input) => {
+      if (input.epoch !== gateEpoch.current) return;
       setPreview(data);
+      setGate(null);
       setStep("preview");
       setSubmitError(null);
     },
-    onError: (err) => {
+    onError: (err, input) => {
+      if (input.epoch !== gateEpoch.current) return;
+      const nextGate = readEndpointGate(err);
+      if (nextGate) {
+        setGate(nextGate);
+        setLive({ status: "idle" });
+        setSelectedMatchId(null);
+        setSubmitError(null);
+        return;
+      }
       setSubmitError(mapCreateErrorMessage(err));
       toast.error(mapCreateErrorMessage(err));
     }
@@ -223,25 +270,11 @@ export function CreateConnectionDrawer({
   });
 
   const writeMutation = useMutation({
-    mutationFn: () =>
-      apiPost<CreateConnectionResult>("/api/connections", {
-        id: form.id.trim(),
-        driver: form.driver,
-        ...(form.engine.trim() ? { engine: form.engine.trim() } : {}),
-        ...(form.wireProtocol.trim() ? { wireProtocol: form.wireProtocol.trim() } : {}),
-        readonly: isSqlite ? false : form.readonly,
-        ...(isSqlite
-          ? {}
-          : {
-              host: form.host.trim(),
-              port: portNumber,
-              username: form.username.trim()
-            }),
-        database: form.database.trim(),
-        ...(form.password ? { password: form.password } : {}),
-        schemas: schemasParsed.schemas,
-        dryRun: false
-      }),
+    mutationFn: (flags: EndpointFlags) =>
+      apiPost<CreateConnectionResult>(
+        "/api/connections",
+        connectionRequest(form, portNumber, schemasParsed.schemas, false, flags)
+      ),
     onSuccess: (data) => {
       setCreated(data);
       setStep("success");
@@ -258,9 +291,17 @@ export function CreateConnectionDrawer({
       );
     },
     onError: (err) => {
+      const nextGate = readEndpointGate(err);
+      if (nextGate) {
+        setGate(nextGate);
+        setLive({ status: "idle" });
+        setStep("input");
+        setSubmitError(null);
+        return;
+      }
       const message = mapCreateErrorMessage(err);
       setSubmitError(message);
-      setStep("preview");
+      setStep("input");
       toast.error(message);
     }
   });
@@ -274,6 +315,10 @@ export function CreateConnectionDrawer({
     setProbeResult(null);
     setShowPassword(false);
     setStep("input");
+    setGate(null);
+    setSelectedMatchId(null);
+    setLive({ status: "idle" });
+    setWriteFlags({});
     setPreview(null);
     setCreated(null);
     setSubmitError(null);
@@ -319,8 +364,16 @@ export function CreateConnectionDrawer({
     form.port,
     form.database,
     form.username,
-    form.password
+    form.password,
+    form.schemasText
   ]);
+
+  useEffect(() => {
+    gateEpoch.current += 1;
+    setGate(null);
+    setLive({ status: "idle" });
+    setSelectedMatchId(null);
+  }, [form.driver, form.databaseType, form.engine, form.host, form.port, form.database, form.username, form.schemasText]);
 
   function handleDatabaseTypeChange(nextKey: DatabaseType) {
     const config = getDatabaseTypeConfig(nextKey);
@@ -347,6 +400,48 @@ export function CreateConnectionDrawer({
 
   function patchForm<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  const conflictSchema = singleConflictSchema({
+    driver: form.driver,
+    engine: form.engine.trim(),
+    database: form.database.trim(),
+    schemas: schemasParsed.schemas
+  });
+
+  async function addSchemaToExisting(connectionId: string, schema: string) {
+    setLive({ status: "checking" });
+    try {
+      const found = await apiGet<LiveSchemasResponse>(
+        `/api/connections/${encodeURIComponent(connectionId)}/live-schemas?refresh=1`
+      );
+      if (found.status !== "ok") {
+        setLive({ status: "error", message: found.reason || "无法读取库内 Schema" });
+        return;
+      }
+      if (!found.schemas.some((item) => item.schema === schema)) {
+        setLive({ status: "missing" });
+        return;
+      }
+      await apiPost(`/api/connections/${encodeURIComponent(connectionId)}/schemas`, {
+        schema,
+        dryRun: false
+      });
+      setLive({ status: "idle" });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.project });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.connections });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.sources });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.connectionTables(connectionId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.connectionLiveSchemas(connectionId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.catalogReloads });
+      toast.success(`已添加 Schema: ${schema}`);
+      close();
+    } catch (err) {
+      setLive({
+        status: "error",
+        message: err instanceof Error ? err.message : "无法读取库内 Schema"
+      });
+    }
   }
 
   if (!open) return null;
@@ -645,10 +740,12 @@ export function CreateConnectionDrawer({
                 type="button"
                 className="pl-btn pl-btn--primary"
                 disabled={previewMutation.isPending || (probeFailed && !probeOverride)}
+                hidden={Boolean(gate && gate.kind !== "schema_count")}
                 onClick={() => {
                   setPreviewAttempted(true);
                   if (!canPreviewWithProbe) return;
-                  previewMutation.mutate();
+                  setWriteFlags({});
+                  previewMutation.mutate({ flags: {}, epoch: gateEpoch.current });
                 }}
                 data-testid="create-connection-preview-btn"
               >
@@ -694,6 +791,32 @@ export function CreateConnectionDrawer({
                 {submitError}
               </p>
             ) : null}
+            {gate ? (
+              <EndpointConflictPanel
+                gate={gate}
+                schemaName={conflictSchema}
+                selectedId={selectedMatchId}
+                onSelect={setSelectedMatchId}
+                live={live}
+                pending={writeMutation.isPending}
+                onAddSchema={(connectionId, schema) => {
+                  void addSchemaToExisting(connectionId, schema);
+                }}
+                onRetryLive={(connectionId, schema) => {
+                  void addSchemaToExisting(connectionId, schema);
+                }}
+                onSeparateConnection={() => {
+                  setStep("submitting");
+                  writeMutation.mutate({ acknowledgeSeparateConnection: true });
+                }}
+                onDifferentDatabase={() => {
+                  const flags = { acknowledgeDifferentDatabase: true };
+                  setWriteFlags(flags);
+                  previewMutation.mutate({ flags, epoch: gateEpoch.current });
+                }}
+                onBackToExisting={close}
+              />
+            ) : null}
           </section>
         )}
 
@@ -725,7 +848,7 @@ export function CreateConnectionDrawer({
                 className="pl-btn pl-btn--primary"
                 onClick={() => {
                   setStep("submitting");
-                  writeMutation.mutate();
+                  writeMutation.mutate(writeFlags);
                 }}
                 disabled={writeMutation.isPending}
                 data-testid="create-connection-confirm-btn"

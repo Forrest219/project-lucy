@@ -31,6 +31,25 @@ GROUP BY n.nspname
 ORDER BY n.nspname
 `.trim().replace(/\s+/g, " ");
 
+const SQLSERVER_LIVE_SQL = `
+SELECT s.name AS schema_name, COUNT(t.object_id) AS table_count
+FROM sys.schemas s
+JOIN sys.tables t ON t.schema_id = s.schema_id
+WHERE s.name NOT IN ('sys', 'INFORMATION_SCHEMA', 'guest')
+GROUP BY s.name
+ORDER BY s.name
+`.trim().replace(/\s+/g, " ");
+
+const ORACLE_LIVE_SQL = `
+SELECT owner AS schema_name, COUNT(*) AS table_count
+FROM all_tables
+WHERE owner NOT IN ('SYS', 'SYSTEM')
+GROUP BY owner
+ORDER BY owner
+`.trim().replace(/\s+/g, " ");
+
+type CatalogProtocol = "mysql" | "postgres" | "sqlserver" | "oracle";
+
 type CacheEntry = {
   expiresAt: number;
   payload: LiveSchemasResponse;
@@ -53,21 +72,33 @@ export function clearLiveCatalogCache(): void {
   cache.clear();
 }
 
-function resolveWireProtocol(conn: ConnectionInfo): "mysql" | "postgres" | "unknown" {
-  if (conn.wireProtocol === "mysql" || conn.wireProtocol === "postgres") {
+function resolveWireProtocol(conn: ConnectionInfo): CatalogProtocol | "unknown" {
+  if (
+    conn.wireProtocol === "mysql" ||
+    conn.wireProtocol === "postgres" ||
+    conn.wireProtocol === "sqlserver" ||
+    conn.wireProtocol === "oracle"
+  ) {
     return conn.wireProtocol;
   }
   const engine = (conn.engine ?? "").toLowerCase();
   if (engine === "starrocks" || engine === "doris" || engine.includes("mysql")) return "mysql";
   if (engine.includes("postgres")) return "postgres";
+  if (engine.includes("sqlserver") || engine.includes("mssql")) return "sqlserver";
+  if (engine.includes("oracle")) return "oracle";
   const driver = (conn.driver ?? "").toLowerCase();
   if (driver.includes("postgres")) return "postgres";
   if (driver.includes("mysql")) return "mysql";
+  if (driver.includes("sqlserver") || driver.includes("mssql")) return "sqlserver";
+  if (driver.includes("oracle")) return "oracle";
   return "unknown";
 }
 
-function sqlForProtocol(protocol: "mysql" | "postgres"): string {
-  return protocol === "postgres" ? POSTGRES_LIVE_SQL : MYSQL_LIVE_SQL;
+function sqlForProtocol(protocol: CatalogProtocol): string {
+  if (protocol === "postgres") return POSTGRES_LIVE_SQL;
+  if (protocol === "sqlserver") return SQLSERVER_LIVE_SQL;
+  if (protocol === "oracle") return ORACLE_LIVE_SQL;
+  return MYSQL_LIVE_SQL;
 }
 
 function parseRows(json: unknown): LiveSchemaSummary[] {
@@ -87,7 +118,7 @@ function parseRows(json: unknown): LiveSchemaSummary[] {
 
 function filterSystemSchemas(
   schemas: LiveSchemaSummary[],
-  protocol: "mysql" | "postgres"
+  protocol: CatalogProtocol
 ): LiveSchemaSummary[] {
   if (protocol === "postgres") {
     return schemas.filter(
@@ -97,6 +128,14 @@ function filterSystemSchemas(
         !s.schema.startsWith("pg_toast") &&
         !s.schema.startsWith("pg_temp_")
     );
+  }
+  if (protocol === "sqlserver") {
+    return schemas.filter(
+      (s) => !["sys", "information_schema", "guest"].includes(s.schema.toLowerCase())
+    );
+  }
+  if (protocol === "oracle") {
+    return schemas.filter((s) => !["SYS", "SYSTEM"].includes(s.schema.toUpperCase()));
   }
   return schemas.filter((s) => !MYSQL_SYSTEM_SCHEMAS.has(s.schema.toLowerCase()));
 }

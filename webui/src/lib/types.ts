@@ -96,7 +96,7 @@ export type ConnectionInfo = {
   id: string;
   driver?: string;
   engine?: string;
-  wireProtocol?: "mysql" | "postgres" | "native" | "unknown";
+  wireProtocol?: "mysql" | "postgres" | "sqlserver" | "oracle" | "native" | "unknown";
   r1Target?: boolean;
   readOnlyExpected?: boolean;
   passwordSource?: "file" | "inline" | "env";
@@ -278,7 +278,7 @@ export type LiveSchemasResponse = {
   cached: boolean;
   latencyMs?: number;
   reason?: string;
-  wireProtocol?: "mysql" | "postgres" | "unknown";
+  wireProtocol?: "mysql" | "postgres" | "sqlserver" | "oracle" | "unknown";
 };
 
 export type SourcesResponse = {

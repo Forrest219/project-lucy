@@ -1,7 +1,7 @@
-import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Eye, EyeOff, Lock, CheckCircle2, AlertCircle } from "lucide-react";
-import { apiPost } from "../../lib/apiClient";
+import { apiGet, apiPost } from "../../lib/apiClient";
 import {
   DATABASE_TYPES,
   getDatabaseTypeConfig,
@@ -9,9 +9,12 @@ import {
   type DatabaseType,
   type DatabaseTypeConfig
 } from "../../lib/connectionId";
+import { queryKeys } from "../../lib/queryKeys";
 import { validateSchemaName } from "../../lib/schemas";
 import { formatProbeFailure } from "../../lib/setupAssistant";
-import type { CreateConnectionResult, ProbeConnectionResult } from "../../lib/types";
+import { readEndpointGate, type EndpointGateState } from "../../lib/connectionEndpointGate";
+import { EndpointConflictPanel } from "../connections/EndpointConflictPanel";
+import type { CreateConnectionResult, LiveSchemasResponse, ProbeConnectionResult } from "../../lib/types";
 
 export type Step1ConnectDbProps = {
   initialValues?: {
@@ -26,14 +29,18 @@ export type Step1ConnectDbProps = {
     schema?: string;
   };
   existingIds?: string[];
+  onClose?: () => void;
   onSuccess: (result: { connectionId: string; schema: string }) => void;
 };
 
 export function Step1ConnectDb({
   initialValues,
   existingIds = [],
+  onClose,
   onSuccess
 }: Step1ConnectDbProps) {
+  const queryClient = useQueryClient();
+  const gateEpoch = useRef(0);
   const initialType = getDatabaseTypeConfig(initialValues?.databaseType || initialValues?.driver || "mysql");
   const [id, setId] = useState(initialValues?.id || "");
   const [databaseType, setDatabaseType] = useState<DatabaseType>(initialType.key);
@@ -52,6 +59,11 @@ export function Step1ConnectDb({
   const [verifiedProbeFingerprint, setVerifiedProbeFingerprint] = useState<string | null>(null);
   const [touched, setTouched] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [gate, setGate] = useState<EndpointGateState | null>(null);
+  const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
+  const [live, setLive] = useState<{ status: "idle" | "checking" | "missing" | "error"; message?: string }>({
+    status: "idle"
+  });
 
   const idIssue = validateConnectionId(id, existingIds);
   const schemaIssue = schema.trim() ? validateSchemaName(schema.trim()) : null;
@@ -121,8 +133,19 @@ export function Step1ConnectDb({
     }
   });
 
+  useEffect(() => {
+    gateEpoch.current += 1;
+    setGate(null);
+    setLive({ status: "idle" });
+    setSelectedMatchId(null);
+  }, [id, driver, engine, host, port, database, username, schema]);
+
   const createMutation = useMutation({
-    mutationFn: () =>
+    mutationFn: (input: {
+      acknowledgeSeparateConnection?: boolean;
+      acknowledgeDifferentDatabase?: boolean;
+      epoch: number;
+    }) =>
       apiPost<CreateConnectionResult>("/api/connections", {
         id: id.trim(),
         driver,
@@ -139,19 +162,66 @@ export function Step1ConnectDb({
             }),
         database: database.trim(),
         schemas: schema.trim() ? [schema.trim()] : isSqlite ? ["main"] : [database.trim()],
-        dryRun: false
+        dryRun: false,
+        ...(input.acknowledgeSeparateConnection ? { acknowledgeSeparateConnection: true } : {}),
+        ...(input.acknowledgeDifferentDatabase ? { acknowledgeDifferentDatabase: true } : {})
       }),
-    onSuccess: (res) => {
-      const createdSchema = schema.trim() || (isSqlite ? "main" : database.trim());
+    onSuccess: (res, input) => {
+      if (input.epoch !== gateEpoch.current) return;
+      const nextSchema = schema.trim() || (isSqlite ? "main" : database.trim());
       onSuccess({
         connectionId: res.connection.id,
-        schema: createdSchema
+        schema: nextSchema
       });
     },
-    onError: (err) => {
+    onError: (err, input) => {
+      if (input.epoch !== gateEpoch.current) return;
+      const nextGate = readEndpointGate(err);
+      if (nextGate) {
+        setGate(nextGate);
+        setLive({ status: "idle" });
+        setSelectedMatchId(null);
+        setSubmitError(null);
+        return;
+      }
       setSubmitError(err instanceof Error ? err.message : String(err));
     }
   });
+
+  const createdSchema = schema.trim() || (isSqlite ? "main" : database.trim());
+
+  async function addSchemaToExisting(connectionId: string, schemaName: string) {
+    setLive({ status: "checking" });
+    try {
+      const found = await apiGet<LiveSchemasResponse>(
+        `/api/connections/${encodeURIComponent(connectionId)}/live-schemas?refresh=1`
+      );
+      if (found.status !== "ok") {
+        setLive({ status: "error", message: found.reason || "无法读取库内 Schema" });
+        return;
+      }
+      if (!found.schemas.some((item) => item.schema === schemaName)) {
+        setLive({ status: "missing" });
+        return;
+      }
+      await apiPost(`/api/connections/${encodeURIComponent(connectionId)}/schemas`, {
+        schema: schemaName,
+        dryRun: false
+      });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.project });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.connections });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.sources });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.connectionTables(connectionId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.connectionLiveSchemas(connectionId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.catalogReloads });
+      onSuccess({ connectionId, schema: schemaName });
+    } catch (err) {
+      setLive({
+        status: "error",
+        message: err instanceof Error ? err.message : "无法读取库内 Schema"
+      });
+    }
+  }
 
   const handleDatabaseTypeChange = (nextKey: DatabaseType) => {
     const config = getDatabaseTypeConfig(nextKey);
@@ -406,7 +476,8 @@ export function Step1ConnectDb({
           className="pl-btn pl-btn--primary"
           disabled={!canSubmit || createMutation.isPending}
           aria-describedby={!canSubmit ? "setup-step1-next-requirement" : undefined}
-          onClick={() => createMutation.mutate()}
+          hidden={Boolean(gate && gate.kind !== "schema_count")}
+          onClick={() => createMutation.mutate({ epoch: gateEpoch.current })}
           data-testid="setup-step1-next"
         >
           {createMutation.isPending ? "正在创建..." : "继续：准备表结构 →"}
@@ -417,6 +488,30 @@ export function Step1ConnectDb({
         <p className="sr-only" id="setup-step1-next-requirement">
           请填写有效参数并完成一次成功的连通测试。
         </p>
+      ) : null}
+
+      {gate ? (
+        <EndpointConflictPanel
+          gate={gate}
+          schemaName={createdSchema || null}
+          selectedId={selectedMatchId}
+          onSelect={setSelectedMatchId}
+          live={live}
+          pending={createMutation.isPending}
+          onAddSchema={(connectionId, schemaName) => {
+            void addSchemaToExisting(connectionId, schemaName);
+          }}
+          onRetryLive={(connectionId, schemaName) => {
+            void addSchemaToExisting(connectionId, schemaName);
+          }}
+          onSeparateConnection={() =>
+            createMutation.mutate({ acknowledgeSeparateConnection: true, epoch: gateEpoch.current })
+          }
+          onDifferentDatabase={() =>
+            createMutation.mutate({ acknowledgeDifferentDatabase: true, epoch: gateEpoch.current })
+          }
+          onBackToExisting={() => onClose?.()}
+        />
       ) : null}
 
       {submitError ? (

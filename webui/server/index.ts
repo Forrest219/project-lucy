@@ -159,6 +159,57 @@ type SupportedError = FastifyError & {
   detail?: unknown;
 };
 
+function stringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function endpointMatchList(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const row = item as Record<string, unknown>;
+    if (typeof row.id !== "string") return [];
+    return [{
+      id: row.id,
+      driver: typeof row.driver === "string" ? row.driver : "",
+      host: typeof row.host === "string" ? row.host : "",
+      port: typeof row.port === "string" ? row.port : "",
+      database: typeof row.database === "string" ? row.database : "",
+      username: typeof row.username === "string" ? row.username : "",
+      schemas: stringList(row.schemas)
+    }];
+  });
+}
+
+function endpointGateDetail(detail: unknown): unknown {
+  if (!detail || typeof detail !== "object") return undefined;
+  const source = detail as Record<string, unknown>;
+  if (
+    source.reason === "multiple" ||
+    source.reason === "username_differs" ||
+    source.reason === "reuse_existing_credentials"
+  ) {
+    return {
+      reason: source.reason,
+      ...(typeof source.schema === "string" ? { schema: source.schema } : {}),
+      matches: endpointMatchList(source.matches)
+    };
+  }
+  if (typeof source.connectionId === "string" && typeof source.schema === "string" && !("matches" in source)) {
+    return { connectionId: source.connectionId, schema: source.schema };
+  }
+  if (typeof source.actual === "number") {
+    return { actual: source.actual };
+  }
+  if (typeof source.requestedDatabase === "string") {
+    return {
+      matches: endpointMatchList(source.matches),
+      requestedDatabase: source.requestedDatabase
+    };
+  }
+  return undefined;
+}
+
 function supportedErrorDetail(error: SupportedError): unknown {
   if (error.code === "SCHEMA_NAME_INVALID") {
     const detail = error.detail;
@@ -181,6 +232,14 @@ function supportedErrorDetail(error: SupportedError): unknown {
     ) {
       return { pattern: (detail as { pattern: string }).pattern };
     }
+  }
+  if (
+    error.code === "ENDPOINT_ALREADY_CONNECTED" ||
+    error.code === "SCHEMA_ALREADY_ON_CONNECTION" ||
+    error.code === "ENDPOINT_SCHEMA_COUNT" ||
+    error.code === "SAME_SERVER_DIFFERENT_DATABASE"
+  ) {
+    return endpointGateDetail(error.detail);
   }
   if (error.code === "CONNECTION_TEST_FAILED") {
     const detail = error.detail;
@@ -1030,6 +1089,8 @@ export function buildServer() {
       password?: string;
       schemas?: string[];
       dryRun?: boolean;
+      acknowledgeSeparateConnection?: boolean;
+      acknowledgeDifferentDatabase?: boolean;
     };
   }>("/api/connections", async (request) => {
     const projectRoot = await resolveProjectRoot();
@@ -1072,7 +1133,13 @@ export function buildServer() {
         ...(Array.isArray(body.schemas) ? { schemas: body.schemas } : {})
       },
       dryRun,
-      { recordConfigChange }
+      {
+        recordConfigChange,
+        endpointFlags: {
+          acknowledgeSeparateConnection: body.acknowledgeSeparateConnection === true,
+          acknowledgeDifferentDatabase: body.acknowledgeDifferentDatabase === true
+        }
+      }
     );
     if (!dryRun) {
       writtenFiles.push({ filePath: "ktx.yaml" });

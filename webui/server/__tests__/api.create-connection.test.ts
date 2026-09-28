@@ -243,6 +243,36 @@ describe("POST /api/connections (Spec 124 Phase A)", () => {
     expect(response.body.error.code).toBe("CONNECTION_ALREADY_EXISTS");
   });
 
+  it("returns the endpoint gate inside the error envelope", async () => {
+    await makeProject();
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_AUDIT_DB = auditDbPath;
+
+    const app = await buildFreshServer();
+    await app.ready();
+
+    const response = await request(app.server)
+      .post("/api/connections")
+      .send({
+        id: "warehouse-mysql",
+        driver: "mysql",
+        host: "localhost",
+        port: 3306,
+        database: "other_schema",
+        username: "sc",
+        schemas: ["other_schema"],
+        dryRun: true
+      })
+      .expect(409);
+
+    expect(response.body.ok).toBe(false);
+    expect(response.body.error.code).toBe("ENDPOINT_ALREADY_CONNECTED");
+    expect(response.body.error.detail.reason).toBe("reuse_existing_credentials");
+    expect(response.body.error.detail.matches[0].id).toBe("mysql-aliyun");
+    expect(response.body.code).toBeUndefined();
+    expect(JSON.stringify(response.body)).not.toContain("inline-password-value");
+  });
+
   it("returns 400 CONNECTION_ID_INVALID for illegal ids", async () => {
     await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
