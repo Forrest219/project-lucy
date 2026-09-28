@@ -134,12 +134,6 @@ export function CaseEditor() {
             ‹ 返回评测用例
           </button>
         }
-        badges={
-          <>
-            <span>{domain}</span>
-            <span>{form.case_type}</span>
-          </>
-        }
         actions={
           <>
             {!isNew && (

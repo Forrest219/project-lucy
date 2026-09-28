@@ -99,6 +99,9 @@ describe("Monitor", () => {
     renderMonitor();
 
     expect(await screen.findByRole("heading", { name: "趋势监控" })).toBeInTheDocument();
+    expect(screen.queryByTestId("page-header-badges")).not.toBeInTheDocument();
+    expect(await screen.findByDisplayValue("superstore")).toHaveValue("superstore");
+    expect(screen.getByRole("tab", { name: "30d" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByText("最新通过率")).toBeInTheDocument();
     expect(await screen.findByText("75%")).toBeInTheDocument();
     expect(screen.getByText("红线状态")).toBeInTheDocument();

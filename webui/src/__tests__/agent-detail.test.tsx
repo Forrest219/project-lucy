@@ -173,6 +173,17 @@ function stubAgentEndpoints(extraRoles: Array<Record<string, unknown>> = []) {
 }
 
 describe("AgentDetail", () => {
+  it("keeps status, role, and token context out of the PageHeader", async () => {
+    stubAgentEndpoints();
+    renderAgentDetail("/admin/agents/zhangsan?tab=tokens");
+
+    expect(await screen.findByText(/当前活跃 token/)).toBeInTheDocument();
+    expect(screen.queryByTestId("page-header-badges")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: "权限预览" }));
+    expect(await screen.findByText("当前角色")).toBeInTheDocument();
+  });
+
   it("exposes MCP playground deep link with agentId", async () => {
     stubAgentEndpoints();
     renderAgentDetail();
@@ -561,11 +572,10 @@ describe("AgentDetail", () => {
     expect(link.getAttribute("href")).toBe("/admin/roles");
   });
 
-  it("Agent detail 基本信息 tab exposes configured tokens and active token count from stats", async () => {
+  it("Agent detail Token tab exposes active token count from stats", async () => {
     stubAgentEndpoints();
-    renderAgentDetail();
-    await screen.findByDisplayValue("张三");
-    expect(document.body).toHaveTextContent("1");
+    renderAgentDetail("/admin/agents/zhangsan?tab=tokens");
+    expect(await screen.findByText(/当前活跃 token/)).toHaveTextContent("1");
     expect(document.body).not.toHaveTextContent(/^\s*7d denied\s*$/);
   });
 

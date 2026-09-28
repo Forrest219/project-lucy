@@ -203,6 +203,7 @@ describe("CaseList M43 Eval YAML exchange", () => {
     renderCaseList();
 
     expect(await screen.findByRole("button", { name: /下载\s*Eval YAML/ })).toBeInTheDocument();
+    expect(screen.queryByTestId("page-header-badges")).not.toBeInTheDocument();
     expect(screen.getByTestId("case-list-coverage-card")).toHaveClass("pl-metric-grid--three");
     expect(screen.getByTestId("metric-help-case-total")).toBeInTheDocument();
     expect(screen.getByTestId("metric-help-latest-pass-rate")).toBeInTheDocument();

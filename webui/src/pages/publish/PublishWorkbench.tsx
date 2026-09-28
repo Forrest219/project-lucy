@@ -439,24 +439,6 @@ export function PublishWorkbench() {
             <span className="notranslate" translate="no">Agent</span> 生效。
           </>
         }
-        badges={
-          <>
-            <span data-testid="workbench-pending-count">
-              {files.length > 0
-                ? `${files.length} 个待同步文件`
-                : "暂无待同步变更"}
-            </span>
-            {validateMutation.data ? (
-              <span data-testid="workbench-validation-badge">
-                {failedCount > 0
-                  ? `表语义校验失败 ${failedCount} 张`
-                  : totalValidated === 0
-                    ? "无可校验表"
-                    : `表语义校验通过 ${passedCount}/${totalValidated}`}
-              </span>
-            ) : null}
-          </>
-        }
         actions={
           <>
             {hasPendingFiles ? (

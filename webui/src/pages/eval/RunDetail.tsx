@@ -145,13 +145,7 @@ export function RunDetail() {
             ‹ 返回运行历史
           </button>
         }
-        badges={
-          <>
-            <span className={`pl-status-badge ${STATUS_CLASS[run.status] ?? "pl-status-partial"}`}>{run.status}</span>
-            <span>{run.domain}</span>
-            <span>通过率 {passRate.toFixed(1)}%</span>
-          </>
-        }
+        badges={<span className={`pl-status-badge ${STATUS_CLASS[run.status] ?? "pl-status-partial"}`}>{run.status}</span>}
         actions={
           <>
             <a className="pl-btn pl-btn--ghost text-sm" href={`/api/eval/runs/${run.id}/artifact?type=json`} download>

@@ -220,13 +220,6 @@ export function CaseList() {
       <PageHeader
         title="评测用例"
         description="管理数据问答与语义质量的评测用例及预期结果。"
-          badges={
-            <span data-testid="case-list-coverage">
-              {latestRun
-                ? `最近完成 Run #${latestRun.id} 通过率 ${Math.round(((latestRun.totalCases ?? 0) > 0 ? latestRun.passCount / latestRun.totalCases : 0) * 100)}%`
-                : "尚未运行"}
-            </span>
-          }
         actions={
           <div className="relative flex gap-2">
             <button

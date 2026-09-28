@@ -97,6 +97,7 @@ describe("PublishWorkbench", () => {
     expect(
       screen.getByRole("heading", { name: "发布工作台" })
     ).toBeInTheDocument();
+    expect(screen.queryByTestId("page-header-badges")).not.toBeInTheDocument();
     expect(screen.getByTestId("page-header")).toHaveTextContent(
       "审阅并校验语义与 Wiki 变更，同步索引后使其对 Agent 生效。"
     );
@@ -947,10 +948,8 @@ describe("PublishWorkbench", () => {
 
     renderWorkbench();
 
-    expect(await screen.findByText("3 个待同步文件")).toBeInTheDocument();
-    expect(screen.getByTestId("workbench-pending-count")).toHaveTextContent("3 个待同步文件");
-    expect(await screen.findByTestId("workbench-validation-badge")).toHaveTextContent(
-      "表语义校验通过 1/1"
+    expect(await screen.findByTestId("workbench-batch-sync-hint")).toHaveTextContent(
+      "本批一并同步 3 项"
     );
     expect(screen.getByTestId("workbench-validation-banner")).toHaveTextContent(
       "表语义校验通过 1/1"
@@ -1012,9 +1011,6 @@ describe("PublishWorkbench", () => {
     expect(await screen.findByTestId("workbench-validation-banner")).toHaveTextContent(
       "表语义校验失败 1 张"
     );
-    expect(screen.getByTestId("workbench-validation-badge")).toHaveTextContent(
-      "表语义校验失败 1 张"
-    );
     expect(screen.getByTestId("workbench-publish-and-reindex")).toBeDisabled();
     expect(screen.queryByTestId("workbench-validation-rest-files")).not.toBeInTheDocument();
   });
@@ -1046,10 +1042,7 @@ describe("PublishWorkbench", () => {
 
     renderWorkbench();
 
-    expect(await screen.findByTestId("workbench-validation-badge")).toHaveTextContent(
-      "无可校验表"
-    );
-    expect(screen.getByTestId("workbench-validation-banner")).toHaveTextContent("无可校验表");
+    expect(await screen.findByTestId("workbench-validation-banner")).toHaveTextContent("无可校验表");
     expect(screen.queryByText(/校验通过/)).not.toBeInTheDocument();
     expect(screen.getByTestId("workbench-publish-and-reindex")).toBeDisabled();
   });

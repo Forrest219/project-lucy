@@ -280,13 +280,6 @@ export function Monitor() {
       <PageHeader
         title="趋势监控"
         description="监控评测通过率、失败集中度与质量漂移趋势。"
-        badges={
-          <>
-            <span>{activeDomain}</span>
-            <span>近 {days} 天</span>
-            {lastPoint ? <span>最新 {pct(lastPoint.passRate)}</span> : null}
-          </>
-        }
         actions={
           <>
             <label className="flex items-center gap-2 text-sm">

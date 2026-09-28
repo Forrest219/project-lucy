@@ -592,13 +592,6 @@ export function AgentDetail() {
           </Link>
         }
         description="编辑显示名、备注或启用状态后可一步保存；变更角色需确认变更 diff。Cmd+S / Ctrl+S 保存。"
-        badges={
-          <>
-            <span>{agent.enabled ? "已启用" : "已禁用"}</span>
-            {agent.role ? <span>role: {agent.role}</span> : <span>legacy allow</span>}
-            <span>{agent.tokens.filter((t) => !t.revoked).length} 有效 token</span>
-          </>
-        }
         actions={
           <>
             <Link
