@@ -360,6 +360,22 @@ describe("RoleList", () => {
     expect(screen.getByRole("menuitem", { name: "删除" })).toBeDisabled();
   });
 
+  it("hides delete for formal lucy_admin even when unused", async () => {
+    stubRoles([
+      makeRole({
+        id: "lucy_admin",
+        description: "平台运维数据面（非 WebUI 登录账户）",
+        usageCount: 0,
+        source_scope: "catalog_bound"
+      })
+    ]);
+    renderRoleList();
+    const row = await waitFor(() => findRow("lucy_admin"));
+    fireEvent.click(within(row).getByRole("button", { name: "lucy_admin 的更多操作" }));
+    expect(screen.getByRole("menuitem", { name: "基于此新建" })).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "删除" })).not.toBeInTheDocument();
+  });
+
   it("filters by search text on id and description", async () => {
     stubRoles([
       makeRole({ id: "analyst_search", description: "数据分析师" }),

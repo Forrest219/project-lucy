@@ -9,7 +9,7 @@ import {
   type EffectivePermissions
 } from "../proxy/acl.js";
 import { parseRowPolicyShape } from "../proxy/row-policy.js";
-import { expandTemplate, ROLE_TEMPLATES } from "./role-templates.js";
+import { expandTemplate, isDeleteProtectedRole, ROLE_TEMPLATES } from "./role-templates.js";
 import {
   ACCESS_YAML_REL,
   ROLE_ID_RE,
@@ -928,6 +928,15 @@ export function registerRoleRoutes(app: FastifyInstance) {
           return reply.status(400).send({ ok: false, error: { code: "TEMPLATE_ROLE_READONLY", message: "template roles are read-only" } });
         }
         return reply.status(404).send({ ok: false, error: { code: "ROLE_NOT_FOUND", message: `role '${request.params.roleId}' not found` } });
+      }
+      if (isDeleteProtectedRole(request.params.roleId)) {
+        return reply.status(403).send({
+          ok: false,
+          error: {
+            code: "PROTECTED_ROLE",
+            message: `role '${request.params.roleId}' is a protected system role and cannot be deleted`
+          }
+        });
       }
       const users = usersReferencingRole(config, request.params.roleId);
       if (users.length > 0) {

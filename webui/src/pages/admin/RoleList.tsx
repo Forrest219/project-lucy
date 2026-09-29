@@ -6,6 +6,7 @@ import type { Role } from "../../lib/types";
 import { PageHeader } from "../../components/PageHeader";
 import { MetricCard } from "../../components/MetricCard";
 import { buildObjectDetailSearch } from "../../lib/objectDetail";
+import { isDeleteProtectedRole } from "../../lib/lucyAdminRole";
 import { RowMoreMenu } from "../../components/RowMoreMenu";
 
 type RolesResponse = { roles: Role[] };
@@ -470,6 +471,7 @@ export function RoleList() {
                 <tbody>
                   {filtered.map((role, index) => {
                     const isTemplate = role.source === "template";
+                    const deleteProtected = isDeleteProtectedRole(role.id);
                     const inUse = (role.usageCount ?? 0) > 0;
                     const badges = roleStatusBadges(role);
                     const connectionsCount = role.connections?.length ?? 0;
@@ -553,7 +555,7 @@ export function RoleList() {
                                   href: `/admin/roles/${encodeURIComponent(role.id)}?mode=copy`,
                                   testId: `role-menu-copy-${role.id}`
                                 },
-                                ...(isTemplate
+                                ...(isTemplate || deleteProtected
                                   ? []
                                   : [
                                       {

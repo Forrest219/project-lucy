@@ -31,6 +31,7 @@ import {
   type RowPolicyPredicateDraft,
   type TableGrant,
 } from "../../lib/rolePermissionDraft";
+import { isDeleteProtectedRole } from "../../lib/lucyAdminRole";
 
 type PageMode = "create" | "edit" | "copy";
 
@@ -537,7 +538,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
     params.set("tab", "overview");
     setSearchParams(params, { replace: true });
 
-    if (detail.source !== "yaml" || detail.usageCount > 0) return;
+    if (detail.source !== "yaml" || detail.usageCount > 0 || isDeleteProtectedRole(detail.id)) return;
     reviewTriggerRef.current = deleteButtonRef.current;
     deleteMutation.mutate({ dryRun: true, version: detail.version });
   }, [deleteIntent, detail, searchParams, setSearchParams]);
@@ -605,7 +606,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
         badges={detail ? <><span>{detail.source === "template" ? "参考模板" : "正式 Role"}</span><span>{detail.usageCount} 个 <span className="notranslate" translate="no">Agent</span> 引用</span></> : null}
         actions={
           isReadOnlyTemplate ? <Link to={`/admin/roles/${encodeURIComponent(detail!.id)}?mode=copy&tab=overview`} className="pl-btn pl-btn--primary text-sm">基于此模板创建 Role</Link>
-            : detail?.source === "yaml" ? <button ref={deleteButtonRef} type="button" className="pl-btn pl-btn--danger text-sm" disabled={detail.usageCount > 0 || deleteMutation.isPending} onClick={(event) => { reviewTriggerRef.current = event.currentTarget; deleteMutation.mutate({ dryRun: true, version: detail.version }); }}>{deleteMutation.isPending ? "检查中…" : "删除 Role"}</button>
+            : detail?.source === "yaml" && !isDeleteProtectedRole(detail.id) ? <button ref={deleteButtonRef} type="button" className="pl-btn pl-btn--danger text-sm" disabled={detail.usageCount > 0 || deleteMutation.isPending} onClick={(event) => { reviewTriggerRef.current = event.currentTarget; deleteMutation.mutate({ dryRun: true, version: detail.version }); }}>{deleteMutation.isPending ? "检查中…" : "删除 Role"}</button>
               : null
         }
       />

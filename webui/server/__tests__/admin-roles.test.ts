@@ -923,6 +923,43 @@ describe("DELETE /api/admin/roles/:roleId", () => {
     expect(res.body.error.code).toBe("TEMPLATE_ROLE_READONLY");
     await app.close();
   });
+
+  it("returns 403 PROTECTED_ROLE when deleting formal lucy_admin", async () => {
+    await rm(projectRoot, { recursive: true, force: true });
+    projectRoot = await makeProject(`roles:
+  lucy_admin:
+    description: 平台运维数据面（非 WebUI 登录账户）
+    permission_model_version: 2
+    allow:
+      connections:
+        - mysql-aliyun
+      source_scope: catalog_bound
+      tools:
+        - lucy_query
+users: []
+defaults:
+  deny_tools:
+    - sql_execution
+`);
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+
+    const app = buildServer();
+    await app.ready();
+    const dryRun = await request(app.server)
+      .delete("/api/admin/roles/lucy_admin")
+      .send({ dryRun: true })
+      .expect(403);
+    expect(dryRun.body.error.code).toBe("PROTECTED_ROLE");
+
+    const res = await request(app.server)
+      .delete("/api/admin/roles/lucy_admin")
+      .send({ dryRun: false })
+      .expect(403);
+    expect(res.body.error.code).toBe("PROTECTED_ROLE");
+    const yaml = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
+    expect(yaml).toContain("lucy_admin:");
+    await app.close();
+  });
 });
 
 describe("POST /api/admin/roles/:roleId/copy", () => {

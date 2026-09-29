@@ -262,6 +262,37 @@ describe("RoleDetail Spec 150", () => {
     expect(screen.queryByTestId("role-dirty-bar")).not.toBeInTheDocument();
   });
 
+  it("hides delete for formal lucy_admin and ignores delete deep link", async () => {
+    const calls: boolean[] = [];
+    installFetch(
+      makeRole({
+        id: "lucy_admin",
+        description: "平台运维数据面（非 WebUI 登录账户）",
+        usageCount: 0,
+        role: {
+          description: "平台运维数据面（非 WebUI 登录账户）",
+          permission_model_version: 2,
+          allow: {
+            connections: ["mysql-aliyun"],
+            source_scope: "catalog_bound",
+            tools: ["lucy_query"]
+          }
+        }
+      }),
+      (url, init) => {
+        if (url === "/api/admin/roles/lucy_admin" && init?.method === "DELETE") {
+          calls.push(true);
+          return new Response(JSON.stringify({ ok: false, error: { code: "PROTECTED_ROLE", message: "protected" } }), { status: 403 });
+        }
+      }
+    );
+    renderAt("/admin/roles/lucy_admin?mode=delete");
+    expect(await screen.findByDisplayValue("平台运维数据面（非 WebUI 登录账户）")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "删除 Role" })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("role-permission-review-drawer")).not.toBeInTheDocument();
+    expect(calls).toEqual([]);
+  });
+
   it("uses a delete impact Drawer and blocks deletion while referenced", async () => {
     const used = makeRole({ usageCount: 1, users: [{ id: "agent-1", name: "Agent 1", enabled: true, tokenCount: 1 }] });
     installFetch(used);

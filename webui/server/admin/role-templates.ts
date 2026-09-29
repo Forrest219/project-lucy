@@ -45,9 +45,16 @@ const KX_NAMES = [
 /** Spec 131 — lucy_admin tools = DataPlane ∪ Meta (AbsoluteDeny never included). */
 export const LUCY_ADMIN_TOOLS = [...DATA_PLANE_TOOLS, ...META_TOOLS];
 
+/** Spec 131 preset ops data-plane Role id; formal yaml instance must not be deleted via Admin. */
+export const LUCY_ADMIN_ROLE_ID = "lucy_admin";
+
+export function isDeleteProtectedRole(roleId: string): boolean {
+  return roleId === LUCY_ADMIN_ROLE_ID;
+}
+
 export const ROLE_TEMPLATES: Record<string, RoleTemplate> = {
   lucy_admin: {
-    id: "lucy_admin",
+    id: LUCY_ADMIN_ROLE_ID,
     description:
       "平台运维数据面（非 WebUI 登录账户）：在已声明连接内绑定启用表目录（catalog_bound）。新连接须手工纳入 allow.connections。",
     permission_model_version: 2,
