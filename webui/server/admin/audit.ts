@@ -164,9 +164,21 @@ function buildAccessLogFilter(q: AccessLogFilterQuery): {
   if (params.clientIp) baseConditions.push("IFNULL(client_ip, '') LIKE @clientIp");
   if (params.deviceName) baseConditions.push("IFNULL(device_name, '') LIKE @deviceName");
   if (params.key) {
-    baseConditions.push("(CAST(id AS TEXT) LIKE @key OR IFNULL(lucy_turn_id, '') LIKE @key)");
+    baseConditions.push(
+      `(CAST(id AS TEXT) LIKE @key OR IFNULL(lucy_turn_id, '') LIKE @key OR EXISTS (
+        SELECT 1 FROM inferred_turn_access_logs ital
+        WHERE ital.access_log_id = access_log.id AND ital.inferred_turn_id LIKE @key
+      ))`
+    );
   } else {
-    if (params.turnId) baseConditions.push("lucy_turn_id LIKE @turnId");
+    if (params.turnId) {
+      baseConditions.push(
+        `(IFNULL(lucy_turn_id, '') LIKE @turnId OR EXISTS (
+          SELECT 1 FROM inferred_turn_access_logs ital
+          WHERE ital.access_log_id = access_log.id AND ital.inferred_turn_id LIKE @turnId
+        ))`
+      );
+    }
     if (params.eventId) baseConditions.push("CAST(id AS TEXT) LIKE @eventId");
   }
 
@@ -641,6 +653,8 @@ interface QueryRow {
   skill_action: "discover" | "read" | null;
   skill_roles_allowed: string | null;
   matched_role_id: string | null;
+  /** Joined at read time; only set when lucy_turn_id is empty. */
+  inferred_turn_id?: string | null;
 }
 
 const ACCESS_LOG_CSV_HEADERS = [
@@ -652,6 +666,7 @@ const ACCESS_LOG_CSV_HEADERS = [
   "token_hash_prefix",
   "lucy_session_id",
   "lucy_turn_id",
+  "inferred_turn_id",
   "turn_attribution_mode",
   "turn_attribution_confidence",
   "turn_attribution_reason",
@@ -748,6 +763,12 @@ const ACCESS_LOG_FIELD_METADATA: Record<(typeof ACCESS_LOG_CSV_HEADERS)[number],
     format: "string|null",
     description: "关联问询记录的 ID，用于从调用流水回溯到一次用户问询。",
     trigger: "客户端上报问询或服务端完成问询归因时输出。"
+  },
+  inferred_turn_id: {
+    label: "推断问询 ID",
+    format: "string|null",
+    description: "当问询 ID 为空时，由当前推断问询关联表回填的推断问询 ID，用于从调用流水跳回问询记录。",
+    trigger: "lucy_turn_id 为空且 inferred_turn_access_logs 存在关联时输出；不回写 access_log。"
   },
   turn_attribution_mode: {
     label: "问询归因方式",
@@ -992,6 +1013,7 @@ function renderAccessLogCsv(rows: QueryRow[]): string {
         csvCell(row.token_hash_prefix),
         csvCell(row.lucy_session_id),
         csvCell(row.lucy_turn_id),
+        csvCell(row.inferred_turn_id ?? null),
         csvCell(row.turn_attribution_mode),
         csvCell(row.turn_attribution_confidence),
         csvCell(row.turn_attribution_reason),
@@ -1078,7 +1100,10 @@ interface TurnEntry {
   userId: string;
   startedAt: string;
   endedAt: string;
+  /** Calls that touched a physical table or were denied with table_forbidden. */
   businessCallCount: number;
+  /** All non-protocol calls linked to this turn (ok + denied + error). */
+  linkedCallCount: number;
   questionSummary?: string;
   questionPreview?: string;
   confidence: string;
@@ -1179,6 +1204,80 @@ function loadAccessLogMetrics(
   return { totalCallDurationMs, maxCallDurationMs, slowCallCount, outcomeSummary };
 }
 
+const TABLE_FORBIDDEN_PREFIX = "table_forbidden:";
+
+function parseTableForbiddenPhysicalTable(decisionReason: string | null | undefined): string | null {
+  if (!decisionReason || !decisionReason.startsWith(TABLE_FORBIDDEN_PREFIX)) return null;
+  const rest = decisionReason.slice(TABLE_FORBIDDEN_PREFIX.length).trim();
+  if (!rest) return null;
+  return rest.split(";")[0]?.trim() || null;
+}
+
+/** Tool-call count + denied tables from table_forbidden reasons. */
+function loadTurnToolCallStats(
+  database: Database.Database,
+  accessLogIds: number[]
+): { toolCallCount: number; forbiddenTables: string[] } {
+  if (accessLogIds.length === 0) return { toolCallCount: 0, forbiddenTables: [] };
+  const placeholders = accessLogIds.map(() => "?").join(",");
+  const rows = database
+    .prepare(`SELECT tables, decision_reason FROM access_log WHERE id IN (${placeholders})`)
+    .all(...accessLogIds) as Array<{ tables: string | null; decision_reason: string | null }>;
+  let toolCallCount = 0;
+  const forbiddenTables: string[] = [];
+  const seen = new Set<string>();
+  for (const row of rows) {
+    const forbidden = parseTableForbiddenPhysicalTable(row.decision_reason);
+    const hasTables = Boolean(row.tables && row.tables.trim() && row.tables !== "null" && row.tables !== "[]");
+    if (hasTables || forbidden) toolCallCount += 1;
+    if (forbidden && !seen.has(forbidden)) {
+      seen.add(forbidden);
+      forbiddenTables.push(forbidden);
+    }
+  }
+  return { toolCallCount, forbiddenTables };
+}
+
+function mergeTurnSources(
+  existing: TurnEntry["sources"],
+  forbiddenTables: string[]
+): TurnEntry["sources"] {
+  if (forbiddenTables.length === 0) return existing;
+  const seen = new Set(existing.map((source) => source.physicalTable));
+  const merged = [...existing];
+  for (const physicalTable of forbiddenTables) {
+    if (seen.has(physicalTable)) continue;
+    seen.add(physicalTable);
+    merged.push({ physicalTable });
+  }
+  return merged;
+}
+
+/** Fill inferred_turn_id only when lucy_turn_id is empty (read-time join; never rewrite access_log). */
+function attachInferredTurnIds(database: Database.Database, rows: QueryRow[]): QueryRow[] {
+  const needIds = rows.filter((row) => !row.lucy_turn_id).map((row) => row.id);
+  if (needIds.length === 0) {
+    return rows.map((row) => ({ ...row, inferred_turn_id: null }));
+  }
+  const map = new Map<number, string>();
+  for (const chunk of chunksOf(needIds)) {
+    const placeholders = chunk.map(() => "?").join(",");
+    const links = database
+      .prepare(
+        `SELECT access_log_id, inferred_turn_id FROM inferred_turn_access_logs
+         WHERE access_log_id IN (${placeholders})`
+      )
+      .all(...chunk) as Array<{ access_log_id: number; inferred_turn_id: string }>;
+    for (const link of links) {
+      if (!map.has(link.access_log_id)) map.set(link.access_log_id, link.inferred_turn_id);
+    }
+  }
+  return rows.map((row) => ({
+    ...row,
+    inferred_turn_id: row.lucy_turn_id ? null : (map.get(row.id) ?? null)
+  }));
+}
+
 function listTurnAccessLogIds(database: Database.Database, entry: TurnEntry): number[] {
   if (entry.source === "inferred") {
     const links = database
@@ -1195,8 +1294,16 @@ function listTurnAccessLogIds(database: Database.Database, entry: TurnEntry): nu
 function enrichTurnEntry(database: Database.Database, entry: TurnEntry, p95Ms: number): TurnEntry {
   const accessLogIds = listTurnAccessLogIds(database, entry);
   const metrics = loadAccessLogMetrics(database, accessLogIds, p95Ms);
+  const { toolCallCount, forbiddenTables } = loadTurnToolCallStats(database, accessLogIds);
+  const linkedCallCount = accessLogIds.length;
+  // Reported turns already count every linked non-protocol call as a tool call.
+  // Inferred turns: tool call = touched table OR table_forbidden deny.
+  const businessCallCount = entry.source === "reported" ? linkedCallCount : toolCallCount;
   return {
     ...entry,
+    businessCallCount,
+    linkedCallCount,
+    sources: mergeTurnSources(entry.sources, forbiddenTables),
     turnSpanMs: turnSpanMs(entry.startedAt, entry.endedAt),
     ...metrics
   };
@@ -1279,6 +1386,7 @@ async function listAuditTurnEntries(
           startedAt: row.started_at,
           endedAt: row.ended_at,
           businessCallCount: row.business_call_count,
+          linkedCallCount: 0,
           questionSummary: row.question_summary ?? undefined,
           confidence: row.confidence,
           tools: JSON.parse(row.tool_summary) as string[],
@@ -1325,6 +1433,7 @@ async function listAuditTurnEntries(
           startedAt: row.created_at,
           endedAt: linked.length > 0 ? linked[linked.length - 1].ts : row.created_at,
           businessCallCount: linked.length,
+          linkedCallCount: linked.length,
           questionSummary: row.question_summary ?? undefined,
           questionPreview: row.question_preview ?? undefined,
           confidence: "high",
@@ -1406,6 +1515,7 @@ const TURN_CSV_HEADERS = [
   "结束时间 UTC",
   "问询时长",
   "问询摘要",
+  "关联调用数",
   "工具调用数",
   "涉及工具",
   "涉及数据表",
@@ -1472,10 +1582,16 @@ const TURN_FIELD_METADATA: Record<(typeof TURN_CSV_HEADERS)[number], Omit<CsvFie
     description: "用户问询预览或系统推断摘要。",
     trigger: "客户端上报问题预览或系统可推断摘要时输出。"
   },
+  "关联调用数": {
+    label: "关联调用数",
+    format: "integer",
+    description: "该问询关联的全部非协议工具调用数量；成功次数 + 拒绝次数 + 错误次数等于本列。",
+    trigger: "每条问询记录均输出。"
+  },
   "工具调用数": {
     label: "工具调用数",
     format: "integer",
-    description: "该问询关联的业务工具调用数量。",
+    description: "触达物理表，或因 table_forbidden 被拒的调用数量。",
     trigger: "每条问询记录均输出。"
   },
   "涉及工具": {
@@ -1487,8 +1603,8 @@ const TURN_FIELD_METADATA: Record<(typeof TURN_CSV_HEADERS)[number], Omit<CsvFie
   "涉及数据表": {
     label: "涉及数据表",
     format: "comma-separated string",
-    description: "该问询关联调用触达的数据表。",
-    trigger: "关联调用可识别物理表时输出。"
+    description: "该问询关联调用触达的数据表，以及 table_forbidden 拒绝中的表名。",
+    trigger: "关联调用可识别物理表或裁决原因为 table_forbidden 时输出。"
   },
   "总调用耗时": {
     label: "总调用耗时",
@@ -1546,6 +1662,7 @@ function renderTurnCsv(rows: TurnEntry[]): string {
         csvCell(row.endedAt),
         row.turnSpanMs ?? "",
         csvCell(row.questionPreview ?? row.questionSummary ?? ""),
+        row.linkedCallCount,
         row.businessCallCount,
         csvCell(row.tools.join(", ")),
         csvCell(row.sources.map((source) => source.physicalTable).join(", ")),
@@ -1969,9 +2086,12 @@ export function registerAuditRoutes(app: FastifyInstance) {
     const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
     const totalRow = database.prepare(`SELECT COUNT(*) AS cnt FROM access_log ${where}`).get(params) as { cnt: number };
-    const rows = database
-      .prepare(`SELECT * FROM access_log ${where} ORDER BY ts DESC LIMIT ${limit} OFFSET ${offset}`)
-      .all(params) as QueryRow[];
+    const rows = attachInferredTurnIds(
+      database,
+      database
+        .prepare(`SELECT * FROM access_log ${where} ORDER BY ts DESC LIMIT ${limit} OFFSET ${offset}`)
+        .all(params) as QueryRow[]
+    );
     const summaryRow = database.prepare(`
       SELECT
         SUM(CASE WHEN tool IN (${PROTOCOL_TOOL_LIST}) THEN 1 ELSE 0 END) AS protocol_calls,
@@ -1989,6 +2109,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
       tokenHashPrefix: row.token_hash_prefix ?? undefined,
       lucySessionId: row.lucy_session_id ?? undefined,
       lucyTurnId: row.lucy_turn_id ?? undefined,
+      inferredTurnId: row.inferred_turn_id ?? undefined,
       turnAttributionMode: row.turn_attribution_mode ?? undefined,
       turnAttributionConfidence: row.turn_attribution_confidence ?? undefined,
       turnAttributionReason: row.turn_attribution_reason ?? undefined,
@@ -2077,9 +2198,10 @@ export function registerAuditRoutes(app: FastifyInstance) {
     const { conditions, params } = buildAccessLogFilter(q);
 
     const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-    const rows = database
-      .prepare(`SELECT * FROM access_log ${where} ORDER BY ts DESC`)
-      .all(params) as QueryRow[];
+    const rows = attachInferredTurnIds(
+      database,
+      database.prepare(`SELECT * FROM access_log ${where} ORDER BY ts DESC`).all(params) as QueryRow[]
+    );
 
     const body = renderAccessLogCsv(rows);
     const withBom = q.bom === "1" || q.bom === "true" ? `\uFEFF${body}` : body;
@@ -2098,9 +2220,12 @@ export function registerAuditRoutes(app: FastifyInstance) {
     const { conditions, params, includeProtocol } = buildAccessLogFilter(q);
     const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
     const maxRows = auditExportMaxRows();
-    const rows = database
-      .prepare(`SELECT * FROM access_log ${where} ORDER BY ts DESC LIMIT @exportLimit`)
-      .all({ ...params, exportLimit: maxRows + 1 }) as QueryRow[];
+    const rows = attachInferredTurnIds(
+      database,
+      database
+        .prepare(`SELECT * FROM access_log ${where} ORDER BY ts DESC LIMIT @exportLimit`)
+        .all({ ...params, exportLimit: maxRows + 1 }) as QueryRow[]
+    );
     if (rows.length > maxRows) {
       reply.code(413);
       reply.header("Cache-Control", "private, no-store");
@@ -2428,6 +2553,8 @@ export function registerAuditRoutes(app: FastifyInstance) {
           }>
         : [];
       const connMap = connectionByLogId(accessLogIds);
+      const { toolCallCount, forbiddenTables } = loadTurnToolCallStats(database, accessLogIds);
+      const baseSources = JSON.parse(row.source_summary as string) as TurnEntry["sources"];
       return {
         ok: true,
         data: {
@@ -2437,10 +2564,11 @@ export function registerAuditRoutes(app: FastifyInstance) {
           startedAt: row.started_at,
           endedAt: row.ended_at,
           callCount: row.call_count,
-          businessCallCount: row.business_call_count,
+          businessCallCount: toolCallCount,
+          linkedCallCount: accessLogIds.length,
           confidence: row.confidence,
           tools: JSON.parse(row.tool_summary as string),
-          sources: JSON.parse(row.source_summary as string),
+          sources: mergeTurnSources(baseSources, forbiddenTables),
           questionSummary: row.question_summary,
           evidence: JSON.parse(row.evidence_json as string),
           accessLogs: accessLogs.map((logRow) => mapAccessLogRow(logRow, connMap)),
@@ -2470,8 +2598,23 @@ export function registerAuditRoutes(app: FastifyInstance) {
     }>;
     const accessLogIds = accessLogs.map((l) => l.id);
     const sources = accessLogIds.length > 0
-      ? database.prepare(`SELECT DISTINCT connection_id, schema_name, source_name, physical_table FROM access_log_sources WHERE access_log_id IN (${accessLogIds.map(() => "?").join(",")})`).all(...accessLogIds)
+      ? database.prepare(`SELECT DISTINCT connection_id, schema_name, source_name, physical_table FROM access_log_sources WHERE access_log_id IN (${accessLogIds.map(() => "?").join(",")})`).all(...accessLogIds) as Array<{
+          connection_id: string | null;
+          schema_name: string | null;
+          source_name: string | null;
+          physical_table: string;
+        }>
       : [];
+    const { forbiddenTables } = loadTurnToolCallStats(database, accessLogIds);
+    const mappedSources = mergeTurnSources(
+      sources.map((s) => ({
+        connectionId: s.connection_id ?? undefined,
+        schema: s.schema_name ?? undefined,
+        sourceName: s.source_name ?? undefined,
+        physicalTable: s.physical_table
+      })),
+      forbiddenTables
+    );
     const connMap = connectionByLogId(accessLogIds);
     return {
       ok: true,
@@ -2483,8 +2626,10 @@ export function registerAuditRoutes(app: FastifyInstance) {
         questionPreview: row.question_preview,
         questionSource: row.question_source,
         createdAt: row.created_at,
+        businessCallCount: accessLogIds.length,
+        linkedCallCount: accessLogIds.length,
         accessLogs: accessLogs.map((logRow) => mapAccessLogRow(logRow, connMap)),
-        sources,
+        sources: mappedSources,
         referenceLatency: { windowHours, p95Ms }
       }
     };

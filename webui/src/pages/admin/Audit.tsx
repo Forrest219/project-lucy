@@ -646,12 +646,11 @@ function CopyableId({ value, testId, label, shortDisplay = false }: { value: str
   );
 }
 
-function formatTablesCell(sources: AuditTurnEntry["sources"], max = 2): string {
+function formatTablesCell(sources: AuditTurnEntry["sources"]): string {
   const tables = sources.map((s) => s.physicalTable).filter(Boolean);
   if (tables.length === 0) return "—";
-  const shown = tables.slice(0, max);
-  const suffix = tables.length > max ? "…" : "";
-  return `${shown.join(", ")}${suffix}`;
+  if (tables.length === 1) return tables[0]!;
+  return `${tables[0]} 等 ${tables.length} 个`;
 }
 
 const TURN_SOURCE_FILTER_TITLE =
@@ -745,6 +744,21 @@ function TurnDetailDrawer({
                   推断问题摘要基于工具调用参数自动生成，不等同于用户原文。
                 </section>
               ) : null}
+
+              <section className="pl-card grid gap-2 text-xs" data-testid="audit-turn-meta-card">
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-fg-muted">
+                  {detail.startedAt || detail.createdAt ? (
+                    <span>开始 {formatConfigAuditTs(detail.startedAt ?? detail.createdAt ?? "")}</span>
+                  ) : null}
+                  {detail.endedAt ? <span>结束 {formatConfigAuditTs(detail.endedAt)}</span> : null}
+                  {typeof detail.linkedCallCount === "number" ? (
+                    <span>关联调用 {detail.linkedCallCount}</span>
+                  ) : null}
+                  {typeof detail.businessCallCount === "number" ? (
+                    <span>工具调用 {detail.businessCallCount}</span>
+                  ) : null}
+                </div>
+              </section>
 
               {(detail.questionSummary || detail.questionPreview) ? (
                 <section className="pl-card grid gap-2" data-testid="audit-turn-summary-card">
@@ -1060,6 +1074,20 @@ function EntryRow({
               }}
             >
               {entry.lucyTurnId}
+            </button>
+          ) : entry.inferredTurnId ? (
+            <button
+              type="button"
+              className="pl-inline-link notranslate font-mono text-xs"
+              translate="no"
+              title="推断问询 ID"
+              data-testid={`audit-call-inferred-turn-id-${entry.id}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                onOpenTurn(entry.inferredTurnId!);
+              }}
+            >
+              {entry.inferredTurnId}
             </button>
           ) : (
             <span className="text-fg-muted">—</span>
@@ -2060,27 +2088,24 @@ export function Audit() {
               tabIndex={0}
               data-testid="audit-turns-grid-scroll"
             >
-            <table className="pl-data-grid pl-data-table pl-audit-table w-full" data-testid="audit-turns-table">
+            <table className="pl-data-grid pl-data-table pl-audit-table pl-audit-turns-table w-full" data-testid="audit-turns-table">
               <thead>
                 <tr>
-                  <th className="w-14 whitespace-nowrap">序号</th>
-                  <th className="whitespace-nowrap">问询 ID</th>
-                  <th>开始时间</th>
-                  <th>结束时间</th>
-                  <th>问询时长</th>
-                  <th><span className="notranslate" translate="no">Agent</span></th>
-                  <th>问询摘要</th>
-                  <th>工具调用数</th>
-                  <th>涉及数据表</th>
-                  <th>耗时</th>
-                  <th>结果</th>
-                  <th className="pl-audit-turn-source-cell">来源</th>
-                  <th className="whitespace-nowrap">操作</th>
+                  <th className="pl-audit-turns-col-index whitespace-nowrap">序号</th>
+                  <th className="pl-audit-turns-col-id whitespace-nowrap">问询 ID</th>
+                  <th className="pl-audit-turns-col-time whitespace-nowrap">开始时间</th>
+                  <th className="pl-audit-turns-col-duration whitespace-nowrap">问询时长</th>
+                  <th className="pl-audit-turns-col-agent whitespace-nowrap"><span className="notranslate" translate="no">Agent</span></th>
+                  <th className="pl-audit-turns-col-summary whitespace-nowrap">问询摘要</th>
+                  <th className="pl-audit-turns-col-calls whitespace-nowrap">关联调用数</th>
+                  <th className="pl-audit-turns-col-tables whitespace-nowrap">涉及数据表</th>
+                  <th className="pl-audit-turns-col-result whitespace-nowrap">结果</th>
+                  <th className="pl-audit-turns-col-source pl-audit-turn-source-cell whitespace-nowrap">来源</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredTurnEntries.length === 0 ? (
-                  <tr><td colSpan={13} className="px-3 py-6 text-center text-fg-muted">暂无问询记录</td></tr>
+                  <tr><td colSpan={10} className="px-3 py-6 text-center text-fg-muted">暂无问询记录</td></tr>
                 ) : (
                   filteredTurnEntries.map((entry, index) => {
                     const denied = entry.outcomeSummary?.denied ?? 0;
@@ -2094,61 +2119,46 @@ export function Audit() {
                       >
                         <td className="pl-audit-table-num">{page * PAGE_SIZE + index + 1}</td>
                         <td className="pl-audit-table-mono pl-audit-turn-id-cell" onClick={(e) => e.stopPropagation()}>
-                          <CopyableId value={entry.id} testId={`audit-turn-id-${entry.id}`} label="问询 ID" shortDisplay />
+                          <CopyableId value={entry.id} testId={`audit-turn-id-${entry.id}`} label="问询 ID" />
                         </td>
-                        <td className="pl-audit-table-muted">
-                          <AuditDateTime value={entry.startedAt} />
+                        <td className="pl-audit-table-muted whitespace-nowrap tabular-nums">
+                          {formatConfigAuditTs(entry.startedAt)}
                         </td>
-                        <td className="pl-audit-table-muted">
-                          <AuditDateTime value={entry.endedAt} />
-                        </td>
-                        <td>
-                          <div>{formatDurationMs(entry.turnSpanMs ?? 0)}</div>
+                        <td className="pl-audit-turn-duration-cell">
+                          {formatDurationMs(entry.turnSpanMs ?? 0)}
                           {(entry.totalCallDurationMs ?? 0) > 0 ? (
-                            <div className="font-normal text-fg-muted">执行 {formatDurationMs(entry.totalCallDurationMs ?? 0)}</div>
+                            <span className="text-fg-muted"> · 执 {formatDurationMs(entry.totalCallDurationMs ?? 0)}</span>
                           ) : null}
                         </td>
                         <td className="notranslate" translate="no">{formatAgentLabel(entry.userId, agentNameById)}</td>
-                        <td>{entry.questionPreview ?? entry.questionSummary ?? "—"}</td>
-                        <td className="pl-audit-table-num">{entry.businessCallCount}</td>
-                        <td className="pl-audit-table-muted notranslate" translate="no">
+                        <td className="pl-audit-turn-summary-cell">{entry.questionPreview ?? entry.questionSummary ?? "—"}</td>
+                        <td className="pl-audit-table-num">{entry.linkedCallCount}</td>
+                        <td className="pl-audit-table-muted pl-audit-turn-tables-cell notranslate" translate="no" title={entry.sources.map((s) => s.physicalTable).filter(Boolean).join(", ") || undefined}>
                           {entry.sources.length === 0 && denied > 0
                             ? <span className="text-fg-muted">未下发</span>
                             : formatTablesCell(entry.sources)}
                         </td>
                         <td>
-                          {(entry.slowCallCount ?? 0) > 0 ? (
-                            <span className="pl-status-badge pl-status-partial">含 {entry.slowCallCount} 次慢调用</span>
-                          ) : (
-                            <span className="text-fg-muted">—</span>
-                          )}
-                        </td>
-                        <td>
-                          {denied > 0 ? (
-                            <span className="inline-flex items-center gap-1 flex-wrap">
-                              <span className="pl-status-badge pl-status-partial">已拦截</span>
-                              <span className="text-xs text-fg-muted tabular-nums">({denied} 次拒绝)</span>
-                            </span>
-                          ) : null}
-                          {errors > 0 ? (
-                            <span className="inline-flex items-center gap-1 flex-wrap">
-                              <span className="pl-status-badge pl-status-validation_failed">异常</span>
-                              <span className="text-xs text-fg-muted tabular-nums">({errors} 次错误)</span>
-                            </span>
-                          ) : null}
-                          {denied === 0 && errors === 0 ? <span className="pl-status-badge pl-status-done">成功</span> : null}
+                          <span className="inline-flex flex-wrap items-center gap-1">
+                            {denied > 0 ? (
+                              <>
+                                <span className="pl-status-badge pl-status-partial">已拦截</span>
+                                <span className="text-xs text-fg-muted tabular-nums">({denied})</span>
+                              </>
+                            ) : null}
+                            {errors > 0 ? (
+                              <>
+                                <span className="pl-status-badge pl-status-validation_failed">异常</span>
+                                <span className="text-xs text-fg-muted tabular-nums">({errors})</span>
+                              </>
+                            ) : null}
+                            {denied === 0 && errors === 0 ? <span className="pl-status-badge pl-status-done">成功</span> : null}
+                            {(entry.slowCallCount ?? 0) > 0 ? (
+                              <span className="pl-status-badge pl-status-partial">含 {entry.slowCallCount} 慢</span>
+                            ) : null}
+                          </span>
                         </td>
                         <td className="pl-audit-turn-source-cell"><TurnSourceBadge source={entry.source} /></td>
-                        <td onClick={(e) => e.stopPropagation()}>
-                          <button
-                            type="button"
-                            className="pl-btn pl-btn--ghost text-xs"
-                            data-testid={`audit-turn-open-${entry.id}`}
-                            onClick={() => openTurnDrawer(entry.id)}
-                          >
-                            查看详情
-                          </button>
-                        </td>
                       </tr>
                     );
                   })

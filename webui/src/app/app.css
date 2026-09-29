@@ -585,7 +585,8 @@
   .pl-page-intro { @apply mb-4 text-sm text-fg-muted; }
   .pl-eyebrow { @apply mb-1 text-xs font-semibold tracking-wider text-fg-muted uppercase; }
   .pl-metric-grid { @apply grid grid-cols-2 gap-3 xl:grid-cols-4; }
-  .pl-metric-grid--three { @apply grid-cols-3; }
+  /* Pin 3 cols through xl so parent xl:grid-cols-4 does not leave an orphan slot. */
+  .pl-metric-grid--three { @apply grid-cols-2 sm:grid-cols-3 xl:grid-cols-3; }
   .pl-usage-metric-groups { @apply grid gap-3; }
   .pl-metric-card { @apply grid gap-1 rounded-lg border border-border-default bg-bg-subtle p-3 shadow-card; }
   .pl-metric-card--button {

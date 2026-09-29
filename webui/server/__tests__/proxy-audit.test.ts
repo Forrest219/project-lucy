@@ -495,4 +495,59 @@ describe("proxy audit log", () => {
       db.close();
     }
   });
+
+  it("rebuildInferredTurns splits clusters when policy_version or permission_snapshot_hash changes", async () => {
+    const { writeLog, rebuildInferredTurns } = await import("../proxy/audit");
+    const base = Date.now() - 60 * 60 * 1000;
+    const at = (offsetMs: number) => new Date(base + offsetMs).toISOString();
+
+    await writeLog({
+      ts: at(0),
+      userId: "policy-split-user",
+      tool: "lucy_query",
+      tables: ["dataforai.superstore_orders"],
+      outcome: "ok",
+      durationMs: 1,
+      requestId: "ps-1",
+      policyVersion: "pol-a",
+      permissionSnapshotHash: "snap-a"
+    });
+    // Within gap, but policy version changed → new cluster.
+    await writeLog({
+      ts: at(30_000),
+      userId: "policy-split-user",
+      tool: "lucy_query",
+      tables: ["dataforai.superstore_orders"],
+      outcome: "ok",
+      durationMs: 1,
+      requestId: "ps-2",
+      policyVersion: "pol-b",
+      permissionSnapshotHash: "snap-a"
+    });
+    // Within gap, same policy, snapshot changed → new cluster.
+    await writeLog({
+      ts: at(60_000),
+      userId: "policy-split-user",
+      tool: "lucy_query",
+      tables: ["dataforai.superstore_people"],
+      outcome: "ok",
+      durationMs: 1,
+      requestId: "ps-3",
+      policyVersion: "pol-b",
+      permissionSnapshotHash: "snap-b"
+    });
+
+    const result = await rebuildInferredTurns("policy-split-user", { lookbackHours: 24, gapMs: 120_000 });
+    expect(result.turns).toBe(3);
+
+    const db = new Database(auditDbPath, { readonly: true });
+    try {
+      const turns = db
+        .prepare("SELECT call_count FROM inferred_turns WHERE user_id = ? ORDER BY started_at ASC")
+        .all("policy-split-user") as Array<{ call_count: number }>;
+      expect(turns.map((row) => row.call_count)).toEqual([1, 1, 1]);
+    } finally {
+      db.close();
+    }
+  });
 });

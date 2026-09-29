@@ -67,6 +67,7 @@ test("@pr-impacted grid geometry keeps audit page width within the viewport", as
     startedAt: "2026-09-26T01:00:00.000Z",
     endedAt: "2026-09-26T01:00:08.500Z",
     businessCallCount: 6,
+    linkedCallCount: 6,
     questionPreview:
       "统计 ai_intl_user_active_30d_uv_daily_extremely_long_table_name_token 的近 30 天活跃趋势",
     confidence: "high",

@@ -1000,6 +1000,8 @@ export type AuditLogEntry = {
   tokenHashPrefix?: string;
   lucySessionId?: string;
   lucyTurnId?: string;
+  /** Present when lucyTurnId is empty and an inferred turn currently links this call. */
+  inferredTurnId?: string;
   turnAttributionMode?: "explicit" | "session_bound" | "identity_inferred" | "unassigned";
   turnAttributionConfidence?: "high" | "low" | "none";
   turnAttributionReason?: "turn_attribution_rejected";
@@ -1118,6 +1120,8 @@ export type AuditTurnEntry = {
   startedAt: string;
   endedAt: string;
   businessCallCount: number;
+  /** All linked non-protocol calls; ok + denied + error equals this count. */
+  linkedCallCount: number;
   questionSummary?: string;
   questionPreview?: string;
   confidence: string;
@@ -1167,6 +1171,9 @@ export type AuditTurnDetailResponse = {
   userId: string;
   startedAt?: string;
   endedAt?: string;
+  createdAt?: string;
+  businessCallCount?: number;
+  linkedCallCount?: number;
   questionSummary?: string | null;
   questionPreview?: string | null;
   confidence?: string;

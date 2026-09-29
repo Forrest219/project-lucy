@@ -688,6 +688,96 @@ export function compileForcedFiltersToUpstreamFilterExprs(
   return [`(${orParts.join(" OR ")})`];
 }
 
+function normalizeConstraintValue(value: unknown): string {
+  if (typeof value === "boolean") return value ? "true" : "false";
+  if (typeof value === "number") return String(value);
+  return String(value);
+}
+
+function valuesFromLeaf(leaf: { op: string; value?: unknown; values?: unknown[] }): Set<string> | null {
+  if (leaf.op === "eq") {
+    if (leaf.value === undefined || leaf.value === null) return null;
+    return new Set([normalizeConstraintValue(leaf.value)]);
+  }
+  if (leaf.op === "in") {
+    const raw = Array.isArray(leaf.values) ? leaf.values : Array.isArray(leaf.value) ? leaf.value : [];
+    if (raw.length === 0) return null;
+    return new Set(raw.map(normalizeConstraintValue));
+  }
+  return null;
+}
+
+function setsIntersect(a: Set<string>, b: Set<string>): boolean {
+  for (const value of a) {
+    if (b.has(value)) return true;
+  }
+  return false;
+}
+
+/** Extract eq/in field constraints from lucy_query user filters (structured only). */
+function extractUserEqInConstraints(filters: unknown): Map<string, Set<string>> {
+  const byField = new Map<string, Set<string>>();
+  if (filters === undefined || filters === null) return byField;
+  const items = Array.isArray(filters) ? filters : [filters];
+  for (const item of items) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const record = item as Record<string, unknown>;
+    const field = typeof record.field === "string" ? record.field.trim() : "";
+    if (!field || !SAFE_QUALIFIED.test(field)) continue;
+    const op = typeof record.op === "string" ? record.op.trim().toLowerCase() : "";
+    if (op !== "eq" && op !== "in") continue;
+    const values = valuesFromLeaf({
+      op,
+      value: record.value,
+      values: Array.isArray(record.values) ? (record.values as unknown[]) : undefined
+    });
+    if (!values || values.size === 0) continue;
+    const existing = byField.get(field);
+    if (!existing) {
+      byField.set(field, values);
+      continue;
+    }
+    // Multiple user constraints on same field AND together → keep intersection.
+    const next = new Set<string>();
+    for (const value of existing) {
+      if (values.has(value)) next.add(value);
+    }
+    byField.set(field, next);
+  }
+  return byField;
+}
+
+/**
+ * True when FinalRows = (forced OR arms) AND user eq/in filters has empty
+ * intersection. Only eq/in are considered; unknown filter shapes do not trigger.
+ */
+export function isScopeIntersectionEmpty(
+  userArgs: unknown,
+  forcedFilters: ForcedFiltersPayload | undefined
+): boolean {
+  if (!forcedFilters?.or?.length) return false;
+  const record = userArgs && typeof userArgs === "object" && !Array.isArray(userArgs)
+    ? (userArgs as Record<string, unknown>)
+    : {};
+  const userConstraints = extractUserEqInConstraints(record.filters);
+  if (userConstraints.size === 0) return false;
+
+  // Empty if every OR arm conflicts with at least one user constraint.
+  return forcedFilters.or.every((arm) => {
+    for (const leaf of arm.and ?? []) {
+      const field = typeof leaf.field === "string" ? leaf.field.trim() : "";
+      if (!field) continue;
+      const userValues = userConstraints.get(field);
+      if (!userValues) continue;
+      if (userValues.size === 0) return true;
+      const armValues = valuesFromLeaf(leaf);
+      if (!armValues) continue;
+      if (!setsIntersect(userValues, armValues)) return true;
+    }
+    return false;
+  });
+}
+
 /**
  * Spec 99 §6 / BY-05 — strip user-forged forced_* fields, inject Proxy payload.
  *

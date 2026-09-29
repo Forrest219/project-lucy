@@ -446,9 +446,15 @@ describe("AgentList", () => {
     expect(document.body).not.toHaveTextContent("近 7 天拒绝");
     expect(document.body).not.toHaveTextContent(/^\s*Token 数\s*$/);
 
-    // PageHeader 不再展示 count badges（由 KPI 网格承载）
+    // PageHeader 不再展示 count badges（由 KPI 网格承载）；管理页不常驻统计时间/自动刷新
     expect(screen.queryByTestId("badge-configured-token-total")).not.toBeInTheDocument();
     expect(screen.queryByTestId("badge-agent-total")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("agent-stats-time")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("agent-audit-completeness")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("agent-auto-refresh")).not.toBeInTheDocument();
+    expect(screen.queryByText("自动刷新")).not.toBeInTheDocument();
+    expect(screen.getByTestId("agent-refresh")).toBeInTheDocument();
+    expect(screen.getByTestId("agent-metric-grid")).toHaveClass("pl-metric-grid", "pl-metric-grid--three");
   });
 
   it("agent table row links role id to role detail and exposes 查看权限 in RowMoreMenu", async () => {

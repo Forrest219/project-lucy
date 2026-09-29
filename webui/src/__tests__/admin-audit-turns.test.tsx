@@ -138,6 +138,7 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
                     startedAt: "2026-08-04T08:00:00.000Z",
                     endedAt: "2026-08-04T08:00:16.000Z",
                     businessCallCount: 2,
+                    linkedCallCount: 2,
                     questionSummary: "推断：查询 superstore",
                     confidence: "medium",
                     tools: ["sl_query"],
@@ -177,8 +178,11 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
     expect(turnsRegion).toHaveAttribute("tabindex", "0");
     expect(turnsTable.querySelector("td.pl-audit-table-muted")).not.toBeNull();
     expect(screen.getByText("开始时间")).toBeInTheDocument();
-    expect(screen.getByText("结束时间")).toBeInTheDocument();
-    expect(screen.getByText("工具调用数")).toBeInTheDocument();
+    expect(screen.queryByText("结束时间")).not.toBeInTheDocument();
+    expect(screen.getByText("关联调用数")).toBeInTheDocument();
+    expect(screen.queryByText("工具调用数")).not.toBeInTheDocument();
+    expect(screen.queryByText("耗时")).not.toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "操作" })).not.toBeInTheDocument();
     expect(screen.getByText("涉及数据表")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("Agent 名称或 ID")).toBeInTheDocument();
     expect(screen.getByTestId("audit-time-label")).toHaveTextContent("时间");
@@ -186,7 +190,7 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
     expect(sinceInput.value).toMatch(/:00$/);
     expect(screen.queryByTestId("audit-latency-reference")).not.toBeInTheDocument();
     expect(screen.getByText("Demo Agent (demo_agent)")).toBeInTheDocument();
-    expect(screen.getByText("含 1 次慢调用")).toBeInTheDocument();
+    expect(screen.getByText("含 1 慢")).toBeInTheDocument();
     expect(screen.queryByText("业务调用")).not.toBeInTheDocument();
     expect(screen.getByTestId("audit-turns-coverage-summary")).toHaveTextContent("已上报问询 0");
     expect(screen.getByTestId("audit-turns-coverage-summary")).toHaveTextContent("推断问询 1");
@@ -355,6 +359,8 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
                     startedAt: "2026-08-04T08:00:00.000Z",
                     endedAt: "2026-08-04T08:00:16.000Z",
                     businessCallCount: 1,
+
+                    linkedCallCount: 1,
                     questionSummary: "推断：查询",
                     confidence: "medium",
                     tools: ["sl_query"],
@@ -402,7 +408,8 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
     expect(screen.getByTestId("audit-key-search")).toBeInTheDocument();
     const turnsTable = await screen.findByTestId("audit-turns-table");
     expect(screen.getByRole("columnheader", { name: "问询 ID" })).toBeInTheDocument();
-    expect(turnsTable.querySelector("th.w-14.whitespace-nowrap")).not.toBeNull();
+    expect(turnsTable.querySelector("th.pl-audit-turns-col-index.whitespace-nowrap")).not.toBeNull();
+    expect(turnsTable).toHaveClass("pl-audit-turns-table");
     expect(screen.getByTestId("audit-turn-id-inf_test_1")).toHaveTextContent("inf_test_1");
     expect(screen.getByTestId("audit-export-current")).toHaveTextContent("导出问询记录");
     expect(screen.getByTestId("audit-export-related")).toHaveTextContent("导出调用流水");
@@ -512,6 +519,8 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
                     startedAt: "2026-08-04T08:00:00.000Z",
                     endedAt: "2026-08-04T08:00:16.000Z",
                     businessCallCount: 1,
+
+                    linkedCallCount: 1,
                     confidence: "medium",
                     tools: ["sl_query"],
                     sources: [],
@@ -717,6 +726,8 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
                     startedAt: "2026-08-04T08:00:00.000Z",
                     endedAt: "2026-08-04T08:00:16.000Z",
                     businessCallCount: 1,
+
+                    linkedCallCount: 1,
                     confidence: "high",
                     tools: ["sl_query"],
                     sources: [],
@@ -741,16 +752,13 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
     expect(screen.getByRole("button", { name: "近 7 天" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: "近 24 小时" })).toHaveAttribute("aria-pressed", "false");
 
-    const openBtn = await screen.findByTestId("audit-turn-open-inf_test_1");
-    fireEvent.click(openBtn);
+    const openRow = await screen.findByTestId("audit-turn-row-inf_test_1");
+    fireEvent.click(openRow);
     expect(await screen.findByTestId("audit-turn-drawer")).toBeInTheDocument();
 
     const idCell = screen.getByTestId("audit-turn-id-inf_test_1").closest("td");
     expect(idCell).toHaveClass("pl-audit-turn-id-cell");
-    const startCell = within(screen.getByTestId("audit-turns-table")).getAllByText((_, node) => {
-      return node?.getAttribute?.("data-part") === "date";
-    });
-    expect(startCell.length).toBeGreaterThanOrEqual(1);
+    expect(within(screen.getByTestId("audit-turns-table")).getByText(/2026\/8\/4/)).toBeInTheDocument();
 
     vi.stubGlobal("navigator", {
       ...navigator,

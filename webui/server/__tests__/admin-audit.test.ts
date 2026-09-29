@@ -554,7 +554,7 @@ describe("GET /api/admin/audit/turns", () => {
       expect(csvRes.text.charCodeAt(0)).toBe(0xFEFF);
       const csvBody = csvRes.text.replace(/^\uFEFF/, "");
       const [headerLine, firstDataLine] = csvBody.split("\n");
-      expect(headerLine).toBe("问询 ID,来源,Agent,开始时间,开始时间 UTC,结束时间,结束时间 UTC,问询时长,问询摘要,工具调用数,涉及工具,涉及数据表,总调用耗时,最大调用耗时,慢调用数,成功次数,拒绝次数,错误次数");
+      expect(headerLine).toBe("问询 ID,来源,Agent,开始时间,开始时间 UTC,结束时间,结束时间 UTC,问询时长,问询摘要,关联调用数,工具调用数,涉及工具,涉及数据表,总调用耗时,最大调用耗时,慢调用数,成功次数,拒绝次数,错误次数");
       const turnHeaders = parseCsvLine(headerLine);
       const turnCells = parseCsvLine(firstDataLine);
       expect(turnCells[turnHeaders.indexOf("开始时间")]).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
@@ -1143,6 +1143,119 @@ describe("Spec 137 audit evidence pack", () => {
         .send({ dryRun: false })
         .expect(400);
       expect(response.body.error.code).toBe("ERR_SCRUB_REASON_REQUIRED");
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("fills inferred_turn_id on call list/CSV when lucy_turn_id is empty", async () => {
+    const { writeLog, rebuildInferredTurns } = await import("../proxy/audit");
+    const ts = new Date().toISOString();
+    const id = await writeLog({
+      ts,
+      userId: "inferred-join-user",
+      tool: "lucy_query",
+      tables: ["dataforai.superstore_orders"],
+      outcome: "ok",
+      durationMs: 12,
+      requestId: "inf-join-1"
+    });
+    await rebuildInferredTurns("inferred-join-user", { lookbackHours: 24, gapMs: 120_000 });
+
+    const { buildServer } = await import("../index");
+    const app = buildServer();
+    await app.ready();
+    try {
+      const list = await request(app.server)
+        .get("/api/admin/audit?user=inferred-join-user&includeProtocol=true")
+        .expect(200);
+      const entry = list.body.data.entries.find((row: { id: number }) => row.id === id);
+      expect(entry?.lucyTurnId).toBeUndefined();
+      expect(entry?.inferredTurnId).toMatch(/^inf_/);
+
+      const csv = await request(app.server)
+        .get("/api/admin/audit/export?user=inferred-join-user&includeProtocol=true")
+        .expect(200);
+      const lines = String(csv.text).trim().split("\n");
+      const headers = parseCsvLine(lines[0]!);
+      expect(headers).toContain("inferred_turn_id");
+      const row = parseCsvLine(lines[1]!);
+      expect(row[headers.indexOf("lucy_turn_id")]).toBe("");
+      expect(row[headers.indexOf("inferred_turn_id")]).toMatch(/^inf_/);
+
+      const filtered = await request(app.server)
+        .get(`/api/admin/audit?key=${encodeURIComponent(entry.inferredTurnId)}&includeProtocol=true`)
+        .expect(200);
+      expect(filtered.body.data.entries.some((row: { id: number }) => row.id === id)).toBe(true);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("turn export reconciles linkedCallCount with outcomes and includes table_forbidden tables", async () => {
+    const { writeLog, rebuildInferredTurns } = await import("../proxy/audit");
+    const base = Date.now();
+    const at = (offsetMs: number) => new Date(base + offsetMs).toISOString();
+    await writeLog({
+      ts: at(0),
+      userId: "reconcile-user",
+      tool: "lucy_query",
+      tables: ["dataforai.superstore_orders"],
+      outcome: "ok",
+      durationMs: 10,
+      requestId: "rec-ok"
+    });
+    await writeLog({
+      ts: at(1_000),
+      userId: "reconcile-user",
+      tool: "lucy_query",
+      outcome: "denied",
+      decisionReason: "table_forbidden:dataforai.superstore_people",
+      durationMs: 2,
+      requestId: "rec-deny"
+    });
+    await writeLog({
+      ts: at(2_000),
+      userId: "reconcile-user",
+      tool: "lucy_catalog",
+      outcome: "ok",
+      durationMs: 1,
+      requestId: "rec-catalog"
+    });
+    await rebuildInferredTurns("reconcile-user", { lookbackHours: 24, gapMs: 120_000 });
+
+    const { buildServer } = await import("../index");
+    const app = buildServer();
+    await app.ready();
+    try {
+      const turns = await request(app.server)
+        .get("/api/admin/audit/turns?user=reconcile-user&source=inferred")
+        .expect(200);
+      expect(turns.body.data.entries).toHaveLength(1);
+      const entry = turns.body.data.entries[0];
+      expect(entry.linkedCallCount).toBe(3);
+      expect(entry.businessCallCount).toBe(2);
+      expect(entry.outcomeSummary).toEqual({ ok: 2, denied: 1, error: 0 });
+      expect(entry.outcomeSummary.ok + entry.outcomeSummary.denied + entry.outcomeSummary.error).toBe(
+        entry.linkedCallCount
+      );
+      expect(entry.sources.map((s: { physicalTable: string }) => s.physicalTable)).toContain(
+        "dataforai.superstore_people"
+      );
+
+      const csv = await request(app.server)
+        .get("/api/admin/audit/turns/export?user=reconcile-user&source=inferred")
+        .expect(200);
+      const lines = String(csv.text).replace(/^\uFEFF/, "").trim().split("\n");
+      const headers = parseCsvLine(lines[0]!);
+      expect(headers).toContain("关联调用数");
+      expect(headers).toContain("工具调用数");
+      const row = parseCsvLine(lines[1]!);
+      expect(Number(row[headers.indexOf("关联调用数")])).toBe(3);
+      expect(Number(row[headers.indexOf("工具调用数")])).toBe(2);
+      expect(Number(row[headers.indexOf("成功次数")])).toBe(2);
+      expect(Number(row[headers.indexOf("拒绝次数")])).toBe(1);
+      expect(row[headers.indexOf("涉及数据表")]).toContain("superstore_people");
     } finally {
       await app.close();
     }

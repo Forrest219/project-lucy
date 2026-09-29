@@ -15,6 +15,8 @@ export function decisionReasonLabel(code: string | null | undefined): string {
   if (code === "license_expired") return "部署许可已过期";
   if (code.startsWith("sensitive_metadata_forbidden:")) return "敏感元数据工具未授权";
   if (code === "raw_query_forbidden") return "禁止原始 SQL 查询";
+  if (code === "scope_intersection_empty") return "行范围与用户筛选无交集";
+  if (code === "row_policy_upstream_unproven") return "上游行策略契约未证明";
   if (code === "query_concurrency_exceeded") return "查询并发超限";
   if (code === "execution_config_stale") return "MCP 执行层配置未加载";
   if (code === "execution_connection_not_loaded") return "MCP 执行层未加载该连接";

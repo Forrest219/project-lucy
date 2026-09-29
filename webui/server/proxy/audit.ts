@@ -1173,24 +1173,42 @@ export async function rebuildInferredTurns(
   const protocolList = PROTOCOL_TOOLS.map((tool) => `'${tool}'`).join(", ");
 
   const rows = database.prepare(`
-    SELECT id, ts, tool, tables, args_summary
+    SELECT id, ts, tool, tables, args_summary, policy_version, permission_snapshot_hash
     FROM access_log
     WHERE user_id = ? AND ts >= ? AND tool NOT IN (${protocolList})
     ORDER BY ts ASC, id ASC
-  `).all(userId, cutoff) as Array<{ id: number; ts: string; tool: string; tables: string | null; args_summary: string | null }>;
+  `).all(userId, cutoff) as Array<{
+    id: number;
+    ts: string;
+    tool: string;
+    tables: string | null;
+    args_summary: string | null;
+    policy_version: string | null;
+    permission_snapshot_hash: string | null;
+  }>;
 
   type ClusterRow = (typeof rows)[number];
   const clusters: ClusterRow[][] = [];
   let current: ClusterRow[] = [];
   let lastTs = 0;
+  let lastPolicyVersion: string | null | undefined;
+  let lastPermissionSnapshot: string | null | undefined;
   for (const row of rows) {
     const t = new Date(row.ts).getTime();
-    if (current.length > 0 && t - lastTs > gapMs) {
+    const policyChanged =
+      current.length > 0
+      && (
+        (row.policy_version ?? null) !== (lastPolicyVersion ?? null)
+        || (row.permission_snapshot_hash ?? null) !== (lastPermissionSnapshot ?? null)
+      );
+    if (current.length > 0 && (t - lastTs > gapMs || policyChanged)) {
       clusters.push(current);
       current = [];
     }
     current.push(row);
     lastTs = t;
+    lastPolicyVersion = row.policy_version;
+    lastPermissionSnapshot = row.permission_snapshot_hash;
   }
   if (current.length > 0) clusters.push(current);
 

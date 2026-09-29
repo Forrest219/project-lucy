@@ -1229,9 +1229,6 @@
 | `setup-readiness-issues` | Step6ConnectAgent | 接入阻塞项列表 |
 | `setup-token-expiry` | Step6ConnectAgent | Token 过期时间 |
 | `setup-token-broad-ack` | Step6ConnectAgent | 宽权限 Token 确认 |
-| `agent-stats-time` | AgentList | Agent 统计时间 |
-| `agent-audit-completeness` | AgentList | 审计完整性摘要 |
-| `agent-auto-refresh` | AgentList | 自动刷新开关 |
 | `agent-refresh` | AgentList | 手动刷新 |
 | `agent-audit-partial-notice` | AgentList | 审计数据不完整提示 |
 | `agent-credential-partial-notice` | AgentList | 凭据统计不完整提示 |

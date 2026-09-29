@@ -83,11 +83,31 @@ describe("GET /api/admin/mcp-runtime/status", () => {
 
   it("probes the resident KTX MCP endpoint with the internal token", async () => {
     let authorization = "";
+    let toolsSession = "";
     const upstream = createServer((request, response) => {
       authorization = request.headers.authorization ?? "";
-      request.resume();
-      response.writeHead(200, { "content-type": "application/json" });
-      response.end(JSON.stringify({ jsonrpc: "2.0", id: "lucy-runtime-probe", result: { tools: [] } }));
+      const chunks: Buffer[] = [];
+      request.on("data", (chunk) => chunks.push(chunk));
+      request.on("end", () => {
+        const body = JSON.parse(Buffer.concat(chunks).toString() || "{}") as { method?: string };
+        if (body.method === "initialize") {
+          response.writeHead(200, { "content-type": "application/json", "mcp-session-id": "probe-session" });
+          response.end(JSON.stringify({
+            jsonrpc: "2.0",
+            id: "lucy-runtime-probe-initialize",
+            result: { protocolVersion: "2024-11-05", capabilities: {}, serverInfo: { name: "ktx", version: "0" } }
+          }));
+          return;
+        }
+        if (body.method === "notifications/initialized") {
+          response.writeHead(202);
+          response.end();
+          return;
+        }
+        toolsSession = String(request.headers["mcp-session-id"] ?? "");
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify({ jsonrpc: "2.0", id: "lucy-runtime-probe", result: { tools: [] } }));
+      });
     });
     await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
     const previousHost = process.env.LUCY_PROXY_UPSTREAM_HOST;
@@ -101,6 +121,7 @@ describe("GET /api/admin/mcp-runtime/status", () => {
       runtime.resetExecutionRuntimeProbeForTests();
       await expect(runtime.probeExecutionRuntime({ force: true })).resolves.toMatchObject({ status: "reachable" });
       expect(authorization).toBe("Bearer runtime-probe-token");
+      expect(toolsSession).toBe("probe-session");
     } finally {
       if (previousHost === undefined) delete process.env.LUCY_PROXY_UPSTREAM_HOST;
       else process.env.LUCY_PROXY_UPSTREAM_HOST = previousHost;

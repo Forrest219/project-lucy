@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -208,15 +208,6 @@ function LastSeen({
       {label}
     </span>
   );
-}
-
-function formatStatsTimeLabel(updatedAt: number, now: Date): string {
-  if (!updatedAt) return "未知";
-  const diffMs = Math.max(0, now.getTime() - updatedAt);
-  if (diffMs < 5_000) return "刚刚";
-  if (diffMs < 60_000) return `${Math.floor(diffMs / 1000)} 秒前`;
-  if (diffMs < 15 * 60_000) return `${Math.floor(diffMs / 60_000)} 分钟前`;
-  return new Date(updatedAt).toLocaleTimeString("zh-CN", { hour12: false });
 }
 
 function RoleSummaryCard({ role }: { role: Role | undefined }) {
@@ -458,25 +449,16 @@ export function AgentList() {
   const [filterEnabled, setFilterEnabled] = useState<"all" | "enabled" | "disabled">("all");
   const [filterRole, setFilterRole] = useState<"all" | "unbound" | string>("all");
   const [filterActivity, setFilterActivity] = useState<"all" | "active" | "inactive">("all");
-  const [autoRefresh, setAutoRefresh] = useState(true);
-  const [now, setNow] = useState(() => new Date());
 
   const agentsQuery = useQuery({
     queryKey: ["admin", "agents"],
-    queryFn: () => apiGet<AgentsResponse>("/api/admin/agents"),
-    refetchInterval: autoRefresh ? 30_000 : false,
-    refetchIntervalInBackground: false
+    queryFn: () => apiGet<AgentsResponse>("/api/admin/agents")
   });
   const { data, isLoading, error } = agentsQuery;
   const { data: rolesData } = useQuery({
     queryKey: ["admin", "roles", { includeTemplates: false }],
     queryFn: () => apiGet<RolesResponse>("/api/admin/roles?includeTemplates=false")
   });
-
-  useEffect(() => {
-    const id = window.setInterval(() => setNow(new Date()), 1000);
-    return () => window.clearInterval(id);
-  }, []);
 
   const agents = data?.agents ?? [];
   const summary = data?.summary ?? summarizeAgents(agents);
@@ -487,7 +469,6 @@ export function AgentList() {
   const businessCallsLast7dTotal = summary.businessCallsLast7d ?? summary.callsLast7d;
   const protocolCallsLast7dTotal = summary.protocolCallsLast7d ?? 0;
   const usedCredentialState = summary.usedCredentialState ?? auditMetricsState;
-  const statsTimeLabel = formatStatsTimeLabel(agentsQuery.dataUpdatedAt, now);
   const isFilterActive = search !== "" || filterEnabled !== "all" || filterRole !== "all" || filterActivity !== "all";
   function clearFilters() {
     setSearch("");
@@ -533,29 +514,8 @@ export function AgentList() {
             管理 <span className="notranslate" translate="no">Agent</span> 身份、角色、<span className="notranslate" translate="no">Token</span> 及数据访问边界。
           </>
         }
-        badges={
-          <div className="flex flex-wrap items-center gap-2">
-            <span data-testid="agent-stats-time">统计时间：{statsTimeLabel}</span>
-            <span
-              className={`pl-badge ${summary.auditCompleteness?.state === "partial" ? "pl-badge--warning" : ""}`}
-              data-testid="agent-audit-completeness"
-              title="仅反映当前 Lucy 进程观测到的审计写入状态"
-            >
-              审计写入完整性：{summary.auditCompleteness?.state === "unavailable" ? "不可用" : summary.auditCompleteness?.state === "partial" ? "需关注" : "正常"}
-            </span>
-          </div>
-        }
         actions={
           <div className="flex flex-wrap items-center gap-3">
-            <label className="flex items-center gap-2 text-sm text-fg-muted">
-              <input
-                type="checkbox"
-                checked={autoRefresh}
-                onChange={(event) => setAutoRefresh(event.target.checked)}
-                data-testid="agent-auto-refresh"
-              />
-              自动刷新
-            </label>
             <button
               type="button"
               className="pl-btn pl-btn--secondary"
@@ -582,7 +542,7 @@ export function AgentList() {
         </div>
       ) : null}
 
-      <div className="pl-metric-grid" data-testid="agent-metric-grid">
+      <div className="pl-metric-grid pl-metric-grid--three" data-testid="agent-metric-grid">
         {/* D1: config-class — always ok, reads directly from config response */}
         <MetricCard
           label={<span><span className="notranslate" translate="no">Agent</span> 总数</span>}

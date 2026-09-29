@@ -92,23 +92,62 @@ export async function probeExecutionRuntime(
     };
     const token = process.env.KTX_INTERNAL_TOKEN?.trim();
     if (token) headers.authorization = `Bearer ${token}`;
-    const response = await fetch(upstreamEndpoint().url, {
+    const endpoint = upstreamEndpoint().url;
+    const probePost = (body: unknown, sessionId?: string) => fetch(endpoint, {
       method: "POST",
-      headers,
-      body: JSON.stringify({ jsonrpc: "2.0", id: "lucy-runtime-probe", method: "tools/list", params: {} }),
+      headers: sessionId ? { ...headers, "mcp-session-id": sessionId } : headers,
+      body: JSON.stringify(body),
       signal: controller.signal
     });
-    const responseText = await response.text();
-    const envelope = parseProbeEnvelope(responseText);
-    result = response.ok && envelope && !("error" in envelope)
-      ? { status: "reachable", checkedAt }
-      : {
+    const initializeResponse = await probePost({
+      jsonrpc: "2.0",
+      id: "lucy-runtime-probe-initialize",
+      method: "initialize",
+      params: {
+        protocolVersion: process.env.LUCY_PROXY_UPSTREAM_PROTOCOL_VERSION ?? "2024-11-05",
+        capabilities: {},
+        clientInfo: { name: "lucy-runtime-probe", version: "1.0" }
+      }
+    });
+    const initializeEnvelope = parseProbeEnvelope(await initializeResponse.text());
+    const sessionId = initializeResponse.headers.get("mcp-session-id")?.trim();
+    if (!initializeResponse.ok || !sessionId || !initializeEnvelope || "error" in initializeEnvelope) {
+      result = {
+        status: "error",
+        checkedAt,
+        error: initializeResponse.ok
+          ? "KTX MCP probe returned an invalid or error response"
+          : `KTX MCP probe returned HTTP ${initializeResponse.status}`
+      };
+    } else {
+      const initializedResponse = await probePost(
+        { jsonrpc: "2.0", method: "notifications/initialized" },
+        sessionId
+      );
+      await initializedResponse.text();
+      if (!initializedResponse.ok) {
+        result = {
           status: "error",
           checkedAt,
-          error: response.ok
-            ? "KTX MCP probe returned an invalid or error response"
-            : `KTX MCP probe returned HTTP ${response.status}`
+          error: `KTX MCP probe returned HTTP ${initializedResponse.status}`
         };
+      } else {
+        const response = await probePost(
+          { jsonrpc: "2.0", id: "lucy-runtime-probe", method: "tools/list", params: {} },
+          sessionId
+        );
+        const envelope = parseProbeEnvelope(await response.text());
+        result = response.ok && envelope && !("error" in envelope)
+          ? { status: "reachable", checkedAt }
+          : {
+              status: "error",
+              checkedAt,
+              error: response.ok
+                ? "KTX MCP probe returned an invalid or error response"
+                : `KTX MCP probe returned HTTP ${response.status}`
+            };
+      }
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     result = {

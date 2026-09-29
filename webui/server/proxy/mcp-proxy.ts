@@ -37,7 +37,7 @@ import { getAuditDb as getAdminAuditDb } from "../admin/audit.js";
 import { extractSqlFromToolResult, mergeIncludeSql } from "../audit/query-artifact-capture.js";
 import { assertLicenseAllowsMcp, loadLicenseSnapshot } from "../license/entitlement.js";
 import { canonicalizeLucyQueryArgs } from "./lucy-query-normalization.js";
-import { applyLucyQueryForcedFilters, buildExplainForcedPredicateDiagnostics } from "./row-policy.js";
+import { applyLucyQueryForcedFilters, buildExplainForcedPredicateDiagnostics, isScopeIntersectionEmpty } from "./row-policy.js";
 import { TurnCorrelationRegistry } from "./turn-correlation.js";
 import { beginAuditWrite, completeAuditWrite, failAuditWrite } from "./audit-write-health.js";
 
@@ -2193,7 +2193,8 @@ async function writeLucySemanticResponse(
   queryMeta: Partial<Parameters<typeof writeLog>[0]>,
   queryTables: string[],
   traceId: string,
-  session: UpstreamSessionState | undefined
+  session: UpstreamSessionState | undefined,
+  options: { scopeIntersectionEmpty?: boolean } = {}
 ): Promise<void> {
   const originalBody = upstreamBody;
   const contentType = String(upstream.headers["content-type"] ?? "");
@@ -2273,7 +2274,9 @@ async function writeLucySemanticResponse(
   const tables = [...new Set([...structuredTables, ...queryTables])];
   const responseMeta = responseAuditMeta(Buffer.from(body), headers["content-type"]);
   const decisionReason = outcome === "ok"
-    ? (metaFailed ? "lucy_result_meta_failed" : "allowed")
+    ? (metaFailed
+      ? "lucy_result_meta_failed"
+      : (options.scopeIntersectionEmpty ? "scope_intersection_empty" : "allowed"))
     : await classifyUpstreamToolError(originalBody, toolArgs);
   if (outcome === "ok") {
     await recordSuccessfulQueryObservation(toolName, toolArgs);
@@ -2501,6 +2504,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
   let rpcMethod: string | undefined;
   let toolName: string | undefined;
   let toolArgs: unknown;
+  let scopeIntersectionEmpty = false;
   let requestId: string | number = "";
   let argsSummary: Record<string, unknown> | undefined;
   let queryMeta: Partial<Parameters<typeof writeLog>[0]> = {};
@@ -2724,6 +2728,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
     }
     // Spec 99 §6 — Proxy-only forced_filters injection for lucy_query; strip any user-supplied alias.
     if (toolName === "lucy_query") {
+      scopeIntersectionEmpty = isScopeIntersectionEmpty(toolArgs, decision.forcedFilters);
       const record = applyLucyQueryForcedFilters(toolArgs, decision.forcedFilters);
       toolArgs = record;
       const params = parsedRpc?.params && typeof parsedRpc.params === "object" && !Array.isArray(parsedRpc.params)
@@ -3869,7 +3874,23 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
   }
 
   if (rpcMethod === "tools/call" && (toolName === "lucy_query" || toolName === "lucy_read_source")) {
-    await writeLucySemanticResponse(identity, upstream, upstreamBody, res, requestId, toolName, toolArgs, start, requestMeta, argsSummary, queryMeta, queryTables, traceId, upstreamSession);
+    await writeLucySemanticResponse(
+      identity,
+      upstream,
+      upstreamBody,
+      res,
+      requestId,
+      toolName,
+      toolArgs,
+      start,
+      requestMeta,
+      argsSummary,
+      queryMeta,
+      queryTables,
+      traceId,
+      upstreamSession,
+      { scopeIntersectionEmpty }
+    );
     return;
   }
 

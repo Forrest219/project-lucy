@@ -954,3 +954,50 @@ ${BASE_ROLE_TOOLS}`,
     });
   });
 });
+
+describe("isScopeIntersectionEmpty", () => {
+  it("detects empty intersection between user eq/in filters and every forced OR arm", async () => {
+    const { isScopeIntersectionEmpty } = await import("../proxy/row-policy.js");
+    const forced = {
+      or: [
+        {
+          and: [
+            { field: "superstore_orders.province", op: "eq" as const, value: "Shanghai/Zhejiang/Jiangsu" },
+            { field: "superstore_orders.category", op: "in" as const, values: ["Furniture", "Office Supplies"] }
+          ]
+        }
+      ]
+    };
+    expect(
+      isScopeIntersectionEmpty(
+        {
+          filters: [
+            { field: "superstore_orders.province", op: "eq", value: "Guangdong/Hunan/Hubei" },
+            { field: "superstore_orders.category", op: "eq", value: "Technology" }
+          ]
+        },
+        forced
+      )
+    ).toBe(true);
+
+    expect(
+      isScopeIntersectionEmpty(
+        {
+          filters: [
+            { field: "superstore_orders.province", op: "eq", value: "Shanghai/Zhejiang/Jiangsu" },
+            { field: "superstore_orders.category", op: "eq", value: "Furniture" }
+          ]
+        },
+        forced
+      )
+    ).toBe(false);
+
+    expect(isScopeIntersectionEmpty({ filters: [] }, forced)).toBe(false);
+    expect(
+      isScopeIntersectionEmpty(
+        { filters: [{ field: "superstore_orders.province", op: "eq", value: "Guangdong/Hunan/Hubei" }] },
+        undefined
+      )
+    ).toBe(false);
+  });
+});

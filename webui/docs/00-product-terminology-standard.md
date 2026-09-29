@@ -552,6 +552,7 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 | Export Manifest | Manifest | — | 将 Manifest 翻译成中文主标签 | Spec 137：`manifest.json`；DOM `translate="no"` |
 | Turn / Question cluster | 问询 | 问询摘要 | 问题簇 | 列表行对象；Drawer 标题 |
 | Turn ID | 问询 ID | — | turn id（裸露作主标签）、问题簇 ID | L1 身份列；可复制；关联调用流水 |
+| Inferred Turn ID | 推断问询 ID | — | inferred turn id（裸露作主标签） | 调用流水列 / CSV；仅当问询 ID 为空时由关联表回填 |
 | Audit Event ID | 事件 ID | — | access_log id（裸露作主标签） | 调用流水 L1 身份列；`access_log.id` |
 | Range preset | 近 24 小时 / 近 7 天 | — | 地址栏 `hours=168`（新写入） | URL `range=24h\|7d`；兼容读 `hours=24\|168` |
 | Reported turn | 已上报问询 | — | reported turn | 来源 badge |
@@ -561,8 +562,9 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 | Typical Request Latency | 多数请求耗时 | P95（次级括注） | 响应上限（P95）作主标签 | 与 `/admin/usage` 同算法；**列表页不再展示整句参照文案**（Spec 94） |
 | Source type filter | 来源类型 | — | 全部来源、推断（筛选项裸词） | 选项：`全部 / 用户原始问询 / 系统推断问询`；**仅问询记录 Tab** |
 | Call origin filter | 调用来源 | — | 全部来源（作选项文案）、来源类型（挪用到调用流水） | 调用流水筛选项：`全部 / MCP 调试台受控试调 / Agent 接入调用`；`callSource=playground\|agent`；`playground` 对应 `lucy_platform=mcp-playground` 并自动包含协议调用 |
-| Tool call count | 工具调用数 | — | 调用数 | L1 列表列 |
-| Tables touched | 涉及数据表 | — | 工具 / 表 | L1 与 Drawer 列；列表仅 physical table |
+| Tool call count | 工具调用数 | — | 调用数 | L1 列表列；触达物理表或 `table_forbidden` 拒绝 |
+| Linked call count | 关联调用数 | — | 调用总数（与工具调用数混用） | 问询记录 / CSV；成功 + 拒绝 + 错误 = 本列 |
+| Tables touched | 涉及数据表 | — | 工具 / 表 | L1 与 Drawer 列；列表仅 physical table（含 `table_forbidden` 拒绝的表） |
 | Database connection | 数据库连接 | — | connection_id（裸露） | Drawer 调用明细列 |
 | Stats Snapshot Time | 统计时间 | — | 上次更新（本页主标签） | 顶栏 24h/7d 左侧 |
 | Decision Reason dual-line | 裁决原因（主行中文 + 次行码） | — | 仅机器码单行（最终态） | Spec 99 §6.4；调用流水/Drawer |
@@ -609,6 +611,7 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`MCP`、`Agent`�
 | Forced Filters Field | 专用强制字段 | `forced_filters` | 用户 filters 即行权限 | 仅 Proxy 注入 |
 | Row Policy Requires Wrapped Tool | 需包装工具 | 请使用 lucy_query | 表未授权（混用） | Toast / 审计主文案 |
 | Row Policy Upstream Unproven | 上游契约未证明 | 行策略未启用取数 | 临时可用 | proven 前取数 deny |
+| Scope Intersection Empty | 行范围与用户筛选无交集 | `scope_intersection_empty` | 允许执行（混用） | 调用流水：`outcome=ok` 且裁决原因区分空交集 |
 | Canonical Source Key | 规范源键 | 源键 | 表名（作为唯一 ID） | 预览 / snapshot 展示四元组 |
 | Policy Version | 策略版本 | `policyVersion` | 配置时间戳（冒充策略世代） | 保存成功回执与审计列 |
 | Runtime Ack | 运行时确认 | 已生效 | 已保存（无 ack 时显示成功） | 收窄保存成功条件 |
