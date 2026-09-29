@@ -4,19 +4,20 @@
 |---|---|
 | 文档名称 | Lucy Product Docs Index |
 | 文档类型 | Product Docs Index |
-| 版本 | v0.5 |
-| 撰写日期 | 2026-06-22；2026-07-06 v0.3；2026-07-24 v0.4（新增 WebUI 模块设计规范索引）；2026-07-26 v0.5（新增 WebUI 部署/连接体验升级 spec） |
+| 版本 | v0.6 |
+| 撰写日期 | 2026-06-22；2026-07-06 v0.3；2026-07-24 v0.4（新增 WebUI 模块设计规范索引）；2026-07-26 v0.5（新增 WebUI 部署/连接体验升级 spec）；2026-09-29 v0.6（索引 Agent Live Report 设计） |
 | 适用范围 | 客户交付文档、管理员文档、用户文档、Agent 接入文档 |
 
 ## 1. Customer-Facing Guides
 
 The customer delivery is headless. Customer-facing docs start with Docker Compose or the single-replica Helm path, customer configuration, Lucy MCP Proxy, Agent MCP client config, and smoke/eval evidence.
 
-Lucy 的正式产品定位是 **data agent context compiler + governed MCP runtime**。定位与目标事实源如下：
+Lucy 的正式产品定位是 **data agent context compiler + governed MCP runtime + Agent Live Report plane**（见愿景 v1.5）。定位与目标事实源如下：
 
 | Source | Purpose |
 |---|---|
-| `docs/governance/vision.md` | 产品愿景与长期定位 |
+| `docs/governance/vision.md` | 产品愿景与长期定位（含平台数据飞轮） |
+| `docs/design/design-agent-live-report.md` | Agent Live Report 技术架构、演进与用户故事（v1.5；当前不拆 Spec / WO） |
 | `docs/governance/project-overview.md` | 当前能力边界、目录索引和交付状态 |
 | `docs/specs/lucy-platform-goal-checklist.md` | 产品化验收目标和边界 |
 
@@ -59,6 +60,7 @@ Builder-facing technical designs that gate codex M-tickets. Spec is the source o
 | `docs/design/design-db-connection.md` | WebUI 连接管理模块（连接概览 / 表白名单 / 连通测试） |
 | `docs/design/design-schema-onboarding.md` | WebUI schema onboarding 模块（M6：给已有连接追加 schema，ADR-11） |
 | `docs/design/design-system-handbook-help.md` | WebUI 内置系统手册与 Help Center（M15：全局 `?`、`/help`、上下文帮助抽屉） |
+| `docs/design/design-agent-live-report.md` | Agent Live Report 表面（架构、分期演进、用户故事；愿景飞轮人读出口） |
 | `webui/docs/10-deployment-connection-ux-refresh.md` | WebUI 部署向导与数据库连接概览体验升级（交付闭环、指标语义、连接卡片、Add Schema 抽屉） |
 
 ## 5. Existing HTML Help Center
