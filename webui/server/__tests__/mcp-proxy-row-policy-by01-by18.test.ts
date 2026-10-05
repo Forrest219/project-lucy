@@ -102,6 +102,7 @@ function rowsMatchingStockKtxFilters(filters: string[]): FixtureRow[] {
 
 let projectRoot: string;
 let previousRoot: string | undefined;
+  let previousContentRoot: string | undefined;
 let previousAuditDb: string | undefined;
 let previousInternalToken: string | undefined;
 let previousUpstreamHost: string | undefined;
@@ -111,6 +112,7 @@ let previousProven: string | undefined;
 beforeEach(async () => {
   vi.resetModules();
   previousRoot = process.env.KTX_PROJECT_ROOT;
+  previousContentRoot = process.env.LUCY_CONTENT_ROOT;
   previousAuditDb = process.env.LUCY_AUDIT_DB;
   previousInternalToken = process.env.KTX_INTERNAL_TOKEN;
   previousUpstreamHost = process.env.LUCY_PROXY_UPSTREAM_HOST;
@@ -126,6 +128,7 @@ beforeEach(async () => {
   await writeFile(path.join(projectRoot, "semantic-layer", "warehouse", "_schema", "fin.yaml"), FIN_SCHEMA_YAML, "utf8");
   await writeFile(path.join(projectRoot, "semantic-layer", "warehouse", "fin_ledger.yaml"), FIN_LEDGER_OVERLAY_YAML, "utf8");
   process.env.KTX_PROJECT_ROOT = projectRoot;
+  process.env.LUCY_CONTENT_ROOT = ".";
   process.env.LUCY_AUDIT_DB = path.join(projectRoot, "audit.sqlite");
   process.env.KTX_INTERNAL_TOKEN = INTERNAL_TOKEN;
 });
@@ -133,6 +136,8 @@ beforeEach(async () => {
 afterEach(async () => {
   if (previousRoot === undefined) delete process.env.KTX_PROJECT_ROOT;
   else process.env.KTX_PROJECT_ROOT = previousRoot;
+    if (previousContentRoot === undefined) delete process.env.LUCY_CONTENT_ROOT;
+    else process.env.LUCY_CONTENT_ROOT = previousContentRoot;
   if (previousAuditDb === undefined) delete process.env.LUCY_AUDIT_DB;
   else process.env.LUCY_AUDIT_DB = previousAuditDb;
   if (previousInternalToken === undefined) delete process.env.KTX_INTERNAL_TOKEN;

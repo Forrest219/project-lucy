@@ -65,19 +65,22 @@ else
 fi
 
 # 注入 E2E 专用 semantic-layer fixture（只放最小可工作集合）
+# A2 (M31): 4 content dirs live under the content root (default config/).
+# WebUI LUCY_CONTENT_ROOT in playwright.config.ts matches this layout.
 SEM_FIXTURE="$FIXTURE_DIR/semantic-layer-fixture"
-SEM_TARGET="$DEST/semantic-layer"
+SEM_TARGET="$DEST/config/semantic-layer"
 if [[ -d "$SEM_FIXTURE" ]]; then
+  mkdir -p "$DEST/config"
   cp -R "$SEM_FIXTURE/." "$SEM_TARGET/"
-  echo "[init] semantic-layer replaced with fixture"
+  echo "[init] semantic-layer replaced with fixture (config/semantic-layer)"
 fi
 
 # 注入 E2E 专用 wiki fixture
 WIKI_FIXTURE="$FIXTURE_DIR/wiki-fixture"
-WIKI_TARGET="$DEST/wiki"
+WIKI_TARGET="$DEST/config/wiki"
 if [[ -d "$WIKI_FIXTURE" ]]; then
   cp -R "$WIKI_FIXTURE/." "$WIKI_TARGET/"
-  echo "[init] wiki replaced with fixture"
+  echo "[init] wiki replaced with fixture (config/wiki)"
 fi
 
 # 触发 catalog reload（让 WebUI 立即看到新 fixture）

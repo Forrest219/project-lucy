@@ -72,6 +72,7 @@ function readRequestBody(req: IncomingMessage): Promise<string> {
 let projectRoot: string;
 let auditDbPath: string;
 let previousRoot: string | undefined;
+  let previousContentRoot: string | undefined;
 let previousAuditDb: string | undefined;
 let previousInternalToken: string | undefined;
 let previousUpstreamHost: string | undefined;
@@ -109,12 +110,14 @@ beforeEach(async () => {
   projectRoot = await makeProject();
   auditDbPath = path.join(projectRoot, "audit.sqlite");
   previousRoot = process.env.KTX_PROJECT_ROOT;
+  previousContentRoot = process.env.LUCY_CONTENT_ROOT;
   previousAuditDb = process.env.LUCY_AUDIT_DB;
   previousInternalToken = process.env.KTX_INTERNAL_TOKEN;
   previousUpstreamHost = process.env.LUCY_PROXY_UPSTREAM_HOST;
   previousUpstreamPort = process.env.LUCY_PROXY_UPSTREAM_PORT;
   previousEnableInstructions = process.env.LUCY_ENABLE_INSTRUCTIONS_INJECTION;
   process.env.KTX_PROJECT_ROOT = projectRoot;
+  process.env.LUCY_CONTENT_ROOT = ".";
   process.env.LUCY_AUDIT_DB = auditDbPath;
   process.env.KTX_INTERNAL_TOKEN = INTERNAL_TOKEN;
   // Default to enabled; individual tests override as needed.
@@ -124,6 +127,8 @@ beforeEach(async () => {
 afterEach(async () => {
   if (previousRoot === undefined) delete process.env.KTX_PROJECT_ROOT;
   else process.env.KTX_PROJECT_ROOT = previousRoot;
+    if (previousContentRoot === undefined) delete process.env.LUCY_CONTENT_ROOT;
+    else process.env.LUCY_CONTENT_ROOT = previousContentRoot;
   if (previousAuditDb === undefined) delete process.env.LUCY_AUDIT_DB;
   else process.env.LUCY_AUDIT_DB = previousAuditDb;
   if (previousInternalToken === undefined) delete process.env.KTX_INTERNAL_TOKEN;

@@ -1,13 +1,25 @@
-import { readFile, stat } from "node:fs/promises";
+import { readFile, realpath, stat } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { assertReadable } from "./fs-safe.js";
 
 const HANDBOOK_REL_PATH = "docs/SYSTEM_HANDBOOK.md";
 const DEFAULT_APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const HEADING_RE = /^(#{1,6})\s+(.+?)\s*#*\s*$/;
 const FENCE_RE = /^```/;
+
+/** Whitelisted product architecture HTML diagrams (SSOT under docs/user-guide/). */
+export const HELP_DIAGRAM_IDS = [
+  "lucy-architecture-diagram",
+  "lucy-docs-flows"
+] as const;
+
+export type HelpDiagramId = (typeof HELP_DIAGRAM_IDS)[number];
+
+const HELP_DIAGRAM_REL_PATHS: Record<HelpDiagramId, string> = {
+  "lucy-architecture-diagram": "docs/user-guide/lucy-architecture-diagram.html",
+  "lucy-docs-flows": "docs/user-guide/lucy-docs-flows.html"
+};
 
 const SECTION_ALIASES: Array<[RegExp, string]> = [
   [/常见问题速查/, "faq-quick-reference"],
@@ -15,6 +27,7 @@ const SECTION_ALIASES: Array<[RegExp, string]> = [
   [/面向管理员/, "faq-admin"],
   [/面向接入协作者|面向接入 Agent 的协作者|接入 Agent 的协作者/, "faq-agent-integration"],
   [/系统概述与架构拓扑/, "system-overview"],
+  [/产品架构图/, "product-architecture-diagrams"],
   [/快速上手/, "quick-start"],
   [/部署向导与上线检查/, "deployment-checklist"],
   [/系统概览待处理事项/, "overview-action-required"],
@@ -40,11 +53,21 @@ const SECTION_ALIASES: Array<[RegExp, string]> = [
   [/访问治理 Admin/, "admin-governance"],
   [/什么时候配置角色、Agent 和 Token|Role \/ Agent \/ Token 怎么选/, "admin-role-agent-token-guide"],
   [/问询记录与调用流水怎么选|问询.*调用流水/, "admin-audit-turns-vs-calls"],
+  [/^WebUI 管理员登录$/, "admin-webui-login"],
+  [/break-glass|管理员账号或密码/i, "admin-break-glass"],
   [/^Agent$/, "admin-agents"],
   [/Role 权限模板|角色配置/, "admin-roles"],
   [/Bearer Token|Token 发行/, "admin-tokens"],
   [/热库与冷库|SQL 留存边界/, "admin-audit-hot-cold-store"],
   [/MCP 访问日志|问题簇|审计/, "admin-audit"],
+  [/业务 Skill 治理工作台/, "business-skill-workbench"],
+  // H3「语义资产范围树」不配 alias，让 H4 独占该 slug：H4 是真正的操作指引，
+  // 深链指向父级章节会跳过内容。若两者都需要稳定 id，须给 H3 单独一条更精确的规则。
+  [/^语义资产范围树（连接与 Schema）$/, "semantic-asset-scope-tree"],
+  [/^角色列表与筛选$/, "admin-role-list"],
+  [/^接入向导六步流程$/, "onboarding-setup-assistant"],
+  [/^行级策略（行授予与最终行约束）$/, "row-policy"],
+  [/^MCP 会话保持与上游连接归属$/, "mcp-upstream-session"],
   [/质量评测 Eval/, "eval"],
   [/Eval Case|Case 维护/, "eval-cases"],
   [/Run 试跑|运行历史/, "eval-runs"],
@@ -94,6 +117,8 @@ const DEPLOYMENT_CHECKLIST_HEADING_TITLES = new Set(["系统概览待处理事�
 const ADMIN_GOVERNANCE_HEADING_TITLES = new Set([
   "什么时候配置角色、Agent 和 Token",
   "问询记录与调用流水怎么选、怎么导出",
+  "WebUI 管理员登录",
+  "丢失管理员账号或密码时如何恢复（break-glass）",
   "审计热库与冷库（SQL 留存边界）"
 ]);
 
@@ -107,6 +132,17 @@ const SEMANTIC_AUTHORING_HEADING_TITLES = new Set([
 ]);
 
 const YAML_DELIVERY_EXTRA_HEADING_TITLES = new Set(["配置作者 Skills"]);
+
+// Spec 153 / 152 的 H4 章节。放行规则与既有集合保持一致：只有登记在册的
+// level-4 标题才进入 TOC，避免把手册内部的实现细节标题也暴露到侧栏。
+const CONTEXT_ASSET_HEADING_TITLES = new Set([
+  "业务 Skill 治理工作台",
+  "语义资产范围树（连接与 Schema）",
+  "角色列表与筛选",
+  "接入向导六步流程",
+  "行级策略（行授予与最终行约束）",
+  "MCP 会话保持与上游连接归属"
+]);
 
 export type HelpTocItem = {
   id: string;
@@ -145,6 +181,57 @@ export class HelpDocNotFoundError extends Error {
   }
 }
 
+export class HelpDiagramNotFoundError extends Error {
+  code = "ERR_HELP_DIAGRAM_NOT_FOUND";
+  statusCode = 404;
+
+  constructor(id: string) {
+    super(`Help diagram "${id}" was not found`);
+    this.name = "HelpDiagramNotFoundError";
+  }
+}
+
+export type HelpDiagram = {
+  id: HelpDiagramId;
+  sourcePath: string;
+  html: string;
+};
+
+function isHelpDiagramId(value: string): value is HelpDiagramId {
+  return (HELP_DIAGRAM_IDS as readonly string[]).includes(value);
+}
+
+export async function readHelpDiagram(
+  id: string,
+  appRoot = resolveHelpAppRoot()
+): Promise<HelpDiagram> {
+  if (!isHelpDiagramId(id)) {
+    throw new HelpDiagramNotFoundError(id);
+  }
+  const sourcePath = HELP_DIAGRAM_REL_PATHS[id];
+  let target: string;
+  try {
+    target = await assertHelpAppReadable(appRoot, sourcePath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      throw new HelpDiagramNotFoundError(id);
+    }
+    throw error;
+  }
+
+  let html: string;
+  try {
+    html = await readFile(target, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      throw new HelpDiagramNotFoundError(id);
+    }
+    throw error;
+  }
+
+  return { id, sourcePath, html };
+}
+
 export class HelpQueryTooLongError extends Error {
   code = "ERR_HELP_QUERY_TOO_LONG";
   statusCode = 400;
@@ -157,6 +244,41 @@ export class HelpQueryTooLongError extends Error {
 
 export function resolveHelpAppRoot(env: NodeJS.ProcessEnv = process.env): string {
   return path.resolve(env.LUCY_APP_ROOT ?? DEFAULT_APP_ROOT);
+}
+
+function isWithin(candidate: string, root: string): boolean {
+  const relative = path.relative(root, candidate);
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+/**
+ * Resolve a fixed relative path under the Lucy app root (handbook + architecture
+ * diagrams). Independent of content-root / project-root fs-safe write rules.
+ */
+async function assertHelpAppReadable(appRoot: string, relPath: string): Promise<string> {
+  if (!relPath || path.isAbsolute(relPath)) {
+    throw Object.assign(new Error("Help path must be relative to the app root"), {
+      code: "FORBIDDEN_PATH",
+      statusCode: 403
+    });
+  }
+  const normalized = path.normalize(relPath).replaceAll(path.sep, "/");
+  if (normalized === "." || normalized === ".." || normalized.startsWith("../")) {
+    throw Object.assign(new Error("Path traversal is not allowed"), {
+      code: "FORBIDDEN_PATH",
+      statusCode: 403
+    });
+  }
+
+  const rootReal = await realpath(appRoot);
+  const target = path.resolve(rootReal, normalized);
+  if (!isWithin(target, rootReal)) {
+    throw Object.assign(new Error("Resolved path escapes the app root"), {
+      code: "FORBIDDEN_PATH",
+      statusCode: 403
+    });
+  }
+  return target;
 }
 
 function stableSlug(title: string): string {
@@ -205,6 +327,8 @@ export function parseHelpToc(markdown: string): HelpTocItem[] {
       rawLevel === 4 && SEMANTIC_AUTHORING_HEADING_TITLES.has(cleanTitle);
     const yamlDeliveryExtraSubheading =
       rawLevel === 4 && YAML_DELIVERY_EXTRA_HEADING_TITLES.has(cleanTitle);
+    const contextAssetSubheading =
+      rawLevel === 4 && CONTEXT_ASSET_HEADING_TITLES.has(cleanTitle);
     if (
       !match ||
       rawLevel < 2 ||
@@ -214,7 +338,8 @@ export function parseHelpToc(markdown: string): HelpTocItem[] {
         !deploymentChecklistSubheading &&
         !adminGovernanceSubheading &&
         !semanticAuthoringSubheading &&
-        !yamlDeliveryExtraSubheading)
+        !yamlDeliveryExtraSubheading &&
+        !contextAssetSubheading)
     )
       continue;
     // 3.7.x 子标题为兼容性保留 level 3；3.2.x 运维 Runbook 子标题按真实 level 4 输出。
@@ -233,7 +358,7 @@ export function parseHelpToc(markdown: string): HelpTocItem[] {
 export async function readHelpHandbook(appRoot = resolveHelpAppRoot()): Promise<HelpHandbook> {
   let target: string;
   try {
-    target = await assertReadable(appRoot, HANDBOOK_REL_PATH);
+    target = await assertHelpAppReadable(appRoot, HANDBOOK_REL_PATH);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       throw new HelpDocNotFoundError();

@@ -86,6 +86,7 @@ ${BASE_ROLE_TOOLS}`;
 
 let projectRoot: string;
 let previousRoot: string | undefined;
+  let previousContentRoot: string | undefined;
 let previousProven: string | undefined;
 
 function identity(userId: string): Identity {
@@ -116,6 +117,7 @@ async function loadAcl() {
 
 beforeEach(() => {
   previousRoot = process.env.KTX_PROJECT_ROOT;
+  previousContentRoot = process.env.LUCY_CONTENT_ROOT;
   previousProven = process.env.LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN;
   delete process.env.LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN;
 });
@@ -123,6 +125,8 @@ beforeEach(() => {
 afterEach(async () => {
   if (previousRoot === undefined) delete process.env.KTX_PROJECT_ROOT;
   else process.env.KTX_PROJECT_ROOT = previousRoot;
+    if (previousContentRoot === undefined) delete process.env.LUCY_CONTENT_ROOT;
+    else process.env.LUCY_CONTENT_ROOT = previousContentRoot;
   if (previousProven === undefined) delete process.env.LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN;
   else process.env.LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN = previousProven;
   if (projectRoot) await rm(projectRoot, { recursive: true, force: true });
@@ -186,6 +190,7 @@ describe("AC-P1.5 Agent Constraints compile (WP-I1)", () => {
               value: Finance`
     ));
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     const { effectivePermissions } = await loadAcl();
 
     const ok = await effectivePermissions(identity("ok_constraints"));
@@ -229,6 +234,7 @@ describe("AC-P1.5 Agent Constraints compile (WP-I1)", () => {
               value: East`
     ));
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     const { effectivePermissions } = await loadAcl();
     const result = await effectivePermissions(identity("mixed_names"));
     expect(result.ok).toBe(false);
@@ -255,6 +261,7 @@ ${BASE_ROLE_TOOLS}`,
     tokens: []`
     ));
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     const { effectivePermissions } = await loadAcl();
     const result = await effectivePermissions(identity("role_constraints_agent"));
     expect(result.ok).toBe(false);
@@ -326,6 +333,7 @@ ${BASE_ROLE_TOOLS}`,
 ${preds}`
     ));
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     const { effectivePermissions } = await loadAcl();
     const result = await effectivePermissions(identity("overflow_agent"));
     expect(result.ok).toBe(false);
@@ -353,6 +361,7 @@ ${preds}`
               value: West`
     ));
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     const { effectivePermissions } = await loadAcl();
     const result = await effectivePermissions(identity("unsat_agent"));
     expect(result.ok).toBe(false);
@@ -368,6 +377,7 @@ ${preds}`
     tokens: []`
     ));
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     const { effectivePermissions } = await loadAcl();
     const result = await effectivePermissions(identity("plain_agent"));
     expect(result.ok).toBe(true);
@@ -485,6 +495,7 @@ ${BASE_ROLE_TOOLS}`,
               value: East`
     ));
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN = "true";
     const { effectivePermissions, authorizeAndRewrite } = await loadAcl();
 
@@ -534,6 +545,7 @@ ${BASE_ROLE_TOOLS}`,
     tokens: []`
     ));
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     const { effectivePermissions } = await loadAcl();
     const resolved = await effectivePermissions(identity("plain_scoped"));
     expect(resolved.ok).toBe(true);
@@ -596,6 +608,7 @@ ${BASE_ROLE_TOOLS}`,
               value: East`
     ));
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     const { effectivePermissions } = await loadAcl();
     const resolved = await effectivePermissions(identity("prune_agent"));
     expect(resolved.ok).toBe(true);
@@ -658,6 +671,7 @@ ${BASE_ROLE_TOOLS}`,
               value: North`
     ));
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     const { effectivePermissions } = await loadAcl();
     const resolved = await effectivePermissions(identity("empty_prune_agent"));
     expect(resolved.ok).toBe(false);
@@ -693,6 +707,7 @@ describe("AC-P1.5 gate + forced predicate reuse (WP-I3)", () => {
   async function loadAllConstrained(proven: boolean) {
     projectRoot = await makeProject(accessYaml(ALL_LEDGER_ROLE, ALL_PLUS_DEPT_CONSTRAINTS_AGENT));
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     if (proven) process.env.LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN = "true";
     else delete process.env.LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN;
     return loadAcl();

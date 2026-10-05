@@ -23,6 +23,7 @@ vi.mock("../ktx", async () => {
 let projectRoot: string;
 let auditDbPath: string;
 let previousRoot: string | undefined;
+  let previousContentRoot: string | undefined;
 let previousAuditDb: string | undefined;
 
 async function makeProject(yaml: string) {
@@ -35,6 +36,7 @@ async function makeProject(yaml: string) {
 beforeEach(async () => {
   vi.resetModules();
   previousRoot = process.env.KTX_PROJECT_ROOT;
+  previousContentRoot = process.env.LUCY_CONTENT_ROOT;
   previousAuditDb = process.env.LUCY_AUDIT_DB;
   vi.clearAllMocks();
 });
@@ -66,6 +68,7 @@ describe("POST /api/connections/:connId/ingest (M14 deprecated alias)", () => {
       `connections:\n  demo-mysql:\n    schemas: [dataforai]\n    enabled_tables: [dataforai.superstore_orders]\n`
     );
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();
@@ -102,6 +105,7 @@ describe("POST /api/connections/:connId/ingest (M14 deprecated alias)", () => {
       `connections:\n  demo-mysql:\n    schemas: [dataforai]\n    enabled_tables: [dataforai.superstore_orders]\n`
     );
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();
@@ -125,6 +129,7 @@ describe("POST /api/connections/:connId/ingest (M14 deprecated alias)", () => {
       `connections:\n  demo-mysql:\n    schemas: [dataforai]\n    enabled_tables: []\n`
     );
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();
@@ -149,6 +154,7 @@ describe("GET /api/connections/ingest-runs (legacy)", () => {
       `connections:\n  demo-mysql:\n    schemas: [dataforai]\n    enabled_tables: [dataforai.superstore_orders]\n`
     );
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();

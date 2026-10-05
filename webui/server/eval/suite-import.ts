@@ -3,8 +3,9 @@ import path from "node:path";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { stringify } from "yaml";
 import { previewDiff } from "../diff.js";
-import { assertReadable, safeWrite } from "../fs-safe.js";
+import { assertReadable } from "../fs-safe.js";
 import { resolveProjectRoot } from "../project.js";
+import { loadContentPaths } from "../paths.js";
 import { getEvalDb } from "./db.js";
 import { auditedWriteFile } from "../admin/config-audit-write.js";
 import type { EvalResultCase, EvalResultImport, EvalSuite, EvalSuiteCase } from "../../src/lib/types.js";
@@ -219,7 +220,8 @@ export function suiteToYaml(suite: EvalSuite): string {
 
 async function readExisting(projectRoot: string, relPath: string): Promise<string> {
   try {
-    const absPath = await assertReadable(projectRoot, relPath);
+    const paths = await loadContentPaths();
+    const absPath = await assertReadable(paths, projectRoot, relPath);
     return await readFile(absPath, "utf8");
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return "";
@@ -267,7 +269,8 @@ function parseImportContent(content: string, filename?: string): {
 
 export async function readCurrentEvalSuite(projectRoot: string, domain: string): Promise<EvalSuite> {
   const relPath = casesRelPath(domain);
-  const absPath = await assertReadable(projectRoot, relPath);
+  const paths = await loadContentPaths();
+  const absPath = await assertReadable(paths, projectRoot, relPath);
   const content = await readFile(absPath, "utf8");
   const parsed = parseImportContent(content, `${domain}-eval-cases.yaml`);
   if (!parsed.suite || parsed.errors.length > 0) {

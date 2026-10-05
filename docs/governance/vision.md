@@ -132,6 +132,13 @@ flowchart TB
 - **Agent Live Report 平面**：托管 Host Agent 生成的报告，提供固定 URL 与自动 / 定时刷新。查看必须使用独立的 Report Viewer 登录，不复用 WebUI 管理权限，也不接受匿名链接。刷新必须复用语义契约；历史快照只有在其分发授权摘要与当前 Grant、SA、ACL / Row Policy、受众及 Shell capability 的有效摘要一致时才可返回。架构基线见 `docs/design/design-agent-live-report.md`。
 - **Eval / 飞轮闭环**：语义层或 Skill 变更、以及报告刷新失败 / 口径争议，触发 Eval 或治理回写，结果进入 Quality Pack 与 Ops 视图。
 
+产品架构的权威全屏图见：
+
+- [`docs/user-guide/lucy-architecture-diagram.html`](../user-guide/lucy-architecture-diagram.html)
+- [`docs/user-guide/lucy-docs-flows.html`](../user-guide/lucy-docs-flows.html)
+
+WebUI `/help?section=product-architecture-diagrams` 同步入口。
+
 ---
 
 ## 4. 关键设计决策

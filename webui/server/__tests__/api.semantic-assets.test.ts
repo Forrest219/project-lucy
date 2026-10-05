@@ -29,6 +29,7 @@ vi.mock("../ktx", async () => {
 
 let projectRoot: string;
 let previousRoot: string | undefined;
+  let previousContentRoot: string | undefined;
 let previousAuditDb: string | undefined;
 
 const BASE_KTX_YAML = `connections:
@@ -127,6 +128,7 @@ function buildStoredZip(entries: Array<{ name: string; data: string }>): Buffer 
 beforeEach(async () => {
   vi.resetModules();
   previousRoot = process.env.KTX_PROJECT_ROOT;
+  previousContentRoot = process.env.LUCY_CONTENT_ROOT;
   previousAuditDb = process.env.LUCY_AUDIT_DB;
   vi.clearAllMocks();
 });
@@ -134,6 +136,8 @@ beforeEach(async () => {
 afterEach(async () => {
   if (previousRoot === undefined) delete process.env.KTX_PROJECT_ROOT;
   else process.env.KTX_PROJECT_ROOT = previousRoot;
+    if (previousContentRoot === undefined) delete process.env.LUCY_CONTENT_ROOT;
+    else process.env.LUCY_CONTENT_ROOT = previousContentRoot;
   if (previousAuditDb === undefined) delete process.env.LUCY_AUDIT_DB;
   else process.env.LUCY_AUDIT_DB = previousAuditDb;
   if (projectRoot) await rm(projectRoot, { recursive: true, force: true });
@@ -143,7 +147,7 @@ describe("POST /api/semantic-assets/validate", () => {
   it("classifies manifest + overlay, computes server-side target paths, and writes no formal file", async () => {
     projectRoot = await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
-
+    process.env.LUCY_CONTENT_ROOT = ".";
     const app = await buildFreshServer();
     await app.ready();
 
@@ -217,7 +221,7 @@ describe("POST /api/semantic-assets/validate", () => {
   it("adds manifest table names to changedSources so manifest-only publish cannot skip the gate", async () => {
     projectRoot = await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
-
+    process.env.LUCY_CONTENT_ROOT = ".";
     const app = await buildFreshServer();
     await app.ready();
 
@@ -238,7 +242,7 @@ describe("POST /api/semantic-assets/validate", () => {
   it("rejects duplicate filenames before persisting a validation snapshot", async () => {
     projectRoot = await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
-
+    process.env.LUCY_CONTENT_ROOT = ".";
     const app = await buildFreshServer();
     await app.ready();
 
@@ -262,6 +266,7 @@ describe("POST /api/semantic-assets/validate", () => {
   it("extracts YAML files from a zip package and still computes target paths server-side", async () => {
     projectRoot = await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     const zip = buildStoredZip([
       { name: "semantic-layer/customer-db/_schema/chatbi.yaml", data: MANIFEST_YAML },
       { name: "semantic-layer/customer-db/international_country_metrics.yaml", data: OVERLAY_YAML }
@@ -289,6 +294,7 @@ describe("POST /api/semantic-assets/validate", () => {
   it("skips AppleDouble junk inside zip packages without failing the package (Spec 115)", async () => {
     projectRoot = await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     const zip = buildStoredZip([
       { name: "semantic-layer/customer-db/_schema/chatbi.yaml", data: MANIFEST_YAML },
       { name: "semantic-layer/customer-db/_schema/._chatbi.yaml", data: "not-an-object" },
@@ -318,7 +324,7 @@ describe("POST /api/semantic-assets/validate", () => {
   it("flags UNKNOWN_CONNECTION when the connection id is not in ktx.yaml", async () => {
     projectRoot = await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
-
+    process.env.LUCY_CONTENT_ROOT = ".";
     const app = await buildFreshServer();
     await app.ready();
     const res = await request(app.server)
@@ -339,7 +345,7 @@ describe("POST /api/semantic-assets/validate", () => {
   it("flags SCHEMA_NOT_CONFIGURED when the schema is missing from the connection's schemas", async () => {
     projectRoot = await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
-
+    process.env.LUCY_CONTENT_ROOT = ".";
     const app = await buildFreshServer();
     await app.ready();
     const res = await request(app.server)
@@ -360,7 +366,7 @@ describe("POST /api/semantic-assets/validate", () => {
   it("flags UNSAFE_SOURCE_NAME when the overlay's name contains path separators", async () => {
     projectRoot = await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
-
+    process.env.LUCY_CONTENT_ROOT = ".";
     const app = await buildFreshServer();
     await app.ready();
     const res = await request(app.server)
@@ -385,7 +391,7 @@ describe("POST /api/semantic-assets/validate", () => {
   it("flags OVERLAY_MISSING_TABLE when the overlay has no table key", async () => {
     projectRoot = await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
-
+    process.env.LUCY_CONTENT_ROOT = ".";
     const app = await buildFreshServer();
     await app.ready();
     const res = await request(app.server)
@@ -410,7 +416,7 @@ describe("POST /api/semantic-assets/validate", () => {
   it("flags UNKNOWN_SHAPE when the YAML cannot be classified as manifest or overlay", async () => {
     projectRoot = await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
-
+    process.env.LUCY_CONTENT_ROOT = ".";
     const app = await buildFreshServer();
     await app.ready();
     const res = await request(app.server)
@@ -435,7 +441,7 @@ describe("POST /api/semantic-assets/validate", () => {
   it("strips pk/nullable from overlay columns during validate", async () => {
     projectRoot = await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
-
+    process.env.LUCY_CONTENT_ROOT = ".";
     const app = await buildFreshServer();
     await app.ready();
     const res = await request(app.server)
@@ -474,7 +480,7 @@ grain:
   it("returns YAML_PARSE_FAILED with line/column when the YAML is malformed", async () => {
     projectRoot = await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
-
+    process.env.LUCY_CONTENT_ROOT = ".";
     const app = await buildFreshServer();
     await app.ready();
     const res = await request(app.server)
@@ -510,7 +516,7 @@ grain:
       "utf8"
     );
     process.env.KTX_PROJECT_ROOT = projectRoot;
-
+    process.env.LUCY_CONTENT_ROOT = ".";
     const app = await buildFreshServer();
     await app.ready();
     const res = await request(app.server)
@@ -533,7 +539,7 @@ grain:
   it("rejects AppleDouble junk filenames (Spec 115)", async () => {
     projectRoot = await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
-
+    process.env.LUCY_CONTENT_ROOT = ".";
     const app = await buildFreshServer();
     await app.ready();
     const res = await request(app.server)

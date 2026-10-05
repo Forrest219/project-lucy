@@ -33,6 +33,7 @@ vi.mock("../ktx", async () => {
 let projectRoot: string;
 let auditDbPath: string;
 let previousRoot: string | undefined;
+  let previousContentRoot: string | undefined;
 let previousAuditDb: string | undefined;
 
 async function makeProject(yaml: string) {
@@ -45,6 +46,7 @@ async function makeProject(yaml: string) {
 beforeEach(async () => {
   vi.resetModules();
   previousRoot = process.env.KTX_PROJECT_ROOT;
+  previousContentRoot = process.env.LUCY_CONTENT_ROOT;
   previousAuditDb = process.env.LUCY_AUDIT_DB;
   vi.clearAllMocks();
 });
@@ -94,6 +96,7 @@ describe("POST /api/connections/:connId/schemas/remove", () => {
   it("defaults dryRun:true and never modifies ktx.yaml", async () => {
     await makeProject(baseYaml());
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();
@@ -128,6 +131,7 @@ describe("POST /api/connections/:connId/schemas/remove", () => {
   it("dryRun:false removes schema and enabled_tables from ktx.yaml", async () => {
     await makeProject(baseYaml());
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();
@@ -158,6 +162,7 @@ describe("POST /api/connections/:connId/schemas/remove", () => {
   it("returns SCHEMA_NOT_FOUND (404) when schema is absent", async () => {
     await makeProject(baseYaml());
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();
@@ -177,6 +182,7 @@ describe("POST /api/connections/:connId/schemas/remove", () => {
   it("returns SCHEMA_NAME_INVALID (400) for names that violate the pattern", async () => {
     await makeProject(baseYaml());
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();
@@ -196,6 +202,7 @@ describe("POST /api/connections/:connId/schemas/remove", () => {
   it("returns CONNECTION_NOT_FOUND (404) when connId is unknown", async () => {
     await makeProject(baseYaml());
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();
@@ -212,6 +219,7 @@ describe("POST /api/connections/:connId/schemas/remove", () => {
   it("writes a schema_remove audit row with target_id '<connId>:<schema>'", async () => {
     await makeProject(baseYaml());
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();
@@ -245,6 +253,7 @@ describe("POST /api/connections/:connId/schemas/remove", () => {
   it("deletes manifest when deleteManifest:true and dryRun:false", async () => {
     await makeProject(baseYaml());
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const manifestDir = path.join(projectRoot, "semantic-layer", "mysql-aliyun", "_schema");
@@ -268,6 +277,7 @@ describe("POST /api/connections/:connId/schemas/remove", () => {
   it("does not run connection test (no ktx CLI invocation)", async () => {
     await makeProject(baseYaml());
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();

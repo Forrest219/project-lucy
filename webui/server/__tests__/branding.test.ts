@@ -69,18 +69,23 @@ describe("isPublicApi branding", () => {
 describe("branding store + API", () => {
   let projectRoot: string;
   let previousRoot: string | undefined;
+  let previousContentRoot: string | undefined;
 
   beforeEach(async () => {
     projectRoot = await mkdtemp(path.join(os.tmpdir(), "lucy-branding-"));
     await writeFile(path.join(projectRoot, "ktx.yaml"), "connections: {}\n", "utf8");
     await mkdir(path.join(projectRoot, "webui", "config"), { recursive: true });
     previousRoot = process.env.KTX_PROJECT_ROOT;
+    previousContentRoot = process.env.LUCY_CONTENT_ROOT;
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
   });
 
   afterEach(async () => {
     if (previousRoot === undefined) delete process.env.KTX_PROJECT_ROOT;
     else process.env.KTX_PROJECT_ROOT = previousRoot;
+    if (previousContentRoot === undefined) delete process.env.LUCY_CONTENT_ROOT;
+    else process.env.LUCY_CONTENT_ROOT = previousContentRoot;
     await rm(projectRoot, { recursive: true, force: true });
   });
 

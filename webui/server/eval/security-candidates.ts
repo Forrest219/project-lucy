@@ -8,6 +8,7 @@ import { resolveProjectRoot } from "../project.js";
 import { getAuditDb } from "../admin/audit.js";
 import { auditedWriteFile } from "../admin/config-audit-write.js";
 import { getEvalDb } from "./db.js";
+import { loadContentPaths } from "../paths.js";
 import {
   hashArtifact,
   writeEvidenceEvents,
@@ -340,7 +341,8 @@ async function buildPromotionPreview(row: SecurityEvalCandidateRow) {
   const formalCase = formalCaseFor(row);
   let existing = "";
   try {
-    existing = await readFile(path.join(projectRoot, CANDIDATE_REL_PATH), "utf8");
+    const candidateAbs = path.join((await loadContentPaths()).evals, "security/eval/security-eval-cases.yaml");
+    existing = await readFile(candidateAbs, "utf8");
   } catch {
     existing = "metadata:\n  domain: security\ncases: []\n";
   }

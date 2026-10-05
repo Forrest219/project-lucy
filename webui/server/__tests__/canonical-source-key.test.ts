@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 let projectRoot: string;
 let previousRoot: string | undefined;
+  let previousContentRoot: string | undefined;
 
 async function makeProject(options: {
   connA?: string;
@@ -88,11 +89,14 @@ async function loadAcl() {
 
 beforeEach(async () => {
   previousRoot = process.env.KTX_PROJECT_ROOT;
+  previousContentRoot = process.env.LUCY_CONTENT_ROOT;
 });
 
 afterEach(async () => {
   if (previousRoot === undefined) delete process.env.KTX_PROJECT_ROOT;
   else process.env.KTX_PROJECT_ROOT = previousRoot;
+    if (previousContentRoot === undefined) delete process.env.LUCY_CONTENT_ROOT;
+    else process.env.LUCY_CONTENT_ROOT = previousContentRoot;
   if (projectRoot) await rm(projectRoot, { recursive: true, force: true });
 });
 
@@ -100,6 +104,7 @@ describe("WP-I1 Canonical Source Key", () => {
   it("U-KEY-01: same sourceName on different connections coexist", async () => {
     projectRoot = await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     const { getSourceMapDiagnostics, extractTables } = await loadAcl();
 
     const diag = await getSourceMapDiagnostics({ fresh: true });
@@ -126,6 +131,7 @@ describe("WP-I1 Canonical Source Key", () => {
   it("U-KEY-02: duplicate sourceName within one connection → compile error", async () => {
     projectRoot = await makeProject({ duplicateInConnA: true });
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     const { getSourceMapDiagnostics } = await loadAcl();
 
     const diag = await getSourceMapDiagnostics({ fresh: true });
@@ -135,6 +141,7 @@ describe("WP-I1 Canonical Source Key", () => {
   it("U-KEY-03: reverse map attributes same physicalTable per connection", async () => {
     projectRoot = await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     const { resolveSourceRefsForTables } = await loadAcl();
 
     await expect(

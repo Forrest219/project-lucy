@@ -10,6 +10,7 @@ import { handbookPathForTests, parseHelpToc, readHelpHandbook, searchHelpHandboo
 let projectRoot: string | undefined;
 let appRoot: string | undefined;
 let previousRoot: string | undefined;
+  let previousContentRoot: string | undefined;
 let previousAppRoot: string | undefined;
 
 async function makeRoot(prefix: string, markdown?: string) {
@@ -28,6 +29,7 @@ async function makeProject() {
 
 beforeEach(() => {
   previousRoot = process.env.KTX_PROJECT_ROOT;
+  previousContentRoot = process.env.LUCY_CONTENT_ROOT;
   previousAppRoot = process.env.LUCY_APP_ROOT;
   vi.resetModules();
 });
@@ -146,6 +148,69 @@ describe("Help handbook", () => {
     expect(toc).toEqual([
       { id: "database-connections", level: 3, title: "3.2 数据库接入" }
     ]);
+  });
+
+  it("routes every bundled handbook H4 into the parsed TOC", async () => {
+    // 门禁：handbook 里新写的 H4 若没登记进 help.ts 的白名单，会被 parseHelpToc
+    // 静默丢弃——内容还在，但侧栏不可达、正文被并入相邻章节，搜索也会命中错章节。
+    // 以运行时 TOC 为准，不在测试里复刻白名单常量，避免两边一起漂移。
+    const handbook = await readHelpHandbook();
+
+    const h4Titles = [...handbook.markdown.matchAll(/^####\s+(.+)$/gm)].map((m) =>
+      m[1]!.trim()
+    );
+    const tocTitles = new Set(
+      handbook.toc.map((t) => t.title.replace(/^\d+(?:\.\d+)*\.?\s*/, "").trim())
+    );
+
+    // 3.7.x 系列由 help.ts 的数字前缀规则单独放行，标题带号，单独豁免。
+    const unregistered = h4Titles.filter((title) => {
+      const clean = title.replace(/^\d+(?:\.\d+)*\.?\s*/, "").trim();
+      if (tocTitles.has(title) || tocTitles.has(clean)) return false;
+      return !/^3\.7\.\d+/.test(clean);
+    });
+
+    expect(
+      unregistered,
+      "这些 H4 未通过 help.ts 白名单放行，需加入对应的 HEADING_TITLES 集合与 SECTION_ALIASES"
+    ).toEqual([]);
+  });
+
+  it("exposes stable non-hash ids for every bundled handbook H4", async () => {
+    // stableSlug 对纯中文标题会回退到 SHA1，产出 10 位十六进制 id：
+    // 无语义、且标题微调即静默改变，会打断已发布的深链。
+    const handbook = await readHelpHandbook();
+    const h4InToc = handbook.toc.filter((t) => t.level === 4);
+    expect(h4InToc.length).toBeGreaterThan(0);
+
+    for (const item of h4InToc) {
+      expect(item.id, `H4「${item.title}」应命中 SECTION_ALIASES`).not.toMatch(/^[0-9a-f]{10}$/);
+      expect(item.id, `H4「${item.title}」应命中 SECTION_ALIASES`).toMatch(/^[a-z][a-z0-9-]*$/);
+    }
+  });
+
+  it("exposes the admin login and break-glass sections as reachable level-4 entries", async () => {
+    // 回归：这两章正文早已存在，但曾因漏配白名单而不可达（搜索错落到审计章节）。
+    const handbook = await readHelpHandbook();
+    const byId = new Map(handbook.toc.filter((t) => t.level === 4).map((t) => [t.id, t]));
+
+    expect(byId.get("admin-webui-login")?.title).toBe("WebUI 管理员登录");
+    expect(byId.get("admin-break-glass")?.title).toBe(
+      "丢失管理员账号或密码时如何恢复（break-glass）"
+    );
+  });
+
+  it("routes break-glass and admin-login searches to their own sections", async () => {
+    // 回归：修复前这两个词会命中 admin-audit-turns-vs-calls（问询记录与调用流水）。
+    const handbook = await readHelpHandbook();
+
+    for (const [query, expectedId] of [
+      ["break-glass", "admin-break-glass"],
+      ["管理员登录", "admin-webui-login"]
+    ] as const) {
+      const first = searchHelpMarkdown(handbook.markdown, query, { limit: 1 }).items[0];
+      expect(first?.sectionId, `搜索「${query}」应命中 ${expectedId}`).toBe(expectedId);
+    }
   });
 
   it("maps §0 sub-sections to stable alias ids", () => {
@@ -269,6 +334,7 @@ describe("Help handbook", () => {
       "### 1.1 Lucy 是什么"
     ].join("\n"));
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_APP_ROOT = appRoot;
 
     const app = await buildFreshServer();
@@ -302,6 +368,7 @@ describe("Help handbook", () => {
     await makeProject();
     appRoot = await makeRoot("lucy-help-app-");
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_APP_ROOT = appRoot;
 
     await expect(readHelpHandbook(appRoot)).rejects.toMatchObject({
@@ -881,6 +948,7 @@ describe("Help search", () => {
     );
     await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_APP_ROOT = realAppRoot;
 
     const app = await buildFreshServer();
@@ -915,6 +983,79 @@ describe("Help search", () => {
         message: "Help search query exceeds 80 characters"
       }
     });
+
+    await app.close();
+  });
+
+  it("aliases 产品架构图 to a stable section id", () => {
+    const toc = parseHelpToc(["### 1.6 产品架构图（摄取与服务）"].join("\n"));
+    expect(toc[0]).toMatchObject({
+      id: "product-architecture-diagrams",
+      level: 3,
+      title: "1.6 产品架构图（摄取与服务）"
+    });
+  });
+
+  it("the bundled handbook documents the product architecture diagrams", async () => {
+    const realAppRoot = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "../../.."
+    );
+    const handbook = await readHelpHandbook(realAppRoot);
+
+    expect(handbook.markdown).toContain("### 1.6 产品架构图（摄取与服务）");
+    expect(handbook.markdown).toContain("/api/help/diagrams/lucy-architecture-diagram");
+    expect(handbook.markdown).toContain("/api/help/diagrams/lucy-docs-flows");
+    expect(handbook.markdown).toContain("docs/user-guide/lucy-architecture-diagram.html");
+    expect(handbook.markdown).toContain("docs/user-guide/lucy-docs-flows.html");
+    expect(handbook.toc.some((item) => item.id === "product-architecture-diagrams")).toBe(true);
+
+    const byArchitecture = await searchHelpHandbook("产品架构图", { appRoot: realAppRoot });
+    expect(
+      byArchitecture.items.some((item) => item.sectionId === "product-architecture-diagrams")
+    ).toBe(true);
+  });
+
+  it("serves the whitelisted architecture diagram HTML and rejects unknown ids", async () => {
+    const realAppRoot = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "../../.."
+    );
+    await makeProject();
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
+    process.env.LUCY_APP_ROOT = realAppRoot;
+
+    const app = await buildFreshServer();
+    await app.ready();
+
+    const architecture = await request(app.server)
+      .get("/api/help/diagrams/lucy-architecture-diagram")
+      .expect(200);
+    expect(architecture.headers["content-type"]).toMatch(/text\/html/);
+    expect(architecture.text).toContain("Lucy 架构");
+
+    const flows = await request(app.server)
+      .get("/api/help/diagrams/lucy-docs-flows")
+      .expect(200);
+    expect(flows.headers["content-type"]).toMatch(/text\/html/);
+    expect(flows.text).toContain("摄取");
+
+    const missing = await request(app.server)
+      .get("/api/help/diagrams/not-a-real-diagram")
+      .expect(404);
+    expect(missing.body).toMatchObject({
+      ok: false,
+      error: {
+        code: "ERR_HELP_DIAGRAM_NOT_FOUND"
+      }
+    });
+
+    // Encoded traversal segments must still miss the whitelist (not open arbitrary files).
+    const escapeAttempt = await request(app.server)
+      .get("/api/help/diagrams/%2e%2e%2fktx.yaml")
+      .expect(404);
+    expect(escapeAttempt.body.error.code).toBe("ERR_HELP_DIAGRAM_NOT_FOUND");
 
     await app.close();
   });

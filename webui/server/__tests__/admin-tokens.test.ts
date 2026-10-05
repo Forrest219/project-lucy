@@ -75,6 +75,7 @@ beforeEach(async () => {
   projectRoot = await makeProject();
   prevRoot = process.env.KTX_PROJECT_ROOT;
   process.env.KTX_PROJECT_ROOT = projectRoot;
+  process.env.LUCY_CONTENT_ROOT = ".";
   revokedRows.length = 0;
   traceWriteFailure.enabled = false;
 });

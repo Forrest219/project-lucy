@@ -3,6 +3,7 @@ import { access, readFile, rename, rm, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { previewDiff } from "./diff";
 import { assertReadable, ForbiddenPathError, safeRemove, safeWrite } from "./fs-safe";
+import { loadContentPaths } from "./paths";
 
 /**
  * Table YAML history must NOT live under `semantic-layer/`.
@@ -180,7 +181,8 @@ function snapshotPath(key: string, versionId: string): string {
 async function readIndex(projectRoot: string): Promise<TableYamlHistoryIndex> {
   await relocateTableYamlHistoryOutOfSemanticLayer(projectRoot);
   try {
-    const raw = await readFile(await assertReadable(projectRoot, TABLE_YAML_HISTORY_INDEX_PATH), "utf8");
+    const paths = await loadContentPaths();
+    const raw = await readFile(await assertReadable(paths, projectRoot, TABLE_YAML_HISTORY_INDEX_PATH), "utf8");
     const parsed = JSON.parse(raw) as Partial<TableYamlHistoryIndex>;
     if (parsed.schemaVersion !== 1 || !parsed.tables || typeof parsed.tables !== "object") {
       throw new TableYamlVersionError("TABLE_YAML_VERSION_INVALID", "版本记录格式不合法。");
@@ -246,6 +248,7 @@ async function readIndex(projectRoot: string): Promise<TableYamlHistoryIndex> {
 }
 
 async function writeIndex(projectRoot: string, index: TableYamlHistoryIndex): Promise<void> {
+  const paths = await loadContentPaths();
   const normalized: TableYamlHistoryIndex = { schemaVersion: 1, tables: {} };
   for (const [rawKey, tableSource] of Object.entries(index.tables)) {
     const parts = rawKey.split("/");
@@ -257,7 +260,7 @@ async function writeIndex(projectRoot: string, index: TableYamlHistoryIndex): Pr
       versions: [...tableSource.versions]
     };
   }
-  await safeWrite(projectRoot, TABLE_YAML_HISTORY_INDEX_PATH, `${JSON.stringify(normalized, null, 2)}\n`);
+  await safeWrite(paths, projectRoot, TABLE_YAML_HISTORY_INDEX_PATH, `${JSON.stringify(normalized, null, 2)}\n`);
 }
 
 function publicSummary(version: TableYamlVersionMetadataEntry): TableYamlVersionSummary {
@@ -283,8 +286,9 @@ async function pruneVersions(
     return;
   }
   const toRemove = table.versions.slice(0, table.versions.length - TABLE_YAML_VERSION_RETENTION_LIMIT);
+  const paths = await loadContentPaths();
   for (const version of toRemove) {
-    await safeRemove(projectRoot, version.snapshotPath);
+    await safeRemove(paths, projectRoot, version.snapshotPath);
   }
   table.versions = table.versions.slice(-TABLE_YAML_VERSION_RETENTION_LIMIT);
 }
@@ -323,7 +327,7 @@ export async function createTableYamlVersionSnapshot(
     affectedFiles: metadata.affectedFiles ?? [],
     snapshotPath: snapshotPath(key, versionId)
   };
-  await safeWrite(projectRoot, version.snapshotPath, rawYaml);
+  await safeWrite((await loadContentPaths()), projectRoot, version.snapshotPath, rawYaml);
   index.tables[key] = {
     key,
     createdAt: existing?.createdAt ?? createdAt,
@@ -380,7 +384,8 @@ export async function readTableYamlVersion(
   currentYaml: string
 ): Promise<TableYamlVersionDetail> {
   const version = await readVersionEntry(projectRoot, conn, schema, table, versionId);
-  const rawYaml = await readFile(await assertReadable(projectRoot, version.snapshotPath), "utf8");
+  const paths = await loadContentPaths();
+  const rawYaml = await readFile(await assertReadable(paths, projectRoot, version.snapshotPath), "utf8");
   return {
     ...publicSummary(version),
     rawYaml,

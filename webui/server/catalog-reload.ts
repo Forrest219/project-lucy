@@ -2,6 +2,7 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import { safeWrite } from "./fs-safe";
+import { loadContentPaths } from "./paths";
 
 // Mirrors webui/src/lib/types.ts CatalogReloadRun. Keeping a local copy avoids a
 // server→src cycle just for the JSON shape. Fields must stay in lock-step.
@@ -149,7 +150,8 @@ export async function appendCatalogReload(
   const current = await readCatalogReloads(projectRoot);
   const next: CatalogReloadRun[] = [...current.runs, run].slice(-MAX_RUNS);
   const file = { version: 1 as const, runs: next };
-  await safeWrite(projectRoot, REL_PATH, `${JSON.stringify(file, null, 2)}\n`);
+  const paths = await loadContentPaths();
+  await safeWrite(paths, projectRoot, REL_PATH, `${JSON.stringify(file, null, 2)}\n`);
   return buildResponse(next);
 }
 
@@ -193,7 +195,8 @@ async function readProjectConfig(projectRoot: string): Promise<ProjectConfig> {
 }
 
 async function listManifests(projectRoot: string, connId: string): Promise<ManifestEntry[]> {
-  const dir = path.join(projectRoot, "semantic-layer", connId, "_schema");
+  const paths = await loadContentPaths();
+  const dir = path.join(paths.semanticLayer, connId, "_schema");
   const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
   const manifests: ManifestEntry[] = [];
   for (const entry of entries) {

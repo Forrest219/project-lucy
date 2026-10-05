@@ -1,11 +1,12 @@
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { parseDocument, Document, isSeq, isMap } from "yaml";
-import { assertReadable, safeWrite } from "../fs-safe.js";
+import { assertReadable } from "../fs-safe.js";
 import { previewDiff } from "../diff.js";
 import { resolveProjectRoot } from "../project.js";
 import type { FastifyInstance } from "fastify";
 import { getEvalDb } from "./db.js";
+import { loadContentPaths } from "../paths.js";
 import { auditedWriteFile } from "../admin/config-audit-write.js";
 
 // ─── types ──────────────────────────────────────────────────────────────────
@@ -99,7 +100,8 @@ function casesRelPath(domain: string): string {
 
 async function readCasesDoc(projectRoot: string, domain: string): Promise<{ doc: Document; text: string; relPath: string }> {
   const relPath = casesRelPath(domain);
-  const absPath = await assertReadable(projectRoot, relPath);
+  const paths = await loadContentPaths();
+  const absPath = await assertReadable(paths, projectRoot, relPath);
   const text = await readFile(absPath, "utf8");
   const doc = parseDocument(text, { prettyErrors: true });
   if (doc.errors.length > 0) {
@@ -185,7 +187,7 @@ function deleteCaseInDoc(doc: Document, caseId: string): void {
 // ─── public API ──────────────────────────────────────────────────────────────
 
 export async function listDomains(projectRoot: string): Promise<EvalDomainInfo[]> {
-  const evalsBase = path.join(projectRoot, "evals");
+  const evalsBase = (await loadContentPaths()).evals;
   let domainDirs: string[] = [];
   try {
     const entries = await readdir(evalsBase, { withFileTypes: true });
@@ -198,7 +200,8 @@ export async function listDomains(projectRoot: string): Promise<EvalDomainInfo[]
   for (const domain of domainDirs) {
     const relPath = casesRelPath(domain);
     try {
-      await assertReadable(projectRoot, relPath);
+      const paths = await loadContentPaths();
+      await assertReadable(paths, projectRoot, relPath);
       const { doc } = await readCasesDoc(projectRoot, domain);
       const cases = extractCases(doc);
       const metadata = extractMetadata(doc);

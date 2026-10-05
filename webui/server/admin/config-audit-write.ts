@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { previewDiff } from "../diff.js";
 import { assertReadable, safeRemove, safeWrite } from "../fs-safe.js";
+import { loadContentPaths } from "../paths.js";
 import {
   recordConfigChange,
   updateConfigChangeStatus,
@@ -28,7 +29,8 @@ type AuditIntent = {
 
 async function readTextIfExists(projectRoot: string, relPath: string): Promise<string> {
   try {
-    const abs = await assertReadable(projectRoot, relPath);
+    const paths = await loadContentPaths();
+    const abs = await assertReadable(paths, projectRoot, relPath);
     return await readFile(abs, "utf8");
   } catch {
     return "";
@@ -42,7 +44,8 @@ export async function auditedWriteFile(
   auditIntent?: AuditIntent
 ): Promise<{ auditId?: number }> {
   if (!auditIntent?.enabled) {
-    await safeWrite(projectRoot, relPath, content);
+    const paths = await loadContentPaths();
+    await safeWrite(paths, projectRoot, relPath, content);
     return {};
   }
   const oldText = await readTextIfExists(projectRoot, relPath);
@@ -66,7 +69,8 @@ export async function auditedWriteFile(
     writeStatus: "pending"
   });
   try {
-    await safeWrite(projectRoot, relPath, content);
+    const paths = await loadContentPaths();
+    await safeWrite(paths, projectRoot, relPath, content);
     if (auditId) {
       await updateConfigChangeStatus({
         id: auditId,
@@ -98,7 +102,8 @@ export async function auditedRemoveFile(
   auditIntent?: AuditIntent
 ): Promise<{ auditId?: number }> {
   if (!auditIntent?.enabled) {
-    await safeRemove(projectRoot, relPath);
+    const paths = await loadContentPaths();
+    await safeRemove(paths, projectRoot, relPath);
     return {};
   }
   const oldText = await readTextIfExists(projectRoot, relPath);
@@ -121,7 +126,8 @@ export async function auditedRemoveFile(
     writeStatus: "pending"
   });
   try {
-    await safeRemove(projectRoot, relPath);
+    const paths = await loadContentPaths();
+    await safeRemove(paths, projectRoot, relPath);
     if (auditId) await updateConfigChangeStatus({ id: auditId, writeStatus: "committed" });
     return { auditId };
   } catch (error) {

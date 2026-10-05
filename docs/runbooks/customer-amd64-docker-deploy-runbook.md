@@ -212,7 +212,7 @@ curl -sf -X POST http://localhost:7879/mcp \
 | `docker load` 报 `unexpected EOF` | image tar 损坏 / 下载不全 | 重新下载，重新 `sha256sum -c SHA256SUMS` |
 | `architecture mismatch` | 宿主机非 x86_64 | 本交付包只支持 AMD x86_64；如需 arm64，重新索要 arm64 包 |
 | 容器启动后立刻退出，看 `ktx.yaml contains CHANGE-ME placeholders` | 没改 `customer-config/ktx.yaml` | 编辑 ktx.yaml，把 `<CHANGE-ME-*>` 全部替换 |
-| 容器启动后退出，看 `no YAML files` / `no _schema YAML files` | `customer-config/semantic-layer/` 为空或只有占位 | 按 §5.3 补齐；或拷贝 `customer-config.example/semantic-layer/` 后再改 |
+| 容器启动后退出，看 `no YAML files` / `no _schema YAML files` | `customer-config/config/semantic-layer/` 为空或只有占位 | 按 §5.3 补齐；或拷贝 `customer-config.example/config/semantic-layer/` 后再改 |
 | `connection refused :5174` | 端口冲突；其他进程占用 | 改 `.env` 的 `LUCY_WEBUI_HOST_PORT` |
 | `connection refused :7879` | 同上 | 改 `.env` 的 `LUCY_PROXY_HOST_PORT` |
 | `ktx cannot connect to db` | secret 文件不存在 / 权限错 / 路径错 | `ls -l customer-config/.ktx/secrets/` 检查；权限必须是 600 |

@@ -28,6 +28,7 @@ import {
   removeConnection,
   removeSchema
 } from "./project";
+import { loadContentPaths } from "./paths";
 import {
   // Ingest sidecar is M13 legacy. M14 keeps the helpers for the deprecated
   // `/api/connections/:connId/ingest` alias compatibility route.
@@ -93,7 +94,11 @@ import {
   type WikiUploadInput,
   type WikiWriteInput
 } from "./wiki";
-import { readHelpHandbook, searchHelpHandbook } from "./help.js";
+import {
+  readHelpDiagram,
+  readHelpHandbook,
+  searchHelpHandbook
+} from "./help.js";
 import { registerAgentRoutes } from "./admin/agents.js";
 import { registerRoleRoutes } from "./admin/roles.js";
 import { registerTokenRoutes } from "./admin/tokens.js";
@@ -423,7 +428,7 @@ function enabledTableError(code: string, message: string) {
 }
 
 async function scannedPhysicalTables(projectRoot: string, connId: string): Promise<Set<string>> {
-  const schemaDir = path.join(projectRoot, "semantic-layer", connId, "_schema");
+  const schemaDir = path.join((await loadContentPaths()).semanticLayer, connId, "_schema");
   const entries = await readdir(schemaDir, { withFileTypes: true }).catch(() => []);
   const tables = new Set<string>();
   for (const entry of entries) {
@@ -1043,6 +1048,14 @@ export function buildServer() {
     };
   });
 
+  // Product architecture HTML diagrams (SSOT: docs/user-guide/*.html).
+  app.get<{
+    Params: { id?: string };
+  }>("/api/help/diagrams/:id", async (request, reply) => {
+    const diagram = await readHelpDiagram(request.params.id ?? "");
+    return reply.type("text/html; charset=utf-8").send(diagram.html);
+  });
+
   app.get("/api/joins/candidates", async () => {
     const projectRoot = await resolveProjectRoot();
     return {
@@ -1239,7 +1252,7 @@ export function buildServer() {
   }>("/api/connections/:connId/tables", async (request) => {
     const projectRoot = await resolveProjectRoot();
     const { connId } = request.params;
-    const schemaDir = path.join(projectRoot, "semantic-layer", connId, "_schema");
+    const schemaDir = path.join((await loadContentPaths()).semanticLayer, connId, "_schema");
     const entries = await readdir(schemaDir, { withFileTypes: true }).catch(() => []);
     const tables: string[] = [];
     for (const entry of entries) {

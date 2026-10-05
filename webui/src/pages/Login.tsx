@@ -117,7 +117,7 @@ export function LoginPage() {
           无法登录时仍可{" "}
           <Link
             className="underline underline-offset-2"
-            to="/help?section=webui-admin-break-glass"
+            to="/help?section=admin-break-glass"
           >
             查看系统手册
           </Link>

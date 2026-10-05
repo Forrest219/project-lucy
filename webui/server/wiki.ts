@@ -14,6 +14,7 @@ import {
   safeWrite
 } from "./fs-safe";
 import { auditedRemoveFile, auditedWriteFile } from "./admin/config-audit-write.js";
+import { loadContentPaths } from "./paths";
 
 export type WikiFrontmatter = {
   summary?: string;
@@ -365,7 +366,8 @@ function serializeWiki(frontmatter: WikiFrontmatter, content: string): string {
 
 async function readExisting(projectRoot: string, key: string): Promise<string> {
   try {
-    return await readFile(await assertReadable(projectRoot, relPathForKey(key)), "utf8");
+    const paths = await loadContentPaths();
+    return await readFile(await assertReadable(paths, projectRoot, relPathForKey(key)), "utf8");
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       return "";
@@ -376,7 +378,8 @@ async function readExisting(projectRoot: string, key: string): Promise<string> {
 
 async function wikiExists(projectRoot: string, key: string): Promise<boolean> {
   try {
-    await stat(await assertReadable(projectRoot, relPathForKey(key)));
+    const paths = await loadContentPaths();
+    await stat(await assertReadable(paths, projectRoot, relPathForKey(key)));
     return true;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
@@ -441,7 +444,8 @@ function versionSummary(markdown: string): string | undefined {
 
 async function readWikiHistoryIndex(projectRoot: string): Promise<WikiHistoryIndex> {
   try {
-    const raw = await readFile(await assertReadable(projectRoot, WIKI_HISTORY_INDEX_PATH), "utf8");
+    const paths = await loadContentPaths();
+    const raw = await readFile(await assertReadable(paths, projectRoot, WIKI_HISTORY_INDEX_PATH), "utf8");
     const parsed = JSON.parse(raw) as Partial<WikiHistoryIndex>;
     if (parsed.schemaVersion !== 1 || !parsed.documents || typeof parsed.documents !== "object") {
       throw new WikiVersionError("WIKI_VERSION_INVALID", "版本记录格式不合法。");
@@ -515,7 +519,8 @@ async function writeWikiHistoryIndex(projectRoot: string, index: WikiHistoryInde
       versions: [...documentSource.versions]
     };
   }
-  await safeWrite(projectRoot, WIKI_HISTORY_INDEX_PATH, `${JSON.stringify(normalized, null, 2)}\n`);
+  const paths = await loadContentPaths();
+  await safeWrite(paths, projectRoot, WIKI_HISTORY_INDEX_PATH, `${JSON.stringify(normalized, null, 2)}\n`);
 }
 
 function publicVersionSummary(version: WikiVersionMetadataEntry): WikiVersionSummary {
@@ -569,7 +574,7 @@ export async function createWikiVersionSnapshot(
     contentHash,
     snapshotPath
   };
-  await safeWrite(projectRoot, snapshotPath, markdown);
+  await safeWrite((await loadContentPaths()), projectRoot, snapshotPath, markdown);
   index.documents[normalized] = {
     key: normalized,
     createdAt: existing?.createdAt ?? createdAt,
@@ -609,15 +614,17 @@ async function pruneWikiVersions(
   }
   const toRemove = document.versions.slice(0, Math.max(0, document.versions.length - WIKI_VERSION_RETENTION_LIMIT));
   const keep = document.versions.slice(-WIKI_VERSION_RETENTION_LIMIT);
+  const paths = await loadContentPaths();
   for (const version of toRemove) {
-    await safeRemove(projectRoot, version.snapshotPath);
+    await safeRemove(paths, projectRoot, version.snapshotPath);
   }
   document.versions = keep;
 }
 
 async function readWikiDirectoryMetadata(projectRoot: string): Promise<WikiDirectoryMetadata> {
   try {
-    const raw = await readFile(await assertReadable(projectRoot, WIKI_DIRECTORY_METADATA_PATH), "utf8");
+    const paths = await loadContentPaths();
+    const raw = await readFile(await assertReadable(paths, projectRoot, WIKI_DIRECTORY_METADATA_PATH), "utf8");
     const parsed = JSON.parse(raw) as Partial<WikiDirectoryMetadata>;
     if (parsed.schemaVersion !== 1 || !Array.isArray(parsed.directories)) {
       throw new WikiDirectoryError("WIKI_DIRECTORY_INVALID", "Wiki 目录元数据格式不合法。");
@@ -660,6 +667,7 @@ async function writeWikiDirectoryMetadata(
   projectRoot: string,
   metadata: WikiDirectoryMetadata
 ): Promise<void> {
+  const paths = await loadContentPaths();
   const deduped = new Map<string, WikiDirectoryMetadataEntry>();
   for (const item of metadata.directories) {
     const normalized = normalizeWikiDirectoryPath(item.path);
@@ -672,7 +680,7 @@ async function writeWikiDirectoryMetadata(
     schemaVersion: 1,
     directories: Array.from(deduped.values()).sort((a, b) => a.path.localeCompare(b.path))
   };
-  await safeWrite(projectRoot, WIKI_DIRECTORY_METADATA_PATH, `${JSON.stringify(next, null, 2)}\n`);
+  await safeWrite(paths, projectRoot, WIKI_DIRECTORY_METADATA_PATH, `${JSON.stringify(next, null, 2)}\n`);
 }
 
 function directoryAncestors(directoryPath: string): string[] {
@@ -716,7 +724,7 @@ async function walkMarkdown(dir: string, base: string): Promise<string[]> {
 }
 
 export async function listWiki(projectRoot: string): Promise<WikiSummary[]> {
-  const wikiRoot = path.join(projectRoot, "wiki");
+  const wikiRoot = (await loadContentPaths()).wiki;
   const keys = await walkMarkdown(wikiRoot, "");
   const summaries: WikiSummary[] = [];
   for (const key of keys.sort()) {
@@ -783,7 +791,8 @@ export async function createWikiDirectory(
   const directoryPath = normalizeWikiDirectoryPath(rawPath);
   const relPath = relPathForDirectory(directoryPath);
   try {
-    const existing = await stat(await assertReadable(projectRoot, relPath));
+    const paths = await loadContentPaths();
+    const existing = await stat(await assertReadable(paths, projectRoot, relPath));
     if (!existing.isDirectory()) {
       throw new WikiDirectoryError("WIKI_DIRECTORY_CONFLICT", "目标路径已被文件占用。", 409);
     }
@@ -796,7 +805,7 @@ export async function createWikiDirectory(
     }
   }
 
-  await safeMkdir(projectRoot, relPath);
+  await safeMkdir((await loadContentPaths()), projectRoot, relPath);
 
   const metadata = await readWikiDirectoryMetadata(projectRoot);
   const existing = new Map(metadata.directories.map((item) => [item.path, item]));
@@ -843,9 +852,10 @@ export async function deleteWikiDirectory(
 ): Promise<WikiDirectoryDeleteResult> {
   const normalizedPath = normalizeWikiDirectoryPath(directoryPath);
   const relPath = relPathForDirectory(normalizedPath);
+  const paths = await loadContentPaths();
 
   try {
-    await stat(await assertReadable(projectRoot, relPath));
+    await stat(await assertReadable(paths, projectRoot, relPath));
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       throw new WikiDirectoryError(
@@ -858,7 +868,7 @@ export async function deleteWikiDirectory(
   }
 
   try {
-    await safeRemoveDirectory(projectRoot, relPath);
+    await safeRemoveDirectory(paths, projectRoot, relPath);
   } catch (error) {
     if (error instanceof DirectoryNotEmptyError) {
       throw new WikiDirectoryError(
@@ -916,8 +926,9 @@ export async function deleteWiki(
   const index = await readWikiHistoryIndex(projectRoot);
   const document = index.documents[normalized];
   if (document) {
+    const paths = await loadContentPaths();
     for (const version of document.versions) {
-      await safeRemove(projectRoot, version.snapshotPath);
+      await safeRemove(paths, projectRoot, version.snapshotPath);
     }
     delete index.documents[normalized];
     await writeWikiHistoryIndex(projectRoot, index);
@@ -974,7 +985,8 @@ async function pathExistsUnderWiki(
 ): Promise<"missing" | "file" | "directory"> {
   const relPath = path.posix.join("wiki", relativeUnderWiki);
   try {
-    const info = await stat(await assertReadable(projectRoot, relPath));
+    const paths = await loadContentPaths();
+    const info = await stat(await assertReadable(paths, projectRoot, relPath));
     return info.isDirectory() ? "directory" : "file";
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
@@ -1137,7 +1149,7 @@ export async function renameWikiDirectory(
   }
 
   try {
-    await safeRenameDirectory(projectRoot, sourceRel, targetRel);
+    await safeRenameDirectory((await loadContentPaths()), projectRoot, sourceRel, targetRel);
   } catch (error) {
     if (error instanceof ForbiddenPathError) {
       if (error.message.includes("already exists")) {
@@ -1202,11 +1214,12 @@ export async function renameWikiDirectory(
         snapshotPath: wikiVersionSnapshotPath(carry.targetKey, version.versionId)
       }));
       for (const version of sourceDocument.versions) {
-        const oldSnapshot = await assertReadable(projectRoot, version.snapshotPath);
+        const paths = await loadContentPaths();
+        const oldSnapshot = await assertReadable(paths, projectRoot, version.snapshotPath);
         const snapshotMarkdown = await readFile(oldSnapshot, "utf8");
         const newSnapshotPath = wikiVersionSnapshotPath(carry.targetKey, version.versionId);
-        await safeWrite(projectRoot, newSnapshotPath, snapshotMarkdown);
-        await safeRemove(projectRoot, version.snapshotPath);
+        await safeWrite(paths, projectRoot, newSnapshotPath, snapshotMarkdown);
+        await safeRemove(paths, projectRoot, version.snapshotPath);
       }
       index.documents[carry.targetKey] = {
         key: carry.targetKey,
@@ -1446,7 +1459,8 @@ export async function readWikiVersion(
   versionId: string
 ): Promise<WikiVersionDetail> {
   const { version } = await findWikiVersion(projectRoot, key, versionId);
-  const rawMarkdown = await readFile(await assertReadable(projectRoot, version.snapshotPath), "utf8");
+  const paths = await loadContentPaths();
+  const rawMarkdown = await readFile(await assertReadable(paths, projectRoot, version.snapshotPath), "utf8");
   const current = await readExisting(projectRoot, version.key);
   return {
     ...publicVersionSummary(version),
@@ -1539,8 +1553,9 @@ function deriveMoveTarget(sourceKey: string, targetDirectory: string): string {
   return normalizedDirectory ? path.posix.join(normalizedDirectory, basename) : basename;
 }
 
-function assertWikiSourceWritable(projectRoot: string, sourceKey: string): Promise<string> {
-  return assertReadable(projectRoot, relPathForKey(sourceKey));
+async function assertWikiSourceWritable(projectRoot: string, sourceKey: string): Promise<string> {
+  const paths = await loadContentPaths();
+  return assertReadable(paths, projectRoot, relPathForKey(sourceKey));
 }
 
 export async function previewWikiMove(
@@ -1611,7 +1626,7 @@ export async function moveWiki(
   // real parent. We only ever write under wiki/<...>; safeMkdir is
   // bounded by the allowlist in fs-safe.
   const targetDirectoryNormalized = normalizeWikiDirectoryPath(targetDirectory);
-  await safeMkdir(projectRoot, relPathForDirectory(targetDirectoryNormalized));
+  await safeMkdir((await loadContentPaths()), projectRoot, relPathForDirectory(targetDirectoryNormalized));
 
   const oldText = await readExisting(projectRoot, normalizedSource);
   await assertWikiSourceWritable(projectRoot, normalizedSource);
@@ -1625,7 +1640,7 @@ export async function moveWiki(
     operation: "move",
     diff: previewDiff("", oldText, targetRelPath)
   });
-  await safeRemove(projectRoot, sourceRelPath);
+  await safeRemove((await loadContentPaths()), projectRoot, sourceRelPath);
 
   // Carry the version history forward so the new key inherits the
   // existing snapshots. We rewrite the snapshots so future prune runs
@@ -1641,11 +1656,12 @@ export async function moveWiki(
     }));
     // Move snapshot files into the new document's hash directory.
     for (const version of sourceDocument.versions) {
-      const oldSnapshot = await assertReadable(projectRoot, version.snapshotPath);
+      const paths = await loadContentPaths();
+      const oldSnapshot = await assertReadable(paths, projectRoot, version.snapshotPath);
       const markdown = await readFile(oldSnapshot, "utf8");
       const newSnapshotPath = wikiVersionSnapshotPath(targetKey, version.versionId);
-      await safeWrite(projectRoot, newSnapshotPath, markdown);
-      await safeRemove(projectRoot, version.snapshotPath);
+      await safeWrite(paths, projectRoot, newSnapshotPath, markdown);
+      await safeRemove(paths, projectRoot, version.snapshotPath);
     }
     index.documents[targetKey] = {
       key: targetKey,

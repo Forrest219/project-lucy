@@ -1,9 +1,22 @@
 import { lstat, mkdir, readdir, realpath, rename, rm, rmdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import type { ContentPaths } from "./paths";
 
-const ALLOW = ["semantic-layer", "evals", "skills", "wiki", ".ktx-ui", "webui/config"];
+/**
+ * Content-dir prefixes. These resolve relative to {@link ContentPaths.configDir},
+ * which defaults to `<projectRoot>/config/` (see `./paths.ts`) and can be
+ * overridden via `LUCY_CONTENT_ROOT` or `ktx.yaml` `paths.content_root`.
+ *
+ * Legacy callers passing `LUCY_CONTENT_ROOT=.` see the old behavior because
+ * `configDir` then equals `projectRoot`.
+ */
+const CONTENT_PREFIXES = ["semantic-layer", "evals", "skills", "wiki"] as const;
+
+/** Project-root-only prefixes (always resolved against `projectRoot`, never against `configDir`). */
+const ROOT_PREFIXES = [".ktx-ui", "webui/config"] as const;
+
 const DENY = [".ktx/secrets", "raw-sources", ".git"];
-const ALLOW_FILES = ["ktx.yaml"];
+const ROOT_FILES = ["ktx.yaml"];
 
 export class ForbiddenPathError extends Error {
   code = "FORBIDDEN_PATH";
@@ -33,14 +46,14 @@ function isWithin(candidate: string, root: string): boolean {
   return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
-function matchesPrefix(relPath: string, prefixes: string[]): boolean {
+function matchesPrefix(relPath: string, prefixes: readonly string[]): boolean {
   return prefixes.some((prefix) => relPath === prefix || relPath.startsWith(`${prefix}/`));
 }
 
-async function resolveExistingTarget(projectRoot: string, relPath: string): Promise<string> {
-  const rootReal = await realpath(projectRoot);
+async function resolveExistingTarget(base: string, relPath: string): Promise<string> {
+  const baseReal = await realpath(base);
   const parts = relPath.split("/");
-  let existing = rootReal;
+  let existing = baseReal;
   let index = 0;
 
   for (; index < parts.length; index += 1) {
@@ -55,78 +68,130 @@ async function resolveExistingTarget(projectRoot: string, relPath: string): Prom
   return path.join(existing, ...parts.slice(index));
 }
 
-export async function resolveWritable(projectRoot: string, relPath: string): Promise<string> {
+/**
+ * Resolve a content-dir-relative path (`semantic-layer/...`, `wiki/...`, ...).
+ * The base is `contentPaths.configDir`, NOT `projectRoot`, so a default
+ * WebUI now writes to `<projectRoot>/config/semantic-layer/...`. With
+ * `LUCY_CONTENT_ROOT=.`, this degrades to the legacy sibling layout.
+ */
+async function resolveContentTarget(
+  contentPaths: ContentPaths,
+  normalized: string
+): Promise<string> {
+  const configDirReal = await realpath(contentPaths.configDir);
+  const target = await resolveExistingTarget(contentPaths.configDir, normalized);
+  if (!isWithin(target, configDirReal)) {
+    throw new ForbiddenPathError("Resolved path escapes the content root");
+  }
+
+  const targetRel = path.relative(configDirReal, target).replaceAll(path.sep, "/");
+  if (!matchesPrefix(targetRel, CONTENT_PREFIXES)) {
+    throw new ForbiddenPathError(`Resolved path ${targetRel} is not writable`);
+  }
+  return target;
+}
+
+/**
+ * Resolve a project-root-relative path (`webui/config/...`, `.ktx-ui/...`,
+ * or one of {@link ROOT_FILES} such as `ktx.yaml`). Refuses symlinks for
+ * ALLOW_FILES (Spec 124: ktx.yaml must not be a symlink that escapes the
+ * project root).
+ */
+async function resolveRootTarget(projectRoot: string, normalized: string): Promise<string> {
+  const rootReal = await realpath(projectRoot);
+  const literalTarget = path.join(rootReal, normalized);
+  let target = literalTarget;
+  try {
+    const targetStat = await lstat(literalTarget);
+    if (targetStat.isSymbolicLink()) {
+      throw new ForbiddenPathError(`Writing symlinked allow-file ${normalized} is forbidden`);
+    }
+    target = await realpath(literalTarget);
+  } catch (error) {
+    if (error instanceof ForbiddenPathError) throw error;
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  if (!isWithin(target, rootReal)) {
+    throw new ForbiddenPathError("Resolved path escapes the project root");
+  }
+  const targetRel = path.relative(rootReal, target).replaceAll(path.sep, "/");
+  if (!matchesPrefix(targetRel, ROOT_PREFIXES) && !ROOT_FILES.includes(targetRel)) {
+    throw new ForbiddenPathError(`Resolved path ${targetRel} is not writable`);
+  }
+  return target;
+}
+
+/**
+ * Resolve a writable path under either the content root (configurable) or
+ * the project root (fixed). The function inspects the path prefix to pick
+ * the right base — callers don't have to know which namespace they are in.
+ *
+ *   semantic-layer/... → <configDir>/semantic-layer/...
+ *   wiki/...           → <configDir>/wiki/...
+ *   evals/...          → <configDir>/evals/...
+ *   skills/...         → <configDir>/skills/...
+ *   webui/config/...   → <projectRoot>/webui/config/...
+ *   .ktx-ui/...        → <projectRoot>/.ktx-ui/...
+ *   ktx.yaml           → <projectRoot>/ktx.yaml
+ */
+export async function resolveWritable(
+  contentPaths: ContentPaths,
+  projectRoot: string,
+  relPath: string
+): Promise<string> {
   const normalized = normalizeRelative(relPath);
   if (matchesPrefix(normalized, DENY)) {
     throw new ForbiddenPathError(`Writing ${normalized} is forbidden`);
   }
 
-  if (ALLOW_FILES.includes(normalized)) {
-    const rootReal = await realpath(projectRoot);
-    const literalTarget = path.join(rootReal, normalized);
-    let target = literalTarget;
-    try {
-      const targetStat = await lstat(literalTarget);
-      if (targetStat.isSymbolicLink()) {
-        throw new ForbiddenPathError(`Writing symlinked allow-file ${normalized} is forbidden`);
-      }
-      target = await realpath(literalTarget);
-    } catch (error) {
-      if (error instanceof ForbiddenPathError) throw error;
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    }
-    if (!isWithin(target, rootReal)) {
-      throw new ForbiddenPathError("Resolved path escapes the project root");
-    }
-    const targetRel = path.relative(rootReal, target).replaceAll(path.sep, "/");
-    if (targetRel !== normalized) {
-      throw new ForbiddenPathError(`Resolved path ${targetRel} is not an allowed file`);
-    }
-    return target;
+  if (matchesPrefix(normalized, CONTENT_PREFIXES)) {
+    return resolveContentTarget(contentPaths, normalized);
+  }
+  if (matchesPrefix(normalized, ROOT_PREFIXES) || ROOT_FILES.includes(normalized)) {
+    return resolveRootTarget(projectRoot, normalized);
   }
 
-  if (!matchesPrefix(normalized, ALLOW)) {
-    throw new ForbiddenPathError(`Writing ${normalized} is outside allowed directories`);
-  }
-
-  const rootReal = await realpath(projectRoot);
-  const target = await resolveExistingTarget(projectRoot, normalized);
-  if (!isWithin(target, rootReal)) {
-    throw new ForbiddenPathError("Resolved path escapes the project root");
-  }
-
-  const targetRel = path.relative(rootReal, target).replaceAll(path.sep, "/");
-  if (matchesPrefix(targetRel, DENY) || !matchesPrefix(targetRel, ALLOW)) {
-    throw new ForbiddenPathError(`Resolved path ${targetRel} is not writable`);
-  }
-
-  return target;
+  throw new ForbiddenPathError(`Writing ${normalized} is outside allowed directories`);
 }
 
-export async function safeWrite(projectRoot: string, relPath: string, content: string): Promise<void> {
-  const target = await resolveWritable(projectRoot, relPath);
+export async function safeWrite(
+  contentPaths: ContentPaths,
+  projectRoot: string,
+  relPath: string,
+  content: string
+): Promise<void> {
+  const target = await resolveWritable(contentPaths, projectRoot, relPath);
   await mkdir(path.dirname(target), { recursive: true });
   await writeFile(target, content, "utf8");
 }
 
 /** Binary-safe write under the same allow-list as `safeWrite` (e.g. customer logo). */
 export async function safeWriteBinary(
+  contentPaths: ContentPaths,
   projectRoot: string,
   relPath: string,
   content: Buffer
 ): Promise<void> {
-  const target = await resolveWritable(projectRoot, relPath);
+  const target = await resolveWritable(contentPaths, projectRoot, relPath);
   await mkdir(path.dirname(target), { recursive: true });
   await writeFile(target, content);
 }
 
-export async function safeMkdir(projectRoot: string, relPath: string): Promise<void> {
-  const target = await resolveWritable(projectRoot, relPath);
+export async function safeMkdir(
+  contentPaths: ContentPaths,
+  projectRoot: string,
+  relPath: string
+): Promise<void> {
+  const target = await resolveWritable(contentPaths, projectRoot, relPath);
   await mkdir(target, { recursive: true });
 }
 
-export async function safeRemove(projectRoot: string, relPath: string): Promise<void> {
-  const target = await resolveWritable(projectRoot, relPath);
+export async function safeRemove(
+  contentPaths: ContentPaths,
+  projectRoot: string,
+  relPath: string
+): Promise<void> {
+  const target = await resolveWritable(contentPaths, projectRoot, relPath);
   try {
     const targetStat = await lstat(target);
     if (targetStat.isSymbolicLink()) {
@@ -171,8 +236,12 @@ export class DirectoryNotEmptyError extends Error {
  * recurse — non-empty directories raise {@link DirectoryNotEmptyError} so
  * the caller can prompt the user to clear the contents first.
  */
-export async function safeRemoveDirectory(projectRoot: string, relPath: string): Promise<void> {
-  const target = await resolveWritable(projectRoot, relPath);
+export async function safeRemoveDirectory(
+  contentPaths: ContentPaths,
+  projectRoot: string,
+  relPath: string
+): Promise<void> {
+  const target = await resolveWritable(contentPaths, projectRoot, relPath);
   let targetStat: Awaited<ReturnType<typeof lstat>>;
   try {
     targetStat = await lstat(target);
@@ -205,12 +274,13 @@ export async function safeRemoveDirectory(projectRoot: string, relPath: string):
  * symlinks and refuses to overwrite an existing target.
  */
 export async function safeRenameDirectory(
+  contentPaths: ContentPaths,
   projectRoot: string,
   sourceRelPath: string,
   targetRelPath: string
 ): Promise<void> {
-  const source = await resolveWritable(projectRoot, sourceRelPath);
-  const target = await resolveWritable(projectRoot, targetRelPath);
+  const source = await resolveWritable(contentPaths, projectRoot, sourceRelPath);
+  const target = await resolveWritable(contentPaths, projectRoot, targetRelPath);
 
   let sourceStat: Awaited<ReturnType<typeof lstat>>;
   try {
@@ -243,19 +313,31 @@ export async function safeRenameDirectory(
   await rename(source, target);
 }
 
-export async function assertReadable(projectRoot: string, relPath: string): Promise<string> {
+/**
+ * Assert a relative path is readable. Permissive by design — anything under
+ * `configDir` or `projectRoot` is readable except `.ktx/secrets/`. Content
+ * paths resolve from `contentPaths.configDir` (configurable); root paths
+ * resolve from `projectRoot`.
+ */
+export async function assertReadable(
+  contentPaths: ContentPaths,
+  projectRoot: string,
+  relPath: string
+): Promise<string> {
   const normalized = normalizeRelative(relPath);
   if (matchesPrefix(normalized, [".ktx/secrets"])) {
     throw new ForbiddenPathError(`Reading ${normalized} is forbidden`);
   }
 
-  const rootReal = await realpath(projectRoot);
-  const target = await resolveExistingTarget(projectRoot, normalized);
-  if (!isWithin(target, rootReal)) {
+  const isContentPath = matchesPrefix(normalized, CONTENT_PREFIXES);
+  const base = isContentPath ? contentPaths.configDir : projectRoot;
+  const baseReal = await realpath(base);
+  const target = await resolveExistingTarget(base, normalized);
+  if (!isWithin(target, baseReal)) {
     throw new ForbiddenPathError("Resolved path escapes the project root");
   }
 
-  const targetRel = path.relative(rootReal, target).replaceAll(path.sep, "/");
+  const targetRel = path.relative(baseReal, target).replaceAll(path.sep, "/");
   if (matchesPrefix(targetRel, [".ktx/secrets"])) {
     throw new ForbiddenPathError(`Reading ${targetRel} is forbidden`);
   }
@@ -271,6 +353,10 @@ export async function assertReadable(projectRoot: string, relPath: string): Prom
  * `.ktx/secrets/<connId>-password` where connId is `[a-z][a-z0-9_-]{1,63}`.
  *
  * Refuses: read APIs, listing, overwrite, symlinks, path traversal, other names.
+ *
+ * Note: secret passwords live under `<projectRoot>/.ktx/secrets/...` —
+ * independent of the A2 content root resolver, so this API stays
+ * project-root-only and does NOT take a ContentPaths parameter.
  */
 export const SECRET_PASSWORD_REL_PATH_PATTERN =
   "^\\.ktx/secrets/([a-z][a-z0-9_-]{1,63})-password$";

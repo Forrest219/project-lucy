@@ -157,6 +157,7 @@ beforeEach(async () => {
   projectRoot = await makeProject();
   prevRoot = process.env.KTX_PROJECT_ROOT;
   process.env.KTX_PROJECT_ROOT = projectRoot;
+  process.env.LUCY_CONTENT_ROOT = ".";
 });
 
 afterEach(async () => {
@@ -205,7 +206,7 @@ describe("GET /api/admin/roles", () => {
     await rm(projectRoot, { recursive: true, force: true });
     projectRoot = await makeProject(CUSTOM_KX_ACCESS_YAML);
     process.env.KTX_PROJECT_ROOT = projectRoot;
-
+    process.env.LUCY_CONTENT_ROOT = ".";
     const app = buildServer();
     await app.ready();
     const res = await request(app.server).get("/api/admin/roles").expect(200);
@@ -226,7 +227,7 @@ describe("GET /api/admin/roles", () => {
     await rm(projectRoot, { recursive: true, force: true });
     projectRoot = await makeProject(IN_USE_ACCESS_YAML);
     process.env.KTX_PROJECT_ROOT = projectRoot;
-
+    process.env.LUCY_CONTENT_ROOT = ".";
     const app = buildServer();
     await app.ready();
     const res = await request(app.server).get("/api/admin/roles").expect(200);
@@ -248,7 +249,7 @@ describe("GET /api/admin/roles", () => {
     await rm(projectRoot, { recursive: true, force: true });
     projectRoot = await makeProject(IN_USE_ACCESS_YAML);
     process.env.KTX_PROJECT_ROOT = projectRoot;
-
+    process.env.LUCY_CONTENT_ROOT = ".";
     const app = buildServer();
     await app.ready();
     const res = await request(app.server).get("/api/admin/roles").expect(200);
@@ -297,7 +298,7 @@ describe("GET /api/admin/roles/:roleId", () => {
     await rm(projectRoot, { recursive: true, force: true });
     projectRoot = await makeProject(ANALYST_ACCESS_YAML);
     process.env.KTX_PROJECT_ROOT = projectRoot;
-
+    process.env.LUCY_CONTENT_ROOT = ".";
     const app = buildServer();
     await app.ready();
     const res = await request(app.server).get("/api/admin/roles/analyst").expect(200);
@@ -834,7 +835,7 @@ describe("PATCH /api/admin/roles/:roleId", () => {
     await rm(projectRoot, { recursive: true, force: true });
     projectRoot = await makeProject(CUSTOM_KX_ACCESS_YAML);
     process.env.KTX_PROJECT_ROOT = projectRoot;
-
+    process.env.LUCY_CONTENT_ROOT = ".";
     const app = buildServer();
     await app.ready();
     const detail = await request(app.server).get("/api/admin/roles/kx_readonly").expect(200);
@@ -870,7 +871,7 @@ describe("DELETE /api/admin/roles/:roleId", () => {
     await rm(projectRoot, { recursive: true, force: true });
     projectRoot = await makeProject(IN_USE_ACCESS_YAML);
     process.env.KTX_PROJECT_ROOT = projectRoot;
-
+    process.env.LUCY_CONTENT_ROOT = ".";
     const app = buildServer();
     await app.ready();
     const res = await request(app.server).delete("/api/admin/roles/analyst").expect(409);

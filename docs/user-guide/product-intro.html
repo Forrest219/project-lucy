@@ -499,6 +499,42 @@
   .arch-block-title { font-size: 17px; font-weight: 700; margin-bottom: 6px; }
   .arch-block-desc { font-size: 13px; color: var(--text2); line-height: 1.65; margin-bottom: 22px; }
 
+  .arch-canonical {
+    margin-top: 40px;
+    padding: 20px 22px;
+    border: 1px solid rgb(79 142 247 / 35%);
+    border-radius: var(--radius);
+    background: linear-gradient(135deg, rgb(79 142 247 / 10%), rgb(6 182 212 / 6%));
+  }
+  .arch-canonical-kicker {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--accent3); margin-bottom: 8px;
+  }
+  .arch-canonical p {
+    margin: 0 0 14px;
+    font-size: 14px;
+    color: var(--text2);
+    line-height: 1.65;
+  }
+  .arch-canonical-links {
+    display: flex; flex-wrap: wrap; gap: 10px;
+  }
+  .arch-canonical-links a {
+    display: inline-flex; align-items: center;
+    padding: 8px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .arch-canonical-links a:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
   /* -- Serving flow -- */
   .serving-flow { display: flex; flex-direction: column; align-items: stretch; gap: 0; }
 
@@ -814,6 +850,15 @@
     <div class="section-label">系统架构</div>
     <h2 class="section-title">Lucy 如何工作</h2>
     <p class="section-sub">两个互补的侧面：摄取侧把数据源整理成可信上下文；服务侧把上下文安全地交给 Agent 使用。</p>
+
+    <div class="arch-canonical">
+      <div class="arch-canonical-kicker">权威架构图</div>
+      <p>完整产品架构请优先看这两张全屏图（比下方示意更完整）。WebUI 用户也可在 <code>/help?section=product-architecture-diagrams</code> 打开同一套图。</p>
+      <div class="arch-canonical-links">
+        <a href="lucy-architecture-diagram.html" target="_blank" rel="noopener">Lucy 架构总览</a>
+        <a href="lucy-docs-flows.html" target="_blank" rel="noopener">摄取与服务流程</a>
+      </div>
+    </div>
 
     <div class="arch-pair">
 

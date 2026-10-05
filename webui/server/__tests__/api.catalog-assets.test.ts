@@ -24,6 +24,7 @@ vi.mock("../ktx", async () => {
 let projectRoot: string;
 let auditDbPath: string;
 let previousRoot: string | undefined;
+  let previousContentRoot: string | undefined;
 let previousAuditDb: string | undefined;
 
 async function makeProject(
@@ -45,6 +46,7 @@ async function makeProject(
 beforeEach(async () => {
   vi.resetModules();
   previousRoot = process.env.KTX_PROJECT_ROOT;
+  previousContentRoot = process.env.LUCY_CONTENT_ROOT;
   previousAuditDb = process.env.LUCY_AUDIT_DB;
   vi.clearAllMocks();
 });
@@ -89,6 +91,7 @@ describe("POST /api/catalog/assets/validate", () => {
     projectRoot = await makeProject(baseYaml());
     auditDbPath = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();
@@ -114,6 +117,7 @@ describe("POST /api/catalog/assets/validate", () => {
     projectRoot = await makeProject(baseYaml());
     auditDbPath = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();
@@ -158,6 +162,7 @@ describe("POST /api/catalog/assets/validate", () => {
     projectRoot = await makeProject(baseYaml());
     auditDbPath = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();
@@ -184,6 +189,7 @@ describe("POST /api/catalog/assets/validate", () => {
     projectRoot = await makeProject(baseYaml());
     auditDbPath = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();
@@ -210,6 +216,7 @@ describe("POST /api/catalog/assets/validate", () => {
     projectRoot = await makeProject(baseYaml());
     auditDbPath = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();
@@ -235,6 +242,7 @@ describe("POST /api/catalog/assets/validate", () => {
     projectRoot = await makeProject(baseYaml());
     auditDbPath = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();
@@ -260,6 +268,7 @@ describe("POST /api/catalog/assets/validate", () => {
     projectRoot = await makeProject(baseYaml());
     auditDbPath = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();
@@ -285,6 +294,7 @@ describe("POST /api/catalog/assets/validate", () => {
     projectRoot = await makeProject(baseYaml());
     auditDbPath = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();
@@ -309,6 +319,7 @@ describe("POST /api/catalog/assets/validate", () => {
     projectRoot = await makeProject(baseYaml());
     auditDbPath = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();
@@ -335,6 +346,7 @@ describe("POST /api/catalog/assets/validate", () => {
     projectRoot = await makeProject(baseYaml());
     auditDbPath = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();
@@ -360,6 +372,7 @@ describe("POST /api/catalog/assets/validate", () => {
     projectRoot = await makeProject(baseYaml());
     auditDbPath = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const overlayYaml = [
@@ -396,6 +409,7 @@ describe("POST /api/catalog/assets/validate", () => {
     projectRoot = await makeProject(baseYaml());
     auditDbPath = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();
@@ -423,6 +437,7 @@ describe("POST /api/catalog/assets/validate", () => {
     });
     auditDbPath = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();
@@ -449,6 +464,7 @@ describe("POST /api/catalog/assets/validate", () => {
     projectRoot = await makeProject(baseYaml());
     auditDbPath = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     // Create a symlink in place of the target manifest.
@@ -486,6 +502,7 @@ describe("POST /api/catalog/assets/validate", () => {
     });
     auditDbPath = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();
@@ -519,6 +536,7 @@ describe("POST /api/catalog/assets/validate", () => {
     await symlink(outside, path.join(projectRoot, "semantic-layer/demo-mysql"));
     auditDbPath = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();
@@ -546,6 +564,7 @@ describe("POST /api/catalog/assets/upload", () => {
     projectRoot = await makeProject(baseYaml());
     auditDbPath = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();
@@ -609,6 +628,7 @@ describe("POST /api/catalog/assets/upload", () => {
     });
     auditDbPath = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const beforeContent = await readFile(
@@ -652,6 +672,7 @@ describe("POST /api/catalog/assets/upload", () => {
     });
     auditDbPath = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();
@@ -681,6 +702,7 @@ describe("POST /api/catalog/assets/upload", () => {
     projectRoot = await makeProject(baseYaml());
     auditDbPath = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const linkPath = path.join(
@@ -720,6 +742,7 @@ describe("GET /api/catalog/assets/uploads", () => {
     projectRoot = await makeProject(baseYaml());
     auditDbPath = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();
@@ -758,6 +781,7 @@ describe("GET /api/catalog/assets/uploads", () => {
     projectRoot = await makeProject(baseYaml());
     auditDbPath = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     // Seed 55 records directly into the sidecar.
@@ -803,6 +827,7 @@ describe("GET /api/catalog/assets/schema-manifest", () => {
     });
     auditDbPath = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();
@@ -824,6 +849,7 @@ describe("GET /api/catalog/assets/schema-manifest", () => {
     projectRoot = await makeProject(baseYaml());
     auditDbPath = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();
@@ -842,6 +868,7 @@ describe("GET /api/catalog/assets/schema-manifest", () => {
     projectRoot = await makeProject(baseYaml());
     auditDbPath = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();

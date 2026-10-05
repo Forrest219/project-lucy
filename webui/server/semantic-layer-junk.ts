@@ -1,6 +1,7 @@
 import { readdir, lstat } from "node:fs/promises";
 import path from "node:path";
 import { assertReadable, safeRemove } from "./fs-safe";
+import { loadContentPaths } from "./paths";
 
 /** AppleDouble / Finder junk that ktx sl validate incorrectly parses as YAML. */
 export function isSemanticLayerJunkName(name: string): boolean {
@@ -13,11 +14,12 @@ export function isSemanticLayerJunkName(name: string): boolean {
  */
 export async function scrubSemanticLayerJunk(projectRoot: string): Promise<string[]> {
   const removed: string[] = [];
+  const paths = await loadContentPaths();
 
   async function walk(relDir: string): Promise<void> {
     let absDir: string;
     try {
-      absDir = await assertReadable(projectRoot, relDir);
+      absDir = await assertReadable(paths, projectRoot, relDir);
     } catch {
       return;
     }
@@ -44,7 +46,7 @@ export async function scrubSemanticLayerJunk(projectRoot: string): Promise<strin
         }
         if (st.isFile() && isSemanticLayerJunkName(name)) {
           try {
-            await safeRemove(projectRoot, childRel);
+            await safeRemove(paths, projectRoot, childRel);
             removed.push(childRel);
           } catch {
             // best-effort: continue scrubbing other junk

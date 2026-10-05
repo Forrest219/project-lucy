@@ -25,6 +25,7 @@ import { loadAllSkills, getSkillByUri, getSkillByName } from "../skills/loader.j
 import type { SkillAsset } from "../skills/types.js";
 import { canAccessSkill, filterAccessibleSkills, type SkillAclDecision, type SkillAclAction } from "./skill-acl.js";
 import { readProject, resolveProjectRoot } from "../project.js";
+import { loadContentPaths } from "../paths.js";
 import { readKtxYamlDigest, recordExecutionRuntimeObservation } from "../mcp-runtime-state.js";
 import {
   recordMcpToolsCall,
@@ -1392,8 +1393,9 @@ async function lucyFreshness(identity: Identity, args: unknown): Promise<Record<
   }
 
   const projectRoot = await resolveProjectRoot();
-  const overlayPath = path.join(projectRoot, "semantic-layer", source.connectionId, `${source.sourceName}.yaml`);
-  const schemaPath = path.join(projectRoot, "semantic-layer", source.connectionId, "_schema", `${source.schema}.yaml`);
+  const paths = await loadContentPaths();
+  const overlayPath = path.join(paths.semanticLayer, source.connectionId, `${source.sourceName}.yaml`);
+  const schemaPath = path.join(paths.semanticLayer, source.connectionId, "_schema", `${source.schema}.yaml`);
   const mtimes: string[] = [];
   for (const filePath of [overlayPath, schemaPath]) {
     try {

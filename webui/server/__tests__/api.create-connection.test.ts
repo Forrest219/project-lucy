@@ -32,6 +32,7 @@ vi.mock("../ktx", async () => {
 let projectRoot: string;
 let auditDbPath: string;
 let previousRoot: string | undefined;
+  let previousContentRoot: string | undefined;
 let previousAuditDb: string | undefined;
 
 function baseYaml(): string {
@@ -70,6 +71,7 @@ async function buildFreshServer() {
 beforeEach(async () => {
   vi.resetModules();
   previousRoot = process.env.KTX_PROJECT_ROOT;
+  previousContentRoot = process.env.LUCY_CONTENT_ROOT;
   previousAuditDb = process.env.LUCY_AUDIT_DB;
   vi.clearAllMocks();
 });
@@ -94,6 +96,7 @@ describe("POST /api/connections (Spec 124 Phase A)", () => {
   it("defaults to dryRun and never writes secret or yaml", async () => {
     await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();
@@ -128,6 +131,7 @@ describe("POST /api/connections (Spec 124 Phase A)", () => {
   it("commits secret + yaml when dryRun=false and test succeeds", async () => {
     await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();
@@ -173,6 +177,7 @@ describe("POST /api/connections (Spec 124 Phase A)", () => {
   it("commits secret + yaml when connection test fails", async () => {
     await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const ktx = await import("../ktx");
@@ -221,6 +226,7 @@ describe("POST /api/connections (Spec 124 Phase A)", () => {
   it("returns 409 when connection id already exists", async () => {
     await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();
@@ -276,6 +282,7 @@ describe("POST /api/connections (Spec 124 Phase A)", () => {
   it("returns 400 CONNECTION_ID_INVALID for illegal ids", async () => {
     await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();
@@ -300,6 +307,7 @@ describe("POST /api/connections (Spec 124 Phase A)", () => {
   it("POST /api/connections/probe tests without writing yaml or secret", async () => {
     await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();
@@ -330,6 +338,7 @@ describe("POST /api/connections (Spec 124 Phase A)", () => {
   it("POST /api/connections/probe returns 200 with status error when test fails", async () => {
     await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const ktx = await import("../ktx");

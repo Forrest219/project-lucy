@@ -160,6 +160,7 @@ beforeEach(async () => {
   projectRoot = await makeProject();
   prevRoot = process.env.KTX_PROJECT_ROOT;
   process.env.KTX_PROJECT_ROOT = projectRoot;
+  process.env.LUCY_CONTENT_ROOT = ".";
   auditRows.length = 0;
 });
 
@@ -568,6 +569,7 @@ defaults:
       "utf8"
     );
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
   }
 
   it("dryRun returns gate decision with tier summary", async () => {
@@ -752,6 +754,7 @@ async function makeConstraintsProject() {
   await rm(projectRoot, { recursive: true, force: true });
   projectRoot = await mkdtemp(path.join(os.tmpdir(), "ktx-admin-agents-constr-"));
   process.env.KTX_PROJECT_ROOT = projectRoot;
+  process.env.LUCY_CONTENT_ROOT = ".";
   await mkdir(path.join(projectRoot, "webui", "config"), { recursive: true });
   await mkdir(path.join(projectRoot, "semantic-layer", "warehouse", "_schema"), { recursive: true });
   await mkdir(path.join(projectRoot, ".ktx-ui"), { recursive: true });

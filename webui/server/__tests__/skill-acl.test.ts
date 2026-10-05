@@ -48,6 +48,7 @@ roles:
 describe("Skill ACL", () => {
   let projectRoot: string;
   let previousRoot: string | undefined;
+  let previousContentRoot: string | undefined;
 
   const publicSkill: SkillAsset = {
     name: "public-skill",
@@ -122,9 +123,10 @@ describe("Skill ACL", () => {
 
   beforeEach(async () => {
     previousRoot = process.env.KTX_PROJECT_ROOT;
+    previousContentRoot = process.env.LUCY_CONTENT_ROOT;
     projectRoot = await mkdtemp(path.join(os.tmpdir(), "skill-acl-test-"));
     process.env.KTX_PROJECT_ROOT = projectRoot;
-
+    process.env.LUCY_CONTENT_ROOT = ".";
     await mkdir(path.join(projectRoot, "webui", "config"), { recursive: true });
     await mkdir(path.join(projectRoot, ".ktx-ui"), { recursive: true });
     await writeFile(path.join(projectRoot, "webui", "config", "access.yaml"), ACCESS_YAML);
@@ -137,6 +139,8 @@ describe("Skill ACL", () => {
   afterEach(async () => {
     if (previousRoot === undefined) delete process.env.KTX_PROJECT_ROOT;
     else process.env.KTX_PROJECT_ROOT = previousRoot;
+    if (previousContentRoot === undefined) delete process.env.LUCY_CONTENT_ROOT;
+    else process.env.LUCY_CONTENT_ROOT = previousContentRoot;
     await rm(projectRoot, { recursive: true, force: true });
   });
 

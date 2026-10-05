@@ -19,6 +19,7 @@ beforeEach(async () => {
   resetEvalDb();
   process.env.LUCY_EVAL_DB = dbPath;
   process.env.KTX_PROJECT_ROOT = projectRoot;
+  process.env.LUCY_CONTENT_ROOT = ".";
 });
 
 afterEach(async () => {

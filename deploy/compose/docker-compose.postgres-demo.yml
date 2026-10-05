@@ -38,6 +38,9 @@ services:
       LUCY_PROXY_PORT: "7879"
       LUCY_PROXY_UPSTREAM_HOST: 127.0.0.1
       LUCY_PROXY_UPSTREAM_PORT: "7878"
+      # A2 — Content root. Default = <projectRoot>/config/. Unset to fall back
+      # to siblings-of-ktx.yaml (legacy). Entrypoint populates runtime/.
+      LUCY_CONTENT_ROOT: "${LUCY_CONTENT_ROOT:-/data/lucy/config}"
       POSTHOG_DISABLED: "1"
     ports:
       - "${LUCY_POSTGRES_DEMO_WEBUI_HOST_PORT:-55177}:5174"
@@ -45,8 +48,10 @@ services:
     volumes:
       - lucy-postgres-demo-data:/data/lucy
       # POC-only evals aligned with demo DB baseline — not repo-root evals/superstore/.
-      # Read-only; demo-data volume still owns runtime state.
-      - ../../examples/postgres-demo/project-template/evals:/data/lucy/evals:ro
+      # Read-only; demo-data volume still owns runtime state. Under A2 the
+      # WebUI reads from <configRoot>/evals, so the bind mount target moved
+      # from /data/lucy/evals to /data/lucy/config/evals.
+      - ../../examples/postgres-demo/project-template/evals:/data/lucy/config/evals:ro
     secrets:
       - postgres_password
     depends_on:

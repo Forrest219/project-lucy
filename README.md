@@ -35,14 +35,14 @@
 |---|---|
 | `ktx.yaml` | **本机私有**（gitignore）。从 `ktx.yaml.example` 复制后填写自己的连接；勿提交。 |
 | `ktx.yaml.example` | 脱敏连接模板（占位符），供开发者复制。 |
-| `semantic-layer/` | 本机可放私有连接目录（gitignore：`mysql-aliyun/` 等）。仓库仅跟踪 `demo-mysql/` CI stub；客户交付 seed 用 `customer-config.example/semantic-layer/`。 |
-| `skills/` | lucy 增量 skill 库（产品通用技能）。本机域名/内网专用 skill 勿提交。 |
+| `config/semantic-layer/` | **A2 (M31) 默认**：本机可放私有连接目录（gitignore：`config/mysql-aliyun/` 等）。仓库仅跟踪 `config/demo-mysql/` CI stub；客户交付 seed 用 `customer-config.example/config/semantic-layer/`。设 `LUCY_CONTENT_ROOT=.` 可恢复兄弟目录布局。 |
+| `config/skills/` | **A2 默认**：lucy 增量 skill 库（产品通用技能）。本机域名/内网专用 skill 勿提交。 |
 | `.ktx/prompts/` | KTX 运行时 prompt 目录，用于承载产品运行时上下文。 |
-| `wiki/` | 业务知识库。仓库仅跟踪 `wiki/global/demo-superstore.md` stub；其余本机私有。 |
-| `evals/` | 仓库跟踪 `evals/superstore/`（demo 可跑）；内网绑定套件本机私有。 |
+| `config/wiki/` | **A2 默认**：业务知识库。仓库仅跟踪 `config/wiki/global/demo-superstore.md` stub；其余本机私有。 |
+| `config/evals/` | **A2 默认**：仓库跟踪 `config/evals/superstore/`（demo 可跑）；内网绑定套件本机私有。 |
 | `webui/` | 治理工作台（React 19 + Vite + Fastify）。`webui/config/access.yaml` 本机私有；提交的是 `access.yaml.example`。 |
 | `raw-sources/` | 本机扫描材料（gitignore 内网连接目录）；勿提交含真实 host 的快照。 |
-| `customer-config.example/` | 客户交付空壳模板；默认 Docker seed 与离线包均以此为准。 |
+| `customer-config.example/` | 客户交付空壳模板；默认 Docker seed 与离线包均以此为准。A2 之后 4 个内容目录在 `customer-config.example/config/` 下。 |
 | `examples/docker-demo/` | 本地 compose 测试库（`demo-mysql`）；仅 demo 栈使用，不进客户默认 seed。 |
 | `docs/` | 开发治理与项目概览。`docs/governance/DEVELOPMENT.md` 是开发规则权威源；`docs/governance/project-overview.md` 是全组件索引；`docs/README.md` 是文档地图。二级分类：`governance/ design/ specs/ runbooks/ reviews/ uat/ webui/` + 既有 `access-control/ licensing/ plans/ qa/ ui-ux-feedback/ user-guide/`。 |
 | `AGENTS.md` | AI coding agent 的开发入口，指向本仓库治理规则。 |
@@ -89,7 +89,26 @@
 
 ### 与 KTX MCP 无关的目录
 
-`skills/`、`webui/`、`docs/` 不被 KTX MCP 加载，属于上层应用层（增量 Skill、前端、开发治理）。
+`config/skills/`、`webui/`、`docs/` 不被 KTX MCP 加载，属于上层应用层（增量 Skill、前端、开发治理）。
+
+### Content Layout (A2 / M31)
+
+> Lucy WebUI 从 **可配置 content root** 加载 4 个内容目录
+> `semantic-layer/`、`wiki/`、`evals/`、`skills/`。默认 `<projectRoot>/config/`。
+> 覆盖优先级：`LUCY_CONTENT_ROOT` 环境变量 > `ktx.yaml` 顶层 `paths.content_root` > 默认 `./config`。
+> `ktx mcp start` 仍要求这些目录是 `ktx.yaml` 的兄弟；Docker entrypoint 会把
+> content root 镜像到 `<projectRoot>/runtime/` 以满足 ktx 的 sibling 要求。
+
+Legacy 部署（兄弟目录）：
+
+```bash
+export LUCY_CONTENT_ROOT=.
+# 或在 ktx.yaml 加：
+# paths:
+#   content_root: .
+```
+
+详见 [`docs/plans/M31-config-subdir-migration.md`](docs/plans/M31-config-subdir-migration.md)。
 
 ---
 

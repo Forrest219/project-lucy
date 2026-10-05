@@ -1,4 +1,4 @@
-# ktx.yaml — 模板（M3.4）
+# ktx.yaml — 模板（M3.4 / A2 M31）
 #
 # Onboarding：
 #   1. cp ktx.yaml.example ktx.yaml
@@ -9,6 +9,18 @@
 # 若团队希望严格隔离凭据，后续可执行：
 #   git rm --cached ktx.yaml && echo 'ktx.yaml' >> .gitignore
 # 该操作涉及 git 索引变更，需团队对齐后再做。
+#
+# ─── A2 / M31 — Content Root 可选覆盖 ─────────────────────────────────────
+# WebUI 默认从 <projectRoot>/config/ 加载 semantic-layer/, wiki/, evals/, skills/。
+# 如需覆盖，设定环境变量 LUCY_CONTENT_ROOT（绝对或相对 projectRoot）或下方 paths 块：
+#
+# paths:
+#   content_root: ./content   # 相对 projectRoot（默认值 ./config 也可写成 ./config）
+#   # content_root: /opt/lucy/content   # 或绝对路径
+#
+# 留空 = 使用默认 ./config。Legacy 部署用 `content_root: .` 保持兄弟目录布局。
+# 详见 docs/plans/M31-config-subdir-migration.md。
+# ──────────────────────────────────────────────────────────────────────────
 
 connections:
   mysql-aliyun:

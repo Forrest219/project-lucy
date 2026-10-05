@@ -18,6 +18,7 @@ vi.mock("../ktx", () => ({
 
 let projectRoot: string;
 let previousRoot: string | undefined;
+  let previousContentRoot: string | undefined;
 
 const schemaRelPath = "semantic-layer/mysql-aliyun/_schema/dataforai.yaml";
 const schemaYaml = `tables:
@@ -79,7 +80,9 @@ async function makeProject() {
 beforeEach(async () => {
   projectRoot = await makeProject();
   previousRoot = process.env.KTX_PROJECT_ROOT;
+  previousContentRoot = process.env.LUCY_CONTENT_ROOT;
   process.env.KTX_PROJECT_ROOT = projectRoot;
+  process.env.LUCY_CONTENT_ROOT = ".";
   vi.clearAllMocks();
 });
 

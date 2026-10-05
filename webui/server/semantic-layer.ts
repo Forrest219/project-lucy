@@ -9,6 +9,7 @@ import type { AuthoredText, Column, Join, ManifestSchemaSummary, Measure, Segmen
 import { previewOverlayUpdate } from "./overlay";
 import { resolveEffectivePermissionsForAdmin } from "./proxy/acl.js";
 import { readConnections } from "./project";
+import { loadContentPaths } from "./paths";
 import { stripManifestOnlyColumnKeys } from "./semantic-overlay-sanitize";
 
 const TABLE_KEYS = new Set(["table", "descriptions", "grain", "columns", "measures", "segments", "joins"]);
@@ -246,13 +247,14 @@ function schemaRelPath(conn: string, schema: string): string {
 }
 
 async function readYamlDocument(projectRoot: string, relPath: string): Promise<{ doc: Document; text: string }> {
-  const absPath = await assertReadable(projectRoot, relPath);
+  const paths = await loadContentPaths();
+  const absPath = await assertReadable(paths, projectRoot, relPath);
   const text = await readFile(absPath, "utf8");
   return { doc: parseYaml(text, relPath), text };
 }
 
 async function listSchemaFiles(projectRoot: string): Promise<SchemaFile[]> {
-  const base = path.join(projectRoot, "semantic-layer");
+  const base = (await loadContentPaths()).semanticLayer;
   const connections = await readdir(base, { withFileTypes: true }).catch(() => []);
   const files: SchemaFile[] = [];
 
@@ -300,7 +302,7 @@ async function readOverlay(projectRoot: string, conn: string, table: string): Pr
 }
 
 async function statOverlay(projectRoot: string, conn: string, table: string): Promise<Date | null> {
-  const absPath = path.join(projectRoot, "semantic-layer", conn, `${table}.yaml`);
+  const absPath = path.join((await loadContentPaths()).semanticLayer, conn, `${table}.yaml`);
   try {
     const s = await stat(absPath);
     return s.mtime;

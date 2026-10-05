@@ -31,6 +31,7 @@ cases:
 
 let projectRoot: string;
 let previousRoot: string | undefined;
+  let previousContentRoot: string | undefined;
 let previousDb: string | undefined;
 
 async function seedRun(id: number, startedAt: string, passCount: number, failCount: number) {
@@ -47,8 +48,10 @@ async function seedRun(id: number, startedAt: string, passCount: number, failCou
 beforeEach(async () => {
   projectRoot = await mkdtemp(path.join(os.tmpdir(), "ktx-eval-api-contract-"));
   previousRoot = process.env.KTX_PROJECT_ROOT;
+  previousContentRoot = process.env.LUCY_CONTENT_ROOT;
   previousDb = process.env.LUCY_EVAL_DB;
   process.env.KTX_PROJECT_ROOT = projectRoot;
+  process.env.LUCY_CONTENT_ROOT = ".";
   process.env.LUCY_EVAL_DB = path.join(projectRoot, ".ktx-ui", "eval", "runs.sqlite");
   resetEvalDb();
 
@@ -62,6 +65,8 @@ afterEach(async () => {
   resetEvalDb();
   if (previousRoot === undefined) delete process.env.KTX_PROJECT_ROOT;
   else process.env.KTX_PROJECT_ROOT = previousRoot;
+    if (previousContentRoot === undefined) delete process.env.LUCY_CONTENT_ROOT;
+    else process.env.LUCY_CONTENT_ROOT = previousContentRoot;
   if (previousDb === undefined) delete process.env.LUCY_EVAL_DB;
   else process.env.LUCY_EVAL_DB = previousDb;
   await rm(projectRoot, { recursive: true, force: true });

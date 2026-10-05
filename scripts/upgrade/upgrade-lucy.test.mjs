@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import {
@@ -40,7 +42,7 @@ test("fullVolumeName prefixes compose project name", () => {
 test("resolveComposeProjectName defaults to cwd basename", () => {
   const prev = process.env.COMPOSE_PROJECT_NAME;
   delete process.env.COMPOSE_PROJECT_NAME;
-  assert.equal(resolveComposeProjectName(repoRoot), "workspace");
+  assert.equal(resolveComposeProjectName(repoRoot), path.basename(repoRoot));
   if (prev === undefined) delete process.env.COMPOSE_PROJECT_NAME;
   else process.env.COMPOSE_PROJECT_NAME = prev;
 });
@@ -74,4 +76,23 @@ test("buildPreserveCheckScript covers all preserve rel paths", () => {
   for (const rel of PRESERVE_REL_PATHS) {
     assert.match(script, new RegExp(rel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
+});
+
+test("upgrade-lucy.sh avoids bash 4-only syntax (stock macOS bash 3.2 compatible)", () => {
+  const src = readFileSync(path.join(repoRoot, "scripts/upgrade/upgrade-lucy.sh"), "utf8");
+  assert.doesNotMatch(src, /^\s*readarray\b/m, "readarray requires bash 4; use a while-read loop");
+  assert.doesNotMatch(src, /^\s*mapfile\b/m, "mapfile requires bash 4; use a while-read loop");
+  assert.doesNotMatch(src, /\[\s*-\d+\s*\]/, "negative array subscripts require bash 4.3+");
+});
+
+test("upgrade-lucy.sh parses under stock macOS bash 3.2 when available", () => {
+  let versionOut;
+  try {
+    versionOut = execFileSync("/bin/bash", ["-c", "echo $BASH_VERSION"], { encoding: "utf8" }).trim();
+  } catch {
+    return; // /bin/bash absent (non-macOS host): static assertions above still apply
+  }
+  const match = versionOut.match(/^(\d+)\.(\d+)/);
+  if (!match || Number(match[1]) >= 4) return; // only gate when host ships bash 3.x
+  execFileSync("/bin/bash", ["-n", path.join(repoRoot, "scripts/upgrade/upgrade-lucy.sh")]);
 });

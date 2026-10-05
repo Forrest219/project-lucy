@@ -5,6 +5,19 @@
 
 Vibe coding 双核角色协作（thinker / builder）的可选完整交付流水线见 [`docs/agent-pipeline.md`](docs/agent-pipeline.md)，按需调用，非必经流程。
 
+## 环境与交付背景（勿混淆）
+
+| 环境 | 硬件 / 平台 | 用途 |
+|---|---|---|
+| 开发环境 | Apple Silicon Mac（arm64）+ Docker Desktop | 本地开发、demo、冒烟验证、出客户镜像包 |
+| 客户环境 | amd64（x86_64）服务器，**Kubernetes** 部署 | 最终交付与运行 |
+
+由此派生的硬约束：
+
+- **客户镜像是 linux/amd64 单架构**，但构建发生在 arm64 Mac 上：允许 `lucy-amd64` builder + QEMU 跨架构构建，**必须**完整过 G1–G4 硬门禁（ELF 架构门禁不得以元数据代替），禁止 `FROM --platform=$BUILDPLATFORM`，禁止 `docker buildx create --use`（会污染本机 demo 默认 builder）。口径见 [`docs/specs/lucy-customer-amd64-offline-delivery-spec.md`](docs/specs/lucy-customer-amd64-offline-delivery-spec.md) v0.3+ 与 [`docs/runbooks/customer-amd64-image-build-checklist.md`](docs/runbooks/customer-amd64-image-build-checklist.md)。
+- **本地脚本必须兼容 stock macOS bash 3.2**（`readarray` / `mapfile` / 负数数组下标均不可用），相关回归门禁见 `scripts/upgrade/upgrade-lucy.test.mjs`。
+- 单机 compose 栈（`deploy/compose/`）是开发/演示与升级验证环境，**不是**客户交付形态；客户交付以 [`deploy/k8s/helm/lucy/`](deploy/k8s/helm/lucy/) Chart + amd64 镜像为准（契约见 `deploy/k8s/K8S_CONTRACT.md`）。
+
 ## KTX 依赖边界与开发优先级
 
 KTX 是 Lucy 引用的上游依赖。本仓库只使用 KTX 提供的 CLI、接口和配置约定，

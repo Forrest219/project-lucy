@@ -109,9 +109,13 @@ COMPOSE=(docker compose)
 for compose_file in "${COMPOSE_FILES[@]}"; do
   COMPOSE+=(-f "${compose_file}")
 done
-COMPOSE_FILE="${COMPOSE_FILES[-1]}"
+# bash 3.2 (stock macOS) lacks negative array subscripts and readarray.
+COMPOSE_FILE="${COMPOSE_FILES[$((${#COMPOSE_FILES[@]} - 1))]}"
 
-readarray -t VOLUME_INFO < <(node "${ROOT}/scripts/upgrade/upgrade-lucy-cli.mjs" volume-info --compose-file "${COMPOSE_FILE}")
+VOLUME_INFO=()
+while IFS= read -r volume_info_line; do
+  VOLUME_INFO+=("${volume_info_line}")
+done < <(node "${ROOT}/scripts/upgrade/upgrade-lucy-cli.mjs" volume-info --compose-file "${COMPOSE_FILE}")
 VOLUME_KIND="${VOLUME_INFO[0]}"
 VOLUME_LOGICAL="${VOLUME_INFO[1]:-}"
 VOLUME_FULL="${VOLUME_INFO[2]:-}"
