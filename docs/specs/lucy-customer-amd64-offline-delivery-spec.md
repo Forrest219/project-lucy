@@ -112,10 +112,11 @@ customer-amd64-offline-package/
 ├── customer-config/
 │   ├── README.md                      # 来自 customer-config.example/README.md
 │   ├── ktx.yaml                       # 来自 customer-config.example/ktx.yaml
-│   ├── semantic-layer/                # 来自 customer-config.example/semantic-layer/
-│   ├── wiki/                          # 来自 customer-config.example/wiki/
-│   ├── evals/                         # 来自 customer-config.example/evals/
-│   ├── skills/                        # 来自 customer-config.example/skills/
+│   ├── config/                        # Lucy content root (M31)
+│   │   ├── semantic-layer/            # 来自 customer-config.example/config/semantic-layer/
+│   │   ├── wiki/                      # 来自 customer-config.example/config/wiki/
+│   │   ├── evals/                     # 来自 customer-config.example/config/evals/
+│   │   └── skills/                    # 来自 customer-config.example/config/skills/
 │   └── webui/config/access.yaml       # 来自 customer-config.example/webui/config/
 ├── docs/
 │   ├── lucy-customer-deployment-guide.md  # 来自 docs/runbooks/customer-deployment-guide.md

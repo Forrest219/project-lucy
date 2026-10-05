@@ -108,10 +108,10 @@ cp deploy/compose/docker-compose.customer-config.yml $PKG/
 cp customer-config.example/README.md   $PKG/customer-config/
 cp customer-config.example/ktx.yaml    $PKG/customer-config/
 
-# semantic-layer / wiki / evals / skills / webui/config 整目录
-for d in semantic-layer wiki evals skills; do
-  test -d customer-config.example/$d && cp -R customer-config.example/$d $PKG/customer-config/
-done
+# A2 (M31): semantic-layer / wiki / evals / skills live under
+# customer-config.example/config/. The webui/ dir keeps its old shape
+# (access.yaml is still at webui/config/access.yaml).
+test -d customer-config.example/config && cp -R customer-config.example/config $PKG/customer-config/
 test -d customer-config.example/webui && cp -R customer-config.example/webui $PKG/customer-config/
 
 # .ktx/secrets 占位目录
