@@ -6,6 +6,7 @@ import { previewDiff } from "../diff.js";
 import { getAccessConfig } from "../proxy/identity.js";
 import { SKILL_SEGMENT_RE } from "./identifiers.js";
 import { getSkillByUri, invalidateSkillsCache, parseSkillMarkdown } from "./loader.js";
+import { loadContentPaths } from "../paths.js";
 import { validateSkill } from "./validator.js";
 import type { SkillAsset, SkillStatus, SkillValidationResult, SkillWithValidation } from "./types.js";
 
@@ -166,7 +167,11 @@ export function assembleSkillMarkdown(input: SkillWriteInput): string {
 }
 
 async function parseOrThrow(projectRoot: string, raw: string, filePath: string): Promise<SkillAsset> {
-  const parsed = parseSkillMarkdown(raw, filePath, projectRoot);
+  // Use the resolved skills root so domain inference (`parts[1]`,
+  // `parts.indexOf("domains")`) operates on content-dir-relative paths
+  // regardless of where the skills tree physically lives.
+  const skillsBase = (await loadContentPaths()).skills;
+  const parsed = parseSkillMarkdown(raw, filePath, skillsBase);
   if (!parsed?.name) {
     throw new SkillWriteError("Failed to parse YAML frontmatter or missing required 'name' field");
   }
@@ -191,16 +196,18 @@ async function prepareCreateSkillFile(
 
   if (typeof input.rawContent === "string") {
     raw = input.rawContent;
-    parsed = await parseOrThrow(projectRoot, raw, path.join(projectRoot, "skills", "_tmp", "incoming.md"));
+    const skillsDir = (await loadContentPaths()).skills;
+    parsed = await parseOrThrow(projectRoot, raw, path.join(skillsDir, "_tmp", "incoming.md"));
     relPath = skillRelativePath(parsed.domain, parsed.name);
-    parsed = await parseOrThrow(projectRoot, raw, path.join(projectRoot, relPath));
+    parsed = await parseOrThrow(projectRoot, raw, path.join(skillsDir, relPath.slice("skills/".length)));
     if ((input.name && parsed.name !== input.name.trim()) || (input.domain && parsed.domain !== input.domain.trim())) {
       throw new SkillWriteError("frontmatter name/domain must match the create request");
     }
   } else {
     relPath = skillRelativePath(input.domain ?? "", input.name ?? "");
     raw = assembleSkillMarkdown(input);
-    parsed = await parseOrThrow(projectRoot, raw, path.join(projectRoot, relPath));
+    const skillsDir = (await loadContentPaths()).skills;
+    parsed = await parseOrThrow(projectRoot, raw, path.join(skillsDir, relPath.slice("skills/".length)));
     if (
       parsed.domain !== assertSegment("domain", input.domain ?? "") ||
       parsed.name !== assertSegment("name", input.name ?? "")
@@ -257,7 +264,8 @@ async function prepareUpdateSkillFile(
     rawContent: input.rawContent
   };
   const raw = assembleSkillMarkdown(merged);
-  const parsed = await parseOrThrow(projectRoot, raw, path.join(projectRoot, relPath));
+  const skillsDir = (await loadContentPaths()).skills;
+  const parsed = await parseOrThrow(projectRoot, raw, path.join(skillsDir, relPath.slice("skills/".length)));
   if (parsed.uri !== oldUri) {
     throw new SkillWriteError("skill_identity_immutable", 409);
   }

@@ -2,7 +2,10 @@
 //
 // Builds a strict allow-listed zip of the project. Hard rules:
 //   - Collect from the allow list (ktx.yaml, semantic-layer/, wiki/, evals/,
-//     skills/), not a recursive project-root walk.
+//     skills/), not a recursive project-root walk. (Under A2 the content
+//     dirs live under the configurable content root, default `<projectRoot>/config/`. The
+//     allow function compares against the resolved relative prefix so the
+//     legacy sibling layout and the new layout both work.)
 //   - Use lstat everywhere; never follow symlinks.
 //   - Skip obvious secret-bearing paths and patterns (.ktx/secrets/**,
 //     .env, *.pem, *.key, *.p12, node_modules/**, .git/**, raw-sources/**,
@@ -17,6 +20,8 @@ import path from "node:path";
 import { parseDocument, stringify as stringifyYaml, Scalar } from "yaml";
 import { isMap, isSeq, isScalar, type Document, type Node } from "yaml";
 import { buildStoredZip } from "./proxy/zip-store.js";
+import { loadContentPaths } from "./paths.js";
+import type { ContentPaths } from "./paths.js";
 
 const MAX_EXPORT_FILES = 200;
 const MAX_EXPORT_TOTAL_BYTES = 16 * 1024 * 1024;
@@ -87,7 +92,9 @@ type CollectEntry = {
 type FileAllowedFn = (relPath: string) => { allowed: boolean; reason?: string };
 
 function makeFileAllowedFn(
-  options: SemanticAssetExportRequest
+  options: SemanticAssetExportRequest,
+  contentPaths: ContentPaths,
+  projectRoot: string
 ): FileAllowedFn {
   const scopeConn = options.scope?.connectionId;
   const scopeSchema = options.scope?.schema;
@@ -95,6 +102,16 @@ function makeFileAllowedFn(
   const includeEvals = options.includeEvals === true;
   const includeSkills = options.includeSkills === true;
   const includeKtx = options.includeSanitizedKtxYaml !== false;
+
+  // Project-root-relative prefixes for the four content dirs. Computed
+  // from ContentPaths so legacy sibling layout (`configDir == projectRoot`)
+  // and the new `config/` subdir layout both match correctly.
+  const toProjectRel = (absDir: string): string =>
+    path.relative(projectRoot, absDir).split(path.sep).join("/") || ".";
+  const semanticRel = toProjectRel(contentPaths.semanticLayer);
+  const wikiRel = toProjectRel(contentPaths.wiki);
+  const evalsRel = toProjectRel(contentPaths.evals);
+  const skillsRel = toProjectRel(contentPaths.skills);
 
   return (relPath: string) => {
     const normalized = relPath.split(path.sep).join("/");
@@ -115,9 +132,9 @@ function makeFileAllowedFn(
         ? { allowed: true }
         : { allowed: false, reason: "ktx-yaml-disabled" };
     }
-    if (normalized.startsWith("semantic-layer/")) {
+    if (normalized === semanticRel || normalized.startsWith(`${semanticRel}/`)) {
       if (scopeConn) {
-        const expectedPrefix = `semantic-layer/${scopeConn}/`;
+        const expectedPrefix = `${semanticRel}/${scopeConn}/`;
         if (!normalized.startsWith(expectedPrefix)) {
           return { allowed: false, reason: "scope-mismatch-connection" };
         }
@@ -135,21 +152,21 @@ function makeFileAllowedFn(
       }
       return { allowed: true };
     }
-    if (normalized.startsWith("wiki/")) {
+    if (normalized === wikiRel || normalized.startsWith(`${wikiRel}/`)) {
       if (!includeWiki) return { allowed: false, reason: "wiki-disabled" };
       if (!MARKDOWN_EXTENSIONS.has(path.extname(normalized).toLowerCase())) {
         return { allowed: false, reason: "extension-not-allowed" };
       }
       return { allowed: true };
     }
-    if (normalized.startsWith("evals/")) {
+    if (normalized === evalsRel || normalized.startsWith(`${evalsRel}/`)) {
       if (!includeEvals) return { allowed: false, reason: "evals-disabled" };
       if (!YAML_EXTENSIONS.has(path.extname(normalized).toLowerCase())) {
         return { allowed: false, reason: "extension-not-allowed" };
       }
       return { allowed: true };
     }
-    if (normalized.startsWith("skills/")) {
+    if (normalized === skillsRel || normalized.startsWith(`${skillsRel}/`)) {
       if (!includeSkills) return { allowed: false, reason: "skills-disabled" };
       // skills/ is always opt-in and currently records the exclusion reason;
       // we do not yet support skill content export in M19.
@@ -279,17 +296,22 @@ export async function exportSemanticAssetPackage(
   projectRoot: string,
   request: SemanticAssetExportRequest
 ): Promise<SemanticAssetExportResponse> {
-  const allowed = makeFileAllowedFn(request);
+  const contentPaths = await loadContentPaths();
+  const allowed = makeFileAllowedFn(request, contentPaths, projectRoot);
   const entries: CollectEntry[] = [];
   const excluded: SemanticAssetExcludedFile[] = [];
 
   // Walk the allow-listed roots. The walk is driven by the allow function, so
   // a directory whose children are all denied simply produces no entries.
+  // Roots come from ContentPaths so both legacy sibling layout and the new
+  // `<projectRoot>/config/` layout resolve correctly.
+  const toProjectRel = (absDir: string): string =>
+    path.relative(projectRoot, absDir).split(path.sep).join("/") || ".";
   const roots: Array<{ rel: string; abs: string }> = [
-    { rel: "semantic-layer", abs: path.resolve(projectRoot, "semantic-layer") },
-    { rel: "wiki", abs: path.resolve(projectRoot, "wiki") },
-    { rel: "evals", abs: path.resolve(projectRoot, "evals") },
-    { rel: "skills", abs: path.resolve(projectRoot, "skills") }
+    { rel: toProjectRel(contentPaths.semanticLayer), abs: contentPaths.semanticLayer },
+    { rel: toProjectRel(contentPaths.wiki), abs: contentPaths.wiki },
+    { rel: toProjectRel(contentPaths.evals), abs: contentPaths.evals },
+    { rel: toProjectRel(contentPaths.skills), abs: contentPaths.skills }
   ];
 
   // Enumerate every project file (cheap lstat walk) and let the allow

@@ -3,6 +3,7 @@ import path from "node:path";
 import { Document, isMap, parseDocument } from "yaml";
 import type { Measure, Segment } from "./model";
 import { assertReadable } from "./fs-safe";
+import { loadContentPaths } from "./paths";
 
 export type OverlayUpdate = {
   grain?: string[];
@@ -30,7 +31,8 @@ function parseOverlay(text: string): Document {
 
 async function readOverlayText(projectRoot: string, relPath: string): Promise<string> {
   try {
-    const absPath = await assertReadable(projectRoot, relPath);
+    const paths = await loadContentPaths();
+    const absPath = await assertReadable(paths, projectRoot, relPath);
     return await readFile(absPath, "utf8");
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {

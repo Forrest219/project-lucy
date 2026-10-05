@@ -62,6 +62,7 @@ const KTX_YAML = `connections:
 describe("Lucy Governed Skill A/B Test Benchmark Execution (Spec 132)", () => {
   let projectRoot: string;
   let previousRoot: string | undefined;
+  let previousContentRoot: string | undefined;
   let upstreamPort: number;
   let proxyPort: number;
   let upstreamServer: ReturnType<typeof createServer>;
@@ -73,8 +74,11 @@ describe("Lucy Governed Skill A/B Test Benchmark Execution (Spec 132)", () => {
     closeAuditDb();
 
     previousRoot = process.env.KTX_PROJECT_ROOT;
+
+    previousContentRoot = process.env.LUCY_CONTENT_ROOT;
     projectRoot = await mkdtemp(path.join(os.tmpdir(), "lucy-abtest-"));
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.KTX_INTERNAL_TOKEN = INTERNAL_TOKEN;
     process.env.LUCY_AUDIT_DB = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
 
@@ -205,6 +209,8 @@ ROE = 净利润率 * 总资产周转率 * 权益乘数
     closeAuditDb();
     if (previousRoot === undefined) delete process.env.KTX_PROJECT_ROOT;
     else process.env.KTX_PROJECT_ROOT = previousRoot;
+    if (previousContentRoot === undefined) delete process.env.LUCY_CONTENT_ROOT;
+    else process.env.LUCY_CONTENT_ROOT = previousContentRoot;
     await new Promise<void>((resolve) => upstreamServer.close(() => resolve()));
     await new Promise<void>((resolve) => proxyServer.close(() => resolve()));
     await rm(projectRoot, { recursive: true, force: true });

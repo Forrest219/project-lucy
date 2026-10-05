@@ -33,6 +33,7 @@ vi.mock("../ktx", async () => {
 let projectRoot: string;
 let auditDbPath: string;
 let previousRoot: string | undefined;
+  let previousContentRoot: string | undefined;
 let previousAuditDb: string | undefined;
 
 function baseYaml(): string {
@@ -79,6 +80,7 @@ async function buildFreshServer() {
 beforeEach(async () => {
   vi.resetModules();
   previousRoot = process.env.KTX_PROJECT_ROOT;
+  previousContentRoot = process.env.LUCY_CONTENT_ROOT;
   previousAuditDb = process.env.LUCY_AUDIT_DB;
   vi.clearAllMocks();
 });
@@ -103,6 +105,7 @@ describe("POST /api/connections/:connId/remove", () => {
   it("defaults dryRun:true and never modifies ktx.yaml", async () => {
     await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();
@@ -129,6 +132,7 @@ describe("POST /api/connections/:connId/remove", () => {
   it("dryRun:false removes the connection from ktx.yaml", async () => {
     await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();
@@ -153,6 +157,7 @@ describe("POST /api/connections/:connId/remove", () => {
   it("returns 404 CONNECTION_NOT_FOUND for unknown ids", async () => {
     await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();
@@ -172,6 +177,7 @@ describe("POST /api/connections/:connId/remove", () => {
   it("returns 400 CONNECTION_DELETE_SECRET_NOT_ELIGIBLE for inline passwords", async () => {
     await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();
@@ -192,6 +198,7 @@ describe("POST /api/connections/:connId/remove", () => {
   it("writes a connection_delete audit row", async () => {
     await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();

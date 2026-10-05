@@ -36,6 +36,7 @@ describe("Spec 147 static gates", () => {
   describe("SC-147-05 status reasons", () => {
     let projectRoot: string;
     let previousRoot: string | undefined;
+  let previousContentRoot: string | undefined;
     const identity: Identity = {
       userId: "acl_147_user",
       tokenLabel: "t",
@@ -62,8 +63,10 @@ describe("Spec 147 static gates", () => {
 
     beforeEach(async () => {
       previousRoot = process.env.KTX_PROJECT_ROOT;
+      previousContentRoot = process.env.LUCY_CONTENT_ROOT;
       projectRoot = await mkdtemp(path.join(os.tmpdir(), "skill-147-acl-"));
       process.env.KTX_PROJECT_ROOT = projectRoot;
+      process.env.LUCY_CONTENT_ROOT = ".";
       await mkdir(path.join(projectRoot, "webui", "config"), { recursive: true });
       await writeFile(path.join(projectRoot, "ktx.yaml"), "connections: {}\n");
       await writeFile(
@@ -89,6 +92,8 @@ roles:
     afterEach(async () => {
       if (previousRoot === undefined) delete process.env.KTX_PROJECT_ROOT;
       else process.env.KTX_PROJECT_ROOT = previousRoot;
+    if (previousContentRoot === undefined) delete process.env.LUCY_CONTENT_ROOT;
+    else process.env.LUCY_CONTENT_ROOT = previousContentRoot;
       invalidateAccessConfigCache();
       await rm(projectRoot, { recursive: true, force: true });
     });

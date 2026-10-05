@@ -27,6 +27,7 @@ import { buildServer } from "../index";
 
 let projectRoot: string;
 let previousRoot: string | undefined;
+  let previousContentRoot: string | undefined;
 
 const SECRET_KTX = `connections:
   customer-db:
@@ -113,12 +114,15 @@ async function buildFreshServer() {
 beforeEach(async () => {
   vi.resetModules();
   previousRoot = process.env.KTX_PROJECT_ROOT;
+  previousContentRoot = process.env.LUCY_CONTENT_ROOT;
   vi.clearAllMocks();
 });
 
 afterEach(async () => {
   if (previousRoot === undefined) delete process.env.KTX_PROJECT_ROOT;
   else process.env.KTX_PROJECT_ROOT = previousRoot;
+    if (previousContentRoot === undefined) delete process.env.LUCY_CONTENT_ROOT;
+    else process.env.LUCY_CONTENT_ROOT = previousContentRoot;
   if (projectRoot) await rm(projectRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
 });
 
@@ -168,6 +172,7 @@ describe("POST /api/semantic-assets/export", () => {
   it("builds a sanitized zip without secrets or ktx.yaml plaintext credentials", async () => {
     projectRoot = await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     await writeFile(
       path.join(projectRoot, "semantic-layer", "customer-db", "debug.json"),
       "{\"token\":\"secret\"}\n",
@@ -263,7 +268,7 @@ describe("POST /api/semantic-assets/export", () => {
   it("excludes symlinked files (lstat, not stat) and never follows them in the zip", async () => {
     projectRoot = await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
-
+    process.env.LUCY_CONTENT_ROOT = ".";
     // Make the wiki/global/context.md a symlink to a file OUTSIDE the
     // project root. The exporter must not follow it.
     const outside = path.join(os.tmpdir(), `lucy-m19-export-outside-${Date.now()}`);
@@ -302,7 +307,7 @@ describe("POST /api/semantic-assets/export", () => {
   it("respects includeWiki/includeEvals/includeSkills toggles", async () => {
     projectRoot = await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
-
+    process.env.LUCY_CONTENT_ROOT = ".";
     const app = await buildFreshServer();
     await app.ready();
 
@@ -343,7 +348,7 @@ describe("POST /api/semantic-assets/export", () => {
   it("scopes the export to a single connection when scope.connectionId is provided", async () => {
     projectRoot = await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
-
+    process.env.LUCY_CONTENT_ROOT = ".";
     // Add a second connection's semantic-layer files that should be excluded.
     await mkdir(path.join(projectRoot, "semantic-layer", "other-db", "_schema"), { recursive: true });
     await writeFile(
@@ -372,7 +377,7 @@ describe("POST /api/semantic-assets/export", () => {
   it("download route returns 404 for unknown export ids and never returns path-arbitrary files", async () => {
     projectRoot = await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
-
+    process.env.LUCY_CONTENT_ROOT = ".";
     const app = await buildFreshServer();
     await app.ready();
     const res = await request(app.server)

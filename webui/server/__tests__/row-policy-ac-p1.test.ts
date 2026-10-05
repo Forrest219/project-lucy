@@ -92,6 +92,7 @@ const SCOPED_EAST_AGENT = `  - id: scoped_agent
 
 let projectRoot: string;
 let previousRoot: string | undefined;
+  let previousContentRoot: string | undefined;
 let previousProven: string | undefined;
 
 function identity(userId: string): Identity {
@@ -122,6 +123,7 @@ async function loadAcl() {
 
 beforeEach(async () => {
   previousRoot = process.env.KTX_PROJECT_ROOT;
+  previousContentRoot = process.env.LUCY_CONTENT_ROOT;
   previousProven = process.env.LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN;
   delete process.env.LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN;
 });
@@ -129,6 +131,8 @@ beforeEach(async () => {
 afterEach(async () => {
   if (previousRoot === undefined) delete process.env.KTX_PROJECT_ROOT;
   else process.env.KTX_PROJECT_ROOT = previousRoot;
+    if (previousContentRoot === undefined) delete process.env.LUCY_CONTENT_ROOT;
+    else process.env.LUCY_CONTENT_ROOT = previousContentRoot;
   if (previousProven === undefined) delete process.env.LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN;
   else process.env.LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN = previousProven;
   if (projectRoot) await rm(projectRoot, { recursive: true, force: true });
@@ -191,6 +195,7 @@ ${BASE_ROLE_TOOLS}`,
     tokens: []`
     ));
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     const { effectivePermissions } = await loadAcl();
 
     const ok = await effectivePermissions(identity("ok_agent"));
@@ -229,6 +234,7 @@ ${BASE_ROLE_TOOLS}`,
     tokens: []`
     ));
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     const { effectivePermissions } = await loadAcl();
 
     const resolved = await effectivePermissions(identity("measure_agent"));
@@ -259,6 +265,7 @@ ${BASE_ROLE_TOOLS}`,
     tokens: []`
     ));
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     const { authorizeAndRewrite } = await loadAcl();
     const args = { connectionId: "warehouse", sourceName: "fin_ledger" };
 
@@ -293,6 +300,7 @@ ${BASE_ROLE_TOOLS}`,
     tokens: []`
     ));
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     const { authorizeAndRewrite } = await loadAcl();
 
     await expect(authorizeAndRewrite(identity("scoped_agent"), "lucy_query", {
@@ -362,6 +370,7 @@ ${BASE_ROLE_TOOLS}`,
     tokens: []`
     ));
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     const { effectivePermissions } = await loadAcl();
 
     const orResolved = await effectivePermissions(identity("or_agent"));
@@ -405,6 +414,7 @@ ${BASE_ROLE_TOOLS}`,
     tokens: []`
     ));
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN = "true";
     const { authorizeAndRewrite } = await loadAcl();
 
@@ -436,6 +446,7 @@ describe("AC-SEC-ROW / BYPASS", () => {
   async function loadScopedProven() {
     projectRoot = await makeProject(accessYaml(SCOPED_EAST_ROLE, SCOPED_EAST_AGENT));
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN = "true";
     return loadAcl();
   }
@@ -510,6 +521,7 @@ describe("AC-SEC-ROW / BYPASS", () => {
   it("BY-06/07/17: unwrapped tools deny on protected source", async () => {
     projectRoot = await makeProject(accessYaml(SCOPED_EAST_ROLE, SCOPED_EAST_AGENT));
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     const { authorizeAndRewrite } = await loadAcl();
     const args = { connectionId: "warehouse", sourceName: "fin_ledger" };
     for (const tool of ["lucy_read_source", "entity_details", "sl_validate", "lucy_freshness"] as const) {
@@ -523,6 +535,7 @@ describe("AC-SEC-ROW / BYPASS", () => {
   it("BY-08: sl_query → tool_absolute_deny", async () => {
     projectRoot = await makeProject(accessYaml(SCOPED_EAST_ROLE, SCOPED_EAST_AGENT));
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     const { authorizeAndRewrite } = await loadAcl();
     await expect(authorizeAndRewrite(identity("scoped_agent"), "sl_query", {
       connectionId: "warehouse",
@@ -533,6 +546,7 @@ describe("AC-SEC-ROW / BYPASS", () => {
   it("BY-09: unproven lucy_query denies on protected source", async () => {
     projectRoot = await makeProject(accessYaml(SCOPED_EAST_ROLE, SCOPED_EAST_AGENT));
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     delete process.env.LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN;
     const { authorizeAndRewrite } = await loadAcl();
     await expect(authorizeAndRewrite(identity("scoped_agent"), "lucy_query", {
@@ -581,6 +595,7 @@ describe("AC-SEC-ROW / BYPASS", () => {
     tokens: []`
     ));
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN = "true";
     const { authorizeAndRewrite, effectivePermissions } = await loadAcl();
 
@@ -657,6 +672,7 @@ describe("AC-SEC-ROW / BYPASS", () => {
     tokens: []`
     ));
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN = "true";
     const { authorizeAndRewrite } = await loadAcl();
 
@@ -706,6 +722,7 @@ describe("AC-SEC-ROW / BYPASS", () => {
   it("BY-18: lucy_explain_query allowed on scoped without forcedFilters (ACL); E1–E5 in mcp-proxy suite", async () => {
     projectRoot = await makeProject(accessYaml(SCOPED_EAST_ROLE, SCOPED_EAST_AGENT));
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     const { authorizeAndRewrite } = await loadAcl();
     const {
       buildExplainForcedPredicateDiagnostics,
@@ -763,6 +780,7 @@ ${BASE_ROLE_TOOLS}`,
     tokens: []`
     ));
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     const { effectivePermissions } = await loadAcl();
     const resolved = await effectivePermissions(identity("measure_agent"));
     expect(resolved.ok).toBe(false);
@@ -888,6 +906,7 @@ measures:
       "utf8"
     );
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     const { effectivePermissions } = await loadAcl();
     const {
       loadSourceFieldCatalog,
@@ -947,6 +966,7 @@ ${BASE_ROLE_TOOLS}`,
     tokens: []`
     ));
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     const { effectivePermissions } = await loadAcl();
     await expect(effectivePermissions(identity("v1_scoped_agent"))).resolves.toEqual({
       ok: false,

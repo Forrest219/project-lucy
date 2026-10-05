@@ -397,6 +397,7 @@ beforeEach(async () => {
   projectRoot = await makeProject();
   prevRoot = process.env.KTX_PROJECT_ROOT;
   process.env.KTX_PROJECT_ROOT = projectRoot;
+  process.env.LUCY_CONTENT_ROOT = ".";
   auditRows.length = 0;
   revokedTokens.length = 0;
   configChangeRows.length = 0;

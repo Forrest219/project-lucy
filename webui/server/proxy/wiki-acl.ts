@@ -2,6 +2,7 @@ import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { parse } from "yaml";
 import { resolveProjectRoot } from "../project.js";
+import { loadContentPaths } from "../paths.js";
 import { effectivePermissions, type EffectivePermissions, type EffectiveSource } from "./acl.js";
 import type { Identity } from "./identity.js";
 
@@ -65,7 +66,7 @@ export async function resolveWikiPage(input: string): Promise<WikiPage | undefin
   const key = canonicalWikiKey(input);
   if (!key) return undefined;
   const projectRoot = await resolveProjectRoot();
-  const wikiRoot = path.join(projectRoot, "wiki");
+  const wikiRoot = (await loadContentPaths()).wiki;
   const filePath = path.join(wikiRoot, key);
   if (!filePath.startsWith(wikiRoot + path.sep)) return undefined;
 
@@ -165,7 +166,7 @@ export async function searchAccessibleWikiPages(identity: Identity, query: strin
   if (!normalizedQuery) return [];
   const terms = normalizedQuery.split(/\s+/).filter(Boolean);
   const projectRoot = await resolveProjectRoot();
-  const wikiRoot = path.join(projectRoot, "wiki");
+  const wikiRoot = (await loadContentPaths()).wiki;
   let keys: string[];
   try {
     keys = await listMarkdownKeys(wikiRoot);

@@ -20,12 +20,26 @@ import {
   restoreWikiVersion,
   writeWiki
 } from "../wiki";
+import type { ContentPaths } from "../paths";
 import { ForbiddenPathError, safeMkdir, safeRemove } from "../fs-safe";
 import { buildServer } from "../index";
 import { resetAuditDbForTests } from "../admin/audit";
 
 let projectRoot: string;
 let previousRoot: string | undefined;
+  let previousContentRoot: string | undefined;
+
+/** Legacy sibling layout for fs-safe tests (configDir == projectRoot). */
+function legacyContentPaths(): ContentPaths {
+  return {
+    configDir: projectRoot,
+    semanticLayer: path.join(projectRoot, "semantic-layer"),
+    wiki: path.join(projectRoot, "wiki"),
+    evals: path.join(projectRoot, "evals"),
+    skills: path.join(projectRoot, "skills"),
+    source: "default"
+  };
+}
 
 beforeEach(async () => {
   projectRoot = await mkdtemp(path.join(os.tmpdir(), "ktx-webui-wiki-"));
@@ -33,7 +47,9 @@ beforeEach(async () => {
   await mkdir(path.join(projectRoot, ".ktx-ui"), { recursive: true });
   await writeFile(path.join(projectRoot, "ktx.yaml"), "connections: {}\n", "utf8");
   previousRoot = process.env.KTX_PROJECT_ROOT;
+  previousContentRoot = process.env.LUCY_CONTENT_ROOT;
   process.env.KTX_PROJECT_ROOT = projectRoot;
+  process.env.LUCY_CONTENT_ROOT = ".";
   resetAuditDbForTests();
 });
 
@@ -41,6 +57,8 @@ afterEach(async () => {
   resetAuditDbForTests();
   if (previousRoot === undefined) delete process.env.KTX_PROJECT_ROOT;
   else process.env.KTX_PROJECT_ROOT = previousRoot;
+    if (previousContentRoot === undefined) delete process.env.LUCY_CONTENT_ROOT;
+    else process.env.LUCY_CONTENT_ROOT = previousContentRoot;
   await rm(projectRoot, { recursive: true, force: true });
 });
 
@@ -132,14 +150,14 @@ describe("wiki editor storage", () => {
   it("safeMkdir rejects symlink parent escape through the wiki allowlist", async () => {
     const outside = await mkdtemp(path.join(os.tmpdir(), "ktx-webui-wiki-outside-"));
     await symlink(outside, path.join(projectRoot, "wiki", "linked"));
-    await expect(safeMkdir(projectRoot, "wiki/linked/escape")).rejects.toBeInstanceOf(ForbiddenPathError);
+    await expect(safeMkdir(legacyContentPaths(), projectRoot, "wiki/linked/escape")).rejects.toBeInstanceOf(ForbiddenPathError);
     await rm(outside, { recursive: true, force: true });
   });
 
   it("safeRemove rejects symlink removal through the wiki allowlist", async () => {
     const outside = await mkdtemp(path.join(os.tmpdir(), "ktx-webui-wiki-outside-"));
     await symlink(path.join(outside, "snapshot.md"), path.join(projectRoot, "wiki", "linked.md"));
-    await expect(safeRemove(projectRoot, "wiki/linked.md")).rejects.toBeInstanceOf(ForbiddenPathError);
+    await expect(safeRemove(legacyContentPaths(), projectRoot, "wiki/linked.md")).rejects.toBeInstanceOf(ForbiddenPathError);
     await rm(outside, { recursive: true, force: true });
   });
 
@@ -196,6 +214,7 @@ describe("wiki editor storage", () => {
     await writeFile(path.join(projectRoot, "ktx.yaml"), "connections: {}\n", "utf8");
     const previousProjectRoot = process.env.KTX_PROJECT_ROOT;
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     const app = buildServer();
     try {
       const created = await app.inject({
@@ -269,6 +288,7 @@ describe("wiki editor storage", () => {
     await writeFile(path.join(projectRoot, "ktx.yaml"), "connections: {}\n", "utf8");
     const previousProjectRoot = process.env.KTX_PROJECT_ROOT;
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     const app = buildServer();
     try {
       const created = await app.inject({
@@ -378,6 +398,7 @@ describe("wiki editor storage", () => {
     await writeWiki(projectRoot, "global/api-delete-doc.md", { content: "# API Delete\n" });
     const previousProjectRoot = process.env.KTX_PROJECT_ROOT;
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     const app = buildServer();
     try {
       const deleted = await app.inject({
@@ -418,6 +439,7 @@ describe("wiki editor storage", () => {
     await writeFile(path.join(projectRoot, "ktx.yaml"), "connections: {}\n", "utf8");
     const previousProjectRoot = process.env.KTX_PROJECT_ROOT;
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     const app = buildServer();
     try {
       const response = await app.inject({
@@ -551,6 +573,7 @@ describe("wiki editor storage", () => {
     await writeFile(path.join(projectRoot, "ktx.yaml"), "connections: {}\n", "utf8");
     const previousProjectRoot = process.env.KTX_PROJECT_ROOT;
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     const app = buildServer();
     try {
       const preview = await app.inject({
@@ -688,6 +711,7 @@ describe("wiki editor storage", () => {
     await writeFile(path.join(projectRoot, "ktx.yaml"), "connections: {}\n", "utf8");
     const previousProjectRoot = process.env.KTX_PROJECT_ROOT;
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     const app = buildServer();
     try {
       const saved = await app.inject({
@@ -833,6 +857,7 @@ describe("wiki document move (M56 UX-WIKI-011)", () => {
     await writeWiki(projectRoot, "global/api-move.md", { content: "# API Move\n" });
     const previousProjectRoot = process.env.KTX_PROJECT_ROOT;
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     const app = buildServer();
     try {
       const preview = await app.inject({

@@ -28,6 +28,7 @@ import { buildServer } from "../index";
 
 let projectRoot: string;
 let previousRoot: string | undefined;
+  let previousContentRoot: string | undefined;
 
 const BASE_KTX_YAML = `connections:
   customer-db:
@@ -77,12 +78,15 @@ async function buildFreshServer() {
 beforeEach(async () => {
   vi.resetModules();
   previousRoot = process.env.KTX_PROJECT_ROOT;
+  previousContentRoot = process.env.LUCY_CONTENT_ROOT;
   vi.clearAllMocks();
 });
 
 afterEach(async () => {
   if (previousRoot === undefined) delete process.env.KTX_PROJECT_ROOT;
   else process.env.KTX_PROJECT_ROOT = previousRoot;
+    if (previousContentRoot === undefined) delete process.env.LUCY_CONTENT_ROOT;
+    else process.env.LUCY_CONTENT_ROOT = previousContentRoot;
   if (projectRoot) {
     await rm(projectRoot, {
       recursive: true,
@@ -109,7 +113,7 @@ describe("POST /api/semantic-assets/publish", () => {
   it("returns reindexing immediately, finishes async reindex, and updates release status to published", async () => {
     projectRoot = await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
-
+    process.env.LUCY_CONTENT_ROOT = ".";
     // Slow reindex to prove the response is not blocked.
     let resolveReindex: () => void = () => undefined;
     const reindexDone = new Promise<void>((r) => {
@@ -182,7 +186,7 @@ describe("POST /api/semantic-assets/publish", () => {
   it("marks the release as reindex_failed when the reindex subprocess returns non-zero", async () => {
     projectRoot = await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
-
+    process.env.LUCY_CONTENT_ROOT = ".";
     vi.doMock("../ktx", async () => {
       const actual = await vi.importActual<typeof import("../ktx")>("../ktx");
       return {
@@ -228,7 +232,7 @@ describe("POST /api/semantic-assets/publish", () => {
   it("returns 409 PUBLISH_IN_PROGRESS when a second publish runs while the first lock is held", async () => {
     projectRoot = await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
-
+    process.env.LUCY_CONTENT_ROOT = ".";
     // Hold the publish lock by pre-creating it on disk.
     await mkdir(path.join(projectRoot, ".ktx-ui"), { recursive: true });
     await writeFile(
@@ -265,7 +269,7 @@ describe("POST /api/semantic-assets/publish", () => {
   it("keeps the publish lock while async reindex is still running", async () => {
     projectRoot = await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
-
+    process.env.LUCY_CONTENT_ROOT = ".";
     let resolveReindex: () => void = () => undefined;
     const reindexDone = new Promise<void>((resolve) => {
       resolveReindex = resolve;
@@ -315,7 +319,7 @@ describe("POST /api/semantic-assets/publish", () => {
   it("returns 409 VALIDATION_GATE_FAILED when an overwrite is needed and confirmOverwrite is missing", async () => {
     projectRoot = await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
-
+    process.env.LUCY_CONTENT_ROOT = ".";
     // Pre-populate the overlay target so the publish path will demand
     // confirmOverwrite.
     await writeFile(
@@ -360,7 +364,7 @@ describe("POST /api/semantic-assets/publish", () => {
   it("blocks publish when re-run validate gate fails on a tampered snapshot", async () => {
     projectRoot = await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
-
+    process.env.LUCY_CONTENT_ROOT = ".";
     // The validate HTTP route never calls `ktx sl validate` — only the
     // publish re-validation does. So the mocked `validateSource` here only
     // runs at publish time. Make it fail so the gate blocks the promote.
@@ -408,7 +412,7 @@ describe("POST /api/semantic-assets/publish", () => {
   it("blocks manifest-only publish when the re-run validate gate fails", async () => {
     projectRoot = await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
-
+    process.env.LUCY_CONTENT_ROOT = ".";
     const validateSource = vi.fn(async () => ({
       ok: false,
       exitCode: 1,
@@ -455,7 +459,7 @@ describe("POST /api/semantic-assets/publish", () => {
   it("refuses to promote when an existing target is a symlink", async () => {
     projectRoot = await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
-
+    process.env.LUCY_CONTENT_ROOT = ".";
     // Make the overlay target a symlink.
     const realTarget = path.join(projectRoot, "real-overlay.yaml");
     await writeFile(realTarget, "name: international_country_metrics\n", "utf8");
@@ -492,7 +496,7 @@ describe("POST /api/semantic-assets/publish", () => {
   it("release sidecar never stores uploaded YAML content as a `content` field", async () => {
     projectRoot = await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
-
+    process.env.LUCY_CONTENT_ROOT = ".";
     vi.doMock("../ktx", async () => {
       const actual = await vi.importActual<typeof import("../ktx")>("../ktx");
       return {

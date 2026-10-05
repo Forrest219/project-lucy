@@ -71,6 +71,7 @@ defaults:
     "LUCY_PROXY_UPSTREAM_PORT"
   ]) previousEnv[key] = process.env[key];
   process.env.KTX_PROJECT_ROOT = projectRoot;
+  process.env.LUCY_CONTENT_ROOT = ".";
   process.env.LUCY_AUDIT_DB = auditDbPath;
   process.env.KTX_INTERNAL_TOKEN = INTERNAL_TOKEN;
 });

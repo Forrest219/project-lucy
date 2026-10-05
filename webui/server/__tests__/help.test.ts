@@ -10,6 +10,7 @@ import { handbookPathForTests, parseHelpToc, readHelpHandbook, searchHelpHandboo
 let projectRoot: string | undefined;
 let appRoot: string | undefined;
 let previousRoot: string | undefined;
+  let previousContentRoot: string | undefined;
 let previousAppRoot: string | undefined;
 
 async function makeRoot(prefix: string, markdown?: string) {
@@ -28,6 +29,7 @@ async function makeProject() {
 
 beforeEach(() => {
   previousRoot = process.env.KTX_PROJECT_ROOT;
+  previousContentRoot = process.env.LUCY_CONTENT_ROOT;
   previousAppRoot = process.env.LUCY_APP_ROOT;
   vi.resetModules();
 });
@@ -332,6 +334,7 @@ describe("Help handbook", () => {
       "### 1.1 Lucy 是什么"
     ].join("\n"));
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_APP_ROOT = appRoot;
 
     const app = await buildFreshServer();
@@ -365,6 +368,7 @@ describe("Help handbook", () => {
     await makeProject();
     appRoot = await makeRoot("lucy-help-app-");
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_APP_ROOT = appRoot;
 
     await expect(readHelpHandbook(appRoot)).rejects.toMatchObject({
@@ -944,6 +948,7 @@ describe("Help search", () => {
     );
     await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_APP_ROOT = realAppRoot;
 
     const app = await buildFreshServer();
@@ -1018,6 +1023,7 @@ describe("Help search", () => {
     );
     await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_APP_ROOT = realAppRoot;
 
     const app = await buildFreshServer();

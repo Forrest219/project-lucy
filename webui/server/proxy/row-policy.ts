@@ -7,6 +7,7 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { parse } from "yaml";
 import { resolveProjectRoot } from "../project.js";
+import { loadContentPaths } from "../paths.js";
 
 export type RowPolicyOp = "eq" | "in";
 
@@ -172,7 +173,7 @@ async function loadPhysicalColumnsFromSchema(
   schema?: string
 ): Promise<Set<string>> {
   const physical = new Set<string>();
-  const schemaDir = path.join(projectRoot, "semantic-layer", connectionId, "_schema");
+  const schemaDir = path.join((await loadContentPaths()).semanticLayer, connectionId, "_schema");
   const files: string[] = [];
   if (schema) {
     files.push(path.join(schemaDir, `${schema}.yaml`));
@@ -248,7 +249,7 @@ export async function loadSourceFieldCatalog(
   const columns = new Set<string>(physical);
   const measures = new Set<string>();
 
-  const overlayPath = path.join(projectRoot, "semantic-layer", connectionId, `${sourceName}.yaml`);
+  const overlayPath = path.join((await loadContentPaths()).semanticLayer, connectionId, `${sourceName}.yaml`);
   try {
     const yaml = parse(await readFile(overlayPath, "utf-8")) as {
       columns?: OverlayField[];

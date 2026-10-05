@@ -57,6 +57,7 @@ const KTX_YAML = `connections:
 describe("MCP Proxy Governed Skills Protocol (Spec 131)", () => {
   let projectRoot: string;
   let previousRoot: string | undefined;
+  let previousContentRoot: string | undefined;
   let upstreamPort: number;
   let proxyPort: number;
   let upstreamServer: ReturnType<typeof createServer>;
@@ -64,8 +65,10 @@ describe("MCP Proxy Governed Skills Protocol (Spec 131)", () => {
 
   beforeEach(async () => {
     previousRoot = process.env.KTX_PROJECT_ROOT;
+    previousContentRoot = process.env.LUCY_CONTENT_ROOT;
     projectRoot = await mkdtemp(path.join(os.tmpdir(), "lucy-skills-test-"));
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.KTX_INTERNAL_TOKEN = INTERNAL_TOKEN;
 
     await mkdir(path.join(projectRoot, "webui", "config"), { recursive: true });
@@ -188,6 +191,8 @@ not for agents
   afterEach(async () => {
     if (previousRoot === undefined) delete process.env.KTX_PROJECT_ROOT;
     else process.env.KTX_PROJECT_ROOT = previousRoot;
+    if (previousContentRoot === undefined) delete process.env.LUCY_CONTENT_ROOT;
+    else process.env.LUCY_CONTENT_ROOT = previousContentRoot;
     await new Promise<void>((resolve) => upstreamServer.close(() => resolve()));
     await new Promise<void>((resolve) => proxyServer.close(() => resolve()));
     await rm(projectRoot, { recursive: true, force: true });

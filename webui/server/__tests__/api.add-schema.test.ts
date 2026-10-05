@@ -34,6 +34,7 @@ vi.mock("../ktx", async () => {
 let projectRoot: string;
 let auditDbPath: string;
 let previousRoot: string | undefined;
+  let previousContentRoot: string | undefined;
 let previousAuditDb: string | undefined;
 
 async function makeProject(yaml: string) {
@@ -49,6 +50,7 @@ beforeEach(async () => {
   // (driven by the env vars we set in the test body).
   vi.resetModules();
   previousRoot = process.env.KTX_PROJECT_ROOT;
+  previousContentRoot = process.env.LUCY_CONTENT_ROOT;
   previousAuditDb = process.env.LUCY_AUDIT_DB;
   vi.clearAllMocks();
 });
@@ -96,6 +98,7 @@ describe("POST /api/connections/:connId/schemas", () => {
   it("keeps dryRun as default and never modifies ktx.yaml", async () => {
     await makeProject(baseYaml());
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();
@@ -133,6 +136,7 @@ describe("POST /api/connections/:connId/schemas", () => {
   it("writes exactly one new line when dryRun:false", async () => {
     await makeProject(baseYaml());
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();
@@ -162,6 +166,7 @@ describe("POST /api/connections/:connId/schemas", () => {
   it("never leaks the password field via /api/project or /api/connections", async () => {
     await makeProject(baseYaml());
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();
@@ -186,6 +191,7 @@ describe("POST /api/connections/:connId/schemas", () => {
   it("returns SCHEMA_ALREADY_EXISTS (409) when the schema is already declared", async () => {
     await makeProject(baseYaml());
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();
@@ -205,6 +211,7 @@ describe("POST /api/connections/:connId/schemas", () => {
   it("returns SCHEMA_NAME_INVALID (400) for names that violate the pattern", async () => {
     await makeProject(baseYaml());
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();
@@ -227,6 +234,7 @@ describe("POST /api/connections/:connId/schemas", () => {
   it("returns CONNECTION_NOT_FOUND (404) when connId is unknown", async () => {
     await makeProject(baseYaml());
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();
@@ -243,6 +251,7 @@ describe("POST /api/connections/:connId/schemas", () => {
   it("returns whitelisted connection-test stdout/stderr detail without writing", async () => {
     await makeProject(baseYaml());
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
     const ktx = await import("../ktx");
     vi.mocked(ktx.testConnection).mockResolvedValueOnce({
@@ -281,6 +290,7 @@ describe("POST /api/connections/:connId/schemas", () => {
   it("writes a schema_add audit row with target_id '<connId>:<schema>'", async () => {
     await makeProject(baseYaml());
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
 
     const app = await buildFreshServer();

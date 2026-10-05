@@ -10,12 +10,14 @@ describe("Skills Admin REST API", () => {
   let app: ReturnType<typeof Fastify>;
   let projectRoot: string;
   let previousRoot: string | undefined;
+  let previousContentRoot: string | undefined;
 
   beforeEach(async () => {
     previousRoot = process.env.KTX_PROJECT_ROOT;
+    previousContentRoot = process.env.LUCY_CONTENT_ROOT;
     projectRoot = await mkdtemp(path.join(os.tmpdir(), "skills-api-test-"));
     process.env.KTX_PROJECT_ROOT = projectRoot;
-
+    process.env.LUCY_CONTENT_ROOT = ".";
     await mkdir(path.join(projectRoot, "skills", "domains", "superstore"), { recursive: true });
     await mkdir(path.join(projectRoot, "wiki", "global"), { recursive: true });
     await mkdir(path.join(projectRoot, "evals", "superstore"), { recursive: true });
@@ -51,6 +53,8 @@ Body content
   afterEach(async () => {
     if (previousRoot === undefined) delete process.env.KTX_PROJECT_ROOT;
     else process.env.KTX_PROJECT_ROOT = previousRoot;
+    if (previousContentRoot === undefined) delete process.env.LUCY_CONTENT_ROOT;
+    else process.env.LUCY_CONTENT_ROOT = previousContentRoot;
     await app.close();
     await rm(projectRoot, { recursive: true, force: true });
   });

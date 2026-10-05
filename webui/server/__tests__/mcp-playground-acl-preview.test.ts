@@ -73,6 +73,7 @@ beforeEach(async () => {
   projectRoot = await makeProject();
   prevRoot = process.env.KTX_PROJECT_ROOT;
   process.env.KTX_PROJECT_ROOT = projectRoot;
+  process.env.LUCY_CONTENT_ROOT = ".";
   prevPublicMcpUrl = process.env.LUCY_PUBLIC_MCP_URL;
   delete process.env.LUCY_PUBLIC_MCP_URL;
 });

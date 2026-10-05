@@ -20,15 +20,18 @@ import { buildServer } from "../index";
 
 let projectRoot: string;
 let previousRoot: string | undefined;
+  let previousContentRoot: string | undefined;
 let previousAuditDb: string | undefined;
 let previousAuth: string | undefined;
 
 beforeEach(async () => {
   projectRoot = await mkdtemp(path.join(os.tmpdir(), "lucy-ui-usage-"));
   previousRoot = process.env.KTX_PROJECT_ROOT;
+  previousContentRoot = process.env.LUCY_CONTENT_ROOT;
   previousAuditDb = process.env.LUCY_AUDIT_DB;
   previousAuth = process.env.LUCY_WEBUI_AUTH;
   process.env.KTX_PROJECT_ROOT = projectRoot;
+  process.env.LUCY_CONTENT_ROOT = ".";
   process.env.LUCY_AUDIT_DB = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
   delete process.env.LUCY_WEBUI_AUTH;
   resetAuditDbForTests();
@@ -42,6 +45,8 @@ afterEach(async () => {
   resetAdminsCache();
   if (previousRoot === undefined) delete process.env.KTX_PROJECT_ROOT;
   else process.env.KTX_PROJECT_ROOT = previousRoot;
+    if (previousContentRoot === undefined) delete process.env.LUCY_CONTENT_ROOT;
+    else process.env.LUCY_CONTENT_ROOT = previousContentRoot;
   if (previousAuditDb === undefined) delete process.env.LUCY_AUDIT_DB;
   else process.env.LUCY_AUDIT_DB = previousAuditDb;
   if (previousAuth === undefined) delete process.env.LUCY_WEBUI_AUTH;

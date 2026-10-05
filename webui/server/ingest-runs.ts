@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { safeWrite } from "./fs-safe";
+import { loadContentPaths } from "./paths";
 
 // Local copy of the IngestRun shape. The shared frontend type lives in
 // webui/src/lib/types.ts; mirroring here avoids a server→src cycle just for
@@ -143,7 +144,8 @@ export async function appendIngestRun(
   // Append to the end and drop the oldest entries when the cap is exceeded.
   const next: IngestRun[] = [...current.runs, normalizeRun(run)].slice(-MAX_RUNS);
   const file: IngestRunsFile = { version: 1, runs: next };
-  await safeWrite(projectRoot, REL_PATH, `${JSON.stringify(file, null, 2)}\n`);
+  const paths = await loadContentPaths();
+  await safeWrite(paths, projectRoot, REL_PATH, `${JSON.stringify(file, null, 2)}\n`);
   return buildResponse(next);
 }
 

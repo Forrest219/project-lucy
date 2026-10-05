@@ -33,6 +33,7 @@ import {
 
 let projectRoot: string;
 let previousRoot: string | undefined;
+  let previousContentRoot: string | undefined;
 
 const BASE_KTX_YAML = `connections:
   customer-db:
@@ -80,12 +81,15 @@ async function buildFreshServer() {
 beforeEach(async () => {
   vi.resetModules();
   previousRoot = process.env.KTX_PROJECT_ROOT;
+  previousContentRoot = process.env.LUCY_CONTENT_ROOT;
   vi.clearAllMocks();
 });
 
 afterEach(async () => {
   if (previousRoot === undefined) delete process.env.KTX_PROJECT_ROOT;
   else process.env.KTX_PROJECT_ROOT = previousRoot;
+    if (previousContentRoot === undefined) delete process.env.LUCY_CONTENT_ROOT;
+    else process.env.LUCY_CONTENT_ROOT = previousContentRoot;
   if (projectRoot) {
     // Use maxRetries/retryDelay to absorb the brief async reindex write
     // that may still be flushing the release record after a successful
@@ -103,7 +107,7 @@ describe("validate gate + staging GC", () => {
   it("builds a staging project under .ktx-ui/staging/semantic-publish/<id>/ without copying .ktx/secrets/**", async () => {
     projectRoot = await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
-
+    process.env.LUCY_CONTENT_ROOT = ".";
     // Populate a secrets directory that must never be copied.
     await mkdir(path.join(projectRoot, ".ktx", "secrets"), { recursive: true });
     await writeFile(
@@ -140,7 +144,7 @@ describe("validate gate + staging GC", () => {
   it("reuses the snapshot stored on disk and removes the staging directory after a successful publish", async () => {
     projectRoot = await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
-
+    process.env.LUCY_CONTENT_ROOT = ".";
     // Mock ktx: validateSource returns OK; reindexProject returns OK.
     const validateSource = vi.fn(async () => ({
       ok: true,
@@ -207,7 +211,7 @@ describe("validate gate + staging GC", () => {
   it("blocks publish when the validate gate fails: formal file untouched, reindex never called, staging removed", async () => {
     projectRoot = await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
-
+    process.env.LUCY_CONTENT_ROOT = ".";
     const reindexProject = vi.fn(async () => ({ exitCode: 0, stdout: "", stderr: "" }));
     vi.doMock("../ktx", async () => {
       const actual = await vi.importActual<typeof import("../ktx")>("../ktx");
@@ -276,7 +280,7 @@ describe("validate gate + staging GC", () => {
   it("removes expired staging directories older than 1 hour via opportunistic GC", async () => {
     projectRoot = await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
-
+    process.env.LUCY_CONTENT_ROOT = ".";
     // Create a fake staging directory with an old mtime.
     const oldDir = path.resolve(
       projectRoot,
@@ -307,6 +311,7 @@ describe("validate gate + staging GC", () => {
   it("removeSemanticPublishStaging never escapes the staging root", async () => {
     projectRoot = await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     const { cleanupSemanticPublishStaging } = await import("../semantic-assets");
 
     // Trying to clean up a validation id that points outside the staging

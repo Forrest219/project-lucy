@@ -13,6 +13,7 @@ import {
   safeWriteNewSecretPassword
 } from "./fs-safe";
 import { resolveMcpEndpoint } from "./runtime-config";
+import { loadContentPaths } from "./paths";
 import type {
   AddSchemaPreview,
   AddSchemaResult,
@@ -420,7 +421,8 @@ export async function writeKtxYaml(
   const serialized = doc.toString();
   assertKtxYamlParses(serialized, "Failed to serialize ktx.yaml");
   if (!opts.dryRun) {
-    await safeWrite(root, "ktx.yaml", serialized);
+    const paths = await loadContentPaths();
+    await safeWrite(paths, root, "ktx.yaml", serialized);
   }
   return { doc, serialized, oldText };
 }
@@ -779,7 +781,8 @@ export async function removeSchema(
 
   // Impact collection.
   const manifestPath = `semantic-layer/${connId}/_schema/${schema}.yaml`;
-  const manifestAbsPath = path.join(root, manifestPath);
+  const paths = await loadContentPaths();
+  const manifestAbsPath = path.join(paths.semanticLayer, connId, "_schema", `${schema}.yaml`);
   let hasManifest = false;
   let manifestTableNames: string[] = [];
   try {
@@ -805,7 +808,7 @@ export async function removeSchema(
     const relPath = overlayRelPath(connId, tableName);
     if (!relPath) continue;
     try {
-      await readFile(path.join(root, relPath), "utf8");
+      await readFile(path.join(paths.semanticLayer, connId, `${tableName}.yaml`), "utf8");
       overlayPaths.push(relPath);
     } catch {
       // File does not exist; skip.
@@ -873,14 +876,14 @@ export async function removeSchema(
 
   // Optional: delete manifest (safeRemove no-ops ENOENT).
   if (options.deleteManifest && hasManifest) {
-    await safeRemove(root, manifestPath);
+    await safeRemove(paths, root, manifestPath);
     deletedFiles.push(manifestPath);
   }
 
   // Optional: delete overlays.
   if (options.deleteOverlays) {
     for (const overlayPath of overlayPaths) {
-      await safeRemove(root, overlayPath);
+      await safeRemove(paths, root, overlayPath);
       deletedFiles.push(overlayPath);
     }
   }
@@ -951,8 +954,9 @@ function conventionalSecretRelPathIfEligible(
 
 async function listConnectionYamlAssets(root: string, connId: string): Promise<string[]> {
   if (!isSafePathSegment(connId)) return [];
+  const paths = await loadContentPaths();
   const relDir = `semantic-layer/${connId}`;
-  return walkYamlFiles(path.join(root, relDir), relDir);
+  return walkYamlFiles(path.join(paths.semanticLayer, connId), relDir);
 }
 
 async function walkYamlFiles(absDir: string, relDir: string): Promise<string[]> {
@@ -1162,7 +1166,8 @@ export async function removeConnection(
   if (options.deleteAssets) {
     for (const assetPath of yamlAssetPaths) {
       try {
-        await safeRemove(root, assetPath);
+        const paths = await loadContentPaths();
+        await safeRemove(paths, root, assetPath);
         deletedFiles.push(assetPath);
       } catch {
         // leftover YAML assets are recoverable by hand
@@ -1448,7 +1453,8 @@ export async function createConnection(
     yamlWritten = true;
   } catch (error) {
     if (yamlWritten) {
-      await safeWrite(root, "ktx.yaml", preview.oldText);
+      const paths = await loadContentPaths();
+      await safeWrite(paths, root, "ktx.yaml", preview.oldText);
     }
     if (secretWritten) {
       await safeRemoveSecretPasswordIfExists(root, secretRelPath);

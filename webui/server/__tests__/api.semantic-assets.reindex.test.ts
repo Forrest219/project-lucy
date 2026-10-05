@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 let projectRoot: string;
 let previousRoot: string | undefined;
+  let previousContentRoot: string | undefined;
 
 async function makeProject(): Promise<string> {
   const root = await mkdtemp(path.join(os.tmpdir(), "lucy-reindex-api-"));
@@ -33,12 +34,15 @@ async function buildFreshServer() {
 beforeEach(() => {
   vi.resetModules();
   previousRoot = process.env.KTX_PROJECT_ROOT;
+  previousContentRoot = process.env.LUCY_CONTENT_ROOT;
   vi.clearAllMocks();
 });
 
 afterEach(async () => {
   if (previousRoot === undefined) delete process.env.KTX_PROJECT_ROOT;
   else process.env.KTX_PROJECT_ROOT = previousRoot;
+    if (previousContentRoot === undefined) delete process.env.LUCY_CONTENT_ROOT;
+    else process.env.LUCY_CONTENT_ROOT = previousContentRoot;
   if (projectRoot) {
     await rm(projectRoot, {
       recursive: true,
@@ -53,6 +57,7 @@ describe("POST /api/semantic-assets/reindex", () => {
   it("runs incremental KTX reindex and returns the subprocess result", async () => {
     projectRoot = await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     const reindexProject = vi.fn(async () => ({
       exitCode: 0,
       stdout: "indexed",
@@ -87,6 +92,7 @@ describe("POST /api/semantic-assets/reindex", () => {
   it("supports a forced rebuild and preserves non-zero exit status in data", async () => {
     projectRoot = await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     const reindexProject = vi.fn(async () => ({
       exitCode: 2,
       stdout: "",
@@ -117,6 +123,7 @@ describe("POST /api/semantic-assets/reindex", () => {
   it("writes a webui_manual_reindex history record visible from /api/semantic-assets/releases", async () => {
     projectRoot = await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     const reindexProject = vi.fn(async () => ({
       exitCode: 0,
       stdout: "indexed",
@@ -153,6 +160,7 @@ describe("POST /api/semantic-assets/reindex", () => {
   it("records a failed manual reindex as reindex_failed and returns 409 when a publish lock is present", async () => {
     projectRoot = await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     const reindexProject = vi.fn(async () => ({
       exitCode: 0,
       stdout: "indexed",
@@ -214,6 +222,7 @@ describe("POST /api/semantic-assets/reindex", () => {
   it("returns release records in newest-first order so the audit page renders latest at the top", async () => {
     projectRoot = await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     // The route only writes a single record, so we use the __test export to
     // seed multiple entries with explicit timestamps and verify the API
     // returns them sorted by `createdAt` descending.
@@ -258,6 +267,7 @@ describe("POST /api/semantic-assets/reindex", () => {
   it("filters, paginates, and exports publish history CSV (Spec 113)", async () => {
     projectRoot = await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
     const { __test } = await import("../semantic-assets");
     const base = {
       actor: "local-admin",

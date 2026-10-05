@@ -32,6 +32,7 @@ const FIN_SCHEMA = `tables:
 
 let projectRoot: string;
 let previousRoot: string | undefined;
+  let previousContentRoot: string | undefined;
 let previousAuditDb: string | undefined;
 
 function identity(userId: string): Identity {
@@ -40,6 +41,7 @@ function identity(userId: string): Identity {
 
 beforeEach(async () => {
   previousRoot = process.env.KTX_PROJECT_ROOT;
+  previousContentRoot = process.env.LUCY_CONTENT_ROOT;
   previousAuditDb = process.env.LUCY_AUDIT_DB;
   projectRoot = await mkdtemp(path.join(os.tmpdir(), "ktx-i6-"));
   await mkdir(path.join(projectRoot, "webui", "config"), { recursive: true });
@@ -48,12 +50,15 @@ beforeEach(async () => {
   await writeFile(path.join(projectRoot, "webui", "config", "access.yaml"), ACCESS_YAML, "utf8");
   await writeFile(path.join(projectRoot, "semantic-layer", "warehouse", "_schema", "fin.yaml"), FIN_SCHEMA, "utf8");
   process.env.KTX_PROJECT_ROOT = projectRoot;
+  process.env.LUCY_CONTENT_ROOT = ".";
   process.env.LUCY_AUDIT_DB = path.join(projectRoot, "audit.sqlite");
 });
 
 afterEach(async () => {
   if (previousRoot === undefined) delete process.env.KTX_PROJECT_ROOT;
   else process.env.KTX_PROJECT_ROOT = previousRoot;
+    if (previousContentRoot === undefined) delete process.env.LUCY_CONTENT_ROOT;
+    else process.env.LUCY_CONTENT_ROOT = previousContentRoot;
   if (previousAuditDb === undefined) delete process.env.LUCY_AUDIT_DB;
   else process.env.LUCY_AUDIT_DB = previousAuditDb;
   await rm(projectRoot, { recursive: true, force: true });

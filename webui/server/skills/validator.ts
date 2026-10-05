@@ -2,6 +2,7 @@ import { access, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { parse } from "yaml";
 import { resolveProjectRoot } from "../project.js";
+import { loadContentPaths } from "../paths.js";
 import { isSkillSegment } from "./identifiers.js";
 import type { SkillAsset, SkillValidationIssue, SkillValidationResult } from "./types.js";
 
@@ -17,6 +18,7 @@ async function fileExists(filePath: string): Promise<boolean> {
 export async function validateSkill(skill: SkillAsset, customProjectRoot?: string): Promise<SkillValidationResult> {
   const issues: SkillValidationIssue[] = [];
   const projectRoot = customProjectRoot ?? (await resolveProjectRoot());
+  const paths = await loadContentPaths();
 
   // 1. Basic field checks
   if (!skill.name || skill.name.trim() === "") {
@@ -79,7 +81,7 @@ export async function validateSkill(skill: SkillAsset, customProjectRoot?: strin
 
       // Check if any yaml in semantic-layer references this
       let found = false;
-      const semanticLayerDir = path.join(projectRoot, "semantic-layer");
+      const semanticLayerDir = paths.semanticLayer;
       try {
         const conns = await readdir(semanticLayerDir, { withFileTypes: true });
         for (const conn of conns) {
@@ -126,9 +128,9 @@ export async function validateSkill(skill: SkillAsset, customProjectRoot?: strin
   if (skill.prerequisites?.wiki_docs) {
     for (const wikiDoc of skill.prerequisites.wiki_docs) {
       const candidates = [
-        path.join(projectRoot, "wiki", wikiDoc),
-        path.join(projectRoot, "wiki", "global", wikiDoc),
-        path.join(projectRoot, wikiDoc),
+        path.join(paths.wiki, wikiDoc),
+        path.join(paths.wiki, "global", wikiDoc),
+        path.join(paths.configDir, wikiDoc),
       ];
       let exists = false;
       for (const cand of candidates) {
@@ -160,9 +162,9 @@ export async function validateSkill(skill: SkillAsset, customProjectRoot?: strin
     } else {
       for (const evalCase of skill.eval_cases) {
         const candidates = [
-          path.join(projectRoot, evalCase),
-          path.join(projectRoot, "evals", evalCase),
-          path.join(projectRoot, "evals", skill.domain, evalCase),
+          path.join(paths.evals, evalCase),
+          path.join(paths.evals, skill.domain, evalCase),
+          path.join(paths.configDir, evalCase),
         ];
         let exists = false;
         for (const cand of candidates) {

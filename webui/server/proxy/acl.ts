@@ -4,6 +4,7 @@ import { glob } from "node:fs/promises";
 import path from "node:path";
 import { parse } from "yaml";
 import { resolveProjectRoot, readConnections } from "../project.js";
+import { loadContentPaths } from "../paths.js";
 import {
   getAccessConfig,
   invalidateAccessConfigCache,
@@ -236,7 +237,8 @@ async function loadSourceMap(options: { fresh?: boolean } = {}): Promise<SourceM
   }
 
   const projectRoot = await resolveProjectRoot();
-  const semanticLayerDir = path.join(projectRoot, "semantic-layer");
+  const paths = await loadContentPaths();
+  const semanticLayerDir = paths.semanticLayer;
 
   const schemaFiles: string[] = [];
   try {

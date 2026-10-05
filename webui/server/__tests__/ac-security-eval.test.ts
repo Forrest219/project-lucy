@@ -62,6 +62,7 @@ const SCHEMA_DUP = `tables:
 
 let projectRoot: string;
 let previousRoot: string | undefined;
+  let previousContentRoot: string | undefined;
 
 function identity(userId: string): Identity {
   return { userId, tokenLabel: "sec-eval", tokenHashPrefix: "sec-eval" };
@@ -74,6 +75,7 @@ async function loadAcl() {
 
 beforeEach(async () => {
   previousRoot = process.env.KTX_PROJECT_ROOT;
+  previousContentRoot = process.env.LUCY_CONTENT_ROOT;
   projectRoot = await mkdtemp(path.join(os.tmpdir(), "ktx-ac-sec-"));
   await mkdir(path.join(projectRoot, "webui", "config"), { recursive: true });
   await mkdir(path.join(projectRoot, "semantic-layer", "warehouse", "_schema"), { recursive: true });
@@ -83,11 +85,14 @@ beforeEach(async () => {
   await writeFile(path.join(projectRoot, "semantic-layer", "warehouse", "_schema", "fin.yaml"), SCHEMA_A, "utf8");
   await writeFile(path.join(projectRoot, "semantic-layer", "other", "_schema", "fin.yaml"), SCHEMA_DUP, "utf8");
   process.env.KTX_PROJECT_ROOT = projectRoot;
+  process.env.LUCY_CONTENT_ROOT = ".";
 });
 
 afterEach(async () => {
   if (previousRoot === undefined) delete process.env.KTX_PROJECT_ROOT;
   else process.env.KTX_PROJECT_ROOT = previousRoot;
+    if (previousContentRoot === undefined) delete process.env.LUCY_CONTENT_ROOT;
+    else process.env.LUCY_CONTENT_ROOT = previousContentRoot;
   await rm(projectRoot, { recursive: true, force: true });
 });
 

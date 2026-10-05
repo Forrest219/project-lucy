@@ -2,9 +2,22 @@ import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promis
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { ContentPaths } from "../paths";
 import { assertReadable, ForbiddenPathError, resolveWritable, safeWrite } from "../fs-safe";
 
 let projectRoot: string;
+
+/** Legacy sibling layout: configDir == projectRoot (post-A2 default uses config/ subdir). */
+function legacyPaths(): ContentPaths {
+  return {
+    configDir: projectRoot,
+    semanticLayer: path.join(projectRoot, "semantic-layer"),
+    wiki: path.join(projectRoot, "wiki"),
+    evals: path.join(projectRoot, "evals"),
+    skills: path.join(projectRoot, "skills"),
+    source: "default"
+  };
+}
 
 async function makeProjectRoot() {
   const root = await mkdtemp(path.join(os.tmpdir(), "ktx-webui-fs-safe-"));
@@ -33,11 +46,12 @@ afterEach(async () => {
 
 describe("fs-safe writable paths", () => {
   it("allows writes under semantic-layer, evals, skills, .ktx-ui, and webui/config", async () => {
-    await safeWrite(projectRoot, "semantic-layer/x.yaml", "a: 1\n");
-    await safeWrite(projectRoot, "evals/a.md", "# A\n");
-    await safeWrite(projectRoot, "skills/warehouse/SKILL.md", "# S\n");
-    await safeWrite(projectRoot, ".ktx-ui/b.json", "{}\n");
-    await safeWrite(projectRoot, "webui/config/access.yaml", "users: []\n");
+    const paths = legacyPaths();
+    await safeWrite(paths, projectRoot, "semantic-layer/x.yaml", "a: 1\n");
+    await safeWrite(paths, projectRoot, "evals/a.md", "# A\n");
+    await safeWrite(paths, projectRoot, "skills/warehouse/SKILL.md", "# S\n");
+    await safeWrite(paths, projectRoot, ".ktx-ui/b.json", "{}\n");
+    await safeWrite(paths, projectRoot, "webui/config/access.yaml", "users: []\n");
 
     await expect(readFile(path.join(projectRoot, "semantic-layer/x.yaml"), "utf8")).resolves.toBe("a: 1\n");
     await expect(readFile(path.join(projectRoot, "evals/a.md"), "utf8")).resolves.toBe("# A\n");
@@ -47,44 +61,51 @@ describe("fs-safe writable paths", () => {
   });
 
   it("rejects denied directories before writing", async () => {
-    await expectForbidden(() => safeWrite(projectRoot, ".ktx/secrets/p", "secret"));
-    await expectForbidden(() => safeWrite(projectRoot, "raw-sources/r", "raw"));
-    await expectForbidden(() => safeWrite(projectRoot, ".git/c", "git"));
+    const paths = legacyPaths();
+    await expectForbidden(() => safeWrite(paths, projectRoot, ".ktx/secrets/p", "secret"));
+    await expectForbidden(() => safeWrite(paths, projectRoot, "raw-sources/r", "raw"));
+    await expectForbidden(() => safeWrite(paths, projectRoot, ".git/c", "git"));
   });
 
   it("rejects path traversal into denied directories", async () => {
-    await expectForbidden(() => safeWrite(projectRoot, "semantic-layer/../.ktx/secrets/p", "secret"));
+    const paths = legacyPaths();
+    await expectForbidden(() => safeWrite(paths, projectRoot, "semantic-layer/../.ktx/secrets/p", "secret"));
   });
 
   it("rejects webui/config path traversal to outside allowed dirs", async () => {
-    await expectForbidden(() => safeWrite(projectRoot, "webui/config/../../../secrets", "secret"));
+    const paths = legacyPaths();
+    await expectForbidden(() => safeWrite(paths, projectRoot, "webui/config/../../../secrets", "secret"));
   });
 
   it("rejects symlinks that resolve into denied directories", async () => {
+    const paths = legacyPaths();
     await symlink(path.join(projectRoot, ".ktx", "secrets"), path.join(projectRoot, "semantic-layer", "secret-link"));
 
-    await expectForbidden(() => resolveWritable(projectRoot, "semantic-layer/secret-link/p"));
+    await expectForbidden(() => resolveWritable(paths, projectRoot, "semantic-layer/secret-link/p"));
   });
 
   it("allows ktx.yaml through the ALLOW_FILES channel for the M6 add-schema flow", async () => {
-    await safeWrite(projectRoot, "ktx.yaml", "connections: {}\n");
+    const paths = legacyPaths();
+    await safeWrite(paths, projectRoot, "ktx.yaml", "connections: {}\n");
     await expect(readFile(path.join(projectRoot, "ktx.yaml"), "utf8")).resolves.toBe("connections: {}\n");
   });
 
   it("rejects writes to other root-level files (e.g. README.md, package.json, .env)", async () => {
-    await expectForbidden(() => safeWrite(projectRoot, "README.md", "# nope"));
-    await expectForbidden(() => safeWrite(projectRoot, "package.json", "{}"));
-    await expectForbidden(() => safeWrite(projectRoot, ".env", "SECRET=x"));
+    const paths = legacyPaths();
+    await expectForbidden(() => safeWrite(paths, projectRoot, "README.md", "# nope"));
+    await expectForbidden(() => safeWrite(paths, projectRoot, "package.json", "{}"));
+    await expectForbidden(() => safeWrite(paths, projectRoot, ".env", "SECRET=x"));
   });
 
   it("rejects writing into a path that symlinks into .ktx/secrets even when ALLOW_FILES matches", async () => {
+    const paths = legacyPaths();
     const outside = await mkdtemp(path.join(os.tmpdir(), "ktx-webui-fs-safe-outside-"));
     try {
       const outsideFile = path.join(outside, "stolen.yaml");
       await writeFile(outsideFile, "original\n", "utf8");
       await symlink(outsideFile, path.join(projectRoot, "ktx.yaml"));
 
-      await expectForbidden(() => safeWrite(projectRoot, "ktx.yaml", "overwritten\n"));
+      await expectForbidden(() => safeWrite(paths, projectRoot, "ktx.yaml", "overwritten\n"));
       await expect(readFile(outsideFile, "utf8")).resolves.toBe("original\n");
     } finally {
       await rm(outside, { recursive: true, force: true });
@@ -92,22 +113,24 @@ describe("fs-safe writable paths", () => {
   });
 
   it("rejects ktx.yaml when it is a symlink to an external directory", async () => {
+    const paths = legacyPaths();
     const outside = await mkdtemp(path.join(os.tmpdir(), "ktx-webui-fs-safe-outside-dir-"));
     try {
       await symlink(outside, path.join(projectRoot, "ktx.yaml"));
-      await expectForbidden(() => safeWrite(projectRoot, "ktx.yaml", "connections: {}\n"));
+      await expectForbidden(() => safeWrite(paths, projectRoot, "ktx.yaml", "connections: {}\n"));
     } finally {
       await rm(outside, { recursive: true, force: true });
     }
   });
 
   it("rejects a dangling ktx.yaml symlink before it can create an external file", async () => {
+    const paths = legacyPaths();
     const outside = await mkdtemp(path.join(os.tmpdir(), "ktx-webui-fs-safe-dangling-"));
     try {
       const outsideFile = path.join(outside, "not-created.yaml");
       await symlink(outsideFile, path.join(projectRoot, "ktx.yaml"));
 
-      await expectForbidden(() => safeWrite(projectRoot, "ktx.yaml", "connections: {}\n"));
+      await expectForbidden(() => safeWrite(paths, projectRoot, "ktx.yaml", "connections: {}\n"));
       await expect(readFile(outsideFile, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
     } finally {
       await rm(outside, { recursive: true, force: true });
@@ -117,12 +140,14 @@ describe("fs-safe writable paths", () => {
 
 describe("fs-safe readable paths", () => {
   it("rejects reads from .ktx/secrets", async () => {
-    await expectForbidden(() => assertReadable(projectRoot, ".ktx/secrets/p"));
+    const paths = legacyPaths();
+    await expectForbidden(() => assertReadable(paths, projectRoot, ".ktx/secrets/p"));
   });
 
   it("rejects symlink reads that resolve into .ktx/secrets", async () => {
+    const paths = legacyPaths();
     await symlink(path.join(projectRoot, ".ktx", "secrets"), path.join(projectRoot, "evals", "secret-link"));
 
-    await expectForbidden(() => assertReadable(projectRoot, "evals/secret-link/p"));
+    await expectForbidden(() => assertReadable(paths, projectRoot, "evals/secret-link/p"));
   });
 });

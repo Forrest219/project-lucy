@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { assertReadable, safeWrite } from "./fs-safe";
+import { loadContentPaths } from "./paths";
 import type { Join } from "./model";
 
 export type JoinCandidate = {
@@ -36,7 +37,8 @@ function normalize(value: unknown): JoinCandidatesFile {
 
 export async function readJoinCandidates(projectRoot: string): Promise<JoinCandidatesFile> {
   try {
-    const text = await readFile(await assertReadable(projectRoot, REL_PATH), "utf8");
+    const paths = await loadContentPaths();
+    const text = await readFile(await assertReadable(paths, projectRoot, REL_PATH), "utf8");
     return normalize(JSON.parse(text));
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
@@ -48,7 +50,8 @@ export async function readJoinCandidates(projectRoot: string): Promise<JoinCandi
 
 export async function writeJoinCandidates(projectRoot: string, candidates: JoinCandidate[]): Promise<JoinCandidatesFile> {
   const sidecar: JoinCandidatesFile = { version: 1, candidates };
-  await safeWrite(projectRoot, REL_PATH, `${JSON.stringify(sidecar, null, 2)}\n`);
+  const paths = await loadContentPaths();
+  await safeWrite(paths, projectRoot, REL_PATH, `${JSON.stringify(sidecar, null, 2)}\n`);
   return sidecar;
 }
 
