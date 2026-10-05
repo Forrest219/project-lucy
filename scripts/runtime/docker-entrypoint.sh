@@ -7,6 +7,25 @@ WEBUI_ROOT="${LUCY_WEBUI_ROOT:-${APP_ROOT}/webui}"
 TEMPLATE_ROOT="${LUCY_TEMPLATE_ROOT:-${APP_ROOT}/project-template}"
 SEED_STATE_DIR="${PROJECT_ROOT}/.lucy-seed"
 
+# A2 — Configurable Content Root.
+# Resolves the directory that holds semantic-layer/, wiki/, evals/, skills/.
+# Defaults to <PROJECT_ROOT>/config/ (the M31 layout). Legacy deployments keep
+# these dirs as project-root siblings by setting LUCY_CONTENT_ROOT=".".
+# Empty / unset → default config/. The ktx-required sibling view still lives
+# under <PROJECT_ROOT>/runtime/ and is populated by sync_runtime_mirror below.
+CONTENT_ROOT=""
+if [[ -n "${LUCY_CONTENT_ROOT:-}" ]]; then
+  CONTENT_ROOT="${LUCY_CONTENT_ROOT}"
+else
+  CONTENT_ROOT="./config"
+fi
+if [[ "${CONTENT_ROOT}" = /* ]]; then
+  CONTENT_ROOT_ABS="${CONTENT_ROOT}"
+else
+  CONTENT_ROOT_ABS="$(cd "${PROJECT_ROOT}" && cd "${CONTENT_ROOT}" && pwd -P 2>/dev/null || echo "${PROJECT_ROOT}/${CONTENT_ROOT}")"
+fi
+export LUCY_CONTENT_ROOT="${CONTENT_ROOT_ABS}"
+
 KTX_MCP_HOST="${KTX_MCP_HOST:-127.0.0.1}"
 KTX_MCP_PORT="${KTX_MCP_PORT:-7878}"
 LUCY_PROXY_UPSTREAM_HOST="${LUCY_PROXY_UPSTREAM_HOST:-127.0.0.1}"
@@ -58,10 +77,31 @@ sync_context_from_template() {
     echo "[lucy] template sync disabled (LUCY_DISABLE_TEMPLATE_SYNC=1)"
     return 0
   fi
-  sync_template_tree "${TEMPLATE_ROOT}/semantic-layer" "${PROJECT_ROOT}/semantic-layer" "semantic-layer"
-  sync_template_tree "${TEMPLATE_ROOT}/wiki" "${PROJECT_ROOT}/wiki" "wiki"
-  sync_template_tree "${TEMPLATE_ROOT}/skills" "${PROJECT_ROOT}/skills" "skills"
-  sync_template_tree "${TEMPLATE_ROOT}/evals" "${PROJECT_ROOT}/evals" "evals"
+  # A2: seed into the configured content root (default <PROJECT_ROOT>/config/).
+  # The ktx-required sibling view lives under <PROJECT_ROOT>/runtime/ and is
+  # populated by sync_runtime_mirror so ktx — which expects siblings of
+  # ktx.yaml — keeps working without code changes.
+  sync_template_tree "${TEMPLATE_ROOT}/semantic-layer" "${CONTENT_ROOT_ABS}/semantic-layer" "semantic-layer (config)"
+  sync_template_tree "${TEMPLATE_ROOT}/wiki" "${CONTENT_ROOT_ABS}/wiki" "wiki (config)"
+  sync_template_tree "${TEMPLATE_ROOT}/skills" "${CONTENT_ROOT_ABS}/skills" "skills (config)"
+  sync_template_tree "${TEMPLATE_ROOT}/evals" "${CONTENT_ROOT_ABS}/evals" "evals (config)"
+}
+
+# A2 — ktx requires semantic-layer/wiki/evals/skills as siblings of ktx.yaml.
+# After seeding into the configured content root, mirror the seed (and any
+# customer-authored content the WebUI later writes there) into <runtime>/ so
+# the ktx sibling view stays in sync. Idempotent — re-runs only copy missing
+# files; customer edits to runtime/ are never overwritten.
+sync_runtime_mirror() {
+  if [[ "${LUCY_DISABLE_RUNTIME_MIRROR:-0}" == "1" ]]; then
+    echo "[lucy] runtime mirror disabled (LUCY_DISABLE_RUNTIME_MIRROR=1)"
+    return 0
+  fi
+  local mirror="${PROJECT_ROOT}/runtime"
+  sync_template_tree "${CONTENT_ROOT_ABS}/semantic-layer" "${mirror}/semantic-layer" "runtime mirror semantic-layer"
+  sync_template_tree "${CONTENT_ROOT_ABS}/wiki" "${mirror}/wiki" "runtime mirror wiki"
+  sync_template_tree "${CONTENT_ROOT_ABS}/skills" "${mirror}/skills" "runtime mirror skills"
+  sync_template_tree "${CONTENT_ROOT_ABS}/evals" "${mirror}/evals" "runtime mirror evals"
 }
 
 seed_project() {
@@ -155,21 +195,27 @@ count_files() {
 validate_project_context() {
   local semantic_count
   local schema_count
-  semantic_count="$(count_files "${PROJECT_ROOT}/semantic-layer" "*.yaml")"
+  # A2: validate the resolved content root, not the project root. The ktx
+  # sibling view is at <runtime>/, but the *source of truth* the WebUI uses
+  # lives under LUCY_CONTENT_ROOT (default <projectRoot>/config/). Checking
+  # the resolved location catches empty templates even when runtime/ is
+  # already populated by sync_runtime_mirror.
+  local semantic_dir="${CONTENT_ROOT_ABS}/semantic-layer"
+  semantic_count="$(count_files "${semantic_dir}" "*.yaml")"
 
-  if [[ -d "${PROJECT_ROOT}/semantic-layer" ]]; then
-    schema_count="$(find "${PROJECT_ROOT}/semantic-layer" -path "*/_schema/*.yaml" -type f ! -name ".DS_Store" | wc -l | tr -d " ")"
+  if [[ -d "${semantic_dir}" ]]; then
+    schema_count="$(find "${semantic_dir}" -path "*/_schema/*.yaml" -type f ! -name ".DS_Store" | wc -l | tr -d " ")"
   else
     schema_count="0"
   fi
 
   if [[ "${semantic_count}" -eq 0 ]]; then
-    echo "[lucy] fatal: ${PROJECT_ROOT}/semantic-layer has no YAML files; refusing to start with an empty data context" >&2
+    echo "[lucy] fatal: ${semantic_dir} has no YAML files; refusing to start with an empty data context" >&2
     return 1
   fi
 
   if [[ "${schema_count}" -eq 0 ]]; then
-    echo "[lucy] fatal: ${PROJECT_ROOT}/semantic-layer has no _schema YAML files; refusing to start with no visible data sources" >&2
+    echo "[lucy] fatal: ${semantic_dir} has no _schema YAML files; refusing to start with no visible data sources" >&2
     return 1
   fi
 
@@ -253,6 +299,7 @@ ensure_git_repo() {
 
 ensure_git_repo
 seed_project
+sync_runtime_mirror
 load_or_create_internal_token
 validate_project_context
 

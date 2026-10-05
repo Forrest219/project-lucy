@@ -40,6 +40,11 @@ services:
       LUCY_PROXY_PORT: "7879"
       LUCY_PROXY_UPSTREAM_HOST: 127.0.0.1
       LUCY_PROXY_UPSTREAM_PORT: "7878"
+      # A2 — Content root (M31 default: <projectRoot>/config/). Unset = config/.
+      # Legacy deployments keep content as siblings of ktx.yaml with:
+      #   LUCY_CONTENT_ROOT: "."
+      # The entrypoint populates <projectRoot>/runtime/ as the ktx sibling view.
+      LUCY_CONTENT_ROOT: "${LUCY_CONTENT_ROOT:-/data/lucy/config}"
       # Advertise URL for Agent / WebUI copy. Default matches host publish port
       # below (57881). If you override LUCY_DEMO_PROXY_HOST_PORT, also set
       # LUCY_PUBLIC_MCP_URL to the same host:port (or your reverse-proxy URL).
@@ -51,8 +56,10 @@ services:
     volumes:
       - lucy-demo-data:/data/lucy
       # POC-only evals aligned with demo DB baseline — not repo-root evals/superstore/.
-      # Read-only; demo-data volume still owns runtime state.
-      - ../../examples/docker-demo/project-template/evals:/data/lucy/evals:ro
+      # Read-only; demo-data volume still owns runtime state. Under A2 the
+      # WebUI reads from <configRoot>/evals, so the bind mount target moved
+      # from /data/lucy/evals to /data/lucy/config/evals.
+      - ../../examples/docker-demo/project-template/evals:/data/lucy/config/evals:ro
     depends_on:
       demo-db:
         condition: service_healthy

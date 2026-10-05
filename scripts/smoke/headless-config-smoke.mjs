@@ -7,6 +7,13 @@ const root = process.cwd();
 const args = process.argv.slice(2);
 const configRootArg = valueFor("--root") ?? "customer-config.example";
 const configRoot = path.resolve(root, configRootArg);
+// A2 — Configurable Content Root. The fixture may use either the legacy
+// sibling layout (LUCY_CONTENT_ROOT=.) or the M31 layout (default config/).
+// Smoke uses this single env var to switch layouts so CI can run the matrix.
+// `contentRootAbs` is always resolved against the project root so that the
+// remaining helpers can use it as a base path.
+const contentRootRel = process.env.LUCY_CONTENT_ROOT ?? "./config";
+const contentRootAbs = path.resolve(configRoot, contentRootRel);
 const requireSecretFiles = args.includes("--require-secret-files");
 const results = [];
 
@@ -32,15 +39,15 @@ function pass(check, message) {
 }
 
 function exists(...parts) {
-  return existsSync(path.join(configRoot, ...parts));
+  return existsSync(path.join(contentRootAbs, ...parts));
 }
 
 function read(...parts) {
-  return readFileSync(path.join(configRoot, ...parts), "utf8");
+  return readFileSync(path.join(contentRootAbs, ...parts), "utf8");
 }
 
 function readYaml(check, ...parts) {
-  const file = path.join(configRoot, ...parts);
+  const file = path.join(contentRootAbs, ...parts);
   try {
     return parse(readFileSync(file, "utf8")) ?? {};
   } catch (error) {
@@ -64,7 +71,7 @@ function walk(dir, predicate, out = []) {
 }
 
 function textFilesOutsideSecrets() {
-  return walk(configRoot, (file) => {
+  return walk(contentRootAbs, (file) => {
     const relPath = rel(file);
     if (relPath.includes("/.ktx/secrets/")) return false;
     return /\.(ya?ml|md|txt|json|gitignore)$/i.test(file) || path.basename(file) === "README.md";
@@ -85,21 +92,22 @@ function hasChangeMe() {
 }
 
 function requiredLayout() {
-  const required = [
-    "ktx.yaml",
-    "semantic-layer",
-    "wiki",
-    "evals",
-    "skills",
-    "webui/config/access.yaml",
-    ".ktx/secrets",
-    ".ktx-ui"
-  ];
-  const missing = required.filter((item) => !exists(...item.split("/")));
-  if (missing.length) {
-    fail("layout", `${rel(configRoot)} is missing: ${missing.join(", ")}`);
+  // A2: layout is parameterized by LUCY_CONTENT_ROOT (default "./config").
+  // ktx.yaml + .ktx/ + .ktx-ui/ + webui/config/ stay at the project root;
+  // the 4 content dirs live under the resolved content root.
+  const projectRootPaths = ["ktx.yaml", ".ktx/secrets", ".ktx-ui", "webui/config/access.yaml"];
+  const missingRoot = projectRootPaths.filter((item) => !existsSync(path.join(configRoot, ...item.split("/"))));
+  if (missingRoot.length) {
+    fail("layout", `${rel(configRoot)} is missing: ${missingRoot.join(", ")}`);
   } else {
-    pass("layout", `${rel(configRoot)} has the required /data/lucy headless layout`);
+    pass("layout", `${rel(configRoot)} has the required project-root scaffolding`);
+  }
+  const contentPaths = ["semantic-layer", "wiki", "evals", "skills"];
+  const missingContent = contentPaths.filter((item) => !exists(item));
+  if (missingContent.length) {
+    fail("layout-content", `${rel(contentRootAbs)} is missing: ${missingContent.join(", ")} (LUCY_CONTENT_ROOT=${contentRootRel})`);
+  } else {
+    pass("layout-content", `${rel(contentRootAbs)} has the required content dirs (LUCY_CONTENT_ROOT=${contentRootRel})`);
   }
 }
 
@@ -151,7 +159,7 @@ function checkKtxYaml() {
 
 function checkSemanticLayer() {
   const check = "semantic-layer";
-  const dir = path.join(configRoot, "semantic-layer");
+  const dir = path.join(contentRootAbs, "semantic-layer");
   const yamlFiles = walk(dir, (file) => /\.ya?ml$/i.test(file));
   const overlayFiles = yamlFiles.filter((file) => !rel(file).includes("/_schema/"));
   const schemaFiles = yamlFiles.filter((file) => rel(file).includes("/_schema/"));
@@ -171,7 +179,7 @@ function checkSemanticLayer() {
 }
 
 function checkWikiAndEvals() {
-  const wikiFiles = walk(path.join(configRoot, "wiki"), (file) => file.endsWith(".md"));
+  const wikiFiles = walk(path.join(contentRootAbs, "wiki"), (file) => file.endsWith(".md"));
   if (wikiFiles.length === 0) {
     fail("wiki", "wiki must include at least one Markdown context document");
   } else {
@@ -197,7 +205,7 @@ function checkWikiAndEvals() {
     pass("wiki", `${wikiFiles.length} wiki Markdown file(s) are present`);
   }
 
-  const evalFiles = walk(path.join(configRoot, "evals"), (file) => file.endsWith("-eval-cases.yaml"));
+  const evalFiles = walk(path.join(contentRootAbs, "evals"), (file) => file.endsWith("-eval-cases.yaml"));
   if (evalFiles.length === 0) {
     fail("evals", "evals must include at least one *-eval-cases.yaml file");
     return;
@@ -219,11 +227,12 @@ function checkWikiAndEvals() {
 
 function checkAccessYaml() {
   const check = "access-yaml";
-  if (!exists("webui", "config", "access.yaml")) {
+  // webui/config/access.yaml stays at the project root, not under contentRoot.
+  if (!existsSync(path.join(configRoot, "webui", "config", "access.yaml"))) {
     fail(check, "webui/config/access.yaml is missing");
     return;
   }
-  const doc = readYaml(check, "webui", "config", "access.yaml");
+  const doc = parse(readFileSync(path.join(configRoot, "webui", "config", "access.yaml"), "utf8")) ?? {};
   if (!doc) return;
   const roles = doc.roles && typeof doc.roles === "object" ? doc.roles : {};
   const users = Array.isArray(doc.users) ? doc.users : [];

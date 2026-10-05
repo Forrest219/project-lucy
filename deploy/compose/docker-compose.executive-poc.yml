@@ -33,6 +33,9 @@ services:
       LUCY_PROXY_PORT: "7879"
       LUCY_PROXY_UPSTREAM_HOST: 127.0.0.1
       LUCY_PROXY_UPSTREAM_PORT: "7878"
+      # A2 — Content root. Default = <projectRoot>/config/. Unset to fall back
+      # to siblings-of-ktx.yaml (legacy). Entrypoint populates runtime/.
+      LUCY_CONTENT_ROOT: "${LUCY_CONTENT_ROOT:-/data/lucy/config}"
       LUCY_PUBLIC_MCP_URL: "${LUCY_PUBLIC_MCP_URL:-http://127.0.0.1:57883/mcp}"
       POSTHOG_DISABLED: "1"
     ports:
@@ -40,7 +43,8 @@ services:
       - "${LUCY_EXEC_PROXY_HOST_PORT:-57883}:7879"
     volumes:
       - lucy-exec-poc-data:/data/lucy
-      - ../../examples/executive-poc/project-template/evals:/data/lucy/evals:ro
+      # A2: WebUI reads from <configRoot>/evals. Move bind mount target there.
+      - ../../examples/executive-poc/project-template/evals:/data/lucy/config/evals:ro
     depends_on:
       demo-exec-db:
         condition: service_healthy

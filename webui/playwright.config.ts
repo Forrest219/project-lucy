@@ -60,6 +60,12 @@ export default defineConfig({
       LUCY_E2E_PROJECT_DIR: PROJECT_DIR,
       LUCY_E2E_BACKEND_URL: BACKEND_URL,
       PATH: `${E2E_BIN}:${process.env.PATH ?? ""}`,
+      // A2 (M31): the WebUI loads 4 content dirs from the resolved content
+      // root (default config/). E2E fixture seeds fixtures under
+      // $FIXTURE/config/{semantic-layer,wiki,...}, so default config/ is
+      // correct. Set LUCY_CONTENT_ROOT=. here to exercise the legacy
+      // sibling layout in a parallel project.
+      LUCY_CONTENT_ROOT: process.env.LUCY_E2E_CONTENT_ROOT ?? `${PROJECT_DIR}/config`,
     },
     stdout: "pipe",
     stderr: "pipe",
