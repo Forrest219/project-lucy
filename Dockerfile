@@ -138,8 +138,8 @@ RUN cd webui \
   && cd /app \
   && mkdir -p /app/project-template/webui /app/project-template/semantic-layer /app/project-template/skills /app/project-template/wiki \
   && cp customer-config.example/ktx.yaml /app/project-template/ktx.yaml \
-  && cp -R customer-config.example/semantic-layer/. /app/project-template/semantic-layer/ \
-  && cp -R customer-config.example/wiki/. /app/project-template/wiki/ \
+  && cp -R customer-config.example/config/semantic-layer/. /app/project-template/semantic-layer/ \
+  && cp -R customer-config.example/config/wiki/. /app/project-template/wiki/ \
   && cp -R customer-config.example/webui/config /app/project-template/webui/config \
   && touch /app/project-template/skills/.gitkeep \
   && mkdir -p /data/lucy \
