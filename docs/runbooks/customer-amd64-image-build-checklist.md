@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy Customer amd64 Image Build Checklist |
 | 文档类型 | Checklist |
-| 版本 | v1.5 |
-| 撰写日期 | 2026-08-27；2026-08-28 增补 G4b；2026-09-02 增补 G8；2026-09-02 v1.4 解耦 G8/Helm；2026-09-02 v1.5 身份闭环（最终 digest 门禁、G4b 功能性、Offline/Registry 语义） |
+| 版本 | v1.6 |
+| 撰写日期 | 2026-08-27；2026-08-28 增补 G4b；2026-09-02 增补 G8；2026-09-02 v1.4 解耦 G8/Helm；2026-09-02 v1.5 身份闭环（最终 digest 门禁、G4b 功能性、Offline/Registry 语义）；2026-10-07 v1.6 Apple Silicon 可构建待测镜像，见 customer-k8s-test-package-principles.md |
 | 撰写人 | Composer |
 | 委托人 | xingchen |
 | 基于材料 | 20260827 客户 `exec /usr/bin/tini: exec format error` 事故；20260902 K8s v1/v2 原地升级契约事故；`docs/specs/lucy-202608-08-image-arch-and-ktx-baseline-fix.md`；Release `lucy-k8s-integration-20260827-v1` 坏包复盘 |
@@ -180,12 +180,13 @@ docker run --rm --network=none --platform linux/amd64 \
 | 构建机 | 做法 |
 |---|---|
 | amd64 native（强烈推荐） | `bash scripts/release/build-customer-amd64-image.sh`，或 GHA `customer-amd64-native` job（lucy-release.yml，原生 amd64 runner 构建 + 全套 G1–G4b/G8 门禁） |
-| Apple Silicon (arm64) | **仅限无 baked runtime 需求的场景**。QEMU 用户态模拟无法执行 ktx CLI 的完整 ESM 模块图（`qemu: uncaught target signal 11` 段错误，2026-09-27 实测：Docker Desktop on Apple Silicon，含 uv/glibc、node 大图两例）。含 `ktx admin runtime install`（G4b 离线 runtime）的镜像**必须**在 amd64 native 构建；本地 QEMU 只做 G1/G2 结构核验 |
+| Apple Silicon (arm64) | **可以构建待测镜像**（历史客户包即由此交叉构建，amd64 上原生运行）。必须 `--platform linux/amd64` 且 `TARGETPLATFORM` / `TARGETARCH` 为 amd64；本机放行看构建成功 + G1 + G2。`docker run ktx` 的 G4/G4b/G8 在 QEMU 下可能 `signal 11`（2026-09-27：glibc `uv` 已用 musl 静态包避开；`ktx` 模块图仍可能段错误），不能据此作废镜像。客户包的 G4/G4b 在 amd64 原生环境判定。详见 [`customer-k8s-test-package-principles.md`](customer-k8s-test-package-principles.md) |
 
 构建后恢复 demo builder：`docker buildx use default`。
 
 ## 关联文档
 
+- `docs/runbooks/customer-k8s-test-package-principles.md`（Mac 构建待测包、amd64 服务器验收、与客户包的分界）
 - `docs/runbooks/customer-delivery-preflight-checklist.md`（全流程通用交付防坑指南）
 - `docs/specs/lucy-customer-amd64-offline-delivery-spec.md`
 - `docs/specs/lucy-202608-08-image-arch-and-ktx-baseline-fix.md`

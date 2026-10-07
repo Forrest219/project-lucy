@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy Customer Delivery Preflight Checklist |
 | 文档类型 | Governance / Quality Gate / Runbook |
-| 版本 | v1.3 |
-| 撰写日期 | 2026-08-28；2026-09-02 增补升级契约铁律；2026-09-02 v1.2 自动化 H3/H4；2026-09-02 v1.3 真实 N-1、Pod imageID、K6 load 重验、MCP URL 矩阵 |
+| 版本 | v1.4 |
+| 撰写日期 | 2026-08-28；2026-09-02 增补升级契约铁律；2026-09-02 v1.2 自动化 H3/H4；2026-09-02 v1.3 真实 N-1、Pod imageID、K6 load 重验、MCP URL 矩阵；2026-10-07 v1.4 区分待测包与客户包放行 |
 | 适用范围 | 所有交付给客户的 Docker Compose 离线包、Kubernetes / Helm 集成包及 Release Assets |
 | 关联文档 | [`docs/runbooks/customer-amd64-image-build-checklist.md`](customer-amd64-image-build-checklist.md)、[`docs/runbooks/customer-k8s-deployer-quickstart.md`](customer-k8s-deployer-quickstart.md)、[`docs/runbooks/customer-deployment-guide.md`](customer-deployment-guide.md) |
 
@@ -152,6 +152,8 @@ bash scripts/gates/k8s-release-gate.sh --with-cluster \
 ---
 
 ## 放行条件（Go / No-Go）
+
+以下全部满足才可标注「可直接原地升级」并发放**客户包**。送到自备 amd64 服务器做平滑升级模拟的**待测包**不套用本节：本机构建成功且 G1、G2 通过即可封包，G4/G4b 与升级验收在那台服务器上做。原则见 [`customer-k8s-test-package-principles.md`](customer-k8s-test-package-principles.md)。
 
 以下全部满足才可标注「可直接原地升级」并发放客户 K8s 包：
 
