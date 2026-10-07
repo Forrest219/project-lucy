@@ -19,6 +19,8 @@ import path from "node:path";
 import { realpath } from "node:fs/promises";
 import { parse as parseYaml } from "yaml";
 import { reloadCatalog, type CatalogReloadRun } from "./catalog-reload";
+import { syncContentToProjectRoot } from "./content-mirror";
+import { resolveContentPaths } from "./paths";
 import { readProject } from "./project";
 
 const MAX_BYTES = 512 * 1024;
@@ -305,6 +307,11 @@ async function validateSchemaAgainstConfig(
  * though, every existing path component in the target chain must be a real
  * directory, not a symlink. Validation never creates directories; upload may
  * create the missing tail and then re-run this check.
+ *
+ * A2 (M31): the anchor is the *content root* semantic layer
+ * (`<contentRoot>/semantic-layer/`, default `<projectRoot>/config/semantic-layer/`),
+ * not the legacy sibling of `ktx.yaml`. The catalog reload reads the content
+ * root; anchoring anywhere else makes uploaded manifests invisible to it.
  */
 export async function assertSafeTarget(
   projectRoot: string,
@@ -312,21 +319,28 @@ export async function assertSafeTarget(
   errors: CatalogAssetError[],
   options: { createParent?: boolean } = {}
 ): Promise<{ safeParentAbs: string; targetAbs: string; exists: boolean } | null> {
-  const targetAbs = path.resolve(projectRoot, targetRel);
+  const contentPaths = await resolveContentPaths(projectRoot);
+  const targetAbs = path.resolve(contentPaths.configDir, targetRel);
   const targetParentAbs = path.dirname(targetAbs);
-  const semanticLayerRel = "semantic-layer";
-  const semanticLayerAbs = path.resolve(projectRoot, semanticLayerRel);
+  const semanticLayerAbs = contentPaths.semanticLayer;
 
-  const semanticLstat = await lstat(semanticLayerAbs).catch((error: NodeJS.ErrnoException) => {
+  let semanticLstat = await lstat(semanticLayerAbs).catch((error: NodeJS.ErrnoException) => {
     if (error.code === "ENOENT") return null;
     throw error;
   });
   if (!semanticLstat) {
-    errors.push({
-      code: "PATH_NOT_ALLOWED",
-      message: "项目缺少 semantic-layer 目录，无法写入 schema manifest"
-    });
-    return null;
+    if (options.createParent) {
+      // Upload may bootstrap the content-root semantic-layer dir (the server
+      // owns the content root; loadContentPaths normally ensures it exists).
+      await mkdir(semanticLayerAbs, { recursive: true });
+      semanticLstat = await lstat(semanticLayerAbs);
+    } else {
+      errors.push({
+        code: "PATH_NOT_ALLOWED",
+        message: "内容根缺少 semantic-layer 目录，无法写入 schema manifest"
+      });
+      return null;
+    }
   }
   if (semanticLstat.isSymbolicLink()) {
     errors.push({
@@ -343,7 +357,7 @@ export async function assertSafeTarget(
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       errors.push({
         code: "PATH_NOT_ALLOWED",
-        message: "项目缺少 semantic-layer 目录，无法写入 schema manifest"
+        message: "内容根缺少 semantic-layer 目录，无法写入 schema manifest"
       });
       return null;
     }
@@ -861,6 +875,20 @@ export async function uploadCatalogAsset(
     }
   }
   await rename(tempAbs, safety.targetAbs);
+
+  // A2: the ktx daemon/CLI still read the project-root sibling view. Push the
+  // just-written manifest (and any other content-root drift) there so query
+  // execution sees the same state the catalog now reads. Per-file failures
+  // are counted; a hard failure here must not silently continue.
+  const mirror = await syncContentToProjectRoot(projectRoot, await resolveContentPaths(projectRoot));
+  if (mirror.failed > 0) {
+    throw new CatalogAssetValidationError(
+      "PATH_NOT_ALLOWED",
+      `内容根到 ktx 兄弟视图的同步有 ${mirror.failed} 个文件失败`,
+      validation,
+      403
+    );
+  }
 
   // Audit record (no YAML content).
   const createdAt = new Date();

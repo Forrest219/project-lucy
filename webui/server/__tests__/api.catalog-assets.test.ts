@@ -43,6 +43,24 @@ async function makeProject(
   return root;
 }
 
+// A2 default layout: content root is <projectRoot>/config/. Tests using this
+// fixture must leave LUCY_CONTENT_ROOT unset.
+async function makeProjectA2(
+  yaml: string,
+  manifestFiles: Record<string, string> = {}
+): Promise<string> {
+  const root = await mkdtemp(path.join(os.tmpdir(), "lucy-api-catalog-assets-a2-"));
+  await writeFile(path.join(root, "ktx.yaml"), yaml, "utf8");
+  await mkdir(path.join(root, ".ktx-ui"), { recursive: true });
+  const connId = "demo-mysql";
+  const dir = path.join(root, "config", "semantic-layer", connId, "_schema");
+  await mkdir(dir, { recursive: true });
+  for (const [name, content] of Object.entries(manifestFiles)) {
+    await writeFile(path.join(dir, `${name}.yaml`), content, "utf8");
+  }
+  return root;
+}
+
 beforeEach(async () => {
   vi.resetModules();
   previousRoot = process.env.KTX_PROJECT_ROOT;
@@ -56,6 +74,11 @@ afterEach(async () => {
     delete process.env.KTX_PROJECT_ROOT;
   } else {
     process.env.KTX_PROJECT_ROOT = previousRoot;
+  }
+  if (previousContentRoot === undefined) {
+    delete process.env.LUCY_CONTENT_ROOT;
+  } else {
+    process.env.LUCY_CONTENT_ROOT = previousContentRoot;
   }
   if (previousAuditDb === undefined) {
     delete process.env.LUCY_AUDIT_DB;
@@ -880,6 +903,131 @@ describe("GET /api/catalog/assets/schema-manifest", () => {
 
     expect(res.body.ok).toBe(false);
     expect(res.body.error.code).toBe("PATH_NOT_ALLOWED");
+    await app.close();
+  });
+});
+
+// ─── A2 default content root (<projectRoot>/config/) ───────────────────────
+// Regression: the M17 upload path anchored `semantic-layer/` at the project
+// root (legacy sibling of ktx.yaml) while the catalog reload reads the A2
+// content root. Uploaded manifests were therefore invisible to the catalog
+// (badge stuck on 缺失 Manifest). These tests pin the content-root anchoring
+// and the one-way mirror to the ktx-facing sibling view.
+
+describe("A2 default content root (config/)", () => {
+  it("validate targets the content root, not the legacy sibling", async () => {
+    projectRoot = await makeProjectA2(baseYaml());
+    auditDbPath = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    delete process.env.LUCY_CONTENT_ROOT;
+    process.env.LUCY_AUDIT_DB = auditDbPath;
+
+    const app = await buildFreshServer();
+    await app.ready();
+    const res = await request(app.server)
+      .post("/api/catalog/assets/validate")
+      .send({
+        connectionId: "demo-mysql",
+        schema: "openclaw_db",
+        assetKind: "schema_manifest",
+        filename: "openclaw_db.yaml",
+        content: SAMPLE_MANIFEST
+      })
+      .expect(200);
+
+    expect(res.body.data.valid).toBe(true);
+    expect(res.body.data.exists).toBe(false);
+
+    // Nothing may be written by validate — at either root.
+    await expect(
+      readFile(path.join(projectRoot, "config/semantic-layer/demo-mysql/_schema/openclaw_db.yaml"), "utf8")
+    ).rejects.toMatchObject({ code: "ENOENT" });
+    await app.close();
+  });
+
+  it("upload writes to the content root, reload sees it, sibling view is mirrored", async () => {
+    projectRoot = await makeProjectA2(baseYaml());
+    auditDbPath = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    delete process.env.LUCY_CONTENT_ROOT;
+    process.env.LUCY_AUDIT_DB = auditDbPath;
+
+    const app = await buildFreshServer();
+    await app.ready();
+    const res = await request(app.server)
+      .post("/api/catalog/assets/upload")
+      .send({
+        connectionId: "demo-mysql",
+        schema: "openclaw_db",
+        assetType: "schemaManifest",
+        filename: "openclaw_db.yaml",
+        content: SAMPLE_MANIFEST
+      })
+      .expect(200);
+
+    expect(res.body.ok).toBe(true);
+
+    // Authoritative copy lives under the content root.
+    const contentRootCopy = await readFile(
+      path.join(projectRoot, "config/semantic-layer/demo-mysql/_schema/openclaw_db.yaml"),
+      "utf8"
+    );
+    expect(contentRootCopy).toBe(SAMPLE_MANIFEST);
+
+    // Catalog reload in the same request consumed the content root copy.
+    const reload = res.body.data.reload;
+    expect(reload.source).toBe("static-yaml");
+    expect(reload.manifestSchemas).toBe(1);
+    expect(reload.warnings).toEqual([]);
+
+    // ktx-facing sibling view received the mirror copy.
+    const siblingCopy = await readFile(
+      path.join(projectRoot, "semantic-layer/demo-mysql/_schema/openclaw_db.yaml"),
+      "utf8"
+    );
+    expect(siblingCopy).toBe(SAMPLE_MANIFEST);
+
+    await app.close();
+  });
+
+  it("schema-manifest read resolves the content root", async () => {
+    projectRoot = await makeProjectA2(baseYaml(), {
+      openclaw_db: "tables:\n  customers:\n    table: openclaw_db.customers\n"
+    });
+    auditDbPath = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    delete process.env.LUCY_CONTENT_ROOT;
+    process.env.LUCY_AUDIT_DB = auditDbPath;
+
+    const app = await buildFreshServer();
+    await app.ready();
+    const res = await request(app.server)
+      .get("/api/catalog/assets/schema-manifest")
+      .query({ connectionId: "demo-mysql", schema: "openclaw_db" })
+      .expect(200);
+
+    expect(res.body.ok).toBe(true);
+    expect(res.body.data.content).toContain("openclaw_db.customers");
+
+    // A legacy-sibling-only copy must NOT satisfy the read.
+    const legacyOnly = await makeProject(baseYaml(), {
+      openclaw_db: "tables:\n  customers:\n    table: openclaw_db.customers\n"
+    });
+    // Empty content root (server boot would ensureContentDirs()).
+    await mkdir(path.join(legacyOnly, "config", "semantic-layer"), { recursive: true });
+    const prevRoot = projectRoot;
+    projectRoot = legacyOnly;
+    process.env.KTX_PROJECT_ROOT = legacyOnly;
+    const app2 = await buildFreshServer();
+    await app2.ready();
+    await request(app2.server)
+      .get("/api/catalog/assets/schema-manifest")
+      .query({ connectionId: "demo-mysql", schema: "openclaw_db" })
+      .expect(404);
+    await app2.close();
+    await rm(legacyOnly, { recursive: true, force: true });
+    projectRoot = prevRoot;
+
     await app.close();
   });
 });

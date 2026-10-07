@@ -1,4 +1,6 @@
 import { execFile, type ExecFileException } from "node:child_process";
+import { syncContentToProjectRoot } from "./content-mirror";
+import { resolveContentPaths } from "./paths";
 import { scrubSemanticLayerJunk } from "./semantic-layer-junk";
 import { relocateTableYamlHistoryOutOfSemanticLayer } from "./table-yaml-history";
 
@@ -127,6 +129,10 @@ export async function runIngest(
 }
 
 async function prepareSemanticLayerForKtx(projectRoot: string): Promise<void> {
+  // A2: ktx reads the project-root sibling view, but WebUI writes land in the
+  // content root. Push content-root drift to the sibling view before ktx
+  // walks it, so validate/reindex see the same state the UI shows.
+  await syncContentToProjectRoot(projectRoot, await resolveContentPaths(projectRoot));
   // Spec 115: remove AppleDouble / .DS_Store before ktx walks semantic-layer.
   await scrubSemanticLayerJunk(projectRoot);
   // M54 leftover history under semantic-layer/ is not a connection; KTX rejects it.
