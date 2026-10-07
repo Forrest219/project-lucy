@@ -1,0 +1,14 @@
+---
+description: 在 Mac 上构建 K8s 待测包、或讨论客户 K8s 平滑升级出包时遵循的原则。Mac 可以构建 linux/amd64 镜像；G4/G4b 的 ktx 执行放在 amd64 原生环境；待测包不交给客户。
+alwaysApply: false
+---
+
+# K8s 待测包
+
+事实来源：`docs/runbooks/customer-k8s-test-package-principles.md`。不要按 `docs/plans/wo-202608-27-customer-k8s-delivery.md` 或 `wo-20260901-k8s-delivery-hardening.md` 的步骤出包。
+
+- 待测包可以在 Apple Silicon 上 `docker build --platform linux/amd64`（`TARGETPLATFORM` / `TARGETARCH` 均为 amd64）。禁止 `FROM --platform=$BUILDPLATFORM`。
+- 本机放行只要求构建成功、G1、G2（`node`/`tini` 为 x86-64）。QEMU `signal 11` 不能作废已构建镜像，也不能改去复用历史 tar。
+- G4/G4b 与平滑升级验收在自备 amd64 服务器上做。待测包使用新的 `*-test` 后缀，不用默认 `20260902-v3`。
+- `build-k8s-delivery-package.sh` 收尾会在本机再跑 `ktx`，失败时删除 tar。待测包不要因此回退到旧包。
+- 客户包仍走 `docs/runbooks/customer-delivery-preflight-checklist.md` 的 Go / No-Go。
