@@ -22,7 +22,7 @@
 // - `LUCY_CONTENT_ROOT=.` (legacy layout, configDir === projectRoot) is a
 //   no-op by construction.
 
-import { copyFile, lstat, mkdir, readdir, realpath, stat, utimes } from "node:fs/promises";
+import { copyFile, lstat, mkdir, readdir, realpath, stat, utimes, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { ContentPaths } from "./paths";
 
@@ -97,6 +97,35 @@ async function mirrorDir(srcDir: string, destDir: string, result: ContentMirrorR
       result.failed += 1;
     }
   }
+}
+
+/**
+ * Mirror one just-written content file into the project-root sibling view.
+ * Best-effort and conservative: any symlink in the destination chain aborts
+ * the mirror silently — the authoritative copy under the content root is
+ * already on disk, and a refused mirror only means the ktx view stays stale
+ * until the next full `syncContentToProjectRoot` run.
+ *
+ * `relPath` must already be normalized (posix separators, no traversal).
+ */
+export async function mirrorContentFileToProjectRoot(
+  projectRootReal: string,
+  relPath: string,
+  content: string | Buffer
+): Promise<void> {
+  const destAbs = path.join(projectRootReal, relPath);
+  const parts = relPath.split("/").filter((segment) => segment.length > 0);
+  let current = projectRootReal;
+  for (const segment of parts.slice(0, -1)) {
+    current = path.join(current, segment);
+    const info = await lstat(current).catch(() => null);
+    if (!info) break;
+    if (info.isSymbolicLink() || !info.isDirectory()) return;
+  }
+  const destInfo = await lstat(destAbs).catch(() => null);
+  if (destInfo?.isSymbolicLink()) return;
+  await mkdir(path.dirname(destAbs), { recursive: true });
+  await writeFile(destAbs, content);
 }
 
 /**

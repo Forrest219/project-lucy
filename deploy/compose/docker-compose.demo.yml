@@ -30,6 +30,8 @@ services:
         TARGETARCH: "${TARGETARCH:-arm64}"
         # Optional PyPI mirror (see Dockerfile ARG block). Empty = official pypi.org.
         UV_INDEX_URL: "${UV_INDEX_URL:-}"
+        # Optional Debian apt mirror host (see Dockerfile ARG block). Empty = deb.debian.org.
+        APT_MIRROR: "${APT_MIRROR:-}"
     image: project-lucy:demo
     environment:
       KTX_PROJECT_ROOT: /data/lucy

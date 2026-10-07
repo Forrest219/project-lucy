@@ -42,9 +42,11 @@ import { createTwoFilesPatch } from "diff";
 type YamlDocument = ReturnType<typeof parseDocument>;
 import { readProject } from "./project";
 import { assertSafeTarget } from "./catalog-assets";
+import { syncContentToProjectRoot } from "./content-mirror";
 import { ForbiddenPathError } from "./fs-safe";
 import { reindexProject, validateSource, type Issue, type ValidationResult } from "./ktx";
 import { reloadCatalog } from "./catalog-reload";
+import { resolveContentPaths } from "./paths";
 import { recordConfigChange } from "./admin/audit.js";
 import { isSemanticLayerJunkName } from "./semantic-layer-junk";
 import { sanitizeSemanticSourceYaml } from "./semantic-overlay-sanitize";
@@ -1364,6 +1366,10 @@ async function promoteFile(
     if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
   }
   await rename(tempAbs, safety.targetAbs);
+  // A2: keep the ktx-facing sibling view in sync so MCP query execution sees
+  // the promoted overlay immediately (the async reindex below also syncs via
+  // prepareSemanticLayerForKtx, but the daemon reads per request).
+  await syncContentToProjectRoot(projectRoot, await resolveContentPaths(projectRoot));
   return { overwritten: safety.exists };
 }
 

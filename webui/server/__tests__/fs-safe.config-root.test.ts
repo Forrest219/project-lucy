@@ -53,19 +53,23 @@ afterEach(async () => {
 });
 
 describe("fs-safe writable paths — config/ subdir layout", () => {
-  it("writes content files to <configDir>/<prefix>/..., not projectRoot siblings", async () => {
+  it("writes content files to <configDir>/<prefix>/... and mirrors them to the ktx sibling view", async () => {
     const paths = configRootPaths();
     await safeWrite(paths, projectRoot, "semantic-layer/x.yaml", "a: 1\n");
     await safeWrite(paths, projectRoot, "evals/a.md", "# A\n");
     await safeWrite(paths, projectRoot, "skills/warehouse/SKILL.md", "# S\n");
 
-    // New layout: writes land under config/
+    // New layout: authoritative writes land under config/
     await expect(readFile(path.join(projectRoot, "config", "semantic-layer", "x.yaml"), "utf8")).resolves.toBe("a: 1\n");
     await expect(readFile(path.join(projectRoot, "config", "evals", "a.md"), "utf8")).resolves.toBe("# A\n");
     await expect(readFile(path.join(projectRoot, "config", "skills", "warehouse", "SKILL.md"), "utf8")).resolves.toBe("# S\n");
 
-    // Legacy sibling paths MUST NOT exist — proving the resolver actually controls visibility
-    await expect(readFile(path.join(projectRoot, "semantic-layer", "x.yaml"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+    // A2 sibling-view mirror: ktx still reads siblings of ktx.yaml, so every
+    // content-root write is mirrored to the project-root view (see
+    // content-mirror.ts). Staleness in the mirror must never exceed one write.
+    await expect(readFile(path.join(projectRoot, "semantic-layer", "x.yaml"), "utf8")).resolves.toBe("a: 1\n");
+    await expect(readFile(path.join(projectRoot, "evals", "a.md"), "utf8")).resolves.toBe("# A\n");
+    await expect(readFile(path.join(projectRoot, "skills", "warehouse", "SKILL.md"), "utf8")).resolves.toBe("# S\n");
   });
 
   it("creates missing content subdirs on demand (mkdir -p)", async () => {
@@ -160,5 +164,68 @@ describe("fs-safe readable paths — config/ subdir layout", () => {
     );
 
     await expectForbidden(() => assertReadable(paths, projectRoot, "evals/secret-link/p"));
+  });
+});
+describe("A2 sibling-view mirror on write", () => {
+  it("mirrors semantic-layer and wiki writes to the project-root sibling view", async () => {
+    const paths = configRootPaths();
+    await safeWrite(paths, projectRoot, "semantic-layer/demo-mysql/s.yaml", "tables: {}\n");
+    await safeWrite(paths, projectRoot, "wiki/global/playbook.md", "# Playbook\n");
+
+    // Authoritative copies under the content root.
+    await expect(
+      readFile(path.join(projectRoot, "config", "semantic-layer", "demo-mysql", "s.yaml"), "utf8")
+    ).resolves.toBe("tables: {}\n");
+    // Mirrored copies where ktx (siblings of ktx.yaml) reads them.
+    await expect(
+      readFile(path.join(projectRoot, "semantic-layer", "demo-mysql", "s.yaml"), "utf8")
+    ).resolves.toBe("tables: {}\n");
+    await expect(
+      readFile(path.join(projectRoot, "wiki", "global", "playbook.md"), "utf8")
+    ).resolves.toBe("# Playbook\n");
+  });
+
+  it("does not mirror root-only writes", async () => {
+    const paths = configRootPaths();
+    await safeWrite(paths, projectRoot, ".ktx-ui/state.json", "{}");
+    await expect(readFile(path.join(projectRoot, ".ktx-ui", "state.json"), "utf8")).resolves.toBe("{}");
+    // No <root>/.ktx-ui/.ktx-ui mirror path is created; only the primary exists.
+    await expect(
+      readFile(path.join(projectRoot, "config", ".ktx-ui", "state.json"), "utf8")
+    ).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("legacy layout (configDir === projectRoot) does not double-write", async () => {
+    const paths: ContentPaths = {
+      configDir: projectRoot,
+      semanticLayer: path.join(projectRoot, "semantic-layer"),
+      wiki: path.join(projectRoot, "wiki"),
+      evals: path.join(projectRoot, "evals"),
+      skills: path.join(projectRoot, "skills"),
+      source: "env"
+    };
+    await safeWrite(paths, projectRoot, "semantic-layer/x.yaml", "a: 1\n");
+    await expect(
+      readFile(path.join(projectRoot, "semantic-layer", "x.yaml"), "utf8")
+    ).resolves.toBe("a: 1\n");
+  });
+
+  it("refuses to mirror through a symlinked sibling dir but keeps the primary write", async () => {
+    const outside = await mkdtemp(path.join(os.tmpdir(), "ktx-webui-fs-safe-mirror-out-"));
+    await mkdir(path.join(outside, "wiki"), { recursive: true });
+    await symlink(path.join(outside, "wiki"), path.join(projectRoot, "wiki"));
+
+    const paths = configRootPaths();
+    await safeWrite(paths, projectRoot, "wiki/global/page.md", "# Page\n");
+
+    // Primary content-root write landed.
+    await expect(
+      readFile(path.join(projectRoot, "config", "wiki", "global", "page.md"), "utf8")
+    ).resolves.toBe("# Page\n");
+    // Nothing was written through the sibling symlink.
+    await expect(
+      readFile(path.join(outside, "wiki", "global", "page.md"), "utf8")
+    ).rejects.toMatchObject({ code: "ENOENT" });
+    await rm(outside, { recursive: true, force: true });
   });
 });

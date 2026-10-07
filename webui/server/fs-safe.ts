@@ -1,5 +1,6 @@
 import { lstat, mkdir, readdir, realpath, rename, rm, rmdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { mirrorContentFileToProjectRoot } from "./content-mirror";
 import type { ContentPaths } from "./paths";
 
 /**
@@ -154,15 +155,48 @@ export async function resolveWritable(
   throw new ForbiddenPathError(`Writing ${normalized} is outside allowed directories`);
 }
 
+/**
+ * A2: after a successful content-root write, keep the ktx-facing sibling
+ * view (`<projectRoot>/{semantic-layer,wiki,evals,skills}/`) in sync. ktx
+ * still reads those dirs as siblings of ktx.yaml, so without the mirror a
+ * WebUI-authored wiki page or overlay would be invisible to query
+ * execution. Best-effort: a refused/failed mirror never fails the primary
+ * write; staleness is reconciled by the next full sync
+ * (`syncContentToProjectRoot` on upload / before ktx invocations).
+ * No-op for the legacy layout (LUCY_CONTENT_ROOT=.).
+ */
+async function mirrorWriteToSiblingView(
+  contentPaths: ContentPaths,
+  projectRoot: string,
+  normalized: string,
+  content: string | Buffer
+): Promise<void> {
+  if (!matchesPrefix(normalized, CONTENT_PREFIXES)) return;
+  let configDirReal: string;
+  let rootReal: string;
+  try {
+    [configDirReal, rootReal] = await Promise.all([
+      realpath(contentPaths.configDir),
+      realpath(projectRoot)
+    ]);
+  } catch {
+    return;
+  }
+  if (configDirReal === rootReal) return;
+  await mirrorContentFileToProjectRoot(rootReal, normalized, content).catch(() => undefined);
+}
+
 export async function safeWrite(
   contentPaths: ContentPaths,
   projectRoot: string,
   relPath: string,
   content: string
 ): Promise<void> {
-  const target = await resolveWritable(contentPaths, projectRoot, relPath);
+  const normalized = normalizeRelative(relPath);
+  const target = await resolveWritable(contentPaths, projectRoot, normalized);
   await mkdir(path.dirname(target), { recursive: true });
   await writeFile(target, content, "utf8");
+  await mirrorWriteToSiblingView(contentPaths, projectRoot, normalized, content);
 }
 
 /** Binary-safe write under the same allow-list as `safeWrite` (e.g. customer logo). */
@@ -172,9 +206,11 @@ export async function safeWriteBinary(
   relPath: string,
   content: Buffer
 ): Promise<void> {
-  const target = await resolveWritable(contentPaths, projectRoot, relPath);
+  const normalized = normalizeRelative(relPath);
+  const target = await resolveWritable(contentPaths, projectRoot, normalized);
   await mkdir(path.dirname(target), { recursive: true });
   await writeFile(target, content);
+  await mirrorWriteToSiblingView(contentPaths, projectRoot, normalized, content);
 }
 
 export async function safeMkdir(
