@@ -17,7 +17,7 @@ description: |
   Bundled runtime: `@kaelio/ktx@0.16.0` (pinned in Dockerfile / values).
   Product version (`appVersion`) is Lucy-facing and independent of KTX.
 type: application
-version: 0.2.2
+version: 0.2.3
 appVersion: "0.17.0"
 kubeVersion: ">=1.24.0-0"
 home: https://github.com/kaelio/lucy
@@ -38,6 +38,14 @@ annotations:
   category: DataAgent
   licenses: Apache-2.0
   artifacthub.io/changes: |
+    - kind: fixed
+      description: DB password Secret is no longer mounted over /data/lucy/.ktx/secrets (read-only, EROFS on WebUI writes); a secrets-sync init container copies keys into the PVC (0700 dir, 0600 files, UID 10001).
+    - kind: added
+      description: env.LUCY_CONTENT_ROOT is injected into the pod so PVCs with the legacy sibling layout (content next to ktx.yaml) keep working.
+    - kind: added
+      description: nameOverride/fullnameOverride documented in values so upgrades can keep existing Deployment/Service names.
+    - kind: changed
+      description: project-migrate only chowns entries that are not already 10001:10001 and drops unneeded capabilities.
     - kind: changed
       description: Decouple Lucy product version (appVersion 0.17.0) from bundled KTX 0.16.0; inject LUCY_VERSION.
     - kind: changed

@@ -8,6 +8,8 @@ PKG_TAR=""
 OUTER_SHA256=""
 SKIP_DOCKER_LOAD=0
 RUN_IMAGE_GATES=1
+SKIP_KTX_EXEC=0
+IMAGE_PREEXISTED=0
 
 usage() {
   cat <<'EOF'
@@ -20,8 +22,10 @@ Checks (K6):
   - Outer/inner SHA256 when provided
   - Single top-level dir + single image tar
   - Offline vs registry identity semantics
+  - No macOS/VCS leftovers (._*, __MACOSX, .DS_Store, .git)
   - Optional docker load + G1/G2/G3/G4/G4b/G8 against loaded image
-  - Helm static gate against package chart + examples
+    (--skip-ktx-exec keeps G1/G2 but skips steps that execute ktx under QEMU)
+  - The package's own scripts/preflight-helm.sh and scripts/acceptance.sh run from the package root
 EOF
 }
 
@@ -32,6 +36,7 @@ while [[ $# -gt 0 ]]; do
     --outer-sha256) OUTER_SHA256="$2"; shift 2 ;;
     --skip-docker-load) SKIP_DOCKER_LOAD=1; shift ;;
     --skip-image-gates) RUN_IMAGE_GATES=0; shift ;;
+    --skip-ktx-exec) SKIP_KTX_EXEC=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "unknown argument: $1" >&2; usage; exit 1 ;;
   esac
@@ -42,7 +47,9 @@ done
 CLEANUP=""
 LOADED_IMAGE=""
 cleanup() {
-  if [[ -n "${LOADED_IMAGE}" ]]; then
+  # Never remove an image that was already present before this script loaded it
+  # (the Mac that built the package still needs its local image).
+  if [[ -n "${LOADED_IMAGE}" && "${IMAGE_PREEXISTED}" -eq 0 ]]; then
     docker rmi "${LOADED_IMAGE}" >/dev/null 2>&1 || true
   fi
   if [[ -n "${CLEANUP}" ]]; then
@@ -76,6 +83,19 @@ if [[ "${PKG_NAME}" =~ -v1$ ]] || [[ "${PKG_NAME}" =~ -v2$ ]]; then
   exit 1
 fi
 echo "  ok package name ${PKG_NAME}"
+
+echo "[verify-k8s-package] K6-1a clean package (no macOS/VCS leftovers)"
+JUNK="$(find "${PKG_DIR}" \( -name '._*' -o -name '__MACOSX' -o -name '.DS_Store' -o -name '.git' \) -print | head -5)"
+if [[ -n "${JUNK}" ]]; then
+  echo "FAIL K6-1a: package contains leftovers:" >&2
+  printf '%s\n' "${JUNK}" >&2
+  exit 1
+fi
+if [[ -n "${PKG_TAR}" ]] && tar -tzf "${PKG_TAR}" | grep -E '(^|/)(\._[^/]*|__MACOSX|\.DS_Store)(/|$)' >/dev/null; then
+  echo "FAIL K6-1a: tar archive contains AppleDouble/macOS entries" >&2
+  exit 1
+fi
+echo "  ok no leftovers"
 
 echo "[verify-k8s-package] K6-1b inner SHA256SUMS"
 [[ -f "${PKG_DIR}/SHA256SUMS" ]] || { echo "FAIL: missing SHA256SUMS" >&2; exit 1; }
@@ -188,6 +208,9 @@ fi
 if [[ "${SKIP_DOCKER_LOAD}" -eq 0 ]]; then
   command -v docker >/dev/null 2>&1 || { echo "FAIL: docker required for load verify" >&2; exit 1; }
   echo "[verify-k8s-package] K6-4 docker load image tar"
+  if docker image inspect "${VALUES_REPO}:${VALUES_TAG}" >/dev/null 2>&1; then
+    IMAGE_PREEXISTED=1
+  fi
   LOAD_OUT="$(docker load -i "${IMAGE_TAR}")"
   echo "  ${LOAD_OUT}"
   LOADED_IMAGE="$(printf '%s\n' "${LOAD_OUT}" | awk -F': ' '/Loaded image:/{print $2; exit}')"
@@ -212,6 +235,10 @@ if [[ "${SKIP_DOCKER_LOAD}" -eq 0 ]]; then
     meta="$(docker image inspect "${LOADED_IMAGE}" --format '{{.Os}}/{{.Architecture}}')"
     [[ "${meta}" == "linux/amd64" ]] || { echo "FAIL G1: ${meta}" >&2; exit 1; }
     bash "${ROOT}/scripts/release/assert-image-elf-arch.sh" "${LOADED_IMAGE}" amd64
+  fi
+  if [[ "${RUN_IMAGE_GATES}" -eq 1 && "${SKIP_KTX_EXEC}" -eq 1 ]]; then
+    echo "[verify-k8s-package] K6-5 ktx execution skipped (--skip-ktx-exec): run G4/G4b/G8 on a native amd64 host"
+  elif [[ "${RUN_IMAGE_GATES}" -eq 1 ]]; then
     docker run --rm --platform linux/amd64 --entrypoint /bin/sh "${LOADED_IMAGE}" -c 'echo ok' >/dev/null
     KTX_VERSION="${KTX_VERSION:-0.16.0}"
     ver="$(docker run --rm --platform linux/amd64 --entrypoint ktx "${LOADED_IMAGE}" --version)"
@@ -226,9 +253,24 @@ else
   echo "[verify-k8s-package] K6-4 skipped docker load (--skip-docker-load)"
 fi
 
-echo "[verify-k8s-package] K6-6 helm static on package chart"
+echo "[verify-k8s-package] K6-6 package scripts run from the package root (preflight)"
 CHART="${PKG_DIR}/helm/lucy"
 [[ -d "${CHART}" ]] || { echo "FAIL: missing package chart" >&2; exit 1; }
-bash "${ROOT}/scripts/gates/helm-lucy-gate.sh" --chart "${CHART}" --k3s-values "${VALUES_FILE}" --k3s-only
+# Use the package's own script, not the repo's, so path/dependency bugs surface here.
+[[ -f "${PKG_DIR}/scripts/preflight-helm.sh" ]] || { echo "FAIL K6-6: missing scripts/preflight-helm.sh" >&2; exit 1; }
+(cd "${PKG_DIR}" && bash scripts/preflight-helm.sh --k3s-only)
+
+echo "[verify-k8s-package] K6-7 acceptance script is self-contained"
+[[ -f "${PKG_DIR}/scripts/acceptance.sh" ]] || { echo "FAIL K6-7: missing scripts/acceptance.sh" >&2; exit 1; }
+[[ -f "${PKG_DIR}/scripts/k8s-gate-lib.sh" ]] || { echo "FAIL K6-7: missing scripts/k8s-gate-lib.sh (acceptance.sh dependency)" >&2; exit 1; }
+for script in "${PKG_DIR}"/scripts/*.sh; do
+  bash -n "${script}" || { echo "FAIL K6-7: syntax error in ${script}" >&2; exit 1; }
+done
+# --help must work from a different cwd, proving the lib is found relative to the script.
+(cd / && bash "${PKG_DIR}/scripts/acceptance.sh" --help >/dev/null) \
+  || { echo "FAIL K6-7: acceptance.sh --help failed outside package root" >&2; exit 1; }
+for required in BUILD-INFO.json helm/lucy/UPGRADE.md helm/lucy/ROLLBACK.md README.md RELEASE_NOTES.md K8S_CONTRACT.md; do
+  [[ -f "${PKG_DIR}/${required}" ]] || { echo "FAIL K6-7: package missing ${required}" >&2; exit 1; }
+done
 
 echo "[verify-k8s-package] OK"

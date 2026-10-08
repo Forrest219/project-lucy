@@ -35,7 +35,7 @@
 - [`docs/plans/wo-202608-27-customer-k8s-delivery.md`](../plans/wo-202608-27-customer-k8s-delivery.md)：仍含「Chart 仅作参考」「可跳过 ELF」「复用历史 tar」「`runAsUser: 0`」「镜像 0.16.0」
 - [`docs/plans/wo-20260901-k8s-delivery-hardening.md`](../plans/wo-20260901-k8s-delivery-hardening.md)：H2–H4 与非 root 镜像的勾选状态已落后于仓库；Chart 现为受支持交付物，运行 UID 为 10001
 
-2026-10-07 的仓库基线：Chart `0.2.2`，`VERSION` `0.17.0`，捆绑 KTX `0.16.0`。以后以文件内容为准，不要从旧 WO 抄版本号。
+2026-10-08 的仓库基线：Chart `0.2.3`，`VERSION` `0.17.0`，捆绑 KTX `0.16.0`。以后以文件内容为准，不要从旧 WO 抄版本号。
 
 ## Mac 可以构建待测镜像
 
@@ -77,7 +77,7 @@ amd64 服务器加载 tar 之后，用原生执行判定 G4 与 G4b。那一步�
 
 `build-k8s-delivery-package.sh` 在写出 tar 之后调用 `verify-k8s-package.sh`，默认再次 `docker run ktx`（K6-5）。QEMU 段错误会使脚本删除未完成的 tar。
 
-待测包若在 Mac 上封包：不要把这次 K6 的 `ktx` 执行当成封包失败。`verify-k8s-package.sh` 有 `--skip-image-gates`，封包脚本目前没有把它暴露出来。可行做法是在 amd64 服务器上 `docker load` 已通过 G1/G2 的镜像后再封包，或在本机封包时跳过会执行 `ktx` 的那段校验，并在包外注明「G4/G4b 留待 amd64 原生验收」。
+待测包若在 Mac 上封包：不要把这次 K6 的 `ktx` 执行当成封包失败。封包脚本现在暴露 `--skip-ktx-exec`（透传给 `verify-k8s-package.sh`）：只跳过会在 QEMU 下执行 `ktx` 的 K6-5 步骤，G1 元数据与 G2 ELF 头检查照常执行。在 Mac 上封待测包时使用它，并在包外注明「G4/G4b 留待 amd64 原生验收」。
 
 ## 待测包身份
 
@@ -85,7 +85,9 @@ amd64 服务器加载 tar 之后，用原生执行判定 G4 与 G4b。那一步�
 - 脚本拒绝 `-v1` / `-v2` 后缀。
 - 镜像 tag 形如 `customer-amd64-<VERSION>-<YYYYMMDD>-<gitSha>`，与 `VERSION`、镜像内 `LUCY_VERSION` 一致。
 - 离线待测包：`pullPolicy: Never`，`image.digest` 留空。config ID 写入 `image/image-config-id.txt`，不要填进 Helm `image.digest`。
-- `examples/values.k3s-test.yaml` 里的 `http://10.69.95.109:8277/mcp`、PVC `lucy`、Secret `lucy-starrocks`、LoadBalancer `8276/8277` 是既有测试环境剖面。只有自备服务器就是这套时才直接使用；否则用该服务器的 namespace、PVC、Secret 和 MCP 地址覆盖后再升级。
+- 目标是 K3s/containerd：节点上用 `sudo k3s ctr images import image/project-lucy-*.tar` 导入，不是 `docker load`；Values 的 `repository:tag` 必须与 `k3s ctr images list` 完全一致。
+- 包内 `BUILD-INFO.json` 记录构建 commit（含 dirty 标记）、镜像 config ID/digest、`linux/amd64` 与依赖版本；封包前工作区应已提交，镜像 tag 中的 git SHA 指向该提交。
+- `examples/values.k3s-test.yaml` 里的 `http://10.69.95.109:8277/mcp`、PVC `lucy`、Secret `lucy-starrocks`、`fullnameOverride: lucy`（Release `lucy-starrocks`）、`LUCY_CONTENT_ROOT: "."`、LoadBalancer `8276/8277` 是既有测试环境剖面。只有自备服务器就是这套时才直接使用；否则用该服务器的 namespace、PVC、Secret 和 MCP 地址覆盖后再升级。
 
 ## 平滑升级模拟要证明的事
 

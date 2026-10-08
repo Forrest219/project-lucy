@@ -93,7 +93,9 @@ ACCEPT_ARGS=(--namespace "${NAMESPACE}" --release "${RELEASE}")
 if [[ "${SKIP_MCP}" -eq 0 ]]; then
   [[ -n "${PUBLIC_MCP_URL}" ]] || { echo "FAIL: --public-mcp-url required with --with-mcp" >&2; exit 1; }
   [[ -n "${TOKEN}" ]] || { echo "FAIL: --token required with --with-mcp" >&2; exit 1; }
-  ACCEPT_ARGS+=(--public-mcp-url "${PUBLIC_MCP_URL}" --token "${TOKEN}")
+  # Token goes through the environment, never argv (visible in the process list).
+  ACCEPT_ARGS+=(--public-mcp-url "${PUBLIC_MCP_URL}")
+  export LUCY_MCP_TOKEN="${TOKEN}"
 else
   ACCEPT_ARGS+=(--skip-mcp)
 fi

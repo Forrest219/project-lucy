@@ -3,8 +3,8 @@
 | Metadata | Value |
 |---|---|
 | Document | Lucy K8s Deployment Contract |
-| Version | 1.1 |
-| Date | 2026-09-02 |
+| Version | 1.2 |
+| Date | 2026-10-08 |
 | Scope | Supported Helm chart `deploy/k8s/helm/lucy/` and customer K8s integrations |
 
 This document is the **authoritative contract** for Lucy on Kubernetes. The Helm chart
@@ -17,7 +17,8 @@ in this repository is a **supported delivery artifact** — not a reference snap
 | `0.1.x` | legacy/ambiguous | `0.16.0` | startup/readiness exec `docker-healthcheck.sh` | **Deprecated** — do not use for new installs or upgrades |
 | `0.2.0` | legacy/ambiguous | `0.16.0` | HTTP `GET /api/health` on port `webui` | Superseded; missing UID/git contract |
 | `0.2.1` | legacy/ambiguous | `0.16.0` | HTTP probes + UID 10001 + `workingDir` | Superseded by product-version-aware chart 0.2.2 |
-| `0.2.2` | `0.17.0` | `0.16.0` | HTTP probes + UID 10001 + `workingDir` | **Current** — use for v3+ delivery and in-place upgrades |
+| `0.2.2` | `0.17.0` | `0.16.0` | HTTP probes + UID 10001 + `workingDir` | **Superseded** — Secret mounted read-only over `.ktx/secrets` (WebUI writes fail with `EROFS`) |
+| `0.2.3` | `0.17.0` | `0.16.0` | HTTP probes + UID 10001 + `workingDir` | **Current** — `secrets-sync` init, `LUCY_CONTENT_ROOT`, name pinning; use for in-place upgrades |
 
 Image tags must be **immutable**. Recommended form:
 
@@ -105,9 +106,12 @@ livenessProbe:
 - `runtime-preflight` or any init container calling `/app/scripts/k8s-preflight.sh`
 - Init containers that connect to databases, run `ktx admin reindex`, or download artifacts
 
-**Allowed (chart 0.2.1+):**
+**Allowed (chart 0.2.3):**
 
-- `project-migrate`: `chown` `/data/lucy` to UID 10001 and `git init` if missing — no network/DB
+- `project-migrate`: `chown` entries under `/data/lucy` that are not already `10001:10001` — no network/DB, no `git init`
+- `secrets-sync` (only when `existingSecret` / `extraSecretData` is set): copy Secret keys from the read-only
+  `/mnt/lucy-secrets` mount into the PVC at `/data/lucy/.ktx/secrets` (dir `0700`, files `0600`, owner `10001:10001`).
+  Keys in the Secret add/overwrite files; files that exist only on the PVC are **never deleted**. No network/DB.
 
 Preflight belongs in post-deploy scripts or Helm test Jobs, not in the pod startup path.
 
@@ -138,6 +142,7 @@ Preflight belongs in post-deploy scripts or Helm test Jobs, not in the pod start
 | `LUCY_BUNDLED_KTX_VERSION` | yes | Bundled KTX identity; current baseline `0.16.0` |
 | `LUCY_PUBLIC_MCP_URL` | yes (non-local) | Externally reachable MCP URL; chart fails render if empty for customer registry |
 | `LUCY_ALLOW_PLACEHOLDER_KTX` | prod: empty | `"1"` only for demo seed |
+| `LUCY_CONTENT_ROOT` | PVCs with legacy layout | `"."` when `semantic-layer/`, `wiki/`, `skills/` sit next to `ktx.yaml`; empty = image default `config/`. Injected by the chart from `env.LUCY_CONTENT_ROOT` |
 
 All runtime env must be declared in Helm values — **never** patch with `kubectl set env`
 after install (causes manifest drift and extra pod restarts).
@@ -160,7 +165,13 @@ containerSecurityContext:
 
 KTX Python runtime path: `/home/lucy/.ktx/runtime/0.16.0/.venv/bin/python`
 
-The optional `project-migrate` init container runs as root **only** to `chown` legacy PVC data before the main container starts.
+The `project-migrate` and `secrets-sync` init containers run as root **only** (capabilities `CHOWN`, `DAC_OVERRIDE`, `FOWNER`) to hand legacy PVC data and copied password files to UID 10001 before the main container starts.
+
+## Secrets and resource names
+
+- A Kubernetes Secret volume is always read-only. It must **never** be mounted at `/data/lucy/.ktx/secrets`; the Lucy container mounts only the `/data/lucy` PVC. Passwords reach the PVC through `secrets-sync`.
+- `fullnameOverride` pins Deployment / Service / ServiceAccount names for environments that already run objects under a name that differs from the Helm release (lucy-test: release `lucy-starrocks`, objects `lucy`). The Deployment selector is immutable, so the live selector must already equal `app.kubernetes.io/name=<chart name>` + `app.kubernetes.io/instance=<release>`.
+- The offline image is loaded with the runtime of the cluster (K3s: `k3s ctr images import`), with `image.pullPolicy: Never`.
 
 ## Upgrade contract
 
@@ -200,6 +211,6 @@ Before any K8s delivery:
 3. `bash scripts/gates/verify-k8s-package.sh` (K6 package integrity)
 4. `bash scripts/gates/k8s-upgrade-gate.sh` (H3; `--test-rollback` for H4)
 5. `bash scripts/gates/k8s-release-gate.sh --with-cluster --test-upgrade …` (orchestrator)
-6. Post-deploy: `bash scripts/gates/k8s-acceptance.sh` (H5)
+6. Post-deploy: `bash scripts/gates/k8s-acceptance.sh` (H5; in a package: `scripts/acceptance.sh`, with `--release`, `--deployment`, `--service` kept distinct and the token passed via `LUCY_MCP_TOKEN`)
 
 See [`docs/runbooks/customer-delivery-preflight-checklist.md`](../../docs/runbooks/customer-delivery-preflight-checklist.md).

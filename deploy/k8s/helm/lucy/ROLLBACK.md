@@ -17,7 +17,7 @@ helm rollback lucy-starrocks <REVISION> -n lucy-test --wait --timeout 15m
 Verify the rolled-back revision uses the **expected immutable image tag and digest**:
 
 ```bash
-kubectl -n lucy-test get deploy lucy-starrocks -o jsonpath='{.spec.template.spec.containers[0].image}{"\n"}'
+kubectl -n lucy-test get deploy lucy -o jsonpath='{.spec.template.spec.containers[0].image}{"\n"}'
 ```
 
 If the tag is mutable and was overwritten in containerd/docker, rollback to an old Helm
@@ -26,19 +26,40 @@ revision may still pull the **new** image. In that case:
 1. Re-import the known-good image tar with its original immutable tag, or
 2. Pin `image.digest` in values to the last known-good digest and upgrade again.
 
+### Rolling back from chart 0.2.3 to an older chart revision
+
+Older charts mount the Secret **over** `/data/lucy/.ktx/secrets` (read-only). After such a rollback:
+
+- Connections whose password key is in the Secret keep working.
+- Password files created through the WebUI **after** the 0.2.3 upgrade exist only on the PVC. They are shadowed by
+  the Secret mount, so those connections fail their `connection test` until you upgrade to 0.2.3 again.
+  Nothing is deleted: the files stay on the PVC underneath the mount.
+- The old chart does not set `LUCY_CONTENT_ROOT`; on a pre-M31 PVC that is the state the old release was already
+  running in.
+
+Roll forward again with the same `helm upgrade` command to restore WebUI-created connections.
+
 ## After atomic upgrade failure
+
+Names below use the lucy-test profile (release `lucy-starrocks`, Deployment `lucy`, `fullnameOverride: lucy`).
 
 ```bash
 helm status lucy-starrocks -n lucy-test
 kubectl -n lucy-test get pods -l app.kubernetes.io/instance=lucy-starrocks
 kubectl -n lucy-test describe pod -l app.kubernetes.io/instance=lucy-starrocks | tail -40
-kubectl -n lucy-test logs deploy/lucy-starrocks --tail=100
+kubectl -n lucy-test logs deploy/lucy -c lucy --tail=100
+kubectl -n lucy-test logs deploy/lucy -c secrets-sync --tail=20     # counts only, never secret values
+kubectl -n lucy-test logs deploy/lucy -c project-migrate --tail=20
 ```
 
 Common failure signatures:
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
+| `EROFS` creating a data source | chart < 0.2.3 (Secret over `.ktx/secrets`) | Upgrade to 0.2.3 |
+| `Init:Error` on `secrets-sync` | `existingSecret` missing in namespace | Create it, `rollout restart deploy/lucy` |
+| `ErrImageNeverPull` | image not imported into containerd | `sudo k3s ctr images import ...` |
+| Empty semantic layer / wiki | pre-M31 PVC without `LUCY_CONTENT_ROOT` | `env.LUCY_CONTENT_ROOT: "."` |
 | `Startup probe failed: command timed out` | Chart 0.1.x exec probe | Upgrade to chart 0.2.x+ |
 | `k8s-preflight.sh: No such file` | stale init container | Remove `runtime-preflight`; use v3 chart |
 | `dubious ownership in repository at '/data/lucy'` | root pod vs UID 10001 `.git` | v3 image + Chart 0.2.1; enable `projectMigrate` |
@@ -63,12 +84,18 @@ helm uninstall lucy-starrocks -n lucy-test   # only when decommissioning
 ## Rollback verification
 
 ```bash
+export LUCY_MCP_TOKEN="<bearer-token>"
 bash scripts/acceptance.sh \
   --namespace lucy-test \
-  --release lucy-starrocks \
+  --release lucy-starrocks --deployment lucy --service lucy \
   --public-mcp-url "http://<node-ip>:8277/mcp" \
-  --token "<bearer-token>"
+  --connection kc-starrocks --connection rds-test --connection zijin
+unset LUCY_MCP_TOKEN
 ```
+
+If you rolled back to a pre-0.2.3 chart, add `--skip-secrets-check`: the old chart mounts the Secret over
+`.ktx/secrets`, which is the very defect 0.2.3 fixes, so the owner/mode/mount checks are expected to fail.
+Judge that rollback by health, MCP and connection tests.
 
 Confirm:
 

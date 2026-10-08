@@ -1,0 +1,54 @@
+# values.customer.example.yaml — template for a customer Kubernetes install.
+#
+# Copy to your own repo, replace every REPLACE-ME / <...> value, then:
+#   helm upgrade --install lucy ./helm/lucy -n <ns> -f values.customer.yaml \
+#     --atomic --wait --timeout 15m
+#
+# This file is NOT rendered by package gates (it contains placeholders on
+# purpose). Do not copy test-environment names (MCP address, PVC, Secret) into it.
+
+# Only set fullnameOverride when adopting resources that already exist under a
+# different name than the Helm release (see UPGRADE.md "Resource names").
+# fullnameOverride: lucy
+
+image:
+  repository: REPLACE-ME-registry.example.com/data-team/project-lucy
+  tag: customer-amd64-0.17.0-YYYYMMDD-<gitShortSha>
+  # Registry installs: pin the manifest digest. Offline (tar import) installs:
+  # leave empty and set pullPolicy: Never.
+  digest: ""
+  pullPolicy: IfNotPresent
+
+containerPorts:
+  webui: 5174
+  mcp: 7879
+
+service:
+  type: ClusterIP
+  webuiPort: 5174
+  mcpPort: 7879
+
+persistence:
+  enabled: true
+  size: 50Gi
+  storageClass: ""
+  # Set to the existing claim when upgrading in place. Never delete it.
+  existingClaim: ""
+
+env:
+  # Externally reachable URL agents call (Ingress / gateway / LoadBalancer).
+  LUCY_PUBLIC_MCP_URL: "https://lucy.example.com/mcp"
+  # Empty = image default `config/`. Set "." ONLY when the existing PVC keeps
+  # semantic-layer/, wiki/, evals/, skills/ next to ktx.yaml.
+  LUCY_CONTENT_ROOT: ""
+  KTX_PROJECT_ROOT: /data/lucy
+  POSTHOG_DISABLED: "1"
+
+# Secret created out-of-band (sealed-secrets / external-secrets / kubectl).
+# Each key becomes /data/lucy/.ktx/secrets/<key> (0600, UID 10001).
+existingSecret: "<your-db-password-secret>"
+
+lucy:
+  version: "0.17.0"   # must equal Chart.appVersion
+  projectMigrate:
+    enabled: true     # keep true for any PVC created by an older build

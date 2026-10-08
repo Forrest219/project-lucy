@@ -13,6 +13,18 @@
 #     reference only; it does NOT render by default.
 
 # -------------------------------------------------------------------
+# Resource naming
+# -------------------------------------------------------------------
+# By default Deployment / Service / ServiceAccount are named after the Helm
+# release (`<release>-lucy`, or just `<release>` when it already contains
+# "lucy"). When upgrading an environment whose resources were created under a
+# different name (e.g. release `lucy-starrocks` but Deployment/Service `lucy`),
+# pin the name here so Helm adopts the existing objects instead of creating a
+# second set. NOTE: the Deployment selector is immutable — see UPGRADE.md.
+nameOverride: ""
+fullnameOverride: ""
+
+# -------------------------------------------------------------------
 # Image
 # -------------------------------------------------------------------
 # IMPORTANT — image.repository / image.tag MUST be overridden before any
@@ -125,6 +137,12 @@ env:
   # gateway URL agents will call, e.g. https://lucy.example.com/mcp.
   LUCY_PUBLIC_MCP_URL: ""
 
+  # Where semantic-layer/, wiki/, evals/, skills/ live, relative to
+  # KTX_PROJECT_ROOT (or absolute). Empty = image default `config/` (M31 layout).
+  # In-place upgrades from a PVC that keeps these directories next to ktx.yaml
+  # (pre-M31 layout) MUST set "." — otherwise the WebUI shows an empty catalog.
+  LUCY_CONTENT_ROOT: ""
+
   # Demo / template-only switches. Production must keep these empty / 0.
   LUCY_ALLOW_PLACEHOLDER_KTX: ""
 
@@ -142,10 +160,17 @@ env:
 # `extraSecretData` are plain strings; the chart base64-encodes them into
 # Secret.data.
 #
-# Secret keys mounted into /data/lucy/.ktx/secrets/<key>:
+# Secret keys are COPIED (not mounted) into /data/lucy/.ktx/secrets/<key> by the
+# `secrets-sync` init container on every pod start:
 #   * `mysql-password` / `postgres-password` etc. — referenced from
 #     customer ktx.yaml as `password: file:/data/lucy/.ktx/secrets/<key>`
-# All keys from the Secret are mounted as files under /data/lucy/.ktx/secrets/.
+#   * target dir 0700, files 0600, owner 10001:10001
+#   * keys in the Secret overwrite same-named files (password rotation works;
+#     restart the pod / `helm upgrade` to apply)
+#   * files that exist on the PVC but not in the Secret (created via the WebUI)
+#     are kept — they are never pruned
+# A Kubernetes Secret volume is always read-only, so it can never be mounted
+# directly over the directory the WebUI writes new password files into.
 existingSecret: ""
 extraSecretData: {}
 

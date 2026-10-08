@@ -9,9 +9,20 @@ require_cmd() {
   command -v "$1" >/dev/null 2>&1 || fail "missing required command: $1"
 }
 
+# Three names that are NOT always equal:
+#   release     Helm release name (also the app.kubernetes.io/instance label)
+#   deployment  workload name (chart fullname; `fullnameOverride` can differ from release)
+#   service     Service name (same chart fullname unless overridden)
+# Callers pass the release; set K8S_GATE_DEPLOYMENT / K8S_GATE_SERVICE when the
+# environment keeps legacy names (e.g. release lucy-starrocks, deploy/svc lucy).
 deployment_name() {
   local release="$1"
-  printf '%s' "${release}"
+  printf '%s' "${K8S_GATE_DEPLOYMENT:-${release}}"
+}
+
+service_name() {
+  local release="$1"
+  printf '%s' "${K8S_GATE_SERVICE:-$(deployment_name "${release}")}"
 }
 
 wait_for_pod_ready() {
@@ -27,11 +38,18 @@ wait_for_pod_ready() {
   [[ "${ready:-0}" == "1" ]] || fail "deployment ${deploy} is not 1/1 Ready"
 }
 
+# Pod selection goes through the Deployment's own selector so it keeps working
+# when the Helm release name differs from the workload name.
 pod_name() {
   local namespace="$1"
   local release="$2"
-  kubectl -n "${namespace}" get pods \
-    -l "app.kubernetes.io/instance=${release}" \
+  local deploy selector
+  deploy="$(deployment_name "${release}")"
+  selector="$(kubectl -n "${namespace}" get deploy "${deploy}" \
+    -o go-template='{{range $k,$v := .spec.selector.matchLabels}}{{$k}}={{$v}},{{end}}')"
+  selector="${selector%,}"
+  [[ -n "${selector}" ]] || fail "deployment ${deploy} has no selector"
+  kubectl -n "${namespace}" get pods -l "${selector}" \
     -o jsonpath='{.items[0].metadata.name}'
 }
 
@@ -41,21 +59,21 @@ kubectl_exec() {
   shift 2
   local pod
   pod="$(pod_name "${namespace}" "${release}")"
-  kubectl -n "${namespace}" exec "${pod}" -- "$@"
+  kubectl -n "${namespace}" exec "${pod}" -c lucy -- "$@"
 }
 
 kubectl_exec_deploy() {
   local namespace="$1"
   local release="$2"
   shift 2
-  kubectl -n "${namespace}" exec "deploy/${release}" -- "$@"
+  kubectl -n "${namespace}" exec "deploy/$(deployment_name "${release}")" -c lucy -- "$@"
 }
 
 webui_base_url() {
   local namespace="$1"
   local release="$2"
   local webui_port="${3:-5174}"
-  kubectl -n "${namespace}" port-forward "svc/${release}" "${webui_port}:${webui_port}" >/dev/null 2>&1 &
+  kubectl -n "${namespace}" port-forward "svc/$(service_name "${release}")" "${webui_port}:${webui_port}" >/dev/null 2>&1 &
   local pf_pid=$!
   # shellcheck disable=SC2064
   trap "kill ${pf_pid} >/dev/null 2>&1 || true" RETURN
@@ -89,10 +107,18 @@ mcp_post() {
   local token="${2:-}"
   local body="$3"
   if [[ -n "${token}" ]]; then
+    # Header goes through a 0600 temp file so the token never appears in the
+    # process list (curl -H @file, curl >= 7.55).
+    local hdr
+    hdr="$(umask 077 && mktemp)"
+    printf 'Authorization: Bearer %s\n' "${token}" > "${hdr}"
+    local rc=0
     curl -fsS -X POST "${url}" \
       -H "Content-Type: application/json" \
-      -H "Authorization: Bearer ${token}" \
-      -d "${body}"
+      -H "@${hdr}" \
+      -d "${body}" || rc=$?
+    rm -f "${hdr}"
+    return "${rc}"
   else
     curl -fsS -X POST "${url}" \
       -H "Content-Type: application/json" \
@@ -104,14 +130,16 @@ mcp_post() {
 pod_image_id() {
   local namespace="$1"
   local release="$2"
-  kubectl -n "${namespace}" get pod \
-    -l "app.kubernetes.io/instance=${release}" \
-    -o jsonpath='{.items[0].status.containerStatuses[?(@.name=="lucy")].imageID}'
+  local pod
+  pod="$(pod_name "${namespace}" "${release}")"
+  kubectl -n "${namespace}" get pod "${pod}" \
+    -o jsonpath='{.status.containerStatuses[?(@.name=="lucy")].imageID}'
 }
 
 # Sentinel paths relative to /data/lucy that must survive in-place upgrade.
-# NOTE: /.ktx/secrets is a projected Secret mount (read-only) — fingerprint an
-# existing projected key instead of creating files there.
+# NOTE: /.ktx/secrets/demo-password is copied from the Secret by the
+# secrets-sync init container (the Secret volume itself is read-only and only
+# mounted at /mnt/lucy-secrets), so it is a regular PVC file after startup.
 K8S_SENTINEL_PATHS=(
   ktx.yaml
   webui/config/access.yaml
@@ -137,7 +165,7 @@ seed_upgrade_sentinels() {
     printf "connections: {}\n# gate-sentinel-ktx\n" > /data/lucy/ktx.yaml
     printf "users: []\n# gate-sentinel-access\n" > /data/lucy/webui/config/access.yaml
     printf "admins: []\n# gate-sentinel-admins\n" > /data/lucy/webui/config/admins.yaml
-    # Projected secret mount is read-only; require the CI values key to exist.
+    # Synced from the Secret by the secrets-sync init; require the CI values key.
     test -f /data/lucy/.ktx/secrets/demo-password
     printf "SQLite format 3\000gate-sentinel-audit\n" > /data/lucy/.ktx-ui/audit.sqlite
     printf "name: gate_sentinel\n" > /data/lucy/semantic-layer/_gate/sentinel.yaml

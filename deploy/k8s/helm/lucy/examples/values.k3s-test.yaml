@@ -3,12 +3,21 @@
 # Use this profile when the test cluster exposes Lucy on host ports 8276 (WebUI)
 # and 8277 (MCP) while the container continues to listen on 5174 / 7879.
 #
+# Existing environment this profile adopts IN PLACE (do not rename):
+#   namespace lucy-test · Helm release lucy-starrocks
+#   Deployment lucy · Service lucy · PVC lucy · Secret lucy-starrocks
+#
 # NOT FOR PRODUCTION. Copy and adjust registry, MCP URL, secrets, and image
 # tag/digest for each environment.
 #
 # NOTE: build-k8s-delivery-package.sh overwrites repository/tag/digest/pullPolicy
 # at pack time. Offline packages clear digest and set pullPolicy: Never.
 # Never put a local image config ID into image.digest.
+
+# Keep the pre-existing resource names. Without this the release name
+# `lucy-starrocks` would render Deployment/Service `lucy-starrocks` and create a
+# second stack next to `lucy`.
+fullnameOverride: lucy
 
 image:
   repository: project-lucy
@@ -22,6 +31,7 @@ containerPorts:
   webui: 5174
   mcp: 7879
 
+# KTX upstream (7878) is pod-internal only and is never part of the Service.
 service:
   type: LoadBalancer
   webuiPort: 8276
@@ -37,10 +47,15 @@ persistence:
 
 env:
   LUCY_PUBLIC_MCP_URL: "http://10.69.95.109:8277/mcp"
+  # The existing PVC keeps ktx.yaml, semantic-layer/, wiki/, skills/ and
+  # webui/config/ directly under /data/lucy (pre-M31 layout).
+  LUCY_CONTENT_ROOT: "."
   LUCY_ALLOW_PLACEHOLDER_KTX: ""
   KTX_PROJECT_ROOT: /data/lucy
   POSTHOG_DISABLED: "1"
 
+# Keys are copied into /data/lucy/.ktx/secrets by the secrets-sync init
+# container (the Secret itself is mounted read-only at /mnt/lucy-secrets).
 existingSecret: lucy-starrocks
 extraSecretData: {}
 

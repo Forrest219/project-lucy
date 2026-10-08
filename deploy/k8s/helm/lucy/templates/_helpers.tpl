@@ -125,4 +125,25 @@ entry lands on its own line at the correct indent.
 - name: LUCY_ALLOW_PLACEHOLDER_KTX
   value: {{ .Values.env.LUCY_ALLOW_PLACEHOLDER_KTX | quote }}
 {{ end -}}
+{{ if .Values.env.LUCY_CONTENT_ROOT -}}
+- name: LUCY_CONTENT_ROOT
+  value: {{ .Values.env.LUCY_CONTENT_ROOT | quote }}
+{{ end -}}
+{{- end -}}
+
+{{/*
+Image reference shared by the main container and init containers.
+A digest, when set, wins over the tag.
+*/}}
+{{- define "lucy.image" -}}
+{{- if .Values.image.digest -}}
+{{ .Values.image.repository }}@{{ .Values.image.digest }}
+{{- else -}}
+{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}
+{{- end -}}
+{{- end -}}
+
+{{/* True when the chart wires DB password files from a Kubernetes Secret. */}}
+{{- define "lucy.hasSecret" -}}
+{{- if or .Values.existingSecret .Values.extraSecretData -}}true{{- end -}}
 {{- end -}}

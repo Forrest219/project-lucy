@@ -11,7 +11,9 @@
 #     --output inbox/lucy-k8s-integration-delivery-20260902-v3.tar.gz \
 #     [--delivery-mode offline|registry] \
 #     [--image-repository project-lucy] \
-#     [--manifest-digest sha256:...]
+#     [--manifest-digest sha256:...] \
+#     [--skip-ktx-exec]      # Apple Silicon: skip only the K6 steps that EXECUTE ktx under QEMU.
+#                            # G1 (metadata) and G2 (ELF headers) still run; run G4/G4b on amd64.
 set -Eeuo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -31,6 +33,7 @@ VERSION_SUFFIX="20260902-v3"
 DELIVERY_MODE="offline"
 IMAGE_REPOSITORY=""
 MANIFEST_DIGEST=""
+SKIP_KTX_EXEC=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -40,8 +43,9 @@ while [[ $# -gt 0 ]]; do
     --delivery-mode) DELIVERY_MODE="$2"; shift 2 ;;
     --image-repository) IMAGE_REPOSITORY="$2"; shift 2 ;;
     --manifest-digest) MANIFEST_DIGEST="$2"; shift 2 ;;
+    --skip-ktx-exec) SKIP_KTX_EXEC=1; shift ;;
     -h|--help)
-      sed -n '2,16p' "$0"
+      sed -n '2,18p' "$0"
       exit 0
       ;;
     *) echo "unknown argument: $1" >&2; exit 1 ;;
@@ -167,18 +171,100 @@ text = re.sub(r'(?m)^  pullPolicy: .*$', f'  pullPolicy: {pull}', text, count=1)
 path.write_text(text, encoding="utf-8")
 PY
 
+cp "${ROOT}/deploy/k8s/helm/lucy/examples/values.customer.example.yaml" "${PKG_DIR}/examples/values.customer.example.yaml"
+# One identity everywhere: the chart-internal copy must not keep pack-time placeholders.
+cp "${VALUES_FILE}" "${PKG_DIR}/helm/lucy/examples/values.k3s-test.yaml"
+
+# Scripts: every dependency ships in the package and is resolved relative to the
+# script itself (k8s-gate-lib.sh sits next to acceptance.sh).
 cp "${ROOT}/scripts/gates/k8s-acceptance.sh" "${PKG_DIR}/scripts/acceptance.sh"
+cp "${ROOT}/scripts/gates/k8s-gate-lib.sh" "${PKG_DIR}/scripts/k8s-gate-lib.sh"
 cp "${ROOT}/scripts/gates/helm-lucy-gate.sh" "${PKG_DIR}/scripts/preflight-helm.sh"
+chmod 0755 "${PKG_DIR}/scripts/acceptance.sh" "${PKG_DIR}/scripts/preflight-helm.sh"
+chmod 0644 "${PKG_DIR}/scripts/k8s-gate-lib.sh"
+
+# macOS / VCS leftovers must never reach the deliverable.
+find "${PKG_DIR}" \( -name '._*' -o -name '.DS_Store' -o -name '__MACOSX' -o -name '.git' -o -name '.gitignore' \) \
+  -prune -exec rm -rf {} + 2>/dev/null || true
 
 GIT_SHA="$(git -C "${ROOT}" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+GIT_SHA_FULL="$(git -C "${ROOT}" rev-parse HEAD 2>/dev/null || echo unknown)"
+GIT_DIRTY="false"
+if [[ -n "$(git -C "${ROOT}" status --porcelain 2>/dev/null || true)" ]]; then
+  GIT_DIRTY="true"
+  echo "[build-k8s-delivery] WARN: working tree is dirty; BUILD-INFO.json records dirty=true" >&2
+fi
+
+echo "[build-k8s-delivery] write BUILD-INFO.json"
+IMAGE_OS_ARCH="$(docker image inspect "${IMAGE_TAG}" --format '{{.Os}}/{{.Architecture}}')"
+IMAGE_ENV_FILE="${STAGING}/image-env.txt"
+docker image inspect "${IMAGE_TAG}" --format '{{range .Config.Env}}{{println .}}{{end}}' > "${IMAGE_ENV_FILE}"
+IMAGE_TAR_SHA="$(tr -d '[:space:]' < "${PKG_DIR}/image/image-tar.sha256")"
+HELM_VERSION="$(helm version --short 2>/dev/null || echo unknown)"
+BUILD_INFO_PKG="${PKG}" BUILD_INFO_GIT_FULL="${GIT_SHA_FULL}" BUILD_INFO_GIT_SHORT="${GIT_SHA}" \
+BUILD_INFO_GIT_DIRTY="${GIT_DIRTY}" BUILD_INFO_CHART_VERSION="${CHART_VERSION}" \
+BUILD_INFO_CHART_APP="${CHART_APP_VERSION}" BUILD_INFO_REPO="${IMAGE_REPOSITORY}" \
+BUILD_INFO_TAG="${IMAGE_REF_TAG}" BUILD_INFO_PLATFORM="${IMAGE_OS_ARCH}" \
+BUILD_INFO_CONFIG_ID="${IMAGE_CONFIG_ID}" BUILD_INFO_MANIFEST_DIGEST="${HELM_DIGEST}" \
+BUILD_INFO_TAR_SHA="${IMAGE_TAR_SHA}" BUILD_INFO_MODE="${DELIVERY_MODE}" \
+BUILD_INFO_LUCY="${LUCY_VERSION}" BUILD_INFO_HELM="${HELM_VERSION}" \
+BUILD_INFO_KTX_FALLBACK="$(awk -F'"' '/bundledKtxVersion:/{print $2; exit}' "${ROOT}/deploy/k8s/helm/lucy/values.yaml")" \
+python3 - "${PKG_DIR}/BUILD-INFO.json" "${IMAGE_ENV_FILE}" <<'PY'
+import datetime
+import json
+import os
+import platform
+import sys
+
+out_path, env_path = sys.argv[1], sys.argv[2]
+env = {}
+with open(env_path, encoding="utf-8") as fh:
+    for line in fh:
+        if "=" in line:
+            key, value = line.rstrip("\n").split("=", 1)
+            env[key] = value
+g = os.environ.get
+info = {
+    "package": g("BUILD_INFO_PKG"),
+    "builtAtUtc": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    "buildHostArch": platform.machine(),
+    "git": {
+        "commit": g("BUILD_INFO_GIT_FULL"),
+        "short": g("BUILD_INFO_GIT_SHORT"),
+        "dirty": g("BUILD_INFO_GIT_DIRTY") == "true",
+    },
+    "chart": {"version": g("BUILD_INFO_CHART_VERSION"), "appVersion": g("BUILD_INFO_CHART_APP")},
+    "image": {
+        "repository": g("BUILD_INFO_REPO"),
+        "tag": g("BUILD_INFO_TAG"),
+        "platform": g("BUILD_INFO_PLATFORM"),
+        "configId": g("BUILD_INFO_CONFIG_ID"),
+        "registryManifestDigest": g("BUILD_INFO_MANIFEST_DIGEST") or None,
+        "tarSha256": g("BUILD_INFO_TAR_SHA"),
+        "deliveryMode": g("BUILD_INFO_MODE"),
+    },
+    "dependencies": {
+        "lucy": g("BUILD_INFO_LUCY"),
+        "ktx": env.get("LUCY_BUNDLED_KTX_VERSION") or g("BUILD_INFO_KTX_FALLBACK") or "unknown",
+        "node": env.get("NODE_VERSION", "unknown"),
+        "helmOnBuildHost": g("BUILD_INFO_HELM"),
+    },
+}
+with open(out_path, "w", encoding="utf-8") as fh:
+    json.dump(info, fh, indent=2, ensure_ascii=False)
+    fh.write("\n")
+PY
 
 {
   printf '%s\n' "# Lucy K8s Integration Delivery (${VERSION_SUFFIX})"
   cat <<'EOF'
 
 Supported Helm chart is included under `helm/lucy/` (not a reference snapshot).
+Package layout: `helm/lucy/` chart · `examples/` values · `image/` offline image tar and identity files ·
+`scripts/` preflight + acceptance (self-contained) · `BUILD-INFO.json` · `SHA256SUMS`.
 
-**Supersedes:** `lucy-k8s-integration-delivery-20260902-v1` and `v2` (incomplete upgrade contract — do not use).
+**Supersedes:** every earlier `lucy-k8s-integration-delivery-*` package. Earlier packages mount the DB password
+Secret read-only over `.ktx/secrets` (WebUI writes fail with `EROFS`) and ship non-runnable preflight/acceptance scripts.
 
 Read order:
 1. README.md (this file)
@@ -186,8 +272,34 @@ Read order:
 3. K8S_CONTRACT.md
 4. helm/lucy/UPGRADE.md
 5. helm/lucy/ROLLBACK.md
-6. examples/values.k3s-test.yaml
-7. scripts/acceptance.sh
+6. examples/values.k3s-test.yaml (lucy-test profile) / examples/values.customer.example.yaml (template)
+7. scripts/preflight-helm.sh, scripts/acceptance.sh
+
+## Offline image import (K3s / containerd)
+
+K3s runs containerd, not Docker. Do **not** use `docker load` on the node:
+
+```bash
+sudo k3s ctr images import image/project-lucy-*.tar
+sudo k3s ctr images list | grep project-lucy
+```
+
+The listed `repository:tag` must equal `image.repository` / `image.tag` in the values file exactly
+(`image/image-repository.txt`, `image/image-tag.txt`). Offline values use `image.pullPolicy: Never`
+and an empty `image.digest`.
+
+## Run from the package root
+
+```bash
+sha256sum -c SHA256SUMS
+bash scripts/preflight-helm.sh --k3s-only
+helm upgrade lucy-starrocks helm/lucy -n lucy-test -f examples/values.k3s-test.yaml --atomic --wait --timeout 15m
+LUCY_MCP_TOKEN=<bearer> bash scripts/acceptance.sh --namespace lucy-test --release lucy-starrocks \
+  --deployment lucy --service lucy --public-mcp-url http://10.69.95.109:8277/mcp \
+  --connection kc-starrocks --connection rds-test --connection zijin --expect-content-root .
+```
+
+Read `helm/lucy/UPGRADE.md` first: it lists the pre-upgrade checks (Deployment selector, PVC, Secret).
 
 EOF
   printf 'Delivery mode: `%s`\n' "${DELIVERY_MODE}"
@@ -211,28 +323,45 @@ EOF
 
 ## Summary
 
-Fixes K8s in-place upgrade contract failures observed in v1/v2 deliveries (20260902).
+Fixes Kubernetes / Helm in-place upgrade defects found when statically checking the previous test package:
+read-only password Secret, legacy PVC layout, resource-name drift, and non-runnable package scripts.
 
-Lucy product version and bundled KTX version are independent release identities.
+Lucy product version and bundled KTX version are independent release identities
+(see `BUILD-INFO.json` for the exact commit, image, platform and dependency versions).
 
-## Changes
+## Changes (Chart 0.2.3)
+
+- **Secret is writable-compatible.** The DB password Secret is mounted read-only at `/mnt/lucy-secrets` in the
+  `secrets-sync` init container, which copies the keys into the PVC at `/data/lucy/.ktx/secrets`
+  (dir `0700`, files `0600`, owner `10001:10001`). The Lucy container mounts only the `/data/lucy` PVC, so
+  WebUI-created connections can write password files (no more `EROFS`).
+  Sync policy: Secret keys are added or overwritten on every pod start; files that exist only on the PVC
+  (created via the WebUI) are **kept, never pruned**.
+- **Legacy PVC ownership.** `project-migrate` hands any entry not owned by `10001:10001` to the runtime user
+  (`/data/lucy`, `.ktx`, `.ktx/secrets`, `.ktx-ui`, ...). No manual `chown`, `kubectl patch` or start-command change.
+- **Legacy content layout.** `env.LUCY_CONTENT_ROOT` is now injected into the pod. The lucy-test profile sets
+  `"."` so `semantic-layer/`, `wiki/`, `skills/` and `webui/config/` next to `ktx.yaml` stay visible.
+- **Resource names.** `fullnameOverride: lucy` keeps `deployment/lucy`, `service/lucy`, `pvc/lucy` under release
+  `lucy-starrocks` (no second stack).
+- **Ports.** Unchanged: WebUI `8276 -> 5174`, MCP `8277 -> 7879`; KTX upstream `7878` is never in the Service.
+- **Scripts.** `scripts/preflight-helm.sh` runs from the package root (`helm/lucy`) and checks names, ports,
+  Secret sync, content root and image identity. `scripts/acceptance.sh` ships with `k8s-gate-lib.sh`,
+  separates Helm release / Deployment / Service names, and never prints tokens or Secret contents.
+- **Offline import on K3s** uses `k3s ctr images import` (README), with `pullPolicy: Never`.
+- Package hygiene: no `._*`, `__MACOSX`, `.DS_Store` or `.git`; inner `SHA256SUMS`, outer `.sha256`, and
+  `BUILD-INFO.json` (commit, image config ID/digest, `linux/amd64`, dependency versions).
+
+## Unchanged contract
 
 - Image runs as UID/GID **10001** (matches legacy PVC `.git` ownership)
 - Entrypoint idempotently runs `git init` on `/data/lucy` (**sole authority**)
 - `project-migrate` init: **chown only** (no git init)
-- Package `examples/values.k3s-test.yaml` repository/tag/digest synced by delivery mode
 - Offline packages use `pullPolicy: Never` and leave `image.digest` empty
-
-## Deprecated
-
-- `lucy-k8s-integration-delivery-20260902-v1`
-- `lucy-k8s-integration-delivery-20260902-v2`
-
-Do **not** use v1/v2 for customer in-place upgrades.
 
 ## Upgrade
 
-See `helm/lucy/UPGRADE.md`. Use `helm upgrade --atomic --wait` with package `examples/values.k3s-test.yaml`.
+See `helm/lucy/UPGRADE.md` (pre-upgrade checks, upgrade, acceptance, restart and rollback).
+Use `helm upgrade --atomic --wait` with `examples/values.k3s-test.yaml`.
 EOF
 } > "${PKG_DIR}/RELEASE_NOTES.md"
 
@@ -241,18 +370,26 @@ EOF
   find . -type f ! -name 'SHA256SUMS' -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
 )
 
+VERIFY_EXTRA=()
+if [[ "${SKIP_KTX_EXEC}" -eq 1 ]]; then
+  VERIFY_EXTRA+=(--skip-ktx-exec)
+  echo "[build-k8s-delivery] --skip-ktx-exec: G4/G4b/G8 ktx execution is left to a native amd64 host"
+fi
+
 echo "[build-k8s-delivery] K6 package verify (before writing deliverable tar)"
 bash "${ROOT}/scripts/gates/verify-k8s-package.sh" --dir "${PKG_DIR}" --skip-docker-load
 
 mkdir -p "$(dirname "${OUTPUT}")"
-tar -C "${STAGING}" -czf "${OUTPUT}" "${PKG}"
+# COPYFILE_DISABLE stops bsdtar on macOS from adding AppleDouble `._*` entries.
+COPYFILE_DISABLE=1 tar -C "${STAGING}" -czf "${OUTPUT}" "${PKG}"
 (
   cd "$(dirname "${OUTPUT}")"
   sha256sum "$(basename "${OUTPUT}")" > "$(basename "${OUTPUT}").sha256"
 )
 
 echo "[build-k8s-delivery] K6 outer tar verify (load + G gates)"
-bash "${ROOT}/scripts/gates/verify-k8s-package.sh" --tar "${OUTPUT}" --outer-sha256 "${OUTPUT}.sha256"
+bash "${ROOT}/scripts/gates/verify-k8s-package.sh" --tar "${OUTPUT}" --outer-sha256 "${OUTPUT}.sha256" \
+  ${VERIFY_EXTRA[@]+"${VERIFY_EXTRA[@]}"}
 
 # Success: disarm fail cleanup of OUTPUT; still remove staging.
 trap 'rm -rf "${STAGING}"' EXIT

@@ -126,3 +126,231 @@ test("upgrade gate records Pod imageID not only Deployment image string", async 
   assert.match(src, /lucy-gate-does-not-exist/);
   assert.match(src, /seed_upgrade_sentinels/);
 });
+
+// ---------------------------------------------------------------------------
+// Chart 0.2.3: Secret sync, content root, resource names, package-root scripts
+// ---------------------------------------------------------------------------
+
+const chartDir = path.join(repoRoot, "deploy/k8s/helm/lucy");
+
+function renderChart(args) {
+  const result = run("helm", ["template", ...args]);
+  assert.equal(result.status, 0, result.stderr);
+  return result.stdout;
+}
+
+/** Return the `- |` shell script of a named init container from a rendered manifest. */
+function extractInitScript(manifest, initName) {
+  const lines = manifest.split("\n");
+  const start = lines.findIndex((line) => line.trim() === `- name: ${initName}`);
+  assert.notEqual(start, -1, `init container ${initName} not rendered`);
+  const bar = lines.findIndex((line, i) => i > start && /^\s+- \|$/.test(line));
+  assert.notEqual(bar, -1, `no script block in ${initName}`);
+  const base = lines[bar].search(/\S/);
+  const body = [];
+  for (let i = bar + 1; i < lines.length; i += 1) {
+    if (lines[i].trim() === "") {
+      body.push("");
+      continue;
+    }
+    if (lines[i].search(/\S/) <= base) break;
+    body.push(lines[i].slice(base + 2));
+  }
+  return body.join("\n");
+}
+
+/** Make an init script runnable unprivileged against temp dirs. */
+function localize(script, { data, secrets }) {
+  const uid = process.getuid();
+  const gid = process.getgid();
+  return script
+    .replaceAll("/mnt/lucy-secrets", secrets)
+    .replaceAll("/data/lucy", data)
+    .replaceAll("10001:10001", `${uid}:${gid}`)
+    .replaceAll("-user 10001", `-user ${uid}`)
+    .replaceAll("-group 10001", `-group ${gid}`);
+}
+
+test("Secret is never mounted over .ktx/secrets; secrets-sync copies it into the PVC", () => {
+  const manifest = renderChart(["lucy", chartDir, "--set", "existingSecret=customer-db"]);
+  assert.doesNotMatch(manifest, /mountPath: \/data\/lucy\/\.ktx\/secrets/);
+  assert.match(manifest, /mountPath: \/mnt\/lucy-secrets\n\s+readOnly: true/);
+  assert.match(manifest, /name: secrets-sync/);
+  // The lucy container only sees the PVC.
+  const lucy = manifest.slice(manifest.indexOf("- name: lucy\n"));
+  assert.doesNotMatch(lucy.slice(0, lucy.indexOf("volumes:")), /secrets/);
+});
+
+test("secrets-sync: adds/overwrites Secret keys, keeps WebUI-created files, sets 0700/0600", async () => {
+  const manifest = renderChart(["lucy", chartDir, "--set", "existingSecret=customer-db"]);
+  const script = extractInitScript(manifest, "secrets-sync");
+  const dir = await mkdtemp(path.join(tmpdir(), "lucy-secrets-sync-"));
+  const data = path.join(dir, "data");
+  const secrets = path.join(dir, "secrets");
+  const dst = path.join(data, ".ktx/secrets");
+  const { readFile, symlink, stat, chmod, readdir } = await import("node:fs/promises");
+
+  // Kubernetes-style projected Secret: keys are symlinks into ..data/.
+  await mkdir(path.join(secrets, "..data"), { recursive: true });
+  await writeFile(path.join(secrets, "..data/db-password"), "from-secret-v2");
+  await symlink("..data/db-password", path.join(secrets, "db-password"));
+  await writeFile(path.join(secrets, "other-password"), "other");
+  await chmod(path.join(secrets, "other-password"), 0o400);
+
+  // Pre-existing PVC state: stale rotated key + a password created via the WebUI.
+  await mkdir(dst, { recursive: true, mode: 0o755 });
+  await writeFile(path.join(dst, "db-password"), "stale");
+  await writeFile(path.join(dst, "webui-conn-password"), "keep-me");
+
+  const result = run("sh", ["-ec", localize(script, { data, secrets })]);
+  assert.equal(result.status, 0, result.stderr);
+
+  assert.equal(await readFile(path.join(dst, "db-password"), "utf8"), "from-secret-v2");
+  assert.equal(await readFile(path.join(dst, "other-password"), "utf8"), "other");
+  assert.equal(
+    await readFile(path.join(dst, "webui-conn-password"), "utf8"),
+    "keep-me",
+    "files absent from the Secret must not be pruned"
+  );
+  assert.equal((await stat(dst)).mode & 0o777, 0o700);
+  for (const name of await readdir(dst)) {
+    assert.ok(!name.startsWith("."), `temp file left behind: ${name}`);
+    assert.equal((await stat(path.join(dst, name))).mode & 0o777, 0o600, name);
+  }
+  assert.doesNotMatch(`${result.stdout}${result.stderr}`, /from-secret|keep-me|other/);
+  await rm(dir, { recursive: true, force: true });
+});
+
+test("secrets-sync tolerates an empty Secret and a missing destination", async () => {
+  const manifest = renderChart(["lucy", chartDir, "--set", "existingSecret=customer-db"]);
+  const script = extractInitScript(manifest, "secrets-sync");
+  const dir = await mkdtemp(path.join(tmpdir(), "lucy-secrets-empty-"));
+  const secrets = path.join(dir, "secrets");
+  await mkdir(secrets, { recursive: true });
+  const result = run("sh", ["-ec", localize(script, { data: path.join(dir, "data"), secrets })]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /synced 0 file/);
+  await rm(dir, { recursive: true, force: true });
+});
+
+test("project-migrate only chowns, never deletes or runs git", () => {
+  const manifest = renderChart(["lucy", chartDir]);
+  const script = extractInitScript(manifest, "project-migrate");
+  assert.match(script, /chown -h 10001:10001/);
+  assert.doesNotMatch(script, /git init|rm -/);
+  assert.doesNotMatch(script, /chown -R/);
+});
+
+test("LUCY_CONTENT_ROOT is injected only when set, and fullnameOverride pins resource names", () => {
+  const defaults = renderChart(["lucy-starrocks", chartDir]);
+  assert.doesNotMatch(defaults, /LUCY_CONTENT_ROOT/);
+
+  const pinned = renderChart([
+    "lucy-starrocks",
+    chartDir,
+    "--set-string", "env.LUCY_CONTENT_ROOT=.",
+    "--set", "fullnameOverride=lucy"
+  ]);
+  assert.match(pinned, /- name: LUCY_CONTENT_ROOT\n\s+value: "\."/);
+  assert.match(pinned, /kind: Deployment\nmetadata:\n  name: lucy\n/);
+  assert.match(pinned, /kind: Service\nmetadata:\n  name: lucy\n/);
+  assert.doesNotMatch(pinned, /name: lucy-starrocks\n/);
+});
+
+test("Service never exposes 7878 in any shipped profile", async () => {
+  for (const profile of ["values.k3s-test.yaml", "values.local-test.yaml"]) {
+    const manifest = renderChart(["lucy-starrocks", chartDir, "-f", path.join(chartDir, "examples", profile)]);
+    assert.doesNotMatch(manifest, /(port|targetPort): 7878/, profile);
+  }
+});
+
+async function buildFakePackage() {
+  const dir = await mkdtemp(path.join(tmpdir(), "lucy-pkg-layout-"));
+  const pkg = path.join(dir, "lucy-k8s-integration-delivery-test");
+  const { readFile, copyFile } = await import("node:fs/promises");
+  await mkdir(path.join(pkg, "helm"), { recursive: true });
+  await mkdir(path.join(pkg, "examples"), { recursive: true });
+  await mkdir(path.join(pkg, "image"), { recursive: true });
+  await mkdir(path.join(pkg, "scripts"), { recursive: true });
+  await cp(chartDir, path.join(pkg, "helm/lucy"), { recursive: true });
+
+  const values = (await readFile(path.join(chartDir, "examples/values.k3s-test.yaml"), "utf8")).replace(
+    "REPLACE-ME-at-pack-time",
+    "customer-amd64-0.17.0-20261008-abcdef0"
+  );
+  await writeFile(path.join(pkg, "examples/values.k3s-test.yaml"), values);
+  await writeFile(path.join(pkg, "image/image-tag.txt"), "customer-amd64-0.17.0-20261008-abcdef0\n");
+  await writeFile(path.join(pkg, "image/image-repository.txt"), "project-lucy\n");
+  await writeFile(path.join(pkg, "image/delivery-mode.txt"), "offline\n");
+  await copyFile(path.join(repoRoot, "scripts/gates/helm-lucy-gate.sh"), path.join(pkg, "scripts/preflight-helm.sh"));
+  await copyFile(path.join(repoRoot, "scripts/gates/k8s-acceptance.sh"), path.join(pkg, "scripts/acceptance.sh"));
+  await copyFile(path.join(repoRoot, "scripts/gates/k8s-gate-lib.sh"), path.join(pkg, "scripts/k8s-gate-lib.sh"));
+  return { dir, pkg };
+}
+
+test("package layout: preflight-helm.sh passes when run from the package root", async () => {
+  const { dir, pkg } = await buildFakePackage();
+  const result = spawnSync("bash", ["scripts/preflight-helm.sh", "--k3s-only"], { cwd: pkg, encoding: "utf8" });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.match(result.stdout, /helm\/lucy/);
+  assert.match(result.stdout, /ok image project-lucy:customer-amd64-0\.17\.0-20261008-abcdef0/);
+  await rm(dir, { recursive: true, force: true });
+});
+
+test("package layout: preflight fails when the Secret is mounted over .ktx/secrets again", async () => {
+  const { dir, pkg } = await buildFakePackage();
+  const deployment = path.join(pkg, "helm/lucy/templates/deployment.yaml");
+  const { readFile } = await import("node:fs/promises");
+  const src = await readFile(deployment, "utf8");
+  await writeFile(
+    deployment,
+    src.replace(
+      "{{- /* Secret is intentionally NOT mounted here: see secrets-sync init. */}}",
+      "- name: secrets\n              mountPath: /data/lucy/.ktx/secrets\n              readOnly: false"
+    )
+  );
+  const result = spawnSync("bash", ["scripts/preflight-helm.sh", "--k3s-only"], { cwd: pkg, encoding: "utf8" });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /\.ktx\/secrets/);
+  await rm(dir, { recursive: true, force: true });
+});
+
+test("package layout: preflight fails when fullnameOverride is dropped from the k3s profile", async () => {
+  const { dir, pkg } = await buildFakePackage();
+  const valuesPath = path.join(pkg, "examples/values.k3s-test.yaml");
+  const { readFile } = await import("node:fs/promises");
+  await writeFile(valuesPath, (await readFile(valuesPath, "utf8")).replace(/^fullnameOverride: lucy$/m, ""));
+  const result = spawnSync("bash", ["scripts/preflight-helm.sh", "--k3s-only"], { cwd: pkg, encoding: "utf8" });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /must be named 'lucy'/);
+  await rm(dir, { recursive: true, force: true });
+});
+
+test("package layout: acceptance.sh runs standalone, separates names, and refuses --token", async () => {
+  const { dir, pkg } = await buildFakePackage();
+  const help = spawnSync("bash", [path.join(pkg, "scripts/acceptance.sh"), "--help"], { cwd: "/", encoding: "utf8" });
+  assert.equal(help.status, 0, help.stderr);
+  assert.match(help.stdout, /--deployment/);
+  assert.match(help.stdout, /--service/);
+  assert.match(help.stdout, /LUCY_MCP_TOKEN/);
+
+  const tokenArg = spawnSync(
+    "bash",
+    [path.join(pkg, "scripts/acceptance.sh"), "--namespace", "x", "--release", "y", "--token", "SECRET-TOKEN-VALUE"],
+    { cwd: "/", encoding: "utf8" }
+  );
+  assert.notEqual(tokenArg.status, 0);
+  assert.match(tokenArg.stderr, /LUCY_MCP_TOKEN/);
+  assert.doesNotMatch(`${tokenArg.stdout}${tokenArg.stderr}`, /SECRET-TOKEN-VALUE/);
+  await rm(dir, { recursive: true, force: true });
+});
+
+test("pack script ships the gate lib, cleans macOS leftovers and records build identity", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const src = await readFile(path.join(repoRoot, "scripts/gates/build-k8s-delivery-package.sh"), "utf8");
+  assert.match(src, /k8s-gate-lib\.sh.*scripts\/k8s-gate-lib\.sh/);
+  assert.match(src, /COPYFILE_DISABLE=1 tar/);
+  assert.match(src, /BUILD-INFO\.json/);
+  assert.match(src, /k3s ctr images import/);
+  assert.match(src, /--skip-ktx-exec/);
+});
