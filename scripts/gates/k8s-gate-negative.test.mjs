@@ -345,6 +345,108 @@ test("package layout: acceptance.sh runs standalone, separates names, and refuse
   await rm(dir, { recursive: true, force: true });
 });
 
+const gateLib = path.join(repoRoot, "scripts/gates/k8s-gate-lib.sh");
+
+function gate(snippet, stdin = "") {
+  return spawnSync("bash", ["-c", `source "${gateLib}"; ${snippet}`], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    input: stdin
+  });
+}
+
+test("secrets dir mode accepts 0700 and fsGroup setgid 2700, owned by 10001", () => {
+  for (const stat of ["2700 10001:10001", "700 10001:10001", "0700 10001:10001"]) {
+    const result = gate(`secrets_dir_stat_ok ${JSON.stringify(stat)}`);
+    assert.equal(result.status, 0, `${stat}: ${result.stderr}`);
+  }
+});
+
+test("secrets dir mode rejects group access, setuid, and a non-runtime owner", () => {
+  for (const stat of ["770 10001:10001", "750 10001:10001", "4700 10001:10001", "2700 0:0"]) {
+    const result = gate(`secrets_dir_stat_ok ${JSON.stringify(stat)}`);
+    assert.notEqual(result.status, 0, stat);
+  }
+});
+
+test("secrets file modes accept 0600 and setgid 2600 for uid 10001 only", () => {
+  const ok = gate("secrets_file_stats_ok", "600 10001\n2600 10001\n");
+  assert.equal(ok.status, 0, ok.stderr);
+  const bad = gate("secrets_file_stats_ok", "644 10001\n600 0\n");
+  assert.notEqual(bad.status, 0);
+  assert.match(bad.stderr, /0600/);
+  assert.doesNotMatch(bad.stderr, /644|password/);
+});
+
+test("MCP initialize accepts upstream serverInfo name ktx and the local-fallback name", () => {
+  const ktx = {
+    jsonrpc: "2.0",
+    id: 1,
+    result: {
+      protocolVersion: "2024-11-05",
+      serverInfo: { name: "ktx", version: "0.16.0" },
+      instructions: "VISIBLE-SCOPE-MUST-NOT-LEAK"
+    }
+  };
+  const ok = gate("mcp_initialize_ok", JSON.stringify(ktx));
+  assert.equal(ok.status, 0, ok.stderr);
+  assert.doesNotMatch(`${ok.stdout}${ok.stderr}`, /VISIBLE-SCOPE-MUST-NOT-LEAK/);
+
+  const fallback = {
+    jsonrpc: "2.0",
+    id: 1,
+    result: {
+      protocolVersion: "2024-11-05",
+      serverInfo: { name: "lucy-mcp-proxy", version: "local-fallback" }
+    }
+  };
+  const named = gate("mcp_initialize_ok", JSON.stringify(fallback));
+  assert.equal(named.status, 0, named.stderr);
+});
+
+test("MCP initialize rejects JSON-RPC errors and a result without serverInfo", () => {
+  const errored = gate(
+    "mcp_initialize_ok",
+    JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      error: { code: -32000, message: "upstream down" },
+      result: { instructions: "VISIBLE-SCOPE-MUST-NOT-LEAK" }
+    })
+  );
+  assert.notEqual(errored.status, 0);
+  assert.match(errored.stderr, /upstream down/);
+  assert.doesNotMatch(`${errored.stdout}${errored.stderr}`, /VISIBLE-SCOPE-MUST-NOT-LEAK/);
+
+  const missing = gate(
+    "mcp_initialize_ok",
+    JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      result: { protocolVersion: "2024-11-05", instructions: "VISIBLE-SCOPE-MUST-NOT-LEAK" }
+    })
+  );
+  assert.notEqual(missing.status, 0);
+  assert.match(missing.stderr, /serverInfo/);
+  assert.doesNotMatch(`${missing.stdout}${missing.stderr}`, /VISIBLE-SCOPE-MUST-NOT-LEAK/);
+});
+
+test("MCP tools/list requires result.tools to be an array", () => {
+  const ok = gate(
+    "mcp_tools_list_ok",
+    JSON.stringify({ jsonrpc: "2.0", id: 2, result: { tools: [{ name: "lucy_query" }] } })
+  );
+  assert.equal(ok.status, 0, ok.stderr);
+  assert.doesNotMatch(`${ok.stdout}${ok.stderr}`, /lucy_query/);
+
+  const bad = gate(
+    "mcp_tools_list_ok",
+    JSON.stringify({ jsonrpc: "2.0", id: 2, error: { message: "no session" }, result: { tools: "nope" } })
+  );
+  assert.notEqual(bad.status, 0);
+  assert.match(bad.stderr, /no session/);
+});
+
 test("pack script ships the gate lib, cleans macOS leftovers and records build identity", async () => {
   const { readFile } = await import("node:fs/promises");
   const src = await readFile(path.join(repoRoot, "scripts/gates/build-k8s-delivery-package.sh"), "utf8");

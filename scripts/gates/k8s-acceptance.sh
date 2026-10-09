@@ -168,14 +168,17 @@ fi
 if [[ "${SKIP_SECRETS}" -eq 0 ]]; then
   log "secrets dir: owner/mode, writable, file modes"
   SECRET_STAT="$(kubectl_exec "${NAMESPACE}" "${RELEASE}" stat -c '%a %u:%g' /data/lucy/.ktx/secrets)"
-  [[ "${SECRET_STAT}" == "700 10001:10001" ]] || fail ".ktx/secrets is '${SECRET_STAT}' (expected '700 10001:10001')"
+  # fsGroup adds setgid (2700). Low 9 bits must be 0700; owner 10001:10001.
+  secrets_dir_stat_ok "${SECRET_STAT}" \
+    || fail ".ktx/secrets is '${SECRET_STAT}' (low 9 bits must be 0700, owner 10001:10001, setgid allowed)"
   kubectl_exec "${NAMESPACE}" "${RELEASE}" /bin/sh -ec '
     probe=/data/lucy/.ktx/secrets/.acceptance-write-probe
     : > "$probe" && rm -f "$probe"
   ' || fail ".ktx/secrets is not writable by the Lucy runtime user (EROFS / Permission denied)"
-  BAD_MODES="$(kubectl_exec "${NAMESPACE}" "${RELEASE}" \
-    find /data/lucy/.ktx/secrets -type f \( ! -perm 0600 -o ! -user 10001 \) | wc -l | tr -d ' ')"
-  [[ "${BAD_MODES}" == "0" ]] || fail "${BAD_MODES} file(s) in .ktx/secrets are not 0600 owned by 10001"
+  FILE_STATS="$(kubectl_exec "${NAMESPACE}" "${RELEASE}" \
+    find /data/lucy/.ktx/secrets -type f -exec stat -c '%a %u' {} +)"
+  printf '%s\n' "${FILE_STATS}" | secrets_file_stats_ok \
+    || fail "password files in .ktx/secrets must be mode 0600 (setgid allowed) and owned by 10001"
   MOUNTS_ON_SECRETS="$(kubectl -n "${NAMESPACE}" get pod "${POD}" \
     -o jsonpath='{range .spec.containers[?(@.name=="lucy")].volumeMounts[*]}{.mountPath}{"\n"}{end}' \
     | grep -c '^/data/lucy/.ktx/secrets' || true)"
@@ -226,12 +229,13 @@ if [[ "${SKIP_MCP}" -eq 0 ]]; then
 
   log "MCP initialize with token"
   INIT_RESP="$(mcp_post "${PUBLIC_MCP_URL}" "${TOKEN}" "${INIT_BODY}")"
-  printf '%s\n' "${INIT_RESP}" | grep -q 'lucy-mcp-proxy' || fail "MCP initialize missing lucy-mcp-proxy"
+  # Do not print INIT_RESP: instructions name the visible connections.
+  printf '%s' "${INIT_RESP}" | mcp_initialize_ok || fail "MCP initialize rejected"
 
   log "MCP tools/list"
   LIST_BODY='{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
   LIST_RESP="$(mcp_post "${PUBLIC_MCP_URL}" "${TOKEN}" "${LIST_BODY}")"
-  printf '%s\n' "${LIST_RESP}" | grep -q 'tools' || fail "MCP tools/list unexpected response"
+  printf '%s' "${LIST_RESP}" | mcp_tools_list_ok || fail "MCP tools/list rejected"
 fi
 
 log "OK — acceptance passed (release=${RELEASE} deployment=${DEPLOYMENT} service=${SERVICE})"

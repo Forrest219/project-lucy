@@ -240,3 +240,123 @@ EOF
   kubectl -n "${namespace}" wait --for=jsonpath='{.status.phase}'=Succeeded "pod/${helper}" --timeout=120s
   kubectl -n "${namespace}" delete pod "${helper}" --ignore-not-found >/dev/null 2>&1 || true
 }
+
+# Kubernetes fsGroup sets the setgid bit on PVC directories (mode 2700).
+# That is not a world/group access bit: low 9 bits stay 0700 / 0600.
+# Accept setgid only. Reject setuid, sticky, or any other low-9 mode.
+secrets_mode_ok() {
+  local mode="$1"
+  local expect_low9="$2"
+  python3 - "${mode}" "${expect_low9}" <<'PY'
+import sys
+mode = int(sys.argv[1], 8)
+expect = int(sys.argv[2], 8)
+if (mode & 0o777) != expect:
+    sys.exit(1)
+if (mode & 0o7000) not in (0, 0o2000):
+    sys.exit(1)
+PY
+}
+
+# stat -c '%a %u:%g' for the secrets directory.
+# Owner must be 10001:10001; mode low 9 bits 0700; setgid allowed.
+secrets_dir_stat_ok() {
+  local line="$1"
+  local mode owner uid gid
+  mode="${line%% *}"
+  owner="${line#* }"
+  uid="${owner%%:*}"
+  gid="${owner##*:}"
+  [[ "${uid}" == "10001" && "${gid}" == "10001" ]] || return 1
+  secrets_mode_ok "${mode}" 700
+}
+
+# stdin: one "MODE UID" line per file from stat -c '%a %u'. Empty is ok.
+# Does not print paths or file contents.
+secrets_file_stats_ok() {
+  python3 -c "$(cat <<'PY'
+import sys
+bad = 0
+for raw in sys.stdin:
+    line = raw.strip()
+    if not line:
+        continue
+    parts = line.split()
+    if len(parts) < 2:
+        bad += 1
+        continue
+    mode = int(parts[0], 8)
+    uid = parts[1]
+    if uid != "10001" or (mode & 0o777) != 0o600 or (mode & 0o7000) not in (0, 0o2000):
+        bad += 1
+if bad:
+    print(
+        f"{bad} file(s) in .ktx/secrets are not mode 0600 (setgid allowed) owned by 10001",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+PY
+)"
+}
+
+# stdin: MCP initialize JSON. Success is a JSON-RPC result with protocolVersion
+# and serverInfo name+version. serverInfo.name is not fixed: a healthy proxy
+# forwards the upstream name ("ktx"); "lucy-mcp-proxy" is only the local fallback.
+# On failure print a short reason only — never the body (it carries instructions).
+mcp_initialize_ok() {
+  python3 -c "$(cat <<'PY'
+import json
+import sys
+
+def reject(reason):
+    print(reason, file=sys.stderr)
+    sys.exit(1)
+
+try:
+    body = json.load(sys.stdin)
+except json.JSONDecodeError:
+    reject("MCP initialize response is not JSON")
+if not isinstance(body, dict):
+    reject("MCP initialize response is not an object")
+if "error" in body:
+    err = body.get("error")
+    message = err.get("message") if isinstance(err, dict) else None
+    reject("MCP initialize error: " + (str(message)[:200] if message else "JSON-RPC error"))
+result = body.get("result")
+if not isinstance(result, dict):
+    reject("MCP initialize missing result")
+if not result.get("protocolVersion"):
+    reject("MCP initialize missing protocolVersion")
+info = result.get("serverInfo")
+if not isinstance(info, dict) or not info.get("name") or not info.get("version"):
+    reject("MCP initialize missing serverInfo.name or serverInfo.version")
+PY
+)"
+}
+
+# stdin: MCP tools/list JSON. result.tools must be an array.
+mcp_tools_list_ok() {
+  python3 -c "$(cat <<'PY'
+import json
+import sys
+
+def reject(reason):
+    print(reason, file=sys.stderr)
+    sys.exit(1)
+
+try:
+    body = json.load(sys.stdin)
+except json.JSONDecodeError:
+    reject("MCP tools/list response is not JSON")
+if not isinstance(body, dict):
+    reject("MCP tools/list response is not an object")
+if "error" in body:
+    err = body.get("error")
+    message = err.get("message") if isinstance(err, dict) else None
+    reject("MCP tools/list error: " + (str(message)[:200] if message else "JSON-RPC error"))
+result = body.get("result")
+if not isinstance(result, dict) or not isinstance(result.get("tools"), list):
+    reject("MCP tools/list missing result.tools array")
+PY
+)"
+}
