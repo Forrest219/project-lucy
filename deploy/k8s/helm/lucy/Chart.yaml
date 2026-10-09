@@ -17,7 +17,7 @@ description: |
   Bundled runtime: `@kaelio/ktx@0.16.0` (pinned in Dockerfile / values).
   Product version (`appVersion`) is Lucy-facing and independent of KTX.
 type: application
-version: 0.2.3
+version: 0.2.4
 appVersion: "0.17.0"
 kubeVersion: ">=1.24.0-0"
 home: https://github.com/kaelio/lucy
@@ -38,6 +38,8 @@ annotations:
   category: DataAgent
   licenses: Apache-2.0
   artifacthub.io/changes: |
+    - kind: added
+      description: preflight-upgrade.sh reports live Deployment drift, non-KTX semantic column types, and AbsoluteDeny role tools before helm upgrade. It does not edit the PVC unless --apply-types or --apply-access is passed.
     - kind: fixed
       description: DB password Secret is no longer mounted over /data/lucy/.ktx/secrets (read-only, EROFS on WebUI writes); a secrets-sync init container copies keys into the PVC (0700 dir, 0600 files, UID 10001).
     - kind: added

@@ -447,6 +447,158 @@ test("MCP tools/list requires result.tools to be an array", () => {
   assert.match(bad.stderr, /no session/);
 });
 
+test("deployment drift flags extra command and hotfix mounts and prints a remove patch", async () => {
+  const { writeFile, rm, mkdtemp, readFile } = await import("node:fs/promises");
+  const root = await mkdtemp(path.join(tmpdir(), "lucy-drift-"));
+  const desired = {
+    spec: {
+      template: {
+        spec: {
+          initContainers: [{ name: "project-migrate" }, { name: "secrets-sync" }],
+          containers: [{ name: "lucy", volumeMounts: [{ name: "data", mountPath: "/data/lucy" }] }],
+          volumes: [{ name: "data" }, { name: "secrets" }]
+        }
+      }
+    }
+  };
+  const live = {
+    spec: {
+      template: {
+        spec: {
+          initContainers: [
+            { name: "project-migrate" },
+            { name: "secrets-sync" },
+            { name: "hotfix-init" }
+          ],
+          containers: [{
+            name: "lucy",
+            command: ["/opt/old-entrypoint.sh"],
+            args: ["--legacy"],
+            volumeMounts: [
+              { name: "data", mountPath: "/data/lucy" },
+              { name: "hotfix-config", mountPath: "/opt/hotfix" }
+            ]
+          }],
+          volumes: [{ name: "data" }, { name: "secrets" }, { name: "hotfix-config" }]
+        }
+      }
+    }
+  };
+  const desiredPath = path.join(root, "desired.json");
+  const livePath = path.join(root, "live.json");
+  await writeFile(desiredPath, JSON.stringify(desired));
+  await writeFile(livePath, JSON.stringify(live));
+  const result = run("python3", [
+    "scripts/gates/preflight_upgrade_drift.py",
+    desiredPath,
+    livePath
+  ]);
+  assert.notEqual(result.status, 0);
+  const out = `${result.stdout}${result.stderr}`;
+  assert.match(out, /DRIFT command/);
+  assert.match(out, /hotfix-config/);
+  assert.match(out, /hotfix-init/);
+  assert.doesNotMatch(out, /DRIFT initContainer project-migrate/);
+  assert.doesNotMatch(out, /DRIFT initContainer secrets-sync/);
+  const patch = JSON.parse(out.slice(out.indexOf("[")));
+  const paths = patch.map((op) => op.path);
+  assert.ok(paths.some((item) => item.endsWith("/command") && patch.find((op) => op.path === item).op === "remove"));
+  assert.ok(paths.some((item) => item.includes("hotfix") || item.endsWith("/volumes/2") || item.endsWith("/volumeMounts/1") || item.endsWith("/initContainers/2")));
+  assert.ok(patch.some((op) => op.op === "remove" && op.path.endsWith("/volumeMounts/1")));
+  assert.ok(patch.some((op) => op.op === "remove" && op.path.endsWith("/volumes/2")));
+  await readFile(desiredPath, "utf8");
+  await rm(root, { recursive: true, force: true });
+});
+
+test("deployment drift is clean when the live pod matches the chart", () => {
+  const body = {
+    spec: {
+      template: {
+        spec: {
+          initContainers: [{ name: "project-migrate" }, { name: "secrets-sync" }],
+          containers: [{ name: "lucy", volumeMounts: [{ name: "data" }] }],
+          volumes: [{ name: "data" }]
+        }
+      }
+    }
+  };
+  const dir = spawnSync("mktemp", ["-d"], { encoding: "utf8" }).stdout.trim();
+  const file = path.join(dir, "d.json");
+  spawnSync("python3", ["-c", `import json,sys; json.dump(json.loads(sys.argv[1]), open(sys.argv[2],'w'))`, JSON.stringify(body), file]);
+  const result = run("python3", ["scripts/gates/preflight_upgrade_drift.py", file, file]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /OK drift/);
+  spawnSync("rm", ["-rf", dir]);
+});
+
+test("semantic type scan names varchar and leaves string alone; geometry survives apply-types", async () => {
+  const { writeFile, rm, mkdtemp, readFile } = await import("node:fs/promises");
+  const root = await mkdtemp(path.join(tmpdir(), "lucy-types-"));
+  const schema = path.join(root, "BIDM.yaml");
+  await writeFile(schema, [
+    "columns:",
+    "  - name: amount",
+    "    type: varchar",
+    "  - name: note",
+    "    type: string",
+    "  - name: shape",
+    "    type: geometry",
+    ""
+  ].join("\n"));
+  const lib = path.join(repoRoot, "scripts/gates/preflight-upgrade-lib.mjs");
+  const scan = run("node", [lib, "scan-types", root]);
+  assert.notEqual(scan.status, 0);
+  assert.match(scan.stdout, /varchar/);
+  assert.match(scan.stdout, /geometry/);
+  assert.doesNotMatch(scan.stdout, /note/);
+  const applied = run("node", [lib, "apply-types", root, "20261009T000000Z"]);
+  assert.notEqual(applied.status, 0);
+  assert.match(applied.stdout, /geometry/);
+  const body = await readFile(schema, "utf8");
+  assert.match(body, /type: string/);
+  assert.match(body, /type: geometry/);
+  assert.doesNotMatch(body, /type: varchar/);
+  const backup = await readFile(`${schema}.backup.20261009T000000Z`, "utf8");
+  assert.match(backup, /type: varchar/);
+  await rm(root, { recursive: true, force: true });
+});
+
+test("access scan reports role tools only, not defaults.known_tools", async () => {
+  const { writeFile, rm, mkdtemp, readFile } = await import("node:fs/promises");
+  const root = await mkdtemp(path.join(tmpdir(), "lucy-access-"));
+  const file = path.join(root, "access.yaml");
+  await writeFile(file, [
+    "defaults:",
+    "  known_tools:",
+    "    - sl_query",
+    "    - sl_read_source",
+    "  table_touching_tools:",
+    "    - sl_query",
+    "roles:",
+    "  analyst:",
+    "    allow:",
+    "      tools:",
+    "        - lucy_query",
+    "        - sl_query",
+    "        - sl_read_source",
+    ""
+  ].join("\n"));
+  const lib = path.join(repoRoot, "scripts/gates/preflight-upgrade-lib.mjs");
+  const scan = run("node", [lib, "scan-access", file]);
+  assert.notEqual(scan.status, 0);
+  assert.match(scan.stdout, /ROLE analyst sl_query/);
+  assert.match(scan.stdout, /ROLE analyst sl_read_source/);
+  assert.doesNotMatch(scan.stdout, /known_tools/);
+  const applied = run("node", [lib, "apply-access", file, "20261009T000000Z"]);
+  assert.equal(applied.status, 0, applied.stderr);
+  const body = await readFile(file, "utf8");
+  assert.match(body, /known_tools:[\s\S]*sl_query/);
+  assert.match(body, /lucy_query/);
+  const backup = await readFile(`${file}.backup.20261009T000000Z`, "utf8");
+  assert.match(backup, /sl_query/);
+  await rm(root, { recursive: true, force: true });
+});
+
 test("pack script ships the gate lib, cleans macOS leftovers and records build identity", async () => {
   const { readFile } = await import("node:fs/promises");
   const src = await readFile(path.join(repoRoot, "scripts/gates/build-k8s-delivery-package.sh"), "utf8");

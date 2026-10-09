@@ -180,8 +180,11 @@ cp "${VALUES_FILE}" "${PKG_DIR}/helm/lucy/examples/values.k3s-test.yaml"
 cp "${ROOT}/scripts/gates/k8s-acceptance.sh" "${PKG_DIR}/scripts/acceptance.sh"
 cp "${ROOT}/scripts/gates/k8s-gate-lib.sh" "${PKG_DIR}/scripts/k8s-gate-lib.sh"
 cp "${ROOT}/scripts/gates/helm-lucy-gate.sh" "${PKG_DIR}/scripts/preflight-helm.sh"
-chmod 0755 "${PKG_DIR}/scripts/acceptance.sh" "${PKG_DIR}/scripts/preflight-helm.sh"
-chmod 0644 "${PKG_DIR}/scripts/k8s-gate-lib.sh"
+cp "${ROOT}/scripts/gates/preflight-upgrade.sh" "${PKG_DIR}/scripts/preflight-upgrade.sh"
+cp "${ROOT}/scripts/gates/preflight-upgrade-lib.mjs" "${PKG_DIR}/scripts/preflight-upgrade-lib.mjs"
+cp "${ROOT}/scripts/gates/preflight_upgrade_drift.py" "${PKG_DIR}/scripts/preflight_upgrade_drift.py"
+chmod 0755 "${PKG_DIR}/scripts/acceptance.sh" "${PKG_DIR}/scripts/preflight-helm.sh" "${PKG_DIR}/scripts/preflight-upgrade.sh"
+chmod 0644 "${PKG_DIR}/scripts/k8s-gate-lib.sh" "${PKG_DIR}/scripts/preflight-upgrade-lib.mjs" "${PKG_DIR}/scripts/preflight_upgrade_drift.py"
 
 # macOS / VCS leftovers must never reach the deliverable.
 find "${PKG_DIR}" \( -name '._*' -o -name '.DS_Store' -o -name '__MACOSX' -o -name '.git' -o -name '.gitignore' \) \
@@ -293,6 +296,8 @@ and an empty `image.digest`.
 ```bash
 sha256sum -c SHA256SUMS
 bash scripts/preflight-helm.sh --k3s-only
+bash scripts/preflight-upgrade.sh --namespace lucy-test --release lucy-starrocks \
+  --deployment lucy --chart helm/lucy -f examples/values.k3s-test.yaml
 helm upgrade lucy-starrocks helm/lucy -n lucy-test -f examples/values.k3s-test.yaml --atomic --wait --timeout 15m
 LUCY_MCP_TOKEN=<bearer> bash scripts/acceptance.sh --namespace lucy-test --release lucy-starrocks \
   --deployment lucy --service lucy --public-mcp-url http://10.69.95.109:8277/mcp \
@@ -328,6 +333,14 @@ read-only password Secret, legacy PVC layout, resource-name drift, and non-runna
 
 Lucy product version and bundled KTX version are independent release identities
 (see `BUILD-INFO.json` for the exact commit, image, platform and dependency versions).
+
+## Changes (Chart 0.2.4)
+
+- **Upgrade preflight.** `scripts/preflight-upgrade.sh` compares the live Deployment with the rendered chart
+  (extra `command`/`args`, hotfix volumes, extra init containers) and prints a JSON Patch it does not apply.
+  It also lists semantic column types outside `string`/`number`/`time`/`boolean`, and AbsoluteDeny tools on
+  `roles.*.allow.tools`. `--apply-types` and `--apply-access` are opt-in and write a sibling backup first.
+  `defaults.known_tools` is not modified. `project-migrate` still only `chown`s.
 
 ## Changes (Chart 0.2.3)
 

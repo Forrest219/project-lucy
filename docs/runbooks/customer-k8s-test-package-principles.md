@@ -35,7 +35,7 @@
 - [`docs/plans/wo-202608-27-customer-k8s-delivery.md`](../plans/wo-202608-27-customer-k8s-delivery.md)：仍含「Chart 仅作参考」「可跳过 ELF」「复用历史 tar」「`runAsUser: 0`」「镜像 0.16.0」
 - [`docs/plans/wo-20260901-k8s-delivery-hardening.md`](../plans/wo-20260901-k8s-delivery-hardening.md)：H2–H4 与非 root 镜像的勾选状态已落后于仓库；Chart 现为受支持交付物，运行 UID 为 10001
 
-2026-10-08 的仓库基线：Chart `0.2.3`，`VERSION` `0.17.0`，捆绑 KTX `0.16.0`。以后以文件内容为准，不要从旧 WO 抄版本号。
+2026-10-09 的仓库基线：Chart `0.2.4`，`VERSION` `0.17.0`，捆绑 KTX `0.16.0`。以后以文件内容为准，不要从旧 WO 抄版本号。
 
 ## Mac 可以构建待测镜像
 

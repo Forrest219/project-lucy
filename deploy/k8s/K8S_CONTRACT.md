@@ -18,7 +18,8 @@ in this repository is a **supported delivery artifact** — not a reference snap
 | `0.2.0` | legacy/ambiguous | `0.16.0` | HTTP `GET /api/health` on port `webui` | Superseded; missing UID/git contract |
 | `0.2.1` | legacy/ambiguous | `0.16.0` | HTTP probes + UID 10001 + `workingDir` | Superseded by product-version-aware chart 0.2.2 |
 | `0.2.2` | `0.17.0` | `0.16.0` | HTTP probes + UID 10001 + `workingDir` | **Superseded** — Secret mounted read-only over `.ktx/secrets` (WebUI writes fail with `EROFS`) |
-| `0.2.3` | `0.17.0` | `0.16.0` | HTTP probes + UID 10001 + `workingDir` | **Current** — `secrets-sync` init, `LUCY_CONTENT_ROOT`, name pinning; use for in-place upgrades |
+| `0.2.3` | `0.17.0` | `0.16.0` | HTTP probes + UID 10001 + `workingDir` | `secrets-sync` init, `LUCY_CONTENT_ROOT`, name pinning |
+| `0.2.4` | `0.17.0` | `0.16.0` | same workload contract as 0.2.3 | **Current** — adds `preflight-upgrade.sh` for live Deployment drift, semantic column types, and AbsoluteDeny role tools |
 
 Image tags must be **immutable**. Recommended form:
 

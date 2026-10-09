@@ -263,6 +263,9 @@ CHART="${PKG_DIR}/helm/lucy"
 echo "[verify-k8s-package] K6-7 acceptance script is self-contained"
 [[ -f "${PKG_DIR}/scripts/acceptance.sh" ]] || { echo "FAIL K6-7: missing scripts/acceptance.sh" >&2; exit 1; }
 [[ -f "${PKG_DIR}/scripts/k8s-gate-lib.sh" ]] || { echo "FAIL K6-7: missing scripts/k8s-gate-lib.sh (acceptance.sh dependency)" >&2; exit 1; }
+[[ -f "${PKG_DIR}/scripts/preflight-upgrade.sh" ]] || { echo "FAIL K6-7: missing scripts/preflight-upgrade.sh" >&2; exit 1; }
+[[ -f "${PKG_DIR}/scripts/preflight-upgrade-lib.mjs" ]] || { echo "FAIL K6-7: missing scripts/preflight-upgrade-lib.mjs" >&2; exit 1; }
+[[ -f "${PKG_DIR}/scripts/preflight_upgrade_drift.py" ]] || { echo "FAIL K6-7: missing scripts/preflight_upgrade_drift.py" >&2; exit 1; }
 for script in "${PKG_DIR}"/scripts/*.sh; do
   bash -n "${script}" || { echo "FAIL K6-7: syntax error in ${script}" >&2; exit 1; }
 done

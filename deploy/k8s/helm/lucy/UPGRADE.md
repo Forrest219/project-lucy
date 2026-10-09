@@ -1,7 +1,7 @@
 # Lucy Helm Chart — Upgrade Guide
 
 Upgrade Lucy on Kubernetes while preserving `/data/lucy` PVC data, Secrets, and MCP tokens.
-Current chart: **0.2.3** (Lucy `0.17.0`, bundled KTX `0.16.0`).
+Current chart: **0.2.4** (Lucy `0.17.0`, bundled KTX `0.16.0`).
 
 ## Before you start
 
@@ -38,6 +38,41 @@ renders `app.kubernetes.io/name=lucy` and `app.kubernetes.io/instance=<helm rele
 If it differs (for example the Deployment was created by another chart or release name), stop: `helm upgrade`
 would fail with `field is immutable`. Do not patch or delete the Deployment by hand — contact Lucy delivery to
 agree a one-off migration plan first (PVC is kept in every case).
+
+## Upgrade preflight (live cluster)
+
+Run this from the package root **before** `helm upgrade`. It reports three things Helm will not fix by itself:
+
+- a live Deployment that still has a hand-patched `command` / `args`, hotfix volume, or extra init container
+- semantic-layer column `type` values other than `string`, `number`, `time`, `boolean`
+- `roles.*.allow.tools` entries that Lucy 0.17.0 treats as AbsoluteDeny (`sl_query`, `sl_read_source`, and the other names in that set)
+
+`defaults.known_tools` and `defaults.table_touching_tools` are not flagged and are not edited.
+
+```bash
+bash scripts/preflight-upgrade.sh \
+  --namespace lucy-test --release lucy-starrocks \
+  --deployment lucy --chart helm/lucy -f examples/values.k3s-test.yaml
+```
+
+The script prints a JSON Patch and does **not** apply it. Read the patch, save the array to a file, then:
+
+```bash
+kubectl -n lucy-test patch deploy lucy --type=json --patch-file drift.json
+```
+
+`helm upgrade --force` deletes and recreates the Deployment. Use it only when the printed patch cannot express the drift. The PVC stays. It is not the default.
+
+Column types and role tools are customer data. The preflight does not change them unless you pass a flag. Each flag copies the original to a sibling `.backup.<timestamp>` first.
+
+```bash
+bash scripts/preflight-upgrade.sh \
+  --namespace lucy-test --release lucy-starrocks \
+  --deployment lucy --chart helm/lucy -f examples/values.k3s-test.yaml \
+  --apply-types --apply-access
+```
+
+`--apply-types` rewrites only a fixed SQL Server map (`varchar`/`nvarchar`/`int`/`decimal`/`datetime`/`bit`, and the other names listed in `scripts/preflight-upgrade-lib.mjs`). A type with no mapping, such as `geometry`, is reported and left unchanged, and the preflight still fails. `--apply-access` removes AbsoluteDeny names from role tool lists only.
 
 If the rendered Deployment still references `k8s-preflight.sh` or uses `startupProbe.exec` with
 `docker-healthcheck.sh`, upgrade the Chart to **0.2.x+** before applying the v3 image.
@@ -173,7 +208,7 @@ and MCP 401 / `initialize` / `tools/list`. It prints no tokens, passwords or Sec
 
 ## Required values changes when coming from chart 0.1.x / v1/v2 packages
 
-| Old (0.1.x / v1/v2) | New (0.2.3) |
+| Old (0.1.x / v1/v2) | New (0.2.4) |
 |---|---|
 | exec startup/readiness probes | HTTP `/api/health` (chart default) |
 | `service.webuiPort` also used as container port | split: `containerPorts.webui: 5174`, `service.webuiPort: 8276` |
