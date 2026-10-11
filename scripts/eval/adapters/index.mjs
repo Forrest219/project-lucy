@@ -28,6 +28,14 @@ const PRESET_DEFAULTS = {
     outputFormat: 'plain',
     authMode: 'none',
   },
+  workbuddy: {
+    id: 'workbuddy',
+    label: 'WorkBuddy',
+    cli: 'workbuddy',
+    args: ['-p', '{question}'],
+    outputFormat: 'plain',
+    authMode: 'none',
+  },
 };
 
 const CORE_ADAPTERS = [
@@ -38,6 +46,7 @@ const CORE_ADAPTERS = [
   createGenericCliAdapter(PRESET_DEFAULTS.cursor),
   createGenericCliAdapter(PRESET_DEFAULTS.openclaw),
   createGenericCliAdapter(PRESET_DEFAULTS.codex),
+  createGenericCliAdapter(PRESET_DEFAULTS.workbuddy),
 ];
 
 function aliasEntries(adapter) {

@@ -1233,6 +1233,10 @@ export type EvalCase = {
   snapshot_date?: string;
   coverage?: string;
   notes?: string;
+  review_status?: "active" | "needs_review";
+  semantic_version_seen?: string;
+  as_of_binding?: EvalSuiteCase["as_of_binding"];
+  executable?: EvalExecutable;
 };
 
 export type EvalRunStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
@@ -1263,6 +1267,10 @@ export type EvalRun = {
   runnerMetadata?: unknown;
   importSource?: string;
   hashStatus?: EvalResultHashStatus;
+  resultVersion?: number;
+  notAnsweredCount?: number;
+  asOf?: string;
+  roleId?: string;
 };
 
 export type EvalRunWithResults = EvalRun & {
@@ -1279,6 +1287,10 @@ export type EvalRunWithResults = EvalRun & {
     failedAssertions?: string[];
     errorMessage?: string;
     finalText?: string;
+    outcome?: EvalAnswerOutcome;
+    reason?: string;
+    policyStatus?: "compliant" | "noncompliant" | "unchecked";
+    window?: { start: string; end: string } | null;
   }>;
 };
 
@@ -1318,8 +1330,11 @@ export type EvalRunCompare = {
 // `webui/docs/46-eval-yaml-exchange-and-result-archive-spec.md` §5.
 
 export const EVAL_SUITE_SCHEMA_VERSION = 1 as const;
+export const EVAL_SUITE_SCHEMA_VERSIONS = [1, 2] as const;
 export const EVAL_SUITE_KIND = "lucy_eval_suite" as const;
 export const EVAL_RESULT_VERSION = 1 as const;
+export const EVAL_RESULT_VERSIONS = [1, 2] as const;
+export const OFFLINE_BATCH_RUNNER_KIND = "lucy_offline_batch" as const;
 
 export type EvalSuiteSnapshot = {
   mode: "live_readonly" | "snapshot";
@@ -1373,10 +1388,37 @@ export type EvalSuiteCase = {
   linked_quiz_questions?: string[];
   coverage?: string;
   notes?: string;
+  review_status?: "active" | "needs_review";
+  semantic_version_seen?: string;
+  as_of_binding?: {
+    kind: "yesterday" | "this_month" | "business_period";
+    period?: string;
+  };
+  executable?: EvalExecutable;
+};
+
+export type EvalExecutableFilter = {
+  field: string;
+  bind: "as_of_window" | "case_value";
+  value?: string;
+};
+
+export type EvalExecutable = {
+  required_measures: string[];
+  grain: string[];
+  required_columns: string[];
+  required_filters: EvalExecutableFilter[];
+  reconciliation?: Array<{
+    id: string;
+    left: { measures: string[]; grain: string[] };
+    right: { measures: string[]; grain: string[] };
+    relation: "sum_equals";
+    tolerance_abs?: number;
+  }>;
 };
 
 export type EvalSuite = {
-  lucy_eval_schema_version: 1;
+  lucy_eval_schema_version: 1 | 2;
   kind: "lucy_eval_suite";
   /** Globally stable ID, matches `[a-z0-9][a-z0-9_-]*`. */
   suite_id: string;
@@ -1404,6 +1446,10 @@ export type EvalResultCase = {
   failures?: string[];
   final_text?: string;
   error_message?: string;
+  outcome?: EvalAnswerOutcome;
+  reason?: string;
+  policy_status?: "compliant" | "noncompliant" | "unchecked";
+  window?: { start: string; end: string } | null;
 };
 
 export type EvalResultRunner = {
@@ -1413,8 +1459,13 @@ export type EvalResultRunner = {
   host?: string;
 };
 
+export type EvalAnswerOutcome = "answered_ok" | "answered_wrong" | "not_answered";
+
 export type EvalResultImport = {
-  lucy_eval_result_version: 1;
+  lucy_eval_result_version: 1 | 2;
+  complete?: boolean;
+  role_id?: string;
+  as_of?: string;
   suite_id: string;
   /** sha256:hex */
   suite_hash: string;
@@ -1462,10 +1513,12 @@ export type EvalDriftDistribution = {
 
 export type EvalTrendPoint = {
   date: string;
-  passRate: number;
+  passRate: number | null;
   runs?: number;
   lowestPassRate?: number;
   totalRuns: number;
+  notAnsweredCount?: number;
+  formulaLabel?: string;
 };
 
 export type EvalThreshold = {
@@ -1478,6 +1531,7 @@ export type MonitorConfig = {
     passRateYellow: number;
     passRateRed: number;
     consecutiveFailThreshold: number;
+    roleIds?: string[];
   }>;
 };
 

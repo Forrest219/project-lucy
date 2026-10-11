@@ -150,9 +150,9 @@ describe("CommandPalette", () => {
     // search term "评测" matches the group title "质量评测"; the renamed
     // 安全评测候选 is also a direct label hit, so it ranks ahead of the two
     // group-title-only matches.
-    expect(options.length).toBe(4);
+    expect(options.length).toBe(5);
     const labels = options.map((option) => option.querySelector(".pl-command-palette-item-label")?.textContent);
-    expect(labels).toEqual(["评测用例", "安全评测候选", "运行历史", "趋势监控"]);
+    expect(labels).toEqual(["评测用例", "安全评测候选", "运行历史", "趋势监控", "现场提问"]);
     // M70: the matching group title now lives inside the breadcrumb line.
     // Use a regex match because the highlight helper may split the matched
     // substring ("评测") into its own <mark> node while leaving the rest
@@ -263,7 +263,7 @@ describe("CommandPalette", () => {
     const input = screen.getByTestId("command-palette-input");
     const list = screen.getByTestId("command-palette-list");
     const options = within(list).getAllByRole("option");
-    expect(options.length).toBe(4);
+    expect(options.length).toBe(5);
     expect(options[0]).toHaveAttribute("data-active", "true");
     expect(screen.queryByTestId("command-palette-enter-hint")).not.toBeInTheDocument();
     expect(screen.getByTestId("command-palette-footer")).toHaveTextContent(
@@ -284,13 +284,16 @@ describe("CommandPalette", () => {
     fireEvent.keyDown(input, { key: "ArrowDown" });
     expect(options[3]).toHaveAttribute("data-active", "true");
 
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    expect(options[4]).toHaveAttribute("data-active", "true");
+
     // Wraps back to the first.
     fireEvent.keyDown(input, { key: "ArrowDown" });
     expect(options[0]).toHaveAttribute("data-active", "true");
 
     // ArrowUp wraps to the last.
     fireEvent.keyDown(input, { key: "ArrowUp" });
-    expect(options[3]).toHaveAttribute("data-active", "true");
+    expect(options[4]).toHaveAttribute("data-active", "true");
   });
 
   it("does not navigate on Enter when multiple results are still only previewed", () => {

@@ -6,6 +6,7 @@ import { previewDiff } from "../diff.js";
 import { resolveProjectRoot } from "../project.js";
 import type { FastifyInstance } from "fastify";
 import { getEvalDb } from "./db.js";
+import { getPolicyRuntimeStatus } from "../proxy/acl.js";
 import { loadContentPaths } from "../paths.js";
 import { auditedWriteFile } from "../admin/config-audit-write.js";
 
@@ -46,6 +47,19 @@ export type EvalCase = {
   snapshot_date?: string;
   coverage?: string;
   notes?: string;
+  review_status?: "active" | "needs_review";
+  semantic_version_seen?: string;
+  as_of_binding?: {
+    kind: "yesterday" | "this_month" | "business_period";
+    period?: string;
+  };
+  executable?: {
+    required_measures: string[];
+    grain: string[];
+    required_columns: string[];
+    required_filters: Array<{ field: string; bind: "as_of_window" | "case_value"; value?: string }>;
+    reconciliation?: unknown[];
+  };
 };
 
 export type EvalDomainInfo = {
@@ -236,6 +250,17 @@ async function attachLastRuns(domains: EvalDomainInfo[]): Promise<EvalDomainInfo
   });
 }
 
+export async function markStaleCases(projectRoot: string, domain: string): Promise<EvalCase[]> {
+  const current = getPolicyRuntimeStatus().sourceMapVersion;
+  const cases = await listCases(projectRoot, domain);
+  if (!current) return cases;
+  const stale = cases.filter((item) => item.semantic_version_seen && item.semantic_version_seen !== current && item.review_status !== "needs_review");
+  for (const item of stale) {
+    await updateCase(projectRoot, domain, item.id, { ...item, review_status: "needs_review" }, false);
+  }
+  return stale.length > 0 ? listCases(projectRoot, domain) : cases;
+}
+
 export async function listCases(projectRoot: string, domain: string): Promise<EvalCase[]> {
   const { doc } = await readCasesDoc(projectRoot, domain);
   return extractCases(doc);
@@ -260,6 +285,9 @@ export async function addCase(
   const cases = extractCases(doc);
   if (cases.some((c) => c.id === caseData.id)) {
     throw new CaseIdTakenError(`Case id ${caseData.id} already exists`);
+  }
+  if (!caseData.question?.trim()) {
+    throw new InvalidCaseSchemaError("问法不能为空");
   }
   upsertCaseInDoc(doc, caseData, true);
   const proposedYaml = doc.toString({ lineWidth: 0 });
@@ -290,6 +318,9 @@ export async function updateCase(
   const cases = extractCases(doc);
   if (!cases.some((c) => c.id === caseId)) {
     throw new CaseNotFoundError(`Case ${caseId} not found in domain ${domain}`);
+  }
+  if (!caseData.question?.trim()) {
+    throw new InvalidCaseSchemaError("问法不能为空");
   }
   upsertCaseInDoc(doc, caseData, false);
   const proposedYaml = doc.toString({ lineWidth: 0 });
@@ -347,8 +378,20 @@ export function registerCaseRoutes(app: FastifyInstance) {
   // GET /api/eval/cases/:domain
   app.get<{ Params: { domain: string } }>("/api/eval/cases/:domain", async (request) => {
     const projectRoot = await resolveProjectRoot();
-    const cases = await listCases(projectRoot, request.params.domain);
+    const cases = await markStaleCases(projectRoot, request.params.domain);
     return { ok: true, data: { cases } };
+  });
+
+  app.post<{ Params: { domain: string; caseId: string } }>("/api/eval/cases/:domain/:caseId/confirm-review", async (request) => {
+    const projectRoot = await resolveProjectRoot();
+    const current = getPolicyRuntimeStatus().sourceMapVersion;
+    const existing = await getCase(projectRoot, request.params.domain, request.params.caseId);
+    await updateCase(projectRoot, request.params.domain, request.params.caseId, {
+      ...existing,
+      review_status: "active",
+      semantic_version_seen: current || existing.semantic_version_seen
+    }, false);
+    return { ok: true, data: { review_status: "active", semantic_version_seen: current || existing.semantic_version_seen } };
   });
 
   // GET /api/eval/cases/:domain/:caseId

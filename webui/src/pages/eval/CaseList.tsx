@@ -39,8 +39,9 @@ type ResultImportResponse = {
   written?: true;
 };
 
-function runnerCommandFor(domain: string, adapter = "hermes"): string {
-  return `EVAL_AGENT_ADAPTER=${adapter} node scripts/eval/lucy-eval-runner.mjs --suite ${domain || "eval"}-eval-suite.yaml --output result.json --adapter ${adapter}`;
+function runnerCommandFor(domain: string): string {
+  const name = domain || "eval";
+  return `npx tsx webui/server/eval/offline-batch-main.ts --suite evals/${name}/eval/${name}-eval-cases.yaml --as-of $(date +%F) --role-id <绑定角色> --output result.json`;
 }
 
 function filenameFromContentDisposition(value: string | null, fallback: string): string {
@@ -259,7 +260,7 @@ export function CaseList() {
       />
 
       <div className="pl-notice">
-        当前服务器未配置 <span className="notranslate" translate="no">Agent runtime</span> 时，仍可下载 <span className="notranslate" translate="no">Eval YAML</span>，在本机 <span className="notranslate" translate="no">Agent 客户端</span>（如 <span className="notranslate" translate="no">Hermes</span>、<span className="notranslate" translate="no">Cursor</span>、<span className="notranslate" translate="no">OpenClaw</span>、<span className="notranslate" translate="no">Claude Code</span>、<span className="notranslate" translate="no">Codex</span>）中运行；结果可选择上传归档。
+        当前服务器未配置 <span className="notranslate" translate="no">Agent runtime</span> 时，仍可下载 <span className="notranslate" translate="no">Eval YAML</span>，在本机 <span className="notranslate" translate="no">Agent 客户端</span>（如 <span className="notranslate" translate="no">Hermes</span>、<span className="notranslate" translate="no">Cursor</span>、<span className="notranslate" translate="no">OpenClaw</span>、<span className="notranslate" translate="no">Claude Code</span>、<span className="notranslate" translate="no">Codex</span>、<span className="notranslate" translate="no">WorkBuddy</span>）中运行；结果可选择上传归档。
       </div>
 
       {suitePanel === "command" && (

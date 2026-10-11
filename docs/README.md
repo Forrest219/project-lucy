@@ -123,6 +123,7 @@
 | 文档 | 用途 |
 |---|---|
 | `plans/README.md` | 仓库级 plan 索引 |
+| `plans/2026-10-11-customer-log-next-optimizations.md` | 客户日志优化最终版 v1.0；Spec 162 与工单 `wo-202610-12` / `13` / `14` |
 | `plans/2026-10-11-eval-module-functional-upgrade.md` | Eval 模块产品能力 v0.4；评审看 Spec 161 与工单 `webui/docs/plans/wo-202610-11-offline-eval-customer-ops.md` |
 | `plans/2026-10-11-eval-result-policy-context-upgrade.md` | Eval 升级建议：结果 / 策略 / 解释分轴、上下文四臂、拒答与轨迹晋升（产品/架构，不含实现 WO） |
 | `plans/2026-08-26-eval-accuracy-closed-loop-and-change-triggered-regression.md` | Eval 优化方案：准确率闭环 + Publish 变更触发 smoke 回归（产品/架构，不含实现 WO） |

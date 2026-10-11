@@ -128,6 +128,7 @@ import { registerSecurityCandidateRoutes } from "./eval/security-candidates.js";
 import { registerSuiteImportRoutes } from "./eval/suite-import.js";
 import { registerRunnerRoutes } from "./eval/runner.js";
 import { registerMonitorRoutes } from "./eval/monitor.js";
+import { registerFieldQuestionRoutes } from "./eval/field-questions.js";
 import { registerR1ObservabilityRoutes } from "./observability.js";
 import { registerCallMonitorRoutes } from "./ops/call-monitor.js";
 import { safeWrite } from "./fs-safe.js";
@@ -1952,6 +1953,7 @@ export function buildServer() {
   registerSuiteImportRoutes(app);
   registerRunnerRoutes(app);
   registerMonitorRoutes(app);
+  registerFieldQuestionRoutes(app);
   registerR1ObservabilityRoutes(app);
   registerCallMonitorRoutes(app);
   registerRiskReviewRoutes(app);

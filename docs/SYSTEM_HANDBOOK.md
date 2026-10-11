@@ -76,7 +76,7 @@
 | 可以用编码代理自动生成语义 / Wiki / Eval 吗？ | 可以。用**配置作者 Skills**（Claude Code / Codex / Cursor）生成产物；生成后仍须过全包门禁与 [3.7.6 GO / NO-GO](#376-go--no-go-交付-checklist)。这不是 MCP 问答运行时 Skill。 | [配置作者 Skills](#配置作者-skills) |
 | `lucy_query` 报 `No join path`？ | 跨 source 查询需要 Manifest/overlay 声明 `joins` + `relationship`，并完成索引重建；有物理外键不等于语义层已连通。 | [6.10 `lucy_query` 报 No join path / 跨表失败](#610-lucy_query-报-no-join-path--跨表失败)、[grain、join 与 fanout](#grainjoin-与-fanout) |
 | 查询被 fanout / Aggregate locality 拒绝？ | measure 源与 filter/dimension 路径不能靠 `one_to_many` 扇出聚合；换 measure 源、改维度，或拆成多步半连接式查询。 | [6.11 fanout / Aggregate locality 拒绝查询](#611-fanout--aggregate-locality-拒绝查询) |
-| 评测用例和运行历史在哪里？ | 用 `/eval/cases` 维护评测用例，用 `/eval/runs` 看运行历史，用 `/eval/monitor` 看趋势监控。 | [3.6 质量评测 Eval](#36-质量评测-eval) |
+| 评测用例和运行历史在哪里？ | 在 `/eval/cases` 维护套件，用离线跑批生成结果，再上传到 `/eval/runs`。通过率和没答出来的计数在 `/eval/monitor`。 | [3.6 质量评测 Eval](#36-质量评测-eval) |
 | `/catalog` 的「语义状态」和 `/connections/enabled-tables` 的「状态」有什么关系？ | 共用 `GET /api/sources` 的 `completion`。`/catalog` 展示四态完成度；启用表范围页先看 `enabled_tables`，再把非 `done` 收成「已启用，待补语义」。 | [语义状态与启用表范围状态](#语义状态与启用表范围状态)、[系统概览待处理事项](#系统概览待处理事项) |
 | `/overview`「待处理事项」里「N 张表待补语义」怎么算？ | 按表计数：只统计已进入启用表范围（`enabled_tables`）且出现在本地 `Manifest` 的表。`N` = 这些表中 `completion !== done` 的数量；未启用的 `Manifest` 表不计入。`done` 需同时有表描述、`grain`、主键、全部非 `hidden` 列描述和至少一个 `measure`。 | [系统概览待处理事项](#系统概览待处理事项)、[3.3 语义层维护](#33-语义层维护) |
 | 「待处理事项」其它条目分别统计什么？ | 只保留三类：待补语义、待发布文件、近 30 天无评测。待发布看 `/api/diff` 文件数；无评测看是否已有评测运行记录。计数为 0 不展示。近 7 天 `ACL` 拒绝不在首页展示，到 `/admin/audit` 或调用监控查看。 | [系统概览待处理事项](#系统概览待处理事项) |
@@ -208,6 +208,7 @@ KTX CLI / MCP daemon
 | 质量评测 | 评测用例 | `/eval/cases` | 管理数据问答与语义质量的评测用例及预期结果。 |
 | 质量评测 | 运行历史 | `/eval/runs` | 查看评测运行记录、通过率、结果明细与失败诊断。 |
 | 质量评测 | 趋势监控 | `/eval/monitor` | 监控评测通过率、失败集中度与质量漂移趋势。 |
+| 质量评测 | 现场提问 | `/eval/field-questions` | 审定访问日志里反复出现的业务问法，补问法后收成评测用例。 |
 | 质量评测 | 安全评测候选 | `/eval/security-candidates` | 从访问拒绝日志中提取权限与数据隔离场景，审定后转为安全评测用例。 |
 | 访问治理 | Agent | `/admin/agents` | 管理 `Agent` 身份、角色、`Token` 及数据访问边界。 |
 | 访问治理 | Token 凭据 | `/admin/tokens` | 全局查看、签发与定向吊销 `Agent` 访问凭据。 |
@@ -1433,7 +1434,14 @@ curl -s "http://127.0.0.1:5174/api/admin/audit/sources?hours=24"
 | Case 编辑 | `/eval/cases/:domain/:caseId` | 编辑 YAML case，支持 dryRun diff |
 | 运行历史 | `/eval/runs` | 查看 run 列表 |
 | Run 详情 | `/eval/runs/:runId` | 查看逐 case 结果、artifact、compare |
-| 趋势监控 | `/eval/monitor` | pass rate 趋势、top failures、drift distribution、阈值 |
+| 趋势监控 | `/eval/monitor` | 通过率趋势、没答出来计数、现场区块、阈值 |
+| 现场提问 | `/eval/field-questions` | 审定反复出现的业务问法；权限拒绝仍在安全评测候选 |
+
+客户路径是维护套件、离线跑批、上传结果。离线跑批命令：
+
+```bash
+npx tsx webui/server/eval/offline-batch-main.ts --suite evals/<domain>/eval/<domain>-eval-cases.yaml --as-of YYYY-MM-DD --role-id <绑定角色> --output result.json
+```
 
 Eval 文件约定：
 

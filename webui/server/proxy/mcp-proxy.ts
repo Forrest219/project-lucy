@@ -11,7 +11,7 @@ import {
 } from "./upstream-session.js";
 import { extractRequestClientMeta } from "./request-client-meta.js";
 import { ensureSkillAuditReady, writeLog, writeAccessLogSources, writeConversationTurn, purgeExpiredConversationTurns, writeAuthFailureLog, type AccessLogSourceRecord } from "./audit.js";
-import { allowedToolNames, check as aclCheck, effectivePermissions, extractTables, extractSourceRefs, resolveSourceRefsForTables, kxCatalog, lucyCatalog, permissionSnapshot, type SourceRef } from "./acl.js";
+import { allowedToolNames, authorizeAndRewrite, check as aclCheck, effectivePermissions, extractTables, extractSourceRefs, resolveSourceRefsForTables, kxCatalog, lucyCatalog, permissionSnapshot, type SourceRef } from "./acl.js";
 import {
   redactQuestionText,
   summarizeArgsForAudit,
@@ -4122,6 +4122,35 @@ function isSkillsPath(url: string | undefined): boolean {
 function normalizeHeader(v: string | string[] | undefined): string | undefined {
   if (!v) return undefined;
   return Array.isArray(v) ? v[0] : v;
+}
+
+/** Same gate as a live lucy_query: authorize, then forward the call to KTX. */
+export async function forwardAuthorizedLucyQuery(
+  identity: Identity,
+  args: Record<string, unknown>
+): Promise<{ ok: true; payload: unknown } | { ok: false; reason: string }> {
+  const decision = await authorizeAndRewrite(identity, "lucy_query", args);
+  if (!decision.allowed) return { ok: false, reason: decision.reason ?? "acl_denied" };
+  const outbound = decision.forcedFilters ? { ...args, forced_filters: decision.forcedFilters } : args;
+  try {
+    const sessionId = getUpstreamSession(identity.userId) ?? await handshakeUpstreamSession(identity);
+    if (!sessionId) return { ok: false, reason: "execution_interrupted" };
+    const body = Buffer.from(JSON.stringify({
+      jsonrpc: "2.0",
+      id: `lucy-offline-batch-${randomUUID()}`,
+      method: "tools/call",
+      params: { name: "lucy_query", arguments: outbound }
+    }));
+    const upstream = await forwardToKtx("POST", "/mcp", { "content-type": "application/json" }, body, sessionId);
+    const text = await readUpstreamBody(upstream);
+    if ((upstream.statusCode ?? 200) >= 400) return { ok: false, reason: "execution_interrupted" };
+    return {
+      ok: true,
+      payload: decodeUpstreamPayload(text, String(upstream.headers["content-type"] ?? ""), "offline-batch")
+    };
+  } catch {
+    return { ok: false, reason: "execution_interrupted" };
+  }
 }
 
 export function buildProxy() {

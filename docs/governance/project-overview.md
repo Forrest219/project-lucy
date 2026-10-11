@@ -178,6 +178,7 @@ Lucy MCP Proxy 监听 `LUCY_PROXY_HOST:LUCY_PROXY_PORT`（默认容器内 `0.0.0
 | MCP Auth Proxy | `webui/docs/07-mcp-auth-proxy-spec.md` |
 | 访问日志审计证据硬化 | `webui/docs/137-access-log-audit-evidence-hardening-spec.md`、`webui/docs/plans/wo-202609-02-access-log-audit-evidence-hardening.md` |
 | Lucy 查询执行与轮次归因可靠性 | `webui/docs/138-lucy-query-execution-and-turn-correlation-reliability-spec.md`、`webui/docs/plans/wo-202609-03-lucy-query-and-answer-reliability.md` |
+| 客户查数体验与使用证据（日志立项） | `docs/plans/2026-10-11-customer-log-next-optimizations.md`、`webui/docs/162-customer-query-experience-and-usage-evidence-spec.md`、`webui/docs/plans/wo-202610-12-query-turn-budget-and-repair.md` |
 | 企业级 Data Agent 可回答性与交付标准 | `webui/docs/139-enterprise-data-agent-answerability-and-delivery-standard.md` |
 | 业务 Skill MVP（只读 Hub + Agent 读取） | `webui/docs/144-skill-hub-mvp-spec.md`、`webui/docs/plans/wo-202609-23-skill-hub-and-publish-clarity.md` |
 | 发布工作台校验口径 | `webui/docs/145-publish-validation-count-clarity-spec.md` |

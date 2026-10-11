@@ -62,16 +62,16 @@ describe("navigation (shared sidebar config)", () => {
     expect(new Set(iconKeys).size).toBe(iconKeys.length);
   });
 
-  it("navGroups contains 23 second-level items in total", () => {
+  it("navGroups contains 24 second-level items in total", () => {
     const totalItems = navGroups.reduce((sum, g) => sum + g.items.length, 0);
-    expect(totalItems).toBe(23);
+    expect(totalItems).toBe(24);
   });
 
   it("flat sidebar entries match Spec 143 Runtime Status IA", () => {
     const flat: Array<Pick<NavItem, "id" | "label" | "to"> & { group: string }> = navGroups.flatMap(
       (g) => g.items.map((item) => ({ group: g.title, id: item.id, label: item.label, to: item.to }))
     );
-    expect(flat.length).toBe(23);
+    expect(flat.length).toBe(24);
     expect(flat).toEqual([
       { group: "运行状态", id: "overview", label: "系统概览", to: "/overview" },
       { group: "运行状态", id: "ops-calls", label: "调用监控", to: "/ops/calls" },
@@ -86,6 +86,7 @@ describe("navigation (shared sidebar config)", () => {
       { group: "质量评测", id: "eval-cases", label: "评测用例", to: "/eval/cases" },
       { group: "质量评测", id: "eval-runs", label: "运行历史", to: "/eval/runs" },
       { group: "质量评测", id: "eval-monitor", label: "趋势监控", to: "/eval/monitor" },
+      { group: "质量评测", id: "eval-field-questions", label: "现场提问", to: "/eval/field-questions" },
       { group: "质量评测", id: "eval-security-candidates", label: "安全评测候选", to: "/eval/security-candidates" },
       { group: "访问治理", id: "admin-agents", label: "Agent", to: "/admin/agents" },
       { group: "访问治理", id: "admin-tokens", label: "Token 凭据", to: "/admin/tokens" },
@@ -138,6 +139,7 @@ describe("navigation (shared sidebar config)", () => {
       "eval-cases": "管理数据问答与语义质量的评测用例及预期结果。",
       "eval-runs": "查看评测运行记录、通过率、结果明细与失败诊断。",
       "eval-monitor": "监控评测通过率、失败集中度与质量漂移趋势。",
+      "eval-field-questions": "审定访问日志里反复出现的业务问法，补问法后收成评测用例。",
       "eval-security-candidates": "从访问拒绝日志中提取权限与数据隔离场景，审定后转为安全评测用例。",
       "admin-governance": "查看 Agent、Token、数据表的活跃率，以及 WebUI 页面访问情况。",
       "admin-agents": "管理 Agent 身份、角色、Token 及数据访问边界。",

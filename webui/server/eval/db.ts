@@ -102,7 +102,12 @@ function ensureEvalRunColumns(instance: Database.Database): void {
     ["suite_hash", "TEXT"],
     ["runner_metadata_raw", "TEXT"],
     ["import_source", "TEXT"],
-    ["hash_status", "TEXT"]
+    ["hash_status", "TEXT"],
+    ["result_version", "INTEGER"],
+    ["as_of", "TEXT"],
+    ["not_answered_count", "INTEGER"],
+    ["complete", "INTEGER"],
+    ["role_id", "TEXT"]
   ];
   for (const [name, type] of additions) {
     if (!columns.has(name)) {
@@ -125,7 +130,11 @@ function ensureEvalRunCaseColumns(instance: Database.Database): void {
     ["lucy_meta_raw", "TEXT"],
     ["score_raw", "TEXT"],
     ["failure_classification", "TEXT"],
-    ["turn_artifacts_raw", "TEXT"]
+    ["turn_artifacts_raw", "TEXT"],
+    ["outcome", "TEXT"],
+    ["reason", "TEXT"],
+    ["policy_status", "TEXT"],
+    ["window_json", "TEXT"]
   ];
   for (const [name, type] of additions) {
     if (!columns.has(name)) {
@@ -178,6 +187,11 @@ export interface EvalRunRow {
   runner_metadata_raw: string | null;
   import_source: string | null;
   hash_status: string | null;
+  result_version: number | null;
+  as_of: string | null;
+  not_answered_count: number | null;
+  complete: number | null;
+  role_id: string | null;
 }
 
 export interface EvalRunCaseRow {

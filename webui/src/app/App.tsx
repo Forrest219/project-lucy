@@ -68,6 +68,7 @@ import { RunList } from "../pages/eval/RunList";
 import { RunDetail } from "../pages/eval/RunDetail";
 import { Monitor } from "../pages/eval/Monitor";
 import { SecurityCandidates } from "../pages/eval/SecurityCandidates";
+import { FieldQuestions } from "../pages/eval/FieldQuestions";
 import { ConnectionOverview } from "../pages/connections/ConnectionOverview";
 import { TableWhitelist } from "../pages/connections/TableWhitelist";
 import { ConnectionTest } from "../pages/connections/ConnectionTest";
@@ -145,6 +146,7 @@ const NAV_ICONS: Record<NavIconKey, LucideIcon> = {
   evalCases: ClipboardList,
   evalRuns: Activity,
   monitor: ChartNoAxesCombined,
+  fieldQuestions: CircleHelp,
   securityEval: ShieldAlert,
   governanceOverview: Gauge,
   agents: Bot,
@@ -435,6 +437,7 @@ export function AppFrame() {
             <Route path="/eval/runs" element={<RunList />} />
             <Route path="/eval/runs/:runId" element={<RunDetail />} />
             <Route path="/eval/monitor" element={<Monitor />} />
+            <Route path="/eval/field-questions" element={<FieldQuestions />} />
             <Route path="/eval/security-candidates" element={<SecurityCandidates />} />
             <Route path="/help" element={<HelpCenter />} />
             </Routes>

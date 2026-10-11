@@ -1,0 +1,335 @@
+# Customer Query Experience and Usage Evidence Spec
+
+| 元数据 | 内容 |
+|---|---|
+| Spec | 162 |
+| 文档名称 | Customer Query Experience and Usage Evidence |
+| 文档类型 | Product / Proxy / Audit / Semantic Contract Spec |
+| 版本 | v0.1 |
+| 状态 | 立项。实现按三份工单分波次，客户语义 YAML 不入库 |
+| 撰写日期 | 2026-10-11 |
+| 委托人 | xingchen |
+| 来源计划 | [`docs/plans/2026-10-11-customer-log-next-optimizations.md`](../../docs/plans/2026-10-11-customer-log-next-optimizations.md) v1.0 |
+| 关联工单 | [`wo-202610-12`](plans/wo-202610-12-query-turn-budget-and-repair.md)、[`wo-202610-13`](plans/wo-202610-13-usage-evidence-and-query-guardrails.md)、[`wo-202610-14`](plans/wo-202610-14-usage-signal-and-publish-gate.md) |
+| 关联 Spec | 08 问询追踪、09 R1 工具契约、125 生成 SQL 热库、138 轮次归因、137 审计证据 |
+| 修订 | 不取代 Spec 138 的归因枚举。不改 Eval 跑批的 tool budget（`docs/design/design-eval-tool-budget.md`）。不改 KTX 源码 |
+
+## 1. 已拍板
+
+1. 没有 `lucy_begin_question` 时，数据查询仍然成功。KSC 的 60 次 begin 与 60 条原话一一对应，兼容是刚需。
+2. 问询预算用尽时返回可继续的部分结果。这条记录不进入四个失败维度。
+3. 修复提示和拒绝名单只含该调用者 ACL 之内的连接和 source。
+4. 过滤条件不得编成 `'字段' AS field, '操作符' AS op` 下推。KSC 上这是完整的 `STRUCT(...)`（MySQL 系错误文本，12 行）；MJ 上 Doris 用省略号截断，27 次语法错误全部含 `AS field`，其中 11 行只剩 `...RUCT(`。
+5. `upstream_error` 不是平台故障维度。四个一级维度是：引擎超时与并发、过滤条件下推、用法与语义、权限拒绝。
+6. 默认版本只来自已发布的语义声明，并写进结果。没有声明就不应用。
+7. 使用人、Agent、自动化是三层。`token_label` 不是使用人。自动化要显式标记，不从 User-Agent 推断。
+8. 第 10 条保持独立的 P2。第 16 条本版只有一个模板试点。P2 内部顺序是 19 → 18 → 17 → 10 → 20。
+9. 验收按 KSC 与 MJ 分开，不合成一个通过率。客户 YAML、Wiki 正文、角色清单不提交进本仓库。
+
+## 2. 问题
+
+运维导出的调用日志对不上用户原话：KSC 83.6% 的问询是推断摘要，业务调用带 turn id 的只有约四分之一，会话 ID 几乎为空。查询失败集中在语义契约和权限拒绝，但 `decision_reason=upstream_error` 把 `COUNT(*)`、缺列和过滤条件下推包在同一个标签里。MJ 的这 27 次失败没有留下 `generated_sql`。`lucy_query` 不写 `response_truncated`。Wiki 对普通中文返回 `unparseable_text`。策略版本在 KSC 有 3,304 行为空，在 MJ 全空。
+
+## 3. 目标
+
+1. 官方客户端上报原话、session 和 turn；代理按 Spec 138 归属，缺了上报仍能查数。
+2. 一次问询有步数和时间预算，用尽后可继续，且不制造新的失败签名。
+3. 语义与参数错误返回修复提示；过滤条件下推在到达引擎前失败关闭，截断的引擎文本仍能归类。
+4. 已发布的默认版本和新鲜度出现在结果元数据里。
+5. 使用统计能按使用人、Agent、自动化、协议噪音分开。
+6. 失败聚合、导出和鉴权失败使用同一条时间线，并按四个维度归类。
+7. `lucy_query` 写明是否截断。Wiki 自然语言检索不再因 `q` 本身失败。
+8. 认证路径和单个损益模板可版本化，执行仍走 `lucy_query` 的 ACL。
+
+## 4. 非目标
+
+- 不修改 KTX 源码。过滤条件下推若仍由上游编译器生成，Lucy 在转发前失败关闭，并把 `compiler_reason` 写入审计。
+- 不把旧日志回填成高置信原话。
+- 不从 `token_label` 或 User-Agent 推断人名，也不把 Python-urllib 默认划成自动化。
+- 不在 P0 拆开一句里的多个问题。
+- 不自动 join 歧义表。
+- 不在本版交付第二个报表模板，也不把 43 个摘要 token 做成授权清单。
+- 不把 `upstream_error` 展示为平台故障。
+- 不把 Pod 对端地址改写成猜测的客户端地址。
+- 不把 Eval runner 的 tool budget 和本 Spec 的问询预算混成一个开关。
+
+## 5. Terminology Compliance
+
+This feature follows `webui/docs/00-product-terminology-standard.md`.
+
+New terms:
+
+| Canonical Term | 中文主术语 | 约束 |
+|---|---|---|
+| Question Budget | 问询预算 | 用尽时的状态是「可继续」，不得写成失败或拒绝 |
+| Repair Hint | 修复提示 | 只含当前角色可见的连接和 source |
+| Filter Pushdown | 过滤条件下推 | 失败维度名。不得在 UI 里把 `upstream_error` 显示成这个名字 |
+| Actor | 使用人 | 与 Agent、自动化调用并列。`token_label` 仍叫 Token 备注 |
+| Automation Call | 自动化调用 | 只来自 Token 上的显式标记 |
+| Failure Dimension | 失败维度 | 四个主术语：引擎超时与并发、过滤条件下推、用法与语义、权限拒绝 |
+| Certified Route | 认证路径 | 答案里写路径 id 和 source。不是「授权了 N 张表」 |
+| Applied Version | 采用的版本 | 结果元数据。没有发布声明时不出现 |
+
+`lucy_turn_id`、`compiler_reason`、`response_truncated`、`policy_version`、`STRUCT` 是协议或引擎标识，出现在 DOM 时加 `translate="no"` 与 `notranslate`。
+
+工单第一项把上表写入术语标准。在此之前，界面不得先用别的译名。
+
+## 6. 波次
+
+| 波次 | 工单 | 覆盖建议条目 | 验收 |
+|---|---|---|---|
+| P0 | WO-202610-12 | 01、02、03、04、05 | SC-1 至 SC-9 |
+| P1 | WO-202610-13 | 06、07、08、09、11、12、13、14、15、16 | SC-10 至 SC-19 |
+| P2 | WO-202610-14 | 19、18、17、10、20 | SC-20 至 SC-24 |
+
+## 7. 核心流程（伪代码）
+
+### 7.1 调用归入问询
+
+归因枚举仍是 Spec 138：`explicit` / `session_bound` / `identity_inferred` / `unassigned`。本流程只增加「缺了 begin 不拒绝」和「会话补绑」。
+
+```text
+function onToolCall(call):
+  if call.tool == lucy_begin_question:
+    if call.intentSummary is empty:
+      return error(missing_intent_summary)   # 不写入问询，也不拒绝此后的查数
+    turn = createTurn(origin=user_text, text=call.intentSummary, session=call.sessionId)
+    return ok { turnId: turn.id }
+
+  turn = attribute(call)                      # Spec 138：显式 turn 必须属于该身份
+  if turn is unassigned and call.sessionId maps to an open user turn:
+    turn = that turn
+    mode = session_bound
+    confidence = high
+
+  if isDataTool(call.tool) and budgetExceeded(turn):
+    return continuable(question_budget_exhausted)   # 见 7.2
+
+  result = dispatch(call)                     # ACL 在修复提示之前裁决
+  audit(call, turn, result, classify(result)) # 见 7.3
+  return withMeta(result)                     # 见 7.5
+```
+
+数据工具包括 `lucy_query`、`lucy_explain_query`、`lucy_read_source`、`wiki_search`、`wiki_read`。协议方法（`resources/list`、`resources/templates/list`、`ping`、`server/discover`、`notifications/*`）不占问询预算，也不进入使用分析的默认分子（SC-16）。
+
+### 7.2 问询预算
+
+默认值可配置：数据工具 20 次，或墙钟 120 秒，先到为准。同一问询允许继续一次，继续后计数清零再给同一档。第二次用尽后仍返回可继续，由客户端决定是否再问；服务端不再自动加档。
+
+```text
+function budgetExceeded(turn):
+  if turn.continuations >= 1 and turn.usedSinceContinue >= budget:
+    return true
+  if turn.continuations == 0 and (turn.dataCalls >= 20 or turn.wallMs >= 120000):
+    return true
+  return false
+
+function continuable(reason):
+  record outcome = budget_stop          # 不是 error，不是 denied
+  record failure_dimension = none
+  return {
+    reason: question_budget_exhausted,
+    partial: turn.evidenceRefs,
+    continueToken: turn.id
+  }
+```
+
+P0 不拆句。第 13 条在 P1：执行 `lucy_query` 之前，若问询文本含指代或两个问号级意图，响应先包含复述（账户、月份、产品线），用户确认后再查。未确认不发查询。
+
+### 7.3 失败分类与修复提示
+
+分类只看已经发生的调用。顺序固定，先匹配先生效。`decision_reason=upstream_error` 不单独成为维度。
+
+```text
+function classify(result):
+  text = result.errorDetail
+  reason = result.decisionReason
+  if reason in ACL_REASONS:
+    return 权限拒绝
+  if reason in {timeout, query_concurrency_exceeded} or text contains Timeout:
+    return 引擎超时与并发
+  if text matches FILTER_PUSHDOWN:          # "AS field" 且 ("AS op" 或 "STRUCT(")
+    return 过滤条件下推
+  if result.outcome != ok:
+    return 用法与语义
+  return none
+
+ACL_REASONS = {
+  table_forbidden, sensitive_metadata_forbidden,
+  explicit_table_required, raw_query_forbidden,
+  unknown_or_forbidden_connection, agent_disabled,
+  wiki_not_found, tool_unclassified
+}
+```
+
+连接未配置（`Connection "…" is not configured`）归「用法与语义」，即使 `decision_reason` 是 `upstream_error`。只有 `unknown_or_forbidden_connection:*` 归「权限拒绝」。因此 `sql_server` 的 11 行未配置与 1 行拒绝分开计数。
+
+```text
+function repairHint(result, role):
+  visible = connectionsAndSources(role)     # 仅 ACL 内
+  if classify(result) == 权限拒绝:
+    return { connections: visible.connections, sources: visible.sources }
+  if classify(result) == 过滤条件下推:
+    return { acceptedFilter: "{ field, op, value }", sources: visible.sources }
+  if measure references no source:
+    return { use: "row_count(source) or a published measure name", sources: visible.sources }
+  return { sources: visible.sources }
+```
+
+名单里出现 ACL 之外的名字即失败（SC-5、SC-14）。`lucy_read_source` 与 `lucy_query` 使用同一函数。
+
+### 7.4 过滤条件下推
+
+```text
+function forwardQuery(call):
+  filters = canonicalize(call.filters)      # Spec 138：JSON 字符串解析失败则失败关闭
+  if filters.invalid:
+    return invalid_arguments                # 不请求引擎
+  compiled = ktxCompile(call)               # Lucy 不改 KTX
+  if compiled.sql matches FILTER_PUSHDOWN:
+    audit.compiler_reason = filter_pushdown
+    audit.generated_sql = compiled.sql if present else empty   # Spec 125
+    return repairHint(过滤条件下推)          # 不把这段 SQL 当作成功结果
+  return execute(compiled)
+```
+
+引擎只返回截断文本时，`generated_sql` 允许为空，`compiler_reason=filter_pushdown` 仍然必填。这覆盖 MJ 上 `STRUCT` 字面量被省略号吃掉的情况。
+
+### 7.5 结果元数据：版本、新鲜度、截断
+
+```text
+function withMeta(result):
+  if result.tool == lucy_query and result.outcome == ok:
+    result.response_truncated = 1 if result.hitRowCap or result.engineTruncated else 0
+    if result.response_truncated == 1:
+      result.repair = "结果已截断，改为聚合后再取明细"
+  if result.tool == lucy_query and source.publishedDefaultVersion exists:
+    if query omitted that dimension:
+      apply(source.publishedDefaultVersion)
+    result.meta.appliedVersion = applied value
+    result.meta.businessDate = applied business date
+    result.meta.valueKind = actual or forecast
+  if source.publishedDefaultVersion is absent:
+    do not invent a version
+  return result
+```
+
+`lucy_freshness` 与 `lucy_explain_query` 已写入的 `response_truncated=0` 保持原样。
+
+### 7.6 使用统计三层
+
+```text
+function usageRow(call):
+  row.agent = call.userId
+  row.actor = token.actorId or unset          # 不用 token_label
+  row.automation = token.actorKind == automation
+  row.protocol = call.tool in PROTOCOL_TOOLS
+  if row.protocol:
+    exclude from default usage KPI
+```
+
+协议工具与第 14 条的探测连接（参数或连接名含 `probe-`、`rds-test`、`demo-mysql` 且 Token 标记为评测）在使用分析的默认视图里分开，不从 KPI 中删除原始行。
+
+### 7.7 Wiki 检索
+
+```text
+function wikiSearch(args, role):
+  if args.q is a non-empty string:
+    hits = searchReadableWiki(role, args.q, args.limit)
+    return ok(hits or empty)                  # 不得返回 unparseable_text
+  return invalid_arguments
+```
+
+问数前注入的篇目必须属于 `role` 可读集合，审计记下篇目 id 与 Wiki 版本。
+
+### 7.8 认证路径与单个模板
+
+```text
+function runCertifiedRoute(routeId, role):
+  route = publishedRoute(routeId)             # 不在仓库内的客户发布物
+  if route is absent or role cannot read route.source:
+    return 权限拒绝 with repairHint
+  result = lucyQuery(role, route.query)
+  result.meta.routeId = routeId
+  result.meta.source = route.source
+  result.meta.appliedVersion = route.version when declared
+  return result
+```
+
+本版唯一试点模板 id：`public_cloud_pnl_quarterly`（公有云损益，分季度，实际/预测）。没有「一次查询替下同主题的多轮试表」的前后对比之前，不增加第二个 id。
+
+内建度量：
+
+```text
+function compileMeasure(measure, source):
+  if measure is count star or count(1) without a source:
+    return repairHint(row_count(source))
+  if measure wraps an already aggregated published measure in sum:
+    return repairHint(use the published measure name)
+  if measure is completeness:
+    require declared numerator and denominator grain
+  return compile(measure)
+```
+
+## 8. 审计字段
+
+在现有 access log 上增加或写满：
+
+| 字段 | 规则 |
+|---|---|
+| `compiler_reason` | `filter_pushdown` 或空。截断的引擎文本不足以恢复 SQL 时仍要写 |
+| `failure_dimension` | 7.3 的四个值或空。`budget_stop` 不写维度 |
+| `response_truncated` | `lucy_query` 成功时必为 `0` 或 `1` |
+| `applied_version` / `business_date` / `value_kind` | 仅当发布物声明了默认或查询显式带了版本 |
+| `actor_id` / `actor_kind` | 来自 Token 配置。备注留在 `token_label` |
+| `policy_version` | 空值计为缺失，不计为一个版本 |
+| `generated_sql` | 有编译结果就按 Spec 125 写入 |
+
+导出：页大小默认 10,000，用游标取下一页，不把超出的行静默丢掉。缺权限快照时 `completeness=false`。鉴权失败（`missing_bearer`、`token_expired`、`token_unrecognized`）出现在同一时间筛选里，类型与调用分开。
+
+慢调用的新定义（P2，替换当前把约 1 秒以上都标慢的规则）：`lucy_query` 的 `duration_ms >= 5000`，或问询墙钟 `>= 120000`。成功且 `response_row_count = 0` 记 `result_empty=1`。`notifications/cancelled` 在 session 能对上问询时写入该 turn id。
+
+发布门禁（P2）：语义 YAML 的既有 TS/Python 契约失败则拒绝发布。豁免写审计：操作者、原因、到期时间。豁免到期后检查恢复。物理名映射和 join 白名单不由这条门禁自动生成。
+
+客户端（P2）：结构化 `client` / `client_version` 为空时，从 User-Agent 解析已知家族。`client_ip` 保持 socket 对端。转发头写入单独字段 `client_forwarded_for`，没有头就为空。
+
+## 9. 客户现场与仓库的边界
+
+下列内容由客户发布，工单只提供机制和验收方法，不提交其正文：
+
+- 哪张 source 的默认版本是哪一个业务版本
+- 认证路径清单和 `public_cloud_pnl_quarterly` 的指标口径
+- 按域拆开的角色与双轨期 Token
+- 广告日表的物理名别名和允许的 join
+- Wiki 篇目正文
+
+## 10. 验收
+
+| ID | 波次 | 断言 |
+|---|---|---|
+| SC-1 | P0 | 不调用 `lucy_begin_question` 的 `lucy_query` 在授权通过时成功 |
+| SC-2 | P0 | 同一 session 内，begin 之后的调用 `turn_attribution_mode=session_bound` 且置信度为 high |
+| SC-3 | P0 | begin 的 `intentSummary` 在问询导出里来源为用户原话；空 summary 返回 `missing_intent_summary` 且不阻断随后的查数 |
+| SC-4 | P0 | 第 21 次数据工具或墙钟超过 120 秒时返回 `question_budget_exhausted`，`outcome=budget_stop`，失败维度为空 |
+| SC-5 | P0 | 修复提示中的 source 全部属于该角色；夹入一个 ACL 外的名字时测试失败 |
+| SC-6 | P0 | 日志中的 filter 形状不得编译出 `AS field` / `STRUCT(`。复现夹具用 KSC 的 MySQL 文本和 MJ 的 `...RUCT(` 文本各一条 |
+| SC-7 | P0 | 引擎只返回截断文本时，`compiler_reason=filter_pushdown` 且 `generated_sql` 允许为空 |
+| SC-8 | P0 | 发布物声明了默认版本时，结果含采用的版本、业务日、实际或预测。未声明时结果不含编造的版本 |
+| SC-9 | P0 | 使用统计能按使用人、Agent、自动化分组。`token_label=测试2` 不会变成使用人。未标记的 Python-urllib 不计入自动化 |
+| SC-10 | P1 | `lucy_query` 成功行的 `response_truncated` 为 0 或 1；打到行上限时为 1，并带聚合修复提示 |
+| SC-11 | P1 | `wiki_search` 的 `q` 为「收入」时不返回 `unparseable_text` |
+| SC-12 | P1 | 注入 Wiki 的篇目属于该角色，审计含篇目 id 与版本 |
+| SC-13 | P1 | 认证路径的结果含 `routeId` 与 source。角色看不见该 source 时走权限拒绝 |
+| SC-14 | P1 | `discover_data`、`lucy_query`、`lucy_read_source` 的拒绝载荷使用 7.3 的同一名单函数 |
+| SC-15 | P1 | `count(*)` 无 source 时修复提示指向 `row_count(source)`。`sum(已聚合度量)` 不生成 `sum(sum())` |
+| SC-16 | P1 | 默认使用 KPI 不含协议工具。原始行仍在 |
+| SC-17 | P1 | 抽样：`COUNT(*)` 的 `upstream_error` 归用法与语义；`AS field` 归过滤条件下推；超时归引擎超时与并发；`table_forbidden` 归权限拒绝 |
+| SC-18 | P1 | 导出第二页能取到第 10,001 行。空 `policy_version` 计为缺失。缺快照时 completeness 为 false |
+| SC-19 | P1 | 仅存在模板 `public_cloud_pnl_quarterly`。结果带 source 与版本。仓库内没有客户口径 YAML |
+| SC-20 | P2 | 新慢调用定义不把 1.6 秒的成功查询标成慢。零行成功的 `result_empty=1`。取消在有 session 时挂上 turn |
+| SC-21 | P2 | 同一时间筛选能看见 `token_expired` 与普通调用，类型字段不同 |
+| SC-22 | P2 | User-Agent `kscc-code/1.3.7 (cli)` 在 `client` 为空时解析出客户端与版本。无转发头时 `client_forwarded_for` 为空，`client_ip` 仍为对端 |
+| SC-23 | P2 | 歧义列的修复提示是 ACL 内的限定名。不生成自动 join。本条测试不依赖 SC-24 的门禁 |
+| SC-24 | P2 | `columns.0.type` 契约失败拒绝发布。豁免行含操作者、原因、到期时间；到期后发布再次失败 |
+
+客户验收基线见来源计划的表。实现测试用夹具，不把客户日志原文提交进仓库。

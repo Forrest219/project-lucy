@@ -602,6 +602,7 @@ export function registerRunnerRoutes(app: FastifyInstance) {
       tool_calls_raw: string | null; tool_summary_raw: string | null; budget_failures: string | null;
       trace_id: string | null; artifact_path: string | null; wiki_context_raw: string | null; semantic_queries_raw: string | null;
       lucy_meta_raw: string | null; score_raw: string | null; failure_classification: string | null; turn_artifacts_raw: string | null;
+      outcome: string | null; reason: string | null; policy_status: string | null; window_json: string | null;
     }>;
 
     const results = caseRows.map((c) => ({
@@ -617,6 +618,10 @@ export function registerRunnerRoutes(app: FastifyInstance) {
       failedAssertions: c.failed_assertions ? JSON.parse(c.failed_assertions) as string[] : undefined,
       errorMessage: c.error_message ?? undefined,
       finalText: c.final_text ?? undefined,
+      outcome: c.outcome ?? undefined,
+      reason: c.reason ?? undefined,
+      policyStatus: c.policy_status ?? undefined,
+      window: c.window_json ? JSON.parse(c.window_json) as { start: string; end: string } : undefined,
       toolCalls: parseJsonText(c.tool_calls_raw),
       toolSummary: parseJsonText(c.tool_summary_raw),
       budgetFailures: parseJsonText(c.budget_failures),
@@ -833,6 +838,10 @@ function rowToRun(row: EvalRunRow) {
     passCount: row.pass_count,
     failCount: row.fail_count,
     passRate: row.total_cases > 0 ? row.pass_count / row.total_cases : undefined,
+    resultVersion: row.result_version ?? undefined,
+    notAnsweredCount: row.not_answered_count ?? undefined,
+    asOf: row.as_of ?? undefined,
+    roleId: row.role_id ?? undefined,
     suiteId: row.suite_id ?? undefined,
     suiteHash: row.suite_hash ?? undefined,
     runnerMetadata,

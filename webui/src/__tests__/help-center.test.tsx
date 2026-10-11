@@ -166,6 +166,7 @@ function renderHelp(path = "/help") {
               "| 质量评测 | 评测用例 | `/eval/cases` | 管理数据问答与语义质量的评测用例及预期结果。 |",
               "| 质量评测 | 运行历史 | `/eval/runs` | 查看评测运行记录、通过率、结果明细与失败诊断。 |",
               "| 质量评测 | 趋势监控 | `/eval/monitor` | 监控评测通过率、失败集中度与质量漂移趋势。 |",
+              "| 质量评测 | 现场提问 | `/eval/field-questions` | 审定访问日志里反复出现的业务问法，补问法后收成评测用例。 |",
               "| 质量评测 | 安全评测候选 | `/eval/security-candidates` | 从访问拒绝日志中提取权限与数据隔离场景，审定后转为安全评测用例。 |",
               "| 访问治理 | Agent | `/admin/agents` | 管理 `Agent` 身份、角色、`Token` 及数据访问边界。 |",
               "| 访问治理 | Token 凭据 | `/admin/tokens` | 全局查看、签发与定向吊销 `Agent` 访问凭据。 |",
@@ -869,7 +870,7 @@ describe("HelpCenter", () => {
     expect(document.querySelector("section#webui-entry-map")).not.toBeNull();
   });
 
-  it("§1.5 table has 4 columns and 23 rows that mirror navigation.ts", async () => {
+  it("§1.5 table has 4 columns and 24 rows that mirror navigation.ts", async () => {
     renderHelp("/help?section=webui-entry-map");
     await waitFor(() =>
       screen.getByRole("heading", { name: /WebUI 入口速查（运行状态侧栏地图）/ })
@@ -888,7 +889,7 @@ describe("HelpCenter", () => {
     expect(headers.length).toBe(4);
 
     const bodyRows = table.querySelectorAll("tbody tr");
-    expect(bodyRows.length).toBe(23);
+    expect(bodyRows.length).toBe(24);
 
     // Every visible column must mirror the shared navigation module so the
     // handbook cannot drift from the current menu labels, paths, or copy.

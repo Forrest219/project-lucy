@@ -52,6 +52,7 @@ export type NavIconKey =
   | "evalCases"
   | "evalRuns"
   | "monitor"
+  | "fieldQuestions"
   | "securityEval"
   | "governanceOverview"
   | "agents"
@@ -228,6 +229,15 @@ export const navGroups: Array<{
         active: (path) => path === "/eval/monitor",
         description: "监控评测通过率、失败集中度与质量漂移趋势。",
         keywords: ["Monitor", "趋势", "基线"]
+      },
+      {
+        id: "eval-field-questions",
+        label: "现场提问",
+        to: "/eval/field-questions",
+        iconKey: "fieldQuestions",
+        active: (path) => path === "/eval/field-questions",
+        description: "审定访问日志里反复出现的业务问法，补问法后收成评测用例。",
+        keywords: ["现场", "提问"]
       },
       {
         id: "eval-security-candidates",

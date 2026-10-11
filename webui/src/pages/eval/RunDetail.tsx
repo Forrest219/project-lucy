@@ -42,6 +42,12 @@ const DRIFT_LABELS: Record<string, string> = {
   tool_error: "tool_error"
 };
 
+const OUTCOME_LABELS: Record<string, string> = {
+  answered_ok: "答对了",
+  answered_wrong: "答错了",
+  not_answered: "没答出来"
+};
+
 const DELTA_LABELS: Record<string, string> = {
   regressed: "新增失败",
   fixed: "已修复",
@@ -129,7 +135,9 @@ export function RunDetail() {
   const passCount = run.passCount;
   const failCount = run.failCount;
   const totalCases = run.totalCases;
-  const passRate = totalCases > 0 ? (passCount / totalCases) * 100 : 0;
+  const v2 = (run.resultVersion ?? 1) >= 2;
+  const scoreable = passCount + failCount;
+  const passRate = (v2 ? scoreable : totalCases) > 0 ? (passCount / (v2 ? scoreable : totalCases)) * 100 : Number.NaN;
   const comparableRuns = (runsData?.runs ?? []).filter((candidate) => candidate.id !== run.id);
 
   return (
@@ -167,13 +175,24 @@ export function RunDetail() {
             <span><span className="text-fg-muted">结束：</span>{new Date(run.finishedAt).toLocaleString("zh-CN")}</span>
           )}
           <span><span className="text-fg-muted">触发人：</span>{run.triggeredBy}</span>
+          {run.asOf && <span><span className="text-fg-muted">截止日期：</span><span translate="no">{run.asOf}</span></span>}
+          {results.find((item) => item.window)?.window && (
+            <span>
+              <span className="text-fg-muted">窗口：</span>
+              <span translate="no">{results.find((item) => item.window)?.window?.start} – {results.find((item) => item.window)?.window?.end}</span>
+            </span>
+          )}
         </div>
         {run.triggerReason && (
           <div><span className="text-fg-muted">原因：</span>{run.triggerReason}</div>
         )}
         <div className="flex items-center gap-4 mt-2">
-          <span className="text-lg font-semibold">{Math.round(passRate)}%</span>
-          <span className="text-fg-muted">{passCount} PASS / {failCount} FAIL / 共 {totalCases} 个</span>
+          <span className="text-lg font-semibold">{Number.isFinite(passRate) ? `${Math.round(passRate)}%` : "—"}</span>
+          <span className="text-fg-muted">
+            {v2
+              ? `答对了 ${passCount} / 答错了 ${failCount} / 没答出来 ${run.notAnsweredCount ?? 0}`
+              : `${passCount} PASS / ${failCount} FAIL / 共 ${totalCases} 个`}
+          </span>
         </div>
         {/* Progress bar */}
         {totalCases > 0 && (
@@ -256,8 +275,8 @@ export function RunDetail() {
             <thead>
               <tr className="border-b border-border text-left text-xs text-fg-muted">
                 <th className="px-3 py-2">Case ID</th>
-                <th className="px-3 py-2">状态</th>
-                <th className="px-3 py-2">失败断言</th>
+                <th className="px-3 py-2">结果</th>
+                <th className="px-3 py-2">语句</th>
                 <th className="px-3 py-2">耗时</th>
               </tr>
             </thead>
@@ -265,7 +284,9 @@ export function RunDetail() {
               {results.map((c) => {
                 // Merge SSE real-time status
                 const liveStatus = sseCaseDone[c.caseId] ?? c.status;
-                const isPassed = liveStatus === "PASS";
+                const outcomeLabel = c.outcome ? OUTCOME_LABELS[c.outcome] ?? c.outcome : liveStatus;
+                const isPassed = c.outcome ? c.outcome === "answered_ok" : liveStatus === "PASS";
+                const isUnanswered = c.outcome === "not_answered";
                 return (
                   <Fragment key={c.caseId}>
                     <tr
@@ -274,12 +295,12 @@ export function RunDetail() {
                     >
                       <td className="px-3 py-2 font-mono text-xs">{c.caseId}</td>
                       <td className="px-3 py-2">
-                        <span className={`pl-status-badge ${isPassed ? "pl-status-done" : "pl-status-validation_failed"}`}>
-                          {liveStatus}
+                        <span className={`pl-status-badge ${isUnanswered ? "pl-status-partial" : isPassed ? "pl-status-done" : "pl-status-validation_failed"}`}>
+                          {outcomeLabel}
                         </span>
                       </td>
                       <td className="px-3 py-2 text-xs text-fg-muted">
-                        {c.failedAssertions?.length ? c.failedAssertions[0] : "—"}
+                        {c.policyStatus === "noncompliant" ? "语句不合规" : c.policyStatus === "compliant" ? "语句合规" : "—"}
                       </td>
                       <td className="px-3 py-2 text-xs text-fg-muted">
                         {c.durationMs ? `${(c.durationMs / 1000).toFixed(1)}s` : "—"}

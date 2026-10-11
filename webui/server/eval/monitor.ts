@@ -4,6 +4,8 @@ import type { FastifyInstance } from "fastify";
 import { resolveProjectRoot } from "../project.js";
 import { safeWrite } from "../fs-safe.js";
 import { getEvalDb } from "./db.js";
+import { loadContentPaths } from "../paths.js";
+import { getAuditDb } from "../admin/audit.js";
 
 export type MonitorThreshold = {
   domain: string;
@@ -15,6 +17,7 @@ export type MonitorConfig = {
     passRateYellow: number;
     passRateRed: number;
     consecutiveFailThreshold: number;
+    roleIds?: string[];
   }>;
 };
 
@@ -31,7 +34,8 @@ async function readMonitorConfig(projectRoot: string): Promise<MonitorConfig> {
 }
 
 async function writeMonitorConfig(projectRoot: string, config: MonitorConfig): Promise<void> {
-  await safeWrite(projectRoot, CONFIG_REL, JSON.stringify(config, null, 2));
+  const paths = await loadContentPaths();
+  await safeWrite(paths, projectRoot, CONFIG_REL, JSON.stringify(config, null, 2));
 }
 
 export function registerMonitorRoutes(app: FastifyInstance) {
@@ -48,42 +52,44 @@ export function registerMonitorRoutes(app: FastifyInstance) {
     const config = await readMonitorConfig(projectRoot);
 
     // Spec 128 D2: SUM(total_cases) is denominator so SKIP is included.
-    let rows: Array<{ date: string; pass_count: number; fail_count: number; total_cases: number; runs: number; lowest_pass_rate: number }>;
-    if (domain) {
-      rows = db.prepare(`
+    let rows: Array<{ date: string; pass_count: number; fail_count: number; total_cases: number; runs: number; lowest_pass_rate: number; not_answered_count: number; legacy_runs: number; v2_runs: number }>;
+    const trendSelect = `
         SELECT DATE(started_at) AS date,
                SUM(pass_count)   AS pass_count,
                SUM(fail_count)   AS fail_count,
                SUM(total_cases)  AS total_cases,
                COUNT(*)          AS runs,
-               MIN(CASE WHEN total_cases > 0 THEN CAST(pass_count AS REAL) / total_cases ELSE 0 END) AS lowest_pass_rate
+               SUM(COALESCE(not_answered_count, 0)) AS not_answered_count,
+               SUM(CASE WHEN COALESCE(result_version, 1) < 2 THEN 1 ELSE 0 END) AS legacy_runs,
+               SUM(CASE WHEN COALESCE(result_version, 1) >= 2 THEN 1 ELSE 0 END) AS v2_runs,
+               MIN(CASE WHEN total_cases > 0 THEN CAST(pass_count AS REAL) / total_cases ELSE NULL END) AS lowest_pass_rate
         FROM eval_run
-        WHERE domain = ? AND DATE(started_at) >= ? AND status = 'succeeded'
+        WHERE status = 'succeeded'
+          AND (hash_status IS NULL OR hash_status = 'matched')`;
+    if (domain) {
+      rows = db.prepare(`
+        ${trendSelect}
+          AND domain = ? AND DATE(started_at) >= ?
         GROUP BY DATE(started_at)
         ORDER BY date ASC
       `).all(domain, since) as typeof rows;
     } else {
       rows = db.prepare(`
-        SELECT DATE(started_at) AS date,
-               SUM(pass_count)   AS pass_count,
-               SUM(fail_count)   AS fail_count,
-               SUM(total_cases)  AS total_cases,
-               COUNT(*)          AS runs,
-               MIN(CASE WHEN total_cases > 0 THEN CAST(pass_count AS REAL) / total_cases ELSE 0 END) AS lowest_pass_rate
-        FROM eval_run
-        WHERE DATE(started_at) >= ? AND status = 'succeeded'
+        ${trendSelect}
+          AND DATE(started_at) >= ?
         GROUP BY DATE(started_at)
         ORDER BY date ASC
       `).all(since) as typeof rows;
     }
 
-    // Spec 128 D2: denominator is total_cases (PASS + FAIL + SKIP), not pass+fail only.
     const points = rows.map((r) => ({
       date: r.date,
-      passRate: r.total_cases > 0 ? r.pass_count / r.total_cases : 0,
+      passRate: r.total_cases > 0 ? r.pass_count / r.total_cases : null,
       runs: r.runs,
       lowestPassRate: r.lowest_pass_rate,
-      totalRuns: r.runs
+      totalRuns: r.runs,
+      notAnsweredCount: r.not_answered_count,
+      formulaLabel: r.legacy_runs > 0 && r.v2_runs > 0 ? "旧口径 / 新口径" : undefined
     }));
 
     const domainConfig = domain ? config.domains[domain] : undefined;
@@ -230,9 +236,55 @@ export function registerMonitorRoutes(app: FastifyInstance) {
     config.domains[domain] = {
       passRateYellow: minPassRate,
       passRateRed: Math.max(0, minPassRate - 0.1),
-      consecutiveFailThreshold: config.domains[domain]?.consecutiveFailThreshold ?? 3
+      consecutiveFailThreshold: config.domains[domain]?.consecutiveFailThreshold ?? 3,
+      roleIds: config.domains[domain]?.roleIds ?? []
     };
     await writeMonitorConfig(projectRoot, config);
     return { ok: true, data: { written: true } };
   });
+
+  app.get<{ Querystring: { domain?: string; days?: string } }>("/api/eval/monitor/field", async (request) => {
+    const projectRoot = await resolveProjectRoot();
+    const config = await readMonitorConfig(projectRoot);
+    const domain = request.query.domain ?? "";
+    const roleIds = config.domains[domain]?.roleIds ?? [];
+    if (roleIds.length === 0) {
+      return { ok: true, data: { bound: false, message: "尚未为该 domain 绑定角色", rows: [] } };
+    }
+    const days = Math.min(parseInt(request.query.days ?? "30", 10) || 30, 365);
+    const since = new Date(Date.now() - days * 86400_000).toISOString();
+    const auditDb = await getAuditDb();
+    const placeholders = roleIds.map(() => "role_ids LIKE ?").join(" OR ");
+    const params = roleIds.map((roleId) => `%${roleId}%`);
+    const calls = auditDb.prepare(`
+      SELECT user_agent, outcome
+      FROM access_log
+      WHERE ts >= ? AND (${placeholders})
+    `).all(since, ...params) as Array<{ user_agent: string | null; outcome: string | null }>;
+    const buckets = new Map<string, { calls: number; errors: number; denies: number }>();
+    for (const call of calls) {
+      const family = clientFamily(call.user_agent ?? "");
+      const bucket = buckets.get(family) ?? { calls: 0, errors: 0, denies: 0 };
+      bucket.calls += 1;
+      if (call.outcome === "error") bucket.errors += 1;
+      if (call.outcome === "denied") bucket.denies += 1;
+      buckets.set(family, bucket);
+    }
+    const rows = [...buckets.entries()]
+      .filter(([, bucket]) => bucket.calls > 0)
+      .map(([family, bucket]) => ({
+        family,
+        calls: bucket.calls,
+        errorRate: bucket.calls > 0 ? bucket.errors / bucket.calls : 0,
+        denyRate: bucket.calls > 0 ? bucket.denies / bucket.calls : 0
+      }));
+    return { ok: true, data: { bound: true, rows } };
+  });
+}
+
+export function clientFamily(userAgent: string): "脚本客户端" | "对话客户端" | "其他" {
+  if (/^python/i.test(userAgent.trim())) return "脚本客户端";
+  const token = userAgent.trim().split(/[/\s]/)[0] ?? "";
+  if (token === "WorkBuddy" || token === "Codex" || token === "kscc-code" || token === "Claude") return "对话客户端";
+  return "其他";
 }
