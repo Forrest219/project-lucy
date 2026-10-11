@@ -9,7 +9,7 @@ import {
   setUpstreamSession,
   upstreamSessionKeepaliveEnabled
 } from "./upstream-session.js";
-import { extractRequestClientMeta } from "./request-client-meta.js";
+import { extractRequestClientMeta, resolveClientIdentity } from "./request-client-meta.js";
 import { ensureSkillAuditReady, writeLog, writeAccessLogSources, writeConversationTurn, purgeExpiredConversationTurns, writeAuthFailureLog, type AccessLogSourceRecord } from "./audit.js";
 import { allowedToolNames, authorizeAndRewrite, check as aclCheck, effectivePermissions, extractTables, extractSourceRefs, resolveSourceRefsForTables, kxCatalog, lucyCatalog, permissionSnapshot, type SourceRef } from "./acl.js";
 import {
@@ -45,8 +45,10 @@ import {
   classifyFailure,
   denialAllowList,
   filterPushdownGuardEnabled,
+  isEmptyResult,
   isFilterPushdownText,
   isQuestionDataTool,
+  isSlowCall,
   lookupPublishedVersion,
   publishedSourceName,
   questionBudget,
@@ -389,10 +391,23 @@ function toSourceRecords(refs: SourceRef[]): AccessLogSourceRecord[] {
 
 function recordAudit(entry: Parameters<typeof writeLog>[0], sources?: SourceRef[]): void {
   beginAuditWrite();
-  writeLog(entry)
+  // Spec 162 §8 / SC-22 — when the structured client identity is empty, fall
+  // back to a known User-Agent family. An unknown family keeps `client` empty
+  // rather than guessing. `client_ip` is untouched: it stays the socket peer.
+  const resolved = resolveClientIdentity({
+    client: entry.client,
+    clientVersion: entry.clientVersion,
+    userAgent: entry.userAgent
+  });
+  const normalized: Parameters<typeof writeLog>[0] = {
+    ...entry,
+    ...(resolved.client ? { client: resolved.client } : {}),
+    ...(resolved.clientVersion ? { clientVersion: resolved.clientVersion } : {})
+  };
+  writeLog(normalized)
     .then((accessLogId) => {
       if (sources && sources.length > 0) {
-        return writeAccessLogSources(accessLogId, entry.ts, entry.userId, entry.tool, toSourceRecords(sources));
+        return writeAccessLogSources(accessLogId, normalized.ts, normalized.userId, normalized.tool, toSourceRecords(sources));
       }
     })
     .then(() => {
@@ -2471,6 +2486,9 @@ async function writeLucySemanticResponse(
   const failureDimension = compilerReason
     ? "过滤条件下推"
     : classifyFailure({ outcome, decisionReason, errorDetail });
+  // Spec 162 §8 / SC-20 — the new slow mark and the empty-result flag are
+  // decided at write time so every consumer reads the same verdict.
+  const slowVerdict = isSlowCall({ tool: toolName, durationMs: Date.now() - start });
   const baseEntry: Parameters<typeof writeLog>[0] = {
     ts: new Date().toISOString(),
     userId: identity.userId,
@@ -2484,6 +2502,9 @@ async function writeLucySemanticResponse(
     errorDetail,
     compilerReason,
     failureDimension: failureDimension || undefined,
+    isSlowCall: slowVerdict.slow,
+    slowBasis: slowVerdict.basis ?? undefined,
+    resultEmpty: isEmptyResult({ outcome, responseRowCount: responseMeta.responseRowCount ?? null }),
     appliedVersion: applied?.appliedVersion,
     appliedBusinessDate: applied?.businessDate,
     appliedValueKind: applied?.valueKind,
@@ -2680,6 +2701,9 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
   const requestMeta: Partial<Parameters<typeof writeLog>[0]> = {
     ...correlationMeta(req.headers),
     clientIp: networkMeta.clientIp,
+    // Spec 162 §8 / SC-22 — forwarded chain is recorded for display only and
+    // never participates in ACL.
+    clientForwardedFor: networkMeta.clientForwardedFor,
     userAgent: networkMeta.userAgent,
     // Runtime device name only — never fall back to YAML remark.
     ...(networkMeta.deviceName ? { deviceName: networkMeta.deviceName } : {})
@@ -2778,6 +2802,36 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
     requestMeta.turnAttributionMode = attribution.mode;
     requestMeta.turnAttributionConfidence = attribution.confidence;
     requestMeta.turnAttributionReason = attribution.reason;
+  }
+
+  // Spec 162 §8 / SC-20 — a cancellation is attached to its question when the
+  // session resolves to an open turn. Without a session there is nothing to
+  // attach, so the notification is recorded without a turn id.
+  if (rpcMethod === "notifications/cancelled") {
+    const attribution = reportedTurns.resolve({
+      identity,
+      sessionId: requestMeta.lucySessionId
+    });
+    if (attribution.turnId) {
+      requestMeta.lucyTurnId = attribution.turnId;
+      requestMeta.turnAttributionMode = attribution.mode;
+      requestMeta.turnAttributionConfidence = attribution.confidence;
+    }
+    recordRequestAudit({
+      ts: new Date().toISOString(),
+      userId: identity.userId,
+      client: identity.client,
+      tool: "notifications/cancelled",
+      argsSummary,
+      outcome: "ok",
+      durationMs: Date.now() - start,
+      requestId,
+      ...requestMeta,
+      ...(await auditMeta(identity, "cancelled")),
+    });
+    res.writeHead(202, { "content-length": "0" });
+    res.end();
+    return;
   }
 
   const invalidArgumentsReason = queryNormalizationReason ?? (

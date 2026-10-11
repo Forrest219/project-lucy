@@ -228,6 +228,70 @@ export function evalMarkFromToken(token: { eval_mark?: unknown } | null | undefi
 
 const PROBE_NAME_MARKERS = ["probe-", "rds-test", "demo-mysql"] as const;
 
+/**
+ * Spec 162 §8 / WO-14 T1 / SC-20 — the new 慢调用 definition.
+ *
+ * A call is slow when `lucy_query` takes at least 5 seconds, or when the
+ * question's wall clock reaches 120 seconds. A 1.6s successful query is not
+ * slow, and other tools (`wiki_read`, `discover_data`, …) are not marked by
+ * this definition at all — Spec 143's own call-monitor threshold and the
+ * question drill-down's `isSlowCall` (above window P95) are separate metrics
+ * and are not replaced here.
+ */
+export const SLOW_CALL_MIN_DURATION_MS = 5_000;
+export const SLOW_TURN_WALL_CLOCK_MS = 120_000;
+
+/** The only tool whose single-call duration counts as slow under SC-20. */
+export const SLOW_CALL_TOOLS = new Set(["lucy_query"]);
+
+export function slowCallThresholdMs(): number {
+  const configured = Number(process.env.LUCY_SLOW_CALL_MIN_MS ?? SLOW_CALL_MIN_DURATION_MS);
+  return Number.isFinite(configured) && configured > 0 ? Math.floor(configured) : SLOW_CALL_MIN_DURATION_MS;
+}
+
+export function slowTurnWallClockMs(): number {
+  const configured = Number(process.env.LUCY_SLOW_TURN_WALL_CLOCK_MS ?? SLOW_TURN_WALL_CLOCK_MS);
+  return Number.isFinite(configured) && configured > 0 ? Math.floor(configured) : SLOW_TURN_WALL_CLOCK_MS;
+}
+
+export type SlowCallVerdict = { slow: boolean; basis: "call_duration" | "turn_wall_clock" | null };
+
+/**
+ * SC-20 — one predicate for the new slow mark. `turnWallClockMs` only counts
+ * when the row belongs to a question; a business call outside any question
+ * cannot inherit a turn's wall clock.
+ */
+export function isSlowCall(input: {
+  tool?: string | null;
+  durationMs?: number | null;
+  turnWallClockMs?: number | null;
+  minDurationMs?: number;
+  turnThresholdMs?: number;
+}): SlowCallVerdict {
+  const callThreshold = input.minDurationMs ?? slowCallThresholdMs();
+  const turnThreshold = input.turnThresholdMs ?? slowTurnWallClockMs();
+  if (typeof input.turnWallClockMs === "number" && input.turnWallClockMs >= turnThreshold) {
+    return { slow: true, basis: "turn_wall_clock" };
+  }
+  if (!input.tool || !SLOW_CALL_TOOLS.has(input.tool)) {
+    // Other tools are not marked slow by this definition, even at 60 seconds.
+    return { slow: false, basis: null };
+  }
+  if (typeof input.durationMs === "number" && input.durationMs >= callThreshold) {
+    return { slow: true, basis: "call_duration" };
+  }
+  return { slow: false, basis: null };
+}
+
+/** SC-20 — a successful call that returned zero rows. */
+export function isEmptyResult(input: {
+  outcome?: string | null;
+  responseRowCount?: number | null;
+}): boolean {
+  if (input.outcome !== "ok") return false;
+  return input.responseRowCount === 0;
+}
+
 /** Probe-looking by name only. SC-16 requires `eval_mark` on top of this. */
 export function hasProbeName(value: string | null | undefined): boolean {
   if (!value) return false;

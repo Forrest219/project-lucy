@@ -70,8 +70,27 @@ describe("request-client-meta", () => {
     );
     expect(meta).toEqual({
       clientIp: "198.51.100.2",
+      // Spec 162 §8 / SC-22: the forwarded chain is captured in its own
+      // display-only field, separately from the peer address.
+      clientForwardedFor: "198.51.100.2",
       userAgent: "Cursor/1.0",
       deviceName: "desk"
     });
+  });
+
+  it("leaves clientForwardedFor empty when there is no forwarding header", () => {
+    const previous = process.env.LUCY_TRUST_PROXY;
+    delete process.env.LUCY_TRUST_PROXY;
+    const meta = extractRequestClientMeta(
+      fakeReq({
+        headers: { "user-agent": "kscc-code/1.3.7 (cli)" },
+        remoteAddress: "10.0.0.1"
+      })
+    );
+    expect(meta.clientForwardedFor).toBeUndefined();
+    // client_ip stays the socket peer; no office range is guessed.
+    expect(meta.clientIp).toBe("10.0.0.1");
+    if (previous === undefined) delete process.env.LUCY_TRUST_PROXY;
+    else process.env.LUCY_TRUST_PROXY = previous;
   });
 });

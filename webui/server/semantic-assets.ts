@@ -50,6 +50,13 @@ import { resolveContentPaths } from "./paths";
 import { recordConfigChange } from "./admin/audit.js";
 import { isSemanticLayerJunkName } from "./semantic-layer-junk";
 import { sanitizeSemanticSourceYaml } from "./semantic-overlay-sanitize";
+import {
+  checkColumnTypeContract,
+  evaluatePublishGate,
+  validatePublishExemption,
+  type PublishExemptionAudit,
+  type PublishGateViolation
+} from "./publish-gate";
 
 // ─── Public types (mirror of `webui/src/lib/types.ts`) ─────────────────────
 
@@ -78,6 +85,8 @@ export type SemanticAssetErrorCode =
   | "PATH_NOT_ALLOWED"
   | "VALIDATION_SNAPSHOT_NOT_FOUND"
   | "VALIDATION_GATE_FAILED"
+  /** Spec 162 §8 / SC-24 — a failing TS/Python contract check. */
+  | "CONTRACT_VIOLATION"
   | "PUBLISH_IN_PROGRESS"
   | "REINDEX_IN_PROGRESS";
 
@@ -179,6 +188,17 @@ export type SemanticAssetReleaseRecord = {
     results: SemanticAssetValidationRow[];
   };
   reindex?: SemanticAssetReindexRecord;
+  /**
+   * Spec 162 §8 / SC-24 — the TS/Python contract gate decision, including any
+   * exemption that was considered and why it did or did not apply.
+   */
+  contractGate?: {
+    violations: PublishGateViolation[];
+    /** The exemption that applied, or null when none did. */
+    waived: PublishExemptionAudit | null;
+    blocking: PublishGateViolation[];
+    rejectedReason?: string;
+  };
 };
 
 export type SemanticAssetReleasesResponse = {
@@ -204,6 +224,19 @@ export type SemanticAssetReleaseStatusResponse = {
 export type SemanticAssetPublishRequest = {
   validationId: string;
   confirmOverwrite?: boolean;
+  /**
+   * Spec 162 §8 / SC-24 — time-boxed, audited waiver for a failing TS/Python
+   * contract check. It is never a way to switch the gate off: operator,
+   * reason and expiry are mandatory and an expiry that has passed waives
+   * nothing.
+   */
+  exemption?: {
+    operator: string;
+    reason: string;
+    expiresAt: string;
+    checkIds: string[];
+    connectionId?: string;
+  };
 };
 
 export type SemanticAssetPublishResponse = {
@@ -1254,6 +1287,31 @@ async function copyDirectory(src: string, dest: string, maxDepth: number): Promi
   }
 }
 
+/**
+ * Spec 162 §8 / SC-24 — read `columns` out of a semantic-source overlay so the
+ * TS/Python SourceColumn contract can be checked before anything is written.
+ * Returns null on anything unparseable; the caller then skips the check rather
+ * than inventing a result.
+ */
+function readSemanticSourceColumns(content: string): { columns?: unknown } {
+  try {
+    const doc = parseDocument(content, { prettyErrors: true });
+    if (doc.errors.length > 0) return {};
+    const root = doc.toJSON();
+    if (!root || typeof root !== "object" || Array.isArray(root)) return {};
+    const record = root as Record<string, unknown>;
+    if (record.tables && typeof record.tables === "object" && !Array.isArray(record.tables)) {
+      const first = Object.values(record.tables as Record<string, unknown>)[0];
+      if (first && typeof first === "object" && !Array.isArray(first)) {
+        return { columns: (first as Record<string, unknown>).columns };
+      }
+    }
+    return { columns: record.columns };
+  } catch {
+    return {};
+  }
+}
+
 // ─── Validate gate (runs `ktx sl validate` for each changed source) ─────
 
 type ValidateGateResult = {
@@ -1771,7 +1829,30 @@ export async function publishSemanticAssets(
   // Re-run the gate (TOCTOU defense; never trust the client-only validation).
   const gate = await runValidateGate(projectRoot, request.validationId, snapshot);
   const issues = collectValidationIssues(gate.results);
-  if (!gate.ok) {
+
+  // Spec 162 §8 / SC-24 — the existing TS/Python contract check is the gate.
+  // Contract violations block the publish unless a time-boxed, audited
+  // exemption covers them. The exemption never disables every check.
+  const contractViolations: PublishGateViolation[] = [];
+  for (const file of snapshot.files) {
+    if (file.kind !== "semanticSource") continue;
+    const parsed = readSemanticSourceColumns(file.content);
+    contractViolations.push(
+      ...checkColumnTypeContract(parsed.columns, file.targetPath).map((violation) => ({
+        ...violation,
+        connectionId: file.connectionId
+      }))
+    );
+  }
+  const exemptionValidation = validatePublishExemption(request.exemption ?? {}, now());
+  const exemption = exemptionValidation.ok ? exemptionValidation.exemption : null;
+  const gateVerdict = evaluatePublishGate(contractViolations, exemption, now());
+
+  if (!gate.ok || !gateVerdict.allowed) {
+    const blockingMessages = [
+      ...issues.map((i) => i.message),
+      ...gateVerdict.blocking.map((v) => v.message)
+    ];
     const record: SemanticAssetReleaseRecord = {
       id: releaseId,
       createdAt,
@@ -1787,22 +1868,38 @@ export async function publishSemanticAssets(
       })),
       changedSources: snapshot.changedSources,
       diff: snapshot.diff,
-      validation: { ok: false, results: gate.results }
-    };
+      validation: { ok: false, results: gate.results },
+      // SC-24 — the exemption that was considered is part of the audit trail,
+      // including the reason it was rejected (expired / not applicable).
+      contractGate: {
+        violations: contractViolations,
+        waived: gateVerdict.waived,
+        blocking: gateVerdict.blocking,
+        rejectedReason: gateVerdict.rejectedReason
+          ?? (request.exemption && !exemption ? exemptionValidation.ok ? undefined : exemptionValidation.reason : undefined)
+      }
+    } as SemanticAssetReleaseRecord;
     await appendReleaseRecord(projectRoot, record);
     await cleanupSemanticPublishStaging(projectRoot, request.validationId);
     await releasePublishLock(projectRoot);
     await deleteSnapshot(projectRoot, request.validationId);
     throw new SemanticAssetValidationError(
       "VALIDATION_GATE_FAILED",
-      `validate gate 失败：${issues.map((i) => i.message).join("; ") || "见 results"}`,
-      issues.map((i) => ({
-        code: "VALIDATION_GATE_FAILED" as const,
-        message: i.message,
-        filePath: i.filePath,
-        line: i.line,
-        column: i.column
-      })),
+      `validate gate 失败：${blockingMessages.join("; ") || "见 results"}`,
+      [
+        ...issues.map((i) => ({
+          code: "VALIDATION_GATE_FAILED" as const,
+          message: i.message,
+          filePath: i.filePath,
+          line: i.line,
+          column: i.column
+        })),
+        ...gateVerdict.blocking.map((v) => ({
+          code: "CONTRACT_VIOLATION" as const,
+          message: v.message,
+          filePath: v.filePath
+        }))
+      ],
       422,
       record
     );

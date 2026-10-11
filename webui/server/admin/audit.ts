@@ -1757,6 +1757,54 @@ function buildAuditCsvFieldMetadata(kind: "calls" | "turns", generatedAt = new D
   };
 }
 
+/**
+ * Spec 162 §8 / SC-21 — auth failures sharing the call timeline.
+ *
+ * The same time/user/client-ip filter applies, but the row type is separate:
+ * an auth failure is never re-labelled as a tool call and never enters
+ * access_log. `auth_failure_log.csv` in the evidence pack stays its own file.
+ */
+export function queryAuthFailures(
+database: Awaited<ReturnType<typeof getAuditDb>>,
+q: { since?: string; until?: string; user?: string; clientIp?: string },
+limit = 50
+): Array<{
+id: number;
+ts: string;
+reason: string;
+client_ip: string | null;
+user_agent: string | null;
+token_hash_prefix: string | null;
+user_id: string | null;
+token_label: string | null;
+request_id: string | null;
+}> {
+const conditions: string[] = [];
+const params: Array<string | number> = [];
+if (q.since) {
+  conditions.push("ts >= ?");
+  params.push(q.since);
+}
+if (q.until) {
+  conditions.push("ts <= ?");
+  params.push(q.until);
+}
+if (q.user) {
+  conditions.push("user_id = ?");
+  params.push(q.user);
+}
+if (q.clientIp) {
+  conditions.push("IFNULL(client_ip, '') LIKE ?");
+  params.push(`%${q.clientIp}%`);
+}
+const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+const suffix = limit > 0 ? " LIMIT ?" : "";
+const sql = `SELECT id, ts, reason, client_ip, user_agent, token_hash_prefix, user_id, token_label, request_id
+     FROM auth_failure_log ${where} ORDER BY ts DESC, id DESC${suffix}`;
+if (limit > 0) params.push(limit);
+return database.prepare(sql).all(...params) as never;
+}
+
 export function registerAuditRoutes(app: FastifyInstance) {
   app.get<{
     Querystring: {
@@ -2123,11 +2171,16 @@ export function registerAuditRoutes(app: FastifyInstance) {
     Querystring: AccessLogFilterQuery & {
       limit?: string;
       offset?: string;
+      includeAuthFailures?: string;
     };
   }>("/api/admin/audit", async (request) => {
     const q = request.query;
     const limit = Math.min(parseInt(q.limit ?? "50", 10) || 50, 500);
     const offset = parseInt(q.offset ?? "0", 10) || 0;
+    // Spec 162 §8 / SC-21 — the same time filter returns auth failures on the
+    // same timeline. They are a distinct event type, never rewritten as a
+    // `lucy_query` failure, and never written into access_log.
+    const includeAuthFailures = q.includeAuthFailures !== "0" && q.includeAuthFailures !== "false";
 
     const database = await getAuditDb();
     const { conditions, baseConditions, params } = buildAccessLogFilter(q);
@@ -2152,6 +2205,9 @@ export function registerAuditRoutes(app: FastifyInstance) {
 
     const entries = rows.map((row) => ({
       id: row.id,
+      // SC-21 — every entry carries its event type so a call and an auth
+      // failure are distinguishable in one list.
+      eventType: "call" as const,
       ts: row.ts,
       userId: row.user_id,
       tokenLabel: row.token_label ?? undefined,
@@ -2200,11 +2256,37 @@ export function registerAuditRoutes(app: FastifyInstance) {
       matchedRoleId: row.matched_role_id ?? undefined
     }));
 
+    // SC-21 — auth failures join the same time filter as a separate event
+    // type. They stay in auth_failure_log and are never turned into a call.
+    const authFailureEntries = includeAuthFailures
+      ? queryAuthFailures(database, q, limit + offset)
+        .slice(offset, offset + limit)
+        .map((row) => ({
+          id: row.id,
+          eventType: "auth_failure" as const,
+          ts: row.ts,
+          reason: row.reason,
+          clientIp: row.client_ip ?? undefined,
+          userAgent: row.user_agent ?? undefined,
+          tokenHashPrefix: row.token_hash_prefix ?? undefined,
+          userId: row.user_id ?? undefined,
+          tokenLabel: row.token_label ?? undefined,
+          requestId: row.request_id ?? undefined
+        }))
+      : [];
+    const authFailureCount = includeAuthFailures
+      ? queryAuthFailures(database, q, 0).length
+      : 0;
+    const merged = [...entries, ...authFailureEntries].sort((a, b) =>
+      a.ts === b.ts ? 0 : a.ts < b.ts ? 1 : -1
+    );
+
     return {
       ok: true,
       data: {
         total: totalRow.cnt,
-        entries,
+        entries: merged,
+        authFailureCount,
         summary: {
           protocolCalls: summaryRow.protocol_calls ?? 0,
           businessCalls: summaryRow.business_calls ?? 0,

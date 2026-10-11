@@ -7,7 +7,13 @@ import { prepareTraceDatabase } from "../trace/evidence.js";
 import { resolveSourceRefsForTables } from "./acl.js";
 import { scrubArgsSummaryJson } from "./audit-privacy.js";
 import { MCP_PROTOCOL_METHODS as PROTOCOL_TOOLS } from "./mcp-request-classification.js";
-import { defaultUsageExcluded, usageGroup, type UsageGroup } from "./question-experience.js";
+import {
+  defaultUsageExcluded,
+  isEmptyResult,
+  isSlowCall,
+  usageGroup,
+  type UsageGroup
+} from "./question-experience.js";
 
 /** SC-26 — a denial with no matched role is its own row, never spread over role_ids. */
 const UNMATCHED_ROLE_ID = "__unmatched_role__";
@@ -26,6 +32,8 @@ export interface AccessLogEntry {
   client?: string;
   clientVersion?: string;
   clientIp?: string;
+  /** Spec 162 §8 / SC-22 — display-only forwarded chain; never used for ACL. */
+  clientForwardedFor?: string;
   userAgent?: string;
   deviceName?: string;
   tool: string;
@@ -51,6 +59,13 @@ export interface AccessLogEntry {
   wikiVersions?: string[];
   /** Spec 162 §7.6 — Token's explicit `eval_mark`, mirrored onto the call row. */
   evalMark?: boolean;
+  /** Spec 162 §8 / SC-20 — slow mark under the new definition. */
+  isSlowCall?: boolean;
+  slowBasis?: "call_duration" | "turn_wall_clock";
+  /** SC-20 — successful call that returned zero rows. */
+  resultEmpty?: boolean;
+  /** SC-20 — elapsed wall clock of the question this call belongs to. */
+  turnWallClockMs?: number;
   durationMs: number;
   requestId: string | number;
   traceId?: string;
@@ -133,6 +148,7 @@ const ACCESS_LOG_COLUMNS = [
   ["response_truncated", "INTEGER"],
   ["trace_id", "TEXT"],
   ["client_ip", "TEXT"],
+  ["client_forwarded_for", "TEXT"],
   ["user_agent", "TEXT"],
   ["client_version", "TEXT"],
   ["device_name", "TEXT"],
@@ -153,7 +169,11 @@ const ACCESS_LOG_COLUMNS = [
   ["actor_kind", "TEXT"],
   ["wiki_injected_keys", "TEXT"],
   ["wiki_versions", "TEXT"],
-  ["eval_mark", "INTEGER"]
+  ["eval_mark", "INTEGER"],
+  ["is_slow_call", "INTEGER"],
+  ["slow_basis", "TEXT"],
+  ["result_empty", "INTEGER"],
+  ["turn_wall_clock_ms", "INTEGER"]
 ] as const;
 const PERMISSION_SNAPSHOT_COLUMNS = [
   ["capability_digest", "TEXT"],
@@ -382,9 +402,9 @@ export async function writeLog(entry: AccessLogEntry): Promise<number> {
   if (!insertStmt) {
     insertStmt = database.prepare(`
       INSERT INTO access_log
-        (ts, user_id, token_label, token_hash_prefix, lucy_session_id, lucy_turn_id, turn_attribution_mode, turn_attribution_confidence, turn_attribution_reason, lucy_platform, client, client_version, client_ip, user_agent, device_name, tool, tables, args_summary, query_hash, query_length, query_operation, query_preview, query_artifact_ref, generated_sql, outcome, error_detail, duration_ms, response_bytes, response_row_count, response_column_count, response_truncated, request_id, trace_id, role_ids, permission_snapshot_hash, effective_tables_count, decision_reason, policy_version, capability_digest, skill_uri, skill_version, skill_file_version, skill_action, skill_roles_allowed, matched_role_id, compiler_reason, failure_dimension, applied_version, applied_business_date, applied_value_kind, actor_id, actor_kind, wiki_injected_keys, wiki_versions, eval_mark)
+        (ts, user_id, token_label, token_hash_prefix, lucy_session_id, lucy_turn_id, turn_attribution_mode, turn_attribution_confidence, turn_attribution_reason, lucy_platform, client, client_version, client_ip, client_forwarded_for, user_agent, device_name, tool, tables, args_summary, query_hash, query_length, query_operation, query_preview, query_artifact_ref, generated_sql, outcome, error_detail, duration_ms, response_bytes, response_row_count, response_column_count, response_truncated, request_id, trace_id, role_ids, permission_snapshot_hash, effective_tables_count, decision_reason, policy_version, capability_digest, skill_uri, skill_version, skill_file_version, skill_action, skill_roles_allowed, matched_role_id, compiler_reason, failure_dimension, applied_version, applied_business_date, applied_value_kind, actor_id, actor_kind, wiki_injected_keys, wiki_versions, eval_mark, is_slow_call, slow_basis, result_empty, turn_wall_clock_ms)
       VALUES
-        (@ts, @userId, @tokenLabel, @tokenHashPrefix, @lucySessionId, @lucyTurnId, @turnAttributionMode, @turnAttributionConfidence, @turnAttributionReason, @lucyPlatform, @client, @clientVersion, @clientIp, @userAgent, @deviceName, @tool, @tables, @argsSummary, @queryHash, @queryLength, @queryOperation, @queryPreview, @queryArtifactRef, @generatedSql, @outcome, @errorDetail, @durationMs, @responseBytes, @responseRowCount, @responseColumnCount, @responseTruncated, @requestId, @traceId, @roleIds, @permissionSnapshotHash, @effectiveTablesCount, @decisionReason, @policyVersion, @capabilityDigest, @skillUri, @skillVersion, @skillFileVersion, @skillAction, @skillRolesAllowed, @matchedRoleId, @compilerReason, @failureDimension, @appliedVersion, @appliedBusinessDate, @appliedValueKind, @actorId, @actorKind, @wikiInjectedKeys, @wikiVersions, @evalMark)
+        (@ts, @userId, @tokenLabel, @tokenHashPrefix, @lucySessionId, @lucyTurnId, @turnAttributionMode, @turnAttributionConfidence, @turnAttributionReason, @lucyPlatform, @client, @clientVersion, @clientIp, @clientForwardedFor, @userAgent, @deviceName, @tool, @tables, @argsSummary, @queryHash, @queryLength, @queryOperation, @queryPreview, @queryArtifactRef, @generatedSql, @outcome, @errorDetail, @durationMs, @responseBytes, @responseRowCount, @responseColumnCount, @responseTruncated, @requestId, @traceId, @roleIds, @permissionSnapshotHash, @effectiveTablesCount, @decisionReason, @policyVersion, @capabilityDigest, @skillUri, @skillVersion, @skillFileVersion, @skillAction, @skillRolesAllowed, @matchedRoleId, @compilerReason, @failureDimension, @appliedVersion, @appliedBusinessDate, @appliedValueKind, @actorId, @actorKind, @wikiInjectedKeys, @wikiVersions, @evalMark, @isSlowCall, @slowBasis, @resultEmpty, @turnWallClockMs)
     `);
   }
   const result = insertStmt.run({
@@ -401,6 +421,7 @@ export async function writeLog(entry: AccessLogEntry): Promise<number> {
     client: entry.client ?? null,
     clientVersion: entry.clientVersion ?? null,
     clientIp: entry.clientIp ?? null,
+    clientForwardedFor: entry.clientForwardedFor ?? null,
     userAgent: entry.userAgent ?? null,
     deviceName: entry.deviceName ?? null,
     tool: entry.tool,
@@ -444,7 +465,11 @@ export async function writeLog(entry: AccessLogEntry): Promise<number> {
     actorKind: entry.actorKind ?? null,
     wikiInjectedKeys: entry.wikiInjectedKeys ? JSON.stringify(entry.wikiInjectedKeys) : null,
     wikiVersions: entry.wikiVersions ? JSON.stringify(entry.wikiVersions) : null,
-    evalMark: entry.evalMark === true ? 1 : 0
+    evalMark: entry.evalMark === true ? 1 : 0,
+    isSlowCall: entry.isSlowCall === true ? 1 : 0,
+    slowBasis: entry.slowBasis ?? null,
+    resultEmpty: entry.resultEmpty === true ? 1 : 0,
+    turnWallClockMs: entry.turnWallClockMs ?? null
   });
   return Number(result.lastInsertRowid);
 }
@@ -587,7 +612,10 @@ export interface R1AuditObservability {
       queryPreview?: string;
       decisionReason?: string;
       requestId: string;
+      slowBasis?: "call_duration" | "turn_wall_clock";
     }>;
+    /** SC-20 — successful calls that returned zero rows. */
+    emptyResults: number;
   };
   denials: Array<{ reason: string; count: number }>;
   sourceErrors: Array<{
@@ -661,7 +689,7 @@ export async function readR1AuditObservability(options: { hours?: number; slowMs
   const rows = database.prepare(`
     SELECT ts, user_id, token_label, token_hash_prefix, tool, outcome, duration_ms, request_id,
            role_ids, matched_role_id, decision_reason, query_operation, query_preview, tables,
-           actor_id, actor_kind, client, args_summary, eval_mark
+           actor_id, actor_kind, client, args_summary, eval_mark, turn_wall_clock_ms, response_row_count
     FROM access_log
     WHERE ts >= ?
     ORDER BY ts DESC, id DESC
@@ -685,6 +713,8 @@ export async function readR1AuditObservability(options: { hours?: number; slowMs
     client: string | null;
     args_summary: string | null;
     eval_mark: number | null;
+    turn_wall_clock_ms: number | null;
+    response_row_count: number | null;
   }>;
 
   const protocolTools = new Set<string>(PROTOCOL_TOOLS);
@@ -759,13 +789,26 @@ export async function readR1AuditObservability(options: { hours?: number; slowMs
   }
 
   const slowQueries = defaultRows
-    .filter((row) => row.duration_ms >= slowMs)
+    // Spec 162 §8 / SC-20 — the usage signal's slow mark. It replaces the old
+    // "anything over the window threshold" rule: a 1.6s successful query is
+    // not slow, and other tools are not marked by this definition at all.
+    // Spec 143's call monitor keeps its own threshold.
+    .filter((row) => isSlowCall({
+      tool: row.tool,
+      durationMs: row.duration_ms,
+      turnWallClockMs: row.turn_wall_clock_ms ?? null
+    }).slow)
     .slice(0, 20)
     .map((row) => ({
       ts: row.ts,
       userId: row.user_id,
       tool: row.tool,
       durationMs: row.duration_ms,
+      slowBasis: isSlowCall({
+        tool: row.tool,
+        durationMs: row.duration_ms,
+        turnWallClockMs: row.turn_wall_clock_ms ?? null
+      }).basis ?? undefined,
       queryOperation: row.query_operation ?? undefined,
       queryPreview: row.query_preview ?? undefined,
       decisionReason: row.decision_reason ?? undefined,
@@ -811,7 +854,11 @@ export async function readR1AuditObservability(options: { hours?: number; slowMs
       p50Ms: percentile(durations, 0.5),
       p95Ms: percentile(durations, 0.95),
       slowCalls: slowQueries.length,
-      slowQueries
+      slowQueries,
+      emptyResults: defaultRows.filter((row) => isEmptyResult({
+        outcome: row.outcome,
+        responseRowCount: row.response_row_count
+      })).length
     },
     denials: [...denials.entries()]
       .map(([reason, count]) => ({ reason, count }))
