@@ -4,6 +4,8 @@ This directory stores repository-level implementation plans that are not scoped 
 
 | Plan | Purpose |
 |---|---|
+| `2026-10-11-eval-module-functional-upgrade.md` | **Eval 模块产品能力（形态 A，v0.4）**：已细化为待评审 Spec 161 与工单 `webui/docs/plans/wo-202610-11-offline-eval-customer-ops.md` |
+| `2026-10-11-eval-result-policy-context-upgrade.md` | **Eval 升级建议（形态 A）**：结果 / 策略 / 解释分轴，superstore 四臂消融，拒答与澄清，业务轨迹晋升。与 8 月 26 日运营闭环并行；不含实现 WO |
 | `2026-08-26-eval-accuracy-closed-loop-and-change-triggered-regression.md` | **Eval 优化方案（形态 A）**：准确率连续跌破闭环（判定 / ack / Webhook）+ Publish 后变更触发 smoke 回归；不含实现 WO |
 | `2026-08-20-trace-evidence-p0-plan.md` | **P0 Trace / Evidence** 权威实施计划（Kernel Landed + P0 Closure：evidence 完整度 / purge / 术语）；对齐 Spec 62 v0.5 |
 | `wo-202608-59-access-control-p0.md` | **访问权限 AC-P0** 可交付实现计划（capability / 工具分级 / 配置版本 / 收窄提交）；入口 `docs/access-control/plans/` |
