@@ -43,6 +43,7 @@ import { TurnCorrelationRegistry } from "./turn-correlation.js";
 import { beginAuditWrite, completeAuditWrite, failAuditWrite } from "./audit-write-health.js";
 import {
   classifyFailure,
+  denialAllowList,
   filterPushdownGuardEnabled,
   isFilterPushdownText,
   isQuestionDataTool,
@@ -53,7 +54,13 @@ import {
   registerPublishedVersion,
   repairHint,
   resolveAppliedVersion,
+  resolveResponseTruncated,
+  TRUNCATION_REPAIR_HINT,
 } from "./question-experience.js";
+import {
+  lookupReportTemplate,
+  resolveCertifiedRoute,
+} from "./certified-route.js";
 
 export { registerPublishedVersion };
 
@@ -709,7 +716,11 @@ function inspectRowsAndColumns(value: unknown, depth = 0): { rows?: number; colu
   return {};
 }
 
-function responseAuditMeta(body: Buffer, contentType: string | string[] | number | undefined): Partial<Parameters<typeof writeLog>[0]> {
+function responseAuditMeta(
+  body: Buffer,
+  contentType: string | string[] | number | undefined,
+  options: { toolName?: string; rowCap?: number } = {}
+): Partial<Parameters<typeof writeLog>[0]> {
   const meta: Partial<Parameters<typeof writeLog>[0]> = { responseBytes: body.byteLength };
   const type = Array.isArray(contentType) ? contentType.join(",") : String(contentType ?? "");
   if (!type.includes("application/json")) return meta;
@@ -719,6 +730,16 @@ function responseAuditMeta(body: Buffer, contentType: string | string[] | number
     meta.responseRowCount = inspected.rows;
     meta.responseColumnCount = inspected.columns;
     meta.responseTruncated = findBooleanFlag(parsed, "truncated");
+    // Spec 162 §7.5 / SC-10 — a successful lucy_query always writes 0 or 1.
+    // Only lucy_query; lucy_freshness / lucy_explain_query keep their own 0.
+    if (options.toolName === "lucy_query" && meta.responseTruncated !== true) {
+      const resolved = resolveResponseTruncated({
+        upstreamTruncated: meta.responseTruncated,
+        rowCount: inspected.rows ?? null,
+        rowCap: options.rowCap ?? null
+      });
+      meta.responseTruncated = resolved.responseTruncated === 1;
+    }
   } catch {
     // byte size is still useful even when JSON parsing fails.
   }
@@ -976,6 +997,41 @@ function lucySkillReadTool() {
   };
 }
 
+/**
+ * Spec 162 §7.8 / SC-13 — 认证路径. Executes a published route as a
+ * role-scoped `lucy_query`; the answer carries `routeId` and its source.
+ */
+function lucyCertifiedRouteTool() {
+  return {
+    name: "lucy_certified_route",
+    description: "Run a published certified route. The answer reports the route id and source it read. Access still follows this agent's permissions.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        routeId: { type: "string", description: "Published certified route id" },
+        templateId: { type: "string", description: "Published report template id (pilot: public_cloud_pnl_quarterly)" }
+      },
+      additionalProperties: false
+    }
+  };
+}
+
+/** Spec 162 §7.8 / SC-19 — single P&L template pilot. */
+function lucyReportTemplateTool() {
+  return {
+    name: "lucy_report_template",
+    description: "Run a published report template and get its source plus the applied version. Pilot scope: public_cloud_pnl_quarterly.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        templateId: { type: "string" }
+      },
+      required: ["templateId"],
+      additionalProperties: false
+    }
+  };
+}
+
 // Local tools the proxy serves itself (never forwarded to KTX). Each is only injected
 // into tools/list when visibleTools allows it — same explicit allow-list gate as any
 // other tool (spec 08 §15 decision 2: no derived/bypass condition).
@@ -991,7 +1047,9 @@ function localToolBuilders(): Array<{ name: string; build: () => Record<string, 
     { name: "wiki_search", build: wikiSearchTool },
     { name: "wiki_read", build: wikiReadTool },
     { name: "lucy_skill_search", build: lucySkillSearchTool },
-    { name: "lucy_skill_read", build: lucySkillReadTool }
+    { name: "lucy_skill_read", build: lucySkillReadTool },
+    { name: "lucy_certified_route", build: lucyCertifiedRouteTool },
+    { name: "lucy_report_template", build: lucyReportTemplateTool }
   ];
   if (process.env.LUCY_ENABLE_QUESTION_TOOL !== "false") {
     builders.push({ name: "lucy_begin_question", build: lucyBeginQuestionTool });
@@ -1682,6 +1740,21 @@ function wikiKeyFromResult(item: Record<string, unknown>): string | undefined {
   return firstStringValue(item, ["path", "filePath", "file", "uri", "key", "page", "slug", "id"]);
 }
 
+/**
+ * Spec 162 §7.7 / SC-11 — recover candidate wiki keys from a prose block so a
+ * plain-text `wiki_search` answer is filtered by role instead of rejected as
+ * `unparseable_text`.
+ */
+function extractWikiKeysFromText(text: string): string[] {
+  const keys = new Set<string>();
+  const pattern = /(?:wiki\/)?(?:global\/)?[\p{L}\p{N}_./-]*[\p{L}\p{N}_-]+\.md/gu;
+  for (const match of text.matchAll(pattern)) {
+    const raw = match[0].replace(/^wiki\//, "");
+    if (raw.length > 3) keys.add(raw);
+  }
+  return [...keys];
+}
+
 async function filterWikiResultArray(identity: Identity, items: unknown[]): Promise<{ items: unknown[]; filtered: number; sawWikiKeys: boolean }> {
   const output: unknown[] = [];
   let filtered = 0;
@@ -1765,7 +1838,31 @@ async function filterWikiSearchPayload(identity: Identity, payload: unknown): Pr
         sawWikiKeys = sawWikiKeys || textResult.sawWikiKeys;
         content.push({ ...contentRecord, text: JSON.stringify(textResult.value, null, 2) });
       } catch {
-        return { payload, filtered, failed: "wiki_search_filter_failed:unparseable_text" };
+        // Spec 162 §7.7 / SC-11 — a non-JSON content block is prose, not a
+        // parse failure. Scan it for wiki keys the role cannot read; keep the
+        // original text and never answer `unparseable_text`.
+        const keysInText = extractWikiKeysFromText(contentRecord.text);
+        if (keysInText.length === 0) {
+          content.push(contentRecord);
+          continue;
+        }
+        const dropped = new Set<string>();
+        for (const key of keysInText) {
+          const { decision, page } = await canAccessWikiKey(identity, key);
+          if (decision.allowed && page) continue;
+          filtered += 1;
+          sawWikiKeys = true;
+          dropped.add(key);
+        }
+        if (dropped.size === 0) {
+          content.push(contentRecord);
+          continue;
+        }
+        const redacted = [...dropped].reduce(
+          (text, key) => text.split(key).join("[wiki_not_authorized]"),
+          contentRecord.text
+        );
+        content.push({ ...contentRecord, text: redacted });
       }
     }
     rewrittenResult.content = content;
@@ -2076,6 +2173,16 @@ function withLucyResultMeta(
   const orderBy = firstFieldValue(argsRecord, ["orderBy", "order_by"]);
   const inspectedResult = inspectRowsAndColumns(resultRecord);
   const responseTruncated = findBooleanFlag(resultRecord, "truncated");
+  // Spec 162 §7.5 — success rows always report 0 or 1; hitting the row cap
+  // forces 1 and attaches the aggregate repair hint.
+  const truncation = toolName === "lucy_query"
+    ? resolveResponseTruncated({
+      upstreamTruncated: responseTruncated,
+      rowCount: inspectedResult.rows ?? null,
+      rowCap: numericLimit(argsRecord.limit)
+    })
+    : null;
+  const effectiveTruncated = truncation ? truncation.responseTruncated === 1 : responseTruncated;
   return {
     ...record,
     result: {
@@ -2098,8 +2205,9 @@ function withLucyResultMeta(
           result: {
             rowCount: inspectedResult.rows ?? null,
             columnCount: inspectedResult.columns ?? null,
-            truncated: responseTruncated ?? null
+            truncated: effectiveTruncated ?? null
           },
+          ...(truncation?.repair ? { repair: truncation.repair } : {}),
           ...(appliedLucyVersion(toolName, argsRecord, sourceRefs) ?? {}),
           provenance: {
             connectionId: firstStringField(argsRecord, ["connectionId", "connection_id", "connection"]) ?? null,
@@ -2341,7 +2449,13 @@ async function writeLucySemanticResponse(
 
   const structuredTables = sourceRefs.map((ref) => ref.physicalTable);
   const tables = [...new Set([...structuredTables, ...queryTables])];
-  const responseMeta = responseAuditMeta(Buffer.from(body), headers["content-type"]);
+  const effectiveRowCap = toolName === "lucy_query"
+    ? numericLimit((toolArgs as Record<string, unknown> | undefined)?.limit)
+    : undefined;
+  const responseMeta = responseAuditMeta(Buffer.from(body), headers["content-type"], {
+    toolName,
+    rowCap: effectiveRowCap
+  });
   const decisionReason = compilerReason
     ? "filter_pushdown"
     : outcome === "ok"
@@ -2759,18 +2873,242 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
     }
   }
 
-  // ACL check for tool calls
+  /**
+ * Spec 162 §7.8 / SC-13 / SC-19 — 认证路径 and the single template pilot.
+ *
+ * Execution is still a role-scoped `lucy_query`: the route/template never
+ * grants access. A role that cannot read the source gets a permission denial
+ * whose repair list is drawn only from that role's ACL. The success payload
+ * always carries the source and, when declared, the applied version.
+ */
+async function writeCertifiedRouteResponse(
+  identity: Identity,
+  toolName: string,
+  toolArgs: unknown,
+  context: {
+    res: ServerResponse;
+    requestId: string | number;
+    start: number;
+    requestMeta: Partial<Parameters<typeof writeLog>[0]>;
+    argsSummary: Record<string, unknown> | undefined;
+    queryMeta: Partial<Parameters<typeof writeLog>[0]>;
+    traceId: string;
+  }
+): Promise<void> {
+  const { res, requestId, start, requestMeta, argsSummary, queryMeta, traceId } = context;
+  const args = (toolArgs && typeof toolArgs === "object" && !Array.isArray(toolArgs)
+    ? toolArgs as Record<string, unknown>
+    : {}) as Record<string, unknown>;
+  const firstString = firstStringField(args, ["routeId", "route_id"]) ?? "";
+  const templateId = firstStringField(args, ["templateId", "template_id"]) ?? "";
+  const identifier = toolName === "lucy_report_template" ? templateId : firstString;
+
+  const resolved = await effectivePermissions(identity).catch(() => null);
+  const permissions = resolved?.ok ? resolved.permissions : undefined;
+  const readsSource = (source: string): boolean => {
+    if (!permissions) return false;
+    if (permissions.tables.includes("*")) return true;
+    return permissions.sources.some((entry) => entry.sourceName === source || entry.table === source);
+  };
+
+  type Gate =
+    | { ok: true; routeId: string; source: string; version?: string; query: Record<string, unknown> }
+    | {
+      ok: false;
+      decision: "permission_denied" | "not_found";
+      reason: string;
+      repair: { connections: string[]; sources: string[] } | null;
+    };
+
+  const denyWith = (decision: "permission_denied" | "not_found", reason: string): Gate => ({
+    ok: false,
+    decision,
+    reason,
+    repair: permissions
+      ? denialAllowList({ connections: permissions.connections, sources: permissions.sources })
+      : null
+  });
+
+  let gate: Gate;
+  if (toolName === "lucy_report_template") {
+    const template = identifier ? lookupReportTemplate(identifier) : undefined;
+    if (!template) {
+      gate = denyWith("not_found", "report_template_not_found");
+    } else if (!readsSource(template.source)) {
+      gate = denyWith("permission_denied", `explicit_table_required:${template.source}`);
+    } else {
+      gate = {
+        ok: true,
+        routeId: template.templateId,
+        source: template.source,
+        version: template.version,
+        query: { connectionId: template.source.split(".")[0], sourceName: template.source }
+      };
+    }
+  } else {
+    const resolvedRoute = resolveCertifiedRoute(identifier, {
+      readsSource,
+      permissions: permissions
+        ? { connections: permissions.connections, sources: permissions.sources }
+        : undefined
+    });
+    if (!resolvedRoute.ok) {
+      gate = resolvedRoute.decision === "permission_denied"
+        ? { ok: false, decision: "permission_denied", reason: resolvedRoute.reason, repair: resolvedRoute.repair }
+        : { ok: false, decision: "not_found", reason: resolvedRoute.reason, repair: null };
+    } else {
+      const route = resolvedRoute.route;
+      gate = {
+        ok: true,
+        routeId: route.routeId,
+        source: route.source,
+        version: route.version,
+        query: route.query
+      };
+    }
+  }
+
+  const respond = async (payload: unknown, isError: boolean, decisionReason: string, errorDetail?: string): Promise<void> => {
+    const responseBody = jsonRpcToolResult(requestId, JSON.stringify(payload, null, 2), isError ? { isError: true } : {});
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(responseBody);
+    const denied = decisionReason.includes("required") || decisionReason.includes("forbidden");
+    recordRequestAudit({
+      ts: new Date().toISOString(),
+      userId: identity.userId,
+      client: identity.client,
+      tool: toolName,
+      argsSummary,
+      ...queryMeta,
+      outcome: isError ? (denied ? "denied" : "error") : "ok",
+      errorDetail,
+      durationMs: Date.now() - start,
+      responseBytes: Buffer.byteLength(responseBody),
+      requestId,
+      ...requestMeta,
+      ...(await auditMeta(identity, decisionReason)),
+    });
+    recordMcpTraceForTool({
+      traceId,
+      identity,
+      toolName,
+      status: isError ? (denied ? "denied" : "error") : "ok",
+      startedAt: new Date(start).toISOString(),
+      turnId: requestMeta.lucyTurnId ?? null,
+      sessionId: requestMeta.lucySessionId ?? null,
+      requestId,
+      argsSummary,
+      allowed: !isError,
+      reason: decisionReason
+    });
+  };
+
+  if (!gate.ok) {
+    const failureDimension = gate.decision === "permission_denied" ? "权限拒绝" : "用法与语义";
+    await respond(
+      {
+        error: gate.reason,
+        failureDimension,
+        ...(gate.decision === "permission_denied" && gate.repair
+          ? { allowedConnections: gate.repair.connections, allowedSources: gate.repair.sources }
+          : {})
+      },
+      true,
+      gate.reason,
+      gate.reason
+    );
+    return;
+  }
+
+  // Execution is a normal role-scoped lucy_query — the ACL still decides.
+  const execution = await forwardAuthorizedLucyQuery(identity, gate.query);
+  if (!execution.ok) {
+    await respond(
+      { error: execution.reason, routeId: gate.routeId, source: gate.source },
+      true,
+      execution.reason,
+      execution.reason
+    );
+    return;
+  }
+
+  await respond(
+    {
+      routeId: gate.routeId,
+      source: gate.source,
+      ...(gate.version ? { appliedVersion: gate.version } : {}),
+      result: execution.payload
+    },
+    false,
+    "allowed"
+  );
+}
+
+/**
+ * Spec 162 §7.3 / SC-14 — the tools whose permission-denial payload carries
+ * the shared allow list. One function, one list, no per-tool divergence.
+ */
+const DENIAL_REPAIR_TOOLS = new Set([
+  "discover_data",
+  "entity_details",
+  "dictionary_search",
+  "lucy_query",
+  "lucy_read_source"
+]);
+
+/**
+ * Builds the ACL-scoped repair payload shared by every permission denial.
+ * Only connections and sources inside the caller's effective permissions are
+ * returned; a resolution failure degrades to no list rather than guessing.
+ */
+async function buildDenialRepairPayload(
+  identity: Identity,
+  reason: string
+): Promise<{ text: string; payload: Record<string, unknown> } | null> {
+  const resolved = await effectivePermissions(identity).catch(() => null);
+  if (!resolved?.ok) return null;
+  const allow = denialAllowList({
+    connections: resolved.permissions.connections,
+    sources: resolved.permissions.sources
+  });
+  const hint = repairHint(
+    { failureDimension: "权限拒绝", suggestedSources: allow.sources },
+    new Set(allow.sources)
+  );
+  const parts: string[] = [];
+  if (allow.connections.length > 0) parts.push(`可用连接：${allow.connections.join("、")}。`);
+  if (allow.sources.length > 0) parts.push(`可用来源：${allow.sources.join("、")}。`);
+  if (hint) parts.push(hint);
+  return {
+    text: parts.length > 0 ? ` ${parts.join(" ")}` : "",
+    payload: {
+      reason,
+      failureDimension: "权限拒绝",
+      connections: allow.connections,
+      sources: allow.sources
+    }
+  };
+}
+
+// ACL check for tool calls
   if (rpcMethod === "tools/call" && toolName) {
     const decision = await aclCheck(identity, toolName, toolArgs);
     if (!decision.allowed) {
       const errorMsg = decision.reason ?? "denied";
       const meta = await auditMeta(identity, errorMsg);
+      // Spec 162 §7.3 / SC-14 — discover_data, entity_details,
+      // dictionary_search, lucy_query and lucy_read_source share this one
+      // allow-list function. Names outside the caller's ACL never appear.
+      const denial = DENIAL_REPAIR_TOOLS.has(toolName)
+        ? await buildDenialRepairPayload(identity, errorMsg)
+        : null;
       const responseBody = JSON.stringify({
         jsonrpc: "2.0",
         id: requestId,
         result: {
           isError: true,
-          content: [{ type: "text", text: `Access denied: ${errorMsg}` }]
+          content: [{ type: "text", text: `Access denied: ${errorMsg}${denial?.text ?? ""}` }],
+          ...(denial ? { data: denial.payload } : {})
         }
       });
       res.writeHead(200, { "content-type": "application/json" });
@@ -2859,6 +3197,18 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
         allowed: true,
         reason: "allowed",
         matchedRule: decision.reason
+      });
+      return;
+    }
+    if (toolName === "lucy_certified_route" || toolName === "lucy_report_template") {
+      await writeCertifiedRouteResponse(identity, toolName, toolArgs, {
+        res,
+        requestId,
+        start,
+        requestMeta,
+        argsSummary,
+        queryMeta,
+        traceId
       });
       return;
     }
@@ -3756,6 +4106,10 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
     if (rpcMethod === "tools/call" && toolName === "wiki_search") {
       const { query, limit } = wikiQueryFromArgs(toolArgs);
       const results = query ? await searchAccessibleWikiPages(identity, query, limit) : [];
+      // SC-12 — only articles this role can read are injected, and each one
+      // is audited with its key and wiki version.
+      const wikiInjectedKeys = results.map((hit) => hit.key);
+      const wikiVersions = results.map((hit) => hit.version ?? "unknown");
       const responseBody = jsonRpcToolResult(requestId, JSON.stringify({
         query: query ?? "",
         results,
@@ -3771,6 +4125,8 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
         tool: toolName,
         argsSummary: query ? { query, limit } : argsSummary,
         ...queryMeta,
+        wikiInjectedKeys,
+        wikiVersions,
         outcome: query ? "ok" : "error",
         errorDetail: query ? `upstream_unavailable:${err instanceof Error ? err.message : String(err)}` : "wiki_query_missing",
         durationMs: Date.now() - start,

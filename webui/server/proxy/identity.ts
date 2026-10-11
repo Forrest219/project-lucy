@@ -4,7 +4,7 @@ import path from "node:path";
 import { parse } from "yaml";
 import { resolveProjectRoot } from "../project.js";
 import { isTokenRevoked } from "./audit.js";
-import { actorFromToken, type ActorKind } from "./question-experience.js";
+import { actorFromToken, evalMarkFromToken, type ActorKind } from "./question-experience.js";
 
 interface UserToken {
   hash?: string | Record<string, unknown>; // format: "sha256:<hex>"
@@ -16,6 +16,8 @@ interface UserToken {
   device_name?: string | null;
   actor_id?: string | null;
   actor_kind?: string | null;
+  /** Spec 162 / SC-16 — optional explicit eval mark. Absent ⇒ unmarked. */
+  eval_mark?: boolean | null;
 }
 
 interface UserAllow {
@@ -88,6 +90,8 @@ export interface Identity {
   deviceName?: string;
   actorId?: string;
   actorKind?: ActorKind;
+  /** Spec 162 / SC-16 — Token's explicit `eval_mark`. Never inferred. */
+  evalMark?: boolean;
 }
 
 export type IdentifyFailureReason =
@@ -330,7 +334,8 @@ export async function identifyRequestDetailed(
           clientVersion: sessionClient?.clientVersion,
           deviceName: t.device_name ?? undefined,
           actorId: actor.actorId,
-          actorKind: actor.actorKind
+          actorKind: actor.actorKind,
+          evalMark: evalMarkFromToken(t) || undefined
         }
       };
     }

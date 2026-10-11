@@ -5,14 +5,14 @@
 | Spec | 162 |
 | 文档名称 | Customer Query Experience and Usage Evidence |
 | 文档类型 | Product / Proxy / Audit / Semantic Contract Spec |
-| 版本 | v0.2 |
-| 状态 | WO-202610-12 已验收。v0.2 吸收启动评估的 4 项澄清。WO-13 / WO-14 仍待开工 |
+| 版本 | v0.3 |
+| 状态 | WO-202610-12 已验收。v0.3 吸收 WO-13 / WO-14 开工复核。WO-13 / WO-14 仍待开工 |
 | 撰写日期 | 2026-10-11 |
 | 委托人 | xingchen |
 | 来源计划 | [`docs/plans/2026-10-11-customer-log-next-optimizations.md`](../../docs/plans/2026-10-11-customer-log-next-optimizations.md) v1.1 |
 | 关联工单 | [`wo-202610-12`](plans/wo-202610-12-query-turn-budget-and-repair.md)、[`wo-202610-13`](plans/wo-202610-13-usage-evidence-and-query-guardrails.md)、[`wo-202610-14`](plans/wo-202610-14-usage-signal-and-publish-gate.md) |
 | 关联 Spec | 08 问询追踪、09 R1 工具契约、125 生成 SQL 热库、138 轮次归因、137 审计证据 |
-| 修订 | 不取代 Spec 138 的归因枚举。不改 Eval 跑批的 tool budget（`docs/design/design-eval-tool-budget.md`）。不改 KTX 源码。v0.2：`wiki_not_found` 与 `explicit_table_required:<empty>` 归用法与语义；`wiki_forbidden` 与带表名的 `explicit_table_required` 归权限拒绝。复述只写进 initialize 指导，代理不因缺少确认而拒绝查数。生产环境的 turn 绑定率依赖客户端发版，不是 WO-12 的退出条件 |
+| 修订 | 不取代 Spec 138 的归因枚举。不改 Eval 跑批的 tool budget（`docs/design/design-eval-tool-budget.md`）。不改 KTX 源码。v0.2：`wiki_not_found` 与 `explicit_table_required:<empty>` 归用法与语义；`wiki_forbidden` 与带表名的 `explicit_table_required` 归权限拒绝。复述只写进 initialize 指导，代理不因缺少确认而拒绝查数。生产环境的 turn 绑定率依赖客户端发版，不是 WO-12 的退出条件。v0.3：SC-16 补上探测连接的评测标记；新增 SC-25、SC-26。慢标记的新定义不覆盖其它工具，也不替换 Spec 143 |
 
 ## 1. 已拍板
 
@@ -69,8 +69,9 @@ New terms:
 | Failure Dimension | 失败维度 | 四个主术语：引擎超时与并发、过滤条件下推、用法与语义、权限拒绝 |
 | Certified Route | 认证路径 | 答案里写路径 id 和 source。不是「授权了 N 张表」 |
 | Applied Version | 采用的版本 | 结果元数据。没有发布声明时不出现 |
+| Eval Mark | 评测标记 | Token 上的显式标记，字段名 `eval_mark`。缺省为未标记。不从 User-Agent、Token 备注或连接名推断。与自动化调用不是同一个标记 |
 
-`lucy_turn_id`、`compiler_reason`、`response_truncated`、`policy_version`、`STRUCT` 是协议或引擎标识，出现在 DOM 时加 `translate="no"` 与 `notranslate`。
+`lucy_turn_id`、`compiler_reason`、`response_truncated`、`policy_version`、`eval_mark`、`STRUCT` 是协议或引擎标识，出现在 DOM 时加 `translate="no"` 与 `notranslate`。
 
 工单第一项把上表写入术语标准。在此之前，界面不得先用别的译名。
 
@@ -79,7 +80,7 @@ New terms:
 | 波次 | 工单 | 覆盖建议条目 | 验收 |
 |---|---|---|---|
 | P0 | WO-202610-12 | 01、02、03、04、05 | SC-1 至 SC-9 |
-| P1 | WO-202610-13 | 06、07、08、09、11、12、13、14、15、16 | SC-10 至 SC-19 |
+| P1 | WO-202610-13 | 06、07、08、09、11、12、13、14、15、16 | SC-10 至 SC-19，以及 SC-25、SC-26 |
 | P2 | WO-202610-14 | 19、18、17、10、20 | SC-20 至 SC-24 |
 
 ## 7. 核心流程（伪代码）
@@ -138,7 +139,7 @@ function continuable(reason):
 
 P0 不拆句。复述范围在 P1，载体仍是这份指导，不新增代理拦截。见 §7.2 的下一段，任务在 WO-13 T8。
 
-问询文本含指代或两个意图时，指导要求模型先复述账户、月份和产品线。用户尚未确认时，由模型不发 `lucy_query`。代理不因请求里没有确认字段而拒绝查询，否则没有该字段的旧客户端会被切断，违反 SC-1。
+问询原文含指代或两个意图时，指导要求模型先复述账户、月份和产品线。用户尚未确认时，由模型不发 `lucy_query`。没有原文的推断问询跳过复述。代理不因请求里没有确认字段而拒绝查询，否则没有该字段的旧客户端会被切断，违反 SC-1。
 
 ### 7.3 失败分类与修复提示
 
@@ -238,7 +239,7 @@ function usageRow(call):
     exclude from default usage KPI
 ```
 
-协议工具与第 14 条的探测连接（参数或连接名含 `probe-`、`rds-test`、`demo-mysql` 且 Token 标记为评测）在使用分析的默认视图里分开，不从 KPI 中删除原始行。
+协议工具与第 14 条的探测连接在使用分析的默认视图里分开，不从 KPI 中删除原始行。探测连接要同时满足两点：参数或连接名含 `probe-`、`rds-test`、`demo-mysql`，且 Token 的 `eval_mark` 为真。只命中名称、`eval_mark` 不为真的调用留在默认视图。`eval_mark` 是 Token 上的可选显式字段，缺省为未标记，不从 User-Agent、`token_label` 或 `actor_kind` 推断。
 
 ### 7.7 Wiki 检索
 
@@ -295,9 +296,9 @@ function compileMeasure(measure, source):
 | `policy_version` | 空值计为缺失，不计为一个版本 |
 | `generated_sql` | 有编译结果就按 Spec 125 写入 |
 
-导出：页大小默认 10,000，用游标取下一页，不把超出的行静默丢掉。缺权限快照时 `completeness=false`。鉴权失败（`missing_bearer`、`token_expired`、`token_unrecognized`）出现在同一时间筛选里，类型与调用分开。
+导出：页大小默认 10,000，用游标取下一页，不把超出的行静默丢掉。缺权限快照时 `completeness=false`。鉴权失败（`missing_bearer`、`token_expired`、`token_unrecognized`）出现在 `GET /api/admin/audit` 的同一时间筛选里，类型与调用分开。该接口合并 `access_log` 与 `auth_failure_log`。证据包里的 `auth_failure_log.csv` 仍是独立文件。
 
-慢调用的新定义（P2，替换当前把约 1 秒以上都标慢的规则）：`lucy_query` 的 `duration_ms >= 5000`，或问询墙钟 `>= 120000`。成功且 `response_row_count = 0` 记 `result_empty=1`。`notifications/cancelled` 在 session 能对上问询时写入该 turn id。
+慢调用的新定义（P2，替换使用信号里把约 1 秒以上都标慢的规则）：`lucy_query` 的 `duration_ms >= 5000`，或问询墙钟 `>= 120000`。成功且 `response_row_count = 0` 记 `result_empty=1`。`notifications/cancelled` 在 session 能对上问询时写入该 turn id。`wiki_read`、`discover_data` 等其它工具的单次耗时不按这个定义标慢。问询钻取里高于窗口 p95 的 `isSlowCall`，以及 Spec 143 调用监测的默认 30 秒阈值，不在这个定义里替换。
 
 发布门禁（P2）：语义 YAML 的既有 TS/Python 契约失败则拒绝发布。豁免写审计：操作者、原因、到期时间。豁免到期后检查恢复。物理名映射和 join 白名单不由这条门禁自动生成。
 
@@ -332,12 +333,14 @@ function compileMeasure(measure, source):
 | SC-13 | P1 | 认证路径的结果含 `routeId` 与 source。角色看不见该 source 时走权限拒绝 |
 | SC-14 | P1 | `discover_data`、`lucy_query`、`lucy_read_source` 的拒绝载荷使用 7.3 的同一名单函数 |
 | SC-15 | P1 | `count(*)` 无 source 时修复提示指向 `row_count(source)`。`sum(已聚合度量)` 不生成 `sum(sum())` |
-| SC-16 | P1 | 默认使用 KPI 不含协议工具。原始行仍在 |
+| SC-16 | P1 | 默认使用 KPI 不含协议工具。参数或连接名含 `probe-`、`rds-test`、`demo-mysql` 且 `eval_mark` 为真的调用在默认视图分开；只命中名称、`eval_mark` 未标记的调用仍在默认视图。不凭 User-Agent 或 `token_label` 推断。原始行仍在 |
 | SC-17 | P1 | 抽样：`COUNT(*)` 的 `upstream_error`、`wiki_not_found`、`explicit_table_required:<empty>` 归用法与语义；`AS field` 归过滤条件下推；超时归引擎超时与并发；`table_forbidden`、`wiki_forbidden`、`explicit_table_required:<table>` 归权限拒绝 |
 | SC-18 | P1 | 导出第二页能取到第 10,001 行。空 `policy_version` 计为缺失。缺快照时 completeness 为 false |
 | SC-19 | P1 | 仅存在模板 `public_cloud_pnl_quarterly`。结果带 source 与版本。仓库内没有客户口径 YAML |
-| SC-20 | P2 | 新慢调用定义不把 1.6 秒的成功查询标成慢。零行成功的 `result_empty=1`。取消在有 session 时挂上 turn |
-| SC-21 | P2 | 同一时间筛选能看见 `token_expired` 与普通调用，类型字段不同 |
+| SC-25 | P1 | `data-qa-instructions.md` 写明：问询原文含指代或两个意图时，模型先复述账户、月份和产品线，确认前不发 `lucy_query`；没有原文的推断问询跳过复述。请求不带确认字段时，代理仍转发 `lucy_query` |
+| SC-26 | P1 | 使用统计按 `matched_role_id` 并排给出权限拒绝次数。同一次拒绝不按 `role_ids` 里的每个角色各计一次。`matched_role_id` 为空时单独成行。不要求客户 `access.yaml` 入库 |
+| SC-20 | P2 | 新慢调用定义不把 1.6 秒的成功查询标成慢。`wiki_read` 或 `discover_data` 单次超过 5 秒也不按本定义标慢。零行成功的 `result_empty=1`。取消在有 session 时挂上 turn |
+| SC-21 | P2 | `GET /api/admin/audit` 的同一时间筛选能看见 `token_expired` 与普通调用，类型字段不同。鉴权失败不写成 `lucy_query` |
 | SC-22 | P2 | User-Agent `kscc-code/1.3.7 (cli)` 在 `client` 为空时解析出客户端与版本。无转发头时 `client_forwarded_for` 为空，`client_ip` 仍为对端 |
 | SC-23 | P2 | 歧义列的修复提示是 ACL 内的限定名。不生成自动 join。本条测试不依赖 SC-24 的门禁 |
 | SC-24 | P2 | `columns.0.type` 契约失败拒绝发布。豁免行含操作者、原因、到期时间；到期后发布再次失败 |

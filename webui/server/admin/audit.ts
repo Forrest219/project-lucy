@@ -122,6 +122,55 @@ function auditExportMaxBytes(): number {
   return Number.isFinite(configured) && configured > 0 ? Math.floor(configured) : 64 * 1024 * 1024;
 }
 
+/**
+ * Spec 162 §8 / SC-18 — cursor paging for the call export.
+ *
+ * A row past the page size is never silently dropped: the page carries a
+ * `nextCursor` that resumes strictly after the last row of this page, so the
+ * second page can reach row 10,001. The cursor encodes the (ts, id) key of
+ * the final row; ordering stays `ts DESC, id DESC`.
+ */
+export type AuditExportCursor = { ts: string; id: number };
+
+const CURSOR_SEPARATOR = "::";
+
+export function encodeAuditExportCursor(cursor: AuditExportCursor): string {
+  return Buffer.from(`${cursor.ts}${CURSOR_SEPARATOR}${cursor.id}`, "utf8").toString("base64url");
+}
+
+export function decodeAuditExportCursor(raw: string | undefined): AuditExportCursor | null {
+  if (!raw || !raw.trim()) return null;
+  try {
+    const decoded = Buffer.from(raw, "base64url").toString("utf8");
+    // The separator is two characters; the id starts after both.
+    const separator = decoded.lastIndexOf(CURSOR_SEPARATOR);
+    if (separator <= 0) return null;
+    const ts = decoded.slice(0, separator);
+    const id = Number(decoded.slice(separator + CURSOR_SEPARATOR.length));
+    if (!ts || !Number.isInteger(id)) return null;
+    return { ts, id };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Applies a resume cursor to an existing WHERE clause. Ordering is
+ * `ts DESC, id DESC`, so "strictly after" is `(ts < ?) OR (ts = ? AND id < ?)`.
+ */
+export function applyAuditExportCursor(
+  conditions: string[],
+  params: Record<string, string | null>,
+  cursor: AuditExportCursor | null,
+): { conditions: string[]; params: Record<string, string | number | null> } {
+  if (!cursor) return { conditions, params };
+  const next: Record<string, string | number | null> = { ...params, cursorTs: cursor.ts, cursorId: cursor.id };
+  return {
+    conditions: [...conditions, "(ts < @cursorTs OR (ts = @cursorTs AND id < @cursorId))"],
+    params: next
+  };
+}
+
 function chunksOf<T>(items: T[], size = 400): T[][] {
   const chunks: T[][] = [];
   for (let index = 0; index < items.length; index += size) chunks.push(items.slice(index, index + size));
@@ -2189,44 +2238,61 @@ export function registerAuditRoutes(app: FastifyInstance) {
     return reply.send(body);
   });
 
-  // GET /api/admin/audit/export — 调用流水 CSV (Spec 137 / 141)
+  // GET /api/admin/audit/export — 调用流水 CSV (Spec 137 / 141 / 162 §8)
   app.get<{
-    Querystring: AccessLogFilterQuery & { bom?: string };
+    Querystring: AccessLogFilterQuery & { bom?: string; cursor?: string; limit?: string };
   }>("/api/admin/audit/export", async (request, reply) => {
     const q = request.query;
     const database = await getAuditDb();
     const { conditions, params } = buildAccessLogFilter(q);
 
-    const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-    const rows = attachInferredTurnIds(
-      database,
-      database.prepare(`SELECT * FROM access_log ${where} ORDER BY ts DESC`).all(params) as QueryRow[]
-    );
+    // SC-18 — page size defaults to 10,000; `cursor` resumes after the last
+    // row of the previous page so the second page can read row 10,001.
+    const pageSize = Math.min(Math.max(parseInt(q.limit ?? "", 10) || auditExportMaxRows(), 1), auditExportMaxRows());
+    const resumed = applyAuditExportCursor(conditions, params, decodeAuditExportCursor(q.cursor));
+    const where = resumed.conditions.length > 0 ? `WHERE ${resumed.conditions.join(" AND ")}` : "";
+    // Fetch one extra row to learn whether a next page exists without
+    // dropping the overflow.
+    const fetched = database
+      .prepare(`SELECT * FROM access_log ${where} ORDER BY ts DESC, id DESC LIMIT @pageSizePlusOne`)
+      .all({ ...resumed.params, pageSizePlusOne: pageSize + 1 }) as QueryRow[];
+    const hasMore = fetched.length > pageSize;
+    const rows = attachInferredTurnIds(database, hasMore ? fetched.slice(0, pageSize) : fetched);
+    const last = fetched[pageSize - 1] ?? fetched[fetched.length - 1];
+    const nextCursor = hasMore && last
+      ? encodeAuditExportCursor({ ts: last.ts, id: last.id })
+      : undefined;
 
     const body = renderAccessLogCsv(rows);
     const withBom = q.bom === "1" || q.bom === "true" ? `\uFEFF${body}` : body;
     reply.header("Content-Type", "text/csv; charset=utf-8");
     reply.header("Content-Disposition", `attachment; filename="${auditExportFilename("calls", "csv")}"`);
     reply.header("Cache-Control", "private, no-store");
+    // The resume cursor rides in headers so a plain CSV download can be paged
+    // without switching client.
+    reply.header("X-Lucy-Export-Row-Count", String(rows.length));
+    if (nextCursor) reply.header("X-Lucy-Export-Next-Cursor", nextCursor);
     return reply.send(withBom);
   });
 
-  // GET /api/admin/audit/export-pack — 审计证据包 zip (Spec 137)
+  // GET /api/admin/audit/export-pack — 审计证据包 zip (Spec 137 / 162 §8)
   app.get<{
-    Querystring: AccessLogFilterQuery;
+    Querystring: AccessLogFilterQuery & { cursor?: string };
   }>("/api/admin/audit/export-pack", async (request, reply) => {
     const q = request.query;
     const database = await getAuditDb();
     const { conditions, params, includeProtocol } = buildAccessLogFilter(q);
-    const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
     const maxRows = auditExportMaxRows();
-    const rows = attachInferredTurnIds(
-      database,
-      database
-        .prepare(`SELECT * FROM access_log ${where} ORDER BY ts DESC LIMIT @exportLimit`)
-        .all({ ...params, exportLimit: maxRows + 1 }) as QueryRow[]
-    );
-    if (rows.length > maxRows) {
+    // SC-18 — the pack pages by cursor too. Without one, an overflowing scope
+    // is reported instead of being silently truncated.
+    const resumed = applyAuditExportCursor(conditions, params, decodeAuditExportCursor(q.cursor));
+    const where = resumed.conditions.length > 0 ? `WHERE ${resumed.conditions.join(" AND ")}` : "";
+    const fetched = database
+      .prepare(`SELECT * FROM access_log ${where} ORDER BY ts DESC, id DESC LIMIT @exportLimit`)
+      .all({ ...resumed.params, exportLimit: maxRows + 1 }) as QueryRow[];
+    const hasMore = fetched.length > maxRows;
+    const rows = attachInferredTurnIds(database, hasMore ? fetched.slice(0, maxRows) : fetched);
+    if (hasMore && !decodeAuditExportCursor(q.cursor)) {
       reply.code(413);
       reply.header("Cache-Control", "private, no-store");
       return {
@@ -2237,6 +2303,10 @@ export function registerAuditRoutes(app: FastifyInstance) {
         }
       };
     }
+    const lastExported = rows[rows.length - 1];
+    const nextCursor = hasMore && lastExported
+      ? encodeAuditExportCursor({ ts: lastExported.ts, id: lastExported.id })
+      : undefined;
 
     const accessCsv = `\uFEFF${renderAccessLogCsv(rows)}`;
     const accessBuf = Buffer.from(accessCsv, "utf8");
@@ -2373,6 +2443,8 @@ export function registerAuditRoutes(app: FastifyInstance) {
     const foundSnapshotHashes = new Set(snapRows.map((row) => String(row.hash)));
     const missingPermissionSnapshotHashes = hashes.filter((hash) => !foundSnapshotHashes.has(hash));
     const rowsWithoutPermissionSnapshot = rows.filter((row) => !row.permission_snapshot_hash).length;
+    // SC-18 — an empty `policy_version` counts as missing, not as a version.
+    const rowsWithoutPolicyVersion = rows.filter((row) => !row.policy_version || !row.policy_version.trim()).length;
 
     const filesMeta = [
       { name: "access_log.csv", rowCount: rows.length, data: accessBuf, filterScope: "normalized_access_log_filter" },
@@ -2402,8 +2474,13 @@ export function registerAuditRoutes(app: FastifyInstance) {
       filter: filterSnapshotForManifest(q, includeProtocol),
       includeProtocol,
       limits: { maxRows, maxBytes, exportedUncompressedBytes: totalUncompressedBytes },
+      paging: { nextCursor: nextCursor ?? null, pageSize: maxRows },
       completeness: {
         rowsWithoutPermissionSnapshot,
+        // SC-18 — an empty policy_version is reported as missing evidence, but
+        // it does not by itself make the pack incomplete: only a missing
+        // permission snapshot does.
+        rowsWithoutPolicyVersion,
         missingPermissionSnapshotHashes,
         missingSourceAccessLogIds,
         complete:
@@ -2427,6 +2504,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
     reply.header("Content-Type", "application/zip");
     reply.header("Content-Disposition", `attachment; filename="${packFilenameStamp()}"`);
     reply.header("Cache-Control", "private, no-store");
+    if (nextCursor) reply.header("X-Lucy-Export-Next-Cursor", nextCursor);
     return reply.send(zip);
   });
 

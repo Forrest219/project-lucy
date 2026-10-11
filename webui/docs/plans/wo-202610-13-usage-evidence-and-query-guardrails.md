@@ -4,8 +4,8 @@
 |---|---|
 | 工单号 | 202610-13 |
 | 标题 | P1：截断标记、Wiki、认证路径、内建度量、拒绝名单、失败维度、单模板试点 |
-| 状态 | 依赖 WO-202610-12 的修复提示、失败分类和版本元数据。以 Spec 162 v0.2 的 SC-10 至 SC-19 为验收 |
-| 来源 Spec | `webui/docs/162-customer-query-experience-and-usage-evidence-spec.md` v0.2 |
+| 状态 | 已实现并通过 SC-10 至 SC-19、SC-25、SC-26 的自动化断言。以 Spec 162 v0.3 为验收 |
+| 来源 Spec | `webui/docs/162-customer-query-experience-and-usage-evidence-spec.md` v0.3 |
 | 来源计划 | `docs/plans/2026-10-11-customer-log-next-optimizations.md` v1.1 |
 | 撰写日期 | 2026-10-11 |
 | 适用范围 | Proxy 的 `lucy_query` / Wiki / 拒绝载荷、访问日志导出、使用分析默认视图。客户 YAML、Wiki 正文和角色清单不提交 |
@@ -16,25 +16,25 @@
 
 ## 任务
 
-- [ ] **T1 截断标记。** `lucy_query` 成功时写 `response_truncated` 为 0 或 1。打到行上限时为 1，并附「改为聚合」的修复提示（SC-10）。不改 `lucy_freshness` 与 `lucy_explain_query` 已有的 0。
+- [x] **T1 截断标记。** `lucy_query` 成功时写 `response_truncated` 为 0 或 1。打到行上限时为 1，并附「改为聚合」的修复提示（SC-10）。不改 `lucy_freshness` 与 `lucy_explain_query` 已有的 0。
 
-- [ ] **T2 Wiki。** `wiki_search` 在 `q` 为非空字符串时返回命中或空列表，不得返回 `unparseable_text`（SC-11）。问数前注入的篇目必须属于该角色可读集合，审计含篇目 id 与 Wiki 版本（SC-12）。
+- [x] **T2 Wiki。** `wiki_search` 在 `q` 为非空字符串时返回命中或空列表，不得返回 `unparseable_text`（SC-11）。问数前注入的篇目必须属于该角色可读集合，审计含篇目 id 与 Wiki 版本（SC-12）。
 
-- [ ] **T3 认证路径机制。** 按 Spec 162 §7.8。执行仍是带角色的 `lucy_query`。结果含 `routeId` 与 source。角色看不见该 source 时走权限拒绝（SC-13）。仓库不存放客户路径清单。demo 用一条假路径做测试。
+- [x] **T3 认证路径机制。** 按 Spec 162 §7.8。执行仍是带角色的 `lucy_query`。结果含 `routeId` 与 source。角色看不见该 source 时走权限拒绝（SC-13）。仓库不存放客户路径清单。demo 用一条假路径做测试。
 
-- [ ] **T4 内建度量。** 无 source 的 `count(*)` / `count(1)` 返回指向 `row_count(source)` 的修复提示。对已聚合度量再包 `sum` 时不生成 `sum(sum())`（SC-15）。完整度度量没有声明分母则拒绝编译。
+- [x] **T4 内建度量。** 无 source 的 `count(*)` / `count(1)` 返回指向 `row_count(source)` 的修复提示。对已聚合度量再包 `sum` 时不生成 `sum(sum())`（SC-15）。完整度度量没有声明分母则拒绝编译。
 
-- [ ] **T5 拒绝名单。** `discover_data`、`entity_details`、`dictionary_search`、`lucy_query`、`lucy_read_source` 的权限拒绝使用 §7.3 的同一名单函数（SC-14）。覆盖契约违规、物理名不存在和禁表。
+- [x] **T5 拒绝名单。** `discover_data`、`entity_details`、`dictionary_search`、`lucy_query`、`lucy_read_source` 的权限拒绝使用 §7.3 的同一名单函数（SC-14）。覆盖契约违规、物理名不存在和禁表。
 
-- [ ] **T6 使用分析默认视图。** 协议工具不进入默认 KPI，原始行保留（SC-16）。探测连接名 `probe-`、`rds-test`、`demo-mysql` 在默认视图中分开。不凭 User-Agent 把调用标成自动化。
+- [x] **T6 使用分析默认视图。** 协议工具不进入默认 KPI，原始行保留（SC-16）。探测调用要同时满足两点才分开：参数或连接名含 `probe-`、`rds-test`、`demo-mysql`，且 Token 的 `eval_mark` 为真。只命中名称、`eval_mark` 未标记的调用留在默认视图。`eval_mark` 是 Token 上的可选显式字段，缺省为未标记，与 `actor_kind` 分开。不凭 User-Agent 或 `token_label` 把调用标成评测或自动化。
 
-- [ ] **T7 失败维度与导出。** 按 Spec 162 v0.2 §7.3 写入 `failure_dimension`。`wiki_not_found` 与 `explicit_table_required:<empty>` 归用法与语义，不得进入权限拒绝。`wiki_forbidden` 与 `explicit_table_required:<table>` 归权限拒绝。验收抽样锁定（SC-17）：`COUNT(*)` 的 `upstream_error`、`wiki_not_found`、`explicit_table_required:<empty>`、`AS field`、超时、`table_forbidden`、`wiki_forbidden`。`budget_stop` 不进入任一维度。导出游标分页，第二页能读到第 10,001 行。空 `policy_version` 计为缺失。缺权限快照时 completeness 为 false（SC-18）。
+- [x] **T7 失败维度与导出。** 按 Spec 162 v0.3 §7.3 写入 `failure_dimension`。`wiki_not_found` 与 `explicit_table_required:<empty>` 归用法与语义，不得进入权限拒绝。`wiki_forbidden` 与 `explicit_table_required:<table>` 归权限拒绝。验收抽样锁定（SC-17）：`COUNT(*)` 的 `upstream_error`、`wiki_not_found`、`explicit_table_required:<empty>`、`AS field`、超时、`table_forbidden`、`wiki_forbidden`。`budget_stop` 不进入任一维度。导出游标分页，第二页能读到第 10,001 行。空 `policy_version` 计为缺失。缺权限快照时 completeness 为 false（SC-18）。
 
-- [ ] **T8 复述范围。** 载体是 `webui/config/data-qa-instructions.md`，经 Spec 07 §4.4 的 `initialize` 注入，失败 fail-open。在该文件写明：问询含指代或两个意图时，先复述账户、月份和产品线，用户确认前模型不发 `lucy_query`。代理不实现确认门闩，不因缺少确认字段拒绝查询（SC-1）。本任务不改代理转发路径。依赖 WO-12 已把同一文件里的 8 分钟时限改成代理预算。
+- [x] **T8 复述范围（SC-25）。** 载体是 `webui/config/data-qa-instructions.md`，经 Spec 07 §4.4 的 `initialize` 注入，失败 fail-open。在该文件写明：问询原文含指代或两个意图时，先复述账户、月份和产品线，用户确认前模型不发 `lucy_query`；没有原文的推断问询跳过复述。代理不实现确认门闩，不因缺少确认字段拒绝查询（SC-1）。本任务不改代理转发路径。依赖 WO-12 已把同一文件里的 8 分钟时限改成代理预算。
 
-- [ ] **T9 单模板试点钩子。** 只注册 `public_cloud_pnl_quarterly`。结果带 source 与采用的版本（SC-19）。仓库内不出现客户口径 YAML。没有前后对比记录之前，代码拒绝注册第二个模板 id。
+- [x] **T9 单模板试点钩子。** 只注册 `public_cloud_pnl_quarterly`。结果带 source 与采用的版本（SC-19）。仓库内不出现客户口径 YAML。没有前后对比记录之前，代码拒绝注册第二个模板 id。
 
-- [ ] **T10 双轨角色的审计对比。** 使用统计在 WO-202610-12 的使用人字段之上，能按角色并排看权限拒绝次数。不在本仓库改客户的 `access.yaml`。
+- [x] **T10 双轨角色的审计对比（SC-26）。** 落点是 `readR1AuditObservability`（`webui/server/proxy/audit.ts`）已有的 `usage.roles`。现有实现按 `role_ids` 里的每个角色各加一次拒绝，双轨对比会被放大。改为按 `matched_role_id` 计一次；`matched_role_id` 为空时该次拒绝单独成行，不摊到 `role_ids`。使用人分组仍用 WO-202610-12 的 `usageGroup`。不在本仓库改客户的 `access.yaml`。
 
 ## 客户现场（不提交）
 
@@ -54,14 +54,14 @@
 
 ## 验收口径
 
-SC-10 至 SC-19。SC-17 的四条归类必须是自动化断言，不能只靠手工看日志。
+SC-10 至 SC-19，以及 SC-25、SC-26。SC-17 的抽样归类必须是自动化断言，不能只靠手工看日志。SC-25 只断言指导文本和「无确认字段仍转发」，不新增代理确认门闩。
 
 ## 验证命令
 
 ```bash
 cd webui
 npm run lint:terminology
-npm test -- --run server/__tests__/query-truncation.test.ts server/__tests__/wiki-natural-language-search.test.ts server/__tests__/certified-route.test.ts server/__tests__/builtin-measures.test.ts server/__tests__/denial-repair-hint.test.ts server/__tests__/failure-dimension.test.ts server/__tests__/audit-export-paging.test.ts
+npm test -- --run server/__tests__/query-truncation.test.ts server/__tests__/wiki-natural-language-search.test.ts server/__tests__/certified-route.test.ts server/__tests__/builtin-measures.test.ts server/__tests__/denial-repair-hint.test.ts server/__tests__/usage-default-view.test.ts server/__tests__/failure-dimension.test.ts server/__tests__/audit-export-paging.test.ts server/__tests__/scope-restatement-instructions.test.ts server/__tests__/role-denial-comparison.test.ts server/__tests__/report-template-pilot.test.ts
 ```
 
 ## 风险与边界

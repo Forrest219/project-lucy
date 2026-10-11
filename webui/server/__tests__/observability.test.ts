@@ -77,6 +77,8 @@ describe("GET /api/observability", () => {
       durationMs: 50_000,
       requestId: "query-denied",
       roleIds: ["analytics_readonly"],
+      // SC-26: a denial is counted once against the role that matched.
+      matchedRoleId: "analytics_readonly",
       decisionReason: "password=hunter2 token=abc123 secret=should-not-leak",
       queryOperation: "select",
       queryPreview: "select * from mart.private_snapshot where password=hunter2 and token=abc123"

@@ -1,4 +1,4 @@
-import { readFile, readdir } from "node:fs/promises";
+import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { parse } from "yaml";
 import { resolveProjectRoot } from "../project.js";
@@ -15,7 +15,19 @@ export interface WikiPage {
     visibility?: string;
     slRefs: string[];
     allowedRoles: string[];
+    /** Frontmatter `version`, when the page declares one. */
+    version?: string;
   };
+}
+
+/**
+ * Spec 162 §7.7 / SC-12 — Wiki version for audit. Falls back to the page's
+ * mtime when the frontmatter declares no version, so an injected article is
+ * always traceable to a concrete revision.
+ */
+export interface WikiInjectionRef {
+  key: string;
+  version: string;
 }
 
 export interface WikiAclDecision {
@@ -73,6 +85,7 @@ export async function resolveWikiPage(input: string): Promise<WikiPage | undefin
   try {
     const content = await readFile(filePath, "utf-8");
     const { data, body } = parseFrontmatter(content);
+    const stat = await statSafe(filePath);
     return {
       key,
       filePath,
@@ -81,12 +94,35 @@ export async function resolveWikiPage(input: string): Promise<WikiPage | undefin
       metadata: {
         visibility: typeof data.visibility === "string" ? data.visibility.trim().toLowerCase() : undefined,
         slRefs: asStringList(data.sl_refs),
-        allowedRoles: asStringList(data.allowed_roles)
+        allowedRoles: asStringList(data.allowed_roles),
+        version: typeof data.version === "string" && data.version.trim()
+          ? data.version.trim()
+          : stat?.mtime.toISOString()
       }
     };
   } catch {
     return undefined;
   }
+}
+
+async function statSafe(filePath: string): Promise<{ mtime: Date } | undefined> {
+  try {
+    return await stat(filePath);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Spec 162 §7.7 / SC-12 — audit refs for articles injected into an answer.
+ * Every entry has already passed the role check in
+ * `searchAccessibleWikiPages` / `canAccessWikiPage`.
+ */
+export function wikiInjectionRefs(pages: Array<Pick<WikiPage, "key" | "metadata">>): WikiInjectionRef[] {
+  return pages.map((page) => ({
+    key: page.key,
+    version: page.metadata.version ?? "unknown"
+  }));
 }
 
 function sourceMatchesRef(source: EffectiveSource, rawRef: string): boolean {
@@ -161,6 +197,8 @@ export async function searchAccessibleWikiPages(identity: Identity, query: strin
   key: string;
   title?: string;
   snippet: string;
+  /** Wiki version of the matched article, for audit (SC-12). */
+  version?: string;
 }>> {
   const normalizedQuery = query.trim().toLowerCase();
   if (!normalizedQuery) return [];
@@ -174,7 +212,7 @@ export async function searchAccessibleWikiPages(identity: Identity, query: strin
     return [];
   }
 
-  const matches: Array<{ key: string; title?: string; snippet: string; score: number }> = [];
+  const matches: Array<{ key: string; title?: string; snippet: string; version?: string; score: number }> = [];
   for (const key of keys) {
     const page = await resolveWikiPage(key);
     if (!page) continue;
@@ -193,6 +231,7 @@ export async function searchAccessibleWikiPages(identity: Identity, query: strin
       key: page.key,
       title: page.title,
       snippet,
+      version: page.metadata.version,
       score: matchedTerms.length + (page.title?.toLowerCase().includes(normalizedQuery) ? 2 : 0)
     });
   }
@@ -200,5 +239,5 @@ export async function searchAccessibleWikiPages(identity: Identity, query: strin
   return matches
     .sort((a, b) => b.score - a.score || a.key.localeCompare(b.key))
     .slice(0, limit)
-    .map(({ key, title, snippet }) => ({ key, title, snippet }));
+    .map(({ key, title, snippet, version }) => ({ key, title, snippet, version }));
 }

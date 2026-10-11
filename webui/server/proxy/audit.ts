@@ -7,7 +7,10 @@ import { prepareTraceDatabase } from "../trace/evidence.js";
 import { resolveSourceRefsForTables } from "./acl.js";
 import { scrubArgsSummaryJson } from "./audit-privacy.js";
 import { MCP_PROTOCOL_METHODS as PROTOCOL_TOOLS } from "./mcp-request-classification.js";
-import { usageGroup, type UsageGroup } from "./question-experience.js";
+import { defaultUsageExcluded, usageGroup, type UsageGroup } from "./question-experience.js";
+
+/** SC-26 — a denial with no matched role is its own row, never spread over role_ids. */
+const UNMATCHED_ROLE_ID = "__unmatched_role__";
 
 export interface AccessLogEntry {
   ts: string;
@@ -43,6 +46,11 @@ export interface AccessLogEntry {
   appliedValueKind?: string;
   actorId?: string;
   actorKind?: "person" | "automation";
+  /** Spec 162 §7.7 / SC-12 — injected wiki articles: key + wiki version. */
+  wikiInjectedKeys?: string[];
+  wikiVersions?: string[];
+  /** Spec 162 §7.6 — Token's explicit `eval_mark`, mirrored onto the call row. */
+  evalMark?: boolean;
   durationMs: number;
   requestId: string | number;
   traceId?: string;
@@ -142,7 +150,10 @@ const ACCESS_LOG_COLUMNS = [
   ["applied_business_date", "TEXT"],
   ["applied_value_kind", "TEXT"],
   ["actor_id", "TEXT"],
-  ["actor_kind", "TEXT"]
+  ["actor_kind", "TEXT"],
+  ["wiki_injected_keys", "TEXT"],
+  ["wiki_versions", "TEXT"],
+  ["eval_mark", "INTEGER"]
 ] as const;
 const PERMISSION_SNAPSHOT_COLUMNS = [
   ["capability_digest", "TEXT"],
@@ -371,9 +382,9 @@ export async function writeLog(entry: AccessLogEntry): Promise<number> {
   if (!insertStmt) {
     insertStmt = database.prepare(`
       INSERT INTO access_log
-        (ts, user_id, token_label, token_hash_prefix, lucy_session_id, lucy_turn_id, turn_attribution_mode, turn_attribution_confidence, turn_attribution_reason, lucy_platform, client, client_version, client_ip, user_agent, device_name, tool, tables, args_summary, query_hash, query_length, query_operation, query_preview, query_artifact_ref, generated_sql, outcome, error_detail, duration_ms, response_bytes, response_row_count, response_column_count, response_truncated, request_id, trace_id, role_ids, permission_snapshot_hash, effective_tables_count, decision_reason, policy_version, capability_digest, skill_uri, skill_version, skill_file_version, skill_action, skill_roles_allowed, matched_role_id, compiler_reason, failure_dimension, applied_version, applied_business_date, applied_value_kind, actor_id, actor_kind)
+        (ts, user_id, token_label, token_hash_prefix, lucy_session_id, lucy_turn_id, turn_attribution_mode, turn_attribution_confidence, turn_attribution_reason, lucy_platform, client, client_version, client_ip, user_agent, device_name, tool, tables, args_summary, query_hash, query_length, query_operation, query_preview, query_artifact_ref, generated_sql, outcome, error_detail, duration_ms, response_bytes, response_row_count, response_column_count, response_truncated, request_id, trace_id, role_ids, permission_snapshot_hash, effective_tables_count, decision_reason, policy_version, capability_digest, skill_uri, skill_version, skill_file_version, skill_action, skill_roles_allowed, matched_role_id, compiler_reason, failure_dimension, applied_version, applied_business_date, applied_value_kind, actor_id, actor_kind, wiki_injected_keys, wiki_versions, eval_mark)
       VALUES
-        (@ts, @userId, @tokenLabel, @tokenHashPrefix, @lucySessionId, @lucyTurnId, @turnAttributionMode, @turnAttributionConfidence, @turnAttributionReason, @lucyPlatform, @client, @clientVersion, @clientIp, @userAgent, @deviceName, @tool, @tables, @argsSummary, @queryHash, @queryLength, @queryOperation, @queryPreview, @queryArtifactRef, @generatedSql, @outcome, @errorDetail, @durationMs, @responseBytes, @responseRowCount, @responseColumnCount, @responseTruncated, @requestId, @traceId, @roleIds, @permissionSnapshotHash, @effectiveTablesCount, @decisionReason, @policyVersion, @capabilityDigest, @skillUri, @skillVersion, @skillFileVersion, @skillAction, @skillRolesAllowed, @matchedRoleId, @compilerReason, @failureDimension, @appliedVersion, @appliedBusinessDate, @appliedValueKind, @actorId, @actorKind)
+        (@ts, @userId, @tokenLabel, @tokenHashPrefix, @lucySessionId, @lucyTurnId, @turnAttributionMode, @turnAttributionConfidence, @turnAttributionReason, @lucyPlatform, @client, @clientVersion, @clientIp, @userAgent, @deviceName, @tool, @tables, @argsSummary, @queryHash, @queryLength, @queryOperation, @queryPreview, @queryArtifactRef, @generatedSql, @outcome, @errorDetail, @durationMs, @responseBytes, @responseRowCount, @responseColumnCount, @responseTruncated, @requestId, @traceId, @roleIds, @permissionSnapshotHash, @effectiveTablesCount, @decisionReason, @policyVersion, @capabilityDigest, @skillUri, @skillVersion, @skillFileVersion, @skillAction, @skillRolesAllowed, @matchedRoleId, @compilerReason, @failureDimension, @appliedVersion, @appliedBusinessDate, @appliedValueKind, @actorId, @actorKind, @wikiInjectedKeys, @wikiVersions, @evalMark)
     `);
   }
   const result = insertStmt.run({
@@ -430,7 +441,10 @@ export async function writeLog(entry: AccessLogEntry): Promise<number> {
     appliedBusinessDate: entry.appliedBusinessDate ?? null,
     appliedValueKind: entry.appliedValueKind ?? null,
     actorId: entry.actorId ?? null,
-    actorKind: entry.actorKind ?? null
+    actorKind: entry.actorKind ?? null,
+    wikiInjectedKeys: entry.wikiInjectedKeys ? JSON.stringify(entry.wikiInjectedKeys) : null,
+    wikiVersions: entry.wikiVersions ? JSON.stringify(entry.wikiVersions) : null,
+    evalMark: entry.evalMark === true ? 1 : 0
   });
   return Number(result.lastInsertRowid);
 }
@@ -590,6 +604,8 @@ export interface R1AuditObservability {
     roles: Array<{ roleId: string; calls: number; denied: number }>;
     tokens: Array<{ tokenLabel: string; tokenHashPrefix?: string; calls: number; denied: number }>;
     actors: Array<{ group: UsageGroup; calls: number }>;
+    /** SC-16 — calls split out of the default view (eval-marked probes). */
+    defaultViewExcluded: number;
   };
 }
 
@@ -624,6 +640,18 @@ function parseJsonArray(value: string | null): string[] {
   }
 }
 
+function parseJsonObject(value: string | null): Record<string, unknown> | null {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function readR1AuditObservability(options: { hours?: number; slowMs?: number } = {}): Promise<R1AuditObservability> {
   const hours = Math.min(Math.max(Math.floor(options.hours ?? 24), 1), 24 * 90);
   const slowMs = Math.max(Math.floor(options.slowMs ?? Number(process.env.LUCY_R1_SLOW_QUERY_MS ?? 30_000)), 1);
@@ -632,8 +660,8 @@ export async function readR1AuditObservability(options: { hours?: number; slowMs
 
   const rows = database.prepare(`
     SELECT ts, user_id, token_label, token_hash_prefix, tool, outcome, duration_ms, request_id,
-           role_ids, decision_reason, query_operation, query_preview, tables,
-           actor_id, actor_kind, client
+           role_ids, matched_role_id, decision_reason, query_operation, query_preview, tables,
+           actor_id, actor_kind, client, args_summary, eval_mark
     FROM access_log
     WHERE ts >= ?
     ORDER BY ts DESC, id DESC
@@ -647,6 +675,7 @@ export async function readR1AuditObservability(options: { hours?: number; slowMs
     duration_ms: number;
     request_id: string;
     role_ids: string | null;
+    matched_role_id: string | null;
     decision_reason: string | null;
     query_operation: string | null;
     query_preview: string | null;
@@ -654,14 +683,29 @@ export async function readR1AuditObservability(options: { hours?: number; slowMs
     actor_id: string | null;
     actor_kind: string | null;
     client: string | null;
+    args_summary: string | null;
+    eval_mark: number | null;
   }>;
 
   const protocolTools = new Set<string>(PROTOCOL_TOOLS);
   const businessRows = rows.filter((row) => !protocolTools.has(row.tool));
-  const okCalls = businessRows.filter((row) => row.outcome === "ok").length;
-  const errorCalls = businessRows.filter((row) => row.outcome === "error").length;
-  const deniedCalls = businessRows.filter((row) => row.outcome === "denied").length;
-  const durations = businessRows.map((row) => row.duration_ms).filter((value) => Number.isFinite(value));
+  // Spec 162 §7.6 / SC-16 — the default view drops protocol traffic and probe
+  // calls that are BOTH name-matched and explicitly eval-marked. Raw rows stay
+  // in access_log; only this default view is split.
+  const defaultRows = businessRows.filter((row) => !defaultUsageExcluded({
+    tool: row.tool,
+    evalMark: row.eval_mark === 1,
+    args: parseJsonObject(row.args_summary)
+  }));
+  const evalProbeRows = businessRows.filter((row) => defaultUsageExcluded({
+    tool: row.tool,
+    evalMark: row.eval_mark === 1,
+    args: parseJsonObject(row.args_summary)
+  }) && !protocolTools.has(row.tool));
+  const okCalls = defaultRows.filter((row) => row.outcome === "ok").length;
+  const errorCalls = defaultRows.filter((row) => row.outcome === "error").length;
+  const deniedCalls = defaultRows.filter((row) => row.outcome === "denied").length;
+  const durations = defaultRows.map((row) => row.duration_ms).filter((value) => Number.isFinite(value));
 
   const denials = new Map<string, number>();
   const tools = new Map<string, { tool: string; calls: number; denied: number; errors: number }>();
@@ -669,7 +713,7 @@ export async function readR1AuditObservability(options: { hours?: number; slowMs
   const tokens = new Map<string, { tokenLabel: string; tokenHashPrefix?: string; calls: number; denied: number }>();
   const actors = new Map<UsageGroup, number>();
 
-  for (const row of businessRows) {
+  for (const row of defaultRows) {
     if (row.outcome === "denied") {
       const reason = row.decision_reason ?? "unknown";
       denials.set(reason, (denials.get(reason) ?? 0) + 1);
@@ -681,11 +725,21 @@ export async function readR1AuditObservability(options: { hours?: number; slowMs
     if (row.outcome === "error") tool.errors += 1;
     tools.set(row.tool, tool);
 
-    for (const roleId of parseRoleIds(row.role_ids)) {
+    // Spec 162 / SC-26 — calls still aggregate per role in `role_ids`, but a
+    // denial is counted ONCE against `matched_role_id`. Counting it on every
+    // role in `role_ids` inflates the dual-track comparison.
+    const roleIds = parseRoleIds(row.role_ids);
+    for (const roleId of roleIds) {
       const role = roles.get(roleId) ?? { roleId, calls: 0, denied: 0 };
       role.calls += 1;
-      if (row.outcome === "denied") role.denied += 1;
       roles.set(roleId, role);
+    }
+    if (row.outcome === "denied") {
+      const matchedRoleId = (row.matched_role_id ?? "").trim();
+      const denialRoleId = matchedRoleId || UNMATCHED_ROLE_ID;
+      const denialRole = roles.get(denialRoleId) ?? { roleId: denialRoleId, calls: 0, denied: 0 };
+      denialRole.denied += 1;
+      roles.set(denialRoleId, denialRole);
     }
 
     const tokenLabel = row.token_label ?? "unknown";
@@ -704,7 +758,7 @@ export async function readR1AuditObservability(options: { hours?: number; slowMs
     actors.set(actorGroup, (actors.get(actorGroup) ?? 0) + 1);
   }
 
-  const slowQueries = businessRows
+  const slowQueries = defaultRows
     .filter((row) => row.duration_ms >= slowMs)
     .slice(0, 20)
     .map((row) => ({
@@ -749,9 +803,9 @@ export async function readR1AuditObservability(options: { hours?: number; slowMs
       okCalls,
       errorCalls,
       deniedCalls,
-      successRate: rate(okCalls, businessRows.length),
-      errorRate: rate(errorCalls, businessRows.length),
-      deniedRate: rate(deniedCalls, businessRows.length)
+      successRate: rate(okCalls, defaultRows.length),
+      errorRate: rate(errorCalls, defaultRows.length),
+      deniedRate: rate(deniedCalls, defaultRows.length)
     },
     latency: {
       p50Ms: percentile(durations, 0.5),
@@ -776,7 +830,9 @@ export async function readR1AuditObservability(options: { hours?: number; slowMs
       tools: [...tools.values()].sort((a, b) => b.calls - a.calls).slice(0, 30),
       roles: [...roles.values()].sort((a, b) => b.calls - a.calls).slice(0, 30),
       tokens: [...tokens.values()].sort((a, b) => b.calls - a.calls).slice(0, 30),
-      actors: [...actors.entries()].map(([group, calls]) => ({ group, calls })).sort((a, b) => b.calls - a.calls)
+      actors: [...actors.entries()].map(([group, calls]) => ({ group, calls })).sort((a, b) => b.calls - a.calls),
+      // SC-16 — split out of the default view, raw rows untouched.
+      defaultViewExcluded: evalProbeRows.length
     }
   };
 }

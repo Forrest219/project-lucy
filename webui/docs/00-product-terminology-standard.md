@@ -569,6 +569,7 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 | Filter Pushdown | 过滤条件下推 | — | 把 `STRUCT` / `AS field` 当作成功 SQL | 编译结果命中该形状时失败关闭；`filter_pushdown` 使用 `translate="no"` |
 | Actor | 使用人 | — | 把 token 备注当成使用人 | Token 上显式 `actor_id` + `actor_kind=person`；`token_label` 只是备注 |
 | Automation Call | 自动化调用 | — | 把未标记的 Python-urllib 算成自动化 | 仅 `actor_kind=automation` |
+| Eval Mark | 评测标记 | — | 把自动化调用、Token 备注或连接名当成评测 | Token 可选字段 `eval_mark`，缺省未标记；Spec 162。DOM 中的 `eval_mark` 使用 `translate="no"` |
 | Applied Version | 采用的版本 | — | 编造版本号 | 只有发布物声明了默认版本才写入结果 |
 | Turn span | 问询时长 | — | turn span | 开始至结束 wall-clock |
 | Slow call | 慢于多数请求 | 慢调用 | 慢查询 | 相对 P95 参照 |

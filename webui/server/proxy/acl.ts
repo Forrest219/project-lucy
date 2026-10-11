@@ -72,7 +72,10 @@ export const META_TOOLS = [
   "wiki_read",
   "lucy_begin_question",
   "lucy_skill_search",
-  "lucy_skill_read"
+  "lucy_skill_read",
+  // Spec 162 §7.8 — certified route / template run through lucy_query's ACL.
+  "lucy_certified_route",
+  "lucy_report_template"
 ] as const;
 
 const ABSOLUTE_DENY_TOOL_SET = new Set<string>(ABSOLUTE_DENY_TOOLS);
