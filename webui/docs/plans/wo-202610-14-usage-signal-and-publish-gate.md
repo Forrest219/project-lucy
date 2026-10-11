@@ -5,8 +5,8 @@
 | 工单号 | 202610-14 |
 | 标题 | P2：慢调用与零行、鉴权时间线、客户端来源、广告日表消歧、语义发布门禁 |
 | 状态 | 依赖 WO-202610-12 的问询对象和 WO-202610-13 的失败维度。内部顺序固定：SC-20 → SC-21 → SC-22 → SC-23 → SC-24 |
-| 来源 Spec | `webui/docs/162-customer-query-experience-and-usage-evidence-spec.md` v0.1 |
-| 来源计划 | `docs/plans/2026-10-11-customer-log-next-optimizations.md` v1.0 |
+| 来源 Spec | `webui/docs/162-customer-query-experience-and-usage-evidence-spec.md` v0.2 |
+| 来源计划 | `docs/plans/2026-10-11-customer-log-next-optimizations.md` v1.1 |
 | 撰写日期 | 2026-10-11 |
 | 适用范围 | 访问日志的慢调用与取消、鉴权失败查询、User-Agent 解析、语义发布校验。广告日表的别名和 join 白名单由客户发布，不入库 |
 

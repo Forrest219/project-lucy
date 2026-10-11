@@ -5,14 +5,14 @@
 | Spec | 162 |
 | 文档名称 | Customer Query Experience and Usage Evidence |
 | 文档类型 | Product / Proxy / Audit / Semantic Contract Spec |
-| 版本 | v0.1 |
-| 状态 | 立项。实现按三份工单分波次，客户语义 YAML 不入库 |
+| 版本 | v0.2 |
+| 状态 | WO-202610-12 已验收。v0.2 吸收启动评估的 4 项澄清。WO-13 / WO-14 仍待开工 |
 | 撰写日期 | 2026-10-11 |
 | 委托人 | xingchen |
-| 来源计划 | [`docs/plans/2026-10-11-customer-log-next-optimizations.md`](../../docs/plans/2026-10-11-customer-log-next-optimizations.md) v1.0 |
+| 来源计划 | [`docs/plans/2026-10-11-customer-log-next-optimizations.md`](../../docs/plans/2026-10-11-customer-log-next-optimizations.md) v1.1 |
 | 关联工单 | [`wo-202610-12`](plans/wo-202610-12-query-turn-budget-and-repair.md)、[`wo-202610-13`](plans/wo-202610-13-usage-evidence-and-query-guardrails.md)、[`wo-202610-14`](plans/wo-202610-14-usage-signal-and-publish-gate.md) |
 | 关联 Spec | 08 问询追踪、09 R1 工具契约、125 生成 SQL 热库、138 轮次归因、137 审计证据 |
-| 修订 | 不取代 Spec 138 的归因枚举。不改 Eval 跑批的 tool budget（`docs/design/design-eval-tool-budget.md`）。不改 KTX 源码 |
+| 修订 | 不取代 Spec 138 的归因枚举。不改 Eval 跑批的 tool budget（`docs/design/design-eval-tool-budget.md`）。不改 KTX 源码。v0.2：`wiki_not_found` 与 `explicit_table_required:<empty>` 归用法与语义；`wiki_forbidden` 与带表名的 `explicit_table_required` 归权限拒绝。复述只写进 initialize 指导，代理不因缺少确认而拒绝查数。生产环境的 turn 绑定率依赖客户端发版，不是 WO-12 的退出条件 |
 
 ## 1. 已拍板
 
@@ -134,7 +134,11 @@ function continuable(reason):
   }
 ```
 
-P0 不拆句。第 13 条在 P1：执行 `lucy_query` 之前，若问询文本含指代或两个问号级意图，响应先包含复述（账户、月份、产品线），用户确认后再查。未确认不发查询。
+模型侧指导的事实源是 `webui/config/data-qa-instructions.md`，由 Spec 07 §4.4 在 `initialize` 注入。注入失败 fail-open，不是权限边界。WO-12 的 T3 已把该文件改成与本节一致：同一问询最多 20 次数据工具或 120 秒，并写明可以继续一次。指导不得再宽于代理预算。
+
+P0 不拆句。复述范围在 P1，载体仍是这份指导，不新增代理拦截。见 §7.2 的下一段，任务在 WO-13 T8。
+
+问询文本含指代或两个意图时，指导要求模型先复述账户、月份和产品线。用户尚未确认时，由模型不发 `lucy_query`。代理不因请求里没有确认字段而拒绝查询，否则没有该字段的旧客户端会被切断，违反 SC-1。
 
 ### 7.3 失败分类与修复提示
 
@@ -144,7 +148,11 @@ P0 不拆句。第 13 条在 P1：执行 `lucy_query` 之前，若问询文本�
 function classify(result):
   text = result.errorDetail
   reason = result.decisionReason
-  if reason in ACL_REASONS:
+  if reason == "wiki_not_found" or reason == "explicit_table_required:<empty>":
+    return 用法与语义
+  if reason starts with "explicit_table_required:" and reason != "explicit_table_required:<empty>":
+    return 权限拒绝
+  if reason in ACL_REASONS or reason starts with "table_forbidden:" or reason starts with "unknown_or_forbidden_connection:" or reason starts with "tool_unclassified:":
     return 权限拒绝
   if reason in {timeout, query_concurrency_exceeded} or text contains Timeout:
     return 引擎超时与并发
@@ -155,14 +163,16 @@ function classify(result):
   return none
 
 ACL_REASONS = {
-  table_forbidden, sensitive_metadata_forbidden,
-  explicit_table_required, raw_query_forbidden,
-  unknown_or_forbidden_connection, agent_disabled,
-  wiki_not_found, tool_unclassified
+  sensitive_metadata_forbidden, wiki_forbidden,
+  raw_query_forbidden, agent_disabled
 }
 ```
 
-连接未配置（`Connection "…" is not configured`）归「用法与语义」，即使 `decision_reason` 是 `upstream_error`。只有 `unknown_or_forbidden_connection:*` 归「权限拒绝」。因此 `sql_server` 的 11 行未配置与 1 行拒绝分开计数。
+`wiki_not_found` 不在 ACL_REASONS 里。`webui/server/proxy/wiki-acl.ts` 只在篇目 key 解析不到页面时返回它；角色看得见但无权读的页面返回 `wiki_forbidden`。KSC 日志里 10 次 `wiki_not_found` 的 key 都是模型猜的文件名。它归「用法与语义」。
+
+`explicit_table_required:<empty>` 是请求里没有解析出任何 source（`acl.ts` 在 `requested.length === 0` 时返回）。日志里的 25 次与 21 次都是这个空值，归「用法与语义」。`explicit_table_required:<table>` 是点名的敏感表不在授权内，归「权限拒绝」。
+
+连接未配置（`Connection "…" is not configured`）归「用法与语义」，即使 `decision_reason` 是 `upstream_error`。只有 `unknown_or_forbidden_connection:*` 归「权限拒绝」。因此 `sql_server` 的 11 行未配置与 1 行拒绝分开计数。`tool_unclassified` 仍归「权限拒绝」：工具没有分类策略，不是用户猜错了名字。
 
 ```text
 function repairHint(result, role):
@@ -308,7 +318,7 @@ function compileMeasure(measure, source):
 | ID | 波次 | 断言 |
 |---|---|---|
 | SC-1 | P0 | 不调用 `lucy_begin_question` 的 `lucy_query` 在授权通过时成功 |
-| SC-2 | P0 | 同一 session 内，begin 之后的调用 `turn_attribution_mode=session_bound` 且置信度为 high |
+| SC-2 | P0 | 测试客户端送出 session 时，begin 之后的调用 `turn_attribution_mode=session_bound` 且置信度为 high。生产环境的 turn 绑定率不是本条的退出条件 |
 | SC-3 | P0 | begin 的 `intentSummary` 在问询导出里来源为用户原话；空 summary 返回 `missing_intent_summary` 且不阻断随后的查数 |
 | SC-4 | P0 | 第 21 次数据工具或墙钟超过 120 秒时返回 `question_budget_exhausted`，`outcome=budget_stop`，失败维度为空 |
 | SC-5 | P0 | 修复提示中的 source 全部属于该角色；夹入一个 ACL 外的名字时测试失败 |
@@ -323,7 +333,7 @@ function compileMeasure(measure, source):
 | SC-14 | P1 | `discover_data`、`lucy_query`、`lucy_read_source` 的拒绝载荷使用 7.3 的同一名单函数 |
 | SC-15 | P1 | `count(*)` 无 source 时修复提示指向 `row_count(source)`。`sum(已聚合度量)` 不生成 `sum(sum())` |
 | SC-16 | P1 | 默认使用 KPI 不含协议工具。原始行仍在 |
-| SC-17 | P1 | 抽样：`COUNT(*)` 的 `upstream_error` 归用法与语义；`AS field` 归过滤条件下推；超时归引擎超时与并发；`table_forbidden` 归权限拒绝 |
+| SC-17 | P1 | 抽样：`COUNT(*)` 的 `upstream_error`、`wiki_not_found`、`explicit_table_required:<empty>` 归用法与语义；`AS field` 归过滤条件下推；超时归引擎超时与并发；`table_forbidden`、`wiki_forbidden`、`explicit_table_required:<table>` 归权限拒绝 |
 | SC-18 | P1 | 导出第二页能取到第 10,001 行。空 `policy_version` 计为缺失。缺快照时 completeness 为 false |
 | SC-19 | P1 | 仅存在模板 `public_cloud_pnl_quarterly`。结果带 source 与版本。仓库内没有客户口径 YAML |
 | SC-20 | P2 | 新慢调用定义不把 1.6 秒的成功查询标成慢。零行成功的 `result_empty=1`。取消在有 session 时挂上 turn |

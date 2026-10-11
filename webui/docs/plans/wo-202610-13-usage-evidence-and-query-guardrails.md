@@ -4,9 +4,9 @@
 |---|---|
 | 工单号 | 202610-13 |
 | 标题 | P1：截断标记、Wiki、认证路径、内建度量、拒绝名单、失败维度、单模板试点 |
-| 状态 | 依赖 WO-202610-12 的修复提示、失败分类和版本元数据。以 Spec 162 v0.1 的 SC-10 至 SC-19 为验收 |
-| 来源 Spec | `webui/docs/162-customer-query-experience-and-usage-evidence-spec.md` v0.1 |
-| 来源计划 | `docs/plans/2026-10-11-customer-log-next-optimizations.md` v1.0 |
+| 状态 | 依赖 WO-202610-12 的修复提示、失败分类和版本元数据。以 Spec 162 v0.2 的 SC-10 至 SC-19 为验收 |
+| 来源 Spec | `webui/docs/162-customer-query-experience-and-usage-evidence-spec.md` v0.2 |
+| 来源计划 | `docs/plans/2026-10-11-customer-log-next-optimizations.md` v1.1 |
 | 撰写日期 | 2026-10-11 |
 | 适用范围 | Proxy 的 `lucy_query` / Wiki / 拒绝载荷、访问日志导出、使用分析默认视图。客户 YAML、Wiki 正文和角色清单不提交 |
 
@@ -28,9 +28,9 @@
 
 - [ ] **T6 使用分析默认视图。** 协议工具不进入默认 KPI，原始行保留（SC-16）。探测连接名 `probe-`、`rds-test`、`demo-mysql` 在默认视图中分开。不凭 User-Agent 把调用标成自动化。
 
-- [ ] **T7 失败维度与导出。** 按 §7.3 写入 `failure_dimension`。验收抽样锁定四条归类（SC-17）：`COUNT(*)` 的 `upstream_error`、`AS field`、超时、`table_forbidden`。`budget_stop` 不进入任一维度。导出游标分页，第二页能读到第 10,001 行。空 `policy_version` 计为缺失。缺权限快照时 completeness 为 false（SC-18）。
+- [ ] **T7 失败维度与导出。** 按 Spec 162 v0.2 §7.3 写入 `failure_dimension`。`wiki_not_found` 与 `explicit_table_required:<empty>` 归用法与语义，不得进入权限拒绝。`wiki_forbidden` 与 `explicit_table_required:<table>` 归权限拒绝。验收抽样锁定（SC-17）：`COUNT(*)` 的 `upstream_error`、`wiki_not_found`、`explicit_table_required:<empty>`、`AS field`、超时、`table_forbidden`、`wiki_forbidden`。`budget_stop` 不进入任一维度。导出游标分页，第二页能读到第 10,001 行。空 `policy_version` 计为缺失。缺权限快照时 completeness 为 false（SC-18）。
 
-- [ ] **T8 复述范围。** 依赖 WO-202610-12 的问询原文。问询文本含指代或两个意图时，先返回复述（账户、月份、产品线），确认前不发 `lucy_query`。无原文的推断问询跳过复述，直接进入现有查询路径。
+- [ ] **T8 复述范围。** 载体是 `webui/config/data-qa-instructions.md`，经 Spec 07 §4.4 的 `initialize` 注入，失败 fail-open。在该文件写明：问询含指代或两个意图时，先复述账户、月份和产品线，用户确认前模型不发 `lucy_query`。代理不实现确认门闩，不因缺少确认字段拒绝查询（SC-1）。本任务不改代理转发路径。依赖 WO-12 已把同一文件里的 8 分钟时限改成代理预算。
 
 - [ ] **T9 单模板试点钩子。** 只注册 `public_cloud_pnl_quarterly`。结果带 source 与采用的版本（SC-19）。仓库内不出现客户口径 YAML。没有前后对比记录之前，代码拒绝注册第二个模板 id。
 

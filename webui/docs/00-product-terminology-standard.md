@@ -563,6 +563,13 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 | Range preset | 近 24 小时 / 近 7 天 | — | 地址栏 `hours=168`（新写入） | URL `range=24h\|7d`；兼容读 `hours=24\|168` |
 | Reported turn | 已上报问询 | — | reported turn | 来源 badge |
 | Inferred turn | 推断问询 | — | 推断问题（无来源标注） | 来源 badge |
+| Question Budget | 问询预算 | — | turn budget（裸露作主标签）、8 分钟上限 | 同一问询的数据工具次数或墙钟上限，先到先停；Spec 162 |
+| Continuable | 可继续 | — | 自动续跑 | 问询预算用尽后的一次继续；协议字段 `question_budget_exhausted` 使用 `translate="no"` |
+| Repair Hint | 修复提示 | — | 把角色外的 source 名写进提示 | 只含当前角色可见的来源与连接 |
+| Filter Pushdown | 过滤条件下推 | — | 把 `STRUCT` / `AS field` 当作成功 SQL | 编译结果命中该形状时失败关闭；`filter_pushdown` 使用 `translate="no"` |
+| Actor | 使用人 | — | 把 token 备注当成使用人 | Token 上显式 `actor_id` + `actor_kind=person`；`token_label` 只是备注 |
+| Automation Call | 自动化调用 | — | 把未标记的 Python-urllib 算成自动化 | 仅 `actor_kind=automation` |
+| Applied Version | 采用的版本 | — | 编造版本号 | 只有发布物声明了默认版本才写入结果 |
 | Turn span | 问询时长 | — | turn span | 开始至结束 wall-clock |
 | Slow call | 慢于多数请求 | 慢调用 | 慢查询 | 相对 P95 参照 |
 | Typical Request Latency | 多数请求耗时 | P95（次级括注） | 响应上限（P95）作主标签 | 与 `/admin/usage` 同算法；**列表页不再展示整句参照文案**（Spec 94） |

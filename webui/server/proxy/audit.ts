@@ -7,6 +7,7 @@ import { prepareTraceDatabase } from "../trace/evidence.js";
 import { resolveSourceRefsForTables } from "./acl.js";
 import { scrubArgsSummaryJson } from "./audit-privacy.js";
 import { MCP_PROTOCOL_METHODS as PROTOCOL_TOOLS } from "./mcp-request-classification.js";
+import { usageGroup, type UsageGroup } from "./question-experience.js";
 
 export interface AccessLogEntry {
   ts: string;
@@ -33,8 +34,15 @@ export interface AccessLogEntry {
   queryPreview?: string;
   queryArtifactRef?: string;
   generatedSql?: string;
-  outcome: "ok" | "error" | "denied";
+  outcome: "ok" | "error" | "denied" | "budget_stop";
   errorDetail?: string;
+  compilerReason?: string;
+  failureDimension?: string;
+  appliedVersion?: string;
+  appliedBusinessDate?: string;
+  appliedValueKind?: string;
+  actorId?: string;
+  actorKind?: "person" | "automation";
   durationMs: number;
   requestId: string | number;
   traceId?: string;
@@ -127,7 +135,14 @@ const ACCESS_LOG_COLUMNS = [
   ["skill_file_version", "TEXT"],
   ["skill_action", "TEXT"],
   ["skill_roles_allowed", "TEXT"],
-  ["matched_role_id", "TEXT"]
+  ["matched_role_id", "TEXT"],
+  ["compiler_reason", "TEXT"],
+  ["failure_dimension", "TEXT"],
+  ["applied_version", "TEXT"],
+  ["applied_business_date", "TEXT"],
+  ["applied_value_kind", "TEXT"],
+  ["actor_id", "TEXT"],
+  ["actor_kind", "TEXT"]
 ] as const;
 const PERMISSION_SNAPSHOT_COLUMNS = [
   ["capability_digest", "TEXT"],
@@ -356,9 +371,9 @@ export async function writeLog(entry: AccessLogEntry): Promise<number> {
   if (!insertStmt) {
     insertStmt = database.prepare(`
       INSERT INTO access_log
-        (ts, user_id, token_label, token_hash_prefix, lucy_session_id, lucy_turn_id, turn_attribution_mode, turn_attribution_confidence, turn_attribution_reason, lucy_platform, client, client_version, client_ip, user_agent, device_name, tool, tables, args_summary, query_hash, query_length, query_operation, query_preview, query_artifact_ref, generated_sql, outcome, error_detail, duration_ms, response_bytes, response_row_count, response_column_count, response_truncated, request_id, trace_id, role_ids, permission_snapshot_hash, effective_tables_count, decision_reason, policy_version, capability_digest, skill_uri, skill_version, skill_file_version, skill_action, skill_roles_allowed, matched_role_id)
+        (ts, user_id, token_label, token_hash_prefix, lucy_session_id, lucy_turn_id, turn_attribution_mode, turn_attribution_confidence, turn_attribution_reason, lucy_platform, client, client_version, client_ip, user_agent, device_name, tool, tables, args_summary, query_hash, query_length, query_operation, query_preview, query_artifact_ref, generated_sql, outcome, error_detail, duration_ms, response_bytes, response_row_count, response_column_count, response_truncated, request_id, trace_id, role_ids, permission_snapshot_hash, effective_tables_count, decision_reason, policy_version, capability_digest, skill_uri, skill_version, skill_file_version, skill_action, skill_roles_allowed, matched_role_id, compiler_reason, failure_dimension, applied_version, applied_business_date, applied_value_kind, actor_id, actor_kind)
       VALUES
-        (@ts, @userId, @tokenLabel, @tokenHashPrefix, @lucySessionId, @lucyTurnId, @turnAttributionMode, @turnAttributionConfidence, @turnAttributionReason, @lucyPlatform, @client, @clientVersion, @clientIp, @userAgent, @deviceName, @tool, @tables, @argsSummary, @queryHash, @queryLength, @queryOperation, @queryPreview, @queryArtifactRef, @generatedSql, @outcome, @errorDetail, @durationMs, @responseBytes, @responseRowCount, @responseColumnCount, @responseTruncated, @requestId, @traceId, @roleIds, @permissionSnapshotHash, @effectiveTablesCount, @decisionReason, @policyVersion, @capabilityDigest, @skillUri, @skillVersion, @skillFileVersion, @skillAction, @skillRolesAllowed, @matchedRoleId)
+        (@ts, @userId, @tokenLabel, @tokenHashPrefix, @lucySessionId, @lucyTurnId, @turnAttributionMode, @turnAttributionConfidence, @turnAttributionReason, @lucyPlatform, @client, @clientVersion, @clientIp, @userAgent, @deviceName, @tool, @tables, @argsSummary, @queryHash, @queryLength, @queryOperation, @queryPreview, @queryArtifactRef, @generatedSql, @outcome, @errorDetail, @durationMs, @responseBytes, @responseRowCount, @responseColumnCount, @responseTruncated, @requestId, @traceId, @roleIds, @permissionSnapshotHash, @effectiveTablesCount, @decisionReason, @policyVersion, @capabilityDigest, @skillUri, @skillVersion, @skillFileVersion, @skillAction, @skillRolesAllowed, @matchedRoleId, @compilerReason, @failureDimension, @appliedVersion, @appliedBusinessDate, @appliedValueKind, @actorId, @actorKind)
     `);
   }
   const result = insertStmt.run({
@@ -408,7 +423,14 @@ export async function writeLog(entry: AccessLogEntry): Promise<number> {
     skillFileVersion: entry.skillFileVersion ?? null,
     skillAction: entry.skillAction ?? null,
     skillRolesAllowed: entry.skillRolesAllowed ? JSON.stringify(entry.skillRolesAllowed) : null,
-    matchedRoleId: entry.matchedRoleId ?? null
+    matchedRoleId: entry.matchedRoleId ?? null,
+    compilerReason: entry.compilerReason ?? null,
+    failureDimension: entry.failureDimension ?? null,
+    appliedVersion: entry.appliedVersion ?? null,
+    appliedBusinessDate: entry.appliedBusinessDate ?? null,
+    appliedValueKind: entry.appliedValueKind ?? null,
+    actorId: entry.actorId ?? null,
+    actorKind: entry.actorKind ?? null
   });
   return Number(result.lastInsertRowid);
 }
@@ -567,6 +589,7 @@ export interface R1AuditObservability {
     tools: Array<{ tool: string; calls: number; denied: number; errors: number }>;
     roles: Array<{ roleId: string; calls: number; denied: number }>;
     tokens: Array<{ tokenLabel: string; tokenHashPrefix?: string; calls: number; denied: number }>;
+    actors: Array<{ group: UsageGroup; calls: number }>;
   };
 }
 
@@ -609,7 +632,8 @@ export async function readR1AuditObservability(options: { hours?: number; slowMs
 
   const rows = database.prepare(`
     SELECT ts, user_id, token_label, token_hash_prefix, tool, outcome, duration_ms, request_id,
-           role_ids, decision_reason, query_operation, query_preview, tables
+           role_ids, decision_reason, query_operation, query_preview, tables,
+           actor_id, actor_kind, client
     FROM access_log
     WHERE ts >= ?
     ORDER BY ts DESC, id DESC
@@ -627,6 +651,9 @@ export async function readR1AuditObservability(options: { hours?: number; slowMs
     query_operation: string | null;
     query_preview: string | null;
     tables: string | null;
+    actor_id: string | null;
+    actor_kind: string | null;
+    client: string | null;
   }>;
 
   const protocolTools = new Set<string>(PROTOCOL_TOOLS);
@@ -640,6 +667,7 @@ export async function readR1AuditObservability(options: { hours?: number; slowMs
   const tools = new Map<string, { tool: string; calls: number; denied: number; errors: number }>();
   const roles = new Map<string, { roleId: string; calls: number; denied: number }>();
   const tokens = new Map<string, { tokenLabel: string; tokenHashPrefix?: string; calls: number; denied: number }>();
+  const actors = new Map<UsageGroup, number>();
 
   for (const row of businessRows) {
     if (row.outcome === "denied") {
@@ -666,6 +694,14 @@ export async function readR1AuditObservability(options: { hours?: number; slowMs
     token.calls += 1;
     if (row.outcome === "denied") token.denied += 1;
     tokens.set(tokenKey, token);
+
+    const actorGroup = usageGroup({
+      actorId: row.actor_id,
+      actorKind: row.actor_kind,
+      userId: row.user_id,
+      client: row.client,
+    });
+    actors.set(actorGroup, (actors.get(actorGroup) ?? 0) + 1);
   }
 
   const slowQueries = businessRows
@@ -739,7 +775,8 @@ export async function readR1AuditObservability(options: { hours?: number; slowMs
     usage: {
       tools: [...tools.values()].sort((a, b) => b.calls - a.calls).slice(0, 30),
       roles: [...roles.values()].sort((a, b) => b.calls - a.calls).slice(0, 30),
-      tokens: [...tokens.values()].sort((a, b) => b.calls - a.calls).slice(0, 30)
+      tokens: [...tokens.values()].sort((a, b) => b.calls - a.calls).slice(0, 30),
+      actors: [...actors.entries()].map(([group, calls]) => ({ group, calls })).sort((a, b) => b.calls - a.calls)
     }
   };
 }

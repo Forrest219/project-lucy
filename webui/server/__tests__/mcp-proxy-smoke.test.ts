@@ -276,6 +276,8 @@ afterEach(async () => {
   else process.env.LUCY_PROXY_UPSTREAM_TIMEOUT_MS = previousUpstreamTimeout;
   if (previousQueryMaxInflight === undefined) delete process.env.LUCY_QUERY_MAX_INFLIGHT;
   else process.env.LUCY_QUERY_MAX_INFLIGHT = previousQueryMaxInflight;
+  delete process.env.LUCY_FILTER_PUSHDOWN_GUARD;
+  delete process.env.LUCY_QUESTION_BUDGET;
   await rm(projectRoot, { recursive: true, force: true });
 });
 
@@ -2315,6 +2317,159 @@ describe("MCP proxy smoke", () => {
       expect(audit.decision_reason).toBe("tools_list_filter_failed");
       expect(String(audit.error_detail)).toContain("tools_list_filter_failed");
     } finally {
+      await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
+      await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));
+    }
+  });
+
+  it("enforces Spec 162 question binding, budget, filter pushdown, and applied version", async () => {
+    const upstreamIds: string[] = [];
+    const pushdownSql = "SELECT STRUCT('month' AS field, '=' AS op, '2026-09' AS val)";
+    const upstream = createServer(async (req, res) => {
+      const body = JSON.parse(await readRequestBody(req)) as { id?: string };
+      const id = String(body.id ?? "");
+      upstreamIds.push(id);
+      res.writeHead(200, { "content-type": "application/json" });
+      if (id === "pushdown-query" || id === "pushdown-off") {
+        res.end(JSON.stringify({
+          jsonrpc: "2.0",
+          id,
+          result: {
+            structuredContent: { sql: pushdownSql },
+            content: [{ type: "text", text: pushdownSql }]
+          }
+        }));
+        return;
+      }
+      if (id === "truncated-query") {
+        res.end(JSON.stringify({
+          jsonrpc: "2.0",
+          id,
+          result: { content: [{ type: "text", text: "detailMessage = ...RUCT(" }] }
+        }));
+        return;
+      }
+      res.end(JSON.stringify({
+        jsonrpc: "2.0",
+        id,
+        result: { content: [{ type: "text", text: JSON.stringify({ rows: [{ ok: true }], truncated: false }) }] }
+      }));
+    });
+
+    await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+    const upstreamPort = (upstream.address() as AddressInfo).port;
+    process.env.LUCY_PROXY_UPSTREAM_HOST = "127.0.0.1";
+    process.env.LUCY_PROXY_UPSTREAM_PORT = String(upstreamPort);
+
+    const { buildProxy, registerPublishedVersion } = await import("../proxy/mcp-proxy");
+    const { server, host } = buildProxy();
+    await new Promise<void>((resolve) => server.listen(0, host, resolve));
+    const proxyPort = (server.address() as AddressInfo).port;
+    const queryArgs = {
+      connectionId: "mysql-aliyun",
+      measures: ["superstore_orders.sales"],
+      dimensions: [{ field: "superstore_orders.region" }],
+      limit: 5
+    };
+
+    const post = async (id: string, name: string, args: Record<string, unknown>, headers: Record<string, string> = {}) => {
+      const res = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${TOKEN}`,
+          ...headers
+        },
+        body: JSON.stringify({ jsonrpc: "2.0", id, method: "tools/call", params: { name, arguments: args } })
+      });
+      return res.json() as Promise<{ result?: { isError?: boolean; content?: Array<{ text?: string }>; _meta?: { lucy?: { appliedVersion?: string; businessDate?: string; valueKind?: string } } } }>;
+    };
+
+    try {
+      const missing = await post("missing-intent", "lucy_begin_question", {});
+      expect(missing.result?.isError).toBe(true);
+      const missingAudit = await waitForAuditRow("missing-intent");
+      expect(missingAudit.error_detail).toBe("missing_intent_summary");
+
+      const stillQueries = await post("after-missing-intent", "lucy_query", queryArgs);
+      expect(stillQueries.result?.isError).not.toBe(true);
+      expect(upstreamIds).toContain("after-missing-intent");
+
+      const ctDb = new Database(auditDbPath, { readonly: true });
+      const turnsBefore = ctDb.prepare("SELECT COUNT(*) AS n FROM conversation_turns").get() as { n: number };
+      expect(turnsBefore.n).toBe(0);
+      ctDb.close();
+
+      const begun = await post("bind-begin", "lucy_begin_question", { intentSummary: "查询销售额", question: "各地区销售额" }, { "mcp-session-id": "session-bind" });
+      const bound = await post("bind-query", "lucy_query", queryArgs, { "mcp-session-id": "session-bind" });
+      expect(bound.result?.isError).not.toBe(true);
+      const bindAudit = await waitForAuditRow("bind-query");
+      expect(bindAudit.turn_attribution_mode).toBe("session_bound");
+      expect(bindAudit.turn_attribution_confidence).toBe("high");
+      const beginText = begun.result?.content?.[0]?.text ?? "";
+      const { turnId } = JSON.parse(beginText) as { turnId: string };
+      const turnDb = new Database(auditDbPath, { readonly: true });
+      const turnRow = turnDb.prepare("SELECT question_source FROM conversation_turns WHERE turn_id = ?").get(turnId) as { question_source: string };
+      expect(turnRow.question_source).toBe("reported_tool");
+      turnDb.close();
+
+      await post("budget-begin", "lucy_begin_question", { intentSummary: "问询预算" }, { "mcp-session-id": "session-budget" });
+      for (let i = 0; i < 20; i += 1) {
+        const ok = await post(`budget-${i}`, "lucy_query", queryArgs, { "mcp-session-id": "session-budget" });
+        expect(ok.result?.isError).not.toBe(true);
+      }
+      const stopped = await post("budget-stop", "lucy_query", queryArgs, { "mcp-session-id": "session-budget" });
+      const stoppedPayload = JSON.parse(stopped.result?.content?.[0]?.text ?? "{}") as { reason?: string; partial?: boolean; continuable?: boolean };
+      expect(stoppedPayload.reason).toBe("question_budget_exhausted");
+      expect(stoppedPayload.partial).toBe(true);
+      expect(stoppedPayload.continuable).toBe(true);
+      expect(upstreamIds).not.toContain("budget-stop");
+      const stopAudit = await waitForAuditRow("budget-stop", 3000);
+      expect(stopAudit.outcome).toBe("budget_stop");
+      expect(stopAudit.failure_dimension == null || stopAudit.failure_dimension === "").toBe(true);
+
+      const continued = await post("budget-continue", "lucy_query", queryArgs, {
+        "mcp-session-id": "session-budget",
+        "x-lucy-question-continue": String(stopAudit.lucy_turn_id)
+      });
+      expect(continued.result?.isError).not.toBe(true);
+      expect(upstreamIds).toContain("budget-continue");
+
+      const pushdown = await post("pushdown-query", "lucy_query", queryArgs, { "mcp-session-id": "session-push" });
+      expect(pushdown.result?.isError).toBe(true);
+      expect(pushdown.result?.content?.[0]?.text ?? "").not.toContain("STRUCT");
+      const pushdownAudit = await waitForAuditRow("pushdown-query");
+      expect(pushdownAudit.compiler_reason).toBe("filter_pushdown");
+      expect(pushdownAudit.failure_dimension).toBe("过滤条件下推");
+      expect(String(pushdownAudit.generated_sql)).toContain("AS field");
+
+      const truncated = await post("truncated-query", "lucy_query", queryArgs);
+      expect(truncated.result?.isError).toBe(true);
+      const truncatedAudit = await waitForAuditRow("truncated-query");
+      expect(truncatedAudit.compiler_reason).toBe("filter_pushdown");
+      expect(truncatedAudit.generated_sql == null || truncatedAudit.generated_sql === "").toBe(true);
+
+      process.env.LUCY_FILTER_PUSHDOWN_GUARD = "off";
+      const forwarded = await post("pushdown-off", "lucy_query", queryArgs);
+      expect(forwarded.result?.isError).not.toBe(true);
+      expect(forwarded.result?.content?.[0]?.text ?? "").toContain("STRUCT");
+      const forwardedAudit = await waitForAuditRow("pushdown-off");
+      expect(forwardedAudit.compiler_reason == null || forwardedAudit.compiler_reason === "").toBe(true);
+
+      delete process.env.LUCY_FILTER_PUSHDOWN_GUARD;
+      registerPublishedVersion("superstore_orders", {
+        version: "demo-v1",
+        businessDate: "2026-10-01",
+        valueKind: "实际"
+      });
+      const versioned = await post("version-query", "lucy_query", queryArgs);
+      expect(versioned.result?._meta?.lucy?.appliedVersion).toBe("demo-v1");
+      expect(versioned.result?._meta?.lucy?.businessDate).toBe("2026-10-01");
+      expect(versioned.result?._meta?.lucy?.valueKind).toBe("实际");
+      const versionAudit = await waitForAuditRow("version-query");
+      expect(versionAudit.applied_version).toBe("demo-v1");
+    } finally {
+      delete process.env.LUCY_FILTER_PUSHDOWN_GUARD;
       await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
       await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));
     }

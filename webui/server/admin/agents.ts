@@ -59,6 +59,8 @@ export interface YamlToken {
   created: string;
   expires_at?: string | null;
   device_name?: string | null;
+  actor_id?: string | null;
+  actor_kind?: "person" | "automation" | null;
 }
 
 export interface YamlUser {

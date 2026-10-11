@@ -4,6 +4,7 @@ import path from "node:path";
 import { parse } from "yaml";
 import { resolveProjectRoot } from "../project.js";
 import { isTokenRevoked } from "./audit.js";
+import { actorFromToken, type ActorKind } from "./question-experience.js";
 
 interface UserToken {
   hash?: string | Record<string, unknown>; // format: "sha256:<hex>"
@@ -13,6 +14,8 @@ interface UserToken {
   created?: string;
   expires_at?: string | null | Date;
   device_name?: string | null;
+  actor_id?: string | null;
+  actor_kind?: string | null;
 }
 
 interface UserAllow {
@@ -83,6 +86,8 @@ export interface Identity {
   client?: string;
   clientVersion?: string;
   deviceName?: string;
+  actorId?: string;
+  actorKind?: ActorKind;
 }
 
 export type IdentifyFailureReason =
@@ -314,6 +319,7 @@ export async function identifyRequestDetailed(
         };
       }
       const sessionClient = getSessionClient(sessionId, user.id, t.label);
+      const actor = actorFromToken(t);
       return {
         ok: true,
         identity: {
@@ -322,7 +328,9 @@ export async function identifyRequestDetailed(
           tokenHashPrefix,
           client: sessionClient?.clientName,
           clientVersion: sessionClient?.clientVersion,
-          deviceName: t.device_name ?? undefined
+          deviceName: t.device_name ?? undefined,
+          actorId: actor.actorId,
+          actorKind: actor.actorKind
         }
       };
     }

@@ -41,6 +41,21 @@ import { canonicalizeLucyQueryArgs } from "./lucy-query-normalization.js";
 import { applyLucyQueryForcedFilters, buildExplainForcedPredicateDiagnostics, isScopeIntersectionEmpty } from "./row-policy.js";
 import { TurnCorrelationRegistry } from "./turn-correlation.js";
 import { beginAuditWrite, completeAuditWrite, failAuditWrite } from "./audit-write-health.js";
+import {
+  classifyFailure,
+  filterPushdownGuardEnabled,
+  isFilterPushdownText,
+  isQuestionDataTool,
+  lookupPublishedVersion,
+  publishedSourceName,
+  questionBudget,
+  questionBudgetEnabled,
+  registerPublishedVersion,
+  repairHint,
+  resolveAppliedVersion,
+} from "./question-experience.js";
+
+export { registerPublishedVersion };
 
 const KTX_HOST = process.env.LUCY_PROXY_UPSTREAM_HOST ?? "127.0.0.1";
 const KTX_PORT = Number(process.env.LUCY_PROXY_UPSTREAM_PORT ?? 7878);
@@ -556,7 +571,13 @@ function recordMcpTraceForTool(input: {
 }
 
 async function auditMeta(identity: Identity | null | undefined, decisionReason: string): Promise<Partial<Parameters<typeof writeLog>[0]>> {
-  return buildAccessLogAuditMeta(identity, decisionReason);
+  const meta = await buildAccessLogAuditMeta(identity, decisionReason);
+  if (!identity?.actorId) return meta;
+  return {
+    ...meta,
+    actorId: identity.actorId,
+    actorKind: identity.actorKind,
+  };
 }
 
 function correlationMeta(headers: IncomingMessage["headers"]): Partial<Parameters<typeof writeLog>[0]> {
@@ -2014,6 +2035,25 @@ function boundedProvenanceValue(value: unknown, depth = 0): unknown {
   return output;
 }
 
+function appliedLucyVersion(
+  toolName: string,
+  argsRecord: Record<string, unknown>,
+  sourceRefs: SourceRef[]
+): { appliedVersion: string; businessDate: string; valueKind: "实际" | "预测" } | undefined {
+  if (toolName !== "lucy_query") return undefined;
+  const sourceName = publishedSourceName(argsRecord, sourceRefs[0]?.sourceName);
+  const applied = resolveAppliedVersion(
+    { version: firstStringField(argsRecord, ["version", "appliedVersion"]) },
+    lookupPublishedVersion(sourceName)
+  );
+  if (!applied) return undefined;
+  return {
+    appliedVersion: applied.version,
+    businessDate: applied.businessDate,
+    valueKind: applied.valueKind
+  };
+}
+
 function withLucyResultMeta(
   payload: unknown,
   requestId: string | number,
@@ -2060,6 +2100,7 @@ function withLucyResultMeta(
             columnCount: inspectedResult.columns ?? null,
             truncated: responseTruncated ?? null
           },
+          ...(appliedLucyVersion(toolName, argsRecord, sourceRefs) ?? {}),
           provenance: {
             connectionId: firstStringField(argsRecord, ["connectionId", "connection_id", "connection"]) ?? null,
             sourceName: firstStringField(argsRecord, ["sourceName", "source_name", "source", "table"]) ?? sourceRefs[0]?.sourceName ?? null,
@@ -2220,6 +2261,8 @@ async function writeLucySemanticResponse(
   }
   let body = originalBody;
   let metaFailed: string | undefined;
+  let compilerReason: string | undefined;
+  let preservedGeneratedSql: string | undefined;
   // Buffered tools/call responses are always normalized to application/json when
   // rewrite succeeds. Re-emitting a finite SSE frame with Content-Length +
   // keep-alive causes Streamable HTTP clients (Cursor / Claude Code) to wait for
@@ -2241,6 +2284,30 @@ async function writeLucySemanticResponse(
   } catch (err) {
     metaFailed = `lucy_result_meta_failed:${err instanceof Error ? err.message : String(err)}`;
     body = originalBody;
+  }
+
+  if (toolName === "lucy_query" && filterPushdownGuardEnabled() && isFilterPushdownText(body)) {
+    let originalParsed: unknown;
+    try {
+      originalParsed = JSON.parse(originalBody);
+    } catch {
+      originalParsed = undefined;
+    }
+    const sql = extractSqlFromToolResult(originalParsed);
+    compilerReason = "filter_pushdown";
+    preservedGeneratedSql = sql?.trim() ? sql : undefined;
+    const visible = new Set(sourceRefs.map((ref) => ref.sourceName).filter((name): name is string => Boolean(name)));
+    const hint = repairHint({ failureDimension: "过滤条件下推", suggestedSources: [...visible] }, visible)
+      ?? "这次过滤条件无法下推。请改成等值、包含或枚举条件后再查。";
+    body = JSON.stringify({
+      jsonrpc: "2.0",
+      id: requestId,
+      result: {
+        isError: true,
+        content: [{ type: "text", text: hint }]
+      }
+    });
+    forceJson = true;
   }
 
   const headers = forceJson ? bufferedJsonHeaders(upstream) : passthroughBodyHeaders(upstream);
@@ -2275,14 +2342,21 @@ async function writeLucySemanticResponse(
   const structuredTables = sourceRefs.map((ref) => ref.physicalTable);
   const tables = [...new Set([...structuredTables, ...queryTables])];
   const responseMeta = responseAuditMeta(Buffer.from(body), headers["content-type"]);
-  const decisionReason = outcome === "ok"
-    ? (metaFailed
-      ? "lucy_result_meta_failed"
-      : (options.scopeIntersectionEmpty ? "scope_intersection_empty" : "allowed"))
-    : await classifyUpstreamToolError(originalBody, toolArgs);
-  if (outcome === "ok") {
+  const decisionReason = compilerReason
+    ? "filter_pushdown"
+    : outcome === "ok"
+      ? (metaFailed
+        ? "lucy_result_meta_failed"
+        : (options.scopeIntersectionEmpty ? "scope_intersection_empty" : "allowed"))
+      : await classifyUpstreamToolError(originalBody, toolArgs);
+  if (outcome === "ok" && !compilerReason) {
     await recordSuccessfulQueryObservation(toolName, toolArgs);
   }
+  const argsRecord = toolArgs && typeof toolArgs === "object" && !Array.isArray(toolArgs) ? toolArgs as Record<string, unknown> : {};
+  const applied = compilerReason ? undefined : appliedLucyVersion(toolName, argsRecord, sourceRefs);
+  const failureDimension = compilerReason
+    ? "过滤条件下推"
+    : classifyFailure({ outcome, decisionReason, errorDetail });
   const baseEntry: Parameters<typeof writeLog>[0] = {
     ts: new Date().toISOString(),
     userId: identity.userId,
@@ -2291,9 +2365,14 @@ async function writeLucySemanticResponse(
     tables: tables.length > 0 ? tables : undefined,
     argsSummary,
     ...queryMeta,
-    ...generatedSqlAuditFields(toolName, parsedBody),
+    ...generatedSqlAuditFields(toolName, preservedGeneratedSql ? { result: { sql: preservedGeneratedSql } } : parsedBody),
     outcome,
     errorDetail,
+    compilerReason,
+    failureDimension: failureDimension || undefined,
+    appliedVersion: applied?.appliedVersion,
+    appliedBusinessDate: applied?.businessDate,
+    appliedValueKind: applied?.valueKind,
     durationMs: Date.now() - start,
     ...responseMeta,
     requestId,
@@ -3464,6 +3543,65 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       policySource: "access_policy"
     });
     return;
+  }
+
+  if (rpcMethod === "tools/call" && toolName && isQuestionDataTool(toolName) && questionBudgetEnabled()) {
+    const budgetDecision = questionBudget.consume(
+      requestMeta.lucyTurnId,
+      Date.now(),
+      normalizeHeader(req.headers["x-lucy-question-continue"])
+    );
+    if (budgetDecision.action === "stop") {
+      const responseBody = JSON.stringify({
+        jsonrpc: "2.0",
+        id: requestId,
+        result: {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              reason: budgetDecision.reason,
+              partial: budgetDecision.partial,
+              continueToken: budgetDecision.continueToken,
+              continuable: budgetDecision.continuable
+            })
+          }]
+        }
+      });
+      res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+      res.end(responseBody);
+      recordRequestAudit({
+        ts: new Date().toISOString(),
+        userId: identity.userId,
+        client: identity.client,
+        tool: toolName,
+        tables: queryTables.length > 0 ? queryTables : undefined,
+        argsSummary,
+        ...queryMeta,
+        outcome: "budget_stop",
+        decisionReason: "question_budget_exhausted",
+        errorDetail: "question_budget_exhausted",
+        durationMs: Date.now() - start,
+        responseBytes: Buffer.byteLength(responseBody),
+        requestId,
+        ...requestMeta,
+        ...(await auditMeta(identity, "question_budget_exhausted")),
+      });
+      recordMcpTraceForTool({
+        traceId,
+        identity,
+        toolName,
+        status: "ok",
+        startedAt: new Date(start).toISOString(),
+        turnId: requestMeta.lucyTurnId ?? null,
+        sessionId: requestMeta.lucySessionId ?? null,
+        requestId,
+        argsSummary,
+        allowed: true,
+        reason: "question_budget_exhausted",
+        policySource: "other"
+      });
+      return;
+    }
   }
 
   if (rpcMethod === "tools/call" && toolName === "lucy_query") {

@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Customer Log Next Optimizations |
 | 文档类型 | Product Optimization Plan（评审通过的最终建议；实现以 Spec 162 与三份工单为准） |
-| 版本 | v1.0 |
-| 状态 | 立项。顺序维持 P0 → P1 → P2 |
+| 版本 | v1.1 |
+| 状态 | WO-202610-12 已验收。WO-13 / WO-14 待开工。v1.1 写入启动评估的 4 项澄清 |
 | 撰写日期 | 2026-10-11 |
 | 委托人 | xingchen |
 | 评审链 | [`inbox/日志分析/2026-10-11-lucy-next-optimizations.md`](../../inbox/日志分析/2026-10-11-lucy-next-optimizations.md)、[`2026-10-11-lucy-next-optimizations-review.md`](../../inbox/日志分析/2026-10-11-lucy-next-optimizations-review.md)、[`2026-10-11-lucy-next-optimizations-review-reply.md`](../../inbox/日志分析/2026-10-11-lucy-next-optimizations-review-reply.md) |
@@ -41,8 +41,11 @@ KSC 的失败主体是语义契约（123），MJ 的失败主体是权限与连�
 | 问询时长 p90 | 4.6 分钟 | 无问询导出 |
 | 成功查询 `query_hash` 重复率 | 评审终稿 55.4%（1,299/2,346）。按仅 `lucy_query` 且 hash 非空计为 1,297/2,322 | — |
 | 带查询的问询里用过 Wiki | 16/233 | 4/229 |
+| `budget_stop` 占问询的比例 | 上线前无此结果。历史对照：95/366（26%）问询墙钟超过 120 秒，会碰到第一档预算 | 无问询导出 |
+| 结果带 `applied_version` 的比例 | 上线前未采集。只统计发布物声明了默认版本的成功 `lucy_query` | 同左 |
+| `actor_id` 非空的调用比例 | 上线前未采集。Token 未标记前分母仍按调用计，预期接近 0 | 同左 |
 
-业务调用的分母是去掉协议噪音之后的调用。两家分开看，不合成一个通过率。
+业务调用的分母是去掉协议噪音之后的调用。两家分开看，不合成一个通过率。`budget_stop`、`applied_version`、`actor_id` 在 WO-12 收口时开始采集；前五个指标的历史基线不因这三行改写。生产环境的 turn 绑定率要等客户端发出 session 才会离开 23.5% / 25.2%，该移动不是 WO-12 的退出条件。
 
 ## 已对齐的口径修正
 
@@ -140,7 +143,7 @@ KSC 有 68 次 measure 不引用 source，其中 46 次是 `COUNT(*)` / `count(*
 ### 13. 执行前复述范围，再处理指代和一句多问
 
 - 优先级：P1。风险：中。工作量：中。
-- 依赖第 01 条留下的上文。原话里有「展开讲讲」、GPU 与 CDN 同句、连续两句相同的「该账户最近 5 笔流水」（其中一次 387 秒、9 次错误）。「昨天的银行流水」是 521.8 秒、8 次工具调用。执行前复述账户、月份和产品线。
+- 依赖第 01 条留下的上文。原话里有「展开讲讲」、GPU 与 CDN 同句、连续两句相同的「该账户最近 5 笔流水」（其中一次 387 秒、9 次错误）。「昨天的银行流水」是 521.8 秒、8 次工具调用。复述文案写在 `webui/config/data-qa-instructions.md`，由 initialize 注入。代理不因缺少确认字段而拒绝 `lucy_query`。
 
 ### 14. 协议心跳、评测和探测不进入使用分析
 

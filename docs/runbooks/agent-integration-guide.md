@@ -92,6 +92,14 @@ Globally denied tools:
 - `memory_ingest`
 - `memory_ingest_status`
 
+## 4.1 问询绑定
+
+官方客户端应在同一个 MCP session 里调用 `lucy_begin_question`，带上用户原话和 `intentSummary`。同一 session 内随后的数据工具会记为 `session_bound`。
+
+漏调 `lucy_begin_question`、不传 session、不传问询 ID，都不会拒绝查数。缺少 `intentSummary` 只让这一次上报失败，下一笔已授权的查询仍然执行。
+
+问询预算默认是 20 次数据工具调用或 120 秒，以先到者为准。用尽后结果里给出 `question_budget_exhausted`，同一问询可以继续一次。协议方法不占预算。
+
 ## 5. Smoke Test
 
 Use the demo gate to verify the full agent path:
