@@ -4,7 +4,7 @@
 |---|---|
 | 文档名称 | Lucy Admin Catalog-Bound Role Spec |
 | 文档类型 | Spec |
-| 版本 | v1.0 |
+| 版本 | v1.1 |
 | 撰写日期 | 2026-09-02 |
 | 撰写人 | Cursor Agent |
 | 委托人 | xingchen |
@@ -13,6 +13,11 @@
 | 输出位置 | `webui/docs/131-lucy-admin-catalog-bound-role-spec.md` |
 | 关联 WO | `webui/docs/plans/wo-202609-01-lucy-admin-catalog-bound.md` |
 | 冲突裁决 | 与 design-upgrade 冲突 → design-upgrade（含 ADR-AC-07）；实现与本文冲突 → 本文 |
+
+> v1.1（2026-10-13）：原编号 131 的 `131-governed-skill-system-and-context-transpass-spec.md`
+> 与本文重号，已改号为 171；此后 131 专指本文。同时修正 §3.1 示例的工具集，补齐
+> `sl_validate`、`lucy_skill_search`、`lucy_skill_read`、`lucy_certified_route`、`lucy_report_template`，
+> 与 `LUCY_ADMIN_TOOLS` 对齐。
 
 ---
 
@@ -90,12 +95,26 @@ roles:
         - lucy_begin_question
         - kx_catalog
         - connection_list
-        - wiki_search
-        - wiki_read
         - entity_details
+        - sl_validate
         - dictionary_search
         - discover_data
+        - wiki_search
+        - wiki_read
+        - lucy_skill_search
+        - lucy_skill_read
+        - lucy_certified_route
+        - lucy_report_template
 ```
+
+上例 18 个工具等于 `webui/server/admin/role-templates.ts` 的 `LUCY_ADMIN_TOOLS = DATA_PLANE_TOOLS ∪ META_TOOLS`
+（`webui/server/proxy/acl.ts`，共 18 个，排除 AbsoluteDeny）。新增工具须同步改这份示例。
+
+其中 `wiki_search`、`wiki_read`、`lucy_skill_search`、`lucy_skill_read` 自 Spec 170 起归入
+`CONTEXT_TOOLS`，对任意已解析且启用的 Agent 常开，不依赖本字段授权；写在这里只为与实现保持一致。
+真正需要本字段授予的是 `sl_validate`、`lucy_certified_route`、`lucy_report_template` 这三个后续新增项。
+Demo 模板 `examples/docker-demo/project-template/webui/config/access.yaml` 已补齐同一组工具，
+`scripts/runtime/docker-entrypoint.sh` 的 `patch_lucy_admin_tools` 负责给存量卷幂等补齐。
 
 ### 3.2 字段语义
 
