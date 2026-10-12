@@ -300,6 +300,8 @@ the proxy should check current disk config. If disk config contains `<connection
 
 ## 8. UI Requirements
 
+Spec 163 修订连接概览：`/connections` 不再展示下面的四层徽章，也不再提供「重新检测执行层」。未加载或问数服务不可用时，列表上方只出现一条提示。MCP 调试台仍按本节展示四层状态。
+
 Connection Overview and MCP Debug Console should show separate state chips:
 
 - `Config`: ready / missing

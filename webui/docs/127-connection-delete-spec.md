@@ -152,7 +152,7 @@ yaml 写入失败则不删文件。文件删除失败时 yaml 已提交：残留
 
 ## 6. UI（`/connections`）
 
-1. 连接卡片 footer 增加 **删除连接**（与同组「+ 添加 Schema / 重新拉取库内目录 / 同步配置变更」同为 `pl-btn pl-btn--secondary`；**不得**做成 Primary 或幽灵链接）。
+1. Spec 163 修订本条的位置：删除连接放在卡片「更多」菜单内，使用危险色文字，不与「添加 Schema」并排。确认抽屉、连接 ID 输入和本节其余条款不变。原要求（页脚同级 `pl-btn--secondary`）作废。
 2. `DeleteConnectionDrawer`：打开即 dryRun → 影响预览 + 可选项 + 输入连接 ID → 确认。标题区与确认输入框均显式标注 **连接 ID** 及待输入值。
 3. 预览必须展示：Schema 数、已启用表数（可展开）、约定密码文件是否可删、YAML 资产数、Role 引用、Wiki 引用页数。
 4. 勾选区默认全关。文案说明：不删物理库；`access.yaml` 与 Wiki **不会**被本操作改写。
@@ -175,7 +175,7 @@ yaml 写入失败则不删文件。文件删除失败时 yaml 已提交：残留
 
 - 引用：`design-system/10-components-button.md`（同组并列维护动作为 secondary；危险确认在 Drawer 内用 `pl-btn--danger`；不得升 Primary）。
 - PageHeader「新建连接」仍为唯一 primary。
-- 删除连接放在卡片 footer，与「+ 添加 Schema」同层级 chrome，不可逆确认留在抽屉。
+- Spec 163：删除连接在卡片「更多」内，不可逆确认仍留在抽屉。
 
 ## 9. 交叉引用
 

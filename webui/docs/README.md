@@ -139,6 +139,7 @@
 | [159-page-header-context-dedup-spec.md](159-page-header-context-dedup-spec.md) | 六个页面 PageHeader 上下文去重：移除正文、指标卡或相邻控件已承载的信息；Run 详情仅保留运行状态 | 产品 / UX / Frontend / Accessibility |
 | [161-offline-eval-customer-ops-spec.md](161-offline-eval-customer-ops-spec.md) | 客户离线评测 v0.2，可交付：与 `lucy_query` 同一执行路径、答对了/答错了/没答出来、现场提问；不完整结果文件整体拒收 | 产品 / UX / API / Eval |
 | [162-customer-query-experience-and-usage-evidence-spec.md](162-customer-query-experience-and-usage-evidence-spec.md) | 客户查数体验与使用证据 v0.3：问询预算、过滤条件下推、四失败维度；`wiki_not_found` 归用法与语义。WO-12 已验收 | 产品 / Proxy / Audit |
+| [163-connection-overview-card-quiet-spec.md](163-connection-overview-card-quiet-spec.md) | 连接概览卡片收纳 v0.1：拿掉每卡四层运行时；页脚五按钮收成添加 Schema 与更多；问数未加载或不可用时列表上方提示一次。已实现，工单 WO-202610-16 | 产品 / UX / Frontend |
 
 ## 与原 README 的关键校正
 

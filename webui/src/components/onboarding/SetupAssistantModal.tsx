@@ -4,6 +4,7 @@ import { X } from "lucide-react";
 import {
   SETUP_STEPS,
   deriveAssistantResumeState,
+  formatAssistantProgressLabel,
   type SetupStep,
   setAssistantDraft,
   getAssistantDraft,
@@ -180,8 +181,12 @@ export function SetupAssistantModal({
           <div className="flex items-start justify-between">
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold uppercase tracking-wider text-primary">
-                  Lucy Setup Assistant
+                <span
+                  className="text-xs font-semibold text-primary notranslate"
+                  translate="no"
+                  data-testid="setup-assistant-progress"
+                >
+                  {formatAssistantProgressLabel(step)}
                 </span>
                 {currentMeta.isOptional ? (
                   <span className="text-[10px] bg-fg-muted/10 text-fg-muted px-1.5 py-0.5 rounded font-medium">

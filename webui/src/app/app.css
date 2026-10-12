@@ -945,6 +945,8 @@
      consecutive connections. */
   .pl-overview-grid--flat { @apply gap-3; }
   .pl-connection-row { @apply overflow-hidden rounded-lg border border-border-default bg-bg-surface; }
+  /* An open row menu is absolutely positioned and otherwise clipped by the card. */
+  .pl-connection-row:has(.pl-row-action-more[open]) { @apply relative z-30 overflow-visible; }
   .pl-connection-card-header { @apply grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 border-b border-border-default bg-bg-subtle px-4 py-3; }
   .pl-connection-card-title { @apply flex min-w-0 items-center gap-3; }
   .pl-connection-card-title strong { @apply text-base font-semibold leading-5 text-fg-default; }
@@ -989,6 +991,12 @@
   .pl-connection-health-chevron { @apply size-3 shrink-0 opacity-80; }
   .pl-connection-meta-tag { @apply inline-flex items-center text-xs font-medium text-fg-muted; }
   .pl-connection-meta-tag--warning { @apply text-fg-muted; }
+  .pl-connection-progress {
+    @apply inline-flex cursor-pointer items-center border-0 bg-transparent p-0 text-xs font-medium text-fg-muted underline-offset-2 hover:text-primary hover:underline;
+  }
+  .pl-connection-progress:focus-visible {
+    @apply outline outline-2 outline-offset-1 outline-primary;
+  }
   /* M44: downgraded to a quiet text reminder; no pill border / background. */
   .pl-connection-readonly-status {
     @apply inline-flex items-center text-xs font-normal text-fg-muted;
@@ -1081,6 +1089,13 @@
   .pl-row-action-more-menu {
     @apply absolute right-0 z-20 mt-1 grid min-w-36 gap-2 rounded-md border border-border-default bg-bg-surface p-2 shadow-lg;
   }
+  .pl-connection-more-menu { @apply min-w-64; }
+  .pl-connection-card-meta .pl-row-action-more > summary { @apply text-xs font-medium text-fg-default; }
+  .pl-connection-more-entry { @apply grid gap-0.5 text-left; }
+  .pl-connection-more-hint { @apply text-xs font-normal text-fg-muted; }
+  .pl-connection-more-action { @apply justify-start text-left text-xs font-medium text-fg-default; }
+  .pl-connection-more-separator { @apply border-t border-border-default; }
+  .pl-connection-more-menu .pl-row-action-link--danger { @apply text-danger-strong hover:text-danger-strong; }
   .pl-schema-asset-status { @apply rounded-pill border px-2 py-0.5 text-xs font-semibold; }
   .pl-schema-asset-status--success { @apply border-success-strong bg-success-soft text-success-strong; }
   .pl-schema-asset-status--warning { @apply border-warning-strong bg-warning-soft text-warning-strong; }

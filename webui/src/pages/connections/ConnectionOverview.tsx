@@ -1,7 +1,6 @@
-import { Fragment } from "react";
-import { useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronRight, Database, Server } from "lucide-react";
+import { Database, Server } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { fetchCatalogSchemaManifest } from "../../lib/catalog-assets";
@@ -257,6 +256,16 @@ function warningKey(connectionId: string, schema: string): string {
   return `${connectionId}:${schema}`;
 }
 
+/** Pointer can cross the 4px gap between 「更多」 and its menu without closing. */
+const SCHEMA_MORE_CLOSE_DELAY_MS = 150;
+
+function findSchemaMoreRoot(key: string): HTMLElement | null {
+  for (const node of document.querySelectorAll<HTMLElement>("[data-schema-more]")) {
+    if (node.dataset.schemaMore === key) return node;
+  }
+  return null;
+}
+
 function schemaRefKey(connectionId: string, schema: string): string {
   return `${connectionId}\u0001${schema}`;
 }
@@ -479,6 +488,71 @@ export function ConnectionOverview() {
   const [refreshingLiveByConnection, setRefreshingLiveByConnection] = useState<Record<string, boolean>>({});
   const [testDrawerConnId, setTestDrawerConnId] = useState<string | null>(null);
   const [testLogsExpanded, setTestLogsExpanded] = useState(false);
+  const [openSchemaMoreKey, setOpenSchemaMoreKey] = useState<string | null>(null);
+  const schemaMoreCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function cancelSchemaMoreClose() {
+    if (schemaMoreCloseTimer.current != null) {
+      clearTimeout(schemaMoreCloseTimer.current);
+      schemaMoreCloseTimer.current = null;
+    }
+  }
+
+  function closeSchemaMore() {
+    cancelSchemaMoreClose();
+    setOpenSchemaMoreKey(null);
+  }
+
+  function toggleSchemaMore(key: string) {
+    cancelSchemaMoreClose();
+    setOpenSchemaMoreKey((current) => (current === key ? null : key));
+  }
+
+  function scheduleSchemaMoreClose(key: string) {
+    cancelSchemaMoreClose();
+    schemaMoreCloseTimer.current = setTimeout(() => {
+      schemaMoreCloseTimer.current = null;
+      setOpenSchemaMoreKey((current) => (current === key ? null : current));
+    }, SCHEMA_MORE_CLOSE_DELAY_MS);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (schemaMoreCloseTimer.current != null) clearTimeout(schemaMoreCloseTimer.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!openSchemaMoreKey) return;
+    const key = openSchemaMoreKey;
+
+    function onPointerDown(event: PointerEvent) {
+      const root = findSchemaMoreRoot(key);
+      if (root && event.target instanceof Node && root.contains(event.target)) return;
+      cancelSchemaMoreClose();
+      setOpenSchemaMoreKey((current) => (current === key ? null : current));
+    }
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      const root = findSchemaMoreRoot(key);
+      const summary = root?.querySelector("summary");
+      const returnFocus =
+        root != null &&
+        document.activeElement instanceof Node &&
+        root.contains(document.activeElement);
+      cancelSchemaMoreClose();
+      setOpenSchemaMoreKey((current) => (current === key ? null : current));
+      if (returnFocus && summary instanceof HTMLElement) summary.focus();
+    }
+
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [openSchemaMoreKey]);
 
   function handleReloadStart(connectionId: string) {
     setReloadingConnections((current) => ({ ...current, [connectionId]: true }));
@@ -768,9 +842,8 @@ export function ConnectionOverview() {
                           className={`pl-connection-health pl-connection-health--${statusTone.tone}`}
                           data-testid={`connection-health-${conn.id}`}
                           data-tone={statusTone.tone}
-                          aria-haspopup="dialog"
-                          aria-label={`连通健康 · ${conn.id} · ${ariaStatus}。打开连通测试`}
-                          title="打开连通测试"
+                          aria-label={`连通健康 · ${conn.id} · ${ariaStatus}`}
+                          title="查看连通诊断；进页会自动探测一次"
                           onClick={() => {
                             setTestDrawerConnId(conn.id);
                             setTestLogsExpanded(false);
@@ -791,7 +864,6 @@ export function ConnectionOverview() {
                               · {probeClock}
                             </time>
                           ) : null}
-                          <ChevronRight className="pl-connection-health-chevron" aria-hidden="true" strokeWidth={2} />
                         </button>
                       );
                     })()}
@@ -1039,8 +1111,42 @@ export function ConnectionOverview() {
                                         {expanded ? "收起详情" : "查看详情"}
                                       </button>
                                     ) : null}
-                                    <details className="pl-row-action-more">
-                                      <summary className="pl-row-action-link notranslate" translate="no" aria-label={`更多 Schema 操作：${schema}`}>更多</summary>
+                                    <details
+                                      className="pl-row-action-more"
+                                      open={openSchemaMoreKey === rowManifestKey}
+                                      data-schema-more={rowManifestKey}
+                                      data-testid={`schema-more-${conn.id}-${schema}`}
+                                      onMouseEnter={() => {
+                                        if (openSchemaMoreKey === rowManifestKey) cancelSchemaMoreClose();
+                                      }}
+                                      onMouseLeave={() => {
+                                        if (openSchemaMoreKey === rowManifestKey) scheduleSchemaMoreClose(rowManifestKey);
+                                      }}
+                                      onToggle={(event) => {
+                                        const nextOpen = event.currentTarget.open;
+                                        setOpenSchemaMoreKey((current) => {
+                                          if (nextOpen) return rowManifestKey;
+                                          return current === rowManifestKey ? null : current;
+                                        });
+                                      }}
+                                      onBlur={(event) => {
+                                        const next = event.relatedTarget;
+                                        if (next instanceof Node && event.currentTarget.contains(next)) return;
+                                        if (openSchemaMoreKey !== rowManifestKey) return;
+                                        closeSchemaMore();
+                                      }}
+                                    >
+                                      <summary
+                                        className="pl-row-action-link notranslate"
+                                        translate="no"
+                                        aria-label={`更多 Schema 操作：${schema}`}
+                                        onClick={(event) => {
+                                          event.preventDefault();
+                                          toggleSchemaMore(rowManifestKey);
+                                        }}
+                                      >
+                                        更多
+                                      </summary>
                                       <div className="pl-row-action-more-menu">
                                         {hasReadableManifest ? (
                                           <>
@@ -1049,7 +1155,10 @@ export function ConnectionOverview() {
                                               className="pl-row-action-link notranslate"
                                               translate="no"
                                               disabled={downloadingManifestKey === rowManifestKey}
-                                              onClick={() => void downloadManifest(conn.id, schema)}
+                                              onClick={() => {
+                                                closeSchemaMore();
+                                                void downloadManifest(conn.id, schema);
+                                              }}
                                               data-testid={`download-manifest-${conn.id}-${schema}`}
                                             >
                                               {downloadingManifestKey === rowManifestKey ? "下载中..." : "下载 Manifest"}
@@ -1059,6 +1168,7 @@ export function ConnectionOverview() {
                                               className="pl-row-action-link notranslate"
                                               translate="no"
                                               onClick={async () => {
+                                                closeSchemaMore();
                                                 try {
                                                   const asset = await fetchCatalogSchemaManifest(conn.id, schema);
                                                   openReuploadDrawer(asset);
@@ -1078,7 +1188,10 @@ export function ConnectionOverview() {
                                           type="button"
                                           className="pl-row-action-link pl-row-action-link--danger notranslate"
                                           translate="no"
-                                          onClick={() => setRemoveTarget({ connection: conn, schema })}
+                                          onClick={() => {
+                                            closeSchemaMore();
+                                            setRemoveTarget({ connection: conn, schema });
+                                          }}
                                           data-testid={`remove-schema-${conn.id}-${schema}`}
                                         >
                                           移除 Schema

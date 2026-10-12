@@ -40,7 +40,9 @@
 
 ### 4.1 Connection Action Bar
 
-Connection 卡片头部只展示身份与状态，不放卡片级操作按钮。
+Spec 163 修订本节：底部 Action Bar 取消。常驻操作是抬头右侧的「添加 Schema」和「更多」。以下原条文仅作 2026-07-31 的历史记录，不再执行。
+
+原条文：Connection 卡片头部只展示身份与状态，不放卡片级操作按钮。
 
 底部 Action Bar 统一承载 Connection 级和 Schema 级主操作，顺序如下：
 

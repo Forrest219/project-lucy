@@ -13,6 +13,7 @@ import {
   getAssistantDraft,
   setAssistantDraft,
   clearAssistantDraft,
+  formatAssistantProgressCompact,
   formatAssistantProgressLabel,
   deriveAssistantResumeState,
   deriveSetupReadiness,
@@ -92,9 +93,11 @@ describe("Setup Assistant Library & Utilities", () => {
     ).toBe(6);
   });
 
-  it("formats progress labels", () => {
-    expect(formatAssistantProgressLabel(1)).toContain("1/6");
-    expect(formatAssistantProgressLabel(3)).toContain("3/6");
+  it("formats progress labels as the current step, shared by the card and the modal", () => {
+    expect(formatAssistantProgressCompact(4)).toBe("接入进度 · 第 4 步");
+    expect(formatAssistantProgressLabel(4)).toBe("接入进度 · 第 4 步，共 6 步 · 当前：丰富业务语义");
+    expect(formatAssistantProgressLabel(1)).toContain("当前：连接数据库");
+    expect(formatAssistantProgressLabel(4)).not.toContain("4/6");
   });
 
   it("rehydrates resume state from the authoritative project and sources contracts", () => {
@@ -491,6 +494,9 @@ describe("SetupAssistantModal Component", () => {
       </QueryClientProvider>
     );
 
+    expect(screen.getByTestId("setup-assistant-progress")).toHaveTextContent(
+      "接入进度 · 第 1 步，共 6 步 · 当前：连接数据库"
+    );
     const stepper = screen.getByRole("navigation", { name: "接入步骤" });
     expect(stepper).toHaveTextContent("准备表结构");
     expect(stepper).toHaveTextContent("连接 Agent 客户端");
@@ -1332,13 +1338,16 @@ describe("ConnectionOverview Setup Assistant Bridge", () => {
     await waitFor(() => {
       expect(screen.getByTestId("resume-assistant-demo-db")).toBeInTheDocument();
     });
-    const progress = screen.getByTestId("connection-assistant-banner-demo-db");
-    expect(progress.className).not.toMatch(/border|rounded|bg-primary/);
-    expect(progress).toHaveTextContent("接入进度 2/6");
-    expect(screen.getByTestId("resume-assistant-demo-db")).toHaveTextContent("继续向导");
+    const progress = screen.getByTestId("resume-assistant-demo-db");
+    expect(screen.queryByTestId("connection-assistant-banner-demo-db")).not.toBeInTheDocument();
+    expect(progress.className).not.toMatch(/pl-btn--secondary|bg-primary/);
+    expect(progress).toHaveTextContent("接入进度 · 第 2 步");
+    expect(progress).toHaveAttribute("title", "接入进度 · 第 2 步，共 6 步 · 当前：准备表结构");
+    expect(progress).toHaveAttribute("aria-label", "继续向导，接入进度 · 第 2 步");
+    expect(screen.queryByRole("button", { name: "继续向导" })).not.toBeInTheDocument();
 
     // Click resume
-    fireEvent.click(screen.getByTestId("resume-assistant-demo-db"));
+    fireEvent.click(progress);
     await waitFor(() => {
       expect(screen.getByTestId("setup-assistant-modal")).toBeInTheDocument();
     });
