@@ -49,7 +49,7 @@
 | Data Capability | 数据能力元组 | `(tool, canonicalSourceKey, rowGrant)` | tools 并集、sources 并集 |
 | Effective Data Capabilities | 有效数据能力集 | 多 Role capability 的并集 | `(∪tools)×(∪sources)` |
 | Row Grant | 行授予 | 某 capability 上的行集合（AC-P0 恒为 TRUE） | Agent Constraints |
-| Agent Constraints | Agent 强制约束 | 人级收紧，AND 到 FinalRows | Role 间 AND |
+| Agent Constraints | 个人行限制 | 在角色行级策略之上再限制这个人，AND 到 FinalRows | 行级策略、Agent 强制约束（弃用主术语）、Role 间 AND |
 | Permission Model Version | 权限模型版本 | Role 上的 `permission_model_version: 1\|2` | 用户字段 `role`/`roles`、修改历史推断 |
 | Row Policy | 行级策略 | 仅 `access.yaml` 内 structured 谓词 | Segment、查询 filters |
 | Canonical Source Key | 规范源键 | `(connectionId, schema, sourceName, physicalTable)` | 裸 sourceName、裸 physicalTable |

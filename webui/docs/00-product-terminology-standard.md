@@ -247,7 +247,7 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Upstream Forced Predicate Proven | 上游强制谓词已证明 | proven 标志 | 代码写完即已证明 | Gate C bypass 全绿后才可置真；未证明取数 deny |
 | Row Policy Requires Wrapped Tool | 需包装工具 | `row_policy_requires_wrapped_tool` | capability_forbidden（混作主文案） | 受保护源上非 lucy_query 取数通道 |
 | Row Policy Upstream Unproven | 上游契约未证明 | `row_policy_upstream_unproven` | 临时放行碰运气 | FinalRows≠TRUE 且 proven≠true 的取数路径 |
-| Agent Constraints | Agent 强制约束 | 人级收紧、FinalRows 收紧 | Role 间 AND、Row Grant OR（混称）、TokenScope | 挂在 Agent 上、与 EffectiveRowGrant **AND**；**AC-P1.5 Spec 100**；Role 上 forbidden；AC-P1 配置出现即失败 |
+| Agent Constraints | 个人行限制 | 人级收紧、FinalRows 收紧 | 行级策略、行级权限策略、Agent 强制约束（弃用主术语）、Role 间 AND、Row Grant OR（混称）、TokenScope | 挂在 Agent 上、在角色行级策略之上再限制这个人，与 EffectiveRowGrant **AND**；**AC-P1.5 Spec 100**；Role 上 forbidden；AC-P1 配置出现即失败 |
 | Permission Model Version | 权限模型版本 | `permission_model_version`、模型版本 | 用户字段 role/roles、修改历史推断世代 | Role 上 `1`=legacy、`2`=显式模型 |
 | Row Policy | 行级策略 | row_policy、结构化行谓词 | Segment、查询 filters、overlay 表达式当权限 | 仅 `access.yaml` 内 structured 谓词；op∈{eq,in}；Spec 99 |
 | Canonical Source Key | 规范源键 | canonicalSourceKey、源键四元组 | 裸 sourceName、裸 physicalTable 作唯一身份 | `connectionId \| schema \| sourceName \| physicalTable` |
@@ -261,7 +261,7 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Policy Degraded | 策略降级 | 权限降级态、DataPlane 整体拒绝 | 服务不可用、完全健康（降级时） | 编译失败导致受影响 Agent 或整体 DataPlane deny |
 | Table & Row Policy Access | 可访问的表与行策略 | 表授权与行策略 | 资产边界、数据范围 | Role 详情中展示可访问表范围及行级策略配置的区域；对应 `allow.tableSelectors` + `row_policy` |
 | Read-only QA Preset | 只读问答 | 问答预设 | 纯只读、Viewer | 预设工具集：`lucy_catalog`、`lucy_read_source`、`lucy_query`、`lucy_explain_query`、`lucy_freshness`、`lucy_begin_question`，共 6 个；不含 `sl_validate` |
-| Read-only QA + Wiki Preset | 只读问答 + 知识库 | 问答 + Wiki 预设 | 查数+Wiki | 预设工具集：只读问答 6 个加 `wiki_search`、`wiki_read`，共 8 个 |
+| Read-only QA + Wiki Preset | 只读问答 + 知识库 | 问答 + Wiki 预设 | 查数+Wiki | Spec 170 起从角色页撤回。`wiki_search`、`wiki_read`、`lucy_skill_search`、`lucy_skill_read` 对已解析角色始终可用，不再作为预设差集 |
 | Matches Preset | 当前与{预设名}一致 | 与预设匹配 | 已绑定预设、跟随预设 | 当前工具集合与某预设完全相等时的界面提示文案；集合比较与顺序无关 |
 | Row Access: All Rows | 行权限：全部行 | 不限制行 | 全部行 all、row_access 作界面主文案 | 表未配置 `row_policy` 时的显示文案；`row_access` 字段只作存储，不作为界面主文案 |
 | Equals / In | 等于 / 属于 | 等于、属于（单独使用） | eq / in / op 作界面主文案（存储仍为 eq / in） | 行级策略条件的界面展示；存储用 `op: eq` 或 `op: in`，界面主文案用「等于」「属于」 |
@@ -514,7 +514,8 @@ Connection (连接)
 | Token Device Inventory | Token 设备清单 | 设备视角 Token 列表 | 已登录设备、Sessions | Agent 详情 Token Tab |
 | Interface Usage View | 界面使用 | — | 埋点、telemetry、pageview | `?view=interface`；默认视图仍为数据访问（Spec 148） |
 | Data Access View | 数据访问 | — | 治理概览（作该视图名） | 使用概况默认视图 |
-| Page Views | 近 N 页面访问 | 页面访问（叙述） | 浏览量 | 窗口内页面打开次数 |
+| Page Views | 近 N 页面访问 | 页面访问（叙述） | 浏览量 | 窗口内页面打开次数。折线见 Usage Page View Line |
+| Usage Page View Line | （无可见标题） | — | 趋势图、迷你图、sparkline（作可见文案） | 只在界面使用的「近 N 页面访问」主值右侧。各点相加等于页面访问。访问账户、活跃菜单和数据访问三张卡不加。见 Spec 166 |
 | Visiting Accounts | 近 N 访问账户 | 访问账户（叙述） | 访客、UV | 去重登录账户 |
 | Active Menus | 近 N 活跃菜单 | 活跃菜单（叙述） | 热门菜单（与排行混用） | 窗口内至少打开 1 次的侧栏菜单 |
 | Group Visit Ranking | 分组访问 · 近 N | — | 模块热度 | 全部分组，含 0 次 |
@@ -532,20 +533,22 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 | System Overview | 系统概览 | 系统总览混用 | 全局运行状态页 |
 | Runtime Status | 运行状态 | 运行时间状态 | 服务运行健康情况 |
 | Runtime Status Group | 运行状态 | 把「系统概览」继续当作分组名承载多页；监控中心 | 侧栏分组；含系统概览 + 调用监控 + 使用概况；见 Spec 143 / 156 |
-| Call Monitoring Page | 调用监控 | 日志调用监控看板、调用看板、流量大屏、监控看板（作 H1） | 主路由 `/ops/calls`；侧栏与 H1；准实时 MCP 工具调用盯盘；见 Spec 143 |
+| Call Monitoring Page | 调用监控 | 日志调用监控看板、调用看板、流量大屏、监控看板（作 H1） | 主路由 `/ops/calls`；侧栏与 H1；准实时 MCP 工具调用盯盘；窗口见 Spec 165 |
 | Call Monitor Success Rate | 成功率 | 与评测「通过率」混用 | MCP 工具调用 `ok / businessCalls`；仅调用监控主标签 |
 | Call Monitor Error Rate | 错误率 | 失败率（与拒绝混用） | `error / businessCalls` |
 | Call Monitor Denied Rate | 拒绝率 | 拦截率作唯一主标签 | `denied / businessCalls`；叙述可写 ACL 拒绝率 |
 | Recent Failures List | 最近失败与拒绝 | 告警列表、incident | 调用监控有界短表；非通知通道 |
-| Auto Refresh | 自动刷新 | 实时推送（暗示 SSE） | 默认 30s 轮询；hint 可写「30 秒刷新」 |
+| Auto Refresh | 自动刷新 | 实时推送（暗示 SSE） | 调用监控四个窗口都是 30 秒轮询；刷新失败保留上一份成功快照。hint 可写「30 秒刷新」 |
 | Public MCP URL | Public MCP URL | 公共 MCP 地址 | 部署暴露给外部的 MCP URL |
 | Asset Delivery | 资产交付 | 资产下载区 | 运维级导出、发布、交付入口 |
 | Sidebar Group | 运行状态 / 数据接入 / 业务上下文 / 语义发布 / 质量评测 / 访问治理 / 系统设置 | 6+1 主导航混用其它分组名；继续用「系统概览」作多页分组名 | Lucy WebUI 侧边栏固定 IA；Spec 143 起置顶分组为「运行状态」；Spec 144 v1.1 起「语义建模」组更名「业务上下文」 |
 | Semantic Completion Incomplete | 未完成 | partial / not_started（作用户主文案）、status=partial | Catalog / overview 深链 value=`incomplete`（`!== done`）；见 Spec 100 |
 | Action Impact | 影响 | impact（裸露） | 待办行必填次级文案；Spec 100 |
 | Action Evidence | 证据来源 | evidence（裸露） | 待办行必填；Spec 100 |
+| Call Monitor Window | 近 1 小时 / 近 24 小时 / 近 7 天 / 近 30 天 | 月、周、24H、近 1 月 | 调用监控全页唯一时间切换。URL `range=1h\|24h\|7d\|30d`。见 Spec 165 |
+| Call Monitor In-window Line | （无可见标题） | 趋势图、迷你图、sparkline（作可见文案） | 每张 KPI 内的折线，刻度跟随窗口。无障碍名称用指标、窗口和刻度。禁止与「趋势监控」混称 |
 
-调用监控沿用访问治理既有口径：**近 N 调用量**、**多数请求耗时**（P95 次级括注）、**慢于多数请求**；页头不展示统计时间或 SLO 总状态。时效只计单次 MCP 工具调用 `durationMs`，不计 Turn 端到端。Protected DOM 另含 tool name、`requestId`、`traceId`。详见 Spec 143。
+调用监控沿用访问治理既有口径：**近 N 调用量**、**多数请求耗时**（P95 次级括注）、**慢于多数请求**。时间窗只有一组：近 1 小时、近 24 小时、近 7 天、近 30 天。每张 KPI 里的折线没有自己的标题，也不叫趋势图。页头不展示统计时间或 SLO 总状态。时效只计单次 MCP 工具调用 `durationMs`，不计 Turn 端到端。Protected DOM 另含 tool name、`requestId`、`traceId`。详见 Spec 143 与 Spec 165。
 
 ### 4.7 访问日志 / Admin Audit
 
@@ -627,7 +630,7 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`MCP`、`Agent`�
 | Row Access | 行访问 | `row_access: all` / `scoped` | 行级已开启但未注入；Dynamic RLS 已交付 | AC-P0 仅 `all`；AC-P1 允许 `scoped`+`row_policy`（Gate B 后） |
 | Row Policy Editor | 行级策略 | predicates / eq / in | Segment 当行权限 | Role Admin；op 仅 eq\|in |
 | Final Rows Preview | 最终行约束 | FinalRows 摘要 | 已取数成功（explain 场景） | dryRun / explain 诊断；P1.5 须含 Constraints 参与后的 digest（Spec 100） |
-| Agent Constraints Editor | Agent 强制约束 | constraints / 人级收紧 | Role 强制约束、Token 行收紧、多 Role 自动 AND | **仅 Agent Admin**（Spec 100）；Role / Token 不提供 |
+| Agent Constraints Editor | 个人行限制 | constraints / 人级收紧 | 行级策略、Agent 强制约束（按钮与标题弃用）、Role 强制约束、Token 行收紧、多 Role 自动 AND | **仅 Agent Admin**（Spec 100）；从当前角色已授权的表勾选；Role / Token 不提供 |
 | Forced Filters Field | 专用强制字段 | `forced_filters` | 用户 filters 即行权限 | 仅 Proxy 注入 |
 | Row Policy Requires Wrapped Tool | 需包装工具 | 请使用 lucy_query | 表未授权（混用） | Toast / 审计主文案 |
 | Row Policy Upstream Unproven | 上游契约未证明 | 行策略未启用取数 | 临时可用 | proven 前取数 deny |
@@ -675,11 +678,11 @@ Skill 是与语义资产、业务 Wiki 并列的受治理上下文。导航与�
 | Save Skill | 保存 Skill | 发布技能（作保存按钮文案） | Spec 147；写回 frontmatter + Markdown；状态字段仍是 `status` |
 | Delete Skill | 删除 Skill | 删除技能、移除技巧 | Spec 147；删除入口文件，不删共享 `references/` |
 | Skill Governance Overview | Skill 治理总览 | Skill 首页、Skill Hub | Spec 153；`/skills` 默认主工作区，展示全部或领域范围内的治理摘要 |
-| Skill Save Preflight | 保存 Skill 前预检 | 发布 Skill、直接保存 | Spec 153；写入前只读展示 Diff、校验、状态与授权影响；按钮为「保存并预检」 |
+| Skill Save Preflight | 保存 Skill 前预检 | 发布 Skill、直接保存 | Spec 153；写入前只读展示 Diff、校验与状态；按钮为「保存并预检」。Spec 170 起不再展示授权影响 |
 | Markdown Source / Rendered Preview | Markdown 源码 / 渲染预览 | 原文框 / 效果区 | Spec 153；Skill 编辑态双栏标签 |
-| Accessible Roles | 可访问角色 | 授权角色（辅助说明） | Skill 编辑页的 Role 多选；对象授权事实源为 `roles_allowed` |
-| All Roles Visible | 所有角色可见 | 全员可用、公开（作主标签） | 显式写入 `roles_allowed: ["*"]`；开启时需要二次确认 |
-| No Roles Visible | 无人可见 | 私有（含义不明确） | 缺失或空 `roles_allowed`；新建 Skill 默认状态 |
+| Accessible Roles | 可访问角色 | 授权角色（辅助说明） | Spec 170 起从 Skill 编辑页撤回。`roles_allowed` 只保留在文件中，不参与运行时裁决 |
+| All Roles Visible | 所有角色可见 | 全员可用、公开（作主标签） | Spec 170 起从界面撤回。已发布 Skill 默认对所有已解析角色开放，不再用该开关写入 `["*"]` |
+| No Roles Visible | 无人可见 | 私有（含义不明确） | Spec 170 起从界面撤回。空 `roles_allowed` 不再表示 Agent 不可读 |
 
 Protected terms（DOM 须 `translate="no"` + `notranslate`）：`Skill`、`lucy-skill://`、`lucy_skill_read`、`domain`、`roles_allowed`、Skill 文件路径、`SKILL.md`。
 

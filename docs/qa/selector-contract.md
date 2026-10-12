@@ -1075,7 +1075,6 @@
 | `skills-row` | Skill 行 | `pages/skills/SkillList.tsx` |
 | `skills-open-detail` | 打开详情 | `pages/skills/SkillList.tsx` |
 | `skill-status` | 状态 | `pages/skills/SkillList.tsx` |
-| `skill-roles-summary` | 可访问角色摘要 | `pages/skills/SkillList.tsx` |
 | `skill-validation` | 校验状态 | `pages/skills/SkillList.tsx` |
 | `skill-detail` | 主区阅读态 | `pages/skills/SkillList.tsx` |
 | `skill-detail-back` | 返回领域治理总览 | `pages/skills/SkillList.tsx` |
@@ -1084,17 +1083,12 @@
 | `skill-detail-path` | Skill 文件路径 | `pages/skills/SkillList.tsx` |
 | `skill-detail-validation-issues` | 中文校验问题 | `pages/skills/SkillList.tsx` |
 | `skill-editor-form` | 编辑表单 | `pages/skills/SkillList.tsx` |
-| `skill-metadata-toggle` | 元数据与授权折叠区 | `pages/skills/SkillList.tsx` |
+| `skill-metadata-toggle` | 元数据折叠区 | `pages/skills/SkillList.tsx` |
 | `skill-field-name` | Skill name | `pages/skills/SkillList.tsx` |
 | `skill-field-domain` | Skill domain | `pages/skills/SkillList.tsx` |
 | `skill-field-title` | 标题 | `pages/skills/SkillList.tsx` |
 | `skill-field-version` | 语义版本 | `pages/skills/SkillList.tsx` |
 | `skill-field-status` | 状态选择 | `pages/skills/SkillList.tsx` |
-| `skill-field-roles` | 可访问角色控件 | `pages/skills/SkillList.tsx` |
-| `skill-role-all` | 所有角色可见开关 | `pages/skills/SkillList.tsx` |
-| `skill-role-option` | Role 多选项 | `pages/skills/SkillList.tsx` |
-| `skill-role-none` | 无人可见提示 | `pages/skills/SkillList.tsx` |
-| `skill-role-unknown` | 未配置 Role 警告 | `pages/skills/SkillList.tsx` |
 | `skill-field-triggers` | 触发词 | `pages/skills/SkillList.tsx` |
 | `skill-field-description` | 说明 | `pages/skills/SkillList.tsx` |
 | `skill-field-content` | Markdown 正文 | `pages/skills/SkillList.tsx` |
@@ -1108,9 +1102,7 @@
 | `skill-delete-confirm` | 删除确认 | `pages/skills/SkillList.tsx` |
 | `skill-preflight` | 保存 Skill 前预检 | `pages/skills/SkillList.tsx` |
 | `skill-preflight-diff` | 预检 Diff | `pages/skills/SkillList.tsx` |
-| `skill-wildcard-ack` | 所有角色可见确认 | `pages/skills/SkillList.tsx` |
 | `skill-preflight-confirm` | 确认写入 | `pages/skills/SkillList.tsx` |
-| `role-skill-access-summary` | Role 详情只读业务 Skill 摘要 | `pages/admin/RoleDetail.tsx` |
 
 ## 8. Rename History
 
@@ -1124,6 +1116,7 @@
 | 2026-07-31 | v0.3 重写 | `add-schema-drawer-step-1..4` | （实现缺失，未补） | v0.3 标记 MISSING，待实现补全 |
 | 2026-07-31 | v0.3 重写 | `sl-ref-picker` / `sl-ref-badge-...` | （实现缺失，未补） | v0.3 标记 MISSING，待实现补全 |
 | 2026-07-31 | v0.3 重写 | `catalog-row-...` / `table-editor-*` | （实现严重缺失） | v0.3 标记 MISSING，影响 E2E-SEM-* 整组 |
+| 2026-10-12 | Spec 170 | `skill-roles-summary`、`skill-field-roles`、`skill-role-all`、`skill-role-option`、`skill-role-none`、`skill-role-unknown`、`skill-wildcard-ack`、`role-skill-access-summary` | （删除） | Skill / Wiki 对象授权暂停，控件不再渲染 |
 
 ---
 
@@ -1184,6 +1177,7 @@
 | `governance-interface-loading` | 治理界面加载态 | `pages/admin/GovernanceOverview.tsx` |
 | `governance-interface-usage` | 治理界面使用摘要 | `pages/admin/GovernanceOverview.tsx` |
 | `governance-interface-metrics` | 治理界面指标 | `pages/admin/GovernanceOverview.tsx` |
+| `usage-sparkline-page-views` | 页面访问折线 | `pages/admin/GovernanceOverview.tsx` |
 | `governance-interface-unmapped` | 未映射界面入口 | `pages/admin/GovernanceOverview.tsx` |
 | `governance-interface-rank-grid` | 界面排行 | `pages/admin/GovernanceOverview.tsx` |
 | `governance-interface-groups` | 界面分组 | `pages/admin/GovernanceOverview.tsx` |
@@ -1193,8 +1187,18 @@
 | `new-token-expiry-policy-notice` | Token 有效期策略提示 | `pages/admin/NewToken.tsx` |
 | `call-monitor-page` | 调用监控页面 | `pages/ops/CallMonitor.tsx` |
 | `call-monitor-controls` | 调用监控控制区 | `pages/ops/CallMonitor.tsx` |
+| `call-monitor-range-${option.range}` | 时间窗（模板） | `pages/ops/CallMonitor.tsx` |
 | `call-monitor-range-24h` | 24 小时时间窗 | `pages/ops/CallMonitor.tsx` |
 | `call-monitor-range-1h` | 1 小时时间窗 | `pages/ops/CallMonitor.tsx` |
+| `call-monitor-range-7d` | 7 天时间窗 | `pages/ops/CallMonitor.tsx` |
+| `call-monitor-range-30d` | 30 天时间窗 | `pages/ops/CallMonitor.tsx` |
+| `call-monitor-sparkline-${seriesMetric}` | 窗内折线（模板） | `components/MetricCard.tsx` |
+| `call-monitor-sparkline-volume` | 调用量折线 | `components/MetricCard.tsx` |
+| `call-monitor-sparkline-success` | 成功率折线 | `components/MetricCard.tsx` |
+| `call-monitor-sparkline-error` | 错误率折线 | `components/MetricCard.tsx` |
+| `call-monitor-sparkline-denied` | 拒绝率折线 | `components/MetricCard.tsx` |
+| `call-monitor-sparkline-p95` | 多数请求耗时折线 | `components/MetricCard.tsx` |
+| `call-monitor-sparkline-slow` | 慢于多数请求折线 | `components/MetricCard.tsx` |
 | `call-monitor-auto-refresh` | 调用监控自动刷新 | `pages/ops/CallMonitor.tsx` |
 | `call-monitor-refresh` | 调用监控手动刷新 | `pages/ops/CallMonitor.tsx` |
 | `call-monitor-error` | 调用监控错误态 | `pages/ops/CallMonitor.tsx` |

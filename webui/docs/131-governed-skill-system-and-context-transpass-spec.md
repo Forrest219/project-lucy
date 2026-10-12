@@ -188,12 +188,9 @@ eval_cases:
 - **Step 3**: 若发现特定单品毛利严重倒挂，执行明细下钻并附加 Provenance 证据。
 ```
 
-### 3.3 语义层强校验契约 (Semantic Validation Contract)
-在 WebUI 编译/保存或 CI 阶段，Lucy 编译器将对 Skill 进行静态检查：
-1. **Source 存在性**：`prerequisites.sources` 中的数据源必须在当前生效的 Catalog / Manifest 中存在。
-2. **Measure 存在性**：`prerequisites.measures` 中的度量必须在对应 Semantic Overlay 中有明确定义。
-3. **Wiki 引用校验**：引用的 `wiki_docs` 必须在 `wiki/` 目录中存在且可读。
-4. **Eval 绑定要求**：处于 `published` 状态的 Skill **必须**绑定至少一个有效的 Eval 用例。
+### 3.3 校验契约
+
+本节原定的语义层强校验（Source / Measure 存在性、Wiki 引用、已发布必须绑定 Eval）已撤回。Skill 是低频、共享、集中上传的公共文档。运行中的校验以 Spec 147 v1.2 为准：只检查名称、标题、域、状态和角色通配符。`prerequisites` 与 `eval_cases` 可以留在文件里，缺失或不存在都不产生校验问题，也不影响 Agent 读取。Agent 可见性仍只看已发布状态和 `roles_allowed`。
 
 ---
 
@@ -240,18 +237,12 @@ eval_cases:
 在 Lucy WebUI 新增一级/二级管理工作台：
 1. **Skill 资产目录**：按 Domain 浏览、搜索、状态筛选（Draft / Published / Deprecated）。
 2. **在线编辑与语法高亮**：支持 Markdown/YAML 混合编辑，集成 Semantic Measure 自动补全。
-3. **实时编译校验器**：实时校验引用的表、字段、度量是否存在，高亮悬空引用（Dangling References）。
+3. **结构性校验**：只检查名称、标题、域、状态和角色通配符。不校验表、字段、度量、Wiki 或评测用例是否存在。
 4. **运行效能仪表盘**：展示各 Skill 在全企业的调用频次（Hit Rate）、平均生成耗时、以及关联的 Bad Case 率。
 
 ### 5.2 CI/CD Eval 评测门禁 (Skill Quality Gate)
-```
-┌─────────────────┐      ┌─────────────────────────┐      ┌─────────────────┐
-│ Skill Edit/PR   │ ───> │ Run Bound Eval Cases    │ ───> │ Gate Decision   │
-│ (Markdown/YAML) │      │ (sl_query + Assertion)  │      │ Pass / Block    │
-└─────────────────┘      └─────────────────────────┘      └─────────────────┘
-```
-- 发布前必须执行绑定的 `eval_cases`。
-- 断言包括：SQL 语法正确性、正确过滤了 Pitfall 条件（如退货过滤）、返回数据非空且与 Golden Value 吻合。
+
+此门禁未实现，并已从 Skill 校验中移除。发布不要求绑定或执行 `eval_cases`。评测仍是质量评测模块自己的能力，不作为业务 Skill 的保存或发布条件。
 
 ### 5.3 客户端一键导出与离线同步 (Client Sync Package)
 针对不同开发者的 IDE 与客户端生态，提供本地配置文件一键导出：
@@ -266,6 +257,6 @@ eval_cases:
 | 阶段 | 交付物 | 核心文件与范围 | 验收标准 |
 |---|---|---|---|
 | **Phase 1: 协议与运行时** | MCP Proxy 支持 `resources/*` 与 `prompts/*` | `webui/server/proxy/mcp-proxy.ts`, `skills-router.ts` | Agent 可通过 `resources/read` 成功读取 Skill，未授权 Token 触发 403 拦截 |
-| **Phase 2: 资产加载与校验** | Skill 资产扫描器与语义校验引擎 | `webui/server/skills/loader.ts`, `validator.ts` | 启动时自动解析 `skills/` 下所有 SOP，校验 Source/Measure 引用合法性 |
+| **Phase 2: 资产加载与校验** | Skill 资产扫描器与结构性校验 | `webui/server/skills/loader.ts`, `validator.ts` | 启动时解析 `skills/`；校验只覆盖名称、标题、域、状态和角色通配符 |
 | **Phase 3: 审计与链路溯源** | Audit DB 扩展与 Provenance 记录 | `webui/server/proxy/audit.ts`, `access_log` | 每次 Skill 读取均记录 `access_log`，生成 Trace Audit ID |
 | **Phase 4: WebUI 管理台** | Skill Studio 界面与客户端导出功能 | `webui/src/pages/skills/*`, `SkillEditor.tsx` | WebUI 可增删改查 Skill、执行一键 Eval 门禁测试、下载客户端配置包 |

@@ -887,7 +887,7 @@ Query：
 
 `POST /api/admin/ui-usage/page-view` 记录一次 WebUI 页面打开。请求体 `{ "pathname": "/catalog" }`。走现有 WebUI 管理员鉴权；required 且未登录返回 401。成功 `{ ok: true, data: { recorded: true | false } }`（跳转路径可为 `recorded: false`）。非法路径返回 400，错误文案不回显路径。
 
-`GET /api/admin/ui-usage/overview?hours=24|168` 返回界面使用聚合：`pageViews`、`visitorCount`、`activeMenuCount`、`unmappedViews`，以及 `groups` / `menus` / `pages` 排行（`{ id, label, visits }`）。仅接受 24 与 168，缺省或其他值按 168。权威契约见 Spec 148。
+`GET /api/admin/ui-usage/overview?hours=24|168` 返回界面使用聚合：`pageViews`、`visitorCount`、`activeMenuCount`、`unmappedViews`，以及 `groups` / `menus` / `pages` 排行（`{ id, label, visits }`）。仅接受 24 与 168，缺省或其他值按 168。`pageViewSeries` 只拆开 `pageViews`，见 Spec 166。权威契约见 Spec 148 与 Spec 166。
 
 `POST /api/admin/ui-usage/catalog-navigation-event` 记录 `/catalog` P0 的匿名交互事件。请求体 `{ visitId, eventType, contextLevel? }`；只接受 Spec 152 定义的事件与层级枚举。事件只写本机审计库，不保存账户、URL、查询串、搜索词或业务对象名。成功返回 `{ ok: true, data: { recorded: true | false } }`；非法请求返回 `400 CATALOG_NAVIGATION_EVENT_INVALID`。
 
@@ -895,7 +895,7 @@ Query：
 
 ### 调用监控（Spec 143）
 
-`GET /api/ops/call-monitor?range=24h|1h&slowMs=` 返回 MCP 业务工具调用的准实时聚合：吞吐、成功率 / 错误率 / 拒绝率、多数请求耗时（P95）、慢于多数请求计数、SLO 违规、Top 工具（≤10）与最近失败与拒绝短表（≤20）。事实源为 `audit.sqlite` access_log，排除协议工具；响应不得包含 Eval / Hermes 字段。权威契约见 Spec 143。
+`GET /api/ops/call-monitor?range=1h|24h|7d|30d&slowMs=` 返回 MCP 业务工具调用的准实时聚合，以及同一窗口的分桶序列：吞吐、成功率 / 错误率 / 拒绝率、多数请求耗时（P95）、慢于多数请求计数、SLO 违规、Top 工具（≤10）、最近失败与拒绝短表（≤20）和 `series`。事实源为 `audit.sqlite` access_log，排除协议工具；响应不得包含 Eval / Hermes 字段。权威契约见 Spec 143 与 Spec 165。
 
 ### MCP Proxy
 

@@ -25,7 +25,7 @@ New / 扩展 terms（须已登记于术语标准 §3 与 §4.8）：
 
 | Canonical Term | UI 主术语 | 禁止混淆 |
 |---|---|---|
-| Agent Constraints | Agent 强制约束 | Role 间 AND、Row Grant OR（混称）、TokenScope |
+| Agent Constraints | 个人行限制 | 行级策略、Agent 强制约束（弃用主术语）、Role 间 AND、Row Grant OR（混称）、TokenScope |
 | Final Rows | 最终行约束 | 仅 Role 并集、仅用户 filter |
 | Effective Row Grant | 有效行授予 | FinalRows（混称）、Role 间 AND |
 | Forced Predicate | 强制谓词 | 拼进用户 filters 的 SQL 字符串 |

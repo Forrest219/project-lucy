@@ -146,6 +146,7 @@
 | [168-agent-role-set-admin-spec.md](168-agent-role-set-admin-spec.md) | Agent 角色多选 v0.1：详情和新建用复选框绑定多个角色，写入只落 `roles[]`，预览和门禁复用既有合成。已实现，工单 WO-202610-20。落实 Spec 14 | 产品 / UX / API / Frontend / Backend / 安全 |
 | [169-usage-and-call-monitor-density-spec.md](169-usage-and-call-monitor-density-spec.md) | 使用概况与调用监控密度 v0.1：短排行顶部对齐，用量条改中性灰；调用量去掉重复窗口副文，当天失败只显示时刻，自动刷新写明 30 秒；数据访问 / 界面使用改为内容页签。已实现，工单 WO-202610-21。修订 Spec 135 / 156 / 165 | 产品 / UX / Frontend |
 | [166-usage-page-view-series-spec.md](166-usage-page-view-series-spec.md) | 使用概况页面访问折线 v0.1：只在界面使用的「近 N 页面访问」上拆开当前 24 小时或 7 天；各点相加等于卡片数字。已实现，工单 WO-202610-19。修订 Spec 148 / 156 | 产品 / UX / API / Frontend / Backend |
+| [170-mvp-open-skill-wiki-access-spec.md](170-mvp-open-skill-wiki-access-spec.md) | Skill 与 Wiki 对所有角色开放 v0.1：暂停对象授权和四个上下文工具的勾选；已发布 Skill 与全部 Wiki 对已解析角色开放。已实现，工单 WO-202610-22。暂停 Spec 151 的对象授权 | 产品 / Runtime / UX / 安全 |
 
 ## 与原 README 的关键校正
 
