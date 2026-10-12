@@ -402,8 +402,8 @@ Connection (连接)
 | 说法 | 用途 | 不使用 |
 |---|---|---|
 | 接入进度 · 第 n 步，共 6 步 | 连接卡片与接入向导弹窗共用的当前步骤。卡片写「接入进度 · 第 n 步」，弹窗写全句并带上当前步骤名 | 接入进度 n/6 |
-| 准备表结构 | 第 2 步标题和第 1 步出口 | 把「上传 Schema Manifest」当作唯一步骤名 |
-| 从数据库读取表结构 | 尚无 Schema Manifest 时的主按钮 | 自动生成清单、跳过 Manifest |
+| 准备表结构 | 第 2 步标题和第 1 步出口；缺 Manifest 时从 Schema 行进入的抽屉标题（Spec 164） | 把「上传 Schema Manifest」当作唯一步骤名 |
+| 从数据库读取表结构 | 尚无 Schema Manifest 时的主按钮。接入向导第 2 步，以及添加 Schema 成功步、缺 Manifest 的 Schema 行（Spec 164） | 自动生成清单、跳过 Manifest |
 | 使用已有 Schema Manifest | 已有资产时的默认主动作 | 请重新上传、强制替换 |
 | 我已有 Schema Manifest | 展开上传 | 裸「上传 YAML」 |
 | 替换已有 Schema Manifest | 主动覆盖入口，确认后再写入 | 自动覆盖 |

@@ -2,9 +2,15 @@
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AddSchemaDrawer } from "../components/AddSchemaDrawer";
 import type { ConnectionInfo } from "../lib/types";
+
+function LocationProbe() {
+  const location = useLocation();
+  return <div data-testid="location">{`${location.pathname}${location.search}`}</div>;
+}
 
 function makeConn(overrides: Partial<ConnectionInfo> = {}): ConnectionInfo {
   return {
@@ -24,7 +30,10 @@ function renderDrawer(conn: ConnectionInfo, onClose = vi.fn()) {
   });
   render(
     <QueryClientProvider client={client}>
-      <AddSchemaDrawer connection={conn} open onClose={onClose} />
+      <MemoryRouter>
+        <LocationProbe />
+        <AddSchemaDrawer connection={conn} open onClose={onClose} />
+      </MemoryRouter>
     </QueryClientProvider>
   );
   return { client, onClose };
@@ -438,18 +447,18 @@ describe("AddSchemaDrawer", () => {
     await waitFor(() => screen.getByTestId("add-schema-confirm-btn"));
     fireEvent.click(screen.getByTestId("add-schema-confirm-btn"));
 
-    // Static loading hint and reload button appear; no ingest wording.
-    await waitFor(() => screen.getByTestId("add-schema-reload-catalog"));
-    expect(screen.getByTestId("add-schema-static-loading-hint")).toHaveTextContent(/semantic-layer/);
+    await waitFor(() => screen.getByTestId("add-schema-read-structure"));
+    expect(screen.getByTestId("add-schema-success-message")).toHaveTextContent("✓ 已添加 Schema：finance_mart");
+    expect(screen.queryByTestId("add-schema-static-loading-hint")).not.toBeInTheDocument();
+    expect(screen.queryByText(/semantic-layer/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/下一步将先验证连接权限/)).not.toBeInTheDocument();
     expect(screen.queryByText(/现在 ingest/)).not.toBeInTheDocument();
     expect(screen.queryByText(/ingest 中/)).not.toBeInTheDocument();
-    // M25: success step surfaces the Schema Manifest upload next step + the "added"
-    // copy in the prescribed format.
-    expect(
-      screen.getByText(/已添加 Schema：finance_mart/)
-    ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "上传 Schema Manifest" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "同步配置变更" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "从数据库读取表结构" })).toHaveClass("pl-btn--primary");
+    expect(screen.getByRole("button", { name: "我已有 Schema Manifest" })).toBeInTheDocument();
+    expect(screen.getByTestId("add-schema-done")).toHaveTextContent("完成");
+    expect(screen.queryByRole("button", { name: "同步配置变更" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "上传 Schema Manifest" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /ingest/i })).not.toBeInTheDocument();
 
     // No request to /ingest at any point.
@@ -458,17 +467,7 @@ describe("AddSchemaDrawer", () => {
     );
     expect(ingestCalls).toHaveLength(0);
 
-    // Click reload and verify it posts to /api/catalog/reload with the
-    // connectionId + schema.
-    fireEvent.click(screen.getByTestId("add-schema-reload-catalog"));
-    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    const reloadCall = fetchMock.mock.calls[0];
-    expect(String(reloadCall?.[0])).toBe("/api/catalog/reload");
-    expect(reloadCall?.[1]?.body).toBe(
-      JSON.stringify({ connectionId: "mysql-aliyun", schema: "finance_mart" })
-    );
-
-    // Catalog cache keys invalidated.
+    // Catalog cache keys invalidated by the schema write.
     await waitFor(() => {
       expect(invalidate).toHaveBeenCalledWith({ queryKey: ["catalog", "reloads"] });
       expect(invalidate).toHaveBeenCalledWith({ queryKey: ["project"] });
@@ -566,4 +565,233 @@ describe("AddSchemaDrawer", () => {
     expect(screen.queryByText("手动输入 Schema 名称")).not.toBeInTheDocument();
     expect(screen.queryByText(/MySQL 中通常对应 database 名/)).not.toBeInTheDocument();
   });
+
+  it("SC-2: a database that cannot be read offers upload as the only next step", async () => {
+    stubFetch({
+      "POST /api/connections/sqlite-main/schemas": schemaWriteResponse("analytics")
+    });
+    renderDrawer(makeConn({
+      id: "sqlite-main",
+      driver: "sqlite",
+      engine: "sqlite",
+      wireProtocol: "sqlite" as ConnectionInfo["wireProtocol"]
+    }));
+    await confirmAddedSchema("analytics");
+    expect(screen.getByRole("button", { name: "上传 Schema Manifest" })).toHaveClass("pl-btn--primary");
+    expect(screen.queryByRole("button", { name: "从数据库读取表结构" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "我已有 Schema Manifest" })).not.toBeInTheDocument();
+    expect(screen.getByTestId("add-schema-done")).toHaveTextContent("完成");
+  });
+
+  it("SC-3: an existing Manifest makes reuse the primary action", async () => {
+    stubFetch({
+      "POST /api/connections/mysql-aliyun/schemas": schemaWriteResponse("finance_mart"),
+      "GET /api/sources": () =>
+        new Response(JSON.stringify({
+          ok: true,
+          data: {
+            tables: [],
+            manifestSchemas: [{
+              conn: "mysql-aliyun",
+              schema: "finance_mart",
+              filePath: "semantic-layer/mysql-aliyun/_schema/finance_mart.yaml",
+              tableCount: 2,
+              mtime: "2026-10-12T00:00:00.000Z"
+            }]
+          }
+        }))
+    });
+    renderDrawer(makeConn());
+    await confirmAddedSchema("finance_mart");
+    expect(await screen.findByRole("button", { name: "使用已有 Schema Manifest" })).toHaveClass("pl-btn--primary");
+    expect(screen.getByRole("button", { name: "替换已有 Schema Manifest" })).toBeInTheDocument();
+  });
+
+  it("SC-4: reading structure writes a missing Manifest and opens enabled tables", async () => {
+    const calls: string[] = [];
+    stubFetch({
+      "POST /api/connections/mysql-aliyun/schemas": schemaWriteResponse("finance_mart"),
+      "POST /api/connections/mysql-aliyun/schema-structure": () => {
+        calls.push("structure");
+        return new Response(JSON.stringify({
+          ok: true,
+          data: {
+            schema: "finance_mart",
+            readable: true,
+            yaml: "tables:\n  orders:\n    columns:\n      - name: id\n        type: number\n",
+            tableCount: 1,
+            columnCount: 1,
+            mapped: { number: 1, string: 0, time: 0 },
+            downgraded: []
+          }
+        }));
+      },
+      "POST /api/catalog/assets/validate": () => {
+        calls.push("validate");
+        return new Response(JSON.stringify({
+          ok: true,
+          data: {
+            valid: true,
+            connectionId: "mysql-aliyun",
+            schema: "finance_mart",
+            assetKind: "schema_manifest",
+            assetType: "schemaManifest",
+            targetPath: "semantic-layer/mysql-aliyun/_schema/finance_mart.yaml",
+            exists: false,
+            originalFilename: "finance_mart.yaml",
+            sizeBytes: 40,
+            sha256: "abc",
+            tables: 1,
+            tableNames: ["orders"],
+            warnings: [],
+            errors: []
+          }
+        }));
+      },
+      "POST /api/catalog/assets/upload": () => {
+        calls.push("upload");
+        return new Response(JSON.stringify({
+          ok: true,
+          data: {
+            uploaded: true,
+            record: { tables: 1 },
+            validation: { tables: 1, valid: true, exists: false, errors: [], warnings: [] },
+            reload: { status: "success", tables: 1, warnings: [] }
+          }
+        }));
+      },
+      "GET /api/sources": () =>
+        new Response(JSON.stringify({
+          ok: true,
+          data: {
+            tables: [{
+              conn: "mysql-aliyun",
+              schema: "finance_mart",
+              table: "orders",
+              qualifiedName: "finance_mart.orders",
+              filePath: "",
+              columnCount: 1,
+              columnNames: ["id"],
+              hasTableDesc: false,
+              hasGrain: false,
+              measureCount: 0,
+              joinCount: 0,
+              wikiRefCount: 0,
+              completion: "partial",
+              mtime: "",
+              enabled: false,
+              authorizedAgentCount: 0
+            }],
+            manifestSchemas: []
+          }
+        }))
+    });
+    renderDrawer(makeConn());
+    await confirmAddedSchema("finance_mart");
+    fireEvent.click(screen.getByTestId("add-schema-read-structure"));
+    await waitFor(() => {
+      expect(screen.getByTestId("location")).toHaveTextContent(
+        "/connections/enabled-tables?connection=mysql-aliyun&schema=finance_mart"
+      );
+    });
+    expect(calls).toEqual(["structure", "validate", "upload"]);
+    const enabledWrites = vi.mocked(global.fetch).mock.calls.filter((call) =>
+      String(call[0]).includes("enabled-tables")
+    );
+    expect(enabledWrites).toHaveLength(0);
+    expect(screen.queryByRole("dialog", { name: "接入向导" })).not.toBeInTheDocument();
+  });
+
+  it("SC-5: downgraded fields wait for 继续生成 before writing", async () => {
+    const calls: string[] = [];
+    stubFetch({
+      "POST /api/connections/mysql-aliyun/schemas": schemaWriteResponse("finance_mart"),
+      "POST /api/connections/mysql-aliyun/schema-structure": () =>
+        new Response(JSON.stringify({
+          ok: true,
+          data: {
+            schema: "finance_mart",
+            readable: true,
+            yaml: "tables: {}\n",
+            tableCount: 1,
+            columnCount: 1,
+            mapped: { number: 0, string: 1, time: 0 },
+            downgraded: [{ table: "orders", column: "payload", rawType: "geometry" }]
+          }
+        })),
+      "POST /api/catalog/assets/validate": () => {
+        calls.push("validate");
+        return new Response(JSON.stringify({ ok: false, error: { code: "STOP", message: "stop" } }), { status: 400 });
+      }
+    });
+    renderDrawer(makeConn());
+    await confirmAddedSchema("finance_mart");
+    fireEvent.click(screen.getByTestId("add-schema-read-structure"));
+    const preview = await screen.findByTestId("add-schema-downgrade-preview");
+    expect(preview).toHaveTextContent("读取到 1 张表、1 个字段");
+    expect(preview).toHaveTextContent("orders.payload");
+    expect(preview).toHaveTextContent("geometry");
+    expect(calls).toEqual([]);
+    expect(screen.getByRole("button", { name: "继续生成" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "我已有 Schema Manifest" })).toBeInTheDocument();
+  });
+
+  it("SC-6: a failed read stays on the success step", async () => {
+    stubFetch({
+      "POST /api/connections/mysql-aliyun/schemas": schemaWriteResponse("finance_mart"),
+      "POST /api/connections/mysql-aliyun/schema-structure": () =>
+        new Response(JSON.stringify({ ok: false, error: { code: "READ_FAILED", message: "连接超时" } }), { status: 500 })
+    });
+    renderDrawer(makeConn());
+    await confirmAddedSchema("finance_mart");
+    fireEvent.click(screen.getByTestId("add-schema-read-structure"));
+    const alert = await screen.findByTestId("add-schema-structure-error");
+    expect(alert).toHaveTextContent("连接超时");
+    expect(alert).not.toHaveTextContent("点下方");
+    expect(screen.getByTestId("add-schema-read-structure")).toBeEnabled();
+    expect(screen.getByTestId("add-schema-drawer")).toBeInTheDocument();
+  });
+
+  it("SC-7: 完成 closes the drawer without reading or reloading", async () => {
+    stubFetch({
+      "POST /api/connections/mysql-aliyun/schemas": schemaWriteResponse("finance_mart")
+    });
+    const onClose = vi.fn();
+    renderDrawer(makeConn(), onClose);
+    await confirmAddedSchema("finance_mart");
+    const callsBefore = vi.mocked(global.fetch).mock.calls.length;
+    fireEvent.click(screen.getByTestId("add-schema-done"));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    const later = vi.mocked(global.fetch).mock.calls.slice(callsBefore).map((call) => String(call[0]));
+    expect(later.some((url) => url.includes("schema-structure"))).toBe(false);
+    expect(later.some((url) => url.includes("/api/catalog/reload"))).toBe(false);
+  });
 });
+
+function schemaWriteResponse(schemaName: string) {
+  return (body: unknown) => {
+    if ((body as { dryRun?: boolean }).dryRun === false) {
+      return new Response(JSON.stringify({
+        ok: true,
+        data: { written: true, auditId: 7, oldSchemas: ["dataforai"], newSchemas: ["dataforai", schemaName] }
+      }));
+    }
+    return new Response(JSON.stringify({
+      ok: true,
+      data: {
+        diff: `+      - ${schemaName}\n`,
+        proposedYaml: "schemas:\n",
+        oldSchemas: ["dataforai"],
+        newSchemas: ["dataforai", schemaName]
+      }
+    }));
+  };
+}
+
+async function confirmAddedSchema(schemaName: string) {
+  fireEvent.change(await screen.findByTestId("add-schema-input"), { target: { value: schemaName } });
+  fireEvent.click(screen.getByTestId("add-schema-preview-btn"));
+  fireEvent.click(await screen.findByTestId("add-schema-confirm-btn"));
+  await screen.findByTestId("add-schema-success-message");
+}
+

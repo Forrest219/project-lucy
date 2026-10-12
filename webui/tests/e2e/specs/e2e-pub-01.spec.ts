@@ -96,9 +96,8 @@ test.describe("E2E-PUB-01: 完整语义资产从新建到发布 Reindex 闭环",
       await expect(
         page.getByTestId("schema-asset-status-mysql-aliyun-finance_mart")
       ).toContainText("缺失 Manifest");
-      // 真实上传入口在 schema-whitelist-${conn.id}-${schema} 内的"上传 Manifest" 按钮
-      // 简化：直接点 schema-row 上的 status badge 进入 Drawer（实际实现是行内按钮）
-      // 这里依赖 schema-whitelist cell 内 action；使用最近按钮定位
+      // 能读库时行内主操作是「从数据库读取表结构」，上传在「更多」里。
+      await row.locator("summary").click();
       await row
         .getByRole("button", { name: /上传 Manifest/ })
         .click();

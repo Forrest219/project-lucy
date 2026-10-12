@@ -175,19 +175,19 @@ n. 操作：用户做什么（界面中文文案，不用内部函数名）
    失败即停：未成功 → FAIL。  
    截图：添加成功。
 
-6. 操作：在成功页点「上传 Schema Manifest」。  
-   定位：`add-schema-upload-yaml`（若已关抽屉：Schema 行 `schema-row-${CONN_ID}-${SCHEMA}` 内「上传 Manifest」）。  
-   必须看见：上传抽屉 `catalog-asset-upload-drawer`，标题含「上传 … Schema Manifest」。  
+6. 操作：成功页主按钮是「从数据库读取表结构」。本条使用已有 YAML，点「我已有 Schema Manifest」。  
+   定位：`add-schema-have-manifest`。不能读库时主按钮才是「上传 Schema Manifest」（`add-schema-upload-yaml`）。  
+   必须看见：上传抽屉 `catalog-asset-upload-drawer`，标题含「上传 … Schema Manifest」。成功页没有「同步配置变更」。  
    失败即停：抽屉未开 → FAIL。
 
 7. 操作：把 `MANIFEST` 全文粘进文本框，点「上传并同步配置变更」。本条要求目标文件尚不存在，**不要**勾「确认覆盖现有 YAML」。  
    定位：`catalog-asset-upload-textarea`；提交 `catalog-asset-upload-submit`。  
-   必须看见：成功区 `catalog-asset-upload-success` 含「✓ 已上传 Schema Manifest」；解析表数 ≥ 1；行状态变为「已存在」（`schema-asset-status-${CONN_ID}-${SCHEMA}`）。  
+   必须看见：刷新出表后进入 `/connections/enabled-tables?connection=${CONN_ID}&schema=${SCHEMA}`。  
    失败即停：校验失败或未成功 → FAIL。误走到覆盖确认 → FAIL（覆盖是 `UJ-ENG-04`）。  
-   截图：上传成功。
+   截图：启用表范围。
 
-8. 操作：为该 Schema 启用 `TABLE`。点行内「维护启用表范围」，勾选 `fact_revenue`（及其他 Manifest 表如需出现在语义资产中），点「保存变更」。  
-   定位：`schema-whitelist-${CONN_ID}-${SCHEMA}` → `/connections/enabled-tables?connection=…&schema=…`；保存 `whitelist-save-changes`。  
+8. 操作：为该 Schema 启用 `TABLE`。勾选 `fact_revenue`（及其他 Manifest 表如需出现在语义资产中），点「保存变更」。  
+   定位：保存 `whitelist-save-changes`。  
    必须看见：Toast「启用表范围已保存」；浮动条消失或「已修改 0 张表」。  
    失败即停：保存失败 → FAIL。  
    截图：启用表范围已保存。

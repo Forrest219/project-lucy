@@ -27,11 +27,13 @@ import type {
   SourcesResponse
 } from "../../lib/types";
 import { AddSchemaDrawer } from "../../components/AddSchemaDrawer";
+import { PrepareSchemaStructureDrawer } from "../../components/SchemaStructurePrep";
 import { CreateConnectionDrawer } from "../../components/CreateConnectionDrawer";
 import { DeleteConnectionDrawer } from "../../components/DeleteConnectionDrawer";
 import { RemoveSchemaDrawer } from "../../components/RemoveSchemaDrawer";
 import { SetupAssistantModal } from "../../components/onboarding";
 import {
+  canReadDatabaseStructure,
   deriveAssistantResumeState,
   formatAssistantProgressCompact,
   formatAssistantProgressLabel,
@@ -464,6 +466,7 @@ export function ConnectionOverview() {
   const loading = projectQuery.isLoading || sourcesQuery.isLoading;
   const error = projectQuery.error ?? sourcesQuery.error;
   const [addTarget, setAddTarget] = useState<ConnectionInfo | null>(null);
+  const [structureTarget, setStructureTarget] = useState<{ connection: ConnectionInfo; schema: string } | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [assistantStep, setAssistantStep] = useState<SetupStep>(1);
@@ -1186,6 +1189,16 @@ export function ConnectionOverview() {
                                           维护启用表范围
                                         </Link>
                                       </>
+                                    ) : canReadDatabaseStructure(conn) ? (
+                                      <button
+                                        type="button"
+                                        className="pl-row-action-link notranslate"
+                                        translate="no"
+                                        onClick={() => setStructureTarget({ connection: conn, schema })}
+                                        data-testid={`read-structure-${conn.id}-${schema}`}
+                                      >
+                                        从数据库读取表结构
+                                      </button>
                                     ) : (
                                       <CatalogAssetUploadButton
                                         connectionId={conn.id}
@@ -1279,6 +1292,16 @@ export function ConnectionOverview() {
                                               重新上传 Manifest
                                             </button>
                                           </>
+                                        ) : canReadDatabaseStructure(conn) ? (
+                                          <CatalogAssetUploadButton
+                                            connectionId={conn.id}
+                                            schema={schema}
+                                            label="上传 Manifest"
+                                            variant="link"
+                                            size="sm"
+                                            testId={`upload-yaml-${conn.id}-${schema}`}
+                                            onOpen={closeSchemaMore}
+                                          />
                                         ) : null}
                                         <button
                                           type="button"
@@ -1401,6 +1424,14 @@ export function ConnectionOverview() {
           open={createOpen}
           onClose={() => setCreateOpen(false)}
           existingIds={connections.map((conn) => conn.id)}
+        />
+      ) : null}
+      {structureTarget ? (
+        <PrepareSchemaStructureDrawer
+          connection={structureTarget.connection}
+          schema={structureTarget.schema}
+          open
+          onClose={() => setStructureTarget(null)}
         />
       ) : null}
       {addTarget && (

@@ -1,8 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileUp, AlertCircle, FileCode } from "lucide-react";
-import { ApiError, apiGet, apiPost } from "../../lib/apiClient";
+import { ApiError, apiGet } from "../../lib/apiClient";
 import { uploadCatalogAsset, validateCatalogAsset } from "../../lib/catalog-assets";
+import {
+  countReadyTables,
+  fetchSchemaStructure,
+  reloadPreparedCatalog,
+  writeMinimalManifest,
+  type SchemaStructurePreview
+} from "../../lib/prepareSchemaStructure";
 import { queryKeys } from "../../lib/queryKeys";
 import {
   canReadDatabaseStructure,
@@ -13,7 +20,6 @@ import type {
   CatalogAssetUploadResponse,
   CatalogAssetValidateRequest,
   CatalogAssetValidateResponse,
-  CatalogReloadRun,
   LiveSchemasResponse,
   ProjectInfo,
   SourcesResponse
@@ -26,14 +32,6 @@ export type Step2UploadManifestProps = {
   onSuccess: (tables: number) => void;
   onExit: () => void;
   onSchemaResolved?: (schema: string) => void;
-};
-
-type SchemaStructurePreview = {
-  schema: string;
-  yaml: string;
-  tableCount: number;
-  columnCount: number;
-  downgraded: Array<{ table: string; column: string; rawType: string; semanticType: "string" }>;
 };
 
 type PrimaryAction = "choose" | "read" | "upload" | "use" | "retry";
@@ -62,14 +60,6 @@ function validationFromError(err: unknown): CatalogAssetValidateResponse | null 
   const maybeValidation = (err.data as { validation?: unknown } | undefined)?.validation;
   if (!maybeValidation || typeof maybeValidation !== "object") return null;
   return maybeValidation as CatalogAssetValidateResponse;
-}
-
-function countReadyTables(sources: SourcesResponse | undefined, connectionId: string, schema: string): number {
-  if (!schema) return 0;
-  const tables = (sources?.tables ?? []).filter(
-    (table) => table.conn === connectionId && table.schema === schema
-  );
-  return tables.length;
 }
 
 export function Step2UploadManifest({
@@ -278,10 +268,7 @@ export function Step2UploadManifest({
     setStatusMessage("正在同步 Catalog...");
     setStructureError(null);
     try {
-      const run = await apiPost<CatalogReloadRun>("/api/catalog/reload", {
-        connectionId,
-        schema: activeSchema
-      });
+      const run = await reloadPreparedCatalog(connectionId, activeSchema);
       await queryClient.invalidateQueries({ queryKey: queryKeys.sources });
       await queryClient.invalidateQueries({ queryKey: queryKeys.project });
       const sources = queryClient.getQueryData<SourcesResponse>(queryKeys.sources);
@@ -314,35 +301,26 @@ export function Step2UploadManifest({
   }
 
   async function writeGenerated(yaml: string) {
-    const name = `${activeSchema}.yaml`;
-    const request = buildRequest(connectionId, activeSchema, name, yaml);
     setBusy(true);
     setStatusMessage("正在写入 Schema Manifest...");
     try {
-      const checked = await validateCatalogAsset(request);
-      if (!checked.valid) {
-        setValidation(checked);
-        setStructureError(checked.errors[0]?.message || "生成结果未通过校验。");
+      const result = await writeMinimalManifest(connectionId, activeSchema, yaml);
+      if (result.status === "invalid") {
+        setValidation(result.validation);
+        setStructureError(result.message);
         return;
       }
-      if (checked.exists) {
+      if (result.status === "exists") {
         setPreferExisting(true);
         setPreview(null);
         setShowUpload(false);
         setStatusMessage("已存在 Schema Manifest，改为使用现有文件。");
         return;
       }
-      const uploaded = await uploadCatalogAsset(request);
       invalidateCatalog();
       setPreview(null);
-      finishWritten(uploaded.validation.tables, uploaded.reload?.status);
+      finishWritten(result.tables, result.reloadStatus);
     } catch (err) {
-      if (err instanceof ApiError && err.code === "TARGET_EXISTS") {
-        setPreferExisting(true);
-        setPreview(null);
-        setShowUpload(false);
-        return;
-      }
       setStructureError(err instanceof Error ? err.message : "写入失败");
     } finally {
       setBusy(false);
@@ -356,10 +334,7 @@ export function Step2UploadManifest({
     setStatusMessage("正在读取表结构...");
     setStructureError(null);
     try {
-      const data = await apiPost<SchemaStructurePreview>(
-        `/api/connections/${encodeURIComponent(connectionId)}/schema-structure`,
-        { schema: activeSchema }
-      );
+      const data = await fetchSchemaStructure(connectionId, activeSchema);
       if (data.downgraded.length > 0) {
         setPreview(data);
         return;

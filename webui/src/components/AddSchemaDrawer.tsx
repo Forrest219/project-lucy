@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { apiGet, apiPost } from "../lib/apiClient";
 import { queryKeys } from "../lib/queryKeys";
 import { DiffViewer } from "./DiffViewer";
-import { CatalogAssetUploadButton, CatalogReloadButton } from "./catalog";
+import { SchemaStructurePrep } from "./SchemaStructurePrep";
 import { schemaFieldHelper, schemaFieldLabel, validateSchemaName } from "../lib/schemas";
 import type {
   AddSchemaPreview,
@@ -26,6 +27,7 @@ const LIVE_SCHEMAS_STALE_MS = 10 * 60 * 1000;
 
 export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerProps) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const fieldLabel = schemaFieldLabel();
   const fieldHelper = schemaFieldHelper(connection.engine, connection.driver);
   const [schema, setSchema] = useState("");
@@ -131,9 +133,11 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
         <header className="pl-drawer-header">
           <div>
             <h2 className="pl-panel-title notranslate" translate="no">添加 Schema 到 {connection.id}</h2>
-            <p className="pl-notice notranslate" translate="no">
-              添加后会写入 <code className="notranslate" translate="no">ktx.yaml</code>；下一步将先验证连接权限。
-            </p>
+            {step !== "success" ? (
+              <p className="pl-notice notranslate" translate="no">
+                添加后会写入 <code className="notranslate" translate="no">ktx.yaml</code>；下一步将先验证连接权限。
+              </p>
+            ) : null}
           </div>
           <button
             type="button"
@@ -299,38 +303,23 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
         )}
 
         {step === "success" && (
-          <section className="pl-drawer-body" aria-label="完成">
-            <p className="text-sm font-semibold text-green-700 notranslate" translate="no" data-testid="add-schema-success-message">
-              ✓ 已添加 Schema：{trimmed}
-            </p>
-            <p className="text-sm">
-              <code>{trimmed}</code> 已添加到 <code>{connection.id}</code>。
-            </p>
-            <p className="text-xs text-fg-muted notranslate" translate="no" data-testid="add-schema-static-loading-hint">
-              添加 Schema 不会自动生成 Manifest。若你已有该 Schema 的 <code className="notranslate" translate="no">semantic-layer</code>{" "}
-              Manifest YAML，可以现在上传；否则稍后由离线流程生成后上传。
-            </p>
-            <div className="pl-drawer-footer">
-              <button className="pl-btn pl-btn--ghost" onClick={close}>
-                完成
-              </button>
-              <CatalogReloadButton
-                connectionId={connection.id}
-                schema={trimmed}
-                label="同步配置变更"
-                pendingLabel="正在同步配置变更..."
-                variant="secondary"
-                testId="add-schema-reload-catalog"
-              />
-              <CatalogAssetUploadButton
-                connectionId={connection.id}
-                schema={trimmed}
-                label="上传 Schema Manifest"
-                variant="primary"
-                testId="add-schema-upload-yaml"
-              />
-            </div>
-          </section>
+          <SchemaStructurePrep
+            connection={connection}
+            schema={trimmed}
+            showAddedStatus
+            exitLabel="完成"
+            idPrefix="add-schema"
+            onExit={close}
+            onPrepared={() => {
+              const schemaName = trimmed;
+              const connectionId = connection.id;
+              reset();
+              onClose();
+              navigate(
+                `/connections/enabled-tables?connection=${encodeURIComponent(connectionId)}&schema=${encodeURIComponent(schemaName)}`
+              );
+            }}
+          />
         )}
 
         {step === "fatal" && (

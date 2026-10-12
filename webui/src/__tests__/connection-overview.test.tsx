@@ -9,6 +9,15 @@ import type { ConnectionInfo } from "../lib/types";
 import { ConnectionOverview } from "../pages/connections/ConnectionOverview";
 import { assertNoForbiddenTerms } from "./forbidden-terms";
 
+function expectReadStructureRow(connectionId: string, schema: string) {
+  const row = screen.getByTestId(`schema-row-${connectionId}-${schema}`);
+  const read = within(row).getByTestId(`read-structure-${connectionId}-${schema}`);
+  expect(read).toHaveTextContent("从数据库读取表结构");
+  expect(read.closest(".pl-row-action-more-menu")).toBeNull();
+  const upload = within(row).getByTestId(`upload-yaml-${connectionId}-${schema}`);
+  expect(upload.closest(".pl-row-action-more-menu")).not.toBeNull();
+}
+
 function renderOverview() {
   const client = new QueryClient({
     defaultOptions: {
@@ -596,7 +605,8 @@ describe("ConnectionOverview", () => {
       "pl-catalog-reload-warning"
     );
     expect(screen.getByTestId("schema-row-mysql-aliyun-openclaw_db")).toHaveTextContent("0 张表");
-    expect(screen.getByTestId("upload-yaml-mysql-aliyun-openclaw_db")).toBeInTheDocument();
+    expectReadStructureRow("mysql-aliyun", "openclaw_db");
+    expect(screen.queryByTestId("read-structure-mysql-aliyun-dataforai")).not.toBeInTheDocument();
     expect(screen.queryByTestId("catalog-reload-warning-mysql-aliyun-openclaw_db")).not.toBeInTheDocument();
     const warningToggle = screen.getByTestId("catalog-reload-warning-toggle-mysql-aliyun-openclaw_db");
     expect(warningToggle).toHaveTextContent("查看详情");
@@ -1568,6 +1578,7 @@ describe("ConnectionOverview", () => {
     expect(
       await screen.findByTestId("schema-asset-status-demo-mysql-openclaw_db")
     ).toHaveTextContent("缺失 Manifest");
+    expectReadStructureRow("demo-mysql", "openclaw_db");
     const uploadBtn = await screen.findByTestId("upload-yaml-demo-mysql-openclaw_db");
     expect(uploadBtn).toHaveTextContent("上传 Manifest");
     expect(uploadBtn).toHaveClass("pl-row-action-link");
@@ -1680,12 +1691,39 @@ describe("ConnectionOverview", () => {
     expect(financeStatus).toHaveTextContent("缺失 Manifest");
     expect(financeStatus).toHaveClass("pl-schema-asset-status--warning");
     expect(screen.getByTestId("schema-row-starrocks-r1-demo_finance")).toHaveAttribute("data-tone", "warning");
-    expect(screen.getByTestId("upload-yaml-starrocks-r1-demo_finance")).toBeInTheDocument();
+    expectReadStructureRow("starrocks-r1", "demo_finance");
 
     const metaStatus = screen.getByTestId("schema-asset-status-starrocks-r1-meta");
     expect(metaStatus).toHaveTextContent("缺失 Manifest");
     expect(metaStatus).not.toHaveTextContent("未发现本地 Manifest");
     expect(screen.queryByText("未发现本地 Manifest")).not.toBeInTheDocument();
+  });
+
+  it("SC-9: a schema that cannot be read from the database still offers 上传 Manifest on the row", async () => {
+    stubOverviewFetch({
+      connections: [
+        {
+          id: "sqlite-main",
+          driver: "sqlite",
+          engine: "sqlite",
+          wireProtocol: "unknown",
+          schemas: ["main"],
+          enabledTables: []
+        }
+      ],
+      tables: [],
+      catalogReloadsResponse: {
+        runs: [],
+        last: null,
+        lastByConnection: {}
+      }
+    });
+    renderOverview();
+    const row = await screen.findByTestId("schema-row-sqlite-main-main");
+    expect(within(row).queryByTestId("read-structure-sqlite-main-main")).not.toBeInTheDocument();
+    const upload = within(row).getByTestId("upload-yaml-sqlite-main-main");
+    expect(upload).toHaveTextContent("上传 Manifest");
+    expect(upload.closest(".pl-row-action-more-menu")).toBeNull();
   });
 });
 
