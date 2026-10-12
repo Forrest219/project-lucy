@@ -22,6 +22,8 @@ import {
 import { SetupAssistantModal } from "../components/onboarding/SetupAssistantModal";
 import { Step2UploadManifest } from "../components/onboarding/Step2UploadManifest";
 import { Step4SemanticOverlay } from "../components/onboarding/Step4SemanticOverlay";
+import { Step5BusinessWiki } from "../components/onboarding/Step5BusinessWiki";
+import { authoringHowToNotes, downloadAuthoringHowTo } from "../lib/authoringHowTo";
 import { ConnectionOverview } from "../pages/connections/ConnectionOverview";
 import { assertNoForbiddenTerms } from "./forbidden-terms";
 import type { ConnectionInfo, ProjectInfo, SourcesResponse } from "../lib/types";
@@ -1271,6 +1273,134 @@ describe("Setup Assistant manifest upload contract", () => {
     fireEvent.click(screen.getByTestId("setup-step2-next"));
     expect(await screen.findByTestId("setup-manifest-parsed-count")).toHaveTextContent("已解析 8 张表");
     expect(screen.getByTestId("setup-step-3")).toBeInTheDocument();
+  });
+
+  it("keeps the schema manifest how-to collapsed when the database can be read", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/project") {
+          return new Response(JSON.stringify({
+            ok: true,
+            data: {
+              connections: [{
+                id: "mysql-aliyun",
+                driver: "mysql",
+                wireProtocol: "mysql",
+                schemas: ["chatbi"],
+                enabledTables: []
+              }]
+            }
+          }));
+        }
+        if (url === "/api/sources") {
+          return new Response(JSON.stringify({ ok: true, data: { tables: [], manifestSchemas: [] } }));
+        }
+        return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
+      })
+    );
+    render(
+      <QueryClientProvider client={queryClient}>
+        <Step2UploadManifest connectionId="mysql-aliyun" schema="chatbi" onSuccess={vi.fn()} onExit={vi.fn()} />
+      </QueryClientProvider>
+    );
+    const howTo = await screen.findByTestId("setup-howto-schema-manifest");
+    await waitFor(() => {
+      expect(screen.getByTestId("setup-step2-next")).toHaveTextContent("从数据库读取表结构");
+    });
+    expect(howTo).not.toHaveAttribute("open");
+    expect(screen.getByText("如何生成 Schema Manifest")).toBeInTheDocument();
+    expect(screen.getByTestId("setup-step2-next")).toBeEnabled();
+  });
+
+  it("opens the schema manifest how-to when the database cannot be read", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/project") {
+          return new Response(JSON.stringify({
+            ok: true,
+            data: {
+              connections: [{
+                id: "sql-prod",
+                driver: "sqlserver",
+                wireProtocol: "sqlserver",
+                schemas: ["dbo"],
+                enabledTables: []
+              }]
+            }
+          }));
+        }
+        if (url === "/api/sources") {
+          return new Response(JSON.stringify({ ok: true, data: { tables: [], manifestSchemas: [] } }));
+        }
+        return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
+      })
+    );
+    render(
+      <QueryClientProvider client={queryClient}>
+        <Step2UploadManifest connectionId="sql-prod" schema="dbo" onSuccess={vi.fn()} onExit={vi.fn()} />
+      </QueryClientProvider>
+    );
+    const howTo = await screen.findByTestId("setup-howto-schema-manifest");
+    await waitFor(() => {
+      expect(howTo).toHaveAttribute("open");
+    });
+    expect(screen.getByTestId("setup-step2-next")).toHaveTextContent("上传 Schema Manifest 并继续");
+    expect(screen.getByText(/交给你的/)).toBeInTheDocument();
+    expect(screen.queryByText(/Cursor/)).not.toBeInTheDocument();
+  });
+});
+
+describe("Setup Assistant authoring how-to", () => {
+  let queryClient: QueryClient;
+
+  beforeEach(() => {
+    queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } }
+    });
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it("keeps the business wiki how-to collapsed beside the optional editor", () => {
+    render(
+      <QueryClientProvider client={queryClient}>
+        <Step5BusinessWiki connectionId="mysql-aliyun" onSuccess={vi.fn()} onSkip={vi.fn()} onBack={vi.fn()} />
+      </QueryClientProvider>
+    );
+    expect(screen.getByTestId("setup-howto-business-wiki")).not.toHaveAttribute("open");
+    expect(screen.getByTestId("setup-step5-skip")).toBeEnabled();
+    fireEvent.click(screen.getByText("如何写业务 Wiki"));
+    expect(screen.getByTestId("setup-howto-business-wiki")).toHaveAttribute("open");
+    expect(screen.getByText(/暂时没有也可以跳过/)).toBeInTheDocument();
+  });
+
+  it("copies and downloads client-neutral authoring notes", () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    const createObjectURL = vi.fn(() => "blob:howto");
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal("URL", { createObjectURL, revokeObjectURL });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <Step5BusinessWiki connectionId="mysql-aliyun" onSuccess={vi.fn()} onSkip={vi.fn()} onBack={vi.fn()} />
+      </QueryClientProvider>
+    );
+    fireEvent.click(screen.getByText("如何写业务 Wiki"));
+    fireEvent.click(screen.getByTestId("setup-howto-business-wiki-copy"));
+    expect(writeText).toHaveBeenCalledWith(authoringHowToNotes("business_wiki"));
+    expect(authoringHowToNotes("schema_manifest")).toContain("不要假定用户使用哪一个客户端");
+    expect(authoringHowToNotes("schema_manifest")).not.toContain("Cursor");
+    fireEvent.click(screen.getByTestId("setup-howto-business-wiki-download"));
+    expect(createObjectURL).toHaveBeenCalled();
+    downloadAuthoringHowTo("schema_manifest");
+    expect(createObjectURL).toHaveBeenCalledTimes(2);
   });
 });
 

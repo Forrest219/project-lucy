@@ -21,7 +21,7 @@
 | 日期 | 2026-09-28 |
 | 范围 | 第 2 步信息架构、单 Schema 解析、已有 Manifest 复用、最小 Schema Manifest 生成、幂等恢复、显式选表和三层就绪状态 |
 
-本文件描述优化后用户能完成的路径，以及相对当前向导的体验差。
+本文件描述优化后用户能完成的路径，以及相对当前向导的体验差。第 2 步和第 5 步「不知道如何生成」的提醒以 [Spec 167](167-setup-assistant-authoring-howto-spec.md) 为准。
 
 ## Gate B 决议（2026-09-28）
 
@@ -161,6 +161,10 @@ Schema 名、数据库对象名和路径必须添加 `translate="no"` 与 `notra
 - 关闭后重新打开，焦点和步骤恢复遵守 Spec 130 的对话框与断点续配规则。
 
 禁止文案：`稍后上传 Schema Manifest`、`跳过 Manifest`、裸用 `上传 YAML`、把“结构已准备”写成“问答已就绪”。
+
+### 6.5 不知道如何生成时的提醒
+
+第 2 步和第 5 步的 how to 以 [Spec 167](167-setup-assistant-authoring-howto-spec.md) 为准。本文件不规定提醒的展开条件和编写说明正文。
 
 ## 7. 最小 Schema Manifest
 

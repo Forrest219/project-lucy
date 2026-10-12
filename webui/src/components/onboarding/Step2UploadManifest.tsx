@@ -25,6 +25,7 @@ import type {
   SourcesResponse
 } from "../../lib/types";
 import { CatalogAssetValidationPanel } from "../catalog/CatalogAssetValidationPanel";
+import { AuthoringHowTo } from "./AuthoringHowTo";
 
 export type Step2UploadManifestProps = {
   connectionId: string;
@@ -408,6 +409,11 @@ export function Step2UploadManifest({
         <p className="text-xs text-fg-muted notranslate" translate="no" aria-live="polite" data-testid="setup-step2-status">
           {statusMessage || "准备当前 Schema 的表结构。确认前不会覆盖已有文件。"}
         </p>
+
+        <AuthoringHowTo
+          kind="schema_manifest"
+          autoOpen={projectQuery.isFetched && primaryAction === "upload"}
+        />
 
         {!schema && liveSchemas.length > 1 ? (
           <fieldset className="space-y-2">
