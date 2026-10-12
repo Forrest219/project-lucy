@@ -1045,6 +1045,103 @@ describe("TableWhitelist", () => {
     expect(nameCell.className).toContain("notranslate");
   });
 
+  it("folds schema groups when the filtered list reaches hundreds of tables", async () => {
+    const schemas = Array.from({ length: 30 }, (_, index) => `db_${String(index + 1).padStart(2, "0")}`);
+    const tables = schemas.flatMap((schema) =>
+      Array.from({ length: 30 }, (_, index) => `${schema}.t_${String(index + 1).padStart(2, "0")}`)
+    );
+    stubWhitelistFetch(
+      defaultHandlers({
+        connection: { ...TEST_CONN, schemas, enabledTables: [] },
+        tables,
+        sources: []
+      })
+    );
+    renderWhitelist();
+
+    expect(await screen.findByTestId("whitelist-large-list-notice")).toHaveTextContent(
+      "共 900 张表，已按 Schema 折叠，一次展开一组。"
+    );
+    expect(screen.getAllByTestId(/^whitelist-row-/)).toHaveLength(30);
+    expect(screen.getByTestId("whitelist-row-db_01.t_01")).toBeInTheDocument();
+    expect(screen.queryByTestId("whitelist-row-db_02.t_01")).not.toBeInTheDocument();
+    expect(screen.getByTestId("whitelist-group-mysql-aliyun-db_30")).toBeInTheDocument();
+    expect(screen.getByTestId("pl-whitelist-selection-summary")).toHaveTextContent("已选 0/900 张表");
+
+    fireEvent.click(screen.getByTestId("whitelist-group-toggle-mysql-aliyun-db_30"));
+
+    expect(screen.queryByTestId("whitelist-row-db_01.t_01")).not.toBeInTheDocument();
+    expect(screen.getByTestId("whitelist-row-db_30.t_30")).toBeInTheDocument();
+    expect(screen.getAllByTestId(/^whitelist-row-/)).toHaveLength(30);
+
+    await clickBatchAction("全选");
+    expect(screen.getByTestId("pl-whitelist-selection-summary")).toHaveTextContent("已选 900/900 张表");
+    expect(
+      within(screen.getByTestId("whitelist-row-db_30.t_01")).getByRole("checkbox")
+    ).toBeChecked();
+
+    fireEvent.click(screen.getByTestId("whitelist-group-toggle-mysql-aliyun-db_02"));
+    expect(
+      within(screen.getByTestId("whitelist-row-db_02.t_01")).getByRole("checkbox")
+    ).toBeChecked();
+    expect(screen.queryAllByTestId(/^whitelist-row-/)).toHaveLength(30);
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Schema 筛选" }), {
+      target: { value: "db_01" }
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("whitelist-large-list-notice")).not.toBeInTheDocument();
+    });
+    expect(screen.queryByTestId("whitelist-group-toggle-mysql-aliyun-db_01")).not.toBeInTheDocument();
+    expect(screen.getByTestId("whitelist-row-db_01.t_30")).toBeInTheDocument();
+    expect(screen.queryByText(/Schema：db_02/)).not.toBeInTheDocument();
+    expect(screen.getAllByTestId(/^whitelist-row-/)).toHaveLength(30);
+  });
+
+  it("pages a single schema that itself exceeds the row budget", async () => {
+    const tables = Array.from(
+      { length: 80 },
+      (_, index) => `dataforai.t_${String(index + 1).padStart(2, "0")}`
+    );
+    stubWhitelistFetch(
+      defaultHandlers({
+        connection: { ...TEST_CONN, enabledTables: [] },
+        tables,
+        sources: []
+      })
+    );
+    renderWhitelist();
+
+    expect(await screen.findByTestId("whitelist-pagination")).toHaveTextContent("显示 1–50 / 80");
+    expect(screen.getAllByTestId(/^whitelist-row-/)).toHaveLength(50);
+    expect(screen.getByTestId("whitelist-large-list-notice")).toHaveTextContent(
+      "共 80 张表，已分页显示。"
+    );
+    expect(
+      within(screen.getByTestId("whitelist-group-mysql-aliyun-dataforai")).getByText(/共 80 张表/)
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId("whitelist-row-dataforai.t_51")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "下一页" }));
+
+    expect(screen.getByTestId("whitelist-pagination")).toHaveTextContent("显示 51–80 / 80");
+    expect(screen.getByTestId("whitelist-row-dataforai.t_51")).toBeInTheDocument();
+    expect(screen.queryByTestId("whitelist-row-dataforai.t_01")).not.toBeInTheDocument();
+    expect(screen.getAllByTestId(/^whitelist-row-/)).toHaveLength(30);
+
+    await clickBatchAction("全选");
+    expect(screen.getByTestId("pl-whitelist-selection-summary")).toHaveTextContent("已选 80/80 张表");
+    expect(
+      within(screen.getByTestId("whitelist-row-dataforai.t_80")).getByRole("checkbox")
+    ).toBeChecked();
+
+    fireEvent.click(screen.getByRole("button", { name: "上一页" }));
+    expect(
+      within(screen.getByTestId("whitelist-row-dataforai.t_01")).getByRole("checkbox")
+    ).toBeChecked();
+  });
+
   describe("Spec 116: invalid enabled (orphan) drift", () => {
     const STARROCKS_CONN: ConnectionInfo = {
       id: "starrocks-r1",

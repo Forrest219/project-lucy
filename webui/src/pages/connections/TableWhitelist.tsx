@@ -127,6 +127,86 @@ function isEqualSet<T>(a: Iterable<T>, b: Iterable<T>): boolean {
   return true;
 }
 
+/** Above this many filtered rows, mount one Schema group at a time. */
+const WHITELIST_ROW_BUDGET = 50;
+
+type GroupExpansion = { mode: "default" } | { mode: "open"; key: string } | { mode: "closed" };
+
+function whitelistGroupKey(connectionId: string, schema: string): string {
+  return `${connectionId}\0${schema}`;
+}
+
+function sliceGroupsByRowPage<T, G extends { rows: T[] }>(
+  groups: G[],
+  pageIndex: number,
+  pageSize: number
+): Array<G & { totalCount: number }> {
+  const decorated = groups.map((group) => ({ ...group, totalCount: group.rows.length }));
+  const total = decorated.reduce((sum, group) => sum + group.totalCount, 0);
+  if (total <= pageSize) return decorated;
+  const start = Math.min(pageIndex, Math.ceil(total / pageSize) - 1) * pageSize;
+  const end = start + pageSize;
+  let seen = 0;
+  const paged: Array<G & { totalCount: number }> = [];
+  for (const group of decorated) {
+    const groupStart = seen;
+    const groupEnd = seen + group.rows.length;
+    seen = groupEnd;
+    if (groupEnd <= start || groupStart >= end) continue;
+    const from = Math.max(0, start - groupStart);
+    const to = Math.min(group.rows.length, end - groupStart);
+    paged.push({ ...group, rows: group.rows.slice(from, to) });
+  }
+  return paged;
+}
+
+function WhitelistPagination({
+  pageIndex,
+  pageSize,
+  total,
+  onPage,
+  testId,
+  label
+}: {
+  pageIndex: number;
+  pageSize: number;
+  total: number;
+  onPage: (pageIndex: number) => void;
+  testId: string;
+  label: string;
+}) {
+  if (total <= pageSize) return null;
+  const pageCount = Math.ceil(total / pageSize);
+  const safePage = Math.min(pageIndex, pageCount - 1);
+  const start = safePage * pageSize + 1;
+  const end = Math.min(total, (safePage + 1) * pageSize);
+  return (
+    <nav className="pl-whitelist-pagination" aria-label={label} data-testid={testId}>
+      <span>
+        显示 {start}–{end} / {total}
+      </span>
+      <div>
+        <button
+          type="button"
+          className="pl-btn pl-btn--ghost text-xs"
+          disabled={safePage <= 0}
+          onClick={() => onPage(safePage - 1)}
+        >
+          上一页
+        </button>
+        <button
+          type="button"
+          className="pl-btn pl-btn--ghost text-xs"
+          disabled={safePage >= pageCount - 1}
+          onClick={() => onPage(safePage + 1)}
+        >
+          下一页
+        </button>
+      </div>
+    </nav>
+  );
+}
+
 export function TableWhitelist() {
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
@@ -146,6 +226,9 @@ export function TableWhitelist() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [statusTone, setStatusTone] = useState<"success" | "warning" | "danger" | null>(null);
   const [openDetails, setOpenDetails] = useState<Record<string, boolean>>({});
+  const [groupExpansion, setGroupExpansion] = useState<GroupExpansion>({ mode: "default" });
+  const [groupPage, setGroupPage] = useState(0);
+  const [invalidPage, setInvalidPage] = useState(0);
 
   const connectionsQuery = useQuery({
     queryKey: queryKeys.connections,
@@ -359,6 +442,42 @@ export function TableWhitelist() {
     (sum, g) => sum + g.rows.filter((r) => r.enabledDraft).length,
     0
   );
+  const largeList = visibleTotal > WHITELIST_ROW_BUDGET;
+  const activeGroupKey = useMemo(() => {
+    if (!largeList || visibleGroups.length === 0) return null;
+    if (groupExpansion.mode === "closed") return null;
+    if (groupExpansion.mode === "open") {
+      const stillVisible = visibleGroups.some(
+        (group) => whitelistGroupKey(group.conn.id, group.schema) === groupExpansion.key
+      );
+      if (stillVisible) return groupExpansion.key;
+    }
+    const first = visibleGroups[0];
+    return whitelistGroupKey(first.conn.id, first.schema);
+  }, [groupExpansion, largeList, visibleGroups]);
+  const expandedGroup =
+    activeGroupKey === null
+      ? null
+      : visibleGroups.find(
+          (group) => whitelistGroupKey(group.conn.id, group.schema) === activeGroupKey
+        ) ?? null;
+  const expandedGroupTotal = expandedGroup?.rows.length ?? 0;
+  const groupPageCount = Math.max(1, Math.ceil(expandedGroupTotal / WHITELIST_ROW_BUDGET));
+  const safeGroupPage = Math.min(groupPage, groupPageCount - 1);
+  const invalidTotal = visibleInvalidGroups.reduce((sum, group) => sum + group.rows.length, 0);
+  const invalidPageCount = Math.max(1, Math.ceil(invalidTotal / WHITELIST_ROW_BUDGET));
+  const safeInvalidPage = Math.min(invalidPage, invalidPageCount - 1);
+  const pagedInvalidGroups = sliceGroupsByRowPage(
+    visibleInvalidGroups,
+    safeInvalidPage,
+    WHITELIST_ROW_BUDGET
+  );
+
+  useEffect(() => {
+    setGroupExpansion({ mode: "default" });
+    setGroupPage(0);
+    setInvalidPage(0);
+  }, [connectionFilter, schemaFilter, search]);
 
   // Dirty check + diff stats
   const diffStats = useMemo(() => {
@@ -797,6 +916,18 @@ export function TableWhitelist() {
         </div>
       ) : null}
 
+      {largeList ? (
+        <p
+          className="pl-whitelist-large-list-notice notranslate"
+          translate="no"
+          data-testid="whitelist-large-list-notice"
+        >
+          {visibleGroups.length > 1
+            ? `共 ${visibleTotal} 张表，已按 Schema 折叠，一次展开一组。`
+            : `共 ${visibleTotal} 张表，已分页显示。`}
+        </p>
+      ) : null}
+
       {visibleGroups.length > 0 && (
         <div className="pl-table-wrapper mt-4">
           <table className="pl-data-grid pl-data-table" data-testid="pl-whitelist-table">
@@ -809,22 +940,60 @@ export function TableWhitelist() {
                 <th>操作</th>
               </tr>
             </thead>
-            {visibleGroups.map(({ conn, schema, rows }) => (
+            {visibleGroups.map(({ conn, schema, rows }) => {
+              const key = whitelistGroupKey(conn.id, schema);
+              const expanded = !largeList || key === activeGroupKey;
+              const mountedRows = !expanded
+                ? []
+                : rows.length <= WHITELIST_ROW_BUDGET
+                  ? rows
+                  : rows.slice(
+                      safeGroupPage * WHITELIST_ROW_BUDGET,
+                      (safeGroupPage + 1) * WHITELIST_ROW_BUDGET
+                    );
+              return (
               <tbody
                 key={`${conn.id}-${schema}`}
                 data-testid={`whitelist-group-${conn.id}-${schema}`}
               >
                 <tr className="pl-table-group-row">
                   <td colSpan={5}>
-                    <span className="notranslate" translate="no">
-                      连接：{conn.id} · Schema：{schema}
-                    </span>
-                    <span className="pl-table-group-row-count notranslate" translate="no">
-                      （共 {rows.length} 张表）
-                    </span>
+                    {largeList ? (
+                      <button
+                        type="button"
+                        className="pl-whitelist-group-toggle"
+                        aria-expanded={expanded}
+                        data-testid={`whitelist-group-toggle-${conn.id}-${schema}`}
+                        onClick={() => {
+                          setGroupPage(0);
+                          setGroupExpansion(
+                            expanded ? { mode: "closed" } : { mode: "open", key }
+                          );
+                        }}
+                      >
+                        <span className="notranslate" translate="no">
+                          连接：{conn.id} · Schema：{schema}
+                        </span>
+                        <span className="pl-table-group-row-count notranslate" translate="no">
+                          （共 {rows.length} 张表）
+                        </span>
+                        <span className="pl-whitelist-group-toggle-action">
+                          {expanded ? "收起" : "展开"}
+                        </span>
+                      </button>
+                    ) : (
+                      <>
+                        <span className="notranslate" translate="no">
+                          连接：{conn.id} · Schema：{schema}
+                        </span>
+                        <span className="pl-table-group-row-count notranslate" translate="no">
+                          （共 {rows.length} 张表）
+                        </span>
+                      </>
+                    )}
                   </td>
                 </tr>
-                {rows.map((row) => {
+                {mountedRows.map((row) => {
                   const status = whitelistStatus(row);
                   return (
                     <tr
@@ -855,8 +1024,17 @@ export function TableWhitelist() {
                   );
                 })}
               </tbody>
-            ))}
+              );
+            })}
           </table>
+          <WhitelistPagination
+            pageIndex={safeGroupPage}
+            pageSize={WHITELIST_ROW_BUDGET}
+            total={expandedGroupTotal}
+            onPage={setGroupPage}
+            testId="whitelist-pagination"
+            label="当前 Schema 分页"
+          />
         </div>
       )}
 
@@ -872,7 +1050,7 @@ export function TableWhitelist() {
                 <th>操作</th>
               </tr>
             </thead>
-            {visibleInvalidGroups.map(({ conn, rows }) => (
+            {pagedInvalidGroups.map(({ conn, rows, totalCount }) => (
               <tbody
                 key={`${conn.id}-invalid-enabled`}
                 data-testid={`whitelist-invalid-group-${conn.id}`}
@@ -883,7 +1061,7 @@ export function TableWhitelist() {
                       连接：{conn.id} · 已启用 · 本地无 Manifest
                     </span>
                     <span className="pl-table-group-row-count notranslate" translate="no">
-                      （共 {rows.length} 张表）
+                      （共 {totalCount} 张表）
                     </span>
                   </td>
                 </tr>
@@ -918,6 +1096,14 @@ export function TableWhitelist() {
               </tbody>
             ))}
           </table>
+          <WhitelistPagination
+            pageIndex={safeInvalidPage}
+            pageSize={WHITELIST_ROW_BUDGET}
+            total={invalidTotal}
+            onPage={setInvalidPage}
+            testId="whitelist-invalid-pagination"
+            label="无效启用分页"
+          />
         </div>
       ) : null}
 

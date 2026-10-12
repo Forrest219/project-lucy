@@ -1353,6 +1353,19 @@
   .pl-table-group-row-count {
     @apply ml-2 text-[11px] font-normal text-fg-muted;
   }
+  .pl-whitelist-group-toggle {
+    @apply flex w-full cursor-pointer items-baseline border-0 bg-transparent p-0 text-left text-xs font-medium tracking-wider text-fg-muted;
+    font-family: inherit;
+  }
+  .pl-whitelist-group-toggle:hover { @apply text-fg-default; }
+  .pl-whitelist-group-toggle-action {
+    @apply ml-auto pl-1 text-[11px] font-normal text-fg-muted;
+  }
+  .pl-whitelist-large-list-notice { @apply mt-4 text-sm text-fg-muted; }
+  .pl-whitelist-pagination {
+    @apply flex items-center justify-between gap-3 text-xs text-fg-muted;
+  }
+  .pl-whitelist-pagination div { @apply flex gap-1; }
   .pl-table-wrapper { @apply grid gap-2; }
   .pl-data-table { @apply w-full; }
 
