@@ -1,7 +1,7 @@
 import { Fragment } from "react";
 import { useState } from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Database, Server } from "lucide-react";
+import { ChevronRight, Database, Server } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { fetchCatalogSchemaManifest } from "../../lib/catalog-assets";
@@ -768,8 +768,9 @@ export function ConnectionOverview() {
                           className={`pl-connection-health pl-connection-health--${statusTone.tone}`}
                           data-testid={`connection-health-${conn.id}`}
                           data-tone={statusTone.tone}
-                          aria-label={`连通健康 · ${conn.id} · ${ariaStatus}`}
-                          title="查看连通诊断；进页会自动探测一次"
+                          aria-haspopup="dialog"
+                          aria-label={`连通健康 · ${conn.id} · ${ariaStatus}。打开连通测试`}
+                          title="打开连通测试"
                           onClick={() => {
                             setTestDrawerConnId(conn.id);
                             setTestLogsExpanded(false);
@@ -790,6 +791,7 @@ export function ConnectionOverview() {
                               · {probeClock}
                             </time>
                           ) : null}
+                          <ChevronRight className="pl-connection-health-chevron" aria-hidden="true" strokeWidth={2} />
                         </button>
                       );
                     })()}

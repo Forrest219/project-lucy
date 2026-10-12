@@ -1789,6 +1789,8 @@ describe("ConnectionOverview grid visual consistency (M72)", () => {
 
     const health = await screen.findByTestId("connection-health-mysql-aliyun");
     expect(health).toHaveTextContent("42 ms");
+    expect(health).toHaveAttribute("aria-haspopup", "dialog");
+    expect(health.querySelector(".pl-connection-health-chevron")).not.toBeNull();
     fireEvent.click(health);
 
     expect(await screen.findByTestId("connection-test-drawer")).toBeInTheDocument();
