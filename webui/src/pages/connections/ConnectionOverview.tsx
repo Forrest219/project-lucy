@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from "react";
-import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Database, Server } from "lucide-react";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ChevronRight, Database, Server } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { fetchCatalogSchemaManifest } from "../../lib/catalog-assets";
@@ -19,8 +19,8 @@ import type {
   CatalogSchemaManifestReadResponse,
   ConnectionInfo,
   ConnectionTestResult,
+  ExecutionRuntimeStatus,
   LiveSchemasResponse,
-  McpRuntimeCanaryResult,
   McpRuntimeStatus,
   ProjectInfo,
   SourceSummary,
@@ -33,6 +33,7 @@ import { RemoveSchemaDrawer } from "../../components/RemoveSchemaDrawer";
 import { SetupAssistantModal } from "../../components/onboarding";
 import {
   deriveAssistantResumeState,
+  formatAssistantProgressCompact,
   formatAssistantProgressLabel,
   getAssistantDraft,
   type SetupStep
@@ -47,7 +48,6 @@ import {
 import { ConnectionTestDrawer } from "../../components/connections";
 import { PageHeader } from "../../components/PageHeader";
 import { MetricCard } from "./MetricCard";
-import { McpRuntimeStatusPanel } from "../../components/McpRuntimeStatusPanel";
 
 /** Spec 107: client staleTime aligned with server TTL. */
 const LIVE_SCHEMAS_STALE_MS = 10 * 60 * 1000;
@@ -71,7 +71,17 @@ function engineKey(engine?: string): "mysql" | "postgres" | "doris" | "starrocks
 }
 
 function catalogReloadTimestampTitle(iso: string): string {
-  return `配置同步时间：${iso}。上传或修改 Schema Manifest 后，可用“同步配置变更”让页面读取最新 YAML 资产，不会连接数据库。`;
+  return `配置同步时间：${iso}。上传或修改 Schema Manifest 后，可用“刷新本地目录”让页面读取最新 YAML 资产，不会连接数据库。`;
+}
+
+function executionNoticeCopy(status: ExecutionRuntimeStatus | undefined): string | null {
+  if (status === "stale") {
+    return "问数服务仍在使用旧配置。已保存的连接里有尚未被它加载的项。";
+  }
+  if (status === "unavailable" || status === "error") {
+    return "问数服务当前不可用。连接配置已保存，问数要等服务恢复后才能使用这些连接。";
+  }
+  return null;
 }
 
 function formatLocalTime(iso: string): string {
@@ -402,23 +412,6 @@ export function ConnectionOverview() {
     queryKey: queryKeys.mcpRuntime,
     queryFn: () => apiGet<McpRuntimeStatus>("/api/admin/mcp-runtime/status")
   });
-  const [runtimeCanaryByConnection, setRuntimeCanaryByConnection] = useState<
-    Record<string, McpRuntimeCanaryResult>
-  >({});
-  const runtimeCanaryMutation = useMutation({
-    mutationFn: (connectionId: string) =>
-      apiPost<McpRuntimeCanaryResult>("/api/admin/mcp-runtime/canary", {
-        connectionId,
-        mode: "connection"
-      }),
-    onSuccess: (data) => {
-      setRuntimeCanaryByConnection((current) => ({
-        ...current,
-        [data.connectionId]: data
-      }));
-      void queryClient.invalidateQueries({ queryKey: queryKeys.mcpRuntime });
-    }
-  });
 
   const connections = projectQuery.data?.connections ?? [];
   const liveSchemaQueries = useQueries({
@@ -673,6 +666,15 @@ export function ConnectionOverview() {
         />
       </div>
 
+      {!mcpRuntimeQuery.isLoading && !mcpRuntimeQuery.isError && executionNoticeCopy(mcpRuntimeQuery.data?.execution?.status) ? (
+        <p className="pl-notice text-sm" role="status" data-testid="execution-runtime-notice">
+          {executionNoticeCopy(mcpRuntimeQuery.data?.execution?.status)}{" "}
+          <Link className="notranslate underline" translate="no" to="/admin/mcp-playground">
+            打开 MCP 调试台
+          </Link>
+        </p>
+      ) : null}
+
       <div className="pl-overview-grid pl-overview-grid--flat">
         {connections.length === 0 && (
           <div className="py-8 px-6 text-center bg-bg-surface border border-border-default rounded-xl space-y-4" data-testid="connections-empty-state">
@@ -842,8 +844,9 @@ export function ConnectionOverview() {
                           className={`pl-connection-health pl-connection-health--${statusTone.tone}`}
                           data-testid={`connection-health-${conn.id}`}
                           data-tone={statusTone.tone}
-                          aria-label={`连通健康 · ${conn.id} · ${ariaStatus}`}
-                          title="查看连通诊断；进页会自动探测一次"
+                          aria-haspopup="dialog"
+                          aria-label={`连通健康 · ${conn.id} · ${ariaStatus}。打开连通测试`}
+                          title="打开连通测试"
                           onClick={() => {
                             setTestDrawerConnId(conn.id);
                             setTestLogsExpanded(false);
@@ -864,6 +867,7 @@ export function ConnectionOverview() {
                               · {probeClock}
                             </time>
                           ) : null}
+                          <ChevronRight className="pl-connection-health-chevron" aria-hidden="true" strokeWidth={2} />
                         </button>
                       );
                     })()}
@@ -890,15 +894,107 @@ export function ConnectionOverview() {
                       </span>
                     ) : null}
                     {isAssistantInProgress ? (
-                      <span
-                        className="pl-connection-meta-tag notranslate"
+                      <button
+                        type="button"
+                        className="pl-connection-progress notranslate"
                         translate="no"
                         title={formatAssistantProgressLabel(cardAssistantStep)}
-                        data-testid={`connection-assistant-banner-${conn.id}`}
+                        aria-label={`继续向导，${formatAssistantProgressCompact(cardAssistantStep)}`}
+                        data-testid={`resume-assistant-${conn.id}`}
+                        onClick={() => {
+                          setAssistantConnId(conn.id);
+                          setAssistantStep(cardAssistantStep);
+                          setAssistantOpen(true);
+                        }}
                       >
-                        接入进度 {cardAssistantStep}/6
-                      </span>
+                        {formatAssistantProgressCompact(cardAssistantStep)}
+                      </button>
                     ) : null}
+                    <button
+                      type="button"
+                      className="pl-btn pl-btn--secondary notranslate"
+                      onClick={() => setAddTarget(conn)}
+                      data-testid={`add-schema-${conn.id}`}
+                      translate="no"
+                    >
+                      添加 Schema
+                    </button>
+                    <details
+                      className="pl-row-action-more pl-connection-more"
+                      data-testid={`connection-more-${conn.id}`}
+                    >
+                      <summary
+                        className="pl-row-action-link notranslate"
+                        translate="no"
+                        aria-label={`更多连接操作：${conn.id}`}
+                      >
+                        更多
+                      </summary>
+                      <div className="pl-row-action-more-menu pl-connection-more-menu">
+                        <div className="pl-connection-more-entry">
+                          <button
+                            type="button"
+                            className="pl-row-action-link pl-connection-more-action notranslate"
+                            disabled={Boolean(liveQuery?.isFetching || refreshingLiveByConnection[conn.id])}
+                            onClick={() => {
+                              void (async () => {
+                                setRefreshingLiveByConnection((current) => ({ ...current, [conn.id]: true }));
+                                try {
+                                  const data = await apiGet<LiveSchemasResponse>(
+                                    `/api/connections/${encodeURIComponent(conn.id)}/live-schemas?refresh=1`
+                                  );
+                                  queryClient.setQueryData(queryKeys.connectionLiveSchemas(conn.id), data);
+                                } catch (err) {
+                                  toast.error(
+                                    err instanceof Error ? err.message : "重新拉取库内目录失败"
+                                  );
+                                } finally {
+                                  setRefreshingLiveByConnection((current) => ({ ...current, [conn.id]: false }));
+                                }
+                              })();
+                            }}
+                            data-testid={`refresh-live-catalog-${conn.id}`}
+                            title="向数据库查询当前可见的 Schema 和表数量。"
+                            translate="no"
+                          >
+                            {liveQuery?.isFetching || refreshingLiveByConnection[conn.id]
+                              ? "拉取库内目录..."
+                              : "重新拉取库内目录"}
+                          </button>
+                          <p className="pl-connection-more-hint">
+                            向数据库查询当前可见的 <span className="notranslate" translate="no">Schema</span> 和表数量。
+                          </p>
+                        </div>
+                        <div className="pl-connection-more-entry">
+                          <CatalogReloadButton
+                            connectionId={conn.id}
+                            label="刷新本地目录"
+                            pendingLabel="刷新中..."
+                            variant="menu"
+                            testId={`catalog-reload-${conn.id}`}
+                            title="重新读取本机 YAML，不连接数据库。"
+                            showCompletionLabel={false}
+                            showInlineResult={false}
+                            onReloadStart={() => handleReloadStart(conn.id)}
+                            onReloadComplete={(run) => handleReloadComplete(conn.id, run)}
+                            onReloadError={(reloadButtonError) => handleReloadError(conn.id, reloadButtonError)}
+                          />
+                          <p className="pl-connection-more-hint">
+                            重新读取本机 <span className="notranslate" translate="no">YAML</span>，不连接数据库。
+                          </p>
+                        </div>
+                        <div className="pl-connection-more-separator" role="separator" />
+                        <button
+                          type="button"
+                          className="pl-row-action-link pl-row-action-link--danger pl-connection-more-action notranslate"
+                          onClick={() => setDeleteTarget(conn)}
+                          data-testid={`delete-connection-${conn.id}`}
+                          translate="no"
+                        >
+                          删除连接
+                        </button>
+                      </div>
+                    </details>
                   </div>
                   <dl className="pl-connection-kv-grid pl-connection-kv-grid--compact" data-testid={`connection-kv-${conn.id}`}>
                     <div className="pl-connection-kv">
@@ -1283,118 +1379,17 @@ export function ConnectionOverview() {
                       </tbody>
                     </table>
                   )}
-                </div>
-                <div className="pl-connection-card-footer">
-                  <McpRuntimeStatusPanel
-                    status={mcpRuntimeQuery.data}
-                    connectionId={conn.id}
-                    canary={runtimeCanaryByConnection[conn.id]}
-                    pending={
-                      runtimeCanaryMutation.isPending &&
-                      runtimeCanaryMutation.variables === conn.id
-                    }
-                    error={
-                      mcpRuntimeQuery.error instanceof Error
-                        ? mcpRuntimeQuery.error.message
-                        : runtimeCanaryMutation.error instanceof Error &&
-                            runtimeCanaryMutation.variables === conn.id
-                          ? runtimeCanaryMutation.error.message
-                          : undefined
-                    }
-                    compact
-                    onRecheck={() => runtimeCanaryMutation.mutate(conn.id)}
-                  />
                   {showCatalogRunStatus ? (
                     <div
                       className={`pl-catalog-reload-status pl-catalog-reload-status--${catalogState.tone} notranslate`}
-                        data-testid={`catalog-reload-status-${conn.id}`}
-                        role={catalogState.tone === "danger" ? "alert" : "status"}
-                        translate="no"
-                      >
-                        <span className="pl-catalog-reload-status-main">{catalogState.label}</span>
+                      data-testid={`catalog-reload-status-${conn.id}`}
+                      role={catalogState.tone === "danger" ? "alert" : "status"}
+                      translate="no"
+                    >
+                      <span className="pl-catalog-reload-status-main">{catalogState.label}</span>
                       {catalogState.detail ? <span>{catalogState.detail}</span> : null}
                     </div>
                   ) : null}
-                  <div
-                    className="pl-connection-card-schema-actions"
-                    data-testid={`connection-card-schema-actions-${conn.id}`}
-                  >
-                    {isAssistantInProgress ? (
-                      <button
-                        type="button"
-                        className="pl-btn pl-btn--secondary notranslate"
-                        onClick={() => {
-                          setAssistantConnId(conn.id);
-                          setAssistantStep(cardAssistantStep);
-                          setAssistantOpen(true);
-                        }}
-                        data-testid={`resume-assistant-${conn.id}`}
-                        translate="no"
-                      >
-                        继续向导
-                      </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      className="pl-btn pl-btn--secondary notranslate"
-                      onClick={() => setAddTarget(conn)}
-                      data-testid={`add-schema-${conn.id}`}
-                      translate="no"
-                    >
-                      + 添加 Schema
-                    </button>
-                    <button
-                      type="button"
-                      className="pl-btn pl-btn--secondary notranslate"
-                      disabled={Boolean(liveQuery?.isFetching || refreshingLiveByConnection[conn.id])}
-                      onClick={() => {
-                        void (async () => {
-                          setRefreshingLiveByConnection((current) => ({ ...current, [conn.id]: true }));
-                          try {
-                            const data = await apiGet<LiveSchemasResponse>(
-                              `/api/connections/${encodeURIComponent(conn.id)}/live-schemas?refresh=1`
-                            );
-                            queryClient.setQueryData(queryKeys.connectionLiveSchemas(conn.id), data);
-                          } catch (err) {
-                            toast.error(
-                              err instanceof Error ? err.message : "重新拉取库内目录失败"
-                            );
-                          } finally {
-                            setRefreshingLiveByConnection((current) => ({ ...current, [conn.id]: false }));
-                          }
-                        })();
-                      }}
-                      data-testid={`refresh-live-catalog-${conn.id}`}
-                      title="重新查询物理库中的 Schema / 表数量；与「同步配置变更」不同，会连接数据库。"
-                      translate="no"
-                    >
-                      {liveQuery?.isFetching || refreshingLiveByConnection[conn.id]
-                        ? "拉取库内目录..."
-                        : "重新拉取库内目录"}
-                    </button>
-                    <CatalogReloadButton
-                      connectionId={conn.id}
-                      label="同步配置变更"
-                      pendingLabel="同步中..."
-                      variant="secondary"
-                      testId={`catalog-reload-${conn.id}`}
-                      title="上传或修改配置文件后，点击同步配置变更以读取最新资产；不会连接数据库，也不会执行 ingest。"
-                      showCompletionLabel={false}
-                      showInlineResult={false}
-                      onReloadStart={() => handleReloadStart(conn.id)}
-                      onReloadComplete={(run) => handleReloadComplete(conn.id, run)}
-                      onReloadError={(reloadButtonError) => handleReloadError(conn.id, reloadButtonError)}
-                    />
-                    <button
-                      type="button"
-                      className="pl-btn pl-btn--secondary notranslate"
-                      onClick={() => setDeleteTarget(conn)}
-                      data-testid={`delete-connection-${conn.id}`}
-                      translate="no"
-                    >
-                      删除连接
-                    </button>
-                  </div>
                 </div>
               </div>
             );
