@@ -128,21 +128,24 @@
 | [140-admin-audit-dual-csv-export-spec.md](140-admin-audit-dual-csv-export-spec.md) | `/admin/audit` 双粒度 CSV 导出：问询记录一问一行、调用流水一调用一行，并在页面与 Help 说明两者关联 | 产品 / UX / API / Audit / Frontend / Backend |
 | [141-admin-audit-csv-readability-metadata-spec.md](141-admin-audit-csv-readability-metadata-spec.md) | `/admin/audit` CSV 可读性增强：本地时间 + UTC 双轨、秒级流水号文件名、字段说明元数据 | 产品 / UX / API / Audit / Frontend / Backend |
 | [142-overview-focus-and-restraint-spec.md](142-overview-focus-and-restraint-spec.md) | `/overview` 聚焦精简：只保留系统状态 / 待处理事项 / MCP 接入；删除质量快照与访问风险（Implemented v1.0） | 产品 / UX / Frontend |
-| [143-call-monitoring-ops-page-spec.md](143-call-monitoring-ops-page-spec.md) | 调用监控运维页：运行状态分组、`/ops/calls` 准实时 MCP 吞吐/成败/时效盯盘、SLO 红标与访问日志下钻（Implemented） | 产品 / UX / API / Ops / Frontend / Backend |
+| [143-call-monitoring-ops-page-spec.md](143-call-monitoring-ops-page-spec.md) | 调用监控运维页：运行状态分组、`/ops/calls` 准实时 MCP 吞吐/成败/时效盯盘、SLO 红标与访问日志下钻（Implemented v1.1；窗口与折线见 Spec 165） | 产品 / UX / API / Ops / Frontend / Backend |
 | [146-restore-row-policy-proxy-wiring-spec.md](146-restore-row-policy-proxy-wiring-spec.md) | Row Policy Proxy 接线恢复：修复 `68db68a` 抹掉的 `forced_filters` 注入与 explain 诊断（安全修复） | Backend / Security |
 | [150-role-permission-configuration-structure-spec.md](150-role-permission-configuration-structure-spec.md) | Role 权限配置结构化重构：可访问的表 / 允许的 MCP 工具 / 行级策略独立编辑面，共享草稿与确认权限变更 Drawer | 产品 / UX / IA / Frontend / Accessibility |
 | [151-business-skill-authorization-and-file-safety-spec.md](151-business-skill-authorization-and-file-safety-spec.md) | 业务 Skill 授权与文件安全加固：`roles_allowed` 单一事实源、同角色闭合、身份不可变、并发版本与审计证据 | 产品 / API / 安全 / Frontend / Audit |
 | [152-catalog-connection-schema-tree-p0-spec.md](152-catalog-connection-schema-tree-p0-spec.md) | `/catalog` Connection → Schema 可折叠范围树 P0：替代位置下拉、保留右侧语义资产表格，并用匿名聚合验证定位成本 | 产品 / UX / Frontend / Observability |
 | [153-unified-skill-workbench-spec.md](153-unified-skill-workbench-spec.md) | `/skills` 统一工作台：领域浏览器、治理总览、主区阅读/编辑、Markdown 双栏、脏数据保护与写入预检 | 产品 / UX / API / Frontend / Accessibility |
 | [154-role-list-p0-p1-remediation-spec.md](154-role-list-p0-p1-remediation-spec.md) | `/admin/roles` P0/P1 修复：快捷详情防白屏、Data Grid 唯一列表、高级筛选收敛与空结果恢复 | 产品 / UX / IA / Frontend / Accessibility |
-| [156-runtime-status-usage-boundary-spec.md](156-runtime-status-usage-boundary-spec.md) | 使用概况并入运行状态；健康 KPI 只留 `/ops/calls`，资产活跃留在数据访问视图；分组排行按当前目录归类，资产卡不再被 P95 连坐（Accepted v1.3） | 产品 / UX / IA / Frontend / Docs |
+| [156-runtime-status-usage-boundary-spec.md](156-runtime-status-usage-boundary-spec.md) | 使用概况并入运行状态；健康 KPI 只留 `/ops/calls`，资产活跃留在数据访问视图；分组排行按当前目录归类，资产卡不再被 P95 连坐（Accepted v1.6；窗口见 Spec 165，页面访问折线见 Spec 166，密度见 Spec 169） | 产品 / UX / IA / Frontend / Docs |
 | [159-page-header-context-dedup-spec.md](159-page-header-context-dedup-spec.md) | 六个页面 PageHeader 上下文去重：移除正文、指标卡或相邻控件已承载的信息；Run 详情仅保留运行状态 | 产品 / UX / Frontend / Accessibility |
 | [161-offline-eval-customer-ops-spec.md](161-offline-eval-customer-ops-spec.md) | 客户离线评测 v0.2，可交付：与 `lucy_query` 同一执行路径、答对了/答错了/没答出来、现场提问；不完整结果文件整体拒收 | 产品 / UX / API / Eval |
 | [162-customer-query-experience-and-usage-evidence-spec.md](162-customer-query-experience-and-usage-evidence-spec.md) | 客户查数体验与使用证据 v0.3：问询预算、过滤条件下推、四失败维度；`wiki_not_found` 归用法与语义。WO-12 已验收 | 产品 / Proxy / Audit |
 | [163-connection-overview-card-quiet-spec.md](163-connection-overview-card-quiet-spec.md) | 连接概览卡片收纳 v0.1：拿掉每卡四层运行时；页脚五按钮收成添加 Schema 与更多；问数未加载或不可用时列表上方提示一次。已实现，工单 WO-202610-16 | 产品 / UX / Frontend |
 | [164-add-schema-structure-next-step-spec.md](164-add-schema-structure-next-step-spec.md) | 添加 Schema 成功步 v0.1：只留已添加状态和一颗主按钮；能读库时读取表结构并进入启用表范围。已实现，工单 WO-202610-17 | 产品 / UX / Frontend |
+| [165-call-monitor-window-series-spec.md](165-call-monitor-window-series-spec.md) | 调用监控窗内折线 v0.1：全页一组时间窗（近 1 小时 / 近 24 小时 / 近 7 天 / 近 30 天），六张 KPI 折线拆开同一窗口；30 秒刷新整份快照，失败保留上一份。已实现，工单 WO-202610-18。修订 Spec 143 / 156 | 产品 / UX / API / Frontend / Backend |
 | [167-setup-assistant-authoring-howto-spec.md](167-setup-assistant-authoring-howto-spec.md) | 接入向导 how to v0.1：第 2 步「如何生成 Schema Manifest」，第 5 步「如何写业务 Wiki」。编写说明交给任意 Agent，不挡主按钮。已实现 | 产品 / UX / Frontend |
 | [168-agent-role-set-admin-spec.md](168-agent-role-set-admin-spec.md) | Agent 角色多选 v0.1：详情和新建用复选框绑定多个角色，写入只落 `roles[]`，预览和门禁复用既有合成。已实现，工单 WO-202610-20。落实 Spec 14 | 产品 / UX / API / Frontend / Backend / 安全 |
+| [169-usage-and-call-monitor-density-spec.md](169-usage-and-call-monitor-density-spec.md) | 使用概况与调用监控密度 v0.1：短排行顶部对齐，用量条改中性灰；调用量去掉重复窗口副文，当天失败只显示时刻，自动刷新写明 30 秒；数据访问 / 界面使用改为内容页签。已实现，工单 WO-202610-21。修订 Spec 135 / 156 / 165 | 产品 / UX / Frontend |
+| [166-usage-page-view-series-spec.md](166-usage-page-view-series-spec.md) | 使用概况页面访问折线 v0.1：只在界面使用的「近 N 页面访问」上拆开当前 24 小时或 7 天；各点相加等于卡片数字。已实现，工单 WO-202610-19。修订 Spec 148 / 156 | 产品 / UX / API / Frontend / Backend |
 
 ## 与原 README 的关键校正
 

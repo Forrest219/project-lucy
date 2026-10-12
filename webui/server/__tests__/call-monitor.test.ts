@@ -112,6 +112,11 @@ describe("GET /api/ops/call-monitor", () => {
         errorCalls: 1,
         deniedCalls: 1
       });
+      expect(res.body.data.series).toHaveLength(24);
+      expect(res.body.data.series.reduce((sum: number, point: { businessCalls: number }) => sum + point.businessCalls, 0)).toBe(3);
+      expect(res.body.data.series.every((point: { p95Ms: number | null }) => point.p95Ms === null)).toBe(true);
+      expect(res.body.data.window.timeZone).toBe("Asia/Shanghai");
+      expect(res.body.data.latency.p95Ms).toEqual(expect.any(Number));
       expect(res.body.data.latency.slowCalls).toBe(1);
       expect(res.body.data.topTools[0]).toMatchObject({
         tool: "lucy_query",
@@ -143,7 +148,8 @@ describe("GET /api/ops/call-monitor", () => {
         .get("/api/ops/call-monitor?range=1h")
         .expect(200);
       expect(res.body.data.window.range).toBe("1h");
-      expect(res.body.data.window.hours).toBe(1);
+      expect(res.body.data.window.bucket).toBe("5m");
+      expect(res.body.data.series).toHaveLength(12);
       expect(res.body.data.traffic.businessCalls).toBe(0);
       expect(res.body.data.slo.status).toBe("no_data");
       expect(res.body.data.slo.violations).toEqual([]);
@@ -152,5 +158,88 @@ describe("GET /api/ops/call-monitor", () => {
     } finally {
       await app.close();
     }
+  });
+
+  it("uses fixed bucket counts and does not treat hours=168 as 7 days", async () => {
+    const { buildServer } = await import("../index");
+    const app = buildServer();
+    await app.ready();
+    try {
+      const week = await request(app.server).get("/api/ops/call-monitor?range=7d").expect(200);
+      expect(week.body.data.window.bucket).toBe("day");
+      expect(week.body.data.series).toHaveLength(7);
+
+      const month = await request(app.server).get("/api/ops/call-monitor?range=30d").expect(200);
+      expect(month.body.data.series).toHaveLength(30);
+
+      const legacy = await request(app.server).get("/api/ops/call-monitor?hours=168").expect(200);
+      expect(legacy.body.data.window.range).toBe("24h");
+      expect(legacy.body.data.series).toHaveLength(24);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("leaves sparse bucket percentiles empty while the window percentile stays", async () => {
+    const { writeLog, readCallMonitorSnapshot } = await import("../proxy/audit");
+    const { callMonitorWindow } = await import("../../src/lib/callMonitorWindow");
+    const now = new Date("2026-10-12T12:30:00.000Z");
+    const plan = callMonitorWindow("24h", now);
+    const previous = new Date(Date.parse(plan.buckets[22].start) + 10 * 60 * 1000).toISOString();
+    const current = new Date(Date.parse(plan.buckets[23].start) + 10 * 60 * 1000).toISOString();
+
+    for (let index = 0; index < 19; index += 1) {
+      await writeLog({
+        ts: previous,
+        userId: "agent-a",
+        tool: "lucy_query",
+        outcome: "ok",
+        durationMs: 100,
+        requestId: `sparse-${index}`
+      });
+    }
+    for (let index = 0; index < 20; index += 1) {
+      await writeLog({
+        ts: current,
+        userId: "agent-a",
+        tool: "lucy_query",
+        outcome: "ok",
+        durationMs: 400,
+        requestId: `dense-${index}`
+      });
+    }
+    await writeLog({
+      ts: current,
+      userId: "agent-a",
+      tool: "tools/list",
+      outcome: "ok",
+      durationMs: 5,
+      requestId: "protocol"
+    });
+    await writeLog({
+      ts: "2026-10-01T00:00:00.000Z",
+      userId: "agent-a",
+      tool: "lucy_query",
+      outcome: "ok",
+      durationMs: 9,
+      requestId: "outside-window"
+    });
+
+    const snapshot = await readCallMonitorSnapshot({ range: "24h", now, slowMs: 1000 });
+    const sparse = snapshot.series.find((point) => point.businessCalls === 19);
+    const dense = snapshot.series.find((point) => point.businessCalls === 20);
+    const empty = snapshot.series.find((point) => point.businessCalls === 0);
+
+    expect(snapshot.series).toHaveLength(24);
+    expect(snapshot.traffic.businessCalls).toBe(39);
+    expect(snapshot.series.reduce((sum, point) => sum + point.businessCalls, 0)).toBe(39);
+    expect(sparse?.p95Ms).toBeNull();
+    expect(sparse?.successRate).toBe(1);
+    expect(dense?.p95Ms).toEqual(expect.any(Number));
+    expect(empty?.successRate).toBeNull();
+    expect(empty?.p95Ms).toBeNull();
+    expect(empty?.slowCalls).toBe(0);
+    expect(snapshot.latency.p95Ms).toEqual(expect.any(Number));
+    expect(JSON.stringify(snapshot)).not.toContain("outside-window");
   });
 });

@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
 import { GovernanceOverview } from "../pages/admin/GovernanceOverview";
 
 function renderPage(initial = "/admin/usage") {
@@ -127,7 +128,17 @@ function stubFetch() {
           pages: [
             { id: "table-editor", label: "表语义编辑", visits: hours === 24 ? 2 : 4 },
             { id: "eval-monitor", label: "趋势监控", visits: 0 }
-          ]
+          ],
+          pageViewSeries: {
+            bucket: hours === 24 ? "hour" : "day",
+            since: hours === 24 ? "2026-10-11T12:30:00.000Z" : "2026-10-05T12:30:00.000Z",
+            until: "2026-10-12T12:30:00.000Z",
+            points: Array.from({ length: hours === 24 ? 24 : 7 }, (_, index) => ({
+              start: "2026-10-05T12:30:00.000Z",
+              end: "2026-10-06T12:30:00.000Z",
+              pageViews: index === 0 ? (hours === 24 ? 2 : 5) : 0
+            }))
+          }
         }
       }));
     }
@@ -169,8 +180,17 @@ describe("GovernanceOverview", () => {
     expect(screen.queryByTestId("metric-acl-denied")).not.toBeInTheDocument();
     expect(screen.queryByTestId("metric-p95-latency")).not.toBeInTheDocument();
     expect(screen.getByTestId("usage-call-monitor-link")).toHaveAttribute("href", "/ops/calls?range=24h");
-    expect(screen.getByText(/调用监控的窗口是近 1 小时或近 24 小时/)).toBeInTheDocument();
+    expect(screen.queryByTestId("usage-sparkline-page-views")).not.toBeInTheDocument();
+    expect(screen.getByText(/调用是否报错、被拒绝或变慢，到调用监控查看/)).toBeInTheDocument();
+    expect(screen.queryByText(/调用监控的窗口是近 1 小时或近 24 小时/)).not.toBeInTheDocument();
     expect(screen.getByTestId("governance-usage-rank-grid")).toHaveClass("pl-usage-rank-grid");
+    expect(screen.queryByTestId("governance-interface-rank-grid")).not.toBeInTheDocument();
+    const usageCss = readFileSync("src/app/app.css", "utf8");
+    expect(usageCss).toMatch(/\.pl-usage-rank-grid \{[^}]*items-start/);
+    expect(usageCss).toMatch(/\.pl-usage-rank-bar \{[^}]*bg-fg-muted\/40/);
+    expect(usageCss).toMatch(/\.pl-usage-rank-track \{[^}]*bg-bg-muted/);
+    expect(usageCss).not.toMatch(/\.pl-usage-rank-bar \{[^}]*bg-brand/);
+    expect(usageCss).not.toMatch(/\.pl-usage-rank-track \{[^}]*bg-brand/);
     expect(screen.getByTestId("governance-agent-usage")).toHaveClass("pl-panel");
     expect(screen.getByTestId("governance-token-usage")).toHaveClass("pl-panel");
     expect(screen.getByTestId("governance-popular-tables")).toHaveClass("pl-panel");
@@ -244,6 +264,14 @@ describe("GovernanceOverview", () => {
     expect(screen.getByTestId("governance-window-7d")).toHaveClass("pl-segmented-control-item--active");
     expect(screen.getByTestId("governance-window-7d").className).not.toMatch(/pl-btn--primary/);
 
+    const viewTabs = screen.getByTestId("governance-usage-view");
+    expect(viewTabs).toHaveClass("pl-admin-tabbar");
+    expect(viewTabs).not.toHaveClass("pl-segmented-control");
+    expect(screen.getByTestId("governance-view-access")).toHaveClass("pl-admin-tab--active");
+    expect(screen.getByTestId("governance-view-interface")).not.toHaveClass("pl-admin-tab--active");
+    expect(screen.getByTestId("governance-view-access").className).not.toMatch(/pl-btn--primary/);
+    expect(viewTabs.className).not.toMatch(/pl-admin-tab-panel/);
+
     expect(screen.queryByText("Role 边界")).not.toBeInTheDocument();
     expect(screen.queryByText("拒绝原因")).not.toBeInTheDocument();
     expect(screen.queryByText("Agent 风险排行")).not.toBeInTheDocument();
@@ -295,6 +323,14 @@ describe("GovernanceOverview", () => {
     expect(screen.getByRole("heading", { name: "页面访问排行 · 近 7 天" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "分组访问 · 近 7 天" })).toBeInTheDocument();
     expect(screen.getByTestId("metric-interface-page-views")).toHaveTextContent("5");
+    expect(screen.getByTestId("usage-sparkline-page-views")).toHaveAttribute("aria-label", "近 7 天页面访问，近 7 天，按天");
+    expect(screen.getByTestId("governance-view-interface")).toHaveClass("pl-admin-tab--active");
+    expect(screen.getByTestId("governance-interface-rank-grid")).toHaveClass("pl-usage-rank-grid");
+    expect(screen.getByTestId("governance-window-7d")).toHaveAttribute("aria-selected", "true");
+    expect(within(screen.getByTestId("metric-interface-visitors")).queryByRole("img")).not.toBeInTheDocument();
+    expect(within(screen.getByTestId("metric-interface-active-menus")).queryByRole("img")).not.toBeInTheDocument();
+    expect(within(screen.getByTestId("governance-interface-rank-grid")).queryByRole("img")).not.toBeInTheDocument();
+    expect(screen.queryByText("趋势图")).not.toBeInTheDocument();
     expect(screen.getByTestId("governance-interface-unmapped")).toHaveTextContent("另有 1 次页面打开未能对应到已知页面");
     expect(within(screen.getByTestId("governance-interface-menu-rank")).getByText("趋势监控")).toBeInTheDocument();
     expect(within(screen.getByTestId("governance-interface-page-rank")).getByText("趋势监控")).toBeInTheDocument();
@@ -310,6 +346,54 @@ describe("GovernanceOverview", () => {
     expect(laterUrls.some((url) => url.includes("/api/admin/governance/"))).toBe(false);
     expect(laterUrls.some((url) => url.includes("/api/admin/ui-usage/overview"))).toBe(true);
     expect(screen.getByRole("heading", { name: "菜单访问排行 · 近 24 小时" })).toBeInTheDocument();
+    expect(screen.getByTestId("usage-sparkline-page-views")).toHaveAttribute("aria-label", "近 24 小时页面访问，近 24 小时，按小时");
+  });
+
+  it("draws a flat line when the page-view window is empty", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      ok: true,
+      data: {
+        windowHours: 168,
+        pageViews: 0,
+        visitorCount: 0,
+        activeMenuCount: 0,
+        unmappedViews: 0,
+        groups: [],
+        menus: [],
+        pages: [],
+        pageViewSeries: {
+          bucket: "day",
+          since: "2026-10-05T12:30:00.000Z",
+          until: "2026-10-12T12:30:00.000Z",
+          points: Array.from({ length: 7 }, () => ({
+            start: "2026-10-05T12:30:00.000Z",
+            end: "2026-10-06T12:30:00.000Z",
+            pageViews: 0
+          }))
+        }
+      }
+    }))));
+    renderPage("/admin/usage?view=interface");
+    expect(await screen.findByTestId("metric-interface-page-views")).toHaveTextContent("0");
+    expect(screen.getByTestId("usage-sparkline-page-views").querySelector("path")).toBeTruthy();
+    expect(screen.queryByText("所选范围内无数据")).not.toBeInTheDocument();
+  });
+
+  it("hides the page-view line while interface usage is loading or failed", async () => {
+    let resolveFetch: (value: Response) => void = () => {};
+    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>((resolve) => {
+      resolveFetch = resolve;
+    })));
+    renderPage("/admin/usage?view=interface");
+    expect(await screen.findByTestId("governance-interface-loading")).toHaveTextContent("正在统计界面使用。");
+    expect(screen.queryByTestId("usage-sparkline-page-views")).not.toBeInTheDocument();
+
+    resolveFetch(new Response(JSON.stringify({
+      ok: false,
+      error: { code: "UI_USAGE_UNAVAILABLE", message: "库不可用" }
+    })));
+    expect(await screen.findByTestId("governance-interface-error")).toHaveTextContent("界面使用暂时无法统计。");
+    expect(screen.queryByTestId("usage-sparkline-page-views")).not.toBeInTheDocument();
   });
 
   it("does not request data-access APIs when opened on the interface view", async () => {

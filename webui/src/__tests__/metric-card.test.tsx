@@ -106,4 +106,27 @@ describe("MetricCard", () => {
       expect(screen.getByTestId("test-card")).not.toHaveAttribute("data-metric-state");
     });
   });
+
+  describe("in-window line", () => {
+    it("breaks the line at null and draws zeros", () => {
+      renderCard({
+        series: [0, 1, null, 2, 3],
+        seriesLabel: "调用量，近 24 小时，按小时",
+        seriesTestId: "test-sparkline"
+      });
+      const line = screen.getByTestId("test-sparkline");
+      expect(line).toHaveAttribute("aria-label", "调用量，近 24 小时，按小时");
+      expect(line.querySelectorAll("path")).toHaveLength(2);
+    });
+
+    it("does not draw a line when the card has no data", () => {
+      renderCard({
+        state: "no_data",
+        series: [1, 2, 3],
+        seriesLabel: "调用量，近 24 小时，按小时",
+        seriesTestId: "test-sparkline"
+      });
+      expect(screen.queryByTestId("test-sparkline")).not.toBeInTheDocument();
+    });
+  });
 });

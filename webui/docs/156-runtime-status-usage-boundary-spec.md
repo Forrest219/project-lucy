@@ -4,17 +4,26 @@
 |---|---|
 | 文档名称 | 运行状态与使用概况分工 Spec |
 | 文档类型 | Spec |
-| 版本 | v1.3 |
-| 撰写日期 | 2026-09-28 |
+| 版本 | v1.6 |
+| 撰写日期 | 2026-09-28；v1.6 2026-10-12 |
 | 撰写人 | Auto |
 | 委托人 | xingchen |
 | 基于材料 | v1.0 已批准方向，以及 2026-09-28 三轮审阅：历史 `group_id` 不随目录迁移、资产卡被 P95 连坐、定位与界面使用冲突、界面使用仍请求数据访问接口、验收只查 test id，以及分组映射的聚合效率 / 空分组边界、资产卡 `unavailable` 与 `partial` 的优先级、一级根页面面包屑规范和 Token 排行分母说明。上游 Spec 42 / 78 / 84 / 86 / 128 / 135 / 143 / 148 |
-| 适用范围 | `/admin/usage` 的导航归属、数据访问 KPI 与资产卡状态；界面使用分组排行的查询归类。`/ops/calls` 的指标边界保持不变 |
+| 适用范围 | `/admin/usage` 的导航归属、数据访问 KPI 与资产卡状态；界面使用分组排行的查询归类。`/ops/calls` 的窗口与折线见 Spec 165。页面访问折线见 Spec 166 |
 | 输出位置 | `webui/docs/156-runtime-status-usage-boundary-spec.md` |
 | Spec 编号 | 156 |
-| 状态 | Accepted（v1.3，2026-09-28） |
+| 状态 | Accepted（v1.6，2026-10-12） |
 | 关联 IA | `webui/docs/06-navigation-ia.md` |
 | 关联术语 | `webui/docs/00-product-terminology-standard.md` §4.5 / §4.6 |
+
+### Changelog
+
+| 版本 | 变更 |
+|---|---|
+| v1.6 | 视图控件、排行高度和排行颜色，以及调用监控的重复副文、失败时间和刷新文案，改由 Spec 169 规定。路由、窗口和折线不变 |
+| v1.5 | 界面使用的页面访问折线改由 Spec 166 规定。合计口径不变。访问账户、活跃菜单和数据访问三张卡不加折线 |
+| v1.4 | 调用监控的 7 天与 30 天窗口改由 Spec 165 规定。交接文案不再声称调用监控没有 7 天。使用概况自己的 7 天仍不写进调用监控链接 |
+| v1.3 | 分组映射、资产卡状态与交接文案的审阅修订 |
 
 ## 1. 背景
 
@@ -24,7 +33,7 @@
 
 1. 侧栏把 **使用概况** 从 **访问治理** 移到 **运行状态**。路由保持 `/admin/usage`。界面使用仍是该页的第二个视图，本 Spec 不拆页。
 2. 两页不合并。重叠的三张指标卡从数据访问视图拿掉，改成跳到调用监控。
-3. 调用监控不增加 Agent / Token / 表活跃率，也不增加 7 天窗口。
+3. 调用监控不增加 Agent / Token / 表活跃率。近 7 天和近 30 天由 Spec 165 规定，使用概况自己选中的 7 天仍不写进调用监控 URL。
 4. 分组访问排行按**当前页面目录**归类，不沿用写入时的 `group_id`。
 5. 三张资产卡各自根据自己的活跃计数决定状态。`calls`、`denied`、`p95LatencyMs` 留在 API 中，不决定资产卡状态。
 
@@ -34,8 +43,8 @@
 2. 使用概况的逻辑归属路径为 `运行状态 / 使用概况`；遵循 Spec 42，一级根页面不渲染面包屑，H1 仍为 **使用概况**。页头说明随视图切换。
 3. 数据访问视图只保留资产与活跃：Agent、Token、授权表三张复合卡，以及 Agent / Token / 表三块调用排行。
 4. 数据访问视图删除「近 N 调用量」「近 N ACL 拒绝次数」「多数请求耗时」，并以一行说明链到调用监控。
-5. 调用监控的路由、窗口、KPI、30 秒轮询、SLO 红标和访问日志下钻保持 Spec 143。
-6. 「界面使用」指标与菜单 / 页面排行保持 Spec 148。分组排行改为按当前 `pageKey → groupId` 归类。
+5. 调用监控的路由、六张 KPI、30 秒轮询、卡片越线高亮和访问日志下钻保持。窗口与折线见 Spec 165。
+6. 「界面使用」的访问账户、活跃菜单与菜单 / 页面排行保持 Spec 148。页面访问的合计口径保持 Spec 148，折线见 Spec 166。分组排行改为按当前 `pageKey → groupId` 归类。
 7. `?view=interface` 不发起数据访问的三个请求。数据访问视图不发起界面使用请求。
 
 ## 3. Non-goals
@@ -46,18 +55,18 @@
 - 不把界面使用拆成独立路由。若以后要做「系统使用分析」，另立 Spec。
 - 不删除使用概况 API 的 `calls`、`denied`、`p95LatencyMs`、`metricsState`。`metricsState` 保持现有并集语义，供兼容；资产卡不得再读它。
 - 不改 `ui_page_views` 表结构，不对历史行做 `UPDATE`。新写入仍保存当时目录中的 `group_id`，但分组排行不得读取该列。
-- 不改调用监控 API、SLO 阈值、自动刷新。
-- 不把使用概况的 7 天窗口写进调用监控，也不把调用监控的 1 小时窗口写进使用概况。
+- 不改调用监控的 SLO 阈值。自动刷新仍是 30 秒，见 Spec 165。
+- 不把使用概况当前选中的 7 天写进调用监控链接，也不把调用监控的 1 小时窗口写进使用概况。调用监控自己的近 7 天 / 近 30 天见 Spec 165。
 - 不把使用概况改成 30 秒轮询。
 - 不改 Agent 管理页上的调用量 KPI（那是另一页的 `metric-calls` 与 Agent 自己的 `stats.metricsState`）。
-- 不改界面使用的页面访问、访问账户、活跃菜单口径，也不改菜单排行、页面排行的聚合键（仍是 `menu_id`、`page_key`）。
+- 不改界面使用的页面访问合计、访问账户、活跃菜单口径，也不改菜单排行、页面排行的聚合键（仍是 `menu_id`、`page_key`）。页面访问折线只拆开这个合计，见 Spec 166；访问账户和活跃菜单不加折线。
 
 ## 4. 定位与路径
 
 | 页面 / 视图 | 分组 | 路由 | 窗口 | 回答 |
 |---|---|---|---|---|
 | 系统概览 | 运行状态 | `/overview` | — | 连接、语义和待办够不够交付 |
-| 调用监控 | 运行状态 | `/ops/calls` | `range=24h`（默认）或 `1h` | 工具调用有没有报错、被拒绝、变慢 |
+| 调用监控 | 运行状态 | `/ops/calls` | `range=1h`、`24h`（默认）、`7d`、`30d`（Spec 165） | 工具调用有没有报错、被拒绝、变慢 |
 | 使用概况 · 数据访问 | 运行状态 | `/admin/usage` | `hours=24` 或 `168`（默认 168，仍为页内状态） | 哪些 Agent、Token、授权表在被用，活跃率多少 |
 | 使用概况 · 界面使用 | 运行状态（同一页，不另开路由） | `/admin/usage?view=interface` | 与数据访问共用 24 小时 / 7 天 | WebUI 页面打开、访问账户、菜单与分组使用 |
 | Agent 及以下治理页 | 访问治理 | `/admin/agents` 等 | — | 配置身份、权限，以及某一次调用的取证 |
@@ -75,11 +84,11 @@
 
 ## 5. KPI 归属
 
-### 5.1 调用监控（不改）
+### 5.1 调用监控（窗口与折线见 Spec 165）
 
 | UI 主术语 | 口径 | 窗口 |
 |---|---|---|
-| 近 N 调用量 | 业务 MCP 工具调用次数，不含协议工具 | 近 1 小时 / 近 24 小时 |
+| 近 N 调用量 | 业务 MCP 工具调用次数，不含协议工具 | 近 1 小时 / 近 24 小时 / 近 7 天 / 近 30 天 |
 | 成功率 | `ok / businessCalls` | 同上 |
 | 错误率 | `error / businessCalls` | 同上；超阈红标 |
 | 拒绝率 | `denied / businessCalls` | 同上；超阈红标 |
@@ -113,15 +122,15 @@
 
 数据访问视图在指标区上方放一行说明，test id `usage-call-monitor-link`：
 
-> 调用是否报错、被拒绝或变慢，到调用监控查看。调用监控的窗口是近 1 小时或近 24 小时。
+> 调用是否报错、被拒绝或变慢，到调用监控查看。
 
-链接文案 **打开调用监控**，目标固定为 `/ops/calls?range=24h`。使用概况停在 7 天时也不把 `168` 写进该 URL：调用监控没有 7 天窗，最近的健康窗口是近 24 小时。
+链接文案 **打开调用监控**，目标固定为 `/ops/calls?range=24h`。使用概况停在 7 天时也不把 `168` 写进该 URL。调用监控自己的近 7 天和近 30 天由用户在调用监控页切换，见 Spec 165。
 
 资产卡状态见 §6.2。活跃数为 0 时仍展示 `活跃 0 / 配置数`，不得因为 `calls === 0` 或 `p95LatencyMs === null` 改成不可用或暂无数据。
 
 ### 5.3 使用概况 · 界面使用（不改指标，改分组归类）
 
-页面访问、访问账户、活跃菜单，以及菜单 / 页面访问排行保持 Spec 148。`?view=interface` 与默认数据访问的切换保持。
+页面访问、访问账户、活跃菜单，以及菜单 / 页面访问排行的合计保持 Spec 148。`?view=interface` 与默认数据访问的切换保持；控件改为内容页签，见 Spec 169。页面访问可以在主值右侧画折线，只拆开当前窗口的打开次数，见 Spec 166。访问账户和活跃菜单不加折线。
 
 分组访问排行的展示项仍是当前 `UI_USAGE_GROUPS`。每个分组的次数改为：窗口内各 `page_key` 的访问次数，按**查询时**目录中的 `groupId` 求和。存储列 `group_id` 不参与这次求和。
 
@@ -239,8 +248,8 @@ function renderUsage(view: UsageView, hours: UsageHours): void {
   }
 
   renderCallMonitorHandoff({
-    text: "调用是否报错、被拒绝或变慢，到调用监控查看。调用监控的窗口是近 1 小时或近 24 小时。",
-    href: "/ops/calls?range=24h"        // 与 hours 无关；禁止 range=168
+    text: "调用是否报错、被拒绝或变慢，到调用监控查看。",
+    href: "/ops/calls?range=24h"        // 与 hours 无关；禁止 range=168 或 range=7d
   })
   renderAssetCards([
     agentCard(agentCardState),
@@ -251,8 +260,8 @@ function renderUsage(view: UsageView, hours: UsageHours): void {
 }
 
 function renderCallMonitor(): void {
-  // Spec 143 全量保持：1h|24h、六张 KPI、工具排行、最近失败、30s 轮询、SLO
-  // 禁止渲染 Agent 活跃率、Token 活跃率、授权表活跃率、7 天窗口
+  // 窗口、折线、刷新失败见 Spec 165
+  // 禁止渲染 Agent 活跃率、Token 活跃率、授权表活跃率
 }
 ```
 
@@ -290,9 +299,9 @@ Protected terms：`Agent`、`Token`、`MCP`、`P95`、`ACL`。数据访问视图
 | SC-2 | `/admin/usage` H1 为使用概况；作为一级根页面不渲染面包屑，其逻辑归属路径为 `运行状态 / 使用概况`。数据访问页头含「活跃率与调用排行」；`?view=interface` 页头含「页面访问、访问账户与菜单使用」。`/admin/governance` 仍 replace 到 `/admin/usage` | 组件测试渲染 `GovernanceOverview`，断言 H1 与无面包屑 |
 | SC-3 | 数据访问视图看不见主标签「多数请求耗时」「ACL 拒绝次数」「近 7 天调用量」或「近 24 小时调用量」，也不存在 aria-label「运行体征」。同时不存在 `metric-calls`、`metric-acl-denied`、`metric-p95-latency`、`governance-usage-metrics-primary` | `webui/src/__tests__/admin-governance-observability.test.tsx`。可见文案断言为主，test id 为辅 |
 | SC-4 | 仍展示 Agent / Token / 授权表三张资产卡及三块排行。24 小时切换后活跃数跟随窗口，配置存量不跟随。活跃数为 0 时展示 `活跃 0 / 配置数`，不因调用量为 0 变成暂无数据 | 沿用该测试文件的窗口切换用例 |
-| SC-5 | `usage-call-monitor-link` 指向 `/ops/calls?range=24h`。7 天窗口下 href 仍是 `range=24h`，文案说明调用监控不含 7 天 | 组件测试断言 `href` 与可见文案 |
+| SC-5 | `usage-call-monitor-link` 指向 `/ops/calls?range=24h`。7 天窗口下 href 仍是 `range=24h`。文案是「调用是否报错、被拒绝或变慢，到调用监控查看。」不再写调用监控没有 7 天 | 组件测试断言 `href` 与可见文案 |
 | SC-6 | `?view=interface` 仍展示页面访问、访问账户、活跃菜单与三块排行。该视图下 overview、agents、tokens 三个 query 的 `enabled` 为 false，不请求 `/api/admin/governance/overview`、`/agents`、`/tokens`。数据访问视图不请求 `/api/admin/ui-usage/overview` | 组件测试用请求 mock 断言调用次数；覆盖直接打开 `?view=interface` 与从数据访问切过去两种入口 |
-| SC-7 | 调用监控仍只有 Spec 143 的六张 KPI、工具排行、最近失败；页面文本不含「活跃率」，无 7 天切换 | `webui/src/__tests__/call-monitor.test.tsx` |
+| SC-7 | 调用监控仍是六张 KPI、工具排行、最近失败；页面文本不含「活跃率」。时间窗以 Spec 165 为准，可以有近 7 天和近 30 天 | `webui/src/__tests__/call-monitor.test.tsx` |
 | SC-8 | 使用概况 API 仍返回 `calls`、`denied`、`p95LatencyMs`、`metricsState`。P95 查询失败使 `p95LatencyMs === null` 且 `metricsState === "unavailable"` 时，只要三类活跃计数非 null，响应里的计数字段仍是原数值 | `webui/server/__tests__/admin-governance-observability.test.ts` 保留原契约，并加这条响应断言 |
 | SC-9 | 手册侧栏表把使用概况放在运行状态；说明覆盖资产活跃与 WebUI 页面访问。系统概览 FAQ 里「ACL 拒绝到使用概况查看」改为到调用监控或访问日志 | `docs/SYSTEM_HANDBOOK.md` 与 `webui/src/__tests__/help-center.test.tsx` |
 | SC-10 | 术语检查通过 | `cd webui && npm run lint:terminology` |
@@ -314,6 +323,6 @@ Protected terms：`Agent`、`Token`、`MCP`、`P95`、`ACL`。数据访问视图
 - 导航测试、使用概况组件测试、帮助中心摘录测试
 - 本文件在 `webui/docs/README.md` 索引中的状态改为 Accepted
 
-不改 `webui/server/ops/call-monitor.ts` 与 `webui/src/pages/ops/CallMonitor.tsx` 的指标逻辑。调用监控文件只允许为 SC-7 补测试，或在发现文案漂移时保持 Spec 143 原文。
+Spec 156 实现时不改调用监控的指标逻辑。其后的窗口、折线和刷新失败由 Spec 165 修改 `webui/server/ops/call-monitor.ts` 与 `webui/src/pages/ops/CallMonitor.tsx`。
 
 `governance-observability.ts` 的 `metricsUnavailable` 并集可以保留，以保证 SC-8 的旧契约。资产卡状态的解耦在前端按 §6.2 完成；若实现时修改该并集，必须先证明 Agent 管理页与现有服务端测试没有读取使用概况的 `metricsState`。

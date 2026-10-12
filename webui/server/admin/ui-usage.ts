@@ -86,6 +86,7 @@ export const UI_USAGE_MENUS: MenuDefinition[] = [
   { id: "eval-cases", label: "评测用例" },
   { id: "eval-runs", label: "运行历史" },
   { id: "eval-monitor", label: "趋势监控" },
+  { id: "eval-field-questions", label: "现场提问" },
   { id: "eval-security-candidates", label: "安全评测候选" },
   { id: "admin-agents", label: "Agent" },
   { id: "admin-tokens", label: "Token 凭据" },
@@ -116,6 +117,7 @@ const PAGE = {
   evalRuns: { pageKey: "eval-runs", label: "运行历史", menuId: "eval-runs", groupId: "evaluation" },
   evalRunDetail: { pageKey: "eval-run-detail", label: "运行详情", menuId: "eval-runs", groupId: "evaluation" },
   evalMonitor: { pageKey: "eval-monitor", label: "趋势监控", menuId: "eval-monitor", groupId: "evaluation" },
+  evalFieldQuestions: { pageKey: "eval-field-questions", label: "现场提问", menuId: "eval-field-questions", groupId: "evaluation" },
   evalSecurity: { pageKey: "eval-security-candidates", label: "安全评测候选", menuId: "eval-security-candidates", groupId: "evaluation" },
   usage: { pageKey: "admin-usage", label: "使用概况", menuId: "admin-governance", groupId: "runtime-status" },
   agents: { pageKey: "admin-agents", label: "Agent", menuId: "admin-agents", groupId: "governance" },
@@ -154,6 +156,7 @@ export const UI_USAGE_PAGES: UiPageDefinition[] = [
   PAGE.evalRuns,
   PAGE.evalRunDetail,
   PAGE.evalMonitor,
+  PAGE.evalFieldQuestions,
   PAGE.evalSecurity,
   PAGE.usage,
   PAGE.agents,
@@ -186,6 +189,7 @@ const EXACT_PAGES = new Map<string, UiPageDefinition>([
   ["/eval/cases", PAGE.evalCases],
   ["/eval/runs", PAGE.evalRuns],
   ["/eval/monitor", PAGE.evalMonitor],
+  ["/eval/field-questions", PAGE.evalFieldQuestions],
   ["/eval/security-candidates", PAGE.evalSecurity],
   ["/admin/usage", PAGE.usage],
   ["/admin/agents", PAGE.agents],
@@ -484,6 +488,44 @@ function groupVisitsByCurrentCatalog(pageCounts: Map<string, number>): Map<strin
   return visits;
 }
 
+export type UsagePageViewSeries = {
+  bucket: "hour" | "day";
+  since: string;
+  until: string;
+  points: Array<{ start: string; end: string; pageViews: number }>;
+};
+
+/** Equal slices of the rolling metric window. A day here is 24 hours, not a calendar date. */
+export function buildPageViewSeries(
+  hours: 24 | 168,
+  window: { startIso: string; endIso: string },
+  timestamps: readonly string[]
+): UsagePageViewSeries {
+  const count = hours === WINDOW_24H ? 24 : 7;
+  const stepMs = hours === WINDOW_24H ? 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
+  const startMs = Date.parse(window.startIso);
+  const points = Array.from({ length: count }, (_, index) => {
+    const start = startMs + index * stepMs;
+    return {
+      start: new Date(start).toISOString(),
+      end: new Date(start + stepMs).toISOString(),
+      pageViews: 0
+    };
+  });
+  for (const ts of timestamps) {
+    const at = Date.parse(ts);
+    if (!Number.isFinite(at)) continue;
+    const index = Math.floor((at - startMs) / stepMs);
+    if (index >= 0 && index < count) points[index].pageViews += 1;
+  }
+  return {
+    bucket: hours === WINDOW_24H ? "hour" : "day",
+    since: points[0]?.start ?? window.startIso,
+    until: points[count - 1]?.end ?? window.endIso,
+    points
+  };
+}
+
 export async function queryUiUsageOverview(hours: 24 | 168, now = new Date()) {
   const window = buildMetricWindow(hours, now);
   const db = await getAuditDb();
@@ -502,6 +544,12 @@ export async function queryUiUsageOverview(hours: 24 | 168, now = new Date()) {
     active_menu_count: number;
     unmapped_views: number | null;
   };
+  const timestamps = db.prepare(`
+    SELECT ts
+    FROM ui_page_views
+    WHERE ts >= ? AND ts < ?
+  `).all(window.startIso, window.endIso) as Array<{ ts: string }>;
+  const pageViewSeries = buildPageViewSeries(hours, window, timestamps.map((row) => row.ts));
 
   const countRows = (column: "menu_id" | "page_key") => {
     const rows = db.prepare(`
@@ -519,6 +567,7 @@ export async function queryUiUsageOverview(hours: 24 | 168, now = new Date()) {
     visitorCount: totals.visitor_count ?? 0,
     activeMenuCount: totals.active_menu_count ?? 0,
     unmappedViews: totals.unmapped_views ?? 0,
+    pageViewSeries,
     groups: rankByVisits(UI_USAGE_GROUPS, groupVisitsByCurrentCatalog(countRows("page_key"))),
     menus: rankByVisits(UI_USAGE_MENUS, countRows("menu_id")),
     pages: rankByVisits(

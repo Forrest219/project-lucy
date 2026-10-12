@@ -892,7 +892,7 @@
   .pl-agent-list-table-meta { @apply text-xs font-normal text-fg-muted; }
   .pl-agent-list-row-actions { @apply inline-flex flex-wrap items-center gap-2; }
   .pl-agent-list-table .pl-row-action-link { @apply text-xs font-medium text-fg-default no-underline hover:text-primary hover:underline; }
-  .pl-usage-rank-grid { @apply grid gap-3 xl:grid-cols-3; }
+  .pl-usage-rank-grid { @apply grid items-start gap-3 xl:grid-cols-3; }
   /* Spec 135: elastic rank body — collapses on sparse data, scrollable at ≥10 rows */
   .pl-usage-rank-body {
     min-height: 7rem;
@@ -903,14 +903,14 @@
     @apply flex items-center justify-center;
   }
   .pl-usage-rank-list { @apply m-0 grid list-none gap-2.5 p-0; }
-  /* 单行：Label | Value | Bar（布局对齐排行参考图；颜色用 brand，不跟参考图紫/黑） */
+  /* 单行：Label | Value | Bar。数量用中性灰，不跟越线橙色抢语义（Spec 169） */
   .pl-usage-rank-row {
     @apply grid grid-cols-[minmax(0,1fr)_minmax(2.5rem,auto)_minmax(4rem,1.4fr)] items-center gap-x-3;
   }
   .pl-usage-rank-label { @apply min-w-0 truncate text-xs font-medium text-fg-default; }
   .pl-usage-rank-link { @apply text-xs font-medium text-fg-default no-underline hover:underline; }
-  .pl-usage-rank-track { @apply h-2.5 overflow-hidden rounded-full bg-brand-soft; }
-  .pl-usage-rank-bar { @apply h-full rounded-full bg-brand/75; }
+  .pl-usage-rank-track { @apply h-2.5 overflow-hidden rounded-full bg-bg-muted; }
+  .pl-usage-rank-bar { @apply h-full rounded-full bg-fg-muted/40; }
   .pl-usage-rank-value { @apply justify-self-end text-xs font-normal tabular-nums text-fg-body; }
   .pl-usage-rank-empty { @apply m-0 py-4 text-center text-sm text-fg-muted; }
   .pl-catalog-table { min-width: 0; }
@@ -1633,6 +1633,7 @@
   .pl-inspector-title-row { @apply grid gap-3 rounded-md border border-border-default bg-bg-base p-3; }
   .pl-segmented-control { @apply grid grid-cols-3 gap-1 rounded-md border border-border-default bg-bg-muted p-1; }
   .pl-segmented-control--cols-2 { @apply grid-cols-2; }
+  .pl-segmented-control--cols-4 { @apply grid-cols-4; }
   .pl-segmented-control--auto {
     @apply flex w-fit max-w-full flex-wrap;
   }
@@ -1874,6 +1875,8 @@
   .pl-metric-card--with-icon { @apply gap-2; }
   .pl-metric-card-title { @apply flex items-center justify-between gap-2 text-xs font-medium text-fg-muted; }
   .pl-metric-card-title > span:first-child { @apply truncate; }
+  .pl-metric-card-value-row { @apply flex items-end justify-between gap-3; }
+  .pl-metric-sparkline { @apply h-7 w-20 shrink-0 text-fg-muted; }
   .pl-metric-card-icon { @apply shrink-0 text-fg-muted; }
   .pl-metric-card--with-icon .pl-metric-card-title { @apply justify-start; }
   .pl-icon-help { @apply inline-flex size-6 shrink-0 items-center justify-center rounded-sm text-xs text-fg-muted transition-colors; }

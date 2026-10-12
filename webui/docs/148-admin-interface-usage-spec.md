@@ -9,7 +9,7 @@
 | 关联页面 | `/admin/usage?view=interface` |
 | 关联实现 | `webui/server/admin/ui-usage.ts`、`webui/src/app/ui-usage-beacon.ts`、`webui/src/pages/admin/GovernanceOverview.tsx` |
 | 关联标准 | `webui/docs/00-product-terminology-standard.md` §4.5 |
-| 状态 | Draft (v1.0) |
+| 状态 | Draft (v1.0)。页面访问折线见 Spec 166，已实现 |
 
 ## 1. 背景
 
@@ -94,11 +94,12 @@
 
 - 仅接受 24 与 168，缺省或其他值按 168。
 - `pageViews`、`visitorCount`、`activeMenuCount`、`unmappedViews`。
+- `pageViewSeries` 把 `pageViews` 拆成当前窗口的 24 段或 7 段，各点相加等于 `pageViews`。字段与起点见 Spec 166。访问账户和活跃菜单没有序列。
 - `groups`、`menus`、`pages`：`{ id, label, visits }`，按 `visits` 降序，其次按标签。含 0 次。`pages` 不含 `unknown`。
 
 ## 7. 界面
 
-`/admin/usage` 增加「数据访问 / 界面使用」切换。默认数据访问，现有内容不变。`?view=interface` 展示三个指标卡和三块排行，时间窗口与数据访问共用。
+`/admin/usage` 增加「数据访问 / 界面使用」切换。默认数据访问，现有内容不变。`?view=interface` 展示三个指标卡和三块排行，时间窗口与数据访问共用。只有「近 N 页面访问」在主值右侧画折线，见 Spec 166。
 
 0 次保留。`unmappedViews > 0` 时提示「另有 N 次页面打开未能对应到已知页面。」
 

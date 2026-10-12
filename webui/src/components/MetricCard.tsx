@@ -34,6 +34,12 @@ export type MetricCardProps = {
   unavailableReason?: string;
   /** ISO 8601 timestamp for freshness labeling. */
   asOf?: string;
+  /** Spec 165: in-window line. Null breaks the line. Omitted on every page except call monitor. */
+  series?: Array<number | null>;
+  seriesLabel?: string;
+  seriesTestId?: string;
+  /** 调用监控窗内折线的指标键，写成 call-monitor-sparkline-${seriesMetric}。 */
+  seriesMetric?: string;
 };
 
 const STATE_PLACEHOLDER = "—";
@@ -59,6 +65,116 @@ function StateSubValue({
   return fallback ?? null;
 }
 
+function SparklineMarks({
+  paths,
+  dots
+}: {
+  paths: string[];
+  dots: Array<{ x: number; y: number }>;
+}) {
+  return (
+    <>
+      {paths.map((d, index) => (
+        <path
+          key={`path-${index}`}
+          d={d}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+      ))}
+      {dots.map((dot, index) => (
+        <circle key={`dot-${index}`} cx={dot.x} cy={dot.y} r="1.5" fill="currentColor" />
+      ))}
+    </>
+  );
+}
+
+function MetricSparkline({
+  values,
+  label,
+  testId,
+  seriesMetric
+}: {
+  values: Array<number | null>;
+  label: string;
+  testId?: string;
+  seriesMetric?: string;
+}) {
+  const width = 80;
+  const height = 28;
+  const pad = 2;
+  const finite = values.filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+  const min = finite.length > 0 ? Math.min(...finite) : 0;
+  const max = finite.length > 0 ? Math.max(...finite) : 0;
+  const span = max - min;
+
+  function xAt(index: number): number {
+    if (values.length <= 1) return width / 2;
+    return pad + (index / (values.length - 1)) * (width - pad * 2);
+  }
+
+  function yAt(value: number): number {
+    if (span === 0) return height / 2;
+    return pad + (1 - (value - min) / span) * (height - pad * 2);
+  }
+
+  const paths: string[] = [];
+  const dots: Array<{ x: number; y: number }> = [];
+  let commands: string[] = [];
+  let segmentCount = 0;
+
+  function flush() {
+    if (segmentCount === 1 && commands[0]) {
+      const match = commands[0].match(/M\s+([\d.]+)\s+([\d.]+)/);
+      if (match) dots.push({ x: Number(match[1]), y: Number(match[2]) });
+    } else if (commands.length > 1) {
+      paths.push(commands.join(" "));
+    }
+    commands = [];
+    segmentCount = 0;
+  }
+
+  values.forEach((value, index) => {
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+      flush();
+      return;
+    }
+    const command = segmentCount === 0 ? "M" : "L";
+    commands.push(`${command} ${xAt(index).toFixed(2)} ${yAt(value).toFixed(2)}`);
+    segmentCount += 1;
+  });
+  flush();
+
+  const marks = <SparklineMarks paths={paths} dots={dots} />;
+  if (seriesMetric != null) {
+    return (
+      <svg
+        className="pl-metric-sparkline"
+        viewBox={`0 0 ${width} ${height}`}
+        role="img"
+        aria-label={label}
+        data-testid={`call-monitor-sparkline-${seriesMetric}`}
+      >
+        {marks}
+      </svg>
+    );
+  }
+  return (
+    <svg
+      className="pl-metric-sparkline"
+      viewBox={`0 0 ${width} ${height}`}
+      role="img"
+      aria-label={label}
+      data-testid={testId}
+    >
+      {marks}
+    </svg>
+  );
+}
+
 export function MetricCard({
   label,
   value,
@@ -71,7 +187,11 @@ export function MetricCard({
   metric,
   state = "ok",
   unavailableReason,
-  asOf: _asOf
+  asOf: _asOf,
+  series,
+  seriesLabel,
+  seriesTestId,
+  seriesMetric
 }: MetricCardProps) {
   const toneClass = tone ? `pl-metric-card--${tone}` : undefined;
   const titleText = labelText ?? (typeof label === "string" ? label : helpId);
@@ -82,6 +202,7 @@ export function MetricCard({
     state === "ok"
       ? subValue
       : <StateSubValue state={state} unavailableReason={unavailableReason} fallback={subValue} />;
+  const showSeries = state === "ok" && series != null && seriesLabel != null;
 
   return (
     <div
@@ -120,9 +241,23 @@ export function MetricCard({
           </Tooltip.Root>
         </Tooltip.Provider>
       </div>
-      <strong className="tabular-nums" data-testid={testId ? `${testId}-value` : undefined}>
-        {displayValue}
-      </strong>
+      {showSeries ? (
+        <div className="pl-metric-card-value-row">
+          <strong className="tabular-nums" data-testid={testId ? `${testId}-value` : undefined}>
+            {displayValue}
+          </strong>
+          <MetricSparkline
+            values={series ?? []}
+            label={seriesLabel ?? ""}
+            testId={seriesTestId}
+            seriesMetric={seriesMetric}
+          />
+        </div>
+      ) : (
+        <strong className="tabular-nums" data-testid={testId ? `${testId}-value` : undefined}>
+          {displayValue}
+        </strong>
+      )}
       {displaySubValue ? <small>{displaySubValue}</small> : null}
     </div>
   );

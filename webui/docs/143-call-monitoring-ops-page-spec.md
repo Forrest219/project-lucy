@@ -14,6 +14,8 @@
 | 关联术语 | `webui/docs/00-product-terminology-standard.md` §4.6 / 本 Spec Terminology Compliance |
 | 关联 IA | `webui/docs/06-navigation-ia.md`（本 Spec 修订「运行状态」分组） |
 
+**Spec 165 修订（2026-10-12，已实现）。** 时间窗、窗内折线、刷新失败时保留上一份快照，以及访问日志的 `range=30d`，以 Spec 165 为准。本文件 v1.1 仍然有效：页头不展示统计时间，不展示 SLO 总状态；越线只高亮对应 KPI。下文里「只有近 1 小时 / 近 24 小时」由 Spec 165 取代。
+
 ## 1. 背景与问题
 
 运维与数据分析需要**实时盯盘 MCP 工具调用的流量与时效**，但现有能力被拆在多处：
@@ -336,7 +338,7 @@ Protected terms：`MCP`、`P95`、tool name、`requestId`、`traceId`、Agent / 
 ## 12. Acceptance Criteria
 
 1. 侧栏 **运行状态** 下可见 **调用监控**，路由 `/ops/calls`；面包屑为 `运行状态 / 调用监控`。
-2. 默认 `range=24h`；可切 `1h`；URL 可分享并恢复。
+2. 默认 `range=24h`。窗口枚举以 Spec 165 为准（`1h`、`24h`、`7d`、`30d`）；URL 可分享并恢复。
 3. 首屏展示 §6.4 全部 KPI + Top 工具 + 最近失败与拒绝；无 Eval / 跑批 / WebUI 自身指标。
 4. 自动刷新默认 30s；可关闭；页头不展示统计时间或 SLO 总状态。
 5. 错误率 / 拒绝率 / P95 超阈时对应卡片红标；`businessCalls=0` 为暂无数据而非误报。

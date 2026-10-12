@@ -4,7 +4,7 @@
 |---|---|
 | 文档名称 | Lucy WebUI 按钮规范（Components） |
 | 文档类型 | Spec |
-| 版本 | v1.1 |
+| 版本 | v1.3 |
 | 撰写日期 | 2026-08-05 |
 | 撰写人 | Composer |
 | 委托人 | zhangxingchen |
@@ -19,6 +19,7 @@
 | v1.0 | 初稿：primary/secondary/ghost/danger 与同组层级 |
 | v1.1 | Spec 101：选中态分离、Header 动作预算、`pl-icon-btn`、loading/disabled 可解释性 |
 | v1.2 | 登记 `pl-segmented-control--auto`（动态选项数量）；明确并列导出/维护操作统一 secondary |
+| v1.3 | 时间窗仍用 segmented。换整页内容的视图用已有 `pl-admin-tabbar`（Spec 169） |
 
 ## 1. 设计目标
 
@@ -88,12 +89,13 @@
 - `/eval/cases`：评测域切换用 `pl-segmented-control pl-segmented-control--auto`（`role="group"`、`aria-label="评测域"`），禁止 primary 表示选中（Spec 101）。
 - `/admin/audit`：Header 三个导出入口（当前视图 CSV、关联视图 CSV、审计证据包 Manifest）为同组平行维护操作，统一 `secondary`，不得出现 `primary`；时间范围用 `pl-segmented-control--auto` 表达选中状态，Header 可见动作保持 ≤ 3。
 - 后续新增「复制/刷新/查看/新增」类组合：并列维护用 `secondary`；纯工具刷新/复制优先 icon-btn。
+- `/admin/usage`：时间窗仍用 `pl-segmented-control--cols-2`。数据访问 / 界面使用用已有 `pl-admin-tabbar`（与 Agent、Role 的内容页签相同）。选中态是下划线 `border-accent`，不得用 `primary` 或 `danger`。不要套 `pl-admin-tab-panel`。
 
 ## 7. Do / Don’t
 
 - Do：同组并列维护动作统一 `secondary`。
 - Do：把真正关键、唯一的下一步放为 `primary`。
-- Do：筛选 / Tab / 时间窗用 segmented，选中态与主按钮分离。
+- Do：筛选和时间窗用 segmented。换整页内容的视图用 `pl-admin-tabbar`。选中态与主按钮分离。
 - Do：Header 工具动作用 `pl-icon-btn` + 中文 `aria-label`。
 - Don’t：仅因「看起来更显眼」就把并列动作升成 `primary`。
 - Don’t：在同组放两个及以上 `primary`。
