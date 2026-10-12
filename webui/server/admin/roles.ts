@@ -10,7 +10,7 @@ import {
   type EffectivePermissions
 } from "../proxy/acl.js";
 import { parseRowPolicyShape } from "../proxy/row-policy.js";
-import { expandTemplate, isDeleteProtectedRole, ROLE_TEMPLATES } from "./role-templates.js";
+import { expandTemplate, isDeleteProtectedRole, LUCY_ADMIN_ROLE_ID, ROLE_TEMPLATES } from "./role-templates.js";
 import {
   ACCESS_YAML_REL,
   ROLE_ID_RE,
@@ -560,6 +560,13 @@ async function resolveRoleForWrite(
   const migrated = await migrateRoleToV2(shape.value);
   if (!migrated.ok) {
     return { ok: false, code: "INVALID_ROLE", message: migrated.reason, status: 400 };
+  }
+  const allow = migrated.value.allow;
+  if (allow?.connections?.includes("*") && roleId !== LUCY_ADMIN_ROLE_ID) {
+    return { ok: false, code: "INVALID_ROLE", message: "connections '*' is only valid on lucy_admin", status: 400 };
+  }
+  if (roleId === LUCY_ADMIN_ROLE_ID && allow?.source_scope === "catalog_bound" && allow) {
+    migrated.value = { ...migrated.value, allow: { ...allow, connections: ["*"] } };
   }
   const resolved = await previewRolePermissionsForAdmin(roleId, { role: migrated.value });
   if (!resolved.ok) {

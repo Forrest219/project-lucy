@@ -82,6 +82,15 @@ const ABSOLUTE_DENY_TOOL_SET = new Set<string>(ABSOLUTE_DENY_TOOLS);
 const DATA_PLANE_TOOL_SET = new Set<string>(DATA_PLANE_TOOLS);
 const META_TOOL_SET = new Set<string>(META_TOOLS);
 
+/** Spec 170: business context tools are open to every resolved agent. */
+export const CONTEXT_TOOLS = [
+  "wiki_search",
+  "wiki_read",
+  "lucy_skill_search",
+  "lucy_skill_read"
+] as const;
+const CONTEXT_TOOL_SET = new Set<string>(CONTEXT_TOOLS);
+
 export function classifyTool(toolName: string): ToolClass {
   if (ABSOLUTE_DENY_TOOL_SET.has(toolName)) return "AbsoluteDeny";
   if (DATA_PLANE_TOOL_SET.has(toolName)) return "DataPlane";
@@ -961,6 +970,24 @@ async function loadEnabledTablesByConnection(): Promise<Map<string, Set<string>>
   return map;
 }
 
+/** lucy_admin follows every configured connection, including ones added later. */
+const LUCY_ADMIN_ROLE_ID = "lucy_admin";
+
+function resolveCatalogConnections(
+  roleId: string,
+  declaredConnections: string[],
+  enabledByConnection: Map<string, Set<string>>
+): { ok: true; connections: string[] } | { ok: false; reason: string } {
+  const wildcard = declaredConnections.includes("*");
+  if (wildcard && roleId !== LUCY_ADMIN_ROLE_ID) {
+    return { ok: false, reason: `role_resolution_failed:${roleId}:catalog_bound_wildcard_forbidden` };
+  }
+  if (roleId === LUCY_ADMIN_ROLE_ID) {
+    return { ok: true, connections: [...enabledByConnection.keys()] };
+  }
+  return { ok: true, connections: declaredConnections };
+}
+
 function catalogBoundSources(
   declaredConnections: string[],
   state: SourceMapState,
@@ -1021,16 +1048,21 @@ async function compileRole(
   if (catalogBound && selectors.length > 0) {
     return { ok: false, reason: `role_resolution_failed:${roleId}:catalog_bound_selectors_forbidden` };
   }
-  if ((catalogBound || selectors.length > 0 || roleToolsTouchTables(roleTools, policy)) && declaredConnections.length === 0) {
+  const adminFollowsAll = catalogBound && roleId === LUCY_ADMIN_ROLE_ID;
+  if ((catalogBound || selectors.length > 0 || roleToolsTouchTables(roleTools, policy)) && declaredConnections.length === 0 && !adminFollowsAll) {
     return failed;
   }
 
   const sourceMatches: EffectiveSource[] = [];
   const sourceGrants = new Map<string, RowGrant>();
+  let effectiveConnections = declaredConnections;
 
   if (catalogBound) {
     const enabledByConnection = await loadEnabledTablesByConnection();
-    const matches = catalogBoundSources(declaredConnections, state, enabledByConnection);
+    const resolvedConnections = resolveCatalogConnections(roleId, declaredConnections, enabledByConnection);
+    if (!resolvedConnections.ok) return { ok: false, reason: resolvedConnections.reason };
+    effectiveConnections = resolvedConnections.connections;
+    const matches = catalogBoundSources(effectiveConnections, state, enabledByConnection);
     if (matches.length === 0) return failed;
     for (const entry of matches) {
       const key = sourceIndexKey(entry.connectionId, entry.table);
@@ -1094,7 +1126,7 @@ async function compileRole(
       deniedTools: denied,
       sources: [...new Map(sourceMatches.map((source) => [`${source.connectionId}:${source.sourceName}`, source])).values()],
       sourceGrants,
-      declaredConnections,
+      declaredConnections: catalogBound ? effectiveConnections : declaredConnections,
       hasSelectors: catalogBound || selectors.length > 0
     }
   };
@@ -1554,7 +1586,7 @@ export async function allowedToolNames(identity: Identity): Promise<string[]> {
 
   const capabilityTools = new Set(resolved.permissions.capabilities.map((capability) => capability.tool));
 
-  return uniqueSorted(tools.filter((tool) => {
+  const listed = uniqueSorted(tools.filter((tool) => {
     if (absoluteDenyOrUnclassifiedReason(tool)) return false;
     if (!policy.knownTools.has(tool) || policy.denyTools.has(tool)) return false;
     // Spec 98 §8.5 — global degrade hides DataPlane / data Meta from listTools; Wiki may remain.
@@ -1562,11 +1594,15 @@ export async function allowedToolNames(identity: Identity): Promise<string[]> {
     const wildcardTables = resolved.permissions.tables.includes("*");
     // P-GATE-03: DataPlane visible iff ≥1 capability — except legacy tables:* (capability list empty by design).
     if (DATA_PLANE_TOOL_SET.has(tool)) return wildcardTables || capabilityTools.has(tool);
+    if (CONTEXT_TOOL_SET.has(tool)) return true;
     if (tool.startsWith("lucy_") || tool === "kx_catalog") {
       return wildcardTables || resolved.permissions.capabilities.length > 0;
     }
     return true;
   }));
+  // Spec 170: context tools stay visible even when the role YAML omits them
+  // and the role has no data-plane capability.
+  return uniqueSorted([...listed, ...CONTEXT_TOOLS]);
 }
 
 // ─── EffectivePolicy compile / submit (Spec 98 §8 / WP-I5) ───────────────────
@@ -1681,11 +1717,15 @@ function expandableScopeSourceKeys(
     if (!modelVersion.ok) continue;
     const scope = typeof role?.allow?.source_scope === "string" ? normalizeRef(role.allow.source_scope) : undefined;
     if (scope === "catalog_bound") {
-      if (modelVersion.version !== 2) continue;
+      if (modelVersion.version !== 2 || !enabledByConnection) continue;
       const declaredConnections = configList(role?.allow?.connections, [], { normalize: true });
-      if (declaredConnections.length === 0 || !enabledByConnection) continue;
+      if (declaredConnections.includes("*") && roleId !== LUCY_ADMIN_ROLE_ID) continue;
+      const resolved = roleId === LUCY_ADMIN_ROLE_ID
+        ? [...enabledByConnection.keys()]
+        : declaredConnections;
+      if (resolved.length === 0) continue;
       const keys = new Set(
-        catalogBoundSources(declaredConnections, state, enabledByConnection).map((source) =>
+        catalogBoundSources(resolved, state, enabledByConnection).map((source) =>
           canonicalSourceKeyDisplay({
             connectionId: source.connectionId,
             schema: source.schema,
@@ -2064,6 +2104,12 @@ export async function authorizeAndRewrite(
 
   const resolved = runtime.byUserId.get(identity.userId)
     ?? await resolveEffectivePermissions(identity, config, policy, { sourceMap: runtime.sourceMap });
+  if (CONTEXT_TOOL_SET.has(toolName)) {
+    if (!resolved.ok && !runtime.degradedAgents.has(identity.userId)) {
+      return { allowed: false, reason: resolved.reason };
+    }
+    return { allowed: true };
+  }
   if (!resolved.ok) {
     // Per-agent compile failure: keep concrete reason for DataPlane; Wiki Meta remains available.
     if (

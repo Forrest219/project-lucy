@@ -398,7 +398,7 @@ dryRun → 用户确认 → save:
 **规则：**
 
 1. `catalog_bound` 要求 `permission_model_version: 2`；`allow.connections` 非空；禁止并存非空 `tableSelectors`；禁止 `tools: ["*"]`；AbsoluteDeny 不可解。
-2. **新 connection 不自动纳入**；必须写入 `allow.connections`。
+2. **新 connection 不自动纳入**普通 `catalog_bound` Role；必须写入 `allow.connections`。例外：正式 Role `lucy_admin` 的连接范围是全部已配置连接，新连接在策略重编译后自动进入，并产生 `policy_scope_expanded`。`connections: ["*"]` 只允许出现在该 Role。
 3. 同连接因 `enabled_tables` / source map 增长导致 source 集合变大时，**允许**扩权，但**禁止静默**：必须产生 `policy_scope_expanded`（与 v1 `prefix` 同级可观测性）。
 4. 不得将 `catalog_bound` 表述或实现为 legacy `tables: ["*"]`，也不得借此恢复 v2 `prefix`。
 5. 产品交付：`lucy_admin` 为 Reference Role Template；客户生产包默认不强制落盘 Agent；UI 必须展示高权限运维数据面警示。

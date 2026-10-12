@@ -31,7 +31,7 @@ import {
   type RowPolicyPredicateDraft,
   type TableGrant,
 } from "../../lib/rolePermissionDraft";
-import { isDeleteProtectedRole } from "../../lib/lucyAdminRole";
+import { isDeleteProtectedRole, LUCY_ADMIN_ROLE_ID } from "../../lib/lucyAdminRole";
 
 type PageMode = "create" | "edit" | "copy";
 
@@ -162,14 +162,17 @@ function initializeDraft(detail: RoleDetailType | null, mode: PageMode): DraftIn
 
   const prefix = expandLegacyPrefixes(detail);
   const partitioned = partitionGrantableTools(detail.role.allow.tools ?? []);
-  const scope: RolePermissionDraft["scope"] = detail.role.allow.source_scope === "catalog_bound"
-    ? { mode: "catalog_bound", connections: [...(detail.role.allow.connections ?? [])] }
+  const catalogBound = detail.role.allow.source_scope === "catalog_bound";
+  const adminCatalog = catalogBound && detail.id === LUCY_ADMIN_ROLE_ID && mode !== "copy";
+  const catalogConnections = adminCatalog ? ["*"] : [...(detail.role.allow.connections ?? [])].filter((id) => id !== "*");
+  const scope: RolePermissionDraft["scope"] = catalogBound
+    ? { mode: "catalog_bound", connections: catalogConnections }
     : { mode: "names", tables: prefix.tables };
   const rawBaseline: RolePermissionDraft = {
     roleId: detail.id,
     description: detail.role.description ?? "",
-    scope: detail.role.allow.source_scope === "catalog_bound"
-      ? { mode: "catalog_bound", connections: [...(detail.role.allow.connections ?? [])] }
+    scope: catalogBound
+      ? { mode: "catalog_bound", connections: detail.id === LUCY_ADMIN_ROLE_ID ? ["*"] : catalogConnections }
       : { mode: "names", tables: explicitTables(detail.role.allow.tableSelectors) },
     tools: [...(detail.role.allow.tools ?? [])],
   };
@@ -191,8 +194,11 @@ function serializeDraft(draft: RolePermissionDraft): RoleWritePayload {
   const partitioned = partitionGrantableTools(draft.tools);
   let allow: RoleAllowConfig;
   if (draft.scope.mode === "catalog_bound") {
+    const connections = draft.roleId === LUCY_ADMIN_ROLE_ID
+      ? ["*"]
+      : draft.scope.connections.filter((id) => id !== "*");
     allow = {
-      connections: draft.scope.connections.length ? draft.scope.connections : undefined,
+      connections: connections.length ? connections : undefined,
       source_scope: "catalog_bound",
       tools: partitioned.grantable.length ? partitioned.grantable : undefined,
     };
@@ -294,8 +300,11 @@ function RoleBoundarySummary({
   impact: PermissionImpactSummary;
 }) {
   const tables = draft.scope.mode === "names" ? draft.scope.tables : [];
-  const connections = draft.scope.mode === "catalog_bound"
-    ? draft.scope.connections
+  const followsAllConnections = draft.roleId === LUCY_ADMIN_ROLE_ID && draft.scope.mode === "catalog_bound";
+  const connections = followsAllConnections
+    ? []
+    : draft.scope.mode === "catalog_bound"
+    ? draft.scope.connections.filter((id) => id !== "*")
     : [...new Set(tables.map((table) => table.connection).filter(Boolean))];
   const restricted = tables.filter((table) => table.predicates?.length).length;
   const incompatible = draft.tools.filter((tool) => ROW_POLICY_INCOMPATIBLE_TOOLS.has(tool));
@@ -304,21 +313,17 @@ function RoleBoundarySummary({
     <aside className="pl-card order-first grid content-start gap-4 xl:order-none xl:sticky xl:top-4" data-testid="role-boundary-summary" aria-label="生效边界摘要">
       <div>
         <h2 className="text-sm font-semibold">生效边界摘要</h2>
-        <p className="mt-1 text-xs text-fg-muted">基于当前草稿实时计算；正式保存后才会生效。</p>
       </div>
       <dl className="grid grid-cols-2 gap-3 text-sm">
-        <div><dt className="text-xs text-fg-muted">允许的连接</dt><dd className="mt-1 font-semibold">{connections.length}</dd></div>
+        <div><dt className="text-xs text-fg-muted">允许的连接</dt><dd className="mt-1 font-semibold">{followsAllConnections ? "全部" : connections.length}</dd></div>
         <div><dt className="text-xs text-fg-muted">可访问的表</dt><dd className="mt-1 font-semibold">{draft.scope.mode === "catalog_bound" ? "目录绑定" : tables.length}</dd></div>
         <div><dt className="notranslate text-xs text-fg-muted" translate="no">MCP 工具</dt><dd className="mt-1 font-semibold">{draft.tools.length}</dd></div>
         <div><dt className="text-xs text-fg-muted">限定行表</dt><dd className="mt-1 font-semibold">{restricted}</dd></div>
       </dl>
-      <div className="rounded-md bg-bg-subtle p-3 text-sm">
-        <p className="font-medium">{riskLabel(impact.risk)}</p>
-        <p className="notranslate mt-1 text-xs text-fg-muted" translate="no">受影响 Agent：{detail?.usageCount ?? 0} 个</p>
-      </div>
-      {draft.scope.mode === "catalog_bound" ? (
-        <p className="rounded-md border border-warning-strong bg-warning-soft p-3 text-xs text-warning-strong">后续新启用的表会自动进入，并走扩权审计。</p>
-      ) : null}
+      <p className={`text-xs ${impact.risk === "unchanged" ? "text-fg-muted" : "font-medium text-warning-strong"}`}>
+        {riskLabel(impact.risk)}
+        <span className="notranslate" translate="no"> · 受影响 Agent {detail?.usageCount ?? 0} 个</span>
+      </p>
       {restricted > 0 && incompatible.length > 0 ? (
         <div className="rounded-md border border-warning-strong p-3 text-xs text-warning-strong" data-testid="row-policy-tool-warning">
           受行级策略保护的表上，以下工具会被运行时拒绝：{" "}
@@ -339,13 +344,15 @@ function RoleBoundarySummary({
             <div><dt className="text-fg-muted">通道不完整</dt><dd className="mt-1 font-semibold">{detail.skillAccess.declaredWithoutChannel.length}</dd></div>
           </dl>
           {detail.skillAccess.declared.length > 0 ? (
-            <ul className="mt-2 max-h-28 space-y-1 overflow-auto text-fg-muted">
-              {detail.skillAccess.declared.map((uri) => <li key={uri} className="notranslate break-all font-mono" translate="no">{uri}</li>)}
-            </ul>
+            <details className="mt-2">
+              <summary className="cursor-pointer text-fg-muted">已声明 {detail.skillAccess.declared.length} 个</summary>
+              <ul className="mt-2 max-h-28 space-y-1 overflow-auto text-fg-muted">
+                {detail.skillAccess.declared.map((uri) => <li key={uri} className="notranslate break-all font-mono" translate="no">{uri}</li>)}
+              </ul>
+            </details>
           ) : (
             <p className="mt-2 text-fg-muted">没有声明给此角色的业务 Skill。</p>
           )}
-          <p className="mt-2 text-fg-muted">授权修改请前往 Skill 编辑页。</p>
         </section>
       ) : null}
       {detail?.effectivePermissions ? (
@@ -601,7 +608,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
         description={
           mode === "create" ? <>按表、<span className="notranslate" translate="no">MCP</span> 工具和行级策略分别配置，最后一次确认并保存。</>
             : isReadOnlyTemplate ? <>这是参考模板，全部配置只读。可基于模板创建正式 Role。</>
-              : <>按独立编辑面维护访问边界，所有改动会作为一个原子草稿保存。</>
+              : undefined
         }
         badges={detail ? <><span>{detail.source === "template" ? "参考模板" : "正式 Role"}</span><span>{detail.usageCount} 个 <span className="notranslate" translate="no">Agent</span> 引用</span></> : null}
         actions={
@@ -647,9 +654,9 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
 
           {activeSection === "tables" ? (
             <div className="grid gap-4 pb-28">
-              <div><h2 className="text-base font-semibold">可访问的表</h2><p className="mt-1 text-sm text-fg-muted">只选择该 Role 确实需要访问的表；连接由选择结果自动推导。</p></div>
+              <h2 className="text-base font-semibold">可访问的表</h2>
               {connectionsQuery.isError ? <p className="text-sm text-warning-strong">连接候选暂不可用，不能修改表范围。</p> : null}
-              <RoleTableGrants value={draft.scope} connections={connectionCandidates.map((connection) => ({ id: connection.id, schemas: connection.schemas ?? [] }))} candidateTablesByKey={candidateTablesByKey} candidatesLoaded={candidatesLoaded} onChange={(scope) => updateDraft({ ...draft, scope })} disabled={isReadOnlyTemplate || connectionsQuery.isError} />
+              <RoleTableGrants value={draft.scope} connections={connectionCandidates.map((connection) => ({ id: connection.id, schemas: connection.schemas ?? [] }))} candidateTablesByKey={candidateTablesByKey} candidatesLoaded={candidatesLoaded} onChange={(scope) => updateDraft({ ...draft, scope })} disabled={isReadOnlyTemplate || connectionsQuery.isError} grantAllConnections={draft.roleId === LUCY_ADMIN_ROLE_ID} />
             </div>
           ) : null}
 

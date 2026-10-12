@@ -58,7 +58,11 @@ describe("RoleTableGrants", () => {
     fireEvent.click(screen.getByRole("button", { name: "确认切换" }));
     expect(screen.getByTestId("scope-value")).toHaveTextContent('{"mode":"catalog_bound","connections":[]}');
     expect(screen.getByTestId("table-grants-manual-connections")).toBeInTheDocument();
+    expect(screen.getByTestId("catalog-bound-scope-note")).toHaveTextContent("已声明连接上，后续新启用的表自动进入");
+    expect(screen.getByTestId("catalog-bound-scope-note")).toHaveTextContent("必须显式选择至少一个连接");
+    expect(screen.queryByText("已选 0 张表")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("checkbox", { name: "允许的连接 rds-test" }));
+    expect(screen.getByTestId("catalog-bound-scope-note")).not.toHaveTextContent("必须显式选择至少一个连接");
     expect(screen.getByTestId("scope-value")).toHaveTextContent('"connections":["rds-test"]');
   });
 

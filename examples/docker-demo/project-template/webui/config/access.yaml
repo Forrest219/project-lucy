@@ -28,7 +28,7 @@ roles:
     permission_model_version: 2
     allow:
       connections:
-        - demo-mysql
+        - "*"
       source_scope: catalog_bound
       tools:
         - lucy_catalog

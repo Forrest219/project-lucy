@@ -711,7 +711,7 @@ roles:
     permission_model_version: 2
     allow:
       connections:
-        - <connection-id>
+        - "*"
       source_scope: catalog_bound
       tools:
         - lucy_catalog
@@ -723,7 +723,8 @@ roles:
 | Role 类型 | 同连接新增启用表 | 新增 connection |
 | --- | --- | --- |
 | `tableSelectors.names` | 必须改 `tableSelectors` | 必须改 `allow.connections` + selectors |
-| `lucy_admin` / `catalog_bound` | 写入 `enabled_tables` 并完成语义层 + 策略重编译即可（有 `policy_scope_expanded`） | **仍必须**写入 `allow.connections` |
+| `lucy_admin` | 写入 `enabled_tables` 并完成语义层 + 策略重编译即可（有 `policy_scope_expanded`） | 新连接在策略重编译后自动进入 |
+| 其他 `catalog_bound` | 写入 `enabled_tables` 并完成语义层 + 策略重编译即可（有 `policy_scope_expanded`） | **仍必须**写入 `allow.connections` |
 
 新增连接后必须做的同步动作：
 

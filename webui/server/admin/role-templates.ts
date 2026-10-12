@@ -56,10 +56,10 @@ export const ROLE_TEMPLATES: Record<string, RoleTemplate> = {
   lucy_admin: {
     id: LUCY_ADMIN_ROLE_ID,
     description:
-      "平台运维数据面（非 WebUI 登录账户）：在已声明连接内绑定启用表目录（catalog_bound）。新连接须手工纳入 allow.connections。",
+      "平台运维数据面（非 WebUI 登录账户）：覆盖全部连接上的已启用表。新连接自动生效。",
     permission_model_version: 2,
     allow: {
-      connections: [],
+      connections: ["*"],
       source_scope: "catalog_bound",
       tools: LUCY_ADMIN_TOOLS
     }

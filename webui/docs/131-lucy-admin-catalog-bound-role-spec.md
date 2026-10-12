@@ -40,16 +40,16 @@ AC-P0 将 Role 表授权钉在显式 `tableSelectors.names`（v2 禁 `prefix`）
 1. 提供预置参考模板与推荐正式 Role id：`lucy_admin`。
 2. 引入显式字段 `allow.source_scope: catalog_bound`：在**已声明** `allow.connections` 内，授权对象 = source map ∩ `enabled_tables`。
 3. 同连接新启用表经策略重编译后进入能力集，且必须产生可观测 `policy_scope_expanded`。
-4. 新 connection **不**自动进入；AbsoluteDeny 与 `tools: ["*"]` 仍拒绝。
+4. 正式 Role `lucy_admin` 覆盖全部已配置连接；新 connection 在策略重编译后自动进入。其他 `catalog_bound` Role 的新 connection **不**自动进入。AbsoluteDeny 与 `tools: ["*"]` 仍拒绝。`connections: ["*"]` 只允许 `lucy_admin`。
 5. 明确与 **WebUI Admin（控制面登录账户）** 正交，不得混称为同一「管理员」。
 
 ### 1.3 成功标准
 
 | ID | 标准 |
 |---|---|
-| SC-01 | `lucy_admin` + `catalog_bound` + 非空 connections 可编译；Agent 可访问该连接下全部 enabled sources |
+| SC-01 | `lucy_admin` + `catalog_bound` 可编译；Agent 可访问全部已配置连接下的 enabled sources |
 | SC-02 | 同连接新增 enabled 表并重编译后无需改 names；出现 `policy_scope_expanded` |
-| SC-03 | 未写入 `allow.connections` 的新连接无 capability / 连接拒 |
+| SC-03 | 新 connection 对 `lucy_admin` 在重编译后自动进入；其他 `catalog_bound` Role 未写入 `allow.connections` 则无 capability |
 | SC-04 | `tools: ["*"]` 或 AbsoluteDeny 工具 → 编译/保存失败 |
 | SC-05 | UI/手册不把 `lucy_admin` 称为 WebUI 所有者或登录管理员 |
 | SC-06 | 既有 `names` / v1 `prefix` Role 零回归 |
@@ -58,7 +58,7 @@ AC-P0 将 Role 表授权钉在显式 `tableSelectors.names`（v2 禁 `prefix`）
 
 ## 2. Non-Goals
 
-- 裸 `connections: ["*"]` / `tables: ["*"]` / Role `tools: ["*"]`
+- 除 `lucy_admin` 外的 `connections: ["*"]`；`tables: ["*"]`；Role `tools: ["*"]`
 - 登录 WebUI 即自动获得 MCP 全库 Token
 - 绕过 AbsoluteDeny（`sl_*` / `sql_execution` / `memory_ingest*` 等）
 - 恢复 v2 `prefix` 选择器
@@ -79,7 +79,7 @@ roles:
     permission_model_version: 2
     allow:
       connections:
-        - demo-mysql
+        - "*"
       source_scope: catalog_bound
       tools:
         - lucy_catalog
@@ -102,7 +102,7 @@ roles:
 | 字段 | 语义 |
 |---|---|
 | `allow.source_scope` | 缺省 / 省略 = 现行 `tableSelectors` 路径。唯一合法显式值：`catalog_bound` |
-| `allow.connections` | `catalog_bound` 时**必填且非空**；新连接必须人工加入 |
+| `allow.connections` | 普通 `catalog_bound` **必填且非空**，新连接必须人工加入。`lucy_admin` 写 `["*"]`，解析为全部已配置连接 |
 | `allow.tableSelectors` | `catalog_bound` 时必须缺省或空数组；与 `catalog_bound` 并存 → 编译失败 |
 | `allow.tools` | 显式工具名列表；禁止 `*`；不得含 AbsoluteDeny / 未分类工具 |
 | `permission_model_version` | `catalog_bound` **要求**为 `2` |
@@ -158,7 +158,7 @@ SourcesGrantedBy(r) =
 |---|---|---|
 | `names` | access.yaml 显式名单 | **不**扩权 |
 | v1 `prefix` | access.yaml 前缀谓词 | 可扩权，须 `policy_scope_expanded` |
-| `catalog_bound` | access.yaml 显式 `source_scope` + connections；对象解析靠 source map ∩ enabled_tables | 同连接可扩权，须 `policy_scope_expanded`；**新连接不扩权** |
+| `catalog_bound` | access.yaml 显式 `source_scope` + connections；对象解析靠 source map ∩ enabled_tables。`lucy_admin` 的 connections 为全部已配置连接 | 同连接可扩权，须 `policy_scope_expanded`。`lucy_admin` 的新连接同样扩权并审计；其他 Role 的新连接不扩权 |
 
 `catalog_bound` **不是** `tables: ["*"]`，也**不是**恢复 v2 `prefix`。
 
