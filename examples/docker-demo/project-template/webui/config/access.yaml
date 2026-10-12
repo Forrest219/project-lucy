@@ -44,6 +44,11 @@ roles:
         - entity_details
         - dictionary_search
         - discover_data
+        - sl_validate
+        - lucy_skill_search
+        - lucy_skill_read
+        - lucy_certified_route
+        - lucy_report_template
 
 users:
   - id: demo_agent

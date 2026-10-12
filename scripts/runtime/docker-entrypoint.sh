@@ -113,6 +113,7 @@ seed_project() {
   fi
   sync_context_from_template
   patch_demo_skill_tools
+  patch_lucy_admin_tools
   mkdir -p "${PROJECT_ROOT}/.ktx/secrets" "${PROJECT_ROOT}/.ktx-ui" "${SEED_STATE_DIR}"
   printf "%s\n" "${LUCY_BUNDLED_KTX_VERSION:-unknown}" > "${SEED_STATE_DIR}/bundled-ktx-version"
 }
@@ -179,6 +180,54 @@ if (inserted === 0) process.exit(0);
 const out = text.slice(0, roleStart) + roleBlock + text.slice(roleBlockEnd);
 fs.writeFileSync(path, out);
 console.log(`[lucy] patched demo_readonly tools (+${inserted}) in ${path}`);
+JS
+}
+
+# Existing volumes keep access.yaml. Idempotently grant lucy_admin every
+# non-denied MCP tool added after the role was first seeded.
+patch_lucy_admin_tools() {
+  case "${TEMPLATE_ROOT}" in
+    */examples/docker-demo/project-template) ;;
+    *) return 0 ;;
+  esac
+  local access_yaml="${PROJECT_ROOT}/webui/config/access.yaml"
+  [[ -f "${access_yaml}" ]] || return 0
+  node - "${access_yaml}" <<'JS'
+const fs = require("fs");
+const path = process.argv[2];
+let text = fs.readFileSync(path, "utf8");
+const tools = [
+  "sl_validate",
+  "lucy_skill_search",
+  "lucy_skill_read",
+  "lucy_certified_route",
+  "lucy_report_template"
+];
+const roleMarker = /^(\s*)lucy_admin:\s*$/m;
+const match = roleMarker.exec(text);
+if (!match) process.exit(0);
+const roleIndent = match[1] ?? "";
+const roleStart = match.index;
+const afterRole = text.slice(roleStart + match[0].length);
+const nextRole = afterRole.search(new RegExp(`^${roleIndent}\\S`, "m"));
+const roleBlockEnd = nextRole === -1 ? text.length : roleStart + match[0].length + nextRole;
+let roleBlock = text.slice(roleStart, roleBlockEnd);
+const toolsMatch = roleBlock.match(/^(\s*)tools:\s*$/m);
+if (!toolsMatch) process.exit(0);
+const listIndent = `${toolsMatch[1]}  `;
+let inserted = 0;
+for (const tool of tools) {
+  if (roleBlock.includes(`- ${tool}`)) continue;
+  roleBlock = roleBlock.replace(
+    /^(\s*tools:\s*\n(?:[ \t]*-[ \t]+\S+[ \t]*\n)*)/m,
+    `$1${listIndent}- ${tool}\n`
+  );
+  inserted += 1;
+}
+if (inserted === 0) process.exit(0);
+const out = text.slice(0, roleStart) + roleBlock + text.slice(roleBlockEnd);
+fs.writeFileSync(path, out);
+console.log(`[lucy] patched lucy_admin tools (+${inserted}) in ${path}`);
 JS
 }
 
