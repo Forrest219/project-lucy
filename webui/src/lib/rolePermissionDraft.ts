@@ -34,19 +34,22 @@ export const READONLY_QA_PRESET = [
   "lucy_begin_question",
 ] as const;
 
-/** 只读问答 + 知识库预设：只读问答 + wiki_search、wiki_read，共 8 个。 */
-export const READONLY_QA_WIKI_PRESET = [
-  ...READONLY_QA_PRESET,
+/** Spec 170: these tools stay open at runtime and are not role-page grants. */
+export const CONTEXT_TOOL_NAMES = [
   "wiki_search",
   "wiki_read",
+  "lucy_skill_search",
+  "lucy_skill_read",
 ] as const;
+
+const CONTEXT_TOOL_SET = new Set<string>(CONTEXT_TOOL_NAMES);
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 /** Spec 150: v2 editing supports explicit names or catalog binding only. */
 export type ScopeMode = "names" | "catalog_bound";
 
-export type PresetName = "只读问答" | "只读问答 + 知识库";
+export type PresetName = "只读问答";
 
 export interface PartitionedTools {
   /** 可授予工具（不属于 AbsoluteDeny）。 */
@@ -152,14 +155,11 @@ export function stampPreset(
  * 集合相等时返回预设名称；多一个或少一个返回 null；顺序无关。
  */
 export function matchingPresetName(tools: string[]): PresetName | null {
-  const toolSet = new Set(tools);
-  const wikiSet = new Set(READONLY_QA_WIKI_PRESET);
-  const qaSet = new Set(READONLY_QA_PRESET);
+  const comparable = tools.filter((tool) => !CONTEXT_TOOL_SET.has(tool));
+  const toolSet = new Set(comparable);
+  const qaSet = new Set<string>(READONLY_QA_PRESET);
 
-  if (toolSet.size === wikiSet.size && [...wikiSet].every((t) => toolSet.has(t))) {
-    return "只读问答 + 知识库";
-  }
-  if (toolSet.size === qaSet.size && [...qaSet].every((t) => toolSet.has(t))) {
+  if (toolSet.size === qaSet.size && [...qaSet].every((tool) => toolSet.has(tool))) {
     return "只读问答";
   }
   return null;

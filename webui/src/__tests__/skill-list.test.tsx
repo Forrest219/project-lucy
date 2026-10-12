@@ -149,25 +149,27 @@ describe("unified Skill workbench", () => {
     await waitFor(() => expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(true));
   });
 
-  it("requires preflight acknowledgement before granting all roles", async () => {
+  it("does not offer role grants on the editor, overview, or preflight (SC-6)", async () => {
     const fetchMock = stubApis();
     renderPage();
-    fireEvent.click(await screen.findByTestId("skill-edit"));
+    expect(await screen.findByTestId("skill-detail")).toBeInTheDocument();
+    expect(screen.queryByText("角色授权")).not.toBeInTheDocument();
+    expect(screen.queryByText("可访问角色")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("skill-edit"));
     fireEvent.click(screen.getByTestId("skill-metadata-toggle"));
-    fireEvent.click(screen.getByTestId("skill-role-all"));
-    expect(screen.getByTestId("skill-role-all")).toBeChecked();
+    expect(screen.queryByText("可访问角色")).not.toBeInTheDocument();
+    expect(screen.queryByText("所有角色可见")).not.toBeInTheDocument();
+    expect(screen.queryByText("无人可见")).not.toBeInTheDocument();
     fireEvent.click(screen.getByTestId("skill-save"));
     const dialog = await screen.findByTestId("skill-preflight");
-    const confirmButton = within(dialog).getByTestId("skill-preflight-confirm");
-    expect(confirmButton).toBeDisabled();
-    fireEvent.click(within(dialog).getByTestId("skill-wildcard-ack"));
-    expect(confirmButton).toBeEnabled();
-    fireEvent.click(confirmButton);
+    expect(within(dialog).queryByText("授权变化")).not.toBeInTheDocument();
+    expect(within(dialog).queryByTestId("skill-wildcard-ack")).not.toBeInTheDocument();
+    fireEvent.click(within(dialog).getByTestId("skill-preflight-confirm"));
     await waitFor(() => {
       const put = fetchMock.mock.calls.find(([, init]) => init?.method === "PUT");
       expect(put).toBeTruthy();
       const body = JSON.parse(String(put![1]?.body));
-      expect(body.roles_allowed).toEqual(["*"]);
+      expect(body.roles_allowed).toBeUndefined();
       expect(body.expected_version).toBe("version-1");
     });
   });
@@ -178,6 +180,6 @@ describe("unified Skill workbench", () => {
     expect(await screen.findByTestId("skill-editor-form")).toBeInTheDocument();
     expect(screen.getByTestId("skill-metadata-toggle")).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByTestId("skill-field-domain")).toHaveValue("kx_financial");
-    expect(screen.getByTestId("skill-role-none")).toHaveTextContent("无人可见");
+    expect(screen.queryByTestId("skill-role-none")).not.toBeInTheDocument();
   });
 });

@@ -15,6 +15,7 @@ import type {
   AuditTurnEntry,
   AuditTurnsResponse
 } from "../../lib/types";
+import { callMonitorWindow } from "../../lib/callMonitorWindow";
 import { PageHeader } from "../../components/PageHeader";
 import { DecisionReasonCell } from "../../components/DecisionReasonCell";
 
@@ -513,14 +514,15 @@ function playgroundReplayHref(entry: Pick<AuditLogEntry, "userId" | "tool" | "ar
   return `/admin/mcp-playground?${params.toString()}`;
 }
 type AuditTab = "turns" | "calls";
-type WindowHours = 1 | 24 | 168;
-type RangePreset = "1h" | "24h" | "7d";
-type TimePreset = "1h" | "24h" | "7d" | "today" | "custom";
+type WindowHours = 1 | 24 | 168 | 720;
+type RangePreset = "1h" | "24h" | "7d" | "30d";
+type TimePreset = "1h" | "24h" | "7d" | "30d" | "today" | "custom";
 
 const TIME_PRESET_LABELS: Record<TimePreset, string> = {
   "1h": "近 1 小时",
   "24h": "近 24 小时",
   "7d": "近 7 天",
+  "30d": "近 30 天",
   "today": "今日",
   "custom": "自定义"
 };
@@ -543,20 +545,29 @@ function formatStatsTimeLabel(statsAt: Date | null, now: Date): string {
   return `${pad(statsAt.getHours())}:${pad(statsAt.getMinutes())}:${pad(statsAt.getSeconds())}`;
 }
 
-/** Spec 106 + Spec 143: prefer `range=1h|24h|7d`; accept legacy `hours=1|24|168`. */
+/** Spec 106 + Spec 165: prefer `range=1h|24h|7d|30d`; accept legacy `hours=1|24|168|720`. */
 function parseRangePreset(searchParams: URLSearchParams): RangePreset {
   const range = searchParams.get("range");
-  if (range === "1h" || range === "24h" || range === "7d") return range;
+  if (range === "1h" || range === "24h" || range === "7d" || range === "30d") return range;
   const hours = searchParams.get("hours");
   if (hours === "1") return "1h";
   if (hours === "24") return "24h";
+  if (hours === "720") return "30d";
   return "7d";
 }
 
 function rangeToHours(range: RangePreset): WindowHours {
   if (range === "1h") return 1;
   if (range === "24h") return 24;
+  if (range === "30d") return 720;
   return 168;
+}
+
+function sinceForRange(range: RangePreset, now = new Date()): string {
+  if (range === "30d") {
+    return toLocalDateTimeValue(new Date(callMonitorWindow("30d", now).since));
+  }
+  return sinceLocalFromHours(rangeToHours(range), now);
 }
 
 /** Spec 106: prefer `view=turns|calls`; accept legacy `tab=`. */
@@ -1326,16 +1337,7 @@ export function Audit() {
   const [turnDrawerOpen, setTurnDrawerOpen] = useState(Boolean(searchParams.get("turnId")));
   const [now, setNow] = useState(() => new Date());
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [timePreset, setTimePreset] = useState<TimePreset>(() => {
-    const r = searchParams.get("range");
-    if (r === "1h") return "1h";
-    if (r === "24h") return "24h";
-    if (r === "7d") return "7d";
-    const hours = searchParams.get("hours");
-    if (hours === "1") return "1h";
-    if (hours === "24") return "24h";
-    return "7d";
-  });
+  const [timePreset, setTimePreset] = useState<TimePreset>(() => parseRangePreset(searchParams));
 
   const user = searchParams.get("user") ?? "";
   const tool = searchParams.get("tool") ?? "";
@@ -1383,12 +1385,12 @@ export function Audit() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasHydratedFromStorage]);
 
-  const sinceDefault = sinceLocalFromHours(hours);
+  const sinceDefault = sinceForRange(range);
   const [since, setSince] = useState(sinceDefault);
   const [until, setUntil] = useState("");
 
   useEffect(() => {
-    setSince(sinceLocalFromHours(hours));
+    setSince(sinceForRange(range));
     setTimePreset(range);
     setPage(0);
   }, [hours, range]);
@@ -1476,6 +1478,9 @@ export function Audit() {
     } else if (preset === "7d") {
       setUntil("");
       updateParam("range", "7d");
+    } else if (preset === "30d") {
+      setUntil("");
+      updateParam("range", "30d");
     } else if (preset === "today") {
       const todayStart = new Date();
       todayStart.setHours(0, 0, 0, 0);
@@ -1529,7 +1534,7 @@ export function Audit() {
     }
   }
 
-  const rangeDefaultSince = sinceLocalFromHours(hours);
+  const rangeDefaultSince = sinceForRange(range);
   const hasNonDefaultFilters = Boolean(
     user
       || tool
@@ -1553,7 +1558,7 @@ export function Audit() {
 
   function clearFilters() {
     setUntil("");
-    setSince(sinceLocalFromHours(hours));
+    setSince(sinceForRange(range));
     setPage(0);
     setAdvancedOpen(false);
     const next = new URLSearchParams();
@@ -1850,7 +1855,7 @@ export function Audit() {
           role="group"
           aria-label="时间范围"
         >
-          {(["1h", "24h", "7d", "today", "custom"] as TimePreset[]).map((preset) => (
+          {(["1h", "24h", "7d", "30d", "today", "custom"] as TimePreset[]).map((preset) => (
             <button
               key={preset}
               type="button"

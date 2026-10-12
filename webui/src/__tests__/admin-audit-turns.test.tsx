@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Audit } from "../pages/admin/Audit";
+import { callMonitorWindow } from "../lib/callMonitorWindow";
 
 const toastMock = vi.hoisted(() => ({
   success: vi.fn(),
@@ -793,12 +794,12 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
     const active = screen.getByTestId("audit-time-preset-7d");
     expect(active).toHaveClass("pl-segmented-control-item", "pl-segmented-control-item--active");
     expect(active).toHaveAttribute("aria-pressed", "true");
-    for (const preset of ["1h", "24h", "today", "custom"]) {
+    for (const preset of ["1h", "24h", "30d", "today", "custom"]) {
       const item = screen.getByTestId(`audit-time-preset-${preset}`);
       expect(item).toHaveAttribute("aria-pressed", "false");
       expect(item.className).not.toMatch(/pl-segmented-control-item--active/);
     }
-    for (const preset of ["1h", "24h", "7d", "today", "custom"]) {
+    for (const preset of ["1h", "24h", "7d", "30d", "today", "custom"]) {
       expect(screen.getByTestId(`audit-time-preset-${preset}`).className).not.toMatch(/pl-btn--primary/);
     }
 
@@ -838,5 +839,22 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
       expect(screen.getByTestId("audit-time-preset-7d")).toHaveAttribute("aria-pressed", "true");
       expect(screen.getByTestId("audit-time-preset-24h")).toHaveAttribute("aria-pressed", "false");
     });
+  });
+
+  it("opens 近 30 天 from range=30d at the Shanghai month start", async () => {
+    stubEmptyAuditApis();
+    renderAudit("/admin/audit?view=calls&range=30d");
+    expect(await screen.findByTestId("audit-time-preset-30d")).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("audit-time-preset-7d")).toHaveAttribute("aria-pressed", "false");
+    const start = new Date(callMonitorWindow("30d").since);
+    const localMs = start.getTime() - start.getTimezoneOffset() * 60_000;
+    expect(screen.getByTestId("audit-since")).toHaveValue(new Date(localMs).toISOString().slice(0, 16));
+  });
+
+  it("opens 近 30 天 from hours=720 instead of 近 7 天", async () => {
+    stubEmptyAuditApis();
+    renderAudit("/admin/audit?view=calls&hours=720");
+    expect(await screen.findByTestId("audit-time-preset-30d")).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("audit-time-preset-7d")).toHaveAttribute("aria-pressed", "false");
   });
 });

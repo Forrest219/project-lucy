@@ -221,8 +221,8 @@ test.describe("Spec 150 Role permission structure", () => {
   test("@pr-impacted template is read-only and copy mode starts dirty", async ({ page }) => {
     await installRoleApi(page, { id: "readonly_template", source: "template", usageCount: 0 });
     await page.goto("/admin/roles/readonly_template");
-    await expect(page.getByTestId("role-skill-access-summary")).toContainText("通道不完整");
-    await expect(page.getByTestId("role-skill-access-summary")).toContainText("lucy-skill://finance_ops/quarter-close");
+    await expect(page.getByTestId("role-skill-access-summary")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "只读问答 + 知识库" })).toHaveCount(0);
     await expect(page.getByText("这是参考模板，全部配置只读。可基于模板创建正式 Role。")).toBeVisible();
     await expect(page.getByRole("button", { name: "删除 Role" })).toHaveCount(0);
     await page.getByRole("link", { name: "基于此模板创建 Role" }).click();

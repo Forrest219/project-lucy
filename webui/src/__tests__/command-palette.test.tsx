@@ -385,7 +385,7 @@ describe("CommandPalette", () => {
     // 业务 Skill lives in the same group, so its breadcrumb must also surface.
     const skillsOption = screen.getByTestId("command-palette-option-semantic-skills");
     expect(skillsOption.querySelector(".pl-command-palette-breadcrumb")).not.toBeNull();
-    expect(skillsOption.textContent).toContain("查看受治理的业务 Skill 资产及其发布状态与角色授权");
+    expect(skillsOption.textContent).toContain("查看受治理的业务 Skill 资产及其发布状态");
     // No result row may render the legacy right-side group label as the
     // primary visual (M61's `.pl-command-palette-item-meta` was promoted to
     // the secondary breadcrumb line in M70).

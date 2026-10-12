@@ -152,42 +152,33 @@ test.describe("Spec 151 business Skill WebUI", () => {
     await page.goto("/skills");
     await page.getByTestId("skills-create").click();
 
-    await expect(page.getByTestId("skill-role-none")).toHaveText("无人可见");
+    await expect(page.getByTestId("skill-role-none")).toHaveCount(0);
+    await expect(page.getByText("可访问角色")).toHaveCount(0);
     await page.getByTestId("skill-field-name").fill("quarter-close");
     await page.getByTestId("skill-field-domain").fill("finance_ops");
     await page.getByTestId("skill-field-title").fill("季度关账");
     await page.getByTestId("skill-field-content").fill("# 季度关账\n按顺序核对。\n");
 
-    const analyst = page.getByLabel("analyst");
-    await analyst.check();
-    await expect(analyst).toBeChecked();
-    await analyst.uncheck();
-    await expect(page.getByTestId("skill-role-none")).toBeVisible();
-
-    await page.getByTestId("skill-role-all").check();
-    await expect(page.getByTestId("skill-role-option").first()).toBeDisabled();
     await page.getByTestId("skill-save").click();
     await expect(page.getByTestId("skill-preflight")).toBeVisible();
-    await expect(page.getByTestId("skill-preflight-confirm")).toBeDisabled();
-    await page.getByTestId("skill-wildcard-ack").check();
+    await expect(page.getByTestId("skill-preflight-confirm")).toBeEnabled();
     await page.getByTestId("skill-preflight-confirm").click();
 
     await expect.poll(() => api.writes.length).toBe(1);
-    expect(api.writes[0]?.body.roles_allowed).toEqual(["*"]);
+    expect(api.writes[0]?.body.roles_allowed).toBeUndefined();
     await expect(page.getByTestId("skill-detail-path")).toContainText("skills/finance_ops/quarter-close.md");
 
     await page.getByTestId("skill-edit").click();
     await page.getByTestId("skill-metadata-toggle").click();
     await expect(page.getByTestId("skill-field-name")).toBeDisabled();
     await expect(page.getByTestId("skill-field-domain")).toBeDisabled();
-    await page.getByTestId("skill-role-all").uncheck();
-    await page.getByLabel("analyst").check();
+    await page.getByTestId("skill-field-content").fill("# 季度关账\n已修订。\n");
     await page.getByTestId("skill-save").click();
     await page.getByTestId("skill-preflight-confirm").click();
 
     await expect.poll(() => api.writes.length).toBe(2);
     expect(api.writes[1]?.body.expected_version).toBe("file-v1");
-    expect(api.writes[1]?.body.roles_allowed).toEqual(["analyst"]);
+    expect(api.writes[1]?.body.roles_allowed).toBeUndefined();
     expect(api.current?.relativePath).toBe("skills/finance_ops/quarter-close.md");
   });
 

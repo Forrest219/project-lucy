@@ -335,26 +335,6 @@ function RoleBoundarySummary({
           当前正式 Role 待修复：{detail.warnings.join("；")}
         </div>
       ) : null}
-      {detail?.skillAccess ? (
-        <section className="rounded-md border border-border p-3 text-xs" data-testid="role-skill-access-summary" aria-label="业务 Skill 摘要">
-          <h3 className="font-medium">业务 Skill</h3>
-          <dl className="mt-2 grid grid-cols-3 gap-2 text-center">
-            <div><dt className="text-fg-muted">可检索</dt><dd className="mt-1 font-semibold">{detail.skillAccess.discoverable.length}</dd></div>
-            <div><dt className="text-fg-muted">可读取</dt><dd className="mt-1 font-semibold">{detail.skillAccess.readable.length}</dd></div>
-            <div><dt className="text-fg-muted">通道不完整</dt><dd className="mt-1 font-semibold">{detail.skillAccess.declaredWithoutChannel.length}</dd></div>
-          </dl>
-          {detail.skillAccess.declared.length > 0 ? (
-            <details className="mt-2">
-              <summary className="cursor-pointer text-fg-muted">已声明 {detail.skillAccess.declared.length} 个</summary>
-              <ul className="mt-2 max-h-28 space-y-1 overflow-auto text-fg-muted">
-                {detail.skillAccess.declared.map((uri) => <li key={uri} className="notranslate break-all font-mono" translate="no">{uri}</li>)}
-              </ul>
-            </details>
-          ) : (
-            <p className="mt-2 text-fg-muted">没有声明给此角色的业务 Skill。</p>
-          )}
-        </section>
-      ) : null}
       {detail?.effectivePermissions ? (
         <details>
           <summary className="notranslate cursor-pointer text-xs font-medium" translate="no">Data Capability Preview</summary>
@@ -662,7 +642,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
 
           {activeSection === "tools" ? (
             <div className="grid max-w-2xl gap-4 pb-28" data-testid="role-tools-field">
-              <div><h2 className="notranslate text-base font-semibold" translate="no">允许的 MCP 工具</h2><p className="mt-1 text-sm text-fg-muted">优先使用职责预设；只有特殊 Role 才展开自定义工具。</p></div>
+              <div><h2 className="notranslate text-base font-semibold" translate="no">允许的 MCP 工具</h2><p className="mt-1 text-sm text-fg-muted">可用职责预设，或在下方勾选具体 <span className="notranslate" translate="no">MCP</span> 工具。全选会授予当前全部可授予工具。</p></div>
               {rejectedTools.length > 0 ? <div className="rounded-md border border-warning-strong bg-warning-soft p-3 text-sm text-warning-strong">旧配置包含 {rejectedTools.length} 个系统禁止工具，保存时将移除。</div> : null}
               <RoleToolGrants candidates={toolsQuery.data?.tools ?? []} value={draft.tools} onChange={(tools) => updateDraft({ ...draft, tools })} disabled={isReadOnlyTemplate} />
               {toolsQuery.isError ? <><p className="text-xs text-warning-strong">工具候选暂不可用，可手工填写工具 ID。</p><TagInput value={draft.tools} onChange={(tools) => updateDraft({ ...draft, tools })} placeholder="输入工具 ID 后回车" /></> : null}

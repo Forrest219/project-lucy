@@ -170,7 +170,7 @@ export const navGroups: Array<{
         to: "/skills",
         iconKey: "skills",
         active: (path) => path === "/skills" || path.startsWith("/skills/"),
-        description: "查看受治理的业务 Skill 资产及其发布状态与角色授权。",
+        description: "查看受治理的业务 Skill 资产及其发布状态。",
         keywords: ["Skill", "SOP", "业务 Skill"]
       }
     ]
