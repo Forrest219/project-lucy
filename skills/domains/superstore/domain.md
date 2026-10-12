@@ -1,7 +1,6 @@
 # Superstore Domain Reference
 
 > 类型：Domain Reference Doc（不是 Skill）
-> 加载方式：由 Knowledge Skill 在检测到 superstore 相关查询时按需加载
 > 数据源：dataforai.superstore_orders / superstore_returns / superstore_people
 
 ## Quick Reference
@@ -66,5 +65,3 @@ Tableau 示例超市数据集，中国零售业务。
 - 常见错误 → `pitfalls.md`
 - 折扣口径 → `discount-policy.md`
 - 表选择规则 → `../../warehouse/references/table-routing.md`
-- 折扣分析程序 → `../../analysis/discount-analysis.md`
-- 利润拆解程序 → `../../analysis/profit-decomposition.md`
