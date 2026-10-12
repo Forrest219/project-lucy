@@ -1312,7 +1312,7 @@
     @apply inline-flex flex-wrap items-center gap-2;
   }
   .pl-whitelist-missing-summary {
-    @apply mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-border-default bg-bg-subtle px-3 py-2 text-sm text-fg-muted;
+    @apply mt-4 flex flex-wrap items-center gap-x-3 gap-y-2;
   }
   .pl-missing-manifest-diagnostic {
     @apply grid gap-2 rounded-md border border-border-default bg-bg-subtle p-3 text-sm text-fg-body;

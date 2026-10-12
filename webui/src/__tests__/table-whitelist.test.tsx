@@ -402,8 +402,12 @@ describe("TableWhitelist", () => {
 
     const schemaSelect = await screen.findByRole("combobox", { name: "Schema 筛选" });
     expect(within(schemaSelect).getByRole("option", { name: "openclaw_db" })).toBeInTheDocument();
-    expect(screen.getByTestId("whitelist-missing-manifest-summary")).toHaveTextContent(
-      "1 个 Schema 缺少 Manifest，暂不可配置表范围。"
+    const summary = screen.getByTestId("whitelist-missing-manifest-summary");
+    expect(summary).toHaveTextContent(
+      "openclaw_db 缺少 Manifest，暂不可配置表范围。"
+    );
+    expect(summary.compareDocumentPosition(screen.getByTestId("pl-whitelist-table"))).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
     );
     expect(
       screen.queryByTestId("configured-schema-empty-mysql-aliyun-openclaw_db")
@@ -640,7 +644,13 @@ describe("TableWhitelist", () => {
     renderWhitelist();
 
     const summary = await screen.findByTestId("whitelist-missing-manifest-summary");
-    expect(summary).toHaveTextContent("1 个 Schema 缺少 Manifest，暂不可配置表范围。");
+    expect(summary).toHaveTextContent("openclaw_db 缺少 Manifest，暂不可配置表范围。");
+    expect(summary.compareDocumentPosition(screen.getByTestId("pl-whitelist-table"))).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+    expect(within(screen.getByRole("toolbar", { name: "启用表范围工具栏" })).queryByTestId(
+      "whitelist-missing-manifest-summary"
+    )).not.toBeInTheDocument();
     const summaryLink = within(summary).getByRole("link", { name: /去连接概览上传 Manifest/ });
     expect(summaryLink).toHaveAttribute("href", "/connections");
     expect(summaryLink).toHaveClass("pl-card-cta");
@@ -675,6 +685,27 @@ describe("TableWhitelist", () => {
       String(call[0]).includes("/api/catalog/reload")
     );
     expect(reloadCalls).toHaveLength(0);
+  });
+
+  it("keeps a count when more than one Schema is missing a Manifest", async () => {
+    stubWhitelistFetch(
+      defaultHandlers({
+        connection: {
+          ...TEST_CONN,
+          schemas: ["dataforai", "openclaw_db", "sandbox"],
+          enabledTables: ["dataforai.superstore_orders", "dataforai.superstore_people"]
+        },
+        tables: ["dataforai.superstore_orders", "dataforai.superstore_people"]
+      })
+    );
+    renderWhitelist();
+
+    const summary = await screen.findByTestId("whitelist-missing-manifest-summary");
+    expect(summary).toHaveTextContent("2 个 Schema 缺少 Manifest，暂不可配置表范围。");
+    expect(summary).not.toHaveTextContent("openclaw_db 缺少 Manifest");
+    expect(summary.compareDocumentPosition(screen.getByTestId("pl-whitelist-table"))).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
   });
 
   it("preselects the Schema filter from the ?schema= query param without overwriting a later manual change", async () => {
@@ -890,7 +921,7 @@ describe("TableWhitelist", () => {
     // Empty-schema copy uses Manifest terminology and stays compact until
     // the user focuses the affected Schema.
     expect(screen.getByTestId("whitelist-missing-manifest-summary")).toHaveTextContent(
-      "1 个 Schema 缺少 Manifest"
+      "openclaw_db 缺少 Manifest，暂不可配置表范围。"
     );
     fireEvent.change(schemaSelect, { target: { value: "openclaw_db" } });
 

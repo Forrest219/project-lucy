@@ -14,6 +14,13 @@ import type {
 import { DiffViewer } from "../../components/DiffViewer";
 import { PageHeader } from "../../components/PageHeader";
 
+function missingManifestSummaryCopy(items: Array<{ schema: string }>): string {
+  if (items.length === 1) {
+    return `${items[0].schema} 缺少 Manifest，暂不可配置表范围。`;
+  }
+  return `${items.length} 个 Schema 缺少 Manifest，暂不可配置表范围。`;
+}
+
 type WhitelistTableRow = {
   connectionId: string;
   schema: string;
@@ -738,6 +745,27 @@ export function TableWhitelist() {
           </div>
         )}
 
+      {configuredSchemasWithoutTables.length > 0 && !showFocusedMissingManifest ? (
+        <div
+          className="pl-whitelist-missing-summary pl-validation-banner pl-validation-banner--warning notranslate"
+          translate="no"
+          role="status"
+          data-testid="whitelist-missing-manifest-summary"
+        >
+          <span className="notranslate" translate="no">
+            {missingManifestSummaryCopy(configuredSchemasWithoutTables)}
+          </span>
+          <Link
+            to="/connections"
+            className="pl-card-cta notranslate"
+            translate="no"
+            data-testid="whitelist-missing-manifest-summary-link"
+          >
+            去连接概览上传 Manifest ↗
+          </Link>
+        </div>
+      ) : null}
+
       {hiddenInvalidEnabledCount > 0 ? (
         <div
           className="pl-validation-banner pl-validation-banner--warning mt-4"
@@ -890,26 +918,6 @@ export function TableWhitelist() {
               </tbody>
             ))}
           </table>
-        </div>
-      ) : null}
-
-      {configuredSchemasWithoutTables.length > 0 && !showFocusedMissingManifest ? (
-        <div
-          className="pl-whitelist-missing-summary notranslate"
-          translate="no"
-          data-testid="whitelist-missing-manifest-summary"
-        >
-          <span className="notranslate" translate="no">
-            {configuredSchemasWithoutTables.length} 个 Schema 缺少 Manifest，暂不可配置表范围。
-          </span>
-          <Link
-            to="/connections"
-            className="pl-card-cta notranslate"
-            translate="no"
-            data-testid="whitelist-missing-manifest-summary-link"
-          >
-            去连接概览上传 Manifest ↗
-          </Link>
         </div>
       ) : null}
 
