@@ -5,6 +5,7 @@ import { parse } from "yaml";
 import { getAuditDb } from "./audit.js";
 import { resolveProjectRoot } from "../project.js";
 import { buildMetricWindow, WINDOW_7D_HOURS } from "./metric-window.js";
+import { resolveRoleIds } from "../proxy/acl.js";
 
 type RoleConfig = {
   description?: string;
@@ -21,6 +22,7 @@ type UserConfig = {
   name?: string;
   enabled?: boolean;
   role?: string;
+  roles?: string[];
   tokens?: Array<{ hash?: string; label?: string; expires_at?: string }>;
   allow?: RoleConfig["allow"];
 };
@@ -765,7 +767,11 @@ function governanceRoles(config: AccessConfig, rows: AuditRow[]) {
   const users = config.users ?? [];
   const roleUsage = new Map<string, number>();
   for (const user of users) {
-    if (user.role) roleUsage.set(user.role, (roleUsage.get(user.role) ?? 0) + 1);
+    const resolved = resolveRoleIds(user);
+    if (!resolved.ok) continue;
+    for (const roleId of resolved.roleIds) {
+      roleUsage.set(roleId, (roleUsage.get(roleId) ?? 0) + 1);
+    }
   }
   // Audit-derived usage may be truncated when `rows` came from recentAuditRows.
   for (const row of rows) {
@@ -933,11 +939,14 @@ export function registerGovernanceObservabilityRoutes(app: FastifyInstance): voi
       const calls = stats?.calls ?? 0;
       const denied = stats?.denied ?? 0;
       const errors = stats?.errors ?? 0;
+      const resolvedRoles = resolveRoleIds(user);
+      const roleIds = resolvedRoles.ok ? resolvedRoles.roleIds : [];
       return {
         id: userId,
         name: user.name ?? userId,
         enabled: user.enabled !== false,
-        roleId: user.role ?? null,
+        roleIds,
+        roleId: roleIds.length === 1 ? roleIds[0] : null,
         calls,
         denied,
         errors,

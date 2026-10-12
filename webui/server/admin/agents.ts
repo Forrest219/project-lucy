@@ -13,6 +13,7 @@ import {
   previewAgentPermissionsForAdmin,
   previewRolePermissionsForAdmin,
   resolveEffectivePermissionsForAdmin,
+  resolveRoleIds,
   type EffectivePermissions
 } from "../proxy/acl.js";
 import {
@@ -518,7 +519,7 @@ function userToAgent(
     name: user.name,
     note: user.note,
     enabled: user.enabled !== false,
-    role: user.role,
+    ...agentRoleFields(user),
     tokens: user.tokens.map((t) => ({
       hash: t.hash,
       label: t.label,
@@ -679,23 +680,34 @@ function constraintsCompileError(reason: string): { code: string; message: strin
  * the durable write will persist.
  */
 async function resolveAgentSources(
-  user: { id: string; role?: string; allow?: unknown },
+  user: { id: string; role?: string; roles?: string[]; allow?: unknown; enabled?: boolean; constraints?: unknown },
   roleOverrides: Record<string, YamlRole> | undefined
 ): Promise<{
   sources: string[];
   snapshotHash: string | null;
 }> {
+  const resolved = resolveRoleIds(user);
+  const roleIds = resolved.ok ? resolved.roleIds : [];
   // Legacy `allow` fallback: don't go through the resolver.
-  if (user.allow && !user.role) {
+  if (user.allow && roleIds.length === 0) {
     const allow = user.allow as { tables?: string[] };
     const sources = Array.isArray(allow.tables) ? allow.tables : [];
     return { sources, snapshotHash: null };
   }
-  if (!user.role) {
+  if (roleIds.length === 0) {
     return { sources: [], snapshotHash: null };
   }
-  const previewRole = roleOverrides?.[user.role];
-  const preview = await previewRolePermissionsForAdmin(user.role, previewRole ? { role: previewRole } : {});
+  const preview = await previewAgentPermissionsForAdmin(
+    {
+      id: user.id,
+      enabled: user.enabled !== false,
+      tokens: [],
+      roles: roleIds,
+      ...(user.allow ? { allow: user.allow as AccessConfig["users"][number]["allow"] } : {}),
+      ...(user.constraints !== undefined ? { constraints: user.constraints } : {})
+    },
+    { roleOverrides }
+  );
   if (!preview.ok) return { sources: [], snapshotHash: null };
   return {
     sources: preview.permissions.sources.map((source) => source.table),
@@ -706,8 +718,8 @@ async function resolveAgentSources(
 interface BuildAgentGateInputArgs {
   targetKind: "agent" | "token";
   targetId?: string | null;
-  oldUser: { id: string; role?: string; allow?: unknown };
-  newUser: { id: string; role?: string; allow?: unknown };
+  oldUser: { id: string; role?: string; roles?: string[]; allow?: unknown; enabled?: boolean; constraints?: unknown };
+  newUser: { id: string; role?: string; roles?: string[]; allow?: unknown; enabled?: boolean; constraints?: unknown };
   oldRoleOverrides?: Record<string, YamlRole>;
   newRoleOverrides?: Record<string, YamlRole>;
   /** Optional recent call count for high-traffic classification. */
@@ -921,8 +933,120 @@ function hasWildcardAllow(user: YamlUser): boolean {
   return Boolean(user.allow?.tables?.includes("*") || user.allow?.tools?.includes("*"));
 }
 
-function assertRoleExists(config: YamlAccessConfig, role: string | undefined): role is string {
-  return Boolean(role && config.roles?.[role]?.allow);
+function catalogRoleIds(config: YamlAccessConfig): string[] {
+  return Object.entries(config.roles ?? {})
+    .filter(([, role]) => role?.allow !== undefined)
+    .map(([id]) => id);
+}
+
+function orderRoleIdsByCatalog(ids: string[], catalogIds: string[]): string[] {
+  const wanted = new Set(ids);
+  const ordered = catalogIds.filter((id) => wanted.has(id));
+  for (const id of ids) {
+    if (!ordered.includes(id)) ordered.push(id);
+  }
+  return ordered;
+}
+
+type RoleSetInput =
+  | { touched: false }
+  | { touched: true; ids: string[] }
+  | { touched: true; error: { code: string; message: string } };
+
+function parseRoleSetInput(body: object): RoleSetInput {
+  const hasRole = bodyHasOwn(body, "role");
+  const hasRoles = bodyHasOwn(body, "roles");
+  if (!hasRole && !hasRoles) return { touched: false };
+  if (hasRole && hasRoles) {
+    return { touched: true, error: { code: "ROLE_AND_ROLES", message: "Send roles or role, not both" } };
+  }
+  if (hasRoles) {
+    const raw = (body as { roles?: unknown }).roles;
+    if (!Array.isArray(raw) || raw.some((id) => typeof id !== "string")) {
+      return { touched: true, error: { code: "BAD_REQUEST", message: "roles must be an array of role ids" } };
+    }
+    return { touched: true, ids: [...new Set(raw.map((id) => id.trim()).filter(Boolean))] };
+  }
+  const rawRole = (body as { role?: unknown }).role;
+  if (typeof rawRole !== "string" || !rawRole.trim()) {
+    return { touched: true, error: { code: "BAD_REQUEST", message: "role must be a role id" } };
+  }
+  return { touched: true, ids: [rawRole.trim()] };
+}
+
+async function validateRoleSetForWrite(
+  config: YamlAccessConfig,
+  ids: string[]
+): Promise<{ ok: true; ids: string[] } | { ok: false; status: number; error: { code: string; message: string } }> {
+  for (const id of ids) {
+    const resolvedRole = roleForInput(config, id);
+    if (!resolvedRole) {
+      return { ok: false, status: 400, error: { code: "INVALID_ROLE", message: `Role '${id}' does not exist or is invalid` } };
+    }
+    if (resolvedRole.source === "template") {
+      return { ok: false, status: 400, error: rejectTemplateRole(resolvedRole.id).error };
+    }
+    const invalidReason = await validateRoleForWrite(resolvedRole.id, resolvedRole.role);
+    if (invalidReason) {
+      return {
+        ok: false,
+        status: 400,
+        error: { code: "INVALID_ROLE", message: `Role '${resolvedRole.id}' is invalid: ${invalidReason}` }
+      };
+    }
+  }
+  return { ok: true, ids: orderRoleIdsByCatalog(ids, catalogRoleIds(config)) };
+}
+
+function applyRoleSet(user: YamlUser, ids: string[]) {
+  delete user.role;
+  if (ids.length === 0) {
+    delete user.roles;
+    return;
+  }
+  user.roles = ids;
+  delete user.allow;
+}
+
+function agentRoleFields(user: YamlUser) {
+  const resolved = resolveRoleIds(user);
+  if (!resolved.ok) {
+    const declaredRoles = Array.isArray(user.roles)
+      ? user.roles.filter((role): role is string => typeof role === "string" && role.trim().length > 0).map((role) => role.trim())
+      : [];
+    return {
+      roles: [] as string[],
+      roleResolutionError: resolved.reason,
+      ...(typeof user.role === "string" && user.role.trim() ? { declaredRole: user.role.trim() } : {}),
+      ...(declaredRoles.length > 0 ? { declaredRoles } : {})
+    };
+  }
+  return {
+    roles: resolved.roleIds,
+    ...(resolved.roleIds.length === 1 ? { role: resolved.roleIds[0] } : {})
+  };
+}
+
+function summaryRole(user: YamlUser): string | undefined {
+  const resolved = resolveRoleIds(user);
+  if (!resolved.ok || resolved.roleIds.length !== 1) return undefined;
+  return resolved.roleIds[0];
+}
+
+async function previewWrittenAgent(user: YamlUser, roleOverrides: YamlAccessConfig["roles"]) {
+  return previewAgentPermissionsForAdmin(
+    {
+      id: user.id,
+      name: user.name,
+      enabled: true,
+      tokens: user.tokens,
+      ...(user.roles ? { roles: user.roles } : {}),
+      ...(user.role ? { role: user.role } : {}),
+      ...(user.allow ? { allow: user.allow } : {}),
+      ...(user.constraints !== undefined ? { constraints: user.constraints } : {})
+    },
+    { roleOverrides }
+  );
 }
 
 function roleForInput(config: YamlAccessConfig, role: string | undefined): { id: string; role: YamlRole; source: "yaml" | "template" } | undefined {
@@ -994,7 +1118,7 @@ export function registerAgentRoutes(app: FastifyInstance) {
     Body: {
       dryRun?: boolean;
       override?: AccessGovernanceOverrideRequest;
-      agent: { id: string; name: string; note?: string; role?: string; allow?: unknown }
+      agent: { id: string; name: string; note?: string; role?: string; roles?: string[]; allow?: unknown }
     };
   }>("/api/admin/agents", async (request, reply) => {
     const dryRun = request.body?.dryRun !== false;
@@ -1010,16 +1134,19 @@ export function registerAgentRoutes(app: FastifyInstance) {
     }
     const projectRoot = await resolveProjectRoot();
     const { config, raw } = await readAccessYaml(projectRoot);
-    const resolvedRole = roleForInput(config, agentInput.role);
-    if (!resolvedRole) {
-      return reply.status(400).send({ ok: false, error: { code: agentInput.role ? "INVALID_ROLE" : "ROLE_REQUIRED", message: "agent.role is required and must reference an existing role" } });
+    const parsedRoles = parseRoleSetInput(agentInput);
+    if (!parsedRoles.touched) {
+      return reply.status(400).send({ ok: false, error: { code: "ROLE_REQUIRED", message: "agent.roles is required and must reference an existing role" } });
     }
-    if (resolvedRole.source === "template") {
-      return reply.status(400).send(rejectTemplateRole(resolvedRole.id));
+    if ("error" in parsedRoles) {
+      return reply.status(400).send({ ok: false, error: parsedRoles.error });
     }
-    const invalidReason = await validateRoleForWrite(resolvedRole.id, resolvedRole.role);
-    if (invalidReason) {
-      return reply.status(400).send({ ok: false, error: { code: "INVALID_ROLE", message: `Role '${resolvedRole.id}' is invalid: ${invalidReason}` } });
+    if (parsedRoles.ids.length === 0) {
+      return reply.status(400).send({ ok: false, error: { code: "ROLE_REQUIRED", message: "agent.roles is required and must reference an existing role" } });
+    }
+    const validatedRoles = await validateRoleSetForWrite(config, parsedRoles.ids);
+    if (!validatedRoles.ok) {
+      return reply.status(validatedRoles.status).send({ ok: false, error: validatedRoles.error });
     }
 
     if (config.users.some((u) => u.id === agentInput.id)) {
@@ -1032,7 +1159,7 @@ export function registerAgentRoutes(app: FastifyInstance) {
       note: agentInput.note,
       enabled: true,
       tokens: [],
-      role: resolvedRole.id
+      roles: validatedRoles.ids
     };
     const newConfig: YamlAccessConfig = {
       ...config,
@@ -1040,6 +1167,11 @@ export function registerAgentRoutes(app: FastifyInstance) {
       users: [...config.users, newUser]
     };
     const { diff, proposedYaml } = agentWritePreview(raw, newConfig);
+    const createdPreview = await previewWrittenAgent(newUser, newConfig.roles);
+    if (!createdPreview.ok) {
+      return reply.status(400).send({ ok: false, error: { code: "ROLE_RESOLUTION_FAILED", message: createdPreview.reason } });
+    }
+    const createdEffectivePermissions = effectivePermissionsToPreview(createdPreview.permissions);
 
     // Access Governance Gate — Tiered Access Governance Gate (P1 / 64).
     const gateInput = await buildAgentGateInput({
@@ -1052,7 +1184,7 @@ export function registerAgentRoutes(app: FastifyInstance) {
     const gate = evaluateAccessGovernanceGate(gateInput);
 
     if (dryRun) {
-      return { ok: true, data: { diff, proposedYaml, gate } };
+      return { ok: true, data: { diff, proposedYaml, gate, effectivePermissions: createdEffectivePermissions } };
     }
 
     if (gate.decision === "block") {
@@ -1095,7 +1227,7 @@ export function registerAgentRoutes(app: FastifyInstance) {
       changeType: "agent_create",
       targetId: newUser.id,
       oldSummary: { userIds: config.users.map((user) => user.id) },
-      newSummary: { userIds: newConfig.users.map((user) => user.id), role: newUser.role },
+      newSummary: { userIds: newConfig.users.map((user) => user.id), role: summaryRole(newUser), roles: newUser.roles },
       diff,
       requestId: request.id
     });
@@ -1157,6 +1289,7 @@ export function registerAgentRoutes(app: FastifyInstance) {
         note?: string;
         enabled?: boolean;
         role?: string;
+        roles?: string[];
         allow?: unknown;
         tokens?: unknown;
         id?: unknown;
@@ -1191,25 +1324,27 @@ export function registerAgentRoutes(app: FastifyInstance) {
       }
     }
     const existingUser = config.users[userIndex];
-    if (patch.role !== undefined) {
-      const resolvedRole = roleForInput(config, patch.role);
-      if (!resolvedRole) {
-        return reply.status(400).send({ ok: false, error: { code: "INVALID_ROLE", message: `Role '${patch.role}' does not exist or is invalid` } });
+    const parsedRoles = parseRoleSetInput(patch);
+    if (parsedRoles.touched && "error" in parsedRoles) {
+      return reply.status(400).send({ ok: false, error: parsedRoles.error });
+    }
+    let nextRoleIds = resolveRoleIds(existingUser).ok ? resolveRoleIds(existingUser).roleIds : [];
+    if (parsedRoles.touched && !("error" in parsedRoles)) {
+      if (parsedRoles.ids.length === 0 && !existingUser.allow) {
+        return reply.status(400).send({ ok: false, error: { code: "ROLE_REQUIRED", message: "At least one role is required" } });
       }
-      if (resolvedRole.source === "template") {
-        return reply.status(400).send(rejectTemplateRole(resolvedRole.id));
-      }
-      const invalidReason = await validateRoleForWrite(resolvedRole.id, resolvedRole.role);
-      if (invalidReason) {
-        return reply.status(400).send({ ok: false, error: { code: "INVALID_ROLE", message: `Role '${resolvedRole.id}' is invalid: ${invalidReason}` } });
+      if (parsedRoles.ids.length > 0) {
+        const validatedRoles = await validateRoleSetForWrite(config, parsedRoles.ids);
+        if (!validatedRoles.ok) {
+          return reply.status(validatedRoles.status).send({ ok: false, error: validatedRoles.error });
+        }
+        nextRoleIds = validatedRoles.ids;
+      } else {
+        nextRoleIds = [];
       }
     }
-    if (patch.role !== undefined && !assertRoleExists(config, patch.role)) {
-      return reply.status(400).send({ ok: false, error: { code: "INVALID_ROLE", message: `Role '${patch.role}' does not exist or is invalid` } });
-    }
-    const nextRole = patch.role !== undefined ? patch.role : existingUser.role;
     const enabling = patch.enabled === true && existingUser.enabled === false;
-    if (enabling && !nextRole && hasWildcardAllow(existingUser)) {
+    if (enabling && nextRoleIds.length === 0 && hasWildcardAllow(existingUser)) {
       return reply.status(400).send({
         ok: false,
         error: { code: "LEGACY_WILDCARD_AGENT_REQUIRES_ROLE", message: "Assign a role before re-enabling a legacy wildcard agent" }
@@ -1219,10 +1354,9 @@ export function registerAgentRoutes(app: FastifyInstance) {
       ...existingUser,
       ...(patch.name !== undefined ? { name: patch.name } : {}),
       ...(patch.note !== undefined ? { note: patch.note } : {}),
-      ...(patch.enabled !== undefined ? { enabled: patch.enabled } : {}),
-      ...(patch.role !== undefined ? { role: patch.role } : {})
+      ...(patch.enabled !== undefined ? { enabled: patch.enabled } : {})
     };
-    if (updatedUser.role) delete updatedUser.allow;
+    if (parsedRoles.touched && !("error" in parsedRoles)) applyRoleSet(updatedUser, nextRoleIds);
 
     const patchHasConstraints = bodyHasOwn(patch, "constraints");
     if (patchHasConstraints) {
@@ -1244,26 +1378,17 @@ export function registerAgentRoutes(app: FastifyInstance) {
     const { diff, proposedYaml } = agentWritePreview(raw, newConfig);
 
     // Spec 100 §10 — illegal / unsatisfiable / over-limit constraints must fail before write.
+    // Spec 168 — role-set changes return the same server-composed preview.
+    const roleSetTouched = parsedRoles.touched;
     let proposedEffectivePermissions: ReturnType<typeof effectivePermissionsToPreview> | undefined;
-    if (patchHasConstraints || updatedUser.constraints !== undefined) {
-      // Omit `constraints` when cleared — passing `constraints: undefined` still
-      // keeps the key and compile treats it as invalid shape.
-      const compiled = await previewAgentPermissionsForAdmin(
-        {
-          id: updatedUser.id,
-          name: updatedUser.name,
-          enabled: updatedUser.enabled,
-          role: updatedUser.role,
-          roles: updatedUser.roles,
-          tokens: updatedUser.tokens,
-          allow: updatedUser.allow,
-          ...(updatedUser.constraints !== undefined ? { constraints: updatedUser.constraints } : {})
-        },
-        { roleOverrides: newConfig.roles as AccessConfig["roles"] }
-      );
+    if (roleSetTouched || patchHasConstraints || updatedUser.constraints !== undefined) {
+      const compiled = await previewWrittenAgent(updatedUser, newConfig.roles);
       if (!compiled.ok) {
-        const err = constraintsCompileError(compiled.reason);
-        return reply.status(400).send({ ok: false, error: err });
+        if (patchHasConstraints || updatedUser.constraints !== undefined) {
+          const err = constraintsCompileError(compiled.reason);
+          return reply.status(400).send({ ok: false, error: err });
+        }
+        return reply.status(400).send({ ok: false, error: { code: "ROLE_RESOLUTION_FAILED", message: compiled.reason } });
       }
       proposedEffectivePermissions = effectivePermissionsToPreview(compiled.permissions);
     }
@@ -1329,13 +1454,15 @@ export function registerAgentRoutes(app: FastifyInstance) {
       targetId: updatedUser.id,
       oldSummary: {
         enabled: existingUser.enabled !== false,
-        role: existingUser.role,
+        role: summaryRole(existingUser),
+        roles: existingUser.roles,
         hasLegacyAllow: Boolean(existingUser.allow),
         hasConstraints: existingUser.constraints !== undefined
       },
       newSummary: {
         enabled: updatedUser.enabled !== false,
-        role: updatedUser.role,
+        role: summaryRole(updatedUser),
+        roles: updatedUser.roles,
         hasLegacyAllow: Boolean(updatedUser.allow),
         hasConstraints: updatedUser.constraints !== undefined
       },

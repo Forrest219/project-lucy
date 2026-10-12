@@ -142,6 +142,7 @@
 | [163-connection-overview-card-quiet-spec.md](163-connection-overview-card-quiet-spec.md) | 连接概览卡片收纳 v0.1：拿掉每卡四层运行时；页脚五按钮收成添加 Schema 与更多；问数未加载或不可用时列表上方提示一次。已实现，工单 WO-202610-16 | 产品 / UX / Frontend |
 | [164-add-schema-structure-next-step-spec.md](164-add-schema-structure-next-step-spec.md) | 添加 Schema 成功步 v0.1：只留已添加状态和一颗主按钮；能读库时读取表结构并进入启用表范围。已实现，工单 WO-202610-17 | 产品 / UX / Frontend |
 | [167-setup-assistant-authoring-howto-spec.md](167-setup-assistant-authoring-howto-spec.md) | 接入向导 how to v0.1：第 2 步「如何生成 Schema Manifest」，第 5 步「如何写业务 Wiki」。编写说明交给任意 Agent，不挡主按钮。已实现 | 产品 / UX / Frontend |
+| [168-agent-role-set-admin-spec.md](168-agent-role-set-admin-spec.md) | Agent 角色多选 v0.1：详情和新建用复选框绑定多个角色，写入只落 `roles[]`，预览和门禁复用既有合成。已实现，工单 WO-202610-20。落实 Spec 14 | 产品 / UX / API / Frontend / Backend / 安全 |
 
 ## 与原 README 的关键校正
 

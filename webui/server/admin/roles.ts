@@ -6,6 +6,7 @@ import {
   normalizePermissionModelVersion,
   previewRolePermissionsForAdmin,
   absoluteDenyOrUnclassifiedReason,
+  resolveRoleIds,
   type EffectivePermissions
 } from "../proxy/acl.js";
 import { parseRowPolicyShape } from "../proxy/row-policy.js";
@@ -62,7 +63,10 @@ function findRole(config: YamlAccessConfig, roleId: string): ResolvedRole | unde
 }
 
 function usersReferencingRole(config: YamlAccessConfig, roleId: string) {
-  return config.users.filter((user) => user.role === roleId);
+  return config.users.filter((user) => {
+    const resolved = resolveRoleIds(user);
+    return resolved.ok && resolved.roleIds.includes(roleId);
+  });
 }
 
 function effectivePermissionsToPreview(permissions: EffectivePermissions) {

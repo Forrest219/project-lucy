@@ -32,6 +32,7 @@ export interface ContentPaths {
 }
 
 let cached: ContentPaths | null = null;
+let cachedKey = "";
 
 /**
  * Resolve the four content directories for `projectRoot`. Pure function —
@@ -52,26 +53,32 @@ export async function resolveContentPaths(projectRoot: string): Promise<ContentP
 }
 
 /**
- * Cached singleton entry point. Uses `resolveProjectRoot()` internally.
- * On cold start (cache miss), also `ensureContentDirs` so the four subdirs
- * exist before any consumer tries to read or write. Idempotent.
+ * Cached entry point. Uses `resolveProjectRoot()` internally.
+ * The cache key is the project root plus `LUCY_CONTENT_ROOT`, so a different
+ * project does not keep the previous semantic-layer path.
+ * On cache miss, also `ensureContentDirs` so the four subdirs exist before
+ * any consumer tries to read or write. Idempotent.
  *
  * Call `invalidateContentPathsCache()` from anywhere that mutates
  * `LUCY_CONTENT_ROOT` or rewrites `ktx.yaml`.
  */
 export async function loadContentPaths(): Promise<ContentPaths> {
-  if (cached) return cached;
   const { resolveProjectRoot } = await import("./project");
   const projectRoot = await resolveProjectRoot();
+  const envValue = process.env.LUCY_CONTENT_ROOT?.trim() ?? "";
+  const key = `${projectRoot}\0${envValue}`;
+  if (cached && cachedKey === key) return cached;
   const resolved = await resolveContentPaths(projectRoot);
   await ensureContentDirs(resolved);
   cached = resolved;
+  cachedKey = key;
   return cached;
 }
 
 /** Drop the cached value so the next `loadContentPaths()` re-reads env / ktx.yaml. */
 export function invalidateContentPathsCache(): void {
   cached = null;
+  cachedKey = "";
 }
 
 /** mkdir -p the four subdirs under the resolved content root. Idempotent. */

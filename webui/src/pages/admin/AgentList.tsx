@@ -3,8 +3,9 @@ import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiGet, apiPost } from "../../lib/apiClient";
-import type { Agent, AgentsResponseSummary, CreateAgentBody, Role } from "../../lib/types";
+import type { Agent, AgentsResponseSummary, CreateAgentBody, EffectivePermissionsPreview, Role } from "../../lib/types";
 import { buildMcpConfig } from "../../lib/mcpEndpoint";
+import { AgentRoleCapability, AgentRoleField, agentRoleIds, roleSelectionSavable } from "../../components/AgentRoleField";
 import { PageHeader } from "../../components/PageHeader";
 import { MetricCard } from "../../components/MetricCard";
 import { buildObjectDetailSearch } from "../../lib/objectDetail";
@@ -210,101 +211,12 @@ function LastSeen({
   );
 }
 
-function RoleSummaryCard({ role }: { role: Role | undefined }) {
-  if (!role) {
-    return (
-      <div className="rounded-md border border-border-default bg-bg-base p-3 text-xs text-fg-muted">
-        请选择一个角色查看权限预览
-      </div>
-    );
-  }
-  return (
-    <div
-      className={`grid gap-2 rounded-md border p-3 text-sm ${
-        role.invalid ? "border-danger-strong bg-danger-soft" : "border-border-default bg-bg-base"
-      }`}
-      data-testid="role-summary-card"
-    >
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-semibold tracking-wider text-fg-muted uppercase">角色权限预览</span>
-        <span className="pl-status-badge pl-status-done notranslate" translate="no">
-          {role.id}
-        </span>
-        {role.source && (
-          <span className="pl-status-badge pl-status-partial">
-            {role.source === "template" ? "参考模板" : "正式 Role"}
-          </span>
-        )}
-        {role.invalid && (
-          <span className="pl-status-badge pl-status-validation_failed">待修复</span>
-        )}
-      </div>
-      <div className="grid gap-1">
-        <span className="text-xs text-fg-muted">数据源</span>
-        <strong>{role.sourceCount} 个授权 source</strong>
-      </div>
-      <div className="grid gap-1">
-        <span className="text-xs text-fg-muted">Connections</span>
-        <div className="flex flex-wrap gap-1.5">
-          {role.connections.length === 0 ? (
-            <span className="text-xs text-fg-muted">—</span>
-          ) : (
-            role.connections.map((conn) => (
-              <span key={conn} className="pl-status-badge pl-status-included">
-                {conn}
-              </span>
-            ))
-          )}
-        </div>
-      </div>
-      <div className="grid gap-1">
-        <span className="text-xs text-fg-muted"><span className="notranslate" translate="no">MCP</span> 工具</span>
-        <div className="flex flex-wrap gap-1.5">
-          {role.tools.length === 0 ? (
-            <span className="text-xs text-fg-muted">—</span>
-          ) : (
-            role.tools.map((tool) => (
-              <span key={tool} className="pl-status-badge pl-status-included">
-                {tool}
-              </span>
-            ))
-          )}
-        </div>
-      </div>
-      {role.description && <p className="text-xs text-fg-muted">{role.description}</p>}
-      {role.warnings.length > 0 && (
-        <ul className="grid gap-1 text-xs text-warning-strong">
-          {role.warnings.map((w, idx) => (
-            <li key={idx} className="grid gap-0.5">
-              <span>
-                ⚠{" "}
-                {w.startsWith("role_resolution_failed")
-                  ? "权限解析失败：当前配置无法生成有效的数据源 / MCP 工具边界。"
-                  : "权限配置需检查：系统返回了未识别的校验信息。"}
-              </span>
-              <span className="text-fg-muted">
-                技术详情：{" "}
-                <code
-                  className="notranslate rounded bg-bg-subtle px-1 py-0.5 font-mono text-[11px]"
-                  translate="no"
-                >
-                  {w}
-                </code>
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
 function NewAgentModal({ roles, onClose, onCreated }: { roles: Role[]; onClose: () => void; onCreated: (id: string) => void }) {
   const formalRoles = roles.filter((item) => item.source !== "template");
   const [id, setId] = useState("");
   const [name, setName] = useState("");
   const [note, setNote] = useState("");
-  const [role, setRole] = useState(formalRoles.find((item) => !item.invalid)?.id ?? formalRoles[0]?.id ?? "");
+  const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
   const [preview, setPreview] = useState<{ diff: string; proposedYaml: string } | null>(null);
   const [step, setStep] = useState<"form" | "diff">("form");
 
@@ -331,13 +243,19 @@ function NewAgentModal({ roles, onClose, onCreated }: { roles: Role[]; onClose: 
       id: id.trim(),
       name: name.trim(),
       note: note.trim() || undefined,
-      role
+      roles: selectedRoles
     };
   }
 
-  const selectedRole = formalRoles.find((item) => item.id === role);
-  const isInvalid = !!selectedRole?.invalid;
-  const canSubmit = !!id.trim() && !!name.trim() && !!role && !isInvalid;
+  const canSubmit = !!id.trim() && !!name.trim() && roleSelectionSavable(selectedRoles, formalRoles, false);
+  const capabilityQuery = useQuery({
+    queryKey: ["admin", "agent-create-capability", id.trim(), selectedRoles.join("\n")],
+    enabled: canSubmit && /^[A-Za-z0-9_-]{1,32}$/.test(id.trim()),
+    queryFn: () => apiPost<{ effectivePermissions?: EffectivePermissionsPreview }>("/api/admin/agents", {
+      dryRun: true,
+      agent: buildAgent()
+    })
+  });
 
   function handlePreview() {
     if (!canSubmit) {
@@ -370,36 +288,36 @@ function NewAgentModal({ roles, onClose, onCreated }: { roles: Role[]; onClose: 
               <span className="text-sm font-medium">备注</span>
               <input className="pl-input" placeholder="可选" value={note} onChange={(e) => setNote(e.target.value)} />
             </label>
-            <label className="grid gap-1">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">角色 <span className="text-danger">*</span></span>
+            <AgentRoleField
+              roles={formalRoles}
+              selected={selectedRoles}
+              onChange={setSelectedRoles}
+              required
+              header={
                 <Link to="/admin/roles" className="text-xs text-accent hover:underline" aria-label="管理角色">
                   管理角色 →
                 </Link>
-              </div>
-              <select className="pl-input" value={role} onChange={(e) => setRole(e.target.value)}>
-                {formalRoles.length === 0 && <option value="" disabled>暂无可用角色</option>}
-                {formalRoles.map((item) => {
-                  const suffix = item.invalid ? " · 待修复" : "";
-                  return (
-                    <option key={item.id} value={item.id} disabled={item.invalid}>
-                      {item.id}
-                      {suffix}
-                    </option>
-                  );
-                })}
-              </select>
-              {formalRoles.length === 0 && (
-                <span className="text-xs text-warning-strong">
-                  还没有可用角色。请先创建角色。
-                  <Link to="/admin/roles/new" className="ml-2 pl-btn pl-btn--secondary text-xs">
-                    创建角色
-                  </Link>
-                </span>
-              )}
-            </label>
-            <RoleSummaryCard role={selectedRole} />
-            {isLucyAdminDataPlaneRole(selectedRole) && (
+              }
+            />
+            {formalRoles.length === 0 && (
+              <span className="text-xs text-warning-strong">
+                还没有可用角色。请先创建角色。
+                <Link to="/admin/roles/new" className="ml-2 pl-btn pl-btn--secondary text-xs">
+                  创建角色
+                </Link>
+              </span>
+            )}
+            {selectedRoles.length > 0 && canSubmit && (
+              <AgentRoleCapability
+                loading={capabilityQuery.isFetching}
+                error={capabilityQuery.error ? (capabilityQuery.error as Error).message : undefined}
+                permissions={capabilityQuery.data?.effectivePermissions}
+              />
+            )}
+            {selectedRoles.length > 0 && !canSubmit && (
+              <span className="text-xs text-warning">至少选择 1 个有效角色，并填写用户 ID 和显示名后显示数据能力</span>
+            )}
+            {selectedRoles.some((roleId) => isLucyAdminDataPlaneRole(formalRoles.find((item) => item.id === roleId)) || roleId === "lucy_admin") && (
               <div
                 className="rounded-md border border-warning-strong bg-warning-soft p-3 text-sm text-warning-strong"
                 data-testid="agent-lucy-admin-role-warning"
@@ -478,7 +396,7 @@ export function AgentList() {
   }
 
   const roleOptions = Array.from(
-    new Set(agents.map((agent) => agent.role).filter((role): role is string => Boolean(role)))
+    new Set(agents.flatMap((agent) => agentRoleIds(agent)))
   ).sort((a, b) => a.localeCompare(b, "zh-CN"));
   const filtered = agents.filter((a) => {
     const normalizedSearch = search.trim().toLowerCase();
@@ -490,9 +408,10 @@ export function AgentList() {
       filterEnabled === "all" ||
       (filterEnabled === "enabled" && a.enabled) ||
       (filterEnabled === "disabled" && !a.enabled);
+    const roleIds = agentRoleIds(a);
     const matchRole =
       filterRole === "all" ||
-      (filterRole === "unbound" ? !a.role : a.role === filterRole);
+      (filterRole === "unbound" ? roleIds.length === 0 : roleIds.includes(filterRole));
     const metricsAvailable = a.stats?.metricsState !== "unavailable";
     const callsLast7d = a.stats?.businessCallsLast7d ?? a.stats?.callsLast7d ?? 0;
     const matchActivity =
@@ -755,20 +674,29 @@ export function AgentList() {
                         </div>
                       </td>
                       <td data-testid={`agent-role-line-${agent.id}`}>
-                        {agent.role ? (
-                          <Link
-                            to={`/admin/roles/${encodeURIComponent(agent.role)}`}
-                            className="pl-agent-list-table-name-link notranslate"
-                            translate="no"
-                            aria-label={`查看角色 ${agent.role}`}
-                            data-testid={`agent-role-link-${agent.id}`}
-                          >
-                            {agent.role}
-                          </Link>
+                        {agentRoleIds(agent).length > 0 ? (
+                          <span className="inline-flex flex-wrap gap-2">
+                            {agentRoleIds(agent).map((roleId) => (
+                              <Link
+                                key={roleId}
+                                to={`/admin/roles/${encodeURIComponent(roleId)}`}
+                                className="pl-agent-list-table-name-link notranslate"
+                                translate="no"
+                                aria-label={`查看角色 ${roleId}`}
+                                data-testid={
+                                  agentRoleIds(agent).length === 1
+                                    ? `agent-role-link-${agent.id}`
+                                    : `agent-role-link-${agent.id}-${roleId}`
+                                }
+                              >
+                                {roleId}
+                              </Link>
+                            ))}
+                          </span>
                         ) : (
                           <span className="text-fg-muted notranslate" translate="no">旧 ACL</span>
                         )}
-                        {legacyWildcard && !agent.role && (
+                        {legacyWildcard && agentRoleIds(agent).length === 0 && (
                           <span className="pl-agent-list-table-meta notranslate" translate="no">legacy wildcard</span>
                         )}
                       </td>

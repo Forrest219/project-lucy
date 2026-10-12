@@ -16,6 +16,7 @@ import {
   type AccessGovernanceGateDecision,
   type AccessGovernanceOverrideRequest
 } from "../access-governance-gate.js";
+import { resolveRoleIds } from "../proxy/acl.js";
 import { invalidateAccessConfigCache, isTokenExpired } from "../proxy/identity.js";
 import { actorIdFromRequest } from "../auth/guard.js";
 import { normalizeNewTokenExpiry, TokenExpiryPolicyError } from "./token-expiry-policy.js";
@@ -188,7 +189,8 @@ export function registerTokenRoutes(app: FastifyInstance) {
     for (const user of users) {
       const userUsage = lastUsedMap.get(user.id);
       const isAgentEnabled = user.enabled !== false;
-      const roles = user.roles && Array.isArray(user.roles) ? user.roles : user.role ? [user.role] : [];
+      const resolvedRoles = resolveRoleIds(user);
+      const roles = resolvedRoles.ok ? resolvedRoles.roleIds : [];
 
       for (const t of user.tokens || []) {
         const hashPrefix = t.hash ? t.hash.slice(0, 19) : "";

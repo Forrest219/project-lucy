@@ -400,7 +400,11 @@
 | `agent-row-${agent.id}` | Agent 表行 | `pages/admin/AgentList.tsx` |
 | `agent-row-index-${agent.id}` | 行序号 | `pages/admin/AgentList.tsx` |
 | `agent-role-line-${agent.id}` | 角色单元格 | `pages/admin/AgentList.tsx` |
-| `agent-role-link-${agent.id}` | 角色链接 | `pages/admin/AgentList.tsx` |
+| `agent-role-link-${agent.id}` | 角色链接（恰好一个角色时） | `pages/admin/AgentList.tsx` |
+| `agent-role-link-${agent.id}-${roleId}` | 角色链接 | `pages/admin/AgentList.tsx` |
+| `agent-role-field` | Agent 角色复选框组 | `components/AgentRoleField.tsx` |
+| `agent-role-option` | Agent 角色复选项 | `components/AgentRoleField.tsx` |
+| `agent-role-capability` | 角色集合的数据能力卡 | `components/AgentRoleField.tsx` |
 | `agent-active-tokens-${agent.id}` | 近 7 天活跃 Token | `pages/admin/AgentList.tsx` |
 | `agent-calls-7d-${agent.id}` | 近 7 天调用量 | `pages/admin/AgentList.tsx` |
 | `agent-leave-confirm-modal` | 未保存离开确认 | `pages/admin/AgentDetail.tsx` |

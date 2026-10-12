@@ -1100,8 +1100,8 @@ async function compileRole(
   };
 }
 
-/** Role Set resolution: legacy `role: x` ≡ `roles: [x]`; declaring both is fail-closed. */
-function resolveRoleIds(user: AccessConfig["users"][number]): { ok: true; roleIds: string[] } | { ok: false; reason: string } {
+/** Role Set resolution: legacy `role: x` ≡ `roles: [x]`; declaring both is fail-closed. Spec 168. */
+export function resolveRoleIds(user: { role?: string | null; roles?: unknown }): { ok: true; roleIds: string[] } | { ok: false; reason: string } {
   const singleRole = typeof user.role === "string" && user.role.trim() ? user.role.trim() : undefined;
   const roleList = Array.isArray(user.roles)
     ? user.roles.filter((role): role is string => typeof role === "string").map((role) => role.trim()).filter(Boolean)

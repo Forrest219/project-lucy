@@ -676,29 +676,33 @@ Agent 列表与详情：
 - `GET /api/admin/agents/:userId`
 - `GET /api/admin/agents/:userId/effective-permissions`
 
-写入路径已是 role-first：
+写入路径是 Role Set（Spec 168）：
 
-- `POST /api/admin/agents`：必须传 `agent.role`，拒绝 `agent.allow`；当 role id 来自内置模板时，后端先展开为完整 yaml role 再写入，不保存 `role-template` / `templateId` 指针字段。
-- `PATCH /api/admin/agents/:userId`：只允许 `name`、`note`、`enabled`、`role`；role 可引用 yaml 中已有 role 或内置模板。
+- `POST /api/admin/agents`：必须传 `agent.roles`（至少一个正式角色），拒绝 `agent.allow`。只传 `agent.role` 时当成单元素数组。参考模板不可直接绑定。
+- `PATCH /api/admin/agents/:userId`：允许 `name`、`note`、`enabled`、`roles`、`constraints`。只传 `patch.role` 时当成单元素数组。写入角色集合时落盘删除 `role`。
+- `GET` 返回解析后的 `roles`。恰好一个角色时附带 `role`。`role` 与 `roles` 同时存在于磁盘时返回 `roleResolutionError`。
+- 角色变更的 dryRun 返回服务端 `effectivePermissions`。
 - `DELETE /api/admin/agents/:userId`：删除 agent 前先撤销 token。
 
 新建请求：
 
 ```jsonc
-{ "dryRun": true, "agent": { "id": "wangwu", "name": "王五", "note": "市场部分析助理", "role": "kx_readonly" }}
+{ "dryRun": true, "agent": { "id": "wangwu", "name": "王五", "note": "市场部分析助理", "roles": ["kx_readonly"] }}
 ```
 
 PATCH 请求：
 
 ```jsonc
-{ "dryRun": true, "version": "mtime-hash", "patch": { "role": "kx_readonly", "enabled": true }}
+{ "dryRun": true, "version": "mtime-hash", "patch": { "roles": ["kx_readonly", "analyst"], "enabled": true }}
 ```
 
 拒绝：
 
 - `agent.allow` / `patch.allow` → `LEGACY_ALLOW_READONLY`
-- 缺 role → `ROLE_REQUIRED`
+- 缺角色，或空 `roles` 且没有旧 ACL → `ROLE_REQUIRED`
+- 同时传 `role` 与 `roles` → `ROLE_AND_ROLES`
 - 无效 role → `INVALID_ROLE`
+- 参考模板 → `REFERENCE_TEMPLATE_NOT_ASSIGNABLE`
 - 启用 legacy wildcard agent 且未分配 role → `LEGACY_WILDCARD_AGENT_REQUIRES_ROLE`
 
 Token：

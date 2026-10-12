@@ -103,14 +103,45 @@ function stubAgentsEndpoints(
     if (url === "/api/admin/agents" && init?.method === "POST") {
       const body = JSON.parse(String(init.body));
       if (body.dryRun) {
-        return new Response(JSON.stringify({ ok: true, data: { diff: "+ id: newagent1", proposedYaml: "yaml" } }));
+        const roleIds = Array.isArray(body.agent?.roles) ? body.agent.roles : body.agent?.role ? [body.agent.role] : [];
+        return new Response(JSON.stringify({
+          ok: true,
+          data: {
+            diff: "+ id: newagent1",
+            proposedYaml: "yaml",
+            effectivePermissions: {
+              roleIds,
+              snapshotHash: "snap",
+              tools: ["lucy_query"],
+              connections: [],
+              sources: [],
+              legacyAllow: false,
+              capabilities: [
+                {
+                  tool: "lucy_query",
+                  connectionId: "mysql-aliyun",
+                  schema: "dataforai",
+                  sourceName: "server_composed_source",
+                  physicalTable: "dataforai.server_composed_source",
+                  sourceKey: "mysql-aliyun|dataforai|server_composed_source|dataforai.server_composed_source",
+                  rowGrant: "all"
+                }
+              ]
+            }
+          }
+        }));
       }
       return new Response(
         JSON.stringify({
           ok: true,
           data: {
             written: true,
-            agent: makeAgent({ id: body.agent.id, name: body.agent.name, role: body.agent.role })
+            agent: makeAgent({
+              id: body.agent.id,
+              name: body.agent.name,
+              roles: body.agent.roles,
+              role: body.agent.roles?.length === 1 ? body.agent.roles[0] : body.agent.role
+            })
           }
         })
       );
@@ -262,22 +293,14 @@ describe("AgentList", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "新建 Agent" }));
 
-    // template role must NOT appear in the select
-    // getAllByRole returns [filter-bar select, modal select] — take the last (modal)
-    const allRoleSelects = await screen.findAllByRole("combobox", { name: /角色/ });
-    const select = allRoleSelects.at(-1) as HTMLSelectElement;
-    const optionTexts = Array.from(select.options).map((opt) => opt.textContent ?? "");
-    expect(optionTexts.some((text) => text.includes("demo_template"))).toBe(false);
-    // no "参考模板" label anywhere in the select
-    expect(optionTexts.some((text) => text.includes("参考模板"))).toBe(false);
-    // invalid role is present but labeled 待修复
-    expect(optionTexts.some((text) => text.includes("broken_role") && text.includes("待修复"))).toBe(true);
-    // invalid option is disabled
-    const brokenOption = select.options[Array.from(select.options).findIndex((o) => o.value === "broken_role")];
-    expect(brokenOption?.disabled).toBe(true);
-    // no raw "(template)" or "(invalid)" English parens
-    expect(optionTexts.some((text) => /\(template\)/.test(text))).toBe(false);
-    expect(optionTexts.some((text) => /\(invalid\)/.test(text))).toBe(false);
+    const field = await screen.findByTestId("agent-role-field");
+    expect(field).not.toHaveTextContent("demo_template");
+    expect(field).not.toHaveTextContent("参考模板");
+    expect(field).toHaveTextContent("broken_role");
+    expect(field).toHaveTextContent("待修复");
+    expect(screen.getByRole("checkbox", { name: /broken_role/ })).toBeDisabled();
+    expect(field).not.toHaveTextContent("(template)");
+    expect(field).not.toHaveTextContent("(invalid)");
   });
 
   it("new agent modal shows role summary card with source count, connections, tools and warnings", async () => {
@@ -297,15 +320,18 @@ describe("AgentList", () => {
     renderAgentList();
     await waitFor(() => expect(screen.getByRole("button", { name: "新建 Agent" })).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "新建 Agent" }));
+    fireEvent.change(await screen.findByPlaceholderText("例：wangwu"), { target: { value: "newagent1" } });
+    fireEvent.change(screen.getByPlaceholderText("例：王五"), { target: { value: "新人" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: "data_engineer" }));
 
     await waitFor(() => {
-      expect(screen.getByText(/7 个授权 source/)).toBeInTheDocument();
+      expect(screen.getByTestId("agent-role-capability")).toHaveTextContent("server_composed_source");
     });
-    expect(screen.getByTestId("role-summary-card")).toHaveTextContent("mysql-aliyun");
-    expect(screen.getByTestId("role-summary-card")).toHaveTextContent("postgres-aws");
-    expect(screen.getByTestId("role-summary-card")).toHaveTextContent("lucy_query");
-    expect(screen.getByTestId("role-summary-card")).toHaveTextContent("Selector matched 0 sources");
-    // Verify primary CTA is no longer just "预览变更"
+    const card = screen.getByTestId("agent-role-capability");
+    expect(card).toHaveTextContent("server_composed_source");
+    expect(card).toHaveTextContent("data_engineer");
+    expect(card).not.toHaveTextContent("lucy_read_source");
+    expect(card).not.toHaveTextContent("7 个授权 source");
     expect(screen.queryByRole("button", { name: "预览变更" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /下一步：预览配置/ })).toBeInTheDocument();
   });
@@ -320,6 +346,7 @@ describe("AgentList", () => {
 
     fireEvent.change(await screen.findByPlaceholderText("例：wangwu"), { target: { value: "newagent1" } });
     fireEvent.change(screen.getByPlaceholderText("例：王五"), { target: { value: "新人" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: "analyst" }));
     fireEvent.click(screen.getByRole("button", { name: /下一步：预览配置/ }));
 
     await waitFor(() => {
@@ -327,7 +354,7 @@ describe("AgentList", () => {
         const init = call[1] as RequestInit | undefined;
         if (init?.method !== "POST") return false;
         const body = JSON.parse(String(init.body));
-        return body.dryRun === true && body.agent?.id === "newagent1";
+        return body.dryRun === true && body.agent?.id === "newagent1" && body.agent?.roles?.includes("analyst");
       });
       expect(dryRunCall).toBeTruthy();
     });
@@ -341,6 +368,7 @@ describe("AgentList", () => {
     fireEvent.click(screen.getByRole("button", { name: "新建 Agent" }));
     fireEvent.change(await screen.findByPlaceholderText("例：wangwu"), { target: { value: "newagent1" } });
     fireEvent.change(screen.getByPlaceholderText("例：王五"), { target: { value: "新人" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: "analyst" }));
     fireEvent.click(screen.getByRole("button", { name: /下一步：预览配置/ }));
     expect(await screen.findByText(/\+ id: newagent1/)).toBeInTheDocument();
 
@@ -481,14 +509,26 @@ describe("AgentList", () => {
     expect(roleLink).toHaveAttribute("href", "/admin/roles/demo_readonly");
     expect(roleLink.getAttribute("aria-label") ?? "").toContain("demo_readonly");
 
-    // 查看权限 is inside RowMoreMenu — open it first
     fireEvent.click(screen.getByRole("button", { name: "Demo Agent 更多操作" }));
     await waitFor(() => expect(screen.getByTestId("row-more-menu")).toBeInTheDocument());
     const permissionsLink = screen.getByTestId("agent-permissions-link-demo_agent");
     expect(permissionsLink.getAttribute("href")).toBe("/admin/agents/demo_agent?tab=permissions");
-
-    // 不再展示完整 Tool scope 行
     expect(screen.queryByTestId("agent-scope-tool-demo_agent")).not.toBeInTheDocument();
+  });
+
+  it("lists every bound role and filters by any of them", async () => {
+    stubAgentsEndpoints([
+      makeAgent({ id: "multi_agent", name: "多角色", roles: ["alpha_role", "beta_role"] }),
+      makeAgent({ id: "solo_agent", name: "单角色", role: "alpha_role" })
+    ]);
+    renderAgentList();
+    await screen.findByTestId("agent-row-multi_agent");
+    expect(screen.getByTestId("agent-role-link-multi_agent-alpha_role")).toHaveAttribute("href", "/admin/roles/alpha_role");
+    expect(screen.getByTestId("agent-role-link-multi_agent-beta_role")).toHaveAttribute("href", "/admin/roles/beta_role");
+
+    fireEvent.change(screen.getByRole("combobox", { name: "角色" }), { target: { value: "beta_role" } });
+    expect(screen.getByTestId("agent-row-multi_agent")).toBeInTheDocument();
+    expect(screen.queryByTestId("agent-row-solo_agent")).not.toBeInTheDocument();
   });
 
   it("supports role and activity filters in filter bar", async () => {

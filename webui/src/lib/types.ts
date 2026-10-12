@@ -620,12 +620,18 @@ export type Agent = {
   name: string;
   note?: string;
   enabled: boolean;
+  /** Resolved role set. Empty when unbound or when `role` and `roles` were both declared. */
+  roles?: string[];
+  /** Present only when the resolved set has exactly one role. */
   role?: string;
+  roleResolutionError?: string;
+  declaredRole?: string;
+  declaredRoles?: string[];
   createdAt?: string;
   configUpdatedAt?: string;
   tokens: TokenSummary[];
   allow?: { tables: string[] | ["*"]; tools: string[] | ["*"]; connections?: string[] };
-  /** Spec 100 — Agent 强制约束；缺省表示 Constraints≡TRUE。 */
+  /** Spec 100 — 个人行限制（constraints）；缺省表示 Constraints≡TRUE。 */
   constraints?: AgentConstraintsConfig;
   effectivePermissions?: EffectivePermissionsPreview;
   permissionWarnings?: string[];
@@ -932,7 +938,9 @@ export type AgentPatch = {
   name?: string;
   note?: string;
   enabled?: boolean;
+  /** @deprecated Single-role input. The admin UI sends `roles`. */
   role?: string;
+  roles?: string[];
   /** Spec 100 — set constraints; `null` clears the YAML key. */
   constraints?: AgentConstraintsConfig | null;
 };
@@ -941,7 +949,9 @@ export type CreateAgentBody = {
   id: string;
   name: string;
   note?: string;
-  role: string;
+  roles?: string[];
+  /** @deprecated Single-role input. The admin UI sends `roles`. */
+  role?: string;
 };
 
 export type CreateTokenBody = { label: string; device_name?: string | null; expires_at: string };

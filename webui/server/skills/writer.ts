@@ -3,6 +3,7 @@ import path from "node:path";
 import { stringify } from "yaml";
 import { auditedRemoveFile, auditedWriteFile } from "../admin/config-audit-write.js";
 import { previewDiff } from "../diff.js";
+import { resolveRoleIds } from "../proxy/acl.js";
 import { getAccessConfig } from "../proxy/identity.js";
 import { SKILL_SEGMENT_RE } from "./identifiers.js";
 import { getSkillByUri, invalidateSkillsCache, parseSkillMarkdown } from "./loader.js";
@@ -118,8 +119,9 @@ async function authorizationAuditSummary(oldRoles: string[], newRoles: string[])
     affectedAgentCount = config.users.filter((user) => {
       if (user.enabled === false) return false;
       if (enteredWildcard || exitedWildcard) return true;
-      const assigned = [...(user.roles ?? []), ...(user.role ? [user.role] : [])];
-      return assigned.some((role) => affected.has(role));
+      const resolved = resolveRoleIds(user);
+      if (!resolved.ok) return false;
+      return resolved.roleIds.some((role) => affected.has(role));
     }).length;
   } catch {
     // Authorization changes must remain writable even if the admin audit cannot

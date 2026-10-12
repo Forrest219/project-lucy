@@ -2,6 +2,7 @@ import { useRef } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { agentRoleIds } from "./AgentRoleField";
 import { apiGet } from "../lib/apiClient";
 import { DecisionReasonCell } from "./DecisionReasonCell";
 import {
@@ -238,7 +239,7 @@ function AgentDetailBody({ target }: { target: AgentTarget }) {
   return (
     <div className="grid gap-3" data-testid="object-detail-agent-body">
       <DetailRow label="显示名" value={match.name} />
-      <DetailRow label="Role" value={match.role ?? "旧 ACL"} notranslate />
+      <DetailRow label="角色" value={agentRoleIds(match).join(", ") || (match.roleResolutionError ? "角色声明冲突" : "旧 ACL")} notranslate />
       <DetailRow label="状态" value={match.enabled ? "启用" : "禁用"} />
       <DetailRow label="Token 数" value={`${match.tokens.length}`} />
       <DetailRow label="近 7 天调用" value={`${match.stats?.callsLast7d ?? 0}`} />

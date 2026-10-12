@@ -8,7 +8,9 @@
 | 撰写日期 | 2026-07-27；v0.2 补丁 2026-08-08；v0.3 2026-08-09；v0.4 2026-08-09 |
 | 适用范围 | Lucy WebUI 访问治理模块：`/admin/agents`、新建 Agent 弹窗、`/admin/agents/:userId`、Token 交付流 |
 | 事实源 | `webui/config/access.yaml`、Lucy MCP Proxy audit sqlite、Admin API |
-| 关联文档 | `docs/access-control/design-governance-baseline.md`、`docs/access-control/design-upgrade.md`、`docs/runbooks/agent-integration-guide.md`、`docs/runbooks/admin-guide.md`、`docs/governance/project-overview.md` |
+| 关联文档 | `docs/access-control/design-governance-baseline.md`、`docs/access-control/design-upgrade.md`、`docs/runbooks/agent-integration-guide.md`、`docs/runbooks/admin-guide.md`、`docs/governance/project-overview.md`、Spec 168 |
+
+Spec 168 落实本文 §5.2 / §5.4 的 Role Set 多选。管理台写入只落 `roles[]`；`role` 只作为单元素兼容输入。能力合成仍以 Spec 98 为准。
 
 ## 1. 背景
 

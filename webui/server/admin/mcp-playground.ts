@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { allowedToolNames, check, effectivePermissions } from "../proxy/acl.js";
+import { allowedToolNames, check, effectivePermissions, resolveRoleIds } from "../proxy/acl.js";
 import type { Identity } from "../proxy/identity.js";
 import { getAccessConfig } from "../proxy/identity.js";
 import { resolveProjectRoot } from "../project.js";
@@ -62,7 +62,8 @@ export function registerMcpPlaygroundRoutes(app: FastifyInstance) {
     const label = decisionReasonLabel(decisionReason);
     const detail = decisionReasonDetail(decisionReason);
 
-    const roleIds = user.role ? [user.role] : [];
+    const resolvedRoles = resolveRoleIds(user);
+    const roleIds = resolvedRoles.ok ? resolvedRoles.roleIds : [];
     const resolved = await effectivePermissions(identity);
     const tools = resolved.ok ? resolved.permissions.tools : [];
     const connections = resolved.ok ? resolved.permissions.connections : [];

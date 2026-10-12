@@ -391,7 +391,9 @@ describe("POST /api/admin/agents", () => {
     expect(res.body.data.written).toBe(true);
     const yaml = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
     expect(yaml).toContain("wangwu");
-    expect(yaml).toContain("role: analyst");
+    const created = yaml.slice(yaml.indexOf("id: wangwu"));
+    expect(created).toMatch(/roles:\n\s+- analyst/);
+    expect(created).not.toMatch(/\n\s+role:/);
     expect(yaml).not.toContain("id: wangwu\n    name: 王五\n    enabled: true\n    tokens: []\n    allow:");
     await app.close();
   });
@@ -495,7 +497,9 @@ describe("PATCH /api/admin/agents/:userId", () => {
     expect(yaml).toContain("roles:");
     expect(yaml).toContain("defaults:");
     expect(yaml).toContain("id: lisi");
-    expect(yaml).toContain("role: analyst");
+    const migrated = yaml.slice(yaml.indexOf("id: lisi"));
+    expect(migrated).toMatch(/roles:\n\s+- analyst/);
+    expect(migrated).not.toMatch(/\n\s+role:/);
     expect(yaml).not.toContain('tables: ["*"]');
     await app.close();
   });
@@ -982,6 +986,197 @@ describe("AC-P1.5 Agent Admin constraints (WP-I4)", () => {
     expect(res.body.data.agent.constraints).toBeUndefined();
     const raw = await readFile(path.join(projectRoot, "webui", "config", "access.yaml"), "utf8");
     expect(raw).not.toContain("constraints:");
+    await app.close();
+  });
+});
+
+const TWO_ROLE_YAML = `roles:
+  analyst:
+    description: Analyst role
+    allow:
+      connections:
+        - mysql-aliyun
+      tableSelectors:
+        - connection: mysql-aliyun
+          schema: dataforai
+          names:
+            - superstore_orders
+      tools:
+        - lucy_query
+  reader:
+    description: Reader role
+    allow:
+      connections:
+        - mysql-aliyun
+      tableSelectors:
+        - connection: mysql-aliyun
+          schema: dataforai
+          names:
+            - superstore_returns
+      tools:
+        - lucy_read_source
+users:
+  - id: bound
+    name: Bound
+    enabled: true
+    tokens: []
+    roles:
+      - analyst
+  - id: conflicted
+    name: Conflicted
+    enabled: true
+    tokens: []
+    role: analyst
+    roles:
+      - reader
+defaults:
+  deny_tools:
+    - sql_execution
+`;
+
+function userBlock(yaml: string, id: string): string {
+  const start = yaml.indexOf(`id: ${id}`);
+  if (start < 0) return "";
+  const rest = yaml.slice(start);
+  const next = rest.search(/\n {2}- id:|\ndefaults:/);
+  return next < 0 ? rest : rest.slice(0, next);
+}
+
+describe("Spec 168 Agent role set", () => {
+  async function useTwoRoles() {
+    await writeFile(path.join(projectRoot, "webui", "config", "access.yaml"), TWO_ROLE_YAML, "utf8");
+    await writeFile(
+      path.join(projectRoot, "semantic-layer", "mysql-aliyun", "_schema", "dataforai.yaml"),
+      "tables:\n  superstore_orders:\n    table: dataforai.superstore_orders\n  superstore_returns:\n    table: dataforai.superstore_returns\n",
+      "utf8"
+    );
+  }
+
+  it("persists a new agent as roles only and composes both sources for the gate", async () => {
+    await useTwoRoles();
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .post("/api/admin/agents")
+      .send({ dryRun: false, agent: { id: "multi", name: "Multi", roles: ["reader", "analyst"] } })
+      .expect(200);
+    expect(res.body.data.agent.roles).toEqual(["analyst", "reader"]);
+    expect(res.body.data.agent.role).toBeUndefined();
+    const yaml = await readFile(path.join(projectRoot, "webui", "config", "access.yaml"), "utf8");
+    const block = userBlock(yaml, "multi");
+    expect(block).toMatch(/roles:\n\s+- analyst\n\s+- reader/);
+    expect(block).not.toMatch(/\n\s+role:/);
+
+    const preview = await request(app.server)
+      .post("/api/admin/agents")
+      .send({ dryRun: true, agent: { id: "multi2", name: "Multi 2", roles: ["reader", "analyst"] } })
+      .expect(200);
+    expect(preview.body.data.effectivePermissions.roleIds).toEqual(["analyst", "reader"]);
+    const pairs = preview.body.data.effectivePermissions.capabilities.map(
+      (capability: { tool: string; sourceName: string }) => `${capability.tool}:${capability.sourceName}`
+    );
+    expect(pairs).toEqual(["lucy_query:superstore_orders", "lucy_read_source:superstore_returns"]);
+    const gateText = JSON.stringify(preview.body.data.gate);
+    expect(gateText).toContain("dataforai.superstore_orders");
+    expect(gateText).toContain("dataforai.superstore_returns");
+
+    const roles = await request(app.server).get("/api/admin/roles?includeTemplates=false").expect(200);
+    const reader = roles.body.data.roles.find((role: { id: string }) => role.id === "reader");
+    expect(reader.users.map((user: { id: string }) => user.id)).toContain("multi");
+    expect(reader.users.map((user: { id: string }) => user.id)).not.toContain("conflicted");
+    expect(reader.usageCount).toBeGreaterThan(0);
+    await app.close();
+  });
+
+  it("round-trips one role and two roles without leaving the other key", async () => {
+    await useTwoRoles();
+    const app = buildServer();
+    await app.ready();
+    await request(app.server)
+      .patch("/api/admin/agents/bound")
+      .send({ dryRun: false, patch: { roles: ["analyst", "reader"] } })
+      .expect(200);
+    let yaml = await readFile(path.join(projectRoot, "webui", "config", "access.yaml"), "utf8");
+    expect(userBlock(yaml, "bound")).toMatch(/- analyst\n\s+- reader/);
+    expect(userBlock(yaml, "bound")).not.toMatch(/\n\s+role:/);
+
+    await request(app.server)
+      .patch("/api/admin/agents/bound")
+      .send({ dryRun: false, patch: { roles: ["reader"] } })
+      .expect(200);
+    yaml = await readFile(path.join(projectRoot, "webui", "config", "access.yaml"), "utf8");
+    expect(userBlock(yaml, "bound")).toMatch(/roles:\n\s+- reader/);
+    expect(userBlock(yaml, "bound")).not.toMatch(/\n\s+- analyst/);
+    expect(userBlock(yaml, "bound")).not.toMatch(/\n\s+role:/);
+    await app.close();
+  });
+
+  it("name-only save does not add role beside roles", async () => {
+    await useTwoRoles();
+    const app = buildServer();
+    await app.ready();
+    await request(app.server)
+      .patch("/api/admin/agents/bound")
+      .send({ dryRun: false, patch: { name: "Bound Renamed" } })
+      .expect(200);
+    const yaml = await readFile(path.join(projectRoot, "webui", "config", "access.yaml"), "utf8");
+    expect(userBlock(yaml, "bound")).toContain("Bound Renamed");
+    expect(userBlock(yaml, "bound")).toMatch(/roles:\n\s+- analyst/);
+    expect(userBlock(yaml, "bound")).not.toMatch(/\n\s+role:/);
+    await app.close();
+  });
+
+  it("rejects an empty set, a template, an unknown role, and both role fields", async () => {
+    await useTwoRoles();
+    const app = buildServer();
+    await app.ready();
+    const empty = await request(app.server)
+      .post("/api/admin/agents")
+      .send({ dryRun: true, agent: { id: "empty", name: "Empty", roles: [] } })
+      .expect(400);
+    expect(empty.body.error.code).toBe("ROLE_REQUIRED");
+
+    const both = await request(app.server)
+      .post("/api/admin/agents")
+      .send({ dryRun: true, agent: { id: "both", name: "Both", role: "analyst", roles: ["reader"] } })
+      .expect(400);
+    expect(both.body.error.code).toBe("ROLE_AND_ROLES");
+
+    const unknown = await request(app.server)
+      .patch("/api/admin/agents/bound")
+      .send({ dryRun: true, patch: { roles: ["missing_role"] } })
+      .expect(400);
+    expect(unknown.body.error.code).toBe("INVALID_ROLE");
+
+    const template = await request(app.server)
+      .post("/api/admin/agents")
+      .send({ dryRun: true, agent: { id: "tmpl", name: "Tmpl", roles: ["kx_readonly"] } })
+      .expect(400);
+    expect(template.body.error.code).toBe("REFERENCE_TEMPLATE_NOT_ASSIGNABLE");
+    await app.close();
+  });
+
+  it("reports a dual declaration and accepts a clean roles replacement", async () => {
+    await useTwoRoles();
+    const app = buildServer();
+    await app.ready();
+    const before = await request(app.server).get("/api/admin/agents/conflicted").expect(200);
+    expect(before.body.data.agent.roleResolutionError).toBe("role_resolution_failed:role_and_roles");
+    expect(before.body.data.agent.roles).toEqual([]);
+    expect(before.body.data.agent.declaredRole).toBe("analyst");
+    expect(before.body.data.agent.declaredRoles).toEqual(["reader"]);
+
+    await request(app.server)
+      .patch("/api/admin/agents/conflicted")
+      .send({ dryRun: false, patch: { roles: ["analyst"] } })
+      .expect(200);
+    const yaml = await readFile(path.join(projectRoot, "webui", "config", "access.yaml"), "utf8");
+    expect(userBlock(yaml, "conflicted")).toMatch(/roles:\n\s+- analyst/);
+    expect(userBlock(yaml, "conflicted")).not.toMatch(/\n\s+role:/);
+    const after = await request(app.server).get("/api/admin/agents/conflicted").expect(200);
+    expect(after.body.data.agent.roleResolutionError).toBeUndefined();
+    expect(after.body.data.agent.roles).toEqual(["analyst"]);
+    expect(after.body.data.agent.role).toBe("analyst");
     await app.close();
   });
 });

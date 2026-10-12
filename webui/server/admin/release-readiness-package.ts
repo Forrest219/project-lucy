@@ -20,6 +20,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { resolveRoleIds } from "../proxy/acl.js";
 import { resolveProjectRoot } from "../project.js";
 import { readAccessYaml } from "./access-config.js";
 import { getAuditDb } from "./audit.js";
@@ -35,7 +36,9 @@ import { getEvalDb } from "../eval/db.js";
 export interface AgentInventoryEntry {
   id: string;
   enabled: boolean;
+  /** Set only when the Agent resolves to exactly one role. */
   role: string | null;
+  roles: string[];
   tokenCount: number;
   tokenHashPrefixes: string[];
   callsLastWindow: number;
@@ -285,7 +288,10 @@ async function buildInventory(
     const role = config.roles?.[roleId];
     if (!role?.allow) continue;
     const resolution = await readRoleResolutionForInventory(roleId);
-    const usageCount = config.users.filter((user) => user.role === roleId).length;
+    const usageCount = config.users.filter((user) => {
+      const resolved = resolveRoleIds(user);
+      return resolved.ok && resolved.roleIds.includes(roleId);
+    }).length;
     roles.push({
       id: roleId,
       source: "yaml",
@@ -309,10 +315,13 @@ async function buildInventory(
       .filter((value): value is string => Boolean(value))
       .sort()
       .at(-1) ?? null;
+    const resolvedRoles = resolveRoleIds(user);
+    const roleIds = resolvedRoles.ok ? resolvedRoles.roleIds : [];
     return {
       id: user.id,
       enabled: user.enabled !== false,
-      role: user.role ?? null,
+      roles: roleIds,
+      role: roleIds.length === 1 ? roleIds[0]! : null,
       tokenCount: user.tokens.length,
       tokenHashPrefixes,
       callsLastWindow: stats?.calls ?? 0,
@@ -377,7 +386,10 @@ async function buildTemplateRoleInventory(config: import("./access-config.js").Y
     const expanded = expandTemplate(roleId);
     if (!expanded) continue;
     const resolution = await readRoleResolutionForInventory(roleId);
-    const usageCount = config.users.filter((user) => user.role === roleId).length;
+    const usageCount = config.users.filter((user) => {
+      const resolved = resolveRoleIds(user);
+      return resolved.ok && resolved.roleIds.includes(roleId);
+    }).length;
     entries.push({
       id: roleId,
       source: "template",
@@ -706,7 +718,7 @@ export function renderReleaseReadinessMarkdown(pkg: ReleaseReadinessPackage): st
   lines.push("|---|---|---|---|---|---|---|");
   for (const agent of pkg.inventory.agents) {
     lines.push(
-      `| \`${agent.id}\` | ${agent.enabled ? "yes" : "no"} | ${agent.role ? `\`${agent.role}\`` : "—"} | ${agent.tokenCount} | ${agent.callsLastWindow} | ${agent.deniedLastWindow} | ${agent.lastSeen ?? "—"} |`
+      `| \`${agent.id}\` | ${agent.enabled ? "yes" : "no"} | ${agent.roles.length > 0 ? agent.roles.map((roleId) => `\`${roleId}\``).join(", ") : "—"} | ${agent.tokenCount} | ${agent.callsLastWindow} | ${agent.deniedLastWindow} | ${agent.lastSeen ?? "—"} |`
     );
   }
   lines.push("");
