@@ -301,6 +301,11 @@ export function CallMonitor() {
         />
       </div>
 
+      <p className="pl-notice" data-testid="call-monitor-usage-slow-mark">
+        问询慢标记自 <span className="notranslate" translate="no">2026-10-12</span> 起生效。
+        <span className="notranslate" translate="no">lucy_query</span> 达到 5 秒，或问询墙钟达到 120 秒，记入问询慢标记。
+      </p>
+
       {noData && !query.isLoading && !query.isError ? (
         <p className="pl-notice" data-testid="call-monitor-empty">
           当前窗口暂无 <span className="notranslate" translate="no">MCP</span> 业务调用。可先到{" "}

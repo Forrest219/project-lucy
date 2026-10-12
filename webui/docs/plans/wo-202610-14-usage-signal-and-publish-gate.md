@@ -4,7 +4,7 @@
 |---|---|
 | 工单号 | 202610-14 |
 | 标题 | P2：慢调用与零行、鉴权时间线、客户端来源、广告日表消歧、语义发布门禁 |
-| 状态 | 已实现并通过 SC-20 至 SC-24 的自动化断言。内部顺序：SC-20 → SC-21 → SC-22 → SC-23 → SC-24 |
+| 状态 | 已实现并通过 SC-20 至 SC-24 的自动化断言。内部顺序：SC-20 → SC-21 → SC-22 → SC-23 → SC-24。SC-20 与 SC-23 的调用路径补丁见 WO-202610-15 |
 | 来源 Spec | `webui/docs/162-customer-query-experience-and-usage-evidence-spec.md` v0.3 |
 | 来源计划 | `docs/plans/2026-10-11-customer-log-next-optimizations.md` v1.1 |
 | 撰写日期 | 2026-10-11 |

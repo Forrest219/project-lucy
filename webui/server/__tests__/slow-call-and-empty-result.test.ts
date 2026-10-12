@@ -10,7 +10,9 @@ import { describe, expect, it } from "vitest";
 import {
   isEmptyResult,
   isSlowCall,
+  questionBudget,
   SLOW_CALL_MIN_DURATION_MS,
+  SLOW_DEFINITION_EFFECTIVE_AT,
   SLOW_TURN_WALL_CLOCK_MS,
   slowCallThresholdMs,
   slowTurnWallClockMs,
@@ -89,6 +91,54 @@ describe("slow call and empty result (SC-20)", () => {
     );
     expect(source).toContain("LUCY_OBSERVABILITY_SLOW_MS");
     expect(source).toContain("30_000");
+  });
+
+  it("writes the question wall clock onto the access log", async () => {
+    const { mkdtemp, rm } = await import("node:fs/promises");
+    const os = await import("node:os");
+    const path = await import("node:path");
+    const auditDbPath = path.join(os.tmpdir(), `lucy-slow-wall-${process.pid}-${Math.random().toString(36).slice(2)}.sqlite`);
+    const previousAuditDb = process.env.LUCY_AUDIT_DB;
+    process.env.LUCY_AUDIT_DB = auditDbPath;
+    questionBudget.resetForTests();
+    const started = Date.now() - 120_000;
+    questionBudget.ensureTurn("turn-wall", started);
+    expect(questionBudget.wallClockMs("turn-wall", started + 120_000)).toBe(120_000);
+    // A continuation must not erase the original question start.
+    questionBudget.consume("turn-wall", started + 120_000, "turn-wall");
+    expect(questionBudget.wallClockMs("turn-wall", started + 120_000)).toBeGreaterThanOrEqual(120_000);
+
+    const { writeLog, readR1AuditObservability, closeAuditDb } = await import("../proxy/audit.js");
+    await writeLog({
+      ts: new Date().toISOString(),
+      userId: "analyst",
+      tool: "wiki_read",
+      outcome: "ok",
+      durationMs: 40,
+      requestId: "wall-1",
+      lucyTurnId: "turn-wall"
+    });
+    const view = await readR1AuditObservability({ hours: 24 });
+    const slow = view.latency.slowQueries.find((query) => query.requestId === "wall-1");
+    expect(slow?.tool).toBe("wiki_read");
+    expect(slow?.slowBasis).toBe("turn_wall_clock");
+    expect(view.latency.slowDefinition.effectiveAt).toBe(SLOW_DEFINITION_EFFECTIVE_AT);
+    closeAuditDb();
+    questionBudget.resetForTests();
+    if (previousAuditDb === undefined) delete process.env.LUCY_AUDIT_DB;
+    else process.env.LUCY_AUDIT_DB = previousAuditDb;
+    await rm(auditDbPath, { force: true });
+  });
+
+  it("opens the question clock from the proxy before the call is forwarded", async () => {
+    const source = await import("node:fs/promises").then((fs) =>
+      fs.readFile(new URL("../proxy/mcp-proxy.ts", import.meta.url), "utf8")
+    );
+    expect(source).toContain("questionBudget.ensureTurn");
+    const guardAt = source.indexOf("applyLucyCallGuard");
+    const forwardAt = source.indexOf("lucyQueryUpstreamArgs");
+    expect(guardAt).toBeGreaterThan(0);
+    expect(forwardAt).toBeGreaterThan(guardAt);
   });
 
   it("keeps the question drill-down isSlowCall as a P95-relative metric", async () => {

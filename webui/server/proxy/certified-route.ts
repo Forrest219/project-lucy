@@ -10,6 +10,7 @@
  * `registerCertifiedRoute` is the hook the customer's published routes call;
  * the test suite registers one fake route, and `registerReportTemplate`
  * refuses a second template id until a before/after comparison is recorded.
+ * After that comparison, the next id can be registered.
  */
 
 import { denialAllowList } from "./question-experience.js";
@@ -104,7 +105,10 @@ export function resolveCertifiedRoute(
 
 export function registerReportTemplate(template: ReportTemplate): void {
   if (!pilotTemplateEnabled()) return;
-  if (template.templateId !== PILOT_TEMPLATE_ID) {
+  if (!template.templateId || !template.source) {
+    throw new Error("report_template_incomplete");
+  }
+  if (template.templateId !== PILOT_TEMPLATE_ID && !comparisonRecorded) {
     throw new Error("pilot_template_scope_violation");
   }
   if (templates.has(template.templateId) && !comparisonRecorded) {

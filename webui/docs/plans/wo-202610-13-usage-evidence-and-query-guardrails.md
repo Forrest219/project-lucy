@@ -4,7 +4,7 @@
 |---|---|
 | 工单号 | 202610-13 |
 | 标题 | P1：截断标记、Wiki、认证路径、内建度量、拒绝名单、失败维度、单模板试点 |
-| 状态 | 已实现并通过 SC-10 至 SC-19、SC-25、SC-26 的自动化断言。以 Spec 162 v0.3 为验收 |
+| 状态 | 已实现并通过 SC-10 至 SC-19、SC-25、SC-26 的自动化断言。以 Spec 162 v0.3 为验收。SC-15 与 SC-19 的调用路径补丁见 WO-202610-15 |
 | 来源 Spec | `webui/docs/162-customer-query-experience-and-usage-evidence-spec.md` v0.3 |
 | 来源计划 | `docs/plans/2026-10-11-customer-log-next-optimizations.md` v1.1 |
 | 撰写日期 | 2026-10-11 |

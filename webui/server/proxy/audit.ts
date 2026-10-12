@@ -11,7 +11,11 @@ import {
   defaultUsageExcluded,
   isEmptyResult,
   isSlowCall,
+  SLOW_CALL_MIN_DURATION_MS,
+  SLOW_DEFINITION_EFFECTIVE_AT,
+  SLOW_TURN_WALL_CLOCK_MS,
   usageGroup,
+  usageSlowMark,
   type UsageGroup
 } from "./question-experience.js";
 
@@ -378,6 +382,17 @@ function truncateErrorDetail(value: string): string {
 }
 
 export async function writeLog(entry: AccessLogEntry): Promise<number> {
+  const slow = usageSlowMark({
+    tool: entry.tool,
+    durationMs: entry.durationMs,
+    lucyTurnId: entry.lucyTurnId
+  });
+  entry = {
+    ...entry,
+    turnWallClockMs: slow.turnWallClockMs ?? undefined,
+    isSlowCall: slow.isSlowCall,
+    slowBasis: slow.slowBasis ?? undefined
+  };
   const database = await getDb();
   if (entry.permissionSnapshot) {
     if (!snapshotStmt) {
@@ -603,6 +618,11 @@ export interface R1AuditObservability {
     p50Ms: number | null;
     p95Ms: number | null;
     slowCalls: number;
+    slowDefinition: {
+      effectiveAt: string;
+      callDurationMs: number;
+      turnWallClockMs: number;
+    };
     slowQueries: Array<{
       ts: string;
       userId: string;
@@ -789,9 +809,8 @@ export async function readR1AuditObservability(options: { hours?: number; slowMs
   }
 
   const slowQueries = defaultRows
-    // Spec 162 §8 / SC-20 — the usage signal's slow mark. It replaces the old
-    // "anything over the window threshold" rule: a 1.6s successful query is
-    // not slow, and other tools are not marked by this definition at all.
+    // Spec 162 §8 / SC-20 — usage slow mark: lucy_query at or above 5 seconds,
+    // or any tool once the question wall clock reaches 120 seconds.
     // Spec 143's call monitor keeps its own threshold.
     .filter((row) => isSlowCall({
       tool: row.tool,
@@ -855,6 +874,11 @@ export async function readR1AuditObservability(options: { hours?: number; slowMs
       p95Ms: percentile(durations, 0.95),
       slowCalls: slowQueries.length,
       slowQueries,
+      slowDefinition: {
+        effectiveAt: SLOW_DEFINITION_EFFECTIVE_AT,
+        callDurationMs: SLOW_CALL_MIN_DURATION_MS,
+        turnWallClockMs: SLOW_TURN_WALL_CLOCK_MS
+      },
       emptyResults: defaultRows.filter((row) => isEmptyResult({
         outcome: row.outcome,
         responseRowCount: row.response_row_count

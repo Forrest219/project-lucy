@@ -59,6 +59,7 @@ import {
   resolveResponseTruncated,
   TRUNCATION_REPAIR_HINT,
 } from "./question-experience.js";
+import { applyLucyCallGuard, loadPublishedAmbiguityCatalog, queryGuardrailsEnabled } from "./query-guardrails.js";
 import {
   lookupReportTemplate,
   resolveCertifiedRoute,
@@ -2803,6 +2804,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
     requestMeta.turnAttributionConfidence = attribution.confidence;
     requestMeta.turnAttributionReason = attribution.reason;
   }
+  if (requestMeta.lucyTurnId) questionBudget.ensureTurn(requestMeta.lucyTurnId, Date.now());
 
   // Spec 162 §8 / SC-20 — a cancellation is attached to its question when the
   // session resolves to an open turn. Without a session there is nothing to
@@ -2816,6 +2818,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       requestMeta.lucyTurnId = attribution.turnId;
       requestMeta.turnAttributionMode = attribution.mode;
       requestMeta.turnAttributionConfidence = attribution.confidence;
+      questionBudget.ensureTurn(attribution.turnId, Date.now());
     }
     recordRequestAudit({
       ts: new Date().toISOString(),
@@ -3947,6 +3950,76 @@ async function buildDenialRepairPayload(
       policySource: "access_policy"
     });
     return;
+  }
+
+  if (
+    queryGuardrailsEnabled()
+    && rpcMethod === "tools/call"
+    && (toolName === "lucy_query" || toolName === "lucy_read_source")
+    && toolArgs
+    && typeof toolArgs === "object"
+  ) {
+    const resolvedPermissions = await effectivePermissions(identity).catch(() => null);
+    const readable = new Set<string>();
+    if (resolvedPermissions?.ok) {
+      if (resolvedPermissions.permissions.tables.includes("*")) readable.add("*");
+      for (const source of resolvedPermissions.permissions.sources) {
+        if (source.sourceName) readable.add(source.sourceName);
+        if (source.table) readable.add(source.table);
+        if (source.connectionId && source.sourceName) readable.add(`${source.connectionId}.${source.sourceName}`);
+      }
+    }
+    const catalog = await loadPublishedAmbiguityCatalog();
+    const guard = applyLucyCallGuard({
+      toolName,
+      args: toolArgs,
+      readableSourceNames: resolvedPermissions?.ok ? readable : null,
+      catalog
+    });
+    if (guard.action === "stop") {
+      const responseBody = jsonRpcToolResult(requestId, JSON.stringify({
+        reason: guard.reason,
+        repair: guard.repair,
+        failureDimension: guard.failureDimension
+      }), { isError: true });
+      res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+      res.end(responseBody);
+      recordRequestAudit({
+        ts: new Date().toISOString(),
+        userId: identity.userId,
+        client: identity.client,
+        tool: toolName,
+        tables: queryTables.length > 0 ? queryTables : undefined,
+        argsSummary,
+        ...queryMeta,
+        outcome: "error",
+        decisionReason: guard.reason,
+        errorDetail: guard.repair,
+        failureDimension: guard.failureDimension,
+        durationMs: Date.now() - start,
+        responseBytes: Buffer.byteLength(responseBody),
+        requestId,
+        ...requestMeta,
+        ...(await auditMeta(identity, guard.reason)),
+      });
+      recordMcpTraceForTool({
+        traceId,
+        identity,
+        toolName,
+        status: "error",
+        startedAt: new Date(start).toISOString(),
+        turnId: requestMeta.lucyTurnId ?? null,
+        sessionId: requestMeta.lucySessionId ?? null,
+        requestId,
+        argsSummary,
+        allowed: false,
+        reason: guard.reason,
+        policySource: "other"
+      });
+      return;
+    }
+    toolArgs = guard.args;
+    argsSummary = summarizeArgsForAudit(toolName, guard.args);
   }
 
   if (rpcMethod === "tools/call" && toolName && isQuestionDataTool(toolName) && questionBudgetEnabled()) {

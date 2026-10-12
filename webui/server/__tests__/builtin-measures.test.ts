@@ -59,6 +59,14 @@ describe("built-in measure guardrails", () => {
     expect(bare.action).toBe("repair");
   });
 
+  it("refuses a literal sum(sum()) even when the inner name is not registered", () => {
+    const decision = compileBuiltinMeasure({ measure: "sum(sum(amount))", source: "demo.orders" });
+    expect(decision.action).toBe("repair");
+    if (decision.action !== "repair") return;
+    expect(decision.reason).toBe("aggregate_of_aggregate");
+    expect(decision.repair).not.toContain("sum(sum");
+  });
+
   it("compiles sum() over a measure that is not already aggregated", () => {
     const decision = compileBuiltinMeasure({
       measure: "sum(demo.orders.amount)",

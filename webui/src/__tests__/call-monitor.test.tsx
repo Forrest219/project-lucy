@@ -90,6 +90,9 @@ describe("CallMonitor page", () => {
       expect(screen.getByTestId("call-monitor-slo-status")).toHaveTextContent("需关注");
     });
     expect(screen.getByRole("heading", { name: "调用监控" })).toBeInTheDocument();
+    expect(screen.getByTestId("call-monitor-usage-slow-mark")).toHaveTextContent("问询慢标记自");
+    expect(screen.getByTestId("call-monitor-usage-slow-mark")).toHaveTextContent("2026-10-12");
+    expect(screen.getByText("慢于多数请求")).toBeInTheDocument();
     expect(screen.getByTestId("call-monitor-kpi-volume")).toHaveTextContent("10");
     expect(screen.getByTestId("call-monitor-tool-lucy_query")).toHaveAttribute(
       "href",

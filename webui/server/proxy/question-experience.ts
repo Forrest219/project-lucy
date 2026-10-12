@@ -54,7 +54,10 @@ export type BudgetStop = {
 };
 
 type BudgetState = {
+  /** Budget window. A continuation resets this. */
   startedAt: number;
+  /** Question age for the slow mark. A continuation does not reset this. */
+  originStartedAt: number;
   calls: number;
   continuations: number;
 };
@@ -78,7 +81,7 @@ export class QuestionBudget {
     if (!turnId) return { action: "allow" };
     let state = this.turns.get(turnId);
     if (!state) {
-      state = { startedAt: now, calls: 0, continuations: 0 };
+      state = { startedAt: now, originStartedAt: now, calls: 0, continuations: 0 };
       this.turns.set(turnId, state);
     }
     const exhausted = state.calls >= QUESTION_BUDGET_MAX_CALLS || now - state.startedAt >= QUESTION_BUDGET_MAX_WALL_MS;
@@ -99,6 +102,24 @@ export class QuestionBudget {
     }
     state.calls += 1;
     return { action: "allow" };
+  }
+
+  /** First sight of a question. Later calls keep the original start. */
+  ensureTurn(turnId: string | undefined, now: number): void {
+    if (!turnId || this.turns.has(turnId)) return;
+    this.turns.set(turnId, { startedAt: now, originStartedAt: now, calls: 0, continuations: 0 });
+  }
+
+  /** Milliseconds since the question was first seen. Null when the turn was never opened. */
+  wallClockMs(turnId: string | undefined, now: number): number | null {
+    if (!turnId) return null;
+    const state = this.turns.get(turnId);
+    if (!state) return null;
+    return Math.max(0, now - state.originStartedAt);
+  }
+
+  resetForTests(): void {
+    this.turns.clear();
   }
 }
 
@@ -240,6 +261,8 @@ const PROBE_NAME_MARKERS = ["probe-", "rds-test", "demo-mysql"] as const;
  */
 export const SLOW_CALL_MIN_DURATION_MS = 5_000;
 export const SLOW_TURN_WALL_CLOCK_MS = 120_000;
+/** Usage-signal slow mark. Distinct from the P95 「慢于多数请求」 card. */
+export const SLOW_DEFINITION_EFFECTIVE_AT = "2026-10-12T00:00:00.000Z";
 
 /** The only tool whose single-call duration counts as slow under SC-20. */
 export const SLOW_CALL_TOOLS = new Set(["lucy_query"]);
@@ -281,6 +304,26 @@ export function isSlowCall(input: {
     return { slow: true, basis: "call_duration" };
   }
   return { slow: false, basis: null };
+}
+
+/**
+ * SC-20 — the mark stored on an access-log row. Wall clock comes from the
+ * question's original start, which `writeLog` fills into `turn_wall_clock_ms`.
+ */
+export function usageSlowMark(entry: {
+  tool?: string | null;
+  durationMs?: number | null;
+  lucyTurnId?: string | null;
+  now?: number;
+}): { turnWallClockMs: number | null; isSlowCall: boolean; slowBasis: SlowCallVerdict["basis"] } {
+  const now = entry.now ?? Date.now();
+  const turnWallClockMs = entry.lucyTurnId ? questionBudget.wallClockMs(entry.lucyTurnId, now) : null;
+  const verdict = isSlowCall({
+    tool: entry.tool,
+    durationMs: entry.durationMs,
+    turnWallClockMs
+  });
+  return { turnWallClockMs, isSlowCall: verdict.slow, slowBasis: verdict.basis };
 }
 
 /** SC-20 — a successful call that returned zero rows. */
@@ -431,7 +474,8 @@ export function compileBuiltinMeasure(input: {
     }
     if (source) candidates.add(`${sourcePrefix}${inner.toLowerCase()}`);
     const wrapsAggregate = [...candidates].some((candidate) => aggregated.has(candidate));
-    if (wrapsAggregate) {
+    const nestedAggregate = AGGREGATE_WRAPPER.test(inner.trim());
+    if (wrapsAggregate || nestedAggregate) {
       return {
         action: "repair",
         reason: "aggregate_of_aggregate",

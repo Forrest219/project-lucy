@@ -65,13 +65,20 @@ describe("single report template pilot (SC-19)", () => {
   it("allows the next template only after a before/after comparison is recorded", () => {
     registerReportTemplate(TEMPLATE);
     expect(() => recordTemplateComparison("")).toThrow(/template_comparison_reference_required/);
-    recordTemplateComparison("inbox/2026-10-11-pilot-comparison.md");
-    expect(templateComparisonRecorded()).toBe(true);
-    // The pilot scope itself still admits only its own id.
     expect(() => registerReportTemplate({
       templateId: "cdn_pnl_quarterly",
       source: "demo.cdn_pnl"
     })).toThrow(/pilot_template_scope_violation/);
+
+    recordTemplateComparison("inbox/2026-10-11-pilot-comparison.md");
+    expect(templateComparisonRecorded()).toBe(true);
+    registerReportTemplate({
+      templateId: "cdn_pnl_quarterly",
+      source: "demo.cdn_pnl",
+      version: "2026Q4"
+    });
+    const ids = listReportTemplates().map((template) => template.templateId).sort();
+    expect(ids).toEqual(["cdn_pnl_quarterly", "public_cloud_pnl_quarterly"]);
   });
 
   it("can be switched off, returning callers to plain lucy_query", () => {
