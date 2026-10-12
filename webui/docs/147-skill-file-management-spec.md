@@ -17,7 +17,7 @@
 | Spec 编号 | 147 |
 | 关联工单 | `webui/docs/plans/wo-202609-24-skill-file-management.md` |
 | 关联页面 | `/skills`（业务上下文 / 业务 Skill） |
-| 上游 Spec | Spec 144（Agent 可见性仍权威）；Spec 131 Phase 4 切片 |
+| 上游 Spec | Spec 144（Agent 可见性仍权威）；Spec 171 Phase 4 切片 |
 | 状态 | Implemented；安全加固见 Spec 151 |
 | 日期 | 2026-09-24 |
 
@@ -44,7 +44,7 @@ Spec 144 交付了只读「业务 Skill」页与 Agent 已发布过滤。Demo �
 
 | 非目标 | 理由 |
 |---|---|
-| Eval 门禁、调用仪表盘、客户端导出 | Spec 131 / 132 / 134 |
+| Eval 门禁、调用仪表盘、客户端导出 | Spec 171 / 132 / 134 |
 | Role 页勾选 Skill | 仍用 frontmatter `roles_allowed` |
 | `.cursor/skills/` 进入 Hub | 配置作者 Skills，非问答运行时 |
 | 改发布工作台 | Skill 状态仍是 frontmatter |

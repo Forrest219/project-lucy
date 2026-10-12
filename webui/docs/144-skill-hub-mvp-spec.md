@@ -8,7 +8,7 @@
 | 撰写日期 | 2026-09-23 |
 | 撰写人 | Grok |
 | 委托人 | xingchen |
-| 基于材料 | 2026-09-23 用户反馈（「行权限 + Skill」为最高优先级）；生产只读核查 `http://10.69.95.109:8276`（v0.16 侧栏无 Skill 入口）；Spec 131；`webui/server/skills/`、`webui/server/proxy/skill-acl.ts`、`webui/server/proxy/mcp-proxy.ts`、`webui/server/admin/skills.ts` |
+| 基于材料 | 2026-09-23 用户反馈（「行权限 + Skill」为最高优先级）；生产只读核查 `http://10.69.95.109:8276`（v0.16 侧栏无 Skill 入口）；Spec 171；`webui/server/skills/`、`webui/server/proxy/skill-acl.ts`、`webui/server/proxy/mcp-proxy.ts`、`webui/server/admin/skills.ts` |
 | 适用范围 | 本周交付：只读「业务 Skill」页，以及 Agent 经 Lucy MCP 发现并读取已发布 Skill |
 | 输出位置 | `webui/docs/144-skill-hub-mvp-spec.md` |
 
@@ -17,7 +17,7 @@
 | Spec 编号 | 144 |
 | 关联工单 | `webui/docs/plans/wo-202609-23-skill-hub-and-publish-clarity.md` |
 | 关联页面 | `/skills`（业务上下文 / 业务 Skill） |
-| 上游 Spec | Spec 131（协议与资产格式仍权威）；本 Spec 只冻结其 MVP 切片 |
+| 上游 Spec | Spec 171（协议与资产格式仍权威）；本 Spec 只冻结其 MVP 切片 |
 | 状态 | Draft |
 | 日期 | 2026-09-23 |
 
@@ -25,16 +25,16 @@
 
 | 版本 | 变更 |
 |---|---|
-| v1.0 | 初稿：只读 Hub + Agent 读取已发布 Skill；明确相对 Spec 131 的 Non-Goals |
+| v1.0 | 初稿：只读 Hub + Agent 读取已发布 Skill；明确相对 Spec 171 的 Non-Goals |
 | v1.1 | 导航组名决策（委托人确认）：「业务 Skill」留同组第三项；组名「语义建模」更名「业务上下文」，三入口名不变；明确 Skill 发布不走「语义发布」流水线 |
 
 ## 1. 背景
 
 用户要的「Skill」是：Lucy 提供基本 Skill 汇聚，外部 Agent 经 Lucy 调用 Skill，而不是各人在本地目录各自维护一份。
 
-生产 v0.16 侧栏没有 Skill 入口。仓库里 Spec 131 与运行时已经具备资产扫描、`roles_allowed` 过滤、`resources/list`、`resources/read`、`lucy_skill_read` 和 `GET /api/skills`。缺的是产品入口，以及「Agent 只能看见已发布 Skill」这条边界。
+生产 v0.16 侧栏没有 Skill 入口。仓库里 Spec 171 与运行时已经具备资产扫描、`roles_allowed` 过滤、`resources/list`、`resources/read`、`lucy_skill_read` 和 `GET /api/skills`。缺的是产品入口，以及「Agent 只能看见已发布 Skill」这条边界。
 
-Spec 131 还包含 Prompts 通道、在线编辑器、Eval 门禁、客户端导出和调用仪表盘。那些不在本周范围。
+Spec 171 还包含 Prompts 通道、在线编辑器、Eval 门禁、客户端导出和调用仪表盘。那些不在本周范围。
 
 ## 2. 目标
 
@@ -47,8 +47,8 @@ Spec 131 还包含 Prompts 通道、在线编辑器、Eval 门禁、客户端导
 
 | 非目标 | 理由 |
 |---|---|
-| Web 编辑器、上传、删除、导出 | Spec 131 Phase 4；本周资产仍由文件入库 |
-| `prompts/list` / `prompts/get` | Spec 131 通道 C |
+| Web 编辑器、上传、删除、导出 | Spec 171 Phase 4；本周资产仍由文件入库 |
+| `prompts/list` / `prompts/get` | Spec 171 通道 C |
 | Skill Eval 门禁、A/B、调用仪表盘 | Spec 132 / 134 |
 | 在 Role 页新增 Skill 勾选 | 授权继续用 Skill frontmatter 的 `roles_allowed` |
 | 把配置作者 Skills（`.cursor/skills/lucy-*-author`）放进 Hub | 那是编码代理产物生成器，不是问答运行时 Skill |
@@ -129,9 +129,9 @@ GET /api/skills（WebUI，沿用现有管理员会话）:
 
 ## 6. 数据与接口
 
-- 资产格式、目录和 URI 以 Spec 131 §3 为准。实现继续使用 `webui/server/skills/loader.ts` 的现有解析，不在本 Spec 改 frontmatter 字段。
+- 资产格式、目录和 URI 以 Spec 171 §3 为准。实现继续使用 `webui/server/skills/loader.ts` 的现有解析，不在本 Spec 改 frontmatter 字段。
 - 列表与详情复用 `GET /api/skills`、`GET /api/skills/:domain/:name`。响应中的正文仅供已登录 WebUI 使用。
-- MCP 拒绝码沿用 Spec 131：无权为 JSON-RPC `-32003`，`data` 或等价字段带 §5 的 `reason`。
+- MCP 拒绝码沿用 Spec 171：无权为 JSON-RPC `-32003`，`data` 或等价字段带 §5 的 `reason`。
 - 读取成功与拒绝都写入现有访问审计；至少包含 identity、`skill_uri` 或 name、allow/deny、reason。不新造审计表。
 
 ## 7. Terminology Compliance
@@ -172,4 +172,4 @@ Protected DOM：`Skill`、`lucy-skill://`、`lucy_skill_read`、`domain`、`role
 ## 10. 实现时必须同步的文档
 
 - `webui/src/app/navigation.ts` 增加入口并将组名改为「业务上下文」后（组 `id` 保持 `semantic-modeling` 不变），同步 `webui/docs/06-navigation-ia.md` 的分组表、面包屑表与「6+1 结构」验收句；`webui/docs/00-product-terminology-standard.md` 的 §3、Sidebar Group 行与 §4.10 已随本 Spec v1.1 更新。
-- 不改 Spec 131 的 Phase 路线；本 Spec 是其 MVP 切片。
+- 不改 Spec 171 的 Phase 路线；本 Spec 是其 MVP 切片。

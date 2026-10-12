@@ -4,13 +4,16 @@
 |---|---|
 | 文档名称 | Lucy Governed Skill System & Context Transpass Spec |
 | 文档类型 | Spec |
-| 版本 | v1.0 |
+| Spec 编号 | 171（原 131） |
+| 版本 | v1.1 |
 | 撰写日期 | 2026-08-29 |
 | 撰写人 | Claude / Codex |
 | 委托人 | 张星晨 |
 | 基于材料 | `docs/specs/lucy-skills-mcp-spec.md`、`webui/docs/07-mcp-auth-proxy-spec.md`、`webui/docs/08-mcp-audit-question-tracing-spec.md`、`webui/docs/62-trace-evidence-kernel-spec.md`、`webui/docs/98-access-control-p0-runtime-spec.md` |
 | 适用范围 | Lucy MCP Proxy (`webui/server/proxy/`)、Skill 资产格式 (`skills/`)、ACL 与审计引擎、WebUI Skill Studio 与客户端导出 |
-| 输出位置 | /Users/zhangxingchen/Projects/project-lucy/webui/docs/131-governed-skill-system-and-context-transpass-spec.md |
+| 输出位置 | `webui/docs/171-governed-skill-system-and-context-transpass-spec.md` |
+
+> 改号说明：本文原编号 131，与 `webui/docs/131-lucy-admin-catalog-bound-role-spec.md`（`lucy_admin` 与 `catalog_bound`）重号。2026-10-13 起本文改为 171，131 专指 `lucy_admin` 那份。引用本文的历史材料按 171 理解。
 
 ---
 

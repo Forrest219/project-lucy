@@ -8,14 +8,14 @@
 | 版本 | v1.0 |
 | 状态 | Implemented，待完整 UAT |
 | 日期 | 2026-09-26 |
-| 上游 Spec | Spec 131、144、147 |
+| 上游 Spec | Spec 171、144、147 |
 | 适用范围 | `skills/`、Skill Admin API、Lucy MCP Proxy、`/skills`、Role 详情、审计 |
 
 > 编号说明：原验收计划拟使用 Spec 150；该编号已被 Role 权限配置结构 Spec 占用，因此本补丁顺延为 Spec 151。
 
 ## 1. 目的与裁决优先级
 
-本 Spec 是 Spec 131 §4.1 与 Spec 147 §4.2 的验收加固补丁。冲突时以本 Spec 为准：
+本 Spec 是 Spec 171 §4.1 与 Spec 147 §4.2 的验收加固补丁。冲突时以本 Spec 为准：
 
 1. Skill frontmatter 的 `roles_allowed` 是具体 Skill 对象授权的唯一事实源；`access.yaml` 不增加 `allowed_skills`、`denied_skills` 或 Skill 白名单。
 2. Role 只授予通道能力：`lucy_skill_search` 对应发现，`lucy_skill_read` 对应读取。
