@@ -32,6 +32,8 @@ services:
         UV_INDEX_URL: "${UV_INDEX_URL:-}"
         # Optional Debian apt mirror host (see Dockerfile ARG block). Empty = deb.debian.org.
         APT_MIRROR: "${APT_MIRROR:-}"
+        # Optional npm registry host (see Dockerfile ARG block). Empty = registry.npmjs.org.
+        NPM_REGISTRY: "${NPM_REGISTRY:-}"
     image: project-lucy:demo
     environment:
       KTX_PROJECT_ROOT: /data/lucy
