@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AgentList, activeTokenCount, configuredTokenCount, summarizeAgents } from "../pages/admin/AgentList";
@@ -357,6 +357,42 @@ describe("AgentList", () => {
         return body.dryRun === true && body.agent?.id === "newagent1" && body.agent?.roles?.includes("analyst");
       });
       expect(dryRunCall).toBeTruthy();
+    });
+  });
+
+  it("new agent modal keeps two roles checked and previews both", async () => {
+    stubAgentsEndpoints([], [
+      analystRole,
+      { ...analystRole, id: "ops_readonly", description: "Ops" }
+    ]);
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+
+    renderAgentList();
+    await waitFor(() => expect(screen.getByRole("button", { name: "新建 Agent" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "新建 Agent" }));
+    fireEvent.change(await screen.findByPlaceholderText("例：wangwu"), { target: { value: "newagent1" } });
+    fireEvent.change(screen.getByPlaceholderText("例：王五"), { target: { value: "新人" } });
+
+    const field = screen.getByTestId("agent-role-field");
+    expect(within(field).queryByRole("combobox")).not.toBeInTheDocument();
+    const analyst = within(field).getByRole("checkbox", { name: "analyst" });
+    const ops = within(field).getByRole("checkbox", { name: "ops_readonly" });
+    fireEvent.click(analyst);
+    fireEvent.click(ops);
+
+    expect(analyst).toBeChecked();
+    expect(ops).toBeChecked();
+    const callsBeforePreview = fetchMock.mock.calls.length;
+    fireEvent.click(screen.getByRole("button", { name: /下一步：预览配置/ }));
+
+    await waitFor(() => {
+      const dryRunCall = fetchMock.mock.calls.slice(callsBeforePreview).find((call) => {
+        const init = call[1] as RequestInit | undefined;
+        if (init?.method !== "POST") return false;
+        const body = JSON.parse(String(init.body));
+        return body.dryRun === true && body.agent?.id === "newagent1";
+      });
+      expect(JSON.parse(String(dryRunCall?.[1]?.body)).agent.roles).toEqual(["analyst", "ops_readonly"]);
     });
   });
 

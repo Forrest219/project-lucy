@@ -252,6 +252,46 @@ describe("AgentDetail", () => {
     });
   });
 
+  it("keeps two roles checked and writes both in the save patch", async () => {
+    const fetchMock = stubAgentEndpoints([
+      {
+        id: "ops_readonly",
+        description: "Ops",
+        source: "yaml",
+        tools: ["lucy_query"],
+        connections: ["mysql-aliyun"],
+        sourceNames: ["superstore_orders"],
+        sourceCount: 1,
+        invalid: false,
+        warnings: []
+      }
+    ]);
+    renderAgentDetail();
+    const field = await screen.findByTestId("agent-role-field");
+    expect(within(field).queryByRole("combobox")).not.toBeInTheDocument();
+    const analyst = within(field).getByRole("checkbox", { name: "analyst" });
+    const ops = within(field).getByRole("checkbox", { name: "ops_readonly" });
+    expect(analyst).toBeChecked();
+
+    fireEvent.click(ops);
+
+    expect(analyst).toBeChecked();
+    expect(ops).toBeChecked();
+    await waitFor(() => {
+      expect(screen.getByTestId("agent-role-capability")).toHaveTextContent("analyst, ops_readonly");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    fireEvent.click(within(await screen.findByTestId("agent-save-confirm-modal")).getByRole("button", { name: "确认保存" }));
+
+    await waitFor(() => {
+      const saveCall = fetchMock.mock.calls.find(
+        (call) => call[1]?.method === "PATCH" && JSON.parse(String(call[1].body)).dryRun === false
+      );
+      expect(JSON.parse(String(saveCall?.[1]?.body)).patch.roles).toEqual(["analyst", "ops_readonly"]);
+    });
+  });
+
   it("clears stale diff preview when edits change after viewing diff", async () => {
     stubAgentEndpoints();
     renderAgentDetail();

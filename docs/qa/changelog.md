@@ -5,6 +5,17 @@
 
 ---
 
+## 2026-10-12 · Agent 角色多选回归
+
+### 新增
+- `webui/tests/e2e/specs/agent-admin.spec.ts`：新建弹窗与 Agent 详情的角色控件必须是复选框，且同时勾选两项后两项都保持选中。不再用列表页第一个 `<select>` 代替角色控件。
+- Vitest：`agent-detail.test.tsx`、`agent-list.test.tsx` 断言保存或预览请求体里的 `roles` 含两个角色。
+
+### 影响映射更新
+- 无新 selector。使用已登记的 `agent-role-field`、`agent-role-option`。
+
+---
+
 ## 2026-10-12 · docs/uat · invest-db 问数用例
 
 ### 新增
