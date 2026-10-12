@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { apiGet } from "../../lib/apiClient";
@@ -62,16 +62,6 @@ function formatPercent(rate: number): string {
   return `${(rate * 100).toFixed(rate >= 0.1 || rate === 0 ? 1 : 2)}%`;
 }
 
-function formatStatsTimeLabel(statsAt: Date | null, now: Date): string {
-  if (!statsAt) return "未知";
-  const diffMs = now.getTime() - statsAt.getTime();
-  if (diffMs < 5_000) return "刚刚";
-  if (diffMs < 60_000) return `${Math.floor(diffMs / 1000)} 秒前`;
-  if (diffMs < 15 * 60_000) return `${Math.floor(diffMs / 60_000)} 分钟前`;
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(statsAt.getHours())}:${pad(statsAt.getMinutes())}:${pad(statsAt.getSeconds())}`;
-}
-
 function formatDurationMs(ms: number): string {
   if (ms < 1000) return `${ms} ms`;
   if (ms < 60_000) return `${(ms / 1000).toFixed(1)} s`;
@@ -85,12 +75,6 @@ function formatLocalTs(iso: string): string {
   if (Number.isNaN(date.getTime())) return iso;
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
-}
-
-function sloStatusLabel(status: CallMonitorResponse["slo"]["status"]): string {
-  if (status === "warn") return "需关注";
-  if (status === "no_data") return "暂无数据";
-  return "正常";
 }
 
 export function buildAuditCallsHref(options: {
@@ -112,7 +96,6 @@ export function CallMonitor() {
   const [searchParams, setSearchParams] = useSearchParams();
   const range = parseRange(searchParams);
   const [autoRefresh, setAutoRefresh] = useState(true);
-  const [now, setNow] = useState(() => new Date());
 
   const query = useQuery({
     queryKey: ["ops", "call-monitor", range],
@@ -121,11 +104,6 @@ export function CallMonitor() {
     refetchInterval: autoRefresh ? 30_000 : false,
     refetchIntervalInBackground: false
   });
-
-  useEffect(() => {
-    const id = window.setInterval(() => setNow(new Date()), 1000);
-    return () => window.clearInterval(id);
-  }, []);
 
   function setRange(next: CallMonitorRange) {
     const params = new URLSearchParams(searchParams);
@@ -139,20 +117,9 @@ export function CallMonitor() {
   const metricState = query.isError ? ("unavailable" as const) : noData ? ("no_data" as const) : ("ok" as const);
   const violations = new Set(data?.slo.violations ?? []);
   const windowText = windowLabel(range);
-  const statsAt = query.dataUpdatedAt ? new Date(query.dataUpdatedAt) : null;
-  const statsTimeLabel = formatStatsTimeLabel(statsAt, now);
   const maxToolCalls = useMemo(
     () => Math.max(1, ...(data?.topTools.map((row) => row.calls) ?? [1])),
     [data?.topTools]
-  );
-
-  const sloBadge = (
-    <span
-      className={`pl-badge ${data?.slo.status === "warn" ? "pl-badge--warning" : ""}`}
-      data-testid="call-monitor-slo-status"
-    >
-      {sloStatusLabel(data?.slo.status ?? (query.isLoading ? "ok" : "no_data"))}
-    </span>
   );
 
   return (
@@ -168,12 +135,6 @@ export function CallMonitor() {
             </span>{" "}
             工具调用量、成败与请求时效。
           </span>
-        }
-        badges={
-          <div className="flex flex-wrap items-center gap-2">
-            <span data-testid="call-monitor-stats-time">统计时间：{statsTimeLabel}</span>
-            {sloBadge}
-          </div>
         }
         actions={
           <div className="flex flex-wrap items-center gap-3" data-testid="call-monitor-controls">

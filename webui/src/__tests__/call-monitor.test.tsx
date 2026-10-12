@@ -87,13 +87,18 @@ describe("CallMonitor page", () => {
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getByTestId("call-monitor-slo-status")).toHaveTextContent("需关注");
+      expect(screen.getByTestId("call-monitor-kpi-volume")).toHaveTextContent("10");
     });
+    expect(screen.queryByTestId("call-monitor-stats-time")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("call-monitor-slo-status")).not.toBeInTheDocument();
+    expect(screen.getByTestId("page-header")).not.toHaveTextContent("统计时间");
+    expect(screen.getByTestId("call-monitor-kpi-error")).toHaveClass("pl-metric-card--warning");
+    expect(screen.getByTestId("call-monitor-kpi-denied")).toHaveClass("pl-metric-card--warning");
+    expect(screen.getByTestId("call-monitor-kpi-p95")).toHaveClass("pl-metric-card--warning");
     expect(screen.getByRole("heading", { name: "调用监控" })).toBeInTheDocument();
     expect(screen.getByTestId("call-monitor-usage-slow-mark")).toHaveTextContent("问询慢标记自");
     expect(screen.getByTestId("call-monitor-usage-slow-mark")).toHaveTextContent("2026-10-12");
     expect(screen.getByText("慢于多数请求")).toBeInTheDocument();
-    expect(screen.getByTestId("call-monitor-kpi-volume")).toHaveTextContent("10");
     expect(screen.getByTestId("call-monitor-tool-lucy_query")).toHaveAttribute(
       "href",
       "/admin/audit?view=calls&range=24h&tool=lucy_query"
@@ -144,6 +149,7 @@ describe("CallMonitor page", () => {
     await waitFor(() => {
       expect(screen.getByTestId("call-monitor-empty")).toBeInTheDocument();
     });
-    expect(screen.getByTestId("call-monitor-slo-status")).toHaveTextContent("暂无数据");
+    expect(screen.queryByTestId("call-monitor-stats-time")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("call-monitor-slo-status")).not.toBeInTheDocument();
   });
 });

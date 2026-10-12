@@ -541,7 +541,7 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 | Action Impact | 影响 | impact（裸露） | 待办行必填次级文案；Spec 100 |
 | Action Evidence | 证据来源 | evidence（裸露） | 待办行必填；Spec 100 |
 
-调用监控沿用访问治理既有口径：**近 N 调用量**、**多数请求耗时**（P95 次级括注）、**慢于多数请求**、**统计时间**；时效只计单次 MCP 工具调用 `durationMs`，不计 Turn 端到端。Protected DOM 另含 tool name、`requestId`、`traceId`。详见 Spec 143。
+调用监控沿用访问治理既有口径：**近 N 调用量**、**多数请求耗时**（P95 次级括注）、**慢于多数请求**；页头不展示统计时间或 SLO 总状态。时效只计单次 MCP 工具调用 `durationMs`，不计 Turn 端到端。Protected DOM 另含 tool name、`requestId`、`traceId`。详见 Spec 143。
 
 ### 4.7 访问日志 / Admin Audit
 
