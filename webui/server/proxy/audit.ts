@@ -8,6 +8,13 @@ import { resolveSourceRefsForTables } from "./acl.js";
 import { scrubArgsSummaryJson } from "./audit-privacy.js";
 import { MCP_PROTOCOL_METHODS as PROTOCOL_TOOLS } from "./mcp-request-classification.js";
 import {
+  CALL_MONITOR_P95_MIN_SAMPLES,
+  callMonitorBucketIndex,
+  callMonitorWindow,
+  parseCallMonitorRange,
+  type CallMonitorRange
+} from "../../src/lib/callMonitorWindow.js";
+import {
   defaultUsageExcluded,
   isEmptyResult,
   isSlowCall,
@@ -360,6 +367,7 @@ async function getDb(): Promise<Database.Database> {
     CREATE INDEX IF NOT EXISTS idx_al_user_token_ts ON access_log(user_id, token_hash_prefix, ts);
     CREATE INDEX IF NOT EXISTS idx_al_session_ts ON access_log(lucy_session_id, ts);
     CREATE INDEX IF NOT EXISTS idx_al_client_ip_ts ON access_log(client_ip, ts);
+    CREATE INDEX IF NOT EXISTS idx_al_ts ON access_log(ts);
   `);
   return db;
 }
@@ -908,11 +916,33 @@ export async function readR1AuditObservability(options: { hours?: number; slowMs
   };
 }
 
-export type CallMonitorRange = "24h" | "1h";
+export type { CallMonitorRange } from "../../src/lib/callMonitorWindow.js";
+
+export type CallMonitorSeriesPoint = {
+  start: string;
+  businessCalls: number;
+  okCalls: number;
+  errorCalls: number;
+  deniedCalls: number;
+  successRate: number | null;
+  errorRate: number | null;
+  deniedRate: number | null;
+  p95Ms: number | null;
+  slowCalls: number;
+};
 
 export type CallMonitorSnapshot = {
   generatedAt: string;
-  window: { range: CallMonitorRange; hours: number; since: string; slowMs: number };
+  window: {
+    range: CallMonitorRange;
+    timeZone: "Asia/Shanghai";
+    bucket: "5m" | "hour" | "day";
+    bucketCount: number;
+    since: string;
+    until: string;
+    slowMs: number;
+  };
+  series: CallMonitorSeriesPoint[];
   traffic: {
     businessCalls: number;
     okCalls: number;
@@ -950,30 +980,27 @@ export type CallMonitorSnapshot = {
   }>;
 };
 
-/** Spec 143: MCP-only call monitor aggregate (no Eval / Hermes fields). */
+/** Spec 143 + Spec 165: MCP-only call monitor aggregate (no Eval / Hermes fields). */
 export async function readCallMonitorSnapshot(options: {
   range?: CallMonitorRange;
-  hours?: number;
   slowMs?: number;
+  now?: Date;
 } = {}): Promise<CallMonitorSnapshot> {
-  const range: CallMonitorRange = options.range === "1h" ? "1h" : "24h";
-  const hours = Math.min(
-    Math.max(Math.floor(options.hours ?? (range === "1h" ? 1 : 24)), 1),
-    24 * 90
-  );
+  const range = parseCallMonitorRange(options.range);
   const slowMs = Math.max(
     Math.floor(options.slowMs ?? Number(process.env.LUCY_OBSERVABILITY_SLOW_MS ?? 30_000)),
     1
   );
-  const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+  const now = options.now ?? new Date();
+  const plan = callMonitorWindow(range, now);
   const database = await getDb();
 
   const rows = database.prepare(`
     SELECT id, ts, user_id, tool, outcome, duration_ms, request_id, trace_id, decision_reason
     FROM access_log
-    WHERE ts >= ?
+    WHERE ts >= ? AND ts <= ?
     ORDER BY ts DESC, id DESC
-  `).all(since) as Array<{
+  `).all(plan.since, plan.until) as Array<{
     id: number;
     ts: string;
     user_id: string;
@@ -986,22 +1013,73 @@ export async function readCallMonitorSnapshot(options: {
   }>;
 
   const protocolTools = new Set<string>(PROTOCOL_TOOLS);
-  const businessRows = rows.filter((row) => !protocolTools.has(row.tool));
-  const okCalls = businessRows.filter((row) => row.outcome === "ok").length;
-  const errorCalls = businessRows.filter((row) => row.outcome === "error").length;
-  const deniedCalls = businessRows.filter((row) => row.outcome === "denied").length;
-  const durations = businessRows.map((row) => row.duration_ms).filter((value) => Number.isFinite(value));
-  // Spec 143: slow call is strictly greater than slowMs (not capped by preview slice).
-  const slowCalls = businessRows.filter((row) => row.duration_ms > slowMs).length;
+  const businessRows = rows.filter((row) =>
+    !protocolTools.has(row.tool) && callMonitorBucketIndex(row.ts, plan) >= 0
+  );
 
+  const bucketTotals = plan.buckets.map(() => ({
+    businessCalls: 0,
+    okCalls: 0,
+    errorCalls: 0,
+    deniedCalls: 0,
+    slowCalls: 0,
+    durations: [] as number[]
+  }));
   const tools = new Map<string, { tool: string; calls: number; denied: number; errors: number }>();
+  const durations: number[] = [];
   for (const row of businessRows) {
+    const index = callMonitorBucketIndex(row.ts, plan);
+    const bucket = bucketTotals[index];
+    if (!bucket) continue;
+    bucket.businessCalls += 1;
+    if (row.outcome === "ok") bucket.okCalls += 1;
+    if (row.outcome === "error") bucket.errorCalls += 1;
+    if (row.outcome === "denied") bucket.deniedCalls += 1;
+    if (row.duration_ms > slowMs) bucket.slowCalls += 1;
+    if (Number.isFinite(row.duration_ms)) {
+      bucket.durations.push(row.duration_ms);
+      durations.push(row.duration_ms);
+    }
+
     const tool = tools.get(row.tool) ?? { tool: row.tool, calls: 0, denied: 0, errors: 0 };
     tool.calls += 1;
     if (row.outcome === "denied") tool.denied += 1;
     if (row.outcome === "error") tool.errors += 1;
     tools.set(row.tool, tool);
   }
+
+  const series = plan.buckets.map((bucket, index) => {
+    const totals = bucketTotals[index] ?? {
+      businessCalls: 0,
+      okCalls: 0,
+      errorCalls: 0,
+      deniedCalls: 0,
+      slowCalls: 0,
+      durations: []
+    };
+    const hasCalls = totals.businessCalls > 0;
+    return {
+      start: bucket.start,
+      businessCalls: totals.businessCalls,
+      okCalls: totals.okCalls,
+      errorCalls: totals.errorCalls,
+      deniedCalls: totals.deniedCalls,
+      successRate: hasCalls ? rate(totals.okCalls, totals.businessCalls) : null,
+      errorRate: hasCalls ? rate(totals.errorCalls, totals.businessCalls) : null,
+      deniedRate: hasCalls ? rate(totals.deniedCalls, totals.businessCalls) : null,
+      p95Ms: totals.businessCalls >= CALL_MONITOR_P95_MIN_SAMPLES
+        ? percentile(totals.durations, 0.95)
+        : null,
+      slowCalls: totals.slowCalls
+    };
+  });
+
+  const okCalls = series.reduce((sum, point) => sum + point.okCalls, 0);
+  const errorCalls = series.reduce((sum, point) => sum + point.errorCalls, 0);
+  const deniedCalls = series.reduce((sum, point) => sum + point.deniedCalls, 0);
+  const businessCalls = series.reduce((sum, point) => sum + point.businessCalls, 0);
+  // Spec 143: slow call is strictly greater than slowMs (not capped by preview slice).
+  const slowCalls = series.reduce((sum, point) => sum + point.slowCalls, 0);
 
   const recentFailures = businessRows
     .filter((row): row is typeof row & { outcome: "error" | "denied" } =>
@@ -1025,12 +1103,12 @@ export async function readCallMonitorSnapshot(options: {
     maxDeniedRate: Number(process.env.LUCY_OBSERVABILITY_MAX_DENIED_RATE ?? 0.1)
   };
   const p95Ms = percentile(durations, 0.95);
-  const successRate = rate(okCalls, businessRows.length);
-  const errorRate = rate(errorCalls, businessRows.length);
-  const deniedRate = rate(deniedCalls, businessRows.length);
+  const successRate = rate(okCalls, businessCalls);
+  const errorRate = rate(errorCalls, businessCalls);
+  const deniedRate = rate(deniedCalls, businessCalls);
   const violations: Array<"latency_p95" | "error_rate" | "denied_rate"> = [];
   let status: "ok" | "warn" | "no_data" = "ok";
-  if (businessRows.length <= 0) {
+  if (businessCalls <= 0) {
     status = "no_data";
   } else {
     if ((p95Ms ?? 0) > thresholds.p95LatencyMs) violations.push("latency_p95");
@@ -1040,10 +1118,19 @@ export async function readCallMonitorSnapshot(options: {
   }
 
   return {
-    generatedAt: new Date().toISOString(),
-    window: { range, hours, since, slowMs },
+    generatedAt: now.toISOString(),
+    window: {
+      range: plan.range,
+      timeZone: plan.timeZone,
+      bucket: plan.bucket,
+      bucketCount: plan.bucketCount,
+      since: plan.since,
+      until: plan.until,
+      slowMs
+    },
+    series,
     traffic: {
-      businessCalls: businessRows.length,
+      businessCalls,
       okCalls,
       errorCalls,
       deniedCalls,

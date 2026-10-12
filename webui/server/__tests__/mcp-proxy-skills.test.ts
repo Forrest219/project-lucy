@@ -195,7 +195,7 @@ not for agents
     else process.env.LUCY_CONTENT_ROOT = previousContentRoot;
     await new Promise<void>((resolve) => upstreamServer.close(() => resolve()));
     await new Promise<void>((resolve) => proxyServer.close(() => resolve()));
-    await rm(projectRoot, { recursive: true, force: true });
+    await rm(projectRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
   });
 
   it("injects governed skills in initialize instructions", async () => {
@@ -396,9 +396,9 @@ not for agents
       method: "resources/read",
       params: { uri: "lucy-skill://superstore/mock-profit-skill" }
     });
-    const readJson = await read.json() as { error?: { code: number; message: string } };
-    expect(readJson.error?.code).toBe(-32003);
-    expect(readJson.error?.message).toContain("skill_channel_forbidden:read");
+    const readJson = await read.json() as { result?: { contents?: Array<{ text?: string }> }; error?: { message?: string } };
+    expect(readJson.error).toBeUndefined();
+    expect(JSON.stringify(readJson.result ?? {})).toContain("Mock Profit Analysis SOP");
   });
 
   it("hides draft skills from all agent channels (Spec 144)", { timeout: 20000 }, async () => {    const post = (body: unknown) =>

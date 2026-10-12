@@ -1,6 +1,6 @@
 import { access } from "node:fs/promises";
 import path from "node:path";
-import { stringify } from "yaml";
+import { parse as parseYaml, stringify } from "yaml";
 import { auditedRemoveFile, auditedWriteFile } from "../admin/config-audit-write.js";
 import { previewDiff } from "../diff.js";
 import { resolveRoleIds } from "../proxy/acl.js";
@@ -142,7 +142,25 @@ export function skillRelativePath(domain: string, name: string): string {
   return path.join("skills", assertSegment("domain", domain), `${assertSegment("name", name)}.md`);
 }
 
-export function assembleSkillMarkdown(input: SkillWriteInput): string {
+/** Spec 170: copy an existing `roles_allowed` key through; omit it when absent. */
+function preservedRolesAllowed(raw: string): string[] | undefined {
+  if (!raw.startsWith("---\n")) return undefined;
+  const end = raw.indexOf("\n---", 4);
+  if (end < 0) return undefined;
+  let data: unknown;
+  try {
+    data = parseYaml(raw.slice(4, end));
+  } catch {
+    return undefined;
+  }
+  if (!data || typeof data !== "object" || Array.isArray(data)) return undefined;
+  if (!Object.prototype.hasOwnProperty.call(data, "roles_allowed")) return undefined;
+  const value = (data as { roles_allowed?: unknown }).roles_allowed;
+  if (!Array.isArray(value)) return undefined;
+  return value.filter((item): item is string => typeof item === "string");
+}
+
+export function assembleSkillMarkdown(input: SkillWriteInput, preservedRolesAllowed?: string[]): string {
   if (typeof input.rawContent === "string") {
     return input.rawContent;
   }
@@ -154,12 +172,14 @@ export function assembleSkillMarkdown(input: SkillWriteInput): string {
     version: input.version?.trim() || "1.0.0",
     domain,
     status: input.status === "published" || input.status === "deprecated" ? input.status : "draft",
-    roles_allowed: normalizeRolesAllowed(input.roles_allowed),
     triggers: Array.isArray(input.triggers) ? input.triggers : [],
     description:
       input.description?.trim() ||
       `${input.title?.trim() || name} - ${domain} domain governed skill SOP`
   };
+  if (preservedRolesAllowed) {
+    frontmatter.roles_allowed = preservedRolesAllowed;
+  }
   if (input.prerequisites) frontmatter.prerequisites = input.prerequisites;
   if (Array.isArray(input.eval_cases) && input.eval_cases.length > 0) {
     frontmatter.eval_cases = input.eval_cases;
@@ -265,7 +285,7 @@ async function prepareUpdateSkillFile(
     content: input.content ?? existing.content,
     rawContent: input.rawContent
   };
-  const raw = assembleSkillMarkdown(merged);
+  const raw = assembleSkillMarkdown(merged, preservedRolesAllowed(existing.raw));
   const skillsDir = (await loadContentPaths()).skills;
   const parsed = await parseOrThrow(projectRoot, raw, path.join(skillsDir, relPath.slice("skills/".length)));
   if (parsed.uri !== oldUri) {

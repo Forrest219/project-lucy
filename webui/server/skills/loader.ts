@@ -2,7 +2,6 @@ import { createHash } from "node:crypto";
 import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { parse } from "yaml";
-import { resolveProjectRoot } from "../project.js";
 import { loadContentPaths } from "../paths.js";
 import type { SkillAsset, SkillFrontmatter } from "./types.js";
 
@@ -115,10 +114,9 @@ async function scanDirectoryForSkills(dir: string, projectRoot: string, accumula
     } else if (entry.isFile() && (entry.name.endsWith(".md") || entry.name.endsWith(".markdown"))) {
       try {
         const rawContent = await readFile(fullPath, "utf-8");
-        // `dir` is the resolved skills root (ContentPaths.skills), so the
-        // relative path produced for inference is content-dir-relative
-        // (e.g. `<domain>/SKILL.md`), not project-root-relative.
-        const skill = parseSkillMarkdown(rawContent, fullPath, dir);
+        // `projectRoot` here is the parent of the skills directory, so the
+        // stored path stays `skills/...` for both domain inference and writes.
+        const skill = parseSkillMarkdown(rawContent, fullPath, projectRoot);
         if (skill) {
           accumulator.push(skill);
         }
@@ -135,11 +133,10 @@ export async function loadAllSkills(customSkillsDir?: string, customProjectRoot?
     return skillsCache;
   }
 
-  const projectRoot = customProjectRoot ?? (await resolveProjectRoot());
   const skillsDir = customSkillsDir ?? (await loadContentPaths()).skills;
 
   const results: SkillAsset[] = [];
-  await scanDirectoryForSkills(skillsDir, projectRoot, results);
+  await scanDirectoryForSkills(skillsDir, path.dirname(skillsDir), results);
 
   if (!customSkillsDir && !customProjectRoot) {
     skillsCache = results;

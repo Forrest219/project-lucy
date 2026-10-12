@@ -192,7 +192,7 @@ status: draft
     const { readFile } = await import("node:fs/promises");
     const text = await readFile(path.join(projectRoot, "skills", "acceptance", "new-skill.md"), "utf8");
     expect(text).toContain("name: new-skill");
-    expect(text).toContain("roles_allowed: []");
+    expect(text).not.toContain("roles_allowed");
   });
 
   it("previews create without writing and reports validation and authorization impact", async () => {
@@ -216,11 +216,10 @@ status: draft
     expect(json.preview.uri).toBe("lucy-skill://acceptance/preview-only");
     expect(json.preview.proposedMarkdown).toContain("name: preview-only");
     expect(json.preview.diff).toContain("# Preview");
-    expect(json.preview.validation.valid).toBe(false);
-    expect(json.preview.validation.issues).toEqual(expect.arrayContaining([
-      expect.objectContaining({ code: "skill_eval_required", field: "eval_cases" })
-    ]));
-    expect(json.preview.impact.enteredWildcard).toBe(true);
+    expect(json.preview.validation.valid).toBe(true);
+    expect(json.preview.validation.issues).toEqual([]);
+    expect(json.preview.proposedMarkdown).not.toContain("roles_allowed");
+    expect(json.preview.impact.enteredWildcard).toBe(false);
     expect(json.preview.impact.status).toEqual({ from: null, to: "published" });
     await expect(access(target)).rejects.toThrow();
   });
@@ -251,7 +250,8 @@ status: draft
     expect(json.preview.operation).toBe("update");
     expect(json.preview.diff).toContain("Changed only in preview");
     expect(json.preview.impact.status).toEqual({ from: "published", to: "draft" });
-    expect(json.preview.impact.exitedWildcard).toBe(true);
+    expect(json.preview.proposedMarkdown).toContain("roles_allowed");
+    expect(json.preview.impact.exitedWildcard).toBe(false);
     expect(await readFile(entry, "utf8")).toBe(before);
 
     const stale = await app.inject({
@@ -338,7 +338,9 @@ status: draft
     });
     expect(updated.statusCode).toBe(200);
     expect(updated.json().skill.relativePath).toBe("skills/legacy_domain/SKILL.md");
-    expect(await readFile(entry, "utf8")).toContain("New");
+    const saved = await readFile(entry, "utf8");
+    expect(saved).toContain("New");
+    expect(saved).toContain("roles_allowed: []");
     await expect(access(path.join(dir, "legacy-skill.md"))).rejects.toThrow();
   });
 
@@ -408,7 +410,7 @@ status: draft
     expect(get.statusCode).toBe(404);
   });
 
-  it("allows save of published skill without eval_cases and returns validation false (SC-147-06)", async () => {
+  it("allows save of published skill without eval_cases and treats it as valid (SC-147-06)", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/api/skills",
@@ -421,8 +423,8 @@ status: draft
     });
     expect(res.statusCode).toBe(201);
     const json = res.json();
-    expect(json.skill.validation.valid).toBe(false);
-    expect(json.skill.validation.issues.some((i: { field: string }) => i.field === "eval_cases")).toBe(true);
+    expect(json.skill.validation.valid).toBe(true);
+    expect(json.skill.validation.issues).toEqual([]);
   });
 
   it("rejects broken frontmatter on create (SC-147-06)", async () => {

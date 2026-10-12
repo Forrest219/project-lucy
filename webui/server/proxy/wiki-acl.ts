@@ -3,7 +3,6 @@ import path from "node:path";
 import { parse } from "yaml";
 import { resolveProjectRoot } from "../project.js";
 import { loadContentPaths } from "../paths.js";
-import { effectivePermissions, type EffectivePermissions, type EffectiveSource } from "./acl.js";
 import type { Identity } from "./identity.js";
 
 export interface WikiPage {
@@ -33,10 +32,6 @@ export interface WikiInjectionRef {
 export interface WikiAclDecision {
   allowed: boolean;
   reason?: string;
-}
-
-function normalizeRef(value: string): string {
-  return value.trim().replace(/[`"']/g, "").toLowerCase();
 }
 
 function asStringList(value: unknown): string[] {
@@ -125,50 +120,13 @@ export function wikiInjectionRefs(pages: Array<Pick<WikiPage, "key" | "metadata"
   }));
 }
 
-function sourceMatchesRef(source: EffectiveSource, rawRef: string): boolean {
-  const ref = normalizeRef(rawRef);
-  if (!ref) return false;
-  const slashParts = ref.split("/").filter(Boolean);
-  if (slashParts.length >= 3) {
-    const [connectionId, schema, name] = slashParts;
-    return source.connectionId === connectionId
-      && source.schema === schema
-      && (source.sourceName === name || source.table === `${schema}.${name}`);
-  }
-  const dotParts = ref.split(".").filter(Boolean);
-  if (dotParts.length >= 2) {
-    const schema = dotParts[dotParts.length - 2];
-    const name = dotParts[dotParts.length - 1];
-    return source.schema === schema && (source.sourceName === name || source.table === `${schema}.${name}`);
-  }
-  return source.sourceName === ref || source.table === ref;
-}
-
-function canAccessSourceRef(permissions: EffectivePermissions, rawRef: string): boolean {
-  const ref = normalizeRef(rawRef);
-  if (!ref) return false;
-  if (permissions.tables.includes("*")) return true;
-  return permissions.sources.some((source) => sourceMatchesRef(source, ref));
-}
-
-export async function canAccessWikiPage(identity: Identity, page: WikiPage): Promise<WikiAclDecision> {
-  const resolved = await effectivePermissions(identity);
-  if (!resolved.ok) return { allowed: false, reason: resolved.reason };
-  const permissions = resolved.permissions;
-  if (page.metadata.visibility === "public") return { allowed: true };
-
-  if (page.metadata.allowedRoles.length > 0) {
-    const allowedRoles = new Set(page.metadata.allowedRoles.map(normalizeRef));
-    if (permissions.roleIds.some((role) => allowedRoles.has(normalizeRef(role)))) {
-      return { allowed: true };
-    }
-  }
-
-  if (page.metadata.slRefs.length > 0 && page.metadata.slRefs.every((ref) => canAccessSourceRef(permissions, ref))) {
-    return { allowed: true };
-  }
-
-  return { allowed: false, reason: "wiki_forbidden" };
+/**
+ * Spec 170: a resolved Wiki page is readable by every agent that can call
+ * the context tools. `visibility`, `allowed_roles` and `sl_refs` stay on the
+ * file for a later rollback, and `sl_refs` still drive editor links.
+ */
+export async function canAccessWikiPage(_identity: Identity, _page: WikiPage): Promise<WikiAclDecision> {
+  return { allowed: true };
 }
 
 export async function canAccessWikiKey(identity: Identity, key: string): Promise<{ page?: WikiPage; decision: WikiAclDecision }> {

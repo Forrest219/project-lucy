@@ -110,12 +110,10 @@ describe("wiki natural-language search", () => {
     expect(hits).toEqual([]);
   });
 
-  it("never injects an article outside the role's readable set (SC-12)", async () => {
+  it("returns a private article to every resolved role (Spec 170 SC-3)", async () => {
     const { searchAccessibleWikiPages } = await freshWikiModule();
-    // "薪酬" only appears in the private finance_admin article.
     const hits = await searchAccessibleWikiPages(analystIdentity(), "薪酬", 10);
-    expect(hits).toEqual([]);
-    expect(JSON.stringify(hits)).not.toContain("payroll.md");
+    expect(hits.some((hit) => hit.key.includes("payroll.md"))).toBe(true);
   });
 
   it("audits each injected article with its id and Wiki version (SC-12)", async () => {

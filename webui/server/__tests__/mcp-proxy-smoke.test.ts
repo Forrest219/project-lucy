@@ -478,6 +478,8 @@ describe("MCP proxy smoke", () => {
         "kx_catalog",
         "wiki_search",
         "wiki_read",
+        "lucy_skill_search",
+        "lucy_skill_read",
         "lucy_begin_question"
       ]);
       const lucyQuerySchema = listBody.result.tools.find((tool) => tool.name === "lucy_query")?.inputSchema as { properties?: Record<string, { items?: { type?: string } }> } | undefined;
@@ -592,18 +594,20 @@ describe("MCP proxy smoke", () => {
       const listBody = await listRes.json() as { result: { tools: Array<{ name: string }> } };
       const names = listBody.result.tools.map((tool) => tool.name);
       expect(names).toEqual([
+        "wiki_search",
+        "wiki_read",
         "lucy_catalog",
         "lucy_read_source",
         "lucy_query",
         "lucy_explain_query",
         "lucy_freshness",
+        "lucy_skill_search",
+        "lucy_skill_read",
         "lucy_begin_question"
       ]);
       expect(names).not.toEqual(expect.arrayContaining([
         "sl_query",
         "sl_read_source",
-        "wiki_search",
-        "wiki_read",
         "kx_catalog",
         "sql_execution",
         "future_table_export"
@@ -1515,6 +1519,8 @@ describe("MCP proxy smoke", () => {
         "kx_catalog",
         "wiki_search",
         "wiki_read",
+        "lucy_skill_search",
+        "lucy_skill_read",
         "lucy_begin_question"
       ]);
 
@@ -1884,10 +1890,9 @@ describe("MCP proxy smoke", () => {
         })
       });
       expect(readDenied.status).toBe(200);
-      const readDeniedBody = await readDenied.json() as { result: { isError: boolean; content: Array<{ text: string }> } };
-      expect(readDeniedBody.result.isError).toBe(true);
-      expect(readDeniedBody.result.content[0]?.text ?? "").toBe("Access denied: wiki_forbidden");
-      expect(readDeniedBody.result.content[0]?.text ?? "").not.toContain("KX Secret Wiki");
+      const readDeniedBody = await readDenied.json() as { result: { isError?: boolean; content: Array<{ text: string }> } };
+      expect(readDeniedBody.result.isError).not.toBe(true);
+      expect(readDeniedBody.result.content[0]?.text ?? "").toContain("KX Secret Wiki");
 
       const search = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
         method: "POST",
@@ -1903,9 +1908,6 @@ describe("MCP proxy smoke", () => {
       const searchBody = await search.json() as { result: { content: Array<{ text: string }> } };
       const searchText = searchBody.result.content[0]?.text ?? "";
       expect(searchText).toContain("global/superstore.md");
-      expect(searchText).not.toContain("KX Secret Wiki");
-      expect(searchText).not.toContain("Unauthorized KX context");
-      expect(searchText).not.toContain("POC Wiki");
 
       const kxSearch = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
         method: "POST",
@@ -1921,8 +1923,8 @@ describe("MCP proxy smoke", () => {
       const kxSearchBody = await kxSearch.json() as { result: { content: Array<{ text: string }> } };
       const kxSearchText = kxSearchBody.result.content[0]?.text ?? "";
       expect(kxSearchText).toContain("KX Secret Wiki");
-      expect(kxSearchText).not.toContain("Superstore Wiki");
-      expect(kxSearchText).not.toContain("POC Wiki");
+      expect(kxSearchText).toContain("Superstore Wiki");
+      expect(kxSearchText).toContain("POC Wiki");
 
       const kxReadAllowed = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
         method: "POST",
@@ -1949,9 +1951,9 @@ describe("MCP proxy smoke", () => {
         })
       });
       expect(kxReadDenied.status).toBe(200);
-      const kxReadDeniedBody = await kxReadDenied.json() as { result: { isError: boolean; content: Array<{ text: string }> } };
-      expect(kxReadDeniedBody.result.isError).toBe(true);
-      expect(kxReadDeniedBody.result.content[0]?.text ?? "").not.toContain("POC Wiki");
+      const kxReadDeniedBody = await kxReadDenied.json() as { result: { isError?: boolean; content: Array<{ text: string }> } };
+      expect(kxReadDeniedBody.result.isError).not.toBe(true);
+      expect(kxReadDeniedBody.result.content[0]?.text ?? "").toContain("POC Wiki");
 
       const pocSearch = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
         method: "POST",
@@ -1967,8 +1969,8 @@ describe("MCP proxy smoke", () => {
       const pocSearchBody = await pocSearch.json() as { result: { content: Array<{ text: string }> } };
       const pocSearchText = pocSearchBody.result.content[0]?.text ?? "";
       expect(pocSearchText).toContain("POC Wiki");
-      expect(pocSearchText).not.toContain("KX Secret Wiki");
-      expect(pocSearchText).not.toContain("Superstore Wiki");
+      expect(pocSearchText).toContain("KX Secret Wiki");
+      expect(pocSearchText).toContain("Superstore Wiki");
 
       const pocReadDenied = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
         method: "POST",
@@ -1981,20 +1983,20 @@ describe("MCP proxy smoke", () => {
         })
       });
       expect(pocReadDenied.status).toBe(200);
-      const pocReadDeniedBody = await pocReadDenied.json() as { result: { isError: boolean; content: Array<{ text: string }> } };
-      expect(pocReadDeniedBody.result.isError).toBe(true);
-      expect(pocReadDeniedBody.result.content[0]?.text ?? "").not.toContain("KX Secret Wiki");
+      const pocReadDeniedBody = await pocReadDenied.json() as { result: { isError?: boolean; content: Array<{ text: string }> } };
+      expect(pocReadDeniedBody.result.isError).not.toBe(true);
+      expect(pocReadDeniedBody.result.content[0]?.text ?? "").toContain("KX Secret Wiki");
 
       expect(upstreamSeen).toHaveLength(3);
       const deniedAudit = await waitForAuditRow("wiki-read-denied");
-      expect(deniedAudit.outcome).toBe("denied");
-      expect(deniedAudit.decision_reason).toBe("wiki_forbidden");
+      expect(deniedAudit.outcome).toBe("ok");
+      expect(deniedAudit.decision_reason).toBe("allowed");
       const kxDeniedAudit = await waitForAuditRow("wiki-read-kx-deny-poc");
-      expect(kxDeniedAudit.outcome).toBe("denied");
-      expect(kxDeniedAudit.decision_reason).toBe("wiki_forbidden");
+      expect(kxDeniedAudit.outcome).toBe("ok");
+      expect(kxDeniedAudit.decision_reason).toBe("allowed");
       const pocDeniedAudit = await waitForAuditRow("wiki-read-poc-deny-kx");
-      expect(pocDeniedAudit.outcome).toBe("denied");
-      expect(pocDeniedAudit.decision_reason).toBe("wiki_forbidden");
+      expect(pocDeniedAudit.outcome).toBe("ok");
+      expect(pocDeniedAudit.decision_reason).toBe("allowed");
     } finally {
       await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
       await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));
@@ -2057,7 +2059,7 @@ describe("MCP proxy smoke", () => {
       expect(aliasBody.error).toBeUndefined();
       const aliasText = aliasBody.result?.content[0]?.text ?? "";
       expect(aliasText).toContain("global/superstore.md");
-      expect(aliasText).not.toContain("KX Secret Wiki");
+      expect(aliasText).toContain("KX Secret Wiki");
       expect(upstreamSeen[0]).toEqual({ query: "revenue", limit: 5 });
       expect(upstreamSeen[0]).not.toHaveProperty("q");
 
@@ -2115,7 +2117,13 @@ describe("MCP proxy smoke", () => {
       });
       const listBody = await listRes.json() as { result: { tools: Array<{ name: string }> } };
       const names = listBody.result.tools.map((tool) => tool.name);
-      expect(names).toEqual(["lucy_read_source"]);
+      expect(names).toEqual([
+        "lucy_read_source",
+        "wiki_search",
+        "wiki_read",
+        "lucy_skill_search",
+        "lucy_skill_read"
+      ]);
       expect(names).not.toContain("lucy_begin_question");
       expect(names).not.toContain("kx_catalog");
     } finally {

@@ -112,8 +112,12 @@ roles:
       path.join(REPO_ROOT, "examples/docker-demo/project-template/webui/config/access.yaml"),
       "utf8"
     );
-    expect(template.match(/lucy_skill_read/g)?.length).toBe(1);
-    expect(template.match(/lucy_skill_search/g)?.length).toBe(1);
+    const demoBlock = template.split(/^  demo_readonly:/m)[1]?.split(/\n  \S/m)[0] ?? "";
+    const adminBlock = template.split(/^  lucy_admin:/m)[1]?.split(/\nusers:/m)[0] ?? "";
+    expect(demoBlock.match(/- lucy_skill_read/g)?.length).toBe(1);
+    expect(demoBlock.match(/- lucy_skill_search/g)?.length).toBe(1);
+    expect(adminBlock).toContain("- lucy_skill_read");
+    expect(adminBlock).toContain("- lucy_skill_search");
 
     const tmp = await mkdtemp(path.join(os.tmpdir(), "skill-patch-"));
     const accessPath = path.join(tmp, "access.yaml");

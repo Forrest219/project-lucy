@@ -354,13 +354,23 @@ function frontmatterFromData(data: Record<string, unknown>): WikiFrontmatter {
   };
 }
 
-function serializeWiki(frontmatter: WikiFrontmatter, content: string): string {
+function preservedWikiAuth(data: Record<string, unknown> | undefined): Record<string, unknown> {
+  if (!data) return {};
+  const preserved: Record<string, unknown> = {};
+  if (Object.prototype.hasOwnProperty.call(data, "visibility")) preserved.visibility = data.visibility;
+  if (Object.prototype.hasOwnProperty.call(data, "allowed_roles")) preserved.allowed_roles = data.allowed_roles;
+  return preserved;
+}
+
+function serializeWiki(frontmatter: WikiFrontmatter, content: string, preserved: Record<string, unknown> = {}): string {
   const data: Record<string, unknown> = {};
   if (frontmatter.summary) data.summary = frontmatter.summary;
   if (frontmatter.tags?.length) data.tags = frontmatter.tags;
   if (frontmatter.sl_refs?.length) data.sl_refs = frontmatter.sl_refs;
   if (frontmatter.refs?.length) data.refs = frontmatter.refs;
   if (frontmatter.usage_mode) data.usage_mode = frontmatter.usage_mode;
+  if (Object.prototype.hasOwnProperty.call(preserved, "visibility")) data.visibility = preserved.visibility;
+  if (Object.prototype.hasOwnProperty.call(preserved, "allowed_roles")) data.allowed_roles = preserved.allowed_roles;
   return matter.stringify(content ?? "", data);
 }
 
@@ -1281,7 +1291,11 @@ export async function previewWikiWrite(projectRoot: string, key: string, input: 
     ...frontmatterFromData(current.data),
     ...(input.frontmatter ?? {})
   };
-  const proposedMarkdown = serializeWiki(frontmatter, input.content ?? current.content);
+  const proposedMarkdown = serializeWiki(
+    frontmatter,
+    input.content ?? current.content,
+    preservedWikiAuth(current.data as Record<string, unknown>)
+  );
   const filePath = relPathForKey(normalized);
   return {
     key: normalized,

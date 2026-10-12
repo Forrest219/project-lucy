@@ -144,99 +144,25 @@ describe("Skill ACL", () => {
     await rm(projectRoot, { recursive: true, force: true });
   });
 
-  it("allows wildcard roles_allowed for any identity", async () => {
-    const decision = await canAccessSkill(mockIdentity, publicSkill);
-    expect(decision.allowed).toBe(true);
-  });
-
-  it("allows matching role from roles_allowed", async () => {
-    const decision = await canAccessSkill(mockIdentity, matchingRoleSkill, "read");
-    expect(decision.allowed).toBe(true);
-    expect(decision.matchedRoleId).toBe("analyst_role");
-  });
-
-  it("treats an empty roles_allowed list as deny-all", async () => {
+  it("allows a published skill with an empty roles_allowed list (SC-1)", async () => {
     const decision = await canAccessSkill(mockIdentity, { ...publicSkill, roles_allowed: [] }, "read");
-    expect(decision).toMatchObject({ allowed: false, reason: "skill_no_roles_allowed" });
-  });
-
-  it("requires the action-specific channel tool", async () => {
-    await writeFile(
-      path.join(projectRoot, "webui", "config", "access.yaml"),
-      ACCESS_YAML.replace("        - lucy_skill_read\n", "")
-    );
-    invalidateAccessConfigCache();
-    resetEffectivePolicyForTests();
-    expect((await canAccessSkill(mockIdentity, matchingRoleSkill, "discover")).allowed).toBe(true);
-    expect(await canAccessSkill(mockIdentity, matchingRoleSkill, "read")).toMatchObject({
-      allowed: false,
-      reason: "skill_channel_forbidden:read"
-    });
-  });
-
-  it("does not combine a role match with another role's channel tool", async () => {
-    await writeFile(
-      path.join(projectRoot, "webui", "config", "access.yaml"),
-      `users:
-  - id: acl_test_user
-    enabled: true
-    roles: [audience_role, reader_role]
-    tokens: []
-roles:
-  audience_role:
-    allow:
-      tools: [lucy_skill_search]
-  reader_role:
-    allow:
-      tools: [lucy_skill_read]
-`
-    );
-    invalidateAccessConfigCache();
-    resetEffectivePolicyForTests();
-    const skill = { ...matchingRoleSkill, roles_allowed: ["audience_role"] };
-    expect((await canAccessSkill(mockIdentity, skill, "discover")).allowed).toBe(true);
-    expect(await canAccessSkill(mockIdentity, skill, "read")).toMatchObject({
-      allowed: false,
-      reason: "skill_channel_forbidden:read"
-    });
-  });
-
-  it("blocks non-matching role from roles_allowed", async () => {
-    const decision = await canAccessSkill(mockIdentity, restrictedSkill);
-    expect(decision.allowed).toBe(false);
-    expect(decision.reason).toContain("skill_role_mismatch");
-  });
-
-  it("keeps unknown role ids fail-closed", async () => {
-    expect(await canAccessSkill(mockIdentity, { ...publicSkill, roles_allowed: ["deleted_role"] }, "read"))
-      .toMatchObject({ allowed: false, reason: "skill_role_mismatch" });
-  });
-
-  it("allows a legacy direct identity only through wildcard plus the action tool", async () => {
-    await writeFile(
-      path.join(projectRoot, "webui", "config", "access.yaml"),
-      `users:
-  - id: acl_test_user
-    enabled: true
-    tokens: []
-    allow:
-      tools: [lucy_skill_read]
-`
-    );
-    invalidateAccessConfigCache();
-    resetEffectivePolicyForTests();
-
-    expect(await canAccessSkill(mockIdentity, publicSkill, "read")).toMatchObject({
+    expect(decision).toMatchObject({ allowed: true, action: "read" });
+    expect(await canAccessSkill(mockIdentity, { ...publicSkill, roles_allowed: [] }, "discover")).toMatchObject({
       allowed: true,
-      matchedRoleId: "__legacy__"
+      action: "discover"
     });
-    expect(await canAccessSkill(mockIdentity, publicSkill, "discover")).toMatchObject({
-      allowed: false,
-      reason: "skill_channel_forbidden:discover"
-    });
-    expect(await canAccessSkill(mockIdentity, matchingRoleSkill, "read")).toMatchObject({
-      allowed: false,
-      reason: "skill_role_required"
+  });
+
+  it("allows published skills regardless of role membership or channel tools (SC-1)", async () => {
+    await writeFile(
+      path.join(projectRoot, "webui", "config", "access.yaml"),
+      ACCESS_YAML.replace("        - lucy_skill_read\n", "").replace("        - lucy_skill_search\n", "")
+    );
+    invalidateAccessConfigCache();
+    resetEffectivePolicyForTests();
+    expect(await canAccessSkill(mockIdentity, restrictedSkill, "read")).toMatchObject({ allowed: true });
+    expect(await canAccessSkill(mockIdentity, { ...publicSkill, roles_allowed: ["deleted_role"] }, "discover")).toMatchObject({
+      allowed: true
     });
   });
 
@@ -273,7 +199,7 @@ roles:
     const names = accessible.map((s) => s.name);
     expect(names).toContain("public-skill");
     expect(names).toContain("analyst-skill");
-    expect(names).not.toContain("finance-audit");
+    expect(names).toContain("finance-audit");
     expect(names).not.toContain("deprecated-skill");
     expect(names).not.toContain("draft-skill");
   });

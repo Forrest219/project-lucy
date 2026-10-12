@@ -1,4 +1,3 @@
-import { effectivePermissions } from "./acl.js";
 import type { Identity } from "./identity.js";
 import type { SkillAsset } from "../skills/types.js";
 
@@ -18,10 +17,6 @@ export interface RoleSkillAccessSummary {
   discoverable: string[];
   readable: string[];
   declaredWithoutChannel: string[];
-}
-
-function requiredTool(action: SkillAclAction): "lucy_skill_search" | "lucy_skill_read" {
-  return action === "discover" ? "lucy_skill_search" : "lucy_skill_read";
 }
 
 export function summarizeRoleSkillAccess(
@@ -48,70 +43,23 @@ export function summarizeRoleSkillAccess(
   };
 }
 
+/**
+ * Spec 170: published skills are open to every resolved agent.
+ * `roles_allowed` and the skill tool channel are not decision inputs.
+ * Draft and deprecated status gates stay.
+ */
 export async function canAccessSkill(
-  identity: Identity,
+  _identity: Identity,
   skill: SkillAsset,
   action: SkillAclAction = "read"
 ): Promise<SkillAclDecision> {
-  const permResult = await effectivePermissions(identity);
-  if (!permResult.ok) {
-    return {
-      allowed: false,
-      reason: `role_resolution_failed: ${permResult.reason}`,
-    };
-  }
-
-  const { roleIds, roleMetaTools = {} } = permResult.permissions;
-
-  // 1. Check skill's status
   if (skill.status === "deprecated") {
-    return {
-      allowed: false,
-      reason: "skill_deprecated",
-    };
+    return { allowed: false, reason: "skill_deprecated", action };
   }
-
-  // Spec 144: only published skills are agent-visible; drafts (incl. missing status) are denied
   if (skill.status !== "published") {
-    return {
-      allowed: false,
-      reason: "skill_not_published",
-    };
+    return { allowed: false, reason: "skill_not_published", action };
   }
-
-  // 2. Check skill's roles_allowed list
-  const rolesAllowed = Array.isArray(skill.roles_allowed) ? skill.roles_allowed : [];
-  if (rolesAllowed.length === 0) {
-    return { allowed: false, reason: "skill_no_roles_allowed", action };
-  }
-
-  const tool = requiredTool(action);
-  const wildcard = rolesAllowed.includes("*");
-  if (roleIds.length === 0) {
-    if (wildcard && (roleMetaTools.__legacy__ ?? []).includes(tool)) {
-      return { allowed: true, action, matchedRoleId: "__legacy__" };
-    }
-    return {
-      allowed: false,
-      reason: wildcard ? `skill_channel_forbidden:${action}` : "skill_role_required",
-      action
-    };
-  }
-
-  let matchedAudience = false;
-  for (const roleId of roleIds) {
-    if (!wildcard && !rolesAllowed.includes(roleId)) continue;
-    matchedAudience = true;
-    if ((roleMetaTools[roleId] ?? []).includes(tool)) {
-      return { allowed: true, action, matchedRoleId: roleId };
-    }
-  }
-
-  return {
-    allowed: false,
-    reason: matchedAudience ? `skill_channel_forbidden:${action}` : "skill_role_mismatch",
-    action
-  };
+  return { allowed: true, action };
 }
 
 export async function filterAccessibleSkills(

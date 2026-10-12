@@ -1022,6 +1022,10 @@ describe("GET /api/admin/mcp-tools", () => {
       "lucy_explain_query",
       "lucy_freshness",
       "lucy_begin_question",
+      "lucy_skill_search",
+      "lucy_skill_read",
+      "lucy_certified_route",
+      "lucy_report_template",
       "sql_dialect_notes"
     ]));
     const dialectNotes = res.body.data.tools.find((tool: { name: string }) => tool.name === "sql_dialect_notes");

@@ -73,6 +73,18 @@ const ACCESS_YAML = `roles:
       tools:
         - wiki_search
         - lucy_catalog
+  qa_only:
+    description: Read-only QA tools with a connection and no table capability
+    allow:
+      connections:
+        - warehouse
+      tools:
+        - lucy_catalog
+        - lucy_read_source
+        - lucy_query
+        - lucy_explain_query
+        - lucy_freshness
+        - lucy_begin_question
 users:
   - id: multi_role_agent
     name: Multi Role Agent
@@ -127,6 +139,16 @@ users:
     name: Meta Only Agent
     enabled: true
     role: meta_only
+    tokens: []
+  - id: qa_only_agent
+    name: QA Only Agent
+    enabled: true
+    role: qa_only
+    tokens: []
+  - id: disabled_qa_agent
+    name: Disabled QA Agent
+    enabled: false
+    role: qa_only
     tokens: []
 defaults:
   deny_tools: []
@@ -347,10 +369,40 @@ describe("WP-I3 Capability synthesis and authorize gate", () => {
     expect(metaCatalog.connections).toEqual(["warehouse"]);
 
     const metaTools = await allowedToolNames(identity("meta_only_agent"));
-    expect(metaTools).toEqual(["wiki_search"]);
+    expect(metaTools).toEqual(["lucy_skill_read", "lucy_skill_search", "wiki_read", "wiki_search"]);
 
     // A DataPlane tool is visible only when at least one capability names that tool.
-    expect(await allowedToolNames(identity("multi_role_agent"))).toEqual(["lucy_query", "lucy_read_source"]);
+    // Spec 170 also unions the four context tools.
+    expect(await allowedToolNames(identity("multi_role_agent"))).toEqual([
+      "lucy_query",
+      "lucy_read_source",
+      "lucy_skill_read",
+      "lucy_skill_search",
+      "wiki_read",
+      "wiki_search"
+    ]);
+  });
+
+  it("keeps context tools available for a QA role with no table capability (SC-4)", async () => {
+    const { allowedToolNames, authorizeAndRewrite } = await loadAcl();
+    const names = await allowedToolNames(identity("qa_only_agent"));
+    expect(names).toEqual(expect.arrayContaining([
+      "lucy_skill_read",
+      "lucy_skill_search",
+      "wiki_read",
+      "wiki_search"
+    ]));
+    for (const tool of ["wiki_search", "wiki_read", "lucy_skill_search", "lucy_skill_read"]) {
+      await expect(authorizeAndRewrite(identity("qa_only_agent"), tool, {})).resolves.toMatchObject({ allowed: true });
+    }
+    await expect(authorizeAndRewrite(identity("qa_only_agent"), "lucy_query", {
+      connectionId: "warehouse",
+      measures: ["pub_orders.amount"]
+    })).resolves.toEqual({ allowed: false, reason: "tool_forbidden" });
+    await expect(authorizeAndRewrite(identity("disabled_qa_agent"), "wiki_search", {})).resolves.toEqual({
+      allowed: false,
+      reason: "agent_disabled"
+    });
   });
 
   it("denies lucy_read_source alias args that would bypass empty-source capability loop", async () => {

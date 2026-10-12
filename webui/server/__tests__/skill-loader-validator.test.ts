@@ -89,14 +89,43 @@ domain: test_domain
       file_version: "v1",
     };
 
-    const res = await validateSkill(invalidSkill);
+    const res = validateSkill(invalidSkill);
     expect(res.valid).toBe(false);
     const fields = res.issues.map((i) => i.field);
     expect(fields).toContain("name");
     expect(fields).toContain("title");
     expect(fields).toContain("domain");
-    expect(fields).toContain("prerequisites.wiki_docs");
-    expect(fields).toContain("eval_cases");
+    expect(fields).not.toContain("prerequisites.wiki_docs");
+    expect(fields).not.toContain("eval_cases");
+  });
+
+  it("accepts a published public skill without eval, wiki, or semantic sources", () => {
+    const skill: SkillAsset = {
+      name: "shared-sop",
+      title: "共享 SOP",
+      domain: "global",
+      version: "1.0.0",
+      status: "published",
+      roles_allowed: ["*"],
+      prerequisites: {
+        sources: ["mysql-aliyun.missing_table"],
+        measures: [],
+        wiki_docs: ["missing-playbook.md"],
+      },
+      triggers: [],
+      eval_cases: [],
+      description: "public skill",
+      uri: "lucy-skill://global/shared-sop",
+      relativePath: "skills/global/shared-sop.md",
+      filePath: "/workspace/skills/global/shared-sop.md",
+      content: "# Body",
+      raw: "raw",
+      file_version: "v1",
+    };
+
+    const res = validateSkill(skill);
+    expect(res.valid).toBe(true);
+    expect(res.issues).toEqual([]);
   });
 
   it("loads actual repository skills and finds superstore-profit-breakdown", async () => {

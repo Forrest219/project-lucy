@@ -77,6 +77,22 @@ describe("wiki editor storage", () => {
     expect(page.content).toContain("# Revenue");
   });
 
+  it("keeps visibility and allowed_roles when the editor saves (SC-8)", async () => {
+    await writeFile(
+      path.join(projectRoot, "wiki", "global", "payroll.md"),
+      "---\nvisibility: private\nallowed_roles:\n  - finance_admin\nsummary: Payroll\n---\n# Payroll\n",
+      "utf8"
+    );
+    await writeWiki(projectRoot, "global/payroll.md", {
+      frontmatter: { summary: "Payroll revised" },
+      content: "# Payroll revised\n"
+    });
+    const saved = await readFile(path.join(projectRoot, "wiki", "global", "payroll.md"), "utf8");
+    expect(saved).toContain("visibility: private");
+    expect(saved).toContain("finance_admin");
+    expect(saved).toContain("Payroll revised");
+  });
+
   it("previews without writing, then writes only under wiki", async () => {
     const preview = await previewWikiWrite(projectRoot, "global/new.md", {
       frontmatter: { summary: "New note", tags: ["ops"], sl_refs: ["mysql/schema/source"] },
