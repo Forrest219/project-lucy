@@ -258,9 +258,10 @@ describe("TableWhitelist", () => {
     expect(screen.getByText("连接：mysql-aliyun · Schema：dataforai")).toBeInTheDocument();
     expect(screen.getByText("superstore_orders")).toBeInTheDocument();
     expect(screen.getByText("8 个")).toBeInTheDocument();
-    expect(screen.getByText("已启用，语义完成")).toBeInTheDocument();
-    expect(screen.getByText("已启用，待补语义")).toBeInTheDocument();
-    expect(screen.getByText("未启用")).toBeInTheDocument();
+    const whitelistTable = screen.getByTestId("pl-whitelist-table");
+    expect(within(whitelistTable).getByText("已启用，语义完成")).toBeInTheDocument();
+    expect(within(whitelistTable).getByText("已启用，待补语义")).toBeInTheDocument();
+    expect(within(whitelistTable).getByText("未启用")).toBeInTheDocument();
     // Forbidden legacy labels from M45 terminology refresh must not appear.
     expect(screen.queryByText("已纳入")).not.toBeInTheDocument();
     expect(screen.queryByText("待同步")).not.toBeInTheDocument();
@@ -385,6 +386,87 @@ describe("TableWhitelist", () => {
     expect(screen.queryByText("连接：mysql-aliyun · Schema：dataforai")).not.toBeInTheDocument();
     expect(screen.getByText("revenue_daily")).toBeInTheDocument();
     expect(screen.queryByText("superstore_orders")).not.toBeInTheDocument();
+  });
+
+  it("renders 状态筛选 with registered terminology options", async () => {
+    stubWhitelistFetch(defaultHandlers());
+    renderWhitelist();
+
+    const statusSelect = await screen.findByRole("combobox", { name: "状态筛选" });
+    expect(within(statusSelect).getByRole("option", { name: "全部" })).toBeInTheDocument();
+    expect(within(statusSelect).getByRole("option", { name: "未启用" })).toBeInTheDocument();
+    expect(
+      within(statusSelect).getByRole("option", { name: "已启用，待补语义" })
+    ).toBeInTheDocument();
+    expect(
+      within(statusSelect).getByRole("option", { name: "已启用，语义完成" })
+    ).toBeInTheDocument();
+    assertNoForbiddenTerms(document.body);
+  });
+
+  it("状态筛选=未启用 only lists currently unchecked tables and updates the selection summary", async () => {
+    stubWhitelistFetch(defaultHandlers());
+    renderWhitelist();
+
+    fireEvent.change(await screen.findByRole("combobox", { name: "状态筛选" }), {
+      target: { value: "disabled" }
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("superstore_returns")).toBeInTheDocument();
+      expect(screen.getAllByText("已选 0/1 张表")[0]).toBeInTheDocument();
+    });
+    expect(screen.queryByText("superstore_orders")).not.toBeInTheDocument();
+    expect(screen.queryByText("superstore_people")).not.toBeInTheDocument();
+  });
+
+  it("状态筛选=已启用，待补语义 only lists enabled tables without completed semantics", async () => {
+    stubWhitelistFetch(defaultHandlers());
+    renderWhitelist();
+
+    fireEvent.change(await screen.findByRole("combobox", { name: "状态筛选" }), {
+      target: { value: "enabled_semantic_pending" }
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("superstore_people")).toBeInTheDocument();
+      expect(screen.getAllByText("已选 1/1 张表")[0]).toBeInTheDocument();
+    });
+    expect(screen.queryByText("superstore_orders")).not.toBeInTheDocument();
+    expect(screen.queryByText("superstore_returns")).not.toBeInTheDocument();
+  });
+
+  it("状态筛选=已启用，语义完成 only lists enabled tables with completed semantics", async () => {
+    stubWhitelistFetch(defaultHandlers());
+    renderWhitelist();
+
+    fireEvent.change(await screen.findByRole("combobox", { name: "状态筛选" }), {
+      target: { value: "enabled_complete" }
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("superstore_orders")).toBeInTheDocument();
+      expect(screen.getAllByText("已选 1/1 张表")[0]).toBeInTheDocument();
+    });
+    expect(screen.queryByText("superstore_people")).not.toBeInTheDocument();
+    expect(screen.queryByText("superstore_returns")).not.toBeInTheDocument();
+  });
+
+  it("状态筛选 composes with the search box", async () => {
+    stubWhitelistFetch(defaultHandlers());
+    renderWhitelist();
+
+    fireEvent.change(await screen.findByRole("combobox", { name: "状态筛选" }), {
+      target: { value: "disabled" }
+    });
+    fireEvent.change(screen.getByPlaceholderText("搜索表名/描述..."), {
+      target: { value: "orders" }
+    });
+
+    await waitFor(() => {
+      expect(screen.getAllByText("已选 0/0 张表")[0]).toBeInTheDocument();
+    });
+    expect(screen.queryByText("superstore_returns")).not.toBeInTheDocument();
   });
 
   it("keeps configured schemas in the filter even when the local manifest is missing", async () => {
@@ -729,7 +811,9 @@ describe("TableWhitelist", () => {
 
     // User manually picks another option — the new value should stick.
     fireEvent.change(schemaSelect, { target: { value: "dataforai" } });
-    expect(schemaSelect).toHaveValue("dataforai");
+    // waitFor 兜底：整文件连跑时 React 提交可能被事件循环饥饿推迟，
+    // 同步断言存在偶发读到旧值的情况（既有 flake，与本次改动无关）。
+    await waitFor(() => expect(schemaSelect).toHaveValue("dataforai"), { timeout: 3000 });
   });
 
   it("falls back to 'all' when the ?schema= query param is unknown", async () => {
@@ -1178,7 +1262,11 @@ describe("TableWhitelist", () => {
       expect(screen.getByText(/本连接另有 3 张无效启用/)).toBeInTheDocument();
 
       fireEvent.click(screen.getByTestId("whitelist-show-invalid-enabled"));
-      expect(await screen.findByTestId("whitelist-invalid-enabled-section")).toBeInTheDocument();
+      // 放宽到 3s：该断言依赖点击后 Effect 链完成的二次渲染，在整文件连跑时
+      // 事件循环竞争激烈，默认 1s 下存在偶发超时（HEAD 上亦可复现的既有 flake）。
+      expect(
+        await screen.findByTestId("whitelist-invalid-enabled-section", {}, { timeout: 3000 })
+      ).toBeInTheDocument();
       expect(
         screen.getByTestId("whitelist-invalid-row-demo_finance.ads_finance_revenue_day")
       ).toBeInTheDocument();
@@ -1241,7 +1329,11 @@ describe("TableWhitelist", () => {
       );
       renderWhitelist(["/?connection=starrocks-r1"]);
 
-      expect(await screen.findByTestId("whitelist-invalid-enabled-section")).toBeInTheDocument();
+      // 放宽到 3s：该断言依赖点击后 Effect 链完成的二次渲染，在整文件连跑时
+      // 事件循环竞争激烈，默认 1s 下存在偶发超时（HEAD 上亦可复现的既有 flake）。
+      expect(
+        await screen.findByTestId("whitelist-invalid-enabled-section", {}, { timeout: 3000 })
+      ).toBeInTheDocument();
       fireEvent.click(screen.getByTestId("whitelist-remove-invalid-enabled"));
 
       await waitFor(() => {

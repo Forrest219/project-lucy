@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { flushSync } from "react-dom";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -112,6 +113,15 @@ function whitelistStatus(row: WhitelistTableRow): WhitelistStatus {
   return "enabled_semantic_pending";
 }
 
+/** Toolbar status filter dimension（术语标准：状态筛选）. */
+export type WhitelistStatusFilter = "all" | "disabled" | "enabled_semantic_pending" | "enabled_complete";
+
+function matchesStatusFilter(row: WhitelistTableRow, filter: WhitelistStatusFilter): boolean {
+  // 未启用 = 当前未勾选（含本次待禁用），服务于「找表启用」的主场景。
+  if (filter === "disabled") return !row.enabledDraft;
+  return whitelistStatus(row) === filter;
+}
+
 function setDifference<T>(a: Iterable<T>, b: Iterable<T>): T[] {
   const bs = new Set(b);
   const out: T[] = [];
@@ -218,6 +228,7 @@ export function TableWhitelist() {
   const [schemaFilter, setSchemaFilter] = useState<string>(
     initialSchemaParam && initialSchemaParam.length > 0 ? initialSchemaParam : "all"
   );
+  const [statusFilter, setStatusFilter] = useState<WhitelistStatusFilter>("all");
   const [userOverrodeConnection, setUserOverrodeConnection] = useState<boolean>(false);
   const [userOverrodeSchema, setUserOverrodeSchema] = useState<boolean>(false);
   const [search, setSearch] = useState("");
@@ -361,6 +372,7 @@ export function TableWhitelist() {
       for (const row of rows) {
         if (row.invalidEnabled) continue;
         if (schemaFilter !== "all" && row.schema !== schemaFilter) continue;
+        if (statusFilter !== "all" && !matchesStatusFilter(row, statusFilter)) continue;
         if (lowerSearch) {
           const matched =
             row.table.toLowerCase().includes(lowerSearch) ||
@@ -376,7 +388,7 @@ export function TableWhitelist() {
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([schema, groupedRows]) => ({ conn, schema, rows: groupedRows }));
     });
-  }, [connectionFilteredRows, search, schemaFilter]);
+  }, [connectionFilteredRows, search, schemaFilter, statusFilter]);
 
   // Spec 116: invalid enabled rows shown when filter is all or matches their schema.
   const visibleInvalidGroups = useMemo(() => {
@@ -477,7 +489,7 @@ export function TableWhitelist() {
     setGroupExpansion({ mode: "default" });
     setGroupPage(0);
     setInvalidPage(0);
-  }, [connectionFilter, schemaFilter, search]);
+  }, [connectionFilter, schemaFilter, statusFilter, search]);
 
   // Dirty check + diff stats
   const diffStats = useMemo(() => {
@@ -784,8 +796,12 @@ export function TableWhitelist() {
                   className="pl-input notranslate"
                   value={connectionFilter}
                   onChange={(e) => {
-                    setUserOverrodeConnection(true);
-                    setConnectionFilter(e.target.value);
+                    // flushSync：保证「用户已手动选择」标记与筛选值在同一提交里生效，
+                    // 避免高负载下 React 优先级调度把两个 setState 拆散（既有 flake）。
+                    flushSync(() => {
+                      setUserOverrodeConnection(true);
+                      setConnectionFilter(e.target.value);
+                    });
                   }}
                   aria-label="连接筛选"
                   translate="no"
@@ -804,8 +820,12 @@ export function TableWhitelist() {
                   className="pl-input notranslate"
                   value={schemaFilter}
                   onChange={(e) => {
-                    setUserOverrodeSchema(true);
-                    setSchemaFilter(e.target.value);
+                    // flushSync：保证「用户已手动选择」标记与筛选值在同一提交里生效，
+                    // 避免高负载下 React 优先级调度把两个 setState 拆散（既有 flake）。
+                    flushSync(() => {
+                      setUserOverrodeSchema(true);
+                      setSchemaFilter(e.target.value);
+                    });
                   }}
                   aria-label="Schema 筛选"
                   translate="no"
@@ -816,6 +836,20 @@ export function TableWhitelist() {
                       {s}
                     </option>
                   ))}
+                </select>
+              </label>
+              <label className="grid gap-1.5 text-sm">
+                <span>状态筛选</span>
+                <select
+                  className="pl-input"
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value as WhitelistStatusFilter)}
+                  aria-label="状态筛选"
+                >
+                  <option value="all">全部</option>
+                  <option value="disabled">未启用</option>
+                  <option value="enabled_semantic_pending">已启用，待补语义</option>
+                  <option value="enabled_complete">已启用，语义完成</option>
                 </select>
               </label>
             </div>
@@ -898,8 +932,11 @@ export function TableWhitelist() {
             type="button"
             className="pl-btn pl-btn--ghost pl-btn--sm"
             onClick={() => {
-              setUserOverrodeSchema(true);
-              setSchemaFilter("all");
+              // flushSync：同上，保证覆盖标记与筛选值原子提交。
+              flushSync(() => {
+                setUserOverrodeSchema(true);
+                setSchemaFilter("all");
+              });
             }}
             data-testid="whitelist-show-invalid-enabled"
           >

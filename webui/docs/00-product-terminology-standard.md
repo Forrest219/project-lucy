@@ -5,7 +5,7 @@
 | 文档名称 | Lucy Product Terminology Standard |
 | 文档类型 | System-wide Product Language / Terminology Standard |
 | 版本 | v0.2 |
-| 撰写日期 | 2026-07-31；2026-08-01 v0.2（新增 Data Agent Ops Control Plane / Data Agent 运维控制台，标记『语义维护工作台』与『运维控制面』为弃用别名）；2026-08-05 增补 §4.8 MCP 调试台术语（Spec 99）；同日 Spec 100 交叉审阅补齐 incomplete / impact / evidence / 裁决双行；2026-08-06 Spec 109 增补目录重命名术语；2026-08-06 Spec 114/115 增补表 YAML 导入与工作台校验披露术语；2026-08-06 Spec 117 增补 Remove Schema 术语；2026-08-20 增补 §4.7.1 Trace Read Model 术语（Spec 62 v0.5）；2026-08-25 Spec 127 增补 Delete Connection 术语；2026-08-26 增补 §4.9 可选 Agent Chat（A3）术语；2026-09-03 Spec 140 增补访问日志双粒度 CSV 导出术语；2026-09-03 Spec 141 增补访问日志 CSV 字段说明与本地时间术语；2026-09-04 Spec 143 增补调用监控与运行状态分组术语；2026-09-11 Spec 142 为 `/overview` 聚焦精简；2026-09-23 Spec 144 增补 Skill / 业务 Skill；Spec 145 增补待同步文件与表语义校验分计；同日 Spec 144 v1.1 增补导航组名「业务上下文」（原「语义建模」组更名，「语义建模」保留为概念词）；2026-09-24 Spec 148 增补界面使用、页面访问、访问账户、活跃菜单与分组/菜单/页面访问排行；同日 Spec 149 增补运维问数连接与运维问数角色 |
+| 撰写日期 | 2026-07-31；2026-08-01 v0.2（新增 Data Agent Ops Control Plane / Data Agent 运维控制台，标记『语义维护工作台』与『运维控制面』为弃用别名）；2026-08-05 增补 §4.8 MCP 调试台术语（Spec 99）；同日 Spec 100 交叉审阅补齐 incomplete / impact / evidence / 裁决双行；2026-08-06 Spec 109 增补目录重命名术语；2026-08-06 Spec 114/115 增补表 YAML 导入与工作台校验披露术语；2026-08-06 Spec 117 增补 Remove Schema 术语；2026-08-20 增补 §4.7.1 Trace Read Model 术语（Spec 62 v0.5）；2026-08-25 Spec 127 增补 Delete Connection 术语；2026-08-26 增补 §4.9 可选 Agent Chat（A3）术语；2026-09-03 Spec 140 增补访问日志双粒度 CSV 导出术语；2026-09-03 Spec 141 增补访问日志 CSV 字段说明与本地时间术语；2026-09-04 Spec 143 增补调用监控与运行状态分组术语；2026-09-11 Spec 142 为 `/overview` 聚焦精简；2026-09-23 Spec 144 增补 Skill / 业务 Skill；Spec 145 增补待同步文件与表语义校验分计；同日 Spec 144 v1.1 增补导航组名「业务上下文」（原「语义建模」组更名，「语义建模」保留为概念词）；2026-09-24 Spec 148 增补界面使用、页面访问、访问账户、活跃菜单与分组/菜单/页面访问排行；同日 Spec 149 增补运维问数连接与运维问数角色；2026-10-12 增补启用表范围「状态筛选」筛选维术语 |
 | 适用范围 | Lucy WebUI、API 用户可见错误、Toast、Modal、Drawer、表格列名、导航、测试断言、Spec、Plan、Runbook、交付文档 |
 | 维护者 | Product / UX / Architecture Review |
 | 优先级 | 高于单模块 Spec。单模块 Spec 可新增术语，但不得覆盖本标准中的固定术语 |
@@ -165,6 +165,7 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Semantic Asset | 语义资产 | 表语义资产、结构化 YAML 模型 | 表目录（主导航 / PageHeader 禁用） | 语义建模下的结构化 YAML 模型维护入口 |
 | Semantic Coverage | 语义覆盖 | 完成度（作 overview 主标签） | 分母 = 已启用 ∩ Manifest（`SourceSummary.enabled`）；不含未启用 Manifest 表（Spec 104） |
 | Enabled Scope Filter | 启用范围 | 白名单筛选 | Catalog 工具栏：已启用 / 全部 / 未启用 |
+| Whitelist Status Filter | 状态筛选 | 表状态筛选、启用状态筛选 | 状态（过宽，单独作 Label 易与连接 / Schema 筛选混淆） | 启用表范围工具栏筛选维：全部 / 未启用 / 已启用，待补语义 / 已启用，语义完成 |
 | Metric | 指标 | Metric | 度量混用 | 可聚合的业务数值定义 |
 | Dimension | 维度 | Dimension | 维数 | 分析分组或切片字段 |
 | Measure | 度量 | Measure | 指标混用 | 语义模型内的聚合表达式；当面向业务用户时优先叫“指标” |
