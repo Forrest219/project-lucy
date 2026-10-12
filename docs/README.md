@@ -71,6 +71,7 @@
 | `uat/uat-agent-permissions.md` | **跳转桩** → `access-control/uat-agent-permissions-v1.md` |
 | `uat/uat-module2-eval-monitoring.md` | Module 2 Eval 配置与监控人工 UAT 用例 |
 | `uat/uat-mysql-aliyun-data-qa.md` | MySQL Aliyun 数据问答人工 UAT 用例 |
+| `uat/uat-invest-db-data-qa.md` | invest-db 投研夹具的接入与问数 UAT |
 
 ## 5. WebUI 现状 → `webui/`
 

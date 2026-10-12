@@ -5,6 +5,17 @@
 
 ---
 
+## 2026-10-12 · docs/uat · invest-db 问数用例
+
+### 新增
+- UAT：[`../uat/uat-invest-db-data-qa.md`](../uat/uat-invest-db-data-qa.md)（场景 A–D，用例 INV-00 至 INV-19）
+- 本轮执行结论：`inbox/investment-mcp-eval-smoke-20261012.md`
+
+### 影响映射更新
+- 无新的 WebUI selector。挂在既有 `E2E-ONBOARD-EVAL` 与 `UJ-ANA`，不新开测试集 ID。
+
+---
+
 ## 2026-08-29 · docs/qa · Fast Smoke 与 Full Smoke 升级对齐新特性
 
 ### 新增
