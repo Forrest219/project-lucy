@@ -23,7 +23,7 @@ const NOW = new Date("2026-10-11T12:00:00.000Z");
 describe("semantic publish gate (SC-24)", () => {
   it("rejects an illegal columns.0.type", () => {
     const violations = checkColumnTypeContract(
-      [{ name: "date", type: "strinng" }, { name: "amount", type: "decimal" }],
+      [{ name: "date", type: "strinng" }, { name: "amount", type: "number" }],
       "semantic-layer/demo-mysql/chatbi/orders.yaml"
     );
     expect(violations.length).toBe(1);
@@ -32,9 +32,31 @@ describe("semantic publish gate (SC-24)", () => {
     expect(violations[0].message).toContain("strinng");
   });
 
+  it("rejects SQL spellings that KTX does not accept", () => {
+    const violations = checkColumnTypeContract(
+      [
+        { name: "amount", type: "decimal" },
+        { name: "rate", type: "float" },
+        { name: "as_of", type: "TIMESTAMP" }
+      ],
+      "x.yaml"
+    );
+    expect(violations.map((v) => v.checkId)).toEqual([
+      "columns.0.type",
+      "columns.1.type",
+      "columns.2.type"
+    ]);
+  });
+
   it("accepts legal column types and untyped columns", () => {
     expect(checkColumnTypeContract(
-      [{ name: "a", type: "string" }, { name: "b", type: "TIMESTAMP" }, { name: "c" }],
+      [
+        { name: "a", type: "string" },
+        { name: "b", type: "number" },
+        { name: "c", type: "time" },
+        { name: "d", type: "boolean" },
+        { name: "e" }
+      ],
       "x.yaml"
     )).toEqual([]);
     expect(checkColumnTypeContract("not-an-array", "x.yaml")).toEqual([]);

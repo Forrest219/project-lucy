@@ -142,15 +142,15 @@ export function applyPublishExemption(
 
 /**
  * SC-24 / the contract check itself: a semantic source whose `columns[].type`
- * is not a legal SQL/TS/Python contract type blocks the publish.
+ * is not a KTX SourceColumn type blocks the publish.
+ *
+ * The contract is `string | number | time | boolean` (see `webui/src/lib/types.ts`
+ * and the semantic-author lint). SQL spellings such as `float` or `timestamp`
+ * are rejected here because KTX rejects them too.
  *
  * This is the `columns.0.type` case named by the acceptance criteria.
  */
-const ALLOWED_COLUMN_TYPES = new Set([
-  "string", "text", "int", "integer", "bigint", "smallint", "float", "double",
-  "decimal", "numeric", "bool", "boolean", "date", "time", "datetime",
-  "timestamp", "json", "uuid", "binary", "blob"
-]);
+const ALLOWED_COLUMN_TYPES = new Set(["string", "number", "time", "boolean"]);
 
 export function checkColumnTypeContract(
   columns: unknown,
