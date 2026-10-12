@@ -48,8 +48,22 @@ test.describe("L1 PR Smoke 12 条 (升级对齐版)", () => {
   test("@pr-smoke E2E-CON-03 上传 Drawer 打开", async ({ page }) => {
     await page.goto("/connections");
     await page.getByTestId("add-schema-mysql-aliyun").click();
-    await expect(page.getByTestId("add-schema-drawer")).toBeVisible();
-    await page.getByTestId("add-schema-input").fill("smoke_schema");
+    const drawer = page.getByTestId("add-schema-drawer");
+    await expect(drawer).toBeVisible();
+    const select = drawer.getByTestId("add-schema-select");
+    const input = drawer.getByTestId("add-schema-input");
+    await expect.poll(async () => {
+      if (await input.isVisible()) return "input";
+      if ((await select.count()) > 0 && (await select.isEnabled())) return "select";
+      return "loading";
+    }).not.toBe("loading");
+    if (await input.isVisible()) {
+      await input.fill("smoke_schema");
+    } else {
+      const value = await select.locator("option:not([value=''])").first().getAttribute("value");
+      expect(value).toBeTruthy();
+      await select.selectOption(value!);
+    }
     const previewBtn = page.getByTestId("add-schema-preview-btn");
     await expect(previewBtn).toBeEnabled({ timeout: 5_000 });
     await expect(previewBtn).toBeVisible();

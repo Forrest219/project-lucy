@@ -31,7 +31,6 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
   const [schema, setSchema] = useState("");
   const [schemaTouched, setSchemaTouched] = useState(false);
   const [previewAttempted, setPreviewAttempted] = useState(false);
-  const [manualEntry, setManualEntry] = useState(false);
   const [step, setStep] = useState<Step>("input");
   const [preview, setPreview] = useState<AddSchemaPreview | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -53,11 +52,12 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
     return liveQuery.data.schemas.filter((item) => !configured.has(item.schema));
   }, [liveQuery.data, configured]);
 
-  const canSelect = candidates.length > 0 && !manualEntry;
+  const isLiveLoading = liveQuery.isPending;
+  const showSelect = isLiveLoading || candidates.length > 0;
   const trimmed = schema.trim();
   const issue = useMemo(() => validateSchemaName(trimmed), [trimmed]);
   const canPreview = trimmed.length > 0 && !issue;
-  const showSchemaIssue = Boolean(issue && (schemaTouched || previewAttempted));
+  const showSchemaIssue = Boolean(issue && (schemaTouched || previewAttempted) && !isLiveLoading);
 
   const previewMutation = useMutation({
     mutationFn: () =>
@@ -101,7 +101,6 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
     setSchema("");
     setSchemaTouched(false);
     setPreviewAttempted(false);
-    setManualEntry(false);
     setStep("input");
     setPreview(null);
     setSubmitError(null);
@@ -169,11 +168,12 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
         {step === "input" && (
           <section className="pl-drawer-body notranslate" aria-label="输入 Schema 名" translate="no">
             <label className="grid gap-1.5 text-sm">
-              <span>{canSelect ? "选择 Schema" : fieldLabel}</span>
-              {canSelect ? (
+              <span>{showSelect ? "选择 Schema" : fieldLabel}</span>
+              {showSelect ? (
                 <select
                   className="pl-input"
                   value={schema}
+                  disabled={isLiveLoading}
                   onChange={(e) => {
                     setSchema(e.target.value);
                     setSchemaTouched(true);
@@ -182,7 +182,9 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
                   aria-invalid={showSchemaIssue ? true : undefined}
                   data-testid="add-schema-select"
                 >
-                  <option value="" className="notranslate" translate="no">请选择 Schema</option>
+                  <option value="" className="notranslate" translate="no" data-testid={isLiveLoading ? "add-schema-live-loading" : undefined}>
+                    {isLiveLoading ? "正在加载库内 Schema 列表…" : "请选择 Schema"}
+                  </option>
                   {candidates.map((item) => (
                     <option key={item.schema} value={item.schema} className="notranslate" translate="no">
                       {item.schema}（{item.tableCount} 张表）
@@ -205,57 +207,25 @@ export function AddSchemaDrawer({ connection, open, onClose }: AddSchemaDrawerPr
                   {issue.message}
                 </span>
               )}
-              {liveQuery.isLoading ? (
-                <span className="text-xs text-fg-muted notranslate" translate="no" data-testid="add-schema-live-loading">
-                  正在加载库内 Schema 列表…
-                </span>
-              ) : null}
-              {liveQuery.isError || liveQuery.data?.status === "error" ? (
+              {!showSelect && (liveQuery.isError || liveQuery.data?.status === "error") ? (
                 <span className="text-xs text-fg-muted notranslate" translate="no" data-testid="add-schema-live-fallback">
                   无法加载库内 Schema 列表
                   {liveQuery.data?.reason ? `：${liveQuery.data.reason}` : ""}。请手动输入。
                 </span>
               ) : null}
-              {liveQuery.data?.status === "ok" && candidates.length === 0 && !liveQuery.isLoading ? (
+              {!showSelect && liveQuery.data?.status === "ok" && candidates.length === 0 ? (
                 <span className="text-xs text-fg-muted notranslate" translate="no" data-testid="add-schema-live-empty">
                   库内可见 Schema 均已配置，或当前无可选项。请手动输入。
                 </span>
               ) : null}
-              {canSelect ? (
-                <button
-                  type="button"
-                  className="pl-btn pl-btn--ghost justify-self-start px-0 notranslate"
-                  translate="no"
-                  onClick={() => {
-                    setManualEntry(true);
-                    setSchema("");
-                    setSchemaTouched(false);
-                  }}
-                  data-testid="add-schema-manual-toggle"
-                >
-                  手动输入 Schema 名称
-                </button>
-              ) : candidates.length > 0 && manualEntry ? (
-                <button
-                  type="button"
-                  className="pl-btn pl-btn--ghost justify-self-start px-0 notranslate"
-                  translate="no"
-                  onClick={() => {
-                    setManualEntry(false);
-                    setSchema("");
-                    setSchemaTouched(false);
-                  }}
-                  data-testid="add-schema-select-toggle"
-                >
-                  从库内目录选择
-                </button>
+              {!showSelect ? (
+                <>
+                  <span className="text-xs text-fg-muted">
+                    须以字母或下划线开头，仅含字母、数字、下划线，最多 63 字符。
+                  </span>
+                  <span className="text-xs text-fg-muted">{fieldHelper}</span>
+                </>
               ) : null}
-              {!canSelect ? (
-                <span className="text-xs text-fg-muted">
-                  须以字母或下划线开头，仅含字母、数字、下划线，最多 63 字符。
-                </span>
-              ) : null}
-              <span className="text-xs text-fg-muted">{fieldHelper}</span>
             </label>
             <div className="pl-drawer-footer">
               <button className="pl-btn pl-btn--ghost" onClick={close}>

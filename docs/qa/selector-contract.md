@@ -65,7 +65,7 @@
 | `add-schema-drawer-backdrop` | Drawer 背景遮罩 | — |
 | `add-schema-drawer` | Drawer 根 | 标题 `添加 Schema` |
 | `add-schema-close` | 关闭按钮 | — |
-| `add-schema-input` | Schema 名 input | Label `Schema 名` |
+| `add-schema-input` | Schema 名 input | 仅库内目录失败或候选为空时出现；Label `Schema 名称` |
 | `add-schema-input-error` | input 错误提示 | — |
 | `add-schema-preview-btn` | `测试连接可用性` 按钮 | 禁止 `替代测试` |
 | `add-schema-connection-test-failed` | 测试失败错误 | — |
@@ -454,8 +454,6 @@
 | `add-schema-live-loading` | add-schema-live-loading | `components/AddSchemaDrawer.tsx` |
 | `add-schema-live-fallback` | add-schema-live-fallback | `components/AddSchemaDrawer.tsx` |
 | `add-schema-live-empty` | add-schema-live-empty | `components/AddSchemaDrawer.tsx` |
-| `add-schema-manual-toggle` | add-schema-manual-toggle | `components/AddSchemaDrawer.tsx` |
-| `add-schema-select-toggle` | add-schema-select-toggle | `components/AddSchemaDrawer.tsx` |
 | `role-table-ranges-field` | role-table-ranges-field | `components/AssetHierarchyPicker.tsx` |
 | `brand-logo` | brand-logo | `components/BrandMark.tsx` |
 | `brand-mark-letter` | brand-mark-letter | `components/BrandMark.tsx` |
@@ -1189,9 +1187,7 @@
 | `governance-interface-pages` | 界面页面 | `pages/admin/GovernanceOverview.tsx` |
 | `mcp-runtime-connection` | MCP Playground 连接 | `pages/admin/McpPlayground.tsx` |
 | `new-token-expiry-policy-notice` | Token 有效期策略提示 | `pages/admin/NewToken.tsx` |
-| `call-monitor-slo-status` | 调用监控 SLO 状态 | `pages/ops/CallMonitor.tsx` |
 | `call-monitor-page` | 调用监控页面 | `pages/ops/CallMonitor.tsx` |
-| `call-monitor-stats-time` | 调用监控统计时间 | `pages/ops/CallMonitor.tsx` |
 | `call-monitor-controls` | 调用监控控制区 | `pages/ops/CallMonitor.tsx` |
 | `call-monitor-range-24h` | 24 小时时间窗 | `pages/ops/CallMonitor.tsx` |
 | `call-monitor-range-1h` | 1 小时时间窗 | `pages/ops/CallMonitor.tsx` |

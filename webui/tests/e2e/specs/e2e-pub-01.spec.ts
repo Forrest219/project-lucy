@@ -58,9 +58,20 @@ test.describe("E2E-PUB-01: 完整语义资产从新建到发布 Reindex 闭环",
     await test.step("2. 添加 Schema finance_mart", async () => {
       // 真实 testid：add-schema-${conn.id}
       await page.getByTestId("add-schema-mysql-aliyun").click();
-      await expect(page.getByTestId("add-schema-drawer")).toBeVisible();
-      // 真实 testid：add-schema-input
-      await page.getByTestId("add-schema-input").fill("finance_mart");
+      const drawer = page.getByTestId("add-schema-drawer");
+      await expect(drawer).toBeVisible();
+      const select = drawer.getByTestId("add-schema-select");
+      const input = drawer.getByTestId("add-schema-input");
+      await expect.poll(async () => {
+        if (await input.isVisible()) return "input";
+        if ((await select.count()) > 0 && (await select.isEnabled())) return "select";
+        return "loading";
+      }).not.toBe("loading");
+      if (await input.isVisible()) {
+        await input.fill("finance_mart");
+      } else {
+        await select.selectOption("finance_mart");
+      }
       // 真实 testid：add-schema-preview-btn（= 测试连接可用性）
       await page.getByTestId("add-schema-preview-btn").click();
       // 等预览结果：success message 含 connection test 退出码

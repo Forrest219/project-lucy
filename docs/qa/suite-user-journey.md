@@ -159,10 +159,10 @@ n. 操作：用户做什么（界面中文文案，不用内部函数名）
    必须看见：抽屉标题含「添加 Schema」（`add-schema-drawer`）；步骤条含「输入 Schema」「测试连接」「确认并完成」。  
    失败即停：抽屉未打开 → FAIL。
 
-3. 操作：填入 Schema 名 `SCHEMA`。若出现库内下拉且列表没有该项，先点「手动输入 Schema 名称」再输入。  
-   定位：`add-schema-select` 或 `add-schema-input`；手动入口 `add-schema-manual-toggle`。  
-   必须看见：输入框或选择值为 `finance_mart`；无 `add-schema-input-error`。  
-   失败即停：名称校验红字 → FAIL。
+3. 操作：填入 Schema 名 `SCHEMA`。库内目录有候选时从下拉选择；只有目录失败或候选为空时才出现输入框。  
+   定位：`add-schema-select` 或 `add-schema-input`。  
+   必须看见：下拉选中 `finance_mart`，或输入框值为 `finance_mart`；无 `add-schema-input-error`。有候选时不得出现「手动输入 Schema 名称」。  
+   失败即停：名称校验红字 → FAIL。下拉里没有 `finance_mart` → blocked（不能再手填一个目录外的名字）。
 
 4. 操作：点「下一步」。  
    定位：`add-schema-preview-btn`（pending 文案「生成预览...」）。  

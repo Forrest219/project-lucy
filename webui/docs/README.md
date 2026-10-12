@@ -97,7 +97,7 @@
 | [104-enabled-scope-semantic-coverage-alignment-spec.md](104-enabled-scope-semantic-coverage-alignment-spec.md) | 语义覆盖 / 待补语义 / Catalog 默认范围对齐 `enabled_tables`（Implemented v1.0） | 产品 / UX / API / Frontend |
 | [105-wiki-directory-selection-explorer-ia-spec.md](105-wiki-directory-selection-explorer-ia-spec.md) | `/wiki` Attu 式目录选中驱动右栏、中栏面板视觉、空态；重命名延期（Implemented v1.0） | 产品 / UX / IA / Frontend |
 | [106-admin-audit-identity-filters-and-url-spec.md](106-admin-audit-identity-filters-and-url-spec.md) | `/admin/audit` 身份 Key 列、序号/Header 同构、共享筛选、`view`/`range` URL（Implemented v1.0） | 产品 / UX / API / Frontend |
-| [107-connection-live-catalog-discovery-spec.md](107-connection-live-catalog-discovery-spec.md) | `/connections` Owner 按需只读库内目录：库内表数列、Add Schema 可选、live-schemas API（Implemented v1.0；修订 Spec 21 边界） | 产品 / UX / API / Frontend |
+| [107-connection-live-catalog-discovery-spec.md](107-connection-live-catalog-discovery-spec.md) | `/connections` Owner 按需只读库内目录：库内表数列、Add Schema 有候选时只下拉、live-schemas API（Implemented v1.1；修订 Spec 21 边界） | 产品 / UX / API / Frontend |
 | [108-connection-card-connectivity-health-summary-spec.md](108-connection-card-connectivity-health-summary-spec.md) | `/connections` 连接卡右侧连通健康摘要：进页并行探测、延迟 ms、Drawer 同源（Implemented v1.0；修订 Spec 44 入口） | 产品 / UX / Frontend |
 | [109-wiki-directory-rename-spec.md](109-wiki-directory-rename-spec.md) | `/wiki` 目录重命名：同父级改名、前缀批量改写、预检/提交 API（Implemented v1.1；承接 UX-WIKI-044） | 产品 / UX / IA / API / Frontend |
 | [112-publish-workbench-flow-and-gate-ia-spec.md](112-publish-workbench-flow-and-gate-ia-spec.md) | `/publish/workbench` 发布流程可视、三栏角色、Header 收口、发布门禁（Implemented v1.0；修订 Spec 35 §6.1–6.3） | 产品 / UX / IA / Frontend |

@@ -329,7 +329,7 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Live Catalog | 库内目录 | 物理扫描（作主标签） | Owner 按需只读目录查询结果 |
 | Refresh Live Catalog | 重新拉取库内目录 | 刷新本地目录（易混） | 仅 bypass TTL 重查物理库 |
 | Select Schema | 选择 Schema | 选择架构、选择模式 | Add Schema 下拉候选 |
-| Enter Schema Manually | 手动输入 Schema 名称 | 手动输入架构 | 候选不可用或自定义时 |
+| Enter Schema Manually | 手动输入 Schema 名称 | 手动输入架构 | 仅库内目录失败或候选为空时，表单改为输入框；有候选时不提供切换 |
 | Remove Schema | 移除 Schema | 删除数据库、删库、删除架构、删除模式 | 从连接配置卸载 Schema；不触碰物理库（Spec 117） |
 | Schema Remove Impact | 移除影响 | — | dryRun 摘要：已启用表、Manifest、overlay、Wiki 引用（Spec 117） |
 | Delete Schema Manifest (optional) | 同时删除 Schema Manifest | 默认级联删除 | 可选勾选；默认关；仅 dryRun:false 时生效（Spec 117） |

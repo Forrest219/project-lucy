@@ -57,6 +57,30 @@ function stubFetch(handlers: Record<string, (body: unknown) => Response>) {
   );
 }
 
+function stubLiveCatalog(
+  connectionId: string,
+  data: Record<string, unknown>,
+  extra: Record<string, (body: unknown) => Response> = {}
+) {
+  stubFetch({
+    [`GET /api/connections/${connectionId}/live-schemas`]: () =>
+      new Response(
+        JSON.stringify({
+          ok: true,
+          data: {
+            connectionId,
+            schemas: [],
+            fetchedAt: "2026-08-06T00:00:00.000Z",
+            cached: false,
+            wireProtocol: "mysql",
+            ...data
+          }
+        })
+      ),
+    ...extra
+  });
+}
+
 beforeEach(() => {
   vi.resetAllMocks();
 });
@@ -75,17 +99,19 @@ describe("AddSchemaDrawer", () => {
     expect(screen.queryByTestId("add-schema-input-error")).not.toBeInTheDocument();
   });
 
-  it("explains an empty schema name after the field is touched", () => {
+  it("explains an empty schema name after the field is touched", async () => {
+    stubLiveCatalog("mysql-aliyun", { status: "error", reason: "connection refused" });
     renderDrawer(makeConn());
 
-    fireEvent.blur(screen.getByTestId("add-schema-input"));
+    fireEvent.blur(await screen.findByTestId("add-schema-input"));
     expect(screen.getByTestId("add-schema-input-error")).toHaveTextContent("Schema 名不能为空");
   });
 
   it("blocks invalid schema names before sending the dryRun request", async () => {
+    stubLiveCatalog("mysql-aliyun", { status: "error", reason: "connection refused" });
     renderDrawer(makeConn());
 
-    const input = screen.getByTestId("add-schema-input") as HTMLInputElement;
+    const input = (await screen.findByTestId("add-schema-input")) as HTMLInputElement;
     fireEvent.change(input, { target: { value: "1bad" } });
 
     const next = screen.getByTestId("add-schema-preview-btn") as HTMLButtonElement;
@@ -125,7 +151,7 @@ describe("AddSchemaDrawer", () => {
 
     renderDrawer(makeConn());
 
-    fireEvent.change(screen.getByTestId("add-schema-input"), { target: { value: "finance_mart" } });
+    fireEvent.change(await screen.findByTestId("add-schema-input"), { target: { value: "finance_mart" } });
     fireEvent.click(screen.getByTestId("add-schema-preview-btn"));
 
     // The "确认写入" CTA only appears once we are in the preview step.
@@ -153,7 +179,7 @@ describe("AddSchemaDrawer", () => {
 
     renderDrawer(makeConn());
 
-    fireEvent.change(screen.getByTestId("add-schema-input"), { target: { value: "dataforai" } });
+    fireEvent.change(await screen.findByTestId("add-schema-input"), { target: { value: "dataforai" } });
     fireEvent.click(screen.getByTestId("add-schema-preview-btn"));
 
     await waitFor(() => {
@@ -194,7 +220,7 @@ describe("AddSchemaDrawer", () => {
 
     renderDrawer(makeConn());
 
-    fireEvent.change(screen.getByTestId("add-schema-input"), { target: { value: "finance_mart" } });
+    fireEvent.change(await screen.findByTestId("add-schema-input"), { target: { value: "finance_mart" } });
     fireEvent.click(screen.getByTestId("add-schema-preview-btn"));
 
     await waitFor(() => screen.getByTestId("add-schema-confirm-btn"));
@@ -238,7 +264,7 @@ describe("AddSchemaDrawer", () => {
 
     renderDrawer(makeConn());
 
-    fireEvent.change(screen.getByTestId("add-schema-input"), { target: { value: "finance_mart" } });
+    fireEvent.change(await screen.findByTestId("add-schema-input"), { target: { value: "finance_mart" } });
     fireEvent.click(screen.getByTestId("add-schema-preview-btn"));
     await waitFor(() => screen.getByTestId("add-schema-confirm-btn"));
     fireEvent.click(screen.getByTestId("add-schema-confirm-btn"));
@@ -286,9 +312,10 @@ describe("AddSchemaDrawer", () => {
     expect(screen.queryByText(/不会触碰凭据/)).not.toBeInTheDocument();
   });
 
-  it("uses a stable Schema label and Postgres helper text", () => {
+  it("uses a stable Schema label and Postgres helper text", async () => {
+    stubLiveCatalog("pg-main", { status: "error", reason: "connection refused", wireProtocol: "postgres" });
     renderDrawer(makeConn({ engine: "postgres", id: "pg-main" }));
-    expect(screen.getByText("Schema 名称")).toBeInTheDocument();
+    expect(await screen.findByText("Schema 名称")).toBeInTheDocument();
     expect(screen.queryByText(/Schema 或 database 名/)).not.toBeInTheDocument();
     expect(screen.getByText(/PostgreSQL 中请填写 schema，不是 database/)).toBeInTheDocument();
   });
@@ -406,7 +433,7 @@ describe("AddSchemaDrawer", () => {
 
     const { client } = renderDrawer(makeConn());
     const invalidate = vi.spyOn(client, "invalidateQueries");
-    fireEvent.change(screen.getByTestId("add-schema-input"), { target: { value: "finance_mart" } });
+    fireEvent.change(await screen.findByTestId("add-schema-input"), { target: { value: "finance_mart" } });
     fireEvent.click(screen.getByTestId("add-schema-preview-btn"));
     await waitFor(() => screen.getByTestId("add-schema-confirm-btn"));
     fireEvent.click(screen.getByTestId("add-schema-confirm-btn"));
@@ -453,11 +480,53 @@ describe("AddSchemaDrawer", () => {
     });
   });
 
-  it("uses a stable Schema label and MySQL helper text", () => {
+  it("uses a stable Schema label and MySQL helper text when manual entry is the fallback", async () => {
+    stubLiveCatalog("mysql-aliyun", { status: "error", reason: "connection refused" });
     renderDrawer(makeConn({ engine: "mysql" }));
-    expect(screen.getByText("Schema 名称")).toBeInTheDocument();
+    expect(await screen.findByText("Schema 名称")).toBeInTheDocument();
     expect(screen.queryByText(/Schema 或 database 名/)).not.toBeInTheDocument();
     expect(screen.getByText(/MySQL 中通常对应 database 名/)).toBeInTheDocument();
+    expect(screen.queryByText("手动输入 Schema 名称")).not.toBeInTheDocument();
+  });
+
+  it("shows a disabled Schema select while the live catalog is loading", () => {
+    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => undefined)));
+    renderDrawer(makeConn());
+
+    const select = screen.getByTestId("add-schema-select");
+    expect(select).toBeDisabled();
+    expect(within(select).getByRole("option", { name: "正在加载库内 Schema 列表…" })).toBeInTheDocument();
+    expect(screen.queryByTestId("add-schema-input")).not.toBeInTheDocument();
+    expect(screen.queryByText("手动输入 Schema 名称")).not.toBeInTheDocument();
+    expect(screen.queryByText(/MySQL 中通常对应 database 名/)).not.toBeInTheDocument();
+  });
+
+  it("falls back to manual entry when the live catalog fails", async () => {
+    stubLiveCatalog("mysql-aliyun", { status: "error", reason: "connection refused" });
+    renderDrawer(makeConn());
+
+    expect(await screen.findByTestId("add-schema-input")).toBeInTheDocument();
+    expect(screen.getByTestId("add-schema-live-fallback")).toHaveTextContent(
+      "无法加载库内 Schema 列表：connection refused。请手动输入。"
+    );
+    expect(screen.getByText(/须以字母或下划线开头/)).toBeInTheDocument();
+    expect(screen.queryByTestId("add-schema-select")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("add-schema-manual-toggle")).not.toBeInTheDocument();
+  });
+
+  it("falls back to manual entry when every visible schema is already configured", async () => {
+    stubLiveCatalog("mysql-aliyun", {
+      status: "ok",
+      schemas: [{ schema: "dataforai", tableCount: 28 }]
+    });
+    renderDrawer(makeConn());
+
+    expect(await screen.findByTestId("add-schema-input")).toBeInTheDocument();
+    expect(screen.getByTestId("add-schema-live-empty")).toHaveTextContent(
+      "库内可见 Schema 均已配置，或当前无可选项。请手动输入。"
+    );
+    expect(screen.getByText(/MySQL 中通常对应 database 名/)).toBeInTheDocument();
+    expect(screen.queryByTestId("add-schema-select")).not.toBeInTheDocument();
   });
 
   it("Spec 107: prefers selecting a live Schema candidate over typing", async () => {
@@ -484,18 +553,17 @@ describe("AddSchemaDrawer", () => {
     renderDrawer(makeConn());
 
     const select = await screen.findByTestId("add-schema-select");
-    expect(select).toBeInTheDocument();
+    expect(await within(select).findByRole("option", { name: "openclaw_db（9 张表）" })).toBeInTheDocument();
+    expect(select).toBeEnabled();
     expect(screen.queryByTestId("add-schema-input")).not.toBeInTheDocument();
     expect(screen.getByText("选择 Schema")).toBeInTheDocument();
-    expect(within(select).getByRole("option", { name: "openclaw_db（9 张表）" })).toBeInTheDocument();
     expect(within(select).queryByRole("option", { name: /dataforai/ })).not.toBeInTheDocument();
 
     fireEvent.change(select, { target: { value: "openclaw_db" } });
     expect(screen.getByTestId("add-schema-preview-btn")).not.toBeDisabled();
-
-    fireEvent.click(screen.getByTestId("add-schema-manual-toggle"));
-    expect(screen.getByTestId("add-schema-input")).toBeInTheDocument();
-    expect(screen.getByTestId("add-schema-select-toggle")).toBeInTheDocument();
+    expect(screen.queryByTestId("add-schema-manual-toggle")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("add-schema-select-toggle")).not.toBeInTheDocument();
+    expect(screen.queryByText("手动输入 Schema 名称")).not.toBeInTheDocument();
+    expect(screen.queryByText(/MySQL 中通常对应 database 名/)).not.toBeInTheDocument();
   });
 });
-
