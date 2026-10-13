@@ -12,6 +12,8 @@ export type CatalogAssetUploadButtonProps = {
   testId?: string;
   onOpen?: () => void;
   onUploaded?: (result: CatalogAssetUploadResponse) => void;
+  /** When false, the button only calls onOpen and does not mount its own drawer. */
+  renderDrawer?: boolean;
 };
 
 function defaultLabel(schema?: string): string {
@@ -46,7 +48,8 @@ export function CatalogAssetUploadButton(props: CatalogAssetUploadButtonProps) {
     size = "default",
     testId,
     onOpen,
-    onUploaded
+    onUploaded,
+    renderDrawer = true
   } = props;
   const [open, setOpen] = useState(false);
 
@@ -57,7 +60,7 @@ export function CatalogAssetUploadButton(props: CatalogAssetUploadButtonProps) {
         className={`${buttonClass(variant, size)} notranslate`}
         onClick={() => {
           onOpen?.();
-          setOpen(true);
+          if (renderDrawer) setOpen(true);
         }}
         data-testid={testId ?? "catalog-asset-upload-button"}
         data-connection={connectionId}
@@ -66,7 +69,7 @@ export function CatalogAssetUploadButton(props: CatalogAssetUploadButtonProps) {
       >
         {label ?? defaultLabel(schema)}
       </button>
-      {open ? (
+      {renderDrawer && open ? (
         <CatalogAssetUploadDrawer
           open={open}
           onClose={() => setOpen(false)}

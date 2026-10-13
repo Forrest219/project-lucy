@@ -11,6 +11,7 @@ import { formatConnectionErrorMessage } from "./connection-errors";
 import { readKtxRuntimeStatus } from "./ktx-runtime";
 import { resolveLucyVersion } from "./lucy-version.js";
 import { reindexProject, validateSource, testConnection, type ValidationResult } from "./ktx";
+import { applyColumnTypeContractToValidation } from "./publish-gate";
 import {
   listLiveSchemas,
   LiveCatalogConnectionNotFoundError
@@ -58,6 +59,7 @@ import {
   listSources,
   previewSourcePatch,
   previewSourceYamlImport,
+  readChangedSourceColumnContracts,
   readSource,
   writeSourcePatch,
   writeSourceYamlImport
@@ -806,9 +808,16 @@ export function buildServer() {
     const projectRoot = await resolveProjectRoot();
     const results: Array<{ conn: string; schema: string; table: string; validation: ValidationResult }> = [];
     for (const source of changedSources.values()) {
+      const validation = await validateSource(projectRoot, source.conn, source.schema, source.table);
+      const contracts = await readChangedSourceColumnContracts(
+        projectRoot,
+        source.conn,
+        source.schema,
+        source.table
+      );
       results.push({
         ...source,
-        validation: await validateSource(projectRoot, source.conn, source.schema, source.table)
+        validation: applyColumnTypeContractToValidation(validation, contracts)
       });
     }
     return {

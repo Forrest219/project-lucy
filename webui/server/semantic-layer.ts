@@ -545,6 +545,49 @@ export async function readSource(
   };
 }
 
+async function readYamlRecordIfPresent(
+  projectRoot: string,
+  relPath: string
+): Promise<Record<string, unknown> | null> {
+  try {
+    const { doc } = await readYamlDocument(projectRoot, relPath);
+    return valueAsRecord(doc.toJSON());
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw error;
+  }
+}
+
+/**
+ * Raw `columns` from the changed source's overlay yaml and from its
+ * `_schema/<schema>.yaml` table. Types are not coerced, so `float` stays
+ * `float` for the column-type contract check.
+ */
+export async function readChangedSourceColumnContracts(
+  projectRoot: string,
+  conn: string,
+  schema: string,
+  table: string
+): Promise<Array<{ filePath: string; columns: unknown }>> {
+  assertSafeSegment(table, "table");
+  const contracts: Array<{ filePath: string; columns: unknown }> = [];
+  const manifestPath = schemaRelPath(conn, schema);
+  const overlayPath = path.posix.join("semantic-layer", conn, `${table}.yaml`);
+  const overlay = await readYamlRecordIfPresent(projectRoot, overlayPath);
+  if (overlay && Array.isArray(overlay.columns)) {
+    contracts.push({ filePath: overlayPath, columns: overlay.columns });
+  }
+  const manifest = await readYamlRecordIfPresent(projectRoot, manifestPath);
+  if (manifest) {
+    const tables = valueAsRecord(manifest.tables);
+    const tableValue = valueAsRecord(tables[table]);
+    if (Array.isArray(tableValue.columns)) {
+      contracts.push({ filePath: manifestPath, columns: tableValue.columns });
+    }
+  }
+  return contracts;
+}
+
 export function applyPatch(doc: Document, table: string, patch: TablePatch): Document {
   const tableNode = requireTableNode(doc, table);
 

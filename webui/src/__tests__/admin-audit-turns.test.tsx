@@ -195,7 +195,10 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
     expect(screen.queryByText("业务调用")).not.toBeInTheDocument();
     expect(screen.getByTestId("audit-turns-coverage-summary")).toHaveTextContent("已上报问询 0");
     expect(screen.getByTestId("audit-turns-coverage-summary")).toHaveTextContent("推断问询 1");
-    expect(screen.getByTestId("audit-turns-coverage-hint")).toHaveTextContent("用户原文依赖客户端可选上报");
+    expect(screen.getByTestId("audit-turns-coverage-hint")).toHaveTextContent("未上报原文时按会话保留问询");
+    expect(screen.getByRole("columnheader", { name: "客户端" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "会话 ID" })).toBeInTheDocument();
+    expect(screen.getByTestId("audit-export-inquiry-pack")).toHaveTextContent("导出问询与调用");
   });
 
   it("wraps 调用流水 in the shared bounded scroll frame with investigation column order", async () => {
@@ -856,5 +859,92 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
     renderAudit("/admin/audit?view=calls&hours=720");
     expect(await screen.findByTestId("audit-time-preset-30d")).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByTestId("audit-time-preset-7d")).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("shows 问询慢标记 only when the stored usageSlowCall flag is true", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/api/admin/agents")) {
+          return new Response(JSON.stringify({ ok: true, data: { agents: [], version: 1, summary: {} } }));
+        }
+        if (url.includes("/api/admin/audit/turns")) {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                total: 0,
+                entries: [],
+                summary: { reportedCount: 0, inferredCount: 0, reportedShare: 0 },
+                referenceLatency: { windowHours: 168, p95Ms: 0, totalCallsInWindow: 0, slowCallsInFilter: 0 }
+              }
+            })
+          );
+        }
+        if (url.startsWith("/api/admin/audit?")) {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                total: 4,
+                summary: { businessCalls: 4, protocolCalls: 0, deniedCalls: 0, dataBearingCalls: 2 },
+                entries: [
+                  {
+                    id: 1,
+                    ts: "2026-10-13T02:00:00.000Z",
+                    userId: "demo_agent",
+                    tool: "lucy_query",
+                    outcome: "ok",
+                    durationMs: 5000,
+                    requestId: "slow-query",
+                    usageSlowCall: true
+                  },
+                  {
+                    id: 2,
+                    ts: "2026-10-13T02:01:00.000Z",
+                    userId: "demo_agent",
+                    tool: "lucy_query",
+                    outcome: "ok",
+                    durationMs: 1600,
+                    requestId: "fast-query",
+                    usageSlowCall: false
+                  },
+                  {
+                    id: 3,
+                    ts: "2026-10-13T02:02:00.000Z",
+                    userId: "demo_agent",
+                    tool: "wiki_read",
+                    outcome: "ok",
+                    durationMs: 60000,
+                    requestId: "wiki-slow",
+                    usageSlowCall: false
+                  },
+                  {
+                    id: 4,
+                    ts: "2026-10-13T02:03:00.000Z",
+                    userId: "demo_agent",
+                    tool: "wiki_read",
+                    outcome: "ok",
+                    durationMs: 60000,
+                    requestId: "wiki-marked",
+                    usageSlowCall: true
+                  }
+                ]
+              }
+            })
+          );
+        }
+        return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
+      })
+    );
+
+    renderAudit("/admin/audit?view=calls&range=7d");
+    const table = await screen.findByTestId("audit-calls-table");
+    expect(within(table).getByTestId("audit-usage-slow-1")).toHaveTextContent("问询慢标记");
+    expect(within(table).queryByTestId("audit-usage-slow-2")).toBeNull();
+    expect(within(table).queryByTestId("audit-usage-slow-3")).toBeNull();
+    expect(within(table).getByTestId("audit-usage-slow-4")).toHaveTextContent("问询慢标记");
+    expect(table).not.toHaveTextContent("慢于多数请求");
   });
 });

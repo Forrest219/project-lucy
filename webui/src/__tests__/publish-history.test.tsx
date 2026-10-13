@@ -356,6 +356,58 @@ describe("PublishHistory", () => {
     expect(screen.getByRole("button", { name: "收起错误" })).toBeInTheDocument();
   });
 
+  it("shows contractGate.blocking when a blocked release has no validation issues", async () => {
+    vi.unstubAllGlobals();
+    const blocked = makePublishRecord({
+      id: "rel_20261013_contract_blocked",
+      createdAt: "2026-10-13T02:00:00.000Z",
+      trigger: "webui_publish",
+      status: "blocked",
+      reindex: undefined,
+      validation: {
+        ok: false,
+        results: [
+          {
+            connectionId: "customer-db",
+            sourceName: "orders",
+            ok: true,
+            exitCode: 0,
+            issues: []
+          }
+        ]
+      },
+      contractGate: {
+        blocking: [
+          {
+            checkId: "columns.0.type",
+            filePath: "semantic-layer/customer-db/orders.yaml",
+            message: "columns.0.type 的值 float 不符合 TS/Python SourceColumn 契约"
+          }
+        ]
+      }
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (isReleasesListUrl(url)) {
+          return new Response(JSON.stringify({ ok: true, data: { records: [blocked], total: 1 } }));
+        }
+        return new Response(
+          JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }),
+          { status: 404 }
+        );
+      })
+    );
+    renderHistory();
+    fireEvent.click(await screen.findByRole("button", { name: "查看错误" }));
+    const panel = await screen.findByTestId("publish-history-expanded-panel");
+    expect(panel).toHaveTextContent("columns.0.type");
+    expect(panel).toHaveTextContent("float");
+    expect(panel).toHaveTextContent("semantic-layer/customer-db/orders.yaml");
+    expect(panel).not.toHaveTextContent("未提供具体错误信息");
+  });
+
   it("exposes a 查看错误 action for promote_failed records and links back to the gate", async () => {
     vi.unstubAllGlobals();
     const promoteFailed = makePublishRecord({

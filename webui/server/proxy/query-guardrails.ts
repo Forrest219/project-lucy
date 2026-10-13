@@ -45,8 +45,15 @@ type SourceYaml = {
   measures?: Array<{ name?: string; expr?: string } | string>;
 };
 
+type SchemaTableDef = {
+  table?: string;
+  columns?: SourceYaml["columns"];
+  measures?: SourceYaml["measures"];
+};
+
 type SchemaYaml = {
-  tables?: Record<string, { table?: string }>;
+  /** `_schema/<schema>.yaml` tables are a map keyed by source name, not an array. */
+  tables?: Record<string, SchemaTableDef>;
 };
 
 function namesOf(items: SourceYaml["columns"]): string[] {
@@ -90,16 +97,35 @@ export async function loadAmbiguityCatalogFromDir(semanticLayerDir: string): Pro
     const connectionId = parts[0] ?? "";
     const isSchema = parts.includes("_schema");
 
-    if (isSchema && parsed.tables) {
+    if (isSchema && parsed.tables && typeof parsed.tables === "object" && !Array.isArray(parsed.tables)) {
       const schema = path.basename(relative, ".yaml");
       for (const [sourceName, tableDef] of Object.entries(parsed.tables)) {
-        if (!tableDef?.table) continue;
-        aliases.push({
-          physicalTable: tableDef.table,
-          sourceName,
+        if (!sourceName.trim() || !tableDef || typeof tableDef !== "object") continue;
+        const physical = typeof tableDef.table === "string" ? tableDef.table.trim() : "";
+        if (physical) {
+          aliases.push({
+            physicalTable: physical,
+            sourceName,
+            connectionId,
+            schema
+          });
+        }
+        const columns = namesOf(tableDef.columns);
+        const measureNames = namesOf(tableDef.measures);
+        if (columns.length === 0 && measureNames.length === 0) continue;
+        sources.push({
           connectionId,
-          schema
+          schema,
+          sourceName,
+          columns: columns.map((name) => ({ name })),
+          measures: measureNames.map((name) => ({ name }))
         });
+        for (const measure of tableDef.measures ?? []) {
+          if (!measure || typeof measure !== "object" || !measure.name) continue;
+          if (isAggregateExpr(measure.expr)) {
+            aggregatedMeasures.push({ source: sourceName, name: measure.name.trim() });
+          }
+        }
       }
       continue;
     }
@@ -230,6 +256,23 @@ function guardMeasures(record: Record<string, unknown>, aggregated: readonly Agg
     }
   }
   return null;
+}
+
+/**
+ * Spec 162 §7.8 — `count(*)` / `count(1)` with no source is a usage repair.
+ * The proxy calls this before `aclCheck`, so the empty-source deny
+ * `explicit_table_required:<empty>` does not replace the row_count hint.
+ * A named source returns null and still goes through ACL, including
+ * `explicit_table_required:<table>`. Other measure repairs stay on
+ * `applyLucyCallGuard`.
+ */
+export function countWithoutSourceBeforeAcl(toolName: string, args: unknown): Extract<LucyCallGuard, { action: "stop" }> | null {
+  if (toolName !== "lucy_query") return null;
+  const record = asRecord(args);
+  if (!record || sourceOf(record)) return null;
+  const stop = guardMeasures(record, []);
+  if (!stop || stop.reason !== "count_without_source") return null;
+  return stop;
 }
 
 function requestedSource(record: Record<string, unknown>): string | undefined {

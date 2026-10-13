@@ -154,6 +154,14 @@ npm run demo:upgrade -- --fresh
 
 `npm run demo:rebuild` 与 `demo:upgrade` 等价，均默认保留 volume；仅 dev 验收「干净模板」场景才用 `--fresh`。
 
+平滑升级的 compose project name 来自 `docker compose config` 的 `name`（已设置 `COMPOSE_PROJECT_NAME` 时以环境变量为准）。`deploy/compose/docker-compose.demo.yml` 因此对应 `compose_lucy-demo-data`，而不是用仓库根目录名拼出来的 volume。
+
+目标 named volume 已存在且为空（挂载点下 0 个文件），同时有运行中的容器挂载另一个同逻辑卷名、且里面有文件时，这次升级失败，不是 `preserved=true`。
+
+### 4.2 Fresh named volume（demo / postgres-demo / executive-poc）
+
+验收：`deploy/compose/docker-compose.demo.yml`、`deploy/compose/docker-compose.postgres-demo.yml`、`deploy/compose/docker-compose.executive-poc.yml` 在全新 named volume 上首次启动必须变为 healthy，不需要手工 `chown`。只读 evals 挂在 `/data/lucy/config/evals` 时，各文件中的 `lucy-data-init`（`user: "0"`）会在 lucy 之前创建并 `chown 10001:10001` `/data/lucy`、`/data/lucy/config`、`/data/lucy/.ktx`、`/data/lucy/.ktx-ui`。该 init 不挂载 evals，也不递归 chown。lucy 服务仍以镜像 USER 10001 运行。
+
 ## 5. Recommended Customer Config Mount
 
 客户 headless 部署推荐把业务配置维护为 `customer-config/`，并 bind mount 到 `/data/lucy`：

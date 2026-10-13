@@ -485,8 +485,14 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
   });
 
   const patchMutation = useMutation({
-    mutationFn: (vars: { dryRun: boolean; payload: RoleWritePayload; version?: string; draftHash: string; impact: PermissionImpactSummary }) =>
-      apiPatch<{ diff: string; proposedYaml: string; version?: string } | AccessWriteAck>(`/api/admin/roles/${encodeURIComponent(roleId)}`, { dryRun: vars.dryRun, version: vars.version, patch: vars.payload }),
+    mutationFn: (vars: { dryRun: boolean; payload: RoleWritePayload; version?: string; draftHash: string; impact: PermissionImpactSummary }) => {
+      const { description, allow } = vars.payload;
+      return apiPatch<{ diff: string; proposedYaml: string; version?: string } | AccessWriteAck>(`/api/admin/roles/${encodeURIComponent(roleId)}`, {
+        dryRun: vars.dryRun,
+        version: vars.version,
+        patch: { description, allow },
+      });
+    },
     onSuccess: (data, vars) => {
       if (vars.dryRun) {
         const preview = data as { diff: string; proposedYaml: string; version?: string };

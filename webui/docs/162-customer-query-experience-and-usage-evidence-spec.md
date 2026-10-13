@@ -187,7 +187,7 @@ function repairHint(result, role):
   return { sources: visible.sources }
 ```
 
-名单里出现 ACL 之外的名字即失败（SC-5、SC-14）。`lucy_read_source` 与 `lucy_query` 使用同一函数。
+名单里出现 ACL 之外的名字即失败（SC-5、SC-14）。`lucy_read_source` 与 `lucy_query` 使用同一函数。列名同时来自 overlay yaml 和 `_schema/<schema>.yaml` 的 tables；SC-23 夹具应按 manifest 形状编写。
 
 ### 7.4 过滤条件下推
 
@@ -282,6 +282,8 @@ function compileMeasure(measure, source):
   return compile(measure)
 ```
 
+`compileMeasure` 在 ACL 的空 source 拒绝之前运行；命中时返回修复提示，且不再同时返回 `explicit_table_required:<empty>`。
+
 ## 8. 审计字段
 
 在现有 access log 上增加或写满：
@@ -340,9 +342,10 @@ function compileMeasure(measure, source):
 | SC-25 | P1 | `data-qa-instructions.md` 写明：问询原文含指代或两个意图时，模型先复述账户、月份和产品线，确认前不发 `lucy_query`；没有原文的推断问询跳过复述。请求不带确认字段时，代理仍转发 `lucy_query` |
 | SC-26 | P1 | 使用统计按 `matched_role_id` 并排给出权限拒绝次数。同一次拒绝不按 `role_ids` 里的每个角色各计一次。`matched_role_id` 为空时单独成行。不要求客户 `access.yaml` 入库 |
 | SC-20 | P2 | 新慢调用定义不把 1.6 秒的成功查询标成慢。`wiki_read` 或 `discover_data` 单次超过 5 秒也不按本定义标慢。零行成功的 `result_empty=1`。取消在有 session 时挂上 turn |
+| SC-20b | P2 | 调用流水在存储慢标记为真时显示「问询慢标记」。列表字段是 `usageSlowCall`，对应 access log 的 `is_slow_call`，不是问询钻取里相对 P95 的 `isSlowCall`（「慢于多数请求」）。1.6 秒成功的 `lucy_query` 不显示。`wiki_read` 即使单次耗时很长也不显示，除非该存储标记为真。不改 Spec 143 调用监测 |
 | SC-21 | P2 | `GET /api/admin/audit` 的同一时间筛选能看见 `token_expired` 与普通调用，类型字段不同。鉴权失败不写成 `lucy_query` |
 | SC-22 | P2 | User-Agent `kscc-code/1.3.7 (cli)` 在 `client` 为空时解析出客户端与版本。无转发头时 `client_forwarded_for` 为空，`client_ip` 仍为对端 |
 | SC-23 | P2 | 歧义列的修复提示是 ACL 内的限定名。不生成自动 join。本条测试不依赖 SC-24 的门禁 |
-| SC-24 | P2 | `columns.0.type` 契约失败拒绝发布。豁免行含操作者、原因、到期时间；到期后发布再次失败 |
+| SC-24 | P2 | `columns.0.type` 契约失败拒绝发布。豁免行含操作者、原因、到期时间；到期后发布再次失败。用户可见入口是工作台已有的 `validate-changed` 检查，不新增端点 |
 
 客户验收基线见来源计划的表。实现测试用夹具，不把客户日志原文提交进仓库。

@@ -762,6 +762,12 @@ function TurnDetailDrawer({
                     <span>开始 {formatConfigAuditTs(detail.startedAt ?? detail.createdAt ?? "")}</span>
                   ) : null}
                   {detail.endedAt ? <span>结束 {formatConfigAuditTs(detail.endedAt)}</span> : null}
+                  {detail.client ? (
+                    <span>客户端 <span className="notranslate" translate="no">{detail.client}</span></span>
+                  ) : null}
+                  {detail.sessionId ? (
+                    <span>会话 ID <span className="notranslate" translate="no">{detail.sessionId}</span></span>
+                  ) : null}
                   {typeof detail.linkedCallCount === "number" ? (
                     <span>关联调用 {detail.linkedCallCount}</span>
                   ) : null}
@@ -1116,7 +1122,17 @@ function EntryRow({
           <span className={`pl-status-badge ${outcomeClass}`}>{OUTCOME_LABELS[entry.outcome]}</span>
         </td>
         <td className="pl-audit-table-muted">
-          <span className="tabular-nums">{entry.durationMs}ms</span>
+          <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+            <span className="tabular-nums">{entry.durationMs}ms</span>
+            {entry.usageSlowCall ? (
+              <span
+                className="pl-status-badge pl-status-partial text-[11px] px-1.5 whitespace-nowrap"
+                data-testid={`audit-usage-slow-${entry.id}`}
+              >
+                问询慢标记
+              </span>
+            ) : null}
+          </span>
         </td>
         <td className="pl-audit-table-mono">{entry.tool}</td>
         <td className="pl-audit-table-muted">{entry.tables?.join(", ")}</td>
@@ -1343,7 +1359,6 @@ export function Audit() {
   const tool = searchParams.get("tool") ?? "";
   const outcome = searchParams.get("outcome") ?? "";
   const tokenHashPrefix = searchParams.get("tokenHashPrefix") ?? "";
-  const decisionReasonPrefix = searchParams.get("decisionReasonPrefix") ?? "";
   const tableSearch = searchParams.get("tableSearch") ?? "";
   const sessionId = searchParams.get("sessionId") ?? "";
   const clientIp = searchParams.get("clientIp") ?? "";
@@ -1540,7 +1555,6 @@ export function Audit() {
       || tool
       || outcome
       || tokenHashPrefix
-      || decisionReasonPrefix
       || tableSearch
       || keySearch
       || sessionId
@@ -1623,7 +1637,6 @@ export function Audit() {
     tokenHashPrefix: tokenHashPrefix || undefined,
     tool: tool || undefined,
     outcome: outcome || undefined,
-    decisionReasonPrefix: decisionReasonPrefix || undefined,
     since: localDateTimeValueToIso(since),
     until: localDateTimeValueToIso(until),
     tableSearch: tableSearch || undefined,
@@ -1704,6 +1717,7 @@ export function Audit() {
     includeProtocol
   });
   const turnExportUrl = `/api/admin/audit/turns/export${turnExportFilterQuery}`;
+  const inquiryPackUrl = `/api/admin/audit/export-inquiry-pack${turnExportFilterQuery}`;
   const callExportUrl = `/api/admin/audit/export${callExportFilterQuery}`;
   const exportPackUrl = `/api/admin/audit/export-pack${callExportFilterQuery}`;
   const metadataUrl = `/api/admin/audit/export-metadata?kind=${tab === "turns" ? "turns" : "calls"}`;
@@ -1768,6 +1782,15 @@ export function Audit() {
               title={secondaryExport.title}
             >
               {secondaryExport.label}
+            </a>
+            <a
+              href={inquiryPackUrl}
+              download
+              className="pl-btn pl-btn--secondary text-sm"
+              data-testid="audit-export-inquiry-pack"
+              title="同一次查询导出问询记录和调用流水"
+            >
+              导出问询与调用
             </a>
             <a
               href={exportPackUrl}
@@ -2081,7 +2104,7 @@ export function Audit() {
             ) : null}
             {turnTotal === 0 || (turnSummary && turnSummary.reportedCount === 0) ? (
               <div className="text-xs text-fg-muted" data-testid="audit-turns-coverage-hint">
-                用户原文依赖客户端可选上报；未上报时仅显示推断问询。
+                未上报原文时按会话保留问询。
               </div>
             ) : null}
           </div>
@@ -2101,6 +2124,8 @@ export function Audit() {
                   <th className="pl-audit-turns-col-time whitespace-nowrap">开始时间</th>
                   <th className="pl-audit-turns-col-duration whitespace-nowrap">问询时长</th>
                   <th className="pl-audit-turns-col-agent whitespace-nowrap"><span className="notranslate" translate="no">Agent</span></th>
+                  <th className="whitespace-nowrap">客户端</th>
+                  <th className="whitespace-nowrap">会话 ID</th>
                   <th className="pl-audit-turns-col-summary whitespace-nowrap">问询摘要</th>
                   <th className="pl-audit-turns-col-calls whitespace-nowrap">关联调用数</th>
                   <th className="pl-audit-turns-col-tables whitespace-nowrap">涉及数据表</th>
@@ -2110,7 +2135,7 @@ export function Audit() {
               </thead>
               <tbody>
                 {filteredTurnEntries.length === 0 ? (
-                  <tr><td colSpan={10} className="px-3 py-6 text-center text-fg-muted">暂无问询记录</td></tr>
+                  <tr><td colSpan={12} className="px-3 py-6 text-center text-fg-muted">暂无问询记录</td></tr>
                 ) : (
                   filteredTurnEntries.map((entry, index) => {
                     const denied = entry.outcomeSummary?.denied ?? 0;
@@ -2136,6 +2161,8 @@ export function Audit() {
                           ) : null}
                         </td>
                         <td className="notranslate" translate="no">{formatAgentLabel(entry.userId, agentNameById)}</td>
+                        <td className="notranslate" translate="no">{entry.client || "—"}</td>
+                        <td className="pl-audit-table-mono notranslate" translate="no">{entry.sessionId || "—"}</td>
                         <td className="pl-audit-turn-summary-cell">{entry.questionPreview ?? entry.questionSummary ?? "—"}</td>
                         <td className="pl-audit-table-num">{entry.linkedCallCount}</td>
                         <td className="pl-audit-table-muted pl-audit-turn-tables-cell notranslate" translate="no" title={entry.sources.map((s) => s.physicalTable).filter(Boolean).join(", ") || undefined}>

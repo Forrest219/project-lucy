@@ -1760,6 +1760,120 @@ describe("MCP proxy smoke", () => {
     }
   });
 
+  it("binds a same-session catalog call that landed just before lucy_begin_question", async () => {
+    const upstream = createServer(async (req, res) => {
+      const parsed = JSON.parse(await readRequestBody(req)) as { id?: string };
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({
+        jsonrpc: "2.0",
+        id: parsed.id ?? null,
+        result: { content: [{ type: "text", text: "ok" }] }
+      }));
+    });
+    await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+    process.env.LUCY_PROXY_UPSTREAM_HOST = "127.0.0.1";
+    process.env.LUCY_PROXY_UPSTREAM_PORT = String((upstream.address() as AddressInfo).port);
+
+    const { buildProxy } = await import("../proxy/mcp-proxy");
+    const { server, host } = buildProxy();
+    await new Promise<void>((resolve) => server.listen(0, host, resolve));
+    const proxyPort = (server.address() as AddressInfo).port;
+
+    const call = async (id: string, name: string, args: Record<string, unknown>) => {
+      const response = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${TOKEN}`,
+          "x-lucy-session-id": "prior-bind-session"
+        },
+        body: JSON.stringify({ jsonrpc: "2.0", id, method: "tools/call", params: { name, arguments: args } })
+      });
+      expect(response.status).toBe(200);
+      return response.json() as Promise<{ result: { content: Array<{ text: string }> } }>;
+    };
+
+    try {
+      await call("prior-catalog", "lucy_catalog", {});
+      await waitForAuditRow("prior-catalog");
+      const begun = await call("prior-begin", "lucy_begin_question", { intentSummary: "列出可访问的表" });
+      const turnId = (JSON.parse(begun.result.content[0]?.text ?? "{}") as { turnId: string }).turnId;
+      const catalog = await waitForAuditRow("prior-catalog");
+      const begin = await waitForAuditRow("prior-begin");
+      expect(catalog.lucy_turn_id).toBe(turnId);
+      expect(catalog.turn_attribution_mode).toBe("session_bound");
+      expect(begin.lucy_turn_id).toBe(turnId);
+      expect(begin.turn_attribution_mode).toBe("explicit");
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
+      await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));
+    }
+  });
+
+  it("binds a read_source that finishes after lucy_begin_question was recorded", async () => {
+    let markReadArrived: () => void = () => {};
+    const readArrived = new Promise<void>((resolve) => {
+      markReadArrived = resolve;
+    });
+    let releaseRead: () => void = () => {};
+    const readHeld = new Promise<void>((resolve) => {
+      releaseRead = resolve;
+    });
+    const upstream = createServer(async (req, res) => {
+      const parsed = JSON.parse(await readRequestBody(req)) as { id?: string; params?: { name?: string } };
+      if (parsed.params?.name === "sl_read_source") {
+        markReadArrived();
+        await readHeld;
+      }
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({
+        jsonrpc: "2.0",
+        id: parsed.id ?? null,
+        result: { content: [{ type: "text", text: "ok" }] }
+      }));
+    });
+    await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+    process.env.LUCY_PROXY_UPSTREAM_HOST = "127.0.0.1";
+    process.env.LUCY_PROXY_UPSTREAM_PORT = String((upstream.address() as AddressInfo).port);
+
+    const { buildProxy } = await import("../proxy/mcp-proxy");
+    const { server, host } = buildProxy();
+    await new Promise<void>((resolve) => server.listen(0, host, resolve));
+    const proxyPort = (server.address() as AddressInfo).port;
+
+    const call = (id: string, name: string, args: Record<string, unknown>) => fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${TOKEN}`,
+        "x-lucy-session-id": "inflight-session"
+      },
+      body: JSON.stringify({ jsonrpc: "2.0", id, method: "tools/call", params: { name, arguments: args } })
+    });
+
+    try {
+      const readPromise = call("inflight-read", "lucy_read_source", {
+        connectionId: "mysql-aliyun",
+        sourceName: "superstore_orders"
+      });
+      await readArrived;
+      const beginResponse = await call("inflight-begin", "lucy_begin_question", { intentSummary: "列出可访问的表" });
+      expect(beginResponse.status).toBe(200);
+      const beginBody = await beginResponse.json() as { result: { content: Array<{ text: string }> } };
+      const turnId = (JSON.parse(beginBody.result.content[0]?.text ?? "{}") as { turnId: string }).turnId;
+      releaseRead();
+      const readResponse = await readPromise;
+      expect(readResponse.status).toBe(200);
+      const readAudit = await waitForAuditRow("inflight-read");
+      expect(readAudit.lucy_turn_id).toBe(turnId);
+      expect(readAudit.turn_attribution_mode).toBe("session_bound");
+    } finally {
+      releaseRead();
+      await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
+      await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));
+    }
+  });
+
   it("allows business tools/call without a prior lucy_begin_question (skipping report never blocks queries)", async () => {
     const upstreamSeen: string[] = [];
     const upstream = createServer(async (req, res) => {

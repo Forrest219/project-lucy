@@ -806,7 +806,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
       dryRun?: boolean;
       version?: string;
       override?: AccessGovernanceOverrideRequest;
-      patch?: { description?: unknown; allow?: unknown };
+      patch?: { description?: unknown; allow?: unknown; permission_model_version?: unknown };
     };
   }>("/api/admin/roles/:roleId", async (request, reply) => {
     const dryRun = request.body?.dryRun !== false;
@@ -825,9 +825,20 @@ export function registerRoleRoutes(app: FastifyInstance) {
       }
       return reply.status(404).send({ ok: false, error: { code: "ROLE_NOT_FOUND", message: `role '${request.params.roleId}' not found` } });
     }
-    const patch = request.body?.patch ?? {};
+    const patch: { description?: unknown; allow?: unknown; permission_model_version?: unknown } = {
+      ...(request.body?.patch ?? {})
+    };
     if (bodyHasOwn(patch, "id") || bodyHasOwn(patch, "roleId")) {
       return reply.status(400).send({ ok: false, error: { code: "BAD_REQUEST", message: "role id cannot be changed" } });
+    }
+    // Echoing the stored field is not an edit. A missing field is not equal to 2
+    // (or to the assumed v1), so sending a version still cannot upgrade v1 to v2.
+    if (
+      bodyHasOwn(patch, "permission_model_version")
+      && existing.permission_model_version !== undefined
+      && patch.permission_model_version === existing.permission_model_version
+    ) {
+      delete patch.permission_model_version;
     }
     for (const key of Object.keys(patch)) {
       if (key !== "description" && key !== "allow") {

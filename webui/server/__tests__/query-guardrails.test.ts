@@ -4,12 +4,14 @@
  * Fixtures stand in for a published semantic layer. The proxy source assertion
  * checks that the guard runs before lucy_query is rewritten for forwarding.
  */
-import { readFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   applyLucyCallGuard,
+  countWithoutSourceBeforeAcl,
   loadAmbiguityCatalogFromDir,
   queryGuardrailsEnabled,
   type AmbiguityCatalog
@@ -196,6 +198,147 @@ describe("published catalog loader", () => {
         })
       ])
     );
+    expect(catalog.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceName: "superstore_orders",
+          columns: expect.arrayContaining([{ name: "region" }])
+        }),
+        expect.objectContaining({
+          sourceName: "superstore_people",
+          columns: expect.arrayContaining([{ name: "region" }])
+        })
+      ])
+    );
+  });
+
+  it("loads column names from schema manifests and still reads overlay yaml", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "lucy-ambiguity-manifest-"));
+    try {
+      const schemaDir = path.join(root, "demo", "_schema");
+      await mkdir(schemaDir, { recursive: true });
+      await writeFile(path.join(schemaDir, "orders.yaml"), `
+tables:
+  orders:
+    table: demo.orders
+    columns:
+      - name: region
+      - name: order_id
+  secret_payroll:
+    table: demo.secret_payroll
+    columns:
+      - name: region
+`, "utf8");
+      await writeFile(path.join(schemaDir, "people.yaml"), `
+tables:
+  people:
+    table: demo.people
+    columns:
+      - name: region
+        type: string
+      - name: manager
+`, "utf8");
+      await writeFile(path.join(root, "demo", "budget.yaml"), `
+name: budget_daily
+columns:
+  - name: overlay_only
+measures:
+  - name: total_spend
+    expr: sum(spend)
+`, "utf8");
+
+      const catalog = await loadAmbiguityCatalogFromDir(root);
+      expect(catalog.aliases).toEqual(expect.arrayContaining([
+        expect.objectContaining({ physicalTable: "demo.orders", sourceName: "orders", schema: "orders" }),
+        expect.objectContaining({ physicalTable: "demo.people", sourceName: "people", schema: "people" })
+      ]));
+      expect(catalog.sources).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          sourceName: "orders",
+          columns: expect.arrayContaining([{ name: "region" }, { name: "order_id" }])
+        }),
+        expect.objectContaining({
+          sourceName: "people",
+          columns: expect.arrayContaining([{ name: "region" }, { name: "manager" }])
+        }),
+        expect.objectContaining({
+          sourceName: "budget_daily",
+          columns: [{ name: "overlay_only" }]
+        })
+      ]));
+      expect(catalog.aggregatedMeasures).toEqual(
+        expect.arrayContaining([{ source: "budget_daily", name: "total_spend" }])
+      );
+
+      const readable = new Set(["orders", "people"]);
+      const ambiguous = applyLucyCallGuard({
+        toolName: "lucy_query",
+        args: { dimensions: [{ field: "region" }] },
+        readableSourceNames: readable,
+        catalog
+      });
+      expect(ambiguous.action).toBe("stop");
+      if (ambiguous.action !== "stop") return;
+      expect(ambiguous.reason).toBe("ambiguous_field");
+      expect(ambiguous.repair).toContain("orders.region");
+      expect(ambiguous.repair).toContain("people.region");
+      expect(ambiguous.repair).not.toContain("secret_payroll");
+      expect(ambiguous.repair).not.toMatch(/\bjoin\b/i);
+
+      const unique = applyLucyCallGuard({
+        toolName: "lucy_query",
+        args: { dimensions: [{ field: "order_id" }] },
+        readableSourceNames: readable,
+        catalog
+      });
+      expect(unique.action).toBe("allow");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("count(*) before the empty-source ACL deny", () => {
+  it("returns the row_count repair only when no source is present", () => {
+    for (const measure of ["count(*)", "count(1)", "COUNT(*)", "count *"]) {
+      const stop = countWithoutSourceBeforeAcl("lucy_query", { measures: [measure] });
+      expect(stop?.reason).toBe("count_without_source");
+      expect(stop?.repair).toContain("row_count");
+    }
+
+    expect(countWithoutSourceBeforeAcl("lucy_query", {
+      sourceName: "orders",
+      measures: ["count(*)"]
+    })).toBeNull();
+    expect(countWithoutSourceBeforeAcl("lucy_query", {
+      table: "secret_payroll",
+      measures: ["count(*)"]
+    })).toBeNull();
+    expect(countWithoutSourceBeforeAcl("lucy_read_source", {
+      measures: ["count(*)"]
+    })).toBeNull();
+  });
+
+  it("leaves sum(already aggregated measure) to the later guard instead of sum(sum())", () => {
+    expect(countWithoutSourceBeforeAcl("lucy_query", {
+      sourceName: "ad_cost_daily",
+      measures: ["sum(total_spend)"]
+    })).toBeNull();
+    expect(countWithoutSourceBeforeAcl("lucy_query", {
+      measures: ["sum(sum(amount))"]
+    })).toBeNull();
+
+    const named = applyLucyCallGuard({
+      toolName: "lucy_query",
+      args: { sourceName: "ad_cost_daily", measures: ["sum(total_spend)"] },
+      readableSourceNames: READABLE,
+      catalog: CATALOG
+    });
+    expect(named.action).toBe("stop");
+    if (named.action === "stop") {
+      expect(named.reason).toBe("aggregate_of_aggregate");
+      expect(named.repair).not.toContain("sum(sum");
+    }
   });
 });
 
@@ -205,9 +348,14 @@ describe("proxy call order", () => {
     const guardAt = source.indexOf("applyLucyCallGuard({");
     const forwardAt = source.indexOf("lucyQueryUpstreamArgs(toolArgs)");
     const budgetAt = source.indexOf("questionBudget.consume(");
+    const aclAt = source.indexOf("const decision = await aclCheck(identity, toolName, toolArgs);");
+    const earlyAt = source.lastIndexOf("countWithoutSourceBeforeAcl(", aclAt);
     expect(guardAt).toBeGreaterThan(0);
     expect(forwardAt).toBeGreaterThan(guardAt);
     expect(budgetAt).toBeGreaterThan(guardAt);
+    expect(earlyAt).toBeGreaterThan(0);
+    expect(aclAt).toBeGreaterThan(earlyAt);
+    expect(source.slice(Math.max(0, earlyAt - 240), earlyAt)).toContain("queryGuardrailsEnabled()");
     expect(source).toContain("questionBudget.ensureTurn");
     expect(source).toContain("queryGuardrailsEnabled()");
     const previous = process.env.LUCY_QUERY_GUARDRAILS;

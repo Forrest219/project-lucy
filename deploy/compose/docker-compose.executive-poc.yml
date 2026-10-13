@@ -1,3 +1,12 @@
+# Shared by lucy and lucy-data-init so `up --build` builds one image.
+# The init service overrides entrypoint/user; lucy keeps the image USER (10001).
+x-lucy-build: &lucy-build
+  context: ../..
+  args:
+    KTX_VERSION: "${KTX_VERSION:-0.16.0}"
+    TARGETPLATFORM: "${TARGETPLATFORM:-linux/arm64}"
+    TARGETARCH: "${TARGETARCH:-arm64}"
+
 services:
   demo-exec-db:
     image: mysql:8.4
@@ -16,13 +25,28 @@ services:
       timeout: 5s
       retries: 30
 
+  # Fresh named volumes plus the read-only evals bind at
+  # /data/lucy/config/evals make Docker create /data/lucy/config as root.
+  # USER 10001 then cannot mkdir siblings (semantic-layer, wiki, skills).
+  # This init mounts only the data volume — not the evals bind — and chowns
+  # the directories the app must create. It does not chown recursively.
+  lucy-data-init:
+    build: *lucy-build
+    image: project-lucy:executive-poc
+    user: "0"
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        mkdir -p /data/lucy /data/lucy/config /data/lucy/.ktx /data/lucy/.ktx-ui
+        chown 10001:10001 /data/lucy /data/lucy/config /data/lucy/.ktx /data/lucy/.ktx-ui
+    volumes:
+      - lucy-exec-poc-data:/data/lucy
+    restart: "no"
+    healthcheck:
+      disable: true
+
   lucy:
-    build:
-      context: ../..
-      args:
-        KTX_VERSION: "${KTX_VERSION:-0.16.0}"
-        TARGETPLATFORM: "${TARGETPLATFORM:-linux/arm64}"
-        TARGETARCH: "${TARGETARCH:-arm64}"
+    build: *lucy-build
     image: project-lucy:executive-poc
     environment:
       KTX_PROJECT_ROOT: /data/lucy
@@ -46,6 +70,8 @@ services:
       # A2: WebUI reads from <configRoot>/evals. Move bind mount target there.
       - ../../examples/executive-poc/project-template/evals:/data/lucy/config/evals:ro
     depends_on:
+      lucy-data-init:
+        condition: service_completed_successfully
       demo-exec-db:
         condition: service_healthy
 

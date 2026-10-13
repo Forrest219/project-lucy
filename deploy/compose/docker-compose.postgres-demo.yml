@@ -1,3 +1,16 @@
+# Shared by lucy and lucy-data-init so `up --build` builds one image.
+# The init service overrides entrypoint/user; lucy keeps the image USER (10001).
+x-lucy-build: &lucy-build
+  context: ../..
+  args:
+    KTX_VERSION: "${KTX_VERSION:-0.16.0}"
+    # Same TARGETPLATFORM contract as deploy/compose/docker-compose.demo.yml. Prefer
+    # BUILDX_BUILDER=default when rebuilding so customer `lucy-amd64` cannot
+    # hijack this path. See docs/specs/lucy-202608-05-demo-builder-arm-default-spec.md
+    # and docs/specs/lucy-202608-08-image-arch-and-ktx-baseline-fix.md.
+    TARGETPLATFORM: "${TARGETPLATFORM:-linux/arm64}"
+    TARGETARCH: "${TARGETARCH:-arm64}"
+
 services:
   postgres-db:
     image: postgres:16-alpine
@@ -17,17 +30,28 @@ services:
     secrets:
       - postgres_password
 
+  # Fresh named volumes plus the read-only evals bind at
+  # /data/lucy/config/evals make Docker create /data/lucy/config as root.
+  # USER 10001 then cannot mkdir siblings (semantic-layer, wiki, skills).
+  # This init mounts only the data volume — not the evals bind — and chowns
+  # the directories the app must create. It does not chown recursively.
+  lucy-data-init:
+    build: *lucy-build
+    image: project-lucy:postgres-demo
+    user: "0"
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        mkdir -p /data/lucy /data/lucy/config /data/lucy/.ktx /data/lucy/.ktx-ui
+        chown 10001:10001 /data/lucy /data/lucy/config /data/lucy/.ktx /data/lucy/.ktx-ui
+    volumes:
+      - lucy-postgres-demo-data:/data/lucy
+    restart: "no"
+    healthcheck:
+      disable: true
+
   lucy:
-    build:
-      context: ../..
-      args:
-        KTX_VERSION: "${KTX_VERSION:-0.16.0}"
-        # Same TARGETPLATFORM contract as deploy/compose/docker-compose.demo.yml. Prefer
-        # BUILDX_BUILDER=default when rebuilding so customer `lucy-amd64` cannot
-        # hijack this path. See docs/specs/lucy-202608-05-demo-builder-arm-default-spec.md
-        # and docs/specs/lucy-202608-08-image-arch-and-ktx-baseline-fix.md.
-        TARGETPLATFORM: "${TARGETPLATFORM:-linux/arm64}"
-        TARGETARCH: "${TARGETARCH:-arm64}"
+    build: *lucy-build
     image: project-lucy:postgres-demo
     environment:
       KTX_PROJECT_ROOT: /data/lucy
@@ -55,6 +79,8 @@ services:
     secrets:
       - postgres_password
     depends_on:
+      lucy-data-init:
+        condition: service_completed_successfully
       postgres-db:
         condition: service_healthy
 

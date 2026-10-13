@@ -118,10 +118,17 @@ function buildErrorPanel(record: SemanticAssetReleaseRecord): ErrorPanel {
           : "(无定位)";
         lines.push(`- [${loc}] ${issue.message}`);
       }
-    } else if (reindex && reindex.ok === false) {
-      lines.push(reindex.stderr?.trim() || "(stderr 为空)");
-    } else {
-      lines.push("(未提供具体错误信息)");
+    }
+    for (const block of record.contractGate?.blocking ?? []) {
+      const loc = block.filePath?.trim() ? block.filePath : "(无定位)";
+      lines.push(`- [${loc}] ${block.checkId}: ${block.message}`);
+    }
+    if (lines.length === 0) {
+      if (reindex && reindex.ok === false) {
+        lines.push(reindex.stderr?.trim() || "(stderr 为空)");
+      } else {
+        lines.push("(未提供具体错误信息)");
+      }
     }
     return {
       title: `发布被阻断 · ${record.id}`,

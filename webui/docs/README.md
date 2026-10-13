@@ -147,6 +147,8 @@
 | [169-usage-and-call-monitor-density-spec.md](169-usage-and-call-monitor-density-spec.md) | 使用概况与调用监控密度 v0.1：短排行顶部对齐，用量条改中性灰；调用量去掉重复窗口副文，当天失败只显示时刻，自动刷新写明 30 秒；数据访问 / 界面使用改为内容页签。已实现，工单 WO-202610-21。修订 Spec 135 / 156 / 165 | 产品 / UX / Frontend |
 | [166-usage-page-view-series-spec.md](166-usage-page-view-series-spec.md) | 使用概况页面访问折线 v0.1：只在界面使用的「近 N 页面访问」上拆开当前 24 小时或 7 天；各点相加等于卡片数字。已实现，工单 WO-202610-19。修订 Spec 148 / 156 | 产品 / UX / API / Frontend / Backend |
 | [170-mvp-open-skill-wiki-access-spec.md](170-mvp-open-skill-wiki-access-spec.md) | Skill 与 Wiki 对所有角色开放 v0.1：暂停对象授权和四个上下文工具的勾选；已发布 Skill 与全部 Wiki 对已解析角色开放。已实现，工单 WO-202610-22。暂停 Spec 151 的对象授权 | 产品 / Runtime / UX / 安全 |
+| [172-audit-session-visit-spec.md](172-audit-session-visit-spec.md) | 访问日志按会话对账 v0.1：一次 MCP 会话一条问询，推断问询 ID 取首条调用，未上报原文的握手仍可查询。工单 WO-202610-23。修订 Spec 138 / 140 / 162。v0.2 由 Spec 173 实施 | 产品 / Audit / API |
+| [173-audit-one-question-one-inquiry-spec.md](173-audit-one-question-one-inquiry-spec.md) | 一次提问一条问询 v0.1：已上报会话不再并列推断问询，同会话 120 秒补绑，探测不进问询，证据包带上已关联握手。工单 WO-202610-25。修订 Spec 172，并入 WO-202610-24 | 产品 / Audit / API |
 
 ## 与原 README 的关键校正
 

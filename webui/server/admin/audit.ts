@@ -14,7 +14,7 @@ import {
   targetLabel
 } from "../../src/lib/configAuditLabels.js";
 import { resolveProjectRoot } from "../project.js";
-import { rebuildInferredTurns, purgeExpiredConversationTurns, scrubAccessLogArgsSummaries } from "../proxy/audit.js";
+import { rebuildInferredTurns, purgeExpiredConversationTurns, scrubAccessLogArgsSummaries, INFERRED_TURN_REBUILD_LOOKBACK_HOURS } from "../proxy/audit.js";
 import { buildStoredZip, sha256Hex } from "../proxy/zip-store.js";
 import { MCP_PLAYGROUND_PLATFORM } from "./mcp-playground.js";
 import { resolveLucyVersion } from "../lucy-version.js";
@@ -36,15 +36,14 @@ import { MCP_PROTOCOL_METHODS as PROTOCOL_TOOLS } from "../proxy/mcp-request-cla
 const lastRebuildAt = new Map<string, number>();
 const REBUILD_DEBOUNCE_MS = Number(process.env.LUCY_TURN_INFER_REBUILD_DEBOUNCE_MS ?? 30_000);
 
-async function rebuildInferredTurnsDebounced(userId: string, options?: { lookbackHours?: number }): Promise<void> {
-  // Key on the resolved window size too: a recent rebuild over a narrower window doesn't cover
-  // a wider one, so a different lookbackHours must not be skipped by the debounce.
-  const key = `${userId}:${options?.lookbackHours ?? "default"}`;
+async function rebuildInferredTurnsDebounced(userId: string): Promise<void> {
+  // Spec 172: one fixed horizon. A shorter page window must not rebuild and renumber IDs.
+  const key = userId;
   const now = Date.now();
   const last = lastRebuildAt.get(key);
   if (last !== undefined && now - last < REBUILD_DEBOUNCE_MS) return;
   lastRebuildAt.set(key, now);
-  await rebuildInferredTurns(userId, options);
+  await rebuildInferredTurns(userId, { lookbackHours: INFERRED_TURN_REBUILD_LOOKBACK_HOURS });
 }
 
 let db: Database.Database | null = null;
@@ -83,7 +82,8 @@ const ACCESS_LOG_COLUMNS = [
   ["skill_file_version", "TEXT"],
   ["skill_action", "TEXT"],
   ["skill_roles_allowed", "TEXT"],
-  ["matched_role_id", "TEXT"]
+  ["matched_role_id", "TEXT"],
+  ["is_slow_call", "INTEGER"]
 ] as const;
 const PERMISSION_SNAPSHOT_COLUMNS = [
   ["capability_digest", "TEXT"],
@@ -243,14 +243,14 @@ function buildAccessLogFilter(q: AccessLogFilterQuery): {
   }
 
   const includeProtocol = q.includeProtocol === "true" || callSource === "playground";
+  const turnScoped = Boolean((q.turnId && q.turnId.trim()) || (q.key && q.key.trim()));
   const conditions = [...baseConditions];
-  if (!includeProtocol) conditions.push(`tool NOT IN (${PROTOCOL_TOOL_LIST})`);
+  // Spec 172: a turn-id search must return that visit's handshake. The unfiltered list stays quiet.
+  if (!includeProtocol && !turnScoped) conditions.push(`tool NOT IN (${PROTOCOL_TOOL_LIST})`);
 
   return { conditions, baseConditions, params, includeProtocol };
 }
 
-// lucy_begin_question is the report call that *starts* a reported turn, not a linked business call.
-const NON_LINKED_CALL_TOOL_LIST = [...PROTOCOL_TOOLS, "lucy_begin_question"].map((tool) => `'${tool}'`).join(", ");
 const SENSITIVE_KEY_RE = /(?:password|passwd|pwd|token|secret|api[-_]?key|authorization|credential|private[-_]?key|cert)/i;
 const SENSITIVE_PAIR_RE = /\b(password|passwd|pwd|token|secret|api[-_]?key|authorization|credential|private[-_]?key|cert)\b\s*[:=]\s*([^,\s;]+)/gi;
 const CSV_FORMULA_RE = /^[=+\-@]/;
@@ -497,6 +497,8 @@ export async function getAuditDb(): Promise<Database.Database> {
     ensureColumn(db, "permission_snapshots", column, definition);
   }
   ensureColumn(db, "conversation_turns", "session_id", "TEXT");
+  ensureColumn(db, "inferred_turns", "client", "TEXT");
+  ensureColumn(db, "inferred_turns", "session_id", "TEXT");
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_al_user_token_ts ON access_log(user_id, token_hash_prefix, ts);
     CREATE INDEX IF NOT EXISTS idx_al_session_ts ON access_log(lucy_session_id, ts);
@@ -702,6 +704,8 @@ interface QueryRow {
   skill_action: "discover" | "read" | null;
   skill_roles_allowed: string | null;
   matched_role_id: string | null;
+  /** Spec 162 SC-20 stored mark. Distinct from the P95 drill-down flag. */
+  is_slow_call?: number | null;
   /** Joined at read time; only set when lucy_turn_id is empty. */
   inferred_turn_id?: string | null;
 }
@@ -1147,6 +1151,8 @@ interface TurnEntry {
   id: string;
   source: "inferred" | "reported";
   userId: string;
+  client?: string;
+  sessionId?: string;
   startedAt: string;
   endedAt: string;
   /** Calls that touched a physical table or were denied with table_forbidden. */
@@ -1327,6 +1333,32 @@ function attachInferredTurnIds(database: Database.Database, rows: QueryRow[]): Q
   }));
 }
 
+/** Spec 173: evidence packs include handshake rows already linked to the exported inquiries. */
+function linkedHandshakeRows(database: Database.Database, rows: QueryRow[]): QueryRow[] {
+  const present = new Set(rows.map((row) => row.id));
+  const turnIds = new Set<string>();
+  for (const row of rows) {
+    if (row.lucy_turn_id) turnIds.add(row.lucy_turn_id);
+    if (row.inferred_turn_id) turnIds.add(row.inferred_turn_id);
+  }
+  if (turnIds.size === 0) return [];
+  const ids = [...turnIds];
+  const placeholders = ids.map(() => "?").join(",");
+  const extra = database.prepare(`
+    SELECT * FROM access_log
+    WHERE tool IN (${PROTOCOL_TOOL_LIST})
+      AND (
+        IFNULL(lucy_turn_id, '') IN (${placeholders})
+        OR EXISTS (
+          SELECT 1 FROM inferred_turn_access_logs ital
+          WHERE ital.access_log_id = access_log.id
+            AND ital.inferred_turn_id IN (${placeholders})
+        )
+      )
+  `).all(...ids, ...ids) as QueryRow[];
+  return extra.filter((row) => !present.has(row.id));
+}
+
 function listTurnAccessLogIds(database: Database.Database, entry: TurnEntry): number[] {
   if (entry.source === "inferred") {
     const links = database
@@ -1335,7 +1367,7 @@ function listTurnAccessLogIds(database: Database.Database, entry: TurnEntry): nu
     return links.map((link) => link.access_log_id);
   }
   const rows = database
-    .prepare(`SELECT id FROM access_log WHERE lucy_turn_id = ? AND tool NOT IN (${NON_LINKED_CALL_TOOL_LIST}) ORDER BY ts ASC`)
+    .prepare(`SELECT id FROM access_log WHERE lucy_turn_id = ? ORDER BY ts ASC`)
     .all(entry.id) as Array<{ id: number }>;
   return rows.map((row) => row.id);
 }
@@ -1384,7 +1416,6 @@ async function listAuditTurnEntries(
 ): Promise<TurnListResult> {
   const source = q.source === "inferred" || q.source === "reported" ? q.source : "all";
   const windowHours = parseWindowHours(q.hours);
-  const lookbackHours = q.lookbackHours ? parseInt(q.lookbackHours, 10) : windowHours;
   const turnIdNeedle = (q.turnId ?? "").trim().toLowerCase();
   const tableNeedle = (q.tableSearch ?? "").trim().toLowerCase();
   const summaryNeedle = (q.q ?? "").trim().toLowerCase();
@@ -1393,12 +1424,12 @@ async function listAuditTurnEntries(
   const sinceDefault = sinceIsoFromHours(windowHours);
 
   if (source !== "reported") {
-    const cutoff = new Date(Date.now() - lookbackHours * 60 * 60 * 1000).toISOString();
+    const cutoff = new Date(Date.now() - INFERRED_TURN_REBUILD_LOOKBACK_HOURS * 60 * 60 * 1000).toISOString();
     const targetUsers = q.user
       ? [q.user]
       : (database.prepare(`SELECT DISTINCT user_id FROM access_log WHERE ts >= ?`).all(cutoff) as Array<{ user_id: string }>).map((row) => row.user_id);
     for (const userId of targetUsers) {
-      await rebuildInferredTurnsDebounced(userId, lookbackHours ? { lookbackHours } : undefined);
+      await rebuildInferredTurnsDebounced(userId);
     }
   }
 
@@ -1418,6 +1449,8 @@ async function listAuditTurnEntries(
     const rows = database.prepare(`SELECT * FROM inferred_turns ${where} ORDER BY started_at DESC`).all(params) as Array<{
       inferred_turn_id: string;
       user_id: string;
+      client: string | null;
+      session_id: string | null;
       started_at: string;
       ended_at: string;
       business_call_count: number;
@@ -1432,6 +1465,8 @@ async function listAuditTurnEntries(
           id: row.inferred_turn_id,
           source: "inferred",
           userId: row.user_id,
+          client: row.client ?? undefined,
+          sessionId: row.session_id ?? undefined,
           startedAt: row.started_at,
           endedAt: row.ended_at,
           businessCallCount: row.business_call_count,
@@ -1458,14 +1493,16 @@ async function listAuditTurnEntries(
     const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
     const rows = database.prepare(`SELECT * FROM conversation_turns ${where} ORDER BY created_at DESC`).all(params) as Array<{
       turn_id: string;
+      session_id: string | null;
       user_id: string;
+      client: string | null;
       created_at: string;
       question_summary: string | null;
       question_preview: string | null;
     }>;
     for (const row of rows) {
       const linked = database.prepare(`
-        SELECT id, ts, tool FROM access_log WHERE lucy_turn_id = ? AND tool NOT IN (${NON_LINKED_CALL_TOOL_LIST}) ORDER BY ts ASC
+        SELECT id, ts, tool FROM access_log WHERE lucy_turn_id = ? ORDER BY ts ASC
       `).all(row.turn_id) as Array<{ id: number; ts: string; tool: string }>;
       const accessLogIds = linked.map((l) => l.id);
       const sourceRows = accessLogIds.length > 0
@@ -1479,6 +1516,8 @@ async function listAuditTurnEntries(
           id: row.turn_id,
           source: "reported",
           userId: row.user_id,
+          client: row.client ?? undefined,
+          sessionId: row.session_id ?? undefined,
           startedAt: row.created_at,
           endedAt: linked.length > 0 ? linked[linked.length - 1].ts : row.created_at,
           businessCallCount: linked.length,
@@ -1558,6 +1597,8 @@ const TURN_CSV_HEADERS = [
   "问询 ID",
   "来源",
   "Agent",
+  "客户端",
+  "会话 ID",
   "开始时间",
   "开始时间 UTC",
   "结束时间",
@@ -1594,6 +1635,18 @@ const TURN_FIELD_METADATA: Record<(typeof TURN_CSV_HEADERS)[number], Omit<CsvFie
     format: "string",
     description: "触发该问询的 Agent 用户 ID。",
     trigger: "每条问询记录均输出。"
+  },
+  "客户端": {
+    label: "客户端",
+    format: "string|null",
+    description: "MCP initialize 自报的客户端名。不根据 User-Agent 改写。",
+    trigger: "问询记录了客户端名时输出。"
+  },
+  "会话 ID": {
+    label: "会话 ID",
+    format: "string|null",
+    description: "MCP 会话 ID，用于把同一次访问的握手和查数收在一条问询上。",
+    trigger: "调用带了会话 ID 时输出。"
   },
   "开始时间": {
     label: "开始时间",
@@ -1705,6 +1758,8 @@ function renderTurnCsv(rows: TurnEntry[]): string {
         csvCell(row.id),
         csvCell(turnSourceLabel(row.source)),
         csvCell(row.userId),
+        csvCell(row.client ?? ""),
+        csvCell(row.sessionId ?? ""),
         csvCell(formatAuditLocalTimestamp(row.startedAt)),
         csvCell(row.startedAt),
         csvCell(formatAuditLocalTimestamp(row.endedAt)),
@@ -2253,7 +2308,8 @@ export function registerAuditRoutes(app: FastifyInstance) {
       skillFileVersion: row.skill_file_version ?? undefined,
       skillAction: row.skill_action ?? undefined,
       skillRolesAllowed: row.skill_roles_allowed ? (JSON.parse(row.skill_roles_allowed) as string[]) : undefined,
-      matchedRoleId: row.matched_role_id ?? undefined
+      matchedRoleId: row.matched_role_id ?? undefined,
+      usageSlowCall: row.is_slow_call === 1
     }));
 
     // SC-21 — auth failures join the same time filter as a separate event
@@ -2373,7 +2429,12 @@ export function registerAuditRoutes(app: FastifyInstance) {
       .prepare(`SELECT * FROM access_log ${where} ORDER BY ts DESC, id DESC LIMIT @exportLimit`)
       .all({ ...resumed.params, exportLimit: maxRows + 1 }) as QueryRow[];
     const hasMore = fetched.length > maxRows;
-    const rows = attachInferredTurnIds(database, hasMore ? fetched.slice(0, maxRows) : fetched);
+    const filteredRows = attachInferredTurnIds(database, hasMore ? fetched.slice(0, maxRows) : fetched);
+    const handshakeRows = includeProtocol ? [] : linkedHandshakeRows(database, filteredRows);
+    const rows = attachInferredTurnIds(
+      database,
+      [...filteredRows, ...handshakeRows].sort((a, b) => (a.ts < b.ts ? 1 : a.ts > b.ts ? -1 : b.id - a.id))
+    );
     if (hasMore && !decodeAuditExportCursor(q.cursor)) {
       reply.code(413);
       reply.header("Cache-Control", "private, no-store");
@@ -2555,6 +2616,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
       appVersion: resolveLucyVersion(),
       filter: filterSnapshotForManifest(q, includeProtocol),
       includeProtocol,
+      linkedHandshakeRowCount: handshakeRows.length,
       limits: { maxRows, maxBytes, exportedUncompressedBytes: totalUncompressedBytes },
       paging: { nextCursor: nextCursor ?? null, pageSize: maxRows },
       completeness: {
@@ -2643,6 +2705,55 @@ export function registerAuditRoutes(app: FastifyInstance) {
     return reply.send(withBom);
   });
 
+  // GET /api/admin/audit/export-inquiry-pack — 问询 CSV 与调用 CSV 同一次查询 (Spec 172)
+  app.get<{
+    Querystring: TurnFilterQuery;
+  }>("/api/admin/audit/export-inquiry-pack", async (request, reply) => {
+    const q = request.query;
+    const database = await getAuditDb();
+    const turns = await listAuditTurnEntries(database, q, { paginate: false });
+    const turnIds = turns.entries.map((entry) => entry.id);
+    const callFilter: AccessLogFilterQuery = {
+      user: q.user,
+      since: q.since,
+      until: q.until,
+      outcome: q.outcome,
+      tableSearch: q.tableSearch,
+      includeProtocol: "true"
+    };
+    const { conditions, params } = buildAccessLogFilter(callFilter);
+    if (turnIds.length > 0) {
+      const placeholders = turnIds.map((_, index) => `@turn${index}`);
+      turnIds.forEach((id, index) => {
+        params[`turn${index}`] = id;
+      });
+      conditions.push(`(
+        IFNULL(lucy_turn_id, '') IN (${placeholders.join(", ")})
+        OR EXISTS (
+          SELECT 1 FROM inferred_turn_access_logs ital
+          WHERE ital.access_log_id = access_log.id AND ital.inferred_turn_id IN (${placeholders.join(", ")})
+        )
+      )`);
+    } else {
+      conditions.push("1 = 0");
+    }
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+    const callRows = attachInferredTurnIds(
+      database,
+      database.prepare(`SELECT * FROM access_log ${where} ORDER BY ts DESC, id DESC`).all(params) as QueryRow[]
+    );
+    const turnsCsv = Buffer.from(`\uFEFF${renderTurnCsv(turns.entries)}`, "utf8");
+    const callsCsv = Buffer.from(`\uFEFF${renderAccessLogCsv(callRows)}`, "utf8");
+    const zip = buildStoredZip([
+      { name: "turns.csv", data: turnsCsv },
+      { name: "calls.csv", data: callsCsv }
+    ]);
+    reply.header("Content-Type", "application/zip");
+    reply.header("Content-Disposition", `attachment; filename="${auditExportFilename("inquiry-pack", "csv").replace(/\.csv$/, ".zip")}"`);
+    reply.header("Cache-Control", "private, no-store");
+    return reply.send(zip);
+  });
+
   // GET /api/admin/audit/turns/:turnId — single turn detail (inferred or reported).
   app.get<{ Params: { turnId: string }; Querystring: { hours?: string } }>("/api/admin/audit/turns/:turnId", async (request, reply) => {
     const { turnId } = request.params;
@@ -2721,6 +2832,8 @@ export function registerAuditRoutes(app: FastifyInstance) {
           id: row.inferred_turn_id,
           source: "inferred",
           userId: row.user_id,
+          client: (row.client as string | null) ?? undefined,
+          sessionId: (row.session_id as string | null) ?? undefined,
           startedAt: row.started_at,
           endedAt: row.ended_at,
           callCount: row.call_count,
@@ -2744,7 +2857,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
     }
     const accessLogs = database.prepare(`
       SELECT id, ts, tool, outcome, decision_reason, duration_ms, trace_id, tables FROM access_log
-      WHERE lucy_turn_id = ? AND tool NOT IN (${NON_LINKED_CALL_TOOL_LIST})
+      WHERE lucy_turn_id = ?
       ORDER BY ts ASC
     `).all(turnId) as Array<{
       id: number;
@@ -2782,6 +2895,8 @@ export function registerAuditRoutes(app: FastifyInstance) {
         id: row.turn_id,
         source: "reported",
         userId: row.user_id,
+        client: (row.client as string | null) ?? undefined,
+        sessionId: (row.session_id as string | null) ?? undefined,
         questionSummary: row.question_summary,
         questionPreview: row.question_preview,
         questionSource: row.question_source,

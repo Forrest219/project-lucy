@@ -1445,9 +1445,13 @@ export async function createConnection(
     );
   }
   const input = validateCreateConnectionInput(rawInput);
-  const gate = await assertEndpointGate(root, input, options.endpointFlags);
   const isSqlite = input.driver === "sqlite";
   const hasPasswordInput = typeof input.password === "string" && input.password.length > 0;
+  // Non-sqlite confirm-write must fail before any yaml or secret write.
+  if (!dryRun && !isSqlite && !hasPasswordInput) {
+    throw new ConnectionPasswordRequiredError("password is required when dryRun is false");
+  }
+  const gate = await assertEndpointGate(root, input, options.endpointFlags);
   const secretRelPath = connectionSecretRelPath(input.id);
   const passwordRef = hasPasswordInput || !isSqlite ? passwordFileRef(root, input.id) : undefined;
   const mutator = connectionCreateMutatorFactory(input, passwordRef);
@@ -1466,14 +1470,21 @@ export async function createConnection(
     };
   }
 
-  if (!isSqlite && !hasPasswordInput) {
-    throw new ConnectionPasswordRequiredError("password is required when dryRun is false");
-  }
-
-  // Write secret then yaml. Connectivity is best-effort: a failed test must not
-  // roll back a successfully written connection (ops may save while the DB is down).
+  // Write secret then yaml. Anything that throws after this write, including the
+  // audit summary, rolls back this call's yaml patch and any secret it created.
   let secretWritten = false;
   let yamlWritten = false;
+  const rollbackWrittenConnection = async () => {
+    if (yamlWritten) {
+      const paths = await loadContentPaths();
+      await safeWrite(paths, root, "ktx.yaml", preview.oldText);
+      yamlWritten = false;
+    }
+    if (secretWritten) {
+      await safeRemoveSecretPasswordIfExists(root, secretRelPath);
+      secretWritten = false;
+    }
+  };
   try {
     if (hasPasswordInput) {
       await safeWriteNewSecretPassword(root, secretRelPath, input.password!);
@@ -1482,13 +1493,7 @@ export async function createConnection(
     await writeKtxYaml(root, mutator, { dryRun: false, lockHeld: true });
     yamlWritten = true;
   } catch (error) {
-    if (yamlWritten) {
-      const paths = await loadContentPaths();
-      await safeWrite(paths, root, "ktx.yaml", preview.oldText);
-    }
-    if (secretWritten) {
-      await safeRemoveSecretPasswordIfExists(root, secretRelPath);
-    }
+    await rollbackWrittenConnection();
     throw error;
   }
 
@@ -1518,26 +1523,33 @@ export async function createConnection(
 
   let auditId: number | undefined;
   if (options.recordConfigChange) {
-    auditId = await options.recordConfigChange({
-      filePath: "ktx.yaml",
-      changeType: "connection_create",
-      targetId: input.id,
-      oldSummary: { connections: "unchanged" },
-      newSummary: {
-        connectionId: input.id,
-        secretRelPath,
-        passwordBytes: Buffer.byteLength(input.password, "utf8"),
-        driver: input.driver,
-        host: input.host,
-        port: input.port,
-        database: input.database,
-        username: input.username,
-        testStatus,
-        ...(gate.acknowledgedSeparateEndpoint ? { acknowledgedSeparateEndpoint: true } : {}),
-        ...(gate.acknowledgedDifferentDatabase ? { acknowledgedDifferentDatabase: true } : {})
-      },
-      diff
-    });
+    const passwordBytes =
+      typeof input.password === "string" ? Buffer.byteLength(input.password, "utf8") : 0;
+    try {
+      auditId = await options.recordConfigChange({
+        filePath: "ktx.yaml",
+        changeType: "connection_create",
+        targetId: input.id,
+        oldSummary: { connections: "unchanged" },
+        newSummary: {
+          connectionId: input.id,
+          secretRelPath,
+          passwordBytes,
+          driver: input.driver,
+          host: input.host,
+          port: input.port,
+          database: input.database,
+          username: input.username,
+          testStatus,
+          ...(gate.acknowledgedSeparateEndpoint ? { acknowledgedSeparateEndpoint: true } : {}),
+          ...(gate.acknowledgedDifferentDatabase ? { acknowledgedDifferentDatabase: true } : {})
+        },
+        diff
+      });
+    } catch (error) {
+      await rollbackWrittenConnection();
+      throw error;
+    }
   }
 
   return {

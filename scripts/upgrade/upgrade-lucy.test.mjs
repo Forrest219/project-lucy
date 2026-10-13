@@ -6,6 +6,8 @@ import path from "node:path";
 import test from "node:test";
 import {
   PRESERVE_REL_PATHS,
+  EmptyVolumeShadowError,
+  assertTargetVolumeNotEmptyShadow,
   buildPreserveCheckScript,
   diffPreserveSnapshots,
   fullVolumeName,
@@ -39,12 +41,153 @@ test("fullVolumeName prefixes compose project name", () => {
   assert.equal(fullVolumeName("project-lucy", "lucy-demo-data"), "project-lucy_lucy-demo-data");
 });
 
-test("resolveComposeProjectName defaults to cwd basename", () => {
-  const prev = process.env.COMPOSE_PROJECT_NAME;
-  delete process.env.COMPOSE_PROJECT_NAME;
-  assert.equal(resolveComposeProjectName(repoRoot), path.basename(repoRoot));
+function restoreComposeProjectName(prev) {
   if (prev === undefined) delete process.env.COMPOSE_PROJECT_NAME;
   else process.env.COMPOSE_PROJECT_NAME = prev;
+}
+
+test("resolveComposeProjectName falls back to cwd basename when compose config cannot be read", () => {
+  const prev = process.env.COMPOSE_PROJECT_NAME;
+  delete process.env.COMPOSE_PROJECT_NAME;
+  try {
+    assert.equal(resolveComposeProjectName(repoRoot), path.basename(repoRoot));
+    assert.equal(
+      resolveComposeProjectName(repoRoot, {
+        composeFile: "deploy/compose/docker-compose.demo.yml",
+        lookupComposeProjectName() {
+          throw new Error("docker unavailable");
+        }
+      }),
+      path.basename(repoRoot)
+    );
+  } finally {
+    restoreComposeProjectName(prev);
+  }
+});
+
+test("resolveComposeProjectName prefers COMPOSE_PROJECT_NAME over compose config", () => {
+  const prev = process.env.COMPOSE_PROJECT_NAME;
+  process.env.COMPOSE_PROJECT_NAME = "explicit-project";
+  let lookupCalls = 0;
+  try {
+    const name = resolveComposeProjectName(repoRoot, {
+      composeFile: "deploy/compose/docker-compose.demo.yml",
+      lookupComposeProjectName() {
+        lookupCalls += 1;
+        return "compose";
+      }
+    });
+    assert.equal(name, "explicit-project");
+    assert.equal(lookupCalls, 0);
+  } finally {
+    restoreComposeProjectName(prev);
+  }
+});
+
+test("resolveComposeProjectName uses an injected compose config name", () => {
+  const prev = process.env.COMPOSE_PROJECT_NAME;
+  delete process.env.COMPOSE_PROJECT_NAME;
+  try {
+    const name = resolveComposeProjectName(repoRoot, {
+      composeFile: "deploy/compose/docker-compose.demo.yml",
+      lookupComposeProjectName() {
+        return "compose";
+      }
+    });
+    assert.equal(name, "compose");
+    assert.notEqual(name, path.basename(repoRoot));
+    assert.equal(fullVolumeName(name, "lucy-demo-data"), "compose_lucy-demo-data");
+  } finally {
+    restoreComposeProjectName(prev);
+  }
+});
+
+test("empty target volume with a live container on another same-logical volume fails", () => {
+  assert.throws(
+    () => assertTargetVolumeNotEmptyShadow({
+      targetVolume: "project-lucy_lucy-demo-data",
+      logicalVolumeName: "lucy-demo-data",
+      inspect() {
+        return {
+          targetExists: true,
+          targetFileCount: 0,
+          otherMounts: [
+            {
+              volumeName: "compose_lucy-demo-data",
+              logicalVolumeName: "lucy-demo-data",
+              fileCount: 7,
+              containerId: "abc123",
+              containerName: "compose-lucy-1"
+            }
+          ]
+        };
+      }
+    }),
+    (err) => {
+      assert.ok(err instanceof EmptyVolumeShadowError);
+      assert.equal(err.shadow.shadowVolume, "compose_lucy-demo-data");
+      assert.match(err.message, /preserve check failed/);
+      assert.match(err.message, /project-lucy_lucy-demo-data/);
+      assert.match(err.message, /0 files/);
+      assert.match(err.message, /compose_lucy-demo-data/);
+      assert.doesNotMatch(err.message, /preserve check ok/);
+      assert.doesNotMatch(err.message, /preserved=true/);
+      return true;
+    }
+  );
+
+  const quiet = {
+    targetVolume: "project-lucy_lucy-demo-data",
+    logicalVolumeName: "lucy-demo-data"
+  };
+  assert.doesNotThrow(() => assertTargetVolumeNotEmptyShadow({
+    ...quiet,
+    inspect: () => ({
+      targetExists: true,
+      targetFileCount: 4,
+      otherMounts: [{
+        volumeName: "compose_lucy-demo-data",
+        logicalVolumeName: "lucy-demo-data",
+        fileCount: 9
+      }]
+    })
+  }));
+  assert.doesNotThrow(() => assertTargetVolumeNotEmptyShadow({
+    ...quiet,
+    inspect: () => ({
+      targetExists: true,
+      targetFileCount: 0,
+      otherMounts: [{
+        volumeName: "compose_lucy-demo-data",
+        logicalVolumeName: "lucy-demo-data",
+        fileCount: 0
+      }]
+    })
+  }));
+  assert.doesNotThrow(() => assertTargetVolumeNotEmptyShadow({
+    ...quiet,
+    inspect: () => ({
+      targetExists: false,
+      targetFileCount: 0,
+      otherMounts: [{
+        volumeName: "compose_lucy-demo-data",
+        logicalVolumeName: "lucy-demo-data",
+        fileCount: 9
+      }]
+    })
+  }));
+  assert.doesNotThrow(() => assertTargetVolumeNotEmptyShadow({
+    ...quiet,
+    inspect: () => ({
+      targetExists: true,
+      targetFileCount: 0,
+      otherMounts: [{
+        volumeName: "project-lucy_lucy-demo-data",
+        logicalVolumeName: "lucy-demo-data",
+        fileCount: 9
+      }]
+    })
+  }));
 });
 
 test("parsePreserveSnapshot reads file and directory markers", () => {

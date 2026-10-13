@@ -188,7 +188,7 @@ docker compose \
 
 然后用 **Admin**（非改仓库默认 YAML）。**推荐优先 Agent Constraints**（不依赖 Role v2）。
 
-**重要：** demo 模板 Role（如 `demo_readonly`）缺省无 `permission_model_version` → 按 **v1** 处理；Role **PATCH 只允许** `description` / `allow`，**不能**把既有 v1 Role 升到 v2，也就**不能**在原 Role 上 PATCH 出 `scoped`/`row_policy`（会 `v1_scoped_forbidden`）。
+**重要：** demo 模板 Role（如 `demo_readonly`）缺省无 `permission_model_version` → 按 **v1** 处理；Role **PATCH 只允许** `description` / `allow`，**不能**把既有 v1 Role 升到 v2，也就**不能**在原 Role 上 PATCH 出 `scoped`/`row_policy`（会 `v1_scoped_forbidden`）。回显已存的 `permission_model_version` 会被忽略；与已存值不同的值仍然拒绝。
 
 | 子路径 | 做法 |
 |---|---|

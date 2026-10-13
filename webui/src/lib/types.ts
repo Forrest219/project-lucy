@@ -1051,6 +1051,8 @@ export type AuditLogEntry = {
   skillAction?: "discover" | "read";
   skillRolesAllowed?: string[];
   matchedRoleId?: string;
+  /** Spec 162 SC-20b. Stored `is_slow_call` on the calls list, not the P95 `isSlowCall`. */
+  usageSlowCall?: boolean;
 };
 
 export type AuditQuery = {
@@ -1127,6 +1129,8 @@ export type AuditTurnEntry = {
   id: string;
   source: "inferred" | "reported";
   userId: string;
+  client?: string;
+  sessionId?: string;
   startedAt: string;
   endedAt: string;
   businessCallCount: number;
@@ -1179,6 +1183,8 @@ export type AuditTurnDetailResponse = {
   id: string;
   source: "inferred" | "reported";
   userId: string;
+  client?: string;
+  sessionId?: string;
   startedAt?: string;
   endedAt?: string;
   createdAt?: string;
@@ -1840,6 +1846,14 @@ export type SemanticAssetReleaseRecord = {
     results: SemanticAssetValidationRow[];
   };
   reindex?: SemanticAssetReindexRecord;
+  /** Spec 162 SC-24 — contract violations that blocked the release. */
+  contractGate?: {
+    blocking?: Array<{
+      checkId: string;
+      filePath?: string;
+      message: string;
+    }>;
+  };
 };
 
 export type SemanticAssetReleasesResponse = {

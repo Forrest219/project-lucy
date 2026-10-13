@@ -171,10 +171,29 @@ describe("RoleDetail Spec 150", () => {
     expect(within(drawer).getByText("完整 YAML diff")).toBeInTheDocument();
     expect(calls).toHaveLength(1);
     expect(calls[0]!.dryRun).toBe(true);
+    expect(calls[0]!.body.role.permission_model_version).toBe(2);
     expect(JSON.stringify(calls[0]!.body)).not.toContain("prefix");
     fireEvent.click(within(drawer).getByRole("button", { name: "确认保存" }));
     await waitFor(() => expect(calls.some((call) => call.dryRun === false)).toBe(true));
     expect(calls[1]!.body.role).toEqual(calls[0]!.body.role);
+  });
+
+  it("omits permission_model_version from an edit patch", async () => {
+    let patchBody: { patch?: Record<string, unknown> } | undefined;
+    installFetch(makeRole(), (url, init) => {
+      if (url === "/api/admin/roles/analyst" && init?.method === "PATCH") {
+        patchBody = JSON.parse(String(init.body));
+        return new Response(JSON.stringify({ ok: true, data: { diff: "+ change", proposedYaml: "yaml", version: "v-preview" } }));
+      }
+    });
+    renderAt("/admin/roles/analyst");
+    fireEvent.change(await screen.findByLabelText("说明"), { target: { value: "Changed" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存权限配置" }));
+    await screen.findByTestId("role-permission-review-drawer");
+    expect(patchBody?.patch).toBeDefined();
+    expect(patchBody?.patch).not.toHaveProperty("permission_model_version");
+    expect(patchBody?.patch?.description).toBe("Changed");
+    expect(patchBody?.patch?.allow).toBeDefined();
   });
 
   it("invalidates a preview after the Drawer is closed and the draft changes", async () => {

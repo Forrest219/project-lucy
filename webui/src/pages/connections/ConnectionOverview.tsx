@@ -124,8 +124,9 @@ type ManifestViewTarget = {
 };
 
 type ManifestUploadTarget = ManifestViewTarget & {
-  initialContent: string;
-  initialFilename: string;
+  mode: "create" | "update";
+  initialContent?: string;
+  initialFilename?: string;
 };
 
 function matchingSchemaWarnings(
@@ -580,8 +581,18 @@ export function ConnectionOverview() {
     setManifestUploadTarget({
       connectionId: asset.connectionId,
       schema: asset.schema,
+      mode: "update",
       initialContent: asset.content,
       initialFilename: asset.filename
+    });
+  }
+
+  function openCreateUploadDrawer(connectionId: string, schema: string) {
+    closeSchemaMore();
+    setManifestUploadTarget({
+      connectionId,
+      schema,
+      mode: "create"
     });
   }
 
@@ -1300,7 +1311,8 @@ export function ConnectionOverview() {
                                             variant="link"
                                             size="sm"
                                             testId={`upload-yaml-${conn.id}-${schema}`}
-                                            onOpen={closeSchemaMore}
+                                            renderDrawer={false}
+                                            onOpen={() => openCreateUploadDrawer(conn.id, schema)}
                                           />
                                         ) : null}
                                         <button
@@ -1471,9 +1483,13 @@ export function ConnectionOverview() {
           onClose={() => setManifestUploadTarget(null)}
           connectionId={manifestUploadTarget.connectionId}
           schema={manifestUploadTarget.schema}
-          mode="update"
-          initialContent={manifestUploadTarget.initialContent}
-          initialFilename={manifestUploadTarget.initialFilename}
+          mode={manifestUploadTarget.mode}
+          {...(manifestUploadTarget.initialContent !== undefined
+            ? { initialContent: manifestUploadTarget.initialContent }
+            : {})}
+          {...(manifestUploadTarget.initialFilename !== undefined
+            ? { initialFilename: manifestUploadTarget.initialFilename }
+            : {})}
         />
       ) : null}
       {(() => {

@@ -121,7 +121,11 @@ Connection ID / sourceName 必须 `translate="no"` + `notranslate`。
 
 `webui/server/semantic-asset-export.ts` 的 `makeScalar` 不得使用 `require("yaml")`；改为从已有 `yaml` ESM import 使用 `Scalar`（或等价构造）。
 
-### 6.5 CSS
+### 6.5 阻断错误面板
+
+状态为 `blocked` 的发布记录，错误面板除 `validation.results[].issues` 外，还展示 `contractGate.blocking` 的 `checkId`、`filePath` 与 `message`。仅有契约阻断、校验 issues 为空时，面板不得显示「(未提供具体错误信息)」。
+
+### 6.6 CSS
 
 最小语义块（不得复制整套 schema-asset 列宽）：
 
@@ -140,6 +144,7 @@ Connection ID / sourceName 必须 `translate="no"` + `notranslate`。
 - 行内无「下载当前快照」/「导出当前语义资产包」按钮；Header 有「导出当前语义资产包 (.zip)」。
 - 发布记录展示连接/语义源摘要与文件·语义源数量；手动 Reindex 空变更展示「全库索引重建（无资产变更）」。
 - 序号：最新记录为 `1`。
+- `blocked` 记录的错误面板包含 `contractGate.blocking`（`checkId`、`filePath`、`message`）；只有契约阻断时不显示「(未提供具体错误信息)」。
 - export 单测仍绿；可选补一条直接调用 `makeScalar` 路径不抛（现有 sanitize 覆盖即可）。
 - `lint:terminology`、`build` 通过。
 

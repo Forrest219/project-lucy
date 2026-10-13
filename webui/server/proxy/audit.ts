@@ -363,6 +363,8 @@ async function getDb(): Promise<Database.Database> {
     ensureColumn(db, "permission_snapshots", column, definition);
   }
   ensureColumn(db, "conversation_turns", "session_id", "TEXT");
+  ensureColumn(db, "inferred_turns", "client", "TEXT");
+  ensureColumn(db, "inferred_turns", "session_id", "TEXT");
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_al_user_token_ts ON access_log(user_id, token_hash_prefix, ts);
     CREATE INDEX IF NOT EXISTS idx_al_session_ts ON access_log(lucy_session_id, ts);
@@ -1396,51 +1398,52 @@ interface SourceSummaryEntry {
 
 const INFERRED_SUMMARY_ARG_KEYS = ["statement_type", "amount_type", "company_name", "report_period"] as const;
 
-function buildInferredQuestionSummary(sourceSummary: SourceSummaryEntry[], argsSummaries: Array<Record<string, unknown>>): string {
-  const names = [...new Set(sourceSummary.map((s) => s.sourceName ?? s.physicalTable))];
-  const details: string[] = [];
-  for (const args of argsSummaries) {
-    for (const key of INFERRED_SUMMARY_ARG_KEYS) {
-      const value = args[key];
-      if (typeof value === "string" && value && !details.includes(`${key}=${value}`)) {
-        details.push(`${key}=${value}`);
-      }
-    }
-  }
-  if (names.length === 0) return "推断：未识别到具体数据源的调用簇";
-  const sourceText = `推断：触达 ${names.join("、")}`;
-  return details.length > 0 ? `${sourceText}（${details.join("，")}）` : sourceText;
+/** Spec 172: page windows filter display only. Rebuild always covers the longest audit preset. */
+export const INFERRED_TURN_REBUILD_LOOKBACK_HOURS = 24 * 30;
+/** Spec 173: same window as the inferred-turn gap. Spec 172 used 2 seconds. */
+export const PRIOR_CALL_BIND_MS = 120_000;
+export const SESSION_VISIT_SUMMARY_PREFIX = "会话建立：";
+
+/** Spec 173 / WO-202610-24: these calls stay in the call log and do not form an inquiry by themselves. */
+const PROBE_TOOLS = new Set([
+  "server/discover",
+  "ping",
+  "resources/list",
+  "resources/templates/list",
+  "notifications/cancelled"
+]);
+
+const HANDSHAKE_TOOLS = ["initialize", "notifications/initialized", "tools/list"] as const;
+
+export function sessionVisitSummary(client: string | null | undefined): string {
+  const name = client?.trim() || "未知客户端";
+  return `${SESSION_VISIT_SUMMARY_PREFIX}${name}`;
 }
 
-export async function rebuildInferredTurns(
-  userId: string,
-  options: { lookbackHours?: number; gapMs?: number; includeCatalogOnly?: boolean } = {}
-): Promise<{ turns: number }> {
-  const lookbackHours = options.lookbackHours ?? Number(process.env.LUCY_TURN_INFER_LOOKBACK_HOURS ?? 24);
-  const gapMs = options.gapMs ?? Number(process.env.LUCY_TURN_INFER_GAP_MS ?? 120_000);
-  const includeCatalogOnly = options.includeCatalogOnly ?? (process.env.LUCY_TURN_INFER_INCLUDE_CATALOG_ONLY === "true");
-  const database = await getDb();
-  const cutoff = new Date(Date.now() - lookbackHours * 60 * 60 * 1000).toISOString();
-  const protocolList = PROTOCOL_TOOLS.map((tool) => `'${tool}'`).join(", ");
+export function inferredTurnId(userId: string, firstAccessLogId: number): string {
+  return `inf_${userId}_${firstAccessLogId}`;
+}
 
-  const rows = database.prepare(`
-    SELECT id, ts, tool, tables, args_summary, policy_version, permission_snapshot_hash
-    FROM access_log
-    WHERE user_id = ? AND ts >= ? AND tool NOT IN (${protocolList})
-    ORDER BY ts ASC, id ASC
-  `).all(userId, cutoff) as Array<{
-    id: number;
-    ts: string;
-    tool: string;
-    tables: string | null;
-    args_summary: string | null;
-    policy_version: string | null;
-    permission_snapshot_hash: string | null;
-  }>;
+type ClusterLogRow = {
+  id: number;
+  ts: string;
+  tool: string;
+  tables: string | null;
+  args_summary: string | null;
+  policy_version: string | null;
+  permission_snapshot_hash: string | null;
+  lucy_session_id: string | null;
+  lucy_turn_id: string | null;
+  client: string | null;
+};
 
-  type ClusterRow = (typeof rows)[number];
-  const clusters: ClusterRow[][] = [];
-  let current: ClusterRow[] = [];
+function sessionKeyOf(row: { lucy_session_id: string | null }): string {
+  return row.lucy_session_id?.trim() || "";
+}
+
+function clusterBusinessRows(rows: ClusterLogRow[], gapMs: number): ClusterLogRow[][] {
+  const clusters: ClusterLogRow[][] = [];
+  let current: ClusterLogRow[] = [];
   let lastTs = 0;
   let lastPolicyVersion: string | null | undefined;
   let lastPermissionSnapshot: string | null | undefined;
@@ -1462,6 +1465,120 @@ export async function rebuildInferredTurns(
     lastPermissionSnapshot = row.permission_snapshot_hash;
   }
   if (current.length > 0) clusters.push(current);
+  return clusters;
+}
+
+function firstHandshakeBySession(rows: ClusterLogRow[]): Map<string, ClusterLogRow[]> {
+  const picked = new Map<string, Map<string, ClusterLogRow>>();
+  for (const row of rows) {
+    const sessionId = sessionKeyOf(row);
+    if (!sessionId) continue;
+    if (row.lucy_turn_id?.trim()) continue;
+    if (!HANDSHAKE_TOOLS.includes(row.tool as (typeof HANDSHAKE_TOOLS)[number])) continue;
+    let tools = picked.get(sessionId);
+    if (!tools) {
+      tools = new Map();
+      picked.set(sessionId, tools);
+    }
+    if (!tools.has(row.tool)) tools.set(row.tool, row);
+  }
+  const result = new Map<string, ClusterLogRow[]>();
+  for (const [sessionId, tools] of picked) {
+    result.set(sessionId, [...tools.values()].sort((a, b) => a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : a.id - b.id));
+  }
+  return result;
+}
+
+function clientFromRows(rows: ClusterLogRow[]): string | null {
+  const initialize = rows.find((row) => row.tool === "initialize" && row.client?.trim());
+  if (initialize?.client) return initialize.client;
+  return rows.find((row) => row.client?.trim())?.client ?? null;
+}
+
+function buildInferredQuestionSummary(sourceSummary: SourceSummaryEntry[], argsSummaries: Array<Record<string, unknown>>): string {
+  const names = [...new Set(sourceSummary.map((s) => s.sourceName ?? s.physicalTable))];
+  const details: string[] = [];
+  for (const args of argsSummaries) {
+    for (const key of INFERRED_SUMMARY_ARG_KEYS) {
+      const value = args[key];
+      if (typeof value === "string" && value && !details.includes(`${key}=${value}`)) {
+        details.push(`${key}=${value}`);
+      }
+    }
+  }
+  if (names.length === 0) return "推断：未识别到具体数据源的调用簇";
+  const sourceText = `推断：触达 ${names.join("、")}`;
+  return details.length > 0 ? `${sourceText}（${details.join("，")}）` : sourceText;
+}
+
+export async function rebuildInferredTurns(
+  userId: string,
+  options: { lookbackHours?: number; gapMs?: number; includeCatalogOnly?: boolean } = {}
+): Promise<{ turns: number }> {
+  const lookbackHours = options.lookbackHours ?? Number(process.env.LUCY_TURN_INFER_LOOKBACK_HOURS ?? INFERRED_TURN_REBUILD_LOOKBACK_HOURS);
+  const gapMs = options.gapMs ?? Number(process.env.LUCY_TURN_INFER_GAP_MS ?? 120_000);
+  const includeCatalogOnly = options.includeCatalogOnly ?? (process.env.LUCY_TURN_INFER_INCLUDE_CATALOG_ONLY === "true");
+  const database = await getDb();
+  const cutoff = new Date(Date.now() - lookbackHours * 60 * 60 * 1000).toISOString();
+
+  const loaded = database.prepare(`
+    SELECT id, ts, tool, tables, args_summary, policy_version, permission_snapshot_hash, lucy_session_id, lucy_turn_id, client
+    FROM access_log
+    WHERE user_id = ? AND ts >= ?
+    ORDER BY ts ASC, id ASC
+  `).all(userId, cutoff) as ClusterLogRow[];
+
+  const business = loaded.filter((row) =>
+    !PROTOCOL_TOOLS.includes(row.tool as (typeof PROTOCOL_TOOLS)[number])
+    && !row.lucy_turn_id?.trim()
+  );
+  const handshake = firstHandshakeBySession(loaded);
+  const bySession = new Map<string, ClusterLogRow[]>();
+  for (const row of business) {
+    const key = sessionKeyOf(row);
+    const group = bySession.get(key);
+    if (group) group.push(row);
+    else bySession.set(key, [row]);
+  }
+
+  type BuiltCluster = {
+    business: ClusterLogRow[];
+    handshake: ClusterLogRow[];
+    sessionId: string | null;
+    summaryOverride?: string;
+  };
+  const built: BuiltCluster[] = [];
+  const sessionsWithBusiness = new Set<string>();
+  for (const [sessionId, group] of bySession) {
+    for (const cluster of clusterBusinessRows(group, gapMs)) {
+      const noSessionCatalog = sessionId === "" && cluster.every((row) => row.tool === "kx_catalog");
+      if (noSessionCatalog && !includeCatalogOnly) continue;
+      if (cluster.every((row) => PROBE_TOOLS.has(row.tool))) continue;
+      if (sessionId) sessionsWithBusiness.add(sessionId);
+      built.push({
+        business: cluster,
+        handshake: [],
+        sessionId: sessionId || null
+      });
+    }
+  }
+  const earliestBySession = new Map<string, BuiltCluster>();
+  for (const cluster of built) {
+    if (!cluster.sessionId || earliestBySession.has(cluster.sessionId)) continue;
+    earliestBySession.set(cluster.sessionId, cluster);
+  }
+  for (const [sessionId, cluster] of earliestBySession) {
+    cluster.handshake = handshake.get(sessionId) ?? [];
+  }
+  for (const [sessionId, rows] of handshake) {
+    if (sessionsWithBusiness.has(sessionId)) continue;
+    built.push({
+      business: [],
+      handshake: rows,
+      sessionId,
+      summaryOverride: sessionVisitSummary(clientFromRows(rows))
+    });
+  }
 
   const deleteAccessLogsStmt = database.prepare(`
     DELETE FROM inferred_turn_access_logs
@@ -1470,9 +1587,9 @@ export async function rebuildInferredTurns(
   const deleteTurnsStmt = database.prepare(`DELETE FROM inferred_turns WHERE user_id = ? AND started_at >= ?`);
   const insertTurnStmt = database.prepare(`
     INSERT INTO inferred_turns
-      (inferred_turn_id, user_id, started_at, ended_at, call_count, business_call_count, tool_summary, source_summary, question_summary, confidence, evidence_json, created_at, updated_at)
+      (inferred_turn_id, user_id, started_at, ended_at, call_count, business_call_count, tool_summary, source_summary, question_summary, confidence, evidence_json, client, session_id, created_at, updated_at)
     VALUES
-      (@id, @userId, @startedAt, @endedAt, @callCount, @businessCallCount, @toolSummary, @sourceSummary, @questionSummary, @confidence, @evidenceJson, @createdAt, @updatedAt)
+      (@id, @userId, @startedAt, @endedAt, @callCount, @businessCallCount, @toolSummary, @sourceSummary, @questionSummary, @confidence, @evidenceJson, @client, @sessionId, @createdAt, @updatedAt)
   `);
   const insertLinkStmt = database.prepare(`INSERT INTO inferred_turn_access_logs (inferred_turn_id, access_log_id) VALUES (?, ?)`);
   const sourceQueryCache = new Map<string, Array<{ connection_id: string | null; schema_name: string | null; source_name: string | null; physical_table: string }>>();
@@ -1496,24 +1613,22 @@ export async function rebuildInferredTurns(
     deleteTurnsStmt.run(userId, cutoff);
 
     let written = 0;
-    let seq = 0;
-    for (const cluster of clusters) {
-      const isCatalogOnly = cluster.every((row) => row.tool === "kx_catalog");
-      if (isCatalogOnly && !includeCatalogOnly) continue; // preflight_only — spec §7.1, not a formal question
-
-      seq += 1;
-      const accessLogIds = cluster.map((row) => row.id);
-      const businessRows = cluster.filter((row) => row.tables !== null);
+    for (const cluster of built) {
+      const members = [...cluster.handshake, ...cluster.business].sort((a, b) => a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : a.id - b.id);
+      if (members.length === 0) continue;
+      const anchor = cluster.business[0] ?? members[0];
+      const accessLogIds = members.map((row) => row.id);
+      const businessRows = cluster.business.filter((row) => row.tables !== null);
       const dataBearing = businessRows.length > 0;
-      const toolSummary = [...new Set(cluster.map((row) => row.tool))];
-      const sourceRows = sourcesFor(accessLogIds);
+      const toolSummary = [...new Set(members.map((row) => row.tool))];
+      const sourceRows = sourcesFor(cluster.business.map((row) => row.id));
       const sourceSummary: SourceSummaryEntry[] = sourceRows.map((row) => ({
         connectionId: row.connection_id ?? undefined,
         schema: row.schema_name ?? undefined,
         sourceName: row.source_name ?? undefined,
         physicalTable: row.physical_table
       }));
-      const argsSummaries = cluster
+      const argsSummaries = cluster.business
         .map((row) => row.args_summary)
         .filter((value): value is string => Boolean(value))
         .map((value) => {
@@ -1525,29 +1640,39 @@ export async function rebuildInferredTurns(
         });
 
       const confidence: "medium" | "low" = dataBearing ? "medium" : "low";
-      const questionSummary = buildInferredQuestionSummary(sourceSummary, argsSummaries);
+      const questionSummary = cluster.summaryOverride ?? buildInferredQuestionSummary(sourceSummary, argsSummaries);
       const now = new Date().toISOString();
-      const startedAt = cluster[0].ts;
-      const endedAt = cluster[cluster.length - 1].ts;
-      const inferredTurnId = `inf_${startedAt.replace(/[^0-9]/g, "")}_${userId}_${String(seq).padStart(2, "0")}`;
+      const startedAt = members[0].ts;
+      const endedAt = members[members.length - 1].ts;
+      const inferredId = inferredTurnId(userId, anchor.id);
+      const client = clientFromRows(members);
 
       insertTurnStmt.run({
-        id: inferredTurnId,
+        id: inferredId,
         userId,
         startedAt,
         endedAt,
-        callCount: cluster.length,
+        callCount: members.length,
         businessCallCount: businessRows.length,
         toolSummary: JSON.stringify(toolSummary),
         sourceSummary: JSON.stringify(sourceSummary),
         questionSummary,
         confidence,
-        evidenceJson: JSON.stringify({ accessLogIds, toolSummary, sourceSummary, callCount: cluster.length, businessCallCount: businessRows.length }),
+        evidenceJson: JSON.stringify({
+          accessLogIds,
+          toolSummary,
+          sourceSummary,
+          callCount: members.length,
+          businessCallCount: businessRows.length,
+          sessionId: cluster.sessionId
+        }),
+        client,
+        sessionId: cluster.sessionId,
         createdAt: now,
         updatedAt: now
       });
       for (const accessLogId of accessLogIds) {
-        insertLinkStmt.run(inferredTurnId, accessLogId);
+        insertLinkStmt.run(inferredId, accessLogId);
       }
       written += 1;
     }
@@ -1556,4 +1681,56 @@ export async function rebuildInferredTurns(
 
   const turns = rebuild();
   return { turns };
+}
+
+/** Spec 172: attach the calls that happened just before begin, plus the session handshake. */
+export async function bindPriorSessionCalls(input: {
+  turnId: string;
+  userId: string;
+  tokenHashPrefix?: string;
+  sessionId?: string;
+  at: string;
+}): Promise<number> {
+  if (!input.sessionId) return 0;
+  const database = await getDb();
+  const tokenHash = input.tokenHashPrefix ?? "";
+  const windowStart = new Date(new Date(input.at).getTime() - PRIOR_CALL_BIND_MS).toISOString();
+  const protocolList = PROTOCOL_TOOLS.map((tool) => `'${tool}'`).join(", ");
+  const prior = database.prepare(`
+    UPDATE access_log
+    SET lucy_turn_id = ?, turn_attribution_mode = 'session_bound', turn_attribution_confidence = 'high'
+    WHERE user_id = ?
+      AND lucy_session_id = ?
+      AND IFNULL(token_hash_prefix, '') = ?
+      AND (lucy_turn_id IS NULL OR lucy_turn_id = '')
+      AND tool NOT IN (${protocolList})
+      AND ts >= ?
+      AND ts <= ?
+  `).run(input.turnId, input.userId, input.sessionId, tokenHash, windowStart, input.at);
+
+  const handshakeRows = database.prepare(`
+    SELECT id, tool FROM access_log
+    WHERE user_id = ?
+      AND lucy_session_id = ?
+      AND IFNULL(token_hash_prefix, '') = ?
+      AND tool IN (${protocolList})
+      AND (lucy_turn_id IS NULL OR lucy_turn_id = '')
+    ORDER BY ts ASC, id ASC
+  `).all(input.userId, input.sessionId, tokenHash) as Array<{ id: number; tool: string }>;
+  const seen = new Set<string>();
+  const handshakeIds: number[] = [];
+  for (const row of handshakeRows) {
+    if (seen.has(row.tool)) continue;
+    seen.add(row.tool);
+    handshakeIds.push(row.id);
+  }
+  if (handshakeIds.length > 0) {
+    const placeholders = handshakeIds.map(() => "?").join(",");
+    database.prepare(`
+      UPDATE access_log
+      SET lucy_turn_id = ?, turn_attribution_mode = 'session_bound', turn_attribution_confidence = 'high'
+      WHERE id IN (${placeholders})
+    `).run(input.turnId, ...handshakeIds);
+  }
+  return Number(prior.changes) + handshakeIds.length;
 }

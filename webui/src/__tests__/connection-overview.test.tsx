@@ -1591,10 +1591,16 @@ describe("ConnectionOverview", () => {
       "pl-btn--secondary"
     );
     fireEvent.click(uploadBtn);
+    const drawer = await screen.findByTestId("catalog-asset-upload-drawer");
     expect(
-      await screen.findByRole("heading", { name: /上传 openclaw_db 的 Schema Manifest/ })
+      screen.getByRole("heading", { name: /上传 openclaw_db 的 Schema Manifest/ })
     ).toBeInTheDocument();
     expect(screen.queryByTestId("catalog-asset-upload-schema")).not.toBeInTheDocument();
+    const more = uploadBtn.closest("details");
+    expect(more).not.toBeNull();
+    expect(more).not.toHaveAttribute("open");
+    expect(drawer.closest("details")).toBeNull();
+    expect(drawer.parentElement).toHaveClass("pl-page-stack");
   });
 
   it("M21: uses 缺失 Manifest (capital M) for missing manifest rows and exposes no machine-translation artifacts", async () => {

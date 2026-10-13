@@ -121,11 +121,12 @@ Protected DOM：`Connection ID`、driver/engine、host、`file:` 路径、`.ktx/
 | 项 | 结论 |
 |---|---|
 | 密码传输 | 仅 `dryRun:false` 请求体携带一次；须 HTTPS/本机环回；响应与日志禁止回显 |
-| 密码存储 | `.ktx/secrets/<connId>-password`；文件权限建议 `0600`；gitignored |
+| 密码必填 | sqlite 确认写入（`dryRun:false`）可省略 password。mysql、postgres、sqlserver、oracle 在 `dryRun:false` 时仍必须提供 password，并在任何 yaml/secret 写入之前返回 400。`dryRun:true` 预览对各 driver 均可省略 password |
+| 密码存储 | `.ktx/secrets/<connId>-password`；文件权限建议 `0600`；gitignored。sqlite 未提供 password 时不创建 secret 文件 |
 | 读路径 | **禁止** `assertReadable` / 任何 API 读取 secret 内容 |
 | fs-safe | DENY 保留为默认；新增**窄例外**：仅 `safeWriteSecretPassword(connId)` 可写 `.ktx/secrets/<connId>-password` |
-| 审计 | `auditedWriteFile` 写 yaml；secret 写入另记 audit 元数据（路径 + sha256 长度类摘要，**不含内容**） |
-| 回滚 | test 失败删除本单创建的 secret；yaml 不提交或恢复 dryRun 前内容 |
+| 审计 | `auditedWriteFile` 写 yaml；secret 写入另记 audit 元数据（路径 + 字节长度类摘要，**不含内容**）。无 password 时 `passwordBytes` 记为 0（或省略该字段） |
+| 回滚 | test 失败删除本单创建的 secret；yaml 不提交或恢复 dryRun 前内容。yaml 与 secret 已写入后，若后续步骤抛错（包括审计摘要），回滚本次调用写入的 yaml 与新建的 secret，再抛出原错误 |
 
 ### 5.5 与既有 ADR / Spec 的冲突处置
 
@@ -172,7 +173,7 @@ Protected DOM：`Connection ID`、driver/engine、host、`file:` 路径、`.ktx/
 | port | 是 | 1–65535；mysql 默认 3306，postgres 默认 5432 |
 | database | 是 | 非空 |
 | username | 是 | 非空 |
-| 数据库密码 | 是 | 一次性；`type=password`；确认创建后清空本地 state |
+| 数据库密码 | sqlite 可省略；其余 driver 必填 | 一次性；`type=password`；确认创建后清空本地 state。sqlite 确认写入可不传 password；mysql / postgres / sqlserver / oracle 缺省时 400，且不写 yaml/secret |
 | 初始 schemas | 否 | 零或多个，各匹配 `SCHEMA_NAME_PATTERN`；默认可空 |
 
 写入默认值：
@@ -211,7 +212,7 @@ Body：
   port: number;
   database: string;
   username: string;
-  password: string;            // 仅 dryRun:false 时需要；dryRun:true 可省略或忽略
+  password?: string;           // sqlite 确认写入可省略；mysql/postgres/sqlserver/oracle 在 dryRun:false 时必填（缺省 400，且不写 yaml/secret）；dryRun:true 可省略
   schemas?: string[];
   dryRun?: boolean;            // 默认 true
 }
@@ -241,6 +242,8 @@ Body：
 ```
 
 test 失败时 HTTP 非 2xx（建议 `422 CONNECTION_TEST_FAILED`），body 含错误信息，**保证** secret 与 yaml 已回滚。
+
+yaml 与 secret 写入之后，若审计摘要或其他步骤抛错（包括 `recordConfigChange`），回滚本次调用写入的 yaml 与新建的 secret，再抛出原错误。响应与审计摘要不得包含密码明文；sqlite 未提供 password 时 `passwordBytes` 为 0（或省略该字段）。
 
 ### 7.2 服务端流程
 

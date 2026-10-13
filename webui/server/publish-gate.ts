@@ -176,6 +176,32 @@ export function checkColumnTypeContract(
 }
 
 /**
+ * Fold SC-24 column-type violations into the validation result the workbench
+ * already renders (`validation.ok` and `issues[].message`). No new route.
+ */
+export function applyColumnTypeContractToValidation<T extends {
+  ok: boolean;
+  exitCode: number;
+  issues?: Array<{ message: string }>;
+}>(
+  validation: T,
+  contracts: ReadonlyArray<{ columns: unknown; filePath: string }>
+): T {
+  const extra = contracts.flatMap((contract) =>
+    checkColumnTypeContract(contract.columns, contract.filePath).map((violation) => ({
+      message: violation.message
+    }))
+  );
+  if (extra.length === 0) return validation;
+  return {
+    ...validation,
+    ok: false,
+    exitCode: validation.exitCode === 0 ? 1 : validation.exitCode,
+    issues: [...(validation.issues ?? []), ...extra]
+  };
+}
+
+/**
  * SC-24 — the gate verdict. `allowed` is false as soon as one non-waived
  * violation remains, and an exemption alone never produces `allowed: true`
  * from an empty violation list.

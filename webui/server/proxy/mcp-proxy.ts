@@ -10,7 +10,7 @@ import {
   upstreamSessionKeepaliveEnabled
 } from "./upstream-session.js";
 import { extractRequestClientMeta, resolveClientIdentity } from "./request-client-meta.js";
-import { ensureSkillAuditReady, writeLog, writeAccessLogSources, writeConversationTurn, purgeExpiredConversationTurns, writeAuthFailureLog, type AccessLogSourceRecord } from "./audit.js";
+import { ensureSkillAuditReady, writeLog, writeAccessLogSources, writeConversationTurn, purgeExpiredConversationTurns, writeAuthFailureLog, bindPriorSessionCalls, type AccessLogSourceRecord } from "./audit.js";
 import { allowedToolNames, authorizeAndRewrite, check as aclCheck, effectivePermissions, extractTables, extractSourceRefs, resolveSourceRefsForTables, kxCatalog, lucyCatalog, permissionSnapshot, type SourceRef } from "./acl.js";
 import {
   redactQuestionText,
@@ -59,7 +59,7 @@ import {
   resolveResponseTruncated,
   TRUNCATION_REPAIR_HINT,
 } from "./question-experience.js";
-import { applyLucyCallGuard, loadPublishedAmbiguityCatalog, queryGuardrailsEnabled } from "./query-guardrails.js";
+import { applyLucyCallGuard, countWithoutSourceBeforeAcl, loadPublishedAmbiguityCatalog, queryGuardrailsEnabled } from "./query-guardrails.js";
 import {
   lookupReportTemplate,
   resolveCertifiedRoute,
@@ -388,6 +388,25 @@ function toSourceRecords(refs: SourceRef[]): AccessLogSourceRecord[] {
     extractionMethod: ref.extractionMethod,
     confidence: ref.confidence
   }));
+}
+
+/** Spec 173: a tools/call that started before begin can finish after the turn exists. */
+function bindOpenSessionTurn(
+  entry: Partial<Parameters<typeof writeLog>[0]>,
+  owner: Identity
+): void {
+  if (entry.tool === "lucy_begin_question") return;
+  if (entry.turnAttributionMode && entry.turnAttributionMode !== "unassigned") return;
+  if (!entry.lucySessionId) return;
+  const attribution = reportedTurns.resolve({
+    identity: owner,
+    sessionId: entry.lucySessionId
+  });
+  if (!attribution.turnId) return;
+  entry.lucyTurnId = attribution.turnId;
+  entry.turnAttributionMode = attribution.mode;
+  entry.turnAttributionConfidence = attribution.confidence;
+  entry.turnAttributionReason = attribution.reason;
 }
 
 function recordAudit(entry: Parameters<typeof writeLog>[0], sources?: SourceRef[]): void {
@@ -2312,6 +2331,7 @@ async function writeUpstreamFailureResponse(
     "content-length": responseBytes
   });
   context.res.end(failure.responseBody);
+  bindOpenSessionTurn(context.requestMeta, context.identity);
 
   recordAudit({
     ts: new Date().toISOString(),
@@ -2482,6 +2502,7 @@ async function writeLucySemanticResponse(
   if (outcome === "ok" && !compilerReason) {
     await recordSuccessfulQueryObservation(toolName, toolArgs);
   }
+  bindOpenSessionTurn(requestMeta, identity);
   const argsRecord = toolArgs && typeof toolArgs === "object" && !Array.isArray(toolArgs) ? toolArgs as Record<string, unknown> : {};
   const applied = compilerReason ? undefined : appliedLucyVersion(toolName, argsRecord, sourceRefs);
   const failureDimension = compilerReason
@@ -2787,7 +2808,11 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
     entry: Parameters<typeof writeLog>[0],
     sources?: SourceRef[]
   ) => {
-    const withTrace = rpcMethod === "tools/call" ? { ...entry, traceId } : entry;
+    // Spec 173: re-resolve at write time. Semantic query/read use their own writer,
+    // which calls the same bind before recordAudit.
+    const next = { ...entry };
+    if (rpcMethod === "tools/call") bindOpenSessionTurn(next, identity);
+    const withTrace = rpcMethod === "tools/call" ? { ...next, traceId } : next;
     recordAudit(withTrace, sources);
   };
 
@@ -3147,7 +3172,55 @@ async function buildDenialRepairPayload(
   };
 }
 
-// ACL check for tool calls
+  // Spec 162 §7.8 — count(*) / count(1) with no source is repaired before the
+  // empty-source ACL deny. A named table still reaches aclCheck.
+  if (rpcMethod === "tools/call" && toolName && queryGuardrailsEnabled()) {
+    const countStop = countWithoutSourceBeforeAcl(toolName, toolArgs);
+    if (countStop) {
+      const responseBody = jsonRpcToolResult(requestId, JSON.stringify({
+        reason: countStop.reason,
+        repair: countStop.repair,
+        failureDimension: countStop.failureDimension
+      }), { isError: true });
+      res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+      res.end(responseBody);
+      recordRequestAudit({
+        ts: new Date().toISOString(),
+        userId: identity.userId,
+        client: identity.client,
+        tool: toolName,
+        tables: queryTables.length > 0 ? queryTables : undefined,
+        argsSummary,
+        ...queryMeta,
+        outcome: "error",
+        decisionReason: countStop.reason,
+        errorDetail: countStop.repair,
+        failureDimension: countStop.failureDimension,
+        durationMs: Date.now() - start,
+        responseBytes: Buffer.byteLength(responseBody),
+        requestId,
+        ...requestMeta,
+        ...(await auditMeta(identity, countStop.reason)),
+      });
+      recordMcpTraceForTool({
+        traceId,
+        identity,
+        toolName,
+        status: "error",
+        startedAt: new Date(start).toISOString(),
+        turnId: requestMeta.lucyTurnId ?? null,
+        sessionId: requestMeta.lucySessionId ?? null,
+        requestId,
+        argsSummary,
+        allowed: false,
+        reason: countStop.reason,
+        policySource: "other"
+      });
+      return;
+    }
+  }
+
+  // ACL check for tool calls
   if (rpcMethod === "tools/call" && toolName) {
     const decision = await aclCheck(identity, toolName, toolArgs);
     if (!decision.allowed) {
@@ -3465,6 +3538,13 @@ async function buildDenialRepairPayload(
         identity,
         sessionId: requestMeta.lucySessionId,
         turnId
+      });
+      await bindPriorSessionCalls({
+        turnId,
+        userId: identity.userId,
+        tokenHashPrefix: identity.tokenHashPrefix,
+        sessionId: requestMeta.lucySessionId,
+        at: new Date().toISOString()
       });
       // spec §8.4: lazy, sampled purge trigger on the (low-frequency) report path — no background worker.
       if (Math.random() < Number(process.env.LUCY_QUESTION_PREVIEW_PURGE_SAMPLE_RATE ?? 0.01)) {

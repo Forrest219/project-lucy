@@ -440,6 +440,95 @@ describe("WP-I4 Admin migration on save", () => {
     await app.close();
   });
 
+  it("ignores patch.permission_model_version when it equals the stored value", async () => {
+    const app = await buildApp();
+    const yamlPath = path.join(projectRoot, "webui/config/access.yaml");
+
+    const dry = await request(app.server)
+      .patch("/api/admin/roles/v2_ok")
+      .send({
+        dryRun: true,
+        patch: { description: "Echoed v2", permission_model_version: 2 }
+      })
+      .expect(200);
+    expect(dry.body.data.proposedYaml).toContain("description: Echoed v2");
+    expect(dry.body.data.proposedYaml).toMatch(/v2_ok:[\s\S]*permission_model_version: 2/);
+
+    const written = await request(app.server)
+      .patch("/api/admin/roles/v2_ok")
+      .send({
+        dryRun: false,
+        patch: { description: "Echoed v2", permission_model_version: 2 }
+      })
+      .expect(200);
+    expect(written.body.data.written).toBe(true);
+    const yaml = await readFile(yamlPath, "utf8");
+    expect(yaml).toContain("description: Echoed v2");
+    expect(yaml).toMatch(/v2_ok:[\s\S]*permission_model_version: 2/);
+
+    const echoedV1 = await request(app.server)
+      .patch("/api/admin/roles/legacy_v1_prefix")
+      .send({
+        dryRun: true,
+        patch: { description: "Migrated by admin", permission_model_version: 1 }
+      })
+      .expect(200);
+    expect(echoedV1.body.data.migration).toMatchObject({
+      fromVersion: 1,
+      toVersion: 2,
+      changed: true
+    });
+    await app.close();
+  });
+
+  it("rejects patch.permission_model_version when the stored role has no field", async () => {
+    const app = await buildApp();
+    const yamlPath = path.join(projectRoot, "webui/config/access.yaml");
+    const before = await readFile(yamlPath, "utf8");
+
+    for (const permission_model_version of [2, 1]) {
+      const res = await request(app.server)
+        .patch("/api/admin/roles/legacy_no_version")
+        .send({
+          dryRun: false,
+          patch: { description: "Should not write", permission_model_version }
+        })
+        .expect(400);
+      expect(res.body.error).toMatchObject({ code: "BAD_REQUEST" });
+      expect(res.body.error.message).toBe("patch.permission_model_version is not editable");
+    }
+
+    expect(await readFile(yamlPath, "utf8")).toBe(before);
+    await app.close();
+  });
+
+  it("rejects a permission_model_version that differs from the stored value", async () => {
+    const app = await buildApp();
+    const yamlPath = path.join(projectRoot, "webui/config/access.yaml");
+    const before = await readFile(yamlPath, "utf8");
+
+    const upgrade = await request(app.server)
+      .patch("/api/admin/roles/legacy_v1_prefix")
+      .send({
+        dryRun: false,
+        patch: { description: "upgrade", permission_model_version: 2 }
+      })
+      .expect(400);
+    expect(upgrade.body.error.message).toBe("patch.permission_model_version is not editable");
+
+    const downgrade = await request(app.server)
+      .patch("/api/admin/roles/v2_ok")
+      .send({
+        dryRun: false,
+        patch: { description: "downgrade", permission_model_version: 1 }
+      })
+      .expect(400);
+    expect(downgrade.body.error.message).toBe("patch.permission_model_version is not editable");
+
+    expect(await readFile(yamlPath, "utf8")).toBe(before);
+    await app.close();
+  });
+
   it("stamps permission_model_version 2 on a newly created Role that omits the field", async () => {
     const app = await buildApp();
 

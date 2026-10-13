@@ -555,4 +555,239 @@ describe("proxy audit log", () => {
       db.close();
     }
   });
+
+  it("splits two sessions inside the gap into two stable inferred turns", async () => {
+    const { writeLog, rebuildInferredTurns, inferredTurnId } = await import("../proxy/audit");
+    const base = Date.now() - 10 * 60 * 1000;
+    const at = (offsetMs: number) => new Date(base + offsetMs).toISOString();
+    const cursorId = await writeLog({
+      ts: at(0),
+      userId: "session-split-user",
+      tool: "lucy_catalog",
+      outcome: "ok",
+      durationMs: 1,
+      requestId: "split-cursor",
+      lucySessionId: "266fc826",
+      client: "cursor-vscode"
+    });
+    const workId = await writeLog({
+      ts: at(30_000),
+      userId: "session-split-user",
+      tool: "lucy_query",
+      tables: ["dataforai.superstore_orders"],
+      outcome: "ok",
+      durationMs: 1,
+      requestId: "split-work",
+      lucySessionId: "5f67cf3d",
+      client: "lucy"
+    });
+    await writeLog({
+      ts: new Date(Date.now() - 20 * 60 * 60 * 1000).toISOString(),
+      userId: "session-split-user",
+      tool: "lucy_query",
+      tables: ["dataforai.superstore_orders"],
+      outcome: "ok",
+      durationMs: 1,
+      requestId: "split-old",
+      lucySessionId: "old-session",
+      client: "cursor-vscode"
+    });
+
+    const narrow = await rebuildInferredTurns("session-split-user", { lookbackHours: 1, gapMs: 120_000 });
+    expect(narrow.turns).toBe(2);
+    const wide = await rebuildInferredTurns("session-split-user", { lookbackHours: 24 * 30, gapMs: 120_000 });
+    expect(wide.turns).toBe(3);
+
+    const db = new Database(auditDbPath, { readonly: true });
+    try {
+      const ids = (db.prepare("SELECT inferred_turn_id FROM inferred_turns WHERE user_id = ?").all("session-split-user") as Array<{ inferred_turn_id: string }>)
+        .map((row) => row.inferred_turn_id);
+      expect(ids).toEqual(expect.arrayContaining([
+        inferredTurnId("session-split-user", cursorId),
+        inferredTurnId("session-split-user", workId)
+      ]));
+      expect(ids).toHaveLength(3);
+    } finally {
+      db.close();
+    }
+  });
+
+  it("binds a same-session catalog 10s before begin and leaves a call older than 120s unassigned", async () => {
+    const { writeLog, bindPriorSessionCalls } = await import("../proxy/audit");
+    const beginMs = Date.now() - 30_000;
+    const beginAt = new Date(beginMs).toISOString();
+    const catalogId = await writeLog({
+      ts: new Date(beginMs - 10_000).toISOString(),
+      userId: "bind-window-user",
+      tool: "lucy_catalog",
+      outcome: "ok",
+      durationMs: 1,
+      requestId: "bind-window-catalog",
+      lucySessionId: "sess-window",
+      tokenHashPrefix: "sha256:aabbccddeeff",
+      turnAttributionMode: "unassigned"
+    });
+    const staleId = await writeLog({
+      ts: new Date(beginMs - 121_000).toISOString(),
+      userId: "bind-window-user",
+      tool: "lucy_catalog",
+      outcome: "ok",
+      durationMs: 1,
+      requestId: "bind-window-stale",
+      lucySessionId: "sess-window",
+      tokenHashPrefix: "sha256:aabbccddeeff",
+      turnAttributionMode: "unassigned"
+    });
+    await bindPriorSessionCalls({
+      turnId: "lucy_window",
+      userId: "bind-window-user",
+      tokenHashPrefix: "sha256:aabbccddeeff",
+      sessionId: "sess-window",
+      at: beginAt
+    });
+    const db = new Database(auditDbPath, { readonly: true });
+    try {
+      const catalog = db.prepare("SELECT lucy_turn_id, turn_attribution_mode FROM access_log WHERE id = ?").get(catalogId) as {
+        lucy_turn_id: string;
+        turn_attribution_mode: string;
+      };
+      const stale = db.prepare("SELECT lucy_turn_id, turn_attribution_mode FROM access_log WHERE id = ?").get(staleId) as {
+        lucy_turn_id: string | null;
+        turn_attribution_mode: string | null;
+      };
+      expect(catalog).toEqual({ lucy_turn_id: "lucy_window", turn_attribution_mode: "session_bound" });
+      expect(stale.lucy_turn_id).toBeFalsy();
+      expect(stale.turn_attribution_mode).not.toBe("session_bound");
+    } finally {
+      db.close();
+    }
+  });
+
+  it("does not open a second inferred turn for calls already on a reported question", async () => {
+    const { writeLog, writeConversationTurn, rebuildInferredTurns } = await import("../proxy/audit");
+    const now = Date.now();
+    const at = (offsetMs: number) => new Date(now + offsetMs).toISOString();
+    await writeConversationTurn({
+      turnId: "lucy_reported_only",
+      userId: "reported-only-user",
+      sessionId: "sess-reported",
+      client: "cursor-vscode",
+      questionSummary: "lucy mcp 有哪些上市公司的财务数据？",
+      questionSource: "reported_tool"
+    });
+    await writeLog({
+      ts: at(0),
+      userId: "reported-only-user",
+      tool: "initialize",
+      outcome: "ok",
+      durationMs: 1,
+      requestId: "reported-init",
+      lucySessionId: "sess-reported",
+      client: "cursor-vscode",
+      lucyTurnId: "lucy_reported_only",
+      turnAttributionMode: "session_bound"
+    });
+    await writeLog({
+      ts: at(10_000),
+      userId: "reported-only-user",
+      tool: "lucy_catalog",
+      outcome: "ok",
+      durationMs: 1,
+      requestId: "reported-catalog",
+      lucySessionId: "sess-reported",
+      client: "cursor-vscode",
+      lucyTurnId: "lucy_reported_only",
+      turnAttributionMode: "session_bound"
+    });
+    await writeLog({
+      ts: at(10_250),
+      userId: "reported-only-user",
+      tool: "lucy_read_source",
+      tables: ["invest.fact_company"],
+      outcome: "ok",
+      durationMs: 1,
+      requestId: "reported-read",
+      lucySessionId: "sess-reported",
+      client: "cursor-vscode",
+      lucyTurnId: "lucy_reported_only",
+      turnAttributionMode: "session_bound"
+    });
+    const result = await rebuildInferredTurns("reported-only-user", { lookbackHours: 24, gapMs: 120_000 });
+    expect(result.turns).toBe(0);
+  });
+
+  it("skips a discover-only cluster and keeps a handshake session as one visit", async () => {
+    const { writeLog, rebuildInferredTurns } = await import("../proxy/audit");
+    const now = Date.now();
+    const at = (offsetMs: number) => new Date(now + offsetMs).toISOString();
+    await writeLog({
+      ts: at(0),
+      userId: "probe-user",
+      tool: "server/discover",
+      outcome: "error",
+      errorDetail: "upstream_status=400",
+      durationMs: 7,
+      requestId: "probe-1",
+      client: "claude-code"
+    });
+    await writeLog({
+      ts: at(12),
+      userId: "probe-user",
+      tool: "server/discover",
+      outcome: "error",
+      errorDetail: "upstream_status=400",
+      durationMs: 17,
+      requestId: "probe-2",
+      client: "claude-code"
+    });
+    await writeLog({
+      ts: at(1_000),
+      userId: "probe-user",
+      tool: "initialize",
+      outcome: "ok",
+      durationMs: 1,
+      requestId: "probe-init",
+      lucySessionId: "sess-handshake",
+      client: "claude-code"
+    });
+    await writeLog({
+      ts: at(1_010),
+      userId: "probe-user",
+      tool: "notifications/initialized",
+      outcome: "ok",
+      durationMs: 1,
+      requestId: "probe-ready",
+      lucySessionId: "sess-handshake",
+      client: "claude-code"
+    });
+    await writeLog({
+      ts: at(1_020),
+      userId: "probe-user",
+      tool: "tools/list",
+      outcome: "ok",
+      durationMs: 1,
+      requestId: "probe-list",
+      lucySessionId: "sess-handshake",
+      client: "claude-code"
+    });
+    await writeLog({
+      ts: at(1_030),
+      userId: "probe-user",
+      tool: "server/discover",
+      outcome: "error",
+      durationMs: 1,
+      requestId: "probe-in-session",
+      lucySessionId: "sess-handshake",
+      client: "claude-code"
+    });
+    const result = await rebuildInferredTurns("probe-user", { lookbackHours: 24, gapMs: 120_000 });
+    expect(result.turns).toBe(1);
+    const db = new Database(auditDbPath, { readonly: true });
+    try {
+      const turns = db.prepare("SELECT question_summary FROM inferred_turns WHERE user_id = ?").all("probe-user") as Array<{ question_summary: string }>;
+      expect(turns.map((row) => row.question_summary)).toEqual(["会话建立：claude-code"]);
+    } finally {
+      db.close();
+    }
+  });
 });
