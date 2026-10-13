@@ -149,6 +149,7 @@
 | [170-mvp-open-skill-wiki-access-spec.md](170-mvp-open-skill-wiki-access-spec.md) | Skill 与 Wiki 对所有角色开放 v0.1：暂停对象授权和四个上下文工具的勾选；已发布 Skill 与全部 Wiki 对已解析角色开放。已实现，工单 WO-202610-22。暂停 Spec 151 的对象授权 | 产品 / Runtime / UX / 安全 |
 | [172-audit-session-visit-spec.md](172-audit-session-visit-spec.md) | 访问日志按会话对账 v0.1：一次 MCP 会话一条问询，推断问询 ID 取首条调用，未上报原文的握手仍可查询。工单 WO-202610-23。修订 Spec 138 / 140 / 162。v0.2 由 Spec 173 实施 | 产品 / Audit / API |
 | [173-audit-one-question-one-inquiry-spec.md](173-audit-one-question-one-inquiry-spec.md) | 一次提问一条问询 v0.1：已上报会话不再并列推断问询，同会话 120 秒补绑，探测不进问询，证据包带上已关联握手。工单 WO-202610-25。修订 Spec 172，并入 WO-202610-24 | 产品 / Audit / API |
+| [174-webui-entry-performance-spec.md](174-webui-entry-performance-spec.md) | WebUI进入性能：批量权限解析、版本化显示缓存、分区就绪、预压缩/lazy、有界探测；基于最新v2.0契约；[Cursor工单](plans/wo-20261013-webui-entry-performance.md)（Accepted v1.2，待实施/验证） | Frontend / Backend / Performance / QA |
 
 ## 与原 README 的关键校正
 

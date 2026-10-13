@@ -173,6 +173,7 @@ Lucy MCP Proxy 监听 `LUCY_PROXY_HOST:LUCY_PROXY_PORT`（默认容器内 `0.0.0
 | WebUI 当前状态 | `docs/webui/webui-impl-status.md` |
 | WebUI 模块使用 | `docs/webui/webui-module-guide.md` |
 | WebUI 基础架构 | `webui/docs/01-architecture.md`、`webui/docs/02-arch-spec.md`、`webui/docs/03-api-spec.md`、`webui/docs/04-data-model.md` |
+| WebUI 进入性能优化（已批准，待实施/验证） | [Spec 174](../../webui/docs/174-webui-entry-performance-spec.md)、[Cursor实施与验证工单](../../webui/docs/plans/wo-20261013-webui-entry-performance.md) |
 | WebUI 内置系统手册 / Help Center | `docs/design/design-system-handbook-help.md`、`docs/SYSTEM_HANDBOOK.md` |
 | YAML 交付自助运维 / Agent 自检 | `webui/docs/24-yaml-delivery-runbook-spec.md`、`webui/docs/plans/wo-M20-yaml-delivery-runbook.md` |
 | MCP Auth Proxy | `webui/docs/07-mcp-auth-proxy-spec.md` |
