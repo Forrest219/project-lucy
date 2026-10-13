@@ -37,6 +37,7 @@ import { enforceAgentSeatLimit } from "../license/routes.js";
 import { isTokenExpired } from "../proxy/identity.js";
 import { MCP_PROTOCOL_METHOD_SQL_LIST } from "../proxy/mcp-request-classification.js";
 import { readAuditWriteHealth, type AuditWriteHealthSnapshot } from "../proxy/audit-write-health.js";
+import { countEntryPerf, timeAsync, withRequestTiming } from "../entry-performance-timing.js";
 
 /** Spec 129: Agent write paths must not materialize reference templates into access.yaml. */
 
@@ -110,6 +111,7 @@ export interface YamlAccessConfig {
 async function readAccessYaml(projectRoot: string): Promise<{ config: YamlAccessConfig; raw: string; version: string }> {
   const filePath = path.join(projectRoot, ACCESS_YAML_REL);
   const raw = await readFile(filePath, "utf-8");
+  countEntryPerf("accessReads");
   const s = await stat(filePath);
   const hash = createHash("sha256").update(raw).digest("hex").slice(0, 16);
   const version = `${s.mtimeMs.toFixed(0)}-${hash}`;
@@ -1081,18 +1083,18 @@ function agentWritePreview(raw: string, newConfig: YamlAccessConfig): { diff: st
 
 export function registerAgentRoutes(app: FastifyInstance) {
   // GET /api/admin/agents
-  app.get("/api/admin/agents", async () => {
+  app.get("/api/admin/agents", async (request) => withRequestTiming(request, async () => {
     const projectRoot = await resolveProjectRoot();
-    const { config, version } = await readAccessYaml(projectRoot);
+    const { config, version } = await timeAsync("access", () => readAccessYaml(projectRoot));
     const userIds = config.users.map((user) => user.id);
     const window = build7dWindow();
-    const [tokenUsage, timelineMap, statsMap, globalActiveTokenCount] = await Promise.all([
+    const [tokenUsage, timelineMap, statsMap, globalActiveTokenCount] = await timeAsync("stats", () => Promise.all([
       getLastUsedMap(userIds),
       getAgentConfigTimelineMap(userIds),
       getStatsMap(config.users, window),
       getGlobalActiveTokenCount(window)
-    ]);
-    const agents = await Promise.all(
+    ]));
+    const agents = await timeAsync("permissions", () => Promise.all(
       config.users.map((user) =>
         userToAgentWithPermissions(
           user,
@@ -1101,7 +1103,7 @@ export function registerAgentRoutes(app: FastifyInstance) {
           timelineMap.get(user.id)
         )
       )
-    );
+    ));
     const summary = buildAgentsSummary(
       agents,
       globalActiveTokenCount,
@@ -1109,7 +1111,7 @@ export function registerAgentRoutes(app: FastifyInstance) {
       readAuditWriteHealth()
     );
     return { ok: true, data: { agents, version, summary } };
-  });
+  }));
 
   // GET /api/admin/roles — moved to ./roles.ts (M12)
 

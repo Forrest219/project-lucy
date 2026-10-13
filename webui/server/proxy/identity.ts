@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { parse } from "yaml";
 import { resolveProjectRoot } from "../project.js";
+import { countEntryPerf } from "../entry-performance-timing.js";
 import { isTokenRevoked } from "./audit.js";
 import { actorFromToken, evalMarkFromToken, type ActorKind } from "./question-experience.js";
 
@@ -130,6 +131,7 @@ async function loadConfig(options: { fresh?: boolean } = {}): Promise<AccessConf
     return configCache;
   }
   const content = await readFile(configPath, "utf-8");
+  countEntryPerf("accessReads");
   let parsed: unknown;
   try {
     parsed = parse(content);

@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import Fastify, { type FastifyError } from "fastify";
 import { parse, parseDocument } from "yaml";
 import { buildProxy } from "./proxy/mcp-proxy.js";
+import { registerEntryPerformanceTiming, timeAsync, withRequestTiming } from "./entry-performance-timing";
 import { changedFiles, previewDiff, type SessionWrittenFile } from "./diff";
 import { joinCandidatesPath, readJoinCandidates, writeJoinCandidates, type JoinCandidate } from "./joins-sidecar";
 import { formatConnectionErrorMessage } from "./connection-errors";
@@ -544,6 +545,7 @@ export function buildServer() {
   const changedSources = new Map<string, { conn: string; schema: string; table: string }>();
 
   registerWebSecurity(app);
+  registerEntryPerformanceTiming(app);
   app.addHook("onRequest", requireWebuiAuthHook);
 
   app.setErrorHandler((error: SupportedError, _request, reply) => {
@@ -612,17 +614,17 @@ export function buildServer() {
     };
   });
 
-  app.get("/api/sources", async () => {
+  app.get("/api/sources", async (request) => withRequestTiming(request, async () => {
     const projectRoot = await resolveProjectRoot();
     const [tables, manifestSchemas] = await Promise.all([
       listSources(projectRoot),
-      listManifestSchemas(projectRoot)
+      timeAsync("manifest", () => listManifestSchemas(projectRoot))
     ]);
     return {
       ok: true,
       data: { tables, manifestSchemas }
     };
-  });
+  }));
 
   app.get<{
     Params: { conn: string; schema: string; table: string };
@@ -1996,11 +1998,27 @@ export function buildServer() {
   return app;
 }
 
-async function start() {
+export type StartupTimings = {
+  policyMs: number;
+  catalogScanMs: number;
+  listenMs: number;
+  displayReadyMs: number | null;
+};
+
+/** Spec 174 T0 — shared startup sequence (also used by the performance fixture server). */
+export async function startServer(options: { displayPrewarm?: boolean } = {}): Promise<{
+  app: ReturnType<typeof buildServer>;
+  proxy: ReturnType<typeof buildProxy>["server"];
+  host: string;
+  port: number;
+  timings: StartupTimings;
+}> {
+  const t0 = performance.now();
   // Spec 98 §8.3 — compile verified EffectivePolicy before accepting traffic.
   // Empty policyVersion must not be the steady-state after a clean start.
   const { commitEffectivePolicy } = await import("./proxy/acl.js");
   await commitEffectivePolicy();
+  const t1 = performance.now();
 
   // Perform initial catalog scan so local YAML assets are ready on cold boot
   try {
@@ -2009,11 +2027,13 @@ async function start() {
   } catch (error) {
     console.warn("[catalog-reload] initial scan failed on startup:", error);
   }
+  const t2 = performance.now();
 
   const app = buildServer();
   const host = process.env.LUCY_WEBUI_HOST ?? "127.0.0.1";
   const port = Number(process.env.LUCY_WEBUI_PORT ?? DEFAULT_WEBUI_PORT);
   await app.listen({ host, port });
+  const t3 = performance.now();
 
   const { server: proxy, host: proxyHost, port: proxyPort } = buildProxy();
   await new Promise<void>((resolve, reject) => {
@@ -2022,6 +2042,17 @@ async function start() {
   });
   console.log(`Lucy WebUI listening on http://${host}:${port}`);
   console.log(`MCP proxy listening on http://${proxyHost}:${proxyPort}/mcp`);
+  return {
+    app,
+    proxy,
+    host,
+    port,
+    timings: { policyMs: t1 - t0, catalogScanMs: t2 - t1, listenMs: t3 - t2, displayReadyMs: null }
+  };
+}
+
+async function start() {
+  await startServer();
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

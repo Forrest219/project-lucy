@@ -11,6 +11,7 @@ import { resolveEffectivePermissionsForAdmin } from "./proxy/acl.js";
 import { readConnections } from "./project";
 import { loadContentPaths } from "./paths";
 import { stripManifestOnlyColumnKeys } from "./semantic-overlay-sanitize";
+import { countEntryPerf, timeAsync } from "./entry-performance-timing";
 
 const TABLE_KEYS = new Set(["table", "descriptions", "grain", "columns", "measures", "segments", "joins"]);
 
@@ -250,6 +251,7 @@ async function readYamlDocument(projectRoot: string, relPath: string): Promise<{
   const paths = await loadContentPaths();
   const absPath = await assertReadable(paths, projectRoot, relPath);
   const text = await readFile(absPath, "utf8");
+  countEntryPerf(relPath.includes("/_schema/") ? "manifestParses" : "overlayReads");
   return { doc: parseYaml(text, relPath), text };
 }
 
@@ -342,6 +344,7 @@ async function computeAuthorizedAgentCounts(
   let raw: string;
   try {
     raw = await readFile(accessPath, "utf8");
+    countEntryPerf("accessReads");
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return counts;
     return counts;
@@ -455,7 +458,7 @@ export async function listSources(projectRoot: string): Promise<SourceSummary[]>
     }
   }
 
-  const authorizedCounts = await computeAuthorizedAgentCounts(projectRoot, authorizedInputs);
+  const authorizedCounts = await timeAsync("permissions", () => computeAuthorizedAgentCounts(projectRoot, authorizedInputs));
 
   const summaries: SourceSummary[] = pending.map((entry) => {
     const manifestMtime = entry.file.mtime;

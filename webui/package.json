@@ -28,7 +28,8 @@
     "e2e:selector-contract": "node scripts/check-selector-contract.mjs",
     "pretest:e2e": "npm run e2e:selector-contract",
     "verify:gate": "tsx ../scripts/smoke/verify-202608-access-governance-gate.mjs",
-    "verify:test": "tsx --test ../scripts/smoke/verify-202608-access-governance-gate.test.mjs"
+    "verify:test": "tsx --test ../scripts/smoke/verify-202608-access-governance-gate.test.mjs",
+    "perf:entry": "tsx scripts/entry-performance.mts"
   },
   "keywords": [],
   "author": "",
