@@ -43,7 +43,7 @@ import { ConnectionTestDrawer } from "../../components/connections";
 import { PageHeader } from "../../components/PageHeader";
 import { AsyncRegion, asyncStatus } from "../../components/AsyncRegion";
 import { MetricCard } from "./MetricCard";
-import { catalogReloadsQueryOptions, mcpRuntimeStatusQueryOptions, projectQueryOptions, sourcesQueryOptions } from "../../lib/displayQueryOptions";
+import { catalogReloadsQueryOptions, mcpRuntimeStatusQueryOptions, projectQueryOptions, sourcesQueryOptions, useDisplayFactsPending } from "../../lib/displayQueryOptions";
 
 // Spec 174 §6 — drawers / the setup assistant only load when opened.
 const AddSchemaDrawer = lazy(() => import("../../components/AddSchemaDrawer").then((m) => ({ default: m.AddSchemaDrawer })));
@@ -488,6 +488,9 @@ export function ConnectionOverview() {
   const cardDecorationsPending = mcpRuntimeQuery.isPending || catalogReloadsQuery.isPending;
   const cardsStatus = projectStatus === "success" && cardDecorationsPending && !runtimeHoldExpired ? "pending" : projectStatus;
   const sourcesReady = sourcesQuery.data !== undefined;
+  // Spec 174 §4.2: a pending write (or no re-read since) keeps Manifest facts unconfirmed for actions.
+  const sourcesFactsPending = useDisplayFactsPending("sources");
+  const sourcesActionsReady = sourcesReady && !sourcesFactsPending;
   const [addTarget, setAddTarget] = useState<ConnectionInfo | null>(null);
   const [structureTarget, setStructureTarget] = useState<{ connection: ConnectionInfo; schema: string } | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -1204,7 +1207,7 @@ export function ConnectionOverview() {
                                 </td>
                                 <td className="pl-schema-asset-table-action">
                                   {/* Spec 174 §4.1: Manifest-dependent actions wait for real sources facts. */}
-                                  {!sourcesReady ? <span className="pl-notice" aria-hidden="true">—</span> : (
+                                  {!sourcesActionsReady ? <span className="pl-notice" aria-hidden="true" data-testid={`schema-actions-pending-${conn.id}-${schema}`}>—</span> : (
                                   <div className="pl-schema-asset-actions">
                                     {hasReadableManifest ? (
                                       <>

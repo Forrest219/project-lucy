@@ -44,7 +44,7 @@ import { HelpButton } from "../components/HelpButton";
 import { CommandPalette } from "../components/CommandPalette";
 import { PolicyDegradeBanner } from "../components/PolicyDegradeBanner";
 import { formatLucyVersionLabel } from "../lib/lucyVersion";
-import { setDisplayWriteSettledHandler } from "../lib/apiClient";
+import { setDisplayWriteBeginHandler, setDisplayWriteSettledHandler } from "../lib/apiClient";
 import { catalogReloadsQueryOptions, DISPLAY_SCOPE_QUERY_KEYS, mcpRuntimeStatusQueryOptions, projectQueryOptions, sourcesQueryOptions } from "../lib/displayQueryOptions";
 import { isChunkLoadError, lazyRoute, type LazyRoute } from "../lib/routeChunkRecovery";
 import { findGroupIdForPathname, navGroups, type NavIconKey } from "./navigation";
@@ -687,13 +687,24 @@ function RequireAuth({ children }: { children: ReactNode }) {
  * Spec 174 §4.2 — after every display-affecting write settles (success or
  * failure) re-check the server read model instead of trusting the response.
  */
+/**
+ * Spec 174 §4.2 — write start cancels in-flight reads of the affected display
+ * models (old data stays on screen; fact-dependent actions wait); the last
+ * overlapping write's settlement (success or failure) re-reads them.
+ */
 function DisplayWriteSync() {
   const client = useQueryClient();
   useEffect(() => {
+    setDisplayWriteBeginHandler((scopes) => {
+      for (const scope of scopes) void client.cancelQueries({ queryKey: DISPLAY_SCOPE_QUERY_KEYS[scope] });
+    });
     setDisplayWriteSettledHandler((scopes) => {
       for (const scope of scopes) void client.invalidateQueries({ queryKey: DISPLAY_SCOPE_QUERY_KEYS[scope] });
     });
-    return () => setDisplayWriteSettledHandler(null);
+    return () => {
+      setDisplayWriteBeginHandler(null);
+      setDisplayWriteSettledHandler(null);
+    };
   }, [client]);
   return null;
 }

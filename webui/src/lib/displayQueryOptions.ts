@@ -1,5 +1,15 @@
+import { useSyncExternalStore } from "react";
 import type { QueryFunctionContext } from "@tanstack/react-query";
-import { ApiError, apiGet, isStaleResponseError, type DisplayReadScope } from "./apiClient";
+import {
+  ApiError,
+  apiGet,
+  displayFactsPending,
+  hasPendingDisplayWrite,
+  isWriteStaleResponseError,
+  subscribeDisplayWrites,
+  waitForDisplayWritesSettled,
+  type DisplayReadScope
+} from "./apiClient";
 import { queryKeys } from "./queryKeys";
 import type { CatalogReloadsResponse, McpRuntimeStatus, ProjectInfo, SourcesResponse } from "./types";
 
@@ -8,20 +18,27 @@ export const DISPLAY_STALE_TIME_MS = 30_000;
 export const DISPLAY_GC_TIME_MS = 300_000;
 
 /**
- * Display read: passes React Query's AbortSignal to fetch and re-reads once
- * when the response straddled a display-affecting write (never surfaces the
- * pre-write payload). Auth-epoch staleness and aborts are not retried.
+ * Display read: passes React Query's AbortSignal to fetch, never starts while
+ * an affecting write is pending, and re-reads (bounded) after the write
+ * settles when the response straddled it (never surfaces the pre-write
+ * payload). Auth-epoch staleness and aborts are not retried.
  */
 const MAX_DISPLAY_READ_ATTEMPTS = 3;
 
 async function displayRead<T>(path: string, scope: DisplayReadScope, signal: AbortSignal | undefined): Promise<T> {
   for (let attempt = 1; ; attempt += 1) {
+    if (hasPendingDisplayWrite(scope)) await waitForDisplayWritesSettled(scope, signal);
     try {
       return await apiGet<T>(path, { signal, displayRead: scope });
     } catch (error) {
-      if (!isStaleResponseError(error) || signal?.aborted || attempt >= MAX_DISPLAY_READ_ATTEMPTS) throw error;
+      if (!isWriteStaleResponseError(error) || signal?.aborted || attempt >= MAX_DISPLAY_READ_ATTEMPTS) throw error;
     }
   }
+}
+
+/** True while a write affecting the scope is pending or its facts were not re-read since. */
+export function useDisplayFactsPending(scope: DisplayReadScope): boolean {
+  return useSyncExternalStore(subscribeDisplayWrites, () => displayFactsPending(scope));
 }
 
 /** Read-only retry: at most once, only for the retryable busy envelope, honouring Retry-After: 1. */

@@ -10,11 +10,15 @@ import {
   apiPut,
   bumpAuthEpoch,
   currentDisplayWriteEpoch,
+  displayFactsPending,
+  hasPendingDisplayWrite,
   isStaleResponseError,
+  isWriteStaleResponseError,
+  setDisplayWriteBeginHandler,
   setDisplayWriteSettledHandler
 } from "../lib/apiClient";
 import { AuthProvider, useAuth } from "../lib/auth";
-import { adminAgentsQueryOptions, DISPLAY_STALE_TIME_MS, projectQueryOptions, sourcesQueryOptions } from "../lib/displayQueryOptions";
+import { adminAgentsQueryOptions, DISPLAY_SCOPE_QUERY_KEYS, DISPLAY_STALE_TIME_MS, projectQueryOptions, sourcesQueryOptions } from "../lib/displayQueryOptions";
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(status === 200 ? { ok: true, data } : data), { status, headers: { "Content-Type": "application/json" } });
@@ -99,6 +103,118 @@ describe("Spec 174 T3 — client freshness guards (SC-08/18, DI-14)", () => {
     expect(retry(0, new ApiError({ code: "DISPLAY_SNAPSHOT_BUSY", message: "" }))).toBe(true);
     expect(retry(1, new ApiError({ code: "DISPLAY_SNAPSHOT_BUSY", message: "" }))).toBe(false);
     expect(retry(0, new Error("AbortError"))).toBe(false);
+  });
+
+  it("R4 a read that resolves while the write is still pending is rejected and re-read only after settle", async () => {
+    const write = deferredResponse();
+    const first = deferredResponse();
+    let reads = 0;
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      if (String(input).endsWith("/enabled-tables")) return write.promise;
+      reads += 1;
+      return reads === 1 ? first.promise : Promise.resolve(json({ tables: ["after"] }));
+    }));
+    const read = sourcesQueryOptions().queryFn({ signal: new AbortController().signal } as never);
+    const saving = apiPut("/api/connections/c1/enabled-tables", { dryRun: false, enabledTables: [] });
+    first.resolve(json({ tables: ["before"] }));
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(reads).toBe(1);
+    write.resolve(json({ written: true }));
+    await saving;
+    await expect(read).resolves.toEqual({ tables: ["after"] });
+    expect(reads).toBe(2);
+  });
+
+  it("R4 a display read started during a pending write does not hit the network until the write settles", async () => {
+    const write = deferredResponse();
+    let reads = 0;
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      if (String(input).endsWith("/enabled-tables")) return write.promise;
+      reads += 1;
+      return Promise.resolve(json({ tables: ["final"] }));
+    }));
+    const saving = apiPut("/api/connections/c1/enabled-tables", { dryRun: false, enabledTables: [] });
+    expect(hasPendingDisplayWrite("sources")).toBe(true);
+    const direct = await apiGet("/api/sources", { displayRead: "sources" }).catch((e: unknown) => e);
+    expect(isWriteStaleResponseError(direct)).toBe(true);
+    const read = sourcesQueryOptions().queryFn({ signal: new AbortController().signal } as never);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(reads).toBe(0);
+    write.resolve(json({ written: true }));
+    await saving;
+    await expect(read).resolves.toEqual({ tables: ["final"] });
+    expect(reads).toBe(1);
+  });
+
+  it("R4 nested / parallel writes: the first to finish does not unlock; one failing still settles; mutations submit once", async () => {
+    const settled = vi.fn();
+    const begun = vi.fn();
+    setDisplayWriteSettledHandler(settled);
+    setDisplayWriteBeginHandler(begun);
+    const a = deferredResponse();
+    const b = deferredResponse();
+    const posts: string[] = [];
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      posts.push(url);
+      if (url.endsWith("/a/enabled-tables")) return a.promise;
+      if (url.endsWith("/b/enabled-tables")) return b.promise;
+      return Promise.resolve(json({ tables: ["fresh"] }));
+    }));
+    const first = apiPut("/api/connections/a/enabled-tables", { dryRun: false, enabledTables: [] });
+    const second = apiPut("/api/connections/b/enabled-tables", { dryRun: false, enabledTables: [] });
+    expect(begun).toHaveBeenCalledTimes(2);
+    expect(displayFactsPending("sources")).toBe(true);
+    a.resolve(json({ written: true }));
+    await first;
+    expect(hasPendingDisplayWrite("sources")).toBe(true);
+    expect(settled).not.toHaveBeenCalled();
+    b.resolve(json({ ok: false, error: { code: "POLICY_COMMIT_FAILED", message: "rolled back" } }, 500));
+    await expect(second).rejects.toBeInstanceOf(ApiError);
+    expect(hasPendingDisplayWrite("sources")).toBe(false);
+    expect(settled).toHaveBeenCalledTimes(1);
+    expect(settled).toHaveBeenCalledWith(["project", "sources", "agents"]);
+    expect(displayFactsPending("sources")).toBe(true);
+    await sourcesQueryOptions().queryFn({ signal: new AbortController().signal } as never);
+    expect(displayFactsPending("sources")).toBe(false);
+    expect(posts.filter((url) => url.endsWith("/enabled-tables"))).toHaveLength(2);
+    setDisplayWriteBeginHandler(null);
+  });
+
+  it("R4 auth stale is not retried as write stale, even when a write settles at the same time", async () => {
+    const write = deferredResponse();
+    const read = deferredResponse();
+    let reads = 0;
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      if (String(input).endsWith("/enabled-tables")) return write.promise;
+      reads += 1;
+      return read.promise;
+    }));
+    const query = sourcesQueryOptions().queryFn({ signal: new AbortController().signal } as never);
+    const saving = apiPut("/api/connections/c1/enabled-tables", { dryRun: false, enabledTables: [] });
+    bumpAuthEpoch();
+    write.resolve(json({ written: true }));
+    read.resolve(json({ tables: ["old-account"] }));
+    const error = await query.catch((e: unknown) => e);
+    await saving.catch(() => undefined);
+    expect(isStaleResponseError(error)).toBe(true);
+    expect(isWriteStaleResponseError(error)).toBe(false);
+    expect(reads).toBe(1);
+  });
+
+  it("R4 public reads are not deferred by display writes", async () => {
+    const write = deferredResponse();
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => (String(input).endsWith("/enabled-tables") ? write.promise : Promise.resolve(json({ sections: [] })))));
+    const saving = apiPut("/api/connections/c1/enabled-tables", { dryRun: false, enabledTables: [] });
+    await expect(apiGet("/api/help/handbook")).resolves.toEqual({ sections: [] });
+    write.resolve(json({ written: true }));
+    await saving;
+  });
+
+  it("R4 the shared display query keys are the ones the write sync invalidates", () => {
+    expect(DISPLAY_SCOPE_QUERY_KEYS.sources).toEqual(sourcesQueryOptions().queryKey);
+    expect(DISPLAY_SCOPE_QUERY_KEYS.project).toEqual(projectQueryOptions().queryKey);
+    expect(DISPLAY_SCOPE_QUERY_KEYS.agents).toEqual(adminAgentsQueryOptions().queryKey);
   });
 
   it("drops protected queries (keeps public Help / branding) when the identity changes or a 401 arrives", async () => {

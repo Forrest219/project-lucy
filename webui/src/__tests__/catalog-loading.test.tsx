@@ -192,3 +192,40 @@ describe("Spec 174 T2 — ConnectionOverview with project ready and sources pend
     expect(screen.getByTestId("schema-asset-status-perf-conn-sales")).toHaveTextContent("已存在");
   });
 });
+
+describe("Spec 174 R4 — a write start blocks Manifest-dependent actions until fresh facts (SC-15/18)", () => {
+  for (const outcome of ["success", "rollback"] as const) {
+    it(`keeps old content, hides fact-dependent actions during the write, and restores them only after a fresh read (${outcome})`, async () => {
+      const { apiPut, setDisplayWriteSettledHandler } = await import("../lib/apiClient");
+      const client = renderWith(<ConnectionOverview />);
+      setDisplayWriteSettledHandler((scopes) => {
+        for (const scope of scopes) if (scope === "sources") void client.invalidateQueries({ queryKey: ["sources"] });
+      });
+      await act(async () => sources.resolve(new Response()));
+      expect(await screen.findByTestId("view-manifest-perf-conn-sales")).toBeInTheDocument();
+
+      const write = deferred();
+      const base = globalThis.fetch;
+      vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+        String(input).endsWith("/enabled-tables") ? write.promise : base(input, init)
+      ));
+      sources = deferred();
+      let saving!: Promise<unknown>;
+      act(() => {
+        saving = apiPut("/api/connections/perf-conn/enabled-tables", { dryRun: false, enabledTables: [] }).catch(() => undefined);
+      });
+      expect(await screen.findByTestId("schema-actions-pending-perf-conn-sales")).toBeInTheDocument();
+      expect(screen.queryByTestId("view-manifest-perf-conn-sales")).not.toBeInTheDocument();
+      expect(screen.getByTestId("schema-asset-status-perf-conn-sales")).toHaveTextContent("已存在");
+
+      await act(async () => {
+        write.resolve(outcome === "success" ? json({ written: true }) : json({ ok: false, error: { code: "POLICY_COMMIT_FAILED", message: "rolled back" } }, 500));
+        await saving;
+      });
+      expect(screen.getByTestId("schema-actions-pending-perf-conn-sales")).toBeInTheDocument();
+      await act(async () => sources.resolve(new Response()));
+      expect(await screen.findByTestId("view-manifest-perf-conn-sales")).toBeInTheDocument();
+      setDisplayWriteSettledHandler(null);
+    });
+  }
+});
