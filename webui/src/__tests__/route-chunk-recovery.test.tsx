@@ -6,7 +6,6 @@ function memorySession() {
   return {
     getItem: (key: string) => values.get(key) ?? null,
     setItem: (key: string, value: string) => void values.set(key, value),
-    removeItem: (key: string) => void values.delete(key),
     values
   };
 }
@@ -34,13 +33,15 @@ describe("Spec 174 T4 — route chunk recovery (SC-12)", () => {
     expect(reload).toHaveBeenCalledTimes(1);
   });
 
-  it("does not reload for non-chunk errors and re-arms after a successful load", async () => {
+  it("does not reload for non-chunk errors; a successful load never re-arms the one-shot", async () => {
     const session = memorySession();
     const reload = vi.fn();
     await expect(loadWithChunkRecovery(() => Promise.reject(new Error("boom")), { reload, session })).rejects.toThrow("boom");
     expect(reload).not.toHaveBeenCalled();
     session.setItem(CHUNK_RELOAD_SESSION_KEY, "1");
     await expect(loadWithChunkRecovery(() => Promise.resolve({ ok: true }), { reload, session })).resolves.toEqual({ ok: true });
-    expect(session.getItem(CHUNK_RELOAD_SESSION_KEY)).toBeNull();
+    expect(session.getItem(CHUNK_RELOAD_SESSION_KEY)).toBe("1");
+    await expect(loadWithChunkRecovery(() => Promise.reject(chunkError()), { reload, session })).rejects.toThrow(/dynamically imported/);
+    expect(reload).not.toHaveBeenCalled();
   });
 });

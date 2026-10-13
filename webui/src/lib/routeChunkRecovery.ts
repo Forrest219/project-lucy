@@ -3,8 +3,8 @@ import { lazy, type ComponentType, type LazyExoticComponent } from "react";
 /**
  * Spec 174 §6 — route chunk recovery. When a lazy route chunk fails to load
  * (typically an old tab after a deployment replaced hashed assets), reload
- * the page once per tab session; a second failure surfaces a local retry
- * instead of a reload loop. A successful chunk load re-arms the one-shot.
+ * the page at most once per tab session; any later failure surfaces a local
+ * retry instead of a reload loop.
  */
 export const CHUNK_RELOAD_SESSION_KEY = "lucy.route-chunk-reload.v1";
 
@@ -31,7 +31,7 @@ function storage(): Storage | null {
 
 export type ChunkRecoveryEnv = {
   reload: () => void;
-  session: Pick<Storage, "getItem" | "setItem" | "removeItem"> | null;
+  session: Pick<Storage, "getItem" | "setItem"> | null;
 };
 
 const defaultEnv = (): ChunkRecoveryEnv => ({
@@ -42,9 +42,7 @@ const defaultEnv = (): ChunkRecoveryEnv => ({
 /** Load a module; on a chunk error reload once per session, otherwise rethrow. */
 export async function loadWithChunkRecovery<T>(loader: () => Promise<T>, env: ChunkRecoveryEnv = defaultEnv()): Promise<T> {
   try {
-    const module = await loader();
-    env.session?.removeItem(CHUNK_RELOAD_SESSION_KEY);
-    return module;
+    return await loader();
   } catch (error) {
     if (isChunkLoadError(error) && env.session && !env.session.getItem(CHUNK_RELOAD_SESSION_KEY)) {
       env.session.setItem(CHUNK_RELOAD_SESSION_KEY, String(Date.now()));
