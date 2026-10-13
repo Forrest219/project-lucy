@@ -1450,6 +1450,12 @@
   .pl-notice { @apply text-sm text-fg-muted; }
   .pl-error { @apply text-sm text-danger; }
 
+  /* Spec 174 — static region placeholder / local error (DS 99 临时模式). No animation. */
+  .pl-async-region { @apply grid content-start gap-2 rounded-xl border border-border-default bg-bg-surface p-4; }
+  .pl-async-region--pending { @apply border-dashed; }
+  .pl-async-region--error { @apply justify-items-start; }
+  .pl-async-region-hint { @apply m-0; }
+
   /* 字段描述列表 */
   .pl-field-editor-list { @apply grid gap-3; }
   .pl-field-table-wrap {

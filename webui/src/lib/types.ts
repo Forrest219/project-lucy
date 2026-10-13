@@ -281,9 +281,18 @@ export type LiveSchemasResponse = {
   wireProtocol?: "mysql" | "postgres" | "sqlserver" | "oracle" | "unknown";
 };
 
+/** Spec 174 §3.3 — display snapshot metadata; counts are unknown unless state is ok. */
+export type SourcesDisplayMeta = {
+  snapshotVersion: string;
+  generatedAt: string;
+  authorizedCountsState: "ok" | "partial" | "unavailable";
+  runtimeConsistency: "matched" | "unconfirmed";
+};
+
 export type SourcesResponse = {
   tables: SourceSummary[];
   manifestSchemas?: ManifestSchemaSummary[];
+  meta?: SourcesDisplayMeta;
 };
 
 export type SourceDetail = {

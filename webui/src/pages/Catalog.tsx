@@ -8,6 +8,7 @@ import {
 import { SelectField } from "../components/SelectField";
 import { StatusBadge } from "../components/StatusBadge";
 import { PageHeader } from "../components/PageHeader";
+import { AsyncRegion, asyncStatus } from "../components/AsyncRegion";
 import { RowMoreMenu } from "../components/RowMoreMenu";
 import { apiGet } from "../lib/apiClient";
 import {
@@ -183,10 +184,13 @@ export function Catalog() {
     }
   }
 
-  const { data, isLoading, error } = useQuery({
+  const sourcesQuery = useQuery({
     queryKey: queryKeys.sources,
     queryFn: () => apiGet<SourcesResponse>("/api/sources")
   });
+  const { data } = sourcesQuery;
+  const sourcesStatus = asyncStatus(sourcesQuery);
+  const agentCountsKnown = !data?.meta || data.meta.authorizedCountsState === "ok";
 
   const tables = data?.tables ?? [];
   const enabledCount = useMemo(() => tables.filter((table) => table.enabled).length, [tables]);
@@ -329,14 +333,6 @@ export function Catalog() {
     patchSearchParams({ connection: nextConnection, schema: nextSchema });
   }
 
-  if (isLoading) {
-    return <p className="pl-notice">正在加载语义资产...</p>;
-  }
-
-  if (error) {
-    return <p className="pl-error">语义资产加载失败：{error instanceof Error ? error.message : "未知错误"}</p>;
-  }
-
   const empty = catalogEmptyMessage({
     total: tables.length,
     scope,
@@ -353,16 +349,19 @@ export function Catalog() {
 
       <section className="pl-catalog-workspace">
         <aside className="pl-catalog-scope-panel">
-          <CatalogScopeTree
-            activeConnection={connection}
-            activeSchema={schema}
-            connections={treeConnections}
-            onSelectConnection={selectConnection}
-            onSelectRoot={selectRoot}
-            onSelectSchema={selectSchema}
-            onToggleConnection={() => recordEvent("tree_toggle", "connection")}
-            totalCount={baseFiltered.length}
-          />
+          {/* The table region owns the error + retry; the tree keeps a quiet placeholder. */}
+          <AsyncRegion status={sourcesStatus === "error" ? "pending" : sourcesStatus} label="范围树" minHeight={240}>
+            <CatalogScopeTree
+              activeConnection={connection}
+              activeSchema={schema}
+              connections={treeConnections}
+              onSelectConnection={selectConnection}
+              onSelectRoot={selectRoot}
+              onSelectSchema={selectSchema}
+              onToggleConnection={() => recordEvent("tree_toggle", "connection")}
+              totalCount={baseFiltered.length}
+            />
+          </AsyncRegion>
         </aside>
 
         <div className="pl-panel pl-catalog-main">
@@ -410,13 +409,24 @@ export function Catalog() {
             </label>
           </div>
           <div className="pl-whitelist-toolbar-actions">
-            <span className="pl-catalog-result-count" data-testid="catalog-result-count">
-              {filtered.length} 条结果
-            </span>
+            {data ? (
+              <span className="pl-catalog-result-count" data-testid="catalog-result-count">
+                {filtered.length} 条结果
+              </span>
+            ) : null}
           </div>
         </div>
 
-        {filtered.length === 0 ? (
+        {!data ? (
+          <AsyncRegion
+            status={sourcesStatus}
+            label="语义资产"
+            error={sourcesQuery.error}
+            onRetry={() => void sourcesQuery.refetch()}
+            minHeight={480}
+            className="mt-4"
+          />
+        ) : filtered.length === 0 ? (
           <div className="pl-catalog-empty mt-4" data-testid="catalog-empty-state">
             <strong>{empty.title}</strong>
             <p>{empty.detail}</p>
@@ -472,7 +482,7 @@ export function Catalog() {
                     <td><StatusBadge status={table.completion} /></td>
                     <td className="pl-catalog-table-structure notranslate" translate="no">{structureLabel(table)}</td>
                     <td className="pl-catalog-table-agents" data-testid={`catalog-row-agents-${table.table}`}>
-                      {agentReferenceLabel(table.authorizedAgentCount)}
+                      {agentCountsKnown ? agentReferenceLabel(table.authorizedAgentCount) : <span className="notranslate" translate="no" title="Agent 引用数暂无法确认">—</span>}
                     </td>
                     <td className="pl-catalog-table-updated notranslate" translate="no" title={semanticUpdatedTooltip(table)}>
                       {formatSemanticUpdatedAt(table.semanticUpdatedAt)}

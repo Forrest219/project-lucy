@@ -478,6 +478,7 @@ describe("AgentList", () => {
 
     renderAgentList();
     await screen.findByRole("heading", { name: "Agent" });
+    await screen.findByTestId("metric-agent-count");
 
     // 顶部指标：配置存量 → 业务活跃 → 凭据生命周期 → 业务/协议调用
     expect(screen.getByTestId("metric-agent-count")).toHaveTextContent("Agent 总数");

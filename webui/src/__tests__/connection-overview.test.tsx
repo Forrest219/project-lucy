@@ -404,6 +404,8 @@ describe("ConnectionOverview", () => {
     renderOverview();
 
     expect(await screen.findByRole("heading", { name: "连接概览" })).toBeInTheDocument();
+    // Spec 174: header renders before data; wait for the real connection card.
+    await screen.findByTestId("connection-card-mysql-aliyun");
     expect(screen.getAllByTestId("connection-metric")).toHaveLength(4);
     expect(screen.getByTestId("metric-help-connections")).toBeInTheDocument();
     expect(screen.getByTestId("metric-help-missingManifestSchemas")).toBeInTheDocument();
@@ -465,6 +467,7 @@ describe("ConnectionOverview", () => {
     });
     renderOverview();
 
+    await screen.findByText("来自 1 个 Schema Manifest");
     const metrics = await screen.findAllByTestId("connection-metric");
     const metricByType = (type: string) => {
       const metric = metrics.find((node) => node.getAttribute("data-metric") === type);
@@ -508,6 +511,7 @@ describe("ConnectionOverview", () => {
     });
     renderOverview();
 
+    await screen.findByText("已启用 1 / 本地 1 张表");
     const metrics = await screen.findAllByTestId("connection-metric");
     const unenabledMetric = metrics.find((node) => node.getAttribute("data-metric") === "unenabledTables");
     expect(unenabledMetric).toBeDefined();
@@ -838,7 +842,10 @@ describe("ConnectionOverview", () => {
     stubOverviewFetch({ projectError: true });
     renderOverview();
 
-    expect(await screen.findByText("连接状态加载失败：project unavailable")).toBeInTheDocument();
+    // Spec 174: project failure stays inside the connection-list region with a retry.
+    expect(await screen.findByText("连接列表加载失败：project unavailable")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "连接概览" })).toBeInTheDocument();
+    expect(screen.getByTestId("async-region-retry")).toBeInTheDocument();
   });
 
   it("M44: keeps the header compact (no project-root context, no pill badge)", async () => {

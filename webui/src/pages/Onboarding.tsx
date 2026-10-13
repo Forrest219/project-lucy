@@ -7,6 +7,7 @@ import { queryKeys } from "../lib/queryKeys";
 import type { Agent, ChangedFilesResponse, McpEndpointInfo, ProjectInfo, SourcesResponse } from "../lib/types";
 import { buildMcpConfig } from "../lib/mcpEndpoint";
 import { PageHeader } from "../components/PageHeader";
+import { AsyncRegion, asyncStatus, type AsyncRegionStatus } from "../components/AsyncRegion";
 import {
   buildActionRequiredItems,
   DEEP_LINKS,
@@ -35,6 +36,21 @@ function severityBadgeClass(severity: Severity): string {
  * (icon, text label, icon shape), but the user-visible label is always
  * one of `待处理 / 提醒 / 就绪` on this page (Spec 142: no 「高风险」).
  */
+type RegionQuery = { data?: unknown; isError: boolean; error: unknown; refetch: () => Promise<unknown> };
+
+function combineRegionStatus(queries: RegionQuery[]): { status: AsyncRegionStatus; error: unknown; retry: () => void } {
+  const statuses = queries.map((query) => asyncStatus(query));
+  const failed = queries.filter((query, index) => statuses[index] === "error");
+  const status: AsyncRegionStatus = failed.length > 0 ? "error" : statuses.includes("pending") ? "pending" : "success";
+  return {
+    status,
+    error: failed[0]?.error,
+    retry: () => {
+      for (const query of failed) void query.refetch();
+    }
+  };
+}
+
 function SeverityBadge({
   severity
 }: {
@@ -277,13 +293,11 @@ export function Onboarding() {
   const [now, setNow] = useState<Date>(() => new Date());
   const projectQuery = useQuery({
     queryKey: queryKeys.project,
-    queryFn: () => apiGet<ProjectInfo>("/api/project"),
-    refetchOnMount: "always"
+    queryFn: () => apiGet<ProjectInfo>("/api/project")
   });
   const sourcesQuery = useQuery({
     queryKey: queryKeys.sources,
-    queryFn: () => apiGet<SourcesResponse>("/api/sources"),
-    refetchOnMount: "always"
+    queryFn: () => apiGet<SourcesResponse>("/api/sources")
   });
   const diffQuery = useQuery({
     queryKey: queryKeys.diff,
@@ -325,8 +339,10 @@ export function Onboarding() {
     [endpoint]
   );
   const canCopyMcp = endpoint !== null;
-  const loading = projectQuery.isLoading || sourcesQuery.isLoading || diffQuery.isLoading || agentsQuery.isLoading;
-  const error = projectQuery.error ?? sourcesQuery.error ?? diffQuery.error ?? agentsQuery.error;
+  // Spec 174 §4.1: each Spec 142 section waits only for its own data.
+  const statusRegion = combineRegionStatus([projectQuery, sourcesQuery, agentsQuery]);
+  const actionRegion = combineRegionStatus([sourcesQuery, diffQuery]);
+  const mcpRegion = combineRegionStatus([projectQuery]);
 
   // Sync lastUpdatedAt on first successful load. We deliberately wait for
   // ALL five core queries to settle so the timestamp always represents the
@@ -530,20 +546,8 @@ export function Onboarding() {
     // touches `?limit=1` is reflected by the "刷新中..." state.
     evalLastRunQuery.isFetching;
 
-  if (loading) {
-    return <p className="pl-notice">正在加载系统概览...</p>;
-  }
-
-  // UX-OVERVIEW-005: the legacy "替换整页" 错误分支 must NOT fire after
-  // a successful mount. Once we have a confirmed snapshot (lastUpdatedAt),
-  // a later refetch failure must keep the dashboard visible and let the
-  // badge surface the stale state inline — see `failureLabel` below.
-  // The branch still owns the very first load so a deployment with a
-  // broken upstream never pretends to render the dashboard.
-  if (error && lastUpdatedAt === null) {
-    return <p className="pl-error">系统概览加载失败：{error instanceof Error ? error.message : "未知错误"}</p>;
-  }
-
+  // UX-OVERVIEW-005: a refetch failure after a successful mount keeps the
+  // dashboard visible; first-load failures stay inside the affected region.
   // M39: a critical-tone service-health panel must remain a high-emphasis
   // Alert. M41: ready / warning now render a single summary line; the
   // legacy compact strip is no longer shown on `/overview`. The danger
@@ -603,6 +607,7 @@ export function Onboarding() {
         }
       />
 
+      <AsyncRegion status={statusRegion.status} label="系统状态" error={statusRegion.error} onRetry={statusRegion.retry} minHeight={88}>
       {isDanger ? (
         <section
           className="pl-panel pl-service-health-critical"
@@ -637,7 +642,9 @@ export function Onboarding() {
       ) : summary ? (
         <ServiceHealthSummaryView summary={summary} />
       ) : null}
+      </AsyncRegion>
 
+      <AsyncRegion status={actionRegion.status} label="待处理事项" error={actionRegion.error} onRetry={actionRegion.retry} minHeight={160}>
       <section className="pl-panel" data-testid="ops-action-required">
         <div className="pl-section-heading">
           <div>
@@ -660,7 +667,9 @@ export function Onboarding() {
           </div>
         )}
       </section>
+      </AsyncRegion>
 
+      <AsyncRegion status={mcpRegion.status} label="MCP 接入" error={mcpRegion.error} onRetry={mcpRegion.retry} minHeight={120}>
       <section className="pl-panel" id="overview-mcp" data-testid="ops-mcp-access">
         <div className="pl-section-heading">
           <div>
@@ -707,6 +716,7 @@ export function Onboarding() {
             : null}
         </div>
       </section>
+      </AsyncRegion>
 
       <McpConfigDrawer
         open={mcpDrawerOpen}

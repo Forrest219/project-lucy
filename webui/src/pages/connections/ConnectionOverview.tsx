@@ -49,6 +49,7 @@ import {
 } from "../../components/catalog";
 import { ConnectionTestDrawer } from "../../components/connections";
 import { PageHeader } from "../../components/PageHeader";
+import { AsyncRegion, asyncStatus } from "../../components/AsyncRegion";
 import { MetricCard } from "./MetricCard";
 
 /** Spec 107: client staleTime aligned with server TTL. */
@@ -464,8 +465,9 @@ export function ConnectionOverview() {
   const catalogReloadHistoryReady = catalogReloadsQuery.isSuccess;
   const catalogReloadHistoryLoading = catalogReloadsQuery.isLoading;
   const catalogReloadHistoryError = catalogReloadsQuery.error instanceof Error ? catalogReloadsQuery.error : null;
-  const loading = projectQuery.isLoading || sourcesQuery.isLoading;
-  const error = projectQuery.error ?? sourcesQuery.error;
+  // Spec 174 §4.1: project drives the cards; sources only feeds local Manifest facts.
+  const projectStatus = asyncStatus(projectQuery);
+  const sourcesReady = sourcesQuery.data !== undefined;
   const [addTarget, setAddTarget] = useState<ConnectionInfo | null>(null);
   const [structureTarget, setStructureTarget] = useState<{ connection: ConnectionInfo; schema: string } | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -612,13 +614,7 @@ export function ConnectionOverview() {
     }
   }
 
-  if (loading) {
-    return <p className="pl-notice">正在加载连接状态...</p>;
-  }
-
-  if (error) {
-    return <p className="pl-error">连接状态加载失败：{error instanceof Error ? error.message : "未知错误"}</p>;
-  }
+  const unknownMetric = "—";
 
   return (
     <div className="pl-page-stack">
@@ -659,24 +655,24 @@ export function ConnectionOverview() {
       <div className="pl-metric-grid">
         <MetricCard
           type="connections"
-          value={connections.length}
-          subValue={schemaCount > 0 ? `${schemaCount} 个 Schema` : "未配置 Schema"}
+          value={projectStatus === "success" ? connections.length : unknownMetric}
+          subValue={projectStatus !== "success" ? undefined : schemaCount > 0 ? `${schemaCount} 个 Schema` : "未配置 Schema"}
         />
         <MetricCard
           type="missingManifestSchemas"
-          value={missingManifestSchemaCount}
-          subValue={`${configuredSchemas.size} 个 Schema 中 ${configuredManifestSchemaCount} 个已有 Manifest`}
-          tone={missingManifestSchemaCount > 0 ? "warning" : undefined}
+          value={sourcesReady && projectStatus === "success" ? missingManifestSchemaCount : unknownMetric}
+          subValue={sourcesReady && projectStatus === "success" ? `${configuredSchemas.size} 个 Schema 中 ${configuredManifestSchemaCount} 个已有 Manifest` : undefined}
+          tone={sourcesReady && missingManifestSchemaCount > 0 ? "warning" : undefined}
         />
         <MetricCard
           type="localCatalogTables"
-          value={semanticTables.length}
-          subValue={`来自 ${configuredManifestSchemaCount} 个 Schema Manifest`}
+          value={sourcesReady ? semanticTables.length : unknownMetric}
+          subValue={sourcesReady && projectStatus === "success" ? `来自 ${configuredManifestSchemaCount} 个 Schema Manifest` : undefined}
         />
         <MetricCard
           type="unenabledTables"
-          value={unenabledLocalTableCount}
-          subValue={`已启用 ${enabledLocalCount} / 本地 ${semanticTables.length} 张表`}
+          value={sourcesReady && projectStatus === "success" ? unenabledLocalTableCount : unknownMetric}
+          subValue={sourcesReady && projectStatus === "success" ? `已启用 ${enabledLocalCount} / 本地 ${semanticTables.length} 张表` : undefined}
         />
       </div>
 
@@ -689,6 +685,13 @@ export function ConnectionOverview() {
         </p>
       ) : null}
 
+      <AsyncRegion
+        status={projectStatus}
+        label="连接列表"
+        error={projectQuery.error}
+        onRetry={() => void projectQuery.refetch()}
+        minHeight={320}
+      >
       <div className="pl-overview-grid pl-overview-grid--flat">
         {connections.length === 0 && (
           <div className="py-8 px-6 text-center bg-bg-surface border border-border-default rounded-xl space-y-4" data-testid="connections-empty-state">
@@ -788,7 +791,7 @@ export function ConnectionOverview() {
               draft: getAssistantDraft(conn.id)
             });
             const cardAssistantStep = cardAssistantState.step;
-            const isAssistantInProgress = cardAssistantStep < 6;
+            const isAssistantInProgress = sourcesReady && cardAssistantStep < 6;
             const showCatalogRunStatus = shouldShowCatalogRunStatus(
               lastRun,
               Boolean(reloadingConnections[conn.id]),
@@ -1119,22 +1122,22 @@ export function ConnectionOverview() {
                           // enabled count comes from `enabled_tables` in
                           // ktx.yaml.
                           const explainSourceDrift =
-                            assetState.tableCount === 0 && enabledTableCount > 0;
+                            sourcesReady && assetState.tableCount === 0 && enabledTableCount > 0;
                           const sourceDriftHintId = `schema-source-drift-hint-${conn.id}-${schema}`;
                           return (
                             <Fragment key={schema}>
                               <tr
-                                data-tone={assetState.tone}
+                                data-tone={sourcesReady ? assetState.tone : "muted"}
                                 data-testid={`schema-row-${conn.id}-${schema}`}
                               >
                                 <td><code className="notranslate" translate="no" dir="ltr">{schema}</code></td>
                                 <td>
                                   <span
-                                    className={`pl-schema-asset-status pl-schema-asset-status--${assetState.tone} notranslate`}
+                                    className={`pl-schema-asset-status pl-schema-asset-status--${sourcesReady ? assetState.tone : "muted"} notranslate`}
                                     data-testid={`schema-asset-status-${conn.id}-${schema}`}
                                     translate="no"
                                   >
-                                    {assetState.label}
+                                    {sourcesReady ? assetState.label : "—"}
                                   </span>
                                 </td>
                                 <td className="pl-schema-asset-table-num">
@@ -1162,7 +1165,7 @@ export function ConnectionOverview() {
                                       explainSourceDrift ? sourceDriftHintId : undefined
                                     }
                                   >
-                                    {assetState.tableCount} 张表
+                                    {sourcesReady ? `${assetState.tableCount} 张表` : "—"}
                                     {explainSourceDrift ? (
                                       <span
                                         className="pl-schema-asset-source-drift-tag"
@@ -1180,6 +1183,8 @@ export function ConnectionOverview() {
                                   {enabledTableCount} 张表
                                 </td>
                                 <td className="pl-schema-asset-table-action">
+                                  {/* Spec 174 §4.1: Manifest-dependent actions wait for real sources facts. */}
+                                  {!sourcesReady ? <span className="pl-notice" aria-hidden="true">—</span> : (
                                   <div className="pl-schema-asset-actions">
                                     {hasReadableManifest ? (
                                       <>
@@ -1330,6 +1335,7 @@ export function ConnectionOverview() {
                                       </div>
                                     </details>
                                   </div>
+                                  )}
                                 </td>
                               </tr>
                               {warning && expanded ? (
@@ -1430,6 +1436,7 @@ export function ConnectionOverview() {
             );
           })}
       </div>
+      </AsyncRegion>
 
       {createOpen ? (
         <CreateConnectionDrawer

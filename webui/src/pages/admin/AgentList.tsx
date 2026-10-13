@@ -7,6 +7,7 @@ import type { Agent, AgentsResponseSummary, CreateAgentBody, EffectivePermission
 import { buildMcpConfig } from "../../lib/mcpEndpoint";
 import { AgentRoleCapability, AgentRoleField, agentRoleIds, roleSelectionSavable } from "../../components/AgentRoleField";
 import { PageHeader } from "../../components/PageHeader";
+import { AsyncRegion, asyncStatus } from "../../components/AsyncRegion";
 import { MetricCard } from "../../components/MetricCard";
 import { buildObjectDetailSearch } from "../../lib/objectDetail";
 import { RowMoreMenu } from "../../components/RowMoreMenu";
@@ -372,7 +373,7 @@ export function AgentList() {
     queryKey: ["admin", "agents"],
     queryFn: () => apiGet<AgentsResponse>("/api/admin/agents")
   });
-  const { data, isLoading, error } = agentsQuery;
+  const { data, error } = agentsQuery;
   const { data: rolesData } = useQuery({
     queryKey: ["admin", "roles", { includeTemplates: false }],
     queryFn: () => apiGet<RolesResponse>("/api/admin/roles?includeTemplates=false")
@@ -421,8 +422,27 @@ export function AgentList() {
     return matchSearch && matchEnabled && matchRole && matchActivity;
   });
 
-  if (isLoading) return <div className="pl-notice">加载中…</div>;
-  if (error) return <div className="pl-notice">加载失败：{(error as Error).message}</div>;
+  if (!data) {
+    return (
+      <div className="pl-page-stack">
+        <PageHeader
+          title={<span className="notranslate" translate="no">Agent</span>}
+          description={
+            <>
+              管理 <span className="notranslate" translate="no">Agent</span> 身份、角色、<span className="notranslate" translate="no">Token</span> 及数据访问边界。
+            </>
+          }
+        />
+        <AsyncRegion
+          status={asyncStatus(agentsQuery)}
+          label="Agent 列表"
+          error={error}
+          onRetry={() => void agentsQuery.refetch()}
+          minHeight={480}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="pl-page-stack">
