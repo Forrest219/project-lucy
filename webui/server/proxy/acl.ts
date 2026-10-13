@@ -1639,19 +1639,37 @@ export async function resolveEffectivePermissionsBatchForAdmin(
   return results;
 }
 
+/** Spec 174 §3.3 — the compile inputs a display permission result was derived from. */
+export type DisplayPolicyInputs = Pick<
+  AdminPermissionContext,
+  "accessConfigDigest" | "sourceMapVersion" | "enabledTablesDigest" | "toolClassificationVersion"
+>;
+
+export function displayPolicyInputsOf(context: AdminPermissionContext): DisplayPolicyInputs {
+  return {
+    accessConfigDigest: context.accessConfigDigest,
+    sourceMapVersion: context.sourceMapVersion,
+    enabledTablesDigest: context.enabledTablesDigest,
+    toolClassificationVersion: context.toolClassificationVersion
+  };
+}
+
 /**
- * Spec 174 §3.3 — whether the committed runtime policy was compiled from the
- * same access / source map / enabled tables / classifier inputs. Read-only.
+ * Spec 174 §3.3 — whether the *currently* committed runtime policy was
+ * compiled from the same access / source map / enabled tables / classifier
+ * inputs and is not degraded. Read-only (never commits); evaluated at each
+ * response so cached display results follow runtime commits and degrades.
  */
-export function runtimeConsistencyFor(context: AdminPermissionContext): "matched" | "unconfirmed" {
+export function runtimeConsistencyForInputs(inputs: DisplayPolicyInputs | null): "matched" | "unconfirmed" {
+  if (!inputs) return "unconfirmed";
   const status = getPolicyRuntimeStatus();
   const matched = status.policyVersion !== ""
     && !status.degradedGlobal
     && status.degradedAgents.length === 0
-    && status.accessConfigDigest === context.accessConfigDigest
-    && status.sourceMapVersion === context.sourceMapVersion
-    && status.enabledTablesDigest === context.enabledTablesDigest
-    && effectivePolicyRef?.toolClassificationVersion === context.toolClassificationVersion;
+    && status.accessConfigDigest === inputs.accessConfigDigest
+    && status.sourceMapVersion === inputs.sourceMapVersion
+    && status.enabledTablesDigest === inputs.enabledTablesDigest
+    && effectivePolicyRef?.toolClassificationVersion === inputs.toolClassificationVersion;
   return matched ? "matched" : "unconfirmed";
 }
 

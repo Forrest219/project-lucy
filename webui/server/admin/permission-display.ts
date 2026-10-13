@@ -10,9 +10,10 @@ import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import {
   buildAdminPermissionContext,
+  displayPolicyInputsOf,
   resolveEffectivePermissionsBatchForAdmin,
-  runtimeConsistencyFor,
   type AdminPermissionContext,
+  type DisplayPolicyInputs,
   type RoleResolutionResult
 } from "../proxy/acl.js";
 import { parseAccessConfigText, resolveAccessConfigPath, type AccessConfig } from "../proxy/identity.js";
@@ -31,14 +32,14 @@ export type AccessSnapshot = {
   problem?: "access_unreadable" | "access_invalid" | typeof ACCESS_PATH_MISMATCH;
 };
 
-export type RuntimeConsistency = "matched" | "unconfirmed";
 export type CountState = "ok" | "partial" | "unavailable";
 
 export type PermissionBatch = {
   results: Map<string, RoleResolutionResult>;
   context: AdminPermissionContext | null;
   problem?: AccessSnapshot["problem"];
-  runtimeConsistency: RuntimeConsistency;
+  /** Compile inputs for the response-time runtimeConsistency check; null when no context was built. */
+  policyInputs: DisplayPolicyInputs | null;
 };
 
 function versionOf(raw: string, mtimeMs: number): string {
@@ -82,11 +83,11 @@ export async function readAccessSnapshot(projectRoot: string, raw?: string, vers
 
 export async function resolvePermissionBatch(snapshot: AccessSnapshot, userIds: string[]): Promise<PermissionBatch> {
   if (!snapshot.runtimeConfig) {
-    return { results: new Map(), context: null, problem: snapshot.problem, runtimeConsistency: "unconfirmed" };
+    return { results: new Map(), context: null, problem: snapshot.problem, policyInputs: null };
   }
   const context = await buildAdminPermissionContext(snapshot.runtimeConfig);
   const results = await resolveEffectivePermissionsBatchForAdmin(userIds, context);
-  return { results, context, runtimeConsistency: runtimeConsistencyFor(context) };
+  return { results, context, policyInputs: displayPolicyInputsOf(context) };
 }
 
 type CountInput = { conn: string; schema: string; table: string };

@@ -130,6 +130,19 @@ describe("Spec 174 T2 — Catalog partitioned loading (SC-06/07)", () => {
     expect(await screen.findByTestId("catalog-row-agents-orders")).toHaveTextContent("—");
   });
 
+  it("R3 shows 权限生效状态待确认 while unconfirmed and clears it once matched, without unknown counts becoming 0", async () => {
+    sourcesBody = () => json({ tables: [summary("orders", { authorizedAgentCount: 0 })], manifestSchemas: [], meta: { snapshotVersion: "v1", generatedAt: "", authorizedCountsState: "partial", runtimeConsistency: "unconfirmed" } });
+    const client = renderWith(<Catalog />);
+    await act(async () => sources.resolve(new Response()));
+    expect(await screen.findByTestId("catalog-runtime-unconfirmed")).toHaveTextContent("权限生效状态待确认");
+    expect(screen.getByTestId("catalog-row-agents-orders")).toHaveTextContent("—");
+    sources = deferred();
+    sourcesBody = () => json({ tables: [summary("orders", { authorizedAgentCount: 1 })], manifestSchemas: [], meta: { snapshotVersion: "v2", generatedAt: "", authorizedCountsState: "ok", runtimeConsistency: "matched" } });
+    void client.invalidateQueries({ queryKey: ["sources"] });
+    await act(async () => sources.resolve(new Response()));
+    await waitFor(() => expect(screen.queryByTestId("catalog-runtime-unconfirmed")).not.toBeInTheDocument());
+  });
+
   it("keeps rows on screen during a background refetch", async () => {
     const client = renderWith(<Catalog />);
     await act(async () => sources.resolve(new Response()));

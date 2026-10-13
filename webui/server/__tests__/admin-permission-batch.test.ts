@@ -10,7 +10,8 @@ import {
   resetEffectivePolicyForTests,
   resolveEffectivePermissionsBatchForAdmin,
   resolveEffectivePermissionsForAdmin,
-  runtimeConsistencyFor
+  displayPolicyInputsOf,
+  runtimeConsistencyForInputs
 } from "../proxy/acl";
 import { invalidateAccessConfigCache, parseAccessConfigText } from "../proxy/identity";
 import { readEntryPerfCounters, resetEntryPerfCounters } from "../entry-performance-timing";
@@ -206,7 +207,7 @@ describe("Spec 174 T1 — admin permission batch (SC-01/16/22/23)", () => {
     await writeFile(path.join(projectRoot, "semantic-layer", "warehouse", "_schema", "fin.yaml"), manifest("fin", ["fin_ledger", "fin_budget", "fin_extra"]), "utf8");
     const snapshot = await readAccessSnapshot(projectRoot);
     const batch = await resolvePermissionBatch(snapshot, ids);
-    expect(batch.runtimeConsistency).toBe("unconfirmed");
+    expect(runtimeConsistencyForInputs(batch.policyInputs)).toBe("unconfirmed");
     expect(getPolicyRuntimeStatus()).toEqual(before);
     const runtimeAfter = await effectivePermissions({ userId: "a02", tokenLabel: "t", tokenHashPrefix: "t" });
     expect(runtimeAfter).toEqual(runtimeBefore);
@@ -218,13 +219,13 @@ describe("Spec 174 T1 — admin permission batch (SC-01/16/22/23)", () => {
     const context = await buildAdminPermissionContext(snapshot.runtimeConfig!);
     // Runtime has a10 role failure → degradedAgents present → never "matched".
     expect(getPolicyRuntimeStatus().degradedAgents.length).toBeGreaterThan(0);
-    expect(runtimeConsistencyFor(context)).toBe("unconfirmed");
+    expect(runtimeConsistencyForInputs(displayPolicyInputsOf(context))).toBe("unconfirmed");
 
     const clean = ACCESS_YAML.split("\n").filter((line) => !/id: a0[67]|id: a10/.test(line)).join("\n");
     await writeFile(path.join(projectRoot, "webui", "config", "access.yaml"), clean, "utf8");
     await commitEffectivePolicy();
     const cleanContext = await buildAdminPermissionContext(parseAccessConfigText(clean));
-    expect(runtimeConsistencyFor(cleanContext)).toBe("matched");
+    expect(runtimeConsistencyForInputs(displayPolicyInputsOf(cleanContext))).toBe("matched");
   });
 
   it("refuses to splice two different access files (LUCY_ACCESS_CONFIG_PATH)", async () => {

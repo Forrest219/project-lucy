@@ -415,6 +415,12 @@ export function Catalog() {
           </div>
         </div>
 
+        {data?.meta?.runtimeConsistency === "unconfirmed" ? (
+          <div className="pl-notice mt-4" role="status" data-testid="catalog-runtime-unconfirmed">
+            权限生效状态待确认
+          </div>
+        ) : null}
+
         {!data ? (
           <AsyncRegion
             status={sourcesStatus}

@@ -52,15 +52,19 @@ export class DisplaySnapshotBusyError extends Error {
   }
 }
 
-type Slot = { key: string; payload: string; version: string; builtAt: number };
+type Slot = { key: string; payload: string; sidecar?: string; version: string; builtAt: number };
 type Entry = { current?: Slot; inflight: Map<string, Promise<Slot>>; failure?: { key: string; until: number; error: unknown } };
 
 const entries = new Map<string, Entry>();
 let inflightBuilds = 0;
 let stats = { builds: 0, hits: 0, misses: 0, busy: 0 };
 
-export type DisplaySnapshotResult = { payload: string; version: string; cache: "hit" | "miss" };
-export type DisplayBuild = (version: string) => Promise<string>;
+export type DisplaySnapshotResult = { payload: string; sidecar?: string; version: string; cache: "hit" | "miss" };
+/**
+ * A build returns the serialized payload, optionally with a small serialized
+ * sidecar (e.g. compile inputs) the handler evaluates per response.
+ */
+export type DisplayBuild = (version: string) => Promise<string | { payload: string; sidecar: string }>;
 
 function entryFor(name: string): Entry {
   let entry = entries.get(name);
@@ -86,7 +90,10 @@ async function buildSlot(key: string, build: DisplayBuild): Promise<Slot> {
   markDisplayBuild();
   try {
     const version = versionOf(key);
-    return { key, payload: await build(version), version, builtAt: Date.now() };
+    const built = await build(version);
+    return typeof built === "string"
+      ? { key, payload: built, version, builtAt: Date.now() }
+      : { key, payload: built.payload, sidecar: built.sidecar, version, builtAt: Date.now() };
   } finally {
     inflightBuilds -= 1;
   }
@@ -125,7 +132,7 @@ export async function getDisplaySnapshot(
       stats.hits += 1;
       countEntryPerf("displayHits");
       markDisplayCache("hit");
-      return { payload: entry.current.payload, version: entry.current.version, cache: "hit" };
+      return { payload: entry.current.payload, sidecar: entry.current.sidecar, version: entry.current.version, cache: "hit" };
     }
     if (entry.failure && entry.failure.key === key && Date.now() < entry.failure.until) {
       throw entry.failure.error;
@@ -166,7 +173,7 @@ export async function getDisplaySnapshot(
       stats.misses += 1;
       countEntryPerf("displayMisses");
       markDisplayCache("miss");
-      return { payload: slot.payload, version: slot.version, cache: "miss" };
+      return { payload: slot.payload, sidecar: slot.sidecar, version: slot.version, cache: "miss" };
     }
   }
   stats.busy += 1;

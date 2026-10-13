@@ -69,6 +69,7 @@ import type { TablePatch } from "./model";
 import {
   listSourcesWithManifests,
   sourcesDisplayMeta,
+  type SourcesDisplayMeta,
   previewSourcePatch,
   previewSourceYamlImport,
   readChangedSourceColumnContracts,
@@ -117,7 +118,7 @@ import { registerAgentRoutes } from "./admin/agents.js";
 import { registerRoleRoutes } from "./admin/roles.js";
 import { registerTokenRoutes } from "./admin/tokens.js";
 import { registerPolicyRuntimeRoutes } from "./admin/policy-runtime.js";
-import { getPolicyRuntimeStatus, isPolicyRuntimeHealthy } from "./proxy/acl.js";
+import { getPolicyRuntimeStatus, isPolicyRuntimeHealthy, runtimeConsistencyForInputs, type DisplayPolicyInputs } from "./proxy/acl.js";
 import { recordConfigChange, registerAuditRoutes } from "./admin/audit.js";
 import { auditedWriteFile } from "./admin/config-audit-write.js";
 import { registerMcpToolsRoutes } from "./admin/mcp-tools.js";
@@ -517,22 +518,34 @@ async function executionAckForConnection(connectionId: string): Promise<{
   }
 }
 
-/** Spec 174 §3.2 — `/api/sources` envelope as a versioned, pre-serialized display snapshot. */
+type SourcesSnapshotSidecar = {
+  policyInputs: DisplayPolicyInputs | null;
+  meta: Pick<SourcesDisplayMeta, "snapshotVersion" | "generatedAt" | "authorizedCountsState">;
+};
+
+/**
+ * Spec 174 §3.2 — `/api/sources` envelope as a versioned, pre-serialized display
+ * snapshot. The cached payload ends right before `meta`; §3.3 runtimeConsistency
+ * is evaluated against the current runtime policy for every response.
+ */
 function getSourcesDisplaySnapshot(projectRoot: string) {
   return getDisplaySnapshot("sources", ["D", "P", "C"], async (version) => {
     const listing = await listSourcesWithManifests(projectRoot);
     const started = performance.now();
-    const payload = JSON.stringify({
-      ok: true,
-      data: {
-        tables: listing.tables,
-        manifestSchemas: listing.manifestSchemas,
-        meta: sourcesDisplayMeta(listing, version ?? undefined)
-      }
-    });
+    const payload = `{"ok":true,"data":{"tables":${JSON.stringify(listing.tables)},"manifestSchemas":${JSON.stringify(listing.manifestSchemas)},"meta":`;
+    const sidecar: SourcesSnapshotSidecar = {
+      policyInputs: listing.policyInputs,
+      meta: { snapshotVersion: version, generatedAt: new Date().toISOString(), authorizedCountsState: listing.authorizedCountsState }
+    };
     addTiming("serialize", performance.now() - started);
-    return payload;
+    return { payload, sidecar: JSON.stringify(sidecar) };
   });
+}
+
+function sourcesResponseBody(snapshot: { payload: string; sidecar?: string }): string {
+  const sidecar = JSON.parse(snapshot.sidecar ?? "null") as SourcesSnapshotSidecar;
+  const meta = sourcesDisplayMeta(sidecar.meta, runtimeConsistencyForInputs(sidecar.policyInputs));
+  return `${snapshot.payload}${JSON.stringify(meta)}}}`;
 }
 
 registerDisplayPrewarmer("sources", async () => getSourcesDisplaySnapshot(await resolveProjectRoot()));
@@ -652,7 +665,7 @@ export function buildServer() {
   app.get("/api/sources", async (request, reply) => withRequestTiming(request, async () => {
     const projectRoot = await resolveProjectRoot();
     const snapshot = await getSourcesDisplaySnapshot(projectRoot);
-    return reply.type("application/json; charset=utf-8").send(snapshot.payload);
+    return reply.type("application/json; charset=utf-8").send(sourcesResponseBody(snapshot));
   }));
 
   app.get<{

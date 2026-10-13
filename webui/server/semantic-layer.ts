@@ -15,6 +15,7 @@ import {
   resolvePermissionBatch,
   sourceCountKey
 } from "./admin/permission-display.js";
+import type { DisplayPolicyInputs } from "./proxy/acl.js";
 import { readConnections } from "./project";
 import { loadContentPaths } from "./paths";
 import { stripManifestOnlyColumnKeys } from "./semantic-overlay-sanitize";
@@ -342,16 +343,16 @@ export type AuthorizedCountsState = "ok" | "partial" | "unavailable";
 async function computeAuthorizedAgentCounts(
   projectRoot: string,
   sources: AuthorizedCountInput[]
-): Promise<{ counts: Map<string, number>; state: AuthorizedCountsState; runtimeConsistency: "matched" | "unconfirmed" }> {
+): Promise<{ counts: Map<string, number>; state: AuthorizedCountsState; policyInputs: DisplayPolicyInputs | null }> {
   const snapshot = await readAccessSnapshot(projectRoot);
   const enabledUserIds = enabledUserIdsFromRaw(snapshot);
   try {
     const batch = await resolvePermissionBatch(snapshot, enabledUserIds);
     const { counts, state } = authorizedCountsFromBatch(snapshot, batch, enabledUserIds, sources);
-    return { counts, state, runtimeConsistency: batch.runtimeConsistency };
+    return { counts, state, policyInputs: batch.policyInputs };
   } catch {
     const counts = new Map(sources.map((source) => [sourceCountKey(source.conn, source.schema, source.table), 0]));
-    return { counts, state: "unavailable", runtimeConsistency: "unconfirmed" };
+    return { counts, state: "unavailable", policyInputs: null };
   }
 }
 
@@ -414,7 +415,8 @@ export type SourcesListing = {
   tables: SourceSummary[];
   manifestSchemas: ManifestSchemaSummary[];
   authorizedCountsState: AuthorizedCountsState;
-  runtimeConsistency: "matched" | "unconfirmed";
+  /** Compile inputs; runtimeConsistency is evaluated against the live runtime per response. */
+  policyInputs: DisplayPolicyInputs | null;
 };
 
 /** Spec 174 §3.1 — tables and manifestSchemas derived from one Manifest scan. */
@@ -511,7 +513,7 @@ export async function listSourcesWithManifests(projectRoot: string): Promise<Sou
     tables: summaries.sort((a, b) => `${a.conn}/${a.schema}/${a.table}`.localeCompare(`${b.conn}/${b.schema}/${b.table}`)),
     manifestSchemas: manifestSchemaSummaries(schemaFiles),
     authorizedCountsState: authorized.state,
-    runtimeConsistency: authorized.runtimeConsistency
+    policyInputs: authorized.policyInputs
   };
 }
 
@@ -523,16 +525,16 @@ export type SourcesDisplayMeta = {
   runtimeConsistency: "matched" | "unconfirmed";
 };
 
-export function sourcesDisplayMeta(listing: SourcesListing, snapshotVersion?: string, generatedAt = new Date()): SourcesDisplayMeta {
-  const version = snapshotVersion ?? createHash("sha256")
-    .update(JSON.stringify([listing.tables, listing.manifestSchemas, listing.authorizedCountsState, listing.runtimeConsistency]))
-    .digest("hex")
-    .slice(0, 16);
+/** The response version covers the cached snapshot *and* the runtime state it is reported against. */
+export function sourcesDisplayMeta(
+  base: Pick<SourcesDisplayMeta, "snapshotVersion" | "generatedAt" | "authorizedCountsState">,
+  runtimeConsistency: SourcesDisplayMeta["runtimeConsistency"]
+): SourcesDisplayMeta {
   return {
-    snapshotVersion: version,
-    generatedAt: generatedAt.toISOString(),
-    authorizedCountsState: listing.authorizedCountsState,
-    runtimeConsistency: listing.runtimeConsistency
+    snapshotVersion: createHash("sha256").update(`${base.snapshotVersion}:${runtimeConsistency}`).digest("hex").slice(0, 16),
+    generatedAt: base.generatedAt,
+    authorizedCountsState: base.authorizedCountsState,
+    runtimeConsistency
   };
 }
 

@@ -63,10 +63,13 @@ const analystRole: Role = {
 };
 
 afterEach(() => {
+  agentsMeta = undefined;
   cleanup();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
+
+let agentsMeta: { runtimeConsistency: "matched" | "unconfirmed" } | undefined;
 
 function stubAgentsEndpoints(
   agents: Agent[],
@@ -95,7 +98,7 @@ function stubAgentsEndpoints(
       );
     }
     if (url === "/api/admin/agents" && (!init || !init.method || init.method === "GET")) {
-      return new Response(JSON.stringify({ ok: true, data: { agents, version: "v1" } }));
+      return new Response(JSON.stringify({ ok: true, data: { agents, version: "v1", ...(agentsMeta ? { meta: agentsMeta } : {}) } }));
     }
     if (url.startsWith("/api/admin/roles")) {
       return new Response(JSON.stringify({ ok: true, data: { roles } }));
@@ -153,6 +156,19 @@ function stubAgentsEndpoints(
 }
 
 describe("AgentList", () => {
+  it("Spec 174 R3: shows 权限生效状态待确认 only while runtime consistency is unconfirmed", async () => {
+    agentsMeta = { runtimeConsistency: "unconfirmed" };
+    stubAgentsEndpoints([makeAgent()]);
+    renderAgentList();
+    expect(await screen.findByTestId("agent-runtime-unconfirmed")).toHaveTextContent("权限生效状态待确认");
+    cleanup();
+    agentsMeta = { runtimeConsistency: "matched" };
+    stubAgentsEndpoints([makeAgent()]);
+    renderAgentList();
+    expect(await screen.findByText("张三")).toBeInTheDocument();
+    expect(screen.queryByTestId("agent-runtime-unconfirmed")).not.toBeInTheDocument();
+  });
+
   it("renders 未访问 for agents that have never been seen", async () => {
     stubAgentsEndpoints([makeAgent({ id: "no1", name: "冷账号", stats: { callsLast7d: 0, deniedLast7d: 0, topTables: [] } })]);
 

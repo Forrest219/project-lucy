@@ -20,6 +20,8 @@ type AgentsResponse = {
   version: string;
   /** Optional server-side aggregate; absent on backends pre-dating M55. */
   summary?: AgentsResponseSummary;
+  /** Spec 174 §3.3 — display permission meta. */
+  meta?: { runtimeConsistency?: "matched" | "unconfirmed" };
 };
 type RolesResponse = { roles: Role[] };
 
@@ -469,6 +471,12 @@ export function AgentList() {
           </div>
         }
       />
+
+      {data.meta?.runtimeConsistency === "unconfirmed" ? (
+        <div className="pl-notice" role="status" data-testid="agent-runtime-unconfirmed">
+          权限生效状态待确认
+        </div>
+      ) : null}
 
       {summary.auditCompleteness?.state === "partial" ? (
         <div className="pl-notice" data-testid="agent-audit-partial-notice">

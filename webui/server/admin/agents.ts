@@ -14,6 +14,8 @@ import {
   previewRolePermissionsForAdmin,
   resolveEffectivePermissionsForAdmin,
   resolveRoleIds,
+  runtimeConsistencyForInputs,
+  type DisplayPolicyInputs,
   type EffectivePermissions
 } from "../proxy/acl.js";
 import {
@@ -949,7 +951,13 @@ type AgentPermissionPreview = {
 type AgentPermissionSection = {
   previews: Record<string, AgentPermissionPreview>;
   permissionsState: "ok" | "partial" | "unavailable";
+  /** Spec 174 §3.3 — evaluated against the current runtime policy per response. */
   runtimeConsistency: "matched" | "unconfirmed";
+  snapshotVersion: string;
+};
+
+type CachedAgentPermissionSection = Omit<AgentPermissionSection, "runtimeConsistency" | "snapshotVersion"> & {
+  policyInputs: DisplayPolicyInputs | null;
 };
 
 function permissionPreviewFromBatch(batch: PermissionBatch, userId: string): AgentPermissionPreview {
@@ -976,14 +984,20 @@ async function agentPermissionSection(
     const accessSnapshot = await readAccessSnapshot(projectRoot, raw, version);
     const userIds = users.map((user) => user.id);
     const batch = await resolvePermissionBatch(accessSnapshot, userIds);
-    const section: AgentPermissionSection = {
+    const section: CachedAgentPermissionSection = {
       previews: Object.fromEntries(userIds.map((id) => [id, permissionPreviewFromBatch(batch, id)])),
       permissionsState: agentPermissionsState(users, batch),
-      runtimeConsistency: batch.runtimeConsistency
+      policyInputs: batch.policyInputs
     };
     return JSON.stringify(section);
   }, { extraKey: version });
-  return JSON.parse(snapshot.payload) as AgentPermissionSection;
+  const { policyInputs, ...cached } = JSON.parse(snapshot.payload) as CachedAgentPermissionSection;
+  const runtimeConsistency = runtimeConsistencyForInputs(policyInputs);
+  return {
+    ...cached,
+    runtimeConsistency,
+    snapshotVersion: createHash("sha256").update(`${snapshot.version}:${runtimeConsistency}`).digest("hex").slice(0, 16)
+  };
 }
 
 registerDisplayPrewarmer("agent-permissions", async () => {
@@ -1218,7 +1232,7 @@ export function registerAgentRoutes(app: FastifyInstance) {
         version,
         summary,
         meta: {
-          snapshotVersion: version,
+          snapshotVersion: permissionSection.snapshotVersion,
           generatedAt: new Date().toISOString(),
           permissionsState: permissionSection.permissionsState,
           runtimeConsistency: permissionSection.runtimeConsistency
