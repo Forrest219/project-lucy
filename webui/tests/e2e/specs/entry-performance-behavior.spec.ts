@@ -215,3 +215,16 @@ for (const variant of [
     expect(timing.cls).toBeLessThanOrEqual(0.05);
   });
 }
+
+test("R5 PERF-09 late sources keep schema-row and metric-card geometry stable", async ({ page }) => {
+  await delayRoute(page, "**/api/sources", 1500);
+  await page.goto("/connections");
+  await expect(page.locator(`[data-testid="connection-card-${firstConn()}"]`)).toBeVisible({ timeout: 1500 });
+  const geometry = () => page.evaluate(() => ({
+    rows: Array.from(document.querySelectorAll('[data-testid^="schema-row-"]')).map((row) => Math.round(row.getBoundingClientRect().height)),
+    metrics: Array.from(document.querySelectorAll(".pl-metric-card")).slice(0, 4).map((card) => Array.from(card.children).map((child) => Math.round(child.getBoundingClientRect().height)).join(","))
+  }));
+  const before = await geometry();
+  await expect(page.locator('[data-testid="connection-metric-value"]').filter({ hasText: String(expected.tables) })).toBeVisible({ timeout: 10_000 });
+  expect(await geometry()).toEqual(before);
+});

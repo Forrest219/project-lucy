@@ -609,6 +609,9 @@
      keep their own visual treatment. */
   .pl-metric-card strong { @apply text-xl font-semibold text-fg-default; }
   .pl-metric-card small { @apply text-xs text-fg-muted; }
+  /* Spec 174 PERF-09: the unknown "—" (fallback-font glyph) must not change the value line box when the count arrives. */
+  .pl-connection-metric-value { @apply inline-block h-7 align-top leading-7; }
+  .pl-schema-asset-actions-pending { @apply inline-block h-4 align-top leading-4; }
   .pl-metric-card-value { @apply text-xl font-semibold text-fg-default; }
   .pl-metric-card-value--xl { @apply text-4xl font-semibold leading-none text-fg-default; }
   .pl-checkbox { @apply size-4 cursor-pointer accent-primary; }

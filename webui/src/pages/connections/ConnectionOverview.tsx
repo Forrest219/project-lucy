@@ -647,6 +647,8 @@ export function ConnectionOverview() {
   }
 
   const unknownMetric = "—";
+  // Keeps every metric card's row structure identical before / after the facts arrive (PERF-09).
+  const pendingSubValue = "\u00a0";
 
   return (
     <div className="pl-page-stack">
@@ -688,26 +690,34 @@ export function ConnectionOverview() {
         <MetricCard
           type="connections"
           value={projectStatus === "success" ? connections.length : unknownMetric}
-          subValue={projectStatus !== "success" ? undefined : schemaCount > 0 ? `${schemaCount} 个 Schema` : "未配置 Schema"}
+          subValue={projectStatus !== "success" ? pendingSubValue : schemaCount > 0 ? `${schemaCount} 个 Schema` : "未配置 Schema"}
         />
         <MetricCard
           type="missingManifestSchemas"
           value={sourcesReady && projectStatus === "success" ? missingManifestSchemaCount : unknownMetric}
-          subValue={sourcesReady && projectStatus === "success" ? `${configuredSchemas.size} 个 Schema 中 ${configuredManifestSchemaCount} 个已有 Manifest` : undefined}
+          subValue={sourcesReady && projectStatus === "success" ? `${configuredSchemas.size} 个 Schema 中 ${configuredManifestSchemaCount} 个已有 Manifest` : pendingSubValue}
           tone={sourcesReady && missingManifestSchemaCount > 0 ? "warning" : undefined}
         />
         <MetricCard
           type="localCatalogTables"
           value={sourcesReady ? semanticTables.length : unknownMetric}
-          subValue={sourcesReady && projectStatus === "success" ? `来自 ${configuredManifestSchemaCount} 个 Schema Manifest` : undefined}
+          subValue={sourcesReady && projectStatus === "success" ? `来自 ${configuredManifestSchemaCount} 个 Schema Manifest` : pendingSubValue}
         />
         <MetricCard
           type="unenabledTables"
           value={sourcesReady && projectStatus === "success" ? unenabledLocalTableCount : unknownMetric}
-          subValue={sourcesReady && projectStatus === "success" ? `已启用 ${enabledLocalCount} / 本地 ${semanticTables.length} 张表` : undefined}
+          subValue={sourcesReady && projectStatus === "success" ? `已启用 ${enabledLocalCount} / 本地 ${semanticTables.length} 张表` : pendingSubValue}
         />
       </div>
 
+      <AsyncRegion
+        status={cardsStatus}
+        label="连接列表"
+        error={projectQuery.error}
+        onRetry={() => void projectQuery.refetch()}
+        minHeight={320}
+      >
+      {/* Rendered with the cards (never above a still-pending list placeholder), so it cannot push it down. */}
       {runtimeNotice ? (
         <p className="pl-notice text-sm" role="status" data-testid="execution-runtime-notice">
           {runtimeNotice}{" "}
@@ -720,14 +730,6 @@ export function ConnectionOverview() {
           &nbsp;
         </p>
       ) : null}
-
-      <AsyncRegion
-        status={cardsStatus}
-        label="连接列表"
-        error={projectQuery.error}
-        onRetry={() => void projectQuery.refetch()}
-        minHeight={320}
-      >
       <div className="pl-overview-grid pl-overview-grid--flat">
         {connections.length === 0 && (
           <div className="py-8 px-6 text-center bg-bg-surface border border-border-default rounded-xl space-y-4" data-testid="connections-empty-state">
@@ -1229,7 +1231,7 @@ export function ConnectionOverview() {
                                 </td>
                                 <td className="pl-schema-asset-table-action">
                                   {/* Spec 174 §4.1: Manifest-dependent actions wait for real sources facts. */}
-                                  {!sourcesActionsReady ? <span className="pl-notice" aria-hidden="true" data-testid={`schema-actions-pending-${conn.id}-${schema}`}>—</span> : (
+                                  {!sourcesActionsReady ? <span className="pl-notice pl-schema-asset-actions-pending" aria-hidden="true" data-testid={`schema-actions-pending-${conn.id}-${schema}`}>—</span> : (
                                   <div className="pl-schema-asset-actions">
                                     {hasReadableManifest ? (
                                       <>

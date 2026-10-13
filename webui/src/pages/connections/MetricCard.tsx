@@ -16,7 +16,7 @@ export function MetricCard({ type, value, subValue, tone }: MetricCardProps) {
   return (
     <SharedMetricCard
       label={meta.title}
-      value={value}
+      value={<span className="pl-connection-metric-value">{value}</span>}
       help={meta.hint}
       subValue={subValue}
       tone={resolvedTone}
