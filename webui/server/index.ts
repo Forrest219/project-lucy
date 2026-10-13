@@ -1,10 +1,11 @@
 import { createReadStream } from "node:fs";
-import { lstat, readFile, readdir, stat } from "node:fs/promises";
+import { lstat, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import Fastify, { type FastifyError } from "fastify";
 import { parse, parseDocument } from "yaml";
 import { buildProxy } from "./proxy/mcp-proxy.js";
+import { serveStaticAsset } from "./static-assets";
 import { addTiming, registerEntryPerformanceTiming, withRequestTiming } from "./entry-performance-timing";
 import { withDisplayWriteBarrier } from "./display-generation";
 import {
@@ -273,44 +274,11 @@ function supportedErrorDetail(error: SupportedError): unknown {
 }
 
 const DEFAULT_WEBUI_PORT = 5174;
-const STATIC_MIME_TYPES: Record<string, string> = {
-  ".css": "text/css; charset=utf-8",
-  ".html": "text/html; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".map": "application/json; charset=utf-8",
-  ".png": "image/png",
-  ".svg": "image/svg+xml",
-  ".ico": "image/x-icon",
-  ".txt": "text/plain; charset=utf-8"
-};
 
 function distDir(): string {
   return process.env.LUCY_WEBUI_DIST_DIR
     ? path.resolve(process.env.LUCY_WEBUI_DIST_DIR)
     : path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../dist");
-}
-
-function contentType(filePath: string): string {
-  return STATIC_MIME_TYPES[path.extname(filePath)] ?? "application/octet-stream";
-}
-
-async function staticFilePath(urlPath: string): Promise<string> {
-  const root = distDir();
-  const pathname = decodeURIComponent(urlPath.split("?")[0] ?? "/");
-  const relative = pathname === "/" ? "index.html" : pathname.replace(/^\/+/, "");
-  const candidate = path.resolve(root, relative);
-  const rootWithSep = root.endsWith(path.sep) ? root : `${root}${path.sep}`;
-  if (candidate !== root && !candidate.startsWith(rootWithSep)) {
-    return path.join(root, "index.html");
-  }
-  try {
-    const info = await stat(candidate);
-    if (info.isFile()) return candidate;
-  } catch {
-    // Fall through to the SPA entry point.
-  }
-  return path.join(root, "index.html");
 }
 
 /**
@@ -2019,8 +1987,7 @@ export function buildServer() {
         }
       } satisfies ErrorEnvelope);
     }
-    const filePath = await staticFilePath(request.url);
-    return reply.type(contentType(filePath)).send(createReadStream(filePath));
+    return serveStaticAsset(request, reply, distDir());
   });
 
   return app;

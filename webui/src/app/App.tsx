@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Component, Suspense, useCallback, useEffect, useMemo, useState, type ErrorInfo, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 import {
@@ -34,54 +34,167 @@ import {
   type LucideIcon
 } from "lucide-react";
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
-import { Catalog } from "../pages/Catalog";
-import { JoinEditor } from "../pages/JoinEditor";
-import { Onboarding } from "../pages/Onboarding";
-import { PublishWorkbench } from "../pages/publish/PublishWorkbench";
-import { PublishHistory } from "../pages/publish/PublishHistory";
-import { TableEditor } from "../pages/TableEditor";
-import { WikiEditor } from "../pages/WikiEditor";
-import { SkillList } from "../pages/skills/SkillList";
-import { AgentList } from "../pages/admin/AgentList";
-import { AgentDetail } from "../pages/admin/AgentDetail";
-import { Tokens } from "../pages/admin/Tokens";
-import { NewToken } from "../pages/admin/NewToken";
-import { GovernanceOverview } from "../pages/admin/GovernanceOverview";
-import { Audit } from "../pages/admin/Audit";
-import { McpPlayground } from "../pages/admin/McpPlayground";
-import { ConfigAudit } from "../pages/admin/ConfigAudit";
-import { AuditSources } from "../pages/admin/AuditSources";
-import { RoleList } from "../pages/admin/RoleList";
-import { RoleDetail } from "../pages/admin/RoleDetail";
-import { AdminAccounts } from "../pages/admin/AdminAccounts";
-import { BrandingSettings } from "../pages/admin/BrandingSettings";
-import { LicenseSettings } from "../pages/admin/LicenseSettings";
 import { LoginPage } from "../pages/Login";
 import { AuthProvider, useAuth, useAuthOptional } from "../lib/auth";
 import { useUiPageViewBeacon } from "./ui-usage-beacon";
 import { BrandMark } from "../components/BrandMark";
 import { useBranding } from "../lib/useBranding";
 import { isPublicUiPath } from "../lib/publicAccess";
-import { CaseList } from "../pages/eval/CaseList";
-import { CaseEditor } from "../pages/eval/CaseEditor";
-import { RunList } from "../pages/eval/RunList";
-import { RunDetail } from "../pages/eval/RunDetail";
-import { Monitor } from "../pages/eval/Monitor";
-import { SecurityCandidates } from "../pages/eval/SecurityCandidates";
-import { FieldQuestions } from "../pages/eval/FieldQuestions";
-import { ConnectionOverview } from "../pages/connections/ConnectionOverview";
-import { TableWhitelist } from "../pages/connections/TableWhitelist";
-import { ConnectionTest } from "../pages/connections/ConnectionTest";
-import { HelpCenter } from "../pages/HelpCenter";
 import { HelpButton } from "../components/HelpButton";
-import { ObjectDetailDrawer } from "../components/ObjectDetailDrawer";
 import { CommandPalette } from "../components/CommandPalette";
 import { PolicyDegradeBanner } from "../components/PolicyDegradeBanner";
 import { formatLucyVersionLabel } from "../lib/lucyVersion";
 import { setDisplayWriteSettledHandler } from "../lib/apiClient";
-import { DISPLAY_SCOPE_QUERY_KEYS } from "../lib/displayQueryOptions";
+import { DISPLAY_SCOPE_QUERY_KEYS, projectQueryOptions, sourcesQueryOptions } from "../lib/displayQueryOptions";
+import { isChunkLoadError, lazyRoute, type LazyRoute } from "../lib/routeChunkRecovery";
 import { findGroupIdForPathname, navGroups, type NavIconKey } from "./navigation";
-import { CallMonitor } from "../pages/ops/CallMonitor";
+
+// Spec 174 §6 — business pages and large drawers load lazily; AuthProvider, the
+// shell and the login page stay in the entry bundle.
+const CatalogRoute = lazyRoute(() => import("../pages/Catalog"), "Catalog");
+const JoinEditorRoute = lazyRoute(() => import("../pages/JoinEditor"), "JoinEditor");
+const OnboardingRoute = lazyRoute(() => import("../pages/Onboarding"), "Onboarding");
+const PublishWorkbenchRoute = lazyRoute(() => import("../pages/publish/PublishWorkbench"), "PublishWorkbench");
+const PublishHistoryRoute = lazyRoute(() => import("../pages/publish/PublishHistory"), "PublishHistory");
+const TableEditorRoute = lazyRoute(() => import("../pages/TableEditor"), "TableEditor");
+const WikiEditorRoute = lazyRoute(() => import("../pages/WikiEditor"), "WikiEditor");
+const SkillListRoute = lazyRoute(() => import("../pages/skills/SkillList"), "SkillList");
+const AgentListRoute = lazyRoute(() => import("../pages/admin/AgentList"), "AgentList");
+const AgentDetailRoute = lazyRoute(() => import("../pages/admin/AgentDetail"), "AgentDetail");
+const TokensRoute = lazyRoute(() => import("../pages/admin/Tokens"), "Tokens");
+const NewTokenRoute = lazyRoute(() => import("../pages/admin/NewToken"), "NewToken");
+const GovernanceOverviewRoute = lazyRoute(() => import("../pages/admin/GovernanceOverview"), "GovernanceOverview");
+const AuditRoute = lazyRoute(() => import("../pages/admin/Audit"), "Audit");
+const McpPlaygroundRoute = lazyRoute(() => import("../pages/admin/McpPlayground"), "McpPlayground");
+const ConfigAuditRoute = lazyRoute(() => import("../pages/admin/ConfigAudit"), "ConfigAudit");
+const AuditSourcesRoute = lazyRoute(() => import("../pages/admin/AuditSources"), "AuditSources");
+const RoleListRoute = lazyRoute(() => import("../pages/admin/RoleList"), "RoleList");
+const RoleDetailRoute = lazyRoute(() => import("../pages/admin/RoleDetail"), "RoleDetail");
+const AdminAccountsRoute = lazyRoute(() => import("../pages/admin/AdminAccounts"), "AdminAccounts");
+const BrandingSettingsRoute = lazyRoute(() => import("../pages/admin/BrandingSettings"), "BrandingSettings");
+const LicenseSettingsRoute = lazyRoute(() => import("../pages/admin/LicenseSettings"), "LicenseSettings");
+const CaseListRoute = lazyRoute(() => import("../pages/eval/CaseList"), "CaseList");
+const CaseEditorRoute = lazyRoute(() => import("../pages/eval/CaseEditor"), "CaseEditor");
+const RunListRoute = lazyRoute(() => import("../pages/eval/RunList"), "RunList");
+const RunDetailRoute = lazyRoute(() => import("../pages/eval/RunDetail"), "RunDetail");
+const MonitorRoute = lazyRoute(() => import("../pages/eval/Monitor"), "Monitor");
+const SecurityCandidatesRoute = lazyRoute(() => import("../pages/eval/SecurityCandidates"), "SecurityCandidates");
+const FieldQuestionsRoute = lazyRoute(() => import("../pages/eval/FieldQuestions"), "FieldQuestions");
+const ConnectionOverviewRoute = lazyRoute(() => import("../pages/connections/ConnectionOverview"), "ConnectionOverview");
+const TableWhitelistRoute = lazyRoute(() => import("../pages/connections/TableWhitelist"), "TableWhitelist");
+const ConnectionTestRoute = lazyRoute(() => import("../pages/connections/ConnectionTest"), "ConnectionTest");
+const HelpCenterRoute = lazyRoute(() => import("../pages/HelpCenter"), "HelpCenter");
+const CallMonitorRoute = lazyRoute(() => import("../pages/ops/CallMonitor"), "CallMonitor");
+const ObjectDetailDrawerRoute = lazyRoute(() => import("../components/ObjectDetailDrawer"), "ObjectDetailDrawer");
+
+const {
+  Catalog,
+  JoinEditor,
+  Onboarding,
+  PublishWorkbench,
+  PublishHistory,
+  TableEditor,
+  WikiEditor,
+  SkillList,
+  AgentList,
+  AgentDetail,
+  Tokens,
+  NewToken,
+  GovernanceOverview,
+  Audit,
+  McpPlayground,
+  ConfigAudit,
+  AuditSources,
+  RoleList,
+  RoleDetail,
+  AdminAccounts,
+  BrandingSettings,
+  LicenseSettings,
+  CaseList,
+  CaseEditor,
+  RunList,
+  RunDetail,
+  Monitor,
+  SecurityCandidates,
+  FieldQuestions,
+  ConnectionOverview,
+  TableWhitelist,
+  ConnectionTest,
+  HelpCenter,
+  CallMonitor,
+  ObjectDetailDrawer
+} = {
+  Catalog: CatalogRoute.Component,
+  JoinEditor: JoinEditorRoute.Component,
+  Onboarding: OnboardingRoute.Component,
+  PublishWorkbench: PublishWorkbenchRoute.Component,
+  PublishHistory: PublishHistoryRoute.Component,
+  TableEditor: TableEditorRoute.Component,
+  WikiEditor: WikiEditorRoute.Component,
+  SkillList: SkillListRoute.Component,
+  AgentList: AgentListRoute.Component,
+  AgentDetail: AgentDetailRoute.Component,
+  Tokens: TokensRoute.Component,
+  NewToken: NewTokenRoute.Component,
+  GovernanceOverview: GovernanceOverviewRoute.Component,
+  Audit: AuditRoute.Component,
+  McpPlayground: McpPlaygroundRoute.Component,
+  ConfigAudit: ConfigAuditRoute.Component,
+  AuditSources: AuditSourcesRoute.Component,
+  RoleList: RoleListRoute.Component,
+  RoleDetail: RoleDetailRoute.Component,
+  AdminAccounts: AdminAccountsRoute.Component,
+  BrandingSettings: BrandingSettingsRoute.Component,
+  LicenseSettings: LicenseSettingsRoute.Component,
+  CaseList: CaseListRoute.Component,
+  CaseEditor: CaseEditorRoute.Component,
+  RunList: RunListRoute.Component,
+  RunDetail: RunDetailRoute.Component,
+  Monitor: MonitorRoute.Component,
+  SecurityCandidates: SecurityCandidatesRoute.Component,
+  FieldQuestions: FieldQuestionsRoute.Component,
+  ConnectionOverview: ConnectionOverviewRoute.Component,
+  TableWhitelist: TableWhitelistRoute.Component,
+  ConnectionTest: ConnectionTestRoute.Component,
+  HelpCenter: HelpCenterRoute.Component,
+  CallMonitor: CallMonitorRoute.Component,
+  ObjectDetailDrawer: ObjectDetailDrawerRoute.Component
+};
+
+/** Route path → chunk + display queries that may start in parallel with the chunk. */
+const ROUTE_PRELOADS: Array<{ match: (path: string) => boolean; route: LazyRoute; queries?: Array<"project" | "sources"> }> = [
+  { match: (p) => p === "/overview" || p === "/onboarding", route: OnboardingRoute, queries: ["project", "sources"] },
+  { match: (p) => p === "/connections", route: ConnectionOverviewRoute, queries: ["project", "sources"] },
+  { match: (p) => p === "/connections/enabled-tables" || p === "/connections/whitelist", route: TableWhitelistRoute },
+  { match: (p) => p === "/connections/test", route: ConnectionTestRoute },
+  { match: (p) => p === "/catalog" || p === "/", route: CatalogRoute, queries: ["sources"] },
+  { match: (p) => p.startsWith("/catalog/") || p.startsWith("/sources/"), route: TableEditorRoute },
+  { match: (p) => p === "/admin/agents", route: AgentListRoute },
+  { match: (p) => p.startsWith("/admin/agents/") && p.endsWith("/tokens/new"), route: NewTokenRoute },
+  { match: (p) => p.startsWith("/admin/agents/"), route: AgentDetailRoute },
+  { match: (p) => p === "/admin/usage", route: GovernanceOverviewRoute },
+  { match: (p) => p === "/admin/roles", route: RoleListRoute },
+  { match: (p) => p.startsWith("/admin/roles/"), route: RoleDetailRoute },
+  { match: (p) => p === "/admin/tokens", route: TokensRoute },
+  { match: (p) => p === "/admin/audit", route: AuditRoute },
+  { match: (p) => p === "/help", route: HelpCenterRoute },
+  { match: (p) => p === "/ops/calls", route: CallMonitorRoute },
+  { match: (p) => p === "/wiki", route: WikiEditorRoute },
+  { match: (p) => p === "/skills", route: SkillListRoute }
+];
+
+function preloadRouteChunk(pathname: string): void {
+  void ROUTE_PRELOADS.find((entry) => entry.match(pathname))?.route.preload();
+}
+
+function prefetchRouteQueries(client: QueryClient, pathname: string): void {
+  for (const query of ROUTE_PRELOADS.find((entry) => entry.match(pathname))?.queries ?? []) {
+    if (query === "project") void client.prefetchQuery(projectQueryOptions());
+    else void client.prefetchQuery(sourcesQueryOptions());
+  }
+}
+
+if (typeof window !== "undefined") preloadRouteChunk(window.location.pathname);
 
 const queryClient = new QueryClient();
 
@@ -200,6 +313,50 @@ function writeCollapsedGroups(ids: Set<string>) {
   }
 }
 
+/** Static content-area placeholder while a route chunk loads (no animation, stable size). */
+function RouteChunkFallback() {
+  return <div className="pl-async-region pl-async-region--pending" aria-busy="true" style={{ minHeight: 320 }} />;
+}
+
+type RouteBoundaryState = { error: unknown };
+
+/**
+ * Spec 174 §6 — a failed route chunk keeps the shell; after the one automatic
+ * reload has been used, show a local retry instead of reloading in a loop.
+ */
+class RouteChunkBoundary extends Component<{ resetKey: string; children: ReactNode }, RouteBoundaryState> {
+  state: RouteBoundaryState = { error: null };
+
+  static getDerivedStateFromError(error: unknown): RouteBoundaryState {
+    return { error };
+  }
+
+  componentDidUpdate(prevProps: { resetKey: string }) {
+    if (prevProps.resetKey !== this.props.resetKey && this.state.error) this.setState({ error: null });
+  }
+
+  componentDidCatch(error: unknown, info: ErrorInfo) {
+    if (!isChunkLoadError(error)) console.error(error, info.componentStack);
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div className="pl-async-region pl-async-region--error" role="alert" data-testid="route-chunk-error">
+        <p className="pl-error">页面资源加载失败，可能是版本已更新。</p>
+        <button
+          type="button"
+          className="pl-btn pl-btn--secondary pl-btn--xs"
+          data-testid="route-chunk-retry"
+          onClick={() => window.location.reload()}
+        >
+          重试
+        </button>
+      </div>
+    );
+  }
+}
+
 export function AppFrame() {
   const location = useLocation();
   const auth = useAuthOptional();
@@ -219,6 +376,7 @@ export function AppFrame() {
   // active route's group to be open below via the derived `expanded` map.
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => readCollapsedGroups());
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const hasObjectDetail = new URLSearchParams(location.search).has("object");
 
   const activeGroupId = useMemo(
     () => findGroupIdForPathname(location.pathname),
@@ -365,6 +523,8 @@ export function AppFrame() {
                         key={item.id}
                         to={item.to}
                         data-testid={`nav-link-${item.id}`}
+                        onMouseEnter={() => preloadRouteChunk(item.to)}
+                        onFocus={() => preloadRouteChunk(item.to)}
                       >
                         <ItemIcon aria-hidden="true" className="size-4" />
                         <span className="notranslate" translate="no">{item.label}</span>
@@ -397,6 +557,8 @@ export function AppFrame() {
         <main className="pl-workspace">
           <PolicyDegradeBanner />
           <div className="pl-workspace-body">
+            <RouteChunkBoundary resetKey={location.pathname}>
+            <Suspense fallback={<RouteChunkFallback />}>
             <Routes>
             <Route path="/overview" element={<Onboarding />} />
             <Route path="/ops/calls" element={<CallMonitor />} />
@@ -443,11 +605,17 @@ export function AppFrame() {
             <Route path="/eval/security-candidates" element={<SecurityCandidates />} />
             <Route path="/help" element={<HelpCenter />} />
             </Routes>
+            </Suspense>
+            </RouteChunkBoundary>
           </div>
           {/* M36: ObjectDetailDrawer is mounted once at the AppFrame level so any
             page can open it by updating URL query parameters (e.g.
             `?object=table&conn=...&schema=...&table=...`). */}
-          <ObjectDetailDrawer />
+          {hasObjectDetail ? (
+            <Suspense fallback={null}>
+              <ObjectDetailDrawer />
+            </Suspense>
+          ) : null}
         </main>
 
         <CommandPalette
@@ -485,6 +653,13 @@ function SidebarAuthFooter() {
 function RequireAuth({ children }: { children: ReactNode }) {
   const { status, loading } = useAuth();
   const location = useLocation();
+  const client = useQueryClient();
+  const authorized = !loading && (status?.mode === "open" || Boolean(status?.me));
+  // Spec 174 §6 — start the entry route's display queries alongside its chunk.
+  useEffect(() => {
+    if (authorized) prefetchRouteQueries(client, location.pathname);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only for the entry route
+  }, [authorized]);
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center text-sm text-fg-muted">
