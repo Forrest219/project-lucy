@@ -1,7 +1,7 @@
 import type { QueryFunctionContext } from "@tanstack/react-query";
 import { ApiError, apiGet, isStaleResponseError, type DisplayReadScope } from "./apiClient";
 import { queryKeys } from "./queryKeys";
-import type { ProjectInfo, SourcesResponse } from "./types";
+import type { CatalogReloadsResponse, McpRuntimeStatus, ProjectInfo, SourcesResponse } from "./types";
 
 /** Spec 174 §4.2 — shared freshness for the project / sources display reads. */
 export const DISPLAY_STALE_TIME_MS = 30_000;
@@ -48,6 +48,22 @@ export function sourcesQueryOptions() {
     staleTime: DISPLAY_STALE_TIME_MS,
     gcTime: DISPLAY_GC_TIME_MS,
     ...displayRetry
+  };
+}
+
+/** MCP runtime status (Spec 163 notice); default freshness, shared by the page and its entry prefetch. */
+export function mcpRuntimeStatusQueryOptions() {
+  return {
+    queryKey: queryKeys.mcpRuntime,
+    queryFn: ({ signal }: QueryFunctionContext) => apiGet<McpRuntimeStatus>("/api/admin/mcp-runtime/status", { signal })
+  };
+}
+
+/** Catalog reload history (card header timestamps); default freshness, shared with the entry prefetch. */
+export function catalogReloadsQueryOptions() {
+  return {
+    queryKey: queryKeys.catalogReloads,
+    queryFn: ({ signal }: QueryFunctionContext) => apiGet<CatalogReloadsResponse>("/api/catalog/reloads", { signal })
   };
 }
 

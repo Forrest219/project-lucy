@@ -32,7 +32,15 @@ const INIT_SCRIPT = `(() => {
   try {
     new PerformanceObserver((list) => {
       for (const e of list.getEntries()) {
-        if (!e.hadRecentInput) { perf.cls += e.value; perf.shifts.push({ t: e.startTime, v: e.value }); }
+        if (!e.hadRecentInput) {
+          perf.cls += e.value;
+          const sources = (e.sources || []).map((src) => {
+            const node = src.node;
+            if (!node || node.nodeType !== 1) return "#text";
+            return node.getAttribute("data-testid") || String(node.className || node.tagName).split(" ")[0];
+          });
+          perf.shifts.push({ t: e.startTime, v: e.value, sources });
+        }
       }
     }).observe({ type: "layout-shift", buffered: true });
   } catch (_) {}
@@ -132,10 +140,12 @@ async function waitRoute(page: Page, route: RouteId | "shell", timeoutMs = 20_00
 
 async function readObservations(page: Page, from: number, to: number) {
   return page.evaluate(([start, end]) => {
-    const perf = (window as unknown as { __lucyPerf: { shifts: Array<{ t: number; v: number }>; longTasks: Array<{ start: number; duration: number; name: string; container: string | null }> } }).__lucyPerf;
+    const perf = (window as unknown as { __lucyPerf: { shifts: Array<{ t: number; v: number; sources: string[] }>; longTasks: Array<{ start: number; duration: number; name: string; container: string | null }> } }).__lucyPerf;
     const shifts = perf.shifts.filter((s) => s.t >= start && s.t <= end);
     const longTasks = perf.longTasks.filter((t) => t.start + t.duration >= start && t.start <= end);
-    return { cls: shifts.reduce((sum, s) => sum + s.v, 0), shiftCount: shifts.length, longTasks };
+    // Non-sensitive shift attribution: test ids / class names only.
+    const shiftSources = shifts.map((s) => `${s.t.toFixed(0)}:${s.v.toFixed(4)}:${s.sources.join("|")}`);
+    return { cls: shifts.reduce((sum, s) => sum + s.v, 0), shiftCount: shifts.length, longTasks, shiftSources };
   }, [from, to] as const);
 }
 

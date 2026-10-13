@@ -45,7 +45,7 @@ import { CommandPalette } from "../components/CommandPalette";
 import { PolicyDegradeBanner } from "../components/PolicyDegradeBanner";
 import { formatLucyVersionLabel } from "../lib/lucyVersion";
 import { setDisplayWriteSettledHandler } from "../lib/apiClient";
-import { DISPLAY_SCOPE_QUERY_KEYS, projectQueryOptions, sourcesQueryOptions } from "../lib/displayQueryOptions";
+import { catalogReloadsQueryOptions, DISPLAY_SCOPE_QUERY_KEYS, mcpRuntimeStatusQueryOptions, projectQueryOptions, sourcesQueryOptions } from "../lib/displayQueryOptions";
 import { isChunkLoadError, lazyRoute, type LazyRoute } from "../lib/routeChunkRecovery";
 import { findGroupIdForPathname, navGroups, type NavIconKey } from "./navigation";
 
@@ -162,9 +162,9 @@ const {
 };
 
 /** Route path → chunk + display queries that may start in parallel with the chunk. */
-const ROUTE_PRELOADS: Array<{ match: (path: string) => boolean; route: LazyRoute; queries?: Array<"project" | "sources"> }> = [
+const ROUTE_PRELOADS: Array<{ match: (path: string) => boolean; route: LazyRoute; queries?: Array<"project" | "sources" | "mcpRuntime" | "catalogReloads"> }> = [
   { match: (p) => p === "/overview" || p === "/onboarding", route: OnboardingRoute, queries: ["project", "sources"] },
-  { match: (p) => p === "/connections", route: ConnectionOverviewRoute, queries: ["project", "sources"] },
+  { match: (p) => p === "/connections", route: ConnectionOverviewRoute, queries: ["project", "sources", "mcpRuntime", "catalogReloads"] },
   { match: (p) => p === "/connections/enabled-tables" || p === "/connections/whitelist", route: TableWhitelistRoute },
   { match: (p) => p === "/connections/test", route: ConnectionTestRoute },
   { match: (p) => p === "/catalog" || p === "/", route: CatalogRoute, queries: ["sources"] },
@@ -190,7 +190,9 @@ function preloadRouteChunk(pathname: string): void {
 function prefetchRouteQueries(client: QueryClient, pathname: string): void {
   for (const query of ROUTE_PRELOADS.find((entry) => entry.match(pathname))?.queries ?? []) {
     if (query === "project") void client.prefetchQuery(projectQueryOptions());
-    else void client.prefetchQuery(sourcesQueryOptions());
+    else if (query === "sources") void client.prefetchQuery(sourcesQueryOptions());
+    else if (query === "mcpRuntime") void client.prefetchQuery(mcpRuntimeStatusQueryOptions());
+    else void client.prefetchQuery(catalogReloadsQueryOptions());
   }
 }
 

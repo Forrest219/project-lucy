@@ -1243,3 +1243,15 @@
 | `role-clear-filters` | RoleList | 清空筛选条件 |
 | `role-advanced-filters` | RoleList | 高级筛选区域 |
 | `role-clear-filters-empty` | RoleList | 空态清空筛选入口 |
+
+## 2026-10-13 · Spec 174 入口性能增量合同
+
+占位 testid 与真实内容 testid 互斥：性能就绪谓词只匹配真实内容（连接卡、表行、Agent 行），占位不复用这些 testid。
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `async-region-pending` | 分区静态占位（`aria-busy`，120 ms 后出现加载文字） | `components/AsyncRegion.tsx` |
+| `async-region-error` | 分区局部错误 | `components/AsyncRegion.tsx` |
+| `async-region-retry` | 分区局部重试 | `components/AsyncRegion.tsx` |
+| `route-chunk-error` | 路由资源加载失败（壳层保留） | `app/App.tsx` |
+| `route-chunk-retry` | 路由资源加载失败后的重试 | `app/App.tsx` |

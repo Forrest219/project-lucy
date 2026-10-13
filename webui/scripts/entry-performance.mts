@@ -653,7 +653,8 @@ async function prepareFixture(options: CliOptions, runDir: string): Promise<{ ma
     const baselineDir = path.resolve(CHECKOUT_ROOT, options.baselineDir!);
     const baselineClean = path.join(baselineDir, "fixture-clean");
     const baselineManifest = await readFixtureManifest(baselineClean);
-    const recomputed = await computeFixtureContentHash(baselineManifest.paths.projectRoot);
+    // Re-verify the snapshot where it lives now (the run dir may have been copied).
+    const recomputed = await computeFixtureContentHash(path.join(baselineClean, "project"));
     if (recomputed !== baselineManifest.contentHash) {
       throw new Error("baseline fixture-clean snapshot was modified; refusing to reuse it");
     }

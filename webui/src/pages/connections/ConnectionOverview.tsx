@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight, Database, Server } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -21,16 +21,9 @@ import type {
   ConnectionTestResult,
   ExecutionRuntimeStatus,
   LiveSchemasResponse,
-  McpRuntimeStatus,
   SourceSummary,
   SourcesResponse
 } from "../../lib/types";
-import { AddSchemaDrawer } from "../../components/AddSchemaDrawer";
-import { PrepareSchemaStructureDrawer } from "../../components/SchemaStructurePrep";
-import { CreateConnectionDrawer } from "../../components/CreateConnectionDrawer";
-import { DeleteConnectionDrawer } from "../../components/DeleteConnectionDrawer";
-import { RemoveSchemaDrawer } from "../../components/RemoveSchemaDrawer";
-import { SetupAssistantModal } from "../../components/onboarding";
 import {
   canReadDatabaseStructure,
   deriveAssistantResumeState,
@@ -50,7 +43,15 @@ import { ConnectionTestDrawer } from "../../components/connections";
 import { PageHeader } from "../../components/PageHeader";
 import { AsyncRegion, asyncStatus } from "../../components/AsyncRegion";
 import { MetricCard } from "./MetricCard";
-import { projectQueryOptions, sourcesQueryOptions } from "../../lib/displayQueryOptions";
+import { catalogReloadsQueryOptions, mcpRuntimeStatusQueryOptions, projectQueryOptions, sourcesQueryOptions } from "../../lib/displayQueryOptions";
+
+// Spec 174 §6 — drawers / the setup assistant only load when opened.
+const AddSchemaDrawer = lazy(() => import("../../components/AddSchemaDrawer").then((m) => ({ default: m.AddSchemaDrawer })));
+const PrepareSchemaStructureDrawer = lazy(() => import("../../components/SchemaStructurePrep").then((m) => ({ default: m.PrepareSchemaStructureDrawer })));
+const CreateConnectionDrawer = lazy(() => import("../../components/CreateConnectionDrawer").then((m) => ({ default: m.CreateConnectionDrawer })));
+const DeleteConnectionDrawer = lazy(() => import("../../components/DeleteConnectionDrawer").then((m) => ({ default: m.DeleteConnectionDrawer })));
+const RemoveSchemaDrawer = lazy(() => import("../../components/RemoveSchemaDrawer").then((m) => ({ default: m.RemoveSchemaDrawer })));
+const SetupAssistantModal = lazy(() => import("../../components/onboarding").then((m) => ({ default: m.SetupAssistantModal })));
 
 /** Spec 107: client staleTime aligned with server TTL. */
 const LIVE_SCHEMAS_STALE_MS = 10 * 60 * 1000;
@@ -407,12 +408,10 @@ export function ConnectionOverview() {
     ...sourcesQueryOptions()
   });
   const catalogReloadsQuery = useQuery({
-    queryKey: queryKeys.catalogReloads,
-    queryFn: () => apiGet<CatalogReloadsResponse>("/api/catalog/reloads")
+    ...catalogReloadsQueryOptions()
   });
   const mcpRuntimeQuery = useQuery({
-    queryKey: queryKeys.mcpRuntime,
-    queryFn: () => apiGet<McpRuntimeStatus>("/api/admin/mcp-runtime/status")
+    ...mcpRuntimeStatusQueryOptions()
   });
 
   const connections = projectQuery.data?.connections ?? [];
@@ -476,6 +475,18 @@ export function ConnectionOverview() {
   const catalogReloadHistoryError = catalogReloadsQuery.error instanceof Error ? catalogReloadsQuery.error : null;
   // Spec 174 §4.1: project drives the cards; sources only feeds local Manifest facts.
   const projectStatus = asyncStatus(projectQuery);
+  // The Spec 163 runtime notice sits above the list and reload timestamps sit in
+  // the card headers; hold the cards at most 300 ms for these (prefetched) reads
+  // so they do not shift the list after it appears.
+  const [runtimeHoldExpired, setRuntimeHoldExpired] = useState(false);
+  const projectReady = projectQuery.data !== undefined;
+  useEffect(() => {
+    if (!projectReady) return;
+    const timer = window.setTimeout(() => setRuntimeHoldExpired(true), 300);
+    return () => window.clearTimeout(timer);
+  }, [projectReady]);
+  const cardDecorationsPending = mcpRuntimeQuery.isPending || catalogReloadsQuery.isPending;
+  const cardsStatus = projectStatus === "success" && cardDecorationsPending && !runtimeHoldExpired ? "pending" : projectStatus;
   const sourcesReady = sourcesQuery.data !== undefined;
   const [addTarget, setAddTarget] = useState<ConnectionInfo | null>(null);
   const [structureTarget, setStructureTarget] = useState<{ connection: ConnectionInfo; schema: string } | null>(null);
@@ -695,7 +706,7 @@ export function ConnectionOverview() {
       ) : null}
 
       <AsyncRegion
-        status={projectStatus}
+        status={cardsStatus}
         label="连接列表"
         error={projectQuery.error}
         onRetry={() => void projectQuery.refetch()}
@@ -1447,6 +1458,7 @@ export function ConnectionOverview() {
       </div>
       </AsyncRegion>
 
+      <Suspense fallback={null}>
       {createOpen ? (
         <CreateConnectionDrawer
           open={createOpen}
@@ -1535,19 +1547,22 @@ export function ConnectionOverview() {
           />
         );
       })()}
-      <SetupAssistantModal
-        open={assistantOpen}
-        onClose={() => {
-          setAssistantOpen(false);
-          void queryClient.invalidateQueries({ queryKey: queryKeys.project });
-          void queryClient.invalidateQueries({ queryKey: queryKeys.sources });
-        }}
-        initialStep={assistantStep}
-        initialConnectionId={assistantConnId}
-        initialConnection={connections.find((connection) => connection.id === assistantConnId) ?? null}
-        initialSources={sourcesQuery.data ?? null}
-        existingIds={connections.map((c) => c.id)}
-      />
+      {assistantOpen ? (
+        <SetupAssistantModal
+          open={assistantOpen}
+          onClose={() => {
+            setAssistantOpen(false);
+            void queryClient.invalidateQueries({ queryKey: queryKeys.project });
+            void queryClient.invalidateQueries({ queryKey: queryKeys.sources });
+          }}
+          initialStep={assistantStep}
+          initialConnectionId={assistantConnId}
+          initialConnection={connections.find((connection) => connection.id === assistantConnId) ?? null}
+          initialSources={sourcesQuery.data ?? null}
+          existingIds={connections.map((c) => c.id)}
+        />
+      ) : null}
+      </Suspense>
     </div>
   );
 }

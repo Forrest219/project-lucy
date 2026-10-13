@@ -1366,6 +1366,8 @@ describe("Setup Assistant authoring how-to", () => {
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
+    // The how-to download test stubs global URL; later lazy imports need the real one.
+    vi.unstubAllGlobals();
   });
 
   it("keeps the business wiki how-to collapsed beside the optional editor", () => {

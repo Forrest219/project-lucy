@@ -111,9 +111,10 @@ test("SC-12 lazy deep links and one-shot chunk recovery", async ({ page }) => {
     await expect(page.locator(".pl-page-stack, .pl-help-center, main").first()).toBeVisible();
   }
   await page.goto("/help");
-  let navigations = 0;
-  page.on("framenavigated", (frame) => {
-    if (frame === page.mainFrame()) navigations += 1;
+  // Count full document loads only (framenavigated also fires for SPA pushState).
+  let documentLoads = 0;
+  page.on("load", () => {
+    documentLoads += 1;
   });
   let blocked = 0;
   await page.route(/\/assets\/(Catalog|catalog)[^/]*\.js$/, async (route) => {
@@ -123,7 +124,7 @@ test("SC-12 lazy deep links and one-shot chunk recovery", async ({ page }) => {
   await page.locator('[data-testid="nav-link-semantic-catalog"]').click();
   await expect(page.locator('[data-testid="route-chunk-retry"]')).toBeVisible({ timeout: 15_000 });
   expect(blocked).toBeGreaterThanOrEqual(1);
-  expect(navigations).toBeLessThanOrEqual(2);
+  expect(documentLoads).toBeLessThanOrEqual(1);
   await expect(page.locator('[data-testid="sidebar-search-trigger"]')).toBeVisible();
   await page.unroute(/\/assets\/(Catalog|catalog)[^/]*\.js$/);
   await page.locator('[data-testid="route-chunk-retry"]').click();
