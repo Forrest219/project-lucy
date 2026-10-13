@@ -16,6 +16,7 @@ type IpcRequest =
   | { id: number; type: "reset-display" }
   | { id: number; type: "counters" }
   | { id: number; type: "reset-counters" }
+  | { id: number; type: "reset-live-cache" }
   | { id: number; type: "shutdown" };
 
 function fail(message: string): never {
@@ -60,6 +61,13 @@ async function main(): Promise<void> {
     displayModule = {};
   }
 
+  let liveCatalog: { clearLiveCatalogCache?: () => void } = {};
+  try {
+    liveCatalog = await import("../server/live-catalog.ts");
+  } catch {
+    liveCatalog = {};
+  }
+
   const started = await server.startServer({ displayPrewarm });
   const listenAt = performance.now();
 
@@ -80,6 +88,11 @@ async function main(): Promise<void> {
           counters: timingModule.readEntryPerfCounters(),
           display: displayModule.displaySnapshotDiagnostics?.() ?? null
         });
+      } else if (message.type === "reset-live-cache") {
+        // probe-load: every sample must really execute its live-schemas KTX task.
+        const available = typeof liveCatalog.clearLiveCatalogCache === "function";
+        liveCatalog.clearLiveCatalogCache?.();
+        send({ id: message.id, ok: true, available });
       } else if (message.type === "reset-counters") {
         timingModule.resetEntryPerfCounters();
         send({ id: message.id, ok: true });

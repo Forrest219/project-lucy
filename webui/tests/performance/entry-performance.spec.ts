@@ -1,13 +1,17 @@
 // Spec 174 §8.1 — browser scenarios. Launched only by `npm run perf:entry`.
-// The DOM readiness predicates are identical for baseline and after: they
-// require real connection cards / table rows / agent rows plus enabled
-// controls, never a skeleton, PageHeader, load or networkidle event.
+// The DOM readiness predicates (entry-performance-predicates.ts) are identical
+// for baseline and after: real connection cards + Manifest / enabled-scope
+// statistics, scope tree + expected row set + counts, overview modules + MCP
+// controls, Agent rows + statistics + filters — compared with expectations
+// computed from the fixture files, never a skeleton, PageHeader, load or
+// networkidle event.
 import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { test, type Browser, type BrowserContext, type Page } from "@playwright/test";
+import { predicatesScript, type PerfExpected } from "./entry-performance-predicates";
 
 type RouteId = "connections" | "catalog" | "overview" | "agents";
-type Expected = { connections: number; tables: number; enabledTables: number; agents: number; connectionIds: string[] };
+type Expected = PerfExpected;
 
 const ROUTES: Record<RouteId, { path: string; nav: string }> = {
   connections: { path: "/connections", nav: "connections-overview" },
@@ -25,6 +29,12 @@ const traceDir = process.env.PERF_TRACE_DIR ?? "";
 const expected = JSON.parse(process.env.PERF_EXPECTED ?? "{}") as Expected;
 const routes = (process.env.PERF_ROUTES ?? "connections,catalog,overview,agents").split(",").filter(Boolean) as RouteId[];
 const OBSERVE_AFTER_READY_MS = Number(process.env.PERF_OBSERVE_AFTER_READY_MS ?? "1000");
+const fixtureDir = process.env.PERF_FIXTURE_DIR ?? "";
+const controlUrl = process.env.PERF_CONTROL_URL ?? "";
+const controlToken = process.env.PERF_CONTROL_TOKEN ?? "";
+const slowConnection = process.env.PERF_SLOW_CONNECTION ?? "";
+const TYPING_DELAY_MS = 80;
+const PROBE_REQUEST = /^\/api\/connections\/[^/]+\/(test|live-schemas)$/;
 
 const INIT_SCRIPT = `(() => {
   const perf = { cls: 0, shifts: [], longTasks: [], lastInput: null };
@@ -58,26 +68,19 @@ const INIT_SCRIPT = `(() => {
   const q = (s) => document.querySelector(s);
   const qa = (s) => Array.from(document.querySelectorAll(s));
   const enabled = (el) => !!el && !el.disabled && el.getAttribute("aria-disabled") !== "true";
+  const P = ${predicatesScript()};
   perf.predicates = {
     shell: () => enabled(q('[data-testid="sidebar-search-trigger"]')) && qa('[data-testid^="nav-link-"]').length > 5,
-    connections: (exp) => {
-      const cards = qa('[data-testid^="connection-card-"]').length;
-      const values = qa('[data-testid="connection-metric-value"]').map((n) => (n.textContent || "").trim());
-      return cards === exp.connections && values.includes(String(exp.tables)) && enabled(q('[data-testid="create-connection-btn"]'));
-    },
-    catalog: (exp) => {
-      const rows = qa('tr[data-testid^="catalog-row-"]').length;
-      const count = q('[data-testid="catalog-result-count"]');
-      return rows === exp.enabledTables && !!count && /\\d+/.test(count.textContent || "") && enabled(q("input.pl-whitelist-search-input"));
-    },
-    overview: () => !!(q('[data-testid="ops-service-health-summary"]') || q('[data-testid="ops-service-health-critical"]'))
-      && !!(q('[data-testid="ops-action-required-count"]') || q('[data-testid="ops-action-required-empty"]'))
-      && !!q('[data-testid="ops-mcp-access"]'),
-    agents: (exp) => {
-      const rows = qa('[data-testid^="agent-row-"]').filter((n) => !(n.getAttribute("data-testid") || "").startsWith("agent-row-index-")).length;
-      return rows === exp.agents && !!q('[data-testid="agent-list-result-count"]') && enabled(q('input[placeholder="搜索显示名或用户 ID"]'));
-    }
+    connections: (exp) => P.connectionsReady(document, exp),
+    catalog: (exp) => P.catalogReady(document, exp),
+    overview: (exp) => P.overviewReady(document, exp),
+    agents: (exp) => P.agentsReady(document, exp)
   };
+  perf.filterDone = (exp, term) => P.catalogFilterDone(document, exp, term);
+  perf.probesSettled = (ids) => ids.every((id) => {
+    const el = q('[data-testid="connection-health-' + id + '"]');
+    return !!el && !(el.getAttribute("aria-label") || "").includes("探测中");
+  });
   perf.waitFor = (check, timeoutMs) => new Promise((resolve) => {
     const deadline = performance.now() + (timeoutMs || 20000);
     let done = false;
@@ -194,15 +197,82 @@ async function collect(page: Page, keys: string[]): Promise<Array<number | null>
   return page.evaluate((list) => (window as unknown as { __lucyPerf: Armable }).__lucyPerf.collect(list), keys);
 }
 
+/** Page-clock time at which every connection health probe has left 探测中 (null on timeout). */
+async function waitProbesSettled(page: Page, timeoutMs = 40_000): Promise<number | null> {
+  return page.evaluate(([ids, timeout]) => {
+    const perf = (window as unknown as { __lucyPerf: { waitFor: (c: () => boolean, t: number) => Promise<number | null>; probesSettled: (ids: string[]) => boolean } }).__lucyPerf;
+    return perf.waitFor(() => perf.probesSettled(ids as string[]), timeout as number);
+  }, [expected.connectionIds, timeoutMs] as const);
+}
+
 async function loadAndMeasure(page: Page, route: RouteId, action: () => Promise<unknown>) {
   await action();
   await arm(page, [["shell", "route", "shell"], ["primary", "route", route]]);
   const [shellReady, primaryReady] = await collect(page, ["shell", "primary"]);
   if (primaryReady === null) throw new Error(`primary-ready predicate not met for ${route}`);
-  await page.waitForTimeout(OBSERVE_AFTER_READY_MS);
-  const observed = await readObservations(page, 0, primaryReady + OBSERVE_AFTER_READY_MS);
+  // PERF-09: keep observing through the background probe updates on /connections.
+  let observeTo = primaryReady + OBSERVE_AFTER_READY_MS;
+  if (route === "connections") {
+    const settled = await waitProbesSettled(page);
+    if (settled === null) throw new Error("connection probes did not settle");
+    observeTo = Math.max(observeTo, settled + 300);
+  }
+  const now = await page.evaluate(() => performance.now());
+  if (observeTo > now) await page.waitForTimeout(observeTo - now);
+  const observed = await readObservations(page, 0, observeTo);
   const resources = await readResources(page, primaryReady);
-  return { shellReadyMs: shellReady, primaryReadyMs: primaryReady, ...observed, resources };
+  return { shellReadyMs: shellReady, primaryReadyMs: primaryReady, observeFromMs: 0, observeToMs: observeTo, ...observed, resources };
+}
+
+type ProbeTracker = { health: number; live: number; nonAutomatic: number; finished: number };
+
+function trackProbes(page: Page): ProbeTracker {
+  const state: ProbeTracker = { health: 0, live: 0, nonAutomatic: 0, finished: 0 };
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    const match = PROBE_REQUEST.exec(url.pathname);
+    if (!match) return;
+    if (match[1] === "test") {
+      state.health += 1;
+      if (!(request.postData() ?? "").includes('"automatic"')) state.nonAutomatic += 1;
+    } else {
+      state.live += 1;
+      if (url.searchParams.get("purpose") !== "automatic") state.nonAutomatic += 1;
+    }
+  });
+  const settle = (request: { url: () => string }) => {
+    if (PROBE_REQUEST.test(new URL(request.url()).pathname)) state.finished += 1;
+  };
+  page.on("requestfinished", settle);
+  page.on("requestfailed", settle);
+  return state;
+}
+
+/** KTX stub executions (start lines) per kind; live-schemas runs as `sql`. */
+function stubStarts(): { test: number; sql: number } {
+  try {
+    const lines = readFileSync(path.join(fixtureDir, "stub", "ktx-stub.log"), "utf8").split("\n");
+    return { test: lines.filter((line) => line.startsWith("start test ")).length, sql: lines.filter((line) => line.startsWith("start sql ")).length };
+  } catch {
+    return { test: 0, sql: 0 };
+  }
+}
+
+async function resetLiveCache(): Promise<boolean> {
+  const response = await fetch(`${controlUrl}/reset-live-cache`, { method: "POST", headers: { "x-perf-token": controlToken } });
+  if (!response.ok) throw new Error(`live cache reset failed: HTTP ${response.status}`);
+  const body = (await response.json()) as { ok?: boolean; available?: boolean };
+  if (!body.ok || !body.available) throw new Error("live cache reset unavailable (fixture IPC)");
+  return true;
+}
+
+async function poll(check: () => boolean, timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (check()) return true;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  return check();
 }
 
 async function runSamples(route: string, fn: (iteration: number, isWarmup: boolean) => Promise<Record<string, unknown>>): Promise<void> {
@@ -292,19 +362,34 @@ test(`entry-performance ${scenario}`, async ({ browser }) => {
       await clickNav(page, "catalog");
       await waitRoute(page, "catalog");
       const input = page.locator("input.pl-whitelist-search-input");
+      if (expected.filterCases.length < 2) throw new Error("fixture expectations must include a path term and a column-name term");
       await runSamples("catalog-filter", async (i) => {
         await input.fill("");
+        if ((await waitRoute(page, "catalog", 5000)) === null) throw new Error("catalog did not return to the unfiltered row set");
         await page.waitForTimeout(100);
-        const term = i % 2 === 0 ? "sales" : "region";
-        await input.pressSequentially(term);
+        const { term } = expected.filterCases[i % expected.filterCases.length]!;
+        // Human-paced typing (the URL-controlled search input drops keystrokes typed with no delay).
+        await input.pressSequentially(term, { delay: TYPING_DELAY_MS });
         const start = await lastInputTime(page);
-        const done = await page.evaluate(() => (window as unknown as { __lucyPerf: { waitFor: (c: () => boolean, t: number) => Promise<number | null> } }).__lucyPerf.waitFor(() => {
-          const count = document.querySelector('[data-testid="catalog-result-count"]');
-          return !!count;
-        }, 5000));
+        // Completion = typed term applied + the independently expected row set and counts rendered.
+        const done = await page.evaluate(([exp, value]) => {
+          const perf = (window as unknown as { __lucyPerf: { waitFor: (c: () => boolean, t: number) => Promise<number | null>; filterDone: (e: unknown, t: string) => boolean } }).__lucyPerf;
+          return perf.waitFor(() => perf.filterDone(exp, value as string), 5000);
+        }, [expected, term] as const);
+        if (done === null || start === null) {
+          const state = await page.evaluate(() => ({
+            inputLength: (document.querySelector("input.pl-whitelist-search-input") as HTMLInputElement | null)?.value.length ?? null,
+            rows: document.querySelectorAll('tr[data-testid^="catalog-row-"]').length,
+            count: document.querySelector('[data-testid="catalog-result-count"]')?.textContent ?? null,
+            tree: document.querySelector('[data-testid="catalog-tree-root"]')?.textContent ?? null
+          }));
+          throw new Error(`catalog filter term #${i % expected.filterCases.length} did not render the expected rows (start=${start}, state=${JSON.stringify(state)})`);
+        }
         await page.waitForTimeout(300);
-        const observed = await readObservations(page, (start ?? 0) - 200, (done ?? 0) + 300);
-        return { filterMs: done !== null && start !== null ? done - start : null, ...observed };
+        const observeFrom = start - 200;
+        const observeTo = done + 300;
+        const observed = await readObservations(page, observeFrom, observeTo);
+        return { filterMs: done - start, filterTermIndex: i % expected.filterCases.length, observeFromMs: observeFrom, observeToMs: observeTo, ...observed };
       });
     }
     await context.close();
@@ -361,18 +446,29 @@ test(`entry-performance ${scenario}`, async ({ browser }) => {
   }
 
   if (scenario === "probe-load" || scenario === "probe-load-slow") {
+    const connectionCount = expected.connectionIds.length;
     for (const route of routes) {
       await runSamples(route, async (i, isWarmup) => {
         const context = await newContext(browser);
         const page = await context.newPage();
+        const probes = trackProbes(page);
         try {
+          // Every sample really runs its 7 health + 7 live-schemas KTX tasks.
+          await resetLiveCache();
+          const before = stubStarts();
           return await maybeTrace(browser, page, `${scenario}-${route}`, !isWarmup && i === warmup, async () => {
+            // `purpose` is an after-only protocol field: recorded, not a baseline-incompatible gate.
+            const assertIntents = () => {
+              if (probes.health !== connectionCount || probes.live !== connectionCount) {
+                throw new Error(`expected ${connectionCount}+${connectionCount} probe intents, saw ${probes.health}+${probes.live}`);
+              }
+            };
             if (route === "connections") {
               await page.goto(ROUTES.connections.path, { waitUntil: "commit" });
-              await arm(page, [["primary", "route", "connections"]]);
+              await arm(page, [["primary", "route", "connections"]], 40_000);
               const [ready] = await collect(page, ["primary"]);
               if (ready === null) throw new Error("connections not ready under probe load");
-              const probes = await page.evaluate((ids) => new Promise<Record<string, number | null>>((resolve) => {
+              const doneTimes = await page.evaluate((ids) => new Promise<Record<string, number | null>>((resolve) => {
                 const out: Record<string, number | null> = {};
                 const deadline = performance.now() + 40_000;
                 const tick = () => {
@@ -389,15 +485,54 @@ test(`entry-performance ${scenario}`, async ({ browser }) => {
                 };
                 tick();
               }), expected.connectionIds);
-              const observed = await readObservations(page, 0, Math.max(ready, ...Object.values(probes).map((v) => v ?? 0)));
-              return { primaryReadyMs: ready, probeDoneMs: probes, ...observed };
+              if (Object.values(doneTimes).some((value) => value === null)) throw new Error("connection probes did not settle");
+              if (!(await poll(() => probes.finished >= connectionCount * 2, 40_000))) throw new Error("probe requests did not finish");
+              assertIntents();
+              const after = stubStarts();
+              const started = { test: after.test - before.test, sql: after.sql - before.sql };
+              if (started.test < connectionCount || started.sql < connectionCount) {
+                throw new Error(`KTX tasks executed ${started.test} test + ${started.sql} live, expected ${connectionCount} each`);
+              }
+              const observeTo = Math.max(ready, ...Object.values(doneTimes).map((value) => value ?? 0)) + 300;
+              await page.waitForTimeout(300);
+              const observed = await readObservations(page, 0, observeTo);
+              return {
+                primaryReadyMs: ready,
+                probeDoneMs: doneTimes,
+                ...(slowConnection ? { slowProbeDoneMs: doneTimes[slowConnection] ?? null } : {}),
+                healthIntents: probes.health,
+                liveIntents: probes.live,
+                nonAutomaticIntents: probes.nonAutomatic,
+                probeTasksStarted: started.test + started.sql,
+                observeFromMs: 0,
+                observeToMs: observeTo,
+                ...observed
+              };
             }
             await page.goto(ROUTES.connections.path, { waitUntil: "commit" });
             await waitRoute(page, "shell");
+            // Before the navigation is timed: all 14 intents issued and the probes still queued / running.
+            if (!(await poll(() => probes.health >= connectionCount && probes.live >= connectionCount, 15_000))) assertIntents();
+            assertIntents();
+            const finishedAtNav = probes.finished;
+            if (finishedAtNav >= connectionCount * 2) throw new Error("probes finished before the navigation was measured");
             const nav = await measureClickNavigation(page, route);
             await page.waitForTimeout(500);
             const observed = await readObservations(page, nav.start, nav.ready + 500);
-            return { primaryReadyMs: nav.ready - nav.start, ...observed };
+            const after = stubStarts();
+            const started = after.test + after.sql - before.test - before.sql;
+            if (started < 1) throw new Error("no probe KTX task executed during the sample");
+            return {
+              primaryReadyMs: nav.ready - nav.start,
+              healthIntents: probes.health,
+              liveIntents: probes.live,
+              nonAutomaticIntents: probes.nonAutomatic,
+              probeTasksStarted: started,
+              probesFinishedAtNav: finishedAtNav,
+              observeFromMs: nav.start,
+              observeToMs: nav.ready + 500,
+              ...observed
+            };
           });
         } finally {
           await context.close();

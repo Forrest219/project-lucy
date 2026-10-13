@@ -11,12 +11,15 @@ import { execFileSync, fork, spawn, type ChildProcess } from "node:child_process
 import { createHash, randomBytes } from "node:crypto";
 import { closeSync, existsSync, openSync, readFileSync } from "node:fs";
 import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import http from "node:http";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
+import { parse as parseYaml } from "yaml";
+import type { PerfExpected } from "../tests/performance/entry-performance-predicates.ts";
 import {
   computeFixtureContentHash,
   FIXTURE_OWNER_MARKER,
@@ -161,62 +164,184 @@ export type BudgetResult = {
   note?: string;
 };
 
-type BudgetRule = { id: string; scenario: string; routes?: string[]; metric: string; stat: "p95" | "max"; limit: number };
+type BudgetRule = { id: string; scenario: ScenarioName; routes: string[]; metric: string; stat: "p95" | "max"; limit: number };
 
+const PAGE_ROUTES = ["connections", "catalog", "overview", "agents"];
+
+/** Spec 174 §8 budgets; every rule names its routes (never derived from what was measured). */
 export const BUDGET_RULES: BudgetRule[] = [
-  { id: "PERF-01", scenario: "route-warm", routes: ["connections", "catalog", "overview", "agents"], metric: "feedbackMs", stat: "p95", limit: 50 },
-  { id: "PERF-02", scenario: "route-warm", routes: ["connections", "catalog", "overview", "agents"], metric: "primaryReadyMs", stat: "p95", limit: 100 },
-  { id: "PERF-03", scenario: "route-query-cold", metric: "primaryReadyMs", stat: "p95", limit: 500 },
+  { id: "PERF-01", scenario: "route-warm", routes: PAGE_ROUTES, metric: "feedbackMs", stat: "p95", limit: 50 },
+  { id: "PERF-02", scenario: "route-warm", routes: PAGE_ROUTES, metric: "primaryReadyMs", stat: "p95", limit: 100 },
+  { id: "PERF-03", scenario: "route-query-cold", routes: PAGE_ROUTES, metric: "primaryReadyMs", stat: "p95", limit: 500 },
   { id: "PERF-03", scenario: "probe-load", routes: ["catalog", "overview", "agents"], metric: "primaryReadyMs", stat: "p95", limit: 500 },
   { id: "PERF-04", scenario: "browser-cold", routes: ["connections", "catalog", "overview"], metric: "shellReadyMs", stat: "p95", limit: 500 },
   { id: "PERF-04", scenario: "browser-warm-refresh", routes: ["connections", "catalog", "overview"], metric: "shellReadyMs", stat: "p95", limit: 500 },
-  { id: "PERF-05", scenario: "browser-cold", metric: "primaryReadyMs", stat: "p95", limit: 800 },
-  { id: "PERF-05", scenario: "browser-warm-refresh", metric: "primaryReadyMs", stat: "p95", limit: 800 },
-  { id: "PERF-05", scenario: "login-required", metric: "loginToPrimaryReadyMs", stat: "p95", limit: 800 },
+  { id: "PERF-05", scenario: "browser-cold", routes: PAGE_ROUTES, metric: "primaryReadyMs", stat: "p95", limit: 800 },
+  { id: "PERF-05", scenario: "browser-warm-refresh", routes: PAGE_ROUTES, metric: "primaryReadyMs", stat: "p95", limit: 800 },
+  { id: "PERF-05", scenario: "login-required", routes: ["overview"], metric: "loginToPrimaryReadyMs", stat: "p95", limit: 800 },
   { id: "PERF-05", scenario: "probe-load", routes: ["connections"], metric: "primaryReadyMs", stat: "p95", limit: 800 },
   { id: "PERF-05", scenario: "probe-load-slow", routes: ["connections"], metric: "primaryReadyMs", stat: "p95", limit: 800 },
   { id: "PERF-06", scenario: "api-warm", routes: ["sources"], metric: "httpTotalMs", stat: "p95", limit: 100 },
   { id: "PERF-06", scenario: "api-warm", routes: ["agents"], metric: "httpTotalMs", stat: "p95", limit: 200 },
   { id: "PERF-07", scenario: "display-cold", routes: ["sources"], metric: "buildMs", stat: "p95", limit: 500 },
-  { id: "PERF-09", scenario: "browser-cold", metric: "cls", stat: "max", limit: 0.05 },
-  { id: "PERF-09", scenario: "browser-warm-refresh", metric: "cls", stat: "max", limit: 0.05 },
-  { id: "PERF-09", scenario: "route-warm", metric: "cls", stat: "max", limit: 0.05 },
-  { id: "PERF-09", scenario: "route-query-cold", metric: "cls", stat: "max", limit: 0.05 },
-  { id: "PERF-09", scenario: "probe-load", metric: "cls", stat: "max", limit: 0.05 },
-  { id: "PERF-10", scenario: "browser-cold", metric: "businessLongTasks", stat: "max", limit: 0 },
-  { id: "PERF-10", scenario: "route-warm", metric: "businessLongTasks", stat: "max", limit: 0 },
-  { id: "PERF-10", scenario: "route-warm", routes: ["catalog-filter"], metric: "businessLongTasks", stat: "max", limit: 0 }
+  { id: "PERF-09", scenario: "browser-cold", routes: PAGE_ROUTES, metric: "cls", stat: "max", limit: 0.05 },
+  { id: "PERF-09", scenario: "browser-warm-refresh", routes: PAGE_ROUTES, metric: "cls", stat: "max", limit: 0.05 },
+  { id: "PERF-09", scenario: "route-warm", routes: [...PAGE_ROUTES, "catalog-filter"], metric: "cls", stat: "max", limit: 0.05 },
+  { id: "PERF-09", scenario: "route-query-cold", routes: PAGE_ROUTES, metric: "cls", stat: "max", limit: 0.05 },
+  { id: "PERF-09", scenario: "probe-load", routes: PAGE_ROUTES, metric: "cls", stat: "max", limit: 0.05 },
+  { id: "PERF-09", scenario: "probe-load-slow", routes: ["connections"], metric: "cls", stat: "max", limit: 0.05 },
+  { id: "PERF-10", scenario: "browser-cold", routes: PAGE_ROUTES, metric: "businessLongTasks", stat: "max", limit: 0 },
+  { id: "PERF-10", scenario: "route-warm", routes: [...PAGE_ROUTES, "catalog-filter"], metric: "businessLongTasks", stat: "max", limit: 0 }
 ];
 
-export function evaluateBudgets(summary: Record<string, Record<string, RouteSummary>>): BudgetResult[] {
+/**
+ * Evaluates the rules for the requested scenarios. A rule cell passes only with
+ * ≥minSamples finite values (warm-up excluded), zero failed samples and the
+ * original threshold met; missing cells are reported as failing, never skipped.
+ */
+export function evaluateBudgets(
+  summary: Record<string, Record<string, RouteSummary>>,
+  options: { scenarios?: readonly string[]; minSamples?: number } = {}
+): BudgetResult[] {
+  const minSamples = options.minSamples ?? 1;
   const results: BudgetResult[] = [];
   for (const rule of BUDGET_RULES) {
-    const byRoute = summary[rule.scenario];
-    if (!byRoute) continue;
-    const routes = rule.routes ?? Object.keys(byRoute).filter((route) => route !== "catalog-filter");
-    for (const route of routes) {
-      const routeSummary = byRoute[route];
+    if (options.scenarios && !options.scenarios.includes(rule.scenario)) continue;
+    for (const route of rule.routes) {
+      const base = { id: rule.id, scenario: rule.scenario, route, metric: rule.metric, stat: rule.stat, limit: rule.limit };
+      const routeSummary = summary[rule.scenario]?.[route];
       if (!routeSummary) {
-        results.push({ id: rule.id, scenario: rule.scenario, route, metric: rule.metric, stat: rule.stat, limit: rule.limit, actual: null, passed: false, note: "no samples" });
+        results.push({ ...base, actual: null, passed: false, note: "no samples" });
         continue;
       }
       const metric = routeSummary.metrics[rule.metric];
       const actual = metric ? metric[rule.stat] : null;
-      const passed = actual !== null && actual <= rule.limit && routeSummary.failures === 0;
-      results.push({
-        id: rule.id,
-        scenario: rule.scenario,
-        route,
-        metric: rule.metric,
-        stat: rule.stat,
-        limit: rule.limit,
-        actual,
-        passed,
-        ...(routeSummary.failures > 0 ? { note: `${routeSummary.failures} failed samples` } : {})
-      });
+      const notes: string[] = [];
+      if (routeSummary.failures > 0) notes.push(`${routeSummary.failures} failed samples`);
+      if (!metric || metric.n < minSamples) notes.push(`n=${metric?.n ?? 0} < ${minSamples}`);
+      if (routeSummary.measured !== (metric?.n ?? 0) + routeSummary.failures) notes.push("non-finite metric values");
+      const passed = actual !== null && actual <= rule.limit && notes.length === 0;
+      results.push({ ...base, actual, passed, ...(notes.length ? { note: notes.join("; ") } : {}) });
     }
   }
   return results;
+}
+
+/** Spec 174 §8.1 contract cells: scenario × route × metrics that a formal run must contain. */
+export const EXPECTED_CELLS: Array<{ scenario: ScenarioName; routes: string[]; metrics: string[] }> = [
+  { scenario: "api-warm", routes: ["sources", "agents"], metrics: ["httpTotalMs"] },
+  { scenario: "display-cold", routes: ["sources", "agents"], metrics: ["buildMs", "httpTotalMs", "displayBuilds"] },
+  { scenario: "service-cold", routes: ["sources"], metrics: ["processToSocketMs", "displayReadyMs", "firstSourcesHttpMs"] },
+  { scenario: "browser-cold", routes: PAGE_ROUTES, metrics: ["shellReadyMs", "primaryReadyMs", "cls", "businessLongTasks"] },
+  { scenario: "browser-warm-refresh", routes: PAGE_ROUTES, metrics: ["shellReadyMs", "primaryReadyMs", "cls"] },
+  { scenario: "route-warm", routes: PAGE_ROUTES, metrics: ["feedbackMs", "primaryReadyMs", "cls", "businessLongTasks"] },
+  { scenario: "route-warm", routes: ["catalog-filter"], metrics: ["filterMs", "cls", "businessLongTasks"] },
+  { scenario: "route-query-cold", routes: PAGE_ROUTES, metrics: ["feedbackMs", "primaryReadyMs", "cls"] },
+  { scenario: "login-required", routes: ["overview"], metrics: ["passwordSubmitMs", "loginToPrimaryReadyMs", "cls"] },
+  { scenario: "probe-load", routes: PAGE_ROUTES, metrics: ["primaryReadyMs", "cls", "healthIntents", "liveIntents", "probeTasksStarted"] },
+  { scenario: "probe-load-slow", routes: ["connections"], metrics: ["primaryReadyMs", "cls", "slowProbeDoneMs", "healthIntents", "liveIntents"] }
+];
+
+export const FORMAL_MIN_SAMPLES = 30;
+export const FORMAL_MIN_WARMUP = 5;
+export const MIN_BEHAVIOR_TESTS = 10;
+
+export type BehaviorResult = { exitCode: number; expected: number; unexpected: number; skipped: number; flaky: number } | null;
+export type AssetCheck = Record<string, { jsGzip: number; cssGzip: number; samples: number; problems: string[] }>;
+
+export type Acceptance = {
+  formal: boolean;
+  status: "pass" | "fail" | "incomplete" | "partial";
+  reasons: string[];
+};
+
+export function isFormalRun(options: Pick<CliOptions, "phase" | "scenarios" | "iterations" | "warmup">): boolean {
+  return options.phase === "after"
+    && ALL_SCENARIOS.every((scenario) => options.scenarios.includes(scenario))
+    && options.iterations >= FORMAL_MIN_SAMPLES
+    && options.warmup >= FORMAL_MIN_WARMUP;
+}
+
+/** Collection completeness against the enumerated contract (independent of the measured summary). */
+export function collectionProblems(
+  summary: Record<string, Record<string, RouteSummary>>,
+  assets: AssetCheck,
+  minSamples: number,
+  scenarios: readonly string[] = ALL_SCENARIOS
+): string[] {
+  const problems: string[] = [];
+  for (const cell of EXPECTED_CELLS) {
+    if (!scenarios.includes(cell.scenario)) continue;
+    for (const route of cell.routes) {
+      const routeSummary = summary[cell.scenario]?.[route];
+      if (!routeSummary) {
+        problems.push(`${cell.scenario}/${route}: missing`);
+        continue;
+      }
+      if (routeSummary.failures > 0) problems.push(`${cell.scenario}/${route}: ${routeSummary.failures} failed samples`);
+      if (routeSummary.measured < minSamples) problems.push(`${cell.scenario}/${route}: measured ${routeSummary.measured} < ${minSamples}`);
+      for (const metric of cell.metrics) {
+        const n = routeSummary.metrics[metric]?.n ?? 0;
+        if (n < minSamples || n !== routeSummary.measured - routeSummary.failures) problems.push(`${cell.scenario}/${route}.${metric}: n=${n} (measured ${routeSummary.measured})`);
+      }
+    }
+  }
+  if (scenarios.includes("browser-cold")) {
+    for (const route of PAGE_ROUTES) {
+      const info = assets[route];
+      if (!info) problems.push(`PERF-08 ${route}: no JS/CSS resource evidence`);
+      else {
+        if (info.samples < minSamples) problems.push(`PERF-08 ${route}: ${info.samples} samples with resources < ${minSamples}`);
+        problems.push(...info.problems.map((problem) => `PERF-08 ${route}: ${problem}`));
+      }
+    }
+  }
+  return problems;
+}
+
+export function evaluateAcceptance(input: {
+  options: Pick<CliOptions, "phase" | "scenarios" | "iterations" | "warmup">;
+  summary: Record<string, Record<string, RouteSummary>>;
+  budgets: BudgetResult[];
+  assets: AssetCheck;
+  behavior: BehaviorResult;
+  sampleFailures: number;
+  secretOffenders: number;
+}): Acceptance {
+  const formal = isFormalRun(input.options);
+  const minSamples = formal ? FORMAL_MIN_SAMPLES : 1;
+  const reasons = collectionProblems(input.summary, input.assets, minSamples, input.options.scenarios);
+  if (input.sampleFailures > 0) reasons.push(`${input.sampleFailures} failed samples`);
+  if (input.secretOffenders > 0) reasons.push(`${input.secretOffenders} trace artifacts contain secrets`);
+  const incomplete = reasons.length > 0;
+  if (input.options.phase === "after") {
+    if (input.budgets.length === 0) reasons.push("no budget evaluated");
+    for (const budget of input.budgets) {
+      if (!budget.passed) reasons.push(`${budget.id} ${budget.scenario}/${budget.route} ${budget.metric}: ${budget.actual ?? "—"} > ${budget.limit}${budget.note ? ` (${budget.note})` : ""}`);
+    }
+    if (input.options.scenarios.includes("behavior")) {
+      const behavior = input.behavior;
+      if (!behavior) reasons.push("behavior not executed");
+      else {
+        if (behavior.exitCode !== 0) reasons.push(`behavior exit ${behavior.exitCode}`);
+        if (behavior.unexpected > 0) reasons.push(`behavior unexpected ${behavior.unexpected}`);
+        if (behavior.skipped > 0) reasons.push(`behavior skipped ${behavior.skipped}`);
+        if (behavior.flaky > 0) reasons.push(`behavior flaky ${behavior.flaky}`);
+        if (behavior.expected < MIN_BEHAVIOR_TESTS) reasons.push(`behavior expected ${behavior.expected} < ${MIN_BEHAVIOR_TESTS}`);
+      }
+    } else if (formal) {
+      reasons.push("behavior not requested");
+    }
+  }
+  const status: Acceptance["status"] = incomplete ? "incomplete" : reasons.length > 0 ? "fail" : formal ? "pass" : "partial";
+  return { formal, status, reasons };
+}
+
+/** Exit code: baseline only fails on incomplete collection; after exits 0 only for a complete pass (formal) or a clean partial smoke. */
+export function exitCodeFor(phase: CliOptions["phase"], acceptance: Acceptance): number {
+  if (acceptance.status === "incomplete") return 1;
+  if (phase === "baseline") return 0;
+  return acceptance.status === "pass" || acceptance.status === "partial" ? 0 : 1;
 }
 
 /** Long tasks ≥50 ms attributed to the main frame (or unattributed) count as business tasks. */
@@ -512,6 +637,9 @@ function runCommand(command: string, args: string[], options: { cwd: string; env
 
 type CommandRecord = { command: string; exitCode: number; logPath: string };
 
+/** probe-load-slow: this connection's health test takes 3 s. */
+const SLOW_PROBE_INDEX = 2;
+
 async function runPlaywright(
   server: ServerHandle,
   fixture: FixtureManifest,
@@ -525,6 +653,7 @@ async function runPlaywright(
   const resultsFile = path.join(runDir, "raw", `${scenario}.jsonl`);
   await mkdir(path.dirname(resultsFile), { recursive: true });
   const logPath = path.join(runDir, "logs", `playwright-${scenario}.log`);
+  const control = await startControlBridge(server);
   const env: NodeJS.ProcessEnv = {
     ...sanitizedEnv(),
     PERF_RUNNER: "entry-performance",
@@ -538,20 +667,38 @@ async function runPlaywright(
     PERF_PLAYWRIGHT_JSON: path.join(runDir, "raw", `playwright-${scenario}.json`),
     PERF_LOGIN_SECRET_FILE: fixture.paths.loginSecret,
     PERF_FIXTURE_DIR: path.dirname(fixture.paths.projectRoot),
-    PERF_EXPECTED: JSON.stringify({
-      connections: fixture.connectionIds.length,
-      tables: fixture.tableCount,
-      enabledTables: fixture.enabledTableCount,
-      agents: fixture.agents.length,
-      connectionIds: fixture.connectionIds
-    })
+    PERF_CONTROL_URL: control.url,
+    PERF_CONTROL_TOKEN: control.token,
+    PERF_SLOW_CONNECTION: scenario === "probe-load-slow" ? fixture.connectionIds[SLOW_PROBE_INDEX]! : "",
+    PERF_EXPECTED: JSON.stringify(await readFixtureExpectations(fixture))
   };
   const args = ["playwright", "test", "-c", "tests/performance/entry-performance.config.ts", specFile];
-  const exitCode = await runCommand("npx", args, { cwd: WEBUI_DIR, env, logPath });
+  const exitCode = await runCommand("npx", args, { cwd: WEBUI_DIR, env, logPath }).finally(() => control.close());
   commands.push({ command: `PERF_SCENARIO=${scenario} npx ${args.join(" ")}`, exitCode, logPath });
   if (!existsSync(resultsFile)) return [];
   const lines = (await readFile(resultsFile, "utf8")).split("\n").filter(Boolean);
   return lines.map((line) => JSON.parse(line) as RawSample);
+}
+
+/**
+ * Fixture-only control bridge (runner process, loopback, per-run token): lets
+ * the Playwright worker ask the fixture server over its IPC pipe to clear the
+ * live-schemas success cache. The Lucy server itself exposes no reset endpoint.
+ */
+async function startControlBridge(server: ServerHandle): Promise<{ url: string; token: string; close: () => Promise<void> }> {
+  const token = randomBytes(16).toString("hex");
+  const bridge = http.createServer((req, res) => {
+    const op = req.url === "/reset-live-cache" ? "reset-live-cache" : null;
+    if (req.method !== "POST" || !op || req.headers["x-perf-token"] !== token) {
+      res.writeHead(404).end();
+      return;
+    }
+    server.request(op)
+      .then((reply) => res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify(reply)))
+      .catch((error) => res.writeHead(500, { "Content-Type": "application/json" }).end(JSON.stringify({ ok: false, error: String(error) })));
+  });
+  const port = await new Promise<number>((resolve) => bridge.listen(0, "127.0.0.1", () => resolve((bridge.address() as net.AddressInfo).port)));
+  return { url: `http://127.0.0.1:${port}`, token, close: () => new Promise((resolve) => bridge.close(() => resolve())) };
 }
 
 function postProcessBrowserSample(sample: RawSample): RawSample {
@@ -578,19 +725,43 @@ async function listDistAssets(): Promise<AssetInfo[]> {
   return out;
 }
 
-/** PERF-08: gzip bytes of the JS/CSS a cold route actually requested before primary-ready. */
-export function initialAssetBudget(samples: RawSample[], assets: AssetInfo[]): Record<string, { jsGzip: number; cssGzip: number; files: string[] }> {
+export type InitialAssets = Record<string, { jsGzip: number; cssGzip: number; jsFiles: string[]; cssFiles: string[]; samples: number; problems: string[] }>;
+
+/**
+ * PERF-08: gzip bytes of the JS/CSS a cold route requested before primary-ready.
+ * JS and CSS maxima are taken independently over every sample. A sample without
+ * resource evidence, or a requested /assets JS/CSS file unknown to the dist
+ * listing, is a problem (incomplete evidence), never silently skipped.
+ */
+export function initialAssetBudget(samples: RawSample[], assets: AssetInfo[]): InitialAssets {
   const byPath = new Map(assets.map((asset) => [asset.path, asset]));
-  const out: Record<string, { jsGzip: number; cssGzip: number; files: string[] }> = {};
+  const out: InitialAssets = {};
   for (const sample of samples) {
     if (sample.scenario !== "browser-cold" || sample.warmup || !sample.ok) continue;
+    const current = (out[sample.route] ??= { jsGzip: 0, cssGzip: 0, jsFiles: [], cssFiles: [], samples: 0, problems: [] });
     const resources = sample.metrics.resources as Array<{ path: string }> | undefined;
-    if (!Array.isArray(resources)) continue;
-    const files = [...new Set(resources.map((resource) => resource.path))].filter((file) => byPath.has(file)).sort();
-    const jsGzip = files.filter((file) => file.endsWith(".js")).reduce((sum, file) => sum + (byPath.get(file)?.gzipBytes ?? 0), 0);
-    const cssGzip = files.filter((file) => file.endsWith(".css")).reduce((sum, file) => sum + (byPath.get(file)?.gzipBytes ?? 0), 0);
-    const current = out[sample.route];
-    if (!current || jsGzip + cssGzip > current.jsGzip + current.cssGzip) out[sample.route] = { jsGzip, cssGzip, files };
+    if (!Array.isArray(resources)) {
+      current.problems.push(`iteration ${sample.iteration}: resources missing`);
+      continue;
+    }
+    const files = [...new Set(resources.map((resource) => resource.path))].filter((file) => /\.(js|css)$/.test(file)).sort();
+    const unknown = files.filter((file) => !byPath.has(file));
+    if (unknown.length > 0) current.problems.push(`iteration ${sample.iteration}: unknown dist resource ${unknown.join(", ")}`);
+    const js = files.filter((file) => file.endsWith(".js"));
+    const css = files.filter((file) => file.endsWith(".css"));
+    if (js.length === 0) current.problems.push(`iteration ${sample.iteration}: no JS resource`);
+    if (css.length === 0) current.problems.push(`iteration ${sample.iteration}: no CSS resource`);
+    const jsGzip = js.reduce((sum, file) => sum + (byPath.get(file)?.gzipBytes ?? 0), 0);
+    const cssGzip = css.reduce((sum, file) => sum + (byPath.get(file)?.gzipBytes ?? 0), 0);
+    current.samples += 1;
+    if (jsGzip >= current.jsGzip) {
+      current.jsGzip = jsGzip;
+      current.jsFiles = js;
+    }
+    if (cssGzip >= current.cssGzip) {
+      current.cssGzip = cssGzip;
+      current.cssFiles = css;
+    }
   }
   return out;
 }
@@ -676,6 +847,78 @@ async function workingFixture(cleanDir: string, targetDir: string): Promise<Fixt
   return rebased;
 }
 
+type FixtureTable = { conn: string; schema: string; name: string; columns: string[]; enabled: boolean };
+
+/** Catalog search semantics (Spec 174 §2: unchanged): path + column names, case-insensitive. */
+export function catalogSearchMatches(table: FixtureTable, term: string): boolean {
+  return `${table.conn}/${table.schema}/${table.name} ${table.columns.join(" ")}`.toLowerCase().includes(term.trim().toLowerCase());
+}
+
+/**
+ * Spec 174 R6 — primary-ready / filter expectations computed from the fixture
+ * files (ktx.yaml, Manifests, fixture manifest), never from the API under test.
+ */
+export function expectationsFromFixture(input: {
+  connections: Array<{ id: string; schemas: string[]; enabledTables: string[] }>;
+  tables: FixtureTable[];
+  agentIds: string[];
+}): PerfExpected {
+  const enabled = input.tables.filter((table) => table.enabled);
+  const configuredSchemas = input.connections.flatMap((conn) => conn.schemas.map((schema) => `${conn.id}/${schema}`));
+  const manifestSchemas = new Set(input.tables.map((table) => `${table.conn}/${table.schema}`));
+  const missingManifest = configuredSchemas.filter((schema) => !manifestSchemas.has(schema)).length;
+  const paths = input.tables.map((table) => `${table.conn}/${table.schema}/${table.name}`.toLowerCase());
+  const columnTerm = [...new Set(enabled.flatMap((table) => table.columns))]
+    .filter((column) => !paths.some((p) => p.includes(column.toLowerCase())))
+    .map((column) => ({ column, hits: enabled.filter((table) => catalogSearchMatches(table, column)).length }))
+    .filter((item) => item.hits >= 2 && item.hits < enabled.length)
+    .sort((a, b) => a.column.localeCompare(b.column))[0]?.column;
+  const terms = ["sales", ...(columnTerm ? [columnTerm] : [])];
+  return {
+    connections: input.connections.length,
+    tables: input.tables.length,
+    enabledTables: enabled.length,
+    agents: input.agentIds.length,
+    connectionIds: input.connections.map((conn) => conn.id),
+    agentIds: input.agentIds,
+    enabledTableNames: enabled.map((table) => table.name).sort(),
+    connectionMetricValues: [String(input.connections.length), String(missingManifest), String(input.tables.length), String(input.tables.length - enabled.length)],
+    schemaCount: configuredSchemas.length,
+    catalogConnections: new Set(input.tables.map((table) => table.conn)).size,
+    filterCases: terms.map((term) => ({ term, names: enabled.filter((table) => catalogSearchMatches(table, term)).map((table) => table.name).sort() }))
+  };
+}
+
+export async function readFixtureExpectations(fixture: FixtureManifest): Promise<PerfExpected> {
+  const ktx = parseYaml(await readFile(path.join(fixture.paths.projectRoot, "ktx.yaml"), "utf8")) as { connections?: Record<string, { schemas?: string[]; enabled_tables?: string[] }> };
+  const connections = Object.entries(ktx.connections ?? {}).map(([id, conn]) => ({ id, schemas: conn.schemas ?? [], enabledTables: conn.enabled_tables ?? [] }));
+  const enabledBy = new Map(connections.map((conn) => [conn.id, new Set(conn.enabledTables)]));
+  const tables: FixtureTable[] = [];
+  const semanticLayer = path.join(fixture.paths.contentRoot, "semantic-layer");
+  for (const conn of (await readdir(semanticLayer)).sort()) {
+    const schemaDir = path.join(semanticLayer, conn, "_schema");
+    if (!existsSync(schemaDir)) continue;
+    for (const file of (await readdir(schemaDir)).filter((name) => name.endsWith(".yaml")).sort()) {
+      const schema = file.replace(/\.yaml$/, "");
+      const doc = parseYaml(await readFile(path.join(schemaDir, file), "utf8")) as { tables?: Record<string, { table?: string; columns?: Array<{ name?: string }> }> };
+      for (const [name, table] of Object.entries(doc.tables ?? {})) {
+        tables.push({
+          conn,
+          schema,
+          name,
+          columns: (table.columns ?? []).map((column) => String(column.name ?? "")).filter(Boolean),
+          enabled: enabledBy.get(conn)?.has(String(table.table ?? "")) ?? false
+        });
+      }
+    }
+  }
+  const expected = expectationsFromFixture({ connections, tables, agentIds: fixture.agents.map((agent) => agent.id) });
+  if (expected.tables !== fixture.tableCount || expected.enabledTables !== fixture.enabledTableCount) {
+    throw new Error(`fixture expectations (${expected.tables}/${expected.enabledTables}) disagree with the fixture manifest`);
+  }
+  return expected;
+}
+
 async function setStubConfig(fixture: FixtureManifest, lines: string[]): Promise<void> {
   await writeFile(fixture.paths.stubConfig, `# connId delayMs mode [kind]\n${lines.join("\n")}\n`, "utf8");
 }
@@ -731,7 +974,7 @@ async function main(): Promise<number> {
         samples.push(...(await runPlaywright(server, warmFixture, runDir, scenario, options, commands)).map(postProcessBrowserSample));
       }
       if (has("probe-load-slow")) {
-        await setStubConfig(warmFixture, ["* 50 ok", `${warmFixture.connectionIds[2]} 3000 ok test`]);
+        await setStubConfig(warmFixture, ["* 50 ok", `${warmFixture.connectionIds[SLOW_PROBE_INDEX]} 3000 ok test`]);
         samples.push(...(await runPlaywright(server, warmFixture, runDir, "probe-load-slow", options, commands, undefined, "connections")).map(postProcessBrowserSample));
         await setStubConfig(warmFixture, ["* 50 ok"]);
       }
@@ -760,7 +1003,7 @@ async function main(): Promise<number> {
     }
   }
 
-  let behavior: { exitCode: number; expected: number; unexpected: number; skipped: number } | null = null;
+  let behavior: BehaviorResult = null;
   if (has("behavior")) {
     const behaviorFixture = await workingFixture(cleanDir, path.join(runDir, "fixture-behavior"));
     const server = await startFixtureServer({ fixture: behaviorFixture, runDir, label: "behavior", auth: "off", displayPrewarm: true });
@@ -773,7 +1016,8 @@ async function main(): Promise<number> {
         exitCode: record.exitCode,
         expected: Number(report?.stats?.expected ?? 0),
         unexpected: Number(report?.stats?.unexpected ?? 0),
-        skipped: Number(report?.stats?.skipped ?? 0)
+        skipped: Number(report?.stats?.skipped ?? 0),
+        flaky: Number(report?.stats?.flaky ?? 0)
       };
     } finally {
       await server.stop();
@@ -781,14 +1025,21 @@ async function main(): Promise<number> {
   }
 
   const summary = summarizeSamples(samples);
-  const budgets = evaluateBudgets(summary);
+  const formal = isFormalRun(options);
+  const budgets = evaluateBudgets(summary, { scenarios: options.scenarios, minSamples: formal ? FORMAL_MIN_SAMPLES : 1 });
   const initialAssets = initialAssetBudget(samples, assets);
-  for (const [route, info] of Object.entries(initialAssets)) {
-    budgets.push({ id: "PERF-08", scenario: "browser-cold", route, metric: "initialJsGzipBytes", stat: "max", limit: 200 * 1024, actual: info.jsGzip, passed: info.jsGzip <= 200 * 1024 });
-    budgets.push({ id: "PERF-08", scenario: "browser-cold", route, metric: "initialCssGzipBytes", stat: "max", limit: 50 * 1024, actual: info.cssGzip, passed: info.cssGzip <= 50 * 1024 });
+  if (has("browser-cold")) {
+    for (const route of PAGE_ROUTES) {
+      const info = initialAssets[route];
+      const complete = Boolean(info) && info!.problems.length === 0 && info!.samples >= (formal ? FORMAL_MIN_SAMPLES : 1);
+      const note = info ? (info.problems.length ? `${info.problems.length} evidence problems` : undefined) : "no samples";
+      budgets.push({ id: "PERF-08", scenario: "browser-cold", route, metric: "initialJsGzipBytes", stat: "max", limit: 200 * 1024, actual: info?.jsGzip ?? null, passed: complete && info!.jsGzip <= 200 * 1024, ...(note ? { note } : {}) });
+      budgets.push({ id: "PERF-08", scenario: "browser-cold", route, metric: "initialCssGzipBytes", stat: "max", limit: 50 * 1024, actual: info?.cssGzip ?? null, passed: complete && info!.cssGzip <= 50 * 1024, ...(note ? { note } : {}) });
+    }
   }
   const sampleFailures = samples.filter((sample) => !sample.ok && !sample.warmup).length;
   const offenders = await scanArtifactsForSecrets(path.join(runDir, "traces"), [readFileSync(warmFixture.paths.loginSecret, "utf8").trim()]);
+  const acceptance = evaluateAcceptance({ options, summary, budgets, assets: initialAssets, behavior, sampleFailures, secretOffenders: offenders.length });
 
   const results = {
     runId,
@@ -820,6 +1071,7 @@ async function main(): Promise<number> {
     summary,
     budgets,
     behavior,
+    acceptance,
     sampleFailures,
     traceSecretOffenders: offenders,
     commands,
@@ -831,11 +1083,8 @@ async function main(): Promise<number> {
   await rm(path.join(runDir, "fixture"), { recursive: true, force: true });
 
   console.log(`[perf:entry] results: ${path.join(runDir, "results.json")}`);
-  const collectionFailed = sampleFailures > 0 || offenders.length > 0;
-  if (options.phase === "baseline") return collectionFailed ? 1 : 0;
-  const budgetFailed = budgets.some((budget) => !budget.passed);
-  const behaviorFailed = behavior !== null && (behavior.exitCode !== 0 || behavior.unexpected > 0);
-  return collectionFailed || budgetFailed || behaviorFailed ? 1 : 0;
+  console.log(`[perf:entry] acceptance: mode=${acceptance.formal ? "formal" : "partial"} status=${acceptance.status}${acceptance.reasons.length ? `\n  - ${acceptance.reasons.join("\n  - ")}` : ""}`);
+  return exitCodeFor(options.phase, acceptance);
 }
 
 function fmt(value: number | null | undefined, digits = 1): string {
@@ -850,8 +1099,17 @@ function renderSummary(results: {
   summary: Record<string, Record<string, RouteSummary>>;
   budgets: BudgetResult[];
   behavior: unknown;
+  acceptance: Acceptance;
 }): string {
-  const lines = [`# Entry performance ${results.phase} (${results.runId})`, "", `commit ${results.sourceCommit}${results.dirty ? " (dirty)" : ""}`, ""];
+  const lines = [
+    `# Entry performance ${results.phase} (${results.runId})`,
+    "",
+    `commit ${results.sourceCommit}${results.dirty ? " (dirty)" : ""}`,
+    "",
+    `acceptance: ${results.acceptance.formal ? "formal" : "partial (smoke — not a Spec pass)"} · ${results.acceptance.status}`,
+    ...results.acceptance.reasons.map((reason) => `- ${reason}`),
+    ""
+  ];
   lines.push("| scenario | route | metric | n | P50 | P95 | max | failures |", "|---|---|---|---:|---:|---:|---:|---:|");
   for (const [scenario, byRoute] of Object.entries(results.summary)) {
     for (const [route, summary] of Object.entries(byRoute)) {
