@@ -2,6 +2,16 @@ import { lstat, mkdir, readdir, realpath, rename, rm, rmdir, writeFile } from "n
 import path from "node:path";
 import { mirrorContentFileToProjectRoot } from "./content-mirror";
 import type { ContentPaths } from "./paths";
+import { scopesForPath, withDisplayWriteBarrier, type DisplayScope } from "./display-generation";
+
+/** Spec 174 §3.2 — display scopes touched by writing these absolute targets. */
+function displayScopesFor(contentPaths: ContentPaths, projectRoot: string, targets: string[]): DisplayScope[] {
+  const accessPaths = [path.join(projectRoot, "webui", "config", "access.yaml")];
+  const override = process.env.LUCY_ACCESS_CONFIG_PATH?.trim();
+  if (override) accessPaths.push(path.resolve(override));
+  const context = { projectRoot, semanticLayer: contentPaths.semanticLayer, accessPaths };
+  return [...new Set(targets.flatMap((target) => scopesForPath(target, context)))];
+}
 
 /**
  * Content-dir prefixes. These resolve relative to {@link ContentPaths.configDir},
@@ -195,7 +205,7 @@ export async function safeWrite(
   const normalized = normalizeRelative(relPath);
   const target = await resolveWritable(contentPaths, projectRoot, normalized);
   await mkdir(path.dirname(target), { recursive: true });
-  await writeFile(target, content, "utf8");
+  await withDisplayWriteBarrier(displayScopesFor(contentPaths, projectRoot, [target]), () => writeFile(target, content, "utf8"));
   await mirrorWriteToSiblingView(contentPaths, projectRoot, normalized, content);
 }
 
@@ -209,7 +219,7 @@ export async function safeWriteBinary(
   const normalized = normalizeRelative(relPath);
   const target = await resolveWritable(contentPaths, projectRoot, normalized);
   await mkdir(path.dirname(target), { recursive: true });
-  await writeFile(target, content);
+  await withDisplayWriteBarrier(displayScopesFor(contentPaths, projectRoot, [target]), () => writeFile(target, content));
   await mirrorWriteToSiblingView(contentPaths, projectRoot, normalized, content);
 }
 
@@ -243,7 +253,7 @@ export async function safeRemove(
     }
     throw error;
   }
-  await rm(target, { force: true });
+  await withDisplayWriteBarrier(displayScopesFor(contentPaths, projectRoot, [target]), () => rm(target, { force: true }));
 }
 
 /**
@@ -300,7 +310,7 @@ export async function safeRemoveDirectory(
   // `rm` on macOS refuses to remove a directory without `recursive`,
   // and `rmdir` already enforces the "empty" invariant we just
   // verified, so it is the safe primitive here.
-  await rmdir(target);
+  await withDisplayWriteBarrier(displayScopesFor(contentPaths, projectRoot, [target]), () => rmdir(target));
 }
 
 /**
@@ -346,7 +356,7 @@ export async function safeRenameDirectory(
   }
 
   await mkdir(path.dirname(target), { recursive: true });
-  await rename(source, target);
+  await withDisplayWriteBarrier(displayScopesFor(contentPaths, projectRoot, [source, target]), () => rename(source, target));
 }
 
 /**
@@ -486,7 +496,7 @@ export async function safeWriteNewSecretPassword(
     }
   }
 
-  await writeFile(target, passwordPlaintext, { encoding: "utf8", mode: 0o600 });
+  await withDisplayWriteBarrier(["C", "L"], () => writeFile(target, passwordPlaintext, { encoding: "utf8", mode: 0o600 }));
   return { relPath: normalized };
 }
 
@@ -514,5 +524,5 @@ export async function safeRemoveSecretPasswordIfExists(
     }
     throw error;
   }
-  await rm(target, { force: true });
+  await withDisplayWriteBarrier(["C", "L"], () => rm(target, { force: true }));
 }

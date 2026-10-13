@@ -11,7 +11,7 @@ const expected = JSON.parse(process.env.PERF_EXPECTED ?? "{}") as { connections:
 const firstConn = () => expected.connectionIds[0]!;
 
 test.skip(!process.env.PERF_BASE_URL || !fixtureDir, "launched by perf:entry only");
-test.describe.configure({ mode: "serial" });
+test.describe.configure({ mode: "default" });
 
 async function connectionCards(page: Page): Promise<number> {
   return page.locator('[data-testid^="connection-card-"]').count();

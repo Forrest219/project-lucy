@@ -15,10 +15,9 @@ import type {
   Agent,
   ConnectionTestResult,
   CreateTokenResponse,
-  McpRuntimeStatus,
-  ProjectInfo,
-  SourcesResponse
+  McpRuntimeStatus
 } from "../../lib/types";
+import { adminAgentsQueryOptions, projectQueryOptions, sourcesQueryOptions } from "../../lib/displayQueryOptions";
 
 export type Step6ConnectAgentProps = {
   connectionId: string;
@@ -41,13 +40,11 @@ export function Step6ConnectAgent({
   const [broadScopeAcknowledged, setBroadScopeAcknowledged] = useState(false);
 
   const { data: projectData } = useQuery({
-    queryKey: queryKeys.project,
-    queryFn: () => apiGet<ProjectInfo>("/api/project")
+    ...projectQueryOptions()
   });
 
   const sourcesQuery = useQuery({
-    queryKey: queryKeys.sources,
-    queryFn: () => apiGet<SourcesResponse>("/api/sources")
+    ...sourcesQueryOptions()
   });
 
   const runtimeQuery = useQuery({
@@ -67,8 +64,7 @@ export function Step6ConnectAgent({
   });
 
   const agentsQuery = useQuery({
-    queryKey: ["admin", "agents"],
-    queryFn: () => apiGet<{ agents: Agent[] }>("/api/admin/agents")
+    ...adminAgentsQueryOptions<{ agents: Agent[] }>()
   });
 
   const agents = agentsQuery.data?.agents ?? [];

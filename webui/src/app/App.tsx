@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 import {
   Boxes,
@@ -78,6 +78,8 @@ import { ObjectDetailDrawer } from "../components/ObjectDetailDrawer";
 import { CommandPalette } from "../components/CommandPalette";
 import { PolicyDegradeBanner } from "../components/PolicyDegradeBanner";
 import { formatLucyVersionLabel } from "../lib/lucyVersion";
+import { setDisplayWriteSettledHandler } from "../lib/apiClient";
+import { DISPLAY_SCOPE_QUERY_KEYS } from "../lib/displayQueryOptions";
 import { findGroupIdForPathname, navGroups, type NavIconKey } from "./navigation";
 import { CallMonitor } from "../pages/ops/CallMonitor";
 
@@ -504,9 +506,25 @@ function RequireAuth({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+/**
+ * Spec 174 §4.2 — after every display-affecting write settles (success or
+ * failure) re-check the server read model instead of trusting the response.
+ */
+function DisplayWriteSync() {
+  const client = useQueryClient();
+  useEffect(() => {
+    setDisplayWriteSettledHandler((scopes) => {
+      for (const scope of scopes) void client.invalidateQueries({ queryKey: DISPLAY_SCOPE_QUERY_KEYS[scope] });
+    });
+    return () => setDisplayWriteSettledHandler(null);
+  }, [client]);
+  return null;
+}
+
 export function App() {
   return (
     <QueryClientProvider client={queryClient}>
+      <DisplayWriteSync />
       <BrowserRouter>
         <AuthProvider>
           <Routes>

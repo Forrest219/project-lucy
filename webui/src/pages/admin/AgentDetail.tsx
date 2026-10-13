@@ -18,6 +18,7 @@ import type {
 } from "../../lib/types";
 import { formatFinalRowsPreviewLabel, formatRowGrantPreviewLabel } from "../../lib/row-grant-preview";
 import { isLucyAdminDataPlaneRole } from "../../lib/lucyAdminRole";
+import { queryKeys } from "../../lib/queryKeys";
 
 type AgentDetailResponse = { agent: Agent; version: string };
 type PatchDryRunResponse = {
@@ -465,7 +466,7 @@ export function AgentDetail() {
       void queryClient.invalidateQueries({ queryKey: ["admin", "policy-runtime"] });
       if (!toastAccessWriteAck(result)) return;
       void queryClient.invalidateQueries({ queryKey: ["admin", "agent", userId] });
-      void queryClient.invalidateQueries({ queryKey: ["admin", "agents"] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.adminAgents });
       setDiffPreview(null);
       setConfirmSave(null);
       goToTab("info");
@@ -484,7 +485,7 @@ export function AgentDetail() {
       void queryClient.invalidateQueries({ queryKey: ["admin", "policy-runtime"] });
       if (!toastAccessWriteAck(result)) return;
       void queryClient.invalidateQueries({ queryKey: ["admin", "agent", userId] });
-      void queryClient.invalidateQueries({ queryKey: ["admin", "agents"] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.adminAgents });
       setDiffPreview(null);
       setConfirmSave(null);
       clearEditForm();
@@ -505,7 +506,7 @@ export function AgentDetail() {
     mutationFn: () => apiDelete<{ written: boolean }>(`/api/admin/agents/${userId}`),
     onSuccess: () => {
       toast.success(`Agent ${userId} 已删除`);
-      void queryClient.invalidateQueries({ queryKey: ["admin", "agents"] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.adminAgents });
       navigate("/admin/agents");
     },
     onError: (err: Error) => toast.error(err.message)

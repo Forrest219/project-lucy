@@ -3,6 +3,7 @@ import path from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import { safeWrite } from "./fs-safe";
 import { loadContentPaths } from "./paths";
+import { bumpDisplayGeneration } from "./display-generation";
 
 // Mirrors webui/src/lib/types.ts CatalogReloadRun. Keeping a local copy avoids a
 // server→src cycle just for the JSON shape. Fields must stay in lock-step.
@@ -238,6 +239,18 @@ async function listManifests(projectRoot: string, connId: string): Promise<Manif
 export async function reloadCatalog(
   projectRoot: string,
   input: ReloadCatalogInput = {}
+): Promise<CatalogReloadRun> {
+  try {
+    return await reloadCatalogUnnotified(projectRoot, input);
+  } finally {
+    // Spec 174 §3.2 — an explicit catalog reload invalidates catalog-derived display data.
+    bumpDisplayGeneration(["D", "P"]);
+  }
+}
+
+async function reloadCatalogUnnotified(
+  projectRoot: string,
+  input: ReloadCatalogInput
 ): Promise<CatalogReloadRun> {
   const startedAt = new Date();
   const warnings: CatalogReloadWarning[] = [];

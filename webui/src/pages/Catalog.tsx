@@ -10,7 +10,6 @@ import { StatusBadge } from "../components/StatusBadge";
 import { PageHeader } from "../components/PageHeader";
 import { AsyncRegion, asyncStatus } from "../components/AsyncRegion";
 import { RowMoreMenu } from "../components/RowMoreMenu";
-import { apiGet } from "../lib/apiClient";
 import {
   CATALOG_SEARCH_COMMIT_MS,
   createCatalogVisitId,
@@ -18,8 +17,8 @@ import {
   type CatalogNavigationContextLevel,
   type CatalogNavigationEventType
 } from "../lib/catalogNavigationUsage";
-import { queryKeys } from "../lib/queryKeys";
-import type { CompletionStatus, SourcesResponse, SourceSummary } from "../lib/types";
+import type { CompletionStatus, SourceSummary } from "../lib/types";
+import { sourcesQueryOptions } from "../lib/displayQueryOptions";
 
 const STATUS_LABELS: Record<CompletionStatus, string> = {
   not_started: "未开始",
@@ -185,8 +184,7 @@ export function Catalog() {
   }
 
   const sourcesQuery = useQuery({
-    queryKey: queryKeys.sources,
-    queryFn: () => apiGet<SourcesResponse>("/api/sources")
+    ...sourcesQueryOptions()
   });
   const { data } = sourcesQuery;
   const sourcesStatus = asyncStatus(sourcesQuery);

@@ -4,6 +4,7 @@ import path from "node:path";
 import { parse, stringify } from "yaml";
 import { auditedWriteFile } from "./config-audit-write.js";
 import type { ConfigAuditAssetKind, ConfigAuditActorType } from "./audit.js";
+import { withDisplayWriteBarrier } from "../display-generation.js";
 
 export const ACCESS_YAML_REL = "webui/config/access.yaml";
 
@@ -103,7 +104,17 @@ export async function readAccessYamlVersion(projectRoot: string): Promise<{ raw:
   return { raw, version: computeVersion(raw, s.mtimeMs) };
 }
 
+/**
+ * Spec 174 §3.2 — the display barrier covers persist → policy commit/ack →
+ * optional direct rollback, so no intermediate access version is published.
+ */
 export async function writeAccessYaml(
+  ...args: Parameters<typeof writeAccessYamlInBarrier>
+): ReturnType<typeof writeAccessYamlInBarrier> {
+  return withDisplayWriteBarrier(["P"], () => writeAccessYamlInBarrier(...args));
+}
+
+async function writeAccessYamlInBarrier(
   projectRoot: string,
   config: YamlAccessConfig,
   audit?: {

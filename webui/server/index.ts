@@ -5,7 +5,15 @@ import { fileURLToPath } from "node:url";
 import Fastify, { type FastifyError } from "fastify";
 import { parse, parseDocument } from "yaml";
 import { buildProxy } from "./proxy/mcp-proxy.js";
-import { registerEntryPerformanceTiming, withRequestTiming } from "./entry-performance-timing";
+import { addTiming, registerEntryPerformanceTiming, withRequestTiming } from "./entry-performance-timing";
+import { withDisplayWriteBarrier } from "./display-generation";
+import {
+  getDisplaySnapshot,
+  prewarmDisplaySnapshots,
+  registerDisplayPrewarmer,
+  startDisplayReconciler,
+  stopDisplayReconciler
+} from "./display-snapshot";
 import { changedFiles, previewDiff, type SessionWrittenFile } from "./diff";
 import { joinCandidatesPath, readJoinCandidates, writeJoinCandidates, type JoinCandidate } from "./joins-sidecar";
 import { formatConnectionErrorMessage } from "./connection-errors";
@@ -539,6 +547,26 @@ async function executionAckForConnection(connectionId: string): Promise<{
   }
 }
 
+/** Spec 174 §3.2 — `/api/sources` envelope as a versioned, pre-serialized display snapshot. */
+function getSourcesDisplaySnapshot(projectRoot: string) {
+  return getDisplaySnapshot("sources", ["D", "P", "C"], async (version) => {
+    const listing = await listSourcesWithManifests(projectRoot);
+    const started = performance.now();
+    const payload = JSON.stringify({
+      ok: true,
+      data: {
+        tables: listing.tables,
+        manifestSchemas: listing.manifestSchemas,
+        meta: sourcesDisplayMeta(listing, version ?? undefined)
+      }
+    });
+    addTiming("serialize", performance.now() - started);
+    return payload;
+  });
+}
+
+registerDisplayPrewarmer("sources", async () => getSourcesDisplaySnapshot(await resolveProjectRoot()));
+
 export function buildServer() {
   const app = Fastify({ logger: true });
   const writtenFiles: SessionWrittenFile[] = [];
@@ -546,6 +574,7 @@ export function buildServer() {
 
   registerWebSecurity(app);
   registerEntryPerformanceTiming(app);
+  app.addHook("onClose", async () => stopDisplayReconciler());
   app.addHook("onRequest", requireWebuiAuthHook);
 
   app.setErrorHandler((error: SupportedError, _request, reply) => {
@@ -562,6 +591,8 @@ export function buildServer() {
     if (detail !== undefined) {
       payload.error.detail = detail;
     }
+    const retryAfter = (error as { retryAfterSeconds?: unknown }).retryAfterSeconds;
+    if (typeof retryAfter === "number") reply.header("Retry-After", String(retryAfter));
 
     reply.status(statusCode).send(payload);
   });
@@ -614,17 +645,10 @@ export function buildServer() {
     };
   });
 
-  app.get("/api/sources", async (request) => withRequestTiming(request, async () => {
+  app.get("/api/sources", async (request, reply) => withRequestTiming(request, async () => {
     const projectRoot = await resolveProjectRoot();
-    const listing = await listSourcesWithManifests(projectRoot);
-    return {
-      ok: true,
-      data: {
-        tables: listing.tables,
-        manifestSchemas: listing.manifestSchemas,
-        meta: sourcesDisplayMeta(listing)
-      }
-    };
+    const snapshot = await getSourcesDisplaySnapshot(projectRoot);
+    return reply.type("application/json; charset=utf-8").send(snapshot.payload);
   }));
 
   app.get<{
@@ -1360,6 +1384,8 @@ export function buildServer() {
       return { ok: true, data: { diff, proposedYaml, oldEnabledTables, newEnabledTables, warnings } };
     }
 
+    // Spec 174 §3.2 — barrier spans ktx.yaml write → catalog reload → policy commit.
+    return withDisplayWriteBarrier(["C", "D", "P", "L"], async () => {
     const { auditId } = await auditedWriteFile(projectRoot, "ktx.yaml", proposedYaml, {
       enabled: true,
       changeType: "enabled_tables_update",
@@ -1420,6 +1446,7 @@ export function buildServer() {
         runtimeAck: policyRuntimeAck
       }
     };
+    });
   });
 
   app.post<{
@@ -2033,8 +2060,19 @@ export async function startServer(options: { displayPrewarm?: boolean } = {}): P
   const app = buildServer();
   const host = process.env.LUCY_WEBUI_HOST ?? "127.0.0.1";
   const port = Number(process.env.LUCY_WEBUI_PORT ?? DEFAULT_WEBUI_PORT);
+  // Spec 174 §3.2 — display snapshots are only trusted while the reconciler runs.
+  try {
+    await startDisplayReconciler();
+  } catch (error) {
+    console.warn("[display-snapshot] reconciler unavailable; display reads stay uncached:", error);
+  }
   await app.listen({ host, port });
   const t3 = performance.now();
+  let displayReadyMs: number | null = null;
+  if (options.displayPrewarm !== false) {
+    await prewarmDisplaySnapshots();
+    displayReadyMs = performance.now() - t3;
+  }
 
   const { server: proxy, host: proxyHost, port: proxyPort } = buildProxy();
   await new Promise<void>((resolve, reject) => {
@@ -2048,7 +2086,7 @@ export async function startServer(options: { displayPrewarm?: boolean } = {}): P
     proxy,
     host,
     port,
-    timings: { policyMs: t1 - t0, catalogScanMs: t2 - t1, listenMs: t3 - t2, displayReadyMs: null }
+    timings: { policyMs: t1 - t0, catalogScanMs: t2 - t1, listenMs: t3 - t2, displayReadyMs }
   };
 }
 

@@ -12,6 +12,8 @@ import { MetricCard } from "../../components/MetricCard";
 import { buildObjectDetailSearch } from "../../lib/objectDetail";
 import { RowMoreMenu } from "../../components/RowMoreMenu";
 import { isLucyAdminDataPlaneRole } from "../../lib/lucyAdminRole";
+import { adminAgentsQueryOptions } from "../../lib/displayQueryOptions";
+import { queryKeys } from "../../lib/queryKeys";
 
 type AgentsResponse = {
   agents: Agent[];
@@ -370,8 +372,7 @@ export function AgentList() {
   const [filterActivity, setFilterActivity] = useState<"all" | "active" | "inactive">("all");
 
   const agentsQuery = useQuery({
-    queryKey: ["admin", "agents"],
-    queryFn: () => apiGet<AgentsResponse>("/api/admin/agents")
+    ...adminAgentsQueryOptions<AgentsResponse>()
   });
   const { data, error } = agentsQuery;
   const { data: rolesData } = useQuery({
@@ -816,7 +817,7 @@ export function AgentList() {
           onClose={() => setShowNew(false)}
           onCreated={(id) => {
             setShowNew(false);
-            void queryClient.invalidateQueries({ queryKey: ["admin", "agents"] });
+            void queryClient.invalidateQueries({ queryKey: queryKeys.adminAgents });
             navigate(`/admin/agents/${id}?tab=tokens`);
           }}
         />

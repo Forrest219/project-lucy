@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { CheckSquare, Square, Table2, AlertCircle } from "lucide-react";
-import { apiGet, apiPut, ApiError } from "../../lib/apiClient";
-import { queryKeys } from "../../lib/queryKeys";
-import type { SourcesResponse, SourceSummary } from "../../lib/types";
+import { apiPut, ApiError } from "../../lib/apiClient";
+import type { SourceSummary } from "../../lib/types";
+import { sourcesQueryOptions } from "../../lib/displayQueryOptions";
 
 export type Step3SelectTablesProps = {
   connectionId: string;
@@ -26,8 +26,7 @@ export function Step3SelectTables({
   const [query, setQuery] = useState("");
 
   const { data: sourcesData, isLoading } = useQuery({
-    queryKey: queryKeys.sources,
-    queryFn: () => apiGet<SourcesResponse>("/api/sources")
+    ...sourcesQueryOptions()
   });
 
   const availableTables: SourceSummary[] = useMemo(

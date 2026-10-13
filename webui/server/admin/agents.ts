@@ -39,6 +39,9 @@ import { MCP_PROTOCOL_METHOD_SQL_LIST } from "../proxy/mcp-request-classificatio
 import { readAuditWriteHealth, type AuditWriteHealthSnapshot } from "../proxy/audit-write-health.js";
 import { countEntryPerf, timeAsync, withRequestTiming } from "../entry-performance-timing.js";
 import { readAccessSnapshot, resolvePermissionBatch, type PermissionBatch } from "./permission-display.js";
+import { generationKey, hasPendingDisplayWrite } from "../display-generation.js";
+import { DisplaySnapshotBusyError, getDisplaySnapshot, registerDisplayPrewarmer } from "../display-snapshot.js";
+import { withDisplayWriteBarrier } from "../display-generation.js";
 
 /** Spec 129: Agent write paths must not materialize reference templates into access.yaml. */
 
@@ -121,7 +124,17 @@ async function readAccessYaml(projectRoot: string): Promise<{ config: YamlAccess
   return { config, raw, version };
 }
 
+/**
+ * Spec 174 §3.2 — the display barrier covers persist → policy commit/ack →
+ * optional direct rollback, so no intermediate access version is published.
+ */
 async function writeAccessYaml(
+  ...args: Parameters<typeof writeAccessYamlInBarrier>
+): ReturnType<typeof writeAccessYamlInBarrier> {
+  return withDisplayWriteBarrier(["P"], () => writeAccessYamlInBarrier(...args));
+}
+
+async function writeAccessYamlInBarrier(
   projectRoot: string,
   config: YamlAccessConfig,
   audit?: {
@@ -928,23 +941,70 @@ async function userToAgentWithPermissions(
   };
 }
 
+type AgentPermissionPreview = {
+  effectivePermissions?: ReturnType<typeof effectivePermissionsToPreview>;
+  permissionWarnings: string[];
+};
+
+type AgentPermissionSection = {
+  previews: Record<string, AgentPermissionPreview>;
+  permissionsState: "ok" | "partial" | "unavailable";
+  runtimeConsistency: "matched" | "unconfirmed";
+};
+
+function permissionPreviewFromBatch(batch: PermissionBatch, userId: string): AgentPermissionPreview {
+  const resolved = batch.results.get(userId);
+  if (!resolved) return { permissionWarnings: [batch.problem ?? "permissions_unavailable"] };
+  return {
+    effectivePermissions: resolved.ok ? effectivePermissionsToPreview(resolved.permissions) : undefined,
+    permissionWarnings: resolved.ok ? [] : [resolved.reason]
+  };
+}
+
+/**
+ * Spec 174 §3.1/§3.2 — permission previews for the list from one access
+ * snapshot, cached as a display snapshot keyed by that snapshot's version.
+ * Dynamic audit statistics are never part of this cache.
+ */
+async function agentPermissionSection(
+  projectRoot: string,
+  users: YamlUser[],
+  raw: string,
+  version: string
+): Promise<AgentPermissionSection> {
+  const snapshot = await getDisplaySnapshot("agent-permissions", ["P", "D", "C"], async () => {
+    const accessSnapshot = await readAccessSnapshot(projectRoot, raw, version);
+    const userIds = users.map((user) => user.id);
+    const batch = await resolvePermissionBatch(accessSnapshot, userIds);
+    const section: AgentPermissionSection = {
+      previews: Object.fromEntries(userIds.map((id) => [id, permissionPreviewFromBatch(batch, id)])),
+      permissionsState: agentPermissionsState(users, batch),
+      runtimeConsistency: batch.runtimeConsistency
+    };
+    return JSON.stringify(section);
+  }, { extraKey: version });
+  return JSON.parse(snapshot.payload) as AgentPermissionSection;
+}
+
+registerDisplayPrewarmer("agent-permissions", async () => {
+  const projectRoot = await resolveProjectRoot();
+  const { config, raw, version } = await readAccessYaml(projectRoot);
+  await agentPermissionSection(projectRoot, config.users, raw, version);
+});
+
 /** Spec 174 §3.1 — list view: permissions from the shared read-only batch. */
 function userToAgentWithBatchPermissions(
   user: YamlUser,
-  batch: PermissionBatch,
+  preview: AgentPermissionPreview | undefined,
   stats?: Awaited<ReturnType<typeof getStats>>,
   tokenUsage?: Map<string, TokenUsageSnapshot>,
   timeline?: AgentConfigTimeline
 ) {
   const agent = userToAgent(user, stats, tokenUsage, timeline);
-  const resolved = batch.results.get(user.id);
-  if (!resolved) {
-    return { ...agent, effectivePermissions: undefined, permissionWarnings: [batch.problem ?? "permissions_unavailable"] };
-  }
   return {
     ...agent,
-    effectivePermissions: resolved.ok ? effectivePermissionsToPreview(resolved.permissions) : undefined,
-    permissionWarnings: resolved.ok ? [] : [resolved.reason]
+    effectivePermissions: preview?.effectivePermissions,
+    permissionWarnings: preview?.permissionWarnings ?? ["permissions_unavailable"]
   };
 }
 
@@ -1115,10 +1175,20 @@ export function registerAgentRoutes(app: FastifyInstance) {
   // GET /api/admin/agents
   app.get("/api/admin/agents", async (request) => withRequestTiming(request, async () => {
     const projectRoot = await resolveProjectRoot();
+    // Spec 174 §3.1 — users / version / permissions come from one access snapshot;
+    // if access changes while dynamic stats are read, rebuild the whole batch (≤3 attempts).
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      const accessGeneration = generationKey(["P"]);
+      const listing = await buildAgentList(projectRoot);
+      if (generationKey(["P"]) === accessGeneration && !hasPendingDisplayWrite(["P"])) return listing;
+    }
+    throw new DisplaySnapshotBusyError();
+  }));
+
+  async function buildAgentList(projectRoot: string) {
     const { config, raw, version } = await timeAsync("access", () => readAccessYaml(projectRoot));
     const userIds = config.users.map((user) => user.id);
-    const accessSnapshot = await readAccessSnapshot(projectRoot, raw, version);
-    const permissionBatch = await timeAsync("permissions", () => resolvePermissionBatch(accessSnapshot, userIds));
+    const permissionSection = await timeAsync("permissions", () => agentPermissionSection(projectRoot, config.users, raw, version));
     const window = build7dWindow();
     const [tokenUsage, timelineMap, statsMap, globalActiveTokenCount] = await timeAsync("stats", () => Promise.all([
       getLastUsedMap(userIds),
@@ -1129,7 +1199,7 @@ export function registerAgentRoutes(app: FastifyInstance) {
     const agents = config.users.map((user) =>
       userToAgentWithBatchPermissions(
         user,
-        permissionBatch,
+        permissionSection.previews[user.id],
         statsMap.get(user.id) ?? unavailableStats(user, window),
         tokenUsage.get(user.id),
         timelineMap.get(user.id)
@@ -1141,7 +1211,6 @@ export function registerAgentRoutes(app: FastifyInstance) {
       hasTokenPrefixCollision(config.users),
       readAuditWriteHealth()
     );
-    const permissionsState = agentPermissionsState(config.users, permissionBatch);
     return {
       ok: true,
       data: {
@@ -1151,12 +1220,12 @@ export function registerAgentRoutes(app: FastifyInstance) {
         meta: {
           snapshotVersion: version,
           generatedAt: new Date().toISOString(),
-          permissionsState,
-          runtimeConsistency: permissionBatch.runtimeConsistency
+          permissionsState: permissionSection.permissionsState,
+          runtimeConsistency: permissionSection.runtimeConsistency
         }
       }
     };
-  }));
+  }
 
   // GET /api/admin/roles — moved to ./roles.ts (M12)
 

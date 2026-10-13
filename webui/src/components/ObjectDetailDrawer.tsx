@@ -21,6 +21,7 @@ import type {
   SourceSummary,
   SourcesResponse
 } from "../lib/types";
+import { adminAgentsQueryOptions } from "../lib/displayQueryOptions";
 
 type AgentsResponse = { agents: Agent[]; version?: string };
 
@@ -217,8 +218,7 @@ type AgentTarget = Extract<NonNullable<ReturnType<typeof parseObjectDetailSearch
 
 function AgentDetailBody({ target }: { target: AgentTarget }) {
   const agentsQuery = useQuery({
-    queryKey: ["admin", "agents"],
-    queryFn: () => apiGet<AgentsResponse>("/api/admin/agents")
+    ...adminAgentsQueryOptions<AgentsResponse>()
   });
   const match: Agent | undefined = (agentsQuery.data?.agents ?? []).find(
     (agent: Agent) => agent.id === target.agentId

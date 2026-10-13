@@ -22,7 +22,6 @@ import type {
   ExecutionRuntimeStatus,
   LiveSchemasResponse,
   McpRuntimeStatus,
-  ProjectInfo,
   SourceSummary,
   SourcesResponse
 } from "../../lib/types";
@@ -51,6 +50,7 @@ import { ConnectionTestDrawer } from "../../components/connections";
 import { PageHeader } from "../../components/PageHeader";
 import { AsyncRegion, asyncStatus } from "../../components/AsyncRegion";
 import { MetricCard } from "./MetricCard";
+import { projectQueryOptions, sourcesQueryOptions } from "../../lib/displayQueryOptions";
 
 /** Spec 107: client staleTime aligned with server TTL. */
 const LIVE_SCHEMAS_STALE_MS = 10 * 60 * 1000;
@@ -401,12 +401,10 @@ function liveTableCountCell(
 export function ConnectionOverview() {
   const queryClient = useQueryClient();
   const projectQuery = useQuery({
-    queryKey: queryKeys.project,
-    queryFn: () => apiGet<ProjectInfo>("/api/project")
+    ...projectQueryOptions()
   });
   const sourcesQuery = useQuery({
-    queryKey: queryKeys.sources,
-    queryFn: () => apiGet<SourcesResponse>("/api/sources")
+    ...sourcesQueryOptions()
   });
   const catalogReloadsQuery = useQuery({
     queryKey: queryKeys.catalogReloads,

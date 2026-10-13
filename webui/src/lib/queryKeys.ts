@@ -19,6 +19,8 @@ export const queryKeys = {
   /** Spec 108: per-connection connectivity probe (`POST .../test`). */
   connectionHealth: (connId: string) => ["connections", connId, "health"] as const,
   mcpRuntime: ["admin", "mcp-runtime"] as const,
+  /** Agent list (dynamic stats; staleTime 0). Spec 174: one key for every consumer / invalidation. */
+  adminAgents: ["admin", "agents"] as const,
   // M13 Ingest sidecar (`.ktx-ui/ingest-runs.json`) — kept for the deprecated
   // `/api/connections/:connId/ingest` alias. New UI surfaces should not use it.
   ingestRuns: ["connections", "ingest-runs"] as const,

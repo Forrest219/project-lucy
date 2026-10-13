@@ -19,6 +19,7 @@ import { readConnections } from "./project";
 import { loadContentPaths } from "./paths";
 import { stripManifestOnlyColumnKeys } from "./semantic-overlay-sanitize";
 import { countEntryPerf, timeAsync } from "./entry-performance-timing";
+import { withDisplayWriteBarrier } from "./display-generation";
 
 const TABLE_KEYS = new Set(["table", "descriptions", "grain", "columns", "measures", "segments", "joins"]);
 
@@ -730,18 +731,21 @@ export async function writeSourcePatch(
   patch: TablePatch
 ): Promise<SourcePreview> {
   const preview = await buildSourcePatchPreview(projectRoot, conn, schema, table, patch);
-  for (const file of preview.files) {
-    await auditedWriteFile(projectRoot, file.filePath, file.proposedYaml, {
-      enabled: true,
-      changeType: "semantic_table_save",
-      assetKind: "semantic",
-      actorType: "ui_admin",
-      source: "semantic_layer_patch_api",
-      targetId: `${conn}:${schema}:${table}`,
-      diff: file.diff,
-      operation: "save"
-    });
-  }
+  // Spec 174 §3.2 — one barrier over the multi-file write (partial failure still invalidates).
+  await withDisplayWriteBarrier(["D", "P"], async () => {
+    for (const file of preview.files) {
+      await auditedWriteFile(projectRoot, file.filePath, file.proposedYaml, {
+        enabled: true,
+        changeType: "semantic_table_save",
+        assetKind: "semantic",
+        actorType: "ui_admin",
+        source: "semantic_layer_patch_api",
+        targetId: `${conn}:${schema}:${table}`,
+        diff: file.diff,
+        operation: "save"
+      });
+    }
+  });
   return preview;
 }
 
@@ -918,17 +922,19 @@ export async function writeSourceYamlImport(
   yaml: string
 ): Promise<SourcePreview> {
   const preview = await previewSourceYamlImport(projectRoot, conn, schema, table, yaml);
-  for (const file of preview.files) {
-    await auditedWriteFile(projectRoot, file.filePath, file.proposedYaml, {
-      enabled: true,
-      changeType: "semantic_table_import",
-      assetKind: "semantic",
-      actorType: "ui_admin",
-      source: "semantic_layer_import_api",
-      targetId: `${conn}:${schema}:${table}`,
-      diff: file.diff,
-      operation: "import"
-    });
-  }
+  await withDisplayWriteBarrier(["D", "P"], async () => {
+    for (const file of preview.files) {
+      await auditedWriteFile(projectRoot, file.filePath, file.proposedYaml, {
+        enabled: true,
+        changeType: "semantic_table_import",
+        assetKind: "semantic",
+        actorType: "ui_admin",
+        source: "semantic_layer_import_api",
+        targetId: `${conn}:${schema}:${table}`,
+        diff: file.diff,
+        operation: "import"
+      });
+    }
+  });
   return preview;
 }

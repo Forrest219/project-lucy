@@ -32,6 +32,7 @@ import {
   type TableGrant,
 } from "../../lib/rolePermissionDraft";
 import { isDeleteProtectedRole, LUCY_ADMIN_ROLE_ID } from "../../lib/lucyAdminRole";
+import { queryKeys } from "../../lib/queryKeys";
 
 type PageMode = "create" | "edit" | "copy";
 
@@ -450,7 +451,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
     void queryClient.invalidateQueries({ queryKey: ["admin", "policy-runtime"] });
     if (!toastAccessWriteAck(result, message)) return false;
     void queryClient.invalidateQueries({ queryKey: ["admin", "roles"] });
-    void queryClient.invalidateQueries({ queryKey: ["admin", "agents"] });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.adminAgents });
     void queryClient.invalidateQueries({ queryKey: ["admin", "role", targetRoleId] });
     setBaseline(draft);
     setRejectedTools([]);
@@ -512,7 +513,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
         setReview({ kind: "delete", draftHash: rolePermissionDraftHash(draft), version: preview.version ?? vars.version, diff: preview.diff, proposedYaml: preview.proposedYaml, impact: derivePermissionImpact(draft, empty, [], detail?.users ?? []) });
       } else if (toastAccessWriteAck(data as AccessWriteAck, `Role '${roleId}' 已删除`)) {
         void queryClient.invalidateQueries({ queryKey: ["admin", "roles"] });
-        void queryClient.invalidateQueries({ queryKey: ["admin", "agents"] });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.adminAgents });
         navigate("/admin/roles");
       }
     },

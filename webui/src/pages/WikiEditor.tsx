@@ -33,7 +33,6 @@ import {
   wikiDraftVersion
 } from "../lib/wiki";
 import type {
-  SourcesResponse,
   WikiFrontmatter,
   WikiListResponse,
   WikiMovePreview,
@@ -53,6 +52,7 @@ import type {
   WikiSummary,
   WikiUploadPreview
 } from "../lib/types";
+import { sourcesQueryOptions } from "../lib/displayQueryOptions";
 
 type PageMode = "library" | "loaded" | "draft";
 type WikiUiMode = "read" | "edit";
@@ -106,8 +106,7 @@ export function WikiEditor() {
     queryFn: () => apiGet<WikiListResponse>("/api/wiki")
   });
   const sourcesQuery = useQuery({
-    queryKey: queryKeys.sources,
-    queryFn: () => apiGet<SourcesResponse>("/api/sources")
+    ...sourcesQueryOptions()
   });
 
   const pages = listQuery.data?.pages ?? [];

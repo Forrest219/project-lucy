@@ -7,6 +7,7 @@ import { apiGet, apiPost } from "../../lib/apiClient";
 import { McpRuntimeStatusPanel } from "../../components/McpRuntimeStatusPanel";
 import type { Agent, McpRuntimeCanaryResult, McpRuntimeStatus } from "../../lib/types";
 import { queryKeys } from "../../lib/queryKeys";
+import { adminAgentsQueryOptions } from "../../lib/displayQueryOptions";
 
 type AgentsResponse = { agents: Agent[] };
 type McpToolsResponse = { tools: Array<{ name: string; description?: string }> };
@@ -59,8 +60,7 @@ export function McpPlayground() {
   const [runtimeConnectionId, setRuntimeConnectionId] = useState("");
 
   const agentsQuery = useQuery({
-    queryKey: ["admin", "agents"],
-    queryFn: () => apiGet<AgentsResponse>("/api/admin/agents")
+    ...adminAgentsQueryOptions<AgentsResponse>()
   });
   const toolsQuery = useQuery({
     queryKey: ["admin", "mcp-tools"],

@@ -9,11 +9,11 @@ import type {
   CompletionStatus,
   ConnectionInfo,
   ConnectionTablesResponse,
-  SourceSummary,
-  SourcesResponse
+  SourceSummary
 } from "../../lib/types";
 import { DiffViewer } from "../../components/DiffViewer";
 import { PageHeader } from "../../components/PageHeader";
+import { sourcesQueryOptions } from "../../lib/displayQueryOptions";
 
 function missingManifestSummaryCopy(items: Array<{ schema: string }>): string {
   if (items.length === 1) {
@@ -248,8 +248,7 @@ export function TableWhitelist() {
   const connections = connectionsQuery.data?.connections ?? [];
 
   const sourcesQuery = useQuery({
-    queryKey: queryKeys.sources,
-    queryFn: () => apiGet<SourcesResponse>("/api/sources")
+    ...sourcesQueryOptions()
   });
 
   const tablesQueries = useQueries({

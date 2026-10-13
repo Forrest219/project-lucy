@@ -31,6 +31,9 @@ import { previewDiff } from "./diff";
 import { assertEndpointGate, type EndpointFlags } from "./connection-endpoint-gate.js";
 import { withKtxYamlWriteLock } from "./ktx-yaml-write-lock.js";
 import type { ConnectionTestResult } from "./ktx";
+import { withDisplayWriteBarrier, type DisplayScope } from "./display-generation";
+
+const KTX_YAML_DISPLAY_SCOPES: DisplayScope[] = ["C", "D", "P", "L"];
 
 export type ProjectOptions = {
   projectRoot?: string;
@@ -418,7 +421,9 @@ export async function writeKtxYaml(
 ): Promise<WriteKtxYamlResult> {
   if (!opts.dryRun && !opts.lockHeld) {
     return withKtxYamlWriteLock(() =>
-      writeKtxYaml(root, mutator, { ...opts, lockHeld: true })
+      withDisplayWriteBarrier(KTX_YAML_DISPLAY_SCOPES, () =>
+        writeKtxYaml(root, mutator, { ...opts, lockHeld: true })
+      )
     );
   }
   const filePath = path.join(root, "ktx.yaml");
@@ -604,6 +609,18 @@ export async function addSchema(
   dryRun: boolean,
   options: AddSchemaOptions = {}
 ): Promise<AddSchemaPreview | AddSchemaResult> {
+  // Spec 174 §3.2 — the display barrier spans the whole confirmed transaction (incl. rollback).
+  if (dryRun) return addSchemaUnbarriered(root, connId, schema, dryRun, options);
+  return withDisplayWriteBarrier(KTX_YAML_DISPLAY_SCOPES, () => addSchemaUnbarriered(root, connId, schema, dryRun, options));
+}
+
+async function addSchemaUnbarriered(
+  root: string,
+  connId: string,
+  schema: string,
+  dryRun: boolean,
+  options: AddSchemaOptions = {}
+): Promise<AddSchemaPreview | AddSchemaResult> {
   if (typeof schema !== "string" || !SCHEMA_NAME_RE.test(schema)) {
     throw new SchemaNameInvalidError(
       `Schema name '${schema}' does not match pattern ${SCHEMA_NAME_PATTERN}`
@@ -726,6 +743,18 @@ export function removeSchema(
   options?: RemoveSchemaOptions
 ): Promise<RemoveSchemaPreview | RemoveSchemaResult>;
 export async function removeSchema(
+  root: string,
+  connId: string,
+  schema: string,
+  dryRun: boolean,
+  options: RemoveSchemaOptions = {}
+): Promise<RemoveSchemaPreview | RemoveSchemaResult> {
+  // Spec 174 §3.2 — the display barrier spans the whole confirmed transaction (incl. rollback).
+  if (dryRun) return removeSchemaUnbarriered(root, connId, schema, dryRun, options);
+  return withDisplayWriteBarrier(KTX_YAML_DISPLAY_SCOPES, () => removeSchemaUnbarriered(root, connId, schema, dryRun, options));
+}
+
+async function removeSchemaUnbarriered(
   root: string,
   connId: string,
   schema: string,
@@ -1077,6 +1106,17 @@ export function removeConnection(
   options?: RemoveConnectionOptions
 ): Promise<DeleteConnectionPreview | DeleteConnectionResult>;
 export async function removeConnection(
+  root: string,
+  connId: string,
+  dryRun: boolean,
+  options: RemoveConnectionOptions = {}
+): Promise<DeleteConnectionPreview | DeleteConnectionResult> {
+  // Spec 174 §3.2 — the display barrier spans the whole confirmed transaction (incl. rollback).
+  if (dryRun) return removeConnectionUnbarriered(root, connId, dryRun, options);
+  return withDisplayWriteBarrier(KTX_YAML_DISPLAY_SCOPES, () => removeConnectionUnbarriered(root, connId, dryRun, options));
+}
+
+async function removeConnectionUnbarriered(
   root: string,
   connId: string,
   dryRun: boolean,
@@ -1440,8 +1480,11 @@ export async function createConnection(
   options: CreateConnectionOptions = {}
 ): Promise<CreateConnectionPreview | CreateConnectionResult> {
   if (dryRun === false && !options.endpointLockHeld) {
+    // Spec 174 §3.2 — barrier covers ktx.yaml + secret writes, audit and rollbackWrittenConnection.
     return withKtxYamlWriteLock(() =>
-      createConnection(root, rawInput, false, { ...options, endpointLockHeld: true })
+      withDisplayWriteBarrier(KTX_YAML_DISPLAY_SCOPES, () =>
+        createConnection(root, rawInput, false, { ...options, endpointLockHeld: true })
+      )
     );
   }
   const input = validateCreateConnectionInput(rawInput);

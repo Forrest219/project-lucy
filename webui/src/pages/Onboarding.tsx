@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiGet } from "../lib/apiClient";
 import { queryKeys } from "../lib/queryKeys";
-import type { Agent, ChangedFilesResponse, McpEndpointInfo, ProjectInfo, SourcesResponse } from "../lib/types";
+import type { Agent, ChangedFilesResponse, McpEndpointInfo } from "../lib/types";
 import { buildMcpConfig } from "../lib/mcpEndpoint";
 import { PageHeader } from "../components/PageHeader";
 import { AsyncRegion, asyncStatus, type AsyncRegionStatus } from "../components/AsyncRegion";
@@ -20,6 +20,7 @@ import {
   type ServiceHealthSummary,
   severityLabelBySeverity
 } from "../lib/opsDashboard";
+import { adminAgentsQueryOptions, projectQueryOptions, sourcesQueryOptions } from "../lib/displayQueryOptions";
 
 type AgentsResponse = { agents: Agent[] };
 
@@ -292,12 +293,10 @@ export function Onboarding() {
   // we have no timestamp to render — avoids burning a timer for nothing.
   const [now, setNow] = useState<Date>(() => new Date());
   const projectQuery = useQuery({
-    queryKey: queryKeys.project,
-    queryFn: () => apiGet<ProjectInfo>("/api/project")
+    ...projectQueryOptions()
   });
   const sourcesQuery = useQuery({
-    queryKey: queryKeys.sources,
-    queryFn: () => apiGet<SourcesResponse>("/api/sources")
+    ...sourcesQueryOptions()
   });
   const diffQuery = useQuery({
     queryKey: queryKeys.diff,
@@ -305,8 +304,7 @@ export function Onboarding() {
     refetchOnMount: "always"
   });
   const agentsQuery = useQuery({
-    queryKey: ["admin", "agents"],
-    queryFn: () => apiGet<AgentsResponse>("/api/admin/agents"),
+    ...adminAgentsQueryOptions<AgentsResponse>(),
     refetchOnMount: "always"
   });
   // Spec 128 Task 4: query bounded 30-day eval summary; never use limit=1 count.

@@ -4,6 +4,7 @@ import path from "node:path";
 import { stringify, parse } from "yaml";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { auditedWriteFile } from "./config-audit-write.js";
+import { withDisplayWriteBarrier } from "../display-generation.js";
 import { resolveProjectRoot } from "../project.js";
 import { getAuditDb } from "./audit.js";
 import type { YamlAccessConfig } from "./agents.js";
@@ -416,26 +417,29 @@ export function registerTokenRoutes(app: FastifyInstance) {
       newUsers[userIndex] = updatedUser;
       const newConfig: YamlAccessConfig = { ...config, users: newUsers };
       const content = stringify(newConfig, { lineWidth: 0 });
-      await auditedWriteFile(projectRoot, ACCESS_YAML_REL, content, {
-        enabled: true,
-        changeType: "token_create",
-        assetKind: "governance",
-        actorType: "ui_admin",
-        actorIp: actorIpFromRequest(request),
-        source: "admin_tokens_api",
-        targetId: userId,
-        oldSummary: { tokenCount: user.tokens.length },
-        newSummary: {
-          tokenCount: updatedUser.tokens.length,
-          label,
-          device_name: deviceName,
-          hashPrefix: tokenHash.slice(0, 19),
-          expires_at
-        },
-        requestId: request.id
+      // Spec 174 §3.2 — display barrier spans write + runtime commit.
+      const runtime = await withDisplayWriteBarrier(["P"], async () => {
+        await auditedWriteFile(projectRoot, ACCESS_YAML_REL, content, {
+          enabled: true,
+          changeType: "token_create",
+          assetKind: "governance",
+          actorType: "ui_admin",
+          actorIp: actorIpFromRequest(request),
+          source: "admin_tokens_api",
+          targetId: userId,
+          oldSummary: { tokenCount: user.tokens.length },
+          newSummary: {
+            tokenCount: updatedUser.tokens.length,
+            label,
+            device_name: deviceName,
+            hashPrefix: tokenHash.slice(0, 19),
+            expires_at
+          },
+          requestId: request.id
+        });
+        invalidateAccessConfigCache();
+        return commitPolicyRuntimeAck(content);
       });
-      invalidateAccessConfigCache();
-      const runtime = await commitPolicyRuntimeAck(content);
 
       return {
         ok: true,
@@ -528,20 +532,23 @@ export function registerTokenRoutes(app: FastifyInstance) {
       newUsers[userIndex] = updatedUser;
       const newConfig: YamlAccessConfig = { ...config, users: newUsers };
       const content = stringify(newConfig, { lineWidth: 0 });
-      await auditedWriteFile(projectRoot, ACCESS_YAML_REL, content, {
-        enabled: true,
-        changeType: "token_revoke",
-        assetKind: "governance",
-        actorType: "ui_admin",
-        actorIp: actorIpFromRequest(request),
-        source: "admin_tokens_api",
-        targetId: userId,
-        oldSummary: { tokenCount: user.tokens.length, label, hashPrefix: token.hash.slice(0, 19) },
-        newSummary: { tokenCount: updatedUser.tokens.length, label },
-        requestId: request.id
+      // Spec 174 §3.2 — display barrier spans write + runtime commit.
+      const runtime = await withDisplayWriteBarrier(["P"], async () => {
+        await auditedWriteFile(projectRoot, ACCESS_YAML_REL, content, {
+          enabled: true,
+          changeType: "token_revoke",
+          assetKind: "governance",
+          actorType: "ui_admin",
+          actorIp: actorIpFromRequest(request),
+          source: "admin_tokens_api",
+          targetId: userId,
+          oldSummary: { tokenCount: user.tokens.length, label, hashPrefix: token.hash.slice(0, 19) },
+          newSummary: { tokenCount: updatedUser.tokens.length, label },
+          requestId: request.id
+        });
+        invalidateAccessConfigCache();
+        return commitPolicyRuntimeAck(content);
       });
-      invalidateAccessConfigCache();
-      const runtime = await commitPolicyRuntimeAck(content);
 
       return { ok: true, data: { written: true, revokedAt, ...runtime, gate } };
     });

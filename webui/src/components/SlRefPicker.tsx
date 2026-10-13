@@ -2,10 +2,9 @@ import clsx from "clsx";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { apiGet } from "../lib/apiClient";
-import { queryKeys } from "../lib/queryKeys";
 import { normalizeSlRef, splitSlRef } from "../lib/slRef";
-import type { SourceSummary, SourcesResponse } from "../lib/types";
+import type { SourceSummary } from "../lib/types";
+import { sourcesQueryOptions } from "../lib/displayQueryOptions";
 
 type Props = {
   value: string[];
@@ -43,8 +42,7 @@ export function SlRefPicker({ value, onChange }: Props) {
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const sourcesQuery = useQuery({
-    queryKey: queryKeys.sources,
-    queryFn: () => apiGet<SourcesResponse>("/api/sources")
+    ...sourcesQueryOptions()
   });
   const tables = sourcesQuery.data?.tables ?? [];
 

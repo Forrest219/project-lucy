@@ -21,11 +21,11 @@ import type {
   CatalogAssetValidateRequest,
   CatalogAssetValidateResponse,
   LiveSchemasResponse,
-  ProjectInfo,
   SourcesResponse
 } from "../../lib/types";
 import { CatalogAssetValidationPanel } from "../catalog/CatalogAssetValidationPanel";
 import { AuthoringHowTo } from "./AuthoringHowTo";
+import { projectQueryOptions, sourcesQueryOptions } from "../../lib/displayQueryOptions";
 
 export type Step2UploadManifestProps = {
   connectionId: string;
@@ -93,12 +93,10 @@ export function Step2UploadManifest({
 
   const activeSchema = schema || schemaChoice;
   const projectQuery = useQuery({
-    queryKey: queryKeys.project,
-    queryFn: () => apiGet<ProjectInfo>("/api/project")
+    ...projectQueryOptions()
   });
   const sourcesQuery = useQuery({
-    queryKey: queryKeys.sources,
-    queryFn: () => apiGet<SourcesResponse>("/api/sources")
+    ...sourcesQueryOptions()
   });
   const connection = projectQuery.data?.connections.find((item) => item.id === connectionId) ?? null;
   const readable = canReadDatabaseStructure(connection);

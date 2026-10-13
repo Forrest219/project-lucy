@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { apiGet } from "../lib/apiClient";
 import { queryKeys } from "../lib/queryKeys";
 import {
   countReadyTables,
@@ -14,6 +13,7 @@ import {
 import { canReadDatabaseStructure } from "../lib/setupAssistant";
 import type { CatalogAssetUploadResponse, ConnectionInfo, SourcesResponse } from "../lib/types";
 import { CatalogAssetUploadButton } from "./catalog";
+import { sourcesQueryOptions } from "../lib/displayQueryOptions";
 
 type PrimaryAction = "read" | "use" | "upload" | "retry" | "continue";
 
@@ -38,8 +38,7 @@ export function SchemaStructurePrep({
 }: SchemaStructurePrepProps) {
   const queryClient = useQueryClient();
   const sourcesQuery = useQuery({
-    queryKey: queryKeys.sources,
-    queryFn: () => apiGet<SourcesResponse>("/api/sources")
+    ...sourcesQueryOptions()
   });
   const [preview, setPreview] = useState<SchemaStructurePreview | null>(null);
   const [preferExisting, setPreferExisting] = useState(false);

@@ -2,11 +2,12 @@ import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { apiGet, apiPost } from "../../lib/apiClient";
+import { apiPost } from "../../lib/apiClient";
 import { queryKeys } from "../../lib/queryKeys";
-import type { Agent, CreateTokenResponse, McpEndpointInfo, ProjectInfo } from "../../lib/types";
+import type { Agent, CreateTokenResponse, McpEndpointInfo } from "../../lib/types";
 import { buildCodexMcpToml, buildMcpConfig } from "../../lib/mcpEndpoint";
 import { PageHeader } from "../../components/PageHeader";
+import { adminAgentsQueryOptions, projectQueryOptions } from "../../lib/displayQueryOptions";
 
 type ClientId = "hermes" | "claude-code" | "codex" | "generic";
 
@@ -69,15 +70,13 @@ export function NewToken() {
   const targetUserId = routeUserId || selectedUserId;
 
   const agentsQuery = useQuery({
-    queryKey: ["admin", "agents"],
-    queryFn: () => apiGet<{ agents: Agent[] }>("/api/admin/agents"),
+    ...adminAgentsQueryOptions<{ agents: Agent[] }>(),
     enabled: !routeUserId
   });
   const agents = agentsQuery.data?.agents ?? [];
 
   const projectQuery = useQuery({
-    queryKey: queryKeys.project,
-    queryFn: () => apiGet<ProjectInfo>("/api/project")
+    ...projectQueryOptions()
   });
   const endpointInfo: McpEndpointInfo | undefined = projectQuery.data?.mcpEndpoint;
   const endpoint = endpointInfo?.url ?? null;
@@ -87,7 +86,7 @@ export function NewToken() {
       apiPost<CreateTokenResponse>(`/api/admin/agents/${encodeURIComponent(targetUserId)}/tokens`, body),
     onSuccess: (data) => {
       setGeneratedToken(data);
-      void queryClient.invalidateQueries({ queryKey: ["admin", "agents"] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.adminAgents });
       void queryClient.invalidateQueries({ queryKey: ["admin", "tokens"] });
       if (targetUserId) {
         void queryClient.invalidateQueries({ queryKey: ["admin", "agent", targetUserId] });

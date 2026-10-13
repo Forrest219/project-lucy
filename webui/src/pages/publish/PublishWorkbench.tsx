@@ -11,7 +11,6 @@ import { toast } from "sonner";
 import type {
   ChangedFilesResponse,
   SemanticAssetManualReindexResponse,
-  SourcesResponse,
   SourceSummary,
   ValidateChangedResponse,
   ValidationResult
@@ -22,6 +21,7 @@ import {
   listValidationIssueMessages,
   primaryValidationIssue
 } from "../semantic/validation-utils";
+import { sourcesQueryOptions } from "../../lib/displayQueryOptions";
 
 function tableNameFromPath(filePath: string) {
   return filePath.split("/").pop()?.replace(/\.ya?ml$/, "") ?? filePath;
@@ -289,8 +289,7 @@ export function PublishWorkbench() {
     }
   });
   const sourcesQuery = useQuery({
-    queryKey: queryKeys.sources,
-    queryFn: () => apiGet<SourcesResponse>("/api/sources")
+    ...sourcesQueryOptions()
   });
 
   const [validateElapsedSeconds, setValidateElapsedSeconds] = useState(0);
