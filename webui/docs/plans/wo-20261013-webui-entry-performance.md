@@ -10,7 +10,7 @@
 |---|---|
 | WO | WO-20261013-174 / v1.2 |
 | 日期 / 执行者 | 2026-10-13 / Cursor |
-| 状态 | Done（2026-10-13）：T0–T7 完成；fixture 上 PERF-01–10 与 SC-01–24 通过，`perf:entry --phase after` 退出码 0；未部署目标环境。报告：[IMPLEMENTATION_NOTES](wo-20261013-webui-entry-performance-IMPLEMENTATION_NOTES.md) |
+| 状态 | Implemented · 修正复验完成（2026-10-13）：原 after 退出码0与成绩保留；复审缺陷按[审阅与修正工单](wo-20261013-webui-entry-performance-REVIEW-FIX.md) R1–R7 修正，正式复验 `after-review-v2` 退出码 0（formal pass），见[IMPLEMENTATION_NOTES §9](wo-20261013-webui-entry-performance-IMPLEMENTATION_NOTES.md)；残余未覆盖分支已登记；未部署目标环境 |
 | 权威 Spec | [174-webui-entry-performance-spec.md](../174-webui-entry-performance-spec.md) |
 | 用户批准 | 已同意原优化方案及生成本工单；范围内按本单执行，无需重复确认常规实现步骤 |
 | 输出 | 代码与测试 + `webui/docs/plans/wo-20261013-webui-entry-performance-IMPLEMENTATION_NOTES.md` |

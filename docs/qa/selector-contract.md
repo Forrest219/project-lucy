@@ -1255,3 +1255,7 @@
 | `async-region-retry` | 分区局部重试 | `components/AsyncRegion.tsx` |
 | `route-chunk-error` | 路由资源加载失败（壳层保留） | `app/App.tsx` |
 | `route-chunk-retry` | 路由资源加载失败后的重试 | `app/App.tsx` |
+| `catalog-runtime-unconfirmed` | 语义资产页「权限生效状态待确认」提示（`meta.runtimeConsistency = unconfirmed`） | `pages/Catalog.tsx` |
+| `agent-runtime-unconfirmed` | Agent 列表「权限生效状态待确认」提示（`meta.runtimeConsistency = unconfirmed`） | `pages/admin/AgentList.tsx` |
+| `execution-runtime-slot` | 连接概览问数提示的稳定占位（卡片出现时状态仍待返回；不可见、无文案） | `pages/connections/ConnectionOverview.tsx` |
+| `schema-actions-pending-${conn.id}-${schema}` | Schema 行依赖 Manifest 事实的动作等待中（写入进行中或尚未重新读取） | `pages/connections/ConnectionOverview.tsx` |

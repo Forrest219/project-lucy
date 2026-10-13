@@ -3,11 +3,13 @@
 | 字段 | 内容 |
 |---|---|
 | 日期 / 版本 | 2026-10-13 / v1.2（实现接线回填） |
-| 状态 | Implemented — 每行已补实际 hook、客户端 key 与测试；未逐项覆盖的边界见下方「残余缺口」 |
+| 状态 | Implemented · 审阅修正复验完成（2026-10-13）；「实际接线」表的“通过”为历史执行结论，以下方「审阅修正复验」四态表为准（含未覆盖项），见[审阅与修正工单](wo-20261013-webui-entry-performance-REVIEW-FIX.md) R1–R7 |
 | 权威合同 | [Spec174 v1.2](../174-webui-entry-performance-spec.md) §3–4/7/9 |
 | 执行工单 | [WO-20261013-174 v1.2](wo-20261013-webui-entry-performance.md) T1/T3/T5 |
 
 本表最初是接线清单；v1.2 起按实现回填「实际接线」一节（hook 函数、客户端 key、测试用例）。原「实际入口与测试要求」表保留为审阅基线。
+
+2026-10-13 复审：IM-13 的 bypass 在未验证状态绕过屏障与并发上限；IM-14 的 epoch/401 仅覆盖 GET；运行时生效状态缓存与 UI 提示、写开始的动作门禁缺失。IM-03/06/08 等实际分支证据不足。需完成修正工单并逐行区分 hook 存在、行为已验证、未覆盖或失败后方可宣称完整通过。
 
 本表从stash7653746提取并按当前代码复核，仍为18行；既有表结构准备/角色多选/审计变更纳入对应行，不另设第二套写入链路。
 
@@ -73,6 +75,36 @@ DI-01–13/15主要落 `server/__tests__/display-invalidation.test.ts`；DI-16�
 - IM-03 import、IM-06 createConnection 失败回滚、IM-08 access-config 的 runtimeAck=false 回滚没有独立的屏障用例；它们与已测路径共用同一包装函数。
 - 「truncate 与完整写之间发请求」用写屏障 + 挂起写入模拟（`display-snapshot.test.ts` › never publishes a build that overlapped a write），未在真实 `writeFile` 中途注入。
 - 按登录账户裁剪的缓存不存在（快照内容不随管理员身份变化），因此未启用「≤32 principal 槽位」；账户边界由客户端 authEpoch + 受保护查询清除保证。
+
+## 审阅修正复验（R1–R7，2026-10-13）
+
+上表「结果」列是 v1.2 首次回填的历史结论，保留不改。本节按[审阅修正工单](wo-20261013-webui-entry-performance-REVIEW-FIX.md) R7.4 逐行区分四种状态：**hook 存在**（代码中有屏障 / 守卫）、**行为通过**（有针对该分支的测试真实注入并断言结果）、**未覆盖**（没有专门分支证据，不能由共用包装推定通过）、**失败**。测试文件均位于 `webui/server/__tests__/` 或 `webui/src/__tests__/`。
+
+| 行 | hook 存在 | 行为通过（测试 › 用例） | 未覆盖 | 失败 |
+|---|---|---|---|---|
+| IM-01 | 是 | `display-invalidation` › DI-01、DI-01/02 partial failure；`display-rollback-races` › audit failure after a successful semantic save still invalidates | 真实 `writeFile` 截断中途注入（以写后挂起模拟） | 无 |
+| IM-02 | 是 | `display-invalidation` › DI-03 confirmed save、DI-01/02 | — | 无 |
+| IM-03 | 是 | `display-rollback-races` › import confirm: reads wait during the write; a failure after the write still serves the written Manifest | restore 提交（`restoredFromVersionId`）与 import 共用路由，无单独注入 | 无 |
+| IM-04 | 是 | `display-snapshot` › detects edits…ignores tmp sidecars；`add-schema-drawer` / `setup-assistant` 回归 | rename 成功后 reload / history 失败未注入 | 无 |
+| IM-05 | 是 | `display-invalidation` › DI-05/16；`display-rollback-races` › enabled-tables: a policy commit failure keeps reads waiting through write → reload → commit | 该路由按既有设计不回滚 ktx.yaml（返回 `runtimeAck=false`），无回滚分支可测 | 无 |
+| IM-06 | 是 | `display-rollback-races` › createConnection: an audit failure after ktx.yaml + secret writes rolls back；`display-invalidation` › DI-06 | addSchema / removeSchema 部分失败、SQLite 无密码分支 | 无 |
+| IM-07 | 是 | `display-invalidation` › DI-07/15；`display-rollback-races` › Agent writeAccessYaml: runtimeAck=false rollback（写入 / commit / 回滚三个阶段发请求） | — | 无 |
+| IM-08 | 是 | `display-rollback-races` › access-config writeAccessYaml (roles PATCH): runtimeAck=false rollback（三阶段） | — | 无 |
+| IM-09 | 是 | `display-invalidation` › DI-09 | — | 无 |
+| IM-10 | 是 | `display-invalidation` › DI-10 | reload 自身失败的显式错误未单列 | 无 |
+| IM-11 | 是 | `display-invalidation` › DI-10/11 | — | 无 |
+| IM-12 | 是 | `display-snapshot` › migrates to a new content root；R1 › a reconciler watching another project root does not verify this root's snapshots | — | 无 |
+| IM-13 | 是（R1 改为 unverified → `503 DISPLAY_SNAPSHOT_BUSY`，无 bypass） | `display-snapshot` › R1 全组（unverified × pending / 并发、构建中 / 等待中失去对账、回滚中请求、重启不复用旧快照）、same-size same-mtime full digest、atomic replace；`display-invalidation` › R1 sources / agents busy envelope 与恢复后最终数据、busy 仍先过 RequireAuth；`admin-permission-batch` › refuses to splice two different access files | 2 s / 31 s 检测窗口未做端到端计时 | 无 |
+| IM-14 | 是（R2 五种方法共用 epoch / 401 返回路径；R4 区分 auth / write stale） | `api-client-abort` › R2 五方法 × {A→B 忽略 abort、旧错误 envelope、延迟 json、当前 401、旧 401、403}、登录失败、Skill 直连读取；`new-token` › R2 旧账户 Token 结果无 Toast；`display-query-isolation` › R4 auth stale is not retried | Wiki raw 下载、Eval YAML 下载两处直接 `fetch`（用户触发的文件下载，未接入 epoch） | 无 |
+| IM-15 | 是 | `display-invalidation` › DI-07/15、DI-15 | — | 无 |
+| IM-16 | 是 | `admin-permission-batch` 全部；`display-permission-runtime` › display reads never commit policy or change runtime readiness | — | 无 |
+| IM-17 | 是（R5 探测在卡片 commit + 双 rAF 后才发） | `background-probes`、`live-catalog`；`catalog-loading` › R5 automatic test / live-schemas requests start only after the cards committed and painted；behavior › R5 三组慢 / 失败装饰 | — | 无 |
+| IM-18 | 是 | `display-invalidation` › DI-18、R1 busy while unverified still runs RequireAuth first | — | 无 |
+
+不属于单行失效、但本次修正一并取证的两项：
+
+- **生效状态（SC-17，R3）**：`runtimeConsistency` 不再随显示快照缓存，快照只存编译输入摘要，每次响应按当前只读 runtime 状态计算；sources / Agent 的 `meta.snapshotVersion` 随状态变化。证据：`display-permission-runtime` 5 例（热命中 unconfirmed↔matched、global degrade 与恢复、请求进行中变化、显示读不提交 policy）；`catalog-loading` / `agent-list` › 权限生效状态待确认。
+- **写开始门禁（SC-15/18，R4）**：客户端按读模型计 pending 写，嵌套 / 并行写只在最后一个结束时失效；写中不发起展示读取，重叠写的响应为 write stale，结算后才有限重读；依赖 Manifest 事实的动作在重新读到数据前不可用。证据：`display-query-isolation` › R4 五例；`catalog-loading` › R4 success / rollback。
 
 ## 核心流程（伪代码）
 

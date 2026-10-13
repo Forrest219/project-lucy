@@ -1,14 +1,18 @@
 # WO-20261013-174 WebUI Entry Performance — Implementation Notes
 
+> **2026-10-13 Codex 复审补注（HEAD 8e4a461）：待修正复验，暂不能按本文原结论关单。** 原性能成绩与 Cursor 执行记录保留。隔离复现确认 unverified bypass 绕过 pending 屏障/并发上限、旧账户 POST 响应未拒绝、POST 401 未清理、runtime-only 变化后 consistency 仍取旧缓存。性能谓词/正式采样完整性也有遗漏；47项既有相关测试通过不能覆盖这些组合场景。本文 §6“bypass 永远返回正确数据”及“SC/PERF 全通过”的完成声明不成立。详见[审阅与 Cursor 修正工单](wo-20261013-webui-entry-performance-REVIEW-FIX.md)，完成 R1–R7 并追加复验证据后才能恢复 Verified 状态。
+
+> **2026-10-13 修正复验（Cursor）：** R1–R7 已按修正工单逐项先红后绿修正，新 runner 下 baseline `8dd210a` 与修正 HEAD `fe00d78` 重新采集，after `mode=formal status=pass`、退出码 0；逐项提交、测试名、命令退出码、同环境失败对照与残余缺口见 §9。原 §1–§8 保留为历史记录。
+
 | 元数据 | 内容 |
 |---|---|
 | 文档名称 | WO-20261013-174 WebUI Entry Performance — Implementation Notes |
 | 文档类型 | Test Report |
-| 版本 | v1.0 |
+| 版本 | v1.1（追加 §9 审阅修正与复验） |
 | 撰写日期 | 2026-10-13 |
 | 撰写人 | Cursor (Builder) |
 | 委托人 | zhangxingchen |
-| 基于材料 | Spec 174 v1.2、WO-20261013-174 v1.2、失效矩阵 v1.1→v1.2、`lucy-v2.0` 自 `2a93abd` 起的实现提交、`inbox/webui-entry-perf/{baseline,after}` 原始结果 |
+| 基于材料 | Spec 174 v1.2、WO-20261013-174 v1.2、审阅修正工单 WO-20261013-174-REVIEW-FIX v1.0、失效矩阵 v1.1→v1.2、`lucy-v2.0` 自 `2a93abd` 起的实现与修正提交、`inbox/webui-entry-perf/{baseline,after,baseline-review-v2,after-review-v2}` 原始结果 |
 | 适用范围 | Spec 174 T0–T7 交付核对、PERF / SC 验收、回退与后续部署决策 |
 | 输出位置 | `webui/docs/plans/wo-20261013-webui-entry-performance-IMPLEMENTATION_NOTES.md` |
 
@@ -160,6 +164,98 @@ baseline 与 after 复用同一 `fixture-clean` 快照（after 重新校验 cont
 - `inbox/webui-entry-perf/baseline/`、`inbox/webui-entry-perf/after/`：`results.json`（环境、fixture hash、预算判定、命令退出码）、`samples.json`、`summary.md`、`raw/*.jsonl`、`raw/playwright-*.json`、`traces/*.json`（每情景 / 路由 1 份 Chromium trace）、`logs/`。
 - `fixture-clean/` 为两阶段共用的匿名快照；trace 已自动扫描，无 Cookie / Authorization / fixture 密码。
 - 早期过程运行（`baseline-initial`、`after-smoke-1`、`debug-*`）保留在同目录，仅作过程参考。
+
+## 9. 审阅修正与复验（R1–R7，2026-10-13）
+
+执行入口：[审阅修正工单](wo-20261013-webui-entry-performance-REVIEW-FIX.md)。上文 §1–§8 为首次实施的历史记录，原成绩与 `inbox/webui-entry-perf/{baseline,after}` 保留不改；§6 中「bypass 永远返回正确数据」与 §1 / §5「SC / PERF 全通过」以本节为准。执行者 Cursor（Builder），分支 `lucy-v2.0`，未 push、未部署。
+
+### 9.1 提交
+
+| 提交 | 项 | 内容 |
+|---|---|---|
+| `7d6c3e0` | R1 | unverified 对账一律 `503 DISPLAY_SNAPSHOT_BUSY`（删除 bypass）；等待写入后、发布 / 返回前再次核对对账与 scope context；reconciler 启动不复用旧快照、首扫失败可恢复，由 `buildServer` onReady / onClose 管理 |
+| `d2bae24` | R2 | GET / POST / PUT / PATCH / DELETE 共用返回路径：旧 authEpoch 的成功 / 错误 envelope / 延迟 JSON 一律 stale；仅当前 epoch 的受保护 `AUTH_REQUIRED` 401 触发清理；Skill 直连读取与 Token 创建消费点 |
+| `eaf45d4` | R3 | 显示缓存只存编译输入摘要，每次响应按当前只读 runtime 状态计算 `runtimeConsistency`；sources / Agent `meta.snapshotVersion` 随状态变化；Catalog / Agent 列表显示「权限生效状态待确认」 |
+| `9cf8462` | R4 | 客户端按读模型计 pending 写（嵌套 / 并行写最后一个结束才失效）；写中不发起展示读取；`WRITE_STALE_RESPONSE` 与 auth `STALE_RESPONSE` 分开，仅前者在结算后有限重读；写开始取消受影响读取，依赖 Manifest 的动作在重新读到数据前不可用 |
+| `8b41d98` | R5 | 删除 300 ms 装饰门禁；问数提示稳定占位、同步历史加载 / 失败进卡头；自动探测在卡片 commit + 双 rAF 后发出（performance mark） |
+| `621de1a`、`eb6db9b` | R6 | 正式验收门禁（契约枚举、n≥30、warm-up≥5、有限值、行为、资源证据、空预算拒绝）；共同真实 DOM 谓词；真实筛选完成；probe-load 逐样本意图与 live cache IPC 清理；`displayReadyMs` 为 after-only 指标（baseline 无显示快照） |
+| `4fc9441` | R7 | `display-rollback-races.test.ts`：import、createConnection 回滚、两套 writeAccessYaml runtimeAck=false 回滚、enabled-tables policy 失败、写后 audit 失败的真实 HTTP 竞态 |
+| `fe00d78` | R5（PERF-09） | 收紧后的正式 after 首次测得 browser-warm-refresh `/connections` CLS 0.069 > 0.05：问数提示移入列表区域与卡片同帧出现；Manifest 占位「—」（CJK 回退字体）与指标卡子值行固定行盒 |
+| （本提交） | R7 | 失效矩阵四态、本节、Spec / WO / 索引状态、selector 合同登记 |
+
+### 9.2 逐项结果
+
+| 项 | 回归测试（先红后绿） | 结果 |
+|---|---|---|
+| R1 | `display-snapshot.test.ts` › R1 组 7 例（unverified × pending、unverified 并发、同 / 异 key 并发 ≤4 且归零、构建中失去对账、等待中失去对账、写→回滚中请求、其他 project root）+ restart 不复用旧快照、owner stopper；`display-invalidation.test.ts` › R1 sources / agents busy envelope 与恢复后最终数据、busy 仍先过 RequireAuth。HEAD 上 6 例红 | 通过 |
+| R2 | `api-client-abort.test.ts` › 五方法 × {A→B 忽略 abort、旧错误 envelope、延迟 `response.json`、当前 401、旧 401、403}（含 test / preview / Token 路径）、登录失败、Skill 直连；`new-token.test.tsx` › 旧账户 Token 结果无 Toast、POST 仅 1 次。HEAD 上 31 + 1 例红 | 通过 |
+| R3 | `display-permission-runtime.test.ts`（新）5 例；`catalog-loading.test.tsx` / `agent-list.test.tsx` › 权限生效状态待确认。HEAD 上 3 + 2 例红 | 通过 |
+| R4 | `display-query-isolation.test.tsx` › R4 6 例；`catalog-loading.test.tsx` › R4 success / rollback 两例。HEAD 上 4 + 2 例红 | 通过 |
+| R5 | `catalog-loading.test.tsx` › R5 3 例（装饰 pending / 失败时卡片立即出现、探测在 commit + paint 之后）；behavior › R5 三组（3 s 慢装饰、装饰失败、慢装饰 + 3 s 慢 sources：卡片 ≤1.5 s、探测 requestStart ≥ armed mark、CLS ≤0.05）+ late sources 几何稳定。HEAD 上 3 例红；Spec 108 用例改为显式等待探测结果 | 通过 |
+| R6 | `entry-performance.test.ts` › R6 13 例负向 / 正向控制（空 summary、缺路由、单样本、warm-up 不计 n、全 null、失败样本保留、缺 / 未知 JS·CSS 资源、缺 / 跳过行为、空预算、单格超预算、smoke=partial、baseline 仅缺采集失败、after-only 指标、PERF-08 JS / CSS 独立取最大）+ 谓词 5 例（含筛选禁用 / 延迟更新负向控制、字段名匹配） | 通过 |
+| R7 | `display-rollback-races.test.ts`（新）6 例；逐一移除 import / createConnection / 两套 writeAccessYaml 的屏障，对应 4 例变红；矩阵四态见[失效矩阵](wo-20261013-webui-entry-performance-invalidation-matrix.md)「审阅修正复验」 | 通过 |
+
+### 9.3 正式复验（PERF）
+
+| 运行 | 代码 | 命令（仓库根） | 退出码 | 判定 |
+|---|---|---|---|---|
+| baseline-review-v2 | `8dd210a` 独立 worktree + 本次 runner（`entry-performance.mts` / perf spec / 谓词 sha256 与修正 HEAD 一致；行为 spec 为 `fe00d78` 前版本，baseline 行为不计门禁） | `npm --prefix webui run perf:entry -- --phase baseline --mode production --scenario all --iterations 30 --warmup 5 --output inbox/webui-entry-perf/baseline-review-v2`（worktree 内运行，产物复制回本仓 inbox） | 0 | 采集完整；超预算允许；行为 1 / 10 通过 |
+| after-review-v2 | `fe00d78`（工作区仅文档改动，`dirty=true`，digest `aebe6640ce5a…`） | `npm --prefix webui run perf:entry -- --phase after --mode production --scenario all --iterations 30 --warmup 5 --baseline-dir /Users/zhangxingchen/Projects/project-lucy/inbox/webui-entry-perf/baseline-review-v2 --output inbox/webui-entry-perf/after-review-v2` | 0 | `mode=formal status=pass`；行为 11 / 11，0 跳过；0 失败样本 |
+
+两次未采用的尝试保留为过程证据：`baseline-review-v2-attempt1`（退出 1：`service-cold displayReadyMs` 在 baseline 恒为空，runner 改为 after-only 后重采）、`after-review-v2-attempt1`（退出 1：PERF-09 browser-warm-refresh connections 0.069，修复见 `fe00d78`）。两轮共用 fixture content hash `5dc0cd88…`、seed 161、同 anchor / 审计摘要与环境（§3）；baseline 14:11–14:40Z、after 15:08–15:24Z，运行期间无其他负载。
+
+| 验收 | 情景 / 路由（P95；CLS / 长任务 / 资源取 max） | baseline | after | 预算 |
+|---|---|---|---|---|
+| PERF-01 / 02 | route-warm 四页 | 24.5–25.0 | 24.5–25.5 | ≤50 / ≤100 |
+| PERF-03 | route-query-cold connections / catalog / overview / agents | 932 / 933 / 1705 / 1179 | 32.9 / 32.6 / 55.1 / 40.7 | ≤500 |
+| | probe-load catalog / overview / agents | 1040 / 1666 / 1890 | 330 / 357 / 347 | ≤500 |
+| PERF-04 | browser-cold / warm-refresh（三页） | 95–102 / 51–53 | 78–96 / 33–34 | ≤500 |
+| PERF-05 | browser-cold 四页 | 1014 / 1030 / 1751 / 1247 | 108 / 112 / 116 / 118 | ≤800 |
+| | browser-warm-refresh 四页 | 959–1718 | 40–66 | ≤800 |
+| | login-required / probe-load / probe-load-slow | 1698 / 1033 / 1018 | 359 / 106 / 107 | ≤800 |
+| PERF-06 | api-warm sources / agents | 951 / 812 | 0.66 / 9.6 | ≤100 / ≤200 |
+| PERF-07 | display-cold sources | 909 | 153 | ≤500 |
+| PERF-08 | 初始 JS / CSS gzip（四页，各自独立取最大） | 367,189 / 33,077 B | 145,501–166,647 / 33,175 B | 204,800 / 51,200 |
+| PERF-09 | 全部情景 / 路由（含 catalog-filter、probe-load-slow） | ≤0.0011 | ≤0.0203（overview），connections ≤0.0036 | ≤0.05 |
+| PERF-10 | browser-cold、route-warm、catalog-filter 业务长任务 | 0 | 0 | 0 |
+
+与首次 after 的差异如实记录：probe-load 导航 P95 由 74–91 ms 升至 330–357 ms，原因是本次每样本清空 live cache、确实执行 7 + 7 个 KTX 任务，并在探测仍排队 / 运行时计时（旧 runner 第二个样本起 live-schemas 命中缓存，且未确认探测仍在运行）；仍在 500 ms 预算内。catalog 筛选完成以「输入值 + 期望行集合 + 结果计数 + 范围树计数」判定；测量中发现以 0 ms 间隔连续输入时 URL 受控搜索框会丢字符，runner 改为 80 ms 人类节奏输入并在报告中登记（见 9.5）。
+
+证据（临时，可清理；sha256 前 16 位）：`baseline-review-v2/results.json` `f5d0f3dac76ca9da`、`samples.json` `129c89034fc92dbd`；`after-review-v2/results.json` `7fb5b6d6b24cd179`、`samples.json` `3d0012bbb883e598`；各含 `summary.md`、`raw/`、`traces/`（22 份）、`logs/`，trace 秘密扫描 0 命中。
+
+### 9.4 其他命令与同环境失败对照
+
+| 命令 | 退出码 |
+|---|---|
+| `git branch --show-current` | 0（`lucy-v2.0`） |
+| `npm --prefix webui test -- server/__tests__/display-snapshot.test.ts server/__tests__/display-invalidation.test.ts server/__tests__/admin-permission-batch.test.ts src/__tests__/display-query-isolation.test.tsx scripts/__tests__/entry-performance.test.ts` | 0（81 例） |
+| `npm --prefix webui test -- server/__tests__/display-permission-runtime.test.ts` | 0（5 例） |
+| `npm --prefix webui test -- src/__tests__/catalog-loading.test.tsx src/__tests__/api-client-abort.test.ts` | 0（58 例） |
+| `npm --prefix webui test -- server/__tests__/display-rollback-races.test.ts` | 0（6 例） |
+| `npm --prefix webui run lint:terminology` / `lint:ia-boundary` / `build` | 0 / 0 / 0 |
+| `npx vitest run src`（全部前端） | 0（77 文件 1,042 例） |
+| 原 WO T6 第 1 组 | 1（5 例，均在下方同环境既有失败列表中） |
+| 原 WO T6 第 2 组（14 文件） | 0（240 例） |
+
+同环境对照：`8dd210a` 与修正 HEAD `4fc9441`（其后 `eb6db9b` / `fe00d78` 只改 runner 与前端，不涉及 server 测试）各自独立干净 worktree、同一 `node_modules`、`env -i` 净化环境、显式匿名项目根 `KTX_PROJECT_ROOT=/private/tmp/lucy-r7-anon-root`，`vitest run server --maxWorkers=1 --reporter=json`。
+
+| 检查 | baseline `8dd210a` | after | 逐项对照 |
+|---|---|---|---|
+| 全 server vitest | 退出 1；1,243 例，37 失败 | 退出 1；1,313 例，37 失败 | 失败全名列表完全相同（仅 after 新增 0、仅 baseline 0） |
+| `tsc --noEmit -p tsconfig.json` | 退出 2；88 错误 | 退出 2；88 错误 | 去掉行列号后只差 worktree 绝对路径 |
+| `check-selector-contract` | 退出 1；33 问题 | 退出 1；33 问题（登记 4 个新 testid 后） | 与 baseline 相同 |
+
+38 vs 37 的一例：`report-template-pilot.test.ts` › ships no customer measure YAML in the repository 以 `process.cwd()/../semantic-layer` 扫描仓库目录，本仓 checkout 存在被 `.gitignore` 忽略的本机私有目录 `semantic-layer/mysql-aliyun/`，干净 worktree 中不存在；在本仓工作目录运行同一 HEAD 即多这一例（`server-after-head.json`），在干净 worktree 运行为 37 例且与 baseline 一致。未读取该目录内容做验证。对照产物：`inbox/webui-entry-perf/review-v2-failure-compare/`（`server-*.json`、`compare-server*.txt`、`tsc-*.txt`、`tsc-diff.txt`、`selector-*.txt`）。
+
+### 9.5 残余缺口与未部署范围
+
+- **未部署**：未访问 / 未改动目标环境 `10.69.95.109:8276`，未做客户 amd64 / Kubernetes 镜像；成绩只代表 Apple Silicon 回环匿名 fixture。
+- 失效矩阵「未覆盖」列：restore 提交、rename 后 reload 失败、addSchema / removeSchema 部分失败、SQLite 无密码分支、真实 `writeFile` 截断中途注入、2 s / 31 s 检测窗口端到端计时；enabled-tables 按既有设计无 ktx 回滚。
+- 直接 `fetch` 的 Wiki raw 下载、Eval YAML 下载未接入 authEpoch（用户触发的文件下载，不进查询缓存）。
+- 问数提示现随连接列表区域渲染：连接列表本身加载失败时不再显示问数提示（Spec 163 SC-11 只规定状态接口失败时不提示，此组合未定义）。
+- runtime 状态晚于卡片返回且最终无需提示时，本次访问保留一行不可见占位（R5 稳定占位的代价）。
+- 发现但未在本单修复：语义资产搜索框由 URL 参数受控，0 ms 间隔连续输入会丢字符（baseline 同代码）；属 Spec 174 范围外的输入体验问题，建议另立单。
+- 按账户裁剪的快照仍不存在，principal LRU 未实现（与 §7 相同）。
 
 ## Terminology Compliance
 
