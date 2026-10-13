@@ -113,11 +113,22 @@ function rejectIfAuthLost<T>(response: Response, envelope: ApiEnvelope<T>): void
   }
 }
 
-export async function apiGet<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
+/**
+ * Shared return path for every method: a response (success, error envelope or
+ * late JSON body) to a request started under an older authEpoch is stale and
+ * never reaches the caller; only a current-epoch AUTH_REQUIRED 401 clears auth.
+ */
+async function apiRequest<T>(path: string, init: RequestInit, options: ApiRequestOptions = {}): Promise<T> {
   const startedAuthEpoch = authEpoch;
   const startedWriteEpoch = options.displayRead ? displayWriteEpochs[options.displayRead] : 0;
-  const response = await fetch(path, { credentials: "same-origin", ...(options.signal ? { signal: options.signal } : {}) });
-  const envelope = (await response.json()) as ApiEnvelope<T>;
+  const response = await fetch(path, { credentials: "same-origin", ...init, ...(options.signal ? { signal: options.signal } : {}) });
+  let envelope: ApiEnvelope<T>;
+  try {
+    envelope = (await response.json()) as ApiEnvelope<T>;
+  } catch (error) {
+    if (startedAuthEpoch !== authEpoch) throw staleResponse();
+    throw error;
+  }
 
   if (startedAuthEpoch !== authEpoch) throw staleResponse();
   if (options.displayRead && startedWriteEpoch !== displayWriteEpochs[options.displayRead]) throw staleResponse();
@@ -129,95 +140,33 @@ export async function apiGet<T>(path: string, options: ApiRequestOptions = {}): 
   return envelope.data;
 }
 
-export async function apiPut<T>(path: string, body: unknown): Promise<T> {
-  return trackDisplayWrite(path, body, () => apiPutUntracked<T>(path, body));
+/** For protected direct-fetch helpers outside this client: reject a response from an older authEpoch. */
+export function assertAuthEpoch(startedAuthEpoch: number): void {
+  if (startedAuthEpoch !== authEpoch) throw staleResponse();
 }
 
-async function apiPutUntracked<T>(path: string, body: unknown): Promise<T> {
-  const response = await fetch(path, {
-    method: "PUT",
-    credentials: "same-origin",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(body)
-  });
-  const envelope = (await response.json()) as ApiEnvelope<T>;
+function jsonBody(body: unknown): RequestInit {
+  return { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
+}
 
-  if (envelope.ok === false) {
-    throw new ApiError(envelope.error, envelope.data);
-  }
+export async function apiGet<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
+  return apiRequest<T>(path, {}, options);
+}
 
-  return envelope.data;
+export async function apiPut<T>(path: string, body: unknown, options: ApiRequestOptions = {}): Promise<T> {
+  return trackDisplayWrite(path, body, () => apiRequest<T>(path, { method: "PUT", ...jsonBody(body) }, options));
 }
 
 export async function apiPost<T>(path: string, body: unknown, options: ApiRequestOptions = {}): Promise<T> {
-  return trackDisplayWrite(path, body, () => apiPostUntracked<T>(path, body, options));
+  return trackDisplayWrite(path, body, () => apiRequest<T>(path, { method: "POST", ...jsonBody(body) }, options));
 }
 
-async function apiPostUntracked<T>(path: string, body: unknown, options: ApiRequestOptions): Promise<T> {
-  const response = await fetch(path, {
-    method: "POST",
-    credentials: "same-origin",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(body),
-    ...(options.signal ? { signal: options.signal } : {})
-  });
-  const envelope = (await response.json()) as ApiEnvelope<T>;
-
-  if (envelope.ok === false) {
-    throw new ApiError(envelope.error, envelope.data);
-  }
-
-  return envelope.data;
+export async function apiPatch<T>(path: string, body: unknown, options: ApiRequestOptions = {}): Promise<T> {
+  return trackDisplayWrite(path, body, () => apiRequest<T>(path, { method: "PATCH", ...jsonBody(body) }, options));
 }
 
-export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
-  return trackDisplayWrite(path, body, () => apiPatchUntracked<T>(path, body));
-}
-
-async function apiPatchUntracked<T>(path: string, body: unknown): Promise<T> {
-  const response = await fetch(path, {
-    method: "PATCH",
-    credentials: "same-origin",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(body)
-  });
-  const envelope = (await response.json()) as ApiEnvelope<T>;
-
-  if (envelope.ok === false) {
-    throw new ApiError(envelope.error, envelope.data);
-  }
-
-  return envelope.data;
-}
-
-export async function apiDelete<T>(path: string, body?: unknown): Promise<T> {
-  return trackDisplayWrite(path, body, () => apiDeleteUntracked<T>(path, body));
-}
-
-async function apiDeleteUntracked<T>(path: string, body?: unknown): Promise<T> {
-  const response = await fetch(path, {
-    method: "DELETE",
-    credentials: "same-origin",
-    ...(body === undefined
-      ? {}
-      : {
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify(body)
-        })
-  });
-  const envelope = (await response.json()) as ApiEnvelope<T>;
-
-  if (envelope.ok === false) {
-    throw new ApiError(envelope.error, envelope.data);
-  }
-
-  return envelope.data;
+export async function apiDelete<T>(path: string, body?: unknown, options: ApiRequestOptions = {}): Promise<T> {
+  return trackDisplayWrite(path, body, () =>
+    apiRequest<T>(path, { method: "DELETE", ...(body === undefined ? {} : jsonBody(body)) }, options)
+  );
 }

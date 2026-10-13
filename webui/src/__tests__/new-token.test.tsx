@@ -326,3 +326,40 @@ describe("NewToken", () => {
     expect(await screen.findByLabelText("选择所属 Agent")).toBeInTheDocument();
   });
 });
+
+describe("Spec 174 R2 — Token creation result from a previous account", () => {
+  it("never shows the old account's token or a Toast after the identity changed", async () => {
+    const { bumpAuthEpoch } = await import("../lib/apiClient");
+    const { toast } = await import("sonner");
+    const toastError = vi.spyOn(toast, "error");
+    let releaseToken!: () => void;
+    const tokenGate = new Promise<void>((resolve) => {
+      releaseToken = resolve;
+    });
+    let tokenPosts = 0;
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/project") {
+        return new Response(JSON.stringify({ ok: true, data: { root: "/tmp/p", ktxAvailable: true, connections: [], mcpEndpoint: DEFAULT_MCP_ENDPOINT } }));
+      }
+      if (url === "/api/admin/agents/zhangsan/tokens" && init?.method === "POST") {
+        tokenPosts += 1;
+        await tokenGate;
+        return new Response(JSON.stringify({ ok: true, data: DEFAULT_TOKEN_RESPONSE }));
+      }
+      return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
+    }));
+
+    renderNewToken();
+    fireEvent.change(screen.getByLabelText(/Token 标签/), { target: { value: "hermes-laptop" } });
+    fireEvent.click(screen.getByRole("button", { name: "生成 Token" }));
+    await vi.waitFor(() => expect(tokenPosts).toBe(1));
+    bumpAuthEpoch();
+    releaseToken();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(screen.queryByText("lucy_oneshot_token")).not.toBeInTheDocument();
+    expect(toastError).not.toHaveBeenCalled();
+    expect(tokenPosts).toBe(1);
+  });
+});

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { apiPost } from "../../lib/apiClient";
+import { apiPost, isStaleResponseError } from "../../lib/apiClient";
 import { queryKeys } from "../../lib/queryKeys";
 import type { Agent, CreateTokenResponse, McpEndpointInfo } from "../../lib/types";
 import { buildCodexMcpToml, buildMcpConfig } from "../../lib/mcpEndpoint";
@@ -92,7 +92,9 @@ export function NewToken() {
         void queryClient.invalidateQueries({ queryKey: ["admin", "agent", targetUserId] });
       }
     },
-    onError: (err: Error) => toast.error(err.message)
+    onError: (err: Error) => {
+      if (!isStaleResponseError(err)) toast.error(err.message);
+    }
   });
 
   function handleGenerate() {

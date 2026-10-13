@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Copy, Check, ExternalLink, Sparkles, CheckCircle2, Key, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
-import { apiGet, apiPost } from "../../lib/apiClient";
+import { apiGet, apiPost, isStaleResponseError } from "../../lib/apiClient";
 import {
   buildClientConfigs,
   buildHelloWorldPrompt,
@@ -103,7 +103,7 @@ export function Step6ConnectAgent({
       toast.success("体验 Token 已签发，并自动注入下方配置。");
     },
     onError: (err: Error) => {
-      toast.error(`生成 Token 失败: ${err.message}`);
+      if (!isStaleResponseError(err)) toast.error(`生成 Token 失败: ${err.message}`);
     }
   });
 
