@@ -19,7 +19,7 @@ export const SERVER_TIMING_NAMES = [
   "total"
 ] as const;
 export type ServerTimingName = (typeof SERVER_TIMING_NAMES)[number];
-export type DisplayCacheState = "hit" | "miss" | "bypass";
+export type DisplayCacheState = "hit" | "miss";
 
 const ALLOWED_NAMES = new Set<string>(SERVER_TIMING_NAMES);
 

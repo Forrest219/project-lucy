@@ -98,8 +98,6 @@ describe("Spec 174 T3 — display snapshot cache (SC-03/04/13/15)", () => {
     fail = false;
     const realNow = Date.now();
     vi.spyOn(Date, "now").mockReturnValue(realNow + 1100);
-    stopDisplayReconciler();
-    await startDisplayReconciler({ metadataIntervalMs: 60_000, fullDigestIntervalMs: 60_000 });
     const result = await getDisplaySnapshot("f", ["D"], build);
     expect(result.payload).toBe("ok");
     expect(builds).toBe(2);
@@ -169,14 +167,123 @@ describe("Spec 174 T3 — display snapshot cache (SC-03/04/13/15)", () => {
     expect(JSON.parse(second.payload)).toEqual({ tables: [{ name: "a" }] });
   });
 
-  it("bypasses the cache when the reconciler is stopped", async () => {
+  it("is busy without a payload while the reconciler is stopped, and serves again once it recovers", async () => {
     stopDisplayReconciler();
     expect(displayCacheVerified()).toBe(false);
     let builds = 0;
-    await getDisplaySnapshot("b", ["D"], async () => String(++builds));
-    const second = await getDisplaySnapshot("b", ["D"], async () => String(++builds));
-    expect(second.cache).toBe("bypass");
-    expect(builds).toBe(2);
+    await expect(getDisplaySnapshot("b", ["D"], async () => String(++builds))).rejects.toMatchObject({ code: "DISPLAY_SNAPSHOT_BUSY", statusCode: 503, retryAfterSeconds: 1 });
+    expect(builds).toBe(0);
+    await startDisplayReconciler({ metadataIntervalMs: 60_000, fullDigestIntervalMs: 60_000 });
+    expect((await getDisplaySnapshot("b", ["D"], async () => String(++builds))).payload).toBe("1");
+  });
+});
+
+describe("Spec 174 R1 — unverified reconciliation never bypasses the safe return boundary (SC-03/04/05/15)", () => {
+  it("unverified × pending write: busy, no build, no payload", async () => {
+    stopDisplayReconciler();
+    const token = beginDisplayWrite(["D"]);
+    let builds = 0;
+    await expect(getDisplaySnapshot("up", ["D"], async () => `partial-${++builds}`)).rejects.toBeInstanceOf(DisplaySnapshotBusyError);
+    endDisplayWrite(token);
+    expect(builds).toBe(0);
+    expect(displaySnapshotDiagnostics().inflightBuilds).toBe(0);
+  });
+
+  it("unverified concurrency: no request builds, none returns data", async () => {
+    stopDisplayReconciler();
+    let builds = 0;
+    const results = await Promise.allSettled(Array.from({ length: 6 }, (_, index) =>
+      getDisplaySnapshot(`uc-${index % 2}`, ["D"], async () => String(++builds))
+    ));
+    expect(results.every((result) => result.status === "rejected")).toBe(true);
+    expect(builds).toBe(0);
+  });
+
+  it("same-key and different-key concurrency never exceeds the build cap and settles to zero", async () => {
+    let maxInflight = 0;
+    const gate = deferred();
+    const build = async () => {
+      maxInflight = Math.max(maxInflight, displaySnapshotDiagnostics().inflightBuilds);
+      await gate.promise;
+      return "x";
+    };
+    const sameKey = Array.from({ length: 6 }, () => getDisplaySnapshot("same", ["D"], build));
+    const otherKeys = Array.from({ length: 8 }, (_, index) => getDisplaySnapshot(`other-${index}`, ["D"], build));
+    const all = Promise.allSettled([...sameKey, ...otherKeys]);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(displaySnapshotDiagnostics().inflightBuilds).toBeLessThanOrEqual(MAX_CONCURRENT_DISPLAY_BUILDS);
+    gate.resolve();
+    const settled = await all;
+    expect(maxInflight).toBeLessThanOrEqual(MAX_CONCURRENT_DISPLAY_BUILDS);
+    expect(settled.slice(0, 6).every((result) => result.status === "fulfilled")).toBe(true);
+    expect(settled.filter((result) => result.status === "rejected").length).toBeGreaterThan(0);
+    expect(displaySnapshotDiagnostics().inflightBuilds).toBe(0);
+  });
+
+  it("verification lost during a build: owner and attached waiters are busy, nothing is published", async () => {
+    const gate = deferred();
+    let builds = 0;
+    const build = async () => {
+      builds += 1;
+      await gate.promise;
+      return `b-${builds}`;
+    };
+    const owner = getDisplaySnapshot("lost", ["D"], build);
+    const attached = getDisplaySnapshot("lost", ["D"], build);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    stopDisplayReconciler();
+    gate.resolve();
+    await expect(owner).rejects.toBeInstanceOf(DisplaySnapshotBusyError);
+    await expect(attached).rejects.toBeInstanceOf(DisplaySnapshotBusyError);
+    expect(builds).toBe(1);
+    expect(displaySnapshotDiagnostics().entries.find((entry) => entry.name === "lost")).toMatchObject({ hasCurrent: false, inflight: 0 });
+    await startDisplayReconciler({ metadataIntervalMs: 60_000, fullDigestIntervalMs: 60_000 });
+    expect((await getDisplaySnapshot("lost", ["D"], build)).payload).toBe("b-2");
+  });
+
+  it("verification lost while waiting for a pending write is busy", async () => {
+    const token = beginDisplayWrite(["D"]);
+    const waiting = getDisplaySnapshot("wait-lost", ["D"], async () => "data");
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    stopDisplayReconciler();
+    endDisplayWrite(token);
+    await expect(waiting).rejects.toBeInstanceOf(DisplaySnapshotBusyError);
+  });
+
+  it("a request during write → rollback waits for the outer barrier and returns only the final disk state", async () => {
+    let disk = "v1";
+    const build = async () => disk;
+    await getDisplaySnapshot("rb", ["P"], build);
+    const transaction = withDisplayWriteBarrier(["P"], async () => {
+      disk = "v2-unacked";
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      await withDisplayWriteBarrier(["P"], async () => {
+        disk = "v1";
+      });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const during = getDisplaySnapshot("rb", ["P"], build);
+    await transaction;
+    const result = await during;
+    expect(result.payload).toBe("v1");
+    expect(result.cache).toBe("miss");
+  });
+
+  it("a reconciler watching another project root does not verify this root's snapshots", async () => {
+    const otherRoot = await mkdtemp(path.join(os.tmpdir(), "lucy-display-snapshot-other-"));
+    try {
+      await writeFile(path.join(otherRoot, "ktx.yaml"), "connections: {}\n", "utf8");
+      process.env.KTX_PROJECT_ROOT = otherRoot;
+      invalidateContentPathsCache();
+      await expect(getDisplaySnapshot("switch", ["D"], async () => "other")).rejects.toBeInstanceOf(DisplaySnapshotBusyError);
+      await startDisplayReconciler({ metadataIntervalMs: 60_000, fullDigestIntervalMs: 60_000 });
+      expect((await getDisplaySnapshot("switch", ["D"], async () => "other")).payload).toBe("other");
+    } finally {
+      process.env.KTX_PROJECT_ROOT = projectRoot;
+      invalidateContentPathsCache();
+      await rm(otherRoot, { recursive: true, force: true });
+    }
   });
 });
 
@@ -246,5 +353,26 @@ describe("Spec 174 T3 — external change reconciliation (SC-05/13, DI-12/13)", 
     stopDisplayReconciler();
     expect(displaySnapshotDiagnostics().reconcilerRunning).toBe(false);
     stopDisplayReconciler();
+  });
+
+  it("a restarted reconciler never serves a snapshot from before the unverified window", async () => {
+    let disk = "before";
+    await getDisplaySnapshot("restart", ["D"], async () => disk);
+    stopDisplayReconciler();
+    disk = "after";
+    await startDisplayReconciler({ metadataIntervalMs: 60_000, fullDigestIntervalMs: 60_000 });
+    expect((await getDisplaySnapshot("restart", ["D"], async () => disk)).payload).toBe("after");
+  });
+
+  it("the server-owned stopper only stops a reconciler it started", async () => {
+    const { ensureDisplayReconciler } = await import("../display-snapshot");
+    const keep = await ensureDisplayReconciler();
+    keep();
+    expect(displaySnapshotDiagnostics().reconcilerRunning).toBe(true);
+    stopDisplayReconciler();
+    const own = await ensureDisplayReconciler();
+    expect(displaySnapshotDiagnostics().reconcilerRunning).toBe(true);
+    own();
+    expect(displaySnapshotDiagnostics().reconcilerRunning).toBe(false);
   });
 });

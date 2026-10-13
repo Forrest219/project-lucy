@@ -273,6 +273,34 @@ describe("Spec 174 T3 — invalidation matrix (DI-01..15/18)", () => {
     expect(deniedAgents.status).toBe(401);
   });
 
+  it("R1 unverified reconciliation: sources and agents are busy with no data, then serve the final disk state", async () => {
+    await sources();
+    await request(app.server).get("/api/admin/agents").expect(200);
+    stopDisplayReconciler();
+    await writeFile(path.join(projectRoot, "semantic-layer", "warehouse", "_schema", "fin.yaml"), MANIFEST.replace("fin_budget", "fin_unverified"), "utf8");
+    await writeFile(path.join(projectRoot, "webui", "config", "access.yaml"), ACCESS.replace("name: Li Si", "name: Li Si 3"), "utf8");
+    for (const url of ["/api/sources", "/api/admin/agents"]) {
+      const busy = await request(app.server).get(url);
+      expect(busy.status).toBe(503);
+      expect(busy.headers["retry-after"]).toBe("1");
+      expect(busy.body).toEqual({ ok: false, error: { code: "DISPLAY_SNAPSHOT_BUSY", message: "页面数据暂时无法完成刷新，请稍后重试。" } });
+    }
+    await startDisplayReconciler({ metadataIntervalMs: 60_000, fullDigestIntervalMs: 60_000 });
+    const recovered = await sources();
+    expect(recovered.body.data.tables.map((t: { table: string }) => t.table)).toContain("fin_unverified");
+    const agents = await request(app.server).get("/api/admin/agents").expect(200);
+    expect(agents.body.data.agents.find((a: { id: string }) => a.id === "lisi").name).toBe("Li Si 3");
+  });
+
+  it("R1 busy while unverified still runs RequireAuth first", async () => {
+    stopDisplayReconciler();
+    const { hashPassword } = await import("../auth/password");
+    await writeFile(process.env.LUCY_ADMINS_CONFIG_PATH!, `version: "1"\nadmins:\n  - id: owner\n    display_name: Owner\n    password_hash: "${await hashPassword("perf-owner-pass-1")}"\n    role: owner\n    enabled: true\n`, "utf8");
+    process.env.LUCY_WEBUI_AUTH = "required";
+    resetAdminsCache();
+    expect((await request(app.server).get("/api/sources")).status).toBe(401);
+  });
+
   it("returns DISPLAY_SNAPSHOT_BUSY with Retry-After when writes never settle", async () => {
     const token = beginDisplayWrite(["D"]);
     const res = await request(app.server).get("/api/sources");

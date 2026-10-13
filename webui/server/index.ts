@@ -13,8 +13,7 @@ import {
   getDisplaySnapshot,
   prewarmDisplaySnapshots,
   registerDisplayPrewarmer,
-  startDisplayReconciler,
-  stopDisplayReconciler
+  ensureDisplayReconciler
 } from "./display-snapshot";
 import { changedFiles, previewDiff, type SessionWrittenFile } from "./diff";
 import { joinCandidatesPath, readJoinCandidates, writeJoinCandidates, type JoinCandidate } from "./joins-sidecar";
@@ -566,8 +565,17 @@ export function buildServer() {
     probeScheduler.invalidateGeneration();
     clearLiveCatalogCache();
   });
+  // Spec 174 §3.2 — display snapshots are only served while a reconciler verifies them.
+  let stopOwnReconciler: () => void = () => undefined;
+  app.addHook("onReady", async () => {
+    try {
+      stopOwnReconciler = await ensureDisplayReconciler();
+    } catch (error) {
+      console.warn("[display-snapshot] reconciler unavailable; display reads stay busy:", error);
+    }
+  });
   app.addHook("onClose", async () => {
-    stopDisplayReconciler();
+    stopOwnReconciler();
     stopProbeInvalidation();
     probeScheduler.close();
   });
@@ -2084,12 +2092,6 @@ export async function startServer(options: { displayPrewarm?: boolean } = {}): P
   const app = buildServer();
   const host = process.env.LUCY_WEBUI_HOST ?? "127.0.0.1";
   const port = Number(process.env.LUCY_WEBUI_PORT ?? DEFAULT_WEBUI_PORT);
-  // Spec 174 §3.2 — display snapshots are only trusted while the reconciler runs.
-  try {
-    await startDisplayReconciler();
-  } catch (error) {
-    console.warn("[display-snapshot] reconciler unavailable; display reads stay uncached:", error);
-  }
   await app.listen({ host, port });
   const t3 = performance.now();
   let displayReadyMs: number | null = null;

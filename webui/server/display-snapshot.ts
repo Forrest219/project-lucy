@@ -6,10 +6,11 @@
  * previews never read it. Payloads are stored pre-serialized, so consumers
  * cannot mutate a published snapshot.
  *
- * The cache is only trusted while the reconciler runs: fs.watch triggers +
- * 1 s metadata reconciliation + 30 s full-content digest. Without a healthy
- * reconciler (tests, failed watchers, overdue digest) every request builds
- * from disk ("bypass"), which is always correct.
+ * Snapshots are only served while the reconciler for the current project
+ * verifies them: fs.watch triggers + 1 s metadata reconciliation + 30 s
+ * full-content digest. Without that (stopped / failed reconciler, overdue
+ * digest, other project root) requests are a retryable DISPLAY_SNAPSHOT_BUSY
+ * with no payload until reconciliation recovers.
  */
 import { createHash } from "node:crypto";
 import { watch, type FSWatcher } from "node:fs";
@@ -56,11 +57,10 @@ type Entry = { current?: Slot; inflight: Map<string, Promise<Slot>>; failure?: {
 
 const entries = new Map<string, Entry>();
 let inflightBuilds = 0;
-let stats = { builds: 0, hits: 0, misses: 0, bypass: 0, busy: 0 };
+let stats = { builds: 0, hits: 0, misses: 0, busy: 0 };
 
-export type DisplaySnapshotResult = { payload: string; version: string; cache: "hit" | "miss" | "bypass" };
-/** `version` is null for uncached (bypass) builds, which should derive a content version. */
-export type DisplayBuild = (version: string | null) => Promise<string>;
+export type DisplaySnapshotResult = { payload: string; version: string; cache: "hit" | "miss" };
+export type DisplayBuild = (version: string) => Promise<string>;
 
 function entryFor(name: string): Entry {
   let entry = entries.get(name);
@@ -79,17 +79,26 @@ function versionOf(key: string): string {
   return createHash("sha256").update(key).digest("hex").slice(0, 16);
 }
 
-async function buildSlot(key: string, build: DisplayBuild, cached = true): Promise<Slot> {
+async function buildSlot(key: string, build: DisplayBuild): Promise<Slot> {
   inflightBuilds += 1;
   stats.builds += 1;
   countEntryPerf("displayBuilds");
   markDisplayBuild();
   try {
     const version = versionOf(key);
-    return { key, payload: await build(cached ? version : null), version, builtAt: Date.now() };
+    return { key, payload: await build(version), version, builtAt: Date.now() };
   } finally {
     inflightBuilds -= 1;
   }
+}
+
+function sameContext(a: ScopeContext, b: ScopeContext): boolean {
+  return a.projectRoot === b.projectRoot && a.semanticLayer === b.semanticLayer && a.accessPaths.join("\u0000") === b.accessPaths.join("\u0000");
+}
+
+/** Reconciliation is healthy *and* watching exactly this scope context. */
+function verifiedFor(context: ScopeContext): boolean {
+  return displayCacheVerified() && reconciler !== null && sameContext(reconciler.context, context);
 }
 
 /**
@@ -104,17 +113,12 @@ export async function getDisplaySnapshot(
 ): Promise<DisplaySnapshotResult> {
   const extraKey = options.extraKey ?? "";
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
-    if (!displayCacheVerified()) {
-      const context = await currentScopeContext();
-      const slot = await buildSlot(keyFor(name, scopes, context, extraKey), build, false);
-      stats.bypass += 1;
-      markDisplayCache("bypass");
-      return { payload: slot.payload, version: slot.version, cache: "bypass" };
-    }
+    if (!displayCacheVerified()) break;
     if (hasPendingDisplayWrite(scopes) && !(await waitForDisplayWritesSettled(scopes, PENDING_WRITE_WAIT_MS))) {
       break;
     }
     const context = await currentScopeContext();
+    if (!verifiedFor(context)) break;
     const key = keyFor(name, scopes, context, extraKey);
     const entry = entryFor(name);
     if (entry.current?.key === key && !hasPendingDisplayWrite(scopes)) {
@@ -147,14 +151,16 @@ export async function getDisplaySnapshot(
       release();
       throw error;
     }
-    // Publish only if nothing changed while building; otherwise retry with the new key.
-    let nowKey: string;
+    // Publish / return only if still verified and nothing changed while building;
+    // otherwise retry with the new key (or end busy).
+    let nowContext: ScopeContext;
     try {
-      nowKey = keyFor(name, scopes, await currentScopeContext(), extraKey);
+      nowContext = await currentScopeContext();
     } finally {
       release();
     }
-    if (!hasPendingDisplayWrite(scopes) && nowKey === slot.key) {
+    if (!verifiedFor(nowContext)) break;
+    if (!hasPendingDisplayWrite(scopes) && keyFor(name, scopes, nowContext, extraKey) === slot.key) {
       if (entry.current?.key !== slot.key) entry.current = slot;
       entry.failure = undefined;
       stats.misses += 1;
@@ -313,6 +319,8 @@ export async function reconcileMetadata(state: ReconcilerState | null = reconcil
     if (scopes.length > 0) bumpDisplayGeneration(scopes);
     state.lastMetaAt = Date.now();
     state.error = undefined;
+    // Recovery path: an overdue / never-completed full digest keeps snapshots busy until it runs.
+    if (state.lastMetaAt - state.lastFullAt >= FULL_DIGEST_FRESH_MS) void reconcileFullDigest(state);
   } catch (error) {
     state.error = error instanceof Error ? error.message : String(error);
   } finally {
@@ -336,29 +344,51 @@ export async function reconcileFullDigest(state: ReconcilerState | null = reconc
   }
 }
 
-export async function startDisplayReconciler(options: { metadataIntervalMs?: number; fullDigestIntervalMs?: number } = {}): Promise<void> {
+export async function startDisplayReconciler(options: { metadataIntervalMs?: number; fullDigestIntervalMs?: number } = {}): Promise<() => void> {
   stopDisplayReconciler();
   const context = await currentScopeContext();
-  const meta = await scanMetadata(context);
-  const now = Date.now();
   const state: ReconcilerState = {
     context,
-    meta,
-    contentHashes: await hashContents(meta.keys()),
-    lastMetaAt: now,
-    lastFullAt: now,
+    meta: new Map(),
+    contentHashes: new Map(),
+    lastMetaAt: 0,
+    lastFullAt: 0,
     running: false,
     fullRunning: false,
     watchers: [],
     timers: []
   };
+  try {
+    state.meta = await scanMetadata(context);
+    state.contentHashes = await hashContents(state.meta.keys());
+    state.lastMetaAt = state.lastFullAt = Date.now();
+  } catch (error) {
+    // Stay unverified (busy) and let the timers retry until reconciliation recovers.
+    state.error = error instanceof Error ? error.message : String(error);
+  }
   reconciler = state;
+  // Nothing that happened while unverified was observed: no earlier snapshot or build may be served.
+  entries.clear();
+  bumpDisplayGeneration(["D", "P", "C"]);
   installWatchers(state);
   const metaTimer = setInterval(() => void reconcileMetadata(state), options.metadataIntervalMs ?? METADATA_INTERVAL_MS);
   const fullTimer = setInterval(() => void reconcileFullDigest(state), options.fullDigestIntervalMs ?? FULL_DIGEST_INTERVAL_MS);
   metaTimer.unref?.();
   fullTimer.unref?.();
   state.timers.push(metaTimer, fullTimer);
+  return () => {
+    if (reconciler === state) stopDisplayReconciler();
+  };
+}
+
+/**
+ * Server lifecycle hook: keep a running reconciler for the current scope
+ * context, or (re)start one. The returned stopper only stops a reconciler this
+ * call started, so closing one server does not unverify another's.
+ */
+export async function ensureDisplayReconciler(): Promise<() => void> {
+  if (reconciler && sameContext(reconciler.context, await currentScopeContext())) return () => undefined;
+  return startDisplayReconciler();
 }
 
 export function stopDisplayReconciler(): void {
@@ -392,7 +422,7 @@ export async function prewarmDisplaySnapshots(): Promise<void> {
 /** Test / fixture IPC hook: drop every snapshot, failure and in-flight reference. */
 export function resetDisplaySnapshotsForTests(): void {
   entries.clear();
-  stats = { builds: 0, hits: 0, misses: 0, bypass: 0, busy: 0 };
+  stats = { builds: 0, hits: 0, misses: 0, busy: 0 };
 }
 
 export function displaySnapshotDiagnostics() {
