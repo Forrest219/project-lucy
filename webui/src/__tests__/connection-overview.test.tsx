@@ -1891,7 +1891,7 @@ describe("ConnectionOverview grid visual consistency (M72)", () => {
     expect(screen.getByRole("columnheader", { name: "已发现表数" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "已启用表数" })).toBeInTheDocument();
 
-    expect(await screen.findByTestId("schema-live-count-mysql-aliyun-dataforai")).toHaveTextContent("28 张表");
+    await waitFor(() => expect(screen.getByTestId("schema-live-count-mysql-aliyun-dataforai")).toHaveTextContent("28 张表"));
     expect(screen.getByTestId("schema-live-count-mysql-aliyun-openclaw_db")).toHaveTextContent("9 张表");
     expect(screen.getByTestId("schema-local-count-mysql-aliyun-openclaw_db")).toHaveTextContent("0 张表");
     expect(screen.getByRole("button", { name: "重新拉取库内目录" })).toBeInTheDocument();
@@ -1924,7 +1924,7 @@ describe("ConnectionOverview grid visual consistency (M72)", () => {
     renderOverview();
 
     const mysqlHealth = await screen.findByTestId("connection-health-mysql-aliyun");
-    expect(mysqlHealth).toHaveTextContent("通");
+    await waitFor(() => expect(mysqlHealth).toHaveTextContent("通"));
     expect(mysqlHealth).toHaveTextContent("42 ms");
     expect(mysqlHealth).toHaveAttribute("data-tone", "success");
 
@@ -1947,7 +1947,7 @@ describe("ConnectionOverview grid visual consistency (M72)", () => {
     renderOverview();
 
     const health = await screen.findByTestId("connection-health-mysql-aliyun");
-    expect(health).toHaveTextContent("42 ms");
+    await waitFor(() => expect(health).toHaveTextContent("42 ms"));
     expect(health).toHaveAttribute("aria-haspopup", "dialog");
     expect(health.querySelector(".pl-connection-health-chevron")).not.toBeNull();
     fireEvent.click(health);
@@ -2008,7 +2008,7 @@ describe("ConnectionOverview grid visual consistency (M72)", () => {
 
     renderOverview();
 
-    expect(await screen.findByTestId("connection-health-mysql-aliyun")).toHaveTextContent("通");
+    await waitFor(() => expect(screen.getByTestId("connection-health-mysql-aliyun")).toHaveTextContent("通"));
     const bad = await screen.findByTestId("connection-health-bad-conn");
     expect(bad).toHaveTextContent("不可用");
     expect(bad).toHaveAttribute("data-tone", "danger");
@@ -2089,7 +2089,7 @@ describe("ConnectionOverview grid visual consistency (M72)", () => {
     renderOverview();
 
     const health = await screen.findByTestId("connection-health-mysql-aliyun");
-    expect(health).toHaveTextContent("不可用");
+    await waitFor(() => expect(health).toHaveTextContent("不可用"));
     fireEvent.click(health);
     expect(await screen.findByTestId("connection-test-drawer")).toBeInTheDocument();
     expect(screen.getByTestId("connection-test-banner")).not.toHaveTextContent("尚未测试");

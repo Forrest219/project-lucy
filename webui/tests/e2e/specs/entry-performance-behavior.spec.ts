@@ -151,3 +151,67 @@ test("SC-05 same-page mutation and external edits are visible on the next reques
     return body.data.meta?.snapshotVersion ?? "none";
   }, { timeout: 5000 }).not.toBe(sources.data.meta?.snapshotVersion ?? "none");
 });
+
+const CLS_INIT = `(() => {
+  const state = { cls: 0, shifts: [] };
+  Object.defineProperty(window, "__lucyCls", { value: state, configurable: false });
+  try {
+    new PerformanceObserver((list) => {
+      for (const e of list.getEntries()) {
+        if (e.hadRecentInput) continue;
+        state.cls += e.value;
+        state.shifts.push({ t: e.startTime, v: e.value });
+      }
+    }).observe({ type: "layout-shift", buffered: true });
+  } catch (_) {}
+})();`;
+
+async function delayRoute(page: Page, pattern: string, ms: number, fail = false): Promise<void> {
+  await page.route(pattern, async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, ms));
+    if (fail) {
+      await route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ ok: false, error: { code: "INTERNAL", message: "synthetic failure" } }) });
+    } else {
+      await route.continue();
+    }
+  });
+}
+
+for (const variant of [
+  { name: "runtime + reload history 3 s slow", runtimeMs: 3000, reloadsMs: 3000, fail: false, sourcesMs: 0 },
+  { name: "runtime + reload history fail", runtimeMs: 300, reloadsMs: 300, fail: true, sourcesMs: 0 },
+  { name: "slow decorations with 3 s slow sources", runtimeMs: 3000, reloadsMs: 3000, fail: false, sourcesMs: 3000 }
+]) {
+  test(`R5 SC-06/10 PERF-09 ${variant.name}: cards are not held, probes start after paint, CLS ≤ 0.05`, async ({ page }) => {
+    await page.addInitScript({ content: CLS_INIT });
+    await delayRoute(page, "**/api/admin/mcp-runtime/status", variant.runtimeMs, variant.fail);
+    await delayRoute(page, "**/api/catalog/reloads", variant.reloadsMs, variant.fail);
+    if (variant.sourcesMs) await delayRoute(page, "**/api/sources", variant.sourcesMs);
+    await page.goto("/connections");
+    await expect(page.locator(`[data-testid="connection-card-${firstConn()}"]`)).toBeVisible({ timeout: 1500 });
+    expect(await connectionCards(page)).toBe(expected.connections);
+    await expect(page.locator('[data-testid="create-connection-btn"]')).toBeEnabled();
+    if (variant.sourcesMs) {
+      await expect(page.locator(`[data-testid^="schema-actions-pending-${firstConn()}-"]`).first()).toBeVisible();
+    }
+    // Observe through every decoration / sources / probe completion.
+    await page.waitForTimeout(Math.max(variant.runtimeMs, variant.reloadsMs, variant.sourcesMs) + 800);
+    await expect(page.locator(`[data-testid="connection-health-${firstConn()}"]`)).not.toHaveAttribute("aria-label", /探测中/, { timeout: 15_000 });
+    await expect(page.locator(`[data-testid^="schema-actions-pending-${firstConn()}-"]`)).toHaveCount(0, { timeout: 5000 });
+    await page.waitForTimeout(300);
+    const timing = await page.evaluate(() => {
+      const armed = performance.getEntriesByName("lucy-connections-probes-armed")[0]?.startTime ?? null;
+      const commit = performance.getEntriesByName("lucy-connections-cards-commit")[0]?.startTime ?? null;
+      const probes = performance.getEntriesByType("resource")
+        .filter((e) => /\/api\/connections\/[^/]+\/(test|live-schemas)/.test(new URL(e.name).pathname))
+        .map((e) => (e as PerformanceResourceTiming).startTime);
+      return { armed, commit, probes, cls: (window as unknown as { __lucyCls: { cls: number } }).__lucyCls.cls };
+    });
+    expect(timing.commit).not.toBeNull();
+    expect(timing.armed).not.toBeNull();
+    expect(timing.armed!).toBeGreaterThanOrEqual(timing.commit!);
+    expect(timing.probes.length).toBeGreaterThanOrEqual(expected.connections * 2);
+    expect(Math.min(...timing.probes)).toBeGreaterThanOrEqual(timing.armed!);
+    expect(timing.cls).toBeLessThanOrEqual(0.05);
+  });
+}

@@ -229,3 +229,75 @@ describe("Spec 174 R4 — a write start blocks Manifest-dependent actions until 
     });
   }
 });
+
+describe("Spec 174 R5 — decorations never gate the cards; probes start after the cards paint (SC-06/10)", () => {
+  function stubWithDecorations(options: { runtime?: Deferred; reloads?: Deferred }) {
+    const probeCalls: Array<{ url: string; cardPresent: boolean; armedMark: boolean }> = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/api/sources")) return sources.promise.then(() => sourcesBody());
+      if (url.endsWith("/api/project")) return json(project);
+      if (url.endsWith("/api/catalog/reloads")) return options.reloads ? options.reloads.promise : json({ runs: [], last: null, lastByConnection: {} });
+      if (url.endsWith("/api/admin/mcp-runtime/status")) return options.runtime ? options.runtime.promise : json({ execution: { status: "unknown" } });
+      if (url.includes("/live-schemas") || url.endsWith("/test")) {
+        probeCalls.push({
+          url,
+          cardPresent: Boolean(document.querySelector('[data-testid="connection-card-perf-conn"]')),
+          armedMark: performance.getEntriesByName("lucy-connections-probes-armed").length > 0
+        });
+        return url.endsWith("/test")
+          ? json({ status: "ok", latencyMs: 5, command: "ktx", args: [], exitCode: 0, stdout: "", stderr: "" })
+          : json({ status: "ok", connectionId: "perf-conn", schemas: [], fetchedAt: "", cached: false });
+      }
+      return json({ recorded: true });
+    }));
+    return probeCalls;
+  }
+
+  it("shows cards as soon as project is ready while runtime status and reload history are still pending", async () => {
+    const runtime = deferred();
+    const reloads = deferred();
+    stubWithDecorations({ runtime, reloads });
+    renderWith(<ConnectionOverview />);
+    expect(await screen.findByTestId("connection-card-perf-conn", {}, { timeout: 150 })).toBeInTheDocument();
+    expect(screen.getByTestId("add-schema-perf-conn")).toBeInTheDocument();
+    expect(screen.getByTestId("execution-runtime-slot")).toBeInTheDocument();
+    expect(screen.getByTestId("catalog-reload-status-perf-conn")).toHaveTextContent("正在读取配置同步状态...");
+    await act(async () => {
+      runtime.resolve(json({ execution: { status: "stale" } }));
+      reloads.resolve(json({ runs: [], last: null, lastByConnection: { "perf-conn": { id: "r1", connectionId: "perf-conn", status: "succeeded", startedAt: "2026-10-01T00:00:00.000Z", finishedAt: "2026-10-01T00:00:01.000Z", tables: 1, warnings: [] } } }));
+    });
+    expect(await screen.findByTestId("execution-runtime-notice")).toBeInTheDocument();
+    expect(screen.queryByTestId("execution-runtime-slot")).not.toBeInTheDocument();
+    expect(await screen.findByTestId("connection-last-reload-perf-conn")).toBeInTheDocument();
+    expect(screen.getByTestId("connection-card-perf-conn")).toBeInTheDocument();
+  });
+
+  it("runtime / reload request errors keep the cards and add no runtime notice", async () => {
+    const runtime = deferred();
+    const reloads = deferred();
+    stubWithDecorations({ runtime, reloads });
+    renderWith(<ConnectionOverview />);
+    expect(await screen.findByTestId("connection-card-perf-conn", {}, { timeout: 150 })).toBeInTheDocument();
+    await act(async () => {
+      runtime.resolve(json({ ok: false, error: { code: "INTERNAL", message: "runtime down" } }, 500));
+      reloads.resolve(json({ ok: false, error: { code: "INTERNAL", message: "history down" } }, 500));
+    });
+    await waitFor(() => expect(screen.getByTestId("catalog-reload-status-perf-conn")).toHaveTextContent("配置同步状态加载失败"));
+    expect(screen.queryByTestId("execution-runtime-notice")).not.toBeInTheDocument();
+    expect(screen.getByTestId("execution-runtime-slot")).toBeInTheDocument();
+    expect(screen.getByTestId("connection-card-perf-conn")).toBeInTheDocument();
+  });
+
+  it("automatic test / live-schemas requests start only after the cards committed and painted", async () => {
+    performance.clearMarks();
+    const probeCalls = stubWithDecorations({});
+    renderWith(<ConnectionOverview />);
+    await screen.findByTestId("connection-card-perf-conn");
+    await waitFor(() => expect(probeCalls.length).toBeGreaterThanOrEqual(2));
+    expect(probeCalls.every((call) => call.cardPresent && call.armedMark)).toBe(true);
+    const commit = performance.getEntriesByName("lucy-connections-cards-commit")[0]!;
+    const armed = performance.getEntriesByName("lucy-connections-probes-armed")[0]!;
+    expect(armed.startTime).toBeGreaterThanOrEqual(commit.startTime);
+  });
+});

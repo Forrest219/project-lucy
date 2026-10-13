@@ -1,4 +1,4 @@
-import { Fragment, lazy, Suspense, useEffect, useRef, useState } from "react";
+import { Fragment, lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight, Database, Server } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -354,14 +354,13 @@ function shouldShowRefreshWarning(
   return !lastRun;
 }
 
+/** Body status line for reload facts; history loading / error is shown in the header slot (Spec 174 R5). */
 function shouldShowCatalogRunStatus(
   lastRun: CatalogReloadRun | undefined,
   isReloading: boolean,
-  hasReloadError: boolean,
-  isHistoryLoading: boolean,
-  hasHistoryError: boolean
+  hasReloadError: boolean
 ): boolean {
-  return Boolean(isReloading || hasReloadError || isHistoryLoading || hasHistoryError || lastRun?.status === "failed");
+  return Boolean(isReloading || hasReloadError || lastRun?.status === "failed");
 }
 
 function liveTableCountCell(
@@ -415,12 +414,25 @@ export function ConnectionOverview() {
   });
 
   const connections = projectQuery.data?.connections ?? [];
-  // Spec 174 §5: background probes start only after the primary content commits;
-  // the server queue (concurrency 2) runs them in card order.
+  // Spec 174 §5: background probes start only after the primary connection cards
+  // commit and paint (double rAF); the server queue (concurrency 2) runs them in card order.
   const [probesArmed, setProbesArmed] = useState(false);
-  useEffect(() => {
-    if (projectQuery.data && !probesArmed) setProbesArmed(true);
-  }, [projectQuery.data, probesArmed]);
+  const cardsCommitted = projectQuery.data !== undefined;
+  useLayoutEffect(() => {
+    if (!cardsCommitted || probesArmed) return;
+    performance.mark("lucy-connections-cards-commit");
+    let second = 0;
+    const first = requestAnimationFrame(() => {
+      second = requestAnimationFrame(() => {
+        performance.mark("lucy-connections-probes-armed");
+        setProbesArmed(true);
+      });
+    });
+    return () => {
+      cancelAnimationFrame(first);
+      cancelAnimationFrame(second);
+    };
+  }, [cardsCommitted, probesArmed]);
   const manualProbeIds = useRef(new Set<string>());
   const liveSchemaQueries = useQueries({
     queries: connections.map((conn) => ({
@@ -473,20 +485,17 @@ export function ConnectionOverview() {
   const catalogReloadHistoryReady = catalogReloadsQuery.isSuccess;
   const catalogReloadHistoryLoading = catalogReloadsQuery.isLoading;
   const catalogReloadHistoryError = catalogReloadsQuery.error instanceof Error ? catalogReloadsQuery.error : null;
-  // Spec 174 §4.1: project drives the cards; sources only feeds local Manifest facts.
+  // Spec 174 §4.1: project alone drives the cards; sources only feeds local Manifest facts.
+  // Runtime notice and reload times are decorations with stable slots (never a card gate).
   const projectStatus = asyncStatus(projectQuery);
-  // The Spec 163 runtime notice sits above the list and reload timestamps sit in
-  // the card headers; hold the cards at most 300 ms for these (prefetched) reads
-  // so they do not shift the list after it appears.
-  const [runtimeHoldExpired, setRuntimeHoldExpired] = useState(false);
-  const projectReady = projectQuery.data !== undefined;
-  useEffect(() => {
-    if (!projectReady) return;
-    const timer = window.setTimeout(() => setRuntimeHoldExpired(true), 300);
-    return () => window.clearTimeout(timer);
-  }, [projectReady]);
-  const cardDecorationsPending = mcpRuntimeQuery.isPending || catalogReloadsQuery.isPending;
-  const cardsStatus = projectStatus === "success" && cardDecorationsPending && !runtimeHoldExpired ? "pending" : projectStatus;
+  const cardsStatus = projectStatus;
+  // If the runtime status is still pending when the cards first appear, keep a
+  // notice-sized slot above the list for this page visit so a late notice (or
+  // its absence) never moves the whole column.
+  const runtimeSlotRef = useRef<boolean | null>(null);
+  if (cardsCommitted && runtimeSlotRef.current === null) runtimeSlotRef.current = mcpRuntimeQuery.isPending;
+  const reserveRuntimeSlot = runtimeSlotRef.current === true;
+  const runtimeNotice = !mcpRuntimeQuery.isLoading && !mcpRuntimeQuery.isError ? executionNoticeCopy(mcpRuntimeQuery.data?.execution?.status) : null;
   const sourcesReady = sourcesQuery.data !== undefined;
   // Spec 174 §4.2: a pending write (or no re-read since) keeps Manifest facts unconfirmed for actions.
   const sourcesFactsPending = useDisplayFactsPending("sources");
@@ -699,12 +708,16 @@ export function ConnectionOverview() {
         />
       </div>
 
-      {!mcpRuntimeQuery.isLoading && !mcpRuntimeQuery.isError && executionNoticeCopy(mcpRuntimeQuery.data?.execution?.status) ? (
+      {runtimeNotice ? (
         <p className="pl-notice text-sm" role="status" data-testid="execution-runtime-notice">
-          {executionNoticeCopy(mcpRuntimeQuery.data?.execution?.status)}{" "}
+          {runtimeNotice}{" "}
           <Link className="notranslate underline" translate="no" to="/admin/mcp-playground">
             打开 MCP 调试台
           </Link>
+        </p>
+      ) : reserveRuntimeSlot ? (
+        <p className="pl-notice text-sm" aria-hidden="true" style={{ visibility: "hidden" }} data-testid="execution-runtime-slot">
+          &nbsp;
         </p>
       ) : null}
 
@@ -818,10 +831,9 @@ export function ConnectionOverview() {
             const showCatalogRunStatus = shouldShowCatalogRunStatus(
               lastRun,
               Boolean(reloadingConnections[conn.id]),
-              Boolean(reloadError),
-              catalogReloadHistoryLoading,
-              Boolean(catalogReloadHistoryError)
+              Boolean(reloadError)
             );
+            const showHistoryStatus = !headerTimestamp && !showCatalogRunStatus && (catalogReloadHistoryLoading || Boolean(catalogReloadHistoryError));
             return (
               <div className="pl-connection-row" key={conn.id} data-testid={`connection-card-${conn.id}`}>
                 <div className="pl-connection-card-header">
@@ -931,6 +943,16 @@ export function ConnectionOverview() {
                         <span>配置同步：</span>
                         <time className="notranslate" translate="no" dir="ltr">{headerTimestamp}</time>
                         {lastRun?.status === "failed" ? <span> · 失败</span> : null}
+                      </span>
+                    ) : showHistoryStatus ? (
+                      <span
+                        className={`pl-connection-last-reload pl-connection-last-reload--${catalogState.tone === "danger" ? "danger" : "muted"} notranslate`}
+                        data-testid={`catalog-reload-status-${conn.id}`}
+                        role={catalogState.tone === "danger" ? "alert" : "status"}
+                        title={catalogState.detail || undefined}
+                        translate="no"
+                      >
+                        {catalogState.label}
                       </span>
                     ) : null}
                     {isAssistantInProgress ? (
