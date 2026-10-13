@@ -3,7 +3,8 @@ import {
   clearLiveCatalogCache,
   listLiveSchemas,
   LiveCatalogConnectionNotFoundError,
-  LIVE_CATALOG_TTL_MS
+  LIVE_CATALOG_TTL_MS,
+  peekLiveSchemasCache
 } from "../live-catalog";
 import type { ConnectionInfo } from "../model";
 import type { SqlResult } from "../ktx";
@@ -285,5 +286,25 @@ describe("listLiveSchemas", () => {
     );
     expect(result.status).toBe("error");
     expect(result.reason).toMatch(/wire protocol/);
+  });
+});
+
+describe("Spec 174 T5 — live-schemas config generation guard (SC-09)", () => {
+  it("never stores or serves a result across connection config generations", async () => {
+    let generation = 1;
+    const runSqlImpl = vi.fn(async () => {
+      generation = 2; // config changed while the probe was running
+      return okSql([["dataforai", 3]]);
+    });
+    const deps = { readConnectionsImpl: async () => [mysqlConn], runSqlImpl, generation: 1, currentGeneration: () => generation };
+    const stale = await listLiveSchemas("/project", "mysql-aliyun", { refresh: true }, deps);
+    expect(stale.status).toBe("ok");
+    expect(peekLiveSchemasCache("/project", "mysql-aliyun", 1)).toBeNull();
+    expect(peekLiveSchemasCache("/project", "mysql-aliyun", 2)).toBeNull();
+
+    const fresh = vi.fn(async () => okSql([["dataforai", 4]]));
+    await listLiveSchemas("/project", "mysql-aliyun", { refresh: true }, { readConnectionsImpl: async () => [mysqlConn], runSqlImpl: fresh, generation: 2, currentGeneration: () => 2 });
+    expect(peekLiveSchemasCache("/project", "mysql-aliyun", 2)?.cached).toBe(true);
+    expect(peekLiveSchemasCache("/project", "mysql-aliyun", 3)).toBeNull();
   });
 });

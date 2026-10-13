@@ -416,16 +416,24 @@ export function ConnectionOverview() {
   });
 
   const connections = projectQuery.data?.connections ?? [];
+  // Spec 174 §5: background probes start only after the primary content commits;
+  // the server queue (concurrency 2) runs them in card order.
+  const [probesArmed, setProbesArmed] = useState(false);
+  useEffect(() => {
+    if (projectQuery.data && !probesArmed) setProbesArmed(true);
+  }, [projectQuery.data, probesArmed]);
+  const manualProbeIds = useRef(new Set<string>());
   const liveSchemaQueries = useQueries({
     queries: connections.map((conn) => ({
       queryKey: queryKeys.connectionLiveSchemas(conn.id),
-      queryFn: () =>
+      queryFn: ({ signal }: { signal: AbortSignal }) =>
         apiGet<LiveSchemasResponse>(
-          `/api/connections/${encodeURIComponent(conn.id)}/live-schemas`
+          `/api/connections/${encodeURIComponent(conn.id)}/live-schemas?purpose=automatic`,
+          { signal }
         ),
       staleTime: LIVE_SCHEMAS_STALE_MS,
       retry: false,
-      enabled: Boolean(projectQuery.data)
+      enabled: probesArmed
     }))
   });
   const liveByConnectionId = new Map(
@@ -436,15 +444,18 @@ export function ConnectionOverview() {
   const healthQueries = useQueries({
     queries: connections.map((conn) => ({
       queryKey: queryKeys.connectionHealth(conn.id),
-      queryFn: () =>
-        apiPost<ConnectionTestResult>(
+      queryFn: ({ signal }: { signal: AbortSignal }) => {
+        const purpose = manualProbeIds.current.delete(conn.id) ? "manual" : "automatic";
+        return apiPost<ConnectionTestResult>(
           `/api/connections/${encodeURIComponent(conn.id)}/test`,
-          {}
-        ),
+          { purpose },
+          { signal }
+        );
+      },
       staleTime: 0,
       gcTime: 0,
       retry: false,
-      enabled: Boolean(projectQuery.data)
+      enabled: probesArmed
     }))
   });
   const healthByConnectionId = new Map(
@@ -956,7 +967,7 @@ export function ConnectionOverview() {
                                 setRefreshingLiveByConnection((current) => ({ ...current, [conn.id]: true }));
                                 try {
                                   const data = await apiGet<LiveSchemasResponse>(
-                                    `/api/connections/${encodeURIComponent(conn.id)}/live-schemas?refresh=1`
+                                    `/api/connections/${encodeURIComponent(conn.id)}/live-schemas?refresh=1&purpose=manual`
                                   );
                                   queryClient.setQueryData(queryKeys.connectionLiveSchemas(conn.id), data);
                                 } catch (err) {
@@ -1517,6 +1528,7 @@ export function ConnectionOverview() {
             logsExpanded={testLogsExpanded}
             onClose={() => setTestDrawerConnId(null)}
             onRunTest={() => {
+              manualProbeIds.current.add(testDrawerConnId);
               void healthQuery?.refetch();
             }}
             onToggleLogs={() => setTestLogsExpanded((v) => !v)}

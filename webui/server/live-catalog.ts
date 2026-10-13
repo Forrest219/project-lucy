@@ -53,6 +53,8 @@ type CatalogProtocol = "mysql" | "postgres" | "sqlserver" | "oracle";
 type CacheEntry = {
   expiresAt: number;
   payload: LiveSchemasResponse;
+  /** Spec 174 §5 — connection config generation the result was produced under. */
+  generation?: number;
 };
 
 const cache = new Map<string, CacheEntry>();
@@ -62,6 +64,9 @@ export type ListLiveSchemasDeps = {
   runSqlImpl?: typeof runSql;
   now?: () => number;
   ttlMs?: number;
+  /** Spec 174 §5 — only reuse / store results of this config generation. */
+  generation?: number;
+  currentGeneration?: () => number;
 };
 
 function cacheKey(projectRoot: string, connId: string): string {
@@ -70,6 +75,18 @@ function cacheKey(projectRoot: string, connId: string): string {
 
 export function clearLiveCatalogCache(): void {
   cache.clear();
+}
+
+/** Spec 174 §5 — completed-result cache lookup without starting a probe. */
+export function peekLiveSchemasCache(
+  projectRoot: string,
+  connId: string,
+  generation: number,
+  now: () => number = Date.now
+): LiveSchemasResponse | null {
+  const hit = cache.get(cacheKey(projectRoot, connId));
+  if (!hit || hit.expiresAt <= now() || hit.generation !== generation) return null;
+  return { ...hit.payload, cached: true };
 }
 
 function resolveWireProtocol(conn: ConnectionInfo): CatalogProtocol | "unknown" {
@@ -182,7 +199,7 @@ export async function listLiveSchemas(
 
   if (!options.refresh) {
     const hit = cache.get(key);
-    if (hit && hit.expiresAt > now()) {
+    if (hit && hit.expiresAt > now() && (deps.generation === undefined || hit.generation === deps.generation)) {
       return { ...hit.payload, cached: true };
     }
   }
@@ -242,6 +259,9 @@ export async function listLiveSchemas(
     latencyMs: sqlResult.latencyMs,
     wireProtocol
   };
-  cache.set(key, { expiresAt: now() + ttlMs, payload: { ...payload, cached: false } });
+  // A result produced under an older connection config never enters the new cache.
+  if (deps.currentGeneration === undefined || deps.currentGeneration() === deps.generation) {
+    cache.set(key, { expiresAt: now() + ttlMs, payload: { ...payload, cached: false }, generation: deps.generation });
+  }
   return payload;
 }

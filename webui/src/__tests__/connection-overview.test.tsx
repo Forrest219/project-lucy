@@ -1957,6 +1957,22 @@ describe("ConnectionOverview grid visual consistency (M72)", () => {
     expect(screen.getByRole("heading", { name: "连通测试" })).toBeInTheDocument();
   });
 
+  it("Spec 174: page-entry probes are automatic; the Drawer re-test is manual", async () => {
+    stubOverviewFetch();
+    renderOverview();
+    const health = await screen.findByTestId("connection-health-mysql-aliyun");
+    await waitFor(() => expect(health).toHaveTextContent("42 ms"));
+    const testBodies = () =>
+      vi.mocked(fetch).mock.calls
+        .filter(([input, init]) => String(input).endsWith("/api/connections/mysql-aliyun/test") && init?.method === "POST")
+        .map(([, init]) => JSON.parse(String(init?.body)));
+    expect(testBodies()).toEqual([{ purpose: "automatic" }]);
+    expect(vi.mocked(fetch).mock.calls.some(([input]) => String(input).includes("/live-schemas?purpose=automatic"))).toBe(true);
+    fireEvent.click(health);
+    fireEvent.click(await screen.findByRole("button", { name: "重新测试连接" }));
+    await waitFor(() => expect(testBodies()).toEqual([{ purpose: "automatic" }, { purpose: "manual" }]));
+  });
+
   it("Spec 108: isolates connectivity failure to one connection card", async () => {
     stubOverviewFetch({
       connections: [

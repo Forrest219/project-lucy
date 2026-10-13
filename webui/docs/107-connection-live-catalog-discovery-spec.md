@@ -20,6 +20,7 @@
 | 关联台账 | `docs/ui-ux-feedback/pages/connections.md`（`UX-CONNECTIONS-026`～`027`） |
 | 上游 Spec | Spec 21（Catalog 上传 / 本地目录边界）；Spec 44（连接概览产品化）；术语标准 §4.2 |
 | 状态 | Implemented |
+| 后续修订 | [Spec 174](174-webui-entry-performance-spec.md) §5：live-schemas 改走全服务有界后台探测队列（并发 2、排队 ≤64、同配置代次进行中合并）；保留只读查询、10 分钟成功缓存与 `refresh=1`（只绕过已完成缓存，仍可合并进行中任务）；连接配置代次变化即清空缓存，旧代次结果不写入新配置缓存；可选 `purpose=automatic\|manual`（默认 manual） |
 | 日期 | 2026-10-12 |
 | 范围 | Owner 按需只读库内目录；连接概览「库内表数」；Add Schema 有候选时只下拉，目录失败或候选为空时才手输；分连接懒加载与 TTL 缓存 |
 

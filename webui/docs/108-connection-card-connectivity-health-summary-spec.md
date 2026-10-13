@@ -20,6 +20,7 @@
 | 关联台账 | `docs/ui-ux-feedback/pages/connections.md`（`UX-CONNECTIONS-028`～`030`） |
 | 上游 Spec | Spec 27（连通测试 Drawer）；Spec 39 §8.1（卡首行「最近连通测试」）；Spec 44（产品化；本 Spec 修订其「不新增测试入口」）；Spec 107（分连接并行探测、失败隔离） |
 | 状态 | Implemented |
+| 后续修订 | [Spec 174](174-webui-entry-performance-spec.md) §5：仅替代本 Spec §2 第 2 项的无限制「并行」调度——改为主内容首帧后排队、全服务并发 2、排队 ≤64、手动优先且每 3 个手动后取 1 个自动；每次进页仍探测、Drawer 同源、失败隔离、不挡首屏；`latencyMs` 仍只计 KTX 命令执行时间（排队 `queueMs` 仅写日志/Server-Timing）；可选 body `purpose` |
 | 日期 | 2026-08-06 |
 | 范围 | 连接卡右侧连通健康摘要；进页并行探测；与 Drawer 共用结果；延迟分级 |
 

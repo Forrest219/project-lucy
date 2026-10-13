@@ -2,12 +2,13 @@ import { createReadStream } from "node:fs";
 import { lstat, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import Fastify, { type FastifyError } from "fastify";
+import Fastify, { type FastifyError, type FastifyReply, type FastifyRequest } from "fastify";
 import { parse, parseDocument } from "yaml";
 import { buildProxy } from "./proxy/mcp-proxy.js";
 import { serveStaticAsset } from "./static-assets";
 import { addTiming, registerEntryPerformanceTiming, withRequestTiming } from "./entry-performance-timing";
-import { withDisplayWriteBarrier } from "./display-generation";
+import { displayGenerations, onDisplayGenerationChange, withDisplayWriteBarrier } from "./display-generation";
+import { parseProbePurpose, ProbeScheduler, type ProbeTiming } from "./background-probes";
 import {
   getDisplaySnapshot,
   prewarmDisplaySnapshots,
@@ -23,8 +24,10 @@ import { resolveLucyVersion } from "./lucy-version.js";
 import { reindexProject, validateSource, testConnection, type ValidationResult } from "./ktx";
 import { applyColumnTypeContractToValidation } from "./publish-gate";
 import {
+  clearLiveCatalogCache,
   listLiveSchemas,
-  LiveCatalogConnectionNotFoundError
+  LiveCatalogConnectionNotFoundError,
+  peekLiveSchemasCache
 } from "./live-catalog";
 import { previewSchemaStructure, SchemaStructureError } from "./schema-structure";
 import {
@@ -535,6 +538,20 @@ function getSourcesDisplaySnapshot(projectRoot: string) {
 
 registerDisplayPrewarmer("sources", async () => getSourcesDisplaySnapshot(await resolveProjectRoot()));
 
+/** Client disconnect (not normal completion) aborts this request's probe subscription. */
+function clientAbortSignal(reply: FastifyReply): AbortSignal {
+  const controller = new AbortController();
+  reply.raw.once("close", () => {
+    if (!reply.raw.writableFinished) controller.abort();
+  });
+  return controller.signal;
+}
+
+function logProbeTiming(request: FastifyRequest, kind: string, purpose: string, timing: ProbeTiming): void {
+  addTiming("queue", timing.queueMs);
+  request.log.info({ probe: { kind, purpose, queueMs: Math.round(timing.queueMs), executionMs: Math.round(timing.executionMs), totalMs: Math.round(timing.totalMs), shared: timing.shared } }, "connection probe");
+}
+
 export function buildServer() {
   const app = Fastify({ logger: true });
   const writtenFiles: SessionWrittenFile[] = [];
@@ -542,7 +559,18 @@ export function buildServer() {
 
   registerWebSecurity(app);
   registerEntryPerformanceTiming(app);
-  app.addHook("onClose", async () => stopDisplayReconciler());
+  // Spec 174 §5 — one bounded probe queue per server; config changes cancel stale work.
+  const probeScheduler = new ProbeScheduler({ currentGeneration: () => displayGenerations().L });
+  const stopProbeInvalidation = onDisplayGenerationChange((scopes) => {
+    if (!scopes.includes("L")) return;
+    probeScheduler.invalidateGeneration();
+    clearLiveCatalogCache();
+  });
+  app.addHook("onClose", async () => {
+    stopDisplayReconciler();
+    stopProbeInvalidation();
+    probeScheduler.close();
+  });
   app.addHook("onRequest", requireWebuiAuthHook);
 
   app.setErrorHandler((error: SupportedError, _request, reply) => {
@@ -1298,8 +1326,10 @@ export function buildServer() {
 
   app.get<{
     Params: { connId: string };
-    Querystring: { refresh?: string };
-  }>("/api/connections/:connId/live-schemas", async (request) => {
+    Querystring: { refresh?: string; purpose?: string };
+  }>("/api/connections/:connId/live-schemas", async (request, reply) => withRequestTiming(request, async () => {
+    const purpose = parseProbePurpose(request.query?.purpose);
+    if (!purpose) throw enabledTableError("BAD_REQUEST", "purpose must be automatic or manual");
     const projectRoot = await resolveProjectRoot();
     const { connId } = request.params;
     const refresh =
@@ -1307,7 +1337,22 @@ export function buildServer() {
       request.query?.refresh === "true" ||
       request.query?.refresh === "yes";
     try {
-      const data = await listLiveSchemas(projectRoot, connId, { refresh });
+      // Spec 107 10-minute success cache; refresh=1 skips completed results but
+      // still merges with an in-flight probe of the same config generation.
+      const generation = displayGenerations().L;
+      const cached = refresh ? null : peekLiveSchemasCache(projectRoot, connId, generation);
+      if (cached) return { ok: true, data: cached };
+      const { value: data, timing } = await probeScheduler.submit({
+        key: `${projectRoot}\u0000L${generation}\u0000${connId}\u0000live-schemas`,
+        generation,
+        purpose,
+        signal: clientAbortSignal(reply),
+        run: () => listLiveSchemas(projectRoot, connId, { refresh: true }, {
+          generation,
+          currentGeneration: () => displayGenerations().L
+        })
+      });
+      logProbeTiming(request, "live-schemas", purpose, timing);
       return { ok: true, data };
     } catch (err) {
       if (err instanceof LiveCatalogConnectionNotFoundError) {
@@ -1315,7 +1360,7 @@ export function buildServer() {
       }
       throw err;
     }
-  });
+  }));
 
   app.put<{
     Params: { connId: string };
@@ -1419,12 +1464,24 @@ export function buildServer() {
 
   app.post<{
     Params: { connId: string };
-  }>("/api/connections/:connId/test", async (request) => {
+    Body: { purpose?: string };
+  }>("/api/connections/:connId/test", async (request, reply) => withRequestTiming(request, async () => {
+    const purpose = parseProbePurpose(request.body?.purpose);
+    if (!purpose) throw enabledTableError("BAD_REQUEST", "purpose must be automatic or manual");
     const projectRoot = await resolveProjectRoot();
     const { connId } = request.params;
-    const result = await testConnection(projectRoot, connId);
+    // Spec 174 §5 — bounded shared queue; latencyMs stays the KTX command time only.
+    const generation = displayGenerations().L;
+    const { value: result, timing } = await probeScheduler.submit({
+      key: `${projectRoot}\u0000L${generation}\u0000${connId}\u0000test`,
+      generation,
+      purpose,
+      signal: clientAbortSignal(reply),
+      run: () => testConnection(projectRoot, connId)
+    });
+    logProbeTiming(request, "test", purpose, timing);
     return { ok: true, data: result };
-  });
+  }));
 
   app.post<{
     Params: { connId: string };
