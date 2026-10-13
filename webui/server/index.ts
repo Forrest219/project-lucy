@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import Fastify, { type FastifyError } from "fastify";
 import { parse, parseDocument } from "yaml";
 import { buildProxy } from "./proxy/mcp-proxy.js";
-import { registerEntryPerformanceTiming, timeAsync, withRequestTiming } from "./entry-performance-timing";
+import { registerEntryPerformanceTiming, withRequestTiming } from "./entry-performance-timing";
 import { changedFiles, previewDiff, type SessionWrittenFile } from "./diff";
 import { joinCandidatesPath, readJoinCandidates, writeJoinCandidates, type JoinCandidate } from "./joins-sidecar";
 import { formatConnectionErrorMessage } from "./connection-errors";
@@ -56,8 +56,8 @@ import {
 } from "./catalog-assets";
 import type { TablePatch } from "./model";
 import {
-  listManifestSchemas,
-  listSources,
+  listSourcesWithManifests,
+  sourcesDisplayMeta,
   previewSourcePatch,
   previewSourceYamlImport,
   readChangedSourceColumnContracts,
@@ -616,13 +616,14 @@ export function buildServer() {
 
   app.get("/api/sources", async (request) => withRequestTiming(request, async () => {
     const projectRoot = await resolveProjectRoot();
-    const [tables, manifestSchemas] = await Promise.all([
-      listSources(projectRoot),
-      timeAsync("manifest", () => listManifestSchemas(projectRoot))
-    ]);
+    const listing = await listSourcesWithManifests(projectRoot);
     return {
       ok: true,
-      data: { tables, manifestSchemas }
+      data: {
+        tables: listing.tables,
+        manifestSchemas: listing.manifestSchemas,
+        meta: sourcesDisplayMeta(listing)
+      }
     };
   }));
 

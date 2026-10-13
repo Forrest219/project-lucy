@@ -151,6 +151,15 @@ async function loadConfig(options: { fresh?: boolean } = {}): Promise<AccessConf
   return configCache;
 }
 
+/** Spec 174 §3.1 — parse access.yaml text without touching the runtime config cache. */
+export function parseAccessConfigText(content: string): AccessConfig {
+  const parsed = parse(content) as unknown;
+  if (!parsed || typeof parsed !== "object" || !Array.isArray((parsed as AccessConfig).users)) {
+    throw new Error("invalid_access_config_shape");
+  }
+  return parsed as AccessConfig;
+}
+
 export async function getAccessConfig(options: { fresh?: boolean } = {}): Promise<AccessConfig> {
   return loadConfig(options);
 }

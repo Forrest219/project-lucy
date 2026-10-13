@@ -1,13 +1,20 @@
+import { createHash } from "node:crypto";
 import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
-import { Document, isMap, parse, parseDocument, Scalar, YAMLMap, YAMLSeq, type ParsedNode } from "yaml";
+import { Document, isMap, parseDocument, Scalar, YAMLMap, YAMLSeq, type ParsedNode } from "yaml";
 import { computeCompletion } from "./completion";
 import { previewDiff } from "./diff";
 import { assertReadable, ForbiddenPathError, safeWrite } from "./fs-safe";
 import { auditedWriteFile } from "./admin/config-audit-write.js";
 import type { AuthoredText, Column, Join, ManifestSchemaSummary, Measure, Segment, SourceSummary, TableModel, TablePatch } from "./model";
 import { previewOverlayUpdate } from "./overlay";
-import { resolveEffectivePermissionsForAdmin } from "./proxy/acl.js";
+import {
+  authorizedCountsFromBatch,
+  enabledUserIdsFromRaw,
+  readAccessSnapshot,
+  resolvePermissionBatch,
+  sourceCountKey
+} from "./admin/permission-display.js";
 import { readConnections } from "./project";
 import { loadContentPaths } from "./paths";
 import { stripManifestOnlyColumnKeys } from "./semantic-overlay-sanitize";
@@ -316,69 +323,35 @@ async function statOverlay(projectRoot: string, conn: string, table: string): Pr
   }
 }
 
-function sourceKey(conn: string, schema: string, table: string): string {
-  return `${conn}${schema}${table}`;
-}
-
 type AuthorizedCountInput = {
   conn: string;
   schema: string;
   table: string;
 };
 
+export type AuthorizedCountsState = "ok" | "partial" | "unavailable";
+
 /**
- * Counts enabled Agents whose effective permissions include each source.
- * Matches `connectionId === conn && schema === schema && sourceName === table`.
- * Disabled Agents are skipped. Returns 0 for every source when access.yaml is
- * missing, malformed, or any per-agent resolution fails — never throws.
+ * Counts enabled Agents whose effective permissions include each source via
+ * one read-only permission batch (Spec 174 §3.1). Matches
+ * `connectionId === conn && schema === schema && sourceName === table`.
+ * Disabled Agents are skipped. Missing / malformed access.yaml keeps the
+ * legacy numeric 0 fallback but reports `unavailable` — never throws.
  */
 async function computeAuthorizedAgentCounts(
   projectRoot: string,
   sources: AuthorizedCountInput[]
-): Promise<Map<string, number>> {
-  const counts = new Map<string, number>();
-  for (const s of sources) {
-    counts.set(sourceKey(s.conn, s.schema, s.table), 0);
-  }
-  const accessPath = path.join(projectRoot, "webui", "config", "access.yaml");
-  let raw: string;
+): Promise<{ counts: Map<string, number>; state: AuthorizedCountsState; runtimeConsistency: "matched" | "unconfirmed" }> {
+  const snapshot = await readAccessSnapshot(projectRoot);
+  const enabledUserIds = enabledUserIdsFromRaw(snapshot);
   try {
-    raw = await readFile(accessPath, "utf8");
-    countEntryPerf("accessReads");
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return counts;
-    return counts;
-  }
-  let users: Array<{ id?: unknown; enabled?: unknown }> = [];
-  try {
-    const parsed = parse(raw);
-    if (parsed && typeof parsed === "object" && Array.isArray((parsed as { users?: unknown }).users)) {
-      users = (parsed as { users: Array<{ id?: unknown; enabled?: unknown }> }).users;
-    }
+    const batch = await resolvePermissionBatch(snapshot, enabledUserIds);
+    const { counts, state } = authorizedCountsFromBatch(snapshot, batch, enabledUserIds, sources);
+    return { counts, state, runtimeConsistency: batch.runtimeConsistency };
   } catch {
-    return counts;
+    const counts = new Map(sources.map((source) => [sourceCountKey(source.conn, source.schema, source.table), 0]));
+    return { counts, state: "unavailable", runtimeConsistency: "unconfirmed" };
   }
-  const enabledUsers = users.filter((u) => u && typeof u.id === "string" && u.enabled !== false);
-  const resolutions = await Promise.all(
-    enabledUsers.map(async (user) => {
-      try {
-        const resolved = await resolveEffectivePermissionsForAdmin(user.id as string);
-        if (!resolved.ok) return [];
-        return resolved.permissions.sources;
-      } catch {
-        return [];
-      }
-    })
-  );
-  for (const sources of resolutions) {
-    for (const source of sources) {
-      if (!source.connectionId) continue;
-      const key = sourceKey(source.connectionId, source.schema, source.sourceName);
-      if (!counts.has(key)) continue;
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    }
-  }
-  return counts;
 }
 
 function modelFromTable(
@@ -414,7 +387,37 @@ function modelFromTable(
   };
 }
 
-export async function listSources(projectRoot: string): Promise<SourceSummary[]> {
+type ParsedSchemaFile = { file: SchemaFile; doc: Document; tables: Record<string, unknown> };
+
+async function readSchemaFiles(projectRoot: string): Promise<ParsedSchemaFile[]> {
+  const parsed: ParsedSchemaFile[] = [];
+  for (const file of await listSchemaFiles(projectRoot)) {
+    const { doc } = await readYamlDocument(projectRoot, file.relPath);
+    const root = valueAsRecord(doc.toJSON());
+    parsed.push({ file, doc, tables: valueAsRecord(root.tables) });
+  }
+  return parsed;
+}
+
+function manifestSchemaSummaries(files: ParsedSchemaFile[]): ManifestSchemaSummary[] {
+  return files.map(({ file, tables }) => ({
+    conn: file.conn,
+    schema: file.schema,
+    filePath: file.relPath,
+    tableCount: Object.keys(tables).length,
+    mtime: file.mtime.toISOString()
+  }));
+}
+
+export type SourcesListing = {
+  tables: SourceSummary[];
+  manifestSchemas: ManifestSchemaSummary[];
+  authorizedCountsState: AuthorizedCountsState;
+  runtimeConsistency: "matched" | "unconfirmed";
+};
+
+/** Spec 174 §3.1 — tables and manifestSchemas derived from one Manifest scan. */
+export async function listSourcesWithManifests(projectRoot: string): Promise<SourcesListing> {
   type Pending = {
     file: SchemaFile;
     table: string;
@@ -438,27 +441,27 @@ export async function listSources(projectRoot: string): Promise<SourceSummary[]>
     enabledByConnection = new Map();
   }
 
-  for (const file of await listSchemaFiles(projectRoot)) {
-    const { doc } = await readYamlDocument(projectRoot, file.relPath);
-    const root = valueAsRecord(doc.toJSON());
-    const tables = valueAsRecord(root.tables);
-
-    for (const [table, tableValue] of Object.entries(tables)) {
-      const overlayMtime = await statOverlay(projectRoot, file.conn, table);
-      const overlay = overlayMtime ? await readOverlay(projectRoot, file.conn, table) : {};
-      pending.push({
-        file,
-        table,
-        tableValue,
-        tableNode: tableNodeFromDocument(doc, table),
-        overlay,
-        overlayMtime
-      });
-      authorizedInputs.push({ conn: file.conn, schema: file.schema, table });
+  const schemaFiles = await timeAsync("manifest", () => readSchemaFiles(projectRoot));
+  await timeAsync("overlay", async () => {
+    for (const { file, doc, tables } of schemaFiles) {
+      for (const [table, tableValue] of Object.entries(tables)) {
+        const overlayMtime = await statOverlay(projectRoot, file.conn, table);
+        const overlay = overlayMtime ? await readOverlay(projectRoot, file.conn, table) : {};
+        pending.push({
+          file,
+          table,
+          tableValue,
+          tableNode: tableNodeFromDocument(doc, table),
+          overlay,
+          overlayMtime
+        });
+        authorizedInputs.push({ conn: file.conn, schema: file.schema, table });
+      }
     }
-  }
+  });
 
-  const authorizedCounts = await timeAsync("permissions", () => computeAuthorizedAgentCounts(projectRoot, authorizedInputs));
+  const authorized = await timeAsync("permissions", () => computeAuthorizedAgentCounts(projectRoot, authorizedInputs));
+  const authorizedCounts = authorized.counts;
 
   const summaries: SourceSummary[] = pending.map((entry) => {
     const manifestMtime = entry.file.mtime;
@@ -497,30 +500,47 @@ export async function listSources(projectRoot: string): Promise<SourceSummary[]>
       completion: computeCompletion(model),
       mtime: manifestMtime.toISOString(),
       enabled,
-      authorizedAgentCount: authorizedCounts.get(sourceKey(entry.file.conn, entry.file.schema, entry.table)) ?? 0,
+      authorizedAgentCount: authorizedCounts.get(sourceCountKey(entry.file.conn, entry.file.schema, entry.table)) ?? 0,
       semanticUpdatedAt,
       semanticUpdatedAtSource
     };
   });
 
-  return summaries.sort((a, b) => `${a.conn}/${a.schema}/${a.table}`.localeCompare(`${b.conn}/${b.schema}/${b.table}`));
+  return {
+    tables: summaries.sort((a, b) => `${a.conn}/${a.schema}/${a.table}`.localeCompare(`${b.conn}/${b.schema}/${b.table}`)),
+    manifestSchemas: manifestSchemaSummaries(schemaFiles),
+    authorizedCountsState: authorized.state,
+    runtimeConsistency: authorized.runtimeConsistency
+  };
+}
+
+/** Spec 174 §3.3 — additive `data.meta` for `/api/sources` (no secrets / absolute paths). */
+export type SourcesDisplayMeta = {
+  snapshotVersion: string;
+  generatedAt: string;
+  authorizedCountsState: AuthorizedCountsState;
+  runtimeConsistency: "matched" | "unconfirmed";
+};
+
+export function sourcesDisplayMeta(listing: SourcesListing, snapshotVersion?: string, generatedAt = new Date()): SourcesDisplayMeta {
+  const version = snapshotVersion ?? createHash("sha256")
+    .update(JSON.stringify([listing.tables, listing.manifestSchemas, listing.authorizedCountsState, listing.runtimeConsistency]))
+    .digest("hex")
+    .slice(0, 16);
+  return {
+    snapshotVersion: version,
+    generatedAt: generatedAt.toISOString(),
+    authorizedCountsState: listing.authorizedCountsState,
+    runtimeConsistency: listing.runtimeConsistency
+  };
+}
+
+export async function listSources(projectRoot: string): Promise<SourceSummary[]> {
+  return (await listSourcesWithManifests(projectRoot)).tables;
 }
 
 export async function listManifestSchemas(projectRoot: string): Promise<ManifestSchemaSummary[]> {
-  const summaries: ManifestSchemaSummary[] = [];
-  for (const file of await listSchemaFiles(projectRoot)) {
-    const { doc } = await readYamlDocument(projectRoot, file.relPath);
-    const root = valueAsRecord(doc.toJSON());
-    const tables = valueAsRecord(root.tables);
-    summaries.push({
-      conn: file.conn,
-      schema: file.schema,
-      filePath: file.relPath,
-      tableCount: Object.keys(tables).length,
-      mtime: file.mtime.toISOString()
-    });
-  }
-  return summaries;
+  return manifestSchemaSummaries(await readSchemaFiles(projectRoot));
 }
 
 export async function readSource(

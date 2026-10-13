@@ -38,6 +38,7 @@ import { isTokenExpired } from "../proxy/identity.js";
 import { MCP_PROTOCOL_METHOD_SQL_LIST } from "../proxy/mcp-request-classification.js";
 import { readAuditWriteHealth, type AuditWriteHealthSnapshot } from "../proxy/audit-write-health.js";
 import { countEntryPerf, timeAsync, withRequestTiming } from "../entry-performance-timing.js";
+import { readAccessSnapshot, resolvePermissionBatch, type PermissionBatch } from "./permission-display.js";
 
 /** Spec 129: Agent write paths must not materialize reference templates into access.yaml. */
 
@@ -927,6 +928,35 @@ async function userToAgentWithPermissions(
   };
 }
 
+/** Spec 174 §3.1 — list view: permissions from the shared read-only batch. */
+function userToAgentWithBatchPermissions(
+  user: YamlUser,
+  batch: PermissionBatch,
+  stats?: Awaited<ReturnType<typeof getStats>>,
+  tokenUsage?: Map<string, TokenUsageSnapshot>,
+  timeline?: AgentConfigTimeline
+) {
+  const agent = userToAgent(user, stats, tokenUsage, timeline);
+  const resolved = batch.results.get(user.id);
+  if (!resolved) {
+    return { ...agent, effectivePermissions: undefined, permissionWarnings: [batch.problem ?? "permissions_unavailable"] };
+  }
+  return {
+    ...agent,
+    effectivePermissions: resolved.ok ? effectivePermissionsToPreview(resolved.permissions) : undefined,
+    permissionWarnings: resolved.ok ? [] : [resolved.reason]
+  };
+}
+
+/** Spec 174 §3.3 — ok / partial / unavailable over enabled Agents (disabled denies are not failures). */
+function agentPermissionsState(users: YamlUser[], batch: PermissionBatch): "ok" | "partial" | "unavailable" {
+  if (!batch.context) return "unavailable";
+  const enabled = users.filter((user) => user.enabled !== false);
+  if (enabled.length === 0) return "ok";
+  const failed = enabled.filter((user) => !batch.results.get(user.id)?.ok).length;
+  return failed === 0 ? "ok" : failed === enabled.length ? "unavailable" : "partial";
+}
+
 function bodyHasOwn(value: unknown, key: string): boolean {
   return Boolean(value && typeof value === "object" && Object.prototype.hasOwnProperty.call(value, key));
 }
@@ -1085,8 +1115,10 @@ export function registerAgentRoutes(app: FastifyInstance) {
   // GET /api/admin/agents
   app.get("/api/admin/agents", async (request) => withRequestTiming(request, async () => {
     const projectRoot = await resolveProjectRoot();
-    const { config, version } = await timeAsync("access", () => readAccessYaml(projectRoot));
+    const { config, raw, version } = await timeAsync("access", () => readAccessYaml(projectRoot));
     const userIds = config.users.map((user) => user.id);
+    const accessSnapshot = await readAccessSnapshot(projectRoot, raw, version);
+    const permissionBatch = await timeAsync("permissions", () => resolvePermissionBatch(accessSnapshot, userIds));
     const window = build7dWindow();
     const [tokenUsage, timelineMap, statsMap, globalActiveTokenCount] = await timeAsync("stats", () => Promise.all([
       getLastUsedMap(userIds),
@@ -1094,23 +1126,36 @@ export function registerAgentRoutes(app: FastifyInstance) {
       getStatsMap(config.users, window),
       getGlobalActiveTokenCount(window)
     ]));
-    const agents = await timeAsync("permissions", () => Promise.all(
-      config.users.map((user) =>
-        userToAgentWithPermissions(
-          user,
-          statsMap.get(user.id) ?? unavailableStats(user, window),
-          tokenUsage.get(user.id),
-          timelineMap.get(user.id)
-        )
+    const agents = config.users.map((user) =>
+      userToAgentWithBatchPermissions(
+        user,
+        permissionBatch,
+        statsMap.get(user.id) ?? unavailableStats(user, window),
+        tokenUsage.get(user.id),
+        timelineMap.get(user.id)
       )
-    ));
+    );
     const summary = buildAgentsSummary(
       agents,
       globalActiveTokenCount,
       hasTokenPrefixCollision(config.users),
       readAuditWriteHealth()
     );
-    return { ok: true, data: { agents, version, summary } };
+    const permissionsState = agentPermissionsState(config.users, permissionBatch);
+    return {
+      ok: true,
+      data: {
+        agents,
+        version,
+        summary,
+        meta: {
+          snapshotVersion: version,
+          generatedAt: new Date().toISOString(),
+          permissionsState,
+          runtimeConsistency: permissionBatch.runtimeConsistency
+        }
+      }
+    };
   }));
 
   // GET /api/admin/roles — moved to ./roles.ts (M12)

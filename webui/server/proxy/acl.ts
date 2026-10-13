@@ -249,7 +249,25 @@ async function loadSourceMap(options: { fresh?: boolean } = {}): Promise<SourceM
     return sourceMapState;
   }
 
-  const projectRoot = await resolveProjectRoot();
+  const built = await buildSourceMapFromDisk(now);
+  if (!built) {
+    // Keep last-known-good map on transient filesystem/glob failure (fail-closed for ACL).
+    if (sourceMapState.forward.size > 0) {
+      sourceMapState = { ...sourceMapState, loadedAt: now };
+      return sourceMapState;
+    }
+    sourceMapState = emptySourceMapState(now);
+    return sourceMapState;
+  }
+  sourceMapState = built;
+  return sourceMapState;
+}
+
+/**
+ * Pure source-map build: reads Manifests, never touches the module-level
+ * `sourceMapState`. Returns null when the Manifest tree cannot be listed.
+ */
+async function buildSourceMapFromDisk(now: number): Promise<SourceMapState | null> {
   const paths = await loadContentPaths();
   const semanticLayerDir = paths.semanticLayer;
   countEntryPerf("sourceMapBuilds");
@@ -260,13 +278,7 @@ async function loadSourceMap(options: { fresh?: boolean } = {}): Promise<SourceM
       schemaFiles.push(path.join(semanticLayerDir, entry));
     }
   } catch {
-    // Keep last-known-good map on transient filesystem/glob failure (fail-closed for ACL).
-    if (sourceMapState.forward.size > 0) {
-      sourceMapState = { ...sourceMapState, loadedAt: now };
-      return sourceMapState;
-    }
-    sourceMapState = emptySourceMapState(now);
-    return sourceMapState;
+    return null;
   }
 
   const forward = new Map<string, SourceMapEntry>();
@@ -314,14 +326,13 @@ async function loadSourceMap(options: { fresh?: boolean } = {}): Promise<SourceM
     .digest("hex")
     .slice(0, 16);
 
-  sourceMapState = {
+  return {
     forward,
     reverse,
     version,
     loadedAt: now,
     compileError
   };
-  return sourceMapState;
 }
 
 /** Test / Admin hook: current source map diagnostics (WP-I1). */
@@ -1016,7 +1027,8 @@ async function compileRole(
   roleId: string,
   role: NonNullable<AccessConfig["roles"]>[string] | undefined,
   policy: AclPolicy,
-  state: SourceMapState
+  state: SourceMapState,
+  enabledTables?: Map<string, Set<string>>
 ): Promise<CompiledRoleResult> {
   const failed: CompiledRoleResult = { ok: false, reason: `role_resolution_failed:${roleId}` };
   if (!role?.allow) return failed;
@@ -1061,7 +1073,7 @@ async function compileRole(
   let effectiveConnections = declaredConnections;
 
   if (catalogBound) {
-    const enabledByConnection = await loadEnabledTablesByConnection();
+    const enabledByConnection = enabledTables ?? await loadEnabledTablesByConnection();
     const resolvedConnections = resolveCatalogConnections(roleId, declaredConnections, enabledByConnection);
     if (!resolvedConnections.ok) return { ok: false, reason: resolvedConnections.reason };
     effectiveConnections = resolvedConnections.connections;
@@ -1156,7 +1168,7 @@ async function resolveEffectivePermissions(
   identity: Identity,
   config: AccessConfig,
   policy: AclPolicy,
-  options: { freshSourceMap?: boolean; sourceMap?: SourceMapState } = {}
+  options: { freshSourceMap?: boolean; sourceMap?: SourceMapState; enabledTables?: Map<string, Set<string>> } = {}
 ): Promise<RoleResolutionResult> {
   const user = config.users.find((u) => u.id === identity.userId);
   if (!user) return { ok: false, reason: "tool_forbidden" };
@@ -1208,7 +1220,7 @@ async function resolveEffectivePermissions(
 
   const compiledRoles: CompiledRole[] = [];
   for (const roleId of roleSet.roleIds) {
-    const compiled = await compileRole(roleId, config.roles?.[roleId], policy, state);
+    const compiled = await compileRole(roleId, config.roles?.[roleId], policy, state, options.enabledTables);
     if (!compiled.ok) return { ok: false, reason: compiled.reason };
     compiledRoles.push(compiled.role);
   }
@@ -1574,6 +1586,73 @@ export async function previewAgentPermissionsForAdmin(
     policy,
     { freshSourceMap: options.freshSourceMap ?? true }
   );
+}
+
+/**
+ * Spec 174 §3.1 — read-only inputs for one Admin display batch. Built from
+ * pure reads: it never updates the identity config cache, `sourceMapState`
+ * or the committed EffectivePolicy, so display preparation cannot change
+ * runtime authorization.
+ */
+export interface AdminPermissionContext {
+  config: AccessConfig;
+  sourceMap: SourceMapState;
+  enabledTables: Map<string, Set<string>>;
+  accessConfigDigest: string;
+  sourceMapVersion: string;
+  enabledTablesDigest: string;
+  toolClassificationVersion: string;
+}
+
+export async function buildAdminPermissionContext(config: AccessConfig): Promise<AdminPermissionContext> {
+  const [built, enabledTables] = await Promise.all([
+    buildSourceMapFromDisk(Date.now()),
+    loadEnabledTablesByConnection()
+  ]);
+  const sourceMap = built ?? emptySourceMapState(Date.now(), "source_map_unavailable");
+  return {
+    config,
+    sourceMap,
+    enabledTables,
+    accessConfigDigest: computeAccessConfigDigest(config),
+    sourceMapVersion: sourceMap.version,
+    enabledTablesDigest: computeEnabledTablesDigest(enabledTables),
+    toolClassificationVersion: TOOL_CLASSIFICATION_VERSION
+  };
+}
+
+/** Spec 174 §3.1 — one context, the existing per-Agent resolver for every id. */
+export async function resolveEffectivePermissionsBatchForAdmin(
+  userIds: string[],
+  context: AdminPermissionContext
+): Promise<Map<string, RoleResolutionResult>> {
+  const policy = aclPolicy(context.config);
+  const results = new Map<string, RoleResolutionResult>();
+  for (const userId of userIds) {
+    results.set(userId, await resolveEffectivePermissions(
+      { userId, tokenLabel: "admin-preview", tokenHashPrefix: "admin-preview" },
+      context.config,
+      policy,
+      { sourceMap: context.sourceMap, enabledTables: context.enabledTables }
+    ));
+  }
+  return results;
+}
+
+/**
+ * Spec 174 §3.3 — whether the committed runtime policy was compiled from the
+ * same access / source map / enabled tables / classifier inputs. Read-only.
+ */
+export function runtimeConsistencyFor(context: AdminPermissionContext): "matched" | "unconfirmed" {
+  const status = getPolicyRuntimeStatus();
+  const matched = status.policyVersion !== ""
+    && !status.degradedGlobal
+    && status.degradedAgents.length === 0
+    && status.accessConfigDigest === context.accessConfigDigest
+    && status.sourceMapVersion === context.sourceMapVersion
+    && status.enabledTablesDigest === context.enabledTablesDigest
+    && effectivePolicyRef?.toolClassificationVersion === context.toolClassificationVersion;
+  return matched ? "matched" : "unconfirmed";
 }
 
 export async function allowedToolNames(identity: Identity): Promise<string[]> {
