@@ -10,7 +10,7 @@
 |---|---|
 | WO | WO-20261013-174 / v1.2 |
 | 日期 / 执行者 | 2026-10-13 / Cursor |
-| 状态 | Ready for implementation；代码与性能验收未执行 |
+| 状态 | Done（2026-10-13）：T0–T7 完成；fixture 上 PERF-01–10 与 SC-01–24 通过，`perf:entry --phase after` 退出码 0；未部署目标环境。报告：[IMPLEMENTATION_NOTES](wo-20261013-webui-entry-performance-IMPLEMENTATION_NOTES.md) |
 | 权威 Spec | [174-webui-entry-performance-spec.md](../174-webui-entry-performance-spec.md) |
 | 用户批准 | 已同意原优化方案及生成本工单；范围内按本单执行，无需重复确认常规实现步骤 |
 | 输出 | 代码与测试 + `webui/docs/plans/wo-20261013-webui-entry-performance-IMPLEMENTATION_NOTES.md` |
@@ -314,12 +314,12 @@ npm --prefix webui run perf:entry -- --phase after --mode production --scenario 
 
 ### Definition of Done
 
-- [ ] G0–G4与SC-01–24通过，矩阵每条可复核，最新v2.0行为不回退。
-- [ ] PERF-01–10满足Spec预算，包含真实30样本，非骨架/开发模式成绩。
-- [ ] 实际授权/deny/AST/搜索/登录权限/主任务交互未回归。
-- [ ] 脚本、fixture、测试、build、报告可在干净checkout复现。
-- [ ] 无真实凭据/数据提交；缓存与后台资源关闭可验证。
-- [ ] 未部署目标服务的事实明确；不声称目标IP已优化。
+- [x] G0–G4与SC-01–24通过，矩阵每条可复核，最新v2.0行为不回退。
+- [x] PERF-01–10满足Spec预算，包含真实30样本，非骨架/开发模式成绩。
+- [x] 实际授权/deny/AST/搜索/登录权限/主任务交互未回归（既有失败用例已与原HEAD逐项对照，见报告§5.3）。
+- [x] 脚本、fixture、测试、build、报告可在干净checkout复现。
+- [x] 无真实凭据/数据提交；缓存与后台资源关闭可验证。
+- [x] 未部署目标服务的事实明确；不声称目标IP已优化。
 
 ## 核心流程（伪代码）
 

@@ -5,7 +5,7 @@
 | Spec 编号 / 版本 | 174 / v1.2 |
 | 日期 / 作者 | 2026-10-13 / Codex |
 | 委托人 | zhangxingchen |
-| 状态 | Accepted scope · Pending implementation / verification |
+| 状态 | Implemented · Verified on anonymous fixture（2026-10-13，PERF-01–10 / SC-01–24，见[执行报告](plans/wo-20261013-webui-entry-performance-IMPLEMENTATION_NOTES.md)）；目标环境未部署 |
 | 授权 | 用户于 2026-10-13 同意进入卡顿优化方案，要求生成 Spec 与 Cursor 实施、验证工单 |
 | 工单 | [WO-20261013-174](plans/wo-20261013-webui-entry-performance.md) |
 | 范围 | Lucy WebUI 服务、前端与构建产物；单进程、单实例；桌面浏览器 |

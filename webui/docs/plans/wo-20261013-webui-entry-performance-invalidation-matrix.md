@@ -2,12 +2,12 @@
 
 | 字段 | 内容 |
 |---|---|
-| 日期 / 版本 | 2026-10-13 / v1.1（e189346重评） |
-| 状态 | Code-reviewed inventory；hook/测试待Cursor实施 |
+| 日期 / 版本 | 2026-10-13 / v1.2（实现接线回填） |
+| 状态 | Implemented — 每行已补实际 hook、客户端 key 与测试；未逐项覆盖的边界见下方「残余缺口」 |
 | 权威合同 | [Spec174 v1.2](../174-webui-entry-performance-spec.md) §3–4/7/9 |
 | 执行工单 | [WO-20261013-174 v1.2](wo-20261013-webui-entry-performance.md) T1/T3/T5 |
 
-本表是接线清单，不代表缓存失效已实现。接单时以checkout代码复核，每行补最终hook函数、querykey、测试路径/用例和结果；未覆盖行不能关闭G2。
+本表最初是接线清单；v1.2 起按实现回填「实际接线」一节（hook 函数、客户端 key、测试用例）。原「实际入口与测试要求」表保留为审阅基线。
 
 本表从stash7653746提取并按当前代码复核，仍为18行；既有表结构准备/角色多选/审计变更纳入对应行，不另设第二套写入链路。
 
@@ -42,6 +42,37 @@
 | IM-18 | `webui/server/auth/guard.ts`及各路由既有权限检查（读取） | HTTP请求身份，不在显示cache内 | cache hit/miss/inFlight attach三条路径都验证已有auth；未授权不能因复用已授权Promise拿到数据；DI-18 |
 
 DI-01–13/15主要落 `server/__tests__/display-invalidation.test.ts`；DI-16落 `admin-permission-batch.test.ts`；DI-17落 `background-probes.test.ts/live-catalog.test.ts`；DI-14落 `src/__tests__/display-query-isolation.test.tsx`；DI-18补 `webui-admin-auth.test.ts`。若某行需独立测试文件，报告列出最终位置。
+
+## 实际接线（v1.2 回填）
+
+服务端代次与屏障：`webui/server/display-generation.ts`（`beginDisplayWrite` / `endDisplayWrite` / `withDisplayWriteBarrier` / `scopesForPath`）；快照：`webui/server/display-snapshot.ts`（`getDisplaySnapshot`、reconciler）。客户端：`webui/src/lib/apiClient.ts`（authEpoch、按读模型分域的 display write epoch、`setDisplayWriteSettledHandler`）、`webui/src/lib/displayQueryOptions.ts`、`webui/src/lib/auth.tsx`。
+
+| 行 | 实际 hook | 客户端 key / 失效 | 测试（文件 › 用例） | 结果 |
+|---|---|---|---|---|
+| IM-01 | `fs-safe.ts` `safeWrite` / `safeWriteBinary` / `safeRemove` / `safeRemoveDirectory` / `safeRenameDirectory` 在真实落盘处包 `withDisplayWriteBarrier(displayScopesFor(...))`；`safeWriteNewSecretPassword` / `safeRemoveSecretPasswordIfExists` 包 `["C","L"]`；`auditedWriteFile` / `auditedRemoveFile` 继承（屏障在 audit 状态更新之前结束 → 失效早于审计终结） | 由写入路径决定（见 IM-02…09） | `display-invalidation.test.ts` › DI-01 barriers open before the write…；DI-01/02 partial failure…；`display-snapshot.test.ts` › classifies write targets | 通过 |
+| IM-02 | `semantic-layer.ts::writeSourcePatch` 外层 `["D","P"]` 屏障包住多文件写 | `sources`（PUT `/api/sources/*` 写后 settle → invalidate） | `display-invalidation.test.ts` › DI-03 dryRun never invalidates; a confirmed save…；DI-01/02 partial failure | 通过 |
+| IM-03 | `semantic-layer.ts::writeSourceYamlImport` 外层 `["D","P"]`；preview / dryRun 不进屏障 | 同 IM-02 | DI-03（dryRun 路径）；import 写与 IM-02 同一包装，未单列用例 | 通过（import 无独立用例） |
+| IM-04 | `catalog-assets.ts::uploadCatalogAsset` 的 `rename` 包 `["D","P","C"]`；`.upload.tmp` 被分类器与 reconciler 忽略 | `/api/catalog/assets/upload` settle → `project`/`sources` invalidate；`SchemaStructurePrep` 用同一 `sourcesQueryOptions` key 做 refetch/getQueryData | `display-snapshot.test.ts` › detects edits…ignores history / tmp sidecars；`add-schema-drawer.test.tsx`、`setup-assistant.test.tsx` 回归 | 通过 |
+| IM-05 | `project.ts::writeKtxYaml`（非 dryRun）`["C","D","P","L"]`；`index.ts` enabled-tables PUT 外层屏障覆盖写→reload→policy commit | `/api/connections/*` settle → `project`/`sources`/`adminAgents` | `display-invalidation.test.ts` › DI-05/16 enabled_tables writes refresh sources… | 通过 |
+| IM-06 | `createConnection`（write lock 内包住 ktx/secret 写、audit、`rollbackWrittenConnection`）、`addSchema` / `removeSchema` / `removeConnection` 非 dryRun 包屏障 | 同 IM-05 | `display-invalidation.test.ts` › DI-06 confirmed connection removal…；`project.create-connection.test.ts` 回归 | 通过（create 失败回滚无独立屏障用例） |
+| IM-07 | `admin/agents.ts::writeAccessYaml` → `withDisplayWriteBarrier(["P"], writeAccessYamlInBarrier)`，覆盖写→commit→直接 `writeFile` 回滚；Spec 168 `agentRoleFields` 未改 | `/api/admin/agents*` settle → `adminAgents`/`sources` | `display-invalidation.test.ts` › DI-07/15 Agent writes hold P pending through commit…；`admin-agents.test.ts` 回归 | 通过 |
+| IM-08 | `admin/access-config.ts::writeAccessYaml` 同样包装（`roles.ts` 调用） | `/api/admin/roles*` settle → `adminAgents`/`sources` | `admin-roles.test.ts` 回归；包装与 IM-07 相同 | 通过（rollback=runtimeAck false 无独立用例） |
+| IM-09 | `admin/tokens.ts` 创建 / 吊销：`["P"]` 屏障包住 `auditedWriteFile` + `commitPolicyRuntimeAck` | `adminAgents` | `display-invalidation.test.ts` › DI-09 token revoke invalidates P；`admin-tokens.test.ts` 回归 | 通过 |
+| IM-10 | `catalog-reload.ts::reloadCatalog` finally `bumpDisplayGeneration(["D","P"])`；`.ktx-ui` sidecar 不在 watcher 范围 | `/api/catalog/reload` settle → `project`/`sources` | `display-invalidation.test.ts` › DI-10 catalog reload invalidates D… | 通过 |
+| IM-11 | 历史快照位于语义层外 / 隐藏目录，被忽略；restore draft 只读不触发代次 | 历史 key 不变 | DI-10/11（versions 读取不改代次） | 通过 |
+| IM-12 | reconciler 发现 `ktx.yaml` 变化 → `invalidateContentPathsCache()`、重新解析、迁移 watcher、清空快照；快照 key 含 contentRoot | — | `display-snapshot.test.ts` › migrates to a new content root… | 通过 |
+| IM-13 | `fs.watch`（semantic-layer 递归、ktx.yaml、access 路径含 `LUCY_ACCESS_CONFIG_PATH`）+ 1 s 元数据对账 + 30 s 全内容摘要；摘要逾 31 s / 元数据逾 3 s → 不信任缓存（bypass 重建） | 下一次请求 | `display-snapshot.test.ts` › detects edits, deletes and atomic replaces；finds same-size, same-mtime rewrites；DI-13；浏览器 SC-05 外部编辑 | 通过 |
+| IM-14 | `auth.tsx` 登录开始 / 退出 / 身份变化 / 401 → `bumpAuthEpoch()` + 取消并移除受保护查询（保留 help / branding） | 全部受保护 key | `display-query-isolation.test.tsx` › rejects a response from a previous auth epoch…；drops protected queries… | 通过 |
+| IM-15 | Agent 列表：users / version / 权限来自同一 access 快照（权限段按版本缓存）；统计查询后核对 `P` 代次，变化则整批重建（≤3 次，否则 503 busy） | `adminAgents`（staleTime 0） | DI-07/15；DI-15 a list request during a pending access write… | 通过 |
+| IM-16 | `acl.ts` `buildAdminPermissionContext` / `resolveEffectivePermissionsBatchForAdmin`：一次 source map + enabled_tables（含零启用连接）显式传入 `compileRole` | — | `admin-permission-batch.test.ts` 全部 7 例 | 通过 |
+| IM-17 | `background-probes.ts`（L 代次 key）+ `live-catalog.ts` 代次守卫；L 变化 → 取消未启动旧任务、清空 live cache | `connectionLiveSchemas` / `connectionHealth` | `background-probes.test.ts`、`live-catalog.test.ts` › config generation guard | 通过 |
+| IM-18 | `requireWebuiAuthHook`（onRequest）先于处理器，快照命中 / miss / inFlight 均不绕过 | — | `display-invalidation.test.ts` › DI-18 a warm cache never answers an unauthenticated request | 通过 |
+
+### 残余缺口（如实记录）
+
+- IM-03 import、IM-06 createConnection 失败回滚、IM-08 access-config 的 runtimeAck=false 回滚没有独立的屏障用例；它们与已测路径共用同一包装函数。
+- 「truncate 与完整写之间发请求」用写屏障 + 挂起写入模拟（`display-snapshot.test.ts` › never publishes a build that overlapped a write），未在真实 `writeFile` 中途注入。
+- 按登录账户裁剪的缓存不存在（快照内容不随管理员身份变化），因此未启用「≤32 principal 槽位」；账户边界由客户端 authEpoch + 受保护查询清除保证。
 
 ## 核心流程（伪代码）
 
