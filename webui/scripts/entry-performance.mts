@@ -227,11 +227,15 @@ export function evaluateBudgets(
   return results;
 }
 
-/** Spec 174 §8.1 contract cells: scenario × route × metrics that a formal run must contain. */
-export const EXPECTED_CELLS: Array<{ scenario: ScenarioName; routes: string[]; metrics: string[] }> = [
+/**
+ * Spec 174 §8.1 contract cells: scenario × route × metrics that a formal run must
+ * contain. `afterOnly` metrics measure an optimisation the baseline does not have
+ * (display snapshot ready time), so they are required in the after phase only.
+ */
+export const EXPECTED_CELLS: Array<{ scenario: ScenarioName; routes: string[]; metrics: string[]; afterOnly?: string[] }> = [
   { scenario: "api-warm", routes: ["sources", "agents"], metrics: ["httpTotalMs"] },
   { scenario: "display-cold", routes: ["sources", "agents"], metrics: ["buildMs", "httpTotalMs", "displayBuilds"] },
-  { scenario: "service-cold", routes: ["sources"], metrics: ["processToSocketMs", "displayReadyMs", "firstSourcesHttpMs"] },
+  { scenario: "service-cold", routes: ["sources"], metrics: ["processToSocketMs", "firstSourcesHttpMs"], afterOnly: ["displayReadyMs"] },
   { scenario: "browser-cold", routes: PAGE_ROUTES, metrics: ["shellReadyMs", "primaryReadyMs", "cls", "businessLongTasks"] },
   { scenario: "browser-warm-refresh", routes: PAGE_ROUTES, metrics: ["shellReadyMs", "primaryReadyMs", "cls"] },
   { scenario: "route-warm", routes: PAGE_ROUTES, metrics: ["feedbackMs", "primaryReadyMs", "cls", "businessLongTasks"] },
@@ -267,7 +271,8 @@ export function collectionProblems(
   summary: Record<string, Record<string, RouteSummary>>,
   assets: AssetCheck,
   minSamples: number,
-  scenarios: readonly string[] = ALL_SCENARIOS
+  scenarios: readonly string[] = ALL_SCENARIOS,
+  phase: CliOptions["phase"] = "after"
 ): string[] {
   const problems: string[] = [];
   for (const cell of EXPECTED_CELLS) {
@@ -280,7 +285,7 @@ export function collectionProblems(
       }
       if (routeSummary.failures > 0) problems.push(`${cell.scenario}/${route}: ${routeSummary.failures} failed samples`);
       if (routeSummary.measured < minSamples) problems.push(`${cell.scenario}/${route}: measured ${routeSummary.measured} < ${minSamples}`);
-      for (const metric of cell.metrics) {
+      for (const metric of [...cell.metrics, ...(phase === "after" ? cell.afterOnly ?? [] : [])]) {
         const n = routeSummary.metrics[metric]?.n ?? 0;
         if (n < minSamples || n !== routeSummary.measured - routeSummary.failures) problems.push(`${cell.scenario}/${route}.${metric}: n=${n} (measured ${routeSummary.measured})`);
       }
@@ -310,7 +315,7 @@ export function evaluateAcceptance(input: {
 }): Acceptance {
   const formal = isFormalRun(input.options);
   const minSamples = formal ? FORMAL_MIN_SAMPLES : 1;
-  const reasons = collectionProblems(input.summary, input.assets, minSamples, input.options.scenarios);
+  const reasons = collectionProblems(input.summary, input.assets, minSamples, input.options.scenarios, input.options.phase);
   if (input.sampleFailures > 0) reasons.push(`${input.sampleFailures} failed samples`);
   if (input.secretOffenders > 0) reasons.push(`${input.secretOffenders} trace artifacts contain secrets`);
   const incomplete = reasons.length > 0;

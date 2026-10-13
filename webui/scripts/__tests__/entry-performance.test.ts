@@ -162,7 +162,7 @@ function completeSamples(): RawSample[] {
   for (const cell of EXPECTED_CELLS) {
     for (const route of cell.routes) {
       for (let i = 0; i < 35; i += 1) {
-        const metrics: Record<string, unknown> = Object.fromEntries(cell.metrics.map((metric) => [metric, metric === "cls" || metric === "businessLongTasks" ? 0 : 7]));
+        const metrics: Record<string, unknown> = Object.fromEntries([...cell.metrics, ...(cell.afterOnly ?? [])].map((metric) => [metric, metric === "cls" || metric === "businessLongTasks" ? 0 : 7]));
         if (cell.scenario === "browser-cold") metrics.resources = [{ path: "/assets/index-a.js" }, { path: "/assets/index-c.css" }];
         samples.push({ scenario: cell.scenario, route, iteration: i, warmup: i < 5, ok: true, metrics });
       }
@@ -275,6 +275,18 @@ describe("Spec 174 R6 — formal acceptance gate (SC-14/19, PERF-01–10 evidenc
     const slowBaseline = completeSamples().map((sample) => (sample.scenario === "api-warm" ? { ...sample, metrics: { httpTotalMs: 5000 } } : sample));
     expect(judge(slowBaseline, { options: { phase: "baseline" } }).exit).toBe(0);
     expect(judge([], { options: { phase: "baseline" } }).exit).toBe(1);
+  });
+
+  it("after-only metrics (display snapshot ready) are required in after, not in baseline", () => {
+    const withoutDisplayReady = completeSamples().map((sample) => {
+      if (sample.scenario !== "service-cold") return sample;
+      const { displayReadyMs: _omit, ...metrics } = sample.metrics;
+      return { ...sample, metrics };
+    });
+    expect(judge(withoutDisplayReady, { options: { phase: "baseline" } }).exit).toBe(0);
+    const after = judge(withoutDisplayReady);
+    expect(after.acceptance.reasons).toContain("service-cold/sources.displayReadyMs: n=0 (measured 30)");
+    expect(after.exit).toBe(1);
   });
 
   it("PERF-08 takes the JS and CSS maxima independently over all samples", () => {
