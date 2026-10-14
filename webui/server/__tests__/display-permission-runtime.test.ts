@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import request from "supertest";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildServer } from "../index";
 import { beginDisplayWrite, endDisplayWrite, resetDisplayGenerationsForTests } from "../display-generation";
 import { displaySnapshotDiagnostics, resetDisplaySnapshotsForTests, startDisplayReconciler, stopDisplayReconciler } from "../display-snapshot";
@@ -10,6 +10,21 @@ import { invalidateContentPathsCache } from "../paths";
 import { invalidateAccessConfigCache } from "../proxy/identity";
 import { commitEffectivePolicy, getPolicyRuntimeStatus, resetEffectivePolicyForTests } from "../proxy/acl";
 import { resetAdminsCache } from "../auth/admins-store";
+
+const statsGate = vi.hoisted(() => ({
+  entered: null as (() => void) | null,
+  wait: null as Promise<void> | null
+}));
+vi.mock("../admin/audit.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../admin/audit.js")>();
+  return { ...actual, getAuditDb: async (...args: Parameters<typeof actual.getAuditDb>) => {
+    if (statsGate.wait) {
+      statsGate.entered?.();
+      await statsGate.wait;
+    }
+    return actual.getAuditDb(...args);
+  } };
+});
 
 /**
  * Spec 174 R3 / SC-17 — `runtimeConsistency` follows the committed runtime
@@ -106,6 +121,40 @@ afterEach(async () => {
 });
 
 describe("Spec 174 R3 — runtimeConsistency follows the runtime policy (SC-17)", () => {
+  for (const direction of ["unconfirmed", "matched"] as const) {
+    it(`Agent response reflects ${direction} after runtime changes during audit statistics`, async () => {
+      const matched = await agents();
+      resetEffectivePolicyForTests();
+      const unconfirmed = await agents();
+      if (direction === "unconfirmed") await commitEffectivePolicy();
+      const builds = displaySnapshotDiagnostics().builds;
+      const before = getPolicyRuntimeStatus();
+      let release!: () => void;
+      const entered = new Promise<void>((resolve) => { statsGate.entered = resolve; });
+      statsGate.wait = new Promise<void>((resolve) => { release = resolve; });
+      const pending = agents();
+      try {
+        await entered;
+        if (direction === "unconfirmed") resetEffectivePolicyForTests();
+        else await commitEffectivePolicy();
+        const current = getPolicyRuntimeStatus();
+        expect(current.policyVersion).not.toBe(before.policyVersion);
+        release();
+        const response = await pending;
+        expect(response.meta.runtimeConsistency).toBe(direction);
+        expect(response.meta.snapshotVersion).toBe((direction === "matched" ? matched : unconfirmed).meta.snapshotVersion);
+        expect(response.agents.map((agent) => agent.effectivePermissions)).toEqual(matched.agents.map((agent) => agent.effectivePermissions));
+        expect(displaySnapshotDiagnostics().builds).toBe(builds);
+        expect(getPolicyRuntimeStatus()).toEqual(current);
+      } finally {
+        release();
+        statsGate.wait = null;
+        statsGate.entered = null;
+        await pending;
+      }
+    });
+  }
+
   it("hot hits flip unconfirmed → matched with no file change, and the response version follows", async () => {
     const matched = await sources();
     expect(matched.meta.runtimeConsistency).toBe("matched");

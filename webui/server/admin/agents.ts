@@ -951,14 +951,12 @@ type AgentPermissionPreview = {
 type AgentPermissionSection = {
   previews: Record<string, AgentPermissionPreview>;
   permissionsState: "ok" | "partial" | "unavailable";
-  /** Spec 174 §3.3 — evaluated against the current runtime policy per response. */
-  runtimeConsistency: "matched" | "unconfirmed";
+  /** Compile inputs retained until the final response, after dynamic statistics finish. */
+  policyInputs: DisplayPolicyInputs | null;
   snapshotVersion: string;
 };
 
-type CachedAgentPermissionSection = Omit<AgentPermissionSection, "runtimeConsistency" | "snapshotVersion"> & {
-  policyInputs: DisplayPolicyInputs | null;
-};
+type CachedAgentPermissionSection = Omit<AgentPermissionSection, "snapshotVersion">;
 
 function permissionPreviewFromBatch(batch: PermissionBatch, userId: string): AgentPermissionPreview {
   const resolved = batch.results.get(userId);
@@ -991,12 +989,9 @@ async function agentPermissionSection(
     };
     return JSON.stringify(section);
   }, { extraKey: version });
-  const { policyInputs, ...cached } = JSON.parse(snapshot.payload) as CachedAgentPermissionSection;
-  const runtimeConsistency = runtimeConsistencyForInputs(policyInputs);
   return {
-    ...cached,
-    runtimeConsistency,
-    snapshotVersion: createHash("sha256").update(`${snapshot.version}:${runtimeConsistency}`).digest("hex").slice(0, 16)
+    ...JSON.parse(snapshot.payload) as CachedAgentPermissionSection,
+    snapshotVersion: snapshot.version
   };
 }
 
@@ -1225,6 +1220,10 @@ export function registerAgentRoutes(app: FastifyInstance) {
       hasTokenPrefixCollision(config.users),
       readAuditWriteHealth()
     );
+    // Runtime-only changes need not bump a file generation. Compute this after
+    // every asynchronous read, immediately before assembling the response.
+    const runtimeConsistency = runtimeConsistencyForInputs(permissionSection.policyInputs);
+    const snapshotVersion = createHash("sha256").update(`${permissionSection.snapshotVersion}:${runtimeConsistency}`).digest("hex").slice(0, 16);
     return {
       ok: true,
       data: {
@@ -1232,10 +1231,10 @@ export function registerAgentRoutes(app: FastifyInstance) {
         version,
         summary,
         meta: {
-          snapshotVersion: permissionSection.snapshotVersion,
+          snapshotVersion,
           generatedAt: new Date().toISOString(),
           permissionsState: permissionSection.permissionsState,
-          runtimeConsistency: permissionSection.runtimeConsistency
+          runtimeConsistency
         }
       }
     };
