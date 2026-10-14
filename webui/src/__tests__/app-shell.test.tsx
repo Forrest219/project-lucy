@@ -100,7 +100,7 @@ function renderAt(path: string) {
           ok: true,
           data: {
             productTitle: "Lucy WebUI",
-            tagline: "Data Agent MCP",
+            tagline: "可信 Agent 数据层",
             productTitleOverride: "",
             taglineOverride: "",
             hasCustomLogo: false,
@@ -109,7 +109,7 @@ function renderAt(path: string) {
             logoWidth: null,
             logoHeight: null,
             updatedAt: null,
-            defaults: { productTitle: "Lucy WebUI", tagline: "Data Agent MCP" }
+            defaults: { productTitle: "Lucy WebUI", tagline: "可信 Agent 数据层" }
           }
         })
       );
@@ -289,12 +289,12 @@ describe("AppFrame shell", () => {
 
   it("labels the system overview entry as the runtime control plane", async () => {
     // M61: brand block is now a Link to /overview with copy
-    // `Lucy WebUI` + `Data Agent MCP`. Bare `Lucy` (the M60 wordmark)
+    // `Lucy WebUI` + `可信 Agent 数据层`. Bare `Lucy` (the M60 wordmark)
     // and the legacy long Chinese caption must not silently come back,
     // and the KTX brand must stay banned.
     renderAt("/overview");
     expect(screen.getByTestId("brand-title")).toHaveTextContent("Lucy WebUI");
-    expect(screen.getByText("Data Agent MCP")).toBeInTheDocument();
+    expect(screen.getByText("可信 Agent 数据层")).toBeInTheDocument();
     expect(screen.queryByText("KTX WebUI")).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "运行状态" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "系统概览" })).toHaveAttribute("aria-current", "page");
@@ -315,22 +315,22 @@ describe("AppFrame shell", () => {
     const brandBlock = screen.getByTestId("sidebar-brand");
     expect(brandBlock).toBe(brandLink);
     expect(within(brandLink).getByTestId("brand-title")).toHaveTextContent("Lucy WebUI");
-    expect(within(brandLink).getByText("Data Agent MCP")).toBeInTheDocument();
+    expect(within(brandLink).getByText("可信 Agent 数据层")).toBeInTheDocument();
   });
 
   it("does not expose the decorative logo glyph in the brand link's accessible name", async () => {
     // M61: aria-label is the single source of truth for the brand link so
-    // screen readers don't read `L · Lucy WebUI Data Agent MCP`.
+    // screen readers don't read `L · Lucy WebUI 可信 Agent 数据层`.
     renderAt("/overview");
     const brandLink = screen.getByRole("link", { name: "返回系统概览" });
     expect(brandLink).not.toHaveAccessibleName(/^L\s/);
   });
 
   it("renders the shortened brand tagline without legacy captions", async () => {
-    // Brand caption is `Data Agent MCP` (width-matched to 16px Lucy WebUI).
+    // Brand caption is `可信 Agent 数据层` (width-matched to 16px Lucy WebUI).
     // Legacy Chinese / English duplicates must stay gone.
     renderAt("/overview");
-    expect(screen.getByText("Data Agent MCP")).toBeInTheDocument();
+    expect(screen.getByText("可信 Agent 数据层")).toBeInTheDocument();
     expect(screen.queryByText("Data Agent 运维控制台")).not.toBeInTheDocument();
     expect(
       screen.queryByText("Data Agent Ops Control Plane"),
@@ -598,9 +598,9 @@ describe("AppFrame shell", () => {
   });
 
   describe("M66 brand block left/right alignment", () => {
-    it("keeps Lucy WebUI as one wordmark sized against Data Agent MCP", async () => {
+    it("keeps Lucy WebUI as one wordmark sized against 可信 Agent 数据层", async () => {
       // Title stays a single string (no Lucy / WebUI split). Caption is the
-      // shorter `Data Agent MCP` so natural widths match under 16px title.
+      // shorter `可信 Agent 数据层` so natural widths match under 16px title.
       renderAt("/overview");
 
       const brandLink = screen.getByRole("link", { name: "返回系统概览" });
@@ -612,7 +612,7 @@ describe("AppFrame shell", () => {
       const tagline = screen.getByTestId("brand-tagline");
       expect(title).toHaveTextContent("Lucy WebUI");
       expect(title.querySelectorAll("span")).toHaveLength(0);
-      expect(tagline).toHaveTextContent("Data Agent MCP");
+      expect(tagline).toHaveTextContent("可信 Agent 数据层");
       expect(title).toHaveClass("pl-brand-title");
       expect(tagline.className).not.toContain("truncate");
     });

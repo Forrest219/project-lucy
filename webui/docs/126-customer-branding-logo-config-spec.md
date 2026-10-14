@@ -4,12 +4,12 @@
 |---|---|
 | 文档名称 | Customer Branding / Logo Config Spec |
 | 文档类型 | Product / UX / API Spec（实现依据） |
-| 版本 | v0.2 |
-| 撰写日期 | 2026-08-25 |
+| 版本 | v0.3 |
+| 撰写日期 | 2026-08-25；v0.3 更新 2026-10-14（默认副标题由 `Data Agent MCP` 改为 `可信 Agent 数据层`，对齐 Verifiable Context Layer 品类定位） |
 | 委托人 | xingchen |
 | 参考 | [Tableau Server `tsm customize`](https://help.tableau.com/current/server/en-us/cli_customize.htm)；Tableau Cloud Site Logo；Lucy Spec 67/68 |
 | 输出位置 | `webui/docs/126-customer-branding-logo-config-spec.md` |
-| 状态 | Approved for implementation（v0.2） |
+| 状态 | Approved for implementation（v0.3） |
 
 ### Changelog
 
@@ -17,6 +17,7 @@
 |---|---|
 | v0.1 | 对照 Tableau 起草需求与设计；决策点待确认 |
 | v0.2 | 拍板五项决策并进入实现：禁 SVG、v1 不做 WebP、超限拒绝、副标题进 v1、登录分槽延后 v1.1 |
+| v0.3 | 默认副标题由 `Data Agent MCP` 改为 `可信 Agent 数据层`，与 `docs/governance/vision.md` 的 context compiler / governed MCP runtime 口径一致。默认值不落库（见 §3.1 备注），存量实例无覆盖值时自动跟随 |
 
 ## 0. 已批准决策（v0.2）
 
@@ -51,7 +52,7 @@ New terms:
 | Customer Branding | 品牌外观 | 客户品牌 | 白标、换皮、皮肤（作导航/标题） | `/admin/branding` |
 | Customer Logo | 客户 Logo | Logo | 头像、图标（作主标签） | 侧栏 mark / 登录页共用 |
 | Product Title | 产品名称 | wordmark | 站点名、系统名（作主标签） | 默认 `Lucy WebUI` |
-| Brand Tagline | 副标题 | tagline | 口号、Slogan（作主标签） | 默认 `Data Agent MCP` |
+| Brand Tagline | 副标题 | tagline | 口号、Slogan（作主标签） | 默认 `可信 Agent 数据层` |
 
 ## 3. 需求
 
@@ -62,7 +63,7 @@ New terms:
 | BR-1 | 配置页「品牌外观」`/admin/branding`，系统设置导航 | P0 |
 | BR-2 | 一张客户 Logo → 侧栏 + 登录共用 | P0 |
 | BR-3 | 产品名称；空 → `Lucy WebUI` | P0 |
-| BR-4 | 副标题；空 → `Data Agent MCP` | P0 |
+| BR-4 | 副标题；空 → `可信 Agent 数据层` | P0 |
 | BR-5 | 侧栏 + 登录预览 | P0 |
 | BR-6 | 恢复默认 Logo；文案可清空回默认后保存 | P0 |
 | BR-7 | 公开 `GET` 品牌元数据与 Logo | P0 |
@@ -71,6 +72,8 @@ New terms:
 | BR-10 | 登录独立 Logo 槽 | P2 / v1.1 |
 | BR-11 | Compact 32×32 | P2 |
 | BR-12 | Favicon / document title | Out |
+
+> **默认值不落库（BR-3 / BR-4 备注）**：覆盖值只写在 `webui/config/branding.yaml`，未设置时存空字符串，默认值由 `webui/server/branding.ts` 的 `DEFAULT_PRODUCT_TITLE` / `DEFAULT_TAGLINE` 在读取时实时解析（`effectiveTagline()`）。因此**改默认文案不需要任何数据库迁移或初始化脚本**；存量实例在无覆盖值时自动跟随新默认，已自定义的客户保持其覆盖值不变。
 
 ### 3.2 Logo 资产
 

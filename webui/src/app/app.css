@@ -231,8 +231,8 @@
     @apply object-contain p-0.5;
     background: transparent;
   }
-  /* Single-column brand text: tagline `Data Agent MCP` sizes the track;
-     16px `Lucy WebUI` uses mild letter-spacing so both lines share the
+  /* Single-column brand text: the short `可信 Agent 数据层` tagline sizes the
+     track; 16px `Lucy WebUI` uses mild letter-spacing so both lines share the
      same left/right edges without splitting the wordmark. */
   .pl-brand-text.pl-brand-text {
     display: grid;

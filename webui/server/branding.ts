@@ -10,7 +10,7 @@ import { readRasterImageSize, sniffRasterImageMime } from "./image-raster.js";
 export const BRANDING_YAML_REL = "webui/config/branding.yaml";
 export const BRANDING_DIR_REL = "webui/config/branding";
 export const DEFAULT_PRODUCT_TITLE = "Lucy WebUI";
-export const DEFAULT_TAGLINE = "Data Agent MCP";
+export const DEFAULT_TAGLINE = "可信 Agent 数据层";
 export const MAX_LOGO_BYTES = 512 * 1024;
 export const MAX_BRAND_TEXT_CHARS = 64;
 export const MIN_LOGO_PX = 32;

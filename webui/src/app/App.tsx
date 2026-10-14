@@ -370,7 +370,7 @@ export function AppFrame() {
     isHelpRoute ? "pl-app-shell--help" : ""
   ].filter(Boolean).join(" ");
   const productTitle = branding?.productTitle ?? "Lucy WebUI";
-  const tagline = branding?.tagline ?? "Data Agent MCP";
+  const tagline = branding?.tagline ?? "可信 Agent 数据层";
   const logoUrl = branding?.logoUrl ?? null;
 
   // M60: collapsible group state. We seed the Set from localStorage so the
@@ -447,10 +447,10 @@ export function AppFrame() {
             <strong className="pl-brand-title" data-testid="brand-title">
               {productTitle}
             </strong>
-            {/* Brand caption shortened to `Data Agent MCP` so the natural
-                width matches the 16px wordmark without splitting the title
-                into spaced-apart tokens. Keep notranslate so browsers don't
-                rewrite professional English in the tagline. */}
+            {/* Brand caption is the short `可信 Agent 数据层` tagline so the
+                natural width stays close to the 16px wordmark without
+                splitting the title into spaced-apart tokens. Keep notranslate
+                so browsers don't rewrite the `Agent` token inside it. */}
             <span
               className="pl-brand-tagline notranslate"
               translate="no"

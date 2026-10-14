@@ -83,10 +83,10 @@ export function BrandingSettings() {
 
   const branding = query.data;
   const previewTitle = productTitle.trim() || branding?.defaults.productTitle || "Lucy WebUI";
-  const previewTagline = tagline.trim() || branding?.defaults.tagline || "Data Agent MCP";
+  const previewTagline = tagline.trim() || branding?.defaults.tagline || "可信 Agent 数据层";
   const previewLogoUrl = branding?.logoUrl ?? null;
   const defaultProductTitle = branding?.defaults.productTitle ?? "Lucy WebUI";
-  const defaultTagline = branding?.defaults.tagline ?? "Data Agent MCP";
+  const defaultTagline = branding?.defaults.tagline ?? "可信 Agent 数据层";
   const isTextDirty = Boolean(
     branding &&
       (productTitle !== branding.productTitleOverride || tagline !== branding.taglineOverride)
