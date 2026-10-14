@@ -9,6 +9,7 @@ import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { test, type Browser, type BrowserContext, type Page } from "@playwright/test";
 import { predicatesScript, type PerfExpected } from "./entry-performance-predicates";
+import { FILTER_TRACE_NAMES, observationsInWindow } from "./entry-performance-observations";
 
 type RouteId = "connections" | "catalog" | "overview" | "agents";
 type Expected = PerfExpected;
@@ -65,6 +66,19 @@ const INIT_SCRIPT = `(() => {
   for (const type of ["pointerdown", "keydown"]) {
     document.addEventListener(type, (e) => { perf.lastInput = { type, t: e.timeStamp }; }, true);
   }
+  perf.observeWindow = (start, end) => (${observationsInWindow.toString()})(perf, start, end);
+  perf.beginFilterObservation = () => {
+    perf.earlyFilterTaskArmed = ${process.env.PERF_FILTER_EARLY_LONG_TASK === "1"};
+    return performance.now();
+  };
+  // Fixture-only negative control: an early key task must fail PERF-10 even
+  // when all subsequent keys and the final filter render are fast.
+  document.addEventListener("keydown", (event) => {
+    if (!perf.earlyFilterTaskArmed || !event.target.matches("input.pl-whitelist-search-input")) return;
+    perf.earlyFilterTaskArmed = false;
+    const end = performance.now() + 80;
+    while (performance.now() < end) { /* controlled main-thread long task */ }
+  }, true);
   const q = (s) => document.querySelector(s);
   const qa = (s) => Array.from(document.querySelectorAll(s));
   const enabled = (el) => !!el && !el.disabled && el.getAttribute("aria-disabled") !== "true";
@@ -143,12 +157,7 @@ async function waitRoute(page: Page, route: RouteId | "shell", timeoutMs = 20_00
 
 async function readObservations(page: Page, from: number, to: number) {
   return page.evaluate(([start, end]) => {
-    const perf = (window as unknown as { __lucyPerf: { shifts: Array<{ t: number; v: number; sources: string[] }>; longTasks: Array<{ start: number; duration: number; name: string; container: string | null }> } }).__lucyPerf;
-    const shifts = perf.shifts.filter((s) => s.t >= start && s.t <= end);
-    const longTasks = perf.longTasks.filter((t) => t.start + t.duration >= start && t.start <= end);
-    // Non-sensitive shift attribution: test ids / class names only.
-    const shiftSources = shifts.map((s) => `${s.t.toFixed(0)}:${s.v.toFixed(4)}:${s.sources.join("|")}`);
-    return { cls: shifts.reduce((sum, s) => sum + s.v, 0), shiftCount: shifts.length, longTasks, shiftSources };
+    return (window as unknown as { __lucyPerf: { observeWindow: (from: number, to: number) => ReturnType<typeof observationsInWindow> } }).__lucyPerf.observeWindow(start, end);
   }, [from, to] as const);
 }
 
@@ -363,33 +372,39 @@ test(`entry-performance ${scenario}`, async ({ browser }) => {
       await waitRoute(page, "catalog");
       const input = page.locator("input.pl-whitelist-search-input");
       if (expected.filterCases.length < 2) throw new Error("fixture expectations must include a path term and a column-name term");
-      await runSamples("catalog-filter", async (i) => {
-        await input.fill("");
-        if ((await waitRoute(page, "catalog", 5000)) === null) throw new Error("catalog did not return to the unfiltered row set");
-        await page.waitForTimeout(100);
-        const { term } = expected.filterCases[i % expected.filterCases.length]!;
-        // Human-paced typing (the URL-controlled search input drops keystrokes typed with no delay).
-        await input.pressSequentially(term, { delay: TYPING_DELAY_MS });
-        const start = await lastInputTime(page);
-        // Completion = typed term applied + the independently expected row set and counts rendered.
-        const done = await page.evaluate(([exp, value]) => {
-          const perf = (window as unknown as { __lucyPerf: { waitFor: (c: () => boolean, t: number) => Promise<number | null>; filterDone: (e: unknown, t: string) => boolean } }).__lucyPerf;
-          return perf.waitFor(() => perf.filterDone(exp, value as string), 5000);
-        }, [expected, term] as const);
-        if (done === null || start === null) {
-          const state = await page.evaluate(() => ({
-            inputLength: (document.querySelector("input.pl-whitelist-search-input") as HTMLInputElement | null)?.value.length ?? null,
-            rows: document.querySelectorAll('tr[data-testid^="catalog-row-"]').length,
-            count: document.querySelector('[data-testid="catalog-result-count"]')?.textContent ?? null,
-            tree: document.querySelector('[data-testid="catalog-tree-root"]')?.textContent ?? null
-          }));
-          throw new Error(`catalog filter term #${i % expected.filterCases.length} did not render the expected rows (start=${start}, state=${JSON.stringify(state)})`);
-        }
-        await page.waitForTimeout(300);
-        const observeFrom = start - 200;
-        const observeTo = done + 300;
-        const observed = await readObservations(page, observeFrom, observeTo);
-        return { filterMs: done - start, filterTermIndex: i % expected.filterCases.length, observeFromMs: observeFrom, observeToMs: observeTo, ...observed };
+      const tracedTerms = new Set<number>();
+      await runSamples("catalog-filter", async (i, isWarmup) => {
+        const termIndex = i % expected.filterCases.length;
+        const trace = !isWarmup && !tracedTerms.has(termIndex);
+        return maybeTrace(browser, page, FILTER_TRACE_NAMES[termIndex]!, trace, async () => {
+          if (trace) tracedTerms.add(termIndex);
+          await input.fill("");
+          if ((await waitRoute(page, "catalog", 5000)) === null) throw new Error("catalog did not return to the unfiltered row set");
+          await page.waitForTimeout(100);
+          const { term } = expected.filterCases[termIndex]!;
+          const observeFrom = await page.evaluate(() => (window as unknown as { __lucyPerf: { beginFilterObservation: () => number } }).__lucyPerf.beginFilterObservation());
+          // Human-paced typing (the URL-controlled search input drops keystrokes typed with no delay).
+          await input.pressSequentially(term, { delay: TYPING_DELAY_MS });
+          const start = await lastInputTime(page);
+          // Completion = typed term applied + the independently expected row set and counts rendered.
+          const done = await page.evaluate(([exp, value]) => {
+            const perf = (window as unknown as { __lucyPerf: { waitFor: (c: () => boolean, t: number) => Promise<number | null>; filterDone: (e: unknown, t: string) => boolean } }).__lucyPerf;
+            return perf.waitFor(() => perf.filterDone(exp, value as string), 5000);
+          }, [expected, term] as const);
+          if (done === null || start === null) {
+            const state = await page.evaluate(() => ({
+              inputLength: (document.querySelector("input.pl-whitelist-search-input") as HTMLInputElement | null)?.value.length ?? null,
+              rows: document.querySelectorAll('tr[data-testid^="catalog-row-"]').length,
+              count: document.querySelector('[data-testid="catalog-result-count"]')?.textContent ?? null,
+              tree: document.querySelector('[data-testid="catalog-tree-root"]')?.textContent ?? null
+            }));
+            throw new Error(`catalog filter term #${i % expected.filterCases.length} did not render the expected rows (start=${start}, state=${JSON.stringify(state)})`);
+          }
+          await page.waitForTimeout(300);
+          const observeTo = done + 300;
+          const observed = await readObservations(page, observeFrom, observeTo);
+          return { filterMs: done - start, filterInteractionMs: done - observeFrom, filterTermIndex: termIndex, observeFromMs: observeFrom, observeToMs: observeTo, ...observed };
+        });
       });
     }
     await context.close();

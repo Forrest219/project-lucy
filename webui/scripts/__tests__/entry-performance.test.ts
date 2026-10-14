@@ -1,5 +1,5 @@
 import { mkdtempSync, readFileSync, existsSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, writeFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { JSDOM } from "jsdom";
@@ -17,10 +17,12 @@ import {
   nearestRank,
   parseCli,
   summarizeSamples,
+  validateFilterTraces,
   type BehaviorResult,
   type RawSample
 } from "../entry-performance.mts";
 import { agentsReady, catalogFilterDone, catalogReady, connectionsReady, type PerfExpected } from "../../tests/performance/entry-performance-predicates";
+import { FILTER_TRACE_NAMES, observationsInWindow } from "../../tests/performance/entry-performance-observations";
 import {
   assertSafeFixtureOutput,
   createRng,
@@ -171,7 +173,7 @@ function completeSamples(): RawSample[] {
   return samples;
 }
 
-function judge(samples: RawSample[], overrides: { behavior?: BehaviorResult; options?: Partial<typeof FORMAL>; budgets?: ReturnType<typeof evaluateBudgets> } = {}) {
+function judge(samples: RawSample[], overrides: { behavior?: BehaviorResult; options?: Partial<typeof FORMAL>; budgets?: ReturnType<typeof evaluateBudgets>; filterTraceProblems?: string[] | null } = {}) {
   const options = { ...FORMAL, ...overrides.options };
   const summary = summarizeSamples(samples);
   const budgets = overrides.budgets ?? evaluateBudgets(summary, { scenarios: options.scenarios, minSamples: options.iterations >= 30 ? 30 : 1 });
@@ -183,12 +185,51 @@ function judge(samples: RawSample[], overrides: { behavior?: BehaviorResult; opt
     assets,
     behavior: overrides.behavior === undefined ? BEHAVIOR_OK : overrides.behavior,
     sampleFailures: samples.filter((sample) => !sample.ok && !sample.warmup).length,
-    secretOffenders: 0
+    secretOffenders: 0,
+    filterTraceProblems: overrides.filterTraceProblems === undefined ? [] : overrides.filterTraceProblems
   });
   return { acceptance, exit: exitCodeFor(options.phase, acceptance) };
 }
 
 describe("Spec 174 R6 — formal acceptance gate (SC-14/19, PERF-01–10 evidence)", () => {
+  it("detects an early-key long task even when the last-key window and final render are fast", () => {
+    const observed = { shifts: [], longTasks: [{ start: 100, duration: 80, name: "self", container: "window" }] };
+    expect(classifyLongTasks(observationsInWindow(observed, 500 - 200, 530).longTasks).business).toBe(0);
+    const business = classifyLongTasks(observationsInWindow(observed, 95, 530).longTasks).business;
+    expect(business).toBe(1);
+    const samples = completeSamples().map((sample) => sample.scenario === "route-warm" && sample.route === "catalog-filter" && sample.iteration === 5
+      ? { ...sample, metrics: { ...sample.metrics, businessLongTasks: business } } : sample);
+    const verdict = judge(samples);
+    expect(verdict.acceptance.status).toBe("fail");
+    expect(verdict.acceptance.reasons.some((reason) => reason.includes("PERF-10 route-warm/catalog-filter"))).toBe(true);
+    expect(verdict.exit).toBe(1);
+  });
+
+  it("requires actual filter keyboard/paint traces, rejecting missing, malformed and navigation-only artifacts", async () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "lucy-filter-traces-"));
+    try {
+      expect(await validateFilterTraces(dir)).toHaveLength(2);
+      const write = (name: string, events: unknown[]) => writeFile(path.join(dir, `${name}.json`), JSON.stringify({ traceEvents: events }));
+      for (const name of FILTER_TRACE_NAMES) await write(name, [{ name: "EventDispatch", args: { data: { type: "click" } } }, { name: "Paint" }]);
+      expect(await validateFilterTraces(dir)).toEqual(FILTER_TRACE_NAMES.map((name) => `${name}.json: no keyboard event evidence`));
+      await writeFile(path.join(dir, `${FILTER_TRACE_NAMES[0]}.json`), "{");
+      expect((await validateFilterTraces(dir))[0]).toContain("invalid JSON");
+      await write(FILTER_TRACE_NAMES[0], []);
+      expect((await validateFilterTraces(dir))[0]).toContain("no trace events");
+      for (const name of FILTER_TRACE_NAMES) await write(name, [{ name: "EventDispatch", args: { data: { type: "keydown" } } }, { name: "Paint" }]);
+      expect(await validateFilterTraces(dir)).toEqual([]);
+      await write(FILTER_TRACE_NAMES[1], [{ name: "EventDispatch", args: { data: { type: "keydown" } } }]);
+      expect(await validateFilterTraces(dir)).toEqual([`${FILTER_TRACE_NAMES[1]}.json: no paint evidence`]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("cannot pass formal acceptance without validating filter traces", () => {
+    expect(judge(completeSamples(), { filterTraceProblems: null }).exit).toBe(1);
+    expect(judge(completeSamples(), { filterTraceProblems: ["catalog-filter-path.json: missing"] }).acceptance.status).toBe("incomplete");
+  });
+
   it("passes a complete formal run", () => {
     const { acceptance, exit } = judge(completeSamples());
     expect(acceptance).toEqual({ formal: true, status: "pass", reasons: [] });

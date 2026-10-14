@@ -18,6 +18,7 @@ import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
+import { FILTER_TRACE_NAMES } from "../tests/performance/entry-performance-observations";
 import { parse as parseYaml } from "yaml";
 import type { PerfExpected } from "../tests/performance/entry-performance-predicates.ts";
 import {
@@ -64,6 +65,7 @@ export type CliOptions = {
   output: string;
   baselineDir?: string;
   skipBuild: boolean;
+  filterNegativeControl?: boolean;
 };
 
 export function parseCli(argv: string[]): CliOptions {
@@ -89,7 +91,7 @@ export function parseCli(argv: string[]): CliOptions {
   if (!output) throw new Error("--output is required");
   const baselineDir = get("--baseline-dir");
   if (phase === "after" && !baselineDir) throw new Error("--phase after requires --baseline-dir");
-  return { phase, mode, scenarios, iterations, warmup, output, baselineDir, skipBuild: argv.includes("--skip-build") };
+  return { phase, mode, scenarios, iterations, warmup, output, baselineDir, skipBuild: argv.includes("--skip-build"), filterNegativeControl: argv.includes("--filter-negative-control") };
 }
 
 /** Nearest-rank percentile: sorted[ceil(p*n)-1]. */
@@ -312,12 +314,17 @@ export function evaluateAcceptance(input: {
   behavior: BehaviorResult;
   sampleFailures: number;
   secretOffenders: number;
+  filterTraceProblems?: string[] | null;
 }): Acceptance {
   const formal = isFormalRun(input.options);
   const minSamples = formal ? FORMAL_MIN_SAMPLES : 1;
   const reasons = collectionProblems(input.summary, input.assets, minSamples, input.options.scenarios, input.options.phase);
   if (input.sampleFailures > 0) reasons.push(`${input.sampleFailures} failed samples`);
   if (input.secretOffenders > 0) reasons.push(`${input.secretOffenders} trace artifacts contain secrets`);
+  if (input.options.scenarios.includes("route-warm") && input.options.iterations >= 2) {
+    if (input.filterTraceProblems == null) reasons.push("filter trace validation missing");
+    else reasons.push(...input.filterTraceProblems);
+  }
   const incomplete = reasons.length > 0;
   if (input.options.phase === "after") {
     if (input.budgets.length === 0) reasons.push("no budget evaluated");
@@ -359,6 +366,29 @@ export function classifyLongTasks(tasks: Array<{ duration: number; container: st
     else other += 1;
   }
   return { business, other };
+}
+
+/** A navigation trace cannot substitute for a filter trace: require keyboard and paint events. */
+export async function validateFilterTraces(traceDir: string): Promise<string[]> {
+  const problems: string[] = [];
+  for (const name of FILTER_TRACE_NAMES) {
+    const file = `${name}.json`;
+    try {
+      const trace = JSON.parse(await readFile(path.join(traceDir, file), "utf8"));
+      const events = trace?.traceEvents;
+      if (!Array.isArray(events) || events.length === 0) {
+        problems.push(`${file}: no trace events`);
+        continue;
+      }
+      if (!events.some((event) => event?.name === "EventDispatch" && event?.args?.data?.type === "keydown")) {
+        problems.push(`${file}: no keyboard event evidence`);
+      }
+      if (!events.some((event) => event?.name === "Paint")) problems.push(`${file}: no paint evidence`);
+    } catch {
+      problems.push(`${file}: missing or invalid JSON`);
+    }
+  }
+  return problems;
 }
 
 // ─── runtime helpers ────────────────────────────────────────────────────────
@@ -664,6 +694,7 @@ async function runPlaywright(
     PERF_RUNNER: "entry-performance",
     PERF_BASE_URL: server.baseUrl,
     PERF_SCENARIO: scenario,
+    PERF_FILTER_EARLY_LONG_TASK: options.filterNegativeControl ? "1" : "0",
     PERF_ITERATIONS: String(options.iterations),
     PERF_WARMUP: String(options.warmup),
     PERF_RESULTS_FILE: resultsFile,
@@ -1044,7 +1075,9 @@ async function main(): Promise<number> {
   }
   const sampleFailures = samples.filter((sample) => !sample.ok && !sample.warmup).length;
   const offenders = await scanArtifactsForSecrets(path.join(runDir, "traces"), [readFileSync(warmFixture.paths.loginSecret, "utf8").trim()]);
-  const acceptance = evaluateAcceptance({ options, summary, budgets, assets: initialAssets, behavior, sampleFailures, secretOffenders: offenders.length });
+  const filterTraceProblems = options.scenarios.includes("route-warm") && options.iterations >= 2
+    ? await validateFilterTraces(path.join(runDir, "traces")) : [];
+  const acceptance = evaluateAcceptance({ options, summary, budgets, assets: initialAssets, behavior, sampleFailures, secretOffenders: offenders.length, filterTraceProblems });
 
   const results = {
     runId,
@@ -1059,6 +1092,8 @@ async function main(): Promise<number> {
     iterations: options.iterations,
     warmup: options.warmup,
     scenarios: options.scenarios,
+    filterNegativeControl: options.filterNegativeControl === true,
+    filterTraceProblems,
     fixture: {
       seed: cleanManifest.seed,
       anchorIso: cleanManifest.anchorIso,
