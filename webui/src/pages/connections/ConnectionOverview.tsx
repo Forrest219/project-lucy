@@ -499,7 +499,7 @@ export function ConnectionOverview() {
   const sourcesReady = sourcesQuery.data !== undefined;
   // Spec 174 §4.2: a pending write (or no re-read since) keeps Manifest facts unconfirmed for actions.
   const sourcesFactsPending = useDisplayFactsPending("sources");
-  const sourcesActionsReady = sourcesReady && !sourcesFactsPending;
+  const sourcesActionsReady = sourcesReady && !sourcesFactsPending && !sourcesQuery.isFetching && !sourcesQuery.isError;
   const [addTarget, setAddTarget] = useState<ConnectionInfo | null>(null);
   const [structureTarget, setStructureTarget] = useState<{ connection: ConnectionInfo; schema: string } | null>(null);
   const [createOpen, setCreateOpen] = useState(false);

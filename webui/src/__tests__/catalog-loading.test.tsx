@@ -3,12 +3,15 @@ import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactElement } from "react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Catalog } from "../pages/Catalog";
 import { ConnectionOverview } from "../pages/connections/ConnectionOverview";
 import { AsyncRegion } from "../components/AsyncRegion";
 import type { SourceSummary } from "../lib/types";
+import { apiPut, setDisplayWriteBeginHandler, setDisplayWriteSettledHandler } from "../lib/apiClient";
+import { DISPLAY_SCOPE_QUERY_KEYS } from "../lib/displayQueryOptions";
+import { queryKeys } from "../lib/queryKeys";
 
 function summary(table: string, overrides: Partial<SourceSummary> = {}): SourceSummary {
   return {
@@ -73,11 +76,10 @@ function stubFetch() {
   }));
 }
 
-function renderWith(node: ReactElement) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+function renderWith(node: ReactElement, client = new QueryClient({ defaultOptions: { queries: { retry: false } } }), path = "/") {
   render(
     <QueryClientProvider client={client}>
-      <MemoryRouter>{node}</MemoryRouter>
+      <MemoryRouter initialEntries={[path]}>{node}</MemoryRouter>
     </QueryClientProvider>
   );
   return client;
@@ -90,8 +92,122 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  setDisplayWriteBeginHandler(null);
+  setDisplayWriteSettledHandler(null);
   vi.unstubAllGlobals();
   vi.useRealTimers();
+});
+
+function LocationProbe() {
+  return <output data-testid="catalog-test-location">{useLocation().pathname}</output>;
+}
+
+describe("Spec 174 R4 closure — Catalog fact-dependent navigation", () => {
+  function syncWrites(client: QueryClient) {
+    setDisplayWriteBeginHandler((scopes) => {
+      for (const scope of scopes) void client.cancelQueries({ queryKey: DISPLAY_SCOPE_QUERY_KEYS[scope] });
+    });
+    setDisplayWriteSettledHandler((scopes) => {
+      for (const scope of scopes) void client.invalidateQueries({ queryKey: DISPLAY_SCOPE_QUERY_KEYS[scope] });
+    });
+  }
+
+  for (const outcome of ["success", "rollback", "fresh-read-failure"] as const) {
+    it(`blocks row navigation and open menus until fresh facts after ${outcome}`, async () => {
+      sourcesBody = () => json({ tables: [summary("orders", { wikiRefCount: 1 }), summary("refunds", { enabled: false })], manifestSchemas: [] });
+      const client = renderWith(<><Catalog /><LocationProbe /></>, undefined, "/catalog?scope=all");
+      syncWrites(client);
+      await act(async () => sources.resolve(new Response()));
+      await screen.findByTestId("catalog-row-orders");
+      fireEvent.click(screen.getByTestId("row-more-trigger"));
+      expect(screen.getByTestId("catalog-row-wiki-orders")).toBeInTheDocument();
+      const write = deferred();
+      sources = deferred();
+      const ordinaryFetch = globalThis.fetch;
+      vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => String(input).endsWith("/enabled-tables") ? write.promise : ordinaryFetch(input, init)));
+      let mutation!: Promise<unknown>;
+      try {
+        act(() => { mutation = apiPut("/api/connections/perf-conn/enabled-tables", { enabledTables: [] }).catch(() => null); });
+        for (const id of ["catalog-row-edit-orders", "catalog-row-maintain-orders", "catalog-row-edit-refunds", "catalog-row-enable-scope-refunds"]) {
+          const action = screen.getByTestId(id);
+          expect(action).toHaveAttribute("aria-disabled", "true");
+          expect(action).not.toHaveAttribute("href");
+          fireEvent.click(action);
+        }
+        expect(screen.getByTestId("catalog-test-location")).toHaveTextContent(/^\/catalog$/);
+        expect(screen.getByTestId("row-more-trigger")).toBeDisabled();
+        expect(screen.queryByTestId("catalog-row-wiki-orders")).not.toBeInTheDocument();
+        expect(screen.getByPlaceholderText("搜索表名或字段名...")).toBeEnabled();
+        expect(screen.getByTestId("catalog-row-orders")).toBeInTheDocument();
+        await act(async () => { write.resolve(outcome === "rollback" ? json({ ok: false, error: { code: "INTERNAL", message: "rolled back" } }, 500) : json({})); await mutation; });
+        expect(screen.getByTestId("catalog-row-edit-orders")).toHaveAttribute("aria-disabled", "true");
+        const finalEnabled = outcome === "rollback";
+        sourcesBody = () => outcome === "fresh-read-failure"
+          ? json({ ok: false, error: { code: "INTERNAL", message: "refresh failed" } }, 500)
+          : json({ tables: [summary("orders", { enabled: finalEnabled, wikiRefCount: 1 })], manifestSchemas: [] });
+        await act(async () => sources.resolve(new Response()));
+        if (outcome === "fresh-read-failure") {
+          await waitFor(() => expect(client.getQueryState(queryKeys.sources)?.status).toBe("error"));
+          expect(screen.getByTestId("catalog-row-edit-orders")).not.toHaveAttribute("href");
+          sourcesBody = () => json({ tables: [summary("orders", { enabled: false })], manifestSchemas: [] });
+          await act(async () => { await client.refetchQueries({ queryKey: queryKeys.sources }); });
+        }
+        await waitFor(() => expect(screen.getByTestId("catalog-row-edit-orders")).toHaveAttribute("href", finalEnabled ? "/catalog/perf-conn/sales/orders" : "/connections/enabled-tables?connection=perf-conn&schema=sales"));
+      } finally {
+        write.resolve(json({}));
+        sources.resolve(new Response());
+        if (mutation) await mutation;
+        client.clear();
+      }
+    });
+  }
+
+  it("does not unlock cached Catalog actions when only one overlapping write settles", async () => {
+    const client = renderWith(<Catalog />, undefined, "/catalog");
+    syncWrites(client);
+    await act(async () => sources.resolve(new Response()));
+    await screen.findByTestId("catalog-row-orders");
+    const first = deferred();
+    const second = deferred();
+    sources = deferred();
+    const ordinaryFetch = globalThis.fetch;
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => String(input).endsWith("/a/enabled-tables") ? first.promise : String(input).endsWith("/b/enabled-tables") ? second.promise : ordinaryFetch(input, init)));
+    let a!: Promise<unknown>;
+    let b!: Promise<unknown>;
+    try {
+      act(() => { a = apiPut("/api/connections/a/enabled-tables", {}); b = apiPut("/api/connections/b/enabled-tables", {}); });
+      await act(async () => { first.resolve(json({})); await a; });
+      expect(screen.getByTestId("catalog-row-edit-orders")).not.toHaveAttribute("href");
+      await act(async () => { second.resolve(json({})); await b; });
+      expect(screen.getByTestId("catalog-row-edit-orders")).not.toHaveAttribute("href");
+      await act(async () => sources.resolve(new Response()));
+      await waitFor(() => expect(screen.getByTestId("catalog-row-edit-orders")).toHaveAttribute("href"));
+    } finally {
+      first.resolve(json({})); second.resolve(json({})); sources.resolve(new Response());
+      if (a) await a; if (b) await b;
+      client.clear();
+    }
+  });
+
+  it("blocks the enabled-scope empty-state link while its facts are pending", async () => {
+    sourcesBody = () => json({ tables: [summary("orders", { enabled: false })], manifestSchemas: [] });
+    const client = renderWith(<Catalog />, undefined, "/catalog");
+    syncWrites(client);
+    await act(async () => sources.resolve(new Response()));
+    await screen.findByText("当前没有已启用的语义资产");
+    const write = deferred();
+    const ordinaryFetch = globalThis.fetch;
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => String(input).endsWith("/enabled-tables") ? write.promise : ordinaryFetch(input, init)));
+    let mutation!: Promise<unknown>;
+    try {
+      act(() => { mutation = apiPut("/api/connections/perf-conn/enabled-tables", {}); });
+      expect(screen.getByRole("link", { name: "启用表范围" })).toHaveAttribute("aria-disabled", "true");
+      expect(screen.getByRole("link", { name: "启用表范围" })).not.toHaveAttribute("href");
+    } finally {
+      await act(async () => { write.resolve(json({})); if (mutation) await mutation; });
+      client.clear();
+    }
+  });
 });
 
 describe("Spec 174 T2 — Catalog partitioned loading (SC-06/07)", () => {

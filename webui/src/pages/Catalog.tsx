@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -18,7 +18,13 @@ import {
   type CatalogNavigationEventType
 } from "../lib/catalogNavigationUsage";
 import type { CompletionStatus, SourceSummary } from "../lib/types";
-import { sourcesQueryOptions } from "../lib/displayQueryOptions";
+import { sourcesQueryOptions, useDisplayFactsPending } from "../lib/displayQueryOptions";
+
+/** A disabled fact-dependent link has no href, including for keyboard/new-tab activation. */
+function CatalogFactLink({ factsReady, ...props }: Pick<ComponentProps<typeof Link>, "to" | "children" | "className" | "onClick" | "title" | "aria-label" | "translate"> & { factsReady: boolean; "data-testid"?: string }) {
+  if (factsReady) return <Link {...props} />;
+  return <span role="link" aria-disabled="true" className={props.className} title={props.title} aria-label={props["aria-label"]} translate={props.translate} data-testid={props["data-testid"]}>{props.children}</span>;
+}
 
 const STATUS_LABELS: Record<CompletionStatus, string> = {
   not_started: "未开始",
@@ -109,6 +115,7 @@ function catalogEmptyMessage(input: {
   total: number;
   scope: ScopeFilter;
   enabledCount: number;
+  factsReady: boolean;
   onEnabledScopeExit: () => void;
 }): { title: string; detail: ReactNode } {
   if (input.total === 0) {
@@ -123,13 +130,14 @@ function catalogEmptyMessage(input: {
       detail: (
         <>
           默认只展示已进入语义层的表。请先在{" "}
-          <Link
+          <CatalogFactLink
+            factsReady={input.factsReady}
             to="/connections/enabled-tables"
             className="pl-inline-link"
             onClick={input.onEnabledScopeExit}
           >
             启用表范围
-          </Link>{" "}
+          </CatalogFactLink>{" "}
           勾选表，或将启用范围切换为「全部」查看{" "}
           <span className="notranslate" translate="no">
             Manifest
@@ -188,6 +196,10 @@ export function Catalog() {
   });
   const { data } = sourcesQuery;
   const sourcesStatus = asyncStatus(sourcesQuery);
+  const factsPending = useDisplayFactsPending("sources");
+  // A successful API read may clear pending before React Query installs its data.
+  // Keep actions locked until the displayed query has finished applying that read.
+  const factsReady = !factsPending && !sourcesQuery.isFetching && !sourcesQuery.isError;
   const agentCountsKnown = !data?.meta || data.meta.authorizedCountsState === "ok";
 
   const tables = data?.tables ?? [];
@@ -335,6 +347,7 @@ export function Catalog() {
     total: tables.length,
     scope,
     enabledCount,
+    factsReady,
     onEnabledScopeExit: () => recordOutcome("enabled_scope_exit")
   });
 
@@ -466,7 +479,8 @@ export function Catalog() {
                   <tr key={`${table.conn}/${table.schema}/${table.table}`} data-testid={`catalog-row-${table.table}`}>
                     <td className="pl-catalog-table-name">
                       <div className="pl-catalog-table-name-cell">
-                        <Link
+                        <CatalogFactLink
+                          factsReady={factsReady}
                           to={table.enabled ? editorHref : enabledTablesHref(table)}
                           className="pl-catalog-table-name-link notranslate"
                           translate="no"
@@ -475,7 +489,7 @@ export function Catalog() {
                           title={fullRef}
                         >
                           {table.table}
-                        </Link>
+                        </CatalogFactLink>
                         {!table.enabled ? (
                           <span className="pl-status-badge pl-status-partial" data-testid={`catalog-row-not-enabled-${table.table}`}>
                             未启用
@@ -494,7 +508,8 @@ export function Catalog() {
                     <td className="pl-catalog-table-actions">
                       <div className="pl-catalog-table-actions-inner">
                         {table.enabled ? (
-                          <Link
+                          <CatalogFactLink
+                            factsReady={factsReady}
                             aria-label={`维护 ${table.schema}.${table.table} 语义`}
                             className="pl-inline-link text-xs notranslate"
                             translate="no"
@@ -503,9 +518,10 @@ export function Catalog() {
                             onClick={() => recordOutcome("row_open")}
                           >
                             维护语义 ↗
-                          </Link>
+                          </CatalogFactLink>
                         ) : (
-                          <Link
+                          <CatalogFactLink
+                            factsReady={factsReady}
                             aria-label={`去启用表范围：${table.schema}.${table.table}`}
                             className="pl-inline-link text-xs notranslate"
                             translate="no"
@@ -514,10 +530,11 @@ export function Catalog() {
                             onClick={() => recordOutcome("enabled_scope_exit")}
                           >
                             去启用表范围 ↗
-                          </Link>
+                          </CatalogFactLink>
                         )}
                         {table.wikiRefCount > 0 ? (
                           <RowMoreMenu
+                            disabled={!factsReady}
                             ariaLabel={moreLabel}
                             items={[
                               { kind: "link", label: "查看关联的 业务 Wiki", href: wikiHref, testId: `catalog-row-wiki-${table.table}` }

@@ -16,6 +16,7 @@ export type RowMoreMenuItem =
 type Props = {
   ariaLabel: string;
   items: RowMoreMenuItem[];
+  disabled?: boolean;
 };
 
 /**
@@ -24,9 +25,13 @@ type Props = {
  * semantics so screen readers announce menu items correctly. Anchored to its
  * trigger via absolute positioning; callers should leave room to the right.
  */
-export function RowMoreMenu({ ariaLabel, items }: Props) {
+export function RowMoreMenu({ ariaLabel, items, disabled = false }: Props) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (disabled) setOpen(false);
+  }, [disabled]);
 
   useEffect(() => {
     if (!open) return;
@@ -57,12 +62,13 @@ export function RowMoreMenu({ ariaLabel, items }: Props) {
         aria-label={ariaLabel}
         aria-haspopup="menu"
         aria-expanded={open}
+        disabled={disabled}
         onClick={() => setOpen((current) => !current)}
         data-testid="row-more-trigger"
       >
         <MoreHorizontal aria-hidden="true" focusable="false" className="pl-row-more-icon" />
       </button>
-      {open ? (
+      {open && !disabled ? (
         <ul className="pl-row-more-menu" role="menu" data-testid="row-more-menu">
           {items.map((item, index) => {
             const testId = item.testId ?? `row-more-item-${index}`;
