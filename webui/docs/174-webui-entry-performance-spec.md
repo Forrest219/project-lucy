@@ -5,7 +5,7 @@
 | Spec 编号 / 版本 | 174 / v1.2 |
 | 日期 / 作者 | 2026-10-13 / Codex |
 | 委托人 | zhangxingchen |
-| 状态 | Implemented · Review fixes R1–R7 done（2026-10-13）：缓存 / 账户一致性修正并补回归；收紧后的正式门禁下 fixture 复验 `after-review-v2` formal pass（PERF-01–10，行为 11/11），见[执行报告 §9](plans/wo-20261013-webui-entry-performance-IMPLEMENTATION_NOTES.md)与[审阅与修正工单](plans/wo-20261013-webui-entry-performance-REVIEW-FIX.md)；未覆盖分支见失效矩阵；目标环境未部署 |
+| 状态 | Implemented · 2026-10-14收尾复验完成：R3/R4/R6追加缺口已关闭，after-review-v3完整formal pass（PERF-01–10、行为11/11），见[执行报告§10](plans/wo-20261013-webui-entry-performance-IMPLEMENTATION_NOTES.md)；已登记未覆盖项保留，目标环境未部署 |
 | 授权 | 用户于 2026-10-13 同意进入卡顿优化方案，要求生成 Spec 与 Cursor 实施、验证工单 |
 | 工单 | [WO-20261013-174](plans/wo-20261013-webui-entry-performance.md) |
 | 范围 | Lucy WebUI 服务、前端与构建产物；单进程、单实例；桌面浏览器 |

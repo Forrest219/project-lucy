@@ -3,7 +3,7 @@
 | 字段 | 内容 |
 |---|---|
 | 日期 / 版本 | 2026-10-13 / v1.2（实现接线回填） |
-| 状态 | Implemented · 审阅修正复验完成（2026-10-13）；「实际接线」表的“通过”为历史执行结论，以下方「审阅修正复验」四态表为准（含未覆盖项），见[审阅与修正工单](wo-20261013-webui-entry-performance-REVIEW-FIX.md) R1–R7 |
+| 状态 | Implemented · 2026-10-14 Codex收尾复验完成：R3/R4/R6追加缺口已关闭；原四态证据及未覆盖项保留，见[执行报告§10](wo-20261013-webui-entry-performance-IMPLEMENTATION_NOTES.md) |
 | 权威合同 | [Spec174 v1.2](../174-webui-entry-performance-spec.md) §3–4/7/9 |
 | 执行工单 | [WO-20261013-174 v1.2](wo-20261013-webui-entry-performance.md) T1/T3/T5 |
 
@@ -105,6 +105,12 @@ DI-01–13/15主要落 `server/__tests__/display-invalidation.test.ts`；DI-16�
 
 - **生效状态（SC-17，R3）**：`runtimeConsistency` 不再随显示快照缓存，快照只存编译输入摘要，每次响应按当前只读 runtime 状态计算；sources / Agent 的 `meta.snapshotVersion` 随状态变化。证据：`display-permission-runtime` 5 例（热命中 unconfirmed↔matched、global degrade 与恢复、请求进行中变化、显示读不提交 policy）；`catalog-loading` / `agent-list` › 权限生效状态待确认。
 - **写开始门禁（SC-15/18，R4）**：客户端按读模型计 pending 写，嵌套 / 并行写只在最后一个结束时失效；写中不发起展示读取，重叠写的响应为 write stale，结算后才有限重读；依赖 Manifest 事实的动作在重新读到数据前不可用。证据：`display-query-isolation` › R4 五例；`catalog-loading` › R4 success / rollback。
+
+## 2026-10-14追加收尾证据
+
+- SC-17 / R3：Agent最终consistency移至统计await之后；display-permission-runtime新增matched↔unconfirmed两个统计期间竞态测试，版本随最终状态变化，缓存构建次数不变。
+- SC-15/18 / R4：Catalog主链接、维护/启用、更多菜单与空态入口接入facts pending；catalog-loading新增5例，覆盖实际点击、写失败、重读失败和并行写。isFetching/isError门禁保证数据安装完成后才解锁；连接页同步补齐。
+- SC-14/19 / R6：筛选窗口覆盖首键起全过程，两类独立trace必须含keydown/Paint；真实80ms早期任务负向控制使PERF-10失败。正常完整after-review-v3（980记录、11/11行为、24trace）formal pass，详见执行报告§10。
 
 ## 核心流程（伪代码）
 

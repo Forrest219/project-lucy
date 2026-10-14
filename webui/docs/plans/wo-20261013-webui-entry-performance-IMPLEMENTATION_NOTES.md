@@ -1,5 +1,7 @@
 # WO-20261013-174 WebUI Entry Performance — Implementation Notes
 
+> **2026-10-14 Codex收尾交付完成：R3/R4/R6追加缺口已关闭，见§10。** 原复核反例与§9成绩保留；修正代码为`0afc3aa`、`866d716`、`586e365`。综合回归200/200、全前端1047/1047通过；`after-review-v3`完整正式验收通过（980记录、11/11行为、24份trace），未部署目标环境。
+
 > **2026-10-13 Codex 复审补注（HEAD 8e4a461）：待修正复验，暂不能按本文原结论关单。** 原性能成绩与 Cursor 执行记录保留。隔离复现确认 unverified bypass 绕过 pending 屏障/并发上限、旧账户 POST 响应未拒绝、POST 401 未清理、runtime-only 变化后 consistency 仍取旧缓存。性能谓词/正式采样完整性也有遗漏；47项既有相关测试通过不能覆盖这些组合场景。本文 §6“bypass 永远返回正确数据”及“SC/PERF 全通过”的完成声明不成立。详见[审阅与 Cursor 修正工单](wo-20261013-webui-entry-performance-REVIEW-FIX.md)，完成 R1–R7 并追加复验证据后才能恢复 Verified 状态。
 
 > **2026-10-13 修正复验（Cursor）：** R1–R7 已按修正工单逐项先红后绿修正，新 runner 下 baseline `8dd210a` 与修正 HEAD `fe00d78` 重新采集，after `mode=formal status=pass`、退出码 0；逐项提交、测试名、命令退出码、同环境失败对照与残余缺口见 §9。原 §1–§8 保留为历史记录。
@@ -256,6 +258,78 @@ baseline 与 after 复用同一 `fixture-clean` 快照（after 重新校验 cont
 - runtime 状态晚于卡片返回且最终无需提示时，本次访问保留一行不可见占位（R5 稳定占位的代价）。
 - 发现但未在本单修复：语义资产搜索框由 URL 参数受控，0 ms 间隔连续输入会丢字符（baseline 同代码）；属 Spec 174 范围外的输入体验问题，建议另立单。
 - 按账户裁剪的快照仍不存在，principal LRU 未实现（与 §7 相同）。
+
+## 10. Codex 收尾实现与正式复验（2026-10-14）
+
+用户要求由 Codex 亲自完成剩余修复，执行依据为[2026-10-14复核计划](wo-20261014-webui-entry-performance-RECHECK.md)。本节为最新交付结论；§1–§9及复核反例保留为历史证据，目标环境未部署。
+
+| 提交 | 修正 | 先红后绿证据 |
+|---|---|---|
+| `0afc3aa` | R3：Agent列表等审计统计完成后，在响应构造处只读计算runtimeConsistency和对应版本，缓存只保留编译输入 | display-permission-runtime新增两个方向的统计等待竞态；红2例→绿，相关14例通过；权限结果/缓存构建次数不变，展示读不提交policy |
+| `866d716` | R4：Catalog主链接、维护/启用链接、更多菜单、空态入口在facts pending/重新读取期间无href或禁用；查询数据安装完成后才恢复；连接页同样防止读取完成前提前解锁 | catalog-loading新增5例，红5例→绿；成功/回滚/重读失败/并行写/空态覆盖，实际点击不跳旧路径；相关66例通过 |
+| `586e365` | R6：long-task窗口从首键前开始，最后键→确认绘制的辅助计时另记；路径词/字段词各一份独立trace；正式入口验证JSON、keydown与Paint事件；fixture-only负向注入开关 | 缺trace验证红→绿；统计/DOM/trace回归30例通过；真实Chromium早期按键长任务使PERF-10按预期失败 |
+
+新增开关`--filter-negative-control`只进入performance fixture/init script，不改变应用或生产路由，产物标记`filterNegativeControl=true`。正常与负向样本分别存储，不混入正常P95。
+
+### 10.1 命令与退出码
+
+| 检查 | 退出码 / 结果 | 证据 |
+|---|---|---|
+| 11文件综合回归（R1–R7与A/B/C涉及文件） | 0；200/200 | `inbox/spec174-fix-regression.log` |
+| `vitest run src --maxWorkers=1` | 0；77文件，1047/1047 | `inbox/spec174-fix-frontend.log` |
+| `npm --prefix webui run build` | 0；生产build +预压缩 | `inbox/spec174-fix-build.log`；formal runner也重新build |
+| terminology / IA lint | 0 / 0 | 最终文档更新后再次核对 |
+| `tsc --noEmit -p tsconfig.json` | 2；88个既有诊断，去掉位置与worktree路径后无新增 | `inbox/spec174-fix-tsc.log`，对照§9.4的tsc-after |
+| selector-contract | 1；同为33个既有问题，无新增产品testid | `inbox/spec174-fix-selector.log` |
+| route-warm负向控制，2次、0warmup、开启early task | **1（预期）**；PERF-10 catalog-filter businessLongTasks=1 | `inbox/webui-entry-perf/filter-negative-v3/`，results hash `c44617ac7f46f46d` |
+| route-warm正常smoke，2次、0warmup | 0；明确标partial，非正式通过 | `inbox/webui-entry-perf/filter-smoke-v3/`，results hash `f874733de3b0467d` |
+| baseline route-warm，30次+5warmup | 0；175记录、每路由/筛选30正式样本、无采集失败 | `inbox/webui-entry-perf/baseline-review-v3/` |
+| after all，30次+5warmup | 0；formal pass，11/11行为、零跳过/失败/预算失败 | `inbox/webui-entry-perf/after-review-v3/` |
+
+负向控制每次在首次按键处理注入80ms任务，新窗口各捕获1个业务长任务，旧last-key−200ms窗口各漏掉该任务；CLI没有采集失败，但预算正确拒绝。这验证了门禁，未将注入任务当成产品性能缺陷。
+
+### 10.2 生产性能证据
+
+本轮baseline只重采受影响的route-warm（含筛选），**不是一轮全场景baseline**；其余历史对照保留review-v2。baseline应用保持`8dd210a`，仅复制共同runner/fixture-server/timing/谓词/观察器/config/behavior共9文件，逐文件SHA256一致，依赖运行时共用；未复制修正应用代码。临时worktree已归档，所有基线证据复制回本仓inbox且hash不变。
+
+after是完整all场景，代码`586e365`，`dirty=true`只含复核文档；应用代码之后没有改动。dirty diff digest为`ed4eaa6672e80e365400a52f0f203ad14d2cb3fb04e5339677e5cef326853183`。两轮仍使用同一fixture content hash `5dc0cd88617da5a60b7db82a61871d50897eac6660907edb909740b601e2ac3d`、seed/anchor/audit输入与环境。正式采样期间没有并行测试。
+
+```bash
+# 8dd210a独立worktree中，共同runner，随后将目录复制回本仓
+npm --prefix webui run perf:entry -- --phase baseline --mode production --scenario route-warm --iterations 30 --warmup 5 --output inbox/webui-entry-perf/baseline-review-v3
+# 本仓，固定修正代码586e365
+npm --prefix webui run perf:entry -- --phase after --mode production --scenario all --iterations 30 --warmup 5 --baseline-dir /Users/zhangxingchen/Projects/project-lucy/inbox/webui-entry-perf/baseline-review-v3 --output inbox/webui-entry-perf/after-review-v3
+# 与正常采样分开的fixture-only负向控制
+npm --prefix webui run perf:entry -- --phase after --mode production --scenario route-warm --iterations 2 --warmup 0 --skip-build --filter-negative-control --baseline-dir inbox/webui-entry-perf/baseline-review-v2 --output inbox/webui-entry-perf/filter-negative-v3
+```
+
+| 指标 | after P95 / 最大值 | 原预算 |
+|---|---:|---:|
+| browser-cold connections primary | 112.3ms | ≤800ms |
+| browser-cold catalog primary | 104.0ms | ≤800ms |
+| browser-cold overview primary | 140.1ms | ≤800ms |
+| browser-cold agents primary | 119.6ms | ≤800ms |
+| route-warm四页primary | 24.2–25.4ms | ≤100ms |
+| probe-load catalog primary | 335.6ms | ≤500ms |
+| probe-load overview primary | 357.2ms | ≤500ms |
+| probe-load agents primary | 349.1ms | ≤500ms |
+| sources / Agent热HTTP | 1.11 / 10.44ms | ≤100 / 200ms |
+| display-cold sources build | 139.0ms | ≤500ms |
+| 初始JS / CSS gzip最大 | 166,662 / 33,175B | ≤204,800 / 51,200B |
+| CLS最大 | 0.0204 | ≤0.05 |
+| ≥50ms业务长任务 | 0 | 0 |
+
+完整after共980记录（含warmup），28个计时场景/路由每项30正式样本，失败0；所有PERF-01–10门禁通过，11个behavior全部通过，24份trace含`catalog-filter-path.json`、`catalog-filter-column.json`，两份均通过键盘/绘制证据校验，秘密扫描无异常。
+
+辅助filterMs P95为103.7ms（baseline 95.9ms），filterInteractionMs P95为1454.6ms。沿用80ms逐字符输入，后者包含全部键入过程；前者是最后keydown→runner确认绘制，包含Playwright尾键间隔等待，不能宣传为纯应用处理耗时。本次没有降低或新增未经批准的筛选延迟预算；PERF-10已覆盖首次输入之前至筛选完成后的整个窗口，业务长任务为0。
+
+证据SHA256：baseline results `d084a70eb588531e4b1b858fb5c5f11c9d20a7d0171fe4e17582d96f1cb29fe2`；after results `71dc06bedaba54288495b2259f9ec5e2cc5f63496ffca14e77e5fd43217a32bb`，samples `d6a62b8941fb609b0e4e16f596b36f3fed3cb81862c4cfa4c8a7667c36e3c42e`。完整环境、P50/P95/max、逐样本值、资源与trace位于上述结果目录；inbox按治理不提交Git。
+
+### 10.3 关闭与边界
+
+2026-10-14复核的A/B/C均已实现并验证，可关闭本轮R3/R4/R6收尾；矩阵中的其他未覆盖项仍保持未覆盖，不从公共包装推定通过。§9.5的高速输入丢字符、下载直连epoch例外及其他已登记事项没有冒充已解决。
+
+提交在本地lucy-v2.0；stash@{0}仍为7653746，未apply/pop。未push、未访问或部署目标IP，未修改真实配置/secret、KTX源码或客户镜像。上述性能只代表Apple Silicon回环匿名fixture；后续目标环境、amd64/Kubernetes交付按既有发布与G1–G4流程验证。
 
 ## Terminology Compliance
 
