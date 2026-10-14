@@ -150,6 +150,7 @@ Lucy MCP Proxy 监听 `LUCY_PROXY_HOST:LUCY_PROXY_PORT`（默认容器内 `0.0.0
 | 主题 | 文档 |
 |---|---|
 | Lucy 产品定位与愿景 | `docs/governance/vision.md` |
+| **竞品分析与差异化立项（20261014）** | **`docs/specs/lucy-20261014-safe-log-to-quality-eval-spec.md`**（P0-1 反馈回流浪程）· **`docs/specs/lucy-20261014-release-bom-spec.md`**（P0-2 发布物料清单）· **`docs/specs/lucy-20261014-concept-dictionary-spec.md`**（P1 概念字典）；工单 `docs/plans/wo-20261014-*.md`；分析底稿与评审历史 `docs/specs/lucy-20261014-fivetran-context-layer-competitive-analysis.md` |
 | Lucy 202608 Enterprise Governance & Observability 升级蓝图 | `docs/specs/lucy-202608-reliable-delivery-upgrade-spec.md` |
 | Lucy 202608 升级执行总控 | `docs/specs/lucy-202608-upgrade-execution-control.md` |
 | Lucy 202608 Governance & Observability 差距分析 | `docs/access-control/gap-analysis-202608.md` |
