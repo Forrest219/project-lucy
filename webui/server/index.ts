@@ -120,7 +120,7 @@ import { registerRoleRoutes } from "./admin/roles.js";
 import { registerTokenRoutes } from "./admin/tokens.js";
 import { registerPolicyRuntimeRoutes } from "./admin/policy-runtime.js";
 import { getPolicyRuntimeStatus, isPolicyRuntimeHealthy, runtimeConsistencyForInputs, type DisplayPolicyInputs } from "./proxy/acl.js";
-import { recordConfigChange, registerAuditRoutes } from "./admin/audit.js";
+import { getAuditDb, recordConfigChange, registerAuditRoutes } from "./admin/audit.js";
 import { auditedWriteFile } from "./admin/config-audit-write.js";
 import { registerMcpToolsRoutes } from "./admin/mcp-tools.js";
 import { registerMcpPlaygroundRoutes } from "./admin/mcp-playground.js";
@@ -139,7 +139,11 @@ import { registerBrandingRoutes } from "./branding.js";
 import { actorIdFromRequest, requireWebuiAuthHook } from "./auth/guard.js";
 import { assertStartupPolicy, resolveCookieSecure } from "./auth/deployment-mode.js";
 import { reconcileBootstrapOnStartup } from "./auth/bootstrap.js";
-import { closeSecurityStore } from "./security/instance.js";
+import { closeSecurityStore, getSecurityStore } from "./security/instance.js";
+import { recoverInterruptedOperations } from "./security/ledger.js";
+import { AUDIT_PROJECTOR_NAME, createProjectionScheduler, readTargetCursor } from "./security/projector.js";
+import { recoverProjectionCursor } from "./security/recovery.js";
+import { recordProjectionStatus } from "./proxy/audit-write-health.js";
 import { registerWebSecurity } from "./web-security.js";
 import { registerSkillsRoutes } from "./admin/skills.js";
 import { registerCaseRoutes } from "./eval/cases.js";
@@ -2144,7 +2148,17 @@ export async function startServer(options: { displayPrewarm?: boolean } = {}): P
     displayReadyMs = performance.now() - t3;
   }
 
-  const { server: proxy, host: proxyHost, port: proxyPort } = buildProxy();
+  await recoverResponseLedger();
+  const projection = createProjectionScheduler({
+    getStore: getSecurityStore,
+    getTarget: getAuditDb,
+    onStatus: recordProjectionStatus
+  });
+  const { server: proxy, host: proxyHost, port: proxyPort } = buildProxy({
+    onOperationSettled: () => projection.trigger()
+  });
+  proxy.on("close", () => projection.stop());
+  projection.start();
   await new Promise<void>((resolve, reject) => {
     proxy.listen(proxyPort, proxyHost, resolve);
     proxy.on("error", reject);
@@ -2158,6 +2172,35 @@ export async function startServer(options: { displayPrewarm?: boolean } = {}): P
     port,
     timings: { policyMs: t1 - t0, catalogScanMs: t2 - t1, listenMs: t3 - t2, displayReadyMs }
   };
+}
+
+/**
+ * T07 boot recovery, before the proxy listens: close operations the previous
+ * process left open as `interrupted` (never `delivered`), and re-sync the ledger's
+ * projection cursor with what the audit database proves. A failure is logged and
+ * leaves the stricter state: the proxy still fails closed per request.
+ */
+async function recoverResponseLedger(): Promise<void> {
+  const store = await getSecurityStore();
+  if (!store.ok) {
+    console.error(`[lucy-audit] ledger recovery skipped: ${store.code}/${store.reason}`);
+    return;
+  }
+  const interrupted = await recoverInterruptedOperations(store.value);
+  if (!interrupted.ok) console.error(`[lucy-audit] interrupted-operation recovery failed: ${interrupted.code}`);
+  else if (interrupted.value.interrupted.length > 0) {
+    console.warn(
+      `[lucy-audit] closed ${interrupted.value.interrupted.length} operation(s) as interrupted ` +
+        `(${interrupted.value.preparedUnconfirmed.length} had a durable response_prepared)`
+    );
+  }
+  try {
+    const target = await getAuditDb();
+    const cursor = await recoverProjectionCursor(store.value, AUDIT_PROJECTOR_NAME, () => readTargetCursor(target));
+    if (!cursor.ok) console.error(`[lucy-audit] projection cursor recovery failed: ${cursor.code}`);
+  } catch (error) {
+    console.error("[lucy-audit] projection cursor recovery failed", error instanceof Error ? error.message : "unknown");
+  }
 }
 
 async function start() {

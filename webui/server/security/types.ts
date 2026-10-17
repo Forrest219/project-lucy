@@ -83,7 +83,14 @@ export type SecurityEventPhase =
   | "abort"
   | "decision"
   | "result"
-  | "recovery";
+  | "recovery"
+  // T07 response-release phases (Spec §5.1). `response_delivered` means the body was
+  // handed to the transport; it is not a client acknowledgement.
+  | "request_admitted"
+  | "response_prepared"
+  | "response_delivered"
+  | "response_failed"
+  | "interrupted";
 
 export type SecurityEventInput = {
   eventId: string;

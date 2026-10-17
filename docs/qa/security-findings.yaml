@@ -85,12 +85,13 @@ findings:
     verifiedBy: [SEC-10, SEC-13, SEC-14]
     acceptedBy: null
   # D-02 审计写失败后仍释放数据（T07）
+  # note: T07-1..4 已落地：所有经准入的 MCP 响应先耐久写 request_admitted、授权复核后耐久写 response_prepared 才释放（非流式 JSON 与有界缓冲 SSE），失败 503 AUDIT_UNAVAILABLE、不 fallback；崩溃遗留标 interrupted 不伪造 delivered；幂等投影 + complete=false；性能预算见 inbox/e2e/<runId>/audit-overhead.json。Plan T07 步骤 5（配置写 intent / Trace 投影）未含；fixedIn 待 T07 提交后回填 SHA
   - id: D-02
     severity: P1
-    status: open
+    status: fixed
     spec: "§5.1"
     fixedIn: null
-    verifiedBy: []
+    verifiedBy: [SEC-19]
     acceptedBy: null
   # G-01 文档称强制，release workflow 无真实 E2E 依赖（T14）
   - id: G-01

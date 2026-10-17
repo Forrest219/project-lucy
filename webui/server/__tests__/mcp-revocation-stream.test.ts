@@ -11,6 +11,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // first, then cancels in-flight requests and streams, clears caches, and only
 // then reports success; every content send point re-checks the authorization
 // version. Bytes already on the wire cannot be recalled (verified end-to-end in T12).
+//
+// T07 (Spec §5.1): sensitive SSE is no longer passed through chunk by chunk; the proxy
+// buffers it (bounded) and releases it only after a durable `response_prepared`. An
+// in-flight stream is therefore a request still being buffered: a narrowing cancels it,
+// closes its upstream stream and answers 403 — no stream byte ever reached the client.
 
 const ALICE_TOKEN = "revocation-alice-token";
 const BOB_TOKEN = "revocation-bob-token";
@@ -177,27 +182,28 @@ describe("MCP revocation send barrier (T04-3)", () => {
     await rm(projectRoot, { recursive: true, force: true });
   });
 
-  async function openStream(token: string): Promise<{ reader: ReadableStreamDefaultReader<Uint8Array>; text: () => string }> {
-    const res = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
+  type OpenedStream = {
+    /** Settles when the proxy answers (or the connection drops). */
+    response: Promise<{ status: number; text: string }>;
+    settled: () => boolean;
+    abort: () => void;
+  };
+
+  /** Opens `GET /mcp` and does not wait for headers: the proxy buffers the stream (T07). */
+  function openStream(token: string): OpenedStream {
+    const controller = new AbortController();
+    let done = false;
+    const response = fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
       method: "GET",
-      headers: { authorization: `Bearer ${token}`, accept: "text/event-stream" }
-    });
-    expect(res.status).toBe(200);
-    const reader = res.body!.getReader();
-    const decoder = new TextDecoder();
-    let received = "";
-    void (async () => {
-      try {
-        for (;;) {
-          const { value, done } = await reader.read();
-          if (done) return;
-          received += decoder.decode(value);
-        }
-      } catch {
-        // an aborted stream is the expected outcome for a narrowed Agent
-      }
-    })();
-    return { reader, text: () => received };
+      headers: { authorization: `Bearer ${token}`, accept: "text/event-stream" },
+      signal: controller.signal
+    })
+      .then(async (res) => ({ status: res.status, text: await res.text() }))
+      .catch(() => ({ status: 0, text: "" }))
+      .finally(() => {
+        done = true;
+      });
+    return { response, settled: () => done, abort: () => controller.abort() };
   }
 
   describe("narrowingScopeBetween", () => {
@@ -336,10 +342,9 @@ describe("MCP revocation send barrier (T04-3)", () => {
     it("cuts the SSE stream of a narrowed Agent before the narrowing is acknowledged, and keeps other Agents' streams", async () => {
       await startProxy();
       const barrier = await import("../proxy/authorization-barrier.js");
-      const alice = await openStream(ALICE_TOKEN);
-      const bob = await openStream(BOB_TOKEN);
-      await waitFor(() => alice.text().includes("first") && bob.text().includes("first"), "both streams open");
-      expect(streamOpened).toBe(2);
+      const alice = openStream(ALICE_TOKEN);
+      const bob = openStream(BOB_TOKEN);
+      await waitFor(() => streamOpened === 2, "both streams open upstream");
 
       await barrier.narrowAuthorization({ kind: "subjects", agentIds: ["alice"], tokenHashes: [] });
 
@@ -348,10 +353,15 @@ describe("MCP revocation send barrier (T04-3)", () => {
       expect(barrier.inflightRequestCount({ agentId: "bob" })).toBe(1);
       await waitFor(() => streamClosedUpstream === 1, "upstream stream of Alice closed");
 
-      const bobBefore = bob.text().length;
+      const cut = await alice.response;
+      expect(cut.status).toBe(403);
+      expect(cut.text).toContain("authorization_revoked");
+      expect(cut.text).not.toContain("data:"); // no stream byte reached the client
+
       await sleep(80);
-      expect(bob.text().length).toBeGreaterThan(bobBefore);
+      expect(bob.settled()).toBe(false);
       expect(streamClosedUpstream).toBe(1);
+      bob.abort();
     });
 
     it("cancels an in-flight upstream call and never delivers the late upstream content", async () => {
@@ -417,9 +427,9 @@ describe("MCP revocation send barrier (T04-3)", () => {
     it("disabling an Agent through the access.yaml writer cuts its stream and spares others", async () => {
       await startProxy();
       const { readAccessYaml, writeAccessYaml } = await import("../admin/access-config.js");
-      const alice = await openStream(ALICE_TOKEN);
-      const bob = await openStream(BOB_TOKEN);
-      await waitFor(() => alice.text().includes("first") && bob.text().includes("first"), "both streams open");
+      const alice = openStream(ALICE_TOKEN);
+      const bob = openStream(BOB_TOKEN);
+      await waitFor(() => streamOpened === 2, "both streams open upstream");
 
       const { config } = await readAccessYaml(projectRoot);
       config.users = config.users.map((user) => (user.id === "alice" ? { ...user, enabled: false } : user));
@@ -436,6 +446,9 @@ describe("MCP revocation send barrier (T04-3)", () => {
       expect(barrier.inflightRequestCount({ agentId: "alice" })).toBe(0);
       await waitFor(() => streamClosedUpstream === 1, "Alice stream closed upstream");
       expect(barrier.inflightRequestCount({ agentId: "bob" })).toBe(1);
+      expect((await alice.response).status).toBe(403);
+      expect(bob.settled()).toBe(false);
+      bob.abort();
 
       const denied = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
         method: "GET",
@@ -451,9 +464,9 @@ describe("MCP revocation send barrier (T04-3)", () => {
       registerTokenRoutes(app);
       await app.ready();
       try {
-        const alice = await openStream(ALICE_TOKEN);
-        const bob = await openStream(BOB_TOKEN);
-        await waitFor(() => alice.text().includes("first") && bob.text().includes("first"), "both streams open");
+        const alice = openStream(ALICE_TOKEN);
+        const bob = openStream(BOB_TOKEN);
+        await waitFor(() => streamOpened === 2, "both streams open upstream");
 
         const response = await app.inject({ method: "DELETE", url: "/api/admin/agents/alice/tokens/alice-main" });
         expect(response.statusCode).toBe(200);
@@ -462,6 +475,9 @@ describe("MCP revocation send barrier (T04-3)", () => {
         expect(barrier.inflightRequestCount({ agentId: "alice" })).toBe(0);
         expect(barrier.inflightRequestCount({ agentId: "bob" })).toBe(1);
         await waitFor(() => streamClosedUpstream === 1, "Alice stream closed upstream");
+        expect((await alice.response).status).toBe(403);
+        expect(bob.settled()).toBe(false);
+        bob.abort();
 
         const replay = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
           method: "GET",
@@ -476,14 +492,16 @@ describe("MCP revocation send barrier (T04-3)", () => {
     it("a widening write (adding an Agent) does not cancel anyone", async () => {
       await startProxy();
       const { readAccessYaml, writeAccessYaml } = await import("../admin/access-config.js");
-      const alice = await openStream(ALICE_TOKEN);
-      await waitFor(() => alice.text().includes("first"), "stream open");
+      const alice = openStream(ALICE_TOKEN);
+      await waitFor(() => streamOpened === 1, "stream open upstream");
       const { config } = await readAccessYaml(projectRoot);
       config.users = [...config.users, { id: "carol", name: "Carol", enabled: true, tokens: [] }];
       await writeAccessYaml(projectRoot, config, { enabled: true, changeType: "agent_create", targetId: "carol", source: "t04-3-test" });
       const barrier = await import("../proxy/authorization-barrier.js");
       expect(barrier.inflightRequestCount({ agentId: "alice" })).toBe(1);
       expect(streamClosedUpstream).toBe(0);
+      expect(alice.settled()).toBe(false);
+      alice.abort();
     });
   });
 

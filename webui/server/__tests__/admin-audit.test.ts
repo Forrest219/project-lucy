@@ -1546,3 +1546,65 @@ describe("Spec 137 audit evidence pack", () => {
     }
   });
 });
+
+describe("T07 audit projection completeness (Spec §5.2)", () => {
+  async function appendLedgerOperation(operationId: string): Promise<void> {
+    const { getSecurityStore } = await import("../security/instance");
+    const store = await getSecurityStore();
+    if (!store.ok) throw new Error(store.message);
+    for (const phase of ["request_admitted", "response_prepared", "response_delivered"] as const) {
+      const result = store.value.appendEvent({
+        eventId: `${operationId}:${phase}`,
+        operationId,
+        phase,
+        actor: "projection-agent",
+        actorType: "agent"
+      });
+      if (!result.ok) throw new Error(result.message);
+    }
+  }
+
+  it("catches the projection up and reports complete=true, then complete=false while a projection failure persists", async () => {
+    const { buildServer } = await import("../index");
+    const app = buildServer();
+    await app.ready();
+    try {
+      await appendLedgerOperation("proj-op-1");
+      const caughtUp = await request(app.server).get("/api/admin/audit?limit=5").expect(200);
+      expect(caughtUp.body.data.projection).toMatchObject({ complete: true, lag: 0, cursor: 3, latestSeq: 3 });
+
+      // A target that rejects the next operation: events stay in the ledger, the view says so.
+      const { getAuditDb } = await import("../admin/audit");
+      (await getAuditDb()).exec(`
+        CREATE TRIGGER proj_poison BEFORE INSERT ON security_operation_projection
+        WHEN NEW.operation_id = 'proj-op-2'
+        BEGIN SELECT RAISE(ABORT, 'injected projection failure'); END;
+      `);
+      await appendLedgerOperation("proj-op-2");
+
+      const lagging = await request(app.server).get("/api/admin/audit?limit=5").expect(200);
+      expect(lagging.body.data.projection).toMatchObject({ complete: false, reason: "projection_failed", lag: 3 });
+
+      const pack = await request(app.server)
+        .get("/api/admin/audit/export-pack")
+        .buffer(true)
+        .parse((res, callback) => {
+          const chunks: Buffer[] = [];
+          res.on("data", (chunk: Buffer) => chunks.push(chunk));
+          res.on("end", () => callback(null, Buffer.concat(chunks)));
+        })
+        .expect(200);
+      const manifest = JSON.parse(parseStoredZipEntries(pack.body as Buffer).get("manifest.json")!.toString("utf8")) as {
+        completeness: { complete: boolean; projection: { complete: boolean; reason?: string } };
+      };
+      expect(manifest.completeness.complete).toBe(false);
+      expect(manifest.completeness.projection).toMatchObject({ complete: false, reason: "projection_failed" });
+
+      (await getAuditDb()).exec("DROP TRIGGER proj_poison");
+      const recovered = await request(app.server).get("/api/admin/audit?limit=5").expect(200);
+      expect(recovered.body.data.projection).toMatchObject({ complete: true, lag: 0, cursor: 6 });
+    } finally {
+      await app.close();
+    }
+  });
+});

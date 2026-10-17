@@ -500,34 +500,59 @@ export class SecurityStore {
     return this.write((db) => this.insertEvent(db, input));
   }
 
+  /**
+   * Group commit: all events land in one write transaction (one fsync), all or
+   * nothing. Callers that need per-event outcomes fall back to `appendEvent`.
+   */
+  appendEventsBatch(inputs: readonly SecurityEventInput[]): SecurityResult<SecurityEvent[]> {
+    return this.write((db) => inputs.map((input) => this.insertEvent(db, input)));
+  }
+
+  private insertEventStmt: Database.Statement | null = null;
+
   private insertEvent(db: Database.Database, input: SecurityEventInput): SecurityEvent {
+    const stmt =
+      this.insertEventStmt ??
+      (this.insertEventStmt = db.prepare(
+        `INSERT INTO security_events
+           (event_id, operation_id, phase, actor, actor_type, network_info, session_fingerprint, trace_id,
+            policy_version, context_version, object_hash, verdict, result_summary, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ));
+    const event: Omit<SecurityEvent, "seq"> = {
+      eventId: input.eventId,
+      operationId: input.operationId,
+      phase: input.phase,
+      actor: input.actor,
+      actorType: input.actorType,
+      networkInfo: input.networkInfo ?? "",
+      sessionFingerprint: input.sessionFingerprint ?? "",
+      traceId: input.traceId ?? "",
+      policyVersion: input.policyVersion ?? "",
+      contextVersion: input.contextVersion ?? "",
+      objectHash: input.objectHash ?? "",
+      verdict: input.verdict ?? "",
+      resultSummary: input.resultSummary ?? "",
+      createdAt: this.now()
+    };
     try {
-      const info = db
-        .prepare(
-          `INSERT INTO security_events
-             (event_id, operation_id, phase, actor, actor_type, network_info, session_fingerprint, trace_id,
-              policy_version, context_version, object_hash, verdict, result_summary, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        )
-        .run(
-          input.eventId,
-          input.operationId,
-          input.phase,
-          input.actor,
-          input.actorType,
-          input.networkInfo ?? "",
-          input.sessionFingerprint ?? "",
-          input.traceId ?? "",
-          input.policyVersion ?? "",
-          input.contextVersion ?? "",
-          input.objectHash ?? "",
-          input.verdict ?? "",
-          input.resultSummary ?? "",
-          this.now()
-        );
-      return eventFromRow(
-        db.prepare("SELECT * FROM security_events WHERE seq = ?").get(info.lastInsertRowid) as Row
+      const info = stmt.run(
+        event.eventId,
+        event.operationId,
+        event.phase,
+        event.actor,
+        event.actorType,
+        event.networkInfo,
+        event.sessionFingerprint,
+        event.traceId,
+        event.policyVersion,
+        event.contextVersion,
+        event.objectHash,
+        event.verdict,
+        event.resultSummary,
+        event.createdAt
       );
+      return { seq: Number(info.lastInsertRowid), ...event };
     } catch (error) {
       if (String((error as { code?: unknown }).code).startsWith("SQLITE_CONSTRAINT")) {
         abort("SECURITY_CONFLICT", "duplicate_event", "event id already recorded");
@@ -549,6 +574,33 @@ export class SecurityStore {
       (db.prepare("SELECT * FROM security_events WHERE operation_id = ? ORDER BY seq ASC").all(operationId) as Row[]).map(
         eventFromRow
       )
+    );
+  }
+
+  /**
+   * Events of `startPhase` whose operation has no event in `terminalPhases`.
+   * Used at boot to find operations a previous process never closed.
+   */
+  listUnterminatedOperations(
+    startPhase: SecurityEvent["phase"],
+    terminalPhases: readonly SecurityEvent["phase"][],
+    limit = 1000
+  ): SecurityResult<SecurityEvent[]> {
+    const marks = terminalPhases.map(() => "?").join(", ");
+    return this.read((db) =>
+      (
+        db
+          .prepare(
+            `SELECT a.* FROM security_events a
+              WHERE a.phase = ?
+                AND NOT EXISTS (
+                  SELECT 1 FROM security_events b
+                   WHERE b.operation_id = a.operation_id AND b.phase IN (${marks})
+                )
+              ORDER BY a.seq ASC LIMIT ?`
+          )
+          .all(startPhase, ...terminalPhases, limit) as Row[]
+      ).map(eventFromRow)
     );
   }
 

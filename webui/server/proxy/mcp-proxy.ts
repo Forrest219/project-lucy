@@ -12,6 +12,8 @@ import {
   runWithBarrier
 } from "./authorization-barrier.js";
 import { assertSkillsPassthroughPolicy, skillsPassthroughRequested } from "../auth/deployment-mode.js";
+import { ReleaseLedger, type ReleaseOperationContext } from "../security/ledger.js";
+import { beginGatedResponse, type ResponseCommitConfig } from "../security/response-commit.js";
 import {
   clearUpstreamSession,
   getUpstreamSession,
@@ -4851,8 +4853,41 @@ const ADMISSION_AUDIT: AdmissionAudit = {
   correlation: correlationMeta
 };
 
-export function buildProxy() {
+/** Method / tool name / id for the ledger; never arguments or content. */
+function ledgerRequestShape(req: IncomingMessage, body: Buffer): {
+  method: string;
+  tool?: string;
+  requestId: string | number | null;
+} {
+  const verb = req.method ?? "GET";
+  if (body.byteLength === 0) return { method: verb, requestId: null };
+  try {
+    const parsed = JSON.parse(body.toString()) as {
+      method?: unknown;
+      id?: unknown;
+      params?: { name?: unknown };
+    };
+    const method = typeof parsed.method === "string" ? parsed.method : verb;
+    const tool = method === "tools/call" && typeof parsed.params?.name === "string" ? parsed.params.name : undefined;
+    const id = typeof parsed.id === "string" || typeof parsed.id === "number" ? parsed.id : null;
+    return { method, tool, requestId: id };
+  } catch {
+    return { method: verb, requestId: null };
+  }
+}
+
+export type BuildProxyOptions = {
+  /** Tests only: override buffer / wall-clock limits. Production reads tighten-only env. */
+  responseCommit?: ResponseCommitConfig;
+  /** Tests only: ledger with an injected store provider. */
+  ledger?: ReleaseLedger;
+  /** Called after an operation reaches a terminal ledger state (projection trigger). */
+  onOperationSettled?: () => void;
+};
+
+export function buildProxy(options: BuildProxyOptions = {}) {
   assertSkillsPassthroughPolicy();
+  const ledger = options.ledger ?? new ReleaseLedger();
   const skillsPassthroughEnabled = skillsPassthroughRequested();
   const port = Number(process.env.LUCY_PROXY_PORT ?? 7879);
   const host = process.env.LUCY_PROXY_HOST ?? "127.0.0.1";
@@ -4868,6 +4903,27 @@ export function buildProxy() {
       });
       if (!admitted.ok) return;
       const barrier = beginGuardedRequest(admitted.identity, res, authorizationStamp);
+      // T07 / Spec §5.1: durable `request_admitted` before any upstream work;
+      // content is released only after a durable `response_prepared`.
+      const shape = ledgerRequestShape(req, admitted.body);
+      const context: ReleaseOperationContext = {
+        operationId: `mcp_${randomUUID()}`,
+        actor: admitted.identity.userId,
+        actorType: "agent",
+        networkInfo: req.socket?.remoteAddress,
+        sessionFingerprint: admitted.identity.tokenHashPrefix,
+        method: shape.method,
+        tool: shape.tool
+      };
+      const gated = await beginGatedResponse(res, {
+        ledger,
+        context,
+        requestId: shape.requestId,
+        isCurrent: () => barrier.isCurrent(),
+        config: options.responseCommit,
+        onSettled: options.onOperationSettled
+      });
+      if (!gated) return;
       await runWithBarrier(barrier, async () => {
         if (admitted.route === "skills") {
           await handleSkillsPassthrough(req, res, admitted);

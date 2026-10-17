@@ -14,6 +14,9 @@ import {
   targetLabel
 } from "../../src/lib/configAuditLabels.js";
 import { resolveProjectRoot } from "../project.js";
+import { recordProjectionStatus } from "../proxy/audit-write-health.js";
+import { getSecurityStore } from "../security/instance.js";
+import { runProjection, type ProjectionStatus } from "../security/projector.js";
 import { rebuildInferredTurns, purgeExpiredConversationTurns, scrubAccessLogArgsSummaries, INFERRED_TURN_REBUILD_LOOKBACK_HOURS } from "../proxy/audit.js";
 import { buildStoredZip, sha256Hex } from "../proxy/zip-store.js";
 import { MCP_PLAYGROUND_PLATFORM } from "./mcp-playground.js";
@@ -1860,6 +1863,20 @@ if (limit > 0) params.push(limit);
 return database.prepare(sql).all(...params) as never;
 }
 
+/**
+ * Catch the audit projection up with the security ledger, then report whether it
+ * is complete. A lagging or failed projection is `complete=false` with the lag;
+ * callers must not present such a view as complete (Spec §5.2).
+ */
+async function auditProjectionStatus(database: Database.Database): Promise<ProjectionStatus> {
+  const store = await getSecurityStore();
+  const status: ProjectionStatus = store.ok
+    ? runProjection(store.value, database).status
+    : { complete: false, cursor: 0, latestSeq: 0, lag: 0, delayMs: 0, reason: "security_store_unavailable" };
+  recordProjectionStatus(status);
+  return status;
+}
+
 export function registerAuditRoutes(app: FastifyInstance) {
   app.get<{
     Querystring: {
@@ -2337,10 +2354,12 @@ export function registerAuditRoutes(app: FastifyInstance) {
       a.ts === b.ts ? 0 : a.ts < b.ts ? 1 : -1
     );
 
+    const projection = await auditProjectionStatus(database);
     return {
       ok: true,
       data: {
         total: totalRow.cnt,
+        projection,
         entries: merged,
         authFailureCount,
         summary: {
@@ -2609,6 +2628,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
         }
       };
     }
+    const projection = await auditProjectionStatus(database);
     const manifest = {
       schemaVersion: "audit-export-manifest/v1",
       generatedAt: new Date().toISOString(),
@@ -2620,6 +2640,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
       limits: { maxRows, maxBytes, exportedUncompressedBytes: totalUncompressedBytes },
       paging: { nextCursor: nextCursor ?? null, pageSize: maxRows },
       completeness: {
+        projection,
         rowsWithoutPermissionSnapshot,
         // SC-18 — an empty policy_version is reported as missing evidence, but
         // it does not by itself make the pack incomplete: only a missing
@@ -2628,6 +2649,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
         missingPermissionSnapshotHashes,
         missingSourceAccessLogIds,
         complete:
+          projection.complete &&
           rowsWithoutPermissionSnapshot === 0 &&
           missingPermissionSnapshotHashes.length === 0 &&
           missingSourceAccessLogIds.length === 0
