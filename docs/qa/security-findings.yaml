@@ -65,10 +65,10 @@ findings:
   # V-08 Wiki frontmatter 服务端代码执行（T0A-1）
   - id: V-08
     severity: P0
-    status: open
+    status: fixed
     spec: "§4.6"
-    fixedIn: null
-    verifiedBy: []
+    fixedIn: pending
+    verifiedBy: [SEC-15-FM-01, SEC-15-FM-02, SEC-15-FM-03, SEC-15-FM-04, SEC-15-FM-05, SEC-15-FM-06]
     acceptedBy: null
   # D-01 Spec 170 上下文全开放（T05/T06）
   - id: D-01

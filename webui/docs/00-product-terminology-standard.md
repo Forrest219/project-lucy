@@ -348,6 +348,7 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Target Wiki Directory | 目标目录路径 | 新目录（仅预检补充） | 改名后 `wiki/<path>/` |
 | Delete Markdown Document | 删除文档 | 删除 MD、删文件、删除 page | 删除当前已保存 Wiki Markdown（Spec 118） |
 | Document Delete Confirmation | 删除确认 | 删除预检（与上传预检混用） | 删除文档确认对话框；展示目标 `wiki/<key>` |
+| Wiki Frontmatter | 文档属性 | 前置元数据、frontmatter（用户可见文案）、元数据块 | Wiki 文档开头 `---` 之间的属性块；仅支持 YAML 格式，其它格式报「仅支持 YAML 格式的文档属性」（V-08，错误码 `WIKI_FRONTMATTER_UNSUPPORTED`）。`YAML` 为专业英文术语，DOM 须加翻译防御 |
 | Business Annotation | 业务注释 | 查看注释可接受 | 面向业务的表 / 字段解释 |
 | Metric Definition | 指标定义 | 度量定义混用 | 指标口径、聚合方式、过滤条件 |
 | Dimension Definition | 维度定义 | 维数定义 | 维度字段和展示属性 |

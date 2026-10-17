@@ -369,7 +369,11 @@ CLI 不可用 → `KTX_CLI_ERROR`（区别于 `VALIDATION_FAILED`）。
 { "ok": true, "data": { "key": "global/revenue.md", "filePath": "wiki/global/revenue.md", "diff": "...", "frontmatter": {}, "content": "# Revenue" }}
 ```
 
-错误码：`BAD_REQUEST` `FORBIDDEN_PATH` `WIKI_NOT_FOUND`。
+错误码：`BAD_REQUEST` `FORBIDDEN_PATH` `WIKI_NOT_FOUND` `WIKI_FRONTMATTER_UNSUPPORTED`。
+
+文档属性（frontmatter）仅支持 YAML（V-08，Spec §4.6）：首行 `---` 后的语言标记去空白并转小写后，只有为空或 `yaml` 才会被解析；`js`、`javascript`、`json` 等其它标记（含大小写与空格变体）一律拒绝，服务端不执行、不写盘。
+- 上传预览 / 上传提交 / `PUT` 保存 / 版本恢复 / 移动：`400 WIKI_FRONTMATTER_UNSUPPORTED`，文案「仅支持 YAML 格式的文档属性。」
+- `GET`（读取已在磁盘上的非法文件）：`422 WIKI_FRONTMATTER_UNSUPPORTED`，需先修复该文档。
 
 ### Wiki 目录治理与版本记录（M51 / M53 / M56）
 

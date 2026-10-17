@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
-import matter from "gray-matter";
+import { parseMarkdownFrontmatter, stringifyMarkdownFrontmatter } from "./markdown-frontmatter";
 import { previewDiff } from "./diff";
 import {
   assertReadable,
@@ -371,7 +371,7 @@ function serializeWiki(frontmatter: WikiFrontmatter, content: string, preserved:
   if (frontmatter.usage_mode) data.usage_mode = frontmatter.usage_mode;
   if (Object.prototype.hasOwnProperty.call(preserved, "visibility")) data.visibility = preserved.visibility;
   if (Object.prototype.hasOwnProperty.call(preserved, "allowed_roles")) data.allowed_roles = preserved.allowed_roles;
-  return matter.stringify(content ?? "", data);
+  return stringifyMarkdownFrontmatter(content ?? "", data);
 }
 
 async function readExisting(projectRoot: string, key: string): Promise<string> {
@@ -442,12 +442,12 @@ function wikiVersionSnapshotPath(key: string, versionId: string): string {
 }
 
 function versionTitle(markdown: string, key: string): string {
-  const parsed = matter(markdown);
+  const parsed = parseMarkdownFrontmatter(markdown);
   return uploadTitle(markdown, key, frontmatterFromData(parsed.data));
 }
 
 function versionSummary(markdown: string): string | undefined {
-  const parsed = matter(markdown);
+  const parsed = parseMarkdownFrontmatter(markdown);
   const frontmatter = frontmatterFromData(parsed.data);
   return frontmatter.summary;
 }
@@ -1274,7 +1274,7 @@ export async function renameWikiDirectory(
 export async function readWiki(projectRoot: string, key: string): Promise<WikiPage> {
   const normalized = normalizeWikiKey(key);
   const rawMarkdown = await readExisting(projectRoot, normalized);
-  const parsed = matter(rawMarkdown);
+  const parsed = parseMarkdownFrontmatter(rawMarkdown);
   return {
     key: normalized,
     frontmatter: frontmatterFromData(parsed.data),
@@ -1286,7 +1286,7 @@ export async function readWiki(projectRoot: string, key: string): Promise<WikiPa
 export async function previewWikiWrite(projectRoot: string, key: string, input: WikiWriteInput): Promise<WikiPreview> {
   const normalized = normalizeWikiKey(key);
   const oldText = await readExisting(projectRoot, normalized);
-  const current = matter(oldText);
+  const current = parseMarkdownFrontmatter(oldText);
   const frontmatter = {
     ...frontmatterFromData(current.data),
     ...(input.frontmatter ?? {})
@@ -1359,14 +1359,14 @@ export async function previewWikiUpload(projectRoot: string, input: WikiUploadIn
   validateUploadMarkdown(input.markdown);
   const exists = await wikiExists(projectRoot, normalized);
   const oldText = await readExisting(projectRoot, normalized);
-  const parsed = matter(input.markdown);
+  const parsed = parseMarkdownFrontmatter(input.markdown);
   const frontmatter = frontmatterFromData(parsed.data);
   const filePath = relPathForKey(normalized);
   const explicitMode = input.mode ?? (input.overwrite ? "replace" : "create");
   const sourceFileName = deriveUploadSourceName(input.sourceFileName, normalized);
   const targetKey = normalized;
   const targetTitle = uploadTitle(input.markdown, normalized, frontmatter);
-  const existingTitle = exists ? uploadTitle(oldText, normalized, frontmatterFromData(matter(oldText).data)) : null;
+  const existingTitle = exists ? uploadTitle(oldText, normalized, frontmatterFromData(parseMarkdownFrontmatter(oldText).data)) : null;
   const warnings: string[] = [];
   if (explicitMode === "create" && exists) {
     warnings.push("目标文档已存在，确认后将按覆盖处理。");
@@ -1503,6 +1503,8 @@ export async function restoreWikiVersion(
   versionId: string
 ): Promise<WikiVersionRestoreResult> {
   const detail = await readWikiVersion(projectRoot, key, versionId);
+  // Reject non-YAML frontmatter before anything is written (V-08).
+  parseMarkdownFrontmatter(detail.rawMarkdown);
   const filePath = relPathForKey(detail.key);
   await auditedWriteFile(projectRoot, filePath, detail.rawMarkdown, {
     enabled: true,
@@ -1586,7 +1588,7 @@ export async function previewWikiMove(
   }
   const targetExists = await wikiExists(projectRoot, targetKey);
   const oldText = await readExisting(projectRoot, normalizedSource);
-  const parsed = matter(oldText);
+  const parsed = parseMarkdownFrontmatter(oldText);
   const frontmatter = frontmatterFromData(parsed.data);
   const targetTitle = uploadTitle(oldText, normalizedSource, frontmatter);
   const targetDirectoryNormalized = normalizeWikiDirectoryPath(targetDirectory);
@@ -1643,6 +1645,8 @@ export async function moveWiki(
   await safeMkdir((await loadContentPaths()), projectRoot, relPathForDirectory(targetDirectoryNormalized));
 
   const oldText = await readExisting(projectRoot, normalizedSource);
+  // Reject non-YAML frontmatter before the target is written (V-08).
+  parseMarkdownFrontmatter(oldText);
   await assertWikiSourceWritable(projectRoot, normalizedSource);
   await auditedWriteFile(projectRoot, targetRelPath, oldText, {
     enabled: true,

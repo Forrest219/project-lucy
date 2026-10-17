@@ -109,6 +109,7 @@ import {
   type WikiUploadInput,
   type WikiWriteInput
 } from "./wiki";
+import { FRONTMATTER_ENGINE_FORBIDDEN } from "./markdown-frontmatter";
 import {
   readHelpDiagram,
   readHelpHandbook,
@@ -594,7 +595,19 @@ export function buildServer() {
   });
   app.addHook("onRequest", requireWebuiAuthHook);
 
-  app.setErrorHandler((error: SupportedError, _request, reply) => {
+  app.setErrorHandler((error: SupportedError, request, reply) => {
+    if (error.code === FRONTMATTER_ENGINE_FORBIDDEN) {
+      // V-08: reads of an already-stored file are 422; upload/save/restore are 400.
+      const reading = request.method === "GET";
+      reply.status(reading ? 422 : 400).send({
+        ok: false,
+        error: {
+          code: "WIKI_FRONTMATTER_UNSUPPORTED",
+          message: reading ? "仅支持 YAML 格式的文档属性，请修复该文档后再读取。" : "仅支持 YAML 格式的文档属性。"
+        }
+      } satisfies ErrorEnvelope);
+      return;
+    }
     const statusCode = error.statusCode ?? 500;
     const code = error.code ?? (statusCode === 500 ? "INTERNAL" : "BAD_REQUEST");
     const payload: ErrorEnvelope = {
