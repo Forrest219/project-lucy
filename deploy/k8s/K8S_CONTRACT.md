@@ -231,3 +231,18 @@ Before any K8s delivery:
 6. Post-deploy: `bash scripts/gates/k8s-acceptance.sh` (H5; in a package: `scripts/acceptance.sh`, with `--release`, `--deployment`, `--service` kept distinct and the token passed via `LUCY_MCP_TOKEN`)
 
 See [`docs/runbooks/customer-delivery-preflight-checklist.md`](../../docs/runbooks/customer-delivery-preflight-checklist.md).
+
+## Candidate digest and real-user E2E (Spec 20261018 §8.3, Plan T14)
+
+- A customer release is exactly one image **digest**: built once (native linux/amd64), gated (G1–G4 + ELF, G4b, G8), deployed
+  to an isolated single-replica K8s, verified by real-user E2E, then **promoted** (not rebuilt) to the customer tag.
+  The candidate is pushed under a `candidate-amd64-…` tag; a customer tag or package exists only after
+  `customer-release-readiness` passed.
+- `scripts/gates/k8s-acceptance.sh --expect-image-digest <sha256:…> --deployment-evidence <file>` fails unless the running
+  Pod's registry digest (from `imageID`, never the Deployment's image string or a config ID) is the candidate, and it writes
+  the instance, the single-replica topology and the digest actually deployed (`results/deployment.json`).
+- The isolated test deployment lives in `deploy/k8s/security-e2e/` (values, NetworkPolicy, `deploy-candidate.sh`). It is a
+  test profile only, carries no credential and no fault switch; faults come from a test control plane outside the Pod.
+  **Known gap:** no K8s fault-control plane exists yet, so catalog variants that require `fault-control` stay BLOCKED on K8s.
+- An N-1 → candidate in-place PVC upgrade on the same digest (`k8s-upgrade` gate, OPS-01-V02..V07) is not yet wired into the
+  workflow; the verifier reports it as BLOCKED (`gate_missing`), never as passed.

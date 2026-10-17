@@ -278,3 +278,10 @@ If you previously maintained your own Chart (e.g. with `runtime-preflight`):
 - Ship v1/v2 delivery packages as "direct in-place upgrade" builds.
 
 See [`ROLLBACK.md`](ROLLBACK.md) if the upgrade fails.
+
+## Release provenance (T14)
+
+Upgrade only to an image digest that passed `customer-release-readiness`. The release tag is produced by promoting the tested
+candidate digest; if `docker buildx imagetools inspect <tag>` shows a different digest than the evidence, do not deploy.
+Tokens, permissions and audit survive an upgrade; WebUI administrator sessions do not (v2 sessions, Spec §3.2) and
+administrators sign in again.

@@ -117,3 +117,7 @@ flowchart TB
 - QA 目录地图：[`README.md`](README.md)  
 - 测试分层与 npm 门禁：[`../governance/test-layers-and-release-gates.md`](../governance/test-layers-and-release-gates.md)  
 - 旧主题接入路径桩：[`../runbooks/sop-semantic-upload-mcp-eval-e2e.md`](../runbooks/sop-semantic-upload-mcp-eval-e2e.md) → 现分表 `suite-semantic-onboard-mcp-eval.md`
+
+## 7. 真实用户 E2E 与客户上线门禁（Spec 20261018）
+
+浏览器 contract 回归（`e2e:contract:release`，旧名 `e2e:release`）使用夹具实例，**不含**真实 Agent，不能签发客户发布。客户候选版本上线前必须由受保护 runner 执行 `npm run e2e:real:*` 三层证据并通过 `npm run gate:customer-release`；运行方式见 [`../runbooks/real-user-e2e.md`](../runbooks/real-user-e2e.md)，case 目录与分母见 `scripts/e2e/contracts/case-catalog.yaml`（冻结，`case-catalog.lock.json`）。缺能力一律 BLOCKED，不得改为 skip 或 pass。

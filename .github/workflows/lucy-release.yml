@@ -122,6 +122,8 @@ jobs:
       - run: npm run test:k8s-delivery-package
       - run: npm run test:k8s-gate-negative
       - run: npm run smoke:p0:docker-entrypoint:test
+      # Real-user E2E harness: catalog freeze, runners, verifier reverse tests, release workflow wiring.
+      - run: npm run test:e2e-harness
 
   k8s-upgrade-gate:
     runs-on: ubuntu-latest
@@ -159,7 +161,8 @@ jobs:
       - run: npm ci
       - run: npm run smoke:p0:headless-config
 
-  demo-e2e:
+  demo-db-smoke:
+    # Runs smoke:p0:demo (database/demo smoke). It is NOT the real-user E2E gate; see real-e2e below.
     runs-on: ubuntu-latest
     needs: docker-smoke
     steps:
@@ -171,7 +174,8 @@ jobs:
       - run: npm ci
       - run: npm run smoke:p0:demo
 
-  postgres-demo-e2e:
+  postgres-demo-db-smoke:
+    # Runs smoke:p0:postgres-demo (database/demo smoke). It is NOT the real-user E2E gate.
     runs-on: ubuntu-latest
     needs: docker-smoke
     steps:
@@ -188,8 +192,8 @@ jobs:
     needs:
       - docker-smoke
       - headless-config
-      - demo-e2e
-      - postgres-demo-e2e
+      - demo-db-smoke
+      - postgres-demo-db-smoke
       - business-eval-catalog
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.ktx_version != '0.16.0' }}
     steps:
@@ -202,16 +206,17 @@ jobs:
       - run: npm run compat:ktx-upgrade -- --baseline 0.16.0 --candidate "$KTX_VERSION"
 
   customer-amd64-native:
-    # Native single-arch amd64 customer image build + full runtime gates.
-    # arm64 dev hosts (Apple Silicon + Docker Desktop qemu-user) segfault when
-    # executing the ktx CLI module graph, so all ktx-executing gates (G4/G4b,
-    # container smoke) must run here on real amd64; Mac only re-verifies
-    # structure (G1/G2) and assembles the offline delivery package.
-    # Not gated on the standalone docker-smoke job: that job has been failing
-    # on main since before this workflow change (pre-existing), and this job
-    # runs the same container smoke itself at the end, natively.
+    # Builds the customer CANDIDATE once, natively on amd64, and runs the full runtime gates against that exact
+    # digest. The candidate goes to the (restricted) registry under a `candidate-` tag only: the customer release tag
+    # and package are produced by release-package after customer-release-readiness passed, by promoting THIS digest
+    # (no rebuild, Spec §8.3). arm64 dev hosts (qemu-user) segfault when executing the ktx CLI module graph, so all
+    # ktx-executing gates (G4/G4b, container smoke) run here on real amd64. Single-arch linux/amd64 only.
     runs-on: ubuntu-latest
     if: ${{ startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' }}
+    outputs:
+      image_digest: ${{ steps.build-push.outputs.digest }}
+      image_ref: ${{ steps.build-push.outputs.ref }}
+      image_repository: ${{ steps.build-push.outputs.repository }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -227,15 +232,13 @@ jobs:
           npm run lint:version
           echo "lucy=${LUCY_VERSION}" >> "$GITHUB_OUTPUT"
           echo "date=$(date +%Y%m%d)" >> "$GITHUB_OUTPUT"
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
           registry: ${{ vars.LUCY_IMAGE_REGISTRY || 'ghcr.io' }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build & push single-arch amd64 customer image (once)
+      - name: Build & push single-arch amd64 CANDIDATE image (once)
         id: build-push
         env:
           REGISTRY: ${{ vars.LUCY_IMAGE_REGISTRY || 'ghcr.io' }}
@@ -243,9 +246,10 @@ jobs:
           LUCY_VERSION: ${{ steps.v.outputs.lucy }}
         run: |
           set -euo pipefail
-          TAG="customer-amd64-${LUCY_VERSION}-${{ steps.v.outputs.date }}-${GITHUB_SHA::7}"
-          IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/project-lucy:${TAG}"
-          # Native amd64 runner: plain docker build, no QEMU/binfmt involved.
+          TAG="candidate-amd64-${LUCY_VERSION}-${{ steps.v.outputs.date }}-${GITHUB_SHA::7}"
+          REPOSITORY="${REGISTRY}/${IMAGE_NAMESPACE}/project-lucy"
+          IMAGE="${REPOSITORY}:${TAG}"
+          # Native amd64 runner: plain docker build. No buildx builder is created and no QEMU/binfmt is involved.
           docker build \
             --platform linux/amd64 \
             --build-arg "KTX_VERSION=${KTX_VERSION}" \
@@ -259,9 +263,10 @@ jobs:
           DIGEST="$(docker pull "${IMAGE}" --quiet >/dev/null && docker image inspect "${IMAGE}" --format '{{index .RepoDigests 0}}' | sed 's/.*@//')"
           echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "repository=${REPOSITORY}" >> "$GITHUB_OUTPUT"
           echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
-          echo "ref=${IMAGE}@${DIGEST}" >> "$GITHUB_OUTPUT"
-          mkdir -p release
+          echo "ref=${REPOSITORY}@${DIGEST}" >> "$GITHUB_OUTPUT"
+          mkdir -p release/results
           {
             echo "git_sha=${GITHUB_SHA}"
             echo "image=${IMAGE}"
@@ -271,33 +276,41 @@ jobs:
             echo "platforms=linux/amd64"
             echo "build_host=native-amd64-gha"
           } > release/image-identity.txt
-      - name: Gate native amd64 image (G1/G2/G3/G4/G4b/G8)
+          node scripts/gates/write-candidate-identity.mjs --image-digest "${DIGEST}" --ktx-version "${KTX_VERSION}" --out release/candidate-identity.json
+      - name: Gate native amd64 image (G1/G2/G3/G4/G4b/G8), results bound to the candidate digest
         env:
           IMAGE_REF: ${{ steps.build-push.outputs.ref }}
+          DIGEST: ${{ steps.build-push.outputs.digest }}
           KTX_VERSION: ${{ env.KTX_VERSION }}
           LUCY_VERSION: ${{ steps.v.outputs.lucy }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          overall=0
+          # Each gate's status comes from its own exit code and is recorded against the candidate digest.
+          gate() {
+            local name="$1"; shift
+            set +e; "$@"; local rc=$?; set -e
+            node scripts/gates/record-gate-result.mjs --results-dir release/results --name "${name}" --exit-code "${rc}" --image-digest "${DIGEST}" >/dev/null
+            [ "${rc}" -eq 0 ] || overall=1
+          }
+          set -e
           # G1: metadata arch
-          META="$(docker image inspect "${IMAGE_REF}" --format '{{.Os}}/{{.Architecture}}')"
-          test "${META}" = "linux/amd64"
+          gate g1-metadata-arch bash -c 'test "$(docker image inspect "${IMAGE_REF}" --format "{{.Os}}/{{.Architecture}}")" = "linux/amd64"'
           # G2: ELF arch of node + tini (metadata alone is not proof)
-          bash scripts/release/assert-image-elf-arch.sh "${IMAGE_REF}" amd64
+          gate g2-elf-arch bash scripts/release/assert-image-elf-arch.sh "${IMAGE_REF}" amd64
           # G3: runtime smoke
-          docker run --rm --network=none --platform linux/amd64 --entrypoint /bin/sh "${IMAGE_REF}" -c "echo ok"
+          gate g3-runtime-smoke docker run --rm --network=none --platform linux/amd64 --entrypoint /bin/sh "${IMAGE_REF}" -c "echo ok"
           # G4: ktx CLI version (requires native amd64; segfaults under qemu-user)
-          docker run --rm --network=none --platform linux/amd64 --entrypoint ktx "${IMAGE_REF}" --version | tee release/ktx-version.txt
-          grep -q "${KTX_VERSION}" release/ktx-version.txt
+          gate g4-ktx-version bash -c 'docker run --rm --network=none --platform linux/amd64 --entrypoint ktx "${IMAGE_REF}" --version > release/ktx-version.txt && grep -q "${KTX_VERSION}" release/ktx-version.txt'
           # G4b: baked Python runtime for offline customers
-          docker run --rm --network=none --platform linux/amd64 --entrypoint /bin/sh "${IMAGE_REF}" -c \
-            "test -x /home/lucy/.ktx/runtime/${KTX_VERSION}/.venv/bin/python && /home/lucy/.ktx/runtime/${KTX_VERSION}/.venv/bin/python --version" | tee release/python-version.txt
+          gate g4b-python-runtime docker run --rm --network=none --platform linux/amd64 --entrypoint /bin/sh "${IMAGE_REF}" -c \
+            "test -x /home/lucy/.ktx/runtime/${KTX_VERSION}/.venv/bin/python && /home/lucy/.ktx/runtime/${KTX_VERSION}/.venv/bin/python --version"
           # LUCY_VERSION baked correctly
-          IMAGE_LUCY_VERSION="$(docker run --rm --network=none --platform linux/amd64 --entrypoint printenv "${IMAGE_REF}" LUCY_VERSION)"
-          test "${IMAGE_LUCY_VERSION}" = "${LUCY_VERSION}"
-          printf '%s\n' "${IMAGE_LUCY_VERSION}" > release/lucy-version.txt
+          gate lucy-version-baked bash -c 'test "$(docker run --rm --network=none --platform linux/amd64 --entrypoint printenv "${IMAGE_REF}" LUCY_VERSION)" = "${LUCY_VERSION}"'
           # G8: K8s contract gate
-          bash scripts/gates/g8-image-k8s-contract-gate.sh "${IMAGE_REF}"
+          gate g8-k8s-contract bash scripts/gates/g8-image-k8s-contract-gate.sh "${IMAGE_REF}"
           docker image inspect "${IMAGE_REF}" --format '{{.Id}}' > release/image-config-id.txt
+          exit "${overall}"
       - name: Container-level smoke (native amd64)
         run: npm run smoke:p0:docker
       - uses: actions/upload-artifact@v4
@@ -306,15 +319,162 @@ jobs:
           name: customer-amd64-native-evidence
           path: release/
 
-  release-package:
+  real-e2e:
+    # Real-user E2E against the SAME candidate digest on an isolated single-replica K8s (Spec §6, §8.3, R8).
+    # Requires a protected self-hosted runner that has: kubectl/helm access to the E2E namespace, the real Codex CLI and
+    # Cursor CLI Agent binaries, and dedicated test model credentials (R10). Until that runner exists this job cannot
+    # be scheduled, so customer-release-readiness stays BLOCKED and release-package never runs: there is no fallback
+    # to headless smoke or to a local/arm64 result.
+    runs-on: [self-hosted, lucy-protected, linux, amd64]
+    needs:
+      - customer-amd64-native
+      - k8s-static
+      - k8s-upgrade-gate
+    timeout-minutes: 240
+    if: ${{ startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' }}
+    outputs:
+      run_id: ${{ steps.ids.outputs.run_id }}
+    env:
+      LUCY_E2E_NAMESPACE: ${{ vars.LUCY_E2E_NAMESPACE }}
+      LUCY_E2E_BASE_URL: ${{ vars.LUCY_E2E_BASE_URL }}
+      LUCY_E2E_MCP_URL: ${{ vars.LUCY_E2E_MCP_URL }}
+      OPENAI_API_KEY: ${{ secrets.LUCY_E2E_OPENAI_API_KEY }}
+      CURSOR_API_KEY: ${{ secrets.LUCY_E2E_CURSOR_API_KEY }}
+      LUCY_EVIDENCE_SIGNING_KEY_FILE: ${{ runner.temp }}/evidence-signing-key.pem
+      LUCY_REAL_E2E_CAPABILITIES: ${{ vars.LUCY_E2E_CAPABILITIES }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm ci
+        working-directory: webui
+      - run: npx playwright install chromium
+        working-directory: webui
+      - uses: actions/download-artifact@v4
+        with:
+          name: customer-amd64-native-evidence
+          path: release/
+      - name: Prepare the isolated run (release mode, frozen profile, candidate identity)
+        id: ids
+        run: |
+          set -euo pipefail
+          RUN_ID="gh-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo "run_id=${RUN_ID}" >> "$GITHUB_OUTPUT"
+          node scripts/e2e/prepare-environment.mjs --run-id "${RUN_ID}" --mode release \
+            --candidate release/candidate-identity.json --profile scripts/e2e/profiles/customer-release.yaml \
+            --base-url "${LUCY_E2E_BASE_URL}" --mcp-url "${LUCY_E2E_MCP_URL}"
+          mkdir -p "inbox/e2e/${RUN_ID}/results"
+          cp release/results/existing-gates.json "inbox/e2e/${RUN_ID}/results/existing-gates.json"
+      - name: Deploy the gated candidate digest into the isolated single-replica namespace
+        env:
+          DIGEST: ${{ needs.customer-amd64-native.outputs.image_digest }}
+          REPOSITORY: ${{ needs.customer-amd64-native.outputs.image_repository }}
+        run: |
+          set -uo pipefail
+          RUN="inbox/e2e/${{ steps.ids.outputs.run_id }}/run.json"
+          bash deploy/k8s/security-e2e/deploy-candidate.sh \
+            --run "${RUN}" \
+            --namespace "${LUCY_E2E_NAMESPACE}" --release lucy-e2e \
+            --repository "${REPOSITORY}" --digest "${DIGEST}" --public-mcp-url "${LUCY_E2E_MCP_URL}"
+          rc=$?
+          # Fresh install of THIS digest on the isolated cluster; the status is the script's exit code only.
+          node scripts/gates/record-gate-result.mjs --run "${RUN}" --name k8s-acceptance --exit-code "${rc}" --image-digest "${DIGEST}"
+          exit "${rc}"
+      - name: Security-integration, real browser journey, real clients (exit codes are recorded, not parsed)
+        run: |
+          set -uo pipefail
+          RUN="inbox/e2e/${{ steps.ids.outputs.run_id }}/run.json"
+          # Every runner writes its own schema'd result file; a blocked/failed runner must not stop the others from
+          # recording theirs (the verifier, not this step, decides). Their exit codes are kept for the log only.
+          node scripts/e2e/run-security.mjs --run "${RUN}" --external; echo "security exit=$?"
+          npm run e2e:real:management -- --run "${RUN}" --external; echo "management exit=$?"
+          node scripts/e2e/run-agent-journey.mjs --run "${RUN}"; echo "agent exit=$?"
+          npm --prefix webui audit --omit=dev --json > "inbox/e2e/${{ steps.ids.outputs.run_id }}/results/npm-audit.json" || true
+          node scripts/gates/collect-gate-results.mjs --run "${RUN}" --candidate release/candidate-identity.json; echo "gates exit=$?"
+      - name: Verify, then archive and sign (scan -> hash -> verify -> sign)
+        env:
+          SIGNING_KEY: ${{ secrets.LUCY_EVIDENCE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          printf '%s' "${SIGNING_KEY}" > "${LUCY_EVIDENCE_SIGNING_KEY_FILE}"
+          chmod 600 "${LUCY_EVIDENCE_SIGNING_KEY_FILE}"
+          RUN_DIR="inbox/e2e/${{ steps.ids.outputs.run_id }}"
+          node scripts/e2e/archive-evidence.mjs --run "${RUN_DIR}/run.json" --candidate release/candidate-identity.json --out "${RUN_DIR}/archive" || true
+          rm -f "${LUCY_EVIDENCE_SIGNING_KEY_FILE}"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: real-e2e-evidence
+          # run.json holds no secret (paths and public identity only). checker/ (gold, tokens, passwords) is never uploaded.
+          path: |
+            inbox/e2e/${{ steps.ids.outputs.run_id }}/run.json
+            inbox/e2e/${{ steps.ids.outputs.run_id }}/results
+            inbox/e2e/${{ steps.ids.outputs.run_id }}/archive
+          if-no-files-found: error
+
+  customer-release-readiness:
+    # REQUIRED CHECK. The only customer-release aggregate gate. Independently re-verifies the evidence with the one
+    # verifier and checks the signed archive; every customer release branch depends on this job.
     runs-on: ubuntu-latest
     needs:
+      - customer-amd64-native
+      - real-e2e
+      - demo-db-smoke
+      - postgres-demo-db-smoke
       - docker-smoke
       - k8s-static
       - k8s-upgrade-gate
       - headless-config
-      - demo-e2e
-      - postgres-demo-e2e
+      - business-eval-catalog
+    if: ${{ startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: customer-amd64-native-evidence
+          path: release/
+      - uses: actions/download-artifact@v4
+        with:
+          name: real-e2e-evidence
+          path: inbox/e2e/${{ needs.real-e2e.outputs.run_id }}/
+      - name: Re-verify the evidence and the signed archive for this exact candidate
+        env:
+          RUN_ID: ${{ needs.real-e2e.outputs.run_id }}
+          LUCY_EVIDENCE_PUBLIC_KEY_FILE: ${{ runner.temp }}/evidence-signing-key.pub
+          EVIDENCE_PUBLIC_KEY: ${{ vars.LUCY_EVIDENCE_PUBLIC_KEY }}
+        run: |
+          set -euo pipefail
+          printf '%s' "${EVIDENCE_PUBLIC_KEY}" > "${LUCY_EVIDENCE_PUBLIC_KEY_FILE}"
+          node scripts/e2e/archive-evidence.mjs --verify --out "inbox/e2e/${RUN_ID}/archive"
+          npm run gate:customer-release -- --candidate release/candidate-identity.json --run "inbox/e2e/${RUN_ID}/run.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: customer-release-readiness
+          path: inbox/e2e/${{ needs.real-e2e.outputs.run_id }}/release-readiness*.json
+          if-no-files-found: warn
+
+  release-package:
+    # Promotes EXACTLY the tested candidate digest to the customer release tag and attaches the evidence. It never
+    # builds: a rebuild after the gates would be an untested image (Spec §8.3). Single-arch linux/amd64.
+    runs-on: ubuntu-latest
+    needs:
+      - customer-amd64-native
+      - customer-release-readiness
+      - docker-smoke
+      - k8s-static
+      - k8s-upgrade-gate
+      - headless-config
+      - demo-db-smoke
+      - postgres-demo-db-smoke
       - business-eval-catalog
       - ktx-diff-audit
     if: ${{ startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' }}
@@ -343,60 +503,51 @@ jobs:
             if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
               TAG="${GITHUB_REF_NAME}"
             else
-              TAG="customer-multiarch-${LUCY_VERSION}-$(date +%Y%m%d)-${GITHUB_SHA::7}"
+              TAG="customer-amd64-${LUCY_VERSION}-$(date +%Y%m%d)-${GITHUB_SHA::7}"
             fi
           fi
           node scripts/release/lucy-version-governance.mjs --release-tag "$TAG"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-      - name: Set up QEMU (for cross-platform builds)
-        uses: docker/setup-qemu-action@v3
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-        with:
-          platforms: linux/amd64,linux/arm64
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
           registry: ${{ vars.LUCY_IMAGE_REGISTRY || 'ghcr.io' }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      # Single build → push → gate the exact digest. Do not rebuild after gates.
-      - name: Build & push multi-arch image (once)
-        id: build-push
+      - name: Promote the tested digest (no rebuild)
+        id: promote
         env:
-          REGISTRY: ${{ vars.LUCY_IMAGE_REGISTRY || 'ghcr.io' }}
-          IMAGE_NAMESPACE: ${{ vars.LUCY_IMAGE_NAMESPACE || 'kaelio' }}
+          CANDIDATE_REF: ${{ needs.customer-amd64-native.outputs.image_ref }}
+          CANDIDATE_DIGEST: ${{ needs.customer-amd64-native.outputs.image_digest }}
+          REPOSITORY: ${{ needs.customer-amd64-native.outputs.image_repository }}
           LUCY_VERSION: ${{ steps.lucy-version.outputs.version }}
         run: |
           set -euo pipefail
           TAG="${{ steps.release.outputs.tag }}"
-          IMAGE="${REGISTRY}/${IMAGE_NAMESPACE}/project-lucy:${TAG}"
-          docker buildx build \
-            --platform linux/amd64,linux/arm64 \
-            --build-arg "KTX_VERSION=${KTX_VERSION}" \
-            --build-arg "LUCY_VERSION=${LUCY_VERSION}" \
-            --build-arg "TARGETPLATFORM=linux/amd64" \
-            --build-arg "TARGETARCH=amd64" \
-            --tag "${IMAGE}" \
-            --tag "${REGISTRY}/${IMAGE_NAMESPACE}/project-lucy:${GITHUB_SHA}" \
-            --metadata-file /tmp/buildx-metadata.json \
-            --push .
-          DIGEST="$(python3 -c 'import json; print(json.load(open("/tmp/buildx-metadata.json"))["containerimage.digest"])')"
-          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
-          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
-          echo "ref=${IMAGE}@${DIGEST}" >> "$GITHUB_OUTPUT"
+          IMAGE="${REPOSITORY}:${TAG}"
+          # imagetools re-tags the existing manifest in the registry; it creates no builder and builds nothing.
+          docker buildx imagetools create --tag "${IMAGE}" "${CANDIDATE_REF}"
+          PROMOTED="$(docker buildx imagetools inspect "${IMAGE}" --format '{{.Manifest.Digest}}')"
+          if [ "${PROMOTED}" != "${CANDIDATE_DIGEST}" ]; then
+            echo "promoted digest ${PROMOTED} differs from the tested candidate ${CANDIDATE_DIGEST}" >&2
+            exit 1
+          fi
           mkdir -p release
+          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "digest=${PROMOTED}" >> "$GITHUB_OUTPUT"
+          echo "ref=${REPOSITORY}@${PROMOTED}" >> "$GITHUB_OUTPUT"
           {
             echo "git_sha=${GITHUB_SHA}"
             echo "image=${IMAGE}"
-            echo "manifest_digest=${DIGEST}"
+            echo "manifest_digest=${PROMOTED}"
             echo "lucy_version=${LUCY_VERSION}"
             echo "ktx_version=${KTX_VERSION}"
-            echo "platforms=linux/amd64,linux/arm64"
+            echo "platforms=linux/amd64"
+            echo "promoted_from=${CANDIDATE_REF}"
           } > release/image-identity.txt
-      - name: Gate final registry amd64 digest (G1/G2/G4b/G8)
+      - name: Re-gate the promoted amd64 digest (G1/G2/G4b/G8)
         env:
-          IMAGE_REF: ${{ steps.build-push.outputs.ref }}
+          IMAGE_REF: ${{ steps.promote.outputs.ref }}
           KTX_VERSION: ${{ env.KTX_VERSION }}
           LUCY_VERSION: ${{ steps.lucy-version.outputs.version }}
         run: |
@@ -416,12 +567,16 @@ jobs:
           printf '%s\n' "${IMAGE_LUCY_VERSION}" > release/lucy-version.txt
           bash scripts/gates/g8-image-k8s-contract-gate.sh "${IMAGE_REF}"
           docker image inspect "${IMAGE_REF}" --format '{{.Id}}' > release/image-config-id.txt
+      - uses: actions/download-artifact@v4
+        with:
+          name: customer-release-readiness
+          path: release/evidence/
       - name: Write release notes
         env:
           LUCY_RELEASE_TAG: ${{ steps.release.outputs.tag }}
-          LUCY_DOCKER_IMAGE: ${{ steps.build-push.outputs.image }}
-          LUCY_IMAGE_DIGEST: ${{ steps.build-push.outputs.digest }}
-          LUCY_PLATFORMS: linux/amd64,linux/arm64
+          LUCY_DOCKER_IMAGE: ${{ steps.promote.outputs.image }}
+          LUCY_IMAGE_DIGEST: ${{ steps.promote.outputs.digest }}
+          LUCY_PLATFORMS: linux/amd64
         run: npm run release:artifacts -- --tag "${{ steps.release.outputs.tag }}"
       - uses: actions/upload-artifact@v4
         with:

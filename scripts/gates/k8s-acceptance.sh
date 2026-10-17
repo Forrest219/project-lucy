@@ -39,6 +39,8 @@ SKIP_MCP=0
 SKIP_KTX=0
 SKIP_HELM=0
 SKIP_SECRETS=0
+EXPECT_IMAGE_DIGEST=""
+DEPLOYMENT_EVIDENCE=""
 
 usage() {
   cat <<'EOF'
@@ -63,6 +65,10 @@ Options:
   --skip-helm                  Skip `helm status` (helm not installed on this host)
   --skip-secrets-check         Skip the .ktx/secrets owner/mode/mount checks (only when judging a
                                rollback to a chart older than 0.2.3)
+  --expect-image-digest <d>    Fail unless the running Pod's registry digest is exactly <d>
+                               (sha256:<64 hex>): the candidate that was built and gated once
+  --deployment-evidence <file> Write what is actually deployed (instance, single-replica topology,
+                               image digest) for the real-user E2E evidence (results/deployment.json)
 EOF
 }
 
@@ -81,6 +87,8 @@ while [[ $# -gt 0 ]]; do
     --skip-ktx) SKIP_KTX=1; shift ;;
     --skip-helm) SKIP_HELM=1; shift ;;
     --skip-secrets-check) SKIP_SECRETS=1; shift ;;
+    --expect-image-digest) EXPECT_IMAGE_DIGEST="$2"; shift 2 ;;
+    --deployment-evidence) DEPLOYMENT_EVIDENCE="$2"; shift 2 ;;
     --token) fail "--token is not accepted (it would leak into the process list); use LUCY_MCP_TOKEN or --token-file" ;;
     -h|--help) usage; exit 0 ;;
     *) fail "unknown argument: $1" ;;
@@ -136,6 +144,21 @@ BAD_INIT="$(kubectl -n "${NAMESPACE}" get pod "${POD}" \
   -o jsonpath='{range .status.initContainerStatuses[*]}{.name}={.state.terminated.exitCode} {end}' \
   | tr ' ' '\n' | grep -v '=0$' | grep -v '^$' || true)"
 [[ -z "${BAD_INIT}" ]] || fail "init container did not exit 0: ${BAD_INIT}"
+
+if [[ -n "${EXPECT_IMAGE_DIGEST}" || -n "${DEPLOYMENT_EVIDENCE}" ]]; then
+  POD_IMAGE_ID="$(kubectl -n "${NAMESPACE}" get pod "${POD}" \
+    -o jsonpath='{.status.containerStatuses[?(@.name=="lucy")].imageID}')"
+  [[ -z "${EXPECT_IMAGE_DIGEST}" ]] || {
+    log "candidate digest check (pod imageID must carry ${EXPECT_IMAGE_DIGEST})"
+    assert_expected_image_digest "${POD_IMAGE_ID}" "${EXPECT_IMAGE_DIGEST}"
+  }
+  if [[ -n "${DEPLOYMENT_EVIDENCE}" ]]; then
+    POD_UID="$(kubectl -n "${NAMESPACE}" get pod "${POD}" -o jsonpath='{.metadata.uid}')"
+    REPLICAS="$(kubectl -n "${NAMESPACE}" get deploy "${DEPLOYMENT}" -o jsonpath='{.spec.replicas}')"
+    write_deployment_evidence "${DEPLOYMENT_EVIDENCE}" "${NAMESPACE}" "${RELEASE}" "${POD_IMAGE_ID}" "${POD_UID}" "${REPLICAS}"
+    log "deployment evidence written to ${DEPLOYMENT_EVIDENCE}"
+  fi
+fi
 
 log "service ports (5174/7879 targets only, never 7878)"
 SVC_TARGETS="$(kubectl -n "${NAMESPACE}" get svc "${SERVICE}" \

@@ -1,0 +1,40 @@
+# Network shape of the E2E namespace (Spec §6.2: "出站网络与客户端隔离由测试部署验证").
+# - Lucy accepts WebUI/MCP traffic only from the ingress controller and the protected runner.
+# - 7878 (KTX direct) is never reachable from outside the pod.
+# - Lucy may reach only the synthetic database and DNS; every other egress is denied, so an injected instruction
+#   cannot exfiltrate content (SEC-16 uses a controlled sink inside the namespace to prove it).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: lucy-e2e-isolation
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: lucy
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+        - podSelector:
+            matchLabels:
+              lucy-e2e-role: runner
+      ports:
+        - { protocol: TCP, port: 5174 }
+        - { protocol: TCP, port: 7879 }
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              lucy-e2e-role: synthetic-db
+      ports:
+        - { protocol: TCP, port: 5432 }
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }

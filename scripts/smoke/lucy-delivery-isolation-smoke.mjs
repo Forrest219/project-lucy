@@ -34,8 +34,20 @@ export const INTERNAL_TEST_DOCKERIGNORE_PATTERNS = [
   "ktx.yaml.example"
 ];
 
+/** Real-user E2E fixtures, gold and fault-control tooling: never part of the customer runtime image or seed. */
+export const SECURITY_E2E_DOCKERIGNORE_PATTERNS = [
+  "examples/security-e2e",
+  "scripts/e2e",
+  "deploy/k8s/security-e2e",
+  "webui/tests/real-e2e",
+  "webui/playwright.real.config.ts"
+];
+
 /** Absolute paths inside the Lucy image that must not exist (A3). */
 export const A3_IMAGE_DENYLIST = [
+  "/app/examples/security-e2e",
+  "/app/scripts/e2e",
+  "/app/deploy/k8s/security-e2e",
   "/app/agent-chat",
   "/app/deploy/compose/docker-compose.agent-chat.yml",
   "/app/docs/design/design-lucy-agent-chat-a3.md",
@@ -138,6 +150,10 @@ export function assertDockerignoreCoversInternalTest(dockerignoreText) {
   return assertDockerignoreCovers(dockerignoreText, INTERNAL_TEST_DOCKERIGNORE_PATTERNS, "internal-test");
 }
 
+export function assertDockerignoreCoversSecurityE2e(dockerignoreText) {
+  return assertDockerignoreCovers(dockerignoreText, SECURITY_E2E_DOCKERIGNORE_PATTERNS, "security-e2e");
+}
+
 export async function runFixtureSentinelCheck(patterns) {
   const dir = await mkdtemp(path.join(tmpdir(), "lucy-a3-isolation-"));
   const sentinel = `sentinel-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -155,7 +171,11 @@ export async function runFixtureSentinelCheck(patterns) {
       `skills/domains/superstore/x.md`,
       `evals/kx_financial/eval/cases.yaml`,
       `raw-sources/mysql-aliyun/connection.json`,
-      `ktx.yaml.example`
+      `ktx.yaml.example`,
+      `examples/security-e2e/gold/compute-gold.mjs`,
+      `scripts/e2e/adapters/codex.mjs`,
+      `deploy/k8s/security-e2e/deploy-candidate.sh`,
+      `webui/tests/real-e2e/admin-auth.spec.ts`
     ];
     for (const rel of samples) {
       const full = path.join(dir, rel);
@@ -225,6 +245,8 @@ Lucy hard gate: .dockerignore must exclude A3 + internal test paths; optional do
     record("dockerignoreCoversA3", true, { patterns: A3_DOCKERIGNORE_PATTERNS });
     assertDockerignoreCoversInternalTest(dockerignoreText);
     record("dockerignoreCoversInternalTest", true, { patterns: INTERNAL_TEST_DOCKERIGNORE_PATTERNS });
+    assertDockerignoreCoversSecurityE2e(dockerignoreText);
+    record("dockerignoreCoversSecurityE2e", true, { patterns: SECURITY_E2E_DOCKERIGNORE_PATTERNS });
 
     const patterns = parseDockerignore(dockerignoreText);
     const fixture = await runFixtureSentinelCheck(patterns);

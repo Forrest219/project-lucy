@@ -7,6 +7,8 @@ import { spawnSync } from "node:child_process";
 import {
   A3_DOCKERIGNORE_PATTERNS,
   INTERNAL_TEST_DOCKERIGNORE_PATTERNS,
+  SECURITY_E2E_DOCKERIGNORE_PATTERNS,
+  assertDockerignoreCoversSecurityE2e,
   assertDockerignoreCoversA3,
   assertDockerignoreCoversInternalTest,
   isIgnoredByDockerignore,
@@ -51,6 +53,16 @@ describe("lucy-delivery-isolation-smoke", () => {
     });
     assert.equal(result.status, 0, result.stderr || result.stdout);
     assert.match(result.stdout, /"status": "pass"/);
+  });
+
+  it("keeps the real-user E2E fixtures, gold and fault tooling out of the customer image context", async () => {
+    const text = await readFile(path.join(ROOT, ".dockerignore"), "utf8");
+    assert.doesNotThrow(() => assertDockerignoreCoversSecurityE2e(text));
+    const patterns = parseDockerignore(text);
+    for (const p of SECURITY_E2E_DOCKERIGNORE_PATTERNS) assert.equal(isIgnoredByDockerignore(`${p}/anything`, patterns) || isIgnoredByDockerignore(p, patterns), true, p);
+    assert.throws(() => assertDockerignoreCoversSecurityE2e(".git\nnode_modules\n"), /missing security-e2e isolation/);
+    assert.equal(isIgnoredByDockerignore("examples/docker-demo/project-template/ktx.yaml", patterns), false, "demo templates still ship");
+    assert.equal(isIgnoredByDockerignore("scripts/runtime/docker-entrypoint.sh", patterns), false, "runtime scripts still ship");
   });
 
   it("fails when .dockerignore omits required patterns", () => {

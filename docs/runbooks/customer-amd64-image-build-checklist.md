@@ -196,3 +196,7 @@ docker run --rm --network=none --platform linux/amd64 \
 - `scripts/gates/g8-image-k8s-contract-gate.sh`
 - `scripts/gates/verify-k8s-package.sh`
 - `scripts/gates/k8s-upgrade-gate.sh`
+
+## 发布流水线口径（T14）
+
+CI 中候选镜像由 `customer-amd64-native` 原生 amd64 **一次**构建并推送为 `candidate-amd64-…`；客户发布 tag 只能在 `customer-release-readiness` 通过后由 `release-package` **promote 同一 digest** 产生，门禁后不得重建。客户镜像始终是 linux/amd64 单架构；G1–G4（含 ELF 架构）、G4b、G8 不因接入 E2E 门禁而减少。本机 Mac 构建仍遵守"禁止 `docker buildx create --use`"。
