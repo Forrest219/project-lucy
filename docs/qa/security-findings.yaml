@@ -90,7 +90,7 @@ findings:
     severity: P1
     status: fixed
     spec: "§5.1"
-    fixedIn: null
+    fixedIn: 3260b01
     verifiedBy: [SEC-19]
     acceptedBy: null
   # G-01 文档称强制，release workflow 无真实 E2E 依赖（T14）
