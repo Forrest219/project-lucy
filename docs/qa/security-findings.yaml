@@ -12,7 +12,7 @@ findings:
     severity: P0
     status: fixed
     spec: "§3.1"
-    fixedIn: pending
+    fixedIn: eb4f6f2
     verifiedBy: [SEC-01, SEC-02, SEC-05, SEC-08]
     acceptedBy: null
   # V-02 停用 Agent 绕过 Resources/Prompts（T0A-3 最小修复；T04 完整修复）
@@ -54,7 +54,7 @@ findings:
     severity: P2
     status: fixed
     spec: "§3.1"
-    fixedIn: pending
+    fixedIn: eb4f6f2
     verifiedBy: [SEC-02]
     acceptedBy: null
   # V-07 MCP Wiki 读取跟随越界符号链接（T06）
