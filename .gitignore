@@ -73,3 +73,6 @@ venv/
 !customer-config.example/.ktx-ui/
 !customer-config.example/.ktx-ui/.gitkeep
 inbox/20260809-gate-c-uat/.tokens.local
+
+# Cursor 本地 MCP 覆盖配置（含 Bearer token，禁止入库）
+.cursor/mcp.json
