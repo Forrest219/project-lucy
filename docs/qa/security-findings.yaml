@@ -16,13 +16,13 @@ findings:
     verifiedBy: [SEC-01, SEC-02, SEC-05, SEC-08]
     acceptedBy: null
   # V-02 停用 Agent 绕过 Resources/Prompts（T0A-3 最小修复；T04 完整修复）
-  # note: A0 入口拒绝已合入，完整准入见 T04
+  # note: T04-1 统一准入、T04-2 会话归属、T04-3 撤销发送屏障与客户模式 /mcp/skills passthrough 关闭已落地；fixedIn 待 T04-3 提交后回填 SHA
   - id: V-02
     severity: P1
-    status: open
+    status: fixed
     spec: "§3.3"
-    fixedIn: null
-    verifiedBy: []
+    fixedIn: pending
+    verifiedBy: [SEC-07, SEC-08, SEC-21]
     acceptedBy: null
   # V-03 退出/重置密码后旧管理 Cookie 仍可重放（T03）
   # note: T03 已落地 v2 持久会话（jti/account_uid/session_epoch）、先吊销后写配置、退出耐久吊销、idle 30min/绝对 12h、no-store、503 AUTH_STATE_UNAVAILABLE；fixedIn 待 T03 提交后回填 SHA

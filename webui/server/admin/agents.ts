@@ -34,6 +34,7 @@ import {
   type AccessGovernanceOverrideRequest
 } from "../access-governance-gate.js";
 import { invalidateAccessConfigCache } from "../proxy/identity.js";
+import { narrowAuthorization, narrowingScopeForWrite } from "../proxy/authorization-barrier.js";
 import { actorIdFromRequest } from "../auth/guard.js";
 import { enforceAgentSeatLimit } from "../license/routes.js";
 import { isTokenExpired } from "../proxy/identity.js";
@@ -204,6 +205,11 @@ async function writeAccessYamlInBarrier(
     status = await commitEffectivePolicy();
     runtimeAck = false;
   }
+
+  // T04-3 / Spec §3.3 — narrower authority is persisted and committed above;
+  // cancel in-flight work and clear caches before this write reports success.
+  const narrowed = narrowingScopeForWrite(previousRaw, toWrite);
+  if (narrowed) await narrowAuthorization(narrowed);
 
   return {
     ...writeResult,

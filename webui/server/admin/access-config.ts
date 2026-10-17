@@ -5,6 +5,7 @@ import { parse, stringify } from "yaml";
 import { auditedWriteFile } from "./config-audit-write.js";
 import type { ConfigAuditAssetKind, ConfigAuditActorType } from "./audit.js";
 import { withDisplayWriteBarrier } from "../display-generation.js";
+import { narrowAuthorization, narrowingScopeForWrite } from "../proxy/authorization-barrier.js";
 
 export const ACCESS_YAML_REL = "webui/config/access.yaml";
 
@@ -189,6 +190,11 @@ async function writeAccessYamlInBarrier(
     status = await commitEffectivePolicy();
     runtimeAck = false;
   }
+
+  // T04-3 / Spec §3.3 — narrower authority is persisted and committed above;
+  // cancel in-flight work and clear caches before this write reports success.
+  const narrowed = narrowingScopeForWrite(previousRaw, toWrite);
+  if (narrowed) await narrowAuthorization(narrowed);
 
   return {
     ...writeResult,

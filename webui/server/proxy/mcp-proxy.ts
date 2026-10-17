@@ -5,6 +5,14 @@ import path from "node:path";
 import { setSessionClient, type Identity } from "./identity.js";
 import { admitMcpRequest, MCP_UPSTREAM_PATH, type AdmissionAudit, type AdmittedRequest } from "./admission.js";
 import {
+  AuthorizationRevokedError,
+  beginGuardedRequest,
+  currentAuthorizationSequence,
+  currentBarrierHandle,
+  runWithBarrier
+} from "./authorization-barrier.js";
+import { assertSkillsPassthroughPolicy, skillsPassthroughRequested } from "../auth/deployment-mode.js";
+import {
   clearUpstreamSession,
   getUpstreamSession,
   ownsUpstreamSession,
@@ -78,10 +86,8 @@ const LUCY_SKILLS_HOST = process.env.LUCY_PROXY_LUCY_SKILLS_HOST ?? "127.0.0.1";
 const LUCY_SKILLS_PORT = Number(process.env.LUCY_PROXY_LUCY_SKILLS_PORT ?? 7881);
 // Spec 144: governed skills are served through the ACL-enforced interceptions on `/mcp`.
 // The legacy lucy-skills upstream has no auth or per-skill ACL of its own, so the
-// passthrough stays disabled unless explicitly enabled for local development.
-const SKILLS_PASSTHROUGH_ENABLED = ["1", "true", "yes"].includes(
-  (process.env.LUCY_PROXY_SKILLS_PASSTHROUGH ?? "").toLowerCase()
-);
+// passthrough stays disabled unless explicitly enabled for local development
+// (`LUCY_DEPLOYMENT_MODE=development`); customer mode refuses to start with it on.
 const MAX_BODY_BYTES = Number(process.env.LUCY_PROXY_MAX_BODY_BYTES ?? 1_048_576);
 const UPSTREAM_TIMEOUT_MS = Number(process.env.LUCY_PROXY_UPSTREAM_TIMEOUT_MS ?? 30_000);
 const QUERY_KEY_RE = /^(?:sql|query)$/i;
@@ -193,6 +199,12 @@ function forwardToUpstream(
   sessionId?: string
 ): Promise<IncomingMessage> {
   return new Promise((resolve, reject) => {
+    // T04-3: no upstream call is started for a request a narrowing already covers.
+    const barrier = currentBarrierHandle();
+    if (barrier && !barrier.isCurrent()) {
+      reject(new AuthorizationRevokedError());
+      return;
+    }
     const headers: Record<string, string | string[]> = {};
     for (const [k, v] of Object.entries(incomingHeaders)) {
       if (v === undefined) continue;
@@ -218,6 +230,7 @@ function forwardToUpstream(
       upstream.destroy(new Error(`${label} upstream timeout after ${UPSTREAM_TIMEOUT_MS}ms`));
     });
     upstream.on("error", reject);
+    barrier?.trackUpstream(upstream);
     if (body) upstream.end(body);
     else upstream.end();
   });
@@ -4842,23 +4855,31 @@ const ADMISSION_AUDIT: AdmissionAudit = {
 };
 
 export function buildProxy() {
+  assertSkillsPassthroughPolicy();
+  const skillsPassthroughEnabled = skillsPassthroughRequested();
   const port = Number(process.env.LUCY_PROXY_PORT ?? 7879);
   const host = process.env.LUCY_PROXY_HOST ?? "127.0.0.1";
 
   const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
     try {
+      // T04-3: stamp before admission so a narrowing committed while identity
+      // is being resolved still covers this request.
+      const authorizationStamp = currentAuthorizationSequence();
       const admitted = await admitMcpRequest(req, res, ADMISSION_AUDIT, {
-        skillsPassthroughEnabled: SKILLS_PASSTHROUGH_ENABLED,
+        skillsPassthroughEnabled,
         readBody
       });
       if (!admitted.ok) return;
-      if (admitted.route === "skills") {
-        await handleSkillsPassthrough(req, res, admitted);
-      } else if (req.method === "POST") {
-        await handlePost(req, res, admitted);
-      } else {
-        await handlePassthrough(req, res, admitted);
-      }
+      const barrier = beginGuardedRequest(admitted.identity, res, authorizationStamp);
+      await runWithBarrier(barrier, async () => {
+        if (admitted.route === "skills") {
+          await handleSkillsPassthrough(req, res, admitted);
+        } else if (req.method === "POST") {
+          await handlePost(req, res, admitted);
+        } else {
+          await handlePassthrough(req, res, admitted);
+        }
+      });
     } catch (err) {
       if (!res.headersSent) {
         const statusCode = err instanceof BodyTooLargeError ? err.statusCode : 502;

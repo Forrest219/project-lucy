@@ -92,8 +92,8 @@ POST /mcp (client)
 - **v1.6 起，KTX 传输 session 由 Proxy 按用户持有**（此前的口径是"一个 client session → 一个 upstream session"，已由本条取代）：
   - KTX 把 MCP session 当作传输状态，任何在成功 `initialize` 之前到达的 session 流量都会被拒为 `400 MCP initialize request is required before session traffic.`（`text/plain`，非 JSON-RPC）。
   - 纯透传把"能否取数"变成了"客户端是否回传 `Mcp-Session-Id`"。`lucy_catalog` 等由 Proxy 本地服务的工具不受影响，而 `lucy_query` / `lucy_read_source` 必须走 KTX——于是丢掉该 header 的客户端会**看得到目录、查不了数**，并把故障误判成数据库问题。Proxy 既然已经终结身份、ACL 与工具改写，就同时持有上游 session。
-  - 缓存键是 Lucy `userId`，**不是** client session：同一用户的多个脚本共用一条 KTX 传输 session。审计归因仍以 `lucy_session_id` / `lucy_turn_id` 为准，不受影响。
-  - 客户端请求**自带** `mcp-session-id` 时一律透传，Proxy 不覆盖；只有缺失时才补上自己持有的值。
+  - 缓存键（企业安全整改 T04-2 取代原"按 `userId`"口径）是 `(Agent id, Token hash, downstreamSessionId)`：下游 id 是 `initialize` 时发给客户端的 `Mcp-Session-Id`，持有别人的 id 拿不到别人的上游状态；不带 header 的兼容客户端落到**自己 Token** 的默认会话（同一 Agent 的另一个 Token 也不共用）。审计归因仍以 `lucy_session_id` / `lucy_turn_id` 为准，不受影响。
+  - 客户端请求自带的 `mcp-session-id` 只有在该 (Agent, Token) 确实持有时才透传；否则丢弃，由 Proxy 补上自己 Token 的默认会话。缺失时同样补上自己持有的值。
   - 补值后 KTX 仍拒绝时，Proxy 自己发一份完整 `initialize`（`protocolVersion` + `capabilities` + `clientInfo` 三项必填）加 `notifications/initialized` 重新握手，并**只重试一次**；仍失败则按 §6.1 返回 `upstream_session_required`。
   - `initialize` 自身**不**注入 session（它就是建立 session 的那一步）。`DELETE /mcp` 以及 KTX 不可达时走本地 initialize 兜底，都必须清掉该用户的缓存，避免把已失效或从未存在的 session 重放到下一次取数。
   - Kill switch `LUCY_ENABLE_UPSTREAM_SESSION_KEEPALIVE=false` 退回 v1.6 之前的纯透传行为。
@@ -123,6 +123,23 @@ POST /mcp (client)
 **失败语义（与 `tools/list` 刻意不同）**：`tools/list` 改写失败时 fail-closed，返回 JSON-RPC error（§6.1，因为它涉及权限边界，过滤失败可能导致越权暴露工具）。`initialize` 的 instructions 注入失败（文件未加载到、JSON 解析失败、content-type 不识别等）必须 fail-open——退化为原样透传上游响应，不能阻断 MCP session 建立。原因：instructions 只是指导文案，不是权限裁决；一旦在这里 fail-closed，注入功能任何一个小 bug 都会导致所有客户端连不上 proxy，影响范围远大于"少了一段指导文字"。失败时 proxy 仍写 audit（`tool=initialize`，`outcome=ok`，`decision_reason=instructions_injection_failed`，`error_detail` 记录失败原因），供事后排查，但不影响客户端侧的请求结果。
 
 **Kill switch**：环境变量 `LUCY_ENABLE_INSTRUCTIONS_INJECTION`（默认 `!== "false"` 即启用）。关闭时 `initialize` 走原有透传分支，行为等价于 v1.3 上线前。
+
+### 4.5 撤销发送屏障与 `/mcp/skills` passthrough（企业安全整改 T04-3，Spec §3.3）
+
+**屏障**（`webui/server/proxy/authorization-barrier.ts`）。Token 吊销、Agent 停用 / 删除 / 权限编辑、Role 编辑属于**收窄操作**。admin 写入先把收窄**持久化并编译**（`revoked_tokens` / `access.yaml` + `commitEffectivePolicy`），然后调用 `narrowAuthorization(scope)`，依次：
+
+1. 提交新授权版本（进程内单调序号，按 Agent / Token / 全局记录）；
+2. 取消受影响的在途请求与 SSE 流，并中止为其发起的上游调用；
+3. 清除可能重放旧授权的缓存（所持上游 session、access-config 缓存）；
+4. 以上都完成后才向 admin 调用方返回成功。某一步失败不跳过后续步骤，新版本保持提交，错误向上抛出，调用方不得报告成功。
+
+**每个内容发送点复核版本**。请求在**准入之前**读取版本序号；准入通过后其响应的 `writeHead` / `write` / `end` 被包装（覆盖所有 JSON 响应与 SSE 每个数据块），上游转发前同样检查。持旧版本的请求：尚未写出任何字节时返回 `403` JSON-RPC error（`-32003`，`Access denied: authorization_revoked`）；已开始流式输出则直接切断连接。成功确认**之后**不再安排新的越权内容写入；**已发送或已进入网络缓冲的数据无法撤回**，不得宣称会被客户端抹除（真实客户端边界在 T12 验证）。
+
+**收窄范围**由 `narrowingScopeBetween()` 对比写入前后的 access.yaml 得出，偏保守：Agent 被删 / 停用 / 权限相关字段变化 → 该 Agent；Token 被移除或 `expires_at` 变化 → 该 Token；任一 Role 被改 / 删或 `defaults` 变化 → 全部；纯新增（Agent / Token / Role）不收窄。Agent 的 `name` / `note` 不计入。
+
+**已知边界**：版本状态在进程内存，与 §4.3 的 session 缓存同口径；多副本需共享存储或粘性路由，届时再定。扩权必须先完成有效策略编译才生效，编译失败保持拒绝（见 Spec 98 §8.2），屏障不改变该规则。
+
+**`/mcp/skills` 旧 passthrough**。该路径转发到无鉴权、无对象 ACL 的 lucy-skills 上游，只允许在 `LUCY_DEPLOYMENT_MODE=development` 下以 `LUCY_PROXY_SKILLS_PASSTHROUGH=1|true|yes` 显式开启。客户模式（默认）下保持关闭（路径 404），**开启则启动预检失败**（`assertStartupPolicy()` 与 `buildProxy()` 均抛错）。开启后仍走统一 admission。不得以 KTX 直连 / stdio 作为"兼容修复"。
 
 ## 5. 数据结构
 
@@ -595,7 +612,8 @@ webui/
 | `.mcp.json` | `url` 改为 `http://localhost:7879/mcp`；加 `headers.Authorization`；v1.3：key 名改为 `lucy`，本地仓库切到走 proxy（见 §10） |
 | `webui/package.json` | 新增依赖：`better-sqlite3`、`@types/better-sqlite3` |
 | `webui/server/proxy/mcp-proxy.ts`（v1.3） | 新增 `loadDataQaInstructions()`、`instructionsInjectionEnabled()`、`writeInitializeResponse()`；`handlePost()` 新增 `initialize` 分支（见 §4.4） |
-| `webui/server/proxy/upstream-session.ts`（v1.6） | 新增：按 `userId` 持有 KTX 传输 session（见 §4.3） |
+| `webui/server/proxy/upstream-session.ts`（v1.6） | 新增：持有 KTX 传输 session（见 §4.3；T04-2 起按 `(Agent id, Token hash, downstreamSessionId)` 归属，T04-3 增 `clearUpstreamSessionsMatching()`） |
+| `webui/server/proxy/authorization-barrier.ts`（T04-3） | 新增：收窄后的版本提交、在途请求 / 流取消、缓存清除与发送点复核（见 §4.5） |
 | `webui/server/proxy/mcp-proxy.ts`（v1.6） | 新增 `classifyUpstreamFailure()` / `writeUpstreamFailureResponse()`（见 §6.1.2）、`handshakeUpstreamSession()` / `forwardToKtxWithSession()`（见 §4.3）、`UpstreamSessionState` / `withUpstreamSessionNote()` / `sessionRequiredHint()`（见 §6.1.3）；`handlePost()` 的上游响应缓冲上移到转发处 |
 
 ### 不改动
@@ -646,6 +664,7 @@ function writeLog(entry: AccessLogEntry): void
 | `LUCY_PROXY_PORT` | 代理监听端口，默认 7879 | `7879` |
 | `LUCY_AUDIT_DB` | SQLite 文件路径，默认 `.ktx-ui/audit.sqlite` | 可自定义 |
 | `LUCY_ENABLE_INSTRUCTIONS_INJECTION` | v1.3 新增：`initialize` instructions 注入开关，`!== "false"` 即启用，默认开启 | `false`（关闭时退化为 v1.3 上线前的透传行为） |
+| `LUCY_PROXY_SKILLS_PASSTHROUGH` | T04-3：legacy `/mcp/skills` passthrough 开关（`1`/`true`/`yes` 开启），仅 `LUCY_DEPLOYMENT_MODE=development` 允许；客户模式下开启 → 启动预检失败（见 §4.5） | 未设置（关闭） |
 | `LUCY_ENABLE_UPSTREAM_SESSION_KEEPALIVE` | v1.6 新增：Proxy 按用户持有 KTX 传输 session 的开关（见 §4.3），`!== "false"` 即启用，默认开启 | `false`（关闭时退化为纯透传） |
 
 ## 10. 实施阶段

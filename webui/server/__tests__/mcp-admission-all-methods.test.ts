@@ -90,6 +90,7 @@ const ENV_KEYS = [
   "LUCY_PROXY_UPSTREAM_PORT",
   "LUCY_PROXY_LUCY_SKILLS_PORT",
   "LUCY_PROXY_SKILLS_PASSTHROUGH",
+  "LUCY_DEPLOYMENT_MODE",
   "KTX_INTERNAL_TOKEN",
   "LUCY_MCP_ALLOWED_ORIGINS",
   "LUCY_LICENSE_MODE",
@@ -139,6 +140,7 @@ describe("MCP admission gate (T04-1)", () => {
     delete process.env.LUCY_MCP_ALLOWED_ORIGINS;
     delete process.env.LUCY_LICENSE_MODE;
     delete process.env.LUCY_PROXY_SKILLS_PASSTHROUGH;
+    delete process.env.LUCY_DEPLOYMENT_MODE;
 
     upstreamServer = createServer(async (req, res) => {
       const body = await readRequestBody(req);
@@ -480,7 +482,7 @@ describe("MCP admission gate (T04-1)", () => {
     });
 
     it("when explicitly enabled it shares the same admission (auth, disabled, envelope, path)", async () => {
-      await startProxy({ LUCY_PROXY_SKILLS_PASSTHROUGH: "1" });
+      await startProxy({ LUCY_PROXY_SKILLS_PASSTHROUGH: "1", LUCY_DEPLOYMENT_MODE: "development" });
       const ok = JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" });
       expect((await send("/mcp/skills", { token: null, body: ok })).status).toBe(401);
       expect((await send("/mcp/skills", { token: tokens.disabled, body: ok })).status).toBe(403);

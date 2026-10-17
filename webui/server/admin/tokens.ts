@@ -19,6 +19,7 @@ import {
 } from "../access-governance-gate.js";
 import { resolveRoleIds } from "../proxy/acl.js";
 import { invalidateAccessConfigCache, isTokenExpired } from "../proxy/identity.js";
+import { narrowAuthorization, tokenHashPrefixOf } from "../proxy/authorization-barrier.js";
 import { actorIdFromRequest } from "../auth/guard.js";
 import { normalizeNewTokenExpiry, TokenExpiryPolicyError } from "./token-expiry-policy.js";
 
@@ -547,7 +548,16 @@ export function registerTokenRoutes(app: FastifyInstance) {
           requestId: request.id
         });
         invalidateAccessConfigCache();
-        return commitPolicyRuntimeAck(content);
+        const committed = await commitPolicyRuntimeAck(content);
+        // T04-3 / Spec §3.3 — revocation is durable (revoked_tokens + access.yaml) and
+        // committed; cancel this Token's in-flight work before reporting success.
+        const revokedHash = tokenHashPrefixOf(token);
+        await narrowAuthorization({
+          kind: "subjects",
+          agentIds: revokedHash ? [] : [userId],
+          tokenHashes: revokedHash ? [revokedHash] : []
+        });
+        return committed;
       });
 
       return { ok: true, data: { written: true, revokedAt, ...runtime, gate } };

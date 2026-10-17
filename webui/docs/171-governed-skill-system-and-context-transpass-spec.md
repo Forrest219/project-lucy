@@ -208,6 +208,8 @@ eval_cases:
 - 显式 `["*"]` 表示所有 Role 可见；无 Role 的 legacy direct-allow identity 仅可通过该通配符匹配。
 - 完整算法、稳定拒绝原因与协议映射见 Spec 151 §2–§3。
 
+> 企业安全整改 T04-3（Spec §3.3）：本节所述 Skill 通道只经 `/mcp` 的 ACL 拦截提供。旧 `/mcp/skills` passthrough（无对象 ACL）在客户模式保持关闭，开启则启动预检失败，仅 development 可显式开启；Token / Agent / Role 收窄后，在途 Skill 内容经发送屏障取消，已发出的数据无法撤回。机制见 `07-mcp-auth-proxy-spec.md` §4.5。
+
 ### 4.2 审计日志增强 (`access_log` Schema Extension)
 在 `.ktx-ui/audit.sqlite` 的 `access_log` 表中扩充 Skill 调用与上下文跟踪字段：
 

@@ -30,12 +30,12 @@ export type UpstreamSessionOwner = {
   tokenHash: string;
 };
 
-type OwnedSession = { lastSeen: number };
+type OwnedSession = { lastSeen: number; owner: UpstreamSessionOwner };
 
 /** `(agent, token, downstreamSessionId)` → liveness; the id itself is the upstream id. */
 const ownedSessions = new Map<string, OwnedSession>();
 /** `(agent, token)` → session used by clients that send no usable `Mcp-Session-Id`. */
-const defaultSessions = new Map<string, { sessionId: string; lastSeen: number }>();
+const defaultSessions = new Map<string, { sessionId: string; lastSeen: number; owner: UpstreamSessionOwner }>();
 
 // JSON arrays are collision-free for arbitrary id characters.
 function ownerKey(owner: UpstreamSessionOwner): string {
@@ -73,8 +73,8 @@ export function setUpstreamSession(owner: UpstreamSessionOwner, sessionId: strin
   if (!sessionId) return;
   const now = Date.now();
   purgeExpired(now);
-  ownedSessions.set(sessionKey(owner, sessionId), { lastSeen: now });
-  defaultSessions.set(ownerKey(owner), { sessionId, lastSeen: now });
+  ownedSessions.set(sessionKey(owner, sessionId), { lastSeen: now, owner });
+  defaultSessions.set(ownerKey(owner), { sessionId, lastSeen: now, owner });
 }
 
 /** True only when `downstreamSessionId` was issued to exactly this (Agent, Token). */
@@ -117,4 +117,33 @@ export function clearUpstreamSession(owner: UpstreamSessionOwner, sessionId?: st
   if (!target) return;
   ownedSessions.delete(sessionKey(owner, target));
   if (defaultSessions.get(key)?.sessionId === target) defaultSessions.delete(key);
+}
+
+/** Which held sessions an authorization narrowing (T04-3) closes. */
+export type UpstreamSessionMatch = {
+  all?: boolean;
+  agentIds?: Iterable<string>;
+  tokenHashes?: Iterable<string>;
+};
+
+/**
+ * Close every held session belonging to a narrowed Agent / Token (or all of
+ * them), so a downstream session id issued before the narrowing owns nothing.
+ * Returns how many owned sessions were closed.
+ */
+export function clearUpstreamSessionsMatching(match: UpstreamSessionMatch): number {
+  const agents = new Set(match.agentIds ?? []);
+  const tokens = new Set(match.tokenHashes ?? []);
+  const hit = (owner: UpstreamSessionOwner): boolean =>
+    match.all === true || agents.has(owner.agentId) || tokens.has(owner.tokenHash);
+  let closed = 0;
+  for (const [key, value] of ownedSessions.entries()) {
+    if (!hit(value.owner)) continue;
+    ownedSessions.delete(key);
+    closed += 1;
+  }
+  for (const [key, value] of defaultSessions.entries()) {
+    if (hit(value.owner)) defaultSessions.delete(key);
+  }
+  return closed;
 }

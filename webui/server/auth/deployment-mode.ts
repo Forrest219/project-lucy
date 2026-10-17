@@ -46,8 +46,26 @@ export function resolveCookieSecure(): CookiePolicy {
   );
 }
 
+export function skillsPassthroughRequested(): boolean {
+  return ["1", "true", "yes"].includes((process.env.LUCY_PROXY_SKILLS_PASSTHROUGH ?? "").trim().toLowerCase());
+}
+
 /**
- * Startup preflight (Spec §3.1 items 1, 8; Plan T02 step 7). Throws so the process
+ * Spec §3.3 / Plan T04 step 5: the legacy `/mcp/skills` passthrough has no
+ * per-object ACL, so customer mode must keep it closed. Enabling it there is a
+ * startup error rather than a silently ignored setting.
+ */
+export function assertSkillsPassthroughPolicy(): void {
+  if (resolveDeploymentMode() === "customer" && skillsPassthroughRequested()) {
+    throw new Error(
+      "LUCY_PROXY_SKILLS_PASSTHROUGH is not allowed when LUCY_DEPLOYMENT_MODE=customer (default); " +
+        "the legacy /mcp/skills passthrough has no per-object ACL"
+    );
+  }
+}
+
+/**
+ * Startup preflight (Spec §3.1 items 1, 8; Plan T02 step 7, T04 step 5). Throws so the process
  * refuses to start when the effective mode contradicts what the Chart pinned
  * (e.g. an `extraEnvFrom` Secret that supplies LUCY_DEPLOYMENT_MODE=development)
  * or the cookie policy is unsafe.
@@ -62,4 +80,5 @@ export function assertStartupPolicy(): void {
     );
   }
   resolveCookieSecure();
+  assertSkillsPassthroughPolicy();
 }
