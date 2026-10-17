@@ -111,3 +111,7 @@ npm run smoke:p0:demo
 It initializes an MCP session, lists tools, calls `sl_read_source`, and runs `sl_query` through Lucy MCP Proxy.
 
 For R1 contract validation, use the relevant `lucy_*` endpoint smoke or contract smoke so the evidence proves the governed MCP runtime surface, not only legacy tool forwarding.
+
+## 6. 真实客户端验收（企业安全整改）
+
+客户候选版本上线前，Codex CLI 与 Cursor CLI Agent 两个产品必须用本指南同一套 endpoint 与独立测试 Token 完成真实问答验收（每产品每场景 3 次）。接入方式固定为：用 WebUI「生成 Token」页复制出的 MCP 配置，写成各产品的原生配置（Codex `config.toml` 的 `bearer_token_env_var`、Cursor `.cursor/mcp.json` 的 `${env:…}` 头），**Token 只经环境变量传递，不进命令行和配置文件**；不得改走 KTX stdio 或 `:7878` 直连。执行与判定见 [`real-user-e2e.md`](real-user-e2e.md)。
