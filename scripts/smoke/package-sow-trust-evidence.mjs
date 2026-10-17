@@ -60,13 +60,14 @@ function readJson(path) {
 }
 
 function copyIfExists(source, target) {
-  if (!existsSync(abs(source))) return false;
+  if (!source || !existsSync(abs(source))) return false;
   mkdirSync(dirname(abs(target)), { recursive: true });
   cpSync(abs(source), abs(target), { recursive: true });
   return true;
 }
 
 function artifactFiles(dir) {
+  if (!dir) return [];
   const full = abs(dir);
   if (!existsSync(full)) return [];
   return readdirSync(full)
@@ -111,7 +112,7 @@ function inspectArtifacts(paths) {
 }
 
 function evidenceSummary(evidencePath) {
-  if (!existsSync(abs(evidencePath))) return null;
+  if (!evidencePath || !existsSync(abs(evidencePath))) return null;
   const evidence = readJson(evidencePath);
   return {
     path: evidencePath,
@@ -248,22 +249,61 @@ function writePackageReadme(outDir, manifest) {
   writeFileSync(abs(`${outDir}/README.md`), `${lines.join("\n")}\n`, "utf8");
 }
 
+// Spec 20261018 §8.3: the old fixed inbox/ paths can mix files of different runs or candidates. A strict (READY)
+// package therefore needs an explicit run manifest and the SAME verdict as the customer release gate
+// (scripts/e2e/verify-evidence.mjs via results/release-readiness.json): only a passed, releaseReady verdict of the
+// manifest's own runId counts. Collect-only packaging (non-strict) keeps working for human review.
+const LEGACY_SOURCES = {
+  evidence: "inbox/p1-agent-e2e-hermes-moz-evidence.json",
+  report: "inbox/p1-agent-e2e-hermes-moz-report.html",
+  artifacts: "inbox/p1-agent-e2e-artifacts",
+  refresh: "inbox/p1-agent-e2e-local-hermes-run.json"
+};
+
+function loadRunManifest(path) {
+  if (!path) return { manifest: null, sources: LEGACY_SOURCES, problems: [] };
+  const manifest = readJson(path);
+  const problems = [];
+  if (manifest.contract !== "lucy-sow-run-manifest-v1") problems.push("run manifest contract must be lucy-sow-run-manifest-v1");
+  if (!manifest.runId) problems.push("run manifest has no runId");
+  for (const key of ["evidence", "report", "artifacts", "refresh", "releaseVerdict"]) {
+    if (!manifest[key]) problems.push(`run manifest has no ${key} path`);
+  }
+  // An unusable manifest must not fall back to the fixed inbox files.
+  const sources = problems.length > 0 ? {} : { evidence: manifest.evidence, report: manifest.report, artifacts: manifest.artifacts, refresh: manifest.refresh };
+  return { manifest, sources, problems };
+}
+
+/** The same verifier decision the customer release uses; absence or mismatch is never READY. */
+function releaseVerdictProblems(manifest) {
+  if (!manifest) return ["strict packaging needs --run-manifest: fixed inbox paths cannot prove a single run and candidate"];
+  const file = manifest.releaseVerdict;
+  if (!file || !existsSync(abs(file))) return [`release verdict ${file ?? "(none)"} does not exist; run scripts/gates/customer-release-readiness.mjs for this run first`];
+  const verdict = readJson(file);
+  const problems = [];
+  if (verdict.runId !== manifest.runId) problems.push(`release verdict belongs to run ${verdict.runId}, the manifest to ${manifest.runId}`);
+  if (verdict.status !== "passed" || verdict.releaseReady !== true) problems.push(`release verdict is ${verdict.status} (releaseReady=${verdict.releaseReady}); only a passed verdict counts`);
+  return problems;
+}
+
 function main() {
   const outDir = argValue(process.argv, "--out", DEFAULT_OUT);
   const strict = process.argv.includes("--strict");
+  const { manifest: runManifest, sources, problems: manifestProblems } = loadRunManifest(argValue(process.argv, "--run-manifest", null));
   mkdirSync(abs(outDir), { recursive: true });
 
-  copyIfExists("inbox/p1-agent-e2e-hermes-moz-evidence.json", `${outDir}/real-hermes-moz-evidence.json`);
-  copyIfExists("inbox/p1-agent-e2e-hermes-moz-report.html", `${outDir}/real-hermes-moz-report.html`);
-  copyIfExists("inbox/p1-agent-e2e-artifacts", `${outDir}/real-hermes-moz-artifacts`);
-  copyIfExists("inbox/p1-agent-e2e-local-hermes-run.json", `${outDir}/latest-refresh-blocked.json`);
+  copyIfExists(sources.evidence, `${outDir}/real-hermes-moz-evidence.json`);
+  copyIfExists(sources.report, `${outDir}/real-hermes-moz-report.html`);
+  copyIfExists(sources.artifacts, `${outDir}/real-hermes-moz-artifacts`);
+  copyIfExists(sources.refresh, `${outDir}/latest-refresh-blocked.json`);
 
-  const realEvidence = evidenceSummary("inbox/p1-agent-e2e-hermes-moz-evidence.json");
-  const blockedEvidence = evidenceSummary("inbox/p1-agent-e2e-local-hermes-run.json");
-  const artifacts = inspectArtifacts(artifactFiles("inbox/p1-agent-e2e-artifacts"));
+  const realEvidence = evidenceSummary(sources.evidence);
+  const blockedEvidence = evidenceSummary(sources.refresh);
+  const artifacts = inspectArtifacts(artifactFiles(sources.artifacts));
   const freshArtifactsReady = artifacts.length > 0 && artifacts.every((item) => item.missingFreshFields.length === 0);
   // Never package files from different runs, dry runs, or runner-generated trace ids as one passing set.
-  const sameRun = Boolean(realEvidence?.runId) && artifacts.every((item) => item.runId === realEvidence.runId);
+  const sameRun = Boolean(realEvidence?.runId) && artifacts.every((item) => item.runId === realEvidence.runId)
+    && (!runManifest || realEvidence.runId === runManifest.runId);
   const serverTraces = artifacts.every((item) => item.traceGenerated === false);
   const standardValidation = validateE2eStandard(realEvidence);
   const realEvidenceReady = Boolean(
@@ -276,9 +316,10 @@ function main() {
     && realEvidence.config?.agentRuntime === "hermes-local-real"
   );
 
+  const verdictProblems = strict || runManifest ? [...manifestProblems, ...releaseVerdictProblems(runManifest)] : [];
   const manifest = {
     generatedAt: new Date().toISOString(),
-    status: realEvidenceReady && freshArtifactsReady && standardValidation.status === "pass" ? "READY" : "PARTIAL_READY_NEEDS_REFRESH",
+    status: realEvidenceReady && freshArtifactsReady && standardValidation.status === "pass" && verdictProblems.length === 0 ? "READY" : "PARTIAL_READY_NEEDS_REFRESH",
     objective: "Use a real Agent + real Lucy/KTX MCP + real eval artifact chain to prove the SOW trustworthy Eval/UAT loop.",
     packagePath: outDir,
     realChainEvidence: {
@@ -295,6 +336,7 @@ function main() {
       ]
     },
     runConsistency: { sameRun, serverTraces, runId: realEvidence?.runId ?? null },
+    releaseVerdict: { required: strict, manifestRunId: runManifest?.runId ?? null, problems: verdictProblems },
     freshArtifactValidation: {
       status: freshArtifactsReady ? "pass" : "needs_refresh",
       requiredFields: REQUIRED_FRESH_FIELDS,
@@ -303,7 +345,7 @@ function main() {
     e2eStandardValidation: standardValidation,
     latestRefreshAttempt: {
       status: blockedEvidence?.status ?? "missing",
-      file: existsSync(abs("inbox/p1-agent-e2e-local-hermes-run.json")) ? "latest-refresh-blocked.json" : null,
+      file: sources.refresh && existsSync(abs(sources.refresh)) ? "latest-refresh-blocked.json" : null,
       summary: blockedEvidence
     },
     refreshCommands: [
@@ -315,6 +357,7 @@ function main() {
   writeFileSync(abs(`${outDir}/manifest.json`), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
   writePackageReadme(outDir, manifest);
   console.log(`[package-sow-trust-evidence] ${manifest.status}: wrote ${abs(outDir)}`);
+  for (const problem of verdictProblems) console.error(`[package-sow-trust-evidence] ${problem}`);
   if (manifest.status === "READY") return EXIT_CODES.ready;
   return strict ? EXIT_CODES.blocked : EXIT_CODES.collect;
 }

@@ -18,9 +18,10 @@ const P0_GATES = [
   ["security-baseline", ["run", "security:baseline"]],
   ["delivery-isolation", ["run", "smoke:p0:delivery-isolation"]],
   ["docker-smoke", ["run", "smoke:p0:docker"]],
-  ["demo-e2e", ["run", "smoke:p0:demo"]],
-  ["postgres-demo-e2e", ["run", "smoke:p0:postgres-demo"]],
-  ["executive-poc-e2e", ["run", "smoke:p0:executive-poc"]]
+  // These run database/demo smoke scripts, not the real-user E2E; the names say so (Spec 20261018 §8.3).
+  ["demo-db-smoke", ["run", "smoke:p0:demo"]],
+  ["postgres-demo-db-smoke", ["run", "smoke:p0:postgres-demo"]],
+  ["executive-poc-db-smoke", ["run", "smoke:p0:executive-poc"]]
 ];
 
 const P1_GATES = [
@@ -159,6 +160,8 @@ async function main() {
     status: overall,
     exitCode,
     releaseReady: false,
+    // The customer release verdict belongs to scripts/e2e/verify-evidence.mjs; this aggregate only records gates.
+    verdictOwner: "scripts/e2e/verify-evidence.mjs",
     dryRun,
     allowBlocked,
     includeP0,

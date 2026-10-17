@@ -33,7 +33,11 @@ async function main() {
   const e2eCode = await run(process.execPath, ["scripts/smoke/p1-agent-e2e-local-hermes.mjs", "--replace-existing"], env);
   if (e2eCode !== 0) process.exit(e2eCode);
 
-  const packageCode = await run(process.execPath, ["scripts/smoke/package-sow-trust-evidence.mjs", "--strict"], env);
+  // Strict packaging needs an explicit run manifest whose release verdict came from the shared verifier;
+  // without LUCY_SOW_RUN_MANIFEST the package is collect-only and can never be READY.
+  const packageArgs = ["scripts/smoke/package-sow-trust-evidence.mjs", "--strict"];
+  if (process.env.LUCY_SOW_RUN_MANIFEST) packageArgs.push("--run-manifest", process.env.LUCY_SOW_RUN_MANIFEST);
+  const packageCode = await run(process.execPath, packageArgs, env);
   process.exit(packageCode);
 }
 
