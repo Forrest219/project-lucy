@@ -39,7 +39,7 @@ findings:
     severity: P1
     status: fixed
     spec: "§5.2"
-    fixedIn: null
+    fixedIn: f95049b
     verifiedBy: [SEC-05, SEC-18, SEC-20]
     acceptedBy: null
   # V-05 配置审计 Diff 暴露管理员密码哈希，含历史数据清理（T08）
@@ -48,7 +48,7 @@ findings:
     severity: P2
     status: fixed
     spec: "§5.3"
-    fixedIn: null
+    fixedIn: f95049b
     verifiedBy: [SEC-17, SEC-20]
     acceptedBy: null
   # V-06 首个 owner bootstrap 并发覆盖（T02）
