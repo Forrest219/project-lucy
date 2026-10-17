@@ -64,7 +64,7 @@ findings:
     severity: P2
     status: fixed
     spec: "§4.5"
-    fixedIn: null
+    fixedIn: 5ce41a5
     verifiedBy: [SEC-15]
     acceptedBy: null
   # V-08 Wiki frontmatter 服务端代码执行（T0A-1）
@@ -81,7 +81,7 @@ findings:
     severity: P1
     status: fixed
     spec: "§4"
-    fixedIn: null
+    fixedIn: 5ce41a5
     verifiedBy: [SEC-10, SEC-13, SEC-14]
     acceptedBy: null
   # D-02 审计写失败后仍释放数据（T07）
