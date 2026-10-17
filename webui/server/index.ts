@@ -137,7 +137,9 @@ import { registerUiUsageRoutes } from "./admin/ui-usage.js";
 import { registerAuthRoutes, registerAdminAccountRoutes } from "./auth/routes.js";
 import { registerBrandingRoutes } from "./branding.js";
 import { requireWebuiAuthHook } from "./auth/guard.js";
-import { resolveDeploymentMode } from "./auth/deployment-mode.js";
+import { assertStartupPolicy, resolveCookieSecure } from "./auth/deployment-mode.js";
+import { reconcileBootstrapOnStartup } from "./auth/bootstrap.js";
+import { closeSecurityStore } from "./security/instance.js";
 import { registerWebSecurity } from "./web-security.js";
 import { registerSkillsRoutes } from "./admin/skills.js";
 import { registerCaseRoutes } from "./eval/cases.js";
@@ -567,7 +569,7 @@ function logProbeTiming(request: FastifyRequest, kind: string, purpose: string, 
 }
 
 export function buildServer() {
-  resolveDeploymentMode(); // invalid LUCY_DEPLOYMENT_MODE refuses to start
+  assertStartupPolicy(); // invalid mode, Chart-mode override or insecure customer cookie refuses to start
   const app = Fastify({ logger: true });
   const writtenFiles: SessionWrittenFile[] = [];
   const changedSources = new Map<string, { conn: string; schema: string; table: string }>();
@@ -590,7 +592,16 @@ export function buildServer() {
       console.warn("[display-snapshot] reconciler unavailable; display reads stay busy:", error);
     }
   });
+  // Close an interrupted first-owner bootstrap before anything can clear admins.yaml (Spec §3.1 item 7).
+  app.addHook("onReady", async () => {
+    try {
+      await reconcileBootstrapOnStartup();
+    } catch (error) {
+      console.warn("[auth] bootstrap reconciliation failed; bootstrap re-checks on the next attempt:", error);
+    }
+  });
   app.addHook("onClose", async () => {
+    closeSecurityStore();
     stopOwnReconciler();
     stopProbeInvalidation();
     probeScheduler.close();
@@ -651,6 +662,8 @@ export function buildServer() {
       data: {
         // Spec 98 §8.4 — align with /api/admin/policy-runtime; empty policyVersion is not healthy.
         status: healthy ? "ok" : "degraded",
+        // Spec §3.1 item 8: surfaced only while customer mode runs without Secure cookies (test profile).
+        ...(resolveCookieSecure().insecureTestProfile ? { insecureTestProfile: true } : {}),
         lucyVersion: resolveLucyVersion(),
         bundledKtxVersion: process.env.LUCY_BUNDLED_KTX_VERSION ?? "unknown",
         ktxRuntime: {

@@ -917,12 +917,3 @@ Query：
 | 401 | `BOOTSTRAP_TOKEN_INVALID` | 缺少或不匹配 `X-Lucy-Bootstrap-Token` |
 
 持久限速、并发互斥与持久引导状态见企业安全 Spec §3.1 / T02。
-
-## 5. 通用约定
-
-- 所有 `:conn/:schema/:table` 段做白名单存在性校验，不存在 → `404 SOURCE_NOT_FOUND`。
-- 写类端点统一支持 `dryRun`，默认 `true`（安全优先：必须显式 `false` 才落盘）。
-- 不存在任何返回 `.ktx/secrets/` 内容的端点。
-
----
-_架构设计 by Claude (architect) · 2026-06-15_

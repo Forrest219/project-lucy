@@ -3,7 +3,7 @@ import { QueryClientContext } from "@tanstack/react-query";
 import { apiGet, apiPost, ApiError, bumpAuthEpoch, setAuthLostHandler } from "./apiClient";
 import { isPublicQueryKey } from "./displayQueryOptions";
 
-export type AuthMode = "open" | "bootstrap" | "required";
+export type AuthMode = "open" | "bootstrap" | "required" | "unavailable";
 
 export type AuthMe = {
   id: string;

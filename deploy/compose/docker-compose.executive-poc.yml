@@ -66,6 +66,10 @@ services:
       # (deploy/compose/secrets/webui-bootstrap-token, git-ignored).
       LUCY_DEPLOYMENT_MODE: customer
       LUCY_WEBUI_BOOTSTRAP_TOKEN_FILE: /run/secrets/webui_bootstrap_token
+      # Local HTTP loopback demo: the only form allowed to serve non-Secure cookies in customer mode
+      # (Spec §3.1 item 8). /api/health reports insecureTestProfile while this is set.
+      LUCY_WEBUI_COOKIE_SECURE: "0"
+      LUCY_WEBUI_TEST_PROFILE: "1"
       POSTHOG_DISABLED: "1"
     ports:
       - "${LUCY_EXEC_WEBUI_HOST_PORT:-55178}:5174"

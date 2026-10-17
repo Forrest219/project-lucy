@@ -273,8 +273,15 @@ function writeMinimalTemplate(templateRoot, projectRoot) {
 
 function runSeedOnlyWithEnv(templateRoot, projectRoot, extraEnv) {
   const env = { ...process.env };
-  delete env.LUCY_DEPLOYMENT_MODE;
-  delete env.LUCY_WEBUI_AUTH;
+  for (const key of [
+    "LUCY_DEPLOYMENT_MODE",
+    "LUCY_WEBUI_AUTH",
+    "LUCY_WEBUI_COOKIE_SECURE",
+    "LUCY_WEBUI_TEST_PROFILE",
+    "LUCY_CHART_DEPLOYMENT_MODE"
+  ]) {
+    delete env[key];
+  }
   return spawnSync("bash", [entrypoint], {
     cwd: repoRoot,
     env: {
@@ -340,5 +347,73 @@ test("entrypoint refuses an invalid LUCY_DEPLOYMENT_MODE", async () => {
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /invalid LUCY_DEPLOYMENT_MODE/);
 
+  await rm(root, { recursive: true, force: true });
+});
+
+test("entrypoint refuses customer mode with LUCY_WEBUI_COOKIE_SECURE=0 unless the explicit test profile is set", async () => {
+  for (const extraEnv of [
+    { LUCY_DEPLOYMENT_MODE: "customer", LUCY_WEBUI_COOKIE_SECURE: "0" },
+    { LUCY_WEBUI_COOKIE_SECURE: " false " },
+    { LUCY_DEPLOYMENT_MODE: "customer", LUCY_WEBUI_COOKIE_SECURE: "0", LUCY_WEBUI_TEST_PROFILE: "0" }
+  ]) {
+    const root = await makeRoot("lucy-entrypoint-cookie-");
+    const templateRoot = path.join(root, "template");
+    const projectRoot = path.join(root, "project");
+    await writeMinimalTemplate(templateRoot, projectRoot);
+
+    const result = runSeedOnlyWithEnv(templateRoot, projectRoot, extraEnv);
+    assert.notEqual(result.status, 0, JSON.stringify(extraEnv));
+    assert.match(result.stderr, /LUCY_WEBUI_COOKIE_SECURE=0 is not allowed when LUCY_DEPLOYMENT_MODE=customer/);
+    await assert.rejects(readFile(path.join(projectRoot, "ktx.yaml"), "utf8"));
+
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("entrypoint allows insecure cookies only for the test profile or development, and Secure in customer", async () => {
+  for (const extraEnv of [
+    { LUCY_DEPLOYMENT_MODE: "customer", LUCY_WEBUI_COOKIE_SECURE: "0", LUCY_WEBUI_TEST_PROFILE: "1" },
+    { LUCY_DEPLOYMENT_MODE: "customer", LUCY_WEBUI_COOKIE_SECURE: "1" },
+    { LUCY_DEPLOYMENT_MODE: "development", LUCY_WEBUI_COOKIE_SECURE: "0" }
+  ]) {
+    const root = await makeRoot("lucy-entrypoint-cookie-ok-");
+    const templateRoot = path.join(root, "template");
+    const projectRoot = path.join(root, "project");
+    await writeMinimalTemplate(templateRoot, projectRoot);
+
+    const result = runSeedOnlyWithEnv(templateRoot, projectRoot, extraEnv);
+    assert.equal(result.status, 0, `${JSON.stringify(extraEnv)}: ${result.stderr}`);
+
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("entrypoint refuses a deployment mode that contradicts the Chart-pinned mode (extraEnvFrom override)", async () => {
+  for (const extraEnv of [
+    { LUCY_CHART_DEPLOYMENT_MODE: "customer", LUCY_DEPLOYMENT_MODE: "development" },
+    { LUCY_CHART_DEPLOYMENT_MODE: " Customer ", LUCY_DEPLOYMENT_MODE: "development", LUCY_WEBUI_AUTH: "off" }
+  ]) {
+    const root = await makeRoot("lucy-entrypoint-chart-pin-");
+    const templateRoot = path.join(root, "template");
+    const projectRoot = path.join(root, "project");
+    await writeMinimalTemplate(templateRoot, projectRoot);
+
+    const result = runSeedOnlyWithEnv(templateRoot, projectRoot, extraEnv);
+    assert.notEqual(result.status, 0, JSON.stringify(extraEnv));
+    assert.match(result.stderr, /contradicts the Chart-pinned mode customer/);
+    await assert.rejects(readFile(path.join(projectRoot, "ktx.yaml"), "utf8"));
+
+    await rm(root, { recursive: true, force: true });
+  }
+
+  const root = await makeRoot("lucy-entrypoint-chart-pin-ok-");
+  const templateRoot = path.join(root, "template");
+  const projectRoot = path.join(root, "project");
+  await writeMinimalTemplate(templateRoot, projectRoot);
+  const ok = runSeedOnlyWithEnv(templateRoot, projectRoot, {
+    LUCY_CHART_DEPLOYMENT_MODE: "customer",
+    LUCY_DEPLOYMENT_MODE: "customer"
+  });
+  assert.equal(ok.status, 0, ok.stderr);
   await rm(root, { recursive: true, force: true });
 });

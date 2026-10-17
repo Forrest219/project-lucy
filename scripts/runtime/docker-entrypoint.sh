@@ -11,9 +11,12 @@ SEED_STATE_DIR="${PROJECT_ROOT}/.lucy-seed"
 # customer-mode container can never come up with the WebUI auth switched off.
 # Default mode is customer; invalid values and customer+LUCY_WEBUI_AUTH=off are fatal.
 preflight_deployment_mode() {
-  local mode auth
+  local mode auth pinned cookie profile
   mode="$(printf '%s' "${LUCY_DEPLOYMENT_MODE:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
   auth="$(printf '%s' "${LUCY_WEBUI_AUTH:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+  pinned="$(printf '%s' "${LUCY_CHART_DEPLOYMENT_MODE:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+  cookie="$(printf '%s' "${LUCY_WEBUI_COOKIE_SECURE:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+  profile="$(printf '%s' "${LUCY_WEBUI_TEST_PROFILE:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
   [[ -n "${mode}" ]] || mode="customer"
   case "${mode}" in
     customer|development) ;;
@@ -22,8 +25,19 @@ preflight_deployment_mode() {
       exit 1
       ;;
   esac
+  # T02: the Chart pins its mode in LUCY_CHART_DEPLOYMENT_MODE; an override that
+  # lands in LUCY_DEPLOYMENT_MODE (e.g. via extraEnvFrom) must not relax it.
+  if [[ -n "${pinned}" && "${pinned}" != "${mode}" ]]; then
+    echo "[lucy] fatal: LUCY_DEPLOYMENT_MODE=${mode} contradicts the Chart-pinned mode ${pinned}; remove the override (for example from extraEnvFrom)" >&2
+    exit 1
+  fi
   if [[ "${mode}" == "customer" && "${auth}" == "off" ]]; then
     echo "[lucy] fatal: LUCY_WEBUI_AUTH=off is not allowed when LUCY_DEPLOYMENT_MODE=customer (default); refusing to start" >&2
+    exit 1
+  fi
+  # Spec §3.1 item 8: customer mode keeps Secure cookies; only the explicit test profile may serve HTTP.
+  if [[ "${mode}" == "customer" && ( "${cookie}" == "0" || "${cookie}" == "false" ) && "${profile}" != "1" && "${profile}" != "true" ]]; then
+    echo "[lucy] fatal: LUCY_WEBUI_COOKIE_SECURE=0 is not allowed when LUCY_DEPLOYMENT_MODE=customer (default) unless LUCY_WEBUI_TEST_PROFILE=1; refusing to start" >&2
     exit 1
   fi
 }

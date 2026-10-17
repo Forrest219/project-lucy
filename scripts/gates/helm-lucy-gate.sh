@@ -181,6 +181,31 @@ for render in "${LOCAL_RENDER}" "${K3S_RENDER}"; do
   assert_universal_contract "${render}" "all profiles"
 done
 
+echo "[helm-lucy-gate] H1a deployment mode + cookie Secure pin (Spec §3.1 items 1, 8)"
+SECURE_RENDER="${TMP_DIR}/secure-default.yaml"
+helm template lucy "${CHART}" --set security.insecureHttpTestProfile=false >"${SECURE_RENDER}"
+assert_env_value "${SECURE_RENDER}" "LUCY_DEPLOYMENT_MODE" "customer"
+assert_env_value "${SECURE_RENDER}" "LUCY_CHART_DEPLOYMENT_MODE" "customer"
+assert_env_value "${SECURE_RENDER}" "LUCY_WEBUI_COOKIE_SECURE" "1"
+assert_absent "${SECURE_RENDER}" "LUCY_WEBUI_TEST_PROFILE"
+assert_absent "${SECURE_RENDER}" "LUCY_WEBUI_AUTH"
+# The customer-facing chart does not expose the deployment mode as a value.
+assert_absent "${CHART}/values.yaml" "^ *LUCY_DEPLOYMENT_MODE:"
+# extraEnvFrom must not remove or shadow the pins (explicit env entries stay rendered).
+EXTRA_RENDER="${TMP_DIR}/secure-extra-env-from.yaml"
+helm template lucy "${CHART}" --set security.insecureHttpTestProfile=false \
+  --set-json 'extraEnvFrom=[{"secretRef":{"name":"operator-override"}}]' >"${EXTRA_RENDER}"
+assert_present "${EXTRA_RENDER}" "name: operator-override"
+assert_env_value "${EXTRA_RENDER}" "LUCY_DEPLOYMENT_MODE" "customer"
+assert_env_value "${EXTRA_RENDER}" "LUCY_CHART_DEPLOYMENT_MODE" "customer"
+assert_env_value "${EXTRA_RENDER}" "LUCY_WEBUI_COOKIE_SECURE" "1"
+for render in "${LOCAL_RENDER}" "${K3S_RENDER}"; do
+  [[ -n "${render}" ]] || continue
+  # Test profiles over plain HTTP opt out explicitly and are marked.
+  assert_env_value "${render}" "LUCY_WEBUI_COOKIE_SECURE" "0"
+  assert_env_value "${render}" "LUCY_WEBUI_TEST_PROFILE" "1"
+done
+
 echo "[helm-lucy-gate] H1a secrets-sync contract (any profile with a Secret)"
 SECRET_RENDER="${TMP_DIR}/secret.yaml"
 helm template lucy "${CHART}" --set existingSecret=customer-db >"${SECRET_RENDER}"

@@ -9,10 +9,19 @@ export const ADMINS_YAML_REL = "webui/config/admins.yaml";
 
 export type WebuiAdminRole = "owner" | "operator";
 
-/** Accept legacy `admin` as alias of `operator` when reading YAML. */
+/** Thrown when admins.yaml is unreadable or structurally invalid; auth then fails closed. */
+export class AdminsConfigError extends Error {
+  readonly code = "ADMINS_CONFIG_INVALID";
+}
+
+/**
+ * Accept legacy `admin` as alias of `operator` when reading YAML.
+ * Unknown or missing roles are rejected (Spec §3.1 item 7): never default to owner.
+ */
 export function normalizeWebuiAdminRole(raw: unknown): WebuiAdminRole {
+  if (raw === "owner") return "owner";
   if (raw === "operator" || raw === "admin") return "operator";
-  return "owner";
+  throw new AdminsConfigError(`unknown admin role: ${JSON.stringify(raw) ?? String(raw)}`);
 }
 
 export function webuiAdminRoleLabel(role: WebuiAdminRole): string {
@@ -33,7 +42,10 @@ export type AdminsConfig = {
   admins: WebuiAdminRecord[];
 };
 
-export type AuthMode = "open" | "bootstrap" | "required";
+/** `unavailable`: admins.yaml is unreadable/corrupt; everything except public recovery info is refused. */
+export type AuthMode = "open" | "bootstrap" | "required" | "unavailable";
+
+export const ADMIN_ID_RE = /^[a-z][a-z0-9_-]{1,31}$/;
 
 let cache: { path: string; loadedAt: number; config: AdminsConfig } | null = null;
 const CACHE_TTL_MS = 5_000;
@@ -47,15 +59,23 @@ function emptyConfig(): AdminsConfig {
 }
 
 function normalizeConfig(raw: unknown): AdminsConfig {
-  if (!raw || typeof raw !== "object") return emptyConfig();
+  // An empty file is "no admins"; anything that is present but malformed is rejected.
+  if (raw === null || raw === undefined) return emptyConfig();
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    throw new AdminsConfigError("admins.yaml must be a mapping");
+  }
   const doc = raw as Record<string, unknown>;
-  const adminsRaw = Array.isArray(doc.admins) ? doc.admins : [];
+  if (doc.admins !== undefined && doc.admins !== null && !Array.isArray(doc.admins)) {
+    throw new AdminsConfigError("admins.yaml `admins` must be a list");
+  }
   const admins: WebuiAdminRecord[] = [];
-  for (const item of adminsRaw) {
-    if (!item || typeof item !== "object") continue;
+  for (const item of (doc.admins as unknown[] | null | undefined) ?? []) {
+    if (!item || typeof item !== "object") throw new AdminsConfigError("admins.yaml entry must be a mapping");
     const row = item as Record<string, unknown>;
-    if (typeof row.id !== "string" || !row.id.trim()) continue;
-    if (typeof row.password_hash !== "string" || !row.password_hash) continue;
+    if (typeof row.id !== "string" || !row.id.trim()) throw new AdminsConfigError("admins.yaml entry has no id");
+    if (typeof row.password_hash !== "string" || !row.password_hash) {
+      throw new AdminsConfigError(`admins.yaml entry '${row.id}' has no password_hash`);
+    }
     const role = normalizeWebuiAdminRole(row.role);
     admins.push({
       id: row.id.trim(),
@@ -94,7 +114,13 @@ export async function loadAdminsConfig(options: { fresh?: boolean } = {}): Promi
   }
   try {
     const text = await readFile(configPath, "utf8");
-    const config = normalizeConfig(parse(text));
+    let parsed: unknown;
+    try {
+      parsed = parse(text);
+    } catch (error) {
+      throw new AdminsConfigError(error instanceof Error ? error.message : "admins.yaml is not valid YAML");
+    }
+    const config = normalizeConfig(parsed);
     cache = { path: configPath, loadedAt: now, config };
     return config;
   } catch (error) {
@@ -116,7 +142,13 @@ export async function resolveAuthMode(): Promise<AuthMode> {
   const flag = (process.env.LUCY_WEBUI_AUTH ?? "").trim().toLowerCase();
   // Spec §3.1: `off` is honored only in development; customer never resolves to open.
   if (flag === "off" && !customer) return "open";
-  const config = await loadAdminsConfig();
+  let config: AdminsConfig;
+  try {
+    config = await loadAdminsConfig();
+  } catch {
+    // Spec §3.1 item 1: a corrupt/unreadable config is `unavailable`, never open.
+    return "unavailable";
+  }
   const enabled = enabledAdmins(config);
   if (enabled.length > 0) return "required";
   if (customer || flag === "required") return "bootstrap";

@@ -126,3 +126,8 @@ lucy:
 serviceAccount:
   create: true
   name: ""
+
+# Test profile over plain HTTP: allows non-Secure session cookies (Spec §3.1 item 8).
+# Customer installs keep the chart default (Secure cookies, HTTPS ingress).
+security:
+  insecureHttpTestProfile: true

@@ -111,6 +111,17 @@ entry lands on its own line at the correct indent.
   value: "7878"
 - name: LUCY_DEPLOYMENT_MODE
   value: "customer"
+- name: LUCY_CHART_DEPLOYMENT_MODE
+  value: "customer"
+{{ if .Values.security.insecureHttpTestProfile -}}
+- name: LUCY_WEBUI_COOKIE_SECURE
+  value: "0"
+- name: LUCY_WEBUI_TEST_PROFILE
+  value: "1"
+{{ else -}}
+- name: LUCY_WEBUI_COOKIE_SECURE
+  value: "1"
+{{ end -}}
 - name: KTX_TELEMETRY_DISABLED
   value: "1"
 - name: POSTHOG_DISABLED

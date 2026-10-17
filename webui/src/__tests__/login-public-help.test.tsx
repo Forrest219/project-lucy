@@ -71,4 +71,24 @@ describe("LoginPage public help link", () => {
     expect(sectionId).toBeTruthy();
     expect(tocIds.has(sectionId!), `Help 链接指向不存在的 section id：${sectionId}`).toBe(true);
   });
+
+  it("shows a notice instead of the form when the admin configuration is unavailable", () => {
+    const original = authState.status;
+    authState.status = { ...original, mode: "unavailable" } as unknown as typeof original;
+    try {
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const { container } = render(
+        <QueryClientProvider client={client}>
+          <MemoryRouter>
+            <LoginPage />
+          </MemoryRouter>
+        </QueryClientProvider>
+      );
+      expect(screen.getByTestId("login-config-unavailable")).toBeInTheDocument();
+      expect(container.querySelector("form")).toHaveAttribute("hidden");
+      expect(screen.getByRole("link", { name: "查看系统手册" })).toBeInTheDocument();
+    } finally {
+      authState.status = original;
+    }
+  });
 });

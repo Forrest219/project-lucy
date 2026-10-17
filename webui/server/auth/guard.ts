@@ -44,9 +44,13 @@ export async function attachAdminContext(request: FastifyRequest): Promise<Reque
   const session = await readAdminSession(request);
   let admin: WebuiAdminRecord | null = null;
   if (session) {
-    const config = await loadAdminsConfig();
-    const found = findAdmin(config, session.adminId);
-    if (found && found.enabled) admin = found;
+    try {
+      const config = await loadAdminsConfig();
+      const found = findAdmin(config, session.adminId);
+      if (found && found.enabled) admin = found;
+    } catch {
+      // Corrupt/unreadable admins config: nobody is authenticated (fail closed).
+    }
   }
   const ctx: RequestAdminContext = {
     session: admin ? session : null,
@@ -64,6 +68,16 @@ export async function requireWebuiAuthHook(
   const mode = await resolveAuthMode();
   if (mode === "open") return;
   if (isPublicApi(request.method, request.url)) return;
+
+  if (mode === "unavailable") {
+    return reply.status(503).send({
+      ok: false,
+      error: {
+        code: "AUTH_CONFIG_UNAVAILABLE",
+        message: "管理员配置不可用，请联系部署人员修复后重试"
+      }
+    });
+  }
 
   if (mode === "bootstrap") {
     if (!ctx.admin) {

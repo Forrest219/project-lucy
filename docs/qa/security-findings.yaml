@@ -7,13 +7,13 @@
 version: 1
 findings:
   # V-01 客户默认部署即开放管理面，可匿名抢占 owner（T0A-2 最小修复；T02 完整修复）
-  # note: A0 最小修复已合入，完整修复见 T02（持久限速 / bootstrap 互斥 / 持久引导状态未做，故保持 open）
+  # note: T02 已补齐持久引导状态 / 进程内互斥 / 持久限速 / 统一 401 / role 拒绝解析 / customer Cookie Secure；fixedIn 待 T02 提交后回填 SHA
   - id: V-01
     severity: P0
-    status: open
+    status: fixed
     spec: "§3.1"
-    fixedIn: null
-    verifiedBy: []
+    fixedIn: pending
+    verifiedBy: [SEC-01, SEC-02, SEC-05, SEC-08]
     acceptedBy: null
   # V-02 停用 Agent 绕过 Resources/Prompts（T0A-3 最小修复；T04 完整修复）
   # note: A0 入口拒绝已合入，完整准入见 T04
@@ -49,12 +49,13 @@ findings:
     verifiedBy: []
     acceptedBy: null
   # V-06 首个 owner bootstrap 并发覆盖（T02）
+  # note: 引导互斥区覆盖 fresh read→验证密钥→写管理员→消费引导→commit；并发第二请求 409；fixedIn 待 T02 提交后回填 SHA
   - id: V-06
     severity: P2
-    status: open
+    status: fixed
     spec: "§3.1"
-    fixedIn: null
-    verifiedBy: []
+    fixedIn: pending
+    verifiedBy: [SEC-02]
     acceptedBy: null
   # V-07 MCP Wiki 读取跟随越界符号链接（T06）
   - id: V-07

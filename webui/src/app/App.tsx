@@ -677,7 +677,7 @@ function RequireAuth({ children }: { children: ReactNode }) {
   if (status?.mode === "required" && !status.me) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
-  if (status?.mode === "bootstrap") {
+  if (status?.mode === "bootstrap" || status?.mode === "unavailable") {
     return <Navigate to="/login" replace />;
   }
   return <>{children}</>;

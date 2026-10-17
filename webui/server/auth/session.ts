@@ -3,6 +3,7 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { resolveProjectRoot } from "../project.js";
+import { resolveCookieSecure } from "./deployment-mode.js";
 
 export const SESSION_COOKIE = "lucy_admin_session";
 const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
@@ -120,7 +121,7 @@ export async function readAdminSession(request: FastifyRequest): Promise<AdminSe
 
 export function setSessionCookie(reply: FastifyReply, token: string, exp: number): void {
   const maxAge = Math.max(0, exp - Math.floor(Date.now() / 1000));
-  const secure = process.env.LUCY_WEBUI_COOKIE_SECURE === "1" ? "; Secure" : "";
+  const secure = resolveCookieSecure().secure ? "; Secure" : "";
   reply.header(
     "Set-Cookie",
     `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`
@@ -128,7 +129,7 @@ export function setSessionCookie(reply: FastifyReply, token: string, exp: number
 }
 
 export function clearSessionCookie(reply: FastifyReply): void {
-  const secure = process.env.LUCY_WEBUI_COOKIE_SECURE === "1" ? "; Secure" : "";
+  const secure = resolveCookieSecure().secure ? "; Secure" : "";
   reply.header(
     "Set-Cookie",
     `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`

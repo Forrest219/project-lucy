@@ -8,21 +8,35 @@ import {
   publicAdminView,
   resolveAuthMode,
   saveAdminsConfig,
+  ADMIN_ID_RE,
   type AdminsConfig,
   type WebuiAdminRecord,
   type WebuiAdminRole
 } from "./admins-store.js";
 import { assertPasswordPolicy, hashPassword, verifyPassword } from "./password.js";
+import { runBootstrap } from "./bootstrap.js";
+import {
+  clearBootstrapFailures,
+  clearLoginFailures,
+  gateBootstrapAttempt,
+  gateLoginAttempt,
+  replyAuthGate
+} from "./rate-limit.js";
 import {
   clearSessionCookie,
   createAdminSession,
   setSessionCookie
 } from "./session.js";
 import { actorIdFromRequest, requireOwner } from "./guard.js";
-import { checkBootstrapToken } from "./bootstrap-token.js";
-import { resolveDeploymentMode } from "./deployment-mode.js";
 
-const ADMIN_ID_RE = /^[a-z][a-z0-9_-]{1,31}$/;
+// Verified against when the account is unknown/disabled so both paths cost one scrypt (no existence oracle).
+let dummyHash: Promise<string> | null = null;
+const getDummyHash = () => (dummyHash ??= hashPassword("lucy-unknown-account-placeholder"));
+
+const AUTH_CONFIG_UNAVAILABLE = {
+  ok: false,
+  error: { code: "AUTH_CONFIG_UNAVAILABLE", message: "管理员配置不可用，请联系部署人员修复后重试" }
+} as const;
 
 export function registerAuthRoutes(app: FastifyInstance): void {
   app.get("/api/auth/status", async (request) => {
@@ -35,7 +49,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
       data: {
         mode,
         me,
-        authEnabled: mode === "required" || mode === "bootstrap"
+        authEnabled: mode !== "open"
       }
     };
   });
@@ -85,6 +99,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
         error: { code: "AUTH_BOOTSTRAP_REQUIRED", message: "请先创建首个所有者管理员" }
       });
     }
+    if (mode === "unavailable") return reply.status(503).send(AUTH_CONFIG_UNAVAILABLE);
 
     const adminId = request.body?.adminId?.trim() ?? "";
     const password = request.body?.password ?? "";
@@ -95,21 +110,21 @@ export function registerAuthRoutes(app: FastifyInstance): void {
       });
     }
 
+    const gate = await gateLoginAttempt(request, adminId);
+    if (!gate.ok) return replyAuthGate(reply, gate);
+
     const config = await loadAdminsConfig({ fresh: true });
-    const admin = findAdmin(config, adminId);
-    if (!admin || !admin.enabled) {
+    const found = findAdmin(config, adminId);
+    const admin = found?.enabled ? found : undefined;
+    const verified = await verifyPassword(password, admin ? admin.password_hash : await getDummyHash());
+    if (!admin || !verified) {
+      // Unknown, disabled and wrong-password are one indistinguishable 401 (Spec §3.1 item 6).
       return reply.status(401).send({
         ok: false,
         error: { code: "AUTH_INVALID", message: "管理员 id 或密码不正确" }
       });
     }
-    const ok = await verifyPassword(password, admin.password_hash);
-    if (!ok) {
-      return reply.status(401).send({
-        ok: false,
-        error: { code: "AUTH_INVALID", message: "管理员 id 或密码不正确" }
-      });
-    }
+    await clearLoginFailures(request, adminId);
 
     const session = await createAdminSession(admin.id);
     setSessionCookie(reply, session.token, session.exp);
@@ -135,77 +150,30 @@ export function registerAuthRoutes(app: FastifyInstance): void {
         error: { code: "ADMINS_ALREADY_CONFIGURED", message: "管理员已配置，请直接登录" }
       });
     }
+    if (mode === "unavailable") return reply.status(503).send(AUTH_CONFIG_UNAVAILABLE);
 
-    if (resolveDeploymentMode() === "customer") {
-      const tokenCheck = await checkBootstrapToken(request.headers["x-lucy-bootstrap-token"]);
-      if (tokenCheck === "not_provisioned") {
-        return reply.status(503).send({
-          ok: false,
-          error: { code: "BOOTSTRAP_NOT_PROVISIONED", message: "部署侧尚未配置引导密钥，暂不能创建首个所有者" }
-        });
-      }
-      if (tokenCheck === "invalid") {
-        return reply.status(401).send({
-          ok: false,
-          error: { code: "BOOTSTRAP_TOKEN_INVALID", message: "引导密钥不正确" }
-        });
-      }
-    }
+    const gate = await gateBootstrapAttempt(request);
+    if (!gate.ok) return replyAuthGate(reply, gate);
 
     const adminId = request.body?.adminId?.trim() ?? "";
-    const displayName = request.body?.displayName?.trim() || adminId;
-    const password = request.body?.password ?? "";
-    if (!ADMIN_ID_RE.test(adminId)) {
-      return reply.status(400).send({
-        ok: false,
-        error: {
-          code: "ADMIN_ID_INVALID",
-          message: "管理员 id 需为 2–32 位小写字母开头的字母数字/_/-"
-        }
-      });
-    }
-    try {
-      assertPasswordPolicy(password);
-    } catch (error) {
-      return reply.status(400).send({
-        ok: false,
-        error: {
-          code: "PASSWORD_TOO_SHORT",
-          message: error instanceof Error ? error.message : "密码不符合要求"
-        }
-      });
-    }
-
-    const config = await loadAdminsConfig({ fresh: true });
-    if (enabledAdmins(config).length > 0) {
-      return reply.status(409).send({
-        ok: false,
-        error: { code: "ADMINS_ALREADY_CONFIGURED", message: "管理员已配置，请直接登录" }
-      });
-    }
-
-    const password_hash = await hashPassword(password);
-    const record: WebuiAdminRecord = {
-      id: adminId,
-      display_name: displayName,
-      password_hash,
-      role: "owner",
-      enabled: true,
-      created_at: new Date().toISOString()
-    };
-    const next: AdminsConfig = { version: "1", admins: [record] };
-    await saveAdminsConfig(next, {
-      changeType: "admin_bootstrap",
-      actor: adminId,
-      targetId: adminId,
-      oldSummary: { count: 0 },
-      newSummary: { count: 1, id: adminId, role: "owner" },
+    const outcome = await runBootstrap({
+      adminId,
+      displayName: request.body?.displayName?.trim() || adminId,
+      password: request.body?.password ?? "",
+      tokenHeader: request.headers["x-lucy-bootstrap-token"],
       requestId: request.id
     });
+    if (!outcome.ok) {
+      return reply.status(outcome.status).send({
+        ok: false,
+        error: { code: outcome.code, message: outcome.message }
+      });
+    }
 
+    await clearBootstrapFailures(request);
     const session = await createAdminSession(adminId);
     setSessionCookie(reply, session.token, session.exp);
-    return { ok: true, data: { me: publicAdminView(record) } };
+    return { ok: true, data: { me: publicAdminView(outcome.record) } };
   });
 }
 

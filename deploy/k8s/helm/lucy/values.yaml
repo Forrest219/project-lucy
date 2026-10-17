@@ -183,6 +183,14 @@ extraSecretData: {}
 bootstrap:
   existingSecret: ""
 
+# WebUI session cookie (Spec §3.1 item 8). The chart pins LUCY_DEPLOYMENT_MODE=customer
+# and Secure cookies; serve the WebUI over HTTPS (ingress TLS). Set
+# `insecureHttpTestProfile: true` ONLY in test profiles that expose plain HTTP
+# (kind / k3s test cluster). It switches Secure off, and /api/health then
+# reports `insecureTestProfile: true`. NEVER enable it for a customer install.
+security:
+  insecureHttpTestProfile: false
+
 # Extra env sources — for example, projecting keys from existingSecret as
 # env vars (NOT as files). Use sparingly; most customer secrets should
 # land as files in /data/lucy/.ktx/secrets/.

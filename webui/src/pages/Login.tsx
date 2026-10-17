@@ -27,6 +27,7 @@ export function LoginPage() {
   }
 
   const isBootstrap = status?.mode === "bootstrap";
+  const configUnavailable = status?.mode === "unavailable";
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -65,7 +66,13 @@ export function LoginPage() {
           </p>
         </div>
 
-        <form className="grid gap-3" onSubmit={onSubmit}>
+        {configUnavailable && (
+          <p className="text-sm text-danger" role="alert" data-testid="login-config-unavailable">
+            管理员配置不可用，暂时无法登录。请联系部署人员修复管理员配置后重试。
+          </p>
+        )}
+
+        <form className="grid gap-3" onSubmit={onSubmit} hidden={configUnavailable}>
           <label className="grid gap-1">
             <span className="text-sm font-medium">账户 id</span>
             <input
