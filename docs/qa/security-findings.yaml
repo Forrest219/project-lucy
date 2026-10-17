@@ -109,7 +109,7 @@ findings:
     severity: P1
     status: fixed
     spec: "§8.2"
-    fixedIn: 9ff54cf
+    fixedIn: 39da52d
     verifiedBy: [GATE-01]
     acceptedBy: null
   # G-03 Agent 评分与 Trace 完整率不能证明实际查过数据（T12/T13）
@@ -126,7 +126,7 @@ findings:
     severity: P1
     status: fixed
     spec: "§6"
-    fixedIn: 9ff54cf
+    fixedIn: 39da52d
     verifiedBy: [GATE-01]
     acceptedBy: null
   # G-05 生产依赖风险未纳入发布门禁（T09；对应 SEC-23）
@@ -135,7 +135,7 @@ findings:
     severity: P1
     status: fixed
     spec: "§8"
-    fixedIn: 9ff54cf
+    fixedIn: 39da52d
     verifiedBy: [SEC-23]
     acceptedBy: null
 dependencies:
