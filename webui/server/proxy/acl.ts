@@ -2168,6 +2168,16 @@ function resolveCapabilityForTable(
 }
 
 /**
+ * T0A-3 — entry-level Agent disable check. Reads the same committed policy
+ * config as `authorizeAndRewrite` (no extra cache) so every MCP method and
+ * HTTP verb can reject a disabled Agent before any content is produced.
+ */
+export async function isAgentDisabled(userId: string): Promise<boolean> {
+  const runtime = await ensurePolicyRuntime();
+  return runtime.config.users.find((u) => u.id === userId)?.enabled === false;
+}
+
+/**
  * Spec 98 §4.6 / Spec 99 §5 — the single data gate. Every upstream data call must pass through here.
  * Hot path prefers the committed EffectivePolicy snapshot (Spec 98 §8).
  */

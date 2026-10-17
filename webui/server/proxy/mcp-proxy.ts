@@ -11,7 +11,7 @@ import {
 } from "./upstream-session.js";
 import { extractRequestClientMeta, resolveClientIdentity } from "./request-client-meta.js";
 import { ensureSkillAuditReady, writeLog, writeAccessLogSources, writeConversationTurn, purgeExpiredConversationTurns, writeAuthFailureLog, bindPriorSessionCalls, type AccessLogSourceRecord } from "./audit.js";
-import { allowedToolNames, authorizeAndRewrite, check as aclCheck, effectivePermissions, extractTables, extractSourceRefs, resolveSourceRefsForTables, kxCatalog, lucyCatalog, permissionSnapshot, type SourceRef } from "./acl.js";
+import { allowedToolNames, authorizeAndRewrite, check as aclCheck, isAgentDisabled, effectivePermissions, extractTables, extractSourceRefs, resolveSourceRefsForTables, kxCatalog, lucyCatalog, permissionSnapshot, type SourceRef } from "./acl.js";
 import {
   redactQuestionText,
   summarizeArgsForAudit,
@@ -2715,6 +2715,58 @@ async function writeInitializeResponse(
   return { injectionFailed, errorDetail, responseBytes };
 }
 
+/**
+ * T0A-3 / V-02 — a disabled Agent is rejected on every verb and MCP method,
+ * right after identification and before any content is produced or forwarded.
+ * Returns true when the request was answered (403) and must stop.
+ */
+async function rejectIfAgentDisabled(
+  req: IncomingMessage,
+  res: ServerResponse,
+  identity: Identity,
+  body?: Buffer
+): Promise<boolean> {
+  if (!(await isAgentDisabled(identity.userId))) return false;
+  let rpcId: string | number | null = null;
+  let auditTool: string | undefined;
+  if (body && body.byteLength > 0) {
+    try {
+      const parsed = JSON.parse(body.toString()) as { id?: unknown; method?: unknown; params?: { name?: unknown } };
+      if (typeof parsed.id === "string" || typeof parsed.id === "number") rpcId = parsed.id;
+      if (typeof parsed.method === "string") auditTool = parsed.method;
+      if (parsed.method === "tools/call" && typeof parsed.params?.name === "string") auditTool = parsed.params.name;
+    } catch {
+      // non-JSON body: still rejected, id stays null
+    }
+  }
+  const responseBody = JSON.stringify({
+    jsonrpc: "2.0",
+    id: rpcId,
+    error: { code: -32003, message: "Access denied: agent_disabled" }
+  });
+  res.writeHead(403, { "content-type": "application/json" });
+  res.end(responseBody);
+  const networkMeta = extractRequestClientMeta(req);
+  recordAudit({
+    ts: new Date().toISOString(),
+    userId: identity.userId,
+    client: identity.client,
+    tool: auditTool ?? req.method ?? "unknown",
+    outcome: "denied",
+    errorDetail: "agent_disabled",
+    durationMs: 0,
+    responseBytes: Buffer.byteLength(responseBody),
+    requestId: rpcId ?? "",
+    ...correlationMeta(req.headers),
+    clientIp: networkMeta.clientIp,
+    clientForwardedFor: networkMeta.clientForwardedFor,
+    userAgent: networkMeta.userAgent,
+    ...(networkMeta.deviceName ? { deviceName: networkMeta.deviceName } : {}),
+    ...(await auditMeta(identity, "agent_disabled"))
+  });
+  return true;
+}
+
 async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const sessionId = normalizeHeader(req.headers["mcp-session-id"]);
   const explicitTurnId = normalizeHeader(req.headers["x-lucy-turn-id"]);
@@ -2739,6 +2791,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
   const identity = identify.identity;
 
   const body = await readBody(req);
+  if (await rejectIfAgentDisabled(req, res, identity, body)) return;
   const start = Date.now();
   const traceId = `trace_${randomUUID()}`;
 
@@ -4768,6 +4821,7 @@ async function handlePassthrough(req: IncomingMessage, res: ServerResponse): Pro
     res.end(JSON.stringify({ error: "Unauthorized" }));
     return;
   }
+  if (await rejectIfAgentDisabled(req, res, identify.identity)) return;
   const keepalive = upstreamSessionKeepaliveEnabled();
   const heldSession = keepalive ? getUpstreamSession(identify.identity.userId) : undefined;
   // `DELETE /mcp` terminates the MCP session; a cached id would otherwise be
@@ -4799,6 +4853,7 @@ async function handleSkillsPassthrough(req: IncomingMessage, res: ServerResponse
   // Read body so we can forward POST content (MCP JSON-RPC envelope).
   // GET / DELETE have no body; readBody returns empty Buffer either way.
   const body = await readBody(req);
+  if (await rejectIfAgentDisabled(req, res, identify.identity, body)) return;
   // /mcp/skills → /mcp, /mcp/skills/ → /mcp/, /mcp/skills/v1/foo → /mcp/v1/foo
   const originalUrl = req.url ?? "/mcp/skills";
   const upstreamUrl = originalUrl.replace(/^\/mcp\/skills(?=\/|$)/, "/mcp") || "/mcp";

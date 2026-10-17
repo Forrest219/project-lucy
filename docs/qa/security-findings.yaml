@@ -16,6 +16,7 @@ findings:
     verifiedBy: []
     acceptedBy: null
   # V-02 停用 Agent 绕过 Resources/Prompts（T0A-3 最小修复；T04 完整修复）
+  # note: A0 入口拒绝已合入，完整准入见 T04
   - id: V-02
     severity: P1
     status: open
