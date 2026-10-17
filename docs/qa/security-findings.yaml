@@ -30,7 +30,7 @@ findings:
     severity: P1
     status: fixed
     spec: "§3.2"
-    fixedIn: pending
+    fixedIn: ed4b4d6
     verifiedBy: [SEC-04]
     acceptedBy: null
   # V-04 Wiki / 语义层写入的管理员归因缺失，无登录事件（T08）
