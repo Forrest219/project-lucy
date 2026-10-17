@@ -1,0 +1,152 @@
+# Lucy 安全缺陷登记（机器可校验事实源）
+# 依据：docs/specs/lucy-20261018-enterprise-security-and-real-e2e-spec.md §8.3a / §8.4
+# 初始化：T00（2026-10-18，runId t00-20261018-0042），基线 lucy-v2.0 / fbed6d4；评估 v1.1（V-01～V-08、D-01～D-02、G-01～G-05、依赖条目）。
+# 规则：P0/P1 只能 open | fixed，不得 accepted_risk；fixed 必须填 fixedIn（提交 SHA）且 verifiedBy 全部为本次 release evidence 中 passed 的 case variant id；
+#       仅 P2 可 accepted_risk（acceptedBy 填 owner 姓名与日期）；依赖 high/critical 只能 fixed 或附可复核说明的 not_reachable。
+# 每个整改任务在关闭/推进对应条目的同一提交内更新本文件。
+version: 1
+findings:
+  # V-01 客户默认部署即开放管理面，可匿名抢占 owner（T0A-2 最小修复；T02 完整修复）
+  - id: V-01
+    severity: P0
+    status: open
+    spec: "§3.1"
+    fixedIn: null
+    verifiedBy: []
+    acceptedBy: null
+  # V-02 停用 Agent 绕过 Resources/Prompts（T0A-3 最小修复；T04 完整修复）
+  - id: V-02
+    severity: P1
+    status: open
+    spec: "§3.3"
+    fixedIn: null
+    verifiedBy: []
+    acceptedBy: null
+  # V-03 退出/重置密码后旧管理 Cookie 仍可重放（T03）
+  - id: V-03
+    severity: P1
+    status: open
+    spec: "§3.2"
+    fixedIn: null
+    verifiedBy: []
+    acceptedBy: null
+  # V-04 Wiki / 语义层写入的管理员归因缺失，无登录事件（T08）
+  - id: V-04
+    severity: P1
+    status: open
+    spec: "§5.2"
+    fixedIn: null
+    verifiedBy: []
+    acceptedBy: null
+  # V-05 配置审计 Diff 暴露管理员密码哈希，含历史数据清理（T08）
+  - id: V-05
+    severity: P2
+    status: open
+    spec: "§5.3"
+    fixedIn: null
+    verifiedBy: []
+    acceptedBy: null
+  # V-06 首个 owner bootstrap 并发覆盖（T02）
+  - id: V-06
+    severity: P2
+    status: open
+    spec: "§3.1"
+    fixedIn: null
+    verifiedBy: []
+    acceptedBy: null
+  # V-07 MCP Wiki 读取跟随越界符号链接（T06）
+  - id: V-07
+    severity: P2
+    status: open
+    spec: "§4.5"
+    fixedIn: null
+    verifiedBy: []
+    acceptedBy: null
+  # V-08 Wiki frontmatter 服务端代码执行（T0A-1）
+  - id: V-08
+    severity: P0
+    status: open
+    spec: "§4.6"
+    fixedIn: null
+    verifiedBy: []
+    acceptedBy: null
+  # D-01 Spec 170 上下文全开放（T05/T06）
+  - id: D-01
+    severity: P1
+    status: open
+    spec: "§4"
+    fixedIn: null
+    verifiedBy: []
+    acceptedBy: null
+  # D-02 审计写失败后仍释放数据（T07）
+  - id: D-02
+    severity: P1
+    status: open
+    spec: "§5.1"
+    fixedIn: null
+    verifiedBy: []
+    acceptedBy: null
+  # G-01 文档称强制，release workflow 无真实 E2E 依赖（T14）
+  - id: G-01
+    severity: P1
+    status: open
+    spec: "§8.3"
+    fixedIn: null
+    verifiedBy: []
+    acceptedBy: null
+  # G-02 blocked / dry-run 可被汇总为 passed（T09/T13）
+  - id: G-02
+    severity: P1
+    status: open
+    spec: "§8.2"
+    fixedIn: null
+    verifiedBy: []
+    acceptedBy: null
+  # G-03 Agent 评分与 Trace 完整率不能证明实际查过数据（T12/T13）
+  - id: G-03
+    severity: P1
+    status: open
+    spec: "§8.1"
+    fixedIn: null
+    verifiedBy: []
+    acceptedBy: null
+  # G-04 用例与夹具落后于最新版功能（selector 33 项、旅程待写、fixture 漂移；T09/T10/T11）
+  - id: G-04
+    severity: P1
+    status: open
+    spec: "§6"
+    fixedIn: null
+    verifiedBy: []
+    acceptedBy: null
+  # G-05 生产依赖风险未纳入发布门禁（T09；对应 SEC-23）
+  - id: G-05
+    severity: P1
+    status: open
+    spec: "§8"
+    fixedIn: null
+    verifiedBy: []
+    acceptedBy: null
+dependencies:
+  # fast-uri 3.1.6：webui/package.json overrides 锁定（提交 5b31145），受影响范围 3.0.0–3.1.7；npm ls 仅见于 Fastify ajv / fast-json-stringify 链，可利用性待 T09 复核
+  - package: fast-uri
+    severity: high
+    status: open
+    rationale: null
+  # gray-matter 4.0.3：真实风险为默认 JS 引擎（V-08），另经 js-yaml 3.x 传递链命中 moderate
+  - package: gray-matter
+    severity: moderate
+    status: open
+    rationale: null
+  # gray-matter → js-yaml → argparse → sprintf-js 传递链
+  - package: js-yaml
+    severity: moderate
+    status: open
+    rationale: null
+  - package: argparse
+    severity: moderate
+    status: open
+    rationale: null
+  - package: sprintf-js
+    severity: moderate
+    status: open
+    rationale: null
