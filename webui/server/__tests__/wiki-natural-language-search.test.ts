@@ -4,7 +4,7 @@
  * SC-11: a non-empty `q` returns hits or an empty list, never
  * `unparseable_text`. SC-12: injected articles belong to the role's readable
  * set, and the audit carries each article id plus its Wiki version. The
- * negative case uses an article outside the role.
+ * negative case uses an article outside the role (Spec §4: default deny).
  */
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -22,27 +22,32 @@ let projectRoot: string;
 let previousContentRoot: string | undefined;
 let previousProjectRoot: string | undefined;
 
-const ACCESS_YAML = `users:
+const ACCESS_YAML = `roles:
+  analyst_role:
+    description: Analyst wiki reader
+    allow:
+      tools: [wiki_search, wiki_read]
+  finance_role:
+    description: Finance wiki reader
+    allow:
+      tools: [wiki_search, wiki_read]
+users:
   - id: analyst
     name: Analyst
     enabled: true
+    role: analyst_role
     tokens:
       - hash: "sha256:placeholder"
         label: analyst-token
         created: 2026-10-11
-    allow:
-      tables: ["*"]
-      tools: ["*"]
   - id: finance_admin
     name: Finance Admin
     enabled: true
+    role: finance_role
     tokens:
       - hash: "sha256:placeholder-finance"
         label: finance-token
         created: 2026-10-11
-    allow:
-      tables: ["*"]
-      tools: ["*"]
 defaults:
   deny_tools: []
 `;
@@ -56,12 +61,12 @@ beforeEach(async () => {
   await writeFile(path.join(projectRoot, "webui", "config", "access.yaml"), ACCESS_YAML, "utf8");
   await writeFile(
     path.join(projectRoot, "wiki", "global", "revenue.md"),
-    "---\nvisibility: public\nversion: v3\n---\n# 收入口径\n\n公有云收入按季度确认，实际与预测分列。\n",
+    "---\nvisibility: public\nallowed_roles: [\"*\"]\nversion: v3\n---\n# 收入口径\n\n公有云收入按季度确认，实际与预测分列。\n",
     "utf8"
   );
   await writeFile(
     path.join(projectRoot, "wiki", "global", "payroll.md"),
-    "---\nvisibility: private\nallowed_roles:\n  - finance_admin\nversion: v1\n---\n# 薪酬\n\n仅财务管理员可见的薪酬条目。\n",
+    "---\nvisibility: private\nallowed_roles:\n  - finance_role\nversion: v1\n---\n# 薪酬\n\n仅财务管理员可见的薪酬条目。\n",
     "utf8"
   );
   testState.projectRoot = projectRoot;
@@ -110,10 +115,16 @@ describe("wiki natural-language search", () => {
     expect(hits).toEqual([]);
   });
 
-  it("returns a private article to every resolved role (Spec 170 SC-3)", async () => {
+  it("hides an article whose allowed_roles excludes the caller's role (Spec §4.1)", async () => {
     const { searchAccessibleWikiPages } = await freshWikiModule();
-    const hits = await searchAccessibleWikiPages(analystIdentity(), "薪酬", 10);
-    expect(hits.some((hit) => hit.key.includes("payroll.md"))).toBe(true);
+    const analystHits = await searchAccessibleWikiPages(analystIdentity(), "薪酬", 10);
+    expect(analystHits.some((hit) => hit.key.includes("payroll.md"))).toBe(false);
+    const financeHits = await searchAccessibleWikiPages(
+      { userId: "finance_admin", tokenLabel: "finance-token", tokenHashPrefix: "sha256:def" } as never,
+      "薪酬",
+      10
+    );
+    expect(financeHits.some((hit) => hit.key.includes("payroll.md"))).toBe(true);
   });
 
   it("audits each injected article with its id and Wiki version (SC-12)", async () => {

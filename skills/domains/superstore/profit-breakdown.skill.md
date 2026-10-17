@@ -4,7 +4,7 @@ title: Superstore 利润与折扣拆解分析 SOP
 version: 1.0.0
 domain: superstore
 status: published
-roles_allowed: ["*"]
+roles_allowed: [demo_readonly, lucy_admin]
 prerequisites:
   sources:
     - "mysql-aliyun.superstore_orders"

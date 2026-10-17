@@ -93,6 +93,15 @@ function normalizeDirParam(raw: string | null): string {
     .replace(/^\/+|\/+$/g, "");
 }
 
+/** Stable server codes → Chinese copy; the code stays visible for support. */
+function wikiWriteErrorText(error: unknown): string {
+  const raw = error instanceof Error ? error.message : "";
+  if (raw.includes("wiki_write_conflict")) return "该 Wiki 已被其他人更新，请重新加载后再保存（wiki_write_conflict）";
+  if (raw.includes("wiki_expected_version_required")) return "缺少 Wiki 文件版本，请重新加载后再保存（wiki_expected_version_required）";
+  if (raw.includes("CONTEXT_ACL_INVALID")) return "可访问角色声明无效，请重新选择（CONTEXT_ACL_INVALID）";
+  return raw || "未知错误";
+}
+
 export function WikiEditor() {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -345,7 +354,9 @@ export function WikiEditor() {
       apiPut<WikiPreview>(`/api/wiki/${encodeURIComponent(key)}`, {
         dryRun: false,
         frontmatter,
-        content
+        content,
+        // Spec §4.3: content and ACL saves share one version token (428 missing / 409 stale).
+        expected_version: pageQuery.data?.file_version
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.wiki });
@@ -359,7 +370,7 @@ export function WikiEditor() {
       setUiMode("read");
     },
     onError: (error) => {
-      toast.error(`保存失败：${error instanceof Error ? error.message : "未知错误"}`);
+      toast.error(`保存失败：${wikiWriteErrorText(error)}`);
     }
   });
 
@@ -372,7 +383,8 @@ export function WikiEditor() {
         key: uploadPreview.targetKey,
         markdown: uploadPreview.proposedMarkdown,
         sourceFileName: uploadPreview.sourceFileName,
-        overwrite: uploadMode === "replace" || uploadPreview?.exists === true
+        overwrite: uploadMode === "replace" || uploadPreview?.exists === true,
+        expected_version: uploadPreview.currentFileVersion ?? undefined
       });
     },
     onSuccess: (result) => {
@@ -390,7 +402,7 @@ export function WikiEditor() {
       toast.success(uploadMode === "replace" ? "Markdown 已覆盖" : "Markdown 已上传");
     },
     onError: (error) => {
-      toast.error(`上传失败：${error instanceof Error ? error.message : "未知错误"}`);
+      toast.error(`上传失败：${wikiWriteErrorText(error)}`);
     }
   });
 
@@ -1544,6 +1556,7 @@ export function WikiEditor() {
               />
             ) : (
               <WikiEditView
+                aclCorrupt={pageQuery.data?.acl?.state === "corrupt"}
                 content={content}
                 frontmatter={frontmatter}
                 onContentChange={updateContent}

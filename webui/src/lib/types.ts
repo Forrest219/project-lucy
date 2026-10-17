@@ -394,7 +394,16 @@ export type WikiFrontmatter = {
   sl_refs?: string[];
   refs?: string[];
   usage_mode?: string;
+  /** Object ACL (Spec §4.1): the only Wiki authorization field. Absent / [] means no one. */
+  allowed_roles?: string[];
 };
+
+export type WikiAclState =
+  | { state: "missing" }
+  | { state: "empty" }
+  | { state: "all" }
+  | { state: "roles"; roles: string[] }
+  | { state: "corrupt"; detail: string };
 
 export type WikiSummary = {
   key: string;
@@ -477,11 +486,16 @@ export type WikiPage = {
   frontmatter: WikiFrontmatter;
   content: string;
   rawMarkdown: string;
+  /** Send back as `expected_version` when saving (428 if missing, 409 if stale). */
+  file_version: string;
+  acl: WikiAclState;
 };
 
 export type WikiPreview = {
   key: string;
   filePath: string;
+  /** `file_version` currently stored for the page, or `null` when it does not exist yet. */
+  currentFileVersion?: string | null;
   diff: string;
   proposedMarkdown: string;
 };
@@ -726,6 +740,16 @@ export type RoleDetail = Role & {
     readable: string[];
     declaredWithoutChannel: string[];
   };
+  /** Spec §4.3 — read-only Wiki discover/read effect of this Role (edited on the Wiki page, not here). */
+  wikiAccess?: {
+    discoverEnabled: boolean;
+    readEnabled: boolean;
+    declared: string[];
+    discoverable: string[];
+    readable: string[];
+    declaredWithoutChannel: string[];
+  };
+  contextPolicyVersion?: string;
 };
 
 /** Spec 99 §8 — TRUE / all, or scoped digest (Role API may also include predicates). */

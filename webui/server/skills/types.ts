@@ -26,6 +26,8 @@ export interface SkillAsset {
   domain: string;
   status: SkillStatus;
   roles_allowed: string[];
+  /** Set when `roles_allowed` is non-array / has bad elements / mixes `*` with ids; denied at runtime. */
+  roles_allowed_invalid?: boolean;
   prerequisites: SkillPrerequisites;
   triggers: string[];
   eval_cases: string[];

@@ -13,6 +13,8 @@
 //   - Sanitize ktx.yaml: replace host/port/username/password with
 //     <REDACTED> regardless of where they appear.
 //   - Use a pure-JS minimal ZIP writer; no external dep.
+//   - Trusted-administrator export only (Spec §4.4): it is NOT an Agent channel, and an export
+//     that carries Wiki / Skill content records its operator in the security ledger.
 
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, lstat, readFile, rm, writeFile } from "node:fs/promises";
@@ -20,6 +22,7 @@ import path from "node:path";
 import { parseDocument, stringify as stringifyYaml, Scalar } from "yaml";
 import { isMap, isSeq, isScalar, type Document, type Node } from "yaml";
 import { buildStoredZip } from "./proxy/zip-store.js";
+import { getSecurityStore } from "./security/instance.js";
 import { loadContentPaths } from "./paths.js";
 import type { ContentPaths } from "./paths.js";
 
@@ -425,4 +428,39 @@ export async function exportSemanticAssetPackage(
     includedFiles: zipEntries.map((e) => e.name),
     excludedFiles: excluded
   };
+}
+
+/**
+ * Spec §4.4 — an administrator export that includes Wiki / Skill content must leave an
+ * operator record. Fails closed (503) when the ledger cannot record it.
+ */
+export async function recordSemanticAssetExport(
+  actor: string,
+  request: SemanticAssetExportRequest,
+  result: SemanticAssetExportResponse
+): Promise<void> {
+  if (request.includeWiki !== true && request.includeSkills !== true) return;
+  const store = await getSecurityStore();
+  const appended = store.ok
+    ? store.value.appendEvent({
+        eventId: randomUUID(),
+        operationId: result.exportId,
+        phase: "result",
+        actor,
+        actorType: "ui_admin",
+        objectHash: result.sha256,
+        verdict: "admin_export",
+        resultSummary: JSON.stringify({
+          includeWiki: request.includeWiki === true,
+          includeSkills: request.includeSkills === true,
+          files: result.includedFiles.length
+        })
+      })
+    : store;
+  if (!store.ok || !appended.ok) {
+    const error = new Error("export audit record unavailable") as Error & { statusCode: number; code: string };
+    error.statusCode = 503;
+    error.code = "SECURITY_STORE_UNAVAILABLE";
+    throw error;
+  }
 }

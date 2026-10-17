@@ -1,5 +1,12 @@
 import type { Identity } from "./identity.js";
 import type { SkillAsset } from "../skills/types.js";
+import {
+  authorizeContext,
+  parseObjectAcl,
+  type ContextAsset,
+  type ContextSnapshot
+} from "./context-acl.js";
+import { resolveContextSnapshot } from "./context-policy.js";
 
 export interface SkillAclDecision {
   allowed: boolean;
@@ -19,6 +26,18 @@ export interface RoleSkillAccessSummary {
   declaredWithoutChannel: string[];
 }
 
+/** Spec §4.1 — Skill `roles_allowed` as the canonical object ACL. */
+export function skillToContextAsset(skill: SkillAsset): ContextAsset {
+  const acl = skill.roles_allowed_invalid
+    ? ({ state: "corrupt", detail: "invalid_roles_allowed" } as const)
+    : parseObjectAcl(skill.roles_allowed, true);
+  return { kind: "skill", id: skill.uri, acl, status: skill.status };
+}
+
+/**
+ * Read-only effect of ONE role on Skills (Role detail). Mirrors `authorizeContext` for a
+ * single role: object ACL (`roles_allowed`) AND the role's own channel tool.
+ */
 export function summarizeRoleSkillAccess(
   roleId: string,
   tools: string[],
@@ -27,7 +46,10 @@ export function summarizeRoleSkillAccess(
   const discoverEnabled = tools.includes("lucy_skill_search");
   const readEnabled = tools.includes("lucy_skill_read");
   const declared = skills
-    .filter((skill) => skill.roles_allowed.includes("*") || skill.roles_allowed.includes(roleId))
+    .filter((skill) => {
+      const acl = skillToContextAsset(skill).acl;
+      return acl.state === "all" || (acl.state === "roles" && acl.roles.includes(roleId));
+    })
     .map((skill) => skill.uri)
     .sort();
   const published = skills.filter(
@@ -43,23 +65,25 @@ export function summarizeRoleSkillAccess(
   };
 }
 
+function toSkillDecision(
+  decision: ReturnType<typeof authorizeContext>
+): SkillAclDecision {
+  if (decision.allowed) return { allowed: true, action: decision.action, matchedRoleId: decision.matchedRoleId };
+  return { allowed: false, reason: decision.reason, action: decision.action };
+}
+
 /**
- * Spec 170: published skills are open to every resolved agent.
- * `roles_allowed` and the skill tool channel are not decision inputs.
- * Draft and deprecated status gates stay.
+ * Spec §4 (supersedes Spec 170): default deny. A published Skill is visible only to a role
+ * that matches `roles_allowed` AND grants the action's channel tool.
  */
 export async function canAccessSkill(
-  _identity: Identity,
+  identity: Identity,
   skill: SkillAsset,
-  action: SkillAclAction = "read"
+  action: SkillAclAction = "read",
+  snapshot?: ContextSnapshot
 ): Promise<SkillAclDecision> {
-  if (skill.status === "deprecated") {
-    return { allowed: false, reason: "skill_deprecated", action };
-  }
-  if (skill.status !== "published") {
-    return { allowed: false, reason: "skill_not_published", action };
-  }
-  return { allowed: true, action };
+  const resolved = snapshot ?? await resolveContextSnapshot(identity);
+  return toSkillDecision(authorizeContext(identity, skillToContextAsset(skill), action, resolved));
 }
 
 export async function filterAccessibleSkills(
@@ -67,9 +91,10 @@ export async function filterAccessibleSkills(
   skills: SkillAsset[],
   action: SkillAclAction = "discover"
 ): Promise<SkillAsset[]> {
+  const snapshot = await resolveContextSnapshot(identity);
   const accessible: SkillAsset[] = [];
   for (const skill of skills) {
-    const decision = await canAccessSkill(identity, skill, action);
+    const decision = await canAccessSkill(identity, skill, action, snapshot);
     if (decision.allowed) {
       accessible.push(skill);
     }

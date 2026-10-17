@@ -192,7 +192,37 @@ status: draft
     const { readFile } = await import("node:fs/promises");
     const text = await readFile(path.join(projectRoot, "skills", "acceptance", "new-skill.md"), "utf8");
     expect(text).toContain("name: new-skill");
-    expect(text).not.toContain("roles_allowed");
+    // Spec §4.1: a new Skill carries an explicit empty ACL ("no one") until roles are chosen.
+    expect(text).toContain("roles_allowed: []");
+  });
+
+  it("writes the chosen roles_allowed and rejects a mixed wildcard (Spec §4.3)", async () => {
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/skills",
+      payload: { name: "acl-skill", domain: "acceptance", status: "draft", roles_allowed: ["analyst", "analyst", "ops"], content: "# A\n" }
+    });
+    expect(created.statusCode).toBe(201);
+    expect(created.json().skill.roles_allowed).toEqual(["analyst", "ops"]);
+
+    const mixed = await app.inject({
+      method: "POST",
+      url: "/api/skills",
+      payload: { name: "acl-mixed", domain: "acceptance", roles_allowed: ["*", "analyst"], content: "# A\n" }
+    });
+    expect(mixed.statusCode).toBe(400);
+
+    const rawCorrupt = await app.inject({
+      method: "POST",
+      url: "/api/skills",
+      payload: {
+        name: "acl-raw",
+        domain: "acceptance",
+        rawContent: "---\nname: acl-raw\ntitle: Raw\ndomain: acceptance\nstatus: draft\nroles_allowed: analyst\n---\nBody\n"
+      }
+    });
+    expect(rawCorrupt.statusCode).toBe(400);
+    expect(rawCorrupt.json().error).toBe("skill_roles_invalid");
   });
 
   it("previews create without writing and reports validation and authorization impact", async () => {
@@ -218,8 +248,8 @@ status: draft
     expect(json.preview.diff).toContain("# Preview");
     expect(json.preview.validation.valid).toBe(true);
     expect(json.preview.validation.issues).toEqual([]);
-    expect(json.preview.proposedMarkdown).not.toContain("roles_allowed");
-    expect(json.preview.impact.enteredWildcard).toBe(false);
+    expect(json.preview.proposedMarkdown).toContain("roles_allowed:");
+    expect(json.preview.impact.enteredWildcard).toBe(true);
     expect(json.preview.impact.status).toEqual({ from: null, to: "published" });
     await expect(access(target)).rejects.toThrow();
   });
@@ -251,7 +281,7 @@ status: draft
     expect(json.preview.diff).toContain("Changed only in preview");
     expect(json.preview.impact.status).toEqual({ from: "published", to: "draft" });
     expect(json.preview.proposedMarkdown).toContain("roles_allowed");
-    expect(json.preview.impact.exitedWildcard).toBe(false);
+    expect(json.preview.impact.exitedWildcard).toBe(true);
     expect(await readFile(entry, "utf8")).toBe(before);
 
     const stale = await app.inject({

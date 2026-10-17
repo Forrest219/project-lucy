@@ -257,6 +257,7 @@
 | `wiki-edit-grid` | 编辑器 + 预览 grid | — |
 | `wiki-edit-source` | 源编辑区 | — |
 | `wiki-edit-textarea` | Markdown 文本框 | 占主工作区 ≥ 80% |
+| `wiki-acl-field` | 可访问角色（对象授权，默认无人可见） | `components/ObjectAclField.tsx` |
 | `wiki-edit-preview` | 渲染预览 | — |
 
 ### 5.5 WikiSavePreflight.tsx
@@ -365,7 +366,12 @@
 | `role-dirty-bar` | 角色 dirty 浮条 |
 | `role-list-table` | 角色列表 Data Grid |
 | `role-row-${roleId}` | 角色行（模板） |
+| `${testId}-corrupt` | 对象授权声明损坏提示（`skill-field-roles` / `wiki-acl-field`） | `components/ObjectAclField.tsx` |
+| `${testId}-roles` | 对象授权角色复选区 | `components/ObjectAclField.tsx` |
+| `${testId}-all-confirm` | 所有角色可见二次确认区 | `components/ObjectAclField.tsx` |
+| `${testId}-all-apply` | 所有角色可见确认并应用 | `components/ObjectAclField.tsx` |
 | `role-summary-card` | 角色摘要卡 |
+| `role-context-access` | Role 详情：Wiki / Skill 发现与读取效果（只读） | `pages/admin/RoleDetail.tsx` |
 | `roles-page` | 角色页 |
 | `route-page` | 通用 route 页根 |
 | `snippet-active` | snippet 激活态 |
@@ -1082,6 +1088,9 @@
 | `skill-detail-content` | 正文详情 | `pages/skills/SkillList.tsx` |
 | `skill-detail-path` | Skill 文件路径 | `pages/skills/SkillList.tsx` |
 | `skill-detail-validation-issues` | 中文校验问题 | `pages/skills/SkillList.tsx` |
+| `skill-detail-roles` | 阅读态可访问角色 | `pages/skills/SkillList.tsx` |
+| `skill-field-roles` | 编辑态可访问角色（对象授权，T05/T06） | `components/ObjectAclField.tsx` |
+| `skill-preflight-roles` | 保存预检：可访问角色变化 / 扩权 | `pages/skills/SkillList.tsx` |
 | `skill-editor-form` | 编辑表单 | `pages/skills/SkillList.tsx` |
 | `skill-metadata-toggle` | 元数据折叠区 | `pages/skills/SkillList.tsx` |
 | `skill-field-name` | Skill name | `pages/skills/SkillList.tsx` |

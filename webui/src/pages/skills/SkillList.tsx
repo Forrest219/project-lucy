@@ -3,6 +3,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { MarkdownPreview } from "../../components/MarkdownPreview";
+import { ObjectAclField } from "../../components/ObjectAclField";
 import { PageHeader } from "../../components/PageHeader";
 import { queryKeys } from "../../lib/queryKeys";
 import { ensureUniqueHeadingId, slugifyHeading } from "../../lib/wiki";
@@ -13,6 +14,7 @@ import {
   fetchSkillSummaries,
   previewCreateSkill,
   previewUpdateSkill,
+  rolesAllowedSummary,
   skillStatusBadgeClass,
   SKILL_STATUS_LABELS,
   updateSkill,
@@ -33,6 +35,9 @@ type DraftForm = {
   title: string;
   version: string;
   status: SkillStatus;
+  /** `roles_allowed`: [] = no one (default), ["*"] = all roles, otherwise explicit Role ids. */
+  rolesAllowed: string[];
+  rolesAllowedInvalid: boolean;
   triggers: string[];
   description: string;
   prerequisiteSources: string[];
@@ -49,6 +54,8 @@ function emptyDraft(domain = "custom"): DraftForm {
     title: "",
     version: "1.0.0",
     status: "draft",
+    rolesAllowed: [],
+    rolesAllowedInvalid: false,
     triggers: [],
     description: "",
     prerequisiteSources: [],
@@ -66,6 +73,8 @@ function draftFromSkill(skill: SkillAsset): DraftForm {
     title: skill.title,
     version: skill.version,
     status: skill.status,
+    rolesAllowed: skill.roles_allowed,
+    rolesAllowedInvalid: skill.roles_allowed_invalid === true,
     triggers: skill.triggers,
     description: skill.description,
     prerequisiteSources: skill.prerequisites.sources ?? [],
@@ -87,6 +96,8 @@ function payloadFromDraft(draft: DraftForm): SkillWritePayload {
     title: draft.title.trim() || draft.name.trim(),
     version: draft.version.trim() || "1.0.0",
     status: draft.status,
+    // A corrupt stored declaration is only rewritten after the owner chooses a value explicitly.
+    ...(draft.rolesAllowedInvalid ? {} : { roles_allowed: cleanList(draft.rolesAllowed) }),
     triggers: cleanList(draft.triggers),
     description: draft.description.trim(),
     prerequisites: {
@@ -108,6 +119,11 @@ function parseSkillSelector(selector: string | null): { domain: string; name: st
   const slash = selector.indexOf("/");
   if (slash <= 0 || slash === selector.length - 1) return null;
   return { domain: selector.slice(0, slash), name: selector.slice(slash + 1) };
+}
+
+function formatRoles(roles: string[]): string {
+  if (roles.includes("*")) return "所有角色";
+  return roles.length === 0 ? "无人可见" : roles.join("、");
 }
 
 function validationLabel(skill: Pick<SkillSummary, "validation">): string {
@@ -267,7 +283,7 @@ function SkillReadView({ skill, onBack, onEdit, onDelete, deleting, confirmDelet
     <article className="pl-skill-main-card pl-skill-read" data-testid="skill-detail">
       <header className="pl-skill-detail-header"><div><button className="pl-inline-link" data-testid="skill-detail-back" type="button" onClick={onBack}>返回治理总览</button><span className="pl-eyebrow">业务 Skill</span><h2 data-testid="skill-detail-title">{skill.title || skill.name}</h2><code className="notranslate" translate="no">{skill.domain}/{skill.name}</code></div><div className="pl-skill-detail-actions"><button className="pl-btn pl-btn--primary text-sm" data-testid="skill-edit" type="button" onClick={onEdit}>编辑</button>{confirmDelete ? <button className="pl-btn pl-btn--danger text-sm" data-testid="skill-delete-confirm" disabled={deleting} type="button" onClick={onDelete}>确认删除</button> : <button className="pl-btn pl-btn--ghost text-sm" data-testid="skill-delete" type="button" onClick={onArmDelete}>删除 Skill</button>}</div></header>
       <div className="pl-skill-meta-strip"><span className={skillStatusBadgeClass(skill.status)}>{SKILL_STATUS_LABELS[skill.status]}</span><span>版本 <span className="notranslate" translate="no">{skill.version}</span></span><ValidationCell skill={skill} /></div>
-      <div className="pl-skill-detail-grid"><DetailRow label="Skill URI" testId="skill-detail-uri"><code className="notranslate" translate="no">{skill.uri}</code></DetailRow><DetailRow label="文件路径"><code className="notranslate" data-testid="skill-detail-path" translate="no">{skill.relativePath}</code></DetailRow><DetailRow label="触发词" testId="skill-detail-triggers">{skill.triggers.length ? <span className="notranslate" translate="no">{skill.triggers.join("、")}</span> : "—"}</DetailRow><DetailRow label="前置依赖" testId="skill-detail-prerequisites">{prerequisiteGroups.length ? prerequisiteGroups.map((group) => <div key={group.label}>{group.label}：<span className="notranslate" translate="no">{group.values.join("、")}</span></div>) : "—"}</DetailRow></div>
+      <div className="pl-skill-detail-grid"><DetailRow label="Skill URI" testId="skill-detail-uri"><code className="notranslate" translate="no">{skill.uri}</code></DetailRow><DetailRow label="文件路径"><code className="notranslate" data-testid="skill-detail-path" translate="no">{skill.relativePath}</code></DetailRow><DetailRow label="可访问角色" testId="skill-detail-roles">{skill.roles_allowed_invalid ? "授权声明已损坏（无人可见，请编辑修复）" : rolesAllowedSummary(skill.roles_allowed).label || <span className="notranslate" translate="no">{skill.roles_allowed.join("、")}</span>}</DetailRow><DetailRow label="触发词" testId="skill-detail-triggers">{skill.triggers.length ? <span className="notranslate" translate="no">{skill.triggers.join("、")}</span> : "—"}</DetailRow><DetailRow label="前置依赖" testId="skill-detail-prerequisites">{prerequisiteGroups.length ? prerequisiteGroups.map((group) => <div key={group.label}>{group.label}：<span className="notranslate" translate="no">{group.values.join("、")}</span></div>) : "—"}</DetailRow></div>
       {skill.validation.issues.length > 0 ? <section className="pl-skill-validation-panel" data-testid="skill-detail-validation-issues"><strong>校验问题</strong><ul>{skill.validation.issues.map((issue, index) => <li key={`${issue.code}-${index}`}><span className={issue.type === "error" ? "pl-status-badge pl-status-validation_failed" : "pl-status-badge pl-status-partial"}>{issue.type === "error" ? "错误" : "警告"}</span> <code className="notranslate" translate="no">{issue.field}</code> {issue.message}</li>)}</ul></section> : null}
       <div className={`pl-skill-read-layout${toc.length < 2 ? " pl-skill-read-layout--no-toc" : ""}`} data-testid="skill-detail-content"><div className="pl-skill-markdown"><MarkdownPreview markdown={skill.content} hideLeadingHeading={skill.title} /></div>{toc.length >= 2 ? <nav className="pl-skill-toc" aria-label="Skill 页内目录"><strong>页内目录</strong><ul>{toc.map((item) => <li className={item.level > 1 ? "pl-skill-toc-sub" : ""} key={item.id}><a href={`#${item.id}`}>{item.text}</a></li>)}</ul></nav> : null}</div>
     </article>
@@ -285,7 +301,7 @@ function SkillEditor({ draft, onChange, identityLocked, metadataOpen, onMetadata
     <div className="pl-skill-editor" data-testid="skill-editor-form">
       <section className={`pl-workbench-disclosure${metadataOpen ? " pl-workbench-disclosure--open" : ""}`}>
         <button aria-expanded={metadataOpen} className="pl-workbench-disclosure-summary" data-testid="skill-metadata-toggle" type="button" onClick={() => onMetadataOpen(!metadataOpen)}><span className="pl-disclosure-title"><span aria-hidden="true">{metadataOpen ? "▾" : "▸"}</span>元数据</span><small>{SKILL_STATUS_LABELS[draft.status]} · <span className="notranslate" translate="no">v{draft.version}</span></small></button>
-        {metadataOpen ? <div className="pl-skill-metadata-form"><div className="pl-skill-field-grid"><Field label="名称"><input className="pl-input notranslate" data-testid="skill-field-name" disabled={identityLocked} translate="no" value={draft.name} onChange={(event) => onChange({ ...draft, name: event.target.value })} /></Field><Field label="域"><input className="pl-input notranslate" data-testid="skill-field-domain" disabled={identityLocked} translate="no" value={draft.domain} onChange={(event) => onChange({ ...draft, domain: event.target.value })} /></Field><Field label="标题"><input className="pl-input" data-testid="skill-field-title" value={draft.title} onChange={(event) => onChange({ ...draft, title: event.target.value })} /></Field><Field label="版本"><input className="pl-input notranslate" data-testid="skill-field-version" translate="no" value={draft.version} onChange={(event) => onChange({ ...draft, version: event.target.value })} /></Field><Field label="状态"><select className="pl-input" data-testid="skill-field-status" value={draft.status} onChange={(event) => onChange({ ...draft, status: event.target.value as SkillStatus })}><option value="draft">草稿</option><option value="published">已发布</option><option value="deprecated">已停用</option></select></Field><Field label="说明"><textarea className="pl-input min-h-20" data-testid="skill-field-description" value={draft.description} onChange={(event) => onChange({ ...draft, description: event.target.value })} /></Field></div>
+        {metadataOpen ? <div className="pl-skill-metadata-form"><div className="pl-skill-field-grid"><Field label="名称"><input className="pl-input notranslate" data-testid="skill-field-name" disabled={identityLocked} translate="no" value={draft.name} onChange={(event) => onChange({ ...draft, name: event.target.value })} /></Field><Field label="域"><input className="pl-input notranslate" data-testid="skill-field-domain" disabled={identityLocked} translate="no" value={draft.domain} onChange={(event) => onChange({ ...draft, domain: event.target.value })} /></Field><Field label="标题"><input className="pl-input" data-testid="skill-field-title" value={draft.title} onChange={(event) => onChange({ ...draft, title: event.target.value })} /></Field><Field label="版本"><input className="pl-input notranslate" data-testid="skill-field-version" translate="no" value={draft.version} onChange={(event) => onChange({ ...draft, version: event.target.value })} /></Field><Field label="状态"><select className="pl-input" data-testid="skill-field-status" value={draft.status} onChange={(event) => onChange({ ...draft, status: event.target.value as SkillStatus })}><option value="draft">草稿</option><option value="published">已发布</option><option value="deprecated">已停用</option></select></Field><ObjectAclField corrupt={draft.rolesAllowedInvalid} onChange={(next) => onChange({ ...draft, rolesAllowed: next, rolesAllowedInvalid: false })} testId="skill-field-roles" value={draft.rolesAllowed} /><Field label="说明"><textarea className="pl-input min-h-20" data-testid="skill-field-description" value={draft.description} onChange={(event) => onChange({ ...draft, description: event.target.value })} /></Field></div>
           <div className="pl-skill-structured-grid"><ListField addLabel="添加触发词" label="触发词" onChange={(values) => onChange({ ...draft, triggers: values })} testId="skill-field-triggers" values={draft.triggers} /><ListField addLabel="添加语义源" label="前置语义源" onChange={(values) => onChange({ ...draft, prerequisiteSources: values })} testId="skill-field-prereq-sources" values={draft.prerequisiteSources} /><ListField addLabel="添加指标" label="前置指标" onChange={(values) => onChange({ ...draft, prerequisiteMeasures: values })} testId="skill-field-prereq-measures" values={draft.prerequisiteMeasures} /><ListField addLabel="添加 Wiki 文档" label="前置 Wiki 文档" onChange={(values) => onChange({ ...draft, prerequisiteWikiDocs: values })} testId="skill-field-prereq-wiki" values={draft.prerequisiteWikiDocs} /><ListField addLabel="添加评测用例" label="评测用例" onChange={(values) => onChange({ ...draft, evalCases: values })} testId="skill-field-eval-cases" values={draft.evalCases} /></div></div> : null}
       </section>
       <div className="pl-skill-markdown-editor"><section><header><strong>Markdown 源码</strong></header><textarea aria-label="Markdown 源码" className="pl-input notranslate" data-testid="skill-field-content" translate="no" value={draft.content} onChange={(event) => onChange({ ...draft, content: event.target.value })} /></section><section data-testid="skill-markdown-preview"><header><strong>渲染预览</strong></header><div className="pl-skill-markdown-preview"><MarkdownPreview markdown={draft.content} hideLeadingHeading={draft.title} /></div></section></div>
@@ -301,7 +317,7 @@ function PreflightDialog({ open, onOpenChange, preview, canConfirm, confirming, 
   confirming: boolean;
   onConfirm: () => void;
 }) {
-  return <Dialog.Root open={open} onOpenChange={onOpenChange}><Dialog.Portal><Dialog.Overlay className="pl-dialog-overlay" /><Dialog.Content className="pl-dialog-content pl-skill-preflight" data-testid="skill-preflight" aria-describedby="skill-preflight-description"><Dialog.Title className="pl-panel-title">保存 Skill 前预检</Dialog.Title><Dialog.Description className="text-sm text-fg-muted" id="skill-preflight-description">确认本次写入的校验、状态和 Diff。</Dialog.Description>{preview ? <><section className={preview.validation.valid ? "pl-notice" : "pl-skill-preflight-warning"}><strong>校验结果：{preview.validation.valid ? "通过" : `${preview.validation.issues.length} 个内容问题（允许保存）`}</strong>{preview.validation.issues.length ? <ul>{preview.validation.issues.map((issue, index) => <li key={`${issue.code}-${index}`}><code className="notranslate" translate="no">{issue.field}</code>：{issue.message}</li>)}</ul> : null}</section><dl className="pl-skill-preflight-impact"><div><dt>状态变化</dt><dd>{preview.impact.status.from ? SKILL_STATUS_LABELS[preview.impact.status.from] : "新建"} → {SKILL_STATUS_LABELS[preview.impact.status.to]}</dd></div></dl><section><strong>变更 Diff</strong><pre className="pl-skill-preflight-diff notranslate" data-testid="skill-preflight-diff" translate="no">{preview.diff || "没有文本差异。"}</pre></section></> : null}<footer className="pl-dialog-actions"><Dialog.Close asChild><button className="pl-btn pl-btn--ghost" type="button">返回编辑</button></Dialog.Close><button className="pl-btn pl-btn--primary" data-testid="skill-preflight-confirm" disabled={!canConfirm || confirming} type="button" onClick={onConfirm}>确认保存</button></footer></Dialog.Content></Dialog.Portal></Dialog.Root>;
+  return <Dialog.Root open={open} onOpenChange={onOpenChange}><Dialog.Portal><Dialog.Overlay className="pl-dialog-overlay" /><Dialog.Content className="pl-dialog-content pl-skill-preflight" data-testid="skill-preflight" aria-describedby="skill-preflight-description"><Dialog.Title className="pl-panel-title">保存 Skill 前预检</Dialog.Title><Dialog.Description className="text-sm text-fg-muted" id="skill-preflight-description">确认本次写入的校验、状态和 Diff。</Dialog.Description>{preview ? <><section className={preview.validation.valid ? "pl-notice" : "pl-skill-preflight-warning"}><strong>校验结果：{preview.validation.valid ? "通过" : `${preview.validation.issues.length} 个内容问题（允许保存）`}</strong>{preview.validation.issues.length ? <ul>{preview.validation.issues.map((issue, index) => <li key={`${issue.code}-${index}`}><code className="notranslate" translate="no">{issue.field}</code>：{issue.message}</li>)}</ul> : null}</section><dl className="pl-skill-preflight-impact"><div><dt>状态变化</dt><dd>{preview.impact.status.from ? SKILL_STATUS_LABELS[preview.impact.status.from] : "新建"} → {SKILL_STATUS_LABELS[preview.impact.status.to]}</dd></div><div data-testid="skill-preflight-roles"><dt>可访问角色</dt><dd><span className="notranslate" translate="no">{formatRoles(preview.impact.rolesAllowed.from)} → {formatRoles(preview.impact.rolesAllowed.to)}</span>{preview.impact.enteredWildcard ? "（扩权：所有角色可见）" : ""}{preview.impact.affectedAgentCount > 0 ? `；影响 ${preview.impact.affectedAgentCount} 个 Agent` : ""}</dd></div></dl><section><strong>变更 Diff</strong><pre className="pl-skill-preflight-diff notranslate" data-testid="skill-preflight-diff" translate="no">{preview.diff || "没有文本差异。"}</pre></section></> : null}<footer className="pl-dialog-actions"><Dialog.Close asChild><button className="pl-btn pl-btn--ghost" type="button">返回编辑</button></Dialog.Close><button className="pl-btn pl-btn--primary" data-testid="skill-preflight-confirm" disabled={!canConfirm || confirming} type="button" onClick={onConfirm}>确认保存</button></footer></Dialog.Content></Dialog.Portal></Dialog.Root>;
 }
 
 export function SkillList() {

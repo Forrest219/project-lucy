@@ -2564,6 +2564,10 @@
   .pl-wiki-meta-title { @apply text-base font-semibold text-fg-default; }
   .pl-wiki-meta-description { @apply text-xs text-fg-muted; }
   .pl-wiki-meta-close { @apply justify-self-end; }
+  .pl-acl-field { @apply grid gap-2 border-0 p-0 m-0; }
+  .pl-acl-option, .pl-acl-role { @apply flex items-center gap-2 text-sm text-fg-default; }
+  .pl-acl-roles, .pl-acl-confirm { @apply grid gap-1 pl-6; }
+  .pl-acl-role--unknown small { @apply text-xs text-fg-muted; }
   .pl-wiki-upload-ref {
     @apply ml-1 inline-flex rounded-sm bg-bg-muted px-1.5 py-0.5 font-mono text-xs;
   }

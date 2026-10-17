@@ -164,6 +164,47 @@ async function verifyAdvertisedMcpEndpoint() {
   console.log(`[p0-demo-smoke] advertised MCP endpoint matches host publish: ${endpoint.url}`);
 }
 
+function toolText(body) {
+  return (body?.result?.content ?? []).map((item) => item?.text ?? "").join("\n");
+}
+
+// Spec §4 / T05+T06: default-deny Wiki ACL. The template page is granted to the demo role;
+// a synthetic page granted only to another role must answer `context_not_available`
+// (same text as an unknown key) and never leak its body.
+async function verifyContextAcl(sessionId) {
+  const grantedKey = "global/demo-superstore.md";
+  const granted = await rpc(sessionId, "tools/call", { name: "wiki_read", arguments: { key: grantedKey } });
+  if (!granted.res.ok || granted.body?.error || granted.body?.result?.isError) {
+    throw new Error(`wiki_read ${grantedKey} should be authorized for demo_agent: ${granted.text}`);
+  }
+  if (!toolText(granted.body).includes("superstore_orders")) {
+    throw new Error(`wiki_read ${grantedKey} did not return the template page body`);
+  }
+  console.log("[p0-demo-smoke] authorized role can wiki_read the template page");
+
+  const deniedKey = "global/smoke-acl-denied.md";
+  const canary = "SMOKE_ACL_CANARY_DO_NOT_LEAK";
+  const page = ["---", "allowed_roles: [lucy_admin]", "---", "# Smoke ACL denied", canary].join("\n");
+  await run("docker", composeArgs([
+    "exec", "-T", "-e", "SMOKE_ACL_PAGE", "lucy", "sh", "-c",
+    `mkdir -p /data/lucy/config/wiki/global && printf '%s\\n' "$SMOKE_ACL_PAGE" > /data/lucy/config/wiki/${deniedKey}`
+  ]), { env: { SMOKE_ACL_PAGE: page }, capture: true });
+  try {
+    const denied = await rpc(sessionId, "tools/call", { name: "wiki_read", arguments: { key: deniedKey } });
+    const unknown = await rpc(sessionId, "tools/call", { name: "wiki_read", arguments: { key: "global/smoke-acl-unknown.md" } });
+    if (denied.body?.result?.isError !== true || toolText(denied.body) !== "context_not_available") {
+      throw new Error(`unauthorized wiki_read must return context_not_available, got: ${denied.text}`);
+    }
+    if (denied.text.includes(canary)) throw new Error("unauthorized wiki_read leaked the page body");
+    if (toolText(unknown.body) !== toolText(denied.body)) {
+      throw new Error("unauthorized and unknown wiki_read responses must be identical");
+    }
+    console.log("[p0-demo-smoke] unauthorized role gets context_not_available (same as unknown key)");
+  } finally {
+    await run("docker", composeArgs(["exec", "-T", "lucy", "rm", "-f", `/data/lucy/config/wiki/${deniedKey}`]), { capture: true }).catch(() => undefined);
+  }
+}
+
 async function verifyProxyAgentPath(baseline) {
   const init = await rpc("", "initialize", {
     protocolVersion: "2025-03-26",
@@ -224,6 +265,7 @@ async function verifyProxyAgentPath(baseline) {
   }
   assertRegionSales("proxy lucy_query", structured.headers, structured.rows, baseline);
   console.log(`[p0-demo-smoke] proxy lucy_query returned ${structured.rows.length} baseline-matched rows`);
+  await verifyContextAcl(sessionId);
 }
 
 async function main() {

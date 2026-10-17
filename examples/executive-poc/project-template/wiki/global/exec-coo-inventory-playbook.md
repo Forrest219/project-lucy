@@ -1,4 +1,5 @@
 ---
+allowed_roles: [exec_coo_readonly, exec_demo_full]
 sl_refs:
   - demo-exec-mysql/dataforai/fct_inventory_health_daily
   - demo-exec-mysql/dataforai/dim_warehouse

@@ -1,4 +1,5 @@
 ---
+allowed_roles: [exec_cfo_readonly, exec_demo_full]
 sl_refs:
   - demo-exec-mysql/dataforai/fct_sales_margin
   - demo-exec-mysql/dataforai/fct_sales_margin_regional

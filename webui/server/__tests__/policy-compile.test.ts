@@ -150,10 +150,13 @@ describe("WP-I5 EffectivePolicy compile + submit", () => {
       reason: "role_resolution_failed:bad_role:v2_prefix_forbidden"
     });
 
-    // Meta wiki still allowed for degraded agent (Spec 98 §8.3)
+    // Spec §4.2: a degraded policy cannot prove an ACL, so context is denied too (supersedes Spec 98 §8.3 Wiki carve-out).
     await expect(
       acl.authorizeAndRewrite(identity("bad_agent"), "wiki_search", { query: "x" })
-    ).resolves.toEqual({ allowed: true });
+    ).resolves.toEqual({
+      allowed: false,
+      reason: "role_resolution_failed:bad_role:v2_prefix_forbidden"
+    });
 
     await expect(
       acl.authorizeAndRewrite(identity("ok_agent"), "lucy_query", {

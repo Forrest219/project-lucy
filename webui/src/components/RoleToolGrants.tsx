@@ -2,7 +2,6 @@ import { useMemo } from "react";
 import type { McpToolInfo } from "../lib/types";
 import {
   ABSOLUTE_DENY_TOOL_NAMES,
-  CONTEXT_TOOL_NAMES,
   READONLY_QA_PRESET,
   matchingPresetName,
   stampPreset,
@@ -39,7 +38,6 @@ const META_TOOL_NAMES: readonly string[] = [
 const DATA_PLANE_SET = new Set<string>(DATA_PLANE_TOOL_NAMES);
 const META_SET = new Set<string>(META_TOOL_NAMES);
 const DENY_SET = new Set<string>(ABSOLUTE_DENY_TOOL_NAMES);
-const CONTEXT_TOOL_SET = new Set<string>(CONTEXT_TOOL_NAMES);
 
 // ─── Props ──────────────────────────────────────────────────────────────────
 
@@ -62,7 +60,7 @@ export function RoleToolGrants({
 }: RoleToolGrantsProps) {
   // Exclude globalDenied + AbsoluteDeny from renderable candidates
   const grantableCandidates = useMemo(
-    () => candidates.filter((t) => !t.globalDenied && !DENY_SET.has(t.name) && !CONTEXT_TOOL_SET.has(t.name)),
+    () => candidates.filter((t) => !t.globalDenied && !DENY_SET.has(t.name)),
     [candidates]
   );
 
@@ -154,9 +152,9 @@ export function RoleToolGrants({
       <p className="text-xs text-fg-muted" aria-live="polite">
         已选 {selectedGrantableCount} 个
       </p>
-      {value.some((tool) => !CONTEXT_TOOL_SET.has(tool)) ? (
+      {value.length > 0 ? (
         <ul className="notranslate flex flex-wrap gap-2" translate="no" aria-label="当前选择的 MCP 工具">
-          {value.filter((tool) => !CONTEXT_TOOL_SET.has(tool)).map((tool) => (
+          {value.map((tool) => (
             <li key={tool} className="notranslate rounded-full bg-bg-subtle px-2 py-1 font-mono text-xs text-fg-muted" translate="no">{tool}</li>
           ))}
         </ul>

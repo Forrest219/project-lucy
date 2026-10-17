@@ -6,10 +6,12 @@
 | 文档类型 | Spec |
 | Spec 编号 | 151 |
 | 版本 | v1.0 |
-| 状态 | Implemented，待完整 UAT |
+| 状态 | Implemented，待完整 UAT；**2026-10-18 起重新生效**（取代 Spec 170 的全开放，对象授权与默认拒绝见企业安全 Spec §4.1–4.5） |
 | 日期 | 2026-09-26 |
 | 上游 Spec | Spec 171、144、147 |
 | 适用范围 | `skills/`、Skill Admin API、Lucy MCP Proxy、`/skills`、Role 详情、审计 |
+
+> 2026-10-18 补充（T05/T06）：`roles_allowed` 缺失 / `[]` 为无人可见（不再等同于开放）；Wiki 同构使用 `allowed_roles`；`*` 仅表示“所有有效已分配角色”，需独立确认，不是匿名公开。无正式角色的 legacy direct-allow Agent 上下文拒绝 `context_role_required`。
 
 > 编号说明：原验收计划拟使用 Spec 150；该编号已被 Role 权限配置结构 Spec 占用，因此本补丁顺延为 Spec 151。
 

@@ -59,12 +59,13 @@ findings:
     verifiedBy: [SEC-02]
     acceptedBy: null
   # V-07 MCP Wiki 读取跟随越界符号链接（T06）
+  # note: T06 已落地 fs-safe `readContextFile`（任一层 symlink / 遍历 / 编码变体 / O_NOFOLLOW+打开后身份检查）并用于 Wiki 与 Skill 读取；assertReadable / resolveWritable 对 wiki/、skills/ 拒绝 symlink；fixedIn 待 T05+T06 提交后回填 SHA
   - id: V-07
     severity: P2
-    status: open
+    status: fixed
     spec: "§4.5"
     fixedIn: null
-    verifiedBy: []
+    verifiedBy: [SEC-15]
     acceptedBy: null
   # V-08 Wiki frontmatter 服务端代码执行（T0A-1）
   - id: V-08
@@ -75,12 +76,13 @@ findings:
     verifiedBy: [SEC-15-FM-01, SEC-15-FM-02, SEC-15-FM-03, SEC-15-FM-04, SEC-15-FM-05, SEC-15-FM-06]
     acceptedBy: null
   # D-01 Spec 170 上下文全开放（T05/T06）
+  # note: T05+T06 同一交付：对象 ACL 默认拒绝（authorizeContext，同角色闭合）、14 篇模板 Wiki / 模板 Skill 显式 ACL、迁移工具与 smoke 授权/拒绝断言；fixedIn 待 T05+T06 提交后回填 SHA
   - id: D-01
     severity: P1
-    status: open
+    status: fixed
     spec: "§4"
     fixedIn: null
-    verifiedBy: []
+    verifiedBy: [SEC-10, SEC-13, SEC-14]
     acceptedBy: null
   # D-02 审计写失败后仍释放数据（T07）
   - id: D-02

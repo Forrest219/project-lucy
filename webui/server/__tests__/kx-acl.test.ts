@@ -508,8 +508,9 @@ describe("KX financial domain ACL guardrails", () => {
     await expect(check(identity("wildcard_agent"), "future_table_export", {}))
       .resolves.toEqual({ allowed: false, reason: "tool_unclassified:future_table_export" });
 
+    // Spec §4.1: a wildcard direct-allow grant has no formal Role, so context stays closed.
     await expect(check(identity("wildcard_agent"), "wiki_search", { query: "discount policy" }))
-      .resolves.toEqual({ allowed: true });
+      .resolves.toEqual({ allowed: false, reason: "context_role_required" });
   });
 
   it("protects KX metadata from broad catalog tools", async () => {

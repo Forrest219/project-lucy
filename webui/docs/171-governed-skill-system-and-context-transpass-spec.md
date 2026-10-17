@@ -13,6 +13,8 @@
 | 适用范围 | Lucy MCP Proxy (`webui/server/proxy/`)、Skill 资产格式 (`skills/`)、ACL 与审计引擎、WebUI Skill Studio 与客户端导出 |
 | 输出位置 | `webui/docs/171-governed-skill-system-and-context-transpass-spec.md` |
 
+> 2026-10-18 补充（T05/T06）：本文 §4.1 的对象 ACL 已恢复生效（取代 Spec 170 的全开放）。Skill / Wiki 的 discover / read 在 initialize、resources、prompts、tools、wiki 通道由同一 `authorizeContext` 裁决；对未授权、不存在、草稿、停用对象统一返回 `context_not_available`（JSON-RPC `-32003`，工具形态 `isError:true`）。
+
 > 改号说明：本文原编号 131，与 `webui/docs/131-lucy-admin-catalog-bound-role-spec.md`（`lucy_admin` 与 `catalog_bound`）重号。2026-10-13 起本文改为 171，131 专指 `lucy_admin` 那份。引用本文的历史材料按 171 理解。
 
 ---

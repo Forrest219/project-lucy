@@ -1,4 +1,5 @@
-import { lstat, mkdir, readdir, realpath, rename, rm, rmdir, writeFile } from "node:fs/promises";
+import { constants as fsConstants } from "node:fs";
+import { lstat, mkdir, open, readdir, realpath, rename, rm, rmdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { mirrorContentFileToProjectRoot } from "./content-mirror";
 import type { ContentPaths } from "./paths";
@@ -90,6 +91,25 @@ async function resolveExistingTarget(base: string, relPath: string): Promise<str
   return path.join(existing, ...parts.slice(index));
 }
 
+/** Wiki / Skill assets are authorization-bearing context: no symlink is accepted at any layer (Spec §4.5). */
+const SYMLINK_FREE_PREFIXES = ["wiki", "skills"] as const;
+
+async function assertNoSymlinkComponents(baseReal: string, normalized: string): Promise<void> {
+  let current = baseReal;
+  for (const part of normalized.split("/")) {
+    current = path.join(current, part);
+    try {
+      if ((await lstat(current)).isSymbolicLink()) {
+        throw new ForbiddenPathError(`Symlink in path ${normalized} is not allowed`);
+      }
+    } catch (error) {
+      if (error instanceof ForbiddenPathError) throw error;
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+      throw error;
+    }
+  }
+}
+
 /**
  * Resolve a content-dir-relative path (`semantic-layer/...`, `wiki/...`, ...).
  * The base is `contentPaths.configDir`, NOT `projectRoot`, so a default
@@ -101,6 +121,9 @@ async function resolveContentTarget(
   normalized: string
 ): Promise<string> {
   const configDirReal = await realpath(contentPaths.configDir);
+  if (matchesPrefix(normalized, SYMLINK_FREE_PREFIXES)) {
+    await assertNoSymlinkComponents(configDirReal, normalized);
+  }
   const target = await resolveExistingTarget(contentPaths.configDir, normalized);
   if (!isWithin(target, configDirReal)) {
     throw new ForbiddenPathError("Resolved path escapes the content root");
@@ -392,6 +415,9 @@ export async function assertReadable(
   const isContentPath = matchesPrefix(normalized, CONTENT_PREFIXES);
   const base = isContentPath ? contentPaths.configDir : projectRoot;
   const baseReal = await realpath(base);
+  if (isContentPath && matchesPrefix(normalized, SYMLINK_FREE_PREFIXES)) {
+    await assertNoSymlinkComponents(baseReal, normalized);
+  }
   const target = await resolveExistingTarget(base, normalized);
   if (!isWithin(target, baseReal)) {
     throw new ForbiddenPathError("Resolved path escapes the project root");
@@ -539,4 +565,52 @@ export async function safeRemoveSecretPasswordIfExists(
     throw error;
   }
   await withDisplayWriteBarrier(["C", "L"], () => rm(target, { force: true }));
+}
+const ENCODED_ESCAPE_RE = /%(2e|2f|5c|00)/i;
+
+/**
+ * Spec §4.5 — read one Wiki / Skill file under `rootDir` for the Agent data path.
+ * Refuses any symlink in the chain, traversal and encoded variants (`%2e%2e`, `%2f`, `%5c`,
+ * NUL, backslash), then opens with O_NOFOLLOW and compares the opened file's identity to the
+ * pre-open `lstat` so a swap to a link between check and open is rejected.
+ */
+export async function readContextFile(
+  rootDir: string,
+  relKey: string
+): Promise<{ content: string; mtime: Date }> {
+  if (
+    !relKey ||
+    relKey.includes("\0") ||
+    relKey.includes("\\") ||
+    path.isAbsolute(relKey) ||
+    ENCODED_ESCAPE_RE.test(relKey)
+  ) {
+    throw new ForbiddenPathError("Context path is not allowed");
+  }
+  const parts = relKey.split("/");
+  if (parts.some((part) => part === "" || part === "." || part === "..")) {
+    throw new ForbiddenPathError("Context path traversal is not allowed");
+  }
+  const rootReal = await realpath(rootDir);
+  let current = rootReal;
+  let leaf = await lstat(rootReal);
+  for (const part of parts) {
+    current = path.join(current, part);
+    leaf = await lstat(current);
+    if (leaf.isSymbolicLink()) throw new ForbiddenPathError("Symlink in context path is not allowed");
+  }
+  if (!leaf.isFile()) throw new ForbiddenPathError("Context path is not a regular file");
+  const handle = await open(current, fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0));
+  try {
+    const opened = await handle.stat();
+    if (opened.dev !== leaf.dev || opened.ino !== leaf.ino || !opened.isFile()) {
+      throw new ForbiddenPathError("Context file changed during open");
+    }
+    if (!isWithin(await realpath(current), rootReal)) {
+      throw new ForbiddenPathError("Resolved path escapes the content root");
+    }
+    return { content: await handle.readFile("utf8"), mtime: opened.mtime };
+  } finally {
+    await handle.close();
+  }
 }

@@ -34,7 +34,10 @@ export const READONLY_QA_PRESET = [
   "lucy_begin_question",
 ] as const;
 
-/** Spec 170: these tools stay open at runtime and are not role-page grants. */
+/**
+ * Wiki / Skill discover + read channels (Spec §4.2). A Role must list them to open a channel;
+ * they do not change object authorization, so preset matching ignores them.
+ */
 export const CONTEXT_TOOL_NAMES = [
   "wiki_search",
   "wiki_read",

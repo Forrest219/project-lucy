@@ -37,6 +37,14 @@ import { actorIdFromRequest } from "../auth/guard.js";
 import type { FastifyRequest } from "fastify";
 import { loadAllSkills } from "../skills/loader.js";
 import { summarizeRoleSkillAccess } from "../proxy/skill-acl.js";
+import {
+  contextReferencesToRole,
+  hasContextReferences,
+  listContextInventory,
+  summarizeRoleWikiAccess
+} from "../proxy/context-inventory.js";
+import { computeContextPolicyVersion } from "../proxy/context-policy.js";
+import { getSecurityStore } from "../security/instance.js";
 
 type RoleSource = "yaml" | "template";
 
@@ -578,6 +586,33 @@ async function resolveRoleForWrite(
   return { ok: true, value: migrated.value, migration: migrated.migration };
 }
 
+type RoleContextGuardFailure = { status: number; code: string; message: string; detail?: unknown };
+
+/**
+ * Spec §4.3 — a retired Role id is never reusable, and a new Role must not silently activate
+ * historical Wiki / Skill ACL references to its id (acknowledgement is an explicit, audited choice).
+ */
+async function guardRoleIdForCreate(roleId: string, acknowledged: boolean): Promise<RoleContextGuardFailure | undefined> {
+  const store = await getSecurityStore();
+  const retired = store.ok ? store.value.isRoleIdTombstoned(roleId) : store;
+  if (!store.ok || !retired.ok) {
+    return { status: 503, code: "SECURITY_STORE_UNAVAILABLE", message: "Role id retirement state is unavailable; try again after the security store recovers" };
+  }
+  if (retired.value) {
+    return { status: 409, code: "ROLE_ID_RETIRED", message: `role id '${roleId}' was deleted and cannot be reused` };
+  }
+  const refs = contextReferencesToRole(await listContextInventory(), roleId);
+  if (hasContextReferences(refs) && !acknowledged) {
+    return {
+      status: 409,
+      code: "ROLE_ID_HAS_CONTEXT_REFERENCES",
+      message: `existing Wiki/Skill ACLs already name '${roleId}'; clean them up or acknowledge before creating the role`,
+      detail: refs
+    };
+  }
+  return undefined;
+}
+
 export function registerRoleRoutes(app: FastifyInstance) {
   // GET /api/admin/roles — list with usageCount and users
   app.get<{ Querystring: { includeTemplates?: string } }>("/api/admin/roles", async (request) => {
@@ -634,11 +669,11 @@ export function registerRoleRoutes(app: FastifyInstance) {
       resolved.source === "template" ? { role: resolved.role } : undefined
     );
     const sourceNames = sourceNamesFromPreview(preview);
-    const skillAccess = summarizeRoleSkillAccess(
-      resolved.id,
-      resolved.role.allow?.tools ?? [],
-      await loadAllSkills()
-    );
+    const roleTools = resolved.role.allow?.tools ?? [];
+    const skillAccess = summarizeRoleSkillAccess(resolved.id, roleTools, await loadAllSkills());
+    const contextEntries = await listContextInventory();
+    const wikiAccess = summarizeRoleWikiAccess(resolved.id, roleTools, contextEntries);
+    const contextPolicyVersion = computeContextPolicyVersion(contextEntries, `${resolved.id}:${[...roleTools].sort().join(",")}`);
     return {
       ok: true,
       data: {
@@ -654,7 +689,9 @@ export function registerRoleRoutes(app: FastifyInstance) {
           allow: resolved.role.allow ?? {}
         },
         effectivePermissions: preview.ok ? effectivePermissionsToPreview(preview.permissions) : undefined,
-        skillAccess
+        skillAccess,
+        wikiAccess,
+        contextPolicyVersion
       }
     };
   });
@@ -687,7 +724,13 @@ export function registerRoleRoutes(app: FastifyInstance) {
 
   // POST /api/admin/roles — create role (dryRun-first)
   app.post<{
-    Body: { dryRun?: boolean; override?: AccessGovernanceOverrideRequest; roleId?: string; role?: unknown };
+    Body: {
+      dryRun?: boolean;
+      override?: AccessGovernanceOverrideRequest;
+      roleId?: string;
+      role?: unknown;
+      acknowledgeContextReferences?: boolean;
+    };
   }>("/api/admin/roles", async (request, reply) => {
     const dryRun = request.body?.dryRun !== false;
     const { roleId, role } = request.body ?? {};
@@ -702,6 +745,13 @@ export function registerRoleRoutes(app: FastifyInstance) {
     const { config, raw } = await readAccessYaml(projectRoot);
     if (config.roles?.[roleId]) {
       return reply.status(409).send({ ok: false, error: { code: "ROLE_ID_TAKEN", message: `role '${roleId}' already exists` } });
+    }
+    const contextGuard = await guardRoleIdForCreate(roleId, request.body?.acknowledgeContextReferences === true);
+    if (contextGuard) {
+      return reply.status(contextGuard.status).send({
+        ok: false,
+        error: { code: contextGuard.code, message: contextGuard.message, ...(contextGuard.detail ? { detail: contextGuard.detail } : {}) }
+      });
     }
     const newConfig: YamlAccessConfig = {
       ...config,
@@ -973,6 +1023,17 @@ export function registerRoleRoutes(app: FastifyInstance) {
           }
         });
       }
+      const contextRefs = contextReferencesToRole(await listContextInventory(), request.params.roleId);
+      if (hasContextReferences(contextRefs)) {
+        return reply.status(409).send({
+          ok: false,
+          error: {
+            code: "ROLE_REFERENCED_BY_CONTEXT",
+            message: `role '${request.params.roleId}' is named by ${contextRefs.skills.length + contextRefs.wiki.length} Wiki/Skill ACL(s); remove them first`,
+            detail: contextRefs
+          }
+        });
+      }
       const existingRole = config.roles[request.params.roleId];
       const newConfig: YamlAccessConfig = {
         ...config,
@@ -1027,6 +1088,16 @@ export function registerRoleRoutes(app: FastifyInstance) {
         await writeGateTrace(gate, undefined, undefined, defaultActor(request));
       }
 
+      // Spec §4.3: retire the id durably BEFORE the config write; a failed write leaves the
+      // stricter state (id retired), never a reusable id.
+      const retireStore = await getSecurityStore();
+      const retired = retireStore.ok ? retireStore.value.tombstoneRoleId(request.params.roleId, "role_deleted") : retireStore;
+      if (!retireStore.ok || !retired.ok) {
+        return reply.status(503).send({
+          ok: false,
+          error: { code: "SECURITY_STORE_UNAVAILABLE", message: "Role id retirement could not be recorded; the role was not deleted" }
+        });
+      }
       const writeResult = await writeAccessYaml(projectRoot, newConfig, {
         enabled: true,
         changeType: "role_delete",
@@ -1060,6 +1131,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
       newRoleId?: string;
       description?: string;
       role?: unknown;
+      acknowledgeContextReferences?: boolean;
     };
   }>("/api/admin/roles/:roleId/copy", async (request, reply) => {
     const dryRun = request.body?.dryRun !== false;
@@ -1085,6 +1157,13 @@ export function registerRoleRoutes(app: FastifyInstance) {
     }
     if (config.roles?.[newRoleId]) {
       return reply.status(409).send({ ok: false, error: { code: "ROLE_ID_TAKEN", message: `role '${newRoleId}' already exists` } });
+    }
+    const copyGuard = await guardRoleIdForCreate(newRoleId, request.body?.acknowledgeContextReferences === true);
+    if (copyGuard) {
+      return reply.status(copyGuard.status).send({
+        ok: false,
+        error: { code: copyGuard.code, message: copyGuard.message, ...(copyGuard.detail ? { detail: copyGuard.detail } : {}) }
+      });
     }
     const newConfig: YamlAccessConfig = {
       ...config,

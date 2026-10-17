@@ -83,7 +83,11 @@ const ABSOLUTE_DENY_TOOL_SET = new Set<string>(ABSOLUTE_DENY_TOOLS);
 const DATA_PLANE_TOOL_SET = new Set<string>(DATA_PLANE_TOOLS);
 const META_TOOL_SET = new Set<string>(META_TOOLS);
 
-/** Spec 170: business context tools are open to every resolved agent. */
+/**
+ * Business context tools (Wiki / Skill discover + read channels). Spec §4.2: a channel is
+ * granted only by the formal Role that lists the tool; object ACL is decided separately
+ * (`context-acl.ts`). No Agent receives these implicitly.
+ */
 export const CONTEXT_TOOLS = [
   "wiki_search",
   "wiki_read",
@@ -1694,15 +1698,13 @@ export async function allowedToolNames(identity: Identity): Promise<string[]> {
     const wildcardTables = resolved.permissions.tables.includes("*");
     // P-GATE-03: DataPlane visible iff ≥1 capability — except legacy tables:* (capability list empty by design).
     if (DATA_PLANE_TOOL_SET.has(tool)) return wildcardTables || capabilityTools.has(tool);
-    if (CONTEXT_TOOL_SET.has(tool)) return true;
+    if (CONTEXT_TOOL_SET.has(tool)) return resolved.permissions.roleIds.length > 0 && !resolved.permissions.legacyAllow;
     if (tool.startsWith("lucy_") || tool === "kx_catalog") {
       return wildcardTables || resolved.permissions.capabilities.length > 0;
     }
     return true;
   }));
-  // Spec 170: context tools stay visible even when the role YAML omits them
-  // and the role has no data-plane capability.
-  return uniqueSorted([...listed, ...CONTEXT_TOOLS]);
+  return uniqueSorted(listed);
 }
 
 // ─── EffectivePolicy compile / submit (Spec 98 §8 / WP-I5) ───────────────────
@@ -2243,19 +2245,16 @@ export async function authorizeAndRewrite(
   const resolved = runtime.byUserId.get(identity.userId)
     ?? await resolveEffectivePermissions(identity, config, policy, { sourceMap: runtime.sourceMap });
   if (CONTEXT_TOOL_SET.has(toolName)) {
-    if (!resolved.ok && !runtime.degradedAgents.has(identity.userId)) {
-      return { allowed: false, reason: resolved.reason };
-    }
-    return { allowed: true };
+    // Spec §4.1/4.2: a degraded or unresolvable policy cannot prove an ACL → deny; legacy
+    // direct-allow has no formal Role → `context_role_required`; otherwise the tool must be
+    // listed by one of the caller's Roles (object ACL is decided in the context gate).
+    if (!resolved.ok) return { allowed: false, reason: resolved.reason };
+    const { roleIds, roleMetaTools, legacyAllow } = resolved.permissions;
+    if (legacyAllow || roleIds.length === 0) return { allowed: false, reason: "context_role_required" };
+    const granted = roleIds.some((roleId) => roleMetaTools?.[roleId]?.includes(toolName));
+    return granted ? { allowed: true } : { allowed: false, reason: "tool_forbidden" };
   }
   if (!resolved.ok) {
-    // Per-agent compile failure: keep concrete reason for DataPlane; Wiki Meta remains available.
-    if (
-      runtime.degradedAgents.has(identity.userId)
-      && (toolName === "wiki_search" || toolName === "wiki_read")
-    ) {
-      return { allowed: true };
-    }
     return { allowed: false, reason: resolved.reason };
   }
   const { tools: allowedTools, tables: allowedTables, connections } = resolved.permissions;

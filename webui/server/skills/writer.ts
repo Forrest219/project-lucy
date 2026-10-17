@@ -142,7 +142,7 @@ export function skillRelativePath(domain: string, name: string): string {
   return path.join("skills", assertSegment("domain", domain), `${assertSegment("name", name)}.md`);
 }
 
-/** Spec 170: copy an existing `roles_allowed` key through; omit it when absent. */
+/** Existing `roles_allowed` strings, carried over when a save does not change authorization. */
 function preservedRolesAllowed(raw: string): string[] | undefined {
   if (!raw.startsWith("---\n")) return undefined;
   const end = raw.indexOf("\n---", 4);
@@ -177,9 +177,11 @@ export function assembleSkillMarkdown(input: SkillWriteInput, preservedRolesAllo
       input.description?.trim() ||
       `${input.title?.trim() || name} - ${domain} domain governed skill SOP`
   };
-  if (preservedRolesAllowed) {
-    frontmatter.roles_allowed = preservedRolesAllowed;
-  }
+  // Spec §4.1/4.3: authorization is always written explicitly; absent input keeps the current
+  // list, and a brand-new Skill defaults to "no one" (`[]`) until roles are chosen.
+  frontmatter.roles_allowed = input.roles_allowed !== undefined
+    ? normalizeRolesAllowed(input.roles_allowed)
+    : (preservedRolesAllowed ?? []);
   if (input.prerequisites) frontmatter.prerequisites = input.prerequisites;
   if (Array.isArray(input.eval_cases) && input.eval_cases.length > 0) {
     frontmatter.eval_cases = input.eval_cases;
@@ -199,6 +201,9 @@ async function parseOrThrow(projectRoot: string, raw: string, filePath: string):
   }
   assertSegment("name", parsed.name);
   assertSegment("domain", parsed.domain);
+  if (parsed.roles_allowed_invalid) {
+    throw new SkillWriteError("skill_roles_invalid", 400);
+  }
   return parsed;
 }
 
@@ -277,7 +282,7 @@ async function prepareUpdateSkillFile(
     title: input.title ?? existing.title,
     version: input.version ?? existing.version,
     status: input.status ?? existing.status,
-    roles_allowed: input.roles_allowed ?? existing.roles_allowed,
+    roles_allowed: input.roles_allowed,
     triggers: input.triggers ?? existing.triggers,
     description: input.description ?? existing.description,
     prerequisites: input.prerequisites ?? existing.prerequisites,
@@ -285,6 +290,10 @@ async function prepareUpdateSkillFile(
     content: input.content ?? existing.content,
     rawContent: input.rawContent
   };
+  if (existing.roles_allowed_invalid && input.roles_allowed === undefined && typeof input.rawContent !== "string") {
+    // A corrupt ACL is repaired by choosing roles explicitly, never by silently saving "no one".
+    throw new SkillWriteError("skill_roles_invalid", 400);
+  }
   const raw = assembleSkillMarkdown(merged, preservedRolesAllowed(existing.raw));
   const skillsDir = (await loadContentPaths()).skills;
   const parsed = await parseOrThrow(projectRoot, raw, path.join(skillsDir, relPath.slice("skills/".length)));

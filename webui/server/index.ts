@@ -136,7 +136,7 @@ import { registerGovernanceObservabilityRoutes } from "./admin/governance-observ
 import { registerUiUsageRoutes } from "./admin/ui-usage.js";
 import { registerAuthRoutes, registerAdminAccountRoutes } from "./auth/routes.js";
 import { registerBrandingRoutes } from "./branding.js";
-import { requireWebuiAuthHook } from "./auth/guard.js";
+import { actorIdFromRequest, requireWebuiAuthHook } from "./auth/guard.js";
 import { assertStartupPolicy, resolveCookieSecure } from "./auth/deployment-mode.js";
 import { reconcileBootstrapOnStartup } from "./auth/bootstrap.js";
 import { closeSecurityStore } from "./security/instance.js";
@@ -163,7 +163,7 @@ import {
   type SemanticAssetReleaseTrigger,
   type SemanticAssetValidateRequest
 } from "./semantic-assets.js";
-import { exportSemanticAssetPackage } from "./semantic-asset-export.js";
+import { exportSemanticAssetPackage, recordSemanticAssetExport } from "./semantic-asset-export.js";
 import {
   buildPublishHistoryCsvRows,
   formatPublishHistoryExportFilenameStamp
@@ -1089,12 +1089,13 @@ export function buildServer() {
 
   app.put<{
     Params: { key: string };
-    Body: { dryRun?: boolean; frontmatter?: WikiWriteInput["frontmatter"]; content?: string };
+    Body: { dryRun?: boolean; frontmatter?: WikiWriteInput["frontmatter"]; content?: string; expected_version?: string };
   }>("/api/wiki/:key", async (request) => {
     const projectRoot = await resolveProjectRoot();
     const writeInput: WikiWriteInput = {
       frontmatter: request.body?.frontmatter,
-      content: request.body?.content
+      content: request.body?.content,
+      expected_version: request.body?.expected_version
     };
     const preview = request.body?.dryRun === false
       ? await writeWiki(projectRoot, request.params.key, writeInput)
@@ -1996,13 +1997,15 @@ export function buildServer() {
             schema: typeof body.scope.schema === "string" ? body.scope.schema : undefined
           }
         : undefined;
-    const result = await exportSemanticAssetPackage(projectRoot, {
+    const exportRequest = {
       ...(scope ? { scope } : {}),
       includeWiki: body.includeWiki === true,
       includeEvals: body.includeEvals === true,
       includeSkills: body.includeSkills === true,
       includeSanitizedKtxYaml: body.includeSanitizedKtxYaml !== false
-    });
+    };
+    const result = await exportSemanticAssetPackage(projectRoot, exportRequest);
+    await recordSemanticAssetExport(actorIdFromRequest(request), exportRequest, result);
     return { ok: true, data: result };
   });
 

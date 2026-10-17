@@ -1,6 +1,7 @@
 import clsx from "clsx";
 import { useMemo, useState } from "react";
 import { MarkdownPreview } from "./MarkdownPreview";
+import { ObjectAclField } from "./ObjectAclField";
 import { extractTemplatePlaceholders } from "../lib/wiki";
 import type { WikiFrontmatter } from "../lib/types";
 
@@ -9,6 +10,8 @@ export type WikiEditViewProps = {
   content: string;
   onFrontmatterChange: (next: WikiFrontmatter) => void;
   onContentChange: (next: string) => void;
+  /** The stored `allowed_roles` declaration is corrupt: nobody can read it until re-saved. */
+  aclCorrupt?: boolean;
   /**
    * `true` forces the Markdown + Preview panels to stack as Tabs. The
    * parent decides when this is appropriate (narrow viewports). When
@@ -26,6 +29,9 @@ export type WikiEditViewProps = {
  * local editor; Diff / Raw stay in Save Preflight.
  */
 export function WikiEditView({
+  frontmatter,
+  onFrontmatterChange,
+  aclCorrupt = false,
   content,
   onContentChange,
   previewTab = false,
@@ -45,6 +51,12 @@ export function WikiEditView({
       className="pl-wiki-edit-view"
       data-testid="wiki-edit-view"
     >
+      <ObjectAclField
+        corrupt={aclCorrupt}
+        onChange={(next) => onFrontmatterChange({ ...frontmatter, allowed_roles: next })}
+        testId="wiki-acl-field"
+        value={frontmatter.allowed_roles}
+      />
       {placeholders.length > 0 ? (
         <p
           aria-label="模板待补全占位符"

@@ -1,4 +1,5 @@
 ---
+allowed_roles: [exec_cfo_readonly, exec_bp_consumer_readonly, exec_demo_full]
 sl_refs:
   - demo-exec-mysql/dataforai/fct_channel_pl_monthly
   - demo-exec-mysql/dataforai/vw_channel_pl_consumer

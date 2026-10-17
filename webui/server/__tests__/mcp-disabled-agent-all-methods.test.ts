@@ -29,21 +29,24 @@ function readRequestBody(req: IncomingMessage): Promise<string> {
   });
 }
 
-const accessYaml = (enabled: boolean) => `users:
-  - id: isolated_agent
-    name: Isolated Agent
-    enabled: ${enabled}
-    tokens:
-      - hash: "${tokenHash(TOKEN)}"
-        label: disabled-test-token
-        created: 2026-10-18
+const accessYaml = (enabled: boolean) => `roles:
+  sop_reader:
+    description: formal role for the Skill control
     allow:
       connections: []
-      tables: []
       tools:
         - lucy_skill_read
         - lucy_skill_search
         - wiki_read
+users:
+  - id: isolated_agent
+    name: Isolated Agent
+    enabled: ${enabled}
+    role: sop_reader
+    tokens:
+      - hash: "${tokenHash(TOKEN)}"
+        label: disabled-test-token
+        created: 2026-10-18
 `;
 
 const METHODS: Array<[string, Record<string, unknown>]> = [
@@ -83,7 +86,7 @@ describe("MCP disabled Agent is rejected on all methods (T0A-3 / V-02)", () => {
     );
     await writeFile(
       path.join(projectRoot, "config", "skills", "finance", "restricted.skill.md"),
-      `---\nname: restricted-sop\ntitle: Restricted SOP\ndomain: finance\nstatus: published\nroles_allowed: ["*"]\ndescription: synthetic\n---\n${CANARY}\n`
+      `---\nname: restricted-sop\ntitle: Restricted SOP\ndomain: finance\nstatus: published\nroles_allowed: ["sop_reader"]\ndescription: synthetic\n---\n${CANARY}\n`
     );
     process.env.KTX_PROJECT_ROOT = projectRoot;
     process.env.LUCY_CONTENT_ROOT = path.join(projectRoot, "config");

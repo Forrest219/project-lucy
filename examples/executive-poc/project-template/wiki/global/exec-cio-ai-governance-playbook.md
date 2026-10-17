@@ -1,4 +1,5 @@
 ---
+allowed_roles: [exec_demo_full]
 sl_refs:
   - demo-exec-mysql/dataforai/fct_ai_token_consumption
   - demo-exec-mysql/dataforai/fct_business_ticket_closed

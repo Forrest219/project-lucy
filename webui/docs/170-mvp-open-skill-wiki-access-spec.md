@@ -8,7 +8,7 @@
 | 版本 | v0.1 |
 | 撰写日期 | 2026-10-12 |
 | 委托人 | xingchen |
-| 状态 | 已实现 |
+| 状态 | **已被取代（2026-10-18，企业安全整改 T05/T06）**：上下文对象授权与默认拒绝恢复，见 [企业安全 Spec §4](../../docs/specs/lucy-20261018-enterprise-security-and-real-e2e-spec.md) 与 [ADR D3](../../docs/access-control/adr-20261018-security-ledger-and-context-acl.md)；本文只保留历史说明，不再有运行时效力 |
 | 适用范围 | MCP Proxy 工具清单与裁决、Skill ACL、Wiki ACL、`/skills`、角色权限里的工具预设、Skill / Wiki 保存回写 |
 | 关联工单 | `webui/docs/plans/wo-202610-22-mvp-open-skill-wiki-access.md` |
 | 上游 | Spec 151、Spec 98 §4.2、Spec 162 §7.3、`webui/server/proxy/skill-acl.ts`、`webui/server/proxy/wiki-acl.ts` |
@@ -17,6 +17,7 @@
 
 | 版本 | 变更 |
 |---|---|
+| v0.1-S（2026-10-18） | 取消当前效力：Skill / Wiki 恢复对象授权（`roles_allowed` / `allowed_roles`，缺失或 `[]` 无人可见）、同一 Role 须同时具备对象授权与通道（`lucy_skill_*` / `wiki_*`），不再向所有 Agent 并入四个上下文工具；Meta 降级不再全开放。`sl_refs`、Skill prerequisites、`visibility`、目录名 `global` 均不授权。回滚只能到通过同一安全回归的构建，不得提供“恢复全开放”开关 |
 | v0.1 | MVP 暂停 Skill 与 Wiki 的对象授权和通道勾选。已发布 Skill 与全部 Wiki 文档对所有已解析角色开放。文件里的授权字段保留，不批量改写 |
 
 ## 1. 问题

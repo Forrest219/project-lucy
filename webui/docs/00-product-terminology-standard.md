@@ -682,9 +682,9 @@ Skill 是与语义资产、业务 Wiki 并列的受治理上下文。导航与�
 | Skill Governance Overview | Skill 治理总览 | Skill 首页、Skill Hub | Spec 153；`/skills` 默认主工作区，展示全部或领域范围内的治理摘要 |
 | Skill Save Preflight | 保存 Skill 前预检 | 发布 Skill、直接保存 | Spec 153；写入前只读展示 Diff、校验与状态；按钮为「保存并预检」。Spec 170 起不再展示授权影响 |
 | Markdown Source / Rendered Preview | Markdown 源码 / 渲染预览 | 原文框 / 效果区 | Spec 153；Skill 编辑态双栏标签 |
-| Accessible Roles | 可访问角色 | 授权角色（辅助说明） | Spec 170 起从 Skill 编辑页撤回。`roles_allowed` 只保留在文件中，不参与运行时裁决 |
-| All Roles Visible | 所有角色可见 | 全员可用、公开（作主标签） | Spec 170 起从界面撤回。已发布 Skill 默认对所有已解析角色开放，不再用该开关写入 `["*"]` |
-| No Roles Visible | 无人可见 | 私有（含义不明确） | Spec 170 起从界面撤回。空 `roles_allowed` 不再表示 Agent 不可读 |
+| Accessible Roles | 可访问角色 | 授权角色（辅助说明） | — | Skill `roles_allowed` / Wiki `allowed_roles` 的对象授权控件（2026-10-18 T05/T06 恢复）；默认无人可见；同一 Role 须同时具备对象授权与通道才可用 |
+| All Roles Visible | 所有角色可见 | 全员可用、公开（作主标签） | 匿名公开、免登录 | 对应 `["*"]`：所有有效已分配 Role 可匹配，仍检查通道与 Skill 状态；需独立开关与二次确认 |
+| No Roles Visible | 无人可见 | 私有（含义不明确） | — | 缺失或空数组；新建 Skill / Wiki 的默认状态，管理台受信任管理员仍可维护 |
 
 Protected terms（DOM 须 `translate="no"` + `notranslate`）：`Skill`、`lucy-skill://`、`lucy_skill_read`、`domain`、`roles_allowed`、Skill 文件路径、`SKILL.md`。
 

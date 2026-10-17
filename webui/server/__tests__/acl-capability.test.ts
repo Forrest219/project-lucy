@@ -369,36 +369,48 @@ describe("WP-I3 Capability synthesis and authorize gate", () => {
     expect(metaCatalog.connections).toEqual(["warehouse"]);
 
     const metaTools = await allowedToolNames(identity("meta_only_agent"));
-    expect(metaTools).toEqual(["lucy_skill_read", "lucy_skill_search", "wiki_read", "wiki_search"]);
+    // Spec §4.2: context channels are listed only when a Role grants them.
+    expect(metaTools).toEqual(["wiki_search"]);
 
     // A DataPlane tool is visible only when at least one capability names that tool.
-    // Spec 170 also unions the four context tools.
     expect(await allowedToolNames(identity("multi_role_agent"))).toEqual([
       "lucy_query",
-      "lucy_read_source",
-      "lucy_skill_read",
-      "lucy_skill_search",
-      "wiki_read",
-      "wiki_search"
+      "lucy_read_source"
     ]);
   });
 
-  it("keeps context tools available for a QA role with no table capability (SC-4)", async () => {
+  it("grants context channels only through the Role that lists them (Spec §4.2)", async () => {
     const { allowedToolNames, authorizeAndRewrite } = await loadAcl();
+    const contextTools = ["wiki_search", "wiki_read", "lucy_skill_search", "lucy_skill_read"];
+
+    // A QA role without any context tool no longer receives them implicitly.
     const names = await allowedToolNames(identity("qa_only_agent"));
-    expect(names).toEqual(expect.arrayContaining([
-      "lucy_skill_read",
-      "lucy_skill_search",
-      "wiki_read",
-      "wiki_search"
-    ]));
-    for (const tool of ["wiki_search", "wiki_read", "lucy_skill_search", "lucy_skill_read"]) {
-      await expect(authorizeAndRewrite(identity("qa_only_agent"), tool, {})).resolves.toMatchObject({ allowed: true });
+    for (const tool of contextTools) expect(names).not.toContain(tool);
+    for (const tool of contextTools) {
+      await expect(authorizeAndRewrite(identity("qa_only_agent"), tool, {})).resolves.toEqual({
+        allowed: false,
+        reason: "tool_forbidden"
+      });
     }
     await expect(authorizeAndRewrite(identity("qa_only_agent"), "lucy_query", {
       connectionId: "warehouse",
       measures: ["pub_orders.amount"]
     })).resolves.toEqual({ allowed: false, reason: "tool_forbidden" });
+
+    // meta_only lists wiki_search only: that channel opens, the others stay closed.
+    await expect(authorizeAndRewrite(identity("meta_only_agent"), "wiki_search", {})).resolves.toEqual({ allowed: true });
+    await expect(authorizeAndRewrite(identity("meta_only_agent"), "wiki_read", {})).resolves.toEqual({
+      allowed: false,
+      reason: "tool_forbidden"
+    });
+
+    // A legacy direct-allow agent has no formal Role: context is refused even if it lists the tool.
+    await expect(authorizeAndRewrite(identity("compat_legacy_agent"), "wiki_search", {})).resolves.toEqual({
+      allowed: false,
+      reason: "context_role_required"
+    });
+    expect(await allowedToolNames(identity("compat_legacy_agent"))).not.toContain("wiki_search");
+
     await expect(authorizeAndRewrite(identity("disabled_qa_agent"), "wiki_search", {})).resolves.toEqual({
       allowed: false,
       reason: "agent_disabled"

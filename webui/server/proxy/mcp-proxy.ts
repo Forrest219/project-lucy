@@ -32,7 +32,8 @@ import {
 } from "./audit-privacy.js";
 import { buildAccessLogAuditMeta } from "./audit-meta.js";
 import { canAccessWikiKey, canonicalWikiKey, searchAccessibleWikiPages } from "./wiki-acl.js";
-import { loadAllSkills, getSkillByUri, getSkillByName } from "../skills/loader.js";
+import { CONTEXT_NOT_AVAILABLE, CONTEXT_ROLE_REQUIRED } from "./context-acl.js";
+import { loadAllSkillsFresh, getSkillByUri, getSkillByName } from "../skills/loader.js";
 import type { SkillAsset } from "../skills/types.js";
 import { canAccessSkill, filterAccessibleSkills, type SkillAclDecision, type SkillAclAction } from "./skill-acl.js";
 import { readProject, resolveProjectRoot } from "../project.js";
@@ -1612,7 +1613,7 @@ async function buildRoleAwareInstructions(identity: Identity): Promise<string | 
     const catalog = await lucyCatalog(identity);
     let accessibleSkills: Awaited<ReturnType<typeof filterAccessibleSkills>> = [];
     try {
-      const allSkills = await loadAllSkills();
+      const allSkills = await loadAllSkillsFresh();
       accessibleSkills = await filterAccessibleSkills(identity, allSkills, "discover");
     } catch {
       // Best-effort loading of skills for instructions
@@ -1830,7 +1831,7 @@ async function filterWikiResultArray(identity: Identity, items: unknown[]): Prom
       continue;
     }
     sawWikiKeys = true;
-    const { decision, page } = await canAccessWikiKey(identity, rawKey);
+    const { decision, page } = await canAccessWikiKey(identity, rawKey, "discover");
     if (!decision.allowed || !page) {
       filtered += 1;
       continue;
@@ -1907,7 +1908,7 @@ async function filterWikiSearchPayload(identity: Identity, payload: unknown): Pr
         }
         const dropped = new Set<string>();
         for (const key of keysInText) {
-          const { decision, page } = await canAccessWikiKey(identity, key);
+          const { decision, page } = await canAccessWikiKey(identity, key, "discover");
           if (decision.allowed && page) continue;
           filtered += 1;
           sawWikiKeys = true;
@@ -1948,6 +1949,16 @@ function rpcErrorResponse(requestId: string | number, message: string, reason: s
       data: { reason }
     }
   };
+}
+
+/** Spec §4.4 — identical external text for unauthorized / unknown / draft / deprecated context objects. */
+function contextExternalReason(internalReason: string | undefined): string {
+  return internalReason === "context_role_required" ? CONTEXT_ROLE_REQUIRED : CONTEXT_NOT_AVAILABLE;
+}
+
+function contextUnavailableRpc(requestId: string | number, internalReason: string | undefined): Record<string, unknown> {
+  const reason = contextExternalReason(internalReason);
+  return rpcErrorResponse(requestId, reason, reason);
 }
 
 function upstreamFailureReason(error: unknown): "source_timeout" | "upstream_unavailable" {
@@ -3413,7 +3424,7 @@ async function buildDenialRepairPayload(
       const allowed = Boolean(decision.allowed && page);
       const responseBody = allowed && page
         ? jsonRpcToolResult(requestId, JSON.stringify({ key: page.key, title: page.title, content: page.body }, null, 2))
-        : jsonRpcToolResult(requestId, `Access denied: ${decision.reason ?? "wiki_forbidden"}`, { isError: true });
+        : jsonRpcToolResult(requestId, contextExternalReason(decision.reason), { isError: true });
       res.writeHead(200, { "content-type": "application/json" });
       res.end(responseBody);
       recordRequestAudit({
@@ -3639,7 +3650,7 @@ async function buildDenialRepairPayload(
   if (rpcMethod === "resources/list") {
     let resources: Array<{ uri: string; name: string; description: string; mimeType: string }> = [];
     try {
-      const allSkills = await loadAllSkills();
+      const allSkills = await loadAllSkillsFresh();
       const accessible = await filterAccessibleSkills(identity, allSkills, "discover");
       resources = accessible.map((s) => ({
         uri: s.uri,
@@ -3678,13 +3689,9 @@ async function buildDenialRepairPayload(
   if (rpcMethod === "resources/read") {
     const params = parsedRpc?.params as Record<string, unknown> | undefined;
     const uri = typeof params?.uri === "string" ? params.uri.trim() : "";
-    const skill = uri ? await getSkillByUri(uri) : null;
+    const skill = uri ? await getSkillByUri(uri, undefined, undefined, { fresh: true }) : null;
     if (!skill) {
-      const errPayload = {
-        jsonrpc: "2.0",
-        id: requestId,
-        error: { code: -32002, message: `Resource not found: ${uri}` }
-      };
+      const errPayload = contextUnavailableRpc(requestId, "skill_not_found");
       const responseBody = JSON.stringify(errPayload);
       res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
       res.end(responseBody);
@@ -3706,11 +3713,7 @@ async function buildDenialRepairPayload(
 
     const decision = await canAccessSkill(identity, skill, "read");
     if (!decision.allowed) {
-      const errPayload = {
-        jsonrpc: "2.0",
-        id: requestId,
-        error: { code: -32003, message: `Access denied: ${decision.reason ?? "denied_skill_acl"}` }
-      };
+      const errPayload = contextUnavailableRpc(requestId, decision.reason);
       const responseBody = JSON.stringify(errPayload);
       res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
       res.end(responseBody);
@@ -3766,7 +3769,7 @@ async function buildDenialRepairPayload(
   if (rpcMethod === "prompts/list") {
     let prompts: Array<{ name: string; description: string; arguments?: Array<{ name: string; description: string; required: boolean }> }> = [];
     try {
-      const allSkills = await loadAllSkills();
+      const allSkills = await loadAllSkillsFresh();
       const accessible = await filterAccessibleSkills(identity, allSkills, "discover");
       prompts = accessible.map((s) => ({
         name: s.name,
@@ -3810,13 +3813,9 @@ async function buildDenialRepairPayload(
   if (rpcMethod === "prompts/get") {
     const params = parsedRpc?.params as Record<string, unknown> | undefined;
     const promptName = typeof params?.name === "string" ? params.name.trim() : "";
-    const skill = promptName ? await getSkillByName(promptName) : null;
+    const skill = promptName ? await getSkillByName(promptName, undefined, undefined, { fresh: true }) : null;
     if (!skill) {
-      const errPayload = {
-        jsonrpc: "2.0",
-        id: requestId,
-        error: { code: -32602, message: `Prompt not found: ${promptName}` }
-      };
+      const errPayload = contextUnavailableRpc(requestId, "skill_not_found");
       const responseBody = JSON.stringify(errPayload);
       res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
       res.end(responseBody);
@@ -3838,11 +3837,7 @@ async function buildDenialRepairPayload(
 
     const decision = await canAccessSkill(identity, skill, "read");
     if (!decision.allowed) {
-      const errPayload = {
-        jsonrpc: "2.0",
-        id: requestId,
-        error: { code: -32003, message: `Access denied: ${decision.reason ?? "denied_skill_acl"}` }
-      };
+      const errPayload = contextUnavailableRpc(requestId, decision.reason);
       const responseBody = JSON.stringify(errPayload);
       res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
       res.end(responseBody);
@@ -3903,7 +3898,7 @@ async function buildDenialRepairPayload(
     const query = typeof rawArgs?.query === "string" ? rawArgs.query.trim().toLowerCase() : (typeof rawArgs?.q === "string" ? rawArgs.q.trim().toLowerCase() : "");
     const domainFilter = typeof rawArgs?.domain === "string" ? rawArgs.domain.trim().toLowerCase() : "";
 
-    const allSkills = await loadAllSkills();
+    const allSkills = await loadAllSkillsFresh();
     const accessible = await filterAccessibleSkills(identity, allSkills, "discover");
 
     const matches = accessible.filter((s) => {
@@ -3967,10 +3962,12 @@ async function buildDenialRepairPayload(
   if (rpcMethod === "tools/call" && toolName === "lucy_skill_read") {
     const rawArgs = toolArgs as Record<string, unknown> | undefined;
     const target = typeof rawArgs?.skill_name === "string" ? rawArgs.skill_name.trim() : (typeof rawArgs?.name === "string" ? rawArgs.name.trim() : "");
-    const skill = target.startsWith("lucy-skill://") ? await getSkillByUri(target) : await getSkillByName(target);
+    const skill = target.startsWith("lucy-skill://")
+      ? await getSkillByUri(target, undefined, undefined, { fresh: true })
+      : await getSkillByName(target, undefined, undefined, { fresh: true });
 
     if (!skill) {
-      const responseBody = jsonRpcToolResult(requestId, `Error: Skill "${target}" not found`, { isError: true });
+      const responseBody = jsonRpcToolResult(requestId, contextExternalReason("skill_not_found"), { isError: true });
       res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
       res.end(responseBody);
       recordRequestAudit({
@@ -3992,7 +3989,7 @@ async function buildDenialRepairPayload(
 
     const decision = await canAccessSkill(identity, skill, "read");
     if (!decision.allowed) {
-      const responseBody = jsonRpcToolResult(requestId, `Access denied: ${decision.reason ?? "denied_skill_acl"}`, { isError: true });
+      const responseBody = jsonRpcToolResult(requestId, contextExternalReason(decision.reason), { isError: true });
       res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
       res.end(responseBody);
       recordRequestAudit({

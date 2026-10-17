@@ -35,6 +35,15 @@ export function validateSkill(skill: SkillAsset): SkillValidationResult {
     });
   }
 
+  if (skill.roles_allowed_invalid && !(skill.roles_allowed.includes("*") && skill.roles_allowed.length > 1)) {
+    issues.push({
+      code: "skill_roles_invalid",
+      type: "error",
+      field: "roles_allowed",
+      message: "可访问角色必须是角色 ID 数组或仅含 * 的数组。",
+    });
+  }
+
   if (skill.roles_allowed.includes("*") && skill.roles_allowed.length > 1) {
     issues.push({
       code: "skill_roles_wildcard_mixed",

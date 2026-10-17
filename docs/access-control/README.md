@@ -47,6 +47,18 @@
 
 ---
 
+### 1.1 上下文对象授权（2026-10-18 起，取代 Spec 170 全开放）
+
+| 主题 | 口径 |
+|---|---|
+| 事实源 | Skill `roles_allowed` / Wiki `allowed_roles`；缺失或 `[]` 无人可见；`["*"]` = 所有有效已分配 Role（非匿名）；损坏声明拒绝 |
+| 裁决 | `webui/server/proxy/context-acl.ts` 的 `authorizeContext`：同一 Role 须同时匹配对象授权与通道；initialize / resources / prompts / tools / wiki 通道复用；未授权 / 不存在 / 草稿 / 停用统一 `context_not_available`；legacy direct-allow `context_role_required` |
+| 版本与缓存 | `contextPolicyVersion = hash(规范化 ACL + 文件版本 + 角色通道版本)`；裁决不缓存正文，授权文件按请求重读，收窄下一请求即生效 |
+| 管理 | Skill / Wiki 编辑页设置可访问角色（默认无人可见，`*` 需二次确认）；Role 详情只读展示发现 / 读取效果；Wiki `file_version` / `expected_version`；Role 删除检查 ACL 引用并退役标识 |
+| 模板 | `examples/*/project-template` 与 `customer-config.example` 的 14 篇 Wiki 及模板 Skill 随代码提交显式 ACL；`*` 仅 `answer-style`（纯版式指引）；`context-template-acl.test.ts` 为门禁 |
+| 迁移 | `scripts/security/migrate-context-acl.mts`：`--dry-run` 只读报告（含 `inventoryDigest`）；`--apply` 仅 owner，带 `--expected-digest`、逐文件 `expected_version`、加密备份与 journal；空 / 损坏 / 旧 public 不自动变 `*` |
+| 回滚 | 迁移回滚用加密备份还原受影响文件，**不得**运行忽略 ACL 的旧全开放版本，也没有“恢复全开放”开关；只能回到通过同一安全回归的构建，或先隔离入口再恢复 |
+
 ## 2. 目录清单
 
 | 文件 | 说明 |

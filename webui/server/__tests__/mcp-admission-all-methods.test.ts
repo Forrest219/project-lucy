@@ -66,6 +66,7 @@ const accessYaml = `roles:
       connections: []
       tools:
         - wiki_read
+        - lucy_skill_read
 users:
 ${agent("legacy_agent", tokens.legacy, legacyAllow)}${agent("roled_agent", tokens.roled, "    role: analyst\n")}${agent("disabled_agent", tokens.disabled, `    enabled: false\n${legacyAllow}`)}${agent("bad_role_agent", tokens.badRole, "    role: ghost_role\n")}${agent("both_roles_agent", tokens.bothRoles, "    role: analyst\n    roles: [analyst]\n")}${agent("empty_agent", tokens.empty, "    allow: {}\n")}  - id: expired_agent
     name: expired_agent
@@ -130,7 +131,7 @@ describe("MCP admission gate (T04-1)", () => {
     await writeFile(path.join(projectRoot, "webui", "config", "data-qa-instructions.md"), "# Base\nFallback");
     await writeFile(
       path.join(projectRoot, "config", "skills", "finance", "restricted.skill.md"),
-      `---\nname: restricted-sop\ntitle: Restricted SOP\ndomain: finance\nstatus: published\nroles_allowed: ["*"]\ndescription: synthetic\n---\n${CANARY}\n`
+      `---\nname: restricted-sop\ntitle: Restricted SOP\ndomain: finance\nstatus: published\nroles_allowed: ["analyst"]\ndescription: synthetic\n---\n${CANARY}\n`
     );
     process.env.KTX_PROJECT_ROOT = projectRoot;
     process.env.LUCY_CONTENT_ROOT = path.join(projectRoot, "config");
@@ -278,18 +279,22 @@ describe("MCP admission gate (T04-1)", () => {
       await startProxy();
     });
 
-    it("legacy direct-allow keeps its data-plane path without a role requirement", async () => {
+    it("legacy direct-allow keeps its data-plane path but context needs a formal role (Spec §4.1)", async () => {
       const res = await rpc("tools/list", {}, tokens.legacy);
       expect(res.status).toBe(200);
       expect(hits.length).toBeGreaterThan(0);
       const read = await rpc("resources/read", { uri: SKILL_URI }, tokens.legacy);
       expect(read.status).toBe(200);
-      expect(read.text).toContain(CANARY);
+      expect(read.text).toContain("context_role_required");
+      expect(read.text).not.toContain(CANARY);
     });
 
-    it("formal role Agent is admitted", async () => {
+    it("formal role Agent is admitted and reads the Skill its role is authorized for", async () => {
       const res = await rpc("tools/list", {}, tokens.roled);
       expect(res.status).toBe(200);
+      const read = await rpc("resources/read", { uri: SKILL_URI }, tokens.roled);
+      expect(read.status).toBe(200);
+      expect(read.text).toContain(CANARY);
     });
 
     it("admission reports role facts for T05 (roles vs legacy direct-allow)", async () => {

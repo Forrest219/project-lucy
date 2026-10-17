@@ -1,4 +1,5 @@
 ---
+allowed_roles: [exec_cfo_readonly, exec_demo_full]
 sl_refs:
   - demo-exec-mysql/dataforai/vw_gl_trial_balance_summary
   - demo-exec-mysql/dataforai/fct_gl_journal_line

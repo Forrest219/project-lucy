@@ -345,6 +345,25 @@ function RoleBoundarySummary({
           </div>
         </details>
       ) : null}
+      {detail?.wikiAccess || detail?.skillAccess ? (
+        <section aria-label="上下文可见范围" className="text-xs" data-testid="role-context-access">
+          <p className="font-medium">上下文可见范围（只读）</p>
+          <ul className="mt-1 grid gap-1 text-fg-muted">
+            {[
+              { label: "业务 Wiki", access: detail.wikiAccess },
+              { label: "业务 Skill", access: detail.skillAccess }
+            ].map(({ label, access }) =>
+              access ? (
+                <li key={label}>
+                  {label}：可发现 {access.discoverable.length} / 可读取 {access.readable.length}
+                  {access.declaredWithoutChannel.length > 0 ? `；${access.declaredWithoutChannel.length} 个已授权对象缺少通道` : ""}
+                </li>
+              ) : null
+            )}
+          </ul>
+          <p className="mt-1 text-fg-muted">对象授权只在 Wiki / Skill 编辑页修改；通道由「允许的 <span className="notranslate" translate="no">MCP</span> 工具」决定。</p>
+        </section>
+      ) : null}
     </aside>
   );
 }

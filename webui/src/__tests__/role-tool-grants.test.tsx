@@ -52,8 +52,9 @@ describe("RoleToolGrants", () => {
     render(<Controlled />);
     expect(screen.getByTestId("role-custom-tools")).toHaveAttribute("open");
     expect(screen.queryByRole("checkbox", { name: /sl_query/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole("checkbox", { name: /lucy_skill_search/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole("checkbox", { name: /lucy_skill_read/ })).not.toBeInTheDocument();
+    // Spec §4.2: Wiki / Skill channels are Role grants again (object ACL is decided on the object).
+    expect(screen.getByRole("checkbox", { name: /lucy_skill_search/ })).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: /lucy_skill_read/ })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "只读问答 + 知识库" })).not.toBeInTheDocument();
     expect(screen.getByRole("checkbox", { name: /custom_probe/ })).toBeInTheDocument();
   });
@@ -68,8 +69,7 @@ describe("RoleToolGrants", () => {
       "sl_validate",
     ]));
     expect(selected).not.toContain("sl_query");
-    expect(selected).not.toContain("lucy_skill_search");
-    expect(selected).not.toContain("lucy_skill_read");
+    expect(selected).toEqual(expect.arrayContaining(["lucy_skill_search", "lucy_skill_read"]));
     expect(screen.getByRole("button", { name: "全选" })).toBeDisabled();
   });
 
@@ -118,7 +118,7 @@ describe("RoleToolGrants", () => {
     expect(screen.getByText("当前与只读问答一致")).toBeInTheDocument();
   });
 
-  it("ignores the four context tools when matching 只读问答 and does not offer them as grants", () => {
+  it("ignores the four channel tools when matching 只读问答 but still offers and lists them as grants", () => {
     render(
       <Controlled
         initial={[
@@ -139,10 +139,10 @@ describe("RoleToolGrants", () => {
       />
     );
     expect(screen.getByText("当前与只读问答一致")).toBeInTheDocument();
-    expect(screen.queryByRole("checkbox", { name: /wiki_search/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: /wiki_search/ })).toBeChecked();
     const chips = screen.getByRole("list", { name: "当前选择的 MCP 工具" });
-    expect(chips.textContent).not.toContain("wiki_search");
-    expect(chips.textContent).not.toContain("lucy_skill_read");
+    expect(chips.textContent).toContain("wiki_search");
+    expect(chips.textContent).toContain("lucy_skill_read");
     expect(chips.textContent).toContain("lucy_query");
   });
 
