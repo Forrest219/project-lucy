@@ -34,20 +34,22 @@ findings:
     verifiedBy: [SEC-04]
     acceptedBy: null
   # V-04 Wiki / 语义层写入的管理员归因缺失，无登录事件（T08）
+  # note: T08-1/2 已落地：request-actor（可信 actor 只取已验证会话或显式 open 模式 local-admin，无请求用 system actor，已登录请求不再回退 local-admin）已显式透传到 Wiki(5)/语义层(2)/Skill(3)/Agent/Role/Token/ktx.yaml 写入与审计读接口；forwarded/User-Agent/body.actor 不影响归因，actor_ip 只取 socket peer；登录成功/失败/退出/引导/账户创建·改角色·轮换密码·停用·删除写入 security_events；fixedIn 待 T08 提交后回填 SHA。未覆盖：eval/cases、security-candidates、semantic-assets、branding、suite-import 等写入点仍沿用旧默认（见交付报告）
   - id: V-04
     severity: P1
-    status: open
+    status: fixed
     spec: "§5.2"
     fixedIn: null
-    verifiedBy: []
+    verifiedBy: [SEC-05, SEC-18, SEC-20]
     acceptedBy: null
   # V-05 配置审计 Diff 暴露管理员密码哈希，含历史数据清理（T08）
+  # note: T08-2 写入前脱敏（凭据值逐行掩码、认证事件 key allowlist、Wiki/Skill 正文只存摘要，集中在 recordConfigChange/updateConfigChangeStatus）+ T08-3 历史清理工具 scripts/security/scrub-audit-secrets.mts（dry-run → 校验 digest → 加密备份并回读 → 单事务改写 → 维护事件 → 复扫为 0）；旧数据库备份/已导出文件/本次备份不由工具清理，需按保留策略处置；fixedIn 待 T08 提交后回填 SHA
   - id: V-05
     severity: P2
-    status: open
+    status: fixed
     spec: "§5.3"
     fixedIn: null
-    verifiedBy: []
+    verifiedBy: [SEC-17, SEC-20]
     acceptedBy: null
   # V-06 首个 owner bootstrap 并发覆盖（T02）
   # note: 引导互斥区覆盖 fresh read→验证密钥→写管理员→消费引导→commit；并发第二请求 409；fixedIn 待 T02 提交后回填 SHA

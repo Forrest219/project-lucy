@@ -6,6 +6,7 @@ import { computeCompletion } from "./completion";
 import { previewDiff } from "./diff";
 import { assertReadable, ForbiddenPathError, safeWrite } from "./fs-safe";
 import { auditedWriteFile } from "./admin/config-audit-write.js";
+import { auditActorFields, type TrustedActor } from "./security/request-actor.js";
 import type { AuthoredText, Column, Join, ManifestSchemaSummary, Measure, Segment, SourceSummary, TableModel, TablePatch } from "./model";
 import { previewOverlayUpdate } from "./overlay";
 import {
@@ -730,7 +731,8 @@ export async function writeSourcePatch(
   conn: string,
   schema: string,
   table: string,
-  patch: TablePatch
+  patch: TablePatch,
+  actor?: TrustedActor
 ): Promise<SourcePreview> {
   const preview = await buildSourcePatchPreview(projectRoot, conn, schema, table, patch);
   // Spec 174 §3.2 — one barrier over the multi-file write (partial failure still invalidates).
@@ -740,7 +742,7 @@ export async function writeSourcePatch(
         enabled: true,
         changeType: "semantic_table_save",
         assetKind: "semantic",
-        actorType: "ui_admin",
+        ...auditActorFields(actor),
         source: "semantic_layer_patch_api",
         targetId: `${conn}:${schema}:${table}`,
         diff: file.diff,
@@ -921,7 +923,8 @@ export async function writeSourceYamlImport(
   conn: string,
   schema: string,
   table: string,
-  yaml: string
+  yaml: string,
+  actor?: TrustedActor
 ): Promise<SourcePreview> {
   const preview = await previewSourceYamlImport(projectRoot, conn, schema, table, yaml);
   await withDisplayWriteBarrier(["D", "P"], async () => {
@@ -930,7 +933,7 @@ export async function writeSourceYamlImport(
         enabled: true,
         changeType: "semantic_table_import",
         assetKind: "semantic",
-        actorType: "ui_admin",
+        ...auditActorFields(actor),
         source: "semantic_layer_import_api",
         targetId: `${conn}:${schema}:${table}`,
         diff: file.diff,

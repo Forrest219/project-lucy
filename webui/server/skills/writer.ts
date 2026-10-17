@@ -8,6 +8,7 @@ import { getAccessConfig } from "../proxy/identity.js";
 import { SKILL_SEGMENT_RE } from "./identifiers.js";
 import { getSkillByUri, invalidateSkillsCache, parseSkillMarkdown } from "./loader.js";
 import { loadContentPaths } from "../paths.js";
+import { auditActorFields, type TrustedActor } from "../security/request-actor.js";
 import { validateSkill } from "./validator.js";
 import type { SkillAsset, SkillStatus, SkillValidationResult, SkillWithValidation } from "./types.js";
 
@@ -358,7 +359,8 @@ export async function previewUpdateSkillFile(
 
 export async function createSkillFile(
   projectRoot: string,
-  input: SkillWriteInput
+  input: SkillWriteInput,
+  actor?: TrustedActor
 ): Promise<SkillWithValidation> {
   const { relPath, raw, parsed } = await prepareCreateSkillFile(projectRoot, input);
   const authSummary = await authorizationAuditSummary([], parsed.roles_allowed);
@@ -366,7 +368,7 @@ export async function createSkillFile(
     enabled: true,
     changeType: "skill_create",
     assetKind: "skill",
-    actorType: "ui_admin",
+    ...auditActorFields(actor),
     source: "skills_api",
     targetId: parsed.uri,
     operation: "create",
@@ -382,7 +384,8 @@ export async function updateSkillFile(
   projectRoot: string,
   domain: string,
   name: string,
-  input: SkillWriteInput
+  input: SkillWriteInput,
+  actor?: TrustedActor
 ): Promise<SkillWithValidation> {
   const { relPath, raw, parsed, existing } = await prepareUpdateSkillFile(projectRoot, domain, name, input);
 
@@ -392,7 +395,7 @@ export async function updateSkillFile(
     enabled: true,
     changeType: "skill_edit_save",
     assetKind: "skill",
-    actorType: "ui_admin",
+    ...auditActorFields(actor),
     source: "skills_api",
     targetId: parsed.uri,
     operation: "edit_save",
@@ -409,7 +412,8 @@ export async function deleteSkillFile(
   projectRoot: string,
   domain: string,
   name: string,
-  expectedVersion?: string
+  expectedVersion?: string,
+  actor?: TrustedActor
 ): Promise<{ uri: string; relativePath: string }> {
   const uri = `lucy-skill://${assertSegment("domain", domain)}/${assertSegment("name", name)}`;
   const existing = await getSkillByUri(uri);
@@ -420,7 +424,7 @@ export async function deleteSkillFile(
     enabled: true,
     changeType: "skill_delete",
     assetKind: "skill",
-    actorType: "ui_admin",
+    ...auditActorFields(actor),
     source: "skills_api",
     targetId: uri,
     operation: "delete",

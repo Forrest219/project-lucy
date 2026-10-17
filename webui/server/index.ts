@@ -978,7 +978,7 @@ export function buildServer() {
     Params: { key: string };
   }>("/api/wiki/:key", async (request) => {
     const projectRoot = await resolveProjectRoot();
-    const result = await deleteWiki(projectRoot, request.params.key);
+    const result = await deleteWiki(projectRoot, request.params.key, trustedActorFromRequest(request));
     writtenFiles.push({ filePath: result.filePath });
     writtenFiles.push({ filePath: "wiki/.lucy-history/index.json" });
     return {
@@ -1835,10 +1835,11 @@ export function buildServer() {
     const validationId =
       typeof body.validationId === "string" ? body.validationId : "";
     try {
-      const result = await publishSemanticAssets(projectRoot, {
-        validationId,
-        confirmOverwrite: body.confirmOverwrite === true
-      });
+      const result = await publishSemanticAssets(
+        projectRoot,
+        { validationId, confirmOverwrite: body.confirmOverwrite === true },
+        { actor: actorIdFromRequest(request) }
+      );
       return reply.send({ ok: true, data: result });
     } catch (error) {
       if (error instanceof SemanticAssetValidationError) {
@@ -1978,6 +1979,7 @@ export function buildServer() {
     // M32: write a lightweight history record so /publish/history can show
     // the reindex result alongside normal publish batches.
     const historyRecord = await recordManualReindex(projectRoot, {
+      actor: actorIdFromRequest(request),
       force,
       startedAt,
       reindex: reindexRecord

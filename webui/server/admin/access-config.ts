@@ -129,6 +129,8 @@ async function writeAccessYamlInBarrier(
     source?: string;
     actorType?: ConfigAuditActorType;
     actor?: string;
+    actorIp?: string;
+    sessionId?: string | null;
     idempotencyKey?: string;
     operation?: string;
     assetKind?: ConfigAuditAssetKind;
@@ -170,6 +172,8 @@ async function writeAccessYamlInBarrier(
     operation: audit.operation,
     actor: audit.actor,
     actorType: audit.actorType ?? "ui_admin",
+    actorIp: audit.actorIp,
+    sessionId: audit.sessionId,
     source: audit.source ?? "admin_access_config_api",
     targetId: audit.targetId,
     oldSummary: audit.oldSummary,

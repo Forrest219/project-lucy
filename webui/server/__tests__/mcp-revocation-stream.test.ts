@@ -461,6 +461,10 @@ describe("MCP revocation send barrier (T04-3)", () => {
       await startProxy();
       const { registerTokenRoutes } = await import("../admin/tokens.js");
       const app = Fastify();
+      app.addHook("onRequest", async (request) => {
+        // Stand-in for requireWebuiAuthHook: this harness runs in open mode.
+        request.lucyAdmin = { session: null, admin: null, stateUnavailable: false, authMode: "open" };
+      });
       registerTokenRoutes(app);
       await app.ready();
       try {

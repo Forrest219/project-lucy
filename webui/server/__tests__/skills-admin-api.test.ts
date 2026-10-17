@@ -46,6 +46,10 @@ Body content
 
     invalidateSkillsCache();
     app = Fastify();
+    app.addHook("onRequest", async (request) => {
+      // Stand-in for requireWebuiAuthHook: this harness runs in open mode.
+      request.lucyAdmin = { session: null, admin: null, stateUnavailable: false, authMode: "open" };
+    });
     registerSkillsRoutes(app);
     await app.ready();
   });

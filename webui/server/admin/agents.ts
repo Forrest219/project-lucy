@@ -6,7 +6,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { auditedWriteFile } from "./config-audit-write.js";
 import { resolveProjectRoot } from "../project.js";
 import { previewDiff } from "../diff.js";
-import { getAuditDb } from "./audit.js";
+import { getAuditDb, type ConfigAuditActorType } from "./audit.js";
 import { build7dWindow } from "./metric-window.js";
 import { expandTemplate } from "./role-templates.js";
 import {
@@ -36,6 +36,7 @@ import {
 import { invalidateAccessConfigCache } from "../proxy/identity.js";
 import { narrowAuthorization, narrowingScopeForWrite } from "../proxy/authorization-barrier.js";
 import { actorIdFromRequest } from "../auth/guard.js";
+import { auditActorFields, trustedActorFromRequest } from "../security/request-actor.js";
 import { enforceAgentSeatLimit } from "../license/routes.js";
 import { isTokenExpired } from "../proxy/identity.js";
 import { MCP_PROTOCOL_METHOD_SQL_LIST } from "../proxy/mcp-request-classification.js";
@@ -149,6 +150,10 @@ async function writeAccessYamlInBarrier(
     diff?: string;
     requestId?: string;
     source?: string;
+    actor?: string;
+    actorType?: ConfigAuditActorType;
+    actorIp?: string;
+    sessionId?: string | null;
   }
 ): Promise<{
   auditId?: number;
@@ -187,7 +192,10 @@ async function writeAccessYamlInBarrier(
     enabled: true,
     changeType: audit.changeType,
     assetKind: "governance",
-    actorType: "ui_admin",
+    actor: audit.actor,
+    actorType: audit.actorType ?? "ui_admin",
+    actorIp: audit.actorIp,
+    sessionId: audit.sessionId,
     source: audit.source ?? "admin_agents_api",
     targetId: audit.targetId,
     oldSummary: audit.oldSummary,
@@ -1364,7 +1372,7 @@ export function registerAgentRoutes(app: FastifyInstance) {
       oldSummary: { userIds: config.users.map((user) => user.id) },
       newSummary: { userIds: newConfig.users.map((user) => user.id), role: summaryRole(newUser), roles: newUser.roles },
       diff,
-      requestId: request.id
+      ...auditActorFields(trustedActorFromRequest(request))
     });
     return {
       ok: true,
@@ -1602,7 +1610,7 @@ export function registerAgentRoutes(app: FastifyInstance) {
         hasConstraints: updatedUser.constraints !== undefined
       },
       diff,
-      requestId: request.id
+      ...auditActorFields(trustedActorFromRequest(request))
     });
     return {
       ok: true,
@@ -1688,7 +1696,7 @@ export function registerAgentRoutes(app: FastifyInstance) {
       targetId: user.id,
       oldSummary: { userIds: config.users.map((item) => item.id), tokenCount: user.tokens.length },
       newSummary: { userIds: newConfig.users.map((item) => item.id) },
-      requestId: request.id
+      ...auditActorFields(trustedActorFromRequest(request))
     });
     invalidateAccessConfigCache();
     return {

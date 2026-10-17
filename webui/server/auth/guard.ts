@@ -3,16 +3,20 @@ import {
   enabledAdmins,
   loadAdminsConfig,
   resolveAuthMode,
+  type AuthMode,
   type WebuiAdminRecord
 } from "./admins-store.js";
 import { authenticateSession } from "./account-state.js";
 import type { SessionClaims } from "./session.js";
+import { trustedActorFromRequest } from "../security/request-actor.js";
 
 export type RequestAdminContext = {
   session: SessionClaims | null;
   admin: WebuiAdminRecord | null;
   /** True when a session cookie was presented but the durable session state could not be consulted. */
   stateUnavailable: boolean;
+  /** Set by `requireWebuiAuthHook`; lets the trusted actor tell open mode from an unauthenticated request. */
+  authMode?: AuthMode;
 };
 
 export const AUTH_STATE_UNAVAILABLE = {
@@ -70,6 +74,7 @@ export async function requireWebuiAuthHook(
   if (isSensitiveApi(request.method, request.url)) reply.header("Cache-Control", "no-store");
   const ctx = await attachAdminContext(request);
   const mode = await resolveAuthMode();
+  ctx.authMode = mode;
   if (mode === "open") return;
   if (isPublicApi(request.method, request.url)) return;
 
@@ -109,8 +114,9 @@ export async function requireWebuiAuthHook(
   }
 }
 
+/** Authenticated admin id, or the explicit open-mode `local-admin`; throws instead of guessing (T08-1). */
 export function actorIdFromRequest(request: FastifyRequest): string {
-  return request.lucyAdmin?.admin?.id ?? "local-admin";
+  return trustedActorFromRequest(request).actorId;
 }
 
 export function requireOwner(request: FastifyRequest, reply: FastifyReply): boolean {

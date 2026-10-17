@@ -21,6 +21,7 @@ import { resolveRoleIds } from "../proxy/acl.js";
 import { invalidateAccessConfigCache, isTokenExpired } from "../proxy/identity.js";
 import { narrowAuthorization, tokenHashPrefixOf } from "../proxy/authorization-barrier.js";
 import { actorIdFromRequest } from "../auth/guard.js";
+import { auditActorFields, trustedActorFromRequest } from "../security/request-actor.js";
 import { normalizeNewTokenExpiry, TokenExpiryPolicyError } from "./token-expiry-policy.js";
 
 const ACCESS_YAML_REL = "webui/config/access.yaml";
@@ -48,18 +49,6 @@ function defaultActor(request?: FastifyRequest): AccessGovernanceApprover {
     actorId: request ? actorIdFromRequest(request) : "local-admin",
     identityProvider: "webui-local"
   };
-}
-
-function actorIpFromRequest(request: FastifyRequest): string | undefined {
-  const trust = (process.env.LUCY_TRUST_PROXY ?? "").trim().toLowerCase();
-  const trustProxy = trust === "1" || trust === "true" || trust === "yes";
-  if (trustProxy) {
-    const xff = request.headers["x-forwarded-for"];
-    const raw = Array.isArray(xff) ? xff[0] : xff;
-    const first = raw?.split(",")[0]?.trim();
-    if (first) return first;
-  }
-  return request.ip || undefined;
 }
 
 async function commitPolicyRuntimeAck(content: string): Promise<{
@@ -424,8 +413,7 @@ export function registerTokenRoutes(app: FastifyInstance) {
           enabled: true,
           changeType: "token_create",
           assetKind: "governance",
-          actorType: "ui_admin",
-          actorIp: actorIpFromRequest(request),
+          ...auditActorFields(trustedActorFromRequest(request)),
           source: "admin_tokens_api",
           targetId: userId,
           oldSummary: { tokenCount: user.tokens.length },
@@ -435,8 +423,7 @@ export function registerTokenRoutes(app: FastifyInstance) {
             device_name: deviceName,
             hashPrefix: tokenHash.slice(0, 19),
             expires_at
-          },
-          requestId: request.id
+          }
         });
         invalidateAccessConfigCache();
         return commitPolicyRuntimeAck(content);
@@ -539,13 +526,11 @@ export function registerTokenRoutes(app: FastifyInstance) {
           enabled: true,
           changeType: "token_revoke",
           assetKind: "governance",
-          actorType: "ui_admin",
-          actorIp: actorIpFromRequest(request),
+          ...auditActorFields(trustedActorFromRequest(request)),
           source: "admin_tokens_api",
           targetId: userId,
           oldSummary: { tokenCount: user.tokens.length, label, hashPrefix: token.hash.slice(0, 19) },
-          newSummary: { tokenCount: updatedUser.tokens.length, label },
-          requestId: request.id
+          newSummary: { tokenCount: updatedUser.tokens.length, label }
         });
         invalidateAccessConfigCache();
         const committed = await commitPolicyRuntimeAck(content);

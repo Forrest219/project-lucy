@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
-import { previewDiff } from "../diff.js";
 import { assertReadable, safeRemove, safeWrite } from "../fs-safe.js";
 import { loadContentPaths } from "../paths.js";
+import { auditDiffForContent } from "../security/redaction.js";
 import {
   recordConfigChange,
   updateConfigChangeStatus,
@@ -49,7 +49,13 @@ export async function auditedWriteFile(
     return {};
   }
   const oldText = await readTextIfExists(projectRoot, relPath);
-  const diff = auditIntent.diff ?? previewDiff(oldText, content, relPath);
+  const diff = auditDiffForContent({
+    assetKind: auditIntent.assetKind,
+    relPath,
+    oldText,
+    newText: content,
+    provided: auditIntent.diff
+  });
   const auditId = await recordConfigChange({
     filePath: relPath,
     changeType: auditIntent.changeType,
@@ -119,7 +125,13 @@ export async function auditedRemoveFile(
     targetId: auditIntent.targetId,
     oldSummary: auditIntent.oldSummary,
     newSummary: auditIntent.newSummary,
-    diff: auditIntent.diff ?? previewDiff(oldText, "", relPath),
+    diff: auditDiffForContent({
+      assetKind: auditIntent.assetKind,
+      relPath,
+      oldText,
+      newText: "",
+      provided: auditIntent.diff
+    }),
     requestId: auditIntent.requestId,
     sessionId: auditIntent.sessionId,
     idempotencyKey: auditIntent.idempotencyKey,

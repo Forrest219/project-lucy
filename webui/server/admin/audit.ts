@@ -17,6 +17,8 @@ import { resolveProjectRoot } from "../project.js";
 import { recordProjectionStatus } from "../proxy/audit-write-health.js";
 import { getSecurityStore } from "../security/instance.js";
 import { runProjection, type ProjectionStatus } from "../security/projector.js";
+import { trustedActorFromRequest } from "../security/request-actor.js";
+import { redactAuditDiff, redactAuditSummary, redactAuditText } from "../security/redaction.js";
 import { rebuildInferredTurns, purgeExpiredConversationTurns, scrubAccessLogArgsSummaries, INFERRED_TURN_REBUILD_LOOKBACK_HOURS } from "../proxy/audit.js";
 import { buildStoredZip, sha256Hex } from "../proxy/zip-store.js";
 import { MCP_PLAYGROUND_PLATFORM } from "./mcp-playground.js";
@@ -548,6 +550,10 @@ export function resetAuditDbForTests(): void {
   }
 }
 
+function serializeAuditSummary(changeType: string, value: unknown): string | null {
+  return value === undefined ? null : JSON.stringify(redactAuditSummary(changeType, value));
+}
+
 export async function recordConfigChange(input: {
   filePath: string;
   changeType: string;
@@ -568,12 +574,13 @@ export async function recordConfigChange(input: {
   sessionId?: string | null;
 }): Promise<number | undefined> {
   const database = await getAuditDb();
-  const oldSummaryJson = input.oldSummary === undefined ? null : JSON.stringify(input.oldSummary);
-  const newSummaryJson = input.newSummary === undefined ? null : JSON.stringify(input.newSummary);
-  const safeDiff = input.diff
-    ? Buffer.byteLength(input.diff, "utf8") > CONFIG_AUDIT_DIFF_MAX_BYTES
-      ? `${input.diff.slice(0, CONFIG_AUDIT_DIFF_MAX_BYTES)}\n...[TRUNCATED]`
-      : input.diff
+  const oldSummaryJson = serializeAuditSummary(input.changeType, input.oldSummary);
+  const newSummaryJson = serializeAuditSummary(input.changeType, input.newSummary);
+  const redactedDiff = input.diff ? redactAuditDiff(input.diff) : undefined;
+  const safeDiff = redactedDiff
+    ? Buffer.byteLength(redactedDiff, "utf8") > CONFIG_AUDIT_DIFF_MAX_BYTES
+      ? `${redactedDiff.slice(0, CONFIG_AUDIT_DIFF_MAX_BYTES)}\n...[TRUNCATED]`
+      : redactedDiff
     : null;
   const stableIdempotencyKey = input.idempotencyKey ?? createHash("sha256").update(
     JSON.stringify({
@@ -619,7 +626,7 @@ export async function recordConfigChange(input: {
     request_id: input.requestId ?? null,
     idempotency_key: stableIdempotencyKey,
     write_status: input.writeStatus ?? "committed",
-    error_reason: input.errorReason ?? null
+    error_reason: input.errorReason ? redactAuditText(input.errorReason) : null
   });
   if (typeof result.lastInsertRowid === "number" && result.lastInsertRowid > 0) return result.lastInsertRowid;
   const existing = database.prepare(
@@ -637,11 +644,16 @@ export async function updateConfigChangeStatus(input: {
   newSummary?: unknown;
 }): Promise<void> {
   const database = await getAuditDb();
-  const safeDiff = input.diff
-    ? Buffer.byteLength(input.diff, "utf8") > CONFIG_AUDIT_DIFF_MAX_BYTES
-      ? `${input.diff.slice(0, CONFIG_AUDIT_DIFF_MAX_BYTES)}\n...[TRUNCATED]`
-      : input.diff
-    : input.diff ?? null;
+  const row = database.prepare("SELECT change_type FROM config_change_log WHERE id = ?").get(input.id) as
+    | { change_type: string }
+    | undefined;
+  const changeType = row?.change_type ?? "";
+  const redactedDiff = input.diff ? redactAuditDiff(input.diff) : input.diff;
+  const safeDiff = redactedDiff
+    ? Buffer.byteLength(redactedDiff, "utf8") > CONFIG_AUDIT_DIFF_MAX_BYTES
+      ? `${redactedDiff.slice(0, CONFIG_AUDIT_DIFF_MAX_BYTES)}\n...[TRUNCATED]`
+      : redactedDiff
+    : redactedDiff ?? null;
   database.prepare(`
     UPDATE config_change_log
     SET write_status = @write_status,
@@ -653,10 +665,10 @@ export async function updateConfigChangeStatus(input: {
   `).run({
     id: input.id,
     write_status: input.writeStatus,
-    error_reason: input.errorReason ?? null,
+    error_reason: input.errorReason ? redactAuditText(input.errorReason) : null,
     diff: safeDiff,
-    old_summary: input.oldSummary === undefined ? null : JSON.stringify(input.oldSummary),
-    new_summary: input.newSummary === undefined ? null : JSON.stringify(input.newSummary)
+    old_summary: serializeAuditSummary(changeType, input.oldSummary),
+    new_summary: serializeAuditSummary(changeType, input.newSummary)
   });
 }
 
@@ -1927,7 +1939,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
       tool = row.tool;
     }
 
-    const actor = "local-admin";
+    const actor = trustedActorFromRequest(request).actorId;
     const ts = new Date().toISOString();
     const insertAccess = database.prepare(`
       INSERT INTO query_artifact_access_log
@@ -2684,7 +2696,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
     }
     const result = await scrubAccessLogArgsSummaries({
       dryRun,
-      actor: "local-admin",
+      actor: trustedActorFromRequest(request).actorId,
       reason: body.reason,
       requestId: String(request.id)
     });

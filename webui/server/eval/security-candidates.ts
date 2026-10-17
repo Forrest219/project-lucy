@@ -7,6 +7,7 @@ import { previewDiff } from "../diff.js";
 import { resolveProjectRoot } from "../project.js";
 import { getAuditDb } from "../admin/audit.js";
 import { auditedWriteFile } from "../admin/config-audit-write.js";
+import { auditActorFields, trustedActorFromRequest } from "../security/request-actor.js";
 import { getEvalDb } from "./db.js";
 import { loadContentPaths } from "../paths.js";
 import {
@@ -457,7 +458,7 @@ export function registerSecurityCandidateRoutes(app: FastifyInstance): void {
       enabled: true,
       changeType: "eval_security_candidate_promote",
       assetKind: "eval",
-      actorType: "ui_admin",
+      ...auditActorFields(trustedActorFromRequest(request)),
       source: "security_candidates_api",
       targetId: candidate.id,
       diff: preview.diff

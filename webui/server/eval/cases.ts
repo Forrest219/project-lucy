@@ -9,6 +9,7 @@ import { getEvalDb } from "./db.js";
 import { getPolicyRuntimeStatus } from "../proxy/acl.js";
 import { loadContentPaths } from "../paths.js";
 import { auditedWriteFile } from "../admin/config-audit-write.js";
+import { auditActorFields, trustedActorFromRequest, type TrustedActor } from "../security/request-actor.js";
 
 // ─── types ──────────────────────────────────────────────────────────────────
 
@@ -279,7 +280,8 @@ export async function addCase(
   projectRoot: string,
   domain: string,
   caseData: EvalCase,
-  dryRun = false
+  dryRun = false,
+  actor?: TrustedActor
 ): Promise<{ diff: string; proposedYaml: string } | { written: true }> {
   const { doc, text, relPath } = await readCasesDoc(projectRoot, domain);
   const cases = extractCases(doc);
@@ -299,7 +301,7 @@ export async function addCase(
     enabled: true,
     changeType: "eval_case_save",
     assetKind: "eval",
-    actorType: "ui_admin",
+    ...auditActorFields(actor),
     source: "eval_cases_api",
     targetId: `${domain}:${caseData.id}`,
     diff
@@ -312,7 +314,8 @@ export async function updateCase(
   domain: string,
   caseId: string,
   caseData: EvalCase,
-  dryRun: boolean
+  dryRun: boolean,
+  actor?: TrustedActor
 ): Promise<{ diff: string; proposedYaml: string } | { written: true }> {
   const { doc, text, relPath } = await readCasesDoc(projectRoot, domain);
   const cases = extractCases(doc);
@@ -333,7 +336,7 @@ export async function updateCase(
     enabled: true,
     changeType: "eval_case_save",
     assetKind: "eval",
-    actorType: "ui_admin",
+    ...auditActorFields(actor),
     source: "eval_cases_api",
     targetId: `${domain}:${caseId}`,
     diff
@@ -341,14 +344,19 @@ export async function updateCase(
   return { written: true };
 }
 
-export async function deleteCase(projectRoot: string, domain: string, caseId: string): Promise<void> {
+export async function deleteCase(
+  projectRoot: string,
+  domain: string,
+  caseId: string,
+  actor?: TrustedActor
+): Promise<void> {
   const { doc, relPath } = await readCasesDoc(projectRoot, domain);
   deleteCaseInDoc(doc, caseId);
   await auditedWriteFile(projectRoot, relPath, doc.toString({ lineWidth: 0 }), {
     enabled: true,
     changeType: "eval_case_save",
     assetKind: "eval",
-    actorType: "ui_admin",
+    ...auditActorFields(actor),
     source: "eval_cases_api",
     targetId: `${domain}:${caseId}`
   });
@@ -390,7 +398,7 @@ export function registerCaseRoutes(app: FastifyInstance) {
       ...existing,
       review_status: "active",
       semantic_version_seen: current || existing.semantic_version_seen
-    }, false);
+    }, false, trustedActorFromRequest(request));
     return { ok: true, data: { review_status: "active", semantic_version_seen: current || existing.semantic_version_seen } };
   });
 
@@ -408,7 +416,13 @@ export function registerCaseRoutes(app: FastifyInstance) {
   }>("/api/eval/cases/:domain", async (request, reply) => {
     const projectRoot = await resolveProjectRoot();
     const dryRun = request.body.dryRun === true;
-    const result = await addCase(projectRoot, request.params.domain, request.body.case, dryRun);
+    const result = await addCase(
+      projectRoot,
+      request.params.domain,
+      request.body.case,
+      dryRun,
+      trustedActorFromRequest(request)
+    );
     return reply.status(dryRun ? 200 : 201).send({ ok: true, data: result });
   });
 
@@ -419,14 +433,21 @@ export function registerCaseRoutes(app: FastifyInstance) {
   }>("/api/eval/cases/:domain/:caseId", async (request) => {
     const projectRoot = await resolveProjectRoot();
     const dryRun = request.body.dryRun !== false;
-    const result = await updateCase(projectRoot, request.params.domain, request.params.caseId, request.body.case, dryRun);
+    const result = await updateCase(
+      projectRoot,
+      request.params.domain,
+      request.params.caseId,
+      request.body.case,
+      dryRun,
+      trustedActorFromRequest(request)
+    );
     return { ok: true, data: result };
   });
 
   // DELETE /api/eval/cases/:domain/:caseId
   app.delete<{ Params: { domain: string; caseId: string } }>("/api/eval/cases/:domain/:caseId", async (request, reply) => {
     const projectRoot = await resolveProjectRoot();
-    await deleteCase(projectRoot, request.params.domain, request.params.caseId);
+    await deleteCase(projectRoot, request.params.domain, request.params.caseId, trustedActorFromRequest(request));
     return reply.status(200).send({ ok: true, data: { deleted: true } });
   });
 }

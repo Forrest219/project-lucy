@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import {
   countEnabledOwners,
   enabledAdmins,
@@ -25,6 +25,7 @@ import {
 } from "./rate-limit.js";
 import { clearSessionCookie, setSessionCookie } from "./session.js";
 import { actorIdFromRequest, AUTH_STATE_UNAVAILABLE, requireOwner } from "./guard.js";
+import { attemptedIdDigest, recordAuthEvent, type AuthEventKind } from "../security/auth-events.js";
 import {
   enableAccount,
   ensureAccountUid,
@@ -128,6 +129,13 @@ export function registerAuthRoutes(app: FastifyInstance): void {
     const verified = await verifyPassword(password, admin ? admin.password_hash : await getDummyHash());
     if (!admin || !verified) {
       // Unknown, disabled and wrong-password are one indistinguishable 401 (Spec §3.1 item 6).
+      await recordAuthEvent({
+        kind: "login_failure",
+        request,
+        actor: "anonymous",
+        actorType: "anonymous",
+        summary: { reason: "invalid_credentials", attemptedIdDigest: attemptedIdDigest(adminId) }
+      });
       return reply.status(401).send(AUTH_INVALID);
     }
     await clearLoginFailures(request, adminId);
@@ -146,14 +154,23 @@ export function registerAuthRoutes(app: FastifyInstance): void {
         ? reply.status(401).send(AUTH_INVALID)
         : reply.status(503).send(AUTH_STATE_UNAVAILABLE);
     }
+    // The session is only handed out once its login is durably on the ledger.
+    if (!(await recordAuthEvent({ kind: "login_success", request, actor: account.id }))) {
+      return reply.status(503).send(AUTH_STATE_UNAVAILABLE);
+    }
     setSessionCookie(reply, session.token, session.exp);
     return { ok: true, data: { me: publicAdminView(account) } };
   });
 
   app.post("/api/auth/logout", async (request, reply) => {
     // Durable revocation first; the cookie is only cleared once it holds (Spec §3.2).
-    if ((await revokeRequestSession(request)) === "unavailable") {
+    const revoked = await revokeRequestSession(request);
+    if (revoked === "unavailable") {
       return reply.status(503).send(AUTH_STATE_UNAVAILABLE);
+    }
+    if (revoked === "revoked") {
+      // Revocation is already durable; the event is best effort and must not keep a session alive.
+      await recordAuthEvent({ kind: "logout", request, actor: request.lucyAdmin?.admin?.id ?? "anonymous" });
     }
     clearSessionCookie(reply);
     return { ok: true, data: { loggedOut: true } };
@@ -196,9 +213,24 @@ export function registerAuthRoutes(app: FastifyInstance): void {
     await clearBootstrapFailures(request);
     const session = await issueSession(outcome.record);
     if (!session.ok) return reply.status(503).send(AUTH_STATE_UNAVAILABLE);
+    if (!(await recordAuthEvent({ kind: "bootstrap_success", request, actor: outcome.record.id, summary: { role: "owner" } }))) {
+      return reply.status(503).send(AUTH_STATE_UNAVAILABLE);
+    }
     setSessionCookie(reply, session.token, session.exp);
     return { ok: true, data: { me: publicAdminView(outcome.record) } };
   });
+}
+
+type AccountEvent = { kind: AuthEventKind; targetId: string; role?: string };
+
+/** Account changes are recorded after the config write; a ledger failure is reported, not hidden. */
+async function recordAccountEvents(request: FastifyRequest, events: AccountEvent[]): Promise<boolean> {
+  const actor = actorIdFromRequest(request);
+  for (const event of events) {
+    const summary = { targetId: event.targetId, ...(event.role ? { role: event.role } : {}) };
+    if (!(await recordAuthEvent({ kind: event.kind, request, actor, summary }))) return false;
+  }
+  return true;
 }
 
 export function registerAdminAccountRoutes(app: FastifyInstance): void {
@@ -308,6 +340,9 @@ export function registerAdminAccountRoutes(app: FastifyInstance): void {
       newSummary: { count: next.admins.length, id: adminId, role },
       requestId: request.id
     });
+    if (!(await recordAccountEvents(request, [{ kind: "admin_created", targetId: adminId, role }]))) {
+      return reply.status(503).send(AUTH_STATE_UNAVAILABLE);
+    }
 
     return { ok: true, data: { admin: publicAdminView(record) } };
   });
@@ -416,6 +451,13 @@ export function registerAdminAccountRoutes(app: FastifyInstance): void {
       return reply.status(503).send(AUTH_STATE_UNAVAILABLE);
     }
 
+    const events: AccountEvent[] = [];
+    if (nextRecord.password_hash !== current.password_hash) events.push({ kind: "password_rotated", targetId: adminId });
+    if (nextRecord.role !== current.role) events.push({ kind: "admin_role_changed", targetId: adminId, role: nextRecord.role });
+    if (current.enabled && !nextRecord.enabled) events.push({ kind: "admin_disabled", targetId: adminId });
+    if (!current.enabled && nextRecord.enabled) events.push({ kind: "admin_enabled", targetId: adminId });
+    if (!(await recordAccountEvents(request, events))) return reply.status(503).send(AUTH_STATE_UNAVAILABLE);
+
     return { ok: true, data: { admin: publicAdminView(nextRecord) } };
   });
 
@@ -464,6 +506,9 @@ export function registerAdminAccountRoutes(app: FastifyInstance): void {
       newSummary: { count: nextConfig.admins.length },
       requestId: request.id
     });
+    if (!(await recordAccountEvents(request, [{ kind: "admin_deleted", targetId: adminId }]))) {
+      return reply.status(503).send(AUTH_STATE_UNAVAILABLE);
+    }
 
     return { ok: true, data: { deleted: adminId } };
   });

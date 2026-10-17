@@ -34,6 +34,7 @@ import {
   type AccessGovernanceOverrideRequest
 } from "../access-governance-gate.js";
 import { actorIdFromRequest } from "../auth/guard.js";
+import { auditActorFields, trustedActorFromRequest } from "../security/request-actor.js";
 import type { FastifyRequest } from "fastify";
 import { loadAllSkills } from "../skills/loader.js";
 import { summarizeRoleSkillAccess } from "../proxy/skill-acl.js";
@@ -814,7 +815,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
       oldSummary: { roleIds: Object.keys(config.roles ?? {}) },
       newSummary: { roleIds: Object.keys(newConfig.roles ?? {}), description: validated.value.description },
       diff,
-      requestId: request.id,
+      ...auditActorFields(trustedActorFromRequest(request)),
       source: "admin_roles_api"
     });
     const detail = await readAccessYaml(projectRoot);
@@ -965,7 +966,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
       oldSummary: { description: existing.description, allow: existing.allow },
       newSummary: { description: validated.value.description, allow: validated.value.allow },
       diff,
-      requestId: request.id,
+      ...auditActorFields(trustedActorFromRequest(request)),
       source: "admin_roles_api"
     });
     const detail = await readAccessYaml(projectRoot);
@@ -1105,7 +1106,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
         oldSummary: { roleIds: Object.keys(config.roles ?? {}) },
         newSummary: { roleIds: Object.keys(newConfig.roles ?? {}) },
         diff,
-        requestId: request.id,
+        ...auditActorFields(trustedActorFromRequest(request)),
         source: "admin_roles_api"
       });
       return {
@@ -1224,7 +1225,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
       oldSummary: { roleIds: Object.keys(config.roles ?? {}), sourceRoleId: request.params.roleId },
       newSummary: { roleIds: Object.keys(newConfig.roles ?? {}), sourceRoleId: request.params.roleId },
       diff,
-      requestId: request.id,
+      ...auditActorFields(trustedActorFromRequest(request)),
       source: "admin_roles_api"
     });
     const detail = await readAccessYaml(projectRoot);

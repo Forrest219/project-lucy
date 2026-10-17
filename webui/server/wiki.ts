@@ -15,6 +15,7 @@ import {
   safeWrite
 } from "./fs-safe";
 import { auditedRemoveFile, auditedWriteFile } from "./admin/config-audit-write.js";
+import { auditActorFields, type TrustedActor } from "./security/request-actor.js";
 import { loadContentPaths } from "./paths";
 
 export type WikiFrontmatter = {
@@ -977,7 +978,8 @@ export async function deleteWikiDirectory(
  */
 export async function deleteWiki(
   projectRoot: string,
-  key: string
+  key: string,
+  actor?: TrustedActor
 ): Promise<WikiDocumentDeleteResult> {
   const normalized = normalizeWikiKey(key);
   const filePath = relPathForKey(normalized);
@@ -989,7 +991,7 @@ export async function deleteWiki(
     enabled: true,
     changeType: "wiki_delete",
     assetKind: "wiki",
-    actorType: "ui_admin",
+    ...auditActorFields(actor),
     source: "wiki_api",
     targetId: normalized,
     operation: "delete"
@@ -1370,7 +1372,12 @@ export async function previewWikiWrite(projectRoot: string, key: string, input: 
   };
 }
 
-export async function writeWiki(projectRoot: string, key: string, input: WikiWriteInput): Promise<WikiPreview> {
+export async function writeWiki(
+  projectRoot: string,
+  key: string,
+  input: WikiWriteInput,
+  actor?: TrustedActor
+): Promise<WikiPreview> {
   const normalized = normalizeWikiKey(key);
   const existed = await wikiExists(projectRoot, normalized);
   const oldText = await readExisting(projectRoot, normalized);
@@ -1380,7 +1387,7 @@ export async function writeWiki(projectRoot: string, key: string, input: WikiWri
     enabled: true,
     changeType: existed ? "wiki_edit_save" : "wiki_create",
     assetKind: "wiki",
-    actorType: "ui_admin",
+    ...auditActorFields(actor),
     source: "wiki_api",
     targetId: normalized,
     operation: existed ? "edit_save" : "create",
@@ -1472,7 +1479,11 @@ export async function previewWikiUpload(projectRoot: string, input: WikiUploadIn
   };
 }
 
-export async function commitWikiUpload(projectRoot: string, input: WikiUploadInput): Promise<WikiUploadPreview> {
+export async function commitWikiUpload(
+  projectRoot: string,
+  input: WikiUploadInput,
+  actor?: TrustedActor
+): Promise<WikiUploadPreview> {
   const normalized = normalizeWikiKey(input.key);
   const existed = await wikiExists(projectRoot, normalized);
   const oldText = await readExisting(projectRoot, normalized);
@@ -1482,7 +1493,7 @@ export async function commitWikiUpload(projectRoot: string, input: WikiUploadInp
     enabled: true,
     changeType: existed ? "wiki_upload_replace" : "wiki_upload_create",
     assetKind: "wiki",
-    actorType: "ui_admin",
+    ...auditActorFields(actor),
     source: "wiki_api",
     targetId: normalized,
     operation: existed ? "upload_replace" : "upload_create",
@@ -1576,7 +1587,8 @@ export async function previewWikiVersionRestore(
 export async function restoreWikiVersion(
   projectRoot: string,
   key: string,
-  versionId: string
+  versionId: string,
+  actor?: TrustedActor
 ): Promise<WikiVersionRestoreResult> {
   const detail = await readWikiVersion(projectRoot, key, versionId);
   // Reject non-YAML frontmatter before anything is written (V-08).
@@ -1589,7 +1601,7 @@ export async function restoreWikiVersion(
     enabled: true,
     changeType: "wiki_restore",
     assetKind: "wiki",
-    actorType: "ui_admin",
+    ...auditActorFields(actor),
     source: "wiki_api",
     targetId: detail.key,
     operation: "restore",
@@ -1696,7 +1708,8 @@ export async function previewWikiMove(
 export async function moveWiki(
   projectRoot: string,
   sourceKey: string,
-  targetDirectory: string
+  targetDirectory: string,
+  actor?: TrustedActor
 ): Promise<WikiMoveResult> {
   const normalizedSource = normalizeWikiKey(sourceKey);
   const targetKey = deriveMoveTarget(normalizedSource, targetDirectory);
@@ -1731,7 +1744,7 @@ export async function moveWiki(
     enabled: true,
     changeType: "wiki_move",
     assetKind: "wiki",
-    actorType: "ui_admin",
+    ...auditActorFields(actor),
     source: "wiki_api",
     targetId: targetKey,
     operation: "move",
