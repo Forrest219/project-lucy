@@ -7,7 +7,7 @@
 | 版本 / 日期 | v0.2 / 2026-10-18，Asia/Shanghai（v0.1 初稿；v0.2 对齐评估 v1.1，补 V-08、A0 热修复、R7–R9、可机器校验条件） |
 | 撰写人 | Codex（v0.1）；Claude（v0.2 修订） |
 | 委托人 | xingchen |
-| 状态 | **已批准（2026-10-18，xingchen）— 待实施；§10 R1～R10 按默认值生效；R8 基础设施负责人待指定；尚未改变现行运行时行为** |
+| 状态 | **已批准（2026-10-18，xingchen）；§10 R1～R10 按默认值生效；R8 基础设施负责人待指定。实施状态四级分别标注（见下表）：已实现 ✅｜本地通过 ✅（范围受限）｜目标 K8s 通过 ❌ BLOCKED｜可发布 ❌** |
 | 实施 Plan | [2026-10-18-enterprise-security-and-real-e2e-plan.md](../plans/2026-10-18-enterprise-security-and-real-e2e-plan.md) |
 | 架构决策 | [ADR — 安全账本与上下文对象授权](../access-control/adr-20261018-security-ledger-and-context-acl.md)（已于 2026-10-18 与本 Spec 同批批准） |
 | 评估来源 | [2026-10-17 评估 v1.1](../../inbox/e2e-security-audit-20261017/assessment.md)及其合成夹具运行证据（含 V-08 复现 `inbox/xv-20261018/`）；该临时目录删除后，本 Spec 的问题映射与验收定义仍独立成立 |
@@ -15,6 +15,17 @@
 | 基线 | `lucy-v2.0`，HEAD `5c1e5cf`；工作区存在他人未提交改动，实施前重新确认源码与漏洞状态 |
 | 范围 | 管理认证、MCP 统一准入、Wiki/Skill 授权、耐久审计、真实用户 E2E、客户上线门禁 |
 | 部署边界 | 单实例/单副本；开发 Mac arm64；客户 linux/amd64 Kubernetes；只改 Lucy，不改 KTX 源码 |
+
+## 0. 实施状态（T15，据实；四级互不替代）
+
+| 级别 | 状态 | 依据与范围 |
+|---|---|---|
+| 已实现 | ✅ | T00～T15 代码、迁移工具、harness、verifier、归档、workflow 接线均已合入工作区（A0 热修复、A、B、C 批次） |
+| 本地通过 | ✅（范围受限） | 开发机（arm64，无 KTX 上游/数据库/真实客户端）：security-integration 对真实 Lucy 进程执行的 case、真实桌面 Chromium 管理旅程（9 个用例）、证据 verifier 反向测试 GATE-01-V01～V16 全部通过；其余按 catalog 能力要求报 BLOCKED，数量与原因见 `docs/qa/enterprise-security-real-e2e-acceptance.md` §8 |
+| 目标 K8s 通过 | ❌ BLOCKED | R8：受保护 runner 与 amd64 单副本 K8s 未提供；`real-e2e` job 从未被调度；N-1 PVC 升级、恢复、网络隔离未运行 |
+| 可发布 | ❌ | 需 `customer-release-readiness` 在同一候选 digest 上通过：P0/P1 全部 fixed 且被本次 release 证据验证（当前 G-01、G-03 为 open）、required 场景与固定分母全部 passed、Codex CLI + Cursor CLI Agent 各 3/3、无 blocked/skip/dry-run |
+
+只有最后一级全部满足才可写 verified / GO；本表不是客户上线授权。
 
 ## 1. 目标、优先级与生效关系
 

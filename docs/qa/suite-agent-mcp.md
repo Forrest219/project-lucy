@@ -30,6 +30,8 @@
 
 环境变量、证据路径见 `test-layers`（如 `LUCY_E2E_*`、`inbox/p1-agent-e2e-*`）。
 
+> **客户上线口径（Spec 20261018）**：上表旧入口只是历史 harness / SOW 兼容路径，**不是**真实用户 E2E 上线门禁。客户上线的 Agent 证据来自 `npm run e2e:real:agent`（Codex CLI + Cursor CLI Agent 两个 required 产品，每产品每场景 3 次，3/3 才通过，服务端账本绑定 + typed gold），运行方式见 [`../runbooks/real-user-e2e.md`](../runbooks/real-user-e2e.md)。缺二进制/凭据/隔离一律 BLOCKED。
+
 ## 3. 通过标准（摘要）
 
 - `gateKind: e2e`，`stub: false`（真实 Agent 路径）。  

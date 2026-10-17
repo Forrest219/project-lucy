@@ -7,7 +7,7 @@
 | 版本 / 日期 | v0.2 / 2026-10-18，Asia/Shanghai（v0.1 初稿；v0.2 补 V-08 与 A0 热修复、测试/demo 冲击面、子提交拆分、R7–R10 阻塞项） |
 | 撰写人 | Codex（v0.1）；Claude（v0.2 修订） |
 | 委托人 | xingchen |
-| 状态 | **已批准（2026-10-18，xingchen）— 按批次实施；不构成客户上线授权** |
+| 状态 | **已批准（2026-10-18，xingchen）— 按批次实施；T00～T15 代码已实施，本地证据已执行，目标 K8s / 真实客户端验证 BLOCKED（R8/R10）；不构成客户上线授权。四级状态见 Spec §0** |
 | 交付提示词 | [Cursor 开发交付提示词](2026-10-18-enterprise-security-cursor-prompts.md) |
 | 权威 Spec | [企业安全整改与真实用户 E2E 上线门禁](../specs/lucy-20261018-enterprise-security-and-real-e2e-spec.md) v0.2 |
 | 架构决策 | [ADR — 安全账本与上下文对象授权](../access-control/adr-20261018-security-ledger-and-context-acl.md) |

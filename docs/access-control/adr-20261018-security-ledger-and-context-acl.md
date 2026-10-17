@@ -11,7 +11,7 @@
 | 基于材料 | [企业安全整改 Spec v0.2](../specs/lucy-20261018-enterprise-security-and-real-e2e-spec.md) §2、§4、§5；2026-10-17 评估 v1.1（V-02/V-03/V-04、D-01/D-02）；[路线图冻结 ADR](adr-post-p15-roadmap-freeze.md) |
 | 适用范围 | 批准企业安全整改 Spec 时同批裁决的存储选型、一致性模型与公共授权契约变更 |
 | 输出位置 | `docs/access-control/adr-20261018-security-ledger-and-context-acl.md` |
-| 状态 | **已批准（2026-10-18，xingchen）— 待实施** |
+| 状态 | **已批准（2026-10-18，xingchen）— 已实施（T00～T15 代码已合入；本地安全集成 / 桌面浏览器证据已执行）；目标 amd64 K8s 验证未完成（BLOCKED），不构成客户发布授权** |
 
 ## 1. 背景与约束
 
@@ -55,3 +55,39 @@
 
 - 迁移：新 schema 幂等创建；旧 v1 会话一次性失效；上下文 ACL 按 Spec §4.3 迁移工具执行，模板内容随代码提交补 ACL。
 - 回滚：不得回滚到会忽略 ACL 或无状态会话的旧镜像；只能回滚到通过同一安全回归的构建。安全库与审计库随持久卷备份，回滚时保持 `security.sqlite` 不删除。
+
+## 7. 实施结果（T15，据实）
+
+状态口径与 Spec 一致：**已实现 ✅｜本地通过 ✅（范围见下）｜目标 K8s 通过 ❌ BLOCKED｜可发布 ❌**。
+
+### 7.1 D1/D2/D3 的落地
+
+| 决策 | 落地 | 证据 |
+|---|---|---|
+| D1 安全库 | `.ktx-ui/security.sqlite`（WAL + `synchronous=FULL`，目录 0700 / 文件 0600，产品每次打开都会把权限收回 0600） | T01；`PRAGMA synchronous` 在压测中取值 2（FULL） |
+| D2 先持久后释放 | 所有经准入的 MCP 响应先耐久写 `request_admitted`，授权复核后写 `response_prepared` 再发出；SSE 为有界缓冲；失败 503 `AUDIT_UNAVAILABLE` | T07；本地 SEC-19-V02（安全库无法打开）、V03（外部持有写锁）：503 且无内容释放，恢复后继续服务 |
+| D3 对象授权 | `authorizeContext` 同角色闭合、默认拒绝、`*` 非匿名；模板 Wiki/Skill 同提交补 ACL | T05/T06；本地 SEC-14-V01～V10、SEC-10-V03 通过；UI 修改 ACL 后 Agent 通道立即一致（SEC-14-V11 真实浏览器通过） |
+
+### 7.2 性能基准（Spec §5.1 预算：p95 ≤ 20 ms、p99 ≤ 50 ms、16 并发 5 分钟无 `SQLITE_BUSY` 导致的 503）
+
+来源：`webui/scripts/audit-overhead-bench.mts`（T07-4，Apple M4 Pro / Node 24 / darwin arm64，上游为固定应答 stub，基线为前一提交构建）。**这是开发机基线，客户目标规格需在 K8s 上重测，未重测前不得宣称客户规格达标。**
+
+| 场景 | 并发 | 额外 p95 (ms) | 额外 p99 (ms) | 结论 |
+|---|---|---|---|---|
+| `tools/call` | 1 | 3.507 | 2.910 | 达标 |
+| `resources/read` | 1 | 5.705 | 7.458 | 达标 |
+| `tools/call` | 16 | -6.830 | -13.234 | 达标（噪声内） |
+| `resources/read` | 16 | 15.091 | 22.810 | 达标 |
+| 持续压测 | 16 × 300 s | 总请求 238,174，全部 200；`SQLITE_BUSY` 503 = 0，账本追加失败 = 0，审计写失败 = 0 | | 达标 |
+
+### 7.3 迁移结果（Spec §4.3，只在合成夹具上执行）
+
+- `scripts/security/migrate-context-acl.mts --dry-run` 对 `examples/security-e2e` 渲染出的合成项目（2026-10-18，本次 T15）：保留 ACL **8**、显式全角色 **1**、待确认（缺失/损坏/旧 public）**2**、legacy Agent 待迁移 **1**，`inventoryDigest` 出现在报告中；无 ACL 的文档与 public 声明**没有**被自动改成 `*`；报告不含正文。
+- `--apply`（owner、`--expected-digest`、逐文件 `expected_version`、加密备份与 journal、崩溃后保持 deny）由 `webui/server/__tests__/context-acl-migration.test.ts` 在合成夹具上覆盖。
+- **未对任何客户真实配置执行 apply**：那属于部署授权范围，本 ADR 与计划的批准不能替代对目标私有配置的确认。客户上线门禁要求 `contextMigrationPending == 0`，当前该计数在 release 证据中未测量（BLOCKED，不是 0）。
+
+### 7.4 仍然开放的风险（不被本 ADR 的"已实施"掩盖）
+
+- 目标 amd64 单副本 K8s 上的真实用户 E2E、N-1 PVC 升级、恢复演练均未运行（R8 基础设施未提供）；因此 `security-findings.yaml` 中 G-01、G-03 保持 `open`。
+- 真实 Codex CLI / Cursor CLI Agent 未执行（本机无二进制与测试凭据，R10）。
+- 故障注入控制面目前只有本地进程版本；K8s 版缺失，依赖 `fault-control` 的变体在 K8s 上将保持 BLOCKED。

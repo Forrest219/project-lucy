@@ -96,14 +96,19 @@ findings:
     verifiedBy: [SEC-19]
     acceptedBy: null
   # G-01 文档称强制，release workflow 无真实 E2E 依赖（T14）
+  # note: T14 代码已交付并有静态契约测试（scripts/gates/customer-release-workflow.test.mjs）：release-package 与每个客户发布分支都经
+  #       customer-release-readiness 依赖 real-e2e，客户镜像单架构 amd64、只 promote 已测试 digest、门禁后不重建；demo-e2e / postgres-demo-e2e 已改名为
+  #       *-db-smoke。**但 G-01 仅在目标 amd64 单副本 K8s 上真实跑通后才可标 fixed**：该基础设施（R8 受保护 runner + K8s）尚未提供，
+  #       real-e2e job 从未被调度，故保持 open（BLOCKED），fixedIn 不填。
   - id: G-01
     severity: P1
     status: open
     spec: "§8.3"
-    fixedIn: 1e9c484
+    fixedIn: null
     verifiedBy: []
     acceptedBy: null
   # G-02 blocked / dry-run 可被汇总为 passed（T09/T13）
+  # T13 补充：唯一 verifier 的 GATE-01-V01..V16 反向测试 16/16 通过（本地，经 node:test 事件 API 采集，非 stdout 解析）；最终 release 证据中仍需 GATE-01 passed。
   # note: T09 旧入口统一 Spec §8.2：p1-governance/publish-regression smoke blocked→exit 2；p1-release-readiness 按子进程退出码判状态（不看 stdout 词语）、dry-run→dry_run/exit 3、--allow-blocked 只 collect/exit 3、不签 releaseReady；p1-agent-e2e blocked=2、dry-run 不计 pass、任意 500 不再算正确 deny；旧 SOW 打包器拒绝 dry-run/跨 run/runner 补造 trace。最终客户判定仍由 T13 独立 verifier 负责；fixedIn 待 T09 提交后回填 SHA
   - id: G-02
     severity: P1
@@ -113,6 +118,8 @@ findings:
     verifiedBy: [GATE-01]
     acceptedBy: null
   # G-03 Agent 评分与 Trace 完整率不能证明实际查过数据（T12/T13）
+  # note: T12/T13 代码已交付并有反作弊单测（无服务端成功 query 不通过、runner 自造 trace 无效、他人 Token/旧窗口事件不计、3/3 重复、跨产品一致）。
+  #       **G-03 仅在 Codex CLI 与 Cursor CLI Agent 真实执行通过后才可标 fixed**：本机既无这两个二进制也无测试模型凭据，真实执行 BLOCKED，故保持 open。
   - id: G-03
     severity: P1
     status: open
@@ -130,6 +137,7 @@ findings:
     verifiedBy: [GATE-01]
     acceptedBy: null
   # G-05 生产依赖风险未纳入发布门禁（T09；对应 SEC-23）
+  # T15 复核：2026-10-18 本地 `npm --prefix webui audit --omit=dev --json`：high=0 critical=0 moderate=4；verifier 的 npm audit 与本登记交叉比对一致（crossCheckDependencies）。
   # note: T09 overrides.fast-uri 3.1.6 → 3.1.8（修复 GHSA-qw65-cvwx-89v3 / GHSA-58mr-gqgx-xq4g / GHSA-hrr3-gc8f-f4qj），`npm audit --omit=dev` high/critical = 0；剩余 4 条 moderate 逐条登记于 dependencies。CI 依赖门禁接线属 T14；fixedIn 待 T09 提交后回填 SHA
   - id: G-05
     severity: P1

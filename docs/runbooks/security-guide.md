@@ -134,6 +134,8 @@ For KTX upgrades:
 npm run compat:ktx-upgrade -- --candidate <version>
 ```
 
+**Customer release (Spec 20261018 §8):** the commands above are necessary but not sufficient. A customer release also needs the real-user E2E evidence of the SAME candidate digest — security-integration (`e2e:real:security`), real desktop browser (`e2e:real:management`), Codex CLI + Cursor CLI Agent (`e2e:real:agent`) — verified by the single verifier (`npm run gate:customer-release`). Any blocked / skipped / dry-run / stale evidence, any open P0/P1 in `docs/qa/security-findings.yaml`, any unresolved high/critical production dependency, or any pending context-ACL migration item keeps the release closed. See [`real-user-e2e.md`](real-user-e2e.md).
+
 R1 受控数据服务层发布还必须按 `docs/runbooks/lucy-r1-release-runbook.md` 归档目标源 vertical slice evidence、Hermes QA Accuracy Report 和 `/api/r1/observability` 快照。默认目标源仍是 Doris；StarRocks 仅在显式 `--target starrocks` 且 evidence 通过时进入 P1 gated release review，live certification 通过前不得写入 verified matrix。
 
 ## 7. Residual Risks
@@ -141,6 +143,6 @@ R1 受控数据服务层发布还必须按 `docs/runbooks/lucy-r1-release-runboo
 | Risk | Current Control | Next Step |
 |---|---|---|
 | Registry publishing credentials | Not enabled in CI | Decide registry and credentials policy |
-| Multi-admin WebUI auth | Out of current scope | Add if moving beyond local/single-admin deployment |
+| Multi-admin WebUI auth | v2 persistent sessions, owner/operator split, bootstrap key, rate limits (Spec 20261018 §3); no dual-approval or SoD | SSO/OIDC/MFA only if the customer requires it |
 | High-sensitive domains | Current role/table ACL | Add domain-level isolation if business policy requires it |
 | Public MCP endpoint | Bearer token + ACL | Add TLS/front-door policy before internet exposure |
