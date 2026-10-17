@@ -1,0 +1,17 @@
+name: orders_masked
+
+grain:
+  - order_id
+
+measures:
+  - name: order_count
+    expr: count(distinct order_id)
+    description: 订单数。必须用 COUNT(DISTINCT order_id)。
+  - name: total_amount_cents
+    expr: sum(amount_cents)
+    description: 订单金额合计（分）。
+
+segments:
+  - name: west
+    expr: region = 'West'
+    description: 华西区域。

@@ -1,0 +1,44 @@
+# Versioned registry of real product clients for the user-e2e layer (Spec §6.3, R4/R7).
+# Authority: docs/specs/lucy-20261018-enterprise-security-and-real-e2e-spec.md §6.3 and §10 (R4, R7, R9, R10).
+# A required client may not be removed to turn a failed run green; removal needs a reviewed change here and a profile bump.
+# `version` is the version proven by the adapter probe at run time (never trusted from this file).
+version: 1
+clients:
+  - product: codex
+    required: true
+    transport: cli
+    integration: "Codex CLI (`codex exec`) with a CODEX_HOME generated from the MCP config copied out of the WebUI"
+    adapter: scripts/e2e/adapters/codex.mjs
+    os: [darwin, linux]
+    version: null
+    auth: "Bearer token via environment variable referenced by the generated config (never argv)"
+    protocols: [streamable-http]
+    cases: [SEC-07-V12, SEC-14-V12, SEC-16-V01, SEC-16-V02, SEC-16-V03, SEC-21-V06, UX-01-V01, UX-02, UX-03, UX-04, UX-05]
+    credentialEnv: [OPENAI_API_KEY]
+  - product: cursor
+    required: true
+    transport: cli
+    integration: "Cursor CLI Agent (`cursor-agent` or `agent`, whichever the runner installs) with a project .cursor/mcp.json generated from the WebUI config"
+    adapter: scripts/e2e/adapters/cursor.mjs
+    os: [darwin, linux]
+    version: null
+    auth: "Bearer token via environment variable interpolated in mcp.json headers (never argv)"
+    protocols: [streamable-http]
+    cases: [SEC-07-V12, SEC-14-V12, SEC-16-V01, SEC-16-V02, SEC-16-V03, SEC-21-V06, UX-01-V01, UX-02, UX-03, UX-04, UX-05]
+    credentialEnv: [CURSOR_API_KEY]
+  - product: cursor-ide
+    required: false
+    transport: gui
+    integration: "Cursor IDE GUI automation (R7: optional, not part of the first-release denominator)"
+    adapter: null
+    os: [darwin]
+    version: null
+    auth: null
+    protocols: [streamable-http]
+    cases: []
+    credentialEnv: []
+notCounted:
+  - "Two Hermes profiles count as ONE product and can never replace Codex or Cursor."
+  - "Direct HTTP scripts are not real clients; they only prove protocol behavior in the security-integration layer."
+  - "A CLI adapter only proves the CLI path it executed; it is not evidence for a desktop UI or cloud connector."
+unsupportedAuth: "If a product cannot send the Lucy Bearer token it is reported blocked; never routed through KTX stdio or :7878."

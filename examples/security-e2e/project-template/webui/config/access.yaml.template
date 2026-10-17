@@ -1,0 +1,196 @@
+# Template: rendered into <runDir>/project/webui/config/access.yaml by prepare-environment.mjs.
+# Token hashes are sha256 of per-run random tokens whose plaintext stays in <runDir>/checker/secrets (0600).
+roles:
+  finance_reader:
+    description: Finance domain reader (all rows)
+    permission_model_version: 2
+    allow:
+      connections: [fin-db]
+      tableSelectors:
+        - connection: fin-db
+          schema: analytics
+          names: [marketing_daily, orders_masked]
+          row_access: all
+      tools: &full_context_tools
+        - lucy_catalog
+        - lucy_query
+        - lucy_read_source
+        - lucy_explain_query
+        - lucy_begin_question
+        - wiki_search
+        - wiki_read
+        - lucy_skill_search
+        - lucy_skill_read
+        - connection_list
+  finance_east:
+    description: Finance East-only reader (scoped rows)
+    permission_model_version: 2
+    allow:
+      connections: [fin-db]
+      tableSelectors:
+        - connection: fin-db
+          schema: analytics
+          names: [marketing_daily]
+          row_access: scoped
+          row_policy:
+            predicates:
+              - field: region
+                op: eq
+                value: East
+      tools: *full_context_tools
+  sales_reader:
+    description: Sales domain reader
+    permission_model_version: 2
+    allow:
+      connections: [sales-db]
+      tableSelectors:
+        - connection: sales-db
+          schema: analytics
+          names: [orders_masked]
+          row_access: all
+      tools: *full_context_tools
+  channel_only:
+    description: Holds the Wiki/Skill read channels but no object grant (same-role closure control)
+    permission_model_version: 2
+    allow:
+      connections: [fin-db]
+      tableSelectors:
+        - connection: fin-db
+          schema: analytics
+          names: [marketing_daily]
+          row_access: all
+      tools:
+        - lucy_catalog
+        - wiki_read
+        - lucy_skill_read
+  discover_only:
+    description: Holds only the discover channels (search), never the read channels
+    permission_model_version: 2
+    allow:
+      connections: [fin-db]
+      tableSelectors:
+        - connection: fin-db
+          schema: analytics
+          names: [marketing_daily]
+          row_access: all
+      tools:
+        - lucy_catalog
+        - wiki_search
+        - lucy_skill_search
+  object_only:
+    description: Holds object grants (split-role document ACL) without the read channels
+    permission_model_version: 2
+    allow:
+      connections: [fin-db]
+      tableSelectors:
+        - connection: fin-db
+          schema: analytics
+          names: [marketing_daily]
+          row_access: all
+      tools:
+        - lucy_catalog
+        - lucy_query
+
+users:
+  - id: e2e_finance
+    name: E2E Finance Agent
+    enabled: true
+    role: finance_reader
+    tokens:
+      - hash: "{{TOKEN_HASH_FINANCE}}"
+        label: e2e-finance
+        created: 2026-10-18
+  - id: e2e_finance_east
+    name: E2E Finance East Agent
+    enabled: true
+    role: finance_east
+    tokens:
+      - hash: "{{TOKEN_HASH_FINANCE_EAST}}"
+        label: e2e-finance-east
+        created: 2026-10-18
+  - id: e2e_sales
+    name: E2E Sales Agent
+    enabled: true
+    role: sales_reader
+    tokens:
+      - hash: "{{TOKEN_HASH_SALES}}"
+        label: e2e-sales
+        created: 2026-10-18
+  - id: e2e_disabled
+    name: E2E Disabled Agent
+    enabled: false
+    role: finance_reader
+    tokens:
+      - hash: "{{TOKEN_HASH_DISABLED}}"
+        label: e2e-disabled
+        created: 2026-10-18
+  - id: e2e_channel_only
+    name: E2E Channel-only Agent
+    enabled: true
+    role: channel_only
+    tokens:
+      - hash: "{{TOKEN_HASH_CHANNEL_ONLY}}"
+        label: e2e-channel-only
+        created: 2026-10-18
+  - id: e2e_discover_only
+    name: E2E Discover-only Agent
+    enabled: true
+    role: discover_only
+    tokens:
+      - hash: "{{TOKEN_HASH_DISCOVER_ONLY}}"
+        label: e2e-discover-only
+        created: 2026-10-18
+  - id: e2e_split_roles
+    name: E2E Split-role Agent (A has channel, B has object grant; must not stitch)
+    enabled: true
+    roles: [channel_only, object_only]
+    tokens:
+      - hash: "{{TOKEN_HASH_SPLIT}}"
+        label: e2e-split
+        created: 2026-10-18
+  - id: e2e_legacy
+    name: E2E Legacy Direct-allow Agent (no formal role)
+    enabled: true
+    allow:
+      connections: [fin-db]
+      tableSelectors:
+        - connection: fin-db
+          schema: analytics
+          names: [marketing_daily]
+      tools:
+        - lucy_catalog
+        - lucy_query
+        - wiki_search
+        - wiki_read
+    tokens:
+      - hash: "{{TOKEN_HASH_LEGACY}}"
+        label: e2e-legacy
+        created: 2026-10-18
+
+defaults:
+  deny_tools:
+    - sql_execution
+    - sql_dialect_notes
+    - memory_ingest
+    - memory_ingest_status
+    - sl_query
+    - sl_read_source
+  known_tools:
+    - lucy_query
+    - lucy_read_source
+    - lucy_explain_query
+    - lucy_catalog
+    - lucy_freshness
+    - lucy_begin_question
+    - lucy_skill_search
+    - lucy_skill_read
+    - wiki_search
+    - wiki_read
+    - entity_details
+    - dictionary_search
+    - discover_data
+    - connection_list
+    - sl_query
+    - sl_read_source
+    - sl_validate
+    - sql_execution

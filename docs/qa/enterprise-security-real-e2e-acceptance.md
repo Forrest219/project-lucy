@@ -4,7 +4,7 @@
 |---|---|
 | 文档名称 | Lucy 企业安全整改与真实用户 E2E 验收映射 |
 | 文档类型 | Checklist |
-| 版本 | v1.0 |
+| 版本 | v1.1（T10～T15 落地与本地执行记录；v1.0 为 T00 映射） |
 | 撰写日期 | 2026-10-18 |
 | 撰写人 | Claude（Cursor Builder，T00） |
 | 委托人 | xingchen |
@@ -169,8 +169,51 @@ flowchart LR
 - [x] `SEC-15-FM-01～06` 全部登记（§3）。
 - [x] 原评估 10 条待写旅程均有归属（§4）。
 - [x] 至少两个不同 required 产品（Codex + Cursor），Hermes 不重复计数（§5）。
-- [ ] T10 冻结 case catalog 分母、变体展开（身份 × 协议 × 引擎 × 客户端）：**未完成，属 T10**。
-- [ ] 各「计划新建」文件落地：**未完成，按 Plan 由各任务创建**。
+- [x] T10 冻结 case catalog 分母与变体展开：`scripts/e2e/contracts/case-catalog.yaml` 展开为 **270** 个变体，固定分母 **388** 次执行（Agent 变体 × 2 个 required 产品 × 3 次）；`case-catalog.lock.json` 固定 digest 与 required id，删除/改 optional 即失败（`case-catalog.test.mjs`）。
+- [x] 各「计划新建」文件已落地（见 §8）；个别 UI/Agent/运维用例的**自动化尚未编写**，在 catalog 中保持 required 并如实报 BLOCKED，不删分母。
+
+
+## 8. T10～T15 落地与本地执行记录（据实；不是通过证据）
+
+基线 HEAD `60683d2`（工作区含 T10～T15 未提交改动），开发机 Apple M4 Pro / Node 24 / arm64，无 KTX 上游、无数据库、无 Codex/Cursor 二进制与模型凭据。运行目录 `inbox/e2e/<runId>/`（临时，可删）。
+
+### 8.1 冻结目录与执行层
+
+| 项 | 数量 / 结果 |
+|---|---|
+| catalog 变体 | 270 = security 177 + management 27 + gate 40 + agent 26；digest 见 `case-catalog.lock.json` |
+| 固定分母 | 388 次执行（agent 变体 × `codex`/`cursor` × 3 次） |
+| security-integration（`e2e:real:security`，真实 Lucy 进程 + HTTP + SQLite） | **73 passed / 0 failed / 104 blocked**（177 个 security 变体） |
+| 真实桌面浏览器（`e2e:real:management`，customer 模式 + 认证 required，1440×900，workers=1，retries=0） | 9 个用例通过，覆盖 **12 个** management 变体：SEC-01-V06、SEC-02-V06、SEC-03-V05、SEC-04-V11、SEC-06-V01、SEC-07-V13、SEC-14-V11、SEC-15-V06、SEC-18-V06、SEC-20-V01/V02/V06；其余 15 个 BLOCKED |
+| 真实客户端（`e2e:real:agent`） | 0 passed / 0 failed / **144 blocked**（24 个 agent 变体 × 2 产品 × 3 次）：`codex`、`cursor-agent` 二进制均不存在，`OPENAI_API_KEY`、`CURSOR_API_KEY` 缺失 |
+| 唯一 verifier 反向测试 | GATE-01-V01～V16 全部通过（`evidence-verifier.test.mjs`，经 node:test 事件 API 采集，非 stdout 解析） |
+| harness 单测 | `npm run test:e2e-harness` 152/152 通过 |
+| `customer-release-readiness --collect`（本地 run） | exit 3，`releaseReady=false`，只写 `release-readiness.collect.json`，421 条问题（缺分母、缺能力、缺 K8s 证据） |
+| 回归 | `webui npm test` 2777/2777；`lint:terminology`、`lint:ia-boundary`、`security:baseline`、`e2e:selector-contract`、`webui build` 通过 |
+
+### 8.2 BLOCKED 清单（security 变体，104 个）
+
+| 原因 | 数量 | 说明 |
+|---|---|---|
+| 缺 `ktx-upstream` | 36 | 需要真实 KTX 上游才有意义（SEC-18 数据类、SEC-21、SEC-22-S02 许可矩阵、UX-06 等） |
+| 缺 `ktx-upstream` + `postgres` | 42 | SEC-09/10/11/12 的真实 DB 查询、行集与绕过输入，BY-01～19 |
+| `handler_not_implemented` | 18 | SEC-04-V07、SEC-05-V07、SEC-06-V02、SEC-13-V03/V04、SEC-15-V02、SEC-15-FM-06、SEC-15-FM-SEED、SEC-15-S01、SEC-19-V04、SEC-20-V03/V04/V05、SEC-22-S01、UX-06-V04～V07：用例**尚未编写**，不得视为通过 |
+| 缺 `network-profile` | 4 | TLS/Secure/HSTS/可信代理、受控出站 sink 需要目标网络 |
+| 缺 `clock-control` | 2 | 空闲 30 分钟 / 绝对 12 小时到期（需要时钟控制面） |
+| 缺 `k8s-amd64` + `network-profile` | 1 | SEC-22-V05（7878 无直接入口） |
+| 缺 `agent-client` + `ktx-upstream` + `postgres` | 1 | SEC-16-V04 受控出站 sink |
+
+management 与 gate 变体的 BLOCKED 原因见 `results/management.json`、`results/gates.json`：连接向导/语义/发布（UX-01、UX-04-V02/V03、SEC-13-V06）、离线 Eval（UX-06-V01～V03/V08）、现场提问/候选（UX-07-*）依赖真实 DB + KTX（及真实客户端），**对应 UI 自动化尚未编写**；OPS-01-*、SEC-17 大部分、SEC-23-V01/V02/V03/V05 依赖 K8s/CI 产物（npm audit、digest 绑定的 G1–G4）。
+
+### 8.3 与 Spec 的差异与已知缺口（需决策或后续任务）
+
+1. **UX-01-V01（J-01 全链路）在连接向导步骤上尚无 UI 自动化**：现有用例只覆盖 J-01 中能在本地验证的步骤（引导、账户、Wiki 授权、Token 一次性展示、吊销、审计导出）。在向导自动化补齐前，该变体保持 BLOCKED，release 将无法通过——这是有意的诚实状态。
+2. **K8s 版故障控制面缺失**：依赖 `fault-control` 的变体（重启、存储故障、损坏配置等）在 K8s 上只能 BLOCKED。
+3. **隔离探测**：同一 OS 用户下客户端必然读得到 gold，正式验收需独立 OS 身份/VM（`run-agent-journey` 会报 `isolation_not_established`）。
+4. **`k8s-upgrade` 门禁（N-1 PVC 升级，OPS-01-V02～V07）未接入 workflow**：verifier 报 `gate_missing`（BLOCKED）。
+5. Codex / Cursor adapter 的命令行标志按产品文档编写，**从未用真实二进制执行过**。
+6. `npm run lint:spec` 在当前工作区有 8 条 `api-spec` 路由缺失告警（`export-inquiry-pack`、`schema-structure`、`confirm-review`、`field-questions*`、`monitor/field`、`help/diagrams/:id`）：属于工作区中他人未提交的 `webui/docs/03-api-spec.md` 改动与 Spec 161/162/172/173 的路由，**非本任务引入，本任务未改动该文件**。
+7. `deploy/k8s/helm/lucy/.DS_Store`（2026-08-03，已被 `.gitignore` 忽略）会让 `k8s-gate-negative` 的 "K6 rejects offline package that pins config ID as digest" 在本机失败（包内含 macOS 残留）；干净检出不受影响，本任务未删除该文件。
 
 ## Terminology Compliance
 

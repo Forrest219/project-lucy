@@ -1,0 +1,22 @@
+name: marketing_daily
+
+grain:
+  - day
+  - region
+  - channel
+
+measures:
+  - name: total_spend_cents
+    expr: sum(spend_cents)
+    description: 投放金额合计（分）。
+  - name: total_new_customers
+    expr: sum(new_customers)
+    description: 新增客户数合计。new_customers 为 NULL 的行不参与求和。
+  - name: cac_cents
+    expr: sum(spend_cents) / nullif(sum(new_customers), 0)
+    description: 获客成本（分）。必须用 SUM/SUM 重算，禁止对日比率取平均。
+
+segments:
+  - name: east
+    expr: region = 'East'
+    description: 华东区域。

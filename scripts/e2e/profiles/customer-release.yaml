@@ -1,0 +1,48 @@
+# Frozen customer-release profile (Spec §6.2, §8, R4/R7–R10). Its sha256 is recorded as profileDigest in every
+# evidence file; changing any value here invalidates earlier evidence and needs review, not a CI-time override.
+profile: customer-release
+version: 1
+deployment:
+  platform: linux/amd64          # customer image is single-arch amd64 (AGENTS.md); Mac/Compose never counts
+  topology: single-replica-k8s
+  mode: customer                 # LUCY_DEPLOYMENT_MODE
+  auth: required                 # LUCY_WEBUI_AUTH
+  cookieSecure: true
+clients:
+  definition: docs/qa/real-e2e-clients.yaml
+  requiredMinimumProducts: 2     # Hermes profiles never count as two products
+  repeatPerProductAndCase: 3     # R9: 3/3, first run and every retry retained
+securityCases:
+  zeroToleranceLeak: true        # any out-of-domain canary / credential in any carrier is FAILED
+tolerances:                      # per answer type; no global fuzzy match (Spec §8.1)
+  money_cents: 0
+  int: 0
+  ratio_ppm: 0
+  sort_ties: lexicographic_by_label
+limits:                          # R10: frozen so a candidate run cannot silently spend more
+  maxModelCallsPerCandidateRun: 400
+  maxAgentCaseWallClockSeconds: 600
+  maxAgentRunWallClockMinutes: 180
+  requestBodyBytes: 1048576      # Spec §5.1 initial bounds, tightening allowed, loosening needs review
+  responseBufferBytes: 8388608
+  upstreamTimeoutSeconds: 30
+  ledgerCommitWaitSeconds: 2
+auditOverhead:                   # Spec §5.1 performance budget
+  p95ExtraMs: 20
+  p99ExtraMs: 50
+  concurrentClients: 16
+  durationMinutes: 5
+  sqliteBusy503: 0
+evidence:
+  retentionDays: 180
+  maxAgeHours: 72                # older evidence can never certify a candidate
+  requireTrustedRunnerProvenance: true
+  requireSignature: true
+isolation:
+  clientsMustNotReach: [gold, seed, fixture-database, test-control-plane, checker-secrets]
+  probeBeforeRelease: true       # the real client is used to try to reach them; failure => blocked
+credentials:
+  # R10: dedicated test accounts only, supplied through protected-runner secrets (never in the repository).
+  modelCredentialEnv:
+    codex: [OPENAI_API_KEY]
+    cursor: [CURSOR_API_KEY]

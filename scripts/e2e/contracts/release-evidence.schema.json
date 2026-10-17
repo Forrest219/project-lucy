@@ -1,0 +1,156 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "lucy-real-user-e2e-v1",
+  "title": "Lucy real-user E2E release evidence (Spec §8.1)",
+  "type": "object",
+  "required": ["contract", "executionMode", "stub", "runId", "candidate", "environment", "clients", "summary", "cases", "gates", "serverEvidence", "provenance", "status", "releaseReady"],
+  "properties": {
+    "contract": { "const": "lucy-real-user-e2e-v1" },
+    "executionMode": { "enum": ["release", "collect", "dry_run", "local"] },
+    "stub": { "type": "boolean" },
+    "runId": { "type": "string", "minLength": 8 },
+    "candidate": {
+      "type": "object",
+      "required": ["gitSha", "treeDigest", "imageDigest", "platform", "ktxVersion", "chartVersion"],
+      "properties": {
+        "gitSha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "treeDigest": { "type": "string", "pattern": "^(sha256:)?[0-9a-f]{64}$" },
+        "imageDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "platform": { "type": "string", "minLength": 1 },
+        "ktxVersion": { "type": "string", "minLength": 1 },
+        "chartVersion": { "type": "string", "minLength": 1 }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "required": ["instanceId", "topology", "fixtureDigest", "profileDigest", "caseCatalogDigest", "deployedImageDigest", "startedAt", "finishedAt"],
+      "properties": {
+        "instanceId": { "type": "string", "minLength": 1 },
+        "topology": { "type": "string", "minLength": 1 },
+        "fixtureDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "profileDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "caseCatalogDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "deployedImageDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "startedAt": { "type": "string", "minLength": 10 },
+        "finishedAt": { "type": "string", "minLength": 10 }
+      }
+    },
+    "clients": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["product", "version", "adapterDigest", "model", "transport", "required"],
+        "properties": {
+          "product": { "type": "string", "minLength": 1 },
+          "version": { "type": "string", "minLength": 1 },
+          "adapterDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+          "model": { "type": "string", "minLength": 1 },
+          "transport": { "type": "string", "minLength": 1 },
+          "required": { "type": "boolean" }
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["required", "executed", "passed", "failed", "blocked", "skipped", "dryRun"],
+      "properties": {
+        "required": { "type": "integer" },
+        "executed": { "type": "integer" },
+        "passed": { "type": "integer" },
+        "failed": { "type": "integer" },
+        "blocked": { "type": "integer" },
+        "skipped": { "type": "integer" },
+        "dryRun": { "type": "integer" }
+      }
+    },
+    "cases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "runner", "status", "startedAt", "finishedAt", "serverTraceIds", "queryEventIds", "policyVersion", "contextPolicyVersion", "assertions", "artifacts"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "runner": { "enum": ["security", "management", "agent", "gate"] },
+          "client": { "type": "string" },
+          "run": { "type": "integer" },
+          "status": { "enum": ["passed", "failed", "blocked", "skipped", "dry_run"] },
+          "startedAt": { "type": "string" },
+          "finishedAt": { "type": "string" },
+          "tokenFingerprint": { "type": "string" },
+          "serverTraceIds": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+          "queryEventIds": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+          "policyVersion": { "type": "string", "minLength": 1 },
+          "contextPolicyVersion": { "type": "string", "minLength": 1 },
+          "goldDigest": { "type": "string" },
+          "resultDigest": { "type": "string" },
+          "denyReason": { "type": "string" },
+          "upstreamExecutions": { "type": "integer" },
+          "failureClass": { "enum": ["product_defect", "semantic_definition", "model_variance", "environment"] },
+          "leakage": {
+            "type": "object",
+            "required": ["scanned", "hits"],
+            "properties": { "scanned": { "type": "boolean" }, "hits": { "type": "integer" } }
+          },
+          "assertions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["token", "passed"],
+              "properties": { "token": { "type": "string", "minLength": 1 }, "passed": { "type": "boolean" }, "detail": { "type": "string" } }
+            }
+          },
+          "artifacts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["path", "sha256"],
+              "properties": { "path": { "type": "string", "minLength": 1 }, "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" } }
+            }
+          }
+        }
+      }
+    },
+    "gates": {
+      "type": "object",
+      "required": ["contextMigrationPending", "projectionBacklog", "existing"],
+      "properties": {
+        "contextMigrationPending": { "type": "integer" },
+        "projectionBacklog": { "type": "integer" },
+        "existing": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "status", "imageDigest"],
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "status": { "enum": ["passed", "failed", "blocked", "skipped", "dry_run"] },
+              "imageDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+            }
+          }
+        }
+      }
+    },
+    "serverEvidence": {
+      "type": "object",
+      "required": ["source", "path", "sha256"],
+      "properties": {
+        "source": { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "minLength": 1 },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["trusted", "runner"],
+      "properties": {
+        "trusted": { "type": "boolean" },
+        "runner": { "type": "string", "minLength": 1 },
+        "ciRunId": { "type": "string" },
+        "ciSha": { "type": "string" },
+        "workflow": { "type": "string" }
+      }
+    },
+    "status": { "enum": ["passed", "failed", "blocked", "skipped", "dry_run"] },
+    "releaseReady": { "type": "boolean" }
+  }
+}
