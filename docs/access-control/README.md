@@ -41,6 +41,7 @@
 | Admin 契约 | [`webui/docs/14-agent-admin-enterprise-delivery-spec.md`](../../webui/docs/14-agent-admin-enterprise-delivery-spec.md)、[`15-role-admin-spec.md`](../../webui/docs/15-role-admin-spec.md) | Agent / Role Admin |
 | Role 权限配置结构 | [`webui/docs/150-role-permission-configuration-structure-spec.md`](../../webui/docs/150-role-permission-configuration-structure-spec.md) | Role 详情三个独立编辑面、共享草稿、保存确认 Drawer；不改运行时契约 |
 | Skill 对象授权 | [`webui/docs/151-business-skill-authorization-and-file-safety-spec.md`](../../webui/docs/151-business-skill-authorization-and-file-safety-spec.md) | 文件身份与并发版本仍有效。对象授权与通道勾选由 [Spec 170](../../webui/docs/170-mvp-open-skill-wiki-access-spec.md) 暂停：已发布 Skill 与全部 Wiki 对所有已解析角色开放 |
+| 企业安全与真实用户 E2E 整改 | [Spec](../specs/lucy-20261018-enterprise-security-and-real-e2e-spec.md) · [Plan](../plans/2026-10-18-enterprise-security-and-real-e2e-plan.md) · [ADR](./adr-20261018-security-ledger-and-context-acl.md) · [Cursor 提示词](../plans/2026-10-18-enterprise-security-cursor-prompts.md) | **2026-10-18 已批准，按批次实施中。** 修复 P0/P1、用显式角色 ACL 替代 170 全开放；实施完成前运行时仍以上方现行基线为准 |
 
 **冲突裁决：** 与 `design-upgrade.md` 冲突时，以 `design-upgrade.md` 为准，直至对应 Spec 同步更新。
 

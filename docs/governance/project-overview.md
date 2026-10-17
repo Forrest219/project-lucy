@@ -169,6 +169,7 @@ Lucy MCP Proxy 监听 `LUCY_PROXY_HOST:LUCY_PROXY_PORT`（默认容器内 `0.0.0
 | Agent 接入指南 | `docs/runbooks/agent-integration-guide.md` |
 | 可选 Agent Chat（A3，非默认交付；客户 bundle 无悬空入口） | `docs/design/design-lucy-agent-chat-a3.md`、`docs/runbooks/runbook-lucy-agent-chat-a3.md`、`deploy/compose/docker-compose.agent-chat.yml`、`agent-chat/`（仓库维护用；`smoke:p0:delivery-isolation` 保证 Lucy 镜像不含 A3） |
 | 安全指南 | `docs/runbooks/security-guide.md` |
+| 企业安全整改与真实用户 E2E 上线门禁（2026-10-18，**已批准，按批次实施中**） | [整改 Spec](../specs/lucy-20261018-enterprise-security-and-real-e2e-spec.md)、[实施 Plan](../plans/2026-10-18-enterprise-security-and-real-e2e-plan.md)、[Cursor 提示词](../plans/2026-10-18-enterprise-security-cursor-prompts.md)；修复 P0/P1、恢复 Wiki/Skill 显式隔离并接入客户版本强制门禁 |
 | 排障指南 | `docs/runbooks/troubleshooting-guide.md` |
 | 开发治理 | `docs/governance/DEVELOPMENT.md` |
 | WebUI 当前状态 | `docs/webui/webui-impl-status.md` |
