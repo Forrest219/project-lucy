@@ -21,7 +21,7 @@ findings:
     severity: P1
     status: fixed
     spec: "§3.3"
-    fixedIn: pending
+    fixedIn: b2ecc58
     verifiedBy: [SEC-07, SEC-08, SEC-21]
     acceptedBy: null
   # V-03 退出/重置密码后旧管理 Cookie 仍可重放（T03）
