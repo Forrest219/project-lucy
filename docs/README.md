@@ -55,6 +55,7 @@
 | `design/design-lucy-agent-chat-a3.md` | 可选 Agent Chat（A3）：Open WebUI + Hermes API Server 旁路叠加 Lucy MCP；Lucy 独立交付、单租户验证；非默认 headless 交付 |
 | `runbooks/runbook-lucy-agent-chat-a3.md` | A3 手工联调 / 排障 Runbook（compose profile `agent-chat`） |
 | `design/access-governance-design.md` | **跳转桩** → `access-control/design-governance-baseline.md` |
+| `design/design-semantic-platform-ontology-proposal.md` | ⚠️ **提案稿·挂起中** 语义平台本体化架构（四层架构 + 4 个 MCP 端点）。**与 2026-10-14 已裁定的「不建议现在碰本体图引擎」及 `concept-dictionary-spec` Non-goals 冲突，重新裁定前不得实施** |
 
 ## 3. 复核（Review — 已实现代码的审查报告）→ `reviews/`
 
