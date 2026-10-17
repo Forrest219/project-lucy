@@ -137,6 +137,7 @@ import { registerUiUsageRoutes } from "./admin/ui-usage.js";
 import { registerAuthRoutes, registerAdminAccountRoutes } from "./auth/routes.js";
 import { registerBrandingRoutes } from "./branding.js";
 import { requireWebuiAuthHook } from "./auth/guard.js";
+import { resolveDeploymentMode } from "./auth/deployment-mode.js";
 import { registerWebSecurity } from "./web-security.js";
 import { registerSkillsRoutes } from "./admin/skills.js";
 import { registerCaseRoutes } from "./eval/cases.js";
@@ -566,6 +567,7 @@ function logProbeTiming(request: FastifyRequest, kind: string, purpose: string, 
 }
 
 export function buildServer() {
+  resolveDeploymentMode(); // invalid LUCY_DEPLOYMENT_MODE refuses to start
   const app = Fastify({ logger: true });
   const writtenFiles: SessionWrittenFile[] = [];
   const changedSources = new Map<string, { conn: string; schema: string; table: string }>();

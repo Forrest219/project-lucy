@@ -3,5 +3,13 @@ services:
     environment:
       # Customer bind-mount owns /data/lucy; do not merge image template context.
       LUCY_DISABLE_TEMPLATE_SYNC: "1"
+      LUCY_DEPLOYMENT_MODE: customer
+      LUCY_WEBUI_BOOTSTRAP_TOKEN_FILE: /run/secrets/webui_bootstrap_token
     volumes:
       - ./customer-config:/data/lucy
+    secrets:
+      - webui_bootstrap_token
+
+secrets:
+  webui_bootstrap_token:
+    file: ./secrets/webui-bootstrap-token

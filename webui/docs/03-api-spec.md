@@ -905,6 +905,19 @@ Query：
 
 `POST /mcp` 在 7879 端口运行，使用 Bearer token 识别 agent，执行 ACL 裁决并写访问日志。代理工具包括 KTX MCP 上游工具和 `kx_catalog` 本地目录工具。
 
+### 部署模式与首个所有者引导（企业安全 V-01 · A0 最小版）
+
+`LUCY_DEPLOYMENT_MODE=customer|development`，缺省 `customer`，其他取值拒绝启动。`customer` 下 `GET /api/auth/status` 的 `mode` 永不为 `open`（无启用管理员 → `bootstrap`），`LUCY_WEBUI_AUTH=off` 不生效；`development` 保持原行为。
+
+`POST /api/auth/bootstrap` 在 `customer` 模式下还需请求头 `X-Lucy-Bootstrap-Token`，对照 `LUCY_WEBUI_BOOTSTRAP_TOKEN_FILE` 指向的 Secret 文件（`timingSafeEqual`）。新增错误码：
+
+| 状态码 | 错误码 | 含义 |
+|---|---|---|
+| 503 | `BOOTSTRAP_NOT_PROVISIONED` | 未配置 `LUCY_WEBUI_BOOTSTRAP_TOKEN_FILE`，或文件不可读 / 为空 |
+| 401 | `BOOTSTRAP_TOKEN_INVALID` | 缺少或不匹配 `X-Lucy-Bootstrap-Token` |
+
+持久限速、并发互斥与持久引导状态见企业安全 Spec §3.1 / T02。
+
 ## 5. 通用约定
 
 - 所有 `:conn/:schema/:table` 段做白名单存在性校验，不存在 → `404 SOURCE_NOT_FOUND`。

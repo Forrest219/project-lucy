@@ -7,6 +7,28 @@ WEBUI_ROOT="${LUCY_WEBUI_ROOT:-${APP_ROOT}/webui}"
 TEMPLATE_ROOT="${LUCY_TEMPLATE_ROOT:-${APP_ROOT}/project-template}"
 SEED_STATE_DIR="${PROJECT_ROOT}/.lucy-seed"
 
+# V-01 (T0A-2) — deployment-mode preflight. Runs before any filesystem work so a
+# customer-mode container can never come up with the WebUI auth switched off.
+# Default mode is customer; invalid values and customer+LUCY_WEBUI_AUTH=off are fatal.
+preflight_deployment_mode() {
+  local mode auth
+  mode="$(printf '%s' "${LUCY_DEPLOYMENT_MODE:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+  auth="$(printf '%s' "${LUCY_WEBUI_AUTH:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+  [[ -n "${mode}" ]] || mode="customer"
+  case "${mode}" in
+    customer|development) ;;
+    *)
+      echo "[lucy] fatal: invalid LUCY_DEPLOYMENT_MODE='${LUCY_DEPLOYMENT_MODE}'; expected customer or development" >&2
+      exit 1
+      ;;
+  esac
+  if [[ "${mode}" == "customer" && "${auth}" == "off" ]]; then
+    echo "[lucy] fatal: LUCY_WEBUI_AUTH=off is not allowed when LUCY_DEPLOYMENT_MODE=customer (default); refusing to start" >&2
+    exit 1
+  fi
+}
+preflight_deployment_mode
+
 # A2 — Configurable Content Root.
 # Resolves the directory that holds semantic-layer/, wiki/, evals/, skills/.
 # Defaults to <PROJECT_ROOT>/config/ (the M31 layout). Legacy deployments keep
@@ -19,10 +41,13 @@ if [[ -n "${LUCY_CONTENT_ROOT:-}" ]]; then
 else
   CONTENT_ROOT="./config"
 fi
+mkdir -p "${PROJECT_ROOT}"
 if [[ "${CONTENT_ROOT}" = /* ]]; then
-  CONTENT_ROOT_ABS="${CONTENT_ROOT}"
+  mkdir -p "${CONTENT_ROOT}"
+  CONTENT_ROOT_ABS="$(cd "${CONTENT_ROOT}" && pwd -P)"
 else
-  CONTENT_ROOT_ABS="$(cd "${PROJECT_ROOT}" && cd "${CONTENT_ROOT}" && pwd -P 2>/dev/null || echo "${PROJECT_ROOT}/${CONTENT_ROOT}")"
+  mkdir -p "${PROJECT_ROOT}/${CONTENT_ROOT}"
+  CONTENT_ROOT_ABS="$(cd "${PROJECT_ROOT}" && cd "${CONTENT_ROOT}" && pwd -P)"
 fi
 export LUCY_CONTENT_ROOT="${CONTENT_ROOT_ABS}"
 

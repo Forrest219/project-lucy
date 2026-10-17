@@ -109,6 +109,8 @@ entry lands on its own line at the correct indent.
   value: "127.0.0.1"
 - name: LUCY_PROXY_UPSTREAM_PORT
   value: "7878"
+- name: LUCY_DEPLOYMENT_MODE
+  value: "customer"
 - name: KTX_TELEMETRY_DISABLED
   value: "1"
 - name: POSTHOG_DISABLED

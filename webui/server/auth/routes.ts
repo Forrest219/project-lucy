@@ -19,6 +19,8 @@ import {
   setSessionCookie
 } from "./session.js";
 import { actorIdFromRequest, requireOwner } from "./guard.js";
+import { checkBootstrapToken } from "./bootstrap-token.js";
+import { resolveDeploymentMode } from "./deployment-mode.js";
 
 const ADMIN_ID_RE = /^[a-z][a-z0-9_-]{1,31}$/;
 
@@ -132,6 +134,22 @@ export function registerAuthRoutes(app: FastifyInstance): void {
         ok: false,
         error: { code: "ADMINS_ALREADY_CONFIGURED", message: "管理员已配置，请直接登录" }
       });
+    }
+
+    if (resolveDeploymentMode() === "customer") {
+      const tokenCheck = await checkBootstrapToken(request.headers["x-lucy-bootstrap-token"]);
+      if (tokenCheck === "not_provisioned") {
+        return reply.status(503).send({
+          ok: false,
+          error: { code: "BOOTSTRAP_NOT_PROVISIONED", message: "部署侧尚未配置引导密钥，暂不能创建首个所有者" }
+        });
+      }
+      if (tokenCheck === "invalid") {
+        return reply.status(401).send({
+          ok: false,
+          error: { code: "BOOTSTRAP_TOKEN_INVALID", message: "引导密钥不正确" }
+        });
+      }
     }
 
     const adminId = request.body?.adminId?.trim() ?? "";

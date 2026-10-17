@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import {
@@ -238,4 +239,37 @@ test("upgrade-lucy.sh parses under stock macOS bash 3.2 when available", () => {
   const match = versionOut.match(/^(\d+)\.(\d+)/);
   if (!match || Number(match[1]) >= 4) return; // only gate when host ships bash 3.x
   execFileSync("/bin/bash", ["-n", path.join(repoRoot, "scripts/upgrade/upgrade-lucy.sh")]);
+});
+
+test("ensure-bootstrap-token.sh generates a 0600 secret once and prints only the path", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "lucy-bootstrap-token-"));
+  const target = path.join(dir, "secrets", "webui-bootstrap-token");
+  const script = path.join(repoRoot, "scripts/upgrade/ensure-bootstrap-token.sh");
+  try {
+    const first = execFileSync("bash", [script, target], { encoding: "utf8" });
+    const secret = readFileSync(target, "utf8").trim();
+    assert.match(secret, /^[a-f0-9]{64}$/);
+    assert.equal(statSync(target).mode & 0o777, 0o600);
+    assert.ok(first.includes(target));
+    assert.ok(!first.includes(secret));
+
+    const second = execFileSync("bash", [script, target], { encoding: "utf8" });
+    assert.equal(readFileSync(target, "utf8").trim(), secret);
+    assert.ok(!second.includes(secret));
+
+    // An empty file is treated as missing.
+    writeFileSync(target, "");
+    execFileSync("bash", [script, target], { encoding: "utf8" });
+    assert.match(readFileSync(target, "utf8").trim(), /^[a-f0-9]{64}$/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("demo compose files mount the bootstrap secret as a file secret", () => {
+  for (const name of ["demo", "postgres-demo", "executive-poc", "customer-config"]) {
+    const text = readFileSync(path.join(repoRoot, `deploy/compose/docker-compose.${name}.yml`), "utf8");
+    assert.match(text, /LUCY_WEBUI_BOOTSTRAP_TOKEN_FILE: \/run\/secrets\/webui_bootstrap_token/, name);
+    assert.match(text, /file: \.\/secrets\/webui-bootstrap-token/, name);
+  }
 });

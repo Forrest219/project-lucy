@@ -159,6 +159,19 @@ wipe_named_volume() {
   docker volume rm -f "${VOLUME_FULL}" 2>/dev/null || true
 }
 
+# V-01: demo compose files mount deploy/compose/secrets/webui-bootstrap-token as a
+# file secret, so `up` fails if it is missing. Generate it once (0600, never
+# rotated, path-only output). Skipped for compose files that do not use it.
+ensure_bootstrap_token() {
+  local compose_file
+  for compose_file in "${COMPOSE_FILES[@]}"; do
+    if [[ -f "${compose_file}" ]] && grep -q 'webui-bootstrap-token' "${compose_file}"; then
+      bash "${ROOT}/scripts/upgrade/ensure-bootstrap-token.sh" "${ROOT}/deploy/compose/secrets/webui-bootstrap-token"
+      return 0
+    fi
+  done
+}
+
 build_and_up() {
   if printf '%s\n' "${COMPOSE_FILES[@]}" | grep -q 'deploy/compose/docker-compose.demo.yml'; then
     bash "${ROOT}/scripts/demo/sync-demo-skills-template.sh"
@@ -215,6 +228,7 @@ if [[ "${FRESH}" -eq 1 ]]; then
   wipe_named_volume
 fi
 
+ensure_bootstrap_token
 build_and_up
 wait_for_health
 

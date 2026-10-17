@@ -137,6 +137,8 @@ export type ApiRequestOptions = {
   signal?: AbortSignal;
   /** Reject the response if a write affecting this read model started or settled meanwhile. */
   displayRead?: DisplayReadScope;
+  /** Extra request headers merged over the defaults (e.g. one-time bootstrap secret). */
+  headers?: Record<string, string>;
 };
 
 /** Which display read models a confirmed write can change (matrix C/D/P). */
@@ -194,7 +196,15 @@ async function apiRequest<T>(path: string, init: RequestInit, options: ApiReques
   const scope = options.displayRead;
   if (scope && hasPendingDisplayWrite(scope)) throw writeStaleResponse();
   const startedWriteEpoch = scope ? displayWriteEpochs[scope] : 0;
-  const response = await fetch(path, { credentials: "same-origin", ...init, ...(options.signal ? { signal: options.signal } : {}) });
+  const headers = options.headers
+    ? { ...(init.headers as Record<string, string> | undefined), ...options.headers }
+    : init.headers;
+  const response = await fetch(path, {
+    credentials: "same-origin",
+    ...init,
+    ...(headers ? { headers } : {}),
+    ...(options.signal ? { signal: options.signal } : {})
+  });
   let envelope: ApiEnvelope<T>;
   try {
     envelope = (await response.json()) as ApiEnvelope<T>;

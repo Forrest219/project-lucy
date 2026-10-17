@@ -25,7 +25,15 @@ type AuthContextValue = {
   refresh: () => Promise<void>;
   login: (adminId: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  bootstrap: (input: { adminId: string; displayName?: string; password: string }) => Promise<void>;
+  bootstrap: (input: BootstrapInput) => Promise<void>;
+};
+
+export type BootstrapInput = {
+  adminId: string;
+  displayName?: string;
+  password: string;
+  /** One-time deployment secret; held in memory only and sent as X-Lucy-Bootstrap-Token. */
+  bootstrapToken?: string;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -103,8 +111,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refresh, resetProtectedQueries]);
 
   const bootstrap = useCallback(
-    async (input: { adminId: string; displayName?: string; password: string }) => {
-      await apiPost<{ me: AuthMe }>("/api/auth/bootstrap", input);
+    async ({ bootstrapToken, ...input }: BootstrapInput) => {
+      await apiPost<{ me: AuthMe }>("/api/auth/bootstrap", input, {
+        headers: bootstrapToken ? { "X-Lucy-Bootstrap-Token": bootstrapToken } : undefined
+      });
       await refresh();
     },
     [refresh]

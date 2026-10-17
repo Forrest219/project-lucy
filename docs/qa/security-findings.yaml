@@ -7,6 +7,7 @@
 version: 1
 findings:
   # V-01 客户默认部署即开放管理面，可匿名抢占 owner（T0A-2 最小修复；T02 完整修复）
+  # note: A0 最小修复已合入，完整修复见 T02（持久限速 / bootstrap 互斥 / 持久引导状态未做，故保持 open）
   - id: V-01
     severity: P0
     status: open

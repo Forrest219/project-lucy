@@ -92,9 +92,9 @@ test("entrypoint restores missing semantic context for an existing volume", asyn
 
   const result = runSeedOnly(templateRoot, projectRoot);
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /synced 2 missing semantic-layer file/);
-  await assert.doesNotReject(readFile(path.join(projectRoot, "semantic-layer/mysql-aliyun/_schema/dataforai.yaml"), "utf8"));
-  await assert.doesNotReject(readFile(path.join(projectRoot, "semantic-layer/mysql-aliyun/orders.yaml"), "utf8"));
+  assert.match(result.stdout, /synced 2 missing semantic-layer \(config\) file/);
+  await assert.doesNotReject(readFile(path.join(projectRoot, "config/semantic-layer/mysql-aliyun/_schema/dataforai.yaml"), "utf8"));
+  await assert.doesNotReject(readFile(path.join(projectRoot, "config/semantic-layer/mysql-aliyun/orders.yaml"), "utf8"));
   assert.equal(await readFile(path.join(projectRoot, "ktx.yaml"), "utf8"), "connections: {}\n");
 
   await rm(root, { recursive: true, force: true });
@@ -105,24 +105,24 @@ test("entrypoint does not overwrite existing customer semantic context", async (
   const templateRoot = path.join(root, "template");
   const projectRoot = path.join(root, "project");
   await mkdir(path.join(templateRoot, "semantic-layer/mysql-aliyun/_schema"), { recursive: true });
-  await mkdir(path.join(projectRoot, "semantic-layer/mysql-aliyun/_schema"), { recursive: true });
+  await mkdir(path.join(projectRoot, "config/semantic-layer/mysql-aliyun/_schema"), { recursive: true });
   await writeFile(path.join(templateRoot, "ktx.yaml"), "connections: {}\n");
   await writeFile(path.join(templateRoot, "semantic-layer/mysql-aliyun/_schema/dataforai.yaml"), "tables:\n  orders: {}\n");
   await writeFile(path.join(templateRoot, "semantic-layer/mysql-aliyun/orders.yaml"), "grain: order\nmeasures:\n  - name: new_metric\n");
   await writeFile(path.join(projectRoot, "ktx.yaml"), "connections: {}\n");
-  await writeFile(path.join(projectRoot, "semantic-layer/mysql-aliyun/_schema/dataforai.yaml"), "tables: {}\n");
-  await writeFile(path.join(projectRoot, "semantic-layer/mysql-aliyun/orders.yaml"), "grain: order\n");
+  await writeFile(path.join(projectRoot, "config/semantic-layer/mysql-aliyun/_schema/dataforai.yaml"), "tables: {}\n");
+  await writeFile(path.join(projectRoot, "config/semantic-layer/mysql-aliyun/orders.yaml"), "grain: order\n");
 
   const result = runSeedOnly(templateRoot, projectRoot);
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /preserved 2 existing semantic-layer file/);
+  assert.match(result.stdout, /preserved 2 existing semantic-layer \(config\) file/);
   assert.doesNotMatch(result.stdout, /refreshed .* changed/);
   assert.equal(
-    await readFile(path.join(projectRoot, "semantic-layer/mysql-aliyun/orders.yaml"), "utf8"),
+    await readFile(path.join(projectRoot, "config/semantic-layer/mysql-aliyun/orders.yaml"), "utf8"),
     "grain: order\n"
   );
   assert.equal(
-    await readFile(path.join(projectRoot, "semantic-layer/mysql-aliyun/_schema/dataforai.yaml"), "utf8"),
+    await readFile(path.join(projectRoot, "config/semantic-layer/mysql-aliyun/_schema/dataforai.yaml"), "utf8"),
     "tables: {}\n"
   );
   assert.equal(await readFile(path.join(projectRoot, "ktx.yaml"), "utf8"), "connections: {}\n");
@@ -135,12 +135,12 @@ test("entrypoint skips template sync when LUCY_DISABLE_TEMPLATE_SYNC=1", async (
   const templateRoot = path.join(root, "template");
   const projectRoot = path.join(root, "project");
   await mkdir(path.join(templateRoot, "semantic-layer/customer-db/_schema"), { recursive: true });
-  await mkdir(path.join(projectRoot, "semantic-layer/customer-db/_schema"), { recursive: true });
+  await mkdir(path.join(projectRoot, "config/semantic-layer/customer-db/_schema"), { recursive: true });
   await writeFile(path.join(templateRoot, "ktx.yaml"), "connections: {}\n");
   await writeFile(path.join(templateRoot, "semantic-layer/customer-db/_schema/analytics.yaml"), "tables: {}\n");
   await writeFile(path.join(templateRoot, "semantic-layer/customer-db/extra.yaml"), "grain: row\n");
   await writeFile(path.join(projectRoot, "ktx.yaml"), "connections: {}\n");
-  await writeFile(path.join(projectRoot, "semantic-layer/customer-db/_schema/analytics.yaml"), "tables: {}\n");
+  await writeFile(path.join(projectRoot, "config/semantic-layer/customer-db/_schema/analytics.yaml"), "tables: {}\n");
 
   const result = spawnSync("bash", [entrypoint], {
     cwd: repoRoot,
@@ -157,7 +157,7 @@ test("entrypoint skips template sync when LUCY_DISABLE_TEMPLATE_SYNC=1", async (
   });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /template sync disabled/);
-  await assert.rejects(readFile(path.join(projectRoot, "semantic-layer/customer-db/extra.yaml"), "utf8"));
+  await assert.rejects(readFile(path.join(projectRoot, "config/semantic-layer/customer-db/extra.yaml"), "utf8"));
 
   await rm(root, { recursive: true, force: true });
 });
@@ -257,6 +257,88 @@ test("entrypoint reuses the persistent KTX internal token across starts", async 
   assert.equal(second.status, 0, second.stderr);
   assert.match(second.stdout, /reused persistent KTX internal token/);
   assert.equal((await readFile(tokenPath, "utf8")).trim(), persisted);
+
+  await rm(root, { recursive: true, force: true });
+});
+
+function writeMinimalTemplate(templateRoot, projectRoot) {
+  return Promise.all([
+    mkdir(path.join(templateRoot, "semantic-layer/mysql-aliyun/_schema"), { recursive: true }),
+    mkdir(projectRoot, { recursive: true })
+  ]).then(async () => {
+    await writeFile(path.join(templateRoot, "ktx.yaml"), "connections: {}\n");
+    await writeFile(path.join(templateRoot, "semantic-layer/mysql-aliyun/_schema/dataforai.yaml"), "tables: {}\n");
+  });
+}
+
+function runSeedOnlyWithEnv(templateRoot, projectRoot, extraEnv) {
+  const env = { ...process.env };
+  delete env.LUCY_DEPLOYMENT_MODE;
+  delete env.LUCY_WEBUI_AUTH;
+  return spawnSync("bash", [entrypoint], {
+    cwd: repoRoot,
+    env: {
+      ...env,
+      LUCY_APP_ROOT: repoRoot,
+      LUCY_TEMPLATE_ROOT: templateRoot,
+      KTX_PROJECT_ROOT: projectRoot,
+      LUCY_BUNDLED_KTX_VERSION: "test-version",
+      LUCY_ENTRYPOINT_SEED_ONLY: "1",
+      ...extraEnv
+    },
+    encoding: "utf8"
+  });
+}
+
+test("entrypoint refuses to start in customer mode with LUCY_WEBUI_AUTH=off (explicit and default mode)", async () => {
+  for (const extraEnv of [
+    { LUCY_DEPLOYMENT_MODE: "customer", LUCY_WEBUI_AUTH: "off" },
+    { LUCY_WEBUI_AUTH: "off" },
+    { LUCY_DEPLOYMENT_MODE: " Customer ", LUCY_WEBUI_AUTH: " OFF " }
+  ]) {
+    const root = await makeRoot("lucy-entrypoint-customer-off-");
+    const templateRoot = path.join(root, "template");
+    const projectRoot = path.join(root, "project");
+    await writeMinimalTemplate(templateRoot, projectRoot);
+
+    const result = runSeedOnlyWithEnv(templateRoot, projectRoot, extraEnv);
+    assert.notEqual(result.status, 0, JSON.stringify(extraEnv));
+    assert.match(result.stderr, /LUCY_WEBUI_AUTH=off is not allowed when LUCY_DEPLOYMENT_MODE=customer/);
+    // Preflight runs before any seeding.
+    await assert.rejects(readFile(path.join(projectRoot, "ktx.yaml"), "utf8"));
+
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("entrypoint allows development mode with LUCY_WEBUI_AUTH=off and customer mode with auth required/unset", async () => {
+  for (const extraEnv of [
+    { LUCY_DEPLOYMENT_MODE: "development", LUCY_WEBUI_AUTH: "off" },
+    { LUCY_DEPLOYMENT_MODE: "customer", LUCY_WEBUI_AUTH: "required" },
+    { LUCY_DEPLOYMENT_MODE: "customer" },
+    {}
+  ]) {
+    const root = await makeRoot("lucy-entrypoint-mode-ok-");
+    const templateRoot = path.join(root, "template");
+    const projectRoot = path.join(root, "project");
+    await writeMinimalTemplate(templateRoot, projectRoot);
+
+    const result = runSeedOnlyWithEnv(templateRoot, projectRoot, extraEnv);
+    assert.equal(result.status, 0, `${JSON.stringify(extraEnv)}: ${result.stderr}`);
+
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("entrypoint refuses an invalid LUCY_DEPLOYMENT_MODE", async () => {
+  const root = await makeRoot("lucy-entrypoint-mode-invalid-");
+  const templateRoot = path.join(root, "template");
+  const projectRoot = path.join(root, "project");
+  await writeMinimalTemplate(templateRoot, projectRoot);
+
+  const result = runSeedOnlyWithEnv(templateRoot, projectRoot, { LUCY_DEPLOYMENT_MODE: "prod" });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /invalid LUCY_DEPLOYMENT_MODE/);
 
   await rm(root, { recursive: true, force: true });
 });

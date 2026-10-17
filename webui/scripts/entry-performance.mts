@@ -462,6 +462,7 @@ async function startFixtureServer(options: ServerOptions): Promise<ServerHandle>
     LUCY_AUDIT_DB: options.fixture.paths.auditDb,
     LUCY_AUDIT_COLD_DIR: path.join(fixtureDir, "audit-cold"),
     LUCY_EVAL_DB: path.join(fixtureDir, "eval.sqlite"),
+    LUCY_DEPLOYMENT_MODE: "development",
     LUCY_WEBUI_AUTH: options.auth,
     LUCY_ADMINS_CONFIG_PATH: options.auth === "required" ? options.fixture.paths.adminsPath : path.join(fixtureDir, "auth", "no-admins.yaml"),
     LUCY_WEBUI_SESSION_SECRET: randomBytes(24).toString("hex"),

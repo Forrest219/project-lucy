@@ -12,6 +12,7 @@ export function LoginPage() {
   const [adminId, setAdminId] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
+  const [bootstrapToken, setBootstrapToken] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const productTitle = branding?.productTitle ?? "Lucy WebUI";
@@ -33,7 +34,7 @@ export function LoginPage() {
     setPending(true);
     try {
       if (isBootstrap) {
-        await bootstrap({ adminId, displayName: displayName || undefined, password });
+        await bootstrap({ adminId, displayName: displayName || undefined, password, bootstrapToken: bootstrapToken || undefined });
       } else {
         await login(adminId, password);
       }
@@ -77,6 +78,23 @@ export function LoginPage() {
               required
             />
           </label>
+          {isBootstrap && (
+            <label className="grid gap-1">
+              <span className="text-sm font-medium">引导密钥</span>
+              <input
+                className="pl-input"
+                type="password"
+                autoComplete="off"
+                value={bootstrapToken}
+                onChange={(e) => setBootstrapToken(e.target.value)}
+                placeholder="由部署人员提供"
+                data-testid="login-bootstrap-token"
+              />
+              <span className="text-xs text-fg-muted">
+                客户部署必填；仅保存在当前页面内存中，不会写入浏览器存储。
+              </span>
+            </label>
+          )}
           {isBootstrap && (
             <label className="grid gap-1">
               <span className="text-sm font-medium">显示名（可选）</span>

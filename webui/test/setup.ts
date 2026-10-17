@@ -8,6 +8,16 @@ import path from "node:path";
 import { afterEach } from "vitest";
 import { cleanup } from "@testing-library/react";
 
+// V-01 (T0A-2): production defaults to customer mode where auth can never be
+// open. The suite predates that and relies on open mode, so default to
+// development + auth off unless a suite/CI explicitly sets them.
+if (!process.env.LUCY_DEPLOYMENT_MODE || process.env.LUCY_DEPLOYMENT_MODE.trim().length === 0) {
+  process.env.LUCY_DEPLOYMENT_MODE = "development";
+}
+if (process.env.LUCY_WEBUI_AUTH === undefined) {
+  process.env.LUCY_WEBUI_AUTH = "off";
+}
+
 // Many server tests call auditedWriteFile → getAuditDb without setting
 // KTX_PROJECT_ROOT / creating ktx.yaml (gitignored in CI). Provide a
 // process-wide default audit sqlite so those paths do not depend on a

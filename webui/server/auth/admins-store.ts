@@ -3,6 +3,7 @@ import path from "node:path";
 import { parse, stringify } from "yaml";
 import { resolveProjectRoot } from "../project.js";
 import { auditedWriteFile } from "../admin/config-audit-write.js";
+import { resolveDeploymentMode } from "./deployment-mode.js";
 
 export const ADMINS_YAML_REL = "webui/config/admins.yaml";
 
@@ -111,12 +112,14 @@ export function enabledAdmins(config: AdminsConfig): WebuiAdminRecord[] {
 }
 
 export async function resolveAuthMode(): Promise<AuthMode> {
+  const customer = resolveDeploymentMode() === "customer";
   const flag = (process.env.LUCY_WEBUI_AUTH ?? "").trim().toLowerCase();
-  if (flag === "off") return "open";
+  // Spec §3.1: `off` is honored only in development; customer never resolves to open.
+  if (flag === "off" && !customer) return "open";
   const config = await loadAdminsConfig();
   const enabled = enabledAdmins(config);
   if (enabled.length > 0) return "required";
-  if (flag === "required") return "bootstrap";
+  if (customer || flag === "required") return "bootstrap";
   return "open";
 }
 
