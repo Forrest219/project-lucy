@@ -974,3 +974,25 @@ n. 操作：用户做什么（界面中文文案，不用内部函数名）
 ## 15. 其余 P0 正文
 
 待已写各条审定后，按同一模板续写 §3 矩阵中「待写」项（数据工程师 ENG-02～07、管理员 ADM-02～05）。
+
+## 附录 A · 真实用户 E2E 自动化绑定（Spec 20261018 §6.5，Plan T11）
+
+本分表原先的旅程是手工/Agent 剧本。企业安全整改后，下列旅程另有**可重复执行的真实浏览器用例**（`webui/tests/real-e2e/`，`customer` 模式 + 认证 required，1440×900 桌面 Chromium，workers=1，retries=0，不 mock API、不用 KTX shim；密码、Token、引导密钥只经 `helpers/secret-capture.ts` 在内存传递，trace / 截图 / 录像全部关闭）。入口：`npm run e2e:real:management -- --run inbox/e2e/<runId>/run.json`。
+
+| 旅程 / 场景 | 用例文件 · 测试 | catalog 变体 | 本地（Mac，无 KTX/DB）状态 |
+|---|---|---|---|
+| 匿名访问被引导到登录 | `admin-auth.spec.ts` | SEC-01-V06 | 已执行通过 |
+| 首个所有者经 UI 受控引导 | `admin-auth.spec.ts` | SEC-02-V06 | 已执行通过 |
+| 所有者添加运维；运维不能治理账户 | `admin-auth.spec.ts` | SEC-03-V05 | 已执行通过 |
+| UJ-ADM-05 UI 停用账户后会话立即失效 | `admin-auth.spec.ts` | SEC-04-V11 | 已执行通过 |
+| UJ-ENG-07 / UJ-ADM-02 Wiki 对象授权 UI → Agent 通道一致 | `context-isolation.spec.ts` | SEC-14-V11 | 已执行通过 |
+| 恶意 Markdown 不执行 | `context-isolation.spec.ts` | SEC-15-V06 | 已执行通过 |
+| UJ-ADM-03 访问日志与导出对账（页面/CSV/zip manifest） | `audit-export.spec.ts` | SEC-18-V06、SEC-20-V01/V02/V06 | 已执行通过 |
+| Token 一次性展示、配置串指向本实例 | `management-journey.spec.ts` | SEC-06-V01 | 已执行通过 |
+| UJ-ADM-05 UI 吊销 Token，同 Agent 另一 Token 继续可用 | `management-journey.spec.ts` | SEC-07-V13 | 已执行通过 |
+| UJ-ENG-02～06（连接向导、Schema、Manifest、启用表、语义保存） | 未编写 | UX-01-V01～V03、SEC-13-V06 | **BLOCKED**：需要真实数据库 + KTX 上游 +（UX-01）真实客户端；连接向导的 UI 自动化尚未编写，不得以预置连接冒充 |
+| 发布后新旧会话 / 版本恢复 | 未编写 | UX-04-V02/V03 | **BLOCKED**：同上 |
+| 离线 Eval 下载→跑批→上传→趋势 | 未编写 | UX-06-V01～V03、V08 | **BLOCKED**：同上（跑批需要真实 KTX/DB） |
+| 现场提问 / 安全候选 / 调用监控对账 | 未编写 | UX-07-* | **BLOCKED**：需要 KTX 上游产生真实调用 |
+
+证据落位：`inbox/e2e/<runId>/results/management.json`（逐 case 状态、已评估断言、产物哈希）；`scripts/e2e/collect-management-results.mjs` 把 Playwright 报告映射为 case 证据——无覆盖用例、能力缺失或用例自标 BLOCKED 一律报 `blocked`，缺声明断言一律报 `failed`。以上"已执行通过"仅指本地 security-integration / 桌面浏览器层，**不**构成客户 K8s 通过或可发布结论。
