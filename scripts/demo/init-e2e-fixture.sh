@@ -7,12 +7,17 @@
 #
 # 用法：
 #   scripts/demo/init-e2e-fixture.sh [DEST] [SRC]
-#   默认 DEST=/tmp/lucy-e2e-fixture, SRC=/Users/zhangxingchen/Projects/project-lucy
+#   默认 DEST=/tmp/lucy-e2e-fixture, SRC=本脚本所在仓库根（不绑定任何机器路径）
+#
+# 本脚本只服务 browser contract fixture（development + loopback，见 webui/playwright.config.ts）。
+# 真实 E2E（customer + auth required）使用独立的项目与配置，不共用本夹具。
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEFAULT_SRC="$(cd "$SCRIPT_DIR/../.." && pwd)"
 DEST="${1:-/tmp/lucy-e2e-fixture}"
-SRC="${2:-/Users/zhangxingchen/Projects/project-lucy}"
+SRC="${2:-$DEFAULT_SRC}"
 
 # 安全 guard：拒绝把 fixture 放到真实项目目录或其子树
 if [[ "$DEST" == "$SRC" || "$DEST" == "$SRC"/* ]]; then
@@ -36,13 +41,16 @@ echo "[init] Cloning $SRC -> $DEST"
 git clone --depth 1 "file://$SRC" "$DEST"
 
 # access.yaml is intentionally gitignored in the real project. Seed the
-# disposable fixture from the committed example so admin and ACL E2E routes
-# do not start in policy_degraded_global.
-ACCESS_FIXTURE="$SRC/webui/config/access.yaml.example"
+# disposable fixture from the fixture policy (role/connection/tables match
+# ktx-fixture.yaml and the semantic-layer fixture manifest) so admin and ACL
+# routes do not start in policy_degraded_global. The product demo example uses
+# a different connection and must not be mixed into this fixture.
+ACCESS_FIXTURE="$SRC/webui/tests/e2e/fixtures/data/access-fixture.yaml"
 ACCESS_TARGET="$DEST/webui/config/access.yaml"
 if [[ -f "$ACCESS_FIXTURE" ]]; then
+  mkdir -p "$(dirname "$ACCESS_TARGET")"
   cp "$ACCESS_FIXTURE" "$ACCESS_TARGET"
-  echo "[init] access.yaml seeded from committed example"
+  echo "[init] access.yaml seeded from E2E fixture policy"
 else
   echo "[E2E-GUARD] missing $ACCESS_FIXTURE" >&2
   exit 2

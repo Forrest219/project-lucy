@@ -5,3 +5,5 @@ schema: dataforai
 tables:
   - name: superstore_orders
     comment: 订单主表
+  - name: superstore_people
+    comment: 区域负责人表

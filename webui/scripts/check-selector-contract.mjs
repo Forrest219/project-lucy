@@ -8,6 +8,8 @@
 //   1. 实现新增 testid 但契约表没登记 → fail（防止契约漂移）
 //   2. L1/L2 spec 引用 testid 但实现缺失 → fail（防止 spec 跑空指针）
 //   3. 契约表登记了 testid 但实现已删除 → warn（可能 pending PR）
+//   4. 负向引用（expect(getByTestId(x)).toHaveCount(0) / .not.*）只用于断言元素不存在，
+//      实现缺失属于预期，单独记为 NEGATIVE-REF；同一 testid 一旦有任何正向引用，仍按规则 2 fail
 //
 // CI 接入：npm run e2e:selector-contract
 // 任何 fail → exit 1
@@ -78,6 +80,17 @@ walk(SRC, "__tests__");
 
 // 3. 扫 spec：getByTestId("...") 静态 + 模板
 const specRefs = new Map();
+const specPositiveRefs = new Map();
+// getByTestId("id") 之后紧跟 `)`（expect 收尾）与 .toHaveCount(0) 或 .not.xxx → 负向引用
+const NEGATIVE_TAIL = /^\)\s*\)?\s*\.(?:toHaveCount\(\s*0\s*\)|not\.\w+)/;
+function recordSpecRef(id, rel, negative) {
+  if (!specRefs.has(id)) specRefs.set(id, []);
+  specRefs.get(id).push(rel);
+  if (!negative) {
+    if (!specPositiveRefs.has(id)) specPositiveRefs.set(id, []);
+    specPositiveRefs.get(id).push(rel);
+  }
+}
 function walkSpecs(dir) {
   for (const ent of readdirSync(dir)) {
     const p = join(dir, ent);
@@ -87,12 +100,11 @@ function walkSpecs(dir) {
       const text = readFileSync(p, "utf-8");
       const rel = relative(REPO, p);
       for (const m of text.matchAll(/getByTestId\("([a-z][a-z0-9-]+)"/g)) {
-        if (!specRefs.has(m[1])) specRefs.set(m[1], []);
-        specRefs.get(m[1]).push(rel);
+        const tail = text.slice(m.index + m[0].length, m.index + m[0].length + 80);
+        recordSpecRef(m[1], rel, NEGATIVE_TAIL.test(tail));
       }
       for (const m of text.matchAll(/getByTestId\(`([^`]+)`\)/g)) {
-        if (!specRefs.has(m[1])) specRefs.set(m[1], []);
-        specRefs.get(m[1]).push(rel);
+        recordSpecRef(m[1], rel, false);
       }
     }
   }
@@ -101,7 +113,7 @@ if (existsSync(SPECS)) walkSpecs(SPECS);
 
 // 4. 双向 fail / warn
 let failed = false;
-const issues = { fail: [], warn: [] };
+const issues = { fail: [], warn: [], info: [] };
 
 // 4a. 实现的静态 testid 必须登记
 for (const [id, files] of implemented) {
@@ -141,13 +153,23 @@ for (const [tpl, files] of templated) {
 }
 
 // 4c. ★ v0.3 新增：L1/L2 spec 引用 testid 但实现缺失 → fail
-for (const [id, files] of specRefs) {
+for (const [id, files] of specPositiveRefs) {
   // 模板引用（spec 里 getByTestId(`...${var}...`)）暂跳过强校验
   if (id.includes("${")) continue;
   if (!implemented.has(id) && !isTemplatedContracted(id)) {
     // 静态实现确实没有 → fail
     issues.fail.push(
       `[SPEC-DANGLES-IMPL] getByTestId("${id}") used in ${files.join(", ")} but no implementation found in webui/src/`
+    );
+  }
+}
+
+// 4c-2. 仅有负向引用且实现已无该 testid → 记录（预期的「元素已移除」回归断言），不 fail
+for (const [id, files] of specRefs) {
+  if (specPositiveRefs.has(id) || id.includes("${")) continue;
+  if (!implemented.has(id) && !isTemplatedContracted(id)) {
+    issues.info.push(
+      `[NEGATIVE-REF] getByTestId("${id}") only asserted absent in ${[...new Set(files)].join(", ")}; no implementation (expected)`
     );
   }
 }
@@ -169,6 +191,9 @@ for (const line of issues.fail) {
 }
 for (const line of issues.warn) {
   console.warn(`⚠️  ${line}`);
+}
+for (const line of issues.info) {
+  console.log(`ℹ️  ${line}`);
 }
 
 const totalImpl = implemented.size;

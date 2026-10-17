@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { randomUUID } from "node:crypto";
 import { accessSync, chmodSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { spawn, spawnSync } from "node:child_process";
 import { dirname, resolve, basename } from "node:path";
@@ -14,13 +15,17 @@ const DEFAULT_ARTIFACTS = "inbox/p1-agent-e2e-artifacts";
 const DEFAULT_HTML_REPORT = "inbox/p1-agent-e2e-report.html";
 const DEFAULT_PROXY_URL = process.env.LUCY_E2E_PROXY_URL || "http://127.0.0.1:7879/mcp";
 
+// Spec §8.2: passed 0 / failed or contract error 1 / blocked 2 / dry_run or collect-only 3.
 const EXIT_CODES = {
   pass: 0,
   fail: 1,
-  usage: 2,
-  blocked: 42
+  usage: 1,
+  blocked: 2,
+  dryRun: 3
 };
 
+// Case files are resolved under the Lucy content root (LUCY_CONTENT_ROOT > default ./config),
+// never from a private machine path. Missing case files make the run blocked, not passed.
 const CASE_SPECS = {
   "superstore-ordercount-002": {
     suite: "superstore",
@@ -197,13 +202,14 @@ Note:
 Options:
   --profile <id>            Profile to run: main, hermes, moz. Repeatable. Defaults to all three.
   --suite <id>              Restrict agent/direct cases to suite: superstore, kx_financial, data_agent_poc. Repeatable.
+  --content-root <dir>      Lucy content root holding evals/. Defaults to LUCY_CONTENT_ROOT, then <repo>/config.
   --proxy-url <url>         Lucy MCP Proxy URL. Defaults to LUCY_E2E_PROXY_URL or ${DEFAULT_PROXY_URL}.
   --out <path>              Evidence JSON path. Defaults to ${DEFAULT_OUT}.
   --artifacts <dir>         Redacted artifact dir. Defaults to ${DEFAULT_ARTIFACTS}.
   --html-report <path>      Human-readable HTML report path. Defaults to ${DEFAULT_HTML_REPORT}.
   --timeout-ms <n>          MCP request timeout. Defaults to 10000.
   --agent-timeout-ms <n>    Agent subprocess timeout. Defaults to 600000.
-  --dry-run                 Parse cases and command templates without calling MCP or agents.
+  --dry-run                 Parse cases and command templates without calling MCP or agents (exit 3, never a pass).
   --help                    Show this help.
 
 Environment:
@@ -211,7 +217,7 @@ Environment:
   LUCY_E2E_MOZ_EXPECTED_ROLE
   LUCY_E2E_AGENT_COMMANDS  JSON object mapping profile id to command argv array.
 
-Exit codes: 0 pass, 1 fail, 2 usage/config parse error, 42 blocked.`;
+Exit codes (Spec §8.2): 0 pass, 1 fail or usage/contract error, 2 blocked, 3 dry-run/collect-only.`;
 
 function parseArgs(argv = process.argv) {
   const args = {
@@ -223,6 +229,7 @@ function parseArgs(argv = process.argv) {
     htmlReport: DEFAULT_HTML_REPORT,
     timeoutMs: 10_000,
     agentTimeoutMs: 600_000,
+    contentRoot: undefined,
     dryRun: false,
     help: false
   };
@@ -242,6 +249,9 @@ function parseArgs(argv = process.argv) {
         break;
       case "--proxy-url":
         args.proxyUrl = requiredValue(argv, ++i, "--proxy-url");
+        break;
+      case "--content-root":
+        args.contentRoot = requiredValue(argv, ++i, "--content-root");
         break;
       case "--out":
         args.out = requiredValue(argv, ++i, "--out");
@@ -311,10 +321,14 @@ function loadAgentCommands(env = process.env) {
   return commands;
 }
 
-function loadEvalCase(caseId) {
+function resolveContentRoot(cliValue, env = process.env) {
+  return resolve(REPO_ROOT, cliValue || env.LUCY_CONTENT_ROOT || "config");
+}
+
+function loadEvalCase(caseId, { contentRoot = resolveContentRoot() } = {}) {
   const spec = CASE_SPECS[caseId];
   if (!spec) throw new Error(`unknown e2e case id: ${caseId}`);
-  const abs = resolve(REPO_ROOT, spec.path);
+  const abs = resolve(contentRoot, spec.path);
   const raw = readFileSync(abs, "utf8");
   const doc = parseYaml(raw);
   const cases = Array.isArray(doc?.cases) ? doc.cases : [];
@@ -518,6 +532,17 @@ function isErrorResult(body) {
   return Boolean(body?.error || body?.result?.isError === true);
 }
 
+// A correct deny is an explicit access-control refusal from the proxy (HTTP 2xx JSON-RPC error /
+// isError result carrying a denial marker). 5xx, timeouts, parse errors or unrelated tool errors are
+// infrastructure failures and must not be scored as a successful deny.
+const DENIAL_MARKER = /access denied|context_not_available|context_role_required|not visible|not allowed|forbidden|permission denied|无权|拒绝访问/i;
+
+function isExplicitDenial(response) {
+  if (!response?.ok || response.body?.parseError) return false;
+  if (!isErrorResult(response.body)) return false;
+  return DENIAL_MARKER.test(textOf(parseJsonStrings(response.body)));
+}
+
 function parseJsonStrings(value, depth = 0) {
   if (depth > 8) return value;
   if (typeof value === "string") {
@@ -671,7 +696,7 @@ async function runDirectMcpProfile(profile, rolePlan, args) {
       });
       checks.push({
         name: `wiki_read:deny:${wikiCase.readKey}`,
-        status: read.ok && isErrorResult(read.body) && responseForbids(read.body, wikiCase.forbids || []) ? "pass" : "fail",
+        status: isExplicitDenial(read) && responseForbids(read.body, wikiCase.forbids || []) ? "pass" : "fail",
         httpStatus: read.status,
         forbiddenPhrases: wikiCase.forbids || [],
         response: tail(read.body, 1200)
@@ -718,7 +743,7 @@ async function runDirectMcpProfile(profile, rolePlan, args) {
     });
     checks.push({
       name: `deny:${denied.sourceName}`,
-      status: !result.ok || isErrorResult(result.body) ? "pass" : "fail",
+      status: isExplicitDenial(result) ? "pass" : "fail",
       httpStatus: result.status,
       denied,
       response: tail(result.body)
@@ -935,7 +960,8 @@ function evidenceFromAgentStreams(stdout = "", stderr = "") {
 
 function traceIdFromEvidence(evidence, profileId, caseId) {
   for (const meta of evidence.lucyMeta || []) {
-    for (const key of ["traceId", "trace_id", "turnId", "turn_id", "requestId", "request_id"]) {
+    // requestId is not a Trace; only server-issued trace/turn identifiers count.
+    for (const key of ["traceId", "trace_id", "turnId", "turn_id"]) {
       if (typeof meta?.[key] === "string" && meta[key]) return { traceId: meta[key], generated: false, source: "lucy_meta" };
     }
   }
@@ -998,7 +1024,7 @@ async function runAgentProfile(profile, rolePlan, args, agentCommands, artifacts
   const mcpConfig = commandUsesMcpConfig(commandTemplate) ? buildMcpConfig(profile, args, artifactsDir) : "";
   try {
     for (const caseId of rolePlan.agent) {
-      const testCase = loadEvalCase(caseId);
+      const testCase = loadEvalCase(caseId, { contentRoot: args.contentRoot });
       const prompt = renderPrompt(profile, testCase);
       const rendered = renderCommand(commandTemplate, {
         prompt,
@@ -1018,18 +1044,31 @@ async function runAgentProfile(profile, rolePlan, args, agentCommands, artifacts
       const contextFailures = checkAgentContextEvidence(contextRequirement, extractedEvidence.wikiContextEvidence);
       const assertions = assertionsFromCase(testCase);
       const assertionResult = checkTextAssertions(finalText, assertions);
+      const serverEvidenceFailures = [
+        ...(extractedEvidence.semanticQueries.length > 0 ? [] : ["server evidence: no lucy_query result observed"]),
+        ...(trace.generated ? ["server evidence: no server-issued trace id (runner-generated ids do not count)"] : [])
+      ];
+      const scorePassed = result.code === 0 && assertionResult.ok && contextFailures.length === 0 && serverEvidenceFailures.length === 0;
       const score = {
-        status: result.code === 0 && assertionResult.ok && contextFailures.length === 0 ? "pass" : "fail",
+        status: scorePassed ? "pass" : "fail",
         failures: [
           ...(result.code === 0 ? [] : [`agent exited code=${result.code}`]),
           ...assertionResult.missing.map((item) => `missing: ${item}`),
           ...assertionResult.forbiddenHits.map((item) => `forbidden: ${item}`),
-          ...contextFailures
+          ...contextFailures,
+          ...serverEvidenceFailures
         ],
-        classification: result.code === 0 && assertionResult.ok && contextFailures.length === 0 ? "pass" : contextFailures.length > 0 ? "schema_drift" : "logic_regression"
+        classification: scorePassed
+          ? "pass"
+          : contextFailures.length > 0
+            ? "schema_drift"
+            : serverEvidenceFailures.length > 0 && assertionResult.ok
+              ? "missing_server_evidence"
+              : "logic_regression"
       };
       const artifactPath = resolve(artifactsDir, `${profile.id}-${caseId}.json`);
       writeFileSync(artifactPath, `${JSON.stringify(redactValue({
+        runId: args.runId,
         profile: profile.id,
         caseId,
         traceId: trace.traceId,
@@ -1115,6 +1154,7 @@ function deriveStatus(profileResults) {
   const statuses = profileResults.flatMap((profile) => [profile.status, profile.direct?.status, profile.agent?.status].filter(Boolean));
   if (statuses.includes("fail")) return "fail";
   if (statuses.includes("blocked")) return "blocked";
+  if (statuses.includes("dry-run")) return "dry_run";
   return "pass";
 }
 
@@ -1168,7 +1208,8 @@ function summarize(profileResults) {
   const agentChecks = profileResults
     .flatMap((profile) => profile.agent?.checks ?? [])
     .filter((check) => String(check.name || "").startsWith("agent:"));
-  const traceIds = agentChecks.map((check) => check.traceId).filter(Boolean);
+  // Only server-issued trace ids count; runner-generated placeholders never raise coverage.
+  const traceIds = agentChecks.filter((check) => check.traceId && check.traceGenerated !== true).map((check) => check.traceId);
   const uniqueTraceIds = new Set(traceIds);
   const contextRequiredChecks = agentChecks.filter((check) => check.contextRequired === true);
   const contextEvidenceChecks = contextRequiredChecks.filter((check) => Number(check.wikiContextEvidenceCount || 0) > 0);
@@ -1257,7 +1298,7 @@ function escapeHtml(value) {
 }
 
 function cssStatus(status) {
-  const normalized = String(status || "unknown").toLowerCase();
+  const normalized = String(status || "unknown").toLowerCase().replace("_", "-");
   if (["pass", "fail", "blocked", "skip", "dry-run"].includes(normalized)) return normalized;
   return "unknown";
 }
@@ -1271,7 +1312,7 @@ function statusLabel(status) {
     "dry-run": "演练",
     unknown: "未知"
   };
-  return labels[String(status || "unknown").toLowerCase()] || labels.unknown;
+  return labels[String(status || "unknown").toLowerCase().replace("_", "-")] || labels.unknown;
 }
 
 function conciseValue(value) {
@@ -1454,7 +1495,7 @@ function buildEnvironmentSnapshot(env = process.env) {
     gitCommit: commit,
     gitDirty: dirty ? dirty.split("\n").length : 0,
     ktxVersion: execVersion("ktx", ["--version"]),
-    hermesVersion: execVersion("/Users/forrest/.local/bin/hermes", ["--version"]),
+    hermesVersion: execVersion(env.LUCY_E2E_HERMES_BIN || "hermes", ["--version"]),
     agentModelTag: env.LUCY_E2E_AGENT_MODEL_TAG || env.HERMES_MODEL_TAG || "not_declared"
   };
 }
@@ -1585,6 +1626,8 @@ function writeHtmlReport(outPath, evidence) {
 async function runAgentE2E({ args, env = process.env } = {}) {
   const agentCommands = loadAgentCommands(env);
   const profiles = resolveProfiles(args.profiles, env);
+  const runId = randomUUID();
+  args = { ...args, contentRoot: resolveContentRoot(args.contentRoot, env), runId };
   const artifactsDir = resolve(REPO_ROOT, args.artifacts);
   mkdirSync(artifactsDir, { recursive: true });
 
@@ -1592,8 +1635,11 @@ async function runAgentE2E({ args, env = process.env } = {}) {
     generatedAt: new Date().toISOString(),
     generatedBy: "scripts/smoke/p1-agent-e2e.mjs",
     contract: "p1-agent-database-e2e",
+    runId,
     status: "running",
     dryRun: args.dryRun,
+    // Final customer verdict belongs to the independent release verifier (T13), never to this legacy harness.
+    releaseReady: false,
     config: {
       proxyUrl: args.proxyUrl,
       profiles: args.profiles,
@@ -1645,7 +1691,7 @@ async function runAgentE2E({ args, env = process.env } = {}) {
     const caseChecks = [];
     for (const caseId of caseIds) {
       try {
-        const testCase = loadEvalCase(caseId);
+        const testCase = loadEvalCase(caseId, { contentRoot: args.contentRoot });
         caseChecks.push({ caseId, status: "pass", questionPresent: Boolean(testCase.question) });
       } catch (error) {
         caseChecks.push({ caseId, status: "blocked", reason: "case_load_failed", message: error.message });
@@ -1662,7 +1708,9 @@ async function runAgentE2E({ args, env = process.env } = {}) {
     });
 
     if (args.dryRun) {
-      profileResult.status = profileResult.precheck.some((check) => check.status === "blocked") ? "blocked" : "pass";
+      // A dry run only parsed files; none of its prechecks verified runtime behavior, so none may count as pass.
+      profileResult.precheck = profileResult.precheck.map((check) => (check.status === "pass" ? { ...check, status: "dry-run" } : check));
+      profileResult.status = profileResult.precheck.some((check) => check.status === "blocked") ? "blocked" : "dry-run";
       profileResult.direct = { status: "dry-run", checks: [] };
       profileResult.agent = { status: "dry-run", checks: [] };
       evidence.profiles.push(profileResult);
@@ -1701,7 +1749,9 @@ async function runAgentE2E({ args, env = process.env } = {}) {
     ? EXIT_CODES.pass
     : evidence.status === "blocked"
       ? EXIT_CODES.blocked
-      : EXIT_CODES.fail;
+      : evidence.status === "dry_run"
+        ? EXIT_CODES.dryRun
+        : EXIT_CODES.fail;
 
   return { evidence, exitCode: evidence.exitCode };
 }
@@ -1741,9 +1791,11 @@ export {
   loadAgentCommands,
   loadEvalCase,
   parseAgentFinalText,
+  isExplicitDenial,
   parseArgs,
   redactValue,
   renderHtmlReport,
+  resolveContentRoot,
   resolveProfiles,
   runAgentE2E,
   stringIncludesLoose,

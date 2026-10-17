@@ -10,8 +10,10 @@ const BASE_URL = process.env.LUCY_E2E_BASE_URL ?? "http://127.0.0.1:5173";
 const PROJECT_DIR = process.env.LUCY_E2E_PROJECT_DIR ?? "/tmp/lucy-e2e-fixture";
 const BACKEND_URL = process.env.LUCY_E2E_BACKEND_URL ?? BASE_URL;
 const E2E_BIN = resolve(import.meta.dirname, "tests/e2e/fixtures/bin");
+// 真实项目仓库 = 本配置所在 webui/ 的上一级；不绑定任何机器路径。
+const REAL_PROJECT_DIR = resolve(import.meta.dirname, "..");
 
-if (PROJECT_DIR === "/Users/zhangxingchen/Projects/project-lucy") {
+if (resolve(PROJECT_DIR) === REAL_PROJECT_DIR) {
   throw new Error(
     `Refusing to run E2E against real project dir. Set LUCY_E2E_PROJECT_DIR=/tmp/lucy-e2e-fixture`
   );
@@ -19,6 +21,8 @@ if (PROJECT_DIR === "/Users/zhangxingchen/Projects/project-lucy") {
 
 export default defineConfig({
   testDir: "./tests/e2e/specs",
+  // 核对被驱动的实例确为 development+loopback 夹具（防止复用客户/demo 实例）
+  globalSetup: "./tests/e2e/global-setup.ts",
   // L3 跑 L1+L2+L3；L1 单独用 --grep @pr-smoke
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
@@ -60,6 +64,11 @@ export default defineConfig({
       LUCY_E2E_PROJECT_DIR: PROJECT_DIR,
       LUCY_E2E_BACKEND_URL: BACKEND_URL,
       PATH: `${E2E_BIN}:${process.env.PATH ?? ""}`,
+      // Browser contract fixture 需要开放管理面：显式 development + auth off + loopback。
+      // 仅作用于本 webServer；真实 E2E（customer + auth required）使用独立配置，不得继承这三项。
+      LUCY_DEPLOYMENT_MODE: "development",
+      LUCY_WEBUI_AUTH: "off",
+      LUCY_WEBUI_HOST: "127.0.0.1",
       // A2 (M31): the WebUI loads 4 content dirs from the resolved content
       // root (default config/). E2E fixture seeds fixtures under
       // $FIXTURE/config/{semantic-layer,wiki,...}, so default config/ is

@@ -287,8 +287,8 @@
 | Test ID | 元素 | 文案约束 |
 |---|---|---|
 | `publish-workbench-layout` | 整体 layout | 桌面双列、窄屏单列 |
-| `workbench-empty-state` | 空态 | 必含 `暂无待发布变更` |
-| `workbench-pending-count` | Header Badge "N 个待发布文件" | `translate="no"` |
+| `workbench-empty-state` | 空态 | 必含 `暂无待同步变更` |
+| `workbench-batch-sync-hint` | 有待同步变更时的批量同步提示（已替代移除的 `workbench-pending-count` Badge） | 仅 `files.length > 0` 时出现；必含 `本批一并同步 N 项` |
 | `workbench-validate` | `校验变更` | 禁止 `Validate changed` |
 | `workbench-reindex` | `强制重建索引` | 禁止 `索引生效` / `重建 KTX 索引` |
 | `workbench-upload-semantic-asset` | `上传语义资产` | 禁止 `上传 YAML` |
@@ -1268,3 +1268,42 @@
 | `agent-runtime-unconfirmed` | Agent 列表「权限生效状态待确认」提示（`meta.runtimeConsistency = unconfirmed`） | `pages/admin/AgentList.tsx` |
 | `execution-runtime-slot` | 连接概览问数提示的稳定占位（卡片出现时状态仍待返回；不可见、无文案） | `pages/connections/ConnectionOverview.tsx` |
 | `schema-actions-pending-${conn.id}-${schema}` | Schema 行依赖 Manifest 事实的动作等待中（写入进行中或尚未重新读取） | `pages/connections/ConnectionOverview.tsx` |
+
+## 2026-10-18 · T09 selector 漂移补录
+
+实现已存在、契约未登记的选择器（Plan T09 步骤 4）。不改变页面行为；负向引用（断言元素不存在）规则见 `webui/scripts/check-selector-contract.mjs`。
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `catalog-bound-scope-note` | 按 Catalog 范围授权时的连接范围说明 | `components/RoleTableGrants.tsx` |
+| `prepare-structure-drawer` | 准备表结构 Drawer | `components/SchemaStructurePrep.tsx` |
+| `${idPrefix}-downgrade-preview` | 读取结构后的降级预览（模板；`add-schema` / `prepare-structure`） | `components/SchemaStructurePrep.tsx` |
+| `${idPrefix}-structure-error` | 读取结构失败提示（模板） | `components/SchemaStructurePrep.tsx` |
+| `${idPrefix}-done` | 结构准备完成/退出按钮（模板） | `components/SchemaStructurePrep.tsx` |
+| `endpoint-gate-panel` | 连接端点冲突门禁面板 | `components/connections/EndpointConflictPanel.tsx` |
+| `endpoint-gate-match-${match.id}` | 同端点已有连接单选项（模板） | `components/connections/EndpointConflictPanel.tsx` |
+| `endpoint-gate-back` | 返回已有连接 | `components/connections/EndpointConflictPanel.tsx` |
+| `endpoint-gate-different-database` | 新建连接（不同数据库） | `components/connections/EndpointConflictPanel.tsx` |
+| `endpoint-gate-retry-live` | 重试读取 | `components/connections/EndpointConflictPanel.tsx` |
+| `endpoint-gate-add-schema` | 添加到已有连接 | `components/connections/EndpointConflictPanel.tsx` |
+| `endpoint-gate-separate` | 仍要新建连接 | `components/connections/EndpointConflictPanel.tsx` |
+| `setup-assistant-progress` | 接入向导步骤进度 | `components/onboarding/SetupAssistantModal.tsx` |
+| `${testId}-copy` | 编写说明复制按钮（模板；`setup-howto-schema-manifest` / `setup-howto-business-wiki`） | `components/onboarding/AuthoringHowTo.tsx` |
+| `${testId}-download` | 编写说明下载按钮（模板） | `components/onboarding/AuthoringHowTo.tsx` |
+| `login-config-unavailable` | 管理员配置不可用提示（`role="alert"`，登录表单隐藏） | `pages/Login.tsx` |
+| `login-bootstrap-token` | 客户部署首次引导 Token 输入 | `pages/Login.tsx` |
+| `agent-token-list` | Agent 详情 Token 列表 | `pages/admin/AgentDetail.tsx` |
+| `agent-token-row-${token.label}` | Agent Token 行（模板） | `pages/admin/AgentDetail.tsx` |
+| `audit-turn-meta-card` | 问询详情元信息卡 | `pages/admin/Audit.tsx` |
+| `audit-export-inquiry-pack` | 导出问询与调用 | `pages/admin/Audit.tsx` |
+| `audit-call-inferred-turn-id-${entry.id}` | 调用流水推断问询 ID 链接（模板） | `pages/admin/Audit.tsx` |
+| `audit-usage-slow-${entry.id}` | 调用流水问询慢标记（模板） | `pages/admin/Audit.tsx` |
+| `usage-call-monitor-link` | 使用视图跳转调用监控 | `pages/admin/GovernanceOverview.tsx` |
+| `execution-runtime-notice` | 连接概览问数运行时提示 | `pages/connections/ConnectionOverview.tsx` |
+| `connection-more-${conn.id}` | 连接卡更多菜单（模板） | `pages/connections/ConnectionOverview.tsx` |
+| `read-structure-${conn.id}-${schema}` | Schema 行 `从数据库读取表结构`（模板） | `pages/connections/ConnectionOverview.tsx` |
+| `schema-more-${conn.id}-${schema}` | Schema 行更多菜单（模板） | `pages/connections/ConnectionOverview.tsx` |
+| `whitelist-large-list-notice` | 启用表范围大列表折叠/分页提示 | `pages/connections/TableWhitelist.tsx` |
+| `whitelist-group-toggle-${conn.id}-${schema}` | 启用表范围 Schema 分组展开开关（模板） | `pages/connections/TableWhitelist.tsx` |
+| `monitor-field-panel` | 评测监控「现场」面板 | `pages/eval/Monitor.tsx` |
+| `call-monitor-usage-slow-mark` | 调用监控问询慢标记生效说明 | `pages/ops/CallMonitor.tsx` |

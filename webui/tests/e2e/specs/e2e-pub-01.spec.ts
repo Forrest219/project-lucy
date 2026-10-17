@@ -186,9 +186,9 @@ test.describe("E2E-PUB-01: 完整语义资产从新建到发布 Reindex 闭环",
     // —— 阶段 4：语义发布 ——
     await test.step("8. 工作台显示待发布变更", async () => {
       await page.goto("/publish/workbench");
-      // 真实 testid：publish-workbench-layout / workbench-pending-count
+      // 真实 testid：publish-workbench-layout / workbench-batch-sync-hint（仅有待同步变更时出现）
       await expect(page.getByTestId("publish-workbench-layout")).toBeVisible();
-      await expect(page.getByTestId("workbench-pending-count")).toBeVisible();
+      await expect(page.getByTestId("workbench-batch-sync-hint")).toBeVisible();
     });
 
     await test.step("9. 校验变更 → 发布并重建索引 可用", async () => {

@@ -556,8 +556,10 @@ async function runLocalHermesE2E({ args, env = process.env } = {}) {
       stdoutTail: tail(result.stdout),
       stderrTail: tail(result.stderr)
     };
-    wrapper.status = result.code === 0 ? "pass" : result.code === EXIT_CODES.blocked ? "blocked" : "fail";
-    wrapper.exitCode = result.code ?? EXIT_CODES.fail;
+    // p1-agent-e2e.mjs now follows Spec §8.2 (blocked = 2); keep accepting the legacy 42.
+    const runnerBlocked = result.code === 2 || result.code === EXIT_CODES.blocked;
+    wrapper.status = result.code === 0 ? "pass" : runnerBlocked ? "blocked" : "fail";
+    wrapper.exitCode = runnerBlocked ? EXIT_CODES.blocked : (result.code ?? EXIT_CODES.fail);
     return { wrapper, exitCode: wrapper.exitCode, knownTokens: [tokens.hermesToken, tokens.mozToken] };
   } catch (error) {
     wrapper.status = /already have listeners|did not become ready|failed to start|failed to stop/.test(error.message)

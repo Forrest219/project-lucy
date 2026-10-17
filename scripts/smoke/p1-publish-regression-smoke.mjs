@@ -6,6 +6,8 @@ import process from "node:process";
 import { parseArgs } from "node:util";
 import { parse } from "yaml";
 
+// Spec §8.2 exit codes: passed 0, failed 1, blocked 2.
+const EXIT_CODES = { passed: 0, failed: 1, blocked: 2 };
 const DEFAULT_OUT = "inbox/p1-publish-regression-evidence.json";
 const { values } = parseArgs({
   options: {
@@ -92,6 +94,8 @@ async function main() {
     if (diffRes.ok) {
       const diffData = await diffRes.json();
       pass("publish-diff-api", `Diff endpoint reachable, returned ${diffData.data?.files?.length ?? 0} changed files`);
+    } else if (diffRes.status === 401 || diffRes.status === 403) {
+      blocked("publish-diff-api", `Diff API returned HTTP ${diffRes.status}; no admin credential supplied`);
     } else {
       fail("publish-diff-api", `Diff API returned HTTP ${diffRes.status}`);
     }
@@ -107,6 +111,8 @@ async function main() {
     });
     if (valRes.ok) {
       pass("publish-validate-changed-api", "Validate changed endpoint responded HTTP 200");
+    } else if (valRes.status === 401 || valRes.status === 403) {
+      blocked("publish-validate-changed-api", `Validate changed returned HTTP ${valRes.status}; no admin credential supplied`);
     } else {
       fail("publish-validate-changed-api", `Validate changed returned HTTP ${valRes.status}`);
     }
@@ -117,10 +123,14 @@ async function main() {
 
 try {
   await main();
+} catch (err) {
+  fail("unexpected-error", err instanceof Error ? err.message : String(err));
 } finally {
   const outPath = path.resolve(process.cwd(), values.out);
   await mkdir(path.dirname(outPath), { recursive: true });
+  evidence.exitCode = EXIT_CODES[evidence.status];
   await writeFile(outPath, JSON.stringify(evidence, null, 2), "utf8");
   console.log(`[p1-publish-regression-smoke] Evidence written to ${outPath}`);
-  if (evidence.status === "failed") process.exit(1);
+  // Spec §8.2: failed 1, blocked 2 (a blocked smoke must never exit 0).
+  if (evidence.exitCode !== 0) process.exit(evidence.exitCode);
 }

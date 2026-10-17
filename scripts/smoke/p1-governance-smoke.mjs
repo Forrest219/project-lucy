@@ -4,6 +4,8 @@ import path from "node:path";
 import process from "node:process";
 import { parseArgs } from "node:util";
 
+// Spec §8.2 exit codes: passed 0, failed 1, blocked 2.
+const EXIT_CODES = { passed: 0, failed: 1, blocked: 2 };
 const DEFAULT_OUT = "inbox/p1-governance-evidence.json";
 const { values } = parseArgs({
   options: {
@@ -63,7 +65,8 @@ async function main() {
       const data = await res.json();
       pass("license-api-envelope", `License endpoint returned HTTP 200 (mode: ${data.data?.mode ?? "unknown"})`);
     } else if (res.status === 401 || res.status === 403) {
-      pass("license-api-envelope", "License endpoint requires auth as expected");
+      // An auth refusal proves nothing about License behavior; no credential was supplied, so it cannot pass.
+      blocked("license-api-envelope", `License endpoint returned HTTP ${res.status}; no admin credential supplied, business behavior not verified`);
     } else {
       fail("license-api-envelope", `License endpoint returned HTTP ${res.status}`);
     }
@@ -77,7 +80,7 @@ async function main() {
     if (res.ok) {
       pass("tokens-inventory-api", "Tokens inventory endpoint reachable");
     } else if (res.status === 401 || res.status === 403) {
-      pass("tokens-inventory-api", "Tokens inventory requires admin authorization");
+      blocked("tokens-inventory-api", `Tokens endpoint returned HTTP ${res.status}; no admin credential supplied, business behavior not verified`);
     } else {
       fail("tokens-inventory-api", `Tokens endpoint returned HTTP ${res.status}`);
     }
@@ -88,8 +91,10 @@ async function main() {
   // 3. 检查 Audit Query Artifacts (Hot Store / Cold Store)
   try {
     const res = await fetch(`${base}/api/admin/audit/query-artifacts`, { headers: { accept: "application/json" } });
-    if (res.ok || res.status === 401 || res.status === 403) {
+    if (res.ok) {
       pass("audit-hotstore-artifacts-api", "Audit query artifacts endpoint reachable");
+    } else if (res.status === 401 || res.status === 403) {
+      blocked("audit-hotstore-artifacts-api", `Audit artifacts returned HTTP ${res.status}; no admin credential supplied, business behavior not verified`);
     } else {
       fail("audit-hotstore-artifacts-api", `Audit artifacts returned HTTP ${res.status}`);
     }
@@ -100,10 +105,14 @@ async function main() {
 
 try {
   await main();
+} catch (err) {
+  fail("unexpected-error", err instanceof Error ? err.message : String(err));
 } finally {
   const outPath = path.resolve(process.cwd(), values.out);
   await mkdir(path.dirname(outPath), { recursive: true });
+  evidence.exitCode = EXIT_CODES[evidence.status];
   await writeFile(outPath, JSON.stringify(evidence, null, 2), "utf8");
   console.log(`[p1-governance-smoke] Evidence written to ${outPath}`);
-  if (evidence.status === "failed") process.exit(1);
+  // Spec §8.2: failed 1, blocked 2 (a blocked smoke must never exit 0).
+  if (evidence.exitCode !== 0) process.exit(evidence.exitCode);
 }

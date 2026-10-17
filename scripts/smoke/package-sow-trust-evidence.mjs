@@ -7,6 +7,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const REPO_ROOT = resolve(__dirname, "../..");
 
+// Spec §8.2: READY 0; blocked (--strict, evidence not READY) 2; collect-only package (non-strict) 3.
+const EXIT_CODES = { ready: 0, blocked: 2, collect: 3 };
 const DEFAULT_OUT = "inbox/ceo-one-report-sow-trust-evidence-package";
 const REQUIRED_FRESH_FIELDS = [
   "traceId",
@@ -96,9 +98,11 @@ function inspectArtifacts(paths) {
     const missingFreshFields = REQUIRED_FRESH_FIELDS.filter((field) => !contractFieldPresent(artifact, field));
     return {
       path,
+      runId: artifact.runId,
       profile: artifact.profile,
       caseId: artifact.caseId,
       traceId: artifact.traceId,
+      traceGenerated: artifact.trace?.generated !== false,
       scoreStatus: artifact.score?.status,
       finalAnswerPresent: fieldPresent(artifact, "finalAnswer") || fieldPresent(artifact, "finalText"),
       missingFreshFields
@@ -113,6 +117,8 @@ function evidenceSummary(evidencePath) {
     path: evidencePath,
     generatedAt: evidence.generatedAt,
     status: evidence.status,
+    runId: evidence.runId,
+    dryRun: evidence.dryRun === true,
     contract: evidence.contract,
     summary: evidence.summary,
     config: {
@@ -256,10 +262,16 @@ function main() {
   const blockedEvidence = evidenceSummary("inbox/p1-agent-e2e-local-hermes-run.json");
   const artifacts = inspectArtifacts(artifactFiles("inbox/p1-agent-e2e-artifacts"));
   const freshArtifactsReady = artifacts.length > 0 && artifacts.every((item) => item.missingFreshFields.length === 0);
+  // Never package files from different runs, dry runs, or runner-generated trace ids as one passing set.
+  const sameRun = Boolean(realEvidence?.runId) && artifacts.every((item) => item.runId === realEvidence.runId);
+  const serverTraces = artifacts.every((item) => item.traceGenerated === false);
   const standardValidation = validateE2eStandard(realEvidence);
   const realEvidenceReady = Boolean(
     realEvidence
     && realEvidence.status === "pass"
+    && realEvidence.dryRun === false
+    && sameRun
+    && serverTraces
     && realEvidence.config?.stub === false
     && realEvidence.config?.agentRuntime === "hermes-local-real"
   );
@@ -282,6 +294,7 @@ function main() {
         "per-case artifacts"
       ]
     },
+    runConsistency: { sameRun, serverTraces, runId: realEvidence?.runId ?? null },
     freshArtifactValidation: {
       status: freshArtifactsReady ? "pass" : "needs_refresh",
       requiredFields: REQUIRED_FRESH_FIELDS,
@@ -302,7 +315,8 @@ function main() {
   writeFileSync(abs(`${outDir}/manifest.json`), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
   writePackageReadme(outDir, manifest);
   console.log(`[package-sow-trust-evidence] ${manifest.status}: wrote ${abs(outDir)}`);
-  return strict && manifest.status !== "READY" ? 1 : 0;
+  if (manifest.status === "READY") return EXIT_CODES.ready;
+  return strict ? EXIT_CODES.blocked : EXIT_CODES.collect;
 }
 
 process.exit(main());
