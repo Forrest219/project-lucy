@@ -2167,14 +2167,42 @@ function resolveCapabilityForTable(
   );
 }
 
+/** T04-1 — role facts established at admission; T05 reads them for the context gate. */
+export type AdmissionSubject = {
+  roleIds: string[];
+  /** No formal role, but a valid pre-role `allow.tools` block (data plane only). */
+  legacyDirectAllow: boolean;
+};
+
+function hasLegacyDirectAllow(user: { allow?: unknown }): boolean {
+  const allow = user.allow;
+  if (!allow || typeof allow !== "object" || Array.isArray(allow)) return false;
+  const tools = (allow as { tools?: unknown }).tools;
+  return Array.isArray(tools) && tools.some((tool) => typeof tool === "string" && tool.trim() !== "");
+}
+
 /**
- * T0A-3 — entry-level Agent disable check. Reads the same committed policy
+ * T0A-3 / T04-1 — entry-level Agent admission. Reads the same committed policy
  * config as `authorizeAndRewrite` (no extra cache) so every MCP method and
- * HTTP verb can reject a disabled Agent before any content is produced.
+ * HTTP verb rejects a disabled Agent, an unresolvable declared role, or an
+ * empty identity (no role and no valid direct-allow) before content is produced.
  */
-export async function isAgentDisabled(userId: string): Promise<boolean> {
+export async function resolveAdmissionSubject(
+  userId: string
+): Promise<{ ok: true; subject: AdmissionSubject } | { ok: false; reason: string }> {
   const runtime = await ensurePolicyRuntime();
-  return runtime.config.users.find((u) => u.id === userId)?.enabled === false;
+  const user = runtime.config.users.find((u) => u.id === userId);
+  if (!user) return { ok: false, reason: "agent_unresolved" };
+  if (user.enabled === false) return { ok: false, reason: "agent_disabled" };
+  const roleSet = resolveRoleIds(user);
+  if (!roleSet.ok) return { ok: false, reason: roleSet.reason };
+  for (const roleId of roleSet.roleIds) {
+    const declared = runtime.config.roles?.[roleId];
+    if (!declared || typeof declared !== "object") return { ok: false, reason: `role_resolution_failed:${roleId}` };
+  }
+  if (roleSet.roleIds.length > 0) return { ok: true, subject: { roleIds: roleSet.roleIds, legacyDirectAllow: false } };
+  if (!hasLegacyDirectAllow(user)) return { ok: false, reason: "role_resolution_failed:no_role_or_direct_allow" };
+  return { ok: true, subject: { roleIds: [], legacyDirectAllow: true } };
 }
 
 /**

@@ -2,7 +2,8 @@ import { createHash, randomUUID } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { createServer, request as httpRequest, type IncomingMessage, type ServerResponse } from "node:http";
 import path from "node:path";
-import { identifyRequestDetailed, setSessionClient, type Identity } from "./identity.js";
+import { setSessionClient, type Identity } from "./identity.js";
+import { admitMcpRequest, MCP_UPSTREAM_PATH, type AdmissionAudit, type AdmittedRequest } from "./admission.js";
 import {
   clearUpstreamSession,
   getUpstreamSession,
@@ -10,8 +11,8 @@ import {
   upstreamSessionKeepaliveEnabled
 } from "./upstream-session.js";
 import { extractRequestClientMeta, resolveClientIdentity } from "./request-client-meta.js";
-import { ensureSkillAuditReady, writeLog, writeAccessLogSources, writeConversationTurn, purgeExpiredConversationTurns, writeAuthFailureLog, bindPriorSessionCalls, type AccessLogSourceRecord } from "./audit.js";
-import { allowedToolNames, authorizeAndRewrite, check as aclCheck, isAgentDisabled, effectivePermissions, extractTables, extractSourceRefs, resolveSourceRefsForTables, kxCatalog, lucyCatalog, permissionSnapshot, type SourceRef } from "./acl.js";
+import { ensureSkillAuditReady, writeLog, writeAccessLogSources, writeConversationTurn, purgeExpiredConversationTurns, bindPriorSessionCalls, type AccessLogSourceRecord } from "./audit.js";
+import { allowedToolNames, authorizeAndRewrite, check as aclCheck, effectivePermissions, extractTables, extractSourceRefs, resolveSourceRefsForTables, kxCatalog, lucyCatalog, permissionSnapshot, type SourceRef } from "./acl.js";
 import {
   redactQuestionText,
   summarizeArgsForAudit,
@@ -73,7 +74,6 @@ const KTX_PORT = Number(process.env.LUCY_PROXY_UPSTREAM_PORT ?? 7878);
 // Routed under `/mcp/skills` to keep the existing `/mcp` KTX path unchanged.
 const LUCY_SKILLS_HOST = process.env.LUCY_PROXY_LUCY_SKILLS_HOST ?? "127.0.0.1";
 const LUCY_SKILLS_PORT = Number(process.env.LUCY_PROXY_LUCY_SKILLS_PORT ?? 7881);
-const LUCY_SKILLS_PATH_PREFIX = "/mcp/skills";
 // Spec 144: governed skills are served through the ACL-enforced interceptions on `/mcp`.
 // The legacy lucy-skills upstream has no auth or per-skill ACL of its own, so the
 // passthrough stays disabled unless explicitly enabled for local development.
@@ -627,25 +627,6 @@ function correlationMeta(headers: IncomingMessage["headers"]): Partial<Parameter
     lucySessionId: normalizeHeader(headers["x-lucy-session-id"]) || normalizeHeader(headers["mcp-session-id"]),
     lucyPlatform: normalizeHeader(headers["x-lucy-platform"])
   };
-}
-
-function recordAuthFailure(
-  req: IncomingMessage,
-  result: Awaited<ReturnType<typeof identifyRequestDetailed>>
-): void {
-  if (result.ok) return;
-  const network = extractRequestClientMeta(req);
-  void writeAuthFailureLog({
-    ts: new Date().toISOString(),
-    reason: result.reason,
-    clientIp: network.clientIp,
-    userAgent: network.userAgent,
-    tokenHashPrefix: result.tokenHashPrefix,
-    userId: result.userId,
-    tokenLabel: result.tokenLabel
-  }).catch((error) => {
-    console.error("[lucy-proxy] failed to write auth_failure_log", error);
-  });
 }
 
 function findRawQuery(value: unknown, depth = 0): string | undefined {
@@ -2715,62 +2696,10 @@ async function writeInitializeResponse(
   return { injectionFailed, errorDetail, responseBytes };
 }
 
-/**
- * T0A-3 / V-02 — a disabled Agent is rejected on every verb and MCP method,
- * right after identification and before any content is produced or forwarded.
- * Returns true when the request was answered (403) and must stop.
- */
-async function rejectIfAgentDisabled(
-  req: IncomingMessage,
-  res: ServerResponse,
-  identity: Identity,
-  body?: Buffer
-): Promise<boolean> {
-  if (!(await isAgentDisabled(identity.userId))) return false;
-  let rpcId: string | number | null = null;
-  let auditTool: string | undefined;
-  if (body && body.byteLength > 0) {
-    try {
-      const parsed = JSON.parse(body.toString()) as { id?: unknown; method?: unknown; params?: { name?: unknown } };
-      if (typeof parsed.id === "string" || typeof parsed.id === "number") rpcId = parsed.id;
-      if (typeof parsed.method === "string") auditTool = parsed.method;
-      if (parsed.method === "tools/call" && typeof parsed.params?.name === "string") auditTool = parsed.params.name;
-    } catch {
-      // non-JSON body: still rejected, id stays null
-    }
-  }
-  const responseBody = JSON.stringify({
-    jsonrpc: "2.0",
-    id: rpcId,
-    error: { code: -32003, message: "Access denied: agent_disabled" }
-  });
-  res.writeHead(403, { "content-type": "application/json" });
-  res.end(responseBody);
-  const networkMeta = extractRequestClientMeta(req);
-  recordAudit({
-    ts: new Date().toISOString(),
-    userId: identity.userId,
-    client: identity.client,
-    tool: auditTool ?? req.method ?? "unknown",
-    outcome: "denied",
-    errorDetail: "agent_disabled",
-    durationMs: 0,
-    responseBytes: Buffer.byteLength(responseBody),
-    requestId: rpcId ?? "",
-    ...correlationMeta(req.headers),
-    clientIp: networkMeta.clientIp,
-    clientForwardedFor: networkMeta.clientForwardedFor,
-    userAgent: networkMeta.userAgent,
-    ...(networkMeta.deviceName ? { deviceName: networkMeta.deviceName } : {}),
-    ...(await auditMeta(identity, "agent_disabled"))
-  });
-  return true;
-}
-
-async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<void> {
+async function handlePost(req: IncomingMessage, res: ServerResponse, admitted: AdmittedRequest): Promise<void> {
   const sessionId = normalizeHeader(req.headers["mcp-session-id"]);
   const explicitTurnId = normalizeHeader(req.headers["x-lucy-turn-id"]);
-  const identify = await identifyRequestDetailed(req.headers.authorization, sessionId);
+  const { identity, body } = admitted;
   const networkMeta = extractRequestClientMeta(req);
   const requestMeta: Partial<Parameters<typeof writeLog>[0]> = {
     ...correlationMeta(req.headers),
@@ -2782,16 +2711,6 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
     // Runtime device name only — never fall back to YAML remark.
     ...(networkMeta.deviceName ? { deviceName: networkMeta.deviceName } : {})
   };
-  if (!identify.ok) {
-    recordAuthFailure(req, identify);
-    res.writeHead(401, { "content-type": "application/json" });
-    res.end(JSON.stringify({ jsonrpc: "2.0", error: { code: -32001, message: "Unauthorized" }, id: null }));
-    return;
-  }
-  const identity = identify.identity;
-
-  const body = await readBody(req);
-  if (await rejectIfAgentDisabled(req, res, identity, body)) return;
   const start = Date.now();
   const traceId = `trace_${randomUUID()}`;
 
@@ -4295,13 +4214,13 @@ async function buildDenialRepairPayload(
   try {
     if (rpcMethod === "initialize") {
       // `initialize` is what establishes the session; never inject one into it.
-      upstream = await forwardToKtx(req.method ?? "POST", req.url ?? "/mcp", req.headers, outboundBody);
+      upstream = await forwardToKtx(req.method ?? "POST", MCP_UPSTREAM_PATH, req.headers, outboundBody);
       upstreamBody = await readUpstreamBody(upstream);
     } else if (bufferedUpstream) {
       const forwarded = await forwardToKtxWithSession(
         identity,
         req.method ?? "POST",
-        req.url ?? "/mcp",
+        MCP_UPSTREAM_PATH,
         req.headers,
         outboundBody
       );
@@ -4311,7 +4230,7 @@ async function buildDenialRepairPayload(
     } else {
       upstream = await forwardToKtx(
         req.method ?? "POST",
-        req.url ?? "/mcp",
+        MCP_UPSTREAM_PATH,
         req.headers,
         outboundBody,
         upstreamSessionKeepaliveEnabled() ? getUpstreamSession(identity.userId) : undefined
@@ -4812,22 +4731,14 @@ async function buildDenialRepairPayload(
   }
 }
 
-async function handlePassthrough(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  const sessionId = normalizeHeader(req.headers["mcp-session-id"]);
-  const identify = await identifyRequestDetailed(req.headers.authorization, sessionId);
-  if (!identify.ok) {
-    recordAuthFailure(req, identify);
-    res.writeHead(401, { "content-type": "application/json" });
-    res.end(JSON.stringify({ error: "Unauthorized" }));
-    return;
-  }
-  if (await rejectIfAgentDisabled(req, res, identify.identity)) return;
+async function handlePassthrough(req: IncomingMessage, res: ServerResponse, admitted: AdmittedRequest): Promise<void> {
+  const { identity } = admitted;
   const keepalive = upstreamSessionKeepaliveEnabled();
-  const heldSession = keepalive ? getUpstreamSession(identify.identity.userId) : undefined;
+  const heldSession = keepalive ? getUpstreamSession(identity.userId) : undefined;
   // `DELETE /mcp` terminates the MCP session; a cached id would otherwise be
   // replayed on the next data call against a session KTX has already dropped.
-  if (keepalive && req.method === "DELETE") clearUpstreamSession(identify.identity.userId);
-  const upstream = await forwardToKtx(req.method ?? "GET", req.url ?? "/mcp", req.headers, undefined, heldSession);
+  if (keepalive && req.method === "DELETE") clearUpstreamSession(identity.userId);
+  const upstream = await forwardToKtx(req.method ?? "GET", MCP_UPSTREAM_PATH, req.headers, undefined, heldSession);
   pipeResponse(upstream, res);
 }
 
@@ -4841,38 +4752,17 @@ async function handlePassthrough(req: IncomingMessage, res: ServerResponse): Pro
  *
  * To be revisited: if skills need trace evidence or ACL, fold them in here.
  */
-async function handleSkillsPassthrough(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  const sessionId = normalizeHeader(req.headers["mcp-session-id"]);
-  const identify = await identifyRequestDetailed(req.headers.authorization, sessionId);
-  if (!identify.ok) {
-    recordAuthFailure(req, identify);
-    res.writeHead(401, { "content-type": "application/json" });
-    res.end(JSON.stringify({ error: "Unauthorized" }));
-    return;
-  }
-  // Read body so we can forward POST content (MCP JSON-RPC envelope).
-  // GET / DELETE have no body; readBody returns empty Buffer either way.
-  const body = await readBody(req);
-  if (await rejectIfAgentDisabled(req, res, identify.identity, body)) return;
-  // /mcp/skills → /mcp, /mcp/skills/ → /mcp/, /mcp/skills/v1/foo → /mcp/v1/foo
-  const originalUrl = req.url ?? "/mcp/skills";
-  const upstreamUrl = originalUrl.replace(/^\/mcp\/skills(?=\/|$)/, "/mcp") || "/mcp";
+async function handleSkillsPassthrough(req: IncomingMessage, res: ServerResponse, admitted: AdmittedRequest): Promise<void> {
+  const { body } = admitted;
   const upstream = await forwardToUpstream(
     { host: LUCY_SKILLS_HOST, port: LUCY_SKILLS_PORT },
     req.method ?? "GET",
-    upstreamUrl,
+    MCP_UPSTREAM_PATH,
     req.headers,
     body.byteLength > 0 ? body : undefined,
     "lucy-skills"
   );
   pipeResponse(upstream, res);
-}
-
-function isSkillsPath(url: string | undefined): boolean {
-  if (!url) return false;
-  // Strip query string for the match
-  const path = url.split("?")[0];
-  return path === LUCY_SKILLS_PATH_PREFIX || path.startsWith(`${LUCY_SKILLS_PATH_PREFIX}/`);
 }
 
 function normalizeHeader(v: string | string[] | undefined): string | undefined {
@@ -4909,24 +4799,29 @@ export async function forwardAuthorizedLucyQuery(
   }
 }
 
+const ADMISSION_AUDIT: AdmissionAudit = {
+  record: (entry) => recordAudit(entry),
+  meta: auditMeta,
+  correlation: correlationMeta
+};
+
 export function buildProxy() {
   const port = Number(process.env.LUCY_PROXY_PORT ?? 7879);
   const host = process.env.LUCY_PROXY_HOST ?? "127.0.0.1";
 
   const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
     try {
-      if (isSkillsPath(req.url)) {
-        if (!SKILLS_PASSTHROUGH_ENABLED) {
-          const body = JSON.stringify({ error: "Not found" });
-          res.writeHead(404, { "content-type": "application/json", "content-length": Buffer.byteLength(body) });
-          res.end(body);
-          return;
-        }
-        await handleSkillsPassthrough(req, res);
+      const admitted = await admitMcpRequest(req, res, ADMISSION_AUDIT, {
+        skillsPassthroughEnabled: SKILLS_PASSTHROUGH_ENABLED,
+        readBody
+      });
+      if (!admitted.ok) return;
+      if (admitted.route === "skills") {
+        await handleSkillsPassthrough(req, res, admitted);
       } else if (req.method === "POST") {
-        await handlePost(req, res);
+        await handlePost(req, res, admitted);
       } else {
-        await handlePassthrough(req, res);
+        await handlePassthrough(req, res, admitted);
       }
     } catch (err) {
       if (!res.headersSent) {
