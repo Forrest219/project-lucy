@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import {
   countEnabledOwners,
@@ -22,16 +23,24 @@ import {
   gateLoginAttempt,
   replyAuthGate
 } from "./rate-limit.js";
+import { clearSessionCookie, setSessionCookie } from "./session.js";
+import { actorIdFromRequest, AUTH_STATE_UNAVAILABLE, requireOwner } from "./guard.js";
 import {
-  clearSessionCookie,
-  createAdminSession,
-  setSessionCookie
-} from "./session.js";
-import { actorIdFromRequest, requireOwner } from "./guard.js";
+  enableAccount,
+  ensureAccountUid,
+  issueSession,
+  narrowAccount,
+  revokeRequestSession
+} from "./account-state.js";
 
 // Verified against when the account is unknown/disabled so both paths cost one scrypt (no existence oracle).
 let dummyHash: Promise<string> | null = null;
 const getDummyHash = () => (dummyHash ??= hashPassword("lucy-unknown-account-placeholder"));
+
+const AUTH_INVALID = {
+  ok: false,
+  error: { code: "AUTH_INVALID", message: "管理员 id 或密码不正确" }
+} as const;
 
 const AUTH_CONFIG_UNAVAILABLE = {
   ok: false,
@@ -119,19 +128,33 @@ export function registerAuthRoutes(app: FastifyInstance): void {
     const verified = await verifyPassword(password, admin ? admin.password_hash : await getDummyHash());
     if (!admin || !verified) {
       // Unknown, disabled and wrong-password are one indistinguishable 401 (Spec §3.1 item 6).
-      return reply.status(401).send({
-        ok: false,
-        error: { code: "AUTH_INVALID", message: "管理员 id 或密码不正确" }
-      });
+      return reply.status(401).send(AUTH_INVALID);
     }
     await clearLoginFailures(request, adminId);
 
-    const session = await createAdminSession(admin.id);
+    // Legacy accounts get their immutable uid on first login (controlled, audited migration).
+    let account: WebuiAdminRecord | null;
+    try {
+      account = await ensureAccountUid(admin.id);
+    } catch {
+      return reply.status(503).send(AUTH_STATE_UNAVAILABLE);
+    }
+    if (!account) return reply.status(401).send(AUTH_INVALID);
+    const session = await issueSession(account);
+    if (!session.ok) {
+      return session.status === 401
+        ? reply.status(401).send(AUTH_INVALID)
+        : reply.status(503).send(AUTH_STATE_UNAVAILABLE);
+    }
     setSessionCookie(reply, session.token, session.exp);
-    return { ok: true, data: { me: publicAdminView(admin) } };
+    return { ok: true, data: { me: publicAdminView(account) } };
   });
 
-  app.post("/api/auth/logout", async (_request, reply) => {
+  app.post("/api/auth/logout", async (request, reply) => {
+    // Durable revocation first; the cookie is only cleared once it holds (Spec §3.2).
+    if ((await revokeRequestSession(request)) === "unavailable") {
+      return reply.status(503).send(AUTH_STATE_UNAVAILABLE);
+    }
     clearSessionCookie(reply);
     return { ok: true, data: { loggedOut: true } };
   });
@@ -171,7 +194,8 @@ export function registerAuthRoutes(app: FastifyInstance): void {
     }
 
     await clearBootstrapFailures(request);
-    const session = await createAdminSession(adminId);
+    const session = await issueSession(outcome.record);
+    if (!session.ok) return reply.status(503).send(AUTH_STATE_UNAVAILABLE);
     setSessionCookie(reply, session.token, session.exp);
     return { ok: true, data: { me: publicAdminView(outcome.record) } };
   });
@@ -268,6 +292,7 @@ export function registerAdminAccountRoutes(app: FastifyInstance): void {
     const password_hash = await hashPassword(password);
     const record: WebuiAdminRecord = {
       id: adminId,
+      account_uid: randomUUID(),
       display_name: displayName,
       password_hash,
       role,
@@ -341,6 +366,9 @@ export function registerAdminAccountRoutes(app: FastifyInstance): void {
       nextRecord.password_hash = await hashPassword(request.body.password);
     }
 
+    // A row that never logged in has no uid yet; give it one in this same write.
+    if (!nextRecord.account_uid) nextRecord.account_uid = randomUUID();
+
     const nextAdmins = [...config.admins];
     nextAdmins[index] = nextRecord;
     const nextConfig: AdminsConfig = { ...config, admins: nextAdmins };
@@ -350,6 +378,17 @@ export function registerAdminAccountRoutes(app: FastifyInstance): void {
         ok: false,
         error: { code: "LAST_OWNER_REQUIRED", message: "至少保留一名启用中的所有者" }
       });
+    }
+
+    // Spec §3.2: narrow first (epoch/disable), then write the configuration.
+    const narrowing =
+      current.enabled && nextRecord.enabled === false
+        ? "disable"
+        : nextRecord.role !== current.role || nextRecord.password_hash !== current.password_hash
+          ? "revoke_sessions"
+          : null;
+    if (narrowing && !(await narrowAccount(current, narrowing))) {
+      return reply.status(503).send(AUTH_STATE_UNAVAILABLE);
     }
 
     await saveAdminsConfig(nextConfig, {
@@ -371,6 +410,11 @@ export function registerAdminAccountRoutes(app: FastifyInstance): void {
       },
       requestId: request.id
     });
+
+    // Enabling is widening, so it follows the config write; it never revives old sessions.
+    if (request.body?.enabled === true && !(await enableAccount(nextRecord))) {
+      return reply.status(503).send(AUTH_STATE_UNAVAILABLE);
+    }
 
     return { ok: true, data: { admin: publicAdminView(nextRecord) } };
   });
@@ -405,6 +449,11 @@ export function registerAdminAccountRoutes(app: FastifyInstance): void {
         ok: false,
         error: { code: "LAST_OWNER_REQUIRED", message: "至少保留一名启用中的所有者" }
       });
+    }
+
+    // Spec §3.2: tombstone (epoch bump, uid never reused) before the configuration write.
+    if (!(await narrowAccount(target, "tombstone"))) {
+      return reply.status(503).send(AUTH_STATE_UNAVAILABLE);
     }
 
     await saveAdminsConfig(nextConfig, {

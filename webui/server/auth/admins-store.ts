@@ -30,6 +30,8 @@ export function webuiAdminRoleLabel(role: WebuiAdminRole): string {
 
 export type WebuiAdminRecord = {
   id: string;
+  /** Immutable account identity (Spec §2). Absent only on legacy rows until their first login migrates them. */
+  account_uid?: string;
   display_name: string;
   password_hash: string;
   role: WebuiAdminRole;
@@ -69,6 +71,7 @@ function normalizeConfig(raw: unknown): AdminsConfig {
     throw new AdminsConfigError("admins.yaml `admins` must be a list");
   }
   const admins: WebuiAdminRecord[] = [];
+  const seenUids = new Set<string>();
   for (const item of (doc.admins as unknown[] | null | undefined) ?? []) {
     if (!item || typeof item !== "object") throw new AdminsConfigError("admins.yaml entry must be a mapping");
     const row = item as Record<string, unknown>;
@@ -77,8 +80,18 @@ function normalizeConfig(raw: unknown): AdminsConfig {
       throw new AdminsConfigError(`admins.yaml entry '${row.id}' has no password_hash`);
     }
     const role = normalizeWebuiAdminRole(row.role);
+    let accountUid: string | undefined;
+    if (row.account_uid !== undefined && row.account_uid !== null) {
+      if (typeof row.account_uid !== "string" || !row.account_uid.trim()) {
+        throw new AdminsConfigError(`admins.yaml entry '${row.id}' has an invalid account_uid`);
+      }
+      accountUid = row.account_uid.trim();
+      if (seenUids.has(accountUid)) throw new AdminsConfigError("admins.yaml has a duplicate account_uid");
+      seenUids.add(accountUid);
+    }
     admins.push({
       id: row.id.trim(),
+      ...(accountUid ? { account_uid: accountUid } : {}),
       display_name: typeof row.display_name === "string" && row.display_name.trim()
         ? row.display_name.trim()
         : row.id.trim(),
@@ -188,6 +201,7 @@ export async function saveAdminsConfig(
       version: config.version || "1",
       admins: config.admins.map((a) => ({
         id: a.id,
+        ...(a.account_uid ? { account_uid: a.account_uid } : {}),
         display_name: a.display_name,
         password_hash: a.password_hash,
         role: a.role,
@@ -214,6 +228,10 @@ export async function saveAdminsConfig(
 
 export function findAdmin(config: AdminsConfig, adminId: string): WebuiAdminRecord | undefined {
   return config.admins.find((a) => a.id === adminId);
+}
+
+export function findAdminByUid(config: AdminsConfig, accountUid: string): WebuiAdminRecord | undefined {
+  return config.admins.find((a) => a.account_uid === accountUid);
 }
 
 export function countEnabledOwners(config: AdminsConfig): number {

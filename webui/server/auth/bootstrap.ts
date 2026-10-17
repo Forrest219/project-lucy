@@ -92,6 +92,7 @@ export async function reconcileBootstrapOnStartup(): Promise<void> {
 async function createOwner(store: SecurityStore, input: BootstrapInput, passwordHash: string): Promise<BootstrapOutcome> {
   const record: WebuiAdminRecord = {
     id: input.adminId,
+    account_uid: randomUUID(),
     display_name: input.displayName,
     password_hash: passwordHash,
     role: "owner",

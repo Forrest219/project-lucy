@@ -25,12 +25,13 @@ findings:
     verifiedBy: []
     acceptedBy: null
   # V-03 退出/重置密码后旧管理 Cookie 仍可重放（T03）
+  # note: T03 已落地 v2 持久会话（jti/account_uid/session_epoch）、先吊销后写配置、退出耐久吊销、idle 30min/绝对 12h、no-store、503 AUTH_STATE_UNAVAILABLE；fixedIn 待 T03 提交后回填 SHA
   - id: V-03
     severity: P1
-    status: open
+    status: fixed
     spec: "§3.2"
-    fixedIn: null
-    verifiedBy: []
+    fixedIn: pending
+    verifiedBy: [SEC-04]
     acceptedBy: null
   # V-04 Wiki / 语义层写入的管理员归因缺失，无登录事件（T08）
   - id: V-04

@@ -427,7 +427,7 @@ CREATE TABLE IF NOT EXISTS config_change_log (
 
 ## 10. 持久安全状态库 `.ktx-ui/security.sqlite`
 
-> 契约来源：`docs/specs/lucy-20261018-enterprise-security-and-real-e2e-spec.md` §2、ADR `docs/access-control/adr-20261018-security-ledger-and-context-acl.md` D1/D2。实现：`webui/server/security/{store,schema,types,recovery}.ts`（T01 仅存储层与恢复逻辑，尚未接入认证或 MCP 路由）。
+> 契约来源：`docs/specs/lucy-20261018-enterprise-security-and-real-e2e-spec.md` §2、ADR `docs/access-control/adr-20261018-security-ledger-and-context-acl.md` D1/D2。实现：`webui/server/security/{store,schema,types,recovery}.ts`（T01 存储层与恢复逻辑；T02 接入引导与限速；T03 接入管理员会话 `webui/server/auth/{session,account-state,guard,routes}.ts`，尚未接入 MCP 路由）。
 
 ### 10.1 文件与权限
 
@@ -444,8 +444,8 @@ CREATE TABLE IF NOT EXISTS config_change_log (
 
 | 表 | 要点 |
 |---|---|
-| `admin_account_state` | `account_uid` 主键、`display_id`、`session_epoch`、`status`（`enabled`/`disabled`/`tombstoned`）、凭据指纹；tombstone 后 UID 不可复用；停用/改密/墓碑会递增 epoch 并吊销该账号全部会话 |
-| `admin_sessions` | 主键为 jti 的 SHA-256；`issued_epoch`、`created_at`/`last_seen_at`/`absolute_expiry`、`revoked_at`；不存原始 Cookie、密码或 Token；校验要求未吊销、未过期、账号 enabled、epoch 一致 |
+| `admin_account_state` | `account_uid` 主键、`display_id`、`session_epoch`、`status`（`enabled`/`disabled`/`tombstoned`）、凭据指纹；tombstone 后 UID 不可复用；停用/改密/墓碑会递增 epoch 并吊销该账号全部会话；T03 起行在账户首次登录时登记，`admins.yaml` 每个账户带同值不可变 `account_uid`（旧账户首次登录时迁移）；PATCH 改密/改角色走 `bumpSessionEpoch`、停用走 `disabled`、DELETE 走 tombstone，均**先于**配置写入 |
+| `admin_sessions` | 主键为 jti 的 SHA-256；`issued_epoch`、`created_at`/`last_seen_at`/`absolute_expiry`、`revoked_at`；不存原始 Cookie、密码或 Token；校验要求未吊销、未过期、账号 enabled、epoch 一致；T03 起每个管理员请求都查此表：空闲 30 分钟（`last_seen_at` 至多每分钟刷新）与绝对 12 小时（`absolute_expiry`）；退出写 `revoked_at`；Cookie v2 载荷含 `jti`、`account_uid`、`ep`，缺一或与本表不一致即无效 |
 | `bootstrap_state` | 单行；`open` → `consumed` 单向且原子，第二次消费冲突 |
 | `auth_rate_buckets` | `bucket_key`、`window_start`、`count`、`expires_at`；TTL 清理、数量上限（满则 fail-closed）；重启保留未到期桶 |
 | `role_id_tombstones` | 已删除 role id，禁止复用 |

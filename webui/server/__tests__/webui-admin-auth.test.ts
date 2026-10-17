@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { isTokenExpired, normalizeExpiresAtInput } from "../proxy/identity.js";
 import { hashPassword, verifyPassword } from "../auth/password.js";
 import { resetAdminsCache } from "../auth/admins-store.js";
-import { createAdminSession, readAdminSession, resetSessionSecretCache } from "../auth/session.js";
+import { readSessionClaims, resetSessionSecretCache, sealSession } from "../auth/session.js";
 import { readFile } from "node:fs/promises";
 import { isPublicApi } from "../auth/guard.js";
 
@@ -95,16 +95,23 @@ describe("webui session secret persistence", () => {
   });
 
   it("keeps the same secret file across process restarts", async () => {
-    const first = await createAdminSession("xingchen");
+    const claims = {
+      v: 2 as const,
+      jti: "jti-a",
+      uid: "uid-a",
+      ep: 0,
+      iat: Math.floor(Date.now() / 1000),
+      exp: Math.floor(Date.now() / 1000) + 3600
+    };
+    const first = await sealSession(claims);
     const secretPath = path.join(tempRoot, ".ktx-ui/webui-session-secret");
     const stored = await readFile(secretPath, "utf8");
     resetSessionSecretCache();
-    const second = await createAdminSession("xingchen");
+    const second = await sealSession({ ...claims, jti: "jti-b" });
     expect(await readFile(secretPath, "utf8")).toBe(stored);
-    const session = await readAdminSession({ headers: { cookie: `lucy_admin_session=${encodeURIComponent(first.token)}` } } as never);
-    expect(session?.adminId).toBe("xingchen");
-    const again = await readAdminSession({ headers: { cookie: `lucy_admin_session=${encodeURIComponent(second.token)}` } } as never);
-    expect(again?.adminId).toBe("xingchen");
+    const cookieOf = (token: string) => ({ headers: { cookie: `lucy_admin_session=${encodeURIComponent(token)}` } }) as never;
+    expect((await readSessionClaims(cookieOf(first)))?.uid).toBe("uid-a");
+    expect((await readSessionClaims(cookieOf(second)))?.jti).toBe("jti-b");
   });
 });
 
