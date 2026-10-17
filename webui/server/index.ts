@@ -137,6 +137,7 @@ import { registerUiUsageRoutes } from "./admin/ui-usage.js";
 import { registerAuthRoutes, registerAdminAccountRoutes } from "./auth/routes.js";
 import { registerBrandingRoutes } from "./branding.js";
 import { actorIdFromRequest, requireWebuiAuthHook } from "./auth/guard.js";
+import { auditActorFields, trustedActorFromRequest } from "./security/request-actor.js";
 import { assertStartupPolicy, resolveCookieSecure } from "./auth/deployment-mode.js";
 import { reconcileBootstrapOnStartup } from "./auth/bootstrap.js";
 import { closeSecurityStore, getSecurityStore } from "./security/instance.js";
@@ -726,7 +727,14 @@ export function buildServer() {
       });
     }
 
-    const preview = await writeSourcePatch(projectRoot, conn, schema, table, request.body?.patch ?? {});
+    const preview = await writeSourcePatch(
+      projectRoot,
+      conn,
+      schema,
+      table,
+      request.body?.patch ?? {},
+      trustedActorFromRequest(request)
+    );
     for (const file of preview.files) {
       writtenFiles.push({ filePath: file.filePath });
     }
@@ -782,7 +790,7 @@ export function buildServer() {
       });
     }
 
-    const preview = await writeSourceYamlImport(projectRoot, conn, schema, table, yaml);
+    const preview = await writeSourceYamlImport(projectRoot, conn, schema, table, yaml, trustedActorFromRequest(request));
     for (const file of preview.files) {
       writtenFiles.push({ filePath: file.filePath });
     }
@@ -997,7 +1005,7 @@ export function buildServer() {
   }>("/api/wiki/:key/move", async (request, reply) => {
     const projectRoot = await resolveProjectRoot();
     const targetDirectory = request.body?.targetDirectory ?? "";
-    const result = await moveWiki(projectRoot, request.params.key, targetDirectory);
+    const result = await moveWiki(projectRoot, request.params.key, targetDirectory, trustedActorFromRequest(request));
     writtenFiles.push({ filePath: result.filePath });
     writtenFiles.push({ filePath: "wiki/.lucy-history/index.json" });
     writtenFiles.push({ filePath: "wiki/.lucy-directories.json" });
@@ -1029,7 +1037,7 @@ export function buildServer() {
     Body: WikiUploadInput;
   }>("/api/wiki/upload/commit", async (request) => {
     const projectRoot = await resolveProjectRoot();
-    const preview = await commitWikiUpload(projectRoot, request.body);
+    const preview = await commitWikiUpload(projectRoot, request.body, trustedActorFromRequest(request));
     writtenFiles.push({ filePath: preview.filePath });
     writtenFiles.push({ filePath: "wiki/.lucy-history/index.json" });
     return {
@@ -1072,7 +1080,12 @@ export function buildServer() {
     Params: { key: string; versionId: string };
   }>("/api/wiki/:key/versions/:versionId/restore", async (request) => {
     const projectRoot = await resolveProjectRoot();
-    const result = await restoreWikiVersion(projectRoot, request.params.key, request.params.versionId);
+    const result = await restoreWikiVersion(
+      projectRoot,
+      request.params.key,
+      request.params.versionId,
+      trustedActorFromRequest(request)
+    );
     writtenFiles.push({ filePath: result.filePath });
     writtenFiles.push({ filePath: "wiki/.lucy-history/index.json" });
     return {
@@ -1102,7 +1115,7 @@ export function buildServer() {
       expected_version: request.body?.expected_version
     };
     const preview = request.body?.dryRun === false
-      ? await writeWiki(projectRoot, request.params.key, writeInput)
+      ? await writeWiki(projectRoot, request.params.key, writeInput, trustedActorFromRequest(request))
       : await previewWikiWrite(projectRoot, request.params.key, writeInput);
     if (request.body?.dryRun === false) {
       writtenFiles.push({ filePath: preview.filePath });
@@ -1457,13 +1470,12 @@ export function buildServer() {
       enabled: true,
       changeType: "enabled_tables_update",
       assetKind: "governance",
-      actorType: "ui_admin",
+      ...auditActorFields(trustedActorFromRequest(request)),
       source: "connections_enabled_tables_api",
       targetId: connId,
       oldSummary: { count: oldEnabledTables.length, enabledTables: oldEnabledTables },
       newSummary: { count: newEnabledTables.length, enabledTables: newEnabledTables },
-      diff,
-      requestId: request.id
+      diff
     });
 
     let catalogRuntimeAck = false;
