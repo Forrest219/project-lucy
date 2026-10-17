@@ -98,7 +98,7 @@ findings:
     severity: P1
     status: open
     spec: "§8.3"
-    fixedIn: null
+    fixedIn: 1e9c484
     verifiedBy: []
     acceptedBy: null
   # G-02 blocked / dry-run 可被汇总为 passed（T09/T13）
