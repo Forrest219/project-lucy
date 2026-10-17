@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Lucy 本机夜间任务（提交 / pull+push / 平滑升级 Docker 中的 Lucy）— launchd plist 模板
+
+  落位：scripts/launchd/com.lucy.nightly-sync-upgrade.plist
+  主脚本：scripts/launchd/nightly-sync-upgrade.sh
+  加载：bash scripts/launchd/install-nightly-sync-upgrade-launchd.sh --bootstrap
+        （默认只渲染到 ~/Library/LaunchAgents/，不注册）
+
+  路径占位符（安装脚本替换）：
+    __LABEL__    默认 com.lucy.nightly-sync-upgrade
+    __ROOT__     仓库根绝对路径
+    __HOME__     $HOME
+    __LOG_DIR__  默认 ~/Library/Logs/lucy-nightly（每次运行另写 nightly-YYYYMMDD-HHMMSS.log）
+    __HOUR__     默认 3
+    __MINUTE__   默认 0
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>__LABEL__</string>
+
+  <!-- 每天 __HOUR__:__MINUTE__ 触发；机器睡眠错过时 launchd 会在唤醒后补跑一次 -->
+  <key>RunAtLoad</key>
+  <false/>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>__HOUR__</integer>
+    <key>Minute</key>
+    <integer>__MINUTE__</integer>
+  </dict>
+
+  <key>WorkingDirectory</key>
+  <string>__ROOT__</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>__HOME__/.local/bin:/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>LUCY_NIGHTLY_LOG_DIR</key>
+    <string>__LOG_DIR__</string>
+    <key>LUCY_NIGHTLY_COMPOSE_FILE</key>
+    <string>deploy/compose/docker-compose.demo.yml</string>
+    <!-- 空 = 在当前检出的任意分支上提交；可改成 "main" 只在 main 上跑 -->
+    <key>LUCY_NIGHTLY_ALLOWED_BRANCHES</key>
+    <string></string>
+  </dict>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>__ROOT__/scripts/launchd/nightly-sync-upgrade.sh</string>
+  </array>
+
+  <!-- 脚本自己按次写日志；这里只兜底收集脚本启动前的错误 -->
+  <key>StandardOutPath</key>
+  <string>__LOG_DIR__/launchd.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>__LOG_DIR__/launchd.err.log</string>
+
+  <!-- 后台优先级，避免与前台 agent 抢资源；不重试，由下次调度覆盖 -->
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>LowPriorityIO</key>
+  <true/>
+</dict>
+</plist>
