@@ -67,7 +67,7 @@ findings:
     severity: P0
     status: fixed
     spec: "§4.6"
-    fixedIn: pending
+    fixedIn: ba89b20
     verifiedBy: [SEC-15-FM-01, SEC-15-FM-02, SEC-15-FM-03, SEC-15-FM-04, SEC-15-FM-05, SEC-15-FM-06]
     acceptedBy: null
   # D-01 Spec 170 上下文全开放（T05/T06）
