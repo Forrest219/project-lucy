@@ -104,12 +104,13 @@ findings:
     verifiedBy: []
     acceptedBy: null
   # G-02 blocked / dry-run 可被汇总为 passed（T09/T13）
+  # note: T09 旧入口统一 Spec §8.2：p1-governance/publish-regression smoke blocked→exit 2；p1-release-readiness 按子进程退出码判状态（不看 stdout 词语）、dry-run→dry_run/exit 3、--allow-blocked 只 collect/exit 3、不签 releaseReady；p1-agent-e2e blocked=2、dry-run 不计 pass、任意 500 不再算正确 deny；旧 SOW 打包器拒绝 dry-run/跨 run/runner 补造 trace。最终客户判定仍由 T13 独立 verifier 负责；fixedIn 待 T09 提交后回填 SHA
   - id: G-02
     severity: P1
-    status: open
+    status: fixed
     spec: "§8.2"
-    fixedIn: null
-    verifiedBy: []
+    fixedIn: 9ff54cf
+    verifiedBy: [GATE-01]
     acceptedBy: null
   # G-03 Agent 评分与 Trace 完整率不能证明实际查过数据（T12/T13）
   - id: G-03
@@ -120,42 +121,43 @@ findings:
     verifiedBy: []
     acceptedBy: null
   # G-04 用例与夹具落后于最新版功能（selector 33 项、旅程待写、fixture 漂移；T09/T10/T11）
+  # note: T09 关闭 selector 契约（35 项失败 → 0：32 项补录登记、1 项 workbench-pending-count 真实漂移改用 workbench-batch-sync-hint、2 项仅负向引用经正负引用识别归类）、contract fixture（角色/连接/manifest 对齐、development+loopback 显式、实例核对）与旧 agent harness（content root/eval 路径、去机器绑定）漂移。新旅程用例由 T10/T11 编写，不在本条关闭范围；fixedIn 待 T09 提交后回填 SHA
   - id: G-04
     severity: P1
-    status: open
+    status: fixed
     spec: "§6"
-    fixedIn: null
-    verifiedBy: []
+    fixedIn: 9ff54cf
+    verifiedBy: [GATE-01]
     acceptedBy: null
   # G-05 生产依赖风险未纳入发布门禁（T09；对应 SEC-23）
+  # note: T09 overrides.fast-uri 3.1.6 → 3.1.8（修复 GHSA-qw65-cvwx-89v3 / GHSA-58mr-gqgx-xq4g / GHSA-hrr3-gc8f-f4qj），`npm audit --omit=dev` high/critical = 0；剩余 4 条 moderate 逐条登记于 dependencies。CI 依赖门禁接线属 T14；fixedIn 待 T09 提交后回填 SHA
   - id: G-05
     severity: P1
-    status: open
+    status: fixed
     spec: "§8"
-    fixedIn: null
-    verifiedBy: []
+    fixedIn: 9ff54cf
+    verifiedBy: [SEC-23]
     acceptedBy: null
 dependencies:
-  # fast-uri 3.1.6：webui/package.json overrides 锁定（提交 5b31145），受影响范围 3.0.0–3.1.7；npm ls 仅见于 Fastify ajv / fast-json-stringify 链，可利用性待 T09 复核
+  # fast-uri：webui/package.json overrides 原锁定 3.1.6（提交 5b31145；受影响 GHSA-qw65-cvwx-89v3 <3.1.7、GHSA-58mr-gqgx-xq4g =3.1.6、GHSA-hrr3-gc8f-f4qj <3.1.8）。T09 升到 3.1.8（含 package-lock），Fastify/ajv 链 `npm ls fast-uri` 全部 deduped 为 3.1.8；`npm audit --omit=dev` high/critical 0
   - package: fast-uri
     severity: high
-    status: open
+    status: fixed
     rationale: null
-  # gray-matter 4.0.3：真实风险为默认 JS 引擎（V-08），另经 js-yaml 3.x 传递链命中 moderate
+  # gray-matter 4.0.3：真实风险为默认 JS 引擎（V-08，已由 server/markdown-frontmatter.ts 唯一入口封堵）；本条 moderate 仅是经 js-yaml 3.x → argparse → sprintf-js 的传递链告警。
   - package: gray-matter
     severity: moderate
-    status: open
-    rationale: null
-  # gray-matter → js-yaml → argparse → sprintf-js 传递链
+    status: not_reachable
+    rationale: "gray-matter 只经 js-yaml 库入口解析 YAML；告警源 sprintf-js<=1.1.3（GHSA-hp3w-g68c-fv3c，不受控精度说明符致 DoS）仅被 argparse 加载，而 argparse 在 js-yaml 3.15.2 中只被 CLI `bin/js-yaml.js` require（`grep -rn require('argparse') node_modules/js-yaml/{lib,index.js}` 无结果）。Lucy 不调用 js-yaml CLI，不向 sprintf-js 传入任何外部格式串；不宣称为远程可利用。若升级 gray-matter 大版本再复核。"
   - package: js-yaml
     severity: moderate
-    status: open
-    rationale: null
+    status: not_reachable
+    rationale: "仅作为 gray-matter 的传递依赖（3.15.2，lock 中由 overrides 固定）。受影响路径在 argparse/sprintf-js（见 gray-matter 条目），库入口 `require('js-yaml')` 不加载 argparse；无 Lucy 代码直接 import js-yaml（Lucy 自有 YAML 解析用 `yaml` 包）。"
   - package: argparse
     severity: moderate
-    status: open
-    rationale: null
+    status: not_reachable
+    rationale: "argparse 1.0.10 只被 js-yaml 的 CLI 入口 `bin/js-yaml.js` 引用，运行时服务进程不加载；其唯一告警来自 sprintf-js 传递依赖，无外部可控参数进入 argparse 的格式化路径。"
   - package: sprintf-js
     severity: moderate
-    status: open
-    rationale: null
+    status: not_reachable
+    rationale: "sprintf-js 1.0.3（GHSA-hp3w-g68c-fv3c，需向 sprintf 传入攻击者可控的超大精度说明符）仅被 argparse 间接使用；该调用链不在 Lucy 运行时加载路径内，也没有任何外部输入作为格式串。性质为本地/构建期 DoS 类告警，不是远程漏洞。"
