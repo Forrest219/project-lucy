@@ -425,5 +425,52 @@ CREATE TABLE IF NOT EXISTS config_change_log (
 
 `actor` 当前固定为 `local-admin`。`change_type` 包括 `enabled_tables_update`、`agent_create`、`agent_patch`、`agent_delete`、`token_create`、`token_revoke`。token 明文不得进入 yaml、audit、日志。
 
+## 10. 持久安全状态库 `.ktx-ui/security.sqlite`
+
+> 契约来源：`docs/specs/lucy-20261018-enterprise-security-and-real-e2e-spec.md` §2、ADR `docs/access-control/adr-20261018-security-ledger-and-context-acl.md` D1/D2。实现：`webui/server/security/{store,schema,types,recovery}.ts`（T01 仅存储层与恢复逻辑，尚未接入认证或 MCP 路由）。
+
+### 10.1 文件与权限
+
+| 项 | 约定 |
+|---|---|
+| 位置 | `<projectRoot>/.ktx-ui/security.sqlite`（+ `-wal` / `-shm`） |
+| 模式 | `journal_mode=WAL`、`synchronous=FULL`、`foreign_keys=ON`；启动时校验生效，否则视为不可用 |
+| 权限 | `.ktx-ui` 目录 0700；db / WAL / SHM 0600；打开时收紧既有宽权限 |
+| 路径安全 | `.ktx-ui` 或 db 为符号链接 / 非目录 → 拒绝打开（`path_unsafe`） |
+| Schema 版本 | `PRAGMA user_version` + `schema_meta.schema_version`，当前 `1`；迁移幂等；更高版本拒绝降级（`schema_unsupported`） |
+| 读写保护 | `fs-safe.ts` 的 `assertReadable` / `resolveWritable` 拒绝 `security.sqlite(-wal|-shm|-journal)`（含符号链接解析后）；语义资产导出已跳过 `.ktx-ui`，不得作为通用 SQLite/运维问数数据源 |
+
+### 10.2 表
+
+| 表 | 要点 |
+|---|---|
+| `admin_account_state` | `account_uid` 主键、`display_id`、`session_epoch`、`status`（`enabled`/`disabled`/`tombstoned`）、凭据指纹；tombstone 后 UID 不可复用；停用/改密/墓碑会递增 epoch 并吊销该账号全部会话 |
+| `admin_sessions` | 主键为 jti 的 SHA-256；`issued_epoch`、`created_at`/`last_seen_at`/`absolute_expiry`、`revoked_at`；不存原始 Cookie、密码或 Token；校验要求未吊销、未过期、账号 enabled、epoch 一致 |
+| `bootstrap_state` | 单行；`open` → `consumed` 单向且原子，第二次消费冲突 |
+| `auth_rate_buckets` | `bucket_key`、`window_start`、`count`、`expires_at`；TTL 清理、数量上限（满则 fail-closed）；重启保留未到期桶 |
+| `role_id_tombstones` | 已删除 role id，禁止复用 |
+| `security_events` | `seq` 自增 + 唯一 `event_id`；`operation_id`、阶段、actor、可信网络信息、会话指纹、trace、policy/context 版本、对象哈希、裁决/结果摘要；**触发器禁止 UPDATE/DELETE**；无正文、凭据、过滤值 |
+| `projection_cursors` | `projector` → `last_seq`；只前进，且不得超过已落盘事件 |
+| `pending_operations` | `operation_id`、`kind`、`direction`（`narrow`/`widen`/`neutral`）、`state`（`pending`/`committed`/`aborted`/`needs_review`）、对象哈希、摘要；状态机：`pending → committed/aborted/needs_review`，`needs_review → committed/aborted`，其余终态 |
+
+### 10.3 失败语义（fail-closed）
+
+- 所有 store 方法返回 `SecurityResult`：成功 `{ok:true,value}`；存储失败 `{ok:false, code:"SECURITY_STORE_UNAVAILABLE", reason}`（`path_unsafe` / `permission` / `open_failed` / `schema_unsupported` / `schema_corrupt` / `busy` / `readonly` / `capacity` / `closed` / `io_error`）；业务冲突 `SECURITY_CONFLICT` / `SECURITY_NOT_FOUND`。
+- 绝不创建内存或空 fallback 库；损坏或更高版本的既有库原样保留，供运维处理。
+- 调用方（T02+）遇 unavailable 必须拒绝（登录/引导 503），不得退回放行或无限尝试。
+
+### 10.4 pending 操作恢复（`recovery.ts`）
+
+D2：先写安全库，再改配置文件。`prepareOperation` 在副作用前落盘；崩溃后 `recoverPendingOperations(store, inspect)` 依据调用方提供的证据处理：
+
+| 证据 | narrow / neutral | widen |
+|---|---|---|
+| `not_applied` | abort | abort |
+| `applied` | 前滚 commit | `needs_review`（恢复流程不自动确认更宽权限，`holdWidening=true`） |
+| `unknown` / 检查失败 | 保持 `pending` | 保持 `pending`，`holdWidening=true` |
+
+pending 永不视为成功。`recoverProjectionCursor` 处理“已投影、游标未提交”：只前进到投影端可证明的位置，且不越过已落盘事件；`lag>0` 时 `complete=false`。
+
+
 ---
 _架构设计 by Claude (architect) · 2026-06-15_

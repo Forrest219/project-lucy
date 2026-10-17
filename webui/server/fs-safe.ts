@@ -29,6 +29,17 @@ const ROOT_PREFIXES = [".ktx-ui", "webui/config"] as const;
 const DENY = [".ktx/secrets", "raw-sources", ".git"];
 const ROOT_FILES = ["ktx.yaml"];
 
+/**
+ * Durable security state (Spec §2, ADR D1): `.ktx-ui/security.sqlite` plus its
+ * WAL/SHM/journal sidecars are never readable or writable as an asset.
+ */
+const SECURITY_STATE_NAME_RE = /^security\.sqlite(-wal|-shm|-journal)?$/i;
+
+function isSecurityStatePath(relPath: string): boolean {
+  const parts = relPath.split("/");
+  return parts[0] === ".ktx-ui" && parts.length >= 2 && SECURITY_STATE_NAME_RE.test(parts[parts.length - 1]);
+}
+
 export class ForbiddenPathError extends Error {
   code = "FORBIDDEN_PATH";
   statusCode = 403;
@@ -126,6 +137,9 @@ async function resolveRootTarget(projectRoot: string, normalized: string): Promi
     throw new ForbiddenPathError("Resolved path escapes the project root");
   }
   const targetRel = path.relative(rootReal, target).replaceAll(path.sep, "/");
+  if (isSecurityStatePath(targetRel)) {
+    throw new ForbiddenPathError(`Writing ${targetRel} is forbidden`);
+  }
   if (!matchesPrefix(targetRel, ROOT_PREFIXES) && !ROOT_FILES.includes(targetRel)) {
     throw new ForbiddenPathError(`Resolved path ${targetRel} is not writable`);
   }
@@ -151,7 +165,7 @@ export async function resolveWritable(
   relPath: string
 ): Promise<string> {
   const normalized = normalizeRelative(relPath);
-  if (matchesPrefix(normalized, DENY)) {
+  if (matchesPrefix(normalized, DENY) || isSecurityStatePath(normalized)) {
     throw new ForbiddenPathError(`Writing ${normalized} is forbidden`);
   }
 
@@ -371,7 +385,7 @@ export async function assertReadable(
   relPath: string
 ): Promise<string> {
   const normalized = normalizeRelative(relPath);
-  if (matchesPrefix(normalized, [".ktx/secrets"])) {
+  if (matchesPrefix(normalized, [".ktx/secrets"]) || isSecurityStatePath(normalized)) {
     throw new ForbiddenPathError(`Reading ${normalized} is forbidden`);
   }
 
@@ -384,7 +398,7 @@ export async function assertReadable(
   }
 
   const targetRel = path.relative(baseReal, target).replaceAll(path.sep, "/");
-  if (matchesPrefix(targetRel, [".ktx/secrets"])) {
+  if (matchesPrefix(targetRel, [".ktx/secrets"]) || isSecurityStatePath(targetRel)) {
     throw new ForbiddenPathError(`Reading ${targetRel} is forbidden`);
   }
 
