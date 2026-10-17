@@ -7,8 +7,10 @@ import { admitMcpRequest, MCP_UPSTREAM_PATH, type AdmissionAudit, type AdmittedR
 import {
   clearUpstreamSession,
   getUpstreamSession,
+  ownsUpstreamSession,
   setUpstreamSession,
-  upstreamSessionKeepaliveEnabled
+  upstreamSessionKeepaliveEnabled,
+  upstreamSessionOwner
 } from "./upstream-session.js";
 import { extractRequestClientMeta, resolveClientIdentity } from "./request-client-meta.js";
 import { ensureSkillAuditReady, writeLog, writeAccessLogSources, writeConversationTurn, purgeExpiredConversationTurns, bindPriorSessionCalls, type AccessLogSourceRecord } from "./audit.js";
@@ -221,6 +223,33 @@ function forwardToUpstream(
   });
 }
 
+/**
+ * T04-2 — the client's `Mcp-Session-Id` is only honoured when this (Agent,
+ * Token) was issued it. Anything else is dropped before forwarding, so a
+ * borrowed id cannot reach another caller's KTX session; the gateway then
+ * supplies the caller's own default session instead.
+ */
+function headersWithOwnedSession(
+  identity: Identity,
+  headers: IncomingMessage["headers"]
+): IncomingMessage["headers"] {
+  const owner = upstreamSessionOwner(identity);
+  if (ownsUpstreamSession(owner, normalizeHeader(headers["mcp-session-id"]))) return headers;
+  const scoped: IncomingMessage["headers"] = { ...headers };
+  for (const key of Object.keys(scoped)) {
+    if (key.toLowerCase() === "mcp-session-id") delete scoped[key];
+  }
+  return scoped;
+}
+
+/** Session id to send upstream for a non-`initialize` request, or none. */
+function resolveOutboundSession(identity: Identity, headers: IncomingMessage["headers"]): string | undefined {
+  const owner = upstreamSessionOwner(identity);
+  const clientSessionId = normalizeHeader(headers["mcp-session-id"]);
+  if (ownsUpstreamSession(owner, clientSessionId)) return clientSessionId;
+  return upstreamSessionKeepaliveEnabled() ? getUpstreamSession(owner) : undefined;
+}
+
 function readUpstreamBody(upstream: IncomingMessage): Promise<string> {
   return (async () => {
     const chunks: Buffer[] = [];
@@ -268,7 +297,7 @@ async function handshakeUpstreamSession(identity: Identity): Promise<string | un
   const initializedResponse = await forwardToKtx("POST", "/mcp", handshakeHeaders, initializedBody, sessionId);
   await readUpstreamBody(initializedResponse);
 
-  setUpstreamSession(identity.userId, sessionId);
+  setUpstreamSession(upstreamSessionOwner(identity), sessionId);
   return sessionId;
 }
 
@@ -324,14 +353,15 @@ async function forwardToKtxWithSession(
   body: Buffer | undefined
 ): Promise<SessionAwareUpstream> {
   const keepalive = upstreamSessionKeepaliveEnabled();
-  const session = emptyUpstreamSessionState(Boolean(normalizeHeader(incomingHeaders["mcp-session-id"])));
+  const clientSessionId = normalizeHeader(incomingHeaders["mcp-session-id"]);
+  const session = emptyUpstreamSessionState(Boolean(clientSessionId));
   // Lazy on purpose: a client that completed `initialize` already has a cached
   // session, so the normal path costs no extra upstream round-trip. The
   // handshake only runs once KTX actually refuses the request.
-  const sessionId = keepalive ? getUpstreamSession(identity.userId) : undefined;
-  session.gatewaySupplied = Boolean(sessionId) && !session.clientSupplied;
+  const sessionId = resolveOutboundSession(identity, incomingHeaders);
+  session.gatewaySupplied = Boolean(sessionId) && sessionId !== clientSessionId;
 
-  let upstream = await forwardToKtx(method, url, incomingHeaders, body, sessionId);
+  let upstream = await forwardToKtx(method, url, headersWithOwnedSession(identity, incomingHeaders), body, sessionId);
   let upstreamBody = await readUpstreamBody(upstream);
   if (!keepalive) return { upstream, body: upstreamBody, session };
 
@@ -343,7 +373,7 @@ async function forwardToKtxWithSession(
   );
   if (!refused) return { upstream, body: upstreamBody, session };
 
-  clearUpstreamSession(identity.userId);
+  if (sessionId) clearUpstreamSession(upstreamSessionOwner(identity), sessionId);
   session.handshakeAttempted = true;
   const freshSession = await handshakeUpstreamSession(identity).catch(() => undefined);
   if (!freshSession) {
@@ -4214,7 +4244,7 @@ async function buildDenialRepairPayload(
   try {
     if (rpcMethod === "initialize") {
       // `initialize` is what establishes the session; never inject one into it.
-      upstream = await forwardToKtx(req.method ?? "POST", MCP_UPSTREAM_PATH, req.headers, outboundBody);
+      upstream = await forwardToKtx(req.method ?? "POST", MCP_UPSTREAM_PATH, headersWithOwnedSession(identity, req.headers), outboundBody);
       upstreamBody = await readUpstreamBody(upstream);
     } else if (bufferedUpstream) {
       const forwarded = await forwardToKtxWithSession(
@@ -4231,16 +4261,16 @@ async function buildDenialRepairPayload(
       upstream = await forwardToKtx(
         req.method ?? "POST",
         MCP_UPSTREAM_PATH,
-        req.headers,
+        headersWithOwnedSession(identity, req.headers),
         outboundBody,
-        upstreamSessionKeepaliveEnabled() ? getUpstreamSession(identity.userId) : undefined
+        resolveOutboundSession(identity, req.headers)
       );
     }
   } catch (err) {
     if (rpcMethod === "initialize") {
       // The client gets a 200 but KTX holds no session, so anything cached for
-      // this user is stale; drop it and let the next data call re-handshake.
-      clearUpstreamSession(identity.userId);
+      // this Token is stale; drop it and let the next data call re-handshake.
+      clearUpstreamSession(upstreamSessionOwner(identity));
       const instructions = instructionsInjectionEnabled() ? await buildRoleAwareInstructions(identity) : undefined;
       const payload = localInitializePayload(requestId, instructions);
       const responseBody = JSON.stringify(payload);
@@ -4391,7 +4421,7 @@ async function buildDenialRepairPayload(
     // Hold the session KTX just created, so a client that does not retain
     // `Mcp-Session-Id` still reaches KTX-bound tools on its next call.
     if (responseSessionId && (upstream.statusCode ?? 200) < 400) {
-      setUpstreamSession(identity.userId, responseSessionId);
+      setUpstreamSession(upstreamSessionOwner(identity), responseSessionId);
     }
     if (responseSessionId) requestMeta.lucySessionId = responseSessionId;
     if (responseSessionId && initializeClientInfo) {
@@ -4733,12 +4763,18 @@ async function buildDenialRepairPayload(
 
 async function handlePassthrough(req: IncomingMessage, res: ServerResponse, admitted: AdmittedRequest): Promise<void> {
   const { identity } = admitted;
-  const keepalive = upstreamSessionKeepaliveEnabled();
-  const heldSession = keepalive ? getUpstreamSession(identity.userId) : undefined;
+  const heldSession = resolveOutboundSession(identity, req.headers);
   // `DELETE /mcp` terminates the MCP session; a cached id would otherwise be
   // replayed on the next data call against a session KTX has already dropped.
-  if (keepalive && req.method === "DELETE") clearUpstreamSession(identity.userId);
-  const upstream = await forwardToKtx(req.method ?? "GET", MCP_UPSTREAM_PATH, req.headers, undefined, heldSession);
+  // Only a session this Token holds can be terminated here.
+  if (heldSession && req.method === "DELETE") clearUpstreamSession(upstreamSessionOwner(identity), heldSession);
+  const upstream = await forwardToKtx(
+    req.method ?? "GET",
+    MCP_UPSTREAM_PATH,
+    headersWithOwnedSession(identity, req.headers),
+    undefined,
+    heldSession
+  );
   pipeResponse(upstream, res);
 }
 
@@ -4779,7 +4815,7 @@ export async function forwardAuthorizedLucyQuery(
   if (!decision.allowed) return { ok: false, reason: decision.reason ?? "acl_denied" };
   const outbound = decision.forcedFilters ? { ...args, forced_filters: decision.forcedFilters } : args;
   try {
-    const sessionId = getUpstreamSession(identity.userId) ?? await handshakeUpstreamSession(identity);
+    const sessionId = getUpstreamSession(upstreamSessionOwner(identity)) ?? await handshakeUpstreamSession(identity);
     if (!sessionId) return { ok: false, reason: "execution_interrupted" };
     const body = Buffer.from(JSON.stringify({
       jsonrpc: "2.0",
