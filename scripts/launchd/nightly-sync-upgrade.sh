@@ -31,9 +31,18 @@
 #   LUCY_NIGHTLY_MAX_FILE_BYTES     默认 5242880（5 MiB）；单个暂存文件超过即中止
 #   LUCY_NIGHTLY_MAX_FILES          默认 300；一次暂存文件数超过即中止
 #   LUCY_NIGHTLY_DOCKER_TIMEOUT     默认 300 秒；等待 Docker Desktop 就绪
-#   LUCY_NIGHTLY_PROXY              默认 http://127.0.0.1:7890；直连失败且该端口在监听时，git 网络操作重试一次走代理
+#   LUCY_NIGHTLY_PROXY              默认 http://127.0.0.1:7890（TaiShanNet）；git 网络操作优先走它
 #   LUCY_NIGHTLY_KEEP_BACKUPS       默认 7；inbox/backups/nightly 下保留的 volume 备份数
 #   LUCY_NIGHTLY_NOTIFY             默认 1；失败时发 macOS 通知
+#   LUCY_NIGHTLY_PROXY_APP          默认 TaiShanNet；代理端口不在监听时 `open -a` 拉起它
+#   LUCY_NIGHTLY_PROXY_WAIT         默认 60；拉起代理后等端口的秒数
+#   LUCY_NIGHTLY_RETRY_DELAYS       默认 "0 120 300 600"；联网检查（git ls-remote，先代理、后直连兜底）
+#                                   每轮之前等待的秒数；检查通过才 fetch/pull/push
+#   LUCY_NIGHTLY_CHECK_TIMEOUT      默认 30；单次 ls-remote 检查硬上限（秒）
+#   LUCY_NIGHTLY_ATTEMPT_TIMEOUT    默认 180；单次 fetch/pull/push 硬上限（秒），另有 lowSpeedTime=30；
+#                                   失败后 30s/60s 再试，代理与直连交替
+#   系统代理始终不动（保持关闭）；代理只按命令通过 https_proxy 环境变量生效
+#   LUCY_NIGHTLY_NET_BUDGET         默认 1800；从启动算起，git 网络重试总预算（秒），超出不再重试
 set -Euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -65,6 +74,13 @@ DOCKER_TIMEOUT="${LUCY_NIGHTLY_DOCKER_TIMEOUT:-300}"
 PROXY_URL="${LUCY_NIGHTLY_PROXY:-http://127.0.0.1:7890}"
 KEEP_BACKUPS="${LUCY_NIGHTLY_KEEP_BACKUPS:-7}"
 NOTIFY="${LUCY_NIGHTLY_NOTIFY:-1}"
+RETRY_DELAYS="${LUCY_NIGHTLY_RETRY_DELAYS:-0 120 300 600}"
+ATTEMPT_TIMEOUT="${LUCY_NIGHTLY_ATTEMPT_TIMEOUT:-180}"
+NET_BUDGET="${LUCY_NIGHTLY_NET_BUDGET:-1800}"
+CHECK_TIMEOUT="${LUCY_NIGHTLY_CHECK_TIMEOUT:-30}"
+PROXY_APP="${LUCY_NIGHTLY_PROXY_APP:-TaiShanNet}"
+PROXY_WAIT="${LUCY_NIGHTLY_PROXY_WAIT:-60}"
+RUN_START="$(date +%s)"
 BACKUP_REL="inbox/backups/nightly"
 STATE_FILE="$LOG_DIR/last-upgraded-commit"
 LOCK_DIR="$LOG_DIR/.lock"
@@ -131,17 +147,99 @@ proxy_listening() {
   /usr/sbin/lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1
 }
 
-# Run a git network command; on failure retry once through the local proxy if it is listening.
-git_net() {
-  if git "$@"; then return 0; fi
-  # A conflict is not a network error: never retry while a rebase/merge is stopped.
-  if git_busy_reason >/dev/null; then return 1; fi
-  if [ -n "$PROXY_URL" ] && proxy_listening; then
-    log "git $1 failed direct; retrying via local proxy"
-    git -c http.proxy="$PROXY_URL" -c https.proxy="$PROXY_URL" "$@"
-    return $?
-  fi
+# ---------- network: TaiShanNet proxy first, direct only as fallback ----------
+# The macOS system proxy stays OFF; the proxy is applied per command only (https_proxy env).
+NET_MODE=""   # proxy|direct, decided by net_ready()
+
+ensure_proxy() {
+  [ -n "$PROXY_URL" ] || return 1
+  if proxy_listening; then log "proxy $PROXY_URL listening"; return 0; fi
+  log "proxy $PROXY_URL not listening; launching $PROXY_APP"
+  /usr/bin/open -a "$PROXY_APP" >/dev/null 2>&1 || { log "WARN open -a $PROXY_APP failed"; return 1; }
+  local waited=0
+  while [ "$waited" -lt "$PROXY_WAIT" ]; do
+    sleep 3; waited=$((waited + 3))
+    if proxy_listening; then log "proxy up after ${waited}s"; sleep 3; return 0; fi
+  done
+  log "WARN proxy still not listening after ${PROXY_WAIT}s"
   return 1
+}
+
+# run_git_mode <proxy|direct> <timeout-seconds> git-args...  (proxy only for this command)
+run_git_mode() {
+  local mode="$1" cap="$2"; shift 2
+  if [ "$mode" = "proxy" ]; then
+    env -u http_proxy -u HTTP_PROXY -u all_proxy -u ALL_PROXY \
+      https_proxy="$PROXY_URL" HTTPS_PROXY="$PROXY_URL" \
+      perl -e 'alarm shift; exec @ARGV or exit 127' "$cap" \
+      git -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=30 "$@"
+  else
+    env -u https_proxy -u HTTPS_PROXY -u http_proxy -u HTTP_PROXY -u all_proxy -u ALL_PROXY \
+      perl -e 'alarm shift; exec @ARGV or exit 127' "$cap" \
+      git -c http.proxy= -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=30 "$@"
+  fi
+}
+
+# Connectivity gate before any network git step: `git ls-remote --heads origin` through the
+# proxy (fallback: direct), retried on LUCY_NIGHTLY_RETRY_DELAYS within the network budget.
+net_ready() {
+  local n=0 total delay elapsed t0 rc
+  total="$(echo $RETRY_DELAYS | wc -w | tr -d ' ')"
+  for delay in $RETRY_DELAYS; do
+    n=$((n + 1))
+    elapsed=$(( $(date +%s) - RUN_START ))
+    if [ "$n" -gt 1 ] && [ $((elapsed + delay + 2 * CHECK_TIMEOUT)) -gt "$NET_BUDGET" ]; then
+      log "net check: stop, next attempt would exceed budget ${NET_BUDGET}s (elapsed ${elapsed}s)"; break
+    fi
+    if [ "$delay" -gt 0 ]; then log "net check: waiting ${delay}s before attempt $n/$total"; sleep "$delay"; fi
+    if ensure_proxy; then
+      t0="$(date +%s)"
+      run_git_mode proxy "$CHECK_TIMEOUT" ls-remote --heads origin >/dev/null 2>"$NET_ERR"; rc=$?
+      if [ "$rc" -eq 0 ]; then
+        log "net check: attempt $n/$total via proxy OK ($(( $(date +%s) - t0 ))s)"; NET_MODE=proxy; return 0
+      fi
+      log "net check: attempt $n/$total via proxy FAILED exit=$rc ($(( $(date +%s) - t0 ))s): $( [ "$rc" -eq 142 ] && echo "timeout ${CHECK_TIMEOUT}s" || grep -v "Alarm clock" "$NET_ERR" | tail -1)"
+    fi
+    t0="$(date +%s)"
+    run_git_mode direct "$CHECK_TIMEOUT" ls-remote --heads origin >/dev/null 2>"$NET_ERR"; rc=$?
+    if [ "$rc" -eq 0 ]; then
+      log "net check: attempt $n/$total via direct (fallback) OK ($(( $(date +%s) - t0 ))s)"; NET_MODE=direct; return 0
+    fi
+    log "net check: attempt $n/$total via direct FAILED exit=$rc ($(( $(date +%s) - t0 ))s): $( [ "$rc" -eq 142 ] && echo "timeout ${CHECK_TIMEOUT}s" || grep -v "Alarm clock" "$NET_ERR" | tail -1)"
+  done
+  log "net check: GitHub unreachable via proxy and direct; no fetch/pull/push"
+  return 1
+}
+
+# git_net <git-args...>: fetch / pull / push using NET_MODE, with up to 3 attempts
+# (0 / 30 / 60 s), alternating to the other mode after a failure. Stops early on
+# non-network failures (rebase conflict, rejected push, auth).
+git_net() {
+  local n=0 delay mode="${NET_MODE:-proxy}" other rc out t0
+  out="$(mktemp -t lucy-nightly-git)"
+  for delay in 0 30 60; do
+    n=$((n + 1))
+    if [ $(( $(date +%s) - RUN_START + delay + ATTEMPT_TIMEOUT )) -gt "$NET_BUDGET" ] && [ "$n" -gt 1 ]; then
+      log "git $1: stop retrying, network budget ${NET_BUDGET}s"; break
+    fi
+    [ "$delay" -gt 0 ] && { log "git $1: waiting ${delay}s before attempt $n/3"; sleep "$delay"; }
+    if [ "$mode" = "proxy" ] && ! ensure_proxy; then mode=direct; fi
+    t0="$(date +%s)"
+    log "git $1: attempt $n/3 via $mode"
+    run_git_mode "$mode" "$ATTEMPT_TIMEOUT" "$@" >"$out" 2>&1; rc=$?
+    cat "$out"
+    if [ "$rc" -eq 0 ]; then
+      log "git $1: attempt $n/3 via $mode OK ($(( $(date +%s) - t0 ))s)"; rm -f "$out"; return 0
+    fi
+    [ "$rc" -eq 142 ] && log "git $1: attempt $n killed after ${ATTEMPT_TIMEOUT}s cap"
+    log "git $1: attempt $n/3 via $mode FAILED exit=$rc ($(( $(date +%s) - t0 ))s)"
+    if git_busy_reason >/dev/null || grep -Eq '\[rejected\]|non-fast-forward|CONFLICT|Authentication failed|could not apply|unmerged files' "$out"; then
+      log "git $1: non-network failure, not retrying"; rm -f "$out"; return 1
+    fi
+    if [ "$mode" = "proxy" ]; then other=direct; else other=proxy; fi
+    mode="$other"
+  done
+  rm -f "$out"; log "git $1: all attempts failed"; return 1
 }
 
 # Secret scan of what is staged in the index given by GIT_INDEX_FILE (or the real index).
@@ -318,6 +416,9 @@ git_step() {
   fi
   log "remote target: origin/$up_branch (upstream: ${upstream:-none})"
 
+  NET_ERR="$(mktemp -t lucy-nightly-net)"
+  if ! net_ready; then rm -f "$NET_ERR"; notify "GitHub unreachable, nightly skipped push/upgrade"; GIT_OK=0; return 1; fi
+  rm -f "$NET_ERR"
   git_net fetch --quiet origin || { log "ERROR git fetch failed"; GIT_OK=0; return 1; }
   if git show-ref --verify --quiet "refs/remotes/origin/$up_branch"; then
     set -- $(git rev-list --left-right --count "HEAD...origin/$up_branch")
