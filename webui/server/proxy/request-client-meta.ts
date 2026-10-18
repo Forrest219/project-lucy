@@ -80,6 +80,13 @@ const KNOWN_CLIENT_FAMILIES: FamilyPattern[] = [
   { client: "claude-code", pattern: /^([\w.\-]*claude-code)\/([\w.\-]+)/i }
 ];
 
+/** MCP `clientInfo.name` values that name Lucy itself, not the product in use. */
+const LUCY_SELF_NAMES = new Set(["lucy", "lucy-mcp-proxy"]);
+
+function isLucySelfName(name: string | undefined): boolean {
+  return Boolean(name && LUCY_SELF_NAMES.has(name.trim().toLowerCase()));
+}
+
 export function userAgentParsingEnabled(): boolean {
   return process.env.LUCY_USER_AGENT_PARSE !== "off";
 }
@@ -107,20 +114,79 @@ export function parseKnownClientFamily(userAgent: string | null | undefined): Kn
   return null;
 }
 
+export type ResolvedClientIdentity = {
+  client?: string;
+  clientVersion?: string;
+  /** MCP `clientInfo` name, kept when it differs from the product shown in `client`. */
+  reportedClient?: string;
+  reportedClientVersion?: string;
+};
+
 /**
- * SC-22 — structured `client` / `client_version` win. When they are empty the
- * User-Agent family is used. A still-empty client stays empty.
+ * A known User-Agent product wins when the MCP client reports nothing, or only
+ * Lucy's own placeholder (`lucy` / `lucy-mcp-proxy`). Any other self-reported
+ * name wins, including `hermes`, `p`, and `probe`. An unknown User-Agent such
+ * as `undici` or `Python-urllib` is never guessed into a product.
  */
 export function resolveClientIdentity(input: {
   client?: string | null;
   clientVersion?: string | null;
   userAgent?: string | null;
-}): { client?: string; clientVersion?: string } {
-  const client = input.client?.trim();
-  if (client) {
-    return { client, clientVersion: input.clientVersion?.trim() || undefined };
+}): ResolvedClientIdentity {
+  const reportedClient = input.client?.trim() || undefined;
+  const reportedClientVersion = input.clientVersion?.trim() || undefined;
+  const family = parseKnownClientFamily(input.userAgent);
+  if (family && (!reportedClient || isLucySelfName(reportedClient))) {
+    return {
+      client: family.client,
+      clientVersion: family.clientVersion,
+      ...(reportedClient ? { reportedClient, reportedClientVersion } : {})
+    };
   }
-  return parseKnownClientFamily(input.userAgent) ?? {};
+  if (reportedClient) {
+    return {
+      client: reportedClient,
+      clientVersion: reportedClientVersion,
+      reportedClient,
+      reportedClientVersion
+    };
+  }
+  return family ? { client: family.client, clientVersion: family.clientVersion } : {};
+}
+
+export type StoredClientRow = {
+  client?: string | null;
+  clientVersion?: string | null;
+  client_version?: string | null;
+  userAgent?: string | null;
+  user_agent?: string | null;
+  reportedClient?: string | null;
+  reported_client?: string | null;
+  reportedClientVersion?: string | null;
+  reported_client_version?: string | null;
+};
+
+/**
+ * Display rule for a stored audit row. New rows keep the product already
+ * written in `client` and the raw self-report in `reported_client`. Older rows
+ * have a null self-report column, so the same resolver runs at read time.
+ */
+export function presentStoredClient(row: StoredClientRow): ResolvedClientIdentity {
+  const storedReported = (row.reported_client ?? row.reportedClient)?.trim() || undefined;
+  const storedReportedVersion = (row.reported_client_version ?? row.reportedClientVersion)?.trim() || undefined;
+  if (storedReported) {
+    return {
+      client: row.client?.trim() || undefined,
+      clientVersion: (row.client_version ?? row.clientVersion)?.trim() || undefined,
+      reportedClient: storedReported,
+      reportedClientVersion: storedReportedVersion
+    };
+  }
+  return resolveClientIdentity({
+    client: row.client,
+    clientVersion: row.client_version ?? row.clientVersion,
+    userAgent: row.user_agent ?? row.userAgent
+  });
 }
 
 export type RequestClientMeta = {

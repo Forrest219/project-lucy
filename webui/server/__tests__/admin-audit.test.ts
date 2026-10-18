@@ -559,7 +559,7 @@ describe("GET /api/admin/audit/turns", () => {
       expect(csvRes.text.charCodeAt(0)).toBe(0xFEFF);
       const csvBody = csvRes.text.replace(/^\uFEFF/, "");
       const [headerLine, firstDataLine] = csvBody.split("\n");
-      expect(headerLine).toBe("问询 ID,来源,Agent,客户端,会话 ID,开始时间,开始时间 UTC,结束时间,结束时间 UTC,问询时长,问询摘要,关联调用数,工具调用数,涉及工具,涉及数据表,总调用耗时,最大调用耗时,慢调用数,成功次数,拒绝次数,错误次数");
+      expect(headerLine).toBe("问询 ID,来源,Agent,客户端,会话 ID,开始时间,开始时间 UTC,结束时间,结束时间 UTC,问询时长,问询摘要,关联调用数,工具调用数,涉及工具,涉及数据表,总调用耗时,最大调用耗时,慢调用数,成功次数,拒绝次数,错误次数,自报客户端,自报客户端版本");
       const turnHeaders = parseCsvLine(headerLine);
       const turnCells = parseCsvLine(firstDataLine);
       expect(turnCells[turnHeaders.indexOf("开始时间")]).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
@@ -915,6 +915,64 @@ describe("GET /api/admin/audit/turns", () => {
       const tools = filtered.body.data.entries.map((row: { tool: string }) => row.tool);
       expect(tools).toContain("initialize");
       expect(tools.filter((tool: string) => tool === "tools/list")).toHaveLength(1);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("shows workbuddy for a lucy self-report when the User-Agent is WorkBuddy", async () => {
+    const { writeLog } = await import("../proxy/audit");
+    await writeLog({
+      ts: new Date().toISOString(),
+      userId: "wb-display-user",
+      tool: "initialize",
+      outcome: "ok",
+      durationMs: 1,
+      requestId: "wb-display-init",
+      lucySessionId: "wb-display-session",
+      client: "lucy",
+      clientVersion: "1.0.0",
+      userAgent: "WorkBuddy/5.8.3"
+    });
+
+    const { buildServer } = await import("../index");
+    const app = buildServer();
+    await app.ready();
+    try {
+      const turns = await request(app.server)
+        .get("/api/admin/audit/turns?user=wb-display-user&source=inferred")
+        .expect(200);
+      expect(turns.body.data.entries).toHaveLength(1);
+      expect(turns.body.data.entries[0]).toMatchObject({
+        client: "workbuddy",
+        reportedClient: "lucy",
+        reportedClientVersion: "1.0.0",
+        questionSummary: "会话建立：workbuddy"
+      });
+
+      const calls = await request(app.server)
+        .get("/api/admin/audit?user=wb-display-user&includeProtocol=true")
+        .expect(200);
+      expect(calls.body.data.entries[0]).toMatchObject({
+        client: "workbuddy",
+        clientVersion: "5.8.3",
+        reportedClient: "lucy",
+        reportedClientVersion: "1.0.0",
+        userAgent: "WorkBuddy/5.8.3"
+      });
+
+      const exported = await request(app.server)
+        .get("/api/admin/audit/export?user=wb-display-user&includeProtocol=true")
+        .expect(200);
+      const lines = exported.text.replace(/^\uFEFF/, "").trim().split("\n");
+      const headers = parseCsvLine(lines[0]!);
+      expect(headers.slice(-2)).toEqual(["reported_client", "reported_client_version"]);
+      expect(headers.indexOf("client")).toBeLessThan(headers.indexOf("reported_client"));
+      const cells = parseCsvLine(lines[1]!);
+      expect(cells[headers.indexOf("client")]).toBe("workbuddy");
+      expect(cells[headers.indexOf("client_version")]).toBe("5.8.3");
+      expect(cells[headers.indexOf("reported_client")]).toBe("lucy");
+      expect(cells[headers.indexOf("reported_client_version")]).toBe("1.0.0");
     } finally {
       await app.close();
     }

@@ -7,6 +7,7 @@ import { auditedWriteFile } from "./config-audit-write.js";
 import { resolveProjectRoot } from "../project.js";
 import { previewDiff } from "../diff.js";
 import { getAuditDb, type ConfigAuditActorType } from "./audit.js";
+import { presentStoredClient } from "../proxy/request-client-meta.js";
 import { build7dWindow } from "./metric-window.js";
 import { expandTemplate } from "./role-templates.js";
 import {
@@ -500,14 +501,15 @@ export async function getLastUsedMap(
       if (!result.has(row.user_id)) result.set(row.user_id, new Map());
       const byToken = result.get(row.user_id);
       if (!byToken || byToken.has(row.token_hash_prefix)) continue;
+      const shown = presentStoredClient(row);
       byToken.set(row.token_hash_prefix, {
         lastUsed: row.ts,
         lastTool: row.tool,
         lastOutcome: row.outcome,
         lastIp: row.client_ip,
         lastUserAgent: row.user_agent,
-        lastClient: row.client,
-        lastClientVersion: row.client_version,
+        lastClient: shown.client ?? row.client,
+        lastClientVersion: shown.clientVersion ?? row.client_version,
         lastDeviceNameSeen: row.device_name
       });
     }

@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import {
   extractForwardedFor,
   parseKnownClientFamily,
+  presentStoredClient,
   resolveClientIdentity,
   trustProxyEnabled,
   userAgentParsingEnabled,
@@ -48,7 +49,88 @@ describe("client and origin (SC-22)", () => {
       client: "hermes",
       clientVersion: "2.0",
       userAgent: "kscc-code/1.3.7 (cli)"
-    })).toEqual({ client: "hermes", clientVersion: "2.0" });
+    })).toEqual({
+      client: "hermes",
+      clientVersion: "2.0",
+      reportedClient: "hermes",
+      reportedClientVersion: "2.0"
+    });
+  });
+
+  it("uses the WorkBuddy product when the self-report is a Lucy placeholder", () => {
+    expect(resolveClientIdentity({
+      client: "lucy",
+      clientVersion: "1.0.0",
+      userAgent: "WorkBuddy/5.8.3"
+    })).toEqual({
+      client: "workbuddy",
+      clientVersion: "5.8.3",
+      reportedClient: "lucy",
+      reportedClientVersion: "1.0.0"
+    });
+    expect(resolveClientIdentity({
+      client: "Lucy-MCP-Proxy",
+      clientVersion: "1.0.0",
+      userAgent: "WorkBuddy/5.8.3"
+    })).toEqual({
+      client: "workbuddy",
+      clientVersion: "5.8.3",
+      reportedClient: "Lucy-MCP-Proxy",
+      reportedClientVersion: "1.0.0"
+    });
+  });
+
+  it("does not guess Python-urllib, undici, p, or probe into WorkBuddy", () => {
+    expect(resolveClientIdentity({
+      client: "p",
+      clientVersion: "1",
+      userAgent: "Python-urllib/3.13"
+    })).toEqual({
+      client: "p",
+      clientVersion: "1",
+      reportedClient: "p",
+      reportedClientVersion: "1"
+    });
+    expect(resolveClientIdentity({
+      client: "probe",
+      clientVersion: "1.0",
+      userAgent: "Python-urllib/3.13"
+    }).client).toBe("probe");
+    expect(resolveClientIdentity({
+      client: "lucy",
+      clientVersion: "1.0.0",
+      userAgent: "undici"
+    })).toEqual({
+      client: "lucy",
+      clientVersion: "1.0.0",
+      reportedClient: "lucy",
+      reportedClientVersion: "1.0.0"
+    });
+  });
+
+  it("keeps a stored product name and the separate self-report", () => {
+    expect(presentStoredClient({
+      client: "workbuddy",
+      client_version: "5.8.3",
+      user_agent: "WorkBuddy/5.8.3",
+      reported_client: "lucy",
+      reported_client_version: "1.0.0"
+    })).toEqual({
+      client: "workbuddy",
+      clientVersion: "5.8.3",
+      reportedClient: "lucy",
+      reportedClientVersion: "1.0.0"
+    });
+    expect(presentStoredClient({
+      client: "lucy",
+      client_version: "1.0.0",
+      user_agent: "WorkBuddy/5.8.3"
+    })).toEqual({
+      client: "workbuddy",
+      clientVersion: "5.8.3",
+      reportedClient: "lucy",
+      reportedClientVersion: "1.0.0"
+    });
   });
 
   it("falls back to the User-Agent family when client is empty", () => {

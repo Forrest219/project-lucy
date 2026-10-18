@@ -456,9 +456,9 @@ function bindOpenSessionTurn(
 
 function recordAudit(entry: Parameters<typeof writeLog>[0], sources?: SourceRef[]): void {
   beginAuditWrite();
-  // Spec 162 §8 / SC-22 — when the structured client identity is empty, fall
-  // back to a known User-Agent family. An unknown family keeps `client` empty
-  // rather than guessing. `client_ip` is untouched: it stays the socket peer.
+  // A known User-Agent product replaces an empty name or Lucy's own placeholder.
+  // Other self-reported names stay. Unknown agents such as undici are not guessed.
+  // `client_ip` stays the socket peer.
   const resolved = resolveClientIdentity({
     client: entry.client,
     clientVersion: entry.clientVersion,
@@ -466,8 +466,10 @@ function recordAudit(entry: Parameters<typeof writeLog>[0], sources?: SourceRef[
   });
   const normalized: Parameters<typeof writeLog>[0] = {
     ...entry,
-    ...(resolved.client ? { client: resolved.client } : {}),
-    ...(resolved.clientVersion ? { clientVersion: resolved.clientVersion } : {})
+    client: resolved.client,
+    clientVersion: resolved.clientVersion,
+    reportedClient: resolved.reportedClient,
+    reportedClientVersion: resolved.reportedClientVersion
   };
   writeLog(normalized)
     .then((accessLogId) => {

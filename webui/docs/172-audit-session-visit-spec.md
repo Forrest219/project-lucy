@@ -5,7 +5,7 @@
 | 文档名称 | 访问日志按会话对账 |
 | 文档类型 | Product / Audit / API Spec |
 | Spec 编号 | 172 |
-| 版本 | v0.1 |
+| 版本 | v0.3 |
 | 撰写日期 | 2026-10-13 |
 | 委托人 | xingchen |
 | 状态 | 已实现 |
@@ -19,6 +19,7 @@
 |---|---|
 | v0.1 | 问询按 MCP 会话切开。推断问询 ID 改为首条调用 ID。未上报原文的握手仍有一条会话访问。同一次导出写出两份 CSV |
 | v0.2 | 由 Spec 173 实施。2 秒补绑改为同会话 120 秒。已上报调用不再另起推断问询。探测簇不进问询。工单 WO-202610-25 |
+| v0.3 | 已知产品的 User-Agent 覆盖空自报名、`lucy` 和 `lucy-mcp-proxy`。`client` 记产品名和 User-Agent 版本，自报名另记。旧行读取时现算，不回写 SQLite。`undici` 与 `Python-urllib` 仍不改写 |
 
 2026-10-13 批准：一次客户端访问必须能在访问日志里查到。问询 ID 不得因页面时间窗改变。Cursor 与 WorkBuddy 不得并成一条问询。
 
@@ -33,14 +34,14 @@
 3. 不同 `lucy_session_id` 不成同一条问询。空会话仍按间隔单独成簇。
 4. 同会话里、问询记下前 2 秒内的未归因非协议调用补到该问询，归因为 `session_bound`。`lucy_begin_question` 计入关联调用。
 5. 会话握手出现在该问询的详情里。默认调用流水仍不列出反复的 `tools/list`。按问询 ID 筛选时，能看到 `initialize`。
-6. 问询列表和问询 CSV 写出客户端与会话 ID。客户端名只用握手自报的 `clientInfo.name`。
+6. 问询列表和问询 CSV 写出客户端与会话 ID。自报名是空的、`lucy` 或 `lucy-mcp-proxy`，且 User-Agent 属于已知产品时，客户端名和版本用该产品；否则用握手自报的 `clientInfo.name`。自报名另记在 `reported_client`。
 7. 配对 zip 里的问询 CSV 与调用 CSV 来自同一次查询，调用上的问询 ID 都能在问询 CSV 里找到。
 
 ## 3. 非目标
 
 - 不新增 Spec 138 的归因枚举。仍是 `explicit` / `session_bound` / `identity_inferred` / `unassigned`。
 - 不因缺少 `lucy_begin_question` 拒绝查数。Spec 162 的这条保持。
-- 不根据 User-Agent 把 `undici` 改写成 WorkBuddy，也不根据 Token 备注推断使用人。
+- 不根据 User-Agent 把 `undici` 或 `Python-urllib` 改写成 WorkBuddy，也不根据 Token 备注推断使用人。自报名不是空、`lucy` 或 `lucy-mcp-proxy` 时，已知产品的 User-Agent 也不覆盖它。
 - 不把每一次 `tools/list` 放进默认调用流水。
 - 不改审计证据包 `/api/admin/audit/export-pack` 的文件结构。
 - 不回填旧的窗口序号 ID。下次重建起使用新 ID。
@@ -89,7 +90,7 @@ function rebuild(user):
   for each session whose only calls are HANDSHAKE:
     write one turn
     id = "inf_" + userId + "_" + first handshake access_log.id
-    summary = "会话建立：" + client from initialize, or "未知客户端"
+    summary = "会话建立：" + resolved client from initialize, or "未知客户端"
   page filter applies to started_at only and does not rebuild with a shorter lookback
 
 function onBeginQuestion(call):
@@ -118,7 +119,7 @@ function exportInquiryPack(filter):
 | 问询 | 客户端 | 会话 ID |
 |---|---|---|
 | 已上报问询 | `conversation_turns.client` | `conversation_turns.session_id` |
-| 推断问询 | 该会话 `initialize` 的 client；没有则用簇内第一条非空 client | `lucy_session_id` |
+| 推断问询 | 该会话 `initialize` 经同一客户端规则解析后的产品名；没有则用簇内第一条能解析出的客户端 | `lucy_session_id` |
 
 CSV 列加在 `Agent` 之后。配对 zip 仍由 `GET /api/admin/audit/export-inquiry-pack` 提供。页头不单列「导出问询与调用」；日常导出跟随当前页签。
 

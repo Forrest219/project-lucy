@@ -343,7 +343,7 @@ CREATE TABLE access_log (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
   ts            TEXT    NOT NULL,   -- ISO8601 UTC, e.g. "2026-06-18T00:30:00.000Z"
   user_id       TEXT    NOT NULL,   -- 'zhangsan'
-  client        TEXT,               -- 'hermes' | 'cursor'（从 initialize 握手的 clientInfo.name 抓）
+  client        TEXT,               -- 已知产品覆盖空名、lucy、lucy-mcp-proxy；其余用 initialize 的 clientInfo.name
   tool          TEXT    NOT NULL,   -- e.g. 'lucy_query'（历史日志可能含 sl_*）
   tables        TEXT,               -- JSON array: ["dataforai.superstore_orders"]
   args_summary  TEXT,               -- 精简入参 JSON（白名单字段，不含完整 rows）
@@ -628,7 +628,7 @@ webui/
 interface Identity {
   userId: string;
   tokenLabel: string;
-  client?: string;  // 从 session 缓存的 clientInfo.name
+  client?: string;  // 会话里的 clientInfo.name；审计展示时已知产品可覆盖 lucy 占位名
 }
 function identifyRequest(authHeader: string | undefined): Identity | null
 

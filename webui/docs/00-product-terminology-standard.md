@@ -509,10 +509,10 @@ Connection (连接)
 | Stats Snapshot Time | 统计时间 | — | 上次更新（本页主标签） | 三组 query 成功后的快照新鲜度；相对时间对齐系统概览；位于时间窗口切换左侧 |
 | Device Name Remark | 设备名备注 | 备注 | Device（裸露作主标签）、绑定设备（暗示硬件强绑定） | 签发时可选；不写 access_log；见 Spec 124 |
 | Last Seen Device Name | 最近设备名 | 运行时设备名 | 与备注混用为单一「设备名」 | 仅 `x-lucy-device-name`；见 Spec 124 |
-| Agent Client Type | Agent 类型 | 客户端 | Device 类型 | `clientInfo.name` + version |
+| Agent Client Type | Agent 类型 | 客户端 | Device 类型 | 自报名是空的、`lucy` 或 `lucy-mcp-proxy` 且 User-Agent 属于已知产品时用产品名，否则用 `initialize.clientInfo.name` |
 | Client IP | 访问 IP | 最近访问 IP | remoteAddress、XFF（裸露作主标签） | `access_log.client_ip`；Token 列表派生 `last_ip` |
 | User-Agent | User-Agent | UA | 浏览器指纹 | HTTP 头截断存储；DOM 值 `notranslate` |
-| Client Version | 客户端版本 | — | clientInfo.version（裸露） | MCP `initialize.clientInfo.version` |
+| Client Version | 客户端版本 | — | clientInfo.version（裸露） | 与客户端同一来源。已知产品覆盖占位名时用 User-Agent 里的版本 |
 | Token Device Inventory | Token 设备清单 | 设备视角 Token 列表 | 已登录设备、Sessions | Agent 详情 Token Tab |
 | Interface Usage View | 界面使用 | — | 埋点、telemetry、pageview | `?view=interface`；默认视图仍为数据访问（Spec 148） |
 | Data Access View | 数据访问 | — | 治理概览（作该视图名） | 使用概况默认视图 |

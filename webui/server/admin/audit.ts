@@ -19,7 +19,8 @@ import { getSecurityStore } from "../security/instance.js";
 import { runProjection, type ProjectionStatus } from "../security/projector.js";
 import { trustedActorFromRequest } from "../security/request-actor.js";
 import { redactAuditDiff, redactAuditSummary, redactAuditText } from "../security/redaction.js";
-import { rebuildInferredTurns, purgeExpiredConversationTurns, scrubAccessLogArgsSummaries, INFERRED_TURN_REBUILD_LOOKBACK_HOURS } from "../proxy/audit.js";
+import { rebuildInferredTurns, purgeExpiredConversationTurns, scrubAccessLogArgsSummaries, INFERRED_TURN_REBUILD_LOOKBACK_HOURS, sessionVisitSummary, SESSION_VISIT_SUMMARY_PREFIX } from "../proxy/audit.js";
+import { presentStoredClient, type ResolvedClientIdentity } from "../proxy/request-client-meta.js";
 import { buildStoredZip, sha256Hex } from "../proxy/zip-store.js";
 import { MCP_PLAYGROUND_PLATFORM } from "./mcp-playground.js";
 import { resolveLucyVersion } from "../lucy-version.js";
@@ -88,7 +89,9 @@ const ACCESS_LOG_COLUMNS = [
   ["skill_action", "TEXT"],
   ["skill_roles_allowed", "TEXT"],
   ["matched_role_id", "TEXT"],
-  ["is_slow_call", "INTEGER"]
+  ["is_slow_call", "INTEGER"],
+  ["reported_client", "TEXT"],
+  ["reported_client_version", "TEXT"]
 ] as const;
 const PERMISSION_SNAPSHOT_COLUMNS = [
   ["capability_digest", "TEXT"],
@@ -731,6 +734,8 @@ interface QueryRow {
   skill_action: "discover" | "read" | null;
   skill_roles_allowed: string | null;
   matched_role_id: string | null;
+  reported_client?: string | null;
+  reported_client_version?: string | null;
   /** Spec 162 SC-20 stored mark. Distinct from the P95 drill-down flag. */
   is_slow_call?: number | null;
   /** Joined at read time; only set when lucy_turn_id is empty. */
@@ -784,7 +789,9 @@ const ACCESS_LOG_CSV_HEADERS = [
   "skill_file_version",
   "skill_action",
   "skill_roles_allowed",
-  "matched_role_id"
+  "matched_role_id",
+  "reported_client",
+  "reported_client_version"
 ] as const;
 
 type CsvFieldMetadata = {
@@ -1077,14 +1084,27 @@ const ACCESS_LOG_FIELD_METADATA: Record<(typeof ACCESS_LOG_CSV_HEADERS)[number],
     format: "string|null",
     description: "同时满足对象授权与通道能力的 Role ID。",
     trigger: "Skill 裁决允许且存在闭合 Role 时输出。"
+  },
+  reported_client: {
+    label: "自报客户端",
+    format: "string|null",
+    description: "MCP initialize 的 clientInfo.name。客户端列改用已知产品名时，这里保留原来的自报名。",
+    trigger: "握手带了 clientInfo.name 时输出。"
+  },
+  reported_client_version: {
+    label: "自报客户端版本",
+    format: "string|null",
+    description: "MCP initialize 的 clientInfo.version。与自报客户端成对。",
+    trigger: "握手带了 clientInfo.version 时输出。"
   }
 };
 
 function renderAccessLogCsv(rows: QueryRow[]): string {
   const lines = [
     ACCESS_LOG_CSV_HEADERS.join(","),
-    ...rows.map((row) =>
-      [
+    ...rows.map((row) => {
+      const shown = presentStoredClient(row);
+      return [
         row.id,
         csvCell(row.ts),
         csvCell(formatAuditLocalTimestamp(row.ts)),
@@ -1098,8 +1118,8 @@ function renderAccessLogCsv(rows: QueryRow[]): string {
         csvCell(row.turn_attribution_confidence),
         csvCell(row.turn_attribution_reason),
         csvCell(row.lucy_platform),
-        csvCell(row.client),
-        csvCell(row.client_version),
+        csvCell(shown.client ?? ""),
+        csvCell(shown.clientVersion ?? ""),
         csvCell(row.client_ip),
         csvCell(row.user_agent),
         csvCell(row.device_name),
@@ -1131,9 +1151,11 @@ function renderAccessLogCsv(rows: QueryRow[]): string {
         csvCell(row.skill_file_version),
         csvCell(row.skill_action),
         csvCell(row.skill_roles_allowed),
-        csvCell(row.matched_role_id)
+        csvCell(row.matched_role_id),
+        csvCell(shown.reportedClient ?? ""),
+        csvCell(shown.reportedClientVersion ?? "")
       ].join(",")
-    )
+    })
   ];
   return lines.join("\n");
 }
@@ -1179,6 +1201,8 @@ interface TurnEntry {
   source: "inferred" | "reported";
   userId: string;
   client?: string;
+  reportedClient?: string;
+  reportedClientVersion?: string;
   sessionId?: string;
   startedAt: string;
   endedAt: string;
@@ -1399,6 +1423,41 @@ function listTurnAccessLogIds(database: Database.Database, entry: TurnEntry): nu
   return rows.map((row) => row.id);
 }
 
+function displayedTurnIdentity(
+  database: Database.Database,
+  accessLogIds: number[],
+  fallback: { client?: string; questionSummary?: string }
+): Pick<TurnEntry, "client" | "reportedClient" | "reportedClientVersion" | "questionSummary"> {
+  let source: Parameters<typeof presentStoredClient>[0] = { client: fallback.client };
+  if (accessLogIds.length > 0) {
+    const row = database.prepare(`
+      SELECT client, client_version, user_agent, reported_client, reported_client_version
+      FROM access_log
+      WHERE id IN (${accessLogIds.map(() => "?").join(",")})
+      ORDER BY CASE WHEN tool = 'initialize' THEN 0 ELSE 1 END, ts ASC
+      LIMIT 1
+    `).get(...accessLogIds) as {
+      client: string | null;
+      client_version: string | null;
+      user_agent: string | null;
+      reported_client: string | null;
+      reported_client_version: string | null;
+    } | undefined;
+    if (row) source = row;
+  }
+  const shown: ResolvedClientIdentity = presentStoredClient(source);
+  const client = shown.client ?? fallback.client;
+  const questionSummary = fallback.questionSummary?.startsWith(SESSION_VISIT_SUMMARY_PREFIX)
+    ? sessionVisitSummary(client)
+    : fallback.questionSummary;
+  return {
+    client,
+    reportedClient: shown.reportedClient,
+    reportedClientVersion: shown.reportedClientVersion,
+    questionSummary
+  };
+}
+
 function enrichTurnEntry(database: Database.Database, entry: TurnEntry, p95Ms: number): TurnEntry {
   const accessLogIds = listTurnAccessLogIds(database, entry);
   const metrics = loadAccessLogMetrics(database, accessLogIds, p95Ms);
@@ -1407,8 +1466,10 @@ function enrichTurnEntry(database: Database.Database, entry: TurnEntry, p95Ms: n
   // Reported turns already count every linked non-protocol call as a tool call.
   // Inferred turns: tool call = touched table OR table_forbidden deny.
   const businessCallCount = entry.source === "reported" ? linkedCallCount : toolCallCount;
+  const identity = displayedTurnIdentity(database, accessLogIds, entry);
   return {
     ...entry,
+    ...identity,
     businessCallCount,
     linkedCallCount,
     sources: mergeTurnSources(entry.sources, forbiddenTables),
@@ -1641,7 +1702,9 @@ const TURN_CSV_HEADERS = [
   "慢调用数",
   "成功次数",
   "拒绝次数",
-  "错误次数"
+  "错误次数",
+  "自报客户端",
+  "自报客户端版本"
 ] as const;
 
 const TURN_FIELD_METADATA: Record<(typeof TURN_CSV_HEADERS)[number], Omit<CsvFieldMetadata, "name">> = {
@@ -1666,7 +1729,7 @@ const TURN_FIELD_METADATA: Record<(typeof TURN_CSV_HEADERS)[number], Omit<CsvFie
   "客户端": {
     label: "客户端",
     format: "string|null",
-    description: "MCP initialize 自报的客户端名。不根据 User-Agent 改写。",
+    description: "已知产品的 User-Agent 覆盖空自报名、lucy 或 lucy-mcp-proxy。其余自报名原样保留。",
     trigger: "问询记录了客户端名时输出。"
   },
   "会话 ID": {
@@ -1770,6 +1833,18 @@ const TURN_FIELD_METADATA: Record<(typeof TURN_CSV_HEADERS)[number], Omit<CsvFie
     format: "integer",
     description: "该问询内 outcome=error 的调用数量。",
     trigger: "每条问询记录均输出。"
+  },
+  "自报客户端": {
+    label: "自报客户端",
+    format: "string|null",
+    description: "MCP initialize 的 clientInfo.name。客户端列改用已知产品名时，这里保留原来的自报名。",
+    trigger: "握手带了 clientInfo.name 时输出。"
+  },
+  "自报客户端版本": {
+    label: "自报客户端版本",
+    format: "string|null",
+    description: "MCP initialize 的 clientInfo.version。与自报客户端成对。",
+    trigger: "握手带了 clientInfo.version 时输出。"
   }
 };
 
@@ -1802,7 +1877,9 @@ function renderTurnCsv(rows: TurnEntry[]): string {
         row.slowCallCount ?? "",
         row.outcomeSummary?.ok ?? 0,
         row.outcomeSummary?.denied ?? 0,
-        row.outcomeSummary?.error ?? 0
+        row.outcomeSummary?.error ?? 0,
+        csvCell(row.reportedClient ?? ""),
+        csvCell(row.reportedClientVersion ?? "")
       ].join(",")
     )
   ];
@@ -2304,7 +2381,9 @@ export function registerAuditRoutes(app: FastifyInstance) {
       FROM access_log ${baseWhere}
     `).get(params) as { protocol_calls: number | null; business_calls: number | null; denied_calls: number | null; data_bearing_calls: number | null };
 
-    const entries = rows.map((row) => ({
+    const entries = rows.map((row) => {
+      const shown = presentStoredClient(row);
+      return {
       id: row.id,
       // SC-21 — every entry carries its event type so a call and an auth
       // failure are distinguishable in one list.
@@ -2320,8 +2399,10 @@ export function registerAuditRoutes(app: FastifyInstance) {
       turnAttributionConfidence: row.turn_attribution_confidence ?? undefined,
       turnAttributionReason: row.turn_attribution_reason ?? undefined,
       lucyPlatform: row.lucy_platform ?? undefined,
-      client: row.client ?? undefined,
-      clientVersion: row.client_version ?? undefined,
+      client: shown.client,
+      clientVersion: shown.clientVersion,
+      reportedClient: shown.reportedClient,
+      reportedClientVersion: shown.reportedClientVersion,
       clientIp: row.client_ip ?? undefined,
       userAgent: row.user_agent ?? undefined,
       deviceName: row.device_name ?? undefined,
@@ -2356,7 +2437,8 @@ export function registerAuditRoutes(app: FastifyInstance) {
       skillRolesAllowed: row.skill_roles_allowed ? (JSON.parse(row.skill_roles_allowed) as string[]) : undefined,
       matchedRoleId: row.matched_role_id ?? undefined,
       usageSlowCall: row.is_slow_call === 1
-    }));
+    };
+    });
 
     // SC-21 — auth failures join the same time filter as a separate event
     // type. They stay in auth_failure_log and are never turned into a call.
@@ -2877,13 +2959,19 @@ export function registerAuditRoutes(app: FastifyInstance) {
       const connMap = connectionByLogId(accessLogIds);
       const { toolCallCount, forbiddenTables } = loadTurnToolCallStats(database, accessLogIds);
       const baseSources = JSON.parse(row.source_summary as string) as TurnEntry["sources"];
+      const identity = displayedTurnIdentity(database, accessLogIds, {
+        client: (row.client as string | null) ?? undefined,
+        questionSummary: (row.question_summary as string | null) ?? undefined
+      });
       return {
         ok: true,
         data: {
           id: row.inferred_turn_id,
           source: "inferred",
           userId: row.user_id,
-          client: (row.client as string | null) ?? undefined,
+          client: identity.client,
+          reportedClient: identity.reportedClient,
+          reportedClientVersion: identity.reportedClientVersion,
           sessionId: (row.session_id as string | null) ?? undefined,
           startedAt: row.started_at,
           endedAt: row.ended_at,
@@ -2893,7 +2981,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
           confidence: row.confidence,
           tools: JSON.parse(row.tool_summary as string),
           sources: mergeTurnSources(baseSources, forbiddenTables),
-          questionSummary: row.question_summary,
+          questionSummary: identity.questionSummary ?? row.question_summary,
           evidence: JSON.parse(row.evidence_json as string),
           accessLogs: accessLogs.map((logRow) => mapAccessLogRow(logRow, connMap)),
           referenceLatency: { windowHours, p95Ms }
@@ -2940,15 +3028,21 @@ export function registerAuditRoutes(app: FastifyInstance) {
       forbiddenTables
     );
     const connMap = connectionByLogId(accessLogIds);
+    const identity = displayedTurnIdentity(database, accessLogIds, {
+      client: (row.client as string | null) ?? undefined,
+      questionSummary: (row.question_summary as string | null) ?? undefined
+    });
     return {
       ok: true,
       data: {
         id: row.turn_id,
         source: "reported",
         userId: row.user_id,
-        client: (row.client as string | null) ?? undefined,
+        client: identity.client,
+        reportedClient: identity.reportedClient,
+        reportedClientVersion: identity.reportedClientVersion,
         sessionId: (row.session_id as string | null) ?? undefined,
-        questionSummary: row.question_summary,
+        questionSummary: identity.questionSummary ?? row.question_summary,
         questionPreview: row.question_preview,
         questionSource: row.question_source,
         createdAt: row.created_at,

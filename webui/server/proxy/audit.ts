@@ -7,6 +7,7 @@ import { prepareTraceDatabase } from "../trace/evidence.js";
 import { resolveSourceRefsForTables } from "./acl.js";
 import { scrubArgsSummaryJson } from "./audit-privacy.js";
 import { MCP_PROTOCOL_METHODS as PROTOCOL_TOOLS } from "./mcp-request-classification.js";
+import { resolveClientIdentity } from "./request-client-meta.js";
 import {
   CALL_MONITOR_P95_MIN_SAMPLES,
   callMonitorBucketIndex,
@@ -42,6 +43,9 @@ export interface AccessLogEntry {
   lucyPlatform?: string;
   client?: string;
   clientVersion?: string;
+  /** Raw MCP `clientInfo`, kept when `client` was replaced by a known User-Agent product. */
+  reportedClient?: string;
+  reportedClientVersion?: string;
   clientIp?: string;
   /** Spec 162 §8 / SC-22 — display-only forwarded chain; never used for ACL. */
   clientForwardedFor?: string;
@@ -184,7 +188,9 @@ const ACCESS_LOG_COLUMNS = [
   ["is_slow_call", "INTEGER"],
   ["slow_basis", "TEXT"],
   ["result_empty", "INTEGER"],
-  ["turn_wall_clock_ms", "INTEGER"]
+  ["turn_wall_clock_ms", "INTEGER"],
+  ["reported_client", "TEXT"],
+  ["reported_client_version", "TEXT"]
 ] as const;
 const PERMISSION_SNAPSHOT_COLUMNS = [
   ["capability_digest", "TEXT"],
@@ -427,9 +433,9 @@ export async function writeLog(entry: AccessLogEntry): Promise<number> {
   if (!insertStmt) {
     insertStmt = database.prepare(`
       INSERT INTO access_log
-        (ts, user_id, token_label, token_hash_prefix, lucy_session_id, lucy_turn_id, turn_attribution_mode, turn_attribution_confidence, turn_attribution_reason, lucy_platform, client, client_version, client_ip, client_forwarded_for, user_agent, device_name, tool, tables, args_summary, query_hash, query_length, query_operation, query_preview, query_artifact_ref, generated_sql, outcome, error_detail, duration_ms, response_bytes, response_row_count, response_column_count, response_truncated, request_id, trace_id, role_ids, permission_snapshot_hash, effective_tables_count, decision_reason, policy_version, capability_digest, skill_uri, skill_version, skill_file_version, skill_action, skill_roles_allowed, matched_role_id, compiler_reason, failure_dimension, applied_version, applied_business_date, applied_value_kind, actor_id, actor_kind, wiki_injected_keys, wiki_versions, eval_mark, is_slow_call, slow_basis, result_empty, turn_wall_clock_ms)
+        (ts, user_id, token_label, token_hash_prefix, lucy_session_id, lucy_turn_id, turn_attribution_mode, turn_attribution_confidence, turn_attribution_reason, lucy_platform, client, client_version, client_ip, client_forwarded_for, user_agent, device_name, tool, tables, args_summary, query_hash, query_length, query_operation, query_preview, query_artifact_ref, generated_sql, outcome, error_detail, duration_ms, response_bytes, response_row_count, response_column_count, response_truncated, request_id, trace_id, role_ids, permission_snapshot_hash, effective_tables_count, decision_reason, policy_version, capability_digest, skill_uri, skill_version, skill_file_version, skill_action, skill_roles_allowed, matched_role_id, compiler_reason, failure_dimension, applied_version, applied_business_date, applied_value_kind, actor_id, actor_kind, wiki_injected_keys, wiki_versions, eval_mark, is_slow_call, slow_basis, result_empty, turn_wall_clock_ms, reported_client, reported_client_version)
       VALUES
-        (@ts, @userId, @tokenLabel, @tokenHashPrefix, @lucySessionId, @lucyTurnId, @turnAttributionMode, @turnAttributionConfidence, @turnAttributionReason, @lucyPlatform, @client, @clientVersion, @clientIp, @clientForwardedFor, @userAgent, @deviceName, @tool, @tables, @argsSummary, @queryHash, @queryLength, @queryOperation, @queryPreview, @queryArtifactRef, @generatedSql, @outcome, @errorDetail, @durationMs, @responseBytes, @responseRowCount, @responseColumnCount, @responseTruncated, @requestId, @traceId, @roleIds, @permissionSnapshotHash, @effectiveTablesCount, @decisionReason, @policyVersion, @capabilityDigest, @skillUri, @skillVersion, @skillFileVersion, @skillAction, @skillRolesAllowed, @matchedRoleId, @compilerReason, @failureDimension, @appliedVersion, @appliedBusinessDate, @appliedValueKind, @actorId, @actorKind, @wikiInjectedKeys, @wikiVersions, @evalMark, @isSlowCall, @slowBasis, @resultEmpty, @turnWallClockMs)
+        (@ts, @userId, @tokenLabel, @tokenHashPrefix, @lucySessionId, @lucyTurnId, @turnAttributionMode, @turnAttributionConfidence, @turnAttributionReason, @lucyPlatform, @client, @clientVersion, @clientIp, @clientForwardedFor, @userAgent, @deviceName, @tool, @tables, @argsSummary, @queryHash, @queryLength, @queryOperation, @queryPreview, @queryArtifactRef, @generatedSql, @outcome, @errorDetail, @durationMs, @responseBytes, @responseRowCount, @responseColumnCount, @responseTruncated, @requestId, @traceId, @roleIds, @permissionSnapshotHash, @effectiveTablesCount, @decisionReason, @policyVersion, @capabilityDigest, @skillUri, @skillVersion, @skillFileVersion, @skillAction, @skillRolesAllowed, @matchedRoleId, @compilerReason, @failureDimension, @appliedVersion, @appliedBusinessDate, @appliedValueKind, @actorId, @actorKind, @wikiInjectedKeys, @wikiVersions, @evalMark, @isSlowCall, @slowBasis, @resultEmpty, @turnWallClockMs, @reportedClient, @reportedClientVersion)
     `);
   }
   const result = insertStmt.run({
@@ -445,6 +451,8 @@ export async function writeLog(entry: AccessLogEntry): Promise<number> {
     lucyPlatform: entry.lucyPlatform ?? null,
     client: entry.client ?? null,
     clientVersion: entry.clientVersion ?? null,
+    reportedClient: entry.reportedClient ?? null,
+    reportedClientVersion: entry.reportedClientVersion ?? null,
     clientIp: entry.clientIp ?? null,
     clientForwardedFor: entry.clientForwardedFor ?? null,
     userAgent: entry.userAgent ?? null,
@@ -1435,6 +1443,8 @@ type ClusterLogRow = {
   lucy_session_id: string | null;
   lucy_turn_id: string | null;
   client: string | null;
+  client_version: string | null;
+  user_agent: string | null;
 };
 
 function sessionKeyOf(row: { lucy_session_id: string | null }): string {
@@ -1489,10 +1499,23 @@ function firstHandshakeBySession(rows: ClusterLogRow[]): Map<string, ClusterLogR
   return result;
 }
 
+function displayedClientName(row: ClusterLogRow): string | null {
+  return resolveClientIdentity({
+    client: row.client,
+    clientVersion: row.client_version,
+    userAgent: row.user_agent
+  }).client ?? null;
+}
+
 function clientFromRows(rows: ClusterLogRow[]): string | null {
-  const initialize = rows.find((row) => row.tool === "initialize" && row.client?.trim());
-  if (initialize?.client) return initialize.client;
-  return rows.find((row) => row.client?.trim())?.client ?? null;
+  const initialize = rows.find((row) => row.tool === "initialize");
+  const fromInitialize = initialize ? displayedClientName(initialize) : null;
+  if (fromInitialize) return fromInitialize;
+  for (const row of rows) {
+    const name = displayedClientName(row);
+    if (name) return name;
+  }
+  return null;
 }
 
 function buildInferredQuestionSummary(sourceSummary: SourceSummaryEntry[], argsSummaries: Array<Record<string, unknown>>): string {
@@ -1522,7 +1545,7 @@ export async function rebuildInferredTurns(
   const cutoff = new Date(Date.now() - lookbackHours * 60 * 60 * 1000).toISOString();
 
   const loaded = database.prepare(`
-    SELECT id, ts, tool, tables, args_summary, policy_version, permission_snapshot_hash, lucy_session_id, lucy_turn_id, client
+    SELECT id, ts, tool, tables, args_summary, policy_version, permission_snapshot_hash, lucy_session_id, lucy_turn_id, client, client_version, user_agent
     FROM access_log
     WHERE user_id = ? AND ts >= ?
     ORDER BY ts ASC, id ASC
