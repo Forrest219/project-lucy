@@ -1,7 +1,7 @@
-import { access, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { access, cp, mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { isMap, isScalar, isSeq, parse, parseDocument, stringify, type Document, type Node, YAMLMap, YAMLSeq } from "yaml";
+import { isMap, isScalar, isSeq, parse, parseDocument, Scalar, stringify, type Document, type Node, YAMLMap, YAMLSeq } from "yaml";
 import { execFile } from "node:child_process";
 import { KtxCliError, testConnection } from "./ktx";
 import { formatConnectionErrorMessage } from "./connection-errors";
@@ -13,7 +13,8 @@ import {
   safeWriteNewSecretPassword
 } from "./fs-safe";
 import { resolveMcpEndpoint } from "./runtime-config";
-import { loadContentPaths } from "./paths";
+import { loadContentPaths, invalidateContentPathsCache, resolveContentPaths } from "./paths";
+import { invalidateAccessConfigCache } from "./proxy/identity.js";
 import type {
   AddSchemaPreview,
   AddSchemaResult,
@@ -1796,5 +1797,965 @@ export async function probeConnection(
     throw error;
   } finally {
     await rm(tmpRoot, { recursive: true, force: true });
+  }
+}
+
+// ─── changeConnectionId (Spec 181 T4) ─────────────────────────────────────────
+
+const WIKI_DIR_REL = "wiki";
+const SEMANTIC_LAYER_DIR_REL = "semantic-layer";
+const ACCESS_YAML_REL = "webui/config/access.yaml";
+
+/** Spec 181 T4 §2 — one identity's source-name set change across a connection id rename. */
+export type ConnectionIdChangeCapabilityDiffEntry = {
+  userId: string;
+  compile: "compiled" | "failed";
+  /** Machine reason emitted by acl.compile on a failed identity (e.g. `role_resolution_failed:<roleId>`). */
+  reason?: string;
+  /** Source keys the identity had before the rename (`<connId>/<schema>/<sourceName>`). */
+  before: string[];
+  /** Source keys the identity has after the rename (still `<schema>/<sourceName>`, only `<connId>` swapped). */
+  after: string[];
+  /** Source keys added by the rename (`<toId>/...`). */
+  added: string[];
+  /** Source keys removed by the rename (`<fromId>/...`). */
+  removed: string[];
+};
+
+/** Spec 181 T4 §2 — one wiki page whose `sl_refs` contain `fromId` or `fromId/<...>`. */
+export type ConnectionIdChangeWikiPageImpact = {
+  key: string;
+  refsChanged: number;
+  before: string[];
+  after: string[];
+};
+
+/** Spec 181 T4 §2 — one role affected by the rename. */
+export type ConnectionIdChangeRoleImpact = {
+  roleId: string;
+  hadConnections: string[];
+  hasConnections: string[];
+  /** Each `tableSelectors[].connection` whose value changed (or was set) in the role. */
+  selectorChanges: Array<{ selectorIndex: number; from: string | undefined; to: string | undefined }>;
+};
+
+/** Spec 181 T4 §2 — dry-run preview returned by `planConnectionIdChange`. */
+export type ConnectionIdChangePlan =
+  | {
+      ok: false;
+      code: "connection_id_taken";
+      fromId: string;
+      toId: string;
+    }
+  | {
+      ok: true;
+      fromId: string;
+      toId: string;
+      /** Unified diff of ktx.yaml; secrets redacted. */
+      diff: string;
+      ktx: {
+        fromKey: string;
+        toKey: string;
+        schemas: string[];
+        enabledTables: string[];
+      };
+      access: {
+        affectedRoles: ConnectionIdChangeRoleImpact[];
+        /** User ids whose `role` / `roles` field references an affected role. */
+        affectedUsers: string[];
+      };
+      semanticLayer: {
+        fromDir: string;
+        toDir: string;
+        exists: boolean;
+        fileCount: number;
+      };
+      wiki: {
+        pages: ConnectionIdChangeWikiPageImpact[];
+      };
+      capabilityDiff: ConnectionIdChangeCapabilityDiffEntry[];
+    };
+
+/** Spec 181 T4 §4 — confirmed write result. */
+export type ConnectionIdChangeResult = {
+  written: true;
+  fromId: string;
+  toId: string;
+  auditId?: number;
+  /** Whether the semantic-layer directory was actually renamed (false when `<fromId>` did not exist). */
+  renamedSemanticDir: boolean;
+  /** Wiki page keys whose `sl_refs` were rewritten. */
+  updatedWikiPages: string[];
+  capabilityDiff: ConnectionIdChangeCapabilityDiffEntry[];
+  /** Outcome of the post-write one-way sync. */
+  mirror: { copied: number; skipped: number; failed: number };
+};
+
+export type ApplyConnectionIdChangeOptions = {
+  /** Required `true`. The planning function never writes; this opt-in is what flips the switch. */
+  write: true;
+  recordConfigChange?: typeof import("./admin/audit").recordConfigChange;
+  /**
+   * Test hook. `before_wiki` throws after access.yaml and the semantic-layer
+   * rename, and before any Wiki or ktx.yaml write, so rollback can be proven
+   * at the Spec 181 injection point.
+   */
+  injectFailure?: "before_wiki";
+};
+
+export type PlanConnectionIdChangeOptions = {
+  /** Test hook — override the wiki enumeration. */
+  listWikiFn?: typeof import("./wiki").listWiki;
+  /** Test hook — override identity compile (called twice: before / after). */
+  compileIdentities?: typeof compileIdentityCapabilityDiffOnRoot;
+};
+
+// ─── helpers ──────────────────────────────────────────────────────────────────
+
+function validateConnectionIdsForRename(fromId: unknown, toId: unknown): void {
+  if (typeof fromId !== "string" || !CONNECTION_ID_RE.test(fromId)) {
+    throw new ConnectionIdInvalidError(
+      `Connection ID '${String(fromId)}' does not match pattern ${CONNECTION_ID_PATTERN}`
+    );
+  }
+  if (typeof toId !== "string" || !CONNECTION_ID_RE.test(toId)) {
+    throw new ConnectionIdInvalidError(
+      `Connection ID '${String(toId)}' does not match pattern ${CONNECTION_ID_PATTERN}`
+    );
+  }
+  if (fromId === toId) {
+    throw new ConnectionIdInvalidError(
+      `Connection ID rename is a no-op: '${fromId}' === '${toId}'`
+    );
+  }
+}
+
+/**
+ * Build the ktx.yaml mutator that renames a connection key. Throws if
+ * `fromId` does not exist or `toId` already exists (the latter becomes
+ * `connection_id_taken` at the plan layer; we still throw early here so
+ * the dry-run write path is the same as the write path).
+ */
+function connectionRenameMutatorFactory(fromId: string, toId: string) {
+  return (doc: ReturnType<typeof parseDocument>): void => {
+    const conns = doc.get("connections", true);
+    if (!isMap(conns)) {
+      throw new ConnectionNotFoundError(`Connection '${fromId}' not found in ktx.yaml`);
+    }
+    if (!conns.has(fromId)) {
+      throw new ConnectionNotFoundError(`Connection '${fromId}' not found in ktx.yaml`);
+    }
+    const connNode = conns.get(fromId, true);
+    if (!isMap(connNode)) {
+      throw new KtxYamlParseError(`Connection '${fromId}' is not a mapping`);
+    }
+    if (conns.has(toId)) {
+      const err = new ConnectionAlreadyExistsError(
+        `Connection '${toId}' already exists in ktx.yaml`
+      ) as Error & { renameCode?: string };
+      err.renameCode = "connection_id_taken";
+      throw err;
+    }
+    // Move every pair of the connection block under the new key while keeping
+    // its relative position. The connection node itself is reused — the yaml
+    // library stores the value via a Pair, so we just retarget the Pair's key
+    // scalar instead of cloning.
+    const originalPairIndex = conns.items.findIndex(
+      (pair) => isScalar(pair.key) && String(pair.key.value ?? "") === fromId
+    );
+    if (originalPairIndex < 0) {
+      // Defensive — `has(fromId)` already passed above, but cover the case
+      // where key comparison via Scalar.value disagrees with conns.has.
+      throw new ConnectionNotFoundError(`Connection '${fromId}' not found in ktx.yaml`);
+    }
+    const originalPair = conns.items[originalPairIndex];
+    if (!originalPair) {
+      throw new ConnectionNotFoundError(`Connection '${fromId}' not found in ktx.yaml`);
+    }
+    // Retarget the existing Pair's key scalar in place — preserves child node
+    // identity and the original ordering.
+    if (isScalar(originalPair.key)) {
+      originalPair.key.value = toId;
+    } else {
+      originalPair.key = new Scalar(toId) as typeof originalPair.key;
+    }
+    forceBlockYamlMaps(conns);
+
+    // Also rename inside setup.database_connection_ids.
+    const setup = doc.get("setup", true);
+    if (isMap(setup)) {
+      const ids = setup.get("database_connection_ids", true);
+      if (isSeq(ids)) {
+        for (let i = 0; i < ids.items.length; i += 1) {
+          if (yamlScalarString(ids.items[i]) === fromId) {
+            ids.items[i] = toId;
+          }
+        }
+      }
+    }
+  };
+}
+
+/**
+ * Replace `fromId` with `toId` inside an access.yaml-like record. Pure
+ * structural mutation — does not write. Used both for the access.yaml
+ * preview and for the in-temp-copy apply that powers the capability diff.
+ */
+export function rewriteAccessConfigConnIds(
+  config: Record<string, unknown>,
+  fromId: string,
+  toId: string
+): { roles: ConnectionIdChangeRoleImpact[]; affectedUsers: string[] } {
+  const roleImpacts: ConnectionIdChangeRoleImpact[] = [];
+  const affectedRoleIds = new Set<string>();
+  const affectedUsers = new Set<string>();
+
+  const roles = config.roles;
+  if (roles && typeof roles === "object" && !Array.isArray(roles)) {
+    for (const [roleId, roleValue] of Object.entries(roles as Record<string, unknown>)) {
+      if (!roleValue || typeof roleValue !== "object" || Array.isArray(roleValue)) continue;
+      const allow = (roleValue as Record<string, unknown>).allow;
+      if (!allow || typeof allow !== "object" || Array.isArray(allow)) continue;
+      const allowRecord = allow as Record<string, unknown>;
+
+      const hadConnections = Array.isArray(allowRecord.connections)
+        ? (allowRecord.connections as unknown[]).filter((v): v is string => typeof v === "string")
+        : [];
+
+      let hasConnections = hadConnections;
+      let touched = false;
+      if (hadConnections.includes(fromId)) {
+        hasConnections = hadConnections.map((c) => (c === fromId ? toId : c));
+        allowRecord.connections = hasConnections;
+        touched = true;
+      }
+
+      const selectorChanges: ConnectionIdChangeRoleImpact["selectorChanges"] = [];
+      const selectors = allowRecord.tableSelectors;
+      if (Array.isArray(selectors)) {
+        selectors.forEach((selector, selectorIndex) => {
+          if (!selector || typeof selector !== "object" || Array.isArray(selector)) return;
+          const selRec = selector as Record<string, unknown>;
+          const currentSelConn = typeof selRec.connection === "string" ? selRec.connection : undefined;
+          if (currentSelConn === fromId) {
+            selectorChanges.push({ selectorIndex, from: fromId, to: toId });
+            selRec.connection = toId;
+            touched = true;
+          } else if (typeof currentSelConn === "string" && currentSelConn !== toId) {
+            // Leave other connection selectors untouched; record as zero-change entry so the
+            // caller can still see per-selector coverage in the preview.
+            selectorChanges.push({ selectorIndex, from: currentSelConn, to: currentSelConn });
+          } else {
+            selectorChanges.push({ selectorIndex, from: undefined, to: currentSelConn });
+          }
+        });
+      }
+
+      if (touched) {
+        affectedRoleIds.add(roleId);
+        roleImpacts.push({
+          roleId,
+          hadConnections,
+          hasConnections,
+          selectorChanges: selectorChanges.filter(
+            (change) => change.from === fromId || change.to === toId
+          )
+        });
+      }
+    }
+  }
+
+  const users = config.users;
+  if (Array.isArray(users)) {
+    for (const user of users) {
+      if (!user || typeof user !== "object" || Array.isArray(user)) continue;
+      const userRecord = user as Record<string, unknown>;
+      const id = userRecord.id;
+      const single = typeof userRecord.role === "string" ? userRecord.role : undefined;
+      const listRaw = Array.isArray(userRecord.roles) ? userRecord.roles : [];
+      const list = listRaw.filter((r): r is string => typeof r === "string");
+      const all = new Set<string>([...(single ? [single] : []), ...list]);
+      const hits = [...all].filter((roleId) => affectedRoleIds.has(roleId));
+      if (hits.length > 0 && typeof id === "string") {
+        affectedUsers.add(id);
+      }
+    }
+  }
+
+  return { roles: roleImpacts, affectedUsers: [...affectedUsers] };
+}
+
+/**
+ * Walk `semantic-layer/<fromId>` and return the relative path + file count.
+ * `exists` distinguishes "no source files yet" from "directory not present".
+ */
+async function inspectSemanticLayer(
+  contentPaths: import("./paths").ContentPaths,
+  fromId: string,
+  toId: string
+): Promise<{ fromDir: string; toDir: string; exists: boolean; fileCount: number }> {
+  const fromDir = path.posix.join(SEMANTIC_LAYER_DIR_REL, fromId);
+  const toDir = path.posix.join(SEMANTIC_LAYER_DIR_REL, toId);
+  const fromAbs = path.join(contentPaths.semanticLayer, fromId);
+  let fileCount = 0;
+  let exists = false;
+  try {
+    const entries = await readdir(fromAbs, { withFileTypes: true });
+    exists = true;
+    for (const entry of entries) {
+      if (entry.name === "." || entry.name === ".." || entry.name.startsWith(".")) continue;
+      if (entry.isFile()) {
+        if (/\.ya?ml$/i.test(entry.name)) fileCount += 1;
+        continue;
+      }
+      if (entry.isDirectory()) {
+        const nested = await readdir(path.join(fromAbs, entry.name), { withFileTypes: true });
+        for (const nestedEntry of nested) {
+          if (nestedEntry.isFile() && /\.ya?ml$/i.test(nestedEntry.name)) fileCount += 1;
+        }
+      }
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    exists = false;
+  }
+  return { fromDir, toDir, exists, fileCount };
+}
+
+/**
+ * Rename `semantic-layer/<fromId>` → `semantic-layer/<toId>`. Refuses when
+ * the destination already exists (mirror drift is left to `syncContentToProjectRoot`).
+ */
+async function renameSemanticLayerDir(
+  semanticLayerRoot: string,
+  fromId: string,
+  toId: string
+): Promise<boolean> {
+  const fromAbs = path.join(semanticLayerRoot, fromId);
+  const toAbs = path.join(semanticLayerRoot, toId);
+  let existed = false;
+  try {
+    const fromStat = await readdir(fromAbs);
+    existed = fromStat.length >= 0;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw error;
+  }
+  if (!existed) return false;
+  // Refuse overwrite — caller is expected to have validated via the dry run.
+  try {
+    await readdir(toAbs);
+    throw new ForbiddenPathError(
+      `Refusing to overwrite existing semantic-layer directory '${toId}'`
+    );
+  } catch (error) {
+    if (error instanceof ForbiddenPathError) throw error;
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  await rename(fromAbs, toAbs);
+  return true;
+}
+
+/**
+ * Compute new `sl_refs` for a wiki page's frontmatter. Only `fromId` and
+ * `fromId/<...>` entries are rewritten; everything else passes through.
+ */
+function rewriteWikiSlRefs(refs: readonly string[], fromId: string, toId: string): string[] {
+  const out: string[] = [];
+  for (const ref of refs) {
+    if (ref === fromId) {
+      out.push(toId);
+    } else if (ref.startsWith(`${fromId}/`)) {
+      out.push(`${toId}${ref.slice(fromId.length)}`);
+    } else {
+      out.push(ref);
+    }
+  }
+  return out;
+}
+
+/**
+ * Construct the markdown for a wiki page whose `sl_refs` have been renamed,
+ * preserving the page's other frontmatter fields (summary / tags / refs /
+ * usage_mode / visibility / allowed_roles) and body content verbatim.
+ *
+ * Lives here instead of in wiki.ts so a single Spec 181 transaction can write
+ * multiple pages without each save going through the version-snapshot path.
+ */
+async function buildRenamedWikiMarkdown(
+  rawMarkdown: string,
+  page: import("./wiki.js").WikiPage,
+  nextRefs: string[]
+): Promise<string> {
+  const { parseMarkdownFrontmatter, stringifyMarkdownFrontmatter } = await import(
+    "./markdown-frontmatter.js"
+  );
+  const parsed = parseMarkdownFrontmatter(rawMarkdown);
+  const data: Record<string, unknown> = {};
+  const frontmatter = page.frontmatter;
+  if (typeof frontmatter.summary === "string") data.summary = frontmatter.summary;
+  if (Array.isArray(frontmatter.tags) && frontmatter.tags.length > 0) {
+    data.tags = [...frontmatter.tags];
+  }
+  data.sl_refs = [...nextRefs];
+  if (Array.isArray(frontmatter.refs) && frontmatter.refs.length > 0) {
+    data.refs = [...frontmatter.refs];
+  }
+  if (typeof frontmatter.usage_mode === "string") data.usage_mode = frontmatter.usage_mode;
+  // Preserve visibility / allowed_roles verbatim — Spec §4.1 / SC-8.
+  if (parsed.data && Object.prototype.hasOwnProperty.call(parsed.data, "visibility")) {
+    data.visibility = parsed.data.visibility;
+  }
+  if (parsed.data && Object.prototype.hasOwnProperty.call(parsed.data, "allowed_roles")) {
+    data.allowed_roles = parsed.data.allowed_roles;
+  }
+  return stringifyMarkdownFrontmatter(page.content, data);
+}
+
+/**
+ * Spec 181 T4 §3 — compile identities against a given project root.
+ *
+ * Switches `KTX_PROJECT_ROOT` / `LUCY_CONTENT_ROOT` / `LUCY_ACCESS_CONFIG_PATH`
+ * for the duration of the call, then restores them and invalidates caches on
+ * the way out. Returns one entry per user id with `compile`, `before`, `after`,
+ * `added`, `removed`. Failed compiles surface their machine reason and empty
+ * diff arrays — the caller must not count a failed identity toward an
+ * authorization widening.
+ */
+export async function compileIdentityCapabilityDiffOnRoot(
+  projectRoot: string,
+  contentRootRel: string,
+  userIds: readonly string[]
+): Promise<ConnectionIdChangeCapabilityDiffEntry[]> {
+  const aclModule = await import("./proxy/acl.js");
+  const identityModule = await import("./proxy/identity.js");
+
+  const previous = {
+    root: process.env.KTX_PROJECT_ROOT,
+    content: process.env.LUCY_CONTENT_ROOT,
+    access: process.env.LUCY_ACCESS_CONFIG_PATH
+  };
+
+  process.env.KTX_PROJECT_ROOT = projectRoot;
+  process.env.LUCY_CONTENT_ROOT = contentRootRel;
+  delete process.env.LUCY_ACCESS_CONFIG_PATH;
+  invalidateContentPathsCache();
+  invalidateAccessConfigCache();
+
+  try {
+    await identityModule.getAccessConfig({ fresh: true });
+    const out: ConnectionIdChangeCapabilityDiffEntry[] = [];
+    for (const userId of userIds) {
+      try {
+        const resolved = await aclModule.effectivePermissions({
+          userId,
+          tokenLabel: "preview",
+          tokenHashPrefix: "preview"
+        });
+        if (resolved.ok) {
+          const sourceKeys = resolved.permissions.sources
+            .map((s) => `${s.connectionId}/${s.schema}/${s.sourceName}`)
+            .sort();
+          out.push({
+            userId,
+            compile: "compiled",
+            before: sourceKeys,
+            after: sourceKeys,
+            added: [],
+            removed: []
+          });
+        } else {
+          out.push({
+            userId,
+            compile: "failed",
+            reason: resolved.reason,
+            before: [],
+            after: [],
+            added: [],
+            removed: []
+          });
+        }
+      } catch (error) {
+        out.push({
+          userId,
+          compile: "failed",
+          reason: error instanceof Error ? error.message : String(error),
+          before: [],
+          after: [],
+          added: [],
+          removed: []
+        });
+      }
+    }
+    return out;
+  } finally {
+    for (const [key, value] of [
+      ["KTX_PROJECT_ROOT", previous.root],
+      ["LUCY_CONTENT_ROOT", previous.content],
+      ["LUCY_ACCESS_CONFIG_PATH", previous.access]
+    ] as const) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    invalidateContentPathsCache();
+    invalidateAccessConfigCache();
+  }
+}
+
+/**
+ * Materialise the diff between two compile runs. Pure helper, no I/O.
+ * Each identity's `after` set is the post-rename replacement; the union of
+ * the two runs becomes `added` / `removed` keyed by full source key.
+ */
+function diffCapabilityEntries(
+  before: ConnectionIdChangeCapabilityDiffEntry[],
+  after: ConnectionIdChangeCapabilityDiffEntry[],
+  fromId: string,
+  toId: string
+): ConnectionIdChangeCapabilityDiffEntry[] {
+  const beforeByUser = new Map(before.map((entry) => [entry.userId, entry]));
+  const afterByUser = new Map(after.map((entry) => [entry.userId, entry]));
+  const allUserIds = new Set<string>([...beforeByUser.keys(), ...afterByUser.keys()]);
+  const merged: ConnectionIdChangeCapabilityDiffEntry[] = [];
+  for (const userId of allUserIds) {
+    const beforeEntry = beforeByUser.get(userId);
+    const afterEntry = afterByUser.get(userId);
+    const beforeKeys = beforeEntry?.compile === "compiled" ? beforeEntry.before : [];
+    const afterKeys = afterEntry?.compile === "compiled" ? afterEntry.after : [];
+    const beforeSet = new Set(beforeKeys);
+    const afterSet = new Set(afterKeys);
+
+    let compile: "compiled" | "failed" = "compiled";
+    let reason: string | undefined;
+    if (beforeEntry?.compile === "failed" || afterEntry?.compile === "failed") {
+      compile = "failed";
+      // Spec 181 T4 — surface the machine reason. Prefer the *after* compile
+      // so the operator sees what the post-rename state actually produced.
+      reason = afterEntry?.reason ?? beforeEntry?.reason;
+    }
+
+    const added = afterKeys.filter((key) => !beforeSet.has(key) && key.startsWith(`${toId}/`));
+    const removed = beforeKeys.filter((key) => !afterSet.has(key) && key.startsWith(`${fromId}/`));
+    // Recompute after as the post-rename source set with `fromId` replaced by `toId`.
+    const renameMapped = beforeKeys.map((key) =>
+      key.startsWith(`${fromId}/`) ? `${toId}${key.slice(fromId.length)}` : key
+    );
+    const sortedAfter = [...new Set(renameMapped)].sort();
+    merged.push({
+      userId,
+      compile,
+      ...(reason ? { reason } : {}),
+      before: beforeKeys,
+      after: sortedAfter,
+      added,
+      removed
+    });
+  }
+  return merged.sort((a, b) => a.userId.localeCompare(b.userId));
+}
+
+/**
+ * Content directory the dry-run compiler should read inside `tempRoot`.
+ * When the live content root sits inside the source project, the recursive
+ * copy already contains it. An external content root is copied beside the
+ * temp project so the preview never renames the live tree.
+ */
+async function copyContentDirForRenamePreview(
+  sourceRoot: string,
+  tempRoot: string,
+  liveConfigDir: string
+): Promise<string> {
+  const liveConfig = path.resolve(liveConfigDir);
+  const sourceResolved = path.resolve(sourceRoot);
+  const rel = path.relative(sourceResolved, liveConfig);
+  const inside = rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
+  if (inside) return path.resolve(tempRoot, rel);
+  const dest = path.join(tempRoot, ".lucy-rename-content");
+  try {
+    await cp(liveConfig, dest, { recursive: true });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  return dest;
+}
+
+// ─── planConnectionIdChange (Spec 181 T4 §2) ─────────────────────────────────
+
+export async function planConnectionIdChange(
+  projectRoot: string,
+  fromId: string,
+  toId: string,
+  options: PlanConnectionIdChangeOptions = {}
+): Promise<ConnectionIdChangePlan> {
+  validateConnectionIdsForRename(fromId, toId);
+
+  // Pre-check the source-of-truth before any write path. The mutator used by
+  // `writeKtxYaml` also throws on `toId`-exists, but we want a structured
+  // `{ok:false}` plan rather than a thrown error per Spec 181 T4 §2.
+  const ktxPath = path.join(projectRoot, "ktx.yaml");
+  const ktxOldText = await readFile(ktxPath, "utf8");
+  const originalDoc = parseDocument(ktxOldText, { keepSourceTokens: true });
+  if (originalDoc.errors.length > 0) {
+    throw new KtxYamlParseError(
+      `Failed to parse ktx.yaml: ${originalDoc.errors[0]?.message ?? "unknown error"}`
+    );
+  }
+  const connsOriginal = originalDoc.get("connections", true);
+  if (!isMap(connsOriginal) || !connsOriginal.has(fromId)) {
+    throw new ConnectionNotFoundError(`Connection '${fromId}' not found in ktx.yaml`);
+  }
+  if (connsOriginal.has(toId)) {
+    return { ok: false, code: "connection_id_taken", fromId, toId };
+  }
+
+  // Read ktx.yaml — surfaces missing source-of-truth before we touch anything.
+  const ktxPreview = await writeKtxYaml(
+    projectRoot,
+    connectionRenameMutatorFactory(fromId, toId),
+    { dryRun: true }
+  );
+  if ((ktxPreview as { serialized?: string }).serialized === undefined) {
+    // unreachable — writeKtxYaml always returns {doc, serialized, oldText}
+  }
+
+  const safeOldYaml = redactKtxYamlForPreview(ktxPreview.oldText);
+  const safeNewYaml = redactKtxYamlForPreview(ktxPreview.serialized);
+  const diff = previewDiff(safeOldYaml, safeNewYaml, "ktx.yaml");
+
+  // Pull the post-rename schemas / enabled_tables for the preview summary.
+  const renamedDoc = parseDocument(ktxPreview.serialized, { keepSourceTokens: true });
+  const renamedConns = renamedDoc.get("connections", true);
+  const renamedConn = isMap(renamedConns) ? renamedConns.get(toId, true) : undefined;
+  const ktxSummary = {
+    fromKey: fromId,
+    toKey: toId,
+    schemas: isMap(renamedConn) ? schemasList(renamedConn.get("schemas", true) as import("yaml").YAMLSeq | undefined) : [],
+    enabledTables: isMap(renamedConn)
+      ? enabledTablesList(renamedConn.get("enabled_tables", true) as import("yaml").YAMLSeq | undefined)
+      : []
+  };
+
+  // Read access.yaml — preferred path, but allow overrides for the test/secondary
+  // layout that some suites use.
+  const accessPath = path.join(projectRoot, ACCESS_YAML_REL);
+  let accessRaw: string | null = null;
+  try {
+    accessRaw = await readFile(accessPath, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  const accessConfig: Record<string, unknown> = accessRaw
+    ? (parse(accessRaw) as Record<string, unknown> | null) ?? {}
+    : {};
+  const accessRewrite = rewriteAccessConfigConnIds(accessConfig, fromId, toId);
+
+  const contentPaths = await resolveContentPaths(projectRoot);
+  const semantic = await inspectSemanticLayer(contentPaths, fromId, toId);
+
+  const listWikiFn = options.listWikiFn ?? (await import("./wiki.js")).listWiki;
+  const wikiPages = await listWikiFn(projectRoot).catch(() => []);
+  const wikiImpacts: ConnectionIdChangeWikiPageImpact[] = [];
+  for (const page of wikiPages) {
+    const refs = page.slRefs ?? [];
+    const before = refs.filter(
+      (ref) => ref === fromId || ref.startsWith(`${fromId}/`)
+    );
+    if (before.length === 0) continue;
+    const after = rewriteWikiSlRefs(refs, fromId, toId);
+    wikiImpacts.push({
+      key: page.key,
+      refsChanged: before.length,
+      before: refs,
+      after
+    });
+  }
+
+  // Capability diff — compile against original, then against a temp copy with the rename applied.
+  const allUserIds = Array.isArray(accessConfig.users)
+    ? (accessConfig.users as unknown[])
+        .filter((u): u is Record<string, unknown> => !!u && typeof u === "object" && !Array.isArray(u))
+        .map((u) => (typeof u.id === "string" ? u.id : ""))
+        .filter(Boolean)
+    : [];
+  const compileFn = options.compileIdentities ?? compileIdentityCapabilityDiffOnRoot;
+  const beforeCompile = await compileFn(projectRoot, contentPaths.configDir, allUserIds);
+
+  // Materialise a temp copy with the rename applied and compile there.
+  // Content paths are resolved against that copy. Ambient `loadContentPaths()`
+  // follows the live project root, so a dry run must not use it to rename.
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), "lucy-conn-id-rename-"));
+  try {
+    await cp(projectRoot, tempRoot, {
+      recursive: true,
+      dereference: false,
+      filter: (src) => !src.includes(`${path.sep}.git${path.sep}`) && !src.endsWith(`${path.sep}.git`)
+    });
+    const tempConfigDir = await copyContentDirForRenamePreview(projectRoot, tempRoot, contentPaths.configDir);
+
+    const tempAccessPath = path.join(tempRoot, ACCESS_YAML_REL);
+    let tempAccessText: string | null = null;
+    try {
+      tempAccessText = await readFile(tempAccessPath, "utf8");
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+    if (tempAccessText) {
+      const tempConfig = parse(tempAccessText) as Record<string, unknown> | null;
+      if (tempConfig && typeof tempConfig === "object") {
+        rewriteAccessConfigConnIds(tempConfig, fromId, toId);
+        await writeFile(tempAccessPath, stringify(tempConfig, { lineWidth: 0 }), "utf8");
+      }
+    }
+    await renameSemanticLayerDir(path.join(tempConfigDir, SEMANTIC_LAYER_DIR_REL), fromId, toId);
+
+    // Dry-run serialization only. Writing through `writeKtxYaml` would resolve
+    // the live content root and can mkdir on the caller's project.
+    const tempKtx = await writeKtxYaml(tempRoot, connectionRenameMutatorFactory(fromId, toId), {
+      dryRun: true
+    });
+    await writeFile(path.join(tempRoot, "ktx.yaml"), tempKtx.serialized, "utf8");
+
+    const afterCompile = await compileFn(tempRoot, tempConfigDir, allUserIds);
+    const capabilityDiff = diffCapabilityEntries(beforeCompile, afterCompile, fromId, toId);
+    // Use the "after" compile for the final capability diff entries; this is
+    // the source-of-truth for which sources each identity ends up with.
+    for (const entry of capabilityDiff) {
+      if (entry.compile === "compiled") {
+        const afterEntry = afterCompile.find((row) => row.userId === entry.userId);
+        if (afterEntry?.compile === "compiled") {
+          entry.after = afterEntry.after;
+        }
+      }
+    }
+
+    return {
+      ok: true,
+      fromId,
+      toId,
+      diff,
+      ktx: ktxSummary,
+      access: {
+        affectedRoles: accessRewrite.roles,
+        affectedUsers: accessRewrite.affectedUsers
+      },
+      semanticLayer: semantic,
+      wiki: { pages: wikiImpacts },
+      capabilityDiff
+    };
+  } finally {
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+}
+
+// ─── applyConnectionIdChange (Spec 181 T4 §4) ────────────────────────────────
+
+export async function applyConnectionIdChange(
+  projectRoot: string,
+  fromId: string,
+  toId: string,
+  options: ApplyConnectionIdChangeOptions
+): Promise<ConnectionIdChangeResult> {
+  if (options?.write !== true) {
+    throw new Error(
+      "applyConnectionIdChange requires options.write === true; use planConnectionIdChange for the dry run"
+    );
+  }
+  validateConnectionIdsForRename(fromId, toId);
+
+  // Snapshot the files we may mutate so a partial failure can restore them.
+  const ktxPath = path.join(projectRoot, "ktx.yaml");
+  const ktxOldText = await readFile(ktxPath, "utf8");
+  const ktxOriginalDoc = parseDocument(ktxOldText, { keepSourceTokens: true });
+  if (ktxOriginalDoc.errors.length > 0) {
+    throw new KtxYamlParseError(
+      `Failed to parse ktx.yaml: ${ktxOriginalDoc.errors[0]?.message ?? "unknown error"}`
+    );
+  }
+  const connsOriginal = ktxOriginalDoc.get("connections", true);
+  if (!isMap(connsOriginal) || !connsOriginal.has(fromId)) {
+    throw new ConnectionNotFoundError(`Connection '${fromId}' not found in ktx.yaml`);
+  }
+  if (connsOriginal.has(toId)) {
+    const err = new ConnectionAlreadyExistsError(
+      `Connection '${toId}' already exists in ktx.yaml`
+    ) as Error & { code?: string };
+    err.code = "connection_id_taken";
+    throw err;
+  }
+
+  const accessPath = path.join(projectRoot, ACCESS_YAML_REL);
+  let accessOldText: string | null = null;
+  let accessOldConfig: Record<string, unknown> | null = null;
+  try {
+    accessOldText = await readFile(accessPath, "utf8");
+    accessOldConfig = parse(accessOldText) as Record<string, unknown> | null;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  if (accessOldText !== null && (accessOldConfig === null || typeof accessOldConfig !== "object")) {
+    throw new KtxYamlParseError(`Failed to parse ${ACCESS_YAML_REL}`);
+  }
+
+  // Snapshot wiki pages with `sl_refs` matching `fromId` so we can restore them on rollback.
+  const listWikiFn = (await import("./wiki.js")).listWiki;
+  const wikiPages = await listWikiFn(projectRoot).catch(() => []);
+  const wikiSnapshots: Array<{ key: string; raw: string }> = [];
+  for (const page of wikiPages) {
+    const refs = page.slRefs ?? [];
+    if (!refs.some((ref) => ref === fromId || ref.startsWith(`${fromId}/`))) continue;
+    const wikiModule = await import("./wiki.js");
+    const full = await wikiModule.readWiki(projectRoot, page.key).catch(() => null);
+    if (full) wikiSnapshots.push({ key: full.key, raw: full.rawMarkdown });
+  }
+
+  // Capture "before" compile against the real project.
+  const contentPaths = await loadContentPaths();
+  const contentRootRel = process.env.LUCY_CONTENT_ROOT?.trim() ?? "";
+  const allUserIds = accessOldConfig && Array.isArray(accessOldConfig.users)
+    ? (accessOldConfig.users as unknown[])
+        .filter((u): u is Record<string, unknown> => !!u && typeof u === "object" && !Array.isArray(u))
+        .map((u) => (typeof u.id === "string" ? u.id : ""))
+        .filter(Boolean)
+    : [];
+  const beforeCompile = await compileIdentityCapabilityDiffOnRoot(
+    projectRoot,
+    contentRootRel || ".",
+    allUserIds
+  );
+
+  // Order per Spec 181 T4 §4: access.yaml → semantic dir rename → wiki → ktx.yaml.
+  let accessWritten = false;
+  let semanticRenamed = false;
+  let wikiUpdated: string[] = [];
+  let ktxWritten = false;
+
+  const rollback = async (reason: unknown): Promise<never> => {
+    if (ktxWritten) {
+      try {
+        await writeFile(ktxPath, ktxOldText, "utf8");
+      } catch {
+        // Best-effort — failure here is a real problem but we cannot unwind further.
+      }
+    }
+    for (const snap of wikiSnapshots) {
+      try {
+        const paths = await loadContentPaths();
+        const relPath = path.posix.join(WIKI_DIR_REL, snap.key);
+        await safeWrite(paths, projectRoot, relPath, snap.raw);
+      } catch {
+        // best-effort
+      }
+    }
+    if (semanticRenamed) {
+      try {
+        const paths = await loadContentPaths();
+        const toAbs = path.join(paths.semanticLayer, toId);
+        const fromAbs = path.join(paths.semanticLayer, fromId);
+        await rename(toAbs, fromAbs);
+      } catch {
+        // best-effort
+      }
+    }
+    if (accessWritten && accessOldText !== null) {
+      try {
+        await writeFile(accessPath, accessOldText, "utf8");
+      } catch {
+        // best-effort
+      }
+    }
+    throw reason;
+  };
+
+  try {
+    // 1. access.yaml
+    if (accessOldText !== null && accessOldConfig !== null) {
+      rewriteAccessConfigConnIds(accessOldConfig, fromId, toId);
+      const newAccessText = stringify(accessOldConfig, { lineWidth: 0 });
+      await writeFile(accessPath, newAccessText, "utf8");
+      accessWritten = true;
+    }
+
+    // 2. semantic-layer dir rename (skip if missing — Spec 181 §4 allows the rename to be a no-op when no manifests exist yet).
+    const renamed = await renameSemanticLayerDir(contentPaths.semanticLayer, fromId, toId);
+    semanticRenamed = renamed;
+
+    if (options.injectFailure === "before_wiki") {
+      throw new Error("injected failure before wiki write");
+    }
+
+    // 3. wiki sl_refs — write each modified page through safeWrite so the wiki allowlist guards symlinks.
+    for (const snap of wikiSnapshots) {
+      const wikiModule = await import("./wiki.js");
+      const page = await wikiModule.readWiki(projectRoot, snap.key);
+      const nextRefs = rewriteWikiSlRefs(page.frontmatter.sl_refs ?? [], fromId, toId);
+      if (JSON.stringify(nextRefs) === JSON.stringify(page.frontmatter.sl_refs ?? [])) continue;
+      const paths = await loadContentPaths();
+      const relPath = path.posix.join(WIKI_DIR_REL, page.key);
+      const proposedMarkdown = await buildRenamedWikiMarkdown(snap.raw, page, nextRefs);
+      await safeWrite(paths, projectRoot, relPath, proposedMarkdown);
+      wikiUpdated.push(page.key);
+    }
+
+    // 4. ktx.yaml — last so a thrown error here still leaves the other three consistent.
+    await writeKtxYaml(projectRoot, connectionRenameMutatorFactory(fromId, toId), {
+      dryRun: false,
+      lockHeld: true
+    });
+    ktxWritten = true;
+
+    // Capture "after" compile on the now-rewritten real project.
+    const afterCompile = await compileIdentityCapabilityDiffOnRoot(
+      projectRoot,
+      contentRootRel || ".",
+      allUserIds
+    );
+    const capabilityDiff = diffCapabilityEntries(beforeCompile, afterCompile, fromId, toId);
+    // Overlay the real "after" source-key list for compiled identities.
+    for (const entry of capabilityDiff) {
+      if (entry.compile === "compiled") {
+        const afterEntry = afterCompile.find((row) => row.userId === entry.userId);
+        if (afterEntry?.compile === "compiled") {
+          entry.after = afterEntry.after;
+        }
+      }
+    }
+
+    // 5. mirror sync (Spec 180/181) — best-effort.
+    const { syncContentToProjectRoot } = await import("./content-mirror.js");
+    const mirror = await syncContentToProjectRoot(projectRoot, await loadContentPaths());
+
+    let auditId: number | undefined;
+    if (options.recordConfigChange) {
+      auditId = await options.recordConfigChange({
+        filePath: "ktx.yaml",
+        changeType: "connection_id_change",
+        targetId: `${fromId}->${toId}`,
+        oldSummary: { connectionId: fromId },
+        newSummary: {
+          connectionId: toId,
+          renamedSemanticDir: semanticRenamed,
+          updatedWikiPages: wikiUpdated
+        },
+        diff: previewDiff(
+          redactKtxYamlForPreview(ktxOldText),
+          redactKtxYamlForPreview(await readFile(ktxPath, "utf8")),
+          "ktx.yaml"
+        )
+      });
+    }
+
+    return {
+      written: true,
+      fromId,
+      toId,
+      auditId,
+      renamedSemanticDir: semanticRenamed,
+      updatedWikiPages: wikiUpdated,
+      capabilityDiff,
+      mirror
+    };
+  } catch (error) {
+    await rollback(error);
+    throw error;
   }
 }
