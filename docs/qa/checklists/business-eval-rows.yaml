@@ -1,0 +1,103 @@
+# Business Eval 能力行。权威链接表，供 docs/qa/business-eval-checklist.md 与 checklist-links 测试使用。
+# 阻塞线挂已有 eval case 与同一能力的真实 Agent 变体。良好线只有在 good_line: linked 且链接非空时才可能变绿。
+# good_line: unlinked 的行保持 blocked，不得写成 passed。本文件不记录运行结果。
+# chatbi_intl 文本题不进入本版阻塞分母，见 business-eval-checklist.md，此处不编造链接。
+version: 1
+kind: business-eval-capability
+judgment: dual
+rows:
+  - id: BE-BASE
+    title: 基础数值
+    blocking_line: linked
+    blocking:
+      eval:
+        - superstore-ordercount-001
+        - superstore-ordercount-002
+        - superstore-profit-001
+        - superstore-discount-001
+        - superstore-discount-002
+      e2e: [UX-02-V01, UX-02-V02, UX-02-V03, UX-02-V04]
+    good_line: linked
+    good:
+      eval:
+        - superstore-discount-004
+        - superstore-ordercount-003
+        - superstore-profit-002
+      e2e: []
+  - id: BE-ANTIPATTERN
+    title: 反模式
+    blocking_line: linked
+    blocking:
+      eval:
+        - superstore-ordercount-004
+        - superstore-filter-001
+        - superstore-filter-002
+      e2e: []
+    good_line: unlinked
+    good:
+      eval: []
+      e2e: []
+  - id: BE-PATH
+    title: 路径与 Join
+    blocking_line: linked
+    blocking:
+      eval:
+        - superstore-join-001
+        - superstore-join-002
+        - superstore-segment-001
+      e2e: [UX-02-S01]
+    good_line: unlinked
+    good:
+      eval: []
+      e2e: []
+  - id: BE-BOUNDARY
+    title: 空值与未定义口径
+    blocking_line: linked
+    blocking:
+      eval:
+        - superstore-degradation-001
+      e2e: [UX-03-V01, UX-03-V02, UX-03-V03]
+    good_line: unlinked
+    good:
+      eval: []
+      e2e: []
+  - id: BE-REFUSE
+    title: 拒答与部分交付
+    blocking_line: linked
+    blocking:
+      eval:
+        - agent-reliability-budget-unavailable-001
+        - agent-reliability-hybrid-label-001
+        - agent-reliability-realized-price-001
+        - agent-reliability-partial-delivery-001
+        - agent-reliability-retry-budget-001
+      e2e: [UX-02-V05, UX-03-V04]
+    good_line: unlinked
+    good:
+      eval: []
+      e2e: []
+  - id: BE-MULTITURN
+    title: 多轮口径
+    blocking_line: linked
+    blocking:
+      eval:
+        - superstore-multiturn-001
+      e2e: [UX-04-V01, UX-04-S02]
+    good_line: unlinked
+    good:
+      eval: []
+      e2e: []
+  - id: BE-EXPERIENCE
+    title: 体验轨
+    blocking_line: unlinked
+    blocking:
+      eval: []
+      e2e: []
+    good_line: unlinked
+    good:
+      eval: []
+      e2e: []
+    experience:
+      status: blocked
+      evidence: inbox/e2e/<runId>/experience.json
+      fields: [operator, questions, coherent, metricUnchanged]

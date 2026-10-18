@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy E2E SOP 指引 |
 | 文档类型 | Checklist / Runbook |
-| 版本 | v1.2 |
-| 撰写日期 | 2026-08-08；v1.2 2026-08-25 |
+| 版本 | v1.3 |
+| 撰写日期 | 2026-08-08；v1.3 2026-10-18 |
 | 撰写人 | Cursor Agent |
 | 委托人 | zhangxingchen |
 | 基于材料 | `docs/governance/test-layers-and-release-gates.md`；`docs/qa/lucy-webui-e2e-test-suite.md`；KSC Financial 主题接入实跑；Spider2-lite Pilot（`evals/spider2_lite_sqlite/`）；`docs/governance/DEVELOPMENT.md` |
@@ -121,3 +121,5 @@ flowchart TB
 ## 7. 真实用户 E2E 与客户上线门禁（Spec 20261018）
 
 浏览器 contract 回归（`e2e:contract:release`，旧名 `e2e:release`）使用夹具实例，**不含**真实 Agent，不能签发客户发布。客户候选版本上线前必须由受保护 runner 执行 `npm run e2e:real:*` 三层证据并通过 `npm run gate:customer-release`；运行方式见 [`../runbooks/real-user-e2e.md`](../runbooks/real-user-e2e.md)，case 目录与分母见 `scripts/e2e/contracts/case-catalog.yaml`（冻结，`case-catalog.lock.json`）。缺能力一律 BLOCKED，不得改为 skip 或 pass。
+
+证据是否齐读 [`e2e-release-checklist.md`](e2e-release-checklist.md)（10 行证据行，二元）。能力绿到阻塞线还是良好线读 [`business-eval-checklist.md`](business-eval-checklist.md)。两份清单只引用已有 case，不另设放行命令；链接完整性由 `npm run test:e2e-harness` 里的 `checklist-links.test.mjs` 检查。

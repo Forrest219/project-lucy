@@ -5,6 +5,18 @@
 
 ---
 
+## 2026-10-18 · 客户发布证据清单与 Business Eval 能力清单
+
+### 新增
+- [`e2e-release-checklist.md`](e2e-release-checklist.md) 与 [`checklists/e2e-release-rows.yaml`](checklists/e2e-release-rows.yaml)：冻结目录 32 个场景收成 10 行证据行，二元判定。
+- [`business-eval-checklist.md`](business-eval-checklist.md) 与 [`checklists/business-eval-rows.yaml`](checklists/business-eval-rows.yaml)：superstore、agent_reliability 与 UX-02/03/04 变体收成能力行，阻塞线与良好线分开。
+- `scripts/e2e/__tests__/checklist-links.test.mjs`：引用必须落到 catalog 或既有 eval case；未挂接的良好线不能写成 passed。随 `npm run test:e2e-harness` 执行。
+
+### 影响映射更新
+- 无新 selector。不新增 `E2E-*` 测试集，不改 `gate:customer-release`。
+
+---
+
 ## 2026-10-12 · Agent 角色多选回归
 
 ### 新增

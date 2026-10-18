@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | docs/qa 文档地图 |
 | 文档类型 | Other |
-| 版本 | v1.3 |
-| 撰写日期 | 2026-08-08；v1.3 2026-08-25 |
+| 版本 | v1.4 |
+| 撰写日期 | 2026-08-08；v1.4 2026-10-18 |
 | 撰写人 | Cursor Agent |
 
 ## 结构
@@ -17,6 +17,9 @@ docs/qa/
   suite-semantic-onboard-mcp-eval.md ← 分表 E2E-ONBOARD-EVAL（含 KSC / Spider2 §14）
   suite-agent-mcp.md                 ← 分表 E2E-AGENT（含 Spider2 §5 可选）
   suite-user-journey.md              ← 分表 E2E-USER-JOURNEY（用户逐步操作剧本）
+  e2e-release-checklist.md           ← 客户发布证据行（二元，挂冻结目录）
+  business-eval-checklist.md         ← 业务能力行（阻塞线 / 良好线）
+  checklists/                        ← 上面两份清单的行定义 YAML
   lucy-webui-e2e-test-suite.md       ← WebUI 用例活文档（被分表引用）
   selector-contract.md / impact-map.json / changelog.md
 ```
@@ -31,6 +34,8 @@ docs/qa/
 | [`suite-semantic-onboard-mcp-eval.md`](suite-semantic-onboard-mcp-eval.md) | 分表 `E2E-ONBOARD-EVAL`（主题实例含 Spider2 Pilot §14） |
 | [`suite-agent-mcp.md`](suite-agent-mcp.md) | 分表 `E2E-AGENT`（Spider2 Agent 抽样见 §5） |
 | [`suite-user-journey.md`](suite-user-journey.md) | 分表 `E2E-USER-JOURNEY`（用户逐步操作剧本；Agent 可执行） |
+| [`e2e-release-checklist.md`](e2e-release-checklist.md) | 客户发布证据行：冻结场景收成 10 行，只回答证据齐不齐 |
+| [`business-eval-checklist.md`](business-eval-checklist.md) | 业务能力行：阻塞线与良好线，挂已有 eval case 与 UX 变体 |
 | [`lucy-webui-e2e-test-suite.md`](lucy-webui-e2e-test-suite.md) | WebUI 用例正文（活文档） |
 | [`selector-contract.md`](selector-contract.md) | Selector 契约 |
 | [`changelog.md`](changelog.md) | 变更日志 |
