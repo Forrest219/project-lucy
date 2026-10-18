@@ -29,7 +29,6 @@ import {
   Terminal,
   Users,
   Image,
-  BadgeCheck,
   Radio,
   type LucideIcon
 } from "lucide-react";
@@ -42,7 +41,6 @@ import { useBranding } from "../lib/useBranding";
 import { isPublicUiPath } from "../lib/publicAccess";
 import { HelpButton } from "../components/HelpButton";
 import { CommandPalette } from "../components/CommandPalette";
-import { PolicyDegradeBanner } from "../components/PolicyDegradeBanner";
 import { formatLucyVersionLabel } from "../lib/lucyVersion";
 import { setDisplayWriteBeginHandler, setDisplayWriteSettledHandler } from "../lib/apiClient";
 import { catalogReloadsQueryOptions, DISPLAY_SCOPE_QUERY_KEYS, mcpRuntimeStatusQueryOptions, projectQueryOptions, sourcesQueryOptions } from "../lib/displayQueryOptions";
@@ -72,7 +70,6 @@ const RoleListRoute = lazyRoute(() => import("../pages/admin/RoleList"), "RoleLi
 const RoleDetailRoute = lazyRoute(() => import("../pages/admin/RoleDetail"), "RoleDetail");
 const AdminAccountsRoute = lazyRoute(() => import("../pages/admin/AdminAccounts"), "AdminAccounts");
 const BrandingSettingsRoute = lazyRoute(() => import("../pages/admin/BrandingSettings"), "BrandingSettings");
-const LicenseSettingsRoute = lazyRoute(() => import("../pages/admin/LicenseSettings"), "LicenseSettings");
 const CaseListRoute = lazyRoute(() => import("../pages/eval/CaseList"), "CaseList");
 const CaseEditorRoute = lazyRoute(() => import("../pages/eval/CaseEditor"), "CaseEditor");
 const RunListRoute = lazyRoute(() => import("../pages/eval/RunList"), "RunList");
@@ -109,7 +106,6 @@ const {
   RoleDetail,
   AdminAccounts,
   BrandingSettings,
-  LicenseSettings,
   CaseList,
   CaseEditor,
   RunList,
@@ -145,7 +141,6 @@ const {
   RoleDetail: RoleDetailRoute.Component,
   AdminAccounts: AdminAccountsRoute.Component,
   BrandingSettings: BrandingSettingsRoute.Component,
-  LicenseSettings: LicenseSettingsRoute.Component,
   CaseList: CaseListRoute.Component,
   CaseEditor: CaseEditorRoute.Component,
   RunList: RunListRoute.Component,
@@ -273,8 +268,7 @@ const NAV_ICONS: Record<NavIconKey, LucideIcon> = {
   mcpPlayground: Terminal,
   configAudit: ShieldCheck,
   admins: Users,
-  branding: Image,
-  license: BadgeCheck
+  branding: Image
 };
 
 const GROUP_ICONS: Record<string, LucideIcon> = {
@@ -557,7 +551,6 @@ export function AppFrame() {
         </aside>
 
         <main className="pl-workspace">
-          <PolicyDegradeBanner />
           <div className="pl-workspace-body">
             <RouteChunkBoundary resetKey={location.pathname}>
             <Suspense fallback={<RouteChunkFallback />}>
@@ -594,7 +587,7 @@ export function AppFrame() {
             <Route path="/admin/mcp-playground" element={<McpPlayground />} />
             <Route path="/admin/config-audit" element={<ConfigAudit />} />
             <Route path="/admin/branding" element={<BrandingSettings />} />
-            <Route path="/admin/license" element={<LicenseSettings />} />
+            <Route path="/admin/license" element={<Navigate to="/overview" replace />} />
             <Route path="/admin/admins" element={<AdminAccounts />} />
             <Route path="/eval/cases" element={<CaseList />} />
             <Route path="/eval/cases/:domain" element={<CaseList />} />

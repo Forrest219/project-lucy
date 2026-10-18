@@ -3,15 +3,14 @@ import { resolveAdmissionSubject, type AdmissionSubject } from "./acl.js";
 import { writeAuthFailureLog, type writeLog } from "./audit.js";
 import { identifyRequestDetailed, type Identity } from "./identity.js";
 import { extractRequestClientMeta } from "./request-client-meta.js";
-import { assertLicenseAllowsMcp, loadLicenseSnapshot, resolveLicenseModeForExport } from "../license/entitlement.js";
-
 /**
  * T04-1 / Spec §3.3 — the single MCP admission gate.
  *
  * Every request that reaches the proxy is shaped, origin-checked and
  * authenticated here before any handler reads content or forwards upstream:
  * path/method allowlist → Origin → Bearer (revoked / expired) → Agent enabled →
- * role resolution → single JSON-RPC envelope → deployment license.
+ * role resolution → single JSON-RPC envelope.
+ * Spec 175 removes the deployment-license step.
  * A request that fails any step is answered here and is never forwarded, so
  * the internal upstream Token cannot be attached to an unvetted request.
  *
@@ -39,9 +38,6 @@ const ALLOWED_RPC_METHODS: ReadonlySet<string> = new Set([
   "prompts/list",
   "prompts/get"
 ]);
-
-/** `tools/call` keeps its in-handler license denial (tool-result shape + trace). */
-const LICENSE_HANDLED_IN_TOOL_CALL = "tools/call";
 
 export type McpRoute = "mcp" | "skills";
 
@@ -253,21 +249,10 @@ export async function admitMcpRequest(
     return { ok: false };
   }
 
-  let rpcMethod: string | undefined;
   if (httpMethod === "POST") {
     const envelope = validateEnvelope(body);
     if (!envelope.ok) {
       await denyAdmitted(audit, req, res, identity, envelope, peeked);
-      return { ok: false };
-    }
-    rpcMethod = envelope.method;
-  }
-
-  if (rpcMethod !== LICENSE_HANDLED_IN_TOOL_CALL && resolveLicenseModeForExport() === "enforce") {
-    const decision = assertLicenseAllowsMcp(await loadLicenseSnapshot());
-    if (!decision.allowed) {
-      const reason = decision.decisionReason ?? decision.code.toLowerCase();
-      await denyAdmitted(audit, req, res, identity, accessDenied(reason), peeked);
       return { ok: false };
     }
   }

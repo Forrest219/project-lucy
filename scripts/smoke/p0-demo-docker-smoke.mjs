@@ -13,6 +13,27 @@ const composeFile = "deploy/compose/docker-compose.demo.yml";
 const baselinePath = "examples/docker-demo/mysql/_baseline.json";
 let tempDockerConfig;
 
+const SQLITE_FILE_SETUP = `
+import { DatabaseSync } from "node:sqlite";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+const root = "/tmp/lucy-sqlite-smoke";
+rmSync(root, { recursive: true, force: true });
+mkdirSync(root + "/project", { recursive: true });
+const dbPath = root + "/smoke.sqlite";
+const db = new DatabaseSync(dbPath);
+db.exec("CREATE TABLE smoke_probe (id INTEGER PRIMARY KEY, label TEXT)");
+db.exec("INSERT INTO smoke_probe (id, label) VALUES (1, 'ok')");
+db.close();
+writeFileSync(root + "/project/ktx.yaml", [
+  "connections:",
+  "  smoke-sqlite:",
+  "    driver: sqlite",
+  "    readonly: true",
+  "    path: " + dbPath,
+  ""
+].join("\\n"));
+`;
+
 function run(command, commandArgs, options = {}) {
   return new Promise((resolve, reject) => {
     const label = [command, ...commandArgs].join(" ");
@@ -20,8 +41,13 @@ function run(command, commandArgs, options = {}) {
     const child = spawn(command, commandArgs, {
       cwd: options.cwd ?? process.cwd(),
       env: { ...process.env, ...(options.env ?? {}) },
-      stdio: options.capture ? ["ignore", "pipe", "pipe"] : "inherit"
+      stdio: options.input != null || options.capture ? ["pipe", "pipe", "pipe"] : "inherit"
     });
+    if (options.input != null) {
+      child.stdin.end(options.input);
+    } else if (options.capture) {
+      child.stdin.end();
+    }
     let stdout = "";
     let stderr = "";
     if (child.stdout) child.stdout.on("data", (chunk) => { stdout += chunk.toString(); });
@@ -99,6 +125,35 @@ function rowsByRegion(headers, rows) {
     }
   }
   return map;
+}
+
+function parseKtxJson(stdout) {
+  const start = stdout.indexOf("{");
+  if (start < 0) throw new Error(`expected JSON from ktx, got: ${stdout.slice(0, 400)}`);
+  return JSON.parse(stdout.slice(start));
+}
+
+async function verifySqliteFile() {
+  await run("docker", composeArgs(["exec", "-T", "lucy", "node", "--input-type=module"]), {
+    input: SQLITE_FILE_SETUP
+  });
+  await run("docker", composeArgs([
+    "exec", "-T", "lucy", "ktx",
+    "--project-dir", "/tmp/lucy-sqlite-smoke/project",
+    "connection", "test", "smoke-sqlite"
+  ]));
+  const query = await run("docker", composeArgs([
+    "exec", "-T", "lucy", "ktx",
+    "--project-dir", "/tmp/lucy-sqlite-smoke/project",
+    "sql", "--connection", "smoke-sqlite", "--json",
+    "SELECT label FROM smoke_probe"
+  ]), { capture: true });
+  const parsed = parseKtxJson(query.stdout);
+  const label = parsed.rows?.[0]?.[0];
+  if (label !== "ok") {
+    throw new Error(`sqlite file query expected label ok, got ${JSON.stringify(parsed)}`);
+  }
+  console.log("[p0-demo-smoke] sqlite file connection test and sql query passed");
 }
 
 function assertRegionSales(label, headers, rows, baseline) {
@@ -291,6 +346,7 @@ async function main() {
     await verifyDemoCounts(baseline);
     await verifyAdvertisedMcpEndpoint();
     await run("docker", composeArgs(["exec", "-T", "lucy", "ktx", "--project-dir", "/data/lucy", "connection", "test", "demo-mysql"]));
+    await verifySqliteFile();
     await run("docker", composeArgs(["exec", "-T", "lucy", "ktx", "--project-dir", "/data/lucy", "admin", "reindex", "--force", "--output", "json"]), { capture: true });
     await run("docker", composeArgs(["exec", "-T", "lucy", "ktx", "--project-dir", "/data/lucy", "sl", "validate", "superstore_orders", "--connection-id", "demo-mysql"]));
     const query = await run("docker", composeArgs([

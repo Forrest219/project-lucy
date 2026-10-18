@@ -86,6 +86,16 @@ describe("release workflow cannot produce a customer release without customer-re
     assert.ok(!/--allow-unisolated-local/.test(text), "the isolation override is for local runs only");
   });
 
+  it("real-e2e passes --external to every external runner; run-agent-journey would otherwise start local source", () => {
+    const text = stepsText("real-e2e");
+    // The whole "runners" block must invoke each of the three external-aware runners with --external,
+    // so the registered MCP URL is the only target contacted. run-agent-journey was the easy one to
+    // miss; assert it explicitly here (Spec §6.5, §8.3).
+    assert.match(text, /run-security\.mjs --run "\$\{RUN\}" --external/);
+    assert.match(text, /e2e:real:management -- --run "\$\{RUN\}" --external/);
+    assert.match(text, /run-agent-journey\.mjs --run "\$\{RUN\}" --external/);
+  });
+
   it("promotes the tested digest and never rebuilds after the gates", () => {
     const text = stepsText("release-package");
     assert.match(text, /imagetools create/);
@@ -159,15 +169,18 @@ describe("K8s gate scripts bind evidence to the candidate digest", () => {
     assert.match(gate(`assert_expected_image_digest "ghcr.io/x/lucy@${DIGEST}" "latest"`).stderr, /must be sha256/);
   });
 
-  it("deployment evidence records the digest and refuses anything but a single replica", () => {
+  it("deployment evidence records the digest AND the logical run id, and refuses anything but a single replica", () => {
     const dir = path.join(REPO_ROOT, "inbox", `deployment-evidence-test-${process.pid}`);
-    const ok = gate(`mkdir -p "${dir}" && write_deployment_evidence "${dir}/d.json" ns rel "ghcr.io/x/lucy@${DIGEST}" uid-1 1 && cat "${dir}/d.json"`);
+    const ok = gate(`mkdir -p "${dir}" && write_deployment_evidence "${dir}/d.json" ns rel "ghcr.io/x/lucy@${DIGEST}" uid-1 1 logical-uuid-x && cat "${dir}/d.json"`);
     assert.equal(ok.status, 0, ok.stderr);
     const doc = JSON.parse(ok.stdout);
-    assert.deepEqual({ topology: doc.topology, digest: doc.deployedImageDigest, instance: doc.instanceId }, { topology: "single-replica-k8s", digest: DIGEST, instance: "uid-1" });
-    const two = gate(`write_deployment_evidence "${dir}/e.json" ns rel "ghcr.io/x/lucy@${DIGEST}" uid-1 2`);
+    assert.deepEqual({ topology: doc.topology, digest: doc.deployedImageDigest, instance: doc.instanceId, logical: doc.logicalInstanceId }, { topology: "single-replica-k8s", digest: DIGEST, instance: "uid-1", logical: "logical-uuid-x" });
+    const two = gate(`write_deployment_evidence "${dir}/e.json" ns rel "ghcr.io/x/lucy@${DIGEST}" uid-1 2 logical-uuid-x`);
     assert.notEqual(two.status, 0);
     assert.match(two.stderr, /single-replica/);
+    const noLogical = gate(`write_deployment_evidence "${dir}/f.json" ns rel "ghcr.io/x/lucy@${DIGEST}" uid-1 1 ""`);
+    assert.notEqual(noLogical.status, 0);
+    assert.match(noLogical.stderr, /logical_instance_id is required/);
     gate(`rm -rf "${dir}"`);
   });
 
@@ -198,7 +211,16 @@ describe("K8s gate scripts bind evidence to the candidate digest", () => {
     for (const name of ["values.security-e2e.yaml", "networkpolicy.yaml", "deploy-candidate.sh", "README.md"]) {
       const raw = readFileSync(path.join(REPO_ROOT, "deploy/k8s/security-e2e", name), "utf8");
       // Comments and README prose may say there is NO such switch; only live content is checked.
-      const text = name === "README.md" ? raw : raw.replace(/^\s*#.*$/gm, "");
+      // B3 mounts the per-run DB password into a K8s Secret via
+      // `kubectl create secret generic --from-file=password=<file>`. The string
+      // "password" there is the Secret data key, not a literal credential; the
+      // value stays in the per-run file (mode 0600). Strip `--from-file=password=...`
+      // (including variable references like `${DB_READER_PASSWORD_FILE}`) so the
+      // credential check focuses on actual plaintext values.
+      const stripped = name === "deploy-candidate.sh"
+        ? raw.replace(/--from-file=password=[\w$\{\}\/\-\.\/]+/g, "--from-file=password=<file>")
+        : raw;
+      const text = name === "README.md" ? stripped : stripped.replace(/^\s*#.*$/gm, "");
       assert.ok(!/password\s*[:=]\s*\S{6,}|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|sk-[A-Za-z0-9]{20,}|Bearer\s+[A-Za-z0-9._~+/-]{20,}/.test(text), `${name} contains a credential`);
       if (name !== "README.md") assert.ok(!/LUCY_FAULT|fault[-_]?inject|failpoint/i.test(text), `${name} carries a fault switch`);
     }

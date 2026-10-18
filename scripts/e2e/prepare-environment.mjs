@@ -33,7 +33,12 @@ export const AGENT_TOKENS = [
   ["e2e_channel_only", "CHANNEL_ONLY"],
   ["e2e_discover_only", "DISCOVER_ONLY"],
   ["e2e_split_roles", "SPLIT"],
-  ["e2e_legacy", "LEGACY"]
+  ["e2e_legacy", "LEGACY"],
+  // C1 disposable fixtures for SEC-10-V04 (multi-role OR East ∪ West) and SEC-10-V05
+  // (Agent Constraints AND role). The matching role declarations and `users` blocks live
+  // in examples/security-e2e/project-template/webui/config/access.yaml.template.
+  ["e2e_east_west", "EAST_WEST"],
+  ["e2e_east_constrained", "EAST_CONSTRAINED"]
 ];
 
 export class PrepareError extends Error {}
@@ -116,12 +121,18 @@ function makeSecrets(secretsDir) {
     operator: { adminId: "e2e-operator", password: `Pw-${randomBytes(12).toString("hex")}` }
   };
   const bootstrapToken = randomBytes(24).toString("hex");
-  const dbPassword = randomBytes(18).toString("hex");
+  // The reader/owner passwords live in their own files (mode 0600) so the DB producer
+  // can read them through a per-run file path; never in env or argv. `db-password` is
+  // kept for backward compatibility with anything that still references it.
+  const readerPassword = randomBytes(18).toString("hex");
+  const ownerPassword = randomBytes(18).toString("hex");
   secretFile(path.join(secretsDir, "tokens.json"), `${JSON.stringify(tokens, null, 2)}\n`);
   secretFile(path.join(secretsDir, "admins.json"), `${JSON.stringify(admins, null, 2)}\n`);
   secretFile(path.join(secretsDir, "bootstrap-token"), bootstrapToken);
-  secretFile(path.join(secretsDir, "db-password"), dbPassword);
-  return { hashes, fingerprints };
+  secretFile(path.join(secretsDir, "db-password"), readerPassword);
+  secretFile(path.join(secretsDir, "db-reader.password"), readerPassword);
+  secretFile(path.join(secretsDir, "db-owner.password"), ownerPassword);
+  return { hashes, fingerprints, readerPassword, ownerPassword };
 }
 
 /**
@@ -155,7 +166,7 @@ export async function prepareEnvironment(options) {
   }
 
   const seed = options.seed ?? randomBytes(16).toString("hex");
-  const { generateDataset, computeGold, renderSeedSql } = await import(path.join(FIXTURE_ROOT, "gold", "compute-gold.mjs"));
+  const { generateDataset, computeGold, renderSeedSql, computeDatasetDigest } = await import(path.join(FIXTURE_ROOT, "gold", "compute-gold.mjs"));
   const dataset = generateDataset(seed);
 
   const runDir = resolveRunDir(runRoot, runId, reset);
@@ -168,21 +179,46 @@ export async function prepareEnvironment(options) {
   mkdirSync(secretsDir, { recursive: true, mode: 0o700 });
 
   const goldDoc = { ...computeGold(dataset), canaries: dataset.canaries };
+  const seedDataSql = renderSeedSql(dataset);
+  const seedSqlDigest = `sha256:${sha256Text(seedDataSql)}`;
+  const datasetDigest = computeDatasetDigest(dataset);
   secretFile(path.join(paths.checker, "gold.json"), `${JSON.stringify(goldDoc, null, 2)}\n`);
-  secretFile(path.join(paths.checker, "seed-data.sql"), renderSeedSql(dataset));
+  secretFile(path.join(paths.checker, "seed-data.sql"), seedDataSql);
   writeFileSync(path.join(paths.outside, "canary.txt"), `${dataset.canaries.outsideFile}\n`);
 
   const { hashes, fingerprints } = makeSecrets(secretsDir);
   const fixtureDigest = treeDigest(FIXTURE_ROOT);
+  const logicalInstanceId = randomUUID();
   const markerKey = "shared/e2e-instance-marker";
   const dbHost = options.dbHost ?? "127.0.0.1";
   const dbPort = Number(options.dbPort ?? 5432);
+  // Per-run isolation id flows from the run id (a long random hex) so every
+  // disposable database / role is owned by THIS run; a leftover from a prior
+  // run cannot satisfy a check. The same string is used in runOwnerIsolationId
+  // (run.db.runOwnerIsolationId) below.
+  const runOwnerIsolationId = randomBytes(12).toString("hex");
+  // Per-run DB / role names are computed here AND recorded in run.db so the
+  // producer and the rendered ktx.yaml stay in lockstep. The ktx.yaml
+  // placeholders below reference exactly these names.
+  const safeIso = runOwnerIsolationId.replace(/[^a-zA-Z0-9_]/g, "_").slice(0, 32);
+  const dbFinName = `lucy_e2e_fin_${safeIso}`;
+  const dbSalesName = `lucy_e2e_sales_${safeIso}`;
+  const dbReaderRole = `lucy_e2e_reader_${safeIso}`;
+  const dbOwnerRole = options.dbOwnerRole ?? "postgres";
+  const secretFilePath = path.join(secretsDir, "db-reader.password");
+  const secretMountPath = options.dbSecretMountPath ?? "/var/run/secrets/lucy/db";
+  const containerPasswordPath = path.join(secretMountPath, "password");
+  const ownerPasswordFile = path.join(secretsDir, "db-owner.password");
   renderTemplates(path.join(FIXTURE_ROOT, "project-template"), paths.project, {
     ...hashes,
     DB_HOST: dbHost,
     DB_PORT: dbPort,
-    DB_PASSWORD_FILE: path.join(secretsDir, "db-password"),
+    DB_FIN_NAME: dbFinName,
+    DB_SALES_NAME: dbSalesName,
+    DB_READER_ROLE: dbReaderRole,
+    DB_PASSWORD_FILE: containerPasswordPath,
     RUN_ID: runId,
+    INSTANCE_ID: logicalInstanceId,
     FIXTURE_DIGEST: fixtureDigest,
     CANARY_FIN_WIKI: dataset.canaries.financeWiki,
     CANARY_SALES_WIKI: dataset.canaries.salesWiki,
@@ -201,6 +237,15 @@ export async function prepareEnvironment(options) {
   const external = Boolean(options.baseUrl);
   if (external && mode !== "release") throw new PrepareError("--base-url (external instance) is only valid in release mode");
   if (external && !options.mcpUrl) throw new PrepareError("--base-url requires --mcp-url");
+  // --apply-db opts the run into the postgresql probe. prepare-environment only
+  // DECLARES the contract (host/port/role/password file paths/digests); it does
+  // NOT touch the database. The actual apply + measurement is performed by
+  // scripts/e2e/apply-db.mjs, which then writes back `run.db.applied = true`
+  // only after applySyntheticDbSeed returns applied=true. Until that step runs,
+  // `run.db.applied` is false and the harness records `applyRequested: true`.
+  const applyDb = options.applyDb === true;
+  const seededDbName = options.dbName ?? dbFinName; // legacy alias kept for back-compat
+  const readonlyRoles = options.dbReadonlyRoles?.split(",").map((s) => s.trim()).filter(Boolean) ?? [dbReaderRole];
   const { cases } = loadCatalog();
   const run = {
     contract: "lucy-e2e-run-v1",
@@ -209,7 +254,7 @@ export async function prepareEnvironment(options) {
     executionMode: mode === "release" ? "release" : "local",
     releaseEligible: mode === "release",
     createdAt: new Date().toISOString(),
-    instanceId: randomUUID(),
+    instanceId: logicalInstanceId,
     seedDigest: sha256Text(seed),
     fixtureDigest,
     profileDigest: profileInfo ? fileDigest(profileInfo.real) : null,
@@ -236,10 +281,50 @@ export async function prepareEnvironment(options) {
         LUCY_WEBUI_TEST_PROFILE: mode === "release" ? "0" : "1",
         KTX_PROJECT_ROOT: paths.project,
         LUCY_CONTENT_ROOT: paths.project,
-        LUCY_WEBUI_BOOTSTRAP_TOKEN_FILE: path.join(secretsDir, "bootstrap-token")
+        LUCY_WEBUI_BOOTSTRAP_TOKEN_FILE: path.join(secretsDir, "bootstrap-token"),
+        // The DB contract is propagated to the WebUI container via env so the WebUI can read
+        // its password from the mounted Secret file at the in-container path.
+        LUCY_DB_HOST: dbHost,
+        LUCY_DB_PORT: String(dbPort),
+        LUCY_DB_NAME: seededDbName,
+        LUCY_DB_PASSWORD_FILE: containerPasswordPath
       }
     },
-    db: { host: dbHost, port: dbPort, seedSql: path.join(paths.checker, "seed-data.sql"), applied: false },
+    db: {
+      host: dbHost,
+      port: dbPort,
+      name: seededDbName,
+      // Per-run disposable DB and reader role names. The producer (apply-db.mjs)
+      // creates databases named `${finName}` and `${salesName}` and a single role
+      // `${readerRole}`; the rendered ktx.yaml uses the same names so the WebUI
+      // connects to the right targets without any host-side renaming.
+      finName: dbFinName,
+      salesName: dbSalesName,
+      readerRole: dbReaderRole,
+      ownerRole: dbOwnerRole,
+      runOwnerIsolationId,
+      seedSql: path.join(paths.checker, "seed-data.sql"),
+      seedSqlDigest,
+      datasetDigest,
+      // `applied` is the contract; it stays false until the producer
+      // (applySyntheticDbSeed) actually seeds the disposable DB. `applyRequested`
+      // records that the user opted into the seed step; the harness treats it as
+      // a signal to call apply-db.mjs before deploy, NOT as a readiness claim.
+      applied: false,
+      applyRequested: applyDb,
+      readonlyRoles,
+      // Password files are mode 0600 on disk. They reach the WebUI container
+      // through a Kubernetes Secret (the deploy script mounts them at
+      // `containerPasswordPath`); the DB host is reached directly by the runner.
+      passwordFile: secretFilePath,
+      ownerPasswordFile,
+      secretMount: secretMountPath,
+      containerPasswordPath,
+      // The Secret name is the contract the harness uses when applying the seed and
+      // when mounting it into the WebUI container. It is generated deterministically from the
+      // run id so re-running the same id reuses the same Secret.
+      secretName: `lucy-e2e-db-${runId}`
+    },
     agents: AGENT_TOKENS.map(([id]) => ({ id, tokenFingerprint: fingerprints[id] })),
     secretsDir
   };
@@ -252,7 +337,9 @@ if (invokedDirectly) {
   try {
     const args = parseArgv(process.argv.slice(2), {
       "run-id": "value", mode: "value", candidate: "value", profile: "value", "run-root": "value", seed: "value",
-      "db-host": "value", "db-port": "value", "webui-port": "value", "proxy-port": "value", "project-dir": "value", "base-url": "value", "mcp-url": "value", reset: "boolean"
+      "db-host": "value", "db-port": "value", "webui-port": "value", "proxy-port": "value", "project-dir": "value", "base-url": "value", "mcp-url": "value", reset: "boolean",
+      "apply-db": "boolean", "db-name": "value", "db-readonly-roles": "value", "db-secret-mount-path": "value",
+      "db-owner-role": "value"
     });
     const { run, runJsonPath } = await prepareEnvironment({
       runId: args["run-id"],
@@ -268,7 +355,12 @@ if (invokedDirectly) {
       projectDir: args["project-dir"],
       baseUrl: args["base-url"],
       mcpUrl: args["mcp-url"],
-      reset: args.reset === true
+      reset: args.reset === true,
+      applyDb: args["apply-db"] === true,
+      dbName: args["db-name"],
+      dbReadonlyRoles: args["db-readonly-roles"],
+      dbSecretMountPath: args["db-secret-mount-path"],
+      dbOwnerRole: args["db-owner-role"]
     });
     // Secrets stay in checker/secrets; only the location of run.json and public identity is printed.
     process.stdout.write(`${JSON.stringify({ runJson: runJsonPath, runId: run.runId, executionMode: run.executionMode, instanceId: run.instanceId, fixtureDigest: run.fixtureDigest })}\n`);

@@ -774,9 +774,8 @@
 | `audit-turn-calls-card` | audit-turn-calls-card | `pages/admin/Audit.tsx` |
 | `audit-turn-calls-table` | audit-turn-calls-table | `pages/admin/Audit.tsx` |
 | `audit-stats-time` | audit-stats-time | `pages/admin/Audit.tsx` |
-| `audit-export-current` | 审计当前视图导出入口 | `pages/admin/Audit.tsx` |
-| `audit-export-related` | 审计关联视图导出入口 | `pages/admin/Audit.tsx` |
-| `audit-export-pack` | 审计证据包导出 | `pages/admin/Audit.tsx` |
+| `audit-export-current` | 导出当前页签 | `pages/admin/Audit.tsx` |
+| `audit-export-pack` | 导出审计证据包 | `pages/admin/Audit.tsx` |
 | `audit-view-tabs` | audit-view-tabs | `pages/admin/Audit.tsx` |
 | `audit-tab-turns` | audit-tab-turns | `pages/admin/Audit.tsx` |
 | `audit-tab-calls` | audit-tab-calls | `pages/admin/Audit.tsx` |
@@ -825,29 +824,30 @@
 | `governance-agent-usage` | governance-agent-usage | `pages/admin/GovernanceOverview.tsx` |
 | `governance-token-usage` | governance-token-usage | `pages/admin/GovernanceOverview.tsx` |
 | `governance-popular-tables` | governance-popular-tables | `pages/admin/GovernanceOverview.tsx` |
-| `license-form-error` | license-form-error | `pages/admin/LicenseSettings.tsx` |
-| `license-activation-section` | license-activation-section | `pages/admin/LicenseSettings.tsx` |
-| `license-activation-code` | license-activation-code | `pages/admin/LicenseSettings.tsx` |
-| `license-status-card` | license-status-card | `pages/admin/LicenseSettings.tsx` |
-| `license-status-label` | license-status-label | `pages/admin/LicenseSettings.tsx` |
-| `license-mode` | license-mode | `pages/admin/LicenseSettings.tsx` |
-| `license-customer-id` | license-customer-id | `pages/admin/LicenseSettings.tsx` |
-| `license-tier` | license-tier | `pages/admin/LicenseSettings.tsx` |
-| `license-seat-usage` | license-seat-usage | `pages/admin/LicenseSettings.tsx` |
-| `license-expires-at` | license-expires-at | `pages/admin/LicenseSettings.tsx` |
-| `license-days-remaining` | license-days-remaining | `pages/admin/LicenseSettings.tsx` |
 | `mcp-playground-page` | mcp-playground-page | `pages/admin/McpPlayground.tsx` |
 | `mcp-playground-agent` | mcp-playground-agent | `pages/admin/McpPlayground.tsx` |
-| `mcp-playground-mode` | mcp-playground-mode | `pages/admin/McpPlayground.tsx` |
 | `mcp-playground-role` | mcp-playground-role | `pages/admin/McpPlayground.tsx` |
-| `mcp-playground-tool` | mcp-playground-tool | `pages/admin/McpPlayground.tsx` |
-| `mcp-playground-args` | mcp-playground-args | `pages/admin/McpPlayground.tsx` |
-| `mcp-playground-run-preview` | mcp-playground-run-preview | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-task-connect` | 检查能不能连上 | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-task-table` | 检查能不能查某张表 | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-connect` | mcp-playground-connect | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-execution-block` | 问数进程未加载 | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-recheck` | 重新检测 | `pages/admin/McpPlayground.tsx` |
 | `mcp-playground-token` | mcp-playground-token | `pages/admin/McpPlayground.tsx` |
-| `mcp-playground-run-live` | mcp-playground-run-live | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-token-error` | 只粘贴 Token | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-run-live` | 检查接入 | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-table` | mcp-playground-table | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-policy-block` | 策略降级 | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-policy-link` | 查看配置审计 | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-role-link` | 去改 Role | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-connection` | mcp-playground-connection | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-source` | mcp-playground-source | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-run-table` | 检查权限 | `pages/admin/McpPlayground.tsx` |
 | `mcp-playground-preview-error` | mcp-playground-preview-error | `pages/admin/McpPlayground.tsx` |
 | `mcp-playground-preview-result` | mcp-playground-preview-result | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-live-error` | mcp-playground-live-error | `pages/admin/McpPlayground.tsx` |
 | `mcp-playground-live-result` | mcp-playground-live-result | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-result-headline` | mcp-playground-result-headline | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-result-action` | mcp-playground-result-action | `pages/admin/McpPlayground.tsx` |
 | `mcp-playground-live-confirm` | mcp-playground-live-confirm | `pages/admin/McpPlayground.tsx` |
 | `mcp-playground-confirm-live` | mcp-playground-confirm-live | `pages/admin/McpPlayground.tsx` |
 | `role-connections-field` | role-connections-field | `pages/admin/RoleDetail.tsx` |
@@ -1192,7 +1192,6 @@
 | `governance-interface-groups` | 界面分组 | `pages/admin/GovernanceOverview.tsx` |
 | `governance-interface-menus` | 界面菜单 | `pages/admin/GovernanceOverview.tsx` |
 | `governance-interface-pages` | 界面页面 | `pages/admin/GovernanceOverview.tsx` |
-| `mcp-runtime-connection` | MCP Playground 连接 | `pages/admin/McpPlayground.tsx` |
 | `new-token-expiry-policy-notice` | Token 有效期策略提示 | `pages/admin/NewToken.tsx` |
 | `call-monitor-page` | 调用监控页面 | `pages/ops/CallMonitor.tsx` |
 | `call-monitor-controls` | 调用监控控制区 | `pages/ops/CallMonitor.tsx` |
@@ -1295,7 +1294,6 @@
 | `agent-token-list` | Agent 详情 Token 列表 | `pages/admin/AgentDetail.tsx` |
 | `agent-token-row-${token.label}` | Agent Token 行（模板） | `pages/admin/AgentDetail.tsx` |
 | `audit-turn-meta-card` | 问询详情元信息卡 | `pages/admin/Audit.tsx` |
-| `audit-export-inquiry-pack` | 导出问询与调用 | `pages/admin/Audit.tsx` |
 | `audit-call-inferred-turn-id-${entry.id}` | 调用流水推断问询 ID 链接（模板） | `pages/admin/Audit.tsx` |
 | `audit-usage-slow-${entry.id}` | 调用流水问询慢标记（模板） | `pages/admin/Audit.tsx` |
 | `usage-call-monitor-link` | 使用视图跳转调用监控 | `pages/admin/GovernanceOverview.tsx` |

@@ -119,7 +119,7 @@ findings:
     acceptedBy: null
   # G-03 Agent 评分与 Trace 完整率不能证明实际查过数据（T12/T13）
   # note: T12/T13 代码已交付并有反作弊单测（无服务端成功 query 不通过、runner 自造 trace 无效、他人 Token/旧窗口事件不计、3/3 重复、跨产品一致）。
-  #       **G-03 仅在 Codex CLI 与 Cursor CLI Agent 真实执行通过后才可标 fixed**：本机既无这两个二进制也无测试模型凭据，真实执行 BLOCKED，故保持 open。
+  #       **G-03 仅在自动两 CLI（Claude Code/OpenClaw）3/3 + 人工 GUI（WorkBuddy/Cursor）清单通过后才可标 fixed**（R4 v5）：缺 CLI 证据或缺人工 pack 时保持 open。
   - id: G-03
     severity: P1
     status: open

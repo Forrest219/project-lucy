@@ -198,7 +198,8 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
     expect(screen.getByTestId("audit-turns-coverage-hint")).toHaveTextContent("未上报原文时按会话保留问询");
     expect(screen.getByRole("columnheader", { name: "客户端" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "会话 ID" })).toBeInTheDocument();
-    expect(screen.getByTestId("audit-export-inquiry-pack")).toHaveTextContent("导出问询与调用");
+    expect(screen.getByTestId("audit-export-current")).toHaveTextContent("导出");
+    expect(screen.queryByTestId("audit-export-inquiry-pack")).not.toBeInTheDocument();
   });
 
   it("wraps 调用流水 in the shared bounded scroll frame with investigation column order", async () => {
@@ -277,7 +278,7 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
     expect(screen.getByTestId("audit-access-context-42")).toHaveTextContent("203.0.113.9");
   });
 
-  it("shows tab-aware current and related exports as secondary actions on both tabs (Spec 140)", async () => {
+  it("exports the current tab and keeps the evidence pack as a text action (Spec 140)", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
@@ -300,14 +301,13 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
     expect(await screen.findByTestId("audit-tab-calls")).toHaveAttribute("aria-selected", "true");
     expect(screen.getByTestId("audit-export-current")).toHaveClass("pl-btn--secondary");
     expect(screen.getByTestId("audit-export-current").className).not.toMatch(/pl-btn--primary/);
-    expect(screen.getByTestId("audit-export-current")).toHaveTextContent("导出调用流水");
+    expect(screen.getByTestId("audit-export-current")).toHaveTextContent("导出");
     expect(screen.getByTestId("audit-export-current")).toHaveAttribute("href", expect.stringMatching(/^\/api\/admin\/audit\/export\?/));
-    expect(screen.getByTestId("audit-export-related")).toHaveClass("pl-btn--secondary");
-    expect(screen.getByTestId("audit-export-related").className).not.toMatch(/pl-btn--primary/);
-    expect(screen.getByTestId("audit-export-related")).toHaveTextContent("导出问询记录");
-    expect(screen.getByTestId("audit-export-related")).toHaveAttribute("href", expect.stringMatching(/^\/api\/admin\/audit\/turns\/export\?/));
-    expect(screen.getByTestId("audit-export-pack")).toHaveClass("pl-btn--secondary");
-    expect(screen.getByTestId("audit-export-pack").className).not.toMatch(/pl-btn--primary/);
+    expect(screen.queryByTestId("audit-export-related")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("audit-export-inquiry-pack")).not.toBeInTheDocument();
+    expect(screen.getByTestId("audit-export-pack")).toHaveTextContent("导出审计证据包");
+    expect(screen.getByTestId("audit-export-pack")).toHaveClass("pl-inline-link");
+    expect(screen.getByTestId("audit-export-pack").className).not.toMatch(/pl-btn/);
     expect(screen.getByTestId("audit-granularity-help")).toHaveTextContent("调用流水按一次工具调用展开");
     expect(screen.getByTestId("audit-export-metadata")).toHaveAttribute("href", "/api/admin/audit/export-metadata?kind=calls");
     expect(screen.getByRole("link", { name: "查看审计口径" })).toHaveAttribute("href", "/help?section=admin-audit-turns-vs-calls");
@@ -317,14 +317,13 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
     expect(await screen.findByTestId("audit-tab-turns")).toHaveAttribute("aria-selected", "true");
     expect(screen.getByTestId("audit-export-current")).toHaveClass("pl-btn--secondary");
     expect(screen.getByTestId("audit-export-current").className).not.toMatch(/pl-btn--primary/);
-    expect(screen.getByTestId("audit-export-current")).toHaveTextContent("导出问询记录");
+    expect(screen.getByTestId("audit-export-current")).toHaveTextContent("导出");
     expect(screen.getByTestId("audit-export-current")).toHaveAttribute("href", expect.stringMatching(/^\/api\/admin\/audit\/turns\/export\?/));
-    expect(screen.getByTestId("audit-export-related")).toHaveClass("pl-btn--secondary");
-    expect(screen.getByTestId("audit-export-related").className).not.toMatch(/pl-btn--primary/);
-    expect(screen.getByTestId("audit-export-related")).toHaveTextContent("导出调用流水");
-    expect(screen.getByTestId("audit-export-related")).toHaveAttribute("href", expect.stringMatching(/^\/api\/admin\/audit\/export\?/));
-    expect(screen.getByTestId("audit-export-pack")).toHaveClass("pl-btn--secondary");
-    expect(screen.getByTestId("audit-export-pack").className).not.toMatch(/pl-btn--primary/);
+    expect(screen.queryByTestId("audit-export-related")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("audit-export-inquiry-pack")).not.toBeInTheDocument();
+    expect(screen.getByTestId("audit-export-pack")).toHaveTextContent("导出审计证据包");
+    expect(screen.getByTestId("audit-export-pack")).toHaveClass("pl-inline-link");
+    expect(screen.getByTestId("audit-export-pack").className).not.toMatch(/pl-btn/);
     expect(screen.getByTestId("audit-granularity-help")).toHaveTextContent("问询记录按一次用户问询聚合");
     expect(screen.getByTestId("audit-export-metadata")).toHaveAttribute("href", "/api/admin/audit/export-metadata?kind=turns");
   });
@@ -415,8 +414,9 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
     expect(turnsTable.querySelector("th.pl-audit-turns-col-index.whitespace-nowrap")).not.toBeNull();
     expect(turnsTable).toHaveClass("pl-audit-turns-table");
     expect(screen.getByTestId("audit-turn-id-inf_test_1")).toHaveTextContent("inf_test_1");
-    expect(screen.getByTestId("audit-export-current")).toHaveTextContent("导出问询记录");
-    expect(screen.getByTestId("audit-export-related")).toHaveTextContent("导出调用流水");
+    expect(screen.getByTestId("audit-export-current")).toHaveTextContent("导出");
+    expect(screen.getByTestId("audit-export-current")).toHaveAttribute("href", expect.stringMatching(/^\/api\/admin\/audit\/turns\/export\?/));
+    expect(screen.queryByTestId("audit-export-related")).not.toBeInTheDocument();
 
     cleanup();
     renderAudit("/admin/audit?tab=calls&hours=168");

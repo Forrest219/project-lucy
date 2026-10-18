@@ -11,15 +11,218 @@
 //   node scripts/e2e/verify-evidence.mjs --run <run.json> --candidate <identity.json> --assemble
 
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, realpathSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
 import { assembleEvidence, loadResults } from "./lib/assemble.mjs";
+import { askPlanIdentity, expectedAskPlan } from "./lib/ask-plan.mjs";
 import { CATALOG_PATH, catalogDigest, executionKey, expectedExecutions, loadCatalog } from "./lib/catalog.mjs";
+import { automatedRequiredClients, manualRequiredClients } from "./lib/clients.mjs";
 import { EXIT_CODES, REPO_ROOT, fail, fileDigest, loadRun, parseArgv } from "./lib/common.mjs";
 import { validateAgainstSchema } from "./lib/schema.mjs";
+
+const EXPECTED_STEP_IDS = ["M-01", "M-02", "M-03", "M-04", "M-05"];
+const MANUAL_FUTURE_GRACE_MS = 5 * 60 * 1000;
+// Manual pack freshness: reuse the same release-evidence maxAgeHours (default 72). Do NOT carve a new
+// 1-year window for human packs; a year-old human checklist cannot certify today's candidate.
+const MANUAL_MAX_AGE_MS = 72 * 3600 * 1000;
+// Allowed extension for run-relative manual evidence files. JSON is the canonical carrier but real
+// GUI exports may legitimately be screenshots/text/csv; .json is not enforced. Traversal and absolute
+// paths are blocked by `fileReader` itself; this regex only forbids NULs and shell metacharacters.
+const SAFE_PATH_RE = /^[A-Za-z0-9_\-./]+$/;
+
+function isSafeRelativePath(value) {
+  if (typeof value !== "string" || value.length === 0) return false;
+  if (path.isAbsolute(value)) return false;
+  if (value.includes("..")) return false;
+  if (value.includes("\0")) return false;
+  return SAFE_PATH_RE.test(value);
+}
+
+/**
+ * Reads the raw pack file at `expectedPath` and validates every required field directly from the parsed
+ * raw JSON. This is the binding rule: the verifier does NOT trust the in-memory `evidence.manualClients`
+ * entry as the source of truth for any pack field; instead it re-parses the actual file on disk and
+ * validates each field against the run-time limits. A synthetic entry whose bytes don't match the raw
+ * file (or whose claimed fields disagree with what is on disk) is rejected even when each object on its
+ * own looks schema-valid.
+ *
+ * The verifier deliberately does NOT compare the on-disk `pack.artifact.sha256` to `rawSha`. A
+ * self-referential hash cannot satisfy that equality: writing the file once gives a placeholder value
+ * for the field, writing it twice changes the body. The real binding to "did the file change after
+ * assembly" is supplied by the caller via `expectedAssemblySha`: the assembler-computed hash from the
+ * in-memory `evidence.manualClients` entry, which the caller compares to `rawSha` for tamper detection.
+ *
+ * `expectedMemoryEntry` is the in-memory `evidence.manualClients` slot. The verifier cross-validates it
+ * against the raw file on every key — if a runner fakes the assembled entry while the raw file says
+ * something different (or vice versa), the disagreement is surfaced as `manual_in_memory_drift` and the
+ * verdict is failed even when each side individually passes schema. This is the binding rule from
+ * Codex review item 4.
+ */
+export function verifyManualPackRaw({ baseDir, expectedProduct, expectedPath, readFile, runId, runCreatedAtMs, now, expectedAssemblySha, expectedMemoryEntry }) {
+  const out = [];
+  const buffer = readFile(expectedPath);
+  if (!buffer) {
+    out.push({ severity: "blocked", code: "missing_pack", message: `manual required client ${expectedProduct} has no checklist pack at ${expectedPath}` });
+    return out;
+  }
+  const rawSha = sha256Buffer(buffer);
+  // Tamper detection: the assembly recorded the raw bytes' SHA at the moment it bound this entry. If the
+  // file changes between assembly and verification, the recorded SHA no longer matches. We surface this
+  // as `manual_artifact_hash_mismatch`; the strict `pack.artifact.sha256 === rawSha` check from the
+  // earlier draft is impossible to satisfy in JSON (a self-referential hash) and was removed.
+  if (typeof expectedAssemblySha === "string" && /^[0-9a-f]{64}$/.test(expectedAssemblySha) && expectedAssemblySha !== rawSha) {
+    out.push({ severity: "failed", code: "manual_artifact_hash_mismatch", message: `${expectedProduct} raw file SHA ${rawSha} != assembly-recorded ${expectedAssemblySha}; the pack was modified after assembly` });
+  }
+  let pack;
+  try {
+    pack = JSON.parse(buffer.toString("utf8"));
+  } catch (error) {
+    out.push({ severity: "failed", code: "manual_invalid_json", message: `${expectedProduct} pack ${expectedPath} is not valid JSON: ${error.message}` });
+    return out;
+  }
+  // Cross-validation: every identity field that the in-memory entry exposes must agree with the raw
+  // file. The same code is reused whether the runner faked the in-memory side or the raw side; the
+  // verdict is "the two views disagree, the pack is not consistent".
+  if (expectedMemoryEntry && typeof expectedMemoryEntry === "object") {
+    const mem = expectedMemoryEntry;
+    const pair = (label, a, b) => {
+      if (a === b) return;
+      out.push({ severity: "failed", code: "manual_in_memory_drift", message: `${expectedProduct} ${label} disagrees between raw file (${JSON.stringify(a)}) and in-memory entry (${JSON.stringify(b)})` });
+    };
+    pair("product", pack.product, mem.product);
+    pair("execution", pack.execution, mem.execution);
+    pair("transport", pack.transport, mem.transport);
+    pair("status", pack.status, mem.status);
+    pair("operator", pack.operator, mem.operator);
+    pair("completedAt", pack.completedAt, mem.completedAt);
+    pair("runId", pack.runId, mem.runId);
+    if (Array.isArray(pack.steps) && Array.isArray(mem.steps)) {
+      if (pack.steps.length !== mem.steps.length) {
+        out.push({ severity: "failed", code: "manual_in_memory_drift", message: `${expectedProduct} steps.length disagrees between raw file (${pack.steps.length}) and in-memory entry (${mem.steps.length})` });
+      } else {
+        for (let i = 0; i < pack.steps.length; i += 1) {
+          const a = pack.steps[i] ?? {};
+          const b = mem.steps[i] ?? {};
+          pair(`steps[${i}].id`, a.id, b.id);
+          pair(`steps[${i}].passed`, a.passed, b.passed);
+          pair(`steps[${i}].evidencePath`, a.evidencePath, b.evidencePath);
+          pair(`steps[${i}].evidenceSha256`, a.evidenceSha256, b.evidenceSha256);
+        }
+      }
+    }
+  }
+  if (pack.product !== expectedProduct) out.push({ severity: "failed", code: "manual_wrong_product", message: `${expectedProduct} pack declares product=${pack.product}` });
+  if (pack.execution !== "manual") out.push({ severity: "failed", code: "manual_wrong_execution", message: `${expectedProduct} pack declares execution=${pack.execution}, expected manual` });
+  if (pack.transport !== "gui") out.push({ severity: "failed", code: "manual_wrong_transport", message: `${expectedProduct} pack declares transport=${pack.transport}, expected gui` });
+  if (typeof pack.runId !== "string" || pack.runId.trim().length === 0) {
+    out.push({ severity: "failed", code: "manual_empty_run", message: `${expectedProduct} pack has no runId` });
+  } else if (pack.runId !== runId) {
+    out.push({ severity: "failed", code: "manual_wrong_run", message: `${expectedProduct} pack runId ${pack.runId} != current run ${runId}` });
+  }
+  if (typeof pack.operator !== "string" || pack.operator.trim().length === 0) {
+    out.push({ severity: "failed", code: "manual_empty_operator", message: `${expectedProduct} operator is empty or whitespace-only` });
+  }
+  // completedAt: must parse, must lie in [runCreatedAtMs, now+grace] and not older than maxAge.
+  if (typeof pack.completedAt !== "string" || pack.completedAt.trim().length === 0) {
+    out.push({ severity: "failed", code: "manual_invalid_timestamp", message: `${expectedProduct} completedAt is missing` });
+  } else {
+    const completedAt = Date.parse(pack.completedAt);
+    if (!Number.isFinite(completedAt)) {
+      out.push({ severity: "failed", code: "manual_invalid_timestamp", message: `${expectedProduct} completedAt ${pack.completedAt} is unparseable` });
+    } else {
+      if (Number.isFinite(runCreatedAtMs) && completedAt < runCreatedAtMs) {
+        out.push({ severity: "failed", code: "manual_pre_run_timestamp", message: `${expectedProduct} completedAt ${pack.completedAt} is before run createdAt` });
+      }
+      if (completedAt > now + MANUAL_FUTURE_GRACE_MS) {
+        out.push({ severity: "failed", code: "manual_future_timestamp", message: `${expectedProduct} completedAt ${pack.completedAt} is in the future (beyond ${MANUAL_FUTURE_GRACE_MS / 60000} min grace)` });
+      } else if (now - completedAt > MANUAL_MAX_AGE_MS) {
+        out.push({ severity: "failed", code: "manual_stale_timestamp", message: `${expectedProduct} completedAt ${pack.completedAt} is older than ${MANUAL_MAX_AGE_MS / (365 * 24 * 3600 * 1000)} y` });
+      }
+    }
+  }
+  // Steps: M-01..M-05 in order, each with id/passed/evidencePath/evidenceSha256.
+  if (!Array.isArray(pack.steps)) {
+    out.push({ severity: "failed", code: "manual_bad_steps", message: `${expectedProduct} steps is not an array` });
+  } else if (pack.steps.length !== EXPECTED_STEP_IDS.length) {
+    out.push({ severity: "failed", code: "manual_bad_steps", message: `${expectedProduct} must have exactly ${EXPECTED_STEP_IDS.length} steps, got ${pack.steps.length}` });
+  } else {
+    for (let i = 0; i < EXPECTED_STEP_IDS.length; i += 1) {
+      const step = pack.steps[i];
+      const expected = EXPECTED_STEP_IDS[i];
+      if (step?.id !== expected) {
+        out.push({ severity: "failed", code: "manual_bad_steps", message: `${expectedProduct} steps must be M-01..M-05 in order; got ${JSON.stringify(pack.steps.map((s) => s?.id))}` });
+        break;
+      }
+      if (step?.passed !== true && step?.passed !== false) {
+        out.push({ severity: "failed", code: "manual_bad_steps", message: `${expectedProduct} step ${expected} passed must be boolean` });
+      }
+      const stepPath = step?.evidencePath;
+      const stepSha = step?.evidenceSha256;
+      if (!isSafeRelativePath(stepPath)) {
+        out.push({ severity: "failed", code: "manual_step_evidence_missing", message: `${expectedProduct} step ${expected} evidencePath is missing or unsafe` });
+        continue;
+      }
+      if (typeof stepSha !== "string" || !/^[0-9a-f]{64}$/.test(stepSha)) {
+        out.push({ severity: "failed", code: "manual_step_evidence_missing", message: `${expectedProduct} step ${expected} evidenceSha256 is missing or not 64 hex chars` });
+        continue;
+      }
+      const buf = readFile(stepPath);
+      if (!buf) {
+        out.push({ severity: "failed", code: "manual_step_evidence_missing", message: `${expectedProduct} step ${expected} artifact ${stepPath} cannot be read` });
+        continue;
+      }
+      const computed = sha256Buffer(buf);
+      if (computed !== stepSha) {
+        out.push({ severity: "failed", code: "manual_step_evidence_hash_mismatch", message: `${expectedProduct} step ${expected} artifact ${stepPath} hash mismatch: declared=${stepSha} computed=${computed}` });
+      }
+    }
+  }
+  // Top-level status: only raw `passed` may continue. The Codex A2 reproduction showed a raw pack with
+  // top-level status:"blocked" + all five steps `passed:true` sailing through as PASS. The raw pack
+  // is the operator-signed source of truth; we treat its top-level verdict as authoritative.
+  //   raw "passed"     → continue, the per-step / freshness / hash rules already gate GO
+  //   raw "failed"     → failed (operator marks this human run as failed; the verifier must agree)
+  //   raw "blocked"/"pending" → blocked (operator marked it blocked; verifier must agree)
+  //   raw anything else or missing → failed (malformed; refuse to green-light a packet the operator
+  //                                  never signed off as a successful human pass)
+  const stepResults = Array.isArray(pack.steps) ? pack.steps : [];
+  const anyFailed = stepResults.some((s) => s?.passed === false);
+  const anyUnrun = stepResults.some((s) => s?.passed !== true && s?.passed !== false);
+  const stepCountOk = Array.isArray(pack.steps) && pack.steps.length === EXPECTED_STEP_IDS.length;
+  if (!stepCountOk) {
+    out.push({ severity: "blocked", code: "manual_unrun_steps", message: `${expectedProduct} steps count != ${EXPECTED_STEP_IDS.length}; treating as unrun` });
+  } else if (anyUnrun) {
+    out.push({ severity: "blocked", code: "manual_unrun_steps", message: `${expectedProduct} has an M-step that is neither passed nor failed` });
+  } else if (anyFailed) {
+    out.push({ severity: "failed", code: "manual_client_failed", message: `${expectedProduct} has a failed M-step` });
+  }
+  if (pack.status === "failed") {
+    out.push({ severity: "failed", code: "manual_top_failed", message: `${expectedProduct} top-level status is "failed"` });
+  } else if (pack.status === "blocked" || pack.status === "pending" || pack.status === "missing") {
+    out.push({ severity: "blocked", code: "manual_top_blocked", message: `${expectedProduct} top-level status is "${pack.status}"; cannot green-light` });
+  } else if (pack.status === "passed") {
+    if (anyFailed) out.push({ severity: "failed", code: "manual_forged_top_passed", message: `${expectedProduct} top-level status is passed but a step is failed` });
+  } else if (pack.status === undefined || pack.status === null || pack.status === "") {
+    out.push({ severity: "failed", code: "manual_top_missing", message: `${expectedProduct} has no top-level status; refusing to green-light` });
+  } else {
+    out.push({ severity: "failed", code: "manual_top_unknown", message: `${expectedProduct} top-level status "${pack.status}" is not one of passed/failed/blocked/pending/missing` });
+  }
+  // Top-level artifact: deliberately NOT required. The assembly record (sha256 of the raw bytes) is
+  // the binding; the raw pack itself is operator-signed and the operator does not need to embed a
+  // self-referential artifact hash. A pack.artifact is permitted (kept for backward compatibility)
+  // but its absence is not a failure. A present artifact must still be a well-formed path/sha pair.
+  if (pack.artifact !== undefined && pack.artifact !== null) {
+    if (typeof pack.artifact.path !== "string" || pack.artifact.path.length === 0) {
+      out.push({ severity: "failed", code: "manual_artifact_invalid", message: `${expectedProduct} artifact.path must be a non-empty string when artifact is present` });
+    } else if (pack.artifact.sha256 !== undefined && (typeof pack.artifact.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(pack.artifact.sha256))) {
+      out.push({ severity: "failed", code: "manual_artifact_invalid", message: `${expectedProduct} artifact.sha256 is not a 64-hex string` });
+    }
+  }
+  return out;
+}
 
 const SCHEMA_PATH = path.join(REPO_ROOT, "scripts/e2e/contracts/release-evidence.schema.json");
 export const PROFILE_PATH = path.join(REPO_ROOT, "scripts/e2e/profiles/customer-release.yaml");
@@ -63,6 +266,208 @@ export function verifyDenyCase({ httpStatus, reason, timedOut = false, approvedR
   if (httpStatus < 400) return { status: "failed", detail: `HTTP ${httpStatus} was allowed` };
   if (approvedReasons && !approvedReasons.includes(reason)) return { status: "failed", detail: `deny reason "${reason}" is not an approved reason` };
   return { status: "passed", detail: `HTTP ${httpStatus}` };
+}
+
+/**
+ * A4: validate per-ask indexed evidence. The runner records one immutable record per ask with its
+ * own runId/instanceId/caseId/client/run/askIndex/agentId/tokenFingerprint/since/until/traceIds/
+ * queryEventIds/policyVersion/contextPolicyVersion. Each ask is checked against the per-ask ledger
+ * record; the verifier rejects duplicate / missing ask indices, mismatched run/instance/case/client/
+ * repeat, mismatched Token/Agent, wrong policy/context versions (vs ledger, not just literal
+ * "unavailable"), any cross-ask union laundering, cross-ask record/query/trace reuse, and any
+ * deviation from the frozen expected ask plan. The top-level passed assertion booleans are NEVER
+ * trusted as a substitute for per-ask evidence; we look at the actual indexed records.
+ */
+export function validateIndexedAsks({ key, entry, ledgerAsks, runId, instanceId, expectedPlan, problems }) {
+  const asks = entry.asks;
+  if (!Array.isArray(asks) || asks.length === 0) {
+    problems.add("failed", "indexed_asks_missing", `${key}: an agent case must carry at least one indexed ask (A4)`);
+    return;
+  }
+  // Frozen expected plan: contiguous askIndex 0..N-1, each with the expected Agent/goldKey/
+  // expectation. Removing the second SEC-14-V12 ask still produces contiguous 0..0 — so we require
+  // the runner's recorded askCount to equal the frozen expected plan's length, not just contiguous
+  // indices.
+  if (Array.isArray(expectedPlan)) {
+    if (asks.length !== expectedPlan.length) {
+      problems.add("failed", "ask_count_mismatch", `${key}: recorded ${asks.length} asks but the frozen plan requires ${expectedPlan.length}; expected ask indices ${expectedPlan.map((_, i) => i).join(",")}`);
+    }
+    // Reject mismatched Agent/goldKey/expectation per askIndex. The runner cannot satisfy the case
+    // by claiming a different plan; every askIndex must match the frozen expected identity.
+    const sortedAsks = [...asks].sort((a, b) => (a.askIndex ?? -1) - (b.askIndex ?? -1));
+    for (let i = 0; i < sortedAsks.length && i < expectedPlan.length; i += 1) {
+      const expected = expectedPlan[i];
+      const actual = sortedAsks[i];
+      if (!actual) continue;
+      if (actual.agentId !== expected.agentId || (actual.goldKey ?? null) !== (expected.goldKey ?? null) || (actual.expectation ?? "answer") !== (expected.expectation ?? "answer")) {
+        problems.add("failed", "ask_plan_mismatch", `${key}/askIndex=${actual.askIndex}: ask identity (agent=${actual.agentId}, goldKey=${actual.goldKey}, expectation=${actual.expectation}) does not match the frozen plan (agent=${expected.agentId}, goldKey=${expected.goldKey}, expectation=${expected.expectation})`);
+      }
+    }
+  }
+  const seenAskIndices = new Set();
+  for (const ask of asks) {
+    const idx = ask.askIndex;
+    if (typeof idx !== "number" || !Number.isInteger(idx) || idx < 0) {
+      problems.add("failed", "ask_index_invalid", `${key}: ask has non-integer/non-negative askIndex (${idx})`);
+      continue;
+    }
+    if (seenAskIndices.has(idx)) {
+      problems.add("failed", "ask_duplicate_index", `${key}: duplicate askIndex ${idx}`);
+    }
+    seenAskIndices.add(idx);
+    // Identity binding: runId/instanceId/caseId/client/run must be PRESENT and agree with the
+    // entry under verification. Missing IDs are no longer accepted — a runner that omits them is
+    // laundering the per-ask identity.
+    if (typeof ask.runId !== "string" || ask.runId.length === 0) {
+      problems.add("failed", "ask_run_missing", `${key}/${idx}: ask runId is missing`);
+    } else if (runId && ask.runId !== runId) {
+      problems.add("failed", "ask_run_mismatch", `${key}/${idx}: ask runId ${ask.runId} != current run ${runId}`);
+    }
+    if (typeof ask.instanceId !== "string" || ask.instanceId.length === 0) {
+      problems.add("failed", "ask_instance_missing", `${key}/${idx}: ask instanceId is missing`);
+    } else if (instanceId && ask.instanceId !== instanceId) {
+      problems.add("failed", "ask_instance_mismatch", `${key}/${idx}: ask instanceId ${ask.instanceId} != current instance ${instanceId}`);
+    }
+    if (ask.caseId !== entry.id) {
+      problems.add("failed", "ask_case_mismatch", `${key}/${idx}: ask caseId ${ask.caseId} != entry id ${entry.id}`);
+    }
+    if (ask.client !== entry.client) {
+      problems.add("failed", "ask_client_mismatch", `${key}/${idx}: ask client ${ask.client} != entry client ${entry.client}`);
+    }
+    if (ask.run !== entry.run) {
+      problems.add("failed", "ask_repeat_mismatch", `${key}/${idx}: ask run ${ask.run} != entry run ${entry.run}`);
+    }
+    if (typeof ask.agentId !== "string" || ask.agentId.trim().length === 0) {
+      problems.add("failed", "ask_agent_missing", `${key}/${idx}: ask has no agentId`);
+    }
+    if (typeof ask.tokenFingerprint !== "string" || !/^[0-9a-f]{12}$/.test(ask.tokenFingerprint)) {
+      problems.add("failed", "ask_fingerprint_invalid", `${key}/${idx}: tokenFingerprint ${ask.tokenFingerprint} is not a 12-hex string`);
+    }
+    // Time window: since must parse, until must parse, since <= until.
+    const since = Date.parse(ask.since);
+    const until = Date.parse(ask.until);
+    if (!Number.isFinite(since) || !Number.isFinite(until)) {
+      problems.add("failed", "ask_time_invalid", `${key}/${idx}: ask since/until is unparseable (${ask.since}/${ask.until})`);
+    } else if (since > until) {
+      problems.add("failed", "ask_time_inverted", `${key}/${idx}: ask since ${ask.since} is after until ${ask.until}`);
+    }
+    // Per-ask ledger binding: traceIds / queryEventIds / fingerprint / agentId / policyVersion /
+    // contextPolicyVersion must match what the instance ledger actually recorded for THIS askIndex.
+    // Cross-ask union laundering (passing by stuffing another ask's traces into this one) is rejected
+    // by indexing. The ledger's runId/instanceId are also required.
+    const ledger = ledgerAsks.get(`${key}:${idx}`);
+    if (!ledger) {
+      problems.add("failed", "ask_not_in_ledger", `${key}/${idx}: no per-ask ledger record for this askIndex`);
+    } else {
+      if (typeof ledger.runId === "string" && ledger.runId.length > 0) {
+        if (typeof ask.runId !== "string" || ask.runId !== ledger.runId) {
+          problems.add("failed", "ask_run_not_in_ledger", `${key}/${idx}: ask runId ${ask.runId} does not match the per-ask ledger runId ${ledger.runId}`);
+        }
+      } else {
+        problems.add("failed", "ask_ledger_run_missing", `${key}/${idx}: per-ask ledger record has no runId`);
+      }
+      if (typeof ledger.instanceId === "string" && ledger.instanceId.length > 0) {
+        if (typeof ask.instanceId !== "string" || ask.instanceId !== ledger.instanceId) {
+          problems.add("failed", "ask_instance_not_in_ledger", `${key}/${idx}: ask instanceId ${ask.instanceId} does not match the per-ask ledger instanceId ${ledger.instanceId}`);
+        }
+      } else {
+        problems.add("failed", "ask_ledger_instance_missing", `${key}/${idx}: per-ask ledger record has no instanceId`);
+      }
+      for (const trace of (ask.traceIds ?? [])) {
+        if (!ledger.traces.has(trace)) problems.add("failed", "ask_trace_not_in_ledger", `${key}/${idx}: trace ${trace} is not in the per-ask ledger record`);
+      }
+      for (const qe of (ask.queryEventIds ?? [])) {
+        if (!ledger.queryEventIds.has(qe)) problems.add("failed", "ask_query_not_in_ledger", `${key}/${idx}: query event ${qe} is not in the per-ask ledger record`);
+      }
+      if (ledger.fingerprint && ask.tokenFingerprint !== ledger.fingerprint) {
+        problems.add("failed", "ask_fingerprint_mismatch", `${key}/${idx}: ask tokenFingerprint ${ask.tokenFingerprint} != ledger ${ledger.fingerprint}`);
+      }
+      if (ledger.agentId && ask.agentId && ledger.agentId !== ask.agentId) {
+        problems.add("failed", "ask_agent_mismatch", `${key}/${idx}: ask agentId ${ask.agentId} != ledger ${ledger.agentId}`);
+      }
+      // Policy/context version: must be present AND must equal the ledger's value. An arbitrary
+      // non-"unavailable" string that disagrees with the ledger is a measurement lie.
+      if (typeof ask.policyVersion !== "string" || ask.policyVersion.length === 0) {
+        problems.add("failed", "ask_version_missing", `${key}/${idx}: ask policyVersion is missing`);
+      } else if (typeof ledger.policyVersion === "string" && ledger.policyVersion.length > 0 && ask.policyVersion !== ledger.policyVersion) {
+        problems.add("failed", "ask_policy_mismatch", `${key}/${idx}: ask policyVersion ${ask.policyVersion} != ledger ${ledger.policyVersion}`);
+      }
+      if (typeof ask.contextPolicyVersion !== "string" || ask.contextPolicyVersion.length === 0) {
+        problems.add("failed", "ask_version_missing", `${key}/${idx}: ask contextPolicyVersion is missing`);
+      } else if (typeof ledger.contextPolicyVersion === "string" && ledger.contextPolicyVersion.length > 0 && ask.contextPolicyVersion !== ledger.contextPolicyVersion) {
+        problems.add("failed", "ask_context_policy_mismatch", `${key}/${idx}: ask contextPolicyVersion ${ask.contextPolicyVersion} != ledger ${ledger.contextPolicyVersion}`);
+      }
+    }
+    // Result / gold digests are required and must be 64-hex. The verifier does not re-derive them
+    // here; it checks the recorded digests are well-formed and that they agree with the actual
+    // answer text + gold the runner saw. A bogus / all-zero digest is rejected.
+    if (typeof ask.resultDigest !== "string" || !/^[0-9a-f]{64}$/.test(ask.resultDigest) || ask.resultDigest === "0".repeat(64)) {
+      problems.add("failed", "ask_result_digest_missing", `${key}/${idx}: ask resultDigest is missing, not 64-hex, or all-zero`);
+    }
+    if (typeof ask.goldDigest !== "string" || !/^[0-9a-f]{64}$/.test(ask.goldDigest) || ask.goldDigest === "0".repeat(64)) {
+      problems.add("failed", "ask_gold_digest_missing", `${key}/${idx}: ask goldDigest is missing, not 64-hex, or all-zero`);
+    }
+  }
+  // Cross-ask union laundering: the entry's top-level serverTraceIds must equal the EXACT union of
+  // per-ask traceIds (no missing, no extras), and entry.tokenFingerprints must equal the EXACT set
+  // of per-ask fingerprints. A runner that records the union but lies about per-ask coverage is
+  // caught here; a runner that records the union correctly but a runner that drops an ask's traces
+  // from the union is also caught.
+  const askTraceUnion = [...new Set(asks.flatMap((a) => a.traceIds ?? []))];
+  const askFingerprints = [...new Set(asks.map((a) => a.tokenFingerprint).filter(Boolean))];
+  const topTraces = entry.serverTraceIds ?? [];
+  const topFingerprints = entry.tokenFingerprints ?? [];
+  for (const trace of topTraces) {
+    if (!askTraceUnion.includes(trace)) problems.add("failed", "ask_trace_laundered", `${key}: top-level serverTraceIds contains ${trace} not in any per-ask record`);
+  }
+  for (const trace of askTraceUnion) {
+    if (!topTraces.includes(trace)) problems.add("failed", "ask_trace_missing_from_union", `${key}: per-ask record includes trace ${trace} that is missing from the top-level serverTraceIds union`);
+  }
+  for (const fp of topFingerprints) {
+    if (!askFingerprints.includes(fp)) problems.add("failed", "ask_fingerprint_laundered", `${key}: top-level tokenFingerprints contains ${fp} not in any per-ask record`);
+  }
+  for (const fp of askFingerprints) {
+    if (!topFingerprints.includes(fp)) problems.add("failed", "ask_fingerprint_missing_from_union", `${key}: per-ask record includes fingerprint ${fp} that is missing from the top-level tokenFingerprints union`);
+  }
+  // Top-level queryEventIds must equal the union of per-ask queryEventIds. The runner cannot
+  // claim a query event that no per-ask record saw; nor can it omit a query event that an ask saw.
+  const askQueryUnion = [...new Set(asks.flatMap((a) => a.queryEventIds ?? []))];
+  const topQueries = entry.queryEventIds ?? [];
+  for (const qe of topQueries) {
+    if (!askQueryUnion.includes(qe)) problems.add("failed", "ask_query_laundered", `${key}: top-level queryEventIds contains ${qe} not in any per-ask record`);
+  }
+  for (const qe of askQueryUnion) {
+    if (!topQueries.includes(qe)) problems.add("failed", "ask_query_missing_from_union", `${key}: per-ask record includes query event ${qe} that is missing from the top-level queryEventIds union`);
+  }
+  // Trace reuse: no trace id may appear in more than one ask's traceIds within the same case run.
+  const traceCount = new Map();
+  for (const ask of asks) {
+    for (const trace of (ask.traceIds ?? [])) {
+      traceCount.set(trace, (traceCount.get(trace) ?? 0) + 1);
+    }
+  }
+  for (const [trace, count] of traceCount) if (count > 1) problems.add("failed", "ask_trace_reuse", `${key}: trace ${trace} appears in ${count} per-ask records; cross-ask record reuse is forbidden`);
+  // Query event reuse: same rule for queryEventIds.
+  const qeCount = new Map();
+  for (const ask of asks) {
+    for (const qe of (ask.queryEventIds ?? [])) {
+      qeCount.set(qe, (qeCount.get(qe) ?? 0) + 1);
+    }
+  }
+  for (const [qe, count] of qeCount) if (count > 1) problems.add("failed", "ask_query_reuse", `${key}: query event ${qe} appears in ${count} per-ask records; cross-ask query reuse is forbidden`);
+  // Fingerprint reuse: same rule for tokenFingerprint within the same case run. Distinct Agents/
+  // Tokens per ask (SEC-14-V12) are legitimate; a reused fingerprint for two asks of the same case
+  // run is a binding problem unless the asks explicitly share an Agent (none in the current plan).
+  const fpCount = new Map();
+  for (const ask of asks) {
+    if (typeof ask.tokenFingerprint === "string") fpCount.set(ask.tokenFingerprint, (fpCount.get(ask.tokenFingerprint) ?? 0) + 1);
+  }
+  for (const [fp, count] of fpCount) {
+    if (count > 1) {
+      const expectedFpReuse = Array.isArray(expectedPlan) && expectedPlan.length > 1 && expectedPlan.slice(1).every((_, i) => i === 0 || expectedPlan[i].agentId === expectedPlan[0].agentId);
+      if (!expectedFpReuse) problems.add("failed", "ask_fingerprint_reuse", `${key}: tokenFingerprint ${fp} appears in ${count} per-ask records; cross-ask Token reuse is forbidden unless the frozen plan mandates a shared Agent`);
+    }
+  }
 }
 
 export function sha256Buffer(buffer) {
@@ -138,7 +543,7 @@ export function crossCheckDependencies({ findings, audit }) {
  * @param {number} [p.now]
  * @param {number} [p.maxAgeHours]
  */
-export function verifyRelease({ evidence, candidate, cases, catalogDigest: frozenCatalog, profileDigest, clientsDoc, findings, audit, readFile, now = Date.now(), maxAgeHours = 72, schema }) {
+export function verifyRelease({ evidence, candidate, cases, catalogDigest: frozenCatalog, profileDigest, clientsDoc, findings, audit, readFile, now = Date.now(), maxAgeHours = 72, schema, runId = null, instanceId = null, runCreatedAtMs = NaN }) {
   const problems = new Problems();
   const schemaProblems = schema ? validateAgainstSchema(schema, evidence) : [];
   if (schemaProblems.length > 0) {
@@ -150,6 +555,11 @@ export function verifyRelease({ evidence, candidate, cases, catalogDigest: froze
     problems.add("skipped", "not_release_execution", `executionMode "${evidence.executionMode}" can never be published`);
   }
   if (evidence.stub !== false) problems.add("failed", "stub", "stub must be false");
+
+  // run / instance identity (Spec §8.1: mixed inputs across runner files must be rejected)
+  if (runId && evidence.runId && evidence.runId !== runId) problems.add("failed", "run_id_mismatch", `evidence runId ${evidence.runId} does not match the run under verification ${runId}`);
+  if (instanceId && evidence.environment.instanceId && evidence.environment.instanceId !== instanceId) problems.add("failed", "instance_id_mismatch", `evidence instanceId ${evidence.environment.instanceId} does not match the run under verification ${instanceId}`);
+  if (!evidence.environment.finishedAt) problems.add("blocked", "missing_finished_at", "evidence.environment.finishedAt is not recorded; assembly must preserve the run's last finish time");
 
   // identity: candidate == deployed == every piece of evidence
   for (const key of ["gitSha", "treeDigest", "imageDigest", "platform", "ktxVersion", "chartVersion"]) {
@@ -173,8 +583,8 @@ export function verifyRelease({ evidence, candidate, cases, catalogDigest: froze
   if (evidence.provenance.trusted !== true) problems.add("failed", "untrusted_provenance", "evidence was not produced by a trusted CI runner");
   if (evidence.provenance.ciSha && evidence.provenance.ciSha !== candidate.gitSha) problems.add("failed", "provenance_sha", "CI sha differs from the candidate git sha");
 
-  // denominator
-  const requiredClients = clientsDoc.clients.filter((c) => c.required).map((c) => c.product);
+  // denominator — automated required clients only (manual GUI packs are checked separately)
+  const requiredClients = automatedRequiredClients(clientsDoc.clients).map((c) => c.product);
   const expected = expectedExecutions(cases, requiredClients);
   if (expected.length === 0) problems.add("failed", "empty_denominator", "the required denominator is empty");
   const keys = evidence.cases.map(executionKey);
@@ -190,6 +600,34 @@ export function verifyRelease({ evidence, candidate, cases, catalogDigest: froze
     const client = evidence.clients.find((c) => c.product === product);
     if (!client) problems.add("failed", "missing_client", `required client ${product} is absent from the evidence`);
     else if (client.required !== true) problems.add("failed", "client_not_required", `${product} is registered as required but evidence marks it optional`);
+  }
+  // Scheme A: WorkBuddy / Cursor Agent GUI remain required for GO but are human-executed. The pack is
+  // validated by reading the raw JSON file once and checking every claim against the actual on-disk
+  // bytes — no field is laundered through `evidence.manualClients` without re-validation against raw.
+  // Exactly one entry per expected filename is permitted; duplicates are rejected before per-field
+  // checks so a runner cannot satisfy both workbuddy and cursor with a single file.
+  for (const client of manualRequiredClients(clientsDoc.clients)) {
+    const expectedPath = `results/manual/${client.product}.json`;
+    const matches = (evidence.manualClients ?? []).filter((c) => c?.artifact?.path === expectedPath);
+    if (matches.length === 0) {
+      problems.add("blocked", "missing_pack", `manual required client ${client.product} has no checklist pack at ${expectedPath}`);
+      continue;
+    }
+    if (matches.length > 1) {
+      problems.add("failed", "manual_duplicate_pack", `manual required client ${client.product} has ${matches.length} entries claiming ${expectedPath}; exactly one entry per filename is allowed`);
+      continue;
+    }
+    // The in-memory entry was built by the assembler from this same file. We pass the recorded SHA
+    // through to verifyManualPackRaw, which uses it for tamper detection (raw vs assembly hash) —
+    // the only binding that's actually possible in JSON, since a self-referential hash is impossible.
+    // We also pass the in-memory entry itself so the verifier can cross-validate every identity
+    // field against the raw file (Codex review item 4: an on-disk failed step and an in-memory
+    // passed step must fail even when each object individually matches schema).
+    const memEntry = matches[0];
+    const expectedAssemblySha = memEntry.artifact?.sha256;
+    for (const problem of verifyManualPackRaw({ baseDir: null, expectedProduct: client.product, expectedPath, readFile, runId, runCreatedAtMs, now, expectedAssemblySha, expectedMemoryEntry: memEntry })) {
+      problems.add(problem.severity, problem.code, problem.message);
+    }
   }
   const summary = evidence.summary;
   const actual = { passed: 0, failed: 0, blocked: 0, skipped: 0, dryRun: 0 };
@@ -228,9 +666,41 @@ export function verifyRelease({ evidence, candidate, cases, catalogDigest: froze
     }
   }
   const ledgerTraces = new Map();
+  // Per-ask indexed ledger: cases with multiple asks (SEC-14-V12: sales denied then finance
+  // allowed) carry one record per askIndex. The legacy (non-indexed) record is preserved at
+  // `<key>` for backwards compatibility with the old `tokenFingerprint` check, but the
+  // indexed records are the binding source of truth.
+  const ledgerAsks = new Map();
+  const seenAskLedgerKeys = new Set();
+  const ledgerDuplicates = new Set();
   for (const sc of serverEvidence?.cases ?? []) {
-    // Agent executions are keyed id@client#run (same as executionKey); other data cases by their id.
-    ledgerTraces.set(sc.client ? `${sc.caseId}@${sc.client}#${sc.run}` : sc.caseId, { traces: new Set(sc.traceIds ?? []), fingerprint: sc.tokenFingerprint });
+    if (sc.client) {
+      const k = `${sc.caseId}@${sc.client}#${sc.run}`;
+      if (seenAskLedgerKeys.has(k) && typeof sc.askIndex !== "number") {
+        // Case-level (non-indexed) ledger record arrived more than once for the same key. The
+        // legacy non-indexed slot is meant to be a single record; subsequent arrivals are a
+        // measurement lie.
+        ledgerDuplicates.add(k);
+      }
+      seenAskLedgerKeys.add(k);
+      // Merge: combine the legacy case-level record's traces with all per-ask traces so the
+      // legacy `trace_not_in_server_evidence` check accepts traces that live in any per-ask
+      // record. The per-ask indexed map keeps each ask's exact binding for A4 validation.
+      const existing = ledgerTraces.get(k);
+      const newTraces = new Set([...(existing?.traces ?? []), ...(sc.traceIds ?? [])]);
+      const newFingerprints = new Set([...(existing?.fingerprints ?? []), sc.tokenFingerprint].filter(Boolean));
+      ledgerTraces.set(k, { traces: newTraces, fingerprints: newFingerprints, fingerprint: sc.tokenFingerprint, policyVersion: sc.policyVersion, contextPolicyVersion: sc.contextPolicyVersion, runId: sc.runId, instanceId: sc.instanceId });
+      if (typeof sc.askIndex === "number") {
+        const askKey = `${k}:${sc.askIndex}`;
+        if (ledgerAsks.has(askKey)) ledgerDuplicates.add(askKey);
+        ledgerAsks.set(askKey, { traces: new Set(sc.traceIds ?? []), queryEventIds: new Set(sc.queryEventIds ?? []), fingerprint: sc.tokenFingerprint, agentId: sc.agentId, policyVersion: sc.policyVersion, contextPolicyVersion: sc.contextPolicyVersion, resultDigest: sc.resultDigest, goldDigest: sc.goldDigest, runId: sc.runId, instanceId: sc.instanceId });
+      }
+    } else {
+      ledgerTraces.set(sc.caseId, { traces: new Set(sc.traceIds ?? []), fingerprint: sc.tokenFingerprint, runId: sc.runId, instanceId: sc.instanceId });
+    }
+  }
+  if (ledgerDuplicates.size > 0) {
+    for (const dup of ledgerDuplicates) problems.add("failed", "ledger_duplicate_record", `server-evidence ledger has multiple records for ${dup}; duplicates are silently overwriting each other and must be surfaced`);
   }
   for (const key of expected) {
     const entry = byKey.get(key);
@@ -249,6 +719,16 @@ export function verifyRelease({ evidence, candidate, cases, catalogDigest: froze
     }
     if (entry.leakage && entry.leakage.hits > 0) problems.add("failed", "leakage", `${key}: ${entry.leakage.hits} leakage hit(s)`);
     if (entry.upstreamExecutions !== undefined && entry.upstreamExecutions !== 0 && spec.assert.includes("upstream_exec_zero")) problems.add("failed", "unauthorized_upstream", `${key}: ${entry.upstreamExecutions} unauthorized upstream execution(s)`);
+    // A4: per-ask indexed evidence is REQUIRED for every passed agent execution. The previous
+    // "missing asks falls back to legacy collapsed Map" path was a delete-asks bypass: the
+    // runner could drop the `asks` array, the verifier would still accept the legacy
+    // serverTraceIds, and any cross-ask laundering in the parent union would sail through. The
+    // expected plan comes from the shared registry; the recorded asks must equal the frozen
+    // expected plan, not a runner-fabricated subset.
+    if (entry.runner === "agent") {
+      const expectedPlan = expectedAskPlan(spec);
+      validateIndexedAsks({ key, entry, ledgerAsks, runId, instanceId, expectedPlan, problems });
+    }
     const dataCase = spec.assert.includes("real_query") || spec.assert.includes("server_trace");
     if (dataCase) {
       if (entry.queryEventIds.length === 0 && spec.assert.includes("real_query")) problems.add("failed", "missing_query", `${key}: no real query event: a correct-looking answer without a query does not count`);
@@ -258,8 +738,11 @@ export function verifyRelease({ evidence, candidate, cases, catalogDigest: froze
         if (!ledger) problems.add("failed", "trace_not_in_server_evidence", `${key}: the server evidence has no record for this execution`);
         else {
           for (const trace of entry.serverTraceIds) if (!ledger.traces.has(trace)) problems.add("failed", "trace_not_in_server_evidence", `${key}: trace ${trace} is not in the instance ledger`);
-          if (entry.tokenFingerprint && ledger.fingerprint !== entry.tokenFingerprint) problems.add("failed", "token_fingerprint_mismatch", `${key}: Token fingerprint differs from the ledger`);
         }
+        // A4: the legacy tokenFingerprint comparison was unreliable for multi-ask cases (each ask
+        // has its own fingerprint, but the legacy ledger has only one). Per-ask binding is now the
+        // source of truth and runs unconditionally above; do not also compare the singular
+        // tokenFingerprint, which is undefined for multi-ask entries.
       }
       if (entry.policyVersion === "unavailable" || entry.contextPolicyVersion === "unavailable") problems.add("failed", "version_missing", `${key}: policy/context version not recorded`);
     }
@@ -322,10 +805,29 @@ export function loadVerifyInputs({ catalogPath = CATALOG_PATH, profilePath = PRO
 }
 
 export function fileReaderFor(baseDir) {
+  // Resolve baseDir to its canonical real path. This is the boundary every read must stay inside:
+  // a symlink in `rel` that escapes the archive root is blocked, not followed. We also pre-compute
+  // the canonical form once so the per-call check is a realpath comparison, not a lexical one.
+  const canonicalBase = realpathSync(baseDir);
   return (rel) => {
-    const resolved = path.resolve(baseDir, rel);
-    if (path.relative(baseDir, resolved).startsWith("..") || !existsSync(resolved)) return null;
-    return readFileSync(resolved);
+    if (typeof rel !== "string" || rel.length === 0) return null;
+    if (path.isAbsolute(rel) || rel.includes("\0")) return null;
+    const lexical = path.resolve(baseDir, rel);
+    // Reject anything that lexically escapes the base BEFORE touching the filesystem. A relative
+    // path that contains `..` is unsafe even if the resulting realpath is the same.
+    if (path.relative(baseDir, lexical).startsWith("..") || path.isAbsolute(path.relative(baseDir, lexical))) return null;
+    let lst;
+    try { lst = lstatSync(lexical); } catch { return null; }
+    if (lst.isSymbolicLink()) return null;
+    if (!lst.isFile()) return null;
+    // Reject anything that resolves to outside the canonical base via a realpath check. This is the
+    // last line of defense: the file is on disk, it is regular, but it could be hard-linked or
+    // mount-bound to a sibling directory; we still refuse to follow.
+    let canonical;
+    try { canonical = realpathSync(lexical); } catch { return null; }
+    const relCanonical = path.relative(canonicalBase, canonical);
+    if (relCanonical === "" || relCanonical.startsWith("..") || path.isAbsolute(relCanonical)) return null;
+    return readFileSync(canonical);
   };
 }
 
@@ -336,12 +838,18 @@ if (invokedDirectly) {
     if (!args.candidate) fail("verify-evidence: --candidate <identity.json> is required", 1);
     const candidate = JSON.parse(readFileSync(args.candidate, "utf8"));
     const inputs = loadVerifyInputs(args.findings ? { findingsPath: path.resolve(args.findings) } : {});
+    // Hoist the run context so the assembly branch and the explicit-evidence branch both supply
+    // the same runId/instanceId/runCreatedAtMs to verifyRelease. The previous implementation
+    // declared `run` INSIDE the if (args.assemble) block, then referenced `run.createdAt`,
+    // `run.runId`, `run.instanceId` AFTER both branches — any `--evidence` invocation threw
+    // ReferenceError before the verifier ever ran.
+    let run = null;
     let evidence;
     let baseDir;
     if (args.assemble) {
       if (!args.run) fail("verify-evidence: --assemble needs --run <run.json>", 1);
-      const run = loadRun(args.run);
-      const { evidence: assembled, missing } = assembleEvidence({ run, results: loadResults(run), candidate, profileDigest: inputs.profileDigest, cases: inputs.cases, expectedCount: expectedExecutions(inputs.cases, inputs.clientsDoc.clients.filter((c) => c.required).map((c) => c.product)).length });
+      run = loadRun(args.run);
+      const { evidence: assembled, missing } = assembleEvidence({ run, results: loadResults(run), candidate, profileDigest: inputs.profileDigest, cases: inputs.cases, expectedCount: expectedExecutions(inputs.cases, automatedRequiredClients(inputs.clientsDoc.clients).map((c) => c.product)).length, clientsDoc: inputs.clientsDoc });
       evidence = assembled;
       baseDir = run.paths.runDir;
       if (missing.length > 0) process.stderr.write(`verify-evidence: absent dependencies: ${missing.join(", ")}\n`);
@@ -351,8 +859,14 @@ if (invokedDirectly) {
       evidence = JSON.parse(readFileSync(args.evidence, "utf8"));
       baseDir = path.dirname(path.resolve(args.evidence));
     }
+    // When the caller did not provide a sibling run.json (the --evidence path), we cannot invent a
+    // run context. The verifier treats null runId/instanceId as "no source binding"; the run/instance
+    // identity fields of the evidence document are still cross-checked against its own values.
+    const runId = run?.runId ?? null;
+    const instanceId = run?.instanceId ?? null;
+    const runCreatedAtMs = run?.createdAt && Number.isFinite(Date.parse(run.createdAt)) ? Date.parse(run.createdAt) : NaN;
     const audit = args["audit-json"] ? JSON.parse(readFileSync(args["audit-json"], "utf8")) : null;
-    const verdict = verifyRelease({ evidence, candidate, ...inputs, audit, readFile: fileReaderFor(baseDir) });
+    const verdict = verifyRelease({ evidence, candidate, ...inputs, audit, readFile: fileReaderFor(baseDir), runId, instanceId, runCreatedAtMs });
     if (args.out) writeFileSync(args.out, `${JSON.stringify(verdict, null, 2)}\n`);
     process.stdout.write(`${JSON.stringify(verdict)}\n`);
     process.exit(verdict.exitCode);

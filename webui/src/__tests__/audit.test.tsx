@@ -221,14 +221,18 @@ describe("Audit", () => {
       "href",
       expect.stringContaining("tokenHashPrefix=sha256%3Aaaaa0000")
     );
+    expect(screen.getByTestId("audit-export-current")).toHaveTextContent("导出");
     expect(screen.getByTestId("audit-export-current")).toHaveClass("pl-btn--secondary");
     expect(screen.getByTestId("audit-export-current").className).not.toMatch(/pl-btn--primary/);
     expect(screen.getByTestId("audit-export-pack")).toHaveAttribute(
       "href",
       expect.stringContaining("tokenHashPrefix=sha256%3Aaaaa0000")
     );
-    expect(screen.getByTestId("audit-export-pack")).toHaveClass("pl-btn--secondary");
-    expect(screen.getByTestId("audit-export-pack").className).not.toMatch(/pl-btn--primary/);
+    expect(screen.getByTestId("audit-export-pack")).toHaveTextContent("导出审计证据包");
+    expect(screen.getByTestId("audit-export-pack")).toHaveClass("pl-inline-link");
+    expect(screen.getByTestId("audit-export-pack").className).not.toMatch(/pl-btn/);
+    expect(screen.queryByTestId("audit-export-related")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("audit-export-inquiry-pack")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "近 24 小时" }));
     expect(await screen.findByTestId("audit-token-filter")).toHaveTextContent("sha256:aaaa0000");

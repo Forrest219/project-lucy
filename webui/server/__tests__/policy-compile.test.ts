@@ -139,6 +139,9 @@ describe("WP-I5 EffectivePolicy compile + submit", () => {
     expect(status.degradedGlobal).toBe(false);
     expect(status.degradedAgents).toContain("bad_agent");
     expect(status.degradedAgents).not.toContain("ok_agent");
+    expect(status.issues).toEqual([
+      { agentId: "bad_agent", reason: "role_resolution_failed:bad_role:v2_prefix_forbidden" }
+    ]);
 
     await expect(
       acl.authorizeAndRewrite(identity("bad_agent"), "lucy_query", {
@@ -178,6 +181,7 @@ describe("WP-I5 EffectivePolicy compile + submit", () => {
     await writeFile(path.join(projectRoot, "webui", "config", "access.yaml"), "{ not: valid access config\n", "utf8");
     const status = await acl.commitEffectivePolicy();
     expect(status.degradedGlobal).toBe(true);
+    expect(status.issues).toEqual([{ agentId: "", reason: "access_config_unreadable" }]);
     expect(acl.getPolicyRuntimeStatus().degradedGlobal).toBe(true);
 
     await expect(

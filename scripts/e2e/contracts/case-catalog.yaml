@@ -408,7 +408,6 @@ scenarios:
       - {id: SEC-22-V06, t: 旧 skills passthrough 关闭, assert: [deny, no_leak]}
       - {id: SEC-22-V07, t: 合法 native 客户端无 Origin 仍可鉴权（对照）, assert: [allow_control, deny]}
       - {id: SEC-22-S01, t: 管理快照/Skill 导出/下载链接权限与过期含 allow 对照, assert: [deny, allow_control]}
-      - {id: "SEC-22-S02-{state}-{channel}", t: "许可 {state} 在 {channel} 通道一致拒绝", requires: [lucy-http, ktx-upstream], matrix: {state: [inactive, expired, invalid], channel: [tools, resources, prompts, wiki, initialize]}}
   SEC-23:
     title: 依赖与交付
     spec: "§8"

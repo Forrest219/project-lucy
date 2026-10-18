@@ -1084,7 +1084,116 @@ export type ManualReindexInput = {
   force: boolean;
   reindex: SemanticAssetReindexRecord;
   startedAt?: string;
+  files?: SemanticAssetReleaseFile[];
+  changedSources?: SemanticAssetChangedSource[];
+  connectionIds?: string[];
 };
+
+const PENDING_REVIEW_PREFIXES = ["semantic-layer/", "wiki/", "evals/", "skills/"] as const;
+
+function isPendingReviewPath(filePath: string): boolean {
+  if (!filePath || filePath.includes("\0")) return false;
+  const parts = filePath.split("/");
+  if (parts.includes("..") || parts.includes("")) return false;
+  return PENDING_REVIEW_PREFIXES.some((prefix) => filePath.startsWith(prefix));
+}
+
+function kindForPendingPath(filePath: string): SemanticAssetKind {
+  if (filePath.startsWith("wiki/")) return "wiki";
+  if (filePath.startsWith("evals/")) return "eval";
+  if (filePath.includes("/_schema/")) return "schemaManifest";
+  return "semanticSource";
+}
+
+function absoluteContentFile(
+  paths: Awaited<ReturnType<typeof resolveContentPaths>>,
+  rel: string
+): string | null {
+  const roots: Array<[string, string]> = [
+    ["semantic-layer/", paths.semanticLayer],
+    ["wiki/", paths.wiki],
+    ["evals/", paths.evals],
+    ["skills/", paths.skills]
+  ];
+  for (const [prefix, root] of roots) {
+    if (!rel.startsWith(prefix)) continue;
+    return path.join(root, rel.slice(prefix.length));
+  }
+  return null;
+}
+
+/**
+ * Snapshot the workbench's pending semantic files into a release record.
+ * Index sync does not promote a new upload, but the files already on disk are
+ * what that sync made visible to Agent. History must name them.
+ */
+export async function describePendingReleaseAssets(
+  projectRoot: string,
+  pending: {
+    filePaths: string[];
+    sources: Array<{ conn: string; schema: string; table: string }>;
+  }
+): Promise<{
+  files: SemanticAssetReleaseFile[];
+  changedSources: SemanticAssetChangedSource[];
+  connectionIds: string[];
+}> {
+  const paths = await resolveContentPaths(projectRoot);
+  const seen = new Set<string>();
+  const files: SemanticAssetReleaseFile[] = [];
+  for (const raw of pending.filePaths) {
+    const filePath = raw.split("\\").join("/");
+    if (!isPendingReviewPath(filePath) || seen.has(filePath)) continue;
+    seen.add(filePath);
+    const abs = absoluteContentFile(paths, filePath);
+    let digest = "";
+    let overwritten = false;
+    if (abs) {
+      try {
+        digest = sha256(await readFile(abs, "utf8"));
+        overwritten = true;
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+      }
+    }
+    files.push({
+      targetPath: filePath,
+      kind: kindForPendingPath(filePath),
+      sha256: digest,
+      overwritten
+    });
+  }
+
+  const changedSources: SemanticAssetChangedSource[] = [];
+  const sourceKeys = new Set<string>();
+  function addSource(connectionId: string, sourceName: string) {
+    if (!connectionId || !sourceName) return;
+    const key = `${connectionId}/${sourceName}`;
+    if (sourceKeys.has(key)) return;
+    sourceKeys.add(key);
+    changedSources.push({ connectionId, sourceName });
+  }
+  for (const source of pending.sources) {
+    addSource(source.conn, source.table);
+  }
+  for (const file of files) {
+    if (file.kind !== "semanticSource") continue;
+    const match = /^semantic-layer\/([^/]+)\/([^/]+)\.yaml$/.exec(file.targetPath);
+    if (!match) continue;
+    addSource(match[1], match[2]);
+  }
+
+  const connectionIds = Array.from(
+    new Set([
+      ...changedSources.map((source) => source.connectionId),
+      ...files.flatMap((file) => {
+        const match = /^semantic-layer\/([^/]+)\//.exec(file.targetPath);
+        return match ? [match[1]] : [];
+      })
+    ])
+  );
+  return { files, changedSources, connectionIds };
+}
 
 export async function recordManualReindex(
   projectRoot: string,
@@ -1092,15 +1201,17 @@ export async function recordManualReindex(
 ): Promise<SemanticAssetReleaseRecord> {
   const createdAt = input.startedAt ?? new Date().toISOString();
   const ok = input.reindex.ok;
+  const changedSources = input.changedSources ?? [];
   const record: SemanticAssetReleaseRecord = {
     id: newManualReindexId(),
     createdAt,
     actor: input.actor ?? "local-admin",
     status: ok ? "published" : "reindex_failed",
     trigger: "webui_manual_reindex",
-    connectionIds: [],
-    files: [],
-    changedSources: [],
+    connectionIds:
+      input.connectionIds ?? Array.from(new Set(changedSources.map((source) => source.connectionId))),
+    files: input.files ?? [],
+    changedSources,
     validation: { ok: true, results: [] },
     reindex: {
       ok: input.reindex.ok,

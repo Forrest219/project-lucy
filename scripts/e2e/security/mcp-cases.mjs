@@ -257,16 +257,30 @@ export const handlers = {
       const resources = await ctx.mcp(token, ctx.rpc(2, "resources/list"));
       const prompts = await ctx.mcp(token, ctx.rpc(3, "prompts/list"));
       const search = await ctx.mcp(token, ctx.rpc(4, "tools/call", { name: "lucy_skill_search", arguments: { query: "获客成本" } }));
-      return { init, resources, prompts, search };
+      // Skill read body — the entitled Agent must receive the published skill body, the
+      // unentitled Agent must not. probes both tools/call (lucy_skill_read) and resources/read.
+      const skillReadCall = await ctx.mcp(token, ctx.rpc(5, "tools/call", { name: "lucy_skill_read", arguments: { name: SKILL_NAME } }));
+      const skillResourceRead = await ctx.mcp(token, ctx.rpc(6, "resources/read", { uri: SKILL_URI }));
+      return { init, resources, prompts, search, skillReadCall, skillResourceRead };
     };
     const fin = await surfaces(ctx.tokens.e2e_finance);
     const sales = await surfaces(ctx.tokens.e2e_sales);
+    // init: the entitled Agent must include the Skill name in its initialized
+    // surface list; the unentitled Agent must not.
+    checks.expect("consistency", bodyText(fin.init).includes(SKILL_NAME), `init: entitled Agent sees the published Skill`);
+    checks.expect("consistency", !bodyText(sales.init).includes(SKILL_NAME), `init: unentitled Agent never sees the Skill`);
     for (const [surface, res] of Object.entries(fin)) {
-      if (surface === "init") continue;
+      if (surface === "init" || surface === "skillReadCall" || surface === "skillResourceRead") continue;
       checks.expect("consistency", bodyText(res).includes(SKILL_NAME), `${surface}: entitled Agent sees the published Skill`);
       checks.expect("consistency", !bodyText(res).includes(DRAFT_NAME), `${surface}: draft Skill is never listed`);
     }
+    // Skill read bodies — entitled Agent gets the body, unentitled Agent does not.
+    checks.expect("allow_control", bodyText(fin.skillReadCall).includes("cac-analysis") || bodyText(fin.skillReadCall).length > 0, `skill_read call returned content for entitled Agent`);
+    checks.expect("deny", !bodyText(fin.skillReadCall).includes(DRAFT_NAME), `skill_read call did not leak the draft Skill body`);
+    checks.expect("deny", isDenied(sales.skillReadCall) || !bodyText(sales.skillReadCall).includes(SKILL_NAME), `unentitled Agent's skill_read is refused or empty`);
+    checks.expect("deny", isDenied(sales.skillResourceRead) || !bodyText(sales.skillResourceRead).includes(SKILL_NAME), `unentitled Agent's resources/read is refused or empty`);
     for (const [surface, res] of Object.entries(sales)) {
+      if (surface === "init" || surface === "skillReadCall" || surface === "skillResourceRead") continue;
       checks.expect("consistency", !bodyText(res).includes(SKILL_NAME), `${surface}: unentitled Agent never sees the Skill`);
     }
     checks.noLeak(Object.values(sales).map(bodyText), { secrets: ctx.allSecrets, forbiddenCanaries: [ctx.canaries.publishedSkill, ctx.canaries.draftSkill, ctx.canaries.deprecatedSkill, ctx.canaries.financeWiki] });

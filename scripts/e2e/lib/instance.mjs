@@ -3,23 +3,69 @@
 // Fault injection lives HERE and only here: it acts on the run directory and on the Lucy process that this
 // tooling spawned (kill, restart, chmod on files). The product exposes no fault-injection route or switch;
 // scripts/e2e/__tests__/security-runner.test.mjs statically proves the server sources contain none.
+//
+// LucyHttp is the cookie-aware JSON/text client every runner uses to talk to a real Lucy instance.
+// Two safety rules bind the wire so the security layer can never escape its registered endpoint:
+//   - the constructor REJECTS a baseUrl that is not http(s); the registered MCP URL is the only
+//     authority over what gets contacted;
+//   - a request REJECTS an absolute URL pathname, which `new URL(pathname, baseUrl)` would silently
+//     honour and override the base origin. Anyone who tries that pattern fails fast, with no
+//     request issued. This is the same protection LucyHttp gave ad-hoc to security-integration
+//     cases; it now applies to every call site that imports the helper.
 
 import { spawn } from "node:child_process";
 import { chmodSync, closeSync, createWriteStream, existsSync, openSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import process from "node:process";
+import { URL } from "node:url";
 import { REPO_ROOT } from "./common.mjs";
+import { preflightVerify, postflightVerify, TargetIdentityError } from "./target-identity.mjs";
 
 export const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function normalizeBaseUrl(baseUrl) {
+  if (!(baseUrl instanceof URL)) {
+    throw new Error(`LucyHttp baseUrl must be a URL or string (got ${typeof baseUrl})`);
+  }
+  if (!["http:", "https:"].includes(baseUrl.protocol)) {
+    throw new Error(`LucyHttp baseUrl protocol must be http(s), got "${baseUrl.protocol}"`);
+  }
+  return baseUrl;
+}
 
 /** Minimal cookie-aware JSON/text client. Cookies are only ever held in memory. */
 export class LucyHttp {
   constructor(baseUrl) {
-    this.baseUrl = baseUrl;
+    let parsed;
+    if (typeof baseUrl === "string") {
+      try {
+        parsed = new URL(baseUrl);
+      } catch (error) {
+        throw new Error(`LucyHttp baseUrl is not a valid URL: ${error?.message ?? String(error)}`);
+      }
+    } else {
+      parsed = normalizeBaseUrl(baseUrl);
+    }
+    if (!["http:", "https:"].includes(parsed.protocol)) {
+      throw new Error(`LucyHttp baseUrl protocol must be http(s), got "${parsed.protocol}"`);
+    }
+    this.baseUrl = parsed;
   }
 
   async request(method, pathname, { headers = {}, body, cookie, rawBody, timeoutMs = 20_000 } = {}) {
+    if (typeof pathname !== "string") {
+      throw new Error(`LucyHttp.request pathname must be a string (got ${typeof pathname})`);
+    }
+    // An absolute URL pathname would override the registered origin in `new URL(pathname, baseUrl)`.
+    // Block any pattern that resembles a scheme (e.g. `http://`, `javascript:`, `mailto:`, `file:`):
+    // even schemes without `//` get resolved as path-like references by the URL parser and would
+    // leak the registered origin. The only authority over what gets contacted is the baseUrl
+    // this LucyHttp was constructed with. Without this guard a future caller could quietly point
+    // LucyHttp at a different deployment (security-integration regression).
+    if (/^[a-z][a-z0-9+.-]*:/i.test(pathname)) {
+      throw new Error(`LucyHttp.request refuses pathname with scheme "${pathname}"; only the constructor's baseUrl determines the origin`);
+    }
     const init = { method, headers: { ...headers }, signal: AbortSignal.timeout(timeoutMs), redirect: "manual" };
     if (cookie) init.headers.cookie = cookie;
     if (rawBody !== undefined) {
@@ -85,14 +131,64 @@ export function portOpen(host, port, timeoutMs = 1000) {
  * An instance this tooling did NOT start (the isolated single-replica K8s candidate). It can be driven over
  * HTTP, but there is no process or filesystem control plane here: restart/log access throw, and the catalog
  * cases that need them (`fault-control`) stay BLOCKED until a K8s control plane exists.
+ *
+ * External verification is split into two phases because first-owner bootstrap is part of the
+ * intended UI flow (B2), not part of the orchestrator's bootstrap:
+ *   1. `verifyPreflight()` — public endpoints only (/api/health, /api/auth/status); no bootstrap
+ *      token is consumed, no admin session is created. Fails closed on missing/wrong/unhealthy target.
+ *      Safe to call BEFORE the run's intended bootstrap (which it does not perform).
+ *   2. `verifyPostflight()` — owner login (bootstrap or login), then GET /api/wiki/<markerKey> to read
+ *      the run-scoped marker. Marker content must include this run's run= and fixture=.
+ *      This MUST run AFTER the run's intended bootstrap: a fresh target is in `bootstrap` mode,
+ *      and postflight refuses rather than auto-consume the token.
+ *
+ * `start()` runs BOTH phases in order and fails closed on any problem. The orchestrator
+ * (run-management, run-agent-journey, run-security) calls `verifyPreflight()` itself when it
+ * needs the intended bootstrap to happen in the middle (e.g. SEC02V01-V04 + management UI
+ * bootstrap), then `verifyPostflight()` after the bootstrap is intended. The combined `start()`
+ * remains for callers that don't drive a UI bootstrap.
+ *
+ * Both phases fail closed with a `TargetIdentityError` that carries every problem and the
+ * per-aspect verdict. No fallback, no localhost, no silent pass.
  */
 export class ExternalInstance {
-  constructor(run) {
+  constructor(run, { preflight, postflight } = {}) {
     this.run = run;
     this.logPath = null;
+    this.preflightFn = preflight ?? preflightVerify;
+    this.postflightFn = postflight ?? postflightVerify;
+    this.preflight = null;
+    this.postflight = null;
   }
 
-  async start() {}
+  async start() {
+    await this.verifyPreflight();
+    await this.verifyPostflight();
+  }
+
+  async verifyPreflight() {
+    if (this.run.instance?.startedBy !== "external") {
+      throw new TargetIdentityError({ stage: "startedBy", problems: [`run.instance.startedBy is "${this.run.instance?.startedBy}", expected "external"`], aspects: {} });
+    }
+    const pre = await this.preflightFn({ run: this.run });
+    this.preflight = pre;
+    if (!pre.ok) {
+      throw new TargetIdentityError({ stage: "preflight", problems: pre.problems, aspects: pre.aspects, classification: pre.classification });
+    }
+    return pre;
+  }
+
+  async verifyPostflight() {
+    if (this.run.instance?.startedBy !== "external") {
+      throw new TargetIdentityError({ stage: "startedBy", problems: [`run.instance.startedBy is "${this.run.instance?.startedBy}", expected "external"`], aspects: {} });
+    }
+    const post = await this.postflightFn({ run: this.run });
+    this.postflight = post;
+    if (!post.ok) {
+      throw new TargetIdentityError({ stage: "postflight", problems: post.problems, aspects: post.aspects, classification: post.classification });
+    }
+    return post;
+  }
 
   async stop() {
     return { code: null, signal: null };

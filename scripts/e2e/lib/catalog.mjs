@@ -179,11 +179,6 @@ export function validateCatalog(cases, { goldKeys }) {
   for (const id of REQUIRED_SUBSCENARIO_IDS) {
     if (!seen.has(id)) problems.push(`required sub-scenario ${id} is not a catalog variant`);
   }
-  for (const state of ["inactive", "expired", "invalid"]) {
-    for (const channel of ["tools", "resources", "prompts", "wiki", "initialize"]) {
-      if (!seen.has(`SEC-22-S02-${state}-${channel}`)) problems.push(`license variant SEC-22-S02-${state}-${channel} missing`);
-    }
-  }
   return problems;
 }
 

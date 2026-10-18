@@ -380,7 +380,11 @@ export async function readProject(projectRoot: string): Promise<ProjectInfo> {
       passwordSource: passwordSource(conn.password),
       host: displayString(conn.host),
       port: displayString(conn.port),
-      database: displayString(conn.database ?? conn.db ?? conn.dbname),
+      database: displayString(
+        driverName === "sqlite"
+          ? (conn.path ?? conn.database ?? conn.db ?? conn.dbname)
+          : (conn.database ?? conn.db ?? conn.dbname)
+      ),
       schemas,
       enabledTables
     };
@@ -1437,7 +1441,11 @@ function connectionCreateMutatorFactory(input: CreateConnectionInput, passwordRe
       if (input.port != null) {
         conn.set("port", input.port);
       }
-      conn.set("database", input.database);
+      if (input.driver === "sqlite") {
+        conn.set("path", input.database);
+      } else {
+        conn.set("database", input.database);
+      }
       if (input.username) {
         conn.set("username", input.username);
       }
@@ -1705,13 +1713,21 @@ export async function probeConnection(
           databases: [],
           enabled_tables: []
         }
-      : {
-          driver: input.driver,
-          readonly: input.readonly !== false,
-          database: input.database,
-          schemas: [],
-          enabled_tables: []
-        };
+      : input.driver === "sqlite"
+        ? {
+            driver: "sqlite",
+            readonly: input.readonly !== false,
+            path: input.database,
+            schemas: [],
+            enabled_tables: []
+          }
+        : {
+            driver: input.driver,
+            readonly: input.readonly !== false,
+            database: input.database,
+            schemas: [],
+            enabled_tables: []
+          };
     if (input.driver !== "athena") {
       if (input.host) conn.host = input.host;
       if (input.port != null) conn.port = input.port;

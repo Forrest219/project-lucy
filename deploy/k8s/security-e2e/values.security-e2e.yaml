@@ -32,6 +32,13 @@ env:
 bootstrap:
   existingSecret: lucy-e2e-bootstrap            # Secret with key `token`, created from checker/secrets/bootstrap-token
 
+# B3 disposable DB password: the harness-created Secret (key `password`) is mounted at
+# /var/run/secrets/lucy-db so the rendered ktx.yaml's `password: file:` reference resolves.
+# Set by deploy-candidate.sh from run.json's db.secretName.
+db:
+  existingSecret: ""
+  mountPath: "/var/run/secrets/lucy-db"
+
 security:
   insecureHttpTestProfile: false
 

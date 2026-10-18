@@ -106,10 +106,9 @@ async function main() {
 
   // Phase 2: Metadata & Config Checks
   try {
-    console.log("\n--- Phase 2: Metadata, Skills & License Baseline ---");
+    console.log("\n--- Phase 2: Metadata & Skills ---");
     await runCommand("node", ["scripts/smoke/p1-skills-smoke.mjs"]);
     await runCommand("node", ["scripts/smoke/headless-config-smoke.mjs"]);
-    await runCommand("node", ["scripts/release/verify-license-baseline.mjs"]);
     evidence.phases.metadata_contracts = { status: "passed" };
   } catch (err) {
     evidence.phases.metadata_contracts = { status: "failed", error: err.message };

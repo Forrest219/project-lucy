@@ -14,6 +14,7 @@ import type {
   RoleSelector,
 } from "../../lib/types";
 import { PageHeader } from "../../components/PageHeader";
+import { PolicyDegradeRepairText } from "../../components/PolicyDegradeBanner";
 import { TagInput } from "../../components/TagInput";
 import { RoleTableGrants } from "../../components/RoleTableGrants";
 import { RoleToolGrants } from "../../components/RoleToolGrants";
@@ -332,8 +333,12 @@ function RoleBoundarySummary({
         </div>
       ) : null}
       {detail?.invalid ? (
-        <div className="rounded-md border border-danger-strong bg-danger-soft p-3 text-xs text-danger" role="alert">
-          当前正式 Role 待修复：{detail.warnings.join("；")}
+        <div className="grid gap-1 rounded-md border border-warning-strong/40 bg-warning-soft p-3 text-xs text-fg-default" role="status" data-testid="role-repair-hint">
+          {detail.warnings.map((warning) => (
+            <p key={warning}>
+              <PolicyDegradeRepairText reason={warning} />
+            </p>
+          ))}
         </div>
       ) : null}
       {detail?.effectivePermissions ? (

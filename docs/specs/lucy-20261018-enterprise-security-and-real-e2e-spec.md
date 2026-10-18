@@ -23,7 +23,7 @@
 | 已实现 | ✅ | T00～T15 代码、迁移工具、harness、verifier、归档、workflow 接线均已合入工作区（A0 热修复、A、B、C 批次） |
 | 本地通过 | ✅（范围受限） | 开发机（arm64，无 KTX 上游/数据库/真实客户端）：security-integration 对真实 Lucy 进程执行的 case、真实桌面 Chromium 管理旅程（9 个用例）、证据 verifier 反向测试 GATE-01-V01～V16 全部通过；其余按 catalog 能力要求报 BLOCKED，数量与原因见 `docs/qa/enterprise-security-real-e2e-acceptance.md` §8 |
 | 目标 K8s 通过 | ❌ BLOCKED | R8：受保护 runner 与 amd64 单副本 K8s 未提供；`real-e2e` job 从未被调度；N-1 PVC 升级、恢复、网络隔离未运行 |
-| 可发布 | ❌ | 需 `customer-release-readiness` 在同一候选 digest 上通过：P0/P1 全部 fixed 且被本次 release 证据验证（当前 G-01、G-03 为 open）、required 场景与固定分母全部 passed、Codex CLI + Cursor CLI Agent 各 3/3、无 blocked/skip/dry-run |
+| 可发布 | ❌ | 需 `customer-release-readiness` 在同一候选 digest 上通过：P0/P1 全部 fixed 且被本次 release 证据验证（当前 G-01、G-03 为 open）、自动分母（Claude Code + OpenClaw 各 3/3）passed、人工 GUI 清单（WorkBuddy + Cursor Agent）passed、无 blocked/skip/dry-run |
 
 只有最后一级全部满足才可写 verified / GO；本表不是客户上线授权。
 
@@ -57,7 +57,7 @@
 
 ### 1.1 非目标与信任边界
 
-不增加多副本、分布式锁、TokenScope、Dynamic RLS、多租户 claim、Active Role、完整 CLS、SSO/OIDC/MFA 或新的查询语言。遵守 [权限路线图冻结](../access-control/adr-post-p15-roadmap-freeze.md)。同一 Agent 多 Token 仍同权；Token 级会话隔离不构成 Token 级行权限。
+不增加多副本、分布式锁、TokenScope、Dynamic RLS、多租户 claim、Active Role、完整 CLS、SSO/OIDC/MFA、SMTP 或新的查询语言。遵守 [权限路线图冻结](../access-control/adr-post-p15-roadmap-freeze.md)。同一 Agent 多 Token 仍同权；Token 级会话隔离不构成 Token 级行权限。可选 SMTP 与单点登录已记入 [Lucy 2.5 功能升级建议书](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) L25-05、L25-06，待单独功能 Spec；该记录不改变本 Spec 的非目标。
 
 保留当前 owner/operator 的职责合同：仅 owner 管理登录账户；operator 可做现有日常连接、语义、Wiki、Skill、Agent/Role/Token 与审计操作。两者都是受信任管理人员，本期不宣称实现双人授权审批或管理员职责分离。操作员能修改业务上下文，故其内容必须视为可能带有间接提示注入的输入，不能提升数据面权限。
 
@@ -124,7 +124,7 @@
 
 每个 HTTP 请求（包括 GET/DELETE、通知、Resources/Prompts）都验证 Bearer、吊销、过期、Agent enabled、角色解析。sessionId 不代替认证；WebUI Cookie 不代替 MCP Token。初次认证不通过为 401；已认证但停用/已声明角色无法解析为 403，MCP 方法授权失败使用 §4.4 的协议响应。既有合法 legacy direct-allow 身份可继续走其原数据面 ACL；仅上下文动作额外要求正式角色。空身份或未声明有效 direct-allow 不能冒充 legacy。这一区分同时适用于 initialize 的目录过滤，不得从 legacy 握手返回上下文摘要。
 
-只接受明确的 `/mcp` 路径/方法集合，拒绝不支持的 batch/非对象 envelope、未知方法或不支持路径，不能原样带内部 Token 转发。`/mcp/skills` 的旧无对象 ACL passthrough 在客户模式必须保持关闭，启用配置导致启动预检失败。License 使用现行策略，但所有产品内容通道应一致执行已配置的许可裁决，不另造授权例外。
+只接受明确的 `/mcp` 路径/方法集合，拒绝不支持的 batch/非对象 envelope、未知方法或不支持路径，不能原样带内部 Token 转发。`/mcp/skills` 的旧无对象 ACL passthrough 在客户模式必须保持关闭，启用配置导致启动预检失败。部署许可按 Spec 175 v0.2 删除：不因激活码拒绝任何 MCP 内容通道。将来若新 Spec 恢复许可，各内容通道仍须一致执行同一裁决，不另造授权例外。
 
 下游会话绑定 `(Agent id, Token hash, downstreamSessionId)`，上游 transport session 不再只按 userId 共享。没有 session header 的兼容客户端按 Token 建立独立默认会话；推荐每客户端安装使用独立 Token，不新增 Token 行权限。外来 sessionId 不可复用别人的上游状态/事件。
 
@@ -326,9 +326,12 @@ checker 按每个 case 的身份与对象定义 allowed/forbidden canary 集合�
 
 ### 6.3 多平台与真实客户端
 
-新增版本化 `docs/qa/real-e2e-clients.yaml`，列出产品客户端、真实接入方式、版本、OS、adapter、支持的协议/认证、required 与用例集合。**草案首发建议 Codex + Cursor 两个不同产品为 required**；最终名单由本 Spec 审阅确认，不能在 CI 失败后删 required 来变绿。
+新增版本化 `docs/qa/real-e2e-clients.yaml`，列出产品客户端、真实接入方式、版本、OS、adapter、支持的协议/认证、required 与用例集合。**首发 required（2026-10-18 owner 确认 v5）**：
+- **自动分母**（`execution: automated`）：Claude Code CLI + OpenClaw CLI（`transport=cli`），由 runner 执行，每产品每场景 3/3。Codex CLI 已放弃自动验收，仅 optional。
+- **人工分母**（`execution: manual`）：WorkBuddy GUI + Cursor Agent GUI，**永远人工执行**；客户 GO 仍 required，证据为 checklist pack（缺包 = blocked）。
+不能在 CI 失败后删 required 来变绿。
 
-同一 Hermes 的两个 profile 不算两个产品；直接 HTTP 脚本不算真实客户端；CLI adapter 仅能证明其实际执行的 CLI 路径，不能冒充桌面 UI/云连接器。承诺支持的 Claude Code/Hermes/WorkBuddy 等须在相应 release profile 中纳入 required；未承诺者明确不标 verified。认证方式不支持时报告 blocked，不绕到 KTX stdio/7878。
+同一 Hermes 的两个 profile 不算两个产品；直接 HTTP 脚本不算真实客户端；CLI adapter 仅能证明其实际执行的 CLI 路径，不能冒充桌面 UI。认证方式不支持时报告 blocked，不绕到 KTX stdio/7878。
 
 GUI 客户端用其真实 UI 操作/受控自动化导入从 WebUI 复制的配置并发问；可保留受信任执行者记录作为 GUI 证据，但必须同时有服务端 Trace、随机 gold 和签名采集记录。配置中每客户端独立测试 Token，Agent 权限仍由各自 Role/Constraints 决定。
 
@@ -407,7 +410,7 @@ GUI 客户端用其真实 UI 操作/受控自动化导入从 WebUI 复制的配�
 - **UX-02/04**：内建度量 `count(*)/count(1)` 引导、嵌套聚合拒绝、同名字段消歧、中文度量；认证路径与报告模板使用原查询 ACL，不扩大来源，模板/口径/实际预测版本与审计 appliedVersion 一致；模板错误/权限拒绝不静默改题。
 - **UX-03**：问询预算耗尽、一次继续、查询并发上限、取消、超时重试、空结果与慢调用；不能绕过预算无限循环，失败后释放执行槽，合法后续请求可继续。既有阈值沿用 Spec 162，不在测试中临时调宽。
 - **SEC-18/20、UX-07**：Spec 172/173 的“先调用后上报问题”补绑、不同客户端/会话不并簇、一次原始问询不重复生成为推断问询、初始化/发现探测不虚增业务问询；调用监控/使用概况的窗口、慢标记、eval 排除与真实事件对账。
-- **SEC-15/17/22**：品牌图片/Markdown 的脚本载荷不执行；管理快照、Skill 客户端导出与下载链接权限/过期行为按 API 契约验证；正常品牌与导出功能有 allow 对照。部署许可 inactive/expired/invalid 在规定的全部 MCP 内容通道一致，不能只测 tools/call。
+- **SEC-15/17/22**：品牌图片/Markdown 的脚本载荷不执行；管理快照、Skill 客户端导出与下载链接权限/过期行为按 API 契约验证；正常品牌与导出功能有 allow 对照。Spec 175 v0.2 删除部署许可后，激活码缺失或过期不列入拒绝分母。将来若新 Spec 恢复许可，inactive/expired/invalid 仍须在全部 MCP 内容通道一致，不能只测 tools/call。
 
 ## 8. 上线强制门禁与证据
 
@@ -538,10 +541,10 @@ verifyRelease(candidate, frozenCatalog, evidence):          # GATE-01
 | R1 上下文隔离 | 显式角色 ACL + 同角色通道；无 ACL 拒绝；`*` 显式确认；legacy Agent 先迁移 | 推翻 170 的全开放；部分旧文档在迁移确认前不可用 |
 | R2 审计失败策略 | 内容返回前 durable prepared；故障停止敏感内容释放 | 选择安全可追溯优先，会在安全存储不可用时降低服务可用性 |
 | R3 会话 | 空闲 30 分钟/绝对 12 小时；旧会话一次失效；恢复强制重新登录 | 管理员需更频繁登录；Agent Token 不受会话迁移影响 |
-| R4 客户端首发矩阵 | Codex + Cursor 为两个 required 产品；所有其他已承诺支持产品也 required | 缺真实客户端 runner 不签发布，不能用 Hermes 两 profile 代替 |
+| R4 客户端首发矩阵 | 自动 required：Claude Code + OpenClaw；人工 required：WorkBuddy + Cursor Agent GUI（2026-10-18 owner v5；放弃 Codex CLI 自动验收） | 缺自动 CLI 证据或缺人工 GUI 清单均不签发布；不能用 Hermes / Codex 代替 |
 | R5 保留/归档 | 安全事件与 release evidence 180 天，原文维持短保留；客户合同更长从其规定 | 需容量预算、受控 artifact 存储；不默认建设 WORM/SSO |
 | R6 分批上线 | A0 热修复先行；P0/P1 可分批合入/内部验证，全部关闭后才客户 GO | 首批热修复不代表全产品企业安全验收已完成 |
-| R7 Cursor 接入形态 | Cursor 以其 **CLI Agent（`cursor-agent` / `agent`，以 runner 实际安装为准）+ 从 WebUI 复制的 MCP 配置**作为 required 执行路径，证据标注 `transport=cli`；Cursor IDE GUI 路径列为 optional，不进入首发分母。Codex 同样以 CLI 为 required | 若客户承诺的是 Cursor IDE GUI，需改为 GUI 自动化 required，T12 工作量与 runner 要求显著上升 |
+| R7 Cursor / WorkBuddy 接入形态 | WorkBuddy 与 Cursor Agent GUI 为 **manual required**（checklist，永不自动化）；自动路径为 Claude Code + OpenClaw。Codex / Cursor Agent CLI 仅 optional | 人工缺包 = GO blocked；不得用自动化假造 GUI 证据 |
 | R8 测试基础设施 | 指定负责人提供：①可运行真实模型与 CLI 客户端的 protected self-hosted runner（macOS 或 Linux 均可，凭据存 CI secret）；②一套 linux/amd64 单节点 K8s（k3s 即可）供候选 digest 部署。两者就绪前 T12/T14 状态为 BLOCKED，客户 GO 不可签 | 无此基础设施则批次 C 无法完成；不得以本地 Compose 或 arm64 结果替代 |
 | R9 LLM 波动容忍 | 安全负例：零容忍（任何一次越权即 FAILED）。业务正确性：每 required 产品 × 场景固定 3 次，**3/3 通过**；任一失败须给出根因分类（产品缺陷 / 语义口径 / 模型波动），模型波动类仅允许 owner 书面豁免单次重跑一轮且原失败保留在证据中 | 严格口径会提高发布阻断概率；放宽为 2/3 需在此显式改决策 |
 | R10 模型凭据与预算 | 使用测试专用账号与 Key，不复用个人生产配置；每次候选完整运行的调用量上限在 `profiles/customer-release.yaml` 冻结 | 未提供凭据即 BLOCKED |

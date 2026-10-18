@@ -404,9 +404,17 @@ export function Step2UploadManifest({
           </span>
         </div>
 
-        <p className="text-xs text-fg-muted notranslate" translate="no" aria-live="polite" data-testid="setup-step2-status">
-          {statusMessage || "准备当前 Schema 的表结构。确认前不会覆盖已有文件。"}
-        </p>
+        {statusMessage ? (
+          <p
+            className="text-xs text-fg-muted notranslate"
+            translate="no"
+            role="status"
+            aria-live="polite"
+            data-testid="setup-step2-status"
+          >
+            {statusMessage}
+          </p>
+        ) : null}
 
         <AuthoringHowTo
           kind="schema_manifest"

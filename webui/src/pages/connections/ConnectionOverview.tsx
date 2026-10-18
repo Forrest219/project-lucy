@@ -273,12 +273,30 @@ function warningKey(connectionId: string, schema: string): string {
   return `${connectionId}:${schema}`;
 }
 
-/** Pointer can cross the 4px gap between 「更多」 and its menu without closing. */
+/** Pointer can cross the 4px gap between a Schema 「更多」 and its menu without closing. */
 const SCHEMA_MORE_CLOSE_DELAY_MS = 150;
 
-function findSchemaMoreRoot(key: string): HTMLElement | null {
-  for (const node of document.querySelectorAll<HTMLElement>("[data-schema-more]")) {
-    if (node.dataset.schemaMore === key) return node;
+type OpenMore =
+  | { kind: "connection"; id: string }
+  | { kind: "schema"; key: string };
+
+function sameOpenMore(current: OpenMore | null, target: OpenMore | null): boolean {
+  if (current === target) return true;
+  if (!current || !target || current.kind !== target.kind) return false;
+  if (current.kind === "connection" && target.kind === "connection") return current.id === target.id;
+  if (current.kind === "schema" && target.kind === "schema") return current.key === target.key;
+  return false;
+}
+
+function findOpenMoreRoot(target: OpenMore): HTMLElement | null {
+  if (target.kind === "schema") {
+    for (const node of document.querySelectorAll<HTMLElement>("[data-schema-more]")) {
+      if (node.dataset.schemaMore === target.key) return node;
+    }
+    return null;
+  }
+  for (const node of document.querySelectorAll<HTMLElement>("[data-connection-more]")) {
+    if (node.dataset.connectionMore === target.id) return node;
   }
   return null;
 }
@@ -521,7 +539,7 @@ export function ConnectionOverview() {
   const [refreshingLiveByConnection, setRefreshingLiveByConnection] = useState<Record<string, boolean>>({});
   const [testDrawerConnId, setTestDrawerConnId] = useState<string | null>(null);
   const [testLogsExpanded, setTestLogsExpanded] = useState(false);
-  const [openSchemaMoreKey, setOpenSchemaMoreKey] = useState<string | null>(null);
+  const [openMore, setOpenMore] = useState<OpenMore | null>(null);
   const schemaMoreCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function cancelSchemaMoreClose() {
@@ -531,21 +549,21 @@ export function ConnectionOverview() {
     }
   }
 
-  function closeSchemaMore() {
+  function closeMore() {
     cancelSchemaMoreClose();
-    setOpenSchemaMoreKey(null);
+    setOpenMore(null);
   }
 
-  function toggleSchemaMore(key: string) {
+  function toggleMore(next: OpenMore) {
     cancelSchemaMoreClose();
-    setOpenSchemaMoreKey((current) => (current === key ? null : key));
+    setOpenMore((current) => (sameOpenMore(current, next) ? null : next));
   }
 
   function scheduleSchemaMoreClose(key: string) {
     cancelSchemaMoreClose();
     schemaMoreCloseTimer.current = setTimeout(() => {
       schemaMoreCloseTimer.current = null;
-      setOpenSchemaMoreKey((current) => (current === key ? null : current));
+      setOpenMore((current) => (current?.kind === "schema" && current.key === key ? null : current));
     }, SCHEMA_MORE_CLOSE_DELAY_MS);
   }
 
@@ -556,26 +574,26 @@ export function ConnectionOverview() {
   }, []);
 
   useEffect(() => {
-    if (!openSchemaMoreKey) return;
-    const key = openSchemaMoreKey;
+    if (!openMore) return;
+    const target = openMore;
 
     function onPointerDown(event: PointerEvent) {
-      const root = findSchemaMoreRoot(key);
+      const root = findOpenMoreRoot(target);
       if (root && event.target instanceof Node && root.contains(event.target)) return;
       cancelSchemaMoreClose();
-      setOpenSchemaMoreKey((current) => (current === key ? null : current));
+      setOpenMore((current) => (sameOpenMore(current, target) ? null : current));
     }
 
     function onKeyDown(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
-      const root = findSchemaMoreRoot(key);
+      const root = findOpenMoreRoot(target);
       const summary = root?.querySelector("summary");
       const returnFocus =
         root != null &&
         document.activeElement instanceof Node &&
         root.contains(document.activeElement);
       cancelSchemaMoreClose();
-      setOpenSchemaMoreKey((current) => (current === key ? null : current));
+      setOpenMore((current) => (sameOpenMore(current, target) ? null : current));
       if (returnFocus && summary instanceof HTMLElement) summary.focus();
     }
 
@@ -585,7 +603,7 @@ export function ConnectionOverview() {
       document.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [openSchemaMoreKey]);
+  }, [openMore]);
 
   function handleReloadStart(connectionId: string) {
     setReloadingConnections((current) => ({ ...current, [connectionId]: true }));
@@ -624,7 +642,7 @@ export function ConnectionOverview() {
   }
 
   function openCreateUploadDrawer(connectionId: string, schema: string) {
-    closeSchemaMore();
+    closeMore();
     setManifestUploadTarget({
       connectionId,
       schema,
@@ -987,12 +1005,26 @@ export function ConnectionOverview() {
                     </button>
                     <details
                       className="pl-row-action-more pl-connection-more"
+                      open={openMore?.kind === "connection" && openMore.id === conn.id}
+                      data-connection-more={conn.id}
                       data-testid={`connection-more-${conn.id}`}
+                      onToggle={(event) => {
+                        const nextOpen = event.currentTarget.open;
+                        const mine: OpenMore = { kind: "connection", id: conn.id };
+                        setOpenMore((current) => {
+                          if (nextOpen) return mine;
+                          return sameOpenMore(current, mine) ? null : current;
+                        });
+                      }}
                     >
                       <summary
                         className="pl-row-action-link notranslate"
                         translate="no"
                         aria-label={`更多连接操作：${conn.id}`}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          toggleMore({ kind: "connection", id: conn.id });
+                        }}
                       >
                         更多
                       </summary>
@@ -1003,6 +1035,7 @@ export function ConnectionOverview() {
                             className="pl-row-action-link pl-connection-more-action notranslate"
                             disabled={Boolean(liveQuery?.isFetching || refreshingLiveByConnection[conn.id])}
                             onClick={() => {
+                              closeMore();
                               void (async () => {
                                 setRefreshingLiveByConnection((current) => ({ ...current, [conn.id]: true }));
                                 try {
@@ -1041,7 +1074,10 @@ export function ConnectionOverview() {
                             title="重新读取本机 YAML，不连接数据库。"
                             showCompletionLabel={false}
                             showInlineResult={false}
-                            onReloadStart={() => handleReloadStart(conn.id)}
+                            onReloadStart={() => {
+                              closeMore();
+                              handleReloadStart(conn.id);
+                            }}
                             onReloadComplete={(run) => handleReloadComplete(conn.id, run)}
                             onReloadError={(reloadButtonError) => handleReloadError(conn.id, reloadButtonError)}
                           />
@@ -1053,7 +1089,10 @@ export function ConnectionOverview() {
                         <button
                           type="button"
                           className="pl-row-action-link pl-row-action-link--danger pl-connection-more-action notranslate"
-                          onClick={() => setDeleteTarget(conn)}
+                          onClick={() => {
+                            closeMore();
+                            setDeleteTarget(conn);
+                          }}
                           data-testid={`delete-connection-${conn.id}`}
                           translate="no"
                         >
@@ -1287,27 +1326,28 @@ export function ConnectionOverview() {
                                     ) : null}
                                     <details
                                       className="pl-row-action-more"
-                                      open={openSchemaMoreKey === rowManifestKey}
+                                      open={openMore?.kind === "schema" && openMore.key === rowManifestKey}
                                       data-schema-more={rowManifestKey}
                                       data-testid={`schema-more-${conn.id}-${schema}`}
                                       onMouseEnter={() => {
-                                        if (openSchemaMoreKey === rowManifestKey) cancelSchemaMoreClose();
+                                        if (openMore?.kind === "schema" && openMore.key === rowManifestKey) cancelSchemaMoreClose();
                                       }}
                                       onMouseLeave={() => {
-                                        if (openSchemaMoreKey === rowManifestKey) scheduleSchemaMoreClose(rowManifestKey);
+                                        if (openMore?.kind === "schema" && openMore.key === rowManifestKey) scheduleSchemaMoreClose(rowManifestKey);
                                       }}
                                       onToggle={(event) => {
                                         const nextOpen = event.currentTarget.open;
-                                        setOpenSchemaMoreKey((current) => {
-                                          if (nextOpen) return rowManifestKey;
-                                          return current === rowManifestKey ? null : current;
+                                        const mine: OpenMore = { kind: "schema", key: rowManifestKey };
+                                        setOpenMore((current) => {
+                                          if (nextOpen) return mine;
+                                          return sameOpenMore(current, mine) ? null : current;
                                         });
                                       }}
                                       onBlur={(event) => {
                                         const next = event.relatedTarget;
                                         if (next instanceof Node && event.currentTarget.contains(next)) return;
-                                        if (openSchemaMoreKey !== rowManifestKey) return;
-                                        closeSchemaMore();
+                                        if (!(openMore?.kind === "schema" && openMore.key === rowManifestKey)) return;
+                                        closeMore();
                                       }}
                                     >
                                       <summary
@@ -1316,7 +1356,7 @@ export function ConnectionOverview() {
                                         aria-label={`更多 Schema 操作：${schema}`}
                                         onClick={(event) => {
                                           event.preventDefault();
-                                          toggleSchemaMore(rowManifestKey);
+                                          toggleMore({ kind: "schema", key: rowManifestKey });
                                         }}
                                       >
                                         更多
@@ -1330,7 +1370,7 @@ export function ConnectionOverview() {
                                               translate="no"
                                               disabled={downloadingManifestKey === rowManifestKey}
                                               onClick={() => {
-                                                closeSchemaMore();
+                                                closeMore();
                                                 void downloadManifest(conn.id, schema);
                                               }}
                                               data-testid={`download-manifest-${conn.id}-${schema}`}
@@ -1342,7 +1382,7 @@ export function ConnectionOverview() {
                                               className="pl-row-action-link notranslate"
                                               translate="no"
                                               onClick={async () => {
-                                                closeSchemaMore();
+                                                closeMore();
                                                 try {
                                                   const asset = await fetchCatalogSchemaManifest(conn.id, schema);
                                                   openReuploadDrawer(asset);
@@ -1374,7 +1414,7 @@ export function ConnectionOverview() {
                                           className="pl-row-action-link pl-row-action-link--danger notranslate"
                                           translate="no"
                                           onClick={() => {
-                                            closeSchemaMore();
+                                            closeMore();
                                             setRemoveTarget({ connection: conn, schema });
                                           }}
                                           data-testid={`remove-schema-${conn.id}-${schema}`}

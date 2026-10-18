@@ -32,27 +32,18 @@ export function AuthoringHowTo({ kind, autoOpen = false }: AuthoringHowToProps) 
   return (
     <details
       ref={detailsRef}
-      className="rounded-lg border border-border-default bg-bg-surface px-3 py-2"
+      className="text-xs"
       data-testid={testId}
     >
-      <summary className="cursor-pointer text-xs font-medium text-fg-default notranslate" translate="no">
+      <summary className="cursor-pointer font-medium text-fg-muted hover:text-fg-default notranslate" translate="no">
         {kind === "schema_manifest" ? "如何生成 Schema Manifest" : "如何写业务 Wiki"}
       </summary>
-      <div className="mt-2 space-y-2 text-xs text-fg-muted">
+      <div className="mt-1.5 space-y-1.5 text-fg-muted">
         {kind === "schema_manifest" ? (
-          <>
-            <p>
-              能读取这套数据库时，点「从数据库读取表结构」。写入的{" "}
-              <span className="notranslate" translate="no">Schema Manifest</span> 包含表名、字段和类型。
-            </p>
-            <p>
-              不能读取，或你要自己准备文件时，把编写说明交给你的{" "}
-              <span className="notranslate" translate="no">Agent</span>
-              。让它连接同一套数据库并生成{" "}
-              <span className="notranslate" translate="no">YAML</span>
-              ，再把文件拖到本页或粘贴到下面。
-            </p>
-          </>
+          <p>
+            要自己准备文件时，把编写说明交给你的{" "}
+            <span className="notranslate" translate="no">Agent</span>。
+          </p>
         ) : (
           <>
             <p>

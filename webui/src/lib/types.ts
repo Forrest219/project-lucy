@@ -799,6 +799,8 @@ export type PolicyRuntimeStatus = {
   policyVersion: string;
   degradedGlobal: boolean;
   degradedAgents: string[];
+  /** Present when the server can name the compile failure. */
+  issues?: Array<{ agentId: string; reason: string }>;
   accessConfigDigest: string;
   sourceMapVersion: string;
   enabledTablesDigest?: string;

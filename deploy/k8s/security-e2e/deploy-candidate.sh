@@ -49,12 +49,64 @@ log "bootstrap Secret from file (value never printed)"
 kubectl -n "${NAMESPACE}" delete secret lucy-e2e-bootstrap --ignore-not-found >/dev/null
 kubectl -n "${NAMESPACE}" create secret generic lucy-e2e-bootstrap --from-file=token="${BOOTSTRAP_FILE}" >/dev/null
 
+# B3: the harness-prepared write of the DB password is mounted into the WebUI pod at
+# the in-container path the rendered ktx.yaml references (`password: file:<path>`).
+# prepare-environment already wrote the per-run reader password file at
+# ${RUN_DIR}/checker/secrets/db-reader.password with mode 0600; we copy it into a
+# K8s Secret so the helm chart can mount it as a volume without printing the value.
+# The B3 step is OPT-IN: a run.json that does not declare db.secretName (e.g. a
+# pre-B3 or B1-only run) skips the step entirely. The script never hardcodes the
+# password or the Secret name.
+DB_SECRET_NAME=""
+DB_READER_PASSWORD_FILE=""
+if python3 -c '
+import json, sys
+with open(sys.argv[1], "r") as f:
+  d = json.load(f).get("db") or {}
+  if not d.get("secretName"):
+    sys.exit(1)
+' "${RUN_JSON}" 2>/dev/null; then
+  DB_SECRET_NAME="$(python3 -c '
+import json, sys
+with open(sys.argv[1], "r") as f:
+  print(json.load(f)["db"]["secretName"])
+' "${RUN_JSON}")"
+  DB_READER_PASSWORD_FILE="$(python3 -c '
+import json, sys
+with open(sys.argv[1], "r") as f:
+  print(json.load(f)["db"]["passwordFile"])
+' "${RUN_JSON}")"
+  [[ -n "${DB_READER_PASSWORD_FILE}" && -r "${DB_READER_PASSWORD_FILE}" ]] || \
+    fail "run.json declares db.secretName=${DB_SECRET_NAME} but db.passwordFile is missing or unreadable; the B3 producer requires a per-run reader password file (run prepare-environment with --apply-db)"
+  log "DB password Secret from file (value never printed) -> ${DB_SECRET_NAME}"
+  kubectl -n "${NAMESPACE}" delete secret "${DB_SECRET_NAME}" --ignore-not-found >/dev/null
+  kubectl -n "${NAMESPACE}" create secret generic "${DB_SECRET_NAME}" --from-file=password="${DB_READER_PASSWORD_FILE}" >/dev/null
+fi
+
 log "helm upgrade --install ${RELEASE} (image pinned by digest ${DIGEST})"
-helm upgrade --install "${RELEASE}" "${CHART}" -n "${NAMESPACE}" -f "${VALUES}" \
-  --set "image.repository=${REPOSITORY}" \
-  --set-string "image.digest=${DIGEST}" \
-  --set-string "env.LUCY_PUBLIC_MCP_URL=${PUBLIC_MCP_URL}" \
-  --wait --timeout 10m
+# B3: pass the DB Secret name (read from run.json's db.secretName) through to the chart so
+# the rendered ktx.yaml's `password: file:<mountPath>/password` resolves to the in-container file.
+# When the run did not opt into --apply-db, no Secret name is forwarded and the chart's default
+# (no DB Secret volume) applies. bash 3.2 cannot safely expand an empty array under
+# `set -u`, so we build the helm invocation string instead of an arg array.
+HELM_EXTRA_ARGS=()
+if [[ -n "${DB_SECRET_NAME}" ]]; then
+  HELM_EXTRA_ARGS=(--set-string "db.existingSecret=${DB_SECRET_NAME}")
+fi
+if [[ ${#HELM_EXTRA_ARGS[@]} -gt 0 ]]; then
+  helm upgrade --install "${RELEASE}" "${CHART}" -n "${NAMESPACE}" -f "${VALUES}" \
+    --set "image.repository=${REPOSITORY}" \
+    --set-string "image.digest=${DIGEST}" \
+    --set-string "env.LUCY_PUBLIC_MCP_URL=${PUBLIC_MCP_URL}" \
+    "${HELM_EXTRA_ARGS[@]}" \
+    --wait --timeout 10m
+else
+  helm upgrade --install "${RELEASE}" "${CHART}" -n "${NAMESPACE}" -f "${VALUES}" \
+    --set "image.repository=${REPOSITORY}" \
+    --set-string "image.digest=${DIGEST}" \
+    --set-string "env.LUCY_PUBLIC_MCP_URL=${PUBLIC_MCP_URL}" \
+    --wait --timeout 10m
+fi
 
 POD="$(kubectl -n "${NAMESPACE}" get pods -l "app.kubernetes.io/instance=${RELEASE}" -o jsonpath='{.items[0].metadata.name}')"
 log "seeding the synthetic fixture project into ${POD}:/data/lucy (no private configuration is ever copied)"
@@ -64,8 +116,21 @@ kubectl -n "${NAMESPACE}" rollout status "deploy/${RELEASE}" --timeout=600s >/de
 
 log "acceptance + what is actually deployed (digest and single-replica topology are read from the cluster)"
 mkdir -p "${RUN_DIR}/results"
+
+# Pull the run's logical instance UUID from run.json so the acceptance step can stamp it on
+# deployment.json. k8s-acceptance.sh now requires --logical-instance-id whenever
+# --deployment-evidence is used (B1 target-identity refuses missing field); the real
+# physical Pod UID is measured inside the acceptance step and recorded separately.
+LOGICAL_INSTANCE_ID="$(python3 -c '
+import json, sys
+with open(sys.argv[1], "r") as f:
+    print(json.load(f)["instanceId"])
+' "${RUN_JSON}")"
+[[ -n "${LOGICAL_INSTANCE_ID}" ]] || fail "run.json is missing instanceId; run prepare-environment.mjs first"
+
 bash "${ROOT}/scripts/gates/k8s-acceptance.sh" --namespace "${NAMESPACE}" --release "${RELEASE}" \
   --skip-mcp --skip-ktx --skip-secrets-check \
   --expect-image-digest "${DIGEST}" \
+  --logical-instance-id "${LOGICAL_INSTANCE_ID}" \
   --deployment-evidence "${RUN_DIR}/results/deployment.json"
-log "deployment evidence: ${RUN_DIR}/results/deployment.json"
+log "deployment evidence: ${RUN_DIR}/results/deployment.json (logicalInstanceId=${LOGICAL_INSTANCE_ID})"

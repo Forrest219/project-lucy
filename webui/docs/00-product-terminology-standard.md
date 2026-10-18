@@ -207,9 +207,9 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | WebUI Admin Operator | 运维 | 运维人员 | 管理员（易与所有者混淆）、普通用户 | 日常连接 / 语义 / Eval / Agent Role；不可管登录账户 |
 | WebUI Login | 登录 | 控制面登录 | Sign in 裸用 | `/login` |
 | Customer Branding | 品牌外观 | 客户品牌 | 白标、换皮、皮肤（作导航/标题） | Spec 126：`/admin/branding` |
-| Deployment License | 部署许可 | 软件许可、License | 授权（与数据 ACL 混淆）、激活（与语义生效混淆） | 客户付费后的实例级 entitlement；`/admin/license` |
-| Activation Code | 激活码 | 授权码、License Key | Token（与 MCP Agent Token 混淆）、激活（动词，指语义发布） | 厂商离线签发的部署许可凭证 |
-| License Seat | Agent 席位 | seat、席位上限 | 用户数、Token 数（作 seat 主标签） | 部署许可允许的启用 Agent 数量上限 |
+| Deployment License | 部署许可 | 软件许可、License | 授权（与数据 ACL 混淆）、激活（与语义生效混淆） | 历史对照。Spec 175 v0.2 起从产品移除，不再作为交付概念 |
+| Activation Code | 激活码 | 授权码、License Key | Token（与 MCP Agent Token 混淆）、激活（动词，指语义发布） | 历史对照。Spec 175 v0.2 起不出现在导航、页面或用户可见错误中 |
+| License Seat | Agent 席位 | seat、席位上限 | 用户数、Token 数（作 seat 主标签） | 历史对照。Spec 175 v0.2 起不再作为拒绝原因 |
 | Customer Logo | 客户 Logo | Logo | 头像、图标（作主标签） | 侧栏 mark 与登录页共用；PNG/JPEG/GIF，32–160px |
 | Product Title | 产品名称 | wordmark | 站点名、系统名（作主标签） | 默认 `Lucy WebUI` |
 | Brand Tagline | 副标题 | tagline | 口号、Slogan（作主标签） | 默认 `可信 Agent 数据层` |
@@ -411,7 +411,7 @@ Connection (连接)
 | 我已有 Schema Manifest | 展开上传 | 裸「上传 YAML」 |
 | 替换已有 Schema Manifest | 主动覆盖入口，确认后再写入 | 自动覆盖 |
 | 结束并稍后继续 | 关闭并保留第 2 步断点 | 稍后上传 Schema Manifest |
-| 如何生成 Schema Manifest | 第 2 步折叠提醒（Spec 167）。能读库时指向「从数据库读取表结构」；不能读库或要自备文件时，让用户把编写说明交给 Agent | 下载 Skill、去某个客户端安装、先准备好 YAML 再启动向导 |
+| 如何生成 Schema Manifest | 第 2 步折叠提醒（Spec 167）。展开后只说明：要自己准备文件时，把编写说明交给 Agent。读库由主按钮「从数据库读取表结构」承担 | 下载 Skill、去某个客户端安装、先准备好 YAML 再启动向导 |
 | 如何写业务 Wiki | 第 5 步折叠提醒（Spec 167）。先说明可直接写、上传或跳过；不知道写什么时把编写说明交给 Agent | 维基模板、把业务 Wiki 写成必填 |
 | 编写说明 | 交给 Agent 的生成说明，可复制或下载（Spec 167）。不限定客户端 | Skill、配置作者、业务 Skill |
 | 暂不补充业务语义，使用数据库字段信息继续 | 第 4 步默认动作 | 采用基础字段语义、自动生成语义 |
@@ -560,11 +560,12 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 |---|---|---|---|---|
 | Turn Inquiry Tab | 问询记录 | — | 问题簇、turn（裸露） | 默认视图 `?view=turns`（可省略）；兼容旧 `?tab=turns` |
 | Call Log Tab | 调用流水 | — | 明细（旧 Tab 名）、access_log | 取证视图 `?view=calls`；含 CSV 导出；兼容旧 `?tab=calls` |
-| Turn Inquiry CSV Export | 导出问询记录 | 问询记录 CSV | 问题簇导出、导出问句、按当前页签导出（未说明粒度） | Spec 140：`GET /api/admin/audit/turns/export`；一行代表一次用户问询 |
-| Access Call Log CSV Export | 导出调用流水 | 调用流水 CSV | 审计证据导出（指单文件 CSV）、Audit Export（作唯一主按钮） | Spec 137：`GET /api/admin/audit/export`；内部排障流水 |
+| Current View Export | 导出 | — | 导出问询与调用、把「导出问询记录」和「导出调用流水」并排 | 顶栏主操作。只导出当前页签和当前筛选：问询记录页得到问询记录 CSV，调用流水页得到调用流水 CSV |
+| Turn Inquiry CSV Export | 导出问询记录 | 问询记录 CSV | 问题簇导出、导出问句、作顶栏按钮文案 | 文件与接口名。问询记录页的「导出」指向 `GET /api/admin/audit/turns/export`；一行代表一次用户问询 |
+| Access Call Log CSV Export | 导出调用流水 | 调用流水 CSV | 审计证据导出（指单文件 CSV）、作顶栏按钮文案 | 文件与接口名。调用流水页的「导出」指向 `GET /api/admin/audit/export`；内部排障流水 |
 | Audit CSV Field Metadata | 字段说明 | CSV 字段说明、字段元数据 | 字段字典（作 UI 主称）、数据字典（与业务数据字典混淆） | Spec 141：`GET /api/admin/audit/export-metadata?kind=calls\|turns`；解释列含义、格式和触发条件 |
 | Local Audit Timestamp | 本地时间 | Excel 友好时间 | 中文时间、北京时间（无时区说明） | Spec 141：`Asia/Shanghai`、`YYYY-MM-DD HH:mm:ss`；与 UTC 原始字段并存 |
-| Audit Evidence Pack | 导出审计证据包 | 证据包 zip | 把单 CSV 称为审计证据包、把 SHA 自检称为防篡改签名 | Spec 137：`GET /api/admin/audit/export-pack`；含 Manifest；仅当 Manifest `complete=true` 才用于正式审计验收 |
+| Audit Evidence Pack | 导出审计证据包 | 证据包 zip | 把单 CSV 称为审计证据包、把 SHA 自检称为防篡改签名、按钮上写 Manifest | Spec 137：顶栏文字按钮，`GET /api/admin/audit/export-pack`；Manifest 在 zip 内；仅当 Manifest `complete=true` 才用于正式审计验收 |
 | Export Manifest | Manifest | — | 将 Manifest 翻译成中文主标签 | Spec 137：`manifest.json`；DOM `translate="no"` |
 | Turn / Question cluster | 问询 | 问询摘要 | 问题簇 | 列表行对象；Drawer 标题 |
 | Turn ID | 问询 ID | — | turn id（裸露作主标签）、问题簇 ID | L1 身份列；可复制；关联调用流水 |
@@ -603,20 +604,20 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 
 Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token`、`MCP`、`P95`、`Manifest`、tool name、physical table、Agent id、问询 ID / 事件 ID 值、裁决原因码、生成 SQL 文本、`lucy-ops`、`lucy_ops_reader`、`ops_calls`、`ops_call_tables`。
 
-详见 Spec 89；Spec 94 补充来源筛选与列表/Drawer 列名；Spec 99 要求双行 DecisionReasonView；**Spec 106** 要求身份列、共享筛选与 `view`/`range` URL；**Spec 125** 要求调用流水直展生成 SQL（Spec 124 冷存降为 legacy）；**Spec 137** 区分「导出调用流水」与「导出审计证据包」；**Spec 140** 增加「导出问询记录」并要求页面同时暴露问询级与调用级 CSV；**Spec 141** 要求 CSV 文件名精确到秒和流水号、增加本地时间并提供字段说明；**Spec 149** 增加运维问数连接与运维问数角色，问数仍沿用调用流水、生成 SQL、裁决原因。**Spec 172** 增加会话访问：没有用户原文时按 MCP 会话保留一条推断问询，摘要以「会话建立：」加客户端名开头。
+详见 Spec 89；Spec 94 补充来源筛选与列表/Drawer 列名；Spec 99 要求双行 DecisionReasonView；**Spec 106** 要求身份列、共享筛选与 `view`/`range` URL；**Spec 125** 要求调用流水直展生成 SQL（Spec 124 冷存降为 legacy）；**Spec 137** 区分「导出调用流水」与「导出审计证据包」；**Spec 140** 增加问询记录 CSV；页头「导出」跟随当前页签，不再并排两个粒度；**Spec 141** 要求 CSV 文件名精确到秒和流水号、增加本地时间并提供字段说明；**Spec 149** 增加运维问数连接与运维问数角色，问数仍沿用调用流水、生成 SQL、裁决原因。**Spec 172** 增加会话访问：没有用户原文时按 MCP 会话保留一条推断问询，摘要以「会话建立：」加客户端名开头。
 
 ### 4.8 MCP 调试台 / ACL 裁决可见性
 
 | Canonical Term | Preferred EN | UI 主术语 | 禁止 / 弃用 | 说明 |
 |---|---|---|---|---|
 | MCP Playground | MCP Playground | MCP 调试台 | API 操场、Playground（单独作 H1）、协议沙箱 | `/admin/mcp-playground`；侧栏与 PageHeader |
-| ACL Decision Preview | ACL Decision Preview | ACL 裁决预览 | 权限模拟、DryRun（单独作主标签） | 默认主模式；不转发上游 |
-| Live Smoke Call | Live Smoke Call | 受控试调 | 真实调用（无「受控」）、生产探测 | 白名单工具 + 确认；Token 不落盘；落库 `lucy_platform=mcp-playground` |
+| ACL Decision Preview | ACL Decision Preview | ACL 裁决预览 | 权限模拟、DryRun（单独作主标签） | 调试台任务文案为「检查能不能查某张表」，不再作为模式下拉；不转发上游 |
+| Live Smoke Call | Live Smoke Call | 受控试调 | 真实调用（无「受控」）、生产探测 | 调试台任务文案为「检查能不能连上」。访问日志 badge 仍为「受控试调」；Token 不落盘；落库 `lucy_platform=mcp-playground` |
 | Call origin · playground | Call origin (playground) | MCP 调试台受控试调 | Playground 调用（裸词）、调试流量 | 访问日志 `callSource=playground` 筛选项与行内 badge「受控试调」 |
 | Call origin · agent | Call origin (agent) | Agent 接入调用 | 用户真实调用（作唯一主标签时易误解 dry-run） | 访问日志 `callSource=agent`：排除 `lucy_platform=mcp-playground` |
 | Decision Reason | Decision Reason | 裁决原因 | 拒绝码、reason（裸露作主标签） | 与访问日志列对齐；主行中文 |
 | Decision Reason Code | Decision Reason Code | 裁决原因码 | — | 机器码（如 `tool_forbidden`）；次行 `notranslate` |
-| Effective Permissions Snapshot | Effective Permissions Snapshot | 生效权限快照 | 权限 dump | DryRun 结果只读摘要 |
+| Effective Permissions Snapshot | Effective Permissions Snapshot | 生效权限快照 | 权限 dump | 调试台结果不展示计数 |
 
 Protected terms（DOM 需 `translate="no"` + `notranslate`）：`MCP`、`Agent`、`Role`、`Token`、`ACL`、tool name、`decision_reason` 码、connection / schema / table、JSON-RPC method。
 

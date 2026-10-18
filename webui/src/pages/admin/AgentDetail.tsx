@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { AgentRoleCapability, AgentRoleField, agentRoleIds, roleSelectionSavable, sameRoleSet } from "../../components/AgentRoleField";
 import { DiffViewer } from "../../components/DiffViewer";
 import { PageHeader } from "../../components/PageHeader";
+import { PolicyDegradeNotice } from "../../components/PolicyDegradeBanner";
 import { apiGet, apiPatch, apiDelete } from "../../lib/apiClient";
 import type {
   AccessWriteAck,
@@ -775,6 +776,13 @@ export function AgentDetail() {
         }
       />
 
+      <PolicyDegradeNotice
+        scope={{
+          agentId: agent.id,
+          agentNames: { [agent.id]: agent.name }
+        }}
+      />
+
       <div className="pl-admin-tabbar" role="tablist">
         {tabs.map((tab) => (
           <button
@@ -860,13 +868,6 @@ export function AgentDetail() {
                     旧 ACL 只读兼容；保存角色后会移除该 <span className="notranslate" translate="no">Agent</span> 的 legacy allow。
                   </span>
                 )}
-                {editRoles !== null && (
-                  <AgentRoleCapability
-                    loading={roleCapabilityQuery.isFetching}
-                    error={roleCapabilityQuery.error ? (roleCapabilityQuery.error as Error).message : undefined}
-                    permissions={roleCapabilityQuery.data?.effectivePermissions}
-                  />
-                )}
                 {showLucyAdminWarning && (
                   <div
                     className="rounded-md border border-warning-strong bg-warning-soft p-3 text-sm text-warning-strong"
@@ -882,6 +883,13 @@ export function AgentDetail() {
                     </span>{" "}
                     时建议设置过期时间。
                   </div>
+                )}
+                {editRoles !== null && (
+                  <AgentRoleCapability
+                    loading={roleCapabilityQuery.isFetching}
+                    error={roleCapabilityQuery.error ? (roleCapabilityQuery.error as Error).message : undefined}
+                    permissions={roleCapabilityQuery.data?.effectivePermissions}
+                  />
                 )}
               </div>
             </div>

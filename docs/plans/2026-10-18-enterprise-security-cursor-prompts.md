@@ -230,7 +230,7 @@ B、C 批次任务内容已在 Plan 中写到文件与步骤级别。交付时�
 | T09 | §8.2、G-02～G-05 | T08 | `overrides.fast-uri` 升到已修复版本；blocked 不得 exit 0；dry-run 不计 passed；selector 33 项按真实漂移修复 | G-02/G-04/G-05 → fixed，依赖条目更新 |
 | T10 | §6.2、§7 | T09 | catalog 冻结全部 required 变体（含 SEC-15-FM）；故障钩子只在测试控制面 | — |
 | T11 | §6.5 J-01 | T10 | auth required、禁 API mock / KTX shim；Token / 密码不进 trace 与截图；1440×900 桌面，workers=1，retries=0 | — |
-| T12 | §6.3、R7、R9、R10 | T11、R8 runner、R10 凭据 | Codex CLI + Cursor CLI Agent 为 required；先探测二进制与凭据，缺失即 BLOCKED；每产品每场景 3 次，3/3 才通过 | G-03 → fixed（需真实执行通过） |
+| T12 | §6.3、R7、R9、R10 | T11、R8 runner、R10 凭据 | 自动：Codex+Claude Code+OpenClaw 3/3；人工：WorkBuddy+Cursor GUI checklist；缺一不可 GO | G-03 → fixed（需真实执行通过） |
 | T13 | §8.1–8.4、§8.3a | T10～T12 | verifier 读取 `security-findings.yaml` 与 `npm audit` 实际结果交叉比对；只从有 schema 的产物判定 | — |
 | T14 | §8.3、R8 | T13、R8 K8s | workflow 中 `demo-e2e` / `postgres-demo-e2e` 改名为 `demo-db-smoke` / `postgres-demo-db-smoke`；禁止 `docker buildx create --use`；amd64 单架构与 G1–G4 不弱化 | G-01 → fixed（需 K8s 实跑通过） |
 | T15 | 全部 | 全部 | ADR 状态更新为已实施并补性能与迁移结果；Spec 状态四级分别标注 | 全部 P0/P1 为 fixed 且 verifiedBy 指向本次 release evidence |

@@ -96,6 +96,23 @@ describe("customer-release-readiness (the only customer aggregate gate)", () => 
     assert.ok(verdict.problems.some((p) => p.code === "omitted_case"));
   });
 
+  it("[A1] readiness summary.required equals the verifier's expected denominator (no manual GUI inflation)", async () => {
+    // Regression for the bug where `clients.filter(c => c.required)` included workbuddy/cursor and produced
+    // expectedCount=517 while the verifier expected 373, triggering `summary_tampered`.
+    const { run } = await makeRun("release");
+    const { evidence } = decideReadiness({ run, candidate, mode: "release" });
+    const automated = inputs => inputs.clientsDoc.clients.filter((c) => c.required && c.execution === "automated").length;
+    const inputs = (await import("../e2e/verify-evidence.mjs")).loadVerifyInputs();
+    const frozen = (await import("../e2e/lib/catalog.mjs")).expectedExecutions(
+      inputs.cases,
+      inputs.clientsDoc.clients.filter((c) => c.required && c.execution === "automated").map((c) => c.product)
+    ).length;
+    // evidence.summary.required reflects the readiness-side expectedCount; the verifier compares it against the
+    // automated-only denominator it computes.
+    assert.equal(evidence.summary.required, frozen, "summary.required must use the automated-only denominator");
+    assert.equal(automated(inputs), 2, "v5: exactly two automated required products");
+  });
+
   it("child exit codes must agree with child JSON (contract failure otherwise)", () => {
     assert.equal(reconcileChild({ jsonStatus: "passed", exitCode: 3 }).status, "failed");
     assert.equal(reconcileChild({ jsonStatus: "collect", exitCode: 3 }).status, "collect");
@@ -128,6 +145,18 @@ describe("gate result collection uses structured sources only", () => {
     writeFileSync(path.join(results, "existing-gates.json"), JSON.stringify({ gates }));
     writeFileSync(path.join(results, "context-migration.json"), JSON.stringify({ pending: 0 }));
     writeFileSync(path.join(results, "projection.json"), JSON.stringify({ backlog: 0 }));
+    // SEC-17-V10 requires per-ask indexed evidence (Review A6 §3). Seed an agent.json with a
+    // minimal asks[] record so the canary policy is bound per-question. The ask's goldKey is
+    // a real question from <run.paths.checker/gold.json> (produced by prepareEnvironment).
+    const gold = JSON.parse(readFileSync(path.join(run.paths.checker, "gold.json"), "utf8"));
+    const goldKey = Object.keys(gold.questions ?? {})[0];
+    const tokens = JSON.parse(readFileSync(path.join(run.secretsDir, "tokens.json"), "utf8"));
+    const agentId = Object.keys(tokens)[0];
+    writeFileSync(path.join(results, "agent.json"), JSON.stringify({
+      contract: "lucy-agent-e2e-v1",
+      runId: run.runId,
+      cases: [{ id: "UX-02-V01", runner: "agent", scenario: "UX-02", client: "claude-code", run: 1, status: "passed", asks: [{ askIndex: 0, agentId, goldKey, expectation: "answer", sessionId: "s0", model: "test", since: "2026-10-18T00:00:00.000Z", until: "2026-10-18T00:01:00.000Z", tokenFingerprint: "fp", answer: "", bindingProblems: [] }], assertions: [], artifacts: [] }]
+    }));
     const body = await collectGateResults({ run, candidate, reverseTests: async () => new Map() });
     const by = Object.fromEntries(body.cases.map((c) => [c.id, c]));
     assert.equal(by["SEC-23-V01"].status, "passed");
@@ -138,7 +167,6 @@ describe("gate result collection uses structured sources only", () => {
     assert.equal(body.projectionBacklog, 0);
 
     // gates on another digest, high vulnerability and a leaked credential each flip their case to failed
-    const tokens = JSON.parse(readFileSync(path.join(run.secretsDir, "tokens.json"), "utf8"));
     writeFileSync(path.join(results, "leaky.json"), JSON.stringify({ note: Object.values(tokens)[0] }));
     writeFileSync(path.join(results, "npm-audit.json"), JSON.stringify({ vulnerabilities: { "left-pad": { severity: "high" } }, metadata: { vulnerabilities: { high: 1, critical: 0 } } }));
     writeFileSync(path.join(results, "existing-gates.json"), JSON.stringify({ gates: gates.map((g) => ({ ...g, imageDigest: `sha256:${"9".repeat(64)}` })) }));

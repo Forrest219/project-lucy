@@ -1717,31 +1717,17 @@ export function Audit() {
     includeProtocol
   });
   const turnExportUrl = `/api/admin/audit/turns/export${turnExportFilterQuery}`;
-  const inquiryPackUrl = `/api/admin/audit/export-inquiry-pack${turnExportFilterQuery}`;
   const callExportUrl = `/api/admin/audit/export${callExportFilterQuery}`;
   const exportPackUrl = `/api/admin/audit/export-pack${callExportFilterQuery}`;
   const metadataUrl = `/api/admin/audit/export-metadata?kind=${tab === "turns" ? "turns" : "calls"}`;
-  const primaryExport = tab === "turns"
+  const currentExport = tab === "turns"
     ? {
         href: turnExportUrl,
-        label: "导出问询记录",
-        title: "导出当前筛选下的问询记录 CSV：一行代表一次用户问询。"
+        title: "导出当前筛选的问询记录"
       }
     : {
         href: callExportUrl,
-        label: "导出调用流水",
-        title: "导出当前筛选下的调用流水 CSV：一行代表一次工具调用。"
-      };
-  const secondaryExport = tab === "turns"
-    ? {
-        href: callExportUrl,
-        label: "导出调用流水",
-        title: "导出当前筛选下的调用流水 CSV：一行代表一次工具调用。"
-      }
-    : {
-        href: turnExportUrl,
-        label: "导出问询记录",
-        title: "导出当前筛选下的问询记录 CSV：一行代表一次用户问询。"
+        title: "导出当前筛选的调用流水"
       };
 
   const tabLink = (nextTab: AuditTab) => {
@@ -1766,44 +1752,22 @@ export function Audit() {
         actions={
           <div className="flex flex-wrap items-center gap-3">
             <a
-              href={primaryExport.href}
+              href={currentExport.href}
               download
               className="pl-btn pl-btn--secondary text-sm"
               data-testid="audit-export-current"
-              title={primaryExport.title}
+              title={currentExport.title}
             >
-              {primaryExport.label}
-            </a>
-            <a
-              href={secondaryExport.href}
-              download
-              className="pl-btn pl-btn--secondary text-sm"
-              data-testid="audit-export-related"
-              title={secondaryExport.title}
-            >
-              {secondaryExport.label}
-            </a>
-            <a
-              href={inquiryPackUrl}
-              download
-              className="pl-btn pl-btn--secondary text-sm"
-              data-testid="audit-export-inquiry-pack"
-              title="同一次查询导出问询记录和调用流水"
-            >
-              导出问询与调用
+              导出
             </a>
             <a
               href={exportPackUrl}
               download
-              className="pl-btn pl-btn--secondary text-sm"
+              className="pl-inline-link"
               data-testid="audit-export-pack"
-              title="导出审计证据包 zip（含 Manifest）"
+              title="下载审计证据包"
             >
               导出审计证据包
-              <span className="notranslate" translate="no">
-                {" "}
-                Manifest
-              </span>
             </a>
           </div>
         }

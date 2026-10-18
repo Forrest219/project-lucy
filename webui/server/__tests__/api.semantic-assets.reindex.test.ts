@@ -157,6 +157,79 @@ describe("POST /api/semantic-assets/reindex", () => {
     await app.close();
   });
 
+  it("records the workbench's pending semantic yaml on the reindex history row", async () => {
+    projectRoot = await makeProject();
+    await mkdir(path.join(projectRoot, "semantic-layer", "demo", "_schema"), { recursive: true });
+    await writeFile(
+      path.join(projectRoot, "semantic-layer", "demo", "_schema", "chatbi.yaml"),
+      `tables:
+  ai_intl_ad_daily:
+    table: chatbi.ai_intl_ad_daily
+    columns:
+      - name: date
+        type: string
+    descriptions:
+      ai: Ad daily.
+`,
+      "utf8"
+    );
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
+    const reindexProject = vi.fn(async () => ({
+      exitCode: 0,
+      stdout: "indexed",
+      stderr: ""
+    }));
+    vi.doMock("../ktx", async () => {
+      const actual = await vi.importActual<typeof import("../ktx")>("../ktx");
+      return {
+        ...actual,
+        reindexProject,
+        validateSource: vi.fn(async () => ({
+          ok: true,
+          exitCode: 0,
+          stdout: "Valid semantic-layer source",
+          stderr: "",
+          issues: []
+        }))
+      };
+    });
+
+    const app = await buildFreshServer();
+    await app.ready();
+    await request(app.server)
+      .post("/api/sources/demo/chatbi/ai_intl_ad_daily/import")
+      .send({
+        dryRun: false,
+        yaml: `name: ai_intl_ad_daily
+table: chatbi.ai_intl_ad_daily
+grain:
+  - date
+measures:
+  - name: spend
+    expr: sum(spend)
+    description: Spend.
+`
+      })
+      .expect(200);
+    await request(app.server).post("/api/semantic-assets/reindex").send({}).expect(200);
+
+    const historyRes = await request(app.server).get("/api/semantic-assets/releases").expect(200);
+    expect(historyRes.body.data.records[0]).toMatchObject({
+      trigger: "webui_manual_reindex",
+      connectionIds: ["demo"],
+      changedSources: [{ connectionId: "demo", sourceName: "ai_intl_ad_daily" }],
+      files: [
+        expect.objectContaining({
+          targetPath: "semantic-layer/demo/ai_intl_ad_daily.yaml",
+          kind: "semanticSource"
+        })
+      ]
+    });
+    expect(historyRes.body.data.records[0].files[0].sha256).toMatch(/^[0-9a-f]{64}$/);
+    await app.close();
+  });
+
   it("records a failed manual reindex as reindex_failed and returns 409 when a publish lock is present", async () => {
     projectRoot = await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;

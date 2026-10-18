@@ -96,11 +96,11 @@ test.describe("L1 PR Smoke 12 条 (升级对齐版)", () => {
     await assertNoForbiddenTerms(page);
   });
 
-  // 8. E2E-LIC-01：部署许可设置与激活码区域
-  test("@pr-smoke E2E-LIC-01 部署许可设置与激活码", async ({ page }) => {
+  // 8. Spec 175：旧部署许可地址进入系统概览，不再出现激活码表单
+  test("@pr-smoke E2E-LIC-01 旧部署许可地址进入系统概览", async ({ page }) => {
     await page.goto("/admin/license");
-    await expect(page.getByTestId("license-activation-section")).toBeVisible();
-    await expect(page.getByTestId("license-status-card")).toBeVisible();
+    await expect(page).toHaveURL(/\/overview$/);
+    await expect(page.getByTestId("license-activation-section")).toHaveCount(0);
     await assertNoForbiddenTerms(page);
   });
 

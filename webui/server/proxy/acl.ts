@@ -1709,10 +1709,18 @@ export async function allowedToolNames(identity: Identity): Promise<string[]> {
 
 // ─── EffectivePolicy compile / submit (Spec 98 §8 / WP-I5) ───────────────────
 
+export interface PolicyDegradeIssue {
+  agentId: string;
+  /** Machine reason. The Admin UI turns this into repair copy. */
+  reason: string;
+}
+
 export interface PolicyRuntimeStatus {
   policyVersion: string;
   degradedGlobal: boolean;
   degradedAgents: string[];
+  /** Per-agent compile failure, or one global issue when the config cannot be read. */
+  issues: PolicyDegradeIssue[];
   accessConfigDigest: string;
   sourceMapVersion: string;
   /** Spec 131 — sha256 of normalized connections→enabled_tables; feeds policyVersion. */
@@ -1770,11 +1778,24 @@ export function computePolicyVersion(
     .digest("hex");
 }
 
+function policyDegradeIssues(snapshot: EffectivePolicySnapshot | null): PolicyDegradeIssue[] {
+  if (!snapshot) return [];
+  if (snapshot.degradedGlobal) {
+    return [{ agentId: "", reason: "access_config_unreadable" }];
+  }
+  return [...snapshot.degradedAgents].sort().map((agentId) => {
+    const resolved = snapshot.byUserId.get(agentId);
+    const reason = resolved && !resolved.ok ? resolved.reason : "role_resolution_failed";
+    return { agentId, reason };
+  });
+}
+
 export function getPolicyRuntimeStatus(): PolicyRuntimeStatus {
   return {
     policyVersion: effectivePolicyRef?.policyVersion ?? "",
     degradedGlobal: effectivePolicyRef?.degradedGlobal ?? false,
     degradedAgents: effectivePolicyRef ? [...effectivePolicyRef.degradedAgents].sort() : [],
+    issues: policyDegradeIssues(effectivePolicyRef),
     accessConfigDigest: effectivePolicyRef?.accessConfigDigest ?? "",
     sourceMapVersion: effectivePolicyRef?.sourceMapVersion ?? "",
     enabledTablesDigest: effectivePolicyRef?.enabledTablesDigest ?? ""

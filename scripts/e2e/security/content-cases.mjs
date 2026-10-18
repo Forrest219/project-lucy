@@ -4,8 +4,22 @@
 import { existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { Checks, explicitDeny } from "./context.mjs";
+import { scanRetainedArtifacts } from "../lib/leak-scan.mjs";
 
 const LANGUAGE_TAGS = ["---js", "---javascript", "---JS", "--- js", "---json"];
+
+// --- A6 carrier-aware leakage helpers (SEC-06 / SEC-17) -----------------------------------------
+// The pre-A6 code only ran scanText over each file's raw bytes, which silently missed every non-text
+// carrier (compressed payloads, screenshots, ZIP / tar.gz, renamed binary blobs). These helpers
+// expose the carrier-aware scan as a content-case primitive so SEC-06-V04 (screenshots / trace),
+// SEC-17-V09 (zip export), and SEC-17-V10 (test artifacts) can reuse the same verdict logic that
+// archive-evidence.mjs uses before it signs the manifest.
+export async function carrierScan({ checks, dir, secrets, forbiddenCanaries = [], label = "carrier_scan" }) {
+  const tree = scanRetainedArtifacts(dir, { secrets, forbiddenCanaries });
+  checks.expect("carrier_no_leak", tree.totals.failed === 0, `${label}: ${tree.totals.failed} file(s) carry an exact credential — ${JSON.stringify(tree.failures)}`);
+  checks.expect("carrier_no_unsupported", tree.totals.blocked === 0, `${label}: ${tree.totals.blocked} carrier(s) could not be safely inspected — ${JSON.stringify(tree.blockedEntries)}`);
+  return tree;
+}
 
 function probePayload(ctx, languageTag, label) {
   const probeFile = path.join(ctx.run.paths.probe, `fm-executed-${label}`);
@@ -198,5 +212,10 @@ export const handlers = {
     const anon = await ctx.mcp("", ctx.rpc(2, "initialize", {}));
     checks.expect("deny", anon.status === 401, `no Origin does not mean no authentication -> ${anon.status}`);
     return checks.result();
-  }
+  },
+
+  // SEC-06-V04 / SEC-17-V09 / SEC-17-V10 are catalog `runner: gate` (or default) cases whose
+  // canonical implementation lives in the gate runner and `archive-evidence.mjs`. The security
+  // runner exposes `carrierScan` as a primitive so future catalog cases that DO get classified as
+  // `runner: security` can reuse the carrier-aware verdict without re-implementing it.
 };

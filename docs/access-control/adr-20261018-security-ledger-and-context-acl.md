@@ -89,5 +89,5 @@
 ### 7.4 仍然开放的风险（不被本 ADR 的"已实施"掩盖）
 
 - 目标 amd64 单副本 K8s 上的真实用户 E2E、N-1 PVC 升级、恢复演练均未运行（R8 基础设施未提供）；因此 `security-findings.yaml` 中 G-01、G-03 保持 `open`。
-- 真实 Codex CLI / Cursor CLI Agent 未执行（本机无二进制与测试凭据，R10）。
+- 真实自动 CLI（Claude Code / OpenClaw）与人工 GUI（WorkBuddy / Cursor）证据尚未齐备（R4 v5 / R10）。
 - 故障注入控制面目前只有本地进程版本；K8s 版缺失，依赖 `fault-control` 的变体在 K8s 上将保持 BLOCKED。

@@ -48,10 +48,52 @@ function EndpointFallbackNotice({ endpointInfo }: { endpointInfo?: McpEndpointIn
   );
 }
 
+function TokenPlaintext({
+  token,
+  copied,
+  onCopy
+}: {
+  token: string;
+  copied: boolean;
+  onCopy: () => void;
+}) {
+  return (
+    <div className="pl-secret-copy">
+      <code
+        className="pl-secret-copy__value notranslate"
+        translate="no"
+        data-testid="plaintext-token"
+      >
+        {token}
+      </code>
+      <button
+        type="button"
+        className="pl-secret-copy__action"
+        data-copied={copied ? "true" : "false"}
+        onClick={onCopy}
+        aria-label="复制 token 明文"
+      >
+        {copied ? "已复制" : (
+          <>
+            复制 <span className="notranslate" translate="no">Token</span>
+          </>
+        )}
+      </button>
+    </div>
+  );
+}
+
 function computePresetDate(days: number): string {
   const target = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
   return target.toISOString().slice(0, 10);
 }
+
+const EXPIRY_PRESETS = [
+  { id: "30d", days: 30, label: "30 天" },
+  { id: "90d", days: 90, label: "90 天" },
+  { id: "180d", days: 180, label: "180 天" },
+  { id: "365d", days: 365, label: "1 年" }
+] as const;
 
 export function NewToken() {
   const { userId: routeUserId } = useParams<{ userId?: string }>();
@@ -178,22 +220,7 @@ export function NewToken() {
         />
 
         <div className="pl-card grid gap-3">
-          <div className="flex items-center gap-2">
-            <code
-              className="flex-1 font-mono text-sm bg-bg-muted rounded px-3 py-2 break-all select-all"
-              data-testid="plaintext-token"
-            >
-              {generatedToken.token}
-            </code>
-            <button
-              type="button"
-              className="pl-btn pl-btn--ghost text-sm shrink-0"
-              onClick={handleCopyToken}
-              aria-label="复制 token 明文"
-            >
-              {copied ? "已复制" : "复制 Token"}
-            </button>
-          </div>
+          <TokenPlaintext token={generatedToken.token} copied={copied} onCopy={handleCopyToken} />
           <div className="text-xs text-fg-muted">
             <span>所属 <span className="notranslate" translate="no">Agent</span>：<span className="font-mono notranslate" translate="no">{targetUserId}</span></span>
             {" · "}
@@ -302,12 +329,7 @@ export function NewToken() {
           }
         />
         <div className="pl-card grid gap-3">
-          <code
-            className="font-mono text-sm bg-bg-muted rounded px-3 py-2 break-all select-all"
-            data-testid="plaintext-token"
-          >
-            {generatedToken.token}
-          </code>
+          <TokenPlaintext token={generatedToken.token} copied={copied} onCopy={handleCopyToken} />
           <div className="pl-error" data-testid="mcp-endpoint-diagnostic">
             {endpointDiagnostic.map((d, i) => (
               <div key={`${d.code}-${i}`}>{d.message}</div>
@@ -397,7 +419,7 @@ export function NewToken() {
           新签发的 <span className="notranslate" translate="no">Token</span> 默认有效期为 90 天，最长为 365 天；到期后
           <span className="notranslate" translate="no"> Proxy </span>立即拒绝访问。
         </div>
-        <label className="grid gap-1">
+        <div className="grid gap-1">
           <span className="text-sm font-medium">过期时间（必填）</span>
           <input
             className="pl-input"
@@ -408,38 +430,33 @@ export function NewToken() {
             max={computePresetDate(365)}
             onChange={(e) => setExpiresAt(e.target.value)}
           />
-          <div className="flex flex-wrap items-center gap-1.5 pt-1">
-            <span className="text-xs text-fg-muted mr-1">快捷预设：</span>
-            <button
-              type="button"
-              className="pl-badge hover:bg-bg-muted cursor-pointer transition-colors text-xs"
-              onClick={() => setExpiresAt(computePresetDate(30))}
+          <div className="grid gap-1.5 pt-1">
+            <span className="text-xs text-fg-muted">快捷预设</span>
+            <div
+              className="grid grid-cols-4 gap-2"
+              role="group"
+              aria-label="快捷预设"
+              data-testid="new-token-expiry-presets"
             >
-              30 天
-            </button>
-            <button
-              type="button"
-              className="pl-badge hover:bg-bg-muted cursor-pointer transition-colors text-xs"
-              onClick={() => setExpiresAt(computePresetDate(90))}
-            >
-              90 天
-            </button>
-            <button
-              type="button"
-              className="pl-badge hover:bg-bg-muted cursor-pointer transition-colors text-xs"
-              onClick={() => setExpiresAt(computePresetDate(180))}
-            >
-              180 天
-            </button>
-            <button
-              type="button"
-              className="pl-badge hover:bg-bg-muted cursor-pointer transition-colors text-xs"
-              onClick={() => setExpiresAt(computePresetDate(365))}
-            >
-              1 年
-            </button>
+              {EXPIRY_PRESETS.map((preset) => {
+                const date = computePresetDate(preset.days);
+                const active = expiresAt === date;
+                return (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    className={active ? "pl-btn pl-btn--primary" : "pl-btn pl-btn--secondary"}
+                    aria-pressed={active}
+                    data-testid={`new-token-expiry-preset-${preset.id}`}
+                    onClick={() => setExpiresAt(date)}
+                  >
+                    {preset.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </label>
+        </div>
       </div>
 
       <div className="flex justify-end gap-2">

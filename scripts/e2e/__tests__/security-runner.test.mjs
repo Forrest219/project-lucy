@@ -34,12 +34,18 @@ describe("security runner semantics (Spec §6.4, §8.2)", () => {
   });
 
   it("a server error is never an explicit deny (GATE-01: 500 is not a correct deny)", () => {
-    assert.equal(explicitDeny({ status: 500, json: { error: { code: -32003 } } }), false);
+    // HTTP 5xx is never a deny, even when the body LOOKS like a deny (GATE-01).
+    assert.equal(explicitDeny({ status: 500, json: { error: { code: -32003, message: "row_policy_upstream_unproven" } } }), false);
     assert.equal(explicitDeny({ status: 503, json: null }), false);
-    assert.equal(explicitDeny({ status: 200, json: { error: { code: -32603 } } }), false);
+    // JSON-RPC -32603 (internal error) and -32700 (parse error) are NOT policy denies.
+    assert.equal(explicitDeny({ status: 200, json: { error: { code: -32603, message: "internal" } } }), false);
+    // HTTP 401 / 403 are explicit transport refusals.
     assert.equal(explicitDeny({ status: 401, json: null }), true);
     assert.equal(explicitDeny({ status: 403, json: null }), true);
-    assert.equal(explicitDeny({ status: 200, json: { error: { code: -32003 } } }), true);
+    // JSON-RPC policy code with an allowlisted message IS a deny.
+    assert.equal(explicitDeny({ status: 200, json: { error: { code: -32003, message: "row_policy_upstream_unproven" } } }), true);
+    // JSON-RPC policy code WITHOUT an allowlisted message is NOT a deny (strict allowlist).
+    assert.equal(explicitDeny({ status: 200, json: { error: { code: -32003 } } }), false);
   });
 
   it("blocks (never passes) a case whose capabilities are missing", () => {
@@ -61,6 +67,37 @@ describe("security runner semantics (Spec §6.4, §8.2)", () => {
     assert.equal(EXIT_CODES[evidence.status], 3);
     assert.ok(evidence.cases.length === securityCases.length && evidence.cases.every((c) => c.status === "dry_run"));
     assert.equal(evidence.summary.passed, 0);
+  });
+
+  it("external run with a refused preflight blocks the runner before any case is run (no LucyProcess child spawned)", async () => {
+    // Test the real entry point: runSecurity builds an ExternalInstance and lets its start()
+    // fail closed. The fail() path in run-security calls process.exit() — that is the production
+    // behavior we are proving. So we exercise the building blocks directly: the same constructor
+    // arguments, the same preflight path, but assert that ExternalInstance.start() throws a
+    // TargetIdentityError BEFORE any handler is invoked.
+    const { ExternalInstance } = await import("../lib/instance.mjs");
+    const run = { runId: "ext-blocked-0001", executionMode: "release", caseCatalogDigest: "sha256:x", profileDigest: null, paths: { runDir: "/nonexistent" }, instance: { startedBy: "external", baseUrl: "https://lucy.example.com", mcpUrl: "https://lucy.example.com/mcp", markerWikiKey: "shared/e2e-instance-marker" }, db: {}, candidate: null, instanceId: "logical" };
+    const inst = new ExternalInstance(run);
+    let error = null;
+    try {
+      await inst.start();
+    } catch (caught) { error = caught; }
+    assert.ok(error, "ExternalInstance.start must throw when preflight refuses the target");
+    assert.match(error.message, /target identity preflight/);
+    assert.equal(error.stage, "preflight");
+    // The instance never reached a usable state.
+    assert.equal(inst.preflight?.ok, false);
+    assert.equal(inst.postflight, null);
+  });
+
+  it("external run with consistent local-only run is refused (reconcileExternalFlag catches the contradiction)", async () => {
+    // Same harness as the production fail() path: runSecurity is told external=true but
+    // run.instance.startedBy=runner. The reconcileExternalFlag check runs first.
+    const { reconcileExternalFlag } = await import("../lib/target-identity.mjs");
+    const run = { runId: "ext-inconsistent-0001", instance: { startedBy: "runner" } };
+    const check = reconcileExternalFlag({ run, flagValue: true });
+    assert.equal(check.ok, false);
+    assert.match(check.problems.join(" "), /--external was given: an external target must be registered/);
   });
 
   it("scans for exact credentials and canaries without echoing them", () => {

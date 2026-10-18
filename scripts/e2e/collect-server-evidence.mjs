@@ -20,8 +20,18 @@ const MARGIN_MS = 2000;
 /**
  * Pure binding: which of the ledger `entries` belong to this case. Anything that does not match the Token
  * fingerprint, agent or window is excluded, and a mismatch inside the window is a binding problem, not a pass.
+ *
+ * `upstreamExecutionCount` is REQUIRED to be a non-negative integer from a provider that
+ * independently observes upstream tool executions (the actual upstream execution provider, NOT
+ * the audit ledger). When this provider is not supplied, or supplies anything other than a
+ * non-negative integer, the returned `upstreamUnauthorized` is `undefined` and a bindingProblem
+ * is added. We do NOT compute upstreamUnauthorized from the audit ledger's outcome tags:
+ * `ok`/`denied`/`error` is a verdict enum, not a raw execution count, and treating
+ * `filter(e.outcome === "unauthorized").length` as a measurement is a fabricated zero under a
+ * new name. Authorized denial can coexist with zero executions, but the count MUST come from a
+ * real provider.
  */
-export function bindEvidence({ entries, agentId, tokenFingerprint, since, until }) {
+export function bindEvidence({ entries, agentId, tokenFingerprint, since, until, upstreamExecutionCount }) {
   const start = Date.parse(since) - MARGIN_MS;
   const end = Date.parse(until) + MARGIN_MS;
   const problems = [];
@@ -41,18 +51,40 @@ export function bindEvidence({ entries, agentId, tokenFingerprint, since, until 
     bound.push(entry);
   }
   const withTrace = bound.filter((e) => typeof e.traceId === "string" && e.traceId.startsWith("trace_"));
-  const queries = bound.filter((e) => e.tool === "lucy_query").map((e) => ({ id: e.id, outcome: e.outcome, traceId: e.traceId ?? null }));
+  const queries = bound.filter((e) => e.tool === "lucy_query").map((e) => ({
+    id: e.id,
+    outcome: e.outcome,
+    traceId: e.traceId ?? null,
+    // Bind the actual query body so the verifier can prove a query was on THIS question's filter, not
+    // an unrelated successful lucy_query that happens to share the case window.
+    query: e.query ?? null,
+    result: e.result ?? null,
+    ts: e.ts
+  }));
   const policyVersions = [...new Set(bound.map((e) => e.policyVersion).filter(Boolean))];
   if (bound.length > 0 && withTrace.length === 0) problems.push("bound entries carry no server trace id");
   if (policyVersions.length > 1) problems.push(`policy changed during the case window (${policyVersions.length} versions)`);
+  // upstreamExecutionCount is REQUIRED to come from the actual upstream execution provider, not
+  // the audit ledger. When the provider is absent OR supplies a non-integer OR supplies a negative
+  // number, upstreamUnauthorized is left undefined and the binding problem is recorded so the
+  // verifier's upstream_unmeasured path fires (BLOCKED, no zero-default).
+  let upstreamUnauthorized;
+  if (upstreamExecutionCount === undefined || upstreamExecutionCount === null) {
+    problems.push("upstream tool execution count was not provided by an independent execution observation provider; cannot be measured");
+  } else if (typeof upstreamExecutionCount !== "number" || !Number.isInteger(upstreamExecutionCount) || upstreamExecutionCount < 0) {
+    problems.push(`upstream tool execution count must be a non-negative integer from a real provider (got ${JSON.stringify(upstreamExecutionCount)})`);
+  } else {
+    upstreamUnauthorized = upstreamExecutionCount;
+  }
   return {
-    events: bound.map((e) => ({ id: e.id, ts: e.ts, tool: e.tool, outcome: e.outcome, traceId: e.traceId ?? null, policyVersion: e.policyVersion ?? null, roleIds: e.roleIds ?? [], decisionReason: e.decisionReason ?? null })),
+    events: bound.map((e) => ({ id: e.id, ts: e.ts, tool: e.tool, outcome: e.outcome ?? null, traceId: e.traceId ?? null, policyVersion: e.policyVersion ?? null, roleIds: e.roleIds ?? [], decisionReason: e.decisionReason ?? null })),
     queries,
     queryEventIds: queries.map((q) => String(q.id)),
     traceIds: [...new Set(withTrace.map((e) => e.traceId))],
     policyVersion: policyVersions[0] ?? null,
     roleIds: [...new Set(bound.flatMap((e) => e.roleIds ?? []))],
     deniedCount: bound.filter((e) => e.outcome === "denied").length,
+    upstreamUnauthorized,
     bindingProblems: problems
   };
 }
@@ -66,8 +98,30 @@ function ownerCredentials(run) {
   return JSON.parse(readFileSync(path.join(run.secretsDir, "admins.json"), "utf8")).owner;
 }
 
+/**
+ * Ensures the run's owner exists on this instance. Fresh local Lucy starts in bootstrap mode;
+ * agent/security evidence cannot login until the first owner is created with the run's bootstrap token.
+ */
+export async function ensureOwnerBootstrapped(run, { http = new LucyHttp(run.instance.baseUrl), credentials = ownerCredentials(run) } = {}) {
+  const status = await http.request("GET", "/api/auth/status");
+  const mode = status.json?.data?.mode;
+  if (mode === "bootstrap") {
+    const bootstrapToken = readFileSync(path.join(run.secretsDir, "bootstrap-token"), "utf8").trim();
+    const res = await http.request("POST", "/api/auth/bootstrap", {
+      headers: { "x-lucy-bootstrap-token": bootstrapToken },
+      body: { adminId: credentials.adminId, displayName: "E2E Owner", password: credentials.password }
+    });
+    if (res.status !== 200) {
+      throw new Error(`cannot read the server ledger: owner bootstrap -> HTTP ${res.status}`);
+    }
+    return { mode: "bootstrapped", cookie: res.cookie };
+  }
+  return { mode: mode ?? "unknown", cookie: null };
+}
+
 /** Logs in as the instance administrator and returns an authenticated reader. Throws when the ledger is unreadable. */
 export async function openLedgerReader(run, { http = new LucyHttp(run.instance.baseUrl), credentials = ownerCredentials(run) } = {}) {
+  await ensureOwnerBootstrapped(run, { http, credentials });
   const login = await http.request("POST", "/api/auth/login", { body: { adminId: credentials.adminId, password: credentials.password } });
   if (login.status !== 200 || !login.cookie) throw new Error(`cannot read the server ledger: administrator login -> HTTP ${login.status}`);
   return {
@@ -84,10 +138,10 @@ export async function openLedgerReader(run, { http = new LucyHttp(run.instance.b
   };
 }
 
-export async function collectServerEvidence({ run, agentId, tokenFingerprint, since, until, reader }) {
+export async function collectServerEvidence({ run, agentId, tokenFingerprint, since, until, reader, upstreamExecutionCount }) {
   const live = reader ?? (await openLedgerReader(run));
   const { entries, projection } = await live.entries({ agentId, since, until });
-  const bound = bindEvidence({ entries, agentId, tokenFingerprint, since, until });
+  const bound = bindEvidence({ entries, agentId, tokenFingerprint, since, until, upstreamExecutionCount });
   const roleId = bound.roleIds[0];
   const contextPolicyVersion = roleId ? await live.contextPolicyVersion(roleId) : null;
   if (projection && projection.complete === false) bound.bindingProblems.push("audit projection is incomplete (lag); evidence cannot be treated as complete");

@@ -131,7 +131,7 @@ import {
 } from "./admin/mcp-runtime.js";
 import { registerRiskReviewRoutes } from "./admin/risk-review.js";
 import { registerReleaseReadinessRoutes } from "./admin/release-readiness-package.js";
-import { registerLicenseRoutes } from "./license/routes.js";
+import { removeLegacyLicenseFile } from "./remove-legacy-license-file.js";
 import { registerGovernanceObservabilityRoutes } from "./admin/governance-observability.js";
 import { registerUiUsageRoutes } from "./admin/ui-usage.js";
 import { registerAuthRoutes, registerAdminAccountRoutes } from "./auth/routes.js";
@@ -157,6 +157,7 @@ import { registerR1ObservabilityRoutes } from "./observability.js";
 import { registerCallMonitorRoutes } from "./ops/call-monitor.js";
 import { safeWrite } from "./fs-safe.js";
 import {
+  describePendingReleaseAssets,
   publishSemanticAssets,
   readSemanticAssetRelease,
   readSemanticAssetReleases,
@@ -595,6 +596,14 @@ export function buildServer() {
       stopOwnReconciler = await ensureDisplayReconciler();
     } catch (error) {
       console.warn("[display-snapshot] reconciler unavailable; display reads stay busy:", error);
+    }
+  });
+  // Spec 175: a leftover deployment-license file is not a credential store. Delete it, do not back it up.
+  app.addHook("onReady", async () => {
+    try {
+      await removeLegacyLicenseFile(await resolveProjectRoot());
+    } catch (error) {
+      console.warn("[license] leftover license.yaml was not removed:", error);
     }
   });
   // Close an interrupted first-owner bootstrap before anything can clear admins.yaml (Spec §3.1 item 7).
@@ -2008,11 +2017,18 @@ export function buildServer() {
     };
     // M32: write a lightweight history record so /publish/history can show
     // the reindex result alongside normal publish batches.
+    const pending = await describePendingReleaseAssets(projectRoot, {
+      filePaths: writtenFiles.map((file) => file.filePath),
+      sources: [...changedSources.values()]
+    });
     const historyRecord = await recordManualReindex(projectRoot, {
       actor: actorIdFromRequest(request),
       force,
       startedAt,
-      reindex: reindexRecord
+      reindex: reindexRecord,
+      files: pending.files,
+      changedSources: pending.changedSources,
+      connectionIds: pending.connectionIds
     });
     return {
       ok: true,
@@ -2122,7 +2138,6 @@ export function buildServer() {
   registerCallMonitorRoutes(app);
   registerRiskReviewRoutes(app);
   registerReleaseReadinessRoutes(app);
-  registerLicenseRoutes(app);
   registerSkillsRoutes(app);
 
   app.setNotFoundHandler(async (request, reply) => {

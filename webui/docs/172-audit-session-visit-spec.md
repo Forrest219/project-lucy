@@ -120,7 +120,7 @@ function exportInquiryPack(filter):
 | 已上报问询 | `conversation_turns.client` | `conversation_turns.session_id` |
 | 推断问询 | 该会话 `initialize` 的 client；没有则用簇内第一条非空 client | `lucy_session_id` |
 
-CSV 列加在 `Agent` 之后。已有两个导出按钮保留。另加「导出问询与调用」，下载上述 zip。
+CSV 列加在 `Agent` 之后。配对 zip 仍由 `GET /api/admin/audit/export-inquiry-pack` 提供。页头不单列「导出问询与调用」；日常导出跟随当前页签。
 
 ## 8. 验收
 

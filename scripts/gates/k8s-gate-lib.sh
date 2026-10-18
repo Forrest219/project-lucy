@@ -157,14 +157,24 @@ assert_expected_image_digest() {
 
 # Writes <file> describing what is actually deployed, for scripts/e2e (results/deployment.json).
 # Single-replica is a fact read from the cluster, not an assumption.
+#
+# The file now records both the physical Pod UID (instanceId, unchanged) AND the logical run
+# instance id (logicalInstanceId, from the run manifest) so B1's target checker can correlate
+# what is running with what was prepared. The run is allowed to pass its logical id (the UUID
+# that appears in run.instanceId and the wiki marker); the physical id remains the
+# independently-measured Pod UID.
 write_deployment_evidence() {
-  local file="$1" namespace="$2" release="$3" image_id="$4" pod_uid="$5" replicas="$6" digest
+  local file="$1" namespace="$2" release="$3" image_id="$4" pod_uid="$5" replicas="$6" logical_instance_id="$7" digest
   digest="$(image_digest_from_id "${image_id}")" || fail "cannot record deployment evidence: imageID has no digest"
   [[ "${replicas}" == "1" ]] || fail "topology must be single-replica (spec.replicas=${replicas})"
-  python3 - "${file}" "${namespace}" "${release}" "${digest}" "${pod_uid}" <<'PY'
+  [[ -n "${logical_instance_id}" ]] || fail "logical_instance_id is required (pass run.instanceId from the e2e run manifest)"
+  python3 - "${file}" "${namespace}" "${release}" "${digest}" "${pod_uid}" "${logical_instance_id}" <<'PY'
 import json, sys
-path, namespace, release, digest, uid = sys.argv[1:6]
-doc = {"contract": "lucy-deployment-v1", "instanceId": uid, "topology": "single-replica-k8s",
+path, namespace, release, digest, uid, logical = sys.argv[1:7]
+doc = {"contract": "lucy-deployment-v1",
+       "instanceId": uid,
+       "logicalInstanceId": logical,
+       "topology": "single-replica-k8s",
        "deployedImageDigest": digest, "namespace": namespace, "release": release}
 with open(path, "w") as handle:
     json.dump(doc, handle, indent=2)

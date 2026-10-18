@@ -37,7 +37,6 @@ import { invalidateAccessConfigCache } from "../proxy/identity.js";
 import { narrowAuthorization, narrowingScopeForWrite } from "../proxy/authorization-barrier.js";
 import { actorIdFromRequest } from "../auth/guard.js";
 import { auditActorFields, trustedActorFromRequest } from "../security/request-actor.js";
-import { enforceAgentSeatLimit } from "../license/routes.js";
 import { isTokenExpired } from "../proxy/identity.js";
 import { MCP_PROTOCOL_METHOD_SQL_LIST } from "../proxy/mcp-request-classification.js";
 import { readAuditWriteHealth, type AuditWriteHealthSnapshot } from "../proxy/audit-write-health.js";
@@ -1340,11 +1339,6 @@ export function registerAgentRoutes(app: FastifyInstance) {
           detail: { gate }
         }
       });
-    }
-
-    const enabledAgentCount = config.users.filter((user) => user.enabled !== false).length + 1;
-    if (!(await enforceAgentSeatLimit(request, reply, enabledAgentCount))) {
-      return;
     }
 
     if (gate.decision === "override_required") {

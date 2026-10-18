@@ -7,6 +7,7 @@ import type { Agent, AgentsResponseSummary, CreateAgentBody, EffectivePermission
 import { buildMcpConfig } from "../../lib/mcpEndpoint";
 import { AgentRoleCapability, AgentRoleField, agentRoleIds, roleSelectionSavable } from "../../components/AgentRoleField";
 import { PageHeader } from "../../components/PageHeader";
+import { PolicyDegradeNotice } from "../../components/PolicyDegradeBanner";
 import { AsyncRegion, asyncStatus } from "../../components/AsyncRegion";
 import { MetricCard } from "../../components/MetricCard";
 import { buildObjectDetailSearch } from "../../lib/objectDetail";
@@ -274,90 +275,96 @@ function NewAgentModal({ roles, onClose, onCreated }: { roles: Role[]; onClose: 
     saveMutation.mutate({ dryRun: false, agent: buildAgent() });
   }
 
+  const showLucyAdminWarning = selectedRoles.some((roleId) => isLucyAdminDataPlaneRole(formalRoles.find((item) => item.id === roleId)) || roleId === "lucy_admin");
+
   return (
     <div className="pl-modal-backdrop">
-      <div className="pl-modal-panel">
-        <h2 className="text-lg font-semibold mb-4">新建 <span className="notranslate" translate="no">Agent</span></h2>
+      <div className="pl-modal-panel flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden" data-testid="new-agent-modal">
+        <h2 className="mb-4 shrink-0 text-lg font-semibold">新建 <span className="notranslate" translate="no">Agent</span></h2>
         {step === "form" ? (
-          <div className="grid gap-4">
-            <label className="grid gap-1">
-              <span className="text-sm font-medium">用户 ID <span className="text-danger">*</span></span>
-              <input className="pl-input" placeholder="例：wangwu" value={id} onChange={(e) => setId(e.target.value)} />
-              <span className="text-xs text-fg-muted">1-32 位，仅 A-Z a-z 0-9 _ -</span>
-            </label>
-            <label className="grid gap-1">
-              <span className="text-sm font-medium">显示名 <span className="text-danger">*</span></span>
-              <input className="pl-input" placeholder="例：王五" value={name} onChange={(e) => setName(e.target.value)} />
-            </label>
-            <label className="grid gap-1">
-              <span className="text-sm font-medium">备注</span>
-              <input className="pl-input" placeholder="可选" value={note} onChange={(e) => setNote(e.target.value)} />
-            </label>
-            <AgentRoleField
-              roles={formalRoles}
-              selected={selectedRoles}
-              onChange={setSelectedRoles}
-              required
-              header={
-                <Link to="/admin/roles" className="text-xs text-accent hover:underline" aria-label="管理角色">
-                  管理角色 →
-                </Link>
-              }
-            />
-            {formalRoles.length === 0 && (
-              <span className="text-xs text-warning-strong">
-                还没有可用角色。请先创建角色。
-                <Link to="/admin/roles/new" className="ml-2 pl-btn pl-btn--secondary text-xs">
-                  创建角色
-                </Link>
-              </span>
-            )}
-            {selectedRoles.length > 0 && canSubmit && (
-              <AgentRoleCapability
-                loading={capabilityQuery.isFetching}
-                error={capabilityQuery.error ? (capabilityQuery.error as Error).message : undefined}
-                permissions={capabilityQuery.data?.effectivePermissions}
+          <>
+            <div className="grid min-h-0 gap-4 overflow-y-auto">
+              <label className="grid gap-1">
+                <span className="text-sm font-medium">用户 ID <span className="text-danger">*</span></span>
+                <input className="pl-input" placeholder="例：wangwu" value={id} onChange={(e) => setId(e.target.value)} />
+                <span className="text-xs text-fg-muted">1-32 位，仅 A-Z a-z 0-9 _ -</span>
+              </label>
+              <label className="grid gap-1">
+                <span className="text-sm font-medium">显示名 <span className="text-danger">*</span></span>
+                <input className="pl-input" placeholder="例：王五" value={name} onChange={(e) => setName(e.target.value)} />
+              </label>
+              <label className="grid gap-1">
+                <span className="text-sm font-medium">备注</span>
+                <input className="pl-input" placeholder="可选" value={note} onChange={(e) => setNote(e.target.value)} />
+              </label>
+              <AgentRoleField
+                roles={formalRoles}
+                selected={selectedRoles}
+                onChange={setSelectedRoles}
+                required
+                header={
+                  <Link to="/admin/roles" className="text-xs text-accent hover:underline" aria-label="管理角色">
+                    管理角色 →
+                  </Link>
+                }
               />
-            )}
-            {selectedRoles.length > 0 && !canSubmit && (
-              <span className="text-xs text-warning">至少选择 1 个有效角色，并填写用户 ID 和显示名后显示数据能力</span>
-            )}
-            {selectedRoles.some((roleId) => isLucyAdminDataPlaneRole(formalRoles.find((item) => item.id === roleId)) || roleId === "lucy_admin") && (
-              <div
-                className="rounded-md border border-warning-strong bg-warning-soft p-3 text-sm text-warning-strong"
-                data-testid="agent-lucy-admin-role-warning"
-              >
-                高权限运维数据面：所选 Role 在已声明连接内绑定启用表目录。这是{" "}
-                <span className="notranslate" translate="no">
-                  MCP
-                </span>{" "}
-                数据面权限，不是 WebUI 登录账户；签发{" "}
-                <span className="notranslate" translate="no">
-                  Token
-                </span>{" "}
-                时建议设置过期时间。
-              </div>
-            )}
-            <div className="flex justify-end gap-2 pt-2">
+              {formalRoles.length === 0 && (
+                <span className="text-xs text-warning-strong">
+                  还没有可用角色。请先创建角色。
+                  <Link to="/admin/roles/new" className="ml-2 pl-btn pl-btn--secondary text-xs">
+                    创建角色
+                  </Link>
+                </span>
+              )}
+              {showLucyAdminWarning && (
+                <div
+                  className="rounded-md border border-warning-strong bg-warning-soft p-3 text-sm text-warning-strong"
+                  data-testid="agent-lucy-admin-role-warning"
+                >
+                  高权限运维数据面：所选 Role 在已声明连接内绑定启用表目录。这是{" "}
+                  <span className="notranslate" translate="no">
+                    MCP
+                  </span>{" "}
+                  数据面权限，不是 WebUI 登录账户；签发{" "}
+                  <span className="notranslate" translate="no">
+                    Token
+                  </span>{" "}
+                  时建议设置过期时间。
+                </div>
+              )}
+              {selectedRoles.length > 0 && canSubmit && (
+                <AgentRoleCapability
+                  loading={capabilityQuery.isFetching}
+                  error={capabilityQuery.error ? (capabilityQuery.error as Error).message : undefined}
+                  permissions={capabilityQuery.data?.effectivePermissions}
+                />
+              )}
+              {selectedRoles.length > 0 && !canSubmit && (
+                <span className="text-xs text-warning">至少选择 1 个有效角色，并填写用户 ID 和显示名后显示数据能力</span>
+              )}
+            </div>
+            <div className="flex shrink-0 justify-end gap-2 border-t border-border-default pt-3">
               <button type="button" className="pl-btn pl-btn--ghost" onClick={onClose}>取消</button>
               <button type="button" className="pl-btn pl-btn--primary" onClick={handlePreview} disabled={!canSubmit || previewMutation.isPending}>
                 {previewMutation.isPending ? "生成中…" : "下一步：预览配置"}
               </button>
             </div>
-          </div>
+          </>
         ) : (
-          <div className="grid gap-4">
-            <p className="text-sm text-fg-muted notranslate" translate="no">以下改动将写入 access.yaml：</p>
-            <pre className="pl-diff-viewer text-xs max-h-64 overflow-auto">
-              {preview?.diff}
-            </pre>
-            <div className="flex justify-end gap-2 pt-2">
+          <>
+            <div className="grid min-h-0 gap-4 overflow-y-auto">
+              <p className="text-sm text-fg-muted notranslate" translate="no">以下改动将写入 access.yaml：</p>
+              <pre className="pl-diff-viewer text-xs max-h-64 overflow-auto">
+                {preview?.diff}
+              </pre>
+            </div>
+            <div className="flex shrink-0 justify-end gap-2 border-t border-border-default pt-3">
               <button type="button" className="pl-btn pl-btn--ghost" onClick={() => setStep("form")}>返回编辑</button>
               <button type="button" className="pl-btn pl-btn--primary" onClick={handleSave} disabled={saveMutation.isPending}>
                 {saveMutation.isPending ? "保存中…" : "确认创建"}
               </button>
             </div>
-          </div>
+          </>
         )}
       </div>
     </div>
@@ -470,6 +477,12 @@ export function AgentList() {
             <button type="button" className="pl-btn pl-btn--primary" onClick={() => setShowNew(true)}>新建 Agent</button>
           </div>
         }
+      />
+
+      <PolicyDegradeNotice
+        scope={{
+          agentNames: Object.fromEntries(agents.map((agent) => [agent.id, agent.name]))
+        }}
       />
 
       {data.meta?.runtimeConsistency === "unconfirmed" ? (

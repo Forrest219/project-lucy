@@ -3,7 +3,7 @@
   "$id": "lucy-real-user-e2e-v1",
   "title": "Lucy real-user E2E release evidence (Spec §8.1)",
   "type": "object",
-  "required": ["contract", "executionMode", "stub", "runId", "candidate", "environment", "clients", "summary", "cases", "gates", "serverEvidence", "provenance", "status", "releaseReady"],
+  "required": ["contract", "executionMode", "stub", "runId", "candidate", "environment", "clients", "manualClients", "summary", "cases", "gates", "serverEvidence", "provenance", "status", "releaseReady"],
   "properties": {
     "contract": { "const": "lucy-real-user-e2e-v1" },
     "executionMode": { "enum": ["release", "collect", "dry_run", "local"] },
@@ -31,8 +31,8 @@
         "profileDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
         "caseCatalogDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
         "deployedImageDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
-        "startedAt": { "type": "string", "minLength": 10 },
-        "finishedAt": { "type": "string", "minLength": 10 }
+        "startedAt": { "type": ["string", "null"], "minLength": 10 },
+        "finishedAt": { "type": ["string", "null"], "minLength": 10 }
       }
     },
     "clients": {
@@ -63,6 +63,56 @@
         "dryRun": { "type": "integer" }
       }
     },
+    "manualClients": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["product", "execution", "transport", "status", "operator", "completedAt", "runId", "steps", "artifact"],
+        "properties": {
+          "product": { "type": "string", "minLength": 1 },
+          "execution": { "enum": ["manual"] },
+          "transport": { "enum": ["gui"] },
+          "status": { "enum": ["passed", "failed", "blocked", "skipped", "dry_run"] },
+          "operator": { "type": "string", "minLength": 1 },
+          "completedAt": { "type": "string", "minLength": 10 },
+          "runId": { "type": "string", "minLength": 1 },
+          "productVersion": { "type": "string" },
+          "notes": { "type": "string" },
+          "steps": {
+            "type": "array",
+            "minItems": 5,
+            "maxItems": 5,
+            "items": {
+              "type": "object",
+              "required": ["id", "passed", "evidencePath", "evidenceSha256"],
+              "properties": {
+                "id": { "type": "string", "pattern": "^M-0[1-5]$" },
+                "passed": { "type": "boolean" },
+                "evidencePath": { "type": "string", "pattern": "^results/manual/[A-Za-z0-9_\\-./]+$" },
+                "evidenceSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+                "notes": { "type": "string" }
+              }
+            }
+          },
+          "artifact": {
+            "type": "object",
+            "required": ["path", "sha256"],
+            "properties": {
+              "path": { "type": "string", "minLength": 1 },
+              "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+            }
+          },
+          "signature": {
+            "type": "object",
+            "properties": {
+              "algorithm": { "type": "string" },
+              "publicKey": { "type": "string" },
+              "value": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
     "cases": {
       "type": "array",
       "items": {
@@ -77,10 +127,13 @@
           "startedAt": { "type": "string" },
           "finishedAt": { "type": "string" },
           "tokenFingerprint": { "type": "string" },
+          "tokenFingerprints": { "type": "array", "items": { "type": "string", "minLength": 1 } },
           "serverTraceIds": { "type": "array", "items": { "type": "string", "minLength": 1 } },
           "queryEventIds": { "type": "array", "items": { "type": "string", "minLength": 1 } },
           "policyVersion": { "type": "string", "minLength": 1 },
           "contextPolicyVersion": { "type": "string", "minLength": 1 },
+          "policyVersions": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+          "contextPolicyVersions": { "type": "array", "items": { "type": "string", "minLength": 1 } },
           "goldDigest": { "type": "string" },
           "resultDigest": { "type": "string" },
           "denyReason": { "type": "string" },
@@ -105,6 +158,38 @@
               "type": "object",
               "required": ["path", "sha256"],
               "properties": { "path": { "type": "string", "minLength": 1 }, "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" } }
+            }
+          },
+          "asks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["runId", "instanceId", "caseId", "askIndex", "agentId", "tokenFingerprint", "since", "until", "traceIds", "queryEventIds", "policyVersion", "contextPolicyVersion", "resultDigest", "goldDigest"],
+              "properties": {
+                "runId": { "type": "string", "minLength": 1 },
+                "instanceId": { "type": "string", "minLength": 1 },
+                "caseId": { "type": "string", "minLength": 1 },
+                "client": { "type": ["string", "null"] },
+                "run": { "type": ["integer", "null"] },
+                "askIndex": { "type": "integer", "minimum": 0 },
+                "agentId": { "type": "string", "minLength": 1 },
+                "goldKey": { "type": ["string", "null"] },
+                "expectation": { "enum": ["answer", "denied"] },
+                "since": { "type": "string", "minLength": 10 },
+                "until": { "type": "string", "minLength": 10 },
+                "traceIds": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+                "queryEventIds": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+                "events": { "type": "array" },
+                "tokenFingerprint": { "type": "string", "pattern": "^[0-9a-f]{12}$" },
+                "policyVersion": { "type": "string", "minLength": 1 },
+                "contextPolicyVersion": { "type": "string", "minLength": 1 },
+                "bindingProblems": { "type": "array", "items": { "type": "string" } },
+                "resultDigest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+                "goldDigest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+                "sessionId": { "type": "string" },
+                "model": { "type": "string" },
+                "answer": { "type": "string" }
+              }
             }
           }
         }

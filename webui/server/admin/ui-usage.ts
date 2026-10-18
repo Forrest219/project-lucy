@@ -94,7 +94,6 @@ export const UI_USAGE_MENUS: MenuDefinition[] = [
   { id: "admin-audit", label: "访问日志" },
   { id: "admin-mcp-playground", label: "MCP 调试台" },
   { id: "admin-config-audit", label: "配置审计" },
-  { id: "admin-license", label: "部署许可" },
   { id: "admin-branding", label: "品牌外观" },
   { id: "admin-accounts", label: "登录账户" }
 ];
@@ -131,7 +130,6 @@ const PAGE = {
   audit: { pageKey: "admin-audit", label: "访问日志", menuId: "admin-audit", groupId: "governance" },
   playground: { pageKey: "mcp-playground", label: "MCP 调试台", menuId: "admin-mcp-playground", groupId: "governance" },
   configAudit: { pageKey: "config-audit", label: "配置审计", menuId: "admin-config-audit", groupId: "governance" },
-  license: { pageKey: "admin-license", label: "部署许可", menuId: "admin-license", groupId: "system-settings" },
   branding: { pageKey: "admin-branding", label: "品牌外观", menuId: "admin-branding", groupId: "system-settings" },
   admins: { pageKey: "admin-accounts", label: "登录账户", menuId: "admin-accounts", groupId: "system-settings" },
   help: { pageKey: "help", label: "帮助中心", menuId: null, groupId: null }
@@ -169,7 +167,6 @@ export const UI_USAGE_PAGES: UiPageDefinition[] = [
   PAGE.audit,
   PAGE.playground,
   PAGE.configAudit,
-  PAGE.license,
   PAGE.branding,
   PAGE.admins,
   PAGE.help
@@ -200,7 +197,6 @@ const EXACT_PAGES = new Map<string, UiPageDefinition>([
   ["/admin/audit", PAGE.audit],
   ["/admin/mcp-playground", PAGE.playground],
   ["/admin/config-audit", PAGE.configAudit],
-  ["/admin/license", PAGE.license],
   ["/admin/branding", PAGE.branding],
   ["/admin/admins", PAGE.admins],
   ["/help", PAGE.help]
@@ -212,7 +208,8 @@ const REDIRECT_EXACT = new Set([
   "/admin/governance",
   "/review",
   "/connections/whitelist",
-  "/admin/audit-sources"
+  "/admin/audit-sources",
+  "/admin/license"
 ]);
 
 const DYNAMIC_PAGES: Array<{ pattern: RegExp; page: UiPageDefinition }> = [

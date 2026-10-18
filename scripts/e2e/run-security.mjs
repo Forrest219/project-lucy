@@ -9,16 +9,17 @@
 // never skipped and never passed. Exit codes follow Spec §8.2: 0 passed, 1 failed, 2 blocked, 3 dry-run.
 
 import { createHash } from "node:crypto";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { catalogDigest, checkLock, loadCatalog, readLock } from "./lib/catalog.mjs";
 import { EXIT_CODES, fail, loadRun, parseArgv, sha256Text } from "./lib/common.mjs";
 import { ExternalInstance, LucyProcess, portOpen } from "./lib/instance.mjs";
+import { reconcileExternalFlag, TargetIdentityError } from "./lib/target-identity.mjs";
 import { SecurityContext } from "./security/context.mjs";
 
-const HANDLER_MODULES = ["auth-cases", "mcp-cases", "content-cases", "fault-cases"];
+const HANDLER_MODULES = ["auth-cases", "mcp-cases", "content-cases", "fault-cases", "data-cases", "row-policy-cases", "remaining-auth-cases", "remaining-content-cases", "remaining-file-cases", "offline-candidate-cases"];
 const RUN_LAST = ["SEC-05-V01", "SEC-05-V02", "SEC-05-V04", "SEC-05-V05", "SEC-05-V06", "SEC-05-V03"];
 
 export async function loadHandlers() {
@@ -84,6 +85,16 @@ export function statusFromAssertions(testCase, outcome) {
   const missing = testCase.assert.filter((token) => !evaluated.has(token));
   const failed = outcome.assertions.filter((a) => !a.passed);
   if (missing.length > 0) return { status: "failed", detail: `declared assertion(s) never evaluated: ${missing.join(", ")}` };
+  // Distinguish a measurement gap (the observer returned `unknown` so the case could
+  // not prove an authorized-zero / unauthorized-zero claim) from a real feature failure
+  // (the gate denied / produced the wrong rows / scanned a leak). A measurement-gap
+  // blocks the case so it cannot claim a green pass; a feature-failure is the
+  // existing `failed` verdict. A `blocked` verdict ranks LOWER than `failed` in the
+  // summary so an unprovable case never masks a real failure.
+  const measurementGap = (outcome.upstreamExecutions === "unknown" || (outcome.upstreamExecutions && outcome.upstreamExecutions.upstreamExecutionCount === "unknown"));
+  if (measurementGap && failed.length === 0) {
+    return { status: "blocked", detail: "independent observer reported 'unknown' for this case window; the runner cannot prove the authorization claim without a measured source" };
+  }
   if (failed.length > 0) return { status: "failed", detail: failed.map((a) => `${a.token}: ${a.detail ?? "failed"}`).join(" | ") };
   return { status: "passed", detail: "" };
 }
@@ -97,20 +108,67 @@ function writeCaseResult(run, testCase, body) {
   return { path: path.relative(run.paths.runDir, file), sha256: createHash("sha256").update(text).digest("hex") };
 }
 
+function progressLog(run, message) {
+  try { appendFileSync(path.join(run.paths.logs, "progress.log"), `${new Date().toISOString()} ${message}\n`); } catch { /* best-effort */ }
+}
+
 /** Runs the selected security cases and returns the evidence document (also written under results/). */
-export async function runSecurity({ run, cases, handlers, only, dryRun = false, ctxFactory, external = false }) {
+export async function runSecurity({ run, cases, handlers, only, dryRun = false, ctxFactory, external = false, onTargetRefused = fail, observerFactory = null }) {
+  const externalCheck = reconcileExternalFlag({ run, flagValue: external });
+  if (!externalCheck.ok) onTargetRefused(`run-security: ${externalCheck.problems.join("; ")}`, EXIT_CODES.blocked);
   const selected = executionOrder(cases.filter((c) => c.runner === "security" && (!only || only.has(c.id) || only.has(c.scenario))));
   const startedAt = new Date().toISOString();
   const results = [];
   let lucy = null;
   let ctx = null;
   let capabilities = {};
+  let activeObserver = null;
   try {
     if (!dryRun) {
-      lucy = external ? new ExternalInstance(run) : new LucyProcess(run);
-      await lucy.start();
+      if (external) {
+        progressLog(run, "external target: running preflight (no auth, no bootstrap)");
+        lucy = new ExternalInstance(run);
+        try {
+          await lucy.start();
+        } catch (error) {
+          if (error instanceof TargetIdentityError) {
+            const blocked = error.classification === "missing_measurement" || (error.stage === "postflight" && error.aspects?.ownerLogin?.classification === "missing_measurement");
+            const code = blocked ? EXIT_CODES.blocked : EXIT_CODES.failed;
+            onTargetRefused(`run-security: target verification refused: ${error.message} (stage=${error.stage} classification=${error.classification})`, code);
+            // onTargetRefused is expected to terminate (process.exit). If a test provided a
+            // non-terminating hook we still need to abort the runner.
+            throw error;
+          }
+          throw error;
+        }
+        progressLog(run, "external target verified (preflight + postflight)");
+      } else {
+        lucy = new LucyProcess(run);
+        await lucy.start();
+      }
       capabilities = await detectCapabilities(run, true, external);
-      ctx = ctxFactory ? ctxFactory({ run, lucy, capabilities }) : new SecurityContext({ run, lucy, capabilities });
+      // Default observer factory: only used when the caller did not supply one. The
+      // factory is bound to the RUN'S registered target type; for external runs it
+      // returns null (no in-process recording), so the SecurityContext reports
+      // `unknown`. For local runs the factory constructs a loopback observer that
+      // sits between the LucyProcess and the upstream; the runner is responsible for
+      // calling `ensureStarted(upstreamUrl)` and `stop()` around the case loop.
+      let factory = observerFactory;
+      if (typeof factory !== "function") {
+        try {
+          const { createDefaultObserverFactory } = await import("./lib/local-loopback-observer.mjs");
+          factory = createDefaultObserverFactory({ run });
+        } catch { /* module optional; missing import leaves factory null */ }
+      }
+      ctx = ctxFactory
+        ? ctxFactory({ run, lucy, capabilities, observerFactory: factory })
+        : new SecurityContext({ run, lucy, capabilities, observerFactory: factory });
+      // Stash the active observer on the context so the runner can start/stop it
+      // around the case loop without going through the factory.
+      if (factory) {
+        const sample = factory({ agentId: "runner-bootstrap", identity: "lucy-e2e-observer", runId: run.runId, instanceId: run.instanceId });
+        if (sample && typeof sample.ensureStarted === "function") activeObserver = sample;
+      }
     }
     for (const testCase of selected) {
       const caseStarted = new Date().toISOString();
@@ -157,6 +215,9 @@ export async function runSecurity({ run, cases, handlers, only, dryRun = false, 
       entry.artifacts = [writeCaseResult(run, testCase, { id: testCase.id, status: entry.status, detail: entry.detail, assertions: entry.assertions, denyReason: entry.denyReason, leakage: entry.leakage })];
     }
   } finally {
+    if (activeObserver && typeof activeObserver.stop === "function") {
+      try { await activeObserver.stop(); } catch { /* best-effort */ }
+    }
     if (lucy) await lucy.stop("SIGTERM");
   }
 

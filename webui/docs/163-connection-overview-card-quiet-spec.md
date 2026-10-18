@@ -138,6 +138,7 @@ Policy Runtime 降级不在本页提示。
 | SC-10 | `execution.status=unavailable` 或 `error` | 只有 §6 的不可用提示，链到 MCP 调试台 |
 | SC-11 | 状态接口失败 | 不出现问数提示，连接卡片仍可操作 |
 | SC-12 | `/admin/mcp-playground` | 四层状态和「重新检测执行层」仍在 |
+| SC-13 | 打开连接「更多」后点击菜单外或按 Esc | 菜单关闭。打开另一张卡或 Schema 行的「更多」时，当前菜单也关闭。点菜单项后菜单关闭 |
 
 ## 8. Terminology Compliance
 
@@ -160,6 +161,6 @@ New terms:
 
 ## 10. 测试
 
-更新 `webui/src/__tests__/connection-overview.test.tsx`：去掉对页脚五按钮和卡片内四层徽章的断言，改为 SC-1 至 SC-11。更新 `webui/src/__tests__/setup-assistant.test.tsx` 中对「继续向导」按钮文案的断言，改为点击「接入进度」控件。`mcp-playground.test.tsx` 继续断言调试台徽章，对应 SC-12。
+更新 `webui/src/__tests__/connection-overview.test.tsx`：去掉对页脚五按钮和卡片内四层徽章的断言，改为 SC-1 至 SC-11。SC-13 的连接「更多」收回也由该文件覆盖。更新 `webui/src/__tests__/setup-assistant.test.tsx` 中对「继续向导」按钮文案的断言，改为点击「接入进度」控件。`mcp-playground.test.tsx` 继续断言调试台徽章，对应 SC-12。
 
 本 Spec 的实现验收用 Vitest 与 `npm run lint:terminology`。不要求浏览器测试。

@@ -86,7 +86,7 @@ KTX WebUI
 | 访问治理 | Token 凭据 | `/admin/tokens` | 全局查看、签发与定向吊销 Agent 访问凭据 |
 | 访问治理 | 角色权限 | `/admin/roles` | 管理角色的数据库连接、数据表与 MCP 工具授权范围 |
 | 访问治理 | 访问日志 | `/admin/audit` | 按问询和工具调用追溯 Agent 访问行为、权限裁决与执行耗时 |
-| 访问治理 | MCP 调试台 | `/admin/mcp-playground` | 预览 Agent 的 MCP 工具权限裁决，并执行受控接入试调 |
+| 访问治理 | MCP 调试台 | `/admin/mcp-playground` | 检查 Agent 能不能连上，或者能不能查某张表。 |
 | 访问治理 | 配置审计 | `/admin/config-audit` | 查看各类配置与内容资产的写入记录、变更内容和操作者 |
 | 系统设置 | 品牌外观 | `/admin/branding` | 配置客户 Logo、产品名称与品牌副标题 |
 | 系统设置 | 登录账户 | `/admin/admins` | 管理 WebUI 登录账户，并配置所有者或运维角色 |

@@ -74,14 +74,25 @@ let agentsMeta: { runtimeConsistency: "matched" | "unconfirmed" } | undefined;
 function stubAgentsEndpoints(
   agents: Agent[],
   roles: Role[] = [analystRole],
-  mcpEndpoint: McpEndpointInfo = {
+  mcpEndpoint?: McpEndpointInfo,
+  capabilityCount = 1
+) {
+  const endpoint = mcpEndpoint ?? {
     url: "https://lucy.example.com/mcp",
     status: "configured" as const,
     source: "env" as const,
     configured: true,
     diagnostics: []
-  }
-) {
+  };
+  const capabilities = Array.from({ length: capabilityCount }, (_, index) => ({
+    tool: "lucy_query",
+    connectionId: "mysql-aliyun",
+    schema: "dataforai",
+    sourceName: index === 0 ? "server_composed_source" : `source_${index}`,
+    physicalTable: `dataforai.source_${index}`,
+    sourceKey: `mysql-aliyun|dataforai|source_${index}`,
+    rowGrant: "all" as const
+  }));
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     if (url === "/api/project") {
@@ -92,7 +103,7 @@ function stubAgentsEndpoints(
             root: "/tmp/project-lucy",
             ktxAvailable: true,
             connections: [],
-            mcpEndpoint
+            mcpEndpoint: endpoint
           }
         })
       );
@@ -119,17 +130,7 @@ function stubAgentsEndpoints(
               connections: [],
               sources: [],
               legacyAllow: false,
-              capabilities: [
-                {
-                  tool: "lucy_query",
-                  connectionId: "mysql-aliyun",
-                  schema: "dataforai",
-                  sourceName: "server_composed_source",
-                  physicalTable: "dataforai.server_composed_source",
-                  sourceKey: "mysql-aliyun|dataforai|server_composed_source|dataforai.server_composed_source",
-                  rowGrant: "all"
-                }
-              ]
+              capabilities
             }
           }
         }));
@@ -441,6 +442,52 @@ describe("AgentList", () => {
     expect(await screen.findByText(/还没有可用角色/)).toBeInTheDocument();
     const createLink = screen.getByRole("link", { name: /创建角色/ });
     expect(createLink.getAttribute("href")).toBe("/admin/roles/new");
+  });
+
+  it("separates lucy_admin from business roles and collapses a long capability list", async () => {
+    stubAgentsEndpoints(
+      [],
+      [
+        { ...analystRole, id: "demo_readonly" },
+        {
+          ...analystRole,
+          id: "lucy_admin",
+          source_scope: "catalog_bound",
+          description: "平台运维数据面（非 WebUI 登录账户）"
+        }
+      ],
+      undefined,
+      16
+    );
+
+    renderAgentList();
+    await waitFor(() => expect(screen.getByRole("button", { name: "新建 Agent" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "新建 Agent" }));
+
+    const business = await screen.findByTestId("agent-business-role-options");
+    const ops = screen.getByTestId("agent-ops-role-group");
+    expect(within(business).getByRole("checkbox", { name: "demo_readonly" })).toBeInTheDocument();
+    expect(within(business).queryByRole("checkbox", { name: /lucy_admin/ })).not.toBeInTheDocument();
+    expect(within(ops).getAllByText("运维数据面").length).toBeGreaterThan(0);
+    expect(within(ops).getByRole("checkbox", { name: /lucy_admin/ })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText("例：wangwu"), { target: { value: "hehe" } });
+    fireEvent.change(screen.getByPlaceholderText("例：王五"), { target: { value: "何老师" } });
+    fireEvent.click(within(ops).getByRole("checkbox", { name: /lucy_admin/ }));
+
+    const warning = await screen.findByTestId("agent-lucy-admin-role-warning");
+    expect(warning).toHaveTextContent("高权限运维数据面");
+    const card = await screen.findByTestId("agent-role-capability");
+    expect(card).toHaveTextContent("数据能力");
+    expect(card).toHaveTextContent("16");
+    expect(card).toHaveTextContent("不必在这里逐条确认");
+    expect(screen.queryByText("lucy_query:source_1")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "下一步：预览配置" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "展开 16 条" }));
+    expect(screen.getByText("lucy_query:source_1")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "收起清单" }));
+    expect(screen.queryByText("lucy_query:source_1")).not.toBeInTheDocument();
   });
 
   it("new agent modal role field shows 管理角色 link to role admin", async () => {

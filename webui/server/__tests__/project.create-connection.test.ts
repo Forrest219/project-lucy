@@ -485,12 +485,13 @@ describe("createConnection (Spec 124 Phase A)", () => {
     expect(JSON.stringify(result)).not.toContain("passwordBytes");
     const yamlText = await readFile(path.join(projectRoot, "ktx.yaml"), "utf8");
     const parsed = parse(yamlText) as {
-      connections: Record<string, { driver: string; database: string; password?: string }>;
+      connections: Record<string, { driver: string; path: string; database?: string; password?: string }>;
     };
     expect(parsed.connections["local-sqlite"]).toMatchObject({
       driver: "sqlite",
-      database: "data/app.sqlite"
+      path: "data/app.sqlite"
     });
+    expect(parsed.connections["local-sqlite"].database).toBeUndefined();
     expect(parsed.connections["local-sqlite"].password).toBeUndefined();
     await expect(
       access(path.join(projectRoot, ".ktx", "secrets", "local-sqlite-password"))

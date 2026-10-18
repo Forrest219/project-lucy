@@ -62,8 +62,7 @@ export type NavIconKey =
   | "mcpPlayground"
   | "configAudit"
   | "admins"
-  | "branding"
-  | "license";
+  | "branding";
 
 /**
  * Spec 143: overview is no longer a pinned top-level entry. Kept as a named
@@ -296,7 +295,7 @@ export const navGroups: Array<{
         to: "/admin/mcp-playground",
         iconKey: "mcpPlayground",
         active: (path) => path === "/admin/mcp-playground" || path.startsWith("/admin/mcp-playground"),
-        description: "预览 Agent 的 MCP 工具权限裁决，并执行受控接入试调。",
+        description: "检查 Agent 能不能连上，或者能不能查某张表。",
         keywords: ["MCP", "Playground", "ACL", "调试"]
       },
       {
@@ -314,15 +313,6 @@ export const navGroups: Array<{
     id: "system-settings",
     title: "系统设置",
     items: [
-      {
-        id: "admin-license",
-        label: "部署许可",
-        to: "/admin/license",
-        iconKey: "license",
-        active: (path) => path === "/admin/license" || path.startsWith("/admin/license/"),
-        description: "输入激活码，管理本实例的 Agent 席位与部署许可有效期。",
-        keywords: ["激活码", "License", "席位", "付费"]
-      },
       {
         id: "admin-branding",
         label: "品牌外观",

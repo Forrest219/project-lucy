@@ -19,6 +19,7 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { assembleEvidence, loadResults } from "../e2e/lib/assemble.mjs";
 import { expectedExecutions } from "../e2e/lib/catalog.mjs";
+import { automatedRequiredClients } from "../e2e/lib/clients.mjs";
 import { EXIT_CODES, fail, loadRun, parseArgv } from "../e2e/lib/common.mjs";
 import { fileReaderFor, loadVerifyInputs, verifyRelease } from "../e2e/verify-evidence.mjs";
 
@@ -52,10 +53,14 @@ function readJsonIfExists(file) {
 export function decideReadiness({ run, candidate, mode, now = Date.now(), inputs = loadVerifyInputs() }) {
   const results = loadResults(run);
   const audit = readJsonIfExists(path.join(run.paths.runDir, "results", "npm-audit.json"));
-  const expectedCount = expectedExecutions(inputs.cases, inputs.clientsDoc.clients.filter((c) => c.required).map((c) => c.product)).length;
-  const { evidence, missing } = assembleEvidence({ run, results, candidate, profileDigest: inputs.profileDigest, cases: inputs.cases, expectedCount });
+  // Automated required products only; manual GUI products (workbuddy/cursor) are checked separately via
+  // `manualRequiredClients` and must not be added to the agent-case denominator.
+  const automatedProducts = automatedRequiredClients(inputs.clientsDoc.clients).map((c) => c.product);
+  const expectedCount = expectedExecutions(inputs.cases, automatedProducts).length;
+  const { evidence, missing } = assembleEvidence({ run, results, candidate, profileDigest: inputs.profileDigest, cases: inputs.cases, expectedCount, clientsDoc: inputs.clientsDoc });
   if (mode !== "release") evidence.executionMode = mode === "dry-run" ? "dry_run" : "collect";
-  const verdict = verifyRelease({ evidence, candidate, ...inputs, audit, readFile: fileReaderFor(run.paths.runDir), now });
+  const runCreatedAtMs = Number.isFinite(Date.parse(run.createdAt)) ? Date.parse(run.createdAt) : NaN;
+  const verdict = verifyRelease({ evidence, candidate, ...inputs, audit, readFile: fileReaderFor(run.paths.runDir), now, runId: run.runId, instanceId: run.instanceId, runCreatedAtMs });
   if (mode !== "release") {
     // Collect / dry-run gathers and reports; it is not a gate and can never be publishable (Spec §8.2: exit 3).
     // The problems stay in the written file so nothing about an incomplete run is hidden.

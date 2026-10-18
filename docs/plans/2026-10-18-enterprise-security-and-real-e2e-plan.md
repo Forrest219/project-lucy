@@ -71,7 +71,7 @@
 2. 将旧评估复现迁为正式测试的候选清单，重新确认 V-01/02/03/04/06/08 仍存在（V-08 用 `inbox/xv-20261018/gm-rce-probe.ts`）；如已由他人修复，记录证据、复用结果，不重复改实现。
 3a. 新建 `docs/qa/security-findings.yaml`（Spec §8.3a 格式），按评估 v1.1 登记 V-01～V-08、D-01～D-02、G-01～G-05 及依赖条目，初始全部 `open`。后续每个任务关闭对应条目时同提交更新 `fixedIn` / `verifiedBy`。
 3. 登记 Spec 的 32 个场景、协议/身份/引擎/客户端变体及必须覆盖的分支；标明旧 BY-01～19、Spec 151/161/162/172/173 用例复用位置。
-4. 锁定两个以上 required 产品及真实执行方式；默认按 R4 Codex+Cursor。不把两份 Hermes profile 计成两个产品。
+4. 锁定 required 产品及执行方式；R4 v4 方案 A：自动 Codex+Claude Code+OpenClaw，人工 WorkBuddy+Cursor GUI。不把两份 Hermes profile 计成两个产品。
 
 **验证：** `git status --short`、`node --version`、`npm --prefix webui run e2e:selector-contract`；已知 33 项漂移记入 T09，而非改为警告。验收目录不允许出现未分配执行器的 required 场景。
 
@@ -411,7 +411,7 @@ npm --prefix webui run build
 
 **步骤：**
 1. RED：静态打印 gold、两个 Hermes profile、curl 改 UA 冒充客户端、Agent 不查数却答对、Runner 自造 Trace、旧窗口/别人的 Token 事件，全部不能通过。
-2. 对实际接入方式实现 adapter；GUI 导入/发问有真实 UI 证据，CLI 只宣称实际 CLI 路径。按 R7 默认：`adapters/codex.mjs` 驱动 Codex CLI，`adapters/cursor.mjs` 驱动 Cursor CLI Agent（二进制名以 runner 上实际安装版本为准，`cursor-agent` 或 `agent`；当前开发机未安装，需 R8 runner 预装），两者都从 T11 复制出的 MCP 配置生成各自原生配置文件，证据记 `transport=cli`、二进制路径与 `--version` 输出；adapter 启动前先探测二进制与凭据，缺失即 BLOCKED。使用 T11 复制出的 endpoint 与独立测试 Token，不重新拼一套可能串实例的配置。
+2. 对实际接入方式实现 adapter。按 R4/R7 v4 方案 A：`adapters/codex.mjs`、`adapters/claude-code.mjs`、`adapters/openclaw.mjs` 为自动 required；WorkBuddy/Cursor GUI 走人工 checklist（永不自动化）。adapter 启动前先探测二进制与凭据，缺失即 BLOCKED。使用 T11 复制出的 endpoint 与独立测试 Token。
 3. UX-02～05 每 required 产品固定 3 次独立运行；由 Agent 自主选 Wiki/Skill/语义工具，保留多轮、无权限、空结果、超时/截断/恢复与恶意文档案例。
 4. checker 独立计算 typed gold、金额/排序/日期/版本/来源，不能只做词语和数字存在判断；扫描所有最终答案和事件内容。
 5. 从服务端采集真实 query、上下文 read、policy/context 版本、Token 指纹、问询/Trace，绑定 case/时窗。模型缺凭据、GUI runner 不可用或产品认证方式不支持即 BLOCKED。

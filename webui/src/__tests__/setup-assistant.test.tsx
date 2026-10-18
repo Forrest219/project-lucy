@@ -1357,7 +1357,9 @@ describe("Setup Assistant manifest upload contract", () => {
       expect(howTo).toHaveAttribute("open");
     });
     expect(screen.getByTestId("setup-step2-next")).toHaveTextContent("上传 Schema Manifest 并继续");
-    expect(screen.getByText(/交给你的/)).toBeInTheDocument();
+    expect(screen.getByText(/要自己准备文件时，把编写说明交给你的/)).toBeInTheDocument();
+    expect(screen.queryByText(/能读取这套数据库时/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/准备当前 Schema 的表结构/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Cursor/)).not.toBeInTheDocument();
   });
 });

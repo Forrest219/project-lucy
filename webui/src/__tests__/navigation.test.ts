@@ -62,16 +62,16 @@ describe("navigation (shared sidebar config)", () => {
     expect(new Set(iconKeys).size).toBe(iconKeys.length);
   });
 
-  it("navGroups contains 24 second-level items in total", () => {
+  it("navGroups contains 23 second-level items in total", () => {
     const totalItems = navGroups.reduce((sum, g) => sum + g.items.length, 0);
-    expect(totalItems).toBe(24);
+    expect(totalItems).toBe(23);
   });
 
   it("flat sidebar entries match Spec 143 Runtime Status IA", () => {
     const flat: Array<Pick<NavItem, "id" | "label" | "to"> & { group: string }> = navGroups.flatMap(
       (g) => g.items.map((item) => ({ group: g.title, id: item.id, label: item.label, to: item.to }))
     );
-    expect(flat.length).toBe(24);
+    expect(flat.length).toBe(23);
     expect(flat).toEqual([
       { group: "运行状态", id: "overview", label: "系统概览", to: "/overview" },
       { group: "运行状态", id: "ops-calls", label: "调用监控", to: "/ops/calls" },
@@ -94,7 +94,6 @@ describe("navigation (shared sidebar config)", () => {
       { group: "访问治理", id: "admin-audit", label: "访问日志", to: "/admin/audit" },
       { group: "访问治理", id: "admin-mcp-playground", label: "MCP 调试台", to: "/admin/mcp-playground" },
       { group: "访问治理", id: "admin-config-audit", label: "配置审计", to: "/admin/config-audit" },
-      { group: "系统设置", id: "admin-license", label: "部署许可", to: "/admin/license" },
       { group: "系统设置", id: "admin-branding", label: "品牌外观", to: "/admin/branding" },
       { group: "系统设置", id: "admin-accounts", label: "登录账户", to: "/admin/admins" }
     ]);
@@ -146,9 +145,8 @@ describe("navigation (shared sidebar config)", () => {
       "admin-tokens": "全局查看、签发与定向吊销 Agent 访问凭据。",
       "admin-roles": "管理角色的数据库连接、数据表与 MCP 工具授权范围。",
       "admin-audit": "按问询和工具调用追溯 Agent 访问行为、权限裁决与执行耗时。",
-      "admin-mcp-playground": "预览 Agent 的 MCP 工具权限裁决，并执行受控接入试调。",
+      "admin-mcp-playground": "检查 Agent 能不能连上，或者能不能查某张表。",
       "admin-config-audit": "查看各类配置与内容资产的写入记录、变更内容和操作者。",
-      "admin-license": "输入激活码，管理本实例的 Agent 席位与部署许可有效期。",
       "admin-branding": "配置客户 Logo、产品名称与品牌副标题。",
       "admin-accounts": "管理 WebUI 登录账户，并配置所有者或运维角色。"
     });

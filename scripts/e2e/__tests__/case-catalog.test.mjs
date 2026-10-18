@@ -74,18 +74,19 @@ describe("case catalog (Spec §7, frozen denominator)", () => {
   it("expands matrices deterministically and the digest changes with any variant change", () => {
     const again = expandCatalog(doc);
     assert.equal(catalogDigest(again), catalogDigest(cases));
-    assert.equal(cases.filter((c) => c.id.startsWith("SEC-22-S02-")).length, 15);
+    assert.equal(cases.filter((c) => c.id.startsWith("SEC-11-BY")).length, 19);
+    assert.equal(cases.filter((c) => c.id.startsWith("SEC-22-S02-")).length, 0);
     const edited = clone(cases).map((c) => (c.id === "SEC-01-V01" ? { ...c, title: `${c.title}!` } : c));
     assert.notEqual(catalogDigest(edited), catalogDigest(cases));
   });
 
   it("builds the fixed denominator: agent cases multiply by required product and the three runs", () => {
-    const keys = expectedExecutions(cases, ["codex", "cursor"]);
-    assert.ok(keys.includes("UX-02-V01@codex#1") && keys.includes("UX-02-V01@cursor#3"));
+    const keys = expectedExecutions(cases, ["codex", "claude-code", "openclaw"]);
+    assert.ok(keys.includes("UX-02-V01@codex#1") && keys.includes("UX-02-V01@claude-code#3") && keys.includes("UX-02-V01@openclaw#2"));
     assert.ok(!keys.includes("UX-02-V01@codex#4"));
     assert.ok(keys.includes("SEC-01-V01") && !keys.includes("SEC-01-V01@codex#1"));
     const agentCases = cases.filter((c) => c.runner === "agent");
-    const expected = cases.length - agentCases.length + agentCases.reduce((sum, c) => sum + c.repeat * 2, 0);
+    const expected = cases.length - agentCases.length + agentCases.reduce((sum, c) => sum + c.repeat * 3, 0);
     assert.equal(keys.length, expected);
     assert.equal(new Set(keys).size, keys.length, "no duplicate execution keys");
   });

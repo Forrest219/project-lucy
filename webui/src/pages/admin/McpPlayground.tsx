@@ -2,15 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { PageHeader } from "../../components/PageHeader";
-import { DecisionReasonCell } from "../../components/DecisionReasonCell";
 import { apiGet, apiPost } from "../../lib/apiClient";
-import { McpRuntimeStatusPanel } from "../../components/McpRuntimeStatusPanel";
-import type { Agent, McpRuntimeCanaryResult, McpRuntimeStatus } from "../../lib/types";
+import type { Agent, EffectivePermissionsPreview, McpRuntimeCanaryResult, McpRuntimeStatus } from "../../lib/types";
 import { queryKeys } from "../../lib/queryKeys";
 import { adminAgentsQueryOptions } from "../../lib/displayQueryOptions";
 
 type AgentsResponse = { agents: Agent[] };
-type McpToolsResponse = { tools: Array<{ name: string; description?: string }> };
+type Task = "connect" | "table" | "";
 
 type AclPreviewData = {
   allowed: boolean;
@@ -22,12 +20,6 @@ type AclPreviewData = {
     primary: { label: string; href: string };
     secondary: Array<{ label: string; href: string }>;
   };
-  effectivePermissions: {
-    tools: string[];
-    connections: string[];
-    tableSample: string[];
-    tableSampleTruncated: boolean;
-  };
 };
 
 type LiveSmokeData = {
@@ -38,42 +30,79 @@ type LiveSmokeData = {
   auditHref?: string;
 };
 
+function firstString(record: Record<string, unknown>, keys: string[]): string {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return "";
+}
+
+function readArgsPrefill(raw: string | null): { connectionId: string; sourceName: string } {
+  if (!raw) return { connectionId: "", sourceName: "" };
+  try {
+    const value = JSON.parse(raw) as unknown;
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return { connectionId: "", sourceName: "" };
+    }
+    const record = value as Record<string, unknown>;
+    return {
+      connectionId: firstString(record, ["connectionId", "connection_id", "connection", "database"]),
+      sourceName: firstString(record, ["sourceName", "source_name", "source", "table"])
+    };
+  } catch {
+    return { connectionId: "", sourceName: "" };
+  }
+}
+
+function initialTask(mode: string | null): Task {
+  if (mode === "live-smoke") return "connect";
+  if (mode === "dry-run") return "table";
+  return "";
+}
+
+function tokenProblem(value: string): string | null {
+  if (value.includes("{") || value.includes("mcpServers")) return "只粘贴 Token 那一串";
+  return null;
+}
+
+function stripBearer(value: string): string {
+  return value.replace(/^Bearer\s+/i, "").trim();
+}
+
+function recheckConnectionId(status: McpRuntimeStatus | undefined): string {
+  return status?.execution.missingConnections?.[0]
+    || status?.config.connectionIds?.[0]
+    || "";
+}
+
 export function McpPlayground() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const prefill = useMemo(() => readArgsPrefill(searchParams.get("args")), [searchParams]);
   const [agentId, setAgentId] = useState(() => searchParams.get("agentId") ?? "");
-  const [tool, setTool] = useState(() => searchParams.get("tool") ?? "lucy_query");
-  const [mode, setMode] = useState<"dry-run" | "live-smoke">(
-    searchParams.get("mode") === "live-smoke" ? "live-smoke" : "dry-run"
-  );
-  const [argsText, setArgsText] = useState(() => {
-    const raw = searchParams.get("args");
-    if (!raw) return "{\n  \n}";
-    try {
-      return JSON.stringify(JSON.parse(raw), null, 2);
-    } catch {
-      return "{\n  \n}";
-    }
-  });
+  const [task, setTask] = useState<Task>(() => initialTask(searchParams.get("mode")));
+  const [connectionId, setConnectionId] = useState(prefill.connectionId);
+  const [sourceName, setSourceName] = useState(prefill.sourceName);
   const [bearerToken, setBearerToken] = useState("");
+  const [tokenError, setTokenError] = useState<string | null>(null);
   const [confirmLive, setConfirmLive] = useState(false);
-  const [parseError, setParseError] = useState<string | null>(null);
-  const [runtimeConnectionId, setRuntimeConnectionId] = useState("");
 
   const agentsQuery = useQuery({
     ...adminAgentsQueryOptions<AgentsResponse>()
-  });
-  const toolsQuery = useQuery({
-    queryKey: ["admin", "mcp-tools"],
-    queryFn: () => apiGet<McpToolsResponse>("/api/admin/mcp-tools")
   });
   const runtimeQuery = useQuery({
     queryKey: queryKeys.mcpRuntime,
     queryFn: () => apiGet<McpRuntimeStatus>("/api/admin/mcp-runtime/status")
   });
+  const permissionsQuery = useQuery({
+    queryKey: ["admin", "agent-effective-permissions", agentId],
+    queryFn: () => apiGet<EffectivePermissionsPreview>(`/api/admin/agents/${encodeURIComponent(agentId)}/effective-permissions`),
+    enabled: Boolean(agentId) && task === "table"
+  });
   const runtimeCanaryMutation = useMutation({
-    mutationFn: (connectionId: string) =>
+    mutationFn: (connection: string) =>
       apiPost<McpRuntimeCanaryResult>("/api/admin/mcp-runtime/canary", {
-        connectionId,
+        connectionId: connection,
         ...(agentId ? { agentId } : {}),
         mode: "connection"
       }),
@@ -81,23 +110,6 @@ export function McpPlayground() {
       void runtimeQuery.refetch();
     }
   });
-
-  useEffect(() => {
-    const connectionIds = runtimeQuery.data?.config.connectionIds ?? [];
-    if (!runtimeConnectionId && connectionIds[0]) {
-      setRuntimeConnectionId(connectionIds[0]);
-    } else if (runtimeConnectionId && !connectionIds.includes(runtimeConnectionId)) {
-      setRuntimeConnectionId(connectionIds[0] ?? "");
-    }
-  }, [runtimeConnectionId, runtimeQuery.data]);
-
-  const agents = agentsQuery.data?.agents ?? [];
-  const selectedAgent = agents.find((a) => a.id === agentId);
-  const toolOptions = useMemo(() => {
-    const names = new Set((toolsQuery.data?.tools ?? []).map((t) => t.name));
-    if (tool) names.add(tool);
-    return Array.from(names).sort();
-  }, [toolsQuery.data, tool]);
 
   const previewMutation = useMutation({
     mutationFn: (body: { agentId: string; tool: string; arguments: unknown }) =>
@@ -109,52 +121,127 @@ export function McpPlayground() {
       apiPost<LiveSmokeData>("/api/admin/mcp-playground/live-smoke", body)
   });
 
-  function syncQuery(next: { agentId?: string; tool?: string; mode?: string }) {
+  useEffect(() => {
     const params = new URLSearchParams(searchParams);
+    if (!params.has("tool") && !params.has("args")) return;
+    params.delete("tool");
+    params.delete("args");
+    setSearchParams(params, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  function syncQuery(next: { agentId?: string; mode?: string }) {
+    const params = new URLSearchParams(searchParams);
+    params.delete("tool");
+    params.delete("args");
     if (next.agentId !== undefined) {
       if (next.agentId) params.set("agentId", next.agentId);
       else params.delete("agentId");
     }
-    if (next.tool !== undefined) {
-      if (next.tool) params.set("tool", next.tool);
-      else params.delete("tool");
+    if (next.mode !== undefined) {
+      if (next.mode) params.set("mode", next.mode);
+      else params.delete("mode");
     }
-    if (next.mode !== undefined) params.set("mode", next.mode);
     setSearchParams(params, { replace: true });
   }
 
-  function parseArgs(): unknown | null {
-    try {
-      const value = JSON.parse(argsText);
-      setParseError(null);
-      return value;
-    } catch {
-      setParseError("参数必须是合法 JSON");
-      return null;
+  const enabledAgents = (agentsQuery.data?.agents ?? []).filter((agent) => agent.enabled);
+  const selectedAgent = enabledAgents.find((agent) => agent.id === agentId);
+  const permissions = permissionsQuery.data;
+  const connections = useMemo(
+    () => [...(permissions?.connections ?? [])].sort((a, b) => a.localeCompare(b)),
+    [permissions]
+  );
+  const sources = useMemo(() => {
+    const seen = new Set<string>();
+    return (permissions?.sources ?? [])
+      .filter((source) => source.connectionId === connectionId && source.sourceName)
+      .filter((source) => {
+        if (seen.has(source.sourceName)) return false;
+        seen.add(source.sourceName);
+        return true;
+      })
+      .sort((a, b) => a.sourceName.localeCompare(b.sourceName));
+  }, [permissions, connectionId]);
+  const roleId = selectedAgent?.role || permissions?.roleIds?.[0] || "";
+  const roleHref = roleId
+    ? `/admin/roles/${encodeURIComponent(roleId)}?tab=permissions`
+    : `/admin/agents/${encodeURIComponent(agentId)}`;
+  const executionReady = runtimeQuery.data?.execution.status === "ok";
+  const policyDegraded = runtimeQuery.isSuccess && runtimeQuery.data.policy.healthy === false;
+  const tableChoicesReady = !runtimeQuery.isPending && !policyDegraded;
+  const canaryConnection = recheckConnectionId(runtimeQuery.data);
+  const preview = task === "table" ? previewMutation.data : undefined;
+  const live = task === "connect" ? liveMutation.data : undefined;
+
+  useEffect(() => {
+    if (!permissions) return;
+    if (connectionId && !permissions.connections.includes(connectionId)) {
+      setConnectionId("");
+      setSourceName("");
     }
-  }
+  }, [permissions, connectionId]);
 
-  async function runPreview() {
-    if (!agentId || !tool) return;
-    const args = parseArgs();
-    if (args === null) return;
-    syncQuery({ agentId, tool, mode: "dry-run" });
-    await previewMutation.mutateAsync({ agentId, tool, arguments: args });
-  }
+  useEffect(() => {
+    if (!connectionId || !sourceName || !permissions) return;
+    const visible = permissions.sources.some(
+      (source) => source.connectionId === connectionId && source.sourceName === sourceName
+    );
+    if (!visible) setSourceName("");
+  }, [permissions, connectionId, sourceName]);
 
-  async function runLive() {
-    if (!agentId || !bearerToken.trim()) return;
+  function chooseAgent(nextAgentId: string) {
+    setAgentId(nextAgentId);
+    setConnectionId("");
+    setSourceName("");
+    setBearerToken("");
+    setTokenError(null);
     setConfirmLive(false);
-    syncQuery({ agentId, tool: "tools/list", mode: "live-smoke" });
-    await liveMutation.mutateAsync({
+    previewMutation.reset();
+    liveMutation.reset();
+    syncQuery({ agentId: nextAgentId, mode: task === "connect" ? "live-smoke" : task === "table" ? "dry-run" : "" });
+  }
+
+  function chooseTask(next: Task) {
+    setTask(next);
+    setConfirmLive(false);
+    previewMutation.reset();
+    liveMutation.reset();
+    syncQuery({ agentId, mode: next === "connect" ? "live-smoke" : "dry-run" });
+  }
+
+  function onTokenChange(value: string) {
+    const problem = tokenProblem(value);
+    setTokenError(problem);
+    setBearerToken(problem ? value : stripBearer(value));
+  }
+
+  async function runTableCheck() {
+    if (!agentId || !connectionId || !sourceName || policyDegraded) return;
+    syncQuery({ agentId, mode: "dry-run" });
+    await previewMutation.mutateAsync({
       agentId,
-      tool: "tools/list",
-      bearerToken: bearerToken.trim()
+      tool: "lucy_query",
+      arguments: { connectionId, sourceName }
     });
   }
 
-  const preview = previewMutation.data;
-  const live = liveMutation.data;
+  async function runLive() {
+    const token = stripBearer(bearerToken);
+    if (!agentId || !token || tokenProblem(bearerToken) || !executionReady) return;
+    setConfirmLive(false);
+    syncQuery({ agentId, mode: "live-smoke" });
+    await liveMutation.mutateAsync({
+      agentId,
+      tool: "tools/list",
+      bearerToken: token
+    });
+  }
+
+  const runtimeError = runtimeQuery.error instanceof Error
+    ? runtimeQuery.error.message
+    : runtimeCanaryMutation.error instanceof Error
+      ? runtimeCanaryMutation.error.message
+      : undefined;
 
   return (
     <div className="pl-page-stack" data-testid="mcp-playground-page">
@@ -162,232 +249,247 @@ export function McpPlayground() {
         title={<span className="notranslate" translate="no">MCP 调试台</span>}
         description={
           <>
-            预览 <span className="notranslate" translate="no">Agent</span> 的{" "}
-            <span className="notranslate" translate="no">MCP</span> 工具权限裁决，并执行受控接入试调。
+            检查这个 <span className="notranslate" translate="no">Agent</span> 能不能连上，或者能不能查某张表。
           </>
         }
       />
 
-      <McpRuntimeStatusPanel
-        status={runtimeQuery.data}
-        connectionId={runtimeConnectionId}
-        canary={runtimeCanaryMutation.data}
-        pending={runtimeCanaryMutation.isPending}
-        error={
-          runtimeQuery.error instanceof Error
-            ? runtimeQuery.error.message
-            : runtimeCanaryMutation.error instanceof Error
-              ? runtimeCanaryMutation.error.message
-              : undefined
-        }
-        controls={
-          <label className="flex items-center gap-2 text-xs">
-            <span>连接</span>
-            <select
-              className="pl-input notranslate"
-              translate="no"
-              value={runtimeConnectionId}
-              data-testid="mcp-runtime-connection"
-              onChange={(event) => setRuntimeConnectionId(event.target.value)}
-            >
-              <option value="">选择连接</option>
-              {(runtimeQuery.data?.config.connectionIds ?? []).map((connectionId) => (
-                <option key={connectionId} value={connectionId}>{connectionId}</option>
-              ))}
-            </select>
-          </label>
-        }
-        onRecheck={() => runtimeCanaryMutation.mutate(runtimeConnectionId)}
-      />
-
       <section className="pl-panel">
-        <div className="grid gap-4 grid-cols-3">
-          <label className="grid gap-1.5 text-sm">
-            <span className="notranslate" translate="no">Agent</span>
-            <select
-              className="pl-input notranslate"
-              translate="no"
-              value={agentId}
-              data-testid="mcp-playground-agent"
-              onChange={(e) => {
-                setAgentId(e.target.value);
-                syncQuery({ agentId: e.target.value });
-              }}
-            >
-              <option value="" className="notranslate" translate="no">
-                选择 Agent
+        <label className="grid max-w-md gap-1.5 text-sm">
+          <span className="notranslate" translate="no">Agent</span>
+          <select
+            className="pl-input notranslate"
+            translate="no"
+            value={selectedAgent ? agentId : ""}
+            data-testid="mcp-playground-agent"
+            onChange={(event) => chooseAgent(event.target.value)}
+          >
+            <option value="" className="notranslate" translate="no">
+              选择 Agent
+            </option>
+            {enabledAgents.map((agent) => (
+              <option key={agent.id} value={agent.id}>
+                {agent.name || agent.id} ({agent.id})
               </option>
-              {agents.map((agent) => (
-                <option key={agent.id} value={agent.id}>
-                  {agent.name || agent.id} ({agent.id})
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="grid gap-1.5 text-sm">
-            <span>模式</span>
-            <select
-              className="pl-input"
-              value={mode}
-              data-testid="mcp-playground-mode"
-              onChange={(e) => {
-                const next = e.target.value === "live-smoke" ? "live-smoke" : "dry-run";
-                setMode(next);
-                syncQuery({ mode: next });
-              }}
-            >
-              <option value="dry-run">ACL 裁决预览</option>
-              <option value="live-smoke">受控试调</option>
-            </select>
-          </label>
-          <div className="grid gap-1.5 text-sm">
-            <span className="notranslate" translate="no">Role</span>
-            <div className="pl-input bg-bg-muted text-fg-muted notranslate" translate="no" data-testid="mcp-playground-role">
-              {selectedAgent?.role || "—"}
-            </div>
-          </div>
-        </div>
+            ))}
+          </select>
+        </label>
 
-        {mode === "dry-run" ? (
+        {selectedAgent ? (
           <div className="mt-4 grid gap-4">
-            <label className="grid gap-1.5 text-sm">
-              <span>工具</span>
-              <select
-                className="pl-input notranslate"
-                translate="no"
-                value={tool}
-                data-testid="mcp-playground-tool"
-                onChange={(e) => {
-                  setTool(e.target.value);
-                  syncQuery({ tool: e.target.value });
-                }}
-              >
-                {toolOptions.map((name) => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="grid gap-1.5 text-sm">
-              <span>参数（JSON）</span>
-              <textarea
-                className="pl-input min-h-32 font-mono text-xs notranslate"
-                translate="no"
-                value={argsText}
-                onChange={(e) => setArgsText(e.target.value)}
-                data-testid="mcp-playground-args"
-              />
-            </label>
-            {parseError ? <p className="pl-error text-sm">{parseError}</p> : null}
-            <div>
-              <button
-                type="button"
-                className="pl-btn pl-btn--primary text-sm"
-                disabled={!agentId || previewMutation.isPending}
-                onClick={() => void runPreview()}
-                data-testid="mcp-playground-run-preview"
-              >
-                {previewMutation.isPending ? "运行中..." : "运行裁决预览"}
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="mt-4 grid gap-4">
-            <p className="pl-notice text-sm">
-              受控试调仅允许 <span className="notranslate" translate="no">tools/list</span>；
-              <span className="notranslate" translate="no">Token</span> 仅保存在本次会话，不会落盘。
-              请求会写入访问日志，并标记为受控试调。
+            <p className="text-sm">
+              <span className="notranslate" translate="no">Role</span>
+              <span className="ml-2 notranslate" translate="no" data-testid="mcp-playground-role">
+                {selectedAgent.role || selectedAgent.roles?.join(", ") || "—"}
+              </span>
             </p>
-            <label className="grid gap-1.5 text-sm">
-              <span className="notranslate" translate="no">Bearer Token</span>
-              <input
-                type="password"
-                className="pl-input notranslate"
-                translate="no"
-                value={bearerToken}
-                onChange={(e) => setBearerToken(e.target.value)}
-                placeholder="粘贴 Bearer Token，仅本次会话使用"
-                data-testid="mcp-playground-token"
-              />
-            </label>
-            <div>
-              <button
-                type="button"
-                className="pl-btn pl-btn--primary text-sm"
-                disabled={!agentId || !bearerToken.trim() || liveMutation.isPending}
-                onClick={() => setConfirmLive(true)}
-                data-testid="mcp-playground-run-live"
-              >
-                运行受控试调
-              </button>
-            </div>
+
+            <fieldset className="grid gap-2">
+              <legend className="text-sm">检查什么</legend>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="radio"
+                  name="mcp-playground-task"
+                  checked={task === "connect"}
+                  data-testid="mcp-playground-task-connect"
+                  onChange={() => chooseTask("connect")}
+                />
+                检查能不能连上
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="radio"
+                  name="mcp-playground-task"
+                  checked={task === "table"}
+                  data-testid="mcp-playground-task-table"
+                  onChange={() => chooseTask("table")}
+                />
+                检查能不能查某张表
+              </label>
+            </fieldset>
+
+            {task === "connect" ? (
+              <div className="grid gap-4" data-testid="mcp-playground-connect">
+                {runtimeQuery.isSuccess && !executionReady ? (
+                  <div className="grid gap-3" data-testid="mcp-playground-execution-block">
+                    <p className="pl-notice text-sm">问数进程还没加载最新配置。</p>
+                    <div>
+                      <button
+                        type="button"
+                        className="pl-btn pl-btn--secondary text-sm"
+                        disabled={!canaryConnection || runtimeCanaryMutation.isPending}
+                        onClick={() => runtimeCanaryMutation.mutate(canaryConnection)}
+                        data-testid="mcp-playground-recheck"
+                      >
+                        {runtimeCanaryMutation.isPending ? "检测中..." : "重新检测"}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+                {runtimeError ? <p className="pl-error text-sm">{runtimeError}</p> : null}
+                {executionReady ? (
+                  <>
+                    <label className="grid max-w-md gap-1.5 text-sm">
+                      <span className="notranslate" translate="no">Token</span>
+                      <input
+                        type="password"
+                        className="pl-input notranslate"
+                        translate="no"
+                        value={bearerToken}
+                        onChange={(event) => onTokenChange(event.target.value)}
+                        placeholder="粘贴这个 Agent 的 Token"
+                        data-testid="mcp-playground-token"
+                      />
+                    </label>
+                    {tokenError ? (
+                      <p className="pl-error text-sm" data-testid="mcp-playground-token-error">{tokenError}</p>
+                    ) : null}
+                    <div>
+                      <button
+                        type="button"
+                        className="pl-btn pl-btn--primary text-sm"
+                        disabled={!stripBearer(bearerToken) || Boolean(tokenError) || liveMutation.isPending}
+                        onClick={() => {
+                          if (!stripBearer(bearerToken) || tokenError) return;
+                          setConfirmLive(true);
+                        }}
+                        data-testid="mcp-playground-run-live"
+                      >
+                        检查接入
+                      </button>
+                    </div>
+                  </>
+                ) : null}
+              </div>
+            ) : null}
+
+            {task === "table" ? (
+              <div className="grid gap-4" data-testid="mcp-playground-table">
+                {policyDegraded ? (
+                  <div className="grid gap-3" data-testid="mcp-playground-policy-block">
+                    <p className="pl-notice text-sm">策略运行时降级，现在不能判断这张表能不能查。</p>
+                    <Link to="/admin/config-audit" className="pl-card-cta" data-testid="mcp-playground-policy-link">
+                      查看配置审计 ↗
+                    </Link>
+                  </div>
+                ) : null}
+                {permissionsQuery.isError ? (
+                  <p className="pl-error text-sm" data-testid="mcp-playground-preview-error">
+                    {(permissionsQuery.error as Error).message}
+                  </p>
+                ) : null}
+                {tableChoicesReady && permissionsQuery.isSuccess && connections.length === 0 ? (
+                  <Link to={roleHref} className="pl-card-cta" data-testid="mcp-playground-role-link">
+                    去授权连接 ↗
+                  </Link>
+                ) : null}
+                {tableChoicesReady && connections.length > 0 ? (
+                  <label className="grid max-w-md gap-1.5 text-sm">
+                    <span>连接</span>
+                    <select
+                      className="pl-input notranslate"
+                      translate="no"
+                      value={connectionId}
+                      data-testid="mcp-playground-connection"
+                      onChange={(event) => {
+                        setConnectionId(event.target.value);
+                        setSourceName("");
+                        previewMutation.reset();
+                      }}
+                    >
+                      <option value="">选择连接</option>
+                      {connections.map((id) => (
+                        <option key={id} value={id}>{id}</option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+                {tableChoicesReady && connectionId && permissionsQuery.isSuccess && sources.length === 0 ? (
+                  <Link to={roleHref} className="pl-card-cta" data-testid="mcp-playground-role-link">
+                    去编辑表范围 ↗
+                  </Link>
+                ) : null}
+                {tableChoicesReady && sources.length > 0 ? (
+                  <>
+                    <label className="grid max-w-md gap-1.5 text-sm">
+                      <span>表</span>
+                      <select
+                        className="pl-input notranslate"
+                        translate="no"
+                        value={sourceName}
+                        data-testid="mcp-playground-source"
+                        onChange={(event) => {
+                          setSourceName(event.target.value);
+                          previewMutation.reset();
+                        }}
+                      >
+                        <option value="">选择表</option>
+                        {sources.map((source) => (
+                          <option key={source.sourceName} value={source.sourceName}>{source.sourceName}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <div>
+                      <button
+                        type="button"
+                        className="pl-btn pl-btn--primary text-sm"
+                        disabled={!sourceName || previewMutation.isPending}
+                        onClick={() => void runTableCheck()}
+                        data-testid="mcp-playground-run-table"
+                      >
+                        {previewMutation.isPending ? "检查中..." : "检查权限"}
+                      </button>
+                    </div>
+                  </>
+                ) : null}
+              </div>
+            ) : null}
           </div>
-        )}
+        ) : null}
       </section>
 
-      {previewMutation.isError ? (
+      {task === "table" && previewMutation.isError ? (
         <p className="pl-error" data-testid="mcp-playground-preview-error">
           {(previewMutation.error as Error).message}
         </p>
       ) : null}
+      {task === "connect" && liveMutation.isError ? (
+        <p className="pl-error" data-testid="mcp-playground-live-error">
+          {(liveMutation.error as Error).message}
+        </p>
+      ) : null}
 
       {preview ? (
-        <section className="pl-panel" data-testid="mcp-playground-preview-result">
-          <h2 className="pl-panel-title mb-3">裁决结果</h2>
-          <p className="mb-3">
-            {preview.allowed ? (
-              <span className="pl-status-badge pl-status-done">允许</span>
-            ) : (
-              <span className="pl-status-badge pl-status-validation_failed">拒绝</span>
-            )}
-          </p>
-          <DecisionReasonCell
+        <div data-testid="mcp-playground-preview-result">
+          <CheckResult
+            headline={preview.allowed ? "允许查这张表" : "不允许"}
+            label={preview.decisionReasonDetail
+              ? `${preview.decisionReasonLabel}（${preview.decisionReasonDetail}）`
+              : preview.decisionReasonLabel}
             code={preview.decisionReason}
-            label={preview.decisionReasonLabel}
-            detail={preview.decisionReasonDetail}
+            action={preview.remediation.primary}
           />
-          <div className="mt-4 text-sm text-fg-muted">
-            生效权限快照：工具 {preview.effectivePermissions.tools.length} · 连接{" "}
-            {preview.effectivePermissions.connections.length} · 表样例{" "}
-            {preview.effectivePermissions.tableSample.length}
-            {preview.effectivePermissions.tableSampleTruncated ? "+" : ""}
-          </div>
-          <div className="mt-4 flex flex-wrap gap-3">
-            <Link to={preview.remediation.primary.href} className="pl-card-cta notranslate" translate="no">
-              {preview.remediation.primary.label} ↗
-            </Link>
-            {preview.remediation.secondary.map((item) => (
-              <Link key={item.href} to={item.href} className="pl-card-cta notranslate" translate="no">
-                {item.label} ↗
-              </Link>
-            ))}
-          </div>
-        </section>
+        </div>
       ) : null}
 
       {live ? (
-        <section className="pl-panel" data-testid="mcp-playground-live-result">
-          <h2 className="pl-panel-title mb-3">试调结果</h2>
-          <DecisionReasonCell code={live.decisionReason} label={live.decisionReasonLabel} />
-          <p className="mt-2 text-sm text-fg-muted">
-            HTTP <span className="notranslate" translate="no">{live.httpStatus}</span>
-          </p>
-          {live.auditHref ? (
-            <Link to={live.auditHref} className="pl-card-cta mt-3 inline-block">
-              查看访问日志 ↗
-            </Link>
-          ) : null}
-        </section>
+        <div data-testid="mcp-playground-live-result">
+          <CheckResult
+            headline={live.decisionReason === "allowed" && live.httpStatus < 400 ? "能连上" : "连不上"}
+            label={live.decisionReasonLabel}
+            code={live.decisionReason}
+            action={live.auditHref ? { label: "查看访问日志", href: live.auditHref } : undefined}
+          />
+        </div>
       ) : null}
 
       {confirmLive ? (
         <div className="pl-modal-backdrop" role="dialog" aria-modal="true" data-testid="mcp-playground-live-confirm">
           <div className="pl-panel max-w-md">
-            <h3 className="pl-panel-title">确认受控试调</h3>
+            <h3 className="pl-panel-title">确认检查接入</h3>
             <p className="pl-notice mt-2">
-              将向本机 Lucy <span className="notranslate" translate="no">MCP</span> Proxy 发送一次真实{" "}
-              <span className="notranslate" translate="no">tools/list</span> 请求并写入访问日志。
+              将向本机 Lucy <span className="notranslate" translate="no">MCP</span> 发送一次工具列表请求，并写入访问日志。
+              <span className="notranslate" translate="no">Token</span> 只留在本次会话。
             </p>
             <div className="mt-4 flex gap-2 justify-end">
               <button type="button" className="pl-btn pl-btn--ghost text-sm" onClick={() => setConfirmLive(false)}>
@@ -400,12 +502,46 @@ export function McpPlayground() {
                 onClick={() => void runLive()}
                 data-testid="mcp-playground-confirm-live"
               >
-                {liveMutation.isPending ? "试调中..." : "确认运行"}
+                {liveMutation.isPending ? "检查中..." : "确认运行"}
               </button>
             </div>
           </div>
         </div>
       ) : null}
     </div>
+  );
+}
+
+function CheckResult({
+  headline,
+  label,
+  code,
+  action
+}: {
+  headline: string;
+  label: string;
+  code: string;
+  action?: { label: string; href: string };
+}) {
+  return (
+    <section className="pl-panel">
+      <p className="text-lg font-medium" data-testid="mcp-playground-result-headline">{headline}</p>
+      <p className="mt-2 text-sm" data-testid="decision-reason-label">{label}</p>
+      <details className="mt-3 text-sm">
+        <summary>详情</summary>
+        <p
+          className="mt-2 font-mono text-xs text-fg-muted notranslate"
+          translate="no"
+          data-testid="decision-reason-code"
+        >
+          {code}
+        </p>
+      </details>
+      {action ? (
+        <Link to={action.href} className="pl-card-cta mt-4 inline-block notranslate" translate="no" data-testid="mcp-playground-result-action">
+          {action.label} ↗
+        </Link>
+      ) : null}
+    </section>
   );
 }

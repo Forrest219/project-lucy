@@ -162,7 +162,7 @@ jobs:
       - run: npm run smoke:p0:headless-config
 
   demo-db-smoke:
-    # Runs smoke:p0:demo (database/demo smoke). It is NOT the real-user E2E gate; see real-e2e below.
+    # Runs smoke:p0:demo (MySQL demo plus an in-container SQLite file probe). It is NOT the real-user E2E gate; see real-e2e below.
     runs-on: ubuntu-latest
     needs: docker-smoke
     steps:
@@ -338,8 +338,15 @@ jobs:
       LUCY_E2E_NAMESPACE: ${{ vars.LUCY_E2E_NAMESPACE }}
       LUCY_E2E_BASE_URL: ${{ vars.LUCY_E2E_BASE_URL }}
       LUCY_E2E_MCP_URL: ${{ vars.LUCY_E2E_MCP_URL }}
-      OPENAI_API_KEY: ${{ secrets.LUCY_E2E_OPENAI_API_KEY }}
-      CURSOR_API_KEY: ${{ secrets.LUCY_E2E_CURSOR_API_KEY }}
+      # B3 DB host for the disposable seeded PG. The harness connects with the per-run
+      # owner role whose password lives in a 0600 file prepared by prepare-environment.
+      LUCY_E2E_DB_HOST: ${{ vars.LUCY_E2E_DB_HOST }}
+      LUCY_E2E_DB_PORT: ${{ vars.LUCY_E2E_DB_PORT }}
+      LUCY_E2E_DB_OWNER_ROLE: ${{ vars.LUCY_E2E_DB_OWNER_ROLE || 'postgres' }}
+      # Required automated clients are Claude Code + OpenClaw (real-e2e-clients.yaml v5); Codex / Cursor CLI Agent
+      # are not part of the required pair, so the legacy OPENAI_API_KEY / CURSOR_API_KEY wiring is removed.
+      ANTHROPIC_API_KEY: ${{ secrets.LUCY_E2E_ANTHROPIC_API_KEY }}
+      OPENCLAW_API_KEY: ${{ secrets.LUCY_E2E_OPENCLAW_API_KEY }}
       LUCY_EVIDENCE_SIGNING_KEY_FILE: ${{ runner.temp }}/evidence-signing-key.pem
       LUCY_REAL_E2E_CAPABILITIES: ${{ vars.LUCY_E2E_CAPABILITIES }}
     steps:
@@ -365,9 +372,27 @@ jobs:
           echo "run_id=${RUN_ID}" >> "$GITHUB_OUTPUT"
           node scripts/e2e/prepare-environment.mjs --run-id "${RUN_ID}" --mode release \
             --candidate release/candidate-identity.json --profile scripts/e2e/profiles/customer-release.yaml \
-            --base-url "${LUCY_E2E_BASE_URL}" --mcp-url "${LUCY_E2E_MCP_URL}"
+            --base-url "${LUCY_E2E_BASE_URL}" --mcp-url "${LUCY_E2E_MCP_URL}" \
+            --db-host "${LUCY_E2E_DB_HOST}" --db-port "${LUCY_E2E_DB_PORT}" \
+            --apply-db --db-owner-role "${LUCY_E2E_DB_OWNER_ROLE:-postgres}"
           mkdir -p "inbox/e2e/${RUN_ID}/results"
           cp release/results/existing-gates.json "inbox/e2e/${RUN_ID}/results/existing-gates.json"
+      - name: Seed the disposable PG databases (B3 producer — only marks run.db.applied when every probe passes)
+        # The B3 db-seed producer is the sole writer of run.db.applied. If this step fails
+        # (exit != 0) the runner treats the run as BLOCKED for the postgres capability; the
+        # downstream runners fall back to the unmeasured branch. The password file path is
+        # owned by prepare-environment (mode 0600, never printed).
+        env:
+          LUCY_E2E_DB_HOST: ${{ vars.LUCY_E2E_DB_HOST }}
+          LUCY_E2E_DB_PORT: ${{ vars.LUCY_E2E_DB_PORT }}
+          LUCY_E2E_DB_OWNER_ROLE: ${{ vars.LUCY_E2E_DB_OWNER_ROLE || 'postgres' }}
+        run: |
+          set -uo pipefail
+          RUN="inbox/e2e/${{ steps.ids.outputs.run_id }}/run.json"
+          node scripts/e2e/apply-db.mjs --run "${RUN}" || rc=$?
+          rc=${rc:-0}
+          node scripts/gates/record-gate-result.mjs --run "${RUN}" --name b3-db-seed --exit-code "${rc}" --image-digest "${DIGEST:-}"
+          exit "${rc}"
       - name: Deploy the gated candidate digest into the isolated single-replica namespace
         env:
           DIGEST: ${{ needs.customer-amd64-native.outputs.image_digest }}
@@ -383,17 +408,63 @@ jobs:
           # Fresh install of THIS digest on the isolated cluster; the status is the script's exit code only.
           node scripts/gates/record-gate-result.mjs --run "${RUN}" --name k8s-acceptance --exit-code "${rc}" --image-digest "${DIGEST}"
           exit "${rc}"
-      - name: Security-integration, real browser journey, real clients (exit codes are recorded, not parsed)
+      - name: Measure the B3 evidence artifacts from the live cluster (results/ops.json, results/context-migration.json, results/projection.json)
+        # The B3 producers must run after the candidate digest is the running release (deploy step
+        # above) and before the security/management/agent runners can write their own results; the
+        # gate collector reads these artifacts and treats absent values as BLOCKED.
+        env:
+          DIGEST: ${{ needs.customer-amd64-native.outputs.image_digest }}
         run: |
           set -uo pipefail
           RUN="inbox/e2e/${{ steps.ids.outputs.run_id }}/run.json"
-          # Every runner writes its own schema'd result file; a blocked/failed runner must not stop the others from
-          # recording theirs (the verifier, not this step, decides). Their exit codes are kept for the log only.
+          # context-migration.json + projection.json are read from the deployed project's
+          # .ktx-ui directory; ops.json needs the live namespace + Helm release to confirm the
+          # digest is actually running. The producer records "null" for anything it cannot
+          # measure so the gate collector never silently passes a case.
+          node scripts/gates/measure-evidence.mjs --run "${RUN}" \
+            --namespace "${LUCY_E2E_NAMESPACE}" --release lucy-e2e \
+            --what context-migration || true
+          node scripts/gates/measure-evidence.mjs --run "${RUN}" \
+            --namespace "${LUCY_E2E_NAMESPACE}" --release lucy-e2e \
+            --what projection || true
+          node scripts/gates/measure-evidence.mjs --run "${RUN}" \
+            --namespace "${LUCY_E2E_NAMESPACE}" --release lucy-e2e \
+            --what ops || true
+      - name: Security-integration, real browser journey, real clients (exit codes are recorded, not parsed)
+        # Every runner writes its own schema'd result file; a blocked/failed runner must not stop the others from
+        # recording theirs (the verifier, not this step, decides). Their exit codes are kept for the log only.
+        # All three runners MUST receive --external: run.json's instance.startedBy is "external" because
+        # prepare-environment.mjs was invoked with --base-url, and starting a local Lucy child against
+        # a registered external target would silently target the wrong deployment (Spec §6.5, §8.3).
+        run: |
+          set -uo pipefail
+          RUN="inbox/e2e/${{ steps.ids.outputs.run_id }}/run.json"
           node scripts/e2e/run-security.mjs --run "${RUN}" --external; echo "security exit=$?"
           npm run e2e:real:management -- --run "${RUN}" --external; echo "management exit=$?"
-          node scripts/e2e/run-agent-journey.mjs --run "${RUN}"; echo "agent exit=$?"
+          node scripts/e2e/run-agent-journey.mjs --run "${RUN}" --external; echo "agent exit=$?"
           npm --prefix webui audit --omit=dev --json > "inbox/e2e/${{ steps.ids.outputs.run_id }}/results/npm-audit.json" || true
           node scripts/gates/collect-gate-results.mjs --run "${RUN}" --candidate release/candidate-identity.json; echo "gates exit=$?"
+      - name: Re-measure B3 evidence after all runners (post-cases, pre-archive; backlog can grow during the cases)
+        # The first measure step runs BEFORE the security/management/agent runners; the projection
+        # backlog can grow while those runners are in flight. This step re-measures immediately
+        # BEFORE the archive step so the collector sees the live post-run state — not a snapshot
+        # from before the cases ran. The helper re-measures context-migration, projection and ops
+        # and refuses to invent missing values; the gate collector downstream treats absent values
+        # as BLOCKED.
+        env:
+          DIGEST: ${{ needs.customer-amd64-native.outputs.image_digest }}
+        run: |
+          set -uo pipefail
+          RUN="inbox/e2e/${{ steps.ids.outputs.run_id }}/run.json"
+          node scripts/gates/measure-evidence.mjs --run "${RUN}" \
+            --namespace "${LUCY_E2E_NAMESPACE}" --release lucy-e2e \
+            --what context-migration || true
+          node scripts/gates/measure-evidence.mjs --run "${RUN}" \
+            --namespace "${LUCY_E2E_NAMESPACE}" --release lucy-e2e \
+            --what projection || true
+          node scripts/gates/measure-evidence.mjs --run "${RUN}" \
+            --namespace "${LUCY_E2E_NAMESPACE}" --release lucy-e2e \
+            --what ops || true
       - name: Verify, then archive and sign (scan -> hash -> verify -> sign)
         env:
           SIGNING_KEY: ${{ secrets.LUCY_EVIDENCE_SIGNING_KEY }}

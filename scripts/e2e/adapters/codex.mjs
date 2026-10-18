@@ -1,8 +1,6 @@
-// Codex CLI adapter (Spec R7: Codex CLI is a required product; evidence is `transport=cli`).
+// Codex CLI adapter (Spec R4 v4: automated required product; transport=cli).
 // Native config: <workDir>/codex-home/config.toml with an MCP server that reads its Bearer token from an
 // environment variable (bearer_token_env_var). Non-interactive run: `codex exec`.
-// NOTE: the flags below follow the Codex CLI documentation; this development machine has no Codex binary, so the
-// real invocation could not be executed here. The probe reports BLOCKED when the binary or credential is missing.
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { TOKEN_ENV, assertNoSecretInArgv, probeCli } from "./_contract.mjs";

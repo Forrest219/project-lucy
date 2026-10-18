@@ -55,8 +55,10 @@ export function probeCli({ names, versionArgs = ["--version"], credentialEnv, en
   const reasons = [];
   const binaryPath = locate(names, env.PATH);
   if (!binaryPath) reasons.push(`binary_not_found: ${names.join(" | ")}`);
-  const missing = credentialEnv.filter((name) => !env[name]);
-  if (missing.length === credentialEnv.length) reasons.push(`credential_missing: ${credentialEnv.join(" | ")}`);
+  if (credentialEnv.length > 0) {
+    const missing = credentialEnv.filter((name) => !env[name]);
+    if (missing.length === credentialEnv.length) reasons.push(`credential_missing: ${credentialEnv.join(" | ")}`);
+  }
   let version = null;
   if (binaryPath) {
     const result = spawnSync(binaryPath, versionArgs, { encoding: "utf8", env, timeout: 20_000 });

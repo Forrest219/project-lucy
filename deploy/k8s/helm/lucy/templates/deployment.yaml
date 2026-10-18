@@ -188,6 +188,14 @@ spec:
               mountPath: /run/secrets/lucy-bootstrap
               readOnly: true
             {{- end }}
+            {{- if .Values.db.existingSecret }}
+            # B3 disposable DB password mount: the harness-prepared reader password
+            # is delivered to the WebUI container through a Kubernetes Secret; the
+            # rendered ktx.yaml reads it via `password: file:<mountPath>/password`.
+            - name: db-password
+              mountPath: {{ .Values.db.mountPath | default "/var/run/secrets/lucy-db" | quote }}
+              readOnly: true
+            {{- end }}
             {{- /* Secret is intentionally NOT mounted here: see secrets-sync init. */}}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
@@ -231,4 +239,15 @@ spec:
             items:
               - key: token
                 path: token
+        {{- end }}
+        {{- if .Values.db.existingSecret }}
+        # B3 disposable DB password mount; key `password` is what the rendered
+        # ktx.yaml references (`password: file:<mountPath>/password`).
+        - name: db-password
+          secret:
+            secretName: {{ .Values.db.existingSecret }}
+            defaultMode: 0400
+            items:
+              - key: password
+                path: password
         {{- end }}

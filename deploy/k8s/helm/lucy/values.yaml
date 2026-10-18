@@ -183,6 +183,16 @@ extraSecretData: {}
 bootstrap:
   existingSecret: ""
 
+# E2E disposable DB password secret (B3). The harness prepares a per-run reader
+# password file (mode 0600) and creates a Secret whose key is `password`; the
+# chart mounts it read-only at /var/run/secrets/lucy-db so the rendered
+# ktx.yaml's `password: file:/var/run/secrets/lucy-db/password` resolves to the
+# in-container file. Empty (default): no DB Secret is mounted and the runner
+# records `db.applied = false`. NEVER put the password value in this file.
+db:
+  existingSecret: ""
+  mountPath: "/var/run/secrets/lucy-db"
+
 # WebUI session cookie (Spec §3.1 item 8). The chart pins LUCY_DEPLOYMENT_MODE=customer
 # and Secure cookies; serve the WebUI over HTTPS (ingress TLS). Set
 # `insecureHttpTestProfile: true` ONLY in test profiles that expose plain HTTP

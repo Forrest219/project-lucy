@@ -995,6 +995,74 @@ describe("ConnectionOverview", () => {
     expect(dataforaiMenu).not.toHaveAttribute("open");
   });
 
+  it("closes the connection more menu on an outside click, Escape, and menu actions", async () => {
+    stubOverviewFetch({
+      connections: [
+        {
+          id: "mysql-aliyun",
+          driver: "mysql",
+          schemas: ["dataforai"],
+          enabledTables: ["dataforai.superstore_orders"]
+        },
+        {
+          id: "demo-mysql",
+          driver: "mysql",
+          schemas: ["dataforai"],
+          enabledTables: []
+        }
+      ],
+      tables: [sourceSummary("superstore_orders")]
+    });
+    renderOverview();
+
+    const aliyun = await screen.findByTestId("connection-more-mysql-aliyun");
+    const demo = screen.getByTestId("connection-more-demo-mysql");
+    const aliyunSummary = aliyun.querySelector("summary");
+    const demoSummary = demo.querySelector("summary");
+    expect(aliyunSummary).not.toBeNull();
+    expect(demoSummary).not.toBeNull();
+    expect(aliyun).not.toHaveAttribute("open");
+
+    fireEvent.click(aliyunSummary!);
+    expect(aliyun).toHaveAttribute("open");
+    fireEvent.pointerDown(document.body);
+    expect(aliyun).not.toHaveAttribute("open");
+
+    fireEvent.click(aliyunSummary!);
+    expect(aliyun).toHaveAttribute("open");
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(aliyun).not.toHaveAttribute("open");
+
+    fireEvent.click(aliyunSummary!);
+    fireEvent.click(demoSummary!);
+    expect(demo).toHaveAttribute("open");
+    expect(aliyun).not.toHaveAttribute("open");
+
+    fireEvent.click(aliyunSummary!);
+    expect(aliyun).toHaveAttribute("open");
+    expect(demo).not.toHaveAttribute("open");
+    const schemaMenu = screen.getByTestId("schema-more-mysql-aliyun-dataforai");
+    fireEvent.click(schemaMenu.querySelector("summary"));
+    expect(schemaMenu).toHaveAttribute("open");
+    expect(aliyun).not.toHaveAttribute("open");
+
+    fireEvent.click(aliyunSummary!);
+    expect(aliyun).toHaveAttribute("open");
+    expect(schemaMenu).not.toHaveAttribute("open");
+    fireEvent.mouseLeave(aliyun);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    });
+    expect(aliyun).toHaveAttribute("open");
+
+    fireEvent.pointerDown(within(aliyun).getByText(/向数据库查询当前可见的/));
+    expect(aliyun).toHaveAttribute("open");
+
+    fireEvent.click(within(aliyun).getByTestId("delete-connection-mysql-aliyun"));
+    expect(aliyun).not.toHaveAttribute("open");
+    expect(await screen.findByTestId("delete-connection-drawer")).toBeInTheDocument();
+  });
+
   it("SC-5/SC-6: connection more menu refreshes local YAML without calling it 同步配置变更", async () => {
     stubOverviewFetch({
       connections: [

@@ -4,7 +4,7 @@
 |---|---|
 | 文档名称 | 访问日志双粒度 CSV 导出 |
 | 文档类型 | Spec |
-| 版本 | v1.0 |
+| 版本 | v1.1 |
 | 撰写日期 | 2026-09-03 |
 | 撰写人 | Codex |
 | 委托人 | 张星晨 |
@@ -63,10 +63,10 @@ Protected DOM：`Agent`、`MCP`、`CSV`、`SQL`、`Manifest`、URL、文件名�
 
 ## 4. 产品口径
 
-| 页签 | 粒度 | 典型问题 | 导出按钮 |
+| 页签 | 粒度 | 典型问题 | 顶栏「导出」得到 |
 |---|---|---|---|
-| 问询记录 | 一次用户问询 / 一个 Turn | 用户问了什么、整体是否成功、涉及哪些表、是否含慢调用 | 导出问询记录 |
-| 调用流水 | 一次工具调用 / 一个 `access_log` 事件 | 哪个工具被拒、哪个 SQL 慢、裁决原因是什么、访问上下文是什么 | 导出调用流水 |
+| 问询记录 | 一次用户问询 / 一个 Turn | 用户问了什么、整体是否成功、涉及哪些表、是否含慢调用 | 问询记录 CSV |
+| 调用流水 | 一次工具调用 / 一个 `access_log` 事件 | 哪个工具被拒、哪个 SQL 慢、裁决原因是什么、访问上下文是什么 | 调用流水 CSV |
 
 关系：
 
@@ -152,11 +152,10 @@ FUNCTION renderTurnCsv(entries):
   RETURN UTF-8 CSV, optional BOM when q.bom == 1 OR true
 
 FUNCTION renderAuditHeaderActions(tab):
-  primary = tab == "turns" ? turnExportUrl : callExportUrl
-  secondary = tab == "turns" ? callExportUrl : turnExportUrl
-  SHOW primary button with tab-specific label
-  SHOW secondary button with alternate label
-  SHOW export-pack button unchanged
+  current = tab == "turns" ? turnExportUrl : callExportUrl
+  SHOW one button labeled 导出, href = current
+  SHOW 导出审计证据包 as a text link
+  DO NOT show the other grain or the inquiry zip on the page
 ```
 
 ## 6. API 契约
@@ -193,20 +192,14 @@ FUNCTION renderAuditHeaderActions(tab):
 
 ### 7.1 Header actions
 
-Header action 顺序：
+v1.1：页签已经选定粒度，顶栏不再并列两种 CSV，也不再单列「导出问询与调用」。`/api/admin/audit/export-inquiry-pack` 保留给脚本。
 
-1. 统计时间
-2. 统计窗口 segmented control
-3. 当前页签主导出按钮
-4. 另一个粒度的次级导出按钮
-5. 导出审计证据包
+Header action：
 
-文案：
+1. 「导出」：当前页签、当前筛选。问询记录页指向 `/api/admin/audit/turns/export`，调用流水页指向 `/api/admin/audit/export`。
+2. 「导出审计证据包」：文字按钮，指向 `/api/admin/audit/export-pack`。按钮文案不含 Manifest。
 
-| 当前页签 | 主按钮 | 次级按钮 |
-|---|---|---|
-| 问询记录 | 导出问询记录 | 导出调用流水 |
-| 调用流水 | 导出调用流水 | 导出问询记录 |
+「字段说明」留在页签说明行。
 
 ### 7.2 页签口径说明
 
@@ -230,10 +223,11 @@ Header action 顺序：
 必须说明：
 
 - 一条问询记录对应多条调用流水。
+- 顶栏「导出」跟随当前页签。
 - 「导出问询记录」是一问一行。
 - 「导出调用流水」是一调用一行。
 - 两者通过「问询 ID」关联。
-- 「导出审计证据包」用于离线审计闭环，不替代两个日常 CSV。
+- 「导出审计证据包」用于离线审计闭环。按钮上不写 Manifest。
 
 `webui/server/help.ts` 增加稳定锚点：`admin-audit-turns-vs-calls`。
 
@@ -241,9 +235,9 @@ Header action 顺序：
 
 | ID | 验收 |
 |---|---|
-| AC-1 | 问询记录页签主按钮为「导出问询记录」，href 指向 `/api/admin/audit/turns/export` |
-| AC-2 | 调用流水页签主按钮为「导出调用流水」，href 指向 `/api/admin/audit/export` |
-| AC-3 | 两个页签均能看到另一个粒度的导出入口 |
+| AC-1 | 问询记录页签「导出」指向 `/api/admin/audit/turns/export` |
+| AC-2 | 调用流水页签「导出」指向 `/api/admin/audit/export` |
+| AC-3 | 顶栏没有另一粒度的导出，也没有「导出问询与调用」 |
 | AC-4 | `/api/admin/audit/turns/export` 返回问询记录 CSV，含中文列头、公式注入防护、来源标记 |
 | AC-5 | 问询导出与 `/api/admin/audit/turns` 在同筛选下返回同一组问询 |
 | AC-6 | 既有 `/api/admin/audit/export` 与 `/api/admin/audit/export-pack` 行为不回归 |

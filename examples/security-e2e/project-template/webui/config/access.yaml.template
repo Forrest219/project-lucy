@@ -90,6 +90,55 @@ roles:
       tools:
         - lucy_catalog
         - lucy_query
+  finance_east_west:
+    description: Multi-role OR fixture (East ∪ West) for SEC-10-V04 / BY-10. The role
+      declares two independent tableSelectors with disjoint row_policy predicates; the
+      effective set is the UNION of the two row policies (an East grant plus a West grant
+      are both honoured). Used by the run-owned `e2e_east_west` Agent whose two roles are
+      combined.
+    permission_model_version: 2
+    allow:
+      connections: [fin-db]
+      tableSelectors:
+        - connection: fin-db
+          schema: analytics
+          names: [marketing_daily]
+          row_access: scoped
+          row_policy:
+            predicates:
+              - field: region
+                op: eq
+                value: East
+        - connection: fin-db
+          schema: analytics
+          names: [marketing_daily]
+          row_access: scoped
+          row_policy:
+            predicates:
+              - field: region
+                op: eq
+                value: West
+      tools: *full_context_tools
+  finance_east_constrained:
+    description: Constraint AND role for SEC-10-V05. The role itself mirrors
+      `finance_east`; the effective set comes from ANDing the role's table grant with the
+      Agent's own `constraints.tables` allow-list. Used by the run-owned
+      `e2e_east_constrained` Agent whose constraint drops `marketing_daily` to prove the
+      AND semantics: the same role plus a tighter constraint denies the call.
+    permission_model_version: 2
+    allow:
+      connections: [fin-db]
+      tableSelectors:
+        - connection: fin-db
+          schema: analytics
+          names: [marketing_daily]
+          row_access: scoped
+          row_policy:
+            predicates:
+              - field: region
+                op: eq
+                value: East
+      tools: *full_context_tools
 
 users:
   - id: e2e_finance
@@ -165,6 +214,25 @@ users:
     tokens:
       - hash: "{{TOKEN_HASH_LEGACY}}"
         label: e2e-legacy
+        created: 2026-10-18
+  - id: e2e_east_west
+    name: E2E Multi-role OR Agent (East ∪ West) for SEC-10-V04 / BY-10
+    enabled: true
+    role: finance_east_west
+    tokens:
+      - hash: "{{TOKEN_HASH_EAST_WEST}}"
+        label: e2e-east-west
+        created: 2026-10-18
+  - id: e2e_east_constrained
+    name: E2E Constraint AND role Agent (drops marketing_daily) for SEC-10-V05
+    enabled: true
+    role: finance_east_constrained
+    constraints:
+      tables:
+        deny: [analytics.marketing_daily]
+    tokens:
+      - hash: "{{TOKEN_HASH_EAST_CONSTRAINED}}"
+        label: e2e-east-constrained
         created: 2026-10-18
 
 defaults:

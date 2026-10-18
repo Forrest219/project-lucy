@@ -100,7 +100,7 @@ flowchart LR
 | UX-07-S01 | SEC-18/20、UX-07 | 调用监控/使用概况窗口、慢标记、eval 排除与真实事件对账 | B/P/V | `RB-audit-export`；既有 `WS/call-monitor.test.ts`、`WS/usage-default-view.test.ts`、`WS/usage-slow-call-list.test.ts`、`WS/admin-ui-usage.test.ts` | T11 |
 | SEC-15-S01 | SEC-15/17/22 | 品牌图片/Markdown 脚本载荷不执行（含 allow 对照） | P/B | `RS`；`RB-context-isolation`；既有 `WS/branding.test.ts` | T10、T11 |
 | SEC-22-S01 | SEC-15/17/22 | 管理快照、Skill 客户端导出与下载链接的权限/过期（含 allow 对照） | P/B | `RS`；`RB-audit-export`；既有 `WS/api.semantic-asset-export.test.ts` | T06、T10、T11 |
-| SEC-22-S02 | SEC-15/17/22 | 部署许可 inactive/expired/invalid 在全部 MCP 内容通道（tools/resources/prompts/Wiki/initialize）一致 | P/O | `RS`；既有 `WS/license.test.ts` | T04、T10 |
+| SEC-22-S02 | SEC-15/17/22 | 已由 Spec 175 v0.2 移出分母：部署许可实现删除，激活码不再拒绝任何 MCP 内容通道 | — | — | — |
 
 ## 3. SEC-15 的 frontmatter 子场景（Spec §4.6 / §7）
 
@@ -137,16 +137,18 @@ flowchart LR
 
 ## 5. 首发 required 客户端（Plan T00 步骤 4，R4/R7）
 
-锁定值来自 Spec §10 默认决策，尚未在 `docs/qa/real-e2e-clients.yaml` 落盘（T10 新建）。
+锁定值：`docs/qa/real-e2e-clients.yaml` v4（2026-10-18 owner 方案 A）。
 
-| 产品 | 接入方式 | 证据 transport | 状态 | adapter / 任务 |
+| 产品 | 执行 | transport | GO | adapter / 清单 |
 |---|---|---|---|---|
-| Codex | CLI + 从 WebUI 复制的 MCP 配置 | `cli` | required | `scripts/e2e/adapters/codex.mjs`，T12 |
-| Cursor | CLI Agent（`cursor-agent` / `agent`，以 runner 实际安装为准）+ 同上配置 | `cli` | required | `scripts/e2e/adapters/cursor.mjs`，T12 |
-| Cursor IDE GUI | GUI 自动化 | `gui` | optional，不进首发分母 | 未列入 |
-| Hermes 两个 profile | — | — | **只计一个产品**，不能替代上述两个 | 不适用 |
+| Codex | automated | `cli` | required | `scripts/e2e/adapters/codex.mjs` |
+| Claude Code | automated | `cli` | required | `scripts/e2e/adapters/claude-code.mjs` |
+| OpenClaw | automated | `cli` | required | `scripts/e2e/adapters/openclaw.mjs` |
+| WorkBuddy | **manual（永远人工）** | `gui` | required | `docs/qa/manual-gui-e2e-checklist.md` |
+| Cursor Agent GUI | **manual（永远人工）** | `gui` | required | `docs/qa/manual-gui-e2e-checklist.md` |
+| Cursor Agent CLI | automated | `cli` | optional | `scripts/e2e/adapters/cursor-cli.mjs` |
 
-当前开发机未检测到 Cursor CLI Agent 二进制（Plan T12 已声明），R8 runner 就绪前 T12 真实执行为 BLOCKED。其他已对外承诺支持的产品须在对应 release profile 中追加为 required。
+自动层缺二进制/凭据 → BLOCKED；人工层缺 checklist pack → GO blocked。
 
 ## 6. T09 待办：selector 契约漂移（T00 只记录，未修）
 
@@ -168,8 +170,8 @@ flowchart LR
 - [x] Spec §7 明列的五组显式子场景全部登记（§2）。
 - [x] `SEC-15-FM-01～06` 全部登记（§3）。
 - [x] 原评估 10 条待写旅程均有归属（§4）。
-- [x] 至少两个不同 required 产品（Codex + Cursor），Hermes 不重复计数（§5）。
-- [x] T10 冻结 case catalog 分母与变体展开：`scripts/e2e/contracts/case-catalog.yaml` 展开为 **270** 个变体，固定分母 **388** 次执行（Agent 变体 × 2 个 required 产品 × 3 次）；`case-catalog.lock.json` 固定 digest 与 required id，删除/改 optional 即失败（`case-catalog.test.mjs`）。
+- [x] 自动 required ≥2 产品族（Codex + Claude Code + OpenClaw），另加人工 GUI required；Hermes 不重复计数（§5）。
+- [x] T10 冻结 case catalog 分母与变体展开：`scripts/e2e/contracts/case-catalog.yaml` 展开为 **270** 个变体，自动固定分母 **460** 次执行（Agent 变体 × Codex/Claude Code/OpenClaw × 3 次）；人工 GUI 另计 checklist。`case-catalog.lock.json` 固定 digest 与 required id。
 - [x] 各「计划新建」文件已落地（见 §8）；个别 UI/Agent/运维用例的**自动化尚未编写**，在 catalog 中保持 required 并如实报 BLOCKED，不删分母。
 
 
@@ -182,10 +184,10 @@ flowchart LR
 | 项 | 数量 / 结果 |
 |---|---|
 | catalog 变体 | 270 = security 177 + management 27 + gate 40 + agent 26；digest 见 `case-catalog.lock.json` |
-| 固定分母 | 388 次执行（agent 变体 × `codex`/`cursor` × 3 次） |
+| 固定分母 | 460 次执行（agent 变体 × `codex`/`claude-code`/`openclaw` × 3 次；人工 GUI 不进自动分母） |
 | security-integration（`e2e:real:security`，真实 Lucy 进程 + HTTP + SQLite） | **73 passed / 0 failed / 104 blocked**（177 个 security 变体） |
 | 真实桌面浏览器（`e2e:real:management`，customer 模式 + 认证 required，1440×900，workers=1，retries=0） | 9 个用例通过，覆盖 **12 个** management 变体：SEC-01-V06、SEC-02-V06、SEC-03-V05、SEC-04-V11、SEC-06-V01、SEC-07-V13、SEC-14-V11、SEC-15-V06、SEC-18-V06、SEC-20-V01/V02/V06；其余 15 个 BLOCKED |
-| 真实客户端（`e2e:real:agent`） | 0 passed / 0 failed / **144 blocked**（24 个 agent 变体 × 2 产品 × 3 次）：`codex`、`cursor-agent` 二进制均不存在，`OPENAI_API_KEY`、`CURSOR_API_KEY` 缺失 |
+| 真实客户端（`e2e:real:agent`） | 分母改为 3 CLI × agent 变体 × 3；本机仍可能因缺 OpenClaw / API key BLOCKED。人工 GUI 不进自动 runner |
 | 唯一 verifier 反向测试 | GATE-01-V01～V16 全部通过（`evidence-verifier.test.mjs`，经 node:test 事件 API 采集，非 stdout 解析） |
 | harness 单测 | `npm run test:e2e-harness` 152/152 通过 |
 | `customer-release-readiness --collect`（本地 run） | exit 3，`releaseReady=false`，只写 `release-readiness.collect.json`，421 条问题（缺分母、缺能力、缺 K8s 证据） |
@@ -195,7 +197,7 @@ flowchart LR
 
 | 原因 | 数量 | 说明 |
 |---|---|---|
-| 缺 `ktx-upstream` | 36 | 需要真实 KTX 上游才有意义（SEC-18 数据类、SEC-21、SEC-22-S02 许可矩阵、UX-06 等） |
+| 缺 `ktx-upstream` | 36 | 需要真实 KTX 上游才有意义（SEC-18 数据类、SEC-21、SEC-22-S02 许可矩阵、UX-06 等）。此表是 Spec 175 之前的运行快照；许可矩阵已从目录删除，下一次运行不再计入这 15 条 |
 | 缺 `ktx-upstream` + `postgres` | 42 | SEC-09/10/11/12 的真实 DB 查询、行集与绕过输入，BY-01～19 |
 | `handler_not_implemented` | 18 | SEC-04-V07、SEC-05-V07、SEC-06-V02、SEC-13-V03/V04、SEC-15-V02、SEC-15-FM-06、SEC-15-FM-SEED、SEC-15-S01、SEC-19-V04、SEC-20-V03/V04/V05、SEC-22-S01、UX-06-V04～V07：用例**尚未编写**，不得视为通过 |
 | 缺 `network-profile` | 4 | TLS/Secure/HSTS/可信代理、受控出站 sink 需要目标网络 |

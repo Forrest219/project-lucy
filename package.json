@@ -38,7 +38,6 @@
     "security:baseline": "node scripts/release/security-baseline.mjs",
     "smoke:fast": "node scripts/smoke/fast-smoke.mjs",
     "smoke:full": "node scripts/gates/p1-release-readiness.mjs --full",
-    "smoke:license": "node scripts/release/verify-license-baseline.mjs",
     "smoke:p0": "node scripts/gates/p0-smoke.mjs",
     "smoke:p0:delivery-isolation": "node scripts/smoke/lucy-delivery-isolation-smoke.mjs",
     "smoke:p0:delivery-isolation:test": "node --test scripts/smoke/lucy-delivery-isolation-smoke.test.mjs",
@@ -115,6 +114,8 @@
     "smoke:agent-chat:a3:test": "node --test scripts/smoke/agent-chat-a3-smoke.test.mjs"
   },
   "dependencies": {
+    "better-sqlite3": "^12.11.1",
+    "pg": "^8.13.1",
     "yaml": "^2.6.0"
   }
 }

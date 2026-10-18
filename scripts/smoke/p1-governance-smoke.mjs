@@ -21,7 +21,7 @@ if (values.help) {
   node scripts/smoke/p1-governance-smoke.mjs
   node scripts/smoke/p1-governance-smoke.mjs --url http://127.0.0.1:5174 --out inbox/p1-governance-evidence.json
 
-Validates License status, Token inventory, forced predicates and SQL Hot Store evidence.`);
+Validates Token inventory, forced predicates and SQL Hot Store evidence. Deployment license checks were removed by Spec 175.`);
   process.exit(0);
 }
 
@@ -54,27 +54,11 @@ function blocked(check, reason) {
 }
 
 async function main() {
-  console.log("[p1-governance-smoke] Checking License & Access Governance baseline...");
+  console.log("[p1-governance-smoke] Checking Access Governance baseline...");
 
   const base = values.url.replace(/\/$/, "");
 
-  // 1. 检查 License 接口
-  try {
-    const res = await fetch(`${base}/api/admin/license`, { headers: { accept: "application/json" } });
-    if (res.ok) {
-      const data = await res.json();
-      pass("license-api-envelope", `License endpoint returned HTTP 200 (mode: ${data.data?.mode ?? "unknown"})`);
-    } else if (res.status === 401 || res.status === 403) {
-      // An auth refusal proves nothing about License behavior; no credential was supplied, so it cannot pass.
-      blocked("license-api-envelope", `License endpoint returned HTTP ${res.status}; no admin credential supplied, business behavior not verified`);
-    } else {
-      fail("license-api-envelope", `License endpoint returned HTTP ${res.status}`);
-    }
-  } catch (err) {
-    blocked("license-api-envelope", `WebUI service not reachable at ${base}: ${err.message}`);
-  }
-
-  // 2. 检查全局 Token 资产接口
+  // 1. 检查全局 Token 资产接口
   try {
     const res = await fetch(`${base}/api/admin/tokens`, { headers: { accept: "application/json" } });
     if (res.ok) {

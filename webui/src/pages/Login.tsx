@@ -16,6 +16,7 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const productTitle = branding?.productTitle ?? "Lucy WebUI";
+  const tagline = branding?.tagline ?? "可信 Agent 数据层";
   const logoUrl = branding?.logoUrl ?? null;
 
   if (!loading && status?.mode === "open") {
@@ -47,23 +48,28 @@ export function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[var(--pl-bg)] px-4">
+    <div className="pl-login-page">
       <div className="w-full max-w-md pl-card grid gap-5 p-6">
         <div className="grid gap-1">
           <div className="flex items-center gap-2">
             <BrandMark productTitle={productTitle} logoUrl={logoUrl} />
-            <strong className="text-lg notranslate" translate="no" data-testid="login-brand-title">
-              {productTitle}
-            </strong>
+            <div className="grid gap-0.5">
+              <strong className="text-lg notranslate" translate="no" data-testid="login-brand-title">
+                {productTitle}
+              </strong>
+              <span className="text-xs text-fg-muted notranslate" translate="no">
+                {tagline}
+              </span>
+            </div>
           </div>
           <h1 className="text-xl font-semibold">
             {isBootstrap ? "创建首个所有者" : "登录"}
           </h1>
-          <p className="text-sm text-fg-muted">
-            {isBootstrap
-              ? "当前实例要求登录。请创建首个所有者账户；之后可在「登录账户」页添加运维人员，负责连接、语义、Eval 与 Agent Role 等日常工作。"
-              : "使用账户 id 与密码登录。运维与所有者共用此入口；Agent Token 不能用于 WebUI 登录。"}
-          </p>
+          {isBootstrap && (
+            <p className="text-sm text-fg-muted">
+              当前实例要求登录。请创建首个所有者账户；之后可在「登录账户」页添加运维人员，负责连接、语义、<span className="notranslate" translate="no">Eval</span> 与 <span className="notranslate" translate="no">Agent Role</span> 等日常工作。
+            </p>
+          )}
         </div>
 
         {configUnavailable && (
@@ -139,14 +145,13 @@ export function LoginPage() {
         </form>
 
         <p className="text-sm text-fg-muted">
-          无法登录时仍可{" "}
+          无法登录？{" "}
           <Link
             className="underline underline-offset-2"
             to="/help?section=admin-break-glass"
           >
             查看系统手册
           </Link>
-          （无需登录），含凭据丢失时的 break-glass 恢复说明。
         </p>
       </div>
     </div>

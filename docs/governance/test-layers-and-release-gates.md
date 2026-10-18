@@ -38,7 +38,7 @@ Lucy 的测试分三层，不能互相替代：
 | `npm run smoke:p0:delivery-isolation` | platform（Lucy 硬门禁） | `.dockerignore` 排除 A3 路径；可选 `--check-images` 对 Lucy 镜像做 denylist；与 A3 是否启用无关 |
 | `npm run smoke:p0:docker` | runtime + platform | Docker image build, compose up, `/api/health`, MCP proxy port, bundled KTX version；并检查 `project-lucy:p0-smoke` 与 `project-lucy:local` 无 A3 路径 |
 | `npm run smoke:p0:headless-config` | customer config | verifies the recommended `/data/lucy` config package shape, secret references, semantic-layer/wiki/eval/access parseability, and compose override |
-| `npm run smoke:p0:demo` | runtime + platform + customer path | demo DB, KTX connection/reindex/validate/query, Lucy MCP Proxy bearer token, `sl_read_source`, `sl_query` |
+| `npm run smoke:p0:demo` | runtime + platform + customer path | demo MySQL, KTX connection/reindex/validate/query, Lucy MCP Proxy bearer token, `sl_read_source`, `sl_query`; same Lucy container also runs a SQLite file `connection test` and one `ktx sql` |
 | `npm run smoke:p0:postgres-demo` | runtime + platform + customer path | PostgreSQL demo DB, KTX connection/reindex/validate/query, Lucy MCP Proxy bearer token, `sl_read_source`, `sl_query` |
 | `npm run smoke:p0:business-eval` | business eval catalog | verifies core eval suites can be read by runner |
 | `npm run smoke:p0:spider2-lite-eval` | business eval catalog (optional gated) | Spider2-lite Pilot suite list-cases; no StarRocks required；跑法见 [`../qa/suite-semantic-onboard-mcp-eval.md`](../qa/suite-semantic-onboard-mcp-eval.md) §14 |

@@ -3,6 +3,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { agentRoleIds } from "./AgentRoleField";
+import { PolicyDegradeRepairText } from "./PolicyDegradeBanner";
 import { apiGet } from "../lib/apiClient";
 import { DecisionReasonCell } from "./DecisionReasonCell";
 import {
@@ -294,20 +295,6 @@ function isRoleDetail(value: unknown): value is RoleDetailType {
     && typeof candidate.role === "object";
 }
 
-function roleWarningDiagnosis(warning: string): { diagnosis: string; technical: string } {
-  const technical = warning.trim();
-  if (technical.startsWith("role_resolution_failed")) {
-    return {
-      diagnosis: "权限解析失败：当前配置无法生成有效的数据源 / MCP 工具边界。",
-      technical
-    };
-  }
-  return {
-    diagnosis: "权限配置需检查：系统返回了未识别的校验信息。",
-    technical
-  };
-}
-
 function RoleDetailBody({ target }: { target: RoleTarget }) {
   const roleQuery = useQuery({
     queryKey: ["admin", "roles", target.roleId],
@@ -381,22 +368,13 @@ function RoleDetailBody({ target }: { target: RoleTarget }) {
       />
       {role.warnings.length > 0 ? (
         <div className="grid gap-1">
-          <span className="pl-eyebrow text-danger">警告 / 诊断</span>
-          <ul className="grid gap-2 text-xs text-danger">
-            {role.warnings.map((warning, idx) => {
-              const { diagnosis, technical } = roleWarningDiagnosis(warning);
-              return (
-                <li key={idx} className="grid gap-1">
-                  <span>{diagnosis}</span>
-                  <span className="text-fg-muted">
-                    技术详情：{" "}
-                    <code className="notranslate rounded bg-bg-subtle px-1 py-0.5 font-mono text-[11px]" translate="no">
-                      {technical}
-                    </code>
-                  </span>
-                </li>
-              );
-            })}
+          <span className="pl-eyebrow">需要修改</span>
+          <ul className="grid gap-2 text-xs text-fg-default">
+            {role.warnings.map((warning) => (
+              <li key={warning}>
+                <PolicyDegradeRepairText reason={warning} />
+              </li>
+            ))}
           </ul>
         </div>
       ) : null}

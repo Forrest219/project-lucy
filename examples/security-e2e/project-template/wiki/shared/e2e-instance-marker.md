@@ -5,4 +5,4 @@ allowed_roles: []
 
 # E2E 实例标记
 
-run={{RUN_ID}} fixture={{FIXTURE_DIGEST}}
+run={{RUN_ID}} fixture={{FIXTURE_DIGEST}} instance={{INSTANCE_ID}}

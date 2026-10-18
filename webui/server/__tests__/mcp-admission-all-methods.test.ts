@@ -447,12 +447,12 @@ describe("MCP admission gate (T04-1)", () => {
     });
   });
 
-  describe("license", () => {
+  describe("license enforcement removed", () => {
     beforeEach(async () => {
       await startProxy({ LUCY_LICENSE_MODE: "enforce" });
     });
 
-    it("enforce mode without an active license denies non-tool methods and verbs uniformly", async () => {
+    it("ignores LUCY_LICENSE_MODE=enforce and does not deny for a missing activation code", async () => {
       for (const [method, params] of [
         ["initialize", { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "t", version: "1" } }],
         ["tools/list", {}],
@@ -461,20 +461,21 @@ describe("MCP admission gate (T04-1)", () => {
         ["prompts/list", {}],
       ] as Array<[string, Record<string, unknown>]>) {
         const res = await rpc(method, params, tokens.legacy);
-        expect(res.status).toBe(403);
-        expect(res.json?.error?.message).toBe("Access denied: license_missing");
+        expect(res.status).not.toBe(403);
+        expect(JSON.stringify(res.json)).not.toContain("license_missing");
+        expect(JSON.stringify(res.json)).not.toContain("license_expired");
         expect(res.text).not.toContain(CANARY);
       }
-      expect((await send("/mcp", { method: "GET" })).status).toBe(403);
-      expect(hits).toHaveLength(0);
+      const get = await send("/mcp", { method: "GET" });
+      expect(get.status).not.toBe(403);
+      expect(get.text).not.toContain("license_missing");
     });
 
-    it("tools/call keeps its existing in-handler license result", async () => {
+    it("tools/call is not denied for a missing activation code", async () => {
       const res = await rpc("tools/call", { name: "wiki_read", arguments: { key: "x" } }, tokens.legacy);
-      expect(res.status).toBe(200);
-      expect(res.json?.result?.isError).toBe(true);
-      expect(JSON.stringify(res.json)).toContain("license_missing");
-      expect(hits).toHaveLength(0);
+      const body = JSON.stringify(res.json);
+      expect(body).not.toContain("license_missing");
+      expect(body).not.toContain("license_expired");
     });
   });
 
