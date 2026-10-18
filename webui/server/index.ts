@@ -132,6 +132,7 @@ import {
 } from "./admin/mcp-runtime.js";
 import { registerRiskReviewRoutes } from "./admin/risk-review.js";
 import { registerReleaseReadinessRoutes } from "./admin/release-readiness-package.js";
+import { registerImportScopeRoutes } from "./admin/import-scope.js";
 import { registerLicenseRoutes } from "./license/routes.js";
 import { registerGovernanceObservabilityRoutes } from "./admin/governance-observability.js";
 import { registerUiUsageRoutes } from "./admin/ui-usage.js";
@@ -2133,6 +2134,7 @@ export function buildServer() {
   registerCallMonitorRoutes(app);
   registerRiskReviewRoutes(app);
   registerReleaseReadinessRoutes(app);
+  registerImportScopeRoutes(app);
   registerLicenseRoutes(app);
   registerSkillsRoutes(app);
 
