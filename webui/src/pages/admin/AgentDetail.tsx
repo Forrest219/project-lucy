@@ -1318,7 +1318,7 @@ export function AgentDetail() {
         )}
 
         {activeTab === "permissions" && (
-          <div className="grid gap-4 max-w-3xl pb-32">
+          <div data-testid="permissions-tree" className="grid gap-4 max-w-3xl pb-32">
             <div className="pl-card">
               <div className="text-sm font-medium">当前角色</div>
               <div className="text-sm text-fg-muted mt-1">
@@ -1336,7 +1336,7 @@ export function AgentDetail() {
               )}
             </div>
             {effective ? (
-              <div data-testid="permissions-tree" className="grid gap-4">
+              <div className="grid gap-4">
                 <div>
                   <p className="text-xs font-semibold tracking-wider text-fg-muted uppercase mb-2">权限摘要</p>
                   <div className="grid grid-cols-3 gap-3">
@@ -1452,7 +1452,8 @@ export function AgentDetail() {
                 </div>
               </div>
             ) : (
-              <div className="pl-card">
+              <div className="grid gap-2" data-testid="capability-preview">
+                <div className="text-sm font-medium">数据能力</div>
                 <p className="text-sm text-fg-muted">当前权限无法解析。请先迁移到有效角色。</p>
               </div>
             )}

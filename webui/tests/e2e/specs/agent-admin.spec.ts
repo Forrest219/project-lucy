@@ -21,11 +21,11 @@ async function ensureTwoFormalRoles(page: Page) {
     const response = await route.fetch();
     const json = await response.json();
     const roles = Array.isArray(json?.data?.roles) ? [...json.data.roles] : [];
-    const formal = roles.filter((role) => role?.source !== "template" && role?.invalid !== true);
-    if (formal.length < 2) {
+    const injectRole = (id: string, description: string) => {
+      if (roles.some((role) => role?.id === id)) return;
       roles.push({
-        id: SECOND_ROLE_ID,
-        description: "Second formal role for multi-select",
+        id,
+        description,
         source: "yaml",
         tools: ["lucy_catalog"],
         connections: [],
@@ -34,6 +34,12 @@ async function ensureTwoFormalRoles(page: Page) {
         invalid: false,
         warnings: []
       });
+    };
+    // Spec 168 needs ≥2 selectable formal roles; inject fixtures when demo ACL is thin.
+    injectRole(SECOND_ROLE_ID, "Second formal role for multi-select");
+    const formalCount = roles.filter((role) => role?.source !== "template" && role?.invalid !== true).length;
+    if (formalCount < 2) {
+      injectRole("e2e_third_role", "Third formal role for multi-select");
     }
     json.data = { ...(json.data ?? {}), roles };
     await route.fulfill({
