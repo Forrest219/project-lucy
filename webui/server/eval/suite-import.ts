@@ -337,7 +337,8 @@ export async function downloadEvalSuiteYaml(projectRoot: string, domain: string)
   return {
     suite,
     yaml: suiteToYaml(suite),
-    runnerCommand: `npx tsx webui/server/eval/offline-batch-main.ts --suite evals/${domain}/eval/${domain}-eval-cases.yaml --as-of $(date +%F) --role-id <绑定角色> --output result.json`
+    // Header-safe ASCII only (HTTP forbids non-ASCII / control chars in header values).
+    runnerCommand: `node scripts/eval/lucy-eval-runner.mjs --suite evals/${domain}/eval/${domain}-eval-cases.yaml --output result.json`
   };
 }
 
