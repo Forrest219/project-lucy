@@ -125,7 +125,15 @@ describe("narrowing takes effect on the next request (Spec §4.4)", () => {
     await mkdir(path.join(root, ".ktx-ui"), { recursive: true });
     await mkdir(path.join(root, "wiki", "global"), { recursive: true });
     await mkdir(path.join(root, "skills", "ops"), { recursive: true });
-    await writeFile(path.join(root, "ktx.yaml"), "connections: {}\n");
+    await writeFile(
+      path.join(root, "ktx.yaml"),
+      `connections:
+  mysql-aliyun:
+    driver: mysql
+    enabled_tables:
+      - dataforai.superstore_orders
+`
+    );
     await writeFile(path.join(root, "webui", "config", "access.yaml"), accessYaml(["wiki_read", "lucy_skill_read"]));
     await writeFile(path.join(root, "wiki", "global", "n.md"), `---\nallowed_roles: [reader]\n---\n# N\n${CANARY}\n`);
     await writeFile(
@@ -228,7 +236,15 @@ describe("Role delete / create vs Wiki and Skill ACL references (Spec §4.3)", (
     await mkdir(path.join(projectRoot, "wiki", "global"), { recursive: true });
     await mkdir(path.join(projectRoot, "skills", "ops"), { recursive: true });
     await mkdir(path.join(projectRoot, "semantic-layer", "mysql-aliyun", "_schema"), { recursive: true });
-    await writeFile(path.join(projectRoot, "ktx.yaml"), "connections: {}\n");
+    await writeFile(
+      path.join(projectRoot, "ktx.yaml"),
+      `connections:
+  mysql-aliyun:
+    driver: mysql
+    enabled_tables:
+      - dataforai.superstore_orders
+`
+    );
     await writeFile(path.join(projectRoot, "webui", "config", "access.yaml"), "roles: {}\nusers: []\n");
     await writeFile(
       path.join(projectRoot, "semantic-layer", "mysql-aliyun", "_schema", "dataforai.yaml"),

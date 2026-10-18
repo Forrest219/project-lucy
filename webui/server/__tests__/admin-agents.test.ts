@@ -148,7 +148,23 @@ async function makeProject(yamlContent = ACCESS_YAML) {
   await mkdir(path.join(root, "webui", "config"), { recursive: true });
   await mkdir(path.join(root, "semantic-layer", "mysql-aliyun", "_schema"), { recursive: true });
   await mkdir(path.join(root, ".ktx-ui"), { recursive: true });
-  await writeFile(path.join(root, "ktx.yaml"), "connections: {}\n", "utf8");
+  // Spec 182 — selector matches intersect with the connection's enabled_tables.
+  // The sensitive fixture adds kx_* tables; pre-seed them so the
+  // kx_fact_financial_amount / superstore_orders roles still resolve.
+  const allEnabled = [
+    "dataforai.superstore_orders",
+    ...KX_TEMPLATE_NAMES.map((n) => `dataforai.${n}`)
+  ];
+  await writeFile(
+    path.join(root, "ktx.yaml"),
+    `connections:
+  mysql-aliyun:
+    driver: mysql
+    enabled_tables:
+${allEnabled.map((t) => `      - ${t}`).join("\n")}
+`,
+    "utf8"
+  );
   await writeFile(path.join(root, "webui", "config", "access.yaml"), yamlContent, "utf8");
   await writeFile(path.join(root, "semantic-layer", "mysql-aliyun", "_schema", "dataforai.yaml"), "tables:\n  superstore_orders:\n    table: dataforai.superstore_orders\n", "utf8");
   return root;
@@ -762,7 +778,18 @@ async function makeConstraintsProject() {
   await mkdir(path.join(projectRoot, "webui", "config"), { recursive: true });
   await mkdir(path.join(projectRoot, "semantic-layer", "warehouse", "_schema"), { recursive: true });
   await mkdir(path.join(projectRoot, ".ktx-ui"), { recursive: true });
-  await writeFile(path.join(projectRoot, "ktx.yaml"), "connections: {}\n", "utf8");
+  // Spec 182 — selector matches intersect with the connection's enabled_tables.
+  // The constraints roles target fin.fin_ledger on warehouse.
+  await writeFile(
+    path.join(projectRoot, "ktx.yaml"),
+    `connections:
+  warehouse:
+    driver: mysql
+    enabled_tables:
+      - fin.fin_ledger
+`,
+    "utf8"
+  );
   await writeFile(path.join(projectRoot, "webui", "config", "access.yaml"), CONSTRAINTS_ACCESS_YAML, "utf8");
   await writeFile(path.join(projectRoot, "semantic-layer", "warehouse", "_schema", "fin.yaml"), FIN_SCHEMA_YAML, "utf8");
   await writeFile(path.join(projectRoot, "semantic-layer", "warehouse", "fin_ledger.yaml"), FIN_LEDGER_OVERLAY_YAML, "utf8");
@@ -1048,6 +1075,19 @@ describe("Spec 168 Agent role set", () => {
     await writeFile(
       path.join(projectRoot, "semantic-layer", "mysql-aliyun", "_schema", "dataforai.yaml"),
       "tables:\n  superstore_orders:\n    table: dataforai.superstore_orders\n  superstore_returns:\n    table: dataforai.superstore_returns\n",
+      "utf8"
+    );
+    // Spec 182 — `reader` selector targets dataforai.superstore_returns, so
+    // it must appear in the connection's enabled_tables.
+    await writeFile(
+      path.join(projectRoot, "ktx.yaml"),
+      `connections:
+  mysql-aliyun:
+    driver: mysql
+    enabled_tables:
+      - dataforai.superstore_orders
+      - dataforai.superstore_returns
+`,
       "utf8"
     );
   }

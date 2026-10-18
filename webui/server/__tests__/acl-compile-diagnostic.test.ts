@@ -98,7 +98,20 @@ async function makeProject(accessYaml: string, schemaYaml: string): Promise<stri
   const root = await mkdtemp(path.join(os.tmpdir(), "ktx-spec-177-"));
   await mkdir(path.join(root, "webui", "config"), { recursive: true });
   await mkdir(path.join(root, "semantic-layer", "warehouse", "_schema"), { recursive: true });
-  await writeFile(path.join(root, "ktx.yaml"), "connections: {}\n", "utf8");
+  // Spec 182 — selector matches intersect with the connection's enabled_tables.
+  // The spec-177 fixtures use `warehouse` and the `fin` schema; both names in
+  // the manifest are added so the existing selector cases still compile.
+  await writeFile(
+    path.join(root, "ktx.yaml"),
+    `connections:
+  warehouse:
+    driver: mysql
+    enabled_tables:
+      - fin.fin_ledger
+      - fin.fin_budget
+`,
+    "utf8"
+  );
   await writeFile(path.join(root, "webui", "config", "access.yaml"), accessYaml, "utf8");
   await writeFile(path.join(root, "semantic-layer", "warehouse", "_schema", "fin.yaml"), schemaYaml, "utf8");
   return root;

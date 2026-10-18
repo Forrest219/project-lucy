@@ -118,7 +118,16 @@ beforeEach(async () => {
   for (const dir of ["webui/config", "semantic-layer/warehouse/_schema"]) {
     await mkdir(path.join(projectRoot, dir), { recursive: true });
   }
-  await writeFile(path.join(projectRoot, "ktx.yaml"), "connections: {}\n", "utf8");
+  await writeFile(
+    path.join(projectRoot, "ktx.yaml"),
+    `connections:
+  warehouse:
+    driver: mysql
+    enabled_tables:
+      - fin.fin_ledger_v1
+`,
+    "utf8"
+  );
 
   upstreamServer = createServer((req, res) => {
     upstreamHits.push({ method: req.method ?? "?", path: req.url ?? "?" });

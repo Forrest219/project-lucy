@@ -1066,6 +1066,22 @@ function resolveCatalogConnections(
   return { ok: true, connections: declaredConnections };
 }
 
+/**
+ * Spec 182 — shared enabled-table-range membership check. Used by both the
+ * `catalog_bound` path and the plain `tableSelectors` path so the two cannot
+ * drift. A missing connection entry, an empty `enabled_tables` array, and an
+ * absent ktx.yaml connection all collapse to "not in range" — never "all
+ * sources on that connection".
+ */
+function isInEnabledTableRange(
+  entry: Pick<SourceMapEntry, "connectionId" | "physicalTable">,
+  enabledByConnection: Map<string, Set<string>>
+): boolean {
+  const enabled = enabledByConnection.get(entry.connectionId);
+  if (!enabled) return false;
+  return enabled.has(normalizeRef(entry.physicalTable));
+}
+
 function catalogBoundSources(
   declaredConnections: string[],
   state: SourceMapState,
@@ -1075,8 +1091,7 @@ function catalogBoundSources(
   const matches: EffectiveSource[] = [];
   for (const entry of state.forward.values()) {
     if (!allowedConnections.has(entry.connectionId)) continue;
-    const enabled = enabledByConnection.get(entry.connectionId);
-    if (!enabled || !enabled.has(normalizeRef(entry.physicalTable))) continue;
+    if (!isInEnabledTableRange(entry, enabledByConnection)) continue;
     matches.push({
       connectionId: entry.connectionId,
       schema: entry.schema,
@@ -1160,8 +1175,13 @@ async function compileRole(
   const sourceGrants = new Map<string, RowGrant>();
   let effectiveConnections = declaredConnections;
 
+  // Spec 182 — load enabled_tables for both `catalog_bound` and plain
+  // `tableSelectors` paths so the membership check uses the same input.
+  const enabledByConnection = enabledTables ?? (selectors.length > 0 || catalogBound
+    ? await loadEnabledTablesByConnection()
+    : new Map<string, Set<string>>());
+
   if (catalogBound) {
-    const enabledByConnection = enabledTables ?? await loadEnabledTablesByConnection();
     const resolvedConnections = resolveCatalogConnections(roleId, declaredConnections, enabledByConnection);
     if (!resolvedConnections.ok) {
       recordStep({ status: "failed", code: `role_resolution_failed:${resolvedConnections.reason}`, stage: "source_scope" });
@@ -1186,13 +1206,21 @@ async function compileRole(
         recordStep({ status: "failed", code: `role_resolution_failed:${versionFailure}`, stage: "selector_match", selectorIndex });
         return { ok: false, reason: `role_resolution_failed:${roleId}:${versionFailure}` };
       }
-      const matches = [...state.forward.values()].filter((entry) => selectorMatches(selector, entry));
+      const rawMatches = [...state.forward.values()].filter((entry) => selectorMatches(selector, entry));
+      // Spec 182 — intersect with enabled_tables AFTER selectorMatches and
+      // BEFORE the zero-match check. Source-map hit but not in
+      // `enabled_tables` of the matching connection is filtered out here.
+      const matches = rawMatches.filter((entry) => isInEnabledTableRange(entry, enabledByConnection));
       // Spec 177 — record per-selector details so a partial match can be reviewed
-      // without leaking the role's whole selector shape.
+      // without leaking the role's whole selector shape. unmatchedNames covers
+      // both names absent from the source map and names filtered out by the
+      // enabled-table intersection (Spec 182) so the diagnostic does not
+      // silently swallow them.
       const declaredNames = Array.isArray(selector.names) ? selector.names.map((n) => normalizeRef(n)) : undefined;
-      const matchedSourceNames = new Set(matches.map((entry) => normalizeRef(entry.sourceName)));
+      const matchedNames = new Set(matches.map((entry) => normalizeRef(entry.sourceName)));
+      const matchedPhysical = new Set(matches.map((entry) => normalizeRef(entry.physicalTable)));
       const unmatchedNames = declaredNames && declaredNames.length > 0
-        ? declaredNames.filter((name) => !matchedSourceNames.has(name) && !matches.some((entry) => normalizeRef(entry.physicalTable) === name))
+        ? declaredNames.filter((name) => !matchedNames.has(name) && !matchedPhysical.has(name))
         : undefined;
       if (matches.length === 0) {
         recordStep({
