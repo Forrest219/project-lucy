@@ -2759,3 +2759,327 @@ export async function applyConnectionIdChange(
     throw error;
   }
 }
+
+// ─── planConnectionReplacement (Spec 184 T11) ────────────────────────────────
+//
+// Dry-run preview of replacing a connection's database / schemas / enabled_tables.
+// Caller passes only the three replaceable fields; password is rejected and
+// never read or returned. Capability diff compiles against a temp copy of the
+// project so the live tree is never mutated.
+
+export type ConnectionReplacementCandidate = {
+  database: string;
+  schemas: string[];
+  enabledTables: string[];
+};
+
+/** Spec 184 T11 §2 — rejects candidates that carry fields outside {database, schemas, enabledTables}. */
+export class ConnectionReplacementInvalidError extends Error {
+  code = "CONNECTION_REPLACEMENT_INVALID";
+  statusCode = 400;
+  detail: { rejectedFields?: string[] };
+
+  constructor(message: string, detail: ConnectionReplacementInvalidError["detail"] = {}) {
+    super(message);
+    this.name = "ConnectionReplacementInvalidError";
+    this.detail = detail;
+  }
+}
+
+/** Spec 184 T11 §2 — before/after scope comparison the operator sees in the preview. */
+export type ConnectionReplacementScope = {
+  before: string[];
+  after: string[];
+};
+
+/** Spec 184 T11 §2 — manifest files under `semantic-layer/<connId>/_schema/*.yaml` that still resolve to this connection id. */
+export type ConnectionReplacementManifestImpact = {
+  /** Absolute paths to manifest files under `<connId>/_schema/`. */
+  files: string[];
+  /** Always true: the connection id is preserved by a replacement. */
+  stillPointsToConnection: boolean;
+};
+
+/** Spec 184 T11 §2 — wiki pages whose `sl_refs` still contain the preserved connection id. */
+export type ConnectionReplacementWikiImpact = {
+  /** Up to 5 sample page keys with their full `sl_refs` for context. */
+  pages: Array<{ key: string; refs: string[] }>;
+  /** Always true: the connection id is preserved by a replacement. */
+  stillPointsToConnection: boolean;
+};
+
+/** Spec 184 T11 §2 — full dry-run preview returned by `planConnectionReplacement`. */
+export type ConnectionReplacementPlan = {
+  connectionId: string;
+  database: { before: string; after: string };
+  schemas: ConnectionReplacementScope;
+  enabledTables: ConnectionReplacementScope;
+  /** Host comparison. Candidate never carries host; reported as true unless the existing connection had no host. */
+  sameHost: boolean;
+  /** True iff `database`, `schemas`, and `enabledTables` all match after sorting. Host is not considered. */
+  sameObject: boolean;
+  /** Unified diff of ktx.yaml with secrets redacted. */
+  diff: string;
+  /** Secret-redacted YAML that would be written. */
+  proposedYaml: string;
+  manifest: ConnectionReplacementManifestImpact;
+  wiki: ConnectionReplacementWikiImpact;
+  capabilityDiff: ConnectionIdChangeCapabilityDiffEntry[];
+};
+
+export type PlanConnectionReplacementOptions = {
+  /** Test hook — override the wiki enumeration. */
+  listWikiFn?: typeof import("./wiki").listWiki;
+  /** Test hook — override identity compile (called twice: before / after). */
+  compileIdentities?: typeof compileIdentityCapabilityDiffOnRoot;
+};
+
+const REPLACEMENT_CANDIDATE_ALLOWED_KEYS = new Set([
+  "database",
+  "schemas",
+  "enabledTables"
+]);
+
+function validateReplacementCandidate(input: unknown): ConnectionReplacementCandidate {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new ConnectionReplacementInvalidError("candidate must be an object");
+  }
+  const obj = input as Record<string, unknown>;
+  const rejected = Object.keys(obj).filter((key) => !REPLACEMENT_CANDIDATE_ALLOWED_KEYS.has(key));
+  if (rejected.length > 0) {
+    throw new ConnectionReplacementInvalidError(
+      `candidate includes fields that are not replaceable: ${rejected.join(", ")}; only database, schemas, enabledTables may be set`,
+      { rejectedFields: rejected }
+    );
+  }
+  if (typeof obj.database !== "string" || obj.database.trim().length === 0) {
+    throw new ConnectionReplacementInvalidError("database is required and must be a non-empty string");
+  }
+  const schemasRaw = Array.isArray(obj.schemas) ? obj.schemas : [];
+  const schemas = schemasRaw.filter((value): value is string => typeof value === "string");
+  for (const schema of schemas) {
+    if (!SCHEMA_NAME_RE.test(schema)) {
+      throw new SchemaNameInvalidError(
+        `Schema name '${schema}' does not match pattern ${SCHEMA_NAME_PATTERN}`
+      );
+    }
+  }
+  const enabledTablesRaw = Array.isArray(obj.enabledTables) ? obj.enabledTables : [];
+  const enabledTables = enabledTablesRaw.filter((value): value is string => typeof value === "string");
+  return {
+    database: obj.database.trim(),
+    schemas: [...new Set(schemas)].sort(),
+    enabledTables: [...new Set(enabledTables)].sort()
+  };
+}
+
+/**
+ * Spec 184 T11 — mutator that applies a replacement candidate to one
+ * connection while preserving the connection id, host, port, username, and
+ * password. Used both for the diff preview (against the live project) and for
+ * the temp-copy compile run (against a copy).
+ */
+function connectionReplacementMutatorFactory(connId: string, candidate: ConnectionReplacementCandidate) {
+  return (doc: ReturnType<typeof parseDocument>): void => {
+    const conns = doc.get("connections", true);
+    if (!isMap(conns)) {
+      throw new ConnectionNotFoundError(`Connection '${connId}' not found in ktx.yaml`);
+    }
+    if (!conns.has(connId)) {
+      throw new ConnectionNotFoundError(`Connection '${connId}' not found in ktx.yaml`);
+    }
+    const conn = conns.get(connId, true);
+    if (!isMap(conn)) {
+      throw new KtxYamlParseError(`Connection '${connId}' is not a mapping`);
+    }
+    conn.set("database", candidate.database);
+
+    const schemasSeq = new YAMLSeq();
+    for (const schema of candidate.schemas) {
+      schemasSeq.items.push(schema);
+    }
+    conn.set("schemas", schemasSeq);
+
+    const enabledTablesSeq = new YAMLSeq();
+    for (const table of candidate.enabledTables) {
+      enabledTablesSeq.items.push(table);
+    }
+    conn.set("enabled_tables", enabledTablesSeq);
+    forceBlockYamlMaps(conns);
+  };
+}
+
+/**
+ * Spec 184 T11 — manifest files under `semantic-layer/<connId>/_schema/*.yaml`.
+ * Reports existence; the connection id is preserved by a replacement so every
+ * existing manifest still points at this connection.
+ */
+async function listReplacementManifestFiles(
+  semanticLayerRoot: string,
+  connId: string
+): Promise<string[]> {
+  if (!isSafePathSegment(connId)) return [];
+  const schemaDir = path.join(semanticLayerRoot, connId, "_schema");
+  let entries: import("node:fs").Dirent[];
+  try {
+    entries = await readdir(schemaDir, { withFileTypes: true });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw error;
+  }
+  const out: string[] = [];
+  for (const entry of entries) {
+    if (!entry.isFile() || !/\.ya?ml$/i.test(entry.name)) continue;
+    out.push(path.posix.join(SEMANTIC_LAYER_DIR_REL, connId, "_schema", entry.name));
+  }
+  return out.sort();
+}
+
+/**
+ * Spec 184 T11 — wiki pages whose `sl_refs` still contain the connection id.
+ * The id is preserved by a replacement, so every matching page keeps its
+ * reference; this function reports them so the operator can see the scope.
+ */
+async function listReplacementWikiSlRefPages(
+  root: string,
+  connId: string,
+  listWikiFn?: typeof import("./wiki").listWiki
+): Promise<Array<{ key: string; refs: string[] }>> {
+  try {
+    const fn = listWikiFn ?? (await import("./wiki.js")).listWiki;
+    const pages = await fn(root);
+    const prefix = `${connId}/`;
+    return pages
+      .filter((page) => page.slRefs.some((ref) => ref === connId || ref.startsWith(prefix)))
+      .map((page) => ({ key: page.key, refs: [...page.slRefs] }))
+      .slice(0, 5);
+  } catch {
+    return [];
+  }
+}
+
+export async function planConnectionReplacement(
+  projectRoot: string,
+  connectionId: string,
+  candidate: unknown,
+  options: PlanConnectionReplacementOptions = {}
+): Promise<ConnectionReplacementPlan> {
+  if (typeof connectionId !== "string" || !CONNECTION_ID_RE.test(connectionId)) {
+    throw new ConnectionIdInvalidError(
+      `Connection ID '${connectionId}' does not match pattern ${CONNECTION_ID_PATTERN}`
+    );
+  }
+  const normalizedCandidate = validateReplacementCandidate(candidate);
+
+  const ktxPath = path.join(projectRoot, "ktx.yaml");
+  const ktxText = await readFile(ktxPath, "utf8");
+  const doc = parseDocument(ktxText, { keepSourceTokens: true });
+  if (doc.errors.length > 0) {
+    throw new KtxYamlParseError(
+      `Failed to parse ktx.yaml: ${doc.errors[0]?.message ?? "unknown error"}`
+    );
+  }
+  const conns = doc.get("connections", true);
+  if (!isMap(conns) || !conns.has(connectionId)) {
+    throw new ConnectionNotFoundError(`Connection '${connectionId}' not found in ktx.yaml`);
+  }
+  const conn = conns.get(connectionId, true);
+  if (!isMap(conn)) {
+    throw new KtxYamlParseError(`Connection '${connectionId}' is not a mapping`);
+  }
+
+  const beforeDatabase = yamlScalarString(conn.get("database")) ?? "";
+  const beforeHost = yamlScalarString(conn.get("host")) ?? "";
+  const beforeSchemas = schemasList(conn.get("schemas", true) as import("yaml").YAMLSeq | undefined).sort();
+  const beforeEnabledTables = enabledTablesList(
+    conn.get("enabled_tables", true) as import("yaml").YAMLSeq | undefined
+  ).sort();
+
+  // Diff preview against the live project — produces a sanitized YAML and a unified diff.
+  const preview = await writeKtxYaml(
+    projectRoot,
+    connectionReplacementMutatorFactory(connectionId, normalizedCandidate),
+    { dryRun: true }
+  );
+  const safeOldYaml = redactKtxYamlForPreview(preview.oldText);
+  const safeNewYaml = redactKtxYamlForPreview(preview.serialized);
+  const diff = previewDiff(safeOldYaml, safeNewYaml, "ktx.yaml");
+
+  const contentPaths = await resolveContentPaths(projectRoot);
+  const manifestFiles = await listReplacementManifestFiles(contentPaths.semanticLayer, connectionId);
+  const wikiPages = await listReplacementWikiSlRefPages(projectRoot, connectionId, options.listWikiFn);
+
+  const accessPath = path.join(projectRoot, ACCESS_YAML_REL);
+  let accessRaw: string | null = null;
+  try {
+    accessRaw = await readFile(accessPath, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  const accessConfig: Record<string, unknown> = accessRaw
+    ? (parse(accessRaw) as Record<string, unknown> | null) ?? {}
+    : {};
+  const allUserIds = Array.isArray(accessConfig.users)
+    ? (accessConfig.users as unknown[])
+        .filter((u): u is Record<string, unknown> => !!u && typeof u === "object" && !Array.isArray(u))
+        .map((u) => (typeof u.id === "string" ? u.id : ""))
+        .filter(Boolean)
+    : [];
+
+  const compileFn = options.compileIdentities ?? compileIdentityCapabilityDiffOnRoot;
+  const beforeCompile = await compileFn(projectRoot, contentPaths.configDir, allUserIds);
+
+  // Capability compile runs only against a temp copy. The live project is
+  // never mutated and the temp tree is removed in `finally`.
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), "lucy-conn-replacement-"));
+  try {
+    await cp(projectRoot, tempRoot, {
+      recursive: true,
+      dereference: false,
+      filter: (src) => !src.includes(`${path.sep}.git${path.sep}`) && !src.endsWith(`${path.sep}.git`)
+    });
+    const tempConfigDir = await copyContentDirForRenamePreview(projectRoot, tempRoot, contentPaths.configDir);
+
+    const tempKtxPreview = await writeKtxYaml(
+      tempRoot,
+      connectionReplacementMutatorFactory(connectionId, normalizedCandidate),
+      { dryRun: true }
+    );
+    await writeFile(path.join(tempRoot, "ktx.yaml"), tempKtxPreview.serialized, "utf8");
+
+    const afterCompile = await compileFn(tempRoot, tempConfigDir, allUserIds);
+    const capabilityDiff = diffCapabilityEntries(beforeCompile, afterCompile, connectionId, connectionId);
+    // Replace `before` / `after` with the real source-key sets from each compile run; the rename-style
+    // diff helper only swaps the connection id, which is a no-op here.
+    for (const entry of capabilityDiff) {
+      if (entry.compile !== "compiled") continue;
+      const beforeEntry = beforeCompile.find((row) => row.userId === entry.userId);
+      const afterEntry = afterCompile.find((row) => row.userId === entry.userId);
+      if (beforeEntry?.compile === "compiled") entry.before = beforeEntry.before;
+      if (afterEntry?.compile === "compiled") entry.after = afterEntry.after;
+    }
+
+    const sameObject =
+      beforeDatabase === normalizedCandidate.database &&
+      JSON.stringify(beforeSchemas) === JSON.stringify(normalizedCandidate.schemas) &&
+      JSON.stringify(beforeEnabledTables) === JSON.stringify(normalizedCandidate.enabledTables);
+    // The candidate cannot change the host. A missing host is not reported as the same host.
+    const sameHost = beforeHost.length > 0;
+
+    return {
+      connectionId,
+      database: { before: beforeDatabase, after: normalizedCandidate.database },
+      schemas: { before: beforeSchemas, after: normalizedCandidate.schemas },
+      enabledTables: { before: beforeEnabledTables, after: normalizedCandidate.enabledTables },
+      sameHost,
+      sameObject,
+      diff,
+      proposedYaml: safeNewYaml,
+      manifest: { files: manifestFiles, stillPointsToConnection: true },
+      wiki: { pages: wikiPages, stillPointsToConnection: true },
+      capabilityDiff
+    };
+  } finally {
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+}
