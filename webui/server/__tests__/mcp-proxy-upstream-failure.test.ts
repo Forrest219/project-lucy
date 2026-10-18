@@ -80,7 +80,8 @@ const ENV_KEYS = [
   "KTX_INTERNAL_TOKEN",
   "LUCY_PROXY_UPSTREAM_HOST",
   "LUCY_PROXY_UPSTREAM_PORT",
-  "LUCY_ENABLE_UPSTREAM_SESSION_KEEPALIVE"
+  "LUCY_ENABLE_UPSTREAM_SESSION_KEEPALIVE",
+  "LUCY_CONTENT_ROOT"
 ] as const;
 
 async function makeProject(): Promise<string> {
@@ -118,6 +119,7 @@ beforeEach(async () => {
   process.env.KTX_PROJECT_ROOT = projectRoot;
   process.env.LUCY_AUDIT_DB = auditDbPath;
   process.env.KTX_INTERNAL_TOKEN = INTERNAL_TOKEN;
+  process.env.LUCY_CONTENT_ROOT = ".";
   delete process.env.LUCY_ENABLE_UPSTREAM_SESSION_KEEPALIVE;
 });
 

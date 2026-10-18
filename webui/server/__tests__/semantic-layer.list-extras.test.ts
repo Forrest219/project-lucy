@@ -2,10 +2,12 @@ import { mkdir, mkdtemp, rm, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { invalidateContentPathsCache } from "../paths";
 import { listSources } from "../semantic-layer";
 
 let projectRoot: string;
 let prevRoot: string | undefined;
+let prevContentRoot: string | undefined;
 
 const ACCESS_YAML = `roles:
   analyst:
@@ -82,13 +84,18 @@ beforeEach(async () => {
   await writeFile(path.join(projectRoot, "ktx.yaml"), "connections: {}\n", "utf8");
   await writeFile(path.join(projectRoot, "webui", "config", "access.yaml"), ACCESS_YAML, "utf8");
   prevRoot = process.env.KTX_PROJECT_ROOT;
+  prevContentRoot = process.env.LUCY_CONTENT_ROOT;
   process.env.KTX_PROJECT_ROOT = projectRoot;
   process.env.LUCY_CONTENT_ROOT = ".";
+  invalidateContentPathsCache();
 });
 
 afterEach(async () => {
+  invalidateContentPathsCache();
   if (prevRoot === undefined) delete process.env.KTX_PROJECT_ROOT;
   else process.env.KTX_PROJECT_ROOT = prevRoot;
+  if (prevContentRoot === undefined) delete process.env.LUCY_CONTENT_ROOT;
+  else process.env.LUCY_CONTENT_ROOT = prevContentRoot;
   await rm(projectRoot, { recursive: true, force: true });
 });
 

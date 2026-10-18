@@ -128,21 +128,29 @@ domain: test_domain
     expect(res.issues).toEqual([]);
   });
 
-  it("loads actual repository skills and finds superstore-profit-breakdown", async () => {
-    const skills = await loadAllSkills();
+  it("loads actual repository skills and finds answer-style", async () => {
+    // Spec 170 retired several warehouse/analysis built-ins; answer-style remains published.
+    // Pass repo skills/ explicitly: default content root is <project>/config/skills (may be empty locally).
+    const { fileURLToPath } = await import("node:url");
+    const { dirname, resolve } = await import("node:path");
+    const repoSkills = resolve(dirname(fileURLToPath(import.meta.url)), "../../../skills");
+    const skills = await loadAllSkills(repoSkills);
     expect(skills.length).toBeGreaterThanOrEqual(1);
 
-    const superstoreSkill = await getSkillByName("superstore-profit-breakdown");
-    expect(superstoreSkill).not.toBeNull();
-    expect(superstoreSkill?.domain).toBe("superstore");
+    const answerStyle = await getSkillByName("answer-style", repoSkills);
+    expect(answerStyle).not.toBeNull();
+    expect(answerStyle?.domain).toBe("answer-style");
 
-    const uriSkill = await getSkillByUri("lucy-skill://superstore/superstore-profit-breakdown");
+    const uriSkill = await getSkillByUri("lucy-skill://answer-style/answer-style", repoSkills);
     expect(uriSkill).not.toBeNull();
-    expect(uriSkill?.name).toBe("superstore-profit-breakdown");
+    expect(uriSkill?.name).toBe("answer-style");
   });
 
   it("exports skills package for claude-code, cursor and mcp-json", async () => {
-    const skills = await loadAllSkills();
+    const { fileURLToPath } = await import("node:url");
+    const { dirname, resolve } = await import("node:path");
+    const repoSkills = resolve(dirname(fileURLToPath(import.meta.url)), "../../../skills");
+    const skills = await loadAllSkills(repoSkills);
     const bundleAll = exportSkillPackage(skills, "all", { proxyUrl: "https://lucy.example.com/mcp" });
     expect(bundleAll.count).toBe(skills.length);
     expect(bundleAll.mcpConfig).toBeDefined();

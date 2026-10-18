@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { parse, stringify } from "yaml";
 import { safeWrite } from "../fs-safe.js";
+import { loadContentPaths } from "../paths.js";
 import { resolveProjectRoot } from "../project.js";
 import type { LicensePayload, LicenseRecord, StoredEntitlement } from "./types.js";
 import { activationCodeFingerprint } from "./codec.js";
@@ -94,7 +95,8 @@ export async function writeLicenseRecord(input: {
     entitlement: toStoredEntitlement(input.payload)
   };
   const yaml = stringify(record);
-  await safeWrite(projectRoot, LICENSE_YAML_REL, yaml);
+  const paths = await loadContentPaths();
+  await safeWrite(paths, projectRoot, LICENSE_YAML_REL, yaml);
   cachedRecord = record;
   return record;
 }

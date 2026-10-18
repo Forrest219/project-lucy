@@ -3,7 +3,7 @@
  * (`configDir = <projectRoot>/config/`). See `./paths.ts` for resolution
  * rules. The pre-A2 legacy sibling layout is covered by `fs-safe.test.ts`.
  */
-import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -122,14 +122,25 @@ describe("fs-safe writable paths — config/ subdir layout", () => {
     await expectForbidden(() => resolveWritable(paths, projectRoot, "semantic-layer/secret-link/p"));
   });
 
-  it("rejects root-level content paths when only config/ content subdirs exist", async () => {
-    // contentDir === projectRoot would accept "semantic-layer/...".
-    // contentDir === projectRoot/config should NOT accept the same path.
+  it("resolves content prefixes under configDir even when sibling dirs exist at project root", async () => {
+    // Sibling dirs at projectRoot are the ktx mirror view; authoritative writes
+    // still land under configDir for content prefixes.
     const paths = configRootPaths();
-    await expectForbidden(() => resolveWritable(paths, projectRoot, "semantic-layer/at-root.yaml"));
-    await expectForbidden(() => resolveWritable(paths, projectRoot, "wiki/page.md"));
-    await expectForbidden(() => resolveWritable(paths, projectRoot, "evals/q.yaml"));
-    await expectForbidden(() => resolveWritable(paths, projectRoot, "skills/foo/SKILL.md"));
+    const configReal = await realpath(path.join(projectRoot, "config"));
+    await expect(resolveWritable(paths, projectRoot, "semantic-layer/at-root.yaml")).resolves.toBe(
+      path.join(configReal, "semantic-layer", "at-root.yaml")
+    );
+    await expect(resolveWritable(paths, projectRoot, "wiki/page.md")).resolves.toBe(
+      path.join(configReal, "wiki", "page.md")
+    );
+    await expect(resolveWritable(paths, projectRoot, "evals/q.yaml")).resolves.toBe(
+      path.join(configReal, "evals", "q.yaml")
+    );
+    await expect(resolveWritable(paths, projectRoot, "skills/foo/SKILL.md")).resolves.toBe(
+      path.join(configReal, "skills", "foo", "SKILL.md")
+    );
+    // Paths outside allow-listed prefixes remain forbidden.
+    await expectForbidden(() => resolveWritable(paths, projectRoot, "README.md"));
   });
 });
 
