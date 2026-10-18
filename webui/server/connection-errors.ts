@@ -1,8 +1,17 @@
+// T12 — keep connection-error classification tightly scoped to connectivity
+// facts: never let a probe pass imply authorization, never bundle every
+// transport error under one label. ENOTFOUND (DNS), ECONNREFUSED/ETIMEDOUT
+// (route/transport), and auth are separate concerns; missing library and
+// missing table get their own category so a schema gap is not hidden behind
+// a generic "network" banner.
+
 export type ConnectionErrorCategory =
   | "starrocks_max_execution_time"
   | "ktx_runtime_uv"
   | "auth"
+  | "dns"
   | "network"
+  | "missing_target"
   | "generic";
 
 export type ConnectionErrorGuidance = {
@@ -12,11 +21,12 @@ export type ConnectionErrorGuidance = {
   actions: string[];
 };
 
-const MAX_EXEC_RE =
-  /max_execution_time|Unknown system variable/i;
+const MAX_EXEC_RE = /max_execution_time|Unknown system variable/i;
 const UV_RUNTIME_RE = /could not download uv|ktx Python runtime install failed|runtime install failed/i;
 const AUTH_RE = /access denied|authentication|password|login/i;
-const NETWORK_RE = /ECONNREFUSED|ETIMEDOUT|ENOTFOUND|timeout|timed out|connect/i;
+const DNS_RE = /ENOTFOUND|getaddrinfo|resolve host|no such host/i;
+const TRANSPORT_RE = /ECONNREFUSED|ETIMEDOUT|connect|connection refused|connection timed out|connection reset|network is unreachable/i;
+const MISSING_TARGET_RE = /library not found|missing library|table .*doesn'?t exist|table not found|no such table|unknown table|schema .*doesn'?t exist|relation .*does not exist/i;
 
 export function classifyConnectionError(raw: string | undefined | null): ConnectionErrorGuidance {
   const text = (raw ?? "").trim();
@@ -24,8 +34,7 @@ export function classifyConnectionError(raw: string | undefined | null): Connect
     return {
       category: "starrocks_max_execution_time",
       title: "StarRocks / MySQL 协议兼容",
-      summary:
-        "目标库不支持 MySQL 的 max_execution_time 会话变量（常见于 StarRocks MySQL 协议端口）。",
+      summary: "目标库不支持 MySQL 的 max_execution_time 会话变量（常见于 StarRocks MySQL 协议端口）。",
       actions: [
         "请使用已包含 ktx StarRocks 兼容补丁的 Lucy 镜像（scripts/runtime/patch-ktx-mysql-starrocks-compat.js）",
         "新建连接时数据库类型请选择 StarRocks（MySQL 协议）",
@@ -45,6 +54,9 @@ export function classifyConnectionError(raw: string | undefined | null): Connect
       ]
     };
   }
+  // T12 — auth stays independent of network: a refused connection is not a
+  // credential failure and vice versa. The probe card and the read-API both
+  // rely on this distinction.
   if (AUTH_RE.test(text)) {
     return {
       category: "auth",
@@ -53,12 +65,40 @@ export function classifyConnectionError(raw: string | undefined | null): Connect
       actions: ["核对凭据与 schema", "确认账号对目标 host:port 有 CONNECT 权限"]
     };
   }
-  if (NETWORK_RE.test(text)) {
+  if (DNS_RE.test(text)) {
+    return {
+      category: "dns",
+      title: "DNS 解析失败",
+      summary: "无法解析数据库 host 名，请检查 DNS / 容器解析配置。",
+      actions: [
+        "在 Lucy 容器内 `nslookup <host>` 确认能解析",
+        "核对 ktx.yaml 中连接配置的 host 拼写与大小写",
+        "内网环境确认 /etc/resolv.conf 与 search domain"
+      ]
+    };
+  }
+  if (TRANSPORT_RE.test(text)) {
     return {
       category: "network",
       title: "网络连通",
-      summary: "无法到达数据库 host:port。",
-      actions: ["确认 Lucy 容器到数据库的网络路由与安全组", "用 mysql 客户端从同网段验证"]
+      summary: "已解析 host，但无法建立到 host:port 的连接或连接被中断。",
+      actions: [
+        "确认 Lucy 容器到数据库 host:port 的网络路由与安全组",
+        "用 mysql 客户端从同网段验证可达性",
+        "核对连接配置的端口与协议（MySQL / StarRocks / KTX 专属端口）"
+      ]
+    };
+  }
+  if (MISSING_TARGET_RE.test(text)) {
+    return {
+      category: "missing_target",
+      title: "目标对象缺失",
+      summary: "连通正常，但访问的库、表或函数在数据库中不存在。",
+      actions: [
+        "在连接概览的「启用表范围」中核对已选库 / 表是否与数据库实际一致",
+        "刷新 Schema Manifest 后再次连通测试",
+        "若新增表尚未补 Manifest，先在数据库侧确认存在"
+      ]
     };
   }
   return {
@@ -72,5 +112,5 @@ export function classifyConnectionError(raw: string | undefined | null): Connect
 export function formatConnectionErrorMessage(raw: string | undefined | null): string {
   const guidance = classifyConnectionError(raw);
   const action = guidance.actions[0];
-  return `${guidance.summary}${action ? ` 建议：${action}` : ""}`;
+  return `${guidance.summary}${action ? `  建议：${action}` : ""}`;
 }

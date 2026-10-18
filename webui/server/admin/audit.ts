@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import Database from "better-sqlite3";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import type { FastifyInstance } from "fastify";
 import {
@@ -256,8 +256,6 @@ function buildAccessLogFilter(q: AccessLogFilterQuery): {
   return { conditions, baseConditions, params, includeProtocol };
 }
 
-const SENSITIVE_KEY_RE = /(?:password|passwd|pwd|token|secret|api[-_]?key|authorization|credential|private[-_]?key|cert)/i;
-const SENSITIVE_PAIR_RE = /\b(password|passwd|pwd|token|secret|api[-_]?key|authorization|credential|private[-_]?key|cert)\b\s*[:=]\s*([^,\s;]+)/gi;
 const CSV_FORMULA_RE = /^[=+\-@]/;
 const CONFIG_AUDIT_DIFF_MAX_BYTES = 256 * 1024;
 const AUDIT_EXPORT_TIMEZONE = "Asia/Shanghai";
@@ -305,22 +303,21 @@ function csvCell(value: unknown): string {
   return `"${escaped}"`;
 }
 
+// T10 — defensive redaction at the audit export boundary. The diff/summary/text
+// rows are already masked at write time by `redactAuditDiff` /
+// `redactAuditSummary` in `security/redaction.ts`, but old rows predating that
+// path could still hold raw secrets. Re-apply the canonical primitives so CSV
+// and JSON exports stay safe even when the write path is bypassed.
 function redactText(value: string): string {
-  return value.replace(SENSITIVE_PAIR_RE, "$1=[REDACTED]");
+  return redactAuditText(value);
 }
 
 function redactSensitive(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(redactSensitive);
-  if (value && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>).map(([key, nested]) => [
-        key,
-        SENSITIVE_KEY_RE.test(key) ? "[REDACTED]" : redactSensitive(nested)
-      ])
-    );
-  }
-  if (typeof value === "string") return redactText(value);
-  return value;
+  // `redactAuditSummary` walks the structure with the canonical
+  // `SECRET_KEY_RE` allowlist (covers `password_hash`, `client_secret`,
+  // `set-cookie`, etc.) and runs `redactAuditText` on every leaf string,
+  // so scrypt-shaped values and bearer tokens never leak either.
+  return redactAuditSummary("audit_export", value);
 }
 
 function redactJsonString(value: string | null): string | null {
@@ -548,6 +545,21 @@ export function resetAuditDbForTests(): void {
     db.close();
     db = null;
   }
+}
+
+// T13 (Spec 185) — snapshot the audit DB to a fresh file using SQLite's online
+// backup API. The destination file is closed/flushed by the time the promise
+// resolves, so a follow-up insert into `source` after this returns cannot be
+// observed by readers who reopen the destination. The sha256 matches the bytes
+// of the destination file, so a verifier can compare it against the on-disk
+// file after the call.
+export async function snapshotAuditDatabase(
+  source: Database.Database,
+  destination: string
+): Promise<string> {
+  await source.backup(destination);
+  const buf = readFileSync(destination);
+  return sha256Hex(buf);
 }
 
 function serializeAuditSummary(changeType: string, value: unknown): string | null {
@@ -2076,9 +2088,14 @@ export function registerAuditRoutes(app: FastifyInstance) {
           assetKind: row.asset_kind,
           operation: row.operation ?? undefined,
           targetId: row.target_id ?? undefined,
-          oldSummary: row.old_summary ? JSON.parse(row.old_summary) : undefined,
-          newSummary: row.new_summary ? JSON.parse(row.new_summary) : undefined,
-          diff: row.diff ?? undefined,
+          // T10 — defensively re-apply canonical redaction at the export boundary.
+          // The DB already stores redacted text via `auditDiffForContent` and
+          // `redactAuditSummary`, but a row that pre-dates that path (or a row
+          // written by a future bypass) must not leak a raw password hash or
+          // token value to an admin UI / JSON export.
+          oldSummary: row.old_summary ? redactSensitive(JSON.parse(row.old_summary)) : undefined,
+          newSummary: row.new_summary ? redactSensitive(JSON.parse(row.new_summary)) : undefined,
+          diff: row.diff ? redactAuditDiff(row.diff) : undefined,
           requestId: row.request_id ?? undefined,
           writeStatus: row.write_status
         }))

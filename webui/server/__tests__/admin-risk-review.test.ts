@@ -290,7 +290,19 @@ async function makeProject(yamlContent = ACCESS_YAML) {
   await mkdir(path.join(root, "webui", "config"), { recursive: true });
   await mkdir(path.join(root, "semantic-layer", "mysql-aliyun", "_schema"), { recursive: true });
   await mkdir(path.join(root, ".ktx-ui"), { recursive: true });
-  await writeFile(path.join(root, "ktx.yaml"), "connections: {}\n", "utf8");
+  // Spec 182 — selector matches intersect with the connection's enabled_tables.
+  // Mirror every schema table name declared in this fixture so the
+  // selector-based roles still resolve to the same capability set.
+  await writeFile(
+    path.join(root, "ktx.yaml"),
+    `connections:
+  mysql-aliyun:
+    driver: mysql
+    enabled_tables:
+${KX_TEMPLATE_NAMES.map((name) => `      - dataforai.${name}`).join("\n")}
+`,
+    "utf8"
+  );
   await writeFile(path.join(root, "webui", "config", "access.yaml"), yamlContent, "utf8");
   await writeFile(
     path.join(root, "semantic-layer", "mysql-aliyun", "_schema", "dataforai.yaml"),

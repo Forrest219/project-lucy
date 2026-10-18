@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import Fastify, { type FastifyError, type FastifyReply, type FastifyRequest } from "fastify";
 import { parse, parseDocument } from "yaml";
-import { buildProxy } from "./proxy/mcp-proxy.js";
+import { buildProxy, getDataQaInstructionsStatus } from "./proxy/mcp-proxy.js";
 import { serveStaticAsset } from "./static-assets";
 import { addTiming, registerEntryPerformanceTiming, withRequestTiming } from "./entry-performance-timing";
 import { displayGenerations, onDisplayGenerationChange, withDisplayWriteBarrier } from "./display-generation";
@@ -41,7 +41,8 @@ import {
   removeConnection,
   removeSchema
 } from "./project";
-import { loadContentPaths } from "./paths";
+import { loadContentPaths, resolveContentPaths } from "./paths";
+import { collectContentLayout } from "./content-layout";
 import {
   // Ingest sidecar is M13 legacy. M14 keeps the helpers for the deprecated
   // `/api/connections/:connId/ingest` alias compatibility route.
@@ -132,6 +133,7 @@ import {
 import { registerRiskReviewRoutes } from "./admin/risk-review.js";
 import { registerReleaseReadinessRoutes } from "./admin/release-readiness-package.js";
 import { removeLegacyLicenseFile } from "./remove-legacy-license-file.js";
+import { registerImportScopeRoutes } from "./admin/import-scope.js";
 import { registerGovernanceObservabilityRoutes } from "./admin/governance-observability.js";
 import { registerUiUsageRoutes } from "./admin/ui-usage.js";
 import { registerAuthRoutes, registerAdminAccountRoutes } from "./auth/routes.js";
@@ -281,6 +283,24 @@ function supportedErrorDetail(error: SupportedError): unknown {
           .filter((key) => typeof source[key] === "string")
           .map((key) => [key, source[key]])
       );
+    }
+  }
+  if (error.code === "connection_references_remain") {
+    // Spec 179 §3: surface the per-kind blocker list so the Admin client can
+    // render a precise message ("连接 X 仍在被角色 R/身份 U/Wiki 页/语义文件引用")
+    // without re-fetching the preview. Pinned shape — only `{kind, id}` allowed.
+    const detail = error.detail;
+    if (detail && typeof detail === "object" && Array.isArray((detail as { blockers?: unknown }).blockers)) {
+      const blockers = (detail as { blockers: unknown[] }).blockers
+        .filter(
+          (entry): entry is { kind: string; id: string } =>
+            !!entry &&
+            typeof entry === "object" &&
+            typeof (entry as { kind?: unknown }).kind === "string" &&
+            typeof (entry as { id?: unknown }).id === "string"
+        )
+        .map((entry) => ({ kind: entry.kind, id: entry.id }));
+      return { blockers };
     }
   }
   return undefined;
@@ -656,6 +676,18 @@ export function buildServer() {
 
   app.get("/api/health", async () => {
     const policy = getPolicyRuntimeStatus();
+    // Spec 180 §2 — the content layout diagnostic is a *side* check on
+    // `/api/health`. Health must not depend on it resolving: a project root
+    // we cannot locate (early boot, missing ktx.yaml) must still produce
+    // a 200 with the existing policy / ktx / execution signal.
+    let contentLayout: import("./content-layout").ContentLayoutStatus | null = null;
+    try {
+      const projectRoot = await resolveProjectRoot();
+      const contentPaths = await resolveContentPaths(projectRoot);
+      contentLayout = await collectContentLayout(projectRoot, contentPaths);
+    } catch {
+      // leave null; `contentLayout` is omitted from the envelope.
+    }
     const [ktxRuntime, mcpRuntime] = await Promise.all([
       readKtxRuntimeStatus(),
       readMcpRuntimeStatus().catch((error) => ({
@@ -670,6 +702,8 @@ export function buildServer() {
     const executionHardFailure = ["stale", "unavailable", "error"].includes(
       mcpRuntime.execution.status
     );
+    // Spec 180 §2 — drift is informational; it must not turn `status` into a
+    // failure. `healthy` only reflects policy + ktx runtime + MCP execution.
     const healthy = policyHealthy && ktxRuntime.ready && !executionHardFailure;
     return {
       ok: true,
@@ -691,7 +725,15 @@ export function buildServer() {
           degradedAgents: policy.degradedAgents,
           healthy: policyHealthy
         },
-        execution: mcpRuntime.execution
+        execution: mcpRuntime.execution,
+        // T9 — guidance is advisory; missing guidance must not fail liveness.
+        // The status is exposed for operator visibility and so an Admin can
+        // confirm the proxy is still functional when the file is being rolled out.
+        dataQaInstructions: getDataQaInstructionsStatus(),
+        // Spec 180 §2 — content root vs. mirror layout snapshot; read-only,
+        // surfaces drift without flipping `status`. Omitted when no project
+        // root can be resolved (e.g. before ktx.yaml is wired up).
+        ...(contentLayout ? { contentLayout } : {})
       }
     };
   });
@@ -2138,6 +2180,7 @@ export function buildServer() {
   registerCallMonitorRoutes(app);
   registerRiskReviewRoutes(app);
   registerReleaseReadinessRoutes(app);
+  registerImportScopeRoutes(app);
   registerSkillsRoutes(app);
 
   app.setNotFoundHandler(async (request, reply) => {

@@ -24,7 +24,7 @@ import {
 } from "./upstream-session.js";
 import { extractRequestClientMeta, resolveClientIdentity } from "./request-client-meta.js";
 import { ensureSkillAuditReady, writeLog, writeAccessLogSources, writeConversationTurn, purgeExpiredConversationTurns, bindPriorSessionCalls, type AccessLogSourceRecord } from "./audit.js";
-import { allowedToolNames, authorizeAndRewrite, check as aclCheck, effectivePermissions, extractTables, extractSourceRefs, resolveSourceRefsForTables, kxCatalog, lucyCatalog, permissionSnapshot, type SourceRef } from "./acl.js";
+import { allowedToolNames, authorizeAndRewrite, check as aclCheck, effectivePermissions, extractTables, extractSourceRefs, formatIdentityCompilerReason, resolveSourceRefsForTables, kxCatalog, lucyCatalog, permissionSnapshot, type SourceRef } from "./acl.js";
 import {
   redactQuestionText,
   summarizeArgsForAudit,
@@ -657,13 +657,18 @@ function recordMcpTraceForTool(input: {
     });
 }
 
-async function auditMeta(identity: Identity | null | undefined, decisionReason: string): Promise<Partial<Parameters<typeof writeLog>[0]>> {
+async function auditMeta(
+  identity: Identity | null | undefined,
+  decisionReason: string,
+  extra?: { compilerReason?: string }
+): Promise<Partial<Parameters<typeof writeLog>[0]>> {
   const meta = await buildAccessLogAuditMeta(identity, decisionReason);
-  if (!identity?.actorId) return meta;
+  if (!identity?.actorId) return extra?.compilerReason ? { ...meta, compilerReason: extra.compilerReason } : meta;
   return {
     ...meta,
     actorId: identity.actorId,
     actorKind: identity.actorKind,
+    ...(extra?.compilerReason ? { compilerReason: extra.compilerReason } : {})
   };
 }
 
@@ -1589,23 +1594,101 @@ async function connectionList(identity: Identity): Promise<{
 // are guidance, not a security boundary, and a buggy rewriter must not block
 // MCP session establishment for every client.
 //
-// The loader is one-shot at module init; if the file is missing or unreadable
-// we treat it as "injection unavailable" and silently pass-through rather than
-// crash the proxy.
+// Loader state for the data-QA guidance injected into MCP `initialize` responses.
+// Project file takes precedence over the bundled mirror; on read failure the next
+// call retries (a missing or temporarily-unreadable file must not poison the
+// proxy for its lifetime). Successes can be cached and tests can call
+// `invalidateDataQaInstructionsCache()` to force a re-read.
+type DataQaInstructionsSource = "project" | "mirror" | "missing";
+
+interface DataQaInstructionsStatus {
+  source: DataQaInstructionsSource;
+  /** Bytes trimmed length of the loaded text. 0 when missing / failed. */
+  length: number;
+  /** Last error message (if any) from a project or mirror read. */
+  lastError: string | null;
+  /** When the cached value was last successfully loaded. */
+  loadedAt: string | null;
+}
+
 let cachedDataQaInstructions: string | undefined;
-let cachedDataQaInstructionsLoaded = false;
-async function loadDataQaInstructions(): Promise<string | undefined> {
-  if (cachedDataQaInstructionsLoaded) return cachedDataQaInstructions;
-  cachedDataQaInstructionsLoaded = true;
+let cachedDataQaInstructionsSource: DataQaInstructionsSource = "missing";
+let cachedDataQaInstructionsError: string | null = null;
+let cachedDataQaInstructionsLoadedAt: string | null = null;
+
+const DEFAULT_DATA_QA_INSTRUCTIONS_MIRROR = "/app/webui/config/data-qa-instructions.md";
+let dataQaInstructionsMirrorOverride: string | null = null;
+
+export function setDataQaInstructionsMirrorPath(mirrorPath: string | null): void {
+  dataQaInstructionsMirrorOverride = mirrorPath;
+  invalidateDataQaInstructionsCache();
+}
+
+export function invalidateDataQaInstructionsCache(): void {
+  cachedDataQaInstructions = undefined;
+  cachedDataQaInstructionsSource = "missing";
+  cachedDataQaInstructionsError = null;
+  cachedDataQaInstructionsLoadedAt = null;
+}
+
+export function getDataQaInstructionsStatus(): DataQaInstructionsStatus {
+  return {
+    source: cachedDataQaInstructionsSource,
+    length: cachedDataQaInstructions?.length ?? 0,
+    lastError: cachedDataQaInstructionsError,
+    loadedAt: cachedDataQaInstructionsLoadedAt
+  };
+}
+
+async function readDataQaInstructionsFile(filePath: string): Promise<string> {
+  const text = (await readFile(filePath, "utf-8")).trim();
+  if (text.length === 0) throw new Error(`data-qa-instructions.md at ${filePath} is empty`);
+  return text;
+}
+
+export async function loadDataQaInstructions(): Promise<string | undefined> {
+  if (cachedDataQaInstructions && cachedDataQaInstructionsLoadedAt) return cachedDataQaInstructions;
+  const projectRoot = await resolveProjectRoot();
+  const projectFilePath = path.join(projectRoot, "webui", "config", "data-qa-instructions.md");
+  const mirrorFilePath = dataQaInstructionsMirrorOverride ?? DEFAULT_DATA_QA_INSTRUCTIONS_MIRROR;
+
+  // Project file wins; ENOENT falls through to the bundled mirror.
   try {
-    const projectRoot = await resolveProjectRoot();
-    const filePath = path.join(projectRoot, "webui", "config", "data-qa-instructions.md");
-    cachedDataQaInstructions = (await readFile(filePath, "utf-8")).trim();
+    const text = await readDataQaInstructionsFile(projectFilePath);
+    cachedDataQaInstructions = text;
+    cachedDataQaInstructionsSource = "project";
+    cachedDataQaInstructionsError = null;
+    cachedDataQaInstructionsLoadedAt = new Date().toISOString();
+    return cachedDataQaInstructions;
   } catch (err) {
-    console.error("[lucy-proxy] failed to load data-qa-instructions.md; initialize will pass through", err);
-    cachedDataQaInstructions = undefined;
+    const projectErr = err instanceof Error ? err.message : String(err);
+    if (!isFileNotFound(err)) {
+      console.error("[lucy-proxy] failed to read project data-qa-instructions.md", err);
+    }
+    try {
+      const text = await readDataQaInstructionsFile(mirrorFilePath);
+      cachedDataQaInstructions = text;
+      cachedDataQaInstructionsSource = "mirror";
+      cachedDataQaInstructionsError = projectErr;
+      cachedDataQaInstructionsLoadedAt = new Date().toISOString();
+      return cachedDataQaInstructions;
+    } catch (mirrorErr) {
+      const message = mirrorErr instanceof Error ? mirrorErr.message : String(mirrorErr);
+      if (!isFileNotFound(mirrorErr)) {
+        console.error("[lucy-proxy] failed to read mirror data-qa-instructions.md", mirrorErr);
+      }
+      cachedDataQaInstructions = undefined;
+      cachedDataQaInstructionsSource = "missing";
+      cachedDataQaInstructionsError = message;
+      cachedDataQaInstructionsLoadedAt = null;
+      console.error("[lucy-proxy] data-qa-instructions unavailable; initialize will pass through", mirrorErr);
+      return undefined;
+    }
   }
-  return cachedDataQaInstructions;
+}
+
+function isFileNotFound(err: unknown): boolean {
+  return Boolean(err && typeof err === "object" && (err as { code?: string }).code === "ENOENT");
 }
 
 async function buildRoleAwareInstructions(identity: Identity): Promise<string | undefined> {
@@ -2603,6 +2686,50 @@ function toolsListErrorResponse(requestId: string | number, detail: string): Rec
   };
 }
 
+/**
+ * Spec 178 / T1 — a role-compile failure must surface on `tools/list` as a
+ * 403, not as a successful empty `tools: []` body.
+ *
+ * The admission gate already rejects ghost / disabled / revoked / expired
+ * Agents and roles whose YAML declared body is missing; this matcher only
+ * covers the *post-admission* compile failures that `effectivePermissions`
+ * reports. Order matches Spec 177's `compileRole` / `effectivePermissions`
+ * reasons exactly.
+ */
+const COMPILE_DENIAL_PREFIXES = [
+  "role_resolution_failed",
+  "source_map_compile_failed"
+] as const;
+
+function isToolsListCompileDenialReason(reason: string | undefined): boolean {
+  if (!reason) return false;
+  if (reason === "policy_degraded_deny") return true;
+  return COMPILE_DENIAL_PREFIXES.some((prefix) => reason.startsWith(prefix));
+}
+
+/**
+ * Spec 178 §2 — JSON-RPC envelope + HTTP 403. The outward message stays
+ * consistent with the admission layer; only `role_resolution_failed` is
+ * spelled as a bare class so the existing 403 tests keep matching.
+ */
+function compileDeniedToolsListEnvelope(
+  requestId: string | number,
+  reason: string
+): { body: string; statusCode: number; message: string } {
+  const message = reason.startsWith("role_resolution_failed")
+    ? "Access denied: role_resolution_failed"
+    : `Access denied: ${reason}`;
+  return {
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: requestId,
+      error: { code: -32003, message }
+    }),
+    statusCode: 403,
+    message
+  };
+}
+
 function localInitializePayload(requestId: string | number, instructions: string | undefined): Record<string, unknown> {
   return {
     jsonrpc: "2.0",
@@ -2640,7 +2767,32 @@ async function writeToolsListResponse(
   res: ServerResponse,
   requestId: string | number,
   session: UpstreamSessionState | undefined
-): Promise<{ filterFailed: boolean; errorDetail?: string; responseBytes: number; upstreamFailure?: UpstreamFailureReason }> {
+): Promise<{
+  filterFailed: boolean;
+  errorDetail?: string;
+  responseBytes: number;
+  upstreamFailure?: UpstreamFailureReason;
+  compileDenied?: boolean;
+}> {
+  // Spec 178 / T1 — `effectivePermissions` compile failure wins over upstream /
+  // filter / empty-list success. Checked first so the cached `result.tools: []`
+  // path never reaches the client for a failed identity.
+  const compiled = await effectivePermissions(identity).catch(() => null);
+  if (compiled && !compiled.ok && isToolsListCompileDenialReason(compiled.reason)) {
+    const envelope = compileDeniedToolsListEnvelope(requestId, compiled.reason);
+    res.writeHead(envelope.statusCode, {
+      "content-type": "application/json",
+      "content-length": Buffer.byteLength(envelope.body)
+    });
+    res.end(envelope.body);
+    return {
+      filterFailed: true,
+      errorDetail: compiled.reason,
+      responseBytes: Buffer.byteLength(envelope.body),
+      compileDenied: true
+    };
+  }
+
   const originalBody = upstreamBody;
   const contentType = String(upstream.headers["content-type"] ?? "");
   const upstreamFailure = classifyUpstreamFailure(upstream.statusCode, contentType, originalBody, requestId, session);
@@ -3201,7 +3353,11 @@ async function buildDenialRepairPayload(
     const decision = await aclCheck(identity, toolName, toolArgs);
     if (!decision.allowed) {
       const errorMsg = decision.reason ?? "denied";
-      const meta = await auditMeta(identity, errorMsg);
+      const compiled = await effectivePermissions(identity).catch(() => null);
+      const compilerReason = compiled && !compiled.ok
+        ? formatIdentityCompilerReason(compiled.diagnostic)
+        : undefined;
+      const meta = await auditMeta(identity, errorMsg, compilerReason ? { compilerReason } : undefined);
       // Spec 162 §7.3 / SC-14 — discover_data, entity_details,
       // dictionary_search, lucy_query and lucy_read_source share this one
       // allow-list function. Names outside the caller's ACL never appear.
@@ -4253,6 +4409,30 @@ async function buildDenialRepairPayload(
       return;
     }
     if (rpcMethod === "tools/list") {
+      // Spec 178 / T1 — compile failure takes priority over the local fallback;
+      // never serve `tools: []` for a failed identity.
+      const compiled = await effectivePermissions(identity).catch(() => null);
+      if (compiled && !compiled.ok && isToolsListCompileDenialReason(compiled.reason)) {
+        const envelope = compileDeniedToolsListEnvelope(requestId, compiled.reason);
+        const responseBytes = Buffer.byteLength(envelope.body);
+        res.writeHead(envelope.statusCode, { "content-type": "application/json", "content-length": responseBytes });
+        res.end(envelope.body);
+        const compilerReason = formatIdentityCompilerReason(compiled.diagnostic);
+        recordRequestAudit({
+          ts: new Date().toISOString(),
+          userId: identity.userId,
+          client: identity.client,
+          tool: rpcMethod,
+          outcome: "denied",
+          errorDetail: compiled.reason,
+          durationMs: Date.now() - start,
+          responseBytes,
+          requestId,
+          ...requestMeta,
+          ...(await auditMeta(identity, compiled.reason, compilerReason ? { compilerReason } : undefined)),
+        });
+        return;
+      }
       const payload = await localToolsListPayload(identity, requestId);
       const responseBody = JSON.stringify(payload);
       res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
@@ -4416,6 +4596,41 @@ async function buildDenialRepairPayload(
 
   if (rpcMethod === "tools/list") {
     const toolsList = await writeToolsListResponse(identity, upstream, upstreamBody, res, requestId, upstreamSession);
+    // Spec 178 / T1 — compile failure short-circuits inside writeToolsListResponse
+    // (HTTP 403 + JSON-RPC -32003 already on the wire). Audit must record the
+    // denial with the full machine reason and the structured diagnostic;
+    // `role_ids` stays empty because permissionSnapshot is undefined on failure.
+    if (toolsList.compileDenied) {
+      const compiled = await effectivePermissions(identity).catch(() => null);
+      const compilerReason = compiled && !compiled.ok
+        ? formatIdentityCompilerReason(compiled.diagnostic)
+        : undefined;
+      const denialReason = compiled && !compiled.ok ? compiled.reason : (toolsList.errorDetail ?? "denied");
+      recordRequestAudit({
+        ts: new Date().toISOString(),
+        userId: identity.userId,
+        client: identity.client,
+        tool: rpcMethod,
+        outcome: "denied",
+        errorDetail: denialReason,
+        durationMs: Date.now() - start,
+        responseBytes: toolsList.responseBytes,
+        requestId,
+        ...requestMeta,
+        ...(await auditMeta(
+          identity,
+          denialReason,
+          compilerReason ? { compilerReason } : undefined
+        )),
+      });
+      return;
+    }
+    // Spec 177 — successful compile: the structured diagnostic still rides on
+    // `compiler_reason` for admin review, never into the client body.
+    const compiled = await effectivePermissions(identity).catch(() => null);
+    const compilerReason = compiled && !compiled.ok
+      ? formatIdentityCompilerReason(compiled.diagnostic)
+      : undefined;
     recordRequestAudit({
       ts: new Date().toISOString(),
       userId: identity.userId,
@@ -4427,10 +4642,14 @@ async function buildDenialRepairPayload(
       responseBytes: toolsList.responseBytes,
       requestId,
       ...requestMeta,
-      ...(await auditMeta(identity, withUpstreamSessionNote(
-        toolsList.upstreamFailure ?? (toolsList.filterFailed ? "tools_list_filter_failed" : "allowed"),
-        upstreamSession
-      ))),
+      ...(await auditMeta(
+        identity,
+        withUpstreamSessionNote(
+          toolsList.upstreamFailure ?? (toolsList.filterFailed ? "tools_list_filter_failed" : "allowed"),
+          upstreamSession
+        ),
+        compilerReason ? { compilerReason } : undefined
+      )),
     });
     return;
   }

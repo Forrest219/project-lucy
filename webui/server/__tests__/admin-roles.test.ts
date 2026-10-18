@@ -134,7 +134,23 @@ async function makeProject(yamlContent = EMPTY_ACCESS_YAML) {
   await mkdir(path.join(root, "semantic-layer", "mysql-aliyun", "_schema"), { recursive: true });
   await mkdir(path.join(root, "semantic-layer", "poc-mysql-aliyun", "_schema"), { recursive: true });
   await mkdir(path.join(root, ".ktx-ui"), { recursive: true });
-  await writeFile(path.join(root, "ktx.yaml"), "connections: {}\n", "utf8");
+  // Spec 182 — selector matches intersect with the connection's enabled_tables.
+  // Mirror every schema table name declared by the templates so the
+  // selector-based roles still resolve to the same capability set.
+  await writeFile(
+    path.join(root, "ktx.yaml"),
+    `connections:
+  mysql-aliyun:
+    driver: mysql
+    enabled_tables:
+${ALL_TEMPLATE_SOURCES.map((source) => `      - dataforai.${source}`).join("\n")}
+  poc-mysql-aliyun:
+    driver: mysql
+    enabled_tables:
+${POC_R1_TEMPLATE_SOURCES.map((source) => `      - data_agent_poc.${source}`).join("\n")}
+`,
+    "utf8"
+  );
   await writeFile(path.join(root, "webui", "config", "access.yaml"), yamlContent, "utf8");
   await writeFile(
     path.join(root, "semantic-layer", "mysql-aliyun", "_schema", "dataforai.yaml"),
@@ -188,10 +204,13 @@ describe("GET /api/admin/roles", () => {
       sourceCount: 5
     });
     expect(ROLE_TEMPLATES.lucy_r1_exact_readonly.allow?.tools).toEqual(LUCY_R1_EXACT_TOOLS);
+    // Spec 182 — with connections configured and `enabled_tables` covering the
+    // catalog, lucy_admin's catalog_bound compile resolves to the
+    // configured sources (Spec 131). The "fails closed" behavior under
+    // empty/missing `ktx.yaml` is covered by spec-182's own test file.
     expect(res.body.data.roles.find((role: { id: string }) => role.id === "lucy_admin")).toMatchObject({
       source: "template",
-      // Empty connections until copied & configured — compile fails closed (Spec 131).
-      invalid: true
+      invalid: false
     });
     expect(ROLE_TEMPLATES.lucy_admin.allow?.source_scope).toBe("catalog_bound");
     expect(

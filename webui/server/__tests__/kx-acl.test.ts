@@ -294,7 +294,26 @@ async function makeProject() {
   await mkdir(path.join(root, "webui", "config"), { recursive: true });
   await mkdir(path.join(root, "semantic-layer", "mysql-aliyun", "_schema"), { recursive: true });
   await mkdir(path.join(root, "semantic-layer", "poc-mysql-aliyun", "_schema"), { recursive: true });
-  await writeFile(path.join(root, "ktx.yaml"), "connections: {}\n", "utf8");
+  // Spec 182 — selector matches intersect with the connection's enabled_tables.
+  // Mirror every schema table that selectors in ACCESS_YAML name so the
+  // existing compile expectations stay intact.
+  await writeFile(
+    path.join(root, "ktx.yaml"),
+    `connections:
+  mysql-aliyun:
+    driver: mysql
+    enabled_tables:
+${KX_TABLES.map((table) => `      - ${table}`).join("\n")}
+      - dataforai.superstore_orders
+      - dataforai.superstore_returns
+      - dataforai.superstore_people
+  poc-mysql-aliyun:
+    driver: mysql
+    enabled_tables:
+${POC_TABLES.map((table) => `      - ${table}`).join("\n")}
+`,
+    "utf8"
+  );
   await writeFile(path.join(root, "webui", "config", "access.yaml"), ACCESS_YAML, "utf8");
   await writeFile(path.join(root, "semantic-layer", "mysql-aliyun", "_schema", "dataforai.yaml"), SCHEMA_YAML, "utf8");
   await writeFile(path.join(root, "semantic-layer", "poc-mysql-aliyun", "_schema", "data_agent_poc.yaml"), POC_SCHEMA_YAML, "utf8");

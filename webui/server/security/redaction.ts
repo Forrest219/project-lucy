@@ -19,13 +19,27 @@ const SECRET_KEY_RE =
 
 const SCRYPT_VALUE_RE = /\bscrypt:[A-Za-z0-9+/=_:.-]{8,}/g;
 const BEARER_VALUE_RE = /\bBearer\s+[A-Za-z0-9._~+/=-]{16,}/g;
+// T10 — a full sha256:hex token hash is a credential; redact the value even
+// when the surrounding key is unlabelled (e.g. `hash: "sha256:..."` in
+// tokens.yaml). 40+ hex chars distinguishes a full digest from the 12-hex
+// fingerprint that the audit trail intentionally preserves.
+const HASH_VALUE_RE = /\bsha256:[0-9a-f]{40,}\b/g;
+// T10 — `password=hunter2`, `token: sk-live-...` (free-form key/value with no
+// colon) gets a value-only mask so the surrounding text is still reviewable.
+const PASSWORD_ASSIGN_RE = /\b(password|passwd|pwd)\s*=\s*([^,\s;"']+)/gi;
+const TOKEN_ASSIGN_RE = /\btoken\s*=\s*([^,\s;"']+)/gi;
 
 // `<diff marker><indent><list dash>"key"<sep>value`
 const YAML_LINE_RE = /^([+\- ]?[ \t]*(?:-[ \t]+)?["']?)([A-Za-z_][\w.-]*)(["']?[ \t]*:[ \t]*)(.*)$/;
 
 /** Mask credential-shaped values inside free text (error reasons, summaries). */
 export function redactAuditText(text: string): string {
-  return text.replace(SCRYPT_VALUE_RE, REDACTED_HASH).replace(BEARER_VALUE_RE, `Bearer ${REDACTED}`);
+  return text
+    .replace(SCRYPT_VALUE_RE, REDACTED_HASH)
+    .replace(BEARER_VALUE_RE, `Bearer ${REDACTED}`)
+    .replace(HASH_VALUE_RE, REDACTED_HASH)
+    .replace(PASSWORD_ASSIGN_RE, (_m, key) => `${key}=${REDACTED}`)
+    .replace(TOKEN_ASSIGN_RE, (_m) => `token=${REDACTED}`);
 }
 
 function redactLine(line: string): string {

@@ -224,7 +224,20 @@ async function makeProject(accessYaml = ACCESS_YAML) {
   await mkdir(path.join(root, "webui", "config"), { recursive: true });
   await mkdir(path.join(root, "semantic-layer", "warehouse", "_schema"), { recursive: true });
   await mkdir(path.join(root, ".ktx-ui"), { recursive: true });
-  await writeFile(path.join(root, "ktx.yaml"), "connections: {}\n", "utf8");
+  // Spec 182 — selector matches intersect with the connection's enabled_tables.
+  // Both manifest sources (fin_ledger, fin_budget) are added so the
+  // selector-based cases still resolve.
+  await writeFile(
+    path.join(root, "ktx.yaml"),
+    `connections:
+  warehouse:
+    driver: mysql
+    enabled_tables:
+      - fin.fin_ledger
+      - fin.fin_budget
+`,
+    "utf8"
+  );
   await writeFile(path.join(root, "webui", "config", "access.yaml"), accessYaml, "utf8");
   await writeFile(path.join(root, "semantic-layer", "warehouse", "_schema", "fin.yaml"), FIN_SCHEMA_YAML, "utf8");
   await writeFile(path.join(root, "semantic-layer", "warehouse", "fin_ledger.yaml"), FIN_LEDGER_OVERLAY_YAML, "utf8");
@@ -301,7 +314,9 @@ describe("WP-I4 permission_model_version", () => {
 
     await expect(effectivePermissions(identity("v2_prefix_agent"))).resolves.toEqual({
       ok: false,
-      reason: "role_resolution_failed:v2_prefix:v2_prefix_forbidden"
+      reason: "role_resolution_failed:v2_prefix:v2_prefix_forbidden",
+      failedRoleId: "v2_prefix",
+      diagnostic: expect.any(Object)
     });
     await expect(authorizeAndRewrite(identity("v2_prefix_agent"), "lucy_query", {
       connectionId: "warehouse",
@@ -324,11 +339,15 @@ describe("WP-I4 permission_model_version", () => {
 
     await expect(effectivePermissions(identity("v2_missing_row_access_agent"))).resolves.toEqual({
       ok: false,
-      reason: "role_resolution_failed:v2_missing_row_access:v2_row_access_required"
+      reason: "role_resolution_failed:v2_missing_row_access:v2_row_access_required",
+      failedRoleId: "v2_missing_row_access",
+      diagnostic: expect.any(Object)
     });
     await expect(effectivePermissions(identity("bad_version_agent"))).resolves.toEqual({
       ok: false,
-      reason: "role_resolution_failed:bad_version:invalid_permission_model_version"
+      reason: "role_resolution_failed:bad_version:invalid_permission_model_version",
+      failedRoleId: "bad_version",
+      diagnostic: expect.any(Object)
     });
 
     const scopedOk = await effectivePermissions(identity("v2_scoped_ok_agent"));
