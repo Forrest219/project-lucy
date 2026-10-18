@@ -346,7 +346,7 @@ Response：
 
 约束：
 
-- 最近 20 条。
+- `runs` 只保留最近 20 条事件；`lastByConnection` 按连接写在同一文件里，不从被裁短的流水单独重建；流水里同一连接的更新记录仍覆盖映射。没有该字段的旧文件继续从这 20 条重算。
 - 只记录本地文件统计与 warning。
 - 不记录 secrets。
 - 不记录 CLI stdout/stderr，因为不再执行 CLI。

@@ -69,7 +69,13 @@ export class CatalogReloadConnectionNotFoundError extends Error {
 const REL_PATH = ".ktx-ui/catalog-reloads.json";
 const MAX_RUNS = 20;
 
-function emptyFile(): { version: 1; runs: CatalogReloadRun[] } {
+type CatalogReloadsFile = {
+  version: 1;
+  runs: CatalogReloadRun[];
+  lastByConnection?: Record<string, CatalogReloadRun>;
+};
+
+function emptyFile(): CatalogReloadsFile {
   return { version: 1, runs: [] };
 }
 
@@ -77,14 +83,31 @@ function emptyResponse(): CatalogReloadsResponse {
   return { runs: [], last: null, lastByConnection: {} };
 }
 
-function normalize(value: unknown): { version: 1; runs: CatalogReloadRun[] } {
+function normalize(value: unknown): CatalogReloadsFile {
   if (!value || typeof value !== "object") return emptyFile();
-  const record = value as { version?: unknown; runs?: unknown };
+  const record = value as { version?: unknown; runs?: unknown; lastByConnection?: unknown };
   const runs = Array.isArray(record.runs) ? (record.runs as CatalogReloadRun[]) : [];
   const cleaned: CatalogReloadRun[] = runs
     .filter((item): item is CatalogReloadRun => Boolean(item) && typeof item === "object")
     .map((item) => ({ ...item }));
-  return { version: 1, runs: cleaned };
+
+  // Persisted map is optional; old sidecars predate the field and still
+  // work because the read path can rebuild lastByConnection from `runs`.
+  let lastByConnection: Record<string, CatalogReloadRun> | undefined;
+  if (record.lastByConnection && typeof record.lastByConnection === "object") {
+    const rawMap = record.lastByConnection as Record<string, unknown>;
+    const cloned: Record<string, CatalogReloadRun> = {};
+    for (const [connId, raw] of Object.entries(rawMap)) {
+      if (raw && typeof raw === "object") {
+        cloned[connId] = { ...(raw as CatalogReloadRun) };
+      }
+    }
+    lastByConnection = cloned;
+  }
+
+  const out: CatalogReloadsFile = { version: 1, runs: cleaned };
+  if (lastByConnection) out.lastByConnection = lastByConnection;
+  return out;
 }
 
 function pad2(value: number): string {
@@ -102,12 +125,21 @@ function formatTimestamp(date: Date): string {
   );
 }
 
-function buildLastByConnection(runs: CatalogReloadRun[]): Record<string, CatalogReloadRun> {
-  const out: Record<string, CatalogReloadRun> = {};
+function buildLastByConnection(
+  runs: CatalogReloadRun[],
+  base: Record<string, CatalogReloadRun> | null = null
+): Record<string, CatalogReloadRun> {
+  const out: Record<string, CatalogReloadRun> = base ? { ...base } : {};
   // Runs are stored oldest-first; iterate in reverse so the most recent run
   // for a connection wins. For connection-targeted runs we use
   // `requestedConnectionId`; for global runs we use the `connectionIds` list
   // captured when the run was recorded.
+  //
+  // When `base` carries entries for connections whose most recent reload
+  // has already been truncated out of `runs`, those entries must survive.
+  // We only overlay a run when its `startedAt` is greater than or equal to
+  // the existing entry's `startedAt` — otherwise the persisted entry is
+  // the newest known record for that connection and we leave it alone.
   for (let i = runs.length - 1; i >= 0; i -= 1) {
     const run = runs[i];
     if (!run) continue;
@@ -115,7 +147,8 @@ function buildLastByConnection(runs: CatalogReloadRun[]): Record<string, Catalog
       ? [run.requestedConnectionId]
       : run.connectionIds;
     for (const connId of coveredConnIds) {
-      if (!out[connId]) {
+      const existing = out[connId];
+      if (!existing || run.startedAt >= existing.startedAt) {
         out[connId] = run;
       }
     }
@@ -123,11 +156,14 @@ function buildLastByConnection(runs: CatalogReloadRun[]): Record<string, Catalog
   return out;
 }
 
-function buildResponse(runs: CatalogReloadRun[]): CatalogReloadsResponse {
+function buildResponse(
+  runs: CatalogReloadRun[],
+  base: Record<string, CatalogReloadRun> | null = null
+): CatalogReloadsResponse {
   return {
     runs,
     last: runs.length > 0 ? runs[runs.length - 1] ?? null : null,
-    lastByConnection: buildLastByConnection(runs)
+    lastByConnection: buildLastByConnection(runs, base)
   };
 }
 
@@ -135,7 +171,7 @@ export async function readCatalogReloads(projectRoot: string): Promise<CatalogRe
   try {
     const text = await readFile(path.join(projectRoot, REL_PATH), "utf8");
     const file = normalize(JSON.parse(text) as unknown);
-    return buildResponse(file.runs);
+    return buildResponse(file.runs, file.lastByConnection ?? null);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       return emptyResponse();
@@ -149,11 +185,21 @@ export async function appendCatalogReload(
   run: CatalogReloadRun
 ): Promise<CatalogReloadsResponse> {
   const current = await readCatalogReloads(projectRoot);
-  const next: CatalogReloadRun[] = [...current.runs, run].slice(-MAX_RUNS);
-  const file = { version: 1 as const, runs: next };
+  const nextRuns: CatalogReloadRun[] = [...current.runs, run].slice(-MAX_RUNS);
+  // Overlay the persisted map for the connections THIS run covers so that
+  // other connections' mapping entries (whose most recent reload may have
+  // already been truncated out of `runs`) survive untouched.
+  const nextMap: Record<string, CatalogReloadRun> = { ...current.lastByConnection };
+  const coveredConnIds = run.requestedConnectionId
+    ? [run.requestedConnectionId]
+    : run.connectionIds;
+  for (const connId of coveredConnIds) {
+    nextMap[connId] = run;
+  }
+  const file: CatalogReloadsFile = { version: 1, runs: nextRuns, lastByConnection: nextMap };
   const paths = await loadContentPaths();
   await safeWrite(paths, projectRoot, REL_PATH, `${JSON.stringify(file, null, 2)}\n`);
-  return buildResponse(next);
+  return buildResponse(nextRuns, nextMap);
 }
 
 type ProjectConfig = {

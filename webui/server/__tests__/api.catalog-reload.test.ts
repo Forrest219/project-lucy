@@ -3,6 +3,11 @@ import os from "node:os";
 import path from "node:path";
 import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  appendCatalogReload,
+  readCatalogReloads,
+  type CatalogReloadRun
+} from "../catalog-reload";
 
 // Ensure the WebUI route does NOT shell out to the ktx CLI. We mock the whole
 // ktx module so any accidental call to runIngest would throw and surface in
@@ -330,5 +335,152 @@ describe("GET /api/catalog/reloads", () => {
     expect(res.body.data.lastByConnection["demo-mysql"].id).toBe(res.body.data.last.id);
 
     await app.close();
+  });
+
+  it("keeps lastByConnection['invest-db'] intact across 20 reloads of another connection", async () => {
+    // Custom two-connection project — `makeProject` only wires up one.
+    projectRoot = await mkdtemp(path.join(os.tmpdir(), "lucy-api-catalog-reload-"));
+    const yaml = `connections:
+  invest-db:
+    schemas:
+      - dataforai
+    enabled_tables: []
+  other-conn:
+    schemas:
+      - dataforai
+    enabled_tables: []
+`;
+    await writeFile(path.join(projectRoot, "ktx.yaml"), yaml, "utf8");
+    auditDbPath = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
+    await mkdir(path.dirname(auditDbPath), { recursive: true });
+    for (const connId of ["invest-db", "other-conn"]) {
+      const dir = path.join(projectRoot, "semantic-layer", connId, "_schema");
+      await mkdir(dir, { recursive: true });
+      await writeFile(path.join(dir, "dataforai.yaml"), DATA_FORAI_MANIFEST, "utf8");
+    }
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
+    process.env.LUCY_AUDIT_DB = auditDbPath;
+
+    const app = await buildFreshServer();
+    await app.ready();
+
+    const investRes = await request(app.server)
+      .post("/api/catalog/reload")
+      .send({ connectionId: "invest-db" })
+      .expect(200);
+    const investRunId = investRes.body.data.id;
+
+    // 20 reloads of a different connection — enough to evict the invest-db run from `runs`.
+    for (let i = 0; i < 20; i += 1) {
+      await request(app.server)
+        .post("/api/catalog/reload")
+        .send({ connectionId: "other-conn" })
+        .expect(200);
+    }
+
+    const res = await request(app.server).get("/api/catalog/reloads").expect(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.data.runs).toHaveLength(20);
+    const coveredConnIds = res.body.data.runs.flatMap(
+      (run: { connectionIds: string[]; requestedConnectionId?: string }) =>
+        run.requestedConnectionId ? [run.requestedConnectionId] : run.connectionIds
+    );
+    expect(coveredConnIds).not.toContain("invest-db");
+    expect(res.body.data.runs.some((run: { id: string }) => run.id === investRunId)).toBe(false);
+
+    expect(res.body.data.lastByConnection["invest-db"]).toBeDefined();
+    expect(res.body.data.lastByConnection["invest-db"].id).toBe(investRunId);
+    expect(res.body.data.lastByConnection["invest-db"].status).toBe("success");
+    expect(res.body.data.lastByConnection["other-conn"]).toBeDefined();
+
+    await app.close();
+  });
+
+  it("a later failed run for the same connection replaces the previous success in lastByConnection", async () => {
+    await makeProject(
+      `connections:
+  demo-mysql:
+    schemas:
+      - dataforai
+    enabled_tables: []
+`,
+      { dataforai: DATA_FORAI_MANIFEST }
+    );
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
+    process.env.LUCY_AUDIT_DB = auditDbPath;
+
+    const app = await buildFreshServer();
+    await app.ready();
+    await request(app.server)
+      .post("/api/catalog/reload")
+      .send({ connectionId: "demo-mysql" })
+      .expect(200);
+
+    const before = await readCatalogReloads(projectRoot);
+    expect(before.lastByConnection["demo-mysql"]?.status).toBe("success");
+
+    // Production reloadCatalog always writes `success`; fabricate a newer `failed`
+    // run directly via appendCatalogReload to exercise the overlay path.
+    const startedAt = new Date(Date.now() + 60_000).toISOString();
+    const failedRun: CatalogReloadRun = {
+      id: "rel_failed_demo_mysql",
+      status: "failed",
+      startedAt,
+      finishedAt: new Date(Date.now() + 60_500).toISOString(),
+      durationMs: 500,
+      requestedConnectionId: "demo-mysql",
+      connections: 1,
+      connectionIds: ["demo-mysql"],
+      configuredSchemas: 0,
+      manifestSchemas: 0,
+      tables: 0,
+      enabledTables: 0,
+      warnings: [],
+      source: "static-yaml"
+    };
+    const after = await appendCatalogReload(projectRoot, failedRun);
+    expect(after.lastByConnection["demo-mysql"]?.id).toBe(failedRun.id);
+    expect(after.lastByConnection["demo-mysql"]?.status).toBe("failed");
+
+    // The HTTP GET should also surface the failed run, and runs must contain it.
+    const res = await request(app.server).get("/api/catalog/reloads").expect(200);
+    expect(res.body.data.lastByConnection["demo-mysql"]?.status).toBe("failed");
+    expect(res.body.data.runs.some((run: { id: string }) => run.id === failedRun.id)).toBe(true);
+
+    await app.close();
+  });
+
+  it("reconstructs lastByConnection from a legacy sidecar that only has `runs`", async () => {
+    projectRoot = await mkdtemp(path.join(os.tmpdir(), "lucy-api-catalog-reload-"));
+    await mkdir(path.join(projectRoot, ".ktx-ui"), { recursive: true });
+    const legacyRun = {
+      id: "rel_legacy_demo_mysql",
+      status: "success",
+      startedAt: "2026-10-01T00:00:00.000Z",
+      finishedAt: "2026-10-01T00:00:01.000Z",
+      durationMs: 1000,
+      requestedConnectionId: "demo-mysql",
+      connections: 1,
+      connectionIds: ["demo-mysql"],
+      configuredSchemas: 1,
+      manifestSchemas: 1,
+      tables: 2,
+      enabledTables: 0,
+      warnings: [],
+      source: "static-yaml"
+    };
+    // Intentionally omit `lastByConnection` — exercises the legacy-fallback path.
+    await writeFile(
+      path.join(projectRoot, ".ktx-ui", "catalog-reloads.json"),
+      `${JSON.stringify({ version: 1, runs: [legacyRun] }, null, 2)}\n`
+    );
+
+    const result = await readCatalogReloads(projectRoot);
+    expect(result.runs).toHaveLength(1);
+    expect(result.lastByConnection["demo-mysql"]).toBeDefined();
+    expect(result.lastByConnection["demo-mysql"].id).toBe("rel_legacy_demo_mysql");
+    expect(result.lastByConnection["demo-mysql"].status).toBe("success");
   });
 });
