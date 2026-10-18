@@ -150,6 +150,17 @@ describe("CreateConnectionDrawer", () => {
     expect(screen.queryByTestId("create-connection-username")).not.toBeInTheDocument();
     expect(screen.queryByTestId("create-connection-password")).not.toBeInTheDocument();
     expect(screen.getByText("数据库文件路径")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByTestId("create-connection-driver"), {
+      target: { value: "athena" }
+    });
+    expect(screen.queryByTestId("create-connection-host")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("create-connection-password")).not.toBeInTheDocument();
+    expect(screen.getByTestId("create-connection-region")).toBeInTheDocument();
+    expect(screen.getByTestId("create-connection-s3-staging-dir")).toBeInTheDocument();
+    expect(screen.getByTestId("create-connection-workgroup")).toHaveValue("primary");
+    expect(screen.getByTestId("create-connection-catalog")).toHaveValue("AwsDataCatalog");
+    expect(screen.getByText("初始 Glue 数据库（可选）")).toBeInTheDocument();
   });
 
   it("shows dryRun preview without sending password, then confirms create", async () => {

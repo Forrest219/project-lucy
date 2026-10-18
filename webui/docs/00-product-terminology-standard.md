@@ -308,6 +308,7 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Delete Connection YAML Assets (optional) | 同时删除本地 YAML 资产 | 默认级联删除 | `semantic-layer/<connId>/` 下 Manifest / overlay（Spec 127） |
 | Connection ID | 连接 ID | 连接名（作主标签） | `connections.<id>` 键；受标识符规则约束 |
 | Connection Password | 数据库密码 | 密钥、Token（作主标签） | 新建表单一次性输入；写入 `.ktx/secrets/<id>-password` 后不可回显 |
+| Amazon Athena | Amazon Athena | Redshift 驱动、JDBC、Athena API（作类型名） | 新建连接的数据库类型。写入 KTX `driver: athena`。Glue 范围用 `databases`，结果前缀用 `s3_staging_dir`。不保存数据库密码 |
 | Password File Reference | 密码文件引用 | 明文密码（配置态） | `password: file:…`；API 只暴露 `passwordSource` |
 | Connection Create Preview | 新建预览 | — | dryRun 脱敏 diff 与 secret 路径预告 |
 | Table Whitelist | 启用表范围 | 白表、表白、表白名单（主导航禁用） | `enabled_tables` 的 UI 管理入口 |

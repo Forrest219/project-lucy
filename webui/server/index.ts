@@ -1184,7 +1184,7 @@ export function buildServer() {
     return { ok: true, data: { connections } };
   });
 
-  const VALID_CREATE_DRIVERS = new Set(["mysql", "postgres", "sqlserver", "oracle", "sqlite"]);
+  const VALID_CREATE_DRIVERS = new Set(["mysql", "postgres", "sqlserver", "oracle", "sqlite", "athena"]);
 
   // Spec 124 Phase A: create connection (secret one-shot write + ktx.yaml patch).
   // dryRun defaults to true. No UI in this spike — API + security tests only.
@@ -1201,6 +1201,10 @@ export function buildServer() {
       username?: string;
       password?: string;
       schemas?: string[];
+      region?: string;
+      s3StagingDir?: string;
+      workgroup?: string;
+      catalog?: string;
       dryRun?: boolean;
       acknowledgeSeparateConnection?: boolean;
       acknowledgeDifferentDatabase?: boolean;
@@ -1213,13 +1217,20 @@ export function buildServer() {
       throw enabledTableError("BAD_REQUEST", "id is required");
     }
     if (!VALID_CREATE_DRIVERS.has(body.driver ?? "")) {
-      throw enabledTableError("BAD_REQUEST", "driver must be one of mysql, postgres, sqlserver, oracle, sqlite");
+      throw enabledTableError("BAD_REQUEST", "driver must be one of mysql, postgres, sqlserver, oracle, sqlite, athena");
     }
-    const isSqlite = body.driver === "sqlite";
+    const skipsHost = body.driver === "sqlite" || body.driver === "athena";
     if (typeof body.database !== "string" || !body.database.trim()) {
       throw enabledTableError("BAD_REQUEST", "database is required");
     }
-    if (!isSqlite) {
+    if (body.driver === "athena") {
+      if (typeof body.region !== "string" || !body.region.trim()) {
+        throw enabledTableError("BAD_REQUEST", "region is required");
+      }
+      if (typeof body.s3StagingDir !== "string" || !body.s3StagingDir.trim()) {
+        throw enabledTableError("BAD_REQUEST", "s3StagingDir is required");
+      }
+    } else if (!skipsHost) {
       if (typeof body.host !== "string" || !body.host.trim()) {
         throw enabledTableError("BAD_REQUEST", "host is required");
       }
@@ -1234,7 +1245,7 @@ export function buildServer() {
       projectRoot,
       {
         id: body.id,
-        driver: body.driver as "mysql" | "postgres" | "sqlserver" | "oracle" | "sqlite",
+        driver: body.driver as "mysql" | "postgres" | "sqlserver" | "oracle" | "sqlite" | "athena",
         ...(typeof body.engine === "string" ? { engine: body.engine } : {}),
         ...(typeof body.wireProtocol === "string" ? { wireProtocol: body.wireProtocol } : {}),
         readonly: body.readonly,
@@ -1243,7 +1254,11 @@ export function buildServer() {
         database: body.database,
         username: body.username,
         ...(typeof body.password === "string" ? { password: body.password } : {}),
-        ...(Array.isArray(body.schemas) ? { schemas: body.schemas } : {})
+        ...(Array.isArray(body.schemas) ? { schemas: body.schemas } : {}),
+        ...(typeof body.region === "string" ? { region: body.region } : {}),
+        ...(typeof body.s3StagingDir === "string" ? { s3StagingDir: body.s3StagingDir } : {}),
+        ...(typeof body.workgroup === "string" ? { workgroup: body.workgroup } : {}),
+        ...(typeof body.catalog === "string" ? { catalog: body.catalog } : {})
       },
       dryRun,
       {
@@ -1256,7 +1271,7 @@ export function buildServer() {
     );
     if (!dryRun) {
       writtenFiles.push({ filePath: "ktx.yaml" });
-      if ("secretRelPath" in result) {
+      if ("secretRelPath" in result && result.secretRelPath) {
         writtenFiles.push({ filePath: result.secretRelPath });
       }
 
@@ -1309,17 +1324,28 @@ export function buildServer() {
       database?: string;
       username?: string;
       password?: string;
+      region?: string;
+      s3StagingDir?: string;
+      workgroup?: string;
+      catalog?: string;
     };
   }>("/api/connections/probe", async (request) => {
     const body = request.body ?? {};
     if (!VALID_CREATE_DRIVERS.has(body.driver ?? "")) {
-      throw enabledTableError("BAD_REQUEST", "driver must be one of mysql, postgres, sqlserver, oracle, sqlite");
+      throw enabledTableError("BAD_REQUEST", "driver must be one of mysql, postgres, sqlserver, oracle, sqlite, athena");
     }
-    const isSqlite = body.driver === "sqlite";
+    const skipsHost = body.driver === "sqlite" || body.driver === "athena";
     if (typeof body.database !== "string" || !body.database.trim()) {
       throw enabledTableError("BAD_REQUEST", "database is required");
     }
-    if (!isSqlite) {
+    if (body.driver === "athena") {
+      if (typeof body.region !== "string" || !body.region.trim()) {
+        throw enabledTableError("BAD_REQUEST", "region is required");
+      }
+      if (typeof body.s3StagingDir !== "string" || !body.s3StagingDir.trim()) {
+        throw enabledTableError("BAD_REQUEST", "s3StagingDir is required");
+      }
+    } else if (!skipsHost) {
       if (typeof body.host !== "string" || !body.host.trim()) {
         throw enabledTableError("BAD_REQUEST", "host is required");
       }
@@ -1334,7 +1360,7 @@ export function buildServer() {
       }
     }
     const data = await probeConnection({
-      driver: body.driver as "mysql" | "postgres" | "sqlserver" | "oracle" | "sqlite",
+      driver: body.driver as "mysql" | "postgres" | "sqlserver" | "oracle" | "sqlite" | "athena",
       ...(typeof body.engine === "string" ? { engine: body.engine } : {}),
       ...(typeof body.wireProtocol === "string" ? { wireProtocol: body.wireProtocol } : {}),
       readonly: body.readonly,
@@ -1342,7 +1368,11 @@ export function buildServer() {
       port: body.port,
       database: body.database,
       username: body.username,
-      password: body.password
+      password: body.password,
+      ...(typeof body.region === "string" ? { region: body.region } : {}),
+      ...(typeof body.s3StagingDir === "string" ? { s3StagingDir: body.s3StagingDir } : {}),
+      ...(typeof body.workgroup === "string" ? { workgroup: body.workgroup } : {}),
+      ...(typeof body.catalog === "string" ? { catalog: body.catalog } : {})
     });
     return { ok: true, data };
   });

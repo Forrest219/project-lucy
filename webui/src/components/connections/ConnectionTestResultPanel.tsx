@@ -16,6 +16,7 @@ function engineDisplay(engine: string | undefined, driver: string | undefined): 
   if (normalized === "postgres" || normalized === "postgresql") return "Postgres";
   if (normalized === "doris") return "Doris";
   if (normalized === "starrocks") return "StarRocks";
+  if (normalized === "athena") return "Athena";
   return "DB";
 }
 

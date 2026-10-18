@@ -62,6 +62,7 @@ function engineLabel(engine?: string) {
   if (normalized === "postgres" || normalized === "postgresql") return "Postgres";
   if (normalized === "doris") return "Doris";
   if (normalized === "starrocks") return "StarRocks";
+  if (normalized === "athena") return "Athena";
   return "DB";
 }
 
@@ -71,6 +72,7 @@ function engineKey(engine?: string): "mysql" | "postgres" | "doris" | "starrocks
   if (normalized === "postgres" || normalized === "postgresql") return "postgres";
   if (normalized === "doris") return "doris";
   if (normalized === "starrocks") return "starrocks";
+  if (normalized === "athena") return "db";
   return "db";
 }
 

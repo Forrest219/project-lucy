@@ -157,7 +157,7 @@ export function decideEndpointGate(
   input: CreateConnectionInput,
   flags: EndpointFlags = {}
 ): EndpointGateDecision {
-  if (input.driver === "sqlite") return { action: "create" };
+  if (input.driver === "sqlite" || input.driver === "athena") return { action: "create" };
 
   const endpoint = connections.filter((row) => endpointMatches(row, input));
   const schema = endpoint.length > 0 ? conflictSchema(input) : null;

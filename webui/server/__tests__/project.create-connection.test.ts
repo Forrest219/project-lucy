@@ -7,9 +7,11 @@ import {
   CONNECTION_ID_PATTERN,
   ConnectionAlreadyExistsError,
   ConnectionIdInvalidError,
+  addSchema,
   createConnection,
   connectionSecretRelPath,
-  probeConnection
+  probeConnection,
+  readProject
 } from "../project";
 import { invalidateContentPathsCache } from "../paths";
 import type { ConnectionTestResult } from "../ktx";
@@ -169,6 +171,96 @@ describe("createConnection (Spec 124 Phase A)", () => {
     expect(parsed.connections["demo-mysql"].schemas).toEqual(["analytics"]);
     expect(parsed.connections["demo-mysql"].enabled_tables).toEqual([]);
     expect(parsed.setup.database_connection_ids).toEqual(["mysql-aliyun", "demo-mysql"]);
+  });
+
+  it("writes KTX athena keys and reads Glue databases back as schemas", async () => {
+    const testFn = vi.fn(async () => okTest("moji-intl"));
+    const result = await createConnection(
+      projectRoot,
+      {
+        id: "moji-intl",
+        driver: "athena",
+        region: "eu-west-1",
+        s3StagingDir: "s3://moji-results/athena/",
+        workgroup: "primary",
+        catalog: "AwsDataCatalog",
+        database: "da_moji",
+        schemas: ["da_moji", "idm"]
+      },
+      false,
+      { testConnectionFn: testFn }
+    );
+
+    expect(result.written).toBe(true);
+    expect(result.secretRelPath).toBe("");
+    expect(result.connection.engine).toBe("athena");
+    await expect(
+      access(path.join(projectRoot, ".ktx", "secrets", "moji-intl-password"))
+    ).rejects.toMatchObject({ code: "ENOENT" });
+
+    const yamlText = await readFile(path.join(projectRoot, "ktx.yaml"), "utf8");
+    const parsed = parse(yamlText) as {
+      connections: Record<string, Record<string, unknown>>;
+    };
+    expect(parsed.connections["moji-intl"]).toEqual({
+      driver: "athena",
+      readonly: true,
+      enabled_tables: [],
+      region: "eu-west-1",
+      s3_staging_dir: "s3://moji-results/athena/",
+      workgroup: "primary",
+      catalog: "AwsDataCatalog",
+      database: "da_moji",
+      databases: ["da_moji", "idm"]
+    });
+    expect(yamlText).not.toMatch(/moji-intl:[\s\S]*\n\s+schemas:/);
+    expect(yamlText).not.toMatch(/moji-intl:[\s\S]*\n\s+host:/);
+
+    const project = await readProject(projectRoot);
+    expect(project.connections.find((row) => row.id === "moji-intl")?.schemas).toEqual(["da_moji", "idm"]);
+
+    await addSchema(projectRoot, "moji-intl", "ods", true);
+    const after = parse(await readFile(path.join(projectRoot, "ktx.yaml"), "utf8")) as {
+      connections: Record<string, { databases?: string[] }>;
+    };
+    expect(after.connections["moji-intl"].databases).toEqual(["da_moji", "idm"]);
+
+    await addSchema(projectRoot, "moji-intl", "ods", false, { testConnectionFn: testFn });
+    const added = parse(await readFile(path.join(projectRoot, "ktx.yaml"), "utf8")) as {
+      connections: Record<string, { databases?: string[] }>;
+    };
+    expect(added.connections["moji-intl"].databases).toEqual(["da_moji", "idm", "ods"]);
+  });
+
+  it("probes athena without a password and without host fields", async () => {
+    let captured = "";
+    const testFn = vi.fn(async (root: string) => {
+      captured = await readFile(path.join(root, "ktx.yaml"), "utf8");
+      return okTest("probe");
+    });
+    const result = await probeConnection(
+      {
+        driver: "athena",
+        region: "eu-west-1",
+        s3StagingDir: "s3://moji-results/athena/",
+        database: "da_moji",
+        workgroup: "primary",
+        catalog: "AwsDataCatalog"
+      },
+      { testConnectionFn: testFn }
+    );
+    expect(result.status).toBe("ok");
+    const parsed = parse(captured) as { connections: { probe: Record<string, unknown> } };
+    expect(parsed.connections.probe).toMatchObject({
+      driver: "athena",
+      region: "eu-west-1",
+      s3_staging_dir: "s3://moji-results/athena/",
+      database: "da_moji",
+      databases: []
+    });
+    expect(parsed.connections.probe).not.toHaveProperty("host");
+    expect(parsed.connections.probe).not.toHaveProperty("password");
+    expect(parsed.connections.probe).not.toHaveProperty("schemas");
   });
 
   it("keeps secret and yaml when connection test fails", async () => {

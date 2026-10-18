@@ -510,6 +510,7 @@ describe("SetupAssistantModal Component", () => {
     expect(screen.getByRole("option", { name: "StarRocks（MySQL 协议）" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Apache Doris" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "PostgreSQL" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Amazon Athena" })).toBeInTheDocument();
 
     fireEvent.change(driver, { target: { value: "starrocks" } });
     expect(screen.getByTestId("setup-port")).toHaveValue("9030");
@@ -518,6 +519,13 @@ describe("SetupAssistantModal Component", () => {
     fireEvent.change(driver, { target: { value: "sqlite" } });
     expect(screen.queryByTestId("setup-host")).not.toBeInTheDocument();
     expect(screen.getByLabelText(/数据库文件路径/)).toBeInTheDocument();
+
+    fireEvent.change(driver, { target: { value: "athena" } });
+    expect(screen.queryByTestId("setup-host")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("setup-password")).not.toBeInTheDocument();
+    expect(screen.getByTestId("setup-region")).toBeInTheDocument();
+    expect(screen.getByTestId("setup-s3-staging-dir")).toBeInTheDocument();
+    expect(screen.getByLabelText(/默认数据库/)).toBeInTheDocument();
   });
 
   it("uses main as the default SQLite schema after switching from a server database", async () => {

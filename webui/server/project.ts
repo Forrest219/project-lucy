@@ -361,9 +361,12 @@ export async function readProject(projectRoot: string): Promise<ProjectInfo> {
   const connectionsConfig = valueAsRecord(config.connections);
   const connections: ConnectionInfo[] = Object.entries(connectionsConfig).map(([id, raw]) => {
     const conn = valueAsRecord(raw);
-    const explicitSchemas = stringArray(conn.schemas);
+    const driverName = normalizedString(conn.driver);
+    const explicitSchemas = driverName === "athena" ? stringArray(conn.databases) : stringArray(conn.schemas);
     const enabledTables = stringArray(conn.enabled_tables);
-    const enabledSchemas = enabledTables.map((table) => table.split(".")[0]).filter(Boolean);
+    const enabledSchemas = driverName === "athena"
+      ? []
+      : enabledTables.map((table) => table.split(".")[0]).filter(Boolean);
     const schemas = Array.from(new Set([...explicitSchemas, ...enabledSchemas])).sort();
     const engine = connectionEngine(conn);
     const readOnlyExpected = booleanValue(conn.readonly ?? conn.read_only ?? conn.readOnly) ?? true;
@@ -493,12 +496,17 @@ function locateSchemas(
   if (!isMap(conn)) {
     throw new ConnectionNotFoundError(`Connection '${connId}' not found in ktx.yaml`);
   }
-  const schemasNode = conn.get("schemas", true);
+  const driverNode = conn.get("driver", true);
+  const driver = isScalar(driverNode) && typeof driverNode.value === "string"
+    ? driverNode.value.trim().toLowerCase()
+    : "";
+  const scopeKey = driver === "athena" ? "databases" : "schemas";
+  const schemasNode = conn.get(scopeKey, true);
   if (!schemasNode) {
     return { seq: undefined, oldSchemas: [] };
   }
   if (!isSeq(schemasNode)) {
-    throw new KtxYamlParseError(`connections.${connId}.schemas is not a sequence`);
+    throw new KtxYamlParseError(`connections.${connId}.${scopeKey} is not a sequence`);
   }
   return { seq: schemasNode, oldSchemas: schemasList(schemasNode) };
 }
@@ -525,9 +533,13 @@ function schemaAddMutatorFactory(schema: string, connId: string) {
     if (!isMap(conn)) {
       throw new ConnectionNotFoundError(`Connection '${connId}' not found in ktx.yaml`);
     }
+    const driverNode = conn.get("driver", true);
+    const driver = isScalar(driverNode) && typeof driverNode.value === "string"
+      ? driverNode.value.trim().toLowerCase()
+      : "";
     const newSeq = new YAMLSeq();
     newSeq.items.push(schema);
-    conn.set("schemas", newSeq);
+    conn.set(driver === "athena" ? "databases" : "schemas", newSeq);
   };
 }
 
@@ -1252,7 +1264,7 @@ async function removeConnectionUnbarriered(
 
 export type CreateConnectionInput = {
   id: string;
-  driver: "mysql" | "postgres" | "sqlserver" | "oracle" | "sqlite";
+  driver: "mysql" | "postgres" | "sqlserver" | "oracle" | "sqlite" | "athena";
   engine?: string;
   wireProtocol?: string;
   readonly?: boolean;
@@ -1260,9 +1272,17 @@ export type CreateConnectionInput = {
   port?: number;
   database: string;
   username?: string;
-  /** Required when dryRun is false (except sqlite without password); ignored for dryRun preview. */
+  /** Required when dryRun is false, except sqlite and athena. */
   password?: string;
   schemas?: string[];
+  /** KTX athena: AWS region, for example eu-west-1. */
+  region?: string;
+  /** KTX athena: s3:// bucket prefix for query results. */
+  s3StagingDir?: string;
+  /** KTX athena: defaults to primary when omitted. */
+  workgroup?: string;
+  /** KTX athena: defaults to AwsDataCatalog when omitted. */
+  catalog?: string;
 };
 
 export type CreateConnectionOptions = {
@@ -1281,7 +1301,8 @@ function requiredNonEmptyString(value: unknown, field: string): string {
   return value.trim();
 }
 
-const VALID_CREATE_DRIVERS = new Set(["mysql", "postgres", "sqlserver", "oracle", "sqlite"]);
+const VALID_CREATE_DRIVERS = new Set(["mysql", "postgres", "sqlserver", "oracle", "sqlite", "athena"]);
+const AWS_REGION_RE = /^[a-z]{2}-[a-z]+-\d$/;
 
 function validateCreateConnectionInput(input: CreateConnectionInput): CreateConnectionInput {
   const id = typeof input.id === "string" ? input.id.trim() : "";
@@ -1291,16 +1312,32 @@ function validateCreateConnectionInput(input: CreateConnectionInput): CreateConn
     );
   }
   if (!VALID_CREATE_DRIVERS.has(input.driver)) {
-    throw new ConnectionCreateValidationError("driver must be mysql, postgres, sqlserver, oracle, or sqlite");
+    throw new ConnectionCreateValidationError("driver must be mysql, postgres, sqlserver, oracle, sqlite, or athena");
   }
   const isSqlite = input.driver === "sqlite";
+  const isAthena = input.driver === "athena";
   const database = requiredNonEmptyString(input.database, "database");
 
   let host = "";
   let username = "";
   let port: number | undefined;
 
-  if (!isSqlite) {
+  let region: string | undefined;
+  let s3StagingDir: string | undefined;
+  let workgroup: string | undefined;
+  let catalog: string | undefined;
+  if (isAthena) {
+    region = requiredNonEmptyString(input.region, "region");
+    if (!AWS_REGION_RE.test(region)) {
+      throw new ConnectionCreateValidationError("region must look like eu-west-1");
+    }
+    s3StagingDir = requiredNonEmptyString(input.s3StagingDir, "s3StagingDir");
+    if (!s3StagingDir.startsWith("s3://") || /\s/.test(s3StagingDir)) {
+      throw new ConnectionCreateValidationError("s3StagingDir must be an s3:// URI");
+    }
+    workgroup = typeof input.workgroup === "string" && input.workgroup.trim() ? input.workgroup.trim() : undefined;
+    catalog = typeof input.catalog === "string" && input.catalog.trim() ? input.catalog.trim() : undefined;
+  } else if (!isSqlite) {
     host = requiredNonEmptyString(input.host, "host");
     username = requiredNonEmptyString(input.username, "username");
     if (typeof input.port !== "number" || !Number.isInteger(input.port) || input.port < 1 || input.port > 65535) {
@@ -1339,8 +1376,12 @@ function validateCreateConnectionInput(input: CreateConnectionInput): CreateConn
     ...(port != null ? { port } : {}),
     database,
     username,
-    ...(typeof input.password === "string" ? { password: input.password } : {}),
-    schemas
+    ...(typeof input.password === "string" && !isAthena ? { password: input.password } : {}),
+    schemas,
+    ...(region ? { region } : {}),
+    ...(s3StagingDir ? { s3StagingDir } : {}),
+    ...(workgroup ? { workgroup } : {}),
+    ...(catalog ? { catalog } : {})
   };
 }
 
@@ -1366,33 +1407,49 @@ function connectionCreateMutatorFactory(input: CreateConnectionInput, passwordRe
     const conn = new YAMLMap();
     conn.flow = false;
     conn.set("driver", input.driver);
-    if (input.engine) {
-      conn.set("engine", input.engine);
+    if (input.driver === "athena") {
+      conn.set("readonly", input.readonly !== false);
+      const enabledTables = new YAMLSeq();
+      conn.set("enabled_tables", enabledTables);
+      conn.set("region", input.region);
+      conn.set("s3_staging_dir", input.s3StagingDir);
+      if (input.workgroup) conn.set("workgroup", input.workgroup);
+      if (input.catalog) conn.set("catalog", input.catalog);
+      if (input.database) conn.set("database", input.database);
+      const databases = new YAMLSeq();
+      for (const schema of input.schemas ?? []) {
+        databases.items.push(schema);
+      }
+      conn.set("databases", databases);
+    } else {
+      if (input.engine) {
+        conn.set("engine", input.engine);
+      }
+      if (input.wireProtocol) {
+        conn.set("wire_protocol", input.wireProtocol);
+      }
+      conn.set("readonly", input.readonly !== false);
+      const enabledTables = new YAMLSeq();
+      conn.set("enabled_tables", enabledTables);
+      if (input.host) {
+        conn.set("host", input.host);
+      }
+      if (input.port != null) {
+        conn.set("port", input.port);
+      }
+      conn.set("database", input.database);
+      if (input.username) {
+        conn.set("username", input.username);
+      }
+      if (passwordRef) {
+        conn.set("password", passwordRef);
+      }
+      const schemas = new YAMLSeq();
+      for (const schema of input.schemas ?? []) {
+        schemas.items.push(schema);
+      }
+      conn.set("schemas", schemas);
     }
-    if (input.wireProtocol) {
-      conn.set("wire_protocol", input.wireProtocol);
-    }
-    conn.set("readonly", input.readonly !== false);
-    const enabledTables = new YAMLSeq();
-    conn.set("enabled_tables", enabledTables);
-    if (input.host) {
-      conn.set("host", input.host);
-    }
-    if (input.port != null) {
-      conn.set("port", input.port);
-    }
-    conn.set("database", input.database);
-    if (input.username) {
-      conn.set("username", input.username);
-    }
-    if (passwordRef) {
-      conn.set("password", passwordRef);
-    }
-    const schemas = new YAMLSeq();
-    for (const schema of input.schemas ?? []) {
-      schemas.items.push(schema);
-    }
-    conn.set("schemas", schemas);
     conns.set(input.id, conn);
 
     let setup = doc.get("setup", true);
@@ -1442,7 +1499,7 @@ function connectionInfoFromInput(
   return {
     id: input.id,
     driver: input.driver,
-    engine,
+    engine: input.driver === "athena" ? "athena" : engine,
     wireProtocol,
     r1Target: engine === "doris",
     readOnlyExpected: input.readonly !== false,
@@ -1488,15 +1545,15 @@ export async function createConnection(
     );
   }
   const input = validateCreateConnectionInput(rawInput);
-  const isSqlite = input.driver === "sqlite";
+  const skipsPassword = input.driver === "sqlite" || input.driver === "athena";
   const hasPasswordInput = typeof input.password === "string" && input.password.length > 0;
-  // Non-sqlite confirm-write must fail before any yaml or secret write.
-  if (!dryRun && !isSqlite && !hasPasswordInput) {
+  // Passwordless drivers (sqlite, athena) do not write a secret file.
+  if (!dryRun && !skipsPassword && !hasPasswordInput) {
     throw new ConnectionPasswordRequiredError("password is required when dryRun is false");
   }
   const gate = await assertEndpointGate(root, input, options.endpointFlags);
-  const secretRelPath = connectionSecretRelPath(input.id);
-  const passwordRef = hasPasswordInput || !isSqlite ? passwordFileRef(root, input.id) : undefined;
+  const secretRelPath = input.driver === "athena" ? "" : connectionSecretRelPath(input.id);
+  const passwordRef = hasPasswordInput || !skipsPassword ? passwordFileRef(root, input.id) : undefined;
   const mutator = connectionCreateMutatorFactory(input, passwordRef);
   const preview = await writeKtxYaml(root, mutator, { dryRun: true });
   const safeOldText = redactKtxYamlForPreview(preview.oldText);
@@ -1619,9 +1676,9 @@ export async function probeConnection(
     id: PROBE_CONNECTION_ID,
     schemas: []
   });
-  const isSqlite = input.driver === "sqlite";
+  const skipsPassword = input.driver === "sqlite" || input.driver === "athena";
   const hasPasswordInput = typeof input.password === "string" && input.password.length > 0;
-  if (!isSqlite && !hasPasswordInput) {
+  if (!skipsPassword && !hasPasswordInput) {
     throw new ConnectionPasswordRequiredError("password is required to test the connection");
   }
 
@@ -1636,19 +1693,33 @@ export async function probeConnection(
       passwordRef = `file:${secretAbs}`;
     }
 
-    const conn: Record<string, unknown> = {
-      driver: input.driver,
-      readonly: input.readonly !== false,
-      database: input.database,
-      schemas: [],
-      enabled_tables: []
-    };
-    if (input.host) conn.host = input.host;
-    if (input.port != null) conn.port = input.port;
-    if (input.username) conn.username = input.username;
-    if (passwordRef) conn.password = passwordRef;
-    if (input.engine) conn.engine = input.engine;
-    if (input.wireProtocol) conn.wire_protocol = input.wireProtocol;
+    const conn: Record<string, unknown> = input.driver === "athena"
+      ? {
+          driver: "athena",
+          readonly: input.readonly !== false,
+          region: input.region,
+          s3_staging_dir: input.s3StagingDir,
+          ...(input.workgroup ? { workgroup: input.workgroup } : {}),
+          ...(input.catalog ? { catalog: input.catalog } : {}),
+          database: input.database,
+          databases: [],
+          enabled_tables: []
+        }
+      : {
+          driver: input.driver,
+          readonly: input.readonly !== false,
+          database: input.database,
+          schemas: [],
+          enabled_tables: []
+        };
+    if (input.driver !== "athena") {
+      if (input.host) conn.host = input.host;
+      if (input.port != null) conn.port = input.port;
+      if (input.username) conn.username = input.username;
+      if (passwordRef) conn.password = passwordRef;
+      if (input.engine) conn.engine = input.engine;
+      if (input.wireProtocol) conn.wire_protocol = input.wireProtocol;
+    }
 
     await writeFile(
       path.join(tmpRoot, "ktx.yaml"),

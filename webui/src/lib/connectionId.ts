@@ -40,12 +40,13 @@ export type DatabaseType =
   | "doris"
   | "sqlserver"
   | "oracle"
-  | "sqlite";
+  | "sqlite"
+  | "athena";
 
 export type DatabaseTypeConfig = {
   key: DatabaseType;
   label: string;
-  driver: "mysql" | "postgres" | "sqlserver" | "oracle" | "sqlite";
+  driver: "mysql" | "postgres" | "sqlserver" | "oracle" | "sqlite" | "athena";
   engine: string;
   wireProtocol: string;
   defaultPort?: number;
@@ -116,6 +117,14 @@ export const DATABASE_TYPES: DatabaseTypeConfig[] = [
     wireProtocol: "sqlite",
     isFileBased: true,
     placeholderId: "local-sqlite"
+  },
+  {
+    key: "athena",
+    label: "Amazon Athena",
+    driver: "athena",
+    engine: "",
+    wireProtocol: "",
+    placeholderId: "moji-intl"
   }
 ];
 

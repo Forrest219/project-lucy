@@ -40,6 +40,8 @@ type EndpointFlags = {
   acknowledgeDifferentDatabase?: boolean;
 };
 
+const AWS_REGION_RE = /^[a-z]{2}-[a-z]+-\d$/;
+
 function connectionRequest(
   form: FormState,
   portNumber: number,
@@ -48,6 +50,26 @@ function connectionRequest(
   flags: EndpointFlags
 ) {
   const isSqlite = form.databaseType === "sqlite" || form.driver === "sqlite";
+  const isAthena = form.databaseType === "athena" || form.driver === "athena";
+  const flagsPayload = {
+    ...(flags.acknowledgeSeparateConnection ? { acknowledgeSeparateConnection: true } : {}),
+    ...(flags.acknowledgeDifferentDatabase ? { acknowledgeDifferentDatabase: true } : {})
+  };
+  if (isAthena) {
+    return {
+      id: form.id.trim(),
+      driver: "athena" as const,
+      readonly: form.readonly,
+      database: form.database.trim(),
+      region: form.region.trim(),
+      s3StagingDir: form.s3StagingDir.trim(),
+      ...(form.workgroup.trim() ? { workgroup: form.workgroup.trim() } : {}),
+      ...(form.catalog.trim() ? { catalog: form.catalog.trim() } : {}),
+      schemas,
+      dryRun,
+      ...flagsPayload
+    };
+  }
   return {
     id: form.id.trim(),
     driver: form.driver,
@@ -65,8 +87,7 @@ function connectionRequest(
     database: form.database.trim(),
     schemas,
     dryRun,
-    ...(flags.acknowledgeSeparateConnection ? { acknowledgeSeparateConnection: true } : {}),
-    ...(flags.acknowledgeDifferentDatabase ? { acknowledgeDifferentDatabase: true } : {})
+    ...flagsPayload
   };
 }
 
@@ -75,7 +96,7 @@ const STEP_LABELS = ["输入连接信息", "新建预览", "确认创建"];
 type FormState = {
   id: string;
   databaseType: DatabaseType;
-  driver: "mysql" | "postgres" | "sqlserver" | "oracle" | "sqlite";
+  driver: "mysql" | "postgres" | "sqlserver" | "oracle" | "sqlite" | "athena";
   engine: string;
   wireProtocol: string;
   readonly: boolean;
@@ -85,6 +106,10 @@ type FormState = {
   username: string;
   password: string;
   schemasText: string;
+  region: string;
+  s3StagingDir: string;
+  workgroup: string;
+  catalog: string;
 };
 
 const INITIAL_FORM: FormState = {
@@ -99,7 +124,11 @@ const INITIAL_FORM: FormState = {
   database: "",
   username: "",
   password: "",
-  schemasText: ""
+  schemasText: "",
+  region: "",
+  s3StagingDir: "",
+  workgroup: "primary",
+  catalog: "AwsDataCatalog"
 };
 
 function parseSchemas(text: string): { schemas: string[]; issue: string | null } {
@@ -167,6 +196,8 @@ export function CreateConnectionDrawer({
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const isSqlite = form.databaseType === "sqlite" || form.driver === "sqlite";
+  const isAthena = form.databaseType === "athena" || form.driver === "athena";
+  const skipsHost = isSqlite || isAthena;
   const currentConfig = useMemo(
     () => getDatabaseTypeConfig(form.databaseType),
     [form.databaseType]
@@ -178,19 +209,32 @@ export function CreateConnectionDrawer({
   );
   const schemasParsed = useMemo(() => parseSchemas(form.schemasText), [form.schemasText]);
   const portNumber = Number(form.port);
-  const portIssue = isSqlite
+  const portIssue = skipsHost
     ? null
     : !Number.isInteger(portNumber) || portNumber < 1 || portNumber > 65535
       ? "端口须为 1–65535 的整数"
       : null;
-  const hostIssue = isSqlite || form.host.trim() ? null : "主机为必填项";
+  const hostIssue = skipsHost || form.host.trim() ? null : "主机为必填项";
   const databaseIssue = form.database.trim()
     ? null
     : isSqlite
       ? "数据库文件路径为必填项"
-      : "数据库为必填项";
-  const usernameIssue = isSqlite || form.username.trim() ? null : "用户名为必填项";
-  const passwordIssue = isSqlite || form.password.length > 0 ? null : "数据库密码为必填项";
+      : isAthena
+        ? "默认数据库为必填项"
+        : "数据库为必填项";
+  const usernameIssue = skipsHost || form.username.trim() ? null : "用户名为必填项";
+  const passwordIssue = skipsHost || form.password.length > 0 ? null : "数据库密码为必填项";
+  const regionIssue = !isAthena
+    ? null
+    : AWS_REGION_RE.test(form.region.trim())
+      ? null
+      : "区域须类似 eu-west-1";
+  const stagingDir = form.s3StagingDir.trim();
+  const s3Issue = !isAthena
+    ? null
+    : stagingDir.startsWith("s3://") && !/\s/.test(stagingDir)
+      ? null
+      : "结果目录须为 s3:// 路径";
 
   const canPreview =
     !idIssue &&
@@ -199,12 +243,16 @@ export function CreateConnectionDrawer({
     !databaseIssue &&
     !usernameIssue &&
     !passwordIssue &&
+    !regionIssue &&
+    !s3Issue &&
     !schemasParsed.issue;
   const probeFailed = probeAttempted && probeResult?.status === "error";
   const canPreviewWithProbe = canPreview && (!probeFailed || probeOverride);
-  const canProbe = isSqlite
-    ? !databaseIssue
-    : !hostIssue && !portIssue && !databaseIssue && !usernameIssue && !passwordIssue;
+  const canProbe = isAthena
+    ? !regionIssue && !s3Issue && !databaseIssue
+    : isSqlite
+      ? !databaseIssue
+      : !hostIssue && !portIssue && !databaseIssue && !usernameIssue && !passwordIssue;
 
   const show = (field: string) => Boolean(touched[field] || previewAttempted || probeAttempted);
 
@@ -238,21 +286,16 @@ export function CreateConnectionDrawer({
 
   const probeMutation = useMutation({
     mutationFn: () =>
-      apiPost<ProbeConnectionResult>("/api/connections/probe", {
-        driver: form.driver,
-        ...(form.engine.trim() ? { engine: form.engine.trim() } : {}),
-        ...(form.wireProtocol.trim() ? { wireProtocol: form.wireProtocol.trim() } : {}),
-        readonly: isSqlite ? false : form.readonly,
-        ...(isSqlite
-          ? {}
-          : {
-              host: form.host.trim(),
-              port: portNumber,
-              username: form.username.trim()
-            }),
-        database: form.database.trim(),
-        ...(form.password ? { password: form.password } : {})
-      }),
+      apiPost<ProbeConnectionResult>("/api/connections/probe", (() => {
+        const { dryRun: _dryRun, id: _id, schemas: _schemas, ...probe } = connectionRequest(
+          form,
+          portNumber,
+          [],
+          true,
+          {}
+        );
+        return probe;
+      })()),
     onSuccess: (data) => {
       setProbeResult(
         data.status === "error"
@@ -365,7 +408,11 @@ export function CreateConnectionDrawer({
     form.database,
     form.username,
     form.password,
-    form.schemasText
+    form.schemasText,
+    form.region,
+    form.s3StagingDir,
+    form.workgroup,
+    form.catalog
   ]);
 
   useEffect(() => {
@@ -393,7 +440,9 @@ export function CreateConnectionDrawer({
         driver: config.driver,
         engine: config.engine,
         wireProtocol: config.wireProtocol,
-        port: nextPort
+        port: nextPort,
+        workgroup: nextKey === "athena" && !prev.workgroup.trim() ? "primary" : prev.workgroup,
+        catalog: nextKey === "athena" && !prev.catalog.trim() ? "AwsDataCatalog" : prev.catalog
       };
     });
   }
@@ -554,6 +603,11 @@ export function CreateConnectionDrawer({
                       底层走 MySQL 协议；超时策略与原生 MySQL 不同，请优先选此类型而非 MySQL。
                     </p>
                   ) : null}
+                  {isAthena ? (
+                    <p className="mt-1 text-xs text-fg-muted" data-testid="create-connection-athena-hint">
+                      使用 KTX 的 athena 驱动。凭据走 AWS 默认链，不保存数据库密码。
+                    </p>
+                  ) : null}
                 </Field>
                 {!isSqlite ? (
                   <Field label="只读账号意图（可选）" pair>
@@ -572,7 +626,70 @@ export function CreateConnectionDrawer({
                 )}
               </FieldPair>
 
-              {!isSqlite ? (
+              {isAthena ? (
+                <>
+                  <FieldPair>
+                    <Field label="区域" required error={show("region") ? regionIssue : null} pair>
+                      <input
+                        className="pl-input notranslate"
+                        translate="no"
+                        value={form.region}
+                        onChange={(e) => patchForm("region", e.target.value)}
+                        onBlur={() => setTouched((t) => ({ ...t, region: true }))}
+                        placeholder="例如 eu-west-1"
+                        data-testid="create-connection-region"
+                      />
+                    </Field>
+                    <Field label="工作组" hint="写入 workgroup，留空时 KTX 使用 primary" pair>
+                      <input
+                        className="pl-input notranslate"
+                        translate="no"
+                        value={form.workgroup}
+                        onChange={(e) => patchForm("workgroup", e.target.value)}
+                        data-testid="create-connection-workgroup"
+                      />
+                    </Field>
+                  </FieldPair>
+                  <Field
+                    label="结果目录"
+                    required
+                    error={show("s3StagingDir") ? s3Issue : null}
+                    hint="写入 s3_staging_dir，查询结果落到这个 S3 前缀"
+                  >
+                    <input
+                      className="pl-input notranslate"
+                      translate="no"
+                      value={form.s3StagingDir}
+                      onChange={(e) => patchForm("s3StagingDir", e.target.value)}
+                      onBlur={() => setTouched((t) => ({ ...t, s3StagingDir: true }))}
+                      placeholder="例如 s3://bucket/athena-results/"
+                      data-testid="create-connection-s3-staging-dir"
+                    />
+                  </Field>
+                  <FieldPair>
+                    <Field label="默认数据库" required error={show("database") ? databaseIssue : null} pair>
+                      <input
+                        className="pl-input notranslate"
+                        translate="no"
+                        value={form.database}
+                        onChange={(e) => patchForm("database", e.target.value)}
+                        onBlur={() => setTouched((t) => ({ ...t, database: true }))}
+                        placeholder="例如 da_moji"
+                        data-testid="create-connection-database"
+                      />
+                    </Field>
+                    <Field label="数据目录" hint="写入 catalog，留空时 KTX 使用 AwsDataCatalog" pair>
+                      <input
+                        className="pl-input notranslate"
+                        translate="no"
+                        value={form.catalog}
+                        onChange={(e) => patchForm("catalog", e.target.value)}
+                        data-testid="create-connection-catalog"
+                      />
+                    </Field>
+                  </FieldPair>
+                </>
+              ) : !isSqlite ? (
                 <>
                   <FieldPair>
                     <Field label="主机" required error={show("host") ? hostIssue : null} pair>
@@ -675,9 +792,13 @@ export function CreateConnectionDrawer({
               )}
 
               <Field
-                label="初始 Schema（可选）"
+                label={isAthena ? "初始 Glue 数据库（可选）" : "初始 Schema（可选）"}
                 error={schemasParsed.issue}
-                hint={`多个用逗号或空格分隔；${SCHEMA_NAME_RULE_HINT}`}
+                hint={
+                  isAthena
+                    ? `写入 ktx.yaml 的 databases。多个用逗号或空格分隔；${SCHEMA_NAME_RULE_HINT}`
+                    : `多个用逗号或空格分隔；${SCHEMA_NAME_RULE_HINT}`
+                }
               >
                 <input
                   className="pl-input notranslate"
@@ -689,6 +810,7 @@ export function CreateConnectionDrawer({
                 />
               </Field>
 
+              {!isAthena ? (
               <details
                 className="rounded-md border border-border-default bg-bg-base px-3 py-2"
                 data-testid="create-connection-advanced"
@@ -717,6 +839,7 @@ export function CreateConnectionDrawer({
                   </FieldPair>
                 </div>
               </details>
+              ) : null}
             </div>
 
             <div className="pl-drawer-footer">
