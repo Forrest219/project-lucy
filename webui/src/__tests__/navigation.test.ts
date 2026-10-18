@@ -2,6 +2,7 @@
 // Spec 143: Runtime Status group owns 系统概览 + 调用监控; no pinned top-level entry.
 
 import { describe, expect, it } from "vitest";
+import { NAV_ICONS } from "../app/navIcons";
 import {
   findGroupIdForPathname,
   navGroups,
@@ -52,6 +53,14 @@ describe("navigation (shared sidebar config)", () => {
   it("every nav item has a unique stable id across navGroups", () => {
     const ids = navGroups.flatMap((g) => g.items.map((i) => i.id));
     expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("every nav iconKey has a sidebar component", () => {
+    for (const group of navGroups) {
+      for (const item of group.items) {
+        expect(NAV_ICONS[item.iconKey]).toBeTruthy();
+      }
+    }
   });
 
   it("every nav item declares an iconKey and the keys are unique per item", () => {

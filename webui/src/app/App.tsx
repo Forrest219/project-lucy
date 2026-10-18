@@ -2,34 +2,16 @@ import { Component, Suspense, useCallback, useEffect, useMemo, useState, type Er
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 import {
-  Boxes,
-  Bot,
-  Cable,
   ChartNoAxesCombined,
   ChevronRight,
   CircleHelp,
   Database,
-  Gauge,
-  History,
   LayoutDashboard,
   Rocket,
   Search,
   Share2,
-  ShieldAlert,
   ShieldCheck,
-  TableProperties,
-  ClipboardList,
-  Activity,
-  BookOpen,
-  Key,
-  KeyRound,
-  ScrollText,
   Settings,
-  Sparkles,
-  Terminal,
-  Users,
-  Image,
-  Radio,
   type LucideIcon
 } from "lucide-react";
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
@@ -45,7 +27,8 @@ import { formatLucyVersionLabel } from "../lib/lucyVersion";
 import { setDisplayWriteBeginHandler, setDisplayWriteSettledHandler } from "../lib/apiClient";
 import { catalogReloadsQueryOptions, DISPLAY_SCOPE_QUERY_KEYS, mcpRuntimeStatusQueryOptions, projectQueryOptions, sourcesQueryOptions } from "../lib/displayQueryOptions";
 import { isChunkLoadError, lazyRoute, type LazyRoute } from "../lib/routeChunkRecovery";
-import { findGroupIdForPathname, navGroups, type NavIconKey } from "./navigation";
+import { findGroupIdForPathname, navGroups } from "./navigation";
+import { NAV_ICONS } from "./navIcons";
 
 // Spec 174 §6 — business pages and large drawers load lazily; AuthProvider, the
 // shell and the login page stay in the entry bundle.
@@ -241,35 +224,6 @@ function TableWhitelistRedirect() {
 function navLinkClass(isActive: boolean, level: "top" | "child" = "top") {
   return `pl-nav-link${level === "child" ? " pl-nav-link--child" : ""}${isActive ? " pl-nav-link--active" : ""}`;
 }
-
-// M60 Sidebar Brand Navigation Polish: visual icon registry. Kept in App.tsx
-// so navigation.ts stays a pure data module and doesn't drag React / lucide
-// into tests that only care about the IA shape.
-const NAV_ICONS: Record<NavIconKey, LucideIcon> = {
-  overview: LayoutDashboard,
-  callMonitor: Radio,
-  connections: Cable,
-  whitelist: TableProperties,
-  catalog: Boxes,
-  wiki: BookOpen,
-  skills: Sparkles,
-  publish: Rocket,
-  history: History,
-  evalCases: ClipboardList,
-  evalRuns: Activity,
-  monitor: ChartNoAxesCombined,
-  fieldQuestions: CircleHelp,
-  securityEval: ShieldAlert,
-  governanceOverview: Gauge,
-  agents: Bot,
-  tokens: Key,
-  roles: KeyRound,
-  audit: ScrollText,
-  mcpPlayground: Terminal,
-  configAudit: ShieldCheck,
-  admins: Users,
-  branding: Image
-};
 
 const GROUP_ICONS: Record<string, LucideIcon> = {
   "runtime-status": LayoutDashboard,
