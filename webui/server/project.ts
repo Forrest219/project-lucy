@@ -1676,7 +1676,7 @@ export async function createConnection(
     throw new ConnectionPasswordRequiredError("password is required when dryRun is false");
   }
   const gate = await assertEndpointGate(root, input, options.endpointFlags);
-  const secretRelPath = input.driver === "athena" ? "" : connectionSecretRelPath(input.id);
+  const secretRelPath = skipsPassword ? "" : connectionSecretRelPath(input.id);
   const passwordRef = hasPasswordInput || !skipsPassword ? passwordFileRef(root, input.id) : undefined;
   const mutator = connectionCreateMutatorFactory(input, passwordRef);
   const preview = await writeKtxYaml(root, mutator, { dryRun: true });
@@ -1710,7 +1710,7 @@ export async function createConnection(
     }
   };
   try {
-    if (hasPasswordInput) {
+    if (hasPasswordInput && secretRelPath) {
       await safeWriteNewSecretPassword(root, secretRelPath, input.password!);
       secretWritten = true;
     }

@@ -518,15 +518,21 @@ export function CreateConnectionDrawer({
             >
               <Lock className="mt-0.5 size-4 shrink-0" aria-hidden />
               <p>
-                密码仅提交一次，写入{" "}
-                <code className="notranslate" translate="no">
-                  .ktx/secrets/&lt;连接 ID&gt;-password
-                </code>
-                ；<code className="notranslate" translate="no">ktx.yaml</code> 只保存{" "}
-                <code className="notranslate" translate="no">
-                  file:
-                </code>{" "}
-                引用。
+                {skipsHost ? (
+                  "此类型不保存数据库密码，也不会写入密码文件。"
+                ) : (
+                  <>
+                    密码仅提交一次，写入{" "}
+                    <code className="notranslate" translate="no">
+                      .ktx/secrets/&lt;连接 ID&gt;-password
+                    </code>
+                    ；<code className="notranslate" translate="no">ktx.yaml</code> 只保存{" "}
+                    <code className="notranslate" translate="no">
+                      file:
+                    </code>{" "}
+                    引用。
+                  </>
+                )}
               </p>
             </div>
           </div>
@@ -946,7 +952,9 @@ export function CreateConnectionDrawer({
         {step === "preview" && preview && (
           <section className="pl-drawer-body" aria-label="新建预览">
             <p className="text-sm notranslate" translate="no">
-              ktx.yaml 计划变更（unified diff；密码仅为 file: 引用）：
+              {skipsHost
+                ? "ktx.yaml 计划变更（unified diff）："
+                : "ktx.yaml 计划变更（unified diff；密码仅为 file: 引用）："}
             </p>
             <DiffViewer diff={preview.diff} />
             {preview.secretRelPath && (
@@ -989,7 +997,9 @@ export function CreateConnectionDrawer({
 
         {step === "submitting" && (
           <section className="pl-drawer-body" aria-label="创建中">
-            <p className="text-sm text-fg-muted">正在写入配置与密码文件，并执行连通测试...</p>
+            <p className="text-sm text-fg-muted">
+              {skipsHost ? "正在写入配置，并执行连通测试..." : "正在写入配置与密码文件，并执行连通测试..."}
+            </p>
           </section>
         )}
 

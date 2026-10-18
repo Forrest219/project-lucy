@@ -150,6 +150,8 @@ describe("CreateConnectionDrawer", () => {
     expect(screen.queryByTestId("create-connection-username")).not.toBeInTheDocument();
     expect(screen.queryByTestId("create-connection-password")).not.toBeInTheDocument();
     expect(screen.getByText("数据库文件路径")).toBeInTheDocument();
+    expect(screen.getByText("此类型不保存数据库密码，也不会写入密码文件。")).toBeInTheDocument();
+    expect(screen.queryByText(/密码仅提交一次/)).not.toBeInTheDocument();
 
     fireEvent.change(screen.getByTestId("create-connection-driver"), {
       target: { value: "athena" }
@@ -161,6 +163,8 @@ describe("CreateConnectionDrawer", () => {
     expect(screen.getByTestId("create-connection-workgroup")).toHaveValue("primary");
     expect(screen.getByTestId("create-connection-catalog")).toHaveValue("AwsDataCatalog");
     expect(screen.getByText("初始 Glue 数据库（可选）")).toBeInTheDocument();
+    expect(screen.getByText("此类型不保存数据库密码，也不会写入密码文件。")).toBeInTheDocument();
+    expect(screen.queryByText(/密码仅提交一次/)).not.toBeInTheDocument();
   });
 
   it("shows dryRun preview without sending password, then confirms create", async () => {
@@ -367,6 +371,7 @@ describe("CreateConnectionDrawer", () => {
     await waitFor(() => {
       expect(screen.getByTestId("create-connection-confirm-btn")).toBeInTheDocument();
     });
+    expect(screen.queryByText(/将写入密码文件/)).not.toBeInTheDocument();
     expect(bodies[0]).toMatchObject({
       dryRun: true,
       id: "local-sqlite",

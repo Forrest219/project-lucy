@@ -464,19 +464,24 @@ describe("createConnection (Spec 124 Phase A)", () => {
   it("supports sqlite connections without host, port, username, or password", async () => {
     const testFn = vi.fn(async () => okTest("local-sqlite"));
     const audit = vi.fn(async () => 7);
-    const result = await createConnection(
-      projectRoot,
-      {
-        id: "local-sqlite",
-        driver: "sqlite",
-        database: "data/app.sqlite",
-        schemas: ["main"]
-      },
-      false,
-      { testConnectionFn: testFn, recordConfigChange: audit }
-    );
+    const sqliteInput = {
+      id: "local-sqlite",
+      driver: "sqlite" as const,
+      database: "data/app.sqlite",
+      schemas: ["main"]
+    };
+    const preview = await createConnection(projectRoot, sqliteInput, true);
+    expect(preview.secretRelPath).toBe("");
+    expect(preview.diff).toContain("path: data/app.sqlite");
+    expect(preview.diff).not.toMatch(/\+\s+password:/);
+
+    const result = await createConnection(projectRoot, sqliteInput, false, {
+      testConnectionFn: testFn,
+      recordConfigChange: audit
+    });
 
     expect(result.written).toBe(true);
+    expect(result.secretRelPath).toBe("");
     expect(result.auditId).toBe(7);
     expect(audit).toHaveBeenCalledOnce();
     const summary = audit.mock.calls[0]?.[0].newSummary as Record<string, unknown>;
