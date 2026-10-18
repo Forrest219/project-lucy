@@ -702,12 +702,70 @@ export interface EffectivePermissions {
   finalRowsBySource?: Record<string, RowGrant>;
 }
 
+// Spec 177 — structured role-compile diagnostic. The spec locks the field
+// names: `RoleCompileStep`, `IdentityCompileDiagnostic`, `RoleCompileStatus`,
+// and the `stage` enum. The diagnostic lives on the policy-runtime entry for
+// every degraded Agent and is written to `access_log.compiler_reason` on a
+// request-level denial; the outward MCP error text is unchanged.
+export type RoleCompileStatus = "compiled" | "failed" | "not_run";
+export type RoleCompileStage =
+  | "selector_match"
+  | "role_declaration"
+  | "tool_classification"
+  | "source_scope"
+  | "row_grant"
+  | "other";
+
+export interface RoleCompileStep {
+  roleId: string;
+  ordinal: number;
+  status: RoleCompileStatus;
+  code?: string;
+  stage?: RoleCompileStage;
+  selectorIndex?: number;
+  connectionId?: string;
+  schema?: string;
+  names?: string[];
+  matchCount?: number;
+  unmatchedNames?: string[];
+}
+
+export interface IdentityCompileDiagnostic {
+  declaredRoleIds: string[];
+  steps: RoleCompileStep[];
+  failedRoleId?: string;
+  contentRoot: string;
+  contentRootSource: string;
+  sourceMapVersion: string;
+  sourceMapConnectionIds?: string[];
+}
+
+/** Spec 177 — admin/audit JSON for `access_log.compiler_reason`. Not an MCP client body. */
+export function formatIdentityCompilerReason(diagnostic: IdentityCompileDiagnostic | undefined): string | undefined {
+  if (!diagnostic) return undefined;
+  try {
+    const json = JSON.stringify(diagnostic);
+    if (json.length <= 16_000) return json;
+    return JSON.stringify({
+      truncated: true,
+      failedRoleId: diagnostic.failedRoleId,
+      sample: json.slice(0, 16_000)
+    });
+  } catch {
+    return JSON.stringify({ truncated: true, reason: "non_serializable" });
+  }
+}
+
 export type RoleResolutionResult = {
   ok: true;
   permissions: EffectivePermissions;
+  /** Spec 177 — diagnostic is always populated, success or failure. */
+  diagnostic: IdentityCompileDiagnostic;
 } | {
   ok: false;
   reason: string;
+  diagnostic: IdentityCompileDiagnostic;
+  failedRoleId?: string;
 };
 
 function allowedConnections(user: AccessConfig["users"][number]): string[] {
@@ -957,7 +1015,9 @@ interface CompiledRole {
   hasSelectors: boolean;
 }
 
-type CompiledRoleResult = { ok: true; role: CompiledRole } | { ok: false; reason: string };
+type CompiledRoleResult =
+  | { ok: true; role: CompiledRole; selectorTraces: RoleCompileStep[] }
+  | { ok: false; reason: string };
 
 function scopedGrantForSource(
   multiSourceGrant: Extract<RowGrant, { kind: "scoped" }>,
@@ -1032,23 +1092,43 @@ async function compileRole(
   role: NonNullable<AccessConfig["roles"]>[string] | undefined,
   policy: AclPolicy,
   state: SourceMapState,
-  enabledTables?: Map<string, Set<string>>
+  enabledTables: Map<string, Set<string>> | undefined,
+  stepOut: RoleCompileStep[] | undefined,
+  ordinal: number
 ): Promise<CompiledRoleResult> {
+  const recordStep = (step: Omit<RoleCompileStep, "roleId" | "ordinal">) => {
+    if (stepOut) stepOut.push({ roleId, ordinal, ...step });
+  };
+  const selectorTraces: RoleCompileStep[] = [];
   const failed: CompiledRoleResult = { ok: false, reason: `role_resolution_failed:${roleId}` };
-  if (!role?.allow) return failed;
+  if (!role?.allow) {
+    recordStep({ status: "failed", code: "role_resolution_failed", stage: "role_declaration" });
+    return failed;
+  }
   if (Object.prototype.hasOwnProperty.call(role, "constraints")) {
+    recordStep({ status: "failed", code: "constraints_forbidden_on_role", stage: "role_declaration" });
     return { ok: false, reason: "constraints_forbidden_on_role" };
   }
 
   const modelVersion = normalizePermissionModelVersion(role);
-  if (!modelVersion.ok) return { ok: false, reason: `role_resolution_failed:${roleId}:${modelVersion.reason}` };
+  if (!modelVersion.ok) {
+    recordStep({ status: "failed", code: `role_resolution_failed:${modelVersion.reason}`, stage: "role_declaration" });
+    return { ok: false, reason: `role_resolution_failed:${roleId}:${modelVersion.reason}` };
+  }
 
   const roleTools = configList(role.allow.tools, []);
-  if (roleTools.length === 0 || roleTools.includes("*")) return failed;
+  if (roleTools.length === 0 || roleTools.includes("*")) {
+    recordStep({ status: "failed", code: "role_resolution_failed", stage: "role_declaration" });
+    return failed;
+  }
   for (const tool of roleTools) {
-    if (!policy.knownTools.has(tool)) return failed;
+    if (!policy.knownTools.has(tool)) {
+      recordStep({ status: "failed", code: "role_resolution_failed", stage: "tool_classification" });
+      return failed;
+    }
     const absoluteOrUnclassified = absoluteDenyOrUnclassifiedReason(tool);
     if (absoluteOrUnclassified) {
+      recordStep({ status: "failed", code: `role_resolution_failed:${absoluteOrUnclassified}`, stage: "tool_classification" });
       return { ok: false, reason: `role_resolution_failed:${roleId}:${absoluteOrUnclassified}` };
     }
   }
@@ -1056,19 +1136,23 @@ async function compileRole(
   const rawScope = typeof role.allow.source_scope === "string" ? normalizeRef(role.allow.source_scope) : undefined;
   const catalogBound = rawScope === "catalog_bound";
   if (rawScope !== undefined && !catalogBound) {
+    recordStep({ status: "failed", code: "role_resolution_failed:invalid_source_scope", stage: "source_scope" });
     return { ok: false, reason: `role_resolution_failed:${roleId}:invalid_source_scope` };
   }
   if (catalogBound && modelVersion.version !== 2) {
+    recordStep({ status: "failed", code: "role_resolution_failed:catalog_bound_requires_v2", stage: "source_scope" });
     return { ok: false, reason: `role_resolution_failed:${roleId}:catalog_bound_requires_v2` };
   }
 
   const selectors = Array.isArray(role.allow.tableSelectors) ? role.allow.tableSelectors : [];
   const declaredConnections = configList(role.allow.connections, [], { normalize: true });
   if (catalogBound && selectors.length > 0) {
+    recordStep({ status: "failed", code: "role_resolution_failed:catalog_bound_selectors_forbidden", stage: "source_scope" });
     return { ok: false, reason: `role_resolution_failed:${roleId}:catalog_bound_selectors_forbidden` };
   }
   const adminFollowsAll = catalogBound && roleId === LUCY_ADMIN_ROLE_ID;
   if ((catalogBound || selectors.length > 0 || roleToolsTouchTables(roleTools, policy)) && declaredConnections.length === 0 && !adminFollowsAll) {
+    recordStep({ status: "failed", code: "role_resolution_failed", stage: "source_scope" });
     return failed;
   }
 
@@ -1079,21 +1163,51 @@ async function compileRole(
   if (catalogBound) {
     const enabledByConnection = enabledTables ?? await loadEnabledTablesByConnection();
     const resolvedConnections = resolveCatalogConnections(roleId, declaredConnections, enabledByConnection);
-    if (!resolvedConnections.ok) return { ok: false, reason: resolvedConnections.reason };
+    if (!resolvedConnections.ok) {
+      recordStep({ status: "failed", code: `role_resolution_failed:${resolvedConnections.reason}`, stage: "source_scope" });
+      return { ok: false, reason: resolvedConnections.reason };
+    }
     effectiveConnections = resolvedConnections.connections;
     const matches = catalogBoundSources(effectiveConnections, state, enabledByConnection);
-    if (matches.length === 0) return failed;
+    if (matches.length === 0) {
+      recordStep({ status: "failed", code: "selector_zero_match", stage: "selector_match", matchCount: 0 });
+      return failed;
+    }
     for (const entry of matches) {
       const key = sourceIndexKey(entry.connectionId, entry.table);
       sourceGrants.set(key, { kind: "all" });
       sourceMatches.push(entry);
     }
   } else {
-    for (const selector of selectors) {
+    for (let selectorIndex = 0; selectorIndex < selectors.length; selectorIndex += 1) {
+      const selector = selectors[selectorIndex];
       const versionFailure = selectorVersionFailure(modelVersion.version, selector);
-      if (versionFailure) return { ok: false, reason: `role_resolution_failed:${roleId}:${versionFailure}` };
+      if (versionFailure) {
+        recordStep({ status: "failed", code: `role_resolution_failed:${versionFailure}`, stage: "selector_match", selectorIndex });
+        return { ok: false, reason: `role_resolution_failed:${roleId}:${versionFailure}` };
+      }
       const matches = [...state.forward.values()].filter((entry) => selectorMatches(selector, entry));
-      if (matches.length === 0) return failed;
+      // Spec 177 — record per-selector details so a partial match can be reviewed
+      // without leaking the role's whole selector shape.
+      const declaredNames = Array.isArray(selector.names) ? selector.names.map((n) => normalizeRef(n)) : undefined;
+      const matchedSourceNames = new Set(matches.map((entry) => normalizeRef(entry.sourceName)));
+      const unmatchedNames = declaredNames && declaredNames.length > 0
+        ? declaredNames.filter((name) => !matchedSourceNames.has(name) && !matches.some((entry) => normalizeRef(entry.physicalTable) === name))
+        : undefined;
+      if (matches.length === 0) {
+        recordStep({
+          status: "failed",
+          code: "selector_zero_match",
+          stage: "selector_match",
+          selectorIndex,
+          connectionId: typeof selector.connection === "string" ? normalizeRef(selector.connection) : undefined,
+          schema: typeof selector.schema === "string" ? normalizeRef(selector.schema) : undefined,
+          names: declaredNames,
+          matchCount: 0,
+          unmatchedNames
+        });
+        return failed;
+      }
 
       const rowAccess = typeof selector.row_access === "string" ? normalizeRef(selector.row_access) : "all";
       let multiScoped: Extract<RowGrant, { kind: "scoped" }> | undefined;
@@ -1106,22 +1220,31 @@ async function compileRole(
             schema: entry.schema
           }))
         );
-        if (!compiled.ok) return { ok: false, reason: `role_resolution_failed:${roleId}:${compiled.reason}` };
+        if (!compiled.ok) {
+          recordStep({ status: "failed", code: `role_resolution_failed:${compiled.reason}`, stage: "row_grant", selectorIndex });
+          return { ok: false, reason: `role_resolution_failed:${roleId}:${compiled.reason}` };
+        }
         if (compiled.grant.kind !== "scoped") {
+          recordStep({ status: "failed", code: "role_resolution_failed:row_policy_invalid", stage: "row_grant", selectorIndex });
           return { ok: false, reason: `role_resolution_failed:${roleId}:row_policy_invalid` };
         }
         multiScoped = compiled.grant;
       }
 
+      let selectorHadUndeclaredConnection = false;
       for (const entry of matches) {
         // U-CAP-04: a capability source on an undeclared connection is a compile failure.
-        if (!declaredConnections.includes(entry.connectionId)) return failed;
+        if (!declaredConnections.includes(entry.connectionId)) {
+          selectorHadUndeclaredConnection = true;
+          break;
+        }
         const grant: RowGrant = multiScoped
           ? scopedGrantForSource(multiScoped, entry.sourceName)
           : { kind: "all" };
         const key = sourceIndexKey(entry.connectionId, entry.physicalTable);
         const existing = sourceGrants.get(key);
         if (existing && grantDigestToken(existing) !== grantDigestToken(grant)) {
+          recordStep({ status: "failed", code: "role_resolution_failed:row_grant_conflict", stage: "row_grant", selectorIndex });
           return { ok: false, reason: `role_resolution_failed:${roleId}:row_grant_conflict` };
         }
         sourceGrants.set(key, grant);
@@ -1132,6 +1255,36 @@ async function compileRole(
           table: entry.physicalTable
         });
       }
+      if (selectorHadUndeclaredConnection) {
+        recordStep({
+          status: "failed",
+          code: "role_resolution_failed:undeclared_connection",
+          stage: "selector_match",
+          selectorIndex,
+          connectionId: typeof selector.connection === "string" ? normalizeRef(selector.connection) : undefined,
+          schema: typeof selector.schema === "string" ? normalizeRef(selector.schema) : undefined,
+          names: declaredNames,
+          matchCount: matches.length,
+          unmatchedNames
+        });
+        return failed;
+      }
+      // Spec 177 — even on the success path, record a per-selector trace so a
+      // partial match (some names hit, some don't) is reviewable from the
+      // diagnostic. The compiled-role step pushed by the caller still carries
+      // the role-level status; this entry is the per-selector detail.
+      selectorTraces.push({
+        roleId,
+        ordinal,
+        status: "compiled",
+        stage: "selector_match",
+        selectorIndex,
+        connectionId: typeof selector.connection === "string" ? normalizeRef(selector.connection) : undefined,
+        schema: typeof selector.schema === "string" ? normalizeRef(selector.schema) : undefined,
+        names: declaredNames,
+        matchCount: matches.length,
+        ...(unmatchedNames && unmatchedNames.length > 0 ? { unmatchedNames } : {})
+      });
     }
   }
 
@@ -1147,7 +1300,8 @@ async function compileRole(
       sourceGrants,
       declaredConnections: catalogBound ? effectiveConnections : declaredConnections,
       hasSelectors: catalogBound || selectors.length > 0
-    }
+    },
+    selectorTraces
   };
 }
 
@@ -1168,6 +1322,15 @@ export function resolveRoleIds(user: { role?: string | null; roles?: unknown }):
   return { ok: true, roleIds: singleRole ? [singleRole] : [] };
 }
 
+async function buildContentRootDiagnostic(): Promise<{ contentRoot: string; contentRootSource: string }> {
+  try {
+    const paths = await loadContentPaths();
+    return { contentRoot: paths.configDir, contentRootSource: paths.source };
+  } catch {
+    return { contentRoot: "", contentRootSource: "default" };
+  }
+}
+
 async function resolveEffectivePermissions(
   identity: Identity,
   config: AccessConfig,
@@ -1175,20 +1338,60 @@ async function resolveEffectivePermissions(
   options: { freshSourceMap?: boolean; sourceMap?: SourceMapState; enabledTables?: Map<string, Set<string>> } = {}
 ): Promise<RoleResolutionResult> {
   const user = config.users.find((u) => u.id === identity.userId);
-  if (!user) return { ok: false, reason: "tool_forbidden" };
-  if (user.enabled === false) return { ok: false, reason: "agent_disabled" };
-  const state = options.sourceMap ?? await loadSourceMap({ fresh: options.freshSourceMap ?? true });
-  if (state.compileError) {
-    return { ok: false, reason: `source_map_compile_failed:${state.compileError}` };
+  const { contentRoot, contentRootSource } = await buildContentRootDiagnostic();
+  if (!user) {
+    return {
+      ok: false,
+      reason: "tool_forbidden",
+      diagnostic: {
+        declaredRoleIds: [],
+        steps: [],
+        contentRoot,
+        contentRootSource,
+        sourceMapVersion: ""
+      }
+    };
   }
+  if (user.enabled === false) {
+    return {
+      ok: false,
+      reason: "agent_disabled",
+      diagnostic: {
+        declaredRoleIds: [],
+        steps: [],
+        contentRoot,
+        contentRootSource,
+        sourceMapVersion: ""
+      }
+    };
+  }
+  const state = options.sourceMap ?? await loadSourceMap({ fresh: options.freshSourceMap ?? true });
   const sourceMapVersion = state.version;
+  const sourceMapConnectionIds = uniqueSorted([...state.forward.values()].map((entry) => entry.connectionId));
+  const baseDiagnostic = {
+    declaredRoleIds: [] as string[],
+    steps: [] as RoleCompileStep[],
+    contentRoot,
+    contentRootSource,
+    sourceMapVersion,
+    sourceMapConnectionIds
+  };
+  if (state.compileError) {
+    return {
+      ok: false,
+      reason: `source_map_compile_failed:${state.compileError}`,
+      diagnostic: baseDiagnostic
+    };
+  }
   const roleSet = resolveRoleIds(user);
-  if (!roleSet.ok) return { ok: false, reason: roleSet.reason };
+  if (!roleSet.ok) {
+    return { ok: false, reason: roleSet.reason, diagnostic: baseDiagnostic };
+  }
 
   if (roleSet.roleIds.length === 0) {
     if (Object.prototype.hasOwnProperty.call(user, "constraints")) {
       // Spec 100: constraints require DataPlane capability sources from Role Set.
-      return { ok: false, reason: "constraints_source_not_in_capability" };
+      return { ok: false, reason: "constraints_source_not_in_capability", diagnostic: baseDiagnostic };
     }
     const tools = configList(user.allow?.tools, []).filter(
       (tool) => tool === "*" || !absoluteDenyOrUnclassifiedReason(tool)
@@ -1218,15 +1421,44 @@ async function resolveEffectivePermissions(
         rolesJson: null,
         resolvedJson,
         legacyAllow: true
-      })
+      }),
+      diagnostic: baseDiagnostic
     };
   }
 
   const compiledRoles: CompiledRole[] = [];
-  for (const roleId of roleSet.roleIds) {
-    const compiled = await compileRole(roleId, config.roles?.[roleId], policy, state, options.enabledTables);
-    if (!compiled.ok) return { ok: false, reason: compiled.reason };
+  const steps: RoleCompileStep[] = [];
+  for (let ordinal = 0; ordinal < roleSet.roleIds.length; ordinal += 1) {
+    const roleId = roleSet.roleIds[ordinal];
+    const compiled = await compileRole(roleId, config.roles?.[roleId], policy, state, options.enabledTables, steps, ordinal);
+    if (!compiled.ok) {
+      // Spec 177 — failed role's step is already appended by compileRole with
+      // status="failed"; every subsequent declared role is "not_run".
+      for (let i = ordinal + 1; i < roleSet.roleIds.length; i += 1) {
+        steps.push({ roleId: roleSet.roleIds[i], ordinal: i, status: "not_run" });
+      }
+      return {
+        ok: false,
+        reason: compiled.reason,
+        failedRoleId: roleId,
+        diagnostic: {
+          declaredRoleIds: [...roleSet.roleIds],
+          steps,
+          failedRoleId: roleId,
+          contentRoot,
+          contentRootSource,
+          sourceMapVersion,
+          sourceMapConnectionIds
+        }
+      };
+    }
     compiledRoles.push(compiled.role);
+    // Per-selector traces precede the role-level "compiled" step so a partial
+    // match (some names hit, some don't) is reviewable from the diagnostic.
+    for (const trace of compiled.selectorTraces) {
+      steps.push(trace);
+    }
+    steps.push({ roleId, ordinal, status: "compiled" });
   }
 
   const capabilities = dedupeCapabilities(
@@ -1248,14 +1480,40 @@ async function resolveEffectivePermissions(
       (user as { constraints?: unknown }).constraints,
       capabilityRefs
     );
-    if (!compiledConstraints.ok) return { ok: false, reason: compiledConstraints.reason };
+    if (!compiledConstraints.ok) {
+      return {
+        ok: false,
+        reason: compiledConstraints.reason,
+        diagnostic: {
+          declaredRoleIds: [...roleSet.roleIds],
+          steps,
+          contentRoot,
+          contentRootSource,
+          sourceMapVersion,
+          sourceMapConnectionIds
+        }
+      };
+    }
     constraintsMap = compiledConstraints.constraints.bySource;
     agentConstraintsBySource = Object.fromEntries(constraintsMap.entries());
   }
 
   // Spec 100 §5 — FinalRows AND (DNF prune) for every capability source.
   const compiledFinalRows = compileFinalRowsBySource(capabilityRefs, constraintsMap);
-  if (!compiledFinalRows.ok) return { ok: false, reason: compiledFinalRows.reason };
+  if (!compiledFinalRows.ok) {
+    return {
+      ok: false,
+      reason: compiledFinalRows.reason,
+      diagnostic: {
+        declaredRoleIds: [...roleSet.roleIds],
+        steps,
+        contentRoot,
+        contentRootSource,
+        sourceMapVersion,
+        sourceMapConnectionIds
+      }
+    };
+  }
   const finalRowsBySource = compiledFinalRows.finalRowsBySource;
 
   const capabilityTools = new Set(capabilities.map((capability) => capability.tool));
@@ -1304,7 +1562,15 @@ async function resolveEffectivePermissions(
       legacyAllow: false,
       agentConstraintsBySource,
       finalRowsBySource
-    })
+    }),
+    diagnostic: {
+      declaredRoleIds: [...roleSet.roleIds],
+      steps,
+      contentRoot,
+      contentRootSource,
+      sourceMapVersion,
+      sourceMapConnectionIds
+    }
   };
 }
 
@@ -1486,7 +1752,18 @@ export async function effectivePermissions(identity: Identity): Promise<RoleReso
   if (runtime.degradedGlobal) {
     const lkg = runtime.byUserId.get(identity.userId);
     if (lkg) return lkg;
-    return { ok: false, reason: "policy_degraded_deny" };
+    return {
+      ok: false,
+      reason: "policy_degraded_deny",
+      diagnostic: {
+        declaredRoleIds: [],
+        steps: [],
+        contentRoot: "",
+        contentRootSource: "default",
+        sourceMapVersion: runtime.sourceMap.version,
+        sourceMapConnectionIds: uniqueSorted([...runtime.sourceMap.forward.values()].map((entry) => entry.connectionId))
+      }
+    };
   }
   const cached = runtime.byUserId.get(identity.userId);
   if (cached) return cached;
@@ -1709,10 +1986,19 @@ export async function allowedToolNames(identity: Identity): Promise<string[]> {
 
 // ─── EffectivePolicy compile / submit (Spec 98 §8 / WP-I5) ───────────────────
 
+/** Spec 177 — one degraded identity. `reason` stays the machine string; `diagnostic` is optional detail. */
+export interface PolicyDegradeIssue {
+  agentId: string;
+  reason: string;
+  diagnostic?: IdentityCompileDiagnostic;
+}
+
 export interface PolicyRuntimeStatus {
   policyVersion: string;
   degradedGlobal: boolean;
   degradedAgents: string[];
+  /** Spec 177 — per degraded identity. Empty when no identity failed compile. */
+  issues: PolicyDegradeIssue[];
   accessConfigDigest: string;
   sourceMapVersion: string;
   /** Spec 131 — sha256 of normalized connections→enabled_tables; feeds policyVersion. */
@@ -1770,11 +2056,30 @@ export function computePolicyVersion(
     .digest("hex");
 }
 
+function policyDegradeIssues(snapshot: EffectivePolicySnapshot | null): PolicyDegradeIssue[] {
+  if (!snapshot) return [];
+  const issues: PolicyDegradeIssue[] = [];
+  for (const agentId of [...snapshot.degradedAgents].sort()) {
+    const resolved = snapshot.byUserId.get(agentId);
+    if (!resolved || resolved.ok) {
+      issues.push({ agentId, reason: "agent_compile_failed" });
+      continue;
+    }
+    issues.push({
+      agentId,
+      reason: resolved.reason,
+      ...(resolved.diagnostic ? { diagnostic: resolved.diagnostic } : {})
+    });
+  }
+  return issues;
+}
+
 export function getPolicyRuntimeStatus(): PolicyRuntimeStatus {
   return {
     policyVersion: effectivePolicyRef?.policyVersion ?? "",
     degradedGlobal: effectivePolicyRef?.degradedGlobal ?? false,
     degradedAgents: effectivePolicyRef ? [...effectivePolicyRef.degradedAgents].sort() : [],
+    issues: policyDegradeIssues(effectivePolicyRef),
     accessConfigDigest: effectivePolicyRef?.accessConfigDigest ?? "",
     sourceMapVersion: effectivePolicyRef?.sourceMapVersion ?? "",
     enabledTablesDigest: effectivePolicyRef?.enabledTablesDigest ?? ""
@@ -2191,7 +2496,10 @@ function hasLegacyDirectAllow(user: { allow?: unknown }): boolean {
  */
 export async function resolveAdmissionSubject(
   userId: string
-): Promise<{ ok: true; subject: AdmissionSubject } | { ok: false; reason: string }> {
+): Promise<
+  | { ok: true; subject: AdmissionSubject }
+  | { ok: false; reason: string; diagnostic?: IdentityCompileDiagnostic }
+> {
   const runtime = await ensurePolicyRuntime();
   const user = runtime.config.users.find((u) => u.id === userId);
   if (!user) return { ok: false, reason: "agent_unresolved" };
@@ -2200,7 +2508,24 @@ export async function resolveAdmissionSubject(
   if (!roleSet.ok) return { ok: false, reason: roleSet.reason };
   for (const roleId of roleSet.roleIds) {
     const declared = runtime.config.roles?.[roleId];
-    if (!declared || typeof declared !== "object") return { ok: false, reason: `role_resolution_failed:${roleId}` };
+    if (!declared || typeof declared !== "object") {
+      // Spec 177 — surface a minimal diagnostic so the gate knows it stopped at
+      // a declared role without a usable YAML body.
+      const { contentRoot, contentRootSource } = await buildContentRootDiagnostic();
+      return {
+        ok: false,
+        reason: `role_resolution_failed:${roleId}`,
+        diagnostic: {
+          declaredRoleIds: [...roleSet.roleIds],
+          steps: [{ roleId, ordinal: roleSet.roleIds.indexOf(roleId), status: "failed", code: "role_resolution_failed:undeclared" }],
+          failedRoleId: roleId,
+          contentRoot,
+          contentRootSource,
+          sourceMapVersion: runtime.sourceMap.version,
+          sourceMapConnectionIds: uniqueSorted([...runtime.sourceMap.forward.values()].map((entry) => entry.connectionId))
+        }
+      };
+    }
   }
   if (roleSet.roleIds.length > 0) return { ok: true, subject: { roleIds: roleSet.roleIds, legacyDirectAllow: false } };
   if (!hasLegacyDirectAllow(user)) return { ok: false, reason: "role_resolution_failed:no_role_or_direct_allow" };

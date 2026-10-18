@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { resolveAdmissionSubject, type AdmissionSubject } from "./acl.js";
+import { formatIdentityCompilerReason, resolveAdmissionSubject, type AdmissionSubject } from "./acl.js";
 import { writeAuthFailureLog, type writeLog } from "./audit.js";
 import { identifyRequestDetailed, type Identity } from "./identity.js";
 import { extractRequestClientMeta } from "./request-client-meta.js";
@@ -50,7 +50,11 @@ export type AdmissionAuditEntry = Parameters<typeof writeLog>[0];
 /** Audit hooks owned by the proxy; injected so admission does not import it. */
 export interface AdmissionAudit {
   record(entry: AdmissionAuditEntry): void;
-  meta(identity: Identity, decisionReason: string): Promise<Partial<AdmissionAuditEntry>>;
+  meta(
+    identity: Identity,
+    decisionReason: string,
+    extra?: { compilerReason?: string }
+  ): Promise<Partial<AdmissionAuditEntry>>;
   correlation(headers: IncomingMessage["headers"]): Partial<AdmissionAuditEntry>;
 }
 
@@ -186,7 +190,8 @@ async function denyAdmitted(
   res: ServerResponse,
   identity: Identity,
   denial: { status: number; code: number; message: string; detail: string },
-  peeked: Peeked
+  peeked: Peeked,
+  extra?: { compilerReason?: string }
 ): Promise<void> {
   const responseBytes = writeJson(res, denial.status, rpcError(peeked.rpcId, denial.code, denial.message));
   const network = extractRequestClientMeta(req);
@@ -205,7 +210,7 @@ async function denyAdmitted(
     clientForwardedFor: network.clientForwardedFor,
     userAgent: network.userAgent,
     ...(network.deviceName ? { deviceName: network.deviceName } : {}),
-    ...(await audit.meta(identity, denial.detail))
+    ...(await audit.meta(identity, denial.detail, extra))
   });
 }
 
@@ -249,7 +254,16 @@ export async function admitMcpRequest(
   const resolved = await resolveAdmissionSubject(identity.userId);
   if (!resolved.ok) {
     const outward = resolved.reason.startsWith("role_resolution_failed") ? "role_resolution_failed" : resolved.reason;
-    await denyAdmitted(audit, req, res, identity, { ...accessDenied(resolved.reason, outward) }, peeked);
+    const compilerReason = formatIdentityCompilerReason(resolved.diagnostic);
+    await denyAdmitted(
+      audit,
+      req,
+      res,
+      identity,
+      { ...accessDenied(resolved.reason, outward) },
+      peeked,
+      compilerReason ? { compilerReason } : undefined
+    );
     return { ok: false };
   }
 

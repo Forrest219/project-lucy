@@ -24,7 +24,7 @@ import {
 } from "./upstream-session.js";
 import { extractRequestClientMeta, resolveClientIdentity } from "./request-client-meta.js";
 import { ensureSkillAuditReady, writeLog, writeAccessLogSources, writeConversationTurn, purgeExpiredConversationTurns, bindPriorSessionCalls, type AccessLogSourceRecord } from "./audit.js";
-import { allowedToolNames, authorizeAndRewrite, check as aclCheck, effectivePermissions, extractTables, extractSourceRefs, resolveSourceRefsForTables, kxCatalog, lucyCatalog, permissionSnapshot, type SourceRef } from "./acl.js";
+import { allowedToolNames, authorizeAndRewrite, check as aclCheck, effectivePermissions, extractTables, extractSourceRefs, formatIdentityCompilerReason, resolveSourceRefsForTables, kxCatalog, lucyCatalog, permissionSnapshot, type SourceRef } from "./acl.js";
 import {
   redactQuestionText,
   summarizeArgsForAudit,
@@ -658,13 +658,18 @@ function recordMcpTraceForTool(input: {
     });
 }
 
-async function auditMeta(identity: Identity | null | undefined, decisionReason: string): Promise<Partial<Parameters<typeof writeLog>[0]>> {
+async function auditMeta(
+  identity: Identity | null | undefined,
+  decisionReason: string,
+  extra?: { compilerReason?: string }
+): Promise<Partial<Parameters<typeof writeLog>[0]>> {
   const meta = await buildAccessLogAuditMeta(identity, decisionReason);
-  if (!identity?.actorId) return meta;
+  if (!identity?.actorId) return extra?.compilerReason ? { ...meta, compilerReason: extra.compilerReason } : meta;
   return {
     ...meta,
     actorId: identity.actorId,
     actorKind: identity.actorKind,
+    ...(extra?.compilerReason ? { compilerReason: extra.compilerReason } : {})
   };
 }
 
@@ -1590,23 +1595,101 @@ async function connectionList(identity: Identity): Promise<{
 // are guidance, not a security boundary, and a buggy rewriter must not block
 // MCP session establishment for every client.
 //
-// The loader is one-shot at module init; if the file is missing or unreadable
-// we treat it as "injection unavailable" and silently pass-through rather than
-// crash the proxy.
+// Loader state for the data-QA guidance injected into MCP `initialize` responses.
+// Project file takes precedence over the bundled mirror; on read failure the next
+// call retries (a missing or temporarily-unreadable file must not poison the
+// proxy for its lifetime). Successes can be cached and tests can call
+// `invalidateDataQaInstructionsCache()` to force a re-read.
+type DataQaInstructionsSource = "project" | "mirror" | "missing";
+
+interface DataQaInstructionsStatus {
+  source: DataQaInstructionsSource;
+  /** Bytes trimmed length of the loaded text. 0 when missing / failed. */
+  length: number;
+  /** Last error message (if any) from a project or mirror read. */
+  lastError: string | null;
+  /** When the cached value was last successfully loaded. */
+  loadedAt: string | null;
+}
+
 let cachedDataQaInstructions: string | undefined;
-let cachedDataQaInstructionsLoaded = false;
-async function loadDataQaInstructions(): Promise<string | undefined> {
-  if (cachedDataQaInstructionsLoaded) return cachedDataQaInstructions;
-  cachedDataQaInstructionsLoaded = true;
+let cachedDataQaInstructionsSource: DataQaInstructionsSource = "missing";
+let cachedDataQaInstructionsError: string | null = null;
+let cachedDataQaInstructionsLoadedAt: string | null = null;
+
+const DEFAULT_DATA_QA_INSTRUCTIONS_MIRROR = "/app/webui/config/data-qa-instructions.md";
+let dataQaInstructionsMirrorOverride: string | null = null;
+
+export function setDataQaInstructionsMirrorPath(mirrorPath: string | null): void {
+  dataQaInstructionsMirrorOverride = mirrorPath;
+  invalidateDataQaInstructionsCache();
+}
+
+export function invalidateDataQaInstructionsCache(): void {
+  cachedDataQaInstructions = undefined;
+  cachedDataQaInstructionsSource = "missing";
+  cachedDataQaInstructionsError = null;
+  cachedDataQaInstructionsLoadedAt = null;
+}
+
+export function getDataQaInstructionsStatus(): DataQaInstructionsStatus {
+  return {
+    source: cachedDataQaInstructionsSource,
+    length: cachedDataQaInstructions?.length ?? 0,
+    lastError: cachedDataQaInstructionsError,
+    loadedAt: cachedDataQaInstructionsLoadedAt
+  };
+}
+
+async function readDataQaInstructionsFile(filePath: string): Promise<string> {
+  const text = (await readFile(filePath, "utf-8")).trim();
+  if (text.length === 0) throw new Error(`data-qa-instructions.md at ${filePath} is empty`);
+  return text;
+}
+
+export async function loadDataQaInstructions(): Promise<string | undefined> {
+  if (cachedDataQaInstructions && cachedDataQaInstructionsLoadedAt) return cachedDataQaInstructions;
+  const projectRoot = await resolveProjectRoot();
+  const projectFilePath = path.join(projectRoot, "webui", "config", "data-qa-instructions.md");
+  const mirrorFilePath = dataQaInstructionsMirrorOverride ?? DEFAULT_DATA_QA_INSTRUCTIONS_MIRROR;
+
+  // Project file wins; ENOENT falls through to the bundled mirror.
   try {
-    const projectRoot = await resolveProjectRoot();
-    const filePath = path.join(projectRoot, "webui", "config", "data-qa-instructions.md");
-    cachedDataQaInstructions = (await readFile(filePath, "utf-8")).trim();
+    const text = await readDataQaInstructionsFile(projectFilePath);
+    cachedDataQaInstructions = text;
+    cachedDataQaInstructionsSource = "project";
+    cachedDataQaInstructionsError = null;
+    cachedDataQaInstructionsLoadedAt = new Date().toISOString();
+    return cachedDataQaInstructions;
   } catch (err) {
-    console.error("[lucy-proxy] failed to load data-qa-instructions.md; initialize will pass through", err);
-    cachedDataQaInstructions = undefined;
+    const projectErr = err instanceof Error ? err.message : String(err);
+    if (!isFileNotFound(err)) {
+      console.error("[lucy-proxy] failed to read project data-qa-instructions.md", err);
+    }
+    try {
+      const text = await readDataQaInstructionsFile(mirrorFilePath);
+      cachedDataQaInstructions = text;
+      cachedDataQaInstructionsSource = "mirror";
+      cachedDataQaInstructionsError = projectErr;
+      cachedDataQaInstructionsLoadedAt = new Date().toISOString();
+      return cachedDataQaInstructions;
+    } catch (mirrorErr) {
+      const message = mirrorErr instanceof Error ? mirrorErr.message : String(mirrorErr);
+      if (!isFileNotFound(mirrorErr)) {
+        console.error("[lucy-proxy] failed to read mirror data-qa-instructions.md", mirrorErr);
+      }
+      cachedDataQaInstructions = undefined;
+      cachedDataQaInstructionsSource = "missing";
+      cachedDataQaInstructionsError = message;
+      cachedDataQaInstructionsLoadedAt = null;
+      console.error("[lucy-proxy] data-qa-instructions unavailable; initialize will pass through", mirrorErr);
+      return undefined;
+    }
   }
-  return cachedDataQaInstructions;
+}
+
+function isFileNotFound(err: unknown): boolean {
+  return Boolean(err && typeof err === "object" && (err as { code?: string }).code === "ENOENT");
 }
 
 async function buildRoleAwareInstructions(identity: Identity): Promise<string | undefined> {
@@ -3253,7 +3336,11 @@ async function buildDenialRepairPayload(
     const decision = await aclCheck(identity, toolName, toolArgs);
     if (!decision.allowed) {
       const errorMsg = decision.reason ?? "denied";
-      const meta = await auditMeta(identity, errorMsg);
+      const compiled = await effectivePermissions(identity).catch(() => null);
+      const compilerReason = compiled && !compiled.ok
+        ? formatIdentityCompilerReason(compiled.diagnostic)
+        : undefined;
+      const meta = await auditMeta(identity, errorMsg, compilerReason ? { compilerReason } : undefined);
       // Spec 162 §7.3 / SC-14 — discover_data, entity_details,
       // dictionary_search, lucy_query and lucy_read_source share this one
       // allow-list function. Names outside the caller's ACL never appear.
@@ -4468,6 +4555,12 @@ async function buildDenialRepairPayload(
 
   if (rpcMethod === "tools/list") {
     const toolsList = await writeToolsListResponse(identity, upstream, upstreamBody, res, requestId, upstreamSession);
+    // Spec 177 — keep HTTP 200 and decision "allowed" (T1 is out of scope). When
+    // compile failed, the admin diagnostic still lands in compiler_reason.
+    const compiled = await effectivePermissions(identity).catch(() => null);
+    const compilerReason = compiled && !compiled.ok
+      ? formatIdentityCompilerReason(compiled.diagnostic)
+      : undefined;
     recordRequestAudit({
       ts: new Date().toISOString(),
       userId: identity.userId,
@@ -4479,10 +4572,14 @@ async function buildDenialRepairPayload(
       responseBytes: toolsList.responseBytes,
       requestId,
       ...requestMeta,
-      ...(await auditMeta(identity, withUpstreamSessionNote(
-        toolsList.upstreamFailure ?? (toolsList.filterFailed ? "tools_list_filter_failed" : "allowed"),
-        upstreamSession
-      ))),
+      ...(await auditMeta(
+        identity,
+        withUpstreamSessionNote(
+          toolsList.upstreamFailure ?? (toolsList.filterFailed ? "tools_list_filter_failed" : "allowed"),
+          upstreamSession
+        ),
+        compilerReason ? { compilerReason } : undefined
+      )),
     });
     return;
   }

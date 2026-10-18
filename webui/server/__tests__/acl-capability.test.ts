@@ -298,7 +298,12 @@ describe("WP-I3 Capability synthesis and authorize gate", () => {
 
     await expect(effectivePermissions(identity("undeclared_connection_agent"))).resolves.toEqual({
       ok: false,
-      reason: "role_resolution_failed:undeclared_connection"
+      reason: "role_resolution_failed:undeclared_connection",
+      failedRoleId: expect.any(String),
+      diagnostic: expect.objectContaining({
+        declaredRoleIds: expect.arrayContaining([expect.any(String)]),
+        steps: expect.arrayContaining([expect.objectContaining({ status: "failed" })])
+      })
     });
 
     await expect(lucyCatalog(identity("undeclared_connection_agent"))).resolves.toEqual({

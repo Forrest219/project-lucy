@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import Fastify, { type FastifyError, type FastifyReply, type FastifyRequest } from "fastify";
 import { parse, parseDocument } from "yaml";
-import { buildProxy } from "./proxy/mcp-proxy.js";
+import { buildProxy, getDataQaInstructionsStatus } from "./proxy/mcp-proxy.js";
 import { serveStaticAsset } from "./static-assets";
 import { addTiming, registerEntryPerformanceTiming, withRequestTiming } from "./entry-performance-timing";
 import { displayGenerations, onDisplayGenerationChange, withDisplayWriteBarrier } from "./display-generation";
@@ -682,7 +682,11 @@ export function buildServer() {
           degradedAgents: policy.degradedAgents,
           healthy: policyHealthy
         },
-        execution: mcpRuntime.execution
+        execution: mcpRuntime.execution,
+        // T9 — guidance is advisory; missing guidance must not fail liveness.
+        // The status is exposed for operator visibility and so an Admin can
+        // confirm the proxy is still functional when the file is being rolled out.
+        dataQaInstructions: getDataQaInstructionsStatus()
       }
     };
   });

@@ -301,7 +301,9 @@ describe("WP-I4 permission_model_version", () => {
 
     await expect(effectivePermissions(identity("v2_prefix_agent"))).resolves.toEqual({
       ok: false,
-      reason: "role_resolution_failed:v2_prefix:v2_prefix_forbidden"
+      reason: "role_resolution_failed:v2_prefix:v2_prefix_forbidden",
+      failedRoleId: "v2_prefix",
+      diagnostic: expect.any(Object)
     });
     await expect(authorizeAndRewrite(identity("v2_prefix_agent"), "lucy_query", {
       connectionId: "warehouse",
@@ -324,11 +326,15 @@ describe("WP-I4 permission_model_version", () => {
 
     await expect(effectivePermissions(identity("v2_missing_row_access_agent"))).resolves.toEqual({
       ok: false,
-      reason: "role_resolution_failed:v2_missing_row_access:v2_row_access_required"
+      reason: "role_resolution_failed:v2_missing_row_access:v2_row_access_required",
+      failedRoleId: "v2_missing_row_access",
+      diagnostic: expect.any(Object)
     });
     await expect(effectivePermissions(identity("bad_version_agent"))).resolves.toEqual({
       ok: false,
-      reason: "role_resolution_failed:bad_version:invalid_permission_model_version"
+      reason: "role_resolution_failed:bad_version:invalid_permission_model_version",
+      failedRoleId: "bad_version",
+      diagnostic: expect.any(Object)
     });
 
     const scopedOk = await effectivePermissions(identity("v2_scoped_ok_agent"));

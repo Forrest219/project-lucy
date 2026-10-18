@@ -799,6 +799,16 @@ export type PolicyRuntimeStatus = {
   policyVersion: string;
   degradedGlobal: boolean;
   degradedAgents: string[];
+  /** Spec 177 — machine reason plus the compile diagnostic for each degraded identity. */
+  issues?: Array<{
+    agentId: string;
+    reason: string;
+    diagnostic?: {
+      declaredRoleIds: string[];
+      failedRoleId?: string;
+      steps: Array<{ roleId: string; ordinal: number; status: "compiled" | "failed" | "not_run"; code?: string }>;
+    };
+  }>;
   accessConfigDigest: string;
   sourceMapVersion: string;
   enabledTablesDigest?: string;

@@ -970,7 +970,9 @@ ${BASE_ROLE_TOOLS}`,
     const { effectivePermissions } = await loadAcl();
     await expect(effectivePermissions(identity("v1_scoped_agent"))).resolves.toEqual({
       ok: false,
-      reason: "role_resolution_failed:v1_scoped:v1_scoped_forbidden"
+      reason: "role_resolution_failed:v1_scoped:v1_scoped_forbidden",
+      failedRoleId: "v1_scoped",
+      diagnostic: expect.any(Object)
     });
   });
 });
