@@ -37,6 +37,6 @@
 | 9 | T14，Spec 186 | 已提交 `43342ca`。只读核对客户入口未发布 7878，客户 token 与内部凭据是否不同，以及 GRANT 文本清单。 | 不改数据库授权，不把内部 token 写进日志 |
 | 10 | R0，Spec 187 | 已提交 `57a23b5`。只读快照清单记下 D1–D3、连接、内容指纹和审计快照哈希。`writes` 为空。 | 不改运行配置 |
 | 11 | R1，Spec 188 | 已提交 `d9f0e3b`。恢复候选列出连接 id、两张 Manifest 表、overlay、角色 selector 和 `mirror_only`。`apply` 为 false。 | 不纳入 UID 表，不自动扩成四表 |
-| 12 | R2、R3、T15 | 按已审查的候选实施，保留回退。原受影响身份做真实客户端结构化查询；未授权表拒绝；其他身份不受影响。 | 容器健康或工具清单非空单独不算完成 |
+| 12 | R2、R3、T15 | 已写入运行实例。连接 id 为 `mysql-aliyun`，启用表范围为 `chatbi.ai_intl_ad_daily`、`chatbi.ai_intl_country_daily`。Cursor 结构化查询这两张表有数；留存表和 UID 表被拒绝；Superstore 仍可查询。回退副本在本机 `/tmp/lucy-r2-backup-20261018`。 | 不删除 sibling 语义目录，不把留存表或 UID 表加回 |
 
 T15 的自动化夹具可以随各批补上。对运行实例的真实客户端验收只在第 12 批。
