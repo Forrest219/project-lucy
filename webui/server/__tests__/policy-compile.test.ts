@@ -151,8 +151,12 @@ describe("WP-I5 EffectivePolicy compile + submit", () => {
     expect(status.degradedAgents).toContain("bad_agent");
     expect(status.degradedAgents).not.toContain("ok_agent");
     expect(status.issues).toEqual([
-      { agentId: "bad_agent", reason: "role_resolution_failed:bad_role:v2_prefix_forbidden" }
+      expect.objectContaining({
+        agentId: "bad_agent",
+        reason: "role_resolution_failed:bad_role:v2_prefix_forbidden"
+      })
     ]);
+    expect(status.issues[0]?.diagnostic?.failedRoleId).toBe("bad_role");
 
     await expect(
       acl.authorizeAndRewrite(identity("bad_agent"), "lucy_query", {
