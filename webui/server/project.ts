@@ -17,6 +17,7 @@ import { loadContentPaths } from "./paths";
 import type {
   AddSchemaPreview,
   AddSchemaResult,
+  Blocker,
   ConnectionInfo,
   CreateConnectionPreview,
   CreateConnectionResult,
@@ -227,6 +228,19 @@ export class ConnectionDeleteSecretNotEligibleError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "ConnectionDeleteSecretNotEligibleError";
+  }
+}
+
+/** Spec 179 §3: confirmation rejected because references still exist; deletes stay rolled-back. */
+export class ConnectionReferencesRemainError extends Error {
+  code = "connection_references_remain";
+  statusCode = 409;
+  detail: { blockers: import("./model").Blocker[] };
+
+  constructor(message: string, blockers: import("./model").Blocker[]) {
+    super(message);
+    this.name = "ConnectionReferencesRemainError";
+    this.detail = { blockers };
   }
 }
 
@@ -1026,45 +1040,120 @@ async function walkYamlFiles(absDir: string, relDir: string): Promise<string[]> 
   return out;
 }
 
-async function collectAclRoleIds(root: string, connId: string): Promise<string[]> {
+async function readAccessConfigIfExists(root: string): Promise<Record<string, unknown> | null> {
   let raw: string;
   try {
     raw = await readFile(path.join(root, "webui", "config", "access.yaml"), "utf8");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
-    return [];
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    return null;
   }
   let parsed: unknown;
   try {
     parsed = parse(raw);
   } catch {
-    return [];
+    return null;
   }
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return [];
-  const roles = (parsed as Record<string, unknown>).roles;
-  if (!roles || typeof roles !== "object" || Array.isArray(roles)) return [];
-  const ids: string[] = [];
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+  return parsed as Record<string, unknown>;
+}
+
+type RoleConnectionKind = "role_connection" | "role_selector";
+
+async function collectRoleReferenceRolesByKind(
+  config: Record<string, unknown> | null,
+  connId: string
+): Promise<Record<RoleConnectionKind, string[]>> {
+  const out: Record<RoleConnectionKind, string[]> = {
+    role_connection: [],
+    role_selector: []
+  };
+  if (!config) return out;
+  const roles = config.roles;
+  if (!roles || typeof roles !== "object" || Array.isArray(roles)) return out;
   for (const [roleId, roleValue] of Object.entries(roles as Record<string, unknown>)) {
     if (!roleValue || typeof roleValue !== "object" || Array.isArray(roleValue)) continue;
     const allow = (roleValue as Record<string, unknown>).allow;
     if (!allow || typeof allow !== "object" || Array.isArray(allow)) continue;
-    const connections = (allow as Record<string, unknown>).connections;
-    const listed = Array.isArray(connections)
-      ? connections.some((item) => item === connId)
-      : false;
-    const selectors = (allow as Record<string, unknown>).tableSelectors;
-    const inSelectors = Array.isArray(selectors)
-      ? selectors.some(
-          (row) =>
-            row &&
-            typeof row === "object" &&
-            !Array.isArray(row) &&
-            (row as Record<string, unknown>).connection === connId
-        )
-      : false;
-    if (listed || inSelectors) ids.push(roleId);
+    const allowRecord = allow as Record<string, unknown>;
+    const connections = allowRecord.connections;
+    if (
+      Array.isArray(connections) &&
+      connections.some((item) => item === connId)
+    ) {
+      out.role_connection.push(roleId);
+      continue;
+    }
+    const selectors = allowRecord.tableSelectors;
+    if (
+      Array.isArray(selectors) &&
+      selectors.some(
+        (row) =>
+          row &&
+          typeof row === "object" &&
+          !Array.isArray(row) &&
+          (row as Record<string, unknown>).connection === connId
+      )
+    ) {
+      out.role_selector.push(roleId);
+    }
   }
-  return ids;
+  return out;
+}
+
+function collectIdentityUsersByRole(
+  config: Record<string, unknown> | null,
+  roleIds: ReadonlySet<string>
+): string[] {
+  if (!config || roleIds.size === 0) return [];
+  const users = config.users;
+  if (!Array.isArray(users)) return [];
+  const out: string[] = [];
+  for (const user of users) {
+    if (!user || typeof user !== "object" || Array.isArray(user)) continue;
+    const userRecord = user as Record<string, unknown>;
+    const role = userRecord.role;
+    const id = userRecord.id;
+    if (typeof role === "string" && typeof id === "string" && roleIds.has(role)) {
+      out.push(id);
+    }
+  }
+  return out;
+}
+
+/**
+ * Spec 179 §2: report Wiki pages whose `sl_refs` equal the connection id
+ * or start with `<connId>/`. Returns each page's relative-to-root key
+ * (prefixed with `wiki/` when missing) so Admin callers can show a path
+ * the operator already understands.
+ */
+async function collectWikiBlockingPages(
+  root: string,
+  connId: string,
+  listWikiFn?: typeof import("./wiki").listWiki
+): Promise<string[]> {
+  try {
+    const fn = listWikiFn ?? (await import("./wiki")).listWiki;
+    const pages = await fn(root);
+    const prefix = `${connId}/`;
+    const matching = pages.filter((page) =>
+      page.slRefs.some((ref) => ref === connId || ref.startsWith(prefix))
+    );
+    return matching.map((page) =>
+      page.key.startsWith("wiki/") ? page.key : `wiki/${page.key}`
+    );
+  } catch {
+    return [];
+  }
+}
+
+async function collectAclRoleIds(root: string, connId: string): Promise<string[]> {
+  // Kept for callers that only need the flat role-id summary; the new
+  // removeConnection flow uses collectRoleReferenceRolesByKind directly
+  // so it can distinguish `role_connection` from `role_selector` blockers.
+  const config = await readAccessConfigIfExists(root);
+  const byKind = await collectRoleReferenceRolesByKind(config, connId);
+  return [...byKind.role_connection, ...byKind.role_selector];
 }
 
 function connectionDeleteMutatorFactory(connId: string) {
@@ -1151,25 +1240,37 @@ async function removeConnectionUnbarriered(
   const diff = previewDiff(safeOldText, safeProposedYaml, "ktx.yaml");
 
   const yamlAssetPaths = await listConnectionYamlAssets(root, connId);
-  const aclRoleIds = await collectAclRoleIds(root, connId);
+  const accessConfig = await readAccessConfigIfExists(root);
+  const rolesByKind = await collectRoleReferenceRolesByKind(accessConfig, connId);
+  const aclRoleIds = [...rolesByKind.role_connection, ...rolesByKind.role_selector];
+  // Users (identities) inherit any role reference; report each user id once
+  // per matched role so an operator can find both the role and its bearers.
+  const referencedRoleIds = new Set<string>(aclRoleIds);
+  const identityUserIds = collectIdentityUsersByRole(accessConfig, referencedRoleIds);
 
-  let wikiRefCount = 0;
-  let wikiSamplePaths: string[] = [];
-  try {
-    const listWikiFn = options.listWikiFn ?? (await import("./wiki")).listWiki;
-    const wikiPages = await listWikiFn(root);
-    const slRefPrefix = `${connId}/`;
-    const matching = wikiPages.filter((page) =>
-      page.slRefs.some((ref) => ref === connId || ref.startsWith(slRefPrefix))
-    );
-    wikiRefCount = matching.length;
-    wikiSamplePaths = matching.slice(0, 5).map((page) =>
-      page.key.startsWith("wiki/") ? page.key : `wiki/${page.key}`
-    );
-  } catch {
-    wikiRefCount = 0;
-    wikiSamplePaths = [];
-  }
+  const wikiBlockingPages = await collectWikiBlockingPages(root, connId, options.listWikiFn);
+  const wikiRefCount = wikiBlockingPages.length;
+  const wikiSamplePaths = wikiBlockingPages.slice(0, 5);
+
+  // Spec 179 §2: blockers always reported; semantic_asset blockers are
+  // *carried* in the response even when the missing directory is empty,
+  // but only count as blocking when `deleteAssets` is not requested.
+  const blockers: Blocker[] = [
+    ...rolesByKind.role_connection.map<Blocker>((id) => ({ kind: "role_connection", id })),
+    ...rolesByKind.role_selector.map<Blocker>((id) => ({ kind: "role_selector", id })),
+    ...identityUserIds.map<Blocker>((id) => ({ kind: "identity", id })),
+    ...wikiBlockingPages.map<Blocker>((id) => ({ kind: "wiki", id })),
+    ...yamlAssetPaths.map<Blocker>((id) => ({ kind: "semantic_asset", id }))
+  ];
+  // deleteAssets:true is the only opt-out: roles/identities/wiki never
+  // auto-resolve, so the deleted-them-alongside guard never weakens them.
+  const semanticAssetStillBlocks = yamlAssetPaths.length > 0 && !options.deleteAssets;
+  const blocked =
+    rolesByKind.role_connection.length > 0 ||
+    rolesByKind.role_selector.length > 0 ||
+    identityUserIds.length > 0 ||
+    wikiBlockingPages.length > 0 ||
+    semanticAssetStillBlocks;
 
   const impact = {
     canDeleteSecret,
@@ -1177,7 +1278,9 @@ async function removeConnectionUnbarriered(
     yamlAssetPaths,
     aclRoleIds,
     wikiRefCount,
-    wikiSamplePaths
+    wikiSamplePaths,
+    blockers,
+    blocked
   };
 
   if (dryRun) {
@@ -1187,8 +1290,20 @@ async function removeConnectionUnbarriered(
       connectionId: connId,
       schemas: oldSchemas,
       enabledTables,
+      blocked,
       impact
     };
+  }
+
+  // Spec 179 §3: a confirmation with remaining references is rejected
+  // before we touch ktx.yaml, secret files, semantic assets, or audit logs.
+  // The pre-flight must run unconditionally — caller-supplied confirmation
+  // fields can never bypass it.
+  if (blocked) {
+    throw new ConnectionReferencesRemainError(
+      `Connection '${connId}' still has references; update or remove them before deleting`,
+      blockers
+    );
   }
 
   if (options.deleteSecret && !canDeleteSecret) {

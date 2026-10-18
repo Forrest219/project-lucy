@@ -6,6 +6,7 @@ import {
   ConnectionDeleteSecretNotEligibleError,
   ConnectionIdInvalidError,
   ConnectionNotFoundError,
+  ConnectionReferencesRemainError,
   KtxYamlParseError,
   removeConnection
 } from "../project";
@@ -208,14 +209,28 @@ describe("removeConnection — write", () => {
     expect(yaml).toContain("- keep-me");
   });
 
-  it("does not delete inline secrets or yaml assets by default", async () => {
+  it("rejects the write when a semantic asset still exists and deleteAssets is unset", async () => {
     const root = await makeProject(baseYaml());
     await mkdir(path.join(root, "semantic-layer", "mysql-aliyun"), { recursive: true });
     const overlay = path.join(root, "semantic-layer", "mysql-aliyun", "superstore_orders.yaml");
     await writeFile(overlay, "grain: []\n", "utf8");
 
-    await removeConnection(root, "mysql-aliyun", false);
+    // Spec 179: semantic_asset is the only kind that deleteAssets can override.
+    // With it unset, the confirmation is rejected before ktx.yaml touches disk
+    // and the asset on disk is left intact.
+    const rejected = removeConnection(root, "mysql-aliyun", false);
+    await expect(rejected).rejects.toBeInstanceOf(ConnectionReferencesRemainError);
+    await expect(rejected).rejects.toMatchObject({
+      code: "connection_references_remain",
+      detail: {
+        blockers: [
+          { kind: "semantic_asset", id: "semantic-layer/mysql-aliyun/superstore_orders.yaml" }
+        ]
+      }
+    });
     await expect(readFile(overlay, "utf8")).resolves.toBe("grain: []\n");
+    const yaml = await readFile(path.join(root, "ktx.yaml"), "utf8");
+    expect(yaml).toContain("mysql-aliyun:");
   });
 
   it("deletes conventional secret and yaml assets when opted in", async () => {
@@ -263,18 +278,220 @@ describe("removeConnection — write", () => {
     expect(yaml).toContain("mysql-aliyun:");
   });
 
-  it("does not rewrite access.yaml", async () => {
+  it("does not rewrite access.yaml when the connection is cleanly removed", async () => {
     const root = await makeProject(baseYaml());
     await mkdir(path.join(root, "webui", "config"), { recursive: true });
     const accessPath = path.join(root, "webui", "config", "access.yaml");
+    // The role below references *another* connection so it does not act as a
+    // blocker for `mysql-aliyun`; this isolates the "access.yaml is untouched"
+    // contract from the reference guard introduced by Spec 179.
     const accessYaml = `roles:
   finance_readonly:
     allow:
       connections:
-        - mysql-aliyun
+        - keep-me
 `;
     await writeFile(accessPath, accessYaml, "utf8");
     await removeConnection(root, "mysql-aliyun", false);
     expect(await readFile(accessPath, "utf8")).toBe(accessYaml);
+  });
+});
+
+describe("removeConnection — Spec 179 reference guard", () => {
+  it("blocks confirmation when a role selector still points at the connection", async () => {
+    const root = await makeProject(baseYaml());
+    // No semantic-layer/<connId>/ directory: the guard must still fire.
+    await mkdir(path.join(root, "webui", "config"), { recursive: true });
+    await writeFile(
+      path.join(root, "webui", "config", "access.yaml"),
+      `roles:
+  finance_readonly:
+    allow:
+      tableSelectors:
+        - connection: mysql-aliyun
+          schema: dataforai
+          names: [superstore_orders]
+users:
+  - id: demo_agent
+    name: Demo Agent
+    enabled: true
+    tokens: []
+    role: finance_readonly
+`,
+      "utf8"
+    );
+
+    const preview = await removeConnection(root, "mysql-aliyun", true);
+    expect(preview.blocked).toBe(true);
+    expect(preview.impact.blocked).toBe(true);
+    expect(preview.impact.blockers).toEqual([
+      { kind: "role_selector", id: "finance_readonly" },
+      { kind: "identity", id: "demo_agent" }
+    ]);
+
+    const rejected = removeConnection(root, "mysql-aliyun", false);
+    await expect(rejected).rejects.toBeInstanceOf(ConnectionReferencesRemainError);
+    await expect(rejected).rejects.toMatchObject({
+      code: "connection_references_remain",
+      statusCode: 409,
+      detail: {
+        blockers: [
+          { kind: "role_selector", id: "finance_readonly" },
+          { kind: "identity", id: "demo_agent" }
+        ]
+      }
+    });
+    const yaml = await readFile(path.join(root, "ktx.yaml"), "utf8");
+    expect(yaml).toContain("mysql-aliyun:");
+  });
+
+  it("blocks when the role references the connection via allow.connections", async () => {
+    const root = await makeProject(baseYaml());
+    await mkdir(path.join(root, "webui", "config"), { recursive: true });
+    await writeFile(
+      path.join(root, "webui", "config", "access.yaml"),
+      `roles:
+  finance_readonly:
+    allow:
+      connections:
+        - mysql-aliyun
+users:
+  - id: demo_agent
+    name: Demo Agent
+    enabled: true
+    tokens: []
+    role: finance_readonly
+`,
+      "utf8"
+    );
+
+    const preview = await removeConnection(root, "mysql-aliyun", true);
+    expect(preview.blocked).toBe(true);
+    expect(preview.impact.blockers.map((b) => b.kind)).toEqual(
+      expect.arrayContaining(["role_connection", "identity"])
+    );
+    await expect(
+      removeConnection(root, "mysql-aliyun", false, { deleteAssets: true })
+    ).rejects.toBeInstanceOf(ConnectionReferencesRemainError);
+  });
+
+  it("blocks when a Wiki page lists the connection in sl_refs", async () => {
+    const root = await makeProject(baseYaml());
+    const wikiList = async () => [
+      {
+        key: "global/playbook.md",
+        summary: "",
+        tags: [],
+        slRefs: ["mysql-aliyun/dataforai/superstore_orders"]
+      },
+      { key: "global/other.md", summary: "", tags: [], slRefs: ["keep-me/other/t"] }
+    ];
+    const preview = await removeConnection(root, "mysql-aliyun", true, {
+      listWikiFn: wikiList
+    });
+    expect(preview.blocked).toBe(true);
+    expect(preview.impact.blockers).toContainEqual({
+      kind: "wiki",
+      id: "wiki/global/playbook.md"
+    });
+
+    await expect(
+      removeConnection(root, "mysql-aliyun", false, { listWikiFn: wikiList })
+    ).rejects.toBeInstanceOf(ConnectionReferencesRemainError);
+    const yaml = await readFile(path.join(root, "ktx.yaml"), "utf8");
+    expect(yaml).toContain("mysql-aliyun:");
+  });
+
+  it("deleteAssets:true removes semantic_asset from the block set but keeps role refs blocking", async () => {
+    const root = await makeProject(baseYaml());
+    await mkdir(path.join(root, "semantic-layer", "mysql-aliyun", "_schema"), { recursive: true });
+    await writeFile(
+      path.join(root, "semantic-layer", "mysql-aliyun", "_schema", "dataforai.yaml"),
+      "tables: {}\n",
+      "utf8"
+    );
+    await mkdir(path.join(root, "webui", "config"), { recursive: true });
+    await writeFile(
+      path.join(root, "webui", "config", "access.yaml"),
+      `roles:
+  finance_readonly:
+    allow:
+      connections:
+        - mysql-aliyun
+`,
+      "utf8"
+    );
+
+    const preview = await removeConnection(root, "mysql-aliyun", true, { deleteAssets: true });
+    // semantic_asset is still in `blockers` for visibility but no longer drives `blocked`.
+    expect(preview.impact.blockers).toContainEqual({
+      kind: "semantic_asset",
+      id: "semantic-layer/mysql-aliyun/_schema/dataforai.yaml"
+    });
+    expect(preview.impact.blockers).toContainEqual({
+      kind: "role_connection",
+      id: "finance_readonly"
+    });
+    expect(preview.blocked).toBe(true);
+
+    // Adding the role reference means deleteAssets alone cannot unblock.
+    await expect(
+      removeConnection(root, "mysql-aliyun", false, { deleteAssets: true })
+    ).rejects.toBeInstanceOf(ConnectionReferencesRemainError);
+  });
+
+  it("reports role_selector blockers even when the semantic-layer directory is absent", async () => {
+    const root = await makeProject(baseYaml());
+    // No semantic-layer/, no access.yaml — ensure absence of files does NOT
+    // hide the role reference; here we only set access.yaml.
+    await mkdir(path.join(root, "webui", "config"), { recursive: true });
+    await writeFile(
+      path.join(root, "webui", "config", "access.yaml"),
+      `roles:
+  finance_readonly:
+    allow:
+      tableSelectors:
+        - connection: mysql-aliyun
+          schema: dataforai
+          names: [superstore_orders]
+`,
+      "utf8"
+    );
+
+    const preview = await removeConnection(root, "mysql-aliyun", true);
+    expect(preview.impact.blockers).toEqual([
+      { kind: "role_selector", id: "finance_readonly" }
+    ]);
+    expect(preview.blocked).toBe(true);
+  });
+
+  it("allows the delete when no references remain (deleteAssets completes the run)", async () => {
+    const root = await makeProject(`connections:
+  mysql-aliyun:
+    driver: mysql
+    host: localhost
+    port: 3306
+    database: dataforai
+    username: sc
+    password: inline-secret
+    schemas: []
+    enabled_tables: []
+`);
+    await mkdir(path.join(root, "semantic-layer", "mysql-aliyun", "_schema"), { recursive: true });
+    const manifest = path.join(root, "semantic-layer", "mysql-aliyun", "_schema", "dataforai.yaml");
+    await writeFile(manifest, "tables: {}\n", "utf8");
+
+    // No access.yaml, no wiki refs → no role/identity/wiki blockers; the
+    // semantic_asset blocker is the only entry and is unblocked by deleteAssets.
+    const preview = await removeConnection(root, "mysql-aliyun", true, { deleteAssets: true });
+    expect(preview.blocked).toBe(false);
+    expect(preview.impact.blockers).toContainEqual({
+      kind: "semantic_asset",
+      id: "semantic-layer/mysql-aliyun/_schema/dataforai.yaml"
+    });
+
+    const result = await removeConnection(root, "mysql-aliyun", false, { deleteAssets: true });
+    expect(result.written).toBe(true);
+    await expect(readFile(manifest, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
   });
 });
