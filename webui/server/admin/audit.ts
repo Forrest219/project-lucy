@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import Database from "better-sqlite3";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import type { FastifyInstance } from "fastify";
 import {
@@ -545,6 +545,21 @@ export function resetAuditDbForTests(): void {
     db.close();
     db = null;
   }
+}
+
+// T13 (Spec 185) — snapshot the audit DB to a fresh file using SQLite's online
+// backup API. The destination file is closed/flushed by the time the promise
+// resolves, so a follow-up insert into `source` after this returns cannot be
+// observed by readers who reopen the destination. The sha256 matches the bytes
+// of the destination file, so a verifier can compare it against the on-disk
+// file after the call.
+export async function snapshotAuditDatabase(
+  source: Database.Database,
+  destination: string
+): Promise<string> {
+  await source.backup(destination);
+  const buf = readFileSync(destination);
+  return sha256Hex(buf);
 }
 
 function serializeAuditSummary(changeType: string, value: unknown): string | null {
