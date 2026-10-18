@@ -41,7 +41,8 @@ import {
   removeConnection,
   removeSchema
 } from "./project";
-import { loadContentPaths } from "./paths";
+import { loadContentPaths, resolveContentPaths } from "./paths";
+import { collectContentLayout } from "./content-layout";
 import {
   // Ingest sidecar is M13 legacy. M14 keeps the helpers for the deprecated
   // `/api/connections/:connId/ingest` alias compatibility route.
@@ -665,6 +666,18 @@ export function buildServer() {
 
   app.get("/api/health", async () => {
     const policy = getPolicyRuntimeStatus();
+    // Spec 180 §2 — the content layout diagnostic is a *side* check on
+    // `/api/health`. Health must not depend on it resolving: a project root
+    // we cannot locate (early boot, missing ktx.yaml) must still produce
+    // a 200 with the existing policy / ktx / execution signal.
+    let contentLayout: import("./content-layout").ContentLayoutStatus | null = null;
+    try {
+      const projectRoot = await resolveProjectRoot();
+      const contentPaths = await resolveContentPaths(projectRoot);
+      contentLayout = await collectContentLayout(projectRoot, contentPaths);
+    } catch {
+      // leave null; `contentLayout` is omitted from the envelope.
+    }
     const [ktxRuntime, mcpRuntime] = await Promise.all([
       readKtxRuntimeStatus(),
       readMcpRuntimeStatus().catch((error) => ({
@@ -679,6 +692,8 @@ export function buildServer() {
     const executionHardFailure = ["stale", "unavailable", "error"].includes(
       mcpRuntime.execution.status
     );
+    // Spec 180 §2 — drift is informational; it must not turn `status` into a
+    // failure. `healthy` only reflects policy + ktx runtime + MCP execution.
     const healthy = policyHealthy && ktxRuntime.ready && !executionHardFailure;
     return {
       ok: true,
@@ -704,7 +719,11 @@ export function buildServer() {
         // T9 — guidance is advisory; missing guidance must not fail liveness.
         // The status is exposed for operator visibility and so an Admin can
         // confirm the proxy is still functional when the file is being rolled out.
-        dataQaInstructions: getDataQaInstructionsStatus()
+        dataQaInstructions: getDataQaInstructionsStatus(),
+        // Spec 180 §2 — content root vs. mirror layout snapshot; read-only,
+        // surfaces drift without flipping `status`. Omitted when no project
+        // root can be resolved (e.g. before ktx.yaml is wired up).
+        ...(contentLayout ? { contentLayout } : {})
       }
     };
   });
