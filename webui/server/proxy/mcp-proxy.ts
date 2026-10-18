@@ -2687,6 +2687,50 @@ function toolsListErrorResponse(requestId: string | number, detail: string): Rec
   };
 }
 
+/**
+ * Spec 178 / T1 — a role-compile failure must surface on `tools/list` as a
+ * 403, not as a successful empty `tools: []` body.
+ *
+ * The admission gate already rejects ghost / disabled / revoked / expired
+ * Agents and roles whose YAML declared body is missing; this matcher only
+ * covers the *post-admission* compile failures that `effectivePermissions`
+ * reports. Order matches Spec 177's `compileRole` / `effectivePermissions`
+ * reasons exactly.
+ */
+const COMPILE_DENIAL_PREFIXES = [
+  "role_resolution_failed",
+  "source_map_compile_failed"
+] as const;
+
+function isToolsListCompileDenialReason(reason: string | undefined): boolean {
+  if (!reason) return false;
+  if (reason === "policy_degraded_deny") return true;
+  return COMPILE_DENIAL_PREFIXES.some((prefix) => reason.startsWith(prefix));
+}
+
+/**
+ * Spec 178 §2 — JSON-RPC envelope + HTTP 403. The outward message stays
+ * consistent with the admission layer; only `role_resolution_failed` is
+ * spelled as a bare class so the existing 403 tests keep matching.
+ */
+function compileDeniedToolsListEnvelope(
+  requestId: string | number,
+  reason: string
+): { body: string; statusCode: number; message: string } {
+  const message = reason.startsWith("role_resolution_failed")
+    ? "Access denied: role_resolution_failed"
+    : `Access denied: ${reason}`;
+  return {
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: requestId,
+      error: { code: -32003, message }
+    }),
+    statusCode: 403,
+    message
+  };
+}
+
 function localInitializePayload(requestId: string | number, instructions: string | undefined): Record<string, unknown> {
   return {
     jsonrpc: "2.0",
@@ -2724,7 +2768,32 @@ async function writeToolsListResponse(
   res: ServerResponse,
   requestId: string | number,
   session: UpstreamSessionState | undefined
-): Promise<{ filterFailed: boolean; errorDetail?: string; responseBytes: number; upstreamFailure?: UpstreamFailureReason }> {
+): Promise<{
+  filterFailed: boolean;
+  errorDetail?: string;
+  responseBytes: number;
+  upstreamFailure?: UpstreamFailureReason;
+  compileDenied?: boolean;
+}> {
+  // Spec 178 / T1 — `effectivePermissions` compile failure wins over upstream /
+  // filter / empty-list success. Checked first so the cached `result.tools: []`
+  // path never reaches the client for a failed identity.
+  const compiled = await effectivePermissions(identity).catch(() => null);
+  if (compiled && !compiled.ok && isToolsListCompileDenialReason(compiled.reason)) {
+    const envelope = compileDeniedToolsListEnvelope(requestId, compiled.reason);
+    res.writeHead(envelope.statusCode, {
+      "content-type": "application/json",
+      "content-length": Buffer.byteLength(envelope.body)
+    });
+    res.end(envelope.body);
+    return {
+      filterFailed: true,
+      errorDetail: compiled.reason,
+      responseBytes: Buffer.byteLength(envelope.body),
+      compileDenied: true
+    };
+  }
+
   const originalBody = upstreamBody;
   const contentType = String(upstream.headers["content-type"] ?? "");
   const upstreamFailure = classifyUpstreamFailure(upstream.statusCode, contentType, originalBody, requestId, session);
@@ -4392,6 +4461,30 @@ async function buildDenialRepairPayload(
       return;
     }
     if (rpcMethod === "tools/list") {
+      // Spec 178 / T1 — compile failure takes priority over the local fallback;
+      // never serve `tools: []` for a failed identity.
+      const compiled = await effectivePermissions(identity).catch(() => null);
+      if (compiled && !compiled.ok && isToolsListCompileDenialReason(compiled.reason)) {
+        const envelope = compileDeniedToolsListEnvelope(requestId, compiled.reason);
+        const responseBytes = Buffer.byteLength(envelope.body);
+        res.writeHead(envelope.statusCode, { "content-type": "application/json", "content-length": responseBytes });
+        res.end(envelope.body);
+        const compilerReason = formatIdentityCompilerReason(compiled.diagnostic);
+        recordRequestAudit({
+          ts: new Date().toISOString(),
+          userId: identity.userId,
+          client: identity.client,
+          tool: rpcMethod,
+          outcome: "denied",
+          errorDetail: compiled.reason,
+          durationMs: Date.now() - start,
+          responseBytes,
+          requestId,
+          ...requestMeta,
+          ...(await auditMeta(identity, compiled.reason, compilerReason ? { compilerReason } : undefined)),
+        });
+        return;
+      }
       const payload = await localToolsListPayload(identity, requestId);
       const responseBody = JSON.stringify(payload);
       res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
@@ -4555,8 +4648,37 @@ async function buildDenialRepairPayload(
 
   if (rpcMethod === "tools/list") {
     const toolsList = await writeToolsListResponse(identity, upstream, upstreamBody, res, requestId, upstreamSession);
-    // Spec 177 — keep HTTP 200 and decision "allowed" (T1 is out of scope). When
-    // compile failed, the admin diagnostic still lands in compiler_reason.
+    // Spec 178 / T1 — compile failure short-circuits inside writeToolsListResponse
+    // (HTTP 403 + JSON-RPC -32003 already on the wire). Audit must record the
+    // denial with the full machine reason and the structured diagnostic;
+    // `role_ids` stays empty because permissionSnapshot is undefined on failure.
+    if (toolsList.compileDenied) {
+      const compiled = await effectivePermissions(identity).catch(() => null);
+      const compilerReason = compiled && !compiled.ok
+        ? formatIdentityCompilerReason(compiled.diagnostic)
+        : undefined;
+      const denialReason = compiled && !compiled.ok ? compiled.reason : (toolsList.errorDetail ?? "denied");
+      recordRequestAudit({
+        ts: new Date().toISOString(),
+        userId: identity.userId,
+        client: identity.client,
+        tool: rpcMethod,
+        outcome: "denied",
+        errorDetail: denialReason,
+        durationMs: Date.now() - start,
+        responseBytes: toolsList.responseBytes,
+        requestId,
+        ...requestMeta,
+        ...(await auditMeta(
+          identity,
+          denialReason,
+          compilerReason ? { compilerReason } : undefined
+        )),
+      });
+      return;
+    }
+    // Spec 177 — successful compile: the structured diagnostic still rides on
+    // `compiler_reason` for admin review, never into the client body.
     const compiled = await effectivePermissions(identity).catch(() => null);
     const compilerReason = compiled && !compiled.ok
       ? formatIdentityCompilerReason(compiled.diagnostic)

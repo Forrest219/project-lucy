@@ -15,7 +15,7 @@
 - `names` 仍是匹配集合。Manifest 里只命中其中一部分时，角色编译成功，只授予命中的 source。未命中的 name 记入诊断，不因此失败。
 - 只有整个 selector 匹配数为 0 时，该角色失败，原因码 `selector_zero_match`。
 - 对外 MCP 错误正文保持 `Access denied: role_resolution_failed` 或既有 `role_resolution_failed:<roleId>`。不把 source map 里的连接清单放进客户端响应。
-- 本 Spec 不把 `tools/list` 改成 403。那是后续 T1。
+- 本 Spec 不把 `tools/list` 改成 403。该行为由 Spec 178 规定。
 - 不修改 `enabled_tables` 与普通 selector 的交集规则。
 
 ## 2. 结构化诊断
