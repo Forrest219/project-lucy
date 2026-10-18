@@ -917,3 +917,36 @@ Query：
 | 401 | `BOOTSTRAP_TOKEN_INVALID` | 缺少或不匹配 `X-Lucy-Bootstrap-Token` |
 
 持久限速、并发互斥与持久引导状态见企业安全 Spec §3.1 / T02。
+
+### Wiki / Skill 对象授权与并发（企业安全 T05 / T06，取代 Spec 170 的全开放）
+
+**授权事实源：** Skill frontmatter `roles_allowed`、Wiki frontmatter `allowed_roles`。缺失或 `[]` 无人可见；精确 `["*"]` 表示所有有效已分配 Role（不是匿名公开）；`*` 与 Role 混用、非数组、非字符串元素为损坏声明，保存 / 导入返回 `400 CONTEXT_ACL_INVALID`（Skill 为 `400 skill_roles_invalid`），运行时对象拒绝。`sl_refs`、Skill prerequisites、`visibility`、目录名均不授权。Agent 侧同一 Role 须同时匹配对象授权与通道（`wiki_search` / `wiki_read` / `lucy_skill_search` / `lucy_skill_read`）。
+
+**Wiki 版本保护：**
+
+| 端点 | 变更 |
+|---|---|
+| `GET /api/wiki/:key` | 响应增加 `file_version`（`sha256:<hex>`，文件字节）与 `acl`（`missing` / `empty` / `all` / `roles` / `corrupt`）；`frontmatter.allowed_roles` 仅在声明合法时返回 |
+| `PUT /api/wiki/:key`（`dryRun:false`） | 页面已存在时必须带 `expected_version`：缺失 `428 wiki_expected_version_required`，过期 `409 wiki_write_conflict`；`frontmatter.allowed_roles` 为空值之外的合法数组才改写授权，否则保留现有声明 |
+| `POST /api/wiki/upload/preview` | 响应增加 `currentFileVersion`；新页面无 ACL 时 `warnings` 提示无人可见 |
+| `POST /api/wiki/upload/commit` | 覆盖已存在页面须带 `expected_version`（428 / 409 同上）；上传内容未声明 `allowed_roles` 时沿用页面当前授权 |
+| `POST /api/wiki/:key/versions/:versionId/restore` | 恢复正文与属性，但**保留当前** `allowed_roles`，不复活历史上更宽的授权 |
+
+Skill 写入沿用 `expected_version`（428 `skill_expected_version_required` / 409 `skill_write_conflict`）；`POST /api/skills`、`PUT /api/skills/:domain/:name` 现在写入请求中的 `roles_allowed`，新建缺省写 `roles_allowed: []`。
+
+**Role 管理：**
+
+| 状态码 | 错误码 | 含义 |
+|---|---|---|
+| 409 | `ROLE_REFERENCED_BY_CONTEXT` | 删除 Role 时仍有 Wiki / Skill 授权指向它；`error.detail` 为 `{ skills: [...], wiki: [...] }`（仅对象标识） |
+| 409 | `ROLE_ID_RETIRED` | 已删除的 Role 标识永久退役（`role_id_tombstones`），创建 / 复制不可复用 |
+| 409 | `ROLE_ID_HAS_CONTEXT_REFERENCES` | 新 Role 标识已出现在历史 ACL 中；清理引用，或在请求体显式带 `acknowledgeContextReferences:true` 后才创建 |
+| 503 | `SECURITY_STORE_UNAVAILABLE` | 无法读取 / 写入退役状态，拒绝删除或创建 |
+
+`GET /api/admin/roles/:roleId` 增加只读的 `wikiAccess`（与 `skillAccess` 同形）和 `contextPolicyVersion`。
+
+**MCP 外部响应：** 对按 key / URI 指定的未授权、不存在、草稿、停用对象，`resources/read`、`prompts/get` 返回 JSON-RPC error `-32003`，`message` 与 `data.reason` 均为 `context_not_available`；`lucy_skill_read`、`wiki_read` 返回 `isError:true`，文本为 `context_not_available`。无正式 Role 的 legacy direct-allow Agent 返回 `context_role_required`。具体内部原因只进入受保护审计。
+
+**管理侧导出：** `POST /api/semantic-assets/export` 在包含 Wiki / Skill 时向安全账本写入操作者记录（账本不可用返回 `503 SECURITY_STORE_UNAVAILABLE`）；它不是 Agent 通道。
+
+**迁移工具：** `cd webui && npx tsx ../scripts/security/migrate-context-acl.mts --project-dir <dir> --dry-run` 输出仅含元数据的迁移报告（`inventoryDigest`、保留 / 显式全角色 / 待确认 / legacy Agent）；`--apply --owner <id> --expected-digest <digest> --decisions <file> --backup-dir <dir>` 仅 owner 可执行，整批预检通过后才写入，带加密备份与持久 journal。先在合成 fixture 上运行；对客户私有配置执行属部署授权范围。

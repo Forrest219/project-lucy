@@ -6,7 +6,7 @@
 | 文档名称 | Offline Eval Customer Ops |
 | 文档类型 | Product / UX / API / Data Contract Spec |
 | 版本 | v0.2 |
-| 状态 | 评审通过，可交付开发。G3 已拍板：不完整结果文件整体拒收 |
+| 状态 | 已实现（lucy-v2.0 已合入）。G3 已拍板：不完整结果文件整体拒收 |
 | 撰写日期 | 2026-10-11 |
 | 委托人 | xingchen |
 | 来源计划 | [`docs/plans/2026-10-11-eval-module-functional-upgrade.md`](../../docs/plans/2026-10-11-eval-module-functional-upgrade.md) v0.4 |

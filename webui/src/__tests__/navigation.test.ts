@@ -133,7 +133,7 @@ describe("navigation (shared sidebar config)", () => {
       "connections-enabled-tables": "配置各连接进入语义层的表范围，并审阅保存前变更。",
       "semantic-catalog": "管理表、字段、指标、分群与关联等结构化语义资产。",
       "semantic-wiki": "管理业务口径、指标说明与分析指引等业务文档。",
-      "semantic-skills": "查看受治理的业务 Skill 资产及其发布状态。",
+      "semantic-skills": "查看受治理的业务 Skill 资产及其发布状态与角色授权。",
       "publish-workbench": "审阅并校验语义与 Wiki 变更，同步索引后使其对 Agent 生效。",
       "publish-history": "查看历次语义发布的变更范围、执行结果与操作记录。",
       "eval-cases": "管理数据问答与语义质量的评测用例及预期结果。",

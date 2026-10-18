@@ -6,7 +6,7 @@
 | 文档名称 | Customer Query Experience and Usage Evidence |
 | 文档类型 | Product / Proxy / Audit / Semantic Contract Spec |
 | 版本 | v0.3 |
-| 状态 | WO-202610-12 已验收。v0.3 吸收 WO-13 / WO-14 开工复核。WO-13 / WO-14 仍待开工 |
+| 状态 | 已实现（lucy-v2.0）。WO-202610-12 / WO-13 / WO-14 均已验收合入；调用路径补丁见 WO-202610-15 |
 | 撰写日期 | 2026-10-11 |
 | 委托人 | xingchen |
 | 来源计划 | [`docs/plans/2026-10-11-customer-log-next-optimizations.md`](../../docs/plans/2026-10-11-customer-log-next-optimizations.md) v1.1 |
