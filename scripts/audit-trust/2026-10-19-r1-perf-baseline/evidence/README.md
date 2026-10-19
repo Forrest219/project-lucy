@@ -31,14 +31,24 @@ during operator runs of the perf baseline workload.
 ## Sampling method
 
 Latency observations use **Algorithm-R reservoir sampling** per worker:
-capacity = `RESERVOIR_PER_WORKER` (4096). The first 4096 samples fill the
-reservoir directly. From observation `k = 4097` onward, sample `k` replaces
-a uniformly random slot in the reservoir with probability `4096 / k`. This
-guarantees every INSERT has an equal chance of ending up in the final
-percentile set, so tail latencies reflect the *whole* run — not just the
-last 4096 inserts.
+capacity = `RESERVOIR_PER_WORKER` (16384). The first 16384 samples fill the
+reservoir directly. From observation `k = 16385` onward, sample `k` replaces
+a uniformly random slot in the reservoir with probability `16384 / k`. This
+guarantees every INSERT has an equal chance of ending up in that worker's
+final percentile set, so tail latencies reflect the *whole* run — not just
+the last `RESERVOIR_PER_WORKER` inserts.
 
 Total samples after master-side merge: ≤ `workers × reservoir_per_worker`.
+
+### Cross-worker caveat
+
+Each worker runs Algorithm-R independently. The combined reservoir is
+therefore *approximately* uniform across worker observations: every sample
+within a single worker has the same inclusion probability, but inclusion
+probability across workers depends on per-worker throughput. In steady-state
+workloads all workers saturate similarly and the bias is negligible. If
+per-worker throughput is highly skewed, weight the samples by
+`1 / observed_per_worker` to obtain exact unbiased estimates.
 
 ## Schema parity
 

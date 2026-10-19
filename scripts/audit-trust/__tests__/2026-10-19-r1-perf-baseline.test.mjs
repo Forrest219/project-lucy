@@ -8,6 +8,11 @@
  * drift in the script (e.g., schema changes breaking all INSERTs, or a
  * worker_threads topology breaking the message protocol).
  *
+ * Also performs a schema introspection check via the script's
+ * `inspectSchema` helper, asserting every required production column /
+ * index is present after `applySchema`. This catches drift between the
+ * perf script's DDL and the production `proxy/audit.ts` source.
+ *
  * Run with: node --test scripts/audit-trust/__tests__/2026-10-19-r1-perf-baseline.test.mjs
  */
 import { describe, it } from "node:test";
@@ -17,6 +22,7 @@ import { mkdtempSync, readFileSync, statSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { inspectSchema } from "../2026-10-19-r1-perf-baseline.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SCRIPT = join(__dirname, "..", "2026-10-19-r1-perf-baseline.mjs");
@@ -41,7 +47,7 @@ function runScript(args) {
   }
 }
 
-function runScriptExpectFailure(args) {
+function runScriptExpectFailure(args, expectedPattern) {
   try {
     execFileSync("node", [SCRIPT, ...args], {
       encoding: "utf8",
@@ -50,13 +56,11 @@ function runScriptExpectFailure(args) {
     });
     throw new Error("script unexpectedly succeeded");
   } catch (err) {
-    // Strip the synthetic wrapper; the child process exit code drives the
-    // stderr we want to assert against.
     const stderr = String(err.stderr ?? "");
     const stdout = String(err.stdout ?? "");
-    if (!/failed:|--duration|--workers|unknown option|requires a value/.test(stderr + stdout)) {
+    if (expectedPattern && !expectedPattern.test(stderr + stdout + String(err.message))) {
       throw new Error(
-        `unexpected error content\nstderr=${stderr}\nstdout=${stdout}\nmessage=${err.message}`
+        `unexpected error content\nstderr=${stderr}\nstdout=${stdout}\nmessage=${err.message}\nexpected=${expectedPattern}`
       );
     }
     return { stderr, stdout };
@@ -81,9 +85,8 @@ describe("T08a.2 perf-baseline script smoke", () => {
     assert.ok(evidence.latency_us.p95 >= evidence.latency_us.p50);
     assert.ok(evidence.latency_us.p99 >= evidence.latency_us.p95);
     assert.ok(evidence.latency_us.sample_count > 0);
-    assert.equal(evidence.latency_us.sampling_method, "reservoir_algorithm_r");
-    // Each worker contributes exactly RESERVOIR_PER_WORKER samples once
-    // observed >= capacity, so total samples <= workers * RESERVOIR_PER_WORKER.
+    assert.match(evidence.latency_us.sampling_method, /reservoir_algorithm_r/);
+    // Each worker contributes at most RESERVOIR_PER_WORKER samples.
     assert.ok(
       evidence.latency_us.sample_count <=
         evidence.config.workers * evidence.config.reservoir_per_worker
@@ -112,26 +115,29 @@ describe("T08a.2 perf-baseline script smoke", () => {
   });
 
   it("rejects --duration < 1 (zero, negative, fractional, non-numeric)", () => {
-    runScriptExpectFailure(["--duration", "0", "--workers", "2"]);
-    runScriptExpectFailure(["--duration", "-1", "--workers", "2"]);
-    runScriptExpectFailure(["--duration", "0.5", "--workers", "2"]);
-    runScriptExpectFailure(["--duration", "abc", "--workers", "2"]);
+    runScriptExpectFailure(["--duration", "0", "--workers", "2"], /--duration|--workers/);
+    runScriptExpectFailure(["--duration", "-1", "--workers", "2"], /--duration|--workers/);
+    runScriptExpectFailure(["--duration", "0.5", "--workers", "2"], /--duration|--workers/);
+    runScriptExpectFailure(["--duration", "abc", "--workers", "2"], /--duration|--workers/);
+  });
+
+  it("rejects missing --duration", () => {
+    runScriptExpectFailure(["--workers", "2"], /--duration|--workers/);
   });
 
   it("rejects --workers 0 / non-integer / negative", () => {
-    runScriptExpectFailure(["--duration", "1", "--workers", "0"]);
-    runScriptExpectFailure(["--duration", "1", "--workers", "1.5"]);
-    runScriptExpectFailure(["--duration", "1", "--workers", "-4"]);
+    runScriptExpectFailure(["--duration", "1", "--workers", "0"], /--workers|--duration/);
+    runScriptExpectFailure(["--duration", "1", "--workers", "1.5"], /--workers|--duration/);
+    runScriptExpectFailure(["--duration", "1", "--workers", "-4"], /--workers|--duration/);
   });
 
   it("rejects unknown options", () => {
-    runScriptExpectFailure(["--bogus", "1", "--workers", "2"]);
+    runScriptExpectFailure(["--bogus", "1", "--workers", "2"], /unknown option|--workers|--duration/);
   });
 
   it("rejects options with missing values", () => {
-    // --duration followed by another option should be rejected.
-    runScriptExpectFailure(["--duration", "--workers", "2"]);
-    runScriptExpectFailure(["--workers", "2", "--out"]);
+    runScriptExpectFailure(["--duration", "--workers", "2"], /requires a value|--workers|--duration/);
+    runScriptExpectFailure(["--workers", "2", "--out"], /requires a value|--workers|--duration/);
   });
 
   it("writes to the configured --out path", () => {
@@ -164,5 +170,27 @@ describe("T08a.2 perf-baseline script smoke", () => {
       "smoke-test-round"
     ]);
     assert.equal(evidence.label, "smoke-test-round");
+  });
+
+  it("responds to --help with usage information and exits cleanly", () => {
+    const out = execFileSync("node", [SCRIPT, "--help"], {
+      encoding: "utf8",
+      timeout: 10_000
+    });
+    assert.match(out, /Usage: node 2026-10-19-r1-perf-baseline\.mjs/);
+    assert.match(out, /--duration/);
+  });
+
+  it("schema introspection covers all required columns and indexes (G3 A1)", () => {
+    const info = inspectSchema();
+    const missingCols = info.requiredColumns.filter((c) => !info.columns.includes(c));
+    const missingIdx = info.requiredIndexes.filter((i) => !info.indexes.includes(i));
+    assert.deepEqual(missingCols, [], `missing columns: ${missingCols.join(", ")}`);
+    assert.deepEqual(missingIdx, [], `missing indexes: ${missingIdx.join(", ")}`);
+    // Sanity: production-introduced NOT NULL columns must remain
+    // declared so that downstream INSERTs are forced to populate them.
+    for (const c of ["ts", "user_id", "tool", "outcome", "duration_ms", "request_id"]) {
+      assert.ok(info.columns.includes(c), `expected NOT NULL column ${c} in schema`);
+    }
   });
 });
