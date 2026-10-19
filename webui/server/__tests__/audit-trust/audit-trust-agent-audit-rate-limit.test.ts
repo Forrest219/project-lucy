@@ -1,13 +1,20 @@
 /**
- * T08a.1 audit-trust 集成测试：per-IP rate limit
- * - 单实例 token bucket (rolling window)
- * - 429 envelope + Retry-After header
- * - 401/400/413 rejection 不计入桶
+ * T08a.1 audit-trust 单元 / 集成测试：per-IP rate limit
+ *
+ * 实施说明: 这不是 "rolling window token bucket"; 这是 fixed-window counter
+ *   (首请求锚定 windowStart, 窗口内累加, 超过 max 返回 429 + Retry-After)。
+ * 集成端点层 envelope 与 Retry-After header 由 T08c 浏览器实测覆盖 (Fastify
+ *   inject API 不支持注入 raw.socket.remoteAddress, 这里不能直接断言 header)。
+ *
+ * 覆盖:
+ * - 单实例 fixed-window counter
+ * - 不同 IP 独立计数 / 桶隔离
+ * - 窗口过期重置 / 边界
  * - extractIpForRateLimit 行为同 auth/rate-limit.clientSource:
- *   不启用 LUCY_TRUST_PROXY / 不可信 peer 时降级到 socket peer;
- *   启用 + peer 在 LUCY_TRUSTED_PROXY_CIDRS 内 + 存在非可信 hop 时用 XFF 最右非可信 hop
- * - 不同 IP 独立计数
- * - 窗口过期重置
+ *   trustProxy=0 / peer 不可信 → 降级 socket peer;
+ *   trustProxy=1 + peer 在 CIDRs 内 + 存在非可信 hop → 取 XFF 右起第一个非可信 hop
+ * - 非 string headers 容错 (返回值降级, 不抛错)
+ * - forgetIpForRateLimit 仅清 1 IP (另 1 IP 留存)
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
@@ -217,7 +224,7 @@ describe("T08a.1 extractIpForRateLimit (trust-proxy-aware)", () => {
     expect(ip).toBe("10.0.0.50");
   });
 
-  it("two distinct clients behind a trusted proxy yield two distinct IPs (G3 A5 fix)", () => {
+  it("two distinct clients behind a trusted proxy yield two distinct IPs (A5 fix)", () => {
     const clientA = extractIpForRateLimit(
       mockRequest({
         peer: "10.0.0.50",
@@ -246,6 +253,89 @@ describe("T08a.1 extractIpForRateLimit (trust-proxy-aware)", () => {
     // Client B is unaffected by Client A exhausting the bucket.
     const firstB = checkAgentAuditRateLimit(clientB, t);
     expect(firstB.allowed).toBe(true);
+  });
+
+  it("trusted peer with trustProxy OFF falls back to socket peer (G3 B4 boundary)", () => {
+    // Even when the direct peer is in the trusted CIDRs, the env switch
+    // OFF means XFF is ignored. This guards against the helper ever
+    // forgetting the trustProxy gate.
+    const ip = extractIpForRateLimit(
+      mockRequest({
+        peer: "10.0.0.50",
+        trustProxy: false,
+        trustedCidrs: "10.0.0.0/8",
+        xff: "198.51.100.7"
+      })
+    );
+    expect(ip).toBe("10.0.0.50");
+  });
+
+  it("multiple non-trusted hops: picks the right-most (G3 B4 boundary)", () => {
+    // Deliberately two valid client hops separated by a trusted hop, with
+    // the bogus hop in the middle; right-most non-trusted should win
+    // (i.e. error-checking with "left-most-wins" would fail this test).
+    const ip = extractIpForRateLimit(
+      mockRequest({
+        peer: "10.0.0.50",
+        trustProxy: true,
+        trustedCidrs: "10.0.0.0/8",
+        xff: "198.51.100.99, 10.0.0.20, 198.51.100.7"
+      })
+    );
+    expect(ip).toBe("198.51.100.7");
+  });
+
+  it("bogus hop at the right does not bleed across (G3 B4 boundary)", () => {
+    // The valid client address is on the left, then a trusted hop, then
+    // a bogus non-IP token on the right. The walker must skip the bogus
+    // hop and resolve back to the left valid hop.
+    const ip = extractIpForRateLimit(
+      mockRequest({
+        peer: "10.0.0.50",
+        trustProxy: true,
+        trustedCidrs: "10.0.0.0/8",
+        xff: "198.51.100.7, 10.0.0.20, not-an-ip"
+      })
+    );
+    expect(ip).toBe("198.51.100.7");
+  });
+
+  it("accepts an array of xff strings (G3 B4 boundary)", () => {
+    // Fastify can surface repeated headers as a string array; the helper
+    // must join them with commas before walking.
+    const ip = extractIpForRateLimit(
+      mockRequest({
+        peer: "10.0.0.50",
+        trustProxy: true,
+        trustedCidrs: "10.0.0.0/8",
+        xff: ["198.51.100.7, 10.0.0.20", " 10.0.0.50"]
+      })
+    );
+    expect(ip).toBe("198.51.100.7");
+  });
+
+  it("ignores non-string xff without throwing (G3 B new)", () => {
+    const ip = extractIpForRateLimit(
+      mockRequest({
+        peer: "10.0.0.50",
+        trustProxy: true,
+        trustedCidrs: "10.0.0.0/8",
+        xff: 12345 as unknown as string
+      })
+    );
+    expect(ip).toBe("10.0.0.50");
+  });
+
+  it("ignores nested-array xff without throwing (G3 B new)", () => {
+    const ip = extractIpForRateLimit(
+      mockRequest({
+        peer: "10.0.0.50",
+        trustProxy: true,
+        trustedCidrs: "10.0.0.0/8",
+        xff: [["198.51.100.7"]] as unknown as string
+      })
+    );
+    expect(ip).toBe("10.0.0.50");
   });
 
   it("never throws when raw.socket is missing", () => {

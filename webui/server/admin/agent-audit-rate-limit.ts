@@ -7,19 +7,20 @@
  * Implementation notes:
  *   - Single-instance assumption (matches product config): bucket state lives
  *     in module-private memory. No SQLite read on the hot path.
- *   - Windowed token counter: rolling fixed window of `windowSeconds`, max
- *     `maxPerWindow` requests per IP. The check is fail-open when the key has
- *     not been seen before; it is fail-closed (HTTP 429) when count exceeds
- *     `maxPerWindow` within the window.
- *   - Counted requests: only those that PASS auth + schema validation. We do
- *     NOT count 401 / 400 / 413 rejections; this prevents a credential
+ *   - Fixed-window counter: the first request inside a window anchors
+ *     `windowStartMs`; subsequent requests increment within the same window
+ *     until `maxPerWindow`. Once exceeded, the bucket reports 429 with a
+ *     `Retry-After` derived from the time remaining in the window. There is
+ *     no token-refill / sliding window in this implementation — it is the
+ *     classic "fixed window counter", not a true token bucket.
+ *   - Counted requests: only those that PASS auth + body + schema validation.
+ *     We do NOT count 401 / 400 / 413 rejections; this prevents a credential
  *     harvester from exhausting the bucket for legitimate clients.
- *   - `extractIpForRateLimit` mirrors `auth/rate-limit.clientSource`
- *     exactly so the two rate limiters stay consistent: forwarded addresses
- *     are honored only when LUCY_TRUST_PROXY is on AND the direct peer is
- *     inside LUCY_TRUSTED_PROXY_CIDRS; the right-most non-trusted hop wins.
- *     Arbitrary X-Forwarded-For is ignored otherwise, so a hostile client
- *     cannot bypass the bucket by spoofing the header.
+ *   - `extractIpForRateLimit` mirrors `auth/rate-limit.clientSource` so the
+ *     two rate limiters stay consistent: forwarded addresses are honored
+ *     only when LUCY_TRUST_PROXY is on AND the direct peer is inside
+ *     LUCY_TRUSTED_PROXY_CIDRS; the right-most non-trusted hop wins.
+ *     Arbitrary X-Forwarded-For is ignored otherwise.
  *
  * Reset hooks are exposed for tests only; production callers never reset.
  */
@@ -129,7 +130,14 @@ function listed(list: BlockList, address: string): boolean {
  * the two rate limiters stay consistent. Honors LUCY_TRUST_PROXY only when
  * the direct peer is also inside LUCY_TRUSTED_PROXY_CIDRS — otherwise an
  * attacker controlling X-Forwarded-For could trivially bypass per-IP
- * quotas. Falls back to socket peer; never throws.
+ * quotas. Falls back to socket peer when nothing matches.
+ *
+ * Header-typing note: `headers` is typed loosely (`Record<string, unknown>`)
+ * because we accept the same duck-shape as Fastify's request. We therefore
+ * narrow `x-forwarded-for` to a plain string before parsing; non-string
+ * (or absent / numeric) values degrade to an empty hop list. This helper
+ * is also best-effort for malformed CIDRs in the env (see
+ * `trustedProxyList`): invalid prefix values are skipped silently.
  */
 export function extractIpForRateLimit(request: {
   ip?: string | undefined;
@@ -141,7 +149,13 @@ export function extractIpForRateLimit(request: {
   const trusted = trustedProxyList();
   if (!trusted || !listed(trusted, peer)) return peer;
   const header = request.headers["x-forwarded-for"];
-  const chain = (Array.isArray(header) ? header.join(",") : header ?? "")
+  let chainRaw = "";
+  if (Array.isArray(header)) {
+    chainRaw = header.filter((h): h is string => typeof h === "string").join(",");
+  } else if (typeof header === "string") {
+    chainRaw = header;
+  }
+  const chain = chainRaw
     .split(",")
     .map((hop) => normalizeAddress(hop.trim()))
     .filter((hop) => isIP(hop) !== 0);
