@@ -25,7 +25,7 @@ during operator runs of the perf baseline workload.
 | `latency_us.p95` | 95th-percentile. |
 | `latency_us.p99` | 99th-percentile. |
 | `latency_us.sample_count` | Same as `totals.latency_samples_kept`. |
-| `latency_us.sampling_method` | `reservoir_algorithm_r` — uniform sampling across the full run. |
+| `latency_us.sampling_method` | `reservoir_algorithm_r_per_worker` — uniform within each worker; combined reservoir is approximately uniform across workers in steady state. |
 | `per_worker[]` | Per-worker rows / errors / rows_per_sec / observed / sampled counts. |
 
 ## Sampling method
@@ -46,9 +46,16 @@ Each worker runs Algorithm-R independently. The combined reservoir is
 therefore *approximately* uniform across worker observations: every sample
 within a single worker has the same inclusion probability, but inclusion
 probability across workers depends on per-worker throughput. In steady-state
-workloads all workers saturate similarly and the bias is negligible. If
-per-worker throughput is highly skewed, weight the samples by
-`1 / observed_per_worker` to obtain exact unbiased estimates.
+workloads all workers saturate similarly and the bias is negligible.
+
+If per-worker throughput is highly skewed, weight samples by
+`Nᵢ / mᵢ` (not `1/Nᵢ`) — where `mᵢ = min(RESERVOIR_PER_WORKER, Nᵢ)` is
+the keep-count for worker `i` and `Nᵢ` is its total observation count —
+before computing weighted percentiles. Note that weighted quantiles do
+not preserve the strong unbiasedness guarantees of Algorithm-R; the
+reweighted estimate has higher variance than a single-stream reservoir.
+Expanding the reservoir reduces the per-stream bias but does not
+eliminate the cross-stream variance.
 
 ## Schema parity
 

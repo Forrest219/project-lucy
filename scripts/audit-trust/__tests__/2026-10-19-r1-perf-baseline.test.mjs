@@ -48,23 +48,34 @@ function runScript(args) {
 }
 
 function runScriptExpectFailure(args, expectedPattern) {
+  let result;
   try {
-    execFileSync("node", [SCRIPT, ...args], {
+    result = execFileSync("node", [SCRIPT, ...args], {
       encoding: "utf8",
       timeout: 30_000,
       stdio: ["ignore", "pipe", "pipe"]
     });
-    throw new Error("script unexpectedly succeeded");
   } catch (err) {
     const stderr = String(err.stderr ?? "");
     const stdout = String(err.stdout ?? "");
-    if (expectedPattern && !expectedPattern.test(stderr + stdout + String(err.message))) {
+    // Match ONLY against stderr/stdout (what the child produced); never
+    // against err.message which embeds the calling command line and
+    // could spuriously match unrelated errors.
+    const haystack = stderr + "\n" + stdout;
+    if (expectedPattern && !expectedPattern.test(haystack)) {
       throw new Error(
-        `unexpected error content\nstderr=${stderr}\nstdout=${stdout}\nmessage=${err.message}\nexpected=${expectedPattern}`
+        `stderr/stdout didn't match expected pattern\nstderr=${stderr}\nstdout=${stdout}\nexpected=${expectedPattern}`
       );
     }
-    return { stderr, stdout };
+    // Confirm the child exited non-zero (guards against 'silent success'
+    // misclassifications if execFileSync ever bubbles the success path).
+    const code = err.status;
+    if (typeof code !== "number" || code === 0) {
+      throw new Error(`expected non-zero exit code, got ${code} (silent success?)`);
+    }
+    return { stderr, stdout, exitCode: code };
   }
+  throw new Error(`script unexpectedly succeeded; stdout=${result}`);
 }
 
 describe("T08a.2 perf-baseline script smoke", () => {
