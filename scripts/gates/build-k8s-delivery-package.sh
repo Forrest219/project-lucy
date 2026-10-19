@@ -183,6 +183,23 @@ cp "${ROOT}/scripts/gates/helm-lucy-gate.sh" "${PKG_DIR}/scripts/preflight-helm.
 cp "${ROOT}/scripts/gates/preflight-upgrade.sh" "${PKG_DIR}/scripts/preflight-upgrade.sh"
 cp "${ROOT}/scripts/gates/preflight-upgrade-lib.mjs" "${PKG_DIR}/scripts/preflight-upgrade-lib.mjs"
 cp "${ROOT}/scripts/gates/preflight_upgrade_drift.py" "${PKG_DIR}/scripts/preflight_upgrade_drift.py"
+cp "${ROOT}/scripts/deploy/deploy-customer-k8s.sh" "${PKG_DIR}/scripts/deploy.sh"
+cp "${ROOT}/scripts/deploy/customer-deployment-helper.py" "${PKG_DIR}/scripts/customer-deployment-helper.py"
+cp "${ROOT}/scripts/deploy/probe-customer-auth-state.mjs" "${PKG_DIR}/scripts/probe-customer-auth-state.mjs"
+cat > "${PKG_DIR}/CUSTOMER-FIRST-ADMIN.md" <<'EOF'
+# 首次创建管理员
+
+供应方会准备客户专属交付目录，并通过受控渠道提供该实例的一次性引导密钥。
+本通用软件包不含密钥，请使用供应方配套的客户专属目录执行部署。
+
+1. 在客户专属目录执行 `bash scripts/deploy.sh`，脚本自动配置对应 Secret 并部署。
+2. 打开部署输出的 HTTPS 地址，输入引导密钥、账户名和新密码，创建首个所有者。
+
+创建成功后使用账户和密码登录，重启或后续升级无需重新认领。已有管理员直接登录。
+请保留原数据卷及必要 Secret。错误请联系交付人员，不要清空管理员或安全状态。
+EOF
+chmod 0755 "${PKG_DIR}/scripts/deploy.sh"
+chmod 0644 "${PKG_DIR}/scripts/customer-deployment-helper.py" "${PKG_DIR}/scripts/probe-customer-auth-state.mjs"
 chmod 0755 "${PKG_DIR}/scripts/acceptance.sh" "${PKG_DIR}/scripts/preflight-helm.sh" "${PKG_DIR}/scripts/preflight-upgrade.sh"
 chmod 0644 "${PKG_DIR}/scripts/k8s-gate-lib.sh" "${PKG_DIR}/scripts/preflight-upgrade-lib.mjs" "${PKG_DIR}/scripts/preflight_upgrade_drift.py"
 
@@ -265,6 +282,11 @@ PY
 Supported Helm chart is included under `helm/lucy/` (not a reference snapshot).
 Package layout: `helm/lucy/` chart · `examples/` values · `image/` offline image tar and identity files ·
 `scripts/` preflight + acceptance (self-contained) · `BUILD-INFO.json` · `SHA256SUMS`.
+
+For first-owner initialization, delivery staff prepare a private customer bundle with
+`scripts/release/prepare-customer-delivery.mjs` from the source repository. That bundle's
+`bash scripts/deploy.sh` configures the instance's bootstrap Secret before deployment.
+This public package contains no bootstrap key. See `CUSTOMER-FIRST-ADMIN.md`.
 
 **Supersedes:** every earlier `lucy-k8s-integration-delivery-*` package. Earlier packages mount the DB password
 Secret read-only over `.ktx/secrets` (WebUI writes fail with `EROFS`) and ship non-runnable preflight/acceptance scripts.

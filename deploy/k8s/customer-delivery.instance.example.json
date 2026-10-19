@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "instanceId": "customer-prod-a",
+  "profile": "k3s",
+  "intent": "install",
+  "authState": "uninitialized",
+  "credentialState": "new",
+  "context": "CUSTOMER_KUBECONTEXT",
+  "namespace": "lucy",
+  "release": "lucy",
+  "deployment": "lucy",
+  "service": "lucy",
+  "pvcName": "lucy-data",
+  "bootstrapSecret": "lucy-bootstrap",
+  "webuiUrl": "https://lucy.customer.example",
+  "publicMcpUrl": "https://lucy.customer.example/mcp",
+  "externalTlsReviewed": true,
+  "offlineNodes": {
+    "CUSTOMER_NODE_NAME": "local"
+  },
+  "values": {
+    "persistence": { "enabled": true, "size": "10Gi" },
+    "env": { "KTX_PROJECT_ROOT": "/data/lucy" },
+    "ingress": { "enabled": false }
+  }
+}

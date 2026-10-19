@@ -4,13 +4,23 @@
 |---|---|
 | 文档名称 | Lucy Customer amd64 Image Build Checklist |
 | 文档类型 | Checklist |
-| 版本 | v1.6 |
-| 撰写日期 | 2026-08-27；2026-08-28 增补 G4b；2026-09-02 增补 G8；2026-09-02 v1.4 解耦 G8/Helm；2026-09-02 v1.5 身份闭环（最终 digest 门禁、G4b 功能性、Offline/Registry 语义）；2026-10-07 v1.6 Apple Silicon 可构建待测镜像，见 customer-k8s-test-package-principles.md |
+| 版本 | v1.7 |
+| 撰写日期 | 2026-08-27；2026-08-28 增补 G4b；2026-09-02 增补 G8；2026-09-02 v1.4 解耦 G8/Helm；2026-09-02 v1.5 身份闭环（最终 digest 门禁、G4b 功能性、Offline/Registry 语义）；2026-10-07 v1.6 Apple Silicon 可构建待测镜像，见 customer-k8s-test-package-principles.md；2026-10-19 v1.7 增补 v2.0 客户首次管理员流程入口 |
 | 撰写人 | Composer |
 | 委托人 | xingchen |
 | 基于材料 | 20260827 客户 `exec /usr/bin/tini: exec format error` 事故；20260902 K8s v1/v2 原地升级契约事故；`docs/specs/lucy-202608-08-image-arch-and-ktx-baseline-fix.md`；Release `lucy-k8s-integration-20260827-v1` 坏包复盘 |
 | 适用范围 | 任何交付给客户的 `linux/amd64` Lucy 镜像（Docker Compose 离线包、K8s integration tar.gz、Release Assets） |
 | 输出位置 | `docs/runbooks/customer-amd64-image-build-checklist.md` |
+
+## v2.0 客户交付与首次管理员流程
+
+客户侧统一为两步：**执行 K8s / K3s 部署入口 → 打开页面，输入供应方提供的一次性引导密钥并创建管理员**。后续重启或升级保留账号和持久化状态，直接登录。
+
+完整客户流程、供应方出包职责、旧开放模式升级安排和人工验证清单放在同目录的 [v2.0 客户交付及首次管理员流程](customer-v2-k8s-first-admin-delivery-flow.md)。
+
+自动生成并复用实例密钥、配置 Secret 和部署入口见[生成与配置脚本计划](../plans/2026-10-19-v2-bootstrap-delivery-scripts-plan.md)（已实现、本地检查通过，含现场待测矩阵）。出包命令和测试交接见[客户流程第 8 节](customer-v2-k8s-first-admin-delivery-flow.md#8-执行入口与测试交接)。
+
+当前后端、页面和 Chart 已支持引导密钥；**客户专属准备与 Secret 配置脚本已实现，实际集群流程待交付人验证**，不能只打镜像就认定客户可完成两步流程。镜像保持通用，实例密钥单独受控交付；不要烘焙到镜像或公共安装包。本节不改变下述既有构建门禁。
 
 ## 背景
 
@@ -186,6 +196,7 @@ docker run --rm --network=none --platform linux/amd64 \
 
 ## 关联文档
 
+- [v2.0 K8s / K3s 客户交付及首次管理员流程](customer-v2-k8s-first-admin-delivery-flow.md)（两步客户流程、供应方出包准备、旧开放模式升级）
 - `docs/runbooks/customer-k8s-test-package-principles.md`（Mac 构建待测包、amd64 服务器验收、与客户包的分界）
 - `docs/runbooks/customer-delivery-preflight-checklist.md`（全流程通用交付防坑指南）
 - `docs/specs/lucy-customer-amd64-offline-delivery-spec.md`
