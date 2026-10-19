@@ -3217,22 +3217,68 @@ export function registerAuditRoutes(app: FastifyInstance) {
   });
 
   // T03b — GET /api/admin/audit/association-revisions
-  // T03c: meta-audit at this GET endpoint is added in the next sub-batch.
+  // T03c: meta-audit (EA-11): actor from request.lucyAdmin, body never read.
+  // Precheck security store; refuse (503) if unavailable so the audit trail
+  // always records who saw it.
   app.get<{
     Querystring: { originalTurnId?: string; limit?: string };
-  }>("/api/admin/audit/association-revisions", async (request) => {
+  }>("/api/admin/audit/association-revisions", async (request, reply) => {
+    let actor;
+    try {
+      actor = resolveActorOr401(request);
+    } catch (err) {
+      reply.code(401);
+      return { ok: false, error: { code: "ACTOR_UNRESOLVED", message: String(err) } };
+    }
+
+    const securityPrecheck = await getSecurityStore();
+    if (!securityPrecheck.ok) {
+      reply.code(503);
+      return {
+        ok: false,
+        error: {
+          code: "META_AUDIT_STORE_UNAVAILABLE",
+          message: "security store unavailable; refusing sensitive read (EA-11)"
+        }
+      };
+    }
+
     const database = await getAuditDb();
     const limit = Math.min(parseInt(request.query.limit ?? "50", 10) || 50, 500);
+    const filterTurnId = request.query.originalTurnId ?? null;
     const rows = listAssociationRevisions(database, {
       originalTurnId: request.query.originalTurnId,
       limit
     });
+
+    // Meta-audit. operationId includes the filter so list investigations can be
+    // tied back to a single operation; failures here are logged but do NOT block
+    // the read response — the audit trail loses fidelity, not the data.
+    const opId = `audit-list-association-revisions-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+    const meta = await securityPrecheck.value.appendEvent({
+      eventId: `${opId}-read`,
+      operationId: opId,
+      phase: "result",
+      actor: actor.actorId,
+      actorType: actor.actorType,
+      auditEventKind: "audit_management",
+      objectHash: sha256Hex(
+        Buffer.from(JSON.stringify({ filterTurnId, limit, rowCount: rows.length }), "utf8")
+      ),
+      resultSummary: `list-association-revisions rows=${rows.length} filter=${filterTurnId ?? "*"}`
+    });
+    if (!meta.ok) {
+      // Surface as a degraded response header; the data is still returned but
+      // marked unverified. EA-11 closure: never silently drop the meta-audit.
+      reply.header("x-audit-trust-meta", "degraded");
+    }
+
     return { ok: true, data: rows.map(serializeAssociationRevision) };
   });
 
   // T03b — GET /api/admin/audit/:id/effective-association
   // 返回单条 access_log 的 original / effective 双视图。
-  // T03c: meta-audit at this GET endpoint is added in the next sub-batch.
+  // T03c: meta-audit at single-row detail (EA-11 closure).
   app.get<{ Params: { id: string } }>(
     "/api/admin/audit/:id/effective-association",
     async (request, reply) => {
@@ -3241,12 +3287,49 @@ export function registerAuditRoutes(app: FastifyInstance) {
         reply.code(400);
         return { ok: false, error: { code: "INVALID_ID" } };
       }
+
+      let actor;
+      try {
+        actor = resolveActorOr401(request);
+      } catch (err) {
+        reply.code(401);
+        return { ok: false, error: { code: "ACTOR_UNRESOLVED", message: String(err) } };
+      }
+
+      const securityPrecheck = await getSecurityStore();
+      if (!securityPrecheck.ok) {
+        reply.code(503);
+        return {
+          ok: false,
+          error: {
+            code: "META_AUDIT_STORE_UNAVAILABLE",
+            message: "security store unavailable; refusing sensitive detail (EA-11)"
+          }
+        };
+      }
+
       const database = await getAuditDb();
       const view = effectiveAssociationFor(database, id);
       if (!view) {
         reply.code(404);
         return { ok: false, error: { code: "NOT_FOUND" } };
       }
+
+      const opId = `audit-effective-association-${id}-${Date.now()}`;
+      const meta = await securityPrecheck.value.appendEvent({
+        eventId: `${opId}-read`,
+        operationId: opId,
+        phase: "result",
+        actor: actor.actorId,
+        actorType: actor.actorType,
+        auditEventKind: "audit_management",
+        objectHash: sha256Hex(Buffer.from(JSON.stringify(view), "utf8")),
+        resultSummary: `effective-association access_log_id=${id} rev=${view.revisionCount}`
+      });
+      if (!meta.ok) {
+        reply.header("x-audit-trust-meta", "degraded");
+      }
+
       return { ok: true, data: view };
     }
   );
