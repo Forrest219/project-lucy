@@ -1928,7 +1928,7 @@ Lucy 维护的 YAML 文件分 7 类。每一类都有明确的路径、维护者
 | --- | --- |
 | 禁止上传真实凭据 | 手册、示例、commit message 严禁出现真实 host、username、password、token、cookie；统一用 `<CHANGE-ME-HOST>`、`<CHANGE-ME-USERNAME>`、`<CHANGE-ME-TOKEN>` |
 | 走 `fs-safe` 允许清单 | 任何 WebUI 写入都走 `webui/server/fs-safe.ts`；手工 `cat > ...` 也要保证目标在允许目录内 |
-| 不要混目录 | manifest 文件只能在 `_schema/`，overlay 只能在 `semantic-layer/<conn>/`；不要把 overlay 写进 `_schema/`，也不要新建一个语义表目录 |
+| 不要混目录 | manifest 文件只能在 `_schema/`，overlay 只能在 `semantic-layer/<conn>/`；不要把 overlay 写进 `_schema/`，也不要新建一个存放语义表的目录 |
 | 默认产物不写进 `webui/config/data-qa-instructions.md` | 数据问答运行时指导由 `webui/config/data-qa-instructions.md` 单独维护，与本节交付规则解耦 |
 | 默认产物不写进 `CLAUDE.md` / `AGENTS.md` | 开发治理规则由 `AGENTS.md` 与 `docs/governance/DEVELOPMENT.md` 承载，运行时数据问答规则由 Proxy initialize 注入 |
 
