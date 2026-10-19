@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy Admin Catalog-Bound Role Spec |
 | 文档类型 | Spec |
-| 版本 | v1.1 |
-| 撰写日期 | 2026-09-02 |
+| 版本 | v1.1；2026-10-19 v0.2-draft（与 `inbox/audit-trust/audit-trust-2026-10-19-r1/T00-r2/implementation-contract.md` §2.2 / §7 同批生效）：可读授权投影 + `policy_scope_expanded` 配置审计事件查阅 |
+| 撰写日期 | 2026-09-02；2026-10-19 v0.2-draft 增补 §x 可读授权投影 + 扩权证据导航 |
 | 撰写人 | Cursor Agent |
 | 委托人 | xingchen |
 | 基于材料 | `lucy_admin` Spec 与实现计划；`docs/access-control/design-upgrade.md` ADR-AC-06/G9；`webui/docs/15-role-admin-spec.md`；`webui/docs/98-access-control-p0-runtime-spec.md`；`webui/docs/07-mcp-auth-proxy-spec.md` |
@@ -199,6 +199,16 @@ SourcesGrantedBy(r) =
 3. **Token**：不建议为 `lucy_admin` 签发无过期长期 Token；创建 Token 流至少提示建议设置过期时间（不强制改 Token 数据模型）。
 4. **客户高敏环境**：可不创建该正式 Role；参考模板仍只读可见。
 5. **控制面 / 数据面分离**：WebUI Admin 鉴权（`admins.yaml`）不得自动映射为 MCP Agent `lucy_admin`。
+
+### 5.1 可读授权投影与扩权证据（v0.2-draft，2026-10-19 audit-trust）
+
+依据 `docs/specs/lucy-20261019-audit-trust-and-admin-investigation-spec.md` §4.2 / `inbox/audit-trust/audit-trust-2026-10-19-r1/T00-r2/implementation-contract.md` §2.2：
+
+1. **可读授权投影**：Admin 通过 `GET /api/admin/roles?source=template` 列表 + `GET /api/admin/roles/:roleId/effective-permissions` 字段（`webui/server/admin/permission-display.ts:resolvePermissionBatch`）得到「Role → 生效连接 / 来源 / 工具 / 行权限 / 命中原因」；受管理员可见性限制；只用于审查，不替代 runtime ACL 编译。审计侧不在本批新增独立可见页面。
+2. **扩权事件**：`policy_scope_expanded` 已由 `webui/server/proxy/acl.ts:emitPolicyScopeExpanded` 在角色生效源集合扩大时记录；事件字段包含 `roleId / sourcesBefore / sourcesAfter / added / removed / sourceMapVersion`，由 `webui/server/admin/audit.ts:recordConfigChange` 持久化。Admin 由 `GET /api/admin/config-audit?changeType=policy_scope_expanded&targetId=<roleId>` 查阅（`webui/server/admin/audit.ts:registerAuditRoutes` 注册；查询字段定义于 `listConfigChangeAudit` 一带，第 2101 行附近）。不允许凭推断。
+3. **lucy_admin 与 catalog_bound 边界**：保留 v1.1 既有规则——`lucy_admin` 沿用所有已配置连接的特例；普通 `catalog_bound` 不得扩权到未声明连接；扩权集合变化必须定位到 `config_change_log.policy_scope_expanded`，**不引入额外授权扩大**。
+4. **服务端不信任短 hash / token_label 作为安全主键**（与 `webui/docs/00-product-terminology-standard.md` §4.7.1 一致）。
+5. **可信来源分类与扩权证据的关系**：`extractRequestClientMeta` 返回的 `trustedSource` 是审计行的可观测分类；`local_admin / customer / trusted_proxy / untrusted_peer / unknown` 五值（`webui/server/proxy/request-client-meta.ts:RequestClientMeta`）。`untrusted_peer`（socket peer 不在 `LUCY_TRUSTED_PROXY_CIDRS` 但带了 `X-Forwarded-For`）写入审计行作为伪造 XFF 证据。**ACL / 限流侧**仍由 `webui/server/auth/rate-limit.ts:clientSource`（line 54）以 socket-peer-vs-XFF 双判强制（trustProxyEnabled ∧ peer CIDR 才采纳 XFF；否则回落 socket peer），**`extractClientIp` 本身不参与 ACL 决策**——EA-10 由限流侧承担。
 
 ---
 

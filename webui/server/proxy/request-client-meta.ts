@@ -1,3 +1,4 @@
+import { BlockList, isIP } from "node:net";
 import type { IncomingMessage } from "node:http";
 
 const USER_AGENT_MAX = 256;
@@ -23,6 +24,17 @@ export function trustProxyEnabled(): boolean {
   return raw === "1" || raw === "true" || raw === "yes";
 }
 
+/**
+ * Extract a best-effort display IP for audit rows. **Display-only** —
+ * it does NOT participate in ACL decisions. ACL / rate-limit gating use
+ * `webui/server/auth/rate-limit.ts:clientSource`, which additionally
+ * checks the peer CIDR before honoring X-Forwarded-For (EA-10).
+ *
+ * When `LUCY_TRUST_PROXY` is on but the peer is not inside
+ * `LUCY_TRUSTED_PROXY_CIDRS`, this function may still return an XFF
+ * value; the audit row's `trustedSource` will record `untrusted_peer`
+ * so the entry is visible as a forged-XFF attempt at review time.
+ */
 export function extractClientIp(req: IncomingMessage): string | undefined {
   if (trustProxyEnabled()) {
     const xff = firstHeaderValue(req.headers["x-forwarded-for"]);
@@ -197,6 +209,15 @@ export type RequestClientMeta = {
   deviceName?: string;
   client?: string;
   clientVersion?: string;
+  /**
+   * Spec 173 v0.3 / 2026-10-19 audit-trust:可信来源分类。
+   *  - `local_admin`    : 进程内本地管理面（无 socket）
+   *  - `customer`       : 直接 socket peer，无可信代理介入
+   *  - `trusted_proxy`  : socket peer 在 `LUCY_TRUSTED_PROXY_CIDRS` 内，XFF 头被采纳
+   *  - `untrusted_peer` : socket peer 不在白名单或 XFF 头被伪造（仍写链但不参与 ACL）
+   *  - `unknown`        : 无法判断
+   */
+  trustedSource?: "local_admin" | "customer" | "trusted_proxy" | "untrusted_peer" | "unknown";
 };
 
 export function extractRequestClientMeta(req: IncomingMessage): RequestClientMeta {
@@ -204,9 +225,52 @@ export function extractRequestClientMeta(req: IncomingMessage): RequestClientMet
     clientIp: extractClientIp(req),
     clientForwardedFor: extractForwardedFor(req),
     userAgent: extractUserAgent(req),
-    deviceName: extractDeviceName(req)
+    deviceName: extractDeviceName(req),
+    trustedSource: classifyTrustedSource(req)
   };
   // The structured identity is not known yet at header time; the proxy
   // resolves it once the MCP `initialize` handshake (if any) has landed.
   return meta;
+}
+
+/**
+ * Spec 173 v0.3 / 2026-10-19 audit-trust:可信来源分类。
+ * 与本文件 `extractClientIp` + `webui/server/auth/rate-limit.ts:clientSource` 同源：
+ *  - `local_admin`    : 没有 socket peer（进程内 Admin 调用或未携带 socket 信息）
+ *  - `customer`         : 直接 socket peer，可信代理未启用
+ *  - `trusted_proxy`    : 可信代理白名单内的 socket peer，XFF 头可采纳
+ *  - `untrusted_peer`   : socket peer 不在白名单但带了 XFF（伪造风险被记录，不入 ACL）
+ *  - `unknown`          : 无法解析的 peer 地址
+ *
+ * 注：`extractClientIp` 仍按 `trustProxyEnabled()` 与 `LUCY_TRUSTED_PROXY_CIDRS`
+ * 选择来源；本函数仅做分类，不修改 clientIp 取值。EA-10 的「伪造 XFF 不影响 ACL /
+ * 限流」由 `auth/rate-limit.ts:clientSource` 的 socket-peer 检查承担。
+ */
+export function classifyTrustedSource(req: IncomingMessage): RequestClientMeta["trustedSource"] {
+  const peer = req.socket?.remoteAddress;
+  if (!peer) return "local_admin";
+  const version = isIP(peer);
+  if (version === 0) return "unknown";
+  if (!trustProxyEnabled()) return "customer";
+  // trust on with NO CIDR list: any XFF cannot be considered trusted, so
+  // fall through to the peer-not-trusted branch. A peer carrying XFF is then
+  // classified as `untrusted_peer` rather than silently labeled `customer`,
+  // because `extractClientIp` will still honor the XFF in this configuration
+  // while `clientSource` will not — the audit row must reflect that mismatch.
+  const cidrs = (process.env.LUCY_TRUSTED_PROXY_CIDRS ?? "").trim();
+  const list = new BlockList();
+  if (cidrs) {
+    for (const entry of cidrs.split(",").map((s) => s.trim()).filter(Boolean)) {
+      const [address, prefix] = entry.split("/");
+      const family = isIP(address) === 6 ? "ipv6" : "ipv4";
+      if (!isIP(address)) continue;
+      if (prefix === undefined) list.addAddress(address, family);
+      else list.addSubnet(address, Number(prefix), family);
+    }
+  }
+  const peerIsTrusted = list.check(peer, version === 6 ? "ipv6" : "ipv4");
+  if (peerIsTrusted) return "trusted_proxy";
+  // peer 不可信 + 携带 XFF = 疑似伪造，记录为 untrusted_peer，不影响 ACL。
+  const xff = firstHeaderValue(req.headers["x-forwarded-for"]);
+  return xff ? "untrusted_peer" : "customer";
 }
