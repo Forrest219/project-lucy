@@ -19,9 +19,11 @@
  * does NOT drift with schema version. Adding new criteria requires a new
  * builder function and a corresponding test.
  */
-import { readFileSync, writeFileSync, mkdirSync, statSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { readFileSync, writeFileSync, mkdirSync, statSync, realpathSync } from "node:fs";
+import * as path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+
+const { dirname, join, resolve } = path;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -333,10 +335,25 @@ function runMain(argv) {
   return { csv, pass, fail, na };
 }
 
-const looksLikeCli = process.argv.slice(2).some((a) =>
-  new Set(["--help", "-h", "--in", "--out", "--label"]).has(a)
-);
-if (looksLikeCli) {
+function isMainEntry() {
+  // ESM equivalent of `require.main === module`. When the script is
+  // invoked via `node script.mjs`, `process.argv[1]` resolves to the
+  // script's own URL. When this file is imported as a module, the
+  // entry script in argv[1] is something else. We resolve symlinks
+  // (macOS `/tmp` is a symlink to `/private/tmp`; without this, the
+  // comparison would always fail when the script is invoked via a
+  // symlinked path).
+  try {
+    if (!process.argv[1]) return false;
+    const argvPath = realpathSync(path.resolve(process.argv[1]));
+    const metaPath = realpathSync(fileURLToPath(import.meta.url));
+    return argvPath === metaPath;
+  } catch {
+    return false;
+  }
+}
+
+if (isMainEntry()) {
   try {
     runMain(process.argv.slice(2));
   } catch (err) {

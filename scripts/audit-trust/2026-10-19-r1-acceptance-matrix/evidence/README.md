@@ -6,29 +6,63 @@ during operator runs.
 
 ## Evidence shape
 
-The CSV is flat: three columns (`criterion`, `observed_value`, `verdict`).
-`verdict` is one of `pass`, `fail`, or `n/a`. The script exits with code 0
-when every criterion passes; exits with code 2 when any fails.
+CSV is flat, three columns:
+- `criterion` — the fixed assertion name (see `EXPECTED_CRITERIA_NAMES`).
+- `observed_value` — what the manifest actually had.
+- `verdict` — one of `pass`, `fail`, `n/a`.
 
-## Criterion set
+The script exits with:
+- `0` — every verdict is `pass` or `n/a` (no failures).
+- `2` — at least one verdict is `fail`.
+- `1` — argument / input / I/O error before rendering.
 
-The criterion set is **fixed** and asserted in
-`scripts/audit-trust/__tests__/2026-10-19-r1-acceptance-matrix.test.mjs`.
-Adding a new criterion requires:
+The script itself does **not** exit non-zero on `n/a`; `n/a` means
+"criterion not applicable to this manifest shape" (e.g. an optional
+field was missing). Operator reads `n/a` rows separately and decides
+whether the omission is intentional.
 
-1. Adding a builder to `buildCriteria()` in the script.
-2. Adding a test asserting the criterion appears in `buildCriteria()`.
+## Criterion set (fixed)
 
-Currently 16 criteria, covering:
+The criterion set is **fixed at 16 entries** and asserted in
+`scripts/audit-trust/__tests__/2026-10-19-r1-acceptance-matrix.test.mjs`:
 
-- `schemaVersion == "audit-export-manifest/v2"` (drift guard).
-- `ledgerUpperSeq` / `lagMs` / `untrustedSelfReport` non-negative integers.
-- `projectionComplete` / `scopeComplete` / `fileHashOk` / `relationCheckOk` booleans.
-- `combinedComplete == scopeComplete && fileHashOk && relationCheckOk`.
-- `associationQuality` carries all five categories.
-- `dataScope.ok`, `clientCoverage` shape.
-- `policyScopeExpanded` array per spec §4.7.
-- `classificationVersion` / `digestVersion` non-empty.
+```js
+const FIXED_CRITERION_NAMES = Object.freeze([
+  "schemaVersion is 'audit-export-manifest/v2'",
+  "ledgerUpperSeq is a non-negative integer",
+  "projectionComplete is boolean true",
+  "scopeComplete is boolean true",
+  "fileHashOk is boolean true",
+  "relationCheckOk is boolean true",
+  "combinedComplete = scopeComplete AND fileHashOk AND relationCheckOk",
+  "associationQuality has all five categories",
+  "dataScope.ok is boolean (always populated)",
+  "clientCoverage.observed is boolean; gapWindows is an array",
+  "policyScopeExpanded is an array (audit-trust spec §4.7)",
+  "untrustedSelfReport is a non-negative integer",
+  "legalEmptyWindow is boolean",
+  "lagMs is a non-negative integer",
+  "classificationVersion is non-empty",
+  "digestVersion is non-empty"
+]);
+```
+
+The test fixture `FIXED_CRITERION_NAMES` is independent of
+`EXPECTED_CRITERIA_NAMES` exported from the script, so updating the
+criterion set requires editing **both** the script and the test, with
+the `deepEqual` assertion failing if either side drifts. This is the
+T08b drift-guard.
+
+## n/a branches
+
+Four criteria have `n/a` branches:
+
+| Criterion | n/a when |
+|---|---|
+| combinedComplete = … | any factor is non-boolean |
+| associationQuality has all five categories | a required key is missing |
+| clientCoverage.observed is boolean; gapWindows is an array | `observed` non-boolean or `gapWindows` not an array |
+| policyScopeExpanded is an array | the field is `undefined` (optional) |
 
 ## Reproducing the r1 baseline matrix
 
@@ -38,28 +72,7 @@ node scripts/audit-trust/2026-10-19-r1-acceptance-matrix.mjs \
   --out scripts/audit-trust/2026-10-19-r1-acceptance-matrix/evidence/matrix-$(date -I).csv
 ```
 
-The fixture manifest that produced the committed baseline file:
-
-```json
-{
-  "schemaVersion": "audit-export-manifest/v2",
-  "classificationVersion": "audit-trust-2026-10-19-r1.v1",
-  "digestVersion": "audit-trust-2026-10-19-r1.v1",
-  "ledgerUpperSeq": 12345,
-  "projectionComplete": true,
-  "scopeComplete": true,
-  "dataScope": { "ok": true },
-  "associationQuality": { "confirmed": 100, "candidate": 20, "unassigned": 5, "conflict": 0, "legacyUnverified": 3 },
-  "clientCoverage": { "observed": true, "gapWindows": [] },
-  "integrityVerification": { "fileHashOk": true, "relationCheckOk": true },
-  "combinedComplete": true,
-  "lagMs": 0,
-  "policyScopeExpanded": [],
-  "untrustedSelfReport": 0,
-  "legalEmptyWindow": false
-}
-```
-
-This is a synthetic "happy-path" fixture to demonstrate end-to-end CSV
-output. Operator runs against real Lucy manifests will replace this
-fixture file.
+The fixture manifest that produced the committed baseline file is the
+synthetic "happy-path" used by the test suite. Operator runs against
+real Lucy manifests will replace this fixture file with concrete
+results.

@@ -23,6 +23,32 @@ import {
   MAX_INPUT_BYTES
 } from "../2026-10-19-r1-acceptance-matrix.mjs";
 
+/**
+ * Drift guard: this list is locked here in the TEST file (independent of
+ * the script's `EXPECTED_CRITERIA_NAMES` export). Adding a new criterion
+ * requires updating BOTH this list AND the script's array; the test
+ * `buildCriteria returns exactly EXPECTED_CRITERIA_NAMES, in order`
+ * catches drift in either direction.
+ */
+const FIXED_CRITERION_NAMES = Object.freeze([
+  "schemaVersion is 'audit-export-manifest/v2'",
+  "ledgerUpperSeq is a non-negative integer",
+  "projectionComplete is boolean true",
+  "scopeComplete is boolean true",
+  "fileHashOk is boolean true",
+  "relationCheckOk is boolean true",
+  "combinedComplete = scopeComplete AND fileHashOk AND relationCheckOk",
+  "associationQuality has all five categories",
+  "dataScope.ok is boolean (always populated)",
+  "clientCoverage.observed is boolean; gapWindows is an array",
+  "policyScopeExpanded is an array (audit-trust spec §4.7)",
+  "untrustedSelfReport is a non-negative integer",
+  "legalEmptyWindow is boolean",
+  "lagMs is a non-negative integer",
+  "classificationVersion is non-empty",
+  "digestVersion is non-empty"
+]);
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SCRIPT = join(__dirname, "..", "2026-10-19-r1-acceptance-matrix.mjs");
 
@@ -61,34 +87,18 @@ describe("T08b.2 acceptance matrix generator", () => {
     assert.equal(SCHEMA_VERSION, "audit-trust-acceptance-matrix/v1");
   });
 
-  it("exports a frozen EXPECTED_CRITERIA_NAMES list (drift guard)", () => {
+  it("exports a frozen EXPECTED_CRITERIA_NAMES list matching the test-side fixed list", () => {
     assert.ok(Object.isFrozen(EXPECTED_CRITERIA_NAMES));
-    // The expected list is the canonical fixture for the criterion set.
-    // Drift is only allowed when both the script and this test are
-    // updated together.
-    assert.equal(EXPECTED_CRITERIA_NAMES.length, 16);
-    assert.equal(
-      new Set(EXPECTED_CRITERIA_NAMES).size,
-      EXPECTED_CRITERIA_NAMES.length,
-      "EXPECTED_CRITERIA_NAMES must contain unique entries"
-    );
-    // Specific names that operator-readable output relies on.
-    assert.ok(
-      EXPECTED_CRITERIA_NAMES.includes("schemaVersion is 'audit-export-manifest/v2'")
-    );
-    assert.ok(
-      EXPECTED_CRITERIA_NAMES.includes(
-        "combinedComplete = scopeComplete AND fileHashOk AND relationCheckOk"
-      )
-    );
+    assert.equal(EXPECTED_CRITERIA_NAMES.length, FIXED_CRITERION_NAMES.length);
+    assert.deepEqual([...EXPECTED_CRITERIA_NAMES], [...FIXED_CRITERION_NAMES]);
   });
 
-  it("buildCriteria returns exactly EXPECTED_CRITERIA_NAMES, in order", () => {
+  it("buildCriteria returns exactly the fixed criterion names, in order", () => {
     const criteria = buildCriteria();
-    assert.equal(criteria.length, EXPECTED_CRITERIA_NAMES.length);
+    assert.equal(criteria.length, FIXED_CRITERION_NAMES.length);
     assert.deepEqual(
       criteria.map((c) => c.name),
-      [...EXPECTED_CRITERIA_NAMES]
+      [...FIXED_CRITERION_NAMES]
     );
   });
 

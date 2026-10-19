@@ -251,45 +251,23 @@ describe("T08b.1 manifest v2 schema conformance", () => {
     );
   });
 
-  it("combinedComplete AND truth table — all 8 combinations preserved", async () => {
-    // Exhaustive truth table: for each input triple, combinedComplete
-    // must equal scope && fileHash && relation (no OR, no NAND, no XOR).
-    // We re-run buildManifest() to capture the base triple the
-    // implementation actually computed, then verify that any synthetic
-    // overlay (scope, fileHash, relation) yields combinedComplete via
-    // AND — i.e. when any factor is false, combinedComplete must be
-    // false; when all are true, combinedComplete must be true.
+  it("combinedComplete AND truth table — base invariant holds on the actual produced manifest", async () => {
+    // The conformance test verifies that the AND invariant holds on
+    // the manifest the production builder actually produces from a
+    // known-good fixture. The exhaustive 8-combination truth table
+    // (any boolean substitution yields a correct AND result) lives
+    // in scripts/audit-trust/__tests__/2026-10-19-r1-acceptance-matrix.test.mjs
+    // (`covers all 8 combinedComplete AND combinations`) which runs
+    // the assertion at the matrix criterion level with full control
+    // over input combinations. Together the two suites cover the
+    // invariant structurally (this test) and exhaustively (matrix
+    // test) without bloating either.
     const base = await buildManifest();
-    const baseScope = base.scopeComplete;
-    const baseFileHash = base.integrityVerification.fileHashOk;
-    const baseRelation = base.integrityVerification.relationCheckOk;
-    for (const [scope, fileHash, relation] of [
-      [true, true, true],
-      [true, true, false],
-      [true, false, true],
-      [true, false, false],
-      [false, true, true],
-      [false, true, false],
-      [false, false, true],
-      [false, false, false]
-    ]) {
-      // Simulate a manifest where the upstream producer could have set
-      // each flag to either `override` or `base`. The AND invariant is:
-      // combinedComplete === (scope && fileHash && relation).
-      const effScope = scope && baseScope;
-      const effFileHash = fileHash && baseFileHash;
-      const effRelation = relation && baseRelation;
-      const expected = effScope && effFileHash && effRelation;
-      // The implementation's reported base must follow AND at minimum:
-      expect(base.combinedComplete).toBe(baseScope && baseFileHash && baseRelation);
-      // Sanity: the AND invariant holds for any boolean substitution.
-      expect(typeof expected).toBe("boolean");
-      // and specifically when all three are true the expected is true
-      // iff the base triple was already true.
-      if (scope && fileHash && relation) {
-        expect(expected).toBe(baseScope && baseFileHash && baseRelation);
-      }
-    }
+    expect(base.combinedComplete).toBe(
+      base.scopeComplete &&
+        base.integrityVerification.fileHashOk &&
+        base.integrityVerification.relationCheckOk
+    );
   });
 
   it("schemaVersion is the fixed string 'audit-export-manifest/v2' (no drift)", async () => {
