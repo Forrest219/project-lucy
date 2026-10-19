@@ -25,6 +25,10 @@ import { buildStoredZip, sha256Hex } from "../proxy/zip-store.js";
 import { MCP_PLAYGROUND_PLATFORM } from "./mcp-playground.js";
 import { resolveLucyVersion } from "../lucy-version.js";
 import {
+  checkAgentAuditRateLimit,
+  extractIpForRateLimit
+} from "./agent-audit-rate-limit.js";
+import {
   ensureTraceEvidenceSchema,
   listTraceEvents,
   prepareTraceDatabase,
@@ -618,13 +622,28 @@ export function registerAgentAuditRoutes(app: FastifyInstance): void {
       };
     }
 
-    // Note: per-IP rate limiting (429 envelope) is delegated to a follow-up
-    // window; the contract specifies `replyAuthGate` is reused but the
-    //    helper has FastifyRequest typing that does not match the agent-audit
-    //    auth path (X-Agent-Audit-Token header, not admin session). The
-    //    surface stays open for T08 / T08b to wire correctly.
+    // Note: per-IP rate limiting (T08a.1) — applied here as step 6 after
+    //    auth + body + schema pass (so 401/400/413 do NOT count against the
+    //    bucket; this avoids a credential harvester exhausting the bucket
+    //    for legitimate clients). Implementation lives in
+    //    ./agent-audit-rate-limit.ts and is single-instance / module-private
+    //    (matches product config of single-instance Lucy).
+    const rateIp = extractIpForRateLimit(request);
+    const rateVerdict = checkAgentAuditRateLimit(rateIp);
+    if (!rateVerdict.allowed) {
+      reply.code(429);
+      reply.header("Retry-After", String(rateVerdict.retryAfterSeconds));
+      return {
+        ok: false,
+        error: {
+          code: "RATE_LIMITED",
+          message: "per-ip rate limit exceeded on observation endpoint",
+          retryAfter: rateVerdict.retryAfterSeconds
+        }
+      };
+    }
 
-    // 6. Append. Use the security store's own Database handle (T06b added
+    // 7. Append. Use the security store's own Database handle (T06b added
     //    `database` getter for this purpose) so the idempotency table writes
     //    run in the same WAL session as `appendEvent`, avoiding SQLITE_BUSY.
     let results: ReturnType<typeof appendClientObservations>;
