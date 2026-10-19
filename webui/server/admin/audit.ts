@@ -3094,6 +3094,162 @@ export function registerAuditRoutes(app: FastifyInstance) {
       }
     };
   });
+
+  // T03b — POST /api/admin/audit/association-revisions
+  // 追加一条关联修订（append-only）。actor 来自 request.lucyAdmin
+  // （trustedActorFromRequest）；body.actor / UA 不被读。
+  // Meta-audit write to security_events is REQUIRED for success — without
+  // it we return 503 (EA-11 closure: meta-audit failure must not release
+  // a sensitive audit mutation).
+  app.post<{
+    Body: {
+      originalTurnId?: string;
+      effectiveTurnId?: string;
+      originalAssociationStatus?: string;
+      effectiveAssociationStatus?: string;
+      reason?: string;
+      referenceDoc?: string;
+      attributionRuleVersion?: string;
+      classificationVersion?: string;
+      expectedRevision?: string;
+    };
+  }>("/api/admin/audit/association-revisions", async (request, reply) => {
+    let actor;
+    try {
+      actor = resolveActorOr401(request);
+    } catch (err) {
+      reply.code(401);
+      return { ok: false, error: { code: "ACTOR_UNRESOLVED", message: String(err) } };
+    }
+
+    const body = request.body ?? {};
+    const required = ["originalTurnId", "effectiveAssociationStatus", "reason", "attributionRuleVersion", "classificationVersion"] as const;
+    for (const field of required) {
+      if (!body[field] || typeof body[field] !== "string") {
+        reply.code(400);
+        return { ok: false, error: { code: "MISSING_FIELD", field } };
+      }
+    }
+
+    // Meta-audit precondition: refuse the sensitive write if the security
+    // store is unavailable. We refuse BEFORE appending the revision so the
+    // audit row and its canonical ledger entry succeed or fail together.
+    const securityPrecheck = await getSecurityStore();
+    if (!securityPrecheck.ok) {
+      reply.code(503);
+      return {
+        ok: false,
+        error: {
+          code: "META_AUDIT_STORE_UNAVAILABLE",
+          message: "security store unavailable; refusing to record sensitive audit write (EA-11)"
+        }
+      };
+    }
+
+    const database = await getAuditDb();
+    let row;
+    try {
+      row = appendAssociationRevision(database, {
+        originalTurnId: body.originalTurnId!,
+        effectiveTurnId: body.effectiveTurnId ?? null,
+        originalAssociationStatus: body.originalAssociationStatus ?? null,
+        effectiveAssociationStatus: body.effectiveAssociationStatus!,
+        reason: body.reason!,
+        referenceDoc: body.referenceDoc ?? null,
+        attributionRuleVersion: body.attributionRuleVersion!,
+        classificationVersion: body.classificationVersion!,
+        expectedRevision: body.expectedRevision ?? null,
+        // Server-resolved actor — body.actor / UA cannot override (EA-11).
+        actorKind: actor.actorType === "ui_admin" ? "person" : "automation",
+        actorId: actor.actorId,
+        instanceId: null,
+        instanceStartGeneration: null
+      });
+    } catch (err) {
+      const message = String((err as Error).message ?? err);
+      if (message.includes("UNIQUE constraint failed")) {
+        reply.code(409);
+        return {
+          ok: false,
+          error: {
+            code: "REVISION_DUPLICATE",
+            message: "a revision already exists for (original_turn_id, attribution_rule_version)"
+          }
+        };
+      }
+      if (message.includes("actorKind")) {
+        reply.code(400);
+        return { ok: false, error: { code: "INVALID_ACTOR_KIND", message } };
+      }
+      reply.code(500);
+      return { ok: false, error: { code: "INTERNAL", message } };
+    }
+
+    // T03b EA-11: meta-audit write persisted to security_events canonical ledger.
+    // Use the per-revision row id as the operationId so distinct revisions
+    // don't collapse into one projection operation.
+    const meta = await securityPrecheck.value.appendEvent({
+      eventId: `audit-association-revision-${row.id}`,
+      operationId: `association-revision-${row.id}`,
+      phase: "commit",
+      actor: actor.actorId,
+      actorType: actor.actorType,
+      auditEventKind: "association_revision",
+      objectHash: sha256Hex(Buffer.from(JSON.stringify(row), "utf8")),
+      resultSummary: `original=${row.originalTurnId} effective=${row.effectiveAssociationStatus}`
+    });
+    if (!meta.ok) {
+      // Roll back: delete the just-written revision so the audit row and its
+      // canonical ledger entry remain consistent. EA-11 closure.
+      database
+        .prepare(`DELETE FROM association_revisions WHERE id = ?`)
+        .run(row.id);
+      reply.code(503);
+      return {
+        ok: false,
+        error: {
+          code: "META_AUDIT_WRITE_FAILED",
+          message: `security_events write failed: ${meta.reason ?? "unknown"}`
+        }
+      };
+    }
+    return { ok: true, data: serializeAssociationRevision(row) };
+  });
+
+  // T03b — GET /api/admin/audit/association-revisions
+  // T03c: meta-audit at this GET endpoint is added in the next sub-batch.
+  app.get<{
+    Querystring: { originalTurnId?: string; limit?: string };
+  }>("/api/admin/audit/association-revisions", async (request) => {
+    const database = await getAuditDb();
+    const limit = Math.min(parseInt(request.query.limit ?? "50", 10) || 50, 500);
+    const rows = listAssociationRevisions(database, {
+      originalTurnId: request.query.originalTurnId,
+      limit
+    });
+    return { ok: true, data: rows.map(serializeAssociationRevision) };
+  });
+
+  // T03b — GET /api/admin/audit/:id/effective-association
+  // 返回单条 access_log 的 original / effective 双视图。
+  // T03c: meta-audit at this GET endpoint is added in the next sub-batch.
+  app.get<{ Params: { id: string } }>(
+    "/api/admin/audit/:id/effective-association",
+    async (request, reply) => {
+      const id = Number(request.params.id);
+      if (!Number.isInteger(id) || id <= 0) {
+        reply.code(400);
+        return { ok: false, error: { code: "INVALID_ID" } };
+      }
+      const database = await getAuditDb();
+      const view = effectiveAssociationFor(database, id);
+      if (!view) {
+        reply.code(404);
+        return { ok: false, error: { code: "NOT_FOUND" } };
+      }
+      return { ok: true, data: view };
+    }
+  );
 }
 
 function serializeTraceEvent(row: TraceEventRow) {
@@ -3131,5 +3287,44 @@ function serializeEvidenceEvent(row: EvidenceEventRow) {
     reviewer: row.reviewer ?? undefined,
     metadata: row.metadata,
     createdAt: row.createdAt
+  };
+}
+
+// ─── T03b: association_revisions endpoints (audit-trust-2026-10-19-r1) ──────
+//
+// Contract §2.6 / §4.2. Actor is resolved from the verified session context
+// (`request.lucyAdmin`) via `trustedActorFromRequest`. Body fields like
+// `actor` / `actor_id` / User-Agent / forwarded headers are **never** consulted.
+// This is the EA-11 closure: meta-audit writes are bound to server-resolved
+// actors; body.actor and UA cannot impersonate.
+
+import {
+  appendAssociationRevision,
+  effectiveAssociationFor,
+  listAssociationRevisions,
+  type AssociationRevisionRow
+} from "../proxy/association-revision.js";
+
+function resolveActorOr401(request: any): ReturnType<typeof trustedActorFromRequest> {
+  return trustedActorFromRequest(request);
+}
+
+function serializeAssociationRevision(row: AssociationRevisionRow) {
+  return {
+    id: row.id,
+    originalTurnId: row.originalTurnId,
+    effectiveTurnId: row.effectiveTurnId,
+    originalAssociationStatus: row.originalAssociationStatus,
+    effectiveAssociationStatus: row.effectiveAssociationStatus,
+    reason: row.reason,
+    referenceDoc: row.referenceDoc,
+    attributionRuleVersion: row.attributionRuleVersion,
+    actorKind: row.actorKind,
+    actorId: row.actorId,
+    instanceId: row.instanceId,
+    instanceStartGeneration: row.instanceStartGeneration,
+    ts: row.ts,
+    classificationVersion: row.classificationVersion,
+    expectedRevision: row.expectedRevision
   };
 }
