@@ -84,7 +84,9 @@ export function PolicyDegradeNotice({ scope }: { scope?: PolicyDegradeScope } = 
               {issue.agentId || copy.roleId ? (
                 <span className="pl-policy-degrade-notice-actions">
                   {issue.agentId && !onThisAgent ? (
-                    <Link to={`/admin/agents/${encodeURIComponent(issue.agentId)}`}>打开这个 Agent</Link>
+                    <Link to={`/admin/agents/${encodeURIComponent(issue.agentId)}`}>
+                      打开这个 <span className="notranslate" translate="no">Agent</span>
+                    </Link>
                   ) : null}
                   {copy.roleId ? (
                     <Link to={`/admin/roles/${encodeURIComponent(copy.roleId)}`}>去修改角色</Link>
