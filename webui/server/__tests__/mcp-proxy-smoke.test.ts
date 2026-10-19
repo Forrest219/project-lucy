@@ -91,6 +91,7 @@ users:
         - mysql-aliyun
       tables:
         - dataforai.superstore_orders
+        - dataforai.superstore_people
       tools:
         - lucy_catalog
         - kx_catalog
@@ -180,6 +181,8 @@ const SCHEMA_YAML = `tables:
     table: dataforai.kx_fact_financial_amount
   superstore_orders:
     table: dataforai.superstore_orders
+  superstore_people:
+    table: dataforai.superstore_people
 `;
 
 const POC_SCHEMA_YAML = `tables:
@@ -469,6 +472,89 @@ describe("MCP proxy smoke", () => {
         extraction_method: "args_source_name",
         confidence: "high"
       });
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
+      await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));
+    }
+  });
+
+  it("writes one access_log_sources row per resolved source when lucy_query fails", async () => {
+    const upstream = createServer(async (req, res) => {
+      const body = await readRequestBody(req);
+      const payload = JSON.parse(body) as { id?: string };
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({
+        jsonrpc: "2.0",
+        id: payload.id,
+        result: {
+          isError: true,
+          content: [{ type: "text", text: "upstream rejected the query" }]
+        }
+      }));
+    });
+
+    await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+    const upstreamPort = (upstream.address() as AddressInfo).port;
+    process.env.LUCY_PROXY_UPSTREAM_HOST = "127.0.0.1";
+    process.env.LUCY_PROXY_UPSTREAM_PORT = String(upstreamPort);
+
+    const { buildProxy } = await import("../proxy/mcp-proxy");
+    const { server, host } = buildProxy();
+    await new Promise<void>((resolve) => server.listen(0, host, resolve));
+    const proxyPort = (server.address() as AddressInfo).port;
+
+    async function call(id: string, args: Record<string, unknown>) {
+      const res = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${TOKEN}`
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id,
+          method: "tools/call",
+          params: { name: "lucy_query", arguments: args }
+        })
+      });
+      expect(res.status).toBe(200);
+    }
+
+    try {
+      await call("proxy-smoke-error-two-sources", {
+        connectionId: "mysql-aliyun",
+        measures: [
+          { expr: "count(superstore_orders.order_id)", name: "orders" },
+          { expr: "count(superstore_people.region)", name: "people" }
+        ]
+      });
+      await call("proxy-smoke-error-one-source", {
+        connectionId: "mysql-aliyun",
+        measures: [{ expr: "row_count(superstore_orders)", name: "n" }]
+      });
+      await call("proxy-smoke-error-no-source", {
+        connectionId: "mysql-aliyun",
+        measures: [{ expr: "count(*)", name: "n" }],
+        limit: 5
+      });
+
+      const two = await waitForAuditRow("proxy-smoke-error-two-sources");
+      expect(two.outcome).toBe("error");
+      const twoSources = await waitForAuditSources(Number(two.id));
+      expect(twoSources).toHaveLength(2);
+      expect(twoSources.map((row) => row.source_name).sort()).toEqual(["superstore_orders", "superstore_people"]);
+
+      const one = await waitForAuditRow("proxy-smoke-error-one-source");
+      expect(one.outcome).toBe("error");
+      const oneSources = await waitForAuditSources(Number(one.id));
+      expect(oneSources).toHaveLength(1);
+      expect(oneSources[0]?.source_name).toBe("superstore_orders");
+
+      const none = await waitForAuditRow("proxy-smoke-error-no-source");
+      expect(none.outcome).toBe("error");
+      expect(none.tables ?? null).toBeNull();
+      const noneSources = await waitForAuditSources(Number(none.id));
+      expect(noneSources).toHaveLength(0);
     } finally {
       await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
       await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));
@@ -1791,15 +1877,15 @@ describe("MCP proxy smoke", () => {
       expect(auditB.lucy_turn_id).toBe(turnB);
       expect(auditA.turn_attribution_mode).toBe("session_bound");
       expect(auditB.turn_attribution_mode).toBe("session_bound");
-      expect(auditA.turn_attribution_confidence).toBe("high");
-      expect(auditB.turn_attribution_confidence).toBe("high");
+      expect(auditA.turn_attribution_confidence).toBe("low");
+      expect(auditB.turn_attribution_confidence).toBe("low");
     } finally {
       await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
       await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));
     }
   });
 
-  it("binds a same-session catalog call that landed just before lucy_begin_question", async () => {
+  it("[v0.3] does NOT back-bind a same-session catalog call that landed just before lucy_begin_question", async () => {
     const upstream = createServer(async (req, res) => {
       const parsed = JSON.parse(await readRequestBody(req)) as { id?: string };
       res.writeHead(200, { "content-type": "application/json" });
@@ -1839,8 +1925,9 @@ describe("MCP proxy smoke", () => {
       const turnId = (JSON.parse(begun.result.content[0]?.text ?? "{}") as { turnId: string }).turnId;
       const catalog = await waitForAuditRow("prior-catalog");
       const begin = await waitForAuditRow("prior-begin");
-      expect(catalog.lucy_turn_id).toBe(turnId);
-      expect(catalog.turn_attribution_mode).toBe("session_bound");
+      // v0.3: prior catalog NOT back-bound; only the begin event is bound to its own turn
+      expect(catalog.lucy_turn_id).toBeFalsy();
+      expect(catalog.turn_attribution_mode).not.toBe("session_bound");
       expect(begin.lucy_turn_id).toBe(turnId);
       expect(begin.turn_attribution_mode).toBe("explicit");
     } finally {
@@ -1849,7 +1936,7 @@ describe("MCP proxy smoke", () => {
     }
   });
 
-  it("binds a read_source that finishes after lucy_begin_question was recorded", async () => {
+  it("[v0.3] does NOT re-bind a read_source that finishes after lucy_begin_question; admission is frozen", async () => {
     let markReadArrived: () => void = () => {};
     const readArrived = new Promise<void>((resolve) => {
       markReadArrived = resolve;
@@ -1904,8 +1991,10 @@ describe("MCP proxy smoke", () => {
       const readResponse = await readPromise;
       expect(readResponse.status).toBe(200);
       const readAudit = await waitForAuditRow("inflight-read");
-      expect(readAudit.lucy_turn_id).toBe(turnId);
-      expect(readAudit.turn_attribution_mode).toBe("session_bound");
+      // v0.3: attribution frozen at admission; inflight read_source NOT bound to a later begin.
+      // effective_* must already be set when the read was admitted (before begin existed).
+      expect(readAudit.lucy_turn_id).toBeFalsy();
+      expect(readAudit.turn_attribution_mode).not.toBe("session_bound");
     } finally {
       releaseRead();
       await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
@@ -2562,7 +2651,7 @@ describe("MCP proxy smoke", () => {
       expect(bound.result?.isError).not.toBe(true);
       const bindAudit = await waitForAuditRow("bind-query");
       expect(bindAudit.turn_attribution_mode).toBe("session_bound");
-      expect(bindAudit.turn_attribution_confidence).toBe("high");
+      expect(bindAudit.turn_attribution_confidence).toBe("low");
       const beginText = begun.result?.content?.[0]?.text ?? "";
       const { turnId } = JSON.parse(beginText) as { turnId: string };
       const turnDb = new Database(auditDbPath, { readonly: true });

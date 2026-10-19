@@ -4,7 +4,7 @@
 |---|---|
 | 文档名称 | Lucy Product Terminology Standard |
 | 文档类型 | System-wide Product Language / Terminology Standard |
-| 版本 | v0.2 |
+| 版本 | v0.2；2026-10-19 v0.2-draft：增补 Spec 173 v0.3 / 2026-10-19 audit-trust 新增术语（凭证主体 / 已确认关联 / 候选关联 / 归属待核验 / 客户端采集范围 / 工具调用数 / 原文登记分组占比 / 证据校验），登记于 §4.7.1，与 `inbox/audit-trust/audit-trust-2026-10-19-r1/T00-r2/` 同批生效 |
 | 撰写日期 | 2026-07-31；2026-08-01 v0.2（新增 Data Agent Ops Control Plane / Data Agent 运维控制台，标记『语义维护工作台』与『运维控制面』为弃用别名）；2026-08-05 增补 §4.8 MCP 调试台术语（Spec 99）；同日 Spec 100 交叉审阅补齐 incomplete / impact / evidence / 裁决双行；2026-08-06 Spec 109 增补目录重命名术语；2026-08-06 Spec 114/115 增补表 YAML 导入与工作台校验披露术语；2026-08-06 Spec 117 增补 Remove Schema 术语；2026-08-20 增补 §4.7.1 Trace Read Model 术语（Spec 62 v0.5）；2026-08-25 Spec 127 增补 Delete Connection 术语；2026-08-26 增补 §4.9 可选 Agent Chat（A3）术语；2026-09-03 Spec 140 增补访问日志双粒度 CSV 导出术语；2026-09-03 Spec 141 增补访问日志 CSV 字段说明与本地时间术语；2026-09-04 Spec 143 增补调用监控与运行状态分组术语；2026-09-11 Spec 142 为 `/overview` 聚焦精简；2026-09-23 Spec 144 增补 Skill / 业务 Skill；Spec 145 增补待同步文件与表语义校验分计；同日 Spec 144 v1.1 增补导航组名「业务上下文」（原「语义建模」组更名，「语义建模」保留为概念词）；2026-09-24 Spec 148 增补界面使用、页面访问、访问账户、活跃菜单与分组/菜单/页面访问排行；同日 Spec 149 增补运维问数连接与运维问数角色；2026-10-12 增补启用表范围「状态筛选」筛选维术语；2026-10-19 Spec 99 v1.3 明确调试台裁决卡与访问日志双行分工；同日 v1.5 连上检查只回答能连上或不能连上 |
 | 适用范围 | Lucy WebUI、API 用户可见错误、Toast、Modal、Drawer、表格列名、导航、测试断言、Spec、Plan、Runbook、交付文档 |
 | 维护者 | Product / UX / Architecture Review |
@@ -608,6 +608,25 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token`、`MCP`、`P95`、`Manifest`、tool name、physical table、Agent id、问询 ID / 事件 ID 值、裁决原因码、生成 SQL 文本、`lucy-ops`、`lucy_ops_reader`、`ops_calls`、`ops_call_tables`。
 
 详见 Spec 89；Spec 94 补充来源筛选与列表/Drawer 列名；Spec 99 要求双行 DecisionReasonView；**Spec 106** 要求身份列、共享筛选与 `view`/`range` URL；**Spec 125** 要求调用流水直展生成 SQL（Spec 124 冷存降为 legacy）；**Spec 137** 区分「导出调用流水」与「导出审计证据包」；**Spec 140** 增加问询记录 CSV；页头「导出」跟随当前页签，不再并排两个粒度；**Spec 141** 要求 CSV 文件名精确到秒和流水号、增加本地时间并提供字段说明；**Spec 149** 增加运维问数连接与运维问数角色，问数仍沿用调用流水、生成 SQL、裁决原因。**Spec 172** 增加会话访问：没有用户原文时按 MCP 会话保留一条推断问询，摘要以「会话建立：」加客户端名开头。
+
+#### 4.7.1 Spec 173 v0.3 / 2026-10-19 audit-trust 新增术语
+
+依据 `docs/specs/lucy-20261019-audit-trust-and-admin-investigation-spec.md` §6、`inbox/audit-trust/audit-trust-2026-10-19-r1/T00-r2/implementation-contract.md` §6。T00-r2 同批生效；T01 起 UI 文案、API 错误、测试断言均按本节。
+
+| Canonical term | UI 主术语 | 允许补充说法 | 禁止文案 | 说明 |
+|---|---|---|---|---|
+| Credential principal | 凭证主体 | Token 绑定凭证 | Agent（作唯一身份）、token_label（当唯一身份） | `user_id` 列；非空 Agent / Token 绑定的内部完整凭证摘要；与既有 `Agent` 列并存说明，不替换 |
+| Confirmed association | 已确认关联 | 显式关联 | "已绑定"、"已授权关联"（混授权）、关联成功（推断） | `association_status = confirmed`；仅合法显式 turn 或 `lucy_begin_question` 自身；不等同"已授权意图证明" |
+| Candidate association | 候选关联 | 推断关联 | "已确认关联"、关联成功 | `association_status = candidate` + `confidence = low`；自动 session 推断；不进入 `confirmed` 分母 |
+| Association review | 归属待核验 | 待核验关联 | "误关联"、权限冲突（混授权） | `association_status ∈ {conflict, legacy_unverified}`；不自动等同于"越权" |
+| Client coverage | 客户端采集范围 | 采集覆盖 | 未外发、已外发（已验证）、未拦截 | `clientCoverage ∈ {observed, gap, unknown}`；未接入显式显示「后续动作不可见」；不基于此推断"未外发" |
+| Tool call count | 工具调用数 | `tool_count_v2` | 调用数、access_log 行数（混） | `count(event_type = tool_call)`；含目录 / 元数据 / begin / 失败；旧"触达物理表"语义标 `legacy` 保留 |
+| Reported group ratio | 原文登记分组占比 | 原文登记占比 | 真实问询覆盖率、丢日志率（86% 误用） | 分母 = 已上报 + 推断问询；分子只计已上报；握手不入分母；EA-21 |
+| Audit integrity verification | 证据校验 | 完整性校验 | 防篡改（本地 hash 自检）、独立签名（未验证后要求） | 文件 hash / 关系校验 / 独立签名 / 外部保全；本地 hash 自检不称为防篡改签名；EA-12 / EA-19 |
+
+沿用既有「问询记录」「调用流水」「会话访问」「裁决原因」「审计同步延迟」「Manifest」等术语。Spec 173 v0.3 与 Spec 162 / Spec 137 / Spec 141 / Spec 149 共用 §4.7；同号 `!(Agent)` / `(Token)` / `!(MCP)` / `!(P95)` / `!(Manifest)` / `!(tool name)` / `!(physical table)` / `!(Agent id)` / `!(问询 ID)` / `!(事件 ID)` / `!(裁决原因码)` / `!(生成 SQL)` / `!(lucy-ops)` / `!(lucy_ops_reader)` / `!(ops_calls)` / `!(ops_call_tables)` 维持 `translate="no"` 与 `notranslate`。
+
+文案不得把"操作权限 / 业务结果 / 归属 / 证据质量"合并成一个安全结论。**撤销的旧规则**（作废声明，不在 UI / API 中出现）：120 秒近邻回绑（`PRIOR_BIND_MS = 120000`）、写完成时按最近活动 turn 重归因（v0.2 §6 lines 73–76）、把 `session_bound + high` 当作等同 confirmed、把 38 个空 tool / hash + 时间窗 / 维护空日志非空即通过等被推翻结论写回实施。
 
 ### 4.8 MCP 调试台 / ACL 裁决可见性
 

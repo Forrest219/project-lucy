@@ -469,7 +469,7 @@ describe("proxy audit log", () => {
     }
   });
 
-  it("rebuildInferredTurns derives question_summary/source_summary from real access_log_sources content, not a placeholder", async () => {
+  it("rebuildInferredTurns keeps touched sources and uses a fixed summary when no question was reported", async () => {
     const { writeLog, writeAccessLogSources, rebuildInferredTurns } = await import("../proxy/audit");
     const base = Date.now() - 30 * 60 * 1000;
     const at = (offsetMs: number) => new Date(base + offsetMs).toISOString();
@@ -495,7 +495,8 @@ describe("proxy audit log", () => {
       const row = db.prepare("SELECT source_summary, question_summary FROM inferred_turns WHERE user_id = ?").get("source-content-user") as { source_summary: string; question_summary: string | null };
       const sources = JSON.parse(row.source_summary) as Array<{ sourceName?: string }>;
       expect(sources).toEqual(expect.arrayContaining([expect.objectContaining({ sourceName: "kx_fact_financial_amount" })]));
-      expect(row.question_summary).toContain("kx_fact_financial_amount");
+      expect(row.question_summary).toBe("未上报问询原文");
+      expect(row.question_summary).not.toContain("kx_fact_financial_amount");
     } finally {
       db.close();
     }
@@ -612,7 +613,7 @@ describe("proxy audit log", () => {
     }
   });
 
-  it("binds a same-session catalog 10s before begin and leaves a call older than 120s unassigned", async () => {
+  it("[v0.3] does NOT backbind same-session calls before begin; only handshake is attached", async () => {
     const { writeLog, bindPriorSessionCalls } = await import("../proxy/audit");
     const beginMs = Date.now() - 30_000;
     const beginAt = new Date(beginMs).toISOString();
@@ -627,13 +628,13 @@ describe("proxy audit log", () => {
       tokenHashPrefix: "sha256:aabbccddeeff",
       turnAttributionMode: "unassigned"
     });
-    const staleId = await writeLog({
-      ts: new Date(beginMs - 121_000).toISOString(),
+    const initializeId = await writeLog({
+      ts: new Date(beginMs - 12_000).toISOString(),
       userId: "bind-window-user",
-      tool: "lucy_catalog",
+      tool: "initialize",
       outcome: "ok",
       durationMs: 1,
-      requestId: "bind-window-stale",
+      requestId: "bind-window-init",
       lucySessionId: "sess-window",
       tokenHashPrefix: "sha256:aabbccddeeff",
       turnAttributionMode: "unassigned"
@@ -647,17 +648,23 @@ describe("proxy audit log", () => {
     });
     const db = new Database(auditDbPath, { readonly: true });
     try {
-      const catalog = db.prepare("SELECT lucy_turn_id, turn_attribution_mode FROM access_log WHERE id = ?").get(catalogId) as {
-        lucy_turn_id: string;
-        turn_attribution_mode: string;
-      };
-      const stale = db.prepare("SELECT lucy_turn_id, turn_attribution_mode FROM access_log WHERE id = ?").get(staleId) as {
+      // Catalog 10s before begin: NOT backbound (v0.3 撤销 120 秒回绑)
+      const catalog = db.prepare("SELECT lucy_turn_id, turn_attribution_mode, turn_attribution_confidence FROM access_log WHERE id = ?").get(catalogId) as {
         lucy_turn_id: string | null;
         turn_attribution_mode: string | null;
+        turn_attribution_confidence: string | null;
       };
-      expect(catalog).toEqual({ lucy_turn_id: "lucy_window", turn_attribution_mode: "session_bound" });
-      expect(stale.lucy_turn_id).toBeFalsy();
-      expect(stale.turn_attribution_mode).not.toBe("session_bound");
+      expect(catalog.lucy_turn_id).toBeFalsy();
+      expect(catalog.turn_attribution_mode).not.toBe("session_bound");
+      // Handshake attached (initialize) but mode remains session_bound + low (v0.3 降级)
+      const init = db.prepare("SELECT lucy_turn_id, turn_attribution_mode, turn_attribution_confidence FROM access_log WHERE id = ?").get(initializeId) as {
+        lucy_turn_id: string | null;
+        turn_attribution_mode: string | null;
+        turn_attribution_confidence: string | null;
+      };
+      expect(init.lucy_turn_id).toBe("lucy_window");
+      expect(init.turn_attribution_mode).toBe("session_bound");
+      expect(init.turn_attribution_confidence).toBe("low");
     } finally {
       db.close();
     }

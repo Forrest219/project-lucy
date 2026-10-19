@@ -773,7 +773,7 @@ describe("GET /api/admin/audit/turns", () => {
     }
   });
 
-  it("binds a catalog call 18ms before begin and counts both as linked calls", async () => {
+  it("[v0.3] does NOT back-bind a catalog call 18ms before begin; only begin itself is bound", async () => {
     const { writeLog, writeConversationTurn, bindPriorSessionCalls } = await import("../proxy/audit");
     const beginMs = Date.now() - 30_000;
     const beginAt = new Date(beginMs).toISOString();
@@ -826,7 +826,8 @@ describe("GET /api/admin/audit/turns", () => {
         .get("/api/admin/audit/turns?user=bind-18-user&source=reported")
         .expect(200);
       expect(reported.body.data.entries).toHaveLength(1);
-      expect(reported.body.data.entries[0].businessCallCount).toBeGreaterThanOrEqual(2);
+      // v0.3: only begin event is bound; catalog 18ms before is NOT back-bound
+      expect(reported.body.data.entries[0].businessCallCount).toBe(1);
       expect(reported.body.data.entries[0].client).toBe("cursor-vscode");
       expect(reported.body.data.entries[0].sessionId).toBe("266fc826");
 
@@ -834,10 +835,9 @@ describe("GET /api/admin/audit/turns", () => {
         .get("/api/admin/audit?user=bind-18-user&turnId=lucy_bind_18")
         .expect(200);
       const catalog = calls.body.data.entries.find((row: { requestId: string }) => row.requestId === "bind-18-catalog");
-      expect(catalog).toMatchObject({
-        lucyTurnId: "lucy_bind_18",
-        turnAttributionMode: "session_bound"
-      });
+      // Catalog NOT bound to begin's turn; remains unassigned / no session_bound
+      expect(catalog?.lucyTurnId ?? null).toBeFalsy();
+      expect(catalog?.turnAttributionMode).not.toBe("session_bound");
     } finally {
       await app.close();
     }

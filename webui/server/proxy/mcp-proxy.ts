@@ -435,23 +435,20 @@ function toSourceRecords(refs: SourceRef[]): AccessLogSourceRecord[] {
   }));
 }
 
-/** Spec 173: a tools/call that started before begin can finish after the turn exists. */
-function bindOpenSessionTurn(
-  entry: Partial<Parameters<typeof writeLog>[0]>,
-  owner: Identity
+/**
+ * Spec 173 v0.3 / 2026-10-19 audit-trust: bindOpenSessionTurn is撤销.
+ * The function previously re-resolved attribution at write time; v0.3 forbids write-time
+ * rewrite of `lucy_turn_id` / association_status / effective_*. Attribution must be frozen
+ * at admission (see `reportedTurns.resolve` in the /mcp tools/call handler before
+ * `recordAudit`). New code MUST NOT re-introduce this helper.
+ */
+function _bindOpenSessionTurn_REMOVED_v0_3(
+  _entry: Partial<Parameters<typeof writeLog>[0]>,
+  _owner: Identity
 ): void {
-  if (entry.tool === "lucy_begin_question") return;
-  if (entry.turnAttributionMode && entry.turnAttributionMode !== "unassigned") return;
-  if (!entry.lucySessionId) return;
-  const attribution = reportedTurns.resolve({
-    identity: owner,
-    sessionId: entry.lucySessionId
-  });
-  if (!attribution.turnId) return;
-  entry.lucyTurnId = attribution.turnId;
-  entry.turnAttributionMode = attribution.mode;
-  entry.turnAttributionConfidence = attribution.confidence;
-  entry.turnAttributionReason = attribution.reason;
+  // intentionally empty; the function body is preserved here only as a tombstone to
+  // catch accidental re-imports. Do not call.
+  return;
 }
 
 function recordAudit(entry: Parameters<typeof writeLog>[0], sources?: SourceRef[]): void {
@@ -2443,6 +2440,7 @@ async function writeUpstreamFailureResponse(
     argsSummary: Record<string, unknown> | undefined;
     queryMeta: Partial<Parameters<typeof writeLog>[0]>;
     tables: string[];
+    sourceRefs: SourceRef[];
     traceId: string;
   }
 ): Promise<void> {
@@ -2452,7 +2450,10 @@ async function writeUpstreamFailureResponse(
     "content-length": responseBytes
   });
   context.res.end(failure.responseBody);
-  bindOpenSessionTurn(context.requestMeta, context.identity);
+  // Spec 173 v0.3 / 2026-10-19 audit-trust: attribution is frozen at admission (line 3004-3014 below).
+  // No re-resolution at write time; effective_* and original_* must already be set on requestMeta.
+  // bindOpenSessionTurn(...) removed; the binding helpers (bindPriorSessionCalls + the
+  // admission-time resolve at /mcp tools/call) own the post-begin binding policy.
 
   recordAudit({
     ts: new Date().toISOString(),
@@ -2470,7 +2471,7 @@ async function writeUpstreamFailureResponse(
     traceId: context.traceId,
     ...context.requestMeta,
     ...(await auditMeta(context.identity, failure.reason)),
-  });
+  }, context.sourceRefs);
   recordMcpTraceForTool({
     traceId: context.traceId,
     identity: context.identity,
@@ -2520,6 +2521,7 @@ async function writeLucySemanticResponse(
       argsSummary,
       queryMeta,
       tables: [...new Set([...sourceRefs.map((ref) => ref.physicalTable), ...queryTables])],
+      sourceRefs,
       traceId
     });
     return;
@@ -2623,7 +2625,7 @@ async function writeLucySemanticResponse(
   if (outcome === "ok" && !compilerReason) {
     await recordSuccessfulQueryObservation(toolName, toolArgs);
   }
-  bindOpenSessionTurn(requestMeta, identity);
+  // Spec 173 v0.3: attribution frozen at admission; no re-resolution at write time.
   const argsRecord = toolArgs && typeof toolArgs === "object" && !Array.isArray(toolArgs) ? toolArgs as Record<string, unknown> : {};
   const applied = compilerReason ? undefined : appliedLucyVersion(toolName, argsRecord, sourceRefs);
   const failureDimension = compilerReason
@@ -2658,7 +2660,7 @@ async function writeLucySemanticResponse(
     ...requestMeta,
     ...(await auditMeta(identity, withUpstreamSessionNote(decisionReason, session))),
   };
-  recordAudit(baseEntry, outcome === "ok" ? sourceRefs : undefined);
+  recordAudit(baseEntry, sourceRefs);
   recordMcpTraceForTool({
     traceId,
     identity,
@@ -2989,11 +2991,10 @@ async function handlePost(req: IncomingMessage, res: ServerResponse, admitted: A
     entry: Parameters<typeof writeLog>[0],
     sources?: SourceRef[]
   ) => {
-    // Spec 173: re-resolve at write time. Semantic query/read use their own writer,
-    // which calls the same bind before recordAudit.
-    const next = { ...entry };
-    if (rpcMethod === "tools/call") bindOpenSessionTurn(next, identity);
-    const withTrace = rpcMethod === "tools/call" ? { ...next, traceId } : next;
+    // Spec 173 v0.3 / 2026-10-19 audit-trust: attribution is frozen at admission (line 3004-3014 below).
+    // No re-resolution at write time. effective_* and original_* must already be set on entry.
+    // The previous bindOpenSessionTurn(...) call here is撤销; do not re-introduce without T00-r2 contract change.
+    const withTrace = rpcMethod === "tools/call" ? { ...entry, traceId } : entry;
     recordAudit(withTrace, sources);
   };
 
@@ -4672,6 +4673,7 @@ async function buildDenialRepairPayload(
         argsSummary,
         queryMeta,
         tables: queryTables,
+        sourceRefs: [],
         traceId
       });
       return;
@@ -4786,6 +4788,27 @@ async function buildDenialRepairPayload(
   if (rpcMethod === "tools/call") {
     const responseBody = Buffer.from(upstreamBody);
     const contentType = String(upstream.headers["content-type"] ?? "");
+    let sourceRefs: SourceRef[] = [];
+    let tables: string[] | undefined;
+    if (toolName) {
+      try {
+        const extracted = await extractTables(toolName, toolArgs);
+        const merged = new Set([...extracted, ...queryTables]);
+        if (merged.size > 0) tables = [...merged];
+      } catch {
+        // don't fail the request
+      }
+      if (!tables && queryTables.length > 0) tables = queryTables;
+      try {
+        const structuredRefs = await extractSourceRefs(toolName, toolArgs);
+        const coveredTables = new Set(structuredRefs.map((ref) => ref.physicalTable));
+        const fallbackTables = queryTables.filter((table) => !coveredTables.has(table));
+        const fallbackRefs = fallbackTables.length > 0 ? await resolveSourceRefsForTables(fallbackTables) : [];
+        sourceRefs = [...structuredRefs, ...fallbackRefs];
+      } catch {
+        // source normalization is best-effort; never block the response
+      }
+    }
     const callUpstreamFailure = classifyUpstreamFailure(upstream.statusCode, contentType, upstreamBody, requestId, upstreamSession);
     if (callUpstreamFailure) {
       await writeUpstreamFailureResponse(callUpstreamFailure, {
@@ -4798,7 +4821,8 @@ async function buildDenialRepairPayload(
         requestMeta,
         argsSummary,
         queryMeta,
-        tables: queryTables,
+        tables: tables ?? queryTables,
+        sourceRefs,
         traceId
       });
       return;
@@ -4841,7 +4865,6 @@ async function buildDenialRepairPayload(
     let errorDetail: string | undefined = callUpstreamStatus >= 400
       ? `upstream_status=${callUpstreamStatus}`
       : undefined;
-    let tables: string[] | undefined;
     try {
       const sniffType = forceJson ? "application/json" : contentType;
       if (sniffType.includes("application/json")) {
@@ -4854,31 +4877,6 @@ async function buildDenialRepairPayload(
       }
     } catch {
       // best-effort sniff; don't fail the request
-    }
-
-    // Extract tables for logging (best-effort)
-    let sourceRefs: SourceRef[] = [];
-    if (toolName) {
-      try {
-        const extracted = await extractTables(toolName, toolArgs);
-        const merged = new Set([...extracted, ...queryTables]);
-        if (merged.size > 0) tables = [...merged];
-      } catch {
-        // don't fail the request
-      }
-      if (!tables && queryTables.length > 0) tables = queryTables;
-
-      // Structured source normalization for access_log_sources (best-effort, never blocks the response).
-      // kx_catalog is handled by its own local-response branch above and never reaches here.
-      try {
-        const structuredRefs = await extractSourceRefs(toolName, toolArgs);
-        const coveredTables = new Set(structuredRefs.map((ref) => ref.physicalTable));
-        const fallbackTables = queryTables.filter((table) => !coveredTables.has(table));
-        const fallbackRefs = fallbackTables.length > 0 ? await resolveSourceRefsForTables(fallbackTables) : [];
-        sourceRefs = [...structuredRefs, ...fallbackRefs];
-      } catch {
-        // source normalization is best-effort; never block the response
-      }
     }
 
     const responseMeta = responseAuditMeta(responseBody, upstream.headers["content-type"]);
@@ -4897,7 +4895,7 @@ async function buildDenialRepairPayload(
       requestId,
       ...requestMeta,
       ...(await auditMeta(identity, withUpstreamSessionNote(outcome === "ok" ? "allowed" : "upstream_error", upstreamSession))),
-    }, outcome === "ok" ? sourceRefs : undefined);
+    }, sourceRefs);
     recordMcpTraceForTool({
       traceId,
       identity,

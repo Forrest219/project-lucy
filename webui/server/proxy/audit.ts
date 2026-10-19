@@ -40,6 +40,38 @@ export interface AccessLogEntry {
   turnAttributionMode?: "explicit" | "session_bound" | "identity_inferred" | "unassigned";
   turnAttributionConfidence?: "high" | "low" | "none";
   turnAttributionReason?: "turn_attribution_rejected";
+  /**
+   * Spec 173 v0.3 / 2026-10-19 audit-trust:正交于 turn_attribution_mode 的关联质量判定。
+   * 由准入路径冻结；不允许在 prepared / delivered 阶段改写。
+   * 历史 `session_bound + high` 行降为 `legacy_unverified`（T03 backfill 接管）。
+   */
+  associationStatus?: "confirmed" | "candidate" | "unassigned" | "conflict" | "legacy_unverified";
+  /** 原始关联：准入时刻捕获，事后不改。历史行 NULL。 */
+  originalTurnId?: string;
+  originalAttributionMode?: "explicit" | "session_bound" | "identity_inferred" | "unassigned";
+  originalAssociationStatus?: "confirmed" | "candidate" | "unassigned" | "conflict" | "legacy_unverified";
+  originalAttributionConfidence?: "high" | "low" | "none";
+  originalReason?: string;
+  /** 有效关联：读路径按事件链 + 修订链 idempotent 计算。准入时与 original 一致。 */
+  effectiveTurnId?: string;
+  effectiveAttributionMode?: "explicit" | "session_bound" | "identity_inferred" | "unassigned";
+  effectiveAssociationStatus?: "confirmed" | "candidate" | "unassigned" | "conflict" | "legacy_unverified";
+  effectiveAttributionConfidence?: "high" | "low" | "none";
+  effectiveReason?: string;
+  /** Spec 173 v0.3 / 2026-10-19 audit-trust:重试链。T07 完整实施，T01 仅占位。 */
+  attemptId?: string;
+  parentAttemptId?: string;
+  /** Spec 173 v0.3 / 2026-10-19 audit-trust:启动代次。新事件写入；历史行 NULL。 */
+  instanceId?: string;
+  instanceStartGeneration?: number;
+  /** T04 由分类函数写入；历史行 NULL。 */
+  eventType?: "tool_call" | "protocol" | "client_observation" | "audit_management";
+  /** Spec 173 v0.3 / 2026-10-19 audit-trust:归因规则版本。 */
+  attributionRuleVersion?: string;
+  /** T04 由分类函数写入。 */
+  classificationVersion?: string;
+  /** T02 / T06 增量；T01 占位。 */
+  credentialPrincipalId?: string;
   lucyPlatform?: string;
   client?: string;
   clientVersion?: string;
@@ -190,7 +222,28 @@ const ACCESS_LOG_COLUMNS = [
   ["result_empty", "INTEGER"],
   ["turn_wall_clock_ms", "INTEGER"],
   ["reported_client", "TEXT"],
-  ["reported_client_version", "TEXT"]
+  ["reported_client_version", "TEXT"],
+  // Spec 173 v0.3 / 2026-10-19 audit-trust: association_status + 双视图 + 重试链 + 启动代次。
+  // ensureColumn 形式做 additive 迁移；历史行 NULL。T03 接管 association_revisions 表。
+  ["association_status", "TEXT"],
+  ["original_turn_id", "TEXT"],
+  ["original_attribution_mode", "TEXT"],
+  ["original_association_status", "TEXT"],
+  ["original_attribution_confidence", "TEXT"],
+  ["original_reason", "TEXT"],
+  ["effective_turn_id", "TEXT"],
+  ["effective_attribution_mode", "TEXT"],
+  ["effective_association_status", "TEXT"],
+  ["effective_attribution_confidence", "TEXT"],
+  ["effective_reason", "TEXT"],
+  ["attempt_id", "TEXT"],
+  ["parent_attempt_id", "TEXT"],
+  ["instance_id", "TEXT"],
+  ["instance_start_generation", "INTEGER"],
+  ["event_type", "TEXT"],
+  ["attribution_rule_version", "TEXT"],
+  ["classification_version", "TEXT"],
+  ["credential_principal_id", "TEXT"]
 ] as const;
 const PERMISSION_SNAPSHOT_COLUMNS = [
   ["capability_digest", "TEXT"],
@@ -1404,11 +1457,19 @@ interface SourceSummaryEntry {
   physicalTable: string;
 }
 
-const INFERRED_SUMMARY_ARG_KEYS = ["statement_type", "amount_type", "company_name", "report_period"] as const;
+/** Spec 173 v0.2: an inferred inquiry has no reported question. Tables stay on the source rows. */
+export const UNREPORTED_QUESTION_SUMMARY = "未上报问询原文";
 
 /** Spec 172: page windows filter display only. Rebuild always covers the longest audit preset. */
 export const INFERRED_TURN_REBUILD_LOOKBACK_HOURS = 24 * 30;
-/** Spec 173: same window as the inferred-turn gap. Spec 172 used 2 seconds. */
+/**
+ * Spec 173 v0.3 / 2026-10-19 audit-trust: 120 秒近邻回绑已作废。
+ * 此常量保留仅为兼容历史 import；`bindPriorSessionCalls` 不再按此窗口回填 `lucy_turn_id`。
+ * 新代码不得读取本常量；新建会话归因见 `TurnCorrelationRegistry` 与 admission-time freeze。
+ * 历史值 120_000 仅作废声明，不在伪代码中出现。
+ *
+ * @deprecated since Spec 173 v0.3. 撤销依据见 inbox/audit-trust/.../T00-r2/RESPONSE.md §G0-02。
+ */
 export const PRIOR_CALL_BIND_MS = 120_000;
 export const SESSION_VISIT_SUMMARY_PREFIX = "会话建立：";
 
@@ -1516,22 +1577,6 @@ function clientFromRows(rows: ClusterLogRow[]): string | null {
     if (name) return name;
   }
   return null;
-}
-
-function buildInferredQuestionSummary(sourceSummary: SourceSummaryEntry[], argsSummaries: Array<Record<string, unknown>>): string {
-  const names = [...new Set(sourceSummary.map((s) => s.sourceName ?? s.physicalTable))];
-  const details: string[] = [];
-  for (const args of argsSummaries) {
-    for (const key of INFERRED_SUMMARY_ARG_KEYS) {
-      const value = args[key];
-      if (typeof value === "string" && value && !details.includes(`${key}=${value}`)) {
-        details.push(`${key}=${value}`);
-      }
-    }
-  }
-  if (names.length === 0) return "推断：未识别到具体数据源的调用簇";
-  const sourceText = `推断：触达 ${names.join("、")}`;
-  return details.length > 0 ? `${sourceText}（${details.join("，")}）` : sourceText;
 }
 
 export async function rebuildInferredTurns(
@@ -1651,19 +1696,8 @@ export async function rebuildInferredTurns(
         sourceName: row.source_name ?? undefined,
         physicalTable: row.physical_table
       }));
-      const argsSummaries = cluster.business
-        .map((row) => row.args_summary)
-        .filter((value): value is string => Boolean(value))
-        .map((value) => {
-          try {
-            return JSON.parse(value) as Record<string, unknown>;
-          } catch {
-            return {};
-          }
-        });
-
       const confidence: "medium" | "low" = dataBearing ? "medium" : "low";
-      const questionSummary = cluster.summaryOverride ?? buildInferredQuestionSummary(sourceSummary, argsSummaries);
+      const questionSummary = cluster.summaryOverride ?? UNREPORTED_QUESTION_SUMMARY;
       const now = new Date().toISOString();
       const startedAt = members[0].ts;
       const endedAt = members[members.length - 1].ts;
@@ -1706,7 +1740,17 @@ export async function rebuildInferredTurns(
   return { turns };
 }
 
-/** Spec 172: attach the calls that happened just before begin, plus the session handshake. */
+/**
+ * Spec 173 v0.3 / 2026-10-19 audit-trust: 120 秒近邻回绑已撤销。
+ * 本函数仅做会话握手 attachment（`initialize` / `notifications/initialized` / `tools/list`），
+ * 不再按任何时间窗回填非协议调用。握手 attachment 不进入 `confirmed` 分母；
+ * 标记为 `association_status = candidate` + `turn_attribution_confidence = low`。
+ *
+ * 返回值 = 受影响行数（仅握手）。`prior` 路径在 v0.3 删除；旧的 `Number(prior.changes)` 已改为常量 0。
+ *
+ * 撤销依据：inbox/audit-trust/audit-trust-2026-10-19-r1/T00-r2/RESPONSE.md §G0-02 / §G0-04。
+ * 验收：EA-02 / EA-03 / EA-04 / EA-07。
+ */
 export async function bindPriorSessionCalls(input: {
   turnId: string;
   userId: string;
@@ -1717,20 +1761,9 @@ export async function bindPriorSessionCalls(input: {
   if (!input.sessionId) return 0;
   const database = await getDb();
   const tokenHash = input.tokenHashPrefix ?? "";
-  const windowStart = new Date(new Date(input.at).getTime() - PRIOR_CALL_BIND_MS).toISOString();
   const protocolList = PROTOCOL_TOOLS.map((tool) => `'${tool}'`).join(", ");
-  const prior = database.prepare(`
-    UPDATE access_log
-    SET lucy_turn_id = ?, turn_attribution_mode = 'session_bound', turn_attribution_confidence = 'high'
-    WHERE user_id = ?
-      AND lucy_session_id = ?
-      AND IFNULL(token_hash_prefix, '') = ?
-      AND (lucy_turn_id IS NULL OR lucy_turn_id = '')
-      AND tool NOT IN (${protocolList})
-      AND ts >= ?
-      AND ts <= ?
-  `).run(input.turnId, input.userId, input.sessionId, tokenHash, windowStart, input.at);
 
+  // v0.3: 不再按 PRIOR_CALL_BIND_MS 窗口回填非协议调用；保留 handshake attachment 但 candidate/low。
   const handshakeRows = database.prepare(`
     SELECT id, tool FROM access_log
     WHERE user_id = ?
@@ -1751,9 +1784,11 @@ export async function bindPriorSessionCalls(input: {
     const placeholders = handshakeIds.map(() => "?").join(",");
     database.prepare(`
       UPDATE access_log
-      SET lucy_turn_id = ?, turn_attribution_mode = 'session_bound', turn_attribution_confidence = 'high'
+      SET lucy_turn_id = ?,
+          turn_attribution_mode = 'session_bound',
+          turn_attribution_confidence = 'low'
       WHERE id IN (${placeholders})
     `).run(input.turnId, ...handshakeIds);
   }
-  return Number(prior.changes) + handshakeIds.length;
+  return handshakeIds.length;
 }
