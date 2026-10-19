@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { PageHeader } from "../../components/PageHeader";
@@ -71,9 +71,17 @@ function stripBearer(value: string): string {
 }
 
 function recheckConnectionId(status: McpRuntimeStatus | undefined): string {
-  return status?.execution.missingConnections?.[0]
-    || status?.config.connectionIds?.[0]
-    || "";
+  return status?.execution.missingConnections?.[0] || "";
+}
+
+function connectReady(
+  execution: McpRuntimeStatus["execution"] | undefined,
+  canary: McpRuntimeCanaryResult | undefined
+): boolean {
+  if (!execution) return false;
+  if (canary?.status === "blocked") return true;
+  if (canary?.status === "fail") return false;
+  return execution.status === "ok" || execution.status === "unknown";
 }
 
 export function McpPlayground() {
@@ -166,7 +174,9 @@ export function McpPlayground() {
   const roleHref = roleId
     ? `/admin/roles/${encodeURIComponent(roleId)}?tab=permissions`
     : `/admin/agents/${encodeURIComponent(agentId)}`;
-  const executionReady = runtimeQuery.data?.execution.status === "ok";
+  const execution = runtimeQuery.data?.execution;
+  const canaryResult = runtimeCanaryMutation.data;
+  const executionReady = connectReady(execution, canaryResult);
   const policyDegraded = runtimeQuery.isSuccess && runtimeQuery.data.policy.healthy === false;
   const tableChoicesReady = !runtimeQuery.isPending && !policyDegraded;
   const canaryConnection = recheckConnectionId(runtimeQuery.data);
@@ -198,6 +208,7 @@ export function McpPlayground() {
     setConfirmLive(false);
     previewMutation.reset();
     liveMutation.reset();
+    runtimeCanaryMutation.reset();
     syncQuery({ agentId: nextAgentId, mode: task === "connect" ? "live-smoke" : task === "table" ? "dry-run" : "" });
   }
 
@@ -206,6 +217,7 @@ export function McpPlayground() {
     setConfirmLive(false);
     previewMutation.reset();
     liveMutation.reset();
+    runtimeCanaryMutation.reset();
     syncQuery({ agentId, mode: next === "connect" ? "live-smoke" : "dry-run" });
   }
 
@@ -242,6 +254,16 @@ export function McpPlayground() {
     : runtimeCanaryMutation.error instanceof Error
       ? runtimeCanaryMutation.error.message
       : undefined;
+  const runtimeCard = task === "connect" && execution && runtimeQuery.isSuccess
+    ? runtimeVerdict({
+        execution,
+        executionReady,
+        canary: canaryResult,
+        liveSettled: Boolean(live)
+      })
+    : null;
+  const previewTone = preview?.allowed ? "success" : "danger";
+  const liveConnected = Boolean(live && live.decisionReason === "allowed" && live.httpStatus < 400);
 
   return (
     <div className="pl-page-stack" data-testid="mcp-playground-page">
@@ -310,21 +332,20 @@ export function McpPlayground() {
 
             {task === "connect" ? (
               <div className="grid gap-4" data-testid="mcp-playground-connect">
-                {runtimeQuery.isSuccess && !executionReady ? (
-                  <div className="grid gap-3" data-testid="mcp-playground-execution-block">
-                    <p className="pl-notice text-sm">问数进程还没加载最新配置。</p>
-                    <div>
-                      <button
-                        type="button"
-                        className="pl-btn pl-btn--secondary text-sm"
-                        disabled={!canaryConnection || runtimeCanaryMutation.isPending}
-                        onClick={() => runtimeCanaryMutation.mutate(canaryConnection)}
-                        data-testid="mcp-playground-recheck"
-                      >
-                        {runtimeCanaryMutation.isPending ? "检测中..." : "重新检测"}
-                      </button>
-                    </div>
-                  </div>
+                {runtimeCard ? (
+                  <section className="pl-panel" data-testid="mcp-playground-execution-block" data-tone={runtimeCard.tone}>
+                    <VerdictCard
+                      tone={runtimeCard.tone}
+                      headline={runtimeCard.headline}
+                      detail={runtimeCard.detail}
+                      recheck={runtimeCard.recheck && canaryConnection ? {
+                        pending: runtimeCanaryMutation.isPending,
+                        disabled: runtimeCanaryMutation.isPending,
+                        connectionId: canaryConnection,
+                        onClick: () => runtimeCanaryMutation.mutate(canaryConnection)
+                      } : undefined}
+                    />
+                  </section>
                 ) : null}
                 {runtimeError ? <p className="pl-error text-sm">{runtimeError}</p> : null}
                 {executionReady ? (
@@ -459,28 +480,37 @@ export function McpPlayground() {
         </p>
       ) : null}
 
-      {preview ? (
-        <div data-testid="mcp-playground-preview-result">
-          <CheckResult
-            headline={preview.allowed ? "允许查这张表" : "不允许"}
-            label={preview.decisionReasonDetail
-              ? `${preview.decisionReasonLabel}（${preview.decisionReasonDetail}）`
-              : preview.decisionReasonLabel}
-            code={preview.decisionReason}
-            action={preview.remediation.primary}
+      {preview && selectedAgent ? (
+        <section className="pl-panel" data-testid="mcp-playground-preview-result" data-tone={previewTone}>
+          <VerdictCard
+            tone={previewTone}
+            headline={preview.allowed
+              ? <><AgentName agent={selectedAgent} />可以查 <Identifier>{sourceName}</Identifier></>
+              : <><AgentName agent={selectedAgent} />不能查 <Identifier>{sourceName}</Identifier></>}
+            detail={preview.allowed
+              ? <>连接 <Identifier>{connectionId}</Identifier>。这是权限预览，没有真正查数。</>
+              : denyDetail(preview)}
+            code={preview.decisionReason === "allowed" ? undefined : preview.decisionReason}
+            action={preview.allowed ? undefined : preview.remediation.primary}
           />
-        </div>
+        </section>
       ) : null}
 
-      {live ? (
-        <div data-testid="mcp-playground-live-result">
-          <CheckResult
-            headline={live.decisionReason === "allowed" && live.httpStatus < 400 ? "能连上" : "连不上"}
-            label={live.decisionReasonLabel}
-            code={live.decisionReason}
+      {live && selectedAgent ? (
+        <section className="pl-panel" data-testid="mcp-playground-live-result" data-tone={liveConnected ? "success" : "danger"}>
+          <VerdictCard
+            tone={liveConnected ? "success" : "danger"}
+            headline={liveConnected
+              ? <><AgentName agent={selectedAgent} />能连上</>
+              : <><AgentName agent={selectedAgent} />不能连上</>}
+            detail={liveConnected
+              ? <>已向本机 <span className="notranslate" translate="no">MCP</span> 拉取工具列表，并写入访问日志。</>
+              : live.decisionReason === "allowed"
+                ? `HTTP ${live.httpStatus}`
+                : live.decisionReasonLabel}
             action={live.auditHref ? { label: "查看访问日志", href: live.auditHref } : undefined}
           />
-        </div>
+        </section>
       ) : null}
 
       {confirmLive ? (
@@ -512,36 +542,150 @@ export function McpPlayground() {
   );
 }
 
-function CheckResult({
-  headline,
-  label,
-  code,
-  action
-}: {
-  headline: string;
-  label: string;
-  code: string;
-  action?: { label: string; href: string };
-}) {
+function Identifier({ children }: { children: string }) {
+  return <span className="notranslate" translate="no">{children}</span>;
+}
+
+function IdList({ ids }: { ids: string[] }) {
   return (
-    <section className="pl-panel">
-      <p className="text-lg font-medium" data-testid="mcp-playground-result-headline">{headline}</p>
-      <p className="mt-2 text-sm" data-testid="decision-reason-label">{label}</p>
-      <details className="mt-3 text-sm">
-        <summary>详情</summary>
-        <p
-          className="mt-2 font-mono text-xs text-fg-muted notranslate"
-          translate="no"
-          data-testid="decision-reason-code"
-        >
-          {code}
-        </p>
-      </details>
+    <>
+      {ids.map((id, index) => (
+        <span key={id}>
+          {index > 0 ? "、" : null}
+          <Identifier>{id}</Identifier>
+        </span>
+      ))}
+    </>
+  );
+}
+
+function AgentName({ agent }: { agent: Agent }) {
+  const name = agent.name?.trim() || agent.id;
+  if (name === agent.id) return <Identifier>{agent.id}</Identifier>;
+  return (
+    <>
+      <Identifier>{name}</Identifier>
+      （<Identifier>{agent.id}</Identifier>）
+    </>
+  );
+}
+
+function denyDetail(preview: AclPreviewData): string {
+  if (!preview.decisionReasonDetail) return preview.decisionReasonLabel;
+  return `${preview.decisionReasonLabel}（${preview.decisionReasonDetail}）`;
+}
+
+function GateDetail({ execution }: { execution: McpRuntimeStatus["execution"] }) {
+  const missing = execution.missingConnections ?? [];
+  const unknown = execution.unknownConnections ?? [];
+  if (execution.status === "stale") {
+    return missing.length > 0
+      ? <>问数进程还没加载 <IdList ids={missing} />。</>
+      : <>问数进程还没加载最新配置。</>;
+  }
+  if (execution.status === "unknown") {
+    const names = unknown.length > 0 ? unknown : missing;
+    return names.length > 0
+      ? <>还没有 <IdList ids={names} /> 的加载记录。</>
+      : <>还没有当前连接的加载记录。</>;
+  }
+  const error = execution.lastError?.trim();
+  return error ? <>问数进程不可用。{error}</> : <>问数进程不可用。</>;
+}
+
+function canaryFailureDetail(canary: McpRuntimeCanaryResult): ReactNode {
+  const id = <Identifier>{canary.connectionId}</Identifier>;
+  if (canary.decisionReason === "config_missing") return <>配置里没有 {id}。</>;
+  if (canary.decisionReason === "policy_missing_connection") return <>这个 Agent 的生效权限不包含 {id}。</>;
+  if (canary.decisionReason === "execution_runtime_unavailable" || canary.decisionReason === "upstream_error") {
+    return <>问数进程不可用。</>;
+  }
+  return <>问数进程还没加载 {id}。</>;
+}
+
+type RuntimeVerdict = {
+  tone: "success" | "danger" | "warning";
+  headline: ReactNode;
+  detail?: ReactNode;
+  recheck: boolean;
+};
+
+function runtimeVerdict(input: {
+  execution: McpRuntimeStatus["execution"];
+  executionReady: boolean;
+  canary?: McpRuntimeCanaryResult;
+  liveSettled: boolean;
+}): RuntimeVerdict | null {
+  const { execution, executionReady, canary, liveSettled } = input;
+  if (liveSettled || executionReady) return null;
+  if (canary?.status === "fail") {
+    return {
+      tone: "danger",
+      headline: "不能连上",
+      detail: canaryFailureDetail(canary),
+      recheck: canary.decisionReason === "execution_config_stale"
+    };
+  }
+  return {
+    tone: "danger",
+    headline: "不能连上",
+    detail: <GateDetail execution={execution} />,
+    recheck: execution.status === "stale"
+  };
+}
+
+function VerdictCard({
+  tone,
+  headline,
+  detail,
+  code,
+  action,
+  recheck
+}: {
+  tone: "success" | "danger" | "warning";
+  headline: ReactNode;
+  detail?: ReactNode;
+  code?: string;
+  action?: { label: string; href: string };
+  recheck?: { pending: boolean; disabled: boolean; connectionId: string; onClick: () => void };
+}) {
+  const banner = tone === "success"
+    ? "pl-diagnostic-banner pl-diagnostic-banner--success"
+    : tone === "danger"
+      ? "pl-diagnostic-banner pl-diagnostic-banner--danger"
+      : "pl-diagnostic-banner pl-diagnostic-banner--warning";
+  return (
+    <>
+      <div className={banner} role="status" aria-live="polite">
+        <strong data-testid="mcp-playground-result-headline">{headline}</strong>
+      </div>
+      {detail ? <p className="mt-3 text-sm" data-testid="mcp-playground-result-detail">{detail}</p> : null}
+      {code ? (
+        <details className="mt-3 text-sm" data-testid="mcp-playground-technical">
+          <summary>技术详情</summary>
+          <p className="mt-2 font-mono text-xs text-fg-muted notranslate" translate="no" data-testid="decision-reason-code">
+            {code}
+          </p>
+        </details>
+      ) : null}
       {action ? (
         <Link to={action.href} className="pl-card-cta mt-4 inline-block notranslate" translate="no" data-testid="mcp-playground-result-action">
           {action.label} ↗
         </Link>
       ) : null}
-    </section>
+      {recheck ? (
+        <div className="mt-4">
+          <button
+            type="button"
+            className="pl-btn pl-btn--secondary text-sm"
+            disabled={recheck.disabled}
+            onClick={recheck.onClick}
+            data-testid="mcp-playground-recheck"
+          >
+            {recheck.pending ? "检测中..." : <>检测 <Identifier>{recheck.connectionId}</Identifier></>}
+          </button>
+        </div>
+      ) : null}
+    </>
   );
 }

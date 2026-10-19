@@ -5,7 +5,7 @@
 | 文档名称 | Lucy Product Terminology Standard |
 | 文档类型 | System-wide Product Language / Terminology Standard |
 | 版本 | v0.2 |
-| 撰写日期 | 2026-07-31；2026-08-01 v0.2（新增 Data Agent Ops Control Plane / Data Agent 运维控制台，标记『语义维护工作台』与『运维控制面』为弃用别名）；2026-08-05 增补 §4.8 MCP 调试台术语（Spec 99）；同日 Spec 100 交叉审阅补齐 incomplete / impact / evidence / 裁决双行；2026-08-06 Spec 109 增补目录重命名术语；2026-08-06 Spec 114/115 增补表 YAML 导入与工作台校验披露术语；2026-08-06 Spec 117 增补 Remove Schema 术语；2026-08-20 增补 §4.7.1 Trace Read Model 术语（Spec 62 v0.5）；2026-08-25 Spec 127 增补 Delete Connection 术语；2026-08-26 增补 §4.9 可选 Agent Chat（A3）术语；2026-09-03 Spec 140 增补访问日志双粒度 CSV 导出术语；2026-09-03 Spec 141 增补访问日志 CSV 字段说明与本地时间术语；2026-09-04 Spec 143 增补调用监控与运行状态分组术语；2026-09-11 Spec 142 为 `/overview` 聚焦精简；2026-09-23 Spec 144 增补 Skill / 业务 Skill；Spec 145 增补待同步文件与表语义校验分计；同日 Spec 144 v1.1 增补导航组名「业务上下文」（原「语义建模」组更名，「语义建模」保留为概念词）；2026-09-24 Spec 148 增补界面使用、页面访问、访问账户、活跃菜单与分组/菜单/页面访问排行；同日 Spec 149 增补运维问数连接与运维问数角色；2026-10-12 增补启用表范围「状态筛选」筛选维术语 |
+| 撰写日期 | 2026-07-31；2026-08-01 v0.2（新增 Data Agent Ops Control Plane / Data Agent 运维控制台，标记『语义维护工作台』与『运维控制面』为弃用别名）；2026-08-05 增补 §4.8 MCP 调试台术语（Spec 99）；同日 Spec 100 交叉审阅补齐 incomplete / impact / evidence / 裁决双行；2026-08-06 Spec 109 增补目录重命名术语；2026-08-06 Spec 114/115 增补表 YAML 导入与工作台校验披露术语；2026-08-06 Spec 117 增补 Remove Schema 术语；2026-08-20 增补 §4.7.1 Trace Read Model 术语（Spec 62 v0.5）；2026-08-25 Spec 127 增补 Delete Connection 术语；2026-08-26 增补 §4.9 可选 Agent Chat（A3）术语；2026-09-03 Spec 140 增补访问日志双粒度 CSV 导出术语；2026-09-03 Spec 141 增补访问日志 CSV 字段说明与本地时间术语；2026-09-04 Spec 143 增补调用监控与运行状态分组术语；2026-09-11 Spec 142 为 `/overview` 聚焦精简；2026-09-23 Spec 144 增补 Skill / 业务 Skill；Spec 145 增补待同步文件与表语义校验分计；同日 Spec 144 v1.1 增补导航组名「业务上下文」（原「语义建模」组更名，「语义建模」保留为概念词）；2026-09-24 Spec 148 增补界面使用、页面访问、访问账户、活跃菜单与分组/菜单/页面访问排行；同日 Spec 149 增补运维问数连接与运维问数角色；2026-10-12 增补启用表范围「状态筛选」筛选维术语；2026-10-19 Spec 99 v1.3 明确调试台裁决卡与访问日志双行分工；同日 v1.5 连上检查只回答能连上或不能连上 |
 | 适用范围 | Lucy WebUI、API 用户可见错误、Toast、Modal、Drawer、表格列名、导航、测试断言、Spec、Plan、Runbook、交付文档 |
 | 维护者 | Product / UX / Architecture Review |
 | 优先级 | 高于单模块 Spec。单模块 Spec 可新增术语，但不得覆盖本标准中的固定术语 |
@@ -618,7 +618,7 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 | Live Smoke Call | Live Smoke Call | 受控试调 | 真实调用（无「受控」）、生产探测 | 调试台任务文案为「检查能不能连上」。访问日志 badge 仍为「受控试调」；Token 不落盘；落库 `lucy_platform=mcp-playground` |
 | Call origin · playground | Call origin (playground) | MCP 调试台受控试调 | Playground 调用（裸词）、调试流量 | 访问日志 `callSource=playground` 筛选项与行内 badge「受控试调」 |
 | Call origin · agent | Call origin (agent) | Agent 接入调用 | 用户真实调用（作唯一主标签时易误解 dry-run） | 访问日志 `callSource=agent`：排除 `lucy_platform=mcp-playground` |
-| Decision Reason | Decision Reason | 裁决原因 | 拒绝码、reason（裸露作主标签） | 与访问日志列对齐；主行中文 |
+| Decision Reason | Decision Reason | 裁决原因 | 拒绝码、reason（裸露作主标签） | 访问日志主行中文、次行裁决原因码。调试台用裁决卡，允许时不重复「允许执行」 |
 | Decision Reason Code | Decision Reason Code | 裁决原因码 | — | 机器码（如 `tool_forbidden`）；次行 `notranslate` |
 | Effective Permissions Snapshot | Effective Permissions Snapshot | 生效权限快照 | 权限 dump | 调试台结果不展示计数 |
 

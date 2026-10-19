@@ -4,7 +4,7 @@
 |---|---|
 | 文档名称 | MCP Playground and ACL Decision Visibility Spec |
 | 文档类型 | Spec |
-| 版本 | v1.2 |
+| 版本 | v1.5 |
 | 撰写日期 | 2026-08-05 |
 | 撰写人 | Composer |
 | 委托人 | zhangxingchen |
@@ -20,7 +20,7 @@
 | 关联台账 | `docs/ui-ux-feedback/pages/admin-mcp-playground.md`；`docs/ui-ux-feedback/pages/admin-audit.md`（`UX-ADMIN-AUDIT-018`） |
 | 上游 Spec | Spec 07；Spec 09；Spec 14/15；Spec 39；Spec 89/94；Spec 100（共享深链登记表） |
 | 状态 | Implemented |
-| 日期 | 2026-08-05 |
+| 日期 | 2026-10-19 |
 | 范围 | ACL DryRun；裁决原因双行展示契约；Audit/Agent 深链；**必达** `tools/list` 最小 live smoke；导航与术语；受控试调调用来源标记与访问日志筛选 |
 
 ### Changelog
@@ -30,6 +30,9 @@
 | v1.0 | 初稿：自 Attu Playground 评估收敛为 Lucy MCP 调试台 P0 |
 | v1.1 | 交叉审阅补齐：与 Spec 100 共享 Deep Link Registry；裁决原因双行 UI/类型硬契约；`tools/list` 最小 live smoke 升为必达；明确 Audit 现况为单行待改造 |
 | v1.2 | 受控试调写入 `x-lucy-platform: mcp-playground`；访问日志调用流水增加「调用来源」筛选（`callSource=playground\|agent`）；深链带 `callSource=playground` 并自动含协议调用 |
+| v1.3 | 调试台结果改为裁决卡（绿 / 红 / 黄）。连上检查在问数进程未就绪时直接给出结果，并展示重新检测的分项。查表允许时写明 Agent 与表，不再重复「允许执行」和 `allowed`，也不给出修复主动作。访问日志双行契约不变 |
+| v1.4 | 连上检查未就绪时标题保持「还不能检查能不能连上」。补充只点名还挡住的连接。按钮为「检测 {连接}」，先检测确认未加载的连接，再检测没有加载记录的连接。分项收进「这次检测了什么」。进程就绪后的绿条为「可以检查能不能连上」 |
+| v1.5 | 连上检查只回答能连上或不能连上。没有加载记录、也无法自省时直接给出 Token，不渲染探测分项。确认未加载或问数进程不可用时只留一句原因。查表拒绝仍把裁决原因码放在「技术详情」 |
 
 ## 0. 与 Spec 100 的组合关系（非重复）
 
@@ -58,7 +61,7 @@ Attu Playground 证明运维面需要「在对象上下文发一次协议请求�
 
 1. `/admin/mcp-playground`：Agent → 工具 → 参数 → ACL 裁决 + 可读原因 + 修复深链。
 2. DryRun 复用 Proxy `acl.ts`；`decision_reason` 与审计一致。
-3. 访问日志与调试台共用 **DecisionReasonView** 双行契约（§6.4）。
+3. 访问日志用 **DecisionReasonView** 双行契约（§6.4）。调试台结果用裁决卡（§6.6）。
 4. **必达**最小 live smoke：`tools/list`（§7）；`kx_catalog` 可同单或 follow-up。
 5. Agent / Audit / Overview 入口预填上下文；URL 遵守 Spec 100 §5。
 
@@ -87,6 +90,8 @@ Attu Playground 证明运维面需要「在对象上下文发一次协议请求�
 | Decision Reason Code | 裁决原因码 | — |
 | Decision Reason Primary Line | （中文主文案，无独立导航名） | 把机器码当主行 |
 | Effective Permissions Snapshot | 生效权限快照 | 权限 dump |
+| Connect result | 能连上 / 不能连上 | 还不能检查能不能连上；这次检测了什么；把没有加载记录写成不能连上 |
+| Connect recheck | 检测 {连接} | 重新检测通过了这条连接；只在确认未加载时出现 |
 
 Protected：`MCP`、`Agent`、`Role`、`Token`、`ACL`、tool name、裁决原因码、表/连接标识、JSON-RPC method。
 
@@ -125,7 +130,7 @@ MCP 调试台
 ├─ PageHeader
 ├─ 上下文：Agent · Role · 模式（ACL 裁决预览 | 受控试调）
 ├─ 请求：工具 + JSON 参数 + 运行
-└─ 结果：裁决 · DecisionReasonView · 生效权限快照 · remediation
+└─ 结果：裁决卡（§6.6）· 拒绝时一个 remediation
 ```
 
 ### 6.2 API：`POST /api/admin/mcp-playground/acl-preview`
@@ -138,7 +143,7 @@ Request / Response 同 v1.0 示例；`remediation.*.href` **必须**落在 Spec 
 
 沿用 v1.0 表（`allowed` / `tool_forbidden` / `table_forbidden:*` / … / 未知码）。**单一映射模块**：server 返回 `decisionReasonLabel`；前端 `DecisionReasonView` 以 API label 优先，本地 fallback 仅用于历史 audit 行无 label 时。
 
-### 6.4 DecisionReasonView 硬契约（调试台 + Audit 共用）
+### 6.4 DecisionReasonView 硬契约（访问日志）
 
 交叉审阅阻断点：Audit 现状单行码。本 Spec 要求落地后：
 
@@ -150,7 +155,7 @@ type DecisionReasonViewModel = {
 };
 ```
 
-**DOM 结构（调用流水列 + Drawer「裁决原因」+ 调试台结果区）：**
+**DOM 结构（调用流水列 + Drawer「裁决原因」）：**
 
 ```text
 [主行] label（中文，可含 detail 短后缀）
@@ -170,6 +175,28 @@ type DecisionReasonViewModel = {
 | Drawer 裁决原因 | 同上 |
 | denied 行 / Drawer | 「在调试台复现」→ `/admin/mcp-playground?agentId=&tool=` |
 | 问询 Tab L1 | 不强制改列（无单行 reason 则不动） |
+
+### 6.6 调试台裁决卡
+
+调试台结果区不套用 §6.4 双行。允许结论若再写「允许执行」和 `allowed`，三处同义。
+
+裁决卡使用诊断条：`data-tone=success|danger|warning`，对应绿 / 红 / 黄。`role="status"`。
+
+| 任务 | 裁决 | 补充 | 下一步 |
+|---|---|---|---|
+| 连上，没有加载记录或无法自省 | 不出现裁决卡 | — | Token，再检查接入 |
+| 连上，确认未加载 | 不能连上 | 问数进程还没加载 {连接} | 检测 {该连接} |
+| 连上，问数进程不可用 | 不能连上 | 问数进程不可用 | — |
+| 接入成功 | `{Agent}能连上` | 已向本机 MCP 拉取工具列表，并写入访问日志 | 查看访问日志 |
+| 接入失败 | `{Agent}不能连上` | 具体原因，例如 Token 不可用 | 查看访问日志（若有） |
+| 查表允许 | `{Agent}可以查 {表}` | 连接名。这是权限预览，没有真正查数 | 无修复主动作 |
+| 查表拒绝 | `{Agent}不能查 {表}` | 比标题更具体的裁决原因 | 一个修复链接 |
+
+- 连上检查不渲染探测分项，也不渲染「技术详情」。
+- 查表拒绝仍把裁决原因码放进折叠的「技术详情」。允许结论不放裁决原因码。
+- 允许时不渲染 remediation 主动作。服务端仍可返回该链接。
+- 一次检测一条，且只检测确认未加载的连接。
+- 切换检查项后，上一张裁决卡消失。
 
 ## 7. 受控试调
 
@@ -205,8 +232,8 @@ PageHeader / filter / Drawer / button hierarchy；DryRun primary；Live 入口 s
 ## 10. 验收标准
 
 - [ ] 侧栏 / 命令面板可达「MCP 调试台」。
-- [ ] DryRun 拒工具/拒表：`allowed:false` + 正确 code；UI 双行 + remediation（Registry URL）。
-- [ ] DryRun 允许：`allowed:true`。
+- [ ] DryRun 拒工具/拒表：`allowed:false` + 正确 code；红裁决卡写明 Agent 与表，补充为具体原因，一个 remediation（Registry URL）。机器码在「技术详情」。
+- [ ] DryRun 允许：`allowed:true`；绿裁决卡写明 Agent 与表。不展示「允许执行」、`allowed` 和修复主动作。
 - [ ] `/admin/audit` 调用流水与 Drawer：**双行** DecisionReasonView（非单行码）。
 - [ ] Agent 详情深链预填 `agentId`。
 - [ ] **必达** `tools/list` live smoke 可跑通（或测试替身覆盖服务端路径）；Token 不落盘。

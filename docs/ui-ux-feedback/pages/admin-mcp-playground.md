@@ -49,3 +49,68 @@ Reported: 2026-08-05
 ### Notes
 - Spec 99 v1.2 §7.3。
 - Fix（2026-08-05）: `x-lucy-platform: mcp-playground` + `auditHref` 带 `callSource=playground`。
+
+## UX-ADMIN-MCP-PLAYGROUND-003: 连上检查没有结果，查表结论没有颜色
+
+Status: Fixed
+Route: /admin/mcp-playground
+Area: 裁决卡
+Severity: P1
+Reported: 2026-10-19
+
+### Feedback
+hehe 检查能不能连上时，问数进程未就绪只显示一行灰字；重新检测的 canary 结果不渲染。检查能不能查某张表时，「允许查这张表」「允许执行」和详情里的 `allowed` 重复，且没有绿/红提示。允许时仍给出「编辑 Role 表范围」。
+
+### Expected
+- 未就绪本身是一张黄/红裁决卡，重新检测后换成 pass / fail / blocked 和分项。
+- 查表和接入结果写明 Agent 与对象，用绿/红诊断条。允许时不重复访问日志双行，也不给修复主动作。
+- 访问日志「允许执行」+ `allowed` 保持不变。
+
+### Notes
+- Spec 99 v1.3 §6.6。
+- 验证：`mcp-playground.test.tsx`、`decision-reason-cell.test.tsx`。本轮不做 Docker 重建。
+
+## UX-ADMIN-MCP-PLAYGROUND-004: 连上检查把一条连接的查数记录说成通过
+
+Status: Fixed
+Route: /admin/mcp-playground
+Area: 裁决卡
+Severity: P1
+Reported: 2026-10-19
+
+### Feedback
+重新检测 `demo-mysql` 后，黄条写「重新检测通过了这条连接」，下一句又说 `invest-db` 没加载。五项机器名与标题并列，其中一项写明这次检查不证明连接已加载。按钮「重新检测」再次打到已经有查数记录的 `demo-mysql`。
+
+### Expected
+- 未就绪时标题保持「还不能检查能不能连上」。补充只点名还挡住的连接。
+- 没有加载记录写成「还没有 {连接} 的加载记录」。「没加载」只用于确认未加载。
+- 按钮为「检测 {连接}」。先检测确认未加载的连接，再检测没有加载记录的连接。
+- 刚检测的连接和查数记录收在「这次检测了什么」。机器名、reload 编号和 UTC 时间收在「技术详情」。
+- 全部连接都有记录后，绿条为「可以检查能不能连上」，并出现 Token。
+
+### Notes
+- Spec 99 v1.4 §6.6。
+- 验证：`mcp-playground.test.tsx`。本轮不做 Docker 重建。
+- 后续（v1.5）：分项折叠仍让用户读到探测清单。连上检查改为只回答能连上或不能连上。见 UX-ADMIN-MCP-PLAYGROUND-005。
+
+## UX-ADMIN-MCP-PLAYGROUND-005: 连上检查展示探测清单
+
+Status: Fixed
+Route: /admin/mcp-playground
+Area: 裁决卡
+Severity: P1
+Reported: 2026-10-19
+
+### Feedback
+「这次检测了什么」和「技术详情」把配置、Catalog reload、生效权限、问数进程和查数记录摊开。用户要的是能连上或不能连上。没有加载记录时仍出现黄条「还不能确认 demo-mysql 是否已加载」。
+
+### Expected
+- 没有加载记录、也无法自省时不出现裁决卡，直接给出 Token。
+- 确认未加载：不能连上。问数进程还没加载该连接。按钮「检测 {连接}」。
+- 问数进程不可用：不能连上。问数进程不可用。
+- 受控试调成功为「{Agent}能连上」，失败为「{Agent}不能连上」加一句原因。
+- 连上检查不渲染探测分项。查表拒绝仍保留裁决原因码。
+
+### Notes
+- Spec 99 v1.5 §6.6。
+- 验证：`mcp-playground.test.tsx`。本轮不做 Docker 重建。

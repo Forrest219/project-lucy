@@ -5,6 +5,18 @@
 
 ---
 
+## 2026-10-19 · MCP 调试台连上检查只回答能连上或不能连上
+
+### 修改
+- 没有加载记录、也无法自省时直接给出 Token。确认未加载时写「不能连上」，按钮为「检测 {连接}」。
+- `mcp-playground-recheck` 可见文案为「检测 {连接}」。连上检查不渲染探测分项。
+- `mcp-playground-technical` 只留在查表拒绝。
+
+### 影响映射更新
+- 补充 `mcp-playground-result-detail`、`mcp-playground-technical`。不新增 `E2E-*` 测试集。
+
+---
+
 ## 2026-10-18 · 客户发布证据清单与 Business Eval 能力清单
 
 ### 新增

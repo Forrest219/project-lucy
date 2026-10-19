@@ -834,7 +834,7 @@
 | `mcp-playground-task-table` | 检查能不能查某张表 | `pages/admin/McpPlayground.tsx` |
 | `mcp-playground-connect` | mcp-playground-connect | `pages/admin/McpPlayground.tsx` |
 | `mcp-playground-execution-block` | 问数进程未加载 | `pages/admin/McpPlayground.tsx` |
-| `mcp-playground-recheck` | 重新检测 | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-recheck` | 检测 {连接} | `pages/admin/McpPlayground.tsx` |
 | `mcp-playground-token` | mcp-playground-token | `pages/admin/McpPlayground.tsx` |
 | `mcp-playground-token-error` | 只粘贴 Token | `pages/admin/McpPlayground.tsx` |
 | `mcp-playground-run-live` | 检查接入 | `pages/admin/McpPlayground.tsx` |
@@ -850,7 +850,9 @@
 | `mcp-playground-live-error` | mcp-playground-live-error | `pages/admin/McpPlayground.tsx` |
 | `mcp-playground-live-result` | mcp-playground-live-result | `pages/admin/McpPlayground.tsx` |
 | `mcp-playground-result-headline` | mcp-playground-result-headline | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-result-detail` | mcp-playground-result-detail | `pages/admin/McpPlayground.tsx` |
 | `mcp-playground-result-action` | mcp-playground-result-action | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-technical` | 技术详情（查表拒绝） | `pages/admin/McpPlayground.tsx` |
 | `mcp-playground-live-confirm` | mcp-playground-live-confirm | `pages/admin/McpPlayground.tsx` |
 | `mcp-playground-confirm-live` | mcp-playground-confirm-live | `pages/admin/McpPlayground.tsx` |
 | `role-connections-field` | role-connections-field | `pages/admin/RoleDetail.tsx` |
