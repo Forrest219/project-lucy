@@ -60,6 +60,21 @@ describe("T07 scopeFingerprint", () => {
       scopeFingerprint(baseScope({ connectionId: "side" }))
     );
   });
+
+  it("treats duplicate filterKeys as one canonical keyset (G3 B2 fix)", () => {
+    // Pre-fix: sort() alone would have produced a different fingerprint for
+    // the duplicated list. Post-fix: dedup via canonicalKeys so both inputs
+    // hash to the same value.
+    expect(scopeFingerprint(baseScope({ filterKeys: ["user_id"] }))).toBe(
+      scopeFingerprint(baseScope({ filterKeys: ["user_id", "user_id"] }))
+    );
+  });
+
+  it("treats reordered filterKeys as the same canonical keyset", () => {
+    expect(scopeFingerprint(baseScope({ filterKeys: ["user_id", "table"] }))).toBe(
+      scopeFingerprint(baseScope({ filterKeys: ["table", "user_id"] }))
+    );
+  });
 });
 
 describe("T07 detectScopeChange", () => {
@@ -116,6 +131,25 @@ describe("T07 detectScopeChange", () => {
     const after = baseScope({ filterKeys: ["user_id"] });
     // Both have user_id as filterKeys; replace_filter should not fire.
     expect(detectScopeChange(before, after).changed).not.toContain("replace_filter");
+  });
+
+  it("treats duplicate filterKeys consistently with scopeFingerprint (G3 B2 fix)", () => {
+    // Pre-fix: fingerprint differed but detectScopeChange reported no change,
+    // causing chainScopeChanges to flag a misleading "widen_limit".
+    const before = baseScope({ filterKeys: ["user_id"] });
+    const after = baseScope({ filterKeys: ["user_id", "user_id"] });
+    const result = detectScopeChange(before, after);
+    expect(result.fingerprintBefore).toBe(result.fingerprintAfter);
+    expect(result.changed).toEqual([]);
+  });
+
+  it("does NOT share a mutable empty array across calls (G3 B5 fix)", () => {
+    // Pre-fix: detectScopeChange returned the same NO_CHANGE array reference;
+    // a downstream .push() would have polluted the next identical call.
+    const a = detectScopeChange(baseScope(), baseScope());
+    const b = detectScopeChange(baseScope(), baseScope());
+    a.changed.push("widen_limit");
+    expect(b.changed).toEqual([]);
   });
 });
 
@@ -207,6 +241,24 @@ describe("T07 retry chain", () => {
       attemptId: "att-2",
       parentAttemptId: "att-1",
       scope: baseScope()
+    });
+    const changes = chainScopeChanges([a1, a2]);
+    expect(changes).toHaveLength(1);
+    expect(changes[0].changed).toEqual([]);
+  });
+
+  it("chainScopeChanges does NOT flag duplicate-key attempts as scope change (G3 B2 fix)", () => {
+    // After canonical dedup, ["user_id"] and ["user_id","user_id"] produce
+    // identical fingerprints. The chain must agree with the detector.
+    const a1 = buildAttempt({
+      attemptId: "att-1",
+      parentAttemptId: null,
+      scope: baseScope({ filterKeys: ["user_id"] })
+    });
+    const a2 = buildAttempt({
+      attemptId: "att-2",
+      parentAttemptId: "att-1",
+      scope: baseScope({ filterKeys: ["user_id", "user_id"] })
     });
     const changes = chainScopeChanges([a1, a2]);
     expect(changes).toHaveLength(1);

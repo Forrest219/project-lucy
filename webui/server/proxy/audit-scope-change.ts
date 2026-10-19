@@ -36,10 +36,18 @@ export type AttemptScope = {
   connectionId: string | null;
 };
 
-const NO_CHANGE: ScopeKey[] = [];
-
 function sha256Hex(input: string): string {
   return createHash("sha256").update(input, "utf8").digest("hex");
+}
+
+/**
+ * Canonical keyset: deduplicate and sort. Used by both fingerprint and the
+ * diff detector so that `["user_id"]` and `["user_id","user_id"]` agree.
+ * Duplicate filterKeys are silently deduped (callers can also reject them
+ * upstream; this keeps the canonical form stable either way).
+ */
+function canonicalKeys(filterKeys: readonly string[]): string[] {
+  return [...new Set(filterKeys)].sort();
 }
 
 /**
@@ -48,7 +56,7 @@ function sha256Hex(input: string): string {
  */
 export function scopeFingerprint(scope: AttemptScope): string {
   const canonical = JSON.stringify({
-    filterKeys: [...scope.filterKeys].sort(),
+    filterKeys: canonicalKeys(scope.filterKeys),
     timeFrom: scope.timeFrom,
     timeUntil: scope.timeUntil,
     limit: scope.limit,
@@ -71,13 +79,14 @@ export function detectScopeChange(
   }
   const fingerprintBefore = scopeFingerprint(before);
   if (fingerprintBefore === fingerprintAfter) {
-    return { changed: NO_CHANGE, fingerprintBefore, fingerprintAfter };
+    return { changed: [], fingerprintBefore, fingerprintAfter };
   }
   const changed: ScopeKey[] = [];
-  // Compare filterKeys set membership (add/remove is preserved by list equality).
-  const beforeKeys = new Set(before.filterKeys);
-  const afterKeys = new Set(after.filterKeys);
-  if (beforeKeys.size !== afterKeys.size || ![...beforeKeys].every((k) => afterKeys.has(k))) {
+  // Compare canonical (deduped+sorted) filterKeys so fingerprint and diff
+  // detection stay consistent when callers pass duplicate keys.
+  const beforeKeys = canonicalKeys(before.filterKeys);
+  const afterKeys = canonicalKeys(after.filterKeys);
+  if (beforeKeys.length !== afterKeys.length || beforeKeys.some((k, i) => k !== afterKeys[i])) {
     changed.push("replace_filter");
   }
   if (before.timeFrom !== after.timeFrom || before.timeUntil !== after.timeUntil) {
