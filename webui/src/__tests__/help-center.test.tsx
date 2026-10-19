@@ -32,9 +32,9 @@ function renderHelp(path = "/help") {
               { id: "faq-agent-integration", level: 3, title: "0.3 面向接入协作者" },
               { id: "system-overview", level: 2, title: "1. 系统概述与架构拓扑" },
               { id: "quick-start", level: 2, title: "2. 快速上手" },
-              { id: "deployment-checklist", level: 3, title: "3.1 部署向导与上线检查" },
+              { id: "deployment-checklist", level: 3, title: "3.1 运行状态 · 系统概览与上线检查" },
               { id: "overview-action-required", level: 4, title: "系统概览待处理事项" },
-              { id: "database-connections", level: 3, title: "3.2 数据库接入" },
+              { id: "database-connections", level: 3, title: "3.2 数据接入 · 连接 / Schema / 表范围" },
               {
                 id: "database-connection-boundary",
                 level: 4,
@@ -56,9 +56,9 @@ function renderHelp(path = "/help") {
                 title: "Agent 可见性与 ACL 同步"
               },
               { id: "connection-overview-metrics", level: 4, title: "连接概览指标说明" },
-              { id: "semantic-layer", level: 3, title: "3.3 语义层维护" },
+              { id: "semantic-layer", level: 3, title: "3.3 业务上下文 · 语义层" },
               { id: "semantic-status-and-enabled-status", level: 4, title: "语义状态与启用表范围状态" },
-              { id: "admin-governance", level: 3, title: "3.5 访问治理 Admin" },
+              { id: "admin-governance", level: 3, title: "3.5 访问治理 · 角色 / Agent / Token 心智" },
               {
                 id: "admin-role-agent-token-guide",
                 level: 4,
@@ -74,8 +74,8 @@ function renderHelp(path = "/help") {
                 level: 4,
                 title: "丢失管理员账号或密码时如何恢复（break-glass）"
               },
-              { id: "eval", level: 3, title: "3.6 质量评测 Eval" },
-              { id: "yaml-delivery-runbook", level: 3, title: "3.7 YAML 文件规范与交付验收" },
+              { id: "eval", level: 3, title: "3.6 质量评测" },
+              { id: "yaml-delivery-runbook", level: 3, title: "3.7 YAML 规范与交付验收" },
               { id: "yaml-type-overview", level: 3, title: "3.7.1 YAML 类型总览" },
               { id: "yaml-delivery-checklist", level: 3, title: "3.7.6 GO / NO-GO 交付 checklist" },
               { id: "mcp-integration", level: 2, title: "4. Agent / 客户端接入指南" },
@@ -97,8 +97,8 @@ function renderHelp(path = "/help") {
               "- [1. 系统概述与架构拓扑](#1-系统概述与架构拓扑)",
               "- [2. 快速上手](#2-快速上手)",
               "- [3. 功能模块操作指南](#3-功能模块操作指南)",
-              "  - [3.1 部署向导与上线检查](#31-部署向导与上线检查)",
-              "  - [3.2 数据库接入](#32-数据库接入)",
+              "  - [3.1 运行状态 · 系统概览与上线检查](#31-运行状态--系统概览与上线检查)",
+              "  - [3.2 数据接入 · 连接 / Schema / 表范围](#32-数据接入--连接--schema--表范围)",
               "",
               "## 0. 常见问题速查",
               "",
@@ -110,16 +110,16 @@ function renderHelp(path = "/help") {
               "",
               "| 问题 | 快速答案 | 详见 |",
               "| --- | --- | --- |",
-              "| 我在哪里新建数据库连接？ | `WebUI` 不新建物理连接；先在 `ktx.yaml` 和 secret 文件声明连接，再回 `WebUI` 管理已声明连接。 | [3.2 数据库接入](#32-数据库接入)、[WebUI 与 ktx.yaml 的职责边界](#webui-与-ktxyaml-的职责边界) |",
+              "| 我在哪里新建数据库连接？ | `WebUI` 不新建物理连接；先在 `ktx.yaml` 和 secret 文件声明连接，再回 `WebUI` 管理已声明连接。 | [3.2 数据接入 · 连接 / Schema / 表范围](#32-数据接入--连接--schema--表范围)、[WebUI 与 ktx.yaml 的职责边界](#webui-与-ktxyaml-的职责边界) |",
               "| 数据库密码应该放在哪里？ | 用 `file:`、`env:` 或 `Docker` secrets；不要把明文密码写进 `ktx.yaml`、文档、`commit message` 或聊天记录。 | [连接形态与配置字段](#连接形态与配置字段)、[5.2 ktx.yaml](#52-ktxyaml) |",
               "| 点了刷新本地目录，刷新后的表在哪里看？ | `/connections` 看 reload 状态，`/connections/whitelist` 看可纳入启用表范围的表，`WebUI` 首页 `/` 看已进入语义建模的表。 | [刷新本地目录](#刷新本地目录) |",
               "| 为什么提示“未发现本地 manifest”？ | `ktx.yaml` 声明了 `Schema` 或启用表范围，但本地 `semantic-layer/<conn>/_schema/<schema>.yaml` 缺失或未包含目标表。 | [6.1 为什么提示“未发现本地 manifest”？](#61-为什么提示未发现本地-manifest) |",
               "| `YAML` 改完后为什么 `Agent` 仍然搜不到新口径？ | `WebUI` 读文件即可看到；`KTX` / `MCP` 检索需要 `ktx admin reindex`，并且还要用 `sl read` 确认 `overlay` 已合并到目标 `source`。 | [6.3 配置文件改动后什么时候生效？](#63-配置文件改动后什么时候生效)、[3.7.6.2 KTX 合并与索引检查](#3762-ktx-合并与索引检查) |",
-              "| 我应该改 `manifest` 还是 `overlay`？ | 物理表结构和物理列描述在 `manifest`；`grain`、`measures`、`segments`、派生列和业务补丁在 `overlay`。 | [3.3 语义层维护](#33-语义层维护)、[3.7.1 YAML 类型总览](#371-yaml-类型总览) |",
+              "| 我应该改 `manifest` 还是 `overlay`？ | 物理表结构和物理列描述在 `manifest`；`grain`、`measures`、`segments`、派生列和业务补丁在 `overlay`。 | [3.3 业务上下文 · 语义层](#33-业务上下文--语义层)、[3.7.1 YAML 类型总览](#371-yaml-类型总览) |",
               "| 新增指标怎样才算可以交付？ | 不能只看 `reindex` 或单个 `sl validate`；必须通过静态检查、`sl read`、真实 query、`MCP smoke` 和最终 `GO / NO-GO` 门槛。 | [3.7.6 GO / NO-GO 交付 checklist](#376-go--no-go-交付-checklist) |",
-              "| 评测用例和运行历史在哪里？ | 用 `/eval/cases` 维护评测用例，用 `/eval/runs` 看运行历史，用 `/eval/monitor` 看趋势监控。 | [3.6 质量评测 Eval](#36-质量评测-eval) |",
+              "| 评测用例和运行历史在哪里？ | 用 `/eval/cases` 维护评测用例，用 `/eval/runs` 看运行历史，用 `/eval/monitor` 看趋势监控。 | [3.6 质量评测](#36-质量评测) |",
               "| `/catalog` 的「语义状态」和 `/connections/enabled-tables` 的「状态」有什么关系？ | 共用 `GET /api/sources` 的 `completion`。`/catalog` 展示四态完成度；启用表范围页先看 `enabled_tables`，再把非 `done` 收成「已启用，待补语义」。 | [语义状态与启用表范围状态](#语义状态与启用表范围状态)、[系统概览待处理事项](#系统概览待处理事项) |",
-              "| `/overview`「待处理事项」里「N 张表待补语义」怎么算？ | 按表计数：只统计已进入启用表范围（`enabled_tables`）且出现在本地 `Manifest` 的表。`N` = 这些表中 `completion !== done` 的数量；未启用的 `Manifest` 表不计入。`done` 需同时有表描述、`grain`、主键、全部非 `hidden` 列描述和至少一个 `measure`。 | [系统概览待处理事项](#系统概览待处理事项)、[3.3 语义层维护](#33-语义层维护) |",
+              "| `/overview`「待处理事项」里「N 张表待补语义」怎么算？ | 按表计数：只统计已进入启用表范围（`enabled_tables`）且出现在本地 `Manifest` 的表。`N` = 这些表中 `completion !== done` 的数量；未启用的 `Manifest` 表不计入。`done` 需同时有表描述、`grain`、主键、全部非 `hidden` 列描述和至少一个 `measure`。 | [系统概览待处理事项](#系统概览待处理事项)、[3.3 业务上下文 · 语义层](#33-业务上下文--语义层) |",
               "| 「待处理事项」其它条目分别统计什么？ | 只保留三类：待补语义、待发布文件、近 30 天无评测。待发布看 `/api/diff` 文件数；无评测看是否已有评测运行记录。计数为 0 不展示。近 7 天 `ACL` 拒绝不在首页展示，到 `/admin/audit` 或调用监控查看。 | [系统概览待处理事项](#系统概览待处理事项) |",
               "",
               "### 0.2 面向管理员",
@@ -128,8 +128,8 @@ function renderHelp(path = "/help") {
               "| --- | --- | --- |",
               "| 什么时候该建角色，什么时候该建 `Agent` / `Token`？ | 角色 = 可复用的权限边界；`Agent` = 要对审计负责的人/机器人；`Token` = 某台设备或某个客户端的接入凭证。先角色、再 `Agent`、最后签发 `Token`。 | [什么时候配置角色、Agent 和 Token](#什么时候配置角色agent-和-token) |",
               "| 同一人多台电脑要建几个 `Agent`？ | **一个** `Agent`，按设备或客户端各发一个 `Token`。只有权限边界不同时才拆成多个 `Agent`。 | [什么时候配置角色、Agent 和 Token](#什么时候配置角色agent-和-token) |",
-              "| `Agent` 返回 `Access denied` 时先查哪里？ | 先看客户端里的 `decision_reason`，再打开 `/admin/audit` 或查 `/api/admin/audit?outcome=denied`，对照 `role` 的连接、表和工具授权。 | [6.2 JSON-RPC Access denied / decision_reason 怎么查？](#62-json-rpc-access-denied--decisionreason-怎么查)、[3.5 访问治理 Admin](#35-访问治理-admin) |",
-              "| `expires_at` 到期后 `token` 会自动失效吗？ | 会。`MCP` Proxy 在鉴权时校验 `expires_at`（不再只是 `metadata`）；到期或不可解析的值一律视为未授权（401）。要提前下线可在 `Admin` 撤销 `token`；到期后仍建议撤销，避免配置残留。 | [3.5 访问治理 Admin](#35-访问治理-admin)、[6.5 MCP 返回 401](#65-mcp-返回-401) |",
+              "| `Agent` 返回 `Access denied` 时先查哪里？ | 先看客户端里的 `decision_reason`，再打开 `/admin/audit` 或查 `/api/admin/audit?outcome=denied`，对照 `role` 的连接、表和工具授权。 | [6.2 JSON-RPC Access denied / decision_reason 怎么查？](#62-json-rpc-access-denied--decisionreason-怎么查)、[3.5 访问治理 · 角色 / Agent / Token 心智](#35-访问治理--角色--agent--token-心智) |",
+              "| `expires_at` 到期后 `token` 会自动失效吗？ | 会。`MCP` Proxy 在鉴权时校验 `expires_at`（不再只是 `metadata`）；到期或不可解析的值一律视为未授权（401）。要提前下线可在 `Admin` 撤销 `token`；到期后仍建议撤销，避免配置残留。 | [3.5 访问治理 · 角色 / Agent / Token 心智](#35-访问治理--角色--agent--token-心智)、[6.5 MCP 返回 401](#65-mcp-返回-401) |",
               "| 问询记录和调用流水都能导出吗？ | 可以。`/admin/audit` 的「导出问询记录」是一问一行，「导出调用流水」是一调用一行；两者通过「问询 ID」关联。 | [问询记录与调用流水怎么选、怎么导出](#问询记录与调用流水怎么选怎么导出) |",
               "| 忘记 `WebUI` 管理员账号或密码怎么办？ | 自托管**不提供邮箱找回**。有其他所有者时由其重置；否则由能读写部署配置的人按 `break-glass` 清空 `admins.yaml` 后重新引导。 | [丢失管理员账号或密码时如何恢复（break-glass）](#丢失管理员账号或密码时如何恢复break-glass) |",
               "| 新连接什么时候对 `Agent` 可见？ | `ktx.yaml`、`manifest` / `overlay`、启用表范围、`KTX reindex`、`access.yaml` `role` / `ACL` 都就绪后才可见。 | [Agent 可见性与 ACL 同步](#agent-可见性与-acl-同步)、[新增数据库连接（运维 Runbook）](#新增数据库连接运维-runbook) |",
@@ -185,7 +185,7 @@ function renderHelp(path = "/help") {
               "",
               "`ktx up` 启动依赖；`WebUI` 默认监听 `5173`，API 默认 `5174`，MCP 默认 `7879`。",
               "",
-              "### 3.1 部署向导与上线检查",
+              "### 3.1 运行状态 · 系统概览与上线检查",
               "",
               "| 步骤 | Ready 条件 | 检查方法 | 异常处理 |",
               "|---|---|---|---|",
@@ -195,7 +195,7 @@ function renderHelp(path = "/help") {
               "",
               "「待处理事项」按表计数：总数减去 `completion` 为 `done` 的表。",
               "",
-              "### 3.2 数据库接入",
+              "### 3.2 数据接入 · 连接 / Schema / 表范围",
               "",
               "WebUI 不负责新建物理数据库连接。新增连接的 host、port、database、username、password、driver 等字段由运维在 `ktx.yaml` 和 secret 文件中配置。",
               "",
@@ -223,7 +223,7 @@ function renderHelp(path = "/help") {
               "",
               "「已发现表数」统计本地 Schema Manifest 已读到的表，不是远端物理库实时表数。",
               "",
-              "### 3.3 语义层维护",
+              "### 3.3 业务上下文 · 语义层",
               "",
               "维护 manifest / overlay、启用表范围与 reindex。",
               "",
@@ -231,7 +231,7 @@ function renderHelp(path = "/help") {
               "",
               "`/catalog` 的「语义状态」直接显示 `completion`；启用表范围的「状态」再叠上 `enabled_tables`。",
               "",
-              "### 3.5 访问治理 Admin",
+              "### 3.5 访问治理 · 角色 / Agent / Token 心智",
               "",
               "在 `/admin` 维护 Agent / Role / Token / 审计。",
               "",
@@ -250,11 +250,11 @@ function renderHelp(path = "/help") {
               "",
               "自托管不提供邮箱找回。优先由其他所有者在 `/admin/admins` 重置；无人可登录时清空 `admins.yaml` 后以 `LUCY_WEBUI_AUTH=required` 重新 bootstrap。",
               "",
-              "### 3.6 质量评测 Eval",
+              "### 3.6 质量评测",
               "",
               "在 `/eval/cases` 维护用例，`/eval/runs` 看历史，`/eval/monitor` 看趋势。",
               "",
-              "### 3.7 YAML 文件规范与交付验收",
+              "### 3.7 YAML 规范与交付验收",
               "",
               "FAQ 可跳到 [KTX 合并与索引检查](#3762-ktx-合并与索引检查)。",
               "",
@@ -418,8 +418,8 @@ describe("HelpCenter", () => {
     expect(await screen.findByRole("heading", { name: "系统手册" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "常见问题速查" })).toHaveAttribute("href", "/help?section=faq-quick-reference");
     expect(screen.getByRole("link", { name: "系统概述与架构拓扑" })).toHaveAttribute("href", "/help?section=system-overview");
-    expect(screen.getByRole("link", { name: "部署向导与上线检查" })).toHaveAttribute("href", "/help?section=deployment-checklist");
-    expect(screen.getByRole("link", { name: "YAML 文件规范与交付验收" })).toHaveAttribute("href", "/help?section=yaml-delivery-runbook");
+    expect(screen.getByRole("link", { name: "运行状态 · 系统概览与上线检查" })).toHaveAttribute("href", "/help?section=deployment-checklist");
+    expect(screen.getByRole("link", { name: "YAML 规范与交付验收" })).toHaveAttribute("href", "/help?section=yaml-delivery-runbook");
     expect(screen.getByRole("link", { name: "GO / NO-GO 交付 checklist" })).toHaveAttribute("href", "/help?section=yaml-delivery-checklist");
     expect(screen.getByRole("link", { name: "Agent / 客户端接入指南" })).toHaveAttribute("href", "/help?section=mcp-integration");
     // TOC 折叠时不应出现 level-4 链接（§0 内部 anchor 链不算），只在 toc 子树内查。
@@ -427,7 +427,7 @@ describe("HelpCenter", () => {
     expect(within(toc).queryByRole("link", { name: "Agent 可见性与 ACL 同步" })).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "0. 常见问题速查" })).toBeInTheDocument();
     expect(screen.getByText("我在哪里新建数据库连接？")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "3.2 数据库接入" })).toHaveAttribute("href", "#32-数据库接入");
+    expect(screen.getByRole("link", { name: "3.2 数据接入 · 连接 / Schema / 表范围" })).toHaveAttribute("href", "#32-数据接入--连接--schema--表范围");
     expect(screen.getByText(/Lucy 是本地语义补充工作台/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "KTX 合并与索引检查" })).toHaveAttribute("href", "#3762-ktx-合并与索引检查");
     expect(screen.getByRole("link", { name: "KTX 合并与索引检查" })).not.toHaveAttribute("target");
@@ -474,7 +474,7 @@ describe("HelpCenter", () => {
     expect(deploymentSection).toBeInTheDocument();
     const table = within(deploymentSection as HTMLElement).getByRole("table");
 
-    expect(screen.getByRole("heading", { name: "3.1 部署向导与上线检查" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "3.1 运行状态 · 系统概览与上线检查" })).toBeInTheDocument();
     expect(screen.queryByText("系统手册加载中...")).not.toBeInTheDocument();
     expect(within(table).getByRole("columnheader", { name: "步骤" })).toBeInTheDocument();
     expect(within(table).getByRole("columnheader", { name: "Ready 条件" })).toBeInTheDocument();

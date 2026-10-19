@@ -5,47 +5,52 @@
 | 文档类型 | System Handbook |
 | 适用对象 | 使用者、管理员、运维人员、接入 Agent 的协作者、开发者 |
 | 事实来源 | `webui/server/`、`webui/src/`、`semantic-layer/`、`webui/config/`、`ktx.yaml.example`、`webui/docs/01-17` |
-| 当前日期 | 2026-09-28 |
+| 当前日期 | 2026-10-19 |
+| 文档基线（不要落） | 详见 §0.0 文档基线 |
 
 ## 目录
 
 - [0. 常见问题速查](#0-常见问题速查)
+  - [0.0 文档基线（自动同步）](#00-文档基线自动同步)
+  - [0.4 v2.0.0 切线说明](#04-v200-切线说明)
 - [1. 系统概述与架构拓扑](#1-系统概述与架构拓扑)
   - [1.5 WebUI 入口速查（运行状态侧栏地图）](#15-webui-入口速查运行状态侧栏地图)
   - [1.6 产品架构图（摄取与服务）](#16-产品架构图摄取与服务)
 - [2. 快速上手](#2-快速上手)
 - [3. 功能模块操作指南](#3-功能模块操作指南)
-  - [3.1 部署向导与上线检查](#31-部署向导与上线检查)
+  - [3.1 运行状态 · 系统概览与上线检查](#31-运行状态--系统概览与上线检查)
     - [系统概览待处理事项](#系统概览待处理事项)
-  - [3.2 数据库接入](#32-数据库接入)
-  - [3.3 语义层维护](#33-语义层维护)
+    - [调用监控（/ops/calls）](#调用监控opscalls)
+  - [3.2 数据接入 · 连接 / Schema / 表范围](#32-数据接入--连接--schema--表范围)
+  - [3.3 业务上下文 · 语义层](#33-业务上下文--语义层)
     - [语义状态与启用表范围状态](#语义状态与启用表范围状态)
     - [为什么要编写语义 YAML](#为什么要编写语义-yaml)
     - [推荐编写工作流](#推荐编写工作流)
     - [grain、join 与 fanout](#grainjoin-与-fanout)
     - [KTX 官方延伸阅读](#ktx-官方延伸阅读)
-  - [3.4 业务文档 Wiki](#34-业务文档-wiki)
-  - [3.5 访问治理 Admin](#35-访问治理-admin)
+    - [语义资产范围树（连接与 Schema）](#语义资产范围树连接与-schema)
+  - [3.4 业务上下文 · Wiki](#34-业务上下文--wiki)
+  - [3.5 访问治理 · 角色 / Agent / Token 心智](#35-访问治理--角色--agent--token-心智)
     - [什么时候配置角色、Agent 和 Token](#什么时候配置角色agent-和-token)
+    - [问询记录与调用流水怎么选、怎么导出](#问询记录与调用流水怎么选怎么导出)
     - [WebUI 管理员登录](#webui-管理员登录)
     - [丢失管理员账号或密码时如何恢复（break-glass）](#丢失管理员账号或密码时如何恢复break-glass)
     - [审计热库与冷库（SQL 留存边界）](#审计热库与冷库sql-留存边界)
-  - [3.6 质量评测 Eval](#36-质量评测-eval)
-  - [3.7 YAML 文件规范与交付验收](#37-yaml-文件规范与交付验收)
+    - [MCP 调试台（/admin/mcp-playground）](#mcp-调试台adminmcp-playground)
+  - [3.6 质量评测](#36-质量评测)
+  - [3.7 YAML 规范与交付验收](#37-yaml-规范与交付验收)
     - [配置作者 Skills](#配置作者-skills)
     - [3.7.0 overlay 字段速查（编写辅导）](#370-overlay-字段速查编写辅导)
-  - [3.8 业务 Skill 治理](#38-业务-skill-治理)
-    - [业务 Skill 治理工作台](#业务-skill-治理工作台)
-  - [3.9 语义资产范围树](#39-语义资产范围树)
-    - [语义资产范围树（连接与 Schema）](#语义资产范围树连接与-schema)
-  - [3.10 角色列表与快捷详情](#310-角色列表与快捷详情)
+  - [3.8 访问治理 · 角色列表与权限预览](#38-访问治理--角色列表与权限预览)
     - [角色列表与筛选](#角色列表与筛选)
-  - [3.11 接入向导](#311-接入向导)
+  - [3.9 接入向导](#39-接入向导)
     - [接入向导六步流程](#接入向导六步流程)
-  - [3.12 行级策略](#312-行级策略)
+  - [3.10 访问治理 · 行级策略](#310-访问治理--行级策略)
     - [行级策略（行授予与最终行约束）](#行级策略行授予与最终行约束)
-  - [3.13 MCP 会话与上游连接](#313-mcp-会话与上游连接)
+  - [3.11 访问治理 · MCP 会话与上游连接](#311-访问治理--mcp-会话与上游连接)
     - [MCP 会话保持与上游连接归属](#mcp-会话保持与上游连接归属)
+  - [3.12 业务上下文 · 业务 Skill](#312-业务上下文--业务-skill)
+    - [业务 Skill 治理工作台](#业务-skill-治理工作台)
 - [4. Agent / 客户端接入指南](#4-agent--客户端接入指南)
 - [5. 配置与环境变量速查](#5-配置与环境变量速查)
 - [6. FAQ 与排障指南](#6-faq-与排障指南)
@@ -54,6 +59,42 @@
   - [6.12 `order_by` 排序无效或排反](#612-order_by-排序无效或排反)
   - [6.13 语义查询答不出复杂分析题，或 Eval 对不上 gold](#613-语义查询答不出复杂分析题或-eval-对不上-gold)
   - [6.14 改了 Manifest / Wiki，MCP 仍旧或 reindex 失败](#614-改了-manifest--wikimcp-仍旧或-reindex-失败)
+
+### 0.0 文档基线（自动同步）
+
+本表由 `npm run lint:handbook-baseline` 校验；任一格被手改、与事实源不一致即 fail。
+
+| 字段 | 当前值 | 来源 |
+| --- | --- | --- |
+| 产品版本（`VERSION`） | 2.0.0 | `VERSION` |
+| 侧栏标签 | v2.0.0 | `webui/src/lib/lucyVersion.ts` FALLBACK |
+| Helm `appVersion` | 2.0.0 | `deploy/k8s/helm/lucy/Chart.yaml` `appVersion` |
+| 捆绑 KTX 版本 | 0.16.0 | `Dockerfile` `LUCY_BUNDLED_KTX_VERSION` |
+| 上次手册审计 | 2026-10-19 | 人工维护；下次审计由治理 PR 触发 |
+| 列车规则 | `2.x`（v2.0.0 主版本切线） | `docs/plans/2026-10-19-lucy-product-version-2.0.0.md` |
+
+> **不要**手改本表。改完事实源后跑 `npm run lint:handbook-baseline`；脚本会因更新而失败时，按报错提示同步本表，再跑一次。
+
+### 0.4 v2.0.0 切线说明
+
+2026-10-19 产品版本由 `0.17.0` 切到 `2.0.0`。客户标签随之变更为 `v2.0.0`。Helm Chart 包版本仍为 `0.2.4`，捆绑 KTX 仍为 `0.16.0`。本次切线本身不改动权限模型、配置或 KTX 运行时。
+
+**列车规则**（详见 `docs/governance/version-matrix.md` 与 `docs/plans/2026-10-19-lucy-product-version-2.0.0.md`）：
+
+| 触发 | 递增 | 例 |
+| --- | --- | --- |
+| 下一次客户交付包 | 第二段 +1 | `2.0.0 → 2.1.0` |
+| 大能力、破坏性配置或捆绑 KTX 主版本变化 | 第二段 +10 | `2.0.0 → 2.10.0` |
+| 补丁段 | 保持 `0`，直到矩阵另定 hotfix 规则 | `2.0.0 → 2.0.1` 暂不启用 |
+| 再进主版本 | 需新的明示批准 | `3.0.0` |
+
+**客户镜像 tag 形式**：`customer-amd64-2.0.0-YYYYMMDD-<gitSha>`（首段产品段已对齐到 `2.0.0`）。
+
+**不**属于本次切线的事项：
+
+- `webui/package.json` 的 `version`（npm 包版本）保持 `1.0.0`，与包无关。
+- Helm Chart `version` 保持 `0.2.4`；图表包版本与 `appVersion` 分开。
+- `@kaelio/ktx` 仍为 `0.16.0`；本次未升级运行时。
 
 ## 0. 常见问题速查
 
@@ -89,7 +130,7 @@
 | 同一人多台电脑要建几个 `Agent`？ | **一个** `Agent`，按设备或客户端各发一个 `Token`。只有权限边界不同时才拆成多个 `Agent`。 | [什么时候配置角色、Agent 和 Token](#什么时候配置角色agent-和-token) |
 | `Agent` 返回 `Access denied` 时先查哪里？ | 先看客户端里的 `decision_reason`，再打开 `/admin/audit` 或查 `/api/admin/audit?outcome=denied`，对照 `role` 的连接、表和工具授权。 | [6.2 JSON-RPC Access denied / decision_reason 怎么查？](#62-json-rpc-access-denied--decisionreason-怎么查)、[3.5 访问治理 Admin](#35-访问治理-admin) |
 | `expires_at` 到期后 `token` 会自动失效吗？ | 会。`MCP` Proxy 在鉴权时校验 `expires_at`（不再只是 `metadata`）；到期或不可解析的值一律视为未授权（401）。要提前下线可在 `Admin` 撤销 `token`；到期后仍建议撤销，避免配置残留。 | [3.5 访问治理 Admin](#35-访问治理-admin)、[6.5 MCP 返回 401](#65-mcp-返回-401) |
-| 问询记录和调用流水都能导出吗？ | 可以。问询记录页的「导出」是一问一行，调用流水页的「导出」是一调用一行；两者通过「问询 ID」关联。 | [问询记录与调用流水怎么选、怎么导出](#问询记录与调用流水怎么选怎么导出) |
+| 问询记录和调用流水都能导出吗？ | 可以。`/admin/audit` 的「导出问询记录」是一问一行，「导出调用流水」是一调用一行；两者通过「问询 ID」关联。 | [问询记录与调用流水怎么选、怎么导出](#问询记录与调用流水怎么选怎么导出) |
 | 调用流水里的「生成 SQL」从哪来？ | `lucy_query` 经语义层编译后的 SQL；热库字段 `generated_sql` 明文保存，调用流水列表与 CSV 可直接 review。不存 deny 路径的 raw `sql`/`query` 攻击载荷。 | [审计热库与冷库（SQL 留存边界）](#审计热库与冷库sql-留存边界)、[3.5 访问治理 Admin](#35-访问治理-admin) |
 | 新连接什么时候对 `Agent` 可见？ | `ktx.yaml`、`manifest` / `overlay`、启用表范围、`KTX reindex`、`access.yaml` `role` / `ACL` 都就绪后才可见。 | [Agent 可见性与 ACL 同步](#agent-可见性与-acl-同步)、[新增数据库连接（运维 Runbook）](#新增数据库连接运维-runbook) |
 
@@ -333,7 +374,7 @@ curl -s -X POST http://127.0.0.1:5174/api/catalog/reload \
 
 ## 3. 功能模块操作指南
 
-### 3.1 部署向导与上线检查
+### 3.1 运行状态 · 系统概览与上线检查
 
 入口：`/onboarding`
 
@@ -375,7 +416,65 @@ curl -s -X POST http://127.0.0.1:5174/api/catalog/reload \
 
 缺任一项则为 `partial` 或 `not_started`，都计入「待补语义」。补语义入口见 [3.3 语义层维护](#33-语义层维护)；发布入口见 `/publish/workbench`。`/catalog`「语义状态」与启用表范围「状态」的对照见 [语义状态与启用表范围状态](#语义状态与启用表范围状态)。
 
-### 3.2 数据库接入
+#### 调用监控（/ops/calls）
+
+入口：`/ops/calls`。运行状态分组下，与 `/overview`（系统概览）和 `/admin/usage`（使用概况）并列；侧栏位置见 [1.5 WebUI 入口速查](#15-webui-入口速查运行状态侧栏地图)。
+
+调用监控回答「MCP 工具调用现在是否健康、是否变慢、是否被拒绝」：六张 KPI 卡片（近 N 调用量、成功率、错误率、拒绝率、多数请求耗时（P95）、慢于多数请求），加工具调用排行（Top 10）与最近失败与拒绝短表。**只读观测页**：不修改 ACL、不写日志、不调 KTX、不接告警通道。
+
+**关键指标**
+
+| UI 主术语 | 口径 | 来源事实 |
+| --- | --- | --- |
+| 近 N 调用量 | `access_log` 中业务 MCP 工具调用次数；排除协议工具 | `.ktx-ui/audit.sqlite` |
+| 成功率 | `ok / businessCalls` | 同上；分母为 0 → 展示「暂无调用」 |
+| 错误率 | `error / businessCalls` | 超阈（`LUCY_OBSERVABILITY_MAX_ERROR_RATE`，默认 `0.02`）红标 |
+| 拒绝率 | `denied / businessCalls` | 超阈（`LUCY_OBSERVABILITY_MAX_DENIED_RATE`，默认 `0.1`）红标；用于排查 ACL 异常，独立列于错误率之外 |
+| 多数请求耗时 | 窗内 `durationMs` 的 P95 | 超阈（`LUCY_OBSERVABILITY_SLOW_MS`，默认 `30000`）红标 |
+| 慢于多数请求 | `durationMs > slowMs` 的次数 | 同上阈值 |
+
+页头不展示「统计时间」或「SLO 总状态」；阈值越线只体现在对应 KPI 卡片红标。
+
+**滚动窗口**
+
+| `range` | 默认 | 用途 |
+| --- | --- | --- |
+| `1h` | — | 当前尖峰盯盘 |
+| `24h` | 是 | 默认主盯盘窗 |
+| `7d` | — | 周级节奏 |
+| `30d` | — | 月级趋势（仅本页；访问日志补 `30d` 为此下钻） |
+
+切换写入 URL `range=`，自动刷新（默认 30s）改写当前一桶；兼容读旧 `hours=`。窗口与 `/admin/audit` 持久日志不同——本窗口是**热数据**、刷新快、不替代审计导出。慢于多数请求空桶记 0；多数请求耗时在该桶调用 < 20 次时断开。
+
+**`callSource` 标记**
+
+来自 `MCP 调试台` 受控试调的调用记为 `mcp-playground`，来自生产 Agent 的记为 `agent`。调用监控默认聚合两者（业务 MCP 调用集合），但列表/工具排行/失败短表都可以按 `callSource` 过滤——把试调与真实调用分开看。详见 [MCP 调试台（/admin/mcp-playground）](#mcp-调试台adminmcp-playground) § 从试调到审计。
+
+**不要做什么**
+
+- 不修改 ACL、不调 Proxy 裁决语义。
+- 不写日志、不发邮件 / Slack / Webhook。
+- 不接 Eval / Hermes / 跑批数据。
+- 不做 SSE / WebSocket 真推送；30s 轮询即可。
+- 任何「封禁 / 限流 / 改权限」动作走 `/admin/audit` 取证，或 `/admin/mcp-playground` ACL 预览后再改 `access.yaml`。
+
+**关联**
+
+- §3.5 [访问治理](#35-访问治理--角色--agent--token-心智)：访问日志是本页 KPI 的取证主场。
+- §3.11 [MCP 会话与上游连接](#311-访问治理--mcp-会话与上游连接)：上游会话归属决定 `callSource` 的语义。
+- §3.9 [接入向导](#39-接入向导) Step 6（首问验证）：本窗口可用于观察首问后的工具调用是否符合预期。
+
+**反馈历史**
+
+| 编号 | 摘要 | Spec / 文件 |
+| --- | --- | --- |
+| `UX-ADMIN-AUDIT-007` | 与使用概况「多数请求耗时」无法交叉验证——已对齐到 24h/7d 窗口与 P95 算法 | `webui/docs/89-admin-audit-turn-drilldown-spec.md` |
+| `UX-ADMIN-AUDIT-018` | 裁决原因仅机器码、缺少修复深链——本页不渲染 reason，但调用流水已升级为双行可读 | `webui/docs/99-mcp-playground-acl-decision-visibility-spec.md` |
+| `UX-ADMIN-AUDIT-019` | 无法区分 MCP 调试台受控试调与 Agent 接入调用——`callSource` 过滤器已落地 | `webui/docs/99-mcp-playground-acl-decision-visibility-spec.md` §7.3 |
+
+权威 Spec：`webui/docs/143-call-monitoring-ops-page-spec.md`、`webui/docs/165-call-monitor-window-series-spec.md`、`webui/docs/156-runtime-status-usage-boundary-spec.md` §5.1。
+
+### 3.2 数据接入 · 连接 / Schema / 表范围
 
 入口：
 
@@ -767,7 +866,7 @@ curl -s "http://127.0.0.1:5174/api/admin/audit?outcome=denied&limit=20"
 ktx --project-dir <PROJECT_ROOT> connection list
 ```
 
-### 3.3 语义层维护
+### 3.3 业务上下文 · 语义层
 
 入口：`/` 表目录、`/sources/:conn/:schema/:table` 单表编辑、`/joins/:conn/:schema/:table` 关联关系。
 
@@ -983,7 +1082,36 @@ Lucy 与上游 `KTX` 文档的一个关键差异：人工描述写入 `descripti
 | `ktx.yaml` 项目配置 | ktx.yaml reference | https://docs.kaelio.com/ktx/docs/configuration/ktx-yaml |
 | `ktx sl` / `validate` / `query` | CLI Reference | https://docs.kaelio.com/ktx/docs/cli-reference |
 
-### 3.4 业务文档 Wiki
+#### 语义资产范围树（连接与 Schema）
+
+> 以下 H4 子节原属旧 §3.9「语义资产范围树」，按 Day 2 侧栏分组重排并入 §3.3 末尾。H4 标题保持不变以保留其已有锚点（`semantic-asset-scope-tree`）。
+
+入口：`/catalog`。本节说明该页在 Spec 152 之后的定位方式。
+
+`/catalog` 改为**左侧目录树（连接与 Schema 范围树）+ 右侧语义资产表格**的双栏工作区，用于跨多个连接与 `Schema` 定位语义资产。
+
+**破坏性变更提示**：右侧原有的「连接筛选」与「Schema 筛选」下拉**已移除**，改由左树承担同样的范围选择职责。旧的筛选方式不再可用。
+
+树结构为三层：「全部连接」根节点 → `Connection` 节点 → `Schema` 叶节点，按 `/api/sources` 中的首次出现顺序展示。不含 `Table` 层节点。
+
+| 操作 | 效果 |
+| --- | --- |
+| 选择根节点 | 清除 `connection` 与 `schema` |
+| 选择 `Connection` | 写入 `connection`、清除 `schema`，并展开该分支 |
+| 选择 `Schema` | 写入对应的 `connection` 与 `schema`，并展开父 `Connection` |
+| 点击展开 / 收起 | 只改变本地展开状态，**不修改 URL，也不改变筛选** |
+
+展开状态默认行为：没有位置深链时所有 `Connection` 初始收起；有有效的 `connection` / `schema` 深链时自动展开所在 `Connection`，之后允许手动收起。**展开状态不持久化**，刷新页面回到默认。
+
+节点计数跟随 `scope`（启用范围）、`completion`（语义状态）与 `q`（搜索）筛选变化，但**不受当前选中的 `Connection` / `Schema` 影响**——这样可以对照"该连接下还剩多少未完成"。计数为 0 的节点仍然展示且可选择。
+
+左树是工作区内的范围选择器，**不是**与全局侧栏等价的第二导航；左树不提供独立搜索，请在右侧表格用搜索框过滤。
+
+`connection` 与 `schema` 仍是 `URL` 上的筛选事实源，页面刷新或分享链接可还原位置。`Connection` 名、`Schema` 名与表名在页面上做了浏览器翻译防御。
+
+本节描述的范围树不适用于「启用表范围」页，也不改变表语义编辑器的行为。
+
+### 3.4 业务上下文 · Wiki
 
 入口：`/wiki`
 
@@ -1047,7 +1175,9 @@ PUT /api/wiki/:key
 
 安全边界：Wiki key 必须是 `wiki/` 下的相对 `.md` 路径；禁止绝对路径、`..`、非 Markdown 文件。
 
-### 3.5 访问治理 Admin
+### 3.5 访问治理 · 角色 / Agent / Token 心智
+
+本节聚焦「角色 / Agent / Token」三层心智，先建决策，再打开对应页面；问询记录、break-glass、审计冷热库、`WebUI` 管理员登录等仍在本节内按 H4 查阅。侧栏分组按访问治理主题将这些 H4 与第 3.8 / 3.10 / 3.11 节共用，但深链与正文位置稳定。
 
 入口：
 
@@ -1185,15 +1315,13 @@ YAML 结构、签发规则与裁决链路见下文「Role-first 模型」「Toke
 1 条问询记录 -> N 条调用流水
 ```
 
-| 要回答的问题 | 看哪个页签 | 点「导出」得到 | 一行代表什么 |
+| 要回答的问题 | 看哪个页签 | 用哪个导出 | 一行代表什么 |
 | --- | --- | --- | --- |
-| 用户问了什么、整体是否成功？ | 问询记录 | 问询记录 CSV | 一次用户问询 |
-| 这次问询涉及哪些表、用了几个工具、有没有慢调用？ | 问询记录 | 问询记录 CSV | 一次用户问询 |
-| 哪个工具调用失败、被拒或变慢？ | 调用流水 | 调用流水 CSV | 一次工具调用 |
-| 要看裁决原因、访问上下文或生成 SQL？ | 调用流水 | 调用流水 CSV | 一次工具调用 |
-| 要做离线审计闭环与完整性对账？ | 当前页签即可 | 另点「导出审计证据包」 | 多个审计文件，包内含 Manifest |
-
-顶栏「导出」只导出当前页签、当前筛选。要另一种粒度，先切换页签再导出。「导出问询记录」是一问一行，「导出调用流水」是一调用一行，两者通过「问询 ID」关联。正式验收用「导出审计证据包」，按钮上不出现 Manifest。
+| 用户问了什么、整体是否成功？ | 问询记录 | 导出问询记录 | 一次用户问询 |
+| 这次问询涉及哪些表、用了几个工具、有没有慢调用？ | 问询记录 | 导出问询记录 | 一次用户问询 |
+| 哪个工具调用失败、被拒或变慢？ | 调用流水 | 导出调用流水 | 一次工具调用 |
+| 要看裁决原因、访问上下文或生成 SQL？ | 调用流水 | 导出调用流水 | 一次工具调用 |
+| 要做离线审计闭环与完整性对账？ | 调用流水 / 审计证据包 | 导出审计证据包 | 多个审计文件 + Manifest |
 
 导出时遵循当前筛选条件。「导出问询记录」保留来源标记：`用户原始问询` 来自客户端上报，`系统推断问询` 来自调用流水聚类；不要把推断问询当作用户原文。「导出调用流水」沿用 `access_log` 明细字段，包含工具、裁决原因、生成 SQL、访问上下文、`request_id` 与 `trace_id` 等事件级信息。
 
@@ -1214,7 +1342,7 @@ CSV 文件名带秒级时间戳和流水号，避免浏览器生成 `(1)` 这类
 1. 先在「问询记录」找到异常问询，复制「问询 ID」。
 2. 切到「调用流水」用同一个「问询 ID」筛选。
 3. 查看具体事件的工具、裁决原因、生成 SQL 和耗时。
-4. 正式审计点「导出审计证据包」。
+4. 需要离线复核时，同时导出问询记录与调用流水；正式审计再导出审计证据包。
 
 #### WebUI 管理员登录
 
@@ -1426,7 +1554,209 @@ curl -s "http://127.0.0.1:5174/api/admin/audit/turns?source=all&lookbackHours=24
 curl -s "http://127.0.0.1:5174/api/admin/audit/sources?hours=24"
 ```
 
-### 3.6 质量评测 Eval
+
+
+入口：`/admin/mcp-playground`。访问治理分组下，与访问日志 / 配置审计并列；侧栏位置见 [1.5 WebUI 入口速查](#15-webui-入口速查运行状态侧栏地图)。
+
+调试台是 Agent 接入后的「试调沙盒」：在不创建正式 Agent / Token 的前提下，预览 ACL 裁决或对白名单工具做一次受控试调。它复用 Proxy 的 `acl.ts` 与 `decisionReasonLabel` 映射——本页得到的裁决结果与生产路径完全一致，仅在**写日志**与**真执行**两个动作上分流。
+
+**两条路径的边界**
+
+| 维度 | ACL 预览 | 受控试调 |
+| --- | --- | --- |
+| 写访问日志 | 否 | 是（`callSource=mcp-playground`） |
+| 真正执行 | 否（仅预览裁决） | 是（仅白名单工具） |
+| Token | 不需要；选中 Agent 即生效 | 借用选中 Agent 的 Token（仅会话内存，不落盘） |
+| 裁决原因 | 中文主行 + 机器码次行（折叠） | 同左；成功为「{Agent}能连上」/失败为「{Agent}不能连上」 |
+| 进入审计 | 否 | 是；通过「在访问日志中查看」按钮下钻 |
+| 用途 | 试参数、对比 Role | 真打通本地 MCP endpoint 的最小 live smoke |
+
+**裁决原因中文化**
+
+上游 KTX 的 `decision_reason` 是机器码（`role_resolution_failed` / `tool_forbidden` / `table_forbidden:<name>` / `query_concurrency_exceeded` / `token_expired` 等），调试台在中文主行展示可读原因，次行折叠展示机器码便于精确排查。访问日志调用流水与 Drawer 已升级为同样的双行可读（`DecisionReasonCell`，Spec 99 §6.4）。允许结论不再重复写「允许执行」和 `allowed`；裁决卡用绿 / 红 / 黄三色诊断条表达结果。
+
+**不嵌入 LLM / Token 不落盘**
+
+- 所有裁决逻辑复用 Proxy 一致代码（`acl.ts`、`decisionReasonLabel`）；本页不引入新的裁决分支。
+- Token 字段在 UI 仅显示占位符；粘贴的 Token 仅存于会话内存，不写盘、不发回服务端持久化。
+- 不引入内嵌 LLM / Copilot；保持 Zero AI（Spec 66 另轨）。
+- 受控试调**白名单**：`tools/list`（必达）、`kx_catalog`；禁止 `lucy_query`、wiki 写、未知工具、用户指定 URL。
+
+**从试调到审计**
+
+受控试调成功后，裁决卡右下出现「查看访问日志」按钮，链到 `/admin/audit?view=calls&callSource=playground`（兼容旧 `?tab=calls`）。这一深链让运维一键把试调记录从真实调用里筛出来，对照 review。试调失败时不展示该按钮。
+
+**常见用法**
+
+| 你要验证的问题 | 走哪条路径 |
+| --- | --- |
+| 「这个 Agent 能不能调 `lucy_query`？」 | ACL 预览（不写日志，无副作用） |
+| 「同一个 Token 调两次，分别能不能查到？」 | 受控试调（写入 `callSource=mcp-playground`） |
+| 「换 role 后行为是否变化？」 | 两次 ACL 预览对比，不依赖试调 |
+| 「接入后 Token 真的能打通本机 MCP 吗？」 | 受控试调 `tools/list`（必达 smoke） |
+| 「denied 行的真实原因码是什么？」 | ACL 预览复制机器码，配合 `/admin/audit` 取证 |
+
+**关联**
+
+- §3.5 [什么时候配置角色、Agent 和 Token](#什么时候配置角色agent-和-token)：先建角色再建 Agent；调试台是建好 Agent 后的裁决验证面。
+- §3.8 [角色列表与权限预览](#38-访问治理--角色列表与权限预览)：权限预览给的是「Role 层能调什么」，本台给的是「这个 Agent 在该 Role 下的具体裁决」。
+- §3.11 [MCP 会话与上游连接](#311-访问治理--mcp-会话与上游连接)：上游会话归属决定 `callSource` 在访问日志里的语义。
+- §4 [Agent / 客户端接入指南](#4-agent--客户端接入指南)：调试台是接入指南的「试一下」按钮——任何 `tools/list` / `kx_catalog` 失败优先到这里复现。
+
+**反馈历史**
+
+| 编号 | 摘要 | Spec / 文件 |
+| --- | --- | --- |
+| `UX-ADMIN-MCP-PLAYGROUND-001` | 缺少协议级 ACL 调试面（P0）——已落地 ACL 预览 + 受控试调 + 双行裁决原因 | `webui/docs/99-mcp-playground-acl-decision-visibility-spec.md` |
+| `UX-ADMIN-MCP-PLAYGROUND-002` | 受控试调写入访问日志后无法区分来源（P2）——`callSource=mcp-playground` 已落库 | Spec 99 v1.2 §7.3 |
+| `UX-ADMIN-MCP-PLAYGROUND-005` | 连上检查展示探测清单（P1）——简化为「能连上 / 不能连上」二态，去掉探测分项 | Spec 99 v1.5 §6.6 |
+
+权威 Spec：`webui/docs/99-mcp-playground-acl-decision-visibility-spec.md`。
+
+#### Token 凭据（/admin/tokens）
+
+入口：`/admin/tokens`（全局视图）或 `/admin/agents/:userId` 的 Token 区（按 Agent 视图）。本节聚焦 **Token 本身** 的签发、吊销、过期与配置复制；何时该配 Token 的三层决策见上文「什么时候配置角色、Agent 和 Token」。
+
+##### 心智位置
+
+Token 是 **Agent 的接入凭证**，不是权限边界；同 Agent 下多个 Token 共享同一份角色绑定与可见 scope。要表达的「权限差异」必须落到 Agent / Role 层，不能用 Token 模拟（详见「什么时候该配 Token」末尾的边界）。`/admin/tokens` 提供「按设备 / 客户端维度」的清单，便于运维快速定位「这个 Key 谁在用」。
+
+##### 签发
+
+- 入口路径：从 `/admin/agents` 选中 Agent → Token 区；或从 `/admin/tokens` 选择 Agent 后一键签发。
+- 必填项：`expires_at`（管理页默认 90 天，最长 365 天；空值表示长期有效，**不推荐**，会失去下文 `expires_at` 强制校验的硬拒绝兜底）。
+- 可选项：标签 / 设备名（便于人工分辨；写明如 `forrest-mbp-cursor`、`eval-runner-2` 之类，**不要含明文 secret**）。
+- 明文 Token **只出现一次**：签发后立刻复制到客户端密钥库 / secret store；不要进仓库、聊天记录、截图或 Wiki。
+
+##### 吊销
+
+- 单 Token 吊销：`/admin/tokens` 行内「撤销 Token」/ `/admin/agents/:userId` Token Tab 行的「撤销」按钮，确认后立即生效（缓存清空，下次请求 401）。
+- Agent 全量吊销：Agent 详情 → 「撤销全部 Token」；用于离职 / 轮换场景。
+- 过期 Token：**仍建议显式撤销**（即使已过期），避免配置残留与误用——下游脚本若还在引用过期 key 会立刻 401，而不是读到旧值混过去。
+
+##### `expires_at` 强制（Spec 124 / Spec 07）
+
+Proxy 鉴权链路在 access 决策中**实际比对** `expires_at`，不再只是 metadata：
+
+- 到期、可解析值越界、字段不可解析 → **硬拒绝 401**（Spec 124：`token_expired`），不是软警告。
+- 正常解析：ISO-8601（`YYYY-MM-DD` 视作当天 UTC `23:59:59.999`）；不可解析一律按过期处理（fail-closed）。
+- 客户端拿到新 Token 必须在配置文件同步替换；不要 reuse 老的 `${LUCY_AGENT_TOKEN}` 占位符值。
+
+##### `x-lucy-platform` 头（可选但推荐）
+
+客户端可在 MCP 请求里携带 `x-lucy-platform: <id>`，Proxy 把该值落到访问日志 `/admin/audit` 的客户端视角列，便于审计区分：
+
+| 取值样例 | 含义 |
+| --- | --- |
+| `mcp-playground` | Lucy `/admin/mcp-playground` 受控试调 |
+| `codex` / `claude-code` / `cursor` | Agent 客户端壳 |
+| `hermes` / `claude-code-local` | 其它 HTTP MCP client |
+| 缺省 / 未识别 | 落 `unknown`，仍记入访问日志 |
+
+未配置该 header 不影响鉴权；只是审计维度变差。详见 `webui/server/proxy/mcp-proxy.ts` 的 `lucyPlatform` 归一化逻辑。
+
+##### 复制 MCP 配置
+
+`/admin/tokens` 列表里「复制 MCP 配置」按钮只产出**占位符**模板：
+
+```json
+{
+  "mcpServers": {
+    "lucy": {
+      "type": "http",
+      "url": "<LUCY_PUBLIC_MCP_URL>",
+      "headers": {
+        "Authorization": "Bearer ${LUCY_AGENT_TOKEN}"
+      }
+    }
+  }
+}
+```
+
+不会二次粘贴历史明文；不同客户端的格式细节（Codex / Claude Code / Hermes）见 [4. Agent / 客户端接入指南](#4-agent--客户端接入指南)。
+
+##### 边界与常见误用
+
+| 误用 | 后果 | 替代做法 |
+| --- | --- | --- |
+| 用不同 Token 表达不同权限 | 当前模型下同 Agent 同权；Token 无法驱动可见 scope | 需要隔离就拆 Agent + 绑不同 Role |
+| 把 Token 当 WebUI 登录密码 | 两套体系，互不登录对方系统 | 控制面看 [「WebUI 管理员登录」](#webui-管理员登录) |
+| 把 `KTX_INTERNAL_TOKEN` 发给外部 Agent | 上游信任链外泄 | 只用于 Lucy Proxy 调用 KTX upstream |
+| 长期不设 `expires_at` | 失去强制轮换与硬拒绝兜底 | 至少 90 天默认；高敏感 30 天并配轮换脚本 |
+
+##### 关联
+
+- 上文 [「什么时候配置角色、Agent 和 Token」](#什么时候配置角色agent-和-token) — 三层决策树
+- 上文 [「什么时候该配 Token」](#什么时候该配-token)（H5 子节）— 何时新建 / 轮换 / 撤销
+- §3.5 MCP 调试台（`/admin/mcp-playground`）— 受控试调验证 Token / Role 链路；区分 `callSource=playground`
+- §3.11 MCP 会话与上游连接 — Token + `Mcp-Session-Id` 在 MCP 握手层的关系
+- §4 Agent / 客户端接入指南 — 各客户端配置模板与 `LUCY_PUBLIC_MCP_URL` 取值
+
+##### 反馈历史
+
+UX-ADMIN-AGENTS-001 / 005 / 023-024（Agents 页 KPI 与 Header 重复、`配置 Token` vs `活跃 Token` 区分）的整改已落地到 `/admin/tokens`：保留「配置 Token」语义，但用「活跃 Token」突出真实使用信号，避免「多 Token = 安全冗余」的反向误导；Token 列表行内不再冗余展示 demo note（UX-ADMIN-AGENTS-004）。UX-ADMIN-AUDIT-019（区分 MCP 调试台受控试调与 Agent 接入调用）通过 `x-lucy-platform` + `access_log.lucy_platform` 字段落地，详见 `webui/docs/124-token-device-security-and-audit-context-spec.md`。
+
+#### MCP 调试台（/admin/mcp-playground）
+
+入口：`/admin/mcp-playground`。访问治理分组下，与访问日志 / 配置审计并列；侧栏位置见 [1.5 WebUI 入口速查](#15-webui-入口速查运行状态侧栏地图)。
+
+调试台是 Agent 接入后的「试调沙盒」：在不创建正式 Agent / Token 的前提下，预览 ACL 裁决或对白名单工具做一次受控试调。它复用 Proxy 的 `acl.ts` 与 `decisionReasonLabel` 映射——本页得到的裁决结果与生产路径完全一致，仅在**写日志**与**真执行**两个动作上分流。
+
+**两条路径的边界**
+
+| 维度 | ACL 预览 | 受控试调 |
+| --- | --- | --- |
+| 写访问日志 | 否 | 是（`callSource=mcp-playground`） |
+| 真正执行 | 否（仅预览裁决） | 是（仅白名单工具） |
+| Token | 不需要；选中 Agent 即生效 | 借用选中 Agent 的 Token（仅会话内存，不落盘） |
+| 裁决原因 | 中文主行 + 机器码次行（折叠） | 同左；成功为「{Agent}能连上」/失败为「{Agent}不能连上」 |
+| 进入审计 | 否 | 是；通过「在访问日志中查看」按钮下钻 |
+| 用途 | 试参数、对比 Role | 真打通本地 MCP endpoint 的最小 live smoke |
+
+**裁决原因中文化**
+
+上游 KTX 的 `decision_reason` 是机器码（`role_resolution_failed` / `tool_forbidden` / `table_forbidden:<name>` / `query_concurrency_exceeded` / `token_expired` 等），调试台在中文主行展示可读原因，次行折叠展示机器码便于精确排查。访问日志调用流水与 Drawer 已升级为同样的双行可读（`DecisionReasonCell`，Spec 99 §6.4）。允许结论不再重复写「允许执行」和 `allowed`；裁决卡用绿 / 红 / 黄三色诊断条表达结果。
+
+**不嵌入 LLM / Token 不落盘**
+
+- 所有裁决逻辑复用 Proxy 一致代码（`acl.ts`、`decisionReasonLabel`）；本页不引入新的裁决分支。
+- Token 字段在 UI 仅显示占位符；粘贴的 Token 仅存于会话内存，不写盘、不发回服务端持久化。
+- 不引入内嵌 LLM / Copilot；保持 Zero AI（Spec 66 另轨）。
+- 受控试调**白名单**：`tools/list`（必达）、`kx_catalog`；禁止 `lucy_query`、wiki 写、未知工具、用户指定 URL。
+
+**从试调到审计**
+
+受控试调成功后，裁决卡右下出现「查看访问日志」按钮，链到 `/admin/audit?view=calls&callSource=playground`（兼容旧 `?tab=calls`）。这一深链让运维一键把试调记录从真实调用里筛出来，对照 review。试调失败时不展示该按钮。
+
+**常见用法**
+
+| 你要验证的问题 | 走哪条路径 |
+| --- | --- |
+| 「这个 Agent 能不能调 `lucy_query`？」 | ACL 预览（不写日志，无副作用） |
+| 「同一个 Token 调两次，分别能不能查到？」 | 受控试调（写入 `callSource=mcp-playground`） |
+| 「换 role 后行为是否变化？」 | 两次 ACL 预览对比，不依赖试调 |
+| 「接入后 Token 真的能打通本机 MCP 吗？」 | 受控试调 `tools/list`（必达 smoke） |
+| 「denied 行的真实原因码是什么？」 | ACL 预览复制机器码，配合 `/admin/audit` 取证 |
+
+**关联**
+
+- §3.5 [什么时候配置角色、Agent 和 Token](#什么时候配置角色agent-和-token)：先建角色再建 Agent；调试台是建好 Agent 后的裁决验证面。
+- §3.5 [Token 凭据（/admin/tokens）](#token-凭据admintokens)：本台借用 Token 仅会话内存，不写盘；Token 生命周期归 Token 凭据管。
+- §3.8 [角色列表与权限预览](#38-访问治理--角色列表与权限预览)：权限预览给的是「Role 层能调什么」，本台给的是「这个 Agent 在该 Role 下的具体裁决」。
+- §3.11 [MCP 会话与上游连接](#311-访问治理--mcp-会话与上游连接)：上游会话归属决定 `callSource` 在访问日志里的语义。
+- §4 [Agent / 客户端接入指南](#4-agent--客户端接入指南)：调试台是接入指南的「试一下」按钮——任何 `tools/list` / `kx_catalog` 失败优先到这里复现。
+
+**反馈历史**
+
+| 编号 | 摘要 | Spec / 文件 |
+| --- | --- | --- |
+| `UX-ADMIN-MCP-PLAYGROUND-001` | 缺少协议级 ACL 调试面（P0）——已落地 ACL 预览 + 受控试调 + 双行裁决原因 | `webui/docs/99-mcp-playground-acl-decision-visibility-spec.md` |
+| `UX-ADMIN-MCP-PLAYGROUND-002` | 受控试调写入访问日志后无法区分来源（P2）——`callSource=mcp-playground` 已落库 | Spec 99 v1.2 §7.3 |
+| `UX-ADMIN-MCP-PLAYGROUND-005` | 连上检查展示探测清单（P1）——简化为「能连上 / 不能连上」二态，去掉探测分项 | Spec 99 v1.5 §6.6 |
+
+权威 Spec：`webui/docs/99-mcp-playground-acl-decision-visibility-spec.md`。
+
+### 3.6 质量评测
 
 入口：
 
@@ -1485,7 +1815,7 @@ POST /api/eval/runs
 | 产物 | run artifact 和 markdown summary |
 | 分类 | `pass`、`logic_regression`、`tool_error`、`schema_drift`、`data_drift` |
 
-### 3.7 YAML 文件规范与交付验收
+### 3.7 YAML 规范与交付验收
 
 本节为人工配置人员、运维人员、Claude Code / Codex 等 Agent 检查者提供统一可执行的 YAML 交付 runbook。事故教训：分析师上传的语义 YAML 文件结构不符合 KTX/Lucy 的 manifest / overlay 合并模型，会让 MCP 侧无法提供正确问答。**`reindex` 成功、单个 `sl validate` 成功都不能单独作为交付成功依据。**
 
@@ -2045,7 +2375,204 @@ Agent **不得**：
 9. 若新增 source，ACL、Wiki、Eval 是否同步（3.7.4）。
 10. 任何文件、命令、log 都不含真实凭据（3.7.1 / 3.7.6.1）。
 
-### 3.8 业务 Skill 治理
+### 3.8 访问治理 · 角色列表与权限预览
+
+入口：`/admin/roles`。本节说明 Spec 154 改版后的列表页形态。
+
+#### 角色列表与筛选
+
+角色列表是**唯一的角色集合呈现**：列表使用统一的数据表格，不再在表格下方重复渲染一份角色卡片。旧版的卡片集合与重复的详情预览入口已移除。
+
+页面顶部保留四张静态 KPI（角色总数、启用数、Agent 绑定数、解析异常数）。其中「解析异常」统计的是正式 `Role` 权限解析失败的数量；当该数大于 0 时，表格上方会给出提示，说明可通过筛选「待修复」查看。
+
+筛选区分两层：
+
+| 层级 | 控件 | 用途 |
+| --- | --- | --- |
+| 常驻 | 搜索框 + 角色范围筛选 | 高频操作，默认展开 |
+| 高级 | 按连接 / 按 `MCP` 工具 / 按表名 | 低频权限维度，收在「高级筛选」内 |
+
+搜索框按角色标识、说明、连接、工具与表名匹配。高级筛选收起时显示已选条件数量（如「高级筛选（2）」），便于记住当前收起了哪些条件。筛选生效后表格下方显示「当前筛选」摘要，并提供「清除筛选」回到全量。
+
+点击表格行的快捷详情会在右侧打开抽屉，展示该角色的完整配置。详情对真实 API 响应做运行时校验：即使遇到异常数据，也只降级抽屉本身，不会导致列表页白屏。
+
+**边界**：新建与编辑角色在独立页面完成，不在抽屉内；本节不涉及服务端 API 与权限裁决逻辑。
+
+### 3.9 接入向导
+
+入口：`/onboarding`，也可从连接概览的卡片「继续配置向导」进入。
+
+#### 接入向导六步流程
+
+接入向导是与各专业工作台**并行**的引导流程，不替代它们。目的是让首次接入按顺序走完必要步骤，而不是在多个工作台之间自己拼装顺序。
+
+| 步骤 | 名称 | 性质 | 可跳过 |
+| --- | --- | --- | --- |
+| 1 | 连接数据库 | 必需 | 否 |
+| 2 | 上传 Schema Manifest | 必需 | 否 |
+| 3 | 选择启用表 | 必需 | 否 |
+| 4 | 丰富业务语义 | 可选增强 | 是，跳过后使用基础字段投影与直通统计 |
+| 5 | 注入业务知识 | 可选增强 | 是，跳过时不创建任何 Wiki 文档 |
+| 6 | 连接 Agent 客户端 | 闭环验证 | 否 |
+
+**双轨关系**：向导负责「按顺序做对」，工作台负责「深入修改」。跳过第 4、5 步不会阻断后续步骤，业务仍可通过 `/catalog`、`/wiki` 等工作台补齐。
+
+第 6 步是终点验证：提供 Cursor / Claude Code / Codex 的 `MCP` 配置一键复制，以及首问验证提示词。配置格式详见 [4. Agent / 客户端接入指南](#4-agent--客户端接入指南)。
+
+向导支持**断点续配**：中途离开后从连接概览的卡片继续，状态按连接保留，不必从头再来。
+
+#### 接入向导六步流程（按实现映射）
+
+下列映射把每一步落到具体组件、接口与 Spec，便于排障与扩展。**这是按实现拆开的工作台版，与上节「六步流程」是同一目录的不同视角——重在「每个 Step 背后是哪个文件 / 哪个 API」。**
+
+| 步骤 | 实现组件 / 接口 | 行为关键点 | 详见 |
+| --- | --- | --- | --- |
+| 1 | `webui/src/components/onboarding/Step1ConnectDb.tsx` + `webui/src/components/CreateConnectionDrawer.tsx` | 走「创建连接抽屉」路径；不再隐式提示 SQLite / Athena 写密码文件（参 [运维 Runbook](#新增数据库连接运维-runbook) 与 git commit `85a900d stop advertising a password file for SQLite and Athena`）。连接创建即同步创建 `connectionId`，作为后续 Step 的状态保留键。 | §3.2、git `85a900d` |
+| 2 | `POST /api/catalog/reload`（或等价语义层刷新接口） | 上传 `manifest.yaml` 后立即触发本地目录刷新；与 §3.2 [「刷新本地目录」](#刷新本地目录) 对齐——这一步不通过、不发布。 | §3.2、§3.7.2 |
+| 3 | `ktx.yaml` 的 `enabled_tables` 写入 | Wizard 只写 `enabled_tables` 段；与「白名单表保存失败」错配兜底见 §6.7。 | §3.2、§5.2 |
+| 4 | `/catalog` / 语义层工作台 | 跳过去后只读基础字段；后续可以从「连接概览 → 业务语义」入口继续。 | §3.3 |
+| 5 | `/wiki` 工作台 | 跳过去后无任何 Wiki 文档被创建；后续从「业务文档 Wiki」入口补齐。 | §3.4 |
+| 6 | `/onboarding` 终点页 + `/admin/agents` 一键签发 | 占位符 MCP 配置复制（含 `<LUCY_PUBLIC_MCP_URL>` / `${LUCY_AGENT_TOKEN}`）+ 首问验证提示词。详见 §4 与 §3.5 Token 凭据。 | §3.5、§4 |
+
+要确认「这一步在哪里改」，先打开连接概览的「继续配置向导」卡片，按当前步骤号选对应的工作台入口，再回到本页对照实现落点。
+
+#### 与 §3.X 的双轨关系
+
+向导与各专业工作台**永远并行存在**，不是替代关系。下表把每一步和它「深入修改版」的工作台连起来：
+
+| Step | 向导入口 | 工作台入口 | 何时切到工作台 |
+| --- | --- | --- | --- |
+| 1 | `/onboarding` Step 1（抽屉） | `/catalog`（连接创建） | 调字段顺序、跨源 password 来源细节、连接 ID 改名 |
+| 2 | Step 2（Manifest 上传） | `/catalog` → Schema Tab | 改 overlay、union schema、按 Spec 07 强约束修列 |
+| 3 | Step 3（白名单） | `ktx.yaml` `enabled_tables` 直编 / 工作台双向同步 | 大批量增删、跨连接批量维护 |
+| 4 | Step 4（业务语义） | `/catalog` → 语义工作台（§3.3） | 写 measure / dimension / join、grain 校准、fanout 决策 |
+| 5 | Step 5（业务知识） | `/wiki`（§3.4） | 维护 Wiki 目录、回填历史 Q&A、术语表 |
+| 6 | Step 6（MCP 客户端） | `/admin/agents` + `/admin/tokens`（§3.5） | 多 Token 管理、过期与轮换、调试台验证 |
+
+**核心约定**：
+
+- 跳过 Step 4 / 5 不会阻断 Step 6；业务通过对应工作台补齐语义或 Wiki 后再回到 Step 6 验证一次。
+- 工作台里做的修改只在该 connectionId 下生效；其他连接的语义 / Wiki 不受影响。
+- 中途离开向导后，从连接概览的「继续配置向导」卡片按 `connectionId` 找回——不依赖浏览器会话；下次登入仍能续配。
+- Wizard 不替代发布工作台（§3.7）；Step 4 写完语义只是「编辑器内完成」，还要走 GO / NO-GO 发布。
+
+#### 配置 MCP endpoint
+
+Step 6 输出的 MCP 配置是**占位符 + 环境变量**，**不写明文**。客户端粘贴配置前的关键点：
+
+- **不要**抄写「本地 7879 端口」或容器 publish 端口——以 WebUI 展示的 **Public MCP endpoint（Advertise）** 为准，由 `LUCY_PUBLIC_MCP_URL` 配置（详见 §4.1）。
+- 配置模板只含 `<LUCY_PUBLIC_MCP_URL>` 与 `${LUCY_AGENT_TOKEN}` 两个占位符；接入方先把 Token 注入环境变量，再让客户端读 `${LUCY_AGENT_TOKEN}`，避免明文进 `.mcp.json` / 客户端配置文件。
+- 终端执行态验证：
+
+  ```bash
+  # Claude Code：确认鉴权与 endpoint 通
+  claude auth status
+
+  # 任意 MCP client：手探一次
+  curl -s "${LUCY_PUBLIC_MCP_URL}" \
+    -H "Authorization: Bearer ${LUCY_AGENT_TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}'
+  ```
+
+- 验证通过再做「首问验证」：在客户端用 `lucy_catalog` / `lucy_explain_query` 试一次（不要上来就 `lucy_query`）；失败优先到 §3.5 MCP 调试台复现。
+- 详情 / 各客户端格式见 §4 接入指南。
+
+### 3.10 访问治理 · 行级策略
+
+入口：`/admin/roles` 的角色详情（行级策略编辑区）与 `/admin/agents` 的 Agent 详情。面向需要按行限制数据可见范围的管理员。
+
+#### 行级策略（行授予与最终行约束）
+
+行级策略是**静态**的表选择器级配置：它挂在角色的表选择器上，用结构化谓词声明"这张表里哪些行对该角色可见"。
+
+| 配置 | 含义 |
+| --- | --- |
+| `row_access: all` | 该表全部行可见（默认），**不得**携带 `row_policy` |
+| `row_access: scoped` | 按 `row_policy.predicates` 限行，**必须**至少有一条谓词 |
+
+谓词字段只支持两种操作：**等于**（`eq`）与**属于**（`in`）。字段必须是该源的普通列或行级维度，**禁止**绑定到度量（measure）名。
+
+多角色叠加时，同源多个角色的行授予取**并集**；再与 Agent 强制约束求交，得到**最终行约束**（Final Rows）。配置保存前可用 dryRun 预览最终行约束的摘要与 `digest`。
+
+**重要边界——当前取数能力受上游证明开关约束**：
+
+行级策略依赖上游对强制谓词的拼接能力。该能力默认**未证明**（`LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN` 不应设置）。在未证明状态下：
+
+- 受行级策略保护的表通过 `lucy_query` 取数会返回 `row_policy_upstream_unproven`，这是**预期的安全拒绝，不是故障**；
+- 受保护表上的 `lucy_read_source` / `lucy_freshness` / `entity_details` 会被 `row_policy_requires_wrapped_tool` 拒绝，只允许走已包装的查询路径；
+- `lucy_explain_query` 始终可在本地执行，用于诊断。
+
+**不要**为了"恢复业务"而把强制条件手写进用户查询的 `filters` 字符串——代理自动前置的条件与用户可写的过滤条件是两回事，手写会绕过裁决。
+
+误配与恢复的完整排查路径见 [`docs/access-control/runbook-row-policy.md`](../docs/access-control/runbook-row-policy.md)。
+
+**这不是什么**：行级策略**不是**动态 RLS、不是多租户隔离、也不是数据库原生行级安全。按人或按 Token 动态变化的策略尚未立项。
+
+### 3.11 访问治理 · MCP 会话与上游连接
+
+面向接入 `Agent` 客户端的开发者与运维。
+
+#### 客户端为何要回传 `Mcp-Session-Id`
+
+KTX 把 MCP session 视为**传输状态**，不是简单的请求标识。在客户端成功发出 `initialize` 之前到达的任何 session 流量，都会被上游硬拒绝（`400 MCP initialize request is required before session traffic.`）。理解这一点对排障很关键：
+
+- **本地服务不受影响**：`lucy_catalog` 等只读本地目录的工具不走上游，即使客户端没回传 `Mcp-Session-Id` 也能成功。
+- **取数路径必须走上游**：`lucy_query` / `lucy_read_source` / `lucy_freshness` 都需要 KTX 把请求与既有的 MCP 传输会话绑定；session 漏了 → 取数 400。
+- 用户**看到**目录能查、点查询失败，常被误判成数据库问题；**实际**是 session 握手层被截断。
+
+Lucy Proxy v1.6 起接管这部分：双向透传客户端 `mcp-session-id`，并把缺失 header 的请求补上代理持有的上游会话值。这意味着**客户端必须正确实现 MCP 协议、把 `Mcp-Session-Id` 在每次请求里回传**——STDIO 客户端（如多数官方 SDK）天然做到；HTTP / SSE 实现的私有客户端要确认 SDK 会话管理正确处理。
+
+#### 上游会话复用与限流
+
+KTX 上游会话**不是按客户端 session 持有**，而是按 Lucy 的 `userId` 持有：
+
+| 维度 | 持有粒度 | 影响 |
+| --- | --- | --- |
+| 上游传输会话 | `userId`（= Lucy Agent 的审计身份） | 同 Agent 下多 Token / 多客户端共用同一条上游传输 |
+| 并发限流 | `userId` | 同 Agent 的所有并发 `lucy_query` 共享配额（`query_concurrency_exceeded` 是用户级） |
+| 会话失效 | `userId` 级，Token 触发 401 可能归因到该 Agent 的整条上游传输 | 详见「排障速查」 |
+
+**对调用的影响**：
+
+- **多脚本共用**：同一用户从两台笔记本并发跑同一个 Agent（两个 Token），它们**共用**同一条上游传输会话。这意味着：上游侧一旦断流（KTX restart / Token revoke / 上游强制关闭），**两条客户端链路同时**回到「走不动上游」状态。
+- **限流瓶颈**：`lucy_query` / `lucy_read_source` 与上游单会话是**串行走单连接**——并发查询超过该 userId 的配额时返回 `query_concurrency_exceeded`，**与本地 Lucy 的并发无关**。这是为什么用「单 Agent + 多并行客户端」做压测时容易撞线。
+- **会话合并**：Lucy Proxy 内已实现 KTX 上游会话按 userId 合并（典型 Spec 132 / 后续「upstream session merge」规则），新客户端起 handshake 时会**沿用**已有的上游会话，而不是开第二条。
+
+调优建议：
+
+- 把并发高的批跑任务**单独拆 Agent**（例如 `eval-runner-agent`），不要压在日常交互 Agent 上，避免共享会话拥挤。
+- 同一 Token 多次失败时优先 `restart Proxy` 或「撤销全部 Token」让 Proxy 走冷启；不要手动改 client session id。
+
+#### 排障速查
+
+| 现象 | 可能原因 | 处理 |
+| --- | --- | --- |
+| `400 MCP initialize request is required before session traffic.` | 请求早于 `initialize` 握手，或客户端没回传 `Mcp-Session-Id` | 检查客户端 SDK 是否在每条请求回传 session header；先发 `initialize` 再发工具调用 |
+| 客户端 session 看起来正常，但 `lucy_query` / `lucy_read_source` 全失败 | 上游传输会话没被 Proxy 持有（KTX 端先断了） | 看 Proxy 日志；`restart Proxy` / 检查 KTX upstream 健康，参考 [§6.6 KTX upstream 不可用](#66-ktx-upstream-不可用) |
+| 多脚本共享会话时某脚本 `expires_at` 触发 401 | 同 Agent 下多 Token；其中一个 Token 过期 / 撤销会让 Proxy 走 401 路径，共用会话的其他客户端也被影响 | 确认哪个 Token 失效；过期后**显式撤销**避免共用会话残留（详见 §3.5 Token 凭据「吊销」） |
+| `query_concurrency_exceeded` 偶发 | 同 Agent 并发跑批，与本地 Lucy 并发无关 | 拆 Agent、降低并发或错峰；这是用户级限流 |
+| 客户端拿到的 `mcp-session-id` 每次都不同 / Proxy 不复用 | 客户端每次自己生成新 ID，Proxy 透传不覆盖 | 让客户端使用首次 `initialize` 服务端给的 ID，并在后续请求回传 |
+| 上游会话语义看似中断，但 `lucy_catalog` 仍能返回 | 取数 vs 本地目录分流——`lucy_catalog` 不走上游 | 误以为数据库故障时优先看这一步；如果只有 catalog 失败而 query 成功，反过来也按此规律定位 |
+
+如果以上都不是，再回到 §3.5 MCP 调试台的受控试调做最小重现，能把「我客户端的问题」与「Lucy 上游的故障」分开。
+
+#### MCP 会话保持与上游连接归属
+
+Proxy 在终结身份、ACL 与工具改写的同时，**持有到 KTX 上游的传输会话**。这是 v1.6 起的行为。
+
+**为什么需要**：KTX 把 MCP session 视为传输状态——任何在成功 `initialize` 之前到达的 session 流量都会被拒绝（`400 MCP initialize request is required before session traffic.`）。早期 Lucy 只做 `Mcp-Session-Id` 双向透传，于是"能不能取数"取决于客户端是否回传该 header：本地服务的 `lucy_catalog` 照常工作，而必须走上游的 `lucy_query` / `lucy_read_source` 失败——用户会**看得到目录、查不了数**，并把故障误判成数据库问题。
+
+**归属规则**：
+
+- `mcp-session-id` **双向透传**，代理不生成新的 session ID；
+- 客户端请求**自带**该 header 时一律透传，代理不覆盖；仅在缺失时补上代理持有的值；
+- 上游会话按 Lucy 的 `userId` 持有，**不是**按客户端 session——同一用户的多个脚本共用一条上游传输会话；
+- 审计归因仍以 `lucySessionId` / `lucyTurnId` 为准，不受此影响。
+
+排查连接问题时，先确认客户端是否在 `initialize` 之后回传 `Mcp-Session-Id`；若看到 `400 MCP initialize request is required before session traffic.`，说明该请求早于初始化握手。详细 Spec 见 `webui/docs/07-mcp-auth-proxy-spec.md` 与 KTX 上游 session merge 内部记录；当前 Lucy 端的双向透传与按 userId 持有的实现见 `webui/server/proxy/mcp-proxy.ts` 的 `lucyPlatform` / 上游会话缓存逻辑。
+
+### 3.12 业务上下文 · 业务 Skill
 
 「业务 Skill」是与语义资产、业务 Wiki 并列的受治理上下文资产，供 `Agent` 在数据问答中调用的分析规程。术语口径见 [3.7 配置作者 Skills](#配置作者-skills) 的边界说明——两者是不同东西，不要混用。
 
@@ -2085,131 +2612,6 @@ Agent **不得**：
 Skill 状态（草稿 / 已发布 / 已停用）只是 frontmatter 字段，**不进入语义发布工作台**——语义发布管的是语义资产与 Wiki，见 [3.7](#37-yaml-文件规范与交付验收) 的交付流程。
 
 本工作台**不提供**：文件上传替换、目录增删改、跨领域移动、版本历史与恢复、语义发布与索引同步。需要这些能力时改用语义资产与发布工作台路径。
-
-### 3.9 语义资产范围树
-
-入口：`/catalog`。本节说明该页在 Spec 152 之后的定位方式。
-
-#### 语义资产范围树（连接与 Schema）
-
-`/catalog` 改为**左侧目录树（连接与 Schema 范围树）+ 右侧语义资产表格**的双栏工作区，用于跨多个连接与 `Schema` 定位语义资产。
-
-**破坏性变更提示**：右侧原有的「连接筛选」与「Schema 筛选」下拉**已移除**，改由左树承担同样的范围选择职责。旧的筛选方式不再可用。
-
-树结构为三层：「全部连接」根节点 → `Connection` 节点 → `Schema` 叶节点，按 `/api/sources` 中的首次出现顺序展示。不含 `Table` 层节点。
-
-| 操作 | 效果 |
-| --- | --- |
-| 选择根节点 | 清除 `connection` 与 `schema` |
-| 选择 `Connection` | 写入 `connection`、清除 `schema`，并展开该分支 |
-| 选择 `Schema` | 写入对应的 `connection` 与 `schema`，并展开父 `Connection` |
-| 点击展开 / 收起 | 只改变本地展开状态，**不修改 URL，也不改变筛选** |
-
-展开状态默认行为：没有位置深链时所有 `Connection` 初始收起；有有效的 `connection` / `schema` 深链时自动展开所在 `Connection`，之后允许手动收起。**展开状态不持久化**，刷新页面回到默认。
-
-节点计数跟随 `scope`（启用范围）、`completion`（语义状态）与 `q`（搜索）筛选变化，但**不受当前选中的 `Connection` / `Schema` 影响**——这样可以对照"该连接下还剩多少未完成"。计数为 0 的节点仍然展示且可选择。
-
-左树是工作区内的范围选择器，**不是**与全局侧栏等价的第二导航；左树不提供独立搜索，请在右侧表格用搜索框过滤。
-
-`connection` 与 `schema` 仍是 `URL` 上的筛选事实源，页面刷新或分享链接可还原位置。`Connection` 名、`Schema` 名与表名在页面上做了浏览器翻译防御。
-
-本节描述的范围树不适用于「启用表范围」页，也不改变表语义编辑器的行为。
-
-### 3.10 角色列表与快捷详情
-
-入口：`/admin/roles`。本节说明 Spec 154 改版后的列表页形态。
-
-#### 角色列表与筛选
-
-角色列表是**唯一的角色集合呈现**：列表使用统一的数据表格，不再在表格下方重复渲染一份角色卡片。旧版的卡片集合与重复的详情预览入口已移除。
-
-页面顶部保留四张静态 KPI（角色总数、启用数、Agent 绑定数、解析异常数）。其中「解析异常」统计的是正式 `Role` 权限解析失败的数量；当该数大于 0 时，表格上方会给出提示，说明可通过筛选「待修复」查看。
-
-筛选区分两层：
-
-| 层级 | 控件 | 用途 |
-| --- | --- | --- |
-| 常驻 | 搜索框 + 角色范围筛选 | 高频操作，默认展开 |
-| 高级 | 按连接 / 按 `MCP` 工具 / 按表名 | 低频权限维度，收在「高级筛选」内 |
-
-搜索框按角色标识、说明、连接、工具与表名匹配。高级筛选收起时显示已选条件数量（如「高级筛选（2）」），便于记住当前收起了哪些条件。筛选生效后表格下方显示「当前筛选」摘要，并提供「清除筛选」回到全量。
-
-点击表格行的快捷详情会在右侧打开抽屉，展示该角色的完整配置。详情对真实 API 响应做运行时校验：即使遇到异常数据，也只降级抽屉本身，不会导致列表页白屏。
-
-**边界**：新建与编辑角色在独立页面完成，不在抽屉内；本节不涉及服务端 API 与权限裁决逻辑。
-
-### 3.11 接入向导
-
-入口：`/onboarding`，也可从连接概览的卡片「继续配置向导」进入。
-
-#### 接入向导六步流程
-
-接入向导是与各专业工作台**并行**的引导流程，不替代它们。目的是让首次接入按顺序走完必要步骤，而不是在多个工作台之间自己拼装顺序。
-
-| 步骤 | 名称 | 性质 | 可跳过 |
-| --- | --- | --- | --- |
-| 1 | 连接数据库 | 必需 | 否 |
-| 2 | 上传 Schema Manifest | 必需 | 否 |
-| 3 | 选择启用表 | 必需 | 否 |
-| 4 | 丰富业务语义 | 可选增强 | 是，跳过后使用基础字段投影与直通统计 |
-| 5 | 注入业务知识 | 可选增强 | 是，跳过时不创建任何 Wiki 文档 |
-| 6 | 连接 Agent 客户端 | 闭环验证 | 否 |
-
-**双轨关系**：向导负责「按顺序做对」，工作台负责「深入修改」。跳过第 4、5 步不会阻断后续步骤，业务仍可通过 `/catalog`、`/wiki` 等工作台补齐。
-
-第 6 步是终点验证：提供 Cursor / Claude Code / Codex 的 `MCP` 配置一键复制，以及首问验证提示词。配置格式详见 [4. Agent / 客户端接入指南](#4-agent--客户端接入指南)。
-
-向导支持**断点续配**：中途离开后从连接概览的卡片继续，状态按连接保留，不必从头再来。
-
-### 3.12 行级策略
-
-入口：`/admin/roles` 的角色详情（行级策略编辑区）与 `/admin/agents` 的 Agent 详情。面向需要按行限制数据可见范围的管理员。
-
-#### 行级策略（行授予与最终行约束）
-
-行级策略是**静态**的表选择器级配置：它挂在角色的表选择器上，用结构化谓词声明"这张表里哪些行对该角色可见"。
-
-| 配置 | 含义 |
-| --- | --- |
-| `row_access: all` | 该表全部行可见（默认），**不得**携带 `row_policy` |
-| `row_access: scoped` | 按 `row_policy.predicates` 限行，**必须**至少有一条谓词 |
-
-谓词字段只支持两种操作：**等于**（`eq`）与**属于**（`in`）。字段必须是该源的普通列或行级维度，**禁止**绑定到度量（measure）名。
-
-多角色叠加时，同源多个角色的行授予取**并集**；再与 Agent 强制约束求交，得到**最终行约束**（Final Rows）。配置保存前可用 dryRun 预览最终行约束的摘要与 `digest`。
-
-**重要边界——当前取数能力受上游证明开关约束**：
-
-行级策略依赖上游对强制谓词的拼接能力。该能力默认**未证明**（`LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN` 不应设置）。在未证明状态下：
-
-- 受行级策略保护的表通过 `lucy_query` 取数会返回 `row_policy_upstream_unproven`，这是**预期的安全拒绝，不是故障**；
-- 受保护表上的 `lucy_read_source` / `lucy_freshness` / `entity_details` 会被 `row_policy_requires_wrapped_tool` 拒绝，只允许走已包装的查询路径；
-- `lucy_explain_query` 始终可在本地执行，用于诊断。
-
-**不要**为了"恢复业务"而把强制条件手写进用户查询的 `filters` 字符串——代理自动前置的条件与用户可写的过滤条件是两回事，手写会绕过裁决。
-
-误配与恢复的完整排查路径见 [`docs/access-control/runbook-row-policy.md`](../docs/access-control/runbook-row-policy.md)。
-
-**这不是什么**：行级策略**不是**动态 RLS、不是多租户隔离、也不是数据库原生行级安全。按人或按 Token 动态变化的策略尚未立项。
-
-### 3.13 MCP 会话与上游连接
-
-面向接入 `Agent` 客户端的开发者与运维。
-
-#### MCP 会话保持与上游连接归属
-
-Proxy 在终结身份、ACL 与工具改写的同时，**持有到 KTX 上游的传输会话**。这是 v1.6 起的行为。
-
-**为什么需要**：KTX 把 MCP session 视为传输状态——任何在成功 `initialize` 之前到达的 session 流量都会被拒绝（`400 MCP initialize request is required before session traffic.`）。早期 Lucy 只做 `Mcp-Session-Id` 双向透传，于是"能不能取数"取决于客户端是否回传该 header：本地服务的 `lucy_catalog` 照常工作，而必须走上游的 `lucy_query` / `lucy_read_source` 失败——用户会**看得到目录、查不了数**，并把故障误判成数据库问题。
-
-**归属规则**：
-
-- `mcp-session-id` **双向透传**，代理不生成新的 session ID；
-- 客户端请求**自带**该 header 时一律透传，代理不覆盖；仅在缺失时补上代理持有的值；
-- 上游会话按 Lucy 的 `userId` 持有，**不是**按客户端 session——同一用户的多个脚本共用一条上游传输会话；
-- 审计归因仍以 `lucySessionId` / `lucyTurnId` 为准，不受此影响。
-
-排查连接问题时，先确认客户端是否在 `initialize` 之后回传 `Mcp-Session-Id`；若看到 `400 MCP initialize request is required before session traffic.`，说明该请求早于初始化握手。
 
 ## 4. Agent / 客户端接入指南
 

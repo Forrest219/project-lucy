@@ -21,6 +21,12 @@ const HELP_DIAGRAM_REL_PATHS: Record<HelpDiagramId, string> = {
   "lucy-docs-flows": "docs/user-guide/lucy-docs-flows.html"
 };
 
+// NOTE (Day 2, 2026-10-19): `docs/SYSTEM_HANDBOOK.md` §3 was reorganized by
+// sidebar group — 13 → 12 subsections; old §3.9 merged into §3.3. Renamed H3
+// titles regenerate their slug via `stableSlug`; pre-Day-2 slugs kept in the
+// `SECTION_ALIASES` table below stay valid (no alias churn for unchanged H4
+// children). See `docs/README.md` redirect map if a legacy slug needs to be
+// resurfaced.
 const SECTION_ALIASES: Array<[RegExp, string]> = [
   [/常见问题速查/, "faq-quick-reference"],
   [/面向开发者/, "faq-developer"],
