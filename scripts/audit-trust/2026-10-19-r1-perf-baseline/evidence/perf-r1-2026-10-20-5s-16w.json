@@ -1,0 +1,136 @@
+{
+  "schema_version": "audit-trust-perf-baseline/v1",
+  "generated_at": "2026-10-19T17:23:16.155Z",
+  "label": "r1-baseline-2026-10-20",
+  "config": {
+    "duration_s": 5,
+    "workers": 16,
+    "classification_version": "audit-trust-2026-10-19-r1.v1"
+  },
+  "elapsed_ms": 5103,
+  "totals": {
+    "rows_inserted": 3416608,
+    "errors": 0,
+    "throughput_per_sec": 669529.3
+  },
+  "latency_us": {
+    "p50": 9,
+    "p95": 25,
+    "p99": 103,
+    "sample_count": 65536
+  },
+  "per_worker": [
+    {
+      "worker_id": 0,
+      "rows": 215310,
+      "errors": 0,
+      "duration_ms": 5000,
+      "rows_per_sec": 43062
+    },
+    {
+      "worker_id": 1,
+      "rows": 218815,
+      "errors": 0,
+      "duration_ms": 5000,
+      "rows_per_sec": 43763
+    },
+    {
+      "worker_id": 2,
+      "rows": 213732,
+      "errors": 0,
+      "duration_ms": 5000,
+      "rows_per_sec": 42746.4
+    },
+    {
+      "worker_id": 3,
+      "rows": 210946,
+      "errors": 0,
+      "duration_ms": 5000,
+      "rows_per_sec": 42189.2
+    },
+    {
+      "worker_id": 4,
+      "rows": 210258,
+      "errors": 0,
+      "duration_ms": 5000,
+      "rows_per_sec": 42051.6
+    },
+    {
+      "worker_id": 5,
+      "rows": 211631,
+      "errors": 0,
+      "duration_ms": 5000,
+      "rows_per_sec": 42326.2
+    },
+    {
+      "worker_id": 6,
+      "rows": 215592,
+      "errors": 0,
+      "duration_ms": 5000,
+      "rows_per_sec": 43118.4
+    },
+    {
+      "worker_id": 7,
+      "rows": 214888,
+      "errors": 0,
+      "duration_ms": 5004,
+      "rows_per_sec": 42943.25
+    },
+    {
+      "worker_id": 8,
+      "rows": 213060,
+      "errors": 0,
+      "duration_ms": 5000,
+      "rows_per_sec": 42612
+    },
+    {
+      "worker_id": 9,
+      "rows": 213682,
+      "errors": 0,
+      "duration_ms": 5000,
+      "rows_per_sec": 42736.4
+    },
+    {
+      "worker_id": 10,
+      "rows": 213197,
+      "errors": 0,
+      "duration_ms": 5000,
+      "rows_per_sec": 42639.4
+    },
+    {
+      "worker_id": 11,
+      "rows": 211908,
+      "errors": 0,
+      "duration_ms": 5000,
+      "rows_per_sec": 42381.6
+    },
+    {
+      "worker_id": 12,
+      "rows": 211108,
+      "errors": 0,
+      "duration_ms": 5000,
+      "rows_per_sec": 42221.6
+    },
+    {
+      "worker_id": 13,
+      "rows": 214874,
+      "errors": 0,
+      "duration_ms": 5000,
+      "rows_per_sec": 42974.8
+    },
+    {
+      "worker_id": 14,
+      "rows": 212001,
+      "errors": 0,
+      "duration_ms": 5000,
+      "rows_per_sec": 42400.2
+    },
+    {
+      "worker_id": 15,
+      "rows": 215606,
+      "errors": 0,
+      "duration_ms": 5000,
+      "rows_per_sec": 43121.2
+    }
+  ]
+}
