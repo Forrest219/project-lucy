@@ -153,6 +153,7 @@
 | [175-suspend-deployment-license-spec.md](175-suspend-deployment-license-spec.md) | 移除部署许可与激活码 v0.2：删除许可实现、签发脚本和 `license.yaml`。已实现，工单 WO-202610-26。运行中的容器需重建后才生效 | 产品 / Runtime / UX |
 | [176-engine-catalog-and-mcp-query-connection-spec.md](176-engine-catalog-and-mcp-query-connection-spec.md) | 新建连接 Amazon Athena v0.3：显式写出 KTX `driver: athena` 与 `databases`。v0.2 引擎目录 / MCP 查询连接已撤回。待审阅，未批准。工单 WO-202610-27 | 产品 / 连接 |
 | [179-connection-delete-reference-guard-spec.md](179-connection-delete-reference-guard-spec.md) | 删除连接前的引用校验 v0.2：角色、用户、业务 Wiki 或未一并删除的本地 YAML 还在时拒绝删除，并在确认前说明。已实现 | 产品 / UX / API / Frontend |
+| [187-access-relation-sankey-spec.md](187-access-relation-sankey-spec.md) | 访问关系图 v0.1-draft：Agent → 角色 → 连接 → 表的授权骨架 + 访问内核双层桑基图，Token 以凭证清单呈现。v2.5 提案 L25-08 候选。**初稿，未授权实现** | 产品 / UX / 前端 |
 
 ## 与原 README 的关键校正
 
