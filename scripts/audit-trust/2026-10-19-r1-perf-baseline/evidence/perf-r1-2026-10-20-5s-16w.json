@@ -1,136 +1,173 @@
 {
   "schema_version": "audit-trust-perf-baseline/v1",
-  "generated_at": "2026-10-19T17:23:16.155Z",
+  "generated_at": "2026-10-19T17:30:55.751Z",
   "label": "r1-baseline-2026-10-20",
   "config": {
     "duration_s": 5,
     "workers": 16,
-    "classification_version": "audit-trust-2026-10-19-r1.v1"
+    "classification_version": "audit-trust-2026-10-19-r1.v1",
+    "reservoir_per_worker": 4096
   },
-  "elapsed_ms": 5103,
+  "elapsed_ms": 5098,
   "totals": {
-    "rows_inserted": 3416608,
+    "rows_inserted": 2353121,
     "errors": 0,
-    "throughput_per_sec": 669529.3
+    "throughput_per_sec": 461577.29,
+    "latency_samples_observed": 2353121,
+    "latency_samples_kept": 65536
   },
   "latency_us": {
-    "p50": 9,
-    "p95": 25,
-    "p99": 103,
-    "sample_count": 65536
+    "p50": 14,
+    "p95": 39,
+    "p99": 279,
+    "sample_count": 65536,
+    "sampling_method": "reservoir_algorithm_r",
+    "reservoir_per_worker": 4096
   },
   "per_worker": [
     {
       "worker_id": 0,
-      "rows": 215310,
+      "rows": 147147,
       "errors": 0,
       "duration_ms": 5000,
-      "rows_per_sec": 43062
+      "rows_per_sec": 29429.4,
+      "observed_latency": 147147,
+      "sampled_latency": 4096
     },
     {
       "worker_id": 1,
-      "rows": 218815,
+      "rows": 150144,
       "errors": 0,
       "duration_ms": 5000,
-      "rows_per_sec": 43763
+      "rows_per_sec": 30028.8,
+      "observed_latency": 150144,
+      "sampled_latency": 4096
     },
     {
       "worker_id": 2,
-      "rows": 213732,
+      "rows": 148981,
       "errors": 0,
       "duration_ms": 5000,
-      "rows_per_sec": 42746.4
+      "rows_per_sec": 29796.2,
+      "observed_latency": 148981,
+      "sampled_latency": 4096
     },
     {
       "worker_id": 3,
-      "rows": 210946,
+      "rows": 150882,
       "errors": 0,
       "duration_ms": 5000,
-      "rows_per_sec": 42189.2
+      "rows_per_sec": 30176.4,
+      "observed_latency": 150882,
+      "sampled_latency": 4096
     },
     {
       "worker_id": 4,
-      "rows": 210258,
+      "rows": 146089,
       "errors": 0,
       "duration_ms": 5000,
-      "rows_per_sec": 42051.6
+      "rows_per_sec": 29217.8,
+      "observed_latency": 146089,
+      "sampled_latency": 4096
     },
     {
       "worker_id": 5,
-      "rows": 211631,
+      "rows": 149753,
       "errors": 0,
       "duration_ms": 5000,
-      "rows_per_sec": 42326.2
+      "rows_per_sec": 29950.6,
+      "observed_latency": 149753,
+      "sampled_latency": 4096
     },
     {
       "worker_id": 6,
-      "rows": 215592,
+      "rows": 147955,
       "errors": 0,
       "duration_ms": 5000,
-      "rows_per_sec": 43118.4
+      "rows_per_sec": 29591,
+      "observed_latency": 147955,
+      "sampled_latency": 4096
     },
     {
       "worker_id": 7,
-      "rows": 214888,
+      "rows": 148883,
       "errors": 0,
-      "duration_ms": 5004,
-      "rows_per_sec": 42943.25
+      "duration_ms": 5000,
+      "rows_per_sec": 29776.6,
+      "observed_latency": 148883,
+      "sampled_latency": 4096
     },
     {
       "worker_id": 8,
-      "rows": 213060,
+      "rows": 145626,
       "errors": 0,
-      "duration_ms": 5000,
-      "rows_per_sec": 42612
+      "duration_ms": 5001,
+      "rows_per_sec": 29119.38,
+      "observed_latency": 145626,
+      "sampled_latency": 4096
     },
     {
       "worker_id": 9,
-      "rows": 213682,
+      "rows": 147642,
       "errors": 0,
       "duration_ms": 5000,
-      "rows_per_sec": 42736.4
+      "rows_per_sec": 29528.4,
+      "observed_latency": 147642,
+      "sampled_latency": 4096
     },
     {
       "worker_id": 10,
-      "rows": 213197,
+      "rows": 143105,
       "errors": 0,
-      "duration_ms": 5000,
-      "rows_per_sec": 42639.4
+      "duration_ms": 5002,
+      "rows_per_sec": 28609.56,
+      "observed_latency": 143105,
+      "sampled_latency": 4096
     },
     {
       "worker_id": 11,
-      "rows": 211908,
+      "rows": 145327,
       "errors": 0,
       "duration_ms": 5000,
-      "rows_per_sec": 42381.6
+      "rows_per_sec": 29065.4,
+      "observed_latency": 145327,
+      "sampled_latency": 4096
     },
     {
       "worker_id": 12,
-      "rows": 211108,
+      "rows": 144666,
       "errors": 0,
       "duration_ms": 5000,
-      "rows_per_sec": 42221.6
+      "rows_per_sec": 28933.2,
+      "observed_latency": 144666,
+      "sampled_latency": 4096
     },
     {
       "worker_id": 13,
-      "rows": 214874,
+      "rows": 142737,
       "errors": 0,
       "duration_ms": 5000,
-      "rows_per_sec": 42974.8
+      "rows_per_sec": 28547.4,
+      "observed_latency": 142737,
+      "sampled_latency": 4096
     },
     {
       "worker_id": 14,
-      "rows": 212001,
+      "rows": 145639,
       "errors": 0,
       "duration_ms": 5000,
-      "rows_per_sec": 42400.2
+      "rows_per_sec": 29127.8,
+      "observed_latency": 145639,
+      "sampled_latency": 4096
     },
     {
       "worker_id": 15,
-      "rows": 215606,
+      "rows": 148545,
       "errors": 0,
       "duration_ms": 5000,
-      "rows_per_sec": 43121.2
+      "rows_per_sec": 29709,
+      "observed_latency": 148545,
+      "sampled_latency": 4096
     }
   ]
 }

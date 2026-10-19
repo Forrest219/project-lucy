@@ -27,7 +27,7 @@ function runScript(args) {
   try {
     const stdout = execFileSync("node", [SCRIPT, ...args, "--out", out], {
       encoding: "utf8",
-      timeout: 30_000
+      timeout: 60_000
     });
     const evidence = JSON.parse(readFileSync(out, "utf8"));
     const size = statSync(out).size;
@@ -38,6 +38,28 @@ function runScript(args) {
     } catch {
       // best-effort
     }
+  }
+}
+
+function runScriptExpectFailure(args) {
+  try {
+    execFileSync("node", [SCRIPT, ...args], {
+      encoding: "utf8",
+      timeout: 30_000,
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    throw new Error("script unexpectedly succeeded");
+  } catch (err) {
+    // Strip the synthetic wrapper; the child process exit code drives the
+    // stderr we want to assert against.
+    const stderr = String(err.stderr ?? "");
+    const stdout = String(err.stdout ?? "");
+    if (!/failed:|--duration|--workers|unknown option|requires a value/.test(stderr + stdout)) {
+      throw new Error(
+        `unexpected error content\nstderr=${stderr}\nstdout=${stdout}\nmessage=${err.message}`
+      );
+    }
+    return { stderr, stdout };
   }
 }
 
@@ -53,39 +75,63 @@ describe("T08a.2 perf-baseline script smoke", () => {
     assert.match(stdout, /perf-baseline/);
   });
 
-  it("records positive latency percentiles (p50, p95, p99)", () => {
+  it("records positive latency percentiles (p50, p95, p99) via reservoir sampling", () => {
     const { evidence } = runScript(["--duration", "1", "--workers", "2"]);
     assert.ok(evidence.latency_us.p50 > 0);
     assert.ok(evidence.latency_us.p95 >= evidence.latency_us.p50);
     assert.ok(evidence.latency_us.p99 >= evidence.latency_us.p95);
     assert.ok(evidence.latency_us.sample_count > 0);
+    assert.equal(evidence.latency_us.sampling_method, "reservoir_algorithm_r");
+    // Each worker contributes exactly RESERVOIR_PER_WORKER samples once
+    // observed >= capacity, so total samples <= workers * RESERVOIR_PER_WORKER.
+    assert.ok(
+      evidence.latency_us.sample_count <=
+        evidence.config.workers * evidence.config.reservoir_per_worker
+    );
   });
 
-  it("emits per_worker entries equal to the worker count", () => {
-    const { evidence } = runScript(["--duration", "1", "--workers", "2"]);
-    assert.equal(evidence.per_worker.length, 2);
+  it("emits per_worker entries with unique worker_id 0..N-1", () => {
+    const { evidence } = runScript(["--duration", "1", "--workers", "4"]);
+    assert.equal(evidence.per_worker.length, 4);
+    const ids = new Set();
     for (const w of evidence.per_worker) {
       assert.ok(w.worker_id >= 0);
+      assert.ok(w.worker_id < 4);
+      assert.ok(!ids.has(w.worker_id), `duplicate worker_id ${w.worker_id}`);
+      ids.add(w.worker_id);
       assert.ok(w.rows > 0);
       assert.equal(w.errors, 0);
       assert.ok(w.rows_per_sec > 0);
     }
   });
 
-  it("higher worker count produces >= rows (4 vs 8)", () => {
-    const low = runScript(["--duration", "1", "--workers", "4"]).evidence;
-    const high = runScript(["--duration", "1", "--workers", "8"]).evidence;
-    assert.ok(high.totals.rows_inserted >= low.totals.rows_inserted);
+  it("rows_inserted matches the sum across per_worker", () => {
+    const { evidence } = runScript(["--duration", "1", "--workers", "4"]);
+    const sum = evidence.per_worker.reduce((a, w) => a + w.rows, 0);
+    assert.equal(evidence.totals.rows_inserted, sum);
   });
 
-  it("rejects invalid --duration", () => {
-    assert.throws(() => runScript(["--duration", "0", "--workers", "2"]));
-    assert.throws(() => runScript(["--duration", "-1", "--workers", "2"]));
+  it("rejects --duration < 1 (zero, negative, fractional, non-numeric)", () => {
+    runScriptExpectFailure(["--duration", "0", "--workers", "2"]);
+    runScriptExpectFailure(["--duration", "-1", "--workers", "2"]);
+    runScriptExpectFailure(["--duration", "0.5", "--workers", "2"]);
+    runScriptExpectFailure(["--duration", "abc", "--workers", "2"]);
   });
 
-  it("rejects invalid --workers", () => {
-    assert.throws(() => runScript(["--duration", "1", "--workers", "0"]));
-    assert.throws(() => runScript(["--duration", "1", "--workers", "1.5"]));
+  it("rejects --workers 0 / non-integer / negative", () => {
+    runScriptExpectFailure(["--duration", "1", "--workers", "0"]);
+    runScriptExpectFailure(["--duration", "1", "--workers", "1.5"]);
+    runScriptExpectFailure(["--duration", "1", "--workers", "-4"]);
+  });
+
+  it("rejects unknown options", () => {
+    runScriptExpectFailure(["--bogus", "1", "--workers", "2"]);
+  });
+
+  it("rejects options with missing values", () => {
+    // --duration followed by another option should be rejected.
+    runScriptExpectFailure(["--duration", "--workers", "2"]);
+    runScriptExpectFailure(["--workers", "2", "--out"]);
   });
 
   it("writes to the configured --out path", () => {

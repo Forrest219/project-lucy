@@ -14,15 +14,38 @@ during operator runs of the perf baseline workload.
 | `config.duration_s` | Wall-clock seconds the workload ran. |
 | `config.workers` | Concurrent worker threads. |
 | `config.classification_version` | Stamped to disambiguate baseline reporting. |
+| `config.reservoir_per_worker` | Latency sample reservoir size per worker (constant). |
 | `elapsed_ms` | Actual elapsed wall-clock time (may exceed `duration_s` due to worker startup). |
 | `totals.rows_inserted` | Sum across all workers of successful access_log inserts. |
 | `totals.errors` | Sum across all workers of failed inserts. |
 | `totals.throughput_per_sec` | `rows_inserted * 1000 / elapsed_ms`. |
+| `totals.latency_samples_observed` | Total INSERTs that produced a latency reading. |
+| `totals.latency_samples_kept` | After reservoir sampling: how many landed in the final percentile set (≤ workers × reservoir_per_worker). |
 | `latency_us.p50` | 50th-percentile per-row INSERT latency (microseconds). |
 | `latency_us.p95` | 95th-percentile. |
 | `latency_us.p99` | 99th-percentile. |
-| `latency_us.sample_count` | Total latency samples (bounded per worker to 4096). |
-| `per_worker[]` | Per-worker rows / errors / rows_per_sec. |
+| `latency_us.sample_count` | Same as `totals.latency_samples_kept`. |
+| `latency_us.sampling_method` | `reservoir_algorithm_r` — uniform sampling across the full run. |
+| `per_worker[]` | Per-worker rows / errors / rows_per_sec / observed / sampled counts. |
+
+## Sampling method
+
+Latency observations use **Algorithm-R reservoir sampling** per worker:
+capacity = `RESERVOIR_PER_WORKER` (4096). The first 4096 samples fill the
+reservoir directly. From observation `k = 4097` onward, sample `k` replaces
+a uniformly random slot in the reservoir with probability `4096 / k`. This
+guarantees every INSERT has an equal chance of ending up in the final
+percentile set, so tail latencies reflect the *whole* run — not just the
+last 4096 inserts.
+
+Total samples after master-side merge: ≤ `workers × reservoir_per_worker`.
+
+## Schema parity
+
+The in-memory DDL mirrors the production access_log (audit_meta + all T01–T07
+columns and indexes, including `idx_al_user_token_ts`, `idx_al_session_ts`,
+`idx_al_client_ip_ts`, `idx_al_tool_ts`). `outcome` and `duration_ms` are
+declared `NOT NULL`, matching production.
 
 ## Reproducing the r1 baseline
 
