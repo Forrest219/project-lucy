@@ -9,13 +9,13 @@
  *
  * 覆盖:
  * - 单实例 fixed-window counter (>= 窗口边界重置)
- * - 不同 IP 独立计数 / 桶隔离 (Promise.all 16 并发)
+ * - 不同 IP 独立计数 / 桶隔离 (Promise.all max+1 并发)
  * - 窗口过期重置 / 边界 (边界前 1ms / 恰好 / 之后 1s)
  * - extractIpForRateLimit 行为同 auth/rate-limit.clientSource:
  *   trustProxy=0 / peer 不可信 → 降级 socket peer;
  *   trustProxy=1 + peer 在 CIDRs 内 + 存在非可信 hop → 取 XFF 右起第一个非可信 hop
  * - 非 string headers 容错 (numeric / 嵌套数组 / 缺 raw.socket 都不抛错)
- * - 非法 CIDR (前缀超界 / 非整数 / addSubnet 抛错) → 跳过不影响 hot path
+ * - 非法 CIDR (前缀超界 / 非整数 / 非 IP address / addSubnet 抛错) → 跳过不影响 hot path
  * - forgetIpForRateLimit 仅清 1 IP (双 IP 同时被耗尽 + A 被忘后 B 仍 429)
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -160,11 +160,12 @@ describe("T08a.1 checkAgentAuditRateLimit", () => {
     expect(wellAfter.allowed).toBe(true);
   });
 
-  it("integrates bucket counts under 16 concurrent Promise.all calls", async () => {
-    // Same IP, same window, 16 simultaneous calls (Promise.all). Under the
-    // single-instance / synchronous-Map counter, exactly N are allowed and
-    // N+1..(max+1) are blocked. If async-lock or interleaving caused false
-    // admits, the count would exceed N.
+  it(`integrates bucket counts under max+1 concurrent Promise.all calls (max=${DEFAULT_AGENT_AUDIT_RATE_LIMIT.maxPerWindow})`, async () => {
+    // Same IP, same window, max+1 simultaneous calls (Promise.all, where
+    // max = DEFAULT_AGENT_AUDIT_RATE_LIMIT.maxPerWindow = 60). Under the
+    // single-instance / synchronous-Map counter, exactly max are allowed
+    // and the (max+1)th is blocked. If async-lock or interleaving caused
+    // false admits, the allowed count would exceed max.
     const t = 1_000_000;
     const max = DEFAULT_AGENT_AUDIT_RATE_LIMIT.maxPerWindow;
     const verdicts = await Promise.all(
@@ -407,10 +408,11 @@ describe("T08a.1 extractIpForRateLimit (trust-proxy-aware)", () => {
     expect(ip).toBe("10.0.0.50");
   });
 
-  it("skips a malformed / duplicate CIDR without throwing (G3 A1)", () => {
-    // Address portion that is not a valid IP: skipped silently. The
-    // resulting blocklist is empty so peer trust fails and we fall back
-    // to the socket peer without ever throwing.
+  it("skips a malformed CIDR (non-IP address portion) without throwing (G3 A1)", () => {
+    // Address portion that is not a valid IP: skipped silently at the
+    // isIP() guard (before the prefix validation, so neither path is
+    // exercised). The resulting blocklist is empty so peer trust fails
+    // and we fall back to the socket peer without ever throwing.
     const ip = extractIpForRateLimit(
       mockRequest({
         peer: "10.0.0.50",
