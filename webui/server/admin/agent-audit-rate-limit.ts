@@ -3,22 +3,29 @@
  * controlled-client observation endpoint (POST /api/agent-audit/events).
  *
  * Contract §6.x: per-IP 429 envelope is required.
- * Implementation notes:
- *   - Single-instance assumption (matches product config): state lives in
- *     module-private memory. No SQLite read on the hot path.
- *   - Windowed token bucket: rolling window of `windowSeconds`, max
- *     `maxPerWindow` requests per IP. The check is fail-open when the key
- *     has not been seen before; it is fail-closed (HTTP 429) when count
- *     exceeds `maxPerWindow` within the window.
- *   - Counted requests: only those that PASS auth + schema validation. We
- *     do NOT count 401 / 400 / 413 rejections; this prevents a credential
- *     harvester from exhausting the bucket for legitimate clients.
- *   - `extractIpForRateLimit` prefers Fastify's `request.ip` (already
- *     resolved under `trustProxy`), then falls back to the leftmost
- *     `X-Forwarded-For` value. Bounded to IPv4/IPv6 textual form only.
  *
- * Reset is exposed for tests only; production callers never reset.
+ * Implementation notes:
+ *   - Single-instance assumption (matches product config): bucket state lives
+ *     in module-private memory. No SQLite read on the hot path.
+ *   - Windowed token counter: rolling fixed window of `windowSeconds`, max
+ *     `maxPerWindow` requests per IP. The check is fail-open when the key has
+ *     not been seen before; it is fail-closed (HTTP 429) when count exceeds
+ *     `maxPerWindow` within the window.
+ *   - Counted requests: only those that PASS auth + schema validation. We do
+ *     NOT count 401 / 400 / 413 rejections; this prevents a credential
+ *     harvester from exhausting the bucket for legitimate clients.
+ *   - `extractIpForRateLimit` mirrors `auth/rate-limit.clientSource`
+ *     exactly so the two rate limiters stay consistent: forwarded addresses
+ *     are honored only when LUCY_TRUST_PROXY is on AND the direct peer is
+ *     inside LUCY_TRUSTED_PROXY_CIDRS; the right-most non-trusted hop wins.
+ *     Arbitrary X-Forwarded-For is ignored otherwise, so a hostile client
+ *     cannot bypass the bucket by spoofing the header.
+ *
+ * Reset hooks are exposed for tests only; production callers never reset.
  */
+
+import { BlockList, isIP } from "node:net";
+import { trustProxyEnabled } from "../web-security.js";
 
 export type RateLimitConfig = {
   windowSeconds: number;
@@ -45,9 +52,11 @@ export function resetAgentAuditRateLimits(): void {
 }
 
 function pruneBuckets(bucketsRef: BucketMap, nowMs: number, windowMs: number): void {
-  // Lazy GC: prune stale buckets periodically to keep memory bounded.
-  // We avoid pruning on every check (would be O(n) per request); only
-  // when the map exceeds a soft cap.
+  // Lazy GC: prune stale buckets periodically to keep memory bounded. We
+  // avoid pruning on every check (would be O(n) per request); only when
+  // the map exceeds a soft cap. This trades a bounded memory footprint
+  // for occasional O(n) sweeps, which is acceptable for a single-instance
+  // service with hundreds-to-low-thousands of distinct IPs.
   if (bucketsRef.size < 256) return;
   for (const [k, b] of bucketsRef) {
     if (nowMs - b.windowStartMs >= windowMs) bucketsRef.delete(k);
@@ -89,28 +98,57 @@ export function checkAgentAuditRateLimit(
   };
 }
 
+// ─── Trusted-proxy-aware client IP extraction (mirrors clientSource) ───────
+
+function normalizeAddress(address: string): string {
+  const mapped = address.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i);
+  return (mapped ? mapped[1] : address).toLowerCase();
+}
+
+function trustedProxyList(): BlockList | null {
+  const raw = (process.env.LUCY_TRUSTED_PROXY_CIDRS ?? "").trim();
+  if (!raw) return null;
+  const list = new BlockList();
+  for (const entry of raw.split(",").map((part) => part.trim()).filter(Boolean)) {
+    const [address, prefix] = entry.split("/");
+    if (!isIP(address)) continue;
+    const family = isIP(address) === 6 ? "ipv6" : "ipv4";
+    if (prefix === undefined) list.addAddress(address, family);
+    else list.addSubnet(address, Number(prefix), family);
+  }
+  return list;
+}
+
+function listed(list: BlockList, address: string): boolean {
+  const version = isIP(address);
+  return version !== 0 && list.check(address, version === 6 ? "ipv6" : "ipv4");
+}
+
 /**
- * Best-effort IP extraction for rate limiting. `request.ip` is preferred
- * (Fastify resolves it under `trustProxy`); we then fall back to the
- * leftmost `X-Forwarded-For` value, then to the literal `"unknown"`. The
- * fallback never throws on malformed input.
+ * The address used for throttling. Mirrors `auth/rate-limit.clientSource` so
+ * the two rate limiters stay consistent. Honors LUCY_TRUST_PROXY only when
+ * the direct peer is also inside LUCY_TRUSTED_PROXY_CIDRS — otherwise an
+ * attacker controlling X-Forwarded-For could trivially bypass per-IP
+ * quotas. Falls back to socket peer; never throws.
  */
 export function extractIpForRateLimit(request: {
   ip?: string | undefined;
   headers: Record<string, unknown>;
+  raw?: { socket?: { remoteAddress?: string } };
 }): string {
-  if (typeof request.ip === "string" && request.ip.length > 0) {
-    return request.ip;
+  const peer = normalizeAddress(request.raw?.socket?.remoteAddress ?? "unknown");
+  if (!trustProxyEnabled()) return peer;
+  const trusted = trustedProxyList();
+  if (!trusted || !listed(trusted, peer)) return peer;
+  const header = request.headers["x-forwarded-for"];
+  const chain = (Array.isArray(header) ? header.join(",") : header ?? "")
+    .split(",")
+    .map((hop) => normalizeAddress(hop.trim()))
+    .filter((hop) => isIP(hop) !== 0);
+  for (let i = chain.length - 1; i >= 0; i -= 1) {
+    if (!listed(trusted, chain[i])) return chain[i];
   }
-  const xff = request.headers["x-forwarded-for"];
-  if (typeof xff === "string" && xff.length > 0) {
-    const first = xff.split(",")[0]?.trim();
-    if (first) return first;
-  }
-  if (Array.isArray(xff) && xff.length > 0 && typeof xff[0] === "string") {
-    return xff[0].split(",")[0]?.trim() || "unknown";
-  }
-  return "unknown";
+  return peer;
 }
 
 /**
