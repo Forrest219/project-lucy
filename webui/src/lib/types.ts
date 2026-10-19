@@ -237,7 +237,20 @@ export type RemoveSchemaResult = {
   deletedFiles: string[];
 };
 
-/** Spec 127: dryRun preview for POST /api/connections/:connId/remove. */
+/** Spec 179: one remaining reference that can block connection deletion. */
+export type ConnectionDeleteBlockerKind =
+  | "role_connection"
+  | "role_selector"
+  | "identity"
+  | "wiki"
+  | "semantic_asset";
+
+export type ConnectionDeleteBlocker = {
+  kind: ConnectionDeleteBlockerKind;
+  id: string;
+};
+
+/** Spec 127 + Spec 179: dryRun preview for POST /api/connections/:connId/remove. */
 export type DeleteConnectionImpact = {
   canDeleteSecret: boolean;
   secretRelPath: string | null;
@@ -245,6 +258,9 @@ export type DeleteConnectionImpact = {
   aclRoleIds: string[];
   wikiRefCount: number;
   wikiSamplePaths: string[];
+  /** Spec 179. Absent only on previews from before the guard. */
+  blockers?: ConnectionDeleteBlocker[];
+  blocked?: boolean;
 };
 
 export type DeleteConnectionPreview = {
@@ -253,6 +269,8 @@ export type DeleteConnectionPreview = {
   connectionId: string;
   schemas: string[];
   enabledTables: string[];
+  /** Spec 179. Mirrors `impact.blocked` when the server sends it. */
+  blocked?: boolean;
   impact: DeleteConnectionImpact;
 };
 

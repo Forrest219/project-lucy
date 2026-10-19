@@ -1,7 +1,13 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { apiPost } from "../lib/apiClient";
+import { ApiError, apiPost } from "../lib/apiClient";
+import {
+  connectionDeleteBlockSentences,
+  connectionDeleteIsBlocked,
+  messageForConnectionReferences,
+  resolveConnectionDeleteBlockers
+} from "../lib/deleteConnectionGuard";
 import { queryKeys } from "../lib/queryKeys";
 import { DiffViewer } from "./DiffViewer";
 import type {
@@ -63,7 +69,7 @@ export function DeleteConnectionDrawer({ connection, open, onClose }: DeleteConn
         return;
       }
       setStep("preview");
-      toast.error(`${code}: ${err instanceof Error ? err.message : String(err)}`);
+      toast.error(mapDeleteConnectionError(err, connection.id, deleteAssets));
     }
   });
 
@@ -101,6 +107,28 @@ export function DeleteConnectionDrawer({ connection, open, onClose }: DeleteConn
   const confirmMatches = confirmId === connection.id;
   const enabledCount = preview?.enabledTables.length ?? 0;
   const schemaCount = preview?.schemas.length ?? 0;
+  const blockers = preview ? resolveConnectionDeleteBlockers(preview.impact) : [];
+  const deleteBlocked = connectionDeleteIsBlocked(blockers, deleteAssets);
+  const blockSentences = connectionDeleteBlockSentences(blockers, deleteAssets);
+  const blockersAuthoritative = Array.isArray(preview?.impact.blockers);
+  const roleIds = [
+    ...new Set(
+      blockers
+        .filter((blocker) => blocker.kind === "role_connection" || blocker.kind === "role_selector")
+        .map((blocker) => blocker.id)
+    )
+  ];
+  const displayRoleIds = blockersAuthoritative ? roleIds : (preview?.impact.aclRoleIds ?? []);
+  const userIds = [...new Set(blockers.filter((blocker) => blocker.kind === "identity").map((blocker) => blocker.id))];
+  const wikiIds = [
+    ...new Set(
+      blockers
+        .filter((blocker) => blocker.kind === "wiki" && blocker.id.length > 0)
+        .map((blocker) => blocker.id)
+    )
+  ];
+  const displayWikiPaths = blockersAuthoritative ? wikiIds : (preview?.impact.wikiSamplePaths ?? []);
+  const wikiCount = blockersAuthoritative ? wikiIds.length : (preview?.impact.wikiRefCount ?? 0);
 
   return (
     <div
@@ -215,38 +243,68 @@ export function DeleteConnectionDrawer({ connection, open, onClose }: DeleteConn
                           : `${preview.impact.yamlAssetPaths.length} 个`}
                       </span>
                     </p>
+                    {preview.impact.yamlAssetPaths.length > 0 && (
+                      <ul className="text-xs text-fg-muted space-y-0.5 notranslate" translate="no">
+                        {preview.impact.yamlAssetPaths.map((assetPath) => (
+                          <li key={assetPath}>
+                            <code className="notranslate" translate="no" dir="ltr">{assetPath}</code>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                     <p className="notranslate" translate="no">
-                      仍引用此连接的 Role：
+                      仍引用此连接的角色：
                       <span className="notranslate" translate="no" data-testid="delete-connection-acl-count">
-                        {preview.impact.aclRoleIds.length === 0
-                          ? "无"
-                          : `${preview.impact.aclRoleIds.length} 个`}
+                        {displayRoleIds.length === 0 ? "无" : `${displayRoleIds.length} 个`}
                       </span>
                       <span className="text-xs text-fg-muted notranslate" translate="no">
-                        {" "}（access.yaml 不会被改写，请在角色管理中手工清理）
+                        {displayRoleIds.length > 0
+                          ? " （请先到角色权限里改掉。本次删除不会改写 "
+                          : " （本次删除不会改写 "}
+                        <code className="notranslate" translate="no">access.yaml</code>
+                        ）
                       </span>
                     </p>
-                    {preview.impact.aclRoleIds.length > 0 && (
+                    {displayRoleIds.length > 0 && (
                       <ul className="text-xs text-fg-muted space-y-0.5 notranslate" translate="no">
-                        {preview.impact.aclRoleIds.map((roleId) => (
+                        {displayRoleIds.map((roleId) => (
                           <li key={roleId}>
                             <code className="notranslate" translate="no" dir="ltr">{roleId}</code>
                           </li>
                         ))}
                       </ul>
                     )}
+                    {blockersAuthoritative && (displayRoleIds.length > 0 || userIds.length > 0) && (
+                      <>
+                        <p className="notranslate" translate="no">
+                          使用这些角色的用户：
+                          <span className="notranslate" translate="no" data-testid="delete-connection-user-count">
+                            {userIds.length === 0 ? "无" : `${userIds.length} 个`}
+                          </span>
+                        </p>
+                        {userIds.length > 0 && (
+                          <ul className="text-xs text-fg-muted space-y-0.5 notranslate" translate="no">
+                            {userIds.map((userId) => (
+                              <li key={userId}>
+                                <code className="notranslate" translate="no" dir="ltr">{userId}</code>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </>
+                    )}
                     <p className="notranslate" translate="no">
-                      Wiki 引用页数：
+                      业务 Wiki：
                       <span className="notranslate" translate="no" data-testid="delete-connection-wiki-count">
-                        {preview.impact.wikiRefCount === 0 ? "无" : preview.impact.wikiRefCount}
+                        {wikiCount === 0 ? "无" : wikiCount}
                       </span>
                       <span className="text-xs text-fg-muted notranslate" translate="no">
-                        {" "}（Wiki 文件不会被删除）
+                        {" "}（本次删除不会改写业务 Wiki）
                       </span>
                     </p>
-                    {preview.impact.wikiSamplePaths.length > 0 && (
+                    {displayWikiPaths.length > 0 && (
                       <ul className="text-xs text-fg-muted space-y-0.5 notranslate" translate="no">
-                        {preview.impact.wikiSamplePaths.map((wikiPath) => (
+                        {displayWikiPaths.map((wikiPath) => (
                           <li key={wikiPath}>
                             <code className="notranslate" translate="no" dir="ltr">{wikiPath}</code>
                           </li>
@@ -297,6 +355,21 @@ export function DeleteConnectionDrawer({ connection, open, onClose }: DeleteConn
                     </p>
                   </div>
 
+                  {blockSentences.length > 0 && (
+                    <div
+                      id="delete-connection-block-reason"
+                      className="pl-drawer-error"
+                      role="alert"
+                      data-testid="delete-connection-block-reason"
+                    >
+                      <p className="font-semibold notranslate" translate="no">
+                        无法删除连接{" "}
+                        <code className="notranslate" translate="no" dir="ltr">{connection.id}</code>
+                        。{blockSentences.join("")}
+                      </p>
+                    </div>
+                  )}
+
                   <label className="block space-y-1">
                     <span className="text-sm font-medium notranslate" translate="no">
                       请输入连接 ID
@@ -331,16 +404,18 @@ export function DeleteConnectionDrawer({ connection, open, onClose }: DeleteConn
                       setStep("submitting");
                       writeMutation.mutate();
                     }}
-                    disabled={writeMutation.isPending || !confirmMatches}
+                    disabled={writeMutation.isPending || !confirmMatches || deleteBlocked}
+                    aria-describedby={deleteBlocked ? "delete-connection-block-reason" : undefined}
                     data-testid="delete-connection-confirm-btn"
                   >
                     {writeMutation.isPending ? "删除中..." : "确认删除连接"}
                   </button>
                 </div>
                 {writeMutation.error && (
-                  <div className="pl-drawer-error" role="alert">
-                    <p className="font-semibold">{errorCode(writeMutation.error)}</p>
-                    <p>{writeMutation.error instanceof Error ? writeMutation.error.message : String(writeMutation.error)}</p>
+                  <div className="pl-drawer-error" role="alert" data-testid="delete-connection-write-error">
+                    <p className="notranslate" translate="no">
+                      {mapDeleteConnectionError(writeMutation.error, connection.id, deleteAssets)}
+                    </p>
                   </div>
                 )}
               </>
@@ -353,7 +428,9 @@ export function DeleteConnectionDrawer({ connection, open, onClose }: DeleteConn
             <p className="text-sm notranslate" translate="no">正在删除连接配置...</p>
             {writeMutation.error && (
               <div className="pl-drawer-error" role="alert">
-                <p>{writeMutation.error instanceof Error ? writeMutation.error.message : String(writeMutation.error)}</p>
+                <p className="notranslate" translate="no">
+                  {mapDeleteConnectionError(writeMutation.error, connection.id, deleteAssets)}
+                </p>
               </div>
             )}
           </section>
@@ -401,4 +478,11 @@ function errorCode(err: unknown): string {
     return (err as { code: string }).code;
   }
   return "UNKNOWN";
+}
+
+function mapDeleteConnectionError(err: unknown, connectionId: string, deleteAssets: boolean): string {
+  if (err instanceof ApiError && err.code === "connection_references_remain") {
+    return messageForConnectionReferences(connectionId, err.detail, deleteAssets);
+  }
+  return err instanceof Error && err.message ? err.message : "删除连接失败";
 }

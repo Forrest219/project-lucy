@@ -118,7 +118,7 @@
 | [124-audit-query-artifact-cold-store-spec.md](124-audit-query-artifact-cold-store-spec.md) | 查询原文加密冷存（Superseded / legacy；主路径见 Spec 125） | 产品 / 安全 / Audit |
 | [125-audit-generated-sql-hot-store-spec.md](125-audit-generated-sql-hot-store-spec.md) | 热库明文 `generated_sql` + 调用流水列表/CSV 直展（Implemented） | 产品 / 安全 / Audit / Backend / Frontend |
 | [126-customer-branding-logo-config-spec.md](126-customer-branding-logo-config-spec.md) | 客户品牌外观：Logo / 产品名称 / 副标题配置页（Spec 126；对齐 Tableau Server Logo 约束） | 产品 / UX / Frontend / Backend |
-| [127-connection-delete-spec.md](127-connection-delete-spec.md) | 删除连接：从 `ktx.yaml` 卸载连接配置；dryRun 影响面；可选删约定 secret 与本地 YAML 资产；ACL/Wiki 只预览（Implemented v1.0） | 产品 / UX / API / Frontend |
+| [127-connection-delete-spec.md](127-connection-delete-spec.md) | 删除连接：从 `ktx.yaml` 卸载连接配置；dryRun 影响面；可选删约定 secret 与本地 YAML 资产。引用阻断见 Spec 179（Implemented v1.2） | 产品 / UX / API / Frontend |
 | [128-enterprise-kpi-contract-spec.md](128-enterprise-kpi-contract-spec.md) | Enterprise KPI 合规契约：四状态规则（ok/no_data/unavailable/partial）、D1–D4 锁定口径、HR-1–HR-7 硬规则、MetricCard 渲染规范；Gate A（状态规范化）与 Gate B（公式修正）实施指南 | 产品 / 前端 / Backend / API |
 | [135-admin-usage-and-audit-uiux-refinement-spec.md](135-admin-usage-and-audit-uiux-refinement-spec.md) | 使用概况与访问日志 UI/UX 重构：看板指标分层与复合卡片、排行榜弹性高与 Tooltip、抽屉排版坍塌根治与触达表内聚、主表高密降噪与状态语义解耦、快捷时间预设与单行弹性筛选栏 | 产品 / UX / Frontend |
 | [136-publish-workbench-uiux-refinement-spec.md](136-publish-workbench-uiux-refinement-spec.md) | 发布工作台 UI/UX 重构：Pipeline Stepper 流水线状态机、异常驱动静默校验展示与 Calm UI、左侧变更资产树 (+N/-M 统计) 与右侧双视图联动、全局 Toast 防抖去重 | 产品 / UX / Frontend |
@@ -152,6 +152,7 @@
 | [174-webui-entry-performance-spec.md](174-webui-entry-performance-spec.md) | WebUI进入性能：批量权限解析、版本化显示缓存、分区就绪、预压缩/lazy、有界探测；[实施工单](plans/wo-20261013-webui-entry-performance.md)；2026-10-14 Codex收尾完成，after-review-v3完整正式复验通过，见[执行报告§10](plans/wo-20261013-webui-entry-performance-IMPLEMENTATION_NOTES.md) / [复核闭环](plans/wo-20261014-webui-entry-performance-RECHECK.md)；未部署 | Frontend / Backend / Performance / QA |
 | [175-suspend-deployment-license-spec.md](175-suspend-deployment-license-spec.md) | 移除部署许可与激活码 v0.2：删除许可实现、签发脚本和 `license.yaml`。已实现，工单 WO-202610-26。运行中的容器需重建后才生效 | 产品 / Runtime / UX |
 | [176-engine-catalog-and-mcp-query-connection-spec.md](176-engine-catalog-and-mcp-query-connection-spec.md) | 新建连接 Amazon Athena v0.3：显式写出 KTX `driver: athena` 与 `databases`。v0.2 引擎目录 / MCP 查询连接已撤回。待审阅，未批准。工单 WO-202610-27 | 产品 / 连接 |
+| [179-connection-delete-reference-guard-spec.md](179-connection-delete-reference-guard-spec.md) | 删除连接前的引用校验 v0.2：角色、用户、业务 Wiki 或未一并删除的本地 YAML 还在时拒绝删除，并在确认前说明。已实现 | 产品 / UX / API / Frontend |
 
 ## 与原 README 的关键校正
 

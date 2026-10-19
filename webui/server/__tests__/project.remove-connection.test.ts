@@ -222,6 +222,7 @@ describe("removeConnection — write", () => {
     await expect(rejected).rejects.toBeInstanceOf(ConnectionReferencesRemainError);
     await expect(rejected).rejects.toMatchObject({
       code: "connection_references_remain",
+      message: "无法删除连接 mysql-aliyun。本地语义文件可勾选「同时删除本地 YAML 资产」后一并删除。",
       detail: {
         blockers: [
           { kind: "semantic_asset", id: "semantic-layer/mysql-aliyun/superstore_orders.yaml" }
@@ -334,6 +335,7 @@ users:
     await expect(rejected).rejects.toMatchObject({
       code: "connection_references_remain",
       statusCode: 409,
+      message: "无法删除连接 mysql-aliyun。它仍被角色和用户 引用，需要先改掉这些引用。",
       detail: {
         blockers: [
           { kind: "role_selector", id: "finance_readonly" },

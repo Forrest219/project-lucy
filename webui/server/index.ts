@@ -286,9 +286,8 @@ function supportedErrorDetail(error: SupportedError): unknown {
     }
   }
   if (error.code === "connection_references_remain") {
-    // Spec 179 §3: surface the per-kind blocker list so the Admin client can
-    // render a precise message ("连接 X 仍在被角色 R/身份 U/Wiki 页/语义文件引用")
-    // without re-fetching the preview. Pinned shape — only `{kind, id}` allowed.
+    // Spec 179 §3 / §5: blockers let the Admin client say which of 角色 / 用户 /
+    // 业务 Wiki / 本地 YAML 资产 still block deletion. Pinned shape — only `{kind, id}`.
     const detail = error.detail;
     if (detail && typeof detail === "object" && Array.isArray((detail as { blockers?: unknown }).blockers)) {
       const blockers = (detail as { blockers: unknown[] }).blockers

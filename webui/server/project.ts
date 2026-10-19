@@ -34,6 +34,7 @@ import { assertEndpointGate, type EndpointFlags } from "./connection-endpoint-ga
 import { withKtxYamlWriteLock } from "./ktx-yaml-write-lock.js";
 import type { ConnectionTestResult } from "./ktx";
 import { withDisplayWriteBarrier, type DisplayScope } from "./display-generation";
+import { connectionDeleteBlockText } from "../src/lib/deleteConnectionGuard.js";
 
 const KTX_YAML_DISPLAY_SCOPES: DisplayScope[] = ["C", "D", "P", "L"];
 
@@ -1318,7 +1319,8 @@ async function removeConnectionUnbarriered(
   // fields can never bypass it.
   if (blocked) {
     throw new ConnectionReferencesRemainError(
-      `Connection '${connId}' still has references; update or remove them before deleting`,
+      connectionDeleteBlockText(connId, blockers, Boolean(options.deleteAssets)) ??
+        `无法删除连接 ${connId}。仍有引用，需要先处理后再删除。`,
       blockers
     );
   }
