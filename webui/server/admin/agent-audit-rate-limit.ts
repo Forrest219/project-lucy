@@ -111,11 +111,24 @@ function trustedProxyList(): BlockList | null {
   if (!raw) return null;
   const list = new BlockList();
   for (const entry of raw.split(",").map((part) => part.trim()).filter(Boolean)) {
-    const [address, prefix] = entry.split("/");
+    const [address, prefixRaw] = entry.split("/");
     if (!isIP(address)) continue;
     const family = isIP(address) === 6 ? "ipv6" : "ipv4";
-    if (prefix === undefined) list.addAddress(address, family);
-    else list.addSubnet(address, Number(prefix), family);
+    const maxPrefix = family === "ipv6" ? 128 : 32;
+    try {
+      if (prefixRaw === undefined) {
+        list.addAddress(address, family);
+      } else {
+        const prefix = Number(prefixRaw);
+        if (!Number.isInteger(prefix) || prefix < 0 || prefix > maxPrefix) continue;
+        list.addSubnet(address, prefix, family);
+      }
+    } catch {
+      // Invalid CIDR (out-of-range prefix, malformed address, or duplicate
+      // entry) — skip silently so a misconfigured deployment cannot break
+      // the rate-limit hot path.
+      continue;
+    }
   }
   return list;
 }
@@ -136,8 +149,11 @@ function listed(list: BlockList, address: string): boolean {
  * because we accept the same duck-shape as Fastify's request. We therefore
  * narrow `x-forwarded-for` to a plain string before parsing; non-string
  * (or absent / numeric) values degrade to an empty hop list. This helper
- * is also best-effort for malformed CIDRs in the env (see
- * `trustedProxyList`): invalid prefix values are skipped silently.
+ * is also best-effort for malformed CIDRs (see `trustedProxyList`):
+ *   - non-integer prefix → skipped
+ *   - prefix out of family range (0–32 IPv4, 0–128 IPv6) → skipped
+ *   - addAddress / addSubnet throws → caught and skipped
+ * so a misconfigured LUCY_TRUSTED_PROXY_CIDRS cannot break the request path.
  */
 export function extractIpForRateLimit(request: {
   ip?: string | undefined;

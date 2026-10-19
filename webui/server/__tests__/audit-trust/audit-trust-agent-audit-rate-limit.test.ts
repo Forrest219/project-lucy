@@ -3,18 +3,20 @@
  *
  * 实施说明: 这不是 "rolling window token bucket"; 这是 fixed-window counter
  *   (首请求锚定 windowStart, 窗口内累加, 超过 max 返回 429 + Retry-After)。
- * 集成端点层 envelope 与 Retry-After header 由 T08c 浏览器实测覆盖 (Fastify
- *   inject API 不支持注入 raw.socket.remoteAddress, 这里不能直接断言 header)。
+ * 集成端点层 envelope (RATE_LIMITED code) 与 Retry-After header 由 T08c 浏览器
+ *   实测覆盖: 这里只断言 helper 层逻辑 (extract / 桶计数), 用 unit tests
+ *   直接调用而非 Fastify 端点。
  *
  * 覆盖:
- * - 单实例 fixed-window counter
- * - 不同 IP 独立计数 / 桶隔离
- * - 窗口过期重置 / 边界
+ * - 单实例 fixed-window counter (>= 窗口边界重置)
+ * - 不同 IP 独立计数 / 桶隔离 (Promise.all 16 并发)
+ * - 窗口过期重置 / 边界 (边界前 1ms / 恰好 / 之后 1s)
  * - extractIpForRateLimit 行为同 auth/rate-limit.clientSource:
  *   trustProxy=0 / peer 不可信 → 降级 socket peer;
  *   trustProxy=1 + peer 在 CIDRs 内 + 存在非可信 hop → 取 XFF 右起第一个非可信 hop
- * - 非 string headers 容错 (返回值降级, 不抛错)
- * - forgetIpForRateLimit 仅清 1 IP (另 1 IP 留存)
+ * - 非 string headers 容错 (numeric / 嵌套数组 / 缺 raw.socket 都不抛错)
+ * - 非法 CIDR (前缀超界 / 非整数 / addSubnet 抛错) → 跳过不影响 hot path
+ * - forgetIpForRateLimit 仅清 1 IP (双 IP 同时被耗尽 + A 被忘后 B 仍 429)
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
@@ -122,20 +124,58 @@ describe("T08a.1 checkAgentAuditRateLimit", () => {
     expect(r.remaining).toBe(DEFAULT_AGENT_AUDIT_RATE_LIMIT.maxPerWindow - 1);
   });
 
-  it("forgetIpForRateLimit clears the bucket for one IP only", () => {
+  it("forgetIpForRateLimit clears the bucket for one IP only (dual IP pre-seed)", () => {
+    // G3 round-3 fix: pre-seed BOTH IPs to exhaustion BEFORE any forget, so
+    // a "wipe-all" bug cannot pass this test. After forget(A), only A is
+    // reset; B remains exhausted.
     const t = 1_000_000;
     for (let i = 0; i < DEFAULT_AGENT_AUDIT_RATE_LIMIT.maxPerWindow; i++) {
-      checkAgentAuditRateLimit("8.8.8.8", t);
+      checkAgentAuditRateLimit("8.8.8.8", t + i);
+      checkAgentAuditRateLimit("8.8.8.9", t + i);
     }
     expect(checkAgentAuditRateLimit("8.8.8.8", t).allowed).toBe(false);
-    forgetIpForRateLimit("8.8.8.8");
-    const reset = checkAgentAuditRateLimit("8.8.8.8", t);
-    expect(reset.allowed).toBe(true);
-    // And another IP keeps its counter (G3 C3 follow-up).
-    for (let i = 0; i < DEFAULT_AGENT_AUDIT_RATE_LIMIT.maxPerWindow; i++) {
-      checkAgentAuditRateLimit("8.8.8.9", t);
-    }
     expect(checkAgentAuditRateLimit("8.8.8.9", t).allowed).toBe(false);
+    forgetIpForRateLimit("8.8.8.8");
+    const resetA = checkAgentAuditRateLimit("8.8.8.8", t);
+    expect(resetA.allowed).toBe(true);
+    expect(resetA.remaining).toBe(DEFAULT_AGENT_AUDIT_RATE_LIMIT.maxPerWindow - 1);
+    const stillB = checkAgentAuditRateLimit("8.8.8.9", t);
+    expect(stillB.allowed).toBe(false);
+    expect(stillB.remaining).toBe(0);
+  });
+
+  it("respects the >= boundary: nowMs == windowStartMs + windowMs resets", () => {
+    // Distinguishing \`>=\` from \`>\`: at exactly the boundary the bucket
+    // must reset and the request must be allowed. Just-before must stay 429.
+    const windowMs = DEFAULT_AGENT_AUDIT_RATE_LIMIT.windowSeconds * 1000;
+    const t0 = 1_000_000;
+    for (let i = 0; i < DEFAULT_AGENT_AUDIT_RATE_LIMIT.maxPerWindow; i++) {
+      checkAgentAuditRateLimit("6.6.6.6", t0 + i);
+    }
+    const justBefore = checkAgentAuditRateLimit("6.6.6.6", t0 + windowMs - 1);
+    expect(justBefore.allowed).toBe(false);
+    const exactBoundary = checkAgentAuditRateLimit("6.6.6.6", t0 + windowMs);
+    expect(exactBoundary.allowed).toBe(true);
+    const wellAfter = checkAgentAuditRateLimit("6.6.6.6", t0 + windowMs + 1000);
+    expect(wellAfter.allowed).toBe(true);
+  });
+
+  it("integrates bucket counts under 16 concurrent Promise.all calls", async () => {
+    // Same IP, same window, 16 simultaneous calls (Promise.all). Under the
+    // single-instance / synchronous-Map counter, exactly N are allowed and
+    // N+1..(max+1) are blocked. If async-lock or interleaving caused false
+    // admits, the count would exceed N.
+    const t = 1_000_000;
+    const max = DEFAULT_AGENT_AUDIT_RATE_LIMIT.maxPerWindow;
+    const verdicts = await Promise.all(
+      Array.from({ length: max + 1 }, () =>
+        Promise.resolve().then(() => checkAgentAuditRateLimit("2.2.2.2", t))
+      )
+    );
+    const allowed = verdicts.filter((v) => v.allowed).length;
+    const blocked = verdicts.filter((v) => !v.allowed).length;
+    expect(allowed).toBe(max);
+    expect(blocked).toBe(1);
   });
 
   it("allows the Nth request and only the (N+1)th is 429'd", () => {
@@ -336,6 +376,64 @@ describe("T08a.1 extractIpForRateLimit (trust-proxy-aware)", () => {
       })
     );
     expect(ip).toBe("10.0.0.50");
+  });
+
+  it("skips CIDR prefixes that exceed the family range (G3 A1)", () => {
+    // IPv4 prefix must be 0..32; 33 is illegal — must not throw, must fall
+    // back to the socket peer. Mixed list with one valid CIDR keeps the
+    // valid entry.
+    const ip = extractIpForRateLimit(
+      mockRequest({
+        peer: "10.0.0.50",
+        trustProxy: true,
+        trustedCidrs: "10.0.0.0/33, 198.51.100.0/24",
+        xff: "203.0.113.42, 10.0.0.20"
+      })
+    );
+    // The malformed CIDR is dropped; peer 10.0.0.50 itself is not in
+    // 198.51.100.0/24 → falls back to peer.
+    expect(ip).toBe("10.0.0.50");
+  });
+
+  it("skips a non-integer prefix without throwing (G3 A1)", () => {
+    const ip = extractIpForRateLimit(
+      mockRequest({
+        peer: "10.0.0.50",
+        trustProxy: true,
+        trustedCidrs: "10.0.0.0/abc",
+        xff: "203.0.113.42"
+      })
+    );
+    expect(ip).toBe("10.0.0.50");
+  });
+
+  it("skips a malformed / duplicate CIDR without throwing (G3 A1)", () => {
+    // Address portion that is not a valid IP: skipped silently. The
+    // resulting blocklist is empty so peer trust fails and we fall back
+    // to the socket peer without ever throwing.
+    const ip = extractIpForRateLimit(
+      mockRequest({
+        peer: "10.0.0.50",
+        trustProxy: true,
+        trustedCidrs: "not-an-ip/24, garbage, /32",
+        xff: "203.0.113.42, 10.0.0.20"
+      })
+    );
+    expect(ip).toBe("10.0.0.50");
+  });
+
+  it("accepts a valid /8 alongside an invalid entry", () => {
+    const ip = extractIpForRateLimit(
+      mockRequest({
+        peer: "10.0.0.50",
+        trustProxy: true,
+        trustedCidrs: "192.168.0.0/33, 10.0.0.0/8",
+        xff: "203.0.113.42, 10.0.0.20"
+      })
+    );
+    // Peer is in 10.0.0.0/8 → XFF walked; the right-most non-trusted hop
+    // is 203.0.113.42.
+    expect(ip).toBe("203.0.113.42");
   });
 
   it("never throws when raw.socket is missing", () => {
