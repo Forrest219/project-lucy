@@ -121,7 +121,7 @@ import { registerRoleRoutes } from "./admin/roles.js";
 import { registerTokenRoutes } from "./admin/tokens.js";
 import { registerPolicyRuntimeRoutes } from "./admin/policy-runtime.js";
 import { getPolicyRuntimeStatus, isPolicyRuntimeHealthy, runtimeConsistencyForInputs, type DisplayPolicyInputs } from "./proxy/acl.js";
-import { getAuditDb, recordConfigChange, registerAuditRoutes } from "./admin/audit.js";
+import { getAuditDb, recordConfigChange, registerAgentAuditRoutes, registerAuditRoutes } from "./admin/audit.js";
 import { auditedWriteFile } from "./admin/config-audit-write.js";
 import { registerMcpToolsRoutes } from "./admin/mcp-tools.js";
 import { registerMcpPlaygroundRoutes } from "./admin/mcp-playground.js";
@@ -2191,6 +2191,7 @@ export function buildServer() {
   registerTokenRoutes(app);
   registerPolicyRuntimeRoutes(app);
   registerAuditRoutes(app);
+  registerAgentAuditRoutes(app);
   registerMcpToolsRoutes(app);
   registerMcpPlaygroundRoutes(app);
   registerMcpRuntimeRoutes(app);

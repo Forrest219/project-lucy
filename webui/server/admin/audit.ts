@@ -36,6 +36,13 @@ import {
 } from "../trace/evidence.js";
 import { readQueryArtifact } from "../audit/query-artifact-store.js";
 import { MCP_PROTOCOL_METHODS as PROTOCOL_TOOLS } from "../proxy/mcp-request-classification.js";
+import {
+  appendClientObservations,
+  resolveAdapterFromToken,
+  validateAgentAuditBody,
+  bodySizeError as agentAuditBodySizeError,
+  isEventCountError as agentAuditIsEventCountError
+} from "./agent-audit-events.js";
 
 // Per-user lazy-rebuild debounce: GET /turns can be polled frequently (UI refresh, multiple
 // users in one window); skip re-running the full delete+reinsert rebuild if we just did it.
@@ -548,6 +555,137 @@ export function resetAuditDbForTests(): void {
     db.close();
     db = null;
   }
+}
+
+// ─── T06b: POST /api/agent-audit/events (受控客户端 observation) ───────────
+//
+// Contract §2.5.2 / §6.2. Registered separately so the route lives outside the
+// admin audit routes (no `lucyAdmin` session dependency; this is the
+// controlled-client endpoint). Caller is `webui/server/index.ts`.
+
+export function registerAgentAuditRoutes(app: FastifyInstance): void {
+  app.post<{
+    Body: { events?: unknown };
+  }>("/api/agent-audit/events", async (request, reply) => {
+    // 1. Credential: server-resolved from `X-Agent-Audit-Token`. Body never
+    //    reads / uses / falls back to admin context. Per EA-11 closure.
+    const token = request.headers["x-agent-audit-token"];
+    const adapter = resolveAdapterFromToken(typeof token === "string" ? token : undefined);
+    if (!adapter) {
+      reply.code(401);
+      return {
+        ok: false,
+        error: { code: "CREDENTIAL_INVALID", message: "X-Agent-Audit-Token missing or invalid" }
+      };
+    }
+
+    // 2. Body size: 1 MiB hard cap (envelope 413).
+    const bodyBytes = Number((request.headers["content-length"] ?? "0")) || JSON.stringify(request.body ?? {}).length;
+    const sizeErr = agentAuditBodySizeError(bodyBytes);
+    if (sizeErr) {
+      reply.code(413);
+      return { ok: false, error: { code: "PAYLOAD_TOO_LARGE", message: sizeErr } };
+    }
+
+    // 3. Schema validation (envelope 400).
+    const schemaErrors = validateAgentAuditBody(request.body);
+    if (schemaErrors.length > 0) {
+      reply.code(400);
+      return {
+        ok: false,
+        error: { code: "SCHEMA_INVALID", details: schemaErrors }
+      };
+    }
+    const events = (request.body as { events: Parameters<typeof appendClientObservations>[2] }).events;
+
+    // 4. Event count (envelope 413 — keep distinct from body size).
+    const countErr = agentAuditIsEventCountError(events.length);
+    if (countErr) {
+      reply.code(413);
+      return { ok: false, error: { code: "EVENTS_TOO_MANY", message: countErr } };
+    }
+
+    // 5. Security store: fail-closed (envelope 503) before any persistence.
+    const securityPrecheck = await getSecurityStore();
+    if (!securityPrecheck.ok) {
+      reply.code(503);
+      return {
+        ok: false,
+        error: {
+          code: "STORE_UNAVAILABLE",
+          message: "security store unavailable; refusing to record controlled-client observations"
+        }
+      };
+    }
+
+    // Note: per-IP rate limiting (429 envelope) is delegated to a follow-up
+    // window; the contract specifies `replyAuthGate` is reused but the
+    //    helper has FastifyRequest typing that does not match the agent-audit
+    //    auth path (X-Agent-Audit-Token header, not admin session). The
+    //    surface stays open for T08 / T08b to wire correctly.
+
+    // 6. Append. Use the security store's own Database handle (T06b added
+    //    `database` getter for this purpose) so the idempotency table writes
+    //    run in the same WAL session as `appendEvent`, avoiding SQLITE_BUSY.
+    let results: ReturnType<typeof appendClientObservations>;
+    try {
+      const secDb = securityPrecheck.value.database;
+      results = appendClientObservations(
+        secDb,
+        adapter,
+        events,
+        "audit-trust-2026-10-19-r1.v1",
+        (input) => {
+          const r = securityPrecheck.value.appendEvent({
+            eventId: input.eventId,
+            operationId: input.operationId,
+            phase: input.phase as "commit",
+            actor: input.actor,
+            actorType: input.actorType,
+            auditEventKind: input.auditEventKind,
+            objectHash: input.objectHash,
+            resultSummary: `${input.resultSummary} sub_kind=client_observed`
+          });
+          if (!r.ok) throw new Error(`ledger_append_failed: ${r.reason ?? "unknown"}`);
+          return { seq: (r.value as { seq: number }).seq, eventId: input.eventId };
+        }
+      );
+
+      // Surface id_conflict and parent_not_visible as 409 in the partial case.
+      const hasIdConflict = results.some((r) => r.status === "id_conflict");
+      const allConflict = results.every((r) => r.status === "id_conflict");
+      const hasParentNotVisible = results.some((r) => r.status === "parent_not_visible");
+
+      if (allConflict) {
+        reply.code(409);
+        return {
+          ok: false,
+          error: { code: "ID_CONFLICT", results: results.map(serializeAgentAuditResult) }
+        };
+      }
+      if (hasIdConflict || hasParentNotVisible) {
+        // Partial: 207 with per-event results.
+        reply.code(207);
+        return { ok: true, partial: true, results: results.map(serializeAgentAuditResult) };
+      }
+
+      reply.code(200);
+      return { ok: true, results: results.map(serializeAgentAuditResult) };
+    } catch (err) {
+      reply.code(500);
+      return { ok: false, error: { code: "INTERNAL", message: String(err) } };
+    }
+  });
+}
+
+function serializeAgentAuditResult(r: ReturnType<typeof appendClientObservations>[number]) {
+  if (r.status === "accepted" || r.status === "idempotent_replay") {
+    return { status: r.status, ...r.persisted };
+  }
+  if (r.status === "id_conflict") {
+    return { status: r.status, existing: r.existing };
+  }
+  return { status: r.status };
 }
 
 // T13 (Spec 185) — snapshot the audit DB to a fresh file using SQLite's online

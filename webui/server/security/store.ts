@@ -223,6 +223,17 @@ export class SecurityStore {
     return this.paths.db;
   }
 
+  /**
+   * T06b: expose the underlying Database handle so callers can manage the
+   * idempotency table in the SAME transaction as `appendEvent`. Bypassing
+   * the security_events private writer and using a separate connection
+   * deadlocks with the WAL writer; this getter lets the caller extend
+   * the store's transaction boundary.
+   */
+  get database(): Database.Database {
+    return this.db;
+  }
+
   close(): void {
     if (this.db.open) this.db.close();
   }
