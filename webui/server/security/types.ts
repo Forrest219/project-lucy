@@ -106,11 +106,21 @@ export type SecurityEventInput = {
   objectHash?: string;
   verdict?: string;
   resultSummary?: string;
+  /**
+   * Spec 173 v0.3 / 2026-10-19 audit-trust §2.3 — kind of audit-management event.
+   * Pre-v2 rows stay NULL. New kinds include `audit_management`, `association_revision`,
+   * `client_observation` (T06), `scrub`, `export_prepared`, `export_failed`. The
+   * semantic-layer `event_type` column is a different axis (the row's actual
+   * subject: tool_call / protocol / etc.).
+   */
+  auditEventKind?: string;
 };
 
-export type SecurityEvent = Required<SecurityEventInput> & {
+export type SecurityEvent = Omit<Required<SecurityEventInput>, "auditEventKind"> & {
   seq: number;
   createdAt: number;
+  /** Spec 173 v0.3 / 2026-10-19 audit-trust §2.3 — NULL for pre-v2 rows. */
+  auditEventKind: string | null;
 };
 
 /** Whether a pending operation narrows, widens, or does not change effective permissions. */

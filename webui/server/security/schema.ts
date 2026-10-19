@@ -1,7 +1,7 @@
 import type Database from "better-sqlite3";
 
 /** Bump together with a new entry in {@link MIGRATIONS}. */
-export const SECURITY_SCHEMA_VERSION = 1;
+export const SECURITY_SCHEMA_VERSION = 2;
 
 export const SECURITY_DB_FILE = "security.sqlite";
 
@@ -101,7 +101,28 @@ CREATE TABLE IF NOT EXISTS pending_operations (
 CREATE INDEX IF NOT EXISTS idx_pending_operations_state ON pending_operations(state);
 `;
 
-const MIGRATIONS: ReadonlyArray<{ version: number; sql: string }> = [{ version: 1, sql: SCHEMA_V1 }];
+/**
+ * SCHEMA_V2 — Spec 173 v0.3 / 2026-10-19 audit-trust / `audit-trust-2026-10-19-r1` §2.3 / §3.2.
+ *
+ * Adds the `audit_event_kind` column to `security_events` and a supporting index.
+ * The column is additive (NULL default) so v1 readers ignore it. T03 begins writing
+ * `audit_management` and `association_revision` event kinds through this column;
+ * pre-existing rows remain NULL.
+ *
+ * Why a column, not a separate table: the canonical ledger already records
+ * `security_events` immutably; introducing a parallel `audit_management_log`
+ * would create a competing fact source forbidden by the 20261018 enterprise
+ * security Spec §5. The single ledger is the truth source.
+ */
+const SCHEMA_V2 = `
+ALTER TABLE security_events ADD COLUMN audit_event_kind TEXT;
+CREATE INDEX IF NOT EXISTS idx_security_events_audit_kind ON security_events(audit_event_kind);
+`;
+
+const MIGRATIONS: ReadonlyArray<{ version: number; sql: string }> = [
+  { version: 1, sql: SCHEMA_V1 },
+  { version: 2, sql: SCHEMA_V2 }
+];
 
 export type SchemaInitResult =
   | { ok: true; version: number }

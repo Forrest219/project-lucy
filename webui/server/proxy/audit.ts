@@ -170,6 +170,13 @@ export interface AccessLogSourceRecord {
 }
 
 let db: Database.Database | null = null;
+
+/**
+ * audit-trust-2026-10-19-r1 / T03a: audit.sqlite schema version (independent
+ * of SQLite's internal `PRAGMA schema_version`, which we never read).
+ * Bump together with new audit_meta entries.
+ */
+export const AUDIT_DB_SCHEMA_VERSION = 2;
 const ACCESS_LOG_COLUMNS = [
   ["role_ids", "TEXT"],
   ["permission_snapshot_hash", "TEXT"],
@@ -243,7 +250,10 @@ const ACCESS_LOG_COLUMNS = [
   ["event_type", "TEXT"],
   ["attribution_rule_version", "TEXT"],
   ["classification_version", "TEXT"],
-  ["credential_principal_id", "TEXT"]
+  ["credential_principal_id", "TEXT"],
+  // T03a: tracks whether the legacy explicit-turn validation passed (1=confirmed, 0=conflict).
+  // Pre-existing rows stay NULL; backfillAssociationStatus() handles the missing-column fallback.
+  ["explicit_turn_validated", "INTEGER"]
 ] as const;
 const PERMISSION_SNAPSHOT_COLUMNS = [
   ["capability_digest", "TEXT"],
@@ -414,6 +424,43 @@ async function getDb(): Promise<Database.Database> {
       after_digest       TEXT    NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_aml_ts ON audit_maintenance_log(ts);
+    -- audit-trust-2026-10-19-r1 / T03a: 管理审计版本表 + 关联修订事件表。
+    -- audit_meta 只放 schema/classification/digest 版本 + 受认证运行信息 + 受影响行数；
+    -- 维护日志本身进入 security_events canonical ledger，不进 audit_meta。
+    CREATE TABLE IF NOT EXISTS audit_meta (
+      audit_db_schema_version INTEGER PRIMARY KEY,
+      classification_version  TEXT,
+      digest_version          TEXT,
+      last_migration_text     TEXT,
+      running_at_iso          TEXT,
+      running_actor           TEXT,
+      input_sha256            TEXT,
+      output_affected_rows    INTEGER
+    );
+    -- association_revisions: append-only 修订记录表（contract §3.1 / §2.6）。
+    -- 由 T03b 的 POST /api/admin/audit/association-revisions 受认证端点写入；
+    -- 不在 backfill 内自动写。UNIQUE(original_turn_id, attribution_rule_version)
+    -- 保证同一规则版本对同一 turn 只能写一次。
+    CREATE TABLE IF NOT EXISTS association_revisions (
+      id                              INTEGER PRIMARY KEY AUTOINCREMENT,
+      original_turn_id                TEXT NOT NULL,
+      effective_turn_id               TEXT,
+      original_association_status     TEXT,
+      effective_association_status    TEXT NOT NULL,
+      reason                          TEXT NOT NULL,
+      reference_doc                   TEXT,
+      attribution_rule_version         TEXT NOT NULL,
+      actor_kind                      TEXT NOT NULL,
+      actor_id                        TEXT,
+      instance_id                     TEXT,
+      instance_start_generation       INTEGER,
+      ts                              TEXT NOT NULL,
+      classification_version          TEXT NOT NULL,
+      expected_revision               TEXT,
+      UNIQUE(original_turn_id, attribution_rule_version)
+    );
+    CREATE INDEX IF NOT EXISTS idx_ar_original_turn ON association_revisions(original_turn_id);
+    CREATE INDEX IF NOT EXISTS idx_ar_ts ON association_revisions(ts);
   `);
   for (const [column, definition] of ACCESS_LOG_COLUMNS) {
     ensureColumn(db, "access_log", column, definition);
@@ -422,6 +469,7 @@ async function getDb(): Promise<Database.Database> {
     ensureColumn(db, "permission_snapshots", column, definition);
   }
   ensureColumn(db, "conversation_turns", "session_id", "TEXT");
+  ensureColumn(db, "conversation_turns", "association_status", "TEXT");
   ensureColumn(db, "inferred_turns", "client", "TEXT");
   ensureColumn(db, "inferred_turns", "session_id", "TEXT");
   db.exec(`
@@ -429,6 +477,10 @@ async function getDb(): Promise<Database.Database> {
     CREATE INDEX IF NOT EXISTS idx_al_session_ts ON access_log(lucy_session_id, ts);
     CREATE INDEX IF NOT EXISTS idx_al_client_ip_ts ON access_log(client_ip, ts);
     CREATE INDEX IF NOT EXISTS idx_al_ts ON access_log(ts);
+    CREATE INDEX IF NOT EXISTS idx_al_association_status ON access_log(association_status);
+    CREATE INDEX IF NOT EXISTS idx_al_attempt_id ON access_log(attempt_id);
+    CREATE INDEX IF NOT EXISTS idx_al_event_type ON access_log(event_type);
+    CREATE INDEX IF NOT EXISTS idx_al_instance_id ON access_log(instance_id);
   `);
   return db;
 }
@@ -1791,4 +1843,181 @@ export async function bindPriorSessionCalls(input: {
     `).run(input.turnId, ...handshakeIds);
   }
   return handshakeIds.length;
+}
+
+// ─── T03a: association_status backfill (audit-trust-2026-10-19-r1) ─────────
+//
+// Contract `inbox/audit-trust/audit-trust-2026-10-19-r1/T00-r2/implementation-contract.md`
+// §3.1 迁移执行顺序 step 2 / §2.1 撤销规则 5:历史行不造当前身份.
+//
+// Mapping (per-row, deterministic, idempotent):
+//   - turn_attribution_mode = 'session_bound' AND association_status IS NULL
+//       → 'legacy_unverified'      (旧 auto 归因;不允许静默升级 confirmed)
+//   - turn_attribution_mode = 'explicit'     AND explicit_turn_validated = 1
+//       → 'confirmed'              (历史已校验的显式 turn)
+//   - turn_attribution_mode = 'unassigned'  (无论 association_status)
+//       → 'unassigned'             (无显式 turn;保持 unassigned;NULL 也合法)
+//   - turn_attribution_mode = 'explicit'     AND explicit_turn_validated = 0
+//       → 'conflict'               (显式 turn 校验失败)
+//
+// Note: the column `reference_doc` (NOT `references`) — `references` is a SQLite
+// reserved word used in FOREIGN KEY syntax.
+//
+// Hard constraints (per §3.1 step 2):
+//   - 不写 instance_id / instance_start_generation (历史行保持 NULL)
+//   - 不默认 event_type='tool_call' / authorization_status='not_evaluated'
+//   - 不重写原始 ledger 行;只 UPDATE association_status 列
+//   - 输出 affected / failed / skipped 计数 + SHA-256;调用方负责持久化到 audit_meta.
+//
+// The function is pure: caller opens db (live or temp copy), runs, then either
+// commits and writes audit_meta + security_events canonical ledger entry, or
+// rolls back by closing the temp DB without persisting.
+
+export type BackfillAssociationStatusResult = {
+  schemaVersion: number;
+  scanned: number;
+  updated: number;
+  unchanged: number;
+  byMode: Record<string, number>;
+  byResult: Record<string, number>;
+  affectedRows: number;
+};
+
+export async function backfillAssociationStatus(
+  database: Database.Database
+): Promise<BackfillAssociationStatusResult> {
+  const scanned = (database
+    .prepare("SELECT COUNT(*) AS n FROM access_log")
+    .get() as { n: number }).n;
+
+  const byMode: Record<string, number> = Object.create(null);
+  const byResult: Record<string, number> = Object.create(null);
+  let updated = 0;
+  let unchanged = 0;
+
+  const txn = database.transaction(() => {
+    const rows = database
+      .prepare(
+        `SELECT id, turn_attribution_mode, association_status
+           FROM access_log`
+      )
+      .all() as Array<{
+      id: number;
+      turn_attribution_mode: string | null;
+      association_status: string | null;
+    }>;
+
+    for (const row of rows) {
+      const mode = row.turn_attribution_mode ?? "<null>";
+      byMode[mode] = (byMode[mode] ?? 0) + 1;
+
+      let target: string | null;
+      // 历史 explicit 已校验: schema 在 access_log 上有 explicit_turn_validated 列;
+      // 若不存在则视为 legacy_unverified,避免静默升级 confirmed.
+      if (mode === "session_bound") {
+        target = "legacy_unverified";
+      } else if (mode === "unassigned") {
+        target = row.association_status ?? "unassigned";
+      } else if (mode === "explicit") {
+        const validated = (database
+          .prepare(
+            `SELECT 1 FROM pragma_table_info('access_log') WHERE name = 'explicit_turn_validated'`
+          )
+          .get() as { 1: number } | undefined);
+        if (!validated) {
+          target = "legacy_unverified";
+        } else {
+          const flag = (database
+            .prepare(
+              `SELECT explicit_turn_validated AS v FROM access_log WHERE id = ?`
+            )
+            .get(row.id) as { v: number | null } | undefined);
+          // NULL = no validation recorded → legacy_unverified (no silent upgrade).
+          // 1 = validated → confirmed. 0 = invalidated → conflict.
+          target = flag?.v === 1 ? "confirmed" : flag?.v === 0 ? "conflict" : "legacy_unverified";
+        }
+      } else {
+        // 'identity_inferred' 或 其他;按 contract 视为非显式候选 → unassigned.
+        target = "unassigned";
+      }
+
+      byResult[target] = (byResult[target] ?? 0) + 1;
+      if (row.association_status === target) {
+        unchanged += 1;
+        continue;
+      }
+      database
+        .prepare(
+          `UPDATE access_log SET association_status = ? WHERE id = ?`
+        )
+        .run(target, row.id);
+      updated += 1;
+    }
+
+    // conversation_turns: 同样规则基于其 turn_id 上的显式登记 (question_source='reported').
+    const ctRows = database
+      .prepare(
+        `SELECT turn_id, question_source, association_status FROM conversation_turns`
+      )
+      .all() as Array<{
+      turn_id: string;
+      question_source: string;
+      association_status: string | null;
+    }>;
+    for (const row of ctRows) {
+      const target = row.question_source === "reported" ? "confirmed" : "unassigned";
+      if (row.association_status === target) continue;
+      database
+        .prepare(`UPDATE conversation_turns SET association_status = ? WHERE turn_id = ?`)
+        .run(target, row.turn_id);
+      updated += 1; // T03a G3: count conversation_turns updates in total affectedRows.
+    }
+  });
+  txn();
+
+  const schemaVersion = AUDIT_DB_SCHEMA_VERSION;
+
+  return {
+    schemaVersion,
+    scanned,
+    updated,
+    unchanged,
+    byMode,
+    byResult,
+    affectedRows: updated
+  };
+}
+
+/**
+ * Persist a backfill run into audit_meta + write a security_events canonical
+ * ledger entry. Idempotent on `audit_db_schema_version`.
+ */
+export async function recordBackfillRun(input: {
+  database: Database.Database;
+  result: BackfillAssociationStatusResult;
+  migrationText: string;
+  classificationVersion: string;
+  digestVersion: string;
+  runningActor: string;
+  inputSha256: string;
+}): Promise<void> {
+  input.database.transaction(() => {
+    input.database
+      .prepare(
+        `INSERT OR REPLACE INTO audit_meta
+           (audit_db_schema_version, classification_version, digest_version,
+            last_migration_text, running_at_iso, running_actor, input_sha256, output_affected_rows)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        input.result.schemaVersion,
+        input.classificationVersion,
+        input.digestVersion,
+        input.migrationText,
+        new Date().toISOString(),
+        input.runningActor,
+        input.inputSha256,
+        input.result.affectedRows
+      );
+  })();
 }
