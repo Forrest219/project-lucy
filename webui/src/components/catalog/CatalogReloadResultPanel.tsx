@@ -8,6 +8,12 @@ export type CatalogReloadResultPanelProps = {
    * any reload has happened without dealing with `null` themselves.
    */
   run: CatalogReloadRun | null;
+  /**
+   * Success heading. Defaults to the shared panel title. Callers that
+   * surface this panel as the primary status (for example a drawer)
+   * pass the terminology-standard phrase instead.
+   */
+  successLabel?: string;
 };
 
 function formatScope(run: CatalogReloadRun): string {
@@ -45,7 +51,10 @@ function warningContext(warning: CatalogReloadWarning): string | null {
   return null;
 }
 
-export function CatalogReloadResultPanel({ run }: CatalogReloadResultPanelProps) {
+export function CatalogReloadResultPanel({
+  run,
+  successLabel = "本地 Catalog 已重新加载"
+}: CatalogReloadResultPanelProps) {
   const [detailsOpen, setDetailsOpen] = useState(false);
   if (run === null) {
     return (
@@ -72,7 +81,7 @@ export function CatalogReloadResultPanel({ run }: CatalogReloadResultPanelProps)
         data-testid="catalog-reload-result-success"
         translate="no"
       >
-        本地 Catalog 已重新加载
+        {successLabel}
         {hasWarnings ? ` · ${run.warnings.length} 个提示` : ""}
       </p>
 

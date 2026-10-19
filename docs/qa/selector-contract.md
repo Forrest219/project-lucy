@@ -537,6 +537,9 @@
 | `remove-schema-enabled-warning` | remove-schema-enabled-warning | `components/RemoveSchemaDrawer.tsx` |
 | `remove-schema-confirm-btn` | remove-schema-confirm-btn | `components/RemoveSchemaDrawer.tsx` |
 | `remove-schema-success-message` | remove-schema-success-message | `components/RemoveSchemaDrawer.tsx` |
+| `remove-schema-done` | remove-schema-done | `components/RemoveSchemaDrawer.tsx` |
+| `remove-schema-reload-catalog` | remove-schema-reload-catalog | `components/RemoveSchemaDrawer.tsx` |
+| `remove-schema-reload-error` | remove-schema-reload-error | `components/RemoveSchemaDrawer.tsx` |
 | `row-more-trigger` | row-more-trigger | `components/RowMoreMenu.tsx` |
 | `row-more-menu` | row-more-menu | `components/RowMoreMenu.tsx` |
 | `segment-editor` | segment-editor | `components/SegmentForm.tsx` |

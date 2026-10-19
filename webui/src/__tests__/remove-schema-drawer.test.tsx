@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RemoveSchemaDrawer } from "../components/RemoveSchemaDrawer";
-import type { ConnectionInfo, RemoveSchemaPreview } from "../lib/types";
+import type { CatalogReloadRun, ConnectionInfo, RemoveSchemaPreview } from "../lib/types";
 
 function makeConn(overrides: Partial<ConnectionInfo> = {}): ConnectionInfo {
   return {
@@ -32,6 +32,26 @@ function makePreview(overrides: Partial<RemoveSchemaPreview> = {}): RemoveSchema
       wikiRefCount: 0,
       wikiSamplePaths: []
     },
+    ...overrides
+  };
+}
+
+function makeReloadRun(overrides: Partial<CatalogReloadRun> = {}): CatalogReloadRun {
+  return {
+    id: "rel_remove_schema",
+    status: "success",
+    startedAt: "2026-10-19T04:00:00.000Z",
+    finishedAt: "2026-10-19T04:00:00.020Z",
+    durationMs: 20,
+    requestedConnectionId: "mysql-aliyun",
+    connectionIds: ["mysql-aliyun"],
+    connections: 1,
+    configuredSchemas: 1,
+    manifestSchemas: 0,
+    tables: 0,
+    enabledTables: 0,
+    warnings: [],
+    source: "static-yaml",
     ...overrides
   };
 }
@@ -184,6 +204,97 @@ describe("RemoveSchemaDrawer", () => {
       expect(screen.getByTestId("remove-schema-success-message")).toBeInTheDocument()
     );
     expect(callCount).toBeGreaterThanOrEqual(2);
+  });
+
+  it("keeps the sync button label and places the reload result above the footer", async () => {
+    stubFetch({
+      "POST /api/connections/mysql-aliyun/schemas/remove": (body) => {
+        const dryRun = (body as { dryRun?: boolean }).dryRun !== false;
+        if (dryRun) {
+          return new Response(JSON.stringify({ ok: true, data: makePreview() }));
+        }
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              written: true,
+              oldSchemas: ["dataforai", "finance_mart"],
+              newSchemas: ["dataforai"],
+              removedEnabledTables: ["finance_mart.sales"],
+              deletedFiles: []
+            }
+          })
+        );
+      },
+      "POST /api/catalog/reload": (body) => {
+        expect(body).toEqual({ connectionId: "mysql-aliyun" });
+        return new Response(JSON.stringify({ ok: true, data: makeReloadRun() }));
+      }
+    });
+
+    renderDrawer(makeConn(), "finance_mart");
+    await waitFor(() => expect(screen.getByTestId("remove-schema-confirm-btn")).toBeInTheDocument());
+    screen.getByTestId("remove-schema-confirm-btn").click();
+
+    const reloadButton = await screen.findByTestId("remove-schema-reload-catalog");
+    const footer = reloadButton.parentElement;
+    expect(footer).toHaveClass("pl-drawer-footer");
+    expect(within(footer as HTMLElement).getByTestId("remove-schema-done")).toHaveTextContent("完成");
+    expect(reloadButton).toHaveTextContent("同步配置变更");
+    expect(screen.queryByRole("button", { name: /完成 ✓/ })).not.toBeInTheDocument();
+
+    reloadButton.click();
+
+    const result = await screen.findByTestId("catalog-reload-result");
+    expect(result).toHaveTextContent("本地目录已刷新");
+    expect(result).not.toHaveTextContent("0 张表");
+    expect(reloadButton).toHaveTextContent("同步配置变更");
+    expect(footer).not.toContainElement(result);
+    expect(screen.queryByRole("button", { name: /完成 ✓/ })).not.toBeInTheDocument();
+  });
+
+  it("shows a reload failure above the footer without changing the sync label", async () => {
+    stubFetch({
+      "POST /api/connections/mysql-aliyun/schemas/remove": (body) => {
+        const dryRun = (body as { dryRun?: boolean }).dryRun !== false;
+        if (dryRun) {
+          return new Response(JSON.stringify({ ok: true, data: makePreview() }));
+        }
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              written: true,
+              oldSchemas: ["dataforai", "finance_mart"],
+              newSchemas: ["dataforai"],
+              removedEnabledTables: [],
+              deletedFiles: []
+            }
+          })
+        );
+      },
+      "POST /api/catalog/reload": () =>
+        new Response(
+          JSON.stringify({
+            ok: false,
+            error: { code: "CATALOG_RELOAD_FAILED", message: "yaml unreadable" }
+          }),
+          { status: 500 }
+        )
+    });
+
+    renderDrawer(makeConn(), "finance_mart");
+    await waitFor(() => expect(screen.getByTestId("remove-schema-confirm-btn")).toBeInTheDocument());
+    screen.getByTestId("remove-schema-confirm-btn").click();
+
+    const reloadButton = await screen.findByTestId("remove-schema-reload-catalog");
+    reloadButton.click();
+
+    const alert = await screen.findByTestId("remove-schema-reload-error");
+    expect(alert).toHaveTextContent("本地目录刷新失败：yaml unreadable");
+    expect(reloadButton.parentElement).not.toContainElement(alert);
+    expect(reloadButton).toHaveTextContent("同步配置变更");
+    expect(screen.queryByTestId("catalog-reload-result")).not.toBeInTheDocument();
   });
 
   it("shows error panel when preview fails", async () => {
