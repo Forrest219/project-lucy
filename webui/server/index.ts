@@ -42,7 +42,7 @@ import {
   removeSchema
 } from "./project";
 import { loadContentPaths, resolveContentPaths } from "./paths";
-import { collectContentLayout } from "./content-layout";
+import { collectContentLayout, mirrorOnlySemanticRelPaths } from "./content-layout";
 import {
   // Ingest sidecar is M13 legacy. M14 keeps the helpers for the deprecated
   // `/api/connections/:connId/ingest` alias compatibility route.
@@ -932,9 +932,23 @@ export function buildServer() {
 
   app.get("/api/diff", async () => {
     const projectRoot = await resolveProjectRoot();
+    let mirrorOnlySemanticFiles: string[] = [];
+    let mirrorDriftTruncated = false;
+    try {
+      const contentPaths = await resolveContentPaths(projectRoot);
+      const layout = await collectContentLayout(projectRoot, contentPaths);
+      mirrorOnlySemanticFiles = mirrorOnlySemanticRelPaths(layout);
+      mirrorDriftTruncated = layout.driftTruncated;
+    } catch {
+      // Spec 180: drift is advisory and must not fail the pending-change read.
+    }
     return {
       ok: true,
-      data: { files: await changedFiles(projectRoot, writtenFiles) }
+      data: {
+        files: await changedFiles(projectRoot, writtenFiles),
+        mirrorOnlySemanticFiles,
+        mirrorDriftTruncated
+      }
     };
   });
 
@@ -2048,6 +2062,8 @@ export function buildServer() {
       if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
     }
     const startedAt = new Date().toISOString();
+    const consumedFiles = writtenFiles.slice();
+    const consumedSourceEntries = [...changedSources.entries()];
     const reindex = await reindexProject(projectRoot, { force });
     const finishedAt = new Date().toISOString();
     const reindexRecord = {
@@ -2057,10 +2073,12 @@ export function buildServer() {
       stderr: reindex.stderr
     };
     // M32: write a lightweight history record so /publish/history can show
-    // the reindex result alongside normal publish batches.
+    // the reindex result alongside normal publish batches. The snapshot is
+    // the pending set at sync start, so a write that lands during reindex
+    // stays on the workbench for the next sync.
     const pending = await describePendingReleaseAssets(projectRoot, {
-      filePaths: writtenFiles.map((file) => file.filePath),
-      sources: [...changedSources.values()]
+      filePaths: consumedFiles.map((file) => file.filePath),
+      sources: consumedSourceEntries.map(([, source]) => source)
     });
     const historyRecord = await recordManualReindex(projectRoot, {
       actor: actorIdFromRequest(request),
@@ -2071,6 +2089,15 @@ export function buildServer() {
       changedSources: pending.changedSources,
       connectionIds: pending.connectionIds
     });
+    if (reindexRecord.ok) {
+      const consumed = new Set(consumedFiles);
+      for (let index = writtenFiles.length - 1; index >= 0; index -= 1) {
+        if (consumed.has(writtenFiles[index])) writtenFiles.splice(index, 1);
+      }
+      for (const [key, value] of consumedSourceEntries) {
+        if (changedSources.get(key) === value) changedSources.delete(key);
+      }
+    }
     return {
       ok: true,
       data: {

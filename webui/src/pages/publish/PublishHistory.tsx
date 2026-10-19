@@ -8,10 +8,14 @@ import {
   coerceTrigger,
   formatPublishHistoryTs,
   isEmptyManualReindex,
+  manifestSchemaNames,
   reindexLabelFor,
+  removedSourceNames,
+  scaleTextFor,
   statusLabelFor,
   triggerLabelFor,
   uniqueConnectionIds,
+  writtenSourceNames,
   type ReindexLabel
 } from "../../lib/publishHistoryLabels";
 import { queryKeys } from "../../lib/queryKeys";
@@ -184,6 +188,23 @@ type ChangeScopeProps = {
   record: SemanticAssetReleaseRecord;
 };
 
+function ScopeNames({ names }: { names: string[] }) {
+  const preview = previewList(names);
+  return (
+    <>
+      {preview.shown.map((name, index) => (
+        <span key={name}>
+          {index > 0 ? "、" : null}
+          <span className="notranslate" translate="no">
+            {name}
+          </span>
+        </span>
+      ))}
+      {preview.more > 0 ? <span className="pl-publish-history-scope-more"> +{preview.more}</span> : null}
+    </>
+  );
+}
+
 function ChangeScopeCell({ record }: ChangeScopeProps) {
   if (isEmptyManualReindex(record)) {
     return (
@@ -194,20 +215,15 @@ function ChangeScopeCell({ record }: ChangeScopeProps) {
   }
 
   const connections = previewList(uniqueConnectionIds(record));
-  const sources = previewList((record.changedSources ?? []).map((s) => s.sourceName));
+  const written = writtenSourceNames(record);
+  const removed = removedSourceNames(record);
+  const manifests = manifestSchemaNames(record);
 
   return (
     <div className="pl-publish-history-scope" data-testid="publish-history-scope">
       {connections.shown.length > 0 ? (
         <div className="pl-publish-history-scope-primary">
-          {connections.shown.map((id, index) => (
-            <span key={id}>
-              {index > 0 ? "、" : null}
-              <span className="notranslate" translate="no">
-                {id}
-              </span>
-            </span>
-          ))}
+          <ScopeNames names={connections.shown.concat()} />
           {connections.more > 0 ? (
             <span className="pl-publish-history-scope-more"> +{connections.more}</span>
           ) : null}
@@ -215,19 +231,22 @@ function ChangeScopeCell({ record }: ChangeScopeProps) {
       ) : (
         <div className="pl-publish-history-scope-primary text-fg-muted">（无连接信息）</div>
       )}
-      {sources.shown.length > 0 ? (
-        <div className="pl-publish-history-scope-secondary">
-          {sources.shown.map((name, index) => (
-            <span key={name}>
-              {index > 0 ? "、" : null}
-              <span className="notranslate" translate="no">
-                {name}
-              </span>
-            </span>
-          ))}
-          {sources.more > 0 ? (
-            <span className="pl-publish-history-scope-more"> +{sources.more}</span>
-          ) : null}
+      {written.length > 0 ? (
+        <div className="pl-publish-history-scope-secondary" data-testid="publish-history-scope-written">
+          写入 <ScopeNames names={written} />
+        </div>
+      ) : null}
+      {removed.length > 0 ? (
+        <div className="pl-publish-history-scope-secondary" data-testid="publish-history-scope-removed">
+          已删除 <ScopeNames names={removed} />
+        </div>
+      ) : null}
+      {manifests.length > 0 ? (
+        <div className="pl-publish-history-scope-secondary" data-testid="publish-history-scope-manifest">
+          <span className="notranslate" translate="no">
+            Schema Manifest
+          </span>{" "}
+          <ScopeNames names={manifests} />
         </div>
       ) : null}
     </div>
@@ -239,18 +258,9 @@ type ScaleCellProps = {
 };
 
 function ScaleCell({ record }: ScaleCellProps) {
-  if (isEmptyManualReindex(record)) {
-    return (
-      <span className="pl-publish-history-table-num" data-testid="publish-history-scale">
-        —
-      </span>
-    );
-  }
-  const fileCount = record.files?.length ?? 0;
-  const sourceCount = record.changedSources?.length ?? 0;
   return (
     <span className="pl-publish-history-table-num" data-testid="publish-history-scale">
-      文件 {fileCount} · 语义源 {sourceCount}
+      {scaleTextFor(record)}
     </span>
   );
 }

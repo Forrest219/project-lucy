@@ -2,7 +2,7 @@
 
 | 元数据 | 内容 |
 |---|---|
-| Spec 编号 / 版本 | 180 / v0.1 |
+| Spec 编号 / 版本 | 180 / v0.2 |
 | 日期 | 2026-10-18 |
 | 状态 | 待实现 |
 | 范围 | T5。只读说明编辑事实源和派生镜像，并报告漂移 |
@@ -63,3 +63,11 @@ interface ContentLayoutStatus {
 - 内容根有、镜像没有的文件，同步后镜像出现该文件，诊断不再把它标成 `authoring_only`。
 - `LUCY_CONTENT_ROOT=.` 时 `mirrorActive` 为 false，且不把项目根文件报成漂移。
 - 不断言、也不执行任何删除。
+
+## 5. 发布工作台提示
+
+`GET /api/diff` 附带 `mirrorOnlySemanticFiles`（`semantic-layer/` 下仅镜像存在的 `.yaml` 相对路径）和 `mirrorDriftTruncated`。诊断失败时这两个字段为空 / false，待同步文件列表仍返回。
+
+`/publish/workbench` 在列表非空时显示：「镜像中仍有内容根已删除的语义文件，本次索引可能继续收录。」路径使用 `notranslate`。此提示不提供删除动作。
+
+同步索引成功后，本批已经入账的待同步路径从进程内列表移除。同步失败时保留，便于重试。这不改变镜像，也不把镜像文件复制回内容根。

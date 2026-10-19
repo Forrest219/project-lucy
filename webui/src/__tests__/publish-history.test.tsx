@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { changeScopeTextFor, scaleTextFor } from "../lib/publishHistoryLabels";
 import { PublishHistory } from "../pages/publish/PublishHistory";
 import type { SemanticAssetReleaseRecord } from "../lib/types";
 
@@ -107,6 +108,43 @@ beforeEach(() => {
   );
 });
 
+describe("publish history change scope", () => {
+  it("splits written overlays, deleted overlays, and schema manifests", () => {
+    const record = makePublishRecord({
+      connectionIds: ["mysql-aliyun"],
+      changedSources: [
+        { connectionId: "mysql-aliyun", sourceName: "ai_intl_ad_daily" },
+        { connectionId: "mysql-aliyun", sourceName: "ai_intl_country_daily" }
+      ],
+      files: [
+        {
+          targetPath: "semantic-layer/mysql-aliyun/_schema/chatbi.yaml",
+          kind: "schemaManifest",
+          sha256: "a".repeat(64),
+          overwritten: true
+        },
+        {
+          targetPath: "semantic-layer/mysql-aliyun/ai_intl_ad_daily.yaml",
+          kind: "semanticSource",
+          sha256: "b".repeat(64),
+          overwritten: true
+        },
+        {
+          targetPath: "semantic-layer/mysql-aliyun/ai_intl_country_daily.yaml",
+          kind: "semanticSource",
+          sha256: "",
+          overwritten: false
+        }
+      ]
+    });
+
+    expect(changeScopeTextFor(record)).toBe(
+      "mysql-aliyun / 写入 ai_intl_ad_daily / 已删除 ai_intl_country_daily / Schema Manifest chatbi"
+    );
+    expect(scaleTextFor(record)).toBe("文件 3 · 语义源 1");
+  });
+});
+
 describe("PublishHistory", () => {
   it("renders the publish history page header with CSV export", async () => {
     renderHistory();
@@ -139,6 +177,7 @@ describe("PublishHistory", () => {
     expect(screen.getByTestId("publish-history-page-index")).toHaveTextContent("1 / 1");
 
     expect(await screen.findByText("customer-db")).toBeInTheDocument();
+    expect(screen.getByTestId("publish-history-scope-written")).toHaveTextContent("写入");
     expect(screen.getByText("international_country_metrics")).toBeInTheDocument();
     expect(screen.getByText(/文件 1 · 语义源 1/)).toBeInTheDocument();
     expect(screen.getByText("全库索引重建（无资产变更）")).toBeInTheDocument();

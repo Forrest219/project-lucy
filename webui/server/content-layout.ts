@@ -149,6 +149,18 @@ export async function collectContentLayout(
   };
 }
 
+/** Semantic YAML that exists only in the ktx mirror. Paths are project-relative. */
+export function mirrorOnlySemanticRelPaths(status: ContentLayoutStatus): string[] {
+  return status.drift
+    .filter(
+      (entry) =>
+        entry.dir === "semantic-layer" &&
+        entry.kind === "mirror_only" &&
+        entry.relPath.endsWith(".yaml")
+    )
+    .map((entry) => `semantic-layer/${entry.relPath}`);
+}
+
 async function listFiles(rootDir: string): Promise<Set<string>> {
   const out = new Set<string>();
   await walk(rootDir, "", out);

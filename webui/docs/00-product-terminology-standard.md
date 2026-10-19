@@ -449,6 +449,9 @@ Connection (连接)
 | Upload Semantic Assets | 上传语义资产 | — | Catalog / 连接等入口；**禁止**作为 `/publish/workbench` 本页入口（Spec 123） |
 | Publish Semantic Assets Drawer | 发布语义资产 | — | 仅上传路径 Drawer 标题；不在工作台本页 |
 | Pending Sync File Count | N 个待同步文件 | 把该数字称为校验通过的文件数 | 本批一并同步的文件数，含 Wiki 与其它非表文件（Spec 145） |
+| Publish Scope Written | 写入 | 把已删除语义源和写入并列 | 发布记录变更范围；只含记录时内容根仍可读的语义源（Spec 85 v1.1） |
+| Publish Scope Removed | 已删除 | 已移除（作变更范围分组）；与写入放在同一组 | 发布记录中已入账、但内容根文件已不存在的语义源 |
+| Mirror Only Semantic Notice | 镜像中仍有内容根已删除的语义文件，本次索引可能继续收录 | 在该提示上提供删除镜像 | 发布工作台只读提示（Spec 180 v0.2）；不删除镜像文件 |
 | Table Validation Result | 表语义校验通过 A/B | 校验成功（不说明校验对象）；校验通过 N 张（不写分母） | 进行态为「正在校验表语义…」。B 为本批进入表语义校验的表数，A 为通过数；与待同步文件数分列（Spec 145） |
 
 审阅与审批的流程分工必须与第 3.1 节一致：

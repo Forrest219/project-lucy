@@ -395,6 +395,9 @@ export type TableYamlVersionRestoreResult = {
 
 export type ChangedFilesResponse = {
   files: ChangedFile[];
+  /** Semantic YAML present only in the ktx mirror (Spec 180). Empty when there is no separate mirror. */
+  mirrorOnlySemanticFiles?: string[];
+  mirrorDriftTruncated?: boolean;
 };
 
 export type ValidateChangedResponse = {

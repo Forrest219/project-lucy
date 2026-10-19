@@ -1124,8 +1124,9 @@ function absoluteContentFile(
 
 /**
  * Snapshot the workbench's pending semantic files into a release record.
- * Index sync does not promote a new upload, but the files already on disk are
- * what that sync made visible to Agent. History must name them.
+ * Index sync does not promote a new upload. `changedSources` names overlays
+ * that still exist in the content root. Paths whose files are already gone
+ * stay on `files` with an empty digest so history can show them as deleted.
  */
 export async function describePendingReleaseAssets(
   projectRoot: string,
@@ -1173,13 +1174,13 @@ export async function describePendingReleaseAssets(
     sourceKeys.add(key);
     changedSources.push({ connectionId, sourceName });
   }
-  for (const source of pending.sources) {
-    addSource(source.conn, source.table);
-  }
+  // Only overlays that were readable in the content root count as written
+  // sources. A pending path with an empty digest is a deletion (the file is
+  // already gone) and must not be listed beside the upload.
   for (const file of files) {
-    if (file.kind !== "semanticSource") continue;
+    if (file.kind !== "semanticSource" || !file.sha256) continue;
     const match = /^semantic-layer\/([^/]+)\/([^/]+)\.yaml$/.exec(file.targetPath);
-    if (!match) continue;
+    if (!match || file.targetPath.includes("/_schema/")) continue;
     addSource(match[1], match[2]);
   }
 

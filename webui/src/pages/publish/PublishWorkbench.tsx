@@ -1,7 +1,7 @@
 import clsx from "clsx";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DiffViewer } from "../../components/DiffViewer";
 import { PageHeader } from "../../components/PageHeader";
 import { apiGet, apiPost } from "../../lib/apiClient";
@@ -234,6 +234,7 @@ export function countDiffLines(diff?: string): { added: number; deleted: number 
 }
 
 export function PublishWorkbench() {
+  const queryClient = useQueryClient();
   const [selected, setSelected] = useState<string | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [confirmPublishOpen, setConfirmPublishOpen] = useState(false);
@@ -280,6 +281,8 @@ export function PublishWorkbench() {
     onSuccess: (data) => {
       if (data.reindex.ok) {
         toast.success("KTX 索引重建完成", { id: "workbench-reindex" });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.diff });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.semanticAssetReleases });
       } else {
         toast.error(`KTX 索引重建失败：exit ${data.reindex.exitCode}`, { id: "workbench-reindex" });
       }
@@ -306,6 +309,8 @@ export function PublishWorkbench() {
   }, [validateMutation.isPending]);
 
   const files = diffQuery.data?.files ?? [];
+  const mirrorOnlySemanticFiles = diffQuery.data?.mirrorOnlySemanticFiles ?? [];
+  const mirrorDriftTruncated = diffQuery.data?.mirrorDriftTruncated === true;
   const fileSignature = files.map((file) => file.filePath).join("\n");
   const hasPendingFiles = files.length > 0;
   const boundaryChecklist = boundaryChecklistForChangedFiles(files.map((file) => file.filePath));
@@ -489,6 +494,18 @@ export function PublishWorkbench() {
       <div className="pl-review-layout" data-testid="publish-workbench-layout">
         <aside className="pl-review-sidebar" data-testid="workbench-pending-panel">
           <p className="pl-panel-title mb-2">本次将同步的变更</p>
+          {mirrorOnlySemanticFiles.length > 0 ? (
+            <p className="pl-notice text-xs mb-2" data-testid="workbench-mirror-only-semantic">
+              镜像中仍有内容根已删除的语义文件，本次索引可能继续收录。{" "}
+              <span className="notranslate" translate="no">
+                {mirrorOnlySemanticFiles.slice(0, 3).join("、")}
+              </span>
+              {mirrorOnlySemanticFiles.length > 3
+                ? ` +${mirrorOnlySemanticFiles.length - 3}`
+                : null}
+              {mirrorDriftTruncated ? " 还有更多未列出。" : null}
+            </p>
+          ) : null}
           {diffQuery.isLoading ? <p className="pl-notice">正在加载变更…</p> : null}
           {diffQuery.error ? (
             <p className="pl-error">

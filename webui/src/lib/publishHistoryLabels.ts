@@ -104,24 +104,69 @@ export function isEmptyManualReindex(record: SemanticAssetReleaseRecord): boolea
   return coerceTrigger(record.trigger) === "webui_manual_reindex" && !hasAssetChanges(record);
 }
 
+const SEMANTIC_SOURCE_PATH = /^semantic-layer\/([^/]+)\/([^/]+)\.yaml$/;
+const MANIFEST_PATH = /^semantic-layer\/[^/]+\/_schema\/([^/]+)\.yaml$/;
+
+function uniqueNames(names: Array<string | null | undefined>): string[] {
+  return Array.from(new Set(names.filter((name): name is string => Boolean(name))));
+}
+
+function isSemanticSourceFile(file: SemanticAssetReleaseRecord["files"][number]): boolean {
+  if (file.kind === "schemaManifest" || file.targetPath.includes("/_schema/")) return false;
+  if (file.kind === "semanticSource") return true;
+  return SEMANTIC_SOURCE_PATH.test(file.targetPath);
+}
+
+function sourceNameOf(file: SemanticAssetReleaseRecord["files"][number]): string | null {
+  const match = SEMANTIC_SOURCE_PATH.exec(file.targetPath);
+  if (!match || file.targetPath.includes("/_schema/")) return null;
+  return match[2] ?? null;
+}
+
+/** Semantic sources whose overlay was readable when the record was written. */
+export function writtenSourceNames(record: SemanticAssetReleaseRecord): string[] {
+  const semanticFiles = (record.files ?? []).filter(isSemanticSourceFile);
+  if (semanticFiles.length > 0) {
+    return uniqueNames(semanticFiles.filter((file) => Boolean(file.sha256)).map(sourceNameOf));
+  }
+  return uniqueNames((record.changedSources ?? []).map((source) => source.sourceName));
+}
+
+/** Pending overlay paths that had no content-root file at record time. */
+export function removedSourceNames(record: SemanticAssetReleaseRecord): string[] {
+  return uniqueNames(
+    (record.files ?? []).filter((file) => isSemanticSourceFile(file) && !file.sha256).map(sourceNameOf)
+  );
+}
+
+export function manifestSchemaNames(record: SemanticAssetReleaseRecord): string[] {
+  return uniqueNames(
+    (record.files ?? []).map((file) => {
+      if (file.kind !== "schemaManifest" && !file.targetPath.includes("/_schema/")) return null;
+      return MANIFEST_PATH.exec(file.targetPath)?.[1] ?? null;
+    })
+  );
+}
+
 /** Full change-scope text for CSV (no truncation). */
 export function changeScopeTextFor(record: SemanticAssetReleaseRecord): string {
   if (isEmptyManualReindex(record)) return "全库索引重建（无资产变更）";
   const connections = uniqueConnectionIds(record);
-  const sources = Array.from(
-    new Set((record.changedSources ?? []).map((s) => s.sourceName).filter(Boolean))
-  );
   const parts: string[] = [];
-  if (connections.length > 0) parts.push(connections.join("、"));
-  else parts.push("（无连接信息）");
-  if (sources.length > 0) parts.push(sources.join("、"));
+  parts.push(connections.length > 0 ? connections.join("、") : "（无连接信息）");
+  const written = writtenSourceNames(record);
+  const removed = removedSourceNames(record);
+  const manifests = manifestSchemaNames(record);
+  if (written.length > 0) parts.push(`写入 ${written.join("、")}`);
+  if (removed.length > 0) parts.push(`已删除 ${removed.join("、")}`);
+  if (manifests.length > 0) parts.push(`Schema Manifest ${manifests.join("、")}`);
   return parts.join(" / ");
 }
 
 export function scaleTextFor(record: SemanticAssetReleaseRecord): string {
   if (isEmptyManualReindex(record)) return "—";
   const fileCount = record.files?.length ?? 0;
-  const sourceCount = record.changedSources?.length ?? 0;
+  const sourceCount = writtenSourceNames(record).length;
   return `文件 ${fileCount} · 语义源 ${sourceCount}`;
 }
 
