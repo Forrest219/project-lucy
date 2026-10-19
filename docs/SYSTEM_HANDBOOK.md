@@ -1596,23 +1596,6 @@ curl -s "http://127.0.0.1:5174/api/admin/audit/sources?hours=24"
 | 「接入后 Token 真的能打通本机 MCP 吗？」 | 受控试调 `tools/list`（必达 smoke） |
 | 「denied 行的真实原因码是什么？」 | ACL 预览复制机器码，配合 `/admin/audit` 取证 |
 
-**关联**
-
-- §3.5 [什么时候配置角色、Agent 和 Token](#什么时候配置角色agent-和-token)：先建角色再建 Agent；调试台是建好 Agent 后的裁决验证面。
-- §3.8 [角色列表与权限预览](#38-访问治理--角色列表与权限预览)：权限预览给的是「Role 层能调什么」，本台给的是「这个 Agent 在该 Role 下的具体裁决」。
-- §3.11 [MCP 会话与上游连接](#311-访问治理--mcp-会话与上游连接)：上游会话归属决定 `callSource` 在访问日志里的语义。
-- §4 [Agent / 客户端接入指南](#4-agent--客户端接入指南)：调试台是接入指南的「试一下」按钮——任何 `tools/list` / `kx_catalog` 失败优先到这里复现。
-
-**反馈历史**
-
-| 编号 | 摘要 | Spec / 文件 |
-| --- | --- | --- |
-| `UX-ADMIN-MCP-PLAYGROUND-001` | 缺少协议级 ACL 调试面（P0）——已落地 ACL 预览 + 受控试调 + 双行裁决原因 | `webui/docs/99-mcp-playground-acl-decision-visibility-spec.md` |
-| `UX-ADMIN-MCP-PLAYGROUND-002` | 受控试调写入访问日志后无法区分来源（P2）——`callSource=mcp-playground` 已落库 | Spec 99 v1.2 §7.3 |
-| `UX-ADMIN-MCP-PLAYGROUND-005` | 连上检查展示探测清单（P1）——简化为「能连上 / 不能连上」二态，去掉探测分项 | Spec 99 v1.5 §6.6 |
-
-权威 Spec：`webui/docs/99-mcp-playground-acl-decision-visibility-spec.md`。
-
 #### Token 凭据（/admin/tokens）
 
 入口：`/admin/tokens`（全局视图）或 `/admin/agents/:userId` 的 Token 区（按 Agent 视图）。本节聚焦 **Token 本身** 的签发、吊销、过期与配置复制；何时该配 Token 的三层决策见上文「什么时候配置角色、Agent 和 Token」。
@@ -1814,6 +1797,118 @@ POST /api/eval/runs
 | 入库 | `.ktx-ui/eval/runs.sqlite` 或 `LUCY_EVAL_DB`（与审计库隔离；runner 捕获的 `SQL` 可写入 run case。生产访问日志的生成 SQL 见 Spec 125 / [审计热库与冷库（SQL 留存边界）](#审计热库与冷库sql-留存边界)） |
 | 产物 | run artifact 和 markdown summary |
 | 分类 | `pass`、`logic_regression`、`tool_error`、`schema_drift`、`data_drift` |
+
+#### 现场提问（/eval/field-questions）
+
+本节为 §3.6 第一个 H4 子节。**现场提问**是从访问日志聚类出来的、用户反复问的业务问法，审定后可收成评测用例。它把"用户真实在问什么"反馈回数据治理者，让 `evals/<domain>/eval/<domain>-eval-cases.yaml` 不只依赖离线套件与专家手写，而是被真实访问流量持续校准。详见 [`webui/docs/161-offline-eval-customer-ops-spec.md`](webui/docs/161-offline-eval-customer-ops-spec.md) §8.3、§8.4、§10（事实源：`webui/src/pages/eval/FieldQuestions.tsx`）。
+
+**聚类规则**
+
+- 同一 `query_hash`（语义层编译结果）在 `[lookback_days]` 窗口内重复 ≥ N 次 → 进入候选池。
+- 默认窗口 30 天，N = 5；两个值都可在页面顶部"窗口与阈值"过滤器里临时调整（不落库）。
+- 分群键是权限快照 `resolved_json.sourceMapVersion` + `shapeHash`（规范化 JSON 的 sha256：指标名、维度字段、过滤字段排序，去掉过滤值、问句、客户版本字符串）+ `failureClass`。
+- 聚类只看语义化后的 `query_hash` / `summary`，**不**保存用户原文——保护 PII，也避免 raw 攻击载荷写入 `evidence_json`。
+- 推断问询的工具调用数大于 50 时，按 `shapeHash` 拆开再进入分组（同一轮推断问询可能叠了多次查法）；调用数为 0 的推断问询直接丢弃。
+- 权限拒绝 / 成功调用都不进入本函数——它们走 `/eval/security-candidates`（deny）或不上榜（success 但未达阈值）。
+
+**三态生命周期**
+
+| 状态 | 含义 | 写入位置 |
+| --- | --- | --- |
+| `candidate` | 刚聚类出来，未审定 | `.ktx-ui/eval/field_question` 表 |
+| `promoted` | 已采纳，已收成评测用例草稿 | `evals/<domain>/eval/<domain>-eval-cases.yaml`（人在编辑器保存） |
+| `ignored` | 明确不要这条用例 | 同 `candidate`，仅 `status` 与 `updated_at` 变化 |
+
+**操作路径**
+
+页面顶部固定"窗口与阈值"过滤器（窗口、命中次数下限、domain），下方表格列：`summary`（脱敏摘要，由失败类 + 指标名生成，例如「查 spend 时，这个指标还没绑到数据源」）、`hit_count`、`first_seen_on` / `last_seen_on`、所属 domain 与 `role_ids_json`、相关 source / measure（仅字段名，不带过滤值）、Actions。
+
+每行三个动作：
+
+- **查看访问日志**：深链 `/admin/audit?outcome=success&queryHash=<hash>`，只看命中同一 hash 的成功调用（deny 不会同时上榜）。
+- **收成评测用例**：弹预检抽屉，预览将生成的 YAML case（含 `query`（待人写）、`expected_measures`、`expected_dimensions`、`expected_filters` 的字段名），确认后 `POST /api/eval/field-questions/:id/promote` 返回草稿，**不直接写盘**。
+- **忽略**：写一行 `note` 即可，不需要 reviewer evidence。
+
+**采纳预检**
+
+- 预览 YAML 草案的字段结构（`query` 留空必须由人写；过滤值与客户版本字符串不出现）。
+- 标注目标 domain（自动从语义层解析；解析失败需手工选择 `superstore` / `kx_financial` / `data_agent_poc` 等已注册 domain）。
+- 确认后才 `POST /api/eval/field-questions/:id/promote`；服务返回草稿，人在 `/eval/cases/:domain/:caseId` 编辑保存。
+- 候选采纳**不**自动触发 Eval Run；评测用例保存后，需到 `/eval/runs` 手动跑批（离线跑批命令见 §3.6 主体）。
+
+**与 §3.6 评测用例的双向同步**
+
+- 已采纳的 case 自动出现在 `/eval/cases` 对应 domain 下；`from_field_question: true` 标识其来源。
+- 在 `/eval/cases` 看到 `from_field_question: true` 的 case，可一键"返回现场提问"——回到原始 `field_question` 行，关闭其在评测套件中的对应条目（不删除评测用例，保留版本历史）。
+
+**边界**
+
+- 现场提问只基于脱敏摘要，**不**保存用户原文、过滤值、客户版本字符串。
+- 与安全评测候选共享访问日志源但分流：`outcome = success` + 未达阈值 → 不上榜；`outcome = success` + 达阈值 → 现场提问；`outcome = denied` → 安全评测候选。一条访问最多入选一个池子。
+- 候选采纳**不**自动触发 Eval Run，需到 `/eval/runs` 手动跑。
+- `splitInferredTurns` 的阈值（50 次调用）写在服务端常量，页面不提供调节；规则变更须改 Spec 161。
+
+**反馈历史**
+
+`docs/ui-ux-feedback/pages/eval.md` 中 `UX-EVAL-FIELD-` 编号暂未建立——新增页面前先暂留空；出现第一条现场提问相关反馈时再创建 `UX-EVAL-FIELD-001` 起新编号。相关条目：UX-EVAL-001/002（运行历史/评测用例 PageHeader badge 冗余）、UX-EVAL-005（评测用例 KPI 缺 ⓘ）的修复经验可移植到现场提问页头。
+
+#### 安全评测候选（/eval/security-candidates）
+
+本节是 §3.6 第二个 H4 子节。**安全评测候选**从访问**拒绝**日志里提取权限与数据隔离场景，审定后转为安全评测用例。它和现场提问共享访问日志源但分流：同一访问要么 success 要么 denied，不会同时入选两边。详见 [`webui/docs/65-safe-log-to-eval-spec.md`](webui/docs/65-safe-log-to-eval-spec.md)（事实源：`webui/src/pages/eval/SecurityCandidates.tsx`）。
+
+**聚类规则**
+
+- 同一 `decision_reason`（中文或机器码，例如 `tool_forbidden_global` / `table_forbidden:*` / `raw_query_forbidden` / `sensitive_metadata_forbidden:*` / `unknown_or_forbidden_connection:*`）在 `[lookback_days]` 窗口内重复 ≥ M 次。
+- 默认窗口 30 天，M = 3（页面顶部可调，不落库）。
+- 提取 `role` / `agent` / `table` / `tool` / `token_hash_prefix` 维度组合作为分群键。
+- **不**带原始 `sql` / `query`——deny 路径不存攻击载荷，避免把拒绝事件本身变成新的攻击面。
+- Redaction fail-closed：高熵凭据串 / 已知 token、secret、API key 签名 → 候选直接 reject，不进入审阅。
+
+**典型场景**
+
+| 候选类型 | 来源 reason | 风险档 |
+| --- | --- | --- |
+| forbidden tool 回归 | `tool_forbidden_global` | P0 |
+| 越权访问敏感表 | `table_forbidden:*` | P0 |
+| 未授权 connection | `unknown_or_forbidden_connection:*` | P0 |
+| raw SQL 路径尝试 | `raw_query_forbidden` | P0 |
+| 敏感元数据工具越权 | `sensitive_metadata_forbidden:*` | P0 |
+| 反复出现的权限相关上游错误 | `upstream_permission_error` 等 | P1 |
+| 审阅人标注的可疑成功访问 | 人工标记 | P1 / P0 |
+
+**三态生命周期**
+
+| 状态 | 含义 | 备注 |
+| --- | --- | --- |
+| `candidate` | 刚抽取出来，等待审阅 | 落 `.ktx-ui/eval/security_eval_candidate` 表 |
+| `accepted` | reviewer evidence 已签发，等待晋升 | 走 `POST /api/eval/security-candidates/:id/promote/preview` |
+| `promoted` | 已晋升为 P0 安全评测用例 | 写 `evals/<domain>/eval/<domain>-security-cases.yaml` |
+| `rejected` | 明确不要这条用例（分 redaction 拒 / 业务拒） | 同 `candidate`，仅 `status` 与 `updated_at` 变化 |
+
+晋升必须先有 `accepted` 状态的 reviewer evidence（`security_eval_candidate_review` 表：审阅人 actor、`permission_boundary_confirmed` / `expected_denial_confirmed` / `business_context_confirmed` 三项勾选与 `note`），否则 promote 接口直接 fail——不接受未审阅候选晋升。
+
+**采纳路径**
+
+- `POST /api/eval/security-candidates/:id/promote/preview` 返回晋升后的 YAML diff（新增 / 改写 / 幂等字段）。
+- 确认后再 `POST /api/eval/security-candidates/:id/promote` 写盘，目标文件独立于正常评测用例：`evals/<domain>/eval/<domain>-security-cases.yaml`。
+- 与正常 case 走不同 Run 路径：安全 case 走 `gateKind = "security_eval_candidate_extraction"` 的 trace span，失败 → §3.5.x MCP 调试台 ACL 预览排查；正常 case 走 `lucy_query` 编译 + 离线跑批。
+
+**与 §3.5 访问治理的关联**
+
+- 一条被采纳的安全 case 进 eval 后，会触发对应的 ACL 改进建议（关联到 §3.5 角色 / Agent / Token 的边界复核）。
+- 安全 case 失败 → 进入 §3.5.x MCP 调试台 ACL 预览排查，看同一 `role` + `table` + `tool` 在试调沙盒里的裁决是否一致。
+- 与 §3.8 访问日志的 `outcome=denied` 视图共享同一审计热库（`.ktx-ui/audit.sqlite`），但本页面只展示脱敏摘要，不展示 raw `sql` / `query`。
+
+**边界**
+
+- 不展示 raw `sql` / `query`；只展示 `decision_reason`（中文）+ `role` / `agent` / `table` / `tool` / `token_hash_prefix`。
+- 与 §3.6.x 现场提问互斥——同一访问要么 success 要么 denied，不会同时入选两边。
+- Redaction fail-closed：高熵凭据 / 已知 secret 签名 → 候选直接 reject，不进入审阅。
+- Trace / Evidence 链路：抽取写 `span_type = "eval_run"` + `metadata.gateKind = "security_eval_candidate_extraction"`；晋升写 `evidence_events.relation = "promoted"`；拒绝写 `relation = "denied_by"`。
+
+**反馈历史**
+
+`docs/ui-ux-feedback/pages/eval.md` 中 `UX-EVAL-SECURITY-` 编号暂未建立——新增页面前先暂留空；出现第一条安全评测候选相关反馈时再创建 `UX-EVAL-SECURITY-001` 起新编号。已有条目 UX-EVAL-003（安全候选页容器与按钮体系分裂，Status: Fixed）走的是 `UX-EVAL-` 主编号而非 `UX-EVAL-SECURITY-` 子编号，复用为新编号格式的参考。
 
 ### 3.7 YAML 规范与交付验收
 
