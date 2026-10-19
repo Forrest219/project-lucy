@@ -127,6 +127,7 @@ GET    /api/eval/runs/summary
 GET    /api/r1/observability
 GET    /api/help/handbook
 GET    /api/help/search
+GET    /api/help/diagrams/:id
 
 POST   /api/semantic-assets/validate
 POST   /api/semantic-assets/publish
@@ -671,6 +672,10 @@ Monitor：
 ### Help
 
 `GET /api/help/handbook` 返回系统手册内容和元数据，供 WebUI 帮助入口展示。该端点只读，不暴露 secret 文件。
+
+`GET /api/help/search` 在手册正文中做只读检索，返回命中章节的 id、标题与片段。
+
+`GET /api/help/diagrams/:id` 返回一张产品架构图（HTML）。`:id` 只能取已登记的两个值之一：`lucy-architecture-diagram`（产品架构图）与 `lucy-docs-flows`（文档流转图）。未知 id 返回 404 `ERR_HELP_DIAGRAM_NOT_FOUND`；路径穿越尝试同样返回 404。该端点只读。
 
 ### Admin / 访问治理
 

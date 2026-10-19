@@ -20,6 +20,8 @@
     "lint:handbook-baseline:test": "node --test scripts/release/handbook-baseline.test.mjs",
     "lint:handbook-coverage": "node scripts/gates/handbook-coverage.mjs",
     "lint:handbook-coverage:test": "node --test scripts/gates/handbook-coverage.test.mjs",
+    "lint:handbook-anchors": "node scripts/gates/handbook-anchor-gate.mjs",
+    "lint:handbook-anchors:test": "node --test scripts/gates/handbook-anchor-gate.test.mjs",
     "lint:terminology": "node webui/scripts/lint-terminology.mjs",
     "lint:ia-boundary": "node webui/scripts/lint-ia-boundary.mjs",
     "r1:doris-smoke": "node scripts/smoke/lucy-r1-doris-smoke.mjs",

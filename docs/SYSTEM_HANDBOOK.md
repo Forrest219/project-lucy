@@ -295,7 +295,7 @@ connections:
       - dataforai
 ```
 
-3. 创建密钥文件。
+3. 创建密码文件。
 
 ```bash
 mkdir -p .ktx/secrets
@@ -445,7 +445,7 @@ curl -s -X POST http://127.0.0.1:5174/api/catalog/reload \
 | 维护启用表范围 | WebUI `/connections/enabled-tables` |
 | 让 Agent 可见 | `webui/config/access.yaml` role / ACL |
 
-连接信息来自 `ktx.yaml`。WebUI 只暴露 `passwordSource`，不会读取或返回 `password: file:` 指向的密钥内容。
+连接信息来自 `ktx.yaml`。WebUI 只暴露 `passwordSource`，不会读取或返回 `password: file:` 指向的密码文件内容。
 
 启用表范围保存流程：
 
@@ -546,7 +546,7 @@ PUT /api/connections/:connId/enabled-tables
 
 | 角色 | 负责的事 | 不负责的事 |
 | --- | --- | --- |
-| WebUI | 查看 connection、连通测试、添加 Schema、维护 `enabled_tables`、上传 YAML 资产、刷新本地目录、显示 secret 路径来源 | 写入 host / port / user / password；读取 `password: file:` 指向的密钥内容；直接连接物理数据库做扫描 |
+| WebUI | 查看 connection、连通测试、添加 Schema、维护 `enabled_tables`、上传 YAML 资产、刷新本地目录、显示 secret 路径来源 | 写入 host / port / user / password；读取 `password: file:` 指向的密码文件内容；直接连接物理数据库做扫描 |
 | `ktx.yaml` + secret | 声明物理连接的 driver、host、port、username、password、schemas、`enabled_tables` | Agent 鉴权；role / ACL 治理 |
 | `webui/config/access.yaml` | 定义 role、Agent、token hash、ACL（连接、表范围、工具） | 物理连接配置；MCP upstream 行为 |
 
@@ -671,7 +671,7 @@ Docker / customer-config 路径（容器内项目根为 `/data/lucy`）：
 # 在容器内准备 secret 目录
 docker compose exec lucy mkdir -p /data/lucy/.ktx/secrets
 
-# 从宿主机把密钥文件灌进容器
+# 从宿主机把密码文件灌进容器
 docker compose exec -T lucy sh -c 'cat > /data/lucy/.ktx/secrets/<connection-id>-password' \
   < ./<connection-id>-password
 
@@ -1150,7 +1150,7 @@ PUT /api/wiki/:key
 | --- | --- | --- | --- |
 | 「这一类人/机器人，能看哪些连接和表、能调哪些 `MCP` 工具？」 | **角色权限**（`Role`） | `/admin/roles` | 可复用的权限边界；被多个 `Agent` 引用 |
 | 「张三 / 评测机器人，要对哪次调用负责？」 | **`Agent`** | `/admin/agents` | 接入主体与审计身份；绑定一个或多个角色 |
-| 「这台电脑 / 这个 Codex，拿什么密钥连上 Lucy？」 | **`Token`** | `Agent` 详情 → Token | 接入凭证；同一 `Agent` 下多个 `Token` **权限相同** |
+| 「这台电脑 / 这个 Codex，拿什么 Token 连上 Lucy？」 | **`Token`** | `Agent` 详情 → Token | 接入凭证；同一 `Agent` 下多个 `Token` **权限相同** |
 
 产品口径：**一人一 `Agent`、一 `MCP`；多 `Token` 只负责鉴权，不改变权限。**  
 `WebUI` 登录账户（所有者 / 运维）与 `MCP` `Agent` / `Token` 是两套体系，不要混用。
@@ -1205,7 +1205,7 @@ PUT /api/wiki/:key
 - 用不同 `Token` 表达不同权限（当前模型下同 `Agent` 同权；需要隔离就拆 `Agent`）
 - 把 `Token` 当 `WebUI` 登录密码，或把 `KTX_INTERNAL_TOKEN` 发给外部客户端
 
-**做法建议：** 明文只在创建时出现一次，立刻放进客户端密钥库，不要进仓库或长期聊天记录。一设备（或一客户端）一个 `Token`，用标签 / 设备名备注区分。列表页「复制 `MCP` 配置」只含占位符，不要二次粘贴历史明文。到期后 Proxy 会 401；仍建议在 Admin 显式撤销，避免配置残留。
+**做法建议：** 明文只在创建时出现一次，立刻放进客户端凭据库，不要进仓库或长期聊天记录。一设备（或一客户端）一个 `Token`，用标签 / 设备名备注区分。列表页「复制 `MCP` 配置」只含占位符，不要二次粘贴历史明文。到期后 Proxy 会 401；仍建议在 Admin 显式撤销，避免配置残留。
 
 #### 场景速查
 
@@ -1215,7 +1215,7 @@ PUT /api/wiki/:key
 | 「张三要开始用 Lucy」 | 建 **`Agent`**（绑已有角色）+ 签发 **`Token`** |
 | 「张三换了电脑 / 新开 Cursor」 | 只加 **`Token`** |
 | 「张三比同组其他人少看一张敏感表」 | 用更窄角色，或在该 `Agent` 上加强制约束；**不是**发特殊 `Token` |
-| 「这台机器的密钥可能泄露」 | **撤销**该 `Token` 并重发 |
+| 「这台机器的 Token 可能泄露」 | **撤销**该 `Token` 并重发 |
 | 「评测机器人整体下线」 | **禁用** `Agent` 并撤光其 `Token` |
 
 #### 推荐操作顺序
@@ -1507,7 +1507,7 @@ Token 是 **Agent 的接入凭证**，不是权限边界；同 Agent 下多个 T
 - 入口路径：从 `/admin/agents` 选中 Agent → Token 区；或从 `/admin/tokens` 选择 Agent 后一键签发。
 - 必填项：`expires_at`（管理页默认 90 天，最长 365 天；空值表示长期有效，**不推荐**，会失去下文 `expires_at` 强制校验的硬拒绝兜底）。
 - 可选项：标签 / 设备名（便于人工分辨；写明如 `forrest-mbp-cursor`、`eval-runner-2` 之类，**不要含明文 secret**）。
-- 明文 Token **只出现一次**：签发后立刻复制到客户端密钥库 / secret store；不要进仓库、聊天记录、截图或 Wiki。
+- 明文 Token **只出现一次**：签发后立刻复制到客户端凭据库 / secret store；不要进仓库、聊天记录、截图或 Wiki。
 
 #### 吊销
 

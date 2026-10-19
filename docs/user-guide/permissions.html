@@ -27,6 +27,8 @@
       <p class="nav-title">开始</p>
       <a class="nav-link" href="index.html">帮助中心首页</a>
       <a class="nav-link" href="product-intro.html">产品介绍</a>
+      <a class="nav-link" href="lucy-architecture-diagram.html">架构总览</a>
+      <a class="nav-link" href="lucy-docs-flows.html">摄取与服务</a>
       <a class="nav-link" href="getting-started.html">5 分钟理解 Lucy</a>
       <a class="nav-link" href="concepts.html">核心概念</a>
     </div>
@@ -38,22 +40,22 @@
     </div>
     <div class="nav-group">
       <p class="nav-title">管理员指南</p>
-      <a class="nav-link" href="quickstart-admin.html">快速部署 <span class="wip">WIP</span></a>
-      <a class="nav-link" href="data-sources.html">数据源接入 <span class="wip">WIP</span></a>
-      <a class="nav-link active" href="permissions.html">权限与 ACL <span class="wip">WIP</span></a>
+      <a class="nav-link" href="quickstart-admin.html">快速部署</a>
+      <a class="nav-link" href="data-sources.html">数据源接入</a>
+      <a class="nav-link active" href="permissions.html">权限与 ACL</a>
       <a class="nav-link" href="webui-guide.html">WebUI 指南</a>
     </div>
     <div class="nav-group">
       <p class="nav-title">治理与安全</p>
       <a class="nav-link" href="trust.html">可信机制</a>
-      <a class="nav-link" href="eval-meta-governance-training.html"><span translate="no" class="notranslate">Eval</span> 培训</a>
-      <a class="nav-link" href="skills.html"><span translate="no" class="notranslate">Skill</span> 管理 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="eval-meta-governance-training.html">质量评测培训</a>
+      <a class="nav-link" href="skills.html"><span translate="no" class="notranslate">Skill</span> 管理</a>
     </div>
     <div class="nav-group">
       <p class="nav-title">参考</p>
-      <a class="nav-link" href="mcp-reference.html"><span translate="no" class="notranslate">MCP</span> 接入参考 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="mcp-reference.html"><span translate="no" class="notranslate">MCP</span> 接入参考</a>
       <a class="nav-link" href="glossary.html">术语表</a>
-      <a class="nav-link" href="release-notes.html">更新日志 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="release-notes.html">更新日志</a>
     </div>
   </aside>
   <main class="content">
@@ -86,7 +88,7 @@
             <td><span translate="no" class="notranslate">Token</span></td>
             <td>接入凭证：这台设备拿什么连上 Lucy。</td>
             <td><code class="notranslate" translate="no">/admin/tokens</code> 或 <span translate="no" class="notranslate">Agent</span> 详情</td>
-            <td>新设备接入、密钥疑似泄露、需要轮换时。</td>
+            <td>新设备接入、<span translate="no" class="notranslate">Token</span> 凭据疑似泄露、需要轮换时。</td>
           </tr>
         </tbody>
       </table>
@@ -348,7 +350,7 @@ users:
           <div class="step-num">4</div>
           <div class="step-body">
             <h3>签发 <span translate="no" class="notranslate">Token</span></h3>
-            <p>在 <span translate="no" class="notranslate">Agent</span> 详情签发 <span translate="no" class="notranslate">Token</span>，设置 <code class="notranslate" translate="no">expires_at</code>，明文立刻存进客户端密钥库。</p>
+            <p>在 <span translate="no" class="notranslate">Agent</span> 详情签发 <span translate="no" class="notranslate">Token</span>，设置 <code class="notranslate" translate="no">expires_at</code>，明文立刻存进客户端凭据库。</p>
           </div>
         </div>
         <div class="step-item">

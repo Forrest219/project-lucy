@@ -2,21 +2,21 @@
 <!--
 | 元数据 | 内容 |
 |---|---|
-| 文档名称 | KTX WebUI 产品使用说明书 |
+| 文档名称 | WebUI 产品使用说明书 |
 | 文档类型 | Other |
-| 版本 | v1.0 |
-| 撰写日期 | 2026-06-16 |
+| 版本 | 2.0.0 |
+| 撰写日期 | 2026-06-16；2.0.0 更新 2026-10-20（统一品牌叫法与术语、补浏览器翻译防御、修跨页链接与文档骨架） |
 | 撰写人 | Codex |
 | 委托人 | project-lucy 团队 |
-| 基于材料 | KTX WebUI 产品设计 |
-| 适用范围 | 语义层维护者日常使用 KTX WebUI |
+| 基于材料 | WebUI 产品设计 |
+| 适用范围 | 语义层维护者日常使用 WebUI |
 | 输出位置 | docs/user-guide/webui-guide.html |
 -->
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>KTX WebUI · Lucy 帮助文档</title>
+  <title translate="no" class="notranslate">WebUI 使用说明 · Lucy 帮助文档</title>
   <link rel="stylesheet" href="assets/user-guide.css">
   <style>
     .cards {
@@ -35,13 +35,13 @@
       white-space: nowrap;
     }
 
-    .s-none { background: var(--soft); color: var(--muted); }
-    .s-partial { background: rgba(181,121,35,.12); color: var(--gold); }
-    .s-done { background: rgba(31,122,112,.12); color: var(--teal); }
+    .s-none { background: var(--soft); color: #3d4b45; }
+    .s-partial { background: rgba(181,121,35,.12); color: var(--gold-ink); }
+    .s-done { background: rgba(26,107,98,.12); color: var(--teal); }
     .s-fail { background: rgba(164,71,63,.10); color: var(--red); }
 
     .ok { color: var(--teal); font-weight: 700; }
-    .warn { color: var(--gold); font-weight: 700; }
+    .warn { color: var(--gold-ink); font-weight: 700; }
 
     .webui-flow {
       display: grid;
@@ -91,6 +91,8 @@
       <p class="nav-title">开始</p>
       <a class="nav-link" href="index.html">帮助中心首页</a>
       <a class="nav-link" href="product-intro.html">产品介绍</a>
+      <a class="nav-link" href="lucy-architecture-diagram.html">架构总览</a>
+      <a class="nav-link" href="lucy-docs-flows.html">摄取与服务</a>
       <a class="nav-link" href="getting-started.html">5 分钟理解 Lucy</a>
       <a class="nav-link" href="concepts.html">核心概念</a>
     </div>
@@ -102,37 +104,38 @@
     </div>
     <div class="nav-group">
       <p class="nav-title">管理员指南</p>
-      <a class="nav-link" href="quickstart-admin.html">快速部署 <span class="wip">WIP</span></a>
-      <a class="nav-link" href="data-sources.html">数据源接入 <span class="wip">WIP</span></a>
-      <a class="nav-link" href="permissions.html">权限与 ACL <span class="wip">WIP</span></a>
-      <a class="nav-link active" href="webui-guide.html">KTX WebUI</a>
+      <a class="nav-link" href="quickstart-admin.html">快速部署</a>
+      <a class="nav-link" href="data-sources.html">数据源接入</a>
+      <a class="nav-link" href="permissions.html">权限与 ACL</a>
+      <a class="nav-link active" href="webui-guide.html">WebUI 指南</a>
     </div>
     <div class="nav-group">
       <p class="nav-title">治理与安全</p>
       <a class="nav-link" href="trust.html">可信机制</a>
-      <a class="nav-link" href="eval-meta-governance-training.html">Eval 培训</a>
-      <a class="nav-link" href="skills.html">Skill 管理 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="eval-meta-governance-training.html">质量评测培训</a>
+      <a class="nav-link" href="skills.html">Skill 管理</a>
     </div>
     <div class="nav-group">
       <p class="nav-title">参考</p>
-      <a class="nav-link" href="mcp-reference.html">MCP 接入参考 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="mcp-reference.html"><span translate="no" class="notranslate">MCP</span> 接入参考</a>
       <a class="nav-link" href="glossary.html">术语表</a>
-      <a class="nav-link" href="release-notes.html">更新日志 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="release-notes.html">更新日志</a>
     </div>
   </aside>
   <main class="content">
     <header class="hero">
       <span class="eyebrow">Admin Guide</span>
-      <h1>KTX WebUI 使用说明</h1>
-      <p class="lead">KTX WebUI 是一个在本机运行的语义补充工作台，用可视化界面帮助维护 KTX 语义层的团队成员补充表描述、字段口径、指标、分群、Join 关系与 Wiki 文档，同时保留 YAML、Markdown 和 Git 作为最终事实源。日常补充无需手写 YAML，但会接触表、字段、指标等概念。</p>
+      <h1>WebUI 使用说明</h1>
+      <p class="lead">WebUI 是 Lucy 的自托管控制面。它用可视化界面帮助团队成员维护语义资产与业务文档，同时保留 YAML、Markdown 和 Git 作为最终事实源。日常补充无需手写 YAML，但会接触表、字段、指标等概念。</p>
+      <p>本页速览：<a href="#semantic-layer">语义层编辑</a> · <a href="#wiki">业务 Wiki 编写</a> · <a href="#pages">功能页面说明</a></p>
     </header>
 
     <section id="overview">
       <h2>产品定位</h2>
-      <p>KTX WebUI 面向需要维护 KTX 语义层的团队成员（数据工程、分析与业务口径维护者）。它把原本需要手写的 <code>semantic-layer/**/*.yaml</code> 和 <code>wiki/**/*.md</code> 转成可浏览、可编辑、可预览差异的页面。</p>
-      <p>它不是云端 BI 平台，也不是数据库管理工具。它更像一个本地工作台：帮助用户把表、字段、指标和业务口径整理清楚，再通过 KTX 校验和 Git diff 完成交付审阅。</p>
+      <p>WebUI 面向需要维护语义层的团队成员（数据工程、分析与业务口径维护者）。它把原本需要手写的 <code class="notranslate" translate="no">semantic-layer/**/*.yaml</code> 和 <code class="notranslate" translate="no">wiki/**/*.md</code> 转成可浏览、可编辑、可预览差异的页面。</p>
+      <p>它不是云端 BI 平台，也不是数据库管理工具。它是自托管的控制面：帮助用户把表、字段、指标和业务口径整理清楚，再通过 <span translate="no" class="notranslate">KTX</span> 校验和 Git diff 完成交付审阅。</p>
       <div class="callout">
-        <strong>核心特性：</strong>本机运行 &nbsp;·&nbsp; 文件优先 &nbsp;·&nbsp; 保存前 diff &nbsp;·&nbsp; 保存后 validate &nbsp;·&nbsp; 不读取 secrets
+        <strong>核心特性：</strong>自托管 &nbsp;·&nbsp; 文件优先 &nbsp;·&nbsp; 保存前 diff &nbsp;·&nbsp; 保存后 validate &nbsp;·&nbsp; 不读取 secrets
       </div>
     </section>
 
@@ -140,20 +143,20 @@
       <h2>快速开始</h2>
       <h3>开始前你需要</h3>
       <ul>
-        <li>一个 KTX 项目目录（根目录含 <code>ktx.yaml</code>）。</li>
+        <li>一个 <span translate="no" class="notranslate">KTX</span> 项目目录（根目录含 <code class="notranslate" translate="no">ktx.yaml</code>）。</li>
         <li>本机已安装 Node（≥20）。</li>
-        <li><code>ktx</code> 命令行工具已在 PATH 中（用于保存后的校验）。</li>
+        <li><code class="notranslate" translate="no">ktx</code> 命令行工具已在 PATH 中（用于保存后的校验）。</li>
       </ul>
-      <h3>启动 WebUI</h3>
+      <h3>本地启动 WebUI</h3>
       <ol>
-        <li>在 WebUI 目录执行 <code>npm install</code>（仅首次需要，需联网）。</li>
-        <li>执行 <code>npm run dev</code> 启动本地服务。</li>
-        <li>打开浏览器访问 <code>http://localhost:5173</code>。</li>
+        <li>在 WebUI 目录执行 <code class="notranslate" translate="no">npm install</code>（仅首次需要，需联网）。</li>
+        <li>执行 <code class="notranslate" translate="no">npm run dev</code> 启动本地服务。</li>
+        <li>打开浏览器访问 <code class="notranslate" translate="no">http://localhost:5173</code>。</li>
       </ol>
       <h3>它怎么知道编辑哪个项目</h3>
-      <p>WebUI 默认从当前目录向上查找 <code>ktx.yaml</code> 来定位你的 KTX 项目；也可以用 <code>--project &lt;目录&gt;</code> 参数或 <code>KTX_PROJECT_ROOT</code> 环境变量显式指定。</p>
+      <p>WebUI 默认从当前目录向上查找 <code class="notranslate" translate="no">ktx.yaml</code> 来定位你的 <span translate="no" class="notranslate">KTX</span> 项目；也可以用 <code class="notranslate" translate="no">--project &lt;目录&gt;</code> 参数或 <code class="notranslate" translate="no">KTX_PROJECT_ROOT</code> 环境变量显式指定。</p>
       <div class="note">
-        <p>WebUI 只在本机运行并绑定 <code>127.0.0.1</code>，不对外暴露，也不会上传任何数据。</p>
+        <p>本地开发时 WebUI 绑定 <code class="notranslate" translate="no">127.0.0.1</code>。生产部署需要显式配置绑定地址与登录账户，并自行承担对外暴露的防护，详见<a href="#safety">安全边界</a>。</p>
       </div>
     </section>
 
@@ -161,8 +164,8 @@
       <h2>核心能力</h2>
       <div class="cards">
         <article class="card">
-          <h3>表目录工作队列</h3>
-          <p>扫描当前 KTX 项目中的语义层表，按 schema、完成状态、表名和字段名筛选，快速找到需要补充的对象。</p>
+          <h3>语义资产工作队列</h3>
+          <p>扫描当前 <span translate="no" class="notranslate">KTX</span> 项目中的语义层表，按 <span translate="no" class="notranslate">schema</span>、完成状态、表名和字段名筛选，快速找到需要补充的对象。</p>
         </article>
         <article class="card">
           <h3>单表语义编辑</h3>
@@ -182,7 +185,7 @@
         </article>
         <article class="card">
           <h3>保存后校验</h3>
-          <p>保存语义层后调用 <code>ktx sl validate</code>，并在 Review 页面集中查看改动文件和校验结果。</p>
+          <p>保存语义层后调用 <code class="notranslate" translate="no">ktx sl validate</code>，并在 Review 页面集中查看改动文件和校验结果。</p>
         </article>
         <article class="card">
           <h3>运维驾驶舱（系统概览）</h3>
@@ -190,7 +193,7 @@
         </article>
         <article class="card">
           <h3>对象详情抽屉</h3>
-          <p>表目录、Agent 列表、运行历史、访问日志中的任何一行都可以打开对象详情抽屉，看上下文、关联对象和审计元数据。</p>
+          <p>语义资产、<span translate="no" class="notranslate">Agent</span> 列表、运行历史、访问日志中的任何一行都可以打开对象详情抽屉，看上下文、关联对象和审计元数据。</p>
         </article>
         <article class="card">
           <h3>变更影响范围与发布后评测</h3>
@@ -202,7 +205,7 @@
         </article>
         <article class="card">
           <h3>访问治理追溯</h3>
-          <p>Agent / Role / Audit / Config Audit 之间相互跳转；访问日志的筛选条件本地持久化，便于回到同一上下文继续排查。</p>
+          <p><span translate="no" class="notranslate">Agent</span> / Role / Audit / Config Audit 之间相互跳转；访问日志的筛选条件本地持久化，便于回到同一上下文继续排查。</p>
         </article>
       </div>
     </section>
@@ -212,7 +215,7 @@
       <div class="webui-flow">
         <div class="webui-step">
           <b>1. 找表</b>
-          <p>从 Catalog 搜索或筛选待补充的表。</p>
+          <p>从 <span translate="no" class="notranslate">Catalog</span> 搜索或筛选待补充的表。</p>
         </div>
         <div class="webui-step">
           <b>2. 补语义</b>
@@ -224,7 +227,7 @@
         </div>
         <div class="webui-step">
           <b>4. 保存校验</b>
-          <p>点击 Save 写回文件，并自动触发 KTX 校验。</p>
+          <p>点击 Save 写回文件，并自动触发 <span translate="no" class="notranslate">KTX</span> 校验。</p>
         </div>
         <div class="webui-step">
           <b>5. Review</b>
@@ -235,45 +238,47 @@
 
     <section id="pages">
       <h2>功能页面说明</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>页面</th>
-            <th>主要用途</th>
-            <th>适合做什么</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>Catalog</td>
-            <td>表目录与工作队列</td>
-            <td>查看全部表，按 schema、状态、关键词筛选，了解字段数、Join 数、指标数和完成状态。</td>
-          </tr>
-          <tr>
-            <td>Table Editor</td>
-            <td>单表语义编辑</td>
-            <td>维护表描述、行粒度 grain、字段描述、measures、segments，并查看 YAML 预览。</td>
-          </tr>
-          <tr>
-            <td>Join Editor</td>
-            <td>表关系编辑</td>
-            <td>查看正式 Join，处理基于字段名推断出的候选 Join，确认可信关系后写入正式 YAML。</td>
-          </tr>
-          <tr>
-            <td>Wiki Editor</td>
-            <td>业务口径文档编辑</td>
-            <td>创建或编辑 Wiki Markdown，维护摘要、标签、语义层引用和正文说明。</td>
-          </tr>
-          <tr>
-            <td>Review</td>
-            <td>改动复核与批量校验</td>
-            <td>查看 editable 目录下的文件 diff，运行 changed sources 校验，确认交付前状态。</td>
-          </tr>
-        </tbody>
-      </table>
+      <p>WebUI 侧栏共 7 个分组、23 个页面入口。路径与用途以 <code class="notranslate" translate="no">webui/src/app/navigation.ts</code> 与系统手册 §1.5 为准。</p>
+      <div class="ref-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>分组</th>
+              <th>页面</th>
+              <th>路径</th>
+              <th>主要用途</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>运行状态</td><td>系统概览</td><td><code class="notranslate" translate="no">/overview</code></td><td>确认系统可用，处理当前待办。</td></tr>
+            <tr><td>运行状态</td><td>调用监控</td><td><code class="notranslate" translate="no">/ops/calls</code></td><td>准实时查看 <span translate="no" class="notranslate">MCP</span> 工具调用量、成败与请求时效。</td></tr>
+            <tr><td>运行状态</td><td>使用概况</td><td><code class="notranslate" translate="no">/admin/usage</code></td><td>查看 <span translate="no" class="notranslate">Agent</span>、<span translate="no" class="notranslate">Token</span>、数据表的活跃率，以及 WebUI 页面访问情况。</td></tr>
+            <tr><td>数据接入</td><td>连接概览</td><td><code class="notranslate" translate="no">/connections</code></td><td>管理数据库连接、<span translate="no" class="notranslate">Schema</span> 与 <span translate="no" class="notranslate">Schema Manifest</span>，并查看连通性和本地目录同步状态。</td></tr>
+            <tr><td>数据接入</td><td>启用表范围</td><td><code class="notranslate" translate="no">/connections/enabled-tables</code></td><td>配置各连接进入语义层的表范围，并审阅保存前变更。</td></tr>
+            <tr><td>业务上下文</td><td>语义资产</td><td><code class="notranslate" translate="no">/catalog</code></td><td>管理表、字段、指标、分群与关联等结构化语义资产。</td></tr>
+            <tr><td>业务上下文</td><td>业务 Wiki</td><td><code class="notranslate" translate="no">/wiki</code></td><td>管理业务口径、指标说明与分析指引等业务文档。</td></tr>
+            <tr><td>业务上下文</td><td>业务 Skill</td><td><code class="notranslate" translate="no">/skills</code></td><td>查看受治理的业务 Skill 资产及其发布状态与角色授权。</td></tr>
+            <tr><td>语义发布</td><td>发布工作台</td><td><code class="notranslate" translate="no">/publish/workbench</code></td><td>审阅并校验语义与 Wiki 变更，同步索引后使其对 <span translate="no" class="notranslate">Agent</span> 生效。</td></tr>
+            <tr><td>语义发布</td><td>发布记录</td><td><code class="notranslate" translate="no">/publish/history</code></td><td>查看历次语义发布的变更范围、执行结果与操作记录。</td></tr>
+            <tr><td>质量评测</td><td>评测用例</td><td><code class="notranslate" translate="no">/eval/cases</code></td><td>管理数据问答与语义质量的评测用例及预期结果。</td></tr>
+            <tr><td>质量评测</td><td>运行历史</td><td><code class="notranslate" translate="no">/eval/runs</code></td><td>查看评测运行记录、通过率、结果明细与失败诊断。</td></tr>
+            <tr><td>质量评测</td><td>趋势监控</td><td><code class="notranslate" translate="no">/eval/monitor</code></td><td>监控评测通过率、失败集中度与质量漂移趋势。</td></tr>
+            <tr><td>质量评测</td><td>现场提问</td><td><code class="notranslate" translate="no">/eval/field-questions</code></td><td>审定访问日志里反复出现的业务问法，补问法后收成评测用例。</td></tr>
+            <tr><td>质量评测</td><td>安全评测候选</td><td><code class="notranslate" translate="no">/eval/security-candidates</code></td><td>从访问拒绝日志中提取权限与数据隔离场景，审定后转为安全评测用例。</td></tr>
+            <tr><td>访问治理</td><td><span translate="no" class="notranslate">Agent</span></td><td><code class="notranslate" translate="no">/admin/agents</code></td><td>管理 <span translate="no" class="notranslate">Agent</span> 身份、角色、<span translate="no" class="notranslate">Token</span> 及数据访问边界。</td></tr>
+            <tr><td>访问治理</td><td><span translate="no" class="notranslate">Token</span> 凭据</td><td><code class="notranslate" translate="no">/admin/tokens</code></td><td>全局查看、签发与定向吊销 <span translate="no" class="notranslate">Agent</span> 访问凭据。</td></tr>
+            <tr><td>访问治理</td><td>角色权限</td><td><code class="notranslate" translate="no">/admin/roles</code></td><td>管理角色的数据库连接、数据表与 <span translate="no" class="notranslate">MCP</span> 工具授权范围。</td></tr>
+            <tr><td>访问治理</td><td>访问日志</td><td><code class="notranslate" translate="no">/admin/audit</code></td><td>按问询和工具调用追溯 <span translate="no" class="notranslate">Agent</span> 访问行为、权限裁决与执行耗时。</td></tr>
+            <tr><td>访问治理</td><td><span translate="no" class="notranslate">MCP</span> 调试台</td><td><code class="notranslate" translate="no">/admin/mcp-playground</code></td><td>检查 <span translate="no" class="notranslate">Agent</span> 能不能连上，或者能不能查某张表。</td></tr>
+            <tr><td>访问治理</td><td>配置审计</td><td><code class="notranslate" translate="no">/admin/config-audit</code></td><td>查看各类配置与内容资产的写入记录、变更内容和操作者。</td></tr>
+            <tr><td>系统设置</td><td>品牌外观</td><td><code class="notranslate" translate="no">/admin/branding</code></td><td>配置客户 Logo、产品名称与品牌副标题。</td></tr>
+            <tr><td>系统设置</td><td>登录账户</td><td><code class="notranslate" translate="no">/admin/admins</code></td><td>管理 WebUI 登录账户，并配置所有者或运维角色。</td></tr>
+          </tbody>
+        </table>
+      </div>
 
       <h3>完成状态的含义</h3>
-      <p>Catalog 可按完成状态筛选，帮助你优先处理未补充的表。各状态含义如下：</p>
+      <p>语义资产页可按完成状态筛选，帮助你优先处理未补充的表。各状态含义如下：</p>
       <table>
         <thead>
           <tr><th>状态</th><th>含义</th></tr>
@@ -282,59 +287,61 @@
           <tr><td><span class="status-pill s-none">未开始</span></td><td>没有表描述、没有行粒度，字段也没有任何描述。</td></tr>
           <tr><td><span class="status-pill s-partial">部分完成</span></td><td>已有表描述或行粒度，但核心字段尚未全部补齐描述。</td></tr>
           <tr><td><span class="status-pill s-done">已完成</span></td><td>表描述、行粒度、主键、核心字段描述与指标齐备。</td></tr>
-          <tr><td><span class="status-pill s-fail">校验失败</span></td><td>最近一次 KTX 校验未通过，需要回到对应表修正。</td></tr>
+          <tr><td><span class="status-pill s-fail">校验失败</span></td><td>最近一次 <span translate="no" class="notranslate">KTX</span> 校验未通过，需要回到对应表修正。</td></tr>
         </tbody>
       </table>
     </section>
 
-    <section id="editing">
-      <h2>编辑与保存说明</h2>
+    <section id="semantic-layer">
+      <h2>语义层编辑与保存</h2>
       <h3>表和字段描述</h3>
-      <p>人工补充的描述会写入 <code>descriptions.human</code>，不会覆盖已有的 <code>descriptions.ai</code>。展示时优先使用人工描述，未填写时回退到 AI 描述。</p>
+      <p>人工补充的描述会写入 <code class="notranslate" translate="no">descriptions.human</code>，不会覆盖已有的 <code class="notranslate" translate="no">descriptions.ai</code>。展示时优先使用人工描述，未填写时回退到 AI 描述。</p>
 
       <h3>Grain、Measures、Segments</h3>
-      <p>行粒度、指标和分群会写入表级 overlay 文件，例如 <code>semantic-layer/&lt;connection&gt;/&lt;table&gt;.yaml</code>。这样可以在不破坏原始 schema YAML 的前提下扩展语义定义。</p>
+      <p>行粒度、指标和分群会写入表级 overlay 文件，例如 <code class="notranslate" translate="no">semantic-layer/&lt;connection&gt;/&lt;table&gt;.yaml</code>。这样可以在不破坏原始 <span translate="no" class="notranslate">schema</span> YAML 的前提下扩展语义定义。</p>
 
       <h3>Join</h3>
-      <p>候选或拒绝的 Join 会保存在 <code>.ktx-ui/join-candidates.json</code>。只有用户确认的 formal Join 才会写入正式语义层 YAML。</p>
-
-      <h3>Wiki</h3>
-      <p>Wiki 页面保存在 <code>wiki/**/*.md</code>。页面支持 frontmatter 和 Markdown 正文，可用于沉淀业务口径、指标解释、使用场景和外部引用。</p>
+      <p>候选或拒绝的 Join 会保存在 <code class="notranslate" translate="no">.ktx-ui/join-candidates.json</code>。只有用户确认的 formal Join 才会写入正式语义层 YAML。</p>
 
       <div class="note">
         <p><strong>保存前请看 diff。</strong>右侧 diff preview 展示的是本次编辑即将写入的内容。确认无误后再点击 Save。</p>
       </div>
     </section>
 
+    <section id="wiki">
+      <h2>业务 Wiki 编写</h2>
+      <p>Wiki 页面保存在 <code class="notranslate" translate="no">wiki/**/*.md</code>。页面支持 frontmatter 和 Markdown 正文，可用于沉淀业务口径、指标解释、使用场景和外部引用。文档属性块仅支持 YAML 格式，其它格式会报「仅支持 YAML 格式的文档属性」。</p>
+    </section>
+
     <section id="review">
       <h2>校验与审阅</h2>
-      <p>保存表语义后，系统会调用 KTX CLI 对对应 source 做校验。Review 页面会列出本次可编辑目录内的改动文件，并提供 <code>Validate changed</code> 做集中校验。</p>
+      <p>保存表语义后，系统会调用 <span translate="no" class="notranslate">KTX</span> CLI 对对应 source 做校验。Review 页面会列出本次可编辑目录内的改动文件，并提供 <code class="notranslate" translate="no">Validate changed</code> 做集中校验。</p>
       <table>
         <thead>
           <tr><th>状态</th><th>含义</th><th>建议动作</th></tr>
         </thead>
         <tbody>
-          <tr><td><span class="ok">通过</span></td><td>KTX 能读取并校验当前语义定义。</td><td>继续检查 diff，准备提交 Git review。</td></tr>
-          <tr><td><span class="warn">校验失败</span></td><td>写入内容不符合 KTX 语义层规则，或引用的字段/表不存在。</td><td>回到对应表页面修正表达式、字段名、Join 条件或 YAML 内容。</td></tr>
-          <tr><td><span class="warn">无改动</span></td><td>当前 editable 目录没有可展示的 diff。</td><td>确认是否已经保存，或检查是否编辑了非白名单目录。</td></tr>
+          <tr><td><span class="ok">通过</span></td><td><span translate="no" class="notranslate">KTX</span> 能读取并校验当前语义定义。</td><td>继续检查 diff，准备提交 Git review。</td></tr>
+          <tr><td><span class="warn">校验失败</span></td><td>写入内容不符合 <span translate="no" class="notranslate">KTX</span> 语义层规则，或引用的字段/表不存在。</td><td>回到对应表页面修正表达式、字段名、Join 条件或 YAML 内容。</td></tr>
+          <tr><td><span class="warn">无改动</span></td><td>当前 editable 目录没有可展示的 diff。</td><td>确认是否已经保存，或检查是否编辑了启用表范围之外的目录。</td></tr>
         </tbody>
       </table>
     </section>
 
     <section id="safety">
       <h2>安全边界</h2>
-      <p>KTX WebUI 按本地单用户工具设计，只绑定 <code>127.0.0.1</code>。它会直接读写当前 KTX 项目文件，因此核心安全策略是限制可读写范围。</p>
+      <p>WebUI 是自托管控制面，默认可在本机运行；生产部署需要显式配置绑定地址与登录账户，并自行承担对外暴露的防护。它直接读写当前 <span translate="no" class="notranslate">KTX</span> 项目文件，因此核心安全策略是限制可读写范围。</p>
       <table>
         <thead>
           <tr><th>范围</th><th>行为</th></tr>
         </thead>
         <tbody>
-          <tr><td><code>semantic-layer/</code></td><td>允许读写，用于正式语义层和 overlay。</td></tr>
-          <tr><td><code>wiki/</code></td><td>允许读写，用于业务口径 Markdown。</td></tr>
-          <tr><td><code>.ktx-ui/</code></td><td>允许读写，用于 WebUI 自身 sidecar，例如候选 Join。</td></tr>
-          <tr><td><code>.ktx/secrets/</code></td><td>禁止读取和展示，避免泄露连接密码或密钥。</td></tr>
-          <tr><td><code>raw-sources/</code></td><td>禁止写入，避免污染扫描得到的原始证据。</td></tr>
-          <tr><td><code>.git/</code></td><td>禁止写入，版本历史和提交动作仍由用户自己控制。</td></tr>
+          <tr><td><code class="notranslate" translate="no">semantic-layer/</code></td><td>允许读写，用于正式语义层和 overlay。</td></tr>
+          <tr><td><code class="notranslate" translate="no">wiki/</code></td><td>允许读写，用于业务口径 Markdown。</td></tr>
+          <tr><td><code class="notranslate" translate="no">.ktx-ui/</code></td><td>允许读写，用于 WebUI 自身 sidecar，例如候选 Join。</td></tr>
+          <tr><td><code class="notranslate" translate="no">.ktx/secrets/</code></td><td>禁止读取和展示，避免泄露连接密码或 <span translate="no" class="notranslate">Token</span> 凭据。</td></tr>
+          <tr><td><code class="notranslate" translate="no">raw-sources/</code></td><td>禁止写入，避免污染扫描得到的原始证据。</td></tr>
+          <tr><td><code class="notranslate" translate="no">.git/</code></td><td>禁止写入，版本历史和提交动作仍由用户自己控制。</td></tr>
         </tbody>
       </table>
     </section>
@@ -346,9 +353,9 @@
           <tr><th>现象</th><th>可能原因</th><th>处理</th></tr>
         </thead>
         <tbody>
-          <tr><td>页面打不开</td><td>本地服务未启动，或端口被占用。</td><td>确认已执行 <code>npm run dev</code>，并访问 <code>http://localhost:5173</code>。</td></tr>
-          <tr><td>表目录是空的</td><td>没有定位到 KTX 项目，或 <code>semantic-layer/</code> 下没有语义层文件。</td><td>在含 <code>ktx.yaml</code> 的项目下启动，或用 <code>--project</code> / <code>KTX_PROJECT_ROOT</code> 指定项目目录。</td></tr>
-          <tr><td>保存后校验失败</td><td>表达式、字段名或 Join 条件不符合 KTX 规则，或 <code>ktx</code> 命令不在 PATH。</td><td>按 Review 页提示修正语义；确认 <code>ktx</code> 命令可用。</td></tr>
+          <tr><td>页面打不开</td><td>本地服务未启动，或端口被占用。</td><td>确认已执行 <code class="notranslate" translate="no">npm run dev</code>，并访问 <code class="notranslate" translate="no">http://localhost:5173</code>。</td></tr>
+          <tr><td>语义资产是空的</td><td>没有定位到 <span translate="no" class="notranslate">KTX</span> 项目，或 <code class="notranslate" translate="no">semantic-layer/</code> 下没有语义层文件。</td><td>在含 <code class="notranslate" translate="no">ktx.yaml</code> 的项目下启动，或用 <code class="notranslate" translate="no">--project</code> / <code class="notranslate" translate="no">KTX_PROJECT_ROOT</code> 指定项目目录。</td></tr>
+          <tr><td>保存后校验失败</td><td>表达式、字段名或 Join 条件不符合 <span translate="no" class="notranslate">KTX</span> 规则，或 <code class="notranslate" translate="no">ktx</code> 命令不在 PATH。</td><td>按 Review 页提示修正语义；确认 <code class="notranslate" translate="no">ktx</code> 命令可用。</td></tr>
           <tr><td>某些字段属性保存不了</td><td>visibility、已有列的 role 覆盖等暂不作为正式落盘能力。</td><td>这是预期行为；详见下方常见问题。</td></tr>
         </tbody>
       </table>
@@ -363,10 +370,10 @@
       <p>语义层 YAML 是项目事实源。diff 能让用户在写入前确认具体变化，避免误改字段、Join 或业务口径。</p>
 
       <h3>为什么有些字段属性不能保存？</h3>
-      <p>当前 KTX 已确认支持 grain、measures、segments 的 overlay 合并；部分字段属性如 visibility 或已有列 role 覆盖暂不作为正式落盘能力。</p>
+      <p>当前 <span translate="no" class="notranslate">KTX</span> 已确认支持 grain、measures、segments 的 overlay 合并；部分字段属性如 visibility 或已有列 role 覆盖暂不作为正式落盘能力。</p>
 
       <h3>Wiki 和表语义有什么区别？</h3>
-      <p>表语义用于 KTX 结构化理解和校验，Wiki 用于沉淀更长的业务说明、指标口径、背景解释和使用建议。两者可以通过 <code>sl_refs</code> 关联。</p>
+      <p>表语义用于 <span translate="no" class="notranslate">KTX</span> 结构化理解和校验，Wiki 用于沉淀更长的业务说明、指标口径、背景解释和使用建议。两者可以通过 <code class="notranslate" translate="no">sl_refs</code> 关联。</p>
 
       <h3>普通用户需要懂 YAML 吗？</h3>
       <p>日常补充语义不需要直接手写 YAML。YAML preview 和 diff 主要用于审阅，让用户知道系统最终会改哪些文件。</p>
@@ -376,23 +383,23 @@
       <h2>术语表</h2>
       <dl class="glossary">
         <dt>语义层 / semantic layer</dt>
-        <dd>用 YAML 描述表、字段、指标等结构化语义的文件集合，位于 <code>semantic-layer/</code>。</dd>
-        <dt>schema</dt>
-        <dd>数据库中的一组表的命名空间；语义层按 schema 组织文件。</dd>
+        <dd>用 YAML 描述表、字段、指标等结构化语义的文件集合，位于 <code class="notranslate" translate="no">semantic-layer/</code>。</dd>
+        <dt><span translate="no" class="notranslate">schema</span></dt>
+        <dd>数据库中的一组表的命名空间；语义层按 <span translate="no" class="notranslate">schema</span> 组织文件。</dd>
         <dt>行粒度 / grain</dt>
-        <dd>一行数据代表的业务粒度，例如"每天每家医院一行"。</dd>
+        <dd>一行数据代表的业务粒度，例如“每天每家医院一行”。</dd>
         <dt>指标 / measure</dt>
-        <dd>可聚合计算的业务度量，例如 <code>sum(sales)</code> 表示销售额合计。</dd>
+        <dd>可聚合计算的业务度量，例如 <code class="notranslate" translate="no">sum(sales)</code> 表示销售额合计。</dd>
         <dt>分群 / segment</dt>
-        <dd>常用的过滤条件，例如"仅正向金额"。</dd>
+        <dd>常用的过滤条件，例如“仅正向金额”。</dd>
         <dt>关系 / join</dt>
         <dd>表之间的关联条件与方向（多对一、一对多、一对一）。</dd>
         <dt>overlay（扩展文件）</dt>
-        <dd>不改动原始 schema 文件、单独存放 grain/指标/分群的补充 YAML，路径形如 <code>semantic-layer/&lt;连接&gt;/&lt;表&gt;.yaml</code>。</dd>
+        <dd>不改动原始 <span translate="no" class="notranslate">schema</span> 文件、单独存放 grain/指标/分群的补充 YAML，路径形如 <code class="notranslate" translate="no">semantic-layer/&lt;连接&gt;/&lt;表&gt;.yaml</code>。</dd>
         <dt>frontmatter</dt>
         <dd>Markdown 文件顶部的结构化元信息（摘要、标签、引用等）。</dd>
         <dt>diff（差异预览）</dt>
-        <dd>保存前展示"将要写入的内容与现有内容的区别"。</dd>
+        <dd>保存前展示“将要写入的内容与现有内容的区别”。</dd>
         <dt>事实源 / source of truth</dt>
         <dd>最终以文件（YAML/Markdown）和 Git 为准，WebUI 只是编辑器。</dd>
       </dl>

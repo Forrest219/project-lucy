@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Skill 管理 |
 | 文档类型 | Other |
-| 版本 | v1.0 |
-| 撰写日期 | 2026-06-20 |
+| 版本 | 2.0.0 |
+| 撰写日期 | 2026-06-20；2.0.0 更新 2026-10-20（统一品牌叫法与术语、补浏览器翻译防御、修跨页链接与文档骨架） |
 | 撰写人 | Claude |
 | 委托人 | project-lucy 团队 |
 | 基于材料 | Lucy Skill 设计规范 |
@@ -16,7 +16,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Skill 管理 · Lucy 帮助文档</title>
+<title translate="no" class="notranslate">Skill 管理 · Lucy 帮助文档</title>
 <link rel="stylesheet" href="assets/user-guide.css">
 </head>
 <body>
@@ -27,6 +27,8 @@
       <p class="nav-title">开始</p>
       <a class="nav-link" href="index.html">帮助中心首页</a>
       <a class="nav-link" href="product-intro.html">产品介绍</a>
+      <a class="nav-link" href="lucy-architecture-diagram.html">架构总览</a>
+      <a class="nav-link" href="lucy-docs-flows.html">摄取与服务</a>
       <a class="nav-link" href="getting-started.html">5 分钟理解 Lucy</a>
       <a class="nav-link" href="concepts.html">核心概念</a>
     </div>
@@ -38,44 +40,44 @@
     </div>
     <div class="nav-group">
       <p class="nav-title">管理员指南</p>
-      <a class="nav-link" href="quickstart-admin.html">快速部署 <span class="wip">WIP</span></a>
-      <a class="nav-link" href="data-sources.html">数据源接入 <span class="wip">WIP</span></a>
-      <a class="nav-link" href="permissions.html">权限与 ACL <span class="wip">WIP</span></a>
-      <a class="nav-link" href="webui-guide.html">KTX WebUI</a>
+      <a class="nav-link" href="quickstart-admin.html">快速部署</a>
+      <a class="nav-link" href="data-sources.html">数据源接入</a>
+      <a class="nav-link" href="permissions.html">权限与 ACL</a>
+      <a class="nav-link" href="webui-guide.html">WebUI 指南</a>
     </div>
     <div class="nav-group">
       <p class="nav-title">治理与安全</p>
       <a class="nav-link" href="trust.html">可信机制</a>
-      <a class="nav-link" href="eval-meta-governance-training.html">Eval 培训</a>
-      <a class="nav-link active" href="skills.html">Skill 管理 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="eval-meta-governance-training.html">质量评测培训</a>
+      <a class="nav-link active" href="skills.html">Skill 管理</a>
     </div>
     <div class="nav-group">
       <p class="nav-title">参考</p>
-      <a class="nav-link" href="mcp-reference.html">MCP 接入参考 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="mcp-reference.html"><span translate="no" class="notranslate">MCP</span> 接入参考</a>
       <a class="nav-link" href="glossary.html">术语表</a>
-      <a class="nav-link" href="release-notes.html">更新日志 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="release-notes.html">更新日志</a>
     </div>
   </aside>
   <main class="content">
     <header class="hero">
       <span class="eyebrow">Governance</span>
       <h1>Skill 管理</h1>
-      <p class="lead">Skill 是企业的分析肌肉记忆。把高频、高价值的分析逻辑以 YAML 格式固化，Agent 执行时直接调用，不需要每次重新推理步骤，也不会产生口径漂移。</p>
+      <p class="lead">Skill 是企业固化的分析规程。把高频、高价值的分析逻辑以 YAML 格式写清分析目标、输入参数、推理步骤和输出格式，<span translate="no" class="notranslate">Agent</span> 执行时直接调用，不需要每次重新推理步骤，也不会产生口径漂移。</p>
     </header>
 
     <section>
       <h2>什么是 Skill</h2>
-      <p>Skill 存储在 Context Layer 的 <code>skills/*.yaml</code> 中。与 SQL 片段不同，一个 Skill 包含：分析目标（title）、所需输入（params）、推理步骤（steps）、输出格式，以及它依赖的 Measures 和维度。Agent 通过 Skill 名称调用，走 <code>sl_read</code> 或 <code>sl_query</code> 执行。</p>
+      <p>Skill 存储在 Context Layer 的 <code class="notranslate" translate="no">skills/*.yaml</code> 中。与 SQL 片段不同，一个 Skill 包含：分析目标（title）、所需输入（params）、推理步骤（steps）、输出格式，以及它依赖的 Measures 和维度。<span translate="no" class="notranslate">Agent</span> 通过 Skill 名称调用，取数与读取语义源走 <code class="notranslate" translate="no">lucy_read_source</code> 与 <code class="notranslate" translate="no">lucy_query</code> 这两个稳定工具名。</p>
 
       <div class="callout">
-        没有 Skill 时，每次问"各区域利润率对比"，Agent 重新推理该用哪个 Measure，可能因 prompt 差异产生不同口径。有 Skill 后，调用 <code>skill:regional_profit_comparison</code>，步骤和口径固定，答案可重现。
+        没有 Skill 时，每次问“各区域利润率对比”，<span translate="no" class="notranslate">Agent</span> 重新推理该用哪个 Measure，可能因 prompt 差异产生不同口径。有 Skill 后，调用 <code class="notranslate" translate="no">skill:regional_profit_comparison</code>，步骤和口径固定，答案可重现。
       </div>
     </section>
 
     <section>
       <h2>Skill YAML 结构</h2>
       <p>以下是一个完整 Skill 定义的示例：</p>
-      <pre>name: regional_profit_comparison
+      <pre class="notranslate" translate="no">name: regional_profit_comparison
 title: 区域利润率对比
 description: 按区域比较指定时间段的销售额和利润率，识别高销售低利润区域
 version: "1.0"
@@ -105,7 +107,7 @@ output_format: table_with_chart_hint</pre>
           <div class="step-num">1</div>
           <div class="step-body">
             <h3>新建 Skill</h3>
-            <p>在 KTX WebUI 的「Skill」页新建，填写名称和描述。</p>
+            <p>在 WebUI 的「Skill」页新建，填写名称和描述。</p>
           </div>
         </div>
 
@@ -120,8 +122,8 @@ output_format: table_with_chart_hint</pre>
         <div class="step-item">
           <div class="step-num">3</div>
           <div class="step-body">
-            <h3>添加 Eval 测试用例</h3>
-            <p>在 Eval 里添加对应测试用例（给定 params 检查 SQL 结果）。</p>
+            <h3>添加质量评测用例</h3>
+            <p>在质量评测里添加对应评测用例（给定 params 检查 SQL 结果）。</p>
           </div>
         </div>
 
@@ -129,7 +131,7 @@ output_format: table_with_chart_hint</pre>
           <div class="step-num">4</div>
           <div class="step-body">
             <h3>发布</h3>
-            <p>Eval 通过后发布，Agent 即可通过 Skill 名称调用。</p>
+            <p>质量评测通过后发布，<span translate="no" class="notranslate">Agent</span> 即可通过 Skill 名称调用。</p>
           </div>
         </div>
 
@@ -144,8 +146,8 @@ output_format: table_with_chart_hint</pre>
     </section>
 
     <nav class="section-nav" aria-label="上一篇和下一篇">
-      <a class="prev" href="eval-meta-governance-training.html"><span class="nav-kicker">上一篇</span><span class="nav-label">Eval 培训</span></a>
-      <a class="next" href="mcp-reference.html"><span class="nav-kicker">下一篇</span><span class="nav-label">MCP 接入参考</span></a>
+      <a class="prev" href="eval-meta-governance-training.html"><span class="nav-kicker">上一篇</span><span class="nav-label">质量评测元治理培训</span></a>
+      <a class="next" href="mcp-reference.html"><span class="nav-kicker">下一篇</span><span class="nav-label"><span translate="no" class="notranslate">MCP</span> 接入参考</span></a>
     </nav>
 
     <p class="footer"><a href="index.html">返回帮助中心首页</a></p>

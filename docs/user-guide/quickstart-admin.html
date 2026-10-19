@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | 快速部署指南 |
 | 文档类型 | Other |
-| 版本 | v1.0 |
-| 撰写日期 | 2026-06-20 |
+| 版本 | 2.0.0 |
+| 撰写日期 | 2026-06-20；2.0.0 更新 2026-10-20（统一品牌叫法与术语、补浏览器翻译防御、修跨页链接与文档骨架） |
 | 撰写人 | Claude |
 | 委托人 | project-lucy 团队 |
 | 基于材料 | Lucy 管理员部署流程 |
@@ -16,7 +16,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>快速部署指南 · Lucy 帮助文档</title>
+<title translate="no" class="notranslate">快速部署指南 · Lucy 帮助文档</title>
 <link rel="stylesheet" href="assets/user-guide.css">
 </head>
 <body>
@@ -27,6 +27,8 @@
       <p class="nav-title">开始</p>
       <a class="nav-link" href="index.html">帮助中心首页</a>
       <a class="nav-link" href="product-intro.html">产品介绍</a>
+      <a class="nav-link" href="lucy-architecture-diagram.html">架构总览</a>
+      <a class="nav-link" href="lucy-docs-flows.html">摄取与服务</a>
       <a class="nav-link" href="getting-started.html">5 分钟理解 Lucy</a>
       <a class="nav-link" href="concepts.html">核心概念</a>
     </div>
@@ -38,29 +40,29 @@
     </div>
     <div class="nav-group">
       <p class="nav-title">管理员指南</p>
-      <a class="nav-link active" href="quickstart-admin.html">快速部署 <span class="wip">WIP</span></a>
-      <a class="nav-link" href="data-sources.html">数据源接入 <span class="wip">WIP</span></a>
-      <a class="nav-link" href="permissions.html">权限与 ACL <span class="wip">WIP</span></a>
-      <a class="nav-link" href="webui-guide.html">KTX WebUI</a>
+      <a class="nav-link active" href="quickstart-admin.html">快速部署</a>
+      <a class="nav-link" href="data-sources.html">数据源接入</a>
+      <a class="nav-link" href="permissions.html">权限与 ACL</a>
+      <a class="nav-link" href="webui-guide.html">WebUI 指南</a>
     </div>
     <div class="nav-group">
       <p class="nav-title">治理与安全</p>
       <a class="nav-link" href="trust.html">可信机制</a>
-      <a class="nav-link" href="eval-meta-governance-training.html">Eval 培训</a>
-      <a class="nav-link" href="skills.html">Skill 管理 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="eval-meta-governance-training.html">质量评测培训</a>
+      <a class="nav-link" href="skills.html">Skill 管理</a>
     </div>
     <div class="nav-group">
       <p class="nav-title">参考</p>
-      <a class="nav-link" href="mcp-reference.html">MCP 接入参考 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="mcp-reference.html"><span translate="no" class="notranslate">MCP</span> 接入参考</a>
       <a class="nav-link" href="glossary.html">术语表</a>
-      <a class="nav-link" href="release-notes.html">更新日志 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="release-notes.html">更新日志</a>
     </div>
   </aside>
   <main class="content">
     <header class="hero">
       <span class="eyebrow">Admin Guide</span>
-      <h1>五步完成 Lucy Headless 部署</h1>
-      <p class="lead">首版客户交付采用 Docker Compose + customer-config 配置包。完成以下五步后，你的团队就可以通过 Agent 发起受治理的数据问答请求了。</p>
+      <h1>Lucy Headless 部署五步流程</h1>
+      <p class="lead">首版客户交付采用 Docker Compose + customer-config 配置包。完成以下五步后，你的团队就可以通过 <span translate="no" class="notranslate">Agent</span> 发起受治理的数据问答请求了。</p>
     </header>
 
     <section>
@@ -73,8 +75,8 @@
         <tbody>
           <tr><td>Docker 环境</td><td>Docker Engine / Docker Desktop 与 Docker Compose v2 可用</td></tr>
           <tr><td>数据库账号</td><td>目标数据库的只读账号（SELECT 权限，无写权限）</td></tr>
-          <tr><td>配置包目录</td><td>基于 <code>customer-config.example/</code> 创建客户 <code>customer-config/</code></td></tr>
-          <tr><td>Agent 接入</td><td>Claude Code / Codex / Cursor 其中之一已配置好</td></tr>
+          <tr><td>配置包目录</td><td>基于 <code class="notranslate" translate="no">customer-config.example/</code> 创建客户 <code class="notranslate" translate="no">customer-config/</code></td></tr>
+          <tr><td><span translate="no" class="notranslate">Agent</span> 接入</td><td>Claude Code / Codex / Cursor 其中之一已配置好</td></tr>
           <tr><td>Git 仓库</td><td>用于存储语义层 YAML 与 Wiki 配置文件</td></tr>
         </tbody>
       </table>
@@ -88,15 +90,15 @@
           <div class="step-num">1</div>
           <div class="step-body">
             <h3>连接数据源</h3>
-            <p>在 <code>customer-config/ktx.yaml</code> 中配置只读数据库连接，密码使用 <code>file:/data/lucy/.ktx/secrets/&lt;name&gt;</code> 引用。当前 release-verified 路径以 MySQL 与 PostgreSQL 为主；StarRocks 属于 R1 P1 gated support，live certification 通过前不作为已验证数据源。详见<a href="data-sources.html">「数据源接入」</a>文档。</p>
+            <p>在 <code class="notranslate" translate="no">customer-config/ktx.yaml</code> 中配置只读数据库连接，密码使用 <code class="notranslate" translate="no">file:/data/lucy/.ktx/secrets/&lt;name&gt;</code> 引用。当前 release-verified 路径以 MySQL 与 PostgreSQL 为主；StarRocks 属于 R1 P1 gated support，live certification 通过前不作为已验证数据源。详见<a href="data-sources.html">「数据源接入」</a>文档。</p>
           </div>
         </div>
 
         <div class="step-item">
           <div class="step-num">2</div>
           <div class="step-body">
-            <h3>Schema 扫描</h3>
-            <p>将物理表 manifest 放在 <code>customer-config/semantic-layer/&lt;connection&gt;/_schema/</code>。它描述表、字段、类型和描述，是后续 overlay 的基础。</p>
+            <h3><span translate="no" class="notranslate">Schema</span> 扫描</h3>
+            <p>将物理表 <span translate="no" class="notranslate">manifest</span> 放在 <code class="notranslate" translate="no">customer-config/semantic-layer/&lt;connection&gt;/_schema/</code>。它描述表、字段、类型和描述，是后续 overlay 的基础。</p>
           </div>
         </div>
 
@@ -104,30 +106,30 @@
           <div class="step-num">3</div>
           <div class="step-body">
             <h3>完善语义层</h3>
-            <p>在 <code>customer-config/semantic-layer/&lt;connection&gt;/&lt;source&gt;.yaml</code> 中维护 grain、measures、segments、joins 和业务描述；在 <code>customer-config/wiki/</code> 中维护口径文档。每个 Wiki 文件必须有 <code>title</code> 与 <code>summary</code> frontmatter。</p>
+            <p>在 <code class="notranslate" translate="no">customer-config/semantic-layer/&lt;connection&gt;/&lt;source&gt;.yaml</code> 中维护 grain、measures、segments、joins 和业务描述；在 <code class="notranslate" translate="no">customer-config/wiki/</code> 中维护口径文档。每个 Wiki 文件必须有 <code class="notranslate" translate="no">title</code> 与 <code class="notranslate" translate="no">summary</code> frontmatter。</p>
           </div>
         </div>
 
         <div class="step-item">
           <div class="step-num">4</div>
           <div class="step-body">
-            <h3>运行 Eval</h3>
-            <p>配置完成后运行 <code>npm run smoke:p0:headless-config -- --root customer-config --require-secret-files</code>，再在容器内执行 <code>ktx admin reindex --force</code>、<code>ktx sl validate</code> 和一条只读查询。SOW/UAT 场景还应运行对应 eval/evidence gate。</p>
+            <h3>运行质量评测</h3>
+            <p>配置完成后运行 <code class="notranslate" translate="no">npm run smoke:p0:headless-config -- --root customer-config --require-secret-files</code>，再在容器内执行 <code class="notranslate" translate="no">ktx admin reindex --force</code>、<code class="notranslate" translate="no">ktx sl validate</code> 和一条只读查询。SOW/UAT 场景还应运行对应 eval/evidence gate。</p>
           </div>
         </div>
 
         <div class="step-item">
           <div class="step-num">5</div>
           <div class="step-body">
-            <h3>接入 Agent</h3>
-            <p>将 Lucy MCP Proxy 地址 <code>http://&lt;host&gt;:7879/mcp</code> 添加到 Agent 配置，并使用 <code>webui/config/access.yaml</code> 中 token hash 对应的一次性明文 token。不要把 <code>KTX_INTERNAL_TOKEN</code> 发给外部 Agent。</p>
+            <h3>接入 <span translate="no" class="notranslate">Agent</span></h3>
+            <p>将 Lucy <span translate="no" class="notranslate">MCP</span> Proxy 地址 <code class="notranslate" translate="no">http://&lt;host&gt;:7879/mcp</code> 添加到 <span translate="no" class="notranslate">Agent</span> 配置，并使用 <code class="notranslate" translate="no">webui/config/access.yaml</code> 中 token hash 对应的一次性明文 token。不要把 <code class="notranslate" translate="no">KTX_INTERNAL_TOKEN</code> 发给外部 <span translate="no" class="notranslate">Agent</span>。</p>
           </div>
         </div>
 
       </div>
 
       <div class="callout warning">
-        ⚠️ 配置上线前必须通过 headless config、reindex、semantic validate 和相关 Eval gate。修改语义层或 Wiki 后必须重新 reindex。
+        ⚠️ 配置上线前必须通过 headless config、reindex、semantic validate 和相关质量评测 gate。修改语义层或 Wiki 后必须重新 reindex。
       </div>
     </section>
 
@@ -135,9 +137,9 @@
       <h2>下一步</h2>
       <p>完成基础部署后，建议继续完善以下配置：</p>
       <ul>
-        <li><a href="webui-guide.html">KTX WebUI 使用说明</a> — 深入学习如何维护语义层、Wiki 和 Join 关系</li>
+        <li><a href="webui-guide.html">WebUI 使用说明</a> — 深入学习如何维护语义层、Wiki 和 Join 关系</li>
         <li><a href="data-sources.html">数据源接入</a> — 了解各数据库的详细连接配置和只读账号设置</li>
-        <li><a href="permissions.html">权限与 ACL</a> — 配置 Agent 身份认证和表级访问控制</li>
+        <li><a href="permissions.html">权限与 ACL</a> — 配置 <span translate="no" class="notranslate">Agent</span> 身份认证与表级访问治理</li>
       </ul>
     </section>
 

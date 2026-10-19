@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy 产品介绍 |
 | 文档类型 | Other |
-| 版本 | v1.5 |
-| 撰写日期 | 2026-06-18；v1.1 更新 2026-06-24（澄清定位措辞；StarRocks/Oracle 数据源范围纠偏；审计留存表述纠偏；准确率指标加来源脚注；Eval 闭环自动化程度标注 Roadmap；列/行级权限措辞与 project-overview 对齐）；v1.2 更新 2026-06-24（权限管理卡片"表级 ACL"状态由 P1 改为已有，与 goal-checklist verified 对齐）；v1.3 更新 2026-06-24（数据源范围收口；Eval 闭环表述改为"可手工/脚本触发即满足本期要求"，自动 Webhook/阈值告警维持 Roadmap）；v1.4 更新 2026-07-03（StarRocks 调整为 R1 P1 gated support，Oracle 仍为 roadmap candidate）；v1.5 更新 2026-07-06（统一定位为 context compiler + governed MCP runtime） |
+| 版本 | 2.0.0 |
+| 撰写日期 | 2026-06-18；v1.1 更新 2026-06-24（澄清定位措辞；StarRocks/Oracle 数据源范围纠偏；审计留存表述纠偏；准确率指标加来源脚注；Eval 闭环自动化程度标注 Roadmap；列/行级权限措辞与 project-overview 对齐）；v1.2 更新 2026-06-24（权限管理卡片“表级 ACL”状态由 P1 改为已有，与 goal-checklist verified 对齐）；v1.3 更新 2026-06-24（数据源范围收口；Eval 闭环表述改为“可手工/脚本触发即满足本期要求”，自动 Webhook/阈值告警维持 Roadmap）；v1.4 更新 2026-07-03（StarRocks 调整为 R1 P1 gated support，Oracle 仍为 roadmap candidate）；v1.5 更新 2026-07-06（统一定位为 context compiler + governed MCP runtime）；2.0.0 更新 2026-10-20（统一品牌叫法与术语、补浏览器翻译防御、修跨页链接与文档骨架） |
 | 撰写人 | Codex |
 | 委托人 | project-lucy 团队 |
 | 基于材料 | project-lucy docs / 产品设计 |
@@ -16,7 +16,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>产品介绍 · Lucy 帮助文档</title>
+<title translate="no" class="notranslate">产品介绍 · Lucy 帮助文档</title>
 <link rel="stylesheet" href="assets/user-guide.css">
 <style>
   /* Override shared CSS to support this dark-theme page inside .product-content */
@@ -33,7 +33,7 @@
     --pred: #ef4444;
     --text: #e2e8f0;
     --text2: #94a3b8;
-    --text3: #64748b;
+    --text3: #7f8d9d;
     --radius: 12px;
     background: var(--bg);
     color: var(--text);
@@ -63,7 +63,7 @@
     --red: #ef4444;
     --text: #e2e8f0;
     --text2: #94a3b8;
-    --text3: #64748b;
+    --text3: #7f8d9d;
     --radius: 12px;
   }
 
@@ -442,15 +442,13 @@
   }
 
   /* ── Footer ── */
-  footer {
-    padding: 40px 48px;
+  .footer {
+    margin-top: 58px;
+    padding-top: 18px;
     border-top: 1px solid var(--border);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+    color: var(--text3);
+    font-size: 13px;
   }
-  .footer-logo { font-size: 18px; font-weight: 800; background: linear-gradient(135deg, var(--accent), var(--accent3)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-  .footer-note { font-size: 13px; color: var(--text3); }
   .guide-bottom {
     max-width: 1200px;
     margin: 0 auto;
@@ -672,6 +670,8 @@
       <p class="nav-title">开始</p>
       <a class="nav-link" href="index.html">帮助中心首页</a>
       <a class="nav-link active" href="product-intro.html">产品介绍</a>
+      <a class="nav-link" href="lucy-architecture-diagram.html">架构总览</a>
+      <a class="nav-link" href="lucy-docs-flows.html">摄取与服务</a>
       <a class="nav-link" href="getting-started.html">5 分钟理解 Lucy</a>
       <a class="nav-link" href="concepts.html">核心概念</a>
     </div>
@@ -683,22 +683,22 @@
     </div>
     <div class="nav-group">
       <p class="nav-title">管理员指南</p>
-      <a class="nav-link" href="quickstart-admin.html">快速部署 <span class="wip">WIP</span></a>
-      <a class="nav-link" href="data-sources.html">数据源接入 <span class="wip">WIP</span></a>
-      <a class="nav-link" href="permissions.html">权限与 ACL <span class="wip">WIP</span></a>
-      <a class="nav-link" href="webui-guide.html">KTX WebUI</a>
+      <a class="nav-link" href="quickstart-admin.html">快速部署</a>
+      <a class="nav-link" href="data-sources.html">数据源接入</a>
+      <a class="nav-link" href="permissions.html">权限与 ACL</a>
+      <a class="nav-link" href="webui-guide.html">WebUI 指南</a>
     </div>
     <div class="nav-group">
       <p class="nav-title">治理与安全</p>
       <a class="nav-link" href="trust.html">可信机制</a>
-      <a class="nav-link" href="eval-meta-governance-training.html">Eval 培训</a>
-      <a class="nav-link" href="skills.html">Skill 管理 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="eval-meta-governance-training.html">质量评测培训</a>
+      <a class="nav-link" href="skills.html">Skill 管理</a>
     </div>
     <div class="nav-group">
       <p class="nav-title">参考</p>
-      <a class="nav-link" href="mcp-reference.html">MCP 接入参考 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="mcp-reference.html"><span translate="no" class="notranslate">MCP</span> 接入参考</a>
       <a class="nav-link" href="glossary.html">术语表</a>
-      <a class="nav-link" href="release-notes.html">更新日志 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="release-notes.html">更新日志</a>
     </div>
   </aside>
   <div class="product-content">
@@ -730,37 +730,37 @@
   <div class="container">
     <div class="hero-badge">
       <span class="dot"></span>
-      Data Agent 上下文编译器
+      Data <span translate="no" class="notranslate">Agent</span> 上下文编译器
     </div>
     <h1 class="hero-title">
-      企业上下文可以安全地<br>
-      <span class="gradient">编译给 Agent 使用</span>
+      企业上下文编译<br>
+      <span class="gradient">与受治理的 <span translate="no" class="notranslate">Agent</span> 数据服务</span>
     </h1>
     <p class="hero-sub">
-      Lucy 是面向中小企业的 data agent context compiler + governed MCP runtime：它本身不直接回答业务问题，而是在数据被 Agent（如 Claude Code / Codex / Hermes / Cursor）消费之前，把数据库、BI、文档、人工口径编译成可授权、可审计、可回归的 MCP 数据服务。
+      Lucy 是面向中小企业的 data agent context compiler + governed <span translate="no" class="notranslate">MCP</span> runtime：它本身不直接回答业务问题，而是在数据被 <span translate="no" class="notranslate">Agent</span>（如 Claude Code / Codex / Hermes / Cursor）消费之前，把数据库、BI、文档、人工口径编译成可授权、可审计、可回归的 <span translate="no" class="notranslate">MCP</span> 数据服务。
     </p>
     <div class="hero-stat-row">
       <div>
         <div class="hero-stat-num">21%</div>
-        <div class="hero-stat-label">无治理时的 Agent 准确率*</div>
+        <div class="hero-stat-label">无治理时的 <span translate="no" class="notranslate">Agent</span> 准确率*</div>
       </div>
       <div class="hero-stat-arrow">→</div>
       <div>
         <div class="hero-stat-num">95%+</div>
-        <div class="hero-stat-label">完整治理后的 Agent 准确率*</div>
+        <div class="hero-stat-label">完整治理后的 <span translate="no" class="notranslate">Agent</span> 准确率*</div>
       </div>
       <div class="hero-stat-divider"></div>
       <div>
         <div class="hero-stat-num">100%</div>
-        <div class="hero-stat-label">MCP 调用审计覆盖</div>
+        <div class="hero-stat-label"><span translate="no" class="notranslate">MCP</span> 调用审计覆盖</div>
       </div>
       <div class="hero-stat-divider"></div>
       <div>
         <div class="hero-stat-num">表级</div>
-        <div class="hero-stat-label">细粒度 Agent 权限管控</div>
+        <div class="hero-stat-label">细粒度 <span translate="no" class="notranslate">Agent</span> 权限管控</div>
       </div>
     </div>
-    <p style="margin-top:18px;font-size:12px;color:var(--text3);text-align:center;">* 行业基准估算，非 Lucy 内部 Eval 实测结果；Lucy Business Eval 当前为 partial 状态，完整闭环尚未生效（详见 <code>docs/specs/lucy-platform-goal-checklist.md</code> Capability Checklist）。</p>
+    <p style="margin-top:18px;font-size:12px;color:var(--text3);text-align:center;">* 行业基准估算，非 Lucy 内部质量评测实测结果；Lucy 业务质量评测当前为 partial 状态，完整闭环尚未生效（详见 <code class="notranslate" translate="no">docs/specs/lucy-platform-goal-checklist.md</code> Capability Checklist）。</p>
   </div>
 </section>
 
@@ -768,23 +768,23 @@
 <section id="problem">
   <div class="container">
     <div class="section-label">为什么需要 Lucy</div>
-    <h2 class="section-title">企业不敢开放数据给 Agent 的三类根因</h2>
+    <h2 class="section-title">企业不敢开放数据给 <span translate="no" class="notranslate">Agent</span> 的三类根因</h2>
     <p class="section-sub">没有上下文编译层和受治理运行时，AI 直连数据会把口径幻觉、越权风险和静默漂移一起带进业务决策链。</p>
     <div class="problem-grid">
       <div class="problem-card">
         <div class="problem-icon">🎯</div>
         <h3>口径幻觉</h3>
-        <p>数据库有数百个字段，Agent 难以准确将自然语言问题映射到正确的表和字段。"活跃用户"到底用哪个字段、什么时间窗口？没有语义层，Agent 只能猜。</p>
+        <p>数据库有数百个字段，<span translate="no" class="notranslate">Agent</span> 难以准确将自然语言问题映射到正确的表和字段。“活跃用户”到底用哪个字段、什么时间窗口？没有语义层，<span translate="no" class="notranslate">Agent</span> 只能猜。</p>
       </div>
       <div class="problem-card">
         <div class="problem-icon">⏳</div>
         <h3>静默漂移</h3>
-        <p>Schema、业务定义和底层数据频繁变化。最危险的不是报错，而是"悄悄返回错误答案"——陈旧的指标口径会把隐性计算错误带进管理决策。</p>
+        <p><span translate="no" class="notranslate">Schema</span>、业务定义和底层数据频繁变化。最危险的不是报错，而是“悄悄返回错误答案”——陈旧的指标口径会把隐性计算错误带进管理决策。</p>
       </div>
       <div class="problem-card">
         <div class="problem-icon">🔍</div>
         <h3>分析主权流失</h3>
-        <p>即使数据标注正确，在巨大的搜索空间里 Agent 仍可能漏掉最相关的实体。没有结构化 Skill 和知识库，Agent 依赖通用模型泛化推理，而不是企业自己的领域判断。</p>
+        <p>即使数据标注正确，在巨大的搜索空间里 <span translate="no" class="notranslate">Agent</span> 仍可能漏掉最相关的实体。没有结构化 Skill 和知识库，<span translate="no" class="notranslate">Agent</span> 依赖通用模型泛化推理，而不是企业自己的领域判断。</p>
       </div>
     </div>
   </div>
@@ -794,49 +794,49 @@
 <section id="features">
   <div class="container">
     <div class="section-label">功能模块</div>
-    <h2 class="section-title">从企业上下文到受控 MCP 服务</h2>
-    <p class="section-sub">Lucy 不是单点工具，而是把数据资产、业务知识、可信查询和质量用例编译成 Agent 可安全消费的治理链路：定义口径、固化知识、控制访问、记录审计、主动评测。</p>
+    <h2 class="section-title">从企业上下文到受控 <span translate="no" class="notranslate">MCP</span> 服务</h2>
+    <p class="section-sub">Lucy 不是单点工具，而是把数据资产、业务知识、可信查询和质量用例编译成 <span translate="no" class="notranslate">Agent</span> 可安全消费的治理链路：定义口径、固化知识、控制访问、记录审计、主动评测。</p>
     <div class="features-grid">
 
       <div class="feature-card boundary-danger">
         <div class="feature-icon icon-blue">🗄️</div>
         <h3>多数据源接入</h3>
-        <p>统一 DataSourceAdapter SPI，首版支持 MySQL + PostgreSQL（只读账号）。StarRocks 进入 R1 P1 gated support：先支持 MySQL wire 只读目标源配置与证据路径，live certification 通过前不标记 release verified；Oracle 仍为 roadmap candidate。跨源 Join 是治理红线，不进入 Agent 自动查询路径。</p>
+        <p>统一 DataSourceAdapter SPI，首版支持 MySQL + PostgreSQL（只读账号）。StarRocks 进入 R1 P1 gated support：先支持 MySQL wire 只读目标源配置与证据路径，live certification 通过前不标记 release verified；Oracle 仍为 roadmap candidate。跨源 Join 是治理红线，不进入 <span translate="no" class="notranslate">Agent</span> 自动查询路径。</p>
         <span class="feature-tag tag-p1">P1 · StarRocks gated support</span>
       </div>
 
       <div class="feature-card">
         <div class="feature-icon icon-cyan">📐</div>
         <h3>语义与知识治理</h3>
-        <p>在 WebUI 中维护字段别名、业务定义、Wiki 文档和 Knowledge Base，形成 Semantic Pack 与 Knowledge Pack。所有变更落 KTX git 文件，以语义层和业务文档作为可审阅事实源。</p>
+        <p>在 WebUI 中维护字段别名、业务定义、Wiki 文档和 Knowledge Base，形成 Semantic Pack 与 Knowledge Pack。所有变更落 <span translate="no" class="notranslate">KTX</span> git 文件，以语义层和业务文档作为可审阅事实源。</p>
         <span class="feature-tag tag-existing">已有 · M0–M5</span>
       </div>
 
       <div class="feature-card">
         <div class="feature-icon icon-purple">⚡</div>
         <h3>Skill 管理</h3>
-        <p>Skill 不是提示词技巧，而是企业分析主权的固化机制。它把资深分析师、财务负责人和业务专家长期形成的判断路径、指标解释、异常处理和追问策略，沉淀为 Agent 可重复调用的分析肌肉记忆。</p>
+        <p>Skill 不是提示词技巧，而是企业分析主权的固化机制。它把资深分析师、财务负责人和业务专家长期形成的判断路径、指标解释、异常处理和追问策略，写成 <span translate="no" class="notranslate">Agent</span> 可重复调用的规程：固定分析目标、输入参数、推理步骤和输出格式，让同一种分析每次都得到同样的口径。</p>
         <span class="feature-tag tag-value">增值服务 · M6</span>
       </div>
 
       <div class="feature-card">
         <div class="feature-icon icon-yellow">🔐</div>
         <h3>权限管理</h3>
-        <p><strong>表级 ACL：</strong>工具级、connection 级与表级权限已可配置、可验证、可追溯（见 <code>access.yaml</code>）。<strong>Secrets Cabinet：</strong>Lucy 不读取、不展示、不提交 <code>.ktx/secrets/</code> 中的密码与令牌；Eval Runner 通过 <code>safety_contract</code> 和 <code>forbidden_ast</code> 强阻断凭证路径、写操作和跨源 Join。</p>
+        <p><strong>表级 ACL：</strong>工具级、connection 级与表级权限已可配置、可验证、可追溯（见 <code class="notranslate" translate="no">access.yaml</code>）。<strong>Secrets Cabinet：</strong>Lucy 不读取、不展示、不提交 <code class="notranslate" translate="no">.ktx/secrets/</code> 中的密码与令牌；质量评测 Runner 通过 <code class="notranslate" translate="no">safety_contract</code> 和 <code class="notranslate" translate="no">forbidden_ast</code> 强阻断凭证路径、写操作和跨源 Join。</p>
         <span class="feature-tag tag-existing">已有 · 表级 ACL</span>
       </div>
 
       <div class="feature-card">
         <div class="feature-icon icon-green">📋</div>
         <h3>访问日志与审计</h3>
-        <p>每次 MCP 调用持久化记录 agent_id、SQL、返回行数、延迟和状态，写入 SQLite audit 日志，可配置、可验证、可追溯。</p>
+        <p>每次 <span translate="no" class="notranslate">MCP</span> 调用持久化记录 agent_id、SQL、返回行数、延迟和状态，写入 SQLite audit 日志，可配置、可验证、可追溯。</p>
         <span class="feature-tag tag-existing">已有 · SQLite Audit</span>
       </div>
 
       <div class="feature-card">
         <div class="feature-icon icon-red">📊</div>
-        <h3>Eval 质量监控</h3>
-        <p>Eval Runner 是 Quality Pack 的核心：先编译安全红线，再校验语义、SQL 结构和结果断言，把异常分诊为数据漂移、schema 漂移、逻辑回归或工具错误。</p>
+        <h3>质量评测监控</h3>
+        <p>质量评测 Runner 是 Quality Pack 的核心：先编译安全红线，再校验语义、SQL 结构和结果断言，把异常分诊为数据漂移、<span translate="no" class="notranslate">schema</span> 漂移、逻辑回归或工具错误。</p>
         <span class="feature-tag tag-p1">P1 · 自动化门禁</span>
       </div>
 
@@ -849,11 +849,11 @@
   <div class="container">
     <div class="section-label">系统架构</div>
     <h2 class="section-title">Lucy 如何工作</h2>
-    <p class="section-sub">两个互补的侧面：摄取侧把数据源整理成可信上下文；服务侧把上下文安全地交给 Agent 使用。</p>
+    <p class="section-sub">两个互补的侧面：摄取侧把数据源整理成可信上下文；服务侧把上下文安全地交给 <span translate="no" class="notranslate">Agent</span> 使用。</p>
 
     <div class="arch-canonical">
       <div class="arch-canonical-kicker">权威架构图</div>
-      <p>完整产品架构请优先看这两张全屏图（比下方示意更完整）。WebUI 用户也可在 <code>/help?section=product-architecture-diagrams</code> 打开同一套图。</p>
+      <p>完整产品架构请优先看这两张全屏图（比下方示意更完整）。WebUI 用户也可在 <code class="notranslate" translate="no">/help?section=product-architecture-diagrams</code> 打开同一套图。</p>
       <div class="arch-canonical-links">
         <a href="lucy-architecture-diagram.html" target="_blank" rel="noopener">Lucy 架构总览</a>
         <a href="lucy-docs-flows.html" target="_blank" rel="noopener">摄取与服务流程</a>
@@ -866,7 +866,7 @@
       <div class="arch-block">
         <div class="arch-block-label">SERVING FLOW</div>
         <div class="arch-block-title">从提问到可信答案</div>
-        <div class="arch-block-desc">Agent 通过 MCP 提问；Lucy 校验权限、检索上下文、编译 SQL、执行只读查询，附 Provenance Footer 回答。</div>
+        <div class="arch-block-desc"><span translate="no" class="notranslate">Agent</span> 通过 <span translate="no" class="notranslate">MCP</span> 提问；Lucy 校验权限、检索上下文、编译 SQL、执行只读查询，附 Provenance Footer 回答。</div>
 
         <div class="serving-flow">
 
@@ -889,8 +889,8 @@
           <div class="sf-lucy">
             <div class="sf-lucy-header">
               <div class="sf-lucy-logo">L</div>
-              <span class="sf-lucy-name">KTX MCP Server · Lucy</span>
-              <span class="sf-lucy-badge">MCP + CLI</span>
+              <span class="sf-lucy-name"><span translate="no" class="notranslate">KTX</span> <span translate="no" class="notranslate">MCP</span> Server · Lucy</span>
+              <span class="sf-lucy-badge"><span translate="no" class="notranslate">MCP</span> + CLI</span>
             </div>
             <div class="sf-gateway">⚙ 鉴权 + 表级 ACL + 审计日志（Governance Gateway）</div>
             <ul class="sf-features">
@@ -909,8 +909,8 @@
             <div class="sf-context">
               <div class="sf-box-title">Context Layer</div>
               <span class="sf-file">wiki/*.md</span>
-              <span class="sf-file">semantic-layer/*.yaml</span>
-              <span class="sf-file">skills/*.yaml</span>
+              <span class="sf-file"><span translate="no" class="notranslate">semantic-layer</span>/*<span translate="no" class="notranslate">.yaml</span></span>
+              <span class="sf-file">skills/*<span translate="no" class="notranslate">.yaml</span></span>
             </div>
             <div class="sf-db">
               <div class="sf-box-title">数据源</div>
@@ -926,7 +926,7 @@
       <div class="arch-block">
         <div class="arch-block-label">INGESTION FLOW</div>
         <div class="arch-block-title">从数据源到可信上下文</div>
-        <div class="arch-block-desc">BI 团队通过 WebUI 补充语义口径；提交后经 Eval Runner 质量门禁校验，通过才进入服务侧。</div>
+        <div class="arch-block-desc">BI 团队通过 WebUI 补充语义口径；提交后经质量评测 Runner 质量门禁校验，通过才进入服务侧。</div>
 
         <div class="ingestion-flow">
 
@@ -941,12 +941,12 @@
             <div class="if-note">首版支持 MySQL + PostgreSQL；StarRocks 为 R1 P1 gated target，live certification 前不进入 verified matrix；Oracle 仍为 roadmap candidate</div>
           </div>
 
-          <div class="if-arrow">↓ Schema 扫描</div>
+          <div class="if-arrow">↓ <span translate="no" class="notranslate">Schema</span> 扫描</div>
 
           <div class="if-step">
             <div class="if-num">1</div>
             <div>
-              <div class="if-title">KTX WebUI · 人工补充语义</div>
+              <div class="if-title">WebUI · 人工补充语义</div>
               <div class="if-desc">BI 团队维护字段口径、指标、Wiki 文档和 Skill</div>
               <div class="if-tags">
                 <span class="if-tag">Table Editor</span>
@@ -962,7 +962,7 @@
           <div class="if-step">
             <div class="if-num">2</div>
             <div>
-              <div class="if-title">Eval Runner · 质量门禁</div>
+              <div class="if-title">质量评测 Runner · 质量门禁</div>
               <div class="if-desc">自动验证安全红线、SQL 结构与结果断言；失败时退回 WebUI 修正</div>
               <div class="if-tags">
                 <span class="if-tag">安全红线校验</span>
@@ -983,11 +983,11 @@
                 <div class="if-output-type">业务口径</div>
               </div>
               <div>
-                <div class="if-output-path">semantic-layer/*.yaml</div>
+                <div class="if-output-path"><span translate="no" class="notranslate">semantic-layer</span>/*<span translate="no" class="notranslate">.yaml</span></div>
                 <div class="if-output-type">结构化指标</div>
               </div>
               <div>
-                <div class="if-output-path">skills/*.yaml</div>
+                <div class="if-output-path">skills/*<span translate="no" class="notranslate">.yaml</span></div>
                 <div class="if-output-type">分析主权</div>
               </div>
             </div>
@@ -998,23 +998,23 @@
 
     </div>
 
-    <!-- Eval 质量闭环 -->
+    <!-- 质量评测闭环 -->
     <div class="eval-box eval-box-wide">
       <div class="eval-wide-header">
         <h3>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-          Eval 质量闭环
+          质量评测闭环
         </h3>
-        <p class="sub">配置侧变更经 Eval Runner 校验（可手工或脚本触发）并留痕才允许进入服务侧；自动 Webhook 触发与阈值告警为可选增强，非本期验收范围（见标注）。</p>
+        <p class="sub">配置侧变更经质量评测 Runner 校验（可手工或脚本触发）并留痕才允许进入服务侧；自动 Webhook 触发与阈值告警为可选增强，非本期验收范围（见标注）。</p>
       </div>
       <div class="eval-steps-row">
         <div class="eval-step">
           <div class="eval-num">1</div>
-          <p><strong>变更触发</strong><br>语义层或 Skill 提交变更 → 手工或脚本触发相关 Eval Case 并留痕；自动 Webhook 触发 <span style="display:inline-block;margin-left:4px;padding:0 5px;border:1px solid var(--border);border-radius:4px;font-size:9px;color:var(--text3);">ROADMAP</span></p>
+          <p><strong>变更触发</strong><br>语义层或 Skill 提交变更 → 手工或脚本触发相关评测用例并留痕；自动 Webhook 触发 <span style="display:inline-block;margin-left:4px;padding:0 5px;border:1px solid var(--border);border-radius:4px;font-size:9px;color:var(--text3);">ROADMAP</span></p>
         </div>
         <div class="eval-step">
           <div class="eval-num">2</div>
-          <p><strong>Eval Runner</strong><br>模拟真实 Agent 走完整 MCP 链路，确保测试环境 = 生产环境</p>
+          <p><strong>质量评测 Runner</strong><br>模拟真实 <span translate="no" class="notranslate">Agent</span> 走完整 <span translate="no" class="notranslate">MCP</span> 链路，确保测试环境 = 生产环境</p>
         </div>
         <div class="eval-step">
           <div class="eval-num">3</div>
@@ -1039,7 +1039,7 @@
   <div class="container">
     <div class="section-label">产品对比</div>
     <h2 class="section-title">Lucy vs 传统 BI 工具</h2>
-    <p class="section-sub">Lucy 不是 BI 工具的竞争产品，而是 Agent 时代的新类别——它服务的是 AI，不是人。</p>
+    <p class="section-sub">Lucy 不是 BI 工具的竞争产品，而是 <span translate="no" class="notranslate">Agent</span> 时代的新类别——它服务的是 AI，不是人。</p>
     <div class="compare-table-wrap">
       <table>
         <thead>
@@ -1053,32 +1053,32 @@
           <tr>
             <td>服务对象</td>
             <td class="cross">人类分析师</td>
-            <td class="check">✓ AI Agent（Claude Code / Codex 等）</td>
+            <td class="check">✓ AI <span translate="no" class="notranslate">Agent</span>（Claude Code / Codex 等）</td>
           </tr>
           <tr>
             <td>输出形式</td>
             <td class="cross">图表、报表、Dashboard</td>
-            <td class="check">✓ 语义上下文 + 受控查询接口（MCP）</td>
+            <td class="check">✓ 语义上下文 + 受控查询接口（<span translate="no" class="notranslate">MCP</span>）</td>
           </tr>
           <tr>
             <td>准确率保障</td>
             <td class="cross">人工 QA，主观校验</td>
-            <td class="check">✓ Eval 自动化门禁，量化准确率趋势</td>
+            <td class="check">✓ 质量评测自动化门禁，量化准确率趋势</td>
           </tr>
           <tr>
             <td>权限管理主体</td>
             <td class="cross">人类用户 / 角色</td>
-            <td class="check">✓ Agent 身份（Service Account + Token）</td>
+            <td class="check">✓ <span translate="no" class="notranslate">Agent</span> 身份（Service Account + <span translate="no" class="notranslate">Token</span>）</td>
           </tr>
           <tr>
             <td>知识更新方式</td>
             <td class="cross">手动修改图表和指标</td>
-            <td class="check">✓ 语义层 + Skill 版本化，变更自动触发 Eval</td>
+            <td class="check">✓ 语义层 + Skill 版本化，变更自动触发质量评测</td>
           </tr>
           <tr>
             <td>审计能力</td>
             <td class="cross">用户操作日志（可选）</td>
-            <td class="check">✓ 每次 Agent MCP 调用完整记录（SQLite Audit，可追溯）</td>
+            <td class="check">✓ 每次 <span translate="no" class="notranslate">Agent</span> <span translate="no" class="notranslate">MCP</span> 调用完整记录（SQLite Audit，可追溯）</td>
           </tr>
           <tr>
             <td>多数据源</td>
@@ -1107,7 +1107,7 @@
         <div class="scope-item"><span class="x">✕</span> BI 可视化（图表 / Dashboard 给人看）</div>
         <div class="scope-item"><span class="x">✕</span> 数据写操作（所有数据源只读）</div>
       </div>
-      <p class="scope-note">安全红线进入 <code>docs/governance/eval-quiz-conventions.md</code> 的 <code>safety_contract</code>：一旦生成 SQL 命中 <code>UPDATE / DELETE / INSERT / DROP / ALTER / TRUNCATE</code> 等写操作，Runner 必须判定为 <code>logic_regression</code> 并阻断流水线。</p>
+      <p class="scope-note">安全红线进入 <code class="notranslate" translate="no">docs/governance/eval-quiz-conventions.md</code> 的 <code class="notranslate" translate="no">safety_contract</code>：一旦生成 SQL 命中 <code class="notranslate" translate="no">UPDATE / DELETE / INSERT / DROP / ALTER / TRUNCATE</code> 等写操作，Runner 必须判定为 <code class="notranslate" translate="no">logic_regression</code> 并阻断流水线。</p>
     </div>
   </div>
 </section>
@@ -1118,10 +1118,7 @@
 </nav>
 
 <!-- Footer -->
-<footer>
-  <div class="footer-logo">Lucy</div>
-  <div class="footer-note">AI 数据资产可信网关与治理海关 · BI 中心评审材料 · 2026-06-18</div>
-</footer>
+<p class="footer">AI 数据资产可信网关与治理海关 · BI 中心评审材料 · 2026-06-18 · <a href="index.html">返回帮助中心首页</a></p>
 
   </div><!-- /.product-content -->
 </div><!-- /.shell -->

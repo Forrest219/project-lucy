@@ -27,6 +27,8 @@
       <p class="nav-title">开始</p>
       <a class="nav-link" href="index.html">帮助中心首页</a>
       <a class="nav-link" href="product-intro.html">产品介绍</a>
+      <a class="nav-link" href="lucy-architecture-diagram.html">架构总览</a>
+      <a class="nav-link" href="lucy-docs-flows.html">摄取与服务</a>
       <a class="nav-link" href="getting-started.html">5 分钟理解 Lucy</a>
       <a class="nav-link" href="concepts.html">核心概念</a>
     </div>
@@ -38,22 +40,22 @@
     </div>
     <div class="nav-group">
       <p class="nav-title">管理员指南</p>
-      <a class="nav-link" href="quickstart-admin.html">快速部署 <span class="wip">WIP</span></a>
-      <a class="nav-link" href="data-sources.html">数据源接入 <span class="wip">WIP</span></a>
-      <a class="nav-link" href="permissions.html">权限与 ACL <span class="wip">WIP</span></a>
+      <a class="nav-link" href="quickstart-admin.html">快速部署</a>
+      <a class="nav-link" href="data-sources.html">数据源接入</a>
+      <a class="nav-link" href="permissions.html">权限与 ACL</a>
       <a class="nav-link" href="webui-guide.html">WebUI 指南</a>
     </div>
     <div class="nav-group">
       <p class="nav-title">治理与安全</p>
       <a class="nav-link" href="trust.html">可信机制</a>
-      <a class="nav-link" href="eval-meta-governance-training.html"><span translate="no" class="notranslate">Eval</span> 培训</a>
-      <a class="nav-link" href="skills.html"><span translate="no" class="notranslate">Skill</span> 管理 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="eval-meta-governance-training.html">质量评测培训</a>
+      <a class="nav-link" href="skills.html"><span translate="no" class="notranslate">Skill</span> 管理</a>
     </div>
     <div class="nav-group">
       <p class="nav-title">参考</p>
-      <a class="nav-link active" href="mcp-reference.html"><span translate="no" class="notranslate">MCP</span> 接入参考 <span class="wip">WIP</span></a>
+      <a class="nav-link active" href="mcp-reference.html"><span translate="no" class="notranslate">MCP</span> 接入参考</a>
       <a class="nav-link" href="glossary.html">术语表</a>
-      <a class="nav-link" href="release-notes.html">更新日志 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="release-notes.html">更新日志</a>
     </div>
   </aside>
   <main class="content">
@@ -140,7 +142,7 @@
     </section>
 
     <section>
-      <h2>可用工具面</h2>
+      <h2 id="tools">可用工具面</h2>
       <p>新接入的 <span translate="no" class="notranslate">Agent</span> 推荐只暴露下面 6 个核心工具：</p>
       <table>
         <thead>
@@ -307,7 +309,7 @@
     <section>
       <h2>凭据边界</h2>
       <ul>
-        <li><strong><span translate="no" class="notranslate">Token</span> 明文只在签发时出现一次</strong>，立刻放进客户端密钥库；配置里只落 <code class="notranslate" translate="no">sha256:&lt;hex&gt;</code>。</li>
+        <li><strong><span translate="no" class="notranslate">Token</span> 明文只在签发时出现一次</strong>，立刻放进客户端凭据库；配置里只落 <code class="notranslate" translate="no">sha256:&lt;hex&gt;</code>。</li>
         <li><strong>必须设置 <code class="notranslate" translate="no">expires_at</code></strong>：管理页默认 90 天、最长 365 天。到期后 <span translate="no" class="notranslate">Proxy</span> 鉴权硬拒绝 401。</li>
         <li><strong><code class="notranslate" translate="no">KTX_INTERNAL_TOKEN</code> 不出门</strong>：它只用于 <span translate="no" class="notranslate">Lucy Proxy</span> 调上游，<strong>不得</strong>分发给任何外部 <span translate="no" class="notranslate">Agent</span>。</li>
         <li><strong>上游内部工具名不外用</strong>：以 <code class="notranslate" translate="no">sl_</code> 为前缀的工具对 <span translate="no" class="notranslate">Agent</span> 一律拒绝，角色配置也放不开。</li>

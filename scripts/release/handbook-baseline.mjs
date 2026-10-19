@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import YAML from "yaml";
@@ -230,7 +230,9 @@ export function runHandbookBaseline(root = ROOT) {
   return sources;
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+// 双边 realpath 比较：macOS 上 `process.argv[1]` 可能是软链路径（/tmp → /private/tmp），
+// 直接比较会在软链调用时静默跳过执行块、退出码 0 却不报错 —— 门禁失效放行。
+if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {
   try {
     const sources = runHandbookBaseline();
     console.log(`[handbook-baseline] OK baseline aligned with VERSION=${sources.version}`);

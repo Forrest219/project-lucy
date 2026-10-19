@@ -1,12 +1,22 @@
 <!DOCTYPE html>
+<!--
+| 元数据 | 内容 |
+|---|---|
+| 文档名称 | 摄取与服务流程 |
+| 文档类型 | Other |
+| 版本 | 2.0.0 |
+| 撰写日期 | 2026-06-20；2.0.0 更新 2026-10-20（补导航与标题、补齐未定义 CSS 变量、改为离线可用） |
+| 撰写人 | project-lucy 团队 |
+| 委托人 | project-lucy 团队 |
+| 基于材料 | docs/SYSTEM_HANDBOOK.md §1.6 |
+| 适用范围 | 帮助文档中心的摄取与服务流程权威图 |
+| 输出位置 | docs/user-guide/lucy-docs-flows.html |
+-->
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Lucy 流程 · 摄取与服务</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@600;700&family=Geist+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <title translate="no" class="notranslate">摄取与服务流程 · Lucy 帮助文档</title>
   <style>
     :root {
       --cream: #faf9f6;
@@ -26,6 +36,9 @@
       --amber: #f59e0b;
       --emerald: #10b981;
       --slate: #334155;
+      /* 卡片顶部强调色：默认取各卡片的行内取值，
+         行内 style 优先级更高，本处只提供兜底，避免 var() 落空。 */
+      --accent: #3b82f6;
     }
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; }
@@ -42,6 +55,39 @@
       display: grid;
       gap: 28px;
     }
+    .page-head h1 {
+      margin: 0 0 6px;
+      font-size: 26px;
+      font-weight: 700;
+      line-height: 1.25;
+    }
+    .page-head p {
+      margin: 0 0 10px;
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--muted);
+    }
+    .page-nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      font-size: 13px;
+    }
+    .page-nav a {
+      color: var(--ink);
+      text-decoration: none;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 1px;
+    }
+    .page-nav a:hover { border-bottom-color: var(--brand); }
+    .footer {
+      margin: 0;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .footer a { color: var(--ink); }
     .board {
       overflow: hidden;
       border: 1px solid var(--line);
@@ -355,18 +401,27 @@
 </head>
 <body>
   <div class="page">
+    <header class="page-head">
+      <h1>摄取与服务流程</h1>
+      <p>摄取侧：数据源 → 语义 / Wiki / Skill → 评测发布前检查；服务侧：<span translate="no" class="notranslate">Agent</span> 提问 → 鉴权 / 上下文 / SQL → 可信答案。本图是产品架构的权威视图，优先于帮助文档站内的简化示意。</p>
+      <nav class="page-nav" aria-label="页面导航">
+        <a href="index.html">返回帮助中心首页</a>
+        <a href="lucy-architecture-diagram.html">Lucy 架构总览</a>
+        <a href="product-intro.html#architecture">产品介绍</a>
+      </nav>
+    </header>
 
     <article class="board" aria-label="Lucy 摄取流程：从源系统到可交付上下文">
       <header class="board-head">
         <p class="eyebrow">摄取流程</p>
-        <h2>从分散的源系统到 Agent 可用的上下文</h2>
-        <p>分析师在 WebUI 接入数仓并编撰语义。Lucy 发布可审阅文件，再经质量评测门禁后，Agent 才能检索或编译。</p>
+        <h2>从分散的源系统到 <span translate="no" class="notranslate">Agent</span> 可用的上下文</h2>
+        <p>分析师在 WebUI 接入数仓并编撰语义。Lucy 发布可审阅文件，再经质量评测门禁后，<span translate="no" class="notranslate">Agent</span> 才能检索或编译。</p>
       </header>
       <div class="canvas">
         <div class="sources">
           <div class="source" style="--accent:#3b82f6">
             <h3>数据库</h3>
-            <p><span class="notranslate" translate="no">Schema</span>、键、行数与 Catalog 元数据。</p>
+            <p><span class="notranslate" translate="no">Schema</span>、键、行数与 <span translate="no" class="notranslate">Catalog</span> 元数据。</p>
             <div class="chips">
               <span class="chip notranslate" translate="no">MySQL</span>
               <span class="chip notranslate" translate="no">PostgreSQL</span>
@@ -424,7 +479,7 @@
             <span class="num">2</span>
             <div>
               <h3>语义编撰</h3>
-              <p>在 WebUI 把 Catalog 证据整理成待审上下文。</p>
+              <p>在 WebUI 把 <span translate="no" class="notranslate">Catalog</span> 证据整理成待审上下文。</p>
             </div>
           </div>
           <div class="stage">
@@ -438,7 +493,7 @@
             <span class="num">4</span>
             <div>
               <h3>评测门禁</h3>
-              <p>在 Agent 依赖之前，检查安全红线、语义与断言。</p>
+              <p>在 <span translate="no" class="notranslate">Agent</span> 依赖之前，检查安全红线、语义与断言。</p>
             </div>
           </div>
         </div>
@@ -460,7 +515,7 @@
               <span class="chip">可审阅</span>
               <span class="chip notranslate" translate="no">skills/*.yaml</span>
             </div>
-            <p>口径、注意事项、政策与分析路径，供 Agent 回答前检索。</p>
+            <p>口径、注意事项、政策与分析路径，供 <span translate="no" class="notranslate">Agent</span> 回答前检索。</p>
           </div>
           <div class="output" style="--accent:#3b82f6">
             <div class="path notranslate" translate="no" style="color:#2563eb">semantic-layer/*.yaml</div>
@@ -476,11 +531,11 @@
       </div>
     </article>
 
-    <article class="board" aria-label="Lucy 服务流程：从 Agent 请求到受治理的答案">
+    <article class="board notranslate" translate="no" aria-label="Lucy 服务流程：从 Agent 请求到受治理的答案">
       <header class="board-head">
         <p class="eyebrow">服务流程</p>
-        <h2>从 Agent 请求到受治理的答案</h2>
-        <p>Agent 用自然语言提问。只有 Lucy 接触上下文层和数仓：先做表级 ACL 与审计，再执行只读 SQL。</p>
+        <h2>从 <span translate="no" class="notranslate">Agent</span> 请求到受治理的答案</h2>
+        <p><span translate="no" class="notranslate">Agent</span> 用自然语言提问。只有 Lucy 接触上下文层和数仓：先做表级 ACL 与审计，再执行只读 SQL。</p>
       </header>
       <div class="canvas serving">
         <div class="agent">
@@ -488,7 +543,7 @@
             <span class="icon-round" aria-hidden="true">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="3"/><circle cx="9" cy="12" r="1.25" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="1.25" fill="currentColor" stroke="none"/><path d="M12 3v3"/></svg>
             </span>
-            <h3>你的 Agent</h3>
+            <h3>你的 <span translate="no" class="notranslate">Agent</span></h3>
           </div>
           <div class="chips">
             <span class="chip notranslate" translate="no">Claude Code</span>
@@ -548,7 +603,7 @@
             <span class="file notranslate" translate="no" style="color:#059669;margin-top:6px">wiki/*.md</span>
             <span class="file notranslate" translate="no" style="color:#0e7490">semantic-layer/*.yaml</span>
             <span class="file notranslate" translate="no" style="color:#b45309">skills/*.yaml</span>
-            <p>Agent 回答前检索的已审口径。</p>
+            <p><span translate="no" class="notranslate">Agent</span> 回答前检索的已审口径。</p>
           </div>
           <div class="leaf" style="--accent:#334155">
             <h3>数据库 <span class="pill">只读</span></h3>
@@ -558,6 +613,7 @@
       </div>
     </article>
 
+    <p class="footer"><a href="index.html">返回帮助中心首页</a></p>
   </div>
 </body>
 </html>
