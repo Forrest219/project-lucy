@@ -49,7 +49,7 @@ import { adminCredentials, fixtureCanaries, mcpCall, ownerContext, runContext } 
 const SELECTORS = {
   // Step 1: owner creates account; operator added.
   loginBootstrapToken: "data-testid=login-bootstrap-token",
-  loginAdminId: "label=账户 id",
+  loginAdminId: "label=登录账户",
   loginPassword: "label=密码",
   loginSubmit: "role=button[name=/^创建并登录$/]",
   adminAccountsCreateOperator: "data-testid=admin-accounts-create-operator",

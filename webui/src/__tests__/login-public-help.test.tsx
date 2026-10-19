@@ -44,6 +44,8 @@ describe("LoginPage public help link", () => {
 
     const helpLink = screen.getByRole("link", { name: "查看系统手册" });
     expect(helpLink).toHaveAttribute("href", "/help?section=admin-break-glass");
+    expect(screen.getByLabelText("登录账户")).toBeInTheDocument();
+    expect(screen.queryByText("账户 id")).not.toBeInTheDocument();
     expect(screen.getByText(/无法登录/)).toBeInTheDocument();
     expect(screen.getByText(/可信 Agent 数据层/)).toBeInTheDocument();
     expect(screen.queryByText(/无需登录/)).not.toBeInTheDocument();

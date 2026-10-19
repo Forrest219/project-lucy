@@ -47,7 +47,7 @@ test("the first owner is created through the UI with the one-time bootstrap key"
   const { owner } = adminCredentials();
   await page.goto("/login");
   await expect(page.getByTestId("login-bootstrap-token")).toBeVisible();
-  await page.getByLabel("账户 id").fill(owner.adminId);
+  await page.getByLabel("登录账户").fill(owner.adminId);
   await page.getByTestId("login-bootstrap-token").fill(bootstrapKey());
   await page.getByLabel("密码").fill(owner.password);
   await page.getByRole("button", { name: "创建并登录" }).click();

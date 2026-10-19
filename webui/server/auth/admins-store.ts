@@ -28,15 +28,29 @@ export function webuiAdminRoleLabel(role: WebuiAdminRole): string {
   return role === "owner" ? "所有者" : "运维";
 }
 
+/**
+ * Reserved binding for a future enterprise identity provider.
+ * v2.0 stores it and never uses it to sign in.
+ */
+export type OidcBinding = {
+  issuer: string;
+  sub: string;
+  email: string;
+};
+
 export type WebuiAdminRecord = {
   id: string;
   /** Immutable account identity (Spec §2). Absent only on legacy rows until their first login migrates them. */
   account_uid?: string;
   display_name: string;
-  password_hash: string;
+  /** Absent only when the account is held for a future OIDC binding and has no local password. */
+  password_hash?: string;
   role: WebuiAdminRole;
   enabled: boolean;
   created_at: string;
+  oidc_bindings?: OidcBinding[];
+  /** Keys this build does not interpret. Written back unchanged so a later release can add fields. */
+  preserved?: Record<string, unknown>;
 };
 
 export type AdminsConfig = {
@@ -60,6 +74,49 @@ function emptyConfig(): AdminsConfig {
   return { version: "1", admins: [] };
 }
 
+const KNOWN_ADMIN_KEYS = new Set([
+  "id",
+  "account_uid",
+  "display_name",
+  "password_hash",
+  "role",
+  "enabled",
+  "created_at",
+  "oidc_bindings"
+]);
+
+function trimmedString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function parseOidcBindings(raw: unknown, adminId: string): OidcBinding[] | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  if (!Array.isArray(raw) || raw.length === 0) {
+    throw new AdminsConfigError(`admins.yaml entry '${adminId}' has an invalid oidc_bindings`);
+  }
+  return raw.map((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      throw new AdminsConfigError(`admins.yaml entry '${adminId}' has an invalid oidc_bindings`);
+    }
+    const binding = item as Record<string, unknown>;
+    const issuer = trimmedString(binding.issuer);
+    const sub = trimmedString(binding.sub);
+    const email = trimmedString(binding.email);
+    if (!issuer || !sub || !email.includes("@") || email.startsWith("@") || email.endsWith("@")) {
+      throw new AdminsConfigError(`admins.yaml entry '${adminId}' has an invalid oidc_bindings`);
+    }
+    return { issuer, sub, email };
+  });
+}
+
+function preservedFields(row: Record<string, unknown>): Record<string, unknown> | undefined {
+  const extra: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(row)) {
+    if (!KNOWN_ADMIN_KEYS.has(key)) extra[key] = value;
+  }
+  return Object.keys(extra).length > 0 ? extra : undefined;
+}
+
 function normalizeConfig(raw: unknown): AdminsConfig {
   // An empty file is "no admins"; anything that is present but malformed is rejected.
   if (raw === null || raw === undefined) return emptyConfig();
@@ -72,33 +129,50 @@ function normalizeConfig(raw: unknown): AdminsConfig {
   }
   const admins: WebuiAdminRecord[] = [];
   const seenUids = new Set<string>();
+  const seenSubjects = new Set<string>();
+  const seenEmails = new Set<string>();
   for (const item of (doc.admins as unknown[] | null | undefined) ?? []) {
-    if (!item || typeof item !== "object") throw new AdminsConfigError("admins.yaml entry must be a mapping");
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      throw new AdminsConfigError("admins.yaml entry must be a mapping");
+    }
     const row = item as Record<string, unknown>;
-    if (typeof row.id !== "string" || !row.id.trim()) throw new AdminsConfigError("admins.yaml entry has no id");
-    if (typeof row.password_hash !== "string" || !row.password_hash) {
-      throw new AdminsConfigError(`admins.yaml entry '${row.id}' has no password_hash`);
+    const id = trimmedString(row.id);
+    if (!id) throw new AdminsConfigError("admins.yaml entry has no id");
+    const bindings = parseOidcBindings(row.oidc_bindings, id);
+    const passwordHash = trimmedString(row.password_hash);
+    if (!passwordHash && !bindings?.length) {
+      throw new AdminsConfigError(`admins.yaml entry '${id}' has no password_hash`);
+    }
+    for (const binding of bindings ?? []) {
+      const subjectKey = `${binding.issuer}\n${binding.sub}`;
+      const emailKey = `${binding.issuer}\n${binding.email.toLowerCase()}`;
+      if (seenSubjects.has(subjectKey) || seenEmails.has(emailKey)) {
+        throw new AdminsConfigError(`admins.yaml entry '${id}' reuses an oidc binding`);
+      }
+      seenSubjects.add(subjectKey);
+      seenEmails.add(emailKey);
     }
     const role = normalizeWebuiAdminRole(row.role);
     let accountUid: string | undefined;
     if (row.account_uid !== undefined && row.account_uid !== null) {
       if (typeof row.account_uid !== "string" || !row.account_uid.trim()) {
-        throw new AdminsConfigError(`admins.yaml entry '${row.id}' has an invalid account_uid`);
+        throw new AdminsConfigError(`admins.yaml entry '${id}' has an invalid account_uid`);
       }
       accountUid = row.account_uid.trim();
       if (seenUids.has(accountUid)) throw new AdminsConfigError("admins.yaml has a duplicate account_uid");
       seenUids.add(accountUid);
     }
+    const preserved = preservedFields(row);
     admins.push({
-      id: row.id.trim(),
+      id,
       ...(accountUid ? { account_uid: accountUid } : {}),
-      display_name: typeof row.display_name === "string" && row.display_name.trim()
-        ? row.display_name.trim()
-        : row.id.trim(),
-      password_hash: row.password_hash,
+      display_name: trimmedString(row.display_name) || id,
+      ...(passwordHash ? { password_hash: passwordHash } : {}),
       role,
       enabled: row.enabled !== false,
-      created_at: typeof row.created_at === "string" ? row.created_at : new Date(0).toISOString()
+      created_at: typeof row.created_at === "string" ? row.created_at : new Date(0).toISOString(),
+      ...(bindings ? { oidc_bindings: bindings } : {}),
+      ...(preserved ? { preserved } : {})
     });
   }
   return {
@@ -200,13 +274,15 @@ export async function saveAdminsConfig(
     {
       version: config.version || "1",
       admins: config.admins.map((a) => ({
+        ...(a.preserved ?? {}),
         id: a.id,
         ...(a.account_uid ? { account_uid: a.account_uid } : {}),
         display_name: a.display_name,
-        password_hash: a.password_hash,
+        ...(a.password_hash ? { password_hash: a.password_hash } : {}),
         role: a.role,
         enabled: a.enabled,
-        created_at: a.created_at
+        created_at: a.created_at,
+        ...(a.oidc_bindings?.length ? { oidc_bindings: a.oidc_bindings } : {})
       }))
     },
     { lineWidth: 0 }

@@ -86,20 +86,43 @@ export type IssueOutcome =
   | { ok: true; token: string; exp: number }
   | { ok: false; status: 401 | 503 };
 
+/** Local password is the only credential v2.0 can fingerprint. */
+export type LocalPasswordCredential = {
+  kind: "local_password";
+  passwordHash: string;
+};
+
+export type IssueSessionInput = {
+  credential?: LocalPasswordCredential;
+  /**
+   * Reserved for a future identity-provider logout hint.
+   * The security store stays on schema v1, so this value is not persisted and is never sealed into the v2 cookie.
+   */
+  logoutHint?: string;
+};
+
 const credentialFingerprint = (passwordHash: string) =>
   createHash("sha256").update(passwordHash).digest("hex").slice(0, 32);
 
+function localPasswordHash(admin: WebuiAdminRecord, input: IssueSessionInput): string | undefined {
+  if (input.credential?.kind === "local_password") return input.credential.passwordHash;
+  return admin.password_hash;
+}
+
 /** Persist a new session row (and the account row if needed), then sign the cookie that points at it. */
-export async function issueSession(admin: WebuiAdminRecord): Promise<IssueOutcome> {
+export async function issueSession(admin: WebuiAdminRecord, input: IssueSessionInput = {}): Promise<IssueOutcome> {
   const accountUid = admin.account_uid;
   if (!accountUid) return { ok: false, status: 503 };
   const store = await openStore();
   if (!store) return { ok: false, status: 503 };
 
+  const passwordHash = localPasswordHash(admin, input);
+  // logoutHint stays off the cookie and out of schema v1. v2.5 can persist it on admin_sessions.
+  void input.logoutHint;
   const account = store.upsertAccount({
     accountUid,
     displayId: admin.id,
-    credentialFingerprint: credentialFingerprint(admin.password_hash)
+    ...(passwordHash ? { credentialFingerprint: credentialFingerprint(passwordHash) } : {})
   });
   if (!account.ok) return refusal(account);
 

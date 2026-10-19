@@ -63,7 +63,7 @@ export function fixtureCanaries(): Record<string, string> {
 /** Fills the real login form. Secrets are typed, never logged or attached to the report. */
 export async function uiLogin(page: Page, creds: Credentials): Promise<void> {
   await page.goto("/login");
-  await page.getByLabel("账户 id").fill(creds.adminId);
+  await page.getByLabel("登录账户").fill(creds.adminId);
   await page.getByLabel("密码").fill(creds.password);
   await page.getByRole("button", { name: "登录", exact: true }).click();
   await page.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 30_000 });
@@ -94,7 +94,7 @@ export async function ownerContext(browser: Browser): Promise<BrowserContext> {
   const page = await context.newPage();
   if ((await currentAuthMode()) === "bootstrap") {
     await page.goto("/login");
-    await page.getByLabel("账户 id").fill(owner.adminId);
+    await page.getByLabel("登录账户").fill(owner.adminId);
     await page.getByTestId("login-bootstrap-token").fill(bootstrapKey());
     await page.getByLabel("密码").fill(owner.password);
     await page.getByRole("button", { name: "创建并登录" }).click();

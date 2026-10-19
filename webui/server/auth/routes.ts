@@ -33,6 +33,7 @@ import {
   narrowAccount,
   revokeRequestSession
 } from "./account-state.js";
+import { ACTIVE_LOGIN_METHODS } from "./oidc-profile.js";
 
 // Verified against when the account is unknown/disabled so both paths cost one scrypt (no existence oracle).
 let dummyHash: Promise<string> | null = null;
@@ -59,7 +60,8 @@ export function registerAuthRoutes(app: FastifyInstance): void {
       data: {
         mode,
         me,
-        authEnabled: mode !== "open"
+        authEnabled: mode !== "open",
+        methods: ACTIVE_LOGIN_METHODS
       }
     };
   });
@@ -126,8 +128,8 @@ export function registerAuthRoutes(app: FastifyInstance): void {
     const config = await loadAdminsConfig({ fresh: true });
     const found = findAdmin(config, adminId);
     const admin = found?.enabled ? found : undefined;
-    const verified = await verifyPassword(password, admin ? admin.password_hash : await getDummyHash());
-    if (!admin || !verified) {
+    const verified = await verifyPassword(password, admin?.password_hash || (await getDummyHash()));
+    if (!admin?.password_hash || !verified) {
       // Unknown, disabled and wrong-password are one indistinguishable 401 (Spec §3.1 item 6).
       await recordAuthEvent({
         kind: "login_failure",

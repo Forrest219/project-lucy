@@ -201,6 +201,37 @@ db:
 security:
   insecureHttpTestProfile: false
 
+# -------------------------------------------------------------------
+# Reserved for v2.5 enterprise OIDC. v2.0 does not inject this block into
+# the pod and does not contact the issuer. Fill it only as a record of the
+# future client registration. Keep the client secret in a Kubernetes Secret,
+# never in this file.
+#
+# Example for an intranet authorization-code client (not applied):
+#   issuer: https://oidc.ksyun.com
+#   public WebUI origin: https://lucy.example.com
+#   scopes: openid profile email offline_access feishu_login
+#   tokenEndpointAuth: client_secret_post   # or client_secret_basic
+#   logoutStyle: id_token_hint               # or access_token
+# A private-network issuer may be http:// only when written here explicitly.
+# -------------------------------------------------------------------
+webui:
+  # HTTPS origin that will be registered as the OIDC redirect_uri origin.
+  publicUrl: ""
+
+oidc:
+  issuer: ""
+  discoveryUrl: ""
+  authorizationEndpoint: ""
+  tokenEndpoint: ""
+  jwksUri: ""
+  endSessionEndpoint: ""
+  clientId: ""
+  scopes: "openid profile email offline_access"
+  tokenEndpointAuth: client_secret_post
+  logoutStyle: id_token_hint
+  redirectPath: /api/auth/oidc/callback
+
 # Extra env sources — for example, projecting keys from existingSecret as
 # env vars (NOT as files). Use sparingly; most customer secrets should
 # land as files in /data/lucy/.ktx/secrets/.

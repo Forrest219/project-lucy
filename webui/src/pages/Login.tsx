@@ -80,14 +80,14 @@ export function LoginPage() {
 
         <form className="grid gap-3" onSubmit={onSubmit} hidden={configUnavailable}>
           <label className="grid gap-1">
-            <span className="text-sm font-medium">账户 id</span>
+            <span className="text-sm font-medium">登录账户</span>
             <input
               className="pl-input notranslate"
               translate="no"
               autoComplete="username"
               value={adminId}
               onChange={(e) => setAdminId(e.target.value)}
-              placeholder="例：xingchen"
+              placeholder="请输入登录账户"
               required
             />
           </label>

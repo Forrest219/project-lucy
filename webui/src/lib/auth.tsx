@@ -17,6 +17,8 @@ export type AuthStatus = {
   mode: AuthMode;
   me: AuthMe | null;
   authEnabled: boolean;
+  /** v2.0 only offers local passwords. A later release may add `oidc`. */
+  methods?: Array<"local" | "oidc">;
 };
 
 type AuthContextValue = {
@@ -80,7 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await refresh();
       } catch {
         if (!cancelled) {
-          setStatus({ mode: "open", me: null, authEnabled: false });
+          setStatus({ mode: "open", me: null, authEnabled: false, methods: ["local"] });
         }
       } finally {
         if (!cancelled) setLoading(false);
