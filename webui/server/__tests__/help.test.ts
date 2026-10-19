@@ -1200,6 +1200,25 @@ describe("Help handbook section id contract", () => {
     expect(mismatchedIds, "契约表映射出的 id 与实际 TOC 不一致").toEqual([]);
   });
 
+  it("registers every handbook heading in the section id contract", async () => {
+    // 反向断言：手册里每个 H2/H3/H4 都必须登记进契约表。
+    //
+    // 没有这条断言时，新增一个**含 ASCII 字符**的标题会静默走 `stableSlug()`
+    // 回落——拿到一个合法 slug，锚点门禁也全绿（TOC 条目可达、正文无死链），
+    // 但这个 id 不在契约表内：id 由标题派生，标题一改 id 就变，已发布的深链失效。
+    // 纯中文标题回落时是 sha1，会被「无哈希 id」断言拦下，所以只有含 ASCII 的
+    // 标题能溜过去——这条断言专门堵这个口子。
+    const handbook = await readHelpHandbook(realAppRoot);
+    const unregistered = markdownHeadings(handbook.markdown, 2, 4)
+      .map((title) => cleanSectionTitle(title))
+      .filter((title) => !SECTION_ID_CONTRACT.has(title));
+
+    expect(
+      unregistered,
+      "这些章节标题没有登记进 SECTION_ID_CONTRACT，id 会静默退回 stableSlug 派生"
+    ).toEqual([]);
+  });
+
   it("keeps the legacy section id map resolvable against the current TOC", async () => {
     const handbook = await readHelpHandbook(realAppRoot);
     const tocIds = new Set(handbook.toc.map((item) => item.id));
@@ -1271,6 +1290,15 @@ describe("Help handbook section id contract", () => {
     expect(resolveLegacySectionId("admin-governance")).toBe("access-governance");
     expect(resolveLegacySectionId("b9c274fb1c")).toBe("handbook-baseline");
     expect(resolveLegacySectionId("v2-0-0")).toBe("product-version-cutover");
+    // Wave 1 之前的 sha1 哈希 id：旧书签必须还能落到内容所在的新章节。
+    expect(resolveLegacySectionId("6071f2d2b3")).toBe("architecture-topology");
+    expect(resolveLegacySectionId("81d1ee0418")).toBe("functional-modules");
+    expect(resolveLegacySectionId("15c67413dc")).toBe("semantic-layer");
+    expect(resolveLegacySectionId("b999ac41e5")).toBe("enabled-tables-save-failure");
+    // 章节改名后的旧哈希 id：内容已下沉到对应 H4。
+    expect(resolveLegacySectionId("e41aa0d406")).toBe("semantic-asset-scope-tree");
+    expect(resolveLegacySectionId("0edbdd1f46")).toBe("admin-role-list");
+    expect(resolveLegacySectionId("2457dc14a2")).toBe("row-level-policy");
     // 与现行 id 同名的旧 id 自映射。
     expect(resolveLegacySectionId("semantic-layer")).toBe("semantic-layer");
     expect(resolveLegacySectionId("business-wiki")).toBe("business-wiki");

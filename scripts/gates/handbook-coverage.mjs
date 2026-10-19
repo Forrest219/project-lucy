@@ -427,7 +427,19 @@ export function runHandbookCoverage(root = ROOT) {
 
 // 双边 realpath 比较：macOS 上 `process.argv[1]` 可能是软链路径（/tmp → /private/tmp），
 // 直接比较会在软链调用时静默跳过执行块、退出码 0 却不报错 —— 门禁失效放行。
-if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {
+// realpath 对不存在的路径会抛 ENOENT，catch 后退回 path.resolve 比较。
+function isMainModule() {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  const self = fileURLToPath(import.meta.url);
+  try {
+    return realpathSync(entry) === realpathSync(self);
+  } catch {
+    return path.resolve(entry) === self;
+  }
+}
+
+if (isMainModule()) {
   try {
     const result = runHandbookCoverage();
     console.log(`[handbook-coverage] OK ${result.covered} nav entries covered`);

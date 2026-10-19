@@ -585,7 +585,7 @@
         </article>
         <article class="panel accent-green">
           <h3>2. 语义层优先，fallback 要留痕</h3>
-          <p>自动化首选 <span translate="no" class="notranslate">KTX</span> <span translate="no" class="notranslate">MCP</span> 的 <code class="notranslate" translate="no">sl_query</code> / <code class="notranslate" translate="no">sl_read</code>。SL 不覆盖时才用 <code class="notranslate" translate="no">raw_sql_fallback</code>，并记录原因、query 和结果摘要。</p>
+          <p>自动化首选 <span translate="no" class="notranslate">KTX</span> <span translate="no" class="notranslate">MCP</span> 的 <code class="notranslate" translate="no">sl_query</code> / <code class="notranslate" translate="no">sl_read_source</code>（这两个是 <span translate="no" class="notranslate">KTX</span> 上游内部工具名，外部 <span translate="no" class="notranslate">Agent</span> 侧对应 <code class="notranslate" translate="no">lucy_query</code> / <code class="notranslate" translate="no">lucy_read_source</code>，对 <span translate="no" class="notranslate">Agent</span> 一律拒绝）。SL 不覆盖时才用 <code class="notranslate" translate="no">raw_sql_fallback</code>，并记录原因、query 和结果摘要。</p>
         </article>
         <article class="panel accent-cyan">
           <h3>3. 断言要结构化</h3>

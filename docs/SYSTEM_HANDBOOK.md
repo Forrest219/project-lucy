@@ -58,7 +58,7 @@
 | 数据库密码应该放在哪里？ | 用 `file:`、`env:` 或 `Docker` secrets；不要把明文密码写进 `ktx.yaml`、文档、`commit message` 或聊天记录。 | [连接形态与配置字段](#database-connection-shapes)、[5.2 ktx.yaml](#ktx-yaml) |
 | 点了刷新本地目录，刷新后的表在哪里看？ | `/connections` 看 reload 状态，`/connections/enabled-tables` 看可纳入启用表范围的表，`/catalog` 语义资产页看已进入语义建模的表。 | [刷新本地目录](#catalog-reload) |
 | 连接概览上的「已发现表数」是什么？ | 统计本地 Schema Manifest 已读到的表，不是远端物理库实时表数；与「已启用表数」（`enabled_tables`）对照看。 | [连接概览指标说明](#connection-overview-metrics) |
-| 为什么提示“未发现本地 manifest”？ | `ktx.yaml` 声明了 `Schema` 或启用表范围，但本地 `semantic-layer/<conn>/_schema/<schema>.yaml` 缺失或未包含目标表。 | [6.1 为什么提示“未发现本地 manifest”？](#manifest) |
+| 为什么提示「未发现本地 manifest」？ | `ktx.yaml` 声明了 `Schema` 或启用表范围，但本地 `semantic-layer/<conn>/_schema/<schema>.yaml` 缺失或未包含目标表。 | [6.1 为什么提示「未发现本地 manifest」？](#manifest) |
 | `YAML` 改完后为什么 `Agent` 仍然搜不到新口径？ | `WebUI` 读文件即可看到；`KTX` / `MCP` 检索需要 `ktx admin reindex`，并且还要用 `sl read` 确认 `overlay` 已合并到目标 `source`。 | [6.3 配置文件改动后什么时候生效？](#config-change-effective-timeline)、[3.7.6 GO / NO-GO 交付 checklist](#yaml-go-no-go-checklist) |
 | 我应该改 `manifest` 还是 `overlay`？ | 物理表结构和物理列描述在 `manifest`；`grain`、`measures`、`segments`、派生列和业务补丁在 `overlay`。 | [3.3 业务上下文 · 语义层](#semantic-layer)、[3.7.1 YAML 类型总览](#yaml-type-overview) |
 | 新增指标怎样才算可以交付？ | 不能只看 `reindex` 或单个 `sl validate`；必须通过静态检查、`sl read`、真实 query、`MCP smoke` 和最终 `GO / NO-GO` 门槛。 | [3.7.6 GO / NO-GO 交付 checklist](#yaml-go-no-go-checklist) |
@@ -488,13 +488,13 @@ PUT /api/connections/:connId/enabled-tables
 /help?section=catalog-reload
 ```
 
-刷新后的“本地目录”不是一个独立页面。它是 WebUI 从本地文件读出的资产视图，按查看目的分布在不同入口：
+刷新后的「本地目录」不是一个独立页面。它是 WebUI 从本地文件读出的资产视图，按查看目的分布在不同入口：
 
 - 看刷新是否成功：打开 `/connections`，在对应 connection 卡片内查看 `本地目录已刷新`、表数量、warning 数量和缺失 Manifest 诊断。
 - 看哪些表可被纳入启用表范围：打开 `/connections/enabled-tables`。这里展示的是本地 manifest 中已经存在、可写入 `ktx.yaml enabled_tables` 的表。
 - 看哪些表已经进入语义层维护：打开 `/catalog` 语义资产页。这里展示的是已被系统读入并可维护描述、指标、分群、joins 的 semantic table。
 - 看底层 YAML 文件：在仓库中查看 `semantic-layer/<conn>/_schema/<schema>.yaml`（manifest）和 `semantic-layer/<conn>/<source>.yaml`（overlay）。
-- 看最近 reload 历史：调用 `GET /api/catalog/reloads`，或查看系统生成文件 `.ktx-ui/catalog-reloads.json`。当前 WebUI 暂无独立的“本地目录历史”页面。
+- 看最近 reload 历史：调用 `GET /api/catalog/reloads`，或查看系统生成文件 `.ktx-ui/catalog-reloads.json`。当前 WebUI 暂无独立的「本地目录历史」页面。
 
 自检顺序：
 
@@ -2295,7 +2295,7 @@ FAQ 交叉引用（既有章节同步增补）：
 
 | FAQ 章节 | 增补要点 |
 | --- | --- |
-| 6.1 为什么提示“未发现本地 manifest”？ | 增补「`reindex` 成功不代表 overlay 合并正确」，按 3.7.6.2 重跑 |
+| 6.1 为什么提示「未发现本地 manifest」？ | 增补「`reindex` 成功不代表 overlay 合并正确」，按 3.7.6.2 重跑 |
 | 6.3 配置文件改动后什么时候生效？ | 区分 `access.yaml` 缓存、KTX reindex、Reload Catalog 的生效时机 |
 | 6.7 为什么启用表范围保存失败？ | 增补 ACL / source 新增风险（参见 3.7.4） |
 | 6.9 最小健康检查清单 | 增补 `sl read`、真实 query、MCP smoke 步骤（参见 3.7.6） |
@@ -2898,7 +2898,7 @@ Docker 常用宿主映射变量：
 
 ## 6. FAQ 与排障指南
 
-### 6.1 为什么提示“未发现本地 manifest”？
+### 6.1 为什么提示「未发现本地 manifest」？
 
 含义：`ktx.yaml` 中配置了 schema 或 `enabled_tables`，但 `semantic-layer/<conn>/_schema/<schema>.yaml` 不存在，或该 manifest 没有包含目标表。
 

@@ -77,7 +77,7 @@ export const SECTION_ID_CONTRACT = new Map<string, string>([
   ["`webui/config/access.yaml`", "webui-config-access-yaml"],
   ["`ktx.yaml`", "ktx-yaml"],
   ["环境变量", "environment-variables"],
-  ["为什么提示“未发现本地 manifest”？", "manifest"],
+  ["为什么提示「未发现本地 manifest」？", "manifest"],
   ["JSON-RPC `Access denied` / `decision_reason` 怎么查？", "json-rpc-access-denied-decision-reason"],
   ["配置文件改动后什么时候生效？", "config-change-effective-timeline"],
   ["WebUI 页面打不开", "webui"],
@@ -158,11 +158,21 @@ export const SECTION_ID_CONTRACT = new Map<string, string>([
 /**
  * 旧 section id → 新 section id，供 `/help?section=<旧 id>` 深链重定向。
  *
- * 只收录**曾经真实分配给某个章节**的旧 id；匹配不到任何标题的纯死别名不收
- * （收进来只会在重定向时把用户带到不存在的章节）。与契约表同名的条目
- * （`semantic-layer` / `business-wiki`）必须自映射——它们既是旧 id，也是现行 id。
+ * 收录两类：
+ *  1. **曾经真实分配给某个章节**的旧 id —— 章节改名后 id 会变，外部已发布的
+ *     深链会静默失效，这里补一层重定向。
+ *  2. 现行设计文档中仍在引用的历史深链（如 `admin-audit`，目标章节存在且语义相关）。
+ *
+ * 匹配不到任何标题、且没有任何现行文档引用的纯死别名不收（收进来只会在重定向时
+ * 把用户带到不存在的章节）。与契约表同名的条目（`semantic-layer` / `business-wiki`）
+ * 必须自映射——它们既是旧 id，也是现行 id。
+ *
+ * 哈希 id 的来源：Wave 1 之前 `parseHelpToc` 对标题取 sha1 前 10 位，线上曾真实
+ * 分配过 20 个这样的 id。它们逐个对应到现行语义 id（按历史 revision 的标题↔id
+ * 配对机械生成），保证旧书签不失效。
  */
 export const LEGACY_SECTION_IDS: Record<string, string> = {
+  // 旧语义 slug
   "deployment-checklist": "runtime-status-checklist",
   "database-connections": "data-access-connections",
   "schema": "data-access-connections",
@@ -178,8 +188,32 @@ export const LEGACY_SECTION_IDS: Record<string, string> = {
   "mcp": "mcp-session-upstream",
   "skill": "business-skill",
   "admin-audit": "admin-audit-turns-vs-calls",
+
+  // Wave 1 之前的 10 位 sha1 哈希 id（按历史 revision 的标题↔id 配对生成）
   "b9c274fb1c": "handbook-baseline",
-  "v2-0-0": "product-version-cutover"
+  "v2-0-0": "product-version-cutover",
+  "6071f2d2b3": "architecture-topology",
+  "39427f6000": "core-principles",
+  "08b71d6edc": "source-of-truth-map",
+  "4ad8773730": "environment-requirements",
+  "198f0630d2": "local-startup",
+  "460668d588": "minimal-setup",
+  "81d1ee0418": "functional-modules",
+  "e01343f072": "runtime-status-checklist",
+  "15c67413dc": "semantic-layer",
+  "6a5064e9e9": "quality-evaluation",
+  "49a623a435": "role-list-preview",
+  "cd0213b37a": "onboarding-guide",
+  "f938505a79": "row-level-policy",
+  "8225783f38": "mcp-endpoint",
+  "881f699603": "available-tools",
+  "8da07705ab": "environment-variables",
+  "1022f33104": "config-change-effective-timeline",
+  "b999ac41e5": "enabled-tables-save-failure",
+  "18665d410e": "enabled-tables-save-failure",
+  "e41aa0d406": "semantic-asset-scope-tree",
+  "0edbdd1f46": "admin-role-list",
+  "2457dc14a2": "row-level-policy"
 };
 
 /** 把旧 section id 重定向到现行 id；未登记的旧 id 原样返回。 */
