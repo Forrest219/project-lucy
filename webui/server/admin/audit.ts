@@ -1916,6 +1916,182 @@ function buildAuditCsvFieldMetadata(kind: "calls" | "turns", generatedAt = new D
   };
 }
 
+// ─── T04b: v2 CSV columns (audit-trust-2026-10-19-r1) ──────────────────────────
+//
+// Contract §2.8 / §4.2. v2 EXTENDS the v1 header list with new audit-trust
+// fields; v1 columns keep their original semantics. New consumers should use
+// `tool_count_v2` (count(event_type = tool_call)) instead of legacy `tool_count`.
+//
+// v2 CSV path: GET /api/admin/audit/v2/export-metadata (this file).
+
+const ACCESS_LOG_CSV_HEADERS_V2 = [
+  ...ACCESS_LOG_CSV_HEADERS,
+  // Spec 173 v0.3 / contract §2.3 — 4-axis status + event_type
+  "event_type",
+  "transport_sub_type",
+  "transport_status",
+  "authorization_status",
+  "execution_status",
+  "usability_status",
+  // Spec 173 v0.3 / contract §2.1 — association_status + original/effective turn_id
+  "association_status",
+  "original_turn_id",
+  "effective_turn_id",
+  // Contract §2.1 — retry chain
+  "attempt_id",
+  "parent_attempt_id",
+  // Contract §2.1 — instance generation (historical rows NULL)
+  "instance_id",
+  // Contract §2.3 / §4.1 — classification version
+  "classification_version",
+  // Contract §2.5.1 — digest (audit, not security)
+  "digest_value",
+  "digest_version",
+  // Contract §2.2 — optional credential principal (NULL default)
+  "credential_principal_id",
+  // Contract §2.2 — explicit actor + actor_kind (server-resolved)
+  "actor_id",
+  "actor_type"
+] as const;
+
+const ACCESS_LOG_FIELD_METADATA_V2: Record<(typeof ACCESS_LOG_CSV_HEADERS_V2)[number], Omit<CsvFieldMetadata, "name">> = {
+  ...ACCESS_LOG_FIELD_METADATA,
+  event_type: {
+    label: "事件类型",
+    format: "enum {tool_call, protocol, client_observation, audit_management}",
+    description: "事件分类: tool_call (业务工具调用); protocol (MCP 协议方法; 含 handshake/probe/unknown_method/other 子类); client_observation (T06 受控客户端上报); audit_management (审计自身管理操作, T03+ 引入)。",
+    trigger: "audit-trust-2026-10-19-r1 后写入; 历史行 NULL。"
+  },
+  transport_sub_type: {
+    label: "传输子类型",
+    format: "enum {handshake, probe, unknown_method, other}",
+    description: "transport=protocol 时的细分子类。handshake=initialize/notifications/initialized/tools/list; probe=ping/resources/list/resources/templates/list/notifications/cancelled; unknown_method=server/discover 与其他未知方法; other=其他协议调用。",
+    trigger: "event_type=protocol 时输出。"
+  },
+  transport_status: {
+    label: "传输状态",
+    format: "enum {succeeded, failed, unknown}",
+    description: "Lucy 与直接对端的传输层观察。明确指 Lucy 与其通信对端观察, 不证明用户已收到结果 (对账另由 client_observation 提供)。",
+    trigger: "audit-trust-2026-10-19-r1 后写入。"
+  },
+  authorization_status: {
+    label: "授权状态",
+    format: "enum {allowed, denied, not_evaluated, unknown}",
+    description: "四轴之一。独立于 executionStatus; 字段歧义不冒充 denied (G0-03 caveat)。",
+    trigger: "audit-trust-2026-10-19-r1 后写入。"
+  },
+  execution_status: {
+    label: "执行状态",
+    format: "enum {succeeded, failed, not_executed, interrupted, unknown}",
+    description: "四轴之一。not_executed=未执行 (denied); interrupted=中断 (budget_stop)。",
+    trigger: "audit-trust-2026-10-19-r1 后写入。"
+  },
+  usability_status: {
+    label: "可用性状态",
+    format: "enum {usable, empty, partial, metadata_missing, not_applicable, unknown}",
+    description: "四轴之一。metadata_missing 用于字段歧义 (scan_missing/scan_failed/field_ambiguous); not_applicable 用于 (无 rowCount 概念)。",
+    trigger: "audit-trust-2026-10-19-r1 后写入。"
+  },
+  association_status: {
+    label: "关联状态",
+    format: "enum {confirmed, candidate, unassigned, conflict, legacy_unverified}",
+    description: "独立于 execution 的关联质量维度。confirmed 仅来自合法显式 turn 或 begin 自身; legacy_unverified 用于迁移前自动归因, 不允许静默升级 confirmed (T03a backfill)。",
+    trigger: "audit-trust-2026-10-19-r1 后写入。"
+  },
+  original_turn_id: {
+    label: "原始 turn id",
+    format: "string|null",
+    description: "准入时确定的 turn id。",
+    trigger: "准入时记录的 turn id, 后续不允许被响应阶段覆盖。"
+  },
+  effective_turn_id: {
+    label: "生效 turn id",
+    format: "string|null",
+    description: "经过 association_revisions replay 后的 turn id。原值与有效值分开保存 (contract §2.1)。",
+    trigger: "audit-trust-2026-10-19-r1 后写入; 历史行 NULL。"
+  },
+  attempt_id: {
+    label: "尝试 ID",
+    format: "string|null",
+    description: "同一受控任务的重试 attempt UUID。",
+    trigger: "T07 重试链。"
+  },
+  parent_attempt_id: {
+    label: "父 attempt ID",
+    format: "string|null",
+    description: "上一次 attempt 的 attempt_id, 重试链回溯。",
+    trigger: "T07 重试链。"
+  },
+  instance_id: {
+    label: "实例 ID",
+    format: "string|null",
+    description: "Lucy 启动实例唯一 ID, 配对 instance_start_generation。历史行 NULL (不写当前启动常量)。",
+    trigger: "audit-trust-2026-10-19-r1 后写入。"
+  },
+  classification_version: {
+    label: "分类版本",
+    format: "string",
+    description: "4 轴状态 + event_type 字典版本, 当前 audit-trust-2026-10-19-r1.v1。",
+    trigger: "audit-trust-2026-10-19-r1 后写入。"
+  },
+  digest_value: {
+    label: "响应摘要值",
+    format: "string|null",
+    description: "response_prepared 阶段规范化+脱敏字节的 SHA-256。prepared ≠ delivered ≠ client-reported; 对账不覆盖服务端事实。",
+    trigger: "audit-trust-2026-10-19-r1 后写入。"
+  },
+  digest_version: {
+    label: "摘要版本",
+    format: "string|null",
+    description: "摘要算法版本, 与 §2.5.1 digestVersion 对齐。",
+    trigger: "audit-trust-2026-10-19-r1 后写入。"
+  },
+  credential_principal_id: {
+    label: "凭证主体 ID",
+    format: "string|null",
+    description: "服务端持久凭证标识, 默认 NULL; 不作为安全主键 (EA-35)。",
+    trigger: "可选新列, 仅在确需扩展时填写。"
+  },
+  actor_id: {
+    label: "显式使用人",
+    format: "string|null",
+    description: "服务端信任路径写入的 actor id; 普通调用不可知时 NULL。Body / UA 不冒充。",
+    trigger: "audit-trust-2026-10-19-r1 后写入。"
+  },
+  actor_type: {
+    label: "使用人类型",
+    format: "enum {person, automation}",
+    description: "actor_id 类型; 不新增枚举。",
+    trigger: "audit-trust-2026-10-19-r1 后写入。"
+  }
+};
+
+function buildAuditCsvFieldMetadataV2(kind: "calls" | "turns", generatedAt = new Date()) {
+  if (kind === "calls") {
+    return {
+      schemaVersion: "audit-csv-field-metadata/v2",
+      kind,
+      title: "调用流水 CSV 字段说明 (v2)",
+      timezone: AUDIT_EXPORT_TIMEZONE,
+      filenamePattern: "audit-calls-v2-YYYYMMDD-HHmmss-000001.csv",
+      generatedAt: generatedAt.toISOString(),
+      // v2 列说明; v1 字段沿用同 label/format 描述以保持消费者对账。
+      fields: csvFieldMetadataFields(ACCESS_LOG_CSV_HEADERS_V2, ACCESS_LOG_FIELD_METADATA_V2),
+      classificationVersion: "audit-trust-2026-10-19-r1.v1"
+    };
+  }
+  return {
+    schemaVersion: "audit-csv-field-metadata/v2",
+    kind,
+    title: "问询记录 CSV 字段说明 (v2)",
+    timezone: AUDIT_EXPORT_TIMEZONE,
+    filenamePattern: "audit-turns-v2-YYYYMMDD-HHmmss-000001.csv",
+    generatedAt: generatedAt.toISOString(),
+    fields: csvFieldMetadataFields(TURN_CSV_HEADERS, TURN_FIELD_METADATA),
+    classificationVersion: "audit-trust-2026-10-19-r1.v1"
+  };
+}
+
 /**
  * Spec 162 §8 / SC-21 — auth failures sharing the call timeline.
  *
@@ -2502,6 +2678,30 @@ export function registerAuditRoutes(app: FastifyInstance) {
     const body = buildAuditCsvFieldMetadata(kind);
     reply.header("Content-Type", "application/json; charset=utf-8");
     reply.header("Content-Disposition", `attachment; filename="${auditExportFilename(`${kind}-fields`, "json")}"`);
+    reply.header("Cache-Control", "private, no-store");
+    return reply.send(body);
+  });
+
+  // GET /api/admin/audit/v2/export-metadata — v2 CSV 字段说明 (T04b).
+  // v1 完全保留; v2 走新端点 (contract §2.8 / §4.3).
+  app.get<{
+    Querystring: { kind?: string };
+  }>("/api/admin/audit/v2/export-metadata", async (request, reply) => {
+    const kind = request.query.kind ?? "calls";
+    if (kind !== "calls" && kind !== "turns") {
+      reply.code(400);
+      reply.header("Cache-Control", "private, no-store");
+      return {
+        ok: false,
+        error: {
+          code: "ERR_INVALID_AUDIT_METADATA_KIND",
+          message: "字段说明类型仅支持 calls 或 turns"
+        }
+      };
+    }
+    const body = buildAuditCsvFieldMetadataV2(kind);
+    reply.header("Content-Type", "application/json; charset=utf-8");
+    reply.header("Content-Disposition", `attachment; filename="${auditExportFilename(`${kind}-fields-v2`, "json")}"`);
     reply.header("Cache-Control", "private, no-store");
     return reply.send(body);
   });
