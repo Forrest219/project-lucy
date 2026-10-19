@@ -19,14 +19,15 @@
  * does NOT drift with schema version. Adding new criteria requires a new
  * builder function and a corresponding test.
  */
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { readFileSync, writeFileSync, mkdirSync, statSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const SCHEMA_VERSION = "audit-trust-acceptance-matrix/v1";
+const MAX_INPUT_BYTES = 50 * 1024 * 1024; // 50 MiB — manifests are typically < 10 KiB.
 
 function parseArgs(argv) {
   const args = { in: null, out: null, label: null, help: false };
@@ -67,7 +68,7 @@ function printHelp() {
       `\nOptions:\n` +
       `  --in <path>   Path to a v2 manifest.json (required)\n` +
       `  --out <path>  Output CSV path (default under scripts/audit-trust/.../)\n` +
-      `  --label <text>  Short label stamped on metadata rows\n` +
+      `  --label <text>  Short label stamped on the console summary line\n` +
       `  --help, -h    Show this message\n`
   );
 }
@@ -75,155 +76,189 @@ function printHelp() {
 /**
  * @typedef {Record<string, unknown>} Manifest
  *
- * Build a fixed set of criteria. Each criterion is { name, predicate }
- * where predicate returns { observed: string, verdict: "pass"|"fail"|"n/a" }.
+ * Fixed criterion set. Adding / removing / reordering any entry requires
+ * updating the EXPECTED_CRITERIA_NAMES constant in
+ * scripts/audit-trust/__tests__/2026-10-19-r1-acceptance-matrix.test.mjs.
  */
+const EXPECTED_CRITERIA_NAMES = Object.freeze([
+  "schemaVersion is 'audit-export-manifest/v2'",
+  "ledgerUpperSeq is a non-negative integer",
+  "projectionComplete is boolean true",
+  "scopeComplete is boolean true",
+  "fileHashOk is boolean true",
+  "relationCheckOk is boolean true",
+  "combinedComplete = scopeComplete AND fileHashOk AND relationCheckOk",
+  "associationQuality has all five categories",
+  "dataScope.ok is boolean (always populated)",
+  "clientCoverage.observed is boolean; gapWindows is an array",
+  "policyScopeExpanded is an array (audit-trust spec §4.7)",
+  "untrustedSelfReport is a non-negative integer",
+  "legalEmptyWindow is boolean",
+  "lagMs is a non-negative integer",
+  "classificationVersion is non-empty",
+  "digestVersion is non-empty"
+]);
+
 function buildCriteria() {
   /** @type {Array<{ name: string, run: (m: Manifest) => { observed: string; verdict: "pass"|"fail"|"n/a" } }>} */
   return [
     {
-      name: "schemaVersion is 'audit-export-manifest/v2'",
+      name: EXPECTED_CRITERIA_NAMES[0],
       run: (m) => ({
-        observed: String(m.schemaVersion ?? ""),
+        observed: `schemaVersion="${m.schemaVersion ?? "<missing>"}"`,
         verdict: m.schemaVersion === "audit-export-manifest/v2" ? "pass" : "fail"
       })
     },
     {
-      name: "ledgerUpperSeq is a non-negative integer",
+      name: EXPECTED_CRITERIA_NAMES[1],
       run: (m) => {
         const v = m.ledgerUpperSeq;
-        return {
-          observed: typeof v === "number" ? String(v) : "not-a-number",
-          verdict:
-            typeof v === "number" && Number.isInteger(v) && v >= 0 ? "pass" : "fail"
-        };
+        const ok = typeof v === "number" && Number.isInteger(v) && v >= 0;
+        return { observed: ok ? String(v) : `<${typeof v} ${v}>`, verdict: ok ? "pass" : "fail" };
       }
     },
     {
-      name: "projectionComplete is boolean true",
+      name: EXPECTED_CRITERIA_NAMES[2],
       run: (m) => ({
-        observed: String(m.projectionComplete),
+        observed: typeof m.projectionComplete === "boolean" ? String(m.projectionComplete) : `<${typeof m.projectionComplete}>`,
         verdict: m.projectionComplete === true ? "pass" : "fail"
       })
     },
     {
-      name: "scopeComplete is boolean true",
+      name: EXPECTED_CRITERIA_NAMES[3],
       run: (m) => ({
-        observed: String(m.scopeComplete),
+        observed: typeof m.scopeComplete === "boolean" ? String(m.scopeComplete) : `<${typeof m.scopeComplete}>`,
         verdict: m.scopeComplete === true ? "pass" : "fail"
       })
     },
     {
-      name: "fileHashOk is boolean true",
+      name: EXPECTED_CRITERIA_NAMES[4],
       run: (m) => {
         const ok = m.integrityVerification?.fileHashOk;
         return {
-          observed: String(ok),
+          observed: typeof ok === "boolean" ? String(ok) : `<${typeof ok}>`,
           verdict: ok === true ? "pass" : "fail"
         };
       }
     },
     {
-      name: "relationCheckOk is boolean true",
+      name: EXPECTED_CRITERIA_NAMES[5],
       run: (m) => {
         const ok = m.integrityVerification?.relationCheckOk;
         return {
-          observed: String(ok),
+          observed: typeof ok === "boolean" ? String(ok) : `<${typeof ok}>`,
           verdict: ok === true ? "pass" : "fail"
         };
       }
     },
     {
-      name: "combinedComplete = scopeComplete && fileHashOk && relationCheckOk",
+      name: EXPECTED_CRITERIA_NAMES[6],
       run: (m) => {
-        const eq =
-          m.scopeComplete === true &&
-          m.integrityVerification?.fileHashOk === true &&
-          m.integrityVerification?.relationCheckOk === true;
+        const scope = typeof m.scopeComplete === "boolean";
+        const fileHash = typeof m.integrityVerification?.fileHashOk === "boolean";
+        const relation = typeof m.integrityVerification?.relationCheckOk === "boolean";
+        const combined = typeof m.combinedComplete === "boolean";
+        const truthyCount =
+          (scope ? (m.scopeComplete ? 1 : 0) : 0) +
+          (fileHash ? (m.integrityVerification.fileHashOk ? 1 : 0) : 0) +
+          (relation ? (m.integrityVerification.relationCheckOk ? 1 : 0) : 0);
+        const expected = truthyCount === 3; // AND semantics
         const got = m.combinedComplete === true;
+        const consensus = combined && got === expected;
+        // n/a: if any of the four booleans is missing/non-boolean, fall back
+        // to n/a (we cannot defensively infer the AND).
+        if (!(scope && fileHash && relation && combined)) return { observed: "n/a (non-boolean inputs)", verdict: "n/a" };
         return {
-          observed: `scope=${m.scopeComplete} fileHash=${m.integrityVerification?.fileHashOk} relation=${m.integrityVerification?.relationCheckOk}; combined=${m.combinedComplete}`,
-          verdict: eq === got ? "pass" : "fail"
+          observed: `scope=${m.scopeComplete} fileHash=${m.integrityVerification.fileHashOk} relation=${m.integrityVerification.relationCheckOk}; combined=${m.combinedComplete} (truthy=${truthyCount}/3)`,
+          verdict: consensus ? "pass" : "fail"
         };
       }
     },
     {
-      name: "associationQuality has all five categories",
+      name: EXPECTED_CRITERIA_NAMES[7],
       run: (m) => {
         const aq = m.associationQuality;
         const keys = ["confirmed", "candidate", "unassigned", "conflict", "legacyUnverified"];
-        const present = keys.every((k) => typeof aq?.[k] === "number");
+        const missing = keys.filter((k) => typeof aq?.[k] !== "number");
+        if (missing.length > 0) {
+          return { observed: `missing: ${missing.join(",")}`, verdict: "n/a" };
+        }
         return {
-          observed: keys.map((k) => `${k}=${aq?.[k] ?? "n/a"}`).join(","),
-          verdict: present ? "pass" : "fail"
+          observed: keys.map((k) => `${k}=${aq[k]}`).join(","),
+          verdict: "pass"
         };
       }
     },
     {
-      name: "dataScope.ok is boolean (always populated)",
+      name: EXPECTED_CRITERIA_NAMES[8],
       run: (m) => ({
-        observed: String(m.dataScope?.ok),
+        observed: typeof m.dataScope?.ok === "boolean" ? String(m.dataScope.ok) : `<${typeof m.dataScope?.ok}>`,
         verdict: typeof m.dataScope?.ok === "boolean" ? "pass" : "fail"
       })
     },
     {
-      name: "clientCoverage.observed is boolean; gapWindows is an array",
+      name: EXPECTED_CRITERIA_NAMES[9],
       run: (m) => {
         const cc = m.clientCoverage;
-        const ok = typeof cc?.observed === "boolean" && Array.isArray(cc?.gapWindows);
+        const observed = typeof cc?.observed === "boolean";
+        const gaps = Array.isArray(cc?.gapWindows);
+        if (!observed || !gaps) {
+          return {
+            observed: `observed=<${typeof cc?.observed}> gapWindows=<${Array.isArray(cc?.gapWindows) ? "array" : typeof cc?.gapWindows}>`,
+            verdict: "n/a"
+          };
+        }
+        return { observed: `observed=${cc.observed} gapWindows=${cc.gapWindows.length}`, verdict: "pass" };
+      }
+    },
+    {
+      name: EXPECTED_CRITERIA_NAMES[10],
+      run: (m) => {
+        // n/a: some manifests may not require policyScopeExpanded.
+        if (m.policyScopeExpanded === undefined) {
+          return { observed: "<missing>", verdict: "n/a" };
+        }
+        const isArr = Array.isArray(m.policyScopeExpanded);
         return {
-          observed: `observed=${cc?.observed} gapWindows=${Array.isArray(cc?.gapWindows) ? cc.gapWindows.length : "not-array"}`,
-          verdict: ok ? "pass" : "fail"
+          observed: isArr ? `array(len=${m.policyScopeExpanded.length})` : `<${typeof m.policyScopeExpanded}>`,
+          verdict: isArr ? "pass" : "fail"
         };
       }
     },
     {
-      name: "policyScopeExpanded is an array (audit-trust spec §4.7)",
-      run: (m) => ({
-        observed: Array.isArray(m.policyScopeExpanded) ? `array(len=${m.policyScopeExpanded.length})` : "not-array",
-        verdict: Array.isArray(m.policyScopeExpanded) ? "pass" : "fail"
-      })
-    },
-    {
-      name: "untrustedSelfReport is a non-negative integer",
+      name: EXPECTED_CRITERIA_NAMES[11],
       run: (m) => {
         const v = m.untrustedSelfReport;
-        return {
-          observed: String(v),
-          verdict:
-            typeof v === "number" && Number.isInteger(v) && v >= 0 ? "pass" : "fail"
-        };
+        const ok = typeof v === "number" && Number.isInteger(v) && v >= 0;
+        return { observed: ok ? String(v) : `<${typeof v}>`, verdict: ok ? "pass" : "fail" };
       }
     },
     {
-      name: "legalEmptyWindow is boolean",
+      name: EXPECTED_CRITERIA_NAMES[12],
       run: (m) => ({
-        observed: String(m.legalEmptyWindow),
+        observed: typeof m.legalEmptyWindow === "boolean" ? String(m.legalEmptyWindow) : `<${typeof m.legalEmptyWindow}>`,
         verdict: typeof m.legalEmptyWindow === "boolean" ? "pass" : "fail"
       })
     },
     {
-      name: "lagMs is a non-negative integer",
+      name: EXPECTED_CRITERIA_NAMES[13],
       run: (m) => {
         const v = m.lagMs;
-        return {
-          observed: String(v),
-          verdict:
-            typeof v === "number" && Number.isInteger(v) && v >= 0 ? "pass" : "fail"
-        };
+        const ok = typeof v === "number" && Number.isInteger(v) && v >= 0;
+        return { observed: ok ? String(v) : `<${typeof v}>`, verdict: ok ? "pass" : "fail" };
       }
     },
     {
-      name: "classificationVersion is non-empty",
+      name: EXPECTED_CRITERIA_NAMES[14],
       run: (m) => ({
-        observed: String(m.classificationVersion ?? ""),
+        observed: `classificationVersion="${m.classificationVersion ?? "<missing>"}"`,
         verdict: typeof m.classificationVersion === "string" && m.classificationVersion.length > 0 ? "pass" : "fail"
       })
     },
     {
-      name: "digestVersion is non-empty",
+      name: EXPECTED_CRITERIA_NAMES[15],
       run: (m) => ({
-        observed: String(m.digestVersion ?? ""),
+        observed: `digestVersion="${m.digestVersion ?? "<missing>"}"`,
         verdict: typeof m.digestVersion === "string" && m.digestVersion.length > 0 ? "pass" : "fail"
       })
     }
@@ -232,20 +267,33 @@ function buildCriteria() {
 
 function csvEscape(value) {
   const s = String(value ?? "");
-  if (s.includes(",") || s.includes('"') || s.includes("\n")) {
+  // Cover all three RFC 4180 line break variants + comma + quote.
+  if (/[",\r\n]/.test(s)) {
     return `"${s.replace(/"/g, '""')}"`;
   }
   return s;
 }
 
+function summarize(criteriaResults) {
+  let pass = 0, fail = 0, na = 0;
+  for (const r of criteriaResults) {
+    if (r.verdict === "pass") pass += 1;
+    else if (r.verdict === "fail") fail += 1;
+    else if (r.verdict === "n/a") na += 1;
+  }
+  return { pass, fail, na };
+}
+
 function renderMatrix(manifest) {
   const criteria = buildCriteria();
   const rows = ["criterion,observed_value,verdict"];
+  const results = [];
   for (const c of criteria) {
     const r = c.run(manifest);
+    results.push(r);
     rows.push([csvEscape(c.name), csvEscape(r.observed), csvEscape(r.verdict)].join(","));
   }
-  return rows.join("\n") + "\n";
+  return { csv: rows.join("\n") + "\n", results };
 }
 
 function runMain(argv) {
@@ -254,25 +302,34 @@ function runMain(argv) {
     printHelp();
     return null;
   }
-  const raw = readFileSync(args.in, "utf8");
+  // Refuse --in == --out so a typo can't destroy the source manifest.
+  const inAbs = resolve(args.in);
+  const outAbs = resolve(args.out);
+  if (inAbs === outAbs) {
+    throw new Error("--in and --out must be different paths (refusing to overwrite the input manifest)");
+  }
+  // Refuse large inputs to bound memory before JSON.parse.
+  const stat = statSync(args.in);
+  if (!stat.isFile()) {
+    throw new Error(`--in is not a regular file: ${args.in}`);
+  }
+  if (stat.size > MAX_INPUT_BYTES) {
+    throw new Error(
+      `--in is too large (${stat.size} bytes > ${MAX_INPUT_BYTES} cap). Refusing to read.`
+    );
+  }
   /** @type {Manifest} */
-  const manifest = JSON.parse(raw);
-  const csv = renderMatrix(manifest);
+  const manifest = JSON.parse(readFileSync(args.in, "utf8"));
+  const { csv, results } = renderMatrix(manifest);
 
   mkdirSync(dirname(args.out), { recursive: true });
   writeFileSync(args.out, csv);
 
-  // Print summary line.
-  const lines = csv.trim().split("\n").slice(1);
-  const pass = lines.filter((l) => l.endsWith(",pass")).length;
-  const fail = lines.filter((l) => l.endsWith(",fail")).length;
-  const na = lines.filter((l) => l.endsWith(",n/a")).length;
+  const { pass, fail, na } = summarize(results);
   console.log(
     `[acceptance-matrix] wrote ${args.out}: ${pass} pass / ${fail} fail / ${na} n/a (label=${args.label}, schema=${SCHEMA_VERSION})`
   );
-  if (fail > 0) {
-    process.exit(2);
-  }
+  if (fail > 0) process.exit(2);
   return { csv, pass, fail, na };
 }
 
@@ -288,4 +345,13 @@ if (looksLikeCli) {
   }
 }
 
-export { buildCriteria, renderMatrix, SCHEMA_VERSION };
+export {
+  buildCriteria,
+  renderMatrix,
+  summarize,
+  csvEscape,
+  SCHEMA_VERSION,
+  EXPECTED_CRITERIA_NAMES,
+  MAX_INPUT_BYTES
+};
+

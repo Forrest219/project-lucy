@@ -3,8 +3,8 @@
  *
  * Runs the matrix generator on a fixture v2 manifest and asserts the
  * CSV output conforms. We also exercise the public `buildCriteria`
- * / `renderMatrix` exports directly to verify the criterion set is
- * stable.
+ * / `renderMatrix` / `summarize` exports directly to verify the criterion
+ * set is stable.
  */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
@@ -13,7 +13,15 @@ import { mkdtempSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildCriteria, renderMatrix, SCHEMA_VERSION } from "../2026-10-19-r1-acceptance-matrix.mjs";
+import {
+  buildCriteria,
+  renderMatrix,
+  summarize,
+  csvEscape,
+  SCHEMA_VERSION,
+  EXPECTED_CRITERIA_NAMES,
+  MAX_INPUT_BYTES
+} from "../2026-10-19-r1-acceptance-matrix.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SCRIPT = join(__dirname, "..", "2026-10-19-r1-acceptance-matrix.mjs");
@@ -48,71 +56,157 @@ function fixtureManifest(overrides = {}) {
   };
 }
 
-function runScript(args, options = {}) {
-  const tmp = mkdtempSync(join(tmpdir(), "audit-trust-matrix-"));
-  const out = join(tmp, `matrix-${Date.now()}.csv`);
-  try {
-    const stdout = execFileSync("node", [SCRIPT, ...args, "--out", out], {
-      encoding: "utf8",
-      maxBuffer: 16 * 1024 * 1024,
-      ...options
-    });
-    const csv = readFileSync(out, "utf8");
-    return { csv, stdout, outPath: out };
-  } finally {
-    try {
-      unlinkSync(out);
-    } catch {
-      // best-effort
-    }
-  }
-}
-
 describe("T08b.2 acceptance matrix generator", () => {
   it("exports a stable SCHEMA_VERSION", () => {
     assert.equal(SCHEMA_VERSION, "audit-trust-acceptance-matrix/v1");
   });
 
-  it("buildCriteria returns the fixed criterion set", () => {
+  it("exports a frozen EXPECTED_CRITERIA_NAMES list (drift guard)", () => {
+    assert.ok(Object.isFrozen(EXPECTED_CRITERIA_NAMES));
+    // The expected list is the canonical fixture for the criterion set.
+    // Drift is only allowed when both the script and this test are
+    // updated together.
+    assert.equal(EXPECTED_CRITERIA_NAMES.length, 16);
+    assert.equal(
+      new Set(EXPECTED_CRITERIA_NAMES).size,
+      EXPECTED_CRITERIA_NAMES.length,
+      "EXPECTED_CRITERIA_NAMES must contain unique entries"
+    );
+    // Specific names that operator-readable output relies on.
+    assert.ok(
+      EXPECTED_CRITERIA_NAMES.includes("schemaVersion is 'audit-export-manifest/v2'")
+    );
+    assert.ok(
+      EXPECTED_CRITERIA_NAMES.includes(
+        "combinedComplete = scopeComplete AND fileHashOk AND relationCheckOk"
+      )
+    );
+  });
+
+  it("buildCriteria returns exactly EXPECTED_CRITERIA_NAMES, in order", () => {
     const criteria = buildCriteria();
-    assert.ok(criteria.length >= 10, `expected >=10 criteria, got ${criteria.length}`);
-    // Each criterion has a name and a run() that returns observed/verdict.
-    for (const c of criteria) {
-      assert.equal(typeof c.name, "string");
-      assert.equal(typeof c.run, "function");
-    }
+    assert.equal(criteria.length, EXPECTED_CRITERIA_NAMES.length);
+    assert.deepEqual(
+      criteria.map((c) => c.name),
+      [...EXPECTED_CRITERIA_NAMES]
+    );
   });
 
   it("renderMatrix produces a CSV header row + one row per criterion", () => {
     const m = fixtureManifest();
-    const csv = renderMatrix(m);
+    const { csv } = renderMatrix(m);
     const lines = csv.trim().split("\n");
     assert.equal(lines[0], "criterion,observed_value,verdict");
     assert.equal(lines.length - 1, buildCriteria().length);
   });
 
   it("all criteria pass on a fully-valid manifest", () => {
-    const csv = renderMatrix(fixtureManifest());
-    const verdictLines = csv.trim().split("\n").slice(1).map((l) => l.split(",").pop());
-    assert.ok(verdictLines.every((v) => v === "pass"), `non-pass verdicts found: ${verdictLines}`);
+    const { results } = renderMatrix(fixtureManifest());
+    assert.ok(results.every((r) => r.verdict === "pass"), `non-pass verdicts found`);
   });
 
   it("flags missing schemaVersion as fail", () => {
     const m = fixtureManifest();
     delete m.schemaVersion;
-    const csv = renderMatrix(m);
+    const { csv } = renderMatrix(m);
     assert.match(csv, /,fail$/m);
   });
 
   it("flags combinedComplete mismatch as fail (conformance invariant)", () => {
     const m = fixtureManifest({ combinedComplete: false });
-    const csv = renderMatrix(m);
+    const { csv } = renderMatrix(m);
     assert.match(csv, /combinedComplete =/, "matrix should include the combinedComplete criterion");
-    // The CSV must have at least one fail row.
     assert.match(csv, /,fail$/m);
   });
 
-  it("end-to-end: writes CSV to --out path with row count > 10", () => {
+  it("covers all 8 combinedComplete AND combinations", () => {
+    // Truth table for combinedComplete = scope && fileHash && relation.
+    for (const [scope, fileHash, relation, expectedCombined] of [
+      [true, true, true, true],
+      [true, true, false, false],
+      [true, false, true, false],
+      [true, false, false, false],
+      [false, true, true, false],
+      [false, true, false, false],
+      [false, false, true, false],
+      [false, false, false, false]
+    ]) {
+      const m = fixtureManifest({
+        scopeComplete: scope,
+        combinedComplete: expectedCombined,
+        integrityVerification: { fileHashOk: fileHash, relationCheckOk: relation }
+      });
+      const { results } = renderMatrix(m);
+      // Locate the combinedComplete criterion (entry index 6 per EXPECTED list).
+      const combined = results[6];
+      assert.equal(
+        combined.verdict,
+        "pass",
+        `scope=${scope}, fileHash=${fileHash}, relation=${relation} should pass`
+      );
+    }
+  });
+
+  it("flags OR-corruption (combinedComplete=true but a factor is false) as fail", () => {
+    // scope=false but combinedComplete=true is an OR-error; should fail.
+    const m = fixtureManifest({ scopeComplete: false, combinedComplete: true });
+    const { results } = renderMatrix(m);
+    assert.equal(results[6].verdict, "fail");
+  });
+
+  it("returns n/a when a non-boolean is supplied to combinedComplete factors", () => {
+    const m = fixtureManifest({
+      scopeComplete: "yes" /* non-boolean */,
+      combinedComplete: true
+    });
+    const { results } = renderMatrix(m);
+    assert.equal(results[6].verdict, "n/a");
+  });
+
+  it("returns n/a when clientCoverage is missing or wrong shape", () => {
+    const m1 = fixtureManifest();
+    delete m1.clientCoverage;
+    assert.equal(renderMatrix(m1).results[9].verdict, "n/a");
+    const m2 = fixtureManifest({ clientCoverage: { observed: "yes", gapWindows: [] } });
+    assert.equal(renderMatrix(m2).results[9].verdict, "n/a");
+  });
+
+  it("returns n/a when associationQuality is missing a category", () => {
+    const m = fixtureManifest();
+    delete m.associationQuality.confirmed;
+    assert.equal(renderMatrix(m).results[7].verdict, "n/a");
+  });
+
+  it("returns n/a when policyScopeExpanded is undefined (optional field)", () => {
+    const m = fixtureManifest();
+    delete m.policyScopeExpanded;
+    assert.equal(renderMatrix(m).results[10].verdict, "n/a");
+  });
+
+  it("summarize() counts pass/fail/n/a from results", () => {
+    const results = [
+      { observed: "x", verdict: "pass" },
+      { observed: "y", verdict: "pass" },
+      { observed: "z", verdict: "fail" },
+      { observed: "w", verdict: "n/a" }
+    ];
+    assert.deepEqual(summarize(results), { pass: 2, fail: 1, na: 1 });
+  });
+
+  it("csvEscape covers commas, quotes, CR, and LF", () => {
+    assert.equal(csvEscape("a,b"), '"a,b"');
+    assert.equal(csvEscape('a"b'), '"a""b"');
+    assert.equal(csvEscape("a\nb"), '"a\nb"');
+    assert.equal(csvEscape("a\rb"), '"a\rb"');
+    assert.equal(csvEscape("a\rb\nc,d"), '"a\rb\nc,d"');
+    assert.equal(csvEscape("plain"), "plain");
+  });
+
+  it("MAX_INPUT_BYTES is 50 MiB (cap is conservative for manifests)", () => {
+    assert.equal(MAX_INPUT_BYTES, 50 * 1024 * 1024);
+  });
+
+  it("end-to-end: writes CSV to --out path with row count == 17 (header + 16 criteria)", () => {
     const tmp = mkdtempSync(join(tmpdir(), "audit-trust-matrix-"));
     const inPath = join(tmp, "manifest.json");
     const outPath = join(tmp, "matrix.csv");
@@ -126,9 +220,8 @@ describe("T08b.2 acceptance matrix generator", () => {
       const csv = readFileSync(outPath, "utf8");
       assert.match(stdout, /acceptance-matrix/);
       const lines = csv.trim().split("\n");
-      assert.ok(lines.length > 10);
+      assert.equal(lines.length, 17, "expected header + 16 criteria");
       assert.equal(lines[0], "criterion,observed_value,verdict");
-      // All verdicts should be `pass` for a fully-valid manifest.
       for (const l of lines.slice(1)) {
         assert.ok(l.endsWith(",pass"), `unexpected verdict in line: ${l}`);
       }
@@ -136,9 +229,7 @@ describe("T08b.2 acceptance matrix generator", () => {
       try {
         unlinkSync(inPath);
         unlinkSync(outPath);
-      } catch {
-        // best-effort
-      }
+      } catch {}
     }
   });
 
@@ -164,9 +255,30 @@ describe("T08b.2 acceptance matrix generator", () => {
       try {
         unlinkSync(inPath);
         unlinkSync(outPath);
-      } catch {
-        // best-effort
-      }
+      } catch {}
     }
+  });
+
+  it("refuses --in == --out (refuses to overwrite the input manifest)", () => {
+    const tmp = mkdtempSync(join(tmpdir(), "audit-trust-matrix-same-"));
+    const path = join(tmp, "manifest.json");
+    writeFileSync(path, JSON.stringify(fixtureManifest()));
+    let exitCode = 0;
+    let stderr = "";
+    try {
+      execFileSync("node", [SCRIPT, "--in", path, "--out", path], {
+        encoding: "utf8",
+        maxBuffer: 16 * 1024 * 1024,
+        stdio: ["ignore", "pipe", "pipe"]
+      });
+    } catch (err) {
+      exitCode = typeof err.status === "number" ? err.status : 1;
+      stderr = String(err.stderr ?? "");
+    }
+    assert.equal(exitCode, 1);
+    assert.match(stderr, /must be different|overwrite/);
+    // Input must NOT have been overwritten.
+    const after = JSON.parse(readFileSync(path, "utf8"));
+    assert.equal(after.schemaVersion, "audit-export-manifest/v2");
   });
 });
