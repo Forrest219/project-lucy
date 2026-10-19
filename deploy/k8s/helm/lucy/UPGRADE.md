@@ -1,7 +1,7 @@
 # Lucy Helm Chart — Upgrade Guide
 
 Upgrade Lucy on Kubernetes while preserving `/data/lucy` PVC data, Secrets, and MCP tokens.
-Current chart: **0.2.4** (Lucy `0.17.0`, bundled KTX `0.16.0`).
+Current chart: **0.2.4** (Lucy `2.0.0`, bundled KTX `0.16.0`).
 
 ## Before you start
 
@@ -45,7 +45,7 @@ Run this from the package root **before** `helm upgrade`. It reports three thing
 
 - a live Deployment that still has a hand-patched `command` / `args`, hotfix volume, or extra init container
 - semantic-layer column `type` values other than `string`, `number`, `time`, `boolean`
-- `roles.*.allow.tools` entries that Lucy 0.17.0 treats as AbsoluteDeny (`sl_query`, `sl_read_source`, and the other names in that set)
+- `roles.*.allow.tools` entries that Lucy 2.0.0 treats as AbsoluteDeny (`sl_query`, `sl_read_source`, and the other names in that set)
 
 `defaults.known_tools` and `defaults.table_touching_tools` are not flagged and are not edited.
 

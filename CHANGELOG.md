@@ -6,6 +6,12 @@ All notable user-visible changes to Lucy ship here. Versions follow `<major>.<mi
 
 ---
 
+## 2.0.0
+
+Product line cut from `0.17.0` to `2.0.0` on 2026-10-19. Customer-facing label is `v2.0.0`. Helm chart package version stays `0.2.4`. Bundled KTX stays `0.16.0`. This cut does not by itself change permissions, configuration, or the KTX runtime.
+
+---
+
 ## Unreleased — M31 / A2 — Configurable Content Root
 
 > Target release: M31 (post-0.17.0). WebUI loads `semantic-layer/`, `wiki/`,
@@ -45,6 +51,6 @@ All notable user-visible changes to Lucy ship here. Versions follow `<major>.<mi
 
 ---
 
-## 0.17.0 (current VERSION file baseline)
+## 0.17.0
 
-Pre-M31 line. Content dirs are siblings of `ktx.yaml`. No `LUCY_CONTENT_ROOT` env, no `paths.content_root` in `ktx.yaml`, no resolver.
+Pre-2.0.0 line. Content dirs are siblings of `ktx.yaml`. No `LUCY_CONTENT_ROOT` env, no `paths.content_root` in `ktx.yaml`, no resolver.

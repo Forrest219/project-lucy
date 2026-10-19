@@ -19,12 +19,13 @@ in this repository is a **supported delivery artifact** — not a reference snap
 | `0.2.1` | legacy/ambiguous | `0.16.0` | HTTP probes + UID 10001 + `workingDir` | Superseded by product-version-aware chart 0.2.2 |
 | `0.2.2` | `0.17.0` | `0.16.0` | HTTP probes + UID 10001 + `workingDir` | **Superseded** — Secret mounted read-only over `.ktx/secrets` (WebUI writes fail with `EROFS`) |
 | `0.2.3` | `0.17.0` | `0.16.0` | HTTP probes + UID 10001 + `workingDir` | `secrets-sync` init, `LUCY_CONTENT_ROOT`, name pinning |
-| `0.2.4` | `0.17.0` | `0.16.0` | same workload contract as 0.2.3 | **Current** — adds `preflight-upgrade.sh` for live Deployment drift, semantic column types, and AbsoluteDeny role tools |
+| `0.2.4` | `0.17.0` | `0.16.0` | same workload contract as 0.2.3 | Product baseline before 2026-10-19. Chart package version was not bumped for the later product cut |
+| `0.2.4` | `2.0.0` | `0.16.0` | same workload contract as 0.2.3 | **Current** — product line cut from `0.17.0` to `2.0.0`; chart `version` stays `0.2.4` |
 
 Image tags must be **immutable**. Recommended form:
 
 ```text
-project-lucy:customer-amd64-0.17.0-YYYYMMDD-<gitShortSha>
+project-lucy:customer-amd64-2.0.0-YYYYMMDD-<gitShortSha>
 ```
 
 Record the digest in `image/image-digest.txt` and pin via Helm `image.digest` when possible.
@@ -139,7 +140,7 @@ Preflight belongs in post-deploy scripts or Helm test Jobs, not in the pod start
 |---|---|---|
 | `KTX_PROJECT_ROOT` | yes | `/data/lucy` |
 | `POSTHOG_DISABLED` | yes | `"1"` |
-| `LUCY_VERSION` | yes | Lucy product version; current baseline `0.17.0` |
+| `LUCY_VERSION` | yes | Lucy product version; current baseline `2.0.0` |
 | `LUCY_BUNDLED_KTX_VERSION` | yes | Bundled KTX identity; current baseline `0.16.0` |
 | `LUCY_PUBLIC_MCP_URL` | yes (non-local) | Externally reachable MCP URL; chart fails render if empty for customer registry |
 | `LUCY_ALLOW_PLACEHOLDER_KTX` | prod: empty | `"1"` only for demo seed |

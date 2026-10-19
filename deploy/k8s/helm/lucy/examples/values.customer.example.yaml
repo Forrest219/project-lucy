@@ -13,7 +13,7 @@
 
 image:
   repository: REPLACE-ME-registry.example.com/data-team/project-lucy
-  tag: customer-amd64-0.17.0-YYYYMMDD-<gitShortSha>
+  tag: customer-amd64-2.0.0-YYYYMMDD-<gitShortSha>
   # Registry installs: pin the manifest digest. Offline (tar import) installs:
   # leave empty and set pullPolicy: Never.
   digest: ""
@@ -49,6 +49,6 @@ env:
 existingSecret: "<your-db-password-secret>"
 
 lucy:
-  version: "0.17.0"   # must equal Chart.appVersion
+  version: "2.0.0"   # must equal Chart.appVersion
   projectMigrate:
     enabled: true     # keep true for any PVC created by an older build
