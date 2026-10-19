@@ -622,6 +622,13 @@ export type HelpHandbook = {
   etag: string;
   toc: HelpTocItem[];
   markdown: string;
+  /**
+   * Legacy section id → current section id. The backend ships it together
+   * with the handbook so old deep links (`?section=<old id>`) keep
+   * resolving after a section id migration. Optional: older servers do not
+   * send it, and the UI then falls back to the raw id.
+   */
+  legacySectionMap?: Record<string, string>;
 };
 
 export type HelpSearchItem = {

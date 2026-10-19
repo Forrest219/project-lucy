@@ -1,22 +1,22 @@
-<!DOCTYPE html>
+!DOCTYPE html>
 <!--
 | 元数据 | 内容 |
 |---|---|
 | 文档名称 | MCP 接入参考 |
 | 文档类型 | Other |
-| 版本 | v1.0 |
-| 撰写日期 | 2026-06-20 |
+| 版本 | v2.0 |
+| 撰写日期 | 2026-06-20；2026-10-20 按 docs/SYSTEM_HANDBOOK.md §4.1–§4.4 重写 |
 | 撰写人 | Claude |
 | 委托人 | project-lucy 团队 |
-| 基于材料 | KTX MCP Server 工具规范 |
-| 适用范围 | 开发者和 BI 管理员配置 Agent MCP 接入 |
+| 基于材料 | docs/SYSTEM_HANDBOOK.md §4.1–§4.4；webui/server/proxy/acl.ts；webui/config/data-qa-instructions.md |
+| 适用范围 | 开发者与管理员配置 Agent 的 MCP 接入 |
 | 输出位置 | docs/user-guide/mcp-reference.html |
 -->
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MCP 接入参考 · Lucy 帮助文档</title>
+<title translate="no" class="notranslate">MCP 接入参考 · Lucy 帮助文档</title>
 <link rel="stylesheet" href="assets/user-guide.css">
 </head>
 <body>
@@ -41,17 +41,17 @@
       <a class="nav-link" href="quickstart-admin.html">快速部署 <span class="wip">WIP</span></a>
       <a class="nav-link" href="data-sources.html">数据源接入 <span class="wip">WIP</span></a>
       <a class="nav-link" href="permissions.html">权限与 ACL <span class="wip">WIP</span></a>
-      <a class="nav-link" href="webui-guide.html">KTX WebUI</a>
+      <a class="nav-link" href="webui-guide.html">WebUI 指南</a>
     </div>
     <div class="nav-group">
       <p class="nav-title">治理与安全</p>
       <a class="nav-link" href="trust.html">可信机制</a>
-      <a class="nav-link" href="eval-meta-governance-training.html">Eval 培训</a>
-      <a class="nav-link" href="skills.html">Skill 管理 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="eval-meta-governance-training.html"><span translate="no" class="notranslate">Eval</span> 培训</a>
+      <a class="nav-link" href="skills.html"><span translate="no" class="notranslate">Skill</span> 管理 <span class="wip">WIP</span></a>
     </div>
     <div class="nav-group">
       <p class="nav-title">参考</p>
-      <a class="nav-link active" href="mcp-reference.html">MCP 接入参考 <span class="wip">WIP</span></a>
+      <a class="nav-link active" href="mcp-reference.html"><span translate="no" class="notranslate">MCP</span> 接入参考 <span class="wip">WIP</span></a>
       <a class="nav-link" href="glossary.html">术语表</a>
       <a class="nav-link" href="release-notes.html">更新日志 <span class="wip">WIP</span></a>
     </div>
@@ -59,119 +59,263 @@
   <main class="content">
     <header class="hero">
       <span class="eyebrow">Reference</span>
-      <h1>MCP 接入参考</h1>
-      <p class="lead">Lucy 通过 Model Context Protocol (MCP) 向 Agent 暴露数据能力。以下是当前可用的所有工具及其调用规范。</p>
+      <h1><span translate="no" class="notranslate">MCP</span> 接入参考</h1>
+      <p class="lead">Lucy 以 <span translate="no" class="notranslate">HTTP</span> 暴露 <span translate="no" class="notranslate">MCP</span> 服务。<span translate="no" class="notranslate">Agent</span> 必须携带 <span translate="no" class="notranslate">Bearer</span> <span translate="no" class="notranslate">Token</span> 才能连上；连上之后能调用哪些工具、能看哪些语义资产，由角色的工具清单和表范围决定。</p>
     </header>
 
     <section>
-      <h2>协议概述</h2>
-      <p>MCP 是 AI Agent 与 Context Server 之间通信的开放标准协议。Lucy 的 MCP Server 作为本地进程运行（或远端端点），Agent 在配置地址处连接。所有工具调用均为 JSON-RPC，通过 stdio 或 HTTP 传输。</p>
+      <h2>协议与鉴权</h2>
+      <ul>
+        <li><strong>传输</strong>：<span translate="no" class="notranslate">HTTP</span>，消息体是 <span translate="no" class="notranslate">JSON-RPC</span> 2.0。</li>
+        <li><strong>鉴权</strong>：每个请求都必须带 <code class="notranslate" translate="no">Authorization: Bearer &lt;token&gt;</code>。</li>
+        <li><strong>握手</strong>：先发 <code class="notranslate" translate="no">initialize</code>，之后每次请求都要回传 <code class="notranslate" translate="no">Mcp-Session-Id</code>。只读本地目录的工具不走上游，但取数工具要走上游，握手没做对会表现为「目录能看、查不了数」。</li>
+        <li><strong>客户端标识</strong>（可选，推荐）：带 <code class="notranslate" translate="no">x-lucy-platform</code> 头，访问日志里能区分是哪个客户端壳发的调用。</li>
+      </ul>
+      <div class="callout warning">
+        请求<strong>必须</strong>携带有效 <span translate="no" class="notranslate">Token</span>。未携带、<span translate="no" class="notranslate">Token</span> 不匹配、已撤销、<code class="notranslate" translate="no">expires_at</code> 到期，一律返回 401。这条链路没有匿名通道。
+      </div>
+      <p><span translate="no" class="notranslate">Token</span> 的签发、过期与吊销规则见<a href="permissions.html">「访问治理：角色、<span translate="no" class="notranslate">Agent</span> 与 <span translate="no" class="notranslate">Token</span>」</a>。</p>
+    </section>
 
-      <p>Claude Code 的配置示例（<code>.claude/settings.json</code>）：</p>
-      <pre>{
+    <section>
+      <h2>接入地址</h2>
+      <p>接入地址分三层。写给 <span translate="no" class="notranslate">Agent</span> 的地址只有第三层：</p>
+      <table>
+        <thead>
+          <tr><th>层</th><th>取值</th><th>说明</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Listen</td>
+            <td><code class="notranslate" translate="no">LUCY_PROXY_HOST</code>:<code class="notranslate" translate="no">LUCY_PROXY_PORT</code>（容器内默认 7879）</td>
+            <td><span translate="no" class="notranslate">Proxy</span> 进程自己绑的地址，<strong>不要</strong>写给 <span translate="no" class="notranslate">Agent</span></td>
+          </tr>
+          <tr>
+            <td>Publish</td>
+            <td>compose 宿主端口映射（<code class="notranslate" translate="no">LUCY_PROXY_HOST_PORT</code>）或 <span translate="no" class="notranslate">Ingress</span></td>
+            <td>对外暴露的那一层；改了端口要同步改下一层</td>
+          </tr>
+          <tr>
+            <td>Advertise</td>
+            <td><code class="notranslate" translate="no">LUCY_PUBLIC_MCP_URL</code>（默认 <code class="notranslate" translate="no">http://127.0.0.1:7879/mcp</code>）</td>
+            <td>WebUI 与 <span translate="no" class="notranslate">Agent</span> 的<strong>唯一事实源</strong>，客户端配置里写的就是这个</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="callout">
+        未配置 <code class="notranslate" translate="no">LUCY_PUBLIC_MCP_URL</code> 时，WebUI 会显示本地开发 fallback，状态为 <code class="notranslate" translate="no">fallback</code>，<strong>不计</strong> <span translate="no" class="notranslate">MCP</span> 就绪。此时请先补上对外地址再接入。
+      </div>
+    </section>
+
+    <section>
+      <h2>客户端配置</h2>
+      <p>Claude Code 与 Codex 使用同一份 <code class="notranslate" translate="no">.mcp.json</code>，走 <span translate="no" class="notranslate">HTTP</span> 传输：</p>
+      <pre class="notranslate" translate="no">{
   "mcpServers": {
     "lucy": {
-      "command": "ktx",
-      "args": ["mcp", "serve"],
-      "env": {
-        "KTX_PROJECT": "/path/to/your/ktx-project"
+      "type": "http",
+      "url": "&lt;LUCY_PUBLIC_MCP_URL&gt;",
+      "headers": {
+        "Authorization": "Bearer ${LUCY_AGENT_TOKEN}"
       }
     }
   }
 }</pre>
-
+      <p>通用 <span translate="no" class="notranslate">HTTP</span> <span translate="no" class="notranslate">MCP</span> client（Hermes 等）用同一份配置，客户端不支持 <code class="notranslate" translate="no">type</code> 字段时省略它即可：</p>
+      <pre class="notranslate" translate="no">{
+  "mcpServers": {
+    "lucy": {
+      "url": "&lt;LUCY_PUBLIC_MCP_URL&gt;",
+      "headers": {
+        "Authorization": "Bearer ${LUCY_AGENT_TOKEN}"
+      }
+    }
+  }
+}</pre>
+      <p>本机 shell 里读取 <span translate="no" class="notranslate">Token</span>（不要把明文写进仓库）：</p>
+      <pre class="notranslate" translate="no">export LUCY_AGENT_TOKEN="$(cat &lt;PROJECT_ROOT&gt;/.ktx/secrets/lucy-agent-token)"</pre>
       <div class="callout">
-        配置文件路径：Claude Code 使用 <code>.claude/settings.json</code>（项目级）或 <code>~/.claude/settings.json</code>（全局）。Cursor 使用项目根目录的 <code>cursor.json</code>。
+        页面上的「复制 <span translate="no" class="notranslate">MCP</span> 配置」按钮只产出占位符模板，永远不会二次粘贴历史明文。生产或客户部署里，把 <span translate="no" class="notranslate">Token</span> 放在 <span translate="no" class="notranslate">Agent</span> 平台的 secret store，再通过环境变量或平台变量注入。
       </div>
     </section>
 
     <section>
-      <h2>工具一览</h2>
+      <h2>可用工具面</h2>
+      <p>新接入的 <span translate="no" class="notranslate">Agent</span> 推荐只暴露下面 6 个核心工具：</p>
       <table>
         <thead>
-          <tr><th>工具名</th><th>用途</th><th>查询优先级</th></tr>
+          <tr><th>工具</th><th>用途</th><th>备注</th></tr>
         </thead>
         <tbody>
-          <tr><td><code>sl_read</code></td><td>读取语义层定义（表描述、字段、Measures、Joins）</td><td>Step 1（必须先调用）</td></tr>
-          <tr><td><code>sl_query</code></td><td>使用语义层生成 SQL 并执行</td><td>Step 2（核心查询工具）</td></tr>
-          <tr><td><code>wiki_search</code></td><td>检索 Wiki 业务文档</td><td>Step 2（与 sl_query 并列）</td></tr>
-          <tr><td><code>sl_validate</code></td><td>验证语义层 YAML 格式合法性</td><td>Eval 流程专用</td></tr>
+          <tr>
+            <td><code class="notranslate" translate="no">lucy_catalog</code></td>
+            <td>列出当前 <span translate="no" class="notranslate">Token</span> 可见的连接与语义资产，附安全查询示例</td>
+            <td>查询前首选</td>
+          </tr>
+          <tr>
+            <td><code class="notranslate" translate="no">lucy_read_source</code></td>
+            <td>读取一个已授权的语义源（grain、字段、度量、关联）</td>
+            <td><span translate="no" class="notranslate">Proxy</span> 转发到上游内部工具，<span translate="no" class="notranslate">Agent</span> 只认这个稳定名</td>
+          </tr>
+          <tr>
+            <td><code class="notranslate" translate="no">lucy_query</code></td>
+            <td>运行已授权的语义查询，取事实数据</td>
+            <td>禁止原始 <span translate="no" class="notranslate">SQL</span></td>
+          </tr>
+          <tr>
+            <td><code class="notranslate" translate="no">lucy_explain_query</code></td>
+            <td>解释同一组参数会如何被授权与限流，<strong>不执行</strong>查询</td>
+            <td>排障用，不是常规 dry-run</td>
+          </tr>
+          <tr>
+            <td><code class="notranslate" translate="no">lucy_freshness</code></td>
+            <td>返回语义源的新鲜度元数据</td>
+            <td>物理数据新鲜度不可用时会显式说明</td>
+          </tr>
+          <tr>
+            <td><code class="notranslate" translate="no">lucy_begin_question</code></td>
+            <td>可选，上报自然语言问题，便于审计关联</td>
+            <td>可用 <code class="notranslate" translate="no">LUCY_ENABLE_QUESTION_TOOL=false</code> 关闭</td>
+          </tr>
         </tbody>
       </table>
-    </section>
-
-    <section>
-      <h2>工具详细说明</h2>
-
-      <h3>sl_read</h3>
-      <p>返回指定 domain 的语义层结构，包含所有表、字段定义、Measures 和 Join 关系。每次查询前必须调用此工具，获取 canonical 表名和 Measure 定义，禁止直接猜测字段名。</p>
-      <pre>{
-  "tool": "sl_read",
-  "params": {
-    "domain": "dataforai"
-  }
-}</pre>
-
-      <h3>sl_query</h3>
-      <p>基于语义层生成 SQL 并在只读连接上执行。返回结果集和实际执行的 SQL。禁止绕过此工具手写等价聚合 SQL。</p>
-      <pre>{
-  "tool": "sl_query",
-  "params": {
-    "domain": "dataforai",
-    "measures": ["total_sales", "profit_rate"],
-    "dimensions": ["region", "order_year"],
-    "filters": ["is_deleted = 0"],
-    "sort": [{"field": "profit_rate", "order": "ASC"}]
-  }
-}</pre>
-
-      <h3>wiki_search</h3>
-      <p>全文搜索 <code>wiki/*.md</code> 文档，用于获取业务口径说明、Gotcha 规则和异常处理指引。</p>
-      <pre>{
-  "tool": "wiki_search",
-  "params": {
-    "query": "折扣政策 口径"
-  }
-}</pre>
-
-      <h3>sl_validate</h3>
-      <p>验证语义层 YAML 文件的合法性，在 Eval 流程中使用。返回校验结果和错误列表。</p>
-      <pre>{
-  "tool": "sl_validate",
-  "params": {
-    "domain": "dataforai",
-    "file": "semantic-layer/superstore_orders.yaml"
-  }
-}</pre>
-    </section>
-
-    <section>
-      <h2>查询优先级（强制）</h2>
-      <div class="callout">
-        <pre style="margin:0; background:transparent; padding:0; font-size:14px;">Step 1  先查语义层（sl_read）
-        → 获取 canonical 表名、字段描述、Measures、Joins
-
-Step 2  再查 Wiki（wiki_search）
-        → 获取业务口径、Gotcha、路由规则
-
-Step 3  以上均不能覆盖时，才允许 raw SQL fallback
-        → 必须标注：「以下基于 raw SQL，假设：…」</pre>
-      </div>
-
       <div class="callout warning">
-        禁止跳过 Step 1 直接写 SQL。跳过语义层可能导致字段名错误、Measure 口径不一致或触发 Safety Contract 阻断。
+        以 <code class="notranslate" translate="no">sl_</code> 为前缀的是上游 <span translate="no" class="notranslate">KTX</span> 内部工具名，<strong>对 <span translate="no" class="notranslate">Agent</span> 一律拒绝</strong>，无条件生效、不受角色配置影响。语义查询与语义源读取请走 <code class="notranslate" translate="no">lucy_query</code> 与 <code class="notranslate" translate="no">lucy_read_source</code> 这两个稳定包装名。
+      </div>
+      <p>上下文类工具（<code class="notranslate" translate="no">wiki_search</code>、<code class="notranslate" translate="no">wiki_read</code>、<code class="notranslate" translate="no">lucy_skill_search</code>、<code class="notranslate" translate="no">lucy_skill_read</code>）只有角色显式列出才可见；元数据类工具（<code class="notranslate" translate="no">dictionary_search</code>、<code class="notranslate" translate="no">discover_data</code>）需要完整的敏感表授权才会放行。</p>
+    </section>
+
+    <section>
+      <h2><span translate="no" class="notranslate">lucy_query</span> 参数规范</h2>
+      <p>调用样例：</p>
+      <pre class="notranslate" translate="no">{
+  "connectionId": "poc-mysql-aliyun",
+  "measures": ["poc_ad_revenue_daily.ad_revenue"],
+  "dimensions": [
+    { "field": "poc_ad_revenue_daily.dt", "granularity": "month" }
+  ],
+  "segments": ["poc_ad_revenue_daily.domestic"],
+  "order_by": [
+    { "field": "poc_ad_revenue_daily.dt", "direction": "asc" }
+  ],
+  "limit": 20
+}</pre>
+      <table>
+        <thead>
+          <tr><th>规则</th><th>写法</th><th>原因</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>字段带来源限定</td>
+            <td><code class="notranslate" translate="no">source.measure</code>、<code class="notranslate" translate="no">source.field</code></td>
+            <td>裁决需要知道请求落在哪张表上</td>
+          </tr>
+          <tr>
+            <td>维度与排序用对象数组</td>
+            <td><code class="notranslate" translate="no">[{ "field": "..." }]</code>，不要传字符串数组</td>
+            <td><span translate="no" class="notranslate">Proxy</span> 会校验结构</td>
+          </tr>
+          <tr>
+            <td>排序方向字段名</td>
+            <td><code class="notranslate" translate="no">direction</code>，取值 <code class="notranslate" translate="no">asc</code> / <code class="notranslate" translate="no">desc</code></td>
+            <td>写成别的名字不会被识别</td>
+          </tr>
+          <tr>
+            <td>过滤条件</td>
+            <td>字符串数组，或 <code class="notranslate" translate="no">{ "field": "...", "op": "...", "value": "..." }</code> 结构化对象</td>
+            <td>结构化对象由 <span translate="no" class="notranslate">Proxy</span> 转成语义层可执行的过滤表达式</td>
+          </tr>
+          <tr>
+            <td>不传原始 <span translate="no" class="notranslate">SQL</span></td>
+            <td>不要出现 <code class="notranslate" translate="no">query</code> / <code class="notranslate" translate="no">sql</code> 字段</td>
+            <td>原始查询默认拒绝，裁决原因 <code class="notranslate" translate="no">raw_query_forbidden</code></td>
+          </tr>
+          <tr>
+            <td>结果条数</td>
+            <td>默认 <code class="notranslate" translate="no">LUCY_QUERY_DEFAULT_LIMIT</code>，上限 <code class="notranslate" translate="no">LUCY_QUERY_MAX_LIMIT</code></td>
+            <td>防止一次拉回过大的结果集</td>
+          </tr>
+          <tr>
+            <td>并发</td>
+            <td>单个 <span translate="no" class="notranslate">Token</span> 的并发查询上限 <code class="notranslate" translate="no">LUCY_QUERY_MAX_INFLIGHT</code></td>
+            <td>超限返回 <code class="notranslate" translate="no">query_concurrency_exceeded</code>，这是按 <span translate="no" class="notranslate">Token</span> 计的用户级限流</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="callout">
+        <code class="notranslate" translate="no">orderBy</code> 是兼容别名，<span translate="no" class="notranslate">Proxy</span> 会统一成 <code class="notranslate" translate="no">order_by</code>。同一个请求不要同时传两套不同的排序，冲突会 fail closed。
       </div>
     </section>
 
     <section>
-      <h2>认证与多租户</h2>
-      <div class="callout" style="border-left-color: var(--gold);">
-        当前版本 MCP Server 通过本地进程绑定，无需额外认证。多租户身份认证（API Key 模式）正在开发中。
+      <h2>查询顺序</h2>
+      <p>查询顺序不写死在本页，而是由 <span translate="no" class="notranslate">Proxy</span> 在 <code class="notranslate" translate="no">initialize</code> 时按当前 <span translate="no" class="notranslate">Token</span> 的实际权限<strong>动态生成</strong>并注入给 <span translate="no" class="notranslate">Agent</span>：只列出这个 <span translate="no" class="notranslate">Token</span> 可见的连接、语义源和示例。事实源是 <code class="notranslate" translate="no">webui/config/data-qa-instructions.md</code>，它同时是动态生成失败时的中性 fallback。</p>
+      <ol>
+        <li>用当前可见的目录工具确认连接和语义源。</li>
+        <li>用 <code class="notranslate" translate="no">lucy_read_source</code> 看 grain、字段和度量。</li>
+        <li>用 <code class="notranslate" translate="no">lucy_query</code> 取事实数据。</li>
+        <li>仅在已授权、且确实需要业务口径时使用 <code class="notranslate" translate="no">wiki_search</code> / <code class="notranslate" translate="no">wiki_read</code>。</li>
+      </ol>
+      <div class="callout">
+        简单事实查询走最短可验证路径：确认目录后直接 <code class="notranslate" translate="no">lucy_query</code>，拿到事实行就作答。<code class="notranslate" translate="no">lucy_explain_query</code> 只在查询被拒、或需要排查权限与限流时使用，不作为常规取数的前置步骤。
       </div>
+      <p>数据面还有一条硬约束：<code class="notranslate" translate="no">lucy_query</code> 拿不到事实数据时，不要用 <span translate="no" class="notranslate">Wiki</span> 上下文编造数值。</p>
+    </section>
+
+    <section>
+      <h2>排障</h2>
+      <table>
+        <thead>
+          <tr><th>现象</th><th>常见原因</th><th>处理</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>401</td>
+            <td>未带 <span translate="no" class="notranslate">Token</span>、<span translate="no" class="notranslate">Token</span> 不匹配、已撤销、已过期</td>
+            <td>核对客户端配置里的 <span translate="no" class="notranslate">Token</span>；过期或疑似泄露就在 <code class="notranslate" translate="no">/admin/tokens</code> 撤销后重发</td>
+          </tr>
+          <tr>
+            <td>400，提示必须先完成 initialize</td>
+            <td>工具调用早于握手，或客户端没有在每条请求回传 <code class="notranslate" translate="no">Mcp-Session-Id</code></td>
+            <td>确认客户端 SDK 的会话管理；先握手再发工具调用</td>
+          </tr>
+          <tr>
+            <td><code class="notranslate" translate="no">query_concurrency_exceeded</code></td>
+            <td>同一 <span translate="no" class="notranslate">Agent</span> 的并发查询超过配额</td>
+            <td>降并发、错峰，或把批跑任务拆到独立 <span translate="no" class="notranslate">Agent</span></td>
+          </tr>
+          <tr>
+            <td><code class="notranslate" translate="no">table_forbidden</code> / <code class="notranslate" translate="no">tool_forbidden</code></td>
+            <td>请求超出角色的表范围或工具清单</td>
+            <td>改角色；改完要新开 <span translate="no" class="notranslate">MCP</span> session，旧 session 不会刷新可见范围</td>
+          </tr>
+          <tr>
+            <td><code class="notranslate" translate="no">row_policy_upstream_unproven</code></td>
+            <td>表受行级策略保护，而上游强制谓词能力当前未证明</td>
+            <td>这是预期的安全拒绝，不是故障</td>
+          </tr>
+          <tr>
+            <td>目录能查、取数全失败</td>
+            <td>上游传输会话没被 <span translate="no" class="notranslate">Proxy</span> 持有</td>
+            <td>先看 <span translate="no" class="notranslate">Proxy</span> 日志与上游健康，再回到调试台做最小重现</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>两个排查入口：<code class="notranslate" translate="no">/admin/mcp-playground</code> 做受控试调（预览裁决或试一次调用，不给正式 <span translate="no" class="notranslate">Agent</span> 造凭据），<code class="notranslate" translate="no">/admin/audit</code> 看访问日志里的裁决原因与调用流水。</p>
+    </section>
+
+    <section>
+      <h2>凭据边界</h2>
+      <ul>
+        <li><strong><span translate="no" class="notranslate">Token</span> 明文只在签发时出现一次</strong>，立刻放进客户端密钥库；配置里只落 <code class="notranslate" translate="no">sha256:&lt;hex&gt;</code>。</li>
+        <li><strong>必须设置 <code class="notranslate" translate="no">expires_at</code></strong>：管理页默认 90 天、最长 365 天。到期后 <span translate="no" class="notranslate">Proxy</span> 鉴权硬拒绝 401。</li>
+        <li><strong><code class="notranslate" translate="no">KTX_INTERNAL_TOKEN</code> 不出门</strong>：它只用于 <span translate="no" class="notranslate">Lucy Proxy</span> 调上游，<strong>不得</strong>分发给任何外部 <span translate="no" class="notranslate">Agent</span>。</li>
+        <li><strong>上游内部工具名不外用</strong>：以 <code class="notranslate" translate="no">sl_</code> 为前缀的工具对 <span translate="no" class="notranslate">Agent</span> 一律拒绝，角色配置也放不开。</li>
+      </ul>
     </section>
 
     <nav class="section-nav" aria-label="上一篇和下一篇">
-      <a class="prev" href="skills.html"><span class="nav-kicker">上一篇</span><span class="nav-label">Skill 管理</span></a>
+      <a class="prev" href="skills.html"><span class="nav-kicker">上一篇</span><span class="nav-label"><span translate="no" class="notranslate">Skill</span> 管理</span></a>
       <a class="next" href="glossary.html"><span class="nav-kicker">下一篇</span><span class="nav-label">术语表</span></a>
     </nav>
 

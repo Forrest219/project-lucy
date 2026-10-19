@@ -4,8 +4,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
 import { HelpCenter } from "../pages/HelpCenter";
 import { navGroups } from "../app/navigation";
+import { slugifyHeading } from "../lib/wiki";
+import type { HelpTocItem } from "../lib/types";
+import { LEGACY_SECTION_IDS, parseHelpToc, resolveHelpAppRoot } from "../../server/help";
 
 function renderHelp(path = "/help") {
   const client = new QueryClient({
@@ -988,5 +993,323 @@ describe("HelpCenter", () => {
     expect(await screen.findByTestId("help-search-empty")).toHaveTextContent(
       "未找到与「完全不存在的关键词xyz」相关的手册内容。"
     );
+  });
+});
+
+// ─── 真实手册回归（docs/SYSTEM_HANDBOOK.md 作为输入） ────────────────────────
+//
+// 上面那组用例全部使用合成夹具，真实手册从未被前端测到 —— §0.0 / §0.4 被整段
+// 丢弃、正文锚点失效这类缺陷因此长期没被发现。这一组直接喂真实手册文件。
+
+const REAL_HANDBOOK_CANDIDATES = [
+  // 服务端 app root 解析（与 `GET /api/help/handbook` 指向同一份文件）。
+  path.join(resolveHelpAppRoot(), "docs/SYSTEM_HANDBOOK.md"),
+  path.resolve(process.cwd(), "docs/SYSTEM_HANDBOOK.md"),
+  path.resolve(process.cwd(), "../docs/SYSTEM_HANDBOOK.md")
+];
+const REAL_HANDBOOK_PATH =
+  REAL_HANDBOOK_CANDIDATES.find((candidate) => existsSync(candidate)) ??
+  (REAL_HANDBOOK_CANDIDATES[0] as string);
+const realHandbookMarkdown = readFileSync(REAL_HANDBOOK_PATH, "utf8");
+/** 服务端 TOC 契约：真实手册 → 与 `GET /api/help/handbook` 一致的 toc 数组。 */
+const realHandbookToc = parseHelpToc(realHandbookMarkdown);
+
+type HandbookEnvelope = {
+  toc: HelpTocItem[];
+  markdown: string;
+  legacySectionMap?: Record<string, string>;
+};
+
+/** 用指定手册内容渲染 /help（绕开最上面那组合成夹具）。 */
+function renderHandbook(path = "/help", envelope: HandbookEnvelope) {
+  const client = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false }
+    }
+  });
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url === "/api/help/handbook") {
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          data: {
+            id: "system-handbook",
+            title: "Project Lucy 系统使用与运维手册",
+            sourcePath: "docs/SYSTEM_HANDBOOK.md",
+            updatedAt: "2026-10-19T00:00:00.000Z",
+            etag: "sha256:real-handbook",
+            toc: envelope.toc,
+            markdown: envelope.markdown,
+            ...(envelope.legacySectionMap
+              ? { legacySectionMap: envelope.legacySectionMap }
+              : {})
+          }
+        }),
+        { status: 200 }
+      );
+    }
+    if (url.startsWith("/api/help/search")) {
+      return new Response(
+        JSON.stringify({ ok: true, data: { query: "", items: [] } }),
+        { status: 200 }
+      );
+    }
+    return new Response(
+      JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: "not found" } }),
+      { status: 404 }
+    );
+  });
+  vi.stubGlobal("fetch", fetchMock);
+
+  if (typeof Element.prototype.scrollIntoView !== "function") {
+    Element.prototype.scrollIntoView = vi.fn();
+  }
+
+  render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter initialEntries={[path]}>
+        <HelpCenter />
+      </MemoryRouter>
+    </QueryClientProvider>
+  );
+  return { fetchMock };
+}
+
+/** 用真实手册渲染 /help。 */
+function renderRealHandbook(path = "/help", options: { legacySectionMap?: Record<string, string> } = {}) {
+  return renderHandbook(path, {
+    toc: realHandbookToc,
+    markdown: realHandbookMarkdown,
+    ...options
+  });
+}
+
+/** 记录被 scrollIntoView 的元素 id，用于断言深链落点。 */
+function trackScrolledSections(): string[] {
+  const scrolled: string[] = [];
+  Element.prototype.scrollIntoView = vi.fn(function (this: Element) {
+    scrolled.push(this.id);
+  }) as unknown as typeof Element.prototype.scrollIntoView;
+  return scrolled;
+}
+
+/** 等真实手册渲染完成（正文里已经出现 section 容器）。 */
+async function waitForHandbookBody() {
+  const article = await screen.findByRole("article");
+  await waitFor(() => {
+    expect(article.querySelector("section")).toBeTruthy();
+  });
+  return article;
+}
+
+describe("HelpCenter · 真实手册回归", () => {
+  it("TOC 的每个 id 在 DOM 中都有对应元素", async () => {
+    renderRealHandbook();
+    await waitForHandbookBody();
+
+    // 手写「目录」块在正文里被剥掉（它只是侧栏的重复），因此它没有正文落点。
+    const directoryId = realHandbookToc.find((item) => item.title === "目录")?.id;
+    const dangling = realHandbookToc
+      .map((item) => item.id)
+      .filter((id) => id !== directoryId && !document.getElementById(id));
+    expect(dangling, `TOC 存在无落点的 section id: ${dangling.join(", ")}`).toEqual([]);
+
+    // 侧栏里的每一条都必须能跳到真实存在的 section。
+    const tocNav = await screen.findByLabelText("系统手册目录");
+    const sectionHrefs = within(tocNav)
+      .getAllByRole("link")
+      .map((link) => link.getAttribute("href") ?? "")
+      .filter((href) => href.startsWith("/help?section="));
+    expect(sectionHrefs.length).toBeGreaterThan(0);
+    sectionHrefs.forEach((href) => {
+      const id = new URL(href, "http://localhost").searchParams.get("section") ?? "";
+      expect(document.getElementById(id), `侧栏死链: ${href}`).toBeTruthy();
+    });
+  });
+
+  it("每个章节标题的 DOM id 与 slugifyHeading 规则一致", async () => {
+    renderRealHandbook();
+    await waitForHandbookBody();
+
+    const directoryId = realHandbookToc.find((item) => item.title === "目录")?.id;
+    const mismatched = realHandbookToc
+      .filter((item) => item.id !== directoryId)
+      .filter((item) => !document.getElementById(slugifyHeading(item.title)))
+      .map((item) => item.title);
+    expect(mismatched, `标题 slug 与渲染器规则不一致: ${mismatched.join(", ")}`).toEqual([]);
+  });
+
+  it("§0.0 文档基线与 §0.4 版本切换说明在正文中可见且有内容", async () => {
+    renderRealHandbook();
+    const article = await waitForHandbookBody();
+
+    const baselineId = realHandbookToc.find((item) => /文档基线/.test(item.title))?.id;
+    const cutoverId = realHandbookToc.find((item) =>
+      /(版本切换|切线)/.test(item.title)
+    )?.id;
+    expect(baselineId, "§0.0 文档基线未出现在服务端 TOC").toBeTruthy();
+    expect(cutoverId, "§0.4 版本切换说明未出现在服务端 TOC").toBeTruthy();
+
+    const baseline = document.getElementById(baselineId as string);
+    const cutover = document.getElementById(cutoverId as string);
+    expect(baseline, "§0.0 文档基线没有正文落点").toBeInTheDocument();
+    expect(cutover, "§0.4 版本切换说明没有正文落点").toBeInTheDocument();
+    expect(baseline?.textContent ?? "").toContain("产品版本");
+    expect(baseline?.textContent ?? "").toContain("2.0.0");
+    expect(cutover?.textContent ?? "").toContain("2.0.0");
+
+    // 手写「目录」标题本身不进入正文（侧栏已承担目录职责）。
+    expect(within(article).queryByRole("heading", { name: "目录" })).not.toBeInTheDocument();
+  });
+
+  it("正文内每个 #锚点 都能解析到真实 DOM id", async () => {
+    renderRealHandbook();
+    const article = await waitForHandbookBody();
+    await waitFor(() => {
+      expect(article.querySelector("a[href^='#']")).toBeTruthy();
+    });
+
+    const anchors = Array.from(article.querySelectorAll<HTMLAnchorElement>("a[href^='#']"));
+    const dead = anchors
+      .map((anchor) => (anchor.getAttribute("href") ?? "").replace(/^#/, ""))
+      .filter((id) => id.length > 0 && !document.getElementById(id));
+    expect([...new Set(dead)], `正文死锚点: ${[...new Set(dead)].join(", ")}`).toEqual([]);
+  });
+
+  it("「MCP 调试台」正文只出现一次", async () => {
+    renderRealHandbook();
+    const article = await waitForHandbookBody();
+
+    // 孤儿副本曾经把「MCP 调试台」正文整段并进上一节；用正文特征串计数。
+    for (const marker of ["调试台是 Agent 接入后的", "两条路径的边界"]) {
+      const copies = Array.from(article.querySelectorAll("p")).filter((node) =>
+        (node.textContent ?? "").includes(marker)
+      );
+      expect(copies.length, `「MCP 调试台」正文重复出现: ${marker}`).toBe(1);
+    }
+    expect(
+      within(article).getAllByRole("heading", { name: "MCP 调试台（/admin/mcp-playground）" })
+        .length
+    ).toBe(1);
+  });
+
+  it("旧 section id 能解析成当前 section 并滚动过去", async () => {
+    const mapped = LEGACY_SECTION_IDS["deployment-checklist"] as string;
+    const scrolled = trackScrolledSections();
+    flushRequestAnimationFrame();
+
+    renderRealHandbook("/help?section=deployment-checklist", {
+      legacySectionMap: { ...LEGACY_SECTION_IDS }
+    });
+
+    await waitFor(() => {
+      expect(scrolled.length).toBeGreaterThan(0);
+    });
+    expect(scrolled).toEqual([mapped]);
+    expect(document.getElementById(mapped)).toBeInTheDocument();
+
+    // 解析后的 id 同时用于侧栏高亮（aria-current）。
+    const tocNav = await screen.findByLabelText("系统手册目录");
+    const activeLink = within(tocNav).getByRole("link", {
+      name: "运行状态 · 系统概览与上线检查"
+    });
+    expect(activeLink).toHaveAttribute("aria-current", "location");
+    expect(activeLink).toHaveAttribute("href", `/help?section=${mapped}`);
+  });
+
+  it("旧短码 id（§0.0 / §0.4 的历史 sha1 id）同样能解析并滚动", async () => {
+    const scrolled = trackScrolledSections();
+    flushRequestAnimationFrame();
+
+    renderRealHandbook("/help?section=b9c274fb1c", {
+      legacySectionMap: { ...LEGACY_SECTION_IDS }
+    });
+
+    await waitFor(() => {
+      expect(scrolled.length).toBeGreaterThan(0);
+    });
+    expect(scrolled).toEqual([LEGACY_SECTION_IDS["b9c274fb1c"]]);
+    expect(document.getElementById(LEGACY_SECTION_IDS["b9c274fb1c"] as string)).toBeInTheDocument();
+  });
+
+  it("未知 section id 不滚动也不报错", async () => {
+    const scrolled = trackScrolledSections();
+    flushRequestAnimationFrame();
+
+    renderRealHandbook("/help?section=does-not-exist");
+
+    expect(await screen.findByRole("heading", { name: "系统手册" })).toBeInTheDocument();
+    expect(screen.queryByText("系统手册加载失败。")).not.toBeInTheDocument();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(scrolled).toEqual([]);
+  });
+});
+
+// ─── 手写「目录」块回归 ──────────────────────────────────────────────────────
+//
+// 真实手册已经删掉手写「目录」，但未来手册仍可能带它。前端必须只剥掉「目录」
+// 标题与它的链接列表，停在下一个同级（H2）/ 同级子节（H3）标题——不能把
+// 「目录」之后排在前面的 H3 正文（历史版本的 §0.0 / §0.4）整段吞掉。
+
+const HANDBOOK_WITH_TOC_MARKDOWN = [
+  "# Project Lucy 系统使用与运维手册",
+  "",
+  "| 项 | 内容 |",
+  "| --- | --- |",
+  "| 文档类型 | System Handbook |",
+  "",
+  "## 目录",
+  "",
+  "- [0. 常见问题速查](#0-常见问题速查)",
+  "  - [0.0 文档基线（自动同步）](#00-文档基线自动同步)",
+  "",
+  "### 0.0 文档基线（自动同步）",
+  "",
+  "基线内容：产品版本 2.0.0。",
+  "",
+  "## 0. 常见问题速查",
+  "",
+  "常见问题正文。"
+].join("\n");
+
+describe("HelpCenter · 手写「目录」块", () => {
+  it("剥掉「目录」标题与链接列表，但保留学目录之后的 H3 正文", async () => {
+    const markdown = HANDBOOK_WITH_TOC_MARKDOWN;
+    renderHandbook("/help", { toc: parseHelpToc(markdown), markdown });
+    const article = await waitForHandbookBody();
+
+    // 「目录」标题与它的链接列表都不进正文。
+    expect(within(article).queryByRole("heading", { name: "目录" })).not.toBeInTheDocument();
+    expect(within(article).queryByRole("link", { name: /常见问题速查/ })).not.toBeInTheDocument();
+
+    // 「目录」之后的 H3 正文必须可见（历史缺陷：整段被吞）。
+    const baselineId = parseHelpToc(markdown).find((item) =>
+      /文档基线/.test(item.title)
+    )?.id;
+    expect(baselineId).toBeTruthy();
+    const baseline = document.getElementById(baselineId as string);
+    expect(baseline, "「目录」之后的 H3 正文没有落点").toBeInTheDocument();
+    expect(baseline?.textContent ?? "").toContain("基线内容：产品版本 2.0.0。");
+  });
+
+  it("侧栏不再保留指向被剥掉的「目录」的入口", async () => {
+    const markdown = HANDBOOK_WITH_TOC_MARKDOWN;
+    renderHandbook("/help", { toc: parseHelpToc(markdown), markdown });
+    await waitForHandbookBody();
+
+    const tocNav = await screen.findByLabelText("系统手册目录");
+    expect(within(tocNav).queryByRole("link", { name: "目录" })).not.toBeInTheDocument();
+
+    // 侧栏里每一条入口都必须有正文落点。
+    const sectionHrefs = within(tocNav)
+      .getAllByRole("link")
+      .map((link) => link.getAttribute("href") ?? "")
+      .filter((href) => href.startsWith("/help?section="));
+    expect(sectionHrefs.length).toBeGreaterThan(0);
+    sectionHrefs.forEach((href) => {
+      const id = new URL(href, "http://localhost").searchParams.get("section") ?? "";
+      expect(document.getElementById(id), `侧栏死链: ${href}`).toBeTruthy();
+    });
   });
 });

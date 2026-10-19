@@ -21,134 +21,182 @@ const HELP_DIAGRAM_REL_PATHS: Record<HelpDiagramId, string> = {
   "lucy-docs-flows": "docs/user-guide/lucy-docs-flows.html"
 };
 
-// NOTE (Day 2, 2026-10-19): `docs/SYSTEM_HANDBOOK.md` §3 was reorganized by
-// sidebar group — 13 → 12 subsections; old §3.9 merged into §3.3. Renamed H3
-// titles regenerate their slug via `stableSlug`; pre-Day-2 slugs kept in the
-// `SECTION_ALIASES` table below stay valid (no alias churn for unchanged H4
-// children). See `docs/README.md` redirect map if a legacy slug needs to be
-// resurfaced.
-const SECTION_ALIASES: Array<[RegExp, string]> = [
-  [/常见问题速查/, "faq-quick-reference"],
-  [/面向开发者/, "faq-developer"],
-  [/面向管理员/, "faq-admin"],
-  [/面向接入协作者|面向接入 Agent 的协作者|接入 Agent 的协作者/, "faq-agent-integration"],
-  [/系统概述与架构拓扑/, "system-overview"],
-  [/产品架构图/, "product-architecture-diagrams"],
-  [/快速上手/, "quick-start"],
-  [/部署向导与上线检查/, "deployment-checklist"],
-  [/系统概览待处理事项/, "overview-action-required"],
-  [/数据库接入/, "database-connections"],
-  [/WebUI 与 ktx\.yaml 的职责边界|职责边界|WebUI Boundary/i, "database-connection-boundary"],
-  [/连接形态与配置字段|Connection Shape/i, "database-connection-shapes"],
-  [/新增数据库连接（运维 Runbook）|Database Connection Operations/i, "database-connection-operations-runbook"],
-  [/Agent 可见性与 ACL 同步|ACL 同步/i, "database-connection-acl-sync"],
-  [/表白名单/, "table-whitelist"],
-  [/刷新本地目录|静态 Catalog reload|Catalog Reload|Reload Catalog/i, "catalog-reload"],
-  [/连接概览指标说明/, "connection-overview-metrics"],
-  [/语义层维护/, "semantic-layer"],
-  [/语义状态与启用表范围状态/, "semantic-status-and-enabled-status"],
-  [/为什么要编写语义 YAML|编写语义 YAML/, "semantic-yaml-why"],
-  [/推荐编写工作流|语义编写工作流/, "semantic-authoring-workflow"],
-  [/grain、join 与 fanout|grain.*fanout/i, "semantic-grain-fanout"],
-  [/^overlay 常见字段速查$/, "semantic-overlay-fields"],
-  [/KTX 官方延伸阅读/, "ktx-further-reading"],
-  [/表目录/, "semantic-catalog"],
-  [/表语义编辑|Human vs AI/, "semantic-table-editor"],
-  [/关联关系|Joins/i, "semantic-joins"],
-  [/业务文档 Wiki|业务 Wiki/, "business-wiki"],
-  [/访问治理 Admin/, "admin-governance"],
-  [/什么时候配置角色、Agent 和 Token|Role \/ Agent \/ Token 怎么选/, "admin-role-agent-token-guide"],
-  [/问询记录与调用流水怎么选|问询.*调用流水/, "admin-audit-turns-vs-calls"],
-  [/^WebUI 管理员登录$/, "admin-webui-login"],
-  [/break-glass|管理员账号或密码/i, "admin-break-glass"],
-  [/^Agent$/, "admin-agents"],
-  [/Role 权限模板|角色配置/, "admin-roles"],
-  [/Bearer Token|Token 发行/, "admin-tokens"],
-  [/热库与冷库|SQL 留存边界/, "admin-audit-hot-cold-store"],
-  [/MCP 访问日志|问题簇|审计/, "admin-audit"],
-  [/业务 Skill 治理工作台/, "business-skill-workbench"],
-  // H3「语义资产范围树」不配 alias，让 H4 独占该 slug：H4 是真正的操作指引，
-  // 深链指向父级章节会跳过内容。若两者都需要稳定 id，须给 H3 单独一条更精确的规则。
-  [/^语义资产范围树（连接与 Schema）$/, "semantic-asset-scope-tree"],
-  [/^角色列表与筛选$/, "admin-role-list"],
-  [/^接入向导六步流程$/, "onboarding-setup-assistant"],
-  [/^行级策略（行授予与最终行约束）$/, "row-policy"],
-  [/^MCP 会话保持与上游连接归属$/, "mcp-upstream-session"],
-  [/质量评测 Eval/, "eval"],
-  [/Eval Case|Case 维护/, "eval-cases"],
-  [/Run 试跑|运行历史/, "eval-runs"],
-  [/趋势监控/, "eval-monitor"],
-  [/YAML 文件规范与交付验收|YAML Delivery/i, "yaml-delivery-runbook"],
-  [/配置作者 Skills/, "config-author-skills"],
-  [/^overlay 字段速查（编写辅导）$/, "yaml-overlay-field-guide"],
-  [/YAML 类型总览/, "yaml-type-overview"],
-  [/Schema manifest 规范|Schema Manifest/i, "yaml-schema-manifest"],
-  [/Manifest augmentation overlay|Augmentation Overlay|Overlay 规范/i, "yaml-augmentation-overlay"],
-  [/New semantic source 规范|New Semantic Source/i, "yaml-new-semantic-source"],
-  [/描述字段规范/, "yaml-description-fields"],
-  [/GO \/ NO-GO|交付 checklist|交付验收/i, "yaml-delivery-checklist"],
-  [/常见错误与修复|常见错误与诊断|诊断 Runbook/i, "yaml-common-errors"],
-  [/Agent 自检协议/, "yaml-agent-self-check"],
-  [/Agent \/ 客户端接入指南|MCP Integration Guide/, "mcp-integration"],
-  [/配置与环境变量速查/, "configuration-reference"],
-  [/FAQ 与排障指南/, "troubleshooting"],
-  [/MCP 返回 401/, "mcp-401"],
-  [/KTX upstream 不可用/, "ktx-upstream-unavailable"],
-  [/安全边界速查/, "security-boundaries"],
-  [/最小健康检查清单/, "health-checklist"],
-  [/No join path|跨表失败/, "lucy-query-no-join-path"],
-  [/fanout|Aggregate locality/, "lucy-query-fanout-locality"],
-  [/order_by.*排序无效|排序无效或排反/, "lucy-query-order-by"],
-  [/复杂分析题|Eval 对不上 gold|对不上 gold/, "eval-semantic-vs-gold"],
-  [/MCP 仍旧|reindex 失败/, "manifest-wiki-reindex-sync"],
-  [/审阅|校验/, "review-validate"],
-  [/WebUI 入口速查/, "webui-entry-map"]
-];
+/**
+ * Section id 契约表：**精确标题 → 稳定 id**。
+ *
+ * 键是「去掉前导编号后的标题」（`cleanSectionTitle()` 的结果），值是稳定 id。
+ *
+ * 为什么不用正则表：正则会同时命中多个标题，章节一改名就静默漂移——评审
+ * 报告记录了 18 条再也匹配不到任何标题的死别名。改成精确查表后，「契约表
+ * 与手册正文不一致」会变成一条可测的失败，而不是无声的 id 漂移。
+ *
+ * 未命中契约表时回落到 `stableSlug()`（保留 sha1 兜底防 id 冲突）。手册里
+ * 每个章节标题都应登记在表内——门禁见 `server/__tests__/help.test.ts`。
+ */
+export const SECTION_ID_CONTRACT = new Map<string, string>([
+  // ---- H2 ----
+  ["常见问题速查", "faq-quick-reference"],
+  ["系统概述与架构拓扑", "system-overview"],
+  ["快速上手", "quick-start"],
+  ["功能模块操作指南", "functional-modules"],
+  ["Agent / 客户端接入指南", "mcp-integration"],
+  ["配置与环境变量速查", "configuration-reference"],
+  ["FAQ 与排障指南", "troubleshooting"],
 
-const DATABASE_OPS_HEADING_TITLES = new Set([
-  "WebUI 与 ktx.yaml 的职责边界",
-  "刷新本地目录",
-  "连接概览指标说明",
-  "连接形态与配置字段",
-  "新增数据库连接（运维 Runbook）",
-  "Agent 可见性与 ACL 同步"
+  // ---- H3 ----
+  ["文档基线（自动同步）", "handbook-baseline"],
+  ["v2.0.0 版本切换说明", "product-version-cutover"],
+  ["面向开发者", "faq-developer"],
+  ["面向管理员", "faq-admin"],
+  ["面向接入协作者", "faq-agent-integration"],
+  ["Lucy 是什么", "lucy"],
+  ["架构拓扑", "architecture-topology"],
+  ["核心原则", "core-principles"],
+  ["目录与事实源地图", "source-of-truth-map"],
+  ["WebUI 入口速查（运行状态侧栏地图）", "webui-entry-map"],
+  ["产品架构图（摄取与服务）", "product-architecture-diagrams"],
+  ["环境要求", "environment-requirements"],
+  ["本地启动", "local-startup"],
+  ["最小配置流程", "minimal-setup"],
+  ["运行状态 · 系统概览与上线检查", "runtime-status-checklist"],
+  ["数据接入 · 连接 / Schema / 表范围", "data-access-connections"],
+  ["业务上下文 · 语义层", "semantic-layer"],
+  ["业务上下文 · Wiki", "business-wiki"],
+  ["访问治理 · 角色 / Agent / Token", "access-governance"],
+  ["质量评测", "quality-evaluation"],
+  ["YAML 规范与交付验收", "yaml-delivery-standard"],
+  ["访问治理 · 角色列表与权限预览", "role-list-preview"],
+  ["接入向导", "onboarding-guide"],
+  ["访问治理 · 行级策略", "row-level-policy"],
+  ["访问治理 · MCP 会话与上游连接", "mcp-session-upstream"],
+  ["业务上下文 · 业务 Skill", "business-skill"],
+  ["接入地址", "mcp-endpoint"],
+  ["Codex / Claude Code `.mcp.json`", "codex-claude-code-mcp-json"],
+  ["Hermes / 通用 HTTP MCP client", "hermes-http-mcp-client"],
+  ["可用工具面", "available-tools"],
+  ["`webui/config/access.yaml`", "webui-config-access-yaml"],
+  ["`ktx.yaml`", "ktx-yaml"],
+  ["环境变量", "environment-variables"],
+  ["为什么提示“未发现本地 manifest”？", "manifest"],
+  ["JSON-RPC `Access denied` / `decision_reason` 怎么查？", "json-rpc-access-denied-decision-reason"],
+  ["配置文件改动后什么时候生效？", "config-change-effective-timeline"],
+  ["WebUI 页面打不开", "webui"],
+  ["MCP 返回 401", "mcp-401"],
+  ["KTX upstream 不可用", "ktx-upstream-unavailable"],
+  ["为什么启用表范围保存失败？", "enabled-tables-save-failure"],
+  ["安全边界速查", "security-boundaries"],
+  ["最小健康检查清单", "health-checklist"],
+  ["`lucy_query` 报 No join path / 跨表失败", "lucy-query-no-join-path"],
+  ["fanout / Aggregate locality 拒绝查询", "lucy-query-fanout-locality"],
+  ["`order_by` 排序无效或排反", "lucy-query-order-by"],
+  ["语义查询答不出复杂分析题，或 Eval 对不上 gold", "eval-semantic-vs-gold"],
+  ["改了 Manifest / Wiki，MCP 仍旧或 reindex 失败", "manifest-wiki-reindex-sync"],
+
+  // ---- H4 ----
+  ["系统概览待处理事项", "overview-action-required"],
+  ["刷新本地目录", "catalog-reload"],
+  ["连接概览指标说明", "connection-overview-metrics"],
+  ["WebUI 与 ktx.yaml 的职责边界", "database-connection-boundary"],
+  ["连接形态与配置字段", "database-connection-shapes"],
+  ["新增数据库连接（运维 Runbook）", "database-connection-operations-runbook"],
+  ["Agent 可见性与 ACL 同步", "database-connection-acl-sync"],
+  ["语义状态与启用表范围状态", "semantic-status-and-enabled-status"],
+  ["为什么要编写语义 YAML", "semantic-yaml-why"],
+  ["推荐编写工作流", "semantic-authoring-workflow"],
+  ["grain、join 与 fanout", "semantic-grain-fanout"],
+  ["overlay 常见字段速查", "semantic-overlay-fields"],
+  ["KTX 官方延伸阅读", "ktx-further-reading"],
+  ["语义资产范围树（连接与 Schema）", "semantic-asset-scope-tree"],
+  ["什么时候配置角色、Agent 和 Token", "admin-role-agent-token-guide"],
+  ["问询记录与调用流水怎么选、怎么导出", "admin-audit-turns-vs-calls"],
+  ["WebUI 管理员登录", "admin-webui-login"],
+  ["丢失管理员账号或密码时如何恢复（break-glass）", "admin-break-glass"],
+  ["Role-first 模型", "role-first-model"],
+  ["Token 发行规则", "token-issuance-policy"],
+  ["权限裁决机制", "permission-decision-flow"],
+  ["问题簇审计", "question-cluster-audit"],
+  ["审计热库与冷库（SQL 留存边界）", "admin-audit-hot-cold-store"],
+  ["配置作者 Skills", "config-author-skills"],
+  ["角色列表与筛选", "admin-role-list"],
+  ["接入向导六步流程", "onboarding-setup-assistant"],
+  ["行级策略（行授予与最终行约束）", "row-policy"],
+  ["MCP 会话保持与上游连接归属", "mcp-upstream-session"],
+  ["业务 Skill 治理工作台", "business-skill-workbench"],
+  ["overlay 字段速查（编写辅导）", "yaml-overlay-field-guide"],
+  ["YAML 类型总览", "yaml-type-overview"],
+  ["Schema manifest 规范", "yaml-schema-manifest"],
+  ["Manifest augmentation overlay 规范", "yaml-augmentation-overlay"],
+  ["New semantic source 规范", "yaml-new-semantic-source"],
+  ["描述字段规范", "yaml-description-fields"],
+  ["GO / NO-GO 交付 checklist", "yaml-go-no-go-checklist"],
+  ["常见错误与诊断 Runbook", "yaml-common-errors"],
+  ["Agent 自检协议", "yaml-agent-self-check"],
+  ["调用监控（/ops/calls）", "call-monitor"],
+  ["Token 凭据（/admin/tokens）", "agent-tokens"],
+  ["MCP 调试台（/admin/mcp-playground）", "mcp-playground"],
+  ["现场提问（/eval/field-questions）", "field-questions"],
+  ["安全评测候选（/eval/security-candidates）", "security-candidates"],
+  ["接入向导六步流程（按实现映射）", "onboarding-steps-implementation"],
+  ["与各工作台的双轨关系", "onboarding-workbench-relation"],
+  ["配置 MCP endpoint", "onboarding-mcp-endpoint"],
+  ["客户端为何要回传 `Mcp-Session-Id`", "mcp-session-id"],
+  ["上游会话复用与限流", "upstream-session-reuse"],
+  ["排障速查", "mcp-session-troubleshooting"],
+  ["先建立三层对象关系", "role-agent-token-overview"],
+  ["什么时候该配角色", "when-to-configure-role"],
+  ["什么时候该配 Agent", "when-to-configure-agent"],
+  ["什么时候该配 Token", "when-to-configure-token"],
+  ["场景速查", "role-agent-token-scenarios"],
+  ["推荐操作顺序", "role-agent-token-order"],
+  ["常见误区", "role-agent-token-pitfalls"],
+  ["签发", "token-issuance"],
+  ["吊销", "token-revocation"],
+  ["复制 MCP 配置", "token-mcp-config-copy"],
+  ["边界与常见误用", "token-boundaries"]
 ]);
+
+/**
+ * 旧 section id → 新 section id，供 `/help?section=<旧 id>` 深链重定向。
+ *
+ * 只收录**曾经真实分配给某个章节**的旧 id；匹配不到任何标题的纯死别名不收
+ * （收进来只会在重定向时把用户带到不存在的章节）。与契约表同名的条目
+ * （`semantic-layer` / `business-wiki`）必须自映射——它们既是旧 id，也是现行 id。
+ */
+export const LEGACY_SECTION_IDS: Record<string, string> = {
+  "deployment-checklist": "runtime-status-checklist",
+  "database-connections": "data-access-connections",
+  "schema": "data-access-connections",
+  "semantic-layer": "semantic-layer",
+  "wiki": "business-wiki",
+  "business-wiki": "business-wiki",
+  "agent-token": "access-governance",
+  "admin-governance": "access-governance",
+  "eval": "quality-evaluation",
+  "yaml-delivery-runbook": "yaml-delivery-standard",
+  "yaml-delivery-checklist": "yaml-delivery-standard",
+  "yaml-delivery-checklist-2": "yaml-go-no-go-checklist",
+  "mcp": "mcp-session-upstream",
+  "skill": "business-skill",
+  "admin-audit": "admin-audit-turns-vs-calls",
+  "b9c274fb1c": "handbook-baseline",
+  "v2-0-0": "product-version-cutover"
+};
+
+/** 把旧 section id 重定向到现行 id；未登记的旧 id 原样返回。 */
+export function resolveLegacySectionId(sectionId: string): string {
+  if (!Object.hasOwn(LEGACY_SECTION_IDS, sectionId)) return sectionId;
+  return LEGACY_SECTION_IDS[sectionId] ?? sectionId;
+}
+
+/**
+ * 显式排除标记：紧邻标题上一行的 `<!-- toc:exclude -->` 会让该标题不进目录。
+ * 手册目前未使用该语法，但机制必须存在——H4 现在默认放行，需要一条退出通道。
+ */
+const TOC_EXCLUDE_MARKER = "<!-- toc:exclude -->";
 
 const HELP_SEARCH_QUERY_MAX = 80;
 const HELP_SEARCH_DEFAULT_LIMIT = 20;
 const HELP_SEARCH_SNIPPET_RADIUS = 72;
-
-const DEPLOYMENT_CHECKLIST_HEADING_TITLES = new Set(["系统概览待处理事项"]);
-
-const ADMIN_GOVERNANCE_HEADING_TITLES = new Set([
-  "什么时候配置角色、Agent 和 Token",
-  "问询记录与调用流水怎么选、怎么导出",
-  "WebUI 管理员登录",
-  "丢失管理员账号或密码时如何恢复（break-glass）",
-  "审计热库与冷库（SQL 留存边界）"
-]);
-
-const SEMANTIC_AUTHORING_HEADING_TITLES = new Set([
-  "语义状态与启用表范围状态",
-  "为什么要编写语义 YAML",
-  "推荐编写工作流",
-  "grain、join 与 fanout",
-  "overlay 常见字段速查",
-  "KTX 官方延伸阅读"
-]);
-
-const YAML_DELIVERY_EXTRA_HEADING_TITLES = new Set(["配置作者 Skills"]);
-
-// Spec 153 / 152 的 H4 章节。放行规则与既有集合保持一致：只有登记在册的
-// level-4 标题才进入 TOC，避免把手册内部的实现细节标题也暴露到侧栏。
-const CONTEXT_ASSET_HEADING_TITLES = new Set([
-  "业务 Skill 治理工作台",
-  "语义资产范围树（连接与 Schema）",
-  "角色列表与筛选",
-  "接入向导六步流程",
-  "行级策略（行授予与最终行约束）",
-  "MCP 会话保持与上游连接归属"
-]);
 
 export type HelpTocItem = {
   id: string;
@@ -163,6 +211,8 @@ export type HelpHandbook = {
   updatedAt: string;
   etag: string;
   toc: HelpTocItem[];
+  /** 旧 section id → 现行 section id，供前端重定向历史深链。 */
+  legacySectionMap: Record<string, string>;
   markdown: string;
 };
 
@@ -297,10 +347,17 @@ function stableSlug(title: string): string {
   return createHash("sha1").update(title).digest("hex").slice(0, 10);
 }
 
+/**
+ * 去掉标题的前导章节编号（`3.7.1 YAML 类型总览` → `YAML 类型总览`）。
+ * 契约表的键就是它的结果。
+ */
+export function cleanSectionTitle(title: string): string {
+  return title.replace(/^\d+(?:\.\d+)*\.?\s*/, "").trim();
+}
+
 function sectionIdFor(title: string): string {
-  const cleanTitle = title.replace(/^\d+(?:\.\d+)*\s*/, "").trim();
-  const alias = SECTION_ALIASES.find(([pattern]) => pattern.test(cleanTitle));
-  return alias?.[1] ?? stableSlug(cleanTitle);
+  const cleanTitle = cleanSectionTitle(title);
+  return SECTION_ID_CONTRACT.get(cleanTitle) ?? stableSlug(cleanTitle);
 }
 
 function dedupeId(base: string, used: Map<string, number>): string {
@@ -313,48 +370,35 @@ export function parseHelpToc(markdown: string): HelpTocItem[] {
   const used = new Map<string, number>();
   const items: HelpTocItem[] = [];
   let inFence = false;
+  let excludeNextHeading = false;
   for (const line of markdown.split(/\r?\n/)) {
     if (FENCE_RE.test(line.trim())) {
       inFence = !inFence;
       continue;
     }
     if (inFence) continue;
+    if (line.trim() === TOC_EXCLUDE_MARKER) {
+      // 标记只对**紧邻的下一行**生效：中间插入任何其它行都会打断这个邻接关系。
+      excludeNextHeading = true;
+      continue;
+    }
     const match = line.match(HEADING_RE);
+    if (!match) {
+      excludeNextHeading = false;
+      continue;
+    }
     const rawLevel = match?.[1]?.length ?? 1;
     const title = (match?.[2] ?? "").trim();
-    const yamlRunbookSubheading = rawLevel === 4 && /^3\.7\.\d+/.test(title);
-    const cleanTitle = title.replace(/^\d+(?:\.\d+)*\.?\s*/, "").trim();
-    const databaseOpsSubheading = rawLevel === 4 && DATABASE_OPS_HEADING_TITLES.has(cleanTitle);
-    const deploymentChecklistSubheading =
-      rawLevel === 4 && DEPLOYMENT_CHECKLIST_HEADING_TITLES.has(cleanTitle);
-    const adminGovernanceSubheading =
-      rawLevel === 4 && ADMIN_GOVERNANCE_HEADING_TITLES.has(cleanTitle);
-    const semanticAuthoringSubheading =
-      rawLevel === 4 && SEMANTIC_AUTHORING_HEADING_TITLES.has(cleanTitle);
-    const yamlDeliveryExtraSubheading =
-      rawLevel === 4 && YAML_DELIVERY_EXTRA_HEADING_TITLES.has(cleanTitle);
-    const contextAssetSubheading =
-      rawLevel === 4 && CONTEXT_ASSET_HEADING_TITLES.has(cleanTitle);
-    if (
-      !match ||
-      rawLevel < 2 ||
-      (rawLevel > 3 &&
-        !yamlRunbookSubheading &&
-        !databaseOpsSubheading &&
-        !deploymentChecklistSubheading &&
-        !adminGovernanceSubheading &&
-        !semanticAuthoringSubheading &&
-        !yamlDeliveryExtraSubheading &&
-        !contextAssetSubheading)
-    )
+    if (excludeNextHeading) {
+      excludeNextHeading = false;
       continue;
-    // 3.7.x 子标题为兼容性保留 level 3；3.2.x 运维 Runbook 子标题按真实 level 4 输出。
-    const level: 2 | 3 | 4 = yamlRunbookSubheading
-      ? (Math.min(rawLevel, 3) as 2 | 3)
-      : (rawLevel as 2 | 3 | 4);
+    }
+    // H2–H4 进目录。H1 是手册标题；H5 及更深是章节内部的实施步骤，
+    // 进目录会把侧栏撑成流程清单。需要排除时用 `<!-- toc:exclude -->`。
+    if (rawLevel < 2 || rawLevel > 4) continue;
     items.push({
       id: dedupeId(sectionIdFor(title), used),
-      level,
+      level: rawLevel as 2 | 3 | 4,
       title
     });
   }
@@ -395,6 +439,7 @@ export async function readHelpHandbook(appRoot = resolveHelpAppRoot()): Promise<
     updatedAt: info.mtime.toISOString(),
     etag: `sha256:${hash}`,
     toc: parseHelpToc(markdown),
+    legacySectionMap: { ...LEGACY_SECTION_IDS },
     markdown
   };
 }

@@ -136,11 +136,38 @@ function stripLeadingHandbookPreface(markdown: string): string {
 
   if (/^##\s+目录\s*#*\s*$/.test(lines[i] ?? "")) {
     i++;
-    while (i < lines.length && !/^##\s+/.test(lines[i] ?? "")) i++;
+    // The hand-authored 「目录」 block only repeats the sidebar navigation.
+    // Its body ends at the next peer heading: an H2 starts the next chapter,
+    // an H3 starts a real sub-section that follows the misplaced 「目录」
+    // heading (e.g. §0.0 文档基线 / §0.4 版本切换说明). Deeper headings still
+    // belong to the 「目录」 block and are skipped with it.
+    while (i < lines.length && !isHelpPeerHeading(lines[i] ?? "")) i++;
     while (i < lines.length && (lines[i] ?? "").trim() === "") i++;
   }
 
   return lines.slice(i).join("\n");
+}
+
+/** H2 / H3 heading — the level at which handbook content sections start. */
+function isHelpPeerHeading(line: string): boolean {
+  return /^#{2,3}\s+\S/.test(line);
+}
+
+/**
+ * Map a `?section=` value onto the section id that actually exists today.
+ * A live TOC id always wins; otherwise the server supplied legacy map is
+ * consulted; an unknown id is kept as-is (no scroll, no error).
+ */
+function resolveHelpSectionId(
+  rawId: string,
+  toc: HelpTocItem[],
+  legacySectionMap?: Record<string, string>
+): string {
+  if (!rawId) return rawId;
+  if (toc.some((item) => item.id === rawId)) return rawId;
+  const mapped = legacySectionMap?.[rawId];
+  if (mapped && toc.some((item) => item.id === mapped)) return mapped;
+  return rawId;
 }
 
 function visibleHelpTocItems(toc: HelpTocItem[], activeSection: string): HelpTocItem[] {
@@ -239,21 +266,37 @@ export function HelpCenter() {
         : [],
     [handbookQuery.data]
   );
-  const visibleToc = useMemo(
-    () => (handbookQuery.data ? visibleHelpTocItems(handbookQuery.data.toc, activeSection) : []),
+  // The URL keeps the requested (possibly legacy) section id; the resolved
+  // id is what the DOM actually contains.
+  const resolvedSection = useMemo(
+    () =>
+      resolveHelpSectionId(
+        activeSection,
+        handbookQuery.data?.toc ?? [],
+        handbookQuery.data?.legacySectionMap
+      ),
     [activeSection, handbookQuery.data]
   );
+  const visibleToc = useMemo(() => {
+    if (!handbookQuery.data) return [];
+    const rendered = new Set(sections.map((section) => section.id));
+    // A TOC entry without a rendered section would be a dead sidebar link
+    // (e.g. the hand-written 「目录」 block, which the article strips).
+    return visibleHelpTocItems(handbookQuery.data.toc, resolvedSection).filter((item) =>
+      rendered.has(item.id)
+    );
+  }, [resolvedSection, sections, handbookQuery.data]);
 
   useEffect(() => {
-    if (!activeSection || sections.length === 0 || activeQuery) return;
+    if (!resolvedSection || sections.length === 0 || activeQuery) return;
     const frame = window.requestAnimationFrame(() => {
-      document.getElementById(activeSection)?.scrollIntoView({
+      document.getElementById(resolvedSection)?.scrollIntoView({
         behavior: "smooth",
         block: "start"
       });
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [activeSection, sections.length, activeQuery]);
+  }, [resolvedSection, sections.length, activeQuery]);
 
   function commitSearch(nextQuery: string) {
     const trimmed = nextQuery.trim();
@@ -336,7 +379,7 @@ export function HelpCenter() {
           <nav className="grid gap-1">
             {visibleToc.map((item) => (
               <Link
-                aria-current={activeSection === item.id ? "location" : undefined}
+                aria-current={resolvedSection === item.id ? "location" : undefined}
                 className={`pl-help-toc-link pl-help-toc-link--level-${item.level}`}
                 key={item.id}
                 to={sectionHref(item.id, activeQuery || undefined)}
