@@ -15,6 +15,7 @@ export function LoginPage() {
   const [bootstrapToken, setBootstrapToken] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [passwordVisible, setPasswordVisible] = useState(false);
   const productTitle = branding?.productTitle ?? "Lucy WebUI";
   const tagline = branding?.tagline ?? "可信 Agent 数据层";
   const logoUrl = branding?.logoUrl ?? null;
@@ -62,9 +63,7 @@ export function LoginPage() {
               </span>
             </div>
           </div>
-          <h1 className="text-xl font-semibold">
-            {isBootstrap ? "创建首个所有者" : "登录"}
-          </h1>
+          {isBootstrap && <h1 className="text-xl font-semibold">创建首个所有者</h1>}
           {isBootstrap && (
             <p className="text-sm text-fg-muted">
               当前实例要求登录。请创建首个所有者账户；之后可在「登录账户」页添加运维人员，负责连接、语义、<span className="notranslate" translate="no">Eval</span> 与 <span className="notranslate" translate="no">Agent Role</span> 等日常工作。
@@ -78,16 +77,16 @@ export function LoginPage() {
           </p>
         )}
 
-        <form className="grid gap-3" onSubmit={onSubmit} hidden={configUnavailable}>
+        <form className="grid gap-4" onSubmit={onSubmit} hidden={configUnavailable}>
           <label className="grid gap-1">
             <span className="text-sm font-medium">登录账户</span>
             <input
-              className="pl-input notranslate"
+              className="pl-input min-h-11 notranslate"
               translate="no"
               autoComplete="username"
               value={adminId}
               onChange={(e) => setAdminId(e.target.value)}
-              placeholder="请输入登录账户"
+              placeholder="例：lucy"
               required
             />
           </label>
@@ -95,7 +94,7 @@ export function LoginPage() {
             <label className="grid gap-1">
               <span className="text-sm font-medium">引导密钥</span>
               <input
-                className="pl-input"
+                className="pl-input min-h-11"
                 type="password"
                 autoComplete="off"
                 value={bootstrapToken}
@@ -112,39 +111,52 @@ export function LoginPage() {
             <label className="grid gap-1">
               <span className="text-sm font-medium">显示名（可选）</span>
               <input
-                className="pl-input"
+                className="pl-input min-h-11"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 placeholder="例：星尘"
               />
             </label>
           )}
-          <label className="grid gap-1">
-            <span className="text-sm font-medium">密码</span>
-            <input
-              className="pl-input"
-              type="password"
-              autoComplete={isBootstrap ? "new-password" : "current-password"}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={10}
-            />
+          <div className="grid gap-1">
+            <label className="text-sm font-medium" htmlFor="login-password">密码</label>
+            <div className="relative">
+              <input
+                id="login-password"
+                className="pl-input min-h-11 pr-11"
+                type={passwordVisible ? "text" : "password"}
+                autoComplete={isBootstrap ? "new-password" : "current-password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={10}
+              />
+              <button
+                type="button"
+                className="absolute inset-y-0 right-0 inline-flex w-11 items-center justify-center text-fg-muted hover:text-fg-default"
+                aria-label={passwordVisible ? "隐藏密码" : "显示密码"}
+                aria-pressed={passwordVisible}
+                data-testid="login-password-toggle"
+                onClick={() => setPasswordVisible((visible) => !visible)}
+              >
+                {passwordVisible ? <EyeOffIcon /> : <EyeIcon />}
+              </button>
+            </div>
             {isBootstrap && (
               <span className="text-xs text-fg-muted">至少 10 个字符</span>
             )}
-          </label>
+          </div>
           {error && (
             <p className="text-sm text-danger" role="alert">
               {error}
             </p>
           )}
-          <button type="submit" className="pl-btn pl-btn--primary" disabled={pending || loading}>
+          <button type="submit" className="pl-btn pl-btn--primary mt-2 min-h-11" disabled={pending || loading}>
             {pending ? "提交中…" : isBootstrap ? "创建并登录" : "登录"}
           </button>
         </form>
 
-        <p className="text-sm text-fg-muted">
+        <p className="text-xs text-fg-muted">
           无法登录？{" "}
           <Link
             className="underline underline-offset-2"
@@ -155,5 +167,23 @@ export function LoginPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+function EyeIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z" stroke="currentColor" strokeWidth="1.8" />
+      <circle cx="12" cy="12" r="2.5" stroke="currentColor" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
+function EyeOffIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M3 3l18 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M9.9 9.9A3 3 0 0 0 12 15a3 3 0 0 0 2.1-.9M6.1 6.3C4.2 7.6 2.8 9.5 2 12c1.2 2.2 4.2 6 10 6 1.6 0 3-.3 4.2-.9M10.6 6.1A11 11 0 0 1 12 6c6.5 0 10 6 10 6a18 18 0 0 1-3.2 3.6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
   );
 }

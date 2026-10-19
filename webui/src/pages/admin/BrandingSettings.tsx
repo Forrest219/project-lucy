@@ -323,9 +323,8 @@ export function BrandingSettings() {
                     <strong className="min-w-0 truncate text-lg">{previewTitle}</strong>
                   </div>
                   <div className="mt-3 grid gap-2" aria-hidden="true">
-                    <span className="text-sm font-semibold">登录</span>
-                    <span className="h-2 w-full rounded-pill bg-bg-muted" />
-                    <span className="h-7 w-full rounded-md border border-border-default bg-bg-surface" />
+                    <span className="h-8 w-full rounded-md border border-border-default bg-bg-surface" />
+                    <span className="h-8 w-full rounded-md border border-border-default bg-bg-surface" />
                   </div>
                 </div>
               </div>

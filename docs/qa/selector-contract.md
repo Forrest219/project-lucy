@@ -1296,6 +1296,7 @@
 | `${testId}-download` | 编写说明下载按钮（模板） | `components/onboarding/AuthoringHowTo.tsx` |
 | `login-config-unavailable` | 管理员配置不可用提示（`role="alert"`，登录表单隐藏） | `pages/Login.tsx` |
 | `login-bootstrap-token` | 客户部署首次引导 Token 输入 | `pages/Login.tsx` |
+| `login-password-toggle` | 登录页密码显示或隐藏 | `pages/Login.tsx` |
 | `agent-token-list` | Agent 详情 Token 列表 | `pages/admin/AgentDetail.tsx` |
 | `agent-token-row-${token.label}` | Agent Token 行（模板） | `pages/admin/AgentDetail.tsx` |
 | `audit-turn-meta-card` | 问询详情元信息卡 | `pages/admin/Audit.tsx` |
