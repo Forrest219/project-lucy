@@ -4,14 +4,14 @@
 |---|---|
 | 文档名称 | Lucy 访问关系图（Access Map）Spec |
 | 文档类型 | Spec（**初稿 / draft，未授权实现**） |
-| 版本 | v0.1-draft |
+| 版本 | v0.2-draft |
 | 撰写日期 | 2026-10-20 |
 | 撰写人 | Mavis（minimax Code） |
 | 委托人 | Forrest |
 | 基于材料 | `docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md`（L25-01 / L25-03）；`webui/docs/06-navigation-ia.md`；`webui/docs/00-product-terminology-standard.md`；`webui/docs/131-lucy-admin-catalog-bound-role-spec.md`；`webui/server/admin/permission-display.ts`；`webui/server/proxy/acl.ts`；`webui/server/proxy/audit.ts`；`webui/server/admin/metric-window.ts`；`webui/docs/design-system/README.md` |
 | 适用范围 | v2.5 治理台 WebUI 的访问关系可视化。授权面读取现有 effective permissions，访问面读取现有审计日志。**不新增授权模型，不改变运行时裁决** |
 | 输出位置 | `webui/docs/187-access-relation-sankey-spec.md` |
-| v2.5 提案登记 | 建议作为 **L25-08** 登记（提案 §2 新增条目 + §2 表格登记），见 §12.3 |
+| v2.5 提案登记 | **已登记为 L25-08**（提案 v1.5，2026-10-20，§2 第 5 项）。v0.2-draft 变更：原 v0.1-draft 为「建议登记」，本版随提案 v1.5 落定 |
 | 冲突裁决 | 与 `webui/docs/07-mcp-auth-proxy-spec.md`（运行时授权/裁决）冲突 → 该文件；与 `docs/access-control/design-upgrade.md` 冲突 → 该文件。本文只做**展示**，不参与任何授权判定 |
 
 ---
@@ -776,7 +776,7 @@ webui/server/admin/access-map.ts 服务端：授权层 + 访问层构建 + 降�
 - `webui/docs/124-audit-query-artifact-cold-store-spec.md` / `125-audit-generated-sql-hot-store-spec.md` — 审计存储（访问层数据源）
 - `webui/docs/186-trust-boundary-inventory-spec.md` — 信任边界（`association_status` 口径）
 - `docs/access-control/README.md` — 访问权限域索引（需交叉引用本文）
-- `docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md` — v2.5 提案（需登记 L25-08）
+- `docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md` — v2.5 提案（v1.5 已登记 L25-08）
 
 ### 12.2 已知待定（下一版收敛）
 
@@ -787,13 +787,13 @@ webui/server/admin/access-map.ts 服务端：授权层 + 访问层构建 + 降�
 
 ### 12.3 实施前必须完成的登记动作
 
-| # | 动作 | 位置 |
-|---|---|---|
-| 1 | 增补 §附录 A 的 6 个新术语 | `webui/docs/00-product-terminology-standard.md` §4.7.1 |
-| 2 | 登记「授权层 / 访问层」两组系列色与状态映射 | `webui/docs/design-system/99-governance.md`「当前临时决策」 |
-| 3 | 导航表新增「访问关系图」 | `webui/docs/06-navigation-ia.md` + `webui/docs/61-help-sidebar-entry-map-spec.md` 侧栏地图 |
-| 4 | 提案新增 L25-08 条目并更新 v1.5 元数据 | `docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md` §2 与头部版本行 |
-| 5 | 域索引交叉引用本文 | `docs/access-control/README.md` §1 现行基线表 |
+| # | 动作 | 位置 | 状态 |
+|---|---|---|---|
+| 1 | 增补 §附录 A 的 6 个新术语 | `webui/docs/00-product-terminology-standard.md` §4.7.1 | 待办 |
+| 2 | 登记「授权层 / 访问层」两组系列色与状态映射 | `webui/docs/design-system/99-governance.md`「当前临时决策」 | 待办 |
+| 3 | 导航表新增「访问关系图」 | `webui/docs/06-navigation-ia.md` + `webui/docs/61-help-sidebar-entry-map-spec.md` 侧栏地图 | 待办 |
+| 4 | 提案登记 L25-08 条目并更新元数据 | `docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md` §2 与头部版本行 | **已完成**（v1.5，2026-10-20） |
+| 5 | 域索引交叉引用本文 | `docs/access-control/README.md` §1 现行基线表 | 待办 |
 
 ---
 
