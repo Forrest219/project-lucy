@@ -18,6 +18,8 @@ import time
 import urllib.request
 from urllib.parse import urlparse
 
+# This script runs from a checksummed package. Imports must not add __pycache__.
+sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from image_identity import runtime_digest, trusted_digests
 

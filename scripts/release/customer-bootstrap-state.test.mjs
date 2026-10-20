@@ -97,6 +97,16 @@ test('BS-06: private assembly leaves the verified base unchanged and supplies a 
   assert.equal((await fs.stat(path.join(opts.output, 'credentials/webui-bootstrap-token'))).mode & 0o777, 0o600);
   assert.ok(!(await fs.readFile(path.join(opts.output, 'instance.json'), 'utf8')).includes(token.trim()));
   assert.ok(!(await fs.readFile(path.join(opts.output, 'README.md'), 'utf8')).includes(token.trim()));
+  await new Promise((resolve, reject) => {
+    const env = { ...process.env };
+    delete env.PYTHONDONTWRITEBYTECODE;
+    const child = spawn('bash', [path.join(opts.output, 'scripts/deploy.sh'), '--help'], { env });
+    let err = '';
+    child.stdout.resume();
+    child.stderr.on('data', d => { err += d; });
+    child.on('close', rc => rc ? reject(Error(err)) : resolve());
+  });
+  await assert.rejects(fs.stat(path.join(opts.output, 'package/scripts/__pycache__')));
   await verifyBasePackage(base);
   await prepareDelivery({ ...opts, output: path.join(root, 'second') });
   assert.equal(await fs.readFile(path.join(root, 'second/credentials/webui-bootstrap-token'), 'utf8'), token);
