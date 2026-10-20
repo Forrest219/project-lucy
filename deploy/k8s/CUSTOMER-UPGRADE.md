@@ -13,7 +13,7 @@
 将包解压到 Git 仓库、`inbox`、缓存之外的目录，使用真实路径。以下路径为示例，请替换：
 
 ```bash
-PACKAGE=/opt/lucy/lucy-k8s-integration-delivery-20261020-r3
+PACKAGE=/opt/lucy/lucy-k8s-integration-delivery-YYYYMMDD-rN
 PRIVATE=/opt/lucy-private
 umask 077
 mkdir -p "$PRIVATE/config" "$PRIVATE/state"
@@ -49,8 +49,8 @@ helm --kube-context "$CTX" -n "$NS" history "$RELEASE"
 ```bash
 python3 "$PACKAGE/scripts/prepare-customer-instance.py" \
   --base-package "$PACKAGE" --instance-config "$PRIVATE/config/instance.json" \
-  --state-dir "$PRIVATE/state" --output "$PRIVATE/delivery-r3"
-cd "$PRIVATE/delivery-r3"
+  --state-dir "$PRIVATE/state" --output "$PRIVATE/delivery-new"
+cd "$PRIVATE/delivery-new"
 bash scripts/deploy.sh --dry-run
 ```
 
@@ -61,7 +61,7 @@ dry-run 检查绑定、旧状态、Secret 引用、节点及 Chart 渲染，不�
 ## 3 升级与创建管理员
 
 ```bash
-cd "$PRIVATE/delivery-r3"
+cd "$PRIVATE/delivery-new"
 bash scripts/deploy.sh
 ```
 
