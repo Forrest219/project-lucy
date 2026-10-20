@@ -18,6 +18,16 @@ Vibe coding 双核角色协作（thinker / builder）的可选完整交付流水
 - **本地脚本必须兼容 stock macOS bash 3.2**（`readarray` / `mapfile` / 负数数组下标均不可用），相关回归门禁见 `scripts/upgrade/upgrade-lucy.test.mjs`。
 - 单机 compose 栈（`deploy/compose/`）是开发/演示与升级验证环境，**不是**客户交付形态；客户交付以 [`deploy/k8s/helm/lucy/`](deploy/k8s/helm/lucy/) Chart + amd64 镜像为准（契约见 `deploy/k8s/K8S_CONTRACT.md`）。
 
+## 客户部署包与引导密钥（每次出包强制遵守）
+
+- 面向首次创建管理员的客户生成部署包时，必须在供应方同次出包中同步生成或复用 `webui-bootstrap-token`，配齐实例签发状态、凭据元数据和使用说明；不得把生成、补齐或手工改绑密钥的工作留给部署人员。
+- 同一逻辑实例重出包、版本升级或部署重试复用原密钥；不同实例分别签发；已有管理员不新发密钥、不重开认领。
+- 密钥必须与部署入口实际读取的值一致。私有附件缺失、绑定不符或复用验证未通过，均视为客户部署交付未完成，禁止发出声称可部署的客户包。
+- 通用镜像和公共软件包仍不含密钥；客户私有附件与软件包成套交付，不能把同一密钥随公共包分发给多个客户。私有附件保存在 Git、inbox、构建上下文和公共上传目录之外，目录 0700、文件 0600，不打印密钥内容。
+- 出包前必须执行 [客户升级交付 Checklist](docs/runbooks/customer-v2-upgrade-release-checklist.md) 的 C01、C05、C20 及其他适用项。自动化尚未覆盖的步骤由供应方在同次出包补齐并验证，不得降级为部署人员补密钥。
+
+具体原则和自动化待办见 [出包时配套生成引导密钥](docs/plans/2026-10-20-build-time-bootstrap-credential-plan.md)。
+
 ## KTX 依赖边界与开发优先级
 
 KTX 是 Lucy 引用的上游依赖。本仓库只使用 KTX 提供的 CLI、接口和配置约定，
