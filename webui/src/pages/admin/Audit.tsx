@@ -665,7 +665,7 @@ function formatTablesCell(sources: AuditTurnEntry["sources"]): string {
 }
 
 const TURN_SOURCE_FILTER_TITLE =
-  "来源类型：用户原始问询为客户端上报；系统推断问询由工具调用参数自动生成摘要，不等同于用户原文。";
+  "来源类型：用户原始问询为客户端上报。没有原文的查数问询摘要固定为「未上报问询原文」，会话访问以「会话建立：」开头。两者都不等同于用户原话。";
 
 /** Spec 135: ID-like input routes to `key`; free text routes to turnSearch / tableSearch. */
 function looksLikeIdQuery(raw: string): boolean {
@@ -685,7 +685,7 @@ function TurnSourceBadge({ source }: { source: AuditTurnEntry["source"] }) {
     return <span className="pl-status-badge pl-status-done">已上报问询</span>;
   }
   return (
-    <span className="pl-status-badge pl-status-partial" title="基于工具调用自动生成，不等同于用户原文">
+    <span className="pl-status-badge pl-status-partial" title="没有客户端上报的原文，不等同于用户原话">
       推断问询
     </span>
   );
@@ -752,7 +752,7 @@ function TurnDetailDrawer({
             <>
               {detail.source === "inferred" ? (
                 <section className="pl-card text-xs text-fg-muted" data-testid="audit-turn-inferred-disclaimer">
-                  推断问题摘要基于工具调用参数自动生成，不等同于用户原文。
+                  没有客户端上报的原文。问询摘要不是用户原话，涉及的数据表见明细。
                 </section>
               ) : null}
 
