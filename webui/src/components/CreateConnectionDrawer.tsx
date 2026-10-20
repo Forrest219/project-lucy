@@ -4,6 +4,7 @@ import { Eye, EyeOff, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { ApiError, apiGet, apiPost } from "../lib/apiClient";
 import {
+  ATHENA_CREDENTIAL_HINT,
   CONNECTION_ID_RULE_HINT,
   DATABASE_TYPES,
   getDatabaseTypeConfig,
@@ -588,7 +589,25 @@ export function CreateConnectionDrawer({
               </Field>
 
               <FieldPair>
-                <Field label="数据库类型" required pair>
+                <Field
+                  label="数据库类型"
+                  required
+                  pair
+                  hint={
+                    isAthena
+                      ? ATHENA_CREDENTIAL_HINT
+                      : form.databaseType === "starrocks" || form.databaseType === "doris"
+                        ? "底层走 MySQL 协议；超时策略与原生 MySQL 不同，请优先选此类型而非 MySQL。"
+                        : undefined
+                  }
+                  hintTestId={
+                    isAthena
+                      ? "create-connection-athena-hint"
+                      : form.databaseType === "starrocks" || form.databaseType === "doris"
+                        ? "create-connection-engine-hint"
+                        : undefined
+                  }
+                >
                   <select
                     className="pl-input notranslate"
                     translate="no"
@@ -604,16 +623,6 @@ export function CreateConnectionDrawer({
                       </option>
                     ))}
                   </select>
-                  {form.databaseType === "starrocks" || form.databaseType === "doris" ? (
-                    <p className="mt-1 text-xs text-fg-muted" data-testid="create-connection-engine-hint">
-                      底层走 MySQL 协议；超时策略与原生 MySQL 不同，请优先选此类型而非 MySQL。
-                    </p>
-                  ) : null}
-                  {isAthena ? (
-                    <p className="mt-1 text-xs text-fg-muted" data-testid="create-connection-athena-hint">
-                      使用 KTX 的 athena 驱动。凭据走 AWS 默认链，不保存数据库密码。
-                    </p>
-                  ) : null}
                 </Field>
                 {!isSqlite ? (
                   <Field label="只读账号意图（可选）" pair>
@@ -1069,6 +1078,7 @@ function Field({
   children,
   error,
   hint,
+  hintTestId,
   pair = false,
   required = false
 }: {
@@ -1076,13 +1086,14 @@ function Field({
   children: ReactNode;
   error?: string | null;
   hint?: string;
+  hintTestId?: string;
   pair?: boolean;
   required?: boolean;
 }) {
   const message = error ? (
     <span className="text-danger">{error}</span>
   ) : hint ? (
-    <span className="text-fg-muted notranslate" translate="no">
+    <span className="text-fg-muted notranslate" translate="no" data-testid={hintTestId}>
       {hint}
     </span>
   ) : null;

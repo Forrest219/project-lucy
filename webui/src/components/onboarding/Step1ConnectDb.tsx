@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Eye, EyeOff, Lock, CheckCircle2, AlertCircle } from "lucide-react";
 import { apiGet, apiPost } from "../../lib/apiClient";
 import {
+  ATHENA_CREDENTIAL_HINT,
   DATABASE_TYPES,
   getDatabaseTypeConfig,
   validateConnectionId,
@@ -333,7 +334,7 @@ export function Step1ConnectDb({
             ) : null}
             {isAthena ? (
               <p className="text-xs text-fg-muted mt-1" data-testid="setup-athena-hint">
-                使用 KTX 的 athena 驱动。凭据走 AWS 默认链，不保存数据库密码。
+                {ATHENA_CREDENTIAL_HINT}
               </p>
             ) : null}
           </div>

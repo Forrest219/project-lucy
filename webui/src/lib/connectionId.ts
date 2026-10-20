@@ -3,6 +3,9 @@ export const CONNECTION_ID_PATTERN = "^[a-z][a-z0-9_-]{1,63}$";
 export const CONNECTION_ID_RULE_HINT =
   "小写字母开头，仅小写字母、数字、下划线和短横线，2–64 个字符";
 
+export const ATHENA_CREDENTIAL_HINT =
+  "凭据使用当前环境的 AWS 凭证，不保存数据库密码。";
+
 const CONNECTION_ID_RE = new RegExp(CONNECTION_ID_PATTERN);
 
 export type ConnectionIdIssue = {

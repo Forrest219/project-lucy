@@ -526,6 +526,11 @@ describe("SetupAssistantModal Component", () => {
     expect(screen.getByTestId("setup-region")).toBeInTheDocument();
     expect(screen.getByTestId("setup-s3-staging-dir")).toBeInTheDocument();
     expect(screen.getByLabelText(/默认数据库/)).toBeInTheDocument();
+    expect(screen.getByTestId("setup-athena-hint")).toHaveTextContent(
+      "凭据使用当前环境的 AWS 凭证，不保存数据库密码。"
+    );
+    expect(screen.queryByText(/KTX 的 athena 驱动/)).not.toBeInTheDocument();
+    expect(screen.queryByTestId("setup-engine-hint")).not.toBeInTheDocument();
   });
 
   it("uses main as the default SQLite schema after switching from a server database", async () => {
