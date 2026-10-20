@@ -8,12 +8,21 @@
 ## 2026-10-19 · MCP 调试台连上检查只回答能连上或不能连上
 
 ### 修改
-- 没有加载记录、也无法自省时直接给出 Token。确认未加载时写「不能连上」，按钮为「检测 {连接}」。
-- `mcp-playground-recheck` 可见文案为「检测 {连接}」。连上检查不渲染探测分项。
-- `mcp-playground-technical` 只留在查表拒绝。
+- 连上检查不再渲染「这次检测了什么」。没有加载记录时直接给出 Token。
+- 删除 selector `mcp-playground-canary-checks`。`mcp-playground-technical` 只留在查表拒绝。
 
 ### 影响映射更新
-- 补充 `mcp-playground-result-detail`、`mcp-playground-technical`。不新增 `E2E-*` 测试集。
+- 无新 `data-testid`。不新增 `E2E-*` 测试集。
+
+---
+
+## 2026-10-19 · MCP 调试台连上检查按钮
+
+### 修改
+- `mcp-playground-recheck` 可见文案由「重新检测」改为「检测 {连接}」。检测目标先取确认未加载的连接，再取没有加载记录的连接。
+
+### 影响映射更新
+- Selector 契约：`mcp-playground-recheck` 标签改为「检测 {连接}」；`mcp-playground-canary-checks` 标签改为「这次检测了什么」；新增 `mcp-playground-technical`（技术详情）。不新增 `E2E-*` 测试集。
 
 ---
 
