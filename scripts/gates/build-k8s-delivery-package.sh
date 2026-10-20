@@ -54,6 +54,7 @@ done
 
 [[ -n "${IMAGE_TAG}" ]] || { echo "FAIL: --image-tag required" >&2; exit 1; }
 [[ -n "${OUTPUT}" ]] || { echo "FAIL: --output required" >&2; exit 1; }
+[[ ! -e "${OUTPUT}" && ! -e "${OUTPUT}.sha256" && ! -e "${OUTPUT}.verification.json" ]] || { echo 'FAIL: use a new delivery name; existing artifacts must not be overwritten' >&2; exit 1; }
 
 case "${DELIVERY_MODE}" in
   offline|registry) ;;
@@ -66,9 +67,16 @@ if [[ "${VERSION_SUFFIX}" =~ -v1$ ]] || [[ "${VERSION_SUFFIX}" =~ -v2$ ]]; then
 fi
 
 command -v docker >/dev/null 2>&1 || { echo "FAIL: docker required" >&2; exit 1; }
+[[ -z "$(git -C "${ROOT}" status --porcelain)" ]] || { echo 'FAIL: clean committed source required for delivery' >&2; exit 1; }
+echo '[build-k8s-delivery] customer upgrade regression checklist'
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s "${ROOT}/scripts/deploy" -p 'test_*.py' -q
+node --test "${ROOT}/scripts/deploy/probe-customer-auth-state.test.mjs" \
+  "${ROOT}/scripts/release/customer-bootstrap-state.test.mjs" \
+  "${ROOT}/scripts/gates/build-k8s-delivery-package.test.mjs"
 docker image inspect "${IMAGE_TAG}" >/dev/null 2>&1 || { echo "FAIL: image not found: ${IMAGE_TAG}" >&2; exit 1; }
 
 IMAGE_REF_TAG="${IMAGE_TAG##*:}"
+[[ "${IMAGE_REF_TAG}" == *-"$(git -C "${ROOT}" rev-parse --short HEAD)" ]] || { echo 'FAIL: image tag must match the committed package source' >&2; exit 1; }
 if [[ "${IMAGE_REF_TAG}" == "${IMAGE_TAG}" ]]; then
   IMAGE_REF_TAG="latest"
 fi
@@ -98,7 +106,7 @@ mkdir -p "${PKG_DIR}/image" "${PKG_DIR}/helm" "${PKG_DIR}/examples" "${PKG_DIR}/
 cleanup_fail() {
   local rc=$?
   if [[ "${rc}" -ne 0 ]]; then
-    rm -f "${OUTPUT}" "${OUTPUT}.sha256" 2>/dev/null || true
+    rm -f "${OUTPUT}" "${OUTPUT}.sha256" "${OUTPUT}.verification.json" 2>/dev/null || true
     echo "[build-k8s-delivery] FAIL — removed incomplete ${OUTPUT}" >&2
   fi
   rm -rf "${STAGING}"
@@ -194,6 +202,7 @@ cp "${ROOT}/deploy/k8s/examples/instance.upgrade.https.example.json" "${PKG_DIR}
 cp "${ROOT}/deploy/k8s/examples/RECOVERY.open-mode.md" "${PKG_DIR}/examples/RECOVERY.open-mode.md"
 cp "${ROOT}/deploy/k8s/CUSTOMER-UPGRADE.md" "${PKG_DIR}/CUSTOMER-UPGRADE.md"
 cp "${ROOT}/deploy/k8s/ACCEPTANCE.md" "${PKG_DIR}/ACCEPTANCE.md"
+cp "${ROOT}/docs/runbooks/customer-v2-upgrade-release-checklist.md" "${PKG_DIR}/UPGRADE-RELEASE-CHECKLIST.md"
 cat > "${PKG_DIR}/CUSTOMER-FIRST-ADMIN.md" <<'EOF'
 # 首次创建管理员
 
@@ -215,7 +224,7 @@ chmod 0755 "${PKG_DIR}/scripts/acceptance.sh" "${PKG_DIR}/scripts/preflight-helm
 chmod 0644 "${PKG_DIR}/scripts/k8s-gate-lib.sh" "${PKG_DIR}/scripts/preflight-upgrade-lib.mjs" "${PKG_DIR}/scripts/preflight_upgrade_drift.py"
 
 # macOS / VCS leftovers must never reach the deliverable.
-find "${PKG_DIR}" \( -name '._*' -o -name '.DS_Store' -o -name '__MACOSX' -o -name '.git' -o -name '.gitignore' \) \
+find "${PKG_DIR}" \( -name '._*' -o -name '.DS_Store' -o -name '__MACOSX' -o -name '.git' -o -name '.gitignore' -o -name '__pycache__' -o -name '*.pyc' -o -name '*.pyo' \) \
   -prune -exec rm -rf {} + 2>/dev/null || true
 
 GIT_SHA="$(git -C "${ROOT}" rev-parse --short HEAD 2>/dev/null || echo unknown)"
@@ -297,7 +306,8 @@ Package layout: `helm/lucy/` chart · `examples/` values · `image/` offline ima
 
 This public package contains no bootstrap key. Follow `CUSTOMER-UPGRADE.md` to prepare a private instance
 directory, run its deployment entry, and create the first owner. Each instance gets its own key.
-The r2 package is superseded: image identity, HTTPS preparation and recovery instructions were corrected.
+The test, r2 and r3 packages are superseded. Follow UPGRADE-RELEASE-CHECKLIST.md for every delivery.
+Local package checks do not authorize production use; native amd64 upgrade and recovery remain mandatory.
 
 Read order:
 1. README.md (this file)
@@ -360,8 +370,10 @@ EOF
 
 ## Summary
 
-Fixes Kubernetes / Helm in-place upgrade defects found when statically checking the previous test package:
-read-only password Secret, legacy PVC layout, resource-name drift, and non-runnable package scripts.
+Fixes the r3 customer deployment entry's multi-resource JSON parsing failure and missing preflight diagnostics.
+Every build now runs deployment regressions and the final archive's instance dry-run regression with real
+Helm and kubectl client rendering against synthetic cluster reads. This is not native K3s upgrade evidence.
+Diagnostics contain stage, error type and stack locations without exception text or tool/credential output.
 
 Lucy product version and bundled KTX version are independent release identities
 (see `BUILD-INFO.json` for the exact commit, image, platform and dependency versions).
@@ -448,6 +460,9 @@ COPYFILE_DISABLE=1 tar -C "${STAGING}" -czf "${OUTPUT}" "${PKG}"
 echo "[build-k8s-delivery] K6 outer tar verify (load + G gates)"
 bash "${ROOT}/scripts/gates/verify-k8s-package.sh" --tar "${OUTPUT}" --outer-sha256 "${OUTPUT}.sha256" \
   ${VERIFY_EXTRA[@]+"${VERIFY_EXTRA[@]}"}
+
+echo '[build-k8s-delivery] final archive customer entry regression (synthetic reads; real CLIs)'
+python3 "${ROOT}/scripts/gates/verify-customer-upgrade-package.py" --tar "${OUTPUT}" --report "${OUTPUT}.verification.json"
 
 # Success: disarm fail cleanup of OUTPUT; still remove staging.
 trap 'rm -rf "${STAGING}"' EXIT

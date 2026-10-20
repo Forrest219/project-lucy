@@ -15,6 +15,7 @@ import sys
 import tarfile
 import tempfile
 import time
+import traceback
 import urllib.request
 from urllib.parse import urlparse
 
@@ -31,6 +32,50 @@ class DeploymentError(Exception):
 def require(condition, code):
     if not condition:
         raise DeploymentError(code)
+
+
+def rendered_resources(output):
+    """Normalize kubectl's single object, List or consecutive JSON objects.
+
+    kubectl may print one pretty-printed JSON document per YAML input document.
+    Never split on lines/braces or accept a valid prefix followed by garbage.
+    """
+    try:
+        text = output.decode('utf-8') if isinstance(output, bytes) else output
+    except UnicodeDecodeError:
+        raise DeploymentError('RENDER_OUTPUT_INVALID_JSON') from None
+    require(isinstance(text, str) and text.strip(), 'RENDER_OUTPUT_EMPTY')
+    require(text.lstrip().startswith('{'), 'RENDER_OUTPUT_NON_JSON')
+    decoder = json.JSONDecoder()
+    items = []
+
+    def collect(obj):
+        require(isinstance(obj, dict), 'RENDER_RESOURCE_INVALID')
+        if obj.get('kind') == 'List':
+            require(isinstance(obj.get('items'), list), 'RENDER_LIST_INVALID')
+            for item in obj['items']:
+                collect(item)
+        else:
+            require(isinstance(obj.get('apiVersion'), str) and obj['apiVersion']
+                    and isinstance(obj.get('kind'), str) and obj['kind']
+                    and isinstance(obj.get('metadata'), dict)
+                    and isinstance(obj['metadata'].get('name'), str)
+                    and obj['metadata']['name'], 'RENDER_RESOURCE_INVALID')
+            items.append(obj)
+
+    offset = 0
+    while offset < len(text):
+        while offset < len(text) and text[offset].isspace():
+            offset += 1
+        if offset == len(text):
+            break
+        try:
+            obj, offset = decoder.raw_decode(text, offset)
+        except (ValueError, RecursionError):
+            raise DeploymentError('RENDER_OUTPUT_INVALID_JSON') from None
+        collect(obj)
+    require(items, 'RENDER_OUTPUT_EMPTY')
+    return items
 
 
 def sha_file(file):
@@ -126,10 +171,14 @@ class Deployment:
         try:
             p = subprocess.run(args, input=data, stdout=output or subprocess.PIPE,
                                stderr=subprocess.PIPE, timeout=timeout, check=False)
-        except (OSError, subprocess.TimeoutExpired):
-            raise DeploymentError('TOOL_UNAVAILABLE_OR_TIMEOUT') from None
+        except subprocess.TimeoutExpired:
+            raise DeploymentError('TOOL_TIMEOUT') from None
+        except OSError:
+            raise DeploymentError('TOOL_UNAVAILABLE') from None
         if p.returncode and not allow_failure:
-            raise DeploymentError('TOOL_REQUEST_FAILED')
+            tool = Path(args[0]).name
+            prefix = tool.upper() if tool in ('kubectl', 'helm') else 'TOOL'
+            raise DeploymentError(prefix + '_REQUEST_FAILED')
         return p
 
     def kubectl(self, *args, data=None, timeout=60, output=None):
@@ -146,6 +195,27 @@ class Deployment:
         self.report['stages'].append({'stage': name, 'time': time.time()})
         print('[customer-deploy] ' + name, flush=True)
 
+    def record_failure(self, error, code):
+        """Keep stack locations, never exception messages, source lines or tool I/O."""
+        stage = self.report['stages'][-1]['stage'] if self.report['stages'] else 'preflight'
+        self.report.update(errorCode=code, failedStage=stage, exceptionType=type(error).__name__)
+        if self.report['status'] == 'RUNNING':
+            self.report['status'] = 'FAILED_RECOVERY_REVIEW_REQUIRED' if self.helm_started else 'FAILED'
+        diagnostic = self.bundle / '.diagnostics'
+        try:
+            diagnostic.mkdir(mode=0o700, exist_ok=True)
+            require(not diagnostic.is_symlink() and diagnostic.stat().st_mode & 0o077 == 0
+                    and diagnostic.stat().st_uid == os.getuid(), 'DIAGNOSTIC_DIRECTORY_INVALID')
+            path = diagnostic / ('failure-' + str(time.time_ns()) + '.json')
+            frames = [{'file': Path(f.filename).name, 'line': f.lineno, 'function': f.name}
+                      for f in traceback.extract_tb(error.__traceback__)]
+            save_private(path, {**self.report, 'stack': frames})
+            print('[customer-deploy] diagnostic=' + str(path), file=sys.stderr)
+        except (OSError, DeploymentError):
+            print('[customer-deploy] DIAGNOSTIC_WRITE_FAILED', file=sys.stderr)
+        print('[customer-deploy] FAILED stage=' + stage + ' code=' + code
+              + ' type=' + type(error).__name__, file=sys.stderr)
+
     def validate(self):
         c = self.c
         require(c.get('schemaVersion') == 1 and c.get('profile') in ['k8s', 'k3s'], 'INSTANCE_CONFIG_INVALID')
@@ -159,6 +229,7 @@ class Deployment:
         for tool in ['kubectl', 'helm']:
             require(shutil.which(tool), 'TOOL_REQUIRED')
         require(self.command(['kubectl', 'config', 'current-context']).stdout.decode().strip() == c['context'], 'CONTEXT_MISMATCH')
+        self.stage('identity')
         require(not (self.bundle / 'credentials').is_symlink(), 'CREDENTIAL_PATH_INVALID')
         require(sha_file(self.package / 'SHA256SUMS') == c['baseChecksumDigest'], 'PACKAGE_IDENTITY_MISMATCH')
         listed = set()
@@ -175,7 +246,10 @@ class Deployment:
             require(not file.is_symlink(), 'PACKAGE_SYMLINK')
             if file.is_file():
                 actual.add(str(file.relative_to(self.package)))
-        require(actual == listed | {'SHA256SUMS'}, 'PACKAGE_UNTRACKED_FILE')
+        if actual != listed | {'SHA256SUMS'}:
+            self.report['untrackedFiles'] = sorted(actual - listed - {'SHA256SUMS'})[:10]
+            self.report['missingFiles'] = sorted(listed - actual)[:10]
+            raise DeploymentError('PACKAGE_UNTRACKED_FILE')
         build = read_json(self.package / 'BUILD-INFO.json')
         require(build['image'] == c['image'] and c['image']['platform'] == 'linux/amd64', 'IMAGE_IDENTITY_MISMATCH')
         if c['intent'] == 'upgrade':
@@ -186,6 +260,7 @@ class Deployment:
         require(c.get('values') == read_json(self.bundle / 'customer-values.yaml'), 'CUSTOMER_VALUES_MISMATCH')
         if c.get('tlsCaFile'):
             require(c['tlsCaFile'] == 'tls-ca.pem' and sha_file(self.bundle / 'tls-ca.pem') == c.get('tlsCaSha256'), 'TLS_CA_IDENTITY_MISMATCH')
+        self.stage('cluster-read')
         self.namespace = self.get('namespace', c['namespace'])
         require(self.namespace is not None or c['intent'] == 'install', 'UPGRADE_NAMESPACE_MISSING')
         self.cluster = self.get('namespace', 'kube-system')['metadata']['uid']
@@ -305,8 +380,7 @@ class Deployment:
         chart = str(self.package / 'helm/lucy')
         self.helm('lint', chart, '-f', str(file))
         manifest = self.helm('template', self.c['release'], chart, '-f', str(file)).stdout
-        rendered = json.loads(self.kubectl('create', '--dry-run=client', '--validate=false', '-f', '-', '-o', 'json', data=manifest).stdout)
-        items = rendered.get('items', [rendered])
+        items = rendered_resources(self.kubectl('create', '--dry-run=client', '--validate=false', '-f', '-', '-o', 'json', data=manifest).stdout)
         desired = next((i for i in items if i.get('kind') == 'Deployment' and i['metadata']['name'] == self.c['deployment']), None)
         require(desired, 'RENDERED_DEPLOYMENT_MISSING')
         spec = desired['spec']['template']['spec']
@@ -452,6 +526,7 @@ class Deployment:
             self.stage('preflight')
             self.validate()
             self.temp = tempfile.TemporaryDirectory(prefix='lucy-deploy-')
+            self.stage('render')
             self.render()
             if self.dry_run:
                 self.report['status'] = 'DRY_RUN'
@@ -500,16 +575,17 @@ class Deployment:
             self.report['status'] = 'PASSED'
             print(json.dumps({'status': 'PASSED', 'webuiUrl': self.c['webuiUrl'].rstrip('/') + '/login', 'next': 'create-first-owner' if self.needs_key else 'sign-in'}))
         except DeploymentError as error:
-            self.report['errorCode'] = str(error)
+            code = str(error) if re.fullmatch(r'[A-Z][A-Z0-9_]{0,95}', str(error)) else 'DEPLOYMENT_FAILED'
             self.report['nextAction'] = 'review-runtime-and-RECOVERY.md' if self.helm_started else 'resolve-preflight-or-backup-error-and-retry-same-bundle'
-            raise
+            self.record_failure(error, code)
+            raise DeploymentError(code) from None
         except KeyboardInterrupt:
             self.report['errorCode'] = 'INTERRUPTED'
             self.report['nextAction'] = 'review-runtime-before-retrying-same-bundle'
             raise
-        except Exception:
-            self.report['errorCode'] = 'DEPLOYMENT_FAILED'
-            self.report['nextAction'] = 'review-runtime-and-RECOVERY.md'
+        except Exception as error:
+            self.report['nextAction'] = 'review-runtime-and-RECOVERY.md' if self.helm_started else 'resolve-preflight-or-backup-error-and-retry-same-bundle'
+            self.record_failure(error, 'DEPLOYMENT_FAILED')
             raise DeploymentError('DEPLOYMENT_FAILED') from None
         finally:
             if self.backup_pod:

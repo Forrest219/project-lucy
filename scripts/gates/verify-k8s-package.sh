@@ -85,7 +85,7 @@ fi
 echo "  ok package name ${PKG_NAME}"
 
 echo "[verify-k8s-package] K6-1a clean package (no macOS/VCS leftovers)"
-JUNK="$(find "${PKG_DIR}" \( -name '._*' -o -name '__MACOSX' -o -name '.DS_Store' -o -name '.git' \) -print | head -5)"
+JUNK="$(find "${PKG_DIR}" \( -name '._*' -o -name '__MACOSX' -o -name '.DS_Store' -o -name '.git' -o -name '__pycache__' -o -name '*.pyc' -o -name '*.pyo' \) -print | head -5)"
 if [[ -n "${JUNK}" ]]; then
   echo "FAIL K6-1a: package contains leftovers:" >&2
   printf '%s\n' "${JUNK}" >&2

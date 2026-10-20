@@ -35,6 +35,17 @@ test("customer README uses the instance entry and ships HTTPS and recovery depen
   }
 });
 
+test("every build requires clean source and verifies the final archive's customer entry", async () => {
+  const src = await readFile(packScript, 'utf8');
+  assert.match(src, /clean committed source required/);
+  assert.match(src, /image tag must match the committed package source/);
+  assert.match(src, /python3 -m unittest discover/);
+  assert.match(src, /customer-v2-upgrade-release-checklist\.md/);
+  assert.match(src, /verify-customer-upgrade-package\.py" --tar "\$\{OUTPUT\}"/);
+  assert.ok(src.indexOf('verify-customer-upgrade-package.py') > src.indexOf('COPYFILE_DISABLE=1 tar'));
+  assert.match(src, /existing artifacts must not be overwritten/);
+});
+
 test("quoted heredoc preserves literal backticks and does not run git init", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "lucy-pack-heredoc-"));
   const out = path.join(dir, "RELEASE_NOTES.md");

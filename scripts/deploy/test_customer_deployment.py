@@ -243,7 +243,7 @@ class CustomerDeploymentTests(unittest.TestCase):
         raw = subprocess.CompletedProcess(['kubectl'], 1, stdout=secret.encode(), stderr=secret.encode())
         output = io.StringIO()
         with patch.object(mod.subprocess, 'run', return_value=raw), redirect_stdout(output):
-            with self.assertRaisesRegex(mod.DeploymentError, '^TOOL_REQUEST_FAILED$') as caught:
+            with self.assertRaisesRegex(mod.DeploymentError, '^KUBECTL_REQUEST_FAILED$') as caught:
                 mod.Deployment.command(d, ['kubectl', 'create', '-f', '-'], data=secret.encode())
         self.assertNotIn(secret, str(caught.exception))
         self.assertNotIn(secret, output.getvalue())
@@ -278,7 +278,7 @@ class CustomerDeploymentTests(unittest.TestCase):
             (d.package / 'helm/lucy').symlink_to(ROOT / 'deploy/k8s/helm/lucy', target_is_directory=True)
             d.temp = type('Temp', (), {'name': temp})()
             def convert(*args, data=None, **kwargs):
-                source = "const Y=require(process.argv[1]);let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>console.log(JSON.stringify({items:Y.parseAllDocuments(s).filter(d=>d.contents).map(d=>d.toJSON())})));"
+                source = "const Y=require(process.argv[1]);let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>process.stdout.write(Y.parseAllDocuments(s).filter(d=>d.contents).map(d=>JSON.stringify(d.toJSON(),null,2)).join('\\n')));"
                 result = subprocess.run(['node', '-e', source, str(ROOT / 'webui/node_modules/yaml')], input=data, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 self.assertEqual(result.returncode, 0)
                 return result
@@ -287,6 +287,52 @@ class CustomerDeploymentTests(unittest.TestCase):
             values = json.loads(d.values_file.read_text())
             self.assertEqual(values['bootstrap']['existingSecret'], 'lucy-bootstrap')
             self.assertNotIn(d.key.decode().strip(), d.values_file.read_text())
+
+    def test_render_accepts_object_list_and_consecutive_documents(self):
+        items = [{'apiVersion': 'v1', 'kind': kind, 'metadata': {'name': kind.lower()}}
+                 for kind in ['Deployment', 'Service', 'PersistentVolumeClaim', 'Secret', 'ServiceAccount', 'ConfigMap']]
+        for output in [json.dumps({'apiVersion': 'v1', 'kind': 'List', 'items': items}),
+                       ' \n' + '\n\n'.join(json.dumps(i, indent=2) for i in items) + '\n']:
+            self.assertEqual(mod.rendered_resources(output.encode()), items)
+        self.assertEqual(mod.rendered_resources(json.dumps(items[0])), items[:1])
+
+    def test_render_rejects_empty_non_json_invalid_and_trailing_garbage(self):
+        item = {'apiVersion': 'v1', 'kind': 'Service', 'metadata': {'name': 'synthetic'}}
+        cases = [(b'', 'EMPTY'), (b' \n', 'EMPTY'), (b'<html>proxy</html>', 'NON_JSON'),
+                 (b'\xff', 'INVALID_JSON'), (b'{broken', 'INVALID_JSON'),
+                 ((json.dumps(item) + '\nwarning').encode(), 'INVALID_JSON'),
+                 (b'{"kind":"List","items":{}}', 'LIST_INVALID'),
+                 (b'{"kind":"List","items":[]}', 'EMPTY'),
+                 (b'{"items":[]}', 'RESOURCE_INVALID'),
+                 (b'{"kind":"List","items":[null]}', 'RESOURCE_INVALID')]
+        for output, code in cases:
+            with self.subTest(code=code, output=output), self.assertRaisesRegex(mod.DeploymentError, code):
+                mod.rendered_resources(output)
+
+    def test_preflight_failure_records_private_sanitized_diagnostics(self):
+        for error in [ValueError('synthetic-sensitive-marker'), mod.DeploymentError('RENDER_OUTPUT_NON_JSON')]:
+            d = SecretDeployment()
+            d.temp, d.backup_pod = None, None
+            d.scaled_down = d.helm_started = False
+            d.dry_run = True
+            d.report = {'status': 'RUNNING', 'stages': []}
+            with tempfile.TemporaryDirectory() as temp:
+                d.bundle = Path(temp)
+                output, stderr = io.StringIO(), io.StringIO()
+                from contextlib import redirect_stderr
+                with patch.object(d, 'validate'), patch.object(d, 'render', side_effect=error), \
+                     redirect_stdout(output), redirect_stderr(stderr):
+                    with self.assertRaises(mod.DeploymentError):
+                        d.run()
+                path = next((d.bundle / '.diagnostics').glob('*.json'))
+                report = json.loads(path.read_text())
+                self.assertEqual(report['failedStage'], 'render')
+                self.assertEqual(report['exceptionType'], type(error).__name__)
+                self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+                self.assertEqual(path.parent.stat().st_mode & 0o777, 0o700)
+                self.assertNotIn('synthetic-sensitive-marker', path.read_text() + output.getvalue() + stderr.getvalue())
+                self.assertFalse((d.bundle / '.deployment').exists())
+                self.assertTrue(report['stack'])
 
     def test_shell_entry_help_needs_no_cluster_or_node(self):
         result = subprocess.run(['/bin/bash', str(ROOT / 'scripts/deploy/deploy-customer-k8s.sh'), '--help'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
