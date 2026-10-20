@@ -76,6 +76,7 @@ export async function fixturePackage(root) {
     'helm/lucy/Chart.yaml': 'apiVersion: v2\nname: lucy\nversion: 0.2.4\n',
     'scripts/deploy.sh': await fs.readFile(path.join(scriptDir, '../deploy/deploy-customer-k8s.sh'), 'utf8'),
     'scripts/customer-deployment-helper.py': await fs.readFile(path.join(scriptDir, '../deploy/customer-deployment-helper.py'), 'utf8'),
+    'scripts/image_identity.py': await fs.readFile(path.join(scriptDir, '../deploy/image_identity.py'), 'utf8'),
     'scripts/probe-customer-auth-state.mjs': await fs.readFile(path.join(scriptDir, '../deploy/probe-customer-auth-state.mjs'), 'utf8'),
     'image/test.tar': 'dummy-image'
   };

@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "instanceId": "must-replace-instance",
+  "profile": "k3s",
+  "intent": "upgrade",
+  "authState": "uninitialized",
+  "credentialState": "new",
+  "legacyBaselineReviewed": false,
+  "context": "MUST-REPLACE-kubectl-context",
+  "namespace": "lucy-test",
+  "release": "lucy-starrocks",
+  "deployment": "lucy",
+  "service": "lucy",
+  "pvcName": "lucy",
+  "bootstrapSecret": "lucy-bootstrap",
+  "access": "https",
+  "webuiUrl": "https://MUST-REPLACE-webui-host",
+  "publicMcpUrl": "https://MUST-REPLACE-mcp-host/mcp",
+  "namespaceUid": "MUST-REPLACE-namespace-uid",
+  "deploymentUid": "MUST-REPLACE-deployment-uid",
+  "pvcUid": "MUST-REPLACE-pvc-uid",
+  "baselineImage": "MUST-REPLACE-current-image",
+  "backup": {
+    "method": "quiesced-pvc-tar"
+  },
+  "recovery": {
+    "baselineImage": "MUST-REPLACE-current-image",
+    "instructionsFile": "RECOVERY.md"
+  },
+  "offlineNodes": {
+    "MUST-REPLACE-node": "local"
+  },
+  "values": {
+    "lucy": {
+      "version": "2.0.0",
+      "bundledKtxVersion": "0.16.0"
+    }
+  },
+  "externalTlsReviewed": false
+}

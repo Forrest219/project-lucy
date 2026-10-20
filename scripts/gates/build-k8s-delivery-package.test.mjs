@@ -24,6 +24,17 @@ test("pack script uses quoted heredocs for README and RELEASE_NOTES", async () =
   assert.doesNotMatch(src, /Chart: `0\.2\.1`/);
 });
 
+test("customer README uses the instance entry and ships HTTPS and recovery dependencies", async () => {
+  const src = await readFile(packScript, "utf8");
+  const readme = src.slice(src.indexOf('# Lucy K8s Integration Delivery'), src.indexOf('} > "${PKG_DIR}/README.md"'));
+  assert.match(readme, /prepare-customer-instance\.py/);
+  assert.match(readme, /deploy\.sh --dry-run/);
+  assert.doesNotMatch(readme, /helm upgrade/);
+  for (const file of ['image_identity.py', 'instance.upgrade.https.example.json', 'CUSTOMER-UPGRADE.md', 'ACCEPTANCE.md']) {
+    assert.ok(src.includes(file), `${file} must ship`);
+  }
+});
+
 test("quoted heredoc preserves literal backticks and does not run git init", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "lucy-pack-heredoc-"));
   const out = path.join(dir, "RELEASE_NOTES.md");

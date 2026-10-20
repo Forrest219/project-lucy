@@ -68,7 +68,6 @@ fi
 command -v docker >/dev/null 2>&1 || { echo "FAIL: docker required" >&2; exit 1; }
 docker image inspect "${IMAGE_TAG}" >/dev/null 2>&1 || { echo "FAIL: image not found: ${IMAGE_TAG}" >&2; exit 1; }
 
-IMAGE_CONFIG_ID="$(docker image inspect "${IMAGE_TAG}" --format '{{.Id}}')"
 IMAGE_REF_TAG="${IMAGE_TAG##*:}"
 if [[ "${IMAGE_REF_TAG}" == "${IMAGE_TAG}" ]]; then
   IMAGE_REF_TAG="latest"
@@ -113,6 +112,8 @@ echo "[build-k8s-delivery] export image tar"
 TAR_NAME="$(echo "${IMAGE_TAG}" | tr '/:' '-').tar"
 docker save -o "${PKG_DIR}/image/${TAR_NAME}" "${IMAGE_TAG}"
 docker image inspect "${IMAGE_TAG}" > "${PKG_DIR}/image/image-inspect.json"
+python3 "${ROOT}/scripts/deploy/image_identity.py" --archive "${PKG_DIR}/image/${TAR_NAME}" > "${PKG_DIR}/image/image-identity.json"
+IMAGE_CONFIG_ID="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["configId"])' "${PKG_DIR}/image/image-identity.json")"
 echo "${IMAGE_CONFIG_ID}" > "${PKG_DIR}/image/image-config-id.txt"
 # Backward-compatible alias: NEVER treat as registry manifest digest.
 cp "${PKG_DIR}/image/image-config-id.txt" "${PKG_DIR}/image/image-digest.txt"
@@ -187,18 +188,22 @@ cp "${ROOT}/scripts/deploy/deploy-customer-k8s.sh" "${PKG_DIR}/scripts/deploy.sh
 cp "${ROOT}/scripts/deploy/customer-deployment-helper.py" "${PKG_DIR}/scripts/customer-deployment-helper.py"
 cp "${ROOT}/scripts/deploy/probe-customer-auth-state.mjs" "${PKG_DIR}/scripts/probe-customer-auth-state.mjs"
 cp "${ROOT}/scripts/deploy/prepare-customer-instance.py" "${PKG_DIR}/scripts/prepare-customer-instance.py"
+cp "${ROOT}/scripts/deploy/image_identity.py" "${PKG_DIR}/scripts/image_identity.py"
 cp "${ROOT}/deploy/k8s/examples/instance.upgrade.http.example.json" "${PKG_DIR}/examples/instance.upgrade.http.example.json"
+cp "${ROOT}/deploy/k8s/examples/instance.upgrade.https.example.json" "${PKG_DIR}/examples/instance.upgrade.https.example.json"
 cp "${ROOT}/deploy/k8s/examples/RECOVERY.open-mode.md" "${PKG_DIR}/examples/RECOVERY.open-mode.md"
+cp "${ROOT}/deploy/k8s/CUSTOMER-UPGRADE.md" "${PKG_DIR}/CUSTOMER-UPGRADE.md"
+cp "${ROOT}/deploy/k8s/ACCEPTANCE.md" "${PKG_DIR}/ACCEPTANCE.md"
 cat > "${PKG_DIR}/CUSTOMER-FIRST-ADMIN.md" <<'EOF'
 # 首次创建管理员
 
 本通用软件包不含引导密钥。旧开放模式升级到 2.0 管理员登录时，保留原 PVC。
 
 1. 把安装包解压到仓库和 `inbox` 之外的目录。
-2. 复制 `examples/instance.upgrade.http.example.json`，填入真实 context、UID、镜像和访问地址。`access` 只能是 `http` 或 `https`，并与 WebUI、MCP 地址的协议一致。内网 HTTP 不要使用实验室测试开关。
-3. 确认旧数据卷没有管理员、也没有 `.ktx-ui/security.sqlite` 之后，才把 `legacyBaselineReviewed` 改为 `true`。填写 `examples/RECOVERY.open-mode.md` 并在升级前做静默 PVC 备份。
-4. 在私有目录执行 `python3 scripts/prepare-customer-instance.py --base-package <解压目录> --instance-config <实例.json> --state-dir <私有状态目录> --output <新的客户目录>`。同一实例重跑会复用已签发的引导密钥。
-5. 在客户目录执行 `bash scripts/deploy.sh`。脚本配置该实例的引导 Secret 并部署。
+2. 按 `CUSTOMER-UPGRADE.md` 选择 HTTP 或 HTTPS 实例样例，填写真实 context、UID、旧镜像、节点映射和访问地址。HTTPS 的 TLS 网关和私有 CA 配置见该说明。
+3. 确认旧数据卷没有管理员、也没有 `.ktx-ui/security.sqlite` 之后，才把 `legacyBaselineReviewed` 改为 `true`。填写恢复说明；部署入口在切换前自动停机备份整个 PVC，并保存原 Helm revision。
+4. 从任意目录使用脚本的绝对路径执行 `python3 <解压目录>/scripts/prepare-customer-instance.py --base-package <解压目录> --instance-config <实例.json> --state-dir <私有状态目录> --output <新的客户目录>`。同一实例更换输出目录重打包会复用已签发的引导密钥。
+5. 在客户目录先执行 `bash scripts/deploy.sh --dry-run`，通过后执行 `bash scripts/deploy.sh`。脚本配置该实例的引导 Secret 并部署。
 6. 打开实例配置中的 WebUI 地址，输入引导密钥、账户名和新密码，创建首个所有者。
 
 创建成功后使用账户和密码登录。重启或后续升级不需要重新认领。已有管理员直接登录。
@@ -235,14 +240,14 @@ BUILD_INFO_CONFIG_ID="${IMAGE_CONFIG_ID}" BUILD_INFO_MANIFEST_DIGEST="${HELM_DIG
 BUILD_INFO_TAR_SHA="${IMAGE_TAR_SHA}" BUILD_INFO_MODE="${DELIVERY_MODE}" \
 BUILD_INFO_LUCY="${LUCY_VERSION}" BUILD_INFO_HELM="${HELM_VERSION}" \
 BUILD_INFO_KTX_FALLBACK="$(awk -F'"' '/bundledKtxVersion:/{print $2; exit}' "${ROOT}/deploy/k8s/helm/lucy/values.yaml")" \
-python3 - "${PKG_DIR}/BUILD-INFO.json" "${IMAGE_ENV_FILE}" <<'PY'
+python3 - "${PKG_DIR}/BUILD-INFO.json" "${IMAGE_ENV_FILE}" "${PKG_DIR}/image/image-identity.json" <<'PY'
 import datetime
 import json
 import os
 import platform
 import sys
 
-out_path, env_path = sys.argv[1], sys.argv[2]
+out_path, env_path, identity_path = sys.argv[1:]
 env = {}
 with open(env_path, encoding="utf-8") as fh:
     for line in fh:
@@ -276,6 +281,7 @@ info = {
         "helmOnBuildHost": g("BUILD_INFO_HELM"),
     },
 }
+info['image'].update(json.load(open(identity_path)))
 with open(out_path, "w", encoding="utf-8") as fh:
     json.dump(info, fh, indent=2, ensure_ascii=False)
     fh.write("\n")
@@ -289,21 +295,18 @@ Supported Helm chart is included under `helm/lucy/` (not a reference snapshot).
 Package layout: `helm/lucy/` chart · `examples/` values · `image/` offline image tar and identity files ·
 `scripts/` preflight + acceptance (self-contained) · `BUILD-INFO.json` · `SHA256SUMS`.
 
-This public package contains no bootstrap key. For an old open-mode upgrade, copy
-`examples/instance.upgrade.http.example.json`, fill the live cluster identity, and run
-`python3 scripts/prepare-customer-instance.py` outside this package. See `CUSTOMER-FIRST-ADMIN.md`.
-
-**Supersedes:** every earlier `lucy-k8s-integration-delivery-*` package. Earlier packages mount the DB password
-Secret read-only over `.ktx/secrets` (WebUI writes fail with `EROFS`) and ship non-runnable preflight/acceptance scripts.
+This public package contains no bootstrap key. Follow `CUSTOMER-UPGRADE.md` to prepare a private instance
+directory, run its deployment entry, and create the first owner. Each instance gets its own key.
+The r2 package is superseded: image identity, HTTPS preparation and recovery instructions were corrected.
 
 Read order:
 1. README.md (this file)
 2. RELEASE_NOTES.md
-3. K8S_CONTRACT.md
-4. helm/lucy/UPGRADE.md
-5. helm/lucy/ROLLBACK.md
-6. examples/values.k3s-test.yaml (lucy-test profile) / examples/values.customer.example.yaml (template)
-7. scripts/preflight-helm.sh, scripts/acceptance.sh
+3. CUSTOMER-UPGRADE.md
+4. CUSTOMER-FIRST-ADMIN.md
+5. examples/RECOVERY.open-mode.md
+6. ACCEPTANCE.md
+7. K8S_CONTRACT.md
 
 ## Offline image import (K3s / containerd)
 
@@ -318,20 +321,22 @@ The listed `repository:tag` must equal `image.repository` / `image.tag` in the v
 (`image/image-repository.txt`, `image/image-tag.txt`). Offline values use `image.pullPolicy: Never`
 and an empty `image.digest`.
 
-## Run from the package root
+## Upgrade an existing open-mode instance
 
 ```bash
 sha256sum -c SHA256SUMS
-bash scripts/preflight-helm.sh --k3s-only
-bash scripts/preflight-upgrade.sh --namespace lucy-test --release lucy-starrocks \
-  --deployment lucy --chart helm/lucy -f examples/values.k3s-test.yaml
-helm upgrade lucy-starrocks helm/lucy -n lucy-test -f examples/values.k3s-test.yaml --atomic --wait --timeout 15m
-LUCY_MCP_TOKEN=<bearer> bash scripts/acceptance.sh --namespace lucy-test --release lucy-starrocks \
-  --deployment lucy --service lucy --public-mcp-url http://10.69.95.109:8277/mcp \
-  --connection kc-starrocks --connection rds-test --connection zijin --expect-content-root .
+# Fill the selected instance example and recovery file as described in CUSTOMER-UPGRADE.md.
+python3 /absolute/path/to/package/scripts/prepare-customer-instance.py \
+  --base-package /absolute/path/to/package --instance-config /private/path/instance.json \
+  --state-dir /private/path/state --output /private/path/customer-delivery
+cd /private/path/customer-delivery
+bash scripts/deploy.sh --dry-run
+bash scripts/deploy.sh
 ```
 
-Read `helm/lucy/UPGRADE.md` first: it lists the pre-upgrade checks (Deployment selector, PVC, Secret).
+Use the instance deployment entry for administrator migration. The lab Helm values do not provision an
+instance bootstrap key and are not the customer upgrade entry. Complete ACCEPTANCE.md before reopening
+production access. Native amd64 upgrade and recovery results must be recorded for this exact package.
 
 EOF
   printf 'Delivery mode: `%s`\n' "${DELIVERY_MODE}"
@@ -360,6 +365,13 @@ read-only password Secret, legacy PVC layout, resource-name drift, and non-runna
 
 Lucy product version and bundled KTX version are independent release identities
 (see `BUILD-INFO.json` for the exact commit, image, platform and dependency versions).
+
+## Changes (Chart 0.2.6)
+
+- Image config, platform manifest and index identities are derived from and verified against the saved image archive.
+- CRI identity checks accept only the verified identities for the candidate image.
+- HTTPS instance preparation includes private CA delivery and a separate HTTPS example.
+- The customer entry prepares the bootstrap Secret, saves the original revision and PVC backup, and links explicit recovery and acceptance steps.
 
 ## Changes (Chart 0.2.5)
 
@@ -407,7 +419,7 @@ Lucy product version and bundled KTX version are independent release identities
 ## Upgrade
 
 See `helm/lucy/UPGRADE.md` (pre-upgrade checks, upgrade, acceptance, restart and rollback).
-Use `helm upgrade --atomic --wait` with `examples/values.k3s-test.yaml`.
+Use `CUSTOMER-UPGRADE.md` and the private instance directory's `scripts/deploy.sh`.
 EOF
 } > "${PKG_DIR}/RELEASE_NOTES.md"
 

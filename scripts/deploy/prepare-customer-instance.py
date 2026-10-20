@@ -4,8 +4,9 @@
 Credential files match scripts/release/customer-bootstrap-state.mjs so a later
 Node or Python run reuses the same bootstrap key. Stdlib only.
 """
-import hashlib, json, os, re, secrets, shutil, sys, time, uuid
+import hashlib, json, os, re, secrets, shutil, ssl, sys, time, uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from urllib.parse import urlparse
 
 NAMES = ['namespace', 'release', 'deployment', 'service', 'pvcName', 'bootstrapSecret']
@@ -117,7 +118,7 @@ def verify_base(base):
     files = package_files(base)
     sums_path = os.path.join(base, 'SHA256SUMS')
     listed = {}
-    for line in open(sums_path).read().strip().split('\n'):
+    for line in Path(sums_path).read_text().strip().split('\n'):
         match = re.fullmatch(r'([a-f0-9]{64}) [ *](?:\./)?(.+)', line)
         if not match or match.group(2).startswith('/') or '..' in match.group(2).split('/') or match.group(2) in listed: fail('PACKAGE_CHECKSUM_LIST_INVALID')
         listed[match.group(2)] = match.group(1)
@@ -126,7 +127,7 @@ def verify_base(base):
         if file_digest(os.path.join(base, name)) != expected: fail('PACKAGE_CHECKSUM_MISMATCH')
     for required in ('BUILD-INFO.json', 'helm/lucy/Chart.yaml', 'scripts/deploy.sh', 'scripts/customer-deployment-helper.py', 'scripts/probe-customer-auth-state.mjs'):
         if required not in files: fail('PACKAGE_DEPLOY_ENTRY_MISSING')
-    build = json.loads(open(os.path.join(base, 'BUILD-INFO.json')).read())
+    build = json.loads(Path(base, 'BUILD-INFO.json').read_text())
     image = build.get('image') or {}
     if image.get('platform') != 'linux/amd64' or not re.fullmatch(r'sha256:[a-f0-9]{64}', image.get('configId', '')) or image.get('deliveryMode') not in ('offline', 'registry'): fail('PACKAGE_IMAGE_INVALID')
     if image['deliveryMode'] == 'offline' and not re.fullmatch(r'[a-f0-9]{64}', image.get('tarSha256', '')): fail('OFFLINE_IMAGE_HASH_INVALID')
@@ -179,22 +180,41 @@ def issue(state_dir, instance_id, credential_state):
         if locked: os.rmdir(lock)
 
 def contains_key(path, key):
-    data = open(path, 'rb').read()
-    return key in data
+    tail = b''
+    with open(path, 'rb') as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b''):
+            data = tail + block
+            if key in data: return True
+            tail = data[-(len(key) - 1):] if len(key) > 1 else b''
+    return False
 
 def prepare(base, config_path, state_dir, output):
-    config = validate(json.loads(open(config_path).read()))
+    config = validate(json.loads(Path(config_path).read_text()))
     base, target, state = map(private_location, (base, output, state_dir))
     if stat(target): fail('OUTPUT_ALREADY_EXISTS')
     verified = verify_base(base)
+    tls_ca = None
+    if config.get('tlsCaFile'):
+        if config['access'] != 'https': fail('TLS_CA_REQUIRES_HTTPS')
+        src = config['tlsCaFile']
+        if not os.path.isabs(src): src = os.path.join(os.path.dirname(os.path.abspath(config_path)), src)
+        found = stat(src)
+        if not found or not is_file(found) or is_link(found): fail('TLS_CA_FILE_INVALID')
+        tls_ca = Path(src).read_bytes()
+        try:
+            if b'PRIVATE KEY' in tls_ca: fail('TLS_CA_FILE_INVALID')
+            ssl.create_default_context(cadata=tls_ca.decode('ascii'))
+        except (ValueError, UnicodeError, ssl.SSLError):
+            fail('TLS_CA_FILE_INVALID')
     recovery = None
     if config['intent'] == 'upgrade':
         src = config['recovery']['instructionsFile']
         if not os.path.isabs(src): src = os.path.join(os.path.dirname(os.path.abspath(config_path)), src)
         found = stat(src)
         if not found or not is_file(found) or is_link(found): fail('RECOVERY_INSTRUCTIONS_INVALID')
-        recovery = open(src, 'rb').read()
+        recovery = Path(src).read_bytes()
         if not recovery: fail('RECOVERY_INSTRUCTIONS_INVALID')
+        if re.search(rb'ACTUAL_|ORIGINAL_|HASH_FROM_INITIAL_BACKUP_JSON', recovery): fail('RECOVERY_INSTRUCTIONS_INCOMPLETE')
     if target == base or target.startswith(base + os.sep) or state == target or state.startswith(target + os.sep) or target.startswith(state + os.sep): fail('OVERLAPPING_DELIVERY_PATHS')
     key, reused = issue(state, config['instanceId'], config['credentialState'])
     os.makedirs(os.path.dirname(target), 0o700, exist_ok=True)
@@ -203,6 +223,10 @@ def prepare(base, config_path, state_dir, output):
     try:
         shutil.copytree(base, os.path.join(staging, 'package'), symlinks=False)
         delivery = {**config, 'credentialState': 'issued' if key else 'none', 'deliveryId': str(uuid.uuid4()), 'image': verified['build']['image'], 'baseChecksumDigest': verified['checksumDigest']}
+        if tls_ca is not None:
+            delivery['tlsCaFile'] = 'tls-ca.pem'
+            delivery['tlsCaSha256'] = digest(tls_ca)
+            write_private(os.path.join(staging, 'tls-ca.pem'), tls_ca.decode('ascii'))
         if recovery is not None:
             delivery['recovery'] = {'baselineImage': config['baselineImage'], 'instructionsFile': 'RECOVERY.md', 'sha256': digest(recovery)}
             fd = os.open(os.path.join(staging, 'RECOVERY.md'), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)

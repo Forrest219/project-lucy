@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+import tarfile
 import unittest
 from contextlib import redirect_stdout
 from unittest.mock import patch
@@ -53,6 +54,62 @@ class SecretDeployment(mod.Deployment):
 
 
 class CustomerDeploymentTests(unittest.TestCase):
+    def test_verify_accepts_only_the_candidates_config_manifest_or_index(self):
+        ids = ['sha256:' + c * 64 for c in 'abc']
+        for actual in ids + ['sha256:' + 'd' * 64]:
+            d = SecretDeployment()
+            d.c['image'].update(configId=ids[0], platformManifestDigest=ids[1], indexDigest=ids[2])
+            d.auth = {'status': 'configured'}
+            d.needs_key = False
+            d.report = {}
+            pod = {'metadata': {'name': 'synthetic'}, 'status': {'containerStatuses': [
+                {'name': 'lucy', 'imageID': 'docker-pullable://project-lucy@' + actual}]}}
+            with patch.object(d, 'kubectl'), patch.object(d, 'running_pod', return_value=pod), \
+                 patch.object(d, 'probe', return_value=d.auth), \
+                 patch.object(mod.urllib.request, 'urlopen', return_value=io.BytesIO(b'{"data":{"mode":"required"}}')):
+                if actual in ids:
+                    d.verify()
+                    self.assertEqual(d.report['runningImageId'], actual)
+                else:
+                    with self.assertRaisesRegex(mod.DeploymentError, 'RUNNING_IMAGE_ID_MISMATCH'):
+                        d.verify()
+
+    def test_initial_backup_preserves_original_revision_across_candidate_retry(self):
+        d = SecretDeployment()
+        d.deployment = {'metadata': {'name': 'lucy'}}
+        d.c.update(intent='upgrade', baselineImage='project-lucy:old', deliveryId='synthetic-delivery',
+                   pvcName='lucy', backup={'method': 'quiesced-pvc-tar'}, recovery={'instructionsFile': 'RECOVERY.md'})
+        d.baseline = 'project-lucy:old'
+        d.binding = {'instanceId': 'synthetic-instance'}
+        d.release = {'revision': '14'}
+        d.pod = {'spec': {'nodeName': 'synthetic-node', 'containers': [{'image': d.baseline}]}}
+        d.auth = {'fingerprint': 'unchanged'}
+        d.report = {}
+        data = io.BytesIO()
+        with tarfile.open(fileobj=data, mode='w:gz') as archive:
+            info = tarfile.TarInfo('./ktx.yaml')
+            info.size = 16
+            archive.addfile(info, io.BytesIO(b'connections: {}\n\n'))
+        def kubectl(*args, output=None, **kwargs):
+            if output is not None:
+                output.write(data.getvalue())
+            return subprocess.CompletedProcess(args, 0, stdout=b'{}')
+        with tempfile.TemporaryDirectory() as root:
+            d.runtime = Path(root)
+            with patch.object(d, 'kubectl', side_effect=kubectl), patch.object(d, 'probe', return_value=d.auth), \
+                 patch.object(d, 'helm', return_value=subprocess.CompletedProcess([], 0, stdout=b'{"secret":"reference-only"}')):
+                d.backup()
+            original = (d.runtime / 'baseline.json').read_bytes()
+            backup = (d.runtime / 'initial-backup.json').read_bytes()
+            d.baseline = d.image_ref()
+            with patch.object(d, 'kubectl') as kubectl_mock, patch.object(d, 'helm') as helm_mock:
+                d.backup()
+                kubectl_mock.assert_not_called()
+                helm_mock.assert_not_called()
+            self.assertEqual((d.runtime / 'baseline.json').read_bytes(), original)
+            self.assertEqual((d.runtime / 'initial-backup.json').read_bytes(), backup)
+            self.assertEqual(d.report['baseline']['revision'], '14')
+
     def test_bs09_secret_create_reuse_and_race_are_atomic(self):
         for race in [False, True]:
             d = SecretDeployment()

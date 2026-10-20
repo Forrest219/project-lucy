@@ -8,7 +8,7 @@ All notable user-visible changes to Lucy ship here. Versions follow `<major>.<mi
 
 ## 2.0.0
 
-Product line cut from `0.17.0` to `2.0.0` on 2026-10-19. Customer-facing label is `v2.0.0`. Bundled KTX stays `0.16.0`. Chart package version is `0.2.5` as of the open-mode upgrade delivery: `security.access` is `https` or intranet `http`.
+Product line cut from `0.17.0` to `2.0.0` on 2026-10-19. Customer-facing label is `v2.0.0`. Bundled KTX stays `0.16.0`. Chart package version is `0.2.6`: `security.access` is `https` or intranet `http`. Customer delivery verifies archive config/manifest/index identities, includes private CA files, and provides one instance deployment entry with durable baseline backups and executable recovery instructions.
 
 ---
 

@@ -204,6 +204,8 @@ if [[ -f "${TAR_SHA_FILE}" ]]; then
     exit 1
   }
 fi
+echo "[verify-k8s-package] K6-3c archive descriptor identities"
+python3 "${PKG_DIR}/scripts/image_identity.py" --archive "${IMAGE_TAR}" --metadata "${PKG_DIR}/BUILD-INFO.json"
 
 if [[ "${SKIP_DOCKER_LOAD}" -eq 0 ]]; then
   command -v docker >/dev/null 2>&1 || { echo "FAIL: docker required for load verify" >&2; exit 1; }
@@ -220,11 +222,8 @@ if [[ "${SKIP_DOCKER_LOAD}" -eq 0 ]]; then
     [[ -n "${LOADED_ID}" ]] || { echo "FAIL K6-4: could not parse docker load output" >&2; exit 1; }
     LOADED_IMAGE="${LOADED_ID}"
   fi
-  LOADED_CONFIG="$(docker image inspect "${LOADED_IMAGE}" --format '{{.Id}}')"
-  [[ "${LOADED_CONFIG}" == "${PACK_CONFIG_ID}" ]] || {
-    echo "FAIL K6-4: loaded config ID ${LOADED_CONFIG} != pack ${PACK_CONFIG_ID}" >&2
-    exit 1
-  }
+  LOADED_ID="$(docker image inspect "${LOADED_IMAGE}" --format '{{.Id}}')"
+  python3 "${PKG_DIR}/scripts/image_identity.py" --archive "${IMAGE_TAR}" --metadata "${PKG_DIR}/BUILD-INFO.json" --docker-id "${LOADED_ID}" >/dev/null
   # Prefer tagged name matching package metadata when available.
   if docker image inspect "${VALUES_REPO}:${VALUES_TAG}" >/dev/null 2>&1; then
     LOADED_IMAGE="${VALUES_REPO}:${VALUES_TAG}"
@@ -272,7 +271,7 @@ done
 # --help must work from a different cwd, proving the lib is found relative to the script.
 (cd / && bash "${PKG_DIR}/scripts/acceptance.sh" --help >/dev/null) \
   || { echo "FAIL K6-7: acceptance.sh --help failed outside package root" >&2; exit 1; }
-for required in BUILD-INFO.json helm/lucy/UPGRADE.md helm/lucy/ROLLBACK.md README.md RELEASE_NOTES.md K8S_CONTRACT.md; do
+for required in BUILD-INFO.json image/image-identity.json scripts/image_identity.py scripts/prepare-customer-instance.py examples/instance.upgrade.https.example.json examples/RECOVERY.open-mode.md CUSTOMER-UPGRADE.md ACCEPTANCE.md helm/lucy/UPGRADE.md helm/lucy/ROLLBACK.md README.md RELEASE_NOTES.md K8S_CONTRACT.md; do
   [[ -f "${PKG_DIR}/${required}" ]] || { echo "FAIL K6-7: package missing ${required}" >&2; exit 1; }
 done
 

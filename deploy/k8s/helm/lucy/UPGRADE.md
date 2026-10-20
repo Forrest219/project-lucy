@@ -1,7 +1,7 @@
 # Lucy Helm Chart — Upgrade Guide
 
 Upgrade Lucy on Kubernetes while preserving `/data/lucy` PVC data, Secrets, and MCP tokens.
-Current chart: **0.2.5** (Lucy `2.0.0`, bundled KTX `0.16.0`).
+Current chart: **0.2.6** (Lucy `2.0.0`, bundled KTX `0.16.0`).
 
 ## Open-mode upgrade to administrator login
 
@@ -14,6 +14,20 @@ Use this when the existing PVC has never had an administrator and has no `.ktx-u
 5. Take a quiesced PVC backup before `helm upgrade`. Helm rollback does not restore `admins.yaml` or `security.sqlite`.
 
 The lab file `examples/values.k3s-test.yaml` is only for the known HTTP test cluster. Copy `examples/instance.upgrade.http.example.json`, replace every MUST-REPLACE value, and point `recovery.instructionsFile` at a filled recovery note.
+
+## Customer upgrade entry
+
+Follow the package-root `CUSTOMER-UPGRADE.md`, `CUSTOMER-FIRST-ADMIN.md`, and `ACCEPTANCE.md`.
+Choose the HTTP or HTTPS instance example, prepare a private instance directory, then run its
+`scripts/deploy.sh --dry-run` followed by `scripts/deploy.sh`. The entry preserves live Helm values,
+backs up the original PVC while quiesced, and configures the per-instance bootstrap Secret.
+
+The original revision and image are stored in `.deployment/baseline.json`, full original Helm values
+in `baseline-values.json`, and the first backup hash in `initial-backup.json`. Preserve these private
+files across retries. Use the filled `RECOVERY.md` to restore volume state as well as the old revision.
+
+Do not use the lab Helm upgrade commands for the first-owner migration: lab values do not provision
+a customer bootstrap Secret. The sections below describe infrastructure diagnostics and lab use.
 
 ## Before you start
 

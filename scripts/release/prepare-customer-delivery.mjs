@@ -108,6 +108,7 @@ export async function prepareDelivery({ basePackage, instanceConfig, stateDir, o
     if (!st.isFile() || st.isSymbolicLink()) fail('RECOVERY_INSTRUCTIONS_INVALID');
     recoveryInstructions = await fs.readFile(file);
     if (!recoveryInstructions.length) fail('RECOVERY_INSTRUCTIONS_INVALID');
+    if (/ACTUAL_|ORIGINAL_|HASH_FROM_INITIAL_BACKUP_JSON/.test(recoveryInstructions.toString())) fail('RECOVERY_INSTRUCTIONS_INCOMPLETE');
   }
   // Everything that can be checked without credentials runs before signing a new record.
   const state = path.resolve(stateDir);

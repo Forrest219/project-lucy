@@ -18,6 +18,9 @@ import time
 import urllib.request
 from urllib.parse import urlparse
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from image_identity import runtime_digest, trusted_digests
+
 
 class DeploymentError(Exception):
     pass
@@ -373,6 +376,33 @@ class Deployment:
         if not self.deployment or self.c['intent'] == 'install':
             return
         require(self.c.get('backup') and self.c.get('recovery'), 'BACKUP_RECOVERY_REQUIRED')
+        baseline_file = self.runtime / 'baseline.json'
+        backup_record = self.runtime / 'initial-backup.json'
+        if baseline_file.exists():
+            baseline = json.loads(private_read(baseline_file))
+            require(baseline['image'] == self.c['baselineImage'] and baseline['binding'] == self.binding, 'RECOVERY_BASELINE_MISMATCH')
+        else:
+            require(self.baseline == self.c['baselineImage'] and self.baseline != self.image_ref(), 'RECOVERY_BASELINE_MISSING')
+            revision = str(self.release.get('revision', ''))
+            require(revision.isdigit(), 'BASELINE_REVISION_REQUIRED')
+            baseline = {'image': self.baseline, 'revision': revision, 'binding': self.binding,
+                        'node': self.pod['spec']['nodeName']}
+            values = json.loads(self.helm('get', 'values', self.c['release'], '--revision', revision, '--all', '-o', 'json').stdout)
+            values_file = self.runtime / 'baseline-values.json'
+            if values_file.exists():
+                require(json.loads(private_read(values_file)) == values, 'RECOVERY_VALUES_MISMATCH')
+            else:
+                save_private(values_file, values)
+            save_private(baseline_file, baseline)
+        if backup_record.exists():
+            previous = json.loads(private_read(backup_record))
+            name = previous.get('file', '')
+            require(Path(name).name == name and name.startswith('backup-'), 'BACKUP_PATH_INVALID')
+            require(sha_file(self.runtime / name) == previous['sha256'], 'BACKUP_CHECKSUM_MISMATCH')
+            self.report['backup'] = previous
+            self.report['baseline'] = baseline
+            return
+        require(self.baseline == baseline['image'], 'INITIAL_BACKUP_MISSING')
         self.kubectl('scale', 'deployment', self.c['deployment'], '--replicas=0')
         self.scaled_down = True
         self.kubectl('wait', '--for=delete', 'pod', '-l', 'app.kubernetes.io/instance=' + self.c['release'], '--timeout=180s', timeout=200)
@@ -390,6 +420,8 @@ class Deployment:
             names = archive.getnames()
             require(any(n in ['./ktx.yaml', 'ktx.yaml'] for n in names), 'BACKUP_PROJECT_MISSING')
         self.report['backup'] = {'file': target.name, 'sha256': sha_file(target), 'authFingerprint': after['fingerprint']}
+        self.report['baseline'] = baseline
+        save_private(backup_record, self.report['backup'])
         self.kubectl('delete', 'pod', self.backup_pod, '--wait=true', '--timeout=120s', timeout=140)
         self.backup_pod = None
 
@@ -397,9 +429,10 @@ class Deployment:
         self.kubectl('rollout', 'status', 'deployment/' + self.c['deployment'], '--timeout=600s', timeout=620)
         pod = self.running_pod()
         container = next(s for s in pod['status']['containerStatuses'] if s['name'] == self.c.get('container', 'lucy'))
-        image_id = re.sub(r'^(?:containerd|docker)://', '', container['imageID'].split('@')[-1])
-        expected = self.c['image'].get('registryManifestDigest') or self.c['image']['configId']
-        require(image_id == expected, 'RUNNING_IMAGE_ID_MISMATCH')
+        image_id = runtime_digest(container['imageID'])
+        # CRI implementations report either config, platform manifest or index.
+        # Every accepted digest comes from this package's verified archive chain.
+        require(image_id is not None and image_id in trusted_digests(self.c['image']), 'RUNNING_IMAGE_ID_MISMATCH')
         actual = self.probe(pod['metadata']['name'])
         require(actual['status'] == self.auth['status'], 'POST_DEPLOY_AUTH_MISMATCH')
         if self.needs_key:
