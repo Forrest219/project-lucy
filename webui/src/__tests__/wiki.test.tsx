@@ -1987,9 +1987,11 @@ describe("WikiEditor directory and document governance (M56)", () => {
     const tree = await screen.findByTestId("wiki-tree");
     fireEvent.click(await within(tree).findByRole("button", { name: "global 目录操作" }));
     const deleteItem = await within(tree).findByTestId("wiki-tree-delete-directory-global");
-    expect(deleteItem).toBeDisabled();
     expect(deleteItem).toHaveAttribute("aria-disabled", "true");
-    expect(deleteItem.getAttribute("title") ?? "").toContain("请先移动或删除内容");
+    expect(deleteItem).toHaveTextContent("请先移动或删除内容");
+    fireEvent.click(deleteItem);
+    expect(within(tree).queryByTestId("wiki-tree-delete-directory-global")).not.toBeInTheDocument();
+    expect(fetchMock.mock.calls.some((call) => call[1]?.method === "DELETE")).toBe(false);
   });
 
   it("renames a directory through the WikiTree menu (UX-WIKI-044 / Spec 109)", async () => {

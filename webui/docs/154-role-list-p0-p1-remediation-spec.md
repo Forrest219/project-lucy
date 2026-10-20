@@ -5,8 +5,8 @@
 | 文档名称 | Role List P0/P1 Remediation Spec |
 | 文档类型 | Spec |
 | Spec 编号 | 154 |
-| 版本 | v1.0 |
-| 日期 | 2026-09-27 |
+| 版本 | v1.1 |
+| 日期 | 2026-09-27；2026-10-19 v1.1 明确使用中 Role 的删除反馈 |
 | 状态 | Implemented |
 | 关联页面 | `/admin/roles`、Role 快捷详情 Drawer |
 | 关联工单 | `webui/docs/plans/wo-202609-27-role-list-p0-p1-remediation.md` |
@@ -81,7 +81,9 @@ Role warning 的呈现顺序为：用户可读诊断 → 「技术详情」原�
 - 保留角色标识链接、状态、数据范围、MCP 工具计数、引用 Agent、配置写入时间和操作列。
 - 点击角色标识打开快捷详情；「编辑/查看」进入完整页面。
 - 更多菜单保留「基于此新建」和正式 Role 的「删除」；删除与标识链接重复的「快捷抽屉预览」。
-- 使用中的正式 Role 删除操作保持禁用并显示原因。
+- 使用中的正式 Role 仍不可删除。「删除」保持可见、可聚焦，使用 `aria-disabled="true"`，不使用会吞掉点击的原生 `disabled`。菜单项直接展示原因：仍被哪些 Agent 引用（最多两个显示名，超出加「等」），以及需先解除引用。点击后关闭菜单，并用同一句说明提示；不导航、不调用删除 API。
+- 未引用的正式 Role 点击「删除」进入 `/admin/roles/:roleId?mode=delete`，由详情页做 dryRun 确认。
+- 菜单动作「基于此新建」「删除」是中文动作，不标记 `translate="no"`。引用说明里的 `Agent` 与 Agent 显示名必须翻译防御。
 - 稳定测试选择器为 `role-list-table` 和 `role-row-${roleId}`。
 
 ## 8. P1：筛选交互
@@ -116,6 +118,20 @@ clearFilters():
 renderFilteredEmptyState():
   if source dataset is empty: offer create-first Role
   else: explain the active filter mismatch and offer clearFilters()
+
+selectDelete(role):
+  if role is template or delete-protected:
+    hide 删除
+    stop
+  if role.usageCount > 0:
+    show 删除 as aria-disabled with the blocked reason
+    on activate:
+      close the menu
+      present the same reason
+      do not navigate
+      do not call DELETE
+    stop
+  navigate to /admin/roles/:roleId?mode=delete
 ```
 
 ## 10. 验收标准
@@ -127,3 +143,4 @@ renderFilteredEmptyState():
 - [x] 高级筛选默认关闭，条件计数、折叠保留、摘要和一键清除有效。
 - [x] 筛选无结果可一键恢复。
 - [x] 组件测试、术语检查、IA 边界检查和构建作为交付门槛。
+- [x] 使用中 Role 的「删除」点击后关闭菜单并说明引用的 Agent；未引用 Role 仍进入删除确认。

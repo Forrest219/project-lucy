@@ -958,6 +958,11 @@
   .pl-row-more-icon { @apply h-4 w-4; }
   .pl-row-more-menu { @apply absolute right-0 top-full z-20 mt-1 min-w-[160px] rounded-md border border-border-default bg-bg-surface py-1 shadow-card; }
   .pl-row-more-item { @apply block w-full px-3 py-1.5 text-left text-sm text-fg-default no-underline transition hover:bg-bg-muted focus:bg-bg-muted focus:outline-none; }
+  .pl-row-more-item-reason { @apply mt-0.5 block max-w-[14rem] whitespace-normal text-xs font-normal leading-4 text-fg-muted; }
+  button.pl-row-more-item--blocked { @apply cursor-not-allowed text-fg-muted; }
+  button.pl-row-more-item--blocked:hover,
+  button.pl-row-more-item--blocked:focus { background-color: transparent; }
+  button.pl-row-more-item--blocked:focus-visible { @apply outline outline-2 outline-offset-1 outline-primary; }
   .pl-overview-grid { @apply grid gap-4; }
   /* M44: outer flat grid replaces the legacy pl-panel wrapper. Cards keep
      their own border; the gap provides a light visual separator between

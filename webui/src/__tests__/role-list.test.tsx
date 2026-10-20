@@ -2,10 +2,25 @@
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useParams, useSearchParams } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { toast } from "sonner";
 import { RoleList } from "../pages/admin/RoleList";
 import type { Role } from "../lib/types";
+
+vi.mock("sonner", () => ({
+  toast: {
+    message: vi.fn(),
+    error: vi.fn(),
+    success: vi.fn()
+  }
+}));
+
+function RoleDetailProbe() {
+  const { roleId } = useParams();
+  const [params] = useSearchParams();
+  return <div data-testid="role-detail">{roleId}?mode={params.get("mode") ?? ""}</div>;
+}
 
 function renderRoleList() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -15,7 +30,7 @@ function renderRoleList() {
         <Routes>
           <Route path="/admin/roles" element={<RoleList />} />
           <Route path="/admin/roles/new" element={<div data-testid="new-role">new role</div>} />
-          <Route path="/admin/roles/:roleId" element={<div data-testid="role-detail">role detail</div>} />
+          <Route path="/admin/roles/:roleId" element={<RoleDetailProbe />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>
@@ -94,6 +109,7 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  vi.mocked(toast.message).mockClear();
 });
 
 function stubRoles(roles: Role[]) {
@@ -357,7 +373,25 @@ describe("RoleList", () => {
     expect(screen.getByRole("menuitem", { name: "基于此新建" }))
       .toHaveAttribute("href", "/admin/roles/demo_readonly?mode=copy");
     expect(screen.queryByRole("menuitem", { name: "快捷抽屉预览" })).not.toBeInTheDocument();
-    expect(screen.getByRole("menuitem", { name: "删除" })).toBeDisabled();
+    const deleteItem = screen.getByRole("menuitem", { name: "删除" });
+    expect(deleteItem).toHaveAttribute("aria-disabled", "true");
+    expect(deleteItem).toHaveTextContent("无法删除：仍被 Agent「Demo」、「Zhao」引用。请先解除该 Agent 的引用后再删除。");
+    fireEvent.click(deleteItem);
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(toast.message).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId("role-detail")).not.toBeInTheDocument();
+  });
+
+  it("navigates an unreferenced formal role delete into the detail review", async () => {
+    stubRoles([makeRole({ id: "unused_role", usageCount: 0, users: [] })]);
+    renderRoleList();
+    const row = await waitFor(() => findRow("unused_role"));
+    fireEvent.click(within(row).getByRole("button", { name: "unused_role 的更多操作" }));
+    const deleteItem = screen.getByRole("menuitem", { name: "删除" });
+    expect(deleteItem).not.toHaveAttribute("aria-disabled");
+    fireEvent.click(deleteItem);
+    expect(await screen.findByTestId("role-detail")).toHaveTextContent("unused_role?mode=delete");
+    expect(toast.message).not.toHaveBeenCalled();
   });
 
   it("hides delete for formal lucy_admin even when unused", async () => {

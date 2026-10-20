@@ -14,6 +14,7 @@ import type {
   RoleSelector,
 } from "../../lib/types";
 import { PageHeader } from "../../components/PageHeader";
+import { RoleDeleteBlockedNotice } from "../../components/RoleDeleteBlockedNotice";
 import { PolicyDegradeRepairText } from "../../components/PolicyDegradeBanner";
 import { TagInput } from "../../components/TagInput";
 import { RoleTableGrants } from "../../components/RoleTableGrants";
@@ -556,7 +557,13 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
     params.set("tab", "overview");
     setSearchParams(params, { replace: true });
 
-    if (detail.source !== "yaml" || detail.usageCount > 0 || isDeleteProtectedRole(detail.id)) return;
+    if (detail.source !== "yaml" || isDeleteProtectedRole(detail.id)) return;
+    if (detail.usageCount > 0) {
+      toast.message(
+        <RoleDeleteBlockedNotice users={detail.users} className="text-sm leading-5 text-fg-default" />
+      );
+      return;
+    }
     reviewTriggerRef.current = deleteButtonRef.current;
     deleteMutation.mutate({ dryRun: true, version: detail.version });
   }, [deleteIntent, detail, searchParams, setSearchParams]);
@@ -624,8 +631,28 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
         badges={detail ? <><span>{detail.source === "template" ? "参考模板" : "正式 Role"}</span><span>{detail.usageCount} 个 <span className="notranslate" translate="no">Agent</span> 引用</span></> : null}
         actions={
           isReadOnlyTemplate ? <Link to={`/admin/roles/${encodeURIComponent(detail!.id)}?mode=copy&tab=overview`} className="pl-btn pl-btn--primary text-sm">基于此模板创建 Role</Link>
-            : detail?.source === "yaml" && !isDeleteProtectedRole(detail.id) ? <button ref={deleteButtonRef} type="button" className="pl-btn pl-btn--danger text-sm" disabled={detail.usageCount > 0 || deleteMutation.isPending} onClick={(event) => { reviewTriggerRef.current = event.currentTarget; deleteMutation.mutate({ dryRun: true, version: detail.version }); }}>{deleteMutation.isPending ? "检查中…" : "删除 Role"}</button>
-              : null
+            : detail?.source === "yaml" && !isDeleteProtectedRole(detail.id) ? (
+              <div className="flex max-w-sm flex-col items-end gap-1">
+                <button
+                  ref={deleteButtonRef}
+                  type="button"
+                  className="pl-btn pl-btn--danger text-sm"
+                  disabled={detail.usageCount > 0 || deleteMutation.isPending}
+                  aria-describedby={detail.usageCount > 0 ? "role-delete-blocked-reason" : undefined}
+                  onClick={(event) => { reviewTriggerRef.current = event.currentTarget; deleteMutation.mutate({ dryRun: true, version: detail.version }); }}
+                >
+                  {deleteMutation.isPending ? "检查中…" : "删除 Role"}
+                </button>
+                {detail.usageCount > 0 ? (
+                  <RoleDeleteBlockedNotice
+                    id="role-delete-blocked-reason"
+                    testId="role-delete-blocked-reason"
+                    users={detail.users}
+                    className="max-w-sm text-right text-xs leading-4 text-fg-muted"
+                  />
+                ) : null}
+              </div>
+            ) : null
         }
       />
 

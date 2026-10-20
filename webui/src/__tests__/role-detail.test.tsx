@@ -4,8 +4,17 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { toast } from "sonner";
 import { RoleDetail } from "../pages/admin/RoleDetail";
 import type { RoleDetail as RoleDetailType } from "../lib/types";
+
+vi.mock("sonner", () => ({
+  toast: {
+    message: vi.fn(),
+    error: vi.fn(),
+    success: vi.fn()
+  }
+}));
 
 function renderAt(path: string) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
@@ -110,6 +119,7 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  vi.mocked(toast.message).mockClear();
 });
 
 describe("RoleDetail Spec 150", () => {
@@ -317,6 +327,7 @@ describe("RoleDetail Spec 150", () => {
     installFetch(used);
     renderAt("/admin/roles/analyst");
     expect(await screen.findByRole("button", { name: "删除 Role" })).toBeDisabled();
+    expect(screen.getByTestId("role-delete-blocked-reason")).toHaveTextContent("无法删除：仍被 Agent「Agent 1」引用。请先解除该 Agent 的引用后再删除。");
 
     cleanup();
     const calls: boolean[] = [];
@@ -351,6 +362,23 @@ describe("RoleDetail Spec 150", () => {
     expect(within(drawer).getByText("确认删除 Role")).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "概览", hidden: true })).toHaveAttribute("aria-selected", "true");
     expect(calls).toEqual([true]);
+    expect(toast.message).not.toHaveBeenCalled();
+  });
+
+  it("explains a referenced delete deep link without opening the review drawer", async () => {
+    const calls: string[] = [];
+    installFetch(
+      makeRole({ usageCount: 1, users: [{ id: "invest-uat", name: "Invest UAT", enabled: true, tokenCount: 1 }] }),
+      (url, init) => {
+        if (init?.method === "DELETE") calls.push(String(url));
+      }
+    );
+    renderAt("/admin/roles/analyst?mode=delete");
+    expect(await screen.findByTestId("role-delete-blocked-reason")).toHaveTextContent("Invest UAT");
+    expect(screen.getByRole("button", { name: "删除 Role" })).toBeDisabled();
+    expect(screen.queryByTestId("role-permission-review-drawer")).not.toBeInTheDocument();
+    expect(calls).toEqual([]);
+    await waitFor(() => expect(toast.message).toHaveBeenCalledTimes(1));
   });
 
   it("retains the draft and review Drawer when runtimeAck is false", async () => {
@@ -375,7 +403,8 @@ describe("RoleDetail Spec 150", () => {
   it("lists referencing agents on the usage surface", async () => {
     installFetch(makeRole({ usageCount: 1, users: [{ id: "agent-1", name: "运营问数", enabled: true, tokenCount: 2 }] }));
     renderAt("/admin/roles/analyst?tab=usage");
-    expect(await screen.findByText("运营问数")).toBeInTheDocument();
-    expect(screen.getByText(/agent-1/).closest("a")).toHaveAttribute("href", "/admin/agents/agent-1");
+    const agentLink = await screen.findByRole("link", { name: /运营问数/ });
+    expect(agentLink).toHaveAttribute("href", "/admin/agents/agent-1");
+    expect(agentLink).toHaveTextContent("agent-1");
   });
 });
