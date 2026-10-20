@@ -4,7 +4,8 @@
 |---|---|
 | 文档名称 | project-lucy 项目概览 |
 | 文档类型 | Overview |
-| 版本 | v1.17 |
+| 版本 | v1.18 |
+| v1.18 更新 | 2026-10-20，登记 v2.5 L25-10 Hive 直连实施方案；仅规划，暂不开发 |
 | 撰写日期 | 2026-06-17；v1.1 更新 2026-06-21；v1.2 更新 2026-06-21；v1.3 更新 2026-06-21；v1.4 更新 2026-06-22；v1.5 更新 2026-06-24（澄清 Lucy 不直接回答问题的定位措辞）；v1.6 更新 2026-07-06（同步交付缺口、headless 边界、运行时 instructions 来源和本机配置治理）；v1.7 更新 2026-07-06（同步 data agent context compiler + governed MCP runtime 定位）；v1.8 更新 2026-07-27（新增 Agent Admin 企业级交付 spec 索引）；v1.9 更新 2026-08-03（新增 Lucy 202608 可靠性交付系统升级蓝图索引）；v1.10 更新 2026-08-03（新增 Lucy 202608 执行总控与 Dynamic RLS POC 索引）；v1.11 更新 2026-08-03（同步 Kubernetes / Helm 单副本 baseline：`deploy/k8s/helm/lucy/`）；v1.12 更新 2026-08-03（将 202608 主线收窄为 Enterprise Governance & Observability）；v1.13 更新 2026-08-03（删除 Dynamic RLS / CLS POC spec / work order，移出 202608 active scope）；v1.14 更新 2026-08-26（索引可选 Agent Chat A3 Design Spec；非默认交付）；v1.15 更新 2026-08-28（索引 API Staging 接入准入 Spec · 计划支持）；v1.16 更新 2026-09-24（索引运维问数连接 Spec 149）；v1.17 更新 2026-10-18（索引 Cloudflare OS 对标差异） |
 | 适用范围 | 新成员 onboarding、模块索引、当前能力边界 |
 
@@ -152,6 +153,7 @@ Lucy MCP Proxy 监听 `LUCY_PROXY_HOST:LUCY_PROXY_PORT`（默认容器内 `0.0.0
 | Lucy 产品定位与愿景 | `docs/governance/vision.md` |
 | **竞品分析与差异化立项（20261014）** | **`docs/specs/lucy-20261014-safe-log-to-quality-eval-spec.md`**（P0-1 反馈回流浪程）· **`docs/specs/lucy-20261014-release-bom-spec.md`**（P0-2 发布物料清单）· **`docs/specs/lucy-20261014-concept-dictionary-spec.md`**（P1 概念字典）；工单 `docs/plans/wo-20261014-*.md`；分析底稿与评审历史 `docs/specs/lucy-20261014-fivetran-context-layer-competitive-analysis.md` |
 | Cloudflare OS 对标差异（20261018） | `docs/specs/lucy-20261018-cloudflare-os-benchmark.md`。公开材料对照，不是功能 Spec；未纳入本地实机截图交叉审阅 |
+| Hive 直连（v2.5 L25-10，方案待评审，暂不开发） | [Hive 直连实施方案](../plans/2026-10-20-hive-direct-connection-implementation-plan.md)。Lucy 适配 HiveServer2/JDBC，复用未修改的 KTX Python 语义计算接口；静态接口核查完成，动态验证未执行 |
 | Lucy 202608 Enterprise Governance & Observability 升级蓝图 | `docs/specs/lucy-202608-reliable-delivery-upgrade-spec.md` |
 | Lucy 202608 升级执行总控 | `docs/specs/lucy-202608-upgrade-execution-control.md` |
 | Lucy 202608 Governance & Observability 差距分析 | `docs/access-control/gap-analysis-202608.md` |
