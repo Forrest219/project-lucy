@@ -24,6 +24,9 @@
 基础检查在客户目录运行，填写实际名称/URL/连接；MCP Token 从密钥管理器注入环境，不在命令参数输入明文：
 
 ```bash
+if [ -f tls-ca.pem ]; then
+  export CURL_CA_BUNDLE="$PWD/tls-ca.pem"
+fi
 bash package/scripts/acceptance.sh --namespace ACTUAL_NAMESPACE \
   --release ACTUAL_RELEASE --deployment ACTUAL_DEPLOYMENT --service ACTUAL_SERVICE \
   --public-mcp-url ACTUAL_MCP_URL --webui-url ACTUAL_WEBUI_URL \
