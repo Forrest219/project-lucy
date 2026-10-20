@@ -125,7 +125,7 @@ def verify(archive, report_path, instance_dir=None):
                     # Simulate the old release's values/resources, not an actual old running pod.
                     old_values = {'fullnameOverride': config['deployment'], 'existingSecret': 'fixture-db',
                         'env': {'LUCY_PUBLIC_MCP_URL': config['publicMcpUrl']}, 'security': {'access': access},
-                        'service': {'type': 'LoadBalancer', 'ports': {'webui': 8276, 'mcp': 8277}}}
+                        'service': {'type': 'LoadBalancer', 'webuiPort': 8276, 'mcpPort': 8277}}
                     if access == 'http':
                         old_values['persistence'] = {'existingClaim': config['pvcName']}
                     values_file = root / (access + '-old-values.json')
@@ -133,6 +133,8 @@ def verify(archive, report_path, instance_dir=None):
                     manifest = run(['helm', 'template', config['release'], str(base / 'helm/lucy'), '-f', str(values_file)])
                     rendered = objects(run([real_kubectl, '--context', 'fixture', 'create', '--dry-run=client', '--validate=false',
                                             '-f', '-', '-o', 'json'], input=manifest, env=env_real))
+                    service = next(x for x in rendered if x['kind'] == 'Service')
+                    require({p['port'] for p in service['spec']['ports']} == {8276, 8277}, 'FIXTURE_PUBLIC_PORTS')
                     dep = next(x for x in rendered if x['kind'] == 'Deployment')
                     pvc = next((x for x in rendered if x['kind'] == 'PersistentVolumeClaim'),
                                {'metadata': {'name': config['pvcName']}, 'spec': {'accessModes': ['ReadWriteOnce']}})
