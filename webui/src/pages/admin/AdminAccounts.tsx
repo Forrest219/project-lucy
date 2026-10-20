@@ -114,7 +114,7 @@ export function AdminAccounts() {
         <table className="pl-data-grid pl-data-table w-full" data-testid="admin-accounts-table">
           <thead>
             <tr>
-              <th>账户 id</th>
+              <th>登录账户</th>
               <th>显示名</th>
               <th>角色</th>
               <th>状态</th>
@@ -147,7 +147,7 @@ export function AdminAccounts() {
                       className="pl-btn pl-btn--ghost"
                       disabled={deleteMutation.isPending}
                       onClick={() => {
-                        if (window.confirm(`确定删除账户 ${row.id}？`)) {
+                        if (window.confirm(`确定删除登录账户 ${row.id}？`)) {
                           deleteMutation.mutate(row.id);
                         }
                       }}
@@ -167,12 +167,14 @@ export function AdminAccounts() {
         <form className="pl-card grid gap-3 p-4" onSubmit={onCreate}>
           <h2 className="text-base font-semibold">添加登录账户</h2>
           <label className="grid gap-1">
-            <span className="text-sm font-medium">账户 id</span>
+            <span className="text-sm font-medium">登录账户</span>
             <input
               className="pl-input notranslate"
               translate="no"
+              autoComplete="username"
               value={adminId}
               onChange={(e) => setAdminId(e.target.value)}
+              placeholder="请输入登录账户"
               required
             />
           </label>

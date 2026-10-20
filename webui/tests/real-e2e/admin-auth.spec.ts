@@ -73,7 +73,7 @@ test("owner adds an operator in the UI; the operator cannot govern accounts but 
     await page.goto("/admin/admins");
     await expect(page.getByRole("heading", { name: "添加登录账户" })).toBeVisible();
     const form = page.locator("form", { has: page.getByRole("heading", { name: "添加登录账户" }) });
-    await form.getByLabel("账户 id").fill(operator.adminId);
+    await form.getByLabel("登录账户").fill(operator.adminId);
     await form.getByLabel("显示名").fill("E2E Operator");
     await form.getByLabel("角色").selectOption("operator");
     await form.getByLabel("初始密码").fill(operator.password);

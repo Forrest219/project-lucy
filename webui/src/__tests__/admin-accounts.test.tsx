@@ -88,6 +88,9 @@ describe("AdminAccounts (/admin/admins)", () => {
     renderAdminAccounts();
 
     expect(await screen.findByRole("heading", { name: "登录账户" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "登录账户" })).toBeInTheDocument();
+    expect(screen.getByLabelText("登录账户")).toBeInTheDocument();
+    expect(screen.queryByText("账户 id")).not.toBeInTheDocument();
     const frame = await screen.findByTestId("admin-accounts-grid-frame");
     expect(frame).toHaveClass("pl-data-grid-frame");
     expect(screen.getByTestId("admin-accounts-grid-scroll")).toHaveClass("pl-data-grid-scroll");
