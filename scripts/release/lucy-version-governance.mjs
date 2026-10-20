@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import YAML from "yaml";
@@ -99,6 +99,21 @@ export function collectVersionGovernanceErrors() {
   }
   if (!releaseWorkflow.includes('printenv "${IMAGE_REF}" LUCY_VERSION')) {
     errors.push("release workflow does not verify final image LUCY_VERSION");
+  }
+  if (!releaseWorkflow.includes('--build-arg "LUCY_GIT_SHA=${GITHUB_SHA}"')) {
+    errors.push("release workflow does not pass GITHUB_SHA into the image build revision");
+  }
+  if (!dockerfile.includes("node scripts/release/lucy-build-revision.mjs")) {
+    errors.push("Dockerfile does not stamp /app/BUILD_REVISION from the source commit");
+  }
+  if (/^ENV\b[^\n]*\bLUCY_GIT_SHA\b/m.test(dockerfile) || /\\\n\s*LUCY_GIT_SHA=/.test(dockerfile)) {
+    errors.push("Dockerfile must not persist LUCY_GIT_SHA as a runtime environment variable");
+  }
+  const helmTemplates = readdirSync(path.join(ROOT, "deploy/k8s/helm/lucy/templates"))
+    .map((name) => read(`deploy/k8s/helm/lucy/templates/${name}`))
+    .join("\n");
+  if (helmTemplates.includes("LUCY_GIT_SHA")) {
+    errors.push("Helm must not inject LUCY_GIT_SHA; the build revision is an image file");
   }
 
   return { version, errors };

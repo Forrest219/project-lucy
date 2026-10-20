@@ -254,6 +254,8 @@ jobs:
             --platform linux/amd64 \
             --build-arg "KTX_VERSION=${KTX_VERSION}" \
             --build-arg "LUCY_VERSION=${LUCY_VERSION}" \
+            --build-arg "LUCY_GIT_SHA=${GITHUB_SHA}" \
+            --build-arg "LUCY_GIT_DIRTY=0" \
             --build-arg "TARGETPLATFORM=linux/amd64" \
             --build-arg "TARGETARCH=amd64" \
             --tag "${IMAGE}" \
@@ -307,6 +309,8 @@ jobs:
             "test -x /home/lucy/.ktx/runtime/${KTX_VERSION}/.venv/bin/python && /home/lucy/.ktx/runtime/${KTX_VERSION}/.venv/bin/python --version"
           # LUCY_VERSION baked correctly
           gate lucy-version-baked bash -c 'test "$(docker run --rm --network=none --platform linux/amd64 --entrypoint printenv "${IMAGE_REF}" LUCY_VERSION)" = "${LUCY_VERSION}"'
+          gate lucy-build-revision bash -c 'test "$(docker run --rm --network=none --platform linux/amd64 --entrypoint cat "${IMAGE_REF}" /app/BUILD_REVISION | tr -d "[:space:]")" = "${GITHUB_SHA}"'
+          gate lucy-build-revision-not-env bash -c 'test -z "$(docker run --rm --network=none --platform linux/amd64 --entrypoint printenv "${IMAGE_REF}" LUCY_GIT_SHA 2>/dev/null || true)"'
           # G8: K8s contract gate
           gate g8-k8s-contract bash scripts/gates/g8-image-k8s-contract-gate.sh "${IMAGE_REF}"
           docker image inspect "${IMAGE_REF}" --format '{{.Id}}' > release/image-config-id.txt
@@ -635,6 +639,8 @@ jobs:
           grep -q "${KTX_VERSION}" release/ktx-version.txt
           IMAGE_LUCY_VERSION="$(docker run --rm --network=none --platform linux/amd64 --entrypoint printenv "${IMAGE_REF}" LUCY_VERSION)"
           test "${IMAGE_LUCY_VERSION}" = "${LUCY_VERSION}"
+          IMAGE_REVISION="$(docker run --rm --network=none --platform linux/amd64 --entrypoint cat "${IMAGE_REF}" /app/BUILD_REVISION | tr -d '[:space:]')"
+          test "${IMAGE_REVISION}" = "${GITHUB_SHA}"
           printf '%s\n' "${IMAGE_LUCY_VERSION}" > release/lucy-version.txt
           bash scripts/gates/g8-image-k8s-contract-gate.sh "${IMAGE_REF}"
           docker image inspect "${IMAGE_REF}" --format '{{.Id}}' > release/image-config-id.txt

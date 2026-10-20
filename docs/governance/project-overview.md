@@ -160,6 +160,7 @@ Lucy MCP Proxy 监听 `LUCY_PROXY_HOST:LUCY_PROXY_PORT`（默认容器内 `0.0.0
 | Kubernetes / Helm 部署（单副本） | `deploy/k8s/helm/lucy/`、`docs/runbooks/customer-k8s-deployer-quickstart.md` |
 | 客户部署 / 运维手册 | `docs/runbooks/customer-deployment-guide.md` |
 | 版本矩阵 | `docs/governance/version-matrix.md` |
+| 构建修订（侧栏提交标识 / health `gitSha`） | `docs/specs/lucy-20261020-build-revision-identity-spec.md` |
 | 测试分层与发布门禁 | `docs/governance/test-layers-and-release-gates.md` |
 | Release CI | `docs/governance/release-ci.md` |
 | Docker demo | `examples/docker-demo/README.md` |

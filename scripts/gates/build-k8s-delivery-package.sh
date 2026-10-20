@@ -90,6 +90,12 @@ IMAGE_LUCY_VERSION="$(docker run --rm --platform linux/amd64 --entrypoint printe
   echo "FAIL: image LUCY_VERSION=${IMAGE_LUCY_VERSION:-<empty>} does not match VERSION=${LUCY_VERSION}" >&2
   exit 1
 }
+GIT_FULL="$(git -C "${ROOT}" rev-parse HEAD)"
+IMAGE_REVISION="$(docker run --rm --platform linux/amd64 --entrypoint cat "${IMAGE_TAG}" /app/BUILD_REVISION | tr -d '[:space:]' || true)"
+[[ "${IMAGE_REVISION}" == "${GIT_FULL}" ]] || {
+  echo "FAIL: image BUILD_REVISION=${IMAGE_REVISION:-<empty>} does not match HEAD=${GIT_FULL}" >&2
+  exit 1
+}
 if [[ -z "${IMAGE_REPOSITORY}" ]]; then
   if [[ "${IMAGE_TAG}" == *:* ]]; then
     IMAGE_REPOSITORY="${IMAGE_TAG%:*}"

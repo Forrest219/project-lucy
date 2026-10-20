@@ -15,7 +15,7 @@
     "eval:list": "node scripts/eval/eval-runner.mjs --list-cases",
     "lint:spec": "node scripts/lint-spec.mjs",
     "lint:version": "node scripts/release/lucy-version-governance.mjs",
-    "lint:version:test": "node --test scripts/release/lucy-version-governance.test.mjs",
+    "lint:version:test": "node --test scripts/release/lucy-version-governance.test.mjs scripts/release/lucy-build-revision.test.mjs",
     "lint:handbook-baseline": "node scripts/release/handbook-baseline.mjs",
     "lint:handbook-baseline:test": "node --test scripts/release/handbook-baseline.test.mjs",
     "lint:handbook-coverage": "node scripts/gates/handbook-coverage.mjs",

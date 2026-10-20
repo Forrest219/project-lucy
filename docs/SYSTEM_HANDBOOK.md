@@ -38,6 +38,8 @@
 
 **客户镜像 tag 形式**：`customer-amd64-2.0.0-YYYYMMDD-<gitSha>`（首段产品段已对齐到 `2.0.0`）。
 
+侧栏在产品标签 `v2.0.0` 下方另有一行提交标识（7 位，工作区不干净时带 `-dirty`）。`/api/health` 的 `gitSha` 是完整 40 位。这行不是产品版本，也不能在 Helm 或 `LUCY_VERSION` 里手改；构建时没有写入则显示 `unknown`。对照客户正在跑的 `main` 提交时看这一行，而不是只看 `v2.0.0`。
+
 本次版本切换**不**涉及的事项：
 
 - `webui/package.json` 的 `version`（npm 包版本）保持 `1.0.0`，与包无关。

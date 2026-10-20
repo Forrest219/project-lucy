@@ -80,6 +80,7 @@ const SOURCE_BUNDLE_ENTRIES = [
   "scripts/smoke/lucy-delivery-isolation-smoke.mjs",
   "scripts/runtime/docker-entrypoint.sh",
   "scripts/runtime/docker-healthcheck.sh",
+  "scripts/release/lucy-build-revision.mjs",
   "webui/package.json",
   "webui/package-lock.json",
   "webui/index.html",

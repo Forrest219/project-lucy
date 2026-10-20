@@ -12,7 +12,7 @@
 
 | Component | Current Baseline | Evidence |
 |---|---|---|
-| **Lucy product version** | **`2.0.0`** | repo-root `VERSION`, `Chart.yaml` `appVersion`, `/api/health.data.lucyVersion`, WebUI sidebar |
+| **Lucy product version** | **`2.0.0`** | repo-root `VERSION`, `Chart.yaml` `appVersion`, `/api/health.data.lucyVersion`, WebUI sidebar product label |
 | Lucy source | `main` after P0 release baseline | commit `e8863b8` established P0 Docker baseline |
 | Lucy package | `project-lucy-eval@2.0.0` | `package.json` (aligned with product version) |
 | WebUI package | `webui@1.0.0` | `webui/package.json` (npm package only; not customer-facing) |
@@ -49,6 +49,18 @@ Lucy versions use numeric `X.Y.Z` syntax so npm, Helm, and container tooling can
 `project-lucy:customer-amd64-<LUCY_VERSION>-<YYYYMMDD>-<gitSha>`
 
 Do **not** put KTX version in the product segment of the tag. KTX remains in `/api/health.data.bundledKtxVersion` and Helm `lucy.bundledKtxVersion`.
+
+## 1.2 Build revision (not a product version)
+
+The sidebar and `/api/health` also show the source commit that was built. That value is how an upgrade is matched to `main`. It is not chosen in `VERSION`, Helm, or `LUCY_VERSION`.
+
+| Field | Meaning |
+|---|---|
+| `/api/health.data.gitSha` | Full 40-hex commit, or `unknown` |
+| `/api/health.data.gitDirty` | `true` when the stamped tree had uncommitted changes |
+| Sidebar, under the product label | 7-hex prefix, plus `-dirty` when `gitDirty` is true |
+
+Normative resolution, stamp file, and the rule that runtime env cannot replace it: [`docs/specs/lucy-20261020-build-revision-identity-spec.md`](../specs/lucy-20261020-build-revision-identity-spec.md). Image builds pass `LUCY_GIT_SHA` only as a Docker build arg because `.dockerignore` excludes `.git`. The image stores the result in `/app/BUILD_REVISION` and does not keep `LUCY_GIT_SHA` in the runtime environment.
 
 ## 2. Runtime Compatibility
 

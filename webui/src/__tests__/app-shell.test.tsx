@@ -1,6 +1,9 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
@@ -8,6 +11,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppFrame } from "../app/App";
 import { PageHeader } from "../components/PageHeader";
 import { assertNoForbiddenTerms } from "./forbidden-terms";
+
+function expectedSidebarRevision(): string | undefined {
+  if (existsSync("/app/BUILD_REVISION")) return undefined;
+  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
+  const sha = execFileSync("git", ["-C", repoRoot, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+  const dirty = execFileSync("git", ["-C", repoRoot, "status", "--porcelain"], { encoding: "utf8" }).trim() !== "";
+  return `${sha.slice(0, 7)}${dirty ? "-dirty" : ""}`;
+}
 
 function StubPage({ name }: { name: string }) {
   return <div data-testid="route-page">{name}</div>;
@@ -403,6 +414,10 @@ describe("AppFrame shell", () => {
     expect(sidebarHelp.querySelector("svg")).not.toBeNull();
     expect(sidebarHelp).not.toHaveTextContent("?");
     expect(within(sidebarFooter).getByTestId("sidebar-version")).toHaveTextContent("v2.0.0");
+    const revisionLabel = expectedSidebarRevision();
+    expect(within(sidebarFooter).getByTestId("sidebar-revision")).toHaveTextContent(
+      revisionLabel ? new RegExp(`^${revisionLabel}$`) : /^(?:[0-9a-f]{7}(?:-dirty)?|unknown)$/
+    );
     expect(within(sidebarFooter).getAllByRole("link")).toHaveLength(1);
     expect(within(sidebarFooter).queryByRole("link", { name: "配置变更" })).not.toBeInTheDocument();
     expect(within(sidebarFooter).queryByRole("navigation")).not.toBeInTheDocument();
@@ -592,6 +607,11 @@ describe("AppFrame shell", () => {
       expect(helpLink).toHaveTextContent("系统手册");
       expect(helpLink.querySelector("svg")).not.toBeNull();
       expect(within(footer).getByTestId("sidebar-version")).toHaveTextContent("v2.0.0");
+      const revisionLabel = expectedSidebarRevision();
+      expect(within(footer).getByTestId("sidebar-revision")).toHaveTextContent(
+        revisionLabel ? new RegExp(`^${revisionLabel}$`) : /^(?:[0-9a-f]{7}(?:-dirty)?|unknown)$/
+      );
+      expect(within(footer).getByTestId("sidebar-revision")).toHaveAttribute("title");
       expect(within(footer).getAllByRole("link")).toHaveLength(1);
       expect(within(footer).getByTestId("sidebar-version").tagName).toBe("SPAN");
     });

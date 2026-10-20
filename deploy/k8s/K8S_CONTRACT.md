@@ -141,7 +141,7 @@ Preflight belongs in post-deploy scripts or Helm test Jobs, not in the pod start
 |---|---|---|
 | `KTX_PROJECT_ROOT` | yes | `/data/lucy` |
 | `POSTHOG_DISABLED` | yes | `"1"` |
-| `LUCY_VERSION` | yes | Lucy product version; current baseline `2.0.0` |
+| `LUCY_VERSION` | yes | Lucy product version; current baseline `2.0.0`. This is not the source commit. Commit identity is the image file `/app/BUILD_REVISION` (`gitSha` on `/api/health`). Do not add `LUCY_GIT_SHA` to the chart or Pod env. |
 | `LUCY_BUNDLED_KTX_VERSION` | yes | Bundled KTX identity; current baseline `0.16.0` |
 | `LUCY_PUBLIC_MCP_URL` | yes (non-local) | Externally reachable MCP URL; chart fails render if empty for customer registry |
 | `LUCY_ALLOW_PLACEHOLDER_KTX` | prod: empty | `"1"` only for demo seed |

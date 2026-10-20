@@ -20,6 +20,7 @@ import { joinCandidatesPath, readJoinCandidates, writeJoinCandidates, type JoinC
 import { formatConnectionErrorMessage } from "./connection-errors";
 import { readKtxRuntimeStatus } from "./ktx-runtime";
 import { resolveLucyVersion } from "./lucy-version.js";
+import { loadRuntimeRevision } from "./lucy-revision.js";
 import { reindexProject, validateSource, testConnection, type ValidationResult } from "./ktx";
 import { applyColumnTypeContractToValidation } from "./publish-gate";
 import {
@@ -712,6 +713,8 @@ export function buildServer() {
         // Spec §3.1 item 8: surfaced only while customer mode runs without Secure cookies (test profile).
         ...(resolveCookieSecure().insecureTestProfile ? { insecureTestProfile: true } : {}),
         lucyVersion: resolveLucyVersion(),
+        // Commit identity from /app/BUILD_REVISION or the Lucy source checkout. Not LUCY_GIT_SHA.
+        ...loadRuntimeRevision(),
         bundledKtxVersion: process.env.LUCY_BUNDLED_KTX_VERSION ?? "unknown",
         ktxRuntime: {
           ready: ktxRuntime.ready,

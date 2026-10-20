@@ -72,6 +72,8 @@ describe("release-artifacts A3 customer-bundle hygiene", () => {
       assert.match(listing.stdout, /customer-config\.example\//);
       assert.match(listing.stdout, /webui\/config\/data-qa-instructions\.md/);
       assert.match(listing.stdout, /scripts\/smoke\/lucy-delivery-isolation-smoke\.mjs/);
+      assert.match(listing.stdout, /scripts\/release\/lucy-build-revision\.mjs/);
+      assert.doesNotMatch(listing.stdout, /lucy-build-revision\.test\.mjs/);
 
       const stagedPkg = JSON.parse(
         await readFile(path.join(extractDir, "lucy-docker-source-bundle", "package.json"), "utf8")

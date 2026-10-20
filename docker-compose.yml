@@ -5,6 +5,9 @@ services:
       args:
         KTX_VERSION: "${KTX_VERSION:-0.16.0}"
         LUCY_VERSION: "${LUCY_VERSION:-2.0.0}"
+        # Source commit for /app/BUILD_REVISION. Not a product version and not a runtime env.
+        LUCY_GIT_SHA: "${LUCY_GIT_SHA:-}"
+        LUCY_GIT_DIRTY: "${LUCY_GIT_DIRTY:-}"
         # Customer / production baseline is amd64. Override on arm64 hosts.
         TARGETPLATFORM: "${TARGETPLATFORM:-linux/amd64}"
         TARGETARCH: "${TARGETARCH:-amd64}"

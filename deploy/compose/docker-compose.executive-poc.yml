@@ -6,6 +6,8 @@ x-lucy-build: &lucy-build
     KTX_VERSION: "${KTX_VERSION:-0.16.0}"
     TARGETPLATFORM: "${TARGETPLATFORM:-linux/arm64}"
     TARGETARCH: "${TARGETARCH:-arm64}"
+    LUCY_GIT_SHA: "${LUCY_GIT_SHA:-}"
+    LUCY_GIT_DIRTY: "${LUCY_GIT_DIRTY:-}"
 
 services:
   demo-exec-db:

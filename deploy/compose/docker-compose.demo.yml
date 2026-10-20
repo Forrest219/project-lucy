@@ -17,6 +17,10 @@ x-lucy-build: &lucy-build
     APT_MIRROR: "${APT_MIRROR:-}"
     # Optional npm registry host (see Dockerfile ARG block). Empty = registry.npmjs.org.
     NPM_REGISTRY: "${NPM_REGISTRY:-}"
+    # Source commit for /app/BUILD_REVISION. upgrade-lucy.sh exports these.
+    # Empty leaves the running UI as `unknown` rather than a hand-set version.
+    LUCY_GIT_SHA: "${LUCY_GIT_SHA:-}"
+    LUCY_GIT_DIRTY: "${LUCY_GIT_DIRTY:-}"
 
 services:
   demo-db:

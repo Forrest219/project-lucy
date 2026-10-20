@@ -459,6 +459,7 @@
 | `brand-tagline` | brand-tagline | `app/App.tsx` |
 | `sidebar-search-trigger` | sidebar-search-trigger | `app/App.tsx` |
 | `sidebar-version` | sidebar-version | `app/App.tsx` |
+| `sidebar-revision` | sidebar-revision | `app/App.tsx` |
 | `sidebar-auth` | sidebar-auth | `app/App.tsx` |
 | `add-schema-select` | add-schema-select | `components/AddSchemaDrawer.tsx` |
 | `add-schema-live-loading` | add-schema-live-loading | `components/AddSchemaDrawer.tsx` |

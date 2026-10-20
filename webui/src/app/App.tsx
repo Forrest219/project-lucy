@@ -24,6 +24,7 @@ import { isPublicUiPath } from "../lib/publicAccess";
 import { HelpButton } from "../components/HelpButton";
 import { CommandPalette } from "../components/CommandPalette";
 import { formatLucyVersionLabel } from "../lib/lucyVersion";
+import { formatLucyRevisionLabel, lucyRevisionTitle } from "../lib/lucyRevision";
 import { setDisplayWriteBeginHandler, setDisplayWriteSettledHandler } from "../lib/apiClient";
 import { catalogReloadsQueryOptions, DISPLAY_SCOPE_QUERY_KEYS, mcpRuntimeStatusQueryOptions, projectQueryOptions, sourcesQueryOptions } from "../lib/displayQueryOptions";
 import { isChunkLoadError, lazyRoute, type LazyRoute } from "../lib/routeChunkRecovery";
@@ -493,12 +494,22 @@ export function AppFrame() {
               <CircleHelp aria-hidden="true" className="size-4" />
               <span>系统手册</span>
             </HelpButton>
-            <span
-              className="pl-sidebar-version notranslate"
-              translate="no"
-              data-testid="sidebar-version"
-            >
-              {formatLucyVersionLabel()}
+            <span className="pl-sidebar-version-stack">
+              <span
+                className="pl-sidebar-version notranslate"
+                translate="no"
+                data-testid="sidebar-version"
+              >
+                {formatLucyVersionLabel()}
+              </span>
+              <span
+                className="pl-sidebar-revision notranslate"
+                translate="no"
+                data-testid="sidebar-revision"
+                title={lucyRevisionTitle()}
+              >
+                {formatLucyRevisionLabel()}
+              </span>
             </span>
           </div>
         </div>

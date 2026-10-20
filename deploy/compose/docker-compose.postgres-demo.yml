@@ -10,6 +10,8 @@ x-lucy-build: &lucy-build
     # and docs/specs/lucy-202608-08-image-arch-and-ktx-baseline-fix.md.
     TARGETPLATFORM: "${TARGETPLATFORM:-linux/arm64}"
     TARGETARCH: "${TARGETARCH:-arm64}"
+    LUCY_GIT_SHA: "${LUCY_GIT_SHA:-}"
+    LUCY_GIT_DIRTY: "${LUCY_GIT_DIRTY:-}"
 
 services:
   postgres-db:

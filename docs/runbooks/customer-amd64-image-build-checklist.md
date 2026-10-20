@@ -67,12 +67,13 @@ bash scripts/release/build-customer-amd64-image.sh
 | G4 | KTX 版本 | `docker run --rm --platform linux/amd64 --entrypoint ktx <tag> --version` | 含 `@kaelio/ktx 0.16.0` |
 | G4b | KTX Python runtime 离线预装 | 见下方 G4b 命令 | runtime python 存在，且 `--network=none` 下 `ktx --version` 成功 |
 | G4c | Lucy 产品版本 | `docker run --rm --platform linux/amd64 --entrypoint printenv <tag> LUCY_VERSION` | 等于根 `VERSION`，且 tag 产品段一致 |
+| G4d | 源提交标识 | `docker run --rm --platform linux/amd64 --entrypoint cat <tag> /app/BUILD_REVISION` | 等于 `git rev-parse HEAD`；工作区不干净时为 `<sha>-dirty`。`printenv LUCY_GIT_SHA` 必须为空 |
 | G5 | 仓库冒烟 | `npm run smoke:p0:docker` | 全绿（推荐） |
 | G6 | 配置包冒烟 | `npm run smoke:p0:headless-config -- --root customer-config.example --require-secret-files` | 8/8 PASS |
-| G7 | 导出后复核 | `docker load -i <tar>` 后重跑 G1–G4 + **G4b/G4c** + **G8** | tar 内镜像与本地 tag 一致 |
+| G7 | 导出后复核 | `docker load -i <tar>` 后重跑 G1–G4 + **G4b/G4c/G4d** + **G8** | tar 内镜像与本地 tag 一致 |
 | G8 | K8s 升级契约（**仅镜像**） | `bash scripts/gates/g8-image-k8s-contract-gate.sh <tag>` | UID 10001；空 volume 自动 `.git`；runtime 在 `/home/lucy/.ktx` |
 
-**G2–G4c + G8 为交付硬门禁**。缺 G4b 的镜像在客户内网执行查询时会尝试下载 `uv`，表现为 `ktx could not download uv`；缺 G4c 会让 image tag、侧栏与 health 版本不一致。缺 G8 的镜像/Chart 组合会导致 K8s 原地升级失败。
+**G2–G4d + G8 为交付硬门禁**。缺 G4b 的镜像在客户内网执行查询时会尝试下载 `uv`，表现为 `ktx could not download uv`；缺 G4c 会让 image tag、侧栏与 health 的产品版本不一致。缺 G4d 时侧栏只有产品版本，无法和 `main` 的提交对齐。缺 G8 的镜像/Chart 组合会导致 K8s 原地升级失败。
 
 ### G4b 命令（出包必跑）
 

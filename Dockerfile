@@ -23,6 +23,12 @@ ARG KTX_VERSION=0.16.0
 # Lucy product version (customer-facing). Independent of bundled KTX.
 # Keep in sync with repo-root VERSION; customer image tags use this, not KTX.
 ARG LUCY_VERSION=2.0.0
+# Source commit baked into /app/BUILD_REVISION. Build-time only: do not copy
+# these into ENV. Helm and runtime env must not be able to relabel the image.
+# Empty SHA writes `unknown` (local compose without the arg). A non-empty value
+# that is not 40 lowercase hex fails the build.
+ARG LUCY_GIT_SHA=
+ARG LUCY_GIT_DIRTY=
 # TARGETARCH is exposed so future architecture-specific steps (e.g. fetching a
 # KTX binary release) can branch on it without changing the rest of the file.
 ARG TARGETARCH=amd64
@@ -133,7 +139,10 @@ COPY . .
 # contain internal test DBs and private ACL. Demo stacks override
 # LUCY_TEMPLATE_ROOT to examples/*/project-template instead.
 # Bake product version into the WebUI bundle (sidebar) and keep ENV for /api/health.
-RUN cd webui \
+# Stamp the source commit before the bundle build so the sidebar and /api/health
+# read the same identity. The stamp is a file, not an environment variable.
+RUN node scripts/release/lucy-build-revision.mjs \
+  && cd webui \
   && LUCY_VERSION="${LUCY_VERSION}" VITE_LUCY_VERSION="${LUCY_VERSION}" npm run build \
   && cd /app \
   && mkdir -p /app/project-template/webui /app/project-template/semantic-layer /app/project-template/skills /app/project-template/wiki \
