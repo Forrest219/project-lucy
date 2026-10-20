@@ -30,7 +30,13 @@
 
 第一版只挂这些已有编号。`chatbi_intl` 的文本题在结果轴与策略轴分开之前不进入阻塞分母，本版不为它们编造链接。
 
-本文件不记录某次运行的 passed / failed。颜色要等后续投影脚本读取运行证据后再填。在那之前，任何一行都不能被读成已通过。`good_line: unlinked` 的良好线保持 blocked。
+本文件不记录某次运行的 passed / failed。颜色写到该 run 的 `checklist-projection.json`：
+
+```bash
+npm run e2e:real:project-checklists -- --run inbox/e2e/<runId>/run.json --eval <evidence.json>
+```
+
+`good_line: unlinked` 的良好线在投影里保持 blocked。`BE-EXPERIENCE` 读 `<runDir>/experience.json`：负责人、问题、连贯和口径都齐，且连贯、口径未被改写，该行才是 passed。投影不修改本文件，也不改 `gate:customer-release`。
 
 ## 2. 着色
 

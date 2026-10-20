@@ -27,7 +27,13 @@
 
 客户发布仍由 `npm run gate:customer-release` 签发。本清单把冻结目录里的 32 个场景收成 10 行，用来读「证据齐不齐」。
 
-变体分母留在 [`scripts/e2e/contracts/case-catalog.yaml`](../../scripts/e2e/contracts/case-catalog.yaml) 与 `case-catalog.lock.json`。本清单不把 270 个变体抄成 270 行，也不记录某次运行的 passed / failed。颜色要等后续投影脚本读取运行证据后再填。在那之前，任何一行都不能被读成已通过。
+变体分母留在 [`scripts/e2e/contracts/case-catalog.yaml`](../../scripts/e2e/contracts/case-catalog.yaml) 与 `case-catalog.lock.json`。本清单不把变体抄成一行一条，也不在本文里记录某次运行的 passed / failed。一次运行的颜色写到该 run 的 `checklist-projection.json`：
+
+```bash
+npm run e2e:real:project-checklists -- --run inbox/e2e/<runId>/run.json
+```
+
+能力行若要带上 eval 结果，加上 `--eval <evidence.json>`。证据文件里的 `cases` 使用 `pass` / `fail` 或 `passed` / `failed`。投影不修改本文件，也不改 `gate:customer-release`。没有结果文件的变体在投影里是 blocked。
 
 浏览器 contract 回归（`e2e:contract:release`）留在夹具实例上，不进入本清单。
 

@@ -27,6 +27,9 @@
 ### 影响映射更新
 - 无新 selector。不新增 `E2E-*` 测试集，不改 `gate:customer-release`。
 
+### 投影
+- `npm run e2e:real:project-checklists` 读取一次 run 的 security / management / agent / gates / 人工清单，写出 `checklist-projection.json`。未挂接的良好线保持 blocked。体验轨只认该 run 目录下的 `experience.json`。
+
 ---
 
 ## 2026-10-12 · Agent 角色多选回归

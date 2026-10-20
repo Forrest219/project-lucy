@@ -122,4 +122,4 @@ flowchart TB
 
 浏览器 contract 回归（`e2e:contract:release`，旧名 `e2e:release`）使用夹具实例，**不含**真实 Agent，不能签发客户发布。客户候选版本上线前必须由受保护 runner 执行 `npm run e2e:real:*` 三层证据并通过 `npm run gate:customer-release`；运行方式见 [`../runbooks/real-user-e2e.md`](../runbooks/real-user-e2e.md)，case 目录与分母见 `scripts/e2e/contracts/case-catalog.yaml`（冻结，`case-catalog.lock.json`）。缺能力一律 BLOCKED，不得改为 skip 或 pass。
 
-证据是否齐读 [`e2e-release-checklist.md`](e2e-release-checklist.md)（10 行证据行，二元）。能力绿到阻塞线还是良好线读 [`business-eval-checklist.md`](business-eval-checklist.md)。两份清单只引用已有 case，不另设放行命令；链接完整性由 `npm run test:e2e-harness` 里的 `checklist-links.test.mjs` 检查。
+证据是否齐读 [`e2e-release-checklist.md`](e2e-release-checklist.md)（10 行证据行，二元）。能力绿到阻塞线还是良好线读 [`business-eval-checklist.md`](business-eval-checklist.md)。两份清单只引用已有 case，不另设放行命令。链接完整性由 `npm run test:e2e-harness` 里的 `checklist-links.test.mjs` 检查。一次运行的颜色由 `npm run e2e:real:project-checklists -- --run inbox/e2e/<runId>/run.json` 写入该 run 的 `checklist-projection.json`。
