@@ -28,6 +28,7 @@ docs/qa/
 
 | 文档 | 角色 |
 |---|---|
+| [`audit-trust-and-admin-investigation-acceptance.md`](audit-trust-and-admin-investigation-acceptance.md) | **未执行**：审计可信度与管理员调查 EA-01–36，Claude 举证、Codex 独立评审；不替代已有客户发布门禁 |
 | [`e2e-sop.md`](e2e-sop.md) | **总指引**：测试集总表、选用决策、共同约定 |
 | [`smoke-test-design-upgrade-spec.md`](smoke-test-design-upgrade-spec.md) | **Fast / Full Smoke 自动化测试任务设计升级规范** |
 | [`suite-webui-browser.md`](suite-webui-browser.md) | 分表 `E2E-WEBUI` |

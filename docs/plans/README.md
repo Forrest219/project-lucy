@@ -5,6 +5,7 @@ This directory stores repository-level implementation plans that are not scoped 
 | Plan | Purpose |
 |---|---|
 | [2026-10-19-lucy-product-version-2.0.0.md](2026-10-19-lucy-product-version-2.0.0.md) | **仓库版本已落地，运行中容器未重建**：产品版本 `2.0.0`，界面标签 `v2.0.0`。V1–V6 已通过。未构建镜像，未改 KTX 或 Helm Chart 包版本 |
+| [2026-10-19-audit-trust-and-admin-investigation-plan.md](2026-10-19-audit-trust-and-admin-investigation-plan.md) | **设计交付，未实施**：用户批准跨端交叉复核后，拆成 T00–T08；Claude Code 实施，Codex 按 EA-01–36 评审验收。覆盖可信归属、身份、保全、导出与管理员调查，受控客户端范围单列 |
 | [2026-10-19-v2-bootstrap-delivery-scripts-plan.md](2026-10-19-v2-bootstrap-delivery-scripts-plan.md) | **v2.0 脚本已实现、现场待测**：自动生成和复用实例引导密钥，配置 K8s / K3s Secret 与部署入口；15 项 Node 和 11 项 Python 检查通过，实际集群、升级及恢复由用户测试，不新增发布门禁 |
 | [2026-10-19-upgrade-e2e-implementation-plan.md](2026-10-19-upgrade-e2e-implementation-plan.md) | **v2.5 需求备忘，待落地，非门禁**：L25-07 的完整方案，覆盖 Docker / K3s / K8s、真实资产、备份恢复、业务与安全连续性；v2.0 仅做交付验证，不修改当前 CI 或发布规则 |
 | `webui/docs/plans/wo-202610-27-engine-catalog-and-mcp-query-connection.md` | **待审阅，未批准**：Spec 176 v0.3。新建连接显式支持 KTX `driver: athena`。v0.2 引擎目录 / MCP 查询连接已撤回 |
