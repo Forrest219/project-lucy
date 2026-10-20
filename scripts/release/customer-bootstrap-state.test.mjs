@@ -122,3 +122,30 @@ test('intranet HTTP is an explicit customer access mode and must match both URLs
   assert.throws(() => validateInstance({ ...http, publicMcpUrl: 'https://lucy.internal/mcp' }));
   assert.throws(() => validateInstance({ ...instanceFixture(), access: 'cleartext' }));
 });
+test('an uninitialized upgrade must record that the old open-mode baseline was reviewed', () => {
+  const upgrade = { ...instanceFixture(), intent: 'upgrade', namespaceUid: 'ns', deploymentUid: 'dep', pvcUid: 'pvc', baselineImage: 'project-lucy:old', backup: { method: 'quiesced-pvc-tar' }, recovery: { baselineImage: 'project-lucy:old', instructionsFile: 'RECOVERY.md' } };
+  assert.throws(() => validateInstance(upgrade), /LEGACY_BASELINE_REVIEW_REQUIRED/);
+  assert.equal(validateInstance({ ...upgrade, legacyBaselineReviewed: true }).intent, 'upgrade');
+});
+test('python prepare writes a credential the node issuer can reuse', async (t) => {
+  const root = await temp(t), base = await fixturePackage(root);
+  const config = path.join(root, 'customer.json');
+  await fs.writeFile(config, JSON.stringify(instanceFixture()));
+  const stateDir = path.join(root, 'state');
+  const output = path.join(root, 'out');
+  await new Promise((resolve, reject) => {
+    const child = spawn('python3', [path.join(scriptDir, '../deploy/prepare-customer-instance.py'), '--base-package', base, '--instance-config', config, '--state-dir', stateDir, '--output', output]);
+    let err = '';
+    child.stderr.on('data', (d) => { err += d; });
+    child.stdout.resume();
+    child.on('close', (rc) => rc ? reject(Error(err || `python exited ${rc}`)) : resolve());
+  });
+  const token = await fs.readFile(path.join(output, 'credentials/webui-bootstrap-token'), 'utf8');
+  const reused = await getBootstrapCredential({ stateDir, instanceId: 'customer-one', credentialState: 'issued' });
+  assert.equal(reused.key, token);
+  assert.equal(reused.reused, true);
+  const delivery = JSON.parse(await fs.readFile(path.join(output, 'instance.json'), 'utf8'));
+  assert.equal(delivery.credentialState, 'issued');
+  assert.equal(delivery.image.platform, 'linux/amd64');
+  assert.equal(JSON.parse(await fs.readFile(path.join(output, 'customer-values.yaml'), 'utf8')).security.access, 'https');
+});

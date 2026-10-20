@@ -186,19 +186,25 @@ cp "${ROOT}/scripts/gates/preflight_upgrade_drift.py" "${PKG_DIR}/scripts/prefli
 cp "${ROOT}/scripts/deploy/deploy-customer-k8s.sh" "${PKG_DIR}/scripts/deploy.sh"
 cp "${ROOT}/scripts/deploy/customer-deployment-helper.py" "${PKG_DIR}/scripts/customer-deployment-helper.py"
 cp "${ROOT}/scripts/deploy/probe-customer-auth-state.mjs" "${PKG_DIR}/scripts/probe-customer-auth-state.mjs"
+cp "${ROOT}/scripts/deploy/prepare-customer-instance.py" "${PKG_DIR}/scripts/prepare-customer-instance.py"
+cp "${ROOT}/deploy/k8s/examples/instance.upgrade.http.example.json" "${PKG_DIR}/examples/instance.upgrade.http.example.json"
+cp "${ROOT}/deploy/k8s/examples/RECOVERY.open-mode.md" "${PKG_DIR}/examples/RECOVERY.open-mode.md"
 cat > "${PKG_DIR}/CUSTOMER-FIRST-ADMIN.md" <<'EOF'
 # 首次创建管理员
 
-供应方会准备客户专属交付目录，并通过受控渠道提供该实例的一次性引导密钥。
-本通用软件包不含密钥，请使用供应方配套的客户专属目录执行部署。
+本通用软件包不含引导密钥。旧开放模式升级到 2.0 管理员登录时，保留原 PVC。
 
-1. 在客户专属目录执行 `bash scripts/deploy.sh`，脚本自动配置对应 Secret 并部署。
-2. 打开部署输出的 HTTPS 地址，输入引导密钥、账户名和新密码，创建首个所有者。
+1. 把安装包解压到仓库和 `inbox` 之外的目录。
+2. 复制 `examples/instance.upgrade.http.example.json`，填入真实 context、UID、镜像和访问地址。`access` 只能是 `http` 或 `https`，并与 WebUI、MCP 地址的协议一致。内网 HTTP 不要使用实验室测试开关。
+3. 确认旧数据卷没有管理员、也没有 `.ktx-ui/security.sqlite` 之后，才把 `legacyBaselineReviewed` 改为 `true`。填写 `examples/RECOVERY.open-mode.md` 并在升级前做静默 PVC 备份。
+4. 在私有目录执行 `python3 scripts/prepare-customer-instance.py --base-package <解压目录> --instance-config <实例.json> --state-dir <私有状态目录> --output <新的客户目录>`。同一实例重跑会复用已签发的引导密钥。
+5. 在客户目录执行 `bash scripts/deploy.sh`。脚本配置该实例的引导 Secret 并部署。
+6. 打开实例配置中的 WebUI 地址，输入引导密钥、账户名和新密码，创建首个所有者。
 
-创建成功后使用账户和密码登录，重启或后续升级无需重新认领。已有管理员直接登录。
-请保留原数据卷及必要 Secret。错误请联系交付人员，不要清空管理员或安全状态。
+创建成功后使用账户和密码登录。重启或后续升级不需要重新认领。已有管理员直接登录。
+Helm 回滚不会恢复 `admins.yaml` 或 `.ktx-ui/security.sqlite`。要回到旧开放模式，恢复升级前的 PVC 备份。
 EOF
-chmod 0755 "${PKG_DIR}/scripts/deploy.sh"
+chmod 0755 "${PKG_DIR}/scripts/deploy.sh" "${PKG_DIR}/scripts/prepare-customer-instance.py"
 chmod 0644 "${PKG_DIR}/scripts/customer-deployment-helper.py" "${PKG_DIR}/scripts/probe-customer-auth-state.mjs"
 chmod 0755 "${PKG_DIR}/scripts/acceptance.sh" "${PKG_DIR}/scripts/preflight-helm.sh" "${PKG_DIR}/scripts/preflight-upgrade.sh"
 chmod 0644 "${PKG_DIR}/scripts/k8s-gate-lib.sh" "${PKG_DIR}/scripts/preflight-upgrade-lib.mjs" "${PKG_DIR}/scripts/preflight_upgrade_drift.py"
@@ -283,10 +289,9 @@ Supported Helm chart is included under `helm/lucy/` (not a reference snapshot).
 Package layout: `helm/lucy/` chart · `examples/` values · `image/` offline image tar and identity files ·
 `scripts/` preflight + acceptance (self-contained) · `BUILD-INFO.json` · `SHA256SUMS`.
 
-For first-owner initialization, delivery staff prepare a private customer bundle with
-`scripts/release/prepare-customer-delivery.mjs` from the source repository. That bundle's
-`bash scripts/deploy.sh` configures the instance's bootstrap Secret before deployment.
-This public package contains no bootstrap key. See `CUSTOMER-FIRST-ADMIN.md`.
+This public package contains no bootstrap key. For an old open-mode upgrade, copy
+`examples/instance.upgrade.http.example.json`, fill the live cluster identity, and run
+`python3 scripts/prepare-customer-instance.py` outside this package. See `CUSTOMER-FIRST-ADMIN.md`.
 
 **Supersedes:** every earlier `lucy-k8s-integration-delivery-*` package. Earlier packages mount the DB password
 Secret read-only over `.ktx/secrets` (WebUI writes fail with `EROFS`) and ship non-runnable preflight/acceptance scripts.
@@ -355,6 +360,12 @@ read-only password Secret, legacy PVC layout, resource-name drift, and non-runna
 
 Lucy product version and bundled KTX version are independent release identities
 (see `BUILD-INFO.json` for the exact commit, image, platform and dependency versions).
+
+## Changes (Chart 0.2.5)
+
+- `security.access` selects HTTPS or intranet HTTP. The lab switch `insecureHttpTestProfile` is not a customer access mode.
+- Open-mode upgrades keep the PVC and mount a per-instance bootstrap Secret. `scripts/prepare-customer-instance.py` writes that private directory. This generic package still has no bootstrap key.
+- The auth probe accepts security schema 1 and 2 without migrating the database.
 
 ## Changes (Chart 0.2.4)
 

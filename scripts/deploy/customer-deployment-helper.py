@@ -329,12 +329,13 @@ class Deployment:
         require(any(i.get('kind') == 'Service' and i['metadata']['name'] == self.c['service'] for i in items), 'SERVICE_NAME_DRIFT')
         if self.needs_key:
             require(env.get('LUCY_WEBUI_BOOTSTRAP_TOKEN_FILE') == '/run/secrets/lucy-bootstrap/token', 'BOOTSTRAP_MOUNT_MISSING')
-        ingress = self.values.get('ingress', {})
-        if ingress.get('enabled'):
-            host = urlparse(self.c['webuiUrl']).hostname
-            require(any(host in t.get('hosts', []) for t in ingress.get('tls', [])), 'INGRESS_TLS_REQUIRED')
-        else:
-            require(self.c.get('externalTlsReviewed') is True, 'EXTERNAL_TLS_REVIEW_REQUIRED')
+        if self.c.get('access') != 'http':
+            ingress = self.values.get('ingress', {})
+            if ingress.get('enabled'):
+                host = urlparse(self.c['webuiUrl']).hostname
+                require(any(host in t.get('hosts', []) for t in ingress.get('tls', [])), 'INGRESS_TLS_REQUIRED')
+            else:
+                require(self.c.get('externalTlsReviewed') is True, 'EXTERNAL_TLS_REVIEW_REQUIRED')
 
     def create_secret(self):
         if not self.needs_key:

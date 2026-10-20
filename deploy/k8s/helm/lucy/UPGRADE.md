@@ -1,7 +1,19 @@
 # Lucy Helm Chart — Upgrade Guide
 
 Upgrade Lucy on Kubernetes while preserving `/data/lucy` PVC data, Secrets, and MCP tokens.
-Current chart: **0.2.4** (Lucy `2.0.0`, bundled KTX `0.16.0`).
+Current chart: **0.2.5** (Lucy `2.0.0`, bundled KTX `0.16.0`).
+
+## Open-mode upgrade to administrator login
+
+Use this when the existing PVC has never had an administrator and has no `.ktx-ui/security.sqlite`. Keep the PVC. Do not delete `admins.yaml` to force a new claim.
+
+1. Set instance `intent` to `upgrade`, `authState` to `uninitialized`, and `legacyBaselineReviewed` to `true` only after that empty state is confirmed.
+2. Set `access` to `http` or `https` to match the URL operators actually open. Intranet HTTP does not use the lab test profile.
+3. Prepare an instance directory from this package. The generic package does not contain a bootstrap key. The prepare step writes `credentials/webui-bootstrap-token` for that instance.
+4. Deploy from the instance directory. The bootstrap Secret is mounted only as a reference. After the first owner is created, later restarts and upgrades reuse the account on the PVC.
+5. Take a quiesced PVC backup before `helm upgrade`. Helm rollback does not restore `admins.yaml` or `security.sqlite`.
+
+The lab file `examples/values.k3s-test.yaml` is only for the known HTTP test cluster. Copy `examples/instance.upgrade.http.example.json`, replace every MUST-REPLACE value, and point `recovery.instructionsFile` at a filled recovery note.
 
 ## Before you start
 

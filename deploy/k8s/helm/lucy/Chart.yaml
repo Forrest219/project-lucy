@@ -17,7 +17,7 @@ description: |
   Bundled runtime: `@kaelio/ktx@0.16.0` (pinned in Dockerfile / values).
   Product version (`appVersion`) is Lucy-facing and independent of KTX.
 type: application
-version: 0.2.4
+version: 0.2.5
 appVersion: "2.0.0"
 kubeVersion: ">=1.24.0-0"
 home: https://github.com/kaelio/lucy
@@ -39,7 +39,9 @@ annotations:
   licenses: Apache-2.0
   artifacthub.io/changes: |
     - kind: changed
-      description: Cut Lucy product version (appVersion) from 0.17.0 to 2.0.0. Chart version stays 0.2.4; bundled KTX stays 0.16.0.
+      description: Chart 0.2.5 keeps appVersion 2.0.0 and KTX 0.16.0. security.access selects HTTPS or intranet HTTP. Open-mode upgrades mount a bootstrap Secret.
+    - kind: changed
+      description: Cut Lucy product version (appVersion) from 0.17.0 to 2.0.0. Bundled KTX stays 0.16.0.
     - kind: added
       description: preflight-upgrade.sh reports live Deployment drift, non-KTX semantic column types, and AbsoluteDeny role tools before helm upgrade. It does not edit the PVC unless --apply-types or --apply-access is passed.
     - kind: fixed

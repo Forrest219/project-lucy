@@ -20,7 +20,8 @@ in this repository is a **supported delivery artifact** — not a reference snap
 | `0.2.2` | `0.17.0` | `0.16.0` | HTTP probes + UID 10001 + `workingDir` | **Superseded** — Secret mounted read-only over `.ktx/secrets` (WebUI writes fail with `EROFS`) |
 | `0.2.3` | `0.17.0` | `0.16.0` | HTTP probes + UID 10001 + `workingDir` | `secrets-sync` init, `LUCY_CONTENT_ROOT`, name pinning |
 | `0.2.4` | `0.17.0` | `0.16.0` | same workload contract as 0.2.3 | Product baseline before 2026-10-19. Chart package version was not bumped for the later product cut |
-| `0.2.4` | `2.0.0` | `0.16.0` | same workload contract as 0.2.3 | **Current** — product line cut from `0.17.0` to `2.0.0`; chart `version` stays `0.2.4` |
+| `0.2.4` | `2.0.0` | `0.16.0` | same workload contract as 0.2.3 | Product line cut from `0.17.0` to `2.0.0`; chart `version` was not bumped in that cut |
+| `0.2.5` | `2.0.0` | `0.16.0` | `security.access` is `https` or intranet `http`; open-mode upgrade mounts a bootstrap Secret | **Current** |
 
 Image tags must be **immutable**. Recommended form:
 

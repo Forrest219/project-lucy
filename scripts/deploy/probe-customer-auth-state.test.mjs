@@ -56,3 +56,21 @@ test('BS-07/08: real SQLite state is opened read-only and unknown schema fails',
   db.close();
   assert.throws(() => probeAuthState(f), /SCHEMA_UNSUPPORTED/);
 });
+test('supported schema 2 is read-only and a schema 2 store missing its column is invalid', async t => {
+  const f = await fixture(t, 'admins: []\n', 'open');
+  const dbFile = path.join(f.root, '.ktx-ui/security.sqlite');
+  const db = new Database(dbFile);
+  db.exec("UPDATE schema_meta SET value='2'; CREATE TABLE security_events(seq INTEGER); ALTER TABLE security_events ADD COLUMN audit_event_kind TEXT;");
+  db.pragma('user_version = 2');
+  db.close();
+  const before = await fs.readFile(dbFile);
+  assert.equal(probeAuthState({ ...f, legacyAllowed: true }).status, 'uninitialized');
+  assert.deepEqual(await fs.readFile(dbFile), before);
+  const brokenRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'lucy-auth-probe-'));
+  t.after(() => fs.rm(brokenRoot, { force: true, recursive: true }));
+  await fs.mkdir(path.join(brokenRoot, '.ktx-ui'), { recursive: true });
+  const broken = new Database(path.join(brokenRoot, '.ktx-ui/security.sqlite'));
+  broken.exec("CREATE TABLE schema_meta(key TEXT, value TEXT); INSERT INTO schema_meta VALUES('schema_version','2'); CREATE TABLE bootstrap_state(id INTEGER, state TEXT); INSERT INTO bootstrap_state VALUES(1,'open'); CREATE TABLE admin_account_state(account_uid TEXT); CREATE TABLE security_events(seq INTEGER);");
+  broken.close();
+  assert.throws(() => probeAuthState({ root: brokenRoot, dependencyRoot }), /SECURITY_STATE_INVALID/);
+});

@@ -25,6 +25,7 @@ export function validateInstance(c) {
   if (c.intent === 'install' && c.authState !== 'uninitialized') fail('INSTALL_STATE_INVALID');
   if (c.intent === 'install' && (c.pvcName !== `${c.deployment}-data` || c.values.persistence?.existingClaim)) fail('NEW_INSTALL_PVC_NAME_INVALID');
   if (c.intent === 'upgrade' && (!c.namespaceUid || !c.deploymentUid || !c.pvcUid || !c.baselineImage || !c.backup || !c.recovery)) fail('UPGRADE_BASELINE_REQUIRED');
+  if (c.intent === 'upgrade' && c.authState === 'uninitialized' && c.legacyBaselineReviewed !== true) fail('LEGACY_BASELINE_REVIEW_REQUIRED');
   if (c.intent === 'upgrade' && (c.backup.method !== 'quiesced-pvc-tar' || c.recovery.baselineImage !== c.baselineImage || typeof c.recovery.instructionsFile !== 'string')) fail('UPGRADE_RECOVERY_CONTRACT_REQUIRED');
   if (c.values.security?.insecureHttpTestProfile || c.values.security?.access && c.values.security.access !== c.access || c.values.env?.LUCY_DEPLOYMENT_MODE === 'development' || c.values.extraSecretData && Object.keys(c.values.extraSecretData).length) fail('CUSTOMER_POLICY_INVALID');
   c.values = { ...c.values, security: { ...c.values.security, access: c.access } };
@@ -140,7 +141,7 @@ export async function prepareDelivery({ basePackage, instanceConfig, stateDir, o
     await fs.mkdir(path.join(staging, 'scripts'), { mode: 0o700 });
     await writePrivate(path.join(staging, 'scripts', 'deploy.sh'), '#!/usr/bin/env bash\nset +x\nset -Eeuo pipefail\nROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"\nexec bash "${ROOT}/package/scripts/deploy.sh" --bundle "${ROOT}" "$@"\n');
     await fs.chmod(path.join(staging, 'scripts', 'deploy.sh'), 0o700);
-    await writePrivate(path.join(staging, 'README.md'), '# Lucy 客户部署\n\n1. 执行 `bash scripts/deploy.sh`。\n2. 打开部署结果中的 HTTPS 地址，输入配套引导密钥并设置首个所有者账号与密码。已有管理员直接登录。\n\n引导密钥由交付人员通过受控渠道提供，凭据附件由部署入口自动配置。不要上传此客户专属目录到公共仓库。\n');
+    await writePrivate(path.join(staging, 'README.md'), '# Lucy 客户部署\n\n1. 执行 `bash scripts/deploy.sh`。\n2. 打开实例配置中的 WebUI 地址，输入配套引导密钥并设置首个所有者账号与密码。已有管理员直接登录。\n\n引导密钥由交付人员通过受控渠道提供，凭据附件由部署入口自动配置。不要上传此客户专属目录到公共仓库。\n');
     await fs.rename(staging, target);
     return { dryRun: false, instanceId: c.instanceId, deliveryId: delivery.deliveryId, credentialReused: credential.reused, output: target };
   } finally { await fs.rm(staging, { recursive: true, force: true }); }

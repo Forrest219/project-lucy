@@ -72,7 +72,9 @@ Common failure signatures:
 ## PVC and data safety
 
 Rollback **does not** delete the PVC or `/data/lucy` contents. Tokens, semantic layer,
-wiki, and ACL config should remain intact.
+wiki, and ACL config should remain intact. It also does not undo `admins.yaml` or
+`.ktx-ui/security.sqlite` written by a 2.0 upgrade. Restore the quiesced PVC backup
+to return to the old open-mode disk.
 
 **Do not run** unless intentionally resetting the environment:
 

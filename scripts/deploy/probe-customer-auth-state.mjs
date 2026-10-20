@@ -29,8 +29,16 @@ export function probeAuthState({ root, dependencyRoot = '/app/webui', legacyAllo
     if (!fs.lstatSync(dbFile).isFile()) throw Error('SECURITY_STATE_INVALID');
     const db = new Database(dbFile, { readonly: true, fileMustExist: true });
     try {
-      const version = db.prepare("SELECT value FROM schema_meta WHERE key='schema_version'").get()?.value;
-      if (String(version) !== '1') throw Error('SECURITY_SCHEMA_UNSUPPORTED');
+      const version = String(db.prepare("SELECT value FROM schema_meta WHERE key='schema_version'").get()?.value ?? '');
+      if (!['1', '2'].includes(version)) throw Error('SECURITY_SCHEMA_UNSUPPORTED');
+      const tables = new Set(db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map((row) => row.name));
+      for (const name of ['schema_meta', 'bootstrap_state', 'admin_account_state']) if (!tables.has(name)) throw Error('SECURITY_STATE_INVALID');
+      if (version === '2') {
+        const columns = db.prepare('PRAGMA table_info(security_events)').all().map((row) => row.name);
+        if (!columns.includes('audit_event_kind')) throw Error('SECURITY_STATE_INVALID');
+      }
+      const userVersion = Number(db.pragma('user_version', { simple: true }) || 0);
+      if (userVersion !== 0 && String(userVersion) !== version) throw Error('SECURITY_STATE_INVALID');
       bootstrap = db.prepare('SELECT state FROM bootstrap_state WHERE id=1').get()?.state;
       if (!['open', 'consumed'].includes(bootstrap)) throw Error('SECURITY_STATE_INVALID');
       historicalAccounts = db.prepare('SELECT COUNT(*) AS n FROM admin_account_state').get().n;
