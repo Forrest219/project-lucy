@@ -81,7 +81,7 @@ Set `LUCY_TRUST_PROXY=1` only behind a trusted reverse proxy so `X-Forwarded-For
 
 ## 4.1 WebUI HTTP hardening
 
-- Production HTTPS deployments must set `LUCY_WEBUI_COOKIE_SECURE=1`; this enables `Secure` session cookies and HSTS.
+- HTTPS customer access (`security.access=https`) keeps `LUCY_WEBUI_COOKIE_SECURE=1`, which enables `Secure` session cookies and HSTS. Intranet HTTP is selected with `security.access=http` and does not send `Secure` or HSTS.
 - Lucy emits CSP, clickjacking, MIME sniffing, referrer, permissions and cross-origin isolation headers on WebUI/API responses.
 - Browser state-changing API requests must be same-origin. `LUCY_TRUST_PROXY=1` also controls whether `X-Forwarded-Host` may participate in that comparison.
 - Token-creation responses are `private, no-store`; plaintext must never be persisted in logs, screenshots or evidence packages.

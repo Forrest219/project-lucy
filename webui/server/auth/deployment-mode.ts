@@ -28,21 +28,42 @@ function parseFlag(name: string): boolean | undefined {
   throw new Error(`Invalid ${name}=${JSON.stringify(process.env[name])}; expected 1 or 0`);
 }
 
+/** Customer access mode from the instance config. Empty means the Secure default. */
+export function resolveWebAccess(): "http" | "https" | undefined {
+  const raw = (process.env.LUCY_WEBUI_ACCESS ?? "").trim().toLowerCase();
+  if (raw === "") return undefined;
+  if (raw === "http" || raw === "https") return raw;
+  throw new Error(`Invalid LUCY_WEBUI_ACCESS=${JSON.stringify(process.env.LUCY_WEBUI_ACCESS)}; expected http or https`);
+}
+
 /**
- * Spec §3.1 item 8. `customer` defaults to Secure cookies; `LUCY_WEBUI_COOKIE_SECURE=0`
- * is a startup error unless the explicit test profile (`LUCY_WEBUI_TEST_PROFILE=1`:
- * HTTP-only compose demo / k3s test Chart) is declared. `development` stays opt-in.
+ * Spec §3.1 item 8. `customer` defaults to Secure cookies.
+ * `LUCY_WEBUI_ACCESS=http` is the explicit intranet HTTP customer mode and serves
+ * non-Secure cookies without the test-profile marker.
+ * `LUCY_WEBUI_COOKIE_SECURE=0` is otherwise a startup error unless the lab test
+ * profile (`LUCY_WEBUI_TEST_PROFILE=1`) is declared. `development` stays opt-in.
  */
 export function resolveCookieSecure(): CookiePolicy {
   const explicit = parseFlag("LUCY_WEBUI_COOKIE_SECURE");
+  const access = resolveWebAccess();
+  const testProfile = parseFlag("LUCY_WEBUI_TEST_PROFILE") === true;
   if (resolveDeploymentMode() === "development") {
     return { secure: explicit ?? false, insecureTestProfile: false };
   }
+  if (testProfile && access === "http") {
+    throw new Error("LUCY_WEBUI_ACCESS=http cannot be combined with LUCY_WEBUI_TEST_PROFILE");
+  }
+  if (access === "http") {
+    if (explicit === true) {
+      throw new Error("LUCY_WEBUI_COOKIE_SECURE=1 contradicts LUCY_WEBUI_ACCESS=http");
+    }
+    return { secure: false, insecureTestProfile: false };
+  }
   if (explicit !== false) return { secure: true, insecureTestProfile: false };
-  if (parseFlag("LUCY_WEBUI_TEST_PROFILE") === true) return { secure: false, insecureTestProfile: true };
+  if (testProfile) return { secure: false, insecureTestProfile: true };
   throw new Error(
     "LUCY_WEBUI_COOKIE_SECURE=0 is not allowed when LUCY_DEPLOYMENT_MODE=customer (default); " +
-      "only the explicit test profile (LUCY_WEBUI_TEST_PROFILE=1) may serve HTTP"
+      "set LUCY_WEBUI_ACCESS=http for intranet HTTP, or LUCY_WEBUI_TEST_PROFILE=1 for a lab test profile"
   );
 }
 

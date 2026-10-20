@@ -83,7 +83,7 @@ export async function fixturePackage(root) {
   await fs.writeFile(path.join(base, 'SHA256SUMS'), Object.entries(files).map(([name, data]) => `${digest(data)}  ./${name}\n`).join(''));
   return base;
 }
-export const instanceFixture = () => ({ schemaVersion: 1, instanceId: 'customer-one', profile: 'k3s', intent: 'install', authState: 'uninitialized', credentialState: 'new', context: 'customer-cluster', namespace: 'lucy-test', release: 'lucy-release', deployment: 'lucy-app', service: 'lucy-app', pvcName: 'lucy-app-data', bootstrapSecret: 'lucy-bootstrap', webuiUrl: 'https://lucy.example.test', publicMcpUrl: 'https://lucy.example.test/mcp', values: { persistence: { enabled: true }, env: {} } });
+export const instanceFixture = () => ({ schemaVersion: 1, instanceId: 'customer-one', profile: 'k3s', intent: 'install', authState: 'uninitialized', credentialState: 'new', context: 'customer-cluster', namespace: 'lucy-test', release: 'lucy-release', deployment: 'lucy-app', service: 'lucy-app', pvcName: 'lucy-app-data', bootstrapSecret: 'lucy-bootstrap', access: 'https', webuiUrl: 'https://lucy.example.test', publicMcpUrl: 'https://lucy.example.test/mcp', values: { persistence: { enabled: true }, env: {} } });
 
 test('BS-06: private assembly leaves the verified base unchanged and supplies a standalone entry', async (t) => {
   const root = await temp(t), base = await fixturePackage(root);
@@ -112,7 +112,13 @@ test('BS-06/18: tampering is rejected and dry-run leaves no output or state', as
   await assert.rejects(prepareDelivery(opts), /CHECKSUM_MISMATCH/);
 });
 test('wrong intent, plaintext secrets, insecure policy and incomplete upgrade identity are rejected', () => {
-  for (const patch of [{ authState: 'configured' }, { webuiUrl: 'http://customer.test' }, { intent: 'upgrade' }, { values: { env: { LUCY_WEBUI_SESSION_SECRET: 'do-not-store-me' } } }]) {
+  for (const patch of [{ authState: 'configured' }, { webuiUrl: 'http://customer.test' }, { access: 'http' }, { intent: 'upgrade' }, { values: { env: { LUCY_WEBUI_SESSION_SECRET: 'do-not-store-me' } } }, { values: { security: { insecureHttpTestProfile: true }, env: {} } }]) {
     assert.throws(() => validateInstance({ ...instanceFixture(), ...patch }));
   }
+});
+test('intranet HTTP is an explicit customer access mode and must match both URLs', () => {
+  const http = { ...instanceFixture(), access: 'http', webuiUrl: 'http://lucy.internal', publicMcpUrl: 'http://lucy.internal/mcp' };
+  assert.equal(validateInstance(http).values.security.access, 'http');
+  assert.throws(() => validateInstance({ ...http, publicMcpUrl: 'https://lucy.internal/mcp' }));
+  assert.throws(() => validateInstance({ ...instanceFixture(), access: 'cleartext' }));
 });

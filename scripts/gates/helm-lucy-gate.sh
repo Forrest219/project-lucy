@@ -187,7 +187,18 @@ helm template lucy "${CHART}" --set security.insecureHttpTestProfile=false >"${S
 assert_env_value "${SECURE_RENDER}" "LUCY_DEPLOYMENT_MODE" "customer"
 assert_env_value "${SECURE_RENDER}" "LUCY_CHART_DEPLOYMENT_MODE" "customer"
 assert_env_value "${SECURE_RENDER}" "LUCY_WEBUI_COOKIE_SECURE" "1"
+assert_env_value "${SECURE_RENDER}" "LUCY_WEBUI_ACCESS" "https"
 assert_absent "${SECURE_RENDER}" "LUCY_WEBUI_TEST_PROFILE"
+HTTP_RENDER="${TMP_DIR}/intranet-http.yaml"
+helm template lucy "${CHART}" --set security.access=http >"${HTTP_RENDER}"
+assert_env_value "${HTTP_RENDER}" "LUCY_WEBUI_COOKIE_SECURE" "0"
+assert_env_value "${HTTP_RENDER}" "LUCY_WEBUI_ACCESS" "http"
+assert_absent "${HTTP_RENDER}" "LUCY_WEBUI_TEST_PROFILE"
+if helm template lucy "${CHART}" --set security.access=http --set security.insecureHttpTestProfile=true >/dev/null 2>"${TMP_DIR}/mixed-access.err"; then
+  echo "FAIL: security.access=http combined with insecureHttpTestProfile must not render" >&2
+  exit 1
+fi
+grep -q "cannot be combined" "${TMP_DIR}/mixed-access.err"
 assert_absent "${SECURE_RENDER}" "LUCY_WEBUI_AUTH"
 # The customer-facing chart does not expose the deployment mode as a value.
 assert_absent "${CHART}/values.yaml" "^ *LUCY_DEPLOYMENT_MODE:"

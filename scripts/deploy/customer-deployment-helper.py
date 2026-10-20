@@ -88,7 +88,11 @@ def deployment_values(config, old):
     # chart-managed PVC would remove it from the manifest and Helm could delete it.
     out.setdefault('env', {})['LUCY_PUBLIC_MCP_URL'] = config['publicMcpUrl']
     require(out['env'].get('LUCY_DEPLOYMENT_MODE', 'customer') == 'customer', 'CUSTOMER_MODE_REQUIRED')
-    require(not out.get('security', {}).get('insecureHttpTestProfile'), 'HTTPS_REQUIRED')
+    require(not config.get('values', {}).get('security', {}).get('insecureHttpTestProfile'), 'CUSTOMER_POLICY_INVALID')
+    security = dict(out.get('security') or {})
+    security.pop('insecureHttpTestProfile', None)
+    security['access'] = config['access']
+    out['security'] = security
     return out
 
 
@@ -143,9 +147,10 @@ class Deployment:
         require(c.get('intent') in ['install', 'upgrade'] and c.get('authState') in ['uninitialized', 'configured'], 'INSTANCE_CONFIG_INVALID')
         for key in ['instanceId', 'namespace', 'release', 'deployment', 'service', 'pvcName', 'bootstrapSecret']:
             require(isinstance(c.get(key), str) and re.fullmatch(r'[a-z0-9][a-z0-9.-]{0,61}[a-z0-9]', c[key]), 'RESOURCE_ID_INVALID')
+        require(c.get('access') in ['http', 'https'], 'ACCESS_REQUIRED')
         for key in ['webuiUrl', 'publicMcpUrl']:
             u = urlparse(c[key])
-            require(u.scheme == 'https' and u.hostname and not u.username and not u.password and not u.query and not u.fragment, 'HTTPS_REQUIRED')
+            require(u.scheme == c['access'] and u.hostname and not u.username and not u.password and not u.query and not u.fragment, 'ACCESS_URL_MISMATCH')
         for tool in ['kubectl', 'helm']:
             require(shutil.which(tool), 'TOOL_REQUIRED')
         require(self.command(['kubectl', 'config', 'current-context']).stdout.decode().strip() == c['context'], 'CONTEXT_MISMATCH')
@@ -301,7 +306,9 @@ class Deployment:
         require(desired, 'RENDERED_DEPLOYMENT_MISSING')
         spec = desired['spec']['template']['spec']
         env = {e['name']: e.get('value') for e in spec['containers'][0]['env']}
-        require(env.get('LUCY_DEPLOYMENT_MODE') == 'customer' and env.get('LUCY_WEBUI_COOKIE_SECURE') == '1' and env.get('KTX_PROJECT_ROOT') == '/data/lucy', 'CUSTOMER_AUTH_POLICY_INVALID')
+        expected_secure = '0' if self.c['access'] == 'http' else '1'
+        require(env.get('LUCY_DEPLOYMENT_MODE') == 'customer' and env.get('LUCY_WEBUI_COOKIE_SECURE') == expected_secure and env.get('KTX_PROJECT_ROOT') == '/data/lucy', 'CUSTOMER_AUTH_POLICY_INVALID')
+        require(env.get('LUCY_WEBUI_ACCESS') == self.c['access'] and not env.get('LUCY_WEBUI_TEST_PROFILE'), 'CUSTOMER_AUTH_POLICY_INVALID')
         require(desired['spec']['replicas'] == 1 and desired['spec']['strategy']['type'] == 'Recreate', 'SINGLE_REPLICA_RECREATE_REQUIRED')
         require(spec.get('securityContext', {}).get('fsGroup') == 10001 and spec['containers'][0].get('securityContext', {}).get('runAsUser') == 10001, 'RUNTIME_IDENTITY_INVALID')
         require(spec['containers'][0]['image'] == self.image_ref(), 'RENDERED_IMAGE_MISMATCH')

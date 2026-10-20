@@ -278,6 +278,7 @@ function runSeedOnlyWithEnv(templateRoot, projectRoot, extraEnv) {
     "LUCY_WEBUI_AUTH",
     "LUCY_WEBUI_COOKIE_SECURE",
     "LUCY_WEBUI_TEST_PROFILE",
+    "LUCY_WEBUI_ACCESS",
     "LUCY_CHART_DEPLOYMENT_MODE"
   ]) {
     delete env[key];
@@ -373,6 +374,7 @@ test("entrypoint refuses customer mode with LUCY_WEBUI_COOKIE_SECURE=0 unless th
 test("entrypoint allows insecure cookies only for the test profile or development, and Secure in customer", async () => {
   for (const extraEnv of [
     { LUCY_DEPLOYMENT_MODE: "customer", LUCY_WEBUI_COOKIE_SECURE: "0", LUCY_WEBUI_TEST_PROFILE: "1" },
+    { LUCY_DEPLOYMENT_MODE: "customer", LUCY_WEBUI_COOKIE_SECURE: "0", LUCY_WEBUI_ACCESS: "http" },
     { LUCY_DEPLOYMENT_MODE: "customer", LUCY_WEBUI_COOKIE_SECURE: "1" },
     { LUCY_DEPLOYMENT_MODE: "development", LUCY_WEBUI_COOKIE_SECURE: "0" }
   ]) {

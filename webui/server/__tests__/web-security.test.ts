@@ -8,12 +8,15 @@ const previousCookieSecure = process.env.LUCY_WEBUI_COOKIE_SECURE;
 const previousTrustProxy = process.env.LUCY_TRUST_PROXY;
 const previousMode = process.env.LUCY_DEPLOYMENT_MODE;
 const previousTestProfile = process.env.LUCY_WEBUI_TEST_PROFILE;
+const previousAccess = process.env.LUCY_WEBUI_ACCESS;
 
 afterEach(() => {
   if (previousMode === undefined) delete process.env.LUCY_DEPLOYMENT_MODE;
   else process.env.LUCY_DEPLOYMENT_MODE = previousMode;
   if (previousTestProfile === undefined) delete process.env.LUCY_WEBUI_TEST_PROFILE;
   else process.env.LUCY_WEBUI_TEST_PROFILE = previousTestProfile;
+  if (previousAccess === undefined) delete process.env.LUCY_WEBUI_ACCESS;
+  else process.env.LUCY_WEBUI_ACCESS = previousAccess;
   if (previousCookieSecure === undefined) delete process.env.LUCY_WEBUI_COOKIE_SECURE;
   else process.env.LUCY_WEBUI_COOKIE_SECURE = previousCookieSecure;
   if (previousTrustProxy === undefined) delete process.env.LUCY_TRUST_PROXY;
@@ -135,6 +138,22 @@ describe("SEC-08: session cookie Secure policy by deployment mode (T02, Spec §3
       expect(() => resolveCookieSecure()).toThrow(/LUCY_WEBUI_COOKIE_SECURE/);
       expect(() => buildServer()).toThrow(/LUCY_WEBUI_COOKIE_SECURE/);
     }
+  });
+
+  it("customer intranet HTTP is an explicit access mode and is not the lab test profile", async () => {
+    process.env.LUCY_DEPLOYMENT_MODE = "customer";
+    process.env.LUCY_WEBUI_ACCESS = "http";
+    process.env.LUCY_WEBUI_COOKIE_SECURE = "0";
+    delete process.env.LUCY_WEBUI_TEST_PROFILE;
+    expect(resolveCookieSecure()).toEqual({ secure: false, insecureTestProfile: false });
+    expect(cookieHeaders((reply) => setSessionCookie(reply, "t", Math.floor(Date.now() / 1000) + 60))).not.toContain("Secure");
+
+    const app = buildServer();
+    await app.ready();
+    const health = await app.inject({ method: "GET", url: "/api/health" });
+    expect(health.json().data.insecureTestProfile).toBeUndefined();
+    expect(health.headers["strict-transport-security"]).toBeUndefined();
+    await app.close();
   });
 
   it("customer + COOKIE_SECURE=0 is allowed only for the explicit test profile, and health says so", async () => {

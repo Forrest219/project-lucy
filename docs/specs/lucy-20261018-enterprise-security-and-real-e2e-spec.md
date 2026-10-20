@@ -105,12 +105,12 @@
 
 | 形态 | `LUCY_DEPLOYMENT_MODE` | `LUCY_WEBUI_AUTH` | Cookie `Secure` | 引导密钥 |
 |---|---|---|---|---|
-| 客户 Helm Chart | 模板写死 `customer`，不在 values 暴露；`extraEnvFrom` 注入的同名变量在启动预检中被检测并拒绝启动 | 不允许 `off` | customer 模式默认开启；仅当 Chart 显式 `ingress.tls=false` 且为测试 profile 时可关闭，并在 health 中标注 | Secret 挂载 `LUCY_WEBUI_BOOTSTRAP_TOKEN_FILE` |
+| 客户 Helm Chart | 模板写死 `customer`，不在 values 暴露；`extraEnvFrom` 注入的同名变量在启动预检中被检测并拒绝启动 | 不允许 `off` | `security.access=https`（默认）开启；`security.access=http` 是显式内网 HTTP，Cookie 不带 Secure，也不标测试 profile。实验室 `insecureHttpTestProfile` 仍可关闭并在 health 中标注 | Secret 挂载 `LUCY_WEBUI_BOOTSTRAP_TOKEN_FILE` |
 | 本地 demo compose（`deploy/compose/docker-compose.*.yml`） | `customer`（与客户一致，用于真实验收） | required | 关闭（HTTP loopback） | `npm run demo:upgrade -- --fresh` 在已被 `.gitignore` 忽略的 `deploy/compose/secrets/webui-bootstrap-token` 生成随机密钥（0600），各 demo compose 以 file secret 挂载并设 `LUCY_WEBUI_BOOTSTRAP_TOKEN_FILE=/run/secrets/webui_bootstrap_token`；脚本只打印文件路径不打印内容。平滑升级保留已有管理员，不再要求引导 |
 | Vitest / contract 浏览器夹具 | 全局 setup 默认 `development`（未显式设置时） | 默认 `off`，个别 suite 显式设 required 覆盖 | 不适用 | 测试 helper 生成临时文件 |
 | 真实 E2E（§6） | `customer` | required | 按目标环境 | runner 受控注入 |
 
-`LUCY_WEBUI_COOKIE_SECURE` 保留为显式覆盖：customer 模式下只能设为开启，设为关闭时启动预检失败（测试 profile 例外见上表）。
+`LUCY_WEBUI_COOKIE_SECURE` 保留为显式覆盖：customer 模式下，`LUCY_WEBUI_ACCESS=http` 或实验室测试 profile 才可以关闭；其余情况设为关闭时启动预检失败。
 
 ### 3.2 可撤销持久会话
 

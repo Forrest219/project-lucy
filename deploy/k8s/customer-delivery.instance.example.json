@@ -12,6 +12,7 @@
   "service": "lucy",
   "pvcName": "lucy-data",
   "bootstrapSecret": "lucy-bootstrap",
+  "access": "https",
   "webuiUrl": "https://lucy.customer.example",
   "publicMcpUrl": "https://lucy.customer.example/mcp",
   "externalTlsReviewed": true,

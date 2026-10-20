@@ -193,12 +193,14 @@ db:
   existingSecret: ""
   mountPath: "/var/run/secrets/lucy-db"
 
-# WebUI session cookie (Spec §3.1 item 8). The chart pins LUCY_DEPLOYMENT_MODE=customer
-# and Secure cookies; serve the WebUI over HTTPS (ingress TLS). Set
-# `insecureHttpTestProfile: true` ONLY in test profiles that expose plain HTTP
-# (kind / k3s test cluster). It switches Secure off, and /api/health then
-# reports `insecureTestProfile: true`. NEVER enable it for a customer install.
+# WebUI session cookie (Spec §3.1 item 8). The chart pins LUCY_DEPLOYMENT_MODE=customer.
+# `access: https` (default) sends Secure cookies. `access: http` is the explicit
+# intranet HTTP customer mode: cookies are not Secure, and this is not the lab
+# test profile. `insecureHttpTestProfile: true` remains only for kind / k3s test
+# profiles; /api/health then reports `insecureTestProfile: true`. Do not combine
+# it with `access: http`.
 security:
+  access: https
   insecureHttpTestProfile: false
 
 # -------------------------------------------------------------------

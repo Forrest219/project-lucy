@@ -60,7 +60,7 @@
 - 在客户部署 values 中写入 `bootstrap.existingSecret` 的资源名，不写入密钥值。此配置不同于数据库密码使用的顶层 `existingSecret`。
 - 通过现有 Chart 只读挂载至 `/run/secrets/lucy-bootstrap/token`，并设置 `LUCY_WEBUI_BOOTSTRAP_TOKEN_FILE`；运行用户 UID `10001` 应可读取该文件。
 - 按客户类型加载或拉取指定镜像。K3s 离线包导入实际 containerd 运行时；多节点环境处理全部可调度节点。
-- 配置 WebUI HTTPS、公用 MCP 地址和必要存储，等待服务就绪，输出访问地址与下一步说明。客户模式默认使用 Secure Cookie，纯 HTTP 的正式交付不能算作登录体验完成。
+- 在实例配置里显式选择访问方式：`access: https` 使用 Secure Cookie；`access: http` 是内网 HTTP 客户访问方式，会话 Cookie 不带 Secure。两条地址的协议必须和 `access` 一致。实验室的 `insecureHttpTestProfile` 不能当作客户访问方式。
 
 values 中的配置形态如下，示例仅含资源名：
 

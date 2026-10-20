@@ -11,12 +11,13 @@ SEED_STATE_DIR="${PROJECT_ROOT}/.lucy-seed"
 # customer-mode container can never come up with the WebUI auth switched off.
 # Default mode is customer; invalid values and customer+LUCY_WEBUI_AUTH=off are fatal.
 preflight_deployment_mode() {
-  local mode auth pinned cookie profile
+  local mode auth pinned cookie profile access
   mode="$(printf '%s' "${LUCY_DEPLOYMENT_MODE:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
   auth="$(printf '%s' "${LUCY_WEBUI_AUTH:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
   pinned="$(printf '%s' "${LUCY_CHART_DEPLOYMENT_MODE:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
   cookie="$(printf '%s' "${LUCY_WEBUI_COOKIE_SECURE:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
   profile="$(printf '%s' "${LUCY_WEBUI_TEST_PROFILE:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+  access="$(printf '%s' "${LUCY_WEBUI_ACCESS:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
   [[ -n "${mode}" ]] || mode="customer"
   case "${mode}" in
     customer|development) ;;
@@ -35,9 +36,25 @@ preflight_deployment_mode() {
     echo "[lucy] fatal: LUCY_WEBUI_AUTH=off is not allowed when LUCY_DEPLOYMENT_MODE=customer (default); refusing to start" >&2
     exit 1
   fi
-  # Spec §3.1 item 8: customer mode keeps Secure cookies; only the explicit test profile may serve HTTP.
-  if [[ "${mode}" == "customer" && ( "${cookie}" == "0" || "${cookie}" == "false" ) && "${profile}" != "1" && "${profile}" != "true" ]]; then
-    echo "[lucy] fatal: LUCY_WEBUI_COOKIE_SECURE=0 is not allowed when LUCY_DEPLOYMENT_MODE=customer (default) unless LUCY_WEBUI_TEST_PROFILE=1; refusing to start" >&2
+  # Customer HTTPS keeps Secure cookies. Intranet HTTP is LUCY_WEBUI_ACCESS=http.
+  # The lab test profile remains LUCY_WEBUI_TEST_PROFILE=1 and must not be combined with it.
+  case "${access}" in
+    ""|http|https) ;;
+    *)
+      echo "[lucy] fatal: invalid LUCY_WEBUI_ACCESS='${LUCY_WEBUI_ACCESS}'; expected http or https" >&2
+      exit 1
+      ;;
+  esac
+  if [[ "${mode}" == "customer" && "${access}" == "http" && ( "${profile}" == "1" || "${profile}" == "true" ) ]]; then
+    echo "[lucy] fatal: LUCY_WEBUI_ACCESS=http cannot be combined with LUCY_WEBUI_TEST_PROFILE; refusing to start" >&2
+    exit 1
+  fi
+  if [[ "${mode}" == "customer" && "${access}" == "http" && ( "${cookie}" == "1" || "${cookie}" == "true" ) ]]; then
+    echo "[lucy] fatal: LUCY_WEBUI_COOKIE_SECURE=1 contradicts LUCY_WEBUI_ACCESS=http; refusing to start" >&2
+    exit 1
+  fi
+  if [[ "${mode}" == "customer" && "${access}" != "http" && ( "${cookie}" == "0" || "${cookie}" == "false" ) && "${profile}" != "1" && "${profile}" != "true" ]]; then
+    echo "[lucy] fatal: LUCY_WEBUI_COOKIE_SECURE=0 is not allowed when LUCY_DEPLOYMENT_MODE=customer (default); set LUCY_WEBUI_ACCESS=http for intranet HTTP, or LUCY_WEBUI_TEST_PROFILE=1 for a lab test profile; refusing to start" >&2
     exit 1
   fi
 }

@@ -23,7 +23,7 @@ def config():
     return {'instanceId': 'customer-one', 'namespace': 'lucy-test', 'release': 'lucy-release',
             'deployment': 'lucy-app', 'service': 'lucy-app', 'pvcName': 'lucy-app-data',
             'bootstrapSecret': 'lucy-bootstrap', 'intent': 'install', 'profile': 'k3s',
-            'context': 'isolated', 'publicMcpUrl': 'https://lucy.example.test/mcp',
+            'context': 'isolated', 'access': 'https', 'publicMcpUrl': 'https://lucy.example.test/mcp',
             'webuiUrl': 'https://lucy.example.test', 'externalTlsReviewed': True,
             'image': {'repository': 'project-lucy', 'tag': 'candidate', 'deliveryMode': 'offline',
                       'registryManifestDigest': None, 'configId': 'sha256:' + 'a' * 64},
@@ -167,8 +167,18 @@ class CustomerDeploymentTests(unittest.TestCase):
         c['intent'] = 'upgrade'
         with self.assertRaisesRegex(mod.DeploymentError, 'NAME_DRIFT'):
             mod.deployment_values(c, {'fullnameOverride': 'wrong'})
-        with self.assertRaisesRegex(mod.DeploymentError, 'HTTPS_REQUIRED'):
-            mod.deployment_values(c, {'fullnameOverride': 'lucy-app', 'security': {'insecureHttpTestProfile': True}})
+        converted = mod.deployment_values(c, {'fullnameOverride': 'lucy-app', 'security': {'insecureHttpTestProfile': True}})
+        self.assertEqual(converted['security'], {'access': 'https'})
+        c['values'] = {'security': {'insecureHttpTestProfile': True}, 'env': {}}
+        with self.assertRaisesRegex(mod.DeploymentError, 'CUSTOMER_POLICY_INVALID'):
+            mod.deployment_values(c, {'fullnameOverride': 'lucy-app'})
+        c = config()
+        c['intent'] = 'upgrade'
+        c['access'] = 'http'
+        c['webuiUrl'] = 'http://lucy.internal'
+        c['publicMcpUrl'] = 'http://lucy.internal/mcp'
+        intranet = mod.deployment_values(c, {'fullnameOverride': 'lucy-app'})
+        self.assertEqual(intranet['security']['access'], 'http')
 
     def test_bs17_raw_tool_error_is_never_forwarded(self):
         d = SecretDeployment()

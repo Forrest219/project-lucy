@@ -14,9 +14,10 @@ export function validateInstance(c) {
   if (c.schemaVersion !== 1 || !validInstanceId(c.instanceId) || !['k8s', 'k3s'].includes(c.profile) || !['install', 'upgrade'].includes(c.intent) || !['uninitialized', 'configured'].includes(c.authState)) fail('INSTANCE_CONFIG_INVALID');
   if (names.some((key) => typeof c[key] !== 'string' || !/^[a-z0-9][a-z0-9.-]{0,61}[a-z0-9]$/.test(c[key]))) fail('RESOURCE_NAME_INVALID');
   if (typeof c.context !== 'string' || !c.context.trim() || /[\r\n\0]/.test(c.context)) fail('CONTEXT_INVALID');
+  if (!['http', 'https'].includes(c.access)) fail('ACCESS_REQUIRED');
   for (const key of ['webuiUrl', 'publicMcpUrl']) {
     const u = new URL(c[key]);
-    if (u.protocol !== 'https:' || u.username || u.password || u.search || u.hash) fail('HTTPS_URL_REQUIRED');
+    if (u.protocol !== `${c.access}:` || u.username || u.password || u.search || u.hash) fail('ACCESS_URL_MISMATCH');
   }
   if (!c.values || typeof c.values !== 'object' || Array.isArray(c.values)) fail('CUSTOMER_VALUES_REQUIRED');
   if (c.authState === 'configured' && c.credentialState !== 'none') fail('EXISTING_ADMIN_MUST_NOT_ISSUE_KEY');
@@ -25,7 +26,8 @@ export function validateInstance(c) {
   if (c.intent === 'install' && (c.pvcName !== `${c.deployment}-data` || c.values.persistence?.existingClaim)) fail('NEW_INSTALL_PVC_NAME_INVALID');
   if (c.intent === 'upgrade' && (!c.namespaceUid || !c.deploymentUid || !c.pvcUid || !c.baselineImage || !c.backup || !c.recovery)) fail('UPGRADE_BASELINE_REQUIRED');
   if (c.intent === 'upgrade' && (c.backup.method !== 'quiesced-pvc-tar' || c.recovery.baselineImage !== c.baselineImage || typeof c.recovery.instructionsFile !== 'string')) fail('UPGRADE_RECOVERY_CONTRACT_REQUIRED');
-  if (c.values.security?.insecureHttpTestProfile || c.values.env?.LUCY_DEPLOYMENT_MODE === 'development' || c.values.extraSecretData && Object.keys(c.values.extraSecretData).length) fail('CUSTOMER_POLICY_INVALID');
+  if (c.values.security?.insecureHttpTestProfile || c.values.security?.access && c.values.security.access !== c.access || c.values.env?.LUCY_DEPLOYMENT_MODE === 'development' || c.values.extraSecretData && Object.keys(c.values.extraSecretData).length) fail('CUSTOMER_POLICY_INVALID');
+  c.values = { ...c.values, security: { ...c.values.security, access: c.access } };
   if (Object.keys(c.values.env ?? {}).some((key) => /(?:TOKEN|SECRET|PASSWORD|API_KEY|PRIVATE_KEY)$/.test(key))) fail('PLAINTEXT_SECRET_IN_VALUES');
   return c;
 }

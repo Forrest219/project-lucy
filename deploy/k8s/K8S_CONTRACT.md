@@ -154,8 +154,9 @@ The chart hard-codes these entries in the Pod `env` (they are not exposed as val
 |---|---|---|
 | `LUCY_DEPLOYMENT_MODE` | `customer` | Default-deny WebUI auth; `LUCY_WEBUI_AUTH=off` is rejected at startup |
 | `LUCY_CHART_DEPLOYMENT_MODE` | `customer` | The chart's pin. Startup (entrypoint and server) exits non-zero when it differs from the effective `LUCY_DEPLOYMENT_MODE`, e.g. when an `extraEnvFrom` Secret/ConfigMap supplies `LUCY_DEPLOYMENT_MODE=development` |
-| `LUCY_WEBUI_COOKIE_SECURE` | `1` | Secure session cookie + HSTS. `0` is refused in customer mode |
-| `LUCY_WEBUI_TEST_PROFILE` | absent | Set to `1` (with `LUCY_WEBUI_COOKIE_SECURE=0`) only when `security.insecureHttpTestProfile: true`, for kind / k3s test profiles over plain HTTP. `/api/health` then reports `insecureTestProfile: true`. Never enable for a customer install |
+| `LUCY_WEBUI_COOKIE_SECURE` | `1` when `security.access` is `https`; `0` when it is `http` | Secure session cookie + HSTS on HTTPS. Intranet HTTP is the explicit customer access mode `security.access=http` |
+| `LUCY_WEBUI_ACCESS` | `https` or `http` | Mirrors `security.access`. `http` allows a non-Secure session cookie in customer mode and does not set the lab test marker |
+| `LUCY_WEBUI_TEST_PROFILE` | absent | Set to `1` (with `LUCY_WEBUI_COOKIE_SECURE=0`) only when `security.insecureHttpTestProfile: true`, for kind / k3s lab profiles over plain HTTP. `/api/health` then reports `insecureTestProfile: true`. Do not combine with `security.access=http` |
 | `LUCY_WEBUI_BOOTSTRAP_TOKEN_FILE` | `/run/secrets/lucy-bootstrap/token` | Only when `bootstrap.existingSecret` is set (Secret key `token`, mounted read-only); the value never appears in ConfigMap, argv or logs |
 
 Kubernetes gives explicit `env` entries precedence over `envFrom`, so an `extraEnvFrom` source cannot shadow the pins on K8s itself; the startup check above is the second line of defence for other runtimes and for edited manifests. `helm template` assertions for these pins live in `npm run gate:k8s-static` (`scripts/gates/helm-lucy-gate.sh`).
