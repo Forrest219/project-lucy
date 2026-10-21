@@ -10,7 +10,7 @@
 
 通用镜像和公共软件包不含密钥，客户私有凭据附件与其配套交付。软件包完整不代表客户部署交付完整；缺密钥附件、签发状态、部署取值一致性或复用证据时，不得发出声称可部署的客户包，也不能让部署人员临时补密钥。
 
-现有签发/准备工具可复用；将签发自动接入标准封包及免填凭据元数据的改造仍见[实施计划](../plans/2026-10-20-build-time-bootstrap-credential-plan.md)。自动化未覆盖前，由供应方在同次出包完成签发、配套和验证；本规则不表示现有封包脚本已经自动完成这些步骤。
+标准出包入口已自动完成签发接入：客户交付在最终归档回归后自动生成或复用私有附件（密钥、签发状态、凭据元数据、准备入口）并执行 C20 成套门禁（`scripts/gates/verify-bootstrap-attachment.py`）；公共发布用 `--public-release` 显式跳过，已有管理员用 `--existing-admin` 记 N/A。实现与边界见[实施计划](../plans/2026-10-20-build-time-bootstrap-credential-plan.md)。自动化未覆盖的新场景，仍由供应方在同次出包完成签发、配套和验证。
 
 ## 两轮事故复盘
 
@@ -29,11 +29,11 @@
 
 | ID | 检查及通过条件 | 执行位置 / 证据 |
 |---|---|---|
-| C01 | 公共通用包无密钥；客户交付同步配齐私有密钥附件及签发状态；实例目录具备 package、instance.json、customer-values.yaml、RECOVERY.md、credentials、scripts/deploy.sh | 最终归档回归 + 供应方附件/实例清点 |
+| C01 | 公共通用包无密钥；客户交付同步配齐私有密钥附件及签发状态；实例目录具备 package、instance.json、customer-values.yaml、RECOVERY.md、credentials、scripts/deploy.sh | 最终归档回归 + C20 门禁（`verify-bootstrap-attachment.py`）+ 供应方附件/实例清点 |
 | C02 | context、集群/Namespace/Deployment/PVC UID、Release、Service、旧镜像绑定原实例 | 真实 dry-run + 基线记录 |
 | C03 | HTTP/HTTPS 明确选择；Cookie Secure、公开 MCP URL 与选择一致；HTTPS 私有 CA 随实例交付 | 自动双模式回归 + 现场适用模式验收 |
 | C04 | 无管理员路径无历史消费或恢复冲突；已有管理员不重发密钥；schema 1/2 探测不改库 | auth probe 回归 + 现场脱敏状态 |
-| C05 | 供应方出包时生成或复用密钥，部署人员不补；权限 0600、签发状态保留、同实例复用、不同实例独立、已有管理员不新发；密钥不进入镜像/公共包/日志 | issuer/preparer 回归 + 同次出包记录 |
+| C05 | 供应方出包时生成或复用密钥，部署人员不补；权限 0600、签发状态保留、同实例复用、不同实例独立、已有管理员不新发；密钥不进入镜像/公共包/日志 | issuer/preparer/attachment 回归（`customer-bootstrap-state`、`build-bootstrap-attachment`）+ 同次出包 C20 报告 |
 | C06 | 原资源名、PVC 所有权、挂载路径、配置/语义层/Wiki/Skills/密码文件/MCP Token、8276/8277 保留；7878 不公开；单副本 Recreate | 渲染检查 + 真实前后对比 |
 | C07 | 已提交且 dirty=false；镜像 tag 对应出包提交；Chart 内容变化升版本，工具修复不强行改 Chart | 构建入口拒绝 dirty/tag 不匹配；BUILD-INFO |
 | C08 | G1–G4/G4b/G4c/G8；amd64 ELF、离线 Python/KTX 功能、UID 10001；导出重导入复验 | 镜像构建日志 + K6；参照 amd64 构建清单 |
@@ -48,7 +48,7 @@
 | C17 | stage/code/type；预检失败也有 0700 目录/0600 脱敏诊断；不保存异常消息、源代码行、命令原文、values、Token 或密码 | 错误分支回归 + 现场诊断 |
 | C18 | 最终包及运行后软件目录无 ._*/.DS_Store/__MACOSX/__pycache__/*.pyc、链接、未登记文件；诊断在软件目录外 | 精确文件集 + 运行前后哈希 |
 | C19 | 新包名/提交/摘要唯一，旧包作废；交付说明列通过/待验；全部适用项通过后才生产放行 | 验证 JSON + 原生验收表 |
-| C20 | 同次客户交付的软件身份、密钥附件、签发状态/元数据和说明齐备；最终附件可复用并生成密钥相同的实例目录；缺任一项或绑定不符即阻断客户交付 | 供应方成套交付清点 + 最终附件重解压/复用证据；已有管理员记 N/A 并核实原状态 |
+| C20 | 同次客户交付的软件身份、密钥附件、签发状态/元数据和说明齐备；最终附件可复用并生成密钥相同的实例目录；缺任一项或绑定不符即阻断客户交付 | 出包自动生成附件 + C20 门禁重解压附件与最终归档、其他 cwd 复用并核对密钥摘要（`--existing-admin` 记 N/A 并核实原状态） |
 
 ## 自动执行入口
 
@@ -57,10 +57,11 @@
 ```bash
 bash scripts/gates/build-k8s-delivery-package.sh \
   --image-tag project-lucy:customer-amd64-2.0.0-YYYYMMDD-COMMIT \
-  --version-suffix YYYYMMDD-rN --output /absolute/path/delivery.tar.gz
+  --version-suffix YYYYMMDD-rN --output /absolute/path/delivery.tar.gz \
+  [--customer <slug>] [--existing-admin]   # 客户交付默认自动生成私有引导附件
 ```
 
-入口自动运行部署/身份/密钥/探测回归、K6 和最终归档入口回归，失败停止出包。最终归档独立复验：
+入口自动运行部署/身份/密钥/探测/附件回归、K6 和最终归档入口回归，失败停止出包。客户交付还会自动生成或复用私有引导附件（默认 `~/.lucy/customer-deliveries/`，签发状态根默认 `~/.lucy/customer-credentials/`），打包为 `<附件>.tar.gz` 并执行 C20 成套门禁，产出 `.c20.json` 证据；软件包与附件必须成套交付。纯公共发布加 `--public-release`，不签发客户凭据。最终归档独立复验：
 
 ```bash
 python3 scripts/gates/verify-customer-upgrade-package.py \

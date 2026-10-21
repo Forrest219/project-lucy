@@ -26,7 +26,7 @@ Vibe coding 双核角色协作（thinker / builder）的可选完整交付流水
 - 通用镜像和公共软件包仍不含密钥；客户私有附件与软件包成套交付，不能把同一密钥随公共包分发给多个客户。私有附件保存在 Git、inbox、构建上下文和公共上传目录之外，目录 0700、文件 0600，不打印密钥内容。
 - 出包前必须执行 [客户升级交付 Checklist](docs/runbooks/customer-v2-upgrade-release-checklist.md) 的 C01、C05、C20 及其他适用项。自动化尚未覆盖的步骤由供应方在同次出包补齐并验证，不得降级为部署人员补密钥。
 
-具体原则和自动化待办见 [出包时配套生成引导密钥](docs/plans/2026-10-20-build-time-bootstrap-credential-plan.md)。
+具体原则和实现见 [出包时配套生成引导密钥](docs/plans/2026-10-20-build-time-bootstrap-credential-plan.md)。标准出包入口已自动生成/复用私有附件并执行 C20 门禁；自动化未覆盖的新场景仍由供应方在同次出包补齐并验证。
 
 ## KTX 依赖边界与开发优先级
 

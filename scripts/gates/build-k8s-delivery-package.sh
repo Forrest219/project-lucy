@@ -14,6 +14,9 @@
 #     [--manifest-digest sha256:...] \
 #     [--skip-ktx-exec]      # Apple Silicon: skip only the K6 steps that EXECUTE ktx under QEMU.
 #                            # G1 (metadata) and G2 (ELF headers) still run; run G4/G4b on amd64.
+#     [--customer <slug>] [--existing-admin] [--public-release]
+#                            # Customer deliveries (default) also generate/reuse the private
+#                            # bootstrap credential attachment (C20) outside this public package.
 set -Eeuo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -34,6 +37,11 @@ DELIVERY_MODE="offline"
 IMAGE_REPOSITORY=""
 MANIFEST_DIGEST=""
 SKIP_KTX_EXEC=0
+PUBLIC_RELEASE=0
+EXISTING_ADMIN=0
+CUSTOMER="${LUCY_CUSTOMER_NAME:-customer}"
+ATTACHMENT_OUTPUT=""
+CREDENTIAL_STATE_DIR="${LUCY_CREDENTIAL_STATE_DIR:-${HOME}/.lucy/customer-credentials}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -44,6 +52,10 @@ while [[ $# -gt 0 ]]; do
     --image-repository) IMAGE_REPOSITORY="$2"; shift 2 ;;
     --manifest-digest) MANIFEST_DIGEST="$2"; shift 2 ;;
     --skip-ktx-exec) SKIP_KTX_EXEC=1; shift ;;
+    --customer) CUSTOMER="$2"; shift 2 ;;
+    --existing-admin) EXISTING_ADMIN=1; shift ;;
+    --attachment-output) ATTACHMENT_OUTPUT="$2"; shift 2 ;;
+    --public-release) PUBLIC_RELEASE=1; shift ;;
     -h|--help)
       sed -n '2,18p' "$0"
       exit 0
@@ -72,6 +84,7 @@ echo '[build-k8s-delivery] customer upgrade regression checklist'
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s "${ROOT}/scripts/deploy" -p 'test_*.py' -q
 node --test "${ROOT}/scripts/deploy/probe-customer-auth-state.test.mjs" \
   "${ROOT}/scripts/release/customer-bootstrap-state.test.mjs" \
+  "${ROOT}/scripts/release/build-bootstrap-attachment.test.mjs" \
   "${ROOT}/scripts/gates/build-k8s-delivery-package.test.mjs"
 docker image inspect "${IMAGE_TAG}" >/dev/null 2>&1 || { echo "FAIL: image not found: ${IMAGE_TAG}" >&2; exit 1; }
 
@@ -113,7 +126,10 @@ cleanup_fail() {
   local rc=$?
   if [[ "${rc}" -ne 0 ]]; then
     rm -f "${OUTPUT}" "${OUTPUT}.sha256" "${OUTPUT}.verification.json" 2>/dev/null || true
-    echo "[build-k8s-delivery] FAIL — removed incomplete ${OUTPUT}" >&2
+    if [[ -n "${ATTACHMENT_OUTPUT:-}" ]]; then
+      rm -rf "${ATTACHMENT_OUTPUT}" "${ATTACHMENT_OUTPUT}.tar.gz" "${ATTACHMENT_OUTPUT}.tar.gz.sha256" "${ATTACHMENT_OUTPUT}.c20.json" 2>/dev/null || true
+    fi
+    echo "[build-k8s-delivery] FAIL — removed incomplete ${OUTPUT} and any bootstrap attachment artifacts" >&2
   fi
   rm -rf "${STAGING}"
 }
@@ -215,9 +231,9 @@ cat > "${PKG_DIR}/CUSTOMER-FIRST-ADMIN.md" <<'EOF'
 本通用软件包不含引导密钥。旧开放模式升级到 2.0 管理员登录时，保留原 PVC。
 
 1. 把安装包解压到仓库和 `inbox` 之外的目录。
-2. 按 `CUSTOMER-UPGRADE.md` 选择 HTTP 或 HTTPS 实例样例，填写真实 context、UID、旧镜像、节点映射和访问地址。HTTPS 的 TLS 网关和私有 CA 配置见该说明。
+2. 按 `CUSTOMER-UPGRADE.md` 选择 HTTP 或 HTTPS 实例样例，填写真实 context、UID、旧镜像、节点映射和访问地址。HTTPS 的 TLS 网关和私有 CA 配置见该说明。不要填写 `instanceId` 和 `credentialState`。
 3. 确认旧数据卷没有管理员、也没有 `.ktx-ui/security.sqlite` 之后，才把 `legacyBaselineReviewed` 改为 `true`。填写恢复说明；部署入口在切换前自动停机备份整个 PVC，并保存原 Helm revision。
-4. 从任意目录使用脚本的绝对路径执行 `python3 <解压目录>/scripts/prepare-customer-instance.py --base-package <解压目录> --instance-config <实例.json> --state-dir <私有状态目录> --output <新的客户目录>`。同一实例更换输出目录重打包会复用已签发的引导密钥。
+4. 使用供应方随包交付的私有附件（引导密钥）：`bash <附件>/scripts/prepare.sh --package <安装包.tar.gz 或解压目录> --config <实例.json> --output <新的客户目录>`。入口自动校验软件包绑定并复用附件内已签发的引导密钥；同一实例重打包、换目录复用原密钥。没有附件时（公共发布）才用手工 `prepare-customer-instance.py` 路径联系供应方补发，不要自行生成密钥。
 5. 在客户目录先执行 `bash scripts/deploy.sh --dry-run`，通过后执行 `bash scripts/deploy.sh`。脚本配置该实例的引导 Secret 并部署。
 6. 打开实例配置中的 WebUI 地址，输入引导密钥、账户名和新密码，创建首个所有者。
 
@@ -310,9 +326,15 @@ Supported Helm chart is included under `helm/lucy/` (not a reference snapshot).
 Package layout: `helm/lucy/` chart · `examples/` values · `image/` offline image tar and identity files ·
 `scripts/` preflight + acceptance (self-contained) · `BUILD-INFO.json` · `SHA256SUMS`.
 
-This public package contains no bootstrap key. Follow `CUSTOMER-UPGRADE.md` to prepare a private instance
-directory, run its deployment entry, and create the first owner. Each instance gets its own key.
-The test, r2 and r3 packages are superseded. Follow UPGRADE-RELEASE-CHECKLIST.md for every delivery.
+This public package contains no bootstrap key. Customer deliveries ship a companion PRIVATE
+bootstrap attachment next to this archive (webui-bootstrap-token, issuance state, credential
+metadata, and a self-service prepare entry; see its README.md). The supplier generates or
+reuses it at build time (C20 gate); deployers never hand-generate keys. Run the attachment's
+`scripts/prepare.sh` against this archive to produce the private instance directory, then run
+its deployment entry and create the first owner. Each instance gets its own key. Public releases
+without the attachment fall back to `CUSTOMER-UPGRADE.md` and `scripts/prepare-customer-instance.py`;
+ask the supplier for the matching private attachment instead of hand-generating keys.
+The test, r2, r3 and r4 packages are superseded. Follow UPGRADE-RELEASE-CHECKLIST.md for every delivery.
 Local package checks do not authorize production use; native amd64 upgrade and recovery remain mandatory.
 
 Read order:
@@ -383,6 +405,16 @@ Diagnostics contain stage, error type and stack locations without exception text
 
 Lucy product version and bundled KTX version are independent release identities
 (see `BUILD-INFO.json` for the exact commit, image, platform and dependency versions).
+
+## Changes (delivery tooling, no Chart change)
+
+- Customer package builds now generate or reuse the per-instance private bootstrap
+  credential attachment at build time (key, issuance state, credential metadata,
+  self-service prepare entry; dir 0700/files 0600; lives outside this public archive).
+  A C20 bundle gate re-extracts the attachment and this archive, prepares the instance
+  from another cwd, and proves the delivered key matches the attachment digest.
+  Public releases opt out explicitly with `--public-release`; existing-admin instances
+  record `credentialState: none` and ship no key.
 
 ## Changes (Chart 0.2.6)
 
@@ -470,8 +502,50 @@ bash "${ROOT}/scripts/gates/verify-k8s-package.sh" --tar "${OUTPUT}" --outer-sha
 echo '[build-k8s-delivery] final archive customer entry regression (synthetic reads; real CLIs)'
 python3 "${ROOT}/scripts/gates/verify-customer-upgrade-package.py" --tar "${OUTPUT}" --report "${OUTPUT}.verification.json"
 
+ATTACHMENT_JSON=""
+if [[ "${PUBLIC_RELEASE}" -eq 1 ]]; then
+  echo "[build-k8s-delivery] --public-release: no per-customer bootstrap credential is issued (C20 N/A by mode)"
+else
+  echo "[build-k8s-delivery] bootstrap credential attachment (C20 bundle gate)"
+  if [[ -z "${ATTACHMENT_OUTPUT}" ]]; then
+    ATTACHMENT_OUTPUT="${LUCY_ATTACHMENT_ROOT:-${HOME}/.lucy/customer-deliveries}/${PKG}-attachment-${CUSTOMER}"
+  fi
+  [[ ! -e "${ATTACHMENT_OUTPUT}" && ! -e "${ATTACHMENT_OUTPUT}.tar.gz" ]] || {
+    echo 'FAIL: use a new attachment output; existing attachment artifacts must not be overwritten' >&2
+    exit 1
+  }
+  OUTER_SHA="$(awk '{print $1}' "${OUTPUT}.sha256")"
+  BASE_CHECKSUM="$(sha256sum "${PKG_DIR}/SHA256SUMS" | awk '{print $1}')"
+  EXISTING_ADMIN_ARG=()
+  if [[ "${EXISTING_ADMIN}" -eq 1 ]]; then
+    EXISTING_ADMIN_ARG+=(--existing-admin)
+  fi
+  ATTACHMENT_JSON="$(node "${ROOT}/scripts/release/build-bootstrap-attachment.mjs" \
+    --customer "${CUSTOMER}" \
+    --state-dir "${CREDENTIAL_STATE_DIR}" \
+    --output "${ATTACHMENT_OUTPUT}" \
+    --package-name "$(basename "${OUTPUT}")" \
+    --package-sha256 "${OUTER_SHA}" \
+    --package-base-checksum "${BASE_CHECKSUM}" \
+    ${EXISTING_ADMIN_ARG[@]+"${EXISTING_ADMIN_ARG[@]}"})"
+  (
+    cd "$(dirname "${ATTACHMENT_OUTPUT}")"
+    COPYFILE_DISABLE=1 tar -czf "$(basename "${ATTACHMENT_OUTPUT}").tar.gz" "$(basename "${ATTACHMENT_OUTPUT}")"
+    sha256sum "$(basename "${ATTACHMENT_OUTPUT}").tar.gz" > "$(basename "${ATTACHMENT_OUTPUT}").tar.gz.sha256"
+  )
+  python3 "${ROOT}/scripts/gates/verify-bootstrap-attachment.py" \
+    --attachment "${ATTACHMENT_OUTPUT}.tar.gz" \
+    --package-tar "${OUTPUT}" \
+    --report "${ATTACHMENT_OUTPUT}.c20.json"
+fi
+
 # Success: disarm fail cleanup of OUTPUT; still remove staging.
 trap 'rm -rf "${STAGING}"' EXIT
 
 echo "[build-k8s-delivery] wrote ${OUTPUT}"
 echo "[build-k8s-delivery] wrote ${OUTPUT}.sha256"
+if [[ -n "${ATTACHMENT_JSON}" ]]; then
+  echo "[build-k8s-delivery] wrote private bootstrap attachment (never prints key material):"
+  echo "${ATTACHMENT_JSON}" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(json.dumps({"attachment": d["attachment"], "instanceId": d["instanceId"], "credentialState": d["credentialState"], "credentialReused": d["credentialReused"], "keyDigest": d["keyDigest"], "packageName": d["packageName"]}, indent=2))'
+  echo "[build-k8s-delivery] wrote ${ATTACHMENT_OUTPUT}.tar.gz (+ .sha256, .c20.json) — deliver together with the package"
+fi

@@ -1,6 +1,6 @@
 # 出包时自动配套生成引导密钥
 
-状态：用户已确认将交付原则固化，已写入 AGENTS.md 和出包/交付清单；自动接入封包及免填凭据元数据的脚本改造仍待实施。本次只固化规则，不宣称自动化已经完成。依据：用户要求每次生成镜像包时同步提供 bootstrap-token，部署人员不再补充或另行签发。
+状态：已实施。标准客户出包入口在最终归档回归通过后自动生成或复用私有引导附件并跑 C20 成套门禁；`--public-release` 显式跳过（公共发布不签发）。实施：供应方附件生成入口 `scripts/release/build-bootstrap-attachment.mjs`、附件内准备入口 `scripts/prepare.sh`（生成物）、C20 门禁 `scripts/gates/verify-bootstrap-attachment.py`、出包流程接入 `scripts/gates/build-k8s-delivery-package.sh`。依据：用户要求每次生成镜像包时同步提供 bootstrap-token，部署人员不再补充或另行签发。
 
 ## 已确认的强制原则
 
@@ -20,20 +20,20 @@
 
 “每次同步生成”指每次确保交付物齐备；同一实例再次出包复用原密钥。已有管理员路径不签发新密钥，不重开认领。通用镜像不得烘焙共享密钥；面向多个客户交付时分别生成私有附件。
 
-## 来源与现有差距
+## 来源与差距（已全部补齐）
 
-- 已有 `customer-bootstrap-state.mjs` 支持 32 字节随机材料、每实例永久签发记录、重复签发复用、并发锁、私有文件权限和 Python 互操作，可直接复用。
-- 标准 `build-k8s-delivery-package.sh` 仅生成通用软件包；签发发生在后续 prepare 阶段，导致软件交付后还需人工补密钥。
-- 上次手工生成的 r4 凭据附件已具备密钥和签发记录，但需要部署人员手工设置实例 ID 和状态路径；应成为受测的自动流程。
-- CI 会上传 release/ 和证据目录，私有附件必须在这些公开上传路径、Git、inbox、镜像构建上下文之外；CI 公共制品路径不签发客户凭据。
+- 已有 `customer-bootstrap-state.mjs` 支持 32 字节随机材料、每实例永久签发记录、重复签发复用、并发锁、私有文件权限和 Python 互操作，可直接复用。→ 已由 `build-bootstrap-attachment.mjs` 复用。
+- 标准 `build-k8s-delivery-package.sh` 仅生成通用软件包；签发发生在后续 prepare 阶段，导致软件交付后还需人工补密钥。→ 出包入口现已在最终归档回归后自动调用附件生成并执行 C20 门禁；公共发布用 `--public-release` 显式跳过。
+- 上次手工生成的 r4 凭据附件已具备密钥和签发记录，但需要部署人员手工设置实例 ID 和状态路径；应成为受测的自动流程。→ 附件生成物自带实例准备入口 `scripts/prepare.sh`，自动注入实例 ID、签发状态和 state-dir，部署人员只填写现场参数。
+- CI 会上传 release/ 和证据目录，私有附件必须在这些公开上传路径、Git、inbox、镜像构建上下文之外；CI 公共制品路径不签发客户凭据。→ 附件默认落在供应方私有目录（`~/.lucy/customer-deliveries/`，可用 `LUCY_ATTACHMENT_ROOT`/`--attachment-output` 覆盖），签发状态根默认 `~/.lucy/customer-credentials/`（可用 `LUCY_CREDENTIAL_STATE_DIR` 覆盖）。
 - 此方案修改原计划“实例化时才签发”的时点；保留按实例隔离、复用、不进入镜像和公共软件包的契约。
 
-## 实施步骤
+## 实施步骤（已完成）
 
-1. 增加供应方私有附件生成入口，复用现有签发模块。为明确客户指定稳定实例 ID；尚无现场参数时自动预分配并保存，不依赖 Kubernetes UID 才能签发。既有实例须使用其原 ID 与签发状态，不因构建新版本另建身份。
-2. 接入标准客户出包流程：软件验证通过后自动生成/复用私有附件。默认落入供应方持久化私有目录；公开 CI 制品与实例私有交付模式显式分开，不将 Token 上传公共 Release。已有管理员不签发。
-3. 私有附件提供可从任意 cwd 运行的实例准备入口，自动注入凭据元数据及状态目录，真实现场配置继续由部署人员填写；与不同实例或包身份冲突时明确拒绝。包身份和凭据复用分别记录，不能把已有密钥改绑至其他实例。
-4. 更新 README、交付流程、出包 Checklist 和验证入口，增加“软件包+凭据附件同时齐备”的门禁；保留原生 amd64 升级/恢复验收边界。
+1. 增加供应方私有附件生成入口，复用现有签发模块。为明确客户指定稳定实例 ID；尚无现场参数时自动预分配并保存，不依赖 Kubernetes UID 才能签发。既有实例须使用其原 ID 与签发状态，不因构建新版本另建身份。→ `scripts/release/build-bootstrap-attachment.mjs`（`resolveInstanceId` 客户注册表）。
+2. 接入标准客户出包流程：软件验证通过后自动生成/复用私有附件。默认落入供应方持久化私有目录；公开 CI 制品与实例私有交付模式显式分开，不将 Token 上传公共 Release。已有管理员不签发。→ `build-k8s-delivery-package.sh` 末尾附件步骤 + `--public-release`/`--existing-admin`。
+3. 私有附件提供可从任意 cwd 运行的实例准备入口，自动注入凭据元数据及状态目录，真实现场配置继续由部署人员填写；与不同实例或包身份冲突时明确拒绝。包身份和凭据复用分别记录，不能把已有密钥改绑至其他实例。→ 附件内 `scripts/prepare.sh`（`PACKAGE_BINDING_MISMATCH`/`INSTANCE_BINDING_MISMATCH`）。
+4. 更新 README、交付流程、出包 Checklist 和验证入口，增加“软件包+凭据附件同时齐备”的门禁；保留原生 amd64 升级/恢复验收边界。→ `scripts/gates/verify-bootstrap-attachment.py`（C20 门禁）+ 文档更新。
 
 ## 核心流程（伪代码）
 

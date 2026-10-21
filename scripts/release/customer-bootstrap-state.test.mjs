@@ -78,6 +78,7 @@ export async function fixturePackage(root) {
     'scripts/customer-deployment-helper.py': await fs.readFile(path.join(scriptDir, '../deploy/customer-deployment-helper.py'), 'utf8'),
     'scripts/image_identity.py': await fs.readFile(path.join(scriptDir, '../deploy/image_identity.py'), 'utf8'),
     'scripts/probe-customer-auth-state.mjs': await fs.readFile(path.join(scriptDir, '../deploy/probe-customer-auth-state.mjs'), 'utf8'),
+    'scripts/prepare-customer-instance.py': await fs.readFile(path.join(scriptDir, '../deploy/prepare-customer-instance.py'), 'utf8'),
     'image/test.tar': 'dummy-image'
   };
   for (const [name, data] of Object.entries(files)) { await fs.mkdir(path.dirname(path.join(base, name)), { recursive: true }); await fs.writeFile(path.join(base, name), data); }

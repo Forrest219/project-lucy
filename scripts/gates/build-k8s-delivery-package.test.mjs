@@ -46,6 +46,24 @@ test("every build requires clean source and verifies the final archive's custome
   assert.match(src, /existing artifacts must not be overwritten/);
 });
 
+test("customer builds ship the private bootstrap attachment and run the C20 bundle gate", async () => {
+  const src = await readFile(packScript, 'utf8');
+  assert.match(src, /build-bootstrap-attachment\.mjs/);
+  assert.match(src, /verify-bootstrap-attachment\.py/);
+  assert.match(src, /--public-release/);
+  assert.match(src, /--existing-admin/);
+  assert.match(src, /--customer/);
+  assert.match(src, /build-bootstrap-attachment\.test\.mjs/);
+  assert.ok(src.indexOf('build-bootstrap-attachment.mjs') > src.indexOf('verify-customer-upgrade-package.py'));
+  assert.ok(src.indexOf('verify-bootstrap-attachment.py') > src.indexOf('build-bootstrap-attachment.mjs'));
+  assert.match(src, /existing attachment artifacts must not be overwritten/);
+  assert.match(src, /removed incomplete \$\{OUTPUT\} and any bootstrap attachment artifacts/);
+  assert.match(src, /never prints key material/);
+  // The public archive itself must still contain no credential directory.
+  const notes = src.slice(src.indexOf('Release Notes'));
+  assert.match(notes, /private bootstrap\s*$/m);
+});
+
 test("quoted heredoc preserves literal backticks and does not run git init", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "lucy-pack-heredoc-"));
   const out = path.join(dir, "RELEASE_NOTES.md");
