@@ -183,6 +183,7 @@ Lucy MCP Proxy 监听 `LUCY_PROXY_HOST:LUCY_PROXY_PORT`（默认容器内 `0.0.0
 | WebUI 基础架构 | `webui/docs/01-architecture.md`、`webui/docs/02-arch-spec.md`、`webui/docs/03-api-spec.md`、`webui/docs/04-data-model.md` |
 | WebUI 进入性能优化（已实施，2026-10-14 Codex收尾及fixture正式复验完成，未部署） | [Spec 174](../../webui/docs/174-webui-entry-performance-spec.md)、[Cursor实施与验证工单](../../webui/docs/plans/wo-20261013-webui-entry-performance.md)、[审阅修正工单](../../webui/docs/plans/wo-20261013-webui-entry-performance-REVIEW-FIX.md)、[复核与下一步计划](../../webui/docs/plans/wo-20261014-webui-entry-performance-RECHECK.md) |
 | WebUI 内置系统手册 / Help Center | `docs/design/design-system-handbook-help.md`、`docs/SYSTEM_HANDBOOK.md` |
+| WebUI 侧栏账户菜单 | [Spec 188](../../webui/docs/188-sidebar-account-menu-spec.md)：左下角单一账户入口，收纳系统手册及退出登录；本次仅 Code Review，未运行验证或重建 Docker |
 | YAML 交付自助运维 / Agent 自检 | `webui/docs/24-yaml-delivery-runbook-spec.md`、`webui/docs/plans/wo-M20-yaml-delivery-runbook.md` |
 | MCP Auth Proxy | `webui/docs/07-mcp-auth-proxy-spec.md` |
 | 访问日志审计证据硬化 | `webui/docs/137-access-log-audit-evidence-hardening-spec.md`、`webui/docs/plans/wo-202609-02-access-log-audit-evidence-hardening.md` |

@@ -10,6 +10,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppFrame } from "../app/App";
 import { PageHeader } from "../components/PageHeader";
+import { AuthProvider, type AuthStatus } from "../lib/auth";
 import { assertNoForbiddenTerms } from "./forbidden-terms";
 
 function expectedSidebarRevision(): string | undefined {
@@ -83,7 +84,7 @@ vi.mock("../pages/connections/TableWhitelist", () => ({ TableWhitelist: () => <S
 vi.mock("../pages/connections/ConnectionTest", () => ({ ConnectionTest: () => <StubPage name="ConnectionTest" /> }));
 vi.mock("../pages/HelpCenter", () => ({ HelpCenter: () => <StubPage name="HelpCenter" /> }));
 
-function renderAt(path: string) {
+function renderAt(path: string, authStatus?: AuthStatus) {
   const client = new QueryClient({
     defaultOptions: {
       queries: { retry: false }
@@ -91,6 +92,13 @@ function renderAt(path: string) {
   });
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
+    if (url === "/api/auth/status" && authStatus) {
+      return new Response(JSON.stringify({ ok: true, data: authStatus }));
+    }
+    if (url === "/api/auth/logout" && authStatus) {
+      authStatus = { ...authStatus, me: null };
+      return new Response(JSON.stringify({ ok: true, data: {} }));
+    }
     if (url === "/api/project") {
       return new Response(
         JSON.stringify({
@@ -150,11 +158,14 @@ function renderAt(path: string) {
     "fetch",
     fetchMock
   );
+  const app = (
+    <MemoryRouter initialEntries={[path]}>
+      <AppFrame />
+    </MemoryRouter>
+  );
   render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[path]}>
-        <AppFrame />
-      </MemoryRouter>
+      {authStatus ? <AuthProvider>{app}</AuthProvider> : app}
     </QueryClientProvider>
   );
   return { fetchMock };
@@ -176,6 +187,32 @@ beforeEach(() => {
 });
 
 describe("AppFrame shell", () => {
+  it("consolidates authenticated footer actions and uses the existing logout flow", async () => {
+    const { fetchMock } = renderAt("/", {
+      mode: "required", authEnabled: true,
+      me: { id: "xingchen", displayName: "星辰", role: "operator", enabled: true, createdAt: null }
+    });
+    const footer = screen.getByTestId("sidebar-footer");
+    const trigger = await within(footer).findByRole("button", { name: "账户菜单：xingchen" });
+    expect(within(footer).getAllByRole("button")).toHaveLength(1);
+    expect(within(footer).queryByRole("link", { name: "打开系统手册" })).not.toBeInTheDocument();
+    expect(screen.queryByText("退出登录")).not.toBeInTheDocument();
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole("menuitem", { name: "退出登录" }));
+    await within(footer).findByRole("link", { name: "打开系统手册" });
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(within(footer).queryByRole("button")).not.toBeInTheDocument();
+    expect(fetchMock.mock.calls.filter(([url]) => String(url) === "/api/auth/logout")).toHaveLength(1);
+  });
+
+  it.each(["open", "required"] as const)("keeps handbook access without an identity in %s mode", async (mode) => {
+    renderAt("/help", { mode, authEnabled: mode === "required", me: null });
+    await waitFor(() => expect(screen.getByTestId("route-page")).toHaveTextContent("HelpCenter"));
+    const footer = screen.getByTestId("sidebar-footer");
+    expect(within(footer).getByRole("link", { name: "打开系统手册" })).toHaveAttribute("href", "/help");
+    expect(within(footer).queryByRole("button")).not.toBeInTheDocument();
+  });
+
   it.each([
     ["/overview", "Onboarding", "系统概览"],
     ["/ops/calls", "CallMonitor", "调用监控"],

@@ -407,6 +407,26 @@
   .pl-sidebar-revision {
     @apply px-1 text-xs leading-4 text-fg-muted;
   }
+  /* Spec 188: one quiet account row; portal escapes sidebar overflow clipping. */
+  .pl-account { @apply min-w-0 w-full; }
+  .pl-account-trigger { @apply flex min-h-10 w-full min-w-0 items-center gap-2 rounded-md px-3 text-left text-sm font-medium text-fg-body transition-colors; }
+  .pl-account-trigger:hover,
+  .pl-account-trigger[aria-expanded="true"] { @apply bg-bg-muted text-fg-default; }
+  .pl-account-trigger:active { @apply bg-bg-subtle; }
+  .pl-account-trigger:disabled { @apply cursor-wait opacity-60; }
+  .pl-account-name { @apply min-w-0 flex-1 truncate; }
+  .pl-account-chevron { @apply text-fg-muted transition-transform; }
+  .pl-account-chevron--open { @apply rotate-180; }
+  .pl-account-popover { @apply fixed z-50 overflow-y-auto overscroll-contain rounded-md border border-border-default bg-bg-surface p-1 shadow-card; }
+  .pl-account-summary { @apply flex flex-col gap-1 border-b border-border-default px-3 py-3 text-xs text-fg-muted; overflow-wrap: anywhere; }
+  .pl-account-summary strong { @apply text-sm font-medium text-fg-default; }
+  .pl-account-item { @apply flex min-h-9 w-full items-center gap-2 rounded-sm px-3 py-2 text-left text-sm font-normal text-fg-body no-underline transition-colors; }
+  .pl-account-item:hover,
+  .pl-account-item:focus { @apply bg-bg-muted text-fg-default; }
+  .pl-account-item:active { @apply bg-bg-subtle; }
+  .pl-account-trigger:focus-visible,
+  .pl-account-item:focus-visible { @apply outline outline-2 outline-offset-[-2px] outline-primary; }
+  .pl-account-separator { @apply my-1 border-t border-border-default; }
   .pl-help-button {
     @apply inline-flex h-9 w-9 items-center justify-center rounded-sm border border-border-default bg-bg-surface text-sm font-semibold text-fg-default no-underline shadow-card transition-colors;
   }

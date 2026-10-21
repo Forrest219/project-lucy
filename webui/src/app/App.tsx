@@ -22,6 +22,7 @@ import { BrandMark } from "../components/BrandMark";
 import { useBranding } from "../lib/useBranding";
 import { isPublicUiPath } from "../lib/publicAccess";
 import { HelpButton } from "../components/HelpButton";
+import { SidebarAccountMenu } from "../components/SidebarAccountMenu";
 import { CommandPalette } from "../components/CommandPalette";
 import { formatLucyVersionLabel } from "../lib/lucyVersion";
 import { formatLucyRevisionLabel, lucyRevisionTitle } from "../lib/lucyRevision";
@@ -488,12 +489,8 @@ export function AppFrame() {
           })}
         </nav>
         <div className="pl-sidebar-footer" data-testid="sidebar-footer">
-          <SidebarAuthFooter />
           <div className="pl-sidebar-utility" data-testid="sidebar-utility">
-            <HelpButton className="pl-sidebar-help-link">
-              <CircleHelp aria-hidden="true" className="size-4" />
-              <span>系统手册</span>
-            </HelpButton>
+            <SidebarAuthFooter />
             <span className="pl-sidebar-version-stack">
               <span
                 className="pl-sidebar-version notranslate"
@@ -589,24 +586,14 @@ export function AppFrame() {
 
 function SidebarAuthFooter() {
   const auth = useAuthOptional();
-  if (!auth?.status || auth.status.mode === "open") return null;
-  if (!auth.status.me) return null;
+  if (auth?.status?.mode === "required" && auth.status.me) {
+    return <SidebarAccountMenu key={auth.status.me.id} me={auth.status.me} onLogout={auth.logout} />;
+  }
   return (
-    <div className="px-3 pb-2 text-xs text-fg-muted grid gap-1" data-testid="sidebar-auth">
-      <div>
-        <span>当前管理员：</span>
-        <span className="notranslate font-mono" translate="no">
-          {auth.status.me.id}
-        </span>
-      </div>
-      <button
-        type="button"
-        className="pl-btn pl-btn--ghost text-left"
-        onClick={() => void auth.logout()}
-      >
-        退出登录
-      </button>
-    </div>
+    <HelpButton className="pl-sidebar-help-link">
+      <CircleHelp aria-hidden="true" className="size-4 shrink-0" />
+      <span className="whitespace-nowrap">系统手册</span>
+    </HelpButton>
   );
 }
 
