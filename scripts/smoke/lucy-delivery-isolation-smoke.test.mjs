@@ -8,6 +8,7 @@ import {
   A3_DOCKERIGNORE_PATTERNS,
   INTERNAL_TEST_DOCKERIGNORE_PATTERNS,
   SECURITY_E2E_DOCKERIGNORE_PATTERNS,
+  assertDockerignoreCoversPrivateRuntime,
   assertDockerignoreCoversSecurityE2e,
   assertDockerignoreCoversA3,
   assertDockerignoreCoversInternalTest,
@@ -27,6 +28,9 @@ describe("lucy-delivery-isolation-smoke", () => {
     assert.equal(isIgnoredByDockerignore("semantic-layer/mysql-aliyun/x.yaml", patterns), true);
     assert.equal(isIgnoredByDockerignore("webui/src/app.tsx", patterns), false);
     assert.equal(isIgnoredByDockerignore("customer-config.example/ktx.yaml", patterns), false);
+    assert.equal(isIgnoredByDockerignore("webui/:memory:/.ktx-ui/security.sqlite", ["**/.ktx-ui"]), true);
+    assert.equal(isIgnoredByDockerignore(".env.local", ["**/.env"]), false);
+    assert.equal(isIgnoredByDockerignore("webui/.env.development.local", ["**/.env.*.local"]), true);
   });
 
   it("requires A3 and internal-test patterns in repo .dockerignore", async () => {
@@ -58,6 +62,7 @@ describe("lucy-delivery-isolation-smoke", () => {
   it("keeps the real-user E2E fixtures, gold and fault tooling out of the customer image context", async () => {
     const text = await readFile(path.join(ROOT, ".dockerignore"), "utf8");
     assert.doesNotThrow(() => assertDockerignoreCoversSecurityE2e(text));
+    assert.doesNotThrow(() => assertDockerignoreCoversPrivateRuntime(text));
     const patterns = parseDockerignore(text);
     for (const p of SECURITY_E2E_DOCKERIGNORE_PATTERNS) assert.equal(isIgnoredByDockerignore(`${p}/anything`, patterns) || isIgnoredByDockerignore(p, patterns), true, p);
     assert.throws(() => assertDockerignoreCoversSecurityE2e(".git\nnode_modules\n"), /missing security-e2e isolation/);

@@ -43,8 +43,22 @@ export const SECURITY_E2E_DOCKERIGNORE_PATTERNS = [
   "webui/playwright.real.config.ts"
 ];
 
+/** Private runtime files at any depth. Root-only names do not cover nested copies. */
+export const PRIVATE_RUNTIME_DOCKERIGNORE_PATTERNS = [
+  "**/.ktx",
+  "**/.ktx-ui",
+  "**/:memory:",
+  "**/.mcp.json",
+  "**/.env",
+  "**/.env.local",
+  "**/.env.*.local",
+  "webui/config/access.yaml",
+  "webui/config/admins.yaml"
+];
+
 /** Absolute paths inside the Lucy image that must not exist (A3). */
 export const A3_IMAGE_DENYLIST = [
+  "/app/webui/:memory:",
   "/app/examples/security-e2e",
   "/app/scripts/e2e",
   "/app/deploy/k8s/security-e2e",
@@ -114,16 +128,35 @@ export function parseDockerignore(text) {
  * Minimal dockerignore matcher for anchored relative paths used by this gate.
  * Supports exact file patterns and directory prefixes (pattern without trailing slash).
  */
+function dockerignorePatternToRegExp(pattern) {
+  let source = pattern.replace(/\\/g, "/");
+  if (source.startsWith("/")) source = source.slice(1);
+  if (source.endsWith("/")) source = source.slice(0, -1);
+  let expression = "";
+  for (let index = 0; index < source.length; index += 1) {
+    if (source.startsWith("**/", index)) {
+      expression += "(?:.*/)?";
+      index += 2;
+      continue;
+    }
+    if (source.startsWith("**", index)) {
+      expression += ".*";
+      index += 1;
+      continue;
+    }
+    const character = source[index];
+    if (character === "*") {
+      expression += "[^/]*";
+      continue;
+    }
+    expression += "\\^$+?.()|[]{}".includes(character) ? `\\${character}` : character;
+  }
+  return new RegExp(`^(?:${expression})(?:/.*)?$`);
+}
+
 export function isIgnoredByDockerignore(relPath, patterns) {
   const norm = relPath.replace(/\\/g, "/").replace(/^\.\//, "");
-  for (const raw of patterns) {
-    let p = raw.replace(/\\/g, "/");
-    if (p.startsWith("/")) p = p.slice(1);
-    if (p.endsWith("/")) p = p.slice(0, -1);
-    if (norm === p) return true;
-    if (norm.startsWith(p + "/")) return true;
-  }
-  return false;
+  return patterns.some((pattern) => dockerignorePatternToRegExp(pattern).test(norm));
 }
 
 function assertDockerignoreCovers(dockerignoreText, required, label) {
@@ -154,6 +187,10 @@ export function assertDockerignoreCoversSecurityE2e(dockerignoreText) {
   return assertDockerignoreCovers(dockerignoreText, SECURITY_E2E_DOCKERIGNORE_PATTERNS, "security-e2e");
 }
 
+export function assertDockerignoreCoversPrivateRuntime(dockerignoreText) {
+  return assertDockerignoreCovers(dockerignoreText, PRIVATE_RUNTIME_DOCKERIGNORE_PATTERNS, "private-runtime");
+}
+
 export async function runFixtureSentinelCheck(patterns) {
   const dir = await mkdtemp(path.join(tmpdir(), "lucy-a3-isolation-"));
   const sentinel = `sentinel-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -175,7 +212,10 @@ export async function runFixtureSentinelCheck(patterns) {
       `examples/security-e2e/gold/compute-gold.mjs`,
       `scripts/e2e/adapters/codex.mjs`,
       `deploy/k8s/security-e2e/deploy-candidate.sh`,
-      `webui/tests/real-e2e/admin-auth.spec.ts`
+      `webui/tests/real-e2e/admin-auth.spec.ts`,
+      `webui/:memory:/.ktx-ui/security.sqlite`,
+      `webui/config/admins.yaml`,
+      `webui/.env.local`
     ];
     for (const rel of samples) {
       const full = path.join(dir, rel);
@@ -247,6 +287,8 @@ Lucy hard gate: .dockerignore must exclude A3 + internal test paths; optional do
     record("dockerignoreCoversInternalTest", true, { patterns: INTERNAL_TEST_DOCKERIGNORE_PATTERNS });
     assertDockerignoreCoversSecurityE2e(dockerignoreText);
     record("dockerignoreCoversSecurityE2e", true, { patterns: SECURITY_E2E_DOCKERIGNORE_PATTERNS });
+    assertDockerignoreCoversPrivateRuntime(dockerignoreText);
+    record("dockerignoreCoversPrivateRuntime", true, { patterns: PRIVATE_RUNTIME_DOCKERIGNORE_PATTERNS });
 
     const patterns = parseDockerignore(dockerignoreText);
     const fixture = await runFixtureSentinelCheck(patterns);

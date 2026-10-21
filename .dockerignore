@@ -43,3 +43,14 @@ scripts/gates/record-gate-result.mjs
 deploy/k8s/security-e2e
 webui/tests/real-e2e
 webui/playwright.real.config.ts
+
+# Local runtime state is private at every depth, even when Git ignores it.
+**/.ktx
+**/.ktx-ui
+**/:memory:
+**/.mcp.json
+**/.env
+**/.env.local
+**/.env.*.local
+webui/config/access.yaml
+webui/config/admins.yaml

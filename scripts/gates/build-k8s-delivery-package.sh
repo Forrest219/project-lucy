@@ -451,7 +451,7 @@ Lucy product version and bundled KTX version are independent release identities
   `"."` so `semantic-layer/`, `wiki/`, `skills/` and `webui/config/` next to `ktx.yaml` stay visible.
 - **Resource names.** `fullnameOverride: lucy` keeps `deployment/lucy`, `service/lucy`, `pvc/lucy` under release
   `lucy-starrocks` (no second stack).
-- **Ports.** Unchanged: WebUI `8276 -> 5174`, MCP `8277 -> 7879`; KTX upstream `7878` is never in the Service.
+- **Ports.** Container ports stay WebUI `5174` and MCP `7879`. Service type and Service ports stay at the live values. KTX upstream `7878` is never in the Service.
 - **Scripts.** `scripts/preflight-helm.sh` runs from the package root (`helm/lucy`) and checks names, ports,
   Secret sync, content root and image identity. `scripts/acceptance.sh` ships with `k8s-gate-lib.sh`,
   separates Helm release / Deployment / Service names, and never prints tokens or Secret contents.

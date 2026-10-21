@@ -109,6 +109,14 @@ def verify(archive, report_path, instance_dir=None):
                     config['recovery'] = {'baselineImage': config['baselineImage'], 'instructionsFile': str(base / 'examples/RECOVERY.open-mode.md')}
                     if access == 'https':
                         config.update(tlsCaFile=cert.name, externalTlsReviewed=True, credentialState='issued')
+                        # The shipped example keeps operator placeholders. This synthetic
+                        # run supplies the only content root and trust-proxy pair the
+                        # upgrade entry accepts. 192.0.2.0/24 is documentation space.
+                        config.setdefault('values', {}).setdefault('env', {}).update({
+                            'LUCY_CONTENT_ROOT': '.',
+                            'LUCY_TRUST_PROXY': '1',
+                            'LUCY_TRUSTED_PROXY_CIDRS': '192.0.2.0/24',
+                        })
                     config_file = root / (access + '.json')
                     config_file.write_text(json.dumps(config))
                     output = root / (access + '-delivery')

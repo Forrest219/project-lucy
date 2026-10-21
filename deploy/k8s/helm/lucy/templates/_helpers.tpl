@@ -156,6 +156,14 @@ entry lands on its own line at the correct indent.
 - name: LUCY_CONTENT_ROOT
   value: {{ .Values.env.LUCY_CONTENT_ROOT | quote }}
 {{ end -}}
+{{ if .Values.env.LUCY_TRUST_PROXY -}}
+- name: LUCY_TRUST_PROXY
+  value: {{ .Values.env.LUCY_TRUST_PROXY | quote }}
+{{ end -}}
+{{ if .Values.env.LUCY_TRUSTED_PROXY_CIDRS -}}
+- name: LUCY_TRUSTED_PROXY_CIDRS
+  value: {{ .Values.env.LUCY_TRUSTED_PROXY_CIDRS | quote }}
+{{ end -}}
 {{- end -}}
 
 {{/*

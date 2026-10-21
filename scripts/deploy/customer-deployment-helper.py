@@ -116,6 +116,30 @@ def merge_values(old, changes):
     return out
 
 
+UPGRADE_ENV_KEYS = ('LUCY_CONTENT_ROOT', 'LUCY_TRUST_PROXY', 'LUCY_TRUSTED_PROXY_CIDRS')
+
+
+def trust_proxy_enabled(value):
+    return str(value).strip().lower() in {'1', 'true', 'yes'}
+
+
+def apply_upgrade_env(config, out):
+    if config.get('intent') != 'upgrade':
+        return out
+    new_env = (config.get('values') or {}).get('env') or {}
+    require(isinstance(new_env, dict), 'CUSTOMER_POLICY_INVALID')
+    allowed = {key: new_env[key] for key in UPGRADE_ENV_KEYS if key in new_env}
+    if 'LUCY_CONTENT_ROOT' in allowed and allowed['LUCY_CONTENT_ROOT'] not in ('', '.'):
+        require(False, 'CONTENT_ROOT_INVALID')
+    if config.get('intent') == 'upgrade' and config.get('access') == 'https':
+        require(trust_proxy_enabled(allowed.get('LUCY_TRUST_PROXY'))
+                and str(allowed.get('LUCY_TRUSTED_PROXY_CIDRS') or '').strip(), 'TRUST_PROXY_REQUIRED')
+    env = dict(out.get('env') or {})
+    env.update(allowed)
+    out['env'] = env
+    return out
+
+
 def deployment_values(config, old):
     image = config['image']
     if config['intent'] == 'upgrade':
@@ -143,7 +167,7 @@ def deployment_values(config, old):
     security.pop('insecureHttpTestProfile', None)
     security['access'] = config['access']
     out['security'] = security
-    return out
+    return apply_upgrade_env(config, out)
 
 
 def secret_matches(secret, instance_id, key):

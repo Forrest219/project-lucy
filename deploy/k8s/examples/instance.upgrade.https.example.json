@@ -34,6 +34,11 @@
     "lucy": {
       "version": "2.0.0",
       "bundledKtxVersion": "0.16.0"
+    },
+    "env": {
+      "LUCY_CONTENT_ROOT": "MUST-REPLACE",
+      "LUCY_TRUST_PROXY": "1",
+      "LUCY_TRUSTED_PROXY_CIDRS": "MUST-REPLACE-gateway-egress-cidr"
     }
   },
   "externalTlsReviewed": false

@@ -11,7 +11,9 @@
 ## 必验项目
 
 - [ ] 包内工具准备实例，dry-run 和实际部署通过；Pod 身份属于 `image/image-identity.json` 的候选链。
-- [ ] 保留同一 PVC、资源名、内容根和外部端口；Service 不暴露 KTX 7878。
+- [ ] 保留同一 PVC 和资源名；Service 不暴露 KTX 7878。
+- [ ] Pod 环境包含本次确定的内容根（`LUCY_CONTENT_ROOT` 为 `.`，或省略以使用 Chart 默认）以及 HTTPS 所需的 `LUCY_TRUST_PROXY`、`LUCY_TRUSTED_PROXY_CIDRS`。
+- [ ] Service 类型和 Service 端口与升级前基线一致；容器端口为 WebUI 5174、MCP 7879。
 - [ ] 初始备份及 baseline.json、baseline-values.json、initial-backup.json 存在，备份哈希通过。
 - [ ] 认领前 `/api/auth/status` 为 bootstrap；缺失/错误密钥不能创建所有者。
 - [ ] 正确密钥创建首个所有者；重复认领被拒绝。

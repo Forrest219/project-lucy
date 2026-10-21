@@ -26,7 +26,11 @@ cp examples/RECOVERY.open-mode.md "$PRIVATE/config/RECOVERY.md"
 
 内网 HTTP 使用 HTTP 样例；HTTPS 使用 HTTPS 样例。顶层 `access` 是访问方式事实源，两个 URL 的协议必须一致。HTTPS 的证书/网关由现场已有设施提供，包不自动搭建 TLS。外部 TLS 网关已验证时设置 `externalTlsReviewed: true`；已有 Ingress TLS 保留原 values。私有 CA 在实例 JSON 配置 `tlsCaFile`，路径相对该 JSON；工具校验证书并复制为客户目录内的 `tls-ca.pem`。没有私有 CA 时删除该字段，使用系统信任库。不要填写证书私钥。
 
-填写稳定且唯一的 `instanceId`（使用随包私有附件时由附件自动注入，不要手工填写）、context、namespace、release、Deployment、Service、PVC、Bootstrap Secret 名称、实际访问地址和 `offlineNodes`。不要沿用另一实例的状态目录。旧 values 从现场 Helm 读取，原端口、Secret、内容根和 PVC 管理方式保留；升级样例不覆盖这些值。
+填写稳定且唯一的 `instanceId`（使用随包私有附件时由附件自动注入，不要手工填写）、context、namespace、release、Deployment、Service、PVC、Bootstrap Secret 名称、实际访问地址和 `offlineNodes`。不要沿用另一实例的状态目录。旧 values 从现场 Helm 读取。Secret、PVC 管理方式、Service 类型和 Service 端口保持现场现值。容器端口为 WebUI `5174`、MCP `7879`。
+
+升级前在运行中的 Pod 执行 `ls /data/lucy`。`semantic-layer/`、`wiki/`、`skills/` 与 `ktx.yaml` 同级时，把实例 JSON 的 `values.env.LUCY_CONTENT_ROOT` 设为 `.`。这些目录位于 `config/` 时省略该键，Chart 使用默认内容根。其他取值会被升级入口拒绝。
+
+HTTPS 升级在 `values.env` 设置 `LUCY_TRUST_PROXY` 为 `1`，并把 `LUCY_TRUSTED_PROXY_CIDRS` 设为已核实的网关出口网段。HTTP 升级省略这两项。
 
 以下查询只读，使用实际 context 和名称：
 

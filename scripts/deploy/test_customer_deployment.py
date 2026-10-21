@@ -31,6 +31,14 @@ def config():
             'values': {'fullnameOverride': 'lucy-app', 'service': {'type': 'ClusterIP'}, 'env': {}}}
 
 
+def https_upgrade_env(c):
+    c['values'].setdefault('env', {}).update({
+        'LUCY_TRUST_PROXY': '1',
+        'LUCY_TRUSTED_PROXY_CIDRS': '10.0.0.0/8',
+    })
+    return c
+
+
 class SecretDeployment(mod.Deployment):
     def __init__(self):
         self.c = config()
@@ -137,7 +145,7 @@ class CustomerDeploymentTests(unittest.TestCase):
         self.assertEqual(len(d.mutations), 1)
 
     def test_bs10_upgrade_preserves_customer_configuration(self):
-        c = config()
+        c = https_upgrade_env(config())
         c['intent'] = 'upgrade'
         c['values']['lucy'] = {'version': '0.17.0'}
         old = {'fullnameOverride': 'lucy-app', 'persistence': {'existingClaim': 'lucy-app-data', 'storageClass': 'customer-sc'},
@@ -150,11 +158,14 @@ class CustomerDeploymentTests(unittest.TestCase):
         for key in ['existingSecret', 'bootstrap', 'customUninterpreted', 'service']:
             self.assertEqual(merged[key], old[key])
         self.assertEqual(merged['env']['LUCY_CONTENT_ROOT'], '.')
+        self.assertEqual(merged['env']['LUCY_TRUST_PROXY'], '1')
+        self.assertEqual(merged['env']['LUCY_TRUSTED_PROXY_CIDRS'], '10.0.0.0/8')
+        self.assertEqual(merged['env']['KTX_PROJECT_ROOT'], '/data/lucy')
         self.assertEqual(merged['persistence']['storageClass'], 'customer-sc')
         self.assertEqual(merged['image']['tag'], 'candidate')
 
     def test_bs10_chart_managed_pvc_stays_in_helm_manifest(self):
-        c = config()
+        c = https_upgrade_env(config())
         c['intent'] = 'upgrade'
         for existing_claim in [None, '']:
             old = {'fullnameOverride': c['deployment'], 'persistence': {'size': '10Gi'}}
@@ -220,7 +231,7 @@ class CustomerDeploymentTests(unittest.TestCase):
             self.assertFalse((d.bundle / '.deployment/lock').exists())
 
     def test_bs10_name_drift_and_insecure_profiles_fail(self):
-        c = config()
+        c = https_upgrade_env(config())
         c['intent'] = 'upgrade'
         with self.assertRaisesRegex(mod.DeploymentError, 'NAME_DRIFT'):
             mod.deployment_values(c, {'fullnameOverride': 'wrong'})
@@ -236,6 +247,52 @@ class CustomerDeploymentTests(unittest.TestCase):
         c['publicMcpUrl'] = 'http://lucy.internal/mcp'
         intranet = mod.deployment_values(c, {'fullnameOverride': 'lucy-app'})
         self.assertEqual(intranet['security']['access'], 'http')
+        self.assertNotIn('LUCY_TRUST_PROXY', intranet['env'])
+
+    def test_bs10_https_upgrade_env_is_whitelisted_and_rendered(self):
+        c = config()
+        c['intent'] = 'upgrade'
+        c['values']['env'] = {
+            'LUCY_CONTENT_ROOT': '.',
+            'LUCY_TRUST_PROXY': 'true',
+            'LUCY_TRUSTED_PROXY_CIDRS': '10.1.2.0/24',
+            'LUCY_OTHER': 'drop-me',
+        }
+        c['values']['service'] = {'type': 'LoadBalancer', 'webuiPort': 8276, 'mcpPort': 8277}
+        old = {'fullnameOverride': 'lucy-app', 'service': {'type': 'NodePort', 'webuiPort': 30080, 'mcpPort': 30081},
+               'env': {'KTX_PROJECT_ROOT': '/data/lucy'}}
+        merged = mod.deployment_values(c, old)
+        self.assertEqual(merged['service'], old['service'])
+        self.assertEqual(merged['env']['LUCY_CONTENT_ROOT'], '.')
+        self.assertEqual(merged['env']['LUCY_TRUST_PROXY'], 'true')
+        self.assertEqual(merged['env']['LUCY_TRUSTED_PROXY_CIDRS'], '10.1.2.0/24')
+        self.assertEqual(merged['env']['KTX_PROJECT_ROOT'], '/data/lucy')
+        self.assertNotIn('LUCY_OTHER', merged['env'])
+        rendered = subprocess.run(
+            ['helm', 'template', c['release'], str(ROOT / 'deploy/k8s/helm/lucy'), '-f', '-'],
+            input=json.dumps(merged).encode(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.assertEqual(rendered.returncode, 0, rendered.stderr.decode())
+        self.assertIn(b'name: LUCY_TRUST_PROXY', rendered.stdout)
+        self.assertIn(b'name: LUCY_TRUSTED_PROXY_CIDRS', rendered.stdout)
+        self.assertIn(b'name: LUCY_CONTENT_ROOT', rendered.stdout)
+
+        missing = config()
+        missing['intent'] = 'upgrade'
+        with self.assertRaisesRegex(mod.DeploymentError, 'TRUST_PROXY_REQUIRED'):
+            mod.deployment_values(missing, old)
+        invalid = https_upgrade_env(config())
+        invalid['intent'] = 'upgrade'
+        invalid['values']['env']['LUCY_CONTENT_ROOT'] = 'config'
+        with self.assertRaisesRegex(mod.DeploymentError, 'CONTENT_ROOT_INVALID'):
+            mod.deployment_values(invalid, old)
+        omitted = config()
+        omitted['intent'] = 'install'
+        installed = mod.deployment_values(omitted, {})
+        self.assertNotIn('LUCY_TRUST_PROXY', installed['env'])
+        blank = https_upgrade_env(config())
+        blank['intent'] = 'upgrade'
+        blank['values']['env']['LUCY_CONTENT_ROOT'] = ''
+        self.assertEqual(mod.deployment_values(blank, old)['env']['LUCY_CONTENT_ROOT'], '')
 
     def test_bs17_raw_tool_error_is_never_forwarded(self):
         d = SecretDeployment()

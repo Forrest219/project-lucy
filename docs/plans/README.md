@@ -4,6 +4,8 @@ This directory stores repository-level implementation plans that are not scoped 
 
 | Plan | Purpose |
 |---|---|
+| [2026-10-21-customer-20260828-v1-upgrade-package-plan.md](2026-10-21-customer-20260828-v1-upgrade-package-plan.md) | **v0.1，执行中**：供方生成 20260828-v1 客户的 linux/amd64 镜像、私有引导密钥附件和随包文档。构建排除、信任代理渲染和升级白名单纳入本次提交。候选包在原生 amd64 验收前不交给客户。验收合同仍是升级计划 v0.3 |
+| [2026-10-21-customer-20260828-v1-to-lucy-2.0-upgrade-plan.md](2026-10-21-customer-20260828-v1-to-lucy-2.0-upgrade-plan.md) | **v0.3，未执行**：客户现役 `20260828-v1`（Lucy 0.16.0 / Chart 0.1.0，无登录、已有 https 域名）→ Lucy 2.0.0 / Chart 0.2.6。放行前先补升级入口白名单，再对那一次构建做原生升级与恢复验收。客户现场成功后不还原旧卷。当前 `r6` 仍为 Draft，不是放行包。同日评审过程稿已作废。供方出包步骤见同日升级包生成计划 |
 | [2026-10-19-lucy-product-version-2.0.0.md](2026-10-19-lucy-product-version-2.0.0.md) | **仓库版本已落地，运行中容器未重建**：产品版本 `2.0.0`，界面标签 `v2.0.0`。V1–V6 已通过。未构建镜像，未改 KTX 或 Helm Chart 包版本 |
 | [2026-10-19-audit-trust-and-admin-investigation-plan.md](2026-10-19-audit-trust-and-admin-investigation-plan.md) | **设计交付，未实施**：用户批准跨端交叉复核后，拆成 T00–T08；Claude Code 实施，Codex 按 EA-01–36 评审验收。覆盖可信归属、身份、保全、导出与管理员调查，受控客户端范围单列 |
 | [2026-10-19-v2-bootstrap-delivery-scripts-plan.md](2026-10-19-v2-bootstrap-delivery-scripts-plan.md) | **v2.0 脚本已实现、现场待测**：自动生成和复用实例引导密钥，配置 K8s / K3s Secret 与部署入口；15 项 Node 和 11 项 Python 检查通过，实际集群、升级及恢复由用户测试，不新增发布门禁 |
