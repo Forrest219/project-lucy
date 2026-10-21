@@ -21,7 +21,7 @@ const HANDBOOK_OK = `## 0. 常见问题速查
 | 字段 | 当前值 | 来源 |
 | --- | --- | --- |
 | 产品版本（\`VERSION\`） | 2.0.0 | \`VERSION\` |
-| 侧栏标签 | v2.0.0 | \`webui/src/lib/lucyVersion.ts\` FALLBACK |
+| 产品版本标签 | v2.0.0 | \`webui/src/lib/lucyVersion.ts\` FALLBACK |
 | Helm \`appVersion\` | 2.0.0 | \`deploy/k8s/helm/lucy/Chart.yaml\` \`appVersion\` |
 | 捆绑 KTX 版本 | 0.16.0 | \`Dockerfile\` \`LUCY_BUNDLED_KTX_VERSION\` |
 | 上次手册审计 | 2026-10-19 | 人工维护；下次审计由治理 PR 触发 |
@@ -92,7 +92,7 @@ test("readBaselineSources reads the four expected values from a fixture repo", (
 test("parseHandbookBaselineTable extracts the §0.0 baseline table fields", () => {
   const parsed = parseHandbookBaselineTable(HANDBOOK_OK);
   assert.equal(parsed["产品版本（`VERSION`）"], "2.0.0");
-  assert.equal(parsed["侧栏标签"], "v2.0.0");
+  assert.equal(parsed["产品版本标签"], "v2.0.0");
   assert.equal(parsed["Helm `appVersion`"], "2.0.0");
   assert.equal(parsed["捆绑 KTX 版本"], "0.16.0");
   assert.equal(parsed["上次手册审计"], "2026-10-19");
@@ -115,14 +115,14 @@ test("assertHandbookBaseline throws when product version diverges", () => {
   );
 });
 
-test("assertHandbookBaseline throws when sidebar label diverges", () => {
+test("assertHandbookBaseline throws when the product version label diverges", () => {
   const wrong = HANDBOOK_OK.replace(
-    "| 侧栏标签 | v2.0.0 |",
-    "| 侧栏标签 | v9.9.9 |"
+    "| 产品版本标签 | v2.0.0 |",
+    "| 产品版本标签 | v9.9.9 |"
   );
   assert.throws(
     () => assertHandbookBaseline(wrong, SOURCES_OK),
-    /侧栏标签[\s\S]*v9\.9\.9[\s\S]*v2\.0\.0/
+    /产品版本标签[\s\S]*v9\.9\.9[\s\S]*v2\.0\.0/
   );
 });
 

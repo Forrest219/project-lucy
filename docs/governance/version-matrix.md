@@ -12,7 +12,7 @@
 
 | Component | Current Baseline | Evidence |
 |---|---|---|
-| **Lucy product version** | **`2.0.0`** | repo-root `VERSION`, `Chart.yaml` `appVersion`, `/api/health.data.lucyVersion`, WebUI sidebar product label |
+| **Lucy product version** | **`2.0.0`** | repo-root `VERSION`, `Chart.yaml` `appVersion`, `/api/health.data.lucyVersion`, WebUI 版本信息页 |
 | Lucy source | `main` after P0 release baseline | commit `e8863b8` established P0 Docker baseline |
 | Lucy package | `project-lucy-eval@2.0.0` | `package.json` (aligned with product version) |
 | WebUI package | `webui@1.0.0` | `webui/package.json` (npm package only; not customer-facing) |
@@ -52,13 +52,13 @@ Do **not** put KTX version in the product segment of the tag. KTX remains in `/a
 
 ## 1.2 Build revision (not a product version)
 
-The sidebar and `/api/health` also show the source commit that was built. That value is how an upgrade is matched to `main`. It is not chosen in `VERSION`, Helm, or `LUCY_VERSION`.
+The 版本信息 page and `/api/health` show the source commit that was built. That value is how an upgrade is matched to `main`. It is not chosen in `VERSION`, Helm, or `LUCY_VERSION`. The sidebar footer does not show it.
 
 | Field | Meaning |
 |---|---|
 | `/api/health.data.gitSha` | Full 40-hex commit, or `unknown` |
 | `/api/health.data.gitDirty` | `true` when the stamped tree had uncommitted changes |
-| Sidebar, under the product label | 7-hex prefix, plus `-dirty` when `gitDirty` is true |
+| WebUI `/admin/version` | Product version, full `gitSha`, a Chinese workspace sentence, and bundled KTX version. The page does not show the word `dirty` |
 
 Normative resolution, stamp file, and the rule that runtime env cannot replace it: [`docs/specs/lucy-20261020-build-revision-identity-spec.md`](../specs/lucy-20261020-build-revision-identity-spec.md). Image builds pass `LUCY_GIT_SHA` only as a Docker build arg because `.dockerignore` excludes `.git`. The image stores the result in `/app/BUILD_REVISION` and does not keep `LUCY_GIT_SHA` in the runtime environment.
 

@@ -95,7 +95,8 @@ export const UI_USAGE_MENUS: MenuDefinition[] = [
   { id: "admin-mcp-playground", label: "MCP 调试台" },
   { id: "admin-config-audit", label: "配置审计" },
   { id: "admin-branding", label: "品牌外观" },
-  { id: "admin-accounts", label: "登录账户" }
+  { id: "admin-accounts", label: "登录账户" },
+  { id: "admin-version", label: "版本信息" }
 ];
 
 const PAGE = {
@@ -132,6 +133,7 @@ const PAGE = {
   configAudit: { pageKey: "config-audit", label: "配置审计", menuId: "admin-config-audit", groupId: "governance" },
   branding: { pageKey: "admin-branding", label: "品牌外观", menuId: "admin-branding", groupId: "system-settings" },
   admins: { pageKey: "admin-accounts", label: "登录账户", menuId: "admin-accounts", groupId: "system-settings" },
+  version: { pageKey: "admin-version", label: "版本信息", menuId: "admin-version", groupId: "system-settings" },
   help: { pageKey: "help", label: "帮助中心", menuId: null, groupId: null }
 } as const satisfies Record<string, UiPageDefinition>;
 
@@ -169,6 +171,7 @@ export const UI_USAGE_PAGES: UiPageDefinition[] = [
   PAGE.configAudit,
   PAGE.branding,
   PAGE.admins,
+  PAGE.version,
   PAGE.help
 ];
 
@@ -199,6 +202,7 @@ const EXACT_PAGES = new Map<string, UiPageDefinition>([
   ["/admin/config-audit", PAGE.configAudit],
   ["/admin/branding", PAGE.branding],
   ["/admin/admins", PAGE.admins],
+  ["/admin/version", PAGE.version],
   ["/help", PAGE.help]
 ]);
 

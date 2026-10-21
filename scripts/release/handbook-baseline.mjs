@@ -173,7 +173,7 @@ export function parseHandbookBaselineTable(markdown) {
 
 const ROW_TO_SOURCE = {
   "产品版本（`VERSION`）": "version",
-  "侧栏标签": "sidebarLabel",
+  "产品版本标签": "sidebarLabel",
   "Helm `appVersion`": "helmAppVersion",
   "捆绑 KTX 版本": "ktxVersion"
 };

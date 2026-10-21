@@ -10,6 +10,7 @@ import {
   Gauge,
   History,
   Image,
+  Info,
   Key,
   KeyRound,
   LayoutDashboard,
@@ -50,5 +51,6 @@ export const NAV_ICONS: Record<NavIconKey, LucideIcon> = {
   mcpPlayground: Terminal,
   configAudit: ShieldCheck,
   admins: Users,
-  branding: Image
+  branding: Image,
+  versionInfo: Info
 };

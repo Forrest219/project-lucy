@@ -181,6 +181,7 @@ function renderHelp(path = "/help") {
               "| 访问治理 | 配置审计 | `/admin/config-audit` | 查看各类配置与内容资产的写入记录、变更内容和操作者。 |",
               "| 系统设置 | 品牌外观 | `/admin/branding` | 配置客户 `Logo`、产品名称与品牌副标题。 |",
               "| 系统设置 | 登录账户 | `/admin/admins` | 管理 `WebUI` 登录账户，并配置所有者或运维角色。 |",
+              "| 系统设置 | 版本信息 | `/admin/version` | 查看产品版本、构建提交和随包 `KTX` 版本；有未提交改动时显示工作区状态。 |",
               "",
               "> 事实源唯一为 `webui/src/app/navigation.ts` 的 `navGroups`。",
               "",
@@ -874,7 +875,7 @@ describe("HelpCenter", () => {
     expect(document.querySelector("section#webui-entry-map")).not.toBeNull();
   });
 
-  it("§1.5 table has 4 columns and 23 rows that mirror navigation.ts", async () => {
+  it("§1.5 table has 4 columns and 24 rows that mirror navigation.ts", async () => {
     renderHelp("/help?section=webui-entry-map");
     await waitFor(() =>
       screen.getByRole("heading", { name: /WebUI 入口速查（运行状态侧栏地图）/ })
@@ -893,7 +894,7 @@ describe("HelpCenter", () => {
     expect(headers.length).toBe(4);
 
     const bodyRows = table.querySelectorAll("tbody tr");
-    expect(bodyRows.length).toBe(23);
+    expect(bodyRows.length).toBe(24);
 
     // Every visible column must mirror the shared navigation module so the
     // handbook cannot drift from the current menu labels, paths, or copy.

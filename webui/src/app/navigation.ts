@@ -62,7 +62,8 @@ export type NavIconKey =
   | "mcpPlayground"
   | "configAudit"
   | "admins"
-  | "branding";
+  | "branding"
+  | "versionInfo";
 
 /**
  * Spec 143: overview is no longer a pinned top-level entry. Kept as a named
@@ -330,6 +331,15 @@ export const navGroups: Array<{
         active: (path) => path === "/admin/admins" || path.startsWith("/admin/admins/"),
         description: "管理 WebUI 登录账户，并配置所有者或运维角色。",
         keywords: ["登录", "Owner", "运维", "管理员账户"]
+      },
+      {
+        id: "admin-version",
+        label: "版本信息",
+        to: "/admin/version",
+        iconKey: "versionInfo",
+        active: (path) => path === "/admin/version" || path.startsWith("/admin/version/"),
+        description: "查看产品版本、构建提交和随包 KTX 版本；有未提交改动时显示工作区状态。",
+        keywords: ["提交", "构建", "KTX"]
       }
     ]
   }

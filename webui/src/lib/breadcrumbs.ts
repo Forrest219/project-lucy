@@ -97,6 +97,9 @@ export function breadcrumbItems(pathname: string): string[] {
     if (parts[1] === "admins") {
       return ["系统设置", "登录账户"];
     }
+    if (parts[1] === "version") {
+      return ["系统设置", "版本信息"];
+    }
     if (parts[1] === "audit-sources") {
       return ["访问治理", "数据热力"];
     }

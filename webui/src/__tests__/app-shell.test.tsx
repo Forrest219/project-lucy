@@ -1,9 +1,6 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { readFileSync } from "node:fs";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
@@ -12,14 +9,6 @@ import { AppFrame } from "../app/App";
 import { PageHeader } from "../components/PageHeader";
 import { AuthProvider, type AuthStatus } from "../lib/auth";
 import { assertNoForbiddenTerms } from "./forbidden-terms";
-
-function expectedSidebarRevision(): string | undefined {
-  if (existsSync("/app/BUILD_REVISION")) return undefined;
-  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
-  const sha = execFileSync("git", ["-C", repoRoot, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
-  const dirty = execFileSync("git", ["-C", repoRoot, "status", "--porcelain"], { encoding: "utf8" }).trim() !== "";
-  return `${sha.slice(0, 7)}${dirty ? "-dirty" : ""}`;
-}
 
 function StubPage({ name }: { name: string }) {
   return <div data-testid="route-page">{name}</div>;
@@ -72,6 +61,7 @@ vi.mock("../pages/admin/AuditSources", () => ({ AuditSources: () => <StubPage na
 vi.mock("../pages/admin/McpPlayground", () => ({ McpPlayground: () => <StubPage name="McpPlayground" /> }));
 vi.mock("../pages/admin/ConfigAudit", () => ({ ConfigAudit: () => <StubPage name="ConfigAudit" /> }));
 vi.mock("../pages/admin/BrandingSettings", () => ({ BrandingSettings: () => <StubPage name="BrandingSettings" /> }));
+vi.mock("../pages/admin/VersionInfo", () => ({ VersionInfo: () => <StubPage name="VersionInfo" /> }));
 vi.mock("../pages/admin/RoleList", () => ({ RoleList: () => <StubPage name="RoleList" /> }));
 vi.mock("../pages/admin/RoleDetail", () => ({ RoleDetail: () => <StubPage name="RoleDetail" /> }));
 vi.mock("../pages/eval/CaseList", () => ({ CaseList: () => <StubPage name="CaseList" /> }));
@@ -406,7 +396,7 @@ describe("AppFrame shell", () => {
       expect(screen.queryByRole("heading", { name: title })).not.toBeInTheDocument();
     }
 
-    for (const label of ["启用表范围", "业务 Wiki", "业务 Skill", "评测用例", "角色权限", "配置审计", "品牌外观", "登录账户"]) {
+    for (const label of ["启用表范围", "业务 Wiki", "业务 Skill", "评测用例", "角色权限", "配置审计", "品牌外观", "登录账户", "版本信息"]) {
       expect(screen.getByRole("link", { name: label })).toBeInTheDocument();
     }
 
@@ -448,13 +438,12 @@ describe("AppFrame shell", () => {
     const sidebarHelp = within(sidebarFooter).getByRole("link", { name: "打开系统手册" });
     expect(sidebarHelp).toHaveAttribute("href", "/help");
     expect(sidebarHelp).toHaveTextContent("系统手册");
+    expect(within(sidebarHelp).getByText("系统手册")).toHaveClass("whitespace-nowrap");
     expect(sidebarHelp.querySelector("svg")).not.toBeNull();
     expect(sidebarHelp).not.toHaveTextContent("?");
-    expect(within(sidebarFooter).getByTestId("sidebar-version")).toHaveTextContent("v2.0.0");
-    const revisionLabel = expectedSidebarRevision();
-    expect(within(sidebarFooter).getByTestId("sidebar-revision")).toHaveTextContent(
-      revisionLabel ? new RegExp(`^${revisionLabel}$`) : /^(?:[0-9a-f]{7}(?:-dirty)?|unknown)$/
-    );
+    expect(within(sidebarFooter).queryByTestId("sidebar-version")).not.toBeInTheDocument();
+    expect(within(sidebarFooter).queryByTestId("sidebar-revision")).not.toBeInTheDocument();
+    expect(sidebarFooter).not.toHaveTextContent(/dirty/i);
     expect(within(sidebarFooter).getAllByRole("link")).toHaveLength(1);
     expect(within(sidebarFooter).queryByRole("link", { name: "配置变更" })).not.toBeInTheDocument();
     expect(within(sidebarFooter).queryByRole("navigation")).not.toBeInTheDocument();
@@ -642,15 +631,12 @@ describe("AppFrame shell", () => {
       const helpLink = within(footer).getByRole("link", { name: "打开系统手册" });
       expect(helpLink).toHaveAttribute("href", "/help");
       expect(helpLink).toHaveTextContent("系统手册");
+      expect(within(helpLink).getByText("系统手册")).toHaveClass("whitespace-nowrap");
       expect(helpLink.querySelector("svg")).not.toBeNull();
-      expect(within(footer).getByTestId("sidebar-version")).toHaveTextContent("v2.0.0");
-      const revisionLabel = expectedSidebarRevision();
-      expect(within(footer).getByTestId("sidebar-revision")).toHaveTextContent(
-        revisionLabel ? new RegExp(`^${revisionLabel}$`) : /^(?:[0-9a-f]{7}(?:-dirty)?|unknown)$/
-      );
-      expect(within(footer).getByTestId("sidebar-revision")).toHaveAttribute("title");
+      expect(within(footer).queryByTestId("sidebar-version")).not.toBeInTheDocument();
+      expect(within(footer).queryByTestId("sidebar-revision")).not.toBeInTheDocument();
+      expect(footer).not.toHaveTextContent(/dirty/i);
       expect(within(footer).getAllByRole("link")).toHaveLength(1);
-      expect(within(footer).getByTestId("sidebar-version").tagName).toBe("SPAN");
     });
   });
 

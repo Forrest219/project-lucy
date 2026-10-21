@@ -4,7 +4,6 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
-import { loadClientBuildRevision, lucyBuildRevisionDefine } from "./server/lucy-revision";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const PRODUCT_VERSION_RE = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
@@ -30,15 +29,11 @@ function readLucyVersion(): string {
 }
 
 const lucyVersion = readLucyVersion();
-const lucyBuildRevision = loadClientBuildRevision(resolve(here, ".."));
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   define: {
-    "import.meta.env.VITE_LUCY_VERSION": JSON.stringify(lucyVersion),
-    // Not import.meta.env.*: Vite's env injection leaves those empty unless they
-    // are real VITE_ process env vars, and the sidebar would show unknown.
-    ...lucyBuildRevisionDefine(lucyBuildRevision)
+    "import.meta.env.VITE_LUCY_VERSION": JSON.stringify(lucyVersion)
   },
   server: {
     host: "127.0.0.1",

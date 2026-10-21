@@ -15,7 +15,7 @@
 | 字段 | 当前值 | 来源 |
 | --- | --- | --- |
 | 产品版本（`VERSION`） | 2.0.0 | `VERSION` |
-| 侧栏标签 | v2.0.0 | `webui/src/lib/lucyVersion.ts` FALLBACK |
+| 产品版本标签 | v2.0.0 | `webui/src/lib/lucyVersion.ts` FALLBACK |
 | Helm `appVersion` | 2.0.0 | `deploy/k8s/helm/lucy/Chart.yaml` `appVersion` |
 | 捆绑 KTX 版本 | 0.16.0 | `Dockerfile` `LUCY_BUNDLED_KTX_VERSION` |
 | 上次手册审计 | 2026-10-19 | 人工维护；下次审计由治理 PR 触发 |
@@ -38,9 +38,7 @@
 
 **客户镜像 tag 形式**：`customer-amd64-2.0.0-YYYYMMDD-<gitSha>`（首段产品段已对齐到 `2.0.0`）。
 
-登录后，侧栏左下角只保留一个账户入口；点击可查看完整账户信息、打开「系统手册」或「退出登录」。开放模式或未登录时仍可直接打开系统手册。
-
-侧栏在产品标签 `v2.0.0` 下方另有一行提交标识（7 位，工作区不干净时带 `-dirty`）。`/api/health` 的 `gitSha` 是完整 40 位。这行不是产品版本，也不能在 Helm 或 `LUCY_VERSION` 里手改；构建时没有写入则显示 `unknown`。对照客户正在跑的 `main` 提交时看这一行，而不是只看 `v2.0.0`。
+登录后，侧栏左下角只保留一个账户入口；点击可查看完整账户信息、打开「系统手册」或「退出登录」。开放模式或未登录时仍可直接打开系统手册。产品版本、构建提交和随包 KTX 版本常驻在「系统设置 / 版本信息」（`/admin/version`）。构建提交是完整 40 位；`/api/health` 的 `gitSha` 与这一页相同。这不是产品版本，也不能在 Helm 或 `LUCY_VERSION` 里手改；构建时没有写入则显示 `unknown`。构建混入未提交改动时页面另显示一行工作区状态，文案是「构建时工作区有未提交改动」，不写 `dirty`；干净构建（含全部客户 CI 构建）不显示该行。对照客户正在跑的 `main` 提交时看这一页的构建提交，而不是只看 `v2.0.0`。
 
 本次版本切换**不**涉及的事项：
 
@@ -213,6 +211,7 @@ KTX CLI / MCP daemon
 | 访问治理 | 配置审计 | `/admin/config-audit` | 查看各类配置与内容资产的写入记录、变更内容和操作者。 |
 | 系统设置 | 品牌外观 | `/admin/branding` | 配置客户 `Logo`、产品名称与品牌副标题。 |
 | 系统设置 | 登录账户 | `/admin/admins` | 管理 `WebUI` 登录账户，并配置所有者或运维角色。 |
+| 系统设置 | 版本信息 | `/admin/version` | 查看产品版本、构建提交和随包 `KTX` 版本；有未提交改动时显示工作区状态。 |
 
 > 事实源唯一为 `webui/src/app/navigation.ts` 的 `navGroups`。
 

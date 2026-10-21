@@ -71,16 +71,16 @@ describe("navigation (shared sidebar config)", () => {
     expect(new Set(iconKeys).size).toBe(iconKeys.length);
   });
 
-  it("navGroups contains 23 second-level items in total", () => {
+  it("navGroups contains 24 second-level items in total", () => {
     const totalItems = navGroups.reduce((sum, g) => sum + g.items.length, 0);
-    expect(totalItems).toBe(23);
+    expect(totalItems).toBe(24);
   });
 
   it("flat sidebar entries match Spec 143 Runtime Status IA", () => {
     const flat: Array<Pick<NavItem, "id" | "label" | "to"> & { group: string }> = navGroups.flatMap(
       (g) => g.items.map((item) => ({ group: g.title, id: item.id, label: item.label, to: item.to }))
     );
-    expect(flat.length).toBe(23);
+    expect(flat.length).toBe(24);
     expect(flat).toEqual([
       { group: "运行状态", id: "overview", label: "系统概览", to: "/overview" },
       { group: "运行状态", id: "ops-calls", label: "调用监控", to: "/ops/calls" },
@@ -104,7 +104,8 @@ describe("navigation (shared sidebar config)", () => {
       { group: "访问治理", id: "admin-mcp-playground", label: "MCP 调试台", to: "/admin/mcp-playground" },
       { group: "访问治理", id: "admin-config-audit", label: "配置审计", to: "/admin/config-audit" },
       { group: "系统设置", id: "admin-branding", label: "品牌外观", to: "/admin/branding" },
-      { group: "系统设置", id: "admin-accounts", label: "登录账户", to: "/admin/admins" }
+      { group: "系统设置", id: "admin-accounts", label: "登录账户", to: "/admin/admins" },
+      { group: "系统设置", id: "admin-version", label: "版本信息", to: "/admin/version" }
     ]);
   });
 
@@ -157,7 +158,8 @@ describe("navigation (shared sidebar config)", () => {
       "admin-mcp-playground": "检查 Agent 能不能连上，或者能不能查某张表。",
       "admin-config-audit": "查看各类配置与内容资产的写入记录、变更内容和操作者。",
       "admin-branding": "配置客户 Logo、产品名称与品牌副标题。",
-      "admin-accounts": "管理 WebUI 登录账户，并配置所有者或运维角色。"
+      "admin-accounts": "管理 WebUI 登录账户，并配置所有者或运维角色。",
+      "admin-version": "查看产品版本、构建提交和随包 KTX 版本；有未提交改动时显示工作区状态。"
     });
   });
 
@@ -221,6 +223,7 @@ describe("navigation (shared sidebar config)", () => {
       expect(findGroupIdForPathname("/admin/config-audit")).toBe("governance");
       expect(findGroupIdForPathname("/admin/branding")).toBe("system-settings");
       expect(findGroupIdForPathname("/admin/admins")).toBe("system-settings");
+      expect(findGroupIdForPathname("/admin/version")).toBe("system-settings");
     });
   });
 });

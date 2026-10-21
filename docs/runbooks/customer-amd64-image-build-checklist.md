@@ -75,7 +75,7 @@ bash scripts/release/build-customer-amd64-image.sh
 | G7 | 导出后复核 | `docker load -i <tar>` 后重跑 G1–G4 + **G4b/G4c/G4d** + **G8** | tar 内镜像与本地 tag 一致 |
 | G8 | K8s 升级契约（**仅镜像**） | `bash scripts/gates/g8-image-k8s-contract-gate.sh <tag>` | UID 10001；空 volume 自动 `.git`；runtime 在 `/home/lucy/.ktx` |
 
-**G2–G4d + G8 为交付硬门禁**。缺 G4b 的镜像在客户内网执行查询时会尝试下载 `uv`，表现为 `ktx could not download uv`；缺 G4c 会让 image tag、侧栏与 health 的产品版本不一致。缺 G4d 时侧栏只有产品版本，无法和 `main` 的提交对齐。缺 G8 的镜像/Chart 组合会导致 K8s 原地升级失败。
+**G2–G4d + G8 为交付硬门禁**。缺 G4b 的镜像在客户内网执行查询时会尝试下载 `uv`，表现为 `ktx could not download uv`；缺 G4c 会让 image tag、版本信息页与 health 的产品版本不一致。缺 G4d 时版本信息页看不到这次构建的提交，无法和 `main` 的提交对齐。缺 G8 的镜像/Chart 组合会导致 K8s 原地升级失败。
 
 ### G4b 命令（出包必跑）
 

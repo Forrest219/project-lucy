@@ -458,8 +458,14 @@
 | `brand-title` | brand-title | `app/App.tsx` |
 | `brand-tagline` | brand-tagline | `app/App.tsx` |
 | `sidebar-search-trigger` | sidebar-search-trigger | `app/App.tsx` |
-| `sidebar-version` | sidebar-version | `app/App.tsx` |
-| `sidebar-revision` | sidebar-revision | `app/App.tsx` |
+| `version-info` | version-info | `pages/admin/VersionInfo.tsx` |
+| `version-info-loading` | version-info-loading | `pages/admin/VersionInfo.tsx` |
+| `version-info-error` | version-info-error | `pages/admin/VersionInfo.tsx` |
+| `version-info-product` | version-info-product | `pages/admin/VersionInfo.tsx` |
+| `version-info-sha` | version-info-sha | `pages/admin/VersionInfo.tsx` |
+| `version-info-copy` | version-info-copy | `pages/admin/VersionInfo.tsx` |
+| `version-info-workspace` | version-info-workspace | `pages/admin/VersionInfo.tsx` |
+| `version-info-ktx` | version-info-ktx | `pages/admin/VersionInfo.tsx` |
 | `sidebar-auth` | sidebar-auth | `app/App.tsx` |
 | `add-schema-select` | add-schema-select | `components/AddSchemaDrawer.tsx` |
 | `add-schema-live-loading` | add-schema-live-loading | `components/AddSchemaDrawer.tsx` |

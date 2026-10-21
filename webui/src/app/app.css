@@ -393,20 +393,11 @@
     @apply text-[12px] text-fg-muted/80;
   }
   .pl-sidebar-footer { @apply relative z-10 mt-4 shrink-0 border-t border-border-default bg-bg-surface px-3 pt-3; }
-  /* Help + version on one row: left CTA, right muted version — avoids the
-     version reading as a subtitle under 系统手册. */
-  .pl-sidebar-utility { @apply flex items-center justify-between gap-2; }
+  .pl-sidebar-utility { @apply flex items-center; }
   .pl-sidebar-help-link {
-    @apply flex min-h-9 min-w-0 items-center gap-2.5 rounded-md px-3 text-sm font-medium text-fg-body no-underline transition-colors;
+    @apply flex min-h-9 shrink-0 items-center gap-2.5 whitespace-nowrap rounded-md px-3 text-sm font-medium text-fg-body no-underline transition-colors;
   }
   .pl-sidebar-help-link:hover { @apply bg-bg-muted text-fg-default; }
-  .pl-sidebar-version-stack { @apply flex shrink-0 flex-col items-end; }
-  .pl-sidebar-version {
-    @apply shrink-0 px-1 text-xs text-fg-muted;
-  }
-  .pl-sidebar-revision {
-    @apply px-1 text-xs leading-4 text-fg-muted;
-  }
   /* Spec 188: one quiet account row; portal escapes sidebar overflow clipping. */
   .pl-account { @apply min-w-0 w-full; }
   .pl-account-trigger { @apply flex min-h-10 w-full min-w-0 items-center gap-2 rounded-md px-3 text-left text-sm font-medium text-fg-body transition-colors; }

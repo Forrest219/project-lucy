@@ -24,8 +24,6 @@ import { isPublicUiPath } from "../lib/publicAccess";
 import { HelpButton } from "../components/HelpButton";
 import { SidebarAccountMenu } from "../components/SidebarAccountMenu";
 import { CommandPalette } from "../components/CommandPalette";
-import { formatLucyVersionLabel } from "../lib/lucyVersion";
-import { formatLucyRevisionLabel, lucyRevisionTitle } from "../lib/lucyRevision";
 import { setDisplayWriteBeginHandler, setDisplayWriteSettledHandler } from "../lib/apiClient";
 import { catalogReloadsQueryOptions, DISPLAY_SCOPE_QUERY_KEYS, mcpRuntimeStatusQueryOptions, projectQueryOptions, sourcesQueryOptions } from "../lib/displayQueryOptions";
 import { isChunkLoadError, lazyRoute, type LazyRoute } from "../lib/routeChunkRecovery";
@@ -55,6 +53,7 @@ const RoleListRoute = lazyRoute(() => import("../pages/admin/RoleList"), "RoleLi
 const RoleDetailRoute = lazyRoute(() => import("../pages/admin/RoleDetail"), "RoleDetail");
 const AdminAccountsRoute = lazyRoute(() => import("../pages/admin/AdminAccounts"), "AdminAccounts");
 const BrandingSettingsRoute = lazyRoute(() => import("../pages/admin/BrandingSettings"), "BrandingSettings");
+const VersionInfoRoute = lazyRoute(() => import("../pages/admin/VersionInfo"), "VersionInfo");
 const CaseListRoute = lazyRoute(() => import("../pages/eval/CaseList"), "CaseList");
 const CaseEditorRoute = lazyRoute(() => import("../pages/eval/CaseEditor"), "CaseEditor");
 const RunListRoute = lazyRoute(() => import("../pages/eval/RunList"), "RunList");
@@ -91,6 +90,7 @@ const {
   RoleDetail,
   AdminAccounts,
   BrandingSettings,
+  VersionInfo,
   CaseList,
   CaseEditor,
   RunList,
@@ -126,6 +126,7 @@ const {
   RoleDetail: RoleDetailRoute.Component,
   AdminAccounts: AdminAccountsRoute.Component,
   BrandingSettings: BrandingSettingsRoute.Component,
+  VersionInfo: VersionInfoRoute.Component,
   CaseList: CaseListRoute.Component,
   CaseEditor: CaseEditorRoute.Component,
   RunList: RunListRoute.Component,
@@ -491,23 +492,6 @@ export function AppFrame() {
         <div className="pl-sidebar-footer" data-testid="sidebar-footer">
           <div className="pl-sidebar-utility" data-testid="sidebar-utility">
             <SidebarAuthFooter />
-            <span className="pl-sidebar-version-stack">
-              <span
-                className="pl-sidebar-version notranslate"
-                translate="no"
-                data-testid="sidebar-version"
-              >
-                {formatLucyVersionLabel()}
-              </span>
-              <span
-                className="pl-sidebar-revision notranslate"
-                translate="no"
-                data-testid="sidebar-revision"
-                title={lucyRevisionTitle()}
-              >
-                {formatLucyRevisionLabel()}
-              </span>
-            </span>
           </div>
         </div>
         </aside>
@@ -551,6 +535,7 @@ export function AppFrame() {
             <Route path="/admin/branding" element={<BrandingSettings />} />
             <Route path="/admin/license" element={<Navigate to="/overview" replace />} />
             <Route path="/admin/admins" element={<AdminAccounts />} />
+            <Route path="/admin/version" element={<VersionInfo />} />
             <Route path="/eval/cases" element={<CaseList />} />
             <Route path="/eval/cases/:domain" element={<CaseList />} />
             <Route path="/eval/cases/:domain/new" element={<CaseEditor />} />
