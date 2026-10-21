@@ -58,6 +58,8 @@ var/screenshots/
 var/logs/
 output/
 tmp/
+# one-off local runners that hardcode an absolute repo path
+scripts/*/__test_run__*
 
 # Build / dependency outputs (webui ships its own .gitignore, this is the root fallback)
 node_modules/
