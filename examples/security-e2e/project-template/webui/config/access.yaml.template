@@ -120,7 +120,8 @@ roles:
                 value: West
       tools: *full_context_tools
   finance_east_constrained:
-    description: Constraint AND role for SEC-10-V05. The role itself mirrors
+    description: >-
+      Constraint AND role for SEC-10-V05. The role itself mirrors
       `finance_east`; the effective set comes from ANDing the role's table grant with the
       Agent's own `constraints.tables` allow-list. Used by the run-owned
       `e2e_east_constrained` Agent whose constraint drops `marketing_daily` to prove the

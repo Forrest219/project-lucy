@@ -218,7 +218,7 @@ describe("K8s gate scripts bind evidence to the candidate digest", () => {
       // (including variable references like `${DB_READER_PASSWORD_FILE}`) so the
       // credential check focuses on actual plaintext values.
       const stripped = name === "deploy-candidate.sh"
-        ? raw.replace(/--from-file=password=[\w$\{\}\/\-\.\/]+/g, "--from-file=password=<file>")
+        ? raw.replace(/--from-file=password="\$\{DB_READER_PASSWORD_FILE\}"/g, "--from-file=<file-reference>")
         : raw;
       const text = name === "README.md" ? stripped : stripped.replace(/^\s*#.*$/gm, "");
       assert.ok(!/password\s*[:=]\s*\S{6,}|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|sk-[A-Za-z0-9]{20,}|Bearer\s+[A-Za-z0-9._~+/-]{20,}/.test(text), `${name} contains a credential`);

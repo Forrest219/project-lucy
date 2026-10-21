@@ -1,0 +1,20 @@
+version: 1
+kind: upgrade-feature-coverage
+scope: local-browser-http-mcp
+releaseEligible: false
+spec: webui/tests/upgrade-e2e/upgrade-features.spec.ts
+features:
+  - {id: UPG-01, title: 管理台登录安全, branch: [webui/server/__tests__/webui-bootstrap-concurrency.test.ts, webui/server/__tests__/webui-session-revocation.test.ts], catalog: [SEC-01, SEC-02, SEC-04]}
+  - {id: UPG-02, title: 多角色保存与查询, branch: [webui/server/__tests__/admin-agents.test.ts, webui/server/__tests__/acl-capability.test.ts], catalog: [SEC-10]}
+  - {id: UPG-03, title: 启用表交集及管理员范围, branch: [webui/server/__tests__/spec-182-enabled-table-intersection.test.ts, webui/server/__tests__/acl-compile-diagnostic.test.ts], catalog: [SEC-13]}
+  - {id: UPG-04, title: Skill与Wiki对象授权, branch: [webui/server/__tests__/context-acl-matrix.test.ts, webui/server/__tests__/mcp-proxy-skills.test.ts], catalog: [SEC-14]}
+  - {id: UPG-05, title: 连接删除引用保护, branch: [webui/server/__tests__/api.remove-connection.test.ts], catalog: []}
+  - {id: UPG-06, title: 连接列表及监控页面, branch: [webui/src/__tests__/table-whitelist.test.tsx, webui/src/__tests__/call-monitor.test.tsx], catalog: [UX-07]}
+  - {id: UPG-07, title: 版本及内容目录诊断, branch: [webui/server/__tests__/content-layout.test.ts, scripts/release/lucy-build-revision.test.mjs], catalog: [OPS-01], targetAcceptance: docs/runbooks/customer-v2-upgrade-release-checklist.md#每次出包必须执行}
+  - {id: UPG-08, title: 离线评测与结果归档, branch: [webui/server/__tests__/eval-offline-batch.test.ts, webui/server/__tests__/eval-results-import.test.ts], catalog: [UX-06]}
+  - {id: UPG-09, title: 发布列类型校验, branch: [webui/server/__tests__/semantic-publish-gate.test.ts, webui/server/__tests__/api.semantic-assets.publish.test.ts], catalog: []}
+  - {id: UPG-10, title: 问询预算及续办, branch: [webui/server/__tests__/question-budget.test.ts], catalog: [UX-03]}
+  - {id: UPG-11, title: 中文关键词检索, branch: [webui/server/__tests__/wiki-natural-language-search.test.ts, webui/server/__tests__/mcp-proxy-smoke.test.ts], catalog: [SEC-14]}
+  - {id: UPG-12, title: 问询关联及稳定编号, branch: [webui/server/__tests__/turn-correlation.test.ts, webui/server/__tests__/audit-trust/integration-turn-correlation.test.ts], catalog: [SEC-18]}
+  - {id: UPG-13, title: 安全审计与失败闭锁, branch: [webui/server/__tests__/audit-release-barrier.test.ts, webui/server/__tests__/audit-projection-recovery.test.ts], catalog: [SEC-19]}
+  - {id: UPG-14, title: Athena配置, branch: [webui/server/__tests__/project.create-connection.test.ts, webui/src/__tests__/create-connection-drawer.test.tsx], catalog: [], targetCase: UPG-14-live}

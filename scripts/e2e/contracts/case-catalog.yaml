@@ -336,7 +336,7 @@ scenarios:
       - {id: SEC-18-V03, t: UA 与 forwarded 伪造不改可信 actor, assert: [audit_event, deny]}
       - {id: SEC-18-V04, t: session 与 server traceId 关联, requires: [lucy-http, ktx-upstream]}
       - {id: SEC-18-V05, t: policy 与 context 版本进入审计, requires: [lucy-http, ktx-upstream]}
-      - {id: SEC-18-S01, t: 先调用后上报问题补绑, requires: [lucy-http, ktx-upstream]}
+      - {id: SEC-18-S01, t: 迟报问题不将此前业务调用自动确认归属, requires: [lucy-http, ktx-upstream]}
       - {id: SEC-18-S02, t: 不同客户端会话不并簇, requires: [lucy-http, ktx-upstream]}
       - {id: SEC-18-S03, t: 一次原始问询不重复生成推断问询, requires: [lucy-http, ktx-upstream]}
       - {id: SEC-18-S04, t: 初始化与发现探测不虚增业务问询, requires: [lucy-http, ktx-upstream]}

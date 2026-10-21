@@ -118,7 +118,9 @@
     "smoke:p1:release-readiness": "node scripts/gates/p1-release-readiness.mjs",
     "smoke:p1:release-readiness:test": "node --test scripts/gates/p1-release-readiness.test.mjs",
     "smoke:agent-chat:a3": "node scripts/smoke/agent-chat-a3-smoke.mjs",
-    "smoke:agent-chat:a3:test": "node --test scripts/smoke/agent-chat-a3-smoke.test.mjs"
+    "smoke:agent-chat:a3:test": "node --test scripts/smoke/agent-chat-a3-smoke.test.mjs",
+    "e2e:upgrade": "node scripts/e2e/run-upgrade-features.mjs",
+    "test:upgrade-coverage": "node --test scripts/e2e/__tests__/upgrade-feature-coverage.test.mjs scripts/e2e/__tests__/real-browser-source-guard.test.mjs"
   },
   "dependencies": {
     "better-sqlite3": "^12.11.1",

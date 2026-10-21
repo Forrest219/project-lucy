@@ -228,8 +228,8 @@ const SCENARIOS = Object.freeze({
     asserts: ["no_leak", "server_trace", "consistency", "repeat3"],
     budget: { maxModelCallsPerCandidateRun: 400, maxAgentRunWallClockMinutes: 180 },
     notes: [
-      "问询预算耗尽: when the per-run modelCalls budget is exhausted the runner must STOP asking and report.",
-      "Spec §162 thresholds (maxModelCallsPerCandidateRun=400, maxAgentRunWallClockMinutes=180) are frozen; a runner that silently raises the budget or drops questions to fit is REFUSED.",
+      "问询预算耗尽: register one question, exhaust the Lucy per-question budget (20 counted tool calls or 120000 ms), and verify the stop response.",
+      "Spec 162 product thresholds are 20 counted tool calls / 120000 ms with one continuation. The profile limits (400 model calls / 180 run minutes) constrain the test runner separately; they do not prove the product budget.",
       "Budget-boundary test: with budget exhausted, one CONTINUE ask is allowed; the runner must NEVER spawn an infinite loop and must NEVER bypass the budget by raising the cap.",
       "The runner's modelCalls counter increments per ASK-PLAN ENTRY (not per client invocation), but each entry's wall-clock bound is the Spec profile value; measured actual model usage (num_turns / tool calls / retries) is captured from the adapter parseResult and recorded against the budget."
     ]

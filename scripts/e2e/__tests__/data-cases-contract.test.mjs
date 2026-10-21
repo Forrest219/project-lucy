@@ -110,7 +110,7 @@ describe("C1 data-cases module contract", () => {
   });
 
   it("the catalog digest is unchanged by the C1 implementation (denominator preserved)", () => {
-    assert.equal(catalogDigest(cases), "sha256:5d68856411654f630ec8de9c61f2e3a7c368d0cb9eb71bf181c32b48a45b24ca");
+    assert.equal(catalogDigest(cases), "sha256:240bff0f8085058405b0f6a0ae835b9934b651a1db17526d27af3b804714a694");
   });
 });
 

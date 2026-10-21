@@ -5,6 +5,7 @@ import { describe, it } from "node:test";
 import { REPO_ROOT } from "../lib/common.mjs";
 import { collectManagementResults } from "../collect-management-results.mjs";
 import { loadCatalog } from "../lib/catalog.mjs";
+import { forbiddenBrowserCalls } from "../lib/real-browser-source-guard.mjs";
 
 const REAL_DIR = path.join(REPO_ROOT, "webui", "tests", "real-e2e");
 const CONFIG = readFileSync(path.join(REPO_ROOT, "webui", "playwright.real.config.ts"), "utf8");
@@ -26,7 +27,7 @@ describe("real-user browser E2E guarantees (Spec §6.4, Plan T11)", () => {
   it("no spec or helper mocks an API or fakes KTX", () => {
     for (const file of [...specFiles, path.join(REPO_ROOT, "webui", "playwright.real.config.ts")]) {
       const text = readFileSync(file, "utf8").replace(/\/\/.*$/gm, "");
-      assert.ok(!/\bpage\.route\(|\bcontext\.route\(|\broute\.fulfill|\brouteFromHAR\(|\bmockApi|\bmswServer/.test(text), `${path.relative(REPO_ROOT, file)} mocks the network`);
+      assert.deepEqual(forbiddenBrowserCalls(readFileSync(file, "utf8"), file), [], `${path.relative(REPO_ROOT, file)} mocks the network`);
       assert.ok(!/fixtures\/bin|KTX_SHIM|ktx-shim/i.test(text.replace(/tests\/e2e\/fixtures\/bin/g, "")) || /global-setup/.test(file), `${path.relative(REPO_ROOT, file)} references the KTX shim`);
     }
     const setup = readFileSync(path.join(REAL_DIR, "helpers", "global-setup.ts"), "utf8");

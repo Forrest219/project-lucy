@@ -64,7 +64,7 @@ export function fixtureCanaries(): Record<string, string> {
 export async function uiLogin(page: Page, creds: Credentials): Promise<void> {
   await page.goto("/login");
   await page.getByLabel("登录账户").fill(creds.adminId);
-  await page.getByLabel("密码").fill(creds.password);
+  await page.getByLabel("密码", { exact: true }).fill(creds.password);
   await page.getByRole("button", { name: "登录", exact: true }).click();
   await page.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 30_000 });
 }
@@ -96,7 +96,7 @@ export async function ownerContext(browser: Browser): Promise<BrowserContext> {
     await page.goto("/login");
     await page.getByLabel("登录账户").fill(owner.adminId);
     await page.getByTestId("login-bootstrap-token").fill(bootstrapKey());
-    await page.getByLabel("密码").fill(owner.password);
+    await page.getByLabel("密码", { exact: true }).fill(owner.password);
     await page.getByRole("button", { name: "创建并登录" }).click();
     await page.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 30_000 });
   } else {
