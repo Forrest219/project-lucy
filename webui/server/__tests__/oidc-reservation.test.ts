@@ -22,6 +22,7 @@ vi.mock("../admin/audit.js", () => ({
   })),
   recordConfigChange: vi.fn(async () => 1),
   updateConfigChangeStatus: vi.fn(async () => undefined),
+  registerAgentAuditRoutes: vi.fn(),
   registerAuditRoutes: vi.fn()
 }));
 
@@ -191,7 +192,8 @@ describe("v2.0 OIDC reservation", () => {
     expect(claims.v).toBe(2);
     expect(claims).not.toHaveProperty("logoutHint");
     expect(JSON.stringify(claims)).not.toContain("id-token-hint-value");
-    expect(SECURITY_SCHEMA_VERSION).toBe(1);
+    // Audit-trust T03 already migrated the shared security schema to v2. OIDC reservation adds no migration.
+    expect(SECURITY_SCHEMA_VERSION).toBe(2);
   });
 
   it("reports only local login and refuses a password for an OIDC-only account", async () => {
