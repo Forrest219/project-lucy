@@ -563,7 +563,7 @@ POC 演示 **不在** 默认 `docker-compose.yml` 内提供 demo 数据库。完
 |---|---|
 | `docker pull node:22-bookworm-slim` / `mysql:8.4` 慢 | `~/.docker/daemon.json` 加 `registry-mirrors`：`https://docker.m.daocloud.io` |
 | `npm ci` 慢 | `npm config set registry https://registry.npmmirror.com` |
-| `ktx admin runtime install` 拉 pydantic 等依赖 `tls handshake eof` | 走 PyPI 镜像：`UV_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/` 后 `docker compose up -d --build`（或显式 `--build-arg UV_INDEX_URL=...`）；可选 `UV_EXTRA_INDEX_URL` 同理。ktx 捆绑的 uv 通过 `managedRuntimeUvEnv`（`process.env` spread + `UV_NO_CONFIG=1`）自动读取，无需改 ktx。空值 = 官方 pypi.org |
+| `apt-get` / `npm ci` / `ktx admin runtime install` 拉取缓慢 | 镜像构建在官方源短超时后自动改走清华、阿里云、腾讯云。npm 用 npmmirror。要固定单一来源再传 `APT_MIRROR`（主机名）、`NPM_REGISTRY`（无 scheme）、`UV_INDEX_URL`（完整 simple URL）。ktx 捆绑的 uv 通过 `managedRuntimeUvEnv` 读取 `UV_INDEX_URL`，无需改 ktx。这些选择只在构建期生效 |
 | 终端要走代理 | `export HTTPS_PROXY=http://127.0.0.1:7897` 后再 `docker compose up`；Docker Desktop 还要在 Settings → Resources → Proxies 同步 |
 
 Docker Desktop 用户在镜像构建时不会自动继承 shell 代理，必须显式配置 daemon.json 或 Docker Desktop UI，否则 build 阶段 apt-get / npm install 超时。

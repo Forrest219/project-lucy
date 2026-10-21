@@ -70,8 +70,9 @@ if ! docker buildx inspect "$BUILDER" >/dev/null 2>&1; then
 fi
 
 echo "[build-customer-amd64] building (see ${LOG})..."
-# Optional network mirrors (China / corporate-restricted networks). Empty by
-# default → stock deb.debian.org / registry.npmjs.org / pypi.org.
+echo "[build-customer-amd64] apt=${APT_MIRROR:-official, then tuna/aliyun/tencent} npm=${NPM_REGISTRY:-official, then npmmirror/tencent} pypi=${UV_INDEX_URL:-official, then tuna/aliyun/tencent}"
+# Optional single-source overrides. Empty leaves the Dockerfile fallback:
+# official source with a short timeout, then Tsinghua, Aliyun, and Tencent.
 # Keep one non-empty array: macOS bash 3.2 + set -u errors on "${empty[@]}".
 BUILD_ARGS=(
   --builder "$BUILDER"
