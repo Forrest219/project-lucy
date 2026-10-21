@@ -1,3 +1,4 @@
+import { computeSuiteHash, parseEvalResultImport } from "../eval/suite-schema";
 import { afterEach, describe, expect, it } from "vitest";
 import type { EvalSuite, EvalSuiteCase } from "../../src/lib/types";
 import {
@@ -57,6 +58,13 @@ const executor = (table: SemanticQuerySuccess | { ok: false; reason: string }): 
 describe("offline batch", () => {
   afterEach(() => {
     delete process.env.LUCY_TIMEZONE;
+  });
+
+  it("produces an importable hash when a parsed/downloaded suite has no suite_hash", async () => {
+    const input = suite([item()]);
+    const result = await runOfflineBatch({ suite: input, asOf: "2026-10-11", roleId: "analyst", boundRoleIds: ["analyst"], executor: executor(okTable()) });
+    expect(result.suite_hash).toBe(computeSuiteHash(input));
+    expect(parseEvalResultImport(JSON.stringify(result)).ok).toBe(true);
   });
 
   it("rejects a batch when the role is missing or unbound", async () => {

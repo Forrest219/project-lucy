@@ -1941,6 +1941,28 @@ async function filterWikiSearchObject(identity: Identity, value: unknown): Promi
   return { value: rewritten, filtered, sawWikiKeys };
 }
 
+/** Only a successful, explicitly empty search can use canonical keyword fallback. */
+function wikiSearchPayloadIsEmpty(payload: unknown): boolean {
+  const rpc = payload as { error?: unknown; result?: Record<string, unknown> } | undefined;
+  if (!rpc?.result || rpc.error || rpc.result.isError) return false;
+  const sizes: number[] = [];
+  const collect = (value: unknown) => {
+    if (Array.isArray(value)) { sizes.push(value.length); return; }
+    if (!value || typeof value !== "object") return;
+    const record = value as Record<string, unknown>;
+    for (const key of ["results", "items", "pages", "matches", "hits"]) {
+      if (Array.isArray(record[key])) sizes.push((record[key] as unknown[]).length);
+    }
+  };
+  collect(rpc.result);
+  collect(rpc.result.structuredContent);
+  if (Array.isArray(rpc.result.content)) for (const item of rpc.result.content) {
+    if (typeof item?.text !== "string") continue;
+    try { collect(JSON.parse(item.text)); } catch { /* Prose is not proof of an empty search. */ }
+  }
+  return sizes.length > 0 && sizes.every((size) => size === 0);
+}
+
 async function filterWikiSearchPayload(identity: Identity, payload: unknown): Promise<{ payload: unknown; filtered: number; failed?: string }> {
   if (!payload || typeof payload !== "object") return { payload, filtered: 0, failed: "wiki_search_filter_failed:non_object_payload" };
   const record = payload as Record<string, unknown>;
@@ -2998,6 +3020,56 @@ async function handlePost(req: IncomingMessage, res: ServerResponse, admitted: A
     recordAudit(withTrace, sources);
   };
 
+  const respondLocalWikiSearch = async (
+    query: string | undefined,
+    limit: number,
+    results: Awaited<ReturnType<typeof searchAccessibleWikiPages>>,
+    upstreamError?: string
+  ): Promise<void> => {
+    // SC-12 — only articles this role can read are injected, and each one
+    // is audited with its key and wiki version.
+    const wikiInjectedKeys = results.map((hit) => hit.key);
+    const wikiVersions = results.map((hit) => hit.version ?? "unknown");
+    const responseBody = jsonRpcToolResult(requestId, JSON.stringify({
+      query: query ?? "",
+      results,
+      filteredBy: "wiki_acl"
+    }, null, 2), { isError: !query });
+    res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+    res.end(responseBody);
+    recordRequestAudit({
+      ts: new Date().toISOString(),
+      userId: identity.userId,
+      client: identity.client,
+      tool: "wiki_search",
+      argsSummary: query ? { query, limit } : argsSummary,
+      ...queryMeta,
+      wikiInjectedKeys,
+      wikiVersions,
+      outcome: query ? "ok" : "error",
+      errorDetail: query ? upstreamError : "wiki_query_missing",
+      durationMs: Date.now() - start,
+      responseBytes: Buffer.byteLength(responseBody),
+      requestId,
+      ...requestMeta,
+      ...(await auditMeta(identity, query ? "local_wiki_search" : "wiki_query_missing")),
+    });
+    recordMcpTraceForTool({
+      traceId,
+      identity,
+      toolName: "wiki_search",
+      status: query ? "ok" : "error",
+      startedAt: new Date(start).toISOString(),
+      turnId: requestMeta.lucyTurnId ?? null,
+      sessionId: requestMeta.lucySessionId ?? null,
+      requestId,
+      argsSummary: query ? { query, limit } : argsSummary,
+      allowed: Boolean(query),
+      reason: query ? "local_wiki_search" : "wiki_query_missing",
+      policySource: "wiki_acl"
+    });
+  };
+
   // Spec 138: Session-bound matching is authoritative. Identity-only matching
   // remains a low-confidence compatibility fallback only when one candidate exists.
   if (rpcMethod === "tools/call" && toolName && toolName !== "lucy_begin_question") {
@@ -3010,6 +3082,14 @@ async function handlePost(req: IncomingMessage, res: ServerResponse, admitted: A
     requestMeta.turnAttributionMode = attribution.mode;
     requestMeta.turnAttributionConfidence = attribution.confidence;
     requestMeta.turnAttributionReason = attribution.reason;
+    Object.assign(requestMeta, {
+      associationStatus: attribution.associationStatus,
+      originalTurnId: attribution.turnId, effectiveTurnId: attribution.turnId,
+      originalAttributionMode: attribution.mode, effectiveAttributionMode: attribution.mode,
+      originalAssociationStatus: attribution.associationStatus, effectiveAssociationStatus: attribution.associationStatus,
+      originalAttributionConfidence: attribution.confidence, effectiveAttributionConfidence: attribution.confidence,
+      originalReason: attribution.reason, effectiveReason: attribution.reason
+    });
   }
   if (requestMeta.lucyTurnId) questionBudget.ensureTurn(requestMeta.lucyTurnId, Date.now());
 
@@ -3420,6 +3500,66 @@ async function buildDenialRepairPayload(
         : undefined;
       if (params) params.arguments = record;
     }
+    // Count before local handlers return as well as before upstream dispatch.
+    if (rpcMethod === "tools/call" && toolName && isQuestionDataTool(toolName) && questionBudgetEnabled()) {
+      const budgetDecision = questionBudget.consume(
+        requestMeta.lucyTurnId,
+        Date.now(),
+        normalizeHeader(req.headers["x-lucy-question-continue"])
+      );
+      if (budgetDecision.action === "stop") {
+        const responseBody = JSON.stringify({
+          jsonrpc: "2.0",
+          id: requestId,
+          result: {
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                reason: budgetDecision.reason,
+                partial: budgetDecision.partial,
+                continueToken: budgetDecision.continueToken,
+                continuable: budgetDecision.continuable
+              })
+            }]
+          }
+        });
+        res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+        res.end(responseBody);
+        recordRequestAudit({
+          ts: new Date().toISOString(),
+          userId: identity.userId,
+          client: identity.client,
+          tool: toolName,
+          tables: queryTables.length > 0 ? queryTables : undefined,
+          argsSummary,
+          ...queryMeta,
+          outcome: "budget_stop",
+          decisionReason: "question_budget_exhausted",
+          errorDetail: "question_budget_exhausted",
+          durationMs: Date.now() - start,
+          responseBytes: Buffer.byteLength(responseBody),
+          requestId,
+          ...requestMeta,
+          ...(await auditMeta(identity, "question_budget_exhausted")),
+        });
+        recordMcpTraceForTool({
+          traceId,
+          identity,
+          toolName,
+          status: "ok",
+          startedAt: new Date(start).toISOString(),
+          turnId: requestMeta.lucyTurnId ?? null,
+          sessionId: requestMeta.lucySessionId ?? null,
+          requestId,
+          argsSummary,
+          allowed: true,
+          reason: "question_budget_exhausted",
+          policySource: "other"
+        });
+        return;
+      }
+    }
+
     if (toolName === "connection_list" || toolName === "lucy_catalog" || toolName === "kx_catalog") {
       const data = toolName === "connection_list"
         ? await connectionList(identity)
@@ -3717,6 +3857,11 @@ async function buildDenialRepairPayload(
         lucyTurnId: turnId,
         turnAttributionMode: "explicit",
         turnAttributionConfidence: "high",
+        associationStatus: "confirmed",
+        originalTurnId: turnId, effectiveTurnId: turnId,
+        originalAttributionMode: "explicit", effectiveAttributionMode: "explicit",
+        originalAssociationStatus: "confirmed", effectiveAssociationStatus: "confirmed",
+        originalAttributionConfidence: "high", effectiveAttributionConfidence: "high",
         ...(await auditMeta(identity, "allowed")),
       });
       recordMcpTraceForTool({
@@ -4223,64 +4368,6 @@ async function buildDenialRepairPayload(
     argsSummary = summarizeArgsForAudit(toolName, guard.args);
   }
 
-  if (rpcMethod === "tools/call" && toolName && isQuestionDataTool(toolName) && questionBudgetEnabled()) {
-    const budgetDecision = questionBudget.consume(
-      requestMeta.lucyTurnId,
-      Date.now(),
-      normalizeHeader(req.headers["x-lucy-question-continue"])
-    );
-    if (budgetDecision.action === "stop") {
-      const responseBody = JSON.stringify({
-        jsonrpc: "2.0",
-        id: requestId,
-        result: {
-          content: [{
-            type: "text",
-            text: JSON.stringify({
-              reason: budgetDecision.reason,
-              partial: budgetDecision.partial,
-              continueToken: budgetDecision.continueToken,
-              continuable: budgetDecision.continuable
-            })
-          }]
-        }
-      });
-      res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
-      res.end(responseBody);
-      recordRequestAudit({
-        ts: new Date().toISOString(),
-        userId: identity.userId,
-        client: identity.client,
-        tool: toolName,
-        tables: queryTables.length > 0 ? queryTables : undefined,
-        argsSummary,
-        ...queryMeta,
-        outcome: "budget_stop",
-        decisionReason: "question_budget_exhausted",
-        errorDetail: "question_budget_exhausted",
-        durationMs: Date.now() - start,
-        responseBytes: Buffer.byteLength(responseBody),
-        requestId,
-        ...requestMeta,
-        ...(await auditMeta(identity, "question_budget_exhausted")),
-      });
-      recordMcpTraceForTool({
-        traceId,
-        identity,
-        toolName,
-        status: "ok",
-        startedAt: new Date(start).toISOString(),
-        turnId: requestMeta.lucyTurnId ?? null,
-        sessionId: requestMeta.lucySessionId ?? null,
-        requestId,
-        argsSummary,
-        allowed: true,
-        reason: "question_budget_exhausted",
-        policySource: "other"
-      });
-      return;
-    }
-  }
 
   if (rpcMethod === "tools/call" && toolName === "lucy_query") {
     const slot = acquireLucyQuerySlot(identity);
@@ -4455,52 +4542,11 @@ async function buildDenialRepairPayload(
       });
       return;
     }
+
     if (rpcMethod === "tools/call" && toolName === "wiki_search") {
       const { query, limit } = wikiQueryFromArgs(toolArgs);
       const results = query ? await searchAccessibleWikiPages(identity, query, limit) : [];
-      // SC-12 — only articles this role can read are injected, and each one
-      // is audited with its key and wiki version.
-      const wikiInjectedKeys = results.map((hit) => hit.key);
-      const wikiVersions = results.map((hit) => hit.version ?? "unknown");
-      const responseBody = jsonRpcToolResult(requestId, JSON.stringify({
-        query: query ?? "",
-        results,
-        filteredBy: "wiki_acl",
-        upstreamFallback: true
-      }, null, 2), { isError: !query });
-      res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
-      res.end(responseBody);
-      recordRequestAudit({
-        ts: new Date().toISOString(),
-        userId: identity.userId,
-        client: identity.client,
-        tool: toolName,
-        argsSummary: query ? { query, limit } : argsSummary,
-        ...queryMeta,
-        wikiInjectedKeys,
-        wikiVersions,
-        outcome: query ? "ok" : "error",
-        errorDetail: query ? `upstream_unavailable:${err instanceof Error ? err.message : String(err)}` : "wiki_query_missing",
-        durationMs: Date.now() - start,
-        responseBytes: Buffer.byteLength(responseBody),
-        requestId,
-        ...requestMeta,
-        ...(await auditMeta(identity, query ? "local_wiki_search_fallback" : "wiki_query_missing")),
-      });
-      recordMcpTraceForTool({
-        traceId,
-        identity,
-        toolName,
-        status: query ? "ok" : "error",
-        startedAt: new Date(start).toISOString(),
-        turnId: requestMeta.lucyTurnId ?? null,
-        sessionId: requestMeta.lucySessionId ?? null,
-        requestId,
-        argsSummary: query ? { query, limit } : argsSummary,
-        allowed: Boolean(query),
-        reason: query ? "local_wiki_search_fallback" : "wiki_query_missing",
-        policySource: "wiki_acl"
-      });
+      await respondLocalWikiSearch(query, limit, results, `upstream_unavailable:${err instanceof Error ? err.message : String(err)}`);
       return;
     }
     if (rpcMethod === "tools/call") {
@@ -4716,6 +4762,17 @@ async function buildDenialRepairPayload(
       filterFailed = `wiki_search_filter_failed:${err instanceof Error ? err.message : String(err)}`;
       body = JSON.stringify(rpcErrorResponse(requestId, "wiki_search filtering failed", filterFailed));
       forceJson = true;
+    }
+
+    // Preserve upstream search and ACL filtering. A canonical keyword fallback
+    // fills a successful empty index result; it never masks upstream/filter errors.
+    if (!filterFailed && wikiSearchPayloadIsEmpty(JSON.parse(body))) {
+      const { query, limit } = wikiQueryFromArgs(toolArgs);
+      const results = query ? await searchAccessibleWikiPages(identity, query, limit) : [];
+      if (results.length > 0) {
+        await respondLocalWikiSearch(query, limit, results);
+        return;
+      }
     }
 
     const headers = forceJson ? bufferedJsonHeaders(upstream) : passthroughBodyHeaders(upstream);

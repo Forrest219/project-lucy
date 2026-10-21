@@ -112,5 +112,5 @@ export function classifyConnectionError(raw: string | undefined | null): Connect
 export function formatConnectionErrorMessage(raw: string | undefined | null): string {
   const guidance = classifyConnectionError(raw);
   const action = guidance.actions[0];
-  return `${guidance.summary}${action ? `  建议：${action}` : ""}`;
+  return `${guidance.summary}${action ? ` 建议：${action}` : ""}`;
 }

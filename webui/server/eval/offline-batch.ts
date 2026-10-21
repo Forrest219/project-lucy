@@ -1,3 +1,4 @@
+import { computeSuiteHash } from "./suite-schema.js";
 import type { EvalExecutable, EvalResultImport, EvalSuite, EvalSuiteCase } from "../../src/lib/types.js";
 
 export const ROW_COUNT_MEASURES = new Set(["physical_rows", "row_count", "row_cnt", "records", "行数"]);
@@ -194,7 +195,7 @@ export async function runOfflineBatch(input: {
     role_id: input.roleId,
     as_of: input.asOf,
     suite_id: input.suite.suite_id,
-    suite_hash: input.suite.suite_hash ?? "",
+    suite_hash: input.suite.suite_hash ?? computeSuiteHash(input.suite),
     domain: input.suite.domain,
     runner: { kind: "lucy_offline_batch", version: "2", model: "" },
     started_at: new Date().toISOString(),
