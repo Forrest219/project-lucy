@@ -221,8 +221,11 @@ cp "${ROOT}/scripts/deploy/prepare-customer-instance.py" "${PKG_DIR}/scripts/pre
 cp "${ROOT}/scripts/deploy/image_identity.py" "${PKG_DIR}/scripts/image_identity.py"
 cp "${ROOT}/deploy/k8s/examples/instance.upgrade.http.example.json" "${PKG_DIR}/examples/instance.upgrade.http.example.json"
 cp "${ROOT}/deploy/k8s/examples/instance.upgrade.https.example.json" "${PKG_DIR}/examples/instance.upgrade.https.example.json"
+cp "${ROOT}/deploy/k8s/examples/instance.install.http.example.json" "${PKG_DIR}/examples/instance.install.http.example.json"
+cp "${ROOT}/deploy/k8s/examples/instance.install.https.example.json" "${PKG_DIR}/examples/instance.install.https.example.json"
 cp "${ROOT}/deploy/k8s/examples/RECOVERY.open-mode.md" "${PKG_DIR}/examples/RECOVERY.open-mode.md"
 cp "${ROOT}/deploy/k8s/CUSTOMER-UPGRADE.md" "${PKG_DIR}/CUSTOMER-UPGRADE.md"
+cp "${ROOT}/deploy/k8s/CUSTOMER-INSTALL.md" "${PKG_DIR}/CUSTOMER-INSTALL.md"
 cp "${ROOT}/deploy/k8s/ACCEPTANCE.md" "${PKG_DIR}/ACCEPTANCE.md"
 cp "${ROOT}/docs/runbooks/customer-v2-upgrade-release-checklist.md" "${PKG_DIR}/UPGRADE-RELEASE-CHECKLIST.md"
 cat > "${PKG_DIR}/CUSTOMER-FIRST-ADMIN.md" <<'EOF'
@@ -341,10 +344,11 @@ Read order:
 1. README.md (this file)
 2. RELEASE_NOTES.md
 3. CUSTOMER-UPGRADE.md
-4. CUSTOMER-FIRST-ADMIN.md
-5. examples/RECOVERY.open-mode.md
-6. ACCEPTANCE.md
-7. K8S_CONTRACT.md
+4. CUSTOMER-INSTALL.md
+5. CUSTOMER-FIRST-ADMIN.md
+6. examples/RECOVERY.open-mode.md
+7. ACCEPTANCE.md
+8. K8S_CONTRACT.md
 
 ## Offline image import (K3s / containerd)
 
@@ -470,6 +474,12 @@ Lucy product version and bundled KTX version are independent release identities
 
 See `helm/lucy/UPGRADE.md` (pre-upgrade checks, upgrade, acceptance, restart and rollback).
 Use `CUSTOMER-UPGRADE.md` and the private instance directory's `scripts/deploy.sh`.
+
+## Fresh install
+
+Empty clusters follow `CUSTOMER-INSTALL.md` and `examples/instance.install.http.example.json`
+or `examples/instance.install.https.example.json`. The in-place upgrade of `20260828-v1`
+stays on the already issued r7 candidate and does not switch to a later package.
 EOF
 } > "${PKG_DIR}/RELEASE_NOTES.md"
 

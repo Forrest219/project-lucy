@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "instanceId": "must-replace-instance",
+  "profile": "k3s",
+  "intent": "install",
+  "authState": "uninitialized",
+  "credentialState": "new",
+  "context": "MUST-REPLACE-kubectl-context",
+  "namespace": "lucy-test",
+  "release": "lucy-starrocks",
+  "deployment": "lucy",
+  "service": "lucy",
+  "pvcName": "lucy-data",
+  "bootstrapSecret": "lucy-bootstrap",
+  "access": "http",
+  "webuiUrl": "http://MUST-REPLACE-host",
+  "publicMcpUrl": "http://MUST-REPLACE-host/mcp",
+  "offlineNodes": {
+    "MUST-REPLACE-node": "local"
+  },
+  "values": {
+    "lucy": {
+      "version": "2.0.0",
+      "bundledKtxVersion": "0.16.0"
+    }
+  }
+}

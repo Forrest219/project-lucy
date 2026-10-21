@@ -271,7 +271,7 @@ done
 # --help must work from a different cwd, proving the lib is found relative to the script.
 (cd / && bash "${PKG_DIR}/scripts/acceptance.sh" --help >/dev/null) \
   || { echo "FAIL K6-7: acceptance.sh --help failed outside package root" >&2; exit 1; }
-for required in BUILD-INFO.json image/image-identity.json scripts/image_identity.py scripts/prepare-customer-instance.py examples/instance.upgrade.https.example.json examples/RECOVERY.open-mode.md CUSTOMER-UPGRADE.md ACCEPTANCE.md helm/lucy/UPGRADE.md helm/lucy/ROLLBACK.md README.md RELEASE_NOTES.md K8S_CONTRACT.md; do
+for required in BUILD-INFO.json image/image-identity.json scripts/image_identity.py scripts/prepare-customer-instance.py examples/instance.upgrade.https.example.json examples/instance.install.https.example.json examples/instance.install.http.example.json examples/RECOVERY.open-mode.md CUSTOMER-UPGRADE.md CUSTOMER-INSTALL.md ACCEPTANCE.md helm/lucy/UPGRADE.md helm/lucy/ROLLBACK.md README.md RELEASE_NOTES.md K8S_CONTRACT.md; do
   [[ -f "${PKG_DIR}/${required}" ]] || { echo "FAIL K6-7: package missing ${required}" >&2; exit 1; }
 done
 

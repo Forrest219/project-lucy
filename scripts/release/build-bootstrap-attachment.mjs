@@ -188,13 +188,16 @@ const README = (packageName) => `# Lucy 客户私有交付附件（引导密钥�
 - state/：本附件自带的签发状态副本，供准备入口复用同一密钥；损坏或缺失时停止并联系供应方，不要手工重建。
 - instance-credential.json：凭据元数据（实例 ID、签发状态、密钥摘要、软件包绑定）。
 - scripts/prepare.sh：实例准备入口，从任意目录运行，自动注入实例 ID、签发状态和 state-dir。
-- examples/：实例与恢复说明样例。
+- examples/：升级样例、空环境安装样例和恢复说明。
+- CUSTOMER-INSTALL.md：空环境安装说明。
 
 ## 部署人员步骤
 
 1. 解压通用软件包（tar.gz），校验其 SHA256 与本附件记录的 package.sha256 一致。
-2. 复制 examples/instance.upgrade.http.example.json（或 https），把 MUST-REPLACE 字段换成现场参数：
+2. 升级现有实例时，复制 examples/instance.upgrade.http.example.json（或 https），把 MUST-REPLACE 字段换成现场参数：
    context、UID、旧镜像、访问地址、节点映射和恢复说明。不要填写 instanceId 和 credentialState。
+   空环境安装时，改复制 examples/instance.install.http.example.json（或 https），并按 CUSTOMER-INSTALL.md 填写。
+   不要填写旧资源 UID、旧镜像或恢复说明，也不要填写 instanceId 和 credentialState。
 3. 从任意目录执行准备入口（先用 --dry-run 核对）：
    bash <本附件>/scripts/prepare.sh --package <软件包.tar.gz 或解压目录> --config <现场实例.json> --output <新的客户目录>
    入口自动校验软件包绑定、复用本附件的引导密钥并生成客户目录。
@@ -256,9 +259,10 @@ export async function buildAttachment({ customer, stateDir, output, packageName,
     await writePrivate(path.join(staging, 'scripts', 'prepare.sh'), PREPARE_ENTRY);
     await fs.chmod(path.join(staging, 'scripts', 'prepare.sh'), 0o700);
     await fs.mkdir(path.join(staging, 'examples'), { mode: 0o700 });
-    for (const file of ['instance.upgrade.http.example.json', 'instance.upgrade.https.example.json', 'RECOVERY.open-mode.md']) {
+    for (const file of ['instance.upgrade.http.example.json', 'instance.upgrade.https.example.json', 'instance.install.http.example.json', 'instance.install.https.example.json', 'RECOVERY.open-mode.md']) {
       await writePrivate(path.join(staging, 'examples', file), await fs.readFile(path.join(REPO_ROOT, 'deploy/k8s/examples', file)));
     }
+    await writePrivate(path.join(staging, 'CUSTOMER-INSTALL.md'), await fs.readFile(path.join(REPO_ROOT, 'deploy/k8s/CUSTOMER-INSTALL.md')));
     await writePrivate(path.join(staging, 'README.md'), README(packageName));
     await fs.rename(staging, target);
     return { attachment: target, instanceId, credentialState: meta.credentialState, credentialReused: credential.reused, keyDigest, packageName };

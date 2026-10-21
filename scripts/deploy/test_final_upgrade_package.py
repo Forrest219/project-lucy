@@ -45,6 +45,8 @@ class FinalUpgradePackageTests(unittest.TestCase):
             evidence = json.loads(report.read_text())
             self.assertEqual(evidence['localGate'], 'PASS')
             self.assertEqual(len(evidence['instanceChecks']), 2)
+            self.assertEqual(len(evidence['installChecks']), 2)
+            self.assertTrue(all(item['intent'] == 'install' and item['entryDryRun'] == 'PASS' for item in evidence['installChecks']))
             self.assertEqual(evidence['discoveryWrites'], 0)
             self.assertFalse(evidence['productionReady'])
             self.assertEqual(evidence['nativeAmd64UpgradeAndRecovery'], 'PENDING_DEPLOYER_ACCEPTANCE')

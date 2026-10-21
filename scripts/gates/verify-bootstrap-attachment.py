@@ -168,6 +168,32 @@ def verify(attachment_tar, package_tar, report_path=None):
                 require(not (delivery / '.deployment').exists(), 'DRY_RUN_SIDE_EFFECT')
                 report['entryDryRun'] = 'PASS'
 
+                require((attachment / 'CUSTOMER-INSTALL.md').is_file(), 'INSTALL_DOC_MISSING')
+                require((attachment / 'examples/instance.install.https.example.json').is_file(), 'INSTALL_EXAMPLE_MISSING')
+                install = json.loads((attachment / 'examples/instance.install.http.example.json').read_text())
+                install.update(context='fixture', webuiUrl='http://fixture.invalid',
+                               publicMcpUrl='http://fixture.invalid/mcp',
+                               offlineNodes={'fixture-node': 'local'})
+                install.setdefault('values', {}).setdefault('env', {}).update({
+                    'LUCY_TRUST_PROXY': '1',
+                    'LUCY_TRUSTED_PROXY_CIDRS': '192.0.2.0/24',
+                })
+                install_file = root / 'install-site.json'
+                install_file.write_text(json.dumps(install))
+                install_entry = ['bash', str(attachment / 'scripts/prepare.sh'), '--package', str(package_tar),
+                                 '--config', str(install_file), '--output', str(root / 'delivery-install')]
+                prepared = json.loads(run(install_entry, cwd='/'))
+                require(prepared['instanceId'] == meta['instanceId'] and prepared['credentialReused'] is True, 'INSTALL_PREPARE')
+                install_delivery = root / 'delivery-install'
+                installed = json.loads((install_delivery / 'instance.json').read_text())
+                require(installed['intent'] == 'install' and installed['pvcName'].endswith('-data'), 'INSTALL_CONTRACT')
+                install_fixture = root / 'install-fixture'
+                install_fixture.mkdir()
+                install_env = fixture_environment(install_fixture, installed, None, None, {}, kubeconfig, empty_install=True)
+                install_stdout = run(['bash', str(install_delivery / 'scripts/deploy.sh'), '--dry-run'], cwd='/', env=install_env).decode()
+                require(json.loads(install_stdout.splitlines()[-1])['status'] == 'DRY_RUN', 'INSTALL_ENTRY_DRY_RUN')
+                report['installEntryDryRun'] = 'PASS'
+
             # Negative: an attachment must never prepare against a different package.
             other_tar = root / 'other.tar.gz'
             other_tar.write_bytes(os.urandom(64))

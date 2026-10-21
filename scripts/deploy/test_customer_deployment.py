@@ -287,12 +287,62 @@ class CustomerDeploymentTests(unittest.TestCase):
             mod.deployment_values(invalid, old)
         omitted = config()
         omitted['intent'] = 'install'
-        installed = mod.deployment_values(omitted, {})
-        self.assertNotIn('LUCY_TRUST_PROXY', installed['env'])
+        with self.assertRaisesRegex(mod.DeploymentError, 'TRUST_PROXY_REQUIRED'):
+            mod.deployment_values(omitted, {})
         blank = https_upgrade_env(config())
         blank['intent'] = 'upgrade'
         blank['values']['env']['LUCY_CONTENT_ROOT'] = ''
         self.assertEqual(mod.deployment_values(blank, old)['env']['LUCY_CONTENT_ROOT'], '')
+
+    def test_bs10_https_install_requires_trust_proxy_and_http_strips_it(self):
+        https = https_upgrade_env(config())
+        https['intent'] = 'install'
+        https['values']['env']['LUCY_CONTENT_ROOT'] = ''
+        installed = mod.deployment_values(https, {})
+        self.assertEqual(installed['env']['LUCY_TRUST_PROXY'], '1')
+        self.assertEqual(installed['env']['LUCY_TRUSTED_PROXY_CIDRS'], '10.0.0.0/8')
+        self.assertEqual(installed['env']['LUCY_CONTENT_ROOT'], '')
+        rendered = subprocess.run(
+            ['helm', 'template', https['release'], str(ROOT / 'deploy/k8s/helm/lucy'), '-f', '-'],
+            input=json.dumps(installed).encode(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.assertEqual(rendered.returncode, 0, rendered.stderr.decode())
+        self.assertIn(b'name: LUCY_TRUST_PROXY', rendered.stdout)
+        self.assertIn(b'name: LUCY_TRUSTED_PROXY_CIDRS', rendered.stdout)
+        self.assertIn(b'kind: PersistentVolumeClaim', rendered.stdout)
+        self.assertIn(b'name: lucy-app-data', rendered.stdout)
+        self.assertNotIn(b'- name: secrets-sync', rendered.stdout)
+
+        missing = config()
+        missing['intent'] = 'install'
+        with self.assertRaisesRegex(mod.DeploymentError, 'TRUST_PROXY_REQUIRED'):
+            mod.deployment_values(missing, {})
+        dotted = https_upgrade_env(config())
+        dotted['intent'] = 'install'
+        dotted['values']['env']['LUCY_CONTENT_ROOT'] = '.'
+        with self.assertRaisesRegex(mod.DeploymentError, 'CONTENT_ROOT_INVALID'):
+            mod.deployment_values(dotted, {})
+
+        http = config()
+        http.update(intent='install', access='http', webuiUrl='http://lucy.internal',
+                    publicMcpUrl='http://lucy.internal/mcp')
+        http['values']['env'] = {
+            'LUCY_TRUST_PROXY': '1',
+            'LUCY_TRUSTED_PROXY_CIDRS': '10.0.0.0/8',
+        }
+        intranet = mod.deployment_values(http, {})
+        self.assertNotIn('LUCY_TRUST_PROXY', intranet['env'])
+        self.assertNotIn('LUCY_TRUSTED_PROXY_CIDRS', intranet['env'])
+        rendered = subprocess.run(
+            ['helm', 'template', http['release'], str(ROOT / 'deploy/k8s/helm/lucy'), '-f', '-'],
+            input=json.dumps(intranet).encode(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.assertEqual(rendered.returncode, 0, rendered.stderr.decode())
+        self.assertNotIn(b'LUCY_TRUST_PROXY', rendered.stdout)
+        self.assertNotIn(b'LUCY_TRUSTED_PROXY_CIDRS', rendered.stdout)
+
+    def test_fresh_install_rejects_an_existing_service_before_writes(self):
+        with self.assertRaisesRegex(mod.DeploymentError, 'INSTALL_RESOURCE_COLLISION'):
+            mod.require_fresh_install_clear(None, None, None, {'metadata': {'name': 'lucy'}})
+        mod.require_fresh_install_clear(None, None, None, None)
 
     def test_bs17_raw_tool_error_is_never_forwarded(self):
         d = SecretDeployment()
@@ -325,6 +375,7 @@ class CustomerDeploymentTests(unittest.TestCase):
     def test_bs11_real_helm_render_preserves_chart_mount_and_runtime_contract(self):
         """Use actual repository Chart; convert YAML through the TEST host's Node dependency only."""
         d = SecretDeployment()
+        https_upgrade_env(d.c)
         d.values = mod.deployment_values(d.c, {})
         d.values['bootstrap'] = {'existingSecret': d.c['bootstrapSecret']}
         d.deployment = None

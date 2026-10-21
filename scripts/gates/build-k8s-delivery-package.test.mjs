@@ -30,7 +30,7 @@ test("customer README uses the instance entry and ships HTTPS and recovery depen
   assert.match(readme, /prepare-customer-instance\.py/);
   assert.match(readme, /deploy\.sh --dry-run/);
   assert.doesNotMatch(readme, /helm upgrade/);
-  for (const file of ['image_identity.py', 'instance.upgrade.https.example.json', 'CUSTOMER-UPGRADE.md', 'ACCEPTANCE.md']) {
+  for (const file of ['image_identity.py', 'instance.upgrade.https.example.json', 'instance.install.https.example.json', 'instance.install.http.example.json', 'CUSTOMER-UPGRADE.md', 'CUSTOMER-INSTALL.md', 'ACCEPTANCE.md']) {
     assert.ok(src.includes(file), `${file} must ship`);
   }
 });

@@ -123,6 +123,26 @@ def trust_proxy_enabled(value):
     return str(value).strip().lower() in {'1', 'true', 'yes'}
 
 
+def require_fresh_install_clear(deployment, pvc, release, service):
+    require(not deployment and not pvc and not release and not service, 'INSTALL_RESOURCE_COLLISION')
+
+
+def apply_install_env(config, out):
+    if config.get('intent') != 'install':
+        return out
+    env = dict(out.get('env') or {})
+    if 'LUCY_CONTENT_ROOT' in env and env['LUCY_CONTENT_ROOT'] not in ('',):
+        require(False, 'CONTENT_ROOT_INVALID')
+    if config.get('access') == 'https':
+        require(trust_proxy_enabled(env.get('LUCY_TRUST_PROXY'))
+                and str(env.get('LUCY_TRUSTED_PROXY_CIDRS') or '').strip(), 'TRUST_PROXY_REQUIRED')
+    else:
+        env.pop('LUCY_TRUST_PROXY', None)
+        env.pop('LUCY_TRUSTED_PROXY_CIDRS', None)
+    out['env'] = env
+    return out
+
+
 def apply_upgrade_env(config, out):
     if config.get('intent') != 'upgrade':
         return out
@@ -167,7 +187,7 @@ def deployment_values(config, old):
     security.pop('insecureHttpTestProfile', None)
     security['access'] = config['access']
     out['security'] = security
-    return apply_upgrade_env(config, out)
+    return apply_install_env(config, apply_upgrade_env(config, out))
 
 
 def secret_matches(secret, instance_id, key):
@@ -301,7 +321,8 @@ class Deployment:
         releases = json.loads(self.helm('list', '--all', '-o', 'json').stdout)
         self.release = next((r for r in releases if r['name'] == c['release']), None)
         if c['intent'] == 'install' and not self.deployment:
-            require(not self.pvc and not self.release, 'INSTALL_RESOURCE_COLLISION')
+            service = self.get('service', c['service'])
+            require_fresh_install_clear(self.deployment, self.pvc, self.release, service)
             self.old_values = {}
             self.auth = {'status': 'uninitialized', 'fingerprint': None}
         else:

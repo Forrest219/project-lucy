@@ -6,6 +6,7 @@ Optional --instance-dir also executes the real customer's read-only preflight.
 """
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 import shutil
@@ -185,8 +186,74 @@ def verify(archive, report_path, instance_dir=None):
                     accesses.append({'access': access, 'entryDryRun': 'PASS', 'clusterReads': 'SYNTHETIC',
                                      'renderer': 'REAL_HELM_AND_KUBECTL', 'tamperAndUntrackedRejected': True})
                     shutil.rmtree(output)
+                helper_path = base / 'scripts/customer-deployment-helper.py'
+                spec = importlib.util.spec_from_file_location('packaged_customer_deploy', helper_path)
+                packaged = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(packaged)
+                install_checks = []
+                install_keys = []
+                for access in ['http', 'https']:
+                    config = json.loads((base / f'examples/instance.install.{access}.example.json').read_text())
+                    config.update(instanceId='fixture-install', context='fixture',
+                        webuiUrl=f'{access}://fixture.invalid', publicMcpUrl=f'{access}://fixture.invalid/mcp',
+                        offlineNodes={'fixture-node': 'local'})
+                    config.setdefault('values', {}).setdefault('env', {}).update({
+                        'LUCY_TRUST_PROXY': '1',
+                        'LUCY_TRUSTED_PROXY_CIDRS': '192.0.2.0/24',
+                    })
+                    if access == 'https':
+                        config.update(externalTlsReviewed=True, credentialState='issued')
+                    config_file = root / ('install-' + access + '.json')
+                    config_file.write_text(json.dumps(config))
+                    output = root / ('install-' + access + '-delivery')
+                    result = json.loads(run(['python3', str(base / 'scripts/prepare-customer-instance.py'),
+                        '--base-package', str(base), '--instance-config', str(config_file),
+                        '--state-dir', str(root / 'install-state'), '--output', str(output)]))
+                    key_file = output / 'credentials/webui-bootstrap-token'
+                    install_keys.append(key_file.read_bytes())
+                    require(len(install_keys[-1]) == 65 and key_file.stat().st_mode & 0o777 == 0o600, 'INSTALL_PRIVATE_KEY_FORMAT')
+                    if access == 'https':
+                        require(result['credentialReused'] and install_keys[0] == install_keys[1], 'INSTALL_KEY_REUSE')
+                    delivered = json.loads((output / 'instance.json').read_text())
+                    merged = packaged.deployment_values(delivered, {})
+                    if access == 'https':
+                        require(merged['env'].get('LUCY_TRUST_PROXY') == '1', 'INSTALL_TRUST_PROXY_MISSING')
+                        require(merged['env'].get('LUCY_TRUSTED_PROXY_CIDRS') == '192.0.2.0/24', 'INSTALL_TRUST_PROXY_CIDR')
+                    else:
+                        require('LUCY_TRUST_PROXY' not in merged['env'] and 'LUCY_TRUSTED_PROXY_CIDRS' not in merged['env'], 'INSTALL_HTTP_PROXY_KEPT')
+                    require('LUCY_CONTENT_ROOT' not in merged['env'] or merged['env'].get('LUCY_CONTENT_ROOT') == '', 'INSTALL_CONTENT_ROOT')
+                    manifest = run(['helm', 'template', config['release'], str(base / 'helm/lucy'), '-f', '-'], input=json.dumps(merged).encode())
+                    require(b'kind: PersistentVolumeClaim' in manifest and b'name: lucy-data' in manifest, 'INSTALL_PVC_MISSING')
+                    require(b'- name: secrets-sync' not in manifest, 'INSTALL_SECRETS_SYNC_UNEXPECTED')
+                    if access == 'https':
+                        require(b'name: LUCY_TRUST_PROXY' in manifest, 'INSTALL_PROXY_RENDER')
+                    else:
+                        require(b'LUCY_TRUST_PROXY' not in manifest, 'INSTALL_HTTP_PROXY_RENDERED')
+                    fixture_root = root / ('install-' + access + '-fixture')
+                    fixture_root.mkdir()
+                    env = fixture_environment(fixture_root, delivered, None, None, {}, kubeconfig, empty_install=True)
+                    entry = ['bash', str(output / 'scripts/deploy.sh'), '--dry-run']
+                    stdout = run(entry, cwd='/', env=env).decode()
+                    require(json.loads(stdout.splitlines()[-1])['status'] == 'DRY_RUN', 'INSTALL_ENTRY_DRY_RUN')
+                    require(not (output / '.deployment').exists() and not (output / '.deployment-binding.json').exists(), 'INSTALL_DRY_RUN_SIDE_EFFECT')
+                    if access == 'https':
+                        collision_root = root / 'install-collision-fixture'
+                        collision_root.mkdir()
+                        collision_env = fixture_environment(
+                            collision_root, delivered, None, None, {}, kubeconfig,
+                            service={'metadata': {'name': config['service']}}, empty_install=True)
+                        bad = subprocess.run(entry, cwd='/', env=collision_env, capture_output=True)
+                        require(bad.returncode != 0 and b'INSTALL_RESOURCE_COLLISION' in bad.stderr, 'INSTALL_SERVICE_COLLISION')
+                        calls = (collision_root / 'calls.jsonl').read_text() if (collision_root / 'calls.jsonl').exists() else ''
+                        require('"upgrade"' not in calls, 'INSTALL_COLLISION_WROTE')
+                    install_checks.append({'access': access, 'intent': 'install', 'entryDryRun': 'PASS',
+                                           'clusterReads': 'SYNTHETIC', 'renderer': 'REAL_HELM_AND_KUBECTL',
+                                           'serviceCollisionRejected': access == 'https'})
+                    shutil.rmtree(output)
+                require(len(install_checks) == 2, 'INSTALL_REGRESSION')
                 require(requests and all(method == 'GET' for method, _ in requests), 'DISCOVERY_API_WRITE')
-                report.update(instanceChecks=accesses, realKubectlResourceKinds=[k for _, k in kinds], discoveryWrites=0)
+                report.update(instanceChecks=accesses, installChecks=install_checks,
+                              realKubectlResourceKinds=[k for _, k in kinds], discoveryWrites=0)
             report['localGate'] = 'PASS'
         if instance_dir:
             actual = json.loads((instance_dir / 'instance.json').read_text())

@@ -5,6 +5,7 @@ This directory stores repository-level implementation plans that are not scoped 
 | Plan | Purpose |
 |---|---|
 | [2026-10-22-upgrade-candidate-verification-plan.md](2026-10-22-upgrade-candidate-verification-plan.md) | **v2.5 需求备忘 L25-13，待落地，非门禁**：用一致性备份在隔离环境验证候选镜像的迁移正确性与业务/审计连续性。原地升级仍为客户现场主线，本条不替代；不切流、不产生放行证据 |
+| [2026-10-21-customer-v2-fresh-install-package-plan.md](2026-10-21-customer-v2-fresh-install-package-plan.md) | **v0.2，执行中**：空集群全新安装 Lucy 2.0.0 / Chart 0.2.6。新后缀 `20261022-fresh`、新 slug `customer-fresh`。原生 amd64 的 G3/G4/G4b/G8 与 F4 完成前不交给客户。不覆盖 r7，也不代替 v0.3 的 P0-3 至 P0-6 |
 | [2026-10-21-customer-20260828-v1-upgrade-package-plan.md](2026-10-21-customer-20260828-v1-upgrade-package-plan.md) | **v0.1，执行中**：供方生成 20260828-v1 客户的 linux/amd64 镜像、私有引导密钥附件和随包文档。构建排除、信任代理渲染和升级白名单纳入本次提交。候选包在原生 amd64 验收前不交给客户。验收合同仍是升级计划 v0.3 |
 | [2026-10-21-customer-20260828-v1-to-lucy-2.0-upgrade-plan.md](2026-10-21-customer-20260828-v1-to-lucy-2.0-upgrade-plan.md) | **v0.3，未执行**：客户现役 `20260828-v1`（Lucy 0.16.0 / Chart 0.1.0，无登录、已有 https 域名）→ Lucy 2.0.0 / Chart 0.2.6。放行前先补升级入口白名单，再对那一次构建做原生升级与恢复验收。客户现场成功后不还原旧卷。当前 `r6` 仍为 Draft，不是放行包。同日评审过程稿已作废。供方出包步骤见同日升级包生成计划 |
 | [2026-10-19-lucy-product-version-2.0.0.md](2026-10-19-lucy-product-version-2.0.0.md) | **仓库版本已落地，运行中容器未重建**：产品版本 `2.0.0`，界面标签 `v2.0.0`。V1–V6 已通过。未构建镜像，未改 KTX 或 Helm Chart 包版本 |

@@ -73,9 +73,10 @@ def discovery(root):
         thread.join()
 
 
-def fixture_environment(root, config, deployment, pvc, old_values, kubeconfig):
+def fixture_environment(root, config, deployment, pvc, old_values, kubeconfig, service=None, empty_install=False):
     """Cluster reads are synthetic. Lint/template and create --dry-run use real CLIs."""
-    state = {'config': config, 'deployment': deployment, 'pvc': pvc, 'values': old_values,
+    state = {'config': config, 'deployment': deployment, 'pvc': pvc, 'service': service,
+             'emptyInstall': empty_install, 'values': old_values,
              'kubectl': shutil.which('kubectl'), 'helm': shutil.which('helm'), 'root': str(root)}
     assert state['kubectl'] and state['helm'], 'helm and kubectl required on verification host'
     state_file = root / 'fixture.json'
@@ -110,7 +111,7 @@ def main():
         if clean[0] in ['lint', 'template']:
             os.execv(state['helm'], [state['helm'], *args])
         if clean[:1] == ['list']:
-            result = [{'name': c['release'], 'status': 'deployed', 'revision': '14'}]
+            result = [] if state.get('emptyInstall') else [{'name': c['release'], 'status': 'deployed', 'revision': '14'}]
         elif clean[:2] == ['get', 'values']:
             result = state['values']
         else:
@@ -131,11 +132,14 @@ def main():
     elif clean[:1] == ['get']:
         kind, name = clean[1], clean[2] if len(clean) > 2 else ''
         if kind == 'namespace':
-            result = {'metadata': {'uid': 'fixture-cluster' if name == 'kube-system' else c['namespaceUid']}}
+            uid = 'fixture-cluster' if name == 'kube-system' else c.get('namespaceUid', 'fixture-ns')
+            result = {'metadata': {'uid': uid}}
         elif kind == 'deployment':
             result = state['deployment']
         elif kind == 'pvc':
             result = state['pvc']
+        elif kind == 'service':
+            result = state.get('service')
         elif kind == 'secret':
             result = None if name == c['bootstrapSecret'] else {'metadata': {'name': name}}
         elif kind == 'pods':
