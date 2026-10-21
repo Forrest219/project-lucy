@@ -43,12 +43,24 @@ export const SECURITY_E2E_DOCKERIGNORE_PATTERNS = [
   "webui/playwright.real.config.ts"
 ];
 
+/** Local state and operator credentials never belong in the build context. */
+export const LOCAL_RUNTIME_DOCKERIGNORE_PATTERNS = [
+  "**/.ktx", "**/.ktx-ui", "**/:memory:", "**/.mcp.json",
+  "**/.env", "**/.env.local", "**/.env.*.local",
+  "webui/config/access.yaml", "webui/config/admins.yaml"
+];
+
 /** Absolute paths inside the Lucy image that must not exist (A3). */
 export const A3_IMAGE_DENYLIST = [
   "/app/examples/security-e2e",
   "/app/scripts/e2e",
   "/app/deploy/k8s/security-e2e",
   "/app/agent-chat",
+  "/app/.mcp.json",
+  "/app/webui/config/access.yaml",
+  "/app/webui/config/admins.yaml",
+  "/app/examples/docker-demo/project-template/.ktx-ui",
+  "/app/webui/:memory:",
   "/app/deploy/compose/docker-compose.agent-chat.yml",
   "/app/docs/design/design-lucy-agent-chat-a3.md",
   "/app/docs/runbooks/runbook-lucy-agent-chat-a3.md",
@@ -247,6 +259,9 @@ Lucy hard gate: .dockerignore must exclude A3 + internal test paths; optional do
     record("dockerignoreCoversInternalTest", true, { patterns: INTERNAL_TEST_DOCKERIGNORE_PATTERNS });
     assertDockerignoreCoversSecurityE2e(dockerignoreText);
     record("dockerignoreCoversSecurityE2e", true, { patterns: SECURITY_E2E_DOCKERIGNORE_PATTERNS });
+
+    assertDockerignoreCovers(dockerignoreText, LOCAL_RUNTIME_DOCKERIGNORE_PATTERNS, "local-runtime");
+    record("dockerignoreCoversLocalRuntime", true, { patterns: LOCAL_RUNTIME_DOCKERIGNORE_PATTERNS });
 
     const patterns = parseDockerignore(dockerignoreText);
     const fixture = await runFixtureSentinelCheck(patterns);
