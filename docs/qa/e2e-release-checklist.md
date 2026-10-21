@@ -65,6 +65,8 @@ npm run e2e:real:project-checklists -- --run inbox/e2e/<runId>/run.json
 
 `E2E-AGENT-EVIDENCE` 只回答证据在不在。金额、口径、拒答和多轮是否达到能力门槛，读 Business Eval 清单里挂到同一变体的能力行。
 
+逐功能补充见 [升级功能 Checklist](upgrade-feature-checklist.md)。该专项不缩减本表冻结的 255 个 required 变体，也不独立签发客户发布。
+
 ## 4. 人工 GUI
 
-`E2E-GUI` 的产品是 `real-e2e-clients.yaml` 里 `execution: manual` 的 `workbuddy` 与 `cursor`。步骤与通过标准以人工清单为准：导入本 run 的 MCP、finance 问数对上 gold、越权问句被拒绝、吊销后全通道拒绝、一次提问一条问询。自动化 runner 不驱动这些步骤。
+`E2E-GUI` 的产品是 `real-e2e-clients.yaml` 里 `execution: manual` 的 `workbuddy` 与 `cursor`。步骤与通过标准以人工清单为准：导入本 run 的 MCP、finance 问数对上 gold、越权问句被拒绝、吊销后全通道拒绝、明确上报与推断记录分开；候选关联不冒充已确认关联。自动化 runner 不驱动这些步骤。

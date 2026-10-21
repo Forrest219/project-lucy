@@ -977,6 +977,8 @@ n. 操作：用户做什么（界面中文文案，不用内部函数名）
 
 ## 附录 A · 真实用户 E2E 自动化绑定（Spec 20261018 §6.5，Plan T11）
 
+2026-10-20 复核：下表是早期本地执行记录，不能据此认定当前候选已验收。`mainline-journey.spec.ts` 已有部分链路代码；`offline-candidate.spec.ts` 仍为结构合同，不是离线评测正向闭环。当前升级用例和执行结果见 [升级功能 Checklist](upgrade-feature-checklist.md)。
+
 本分表原先的旅程是手工/Agent 剧本。企业安全整改后，下列旅程另有**可重复执行的真实浏览器用例**（`webui/tests/real-e2e/`，`customer` 模式 + 认证 required，1440×900 桌面 Chromium，workers=1，retries=0，不 mock API、不用 KTX shim；密码、Token、引导密钥只经 `helpers/secret-capture.ts` 在内存传递，trace / 截图 / 录像全部关闭）。入口：`npm run e2e:real:management -- --run inbox/e2e/<runId>/run.json`。
 
 | 旅程 / 场景 | 用例文件 · 测试 | catalog 变体 | 本地（Mac，无 KTX/DB）状态 |

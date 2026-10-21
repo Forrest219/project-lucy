@@ -784,8 +784,9 @@
 | `audit-turn-calls-card` | audit-turn-calls-card | `pages/admin/Audit.tsx` |
 | `audit-turn-calls-table` | audit-turn-calls-table | `pages/admin/Audit.tsx` |
 | `audit-stats-time` | audit-stats-time | `pages/admin/Audit.tsx` |
-| `audit-export-current` | 导出当前页签 | `pages/admin/Audit.tsx` |
-| `audit-export-pack` | 导出审计证据包 | `pages/admin/Audit.tsx` |
+| `audit-export-current` | 审计当前视图导出入口 | `pages/admin/Audit.tsx` |
+| `audit-export-related` | 审计关联视图导出入口 | `pages/admin/Audit.tsx` |
+| `audit-export-pack` | 审计证据包导出 | `pages/admin/Audit.tsx` |
 | `audit-view-tabs` | audit-view-tabs | `pages/admin/Audit.tsx` |
 | `audit-tab-turns` | audit-tab-turns | `pages/admin/Audit.tsx` |
 | `audit-tab-calls` | audit-tab-calls | `pages/admin/Audit.tsx` |
@@ -1307,6 +1308,7 @@
 | `agent-token-list` | Agent 详情 Token 列表 | `pages/admin/AgentDetail.tsx` |
 | `agent-token-row-${token.label}` | Agent Token 行（模板） | `pages/admin/AgentDetail.tsx` |
 | `audit-turn-meta-card` | 问询详情元信息卡 | `pages/admin/Audit.tsx` |
+| `audit-export-inquiry-pack` | 导出问询与调用 | `pages/admin/Audit.tsx` |
 | `audit-call-inferred-turn-id-${entry.id}` | 调用流水推断问询 ID 链接（模板） | `pages/admin/Audit.tsx` |
 | `audit-usage-slow-${entry.id}` | 调用流水问询慢标记（模板） | `pages/admin/Audit.tsx` |
 | `usage-call-monitor-link` | 使用视图跳转调用监控 | `pages/admin/GovernanceOverview.tsx` |

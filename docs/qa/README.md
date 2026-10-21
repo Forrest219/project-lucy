@@ -44,6 +44,10 @@ docs/qa/
 
 **不**为 Spider2 新建第四个 `E2E-*` 测试集：装载/MCP/gold → ONBOARD；Agent 抽样 → AGENT。
 
+## 升级功能专项
+
+[升级功能 Checklist](upgrade-feature-checklist.md) 将 14 条客户升级说明映射到可执行桌面浏览器、HTTP/MCP 与支线测试。`npm run e2e:upgrade -- --ktx-bin /absolute/path/to/ktx` 创建隔离实例；结果保留环境边界，不替代客户发布门禁。
+
 ## 选用
 
 见 [`e2e-sop.md`](e2e-sop.md) §2–§3。
