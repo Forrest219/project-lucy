@@ -14,7 +14,7 @@ This directory stores repository-level implementation plans that are not scoped 
 | [2026-10-19-upgrade-e2e-implementation-plan.md](2026-10-19-upgrade-e2e-implementation-plan.md) | **v2.5 需求备忘，待落地，非门禁**：L25-07 的完整方案，覆盖 Docker / K3s / K8s、真实资产、备份恢复、业务与安全连续性；v2.0 仅做交付验证，不修改当前 CI 或发布规则 |
 | `webui/docs/plans/wo-202610-27-engine-catalog-and-mcp-query-connection.md` | **待审阅，未批准**：Spec 176 v0.3。新建连接显式支持 KTX `driver: athena`。v0.2 引擎目录 / MCP 查询连接已撤回 |
 | `webui/docs/plans/wo-202610-26-suspend-deployment-license.md` | **移除激活码（已实现）**：Spec 175 v0.2。删除许可实现与签发脚本，去掉治理台入口。Docker 未在本次重启 |
-| [2026-10-18-lucy-2.5-upgrade-proposal.md](2026-10-18-lucy-2.5-upgrade-proposal.md) | **Lucy 2.5 升级建议（v1.13）**：治理台五项展示改造（L25-01–L25-04、L25-08），另记可选 SMTP、单点登录（L25-05、L25-06）、升级 E2E 自动化（L25-07）、审计运行时增量（L25-09）、Hive 直连（L25-10）、语义资产批量维护（L25-11）、帮助中心优化（L25-12）、升级候选验证环境（L25-13）。不含实现 WO |
+| [2026-10-18-lucy-2.5-upgrade-proposal.md](2026-10-18-lucy-2.5-upgrade-proposal.md) | **Lucy 2.5 升级建议（v1.14）**：治理台五项展示改造（L25-01–L25-04、L25-08），另记可选 SMTP、单点登录（L25-05、L25-06）、升级 E2E 自动化（L25-07）、审计运行时增量（L25-09）、Hive 直连（L25-10）、语义资产批量维护（L25-11）、帮助中心优化（L25-12）、升级候选验证环境（L25-13）、行权限管理（L25-14）。不含实现 WO |
 | `2026-10-18-mcp-audit-serial.md` | **MCP 审计整改串行计划**：D1–D3 已锁定。批次 1 为 Spec 178 / T1，其后 T3、T5、T4、T7、T6、T11、T13、T14、R0–R3、T15 |
 | `2026-10-12-acceptance-gap-closure.md` | **验收缺口修复**：把 SC-15 / SC-19 / SC-20 / SC-23 接到查数路径。工单 `wo-202610-15` |
 | `2026-10-11-customer-log-next-optimizations.md` | **客户日志优化最终版（v1.1，WO-12 已验收）**：P0→P1→P2。Spec 162 v0.3；工单 `wo-202610-12` / `13` / `14` |

@@ -4,7 +4,8 @@
 |---|---|
 | 文档名称 | project-lucy 项目概览 |
 | 文档类型 | Overview |
-| 版本 | v1.21 |
+| 版本 | v1.22 |
+| v1.22 更新 | 2026-10-22，登记 v2.5 L25-14 行权限管理 Spec v0.1-draft（可复用静态行策略模板 + 最终行约束预览 + 行权限视图 + 配置审计）；同步登记行级策略字段绑定存量缺陷 D-03（P1 / open，只登记不修，留 v2.0 线排期）；仅设计草案，验证未执行，暂不开发 |
 | v1.21 更新 | 2026-10-22，登记 v2.5 L25-13 升级候选验证环境实施方案 v0.1；仅规划，暂不开发，不改变客户现场以原地升级为主线的放行方式 |
 | v1.19 更新 | 2026-10-20，登记 v2.5 L25-11 语义资产批量维护 Spec v0.1-draft；仅设计草案，验证未执行，暂不开发 |
 | v1.18 更新 | 2026-10-20，登记 v2.5 L25-10 Hive 直连实施方案；仅规划，暂不开发 |
@@ -158,6 +159,7 @@ Lucy MCP Proxy 监听 `LUCY_PROXY_HOST:LUCY_PROXY_PORT`（默认容器内 `0.0.0
 | Hive 直连（v2.5 L25-10，方案待评审，暂不开发） | [Hive 直连实施方案](../plans/2026-10-20-hive-direct-connection-implementation-plan.md)。Lucy 适配 HiveServer2/JDBC，复用未修改的 KTX Python 语义计算接口；静态接口核查完成，动态验证未执行 |
 | 语义资产批量维护（v2.5 L25-11，P1，草案待评审，暂不开发） | [Spec v0.1-draft](../specs/lucy-20261020-v2p5-semantic-batch-operations-spec.md)。记录运行镜像与源码双基线；Catalog 批量下载 / 校验 / 导入与工作台生效协作，含核心伪代码及 V01–V22 验证矩阵，全部未执行 |
 | 升级候选验证环境（v2.5 L25-13，P1，方案待评审，暂不开发） | [实施方案](../plans/2026-10-22-upgrade-candidate-verification-plan.md)。L25-07「独立恢复验证」的细化：用一致性备份在隔离环境验证候选镜像的迁移正确性与业务/审计连续性，13 条 `RVC-*` 断言全部未执行；原地升级仍是客户现场主线 |
+| 行权限管理（v2.5 L25-14，P1，草案待评审，暂不开发） | [Spec v0.1-draft](../specs/lucy-20261022-v2p5-row-permission-management-spec.md)。可复用静态行策略模板 + 保存前最终行约束预览（角色并集 ∧ 个人行限制）+ 按表反查的行权限视图 + 配置审计；模板编译期摊平为现有 `row_policy` 谓词形状，不产生第二套权限代数；动态 / 按人 / 按 Token 行策略仍按 ADR 冻结；V01–V18 全部未执行 |
 | Lucy 202608 Enterprise Governance & Observability 升级蓝图 | `docs/specs/lucy-202608-reliable-delivery-upgrade-spec.md` |
 | Lucy 202608 升级执行总控 | `docs/specs/lucy-202608-upgrade-execution-control.md` |
 | Lucy 202608 Governance & Observability 差距分析 | `docs/access-control/gap-analysis-202608.md` |

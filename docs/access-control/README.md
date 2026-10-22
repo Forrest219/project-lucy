@@ -37,6 +37,8 @@
 | **P0 实施计划** | [`plans/wo-202608-59-access-control-p0.md`](plans/wo-202608-59-access-control-p0.md) | 可交付开发任务计划 |
 | **WebUI 登录 / Token 失效** | [`design-webui-admin-auth.md`](design-webui-admin-auth.md) · [`plans/wo-202608-62-webui-admin-auth-and-token-expiry.md`](plans/wo-202608-62-webui-admin-auth-and-token-expiry.md) | Token `expires_at` 强制；多管理员本地登录 |
 | 行级策略后续顺序 | [`adr-row-policy-next-iteration.md`](adr-row-policy-next-iteration.md) | 已确认：当前维持静态行级策略；下一次增量候选为可复用静态策略引用；动态数据策略另批 |
+| 行权限管理（v2.5 L25-14） | [`../specs/lucy-20261022-v2p5-row-permission-management-spec.md`](../specs/lucy-20261022-v2p5-row-permission-management-spec.md) v0.1-draft | **待评审，暂不开发**：把 ADR §2.2 的「可复用静态策略引用」落为 v2.5 需求，含最终行约束预览与按表反查视图；不改 Spec 99 / 100 运行时语义，动态策略仍按 §2.3 冻结 |
+| 已登记缺陷（行级策略字段绑定） | [`../qa/security-findings.yaml`](../qa/security-findings.yaml) **D-03（P1 / open）** | **存量缺陷，未修**：大写 schema 的清单文件名按小写化路径查找失败，合法行级字段被判 `row_policy_field_unresolved:unknown`；根因与复现见 L25-14 Spec §1.4。2026-10-22 裁决：只登记不修，留 v2.0 线排期。不得以改成「全部行」绕过 |
 | 实现契约 | [`webui/docs/07-mcp-auth-proxy-spec.md`](../../webui/docs/07-mcp-auth-proxy-spec.md) | Runtime ACL / Proxy（AC-P0 须更新） |
 | Admin 契约 | [`webui/docs/14-agent-admin-enterprise-delivery-spec.md`](../../webui/docs/14-agent-admin-enterprise-delivery-spec.md)、[`15-role-admin-spec.md`](../../webui/docs/15-role-admin-spec.md) | Agent / Role Admin |
 | Role 权限配置结构 | [`webui/docs/150-role-permission-configuration-structure-spec.md`](../../webui/docs/150-role-permission-configuration-structure-spec.md) | Role 详情三个独立编辑面、共享草稿、保存确认 Drawer；不改运行时契约 |
@@ -72,6 +74,7 @@
 | `proposal-access-onboarding-simplification-202609.md` | **待审批**：访问治理「加人 / 开权限」体验简化（意图优先 + 渐进披露；与 Spec 133 顺序裁决） |
 | `integrity-p0-decision.md` | 企业完整性 P0 决策备忘（承诺表 / 已知限制 / 与工程 P0 对齐） |
 | `adr-row-policy-next-iteration.md` | 行级策略后续迭代 ADR；记录静态策略引用与动态数据策略的开工顺序 |
+| `../specs/lucy-20261022-v2p5-row-permission-management-spec.md` | 行权限管理 Spec v0.1-draft（v2.5 L25-14，待评审）；静态策略引用、最终行约束预览、行权限视图与配置审计 |
 | `feasibility-row-acl.SUPERSEDED.md` | **SUPERSEDED**；不得作为实施依据 |
 | `plans/` | 本域 Work Order |
 

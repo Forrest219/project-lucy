@@ -37,6 +37,9 @@
 
 | 文档 | 用途 |
 |---|---|
+| [specs/lucy-20261022-v2p5-row-permission-management-spec.md](specs/lucy-20261022-v2p5-row-permission-management-spec.md) | **设计交付，未实施**：v2.5 L25-14 行权限管理。可复用静态行策略模板、保存前最终行约束预览（角色并集 ∧ 个人行限制）、按表反查的行权限视图与配置审计；不改 Spec 99 / 100 运行时语义，动态行策略仍冻结；V01–V18 全部未执行 |
+| [specs/lucy-20261021-v2p5-help-center-spec.md](specs/lucy-20261021-v2p5-help-center-spec.md) | **设计交付，未实施**：v2.5 L25-12 系统手册帮助中心体验优化；手册三层 IA 派生、分类 / 文章 / 本页目录与归属化搜索 |
+| [specs/lucy-20261020-v2p5-semantic-batch-operations-spec.md](specs/lucy-20261020-v2p5-semantic-batch-operations-spec.md) | **设计交付，未实施**：v2.5 L25-11 语义资产批量维护；Catalog 批量下载 / 校验 / 导入与发布工作台生效协作 |
 | [specs/lucy-20261019-audit-trust-and-admin-investigation-spec.md](specs/lucy-20261019-audit-trust-and-admin-investigation-spec.md) | **设计交付，未实施**：审计可信度与管理员调查增量契约；取消近邻强制补绑、分离身份和归属质量、统一计数与导出范围；关联实施 Plan 和独立验收矩阵 |
 | `specs/ceo-one-report-sow-product-risk-register.md` | CEO 一眼报 SOW 对照下的 Lucy 产品功能风险 register，聚焦 Eval/trace/context/reviewer/observability 等非数据主题能力 |
 | `specs/ceo-one-report-sow-eval-uat-contract.md` | CEO 一眼报 SOW 可信 Eval/UAT contract，冻结 trace、scoring、context evidence、per-case artifact 与验收口径 |

@@ -95,6 +95,33 @@ findings:
     fixedIn: 3260b01
     verifiedBy: [SEC-19]
     acceptedBy: null
+  # D-03 行级策略字段绑定对 Schema Manifest 文件名大小写敏感：大写 schema 下合法列被判 unknown
+  # 现象（2026-10-22 客户环境诊断报告）：角色 finbp_cdn 对 sql_server / BIDM / hs_sy_bu_metric 设置行级条件
+  #   hs_manage_bu_l2 = 'CDN产品'（该列在 SQL Server 物理表与 Lucy 语义模型中均存在），PATCH /api/admin/roles/finbp_cdn
+  #   （dryRun: true）返回 400 / INVALID_ROLE / role_resolution_failed:finbp_cdn:row_policy_field_unresolved:unknown；
+  #   移除行级策略后返回 200。正式角色配置与版本回读未变化，新权限未保存生效。
+  # 根因（已用复现用例证明，非推测）：同一份 Schema Manifest 有两条读取路径，对 schema 名的处理不一致——
+  #   源映射 acl.ts:300 用 normalizeRef(basename) 得到小写化名，但通过 glob("**/_schema/*.yaml") 取磁盘真实文件名，能命中 BIDM.yaml；
+  #   字段目录 webui/server/proxy/row-policy.ts 的 loadPhysicalColumnsFromSchema 用已小写化的 entry.schema 拼路径
+  #   （.../_schema/bidm.yaml），在大小写敏感文件系统上不存在 → 物理列集合为空 → overlay 普通列因不在物理列集合中被丢弃、
+  #   计算列因 isProvenRowLevelExpr 依赖物理列也被丢弃 → catalog.columns 为空 → bindRowPolicyField 判定 unknown。
+  # 影响面：清单文件名保留原始大小写（大写 schema，SQL Server / Oracle 常见）的连接上，该表无法保存任何行级条件；
+  #   开发期不可见——macOS / APFS 默认大小写不敏感，bidm.yaml 能命中 BIDM.yaml；客户环境为 Linux，问题必现。
+  #   仓库既有行策略测试全部使用小写 schema（fin），该路径从未被覆盖。
+  # 处置（2026-10-22 Forrest 裁决）：只登记不修，留给 v2.0 线排期；本次不授权实现。
+  #   修复形态与回归要求见 docs/specs/lucy-20261022-v2p5-row-permission-management-spec.md §5.5 与 V19–V22。
+  #   复现步骤（持久记录于本 note 与 L25-14 Spec §1.4 / §5.5）：用 vitest mock node:fs/promises 的 readFile，使其按大小写敏感语义
+  #   判定文件名是否存在；造一份 _schema/BIDM.yaml（含目标列）与同名 overlay，跑一次带 scoped 行级条件的角色编译；
+  #   同一内容仅清单文件名大小写不同（大写 BIDM.yaml / 小写 bidm.yaml），结果从 row_policy_field_unresolved:unknown 变为可绑定。
+  #   工作副本在 inbox/2026-10-22-行级策略字段绑定诊断/（gitignore，不入库）。
+  #   注意：不得以把行级策略改成「全部行」绕过本条报错——那会放宽数据可见范围。
+  - id: D-03
+    severity: P1
+    status: open
+    spec: "L25-14 §1.4 / §5.5"
+    fixedIn: null
+    verifiedBy: []
+    acceptedBy: null
   # G-01 文档称强制，release workflow 无真实 E2E 依赖（T14）
   # note: T14 代码已交付并有静态契约测试（scripts/gates/customer-release-workflow.test.mjs）：release-package 与每个客户发布分支都经
   #       customer-release-readiness 依赖 real-e2e，客户镜像单架构 amd64、只 promote 已测试 digest、门禁后不重建；demo-e2e / postgres-demo-e2e 已改名为
