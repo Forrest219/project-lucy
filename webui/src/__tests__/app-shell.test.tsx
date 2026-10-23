@@ -178,7 +178,11 @@ beforeEach(() => {
 
 describe("AppFrame shell", () => {
   it("consolidates authenticated footer actions and uses the existing logout flow", async () => {
-    const { fetchMock } = renderAt("/", {
+    // Render on a stable route. "/" is a redirecting route (it canonicalises to
+    // /catalog), and the account menu closes on navigation by design - so the
+    // redirect raced the menu click and the popover was gone before it could be used.
+    // The footer consolidation and the logout flow do not depend on the route.
+    const { fetchMock } = renderAt("/overview", {
       mode: "required", authEnabled: true,
       me: { id: "xingchen", displayName: "星辰", role: "operator", enabled: true, createdAt: null }
     });
