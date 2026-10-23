@@ -72,7 +72,7 @@
 | `reviews/2026-10-21-customer-20260828-v1-to-lucy-2.0-upgrade-plan-review-crosscheck.md` | **已作废**：上述评审的交叉验证过程稿，不得执行。结论已纳入计划 v0.3 |
 | `reviews/2026-10-20-selectdb-hive-catalog-review.md` | SelectDB / Hive 外部 Catalog 与 Lucy 连接接入评审 |
 | `reviews/2026-10-20-upgrade-feature-validation.md` | 升级功能测试验证与复核（14 项功能映射 + 19 条真实用例） |
-| `reviews/2026-10-23-lucy-v2.0-release-readiness-review.md` | **待审阅**：v2.0 合流 main / 开 2.5 线的发版就绪度评审、两项待决策（D1 受保护 runner、D2 版本号）与执行清单 |
+| `reviews/2026-10-23-lucy-v2.0-release-readiness-review.md` | **已审阅**：v2.0 合流 main / 开 2.5 线的发版就绪度评审。D1（受保护 runner）裁定为 **B**：本期不 provisioning，死线为 2.5 首次客户交付前就位；D2（2.5 波次版本号）裁定为 **`2.10.0`**。§4.8–§4.13 记录 CI 恢复后一次性暴露的六项门禁缺陷的根因与修复 |
 
 ## 4. UAT（人工验收用例）→ `uat/`
 
