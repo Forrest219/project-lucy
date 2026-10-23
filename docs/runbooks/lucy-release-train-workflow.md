@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy Release Train Workflow |
 | 文档类型 | Release / Process Spec |
-| 版本 | v0.3 |
-| 撰写日期 | 2026-10-23；v0.2 增补配套评审链接与 §7 待办出处；v0.3 按评审意见修订：§4.1 补 `ktx-upgrade-compat` 注脚、§3.0 补 actionlint 配置与退出码口径、§3.2 补 context 新鲜度前置、§3.3 补 Release 非空壳要求、§7 修正工作区口径 |
+| 版本 | v0.4 |
+| 撰写日期 | 2026-10-23；v0.2 增补配套评审链接与 §7 待办出处；v0.3 按评审意见修订：§4.1 补 `ktx-upgrade-compat` 注脚、§3.0 补 actionlint 配置与退出码口径、§3.2 补 context 新鲜度前置、§3.3 补 Release 非空壳要求、§7 修正工作区口径；v0.4 更正 §3.2 的 context 新鲜度前置条件（推 `lucy-v2.0` 不触发工作流） |
 | 适用范围 | Lucy 2.0 → 2.5 及以后每个版本的分支治理、合并、切线、构建、客户交付与归档 |
 | 配套评审 | [`docs/reviews/2026-10-23-lucy-v2.0-release-readiness-review.md`](../reviews/2026-10-23-lucy-v2.0-release-readiness-review.md)（本版的就绪度评审、待决策项 D1/D2 与执行清单） |
 | 关联 | [`docs/governance/release-ci.md`](../governance/release-ci.md)（CI 门禁定义）· [`docs/governance/version-matrix.md`](../governance/version-matrix.md)（版本与兼容性事实源）· [`docs/runbooks/customer-v2-upgrade-release-checklist.md`](customer-v2-upgrade-release-checklist.md)（客户交付 C01–C20）· [`docs/governance/DEVELOPMENT.md`](../governance/DEVELOPMENT.md)（开发治理）· [`docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md`](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md)（2.5 范围 L25-01–L25-14）· [`docs/plans/2026-10-19-lucy-product-version-2.0.0.md`](../plans/2026-10-19-lucy-product-version-2.0.0.md)（2.0 切线先例） |
@@ -158,7 +158,9 @@ echo "exit=$?"   # 本仓库期望 0
 | Allow deletions | 关 | |
 | Tag protection (`v*`) | 禁止删除 / 禁止移动 | tag 是放行凭据的锚点，移动等于伪造证据 |
 
-> **前置条件（顺序不可调换）：** GitHub 要求 Required checks 的 context 在近期（约一周内）有 check-run 报告，否则该 API 会拒绝。`main` 最后一次 CI 是 2026-10-11，已超出新鲜度窗口。**必须先在 `lucy-v2.0` 上 push 一次拿到绿跑，再执行下面的命令**（见配套评审 §5 阶段一的顺序）。
+> **前置条件（顺序不可调换）：** GitHub 要求 Required checks 的 context 在近期（约一周内）有 check-run 报告，否则该 API 会拒绝。`main` 最后一次 CI 是 2026-10-11，已超出新鲜度窗口。
+>
+> ⚠️ **推 `lucy-v2.0` 拿不到报告。** `on.push.branches` 只含 `main`，推 `lucy-v2.0` 不触发本工作流——此前那些 `lucy-v2.0` 的 "push" run 是工作流文件损坏时 GitHub 无法解析触发条件、被动兜底创建的产物。验证工作流本身可调度要走 PR 的 `pull_request` 事件；若 API 以 "not found in the last 7 days" 拒绝，说明 context 需要在默认分支上有一次报告来刷新，即合并后由 `main` 的 push run 立即刷新，再开保护。
 
 可直接执行（需仓库 admin）：
 
