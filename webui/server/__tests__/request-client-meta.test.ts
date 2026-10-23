@@ -74,7 +74,12 @@ describe("request-client-meta", () => {
       // display-only field, separately from the peer address.
       clientForwardedFor: "198.51.100.2",
       userAgent: "Cursor/1.0",
-      deviceName: "desk"
+      deviceName: "desk",
+      // Spec 173 v0.3 / 2026-10-19 audit-trust / EA-10: the trusted-source
+      // classification travels with the row. Trust proxy is on, but the peer
+      // 10.0.0.1 is not inside LUCY_TRUSTED_PROXY_CIDRS, so the XFF value is
+      // recorded as a forged-XFF attempt: display-only, never an ACL input.
+      trustedSource: "untrusted_peer"
     });
   });
 
