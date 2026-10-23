@@ -73,9 +73,15 @@ function seedAgentJson(run, { asks }) {
       answer: a.answer ?? "",
       // The carrier router binds the ask's policy to a file via `answerPath`. Tests that
       // want per-ask routing to apply to a specific file set the same `answerPath` here
-      // as the test writes to. The default is the canonical client-work path for the
-      // ask's agentId; tests can override by passing `answerPath` in the ask spec.
-      answerPath: a.answerPath ?? `client-work/${a.agentId}/answer.json`,
+      // as the test writes to.
+      //
+      // There is deliberately NO default answerPath. The router falls back to the global
+      // canary union when no ask in the map carries one - that fallback is the documented
+      // pre-B5-producer behaviour and the one most fixtures rely on. A default of
+      // `client-work/<agentId>/answer.json` would make every ask look bound, disable the
+      // fallback, and leave every file the router does not claim UNRESOLVED - so a clean
+      // server log would fail the carrier case on a synthetic router-unresolved hit.
+      ...(a.answerPath ? { answerPath: a.answerPath } : {}),
       bindingProblems: []
     })),
     assertions: [], artifacts: []
