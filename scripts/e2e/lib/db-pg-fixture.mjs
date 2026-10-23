@@ -13,7 +13,8 @@
 //        - the password files mounted read-only,
 //        - the password set via POSTGRES_PASSWORD_FILE (not on the command line),
 //      so the producer can connect with the per-run owner / reader password;
-//   4. Waits for the database to accept queries (one POSTGRES_READY probe);
+//   4. Waits for the database to accept queries - inside the container AND over
+//      the published host TCP port the contract connects through;
 //   5. Returns a handle the test can pass to applySyntheticDbSeed;
 //   6. On `cleanup()`, stops AND removes ONLY the container it started — never
 //      any other container, never any pre-existing lucy-e2e-* container.
@@ -140,11 +141,51 @@ async function waitForReady(bin, containerName, port, ownerPassword, timeoutMs =
       capture: true,
       env: { PGPASSWORD_FILE: "/run/secrets/owner.password", PGPASSWORD: ownerPassword }
     }).catch((error) => ({ status: -1, stdout: "", stderr: error?.message ?? String(error) }));
-    if (probe.status === 0 && /^\s*1\s*$/.test(probe.stdout)) return { ok: true };
-    lastError = `${probe.status} ${probe.stderr || probe.stdout}`;
+    if (probe.status === 0 && /^\s*1\s*$/.test(probe.stdout)) {
+      // The container answering a query is not enough: the contract connects
+      // from the HOST over the published TCP port, and that path can still be
+      // closed while the container itself is up (the published port is wired up
+      // after the entrypoint starts the server). Probing only inside the
+      // container let the first host-side connection die with "Connection
+      // terminated unexpectedly" and failed the suite at random. Probe the same
+      // path the caller will use before declaring the fixture ready.
+      const hostProbe = await probeFromHost(port, ownerPassword);
+      if (hostProbe.ok) return { ok: true };
+      lastError = hostProbe.reason;
+    } else {
+      lastError = `${probe.status} ${probe.stderr || probe.stdout}`;
+    }
     await new Promise((resolve) => setTimeout(resolve, 1_000));
   }
   return { ok: false, reason: `postgres:16-alpine did not accept queries within ${timeoutMs}ms (last error: ${lastError ?? "unknown"})` };
+}
+
+/**
+ * Probe the host-published TCP port with the same driver the contract uses.
+ * If the `pg` driver is unavailable the probe is skipped rather than failing
+ * the fixture - the contract is portable and the integration step is
+ * environment-bound.
+ */
+async function probeFromHost(port, ownerPassword) {
+  const mod = await import("pg").catch(() => null);
+  if (!mod) return { ok: true, reason: "pg driver unavailable; skipped the host-side probe" };
+  const { Client } = mod;
+  const client = new Client({
+    host: "127.0.0.1",
+    port,
+    database: "postgres",
+    user: OWNER_NAME,
+    password: ownerPassword
+  });
+  try {
+    await client.connect();
+    const res = await client.query("SELECT 1");
+    return res.rows?.length ? { ok: true } : { ok: false, reason: "host-side probe returned no rows" };
+  } catch (error) {
+    return { ok: false, reason: `host-side probe failed: ${error?.message ?? String(error)}` };
+  } finally {
+    await client.end().catch(() => undefined);
+  }
 }
 
 function runCommand(command, args, options = {}) {
