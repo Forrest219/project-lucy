@@ -129,6 +129,15 @@ npm run uat:mcp-session -- \
 在访问日志中按证据文件的 `requestIds` 核对调用成功。Doris 复测通过后，结论可标记为
 “客户拓扑已验证修复”。
 
+面向客户交付的完整取证流程（现场自检、指标口径、访问日志核对、与 `ACCEPTANCE.md`
+的衔接）见 [客户环境 MCP Session 修复取证与验收](uat-mcp-session-customer-verification.md)；
+对应的根因、版本对照与升级动作单见
+[客户 MCP Session 400 修复与升级动作单](../runbooks/customer-mcp-session-400-upgrade.md)。
+
+度量名与 Demo 契约的 `order_count` / `total_sales` 不同时，用 `--expect-metric` /
+`--expect-value` 断言客户自己的度量；两者都不给时，脚本退化为“响应中必须含至少一个
+数值指标”，用于区分空信封与真实数据。
+
 ## 8. 报告记录
 
 | 项目 | 记录 |

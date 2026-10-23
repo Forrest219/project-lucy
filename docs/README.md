@@ -77,6 +77,8 @@
 | `uat/uat-module2-eval-monitoring.md` | Module 2 Eval 配置与监控人工 UAT 用例 |
 | `uat/uat-mysql-aliyun-data-qa.md` | MySQL Aliyun 数据问答人工 UAT 用例 |
 | `uat/uat-invest-db-data-qa.md` | invest-db 投研夹具的接入与问数 UAT |
+| `uat/uat-mcp-session-regression.md` | MCP Session 回归 UAT：代理持有上游会话后的无会话标识取数验证 |
+| `uat/uat-mcp-session-customer-verification.md` | 客户环境 MCP Session 修复取证与验收（可交付证明材料；配套 `runbooks/customer-mcp-session-400-upgrade.md`） |
 
 ## 5. WebUI 现状 → `webui/`
 
@@ -102,6 +104,7 @@
 | `runbooks/customer-deployment-guide.md` | 端到端客户部署与运维（⚠️ CI release-artifacts 文案引用） |
 | `runbooks/deployment-docker.md` | Docker Compose 细节（⚠️ 同上） |
 | `runbooks/customer-amd64-docker-deploy-runbook.md` | amd64 离线包客户部署 runbook（配套 `specs/lucy-customer-amd64-offline-delivery-spec.md`） |
+| `runbooks/customer-mcp-session-400-upgrade.md` | 客户 MCP Session 400 的根因、版本对照、升级动作单与对外沟通稿（配套 `uat/uat-mcp-session-customer-verification.md`） |
 | `user-guide/`（目录） | 现有 HTML 帮助中心；`user-guide.md` 末尾已显式指向此目录，两者是同一主题的 Markdown 摘要 + HTML 详情，非命名冲突 |
 
 ## 7. 发布 / 版本 / 测试门禁 → `governance/`

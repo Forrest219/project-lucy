@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy Product Docs Index |
 | 文档类型 | Product Docs Index |
-| 版本 | v0.6 |
-| 撰写日期 | 2026-06-22；2026-07-06 v0.3；2026-07-24 v0.4（新增 WebUI 模块设计规范索引）；2026-07-26 v0.5（新增 WebUI 部署/连接体验升级 spec）；2026-09-29 v0.6（索引 Agent Live Report 设计） |
+| 版本 | v0.7 |
+| 撰写日期 | 2026-06-22；2026-07-06 v0.3；2026-07-24 v0.4（新增 WebUI 模块设计规范索引）；2026-07-26 v0.5（新增 WebUI 部署/连接体验升级 spec）；2026-09-29 v0.6（索引 Agent Live Report 设计）；2026-10-21 v0.7（索引 MCP Session 400 升级动作单与客户环境取证验收） |
 | 适用范围 | 客户交付文档、管理员文档、用户文档、Agent 接入文档 |
 
 ## 1. Customer-Facing Guides
@@ -36,6 +36,8 @@ Lucy 的正式产品定位是 **data agent context compiler + governed MCP runti
 | `docs/runbooks/customer-deployment-guide.md` | End-to-end customer deployment, headless config package, operations |
 | `docs/customer-deployer-quickstart.md` | Minimal customer installer guide for Docker deployment, Doris validation, and future `customer-config` maintenance |
 | `docs/runbooks/customer-k8s-deployer-quickstart.md` | Minimal Helm installer guide for single-replica K8s deployment, Doris validation, persistence, and rollback |
+| `docs/runbooks/customer-mcp-session-400-upgrade.md` | MCP Session 400 root cause, version comparison, upgrade action sheet and customer-facing brief |
+| `docs/uat/uat-mcp-session-customer-verification.md` | Customer-environment evidence capture and acceptance for the MCP Session fix |
 | `docs/customer-ops-deployment-runbook.md` | Customer operations manager deployment, acceptance, monitoring, load-test evidence, rollback, and incident runbook |
 | `docs/runbooks/deployment-docker.md` | Docker Compose details and `customer-config/` bind mount |
 | `docs/governance/release-ci.md` | Release CI and KTX upgrade gates |
