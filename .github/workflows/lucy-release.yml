@@ -104,6 +104,12 @@ jobs:
       - run: npm ci
       - run: npm ci
         working-directory: webui
+      # p0-smoke runs the WebUI suite and the WebUI server with cwd=webui, and
+      # findProjectRoot() walks up from there looking for ktx.yaml. The file is
+      # gitignored (it is environment-specific), so a clean CI checkout has no
+      # project root and every WebUI test that resolves one fails with
+      # PROJECT_NOT_FOUND. Same materialisation as spec-and-webui above.
+      - run: cp ktx.yaml.example ktx.yaml
       - run: npm run smoke:p0:docker
 
   k8s-static:
