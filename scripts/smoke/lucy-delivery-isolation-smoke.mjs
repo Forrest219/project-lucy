@@ -252,8 +252,15 @@ export function checkImageDenylist(imageTag) {
   const result = spawnSync(
     "docker",
     ["run", "--rm", "--entrypoint", "sh", imageTag, "-c", script],
-    { encoding: "utf8" }
+    // A bounded probe: an unbounded `docker run` turns a wedged daemon or a
+    // stuck container into a silent gate hang instead of a diagnosable failure.
+    { encoding: "utf8", timeout: 5 * 60_000 }
   );
+  if (result.error) {
+    throw new Error(
+      `image ${imageTag} delivery denylist probe failed before completing: ${result.error.message}`
+    );
+  }
   if (result.status !== 0) {
     throw new Error(
       `image ${imageTag} failed delivery denylist (exit ${result.status}): ${result.stderr || result.stdout || ""}`
