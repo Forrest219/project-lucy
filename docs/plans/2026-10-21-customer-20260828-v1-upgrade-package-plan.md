@@ -6,7 +6,7 @@
 | 文档类型 | Implementation Plan |
 | 版本 | v0.1 |
 | 撰写日期 | 2026-10-21 |
-| 状态 | 执行中：第 3 节已纳入本次提交。候选包在原生 amd64 的 G4/G4b 与 v0.3 P0-3 至 P0-6 完成前不交给客户 |
+| 状态 | 候选包已生成（20261021-r7，镜像 a93880e）。Mac 上 G1–G4b 与 G8 已通过。交给客户前仍须在原生 amd64 完成 v0.3 P0-3 至 P0-6。productionReady 仍为 false |
 | 适用范围 | 为现役 `lucy-k8s-integration-20260828-v1`（无登录、无管理员、已有 https 域名）生成一次 Lucy 2.0 候选交付：linux/amd64 镜像、私有引导密钥附件、随包文档 |
 | 关联 | [升级计划 v0.3](2026-10-21-customer-20260828-v1-to-lucy-2.0-upgrade-plan.md) 仍是升级验收合同。本计划只实现供方出包。现场维护窗口、恢复演练和 `productionReady` 仍按 v0.3 的 P0-3 至 P0-6。引导密钥规则见 [出包时配套生成引导密钥](2026-10-20-build-time-bootstrap-credential-plan.md) |
 

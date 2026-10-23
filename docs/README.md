@@ -68,6 +68,10 @@
 | `reviews/review-module1-agent-permissions.md` | **跳转桩** → `access-control/review-agent-permissions-v1.md` |
 | `reviews/review-module2-eval-monitoring.md` | Module 2 Eval 配置与监控代码审查 |
 | `reviews/review-ktx-llm-switch-to-minimax.md` | KTX LLM Backend 切换 Claude Code → MiniMax 结论 |
+| `reviews/2026-10-21-customer-20260828-v1-to-lucy-2.0-upgrade-plan-review.md` | **已作废**：v0.2 计划的评审过程稿，不得执行。结论已纳入计划 v0.3 |
+| `reviews/2026-10-21-customer-20260828-v1-to-lucy-2.0-upgrade-plan-review-crosscheck.md` | **已作废**：上述评审的交叉验证过程稿，不得执行。结论已纳入计划 v0.3 |
+| `reviews/2026-10-20-selectdb-hive-catalog-review.md` | SelectDB / Hive 外部 Catalog 与 Lucy 连接接入评审 |
+| `reviews/2026-10-20-upgrade-feature-validation.md` | 升级功能测试验证与复核（14 项功能映射 + 19 条真实用例） |
 
 ## 4. UAT（人工验收用例）→ `uat/`
 
@@ -134,6 +138,8 @@
 |---|---|
 | `plans/README.md` | 仓库级 plan 索引 |
 | `plans/2026-10-22-upgrade-candidate-verification-plan.md` | 升级候选验证环境实施方案 v0.1（v2.5 L25-13，待落地、非门禁；用一致性备份在隔离环境验证候选镜像的迁移正确性与业务/审计连续性；原地升级仍为客户现场主线） |
+| `plans/2026-10-21-customer-20260828-v1-upgrade-package-plan.md` | 20260828-v1 客户升级包生成计划 v0.1（待确认；镜像、引导密钥、随包文档；验收前不交给客户） |
+| `plans/2026-10-21-customer-20260828-v1-to-lucy-2.0-upgrade-plan.md` | 客户 20260828-v1 → Lucy 2.0 升级计划 v0.3（未执行；r6 不是放行包；评审过程稿已作废） |
 | `plans/2026-10-12-acceptance-gap-closure.md` | 验收缺口修复：SC-15 / SC-19 / SC-20 / SC-23 接到查数路径，工单 WO-202610-15 |
 | `plans/2026-10-11-customer-log-next-optimizations.md` | 客户日志优化最终版 v1.1；Spec 162 v0.3，WO-12 已验收 |
 | `plans/2026-10-11-eval-module-functional-upgrade.md` | Eval 模块产品能力 v0.4；评审看 Spec 161 与工单 `webui/docs/plans/wo-202610-11-offline-eval-customer-ops.md` |
