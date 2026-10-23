@@ -46,8 +46,7 @@ function read(...parts) {
   return readFileSync(path.join(contentRootAbs, ...parts), "utf8");
 }
 
-function readYaml(check, ...parts) {
-  const file = path.join(contentRootAbs, ...parts);
+function readYaml(check, file) {
   try {
     return parse(readFileSync(file, "utf8")) ?? {};
   } catch (error) {
@@ -113,11 +112,19 @@ function requiredLayout() {
 
 function checkKtxYaml() {
   const check = "ktx-yaml";
-  if (!exists("ktx.yaml")) {
-    fail(check, `${rel(path.join(configRoot, "ktx.yaml"))} is missing`);
+  // ktx.yaml is a project-root file. The A2/M31 content-root migration moved the
+  // four content dirs under <root>/config and changed the default
+  // LUCY_CONTENT_ROOT from "." to "./config", but ktx.yaml stayed beside .ktx/,
+  // .ktx-ui/ and webui/config/ - the same place requiredLayout() checks it and
+  // the same place the customer compose override mounts as the Lucy project
+  // root. Resolving it against contentRootAbs would look for config/ktx.yaml
+  // and report a file that is present as missing.
+  const ktxPath = path.join(configRoot, "ktx.yaml");
+  if (!existsSync(ktxPath)) {
+    fail(check, `${rel(ktxPath)} is missing`);
     return;
   }
-  const doc = readYaml(check, "ktx.yaml");
+  const doc = readYaml(check, ktxPath);
   if (!doc) return;
   const connections = doc.connections && typeof doc.connections === "object" ? doc.connections : {};
   const entries = Object.entries(connections);
