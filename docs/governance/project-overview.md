@@ -4,7 +4,8 @@
 |---|---|
 | 文档名称 | project-lucy 项目概览 |
 | 文档类型 | Overview |
-| 版本 | v1.22 |
+| 版本 | v1.23 |
+| v1.23 更新 | 2026-10-23，同步差异化主张（口径、权限、语境是模型之外的资产）与 vision.md §1.2 的自建 / 外购判据、差异化边界、衡量口径引用；仅定位与文档口径同步，不改变能力边界与交付状态 |
 | v1.22 更新 | 2026-10-22，登记 v2.5 L25-14 行权限管理 Spec v0.1-draft（可复用静态行策略模板 + 最终行约束预览 + 行权限视图 + 配置审计）；同步登记行级策略字段绑定存量缺陷 D-03（P1 / open，只登记不修，留 v2.0 线排期）；仅设计草案，验证未执行，暂不开发 |
 | v1.21 更新 | 2026-10-22，登记 v2.5 L25-13 升级候选验证环境实施方案 v0.1；仅规划，暂不开发，不改变客户现场以原地升级为主线的放行方式 |
 | v1.20 更新 | 2026-10-21，新增数据库支持矩阵（`docs/governance/database-support-matrix.md`）作为数据库支持状态唯一真源；本文件「数据库接入」能力行改为引用它 |
@@ -14,6 +15,8 @@
 | 适用范围 | 新成员 onboarding、模块索引、当前能力边界 |
 
 project-lucy 是面向中小企业的 **data agent context compiler + governed MCP runtime**。它把数据库、BI、文档、人工口径编译成 Agent 可安全使用、可审计、可回归的数据服务；底座为 KTX 语义层、wiki、eval cases、skills、Lucy MCP Proxy 和 Lucy WebUI 治理工作台。
+
+差异化主张：**口径、权限、语境是模型之外的资产，模型换代它们不变**。企业 Agent 正从 frontier 闭源模型迁到微调后的开源小模型，差异不在模型本身，而在业务逻辑与企业集成；Lucy 把「这家企业的业务逻辑」沉淀为可执行、可授权、可审计、可回归的外部资产。完整定位、自建 / 外购判据、差异化边界与衡量口径见 [`docs/governance/vision.md`](vision.md) §1.2。
 
 Lucy 自身不直接生成分析结论或回答问题；语义问答由 Claude Code / Codex / Hermes / Cursor 等 Agent 通过 Lucy 提供的受治理 MCP 能力完成。面向产品化交付，用户通过 Docker 部署 Lucy，接入数据库，维护客户 context package，并在 agents 平台配置 MCP endpoint/token 接入数据能力。该目标的验收合同见 `docs/specs/lucy-platform-goal-checklist.md`。
 
