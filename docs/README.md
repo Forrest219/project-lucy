@@ -72,6 +72,7 @@
 | `reviews/2026-10-21-customer-20260828-v1-to-lucy-2.0-upgrade-plan-review-crosscheck.md` | **已作废**：上述评审的交叉验证过程稿，不得执行。结论已纳入计划 v0.3 |
 | `reviews/2026-10-20-selectdb-hive-catalog-review.md` | SelectDB / Hive 外部 Catalog 与 Lucy 连接接入评审 |
 | `reviews/2026-10-20-upgrade-feature-validation.md` | 升级功能测试验证与复核（14 项功能映射 + 19 条真实用例） |
+| `reviews/2026-10-23-lucy-v2.0-release-readiness-review.md` | **待审阅**：v2.0 合流 main / 开 2.5 线的发版就绪度评审、两项待决策（D1 受保护 runner、D2 版本号）与执行清单 |
 
 ## 4. UAT（人工验收用例）→ `uat/`
 
@@ -109,6 +110,7 @@
 | `runbooks/deployment-docker.md` | Docker Compose 细节（⚠️ 同上） |
 | `runbooks/customer-amd64-docker-deploy-runbook.md` | amd64 离线包客户部署 runbook（配套 `specs/lucy-customer-amd64-offline-delivery-spec.md`） |
 | `runbooks/customer-mcp-session-400-upgrade.md` | 客户 MCP Session 400 的根因、版本对照、升级动作单与对外沟通稿（配套 `uat/uat-mcp-session-customer-verification.md`） |
+| `runbooks/lucy-release-train-workflow.md` | 发版列车流程：分支模型、版本切线、合流与交付阶段、门禁矩阵、回滚 |
 | `user-guide/`（目录） | 现有 HTML 帮助中心；`user-guide.md` 末尾已显式指向此目录，两者是同一主题的 Markdown 摘要 + HTML 详情，非命名冲突 |
 
 ## 7. 发布 / 版本 / 测试门禁 → `governance/`
