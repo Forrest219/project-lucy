@@ -7,6 +7,11 @@ import path from "node:path";
 
 const args = new Set(process.argv.slice(2));
 const runDocker = args.has("--docker");
+// The WebUI suite is the job of the spec-and-webui gate. The docker-smoke CI
+// job depends on spec-and-webui, so the suite has already run and passed by
+// the time this gate starts - running it a second time only doubles the
+// chance of a load-sensitive suite flake turning into a red release train.
+const skipWebuiSuite = args.has("--skip-webui-suite");
 const expectedKtxVersion = process.env.LUCY_EXPECTED_KTX_VERSION ?? "0.16.0";
 let tempDockerConfig;
 let defaultDockerConfig;
@@ -172,7 +177,11 @@ async function localSmoke() {
   await run("npm", ["run", "lint:spec"], { timeoutMs: 10 * 60_000 });
   await run("npm", ["run", "smoke:p0:delivery-isolation"], { timeoutMs: 10 * 60_000 });
   await run("npm", ["run", "build"], { cwd: "webui", timeoutMs: 15 * 60_000 });
-  await run("npm", ["test"], { cwd: "webui", timeoutMs: 25 * 60_000 });
+  if (skipWebuiSuite) {
+    console.log("[p0-smoke] skipping the WebUI suite (--skip-webui-suite): spec-and-webui owns it");
+  } else {
+    await run("npm", ["test"], { cwd: "webui", timeoutMs: 25 * 60_000 });
+  }
   await run("bash", ["-n", "scripts/runtime/docker-entrypoint.sh", "scripts/runtime/docker-healthcheck.sh"], { timeoutMs: 2 * 60_000 });
   await run("npm", ["run", "smoke:p0:docker-entrypoint:test"], { timeoutMs: 10 * 60_000 });
   await run("npm", ["run", "smoke:p0:docker-healthcheck:test"], { timeoutMs: 10 * 60_000 });

@@ -114,7 +114,10 @@ jobs:
       # project root and every WebUI test that resolves one fails with
       # PROJECT_NOT_FOUND. Same materialisation as spec-and-webui above.
       - run: cp ktx.yaml.example ktx.yaml
-      - run: npm run smoke:p0:docker
+      # The WebUI suite is spec-and-webui's job and this job depends on it, so
+      # the suite has already run and passed here. Running it a second time
+      # only doubles the chance of a load-sensitive flake reddening the train.
+      - run: npm run smoke:p0:docker -- --skip-webui-suite
 
   k8s-static:
     runs-on: ubuntu-latest

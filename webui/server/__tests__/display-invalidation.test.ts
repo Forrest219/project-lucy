@@ -142,6 +142,10 @@ describe("Spec 174 T3 — invalidation matrix (DI-01..15/18)", () => {
   });
 
   it("DI-01 barriers open before the write and close after it, with or without audit; wiki writes do not touch D/P", async () => {
+    // The reconciler's file watcher bumps the D generation asynchronously, so
+    // the delta would depend on whether the watcher had fired before the
+    // measurement. This case is about the write barriers, not the watcher.
+    stopDisplayReconciler();
     const seen: Array<{ pending: boolean }> = [];
     const off = onDisplayGenerationChange(() => seen.push({ pending: hasPendingDisplayWrite(["D"]) }));
     const before = displayGenerations();
