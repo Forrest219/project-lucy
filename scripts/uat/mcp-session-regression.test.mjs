@@ -12,15 +12,20 @@ import {
 
 const SESSION_ERROR = "MCP initialize request is required before session traffic.";
 
-async function startStub({ rejectMissingSession = false } = {}) {
+async function startStub({ rejectMissingSession = false, queryMetrics, catalogSources } = {}) {
   const calls = [];
   const sockets = new Set();
   let initializeCount = 0;
+  const metrics = queryMetrics ?? { headers: ["order_count", "total_sales"], rows: [[1000, 1459476.0953]] };
+  const sources = catalogSources ?? [{ connectionId: "demo-mysql", sourceName: "superstore_orders" }];
   const server = http.createServer(async (req, res) => {
     let raw = "";
     for await (const chunk of req) raw += chunk.toString();
     const body = raw ? JSON.parse(raw) : undefined;
     const toolName = body?.params?.name;
+    const toolArgs = body?.params?.arguments ?? {};
+    const askedSource = toolArgs.sourceName ?? "superstore_orders";
+    const askedConnection = toolArgs.connectionId ?? "demo-mysql";
     calls.push({
       method: req.method,
       rpcMethod: body?.method,
@@ -70,7 +75,7 @@ async function startStub({ rejectMissingSession = false } = {}) {
         result: {
           content: [{
             type: "text",
-            text: JSON.stringify({ sources: [{ connectionId: "demo-mysql", sourceName: "superstore_orders" }] })
+            text: JSON.stringify({ sources })
           }]
         }
       }));
@@ -81,7 +86,7 @@ async function startStub({ rejectMissingSession = false } = {}) {
       res.end(JSON.stringify({
         jsonrpc: "2.0",
         id: body.id,
-        result: { content: [{ type: "text", text: "superstore_orders order_count active_rows" }] }
+        result: { content: [{ type: "text", text: `${askedSource} order_count active_rows` }] }
       }));
       return;
     }
@@ -92,8 +97,8 @@ async function startStub({ rejectMissingSession = false } = {}) {
         id: body.id,
         result: {
           structuredContent: {
-            headers: ["order_count", "total_sales"],
-            rows: [[1000, 1459476.0953]]
+            headers: metrics.headers,
+            rows: metrics.rows
           }
         }
       }));
@@ -138,6 +143,99 @@ test("parseArgs supports the UAT contract and rejects missing values", () => {
   assert.equal(parsed.sourceName, "orders");
   assert.equal(parsed.container, undefined);
   assert.throws(() => parseArgs(["node", "script", "--proxy-url"]), /requires a value/);
+});
+
+test("parseArgs reads the non-demo metric expectations", () => {
+  const parsed = parseArgs([
+    "node",
+    "mcp-session-regression.mjs",
+    "--connection-id", "doris",
+    "--source-name", "dm_uid_rven",
+    "--measure", "dm_uid_rven.revenue",
+    "--expect-metric", "revenue",
+    "--expect-value", "revenue=42.5",
+    "--expect-value", "rows=7"
+  ]);
+  assert.deepEqual(parsed.expectMetrics, ["revenue"]);
+  assert.deepEqual(parsed.expectValues, [
+    { name: "revenue", value: 42.5 },
+    { name: "rows", value: 7 }
+  ]);
+  assert.throws(() => parseArgs(["node", "script", "--expect-value", "revenue"]), /<name>=<number>/);
+  assert.throws(() => parseArgs(["node", "script", "--expect-value", "revenue=abc"]), /<name>=<finite number>/);
+});
+
+test("a non-demo source asserts its own metric names, and a wrong value fails", async () => {
+  const stub = await startStub({
+    queryMetrics: { headers: ["revenue"], rows: [[42.5]] },
+    catalogSources: [{ connectionId: "doris", sourceName: "dm_uid_rven" }]
+  });
+  const temp = await mkdtemp(path.join(os.tmpdir(), "lucy-session-uat-metric-"));
+  try {
+    const evidence = await runSessionUat({
+      proxyUrl: stub.url,
+      tokenEnv: "LUCY_UAT_TEST_TOKEN",
+      token: "uat-token",
+      connectionId: "doris",
+      sourceName: "dm_uid_rven",
+      measures: ["dm_uid_rven.revenue"],
+      expectMetrics: ["revenue"],
+      expectValues: [{ name: "revenue", value: 42.5 }],
+      out: path.join(temp, "evidence.json"),
+      container: undefined,
+      timeoutMs: 5_000
+    });
+    assert.equal(evidence.status, "pass");
+    const queryCheck = evidence.checks.find((item) => item.name === "query_without_session");
+    assert.equal(queryCheck.metrics.revenue, 42.5);
+    assert.deepEqual(evidence.target.expectedMetrics, ["revenue"]);
+
+    await assert.rejects(
+      runSessionUat({
+        proxyUrl: stub.url,
+        tokenEnv: "LUCY_UAT_TEST_TOKEN",
+        token: "uat-token",
+        connectionId: "doris",
+        sourceName: "dm_uid_rven",
+        measures: ["dm_uid_rven.revenue"],
+        expectValues: [{ name: "revenue", value: 43 }],
+        out: path.join(temp, "evidence-wrong.json"),
+        container: undefined,
+        timeoutMs: 5_000
+      }),
+      /revenue expected 43, got 42.5/
+    );
+  } finally {
+    await stub.close();
+    await rm(temp, { recursive: true, force: true });
+  }
+});
+
+test("a non-demo source without expectations still proves data came back", async () => {
+  const stub = await startStub({
+    queryMetrics: { headers: ["revenue"], rows: [[42.5]] },
+    catalogSources: [{ connectionId: "doris", sourceName: "dm_uid_rven" }]
+  });
+  const temp = await mkdtemp(path.join(os.tmpdir(), "lucy-session-uat-generic-"));
+  try {
+    const evidence = await runSessionUat({
+      proxyUrl: stub.url,
+      tokenEnv: "LUCY_UAT_TEST_TOKEN",
+      token: "uat-token",
+      connectionId: "doris",
+      sourceName: "dm_uid_rven",
+      measures: ["dm_uid_rven.revenue"],
+      out: path.join(temp, "evidence.json"),
+      container: undefined,
+      timeoutMs: 5_000
+    });
+    assert.equal(evidence.status, "pass");
+    const queryCheck = evidence.checks.find((item) => item.name === "query_without_session");
+    assert.equal(queryCheck.metrics.revenue, 42.5);
+  } finally {
+    await stub.close();
+    await rm(temp, { recursive: true, force: true });
+  }
 });
 
 test("black-box UAT omits the first session, validates values, and redacts evidence", async () => {
