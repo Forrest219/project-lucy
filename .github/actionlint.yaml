@@ -1,0 +1,16 @@
+# Configuration for actionlint (https://github.com/rhysd/actionlint).
+#
+# Why this file exists: `real-e2e` runs on a protected self-hosted runner. Its labels are custom to this
+# repository, so actionlint reports them as "unknown" and exits non-zero. That makes the P0-2 gate
+# unusable — a naive `actionlint || exit 1` pre-push hook would block every push on two findings that
+# are not defects.
+#
+# Declaring the labels here makes both the output and the exit code honest: any remaining finding is a
+# real problem with the workflow file.
+#
+# `config-variables` is intentionally left unset (default null = no strict check) so that adding a new
+# `vars.*` reference to the workflow does not require updating this file.
+self-hosted-runner:
+  labels:
+    - lucy-protected
+    - amd64

@@ -351,7 +351,6 @@ jobs:
       # are not part of the required pair, so the legacy OPENAI_API_KEY / CURSOR_API_KEY wiring is removed.
       ANTHROPIC_API_KEY: ${{ secrets.LUCY_E2E_ANTHROPIC_API_KEY }}
       OPENCLAW_API_KEY: ${{ secrets.LUCY_E2E_OPENCLAW_API_KEY }}
-      LUCY_EVIDENCE_SIGNING_KEY_FILE: ${{ runner.temp }}/evidence-signing-key.pem
       LUCY_REAL_E2E_CAPABILITIES: ${{ vars.LUCY_E2E_CAPABILITIES }}
     steps:
       - uses: actions/checkout@v4
@@ -472,6 +471,10 @@ jobs:
       - name: Verify, then archive and sign (scan -> hash -> verify -> sign)
         env:
           SIGNING_KEY: ${{ secrets.LUCY_EVIDENCE_SIGNING_KEY }}
+          # Step-scoped on purpose: the `runner` context is not available in a job-level
+          # `env` block, and a job-level use makes GitHub reject the entire workflow file
+          # at load time (all jobs vanish; the run fails in 0s as a "workflow file issue").
+          LUCY_EVIDENCE_SIGNING_KEY_FILE: ${{ runner.temp }}/evidence-signing-key.pem
         run: |
           set -euo pipefail
           printf '%s' "${SIGNING_KEY}" > "${LUCY_EVIDENCE_SIGNING_KEY_FILE}"
