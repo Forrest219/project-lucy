@@ -7,18 +7,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { invalidateContentPathsCache } from "../paths";
 
 const testState = vi.hoisted(() => ({
-  projectRoot: "",
   writeLogMock: vi.fn(() => Promise.resolve()),
   writeAccessLogSourcesMock: vi.fn(() => Promise.resolve()),
   isTokenRevokedMock: vi.fn(() => false),
   recordMcpToolsCallMock: vi.fn(() => ({ callEventId: 1, policyEventId: 2 }))
 }));
 
-vi.mock("../project.js", async (importOriginal) => ({
-  ...await importOriginal<typeof import("../project.js")>(),
-  resolveProjectRoot: vi.fn(() => testState.projectRoot)
-}));
-
+// The project root is redirected through `KTX_PROJECT_ROOT` instead of
+// `vi.mock("../project.js")`: the module mock never reaches the static import
+// inside `proxy/identity.ts`, so `access.yaml` would be read from the real
+// repository instead of this test's temporary project. `resolveProjectRoot`
+// honours the env override for every consumer (identity, paths, acl).
 vi.mock("../proxy/audit.js", () => ({
   isTokenRevoked: testState.isTokenRevokedMock,
   writeLog: testState.writeLogMock,
@@ -98,6 +97,7 @@ const SCHEMA_YAML = `tables:
 `;
 
 let projectRoot: string;
+let previousProjectRoot: string | undefined;
 let previousContentRoot: string | undefined;
 
 async function makeProject() {
@@ -118,7 +118,8 @@ beforeEach(async () => {
   testState.recordMcpToolsCallMock.mockClear();
   testState.recordMcpToolsCallMock.mockReturnValue({ callEventId: 1, policyEventId: 2 });
   projectRoot = await makeProject();
-  testState.projectRoot = projectRoot;
+  previousProjectRoot = process.env.KTX_PROJECT_ROOT;
+  process.env.KTX_PROJECT_ROOT = projectRoot;
   previousContentRoot = process.env.LUCY_CONTENT_ROOT;
   process.env.LUCY_CONTENT_ROOT = ".";
   invalidateContentPathsCache();
@@ -126,10 +127,11 @@ beforeEach(async () => {
 
 afterEach(async () => {
   invalidateContentPathsCache();
+  if (previousProjectRoot === undefined) delete process.env.KTX_PROJECT_ROOT;
+  else process.env.KTX_PROJECT_ROOT = previousProjectRoot;
   if (previousContentRoot === undefined) delete process.env.LUCY_CONTENT_ROOT;
   else process.env.LUCY_CONTENT_ROOT = previousContentRoot;
   await rm(projectRoot, { recursive: true, force: true });
-  testState.projectRoot = "";
 });
 
 describe("MCP proxy ACL enforcement", () => {
