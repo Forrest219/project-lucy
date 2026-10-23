@@ -95,6 +95,10 @@ jobs:
   docker-smoke:
     runs-on: ubuntu-latest
     needs: spec-and-webui
+    # Bound the gate. Without this the job inherits the 360-minute default and a
+    # hang blocks the release train for six hours with no diagnosable failure.
+    # The legitimate path is ~25 min (two cold image builds + compose + probes).
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
