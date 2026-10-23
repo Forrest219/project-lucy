@@ -57,7 +57,13 @@ describe("scope restatement instructions (SC-25)", () => {
     expect(allowed.action).toBe("allow");
 
     // The proxy's query path never inspects a confirmation field.
+    //
+    // The check is scoped to the latch identifiers on purpose. `confirmed` is also the
+    // audit association status enum (Spec 173 / L25-09) and `confirmation` appears in the
+    // runtime instruction prose - neither is a latch, and a bare grep for the word flags
+    // both. A latch would have to name itself, so the identifiers are what matters; the
+    // boolean form is still caught so a `confirmed: true` gate cannot sneak back in.
     const source = await readFile(path.join(process.cwd(), "server", "proxy", "mcp-proxy.ts"), "utf8");
-    expect(source).not.toMatch(/confirmed|confirmation_required|awaiting_confirmation/);
+    expect(source).not.toMatch(/confirmation_required|awaiting_confirmation|confirmationState|\bconfirmed\s*[:=]\s*(?:true|false)\b/);
   });
 });
