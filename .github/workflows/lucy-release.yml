@@ -118,6 +118,17 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
+      # scripts/gates/preflight-upgrade-lib.mjs resolves the YAML parser from webui/node_modules/yaml
+      # (the customer container path), so the webui dependencies must be installed in this job too.
+      # Without them the gate library throws before it can print, and the negative contract tests
+      # fail on an empty stdout instead of on a real defect.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: webui/package-lock.json
+      - run: npm ci
+        working-directory: webui
       - run: npm run gate:k8s-static
       - run: npm run test:k8s-delivery-package
       - run: npm run test:k8s-gate-negative
