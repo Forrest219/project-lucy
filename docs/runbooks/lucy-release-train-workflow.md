@@ -152,11 +152,20 @@ echo "exit=$?"   # 本仓库期望 0
 |---|---|---|
 | Required status checks | `spec-and-webui`、`docker-smoke`、`k8s-static`、`k8s-upgrade-gate` | 与 release-ci.md §2 建议的必需检查一致；前两项覆盖版本/Spec/安全基线，后两项覆盖交付形态（H1 静态、H3/H4 真实 N-1 升级） |
 | Require branches to be up to date | 开 | 避免用过期基线合并 |
-| Require approvals | ≥1 | 发布主线不允许自审自合 |
+| Require approvals | **0（见下方偏离说明）** | 发布主线本意是不允许自审自合；但本仓库协作者**只有 `Forrest219` 一人**（admin），审批数 ≥1 会让 main **永久死锁**——唯一管理员需要一份自己给不出的审批。增补第二个有写权限的协作者后，应把审批数提到 ≥1 并保留 `enforce_admins = true` |
 | Restrict pushes | 开 | 只允许维护者可推（即禁止开发者直推） |
 | Allow force pushes | 关 | |
 | Allow deletions | 关 | |
 | Tag protection (`v*`) | 禁止删除 / 禁止移动 | tag 是放行凭据的锚点，移动等于伪造证据 |
+
+> **偏离说明（2026-10-24 实际执行）：** 仓库协作者只有 `Forrest219`（admin），故实际下发的是
+> `required_approving_review_count = 0` + `enforce_admins = true`。这样四项 Required checks、
+> 禁直推、禁 force push、禁删除**对管理员同样强制**，而不会因为「需要一份无法产生的审批」把
+> main 锁死。**这是能力受限下的折中，不是「允许自审自合」的追认**——审批门待增补第二个协作者
+> 后立即恢复。
+>
+> 仓库级标签保护走 **ruleset**（`POST /repos/{owner}/{repo}/rulesets`，`target: "tag"`），
+> 不是 `PUT /repos/{owner}/{repo}/tags/protection`——后者是**组织级**接口，个人仓库返回 404。
 
 > **前置条件（顺序不可调换）：** GitHub 要求 Required checks 的 context 在近期（约一周内）有 check-run 报告，否则该 API 会拒绝。`main` 最后一次 CI 是 2026-10-11，已超出新鲜度窗口。
 >
