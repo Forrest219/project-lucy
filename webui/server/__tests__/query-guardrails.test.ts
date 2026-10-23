@@ -352,7 +352,11 @@ describe("proxy call order", () => {
     const earlyAt = source.lastIndexOf("countWithoutSourceBeforeAcl(", aclAt);
     expect(guardAt).toBeGreaterThan(0);
     expect(forwardAt).toBeGreaterThan(guardAt);
-    expect(budgetAt).toBeGreaterThan(guardAt);
+    // Spec 162 §7.1 puts the budget gate before the dispatch that carries the guard
+    // and the forward. 365f3ca moved it there on purpose: the local tool path used
+    // to return before the old budget block and skipped the budget entirely. This
+    // assertion used to pin the pre-365f3ca order and has been failing ever since.
+    expect(budgetAt).toBeLessThan(guardAt);
     expect(earlyAt).toBeGreaterThan(0);
     expect(aclAt).toBeGreaterThan(earlyAt);
     expect(source.slice(Math.max(0, earlyAt - 240), earlyAt)).toContain("queryGuardrailsEnabled()");
