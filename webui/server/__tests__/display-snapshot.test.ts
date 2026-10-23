@@ -230,11 +230,17 @@ describe("Spec 174 R1 — unverified reconciliation never bypasses the safe retu
     };
     const owner = getDisplaySnapshot("lost", ["D"], build);
     const attached = getDisplaySnapshot("lost", ["D"], build);
+    // Attach both rejection handlers before yielding. The busy rejection fires
+    // as soon as the build settles, and awaiting the owner first would leave
+    // `attached` without a handler for a tick - an unhandled rejection fails
+    // the whole run even when every assertion passes.
+    const ownerRejects = expect(owner).rejects.toBeInstanceOf(DisplaySnapshotBusyError);
+    const attachedRejects = expect(attached).rejects.toBeInstanceOf(DisplaySnapshotBusyError);
     await new Promise((resolve) => setTimeout(resolve, 5));
     stopDisplayReconciler();
     gate.resolve();
-    await expect(owner).rejects.toBeInstanceOf(DisplaySnapshotBusyError);
-    await expect(attached).rejects.toBeInstanceOf(DisplaySnapshotBusyError);
+    await ownerRejects;
+    await attachedRejects;
     expect(builds).toBe(1);
     expect(displaySnapshotDiagnostics().entries.find((entry) => entry.name === "lost")).toMatchObject({ hasCurrent: false, inflight: 0 });
     await startDisplayReconciler({ metadataIntervalMs: 60_000, fullDigestIntervalMs: 60_000 });
@@ -244,10 +250,12 @@ describe("Spec 174 R1 — unverified reconciliation never bypasses the safe retu
   it("verification lost while waiting for a pending write is busy", async () => {
     const token = beginDisplayWrite(["D"]);
     const waiting = getDisplaySnapshot("wait-lost", ["D"], async () => "data");
+    // Attach the handler before yielding; see the sibling test above.
+    const waitingRejects = expect(waiting).rejects.toBeInstanceOf(DisplaySnapshotBusyError);
     await new Promise((resolve) => setTimeout(resolve, 5));
     stopDisplayReconciler();
     endDisplayWrite(token);
-    await expect(waiting).rejects.toBeInstanceOf(DisplaySnapshotBusyError);
+    await waitingRejects;
   });
 
   it("a request during write → rollback waits for the outer barrier and returns only the final disk state", async () => {

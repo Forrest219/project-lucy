@@ -8,6 +8,28 @@ import path from "node:path";
 import { afterEach } from "vitest";
 import { cleanup } from "@testing-library/react";
 
+// Vitest runs every test file through this setup file, but the suites share a
+// process. A suite that sets process.env without cleaning up leaks it into the
+// next suite, and the next suite then sees a different project root / access
+// config - which shows up as routes answering 404 on perfectly ordinary
+// endpoints. Restore the environment the worker started with before each file
+// so a suite can only observe what it set itself.
+const PRISTINE_ENV = Symbol.for("lucy.vitest.pristineEnv");
+type EnvSnapshot = Record<string, string | undefined>;
+const globalStore = globalThis as unknown as { [PRISTINE_ENV]?: EnvSnapshot };
+const pristine = globalStore[PRISTINE_ENV];
+if (pristine) {
+  for (const key of Object.keys(process.env)) {
+    if (!(key in pristine)) delete process.env[key];
+  }
+  for (const [key, value] of Object.entries(pristine)) {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+} else {
+  globalStore[PRISTINE_ENV] = { ...process.env };
+}
+
 // V-01 (T0A-2): production defaults to customer mode where auth can never be
 // open. The suite predates that and relies on open mode, so default to
 // development + auth off unless a suite/CI explicitly sets them.

@@ -122,7 +122,9 @@ describe("audit export cursor paging", () => {
     expect(requestIdOf(firstRows[0] ?? "")).toBe("req-10000");
 
     await app.close();
-  });
+    // Writing 10,001 audit rows one at a time takes ~1.5 s on an idle machine
+    // and overruns the default 5 s budget on a loaded CI runner.
+  }, 60_000);
 
   it("counts an empty policy_version as missing, not as a version", async () => {
     const { writeLog, closeAuditDb } = await import("../proxy/audit");
