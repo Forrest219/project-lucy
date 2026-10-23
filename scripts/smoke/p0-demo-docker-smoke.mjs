@@ -11,6 +11,13 @@ const demoToken = process.env.LUCY_DEMO_AGENT_TOKEN ?? "lucy-demo-agent-token";
 const expectedKtxVersion = process.env.LUCY_EXPECTED_KTX_VERSION ?? "0.16.0";
 const composeFile = "deploy/compose/docker-compose.demo.yml";
 const baselinePath = "examples/docker-demo/mysql/_baseline.json";
+// The compose files default TARGETPLATFORM to linux/arm64 because that is the
+// common developer machine. On any other host that produces an image the host
+// cannot execute ("exec /bin/sh: exec format error"), so default to the host
+// architecture and let an explicit env var win.
+const hostArch = process.arch === "arm64" ? "arm64" : "amd64";
+const targetPlatform = process.env.TARGETPLATFORM ?? `linux/${hostArch}`;
+const targetArch = process.env.TARGETARCH ?? hostArch;
 let tempDockerConfig;
 
 const SQLITE_FILE_SETUP = `
@@ -329,7 +336,9 @@ async function main() {
     LUCY_DEMO_WEBUI_HOST_PORT: webPort,
     LUCY_DEMO_PROXY_HOST_PORT: proxyPort,
     // Keep Advertise aligned with Publish when smoke remaps host ports.
-    LUCY_PUBLIC_MCP_URL: process.env.LUCY_PUBLIC_MCP_URL ?? `http://127.0.0.1:${proxyPort}/mcp`
+    LUCY_PUBLIC_MCP_URL: process.env.LUCY_PUBLIC_MCP_URL ?? `http://127.0.0.1:${proxyPort}/mcp`,
+    TARGETPLATFORM: targetPlatform,
+    TARGETARCH: targetArch
   };
   if (!process.env.DOCKER_CONFIG) {
     tempDockerConfig = await mkdtemp(path.join(tmpdir(), "lucy-demo-docker-config-"));

@@ -11,6 +11,13 @@ const demoToken = process.env.LUCY_EXEC_AGENT_TOKEN ?? "exec-demo-full-token";
 const expectedKtxVersion = process.env.LUCY_EXPECTED_KTX_VERSION ?? "0.16.0";
 const composeFile = "deploy/compose/docker-compose.executive-poc.yml";
 const baselinePath = "examples/executive-poc/mysql/_baseline.json";
+// The compose files default TARGETPLATFORM to linux/arm64 because that is the
+// common developer machine. On any other host that produces an image the host
+// cannot execute ("exec /bin/sh: exec format error"), so default to the host
+// architecture and let an explicit env var win.
+const hostArch = process.arch === "arm64" ? "arm64" : "amd64";
+const targetPlatform = process.env.TARGETPLATFORM ?? `linux/${hostArch}`;
+const targetArch = process.env.TARGETARCH ?? hostArch;
 let tempDockerConfig;
 
 function run(command, commandArgs, options = {}) {
@@ -230,7 +237,9 @@ async function main() {
   const env = {
     LUCY_EXEC_WEBUI_HOST_PORT: webPort,
     LUCY_EXEC_PROXY_HOST_PORT: proxyPort,
-    LUCY_PUBLIC_MCP_URL: process.env.LUCY_PUBLIC_MCP_URL ?? `http://127.0.0.1:${proxyPort}/mcp`
+    LUCY_PUBLIC_MCP_URL: process.env.LUCY_PUBLIC_MCP_URL ?? `http://127.0.0.1:${proxyPort}/mcp`,
+    TARGETPLATFORM: targetPlatform,
+    TARGETARCH: targetArch
   };
   if (!process.env.DOCKER_CONFIG) {
     tempDockerConfig = await mkdtemp(path.join(tmpdir(), "lucy-exec-docker-config-"));

@@ -14,6 +14,13 @@ const expectedKtxVersion = process.env.LUCY_EXPECTED_KTX_VERSION ?? "0.16.0";
 const demoPassword = process.env.LUCY_POSTGRES_DEMO_PASSWORD ?? randomBytes(24).toString("base64url");
 const composeFile = "deploy/compose/docker-compose.postgres-demo.yml";
 const accessConfigPath = "examples/postgres-demo/project-template/webui/config/access.yaml";
+// The compose files default TARGETPLATFORM to linux/arm64 because that is the
+// common developer machine. On any other host that produces an image the host
+// cannot execute ("exec /bin/sh: exec format error"), so default to the host
+// architecture and let an explicit env var win.
+const hostArch = process.arch === "arm64" ? "arm64" : "amd64";
+const targetPlatform = process.env.TARGETPLATFORM ?? `linux/${hostArch}`;
+const targetArch = process.env.TARGETARCH ?? hostArch;
 let tempDockerConfig;
 let tempSecretDir;
 
@@ -224,7 +231,9 @@ async function main() {
   const env = {
     LUCY_POSTGRES_DEMO_WEBUI_HOST_PORT: webPort,
     LUCY_POSTGRES_DEMO_PROXY_HOST_PORT: proxyPort,
-    LUCY_POSTGRES_DEMO_SECRET_DIR: secretDir
+    LUCY_POSTGRES_DEMO_SECRET_DIR: secretDir,
+    TARGETPLATFORM: targetPlatform,
+    TARGETARCH: targetArch
   };
   if (!process.env.DOCKER_CONFIG) {
     tempDockerConfig = await mkdtemp(path.join(tmpdir(), "lucy-demo-docker-config-"));
