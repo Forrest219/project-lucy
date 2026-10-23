@@ -72,6 +72,8 @@ POST /api/connections/:connId/schemas/remove     # remove schema from connection
 POST /api/connections/:connId/test
 POST /api/connections/:connId/ingest
 GET  /api/connections/ingest-runs
+POST /api/connections/:connId/schema-structure
+GET  /api/connections/:connectionId/import-scope
 
 POST /api/catalog/reload
 GET  /api/catalog/reloads
@@ -87,6 +89,7 @@ GET    /api/eval/cases/:domain/:caseId
 POST   /api/eval/cases/:domain
 PUT    /api/eval/cases/:domain/:caseId
 DELETE /api/eval/cases/:domain/:caseId
+POST   /api/eval/cases/:domain/:caseId/confirm-review
 POST   /api/eval/suites/import
 GET    /api/eval/suites/:domain/download
 POST   /api/eval/results/import
@@ -105,11 +108,16 @@ GET    /api/eval/monitor/config
 PUT    /api/eval/monitor/config
 GET    /api/eval/monitor/threshold
 PUT    /api/eval/monitor/threshold
+GET    /api/eval/monitor/field
 GET    /api/eval/security-candidates
 POST   /api/eval/security-candidates/extract
 POST   /api/eval/security-candidates/:id/review
 POST   /api/eval/security-candidates/:id/promote/preview
 POST   /api/eval/security-candidates/:id/promote
+
+GET    /api/eval/field-questions
+POST   /api/eval/field-questions/extract
+POST   /api/eval/field-questions/:id/promote
 
 POST   /api/connections/probe
 
@@ -164,7 +172,13 @@ GET    /api/admin/audit/turns/export
 GET    /api/admin/audit/turns/:turnId
 POST   /api/admin/audit/conversation-turns/purge
 POST   /api/admin/audit/args-summary/scrub
+GET    /api/admin/audit/:id/effective-association
+GET    /api/admin/audit/association-revisions
+POST   /api/admin/audit/association-revisions
+GET    /api/admin/audit/export-inquiry-pack
+GET    /api/admin/audit/v2/export-metadata
 GET    /api/admin/trace/events
+POST   /api/agent-audit/events
 GET    /api/admin/mcp-tools
 POST   /api/admin/mcp-playground/acl-preview
 POST   /api/admin/mcp-playground/live-smoke
@@ -441,6 +455,8 @@ Wiki Markdown 版本记录与 Table YAML 版本记录对齐：保留最近 5 个
 
 `GET /api/connections/:connId/live-schemas`（Spec 107）经 `ktx sql --json` 只读聚合账号可见 Schema 及 BASE TABLE 数量。Query `refresh=1` 跳过进程内 TTL（默认 10 分钟）。成功 / 连通失败均返回 HTTP 200 + `data.status`（与 connection test 同构，便于分连接 UI）；连接不存在返回 404。字段见 Spec 107 §6。
 
+`POST /api/connections/:connId/schema-structure` 预览指定 schema 的物理表结构，请求体 `{ schema }`；缺 `schema` 返回 `BAD_REQUEST`。`GET /api/connections/:connectionId/import-scope`（Spec 183）只读返回已发现物理表的导入范围分布。
+
 `GET /api/connections/:connId/tables` 从 `semantic-layer/<connId>/_schema/*.yaml` 返回已扫描表名：
 
 ```jsonc
@@ -544,7 +560,7 @@ dryRun 响应：
 
 `GET /api/eval/domains` 返回 domain 列表与最近运行摘要；`GET /api/eval/domains/:domain` 返回单个 domain。
 
-`GET /api/eval/cases/:domain` / `GET /api/eval/cases/:domain/:caseId` 读取 eval case。`POST /api/eval/cases/:domain` 新增 case；`PUT /api/eval/cases/:domain/:caseId` 更新 case，默认 dryRun；`DELETE` 删除 case。
+`GET /api/eval/cases/:domain` / `GET /api/eval/cases/:domain/:caseId` 读取 eval case。`POST /api/eval/cases/:domain` 新增 case；`PUT /api/eval/cases/:domain/:caseId` 更新 case，默认 dryRun；`DELETE` 删除 case。`POST /api/eval/cases/:domain/:caseId/confirm-review` 将该 case 的 `review_status` 置为 `active`，并把当前 `sourceMapVersion` 记入 `semantic_version_seen`（语义版本变更后需重新确认）。
 
 `POST /api/eval/suites/import` 导入 Eval Suite YAML，默认 `dryRun:true`；`GET /api/eval/suites/:domain/download` 以 YAML 附件下载当前 domain 的 canonical suite，并在响应头返回 suite id/hash 与 runner command；`POST /api/eval/results/import` 导入离线 Result JSON，默认 `dryRun:true`，可选归档本地变体。
 
@@ -585,6 +601,13 @@ Monitor：
 - `GET /api/eval/monitor/drift-distribution?domain=&days=`
 - `GET/PUT /api/eval/monitor/config`
 - `GET/PUT /api/eval/monitor/threshold`
+- `GET /api/eval/monitor/field?domain=&days=`（按 domain 绑定角色统计 access_log 调用 / 错误 / 拒绝，按 client family 分桶）
+
+Field Questions：
+
+- `GET /api/eval/field-questions`（返回 `field_question` 表全部记录，按 `updated_at` 倒序）
+- `POST /api/eval/field-questions/extract`（请求体为现场提问包；抽取分组后落库，拒绝抽取时返回 `422`，成功返回 `data.inserted`）
+- `POST /api/eval/field-questions/:id/promote`（返回用例草稿 `data.draft`；⚠️ 当前只返回内存草稿，**不写入 eval case**，用例仍需人工落地）
 
 常见错误码：`RUNNER_BUSY` `RUN_NOT_FOUND` `RUNNER_PRECHECK_FAILED` `NO_CASES_SELECTED` `UNSUPPORTED_SELECTION_MODE`。
 
@@ -742,6 +765,12 @@ Audit：
 - `GET /api/admin/audit/turns/:turnId`
 - `POST /api/admin/audit/conversation-turns/purge`
 - `POST /api/admin/audit/args-summary/scrub`
+- `GET /api/admin/audit/:id/effective-association`
+- `GET /api/admin/audit/association-revisions`
+- `POST /api/admin/audit/association-revisions`
+- `GET /api/admin/audit/export-inquiry-pack`
+- `GET /api/admin/audit/v2/export-metadata`
+- `POST /api/agent-audit/events`（受控客户端 observation 上报；凭据取自 `X-Agent-Audit-Token` 头并由服务端解析，不依赖 admin session；缺失或无效返回 `401 CREDENTIAL_INVALID`）
 - `GET /api/admin/mcp-tools`
 
 `GET /api/admin/config-audit` 查询 `config_change_log`，用于追踪 WebUI 对 `ktx.yaml`、`webui/config/access.yaml` 等治理配置的写入记录。
