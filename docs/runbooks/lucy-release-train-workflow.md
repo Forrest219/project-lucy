@@ -153,16 +153,16 @@ echo "exit=$?"   # 本仓库期望 0
 | Required status checks | `spec-and-webui`、`docker-smoke`、`k8s-static`、`k8s-upgrade-gate` | 与 release-ci.md §2 建议的必需检查一致；前两项覆盖版本/Spec/安全基线，后两项覆盖交付形态（H1 静态、H3/H4 真实 N-1 升级） |
 | Require branches to be up to date | 开 | 避免用过期基线合并 |
 | Require approvals | **0（见下方偏离说明）** | 发布主线本意是不允许自审自合；但本仓库协作者**只有 `Forrest219` 一人**（admin），审批数 ≥1 会让 main **永久死锁**——唯一管理员需要一份自己给不出的审批。增补第二个有写权限的协作者后，应把审批数提到 ≥1 并保留 `enforce_admins = true` |
-| Restrict pushes | 开 | 只允许维护者可推（即禁止开发者直推） |
+| Restrict pushes | **不设 restrictions**（见下方偏离说明） | 设成"仅维护者名单"在单人仓库里等于把唯一管理员也排除在外——`enforce_admins = true` 时管理员连自己的 PR 都合不进去，main 再次死锁。**实际约束来自 Required checks**：直推一个没跑绿四个 context 的提交会被 GitHub 直接拒掉，所以"绕过门禁直推"这条路是堵死的；能直推的只有已经跑绿、且与 `main` 同步的提交 |
 | Allow force pushes | 关 | |
 | Allow deletions | 关 | |
 | Tag protection (`v*`) | 禁止删除 / 禁止移动 | tag 是放行凭据的锚点，移动等于伪造证据 |
 
 > **偏离说明（2026-10-24 实际执行）：** 仓库协作者只有 `Forrest219`（admin），故实际下发的是
-> `required_approving_review_count = 0` + `enforce_admins = true`。这样四项 Required checks、
-> 禁直推、禁 force push、禁删除**对管理员同样强制**，而不会因为「需要一份无法产生的审批」把
-> main 锁死。**这是能力受限下的折中，不是「允许自审自合」的追认**——审批门待增补第二个协作者
-> 后立即恢复。
+> `required_approving_review_count = 0` + `enforce_admins = true` + `restrictions = null`。
+> 这样四项 Required checks、禁 force push、禁删除**对管理员同样强制**，而不会因为「需要一份无法产生的审批」或
+> 「把管理员排除在可推名单外」把 main 锁死。**这是能力受限下的折中，不是「允许自审自合」的追认**——审批门待增补第二个协作者
+> 后立即恢复（届时 `restrictions` 可一并收紧）。
 >
 > 仓库级标签保护走 **ruleset**（`POST /repos/{owner}/{repo}/rulesets`，`target: "tag"`），
 > 不是 `PUT /repos/{owner}/{repo}/tags/protection`——后者是**组织级**接口，个人仓库返回 404。
@@ -180,13 +180,16 @@ gh api -X PUT repos/Forrest219/project-lucy/branches/main/protection \
   -f 'required_status_checks[contexts][]=docker-smoke' \
   -f 'required_status_checks[contexts][]=k8s-static' \
   -f 'required_status_checks[contexts][]=k8s-upgrade-gate' \
-  -F required_pull_request_reviews[required_approving_review_count]=1 \
+  -F required_pull_request_reviews[required_approving_review_count]=0 \
   -F enforce_admins=true \
   -F restrictions=null \
   -F required_linear_history=false \
   -F allow_force_pushes=false \
   -F allow_deletions=false
 ```
+
+> ⚠️ `required_approving_review_count` 必须是 **0**。写成 1 会让唯一管理员拿不出审批 → main 永久死锁
+> （见上方偏离说明）。增补第二个协作者后，才把它改成 1 并把 `restrictions` 收紧。
 
 ### 3.3 P1 尾部：打标记与归档
 
