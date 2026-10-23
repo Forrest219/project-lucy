@@ -41,10 +41,13 @@ Manual inputs:
 | `k8s-static` | **H1** — `npm run gate:k8s-static`（含 MCP URL 负例矩阵） |
 | `k8s-upgrade-gate` | **H3 + H4** — `npm run gate:k8s-kind-h3`（N-1 baseline ref ≠ HEAD；Pod `imageID`；UID 0 / 10001 fixtures；sentinel 保留） |
 | `headless-config` | `npm run smoke:p0:headless-config` |
-| `demo-e2e` | `npm run smoke:p0:demo` |
-| `postgres-demo-e2e` | `npm run smoke:p0:postgres-demo` |
+| `demo-db-smoke` | `npm run smoke:p0:demo`（原名 `demo-e2e`，仅数据库/演示冒烟） |
+| `postgres-demo-db-smoke` | `npm run smoke:p0:postgres-demo`（原名 `postgres-demo-e2e`） |
+| `customer-amd64-native` | tag/manual；原生 amd64 **单架构**构建候选镜像（`candidate-amd64-…` tag），G1/G2/G3/G4/G4b/G8 结果按候选 digest 记录 |
+| `real-e2e` | tag/manual；`[self-hosted, lucy-protected]` runner：同一 digest 部署到隔离单副本 K8s，执行 security / 浏览器 / 真实客户端并签名归档；无该 runner 即不可调度（BLOCKED，不退化为 headless） |
+| `customer-release-readiness` | **Required check**：独立复验证据与签名归档；`npm run gate:customer-release` |
 | `ktx-upgrade-compat` | manual candidate version only; runs `npm run compat:ktx-upgrade` |
-| `release-package` | tag/manual only；**单次** multi-arch build → push → 对 `${IMAGE}@${DIGEST}` 跑 G1/G2/G4b/G8 → 写 identity metadata；**禁止 gate 后再 build** |
+| `release-package` | tag/manual only；依赖 `customer-release-readiness`；**只 promote 已测试的候选 digest**（`imagetools create`，不重建、不创建 builder）→ 对 `${IMAGE}@${DIGEST}` 复跑 G1/G2/G4b/G8 → 写 identity metadata；**禁止 gate 后再 build**；客户镜像只有 linux/amd64 单架构 |
 
 ### Branch protection Required checks（建议）
 

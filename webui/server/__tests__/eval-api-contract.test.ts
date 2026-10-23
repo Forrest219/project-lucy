@@ -12,6 +12,7 @@ vi.mock("../admin/audit.js", () => ({
     exec: vi.fn(),
     pragma: vi.fn()
   })),
+  registerAgentAuditRoutes: vi.fn(),
   registerAuditRoutes: vi.fn()
 }));
 

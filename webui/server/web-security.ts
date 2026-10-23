@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
+import { resolveCookieSecure } from "./auth/deployment-mode.js";
 
 const UNSAFE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
@@ -15,7 +16,7 @@ export const CONTENT_SECURITY_POLICY = [
   "connect-src 'self'"
 ].join("; ");
 
-function trustProxyEnabled(): boolean {
+export function trustProxyEnabled(): boolean {
   const raw = (process.env.LUCY_TRUST_PROXY ?? "").trim().toLowerCase();
   return raw === "1" || raw === "true" || raw === "yes";
 }
@@ -73,7 +74,7 @@ export function registerWebSecurity(app: FastifyInstance): void {
     reply.header("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
     reply.header("Cross-Origin-Opener-Policy", "same-origin");
     reply.header("Cross-Origin-Resource-Policy", "same-origin");
-    if (process.env.LUCY_WEBUI_COOKIE_SECURE === "1") {
+    if (resolveCookieSecure().secure) {
       reply.header("Strict-Transport-Security", "max-age=31536000");
     }
     return payload;

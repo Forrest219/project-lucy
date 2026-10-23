@@ -4,7 +4,7 @@
 |---|---|
 | 文档名称 | Publish History Business Columns & Export Clarity Spec |
 | 文档类型 | Spec |
-| 版本 | v1.0 |
+| 版本 | v1.1 |
 | 撰写日期 | 2026-08-05 |
 | 撰写人 | Composer |
 | 委托人 | zhangxingchen |
@@ -24,6 +24,10 @@
 | 范围 | 序号列、变更范围/规模列、操作列改名与行内去伪下载、Header 导出文案、export `require` ESM 修复、`pl-data-grid` 轻量收敛；不实现按 releaseId 历史包下载 |
 
 > **修订（Spec 113，2026-08-06）：** `/publish/history` Header 不再导出语义资产包 ZIP；改为「导出 CSV」明细表，并补筛选/分页。见 `113-publish-history-filters-pagination-and-csv-export-spec.md`。
+>
+> **修订（v1.1，2026-10-19）：** 变更范围按文件事实拆成「写入」「已删除」「Schema Manifest」。空哈希的语义源是已删除，不再和写入并列。规模里的语义源只计写入。旧记录不迁移，展示时从 `files` 推导。
+
+
 
 ## 1. 背景
 
@@ -106,10 +110,15 @@ if trigger === webui_manual_reindex && connectionIds.length === 0 && changedSour
   → 「全库索引重建（无资产变更）」
 else:
   主行：连接摘要（unique connectionIds，过多时前 2 +「+N」）
-  次行：变更源摘要（changedSources 的 sourceName，前 2 +「+N」；无则省略）
+  写入：内容可读的语义源（sha256 非空）；无语义源文件时回退 changedSources
+  已删除：语义源路径在 files 中且 sha256 为空
+  Schema Manifest：`_schema/*.yaml` 的 schema 名
+  三类都省略空组。每组过多时前 2 +「+N」
 ```
 
-Connection ID / sourceName 必须 `translate="no"` + `notranslate`。
+CSV 与主表同一句，用 ` / ` 连接：`连接 / 写入 源 / 已删除 源 / Schema Manifest schema`。
+
+Connection ID、sourceName、`Schema Manifest` 必须 `translate="no"` + `notranslate`。规模的语义源个数等于写入组，文件个数仍是 `files.length`。
 
 ### 6.3 导出
 
@@ -121,7 +130,11 @@ Connection ID / sourceName 必须 `translate="no"` + `notranslate`。
 
 `webui/server/semantic-asset-export.ts` 的 `makeScalar` 不得使用 `require("yaml")`；改为从已有 `yaml` ESM import 使用 `Scalar`（或等价构造）。
 
-### 6.5 CSS
+### 6.5 阻断错误面板
+
+状态为 `blocked` 的发布记录，错误面板除 `validation.results[].issues` 外，还展示 `contractGate.blocking` 的 `checkId`、`filePath` 与 `message`。仅有契约阻断、校验 issues 为空时，面板不得显示「(未提供具体错误信息)」。
+
+### 6.6 CSS
 
 最小语义块（不得复制整套 schema-asset 列宽）：
 
@@ -140,6 +153,7 @@ Connection ID / sourceName 必须 `translate="no"` + `notranslate`。
 - 行内无「下载当前快照」/「导出当前语义资产包」按钮；Header 有「导出当前语义资产包 (.zip)」。
 - 发布记录展示连接/语义源摘要与文件·语义源数量；手动 Reindex 空变更展示「全库索引重建（无资产变更）」。
 - 序号：最新记录为 `1`。
+- `blocked` 记录的错误面板包含 `contractGate.blocking`（`checkId`、`filePath`、`message`）；只有契约阻断时不显示「(未提供具体错误信息)」。
 - export 单测仍绿；可选补一条直接调用 `makeScalar` 路径不抛（现有 sanitize 覆盖即可）。
 - `lint:terminology`、`build` 通过。
 

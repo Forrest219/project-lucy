@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy 常见任务流 |
 | 文档类型 | Other |
-| 版本 | v1.0 |
-| 撰写日期 | 2026-06-19 |
+| 版本 | 2.0.0 |
+| 撰写日期 | 2026-06-19；2.0.0 更新 2026-10-20（统一品牌叫法与术语、补浏览器翻译防御、修跨页链接与文档骨架） |
 | 撰写人 | Codex |
 | 委托人 | project-lucy 团队 |
 | 基于材料 | project-lucy docs / 用户讨论 |
@@ -16,7 +16,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Lucy 常见任务流</title>
+<title translate="no" class="notranslate">常见任务流 · Lucy 帮助文档</title>
 <link rel="stylesheet" href="assets/user-guide.css">
 </head>
 <body>
@@ -27,6 +27,8 @@
       <p class="nav-title">开始</p>
       <a class="nav-link" href="index.html">帮助中心首页</a>
       <a class="nav-link" href="product-intro.html">产品介绍</a>
+      <a class="nav-link" href="lucy-architecture-diagram.html">架构总览</a>
+      <a class="nav-link" href="lucy-docs-flows.html">摄取与服务</a>
       <a class="nav-link" href="getting-started.html">5 分钟理解 Lucy</a>
       <a class="nav-link" href="concepts.html">核心概念</a>
     </div>
@@ -38,32 +40,33 @@
     </div>
     <div class="nav-group">
       <p class="nav-title">管理员指南</p>
-      <a class="nav-link" href="quickstart-admin.html">快速部署 <span class="wip">WIP</span></a>
-      <a class="nav-link" href="data-sources.html">数据源接入 <span class="wip">WIP</span></a>
-      <a class="nav-link" href="permissions.html">权限与 ACL <span class="wip">WIP</span></a>
-      <a class="nav-link" href="webui-guide.html">KTX WebUI</a>
+      <a class="nav-link" href="quickstart-admin.html">快速部署</a>
+      <a class="nav-link" href="data-sources.html">数据源接入</a>
+      <a class="nav-link" href="permissions.html">权限与 ACL</a>
+      <a class="nav-link" href="webui-guide.html">WebUI 指南</a>
     </div>
     <div class="nav-group">
       <p class="nav-title">治理与安全</p>
       <a class="nav-link" href="trust.html">可信机制</a>
-      <a class="nav-link" href="eval-meta-governance-training.html">Eval 培训</a>
-      <a class="nav-link" href="skills.html">Skill 管理 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="eval-meta-governance-training.html">质量评测培训</a>
+      <a class="nav-link" href="skills.html">Skill 管理</a>
     </div>
     <div class="nav-group">
       <p class="nav-title">参考</p>
-      <a class="nav-link" href="mcp-reference.html">MCP 接入参考 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="mcp-reference.html"><span translate="no" class="notranslate">MCP</span> 接入参考</a>
       <a class="nav-link" href="glossary.html">术语表</a>
-      <a class="nav-link" href="release-notes.html">更新日志 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="release-notes.html">更新日志</a>
     </div>
   </aside>
   <main class="content">
     <header class="hero">
       <span class="eyebrow">Workflows</span>
-      <h1>把会议里的追问，改写成 Lucy 能稳定执行的任务。</h1>
-      <p class="lead">不要从“功能入口”开始想。先想你要在会议里回答什么争议：数字是多少、差异在哪里、为什么这么算、这个答案能不能放心引用。</p>
+      <h1>会议追问到可执行任务</h1>
+      <p class="lead">把会议里的追问，改写成 Lucy 能稳定执行的任务。不要从“功能入口”开始想。先想你要在会议里回答什么争议：数字是多少、差异在哪里、为什么这么算、这个答案能不能放心引用。</p>
+      <p>本页速览：<a href="#meeting">会议场景</a> · <a href="#templates">可复制的任务模板</a> · <a href="#suffix">固定加在问题末尾的一句话</a></p>
     </header>
 
-    <section>
+    <section id="meeting">
       <h2>四个高频会议片场</h2>
       <div class="grid two">
         <article class="card"><h3>1. 老板问：这个数到底是多少？</h3><p>说清指标名、时间范围和筛选条件，并要求 Lucy 回答使用的官方指标名和数据基准截止时间。</p></article>
@@ -73,7 +76,7 @@
       </div>
     </section>
 
-    <section>
+    <section id="templates">
       <h2>可直接复制的任务模板</h2>
       <table>
         <thead><tr><th>会议目标</th><th>推荐问法</th></tr></thead>
@@ -87,7 +90,7 @@
       </table>
     </section>
 
-    <section>
+    <section id="suffix">
       <h2>固定加在问题末尾的一句话</h2>
       <div class="callout">
         请在回答最后，附上你使用的【官方指标名】和【数据基准截止时间】，并诚实告诉我你有没有走字典外安全探索。

@@ -67,6 +67,7 @@
 version: "1"
 admins:
   - id: xingchen
+    account_uid: "<uuid，不可变>"   # 旧账户首次登录时自动补齐
     display_name: 星尘
     password_hash: "scrypt:<saltHex>:<hashHex>"
     role: owner   # owner | operator（legacy admin → operator）
@@ -99,10 +100,18 @@ admins:
 实现落点：`webui/server/auth/guard.ts` `isPublicApi`；`webui/src/lib/publicAccess.ts` `isPublicUiPath`（`RequireAuth` 放行）。
 ### 5.3 Session
 
-- Cookie 名：`lucy_admin_session`
-- HttpOnly + SameSite=Lax；Path=/
-- HMAC-SHA256 密封；密钥：`LUCY_WEBUI_SESSION_SECRET`，缺省则持久化到 `.ktx-ui/webui-session-secret`
-- 默认有效期 7 天
+> v2（企业安全 Spec §3.2，V-03 · T03）。v1 无状态 Cookie 一次性失效，不再被接受。
+
+- Cookie 名：`lucy_admin_session`；`HttpOnly; SameSite=Lax; Path=/`；customer 模式带 `Secure`
+- 载荷（HMAC-SHA256 密封）：`v=2`、`jti`（256 bit 随机）、`uid`（不可变 `account_uid`）、`ep`（签发时 `session_epoch`）、`iat`、`exp`；Cookie 只是指针，权威状态在 `.ktx-ui/security.sqlite`（`admin_sessions` 只存 jti 的 SHA-256）
+- 密钥：`LUCY_WEBUI_SESSION_SECRET`，缺省持久化到 `.ktx-ui/webui-session-secret`；**不少于 32 字节**。过短的旧密钥文件在首次签发时轮换；过短的环境变量使会话不可用（`503 AUTH_STATE_UNAVAILABLE`）
+- 每个受保护请求：校验签名 → 查持久会话（未吊销、未过期、账户 `enabled`、`session_epoch` 一致、uid/epoch 与 Cookie 声明一致）→ 空闲检查 → **新读** `admins.yaml` 按 `account_uid` 定位启用账户。不使用 5 秒管理员展示缓存做安全判断
+- 期限（提案默认 R3）：空闲 30 分钟（`lastSeenAt` 至多每分钟刷新一次）、绝对 12 小时；Cookie `Max-Age` 取绝对期限；延长空闲不突破绝对期限；空闲过期即吊销
+- 账户标识：`admins.yaml` 每个账户有不可变 `account_uid`。旧账户在首次登录时受控迁移（配置审计 `admin_uid_migrate`）；删除后保留 tombstone，同 id 重建使用新 uid
+- 吊销顺序：退出先**耐久吊销** jti 再清 Cookie；重置密码 / 角色变化 / 停用 / 删除先提升 epoch（或 disabled / tombstone）再写 `admins.yaml`，写失败不恢复旧会话；启用账户在配置写入之后，且不复活旧会话
+- 失败关闭：安全库不可读写返回 `503 AUTH_STATE_UNAVAILABLE`（不当成「没有管理员」，也不放行）；退出吊销失败同样 503 且保留 Cookie
+- 响应头：`/api/auth/*` 与所有非公开 API 返回 `Cache-Control: no-store`
+- 恢复：恢复旧 `admins.yaml` / `security.sqlite` 必须轮换会话密钥并要求重新登录，见 [会话撤销与受控恢复 Runbook](../runbooks/webui-session-recovery-runbook.md)
 
 ### 5.4 API
 
@@ -110,7 +119,7 @@ admins:
 |---|---|---|
 | GET | `/api/auth/status` | `{ mode, me? }` 公开 |
 | POST | `/api/auth/login` | `{ adminId, password }` |
-| POST | `/api/auth/logout` | 清 Cookie |
+| POST | `/api/auth/logout` | 先耐久吊销当前会话，再清 Cookie；吊销失败 503 |
 | GET | `/api/auth/me` | 当前管理员（required 时需登录） |
 | POST | `/api/auth/bootstrap` | 创建首个 Owner（仅 open/bootstrap） |
 | GET/POST/PATCH/DELETE | `/api/admin/admins…` | 管理员管理（Owner） |

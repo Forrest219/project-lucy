@@ -234,8 +234,8 @@ describe("ObjectDetailDrawer", () => {
     expect(body).toHaveTextContent("2 个 (lucy_catalog, lucy_query)");
     expect(body).toHaveTextContent("1 个 source");
     expect(body).toHaveTextContent("1 个 Agent 引用 (Demo Agent)");
-    expect(body).toHaveTextContent("权限解析失败：当前配置无法生成有效的数据源 / MCP 工具边界。");
-    expect(body).toHaveTextContent("role_resolution_failed:demo_readonly");
+    expect(body).toHaveTextContent("角色 demo_readonly 没有对应到已发布的数据表");
+    expect(body).not.toHaveTextContent("role_resolution_failed");
   });
 
   it("shows a recoverable role drawer error for a malformed success payload", async () => {

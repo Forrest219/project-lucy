@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, rm, writeFile, mkdir } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   removeSchema,
   SchemaNameInvalidError,
@@ -10,16 +10,32 @@ import {
   KtxYamlParseError,
   SCHEMA_NAME_PATTERN
 } from "../project";
+import { invalidateContentPathsCache } from "../paths";
 
 let tempRoot: string | undefined;
+let previousRoot: string | undefined;
+let previousContentRoot: string | undefined;
 
 async function makeProject(yaml: string): Promise<string> {
   tempRoot = await mkdtemp(path.join(os.tmpdir(), "lucy-remove-schema-"));
   await writeFile(path.join(tempRoot, "ktx.yaml"), yaml, "utf8");
+  process.env.KTX_PROJECT_ROOT = tempRoot;
+  process.env.LUCY_CONTENT_ROOT = ".";
+  invalidateContentPathsCache();
   return tempRoot;
 }
 
+beforeEach(() => {
+  previousRoot = process.env.KTX_PROJECT_ROOT;
+  previousContentRoot = process.env.LUCY_CONTENT_ROOT;
+});
+
 afterEach(async () => {
+  invalidateContentPathsCache();
+  if (previousRoot === undefined) delete process.env.KTX_PROJECT_ROOT;
+  else process.env.KTX_PROJECT_ROOT = previousRoot;
+  if (previousContentRoot === undefined) delete process.env.LUCY_CONTENT_ROOT;
+  else process.env.LUCY_CONTENT_ROOT = previousContentRoot;
   if (tempRoot) {
     await rm(tempRoot, { recursive: true, force: true });
     tempRoot = undefined;

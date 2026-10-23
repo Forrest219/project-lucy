@@ -4,13 +4,27 @@
 |---|---|
 | 文档名称 | Lucy Customer amd64 Image Build Checklist |
 | 文档类型 | Checklist |
-| 版本 | v1.6 |
-| 撰写日期 | 2026-08-27；2026-08-28 增补 G4b；2026-09-02 增补 G8；2026-09-02 v1.4 解耦 G8/Helm；2026-09-02 v1.5 身份闭环（最终 digest 门禁、G4b 功能性、Offline/Registry 语义）；2026-10-07 v1.6 Apple Silicon 可构建待测镜像，见 customer-k8s-test-package-principles.md |
+| 版本 | v1.7 |
+| 撰写日期 | 2026-08-27；2026-08-28 增补 G4b；2026-09-02 增补 G8；2026-09-02 v1.4 解耦 G8/Helm；2026-09-02 v1.5 身份闭环（最终 digest 门禁、G4b 功能性、Offline/Registry 语义）；2026-10-07 v1.6 Apple Silicon 可构建待测镜像，见 customer-k8s-test-package-principles.md；2026-10-19 v1.7 增补 v2.0 客户首次管理员流程入口 |
 | 撰写人 | Composer |
 | 委托人 | xingchen |
 | 基于材料 | 20260827 客户 `exec /usr/bin/tini: exec format error` 事故；20260902 K8s v1/v2 原地升级契约事故；`docs/specs/lucy-202608-08-image-arch-and-ktx-baseline-fix.md`；Release `lucy-k8s-integration-20260827-v1` 坏包复盘 |
 | 适用范围 | 任何交付给客户的 `linux/amd64` Lucy 镜像（Docker Compose 离线包、K8s integration tar.gz、Release Assets） |
 | 输出位置 | `docs/runbooks/customer-amd64-image-build-checklist.md` |
+
+## v2.0 客户交付与首次管理员流程
+
+每次生成 2.0 升级包还必须执行 [旧开放模式升级交付 Checklist](customer-v2-upgrade-release-checklist.md)。标准封包入口自动运行最终归档的实例入口回归；原生升级与恢复证据仍由部署人员提供，未完成不能生产放行。
+
+客户首次管理员部署包必须在供应方同次出包中同步配齐 `webui-bootstrap-token`、签发状态、凭据元数据和说明；部署人员不另行补密钥。同实例重出包复用，不同实例分别签发，已有管理员不新发。按 C01/C05/C20 核验附件和部署密钥一致；缺失即禁止客户交付。密钥放在客户私有附件，通用镜像与公共软件包保持无凭据。
+
+客户侧统一为两步：**执行 K8s / K3s 部署入口 → 打开页面，输入供应方提供的一次性引导密钥并创建管理员**。后续重启或升级保留账号和持久化状态，直接登录。
+
+完整客户流程、供应方出包职责、旧开放模式升级安排和人工验证清单放在同目录的 [v2.0 客户交付及首次管理员流程](customer-v2-k8s-first-admin-delivery-flow.md)。
+
+自动生成并复用实例密钥、配置 Secret 和部署入口见[生成与配置脚本计划](../plans/2026-10-19-v2-bootstrap-delivery-scripts-plan.md)（已实现、本地检查通过，含现场待测矩阵）。出包命令和测试交接见[客户流程第 8 节](customer-v2-k8s-first-admin-delivery-flow.md#8-执行入口与测试交接)。
+
+当前后端、页面和 Chart 已支持引导密钥；**客户专属准备与 Secret 配置脚本已实现，实际集群流程待交付人验证**，不能只打镜像就认定客户可完成两步流程。镜像保持通用，实例密钥单独受控交付；不要烘焙到镜像或公共安装包。本节不改变下述既有构建门禁。
 
 ## 背景
 
@@ -55,12 +69,13 @@ bash scripts/release/build-customer-amd64-image.sh
 | G4 | KTX 版本 | `docker run --rm --platform linux/amd64 --entrypoint ktx <tag> --version` | 含 `@kaelio/ktx 0.16.0` |
 | G4b | KTX Python runtime 离线预装 | 见下方 G4b 命令 | runtime python 存在，且 `--network=none` 下 `ktx --version` 成功 |
 | G4c | Lucy 产品版本 | `docker run --rm --platform linux/amd64 --entrypoint printenv <tag> LUCY_VERSION` | 等于根 `VERSION`，且 tag 产品段一致 |
+| G4d | 源提交标识 | `docker run --rm --platform linux/amd64 --entrypoint cat <tag> /app/BUILD_REVISION` | 等于 `git rev-parse HEAD`；工作区不干净时为 `<sha>-dirty`。`printenv LUCY_GIT_SHA` 必须为空 |
 | G5 | 仓库冒烟 | `npm run smoke:p0:docker` | 全绿（推荐） |
 | G6 | 配置包冒烟 | `npm run smoke:p0:headless-config -- --root customer-config.example --require-secret-files` | 8/8 PASS |
-| G7 | 导出后复核 | `docker load -i <tar>` 后重跑 G1–G4 + **G4b/G4c** + **G8** | tar 内镜像与本地 tag 一致 |
+| G7 | 导出后复核 | `docker load -i <tar>` 后重跑 G1–G4 + **G4b/G4c/G4d** + **G8** | tar 内镜像与本地 tag 一致 |
 | G8 | K8s 升级契约（**仅镜像**） | `bash scripts/gates/g8-image-k8s-contract-gate.sh <tag>` | UID 10001；空 volume 自动 `.git`；runtime 在 `/home/lucy/.ktx` |
 
-**G2–G4c + G8 为交付硬门禁**。缺 G4b 的镜像在客户内网执行查询时会尝试下载 `uv`，表现为 `ktx could not download uv`；缺 G4c 会让 image tag、侧栏与 health 版本不一致。缺 G8 的镜像/Chart 组合会导致 K8s 原地升级失败。
+**G2–G4d + G8 为交付硬门禁**。缺 G4b 的镜像在客户内网执行查询时会尝试下载 `uv`，表现为 `ktx could not download uv`；缺 G4c 会让 image tag、版本信息页与 health 的产品版本不一致。缺 G4d 时版本信息页看不到这次构建的提交，无法和 `main` 的提交对齐。缺 G8 的镜像/Chart 组合会导致 K8s 原地升级失败。
 
 ### G4b 命令（出包必跑）
 
@@ -186,6 +201,7 @@ docker run --rm --network=none --platform linux/amd64 \
 
 ## 关联文档
 
+- [v2.0 K8s / K3s 客户交付及首次管理员流程](customer-v2-k8s-first-admin-delivery-flow.md)（两步客户流程、供应方出包准备、旧开放模式升级）
 - `docs/runbooks/customer-k8s-test-package-principles.md`（Mac 构建待测包、amd64 服务器验收、与客户包的分界）
 - `docs/runbooks/customer-delivery-preflight-checklist.md`（全流程通用交付防坑指南）
 - `docs/specs/lucy-customer-amd64-offline-delivery-spec.md`
@@ -196,3 +212,7 @@ docker run --rm --network=none --platform linux/amd64 \
 - `scripts/gates/g8-image-k8s-contract-gate.sh`
 - `scripts/gates/verify-k8s-package.sh`
 - `scripts/gates/k8s-upgrade-gate.sh`
+
+## 发布流水线口径（T14）
+
+CI 中候选镜像由 `customer-amd64-native` 原生 amd64 **一次**构建并推送为 `candidate-amd64-…`；客户发布 tag 只能在 `customer-release-readiness` 通过后由 `release-package` **promote 同一 digest** 产生，门禁后不得重建。客户镜像始终是 linux/amd64 单架构；G1–G4（含 ELF 架构）、G4b、G8 不因接入 E2E 门禁而减少。本机 Mac 构建仍遵守"禁止 `docker buildx create --use`"。

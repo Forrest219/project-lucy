@@ -3,8 +3,8 @@
 | 元数据 | 内容 |
 |---|---|
 | 文档类型 | Product / UX / IA / Frontend Implementation Spec |
-| 版本 | v1.0 |
-| 日期 | 2026-09-26 |
+| 版本 | v1.1 |
+| 日期 | 2026-09-26；2026-10-19 v1.1 明确被引用 Role 的删除反馈 |
 | 适用页面 | `/admin/roles/new`、`/admin/roles/:roleId` |
 | 现状证据 | `inbox/role-permission-ia-audit-20260926/role-permission-ia-audit.md` 及同目录截图 |
 | 上游契约 | Spec 98 / 99 / 100 / 131；`docs/access-control/design-upgrade.md` |
@@ -58,7 +58,7 @@ New terms:
 | 新建 / 复制 | 基本信息、可访问的表、允许的 MCP 工具、行级策略（可选） | 任意切换，无强制步骤 |
 | 正式 Role 编辑 | 概览、可访问的表、允许的 MCP 工具、行级策略（可选）、使用情况 | 基本信息在概览编辑 |
 | 参考模板 | 与正式 Role 一致 | 全部只读；仅「基于此模板创建 Role」 |
-| 删除 | 概览中的危险次要动作 | dryRun 后打开删除影响确认 Drawer |
+| 删除 | 概览中的危险次要动作 | 未被引用时 dryRun 后打开删除影响确认 Drawer。仍被 Agent 引用时按钮保持禁用，并在按钮旁展示解除引用说明。`?mode=delete` 对仍被引用的 Role 只展示该说明，不打开 Drawer、不发 DELETE |
 
 兼容映射：
 
@@ -195,7 +195,25 @@ confirmSave(preview):
   navigate to canonical Role URL
 ```
 
-失败分支对应 SC-150-06、07、09、13、14、15；成功路径对应 SC-150-03、05、12、14。
+```text
+openDelete(role):
+  if role.source != yaml OR role is delete-protected:
+    hide 删除 Role
+    stop
+  if role.usageCount > 0:
+    keep 删除 Role disabled
+    show the blocked reason beside it, naming referencing Agents
+    if arrival is ?mode=delete or ?action=delete:
+      clear those params
+      present the same blocked reason
+    do not open the confirm Drawer
+    do not call DELETE
+    stop
+  dryRun DELETE
+  open 确认删除 Role Drawer
+```
+
+失败分支对应 SC-150-06、07、09、13、14、15；成功路径对应 SC-150-03、05、12、14。`openDelete` 的引用阻断对应 SC-150-15。
 
 ## 8. Design System Compliance
 
@@ -222,7 +240,7 @@ confirmSave(preview):
 | SC-150-12 | 仅保存时打开结构化确认 Drawer；YAML diff 默认折叠 |
 | SC-150-13 | 草稿变化使旧预览失效，旧 payload/version 不可提交 |
 | SC-150-14 | dryRun → confirm → formal save；失败或 `runtimeAck=false` 保留草稿 |
-| SC-150-15 | 删除走影响确认；被 Agent 引用和模板均不可删除 |
+| SC-150-15 | 未引用正式 Role 的删除走影响确认；被 Agent 引用时展示引用对象并阻止删除；模板与受保护 Role 不提供删除 |
 | SC-150-16 | Drawer 支持 Esc、焦点管理和唯一可访问名称 |
 | SC-150-17 | 1440/1200 无遮挡；1024 可控横向滚动，不做移动布局 |
 | SC-150-18 | 术语与翻译防御通过 lint |

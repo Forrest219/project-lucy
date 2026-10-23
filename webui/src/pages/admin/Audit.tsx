@@ -15,6 +15,7 @@ import type {
   AuditTurnEntry,
   AuditTurnsResponse
 } from "../../lib/types";
+import { callMonitorWindow } from "../../lib/callMonitorWindow";
 import { PageHeader } from "../../components/PageHeader";
 import { DecisionReasonCell } from "../../components/DecisionReasonCell";
 
@@ -513,14 +514,15 @@ function playgroundReplayHref(entry: Pick<AuditLogEntry, "userId" | "tool" | "ar
   return `/admin/mcp-playground?${params.toString()}`;
 }
 type AuditTab = "turns" | "calls";
-type WindowHours = 1 | 24 | 168;
-type RangePreset = "1h" | "24h" | "7d";
-type TimePreset = "1h" | "24h" | "7d" | "today" | "custom";
+type WindowHours = 1 | 24 | 168 | 720;
+type RangePreset = "1h" | "24h" | "7d" | "30d";
+type TimePreset = "1h" | "24h" | "7d" | "30d" | "today" | "custom";
 
 const TIME_PRESET_LABELS: Record<TimePreset, string> = {
   "1h": "近 1 小时",
   "24h": "近 24 小时",
   "7d": "近 7 天",
+  "30d": "近 30 天",
   "today": "今日",
   "custom": "自定义"
 };
@@ -543,20 +545,29 @@ function formatStatsTimeLabel(statsAt: Date | null, now: Date): string {
   return `${pad(statsAt.getHours())}:${pad(statsAt.getMinutes())}:${pad(statsAt.getSeconds())}`;
 }
 
-/** Spec 106 + Spec 143: prefer `range=1h|24h|7d`; accept legacy `hours=1|24|168`. */
+/** Spec 106 + Spec 165: prefer `range=1h|24h|7d|30d`; accept legacy `hours=1|24|168|720`. */
 function parseRangePreset(searchParams: URLSearchParams): RangePreset {
   const range = searchParams.get("range");
-  if (range === "1h" || range === "24h" || range === "7d") return range;
+  if (range === "1h" || range === "24h" || range === "7d" || range === "30d") return range;
   const hours = searchParams.get("hours");
   if (hours === "1") return "1h";
   if (hours === "24") return "24h";
+  if (hours === "720") return "30d";
   return "7d";
 }
 
 function rangeToHours(range: RangePreset): WindowHours {
   if (range === "1h") return 1;
   if (range === "24h") return 24;
+  if (range === "30d") return 720;
   return 168;
+}
+
+function sinceForRange(range: RangePreset, now = new Date()): string {
+  if (range === "30d") {
+    return toLocalDateTimeValue(new Date(callMonitorWindow("30d", now).since));
+  }
+  return sinceLocalFromHours(rangeToHours(range), now);
 }
 
 /** Spec 106: prefer `view=turns|calls`; accept legacy `tab=`. */
@@ -654,7 +665,7 @@ function formatTablesCell(sources: AuditTurnEntry["sources"]): string {
 }
 
 const TURN_SOURCE_FILTER_TITLE =
-  "来源类型：用户原始问询为客户端上报；系统推断问询由工具调用参数自动生成摘要，不等同于用户原文。";
+  "来源类型：用户原始问询为客户端上报。没有原文的查数问询摘要固定为「未上报问询原文」，会话访问以「会话建立：」开头。两者都不等同于用户原话。";
 
 /** Spec 135: ID-like input routes to `key`; free text routes to turnSearch / tableSearch. */
 function looksLikeIdQuery(raw: string): boolean {
@@ -674,7 +685,7 @@ function TurnSourceBadge({ source }: { source: AuditTurnEntry["source"] }) {
     return <span className="pl-status-badge pl-status-done">已上报问询</span>;
   }
   return (
-    <span className="pl-status-badge pl-status-partial" title="基于工具调用自动生成，不等同于用户原文">
+    <span className="pl-status-badge pl-status-partial" title="没有客户端上报的原文，不等同于用户原话">
       推断问询
     </span>
   );
@@ -741,7 +752,7 @@ function TurnDetailDrawer({
             <>
               {detail.source === "inferred" ? (
                 <section className="pl-card text-xs text-fg-muted" data-testid="audit-turn-inferred-disclaimer">
-                  推断问题摘要基于工具调用参数自动生成，不等同于用户原文。
+                  没有客户端上报的原文。问询摘要不是用户原话，涉及的数据表见明细。
                 </section>
               ) : null}
 
@@ -751,6 +762,12 @@ function TurnDetailDrawer({
                     <span>开始 {formatConfigAuditTs(detail.startedAt ?? detail.createdAt ?? "")}</span>
                   ) : null}
                   {detail.endedAt ? <span>结束 {formatConfigAuditTs(detail.endedAt)}</span> : null}
+                  {detail.client ? (
+                    <span>客户端 <span className="notranslate" translate="no">{detail.client}</span></span>
+                  ) : null}
+                  {detail.sessionId ? (
+                    <span>会话 ID <span className="notranslate" translate="no">{detail.sessionId}</span></span>
+                  ) : null}
                   {typeof detail.linkedCallCount === "number" ? (
                     <span>关联调用 {detail.linkedCallCount}</span>
                   ) : null}
@@ -1105,7 +1122,17 @@ function EntryRow({
           <span className={`pl-status-badge ${outcomeClass}`}>{OUTCOME_LABELS[entry.outcome]}</span>
         </td>
         <td className="pl-audit-table-muted">
-          <span className="tabular-nums">{entry.durationMs}ms</span>
+          <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+            <span className="tabular-nums">{entry.durationMs}ms</span>
+            {entry.usageSlowCall ? (
+              <span
+                className="pl-status-badge pl-status-partial text-[11px] px-1.5 whitespace-nowrap"
+                data-testid={`audit-usage-slow-${entry.id}`}
+              >
+                问询慢标记
+              </span>
+            ) : null}
+          </span>
         </td>
         <td className="pl-audit-table-mono">{entry.tool}</td>
         <td className="pl-audit-table-muted">{entry.tables?.join(", ")}</td>
@@ -1326,22 +1353,12 @@ export function Audit() {
   const [turnDrawerOpen, setTurnDrawerOpen] = useState(Boolean(searchParams.get("turnId")));
   const [now, setNow] = useState(() => new Date());
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [timePreset, setTimePreset] = useState<TimePreset>(() => {
-    const r = searchParams.get("range");
-    if (r === "1h") return "1h";
-    if (r === "24h") return "24h";
-    if (r === "7d") return "7d";
-    const hours = searchParams.get("hours");
-    if (hours === "1") return "1h";
-    if (hours === "24") return "24h";
-    return "7d";
-  });
+  const [timePreset, setTimePreset] = useState<TimePreset>(() => parseRangePreset(searchParams));
 
   const user = searchParams.get("user") ?? "";
   const tool = searchParams.get("tool") ?? "";
   const outcome = searchParams.get("outcome") ?? "";
   const tokenHashPrefix = searchParams.get("tokenHashPrefix") ?? "";
-  const decisionReasonPrefix = searchParams.get("decisionReasonPrefix") ?? "";
   const tableSearch = searchParams.get("tableSearch") ?? "";
   const sessionId = searchParams.get("sessionId") ?? "";
   const clientIp = searchParams.get("clientIp") ?? "";
@@ -1383,12 +1400,12 @@ export function Audit() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasHydratedFromStorage]);
 
-  const sinceDefault = sinceLocalFromHours(hours);
+  const sinceDefault = sinceForRange(range);
   const [since, setSince] = useState(sinceDefault);
   const [until, setUntil] = useState("");
 
   useEffect(() => {
-    setSince(sinceLocalFromHours(hours));
+    setSince(sinceForRange(range));
     setTimePreset(range);
     setPage(0);
   }, [hours, range]);
@@ -1476,6 +1493,9 @@ export function Audit() {
     } else if (preset === "7d") {
       setUntil("");
       updateParam("range", "7d");
+    } else if (preset === "30d") {
+      setUntil("");
+      updateParam("range", "30d");
     } else if (preset === "today") {
       const todayStart = new Date();
       todayStart.setHours(0, 0, 0, 0);
@@ -1529,13 +1549,12 @@ export function Audit() {
     }
   }
 
-  const rangeDefaultSince = sinceLocalFromHours(hours);
+  const rangeDefaultSince = sinceForRange(range);
   const hasNonDefaultFilters = Boolean(
     user
       || tool
       || outcome
       || tokenHashPrefix
-      || decisionReasonPrefix
       || tableSearch
       || keySearch
       || sessionId
@@ -1553,7 +1572,7 @@ export function Audit() {
 
   function clearFilters() {
     setUntil("");
-    setSince(sinceLocalFromHours(hours));
+    setSince(sinceForRange(range));
     setPage(0);
     setAdvancedOpen(false);
     const next = new URLSearchParams();
@@ -1618,7 +1637,6 @@ export function Audit() {
     tokenHashPrefix: tokenHashPrefix || undefined,
     tool: tool || undefined,
     outcome: outcome || undefined,
-    decisionReasonPrefix: decisionReasonPrefix || undefined,
     since: localDateTimeValueToIso(since),
     until: localDateTimeValueToIso(until),
     tableSearch: tableSearch || undefined,
@@ -1702,27 +1720,14 @@ export function Audit() {
   const callExportUrl = `/api/admin/audit/export${callExportFilterQuery}`;
   const exportPackUrl = `/api/admin/audit/export-pack${callExportFilterQuery}`;
   const metadataUrl = `/api/admin/audit/export-metadata?kind=${tab === "turns" ? "turns" : "calls"}`;
-  const primaryExport = tab === "turns"
+  const currentExport = tab === "turns"
     ? {
         href: turnExportUrl,
-        label: "导出问询记录",
-        title: "导出当前筛选下的问询记录 CSV：一行代表一次用户问询。"
+        title: "导出当前筛选的问询记录"
       }
     : {
         href: callExportUrl,
-        label: "导出调用流水",
-        title: "导出当前筛选下的调用流水 CSV：一行代表一次工具调用。"
-      };
-  const secondaryExport = tab === "turns"
-    ? {
-        href: callExportUrl,
-        label: "导出调用流水",
-        title: "导出当前筛选下的调用流水 CSV：一行代表一次工具调用。"
-      }
-    : {
-        href: turnExportUrl,
-        label: "导出问询记录",
-        title: "导出当前筛选下的问询记录 CSV：一行代表一次用户问询。"
+        title: "导出当前筛选的调用流水"
       };
 
   const tabLink = (nextTab: AuditTab) => {
@@ -1747,35 +1752,22 @@ export function Audit() {
         actions={
           <div className="flex flex-wrap items-center gap-3">
             <a
-              href={primaryExport.href}
+              href={currentExport.href}
               download
               className="pl-btn pl-btn--secondary text-sm"
               data-testid="audit-export-current"
-              title={primaryExport.title}
+              title={currentExport.title}
             >
-              {primaryExport.label}
-            </a>
-            <a
-              href={secondaryExport.href}
-              download
-              className="pl-btn pl-btn--secondary text-sm"
-              data-testid="audit-export-related"
-              title={secondaryExport.title}
-            >
-              {secondaryExport.label}
+              导出
             </a>
             <a
               href={exportPackUrl}
               download
-              className="pl-btn pl-btn--secondary text-sm"
+              className="pl-inline-link"
               data-testid="audit-export-pack"
-              title="导出审计证据包 zip（含 Manifest）"
+              title="下载审计证据包"
             >
               导出审计证据包
-              <span className="notranslate" translate="no">
-                {" "}
-                Manifest
-              </span>
             </a>
           </div>
         }
@@ -1850,7 +1842,7 @@ export function Audit() {
           role="group"
           aria-label="时间范围"
         >
-          {(["1h", "24h", "7d", "today", "custom"] as TimePreset[]).map((preset) => (
+          {(["1h", "24h", "7d", "30d", "today", "custom"] as TimePreset[]).map((preset) => (
             <button
               key={preset}
               type="button"
@@ -2076,7 +2068,7 @@ export function Audit() {
             ) : null}
             {turnTotal === 0 || (turnSummary && turnSummary.reportedCount === 0) ? (
               <div className="text-xs text-fg-muted" data-testid="audit-turns-coverage-hint">
-                用户原文依赖客户端可选上报；未上报时仅显示推断问询。
+                未上报原文时按会话保留问询。
               </div>
             ) : null}
           </div>
@@ -2096,6 +2088,8 @@ export function Audit() {
                   <th className="pl-audit-turns-col-time whitespace-nowrap">开始时间</th>
                   <th className="pl-audit-turns-col-duration whitespace-nowrap">问询时长</th>
                   <th className="pl-audit-turns-col-agent whitespace-nowrap"><span className="notranslate" translate="no">Agent</span></th>
+                  <th className="whitespace-nowrap">客户端</th>
+                  <th className="whitespace-nowrap">会话 ID</th>
                   <th className="pl-audit-turns-col-summary whitespace-nowrap">问询摘要</th>
                   <th className="pl-audit-turns-col-calls whitespace-nowrap">关联调用数</th>
                   <th className="pl-audit-turns-col-tables whitespace-nowrap">涉及数据表</th>
@@ -2105,7 +2099,7 @@ export function Audit() {
               </thead>
               <tbody>
                 {filteredTurnEntries.length === 0 ? (
-                  <tr><td colSpan={10} className="px-3 py-6 text-center text-fg-muted">暂无问询记录</td></tr>
+                  <tr><td colSpan={12} className="px-3 py-6 text-center text-fg-muted">暂无问询记录</td></tr>
                 ) : (
                   filteredTurnEntries.map((entry, index) => {
                     const denied = entry.outcomeSummary?.denied ?? 0;
@@ -2131,6 +2125,8 @@ export function Audit() {
                           ) : null}
                         </td>
                         <td className="notranslate" translate="no">{formatAgentLabel(entry.userId, agentNameById)}</td>
+                        <td className="notranslate" translate="no">{entry.client || "—"}</td>
+                        <td className="pl-audit-table-mono notranslate" translate="no">{entry.sessionId || "—"}</td>
                         <td className="pl-audit-turn-summary-cell">{entry.questionPreview ?? entry.questionSummary ?? "—"}</td>
                         <td className="pl-audit-table-num">{entry.linkedCallCount}</td>
                         <td className="pl-audit-table-muted pl-audit-turn-tables-cell notranslate" translate="no" title={entry.sources.map((s) => s.physicalTable).filter(Boolean).join(", ") || undefined}>

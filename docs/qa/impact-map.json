@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft-07/schema#",
-  "description": "Lucy WebUI E2E 变更影响映射。维护规则：路由/组件/API 改动 → 必须更新对应映射；CI 通过 git diff 自动计算 L2 准入集合。",
-  "version": "0.2.0",
-  "lastUpdated": "2026-07-31",
+  "description": "Lucy WebUI E2E 变更影响映射。维护规则：路由/组件/API 改动 → 必须更新对应映射；CI 通过 git diff 自动计算 L2 准入集合。v0.3.0（T09）：补录 admin/skills/ops 现行路由与组件，映射目标为现行 contract spec 文件（spec:<文件名>），因这些 spec 不带 E2E-* 场景编号；workbench-pending-count 已由 workbench-batch-sync-hint 取代。真实 Agent E2E（SEC-*/UX-* 场景）的影响映射由 T10/T11 目录冻结后另行维护。",
+  "version": "0.3.0",
+  "lastUpdated": "2026-10-18",
   "route": {
     "/onboarding": ["E2E-CON-01"],
     "/connections": ["E2E-CON-01", "E2E-CON-02", "E2E-CON-03", "E2E-CON-04", "E2E-CON-05", "E2E-CON-06", "E2E-SEC-01"],
@@ -14,7 +14,21 @@
     "/wiki": ["E2E-WIKI-01", "E2E-WIKI-02", "E2E-WIKI-03", "E2E-WIKI-04", "E2E-WIKI-05", "E2E-NAV-03"],
     "/publish/workbench": ["E2E-PUB-01", "E2E-PUB-02", "E2E-PUB-03", "E2E-PUB-04", "E2E-PUB-05", "E2E-PUB-07", "E2E-NAV-01", "E2E-RES-01", "E2E-A11Y-02"],
     "/publish/history": ["E2E-PUB-06", "E2E-PUB-07", "E2E-NAV-01"],
-    "/review": ["E2E-PUB-02"]
+    "/review": ["E2E-PUB-02"],
+    "/login": ["spec:smoke"],
+    "/catalog": ["spec:catalog-scope-tree", "spec:entry-performance-behavior"],
+    "/admin/agents": ["spec:agent-admin", "spec:admin-data-grid-consistency"],
+    "/admin/agents/:id": ["spec:agent-admin"],
+    "/admin/roles/:id": ["spec:role-permission-structure"],
+    "/admin/roles/new": ["spec:role-permission-structure"],
+    "/admin/admins": ["spec:admin-data-grid-consistency"],
+    "/admin/tokens": ["spec:admin-data-grid-consistency"],
+    "/admin/audit": ["spec:admin-data-grid-consistency"],
+    "/admin/config-audit": ["spec:admin-data-grid-consistency"],
+    "/eval/cases": ["spec:admin-data-grid-consistency"],
+    "/eval/monitor": ["spec:admin-data-grid-consistency"],
+    "/skills": ["spec:business-skill-151"],
+    "/help": ["spec:entry-performance-behavior"]
   },
   "component": {
     "AddSchemaDrawer": ["E2E-CON-02"],
@@ -38,7 +52,17 @@
     "PublishHistory": ["E2E-PUB-06", "E2E-NAV-01"],
     "SemanticAssetPublishButton": ["E2E-PUB-03"],
     "SemanticAssetPublishDrawer": ["E2E-PUB-01", "E2E-PUB-04", "E2E-A11Y-02"],
-    "SemanticAssetExportButton": ["E2E-PUB-07", "E2E-SEC-02"]
+    "SemanticAssetExportButton": ["E2E-PUB-07", "E2E-SEC-02"],
+    "CatalogScopeTree": ["spec:catalog-scope-tree"],
+    "SetupAssistantModal": ["spec:setup-assistant"],
+    "SchemaStructurePrep": ["spec:setup-assistant"],
+    "EndpointConflictPanel": ["spec:setup-assistant"],
+    "AgentList": ["spec:agent-admin"],
+    "AgentDetail": ["spec:agent-admin"],
+    "RoleTableGrants": ["spec:role-permission-structure"],
+    "SkillList": ["spec:business-skill-151"],
+    "Audit": ["spec:admin-data-grid-consistency"],
+    "CallMonitor": ["spec:admin-data-grid-consistency"]
   },
   "api": {
     "GET /api/connections": ["E2E-CON-01", "E2E-CON-06"],
@@ -66,7 +90,7 @@
     "PUT /api/wiki/:key": ["E2E-WIKI-04"]
   },
   "selectorTestId": {
-    "workbench-pending-count": ["E2E-PUB-01", "E2E-PUB-04"],
+    "workbench-batch-sync-hint": ["E2E-PUB-01", "E2E-PUB-04"],
     "workbench-validate": ["E2E-PUB-01", "E2E-PUB-04"],
     "workbench-reindex": ["E2E-PUB-05"],
     "workbench-upload-semantic-asset": ["E2E-PUB-03"],
@@ -150,7 +174,9 @@
     "wiki-template-card-<name>": ["E2E-WIKI-05"],
     "wiki-yaml-boundary-hint": ["E2E-WIKI-05"],
     "sl-ref-picker": ["E2E-WIKI-03"],
-    "sl-ref-badge-<conn>-<schema>-<table>": ["E2E-WIKI-03"]
+    "sl-ref-badge-<conn>-<schema>-<table>": ["E2E-WIKI-03"],
+    "skill-role-none": ["spec:business-skill-151 (negative: must be absent)"],
+    "role-skill-access-summary": ["spec:role-permission-structure (negative: must be absent)"]
   },
   "forbiddenTermChange": {
     "（新增）": ["E2E-I18N-01", "E2E-I18N-02"]

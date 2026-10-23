@@ -4,12 +4,12 @@
 |---|---|
 | 文档名称 | Connection Delete Spec |
 | 文档类型 | Spec |
-| 版本 | v1.1 |
+| 版本 | v1.2 |
 | 撰写日期 | 2026-08-25 |
 | 撰写人 | Cursor Grok 4.6 |
 | 委托人 | xingchen |
 | 基于材料 | `/connections` 核实无删除连接入口；Spec 124 Non-Goal「不删除连接」；Spec 117 移除 Schema dryRun / 可选清文件模式；`CreateConnectionDrawer` / `RemoveSchemaDrawer` |
-| 适用范围 | `/connections` 连接卡片「删除连接」；`POST /api/connections/:connId/remove`；`ktx.yaml` 连接键与 `setup.database_connection_ids`；可选约定密码文件与本地 YAML 资产；ACL / Wiki 仅影响预览 |
+| 适用范围 | `/connections` 连接卡片「删除连接」；`POST /api/connections/:connId/remove`；`ktx.yaml` 连接键与 `setup.database_connection_ids`；可选约定密码文件与本地 YAML 资产。角色、用户、业务 Wiki 与未一并删除的本地 YAML 的阻断见 Spec 179 |
 | 输出位置 | `webui/docs/127-connection-delete-spec.md` |
 
 | 字段 | 内容 |
@@ -28,6 +28,7 @@
 |---|---|
 | v1.0 | 初稿并落地：对称新建连接的删除闭环；翻转 Spec 124「删除仍手工」 |
 | v1.1 | 确认区显式展示连接 ID；卡片「删除连接」改为与同组 secondary 一致 |
+| v1.2 | 角色、用户、业务 Wiki 和未一并删除的本地 YAML 不再只预览。确认删除改由 Spec 179 阻断 |
 
 ## 1. 背景
 
@@ -41,7 +42,7 @@
 2. API 默认 `dryRun:true`：展示脱敏 `ktx.yaml` diff、将带走的 Schema / 已启用表、约定 secret 是否可删、本地 YAML 资产候选、角色 ACL 引用、Wiki 引用。
 3. 确认写入时 **必须**：删除 `connections.<connId>`；若存在则从 `setup.database_connection_ids` 移出该项。该连接的 `schemas` / `enabled_tables` 随键一起消失。
 4. 可选（默认不勾）：删除约定路径密码文件 `.ktx/secrets/<connId>-password`；删除 `semantic-layer/<connId>/` 下现存 YAML 资产。
-5. **不**改写 `access.yaml`（只列出仍引用该连接的 Role）；**不**删除业务 Wiki 正文。
+5. **不**改写 `access.yaml`，**不**删除业务 Wiki 正文。仍有角色、用户、业务 Wiki，或未勾选一并删除的本地 YAML 时，确认删除由 Spec 179 阻断。
 6. 确认前须原样输入连接 ID。
 7. 审计 `change_type=connection_delete`；diff / 响应 **脱敏**。
 8. **不**连接物理库、**不** DROP 远端库/Schema/表。
@@ -51,7 +52,7 @@
 | 非目标 | 理由 |
 |---|---|
 | 不删除 / 重命名物理数据库 | 配置卸载，不是 DBA 删库 |
-| 不自动改写 `access.yaml` | Role Admin 是 ACL 写入路径；本单只预览引用，避免双通道改权限 |
+| 不自动改写 `access.yaml` | 角色权限仍是 ACL 写入路径。本单不改权限；引用还在时由 Spec 179 拒绝删除 |
 | 不删除 Wiki Markdown | 与 Spec 117 一致：只统计失效 `sl_refs` |
 | 不删除评测用例、发布包历史 | 独立治理 |
 | 不编辑连接凭据 / 不轮换密码 | Spec 124 仍保留 |
@@ -114,7 +115,7 @@ Body：
 
 `yamlAssetPaths`：递归列出 `semantic-layer/<connId>/` 下现存 `.yaml` / `.yml`（跳过不安全路径段）。
 
-`aclRoleIds`：`roles.*.allow.connections` 含该 ID，或 `roles.*.allow.tableSelectors[].connection` 等于该 ID。文件缺失或无法解析时视为无引用，不阻断删除。
+`aclRoleIds`：`roles.*.allow.connections` 含该 ID，或 `roles.*.allow.tableSelectors[].connection` 等于该 ID。`access.yaml` 缺失或无法解析时，这一项视为无引用。引用存在时是否允许确认删除，见 Spec 179。
 
 ### 5.3 写入响应 `DeleteConnectionResult`
 
@@ -152,7 +153,7 @@ yaml 写入失败则不删文件。文件删除失败时 yaml 已提交：残留
 
 ## 6. UI（`/connections`）
 
-1. 连接卡片 footer 增加 **删除连接**（与同组「+ 添加 Schema / 重新拉取库内目录 / 同步配置变更」同为 `pl-btn pl-btn--secondary`；**不得**做成 Primary 或幽灵链接）。
+1. Spec 163 修订本条的位置：删除连接放在卡片「更多」菜单内，使用危险色文字，不与「添加 Schema」并排。确认抽屉、连接 ID 输入和本节其余条款不变。原要求（页脚同级 `pl-btn--secondary`）作废。
 2. `DeleteConnectionDrawer`：打开即 dryRun → 影响预览 + 可选项 + 输入连接 ID → 确认。标题区与确认输入框均显式标注 **连接 ID** 及待输入值。
 3. 预览必须展示：Schema 数、已启用表数（可展开）、约定密码文件是否可删、YAML 资产数、Role 引用、Wiki 引用页数。
 4. 勾选区默认全关。文案说明：不删物理库；`access.yaml` 与 Wiki **不会**被本操作改写。
@@ -175,10 +176,10 @@ yaml 写入失败则不删文件。文件删除失败时 yaml 已提交：残留
 
 - 引用：`design-system/10-components-button.md`（同组并列维护动作为 secondary；危险确认在 Drawer 内用 `pl-btn--danger`；不得升 Primary）。
 - PageHeader「新建连接」仍为唯一 primary。
-- 删除连接放在卡片 footer，与「+ 添加 Schema」同层级 chrome，不可逆确认留在抽屉。
+- Spec 163：删除连接在卡片「更多」内，不可逆确认仍留在抽屉。
 
 ## 9. 交叉引用
 
 - 修订 Spec 124：删除连接从 Non-Goal 改为指向本 Spec。
 - Spec 117：本操作删除整条连接；Schema 行「移除 Schema」仍用于收缩单个 Schema。
-- Spec 15 Role Admin：残留 Role 引用需运维在角色管理中手工清理；本单只预览。
+- Spec 15 Role Admin：残留角色引用需先到角色权限里改掉。Spec 179 在这些引用还在时拒绝删除。

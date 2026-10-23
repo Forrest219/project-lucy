@@ -529,6 +529,9 @@ export function validateWikiDraft(ctx: WikiValidationContext): WikiValidationFin
       });
     }
   }
+  if (!(frontmatter.allowed_roles ?? []).length) {
+    findings.push({ level: "warning", message: "未授权任何角色：保存后 Agent 无人可见，请在编辑页选择可访问角色。" });
+  }
   if (!key.endsWith(".md")) {
     findings.push({ level: "error", message: "路径必须以 `.md` 结尾，业务 Wiki 使用 Markdown 存储。" });
   }

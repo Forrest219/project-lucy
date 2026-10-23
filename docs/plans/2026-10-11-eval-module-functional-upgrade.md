@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Eval Module Functional Upgrade |
 | 文档类型 | Product Optimization Plan（形态 A：目标态与优先级，**不含**实现工单） |
-| 版本 | v0.4 |
-| 评审入口 | Spec [`webui/docs/161-offline-eval-customer-ops-spec.md`](../../webui/docs/161-offline-eval-customer-ops-spec.md) v0.1；工单 [`webui/docs/plans/wo-202610-11-offline-eval-customer-ops.md`](../../webui/docs/plans/wo-202610-11-offline-eval-customer-ops.md) |
+| 版本 | v0.4（跑批一节已按 Spec 161 v0.2 去掉数据变化） |
+| 评审入口 | Spec [`webui/docs/161-offline-eval-customer-ops-spec.md`](../../webui/docs/161-offline-eval-customer-ops-spec.md) v0.2；工单 [`webui/docs/plans/wo-202610-11-offline-eval-customer-ops.md`](../../webui/docs/plans/wo-202610-11-offline-eval-customer-ops.md) |
 | 撰写日期 | 2026-10-11 |
 | 委托人 | xingchen |
 | 基于材料 | 质量评测现有页面（评测用例、运行历史、趋势监控、安全评测候选）；[`2026-10-11-eval-result-policy-context-upgrade.md`](2026-10-11-eval-result-policy-context-upgrade.md)；两套客户访问日志 |
@@ -45,7 +45,7 @@
 3. 在客户库里执行。
 4. 对照两类事情。结构：能否编译、列齐不齐、粒度有没有变粗、身份条件在不在、要的业务指标有没有出现。勾稽：用例写明的两条查询，结果是否一致。
 
-新数据进来导致数字变化，记为数据变化，这一条仍算通过。列、粒度或过滤条件变了，记为答错了。编译失败、指标没绑上、分组或语句错误，记为没答出来。
+列、粒度或过滤条件变了，记为答错了。编译失败、指标没绑上、分组或语句错误，记为没答出来。数字相对以往运行发生变化时，本版不单独记原因，也不因此判失败。
 
 跑批写出一份结果文件，带套件哈希、截止日期，以及每一条的结论和原因。这份文件不经过 Agent，也不访问模型。
 

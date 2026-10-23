@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy Admin Catalog-Bound Role Spec |
 | 文档类型 | Spec |
-| 版本 | v1.0 |
-| 撰写日期 | 2026-09-02 |
+| 版本 | v1.1；2026-10-19 v0.2-draft（与 `inbox/audit-trust/audit-trust-2026-10-19-r1/T00-r2/implementation-contract.md` §2.2 / §7 同批生效）：可读授权投影 + `policy_scope_expanded` 配置审计事件查阅 |
+| 撰写日期 | 2026-09-02；2026-10-19 v0.2-draft 增补 §x 可读授权投影 + 扩权证据导航 |
 | 撰写人 | Cursor Agent |
 | 委托人 | xingchen |
 | 基于材料 | `lucy_admin` Spec 与实现计划；`docs/access-control/design-upgrade.md` ADR-AC-06/G9；`webui/docs/15-role-admin-spec.md`；`webui/docs/98-access-control-p0-runtime-spec.md`；`webui/docs/07-mcp-auth-proxy-spec.md` |
@@ -13,6 +13,11 @@
 | 输出位置 | `webui/docs/131-lucy-admin-catalog-bound-role-spec.md` |
 | 关联 WO | `webui/docs/plans/wo-202609-01-lucy-admin-catalog-bound.md` |
 | 冲突裁决 | 与 design-upgrade 冲突 → design-upgrade（含 ADR-AC-07）；实现与本文冲突 → 本文 |
+
+> v1.1（2026-10-13）：原编号 131 的 `131-governed-skill-system-and-context-transpass-spec.md`
+> 与本文重号，已改号为 171；此后 131 专指本文。同时修正 §3.1 示例的工具集，补齐
+> `sl_validate`、`lucy_skill_search`、`lucy_skill_read`、`lucy_certified_route`、`lucy_report_template`，
+> 与 `LUCY_ADMIN_TOOLS` 对齐。
 
 ---
 
@@ -40,16 +45,16 @@ AC-P0 将 Role 表授权钉在显式 `tableSelectors.names`（v2 禁 `prefix`）
 1. 提供预置参考模板与推荐正式 Role id：`lucy_admin`。
 2. 引入显式字段 `allow.source_scope: catalog_bound`：在**已声明** `allow.connections` 内，授权对象 = source map ∩ `enabled_tables`。
 3. 同连接新启用表经策略重编译后进入能力集，且必须产生可观测 `policy_scope_expanded`。
-4. 新 connection **不**自动进入；AbsoluteDeny 与 `tools: ["*"]` 仍拒绝。
+4. 正式 Role `lucy_admin` 覆盖全部已配置连接；新 connection 在策略重编译后自动进入。其他 `catalog_bound` Role 的新 connection **不**自动进入。AbsoluteDeny 与 `tools: ["*"]` 仍拒绝。`connections: ["*"]` 只允许 `lucy_admin`。
 5. 明确与 **WebUI Admin（控制面登录账户）** 正交，不得混称为同一「管理员」。
 
 ### 1.3 成功标准
 
 | ID | 标准 |
 |---|---|
-| SC-01 | `lucy_admin` + `catalog_bound` + 非空 connections 可编译；Agent 可访问该连接下全部 enabled sources |
+| SC-01 | `lucy_admin` + `catalog_bound` 可编译；Agent 可访问全部已配置连接下的 enabled sources |
 | SC-02 | 同连接新增 enabled 表并重编译后无需改 names；出现 `policy_scope_expanded` |
-| SC-03 | 未写入 `allow.connections` 的新连接无 capability / 连接拒 |
+| SC-03 | 新 connection 对 `lucy_admin` 在重编译后自动进入；其他 `catalog_bound` Role 未写入 `allow.connections` 则无 capability |
 | SC-04 | `tools: ["*"]` 或 AbsoluteDeny 工具 → 编译/保存失败 |
 | SC-05 | UI/手册不把 `lucy_admin` 称为 WebUI 所有者或登录管理员 |
 | SC-06 | 既有 `names` / v1 `prefix` Role 零回归 |
@@ -58,7 +63,7 @@ AC-P0 将 Role 表授权钉在显式 `tableSelectors.names`（v2 禁 `prefix`）
 
 ## 2. Non-Goals
 
-- 裸 `connections: ["*"]` / `tables: ["*"]` / Role `tools: ["*"]`
+- 除 `lucy_admin` 外的 `connections: ["*"]`；`tables: ["*"]`；Role `tools: ["*"]`
 - 登录 WebUI 即自动获得 MCP 全库 Token
 - 绕过 AbsoluteDeny（`sl_*` / `sql_execution` / `memory_ingest*` 等）
 - 恢复 v2 `prefix` 选择器
@@ -79,7 +84,7 @@ roles:
     permission_model_version: 2
     allow:
       connections:
-        - demo-mysql
+        - "*"
       source_scope: catalog_bound
       tools:
         - lucy_catalog
@@ -90,19 +95,33 @@ roles:
         - lucy_begin_question
         - kx_catalog
         - connection_list
-        - wiki_search
-        - wiki_read
         - entity_details
+        - sl_validate
         - dictionary_search
         - discover_data
+        - wiki_search
+        - wiki_read
+        - lucy_skill_search
+        - lucy_skill_read
+        - lucy_certified_route
+        - lucy_report_template
 ```
+
+上例 18 个工具等于 `webui/server/admin/role-templates.ts` 的 `LUCY_ADMIN_TOOLS = DATA_PLANE_TOOLS ∪ META_TOOLS`
+（`webui/server/proxy/acl.ts`，共 18 个，排除 AbsoluteDeny）。新增工具须同步改这份示例。
+
+其中 `wiki_search`、`wiki_read`、`lucy_skill_search`、`lucy_skill_read` 自 Spec 170 起归入
+`CONTEXT_TOOLS`，对任意已解析且启用的 Agent 常开，不依赖本字段授权；写在这里只为与实现保持一致。
+真正需要本字段授予的是 `sl_validate`、`lucy_certified_route`、`lucy_report_template` 这三个后续新增项。
+Demo 模板 `examples/docker-demo/project-template/webui/config/access.yaml` 已补齐同一组工具，
+`scripts/runtime/docker-entrypoint.sh` 的 `patch_lucy_admin_tools` 负责给存量卷幂等补齐。
 
 ### 3.2 字段语义
 
 | 字段 | 语义 |
 |---|---|
 | `allow.source_scope` | 缺省 / 省略 = 现行 `tableSelectors` 路径。唯一合法显式值：`catalog_bound` |
-| `allow.connections` | `catalog_bound` 时**必填且非空**；新连接必须人工加入 |
+| `allow.connections` | 普通 `catalog_bound` **必填且非空**，新连接必须人工加入。`lucy_admin` 写 `["*"]`，解析为全部已配置连接 |
 | `allow.tableSelectors` | `catalog_bound` 时必须缺省或空数组；与 `catalog_bound` 并存 → 编译失败 |
 | `allow.tools` | 显式工具名列表；禁止 `*`；不得含 AbsoluteDeny / 未分类工具 |
 | `permission_model_version` | `catalog_bound` **要求**为 `2` |
@@ -158,7 +177,7 @@ SourcesGrantedBy(r) =
 |---|---|---|
 | `names` | access.yaml 显式名单 | **不**扩权 |
 | v1 `prefix` | access.yaml 前缀谓词 | 可扩权，须 `policy_scope_expanded` |
-| `catalog_bound` | access.yaml 显式 `source_scope` + connections；对象解析靠 source map ∩ enabled_tables | 同连接可扩权，须 `policy_scope_expanded`；**新连接不扩权** |
+| `catalog_bound` | access.yaml 显式 `source_scope` + connections；对象解析靠 source map ∩ enabled_tables。`lucy_admin` 的 connections 为全部已配置连接 | 同连接可扩权，须 `policy_scope_expanded`。`lucy_admin` 的新连接同样扩权并审计；其他 Role 的新连接不扩权 |
 
 `catalog_bound` **不是** `tables: ["*"]`，也**不是**恢复 v2 `prefix`。
 
@@ -180,6 +199,16 @@ SourcesGrantedBy(r) =
 3. **Token**：不建议为 `lucy_admin` 签发无过期长期 Token；创建 Token 流至少提示建议设置过期时间（不强制改 Token 数据模型）。
 4. **客户高敏环境**：可不创建该正式 Role；参考模板仍只读可见。
 5. **控制面 / 数据面分离**：WebUI Admin 鉴权（`admins.yaml`）不得自动映射为 MCP Agent `lucy_admin`。
+
+### 5.1 可读授权投影与扩权证据（v0.2-draft，2026-10-19 audit-trust）
+
+依据 `docs/specs/lucy-20261019-audit-trust-and-admin-investigation-spec.md` §4.2 / `inbox/audit-trust/audit-trust-2026-10-19-r1/T00-r2/implementation-contract.md` §2.2：
+
+1. **可读授权投影**：Admin 通过 `GET /api/admin/roles?source=template` 列表 + `GET /api/admin/roles/:roleId/effective-permissions` 字段（`webui/server/admin/permission-display.ts:resolvePermissionBatch`）得到「Role → 生效连接 / 来源 / 工具 / 行权限 / 命中原因」；受管理员可见性限制；只用于审查，不替代 runtime ACL 编译。审计侧不在本批新增独立可见页面。
+2. **扩权事件**：`policy_scope_expanded` 已由 `webui/server/proxy/acl.ts:emitPolicyScopeExpanded` 在角色生效源集合扩大时记录；事件字段包含 `roleId / sourcesBefore / sourcesAfter / added / removed / sourceMapVersion`，由 `webui/server/admin/audit.ts:recordConfigChange` 持久化。Admin 由 `GET /api/admin/config-audit?changeType=policy_scope_expanded&targetId=<roleId>` 查阅（`webui/server/admin/audit.ts:registerAuditRoutes` 注册；查询字段定义于 `listConfigChangeAudit` 一带，第 2101 行附近）。不允许凭推断。
+3. **lucy_admin 与 catalog_bound 边界**：保留 v1.1 既有规则——`lucy_admin` 沿用所有已配置连接的特例；普通 `catalog_bound` 不得扩权到未声明连接；扩权集合变化必须定位到 `config_change_log.policy_scope_expanded`，**不引入额外授权扩大**。
+4. **服务端不信任短 hash / token_label 作为安全主键**（与 `webui/docs/00-product-terminology-standard.md` §4.7.1 一致）。
+5. **可信来源分类与扩权证据的关系**：`extractRequestClientMeta` 返回的 `trustedSource` 是审计行的可观测分类；`local_admin / customer / trusted_proxy / untrusted_peer / unknown` 五值（`webui/server/proxy/request-client-meta.ts:RequestClientMeta`）。`untrusted_peer`（socket peer 不在 `LUCY_TRUSTED_PROXY_CIDRS` 但带了 `X-Forwarded-For`）写入审计行作为伪造 XFF 证据。**ACL / 限流侧**仍由 `webui/server/auth/rate-limit.ts:clientSource`（line 54）以 socket-peer-vs-XFF 双判强制（trustProxyEnabled ∧ peer CIDR 才采纳 XFF；否则回落 socket peer），**`extractClientIp` 本身不参与 ACL 决策**——EA-10 由限流侧承担。
 
 ---
 

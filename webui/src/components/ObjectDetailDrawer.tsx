@@ -2,6 +2,8 @@ import { useRef } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { agentRoleIds } from "./AgentRoleField";
+import { PolicyDegradeRepairText } from "./PolicyDegradeBanner";
 import { apiGet } from "../lib/apiClient";
 import { DecisionReasonCell } from "./DecisionReasonCell";
 import {
@@ -20,6 +22,7 @@ import type {
   SourceSummary,
   SourcesResponse
 } from "../lib/types";
+import { adminAgentsQueryOptions } from "../lib/displayQueryOptions";
 
 type AgentsResponse = { agents: Agent[]; version?: string };
 
@@ -216,8 +219,7 @@ type AgentTarget = Extract<NonNullable<ReturnType<typeof parseObjectDetailSearch
 
 function AgentDetailBody({ target }: { target: AgentTarget }) {
   const agentsQuery = useQuery({
-    queryKey: ["admin", "agents"],
-    queryFn: () => apiGet<AgentsResponse>("/api/admin/agents")
+    ...adminAgentsQueryOptions<AgentsResponse>()
   });
   const match: Agent | undefined = (agentsQuery.data?.agents ?? []).find(
     (agent: Agent) => agent.id === target.agentId
@@ -238,7 +240,7 @@ function AgentDetailBody({ target }: { target: AgentTarget }) {
   return (
     <div className="grid gap-3" data-testid="object-detail-agent-body">
       <DetailRow label="显示名" value={match.name} />
-      <DetailRow label="Role" value={match.role ?? "旧 ACL"} notranslate />
+      <DetailRow label="角色" value={agentRoleIds(match).join(", ") || (match.roleResolutionError ? "角色声明冲突" : "旧 ACL")} notranslate />
       <DetailRow label="状态" value={match.enabled ? "启用" : "禁用"} />
       <DetailRow label="Token 数" value={`${match.tokens.length}`} />
       <DetailRow label="近 7 天调用" value={`${match.stats?.callsLast7d ?? 0}`} />
@@ -291,20 +293,6 @@ function isRoleDetail(value: unknown): value is RoleDetailType {
     && hasValidUsers
     && Boolean(candidate.role)
     && typeof candidate.role === "object";
-}
-
-function roleWarningDiagnosis(warning: string): { diagnosis: string; technical: string } {
-  const technical = warning.trim();
-  if (technical.startsWith("role_resolution_failed")) {
-    return {
-      diagnosis: "权限解析失败：当前配置无法生成有效的数据源 / MCP 工具边界。",
-      technical
-    };
-  }
-  return {
-    diagnosis: "权限配置需检查：系统返回了未识别的校验信息。",
-    technical
-  };
 }
 
 function RoleDetailBody({ target }: { target: RoleTarget }) {
@@ -380,22 +368,13 @@ function RoleDetailBody({ target }: { target: RoleTarget }) {
       />
       {role.warnings.length > 0 ? (
         <div className="grid gap-1">
-          <span className="pl-eyebrow text-danger">警告 / 诊断</span>
-          <ul className="grid gap-2 text-xs text-danger">
-            {role.warnings.map((warning, idx) => {
-              const { diagnosis, technical } = roleWarningDiagnosis(warning);
-              return (
-                <li key={idx} className="grid gap-1">
-                  <span>{diagnosis}</span>
-                  <span className="text-fg-muted">
-                    技术详情：{" "}
-                    <code className="notranslate rounded bg-bg-subtle px-1 py-0.5 font-mono text-[11px]" translate="no">
-                      {technical}
-                    </code>
-                  </span>
-                </li>
-              );
-            })}
+          <span className="pl-eyebrow">需要修改</span>
+          <ul className="grid gap-2 text-xs text-fg-default">
+            {role.warnings.map((warning) => (
+              <li key={warning}>
+                <PolicyDegradeRepairText reason={warning} />
+              </li>
+            ))}
           </ul>
         </div>
       ) : null}

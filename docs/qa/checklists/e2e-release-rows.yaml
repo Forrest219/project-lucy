@@ -1,0 +1,40 @@
+# E2E 证据行。权威链接表，供 docs/qa/e2e-release-checklist.md 与 checklist-links 测试使用。
+# 一行引用冻结目录中的场景 id；变体分母仍在 scripts/e2e/contracts/case-catalog.yaml。
+# 本文件不记录运行结果。没有 good_line：安全、吊销、审计与门禁反向测试只有二元判定。
+version: 1
+kind: e2e-evidence
+judgment: binary
+rows:
+  - id: E2E-AUTH
+    title: 认证、引导、职责、会话回收与限速
+    scenarios: [SEC-01, SEC-02, SEC-03, SEC-04, SEC-05]
+  - id: E2E-TOKEN
+    title: Token 展示、吊销、错误身份与会话归属
+    scenarios: [SEC-06, SEC-07, SEC-08, SEC-21]
+  - id: E2E-ACL
+    title: 授权对象、Role Set、真行集、绕过与策略失效
+    scenarios: [SEC-09, SEC-10, SEC-11, SEC-12, SEC-13]
+  - id: E2E-CONTEXT
+    title: 上下文隔离、文件供应链、间接注入与泄漏扫描
+    scenarios: [SEC-14, SEC-15, SEC-16, SEC-17]
+  - id: E2E-AUDIT
+    title: 可问责审计、审计故障与导出保留
+    scenarios: [SEC-18, SEC-19, SEC-20]
+  - id: E2E-DELIVERY
+    title: 客户网络、依赖交付与 amd64 K8s
+    scenarios: [SEC-22, SEC-23, OPS-01]
+  - id: E2E-JOURNEY
+    title: 管理到使用、离线 Eval 与现场提问
+    scenarios: [UX-01, UX-06, UX-07]
+  - id: E2E-AGENT-EVIDENCE
+    title: 真实 Agent 证据是否齐
+    scenarios: [UX-02, UX-03, UX-04, UX-05]
+  - id: E2E-GATE
+    title: 门禁反向测试
+    scenarios: [GATE-01]
+  - id: E2E-GUI
+    title: 人工 GUI
+    manual:
+      doc: docs/qa/manual-gui-e2e-checklist.md
+      products: [workbuddy, cursor]
+      steps: [M-01, M-02, M-03, M-04, M-05]

@@ -62,6 +62,9 @@ afterEach(async () => {
   await rm(projectRoot, { recursive: true, force: true });
 });
 
+/** Spec §4.3: saves to an existing page carry the file_version they were based on. */
+const versionOf = async (key: string): Promise<string> => (await readWiki(projectRoot, key)).file_version;
+
 describe("wiki editor storage", () => {
   it("round-trips frontmatter and markdown", async () => {
     await writeFile(
@@ -75,6 +78,23 @@ describe("wiki editor storage", () => {
     expect(page.frontmatter.tags).toEqual(["finance"]);
     expect(page.frontmatter.sl_refs).toEqual(["mysql/schema/table"]);
     expect(page.content).toContain("# Revenue");
+  });
+
+  it("keeps visibility and allowed_roles when the editor saves (SC-8)", async () => {
+    await writeFile(
+      path.join(projectRoot, "wiki", "global", "payroll.md"),
+      "---\nvisibility: private\nallowed_roles:\n  - finance_admin\nsummary: Payroll\n---\n# Payroll\n",
+      "utf8"
+    );
+    await writeWiki(projectRoot, "global/payroll.md", {
+      frontmatter: { summary: "Payroll revised" },
+      content: "# Payroll revised\n",
+      expected_version: await versionOf("global/payroll.md")
+    });
+    const saved = await readFile(path.join(projectRoot, "wiki", "global", "payroll.md"), "utf8");
+    expect(saved).toContain("visibility: private");
+    expect(saved).toContain("finance_admin");
+    expect(saved).toContain("Payroll revised");
   });
 
   it("previews without writing, then writes only under wiki", async () => {
@@ -667,13 +687,20 @@ describe("wiki editor storage", () => {
 
   it("generates create, edit, upload and restore versions", async () => {
     await writeWiki(projectRoot, "global/versioned.md", { content: "# First\n" });
-    await writeWiki(projectRoot, "global/versioned.md", { content: "# Second\n" });
-    await writeWiki(projectRoot, "global/versioned.md", { content: "# Second\n" });
+    await writeWiki(projectRoot, "global/versioned.md", {
+      content: "# Second\n",
+      expected_version: await versionOf("global/versioned.md")
+    });
+    await writeWiki(projectRoot, "global/versioned.md", {
+      content: "# Second\n",
+      expected_version: await versionOf("global/versioned.md")
+    });
     await commitWikiUpload(projectRoot, {
       key: "global/versioned.md",
       markdown: "# Uploaded\n",
       overwrite: true,
-      sourceFileName: "uploaded.md"
+      sourceFileName: "uploaded.md",
+      expected_version: await versionOf("global/versioned.md")
     });
 
     let versions = await listWikiVersions(projectRoot, "global/versioned.md");
@@ -727,7 +754,8 @@ describe("wiki editor storage", () => {
           key: "global/api-versioned.md",
           markdown: "# API Uploaded\n",
           overwrite: true,
-          sourceFileName: "api-uploaded.md"
+          sourceFileName: "api-uploaded.md",
+          expected_version: await versionOf("global/api-versioned.md")
         }
       });
       expect(upload.statusCode).toBe(200);
@@ -802,7 +830,8 @@ describe("wiki document move (M56 UX-WIKI-011)", () => {
     // Edit save so we have at least one baseline snapshot under the old key.
     await writeWiki(projectRoot, "global/cross-team-note.md", {
       frontmatter: { summary: "Cross team v2" },
-      content: "# Cross team v2\n"
+      content: "# Cross team v2\n",
+      expected_version: await versionOf("global/cross-team-note.md")
     });
 
     const result = await moveWiki(projectRoot, "global/cross-team-note.md", "ops/playbooks");
@@ -902,7 +931,7 @@ describe("wiki upload preflight enrichment (M56 UX-WIKI-013)", () => {
   it("surfaces sourceFileName, targetKey and titles for create-mode uploads", async () => {
     const preview = await previewWikiUpload(projectRoot, {
       key: "global/draft-note.md",
-      markdown: "---\nsummary: Imported\n---\n# Imported\n",
+      markdown: "---\nsummary: Imported\nallowed_roles: [analyst]\n---\n# Imported\n",
       sourceFileName: "draft-note.md"
     });
 

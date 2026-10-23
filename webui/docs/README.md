@@ -90,14 +90,14 @@
 | [96-admin-config-audit-table-filter-polish-spec.md](96-admin-config-audit-table-filter-polish-spec.md) | `/admin/config-audit` 固定 20 行、`pl-data-grid`、中文业务字段、时间筛选与快捷窗口 | 产品 / UX / Frontend / API |
 | [97-admin-config-audit-header-export-parity-spec.md](97-admin-config-audit-header-export-parity-spec.md) | `/admin/config-audit` 删页头「访问日志」；CSV 与主表 7 列中文对齐；文件名精确到秒 | 产品 / UX / Frontend / API |
 | [98-agent-admin-kpi-column-order-and-identity-header-spec.md](98-agent-admin-kpi-column-order-and-identity-header-spec.md) | `/admin/agents` KPI/表列顺序重排；主列头「显示名/用户 ID」 | 产品 / UX / Frontend |
-| [99-mcp-playground-acl-decision-visibility-spec.md](99-mcp-playground-acl-decision-visibility-spec.md) | MCP 调试台：ACL 裁决预览、裁决原因双行可读化、必达 `tools/list` smoke（Implemented v1.1） | 产品 / API / UX / 安全 / Frontend |
+| [99-mcp-playground-acl-decision-visibility-spec.md](99-mcp-playground-acl-decision-visibility-spec.md) | MCP 调试台：ACL 裁决预览、裁决原因双行可读化、必达 `tools/list` smoke（Implemented v1.5） | 产品 / API / UX / 安全 / Frontend |
 | [100-overview-health-action-deeplink-loop-spec.md](100-overview-health-action-deeplink-loop-spec.md) | `/overview` 深链 Registry 闭环；Catalog query 原子交付；回写 refetch；Attu 指标卡 icon（Implemented v1.2） | 产品 / UX / Frontend |
 | [102-overview-quality-risk-metric-row-unification-spec.md](102-overview-quality-risk-metric-row-unification-spec.md) | `/overview` 质量快照 / 访问风险六卡 Metric Row 统一（历史；首页分区已被 Spec 142 删除） | 产品 / UX / Frontend |
 | [103-list-page-kpi-metric-card-unification-spec.md](103-list-page-kpi-metric-card-unification-spec.md) | 列表页 KPI 以 Connections 为基准；每卡 ⓘ；共享 MetricCard；允许 3/4/8 网格（Implemented v1.0） | 产品 / UX / Design System / Frontend |
 | [104-enabled-scope-semantic-coverage-alignment-spec.md](104-enabled-scope-semantic-coverage-alignment-spec.md) | 语义覆盖 / 待补语义 / Catalog 默认范围对齐 `enabled_tables`（Implemented v1.0） | 产品 / UX / API / Frontend |
 | [105-wiki-directory-selection-explorer-ia-spec.md](105-wiki-directory-selection-explorer-ia-spec.md) | `/wiki` Attu 式目录选中驱动右栏、中栏面板视觉、空态；重命名延期（Implemented v1.0） | 产品 / UX / IA / Frontend |
 | [106-admin-audit-identity-filters-and-url-spec.md](106-admin-audit-identity-filters-and-url-spec.md) | `/admin/audit` 身份 Key 列、序号/Header 同构、共享筛选、`view`/`range` URL（Implemented v1.0） | 产品 / UX / API / Frontend |
-| [107-connection-live-catalog-discovery-spec.md](107-connection-live-catalog-discovery-spec.md) | `/connections` Owner 按需只读库内目录：库内表数列、Add Schema 可选、live-schemas API（Implemented v1.0；修订 Spec 21 边界） | 产品 / UX / API / Frontend |
+| [107-connection-live-catalog-discovery-spec.md](107-connection-live-catalog-discovery-spec.md) | `/connections` Owner 按需只读库内目录：库内表数列、Add Schema 有候选时只下拉、live-schemas API（Implemented v1.1；修订 Spec 21 边界） | 产品 / UX / API / Frontend |
 | [108-connection-card-connectivity-health-summary-spec.md](108-connection-card-connectivity-health-summary-spec.md) | `/connections` 连接卡右侧连通健康摘要：进页并行探测、延迟 ms、Drawer 同源（Implemented v1.0；修订 Spec 44 入口） | 产品 / UX / Frontend |
 | [109-wiki-directory-rename-spec.md](109-wiki-directory-rename-spec.md) | `/wiki` 目录重命名：同父级改名、前缀批量改写、预检/提交 API（Implemented v1.1；承接 UX-WIKI-044） | 产品 / UX / IA / API / Frontend |
 | [112-publish-workbench-flow-and-gate-ia-spec.md](112-publish-workbench-flow-and-gate-ia-spec.md) | `/publish/workbench` 发布流程可视、三栏角色、Header 收口、发布门禁（Implemented v1.0；修订 Spec 35 §6.1–6.3） | 产品 / UX / IA / Frontend |
@@ -118,7 +118,7 @@
 | [124-audit-query-artifact-cold-store-spec.md](124-audit-query-artifact-cold-store-spec.md) | 查询原文加密冷存（Superseded / legacy；主路径见 Spec 125） | 产品 / 安全 / Audit |
 | [125-audit-generated-sql-hot-store-spec.md](125-audit-generated-sql-hot-store-spec.md) | 热库明文 `generated_sql` + 调用流水列表/CSV 直展（Implemented） | 产品 / 安全 / Audit / Backend / Frontend |
 | [126-customer-branding-logo-config-spec.md](126-customer-branding-logo-config-spec.md) | 客户品牌外观：Logo / 产品名称 / 副标题配置页（Spec 126；对齐 Tableau Server Logo 约束） | 产品 / UX / Frontend / Backend |
-| [127-connection-delete-spec.md](127-connection-delete-spec.md) | 删除连接：从 `ktx.yaml` 卸载连接配置；dryRun 影响面；可选删约定 secret 与本地 YAML 资产；ACL/Wiki 只预览（Implemented v1.0） | 产品 / UX / API / Frontend |
+| [127-connection-delete-spec.md](127-connection-delete-spec.md) | 删除连接：从 `ktx.yaml` 卸载连接配置；dryRun 影响面；可选删约定 secret 与本地 YAML 资产。引用阻断见 Spec 179（Implemented v1.2） | 产品 / UX / API / Frontend |
 | [128-enterprise-kpi-contract-spec.md](128-enterprise-kpi-contract-spec.md) | Enterprise KPI 合规契约：四状态规则（ok/no_data/unavailable/partial）、D1–D4 锁定口径、HR-1–HR-7 硬规则、MetricCard 渲染规范；Gate A（状态规范化）与 Gate B（公式修正）实施指南 | 产品 / 前端 / Backend / API |
 | [135-admin-usage-and-audit-uiux-refinement-spec.md](135-admin-usage-and-audit-uiux-refinement-spec.md) | 使用概况与访问日志 UI/UX 重构：看板指标分层与复合卡片、排行榜弹性高与 Tooltip、抽屉排版坍塌根治与触达表内聚、主表高密降噪与状态语义解耦、快捷时间预设与单行弹性筛选栏 | 产品 / UX / Frontend |
 | [136-publish-workbench-uiux-refinement-spec.md](136-publish-workbench-uiux-refinement-spec.md) | 发布工作台 UI/UX 重构：Pipeline Stepper 流水线状态机、异常驱动静默校验展示与 Calm UI、左侧变更资产树 (+N/-M 统计) 与右侧双视图联动、全局 Toast 防抖去重 | 产品 / UX / Frontend |
@@ -128,16 +128,32 @@
 | [140-admin-audit-dual-csv-export-spec.md](140-admin-audit-dual-csv-export-spec.md) | `/admin/audit` 双粒度 CSV 导出：问询记录一问一行、调用流水一调用一行，并在页面与 Help 说明两者关联 | 产品 / UX / API / Audit / Frontend / Backend |
 | [141-admin-audit-csv-readability-metadata-spec.md](141-admin-audit-csv-readability-metadata-spec.md) | `/admin/audit` CSV 可读性增强：本地时间 + UTC 双轨、秒级流水号文件名、字段说明元数据 | 产品 / UX / API / Audit / Frontend / Backend |
 | [142-overview-focus-and-restraint-spec.md](142-overview-focus-and-restraint-spec.md) | `/overview` 聚焦精简：只保留系统状态 / 待处理事项 / MCP 接入；删除质量快照与访问风险（Implemented v1.0） | 产品 / UX / Frontend |
-| [143-call-monitoring-ops-page-spec.md](143-call-monitoring-ops-page-spec.md) | 调用监控运维页：运行状态分组、`/ops/calls` 准实时 MCP 吞吐/成败/时效盯盘、SLO 红标与访问日志下钻（Implemented） | 产品 / UX / API / Ops / Frontend / Backend |
+| [143-call-monitoring-ops-page-spec.md](143-call-monitoring-ops-page-spec.md) | 调用监控运维页：运行状态分组、`/ops/calls` 准实时 MCP 吞吐/成败/时效盯盘、SLO 红标与访问日志下钻（Implemented v1.1；窗口与折线见 Spec 165） | 产品 / UX / API / Ops / Frontend / Backend |
 | [146-restore-row-policy-proxy-wiring-spec.md](146-restore-row-policy-proxy-wiring-spec.md) | Row Policy Proxy 接线恢复：修复 `68db68a` 抹掉的 `forced_filters` 注入与 explain 诊断（安全修复） | Backend / Security |
 | [150-role-permission-configuration-structure-spec.md](150-role-permission-configuration-structure-spec.md) | Role 权限配置结构化重构：可访问的表 / 允许的 MCP 工具 / 行级策略独立编辑面，共享草稿与确认权限变更 Drawer | 产品 / UX / IA / Frontend / Accessibility |
 | [151-business-skill-authorization-and-file-safety-spec.md](151-business-skill-authorization-and-file-safety-spec.md) | 业务 Skill 授权与文件安全加固：`roles_allowed` 单一事实源、同角色闭合、身份不可变、并发版本与审计证据 | 产品 / API / 安全 / Frontend / Audit |
 | [152-catalog-connection-schema-tree-p0-spec.md](152-catalog-connection-schema-tree-p0-spec.md) | `/catalog` Connection → Schema 可折叠范围树 P0：替代位置下拉、保留右侧语义资产表格，并用匿名聚合验证定位成本 | 产品 / UX / Frontend / Observability |
 | [153-unified-skill-workbench-spec.md](153-unified-skill-workbench-spec.md) | `/skills` 统一工作台：领域浏览器、治理总览、主区阅读/编辑、Markdown 双栏、脏数据保护与写入预检 | 产品 / UX / API / Frontend / Accessibility |
 | [154-role-list-p0-p1-remediation-spec.md](154-role-list-p0-p1-remediation-spec.md) | `/admin/roles` P0/P1 修复：快捷详情防白屏、Data Grid 唯一列表、高级筛选收敛与空结果恢复 | 产品 / UX / IA / Frontend / Accessibility |
-| [156-runtime-status-usage-boundary-spec.md](156-runtime-status-usage-boundary-spec.md) | 使用概况并入运行状态；健康 KPI 只留 `/ops/calls`，资产活跃留在数据访问视图；分组排行按当前目录归类，资产卡不再被 P95 连坐（Accepted v1.3） | 产品 / UX / IA / Frontend / Docs |
+| [156-runtime-status-usage-boundary-spec.md](156-runtime-status-usage-boundary-spec.md) | 使用概况并入运行状态；健康 KPI 只留 `/ops/calls`，资产活跃留在数据访问视图；分组排行按当前目录归类，资产卡不再被 P95 连坐（Accepted v1.6；窗口见 Spec 165，页面访问折线见 Spec 166，密度见 Spec 169） | 产品 / UX / IA / Frontend / Docs |
 | [159-page-header-context-dedup-spec.md](159-page-header-context-dedup-spec.md) | 六个页面 PageHeader 上下文去重：移除正文、指标卡或相邻控件已承载的信息；Run 详情仅保留运行状态 | 产品 / UX / Frontend / Accessibility |
-| [161-offline-eval-customer-ops-spec.md](161-offline-eval-customer-ops-spec.md) | 客户离线评测：v2 套件、编译重跑、答对/答错/没答出来、现场提问、现场对照（待评审 v0.1；修订 Spec 46 客户主路径；工单 `plans/wo-202610-11-offline-eval-customer-ops.md`） | 产品 / UX / API / Eval |
+| [161-offline-eval-customer-ops-spec.md](161-offline-eval-customer-ops-spec.md) | 客户离线评测 v0.2，可交付：与 `lucy_query` 同一执行路径、答对了/答错了/没答出来、现场提问；不完整结果文件整体拒收 | 产品 / UX / API / Eval |
+| [162-customer-query-experience-and-usage-evidence-spec.md](162-customer-query-experience-and-usage-evidence-spec.md) | 客户查数体验与使用证据 v0.3：问询预算、过滤条件下推、四失败维度；`wiki_not_found` 归用法与语义。WO-12 已验收 | 产品 / Proxy / Audit |
+| [163-connection-overview-card-quiet-spec.md](163-connection-overview-card-quiet-spec.md) | 连接概览卡片收纳 v0.1：拿掉每卡四层运行时；页脚五按钮收成添加 Schema 与更多；问数未加载或不可用时列表上方提示一次。已实现，工单 WO-202610-16 | 产品 / UX / Frontend |
+| [164-add-schema-structure-next-step-spec.md](164-add-schema-structure-next-step-spec.md) | 添加 Schema 成功步 v0.1：只留已添加状态和一颗主按钮；能读库时读取表结构并进入启用表范围。已实现，工单 WO-202610-17 | 产品 / UX / Frontend |
+| [165-call-monitor-window-series-spec.md](165-call-monitor-window-series-spec.md) | 调用监控窗内折线 v0.1：全页一组时间窗（近 1 小时 / 近 24 小时 / 近 7 天 / 近 30 天），六张 KPI 折线拆开同一窗口；30 秒刷新整份快照，失败保留上一份。已实现，工单 WO-202610-18。修订 Spec 143 / 156 | 产品 / UX / API / Frontend / Backend |
+| [167-setup-assistant-authoring-howto-spec.md](167-setup-assistant-authoring-howto-spec.md) | 接入向导 how to v0.1：第 2 步「如何生成 Schema Manifest」，第 5 步「如何写业务 Wiki」。编写说明交给任意 Agent，不挡主按钮。已实现 | 产品 / UX / Frontend |
+| [168-agent-role-set-admin-spec.md](168-agent-role-set-admin-spec.md) | Agent 角色多选 v0.1：详情和新建用复选框绑定多个角色，写入只落 `roles[]`，预览和门禁复用既有合成。已实现，工单 WO-202610-20。落实 Spec 14 | 产品 / UX / API / Frontend / Backend / 安全 |
+| [169-usage-and-call-monitor-density-spec.md](169-usage-and-call-monitor-density-spec.md) | 使用概况与调用监控密度 v0.1：短排行顶部对齐，用量条改中性灰；调用量去掉重复窗口副文，当天失败只显示时刻，自动刷新写明 30 秒；数据访问 / 界面使用改为内容页签。已实现，工单 WO-202610-21。修订 Spec 135 / 156 / 165 | 产品 / UX / Frontend |
+| [166-usage-page-view-series-spec.md](166-usage-page-view-series-spec.md) | 使用概况页面访问折线 v0.1：只在界面使用的「近 N 页面访问」上拆开当前 24 小时或 7 天；各点相加等于卡片数字。已实现，工单 WO-202610-19。修订 Spec 148 / 156 | 产品 / UX / API / Frontend / Backend |
+| [170-mvp-open-skill-wiki-access-spec.md](170-mvp-open-skill-wiki-access-spec.md) | Skill 与 Wiki 对所有角色开放 v0.1：暂停对象授权和四个上下文工具的勾选；已发布 Skill 与全部 Wiki 对已解析角色开放。已实现，工单 WO-202610-22。暂停 Spec 151 的对象授权 | 产品 / Runtime / UX / 安全 |
+| [172-audit-session-visit-spec.md](172-audit-session-visit-spec.md) | 访问日志按会话对账 v0.1：一次 MCP 会话一条问询，推断问询 ID 取首条调用，未上报原文的握手仍可查询。工单 WO-202610-23。修订 Spec 138 / 140 / 162。v0.2 由 Spec 173 实施 | 产品 / Audit / API |
+| [173-audit-one-question-one-inquiry-spec.md](173-audit-one-question-one-inquiry-spec.md) | 一次提问一条问询 v0.2：已上报会话不再并列推断问询；未上报原文的摘要固定为「未上报问询原文」；失败但已解析出源的调用按源写入来源明细。工单 WO-202610-25。修订 Spec 172，并入 WO-202610-24 | 产品 / Audit / API |
+| [174-webui-entry-performance-spec.md](174-webui-entry-performance-spec.md) | WebUI进入性能：批量权限解析、版本化显示缓存、分区就绪、预压缩/lazy、有界探测；[实施工单](plans/wo-20261013-webui-entry-performance.md)；2026-10-14 Codex收尾完成，after-review-v3完整正式复验通过，见[执行报告§10](plans/wo-20261013-webui-entry-performance-IMPLEMENTATION_NOTES.md) / [复核闭环](plans/wo-20261014-webui-entry-performance-RECHECK.md)；未部署 | Frontend / Backend / Performance / QA |
+| [175-suspend-deployment-license-spec.md](175-suspend-deployment-license-spec.md) | 移除部署许可与激活码 v0.2：删除许可实现、签发脚本和 `license.yaml`。已实现，工单 WO-202610-26。运行中的容器需重建后才生效 | 产品 / Runtime / UX |
+| [176-engine-catalog-and-mcp-query-connection-spec.md](176-engine-catalog-and-mcp-query-connection-spec.md) | 新建连接 Amazon Athena v0.3：显式写出 KTX `driver: athena` 与 `databases`。v0.2 引擎目录 / MCP 查询连接已撤回。待审阅，未批准。工单 WO-202610-27 | 产品 / 连接 |
+| [179-connection-delete-reference-guard-spec.md](179-connection-delete-reference-guard-spec.md) | 删除连接前的引用校验 v0.2：角色、用户、业务 Wiki 或未一并删除的本地 YAML 还在时拒绝删除，并在确认前说明。已实现 | 产品 / UX / API / Frontend |
+| [187-access-relation-sankey-spec.md](187-access-relation-sankey-spec.md) | 访问关系图 v0.2-draft：Agent → 角色 → 连接 → 表的授权骨架 + 访问内核双层桑基图，Token 以凭证清单呈现。v2.5 提案 L25-08。**初稿，未授权实现** | 产品 / UX / 前端 |
 
 ## 与原 README 的关键校正
 

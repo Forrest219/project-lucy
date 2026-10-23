@@ -3,19 +3,26 @@ import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiGet, apiPost } from "../../lib/apiClient";
-import type { Agent, AgentsResponseSummary, CreateAgentBody, Role } from "../../lib/types";
+import type { Agent, AgentsResponseSummary, CreateAgentBody, EffectivePermissionsPreview, Role } from "../../lib/types";
 import { buildMcpConfig } from "../../lib/mcpEndpoint";
+import { AgentRoleCapability, AgentRoleField, agentRoleIds, roleSelectionSavable } from "../../components/AgentRoleField";
 import { PageHeader } from "../../components/PageHeader";
+import { PolicyDegradeNotice } from "../../components/PolicyDegradeBanner";
+import { AsyncRegion, asyncStatus } from "../../components/AsyncRegion";
 import { MetricCard } from "../../components/MetricCard";
 import { buildObjectDetailSearch } from "../../lib/objectDetail";
 import { RowMoreMenu } from "../../components/RowMoreMenu";
 import { isLucyAdminDataPlaneRole } from "../../lib/lucyAdminRole";
+import { adminAgentsQueryOptions } from "../../lib/displayQueryOptions";
+import { queryKeys } from "../../lib/queryKeys";
 
 type AgentsResponse = {
   agents: Agent[];
   version: string;
   /** Optional server-side aggregate; absent on backends pre-dating M55. */
   summary?: AgentsResponseSummary;
+  /** Spec 174 §3.3 — display permission meta. */
+  meta?: { runtimeConsistency?: "matched" | "unconfirmed" };
 };
 type RolesResponse = { roles: Role[] };
 
@@ -210,101 +217,12 @@ function LastSeen({
   );
 }
 
-function RoleSummaryCard({ role }: { role: Role | undefined }) {
-  if (!role) {
-    return (
-      <div className="rounded-md border border-border-default bg-bg-base p-3 text-xs text-fg-muted">
-        请选择一个角色查看权限预览
-      </div>
-    );
-  }
-  return (
-    <div
-      className={`grid gap-2 rounded-md border p-3 text-sm ${
-        role.invalid ? "border-danger-strong bg-danger-soft" : "border-border-default bg-bg-base"
-      }`}
-      data-testid="role-summary-card"
-    >
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-semibold tracking-wider text-fg-muted uppercase">角色权限预览</span>
-        <span className="pl-status-badge pl-status-done notranslate" translate="no">
-          {role.id}
-        </span>
-        {role.source && (
-          <span className="pl-status-badge pl-status-partial">
-            {role.source === "template" ? "参考模板" : "正式 Role"}
-          </span>
-        )}
-        {role.invalid && (
-          <span className="pl-status-badge pl-status-validation_failed">待修复</span>
-        )}
-      </div>
-      <div className="grid gap-1">
-        <span className="text-xs text-fg-muted">数据源</span>
-        <strong>{role.sourceCount} 个授权 source</strong>
-      </div>
-      <div className="grid gap-1">
-        <span className="text-xs text-fg-muted">Connections</span>
-        <div className="flex flex-wrap gap-1.5">
-          {role.connections.length === 0 ? (
-            <span className="text-xs text-fg-muted">—</span>
-          ) : (
-            role.connections.map((conn) => (
-              <span key={conn} className="pl-status-badge pl-status-included">
-                {conn}
-              </span>
-            ))
-          )}
-        </div>
-      </div>
-      <div className="grid gap-1">
-        <span className="text-xs text-fg-muted"><span className="notranslate" translate="no">MCP</span> 工具</span>
-        <div className="flex flex-wrap gap-1.5">
-          {role.tools.length === 0 ? (
-            <span className="text-xs text-fg-muted">—</span>
-          ) : (
-            role.tools.map((tool) => (
-              <span key={tool} className="pl-status-badge pl-status-included">
-                {tool}
-              </span>
-            ))
-          )}
-        </div>
-      </div>
-      {role.description && <p className="text-xs text-fg-muted">{role.description}</p>}
-      {role.warnings.length > 0 && (
-        <ul className="grid gap-1 text-xs text-warning-strong">
-          {role.warnings.map((w, idx) => (
-            <li key={idx} className="grid gap-0.5">
-              <span>
-                ⚠{" "}
-                {w.startsWith("role_resolution_failed")
-                  ? "权限解析失败：当前配置无法生成有效的数据源 / MCP 工具边界。"
-                  : "权限配置需检查：系统返回了未识别的校验信息。"}
-              </span>
-              <span className="text-fg-muted">
-                技术详情：{" "}
-                <code
-                  className="notranslate rounded bg-bg-subtle px-1 py-0.5 font-mono text-[11px]"
-                  translate="no"
-                >
-                  {w}
-                </code>
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
 function NewAgentModal({ roles, onClose, onCreated }: { roles: Role[]; onClose: () => void; onCreated: (id: string) => void }) {
   const formalRoles = roles.filter((item) => item.source !== "template");
   const [id, setId] = useState("");
   const [name, setName] = useState("");
   const [note, setNote] = useState("");
-  const [role, setRole] = useState(formalRoles.find((item) => !item.invalid)?.id ?? formalRoles[0]?.id ?? "");
+  const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
   const [preview, setPreview] = useState<{ diff: string; proposedYaml: string } | null>(null);
   const [step, setStep] = useState<"form" | "diff">("form");
 
@@ -331,13 +249,19 @@ function NewAgentModal({ roles, onClose, onCreated }: { roles: Role[]; onClose: 
       id: id.trim(),
       name: name.trim(),
       note: note.trim() || undefined,
-      role
+      roles: selectedRoles
     };
   }
 
-  const selectedRole = formalRoles.find((item) => item.id === role);
-  const isInvalid = !!selectedRole?.invalid;
-  const canSubmit = !!id.trim() && !!name.trim() && !!role && !isInvalid;
+  const canSubmit = !!id.trim() && !!name.trim() && roleSelectionSavable(selectedRoles, formalRoles, false);
+  const capabilityQuery = useQuery({
+    queryKey: ["admin", "agent-create-capability", id.trim(), selectedRoles.join("\n")],
+    enabled: canSubmit && /^[A-Za-z0-9_-]{1,32}$/.test(id.trim()),
+    queryFn: () => apiPost<{ effectivePermissions?: EffectivePermissionsPreview }>("/api/admin/agents", {
+      dryRun: true,
+      agent: buildAgent()
+    })
+  });
 
   function handlePreview() {
     if (!canSubmit) {
@@ -351,44 +275,39 @@ function NewAgentModal({ roles, onClose, onCreated }: { roles: Role[]; onClose: 
     saveMutation.mutate({ dryRun: false, agent: buildAgent() });
   }
 
+  const showLucyAdminWarning = selectedRoles.some((roleId) => isLucyAdminDataPlaneRole(formalRoles.find((item) => item.id === roleId)) || roleId === "lucy_admin");
+
   return (
     <div className="pl-modal-backdrop">
-      <div className="pl-modal-panel">
-        <h2 className="text-lg font-semibold mb-4">新建 <span className="notranslate" translate="no">Agent</span></h2>
+      <div className="pl-modal-panel flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden" data-testid="new-agent-modal">
+        <h2 className="mb-4 shrink-0 text-lg font-semibold">新建 <span className="notranslate" translate="no">Agent</span></h2>
         {step === "form" ? (
-          <div className="grid gap-4">
-            <label className="grid gap-1">
-              <span className="text-sm font-medium">用户 ID <span className="text-danger">*</span></span>
-              <input className="pl-input" placeholder="例：wangwu" value={id} onChange={(e) => setId(e.target.value)} />
-              <span className="text-xs text-fg-muted">1-32 位，仅 A-Z a-z 0-9 _ -</span>
-            </label>
-            <label className="grid gap-1">
-              <span className="text-sm font-medium">显示名 <span className="text-danger">*</span></span>
-              <input className="pl-input" placeholder="例：王五" value={name} onChange={(e) => setName(e.target.value)} />
-            </label>
-            <label className="grid gap-1">
-              <span className="text-sm font-medium">备注</span>
-              <input className="pl-input" placeholder="可选" value={note} onChange={(e) => setNote(e.target.value)} />
-            </label>
-            <label className="grid gap-1">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">角色 <span className="text-danger">*</span></span>
-                <Link to="/admin/roles" className="text-xs text-accent hover:underline" aria-label="管理角色">
-                  管理角色 →
-                </Link>
-              </div>
-              <select className="pl-input" value={role} onChange={(e) => setRole(e.target.value)}>
-                {formalRoles.length === 0 && <option value="" disabled>暂无可用角色</option>}
-                {formalRoles.map((item) => {
-                  const suffix = item.invalid ? " · 待修复" : "";
-                  return (
-                    <option key={item.id} value={item.id} disabled={item.invalid}>
-                      {item.id}
-                      {suffix}
-                    </option>
-                  );
-                })}
-              </select>
+          <>
+            <div className="grid min-h-0 gap-4 overflow-y-auto">
+              <label className="grid gap-1">
+                <span className="text-sm font-medium">用户 ID <span className="text-danger">*</span></span>
+                <input className="pl-input" placeholder="例：wangwu" value={id} onChange={(e) => setId(e.target.value)} />
+                <span className="text-xs text-fg-muted">1-32 位，仅 A-Z a-z 0-9 _ -</span>
+              </label>
+              <label className="grid gap-1">
+                <span className="text-sm font-medium">显示名 <span className="text-danger">*</span></span>
+                <input className="pl-input" placeholder="例：王五" value={name} onChange={(e) => setName(e.target.value)} />
+              </label>
+              <label className="grid gap-1">
+                <span className="text-sm font-medium">备注</span>
+                <input className="pl-input" placeholder="可选" value={note} onChange={(e) => setNote(e.target.value)} />
+              </label>
+              <AgentRoleField
+                roles={formalRoles}
+                selected={selectedRoles}
+                onChange={setSelectedRoles}
+                required
+                header={
+                  <Link to="/admin/roles" className="text-xs text-accent hover:underline" aria-label="管理角色">
+                    管理角色 →
+                  </Link>
+                }
+              />
               {formalRoles.length === 0 && (
                 <span className="text-xs text-warning-strong">
                   还没有可用角色。请先创建角色。
@@ -397,44 +316,55 @@ function NewAgentModal({ roles, onClose, onCreated }: { roles: Role[]; onClose: 
                   </Link>
                 </span>
               )}
-            </label>
-            <RoleSummaryCard role={selectedRole} />
-            {isLucyAdminDataPlaneRole(selectedRole) && (
-              <div
-                className="rounded-md border border-warning-strong bg-warning-soft p-3 text-sm text-warning-strong"
-                data-testid="agent-lucy-admin-role-warning"
-              >
-                高权限运维数据面：所选 Role 在已声明连接内绑定启用表目录。这是{" "}
-                <span className="notranslate" translate="no">
-                  MCP
-                </span>{" "}
-                数据面权限，不是 WebUI 登录账户；签发{" "}
-                <span className="notranslate" translate="no">
-                  Token
-                </span>{" "}
-                时建议设置过期时间。
-              </div>
-            )}
-            <div className="flex justify-end gap-2 pt-2">
+              {showLucyAdminWarning && (
+                <div
+                  className="rounded-md border border-warning-strong bg-warning-soft p-3 text-sm text-warning-strong"
+                  data-testid="agent-lucy-admin-role-warning"
+                >
+                  高权限运维数据面：所选 Role 在已声明连接内绑定启用表目录。这是{" "}
+                  <span className="notranslate" translate="no">
+                    MCP
+                  </span>{" "}
+                  数据面权限，不是 WebUI 登录账户；签发{" "}
+                  <span className="notranslate" translate="no">
+                    Token
+                  </span>{" "}
+                  时建议设置过期时间。
+                </div>
+              )}
+              {selectedRoles.length > 0 && canSubmit && (
+                <AgentRoleCapability
+                  loading={capabilityQuery.isFetching}
+                  error={capabilityQuery.error ? (capabilityQuery.error as Error).message : undefined}
+                  permissions={capabilityQuery.data?.effectivePermissions}
+                />
+              )}
+              {selectedRoles.length > 0 && !canSubmit && (
+                <span className="text-xs text-warning">至少选择 1 个有效角色，并填写用户 ID 和显示名后显示数据能力</span>
+              )}
+            </div>
+            <div className="flex shrink-0 justify-end gap-2 border-t border-border-default pt-3">
               <button type="button" className="pl-btn pl-btn--ghost" onClick={onClose}>取消</button>
               <button type="button" className="pl-btn pl-btn--primary" onClick={handlePreview} disabled={!canSubmit || previewMutation.isPending}>
                 {previewMutation.isPending ? "生成中…" : "下一步：预览配置"}
               </button>
             </div>
-          </div>
+          </>
         ) : (
-          <div className="grid gap-4">
-            <p className="text-sm text-fg-muted notranslate" translate="no">以下改动将写入 access.yaml：</p>
-            <pre className="pl-diff-viewer text-xs max-h-64 overflow-auto">
-              {preview?.diff}
-            </pre>
-            <div className="flex justify-end gap-2 pt-2">
+          <>
+            <div className="grid min-h-0 gap-4 overflow-y-auto">
+              <p className="text-sm text-fg-muted notranslate" translate="no">以下改动将写入 access.yaml：</p>
+              <pre className="pl-diff-viewer text-xs max-h-64 overflow-auto">
+                {preview?.diff}
+              </pre>
+            </div>
+            <div className="flex shrink-0 justify-end gap-2 border-t border-border-default pt-3">
               <button type="button" className="pl-btn pl-btn--ghost" onClick={() => setStep("form")}>返回编辑</button>
               <button type="button" className="pl-btn pl-btn--primary" onClick={handleSave} disabled={saveMutation.isPending}>
                 {saveMutation.isPending ? "保存中…" : "确认创建"}
               </button>
             </div>
-          </div>
+          </>
         )}
       </div>
     </div>
@@ -451,10 +381,9 @@ export function AgentList() {
   const [filterActivity, setFilterActivity] = useState<"all" | "active" | "inactive">("all");
 
   const agentsQuery = useQuery({
-    queryKey: ["admin", "agents"],
-    queryFn: () => apiGet<AgentsResponse>("/api/admin/agents")
+    ...adminAgentsQueryOptions<AgentsResponse>()
   });
-  const { data, isLoading, error } = agentsQuery;
+  const { data, error } = agentsQuery;
   const { data: rolesData } = useQuery({
     queryKey: ["admin", "roles", { includeTemplates: false }],
     queryFn: () => apiGet<RolesResponse>("/api/admin/roles?includeTemplates=false")
@@ -478,7 +407,7 @@ export function AgentList() {
   }
 
   const roleOptions = Array.from(
-    new Set(agents.map((agent) => agent.role).filter((role): role is string => Boolean(role)))
+    new Set(agents.flatMap((agent) => agentRoleIds(agent)))
   ).sort((a, b) => a.localeCompare(b, "zh-CN"));
   const filtered = agents.filter((a) => {
     const normalizedSearch = search.trim().toLowerCase();
@@ -490,9 +419,10 @@ export function AgentList() {
       filterEnabled === "all" ||
       (filterEnabled === "enabled" && a.enabled) ||
       (filterEnabled === "disabled" && !a.enabled);
+    const roleIds = agentRoleIds(a);
     const matchRole =
       filterRole === "all" ||
-      (filterRole === "unbound" ? !a.role : a.role === filterRole);
+      (filterRole === "unbound" ? roleIds.length === 0 : roleIds.includes(filterRole));
     const metricsAvailable = a.stats?.metricsState !== "unavailable";
     const callsLast7d = a.stats?.businessCallsLast7d ?? a.stats?.callsLast7d ?? 0;
     const matchActivity =
@@ -502,8 +432,27 @@ export function AgentList() {
     return matchSearch && matchEnabled && matchRole && matchActivity;
   });
 
-  if (isLoading) return <div className="pl-notice">加载中…</div>;
-  if (error) return <div className="pl-notice">加载失败：{(error as Error).message}</div>;
+  if (!data) {
+    return (
+      <div className="pl-page-stack">
+        <PageHeader
+          title={<span className="notranslate" translate="no">Agent</span>}
+          description={
+            <>
+              管理 <span className="notranslate" translate="no">Agent</span> 身份、角色、<span className="notranslate" translate="no">Token</span> 及数据访问边界。
+            </>
+          }
+        />
+        <AsyncRegion
+          status={asyncStatus(agentsQuery)}
+          label="Agent 列表"
+          error={error}
+          onRetry={() => void agentsQuery.refetch()}
+          minHeight={480}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="pl-page-stack">
@@ -529,6 +478,18 @@ export function AgentList() {
           </div>
         }
       />
+
+      <PolicyDegradeNotice
+        scope={{
+          agentNames: Object.fromEntries(agents.map((agent) => [agent.id, agent.name]))
+        }}
+      />
+
+      {data.meta?.runtimeConsistency === "unconfirmed" ? (
+        <div className="pl-notice" role="status" data-testid="agent-runtime-unconfirmed">
+          权限生效状态待确认
+        </div>
+      ) : null}
 
       {summary.auditCompleteness?.state === "partial" ? (
         <div className="pl-notice" data-testid="agent-audit-partial-notice">
@@ -755,20 +716,29 @@ export function AgentList() {
                         </div>
                       </td>
                       <td data-testid={`agent-role-line-${agent.id}`}>
-                        {agent.role ? (
-                          <Link
-                            to={`/admin/roles/${encodeURIComponent(agent.role)}`}
-                            className="pl-agent-list-table-name-link notranslate"
-                            translate="no"
-                            aria-label={`查看角色 ${agent.role}`}
-                            data-testid={`agent-role-link-${agent.id}`}
-                          >
-                            {agent.role}
-                          </Link>
+                        {agentRoleIds(agent).length > 0 ? (
+                          <span className="inline-flex flex-wrap gap-2">
+                            {agentRoleIds(agent).map((roleId) => (
+                              <Link
+                                key={roleId}
+                                to={`/admin/roles/${encodeURIComponent(roleId)}`}
+                                className="pl-agent-list-table-name-link notranslate"
+                                translate="no"
+                                aria-label={`查看角色 ${roleId}`}
+                                data-testid={
+                                  agentRoleIds(agent).length === 1
+                                    ? `agent-role-link-${agent.id}`
+                                    : `agent-role-link-${agent.id}-${roleId}`
+                                }
+                              >
+                                {roleId}
+                              </Link>
+                            ))}
+                          </span>
                         ) : (
                           <span className="text-fg-muted notranslate" translate="no">旧 ACL</span>
                         )}
-                        {legacyWildcard && !agent.role && (
+                        {legacyWildcard && agentRoleIds(agent).length === 0 && (
                           <span className="pl-agent-list-table-meta notranslate" translate="no">legacy wildcard</span>
                         )}
                       </td>
@@ -868,7 +838,7 @@ export function AgentList() {
           onClose={() => setShowNew(false)}
           onCreated={(id) => {
             setShowNew(false);
-            void queryClient.invalidateQueries({ queryKey: ["admin", "agents"] });
+            void queryClient.invalidateQueries({ queryKey: queryKeys.adminAgents });
             navigate(`/admin/agents/${id}?tab=tokens`);
           }}
         />

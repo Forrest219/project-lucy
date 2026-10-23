@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -8,8 +8,8 @@ import {
 import { SelectField } from "../components/SelectField";
 import { StatusBadge } from "../components/StatusBadge";
 import { PageHeader } from "../components/PageHeader";
+import { AsyncRegion, asyncStatus } from "../components/AsyncRegion";
 import { RowMoreMenu } from "../components/RowMoreMenu";
-import { apiGet } from "../lib/apiClient";
 import {
   CATALOG_SEARCH_COMMIT_MS,
   createCatalogVisitId,
@@ -17,8 +17,14 @@ import {
   type CatalogNavigationContextLevel,
   type CatalogNavigationEventType
 } from "../lib/catalogNavigationUsage";
-import { queryKeys } from "../lib/queryKeys";
-import type { CompletionStatus, SourcesResponse, SourceSummary } from "../lib/types";
+import type { CompletionStatus, SourceSummary } from "../lib/types";
+import { sourcesQueryOptions, useDisplayFactsPending } from "../lib/displayQueryOptions";
+
+/** A disabled fact-dependent link has no href, including for keyboard/new-tab activation. */
+function CatalogFactLink({ factsReady, ...props }: Pick<ComponentProps<typeof Link>, "to" | "children" | "className" | "onClick" | "title" | "aria-label" | "translate"> & { factsReady: boolean; "data-testid"?: string }) {
+  if (factsReady) return <Link {...props} />;
+  return <span role="link" aria-disabled="true" className={props.className} title={props.title} aria-label={props["aria-label"]} translate={props.translate} data-testid={props["data-testid"]}>{props.children}</span>;
+}
 
 const STATUS_LABELS: Record<CompletionStatus, string> = {
   not_started: "未开始",
@@ -109,6 +115,7 @@ function catalogEmptyMessage(input: {
   total: number;
   scope: ScopeFilter;
   enabledCount: number;
+  factsReady: boolean;
   onEnabledScopeExit: () => void;
 }): { title: string; detail: ReactNode } {
   if (input.total === 0) {
@@ -123,13 +130,14 @@ function catalogEmptyMessage(input: {
       detail: (
         <>
           默认只展示已进入语义层的表。请先在{" "}
-          <Link
+          <CatalogFactLink
+            factsReady={input.factsReady}
             to="/connections/enabled-tables"
             className="pl-inline-link"
             onClick={input.onEnabledScopeExit}
           >
             启用表范围
-          </Link>{" "}
+          </CatalogFactLink>{" "}
           勾选表，或将启用范围切换为「全部」查看{" "}
           <span className="notranslate" translate="no">
             Manifest
@@ -183,10 +191,16 @@ export function Catalog() {
     }
   }
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: queryKeys.sources,
-    queryFn: () => apiGet<SourcesResponse>("/api/sources")
+  const sourcesQuery = useQuery({
+    ...sourcesQueryOptions()
   });
+  const { data } = sourcesQuery;
+  const sourcesStatus = asyncStatus(sourcesQuery);
+  const factsPending = useDisplayFactsPending("sources");
+  // A successful API read may clear pending before React Query installs its data.
+  // Keep actions locked until the displayed query has finished applying that read.
+  const factsReady = !factsPending && !sourcesQuery.isFetching && !sourcesQuery.isError;
+  const agentCountsKnown = !data?.meta || data.meta.authorizedCountsState === "ok";
 
   const tables = data?.tables ?? [];
   const enabledCount = useMemo(() => tables.filter((table) => table.enabled).length, [tables]);
@@ -329,18 +343,11 @@ export function Catalog() {
     patchSearchParams({ connection: nextConnection, schema: nextSchema });
   }
 
-  if (isLoading) {
-    return <p className="pl-notice">正在加载语义资产...</p>;
-  }
-
-  if (error) {
-    return <p className="pl-error">语义资产加载失败：{error instanceof Error ? error.message : "未知错误"}</p>;
-  }
-
   const empty = catalogEmptyMessage({
     total: tables.length,
     scope,
     enabledCount,
+    factsReady,
     onEnabledScopeExit: () => recordOutcome("enabled_scope_exit")
   });
 
@@ -353,16 +360,19 @@ export function Catalog() {
 
       <section className="pl-catalog-workspace">
         <aside className="pl-catalog-scope-panel">
-          <CatalogScopeTree
-            activeConnection={connection}
-            activeSchema={schema}
-            connections={treeConnections}
-            onSelectConnection={selectConnection}
-            onSelectRoot={selectRoot}
-            onSelectSchema={selectSchema}
-            onToggleConnection={() => recordEvent("tree_toggle", "connection")}
-            totalCount={baseFiltered.length}
-          />
+          {/* The table region owns the error + retry; the tree keeps a quiet placeholder. */}
+          <AsyncRegion status={sourcesStatus === "error" ? "pending" : sourcesStatus} label="范围树" minHeight={240}>
+            <CatalogScopeTree
+              activeConnection={connection}
+              activeSchema={schema}
+              connections={treeConnections}
+              onSelectConnection={selectConnection}
+              onSelectRoot={selectRoot}
+              onSelectSchema={selectSchema}
+              onToggleConnection={() => recordEvent("tree_toggle", "connection")}
+              totalCount={baseFiltered.length}
+            />
+          </AsyncRegion>
         </aside>
 
         <div className="pl-panel pl-catalog-main">
@@ -410,13 +420,30 @@ export function Catalog() {
             </label>
           </div>
           <div className="pl-whitelist-toolbar-actions">
-            <span className="pl-catalog-result-count" data-testid="catalog-result-count">
-              {filtered.length} 条结果
-            </span>
+            {data ? (
+              <span className="pl-catalog-result-count" data-testid="catalog-result-count">
+                {filtered.length} 条结果
+              </span>
+            ) : null}
           </div>
         </div>
 
-        {filtered.length === 0 ? (
+        {data?.meta?.runtimeConsistency === "unconfirmed" ? (
+          <div className="pl-notice mt-4" role="status" data-testid="catalog-runtime-unconfirmed">
+            权限生效状态待确认
+          </div>
+        ) : null}
+
+        {!data ? (
+          <AsyncRegion
+            status={sourcesStatus}
+            label="语义资产"
+            error={sourcesQuery.error}
+            onRetry={() => void sourcesQuery.refetch()}
+            minHeight={480}
+            className="mt-4"
+          />
+        ) : filtered.length === 0 ? (
           <div className="pl-catalog-empty mt-4" data-testid="catalog-empty-state">
             <strong>{empty.title}</strong>
             <p>{empty.detail}</p>
@@ -452,7 +479,8 @@ export function Catalog() {
                   <tr key={`${table.conn}/${table.schema}/${table.table}`} data-testid={`catalog-row-${table.table}`}>
                     <td className="pl-catalog-table-name">
                       <div className="pl-catalog-table-name-cell">
-                        <Link
+                        <CatalogFactLink
+                          factsReady={factsReady}
                           to={table.enabled ? editorHref : enabledTablesHref(table)}
                           className="pl-catalog-table-name-link notranslate"
                           translate="no"
@@ -461,7 +489,7 @@ export function Catalog() {
                           title={fullRef}
                         >
                           {table.table}
-                        </Link>
+                        </CatalogFactLink>
                         {!table.enabled ? (
                           <span className="pl-status-badge pl-status-partial" data-testid={`catalog-row-not-enabled-${table.table}`}>
                             未启用
@@ -472,7 +500,7 @@ export function Catalog() {
                     <td><StatusBadge status={table.completion} /></td>
                     <td className="pl-catalog-table-structure notranslate" translate="no">{structureLabel(table)}</td>
                     <td className="pl-catalog-table-agents" data-testid={`catalog-row-agents-${table.table}`}>
-                      {agentReferenceLabel(table.authorizedAgentCount)}
+                      {agentCountsKnown ? agentReferenceLabel(table.authorizedAgentCount) : <span className="notranslate" translate="no" title="Agent 引用数暂无法确认">—</span>}
                     </td>
                     <td className="pl-catalog-table-updated notranslate" translate="no" title={semanticUpdatedTooltip(table)}>
                       {formatSemanticUpdatedAt(table.semanticUpdatedAt)}
@@ -480,7 +508,8 @@ export function Catalog() {
                     <td className="pl-catalog-table-actions">
                       <div className="pl-catalog-table-actions-inner">
                         {table.enabled ? (
-                          <Link
+                          <CatalogFactLink
+                            factsReady={factsReady}
                             aria-label={`维护 ${table.schema}.${table.table} 语义`}
                             className="pl-inline-link text-xs notranslate"
                             translate="no"
@@ -489,9 +518,10 @@ export function Catalog() {
                             onClick={() => recordOutcome("row_open")}
                           >
                             维护语义 ↗
-                          </Link>
+                          </CatalogFactLink>
                         ) : (
-                          <Link
+                          <CatalogFactLink
+                            factsReady={factsReady}
                             aria-label={`去启用表范围：${table.schema}.${table.table}`}
                             className="pl-inline-link text-xs notranslate"
                             translate="no"
@@ -500,10 +530,11 @@ export function Catalog() {
                             onClick={() => recordOutcome("enabled_scope_exit")}
                           >
                             去启用表范围 ↗
-                          </Link>
+                          </CatalogFactLink>
                         )}
                         {table.wikiRefCount > 0 ? (
                           <RowMoreMenu
+                            disabled={!factsReady}
                             ariaLabel={moreLabel}
                             items={[
                               { kind: "link", label: "查看关联的 业务 Wiki", href: wikiHref, testId: `catalog-row-wiki-${table.table}` }

@@ -159,7 +159,39 @@ wipe_named_volume() {
   docker volume rm -f "${VOLUME_FULL}" 2>/dev/null || true
 }
 
+# V-01: demo compose files mount deploy/compose/secrets/webui-bootstrap-token as a
+# file secret, so `up` fails if it is missing. Generate it once (0600, never
+# rotated, path-only output). Skipped for compose files that do not use it.
+ensure_bootstrap_token() {
+  local compose_file
+  for compose_file in "${COMPOSE_FILES[@]}"; do
+    if [[ -f "${compose_file}" ]] && grep -q 'webui-bootstrap-token' "${compose_file}"; then
+      bash "${ROOT}/scripts/upgrade/ensure-bootstrap-token.sh" "${ROOT}/deploy/compose/secrets/webui-bootstrap-token"
+      return 0
+    fi
+  done
+}
+
+export_source_revision() {
+  local sha
+  sha="$(git -C "${ROOT}" rev-parse HEAD 2>/dev/null || true)"
+  if [[ "${sha}" =~ ^[0-9a-f]{40}$ ]]; then
+    export LUCY_GIT_SHA="${sha}"
+    if [[ -n "$(git -C "${ROOT}" status --porcelain 2>/dev/null || true)" ]]; then
+      export LUCY_GIT_DIRTY=1
+    else
+      export LUCY_GIT_DIRTY=0
+    fi
+    echo "[lucy-upgrade] source revision ${sha} dirty=${LUCY_GIT_DIRTY}"
+  else
+    export LUCY_GIT_SHA=
+    export LUCY_GIT_DIRTY=0
+    echo "[lucy-upgrade] WARN: no source git sha; image revision will be unknown" >&2
+  fi
+}
+
 build_and_up() {
+  export_source_revision
   if printf '%s\n' "${COMPOSE_FILES[@]}" | grep -q 'deploy/compose/docker-compose.demo.yml'; then
     bash "${ROOT}/scripts/demo/sync-demo-skills-template.sh"
   fi
@@ -215,6 +247,7 @@ if [[ "${FRESH}" -eq 1 ]]; then
   wipe_named_volume
 fi
 
+ensure_bootstrap_token
 build_and_up
 wait_for_health
 

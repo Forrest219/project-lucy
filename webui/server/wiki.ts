@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
-import matter from "gray-matter";
+import { parseMarkdownFrontmatter, stringifyMarkdownFrontmatter } from "./markdown-frontmatter";
+import { assertWritableAcl, parseObjectAcl, type ObjectAcl } from "./proxy/context-acl";
 import { previewDiff } from "./diff";
 import {
   assertReadable,
@@ -14,6 +15,7 @@ import {
   safeWrite
 } from "./fs-safe";
 import { auditedRemoveFile, auditedWriteFile } from "./admin/config-audit-write.js";
+import { auditActorFields, type TrustedActor } from "./security/request-actor.js";
 import { loadContentPaths } from "./paths";
 
 export type WikiFrontmatter = {
@@ -22,6 +24,8 @@ export type WikiFrontmatter = {
   sl_refs?: string[];
   refs?: string[];
   usage_mode?: string;
+  /** Spec §4.1 object ACL: the only Wiki authorization source (`sl_refs` / `visibility` never grant). */
+  allowed_roles?: string[];
 };
 
 export type WikiPage = {
@@ -29,6 +33,10 @@ export type WikiPage = {
   frontmatter: WikiFrontmatter;
   content: string;
   rawMarkdown: string;
+  /** `sha256:<hex>` of the exact file bytes; send back as `expected_version` when saving. */
+  file_version: string;
+  /** Canonical ACL state so the editor can distinguish "no one" from a corrupt declaration. */
+  acl: ObjectAcl;
 };
 
 export type WikiSummary = {
@@ -100,11 +108,15 @@ export type WikiDirectoryRenameResult = {
 export type WikiWriteInput = {
   frontmatter?: WikiFrontmatter;
   content?: string;
+  /** Required (428) when the page exists; stale values are rejected (409). */
+  expected_version?: string;
 };
 
 export type WikiPreview = {
   key: string;
   filePath: string;
+  /** `file_version` of the page as currently stored, or `null` when it does not exist yet. */
+  currentFileVersion?: string | null;
   diff: string;
   proposedMarkdown: string;
 };
@@ -121,6 +133,8 @@ export type WikiUploadInput = {
    * legacy `overwrite` boolean.
    */
   mode?: WikiUploadMode;
+  /** Required (428) when the target page already exists; stale values are rejected (409). */
+  expected_version?: string;
 };
 
 export type WikiUploadMode = "create" | "replace";
@@ -284,6 +298,25 @@ class WikiVersionError extends Error {
   }
 }
 
+export class WikiConcurrencyError extends Error {
+  code: string;
+  statusCode: number;
+
+  constructor(code: "wiki_expected_version_required" | "wiki_write_conflict", statusCode: 409 | 428) {
+    super(code);
+    this.name = "WikiConcurrencyError";
+    this.code = code;
+    this.statusCode = statusCode;
+  }
+}
+
+/** Spec §4.3 — content and ACL saves share one optimistic-concurrency token. */
+function assertExpectedWikiVersion(existed: boolean, currentText: string, expected: string | undefined): void {
+  if (!existed) return;
+  if (!expected?.trim()) throw new WikiConcurrencyError("wiki_expected_version_required", 428);
+  if (expected.trim() !== wikiContentHash(currentText)) throw new WikiConcurrencyError("wiki_write_conflict", 409);
+}
+
 export function normalizeWikiKey(key: string): string {
   const decoded = decodeURIComponent(key);
   if (!decoded || decoded.startsWith("/") || path.isAbsolute(decoded)) {
@@ -350,18 +383,58 @@ function frontmatterFromData(data: Record<string, unknown>): WikiFrontmatter {
     tags: stringArray(data.tags),
     sl_refs: stringArray(data.sl_refs),
     refs: stringArray(data.refs),
-    usage_mode: typeof data.usage_mode === "string" ? data.usage_mode : undefined
+    usage_mode: typeof data.usage_mode === "string" ? data.usage_mode : undefined,
+    // Only a well-formed declaration is echoed back; absent / corrupt stays absent so an editor
+    // round-trip can never turn "not chosen yet" into an explicit empty ACL.
+    allowed_roles: Array.isArray(data.allowed_roles) && data.allowed_roles.every((item) => typeof item === "string")
+      ? (data.allowed_roles as string[])
+      : undefined
   };
 }
 
-function serializeWiki(frontmatter: WikiFrontmatter, content: string): string {
+function aclOf(data: Record<string, unknown>): ObjectAcl {
+  return parseObjectAcl(data.allowed_roles, Object.prototype.hasOwnProperty.call(data, "allowed_roles"));
+}
+
+/**
+ * Replace-style writes (upload replace, version restore) must not silently change who can
+ * read the page: unless the caller supplies a valid new `allowed_roles`, the current ACL
+ * declaration is carried over (and a historical wider ACL is never revived).
+ */
+function carryCurrentAcl(proposedMarkdown: string, currentText: string, options: { restore?: boolean } = {}): string {
+  const proposed = parseMarkdownFrontmatter(proposedMarkdown);
+  const proposedDeclares = Object.prototype.hasOwnProperty.call(proposed.data, "allowed_roles");
+  if (proposedDeclares && !options.restore) {
+    assertWritableAcl(proposed.data.allowed_roles);
+    return proposedMarkdown;
+  }
+  const current = parseMarkdownFrontmatter(currentText);
+  const currentDeclares = Object.prototype.hasOwnProperty.call(current.data, "allowed_roles");
+  if (!currentDeclares && !proposedDeclares) return proposedMarkdown;
+  const data: Record<string, unknown> = { ...proposed.data };
+  if (currentDeclares) data.allowed_roles = current.data.allowed_roles;
+  else delete data.allowed_roles;
+  return stringifyMarkdownFrontmatter(proposed.content, data);
+}
+
+function preservedWikiAuth(data: Record<string, unknown> | undefined): Record<string, unknown> {
+  if (!data) return {};
+  const preserved: Record<string, unknown> = {};
+  if (Object.prototype.hasOwnProperty.call(data, "visibility")) preserved.visibility = data.visibility;
+  if (Object.prototype.hasOwnProperty.call(data, "allowed_roles")) preserved.allowed_roles = data.allowed_roles;
+  return preserved;
+}
+
+function serializeWiki(frontmatter: WikiFrontmatter, content: string, preserved: Record<string, unknown> = {}): string {
   const data: Record<string, unknown> = {};
   if (frontmatter.summary) data.summary = frontmatter.summary;
   if (frontmatter.tags?.length) data.tags = frontmatter.tags;
   if (frontmatter.sl_refs?.length) data.sl_refs = frontmatter.sl_refs;
   if (frontmatter.refs?.length) data.refs = frontmatter.refs;
   if (frontmatter.usage_mode) data.usage_mode = frontmatter.usage_mode;
-  return matter.stringify(content ?? "", data);
+  if (Object.prototype.hasOwnProperty.call(preserved, "visibility")) data.visibility = preserved.visibility;
+  if (Object.prototype.hasOwnProperty.call(preserved, "allowed_roles")) data.allowed_roles = preserved.allowed_roles;
+  return stringifyMarkdownFrontmatter(content ?? "", data);
 }
 
 async function readExisting(projectRoot: string, key: string): Promise<string> {
@@ -432,12 +505,12 @@ function wikiVersionSnapshotPath(key: string, versionId: string): string {
 }
 
 function versionTitle(markdown: string, key: string): string {
-  const parsed = matter(markdown);
+  const parsed = parseMarkdownFrontmatter(markdown);
   return uploadTitle(markdown, key, frontmatterFromData(parsed.data));
 }
 
 function versionSummary(markdown: string): string | undefined {
-  const parsed = matter(markdown);
+  const parsed = parseMarkdownFrontmatter(markdown);
   const frontmatter = frontmatterFromData(parsed.data);
   return frontmatter.summary;
 }
@@ -905,7 +978,8 @@ export async function deleteWikiDirectory(
  */
 export async function deleteWiki(
   projectRoot: string,
-  key: string
+  key: string,
+  actor?: TrustedActor
 ): Promise<WikiDocumentDeleteResult> {
   const normalized = normalizeWikiKey(key);
   const filePath = relPathForKey(normalized);
@@ -917,7 +991,7 @@ export async function deleteWiki(
     enabled: true,
     changeType: "wiki_delete",
     assetKind: "wiki",
-    actorType: "ui_admin",
+    ...auditActorFields(actor),
     source: "wiki_api",
     targetId: normalized,
     operation: "delete"
@@ -1264,43 +1338,56 @@ export async function renameWikiDirectory(
 export async function readWiki(projectRoot: string, key: string): Promise<WikiPage> {
   const normalized = normalizeWikiKey(key);
   const rawMarkdown = await readExisting(projectRoot, normalized);
-  const parsed = matter(rawMarkdown);
+  const parsed = parseMarkdownFrontmatter(rawMarkdown);
   return {
     key: normalized,
     frontmatter: frontmatterFromData(parsed.data),
     content: parsed.content,
-    rawMarkdown
+    rawMarkdown,
+    file_version: wikiContentHash(rawMarkdown),
+    acl: aclOf(parsed.data)
   };
 }
 
 export async function previewWikiWrite(projectRoot: string, key: string, input: WikiWriteInput): Promise<WikiPreview> {
   const normalized = normalizeWikiKey(key);
   const oldText = await readExisting(projectRoot, normalized);
-  const current = matter(oldText);
+  const current = parseMarkdownFrontmatter(oldText);
   const frontmatter = {
     ...frontmatterFromData(current.data),
     ...(input.frontmatter ?? {})
   };
-  const proposedMarkdown = serializeWiki(frontmatter, input.content ?? current.content);
+  const preserved = preservedWikiAuth(current.data as Record<string, unknown>);
+  if (input.frontmatter?.allowed_roles !== undefined) {
+    preserved.allowed_roles = assertWritableAcl(input.frontmatter.allowed_roles);
+  }
+  const proposedMarkdown = serializeWiki(frontmatter, input.content ?? current.content, preserved);
   const filePath = relPathForKey(normalized);
   return {
     key: normalized,
     filePath,
+    currentFileVersion: oldText ? wikiContentHash(oldText) : null,
     diff: previewDiff(oldText, proposedMarkdown, filePath),
     proposedMarkdown
   };
 }
 
-export async function writeWiki(projectRoot: string, key: string, input: WikiWriteInput): Promise<WikiPreview> {
+export async function writeWiki(
+  projectRoot: string,
+  key: string,
+  input: WikiWriteInput,
+  actor?: TrustedActor
+): Promise<WikiPreview> {
   const normalized = normalizeWikiKey(key);
   const existed = await wikiExists(projectRoot, normalized);
   const oldText = await readExisting(projectRoot, normalized);
+  assertExpectedWikiVersion(existed, oldText, input.expected_version);
   const preview = await previewWikiWrite(projectRoot, key, input);
   await auditedWriteFile(projectRoot, preview.filePath, preview.proposedMarkdown, {
     enabled: true,
     changeType: existed ? "wiki_edit_save" : "wiki_create",
     assetKind: "wiki",
-    actorType: "ui_admin",
+    ...auditActorFields(actor),
     source: "wiki_api",
     targetId: normalized,
     operation: existed ? "edit_save" : "create",
@@ -1345,14 +1432,16 @@ export async function previewWikiUpload(projectRoot: string, input: WikiUploadIn
   validateUploadMarkdown(input.markdown);
   const exists = await wikiExists(projectRoot, normalized);
   const oldText = await readExisting(projectRoot, normalized);
-  const parsed = matter(input.markdown);
+  // Replace keeps the page's current ACL unless the upload declares a valid one (Spec §4.3).
+  const proposedMarkdown = carryCurrentAcl(input.markdown, oldText);
+  const parsed = parseMarkdownFrontmatter(proposedMarkdown);
   const frontmatter = frontmatterFromData(parsed.data);
   const filePath = relPathForKey(normalized);
   const explicitMode = input.mode ?? (input.overwrite ? "replace" : "create");
   const sourceFileName = deriveUploadSourceName(input.sourceFileName, normalized);
   const targetKey = normalized;
   const targetTitle = uploadTitle(input.markdown, normalized, frontmatter);
-  const existingTitle = exists ? uploadTitle(oldText, normalized, frontmatterFromData(matter(oldText).data)) : null;
+  const existingTitle = exists ? uploadTitle(oldText, normalized, frontmatterFromData(parseMarkdownFrontmatter(oldText).data)) : null;
   const warnings: string[] = [];
   if (explicitMode === "create" && exists) {
     warnings.push("目标文档已存在，确认后将按覆盖处理。");
@@ -1363,6 +1452,10 @@ export async function previewWikiUpload(projectRoot: string, input: WikiUploadIn
   if (!parsed.content.trim()) {
     warnings.push("Markdown 正文为空。");
   }
+  const uploadAcl = aclOf(parsed.data);
+  if (uploadAcl.state === "missing" || uploadAcl.state === "empty") {
+    warnings.push("该文档未授权任何角色，保存后 Agent 无人可见。");
+  }
   if (sourceFileName && path.posix.basename(targetKey) !== sourceFileName) {
     warnings.push(
       `本地文件名 ${sourceFileName} 与目标路径文件名 ${path.posix.basename(targetKey)} 不一致，将按目标 Wiki 路径保存。`
@@ -1371,8 +1464,9 @@ export async function previewWikiUpload(projectRoot: string, input: WikiUploadIn
   return {
     key: normalized,
     filePath,
-    diff: previewDiff(oldText, input.markdown, filePath),
-    proposedMarkdown: input.markdown,
+    diff: previewDiff(oldText, proposedMarkdown, filePath),
+    proposedMarkdown,
+    currentFileVersion: exists ? wikiContentHash(oldText) : null,
     exists,
     mode: exists ? "replace" : "create",
     sourceFileName,
@@ -1385,16 +1479,21 @@ export async function previewWikiUpload(projectRoot: string, input: WikiUploadIn
   };
 }
 
-export async function commitWikiUpload(projectRoot: string, input: WikiUploadInput): Promise<WikiUploadPreview> {
+export async function commitWikiUpload(
+  projectRoot: string,
+  input: WikiUploadInput,
+  actor?: TrustedActor
+): Promise<WikiUploadPreview> {
   const normalized = normalizeWikiKey(input.key);
   const existed = await wikiExists(projectRoot, normalized);
   const oldText = await readExisting(projectRoot, normalized);
+  assertExpectedWikiVersion(existed, oldText, input.expected_version);
   const preview = await previewWikiUpload(projectRoot, input);
   await auditedWriteFile(projectRoot, preview.filePath, preview.proposedMarkdown, {
     enabled: true,
     changeType: existed ? "wiki_upload_replace" : "wiki_upload_create",
     assetKind: "wiki",
-    actorType: "ui_admin",
+    ...auditActorFields(actor),
     source: "wiki_api",
     targetId: normalized,
     operation: existed ? "upload_replace" : "upload_create",
@@ -1475,32 +1574,40 @@ export async function previewWikiVersionRestore(
   versionId: string
 ): Promise<WikiVersionRestorePreview> {
   const detail = await readWikiVersion(projectRoot, key, versionId);
+  const currentText = await readExisting(projectRoot, detail.key);
+  const restoredMarkdown = carryCurrentAcl(detail.rawMarkdown, currentText, { restore: true });
   return {
     key: detail.key,
     versionId: detail.versionId,
     targetTitle: versionTitle(detail.rawMarkdown, detail.key),
-    diff: detail.diffFromCurrent
+    diff: previewDiff(currentText, restoredMarkdown, relPathForKey(detail.key))
   };
 }
 
 export async function restoreWikiVersion(
   projectRoot: string,
   key: string,
-  versionId: string
+  versionId: string,
+  actor?: TrustedActor
 ): Promise<WikiVersionRestoreResult> {
   const detail = await readWikiVersion(projectRoot, key, versionId);
+  // Reject non-YAML frontmatter before anything is written (V-08).
+  parseMarkdownFrontmatter(detail.rawMarkdown);
   const filePath = relPathForKey(detail.key);
-  await auditedWriteFile(projectRoot, filePath, detail.rawMarkdown, {
+  // Restoring content never revives an older (possibly wider) ACL: the current one is kept.
+  const currentText = await readExisting(projectRoot, detail.key);
+  const restoredMarkdown = carryCurrentAcl(detail.rawMarkdown, currentText, { restore: true });
+  await auditedWriteFile(projectRoot, filePath, restoredMarkdown, {
     enabled: true,
     changeType: "wiki_restore",
     assetKind: "wiki",
-    actorType: "ui_admin",
+    ...auditActorFields(actor),
     source: "wiki_api",
     targetId: detail.key,
     operation: "restore",
-    diff: detail.diffFromCurrent
+    diff: previewDiff(currentText, restoredMarkdown, filePath)
   });
-  const restored = await createWikiVersionSnapshot(projectRoot, detail.key, detail.rawMarkdown, {
+  const restored = await createWikiVersionSnapshot(projectRoot, detail.key, restoredMarkdown, {
     operation: "restore",
     restoredFromVersionId: detail.versionId,
     force: true
@@ -1572,7 +1679,7 @@ export async function previewWikiMove(
   }
   const targetExists = await wikiExists(projectRoot, targetKey);
   const oldText = await readExisting(projectRoot, normalizedSource);
-  const parsed = matter(oldText);
+  const parsed = parseMarkdownFrontmatter(oldText);
   const frontmatter = frontmatterFromData(parsed.data);
   const targetTitle = uploadTitle(oldText, normalizedSource, frontmatter);
   const targetDirectoryNormalized = normalizeWikiDirectoryPath(targetDirectory);
@@ -1601,7 +1708,8 @@ export async function previewWikiMove(
 export async function moveWiki(
   projectRoot: string,
   sourceKey: string,
-  targetDirectory: string
+  targetDirectory: string,
+  actor?: TrustedActor
 ): Promise<WikiMoveResult> {
   const normalizedSource = normalizeWikiKey(sourceKey);
   const targetKey = deriveMoveTarget(normalizedSource, targetDirectory);
@@ -1629,12 +1737,14 @@ export async function moveWiki(
   await safeMkdir((await loadContentPaths()), projectRoot, relPathForDirectory(targetDirectoryNormalized));
 
   const oldText = await readExisting(projectRoot, normalizedSource);
+  // Reject non-YAML frontmatter before the target is written (V-08).
+  parseMarkdownFrontmatter(oldText);
   await assertWikiSourceWritable(projectRoot, normalizedSource);
   await auditedWriteFile(projectRoot, targetRelPath, oldText, {
     enabled: true,
     changeType: "wiki_move",
     assetKind: "wiki",
-    actorType: "ui_admin",
+    ...auditActorFields(actor),
     source: "wiki_api",
     targetId: targetKey,
     operation: "move",

@@ -58,9 +58,20 @@ test.describe("E2E-PUB-01: 完整语义资产从新建到发布 Reindex 闭环",
     await test.step("2. 添加 Schema finance_mart", async () => {
       // 真实 testid：add-schema-${conn.id}
       await page.getByTestId("add-schema-mysql-aliyun").click();
-      await expect(page.getByTestId("add-schema-drawer")).toBeVisible();
-      // 真实 testid：add-schema-input
-      await page.getByTestId("add-schema-input").fill("finance_mart");
+      const drawer = page.getByTestId("add-schema-drawer");
+      await expect(drawer).toBeVisible();
+      const select = drawer.getByTestId("add-schema-select");
+      const input = drawer.getByTestId("add-schema-input");
+      await expect.poll(async () => {
+        if (await input.isVisible()) return "input";
+        if ((await select.count()) > 0 && (await select.isEnabled())) return "select";
+        return "loading";
+      }).not.toBe("loading");
+      if (await input.isVisible()) {
+        await input.fill("finance_mart");
+      } else {
+        await select.selectOption("finance_mart");
+      }
       // 真实 testid：add-schema-preview-btn（= 测试连接可用性）
       await page.getByTestId("add-schema-preview-btn").click();
       // 等预览结果：success message 含 connection test 退出码
@@ -85,9 +96,8 @@ test.describe("E2E-PUB-01: 完整语义资产从新建到发布 Reindex 闭环",
       await expect(
         page.getByTestId("schema-asset-status-mysql-aliyun-finance_mart")
       ).toContainText("缺失 Manifest");
-      // 真实上传入口在 schema-whitelist-${conn.id}-${schema} 内的"上传 Manifest" 按钮
-      // 简化：直接点 schema-row 上的 status badge 进入 Drawer（实际实现是行内按钮）
-      // 这里依赖 schema-whitelist cell 内 action；使用最近按钮定位
+      // 能读库时行内主操作是「从数据库读取表结构」，上传在「更多」里。
+      await row.locator("summary").click();
       await row
         .getByRole("button", { name: /上传 Manifest/ })
         .click();
@@ -176,9 +186,9 @@ test.describe("E2E-PUB-01: 完整语义资产从新建到发布 Reindex 闭环",
     // —— 阶段 4：语义发布 ——
     await test.step("8. 工作台显示待发布变更", async () => {
       await page.goto("/publish/workbench");
-      // 真实 testid：publish-workbench-layout / workbench-pending-count
+      // 真实 testid：publish-workbench-layout / workbench-batch-sync-hint（仅有待同步变更时出现）
       await expect(page.getByTestId("publish-workbench-layout")).toBeVisible();
-      await expect(page.getByTestId("workbench-pending-count")).toBeVisible();
+      await expect(page.getByTestId("workbench-batch-sync-hint")).toBeVisible();
     });
 
     await test.step("9. 校验变更 → 发布并重建索引 可用", async () => {

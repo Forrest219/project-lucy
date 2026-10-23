@@ -1,3 +1,8 @@
+---
+summary: Demo Superstore dataset metric definitions and default filters.
+allowed_roles: [demo_readonly, lucy_admin]
+---
+
 # Demo Superstore
 
 The Docker demo project contains a small `demo-mysql/superstore_orders` dataset.

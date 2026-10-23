@@ -83,10 +83,10 @@ export function BrandingSettings() {
 
   const branding = query.data;
   const previewTitle = productTitle.trim() || branding?.defaults.productTitle || "Lucy WebUI";
-  const previewTagline = tagline.trim() || branding?.defaults.tagline || "Data Agent MCP";
+  const previewTagline = tagline.trim() || branding?.defaults.tagline || "可信 Agent 数据层";
   const previewLogoUrl = branding?.logoUrl ?? null;
   const defaultProductTitle = branding?.defaults.productTitle ?? "Lucy WebUI";
-  const defaultTagline = branding?.defaults.tagline ?? "Data Agent MCP";
+  const defaultTagline = branding?.defaults.tagline ?? "可信 Agent 数据层";
   const isTextDirty = Boolean(
     branding &&
       (productTitle !== branding.productTitleOverride || tagline !== branding.taglineOverride)
@@ -323,9 +323,8 @@ export function BrandingSettings() {
                     <strong className="min-w-0 truncate text-lg">{previewTitle}</strong>
                   </div>
                   <div className="mt-3 grid gap-2" aria-hidden="true">
-                    <span className="text-sm font-semibold">登录</span>
-                    <span className="h-2 w-full rounded-pill bg-bg-muted" />
-                    <span className="h-7 w-full rounded-md border border-border-default bg-bg-surface" />
+                    <span className="h-8 w-full rounded-md border border-border-default bg-bg-surface" />
+                    <span className="h-8 w-full rounded-md border border-border-default bg-bg-surface" />
                   </div>
                 </div>
               </div>

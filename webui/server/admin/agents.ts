@@ -6,13 +6,17 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { auditedWriteFile } from "./config-audit-write.js";
 import { resolveProjectRoot } from "../project.js";
 import { previewDiff } from "../diff.js";
-import { getAuditDb } from "./audit.js";
+import { getAuditDb, type ConfigAuditActorType } from "./audit.js";
+import { presentStoredClient } from "../proxy/request-client-meta.js";
 import { build7dWindow } from "./metric-window.js";
 import { expandTemplate } from "./role-templates.js";
 import {
   previewAgentPermissionsForAdmin,
   previewRolePermissionsForAdmin,
   resolveEffectivePermissionsForAdmin,
+  resolveRoleIds,
+  runtimeConsistencyForInputs,
+  type DisplayPolicyInputs,
   type EffectivePermissions
 } from "../proxy/acl.js";
 import {
@@ -31,11 +35,17 @@ import {
   type AccessGovernanceOverrideRequest
 } from "../access-governance-gate.js";
 import { invalidateAccessConfigCache } from "../proxy/identity.js";
+import { narrowAuthorization, narrowingScopeForWrite } from "../proxy/authorization-barrier.js";
 import { actorIdFromRequest } from "../auth/guard.js";
-import { enforceAgentSeatLimit } from "../license/routes.js";
+import { auditActorFields, trustedActorFromRequest } from "../security/request-actor.js";
 import { isTokenExpired } from "../proxy/identity.js";
 import { MCP_PROTOCOL_METHOD_SQL_LIST } from "../proxy/mcp-request-classification.js";
 import { readAuditWriteHealth, type AuditWriteHealthSnapshot } from "../proxy/audit-write-health.js";
+import { countEntryPerf, timeAsync, withRequestTiming } from "../entry-performance-timing.js";
+import { readAccessSnapshot, resolvePermissionBatch, type PermissionBatch } from "./permission-display.js";
+import { generationKey, hasPendingDisplayWrite } from "../display-generation.js";
+import { DisplaySnapshotBusyError, getDisplaySnapshot, registerDisplayPrewarmer } from "../display-snapshot.js";
+import { withDisplayWriteBarrier } from "../display-generation.js";
 
 /** Spec 129: Agent write paths must not materialize reference templates into access.yaml. */
 
@@ -59,6 +69,8 @@ export interface YamlToken {
   created: string;
   expires_at?: string | null;
   device_name?: string | null;
+  actor_id?: string | null;
+  actor_kind?: "person" | "automation" | null;
 }
 
 export interface YamlUser {
@@ -107,6 +119,7 @@ export interface YamlAccessConfig {
 async function readAccessYaml(projectRoot: string): Promise<{ config: YamlAccessConfig; raw: string; version: string }> {
   const filePath = path.join(projectRoot, ACCESS_YAML_REL);
   const raw = await readFile(filePath, "utf-8");
+  countEntryPerf("accessReads");
   const s = await stat(filePath);
   const hash = createHash("sha256").update(raw).digest("hex").slice(0, 16);
   const version = `${s.mtimeMs.toFixed(0)}-${hash}`;
@@ -115,7 +128,17 @@ async function readAccessYaml(projectRoot: string): Promise<{ config: YamlAccess
   return { config, raw, version };
 }
 
+/**
+ * Spec 174 §3.2 — the display barrier covers persist → policy commit/ack →
+ * optional direct rollback, so no intermediate access version is published.
+ */
 async function writeAccessYaml(
+  ...args: Parameters<typeof writeAccessYamlInBarrier>
+): ReturnType<typeof writeAccessYamlInBarrier> {
+  return withDisplayWriteBarrier(["P"], () => writeAccessYamlInBarrier(...args));
+}
+
+async function writeAccessYamlInBarrier(
   projectRoot: string,
   config: YamlAccessConfig,
   audit?: {
@@ -127,6 +150,10 @@ async function writeAccessYaml(
     diff?: string;
     requestId?: string;
     source?: string;
+    actor?: string;
+    actorType?: ConfigAuditActorType;
+    actorIp?: string;
+    sessionId?: string | null;
   }
 ): Promise<{
   auditId?: number;
@@ -165,7 +192,10 @@ async function writeAccessYaml(
     enabled: true,
     changeType: audit.changeType,
     assetKind: "governance",
-    actorType: "ui_admin",
+    actor: audit.actor,
+    actorType: audit.actorType ?? "ui_admin",
+    actorIp: audit.actorIp,
+    sessionId: audit.sessionId,
     source: audit.source ?? "admin_agents_api",
     targetId: audit.targetId,
     oldSummary: audit.oldSummary,
@@ -183,6 +213,11 @@ async function writeAccessYaml(
     status = await commitEffectivePolicy();
     runtimeAck = false;
   }
+
+  // T04-3 / Spec §3.3 — narrower authority is persisted and committed above;
+  // cancel in-flight work and clear caches before this write reports success.
+  const narrowed = narrowingScopeForWrite(previousRaw, toWrite);
+  if (narrowed) await narrowAuthorization(narrowed);
 
   return {
     ...writeResult,
@@ -466,14 +501,15 @@ export async function getLastUsedMap(
       if (!result.has(row.user_id)) result.set(row.user_id, new Map());
       const byToken = result.get(row.user_id);
       if (!byToken || byToken.has(row.token_hash_prefix)) continue;
+      const shown = presentStoredClient(row);
       byToken.set(row.token_hash_prefix, {
         lastUsed: row.ts,
         lastTool: row.tool,
         lastOutcome: row.outcome,
         lastIp: row.client_ip,
         lastUserAgent: row.user_agent,
-        lastClient: row.client,
-        lastClientVersion: row.client_version,
+        lastClient: shown.client ?? row.client,
+        lastClientVersion: shown.clientVersion ?? row.client_version,
         lastDeviceNameSeen: row.device_name
       });
     }
@@ -516,7 +552,7 @@ function userToAgent(
     name: user.name,
     note: user.note,
     enabled: user.enabled !== false,
-    role: user.role,
+    ...agentRoleFields(user),
     tokens: user.tokens.map((t) => ({
       hash: t.hash,
       label: t.label,
@@ -677,23 +713,34 @@ function constraintsCompileError(reason: string): { code: string; message: strin
  * the durable write will persist.
  */
 async function resolveAgentSources(
-  user: { id: string; role?: string; allow?: unknown },
+  user: { id: string; role?: string; roles?: string[]; allow?: unknown; enabled?: boolean; constraints?: unknown },
   roleOverrides: Record<string, YamlRole> | undefined
 ): Promise<{
   sources: string[];
   snapshotHash: string | null;
 }> {
+  const resolved = resolveRoleIds(user);
+  const roleIds = resolved.ok ? resolved.roleIds : [];
   // Legacy `allow` fallback: don't go through the resolver.
-  if (user.allow && !user.role) {
+  if (user.allow && roleIds.length === 0) {
     const allow = user.allow as { tables?: string[] };
     const sources = Array.isArray(allow.tables) ? allow.tables : [];
     return { sources, snapshotHash: null };
   }
-  if (!user.role) {
+  if (roleIds.length === 0) {
     return { sources: [], snapshotHash: null };
   }
-  const previewRole = roleOverrides?.[user.role];
-  const preview = await previewRolePermissionsForAdmin(user.role, previewRole ? { role: previewRole } : {});
+  const preview = await previewAgentPermissionsForAdmin(
+    {
+      id: user.id,
+      enabled: user.enabled !== false,
+      tokens: [],
+      roles: roleIds,
+      ...(user.allow ? { allow: user.allow as AccessConfig["users"][number]["allow"] } : {}),
+      ...(user.constraints !== undefined ? { constraints: user.constraints } : {})
+    },
+    { roleOverrides }
+  );
   if (!preview.ok) return { sources: [], snapshotHash: null };
   return {
     sources: preview.permissions.sources.map((source) => source.table),
@@ -704,8 +751,8 @@ async function resolveAgentSources(
 interface BuildAgentGateInputArgs {
   targetKind: "agent" | "token";
   targetId?: string | null;
-  oldUser: { id: string; role?: string; allow?: unknown };
-  newUser: { id: string; role?: string; allow?: unknown };
+  oldUser: { id: string; role?: string; roles?: string[]; allow?: unknown; enabled?: boolean; constraints?: unknown };
+  newUser: { id: string; role?: string; roles?: string[]; allow?: unknown; enabled?: boolean; constraints?: unknown };
   oldRoleOverrides?: Record<string, YamlRole>;
   newRoleOverrides?: Record<string, YamlRole>;
   /** Optional recent call count for high-traffic classification. */
@@ -911,6 +958,89 @@ async function userToAgentWithPermissions(
   };
 }
 
+type AgentPermissionPreview = {
+  effectivePermissions?: ReturnType<typeof effectivePermissionsToPreview>;
+  permissionWarnings: string[];
+};
+
+type AgentPermissionSection = {
+  previews: Record<string, AgentPermissionPreview>;
+  permissionsState: "ok" | "partial" | "unavailable";
+  /** Compile inputs retained until the final response, after dynamic statistics finish. */
+  policyInputs: DisplayPolicyInputs | null;
+  snapshotVersion: string;
+};
+
+type CachedAgentPermissionSection = Omit<AgentPermissionSection, "snapshotVersion">;
+
+function permissionPreviewFromBatch(batch: PermissionBatch, userId: string): AgentPermissionPreview {
+  const resolved = batch.results.get(userId);
+  if (!resolved) return { permissionWarnings: [batch.problem ?? "permissions_unavailable"] };
+  return {
+    effectivePermissions: resolved.ok ? effectivePermissionsToPreview(resolved.permissions) : undefined,
+    permissionWarnings: resolved.ok ? [] : [resolved.reason]
+  };
+}
+
+/**
+ * Spec 174 §3.1/§3.2 — permission previews for the list from one access
+ * snapshot, cached as a display snapshot keyed by that snapshot's version.
+ * Dynamic audit statistics are never part of this cache.
+ */
+async function agentPermissionSection(
+  projectRoot: string,
+  users: YamlUser[],
+  raw: string,
+  version: string
+): Promise<AgentPermissionSection> {
+  const snapshot = await getDisplaySnapshot("agent-permissions", ["P", "D", "C"], async () => {
+    const accessSnapshot = await readAccessSnapshot(projectRoot, raw, version);
+    const userIds = users.map((user) => user.id);
+    const batch = await resolvePermissionBatch(accessSnapshot, userIds);
+    const section: CachedAgentPermissionSection = {
+      previews: Object.fromEntries(userIds.map((id) => [id, permissionPreviewFromBatch(batch, id)])),
+      permissionsState: agentPermissionsState(users, batch),
+      policyInputs: batch.policyInputs
+    };
+    return JSON.stringify(section);
+  }, { extraKey: version });
+  return {
+    ...JSON.parse(snapshot.payload) as CachedAgentPermissionSection,
+    snapshotVersion: snapshot.version
+  };
+}
+
+registerDisplayPrewarmer("agent-permissions", async () => {
+  const projectRoot = await resolveProjectRoot();
+  const { config, raw, version } = await readAccessYaml(projectRoot);
+  await agentPermissionSection(projectRoot, config.users, raw, version);
+});
+
+/** Spec 174 §3.1 — list view: permissions from the shared read-only batch. */
+function userToAgentWithBatchPermissions(
+  user: YamlUser,
+  preview: AgentPermissionPreview | undefined,
+  stats?: Awaited<ReturnType<typeof getStats>>,
+  tokenUsage?: Map<string, TokenUsageSnapshot>,
+  timeline?: AgentConfigTimeline
+) {
+  const agent = userToAgent(user, stats, tokenUsage, timeline);
+  return {
+    ...agent,
+    effectivePermissions: preview?.effectivePermissions,
+    permissionWarnings: preview?.permissionWarnings ?? ["permissions_unavailable"]
+  };
+}
+
+/** Spec 174 §3.3 — ok / partial / unavailable over enabled Agents (disabled denies are not failures). */
+function agentPermissionsState(users: YamlUser[], batch: PermissionBatch): "ok" | "partial" | "unavailable" {
+  if (!batch.context) return "unavailable";
+  const enabled = users.filter((user) => user.enabled !== false);
+  if (enabled.length === 0) return "ok";
+  const failed = enabled.filter((user) => !batch.results.get(user.id)?.ok).length;
+  return failed === 0 ? "ok" : failed === enabled.length ? "unavailable" : "partial";
+}
+
 function bodyHasOwn(value: unknown, key: string): boolean {
   return Boolean(value && typeof value === "object" && Object.prototype.hasOwnProperty.call(value, key));
 }
@@ -919,8 +1049,120 @@ function hasWildcardAllow(user: YamlUser): boolean {
   return Boolean(user.allow?.tables?.includes("*") || user.allow?.tools?.includes("*"));
 }
 
-function assertRoleExists(config: YamlAccessConfig, role: string | undefined): role is string {
-  return Boolean(role && config.roles?.[role]?.allow);
+function catalogRoleIds(config: YamlAccessConfig): string[] {
+  return Object.entries(config.roles ?? {})
+    .filter(([, role]) => role?.allow !== undefined)
+    .map(([id]) => id);
+}
+
+function orderRoleIdsByCatalog(ids: string[], catalogIds: string[]): string[] {
+  const wanted = new Set(ids);
+  const ordered = catalogIds.filter((id) => wanted.has(id));
+  for (const id of ids) {
+    if (!ordered.includes(id)) ordered.push(id);
+  }
+  return ordered;
+}
+
+type RoleSetInput =
+  | { touched: false }
+  | { touched: true; ids: string[] }
+  | { touched: true; error: { code: string; message: string } };
+
+function parseRoleSetInput(body: object): RoleSetInput {
+  const hasRole = bodyHasOwn(body, "role");
+  const hasRoles = bodyHasOwn(body, "roles");
+  if (!hasRole && !hasRoles) return { touched: false };
+  if (hasRole && hasRoles) {
+    return { touched: true, error: { code: "ROLE_AND_ROLES", message: "Send roles or role, not both" } };
+  }
+  if (hasRoles) {
+    const raw = (body as { roles?: unknown }).roles;
+    if (!Array.isArray(raw) || raw.some((id) => typeof id !== "string")) {
+      return { touched: true, error: { code: "BAD_REQUEST", message: "roles must be an array of role ids" } };
+    }
+    return { touched: true, ids: [...new Set(raw.map((id) => id.trim()).filter(Boolean))] };
+  }
+  const rawRole = (body as { role?: unknown }).role;
+  if (typeof rawRole !== "string" || !rawRole.trim()) {
+    return { touched: true, error: { code: "BAD_REQUEST", message: "role must be a role id" } };
+  }
+  return { touched: true, ids: [rawRole.trim()] };
+}
+
+async function validateRoleSetForWrite(
+  config: YamlAccessConfig,
+  ids: string[]
+): Promise<{ ok: true; ids: string[] } | { ok: false; status: number; error: { code: string; message: string } }> {
+  for (const id of ids) {
+    const resolvedRole = roleForInput(config, id);
+    if (!resolvedRole) {
+      return { ok: false, status: 400, error: { code: "INVALID_ROLE", message: `Role '${id}' does not exist or is invalid` } };
+    }
+    if (resolvedRole.source === "template") {
+      return { ok: false, status: 400, error: rejectTemplateRole(resolvedRole.id).error };
+    }
+    const invalidReason = await validateRoleForWrite(resolvedRole.id, resolvedRole.role);
+    if (invalidReason) {
+      return {
+        ok: false,
+        status: 400,
+        error: { code: "INVALID_ROLE", message: `Role '${resolvedRole.id}' is invalid: ${invalidReason}` }
+      };
+    }
+  }
+  return { ok: true, ids: orderRoleIdsByCatalog(ids, catalogRoleIds(config)) };
+}
+
+function applyRoleSet(user: YamlUser, ids: string[]) {
+  delete user.role;
+  if (ids.length === 0) {
+    delete user.roles;
+    return;
+  }
+  user.roles = ids;
+  delete user.allow;
+}
+
+function agentRoleFields(user: YamlUser) {
+  const resolved = resolveRoleIds(user);
+  if (!resolved.ok) {
+    const declaredRoles = Array.isArray(user.roles)
+      ? user.roles.filter((role): role is string => typeof role === "string" && role.trim().length > 0).map((role) => role.trim())
+      : [];
+    return {
+      roles: [] as string[],
+      roleResolutionError: resolved.reason,
+      ...(typeof user.role === "string" && user.role.trim() ? { declaredRole: user.role.trim() } : {}),
+      ...(declaredRoles.length > 0 ? { declaredRoles } : {})
+    };
+  }
+  return {
+    roles: resolved.roleIds,
+    ...(resolved.roleIds.length === 1 ? { role: resolved.roleIds[0] } : {})
+  };
+}
+
+function summaryRole(user: YamlUser): string | undefined {
+  const resolved = resolveRoleIds(user);
+  if (!resolved.ok || resolved.roleIds.length !== 1) return undefined;
+  return resolved.roleIds[0];
+}
+
+async function previewWrittenAgent(user: YamlUser, roleOverrides: YamlAccessConfig["roles"]) {
+  return previewAgentPermissionsForAdmin(
+    {
+      id: user.id,
+      name: user.name,
+      enabled: true,
+      tokens: user.tokens,
+      ...(user.roles ? { roles: user.roles } : {}),
+      ...(user.role ? { role: user.role } : {}),
+      ...(user.allow ? { allow: user.allow } : {}),
+      ...(user.constraints !== undefined ? { constraints: user.constraints } : {})
+    },
+    { roleOverrides }
+  );
 }
 
 function roleForInput(config: YamlAccessConfig, role: string | undefined): { id: string; role: YamlRole; source: "yaml" | "template" } | undefined {
@@ -955,25 +1197,36 @@ function agentWritePreview(raw: string, newConfig: YamlAccessConfig): { diff: st
 
 export function registerAgentRoutes(app: FastifyInstance) {
   // GET /api/admin/agents
-  app.get("/api/admin/agents", async () => {
+  app.get("/api/admin/agents", async (request) => withRequestTiming(request, async () => {
     const projectRoot = await resolveProjectRoot();
-    const { config, version } = await readAccessYaml(projectRoot);
+    // Spec 174 §3.1 — users / version / permissions come from one access snapshot;
+    // if access changes while dynamic stats are read, rebuild the whole batch (≤3 attempts).
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      const accessGeneration = generationKey(["P"]);
+      const listing = await buildAgentList(projectRoot);
+      if (generationKey(["P"]) === accessGeneration && !hasPendingDisplayWrite(["P"])) return listing;
+    }
+    throw new DisplaySnapshotBusyError();
+  }));
+
+  async function buildAgentList(projectRoot: string) {
+    const { config, raw, version } = await timeAsync("access", () => readAccessYaml(projectRoot));
     const userIds = config.users.map((user) => user.id);
+    const permissionSection = await timeAsync("permissions", () => agentPermissionSection(projectRoot, config.users, raw, version));
     const window = build7dWindow();
-    const [tokenUsage, timelineMap, statsMap, globalActiveTokenCount] = await Promise.all([
+    const [tokenUsage, timelineMap, statsMap, globalActiveTokenCount] = await timeAsync("stats", () => Promise.all([
       getLastUsedMap(userIds),
       getAgentConfigTimelineMap(userIds),
       getStatsMap(config.users, window),
       getGlobalActiveTokenCount(window)
-    ]);
-    const agents = await Promise.all(
-      config.users.map((user) =>
-        userToAgentWithPermissions(
-          user,
-          statsMap.get(user.id) ?? unavailableStats(user, window),
-          tokenUsage.get(user.id),
-          timelineMap.get(user.id)
-        )
+    ]));
+    const agents = config.users.map((user) =>
+      userToAgentWithBatchPermissions(
+        user,
+        permissionSection.previews[user.id],
+        statsMap.get(user.id) ?? unavailableStats(user, window),
+        tokenUsage.get(user.id),
+        timelineMap.get(user.id)
       )
     );
     const summary = buildAgentsSummary(
@@ -982,8 +1235,25 @@ export function registerAgentRoutes(app: FastifyInstance) {
       hasTokenPrefixCollision(config.users),
       readAuditWriteHealth()
     );
-    return { ok: true, data: { agents, version, summary } };
-  });
+    // Runtime-only changes need not bump a file generation. Compute this after
+    // every asynchronous read, immediately before assembling the response.
+    const runtimeConsistency = runtimeConsistencyForInputs(permissionSection.policyInputs);
+    const snapshotVersion = createHash("sha256").update(`${permissionSection.snapshotVersion}:${runtimeConsistency}`).digest("hex").slice(0, 16);
+    return {
+      ok: true,
+      data: {
+        agents,
+        version,
+        summary,
+        meta: {
+          snapshotVersion,
+          generatedAt: new Date().toISOString(),
+          permissionsState: permissionSection.permissionsState,
+          runtimeConsistency
+        }
+      }
+    };
+  }
 
   // GET /api/admin/roles — moved to ./roles.ts (M12)
 
@@ -992,7 +1262,7 @@ export function registerAgentRoutes(app: FastifyInstance) {
     Body: {
       dryRun?: boolean;
       override?: AccessGovernanceOverrideRequest;
-      agent: { id: string; name: string; note?: string; role?: string; allow?: unknown }
+      agent: { id: string; name: string; note?: string; role?: string; roles?: string[]; allow?: unknown }
     };
   }>("/api/admin/agents", async (request, reply) => {
     const dryRun = request.body?.dryRun !== false;
@@ -1008,16 +1278,19 @@ export function registerAgentRoutes(app: FastifyInstance) {
     }
     const projectRoot = await resolveProjectRoot();
     const { config, raw } = await readAccessYaml(projectRoot);
-    const resolvedRole = roleForInput(config, agentInput.role);
-    if (!resolvedRole) {
-      return reply.status(400).send({ ok: false, error: { code: agentInput.role ? "INVALID_ROLE" : "ROLE_REQUIRED", message: "agent.role is required and must reference an existing role" } });
+    const parsedRoles = parseRoleSetInput(agentInput);
+    if (!parsedRoles.touched) {
+      return reply.status(400).send({ ok: false, error: { code: "ROLE_REQUIRED", message: "agent.roles is required and must reference an existing role" } });
     }
-    if (resolvedRole.source === "template") {
-      return reply.status(400).send(rejectTemplateRole(resolvedRole.id));
+    if ("error" in parsedRoles) {
+      return reply.status(400).send({ ok: false, error: parsedRoles.error });
     }
-    const invalidReason = await validateRoleForWrite(resolvedRole.id, resolvedRole.role);
-    if (invalidReason) {
-      return reply.status(400).send({ ok: false, error: { code: "INVALID_ROLE", message: `Role '${resolvedRole.id}' is invalid: ${invalidReason}` } });
+    if (parsedRoles.ids.length === 0) {
+      return reply.status(400).send({ ok: false, error: { code: "ROLE_REQUIRED", message: "agent.roles is required and must reference an existing role" } });
+    }
+    const validatedRoles = await validateRoleSetForWrite(config, parsedRoles.ids);
+    if (!validatedRoles.ok) {
+      return reply.status(validatedRoles.status).send({ ok: false, error: validatedRoles.error });
     }
 
     if (config.users.some((u) => u.id === agentInput.id)) {
@@ -1030,7 +1303,7 @@ export function registerAgentRoutes(app: FastifyInstance) {
       note: agentInput.note,
       enabled: true,
       tokens: [],
-      role: resolvedRole.id
+      roles: validatedRoles.ids
     };
     const newConfig: YamlAccessConfig = {
       ...config,
@@ -1038,6 +1311,11 @@ export function registerAgentRoutes(app: FastifyInstance) {
       users: [...config.users, newUser]
     };
     const { diff, proposedYaml } = agentWritePreview(raw, newConfig);
+    const createdPreview = await previewWrittenAgent(newUser, newConfig.roles);
+    if (!createdPreview.ok) {
+      return reply.status(400).send({ ok: false, error: { code: "ROLE_RESOLUTION_FAILED", message: createdPreview.reason } });
+    }
+    const createdEffectivePermissions = effectivePermissionsToPreview(createdPreview.permissions);
 
     // Access Governance Gate — Tiered Access Governance Gate (P1 / 64).
     const gateInput = await buildAgentGateInput({
@@ -1050,7 +1328,7 @@ export function registerAgentRoutes(app: FastifyInstance) {
     const gate = evaluateAccessGovernanceGate(gateInput);
 
     if (dryRun) {
-      return { ok: true, data: { diff, proposedYaml, gate } };
+      return { ok: true, data: { diff, proposedYaml, gate, effectivePermissions: createdEffectivePermissions } };
     }
 
     if (gate.decision === "block") {
@@ -1063,11 +1341,6 @@ export function registerAgentRoutes(app: FastifyInstance) {
           detail: { gate }
         }
       });
-    }
-
-    const enabledAgentCount = config.users.filter((user) => user.enabled !== false).length + 1;
-    if (!(await enforceAgentSeatLimit(request, reply, enabledAgentCount))) {
-      return;
     }
 
     if (gate.decision === "override_required") {
@@ -1093,9 +1366,9 @@ export function registerAgentRoutes(app: FastifyInstance) {
       changeType: "agent_create",
       targetId: newUser.id,
       oldSummary: { userIds: config.users.map((user) => user.id) },
-      newSummary: { userIds: newConfig.users.map((user) => user.id), role: newUser.role },
+      newSummary: { userIds: newConfig.users.map((user) => user.id), role: summaryRole(newUser), roles: newUser.roles },
       diff,
-      requestId: request.id
+      ...auditActorFields(trustedActorFromRequest(request))
     });
     return {
       ok: true,
@@ -1155,6 +1428,7 @@ export function registerAgentRoutes(app: FastifyInstance) {
         note?: string;
         enabled?: boolean;
         role?: string;
+        roles?: string[];
         allow?: unknown;
         tokens?: unknown;
         id?: unknown;
@@ -1189,25 +1463,27 @@ export function registerAgentRoutes(app: FastifyInstance) {
       }
     }
     const existingUser = config.users[userIndex];
-    if (patch.role !== undefined) {
-      const resolvedRole = roleForInput(config, patch.role);
-      if (!resolvedRole) {
-        return reply.status(400).send({ ok: false, error: { code: "INVALID_ROLE", message: `Role '${patch.role}' does not exist or is invalid` } });
+    const parsedRoles = parseRoleSetInput(patch);
+    if (parsedRoles.touched && "error" in parsedRoles) {
+      return reply.status(400).send({ ok: false, error: parsedRoles.error });
+    }
+    let nextRoleIds = resolveRoleIds(existingUser).ok ? resolveRoleIds(existingUser).roleIds : [];
+    if (parsedRoles.touched && !("error" in parsedRoles)) {
+      if (parsedRoles.ids.length === 0 && !existingUser.allow) {
+        return reply.status(400).send({ ok: false, error: { code: "ROLE_REQUIRED", message: "At least one role is required" } });
       }
-      if (resolvedRole.source === "template") {
-        return reply.status(400).send(rejectTemplateRole(resolvedRole.id));
-      }
-      const invalidReason = await validateRoleForWrite(resolvedRole.id, resolvedRole.role);
-      if (invalidReason) {
-        return reply.status(400).send({ ok: false, error: { code: "INVALID_ROLE", message: `Role '${resolvedRole.id}' is invalid: ${invalidReason}` } });
+      if (parsedRoles.ids.length > 0) {
+        const validatedRoles = await validateRoleSetForWrite(config, parsedRoles.ids);
+        if (!validatedRoles.ok) {
+          return reply.status(validatedRoles.status).send({ ok: false, error: validatedRoles.error });
+        }
+        nextRoleIds = validatedRoles.ids;
+      } else {
+        nextRoleIds = [];
       }
     }
-    if (patch.role !== undefined && !assertRoleExists(config, patch.role)) {
-      return reply.status(400).send({ ok: false, error: { code: "INVALID_ROLE", message: `Role '${patch.role}' does not exist or is invalid` } });
-    }
-    const nextRole = patch.role !== undefined ? patch.role : existingUser.role;
     const enabling = patch.enabled === true && existingUser.enabled === false;
-    if (enabling && !nextRole && hasWildcardAllow(existingUser)) {
+    if (enabling && nextRoleIds.length === 0 && hasWildcardAllow(existingUser)) {
       return reply.status(400).send({
         ok: false,
         error: { code: "LEGACY_WILDCARD_AGENT_REQUIRES_ROLE", message: "Assign a role before re-enabling a legacy wildcard agent" }
@@ -1217,10 +1493,9 @@ export function registerAgentRoutes(app: FastifyInstance) {
       ...existingUser,
       ...(patch.name !== undefined ? { name: patch.name } : {}),
       ...(patch.note !== undefined ? { note: patch.note } : {}),
-      ...(patch.enabled !== undefined ? { enabled: patch.enabled } : {}),
-      ...(patch.role !== undefined ? { role: patch.role } : {})
+      ...(patch.enabled !== undefined ? { enabled: patch.enabled } : {})
     };
-    if (updatedUser.role) delete updatedUser.allow;
+    if (parsedRoles.touched && !("error" in parsedRoles)) applyRoleSet(updatedUser, nextRoleIds);
 
     const patchHasConstraints = bodyHasOwn(patch, "constraints");
     if (patchHasConstraints) {
@@ -1242,26 +1517,17 @@ export function registerAgentRoutes(app: FastifyInstance) {
     const { diff, proposedYaml } = agentWritePreview(raw, newConfig);
 
     // Spec 100 §10 — illegal / unsatisfiable / over-limit constraints must fail before write.
+    // Spec 168 — role-set changes return the same server-composed preview.
+    const roleSetTouched = parsedRoles.touched;
     let proposedEffectivePermissions: ReturnType<typeof effectivePermissionsToPreview> | undefined;
-    if (patchHasConstraints || updatedUser.constraints !== undefined) {
-      // Omit `constraints` when cleared — passing `constraints: undefined` still
-      // keeps the key and compile treats it as invalid shape.
-      const compiled = await previewAgentPermissionsForAdmin(
-        {
-          id: updatedUser.id,
-          name: updatedUser.name,
-          enabled: updatedUser.enabled,
-          role: updatedUser.role,
-          roles: updatedUser.roles,
-          tokens: updatedUser.tokens,
-          allow: updatedUser.allow,
-          ...(updatedUser.constraints !== undefined ? { constraints: updatedUser.constraints } : {})
-        },
-        { roleOverrides: newConfig.roles as AccessConfig["roles"] }
-      );
+    if (roleSetTouched || patchHasConstraints || updatedUser.constraints !== undefined) {
+      const compiled = await previewWrittenAgent(updatedUser, newConfig.roles);
       if (!compiled.ok) {
-        const err = constraintsCompileError(compiled.reason);
-        return reply.status(400).send({ ok: false, error: err });
+        if (patchHasConstraints || updatedUser.constraints !== undefined) {
+          const err = constraintsCompileError(compiled.reason);
+          return reply.status(400).send({ ok: false, error: err });
+        }
+        return reply.status(400).send({ ok: false, error: { code: "ROLE_RESOLUTION_FAILED", message: compiled.reason } });
       }
       proposedEffectivePermissions = effectivePermissionsToPreview(compiled.permissions);
     }
@@ -1327,18 +1593,20 @@ export function registerAgentRoutes(app: FastifyInstance) {
       targetId: updatedUser.id,
       oldSummary: {
         enabled: existingUser.enabled !== false,
-        role: existingUser.role,
+        role: summaryRole(existingUser),
+        roles: existingUser.roles,
         hasLegacyAllow: Boolean(existingUser.allow),
         hasConstraints: existingUser.constraints !== undefined
       },
       newSummary: {
         enabled: updatedUser.enabled !== false,
-        role: updatedUser.role,
+        role: summaryRole(updatedUser),
+        roles: updatedUser.roles,
         hasLegacyAllow: Boolean(updatedUser.allow),
         hasConstraints: updatedUser.constraints !== undefined
       },
       diff,
-      requestId: request.id
+      ...auditActorFields(trustedActorFromRequest(request))
     });
     return {
       ok: true,
@@ -1424,7 +1692,7 @@ export function registerAgentRoutes(app: FastifyInstance) {
       targetId: user.id,
       oldSummary: { userIds: config.users.map((item) => item.id), tokenCount: user.tokens.length },
       newSummary: { userIds: newConfig.users.map((item) => item.id) },
-      requestId: request.id
+      ...auditActorFields(trustedActorFromRequest(request))
     });
     invalidateAccessConfigCache();
     return {

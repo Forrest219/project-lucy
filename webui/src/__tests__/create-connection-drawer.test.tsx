@@ -126,6 +126,9 @@ describe("CreateConnectionDrawer", () => {
       target: { value: "starrocks" }
     });
     expect(screen.getByTestId("create-connection-port")).toHaveValue("9030");
+    const engineHint = screen.getByTestId("create-connection-engine-hint");
+    expect(engineHint.closest(".pl-connection-field-control")).toBeNull();
+    expect(screen.getByTestId("create-connection-driver").parentElement).not.toContainElement(engineHint);
 
     fireEvent.change(screen.getByTestId("create-connection-driver"), {
       target: { value: "doris" }
@@ -150,6 +153,27 @@ describe("CreateConnectionDrawer", () => {
     expect(screen.queryByTestId("create-connection-username")).not.toBeInTheDocument();
     expect(screen.queryByTestId("create-connection-password")).not.toBeInTheDocument();
     expect(screen.getByText("数据库文件路径")).toBeInTheDocument();
+    expect(screen.getByText("此类型不保存数据库密码，也不会写入密码文件。")).toBeInTheDocument();
+    expect(screen.queryByText(/密码仅提交一次/)).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByTestId("create-connection-driver"), {
+      target: { value: "athena" }
+    });
+    expect(screen.queryByTestId("create-connection-host")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("create-connection-password")).not.toBeInTheDocument();
+    expect(screen.getByTestId("create-connection-region")).toBeInTheDocument();
+    expect(screen.getByTestId("create-connection-s3-staging-dir")).toBeInTheDocument();
+    expect(screen.getByTestId("create-connection-workgroup")).toHaveValue("primary");
+    expect(screen.getByTestId("create-connection-catalog")).toHaveValue("AwsDataCatalog");
+    expect(screen.getByText("初始 Glue 数据库（可选）")).toBeInTheDocument();
+    expect(screen.getByText("此类型不保存数据库密码，也不会写入密码文件。")).toBeInTheDocument();
+    expect(screen.queryByText(/密码仅提交一次/)).not.toBeInTheDocument();
+    const athenaHint = screen.getByTestId("create-connection-athena-hint");
+    expect(athenaHint).toHaveTextContent("凭据使用当前环境的 AWS 凭证，不保存数据库密码。");
+    expect(athenaHint.closest(".pl-connection-field-control")).toBeNull();
+    expect(screen.getByTestId("create-connection-driver").parentElement).not.toContainElement(athenaHint);
+    expect(screen.queryByText(/KTX 的 athena 驱动/)).not.toBeInTheDocument();
+    expect(screen.queryByTestId("create-connection-engine-hint")).not.toBeInTheDocument();
   });
 
   it("shows dryRun preview without sending password, then confirms create", async () => {
@@ -356,6 +380,7 @@ describe("CreateConnectionDrawer", () => {
     await waitFor(() => {
       expect(screen.getByTestId("create-connection-confirm-btn")).toBeInTheDocument();
     });
+    expect(screen.queryByText(/将写入密码文件/)).not.toBeInTheDocument();
     expect(bodies[0]).toMatchObject({
       dryRun: true,
       id: "local-sqlite",

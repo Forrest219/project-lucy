@@ -4,11 +4,19 @@
 |---|---|
 | 文档名称 | project-lucy 项目概览 |
 | 文档类型 | Overview |
-| 版本 | v1.16 |
-| 撰写日期 | 2026-06-17；v1.1 更新 2026-06-21；v1.2 更新 2026-06-21；v1.3 更新 2026-06-21；v1.4 更新 2026-06-22；v1.5 更新 2026-06-24（澄清 Lucy 不直接回答问题的定位措辞）；v1.6 更新 2026-07-06（同步交付缺口、headless 边界、运行时 instructions 来源和本机配置治理）；v1.7 更新 2026-07-06（同步 data agent context compiler + governed MCP runtime 定位）；v1.8 更新 2026-07-27（新增 Agent Admin 企业级交付 spec 索引）；v1.9 更新 2026-08-03（新增 Lucy 202608 可靠性交付系统升级蓝图索引）；v1.10 更新 2026-08-03（新增 Lucy 202608 执行总控与 Dynamic RLS POC 索引）；v1.11 更新 2026-08-03（同步 Kubernetes / Helm 单副本 baseline：`deploy/k8s/helm/lucy/`）；v1.12 更新 2026-08-03（将 202608 主线收窄为 Enterprise Governance & Observability）；v1.13 更新 2026-08-03（删除 Dynamic RLS / CLS POC spec / work order，移出 202608 active scope）；v1.14 更新 2026-08-26（索引可选 Agent Chat A3 Design Spec；非默认交付）；v1.15 更新 2026-08-28（索引 API Staging 接入准入 Spec · 计划支持）；v1.16 更新 2026-09-24（索引运维问数连接 Spec 149） |
+| 版本 | v1.23 |
+| v1.23 更新 | 2026-10-23，同步差异化主张（口径、权限、语境是模型之外的资产）与 vision.md §1.2 的自建 / 外购判据、差异化边界、衡量口径引用；仅定位与文档口径同步，不改变能力边界与交付状态 |
+| v1.22 更新 | 2026-10-22，登记 v2.5 L25-14 行权限管理 Spec v0.1-draft（可复用静态行策略模板 + 最终行约束预览 + 行权限视图 + 配置审计）；同步登记行级策略字段绑定存量缺陷 D-03（P1 / open，只登记不修，留 v2.0 线排期）；仅设计草案，验证未执行，暂不开发 |
+| v1.21 更新 | 2026-10-22，登记 v2.5 L25-13 升级候选验证环境实施方案 v0.1；仅规划，暂不开发，不改变客户现场以原地升级为主线的放行方式 |
+| v1.20 更新 | 2026-10-21，新增数据库支持矩阵（`docs/governance/database-support-matrix.md`）作为数据库支持状态唯一真源；本文件「数据库接入」能力行改为引用它 |
+| v1.19 更新 | 2026-10-20，登记 v2.5 L25-11 语义资产批量维护 Spec v0.1-draft；仅设计草案，验证未执行，暂不开发 |
+| v1.18 更新 | 2026-10-20，登记 v2.5 L25-10 Hive 直连实施方案；仅规划，暂不开发 |
+| 撰写日期 | 2026-06-17；v1.1 更新 2026-06-21；v1.2 更新 2026-06-21；v1.3 更新 2026-06-21；v1.4 更新 2026-06-22；v1.5 更新 2026-06-24（澄清 Lucy 不直接回答问题的定位措辞）；v1.6 更新 2026-07-06（同步交付缺口、headless 边界、运行时 instructions 来源和本机配置治理）；v1.7 更新 2026-07-06（同步 data agent context compiler + governed MCP runtime 定位）；v1.8 更新 2026-07-27（新增 Agent Admin 企业级交付 spec 索引）；v1.9 更新 2026-08-03（新增 Lucy 202608 可靠性交付系统升级蓝图索引）；v1.10 更新 2026-08-03（新增 Lucy 202608 执行总控与 Dynamic RLS POC 索引）；v1.11 更新 2026-08-03（同步 Kubernetes / Helm 单副本 baseline：`deploy/k8s/helm/lucy/`）；v1.12 更新 2026-08-03（将 202608 主线收窄为 Enterprise Governance & Observability）；v1.13 更新 2026-08-03（删除 Dynamic RLS / CLS POC spec / work order，移出 202608 active scope）；v1.14 更新 2026-08-26（索引可选 Agent Chat A3 Design Spec；非默认交付）；v1.15 更新 2026-08-28（索引 API Staging 接入准入 Spec · 计划支持）；v1.16 更新 2026-09-24（索引运维问数连接 Spec 149）；v1.17 更新 2026-10-18（索引 Cloudflare OS 对标差异） |
 | 适用范围 | 新成员 onboarding、模块索引、当前能力边界 |
 
 project-lucy 是面向中小企业的 **data agent context compiler + governed MCP runtime**。它把数据库、BI、文档、人工口径编译成 Agent 可安全使用、可审计、可回归的数据服务；底座为 KTX 语义层、wiki、eval cases、skills、Lucy MCP Proxy 和 Lucy WebUI 治理工作台。
+
+差异化主张：**口径、权限、语境是模型之外的资产，模型换代它们不变**。企业 Agent 正从 frontier 闭源模型迁到微调后的开源小模型，差异不在模型本身，而在业务逻辑与企业集成；Lucy 把「这家企业的业务逻辑」沉淀为可执行、可授权、可审计、可回归的外部资产。完整定位、自建 / 外购判据、差异化边界与衡量口径见 [`docs/governance/vision.md`](vision.md) §1.2。
 
 Lucy 自身不直接生成分析结论或回答问题；语义问答由 Claude Code / Codex / Hermes / Cursor 等 Agent 通过 Lucy 提供的受治理 MCP 能力完成。面向产品化交付，用户通过 Docker 部署 Lucy，接入数据库，维护客户 context package，并在 agents 平台配置 MCP endpoint/token 接入数据能力。该目标的验收合同见 `docs/specs/lucy-platform-goal-checklist.md`。
 
@@ -115,7 +123,7 @@ WebUI 是本地治理工作台，当前导航有 7 个一级模块：
 | Docker headless customer path | 达到当前交付预期 | 标准入口是 Docker Compose、配置文件、Lucy MCP Proxy、Agent MCP config、smoke/eval 证据 |
 | Kubernetes / Helm customer path | 单副本 supported baseline（2026-08-03 起） | 标准入口是 `deploy/k8s/helm/lucy/`、`docs/runbooks/customer-k8s-deployer-quickstart.md`；`Recreate` strategy + RWO PVC；HA 不在本期 |
 | WebUI 管理台 | 已实现内部治理能力，但非当前客户标准入口 | 代码和测试作为内部质量门禁；客户承诺需另补 UAT、用户文档和稳定性证据 |
-| 数据库接入 | MySQL/PostgreSQL verified；StarRocks P1 gated；Oracle roadmap | StarRocks live certification 前不能写入 verified matrix |
+| 数据库接入 | MySQL/PostgreSQL verified；StarRocks/Doris gated；SQL Server/Athena experimental；SQLite verified（仅本地文件）；Oracle roadmap | 支持状态以 [`docs/governance/database-support-matrix.md`](database-support-matrix.md) 为唯一真源；StarRocks live certification 前不能写入 verified matrix |
 | API Staging 接入（P1-MasterUidExtension） | **计划支持**（Spec 已落盘；ETL / WebUI / 生产域 **暂不开发**） | 见 `docs/specs/api-staging-admission-spec.md`；不承诺 Lucy 原生 HTTP |
 | Semantic layer / Wiki 管理 | 编辑能力已实现，reindex 与 wiki_search 交付证据仍不足 | 不能把 WebUI 维护链路整体标记为 verified 治理闭环 |
 | Skill management | 文件资产存在，Skill Editor / 版本化 / 自动加载闭环未开发 | 当前只能作为代码库治理资产，不是产品化 Skill 管理模块 |
@@ -150,6 +158,12 @@ Lucy MCP Proxy 监听 `LUCY_PROXY_HOST:LUCY_PROXY_PORT`（默认容器内 `0.0.0
 | 主题 | 文档 |
 |---|---|
 | Lucy 产品定位与愿景 | `docs/governance/vision.md` |
+| **竞品分析与差异化立项（20261014）** | **`docs/specs/lucy-20261014-safe-log-to-quality-eval-spec.md`**（P0-1 反馈回流浪程）· **`docs/specs/lucy-20261014-release-bom-spec.md`**（P0-2 发布物料清单）· **`docs/specs/lucy-20261014-concept-dictionary-spec.md`**（P1 概念字典）；工单 `docs/plans/wo-20261014-*.md`；分析底稿与评审历史 `docs/specs/lucy-20261014-fivetran-context-layer-competitive-analysis.md` |
+| Cloudflare OS 对标差异（20261018） | `docs/specs/lucy-20261018-cloudflare-os-benchmark.md`。公开材料对照，不是功能 Spec；未纳入本地实机截图交叉审阅 |
+| Hive 直连（v2.5 L25-10，方案待评审，暂不开发） | [Hive 直连实施方案](../plans/2026-10-20-hive-direct-connection-implementation-plan.md)。Lucy 适配 HiveServer2/JDBC，复用未修改的 KTX Python 语义计算接口；静态接口核查完成，动态验证未执行 |
+| 语义资产批量维护（v2.5 L25-11，P1，草案待评审，暂不开发） | [Spec v0.1-draft](../specs/lucy-20261020-v2p5-semantic-batch-operations-spec.md)。记录运行镜像与源码双基线；Catalog 批量下载 / 校验 / 导入与工作台生效协作，含核心伪代码及 V01–V22 验证矩阵，全部未执行 |
+| 升级候选验证环境（v2.5 L25-13，P1，方案待评审，暂不开发） | [实施方案](../plans/2026-10-22-upgrade-candidate-verification-plan.md)。L25-07「独立恢复验证」的细化：用一致性备份在隔离环境验证候选镜像的迁移正确性与业务/审计连续性，13 条 `RVC-*` 断言全部未执行；原地升级仍是客户现场主线 |
+| 行权限管理（v2.5 L25-14，P1，草案待评审，暂不开发） | [Spec v0.1-draft](../specs/lucy-20261022-v2p5-row-permission-management-spec.md)。可复用静态行策略模板 + 保存前最终行约束预览（角色并集 ∧ 个人行限制）+ 按表反查的行权限视图 + 配置审计；模板编译期摊平为现有 `row_policy` 谓词形状，不产生第二套权限代数；动态 / 按人 / 按 Token 行策略仍按 ADR 冻结；V01–V18 全部未执行 |
 | Lucy 202608 Enterprise Governance & Observability 升级蓝图 | `docs/specs/lucy-202608-reliable-delivery-upgrade-spec.md` |
 | Lucy 202608 升级执行总控 | `docs/specs/lucy-202608-upgrade-execution-control.md` |
 | Lucy 202608 Governance & Observability 差距分析 | `docs/access-control/gap-analysis-202608.md` |
@@ -158,6 +172,8 @@ Lucy MCP Proxy 监听 `LUCY_PROXY_HOST:LUCY_PROXY_PORT`（默认容器内 `0.0.0
 | Kubernetes / Helm 部署（单副本） | `deploy/k8s/helm/lucy/`、`docs/runbooks/customer-k8s-deployer-quickstart.md` |
 | 客户部署 / 运维手册 | `docs/runbooks/customer-deployment-guide.md` |
 | 版本矩阵 | `docs/governance/version-matrix.md` |
+| **数据库支持矩阵（支持状态唯一真源）** | **`docs/governance/database-support-matrix.md`** |
+| 构建修订（版本信息页 / health `gitSha`） | `docs/specs/lucy-20261020-build-revision-identity-spec.md` |
 | 测试分层与发布门禁 | `docs/governance/test-layers-and-release-gates.md` |
 | Release CI | `docs/governance/release-ci.md` |
 | Docker demo | `examples/docker-demo/README.md` |
@@ -168,16 +184,20 @@ Lucy MCP Proxy 监听 `LUCY_PROXY_HOST:LUCY_PROXY_PORT`（默认容器内 `0.0.0
 | Agent 接入指南 | `docs/runbooks/agent-integration-guide.md` |
 | 可选 Agent Chat（A3，非默认交付；客户 bundle 无悬空入口） | `docs/design/design-lucy-agent-chat-a3.md`、`docs/runbooks/runbook-lucy-agent-chat-a3.md`、`deploy/compose/docker-compose.agent-chat.yml`、`agent-chat/`（仓库维护用；`smoke:p0:delivery-isolation` 保证 Lucy 镜像不含 A3） |
 | 安全指南 | `docs/runbooks/security-guide.md` |
+| 企业安全整改与真实用户 E2E 上线门禁（2026-10-18，**已批准，按批次实施中**） | [整改 Spec](../specs/lucy-20261018-enterprise-security-and-real-e2e-spec.md)、[实施 Plan](../plans/2026-10-18-enterprise-security-and-real-e2e-plan.md)、[Cursor 提示词](../plans/2026-10-18-enterprise-security-cursor-prompts.md)；修复 P0/P1、恢复 Wiki/Skill 显式隔离并接入客户版本强制门禁 |
 | 排障指南 | `docs/runbooks/troubleshooting-guide.md` |
 | 开发治理 | `docs/governance/DEVELOPMENT.md` |
 | WebUI 当前状态 | `docs/webui/webui-impl-status.md` |
 | WebUI 模块使用 | `docs/webui/webui-module-guide.md` |
 | WebUI 基础架构 | `webui/docs/01-architecture.md`、`webui/docs/02-arch-spec.md`、`webui/docs/03-api-spec.md`、`webui/docs/04-data-model.md` |
+| WebUI 进入性能优化（已实施，2026-10-14 Codex收尾及fixture正式复验完成，未部署） | [Spec 174](../../webui/docs/174-webui-entry-performance-spec.md)、[Cursor实施与验证工单](../../webui/docs/plans/wo-20261013-webui-entry-performance.md)、[审阅修正工单](../../webui/docs/plans/wo-20261013-webui-entry-performance-REVIEW-FIX.md)、[复核与下一步计划](../../webui/docs/plans/wo-20261014-webui-entry-performance-RECHECK.md) |
 | WebUI 内置系统手册 / Help Center | `docs/design/design-system-handbook-help.md`、`docs/SYSTEM_HANDBOOK.md` |
+| WebUI 侧栏账户菜单 | [Spec 188](../../webui/docs/188-sidebar-account-menu-spec.md)：左下角单一账户入口，收纳系统手册及退出登录；本次仅 Code Review，未运行验证或重建 Docker |
 | YAML 交付自助运维 / Agent 自检 | `webui/docs/24-yaml-delivery-runbook-spec.md`、`webui/docs/plans/wo-M20-yaml-delivery-runbook.md` |
 | MCP Auth Proxy | `webui/docs/07-mcp-auth-proxy-spec.md` |
 | 访问日志审计证据硬化 | `webui/docs/137-access-log-audit-evidence-hardening-spec.md`、`webui/docs/plans/wo-202609-02-access-log-audit-evidence-hardening.md` |
 | Lucy 查询执行与轮次归因可靠性 | `webui/docs/138-lucy-query-execution-and-turn-correlation-reliability-spec.md`、`webui/docs/plans/wo-202609-03-lucy-query-and-answer-reliability.md` |
+| 客户查数体验与使用证据（日志立项） | `docs/plans/2026-10-11-customer-log-next-optimizations.md`、`webui/docs/162-customer-query-experience-and-usage-evidence-spec.md`、`webui/docs/plans/wo-202610-12-query-turn-budget-and-repair.md` |
 | 企业级 Data Agent 可回答性与交付标准 | `webui/docs/139-enterprise-data-agent-answerability-and-delivery-standard.md` |
 | 业务 Skill MVP（只读 Hub + Agent 读取） | `webui/docs/144-skill-hub-mvp-spec.md`、`webui/docs/plans/wo-202609-23-skill-hub-and-publish-clarity.md` |
 | 发布工作台校验口径 | `webui/docs/145-publish-validation-count-clarity-spec.md` |

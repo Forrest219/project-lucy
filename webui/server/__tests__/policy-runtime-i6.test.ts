@@ -46,7 +46,18 @@ beforeEach(async () => {
   projectRoot = await mkdtemp(path.join(os.tmpdir(), "ktx-i6-"));
   await mkdir(path.join(projectRoot, "webui", "config"), { recursive: true });
   await mkdir(path.join(projectRoot, "semantic-layer", "warehouse", "_schema"), { recursive: true });
-  await writeFile(path.join(projectRoot, "ktx.yaml"), "connections: {}\n", "utf8");
+  // Spec 182 — selector matches intersect with the connection's enabled_tables.
+  await writeFile(
+    path.join(projectRoot, "ktx.yaml"),
+    `connections:
+  warehouse:
+    driver: mysql
+    enabled_tables:
+      - fin.fin_ledger
+      - fin.fin_budget
+`,
+    "utf8"
+  );
   await writeFile(path.join(projectRoot, "webui", "config", "access.yaml"), ACCESS_YAML, "utf8");
   await writeFile(path.join(projectRoot, "semantic-layer", "warehouse", "_schema", "fin.yaml"), FIN_SCHEMA, "utf8");
   process.env.KTX_PROJECT_ROOT = projectRoot;

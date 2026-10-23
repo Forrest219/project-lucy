@@ -13,6 +13,7 @@ vi.mock("../admin/audit.js", () => ({
   })),
   recordConfigChange: vi.fn(async () => 1),
   updateConfigChangeStatus: vi.fn(async () => {}),
+  registerAgentAuditRoutes: vi.fn(),
   registerAuditRoutes: vi.fn()
 }));
 
@@ -224,7 +225,20 @@ async function makeProject(accessYaml = ACCESS_YAML) {
   await mkdir(path.join(root, "webui", "config"), { recursive: true });
   await mkdir(path.join(root, "semantic-layer", "warehouse", "_schema"), { recursive: true });
   await mkdir(path.join(root, ".ktx-ui"), { recursive: true });
-  await writeFile(path.join(root, "ktx.yaml"), "connections: {}\n", "utf8");
+  // Spec 182 — selector matches intersect with the connection's enabled_tables.
+  // Both manifest sources (fin_ledger, fin_budget) are added so the
+  // selector-based cases still resolve.
+  await writeFile(
+    path.join(root, "ktx.yaml"),
+    `connections:
+  warehouse:
+    driver: mysql
+    enabled_tables:
+      - fin.fin_ledger
+      - fin.fin_budget
+`,
+    "utf8"
+  );
   await writeFile(path.join(root, "webui", "config", "access.yaml"), accessYaml, "utf8");
   await writeFile(path.join(root, "semantic-layer", "warehouse", "_schema", "fin.yaml"), FIN_SCHEMA_YAML, "utf8");
   await writeFile(path.join(root, "semantic-layer", "warehouse", "fin_ledger.yaml"), FIN_LEDGER_OVERLAY_YAML, "utf8");
@@ -301,7 +315,9 @@ describe("WP-I4 permission_model_version", () => {
 
     await expect(effectivePermissions(identity("v2_prefix_agent"))).resolves.toEqual({
       ok: false,
-      reason: "role_resolution_failed:v2_prefix:v2_prefix_forbidden"
+      reason: "role_resolution_failed:v2_prefix:v2_prefix_forbidden",
+      failedRoleId: "v2_prefix",
+      diagnostic: expect.any(Object)
     });
     await expect(authorizeAndRewrite(identity("v2_prefix_agent"), "lucy_query", {
       connectionId: "warehouse",
@@ -324,11 +340,15 @@ describe("WP-I4 permission_model_version", () => {
 
     await expect(effectivePermissions(identity("v2_missing_row_access_agent"))).resolves.toEqual({
       ok: false,
-      reason: "role_resolution_failed:v2_missing_row_access:v2_row_access_required"
+      reason: "role_resolution_failed:v2_missing_row_access:v2_row_access_required",
+      failedRoleId: "v2_missing_row_access",
+      diagnostic: expect.any(Object)
     });
     await expect(effectivePermissions(identity("bad_version_agent"))).resolves.toEqual({
       ok: false,
-      reason: "role_resolution_failed:bad_version:invalid_permission_model_version"
+      reason: "role_resolution_failed:bad_version:invalid_permission_model_version",
+      failedRoleId: "bad_version",
+      diagnostic: expect.any(Object)
     });
 
     const scopedOk = await effectivePermissions(identity("v2_scoped_ok_agent"));
@@ -437,6 +457,95 @@ describe("WP-I4 Admin migration on save", () => {
           row_access: all
 `);
 
+    await app.close();
+  });
+
+  it("ignores patch.permission_model_version when it equals the stored value", async () => {
+    const app = await buildApp();
+    const yamlPath = path.join(projectRoot, "webui/config/access.yaml");
+
+    const dry = await request(app.server)
+      .patch("/api/admin/roles/v2_ok")
+      .send({
+        dryRun: true,
+        patch: { description: "Echoed v2", permission_model_version: 2 }
+      })
+      .expect(200);
+    expect(dry.body.data.proposedYaml).toContain("description: Echoed v2");
+    expect(dry.body.data.proposedYaml).toMatch(/v2_ok:[\s\S]*permission_model_version: 2/);
+
+    const written = await request(app.server)
+      .patch("/api/admin/roles/v2_ok")
+      .send({
+        dryRun: false,
+        patch: { description: "Echoed v2", permission_model_version: 2 }
+      })
+      .expect(200);
+    expect(written.body.data.written).toBe(true);
+    const yaml = await readFile(yamlPath, "utf8");
+    expect(yaml).toContain("description: Echoed v2");
+    expect(yaml).toMatch(/v2_ok:[\s\S]*permission_model_version: 2/);
+
+    const echoedV1 = await request(app.server)
+      .patch("/api/admin/roles/legacy_v1_prefix")
+      .send({
+        dryRun: true,
+        patch: { description: "Migrated by admin", permission_model_version: 1 }
+      })
+      .expect(200);
+    expect(echoedV1.body.data.migration).toMatchObject({
+      fromVersion: 1,
+      toVersion: 2,
+      changed: true
+    });
+    await app.close();
+  });
+
+  it("rejects patch.permission_model_version when the stored role has no field", async () => {
+    const app = await buildApp();
+    const yamlPath = path.join(projectRoot, "webui/config/access.yaml");
+    const before = await readFile(yamlPath, "utf8");
+
+    for (const permission_model_version of [2, 1]) {
+      const res = await request(app.server)
+        .patch("/api/admin/roles/legacy_no_version")
+        .send({
+          dryRun: false,
+          patch: { description: "Should not write", permission_model_version }
+        })
+        .expect(400);
+      expect(res.body.error).toMatchObject({ code: "BAD_REQUEST" });
+      expect(res.body.error.message).toBe("patch.permission_model_version is not editable");
+    }
+
+    expect(await readFile(yamlPath, "utf8")).toBe(before);
+    await app.close();
+  });
+
+  it("rejects a permission_model_version that differs from the stored value", async () => {
+    const app = await buildApp();
+    const yamlPath = path.join(projectRoot, "webui/config/access.yaml");
+    const before = await readFile(yamlPath, "utf8");
+
+    const upgrade = await request(app.server)
+      .patch("/api/admin/roles/legacy_v1_prefix")
+      .send({
+        dryRun: false,
+        patch: { description: "upgrade", permission_model_version: 2 }
+      })
+      .expect(400);
+    expect(upgrade.body.error.message).toBe("patch.permission_model_version is not editable");
+
+    const downgrade = await request(app.server)
+      .patch("/api/admin/roles/v2_ok")
+      .send({
+        dryRun: false,
+        patch: { description: "downgrade", permission_model_version: 1 }
+      })
+      .expect(400);
+    expect(downgrade.body.error.message).toBe("patch.permission_model_version is not editable");
+
+    expect(await readFile(yamlPath, "utf8")).toBe(before);
     await app.close();
   });
 

@@ -1,5 +1,6 @@
 // Spec 144 / 147 Skill admin client.
 // Routes return `{ ok, ... }` (not `{ ok, data }`), so we fetch directly.
+import { assertAuthEpoch, currentAuthEpoch } from "./apiClient";
 
 export type SkillStatus = "draft" | "published" | "deprecated";
 
@@ -28,6 +29,8 @@ export type SkillAsset = {
   domain: string;
   status: SkillStatus;
   roles_allowed: string[];
+  /** Server flag: the stored declaration is corrupt (denied at runtime until repaired). */
+  roles_allowed_invalid?: boolean;
   prerequisites: SkillPrerequisites;
   triggers: string[];
   eval_cases: string[];
@@ -88,6 +91,7 @@ export type SkillWritePayload = {
 };
 
 async function fetchSkillsJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const startedAuthEpoch = currentAuthEpoch();
   const response = await fetch(path, {
     credentials: "same-origin",
     ...init,
@@ -97,12 +101,14 @@ async function fetchSkillsJson<T>(path: string, init?: RequestInit): Promise<T> 
     }
   });
   const body = (await response.json()) as { ok: boolean; error?: unknown } & T;
+  assertAuthEpoch(startedAuthEpoch);
   if (!response.ok || body.ok === false) {
     const raw = typeof body.error === "string" ? body.error : "";
     const knownErrors: Record<string, string> = {
       skill_write_conflict: "Skill 已被其他操作更新，请重新加载后再试",
       skill_expected_version_required: "缺少 Skill 文件版本，请重新加载后再试",
-      skill_identity_immutable: "Skill 的域和名称创建后不可修改"
+      skill_identity_immutable: "Skill 的域和名称创建后不可修改",
+      skill_roles_invalid: "可访问角色声明无效，请重新选择"
     };
     const code = Object.keys(knownErrors).find((candidate) => raw.includes(candidate));
     const message = code

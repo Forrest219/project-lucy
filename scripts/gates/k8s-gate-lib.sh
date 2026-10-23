@@ -136,6 +136,52 @@ pod_image_id() {
     -o jsonpath='{.status.containerStatuses[?(@.name=="lucy")].imageID}'
 }
 
+# Digest ("sha256:<64 hex>") from a runtime imageID such as "docker-pullable://repo@sha256:..." or
+# "repo@sha256:...". Prints nothing (and returns 1) when the imageID carries no digest, e.g. a bare config ID
+# or a tag-only reference: only a registry manifest digest identifies a candidate (Spec §8.3).
+image_digest_from_id() {
+  local id="$1" digest
+  digest="$(printf '%s' "${id}" | sed -n 's/.*@\(sha256:[0-9a-f]\{64\}\)$/\1/p')"
+  [[ -n "${digest}" ]] || return 1
+  printf '%s' "${digest}"
+}
+
+# Fails unless the running Pod's image digest is exactly the candidate digest.
+assert_expected_image_digest() {
+  local image_id="$1" expected="$2" actual
+  [[ "${expected}" =~ ^sha256:[0-9a-f]{64}$ ]] || fail "--expect-image-digest must be sha256:<64 hex>, got '${expected}'"
+  actual="$(image_digest_from_id "${image_id}")" \
+    || fail "pod imageID '${image_id}' carries no registry digest; cannot prove it is candidate ${expected}"
+  [[ "${actual}" == "${expected}" ]] || fail "pod runs ${actual}, not the candidate ${expected}"
+}
+
+# Writes <file> describing what is actually deployed, for scripts/e2e (results/deployment.json).
+# Single-replica is a fact read from the cluster, not an assumption.
+#
+# The file now records both the physical Pod UID (instanceId, unchanged) AND the logical run
+# instance id (logicalInstanceId, from the run manifest) so B1's target checker can correlate
+# what is running with what was prepared. The run is allowed to pass its logical id (the UUID
+# that appears in run.instanceId and the wiki marker); the physical id remains the
+# independently-measured Pod UID.
+write_deployment_evidence() {
+  local file="$1" namespace="$2" release="$3" image_id="$4" pod_uid="$5" replicas="$6" logical_instance_id="$7" digest
+  digest="$(image_digest_from_id "${image_id}")" || fail "cannot record deployment evidence: imageID has no digest"
+  [[ "${replicas}" == "1" ]] || fail "topology must be single-replica (spec.replicas=${replicas})"
+  [[ -n "${logical_instance_id}" ]] || fail "logical_instance_id is required (pass run.instanceId from the e2e run manifest)"
+  python3 - "${file}" "${namespace}" "${release}" "${digest}" "${pod_uid}" "${logical_instance_id}" <<'PY'
+import json, sys
+path, namespace, release, digest, uid, logical = sys.argv[1:7]
+doc = {"contract": "lucy-deployment-v1",
+       "instanceId": uid,
+       "logicalInstanceId": logical,
+       "topology": "single-replica-k8s",
+       "deployedImageDigest": digest, "namespace": namespace, "release": release}
+with open(path, "w") as handle:
+    json.dump(doc, handle, indent=2)
+    handle.write("\n")
+PY
+}
+
 # Sentinel paths relative to /data/lucy that must survive in-place upgrade.
 # NOTE: /.ktx/secrets/demo-password is copied from the Secret by the
 # secrets-sync init container (the Secret volume itself is read-only and only

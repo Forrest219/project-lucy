@@ -1,15 +1,40 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { apiGet } from "../../lib/apiClient";
+import {
+  parseCallMonitorRange,
+  type CallMonitorBucket,
+  type CallMonitorRange
+} from "../../lib/callMonitorWindow";
 import { PageHeader } from "../../components/PageHeader";
 import { MetricCard } from "../../components/MetricCard";
 
-export type CallMonitorRange = "24h" | "1h";
+type CallMonitorSeriesPoint = {
+  start: string;
+  businessCalls: number;
+  okCalls: number;
+  errorCalls: number;
+  deniedCalls: number;
+  successRate: number | null;
+  errorRate: number | null;
+  deniedRate: number | null;
+  p95Ms: number | null;
+  slowCalls: number;
+};
 
 type CallMonitorResponse = {
   generatedAt: string;
-  window: { range: CallMonitorRange; hours: number; since: string; slowMs: number };
+  window: {
+    range: CallMonitorRange;
+    timeZone: "Asia/Shanghai";
+    bucket: CallMonitorBucket;
+    bucketCount: number;
+    since: string;
+    until: string;
+    slowMs: number;
+  };
+  series?: CallMonitorSeriesPoint[];
   traffic: {
     businessCalls: number;
     okCalls: number;
@@ -47,29 +72,39 @@ type CallMonitorResponse = {
   }>;
 };
 
+export type { CallMonitorRange };
+
+const RANGE_OPTIONS: Array<{ range: CallMonitorRange; label: string; noun: string }> = [
+  { range: "1h", label: "近 1 小时", noun: "1 小时" },
+  { range: "24h", label: "近 24 小时", noun: "24 小时" },
+  { range: "7d", label: "近 7 天", noun: "7 天" },
+  { range: "30d", label: "近 30 天", noun: "30 天" }
+];
+
+const GRAIN_LABEL: Record<CallMonitorBucket, string> = {
+  "5m": "5 分钟",
+  hour: "小时",
+  day: "天"
+};
+
 function parseRange(searchParams: URLSearchParams): CallMonitorRange {
-  const range = searchParams.get("range");
-  if (range === "1h" || range === "24h") return range;
-  const hours = searchParams.get("hours");
-  return hours === "1" ? "1h" : "24h";
+  return parseCallMonitorRange(searchParams.get("range") ?? undefined, searchParams.get("hours") ?? undefined);
 }
 
 function windowLabel(range: CallMonitorRange): string {
-  return range === "1h" ? "近 1 小时" : "近 24 小时";
+  return RANGE_OPTIONS.find((option) => option.range === range)?.label ?? "近 24 小时";
+}
+
+function windowNoun(range: CallMonitorRange): string {
+  return RANGE_OPTIONS.find((option) => option.range === range)?.noun ?? "24 小时";
+}
+
+function seriesLabel(metric: string, rangeLabel: string, bucket: CallMonitorBucket | undefined): string {
+  return `${metric}，${rangeLabel}，按${GRAIN_LABEL[bucket ?? "hour"]}`;
 }
 
 function formatPercent(rate: number): string {
   return `${(rate * 100).toFixed(rate >= 0.1 || rate === 0 ? 1 : 2)}%`;
-}
-
-function formatStatsTimeLabel(statsAt: Date | null, now: Date): string {
-  if (!statsAt) return "未知";
-  const diffMs = now.getTime() - statsAt.getTime();
-  if (diffMs < 5_000) return "刚刚";
-  if (diffMs < 60_000) return `${Math.floor(diffMs / 1000)} 秒前`;
-  if (diffMs < 15 * 60_000) return `${Math.floor(diffMs / 60_000)} 分钟前`;
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(statsAt.getHours())}:${pad(statsAt.getMinutes())}:${pad(statsAt.getSeconds())}`;
 }
 
 function formatDurationMs(ms: number): string {
@@ -80,17 +115,19 @@ function formatDurationMs(ms: number): string {
   return `${minutes} m ${seconds} s`;
 }
 
-function formatLocalTs(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso;
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+function pad2(value: number): string {
+  return String(value).padStart(2, "0");
 }
 
-function sloStatusLabel(status: CallMonitorResponse["slo"]["status"]): string {
-  if (status === "warn") return "需关注";
-  if (status === "no_data") return "暂无数据";
-  return "正常";
+export function formatFailureTime(iso: string, now = new Date()): { visible: string; full: string } {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return { visible: iso, full: iso };
+  const clock = `${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`;
+  const full = `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())} ${clock}`;
+  const sameDay = date.getFullYear() === now.getFullYear()
+    && date.getMonth() === now.getMonth()
+    && date.getDate() === now.getDate();
+  return { visible: sameDay ? clock : full, full };
 }
 
 export function buildAuditCallsHref(options: {
@@ -108,11 +145,36 @@ export function buildAuditCallsHref(options: {
   return `/admin/audit?${params.toString()}`;
 }
 
+function FailureTimeLink({
+  row,
+  range
+}: {
+  row: { id: number; ts: string; tool: string; outcome: "error" | "denied" };
+  range: CallMonitorRange;
+}) {
+  const time = formatFailureTime(row.ts);
+  return (
+    <Link
+      className="pl-link notranslate"
+      translate="no"
+      title={time.full}
+      aria-label={time.full}
+      to={buildAuditCallsHref({
+        range,
+        outcome: row.outcome,
+        tool: row.tool
+      })}
+      data-testid={`call-monitor-failure-${row.id}`}
+    >
+      {time.visible}
+    </Link>
+  );
+}
+
 export function CallMonitor() {
   const [searchParams, setSearchParams] = useSearchParams();
   const range = parseRange(searchParams);
   const [autoRefresh, setAutoRefresh] = useState(true);
-  const [now, setNow] = useState(() => new Date());
 
   const query = useQuery({
     queryKey: ["ops", "call-monitor", range],
@@ -122,11 +184,6 @@ export function CallMonitor() {
     refetchIntervalInBackground: false
   });
 
-  useEffect(() => {
-    const id = window.setInterval(() => setNow(new Date()), 1000);
-    return () => window.clearInterval(id);
-  }, []);
-
   function setRange(next: CallMonitorRange) {
     const params = new URLSearchParams(searchParams);
     params.set("range", next);
@@ -135,24 +192,23 @@ export function CallMonitor() {
   }
 
   const data = query.data;
-  const noData = !data || data.traffic.businessCalls <= 0;
-  const metricState = query.isError ? ("unavailable" as const) : noData ? ("no_data" as const) : ("ok" as const);
+  const awaitingFirstLoad = !data && query.isPending;
+  const failedWithoutSnapshot = query.isError && !data;
+  const noData = Boolean(data) && data.traffic.businessCalls <= 0;
+  const metricState = failedWithoutSnapshot
+    ? ("unavailable" as const)
+    : awaitingFirstLoad
+      ? ("ok" as const)
+      : noData
+        ? ("no_data" as const)
+        : ("ok" as const);
+  const showNumbers = Boolean(data) && metricState === "ok";
   const violations = new Set(data?.slo.violations ?? []);
   const windowText = windowLabel(range);
-  const statsAt = query.dataUpdatedAt ? new Date(query.dataUpdatedAt) : null;
-  const statsTimeLabel = formatStatsTimeLabel(statsAt, now);
+  const errorMessage = query.error instanceof Error ? query.error.message : "未知错误";
   const maxToolCalls = useMemo(
     () => Math.max(1, ...(data?.topTools.map((row) => row.calls) ?? [1])),
     [data?.topTools]
-  );
-
-  const sloBadge = (
-    <span
-      className={`pl-badge ${data?.slo.status === "warn" ? "pl-badge--warning" : ""}`}
-      data-testid="call-monitor-slo-status"
-    >
-      {sloStatusLabel(data?.slo.status ?? (query.isLoading ? "ok" : "no_data"))}
-    </span>
   );
 
   return (
@@ -169,47 +225,30 @@ export function CallMonitor() {
             工具调用量、成败与请求时效。
           </span>
         }
-        badges={
-          <div className="flex flex-wrap items-center gap-2">
-            <span data-testid="call-monitor-stats-time">统计时间：{statsTimeLabel}</span>
-            {sloBadge}
-          </div>
-        }
         actions={
           <div className="flex flex-wrap items-center gap-3" data-testid="call-monitor-controls">
             <div
-              className="pl-segmented-control pl-segmented-control--cols-2"
+              className="pl-segmented-control pl-segmented-control--cols-4"
               role="tablist"
               aria-label="时间窗口"
             >
-              <button
-                type="button"
-                role="tab"
-                className={
-                  range === "24h"
-                    ? "pl-segmented-control-item pl-segmented-control-item--active"
-                    : "pl-segmented-control-item"
-                }
-                aria-selected={range === "24h"}
-                onClick={() => setRange("24h")}
-                data-testid="call-monitor-range-24h"
-              >
-                近 24 小时
-              </button>
-              <button
-                type="button"
-                role="tab"
-                className={
-                  range === "1h"
-                    ? "pl-segmented-control-item pl-segmented-control-item--active"
-                    : "pl-segmented-control-item"
-                }
-                aria-selected={range === "1h"}
-                onClick={() => setRange("1h")}
-                data-testid="call-monitor-range-1h"
-              >
-                近 1 小时
-              </button>
+              {RANGE_OPTIONS.map((option) => (
+                <button
+                  key={option.range}
+                  type="button"
+                  role="tab"
+                  className={
+                    range === option.range
+                      ? "pl-segmented-control-item pl-segmented-control-item--active"
+                      : "pl-segmented-control-item"
+                  }
+                  aria-selected={range === option.range}
+                  onClick={() => setRange(option.range)}
+                  data-testid={`call-monitor-range-${option.range}`}
+                >
+                  {option.label}
+                </button>
+              ))}
             </div>
             <label className="flex items-center gap-2 text-sm text-fg-muted">
               <input
@@ -218,7 +257,7 @@ export function CallMonitor() {
                 onChange={(event) => setAutoRefresh(event.target.checked)}
                 data-testid="call-monitor-auto-refresh"
               />
-              自动刷新
+              每 30 秒刷新
             </label>
             <button
               type="button"
@@ -235,7 +274,7 @@ export function CallMonitor() {
 
       {query.isError ? (
         <p className="pl-error" data-testid="call-monitor-error">
-          调用监控加载失败：{query.error instanceof Error ? query.error.message : "未知错误"}
+          {data ? "本次刷新失败" : "调用监控加载失败"}：{errorMessage}
         </p>
       ) : null}
 
@@ -243,37 +282,48 @@ export function CallMonitor() {
         <MetricCard
           helpId="call-monitor-volume"
           testId="call-monitor-kpi-volume"
-          label={`近 ${range === "1h" ? "1 小时" : "24 小时"}调用量`}
+          label={`近 ${windowNoun(range)}调用量`}
           help={<span>窗口内业务 <span className="notranslate" translate="no">MCP</span> 工具调用次数（不含协议工具）。</span>}
-          value={data?.traffic.businessCalls ?? 0}
+          value={showNumbers ? data?.traffic.businessCalls ?? 0 : "—"}
           state={metricState}
-          subValue={windowText}
+          series={showNumbers ? data?.series?.map((point) => point.businessCalls) : undefined}
+          seriesLabel={seriesLabel(`近 ${windowNoun(range)}调用量`, windowText, data?.window.bucket)}
+          seriesMetric="volume"
         />
         <MetricCard
           helpId="call-monitor-success"
           testId="call-monitor-kpi-success"
           label="成功率"
           help="ok 调用占业务调用的比例。"
-          value={formatPercent(data?.traffic.successRate ?? 0)}
+          value={showNumbers ? formatPercent(data?.traffic.successRate ?? 0) : "—"}
           state={metricState}
+          series={showNumbers ? data?.series?.map((point) => point.successRate) : undefined}
+          seriesLabel={seriesLabel("成功率", windowText, data?.window.bucket)}
+          seriesMetric="success"
         />
         <MetricCard
           helpId="call-monitor-error"
           testId="call-monitor-kpi-error"
           label="错误率"
           help="error 调用占业务调用的比例。"
-          value={formatPercent(data?.traffic.errorRate ?? 0)}
+          value={showNumbers ? formatPercent(data?.traffic.errorRate ?? 0) : "—"}
           state={metricState}
-          tone={violations.has("error_rate") ? "warning" : undefined}
+          tone={showNumbers && violations.has("error_rate") ? "warning" : undefined}
+          series={showNumbers ? data?.series?.map((point) => point.errorRate) : undefined}
+          seriesLabel={seriesLabel("错误率", windowText, data?.window.bucket)}
+          seriesMetric="error"
         />
         <MetricCard
           helpId="call-monitor-denied"
           testId="call-monitor-kpi-denied"
           label="拒绝率"
           help="denied 调用占业务调用的比例。"
-          value={formatPercent(data?.traffic.deniedRate ?? 0)}
+          value={showNumbers ? formatPercent(data?.traffic.deniedRate ?? 0) : "—"}
           state={metricState}
-          tone={violations.has("denied_rate") ? "warning" : undefined}
+          tone={showNumbers && violations.has("denied_rate") ? "warning" : undefined}
+          series={showNumbers ? data?.series?.map((point) => point.deniedRate) : undefined}
+          seriesLabel={seriesLabel("拒绝率", windowText, data?.window.bucket)}
+          seriesMetric="denied"
         />
         <MetricCard
           helpId="call-monitor-p95"
@@ -285,23 +335,34 @@ export function CallMonitor() {
             </span>
           }
           labelText="多数请求耗时"
-          help={<span>95% 的请求在此时间内完成（<span className="notranslate" translate="no">P95</span>）。</span>}
-          value={data?.latency.p95Ms != null ? `${data.latency.p95Ms} ms` : "—"}
+          help={<span>95% 的请求在此时间内完成（<span className="notranslate" translate="no">P95</span>）。时段内调用少于 20 次时，折线在该段断开。</span>}
+          value={showNumbers ? (data?.latency.p95Ms != null ? `${data.latency.p95Ms} ms` : "—") : "—"}
           state={metricState}
-          tone={violations.has("latency_p95") ? "warning" : undefined}
+          tone={showNumbers && violations.has("latency_p95") ? "warning" : undefined}
+          series={showNumbers ? data?.series?.map((point) => point.p95Ms) : undefined}
+          seriesLabel={seriesLabel("多数请求耗时", windowText, data?.window.bucket)}
+          seriesMetric="p95"
         />
         <MetricCard
           helpId="call-monitor-slow"
           testId="call-monitor-kpi-slow"
           label="慢于多数请求"
           help={`耗时严格大于慢调用阈值（${data?.window.slowMs ?? 30000} ms）的调用数。`}
-          value={data?.latency.slowCalls ?? 0}
+          value={showNumbers ? data?.latency.slowCalls ?? 0 : "—"}
           state={metricState}
-          tone={(data?.latency.slowCalls ?? 0) > 0 ? "warning" : undefined}
+          tone={showNumbers && (data?.latency.slowCalls ?? 0) > 0 ? "warning" : undefined}
+          series={showNumbers ? data?.series?.map((point) => point.slowCalls) : undefined}
+          seriesLabel={seriesLabel("慢于多数请求", windowText, data?.window.bucket)}
+          seriesMetric="slow"
         />
       </div>
 
-      {noData && !query.isLoading && !query.isError ? (
+      <p className="pl-notice" data-testid="call-monitor-usage-slow-mark">
+        问询慢标记自 <span className="notranslate" translate="no">2026-10-12</span> 起生效。
+        <span className="notranslate" translate="no">lucy_query</span> 达到 5 秒，或问询墙钟达到 120 秒，记入问询慢标记。
+      </p>
+
+      {noData && !query.isPending && !failedWithoutSnapshot ? (
         <p className="pl-notice" data-testid="call-monitor-empty">
           当前窗口暂无 <span className="notranslate" translate="no">MCP</span> 业务调用。可先到{" "}
           <Link to="/overview">系统概览</Link> 检查接入状态。
@@ -383,18 +444,7 @@ export function CallMonitor() {
                   {data!.recentFailures.map((row) => (
                     <tr key={row.id}>
                       <td>
-                        <Link
-                          className="pl-link notranslate"
-                          translate="no"
-                          to={buildAuditCallsHref({
-                            range,
-                            outcome: row.outcome,
-                            tool: row.tool
-                          })}
-                          data-testid={`call-monitor-failure-${row.id}`}
-                        >
-                          {formatLocalTs(row.ts)}
-                        </Link>
+                        <FailureTimeLink row={row} range={range} />
                       </td>
                       <td>
                         <span className="notranslate" translate="no">

@@ -24,6 +24,9 @@ Options:
   --segment <name>          Query segment. Repeatable; defaults to demo active_rows.
   --expected-order-count <n>  Optional exact order_count assertion.
   --expected-total-sales <n>  Optional exact total_sales assertion.
+  --expect-metric <name>    Metric the query must return. Repeatable. Use it when the
+                            source does not expose order_count / total_sales (non-demo).
+  --expect-value <name>=<n>  Exact value assertion for one metric. Repeatable.
   --out <path>              Redacted JSON evidence. Default: ${DEFAULT_OUT}
   --container <name>        Docker container used for provenance and audit checks.
   --no-container            Skip Docker provenance/audit checks (for remote Doris or harness tests).
@@ -53,6 +56,8 @@ export function parseArgs(argv = process.argv) {
     segments: [],
     expectedOrderCount: undefined,
     expectedTotalSales: undefined,
+    expectMetrics: [],
+    expectValues: [],
     out: DEFAULT_OUT,
     container: DEFAULT_CONTAINER,
     timeoutMs: 15_000,
@@ -90,6 +95,21 @@ export function parseArgs(argv = process.argv) {
         args.expectedTotalSales = positiveNumber(requiredValue(argv, ++index, option), option);
         expectedTotalSalesExplicit = true;
         break;
+      case "--expect-metric":
+        args.expectMetrics.push(requiredValue(argv, ++index, option));
+        break;
+      case "--expect-value": {
+        const raw = requiredValue(argv, ++index, option);
+        const separator = raw.indexOf("=");
+        if (separator <= 0) throw new Error("--expect-value requires <name>=<number>");
+        const name = raw.slice(0, separator);
+        const value = Number(raw.slice(separator + 1));
+        if (!name || !Number.isFinite(value)) {
+          throw new Error("--expect-value requires <name>=<finite number>");
+        }
+        args.expectValues.push({ name, value });
+        break;
+      }
       case "--out":
         args.out = requiredValue(argv, ++index, option);
         break;
@@ -175,6 +195,48 @@ export function extractMetric(payload, metricName) {
       if (index >= 0 && Array.isArray(record.rows[0])) return record.rows[0][index];
     }
     for (const item of Object.values(record)) {
+      const found = visit(item, depth + 1);
+      if (found !== undefined) return found;
+    }
+    return undefined;
+  };
+  return visit(parsed);
+}
+
+/**
+ * First numeric metric in a query response, whatever it is named.
+ *
+ * The demo contract asserts on `order_count` / `total_sales` by name. A customer
+ * source with different measure names would fail that check for a reason that
+ * has nothing to do with the Session fix, so non-demo runs fall back to
+ * "the response carries a metric value at all" — enough to tell an empty
+ * envelope from real data.
+ */
+export function extractAnyNumericMetric(payload) {
+  const parsed = deepParseJsonStrings(payload);
+  const visit = (value, depth = 0) => {
+    if (depth > 12 || value === null || value === undefined) return undefined;
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const found = visit(item, depth + 1);
+        if (found !== undefined) return found;
+      }
+      return undefined;
+    }
+    if (typeof value !== "object") return undefined;
+    if (Array.isArray(value.headers) && Array.isArray(value.rows) && value.rows.length > 0) {
+      const row = value.rows[0];
+      if (Array.isArray(row)) {
+        for (let index = 0; index < row.length; index += 1) {
+          const cell = row[index];
+          if (typeof cell === "number" && Number.isFinite(cell)) {
+            return { name: String(value.headers[index] ?? index), value: cell };
+          }
+        }
+      }
+    }
+    for (const [key, item] of Object.entries(value)) {
+      if (typeof item === "number" && Number.isFinite(item)) return { name: key, value: item };
       const found = visit(item, depth + 1);
       if (found !== undefined) return found;
     }
@@ -330,17 +392,65 @@ export async function runSessionUat(options) {
     ?? (connectionId === "demo-mysql" && sourceName === "superstore_orders" ? 1000 : undefined);
   const expectedTotalSales = options.expectedTotalSales
     ?? (connectionId === "demo-mysql" && sourceName === "superstore_orders" ? 1459476.0953 : undefined);
+  const expectMetrics = options.expectMetrics ?? [];
+  const expectValues = options.expectValues ?? [];
+  const expectedMetricNames = [...new Set([
+    ...expectMetrics,
+    ...expectValues.map((item) => item.name)
+  ])];
   const prefix = `mcp-session-uat-${Date.now()}`;
   const requestIds = {};
   const evidence = {
     contract: "lucy-mcp-session-regression-uat",
     generatedAt: new Date().toISOString(),
     status: "running",
-    target: { proxyUrl, connectionId, sourceName, tokenEnv, tokenPresent: Boolean(token) },
+    target: {
+      proxyUrl,
+      connectionId,
+      sourceName,
+      tokenEnv,
+      tokenPresent: Boolean(token),
+      measures,
+      expectedMetrics: expectedMetricNames,
+      expectedValues: expectValues.map((item) => ({ name: item.name, value: item.value }))
+    },
     provenance: collectProvenance(container),
     checks: []
   };
   const check = (name, details = {}) => evidence.checks.push({ name, status: "pass", ...details });
+
+  /**
+   * Assert the query response really carries data, by whatever names the
+   * source uses. Demo runs keep their exact `order_count` / `total_sales`
+   * assertions; a customer source asserts the metrics it was told to expect.
+   */
+  const assertQueryMetrics = (label, body) => {
+    const orderCount = extractMetric(body, "order_count");
+    const totalSales = extractMetric(body, "total_sales");
+    if (expectedOrderCount !== undefined) {
+      assertClose(`${label} order_count`, orderCount, expectedOrderCount, 0);
+    }
+    if (expectedTotalSales !== undefined) {
+      assertClose(`${label} total_sales`, totalSales, expectedTotalSales, 0.01);
+    }
+    const asserted = {};
+    for (const name of expectedMetricNames) {
+      const value = extractMetric(body, name);
+      if (value === undefined || value === null) {
+        throw new Error(`${label} did not return expected metric ${name}`);
+      }
+      asserted[name] = value;
+    }
+    for (const item of expectValues) {
+      assertClose(`${label} ${item.name}`, asserted[item.name], item.value, 0.01);
+    }
+    if (expectedMetricNames.length === 0 && orderCount === undefined && totalSales === undefined) {
+      const anyMetric = extractAnyNumericMetric(body);
+      if (!anyMetric) throw new Error(`${label} returned no metric values`);
+      asserted[anyMetric.name] = anyMetric.value;
+    }
+    return { orderCount, totalSales, ...asserted };
+  };
 
   try {
     if (!token) throw new Error(`Missing UAT token in environment variable ${tokenEnv}`);
@@ -416,12 +526,8 @@ export async function runSessionUat(options) {
       requestIds.query
     );
     assertRpcSuccess("lucy_query without Session", query, token);
-    const orderCount = extractMetric(query.body, "order_count");
-    const totalSales = extractMetric(query.body, "total_sales");
-    if (expectedOrderCount !== undefined) assertClose("order_count", orderCount, expectedOrderCount, 0);
-    if (expectedTotalSales !== undefined) assertClose("total_sales", totalSales, expectedTotalSales, 0.01);
-    if (orderCount === undefined && totalSales === undefined) throw new Error("lucy_query returned no expected metric values");
-    check("query_without_session", { httpStatus: query.status, metrics: { orderCount, totalSales } });
+    const queryMetrics = assertQueryMetrics("lucy_query", query.body);
+    check("query_without_session", { httpStatus: query.status, metrics: queryMetrics });
 
     const deleteStatus = await terminate({ proxyUrl, token, timeoutMs });
     if (deleteStatus < 200 || deleteStatus >= 300) throw new Error(`DELETE /mcp failed: HTTP ${deleteStatus}`);
@@ -435,7 +541,7 @@ export async function runSessionUat(options) {
       requestIds.recovery
     );
     assertRpcSuccess("lucy_query recovery after DELETE", recovery, token);
-    if (expectedOrderCount !== undefined) assertClose("recovered order_count", extractMetric(recovery.body, "order_count"), expectedOrderCount, 0);
+    const recoveryMetrics = assertQueryMetrics("recovered lucy_query", recovery.body);
     const recoveryAudit = await readAuditRow(container, requestIds.recovery);
     if (container) {
       if (!recoveryAudit) throw new Error(`audit row not found for ${requestIds.recovery}`);
@@ -445,6 +551,7 @@ export async function runSessionUat(options) {
     }
     check("query_after_session_delete", {
       httpStatus: recovery.status,
+      metrics: recoveryMetrics,
       audit: recoveryAudit
         ? { outcome: recoveryAudit.outcome, decisionReason: recoveryAudit.decision_reason }
         : { status: "not_checked", reason: "no_container" }
@@ -479,8 +586,12 @@ export async function runSessionUat(options) {
       `${prefix}-compliant-query`
     );
     assertRpcSuccess("compliant lucy_query", compliantQuery, token);
-    if (expectedOrderCount !== undefined) assertClose("compliant order_count", extractMetric(compliantQuery.body, "order_count"), expectedOrderCount, 0);
-    check("compliant_client", { readHttpStatus: compliantRead.status, queryHttpStatus: compliantQuery.status });
+    const compliantMetrics = assertQueryMetrics("compliant lucy_query", compliantQuery.body);
+    check("compliant_client", {
+      readHttpStatus: compliantRead.status,
+      queryHttpStatus: compliantQuery.status,
+      metrics: compliantMetrics
+    });
 
     evidence.status = "pass";
     evidence.completedAt = new Date().toISOString();

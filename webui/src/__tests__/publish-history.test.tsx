@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { changeScopeTextFor, scaleTextFor } from "../lib/publishHistoryLabels";
 import { PublishHistory } from "../pages/publish/PublishHistory";
 import type { SemanticAssetReleaseRecord } from "../lib/types";
 
@@ -107,6 +108,43 @@ beforeEach(() => {
   );
 });
 
+describe("publish history change scope", () => {
+  it("splits written overlays, deleted overlays, and schema manifests", () => {
+    const record = makePublishRecord({
+      connectionIds: ["mysql-aliyun"],
+      changedSources: [
+        { connectionId: "mysql-aliyun", sourceName: "ai_intl_ad_daily" },
+        { connectionId: "mysql-aliyun", sourceName: "ai_intl_country_daily" }
+      ],
+      files: [
+        {
+          targetPath: "semantic-layer/mysql-aliyun/_schema/chatbi.yaml",
+          kind: "schemaManifest",
+          sha256: "a".repeat(64),
+          overwritten: true
+        },
+        {
+          targetPath: "semantic-layer/mysql-aliyun/ai_intl_ad_daily.yaml",
+          kind: "semanticSource",
+          sha256: "b".repeat(64),
+          overwritten: true
+        },
+        {
+          targetPath: "semantic-layer/mysql-aliyun/ai_intl_country_daily.yaml",
+          kind: "semanticSource",
+          sha256: "",
+          overwritten: false
+        }
+      ]
+    });
+
+    expect(changeScopeTextFor(record)).toBe(
+      "mysql-aliyun / 写入 ai_intl_ad_daily / 已删除 ai_intl_country_daily / Schema Manifest chatbi"
+    );
+    expect(scaleTextFor(record)).toBe("文件 3 · 语义源 1");
+  });
+});
+
 describe("PublishHistory", () => {
   it("renders the publish history page header with CSV export", async () => {
     renderHistory();
@@ -139,6 +177,7 @@ describe("PublishHistory", () => {
     expect(screen.getByTestId("publish-history-page-index")).toHaveTextContent("1 / 1");
 
     expect(await screen.findByText("customer-db")).toBeInTheDocument();
+    expect(screen.getByTestId("publish-history-scope-written")).toHaveTextContent("写入");
     expect(screen.getByText("international_country_metrics")).toBeInTheDocument();
     expect(screen.getByText(/文件 1 · 语义源 1/)).toBeInTheDocument();
     expect(screen.getByText("全库索引重建（无资产变更）")).toBeInTheDocument();
@@ -354,6 +393,58 @@ describe("PublishHistory", () => {
     expect(panel).toHaveTextContent("measure expr is invalid");
     expect(panel).toHaveTextContent("superstore_orders.yaml");
     expect(screen.getByRole("button", { name: "收起错误" })).toBeInTheDocument();
+  });
+
+  it("shows contractGate.blocking when a blocked release has no validation issues", async () => {
+    vi.unstubAllGlobals();
+    const blocked = makePublishRecord({
+      id: "rel_20261013_contract_blocked",
+      createdAt: "2026-10-13T02:00:00.000Z",
+      trigger: "webui_publish",
+      status: "blocked",
+      reindex: undefined,
+      validation: {
+        ok: false,
+        results: [
+          {
+            connectionId: "customer-db",
+            sourceName: "orders",
+            ok: true,
+            exitCode: 0,
+            issues: []
+          }
+        ]
+      },
+      contractGate: {
+        blocking: [
+          {
+            checkId: "columns.0.type",
+            filePath: "semantic-layer/customer-db/orders.yaml",
+            message: "columns.0.type 的值 float 不符合 TS/Python SourceColumn 契约"
+          }
+        ]
+      }
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (isReleasesListUrl(url)) {
+          return new Response(JSON.stringify({ ok: true, data: { records: [blocked], total: 1 } }));
+        }
+        return new Response(
+          JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }),
+          { status: 404 }
+        );
+      })
+    );
+    renderHistory();
+    fireEvent.click(await screen.findByRole("button", { name: "查看错误" }));
+    const panel = await screen.findByTestId("publish-history-expanded-panel");
+    expect(panel).toHaveTextContent("columns.0.type");
+    expect(panel).toHaveTextContent("float");
+    expect(panel).toHaveTextContent("semantic-layer/customer-db/orders.yaml");
+    expect(panel).not.toHaveTextContent("未提供具体错误信息");
   });
 
   it("exposes a 查看错误 action for promote_failed records and links back to the gate", async () => {

@@ -4,6 +4,8 @@ import path from "node:path";
 import { parse, stringify } from "yaml";
 import { auditedWriteFile } from "./config-audit-write.js";
 import type { ConfigAuditAssetKind, ConfigAuditActorType } from "./audit.js";
+import { withDisplayWriteBarrier } from "../display-generation.js";
+import { narrowAuthorization, narrowingScopeForWrite } from "../proxy/authorization-barrier.js";
 
 export const ACCESS_YAML_REL = "webui/config/access.yaml";
 
@@ -14,6 +16,8 @@ export interface YamlToken {
   label: string;
   created: string;
   expires_at?: string | null;
+  actor_id?: string | null;
+  actor_kind?: "person" | "automation" | null;
 }
 
 export interface YamlUser {
@@ -101,7 +105,17 @@ export async function readAccessYamlVersion(projectRoot: string): Promise<{ raw:
   return { raw, version: computeVersion(raw, s.mtimeMs) };
 }
 
+/**
+ * Spec 174 §3.2 — the display barrier covers persist → policy commit/ack →
+ * optional direct rollback, so no intermediate access version is published.
+ */
 export async function writeAccessYaml(
+  ...args: Parameters<typeof writeAccessYamlInBarrier>
+): ReturnType<typeof writeAccessYamlInBarrier> {
+  return withDisplayWriteBarrier(["P"], () => writeAccessYamlInBarrier(...args));
+}
+
+async function writeAccessYamlInBarrier(
   projectRoot: string,
   config: YamlAccessConfig,
   audit?: {
@@ -115,6 +129,8 @@ export async function writeAccessYaml(
     source?: string;
     actorType?: ConfigAuditActorType;
     actor?: string;
+    actorIp?: string;
+    sessionId?: string | null;
     idempotencyKey?: string;
     operation?: string;
     assetKind?: ConfigAuditAssetKind;
@@ -156,6 +172,8 @@ export async function writeAccessYaml(
     operation: audit.operation,
     actor: audit.actor,
     actorType: audit.actorType ?? "ui_admin",
+    actorIp: audit.actorIp,
+    sessionId: audit.sessionId,
     source: audit.source ?? "admin_access_config_api",
     targetId: audit.targetId,
     oldSummary: audit.oldSummary,
@@ -176,6 +194,11 @@ export async function writeAccessYaml(
     status = await commitEffectivePolicy();
     runtimeAck = false;
   }
+
+  // T04-3 / Spec §3.3 — narrower authority is persisted and committed above;
+  // cancel in-flight work and clear caches before this write reports success.
+  const narrowed = narrowingScopeForWrite(previousRaw, toWrite);
+  if (narrowed) await narrowAuthorization(narrowed);
 
   return {
     ...writeResult,

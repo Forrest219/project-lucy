@@ -9,13 +9,16 @@ export type RowMoreMenuItem =
       label: string;
       onSelect: () => void;
       testId?: string;
+      /** Keeps the item focusable. Activation explains the block and does not call onSelect. */
       disabled?: boolean;
       disabledReason?: string;
+      onBlocked?: () => void;
     };
 
 type Props = {
   ariaLabel: string;
   items: RowMoreMenuItem[];
+  disabled?: boolean;
 };
 
 /**
@@ -24,9 +27,13 @@ type Props = {
  * semantics so screen readers announce menu items correctly. Anchored to its
  * trigger via absolute positioning; callers should leave room to the right.
  */
-export function RowMoreMenu({ ariaLabel, items }: Props) {
+export function RowMoreMenu({ ariaLabel, items, disabled = false }: Props) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (disabled) setOpen(false);
+  }, [disabled]);
 
   useEffect(() => {
     if (!open) return;
@@ -57,12 +64,13 @@ export function RowMoreMenu({ ariaLabel, items }: Props) {
         aria-label={ariaLabel}
         aria-haspopup="menu"
         aria-expanded={open}
+        disabled={disabled}
         onClick={() => setOpen((current) => !current)}
         data-testid="row-more-trigger"
       >
         <MoreHorizontal aria-hidden="true" focusable="false" className="pl-row-more-icon" />
       </button>
-      {open ? (
+      {open && !disabled ? (
         <ul className="pl-row-more-menu" role="menu" data-testid="row-more-menu">
           {items.map((item, index) => {
             const testId = item.testId ?? `row-more-item-${index}`;
@@ -73,8 +81,7 @@ export function RowMoreMenu({ ariaLabel, items }: Props) {
                     role="menuitem"
                     to={item.href}
                     onClick={() => setOpen(false)}
-                    className="pl-row-more-item notranslate"
-                    translate="no"
+                    className="pl-row-more-item"
                     data-testid={testId}
                   >
                     {item.label}
@@ -82,24 +89,33 @@ export function RowMoreMenu({ ariaLabel, items }: Props) {
                 </li>
               );
             }
+            const reasonId = item.disabled && item.disabledReason ? `${testId}-reason` : undefined;
             return (
               <li key={item.label} role="none">
                 <button
                   role="menuitem"
                   type="button"
+                  aria-label={item.label}
+                  aria-disabled={item.disabled || undefined}
+                  aria-describedby={reasonId}
                   onClick={() => {
-                    if (item.disabled) return;
+                    if (item.disabled) {
+                      setOpen(false);
+                      item.onBlocked?.();
+                      return;
+                    }
                     item.onSelect();
                     setOpen(false);
                   }}
-                  disabled={item.disabled}
-                  title={item.disabled ? item.disabledReason : undefined}
-                  aria-disabled={item.disabled || undefined}
-                  className="pl-row-more-item notranslate"
-                  translate="no"
+                  className={`pl-row-more-item${item.disabled ? " pl-row-more-item--blocked" : ""}`}
                   data-testid={testId}
                 >
                   {item.label}
+                  {reasonId ? (
+                    <span id={reasonId} className="pl-row-more-item-reason notranslate" translate="no">
+                      {item.disabledReason}
+                    </span>
+                  ) : null}
                 </button>
               </li>
             );

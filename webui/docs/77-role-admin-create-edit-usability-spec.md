@@ -240,7 +240,7 @@ Table Selectors  ← + 添加 selector
 | `GET /api/connections` | **连接候选主源**；其 `schemas[]` 为 **Schema 下拉主源** |
 | `GET /api/connections/:connId/tables` | **仅表候选兜底**：返回扁平 `schema.table` 列表；按 Schema 前缀过滤后供「指定表名」多选；**不得**用作 Schema 分层主源 |
 | `GET /api/admin/mcp-tools` | MCP 工具候选 + `globalDenied` |
-| `POST /api/admin/roles` / `PATCH` / dryRun | 写入形状不变：`allow.connections` / `tools` / `tableSelectors` |
+| `POST /api/admin/roles` / `PATCH` / dryRun | 写入形状不变：`allow.connections` / `tools` / `tableSelectors`。编辑请求不得依赖发送 `permission_model_version`；该键等于已存值时服务端忽略，值不同则拒绝。 |
 
 ### 8.2 列表摘要最小扩展（Wave B）
 

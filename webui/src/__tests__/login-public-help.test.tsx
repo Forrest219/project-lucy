@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
@@ -44,7 +44,16 @@ describe("LoginPage public help link", () => {
 
     const helpLink = screen.getByRole("link", { name: "查看系统手册" });
     expect(helpLink).toHaveAttribute("href", "/help?section=admin-break-glass");
-    expect(screen.getByText(/无需登录/)).toBeInTheDocument();
+    expect(screen.getByLabelText("登录账户")).toHaveAttribute("placeholder", "例：lucy");
+    expect(screen.queryByRole("heading", { name: "登录" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "登录" })).toBeInTheDocument();
+    expect(screen.getByLabelText("密码")).toHaveAttribute("type", "password");
+    expect(screen.queryByText("账户 id")).not.toBeInTheDocument();
+    expect(screen.getByText(/无法登录/)).toBeInTheDocument();
+    expect(screen.getByText(/可信 Agent 数据层/)).toBeInTheDocument();
+    expect(screen.queryByText(/无需登录/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Agent Token/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/break-glass/)).not.toBeInTheDocument();
   });
 
   it("points the help link at a section id that actually exists in the handbook", async () => {
@@ -70,5 +79,58 @@ describe("LoginPage public help link", () => {
 
     expect(sectionId).toBeTruthy();
     expect(tocIds.has(sectionId!), `Help 链接指向不存在的 section id：${sectionId}`).toBe(true);
+  });
+
+  it("reveals the password and keeps the bootstrap heading", () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { unmount } = render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <LoginPage />
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+    const password = screen.getByLabelText("密码");
+    fireEvent.click(screen.getByRole("button", { name: "显示密码" }));
+    expect(password).toHaveAttribute("type", "text");
+    expect(screen.getByRole("button", { name: "隐藏密码" })).toHaveAttribute("aria-pressed", "true");
+    unmount();
+
+    const original = authState.status;
+    authState.status = { ...original, mode: "bootstrap" } as unknown as typeof original;
+    try {
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      render(
+        <QueryClientProvider client={client}>
+          <MemoryRouter>
+            <LoginPage />
+          </MemoryRouter>
+        </QueryClientProvider>
+      );
+      expect(screen.getByRole("heading", { name: "创建首个所有者" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "创建并登录" })).toBeInTheDocument();
+    } finally {
+      authState.status = original;
+    }
+  });
+
+  it("shows a notice instead of the form when the admin configuration is unavailable", () => {
+    const original = authState.status;
+    authState.status = { ...original, mode: "unavailable" } as unknown as typeof original;
+    try {
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const { container } = render(
+        <QueryClientProvider client={client}>
+          <MemoryRouter>
+            <LoginPage />
+          </MemoryRouter>
+        </QueryClientProvider>
+      );
+      expect(screen.getByTestId("login-config-unavailable")).toBeInTheDocument();
+      expect(container.querySelector("form")).toHaveAttribute("hidden");
+      expect(screen.getByRole("link", { name: "查看系统手册" })).toBeInTheDocument();
+    } finally {
+      authState.status = original;
+    }
   });
 });

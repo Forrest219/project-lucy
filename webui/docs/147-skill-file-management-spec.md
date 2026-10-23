@@ -4,7 +4,7 @@
 |---|---|
 | 文档名称 | WebUI 管理 Skill 文件 Spec |
 | 文档类型 | Spec |
-| 版本 | v1.1 |
+| 版本 | v1.2 |
 | 撰写日期 | 2026-09-24 |
 | 撰写人 | Composer |
 | 委托人 | xingchen |
@@ -17,7 +17,7 @@
 | Spec 编号 | 147 |
 | 关联工单 | `webui/docs/plans/wo-202609-24-skill-file-management.md` |
 | 关联页面 | `/skills`（业务上下文 / 业务 Skill） |
-| 上游 Spec | Spec 144（Agent 可见性仍权威）；Spec 131 Phase 4 切片 |
+| 上游 Spec | Spec 144（Agent 可见性仍权威）；Spec 171 Phase 4 切片 |
 | 状态 | Implemented；安全加固见 Spec 151 |
 | 日期 | 2026-09-24 |
 
@@ -27,6 +27,7 @@
 |---|---|
 | v1.0 | 初稿：Demo 灌入、WebUI 文件管理、Demo Token Skill 工具授权 |
 | v1.1 | Spec 151 加固：身份不可变、原路径保存、并发版本、显式角色授权 |
+| v1.2 | 校验只保留文件身份：名称、标题、域、状态、角色通配符。评测用例、Wiki、语义源不再产生校验问题 |
 
 ## 1. 背景
 
@@ -36,14 +37,14 @@ Spec 144 交付了只读「业务 Skill」页与 Agent 已发布过滤。Demo �
 
 1. Demo 构建把仓库 `skills/` 复制进 `examples/docker-demo/project-template/skills/`；entrypoint 只补缺失文件。
 2. `/skills` 支持新建、编辑、改状态、删除；写入项目 `skills/`。
-3. 保存前校验：无法解析或缺少合法 `name` 拒绝；已发布无 `eval_cases` 允许保存并展示校验未通过。
+3. 保存前校验只检查文件能否解析、以及名称、标题、域、状态、角色通配符是否合法。评测用例、Wiki、语义源缺失不构成校验问题，也不阻断保存。
 4. Demo 角色 `demo_readonly` 授权 `lucy_skill_read`、`lucy_skill_search`；已有卷幂等补丁。
 
 ## 3. 非目标
 
 | 非目标 | 理由 |
 |---|---|
-| Eval 门禁、调用仪表盘、客户端导出 | Spec 131 / 132 / 134 |
+| Eval 门禁、调用仪表盘、客户端导出 | Spec 171 / 132 / 134 |
 | Role 页勾选 Skill | 仍用 frontmatter `roles_allowed` |
 | `.cursor/skills/` 进入 Hub | 配置作者 Skills，非问答运行时 |
 | 改发布工作台 | Skill 状态仍是 frontmatter |
@@ -71,7 +72,8 @@ Spec 144 交付了只读「业务 Skill」页与 Agent 已发布过滤。Demo �
 
 - 保存前 `parseSkillMarkdown` + `validateSkill`。
 - 解析失败或无合法 `name`：HTTP 400，不写盘。
-- 已发布且无 `eval_cases`：写盘成功，响应带 `validation.valid === false`。
+- `validateSkill` 只报告结构性错误：名称为空或格式非法、标题为空、域为空或格式非法、状态非法、`*` 与具体角色 ID 混用。
+- 已发布但没有 `eval_cases`、引用的 Wiki 不存在、语义源对不上：写盘成功，且 `validation.valid === true`。这些字段可以继续写在文件里，不参与校验。
 
 ### 4.4 状态与 Agent
 
@@ -99,7 +101,7 @@ Spec 144 交付了只读「业务 Skill」页与 Agent 已发布过滤。Demo �
 | SC-147-03 | 更新写回原文件；`domain` / `name` 不一致返回 `skill_identity_immutable`，不得搬移 |
 | SC-147-04 | 删除后 GET 404；loader 不再返回该 URI |
 | SC-147-05 | `published` 且角色匹配时 `canAccessSkill` 放行；`draft` → `skill_not_published`；`deprecated` → `skill_deprecated` |
-| SC-147-06 | 已发布无 `eval_cases` 保存成功且 `validation.valid === false`；损坏 frontmatter 保存失败 |
+| SC-147-06 | 已发布且无 `eval_cases` 保存成功，`validation.valid === true`；损坏 frontmatter 保存失败 |
 | SC-147-07 | demo 模板与幂等补丁后 YAML 含两工具且各一次 |
 | SC-147-08 | `cd webui && npm run lint:terminology`；Skill 管理相关 vitest 通过 |
 

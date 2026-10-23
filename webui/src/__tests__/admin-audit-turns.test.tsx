@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Audit } from "../pages/admin/Audit";
+import { callMonitorWindow } from "../lib/callMonitorWindow";
 
 const toastMock = vi.hoisted(() => ({
   success: vi.fn(),
@@ -194,7 +195,11 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
     expect(screen.queryByText("业务调用")).not.toBeInTheDocument();
     expect(screen.getByTestId("audit-turns-coverage-summary")).toHaveTextContent("已上报问询 0");
     expect(screen.getByTestId("audit-turns-coverage-summary")).toHaveTextContent("推断问询 1");
-    expect(screen.getByTestId("audit-turns-coverage-hint")).toHaveTextContent("用户原文依赖客户端可选上报");
+    expect(screen.getByTestId("audit-turns-coverage-hint")).toHaveTextContent("未上报原文时按会话保留问询");
+    expect(screen.getByRole("columnheader", { name: "客户端" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "会话 ID" })).toBeInTheDocument();
+    expect(screen.getByTestId("audit-export-current")).toHaveTextContent("导出");
+    expect(screen.queryByTestId("audit-export-inquiry-pack")).not.toBeInTheDocument();
   });
 
   it("wraps 调用流水 in the shared bounded scroll frame with investigation column order", async () => {
@@ -273,7 +278,7 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
     expect(screen.getByTestId("audit-access-context-42")).toHaveTextContent("203.0.113.9");
   });
 
-  it("shows tab-aware current and related exports as secondary actions on both tabs (Spec 140)", async () => {
+  it("exports the current tab and keeps the evidence pack as a text action (Spec 140)", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
@@ -296,14 +301,13 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
     expect(await screen.findByTestId("audit-tab-calls")).toHaveAttribute("aria-selected", "true");
     expect(screen.getByTestId("audit-export-current")).toHaveClass("pl-btn--secondary");
     expect(screen.getByTestId("audit-export-current").className).not.toMatch(/pl-btn--primary/);
-    expect(screen.getByTestId("audit-export-current")).toHaveTextContent("导出调用流水");
+    expect(screen.getByTestId("audit-export-current")).toHaveTextContent("导出");
     expect(screen.getByTestId("audit-export-current")).toHaveAttribute("href", expect.stringMatching(/^\/api\/admin\/audit\/export\?/));
-    expect(screen.getByTestId("audit-export-related")).toHaveClass("pl-btn--secondary");
-    expect(screen.getByTestId("audit-export-related").className).not.toMatch(/pl-btn--primary/);
-    expect(screen.getByTestId("audit-export-related")).toHaveTextContent("导出问询记录");
-    expect(screen.getByTestId("audit-export-related")).toHaveAttribute("href", expect.stringMatching(/^\/api\/admin\/audit\/turns\/export\?/));
-    expect(screen.getByTestId("audit-export-pack")).toHaveClass("pl-btn--secondary");
-    expect(screen.getByTestId("audit-export-pack").className).not.toMatch(/pl-btn--primary/);
+    expect(screen.queryByTestId("audit-export-related")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("audit-export-inquiry-pack")).not.toBeInTheDocument();
+    expect(screen.getByTestId("audit-export-pack")).toHaveTextContent("导出审计证据包");
+    expect(screen.getByTestId("audit-export-pack")).toHaveClass("pl-inline-link");
+    expect(screen.getByTestId("audit-export-pack").className).not.toMatch(/pl-btn/);
     expect(screen.getByTestId("audit-granularity-help")).toHaveTextContent("调用流水按一次工具调用展开");
     expect(screen.getByTestId("audit-export-metadata")).toHaveAttribute("href", "/api/admin/audit/export-metadata?kind=calls");
     expect(screen.getByRole("link", { name: "查看审计口径" })).toHaveAttribute("href", "/help?section=admin-audit-turns-vs-calls");
@@ -313,14 +317,13 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
     expect(await screen.findByTestId("audit-tab-turns")).toHaveAttribute("aria-selected", "true");
     expect(screen.getByTestId("audit-export-current")).toHaveClass("pl-btn--secondary");
     expect(screen.getByTestId("audit-export-current").className).not.toMatch(/pl-btn--primary/);
-    expect(screen.getByTestId("audit-export-current")).toHaveTextContent("导出问询记录");
+    expect(screen.getByTestId("audit-export-current")).toHaveTextContent("导出");
     expect(screen.getByTestId("audit-export-current")).toHaveAttribute("href", expect.stringMatching(/^\/api\/admin\/audit\/turns\/export\?/));
-    expect(screen.getByTestId("audit-export-related")).toHaveClass("pl-btn--secondary");
-    expect(screen.getByTestId("audit-export-related").className).not.toMatch(/pl-btn--primary/);
-    expect(screen.getByTestId("audit-export-related")).toHaveTextContent("导出调用流水");
-    expect(screen.getByTestId("audit-export-related")).toHaveAttribute("href", expect.stringMatching(/^\/api\/admin\/audit\/export\?/));
-    expect(screen.getByTestId("audit-export-pack")).toHaveClass("pl-btn--secondary");
-    expect(screen.getByTestId("audit-export-pack").className).not.toMatch(/pl-btn--primary/);
+    expect(screen.queryByTestId("audit-export-related")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("audit-export-inquiry-pack")).not.toBeInTheDocument();
+    expect(screen.getByTestId("audit-export-pack")).toHaveTextContent("导出审计证据包");
+    expect(screen.getByTestId("audit-export-pack")).toHaveClass("pl-inline-link");
+    expect(screen.getByTestId("audit-export-pack").className).not.toMatch(/pl-btn/);
     expect(screen.getByTestId("audit-granularity-help")).toHaveTextContent("问询记录按一次用户问询聚合");
     expect(screen.getByTestId("audit-export-metadata")).toHaveAttribute("href", "/api/admin/audit/export-metadata?kind=turns");
   });
@@ -411,8 +414,9 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
     expect(turnsTable.querySelector("th.pl-audit-turns-col-index.whitespace-nowrap")).not.toBeNull();
     expect(turnsTable).toHaveClass("pl-audit-turns-table");
     expect(screen.getByTestId("audit-turn-id-inf_test_1")).toHaveTextContent("inf_test_1");
-    expect(screen.getByTestId("audit-export-current")).toHaveTextContent("导出问询记录");
-    expect(screen.getByTestId("audit-export-related")).toHaveTextContent("导出调用流水");
+    expect(screen.getByTestId("audit-export-current")).toHaveTextContent("导出");
+    expect(screen.getByTestId("audit-export-current")).toHaveAttribute("href", expect.stringMatching(/^\/api\/admin\/audit\/turns\/export\?/));
+    expect(screen.queryByTestId("audit-export-related")).not.toBeInTheDocument();
 
     cleanup();
     renderAudit("/admin/audit?tab=calls&hours=168");
@@ -793,12 +797,12 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
     const active = screen.getByTestId("audit-time-preset-7d");
     expect(active).toHaveClass("pl-segmented-control-item", "pl-segmented-control-item--active");
     expect(active).toHaveAttribute("aria-pressed", "true");
-    for (const preset of ["1h", "24h", "today", "custom"]) {
+    for (const preset of ["1h", "24h", "30d", "today", "custom"]) {
       const item = screen.getByTestId(`audit-time-preset-${preset}`);
       expect(item).toHaveAttribute("aria-pressed", "false");
       expect(item.className).not.toMatch(/pl-segmented-control-item--active/);
     }
-    for (const preset of ["1h", "24h", "7d", "today", "custom"]) {
+    for (const preset of ["1h", "24h", "7d", "30d", "today", "custom"]) {
       expect(screen.getByTestId(`audit-time-preset-${preset}`).className).not.toMatch(/pl-btn--primary/);
     }
 
@@ -838,5 +842,109 @@ describe("Admin / Audit turns tab (Spec 89)", () => {
       expect(screen.getByTestId("audit-time-preset-7d")).toHaveAttribute("aria-pressed", "true");
       expect(screen.getByTestId("audit-time-preset-24h")).toHaveAttribute("aria-pressed", "false");
     });
+  });
+
+  it("opens 近 30 天 from range=30d at the Shanghai month start", async () => {
+    stubEmptyAuditApis();
+    renderAudit("/admin/audit?view=calls&range=30d");
+    expect(await screen.findByTestId("audit-time-preset-30d")).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("audit-time-preset-7d")).toHaveAttribute("aria-pressed", "false");
+    const start = new Date(callMonitorWindow("30d").since);
+    const localMs = start.getTime() - start.getTimezoneOffset() * 60_000;
+    expect(screen.getByTestId("audit-since")).toHaveValue(new Date(localMs).toISOString().slice(0, 16));
+  });
+
+  it("opens 近 30 天 from hours=720 instead of 近 7 天", async () => {
+    stubEmptyAuditApis();
+    renderAudit("/admin/audit?view=calls&hours=720");
+    expect(await screen.findByTestId("audit-time-preset-30d")).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("audit-time-preset-7d")).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("shows 问询慢标记 only when the stored usageSlowCall flag is true", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/api/admin/agents")) {
+          return new Response(JSON.stringify({ ok: true, data: { agents: [], version: 1, summary: {} } }));
+        }
+        if (url.includes("/api/admin/audit/turns")) {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                total: 0,
+                entries: [],
+                summary: { reportedCount: 0, inferredCount: 0, reportedShare: 0 },
+                referenceLatency: { windowHours: 168, p95Ms: 0, totalCallsInWindow: 0, slowCallsInFilter: 0 }
+              }
+            })
+          );
+        }
+        if (url.startsWith("/api/admin/audit?")) {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                total: 4,
+                summary: { businessCalls: 4, protocolCalls: 0, deniedCalls: 0, dataBearingCalls: 2 },
+                entries: [
+                  {
+                    id: 1,
+                    ts: "2026-10-13T02:00:00.000Z",
+                    userId: "demo_agent",
+                    tool: "lucy_query",
+                    outcome: "ok",
+                    durationMs: 5000,
+                    requestId: "slow-query",
+                    usageSlowCall: true
+                  },
+                  {
+                    id: 2,
+                    ts: "2026-10-13T02:01:00.000Z",
+                    userId: "demo_agent",
+                    tool: "lucy_query",
+                    outcome: "ok",
+                    durationMs: 1600,
+                    requestId: "fast-query",
+                    usageSlowCall: false
+                  },
+                  {
+                    id: 3,
+                    ts: "2026-10-13T02:02:00.000Z",
+                    userId: "demo_agent",
+                    tool: "wiki_read",
+                    outcome: "ok",
+                    durationMs: 60000,
+                    requestId: "wiki-slow",
+                    usageSlowCall: false
+                  },
+                  {
+                    id: 4,
+                    ts: "2026-10-13T02:03:00.000Z",
+                    userId: "demo_agent",
+                    tool: "wiki_read",
+                    outcome: "ok",
+                    durationMs: 60000,
+                    requestId: "wiki-marked",
+                    usageSlowCall: true
+                  }
+                ]
+              }
+            })
+          );
+        }
+        return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
+      })
+    );
+
+    renderAudit("/admin/audit?view=calls&range=7d");
+    const table = await screen.findByTestId("audit-calls-table");
+    expect(within(table).getByTestId("audit-usage-slow-1")).toHaveTextContent("问询慢标记");
+    expect(within(table).queryByTestId("audit-usage-slow-2")).toBeNull();
+    expect(within(table).queryByTestId("audit-usage-slow-3")).toBeNull();
+    expect(within(table).getByTestId("audit-usage-slow-4")).toHaveTextContent("问询慢标记");
+    expect(table).not.toHaveTextContent("慢于多数请求");
   });
 });

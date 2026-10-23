@@ -237,7 +237,20 @@ export type RemoveSchemaResult = {
   deletedFiles: string[];
 };
 
-/** Spec 127: dryRun preview for POST /api/connections/:connId/remove. */
+/** Spec 179: one remaining reference that can block connection deletion. */
+export type ConnectionDeleteBlockerKind =
+  | "role_connection"
+  | "role_selector"
+  | "identity"
+  | "wiki"
+  | "semantic_asset";
+
+export type ConnectionDeleteBlocker = {
+  kind: ConnectionDeleteBlockerKind;
+  id: string;
+};
+
+/** Spec 127 + Spec 179: dryRun preview for POST /api/connections/:connId/remove. */
 export type DeleteConnectionImpact = {
   canDeleteSecret: boolean;
   secretRelPath: string | null;
@@ -245,6 +258,9 @@ export type DeleteConnectionImpact = {
   aclRoleIds: string[];
   wikiRefCount: number;
   wikiSamplePaths: string[];
+  /** Spec 179. Absent only on previews from before the guard. */
+  blockers?: ConnectionDeleteBlocker[];
+  blocked?: boolean;
 };
 
 export type DeleteConnectionPreview = {
@@ -253,6 +269,8 @@ export type DeleteConnectionPreview = {
   connectionId: string;
   schemas: string[];
   enabledTables: string[];
+  /** Spec 179. Mirrors `impact.blocked` when the server sends it. */
+  blocked?: boolean;
   impact: DeleteConnectionImpact;
 };
 
@@ -281,9 +299,18 @@ export type LiveSchemasResponse = {
   wireProtocol?: "mysql" | "postgres" | "sqlserver" | "oracle" | "unknown";
 };
 
+/** Spec 174 §3.3 — display snapshot metadata; counts are unknown unless state is ok. */
+export type SourcesDisplayMeta = {
+  snapshotVersion: string;
+  generatedAt: string;
+  authorizedCountsState: "ok" | "partial" | "unavailable";
+  runtimeConsistency: "matched" | "unconfirmed";
+};
+
 export type SourcesResponse = {
   tables: SourceSummary[];
   manifestSchemas?: ManifestSchemaSummary[];
+  meta?: SourcesDisplayMeta;
 };
 
 export type SourceDetail = {
@@ -368,6 +395,9 @@ export type TableYamlVersionRestoreResult = {
 
 export type ChangedFilesResponse = {
   files: ChangedFile[];
+  /** Semantic YAML present only in the ktx mirror (Spec 180). Empty when there is no separate mirror. */
+  mirrorOnlySemanticFiles?: string[];
+  mirrorDriftTruncated?: boolean;
 };
 
 export type ValidateChangedResponse = {
@@ -385,7 +415,16 @@ export type WikiFrontmatter = {
   sl_refs?: string[];
   refs?: string[];
   usage_mode?: string;
+  /** Object ACL (Spec §4.1): the only Wiki authorization field. Absent / [] means no one. */
+  allowed_roles?: string[];
 };
+
+export type WikiAclState =
+  | { state: "missing" }
+  | { state: "empty" }
+  | { state: "all" }
+  | { state: "roles"; roles: string[] }
+  | { state: "corrupt"; detail: string };
 
 export type WikiSummary = {
   key: string;
@@ -468,11 +507,16 @@ export type WikiPage = {
   frontmatter: WikiFrontmatter;
   content: string;
   rawMarkdown: string;
+  /** Send back as `expected_version` when saving (428 if missing, 409 if stale). */
+  file_version: string;
+  acl: WikiAclState;
 };
 
 export type WikiPreview = {
   key: string;
   filePath: string;
+  /** `file_version` currently stored for the page, or `null` when it does not exist yet. */
+  currentFileVersion?: string | null;
   diff: string;
   proposedMarkdown: string;
 };
@@ -578,6 +622,13 @@ export type HelpHandbook = {
   etag: string;
   toc: HelpTocItem[];
   markdown: string;
+  /**
+   * Legacy section id → current section id. The backend ships it together
+   * with the handbook so old deep links (`?section=<old id>`) keep
+   * resolving after a section id migration. Optional: older servers do not
+   * send it, and the UI then falls back to the raw id.
+   */
+  legacySectionMap?: Record<string, string>;
 };
 
 export type HelpSearchItem = {
@@ -620,12 +671,18 @@ export type Agent = {
   name: string;
   note?: string;
   enabled: boolean;
+  /** Resolved role set. Empty when unbound or when `role` and `roles` were both declared. */
+  roles?: string[];
+  /** Present only when the resolved set has exactly one role. */
   role?: string;
+  roleResolutionError?: string;
+  declaredRole?: string;
+  declaredRoles?: string[];
   createdAt?: string;
   configUpdatedAt?: string;
   tokens: TokenSummary[];
   allow?: { tables: string[] | ["*"]; tools: string[] | ["*"]; connections?: string[] };
-  /** Spec 100 — Agent 强制约束；缺省表示 Constraints≡TRUE。 */
+  /** Spec 100 — 个人行限制（constraints）；缺省表示 Constraints≡TRUE。 */
   constraints?: AgentConstraintsConfig;
   effectivePermissions?: EffectivePermissionsPreview;
   permissionWarnings?: string[];
@@ -711,6 +768,16 @@ export type RoleDetail = Role & {
     readable: string[];
     declaredWithoutChannel: string[];
   };
+  /** Spec §4.3 — read-only Wiki discover/read effect of this Role (edited on the Wiki page, not here). */
+  wikiAccess?: {
+    discoverEnabled: boolean;
+    readEnabled: boolean;
+    declared: string[];
+    discoverable: string[];
+    readable: string[];
+    declaredWithoutChannel: string[];
+  };
+  contextPolicyVersion?: string;
 };
 
 /** Spec 99 §8 — TRUE / all, or scoped digest (Role API may also include predicates). */
@@ -760,6 +827,16 @@ export type PolicyRuntimeStatus = {
   policyVersion: string;
   degradedGlobal: boolean;
   degradedAgents: string[];
+  /** Spec 177 — machine reason plus the compile diagnostic for each degraded identity. */
+  issues?: Array<{
+    agentId: string;
+    reason: string;
+    diagnostic?: {
+      declaredRoleIds: string[];
+      failedRoleId?: string;
+      steps: Array<{ roleId: string; ordinal: number; status: "compiled" | "failed" | "not_run"; code?: string }>;
+    };
+  }>;
   accessConfigDigest: string;
   sourceMapVersion: string;
   enabledTablesDigest?: string;
@@ -932,7 +1009,9 @@ export type AgentPatch = {
   name?: string;
   note?: string;
   enabled?: boolean;
+  /** @deprecated Single-role input. The admin UI sends `roles`. */
   role?: string;
+  roles?: string[];
   /** Spec 100 — set constraints; `null` clears the YAML key. */
   constraints?: AgentConstraintsConfig | null;
 };
@@ -941,7 +1020,9 @@ export type CreateAgentBody = {
   id: string;
   name: string;
   note?: string;
-  role: string;
+  roles?: string[];
+  /** @deprecated Single-role input. The admin UI sends `roles`. */
+  role?: string;
 };
 
 export type CreateTokenBody = { label: string; device_name?: string | null; expires_at: string };
@@ -1041,6 +1122,8 @@ export type AuditLogEntry = {
   skillAction?: "discover" | "read";
   skillRolesAllowed?: string[];
   matchedRoleId?: string;
+  /** Spec 162 SC-20b. Stored `is_slow_call` on the calls list, not the P95 `isSlowCall`. */
+  usageSlowCall?: boolean;
 };
 
 export type AuditQuery = {
@@ -1117,6 +1200,8 @@ export type AuditTurnEntry = {
   id: string;
   source: "inferred" | "reported";
   userId: string;
+  client?: string;
+  sessionId?: string;
   startedAt: string;
   endedAt: string;
   businessCallCount: number;
@@ -1169,6 +1254,8 @@ export type AuditTurnDetailResponse = {
   id: string;
   source: "inferred" | "reported";
   userId: string;
+  client?: string;
+  sessionId?: string;
   startedAt?: string;
   endedAt?: string;
   createdAt?: string;
@@ -1233,6 +1320,10 @@ export type EvalCase = {
   snapshot_date?: string;
   coverage?: string;
   notes?: string;
+  review_status?: "active" | "needs_review";
+  semantic_version_seen?: string;
+  as_of_binding?: EvalSuiteCase["as_of_binding"];
+  executable?: EvalExecutable;
 };
 
 export type EvalRunStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
@@ -1263,6 +1354,10 @@ export type EvalRun = {
   runnerMetadata?: unknown;
   importSource?: string;
   hashStatus?: EvalResultHashStatus;
+  resultVersion?: number;
+  notAnsweredCount?: number;
+  asOf?: string;
+  roleId?: string;
 };
 
 export type EvalRunWithResults = EvalRun & {
@@ -1279,6 +1374,10 @@ export type EvalRunWithResults = EvalRun & {
     failedAssertions?: string[];
     errorMessage?: string;
     finalText?: string;
+    outcome?: EvalAnswerOutcome;
+    reason?: string;
+    policyStatus?: "compliant" | "noncompliant" | "unchecked";
+    window?: { start: string; end: string } | null;
   }>;
 };
 
@@ -1318,8 +1417,11 @@ export type EvalRunCompare = {
 // `webui/docs/46-eval-yaml-exchange-and-result-archive-spec.md` §5.
 
 export const EVAL_SUITE_SCHEMA_VERSION = 1 as const;
+export const EVAL_SUITE_SCHEMA_VERSIONS = [1, 2] as const;
 export const EVAL_SUITE_KIND = "lucy_eval_suite" as const;
 export const EVAL_RESULT_VERSION = 1 as const;
+export const EVAL_RESULT_VERSIONS = [1, 2] as const;
+export const OFFLINE_BATCH_RUNNER_KIND = "lucy_offline_batch" as const;
 
 export type EvalSuiteSnapshot = {
   mode: "live_readonly" | "snapshot";
@@ -1373,10 +1475,37 @@ export type EvalSuiteCase = {
   linked_quiz_questions?: string[];
   coverage?: string;
   notes?: string;
+  review_status?: "active" | "needs_review";
+  semantic_version_seen?: string;
+  as_of_binding?: {
+    kind: "yesterday" | "this_month" | "business_period";
+    period?: string;
+  };
+  executable?: EvalExecutable;
+};
+
+export type EvalExecutableFilter = {
+  field: string;
+  bind: "as_of_window" | "case_value";
+  value?: string;
+};
+
+export type EvalExecutable = {
+  required_measures: string[];
+  grain: string[];
+  required_columns: string[];
+  required_filters: EvalExecutableFilter[];
+  reconciliation?: Array<{
+    id: string;
+    left: { measures: string[]; grain: string[] };
+    right: { measures: string[]; grain: string[] };
+    relation: "sum_equals";
+    tolerance_abs?: number;
+  }>;
 };
 
 export type EvalSuite = {
-  lucy_eval_schema_version: 1;
+  lucy_eval_schema_version: 1 | 2;
   kind: "lucy_eval_suite";
   /** Globally stable ID, matches `[a-z0-9][a-z0-9_-]*`. */
   suite_id: string;
@@ -1404,6 +1533,10 @@ export type EvalResultCase = {
   failures?: string[];
   final_text?: string;
   error_message?: string;
+  outcome?: EvalAnswerOutcome;
+  reason?: string;
+  policy_status?: "compliant" | "noncompliant" | "unchecked";
+  window?: { start: string; end: string } | null;
 };
 
 export type EvalResultRunner = {
@@ -1413,8 +1546,13 @@ export type EvalResultRunner = {
   host?: string;
 };
 
+export type EvalAnswerOutcome = "answered_ok" | "answered_wrong" | "not_answered";
+
 export type EvalResultImport = {
-  lucy_eval_result_version: 1;
+  lucy_eval_result_version: 1 | 2;
+  complete?: boolean;
+  role_id?: string;
+  as_of?: string;
   suite_id: string;
   /** sha256:hex */
   suite_hash: string;
@@ -1462,10 +1600,12 @@ export type EvalDriftDistribution = {
 
 export type EvalTrendPoint = {
   date: string;
-  passRate: number;
+  passRate: number | null;
   runs?: number;
   lowestPassRate?: number;
   totalRuns: number;
+  notAnsweredCount?: number;
+  formulaLabel?: string;
 };
 
 export type EvalThreshold = {
@@ -1478,6 +1618,7 @@ export type MonitorConfig = {
     passRateYellow: number;
     passRateRed: number;
     consecutiveFailThreshold: number;
+    roleIds?: string[];
   }>;
 };
 
@@ -1776,6 +1917,14 @@ export type SemanticAssetReleaseRecord = {
     results: SemanticAssetValidationRow[];
   };
   reindex?: SemanticAssetReindexRecord;
+  /** Spec 162 SC-24 — contract violations that blocked the release. */
+  contractGate?: {
+    blocking?: Array<{
+      checkId: string;
+      filePath?: string;
+      message: string;
+    }>;
+  };
 };
 
 export type SemanticAssetReleasesResponse = {

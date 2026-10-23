@@ -14,6 +14,9 @@
 #     [--manifest-digest sha256:...] \
 #     [--skip-ktx-exec]      # Apple Silicon: skip only the K6 steps that EXECUTE ktx under QEMU.
 #                            # G1 (metadata) and G2 (ELF headers) still run; run G4/G4b on amd64.
+#     [--customer <slug>] [--existing-admin] [--public-release]
+#                            # Customer deliveries (default) also generate/reuse the private
+#                            # bootstrap credential attachment (C20) outside this public package.
 set -Eeuo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -34,6 +37,11 @@ DELIVERY_MODE="offline"
 IMAGE_REPOSITORY=""
 MANIFEST_DIGEST=""
 SKIP_KTX_EXEC=0
+PUBLIC_RELEASE=0
+EXISTING_ADMIN=0
+CUSTOMER="${LUCY_CUSTOMER_NAME:-customer}"
+ATTACHMENT_OUTPUT=""
+CREDENTIAL_STATE_DIR="${LUCY_CREDENTIAL_STATE_DIR:-${HOME}/.lucy/customer-credentials}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -44,6 +52,10 @@ while [[ $# -gt 0 ]]; do
     --image-repository) IMAGE_REPOSITORY="$2"; shift 2 ;;
     --manifest-digest) MANIFEST_DIGEST="$2"; shift 2 ;;
     --skip-ktx-exec) SKIP_KTX_EXEC=1; shift ;;
+    --customer) CUSTOMER="$2"; shift 2 ;;
+    --existing-admin) EXISTING_ADMIN=1; shift ;;
+    --attachment-output) ATTACHMENT_OUTPUT="$2"; shift 2 ;;
+    --public-release) PUBLIC_RELEASE=1; shift ;;
     -h|--help)
       sed -n '2,18p' "$0"
       exit 0
@@ -54,6 +66,7 @@ done
 
 [[ -n "${IMAGE_TAG}" ]] || { echo "FAIL: --image-tag required" >&2; exit 1; }
 [[ -n "${OUTPUT}" ]] || { echo "FAIL: --output required" >&2; exit 1; }
+[[ ! -e "${OUTPUT}" && ! -e "${OUTPUT}.sha256" && ! -e "${OUTPUT}.verification.json" ]] || { echo 'FAIL: use a new delivery name; existing artifacts must not be overwritten' >&2; exit 1; }
 
 case "${DELIVERY_MODE}" in
   offline|registry) ;;
@@ -66,10 +79,17 @@ if [[ "${VERSION_SUFFIX}" =~ -v1$ ]] || [[ "${VERSION_SUFFIX}" =~ -v2$ ]]; then
 fi
 
 command -v docker >/dev/null 2>&1 || { echo "FAIL: docker required" >&2; exit 1; }
+[[ -z "$(git -C "${ROOT}" status --porcelain)" ]] || { echo 'FAIL: clean committed source required for delivery' >&2; exit 1; }
+echo '[build-k8s-delivery] customer upgrade regression checklist'
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s "${ROOT}/scripts/deploy" -p 'test_*.py' -q
+node --test "${ROOT}/scripts/deploy/probe-customer-auth-state.test.mjs" \
+  "${ROOT}/scripts/release/customer-bootstrap-state.test.mjs" \
+  "${ROOT}/scripts/release/build-bootstrap-attachment.test.mjs" \
+  "${ROOT}/scripts/gates/build-k8s-delivery-package.test.mjs"
 docker image inspect "${IMAGE_TAG}" >/dev/null 2>&1 || { echo "FAIL: image not found: ${IMAGE_TAG}" >&2; exit 1; }
 
-IMAGE_CONFIG_ID="$(docker image inspect "${IMAGE_TAG}" --format '{{.Id}}')"
 IMAGE_REF_TAG="${IMAGE_TAG##*:}"
+[[ "${IMAGE_REF_TAG}" == *-"$(git -C "${ROOT}" rev-parse --short HEAD)" ]] || { echo 'FAIL: image tag must match the committed package source' >&2; exit 1; }
 if [[ "${IMAGE_REF_TAG}" == "${IMAGE_TAG}" ]]; then
   IMAGE_REF_TAG="latest"
 fi
@@ -81,6 +101,12 @@ LUCY_VERSION_PATTERN="${LUCY_VERSION//./\\.}"
 IMAGE_LUCY_VERSION="$(docker run --rm --platform linux/amd64 --entrypoint printenv "${IMAGE_TAG}" LUCY_VERSION || true)"
 [[ "${IMAGE_LUCY_VERSION}" == "${LUCY_VERSION}" ]] || {
   echo "FAIL: image LUCY_VERSION=${IMAGE_LUCY_VERSION:-<empty>} does not match VERSION=${LUCY_VERSION}" >&2
+  exit 1
+}
+GIT_FULL="$(git -C "${ROOT}" rev-parse HEAD)"
+IMAGE_REVISION="$(docker run --rm --platform linux/amd64 --entrypoint cat "${IMAGE_TAG}" /app/BUILD_REVISION | tr -d '[:space:]' || true)"
+[[ "${IMAGE_REVISION}" == "${GIT_FULL}" ]] || {
+  echo "FAIL: image BUILD_REVISION=${IMAGE_REVISION:-<empty>} does not match HEAD=${GIT_FULL}" >&2
   exit 1
 }
 if [[ -z "${IMAGE_REPOSITORY}" ]]; then
@@ -99,8 +125,11 @@ mkdir -p "${PKG_DIR}/image" "${PKG_DIR}/helm" "${PKG_DIR}/examples" "${PKG_DIR}/
 cleanup_fail() {
   local rc=$?
   if [[ "${rc}" -ne 0 ]]; then
-    rm -f "${OUTPUT}" "${OUTPUT}.sha256" 2>/dev/null || true
-    echo "[build-k8s-delivery] FAIL — removed incomplete ${OUTPUT}" >&2
+    rm -f "${OUTPUT}" "${OUTPUT}.sha256" "${OUTPUT}.verification.json" 2>/dev/null || true
+    if [[ -n "${ATTACHMENT_OUTPUT:-}" ]]; then
+      rm -rf "${ATTACHMENT_OUTPUT}" "${ATTACHMENT_OUTPUT}.tar.gz" "${ATTACHMENT_OUTPUT}.tar.gz.sha256" "${ATTACHMENT_OUTPUT}.c20.json" 2>/dev/null || true
+    fi
+    echo "[build-k8s-delivery] FAIL — removed incomplete ${OUTPUT} and any bootstrap attachment artifacts" >&2
   fi
   rm -rf "${STAGING}"
 }
@@ -113,6 +142,8 @@ echo "[build-k8s-delivery] export image tar"
 TAR_NAME="$(echo "${IMAGE_TAG}" | tr '/:' '-').tar"
 docker save -o "${PKG_DIR}/image/${TAR_NAME}" "${IMAGE_TAG}"
 docker image inspect "${IMAGE_TAG}" > "${PKG_DIR}/image/image-inspect.json"
+python3 "${ROOT}/scripts/deploy/image_identity.py" --archive "${PKG_DIR}/image/${TAR_NAME}" > "${PKG_DIR}/image/image-identity.json"
+IMAGE_CONFIG_ID="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["configId"])' "${PKG_DIR}/image/image-identity.json")"
 echo "${IMAGE_CONFIG_ID}" > "${PKG_DIR}/image/image-config-id.txt"
 # Backward-compatible alias: NEVER treat as registry manifest digest.
 cp "${PKG_DIR}/image/image-config-id.txt" "${PKG_DIR}/image/image-digest.txt"
@@ -183,11 +214,42 @@ cp "${ROOT}/scripts/gates/helm-lucy-gate.sh" "${PKG_DIR}/scripts/preflight-helm.
 cp "${ROOT}/scripts/gates/preflight-upgrade.sh" "${PKG_DIR}/scripts/preflight-upgrade.sh"
 cp "${ROOT}/scripts/gates/preflight-upgrade-lib.mjs" "${PKG_DIR}/scripts/preflight-upgrade-lib.mjs"
 cp "${ROOT}/scripts/gates/preflight_upgrade_drift.py" "${PKG_DIR}/scripts/preflight_upgrade_drift.py"
+cp "${ROOT}/scripts/deploy/deploy-customer-k8s.sh" "${PKG_DIR}/scripts/deploy.sh"
+cp "${ROOT}/scripts/deploy/customer-deployment-helper.py" "${PKG_DIR}/scripts/customer-deployment-helper.py"
+cp "${ROOT}/scripts/deploy/probe-customer-auth-state.mjs" "${PKG_DIR}/scripts/probe-customer-auth-state.mjs"
+cp "${ROOT}/scripts/deploy/prepare-customer-instance.py" "${PKG_DIR}/scripts/prepare-customer-instance.py"
+cp "${ROOT}/scripts/deploy/image_identity.py" "${PKG_DIR}/scripts/image_identity.py"
+cp "${ROOT}/deploy/k8s/examples/instance.upgrade.http.example.json" "${PKG_DIR}/examples/instance.upgrade.http.example.json"
+cp "${ROOT}/deploy/k8s/examples/instance.upgrade.https.example.json" "${PKG_DIR}/examples/instance.upgrade.https.example.json"
+cp "${ROOT}/deploy/k8s/examples/instance.install.http.example.json" "${PKG_DIR}/examples/instance.install.http.example.json"
+cp "${ROOT}/deploy/k8s/examples/instance.install.https.example.json" "${PKG_DIR}/examples/instance.install.https.example.json"
+cp "${ROOT}/deploy/k8s/examples/RECOVERY.open-mode.md" "${PKG_DIR}/examples/RECOVERY.open-mode.md"
+cp "${ROOT}/deploy/k8s/CUSTOMER-UPGRADE.md" "${PKG_DIR}/CUSTOMER-UPGRADE.md"
+cp "${ROOT}/deploy/k8s/CUSTOMER-INSTALL.md" "${PKG_DIR}/CUSTOMER-INSTALL.md"
+cp "${ROOT}/deploy/k8s/ACCEPTANCE.md" "${PKG_DIR}/ACCEPTANCE.md"
+cp "${ROOT}/docs/runbooks/customer-v2-upgrade-release-checklist.md" "${PKG_DIR}/UPGRADE-RELEASE-CHECKLIST.md"
+cat > "${PKG_DIR}/CUSTOMER-FIRST-ADMIN.md" <<'EOF'
+# 首次创建管理员
+
+本通用软件包不含引导密钥。旧开放模式升级到 2.0 管理员登录时，保留原 PVC。
+
+1. 把安装包解压到仓库和 `inbox` 之外的目录。
+2. 按 `CUSTOMER-UPGRADE.md` 选择 HTTP 或 HTTPS 实例样例，填写真实 context、UID、旧镜像、节点映射和访问地址。HTTPS 的 TLS 网关和私有 CA 配置见该说明。不要填写 `instanceId` 和 `credentialState`。
+3. 确认旧数据卷没有管理员、也没有 `.ktx-ui/security.sqlite` 之后，才把 `legacyBaselineReviewed` 改为 `true`。填写恢复说明；部署入口在切换前自动停机备份整个 PVC，并保存原 Helm revision。
+4. 使用供应方随包交付的私有附件（引导密钥）：`bash <附件>/scripts/prepare.sh --package <安装包.tar.gz 或解压目录> --config <实例.json> --output <新的客户目录>`。入口自动校验软件包绑定并复用附件内已签发的引导密钥；同一实例重打包、换目录复用原密钥。没有附件时（公共发布）才用手工 `prepare-customer-instance.py` 路径联系供应方补发，不要自行生成密钥。
+5. 在客户目录先执行 `bash scripts/deploy.sh --dry-run`，通过后执行 `bash scripts/deploy.sh`。脚本配置该实例的引导 Secret 并部署。
+6. 打开实例配置中的 WebUI 地址，输入引导密钥、账户名和新密码，创建首个所有者。
+
+创建成功后使用账户和密码登录。重启或后续升级不需要重新认领。已有管理员直接登录。
+Helm 回滚不会恢复 `admins.yaml` 或 `.ktx-ui/security.sqlite`。要回到旧开放模式，恢复升级前的 PVC 备份。
+EOF
+chmod 0755 "${PKG_DIR}/scripts/deploy.sh" "${PKG_DIR}/scripts/prepare-customer-instance.py"
+chmod 0644 "${PKG_DIR}/scripts/customer-deployment-helper.py" "${PKG_DIR}/scripts/probe-customer-auth-state.mjs"
 chmod 0755 "${PKG_DIR}/scripts/acceptance.sh" "${PKG_DIR}/scripts/preflight-helm.sh" "${PKG_DIR}/scripts/preflight-upgrade.sh"
 chmod 0644 "${PKG_DIR}/scripts/k8s-gate-lib.sh" "${PKG_DIR}/scripts/preflight-upgrade-lib.mjs" "${PKG_DIR}/scripts/preflight_upgrade_drift.py"
 
 # macOS / VCS leftovers must never reach the deliverable.
-find "${PKG_DIR}" \( -name '._*' -o -name '.DS_Store' -o -name '__MACOSX' -o -name '.git' -o -name '.gitignore' \) \
+find "${PKG_DIR}" \( -name '._*' -o -name '.DS_Store' -o -name '__MACOSX' -o -name '.git' -o -name '.gitignore' -o -name '__pycache__' -o -name '*.pyc' -o -name '*.pyo' \) \
   -prune -exec rm -rf {} + 2>/dev/null || true
 
 GIT_SHA="$(git -C "${ROOT}" rev-parse --short HEAD 2>/dev/null || echo unknown)"
@@ -212,14 +274,14 @@ BUILD_INFO_CONFIG_ID="${IMAGE_CONFIG_ID}" BUILD_INFO_MANIFEST_DIGEST="${HELM_DIG
 BUILD_INFO_TAR_SHA="${IMAGE_TAR_SHA}" BUILD_INFO_MODE="${DELIVERY_MODE}" \
 BUILD_INFO_LUCY="${LUCY_VERSION}" BUILD_INFO_HELM="${HELM_VERSION}" \
 BUILD_INFO_KTX_FALLBACK="$(awk -F'"' '/bundledKtxVersion:/{print $2; exit}' "${ROOT}/deploy/k8s/helm/lucy/values.yaml")" \
-python3 - "${PKG_DIR}/BUILD-INFO.json" "${IMAGE_ENV_FILE}" <<'PY'
+python3 - "${PKG_DIR}/BUILD-INFO.json" "${IMAGE_ENV_FILE}" "${PKG_DIR}/image/image-identity.json" <<'PY'
 import datetime
 import json
 import os
 import platform
 import sys
 
-out_path, env_path = sys.argv[1], sys.argv[2]
+out_path, env_path, identity_path = sys.argv[1:]
 env = {}
 with open(env_path, encoding="utf-8") as fh:
     for line in fh:
@@ -253,6 +315,7 @@ info = {
         "helmOnBuildHost": g("BUILD_INFO_HELM"),
     },
 }
+info['image'].update(json.load(open(identity_path)))
 with open(out_path, "w", encoding="utf-8") as fh:
     json.dump(info, fh, indent=2, ensure_ascii=False)
     fh.write("\n")
@@ -266,17 +329,26 @@ Supported Helm chart is included under `helm/lucy/` (not a reference snapshot).
 Package layout: `helm/lucy/` chart · `examples/` values · `image/` offline image tar and identity files ·
 `scripts/` preflight + acceptance (self-contained) · `BUILD-INFO.json` · `SHA256SUMS`.
 
-**Supersedes:** every earlier `lucy-k8s-integration-delivery-*` package. Earlier packages mount the DB password
-Secret read-only over `.ktx/secrets` (WebUI writes fail with `EROFS`) and ship non-runnable preflight/acceptance scripts.
+This public package contains no bootstrap key. Customer deliveries ship a companion PRIVATE
+bootstrap attachment next to this archive (webui-bootstrap-token, issuance state, credential
+metadata, and a self-service prepare entry; see its README.md). The supplier generates or
+reuses it at build time (C20 gate); deployers never hand-generate keys. Run the attachment's
+`scripts/prepare.sh` against this archive to produce the private instance directory, then run
+its deployment entry and create the first owner. Each instance gets its own key. Public releases
+without the attachment fall back to `CUSTOMER-UPGRADE.md` and `scripts/prepare-customer-instance.py`;
+ask the supplier for the matching private attachment instead of hand-generating keys.
+The test, r2, r3 and r4 packages are superseded. Follow UPGRADE-RELEASE-CHECKLIST.md for every delivery.
+Local package checks do not authorize production use; native amd64 upgrade and recovery remain mandatory.
 
 Read order:
 1. README.md (this file)
 2. RELEASE_NOTES.md
-3. K8S_CONTRACT.md
-4. helm/lucy/UPGRADE.md
-5. helm/lucy/ROLLBACK.md
-6. examples/values.k3s-test.yaml (lucy-test profile) / examples/values.customer.example.yaml (template)
-7. scripts/preflight-helm.sh, scripts/acceptance.sh
+3. CUSTOMER-UPGRADE.md
+4. CUSTOMER-INSTALL.md
+5. CUSTOMER-FIRST-ADMIN.md
+6. examples/RECOVERY.open-mode.md
+7. ACCEPTANCE.md
+8. K8S_CONTRACT.md
 
 ## Offline image import (K3s / containerd)
 
@@ -291,20 +363,22 @@ The listed `repository:tag` must equal `image.repository` / `image.tag` in the v
 (`image/image-repository.txt`, `image/image-tag.txt`). Offline values use `image.pullPolicy: Never`
 and an empty `image.digest`.
 
-## Run from the package root
+## Upgrade an existing open-mode instance
 
 ```bash
 sha256sum -c SHA256SUMS
-bash scripts/preflight-helm.sh --k3s-only
-bash scripts/preflight-upgrade.sh --namespace lucy-test --release lucy-starrocks \
-  --deployment lucy --chart helm/lucy -f examples/values.k3s-test.yaml
-helm upgrade lucy-starrocks helm/lucy -n lucy-test -f examples/values.k3s-test.yaml --atomic --wait --timeout 15m
-LUCY_MCP_TOKEN=<bearer> bash scripts/acceptance.sh --namespace lucy-test --release lucy-starrocks \
-  --deployment lucy --service lucy --public-mcp-url http://10.69.95.109:8277/mcp \
-  --connection kc-starrocks --connection rds-test --connection zijin --expect-content-root .
+# Fill the selected instance example and recovery file as described in CUSTOMER-UPGRADE.md.
+python3 /absolute/path/to/package/scripts/prepare-customer-instance.py \
+  --base-package /absolute/path/to/package --instance-config /private/path/instance.json \
+  --state-dir /private/path/state --output /private/path/customer-delivery
+cd /private/path/customer-delivery
+bash scripts/deploy.sh --dry-run
+bash scripts/deploy.sh
 ```
 
-Read `helm/lucy/UPGRADE.md` first: it lists the pre-upgrade checks (Deployment selector, PVC, Secret).
+Use the instance deployment entry for administrator migration. The lab Helm values do not provision an
+instance bootstrap key and are not the customer upgrade entry. Complete ACCEPTANCE.md before reopening
+production access. Native amd64 upgrade and recovery results must be recorded for this exact package.
 
 EOF
   printf 'Delivery mode: `%s`\n' "${DELIVERY_MODE}"
@@ -328,11 +402,36 @@ EOF
 
 ## Summary
 
-Fixes Kubernetes / Helm in-place upgrade defects found when statically checking the previous test package:
-read-only password Secret, legacy PVC layout, resource-name drift, and non-runnable package scripts.
+Fixes the r3 customer deployment entry's multi-resource JSON parsing failure and missing preflight diagnostics.
+Every build now runs deployment regressions and the final archive's instance dry-run regression with real
+Helm and kubectl client rendering against synthetic cluster reads. This is not native K3s upgrade evidence.
+Diagnostics contain stage, error type and stack locations without exception text or tool/credential output.
 
 Lucy product version and bundled KTX version are independent release identities
 (see `BUILD-INFO.json` for the exact commit, image, platform and dependency versions).
+
+## Changes (delivery tooling, no Chart change)
+
+- Customer package builds now generate or reuse the per-instance private bootstrap
+  credential attachment at build time (key, issuance state, credential metadata,
+  self-service prepare entry; dir 0700/files 0600; lives outside this public archive).
+  A C20 bundle gate re-extracts the attachment and this archive, prepares the instance
+  from another cwd, and proves the delivered key matches the attachment digest.
+  Public releases opt out explicitly with `--public-release`; existing-admin instances
+  record `credentialState: none` and ship no key.
+
+## Changes (Chart 0.2.6)
+
+- Image config, platform manifest and index identities are derived from and verified against the saved image archive.
+- CRI identity checks accept only the verified identities for the candidate image.
+- HTTPS instance preparation includes private CA delivery and a separate HTTPS example.
+- The customer entry prepares the bootstrap Secret, saves the original revision and PVC backup, and links explicit recovery and acceptance steps.
+
+## Changes (Chart 0.2.5)
+
+- `security.access` selects HTTPS or intranet HTTP. The lab switch `insecureHttpTestProfile` is not a customer access mode.
+- Open-mode upgrades keep the PVC and mount a per-instance bootstrap Secret. `scripts/prepare-customer-instance.py` writes that private directory. This generic package still has no bootstrap key.
+- The auth probe accepts security schema 1 and 2 without migrating the database.
 
 ## Changes (Chart 0.2.4)
 
@@ -356,7 +455,7 @@ Lucy product version and bundled KTX version are independent release identities
   `"."` so `semantic-layer/`, `wiki/`, `skills/` and `webui/config/` next to `ktx.yaml` stay visible.
 - **Resource names.** `fullnameOverride: lucy` keeps `deployment/lucy`, `service/lucy`, `pvc/lucy` under release
   `lucy-starrocks` (no second stack).
-- **Ports.** Unchanged: WebUI `8276 -> 5174`, MCP `8277 -> 7879`; KTX upstream `7878` is never in the Service.
+- **Ports.** Container ports stay WebUI `5174` and MCP `7879`. Service type and Service ports stay at the live values. KTX upstream `7878` is never in the Service.
 - **Scripts.** `scripts/preflight-helm.sh` runs from the package root (`helm/lucy`) and checks names, ports,
   Secret sync, content root and image identity. `scripts/acceptance.sh` ships with `k8s-gate-lib.sh`,
   separates Helm release / Deployment / Service names, and never prints tokens or Secret contents.
@@ -374,7 +473,13 @@ Lucy product version and bundled KTX version are independent release identities
 ## Upgrade
 
 See `helm/lucy/UPGRADE.md` (pre-upgrade checks, upgrade, acceptance, restart and rollback).
-Use `helm upgrade --atomic --wait` with `examples/values.k3s-test.yaml`.
+Use `CUSTOMER-UPGRADE.md` and the private instance directory's `scripts/deploy.sh`.
+
+## Fresh install
+
+Empty clusters follow `CUSTOMER-INSTALL.md` and `examples/instance.install.http.example.json`
+or `examples/instance.install.https.example.json`. The in-place upgrade of `20260828-v1`
+stays on the already issued r7 candidate and does not switch to a later package.
 EOF
 } > "${PKG_DIR}/RELEASE_NOTES.md"
 
@@ -404,8 +509,53 @@ echo "[build-k8s-delivery] K6 outer tar verify (load + G gates)"
 bash "${ROOT}/scripts/gates/verify-k8s-package.sh" --tar "${OUTPUT}" --outer-sha256 "${OUTPUT}.sha256" \
   ${VERIFY_EXTRA[@]+"${VERIFY_EXTRA[@]}"}
 
+echo '[build-k8s-delivery] final archive customer entry regression (synthetic reads; real CLIs)'
+python3 "${ROOT}/scripts/gates/verify-customer-upgrade-package.py" --tar "${OUTPUT}" --report "${OUTPUT}.verification.json"
+
+ATTACHMENT_JSON=""
+if [[ "${PUBLIC_RELEASE}" -eq 1 ]]; then
+  echo "[build-k8s-delivery] --public-release: no per-customer bootstrap credential is issued (C20 N/A by mode)"
+else
+  echo "[build-k8s-delivery] bootstrap credential attachment (C20 bundle gate)"
+  if [[ -z "${ATTACHMENT_OUTPUT}" ]]; then
+    ATTACHMENT_OUTPUT="${LUCY_ATTACHMENT_ROOT:-${HOME}/.lucy/customer-deliveries}/${PKG}-attachment-${CUSTOMER}"
+  fi
+  [[ ! -e "${ATTACHMENT_OUTPUT}" && ! -e "${ATTACHMENT_OUTPUT}.tar.gz" ]] || {
+    echo 'FAIL: use a new attachment output; existing attachment artifacts must not be overwritten' >&2
+    exit 1
+  }
+  OUTER_SHA="$(awk '{print $1}' "${OUTPUT}.sha256")"
+  BASE_CHECKSUM="$(sha256sum "${PKG_DIR}/SHA256SUMS" | awk '{print $1}')"
+  EXISTING_ADMIN_ARG=()
+  if [[ "${EXISTING_ADMIN}" -eq 1 ]]; then
+    EXISTING_ADMIN_ARG+=(--existing-admin)
+  fi
+  ATTACHMENT_JSON="$(node "${ROOT}/scripts/release/build-bootstrap-attachment.mjs" \
+    --customer "${CUSTOMER}" \
+    --state-dir "${CREDENTIAL_STATE_DIR}" \
+    --output "${ATTACHMENT_OUTPUT}" \
+    --package-name "$(basename "${OUTPUT}")" \
+    --package-sha256 "${OUTER_SHA}" \
+    --package-base-checksum "${BASE_CHECKSUM}" \
+    ${EXISTING_ADMIN_ARG[@]+"${EXISTING_ADMIN_ARG[@]}"})"
+  (
+    cd "$(dirname "${ATTACHMENT_OUTPUT}")"
+    COPYFILE_DISABLE=1 tar -czf "$(basename "${ATTACHMENT_OUTPUT}").tar.gz" "$(basename "${ATTACHMENT_OUTPUT}")"
+    sha256sum "$(basename "${ATTACHMENT_OUTPUT}").tar.gz" > "$(basename "${ATTACHMENT_OUTPUT}").tar.gz.sha256"
+  )
+  python3 "${ROOT}/scripts/gates/verify-bootstrap-attachment.py" \
+    --attachment "${ATTACHMENT_OUTPUT}.tar.gz" \
+    --package-tar "${OUTPUT}" \
+    --report "${ATTACHMENT_OUTPUT}.c20.json"
+fi
+
 # Success: disarm fail cleanup of OUTPUT; still remove staging.
 trap 'rm -rf "${STAGING}"' EXIT
 
 echo "[build-k8s-delivery] wrote ${OUTPUT}"
 echo "[build-k8s-delivery] wrote ${OUTPUT}.sha256"
+if [[ -n "${ATTACHMENT_JSON}" ]]; then
+  echo "[build-k8s-delivery] wrote private bootstrap attachment (never prints key material):"
+  echo "${ATTACHMENT_JSON}" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(json.dumps({"attachment": d["attachment"], "instanceId": d["instanceId"], "credentialState": d["credentialState"], "credentialReused": d["credentialReused"], "keyDigest": d["keyDigest"], "packageName": d["packageName"]}, indent=2))'
+  echo "[build-k8s-delivery] wrote ${ATTACHMENT_OUTPUT}.tar.gz (+ .sha256, .c20.json) — deliver together with the package"
+fi

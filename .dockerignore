@@ -31,3 +31,26 @@ wiki/
 skills/
 evals/
 ktx.yaml.example
+
+# Real-user E2E / security test material (Spec 20261018 §6.2): synthetic fixture, gold calculator, canaries, injection
+# documents, fault-control tooling and the isolated K8s test deployment must never reach the customer runtime image
+# or its default seed.
+examples/security-e2e
+scripts/e2e
+scripts/gates/customer-release-readiness.mjs
+scripts/gates/collect-gate-results.mjs
+scripts/gates/record-gate-result.mjs
+deploy/k8s/security-e2e
+webui/tests/real-e2e
+webui/playwright.real.config.ts
+
+# Local runtime state is private at every depth, even when Git ignores it.
+**/.ktx
+**/.ktx-ui
+**/:memory:
+**/.mcp.json
+**/.env
+**/.env.local
+**/.env.*.local
+webui/config/access.yaml
+webui/config/admins.yaml

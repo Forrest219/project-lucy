@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { isTokenExpired, normalizeExpiresAtInput } from "../proxy/identity.js";
 import { hashPassword, verifyPassword } from "../auth/password.js";
 import { resetAdminsCache } from "../auth/admins-store.js";
-import { createAdminSession, readAdminSession, resetSessionSecretCache } from "../auth/session.js";
+import { readSessionClaims, resetSessionSecretCache, sealSession } from "../auth/session.js";
 import { readFile } from "node:fs/promises";
 import { isPublicApi } from "../auth/guard.js";
 
@@ -17,6 +17,7 @@ vi.mock("../admin/audit.js", () => ({
   })),
   recordConfigChange: vi.fn(async () => 1),
   updateConfigChangeStatus: vi.fn(async () => undefined),
+  registerAgentAuditRoutes: vi.fn(),
   registerAuditRoutes: vi.fn()
 }));
 
@@ -95,16 +96,23 @@ describe("webui session secret persistence", () => {
   });
 
   it("keeps the same secret file across process restarts", async () => {
-    const first = await createAdminSession("xingchen");
+    const claims = {
+      v: 2 as const,
+      jti: "jti-a",
+      uid: "uid-a",
+      ep: 0,
+      iat: Math.floor(Date.now() / 1000),
+      exp: Math.floor(Date.now() / 1000) + 3600
+    };
+    const first = await sealSession(claims);
     const secretPath = path.join(tempRoot, ".ktx-ui/webui-session-secret");
     const stored = await readFile(secretPath, "utf8");
     resetSessionSecretCache();
-    const second = await createAdminSession("xingchen");
+    const second = await sealSession({ ...claims, jti: "jti-b" });
     expect(await readFile(secretPath, "utf8")).toBe(stored);
-    const session = await readAdminSession({ headers: { cookie: `lucy_admin_session=${encodeURIComponent(first.token)}` } } as never);
-    expect(session?.adminId).toBe("xingchen");
-    const again = await readAdminSession({ headers: { cookie: `lucy_admin_session=${encodeURIComponent(second.token)}` } } as never);
-    expect(again?.adminId).toBe("xingchen");
+    const cookieOf = (token: string) => ({ headers: { cookie: `lucy_admin_session=${encodeURIComponent(token)}` } }) as never;
+    expect((await readSessionClaims(cookieOf(first)))?.uid).toBe("uid-a");
+    expect((await readSessionClaims(cookieOf(second)))?.jti).toBe("jti-b");
   });
 });
 
@@ -235,6 +243,126 @@ describe("webui admin auth API", () => {
       payload: { adminId: "xingchen", password: "wrong-password" }
     });
     expect(bad.statusCode).toBe(401);
+    await app.close();
+  });
+});
+
+describe("SEC-01: unknown or corrupt admin configuration never opens or elevates (T02)", () => {
+  let tempRoot: string;
+  let adminsPath: string;
+  const KEYS = [
+    "KTX_PROJECT_ROOT",
+    "LUCY_ADMINS_CONFIG_PATH",
+    "LUCY_WEBUI_SESSION_SECRET",
+    "LUCY_WEBUI_AUTH",
+    "LUCY_DEPLOYMENT_MODE"
+  ] as const;
+  const saved: Partial<Record<(typeof KEYS)[number], string | undefined>> = {};
+
+  beforeEach(async () => {
+    tempRoot = await mkdtemp(path.join(os.tmpdir(), "lucy-admin-config-"));
+    await mkdir(path.join(tempRoot, "webui", "config"), { recursive: true });
+    await mkdir(path.join(tempRoot, ".ktx-ui"), { recursive: true });
+    await mkdir(path.join(tempRoot, "wiki", "global"), { recursive: true });
+    adminsPath = path.join(tempRoot, "webui", "config", "admins.yaml");
+    await writeFile(path.join(tempRoot, "webui", "config", "access.yaml"), "users: []\n", "utf8");
+    await writeFile(path.join(tempRoot, "ktx.yaml"), "connections: {}\n", "utf8");
+    for (const key of KEYS) saved[key] = process.env[key];
+    process.env.KTX_PROJECT_ROOT = tempRoot;
+    process.env.LUCY_ADMINS_CONFIG_PATH = adminsPath;
+    process.env.LUCY_WEBUI_SESSION_SECRET = "test-session-secret-32bytes-min!!";
+    process.env.LUCY_DEPLOYMENT_MODE = "customer";
+    delete process.env.LUCY_WEBUI_AUTH;
+    resetAdminsCache();
+    resetSessionSecretCache();
+  });
+
+  afterEach(async () => {
+    for (const key of KEYS) {
+      if (saved[key] === undefined) delete process.env[key];
+      else process.env[key] = saved[key];
+    }
+    resetAdminsCache();
+    resetSessionSecretCache();
+    await rm(tempRoot, { recursive: true, force: true });
+  });
+
+  async function adminRow(role: string | null): Promise<string> {
+    const hash = await hashPassword("correct-horse");
+    const roleLine = role === null ? "" : `    role: ${role}\n`;
+    return `version: "1"\nadmins:\n  - id: xingchen\n    display_name: 星尘\n    password_hash: "${hash}"\n${roleLine}    enabled: true\n    created_at: "2026-10-18T00:00:00.000Z"\n`;
+  }
+
+  async function start() {
+    const { buildServer } = await import("../index.js");
+    const app = buildServer();
+    await app.ready();
+    return app;
+  }
+
+  const WIKI = { method: "PUT" as const, url: "/api/wiki/global%2Fanon-probe.md", payload: { dryRun: false, content: "# probe\n" } };
+
+  it("normalizeWebuiAdminRole accepts owner/operator/admin and rejects everything else (no default owner)", async () => {
+    const { normalizeWebuiAdminRole } = await import("../auth/admins-store.js");
+    expect(normalizeWebuiAdminRole("owner")).toBe("owner");
+    expect(normalizeWebuiAdminRole("operator")).toBe("operator");
+    expect(normalizeWebuiAdminRole("admin")).toBe("operator");
+    for (const bad of [undefined, null, "", "root", "Owner", "superuser", 1, {}]) {
+      expect(() => normalizeWebuiAdminRole(bad)).toThrow();
+    }
+  });
+
+  it.each([
+    ["unknown role", async () => adminRow("superuser")],
+    ["missing role", async () => adminRow(null)],
+    ["invalid YAML", async () => "version: [unterminated\nadmins: {{{"],
+    ["admins is not a list", async () => 'version: "1"\nadmins: owner\n'],
+    ["entry without a password hash", async () => 'version: "1"\nadmins:\n  - id: xingchen\n    role: owner\n']
+  ])("%s → auth is unavailable (503), not open and not owner", async (_label, content) => {
+    await writeFile(adminsPath, await content(), "utf8");
+    const app = await start();
+    const status = await app.inject({ method: "GET", url: "/api/auth/status" });
+    expect(status.statusCode).toBe(200);
+    expect(status.json().data.mode).toBe("unavailable");
+    expect(status.json().data.authEnabled).toBe(true);
+
+    const put = await app.inject(WIKI);
+    expect(put.statusCode).toBe(503);
+    expect(put.json().error.code).toBe("AUTH_CONFIG_UNAVAILABLE");
+    await expect(readFile(path.join(tempRoot, "wiki", "global", "anon-probe.md"), "utf8")).rejects.toThrow();
+
+    const login = await app.inject({
+      method: "POST",
+      url: "/api/auth/login",
+      payload: { adminId: "xingchen", password: "correct-horse" }
+    });
+    expect(login.statusCode).toBe(503);
+    expect(login.headers["set-cookie"]).toBeUndefined();
+    await app.close();
+  });
+
+  it("missing and empty admins files in customer mode go to bootstrap (401), never open", async () => {
+    for (const content of [null, "", 'version: "1"\nadmins: []\n']) {
+      if (content === null) await rm(adminsPath, { force: true });
+      else await writeFile(adminsPath, content, "utf8");
+      resetAdminsCache();
+      const app = await start();
+      expect((await app.inject({ method: "GET", url: "/api/auth/status" })).json().data.mode).toBe("bootstrap");
+      expect((await app.inject(WIKI)).statusCode).toBe(401);
+      await app.close();
+    }
+  });
+
+  it("a valid config still logs in and keeps its role", async () => {
+    await writeFile(adminsPath, await adminRow("operator"), "utf8");
+    const app = await start();
+    const login = await app.inject({
+      method: "POST",
+      url: "/api/auth/login",
+      payload: { adminId: "xingchen", password: "correct-horse" }
+    });
+    expect(login.statusCode).toBe(200);
+    expect(login.json().data.me.role).toBe("operator");
     await app.close();
   });
 });

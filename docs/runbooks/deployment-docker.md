@@ -154,6 +154,14 @@ npm run demo:upgrade -- --fresh
 
 `npm run demo:rebuild` 与 `demo:upgrade` 等价，均默认保留 volume；仅 dev 验收「干净模板」场景才用 `--fresh`。
 
+平滑升级的 compose project name 来自 `docker compose config` 的 `name`（已设置 `COMPOSE_PROJECT_NAME` 时以环境变量为准）。`deploy/compose/docker-compose.demo.yml` 因此对应 `compose_lucy-demo-data`，而不是用仓库根目录名拼出来的 volume。
+
+目标 named volume 已存在且为空（挂载点下 0 个文件），同时有运行中的容器挂载另一个同逻辑卷名、且里面有文件时，这次升级失败，不是 `preserved=true`。
+
+### 4.2 Fresh named volume（demo / postgres-demo / executive-poc）
+
+验收：`deploy/compose/docker-compose.demo.yml`、`deploy/compose/docker-compose.postgres-demo.yml`、`deploy/compose/docker-compose.executive-poc.yml` 在全新 named volume 上首次启动必须变为 healthy，不需要手工 `chown`。只读 evals 挂在 `/data/lucy/config/evals` 时，各文件中的 `lucy-data-init`（`user: "0"`）会在 lucy 之前创建并 `chown 10001:10001` `/data/lucy`、`/data/lucy/config`、`/data/lucy/.ktx`、`/data/lucy/.ktx-ui`。该 init 不挂载 evals，也不递归 chown。lucy 服务仍以镜像 USER 10001 运行。
+
 ## 5. Recommended Customer Config Mount
 
 客户 headless 部署推荐把业务配置维护为 `customer-config/`，并 bind mount 到 `/data/lucy`：
@@ -555,7 +563,7 @@ POC 演示 **不在** 默认 `docker-compose.yml` 内提供 demo 数据库。完
 |---|---|
 | `docker pull node:22-bookworm-slim` / `mysql:8.4` 慢 | `~/.docker/daemon.json` 加 `registry-mirrors`：`https://docker.m.daocloud.io` |
 | `npm ci` 慢 | `npm config set registry https://registry.npmmirror.com` |
-| `ktx admin runtime install` 拉 pydantic 等依赖 `tls handshake eof` | 走 PyPI 镜像：`UV_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/` 后 `docker compose up -d --build`（或显式 `--build-arg UV_INDEX_URL=...`）；可选 `UV_EXTRA_INDEX_URL` 同理。ktx 捆绑的 uv 通过 `managedRuntimeUvEnv`（`process.env` spread + `UV_NO_CONFIG=1`）自动读取，无需改 ktx。空值 = 官方 pypi.org |
+| `apt-get` / `npm ci` / `ktx admin runtime install` 拉取缓慢 | 镜像构建在官方源短超时后自动改走清华、阿里云、腾讯云。npm 用 npmmirror。要固定单一来源再传 `APT_MIRROR`（主机名）、`NPM_REGISTRY`（无 scheme）、`UV_INDEX_URL`（完整 simple URL）。ktx 捆绑的 uv 通过 `managedRuntimeUvEnv` 读取 `UV_INDEX_URL`，无需改 ktx。这些选择只在构建期生效 |
 | 终端要走代理 | `export HTTPS_PROXY=http://127.0.0.1:7897` 后再 `docker compose up`；Docker Desktop 还要在 Settings → Resources → Proxies 同步 |
 
 Docker Desktop 用户在镜像构建时不会自动继承 shell 代理，必须显式配置 daemon.json 或 Docker Desktop UI，否则 build 阶段 apt-get / npm install 超时。

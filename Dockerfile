@@ -22,32 +22,23 @@ FROM --platform=$TARGETPLATFORM node:22-bookworm-slim
 ARG KTX_VERSION=0.16.0
 # Lucy product version (customer-facing). Independent of bundled KTX.
 # Keep in sync with repo-root VERSION; customer image tags use this, not KTX.
-ARG LUCY_VERSION=0.17.0
+ARG LUCY_VERSION=2.0.0
 # TARGETARCH is exposed so future architecture-specific steps (e.g. fetching a
 # KTX binary release) can branch on it without changing the rest of the file.
 ARG TARGETARCH=amd64
-# Optional PyPI mirror for `ktx admin runtime install` (China / corporate-VPN
-# networks where files.pythonhosted.org DNS-hijacks to a TLS-blackhole IP).
-# Default empty → uv falls back to official pypi.org. ktx's bundled uv reads
-# this through managedRuntimeUvEnv (process.env spread + UV_NO_CONFIG=1), so
-# no ktx patch is needed. Examples:
-#   UV_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
+# Optional single mirror. Empty uses scripts/runtime/docker-build-mirrors.sh:
+# try the official source with a short timeout, then Tsinghua, Aliyun, and
+# Tencent Cloud. A non-empty value uses only that source.
+# PyPI index URL. ktx's bundled uv reads UV_INDEX_URL from the process
+# environment (managedRuntimeUvEnv). Examples:
 #   UV_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple/
-#   UV_INDEX_URL=https://mirrors.cloud.tencent.com/pypi/simple/
+#   UV_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
 ARG UV_INDEX_URL=
-# Optional Debian apt mirror for the build-time toolchain install (China /
-# corporate-restricted networks where deb.debian.org crawls or stalls).
-# Pass the mirror HOST only — the image's /debian path components are kept, so
-# APT_MIRROR=mirrors.tuna.tsinghua.edu.cn yields mirrors.tuna.../debian.
-# Default empty → keep stock deb.debian.org sources. Examples:
-#   APT_MIRROR=mirrors.tuna.tsinghua.edu.cn
-#   APT_MIRROR=mirrors.aliyun.com
+# Debian mirror HOST only. The image's /debian path is kept, so
+# APT_MIRROR=mirrors.tuna.tsinghua.edu.cn stays mirrors.tuna.../debian.
 ARG APT_MIRROR=
-# Optional npm registry mirror for build-time installs (npm install -g / npm ci).
-# Default empty → keep stock registry.npmjs.org. Example:
-#   NPM_REGISTRY=registry.npmmirror.com
-# Mirrors are build-time only (per-command flags); the shipped image keeps no
-# mirror config, so runtime behavior on customer networks is unchanged.
+# npm registry host, without a scheme. Example: registry.npmmirror.com
+# Mirror choices are build-time only. The shipped image keeps no mirror config.
 ARG NPM_REGISTRY=
 
 ENV NODE_ENV=production \
@@ -68,19 +59,10 @@ WORKDIR /app
 
 # python3/make/g++ : fallback compile for native addons (better-sqlite3 via node-gyp)
 # when prebuild-install cannot reach GitHub release assets (restricted networks).
-RUN set -eux; \
-  if [ -n "${APT_MIRROR}" ]; then \
-    if [ -f /etc/apt/sources.list.d/debian.sources ]; then \
-      sed -i "s|deb.debian.org|${APT_MIRROR}|g" /etc/apt/sources.list.d/debian.sources; \
-    else \
-      sed -i "s|deb.debian.org|${APT_MIRROR}|g" /etc/apt/sources.list; \
-    fi; \
-  fi; \
-  apt-get update \
-  && apt-get install -y --no-install-recommends bash ca-certificates curl git tini python3 make g++ \
-  && rm -rf /var/lib/apt/lists/*
+COPY scripts/runtime/docker-build-mirrors.sh /tmp/docker-build-mirrors.sh
+RUN sh /tmp/docker-build-mirrors.sh apt-install bash ca-certificates curl git tini python3 make g++
 
-RUN npm install -g "@kaelio/ktx@${KTX_VERSION}" ${NPM_REGISTRY:+--registry="https://${NPM_REGISTRY}"}
+RUN sh /tmp/docker-build-mirrors.sh npm install -g "@kaelio/ktx@${KTX_VERSION}"
 
 # StarRocks / MySQL-protocol engines may reject SET SESSION max_execution_time (P0-1/P0-2).
 COPY scripts/runtime/patch-ktx-mysql-starrocks-compat.js /tmp/patch-ktx-mysql-starrocks-compat.js
@@ -118,13 +100,13 @@ RUN set -eux; \
   rm /tmp/uv.tar.gz; \
   chown -R lucy:lucy /home/lucy/.ktx
 
-RUN su lucy -s /bin/bash -c 'ktx admin runtime install --yes --feature core'
+RUN sh /tmp/docker-build-mirrors.sh ktx-runtime
 
 COPY package.json package-lock.json ./
-RUN npm ci --include=dev ${NPM_REGISTRY:+--registry="https://${NPM_REGISTRY}"}
+RUN sh /tmp/docker-build-mirrors.sh npm ci --include=dev
 
 COPY webui/package.json webui/package-lock.json ./webui/
-RUN cd webui && npm ci --include=dev ${NPM_REGISTRY:+--registry="https://${NPM_REGISTRY}"}
+RUN sh /tmp/docker-build-mirrors.sh npm --prefix /app/webui ci --include=dev
 
 COPY . .
 
@@ -133,7 +115,15 @@ COPY . .
 # contain internal test DBs and private ACL. Demo stacks override
 # LUCY_TEMPLATE_ROOT to examples/*/project-template instead.
 # Bake product version into the WebUI bundle (sidebar) and keep ENV for /api/health.
-RUN cd webui \
+# Stamp the source commit before the bundle build so the sidebar and /api/health
+# read the same identity. The stamp is a file, not an environment variable.
+# Declared here, after the install layers, so a new commit does not rebuild apt,
+# npm, or the KTX runtime. Do not copy these into ENV.
+ARG LUCY_GIT_SHA=
+ARG LUCY_GIT_DIRTY=
+RUN rm -f /tmp/docker-build-mirrors.sh \
+  && node scripts/release/lucy-build-revision.mjs \
+  && cd webui \
   && LUCY_VERSION="${LUCY_VERSION}" VITE_LUCY_VERSION="${LUCY_VERSION}" npm run build \
   && cd /app \
   && mkdir -p /app/project-template/webui /app/project-template/semantic-layer /app/project-template/skills /app/project-template/wiki \

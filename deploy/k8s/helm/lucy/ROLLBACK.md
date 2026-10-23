@@ -7,7 +7,20 @@
 - Wrong image digest was deployed under a reused mutable tag.
 - v1/v2 package upgrade failed — roll back to last known-good revision, then plan v3 retry.
 
-## Quick rollback
+## Lucy 2.0 authentication migration
+
+Use the instance directory's filled `RECOVERY.md` (template at package-root
+`examples/RECOVERY.open-mode.md`). It includes access isolation, original image/revision and
+backup validation, failed-state preservation, full PVC restore with numeric ownership, rollback,
+and security/business verification. Keep `.deployment/baseline.json`, `baseline-values.json`,
+`initial-backup.json`, and the original `backup-*.tgz`. An existing initial backup is never replaced
+by a retry against the candidate version.
+
+Helm rollback alone leaves the new admins and security database on the PVC. Reopening an old
+open-mode service requires explicit review of the access boundary and any later permission/token
+revocations that the old snapshot would undo.
+
+## Helm rollback (after the volume recovery decision)
 
 ```bash
 helm history lucy-starrocks -n lucy-test
@@ -72,7 +85,9 @@ Common failure signatures:
 ## PVC and data safety
 
 Rollback **does not** delete the PVC or `/data/lucy` contents. Tokens, semantic layer,
-wiki, and ACL config should remain intact.
+wiki, and ACL config should remain intact. It also does not undo `admins.yaml` or
+`.ktx-ui/security.sqlite` written by a 2.0 upgrade. Restore the quiesced PVC backup
+to return to the old open-mode disk.
 
 **Do not run** unless intentionally resetting the environment:
 

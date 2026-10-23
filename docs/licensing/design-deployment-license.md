@@ -6,7 +6,7 @@
 | 文档类型 | Design |
 | 版本 | v1.0 |
 | 撰写日期 | 2026-08-27 |
-| 状态 | 实施中 |
+| 状态 | 归档。2026-10-18 起不再指导交付。[Spec 175](../../webui/docs/175-suspend-deployment-license-spec.md) v0.2 已实现：许可实现、签发脚本和 `license.yaml` 删除。工单 WO-202610-26 |
 | 适用范围 | 企业私有化交付的部署许可、激活码签发与运行时 enforcement |
 
 ---

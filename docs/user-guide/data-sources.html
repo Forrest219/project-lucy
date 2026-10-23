@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | 数据源接入 |
 | 文档类型 | Other |
-| 版本 | v1.0 |
-| 撰写日期 | 2026-06-20 |
+| 版本 | 2.0.0 |
+| 撰写日期 | 2026-06-20；2.0.0 更新 2026-10-20（统一品牌叫法与术语、补浏览器翻译防御、修跨页链接与文档骨架） |
 | 撰写人 | Claude |
 | 委托人 | project-lucy 团队 |
 | 基于材料 | Lucy 数据源接入规范 |
@@ -16,7 +16,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>数据源接入 · Lucy 帮助文档</title>
+<title translate="no" class="notranslate">数据源接入 · Lucy 帮助文档</title>
 <link rel="stylesheet" href="assets/user-guide.css">
 </head>
 <body>
@@ -27,6 +27,8 @@
       <p class="nav-title">开始</p>
       <a class="nav-link" href="index.html">帮助中心首页</a>
       <a class="nav-link" href="product-intro.html">产品介绍</a>
+      <a class="nav-link" href="lucy-architecture-diagram.html">架构总览</a>
+      <a class="nav-link" href="lucy-docs-flows.html">摄取与服务</a>
       <a class="nav-link" href="getting-started.html">5 分钟理解 Lucy</a>
       <a class="nav-link" href="concepts.html">核心概念</a>
     </div>
@@ -38,45 +40,50 @@
     </div>
     <div class="nav-group">
       <p class="nav-title">管理员指南</p>
-      <a class="nav-link" href="quickstart-admin.html">快速部署 <span class="wip">WIP</span></a>
-      <a class="nav-link active" href="data-sources.html">数据源接入 <span class="wip">WIP</span></a>
-      <a class="nav-link" href="permissions.html">权限与 ACL <span class="wip">WIP</span></a>
-      <a class="nav-link" href="webui-guide.html">KTX WebUI</a>
+      <a class="nav-link" href="quickstart-admin.html">快速部署</a>
+      <a class="nav-link active" href="data-sources.html">数据源接入</a>
+      <a class="nav-link" href="permissions.html">权限与 ACL</a>
+      <a class="nav-link" href="webui-guide.html">WebUI 指南</a>
     </div>
     <div class="nav-group">
       <p class="nav-title">治理与安全</p>
       <a class="nav-link" href="trust.html">可信机制</a>
-      <a class="nav-link" href="eval-meta-governance-training.html">Eval 培训</a>
-      <a class="nav-link" href="skills.html">Skill 管理 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="eval-meta-governance-training.html">质量评测培训</a>
+      <a class="nav-link" href="skills.html">Skill 管理</a>
     </div>
     <div class="nav-group">
       <p class="nav-title">参考</p>
-      <a class="nav-link" href="mcp-reference.html">MCP 接入参考 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="mcp-reference.html"><span translate="no" class="notranslate">MCP</span> 接入参考</a>
       <a class="nav-link" href="glossary.html">术语表</a>
-      <a class="nav-link" href="release-notes.html">更新日志 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="release-notes.html">更新日志</a>
     </div>
   </aside>
   <main class="content">
     <header class="hero">
       <span class="eyebrow">Admin Guide</span>
-      <h1>连接你的数据源</h1>
-      <p class="lead">Lucy 支持主流企业数据库。客户 headless 部署中，数据库连接、表清单、语义层、Wiki 和 Eval 都由 <code>customer-config/</code> 配置包持续维护。</p>
+      <h1>数据源接入与支持的数据库</h1>
+      <p class="lead">Lucy 支持主流企业数据库。客户 headless 部署中，数据库连接、表清单、语义层、Wiki 和质量评测都由 <code class="notranslate" translate="no">customer-config/</code> 配置包持续维护。</p>
     </header>
 
     <section>
       <h2>支持的数据库</h2>
-      <table>
-        <thead>
-          <tr><th>数据库</th><th>版本要求</th><th>连接协议</th><th>备注</th></tr>
-        </thead>
-        <tbody>
-          <tr><td>MySQL</td><td>8.0+</td><td>mysql2</td><td>推荐，完整测试覆盖</td></tr>
-          <tr><td>PostgreSQL</td><td>13+</td><td>pg</td><td>支持</td></tr>
-          <tr><td>Oracle</td><td>19c+</td><td>oracledb</td><td>需额外安装 Oracle Instant Client</td></tr>
-          <tr><td>StarRocks</td><td>待 live certification</td><td>mysql2</td><td>R1 P1 gated support；兼容 MySQL 协议，未进入 release verified matrix</td></tr>
-          <tr><td>更多</td><td>—</td><td>—</td><td>进行中，联系支持团队</td></tr>
-        </tbody>
-      </table>
+      <p>WebUI 与 <code class="notranslate" translate="no">ktx.yaml</code> 共用同一套 driver，共 6 种：<code class="notranslate" translate="no">mysql</code>、<code class="notranslate" translate="no">postgres</code>、<code class="notranslate" translate="no">sqlserver</code>、<code class="notranslate" translate="no">oracle</code>、<code class="notranslate" translate="no">sqlite</code>、<code class="notranslate" translate="no">athena</code>。</p>
+      <div class="ref-table-wrap">
+        <table>
+          <thead>
+            <tr><th>数据库</th><th>driver</th><th>默认端口</th><th>备注</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>MySQL</td><td><code class="notranslate" translate="no">mysql</code></td><td>3306</td><td>推荐，完整测试覆盖</td></tr>
+            <tr><td>PostgreSQL</td><td><code class="notranslate" translate="no">postgres</code></td><td>5432</td><td>支持</td></tr>
+            <tr><td>SQL Server</td><td><code class="notranslate" translate="no">sqlserver</code></td><td>1433</td><td>支持</td></tr>
+            <tr><td>Oracle</td><td><code class="notranslate" translate="no">oracle</code></td><td>1521</td><td>需额外安装 Oracle Instant Client</td></tr>
+            <tr><td>SQLite</td><td><code class="notranslate" translate="no">sqlite</code></td><td>—</td><td>文件型数据库，无需端口</td></tr>
+            <tr><td>Amazon Athena</td><td><code class="notranslate" translate="no">athena</code></td><td>—</td><td>使用当前环境的 AWS 凭证，不保存数据库密码</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>StarRocks 与 Apache Doris 在 WebUI 中也作为可选数据库类型提供，但它们复用 <code class="notranslate" translate="no">mysql</code> driver、走 MySQL 协议，因此不单列为 driver。</p>
     </section>
 
     <section>
@@ -84,13 +91,13 @@
       <p>强烈建议为 Lucy 创建专用只读账号，不要使用具有写权限的数据库账号。</p>
 
       <h3>MySQL</h3>
-      <pre>-- 创建只读用户
+      <pre class="notranslate" translate="no">-- 创建只读用户
 CREATE USER 'lucy_readonly'@'%' IDENTIFIED BY '&lt;strong-password&gt;';
 GRANT SELECT ON your_database.* TO 'lucy_readonly'@'%';
 FLUSH PRIVILEGES;</pre>
 
       <h3>PostgreSQL</h3>
-      <pre>-- 创建只读用户
+      <pre class="notranslate" translate="no">-- 创建只读用户
 CREATE USER lucy_readonly WITH PASSWORD '&lt;strong-password&gt;';
 GRANT CONNECT ON DATABASE your_database TO lucy_readonly;
 GRANT USAGE ON SCHEMA public TO lucy_readonly;
@@ -102,11 +109,11 @@ GRANT SELECT ON ALL TABLES IN SCHEMA public TO lucy_readonly;</pre>
     </section>
 
     <section>
-      <h2>ktx.yaml 配置格式</h2>
-      <p>在 <code>customer-config/ktx.yaml</code> 中配置连接。密码不要写入 YAML 明文，统一使用 <code>file:</code> 引用容器内 secret 文件。</p>
+      <h2><span translate="no" class="notranslate">ktx.yaml</span> 配置格式</h2>
+      <p>连接写在 <code class="notranslate" translate="no">ktx.yaml</code> 里。客户交付包里，配置文件位于 <code class="notranslate" translate="no">customer-config/ktx.yaml</code>，容器内映射为 <code class="notranslate" translate="no">/data/lucy/ktx.yaml</code>；文件名始终是 <code class="notranslate" translate="no">ktx.yaml</code>，目录前缀只是交付包里的存放位置。密码不要写入 YAML 明文，统一使用 <code class="notranslate" translate="no">file:</code> 引用容器内 secret 文件。</p>
 
-      <h3>MySQL / StarRocks（P1 gated）</h3>
-      <pre>connections:
+      <h3>MySQL / StarRocks（StarRocks 复用 <code class="notranslate" translate="no">mysql</code> driver）</h3>
+      <pre class="notranslate" translate="no">connections:
   customer-db:
     driver: mysql
     readonly: true
@@ -121,7 +128,7 @@ GRANT SELECT ON ALL TABLES IN SCHEMA public TO lucy_readonly;</pre>
       - analytics</pre>
 
       <h3>PostgreSQL</h3>
-      <pre>connections:
+      <pre class="notranslate" translate="no">connections:
   customer-postgres:
     driver: postgres
     readonly: true
@@ -138,9 +145,9 @@ GRANT SELECT ON ALL TABLES IN SCHEMA public TO lucy_readonly;</pre>
 
     <section>
       <h2>表与语义层持续配置</h2>
-      <p><code>customer-config/semantic-layer/&lt;connection&gt;/_schema/</code> 保存物理表 manifest，描述表名、字段、类型和基础描述；<code>customer-config/semantic-layer/&lt;connection&gt;/&lt;source&gt;.yaml</code> 保存人工 overlay，维护 grain、measures、segments、joins 和业务解释。</p>
-      <p>每次新增表、指标、Join 或 Wiki 口径后，运行配置包检查、reindex 和 validate，确保 Agent 能检索到最新语义：</p>
-      <pre>npm run smoke:p0:headless-config -- --root customer-config --require-secret-files
+      <p><code class="notranslate" translate="no">customer-config/semantic-layer/&lt;connection&gt;/_schema/</code> 保存物理表 <span translate="no" class="notranslate">Schema Manifest</span>，描述表名、字段、类型和基础描述；<code class="notranslate" translate="no">customer-config/semantic-layer/&lt;connection&gt;/&lt;source&gt;.yaml</code> 保存人工 overlay，维护 grain、measures、segments、joins 和业务解释。</p>
+      <p>每次新增表、指标、关联或业务 Wiki 口径后，运行配置包检查、reindex 和 validate，确保 <span translate="no" class="notranslate">Agent</span> 能检索到最新语义：</p>
+      <pre class="notranslate" translate="no">npm run smoke:p0:headless-config -- --root customer-config --require-secret-files
 docker compose -f docker-compose.yml -f deploy/compose/docker-compose.customer-config.yml exec lucy \
   ktx --project-dir /data/lucy admin reindex --force --output json
 docker compose -f docker-compose.yml -f deploy/compose/docker-compose.customer-config.yml exec lucy \
@@ -157,7 +164,7 @@ docker compose -f docker-compose.yml -f deploy/compose/docker-compose.customer-c
 
       <div class="callout">
         <strong>能同时连多个数据库吗？</strong>
-        <p>可以。每个数据库作为独立 connection 配置，语义层文件按 <code>semantic-layer/&lt;connection&gt;/</code> 目录隔离。</p>
+        <p>可以。每个数据库作为独立 connection 配置，语义层文件按 <code class="notranslate" translate="no">semantic-layer/&lt;connection&gt;/</code> 目录隔离。</p>
       </div>
     </section>
 

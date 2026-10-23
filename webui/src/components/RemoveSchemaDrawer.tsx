@@ -4,8 +4,9 @@ import { toast } from "sonner";
 import { apiPost } from "../lib/apiClient";
 import { queryKeys } from "../lib/queryKeys";
 import { DiffViewer } from "./DiffViewer";
-import { CatalogReloadButton } from "./catalog";
+import { CatalogReloadButton, CatalogReloadResultPanel } from "./catalog";
 import type {
+  CatalogReloadRun,
   ConnectionInfo,
   RemoveSchemaPreview,
   RemoveSchemaResult
@@ -24,6 +25,8 @@ export function RemoveSchemaDrawer({ connection, schema, open, onClose }: Remove
   const [deleteOverlays, setDeleteOverlays] = useState(false);
   const [step, setStep] = useState<"preview" | "submitting" | "success" | "fatal">("preview");
   const [fatalMessage, setFatalMessage] = useState<string | null>(null);
+  const [reloadRun, setReloadRun] = useState<CatalogReloadRun | null>(null);
+  const [reloadError, setReloadError] = useState<string | null>(null);
 
   const previewMutation = useMutation({
     mutationFn: () =>
@@ -73,6 +76,8 @@ export function RemoveSchemaDrawer({ connection, schema, open, onClose }: Remove
     setDeleteOverlays(false);
     setStep("preview");
     setFatalMessage(null);
+    setReloadRun(null);
+    setReloadError(null);
     previewMutation.reset();
     writeMutation.reset();
   }
@@ -89,6 +94,8 @@ export function RemoveSchemaDrawer({ connection, schema, open, onClose }: Remove
     setDeleteOverlays(false);
     setStep("preview");
     setFatalMessage(null);
+    setReloadRun(null);
+    setReloadError(null);
     previewMutation.reset();
     writeMutation.reset();
     previewMutation.mutate();
@@ -301,8 +308,24 @@ export function RemoveSchemaDrawer({ connection, schema, open, onClose }: Remove
             <p className="text-sm notranslate" translate="no">
               <code className="notranslate" translate="no">{schema}</code> 已从 <code className="notranslate" translate="no">{connection.id}</code> 配置中移除。
             </p>
+            {reloadRun ? (
+              <CatalogReloadResultPanel
+                run={reloadRun}
+                successLabel="本地目录已刷新"
+              />
+            ) : null}
+            {reloadError ? (
+              <div
+                className="pl-catalog-reload-error notranslate"
+                role="alert"
+                data-testid="remove-schema-reload-error"
+                translate="no"
+              >
+                本地目录刷新失败：{reloadError}
+              </div>
+            ) : null}
             <div className="pl-drawer-footer">
-              <button className="pl-btn pl-btn--ghost" onClick={close}>
+              <button className="pl-btn pl-btn--ghost" onClick={close} data-testid="remove-schema-done">
                 完成
               </button>
               <CatalogReloadButton
@@ -311,6 +334,17 @@ export function RemoveSchemaDrawer({ connection, schema, open, onClose }: Remove
                 pendingLabel="正在同步配置变更..."
                 variant="secondary"
                 testId="remove-schema-reload-catalog"
+                showCompletionLabel={false}
+                showInlineResult={false}
+                onReloadStart={() => setReloadError(null)}
+                onReloadComplete={(run) => {
+                  setReloadRun(run);
+                  setReloadError(null);
+                }}
+                onReloadError={(error) => {
+                  setReloadRun(null);
+                  setReloadError(error.message);
+                }}
               />
             </div>
           </section>

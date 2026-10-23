@@ -25,6 +25,11 @@ export function decisionReasonLabel(code: string | null | undefined): string {
   if (code === "invalid_arguments:lucy_query:filters_serialized_json_invalid") return "筛选条件格式无效";
   if (code === "invalid_arguments:lucy_query:order_by_conflict") return "排序条件互相冲突";
   if (code.startsWith("invalid_arguments:")) return "工具参数不符合要求";
+  if (code === "completeness_denominator_required") return "完整度度量缺少分母";
+  if (code === "aggregate_of_aggregate") return "不能对聚合结果再聚合";
+  if (code === "ambiguous_field") return "字段名在多个表中出现";
+  if (code === "source_not_found") return "找不到对应的数据来源";
+  if (code === "count_without_source") return "计数缺少数据来源";
   return "未识别裁决原因";
 }
 

@@ -12,6 +12,7 @@ import {
   type SkillWriteInput
 } from "../skills/writer.js";
 import { resolveProjectRoot } from "../project.js";
+import { trustedActorFromRequest } from "../security/request-actor.js";
 import { resolveMcpEndpoint } from "../runtime-config.js";
 import type { SkillClientTarget, SkillWithValidation } from "../skills/types.js";
 
@@ -72,7 +73,7 @@ export function registerSkillsRoutes(app: FastifyInstance): void {
   app.post("/api/skills", async (req: FastifyRequest<{ Body: SkillWriteInput }>, reply: FastifyReply) => {
     try {
       const projectRoot = await resolveProjectRoot();
-      const skill = await createSkillFile(projectRoot, req.body ?? {});
+      const skill = await createSkillFile(projectRoot, req.body ?? {}, trustedActorFromRequest(req));
       return reply.status(201).send({ ok: true, skill });
     } catch (err) {
       return writeErrorReply(reply, err);
@@ -219,7 +220,13 @@ export function registerSkillsRoutes(app: FastifyInstance): void {
     ) => {
       try {
         const projectRoot = await resolveProjectRoot();
-        const skill = await updateSkillFile(projectRoot, req.params.domain, req.params.name, req.body ?? {});
+        const skill = await updateSkillFile(
+          projectRoot,
+          req.params.domain,
+          req.params.name,
+          req.body ?? {},
+          trustedActorFromRequest(req)
+        );
         return reply.send({ ok: true, skill });
       } catch (err) {
         return writeErrorReply(reply, err);
@@ -263,7 +270,8 @@ export function registerSkillsRoutes(app: FastifyInstance): void {
           projectRoot,
           req.params.domain,
           req.params.name,
-          req.body?.expected_version
+          req.body?.expected_version,
+          trustedActorFromRequest(req)
         );
         return reply.send({ ok: true, ...result });
       } catch (err) {

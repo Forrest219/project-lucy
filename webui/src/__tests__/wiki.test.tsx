@@ -427,6 +427,9 @@ function buildFetchMock(
         })
       );
     }
+    if (url === "/api/admin/roles?includeTemplates=false") {
+      return new Response(JSON.stringify({ ok: true, data: { roles: [{ id: "analyst" }, { id: "finance_reader" }] } }));
+    }
     const pageMatch = url.match(/^\/api\/wiki\/(.+)$/);
     if (pageMatch && (!init || init.method === undefined)) {
       const key = decodeURIComponent(pageMatch[1]);
@@ -448,7 +451,9 @@ function buildFetchMock(
               sl_refs: page.slRefs
             },
             content: `# ${page.summary}\n\nDetailed notes here.`,
-            rawMarkdown: `---\nsummary: ${page.summary}\ntags:\n  - ${page.tags[0]}\nsl_refs:\n  - ${page.slRefs[0]}\n---\n# ${page.summary}\n\nDetailed notes here.\n`
+            rawMarkdown: `---\nsummary: ${page.summary}\ntags:\n  - ${page.tags[0]}\nsl_refs:\n  - ${page.slRefs[0]}\n---\n# ${page.summary}\n\nDetailed notes here.\n`,
+            file_version: `sha256:fixture-${page.key}`,
+            acl: { state: "missing" }
           }
         })
       );
@@ -1289,6 +1294,42 @@ describe("WikiEditor Save Preflight (P0)", () => {
     expect(screen.getByTestId("wiki-layout")).toHaveAttribute("data-mode", "read");
   });
 
+  it("saves with the loaded file_version and the chosen allowed_roles (Spec §4.3)", async () => {
+    const fetchMock = buildFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    renderWiki("/wiki?key=global%2Fsuperstore-analysis-playbook.md");
+
+    fireEvent.click(await screen.findByTestId("wiki-edit-button"));
+    const field = await screen.findByTestId("wiki-acl-field");
+    expect(within(field).getByLabelText("无人可见")).toBeChecked();
+    fireEvent.click(within(field).getByLabelText("指定角色"));
+    fireEvent.click(await within(field).findByLabelText("analyst"));
+    fireEvent.click(await screen.findByTestId("wiki-save-preflight-button"));
+
+    const confirm = await screen.findByTestId("wiki-save-preflight-confirm");
+    await waitFor(() => expect(confirm).not.toBeDisabled());
+    fireEvent.click(confirm);
+    await waitFor(() => {
+      const save = fetchMock.mock.calls.find((call) => call[1]?.method === "PUT" && JSON.parse(String(call[1]?.body)).dryRun === false);
+      expect(save).toBeTruthy();
+      const body = JSON.parse(String(save![1]?.body));
+      expect(body.frontmatter.allowed_roles).toEqual(["analyst"]);
+      expect(body.expected_version).toBe("sha256:fixture-global/superstore-analysis-playbook.md");
+    });
+  });
+
+  it("warns in the preflight when nobody is authorized and keeps the wildcard behind a confirmation", async () => {
+    vi.stubGlobal("fetch", buildFetchMock());
+    renderWiki("/wiki?key=global%2Fsuperstore-analysis-playbook.md");
+    fireEvent.click(await screen.findByTestId("wiki-edit-button"));
+    const field = await screen.findByTestId("wiki-acl-field");
+    fireEvent.click(within(field).getByLabelText("所有角色可见"));
+    expect(within(field).getByTestId("wiki-acl-field-all-apply")).toBeDisabled();
+    fireEvent.click(await screen.findByTestId("wiki-save-preflight-button"));
+    const findings = await screen.findByTestId("wiki-save-preflight-findings");
+    expect(findings).toHaveTextContent("未授权任何角色");
+  });
+
   it("Cmd/Ctrl+S opens the Save Preflight without writing dryRun:false", async () => {
     const fetchMock = buildFetchMock();
     vi.stubGlobal("fetch", fetchMock);
@@ -1946,9 +1987,11 @@ describe("WikiEditor directory and document governance (M56)", () => {
     const tree = await screen.findByTestId("wiki-tree");
     fireEvent.click(await within(tree).findByRole("button", { name: "global 目录操作" }));
     const deleteItem = await within(tree).findByTestId("wiki-tree-delete-directory-global");
-    expect(deleteItem).toBeDisabled();
     expect(deleteItem).toHaveAttribute("aria-disabled", "true");
-    expect(deleteItem.getAttribute("title") ?? "").toContain("请先移动或删除内容");
+    expect(deleteItem).toHaveTextContent("请先移动或删除内容");
+    fireEvent.click(deleteItem);
+    expect(within(tree).queryByTestId("wiki-tree-delete-directory-global")).not.toBeInTheDocument();
+    expect(fetchMock.mock.calls.some((call) => call[1]?.method === "DELETE")).toBe(false);
   });
 
   it("renames a directory through the WikiTree menu (UX-WIKI-044 / Spec 109)", async () => {

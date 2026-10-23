@@ -79,6 +79,12 @@ type InterfaceUsageResponse = {
   visitorCount: number;
   activeMenuCount: number;
   unmappedViews: number;
+  pageViewSeries?: {
+    bucket: "hour" | "day";
+    since: string;
+    until: string;
+    points: Array<{ start: string; end: string; pageViews: number }>;
+  };
   groups: InterfaceRankRow[];
   menus: InterfaceRankRow[];
   pages: InterfaceRankRow[];
@@ -102,6 +108,10 @@ function assetCardState(
 
 function windowLabel(hours: WindowHours): string {
   return hours === 24 ? "近 24 小时" : "近 7 天";
+}
+
+function pageViewSeriesLabel(windowText: string, bucket: "hour" | "day" | undefined): string {
+  return `${windowText}页面访问，${windowText}，按${bucket === "hour" ? "小时" : "天"}`;
 }
 
 /** Relative/absolute label aligned with `/overview` freshness badge. */
@@ -399,7 +409,7 @@ export function GovernanceOverview() {
       />
 
       <div
-        className="pl-segmented-control pl-segmented-control--cols-2 w-fit"
+        className="pl-admin-tabbar"
         role="tablist"
         aria-label="使用视图"
         data-testid="governance-usage-view"
@@ -407,8 +417,10 @@ export function GovernanceOverview() {
         <button
           type="button"
           role="tab"
-          className={view === "access" ? "pl-segmented-control-item pl-segmented-control-item--active" : "pl-segmented-control-item"}
+          id="governance-tab-access"
+          className={view === "access" ? "pl-admin-tab pl-admin-tab--active" : "pl-admin-tab"}
           aria-selected={view === "access"}
+          aria-controls="governance-usage-panel"
           data-testid="governance-view-access"
           onClick={() => setView("access")}
         >
@@ -417,14 +429,23 @@ export function GovernanceOverview() {
         <button
           type="button"
           role="tab"
-          className={view === "interface" ? "pl-segmented-control-item pl-segmented-control-item--active" : "pl-segmented-control-item"}
+          id="governance-tab-interface"
+          className={view === "interface" ? "pl-admin-tab pl-admin-tab--active" : "pl-admin-tab"}
           aria-selected={view === "interface"}
+          aria-controls="governance-usage-panel"
           data-testid="governance-view-interface"
           onClick={() => setView("interface")}
         >
           界面使用
         </button>
       </div>
+
+      <div
+        className="grid gap-4"
+        role="tabpanel"
+        id="governance-usage-panel"
+        aria-labelledby={view === "interface" ? "governance-tab-interface" : "governance-tab-access"}
+      >
 
       {view === "interface" ? (
         <InterfaceUsagePanel
@@ -436,7 +457,7 @@ export function GovernanceOverview() {
 
       {view === "access" ? <>
       <p className="text-sm text-fg-muted">
-        调用是否报错、被拒绝或变慢，到调用监控查看。调用监控的窗口是近 1 小时或近 24 小时。{" "}
+        调用是否报错、被拒绝或变慢，到调用监控查看。{" "}
         <Link className="pl-link" to="/ops/calls?range=24h" data-testid="usage-call-monitor-link">
           打开调用监控
         </Link>
@@ -553,6 +574,7 @@ export function GovernanceOverview() {
         </section>
       </div>
       </> : null}
+      </div>
     </div>
   );
 }
@@ -587,6 +609,9 @@ function InterfaceUsagePanel({
           help={`当前时间窗（${windowText}）内已记录的页面打开次数。`}
           helpId="interface-page-views"
           testId="metric-interface-page-views"
+          series={data.pageViewSeries?.points.map((point) => point.pageViews)}
+          seriesLabel={pageViewSeriesLabel(windowText, data.pageViewSeries?.bucket)}
+          seriesTestId="usage-sparkline-page-views"
         />
         <MetricCard
           label={<span>{windowText}访问账户</span>}

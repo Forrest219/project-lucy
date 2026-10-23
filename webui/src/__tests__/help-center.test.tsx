@@ -4,8 +4,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
 import { HelpCenter } from "../pages/HelpCenter";
 import { navGroups } from "../app/navigation";
+import { slugifyHeading } from "../lib/wiki";
+import type { HelpTocItem } from "../lib/types";
+import { LEGACY_SECTION_IDS, parseHelpToc, resolveHelpAppRoot } from "../../server/help";
 
 function renderHelp(path = "/help") {
   const client = new QueryClient({
@@ -32,9 +37,9 @@ function renderHelp(path = "/help") {
               { id: "faq-agent-integration", level: 3, title: "0.3 面向接入协作者" },
               { id: "system-overview", level: 2, title: "1. 系统概述与架构拓扑" },
               { id: "quick-start", level: 2, title: "2. 快速上手" },
-              { id: "deployment-checklist", level: 3, title: "3.1 部署向导与上线检查" },
+              { id: "deployment-checklist", level: 3, title: "3.1 运行状态 · 系统概览与上线检查" },
               { id: "overview-action-required", level: 4, title: "系统概览待处理事项" },
-              { id: "database-connections", level: 3, title: "3.2 数据库接入" },
+              { id: "database-connections", level: 3, title: "3.2 数据接入 · 连接 / Schema / 表范围" },
               {
                 id: "database-connection-boundary",
                 level: 4,
@@ -56,9 +61,9 @@ function renderHelp(path = "/help") {
                 title: "Agent 可见性与 ACL 同步"
               },
               { id: "connection-overview-metrics", level: 4, title: "连接概览指标说明" },
-              { id: "semantic-layer", level: 3, title: "3.3 语义层维护" },
+              { id: "semantic-layer", level: 3, title: "3.3 业务上下文 · 语义层" },
               { id: "semantic-status-and-enabled-status", level: 4, title: "语义状态与启用表范围状态" },
-              { id: "admin-governance", level: 3, title: "3.5 访问治理 Admin" },
+              { id: "admin-governance", level: 3, title: "3.5 访问治理 · 角色 / Agent / Token 心智" },
               {
                 id: "admin-role-agent-token-guide",
                 level: 4,
@@ -74,8 +79,8 @@ function renderHelp(path = "/help") {
                 level: 4,
                 title: "丢失管理员账号或密码时如何恢复（break-glass）"
               },
-              { id: "eval", level: 3, title: "3.6 质量评测 Eval" },
-              { id: "yaml-delivery-runbook", level: 3, title: "3.7 YAML 文件规范与交付验收" },
+              { id: "eval", level: 3, title: "3.6 质量评测" },
+              { id: "yaml-delivery-runbook", level: 3, title: "3.7 YAML 规范与交付验收" },
               { id: "yaml-type-overview", level: 3, title: "3.7.1 YAML 类型总览" },
               { id: "yaml-delivery-checklist", level: 3, title: "3.7.6 GO / NO-GO 交付 checklist" },
               { id: "mcp-integration", level: 2, title: "4. Agent / 客户端接入指南" },
@@ -97,8 +102,8 @@ function renderHelp(path = "/help") {
               "- [1. 系统概述与架构拓扑](#1-系统概述与架构拓扑)",
               "- [2. 快速上手](#2-快速上手)",
               "- [3. 功能模块操作指南](#3-功能模块操作指南)",
-              "  - [3.1 部署向导与上线检查](#31-部署向导与上线检查)",
-              "  - [3.2 数据库接入](#32-数据库接入)",
+              "  - [3.1 运行状态 · 系统概览与上线检查](#31-运行状态--系统概览与上线检查)",
+              "  - [3.2 数据接入 · 连接 / Schema / 表范围](#32-数据接入--连接--schema--表范围)",
               "",
               "## 0. 常见问题速查",
               "",
@@ -110,16 +115,16 @@ function renderHelp(path = "/help") {
               "",
               "| 问题 | 快速答案 | 详见 |",
               "| --- | --- | --- |",
-              "| 我在哪里新建数据库连接？ | `WebUI` 不新建物理连接；先在 `ktx.yaml` 和 secret 文件声明连接，再回 `WebUI` 管理已声明连接。 | [3.2 数据库接入](#32-数据库接入)、[WebUI 与 ktx.yaml 的职责边界](#webui-与-ktxyaml-的职责边界) |",
+              "| 我在哪里新建数据库连接？ | `WebUI` 不新建物理连接；先在 `ktx.yaml` 和 secret 文件声明连接，再回 `WebUI` 管理已声明连接。 | [3.2 数据接入 · 连接 / Schema / 表范围](#32-数据接入--连接--schema--表范围)、[WebUI 与 ktx.yaml 的职责边界](#webui-与-ktxyaml-的职责边界) |",
               "| 数据库密码应该放在哪里？ | 用 `file:`、`env:` 或 `Docker` secrets；不要把明文密码写进 `ktx.yaml`、文档、`commit message` 或聊天记录。 | [连接形态与配置字段](#连接形态与配置字段)、[5.2 ktx.yaml](#52-ktxyaml) |",
               "| 点了刷新本地目录，刷新后的表在哪里看？ | `/connections` 看 reload 状态，`/connections/whitelist` 看可纳入启用表范围的表，`WebUI` 首页 `/` 看已进入语义建模的表。 | [刷新本地目录](#刷新本地目录) |",
               "| 为什么提示“未发现本地 manifest”？ | `ktx.yaml` 声明了 `Schema` 或启用表范围，但本地 `semantic-layer/<conn>/_schema/<schema>.yaml` 缺失或未包含目标表。 | [6.1 为什么提示“未发现本地 manifest”？](#61-为什么提示未发现本地-manifest) |",
               "| `YAML` 改完后为什么 `Agent` 仍然搜不到新口径？ | `WebUI` 读文件即可看到；`KTX` / `MCP` 检索需要 `ktx admin reindex`，并且还要用 `sl read` 确认 `overlay` 已合并到目标 `source`。 | [6.3 配置文件改动后什么时候生效？](#63-配置文件改动后什么时候生效)、[3.7.6.2 KTX 合并与索引检查](#3762-ktx-合并与索引检查) |",
-              "| 我应该改 `manifest` 还是 `overlay`？ | 物理表结构和物理列描述在 `manifest`；`grain`、`measures`、`segments`、派生列和业务补丁在 `overlay`。 | [3.3 语义层维护](#33-语义层维护)、[3.7.1 YAML 类型总览](#371-yaml-类型总览) |",
+              "| 我应该改 `manifest` 还是 `overlay`？ | 物理表结构和物理列描述在 `manifest`；`grain`、`measures`、`segments`、派生列和业务补丁在 `overlay`。 | [3.3 业务上下文 · 语义层](#33-业务上下文--语义层)、[3.7.1 YAML 类型总览](#371-yaml-类型总览) |",
               "| 新增指标怎样才算可以交付？ | 不能只看 `reindex` 或单个 `sl validate`；必须通过静态检查、`sl read`、真实 query、`MCP smoke` 和最终 `GO / NO-GO` 门槛。 | [3.7.6 GO / NO-GO 交付 checklist](#376-go--no-go-交付-checklist) |",
-              "| 评测用例和运行历史在哪里？ | 用 `/eval/cases` 维护评测用例，用 `/eval/runs` 看运行历史，用 `/eval/monitor` 看趋势监控。 | [3.6 质量评测 Eval](#36-质量评测-eval) |",
+              "| 评测用例和运行历史在哪里？ | 用 `/eval/cases` 维护评测用例，用 `/eval/runs` 看运行历史，用 `/eval/monitor` 看趋势监控。 | [3.6 质量评测](#36-质量评测) |",
               "| `/catalog` 的「语义状态」和 `/connections/enabled-tables` 的「状态」有什么关系？ | 共用 `GET /api/sources` 的 `completion`。`/catalog` 展示四态完成度；启用表范围页先看 `enabled_tables`，再把非 `done` 收成「已启用，待补语义」。 | [语义状态与启用表范围状态](#语义状态与启用表范围状态)、[系统概览待处理事项](#系统概览待处理事项) |",
-              "| `/overview`「待处理事项」里「N 张表待补语义」怎么算？ | 按表计数：只统计已进入启用表范围（`enabled_tables`）且出现在本地 `Manifest` 的表。`N` = 这些表中 `completion !== done` 的数量；未启用的 `Manifest` 表不计入。`done` 需同时有表描述、`grain`、主键、全部非 `hidden` 列描述和至少一个 `measure`。 | [系统概览待处理事项](#系统概览待处理事项)、[3.3 语义层维护](#33-语义层维护) |",
+              "| `/overview`「待处理事项」里「N 张表待补语义」怎么算？ | 按表计数：只统计已进入启用表范围（`enabled_tables`）且出现在本地 `Manifest` 的表。`N` = 这些表中 `completion !== done` 的数量；未启用的 `Manifest` 表不计入。`done` 需同时有表描述、`grain`、主键、全部非 `hidden` 列描述和至少一个 `measure`。 | [系统概览待处理事项](#系统概览待处理事项)、[3.3 业务上下文 · 语义层](#33-业务上下文--语义层) |",
               "| 「待处理事项」其它条目分别统计什么？ | 只保留三类：待补语义、待发布文件、近 30 天无评测。待发布看 `/api/diff` 文件数；无评测看是否已有评测运行记录。计数为 0 不展示。近 7 天 `ACL` 拒绝不在首页展示，到 `/admin/audit` 或调用监控查看。 | [系统概览待处理事项](#系统概览待处理事项) |",
               "",
               "### 0.2 面向管理员",
@@ -128,8 +133,8 @@ function renderHelp(path = "/help") {
               "| --- | --- | --- |",
               "| 什么时候该建角色，什么时候该建 `Agent` / `Token`？ | 角色 = 可复用的权限边界；`Agent` = 要对审计负责的人/机器人；`Token` = 某台设备或某个客户端的接入凭证。先角色、再 `Agent`、最后签发 `Token`。 | [什么时候配置角色、Agent 和 Token](#什么时候配置角色agent-和-token) |",
               "| 同一人多台电脑要建几个 `Agent`？ | **一个** `Agent`，按设备或客户端各发一个 `Token`。只有权限边界不同时才拆成多个 `Agent`。 | [什么时候配置角色、Agent 和 Token](#什么时候配置角色agent-和-token) |",
-              "| `Agent` 返回 `Access denied` 时先查哪里？ | 先看客户端里的 `decision_reason`，再打开 `/admin/audit` 或查 `/api/admin/audit?outcome=denied`，对照 `role` 的连接、表和工具授权。 | [6.2 JSON-RPC Access denied / decision_reason 怎么查？](#62-json-rpc-access-denied--decisionreason-怎么查)、[3.5 访问治理 Admin](#35-访问治理-admin) |",
-              "| `expires_at` 到期后 `token` 会自动失效吗？ | 会。`MCP` Proxy 在鉴权时校验 `expires_at`（不再只是 `metadata`）；到期或不可解析的值一律视为未授权（401）。要提前下线可在 `Admin` 撤销 `token`；到期后仍建议撤销，避免配置残留。 | [3.5 访问治理 Admin](#35-访问治理-admin)、[6.5 MCP 返回 401](#65-mcp-返回-401) |",
+              "| `Agent` 返回 `Access denied` 时先查哪里？ | 先看客户端里的 `decision_reason`，再打开 `/admin/audit` 或查 `/api/admin/audit?outcome=denied`，对照 `role` 的连接、表和工具授权。 | [6.2 JSON-RPC Access denied / decision_reason 怎么查？](#62-json-rpc-access-denied--decisionreason-怎么查)、[3.5 访问治理 · 角色 / Agent / Token 心智](#35-访问治理--角色--agent--token-心智) |",
+              "| `expires_at` 到期后 `token` 会自动失效吗？ | 会。`MCP` Proxy 在鉴权时校验 `expires_at`（不再只是 `metadata`）；到期或不可解析的值一律视为未授权（401）。要提前下线可在 `Admin` 撤销 `token`；到期后仍建议撤销，避免配置残留。 | [3.5 访问治理 · 角色 / Agent / Token 心智](#35-访问治理--角色--agent--token-心智)、[6.5 MCP 返回 401](#65-mcp-返回-401) |",
               "| 问询记录和调用流水都能导出吗？ | 可以。`/admin/audit` 的「导出问询记录」是一问一行，「导出调用流水」是一调用一行；两者通过「问询 ID」关联。 | [问询记录与调用流水怎么选、怎么导出](#问询记录与调用流水怎么选怎么导出) |",
               "| 忘记 `WebUI` 管理员账号或密码怎么办？ | 自托管**不提供邮箱找回**。有其他所有者时由其重置；否则由能读写部署配置的人按 `break-glass` 清空 `admins.yaml` 后重新引导。 | [丢失管理员账号或密码时如何恢复（break-glass）](#丢失管理员账号或密码时如何恢复break-glass) |",
               "| 新连接什么时候对 `Agent` 可见？ | `ktx.yaml`、`manifest` / `overlay`、启用表范围、`KTX reindex`、`access.yaml` `role` / `ACL` 都就绪后才可见。 | [Agent 可见性与 ACL 同步](#agent-可见性与-acl-同步)、[新增数据库连接（运维 Runbook）](#新增数据库连接运维-runbook) |",
@@ -166,16 +171,17 @@ function renderHelp(path = "/help") {
               "| 质量评测 | 评测用例 | `/eval/cases` | 管理数据问答与语义质量的评测用例及预期结果。 |",
               "| 质量评测 | 运行历史 | `/eval/runs` | 查看评测运行记录、通过率、结果明细与失败诊断。 |",
               "| 质量评测 | 趋势监控 | `/eval/monitor` | 监控评测通过率、失败集中度与质量漂移趋势。 |",
+              "| 质量评测 | 现场提问 | `/eval/field-questions` | 审定访问日志里反复出现的业务问法，补问法后收成评测用例。 |",
               "| 质量评测 | 安全评测候选 | `/eval/security-candidates` | 从访问拒绝日志中提取权限与数据隔离场景，审定后转为安全评测用例。 |",
               "| 访问治理 | Agent | `/admin/agents` | 管理 `Agent` 身份、角色、`Token` 及数据访问边界。 |",
               "| 访问治理 | Token 凭据 | `/admin/tokens` | 全局查看、签发与定向吊销 `Agent` 访问凭据。 |",
               "| 访问治理 | 角色权限 | `/admin/roles` | 管理角色的数据库连接、数据表与 `MCP` 工具授权范围。 |",
               "| 访问治理 | 访问日志 | `/admin/audit` | 按问询和工具调用追溯 `Agent` 访问行为、权限裁决与执行耗时。 |",
-              "| 访问治理 | MCP 调试台 | `/admin/mcp-playground` | 预览 `Agent` 的 `MCP` 工具权限裁决，并执行受控接入试调。 |",
+              "| 访问治理 | MCP 调试台 | `/admin/mcp-playground` | 检查 `Agent` 能不能连上，或者能不能查某张表。 |",
               "| 访问治理 | 配置审计 | `/admin/config-audit` | 查看各类配置与内容资产的写入记录、变更内容和操作者。 |",
-              "| 系统设置 | 部署许可 | `/admin/license` | 输入激活码，管理本实例的 `Agent` 席位与部署许可有效期。 |",
               "| 系统设置 | 品牌外观 | `/admin/branding` | 配置客户 `Logo`、产品名称与品牌副标题。 |",
               "| 系统设置 | 登录账户 | `/admin/admins` | 管理 `WebUI` 登录账户，并配置所有者或运维角色。 |",
+              "| 系统设置 | 版本信息 | `/admin/version` | 查看产品版本、构建提交和随包 `KTX` 版本；有未提交改动时显示工作区状态。 |",
               "",
               "> 事实源唯一为 `webui/src/app/navigation.ts` 的 `navGroups`。",
               "",
@@ -185,7 +191,7 @@ function renderHelp(path = "/help") {
               "",
               "`ktx up` 启动依赖；`WebUI` 默认监听 `5173`，API 默认 `5174`，MCP 默认 `7879`。",
               "",
-              "### 3.1 部署向导与上线检查",
+              "### 3.1 运行状态 · 系统概览与上线检查",
               "",
               "| 步骤 | Ready 条件 | 检查方法 | 异常处理 |",
               "|---|---|---|---|",
@@ -195,7 +201,7 @@ function renderHelp(path = "/help") {
               "",
               "「待处理事项」按表计数：总数减去 `completion` 为 `done` 的表。",
               "",
-              "### 3.2 数据库接入",
+              "### 3.2 数据接入 · 连接 / Schema / 表范围",
               "",
               "WebUI 不负责新建物理数据库连接。新增连接的 host、port、database、username、password、driver 等字段由运维在 `ktx.yaml` 和 secret 文件中配置。",
               "",
@@ -223,7 +229,7 @@ function renderHelp(path = "/help") {
               "",
               "「已发现表数」统计本地 Schema Manifest 已读到的表，不是远端物理库实时表数。",
               "",
-              "### 3.3 语义层维护",
+              "### 3.3 业务上下文 · 语义层",
               "",
               "维护 manifest / overlay、启用表范围与 reindex。",
               "",
@@ -231,7 +237,7 @@ function renderHelp(path = "/help") {
               "",
               "`/catalog` 的「语义状态」直接显示 `completion`；启用表范围的「状态」再叠上 `enabled_tables`。",
               "",
-              "### 3.5 访问治理 Admin",
+              "### 3.5 访问治理 · 角色 / Agent / Token 心智",
               "",
               "在 `/admin` 维护 Agent / Role / Token / 审计。",
               "",
@@ -250,11 +256,11 @@ function renderHelp(path = "/help") {
               "",
               "自托管不提供邮箱找回。优先由其他所有者在 `/admin/admins` 重置；无人可登录时清空 `admins.yaml` 后以 `LUCY_WEBUI_AUTH=required` 重新 bootstrap。",
               "",
-              "### 3.6 质量评测 Eval",
+              "### 3.6 质量评测",
               "",
               "在 `/eval/cases` 维护用例，`/eval/runs` 看历史，`/eval/monitor` 看趋势。",
               "",
-              "### 3.7 YAML 文件规范与交付验收",
+              "### 3.7 YAML 规范与交付验收",
               "",
               "FAQ 可跳到 [KTX 合并与索引检查](#3762-ktx-合并与索引检查)。",
               "",
@@ -418,8 +424,8 @@ describe("HelpCenter", () => {
     expect(await screen.findByRole("heading", { name: "系统手册" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "常见问题速查" })).toHaveAttribute("href", "/help?section=faq-quick-reference");
     expect(screen.getByRole("link", { name: "系统概述与架构拓扑" })).toHaveAttribute("href", "/help?section=system-overview");
-    expect(screen.getByRole("link", { name: "部署向导与上线检查" })).toHaveAttribute("href", "/help?section=deployment-checklist");
-    expect(screen.getByRole("link", { name: "YAML 文件规范与交付验收" })).toHaveAttribute("href", "/help?section=yaml-delivery-runbook");
+    expect(screen.getByRole("link", { name: "运行状态 · 系统概览与上线检查" })).toHaveAttribute("href", "/help?section=deployment-checklist");
+    expect(screen.getByRole("link", { name: "YAML 规范与交付验收" })).toHaveAttribute("href", "/help?section=yaml-delivery-runbook");
     expect(screen.getByRole("link", { name: "GO / NO-GO 交付 checklist" })).toHaveAttribute("href", "/help?section=yaml-delivery-checklist");
     expect(screen.getByRole("link", { name: "Agent / 客户端接入指南" })).toHaveAttribute("href", "/help?section=mcp-integration");
     // TOC 折叠时不应出现 level-4 链接（§0 内部 anchor 链不算），只在 toc 子树内查。
@@ -427,7 +433,7 @@ describe("HelpCenter", () => {
     expect(within(toc).queryByRole("link", { name: "Agent 可见性与 ACL 同步" })).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "0. 常见问题速查" })).toBeInTheDocument();
     expect(screen.getByText("我在哪里新建数据库连接？")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "3.2 数据库接入" })).toHaveAttribute("href", "#32-数据库接入");
+    expect(screen.getByRole("link", { name: "3.2 数据接入 · 连接 / Schema / 表范围" })).toHaveAttribute("href", "#32-数据接入--连接--schema--表范围");
     expect(screen.getByText(/Lucy 是本地语义补充工作台/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "KTX 合并与索引检查" })).toHaveAttribute("href", "#3762-ktx-合并与索引检查");
     expect(screen.getByRole("link", { name: "KTX 合并与索引检查" })).not.toHaveAttribute("target");
@@ -474,7 +480,7 @@ describe("HelpCenter", () => {
     expect(deploymentSection).toBeInTheDocument();
     const table = within(deploymentSection as HTMLElement).getByRole("table");
 
-    expect(screen.getByRole("heading", { name: "3.1 部署向导与上线检查" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "3.1 运行状态 · 系统概览与上线检查" })).toBeInTheDocument();
     expect(screen.queryByText("系统手册加载中...")).not.toBeInTheDocument();
     expect(within(table).getByRole("columnheader", { name: "步骤" })).toBeInTheDocument();
     expect(within(table).getByRole("columnheader", { name: "Ready 条件" })).toBeInTheDocument();
@@ -869,7 +875,7 @@ describe("HelpCenter", () => {
     expect(document.querySelector("section#webui-entry-map")).not.toBeNull();
   });
 
-  it("§1.5 table has 4 columns and 23 rows that mirror navigation.ts", async () => {
+  it("§1.5 table has 4 columns and 24 rows that mirror navigation.ts", async () => {
     renderHelp("/help?section=webui-entry-map");
     await waitFor(() =>
       screen.getByRole("heading", { name: /WebUI 入口速查（运行状态侧栏地图）/ })
@@ -888,7 +894,7 @@ describe("HelpCenter", () => {
     expect(headers.length).toBe(4);
 
     const bodyRows = table.querySelectorAll("tbody tr");
-    expect(bodyRows.length).toBe(23);
+    expect(bodyRows.length).toBe(24);
 
     // Every visible column must mirror the shared navigation module so the
     // handbook cannot drift from the current menu labels, paths, or copy.
@@ -988,5 +994,323 @@ describe("HelpCenter", () => {
     expect(await screen.findByTestId("help-search-empty")).toHaveTextContent(
       "未找到与「完全不存在的关键词xyz」相关的手册内容。"
     );
+  });
+});
+
+// ─── 真实手册回归（docs/SYSTEM_HANDBOOK.md 作为输入） ────────────────────────
+//
+// 上面那组用例全部使用合成夹具，真实手册从未被前端测到 —— §0.0 / §0.4 被整段
+// 丢弃、正文锚点失效这类缺陷因此长期没被发现。这一组直接喂真实手册文件。
+
+const REAL_HANDBOOK_CANDIDATES = [
+  // 服务端 app root 解析（与 `GET /api/help/handbook` 指向同一份文件）。
+  path.join(resolveHelpAppRoot(), "docs/SYSTEM_HANDBOOK.md"),
+  path.resolve(process.cwd(), "docs/SYSTEM_HANDBOOK.md"),
+  path.resolve(process.cwd(), "../docs/SYSTEM_HANDBOOK.md")
+];
+const REAL_HANDBOOK_PATH =
+  REAL_HANDBOOK_CANDIDATES.find((candidate) => existsSync(candidate)) ??
+  (REAL_HANDBOOK_CANDIDATES[0] as string);
+const realHandbookMarkdown = readFileSync(REAL_HANDBOOK_PATH, "utf8");
+/** 服务端 TOC 契约：真实手册 → 与 `GET /api/help/handbook` 一致的 toc 数组。 */
+const realHandbookToc = parseHelpToc(realHandbookMarkdown);
+
+type HandbookEnvelope = {
+  toc: HelpTocItem[];
+  markdown: string;
+  legacySectionMap?: Record<string, string>;
+};
+
+/** 用指定手册内容渲染 /help（绕开最上面那组合成夹具）。 */
+function renderHandbook(path = "/help", envelope: HandbookEnvelope) {
+  const client = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false }
+    }
+  });
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url === "/api/help/handbook") {
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          data: {
+            id: "system-handbook",
+            title: "Project Lucy 系统使用与运维手册",
+            sourcePath: "docs/SYSTEM_HANDBOOK.md",
+            updatedAt: "2026-10-19T00:00:00.000Z",
+            etag: "sha256:real-handbook",
+            toc: envelope.toc,
+            markdown: envelope.markdown,
+            ...(envelope.legacySectionMap
+              ? { legacySectionMap: envelope.legacySectionMap }
+              : {})
+          }
+        }),
+        { status: 200 }
+      );
+    }
+    if (url.startsWith("/api/help/search")) {
+      return new Response(
+        JSON.stringify({ ok: true, data: { query: "", items: [] } }),
+        { status: 200 }
+      );
+    }
+    return new Response(
+      JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: "not found" } }),
+      { status: 404 }
+    );
+  });
+  vi.stubGlobal("fetch", fetchMock);
+
+  if (typeof Element.prototype.scrollIntoView !== "function") {
+    Element.prototype.scrollIntoView = vi.fn();
+  }
+
+  render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter initialEntries={[path]}>
+        <HelpCenter />
+      </MemoryRouter>
+    </QueryClientProvider>
+  );
+  return { fetchMock };
+}
+
+/** 用真实手册渲染 /help。 */
+function renderRealHandbook(path = "/help", options: { legacySectionMap?: Record<string, string> } = {}) {
+  return renderHandbook(path, {
+    toc: realHandbookToc,
+    markdown: realHandbookMarkdown,
+    ...options
+  });
+}
+
+/** 记录被 scrollIntoView 的元素 id，用于断言深链落点。 */
+function trackScrolledSections(): string[] {
+  const scrolled: string[] = [];
+  Element.prototype.scrollIntoView = vi.fn(function (this: Element) {
+    scrolled.push(this.id);
+  }) as unknown as typeof Element.prototype.scrollIntoView;
+  return scrolled;
+}
+
+/** 等真实手册渲染完成（正文里已经出现 section 容器）。 */
+async function waitForHandbookBody() {
+  const article = await screen.findByRole("article");
+  await waitFor(() => {
+    expect(article.querySelector("section")).toBeTruthy();
+  });
+  return article;
+}
+
+describe("HelpCenter · 真实手册回归", () => {
+  it("TOC 的每个 id 在 DOM 中都有对应元素", async () => {
+    renderRealHandbook();
+    await waitForHandbookBody();
+
+    // 手写「目录」块在正文里被剥掉（它只是侧栏的重复），因此它没有正文落点。
+    const directoryId = realHandbookToc.find((item) => item.title === "目录")?.id;
+    const dangling = realHandbookToc
+      .map((item) => item.id)
+      .filter((id) => id !== directoryId && !document.getElementById(id));
+    expect(dangling, `TOC 存在无落点的 section id: ${dangling.join(", ")}`).toEqual([]);
+
+    // 侧栏里的每一条都必须能跳到真实存在的 section。
+    const tocNav = await screen.findByLabelText("系统手册目录");
+    const sectionHrefs = within(tocNav)
+      .getAllByRole("link")
+      .map((link) => link.getAttribute("href") ?? "")
+      .filter((href) => href.startsWith("/help?section="));
+    expect(sectionHrefs.length).toBeGreaterThan(0);
+    sectionHrefs.forEach((href) => {
+      const id = new URL(href, "http://localhost").searchParams.get("section") ?? "";
+      expect(document.getElementById(id), `侧栏死链: ${href}`).toBeTruthy();
+    });
+  });
+
+  it("每个章节标题的 DOM id 与 slugifyHeading 规则一致", async () => {
+    renderRealHandbook();
+    await waitForHandbookBody();
+
+    const directoryId = realHandbookToc.find((item) => item.title === "目录")?.id;
+    const mismatched = realHandbookToc
+      .filter((item) => item.id !== directoryId)
+      .filter((item) => !document.getElementById(slugifyHeading(item.title)))
+      .map((item) => item.title);
+    expect(mismatched, `标题 slug 与渲染器规则不一致: ${mismatched.join(", ")}`).toEqual([]);
+  });
+
+  it("§0.0 文档基线与 §0.4 版本切换说明在正文中可见且有内容", async () => {
+    renderRealHandbook();
+    const article = await waitForHandbookBody();
+
+    const baselineId = realHandbookToc.find((item) => /文档基线/.test(item.title))?.id;
+    const cutoverId = realHandbookToc.find((item) =>
+      /(版本切换|切线)/.test(item.title)
+    )?.id;
+    expect(baselineId, "§0.0 文档基线未出现在服务端 TOC").toBeTruthy();
+    expect(cutoverId, "§0.4 版本切换说明未出现在服务端 TOC").toBeTruthy();
+
+    const baseline = document.getElementById(baselineId as string);
+    const cutover = document.getElementById(cutoverId as string);
+    expect(baseline, "§0.0 文档基线没有正文落点").toBeInTheDocument();
+    expect(cutover, "§0.4 版本切换说明没有正文落点").toBeInTheDocument();
+    expect(baseline?.textContent ?? "").toContain("产品版本");
+    expect(baseline?.textContent ?? "").toContain("2.0.0");
+    expect(cutover?.textContent ?? "").toContain("2.0.0");
+
+    // 手写「目录」标题本身不进入正文（侧栏已承担目录职责）。
+    expect(within(article).queryByRole("heading", { name: "目录" })).not.toBeInTheDocument();
+  });
+
+  it("正文内每个 #锚点 都能解析到真实 DOM id", async () => {
+    renderRealHandbook();
+    const article = await waitForHandbookBody();
+    await waitFor(() => {
+      expect(article.querySelector("a[href^='#']")).toBeTruthy();
+    });
+
+    const anchors = Array.from(article.querySelectorAll<HTMLAnchorElement>("a[href^='#']"));
+    const dead = anchors
+      .map((anchor) => (anchor.getAttribute("href") ?? "").replace(/^#/, ""))
+      .filter((id) => id.length > 0 && !document.getElementById(id));
+    expect([...new Set(dead)], `正文死锚点: ${[...new Set(dead)].join(", ")}`).toEqual([]);
+  });
+
+  it("「MCP 调试台」正文只出现一次", async () => {
+    renderRealHandbook();
+    const article = await waitForHandbookBody();
+
+    // 孤儿副本曾经把「MCP 调试台」正文整段并进上一节；用正文特征串计数。
+    for (const marker of ["调试台是 Agent 接入后的", "两条路径的边界"]) {
+      const copies = Array.from(article.querySelectorAll("p")).filter((node) =>
+        (node.textContent ?? "").includes(marker)
+      );
+      expect(copies.length, `「MCP 调试台」正文重复出现: ${marker}`).toBe(1);
+    }
+    expect(
+      within(article).getAllByRole("heading", { name: "MCP 调试台（/admin/mcp-playground）" })
+        .length
+    ).toBe(1);
+  });
+
+  it("旧 section id 能解析成当前 section 并滚动过去", async () => {
+    const mapped = LEGACY_SECTION_IDS["deployment-checklist"] as string;
+    const scrolled = trackScrolledSections();
+    flushRequestAnimationFrame();
+
+    renderRealHandbook("/help?section=deployment-checklist", {
+      legacySectionMap: { ...LEGACY_SECTION_IDS }
+    });
+
+    await waitFor(() => {
+      expect(scrolled.length).toBeGreaterThan(0);
+    });
+    expect(scrolled).toEqual([mapped]);
+    expect(document.getElementById(mapped)).toBeInTheDocument();
+
+    // 解析后的 id 同时用于侧栏高亮（aria-current）。
+    const tocNav = await screen.findByLabelText("系统手册目录");
+    const activeLink = within(tocNav).getByRole("link", {
+      name: "运行状态 · 系统概览与上线检查"
+    });
+    expect(activeLink).toHaveAttribute("aria-current", "location");
+    expect(activeLink).toHaveAttribute("href", `/help?section=${mapped}`);
+  });
+
+  it("旧短码 id（§0.0 / §0.4 的历史 sha1 id）同样能解析并滚动", async () => {
+    const scrolled = trackScrolledSections();
+    flushRequestAnimationFrame();
+
+    renderRealHandbook("/help?section=b9c274fb1c", {
+      legacySectionMap: { ...LEGACY_SECTION_IDS }
+    });
+
+    await waitFor(() => {
+      expect(scrolled.length).toBeGreaterThan(0);
+    });
+    expect(scrolled).toEqual([LEGACY_SECTION_IDS["b9c274fb1c"]]);
+    expect(document.getElementById(LEGACY_SECTION_IDS["b9c274fb1c"] as string)).toBeInTheDocument();
+  });
+
+  it("未知 section id 不滚动也不报错", async () => {
+    const scrolled = trackScrolledSections();
+    flushRequestAnimationFrame();
+
+    renderRealHandbook("/help?section=does-not-exist");
+
+    expect(await screen.findByRole("heading", { name: "系统手册" })).toBeInTheDocument();
+    expect(screen.queryByText("系统手册加载失败。")).not.toBeInTheDocument();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(scrolled).toEqual([]);
+  });
+});
+
+// ─── 手写「目录」块回归 ──────────────────────────────────────────────────────
+//
+// 真实手册已经删掉手写「目录」，但未来手册仍可能带它。前端必须只剥掉「目录」
+// 标题与它的链接列表，停在下一个同级（H2）/ 同级子节（H3）标题——不能把
+// 「目录」之后排在前面的 H3 正文（历史版本的 §0.0 / §0.4）整段吞掉。
+
+const HANDBOOK_WITH_TOC_MARKDOWN = [
+  "# Project Lucy 系统使用与运维手册",
+  "",
+  "| 项 | 内容 |",
+  "| --- | --- |",
+  "| 文档类型 | System Handbook |",
+  "",
+  "## 目录",
+  "",
+  "- [0. 常见问题速查](#0-常见问题速查)",
+  "  - [0.0 文档基线（自动同步）](#00-文档基线自动同步)",
+  "",
+  "### 0.0 文档基线（自动同步）",
+  "",
+  "基线内容：产品版本 2.0.0。",
+  "",
+  "## 0. 常见问题速查",
+  "",
+  "常见问题正文。"
+].join("\n");
+
+describe("HelpCenter · 手写「目录」块", () => {
+  it("剥掉「目录」标题与链接列表，但保留学目录之后的 H3 正文", async () => {
+    const markdown = HANDBOOK_WITH_TOC_MARKDOWN;
+    renderHandbook("/help", { toc: parseHelpToc(markdown), markdown });
+    const article = await waitForHandbookBody();
+
+    // 「目录」标题与它的链接列表都不进正文。
+    expect(within(article).queryByRole("heading", { name: "目录" })).not.toBeInTheDocument();
+    expect(within(article).queryByRole("link", { name: /常见问题速查/ })).not.toBeInTheDocument();
+
+    // 「目录」之后的 H3 正文必须可见（历史缺陷：整段被吞）。
+    const baselineId = parseHelpToc(markdown).find((item) =>
+      /文档基线/.test(item.title)
+    )?.id;
+    expect(baselineId).toBeTruthy();
+    const baseline = document.getElementById(baselineId as string);
+    expect(baseline, "「目录」之后的 H3 正文没有落点").toBeInTheDocument();
+    expect(baseline?.textContent ?? "").toContain("基线内容：产品版本 2.0.0。");
+  });
+
+  it("侧栏不再保留指向被剥掉的「目录」的入口", async () => {
+    const markdown = HANDBOOK_WITH_TOC_MARKDOWN;
+    renderHandbook("/help", { toc: parseHelpToc(markdown), markdown });
+    await waitForHandbookBody();
+
+    const tocNav = await screen.findByLabelText("系统手册目录");
+    expect(within(tocNav).queryByRole("link", { name: "目录" })).not.toBeInTheDocument();
+
+    // 侧栏里每一条入口都必须有正文落点。
+    const sectionHrefs = within(tocNav)
+      .getAllByRole("link")
+      .map((link) => link.getAttribute("href") ?? "")
+      .filter((href) => href.startsWith("/help?section="));
+    expect(sectionHrefs.length).toBeGreaterThan(0);
+    sectionHrefs.forEach((href) => {
+      const id = new URL(href, "http://localhost").searchParams.get("section") ?? "";
+      expect(document.getElementById(id), `侧栏死链: ${href}`).toBeTruthy();
+    });
   });
 });

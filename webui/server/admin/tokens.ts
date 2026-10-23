@@ -4,6 +4,7 @@ import path from "node:path";
 import { stringify, parse } from "yaml";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { auditedWriteFile } from "./config-audit-write.js";
+import { withDisplayWriteBarrier } from "../display-generation.js";
 import { resolveProjectRoot } from "../project.js";
 import { getAuditDb } from "./audit.js";
 import type { YamlAccessConfig } from "./agents.js";
@@ -16,8 +17,11 @@ import {
   type AccessGovernanceGateDecision,
   type AccessGovernanceOverrideRequest
 } from "../access-governance-gate.js";
+import { resolveRoleIds } from "../proxy/acl.js";
 import { invalidateAccessConfigCache, isTokenExpired } from "../proxy/identity.js";
+import { narrowAuthorization, tokenHashPrefixOf } from "../proxy/authorization-barrier.js";
 import { actorIdFromRequest } from "../auth/guard.js";
+import { auditActorFields, trustedActorFromRequest } from "../security/request-actor.js";
 import { normalizeNewTokenExpiry, TokenExpiryPolicyError } from "./token-expiry-policy.js";
 
 const ACCESS_YAML_REL = "webui/config/access.yaml";
@@ -45,18 +49,6 @@ function defaultActor(request?: FastifyRequest): AccessGovernanceApprover {
     actorId: request ? actorIdFromRequest(request) : "local-admin",
     identityProvider: "webui-local"
   };
-}
-
-function actorIpFromRequest(request: FastifyRequest): string | undefined {
-  const trust = (process.env.LUCY_TRUST_PROXY ?? "").trim().toLowerCase();
-  const trustProxy = trust === "1" || trust === "true" || trust === "yes";
-  if (trustProxy) {
-    const xff = request.headers["x-forwarded-for"];
-    const raw = Array.isArray(xff) ? xff[0] : xff;
-    const first = raw?.split(",")[0]?.trim();
-    if (first) return first;
-  }
-  return request.ip || undefined;
 }
 
 async function commitPolicyRuntimeAck(content: string): Promise<{
@@ -188,7 +180,8 @@ export function registerTokenRoutes(app: FastifyInstance) {
     for (const user of users) {
       const userUsage = lastUsedMap.get(user.id);
       const isAgentEnabled = user.enabled !== false;
-      const roles = user.roles && Array.isArray(user.roles) ? user.roles : user.role ? [user.role] : [];
+      const resolvedRoles = resolveRoleIds(user);
+      const roles = resolvedRoles.ok ? resolvedRoles.roleIds : [];
 
       for (const t of user.tokens || []) {
         const hashPrefix = t.hash ? t.hash.slice(0, 19) : "";
@@ -414,26 +407,27 @@ export function registerTokenRoutes(app: FastifyInstance) {
       newUsers[userIndex] = updatedUser;
       const newConfig: YamlAccessConfig = { ...config, users: newUsers };
       const content = stringify(newConfig, { lineWidth: 0 });
-      await auditedWriteFile(projectRoot, ACCESS_YAML_REL, content, {
-        enabled: true,
-        changeType: "token_create",
-        assetKind: "governance",
-        actorType: "ui_admin",
-        actorIp: actorIpFromRequest(request),
-        source: "admin_tokens_api",
-        targetId: userId,
-        oldSummary: { tokenCount: user.tokens.length },
-        newSummary: {
-          tokenCount: updatedUser.tokens.length,
-          label,
-          device_name: deviceName,
-          hashPrefix: tokenHash.slice(0, 19),
-          expires_at
-        },
-        requestId: request.id
+      // Spec 174 §3.2 — display barrier spans write + runtime commit.
+      const runtime = await withDisplayWriteBarrier(["P"], async () => {
+        await auditedWriteFile(projectRoot, ACCESS_YAML_REL, content, {
+          enabled: true,
+          changeType: "token_create",
+          assetKind: "governance",
+          ...auditActorFields(trustedActorFromRequest(request)),
+          source: "admin_tokens_api",
+          targetId: userId,
+          oldSummary: { tokenCount: user.tokens.length },
+          newSummary: {
+            tokenCount: updatedUser.tokens.length,
+            label,
+            device_name: deviceName,
+            hashPrefix: tokenHash.slice(0, 19),
+            expires_at
+          }
+        });
+        invalidateAccessConfigCache();
+        return commitPolicyRuntimeAck(content);
       });
-      invalidateAccessConfigCache();
-      const runtime = await commitPolicyRuntimeAck(content);
 
       return {
         ok: true,
@@ -526,20 +520,30 @@ export function registerTokenRoutes(app: FastifyInstance) {
       newUsers[userIndex] = updatedUser;
       const newConfig: YamlAccessConfig = { ...config, users: newUsers };
       const content = stringify(newConfig, { lineWidth: 0 });
-      await auditedWriteFile(projectRoot, ACCESS_YAML_REL, content, {
-        enabled: true,
-        changeType: "token_revoke",
-        assetKind: "governance",
-        actorType: "ui_admin",
-        actorIp: actorIpFromRequest(request),
-        source: "admin_tokens_api",
-        targetId: userId,
-        oldSummary: { tokenCount: user.tokens.length, label, hashPrefix: token.hash.slice(0, 19) },
-        newSummary: { tokenCount: updatedUser.tokens.length, label },
-        requestId: request.id
+      // Spec 174 §3.2 — display barrier spans write + runtime commit.
+      const runtime = await withDisplayWriteBarrier(["P"], async () => {
+        await auditedWriteFile(projectRoot, ACCESS_YAML_REL, content, {
+          enabled: true,
+          changeType: "token_revoke",
+          assetKind: "governance",
+          ...auditActorFields(trustedActorFromRequest(request)),
+          source: "admin_tokens_api",
+          targetId: userId,
+          oldSummary: { tokenCount: user.tokens.length, label, hashPrefix: token.hash.slice(0, 19) },
+          newSummary: { tokenCount: updatedUser.tokens.length, label }
+        });
+        invalidateAccessConfigCache();
+        const committed = await commitPolicyRuntimeAck(content);
+        // T04-3 / Spec §3.3 — revocation is durable (revoked_tokens + access.yaml) and
+        // committed; cancel this Token's in-flight work before reporting success.
+        const revokedHash = tokenHashPrefixOf(token);
+        await narrowAuthorization({
+          kind: "subjects",
+          agentIds: revokedHash ? [] : [userId],
+          tokenHashes: revokedHash ? [revokedHash] : []
+        });
+        return committed;
       });
-      invalidateAccessConfigCache();
-      const runtime = await commitPolicyRuntimeAck(content);
 
       return { ok: true, data: { written: true, revokedAt, ...runtime, gate } };
     });

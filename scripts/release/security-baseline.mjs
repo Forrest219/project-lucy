@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { parse } from "yaml";
@@ -109,10 +109,37 @@ async function checkSecretsAndDocs() {
   }
 }
 
+async function listServerTsFiles(dir) {
+  const entries = await readdir(rel(dir), { withFileTypes: true });
+  const files = [];
+  for (const entry of entries) {
+    const child = path.posix.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (entry.name !== "node_modules") files.push(...(await listServerTsFiles(child)));
+    } else if (entry.isFile() && entry.name.endsWith(".ts")) {
+      files.push(child);
+    }
+  }
+  return files;
+}
+
+// V-08 / Spec §4.6: gray-matter ships an eval-based javascript engine, so only
+// the single YAML-only frontmatter entry may import it.
+async function checkFrontmatterEntryPoint() {
+  const allowed = "webui/server/markdown-frontmatter.ts";
+  for (const file of await listServerTsFiles("webui/server")) {
+    if (file === allowed) continue;
+    if (/from\s+["']gray-matter["']/.test(await read(file))) {
+      add("fail", `${file}: must not import gray-matter; use parseMarkdownFrontmatter from ${allowed}`);
+    }
+  }
+}
+
 async function main() {
   await checkAccessConfig();
   await checkProxySecurityHooks();
   await checkSecretsAndDocs();
+  await checkFrontmatterEntryPoint();
 
   const failCount = results.filter((item) => item.level === "fail").length;
   const warnCount = results.filter((item) => item.level === "warn").length;

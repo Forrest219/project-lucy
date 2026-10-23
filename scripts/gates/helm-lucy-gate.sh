@@ -162,7 +162,7 @@ assert_universal_contract() {
   assert_present "${render}" "runAsUser: 10001"
   assert_present "${render}" "fsGroup: 10001"
   assert_present "${render}" "path: /api/health"
-  assert_env_value "${render}" "LUCY_VERSION" "0.17.0"
+  assert_env_value "${render}" "LUCY_VERSION" "2.0.0"
   assert_env_value "${render}" "LUCY_BUNDLED_KTX_VERSION" "0.16.0"
   # A Secret volume is read-only: it must never shadow the WebUI-writable dir.
   assert_absent "${render}" "mountPath: /data/lucy/.ktx/secrets"
@@ -179,6 +179,42 @@ assert_universal_contract() {
 for render in "${LOCAL_RENDER}" "${K3S_RENDER}"; do
   [[ -n "${render}" ]] || continue
   assert_universal_contract "${render}" "all profiles"
+done
+
+echo "[helm-lucy-gate] H1a deployment mode + cookie Secure pin (Spec §3.1 items 1, 8)"
+SECURE_RENDER="${TMP_DIR}/secure-default.yaml"
+helm template lucy "${CHART}" --set security.insecureHttpTestProfile=false >"${SECURE_RENDER}"
+assert_env_value "${SECURE_RENDER}" "LUCY_DEPLOYMENT_MODE" "customer"
+assert_env_value "${SECURE_RENDER}" "LUCY_CHART_DEPLOYMENT_MODE" "customer"
+assert_env_value "${SECURE_RENDER}" "LUCY_WEBUI_COOKIE_SECURE" "1"
+assert_env_value "${SECURE_RENDER}" "LUCY_WEBUI_ACCESS" "https"
+assert_absent "${SECURE_RENDER}" "LUCY_WEBUI_TEST_PROFILE"
+HTTP_RENDER="${TMP_DIR}/intranet-http.yaml"
+helm template lucy "${CHART}" --set security.access=http >"${HTTP_RENDER}"
+assert_env_value "${HTTP_RENDER}" "LUCY_WEBUI_COOKIE_SECURE" "0"
+assert_env_value "${HTTP_RENDER}" "LUCY_WEBUI_ACCESS" "http"
+assert_absent "${HTTP_RENDER}" "LUCY_WEBUI_TEST_PROFILE"
+if helm template lucy "${CHART}" --set security.access=http --set security.insecureHttpTestProfile=true >/dev/null 2>"${TMP_DIR}/mixed-access.err"; then
+  echo "FAIL: security.access=http combined with insecureHttpTestProfile must not render" >&2
+  exit 1
+fi
+grep -q "cannot be combined" "${TMP_DIR}/mixed-access.err"
+assert_absent "${SECURE_RENDER}" "LUCY_WEBUI_AUTH"
+# The customer-facing chart does not expose the deployment mode as a value.
+assert_absent "${CHART}/values.yaml" "^ *LUCY_DEPLOYMENT_MODE:"
+# extraEnvFrom must not remove or shadow the pins (explicit env entries stay rendered).
+EXTRA_RENDER="${TMP_DIR}/secure-extra-env-from.yaml"
+helm template lucy "${CHART}" --set security.insecureHttpTestProfile=false \
+  --set-json 'extraEnvFrom=[{"secretRef":{"name":"operator-override"}}]' >"${EXTRA_RENDER}"
+assert_present "${EXTRA_RENDER}" "name: operator-override"
+assert_env_value "${EXTRA_RENDER}" "LUCY_DEPLOYMENT_MODE" "customer"
+assert_env_value "${EXTRA_RENDER}" "LUCY_CHART_DEPLOYMENT_MODE" "customer"
+assert_env_value "${EXTRA_RENDER}" "LUCY_WEBUI_COOKIE_SECURE" "1"
+for render in "${LOCAL_RENDER}" "${K3S_RENDER}"; do
+  [[ -n "${render}" ]] || continue
+  # Test profiles over plain HTTP opt out explicitly and are marked.
+  assert_env_value "${render}" "LUCY_WEBUI_COOKIE_SECURE" "0"
+  assert_env_value "${render}" "LUCY_WEBUI_TEST_PROFILE" "1"
 done
 
 echo "[helm-lucy-gate] H1a secrets-sync contract (any profile with a Secret)"

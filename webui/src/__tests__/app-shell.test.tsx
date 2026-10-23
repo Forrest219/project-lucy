@@ -2,11 +2,12 @@
 import "@testing-library/jest-dom/vitest";
 import { readFileSync } from "node:fs";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppFrame } from "../app/App";
 import { PageHeader } from "../components/PageHeader";
+import { AuthProvider, type AuthStatus } from "../lib/auth";
 import { assertNoForbiddenTerms } from "./forbidden-terms";
 
 function StubPage({ name }: { name: string }) {
@@ -60,6 +61,7 @@ vi.mock("../pages/admin/AuditSources", () => ({ AuditSources: () => <StubPage na
 vi.mock("../pages/admin/McpPlayground", () => ({ McpPlayground: () => <StubPage name="McpPlayground" /> }));
 vi.mock("../pages/admin/ConfigAudit", () => ({ ConfigAudit: () => <StubPage name="ConfigAudit" /> }));
 vi.mock("../pages/admin/BrandingSettings", () => ({ BrandingSettings: () => <StubPage name="BrandingSettings" /> }));
+vi.mock("../pages/admin/VersionInfo", () => ({ VersionInfo: () => <StubPage name="VersionInfo" /> }));
 vi.mock("../pages/admin/RoleList", () => ({ RoleList: () => <StubPage name="RoleList" /> }));
 vi.mock("../pages/admin/RoleDetail", () => ({ RoleDetail: () => <StubPage name="RoleDetail" /> }));
 vi.mock("../pages/eval/CaseList", () => ({ CaseList: () => <StubPage name="CaseList" /> }));
@@ -72,7 +74,7 @@ vi.mock("../pages/connections/TableWhitelist", () => ({ TableWhitelist: () => <S
 vi.mock("../pages/connections/ConnectionTest", () => ({ ConnectionTest: () => <StubPage name="ConnectionTest" /> }));
 vi.mock("../pages/HelpCenter", () => ({ HelpCenter: () => <StubPage name="HelpCenter" /> }));
 
-function renderAt(path: string) {
+function renderAt(path: string, authStatus?: AuthStatus) {
   const client = new QueryClient({
     defaultOptions: {
       queries: { retry: false }
@@ -80,6 +82,13 @@ function renderAt(path: string) {
   });
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
+    if (url === "/api/auth/status" && authStatus) {
+      return new Response(JSON.stringify({ ok: true, data: authStatus }));
+    }
+    if (url === "/api/auth/logout" && authStatus) {
+      authStatus = { ...authStatus, me: null };
+      return new Response(JSON.stringify({ ok: true, data: {} }));
+    }
     if (url === "/api/project") {
       return new Response(
         JSON.stringify({
@@ -91,13 +100,16 @@ function renderAt(path: string) {
     if (url === "/api/connections") {
       return new Response(JSON.stringify({ ok: true, data: { connections: [] } }));
     }
+    if (url === "/api/admin/policy-runtime") {
+      return new Response(JSON.stringify({ ok: true, data: { policyVersion: "v", degradedGlobal: false, degradedAgents: [] } }));
+    }
     if (url.startsWith("/api/branding")) {
       return new Response(
         JSON.stringify({
           ok: true,
           data: {
             productTitle: "Lucy WebUI",
-            tagline: "Data Agent MCP",
+            tagline: "可信 Agent 数据层",
             productTitleOverride: "",
             taglineOverride: "",
             hasCustomLogo: false,
@@ -106,7 +118,7 @@ function renderAt(path: string) {
             logoWidth: null,
             logoHeight: null,
             updatedAt: null,
-            defaults: { productTitle: "Lucy WebUI", tagline: "Data Agent MCP" }
+            defaults: { productTitle: "Lucy WebUI", tagline: "可信 Agent 数据层" }
           }
         })
       );
@@ -136,11 +148,14 @@ function renderAt(path: string) {
     "fetch",
     fetchMock
   );
+  const app = (
+    <MemoryRouter initialEntries={[path]}>
+      <AppFrame />
+    </MemoryRouter>
+  );
   render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[path]}>
-        <AppFrame />
-      </MemoryRouter>
+      {authStatus ? <AuthProvider>{app}</AuthProvider> : app}
     </QueryClientProvider>
   );
   return { fetchMock };
@@ -162,6 +177,36 @@ beforeEach(() => {
 });
 
 describe("AppFrame shell", () => {
+  it("consolidates authenticated footer actions and uses the existing logout flow", async () => {
+    // Render on a stable route. "/" is a redirecting route (it canonicalises to
+    // /catalog), and the account menu closes on navigation by design - so the
+    // redirect raced the menu click and the popover was gone before it could be used.
+    // The footer consolidation and the logout flow do not depend on the route.
+    const { fetchMock } = renderAt("/overview", {
+      mode: "required", authEnabled: true,
+      me: { id: "xingchen", displayName: "星辰", role: "operator", enabled: true, createdAt: null }
+    });
+    const footer = screen.getByTestId("sidebar-footer");
+    const trigger = await within(footer).findByRole("button", { name: "账户菜单：xingchen" });
+    expect(within(footer).getAllByRole("button")).toHaveLength(1);
+    expect(within(footer).queryByRole("link", { name: "打开系统手册" })).not.toBeInTheDocument();
+    expect(screen.queryByText("退出登录")).not.toBeInTheDocument();
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole("menuitem", { name: "退出登录" }));
+    await within(footer).findByRole("link", { name: "打开系统手册" });
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(within(footer).queryByRole("button")).not.toBeInTheDocument();
+    expect(fetchMock.mock.calls.filter(([url]) => String(url) === "/api/auth/logout")).toHaveLength(1);
+  });
+
+  it.each(["open", "required"] as const)("keeps handbook access without an identity in %s mode", async (mode) => {
+    renderAt("/help", { mode, authEnabled: mode === "required", me: null });
+    await waitFor(() => expect(screen.getByTestId("route-page")).toHaveTextContent("HelpCenter"));
+    const footer = screen.getByTestId("sidebar-footer");
+    expect(within(footer).getByRole("link", { name: "打开系统手册" })).toHaveAttribute("href", "/help");
+    expect(within(footer).queryByRole("button")).not.toBeInTheDocument();
+  });
+
   it.each([
     ["/overview", "Onboarding", "系统概览"],
     ["/ops/calls", "CallMonitor", "调用监控"],
@@ -180,60 +225,60 @@ describe("AppFrame shell", () => {
     ["/admin/mcp-playground", "McpPlayground", "MCP 调试台"],
     ["/admin/roles", "RoleList", "角色权限"],
     ["/admin/config-audit", "ConfigAudit", "配置审计"]
-  ])("renders route %s and marks active navigation", (path, pageName, activeLink) => {
+  ])("renders route %s and marks active navigation", async (path, pageName, activeLink) => {
     renderAt(path);
-    expect(screen.getByTestId("route-page")).toHaveTextContent(pageName);
+    await waitFor(() => expect(screen.getByTestId("route-page")).toHaveTextContent(pageName));
     expect(screen.getByRole("link", { name: activeLink })).toHaveAttribute("aria-current", "page");
   });
 
-  it("keeps /connections/whitelist as a compatibility alias for enabled table scope", () => {
+  it("keeps /connections/whitelist as a compatibility alias for enabled table scope", async () => {
     renderAt("/connections/whitelist?schema=dataforai");
-    expect(screen.getByTestId("route-page")).toHaveTextContent("TableWhitelist");
+    await waitFor(() => expect(screen.getByTestId("route-page")).toHaveTextContent("TableWhitelist"));
     expect(screen.getByRole("link", { name: "启用表范围" })).toHaveAttribute("aria-current", "page");
   });
 
-  it("keeps global navigation visible on the Wiki route", () => {
+  it("keeps global navigation visible on the Wiki route", async () => {
     renderAt("/wiki");
 
-    expect(screen.getByTestId("route-page")).toHaveTextContent("WikiEditor");
+    await waitFor(() => expect(screen.getByTestId("route-page")).toHaveTextContent("WikiEditor"));
     expect(document.querySelector(".pl-app-shell")).not.toHaveClass("pl-app-shell--wiki");
     expect(document.querySelector(".pl-sidebar")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "语义资产" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "业务 Wiki" })).toHaveAttribute("aria-current", "page");
   });
 
-  it("keeps /connections/test as a compat alias route with no sidebar entry", () => {
+  it("keeps /connections/test as a compat alias route with no sidebar entry", async () => {
     // v1.9.0: 连通测试（兼容）已从主导航移除，但 /connections/test 仍需可访问，
     // 承接外链/历史书签。连接卡内测试 Drawer（M25）是当前正式入口。
     renderAt("/connections/test");
-    expect(screen.getByTestId("route-page")).toHaveTextContent("ConnectionTest");
+    await waitFor(() => expect(screen.getByTestId("route-page")).toHaveTextContent("ConnectionTest"));
     expect(screen.queryByRole("link", { name: /连通测试/ })).not.toBeInTheDocument();
   });
 
-  it("treats /overview as the canonical system overview route and keeps /onboarding as a redirect", () => {
+  it("treats /overview as the canonical system overview route and keeps /onboarding as a redirect", async () => {
     renderAt("/overview");
-    expect(screen.getByTestId("route-page")).toHaveTextContent("Onboarding");
+    await waitFor(() => expect(screen.getByTestId("route-page")).toHaveTextContent("Onboarding"));
     const overviewLink = screen.getByRole("link", { name: "系统概览" });
     expect(overviewLink).toHaveAttribute("href", "/overview");
     expect(overviewLink).toHaveAttribute("aria-current", "page");
   });
 
-  it("redirects /onboarding to /overview and renders the system overview page", () => {
+  it("redirects /onboarding to /overview and renders the system overview page", async () => {
     renderAt("/onboarding");
     // MemoryRouter issues a history.replace("/overview") so the final render
     // must show the Onboarding stub. The sidebar link "系统概览" remains
     // active because the canonical predicate is now keyed on /overview.
-    expect(screen.getByTestId("route-page")).toHaveTextContent("Onboarding");
+    await waitFor(() => expect(screen.getByTestId("route-page")).toHaveTextContent("Onboarding"));
     const overviewLink = screen.getByRole("link", { name: "系统概览" });
     expect(overviewLink).toHaveAttribute("href", "/overview");
     expect(overviewLink).toHaveAttribute("aria-current", "page");
   });
 
-  it("preserves search and hash when redirecting /onboarding to /overview", () => {
+  it("preserves search and hash when redirecting /onboarding to /overview", async () => {
     // Legacy bookmark from M36 / pre-M39 — must still resolve to /overview
     // with the same query so ObjectDetailDrawer can open the right object.
     renderAt("/onboarding?object=table&conn=mysql-aliyun&schema=dataforai&table=orders#section-1");
-    expect(screen.getByTestId("route-page")).toHaveTextContent("Onboarding");
+    await waitFor(() => expect(screen.getByTestId("route-page")).toHaveTextContent("Onboarding"));
     // The post-redirect location must be /overview with the original
     // `search` and `hash` intact. A naive `<Navigate to="/overview" />`
     // would silently drop both.
@@ -243,17 +288,17 @@ describe("AppFrame shell", () => {
     expect(lastOnboardingLocation?.hash).toBe("#section-1");
   });
 
-  it("redirects / to the canonical /catalog route and marks 语义资产 active", () => {
+  it("redirects / to the canonical /catalog route and marks 语义资产 active", async () => {
     renderAt("/");
-    expect(screen.getByTestId("route-page")).toHaveTextContent("Catalog");
+    await waitFor(() => expect(screen.getByTestId("route-page")).toHaveTextContent("Catalog"));
     const catalogLink = screen.getByRole("link", { name: "语义资产" });
     expect(catalogLink).toHaveAttribute("href", "/catalog");
     expect(catalogLink).toHaveAttribute("aria-current", "page");
   });
 
-  it("redirects legacy /sources table URLs to the canonical /catalog table route", () => {
+  it("redirects legacy /sources table URLs to the canonical /catalog table route", async () => {
     renderAt("/sources/mysql-aliyun/dataforai/superstore_orders?tab=diff#preview");
-    expect(screen.getByTestId("route-page")).toHaveTextContent("TableEditor");
+    await waitFor(() => expect(screen.getByTestId("route-page")).toHaveTextContent("TableEditor"));
     expect(lastTableEditorLocation).toEqual({
       pathname: "/catalog/mysql-aliyun/dataforai/superstore_orders",
       search: "?tab=diff",
@@ -262,7 +307,7 @@ describe("AppFrame shell", () => {
     expect(screen.getByRole("link", { name: "语义资产" })).toHaveAttribute("aria-current", "page");
   });
 
-  it("exposes each navigation group heading exactly once", () => {
+  it("exposes each navigation group heading exactly once", async () => {
     // Group titles are collapsible <button>s with `aria-expanded`.
     renderAt("/overview");
     const groupTitles = ["运行状态", "数据接入", "业务上下文", "语义发布", "质量评测", "访问治理", "系统设置"];
@@ -275,7 +320,7 @@ describe("AppFrame shell", () => {
     }
   });
 
-  it("does not render any nav section inside the sidebar footer", () => {
+  it("does not render any nav section inside the sidebar footer", async () => {
     renderAt("/overview");
     const sidebarFooter = screen.getByTestId("sidebar-footer");
     expect(sidebarFooter.querySelectorAll(".pl-nav-section")).toHaveLength(0);
@@ -284,14 +329,14 @@ describe("AppFrame shell", () => {
     expect(within(sidebarFooter).getByRole("link", { name: "打开系统手册" })).toHaveAttribute("href", "/help");
   });
 
-  it("labels the system overview entry as the runtime control plane", () => {
+  it("labels the system overview entry as the runtime control plane", async () => {
     // M61: brand block is now a Link to /overview with copy
-    // `Lucy WebUI` + `Data Agent MCP`. Bare `Lucy` (the M60 wordmark)
+    // `Lucy WebUI` + `可信 Agent 数据层`. Bare `Lucy` (the M60 wordmark)
     // and the legacy long Chinese caption must not silently come back,
     // and the KTX brand must stay banned.
     renderAt("/overview");
     expect(screen.getByTestId("brand-title")).toHaveTextContent("Lucy WebUI");
-    expect(screen.getByText("Data Agent MCP")).toBeInTheDocument();
+    expect(screen.getByText("可信 Agent 数据层")).toBeInTheDocument();
     expect(screen.queryByText("KTX WebUI")).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "运行状态" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "系统概览" })).toHaveAttribute("aria-current", "page");
@@ -299,7 +344,7 @@ describe("AppFrame shell", () => {
     expect(screen.queryByRole("link", { name: "上线检查" })).not.toBeInTheDocument();
   });
 
-  it("makes the brand block a clickable link back to /overview", () => {
+  it("makes the brand block a clickable link back to /overview", async () => {
     // M61 Brand Link: clicking the logo/title anywhere on the brand block
     // must navigate back to /overview. The accessible name is the explicit
     // `返回系统概览` so screen-reader users get a single, meaningful label
@@ -312,22 +357,22 @@ describe("AppFrame shell", () => {
     const brandBlock = screen.getByTestId("sidebar-brand");
     expect(brandBlock).toBe(brandLink);
     expect(within(brandLink).getByTestId("brand-title")).toHaveTextContent("Lucy WebUI");
-    expect(within(brandLink).getByText("Data Agent MCP")).toBeInTheDocument();
+    expect(within(brandLink).getByText("可信 Agent 数据层")).toBeInTheDocument();
   });
 
-  it("does not expose the decorative logo glyph in the brand link's accessible name", () => {
+  it("does not expose the decorative logo glyph in the brand link's accessible name", async () => {
     // M61: aria-label is the single source of truth for the brand link so
-    // screen readers don't read `L · Lucy WebUI Data Agent MCP`.
+    // screen readers don't read `L · Lucy WebUI 可信 Agent 数据层`.
     renderAt("/overview");
     const brandLink = screen.getByRole("link", { name: "返回系统概览" });
     expect(brandLink).not.toHaveAccessibleName(/^L\s/);
   });
 
-  it("renders the shortened brand tagline without legacy captions", () => {
-    // Brand caption is `Data Agent MCP` (width-matched to 16px Lucy WebUI).
+  it("renders the shortened brand tagline without legacy captions", async () => {
+    // Brand caption is `可信 Agent 数据层` (width-matched to 16px Lucy WebUI).
     // Legacy Chinese / English duplicates must stay gone.
     renderAt("/overview");
-    expect(screen.getByText("Data Agent MCP")).toBeInTheDocument();
+    expect(screen.getByText("可信 Agent 数据层")).toBeInTheDocument();
     expect(screen.queryByText("Data Agent 运维控制台")).not.toBeInTheDocument();
     expect(
       screen.queryByText("Data Agent Ops Control Plane"),
@@ -337,7 +382,7 @@ describe("AppFrame shell", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("renders the Runtime Status sidebar shape with Spec 143 call monitor", () => {
+  it("renders the Runtime Status sidebar shape with Spec 143 call monitor", async () => {
     renderAt("/");
 
     // Group titles are buttons, not headings.
@@ -355,7 +400,7 @@ describe("AppFrame shell", () => {
       expect(screen.queryByRole("heading", { name: title })).not.toBeInTheDocument();
     }
 
-    for (const label of ["启用表范围", "业务 Wiki", "业务 Skill", "评测用例", "角色权限", "配置审计", "品牌外观", "登录账户"]) {
+    for (const label of ["启用表范围", "业务 Wiki", "业务 Skill", "评测用例", "角色权限", "配置审计", "品牌外观", "登录账户", "版本信息"]) {
       expect(screen.getByRole("link", { name: label })).toBeInTheDocument();
     }
 
@@ -370,7 +415,7 @@ describe("AppFrame shell", () => {
     }
   });
 
-  it("exposes the semantic-publish module with only workbench + history in the sidebar", () => {
+  it("exposes the semantic-publish module with only workbench + history in the sidebar", async () => {
     renderAt("/publish/workbench");
     expect(screen.getByText("语义发布")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "发布工作台" })).toHaveAttribute("href", "/publish/workbench");
@@ -383,13 +428,13 @@ describe("AppFrame shell", () => {
     expect(screen.queryByRole("link", { name: "资产包" })).not.toBeInTheDocument();
   });
 
-  it("redirects the legacy /review route to the publish workbench", () => {
+  it("redirects the legacy /review route to the publish workbench", async () => {
     renderAt("/review");
-    expect(screen.getByTestId("route-page")).toHaveTextContent("PublishWorkbench");
+    await waitFor(() => expect(screen.getByTestId("route-page")).toHaveTextContent("PublishWorkbench"));
     expect(screen.getByRole("link", { name: "发布工作台" })).toHaveAttribute("aria-current", "page");
   });
 
-  it("renders a global help button", () => {
+  it("renders a global help button", async () => {
     renderAt("/");
     expect(document.querySelector(".pl-topbar")).not.toBeInTheDocument();
 
@@ -397,33 +442,36 @@ describe("AppFrame shell", () => {
     const sidebarHelp = within(sidebarFooter).getByRole("link", { name: "打开系统手册" });
     expect(sidebarHelp).toHaveAttribute("href", "/help");
     expect(sidebarHelp).toHaveTextContent("系统手册");
+    expect(within(sidebarHelp).getByText("系统手册")).toHaveClass("whitespace-nowrap");
     expect(sidebarHelp.querySelector("svg")).not.toBeNull();
     expect(sidebarHelp).not.toHaveTextContent("?");
-    expect(within(sidebarFooter).getByTestId("sidebar-version")).toHaveTextContent("v0.17.0");
+    expect(within(sidebarFooter).queryByTestId("sidebar-version")).not.toBeInTheDocument();
+    expect(within(sidebarFooter).queryByTestId("sidebar-revision")).not.toBeInTheDocument();
+    expect(sidebarFooter).not.toHaveTextContent(/dirty/i);
     expect(within(sidebarFooter).getAllByRole("link")).toHaveLength(1);
     expect(within(sidebarFooter).queryByRole("link", { name: "配置变更" })).not.toBeInTheDocument();
     expect(within(sidebarFooter).queryByRole("navigation")).not.toBeInTheDocument();
     expect(sidebarFooter.querySelector(".pl-nav-section")).not.toBeInTheDocument();
   });
 
-  it("renders the help route", () => {
+  it("renders the help route", async () => {
     renderAt("/help");
-    expect(screen.getByTestId("route-page")).toHaveTextContent("HelpCenter");
+    await waitFor(() => expect(screen.getByTestId("route-page")).toHaveTextContent("HelpCenter"));
     expect(document.querySelector(".pl-app-shell")).toHaveClass("pl-app-shell--help");
   });
 
-  it("marks source and join pages as semantic asset navigation", () => {
+  it("marks source and join pages as semantic asset navigation", async () => {
     renderAt("/sources/mysql-aliyun/dataforai/superstore_orders");
     expect(screen.getByRole("link", { name: "语义资产" })).toHaveAttribute("aria-current", "page");
-    expect(screen.getByTestId("route-page")).toHaveTextContent("TableEditor");
+    await waitFor(() => expect(screen.getByTestId("route-page")).toHaveTextContent("TableEditor"));
 
     cleanup();
     renderAt("/catalog/mysql-aliyun/dataforai/superstore_orders");
     expect(screen.getByRole("link", { name: "语义资产" })).toHaveAttribute("aria-current", "page");
-    expect(screen.getByTestId("route-page")).toHaveTextContent("TableEditor");
+    await waitFor(() => expect(screen.getByTestId("route-page")).toHaveTextContent("TableEditor"));
   });
 
-  it("exposes density shell classes and active nav styling hook", () => {
+  it("exposes density shell classes and active nav styling hook", async () => {
     renderAt("/connections");
     expect(document.querySelector(".pl-app-root")).toBeInTheDocument();
     expect(document.querySelector(".pl-app-shell")).toBeInTheDocument();
@@ -433,7 +481,7 @@ describe("AppFrame shell", () => {
     expect(screen.getByRole("link", { name: "连接概览" })).toHaveClass("pl-nav-link", "pl-nav-link--active");
   });
 
-  it("locks desktop shell to --layout-min-readable-width with html overflow-x (Design System 02)", () => {
+  it("locks desktop shell to --layout-min-readable-width with html overflow-x (Design System 02)", async () => {
     // jsdom does not compute Tailwind/CSSOM from app.css; assert the contract
     // source so viewport zoom / sub-1200 windows keep desktop layout width.
     const css = readFileSync("src/app/app.css", "utf8");
@@ -443,7 +491,7 @@ describe("AppFrame shell", () => {
     expect(shellRule).toContain("min-width: var(--layout-min-readable-width)");
   });
 
-  it("forbids max-width layout stacks below 1200px for shell, PageHeader, and wiki (Design System 02)", () => {
+  it("forbids max-width layout stacks below 1200px for shell, PageHeader, and wiki (Design System 02)", async () => {
     const css = readFileSync("src/app/app.css", "utf8");
     // Help must keep desktop shell + TOC; no max-width collapse of --help shell.
     expect(css).not.toMatch(
@@ -466,13 +514,13 @@ describe("AppFrame shell", () => {
     );
   });
 
-  it("mounts global Toaster at bottom-right away from PageHeader actions (Spec 120)", () => {
+  it("mounts global Toaster at bottom-right away from PageHeader actions (Spec 120)", async () => {
     const appSource = readFileSync("src/app/App.tsx", "utf8");
     expect(appSource).toMatch(/<Toaster\b[^>]*\bposition="bottom-right"/);
     expect(appSource).not.toMatch(/<Toaster\b[^>]*\bposition="top-right"/);
   });
 
-  it("renders PageHeader with the global H1 styling hook", () => {
+  it("renders PageHeader with the global H1 styling hook", async () => {
     render(
       <MemoryRouter>
         <PageHeader title="连接概览" breadcrumbs={["数据接入"]} />
@@ -483,13 +531,13 @@ describe("AppFrame shell", () => {
     expect(screen.queryByRole("link", { name: "打开系统手册" })).not.toBeInTheDocument();
   });
 
-  it("marks admin agent context pages as agent navigation", () => {
+  it("marks admin agent context pages as agent navigation", async () => {
     renderAt("/admin/agents/zhangsan/tokens/new");
     expect(screen.getByRole("link", { name: "Agent" })).toHaveAttribute("aria-current", "page");
-    expect(screen.getByTestId("route-page")).toHaveTextContent("NewToken");
+    await waitFor(() => expect(screen.getByTestId("route-page")).toHaveTextContent("NewToken"));
   });
 
-  it("removes the compat 连通测试 sidebar entry while keeping no machine-translation artifacts", () => {
+  it("removes the compat 连通测试 sidebar entry while keeping no machine-translation artifacts", async () => {
     // v1.9.0: 连通测试（兼容）已从主导航移除；/connections/test 路由继续保留为兼容页。
     renderAt("/connections");
     expect(screen.queryByRole("link", { name: "连通测试（兼容）" })).not.toBeInTheDocument();
@@ -500,7 +548,7 @@ describe("AppFrame shell", () => {
   });
 
   describe("M60 sidebar brand + navigation polish", () => {
-    it("renders the sidebar search / command entry with the ⌘ K shortcut hint", () => {
+    it("renders the sidebar search / command entry with the ⌘ K shortcut hint", async () => {
       renderAt("/overview");
       const trigger = screen.getByTestId("sidebar-search-trigger");
       expect(trigger).toHaveAttribute("aria-label", expect.stringContaining("命令面板"));
@@ -508,7 +556,7 @@ describe("AppFrame shell", () => {
       expect(trigger).toHaveTextContent("⌘ K");
     });
 
-    it("auto-expands the sidebar group that owns the current route", () => {
+    it("auto-expands the sidebar group that owns the current route", async () => {
       renderAt("/admin/agents");
       const group = screen.getByTestId("nav-group-governance");
       expect(group).toHaveAttribute("data-open", "true");
@@ -516,7 +564,7 @@ describe("AppFrame shell", () => {
       expect(screen.getByRole("link", { name: "Agent" })).toBeVisible();
     });
 
-    it("hides a group's children when the user collapses it and restores them on toggle", () => {
+    it("hides a group's children when the user collapses it and restores them on toggle", async () => {
       renderAt("/overview");
       const toggle = screen.getByTestId("nav-group-toggle-publish");
       const group = screen.getByTestId("nav-group-publish");
@@ -536,7 +584,7 @@ describe("AppFrame shell", () => {
       expect(screen.getByRole("link", { name: "发布工作台" })).toBeVisible();
     });
 
-    it("persists collapsed group state across mounts in a versioned localStorage key", () => {
+    it("persists collapsed group state across mounts in a versioned localStorage key", async () => {
       renderAt("/overview");
       fireEvent.click(screen.getByTestId("nav-group-toggle-publish"));
       expect(window.localStorage.getItem("lucy.sidebar.collapsedGroups.v1")).toContain("publish");
@@ -549,7 +597,7 @@ describe("AppFrame shell", () => {
       expect(screen.getByTestId("nav-group-publish")).toHaveAttribute("data-open", "false");
     });
 
-    it("re-expands a collapsed group when the user navigates to a route inside it", () => {
+    it("re-expands a collapsed group when the user navigates to a route inside it", async () => {
       renderAt("/overview");
       fireEvent.click(screen.getByTestId("nav-group-toggle-evaluation"));
       expect(screen.getByTestId("nav-group-evaluation")).toHaveAttribute("data-open", "false");
@@ -561,14 +609,14 @@ describe("AppFrame shell", () => {
       expect(screen.getByRole("link", { name: "评测用例" })).toBeVisible();
     });
 
-    it("keeps the active nav-link styling hook even after the brand polish", () => {
+    it("keeps the active nav-link styling hook even after the brand polish", async () => {
       renderAt("/connections");
       const link = screen.getByRole("link", { name: "连接概览" });
       expect(link).toHaveClass("pl-nav-link", "pl-nav-link--active");
       expect(link).toHaveAttribute("aria-current", "page");
     });
 
-    it("keeps second-level navigation on a dedicated inset rail", () => {
+    it("keeps second-level navigation on a dedicated inset rail", async () => {
       renderAt("/connections");
       const groupItems = screen.getByTestId("nav-group-items-connections");
       const childLink = screen.getByRole("link", { name: "连接概览" });
@@ -581,23 +629,25 @@ describe("AppFrame shell", () => {
       expect(overviewLink.closest("[data-testid='nav-group-runtime-status']")).not.toBeNull();
     });
 
-    it("does not break the 系统手册 footer entry after the sidebar rewrite", () => {
+    it("does not break the 系统手册 footer entry after the sidebar rewrite", async () => {
       renderAt("/overview");
       const footer = screen.getByTestId("sidebar-footer");
       const helpLink = within(footer).getByRole("link", { name: "打开系统手册" });
       expect(helpLink).toHaveAttribute("href", "/help");
       expect(helpLink).toHaveTextContent("系统手册");
+      expect(within(helpLink).getByText("系统手册")).toHaveClass("whitespace-nowrap");
       expect(helpLink.querySelector("svg")).not.toBeNull();
-      expect(within(footer).getByTestId("sidebar-version")).toHaveTextContent("v0.17.0");
+      expect(within(footer).queryByTestId("sidebar-version")).not.toBeInTheDocument();
+      expect(within(footer).queryByTestId("sidebar-revision")).not.toBeInTheDocument();
+      expect(footer).not.toHaveTextContent(/dirty/i);
       expect(within(footer).getAllByRole("link")).toHaveLength(1);
-      expect(within(footer).getByTestId("sidebar-version").tagName).toBe("SPAN");
     });
   });
 
   describe("M66 brand block left/right alignment", () => {
-    it("keeps Lucy WebUI as one wordmark sized against Data Agent MCP", () => {
+    it("keeps Lucy WebUI as one wordmark sized against 可信 Agent 数据层", async () => {
       // Title stays a single string (no Lucy / WebUI split). Caption is the
-      // shorter `Data Agent MCP` so natural widths match under 16px title.
+      // shorter `可信 Agent 数据层` so natural widths match under 16px title.
       renderAt("/overview");
 
       const brandLink = screen.getByRole("link", { name: "返回系统概览" });
@@ -609,7 +659,7 @@ describe("AppFrame shell", () => {
       const tagline = screen.getByTestId("brand-tagline");
       expect(title).toHaveTextContent("Lucy WebUI");
       expect(title.querySelectorAll("span")).toHaveLength(0);
-      expect(tagline).toHaveTextContent("Data Agent MCP");
+      expect(tagline).toHaveTextContent("可信 Agent 数据层");
       expect(title).toHaveClass("pl-brand-title");
       expect(tagline.className).not.toContain("truncate");
     });

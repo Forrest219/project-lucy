@@ -4,7 +4,10 @@ services:
       context: .
       args:
         KTX_VERSION: "${KTX_VERSION:-0.16.0}"
-        LUCY_VERSION: "${LUCY_VERSION:-0.17.0}"
+        LUCY_VERSION: "${LUCY_VERSION:-2.0.0}"
+        # Source commit for /app/BUILD_REVISION. Not a product version and not a runtime env.
+        LUCY_GIT_SHA: "${LUCY_GIT_SHA:-}"
+        LUCY_GIT_DIRTY: "${LUCY_GIT_DIRTY:-}"
         # Customer / production baseline is amd64. Override on arm64 hosts.
         TARGETPLATFORM: "${TARGETPLATFORM:-linux/amd64}"
         TARGETARCH: "${TARGETARCH:-amd64}"
@@ -13,7 +16,7 @@ services:
     image: project-lucy:local
     environment:
       KTX_PROJECT_ROOT: /data/lucy
-      LUCY_VERSION: "${LUCY_VERSION:-0.17.0}"
+      LUCY_VERSION: "${LUCY_VERSION:-2.0.0}"
       LUCY_WEBUI_HOST: 0.0.0.0
       LUCY_WEBUI_PORT: "5174"
       LUCY_PROXY_HOST: 0.0.0.0

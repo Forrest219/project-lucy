@@ -1,0 +1,17 @@
+criterion,observed_value,verdict
+schemaVersion is 'audit-export-manifest/v2',"schemaVersion=""audit-export-manifest/v2""",pass
+ledgerUpperSeq is a non-negative integer,12345,pass
+projectionComplete is boolean true,true,pass
+scopeComplete is boolean true,true,pass
+fileHashOk is boolean true,true,pass
+relationCheckOk is boolean true,true,pass
+combinedComplete = scopeComplete AND fileHashOk AND relationCheckOk,scope=true fileHash=true relation=true; combined=true (truthy=3/3),pass
+associationQuality has all five categories,"confirmed=100,candidate=20,unassigned=5,conflict=0,legacyUnverified=3",pass
+dataScope.ok is boolean (always populated),true,pass
+clientCoverage.observed is boolean; gapWindows is an array,observed=true gapWindows=0,pass
+policyScopeExpanded is an array (audit-trust spec §4.7),array(len=0),pass
+untrustedSelfReport is a non-negative integer,0,pass
+legalEmptyWindow is boolean,false,pass
+lagMs is a non-negative integer,0,pass
+classificationVersion is non-empty,"classificationVersion=""audit-trust-2026-10-19-r1.v1""",pass
+digestVersion is non-empty,"digestVersion=""audit-trust-2026-10-19-r1.v1""",pass

@@ -1,7 +1,6 @@
-import { Fragment } from "react";
-import { useState } from "react";
-import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Database, Server } from "lucide-react";
+import { Fragment, lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ChevronRight, Database, Server } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { fetchCatalogSchemaManifest } from "../../lib/catalog-assets";
@@ -20,20 +19,15 @@ import type {
   CatalogSchemaManifestReadResponse,
   ConnectionInfo,
   ConnectionTestResult,
+  ExecutionRuntimeStatus,
   LiveSchemasResponse,
-  McpRuntimeCanaryResult,
-  McpRuntimeStatus,
-  ProjectInfo,
   SourceSummary,
   SourcesResponse
 } from "../../lib/types";
-import { AddSchemaDrawer } from "../../components/AddSchemaDrawer";
-import { CreateConnectionDrawer } from "../../components/CreateConnectionDrawer";
-import { DeleteConnectionDrawer } from "../../components/DeleteConnectionDrawer";
-import { RemoveSchemaDrawer } from "../../components/RemoveSchemaDrawer";
-import { SetupAssistantModal } from "../../components/onboarding";
 import {
+  canReadDatabaseStructure,
   deriveAssistantResumeState,
+  formatAssistantProgressCompact,
   formatAssistantProgressLabel,
   getAssistantDraft,
   type SetupStep
@@ -47,8 +41,17 @@ import {
 } from "../../components/catalog";
 import { ConnectionTestDrawer } from "../../components/connections";
 import { PageHeader } from "../../components/PageHeader";
+import { AsyncRegion, asyncStatus } from "../../components/AsyncRegion";
 import { MetricCard } from "./MetricCard";
-import { McpRuntimeStatusPanel } from "../../components/McpRuntimeStatusPanel";
+import { catalogReloadsQueryOptions, mcpRuntimeStatusQueryOptions, projectQueryOptions, sourcesQueryOptions, useDisplayFactsPending } from "../../lib/displayQueryOptions";
+
+// Spec 174 §6 — drawers / the setup assistant only load when opened.
+const AddSchemaDrawer = lazy(() => import("../../components/AddSchemaDrawer").then((m) => ({ default: m.AddSchemaDrawer })));
+const PrepareSchemaStructureDrawer = lazy(() => import("../../components/SchemaStructurePrep").then((m) => ({ default: m.PrepareSchemaStructureDrawer })));
+const CreateConnectionDrawer = lazy(() => import("../../components/CreateConnectionDrawer").then((m) => ({ default: m.CreateConnectionDrawer })));
+const DeleteConnectionDrawer = lazy(() => import("../../components/DeleteConnectionDrawer").then((m) => ({ default: m.DeleteConnectionDrawer })));
+const RemoveSchemaDrawer = lazy(() => import("../../components/RemoveSchemaDrawer").then((m) => ({ default: m.RemoveSchemaDrawer })));
+const SetupAssistantModal = lazy(() => import("../../components/onboarding").then((m) => ({ default: m.SetupAssistantModal })));
 
 /** Spec 107: client staleTime aligned with server TTL. */
 const LIVE_SCHEMAS_STALE_MS = 10 * 60 * 1000;
@@ -59,6 +62,7 @@ function engineLabel(engine?: string) {
   if (normalized === "postgres" || normalized === "postgresql") return "Postgres";
   if (normalized === "doris") return "Doris";
   if (normalized === "starrocks") return "StarRocks";
+  if (normalized === "athena") return "Athena";
   return "DB";
 }
 
@@ -68,11 +72,22 @@ function engineKey(engine?: string): "mysql" | "postgres" | "doris" | "starrocks
   if (normalized === "postgres" || normalized === "postgresql") return "postgres";
   if (normalized === "doris") return "doris";
   if (normalized === "starrocks") return "starrocks";
+  if (normalized === "athena") return "db";
   return "db";
 }
 
 function catalogReloadTimestampTitle(iso: string): string {
-  return `配置同步时间：${iso}。上传或修改 Schema Manifest 后，可用“同步配置变更”让页面读取最新 YAML 资产，不会连接数据库。`;
+  return `配置同步时间：${iso}。上传或修改 Schema Manifest 后，可用“刷新本地目录”让页面读取最新 YAML 资产，不会连接数据库。`;
+}
+
+function executionNoticeCopy(status: ExecutionRuntimeStatus | undefined): string | null {
+  if (status === "stale") {
+    return "问数服务仍在使用旧配置。已保存的连接里有尚未被它加载的项。";
+  }
+  if (status === "unavailable" || status === "error") {
+    return "问数服务当前不可用。连接配置已保存，问数要等服务恢复后才能使用这些连接。";
+  }
+  return null;
 }
 
 function formatLocalTime(iso: string): string {
@@ -113,8 +128,9 @@ type ManifestViewTarget = {
 };
 
 type ManifestUploadTarget = ManifestViewTarget & {
-  initialContent: string;
-  initialFilename: string;
+  mode: "create" | "update";
+  initialContent?: string;
+  initialFilename?: string;
 };
 
 function matchingSchemaWarnings(
@@ -257,6 +273,34 @@ function warningKey(connectionId: string, schema: string): string {
   return `${connectionId}:${schema}`;
 }
 
+/** Pointer can cross the 4px gap between a Schema 「更多」 and its menu without closing. */
+const SCHEMA_MORE_CLOSE_DELAY_MS = 150;
+
+type OpenMore =
+  | { kind: "connection"; id: string }
+  | { kind: "schema"; key: string };
+
+function sameOpenMore(current: OpenMore | null, target: OpenMore | null): boolean {
+  if (current === target) return true;
+  if (!current || !target || current.kind !== target.kind) return false;
+  if (current.kind === "connection" && target.kind === "connection") return current.id === target.id;
+  if (current.kind === "schema" && target.kind === "schema") return current.key === target.key;
+  return false;
+}
+
+function findOpenMoreRoot(target: OpenMore): HTMLElement | null {
+  if (target.kind === "schema") {
+    for (const node of document.querySelectorAll<HTMLElement>("[data-schema-more]")) {
+      if (node.dataset.schemaMore === target.key) return node;
+    }
+    return null;
+  }
+  for (const node of document.querySelectorAll<HTMLElement>("[data-connection-more]")) {
+    if (node.dataset.connectionMore === target.id) return node;
+  }
+  return null;
+}
+
 function schemaRefKey(connectionId: string, schema: string): string {
   return `${connectionId}\u0001${schema}`;
 }
@@ -330,14 +374,13 @@ function shouldShowRefreshWarning(
   return !lastRun;
 }
 
+/** Body status line for reload facts; history loading / error is shown in the header slot (Spec 174 R5). */
 function shouldShowCatalogRunStatus(
   lastRun: CatalogReloadRun | undefined,
   isReloading: boolean,
-  hasReloadError: boolean,
-  isHistoryLoading: boolean,
-  hasHistoryError: boolean
+  hasReloadError: boolean
 ): boolean {
-  return Boolean(isReloading || hasReloadError || isHistoryLoading || hasHistoryError || lastRun?.status === "failed");
+  return Boolean(isReloading || hasReloadError || lastRun?.status === "failed");
 }
 
 function liveTableCountCell(
@@ -378,50 +421,50 @@ function liveTableCountCell(
 export function ConnectionOverview() {
   const queryClient = useQueryClient();
   const projectQuery = useQuery({
-    queryKey: queryKeys.project,
-    queryFn: () => apiGet<ProjectInfo>("/api/project")
+    ...projectQueryOptions()
   });
   const sourcesQuery = useQuery({
-    queryKey: queryKeys.sources,
-    queryFn: () => apiGet<SourcesResponse>("/api/sources")
+    ...sourcesQueryOptions()
   });
   const catalogReloadsQuery = useQuery({
-    queryKey: queryKeys.catalogReloads,
-    queryFn: () => apiGet<CatalogReloadsResponse>("/api/catalog/reloads")
+    ...catalogReloadsQueryOptions()
   });
   const mcpRuntimeQuery = useQuery({
-    queryKey: queryKeys.mcpRuntime,
-    queryFn: () => apiGet<McpRuntimeStatus>("/api/admin/mcp-runtime/status")
-  });
-  const [runtimeCanaryByConnection, setRuntimeCanaryByConnection] = useState<
-    Record<string, McpRuntimeCanaryResult>
-  >({});
-  const runtimeCanaryMutation = useMutation({
-    mutationFn: (connectionId: string) =>
-      apiPost<McpRuntimeCanaryResult>("/api/admin/mcp-runtime/canary", {
-        connectionId,
-        mode: "connection"
-      }),
-    onSuccess: (data) => {
-      setRuntimeCanaryByConnection((current) => ({
-        ...current,
-        [data.connectionId]: data
-      }));
-      void queryClient.invalidateQueries({ queryKey: queryKeys.mcpRuntime });
-    }
+    ...mcpRuntimeStatusQueryOptions()
   });
 
   const connections = projectQuery.data?.connections ?? [];
+  // Spec 174 §5: background probes start only after the primary connection cards
+  // commit and paint (double rAF); the server queue (concurrency 2) runs them in card order.
+  const [probesArmed, setProbesArmed] = useState(false);
+  const cardsCommitted = projectQuery.data !== undefined;
+  useLayoutEffect(() => {
+    if (!cardsCommitted || probesArmed) return;
+    performance.mark("lucy-connections-cards-commit");
+    let second = 0;
+    const first = requestAnimationFrame(() => {
+      second = requestAnimationFrame(() => {
+        performance.mark("lucy-connections-probes-armed");
+        setProbesArmed(true);
+      });
+    });
+    return () => {
+      cancelAnimationFrame(first);
+      cancelAnimationFrame(second);
+    };
+  }, [cardsCommitted, probesArmed]);
+  const manualProbeIds = useRef(new Set<string>());
   const liveSchemaQueries = useQueries({
     queries: connections.map((conn) => ({
       queryKey: queryKeys.connectionLiveSchemas(conn.id),
-      queryFn: () =>
+      queryFn: ({ signal }: { signal: AbortSignal }) =>
         apiGet<LiveSchemasResponse>(
-          `/api/connections/${encodeURIComponent(conn.id)}/live-schemas`
+          `/api/connections/${encodeURIComponent(conn.id)}/live-schemas?purpose=automatic`,
+          { signal }
         ),
       staleTime: LIVE_SCHEMAS_STALE_MS,
       retry: false,
-      enabled: Boolean(projectQuery.data)
+      enabled: probesArmed
     }))
   });
   const liveByConnectionId = new Map(
@@ -432,15 +475,18 @@ export function ConnectionOverview() {
   const healthQueries = useQueries({
     queries: connections.map((conn) => ({
       queryKey: queryKeys.connectionHealth(conn.id),
-      queryFn: () =>
-        apiPost<ConnectionTestResult>(
+      queryFn: ({ signal }: { signal: AbortSignal }) => {
+        const purpose = manualProbeIds.current.delete(conn.id) ? "manual" : "automatic";
+        return apiPost<ConnectionTestResult>(
           `/api/connections/${encodeURIComponent(conn.id)}/test`,
-          {}
-        ),
+          { purpose },
+          { signal }
+        );
+      },
       staleTime: 0,
       gcTime: 0,
       retry: false,
-      enabled: Boolean(projectQuery.data)
+      enabled: probesArmed
     }))
   });
   const healthByConnectionId = new Map(
@@ -459,9 +505,23 @@ export function ConnectionOverview() {
   const catalogReloadHistoryReady = catalogReloadsQuery.isSuccess;
   const catalogReloadHistoryLoading = catalogReloadsQuery.isLoading;
   const catalogReloadHistoryError = catalogReloadsQuery.error instanceof Error ? catalogReloadsQuery.error : null;
-  const loading = projectQuery.isLoading || sourcesQuery.isLoading;
-  const error = projectQuery.error ?? sourcesQuery.error;
+  // Spec 174 §4.1: project alone drives the cards; sources only feeds local Manifest facts.
+  // Runtime notice and reload times are decorations with stable slots (never a card gate).
+  const projectStatus = asyncStatus(projectQuery);
+  const cardsStatus = projectStatus;
+  // If the runtime status is still pending when the cards first appear, keep a
+  // notice-sized slot above the list for this page visit so a late notice (or
+  // its absence) never moves the whole column.
+  const runtimeSlotRef = useRef<boolean | null>(null);
+  if (cardsCommitted && runtimeSlotRef.current === null) runtimeSlotRef.current = mcpRuntimeQuery.isPending;
+  const reserveRuntimeSlot = runtimeSlotRef.current === true;
+  const runtimeNotice = !mcpRuntimeQuery.isLoading && !mcpRuntimeQuery.isError ? executionNoticeCopy(mcpRuntimeQuery.data?.execution?.status) : null;
+  const sourcesReady = sourcesQuery.data !== undefined;
+  // Spec 174 §4.2: a pending write (or no re-read since) keeps Manifest facts unconfirmed for actions.
+  const sourcesFactsPending = useDisplayFactsPending("sources");
+  const sourcesActionsReady = sourcesReady && !sourcesFactsPending && !sourcesQuery.isFetching && !sourcesQuery.isError;
   const [addTarget, setAddTarget] = useState<ConnectionInfo | null>(null);
+  const [structureTarget, setStructureTarget] = useState<{ connection: ConnectionInfo; schema: string } | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [assistantStep, setAssistantStep] = useState<SetupStep>(1);
@@ -479,6 +539,71 @@ export function ConnectionOverview() {
   const [refreshingLiveByConnection, setRefreshingLiveByConnection] = useState<Record<string, boolean>>({});
   const [testDrawerConnId, setTestDrawerConnId] = useState<string | null>(null);
   const [testLogsExpanded, setTestLogsExpanded] = useState(false);
+  const [openMore, setOpenMore] = useState<OpenMore | null>(null);
+  const schemaMoreCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function cancelSchemaMoreClose() {
+    if (schemaMoreCloseTimer.current != null) {
+      clearTimeout(schemaMoreCloseTimer.current);
+      schemaMoreCloseTimer.current = null;
+    }
+  }
+
+  function closeMore() {
+    cancelSchemaMoreClose();
+    setOpenMore(null);
+  }
+
+  function toggleMore(next: OpenMore) {
+    cancelSchemaMoreClose();
+    setOpenMore((current) => (sameOpenMore(current, next) ? null : next));
+  }
+
+  function scheduleSchemaMoreClose(key: string) {
+    cancelSchemaMoreClose();
+    schemaMoreCloseTimer.current = setTimeout(() => {
+      schemaMoreCloseTimer.current = null;
+      setOpenMore((current) => (current?.kind === "schema" && current.key === key ? null : current));
+    }, SCHEMA_MORE_CLOSE_DELAY_MS);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (schemaMoreCloseTimer.current != null) clearTimeout(schemaMoreCloseTimer.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!openMore) return;
+    const target = openMore;
+
+    function onPointerDown(event: PointerEvent) {
+      const root = findOpenMoreRoot(target);
+      if (root && event.target instanceof Node && root.contains(event.target)) return;
+      cancelSchemaMoreClose();
+      setOpenMore((current) => (sameOpenMore(current, target) ? null : current));
+    }
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      const root = findOpenMoreRoot(target);
+      const summary = root?.querySelector("summary");
+      const returnFocus =
+        root != null &&
+        document.activeElement instanceof Node &&
+        root.contains(document.activeElement);
+      cancelSchemaMoreClose();
+      setOpenMore((current) => (sameOpenMore(current, target) ? null : current));
+      if (returnFocus && summary instanceof HTMLElement) summary.focus();
+    }
+
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [openMore]);
 
   function handleReloadStart(connectionId: string) {
     setReloadingConnections((current) => ({ ...current, [connectionId]: true }));
@@ -510,8 +635,18 @@ export function ConnectionOverview() {
     setManifestUploadTarget({
       connectionId: asset.connectionId,
       schema: asset.schema,
+      mode: "update",
       initialContent: asset.content,
       initialFilename: asset.filename
+    });
+  }
+
+  function openCreateUploadDrawer(connectionId: string, schema: string) {
+    closeMore();
+    setManifestUploadTarget({
+      connectionId,
+      schema,
+      mode: "create"
     });
   }
 
@@ -531,13 +666,9 @@ export function ConnectionOverview() {
     }
   }
 
-  if (loading) {
-    return <p className="pl-notice">正在加载连接状态...</p>;
-  }
-
-  if (error) {
-    return <p className="pl-error">连接状态加载失败：{error instanceof Error ? error.message : "未知错误"}</p>;
-  }
+  const unknownMetric = "—";
+  // Keeps every metric card's row structure identical before / after the facts arrive (PERF-09).
+  const pendingSubValue = "\u00a0";
 
   return (
     <div className="pl-page-stack">
@@ -578,27 +709,47 @@ export function ConnectionOverview() {
       <div className="pl-metric-grid">
         <MetricCard
           type="connections"
-          value={connections.length}
-          subValue={schemaCount > 0 ? `${schemaCount} 个 Schema` : "未配置 Schema"}
+          value={projectStatus === "success" ? connections.length : unknownMetric}
+          subValue={projectStatus !== "success" ? pendingSubValue : schemaCount > 0 ? `${schemaCount} 个 Schema` : "未配置 Schema"}
         />
         <MetricCard
           type="missingManifestSchemas"
-          value={missingManifestSchemaCount}
-          subValue={`${configuredSchemas.size} 个 Schema 中 ${configuredManifestSchemaCount} 个已有 Manifest`}
-          tone={missingManifestSchemaCount > 0 ? "warning" : undefined}
+          value={sourcesReady && projectStatus === "success" ? missingManifestSchemaCount : unknownMetric}
+          subValue={sourcesReady && projectStatus === "success" ? `${configuredSchemas.size} 个 Schema 中 ${configuredManifestSchemaCount} 个已有 Manifest` : pendingSubValue}
+          tone={sourcesReady && missingManifestSchemaCount > 0 ? "warning" : undefined}
         />
         <MetricCard
           type="localCatalogTables"
-          value={semanticTables.length}
-          subValue={`来自 ${configuredManifestSchemaCount} 个 Schema Manifest`}
+          value={sourcesReady ? semanticTables.length : unknownMetric}
+          subValue={sourcesReady && projectStatus === "success" ? `来自 ${configuredManifestSchemaCount} 个 Schema Manifest` : pendingSubValue}
         />
         <MetricCard
           type="unenabledTables"
-          value={unenabledLocalTableCount}
-          subValue={`已启用 ${enabledLocalCount} / 本地 ${semanticTables.length} 张表`}
+          value={sourcesReady && projectStatus === "success" ? unenabledLocalTableCount : unknownMetric}
+          subValue={sourcesReady && projectStatus === "success" ? `已启用 ${enabledLocalCount} / 本地 ${semanticTables.length} 张表` : pendingSubValue}
         />
       </div>
 
+      <AsyncRegion
+        status={cardsStatus}
+        label="连接列表"
+        error={projectQuery.error}
+        onRetry={() => void projectQuery.refetch()}
+        minHeight={320}
+      >
+      {/* Rendered with the cards (never above a still-pending list placeholder), so it cannot push it down. */}
+      {runtimeNotice ? (
+        <p className="pl-notice text-sm" role="status" data-testid="execution-runtime-notice">
+          {runtimeNotice}{" "}
+          <Link className="notranslate underline" translate="no" to="/admin/mcp-playground">
+            打开 MCP 调试台
+          </Link>
+        </p>
+      ) : reserveRuntimeSlot ? (
+        <p className="pl-notice text-sm" aria-hidden="true" style={{ visibility: "hidden" }} data-testid="execution-runtime-slot">
+          &nbsp;
+        </p>
+      ) : null}
       <div className="pl-overview-grid pl-overview-grid--flat">
         {connections.length === 0 && (
           <div className="py-8 px-6 text-center bg-bg-surface border border-border-default rounded-xl space-y-4" data-testid="connections-empty-state">
@@ -698,14 +849,13 @@ export function ConnectionOverview() {
               draft: getAssistantDraft(conn.id)
             });
             const cardAssistantStep = cardAssistantState.step;
-            const isAssistantInProgress = cardAssistantStep < 6;
+            const isAssistantInProgress = sourcesReady && cardAssistantStep < 6;
             const showCatalogRunStatus = shouldShowCatalogRunStatus(
               lastRun,
               Boolean(reloadingConnections[conn.id]),
-              Boolean(reloadError),
-              catalogReloadHistoryLoading,
-              Boolean(catalogReloadHistoryError)
+              Boolean(reloadError)
             );
+            const showHistoryStatus = !headerTimestamp && !showCatalogRunStatus && (catalogReloadHistoryLoading || Boolean(catalogReloadHistoryError));
             return (
               <div className="pl-connection-row" key={conn.id} data-testid={`connection-card-${conn.id}`}>
                 <div className="pl-connection-card-header">
@@ -768,8 +918,9 @@ export function ConnectionOverview() {
                           className={`pl-connection-health pl-connection-health--${statusTone.tone}`}
                           data-testid={`connection-health-${conn.id}`}
                           data-tone={statusTone.tone}
-                          aria-label={`连通健康 · ${conn.id} · ${ariaStatus}`}
-                          title="查看连通诊断；进页会自动探测一次"
+                          aria-haspopup="dialog"
+                          aria-label={`连通健康 · ${conn.id} · ${ariaStatus}。打开连通测试`}
+                          title="打开连通测试"
                           onClick={() => {
                             setTestDrawerConnId(conn.id);
                             setTestLogsExpanded(false);
@@ -790,6 +941,7 @@ export function ConnectionOverview() {
                               · {probeClock}
                             </time>
                           ) : null}
+                          <ChevronRight className="pl-connection-health-chevron" aria-hidden="true" strokeWidth={2} />
                         </button>
                       );
                     })()}
@@ -814,17 +966,140 @@ export function ConnectionOverview() {
                         <time className="notranslate" translate="no" dir="ltr">{headerTimestamp}</time>
                         {lastRun?.status === "failed" ? <span> · 失败</span> : null}
                       </span>
-                    ) : null}
-                    {isAssistantInProgress ? (
+                    ) : showHistoryStatus ? (
                       <span
-                        className="pl-connection-meta-tag notranslate"
+                        className={`pl-connection-last-reload pl-connection-last-reload--${catalogState.tone === "danger" ? "danger" : "muted"} notranslate`}
+                        data-testid={`catalog-reload-status-${conn.id}`}
+                        role={catalogState.tone === "danger" ? "alert" : "status"}
+                        title={catalogState.detail || undefined}
                         translate="no"
-                        title={formatAssistantProgressLabel(cardAssistantStep)}
-                        data-testid={`connection-assistant-banner-${conn.id}`}
                       >
-                        接入进度 {cardAssistantStep}/6
+                        {catalogState.label}
                       </span>
                     ) : null}
+                    {isAssistantInProgress ? (
+                      <button
+                        type="button"
+                        className="pl-connection-progress notranslate"
+                        translate="no"
+                        title={formatAssistantProgressLabel(cardAssistantStep)}
+                        aria-label={`继续向导，${formatAssistantProgressCompact(cardAssistantStep)}`}
+                        data-testid={`resume-assistant-${conn.id}`}
+                        onClick={() => {
+                          setAssistantConnId(conn.id);
+                          setAssistantStep(cardAssistantStep);
+                          setAssistantOpen(true);
+                        }}
+                      >
+                        {formatAssistantProgressCompact(cardAssistantStep)}
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="pl-btn pl-btn--secondary notranslate"
+                      onClick={() => setAddTarget(conn)}
+                      data-testid={`add-schema-${conn.id}`}
+                      translate="no"
+                    >
+                      添加 Schema
+                    </button>
+                    <details
+                      className="pl-row-action-more pl-connection-more"
+                      open={openMore?.kind === "connection" && openMore.id === conn.id}
+                      data-connection-more={conn.id}
+                      data-testid={`connection-more-${conn.id}`}
+                      onToggle={(event) => {
+                        const nextOpen = event.currentTarget.open;
+                        const mine: OpenMore = { kind: "connection", id: conn.id };
+                        setOpenMore((current) => {
+                          if (nextOpen) return mine;
+                          return sameOpenMore(current, mine) ? null : current;
+                        });
+                      }}
+                    >
+                      <summary
+                        className="pl-row-action-link notranslate"
+                        translate="no"
+                        aria-label={`更多连接操作：${conn.id}`}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          toggleMore({ kind: "connection", id: conn.id });
+                        }}
+                      >
+                        更多
+                      </summary>
+                      <div className="pl-row-action-more-menu pl-connection-more-menu">
+                        <div className="pl-connection-more-entry">
+                          <button
+                            type="button"
+                            className="pl-row-action-link pl-connection-more-action notranslate"
+                            disabled={Boolean(liveQuery?.isFetching || refreshingLiveByConnection[conn.id])}
+                            onClick={() => {
+                              closeMore();
+                              void (async () => {
+                                setRefreshingLiveByConnection((current) => ({ ...current, [conn.id]: true }));
+                                try {
+                                  const data = await apiGet<LiveSchemasResponse>(
+                                    `/api/connections/${encodeURIComponent(conn.id)}/live-schemas?refresh=1&purpose=manual`
+                                  );
+                                  queryClient.setQueryData(queryKeys.connectionLiveSchemas(conn.id), data);
+                                } catch (err) {
+                                  toast.error(
+                                    err instanceof Error ? err.message : "重新拉取库内目录失败"
+                                  );
+                                } finally {
+                                  setRefreshingLiveByConnection((current) => ({ ...current, [conn.id]: false }));
+                                }
+                              })();
+                            }}
+                            data-testid={`refresh-live-catalog-${conn.id}`}
+                            title="向数据库查询当前可见的 Schema 和表数量。"
+                            translate="no"
+                          >
+                            {liveQuery?.isFetching || refreshingLiveByConnection[conn.id]
+                              ? "拉取库内目录..."
+                              : "重新拉取库内目录"}
+                          </button>
+                          <p className="pl-connection-more-hint">
+                            向数据库查询当前可见的 <span className="notranslate" translate="no">Schema</span> 和表数量。
+                          </p>
+                        </div>
+                        <div className="pl-connection-more-entry">
+                          <CatalogReloadButton
+                            connectionId={conn.id}
+                            label="刷新本地目录"
+                            pendingLabel="刷新中..."
+                            variant="menu"
+                            testId={`catalog-reload-${conn.id}`}
+                            title="重新读取本机 YAML，不连接数据库。"
+                            showCompletionLabel={false}
+                            showInlineResult={false}
+                            onReloadStart={() => {
+                              closeMore();
+                              handleReloadStart(conn.id);
+                            }}
+                            onReloadComplete={(run) => handleReloadComplete(conn.id, run)}
+                            onReloadError={(reloadButtonError) => handleReloadError(conn.id, reloadButtonError)}
+                          />
+                          <p className="pl-connection-more-hint">
+                            重新读取本机 <span className="notranslate" translate="no">YAML</span>，不连接数据库。
+                          </p>
+                        </div>
+                        <div className="pl-connection-more-separator" role="separator" />
+                        <button
+                          type="button"
+                          className="pl-row-action-link pl-row-action-link--danger pl-connection-more-action notranslate"
+                          onClick={() => {
+                            closeMore();
+                            setDeleteTarget(conn);
+                          }}
+                          data-testid={`delete-connection-${conn.id}`}
+                          translate="no"
+                        >
+                          删除连接
+                        </button>
+                      </div>
+                    </details>
                   </div>
                   <dl className="pl-connection-kv-grid pl-connection-kv-grid--compact" data-testid={`connection-kv-${conn.id}`}>
                     <div className="pl-connection-kv">
@@ -935,22 +1210,22 @@ export function ConnectionOverview() {
                           // enabled count comes from `enabled_tables` in
                           // ktx.yaml.
                           const explainSourceDrift =
-                            assetState.tableCount === 0 && enabledTableCount > 0;
+                            sourcesReady && assetState.tableCount === 0 && enabledTableCount > 0;
                           const sourceDriftHintId = `schema-source-drift-hint-${conn.id}-${schema}`;
                           return (
                             <Fragment key={schema}>
                               <tr
-                                data-tone={assetState.tone}
+                                data-tone={sourcesReady ? assetState.tone : "muted"}
                                 data-testid={`schema-row-${conn.id}-${schema}`}
                               >
                                 <td><code className="notranslate" translate="no" dir="ltr">{schema}</code></td>
                                 <td>
                                   <span
-                                    className={`pl-schema-asset-status pl-schema-asset-status--${assetState.tone} notranslate`}
+                                    className={`pl-schema-asset-status pl-schema-asset-status--${sourcesReady ? assetState.tone : "muted"} notranslate`}
                                     data-testid={`schema-asset-status-${conn.id}-${schema}`}
                                     translate="no"
                                   >
-                                    {assetState.label}
+                                    {sourcesReady ? assetState.label : "—"}
                                   </span>
                                 </td>
                                 <td className="pl-schema-asset-table-num">
@@ -978,7 +1253,7 @@ export function ConnectionOverview() {
                                       explainSourceDrift ? sourceDriftHintId : undefined
                                     }
                                   >
-                                    {assetState.tableCount} 张表
+                                    {sourcesReady ? `${assetState.tableCount} 张表` : "—"}
                                     {explainSourceDrift ? (
                                       <span
                                         className="pl-schema-asset-source-drift-tag"
@@ -996,6 +1271,8 @@ export function ConnectionOverview() {
                                   {enabledTableCount} 张表
                                 </td>
                                 <td className="pl-schema-asset-table-action">
+                                  {/* Spec 174 §4.1: Manifest-dependent actions wait for real sources facts. */}
+                                  {!sourcesActionsReady ? <span className="pl-notice pl-schema-asset-actions-pending" aria-hidden="true" data-testid={`schema-actions-pending-${conn.id}-${schema}`}>—</span> : (
                                   <div className="pl-schema-asset-actions">
                                     {hasReadableManifest ? (
                                       <>
@@ -1016,6 +1293,16 @@ export function ConnectionOverview() {
                                           维护启用表范围
                                         </Link>
                                       </>
+                                    ) : canReadDatabaseStructure(conn) ? (
+                                      <button
+                                        type="button"
+                                        className="pl-row-action-link notranslate"
+                                        translate="no"
+                                        onClick={() => setStructureTarget({ connection: conn, schema })}
+                                        data-testid={`read-structure-${conn.id}-${schema}`}
+                                      >
+                                        从数据库读取表结构
+                                      </button>
                                     ) : (
                                       <CatalogAssetUploadButton
                                         connectionId={conn.id}
@@ -1037,8 +1324,43 @@ export function ConnectionOverview() {
                                         {expanded ? "收起详情" : "查看详情"}
                                       </button>
                                     ) : null}
-                                    <details className="pl-row-action-more">
-                                      <summary className="pl-row-action-link notranslate" translate="no" aria-label={`更多 Schema 操作：${schema}`}>更多</summary>
+                                    <details
+                                      className="pl-row-action-more"
+                                      open={openMore?.kind === "schema" && openMore.key === rowManifestKey}
+                                      data-schema-more={rowManifestKey}
+                                      data-testid={`schema-more-${conn.id}-${schema}`}
+                                      onMouseEnter={() => {
+                                        if (openMore?.kind === "schema" && openMore.key === rowManifestKey) cancelSchemaMoreClose();
+                                      }}
+                                      onMouseLeave={() => {
+                                        if (openMore?.kind === "schema" && openMore.key === rowManifestKey) scheduleSchemaMoreClose(rowManifestKey);
+                                      }}
+                                      onToggle={(event) => {
+                                        const nextOpen = event.currentTarget.open;
+                                        const mine: OpenMore = { kind: "schema", key: rowManifestKey };
+                                        setOpenMore((current) => {
+                                          if (nextOpen) return mine;
+                                          return sameOpenMore(current, mine) ? null : current;
+                                        });
+                                      }}
+                                      onBlur={(event) => {
+                                        const next = event.relatedTarget;
+                                        if (next instanceof Node && event.currentTarget.contains(next)) return;
+                                        if (!(openMore?.kind === "schema" && openMore.key === rowManifestKey)) return;
+                                        closeMore();
+                                      }}
+                                    >
+                                      <summary
+                                        className="pl-row-action-link notranslate"
+                                        translate="no"
+                                        aria-label={`更多 Schema 操作：${schema}`}
+                                        onClick={(event) => {
+                                          event.preventDefault();
+                                          toggleMore({ kind: "schema", key: rowManifestKey });
+                                        }}
+                                      >
+                                        更多
+                                      </summary>
                                       <div className="pl-row-action-more-menu">
                                         {hasReadableManifest ? (
                                           <>
@@ -1047,7 +1369,10 @@ export function ConnectionOverview() {
                                               className="pl-row-action-link notranslate"
                                               translate="no"
                                               disabled={downloadingManifestKey === rowManifestKey}
-                                              onClick={() => void downloadManifest(conn.id, schema)}
+                                              onClick={() => {
+                                                closeMore();
+                                                void downloadManifest(conn.id, schema);
+                                              }}
                                               data-testid={`download-manifest-${conn.id}-${schema}`}
                                             >
                                               {downloadingManifestKey === rowManifestKey ? "下载中..." : "下载 Manifest"}
@@ -1057,6 +1382,7 @@ export function ConnectionOverview() {
                                               className="pl-row-action-link notranslate"
                                               translate="no"
                                               onClick={async () => {
+                                                closeMore();
                                                 try {
                                                   const asset = await fetchCatalogSchemaManifest(conn.id, schema);
                                                   openReuploadDrawer(asset);
@@ -1071,12 +1397,26 @@ export function ConnectionOverview() {
                                               重新上传 Manifest
                                             </button>
                                           </>
+                                        ) : canReadDatabaseStructure(conn) ? (
+                                          <CatalogAssetUploadButton
+                                            connectionId={conn.id}
+                                            schema={schema}
+                                            label="上传 Manifest"
+                                            variant="link"
+                                            size="sm"
+                                            testId={`upload-yaml-${conn.id}-${schema}`}
+                                            renderDrawer={false}
+                                            onOpen={() => openCreateUploadDrawer(conn.id, schema)}
+                                          />
                                         ) : null}
                                         <button
                                           type="button"
                                           className="pl-row-action-link pl-row-action-link--danger notranslate"
                                           translate="no"
-                                          onClick={() => setRemoveTarget({ connection: conn, schema })}
+                                          onClick={() => {
+                                            closeMore();
+                                            setRemoveTarget({ connection: conn, schema });
+                                          }}
                                           data-testid={`remove-schema-${conn.id}-${schema}`}
                                         >
                                           移除 Schema
@@ -1084,6 +1424,7 @@ export function ConnectionOverview() {
                                       </div>
                                     </details>
                                   </div>
+                                  )}
                                 </td>
                               </tr>
                               {warning && expanded ? (
@@ -1168,129 +1509,38 @@ export function ConnectionOverview() {
                       </tbody>
                     </table>
                   )}
-                </div>
-                <div className="pl-connection-card-footer">
-                  <McpRuntimeStatusPanel
-                    status={mcpRuntimeQuery.data}
-                    connectionId={conn.id}
-                    canary={runtimeCanaryByConnection[conn.id]}
-                    pending={
-                      runtimeCanaryMutation.isPending &&
-                      runtimeCanaryMutation.variables === conn.id
-                    }
-                    error={
-                      mcpRuntimeQuery.error instanceof Error
-                        ? mcpRuntimeQuery.error.message
-                        : runtimeCanaryMutation.error instanceof Error &&
-                            runtimeCanaryMutation.variables === conn.id
-                          ? runtimeCanaryMutation.error.message
-                          : undefined
-                    }
-                    compact
-                    onRecheck={() => runtimeCanaryMutation.mutate(conn.id)}
-                  />
                   {showCatalogRunStatus ? (
                     <div
                       className={`pl-catalog-reload-status pl-catalog-reload-status--${catalogState.tone} notranslate`}
-                        data-testid={`catalog-reload-status-${conn.id}`}
-                        role={catalogState.tone === "danger" ? "alert" : "status"}
-                        translate="no"
-                      >
-                        <span className="pl-catalog-reload-status-main">{catalogState.label}</span>
+                      data-testid={`catalog-reload-status-${conn.id}`}
+                      role={catalogState.tone === "danger" ? "alert" : "status"}
+                      translate="no"
+                    >
+                      <span className="pl-catalog-reload-status-main">{catalogState.label}</span>
                       {catalogState.detail ? <span>{catalogState.detail}</span> : null}
                     </div>
                   ) : null}
-                  <div
-                    className="pl-connection-card-schema-actions"
-                    data-testid={`connection-card-schema-actions-${conn.id}`}
-                  >
-                    {isAssistantInProgress ? (
-                      <button
-                        type="button"
-                        className="pl-btn pl-btn--secondary notranslate"
-                        onClick={() => {
-                          setAssistantConnId(conn.id);
-                          setAssistantStep(cardAssistantStep);
-                          setAssistantOpen(true);
-                        }}
-                        data-testid={`resume-assistant-${conn.id}`}
-                        translate="no"
-                      >
-                        继续向导
-                      </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      className="pl-btn pl-btn--secondary notranslate"
-                      onClick={() => setAddTarget(conn)}
-                      data-testid={`add-schema-${conn.id}`}
-                      translate="no"
-                    >
-                      + 添加 Schema
-                    </button>
-                    <button
-                      type="button"
-                      className="pl-btn pl-btn--secondary notranslate"
-                      disabled={Boolean(liveQuery?.isFetching || refreshingLiveByConnection[conn.id])}
-                      onClick={() => {
-                        void (async () => {
-                          setRefreshingLiveByConnection((current) => ({ ...current, [conn.id]: true }));
-                          try {
-                            const data = await apiGet<LiveSchemasResponse>(
-                              `/api/connections/${encodeURIComponent(conn.id)}/live-schemas?refresh=1`
-                            );
-                            queryClient.setQueryData(queryKeys.connectionLiveSchemas(conn.id), data);
-                          } catch (err) {
-                            toast.error(
-                              err instanceof Error ? err.message : "重新拉取库内目录失败"
-                            );
-                          } finally {
-                            setRefreshingLiveByConnection((current) => ({ ...current, [conn.id]: false }));
-                          }
-                        })();
-                      }}
-                      data-testid={`refresh-live-catalog-${conn.id}`}
-                      title="重新查询物理库中的 Schema / 表数量；与「同步配置变更」不同，会连接数据库。"
-                      translate="no"
-                    >
-                      {liveQuery?.isFetching || refreshingLiveByConnection[conn.id]
-                        ? "拉取库内目录..."
-                        : "重新拉取库内目录"}
-                    </button>
-                    <CatalogReloadButton
-                      connectionId={conn.id}
-                      label="同步配置变更"
-                      pendingLabel="同步中..."
-                      variant="secondary"
-                      testId={`catalog-reload-${conn.id}`}
-                      title="上传或修改配置文件后，点击同步配置变更以读取最新资产；不会连接数据库，也不会执行 ingest。"
-                      showCompletionLabel={false}
-                      showInlineResult={false}
-                      onReloadStart={() => handleReloadStart(conn.id)}
-                      onReloadComplete={(run) => handleReloadComplete(conn.id, run)}
-                      onReloadError={(reloadButtonError) => handleReloadError(conn.id, reloadButtonError)}
-                    />
-                    <button
-                      type="button"
-                      className="pl-btn pl-btn--secondary notranslate"
-                      onClick={() => setDeleteTarget(conn)}
-                      data-testid={`delete-connection-${conn.id}`}
-                      translate="no"
-                    >
-                      删除连接
-                    </button>
-                  </div>
                 </div>
               </div>
             );
           })}
       </div>
+      </AsyncRegion>
 
+      <Suspense fallback={null}>
       {createOpen ? (
         <CreateConnectionDrawer
           open={createOpen}
           onClose={() => setCreateOpen(false)}
           existingIds={connections.map((conn) => conn.id)}
+        />
+      ) : null}
+      {structureTarget ? (
+        <PrepareSchemaStructureDrawer
+          connection={structureTarget.connection}
+          schema={structureTarget.schema}
+          open
+          onClose={() => setStructureTarget(null)}
         />
       ) : null}
       {addTarget && (
@@ -1330,9 +1580,13 @@ export function ConnectionOverview() {
           onClose={() => setManifestUploadTarget(null)}
           connectionId={manifestUploadTarget.connectionId}
           schema={manifestUploadTarget.schema}
-          mode="update"
-          initialContent={manifestUploadTarget.initialContent}
-          initialFilename={manifestUploadTarget.initialFilename}
+          mode={manifestUploadTarget.mode}
+          {...(manifestUploadTarget.initialContent !== undefined
+            ? { initialContent: manifestUploadTarget.initialContent }
+            : {})}
+          {...(manifestUploadTarget.initialFilename !== undefined
+            ? { initialFilename: manifestUploadTarget.initialFilename }
+            : {})}
         />
       ) : null}
       {(() => {
@@ -1355,25 +1609,29 @@ export function ConnectionOverview() {
             logsExpanded={testLogsExpanded}
             onClose={() => setTestDrawerConnId(null)}
             onRunTest={() => {
+              manualProbeIds.current.add(testDrawerConnId);
               void healthQuery?.refetch();
             }}
             onToggleLogs={() => setTestLogsExpanded((v) => !v)}
           />
         );
       })()}
-      <SetupAssistantModal
-        open={assistantOpen}
-        onClose={() => {
-          setAssistantOpen(false);
-          void queryClient.invalidateQueries({ queryKey: queryKeys.project });
-          void queryClient.invalidateQueries({ queryKey: queryKeys.sources });
-        }}
-        initialStep={assistantStep}
-        initialConnectionId={assistantConnId}
-        initialConnection={connections.find((connection) => connection.id === assistantConnId) ?? null}
-        initialSources={sourcesQuery.data ?? null}
-        existingIds={connections.map((c) => c.id)}
-      />
+      {assistantOpen ? (
+        <SetupAssistantModal
+          open={assistantOpen}
+          onClose={() => {
+            setAssistantOpen(false);
+            void queryClient.invalidateQueries({ queryKey: queryKeys.project });
+            void queryClient.invalidateQueries({ queryKey: queryKeys.sources });
+          }}
+          initialStep={assistantStep}
+          initialConnectionId={assistantConnId}
+          initialConnection={connections.find((connection) => connection.id === assistantConnId) ?? null}
+          initialSources={sourcesQuery.data ?? null}
+          existingIds={connections.map((c) => c.id)}
+        />
+      ) : null}
+      </Suspense>
     </div>
   );
 }

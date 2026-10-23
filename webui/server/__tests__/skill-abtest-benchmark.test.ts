@@ -26,20 +26,12 @@ function readRequestBody(req: IncomingMessage): Promise<string> {
   });
 }
 
-const ACCESS_YAML = `users:
-  - id: abtest_agent
-    name: ABTest Agent
-    enabled: true
-    tokens:
-      - hash: "${tokenHash(TOKEN)}"
-        label: abtest-token
-        created: 2026-08-29
+const ACCESS_YAML = `roles:
+  abtest_role:
+    description: ABTest role
     allow:
       connections:
         - mysql-aliyun
-      tables:
-        - dataforai.superstore_orders
-        - dataforai.kx_fact_financial_amount
       tools:
         - lucy_catalog
         - lucy_query
@@ -48,6 +40,15 @@ const ACCESS_YAML = `users:
         - lucy_skill_read
         - wiki_search
         - wiki_read
+users:
+  - id: abtest_agent
+    name: ABTest Agent
+    enabled: true
+    role: abtest_role
+    tokens:
+      - hash: "${tokenHash(TOKEN)}"
+        label: abtest-token
+        created: 2026-08-29
 `;
 
 const KTX_YAML = `connections:
@@ -105,7 +106,7 @@ title: Superstore 利润与折扣拆解分析 SOP
 version: 1.0.0
 domain: superstore
 status: published
-roles_allowed: ["*"]
+roles_allowed: ["abtest_role"]
 prerequisites:
   sources: ["mysql-aliyun.superstore_orders"]
   measures: ["superstore_orders.profit", "superstore_orders.sales", "superstore_orders.discount_amount"]
@@ -130,7 +131,7 @@ title: 柯西财务杜邦分析 SOP
 version: 1.0.0
 domain: kx_financial
 status: published
-roles_allowed: ["*"]
+roles_allowed: ["abtest_role"]
 prerequisites:
   sources: ["mysql-aliyun.kx_fact_financial_amount"]
 triggers: ["杜邦分析", "ROE"]

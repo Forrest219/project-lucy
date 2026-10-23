@@ -19,12 +19,14 @@ in this repository is a **supported delivery artifact** — not a reference snap
 | `0.2.1` | legacy/ambiguous | `0.16.0` | HTTP probes + UID 10001 + `workingDir` | Superseded by product-version-aware chart 0.2.2 |
 | `0.2.2` | `0.17.0` | `0.16.0` | HTTP probes + UID 10001 + `workingDir` | **Superseded** — Secret mounted read-only over `.ktx/secrets` (WebUI writes fail with `EROFS`) |
 | `0.2.3` | `0.17.0` | `0.16.0` | HTTP probes + UID 10001 + `workingDir` | `secrets-sync` init, `LUCY_CONTENT_ROOT`, name pinning |
-| `0.2.4` | `0.17.0` | `0.16.0` | same workload contract as 0.2.3 | **Current** — adds `preflight-upgrade.sh` for live Deployment drift, semantic column types, and AbsoluteDeny role tools |
+| `0.2.4` | `0.17.0` | `0.16.0` | same workload contract as 0.2.3 | Product baseline before 2026-10-19. Chart package version was not bumped for the later product cut |
+| `0.2.4` | `2.0.0` | `0.16.0` | same workload contract as 0.2.3 | Product line cut from `0.17.0` to `2.0.0`; chart `version` was not bumped in that cut |
+| `0.2.5` | `2.0.0` | `0.16.0` | `security.access` is `https` or intranet `http`; open-mode upgrade mounts a bootstrap Secret | **Current** |
 
 Image tags must be **immutable**. Recommended form:
 
 ```text
-project-lucy:customer-amd64-0.17.0-YYYYMMDD-<gitShortSha>
+project-lucy:customer-amd64-2.0.0-YYYYMMDD-<gitShortSha>
 ```
 
 Record the digest in `image/image-digest.txt` and pin via Helm `image.digest` when possible.
@@ -139,11 +141,28 @@ Preflight belongs in post-deploy scripts or Helm test Jobs, not in the pod start
 |---|---|---|
 | `KTX_PROJECT_ROOT` | yes | `/data/lucy` |
 | `POSTHOG_DISABLED` | yes | `"1"` |
-| `LUCY_VERSION` | yes | Lucy product version; current baseline `0.17.0` |
+| `LUCY_VERSION` | yes | Lucy product version; current baseline `2.0.0`. This is not the source commit. Commit identity is the image file `/app/BUILD_REVISION` (`gitSha` on `/api/health`). Do not add `LUCY_GIT_SHA` to the chart or Pod env. |
 | `LUCY_BUNDLED_KTX_VERSION` | yes | Bundled KTX identity; current baseline `0.16.0` |
 | `LUCY_PUBLIC_MCP_URL` | yes (non-local) | Externally reachable MCP URL; chart fails render if empty for customer registry |
 | `LUCY_ALLOW_PLACEHOLDER_KTX` | prod: empty | `"1"` only for demo seed |
 | `LUCY_CONTENT_ROOT` | PVCs with legacy layout | `"."` when `semantic-layer/`, `wiki/`, `skills/` sit next to `ktx.yaml`; empty = image default `config/`. Injected by the chart from `env.LUCY_CONTENT_ROOT` |
+
+### WebUI authentication pins (enterprise security T02)
+
+The chart hard-codes these entries in the Pod `env` (they are not exposed as values and are not valid `env.*` overrides):
+
+| Variable | Chart value | Notes |
+|---|---|---|
+| `LUCY_DEPLOYMENT_MODE` | `customer` | Default-deny WebUI auth; `LUCY_WEBUI_AUTH=off` is rejected at startup |
+| `LUCY_CHART_DEPLOYMENT_MODE` | `customer` | The chart's pin. Startup (entrypoint and server) exits non-zero when it differs from the effective `LUCY_DEPLOYMENT_MODE`, e.g. when an `extraEnvFrom` Secret/ConfigMap supplies `LUCY_DEPLOYMENT_MODE=development` |
+| `LUCY_WEBUI_COOKIE_SECURE` | `1` when `security.access` is `https`; `0` when it is `http` | Secure session cookie + HSTS on HTTPS. Intranet HTTP is the explicit customer access mode `security.access=http` |
+| `LUCY_WEBUI_ACCESS` | `https` or `http` | Mirrors `security.access`. `http` allows a non-Secure session cookie in customer mode and does not set the lab test marker |
+| `LUCY_WEBUI_TEST_PROFILE` | absent | Set to `1` (with `LUCY_WEBUI_COOKIE_SECURE=0`) only when `security.insecureHttpTestProfile: true`, for kind / k3s lab profiles over plain HTTP. `/api/health` then reports `insecureTestProfile: true`. Do not combine with `security.access=http` |
+| `LUCY_WEBUI_BOOTSTRAP_TOKEN_FILE` | `/run/secrets/lucy-bootstrap/token` | Only when `bootstrap.existingSecret` is set (Secret key `token`, mounted read-only); the value never appears in ConfigMap, argv or logs |
+
+Kubernetes gives explicit `env` entries precedence over `envFrom`, so an `extraEnvFrom` source cannot shadow the pins on K8s itself; the startup check above is the second line of defence for other runtimes and for edited manifests. `helm template` assertions for these pins live in `npm run gate:k8s-static` (`scripts/gates/helm-lucy-gate.sh`).
+
+Behind an ingress, supply `LUCY_TRUST_PROXY=1` and `LUCY_TRUSTED_PROXY_CIDRS` (comma-separated CIDRs of the ingress controller) through `extraEnvFrom` so login/bootstrap rate limits use the real client address. Without CIDRs, forwarded headers are ignored and all clients share the ingress address as the throttling source.
 
 All runtime env must be declared in Helm values — **never** patch with `kubectl set env`
 after install (causes manifest drift and extra pod restarts).
@@ -215,3 +234,18 @@ Before any K8s delivery:
 6. Post-deploy: `bash scripts/gates/k8s-acceptance.sh` (H5; in a package: `scripts/acceptance.sh`, with `--release`, `--deployment`, `--service` kept distinct and the token passed via `LUCY_MCP_TOKEN`)
 
 See [`docs/runbooks/customer-delivery-preflight-checklist.md`](../../docs/runbooks/customer-delivery-preflight-checklist.md).
+
+## Candidate digest and real-user E2E (Spec 20261018 §8.3, Plan T14)
+
+- A customer release is exactly one image **digest**: built once (native linux/amd64), gated (G1–G4 + ELF, G4b, G8), deployed
+  to an isolated single-replica K8s, verified by real-user E2E, then **promoted** (not rebuilt) to the customer tag.
+  The candidate is pushed under a `candidate-amd64-…` tag; a customer tag or package exists only after
+  `customer-release-readiness` passed.
+- `scripts/gates/k8s-acceptance.sh --expect-image-digest <sha256:…> --deployment-evidence <file>` fails unless the running
+  Pod's registry digest (from `imageID`, never the Deployment's image string or a config ID) is the candidate, and it writes
+  the instance, the single-replica topology and the digest actually deployed (`results/deployment.json`).
+- The isolated test deployment lives in `deploy/k8s/security-e2e/` (values, NetworkPolicy, `deploy-candidate.sh`). It is a
+  test profile only, carries no credential and no fault switch; faults come from a test control plane outside the Pod.
+  **Known gap:** no K8s fault-control plane exists yet, so catalog variants that require `fault-control` stay BLOCKED on K8s.
+- An N-1 → candidate in-place PVC upgrade on the same digest (`k8s-upgrade` gate, OPS-01-V02..V07) is not yet wired into the
+  workflow; the verifier reports it as BLOCKED (`gate_missing`), never as passed.

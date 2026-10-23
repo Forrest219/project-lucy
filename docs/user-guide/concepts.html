@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy 核心概念 |
 | 文档类型 | Other |
-| 版本 | v1.1 |
-| 撰写日期 | 2026-06-19；v1.1 更新 2026-07-06（新增 context pack 与 governed MCP runtime 概念） |
+| 版本 | 2.0.0 |
+| 撰写日期 | 2026-06-19；v1.1 更新 2026-07-06（新增 context pack 与 governed MCP runtime 概念）；2.0.0 更新 2026-10-20（统一品牌叫法与术语、补浏览器翻译防御、修跨页链接与文档骨架） |
 | 撰写人 | Codex |
 | 委托人 | project-lucy 团队 |
 | 基于材料 | docs/governance/eval-quiz-conventions.md |
@@ -16,7 +16,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Lucy 核心概念</title>
+<title translate="no" class="notranslate">核心概念 · Lucy 帮助文档</title>
 <link rel="stylesheet" href="assets/user-guide.css">
 </head>
 <body>
@@ -27,6 +27,8 @@
       <p class="nav-title">开始</p>
       <a class="nav-link" href="index.html">帮助中心首页</a>
       <a class="nav-link" href="product-intro.html">产品介绍</a>
+      <a class="nav-link" href="lucy-architecture-diagram.html">架构总览</a>
+      <a class="nav-link" href="lucy-docs-flows.html">摄取与服务</a>
       <a class="nav-link" href="getting-started.html">5 分钟理解 Lucy</a>
       <a class="nav-link active" href="concepts.html">核心概念</a>
     </div>
@@ -38,29 +40,29 @@
     </div>
     <div class="nav-group">
       <p class="nav-title">管理员指南</p>
-      <a class="nav-link" href="quickstart-admin.html">快速部署 <span class="wip">WIP</span></a>
-      <a class="nav-link" href="data-sources.html">数据源接入 <span class="wip">WIP</span></a>
-      <a class="nav-link" href="permissions.html">权限与 ACL <span class="wip">WIP</span></a>
-      <a class="nav-link" href="webui-guide.html">KTX WebUI</a>
+      <a class="nav-link" href="quickstart-admin.html">快速部署</a>
+      <a class="nav-link" href="data-sources.html">数据源接入</a>
+      <a class="nav-link" href="permissions.html">权限与 ACL</a>
+      <a class="nav-link" href="webui-guide.html">WebUI 指南</a>
     </div>
     <div class="nav-group">
       <p class="nav-title">治理与安全</p>
       <a class="nav-link" href="trust.html">可信机制</a>
-      <a class="nav-link" href="eval-meta-governance-training.html">Eval 培训</a>
-      <a class="nav-link" href="skills.html">Skill 管理 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="eval-meta-governance-training.html">质量评测培训</a>
+      <a class="nav-link" href="skills.html">Skill 管理</a>
     </div>
     <div class="nav-group">
       <p class="nav-title">参考</p>
-      <a class="nav-link" href="mcp-reference.html">MCP 接入参考 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="mcp-reference.html"><span translate="no" class="notranslate">MCP</span> 接入参考</a>
       <a class="nav-link" href="glossary.html">术语表</a>
-      <a class="nav-link" href="release-notes.html">更新日志 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="release-notes.html">更新日志</a>
     </div>
   </aside>
   <main class="content">
     <header class="hero">
       <span class="eyebrow">Concepts</span>
-      <h1>先理解概念，再相信答案。</h1>
-      <p class="lead">Lucy 的回答质量来自两件事：先把企业上下文编译成可维护资产，再通过受治理 MCP runtime 让 Agent 安全使用。</p>
+      <h1>核心概念速览</h1>
+      <p class="lead">先理解概念，再相信答案。Lucy 的回答质量来自两件事：先把企业上下文编译成可维护资产，再通过受治理 <span translate="no" class="notranslate">MCP</span> runtime 让 <span translate="no" class="notranslate">Agent</span> 安全使用。</p>
     </header>
 
     <section>
@@ -68,16 +70,16 @@
       <table>
         <thead><tr><th>概念</th><th>含义</th><th>用户应该关心什么</th></tr></thead>
         <tbody>
-          <tr><td>Context Compiler</td><td>把数据库、BI、文档、人工口径整理成 Agent 可用上下文资产的过程。</td><td>不要让 Agent 直接猜裸库；先维护上下文。</td></tr>
-          <tr><td>Governed MCP Runtime</td><td>通过 MCP 暴露受权限、guardrail、审计和 eval 约束的数据工具。</td><td>Agent 只能使用当前 token/role 可见的工具和数据。</td></tr>
-          <tr><td>Semantic Pack</td><td>schema、指标、维度、过滤条件、grain 和 join 路径的标准定义。</td><td>优先要求 Lucy 使用标准口径。</td></tr>
+          <tr><td>Context Compiler</td><td>把数据库、BI、文档、人工口径整理成 <span translate="no" class="notranslate">Agent</span> 可用上下文资产的过程。</td><td>不要让 <span translate="no" class="notranslate">Agent</span> 直接猜裸库；先维护上下文。</td></tr>
+          <tr><td>Governed <span translate="no" class="notranslate">MCP</span> <span translate="no" class="notranslate">Runtime</span></td><td>通过 <span translate="no" class="notranslate">MCP</span> 暴露受权限、guardrail、审计和 eval 约束的数据工具。</td><td><span translate="no" class="notranslate">Agent</span> 只能使用当前 token/role 可见的工具和数据。</td></tr>
+          <tr><td>Semantic Pack</td><td><span translate="no" class="notranslate">schema</span>、指标、维度、过滤条件、grain 和 join 路径的标准定义。</td><td>优先要求 Lucy 使用标准口径。</td></tr>
           <tr><td>Knowledge Pack</td><td>Wiki、Skill、业务解释、owner/caveat 和使用禁区。</td><td>用它解释“为什么这样算”和“哪里容易错”。</td></tr>
           <tr><td>Query Pack</td><td>可信查询范式、常见问题和后续 BI/dashboard query examples。</td><td>优先复用可信查询路径，不模仿一次性探索 SQL。</td></tr>
-          <tr><td>Quality Pack</td><td>Eval、安全回归、audit trace 和纠错记录。</td><td>验证模型会不会按正确方式做，并把错误沉淀为回归资产。</td></tr>
+          <tr><td>Quality Pack</td><td>质量评测、安全回归、audit trace 和纠错记录。</td><td>验证模型会不会按正确方式做，并把错误沉淀为回归资产。</td></tr>
           <tr><td>Semantic Layer</td><td>Semantic Pack 的结构化实现，定义指标、维度、过滤条件和 join 路径。</td><td>优先要求 Lucy 使用标准口径。</td></tr>
-          <tr><td>Measure</td><td>可计算指标，例如 <code>order_count</code>、<code>profit_margin</code>。</td><td>同名业务指标必须口径一致。</td></tr>
+          <tr><td>Measure</td><td>可计算指标，例如 <code class="notranslate" translate="no">order_count</code>、<code class="notranslate" translate="no">profit_margin</code>。</td><td>同名业务指标必须口径一致。</td></tr>
           <tr><td>Fallback</td><td>语义层暂时表达不了的问题，使用受控 raw SQL 补充。</td><td>必须说明原因、假设和可追溯来源。</td></tr>
-          <tr><td>Eval</td><td>给 Agent 跑的机器评测题，是 Quality Pack 的一部分。</td><td>验证模型会不会按正确方式做。</td></tr>
+          <tr><td>质量评测</td><td>给 <span translate="no" class="notranslate">Agent</span> 跑的机器评测题，是 Quality Pack 的一部分。</td><td>验证模型会不会按正确方式做。</td></tr>
           <tr><td>Quiz</td><td>给人做的训练题。</td><td>验证团队是否理解正确业务口径。</td></tr>
           <tr><td>Data Drift</td><td>底层数据变化导致结果值变化。</td><td>不要把正常数据漂移误判为模型错误。</td></tr>
         </tbody>
@@ -87,9 +89,9 @@
     <section>
       <h2>最容易误解的三件事</h2>
       <div class="grid">
-        <article class="card"><h3>订单数不是行数</h3><p>明细表一笔订单可能有多行，订单数通常需要 <code>COUNT(DISTINCT order_id)</code>。</p></article>
-        <article class="card"><h3>平均折扣不是简单平均</h3><p>折扣率通常要按销售额加权，避免小额订单扭曲结论。</p></article>
-        <article class="card"><h3>利润率不是逐行平均</h3><p>标准利润率应使用 <code>SUM(profit) / SUM(sales)</code>。</p></article>
+        <article class="card"><span class="tag">去重计数</span><h3>订单数不是行数</h3><p>明细表一笔订单可能有多行，订单数通常需要 <code class="notranslate" translate="no">COUNT(DISTINCT order_id)</code>。</p></article>
+        <article class="card"><span class="tag">加权平均</span><h3>平均折扣不是简单平均</h3><p>折扣率通常要按销售额加权，避免小额订单扭曲结论。</p></article>
+        <article class="card"><span class="tag">比率口径</span><h3>利润率不是逐行平均</h3><p>标准利润率应使用 <code class="notranslate" translate="no">SUM(profit) / SUM(sales)</code>。</p></article>
       </div>
     </section>
 

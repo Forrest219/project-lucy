@@ -3,6 +3,8 @@ import { spawnSync } from "node:child_process";
 import process from "node:process";
 import {
   PRESERVE_REL_PATHS,
+  EmptyVolumeShadowError,
+  assertTargetVolumeNotEmptyShadow,
   buildPreserveCheckScript,
   diffPreserveSnapshots,
   fullVolumeName,
@@ -60,8 +62,22 @@ async function runVolumeInfo(composeFile) {
     console.log(["bind", "", "", info.source].join("\n"));
     return;
   }
-  const project = resolveComposeProjectName();
+  const project = resolveComposeProjectName(process.cwd(), { composeFile });
   const full = fullVolumeName(project, info.logicalVolumeName);
+  try {
+    assertTargetVolumeNotEmptyShadow({
+      targetVolume: full,
+      logicalVolumeName: info.logicalVolumeName
+    });
+  } catch (err) {
+    if (err instanceof EmptyVolumeShadowError) {
+      console.error(err.message);
+    } else {
+      const detail = err instanceof Error ? err.message : String(err);
+      console.error(`[lucy-upgrade] failed to inspect named volume ${full}: ${detail}`);
+    }
+    process.exit(1);
+  }
   console.log(["named", info.logicalVolumeName, full, ""].join("\n"));
 }
 

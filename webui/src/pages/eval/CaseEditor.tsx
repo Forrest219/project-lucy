@@ -68,6 +68,9 @@ export function CaseEditor() {
 
   const saveMutation = useMutation({
     mutationFn: async (dryRun: boolean) => {
+      if (!form.question?.trim()) {
+        throw new Error("问法不能为空");
+      }
       if (isNew) {
         return apiPost<{ diff?: string; proposedYaml?: string; written?: boolean }>(
           `/api/eval/cases/${domain}`,
@@ -289,6 +292,136 @@ export function CaseEditor() {
                 placeholder="weighted_discount, profit_margin"
               />
             </div>
+            <div className="grid gap-1">
+              <label className="text-sm font-medium">截止日期</label>
+              <select
+                className="pl-input"
+                value={form.as_of_binding?.kind ?? ""}
+                onChange={(e) => setForm((p) => ({
+                  ...p,
+                  as_of_binding: e.target.value
+                    ? { kind: e.target.value as "yesterday" | "this_month" | "business_period", period: p.as_of_binding?.period }
+                    : undefined
+                }))}
+              >
+                <option value="">— 未绑定 —</option>
+                <option value="yesterday">昨天</option>
+                <option value="this_month">本月截至截止日期</option>
+                <option value="business_period">业务期间</option>
+              </select>
+            </div>
+            <div className="grid gap-1">
+              <label className="text-sm font-medium">粒度（逗号分隔）</label>
+              <input
+                className="pl-input"
+                value={(form.executable?.grain ?? []).join(", ")}
+                onChange={(e) => setForm((p) => ({
+                  ...p,
+                  executable: {
+                    required_measures: p.executable?.required_measures ?? p.expected_measures ?? [],
+                    grain: e.target.value.split(",").map((s) => s.trim()).filter(Boolean),
+                    required_columns: p.executable?.required_columns ?? [],
+                    required_filters: p.executable?.required_filters ?? [],
+                    reconciliation: p.executable?.reconciliation
+                  }
+                }))}
+              />
+            </div>
+            <div className="grid gap-1">
+              <label className="text-sm font-medium">必须出现的列（逗号分隔）</label>
+              <input
+                className="pl-input"
+                value={(form.executable?.required_columns ?? []).join(", ")}
+                onChange={(e) => setForm((p) => ({
+                  ...p,
+                  executable: {
+                    required_measures: p.executable?.required_measures ?? p.expected_measures ?? [],
+                    grain: p.executable?.grain ?? [],
+                    required_columns: e.target.value.split(",").map((s) => s.trim()).filter(Boolean),
+                    required_filters: p.executable?.required_filters ?? [],
+                    reconciliation: p.executable?.reconciliation
+                  }
+                }))}
+              />
+            </div>
+            <div className="grid gap-1">
+              <label className="text-sm font-medium">条件字段（逗号分隔）</label>
+              <input
+                className="pl-input"
+                value={(form.executable?.required_filters ?? []).map((item) => item.field).join(", ")}
+                onChange={(e) => setForm((p) => ({
+                  ...p,
+                  executable: {
+                    required_measures: p.executable?.required_measures ?? p.expected_measures ?? [],
+                    grain: p.executable?.grain ?? [],
+                    required_columns: p.executable?.required_columns ?? [],
+                    required_filters: e.target.value.split(",").map((s) => s.trim()).filter(Boolean).map((field) => ({ field, bind: "case_value" as const })),
+                    reconciliation: p.executable?.reconciliation
+                  }
+                }))}
+              />
+            </div>
+            <div className="grid gap-1">
+              <label className="text-sm font-medium">业务指标（逗号分隔）</label>
+              <input
+                className="pl-input"
+                value={(form.executable?.required_measures ?? []).join(", ")}
+                onChange={(e) => {
+                  const required_measures = e.target.value.split(",").map((s) => s.trim()).filter(Boolean);
+                  setForm((p) => ({
+                    ...p,
+                    expected_measures: required_measures,
+                    executable: {
+                      required_measures,
+                      grain: p.executable?.grain ?? [],
+                      required_columns: p.executable?.required_columns ?? [],
+                      required_filters: p.executable?.required_filters ?? [],
+                      reconciliation: p.executable?.reconciliation
+                    }
+                  }));
+                }}
+              />
+            </div>
+            <div className="grid gap-1">
+              <label className="text-sm font-medium">勾稽（左侧指标 = 右侧指标）</label>
+              <input
+                className="pl-input"
+                placeholder="sales, revenue"
+                value={form.executable?.reconciliation?.[0] ? `${form.executable.reconciliation[0].left.measures[0] ?? ""}, ${form.executable.reconciliation[0].right.measures[0] ?? ""}` : ""}
+                onChange={(e) => {
+                  const [left, right] = e.target.value.split(",").map((s) => s.trim());
+                  setForm((p) => ({
+                    ...p,
+                    executable: {
+                      required_measures: p.executable?.required_measures ?? p.expected_measures ?? [],
+                      grain: p.executable?.grain ?? [],
+                      required_columns: p.executable?.required_columns ?? [],
+                      required_filters: p.executable?.required_filters ?? [],
+                      reconciliation: left && right ? [{
+                        id: "sum-equals",
+                        left: { measures: [left], grain: p.executable?.grain ?? [] },
+                        right: { measures: [right], grain: [] },
+                        relation: "sum_equals"
+                      }] : undefined
+                    }
+                  }));
+                }}
+              />
+            </div>
+            {form.review_status === "needs_review" && (
+              <button
+                type="button"
+                className="pl-btn pl-btn--ghost text-sm justify-self-start"
+                onClick={() => {
+                  void apiPost(`/api/eval/cases/${domain}/${form.id}/confirm-review`, {}).then(() => {
+                    setForm((p) => ({ ...p, review_status: "active" }));
+                    toast.success("已确认，用例回到通过率");
+                  });
+                }}
+              >
+                确认复核
+              </button>
+            )}
             <div className="grid gap-1">
               <label className="text-sm font-medium">linked_quiz_questions（逗号分隔）</label>
               <input

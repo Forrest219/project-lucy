@@ -25,7 +25,17 @@ if [[ -n "${LUCY_VERSION:-}" && "${LUCY_VERSION}" != "${REPO_LUCY_VERSION}" ]]; 
 fi
 LUCY_VERSION="${REPO_LUCY_VERSION}"
 BUILD_DATE="${BUILD_DATE:-$(date +%Y%m%d)}"
+GIT_FULL="$(git rev-parse HEAD 2>/dev/null || true)"
 GIT_SHORT="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+if [[ -n "$(git status --porcelain 2>/dev/null || true)" ]]; then
+  LUCY_GIT_DIRTY=1
+else
+  LUCY_GIT_DIRTY=0
+fi
+[[ "${GIT_FULL}" =~ ^[0-9a-f]{40}$ ]] || {
+  echo "FAIL: customer image requires a full source git sha; got: ${GIT_FULL:-<empty>}" >&2
+  exit 1
+}
 # Immutable customer tag: lucy product version + date + sha (KTX no longer owns the tag).
 IMAGE="${IMAGE:-project-lucy:customer-amd64-${LUCY_VERSION}-${BUILD_DATE}-${GIT_SHORT}}"
 IMAGE_REF_TAG="${IMAGE##*:}"
@@ -60,14 +70,17 @@ if ! docker buildx inspect "$BUILDER" >/dev/null 2>&1; then
 fi
 
 echo "[build-customer-amd64] building (see ${LOG})..."
-# Optional network mirrors (China / corporate-restricted networks). Empty by
-# default → stock deb.debian.org / registry.npmjs.org / pypi.org.
+echo "[build-customer-amd64] apt=${APT_MIRROR:-official, then tuna/aliyun/tencent} npm=${NPM_REGISTRY:-official, then npmmirror/tencent} pypi=${UV_INDEX_URL:-official, then tuna/aliyun/tencent}"
+# Optional single-source overrides. Empty leaves the Dockerfile fallback:
+# official source with a short timeout, then Tsinghua, Aliyun, and Tencent.
 # Keep one non-empty array: macOS bash 3.2 + set -u errors on "${empty[@]}".
 BUILD_ARGS=(
   --builder "$BUILDER"
   --platform linux/amd64
   --build-arg "KTX_VERSION=${KTX_VERSION}"
   --build-arg "LUCY_VERSION=${LUCY_VERSION}"
+  --build-arg "LUCY_GIT_SHA=${GIT_FULL}"
+  --build-arg "LUCY_GIT_DIRTY=${LUCY_GIT_DIRTY}"
   --build-arg "TARGETPLATFORM=linux/amd64"
   --build-arg "TARGETARCH=amd64"
 )
@@ -157,6 +170,22 @@ echo "  LUCY_VERSION=${img_lucy}"
   exit 1
 }
 echo "  ok product version"
+
+echo "[build-customer-amd64] gate G4d source revision file"
+expected_revision="${GIT_FULL}"
+[[ "${LUCY_GIT_DIRTY}" == "1" ]] && expected_revision="${GIT_FULL}-dirty"
+img_revision="$(docker run --rm --platform linux/amd64 --entrypoint cat "$IMAGE" /app/BUILD_REVISION | tr -d '[:space:]' || true)"
+echo "  BUILD_REVISION=${img_revision}"
+[[ "${img_revision}" == "${expected_revision}" ]] || {
+  echo "FAIL G4d: expected BUILD_REVISION=${expected_revision}, got: ${img_revision:-<empty>}" >&2
+  exit 1
+}
+img_revision_env="$(docker run --rm --platform linux/amd64 --entrypoint printenv "$IMAGE" LUCY_GIT_SHA 2>/dev/null || true)"
+[[ -z "${img_revision_env}" ]] || {
+  echo "FAIL G4d: LUCY_GIT_SHA must not be a runtime env; got: ${img_revision_env}" >&2
+  exit 1
+}
+echo "  ok source revision"
 
 echo "[build-customer-amd64] gate G8 image K8s contract (image-only, no Helm)"
 bash scripts/gates/g8-image-k8s-contract-gate.sh "${IMAGE}"

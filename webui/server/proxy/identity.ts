@@ -3,7 +3,9 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { parse } from "yaml";
 import { resolveProjectRoot } from "../project.js";
+import { countEntryPerf } from "../entry-performance-timing.js";
 import { isTokenRevoked } from "./audit.js";
+import { actorFromToken, evalMarkFromToken, type ActorKind } from "./question-experience.js";
 
 interface UserToken {
   hash?: string | Record<string, unknown>; // format: "sha256:<hex>"
@@ -13,6 +15,10 @@ interface UserToken {
   created?: string;
   expires_at?: string | null | Date;
   device_name?: string | null;
+  actor_id?: string | null;
+  actor_kind?: string | null;
+  /** Spec 162 / SC-16 — optional explicit eval mark. Absent ⇒ unmarked. */
+  eval_mark?: boolean | null;
 }
 
 interface UserAllow {
@@ -83,6 +89,10 @@ export interface Identity {
   client?: string;
   clientVersion?: string;
   deviceName?: string;
+  actorId?: string;
+  actorKind?: ActorKind;
+  /** Spec 162 / SC-16 — Token's explicit `eval_mark`. Never inferred. */
+  evalMark?: boolean;
 }
 
 export type IdentifyFailureReason =
@@ -121,6 +131,7 @@ async function loadConfig(options: { fresh?: boolean } = {}): Promise<AccessConf
     return configCache;
   }
   const content = await readFile(configPath, "utf-8");
+  countEntryPerf("accessReads");
   let parsed: unknown;
   try {
     parsed = parse(content);
@@ -138,6 +149,15 @@ async function loadConfig(options: { fresh?: boolean } = {}): Promise<AccessConf
   configCachePath = configPath;
   configLoadedAt = now;
   return configCache;
+}
+
+/** Spec 174 §3.1 — parse access.yaml text without touching the runtime config cache. */
+export function parseAccessConfigText(content: string): AccessConfig {
+  const parsed = parse(content) as unknown;
+  if (!parsed || typeof parsed !== "object" || !Array.isArray((parsed as AccessConfig).users)) {
+    throw new Error("invalid_access_config_shape");
+  }
+  return parsed as AccessConfig;
 }
 
 export async function getAccessConfig(options: { fresh?: boolean } = {}): Promise<AccessConfig> {
@@ -314,6 +334,7 @@ export async function identifyRequestDetailed(
         };
       }
       const sessionClient = getSessionClient(sessionId, user.id, t.label);
+      const actor = actorFromToken(t);
       return {
         ok: true,
         identity: {
@@ -322,7 +343,10 @@ export async function identifyRequestDetailed(
           tokenHashPrefix,
           client: sessionClient?.clientName,
           clientVersion: sessionClient?.clientVersion,
-          deviceName: t.device_name ?? undefined
+          deviceName: t.device_name ?? undefined,
+          actorId: actor.actorId,
+          actorKind: actor.actorKind,
+          evalMark: evalMarkFromToken(t) || undefined
         }
       };
     }

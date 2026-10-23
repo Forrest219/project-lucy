@@ -58,7 +58,19 @@ function hoursAgoIso(hours: number): string {
 async function seedProject() {
   await mkdir(path.join(projectRoot, "webui", "config"), { recursive: true });
   await mkdir(path.join(projectRoot, ".ktx-ui", "eval"), { recursive: true });
-  await writeFile(path.join(projectRoot, "ktx.yaml"), "connections: {}\n", "utf8");
+  // Spec 182 — selector matches intersect with the connection's enabled_tables.
+  // The finance_readonly selector targets dataforai.kx_fact_financial_amount
+  // on connection "mysql", so that table must appear in enabled_tables.
+  await writeFile(
+    path.join(projectRoot, "ktx.yaml"),
+    `connections:
+  mysql:
+    driver: mysql
+    enabled_tables:
+      - dataforai.kx_fact_financial_amount
+`,
+    "utf8"
+  );
   await writeFile(path.join(projectRoot, "webui", "config", "access.yaml"), ACCESS_YAML, "utf8");
 }
 

@@ -1,0 +1,174 @@
+{
+  "schema_version": "audit-trust-perf-baseline/v1",
+  "generated_at": "2026-10-19T17:39:08.744Z",
+  "label": "r1-baseline-2026-10-20-r2",
+  "config": {
+    "duration_s": 5,
+    "workers": 16,
+    "classification_version": "audit-trust-2026-10-19-r1.v1",
+    "reservoir_per_worker": 16384
+  },
+  "elapsed_ms": 5130,
+  "totals": {
+    "rows_inserted": 2423163,
+    "errors": 0,
+    "throughput_per_sec": 472351.46,
+    "latency_samples_observed": 2423163,
+    "latency_samples_kept": 262144
+  },
+  "latency_us": {
+    "p50": 14,
+    "p95": 36,
+    "p99": 247,
+    "sample_count": 262144,
+    "sampling_method": "reservoir_algorithm_r_per_worker",
+    "reservoir_per_worker": 16384,
+    "combine_note": "Reservoirs are merged after the run; per-worker throughput differences may bias the combined percentiles slightly (see script README)."
+  },
+  "per_worker": [
+    {
+      "worker_id": 0,
+      "rows": 150955,
+      "errors": 0,
+      "duration_ms": 5000,
+      "rows_per_sec": 30191,
+      "observed_latency": 150955,
+      "sampled_latency": 16384
+    },
+    {
+      "worker_id": 1,
+      "rows": 154561,
+      "errors": 0,
+      "duration_ms": 5000,
+      "rows_per_sec": 30912.2,
+      "observed_latency": 154561,
+      "sampled_latency": 16384
+    },
+    {
+      "worker_id": 2,
+      "rows": 154870,
+      "errors": 0,
+      "duration_ms": 5015,
+      "rows_per_sec": 30881.36,
+      "observed_latency": 154870,
+      "sampled_latency": 16384
+    },
+    {
+      "worker_id": 3,
+      "rows": 152726,
+      "errors": 0,
+      "duration_ms": 5000,
+      "rows_per_sec": 30545.2,
+      "observed_latency": 152726,
+      "sampled_latency": 16384
+    },
+    {
+      "worker_id": 4,
+      "rows": 152585,
+      "errors": 0,
+      "duration_ms": 5013,
+      "rows_per_sec": 30437.86,
+      "observed_latency": 152585,
+      "sampled_latency": 16384
+    },
+    {
+      "worker_id": 5,
+      "rows": 151061,
+      "errors": 0,
+      "duration_ms": 5008,
+      "rows_per_sec": 30163.94,
+      "observed_latency": 151061,
+      "sampled_latency": 16384
+    },
+    {
+      "worker_id": 6,
+      "rows": 154339,
+      "errors": 0,
+      "duration_ms": 5000,
+      "rows_per_sec": 30867.8,
+      "observed_latency": 154339,
+      "sampled_latency": 16384
+    },
+    {
+      "worker_id": 7,
+      "rows": 150544,
+      "errors": 0,
+      "duration_ms": 5015,
+      "rows_per_sec": 30018.74,
+      "observed_latency": 150544,
+      "sampled_latency": 16384
+    },
+    {
+      "worker_id": 8,
+      "rows": 148925,
+      "errors": 0,
+      "duration_ms": 5002,
+      "rows_per_sec": 29773.09,
+      "observed_latency": 148925,
+      "sampled_latency": 16384
+    },
+    {
+      "worker_id": 9,
+      "rows": 151352,
+      "errors": 0,
+      "duration_ms": 5000,
+      "rows_per_sec": 30270.4,
+      "observed_latency": 151352,
+      "sampled_latency": 16384
+    },
+    {
+      "worker_id": 10,
+      "rows": 149219,
+      "errors": 0,
+      "duration_ms": 5002,
+      "rows_per_sec": 29831.87,
+      "observed_latency": 149219,
+      "sampled_latency": 16384
+    },
+    {
+      "worker_id": 11,
+      "rows": 151506,
+      "errors": 0,
+      "duration_ms": 5000,
+      "rows_per_sec": 30301.2,
+      "observed_latency": 151506,
+      "sampled_latency": 16384
+    },
+    {
+      "worker_id": 12,
+      "rows": 147773,
+      "errors": 0,
+      "duration_ms": 5000,
+      "rows_per_sec": 29554.6,
+      "observed_latency": 147773,
+      "sampled_latency": 16384
+    },
+    {
+      "worker_id": 13,
+      "rows": 150634,
+      "errors": 0,
+      "duration_ms": 5000,
+      "rows_per_sec": 30126.8,
+      "observed_latency": 150634,
+      "sampled_latency": 16384
+    },
+    {
+      "worker_id": 14,
+      "rows": 151369,
+      "errors": 0,
+      "duration_ms": 5000,
+      "rows_per_sec": 30273.8,
+      "observed_latency": 151369,
+      "sampled_latency": 16384
+    },
+    {
+      "worker_id": 15,
+      "rows": 150744,
+      "errors": 0,
+      "duration_ms": 5000,
+      "rows_per_sec": 30148.8,
+      "observed_latency": 150744,
+      "sampled_latency": 16384
+    }
+  ]
+}

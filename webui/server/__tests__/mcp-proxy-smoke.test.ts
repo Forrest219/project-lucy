@@ -11,6 +11,9 @@ const TOKEN = "proxy-smoke-token";
 const KX_TOKEN = "proxy-smoke-kx-token";
 const POC_TOKEN = "proxy-smoke-poc-token";
 const RESTRICTED_TOKEN = "proxy-smoke-restricted-token";
+const WIKI_TOKEN = "proxy-smoke-wiki-token";
+const WIKI_KX_TOKEN = "proxy-smoke-wiki-kx-token";
+const WIKI_POC_TOKEN = "proxy-smoke-wiki-poc-token";
 const EXACT_TOKEN = "proxy-smoke-exact-r1-token";
 const INTERNAL_TOKEN = "internal-smoke-token";
 
@@ -30,7 +33,52 @@ function readRequestBody(req: IncomingMessage): Promise<string> {
   });
 }
 
-const ACCESS_YAML = `users:
+// Spec §4: Wiki context needs a formal Role. Three pure-Meta roles exercise object ACLs;
+// the legacy direct-allow agents below keep their data-plane behavior and get no context.
+const ACCESS_YAML = `roles:
+  wiki_smoke:
+    description: Wiki reader
+    allow:
+      tools:
+        - wiki_search
+        - wiki_read
+  wiki_kx:
+    description: KX wiki reader
+    allow:
+      tools:
+        - wiki_search
+        - wiki_read
+  wiki_poc:
+    description: POC wiki reader
+    allow:
+      tools:
+        - wiki_search
+        - wiki_read
+users:
+  - id: wiki_smoke_agent
+    name: Wiki Smoke Agent
+    enabled: true
+    role: wiki_smoke
+    tokens:
+      - hash: "${tokenHash(WIKI_TOKEN)}"
+        label: wiki-smoke-token
+        created: 2026-10-18
+  - id: wiki_kx_agent
+    name: Wiki KX Agent
+    enabled: true
+    role: wiki_kx
+    tokens:
+      - hash: "${tokenHash(WIKI_KX_TOKEN)}"
+        label: wiki-kx-token
+        created: 2026-10-18
+  - id: wiki_poc_agent
+    name: Wiki POC Agent
+    enabled: true
+    role: wiki_poc
+    tokens:
+      - hash: "${tokenHash(WIKI_POC_TOKEN)}"
+        label: wiki-poc-token
+        created: 2026-10-18
   - id: smoke_agent
     name: Smoke Agent
     enabled: true
@@ -43,6 +91,7 @@ const ACCESS_YAML = `users:
         - mysql-aliyun
       tables:
         - dataforai.superstore_orders
+        - dataforai.superstore_people
       tools:
         - lucy_catalog
         - kx_catalog
@@ -132,6 +181,8 @@ const SCHEMA_YAML = `tables:
     table: dataforai.kx_fact_financial_amount
   superstore_orders:
     table: dataforai.superstore_orders
+  superstore_people:
+    table: dataforai.superstore_people
 `;
 
 const POC_SCHEMA_YAML = `tables:
@@ -163,6 +214,7 @@ async function makeProject() {
   await writeFile(path.join(root, "wiki", "global", "superstore.md"), [
     "---",
     "visibility: private",
+    "allowed_roles: ['*']",
     "sl_refs:",
     "  - mysql-aliyun/dataforai/superstore_orders",
     "---",
@@ -173,6 +225,7 @@ async function makeProject() {
   await writeFile(path.join(root, "wiki", "global", "kx-secret.md"), [
     "---",
     "visibility: private",
+    "allowed_roles: [wiki_kx]",
     "sl_refs:",
     "  - mysql-aliyun/dataforai/kx_fact_financial_amount",
     "---",
@@ -183,6 +236,7 @@ async function makeProject() {
   await writeFile(path.join(root, "wiki", "global", "poc.md"), [
     "---",
     "visibility: private",
+    "allowed_roles: [wiki_poc]",
     "sl_refs:",
     "  - poc-mysql-aliyun/data_agent_poc/poc_ceo_metric_snapshot",
     "---",
@@ -276,6 +330,8 @@ afterEach(async () => {
   else process.env.LUCY_PROXY_UPSTREAM_TIMEOUT_MS = previousUpstreamTimeout;
   if (previousQueryMaxInflight === undefined) delete process.env.LUCY_QUERY_MAX_INFLIGHT;
   else process.env.LUCY_QUERY_MAX_INFLIGHT = previousQueryMaxInflight;
+  delete process.env.LUCY_FILTER_PUSHDOWN_GUARD;
+  delete process.env.LUCY_QUESTION_BUDGET;
   await rm(projectRoot, { recursive: true, force: true });
 });
 
@@ -422,6 +478,89 @@ describe("MCP proxy smoke", () => {
     }
   });
 
+  it("writes one access_log_sources row per resolved source when lucy_query fails", async () => {
+    const upstream = createServer(async (req, res) => {
+      const body = await readRequestBody(req);
+      const payload = JSON.parse(body) as { id?: string };
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({
+        jsonrpc: "2.0",
+        id: payload.id,
+        result: {
+          isError: true,
+          content: [{ type: "text", text: "upstream rejected the query" }]
+        }
+      }));
+    });
+
+    await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+    const upstreamPort = (upstream.address() as AddressInfo).port;
+    process.env.LUCY_PROXY_UPSTREAM_HOST = "127.0.0.1";
+    process.env.LUCY_PROXY_UPSTREAM_PORT = String(upstreamPort);
+
+    const { buildProxy } = await import("../proxy/mcp-proxy");
+    const { server, host } = buildProxy();
+    await new Promise<void>((resolve) => server.listen(0, host, resolve));
+    const proxyPort = (server.address() as AddressInfo).port;
+
+    async function call(id: string, args: Record<string, unknown>) {
+      const res = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${TOKEN}`
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id,
+          method: "tools/call",
+          params: { name: "lucy_query", arguments: args }
+        })
+      });
+      expect(res.status).toBe(200);
+    }
+
+    try {
+      await call("proxy-smoke-error-two-sources", {
+        connectionId: "mysql-aliyun",
+        measures: [
+          { expr: "count(superstore_orders.order_id)", name: "orders" },
+          { expr: "count(superstore_people.region)", name: "people" }
+        ]
+      });
+      await call("proxy-smoke-error-one-source", {
+        connectionId: "mysql-aliyun",
+        measures: [{ expr: "row_count(superstore_orders)", name: "n" }]
+      });
+      await call("proxy-smoke-error-no-source", {
+        connectionId: "mysql-aliyun",
+        measures: [{ expr: "count(*)", name: "n" }],
+        limit: 5
+      });
+
+      const two = await waitForAuditRow("proxy-smoke-error-two-sources");
+      expect(two.outcome).toBe("error");
+      const twoSources = await waitForAuditSources(Number(two.id));
+      expect(twoSources).toHaveLength(2);
+      expect(twoSources.map((row) => row.source_name).sort()).toEqual(["superstore_orders", "superstore_people"]);
+
+      const one = await waitForAuditRow("proxy-smoke-error-one-source");
+      expect(one.outcome).toBe("error");
+      const oneSources = await waitForAuditSources(Number(one.id));
+      expect(oneSources).toHaveLength(1);
+      expect(oneSources[0]?.source_name).toBe("superstore_orders");
+
+      const none = await waitForAuditRow("proxy-smoke-error-no-source");
+      expect(none.outcome).toBe("error");
+      expect(none.tables ?? null).toBeNull();
+      const noneSources = await waitForAuditSources(Number(none.id));
+      expect(noneSources).toHaveLength(0);
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
+      await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));
+    }
+  });
+
   it("injects kx_catalog into tools/list and serves it from the proxy", async () => {
     const upstreamSeen: string[] = [];
     const upstream = createServer(async (req, res) => {
@@ -474,8 +613,6 @@ describe("MCP proxy smoke", () => {
         "lucy_explain_query",
         "lucy_freshness",
         "kx_catalog",
-        "wiki_search",
-        "wiki_read",
         "lucy_begin_question"
       ]);
       const lucyQuerySchema = listBody.result.tools.find((tool) => tool.name === "lucy_query")?.inputSchema as { properties?: Record<string, { items?: { type?: string } }> } | undefined;
@@ -600,8 +737,6 @@ describe("MCP proxy smoke", () => {
       expect(names).not.toEqual(expect.arrayContaining([
         "sl_query",
         "sl_read_source",
-        "wiki_search",
-        "wiki_read",
         "kx_catalog",
         "sql_execution",
         "future_table_export"
@@ -1511,8 +1646,6 @@ describe("MCP proxy smoke", () => {
         "lucy_explain_query",
         "lucy_freshness",
         "kx_catalog",
-        "wiki_search",
-        "wiki_read",
         "lucy_begin_question"
       ]);
 
@@ -1541,7 +1674,7 @@ describe("MCP proxy smoke", () => {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          authorization: `Bearer ${TOKEN}`
+          authorization: `Bearer ${WIKI_TOKEN}`
         },
         body: JSON.stringify({
           jsonrpc: "2.0",
@@ -1559,7 +1692,7 @@ describe("MCP proxy smoke", () => {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          authorization: `Bearer ${TOKEN}`
+          authorization: `Bearer ${WIKI_TOKEN}`
         },
         body: JSON.stringify({
           jsonrpc: "2.0",
@@ -1744,9 +1877,126 @@ describe("MCP proxy smoke", () => {
       expect(auditB.lucy_turn_id).toBe(turnB);
       expect(auditA.turn_attribution_mode).toBe("session_bound");
       expect(auditB.turn_attribution_mode).toBe("session_bound");
-      expect(auditA.turn_attribution_confidence).toBe("high");
-      expect(auditB.turn_attribution_confidence).toBe("high");
+      expect(auditA.turn_attribution_confidence).toBe("low");
+      expect(auditB.turn_attribution_confidence).toBe("low");
     } finally {
+      await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
+      await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));
+    }
+  });
+
+  it("[v0.3] does NOT back-bind a same-session catalog call that landed just before lucy_begin_question", async () => {
+    const upstream = createServer(async (req, res) => {
+      const parsed = JSON.parse(await readRequestBody(req)) as { id?: string };
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({
+        jsonrpc: "2.0",
+        id: parsed.id ?? null,
+        result: { content: [{ type: "text", text: "ok" }] }
+      }));
+    });
+    await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+    process.env.LUCY_PROXY_UPSTREAM_HOST = "127.0.0.1";
+    process.env.LUCY_PROXY_UPSTREAM_PORT = String((upstream.address() as AddressInfo).port);
+
+    const { buildProxy } = await import("../proxy/mcp-proxy");
+    const { server, host } = buildProxy();
+    await new Promise<void>((resolve) => server.listen(0, host, resolve));
+    const proxyPort = (server.address() as AddressInfo).port;
+
+    const call = async (id: string, name: string, args: Record<string, unknown>) => {
+      const response = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${TOKEN}`,
+          "x-lucy-session-id": "prior-bind-session"
+        },
+        body: JSON.stringify({ jsonrpc: "2.0", id, method: "tools/call", params: { name, arguments: args } })
+      });
+      expect(response.status).toBe(200);
+      return response.json() as Promise<{ result: { content: Array<{ text: string }> } }>;
+    };
+
+    try {
+      await call("prior-catalog", "lucy_catalog", {});
+      await waitForAuditRow("prior-catalog");
+      const begun = await call("prior-begin", "lucy_begin_question", { intentSummary: "列出可访问的表" });
+      const turnId = (JSON.parse(begun.result.content[0]?.text ?? "{}") as { turnId: string }).turnId;
+      const catalog = await waitForAuditRow("prior-catalog");
+      const begin = await waitForAuditRow("prior-begin");
+      // v0.3: prior catalog NOT back-bound; only the begin event is bound to its own turn
+      expect(catalog.lucy_turn_id).toBeFalsy();
+      expect(catalog.turn_attribution_mode).not.toBe("session_bound");
+      expect(begin.lucy_turn_id).toBe(turnId);
+      expect(begin.turn_attribution_mode).toBe("explicit");
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
+      await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));
+    }
+  });
+
+  it("[v0.3] does NOT re-bind a read_source that finishes after lucy_begin_question; admission is frozen", async () => {
+    let markReadArrived: () => void = () => {};
+    const readArrived = new Promise<void>((resolve) => {
+      markReadArrived = resolve;
+    });
+    let releaseRead: () => void = () => {};
+    const readHeld = new Promise<void>((resolve) => {
+      releaseRead = resolve;
+    });
+    const upstream = createServer(async (req, res) => {
+      const parsed = JSON.parse(await readRequestBody(req)) as { id?: string; params?: { name?: string } };
+      if (parsed.params?.name === "sl_read_source") {
+        markReadArrived();
+        await readHeld;
+      }
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({
+        jsonrpc: "2.0",
+        id: parsed.id ?? null,
+        result: { content: [{ type: "text", text: "ok" }] }
+      }));
+    });
+    await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+    process.env.LUCY_PROXY_UPSTREAM_HOST = "127.0.0.1";
+    process.env.LUCY_PROXY_UPSTREAM_PORT = String((upstream.address() as AddressInfo).port);
+
+    const { buildProxy } = await import("../proxy/mcp-proxy");
+    const { server, host } = buildProxy();
+    await new Promise<void>((resolve) => server.listen(0, host, resolve));
+    const proxyPort = (server.address() as AddressInfo).port;
+
+    const call = (id: string, name: string, args: Record<string, unknown>) => fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${TOKEN}`,
+        "x-lucy-session-id": "inflight-session"
+      },
+      body: JSON.stringify({ jsonrpc: "2.0", id, method: "tools/call", params: { name, arguments: args } })
+    });
+
+    try {
+      const readPromise = call("inflight-read", "lucy_read_source", {
+        connectionId: "mysql-aliyun",
+        sourceName: "superstore_orders"
+      });
+      await readArrived;
+      const beginResponse = await call("inflight-begin", "lucy_begin_question", { intentSummary: "列出可访问的表" });
+      expect(beginResponse.status).toBe(200);
+      const beginBody = await beginResponse.json() as { result: { content: Array<{ text: string }> } };
+      const turnId = (JSON.parse(beginBody.result.content[0]?.text ?? "{}") as { turnId: string }).turnId;
+      releaseRead();
+      const readResponse = await readPromise;
+      expect(readResponse.status).toBe(200);
+      const readAudit = await waitForAuditRow("inflight-read");
+      // v0.3: attribution frozen at admission; inflight read_source NOT bound to a later begin.
+      // effective_* must already be set when the read was admitted (before begin existed).
+      expect(readAudit.lucy_turn_id).toBeFalsy();
+      expect(readAudit.turn_attribution_mode).not.toBe("session_bound");
+    } finally {
+      releaseRead();
       await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
       await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));
     }
@@ -1814,7 +2064,7 @@ describe("MCP proxy smoke", () => {
     }
   });
 
-  it("serves authorized wiki_read locally and filters unauthorized wiki_search results", async () => {
+  it("authorizes wiki_read by object ACL and filters wiki_search results the role cannot discover", async () => {
     const upstreamSeen: string[] = [];
     const upstream = createServer(async (req, res) => {
       const body = await readRequestBody(req);
@@ -1859,7 +2109,7 @@ describe("MCP proxy smoke", () => {
     try {
       const readAllowed = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
         method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}` },
+        headers: { "content-type": "application/json", authorization: `Bearer ${WIKI_TOKEN}` },
         body: JSON.stringify({
           jsonrpc: "2.0",
           id: "wiki-read-allowed",
@@ -1873,7 +2123,7 @@ describe("MCP proxy smoke", () => {
 
       const readDenied = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
         method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}` },
+        headers: { "content-type": "application/json", authorization: `Bearer ${WIKI_TOKEN}` },
         body: JSON.stringify({
           jsonrpc: "2.0",
           id: "wiki-read-denied",
@@ -1882,14 +2132,13 @@ describe("MCP proxy smoke", () => {
         })
       });
       expect(readDenied.status).toBe(200);
-      const readDeniedBody = await readDenied.json() as { result: { isError: boolean; content: Array<{ text: string }> } };
+      const readDeniedBody = await readDenied.json() as { result: { isError?: boolean; content: Array<{ text: string }> } };
       expect(readDeniedBody.result.isError).toBe(true);
-      expect(readDeniedBody.result.content[0]?.text ?? "").toBe("Access denied: wiki_forbidden");
-      expect(readDeniedBody.result.content[0]?.text ?? "").not.toContain("KX Secret Wiki");
+      expect(readDeniedBody.result.content[0]?.text).toBe("context_not_available");
 
       const search = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
         method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}` },
+        headers: { "content-type": "application/json", authorization: `Bearer ${WIKI_TOKEN}` },
         body: JSON.stringify({
           jsonrpc: "2.0",
           id: "wiki-search-filtered",
@@ -1902,12 +2151,11 @@ describe("MCP proxy smoke", () => {
       const searchText = searchBody.result.content[0]?.text ?? "";
       expect(searchText).toContain("global/superstore.md");
       expect(searchText).not.toContain("KX Secret Wiki");
-      expect(searchText).not.toContain("Unauthorized KX context");
       expect(searchText).not.toContain("POC Wiki");
 
       const kxSearch = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
         method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${KX_TOKEN}` },
+        headers: { "content-type": "application/json", authorization: `Bearer ${WIKI_KX_TOKEN}` },
         body: JSON.stringify({
           jsonrpc: "2.0",
           id: "wiki-search-kx-filtered",
@@ -1919,12 +2167,12 @@ describe("MCP proxy smoke", () => {
       const kxSearchBody = await kxSearch.json() as { result: { content: Array<{ text: string }> } };
       const kxSearchText = kxSearchBody.result.content[0]?.text ?? "";
       expect(kxSearchText).toContain("KX Secret Wiki");
-      expect(kxSearchText).not.toContain("Superstore Wiki");
+      expect(kxSearchText).toContain("Superstore Wiki");
       expect(kxSearchText).not.toContain("POC Wiki");
 
       const kxReadAllowed = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
         method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${KX_TOKEN}` },
+        headers: { "content-type": "application/json", authorization: `Bearer ${WIKI_KX_TOKEN}` },
         body: JSON.stringify({
           jsonrpc: "2.0",
           id: "wiki-read-kx-allowed",
@@ -1938,7 +2186,7 @@ describe("MCP proxy smoke", () => {
 
       const kxReadDenied = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
         method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${KX_TOKEN}` },
+        headers: { "content-type": "application/json", authorization: `Bearer ${WIKI_KX_TOKEN}` },
         body: JSON.stringify({
           jsonrpc: "2.0",
           id: "wiki-read-kx-deny-poc",
@@ -1947,13 +2195,13 @@ describe("MCP proxy smoke", () => {
         })
       });
       expect(kxReadDenied.status).toBe(200);
-      const kxReadDeniedBody = await kxReadDenied.json() as { result: { isError: boolean; content: Array<{ text: string }> } };
+      const kxReadDeniedBody = await kxReadDenied.json() as { result: { isError?: boolean; content: Array<{ text: string }> } };
       expect(kxReadDeniedBody.result.isError).toBe(true);
-      expect(kxReadDeniedBody.result.content[0]?.text ?? "").not.toContain("POC Wiki");
+      expect(kxReadDeniedBody.result.content[0]?.text).toBe("context_not_available");
 
       const pocSearch = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
         method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${POC_TOKEN}` },
+        headers: { "content-type": "application/json", authorization: `Bearer ${WIKI_POC_TOKEN}` },
         body: JSON.stringify({
           jsonrpc: "2.0",
           id: "wiki-search-poc-filtered",
@@ -1966,11 +2214,11 @@ describe("MCP proxy smoke", () => {
       const pocSearchText = pocSearchBody.result.content[0]?.text ?? "";
       expect(pocSearchText).toContain("POC Wiki");
       expect(pocSearchText).not.toContain("KX Secret Wiki");
-      expect(pocSearchText).not.toContain("Superstore Wiki");
+      expect(pocSearchText).toContain("Superstore Wiki");
 
       const pocReadDenied = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
         method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${POC_TOKEN}` },
+        headers: { "content-type": "application/json", authorization: `Bearer ${WIKI_POC_TOKEN}` },
         body: JSON.stringify({
           jsonrpc: "2.0",
           id: "wiki-read-poc-deny-kx",
@@ -1979,20 +2227,20 @@ describe("MCP proxy smoke", () => {
         })
       });
       expect(pocReadDenied.status).toBe(200);
-      const pocReadDeniedBody = await pocReadDenied.json() as { result: { isError: boolean; content: Array<{ text: string }> } };
+      const pocReadDeniedBody = await pocReadDenied.json() as { result: { isError?: boolean; content: Array<{ text: string }> } };
       expect(pocReadDeniedBody.result.isError).toBe(true);
-      expect(pocReadDeniedBody.result.content[0]?.text ?? "").not.toContain("KX Secret Wiki");
+      expect(pocReadDeniedBody.result.content[0]?.text).toBe("context_not_available");
 
       expect(upstreamSeen).toHaveLength(3);
       const deniedAudit = await waitForAuditRow("wiki-read-denied");
       expect(deniedAudit.outcome).toBe("denied");
-      expect(deniedAudit.decision_reason).toBe("wiki_forbidden");
+      expect(deniedAudit.decision_reason).toBe("role_not_granted");
       const kxDeniedAudit = await waitForAuditRow("wiki-read-kx-deny-poc");
       expect(kxDeniedAudit.outcome).toBe("denied");
-      expect(kxDeniedAudit.decision_reason).toBe("wiki_forbidden");
+      expect(kxDeniedAudit.decision_reason).toBe("role_not_granted");
       const pocDeniedAudit = await waitForAuditRow("wiki-read-poc-deny-kx");
       expect(pocDeniedAudit.outcome).toBe("denied");
-      expect(pocDeniedAudit.decision_reason).toBe("wiki_forbidden");
+      expect(pocDeniedAudit.decision_reason).toBe("role_not_granted");
     } finally {
       await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
       await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));
@@ -2039,7 +2287,7 @@ describe("MCP proxy smoke", () => {
     try {
       const aliasSearch = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
         method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}` },
+        headers: { "content-type": "application/json", authorization: `Bearer ${WIKI_TOKEN}` },
         body: JSON.stringify({
           jsonrpc: "2.0",
           id: "wiki-search-q-alias",
@@ -2061,7 +2309,7 @@ describe("MCP proxy smoke", () => {
 
       const querySearch = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
         method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}` },
+        headers: { "content-type": "application/json", authorization: `Bearer ${WIKI_TOKEN}` },
         body: JSON.stringify({
           jsonrpc: "2.0",
           id: "wiki-search-query-kept",
@@ -2315,6 +2563,159 @@ describe("MCP proxy smoke", () => {
       expect(audit.decision_reason).toBe("tools_list_filter_failed");
       expect(String(audit.error_detail)).toContain("tools_list_filter_failed");
     } finally {
+      await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
+      await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));
+    }
+  });
+
+  it("enforces Spec 162 question binding, budget, filter pushdown, and applied version", async () => {
+    const upstreamIds: string[] = [];
+    const pushdownSql = "SELECT STRUCT('month' AS field, '=' AS op, '2026-09' AS val)";
+    const upstream = createServer(async (req, res) => {
+      const body = JSON.parse(await readRequestBody(req)) as { id?: string };
+      const id = String(body.id ?? "");
+      upstreamIds.push(id);
+      res.writeHead(200, { "content-type": "application/json" });
+      if (id === "pushdown-query" || id === "pushdown-off") {
+        res.end(JSON.stringify({
+          jsonrpc: "2.0",
+          id,
+          result: {
+            structuredContent: { sql: pushdownSql },
+            content: [{ type: "text", text: pushdownSql }]
+          }
+        }));
+        return;
+      }
+      if (id === "truncated-query") {
+        res.end(JSON.stringify({
+          jsonrpc: "2.0",
+          id,
+          result: { content: [{ type: "text", text: "detailMessage = ...RUCT(" }] }
+        }));
+        return;
+      }
+      res.end(JSON.stringify({
+        jsonrpc: "2.0",
+        id,
+        result: { content: [{ type: "text", text: JSON.stringify({ rows: [{ ok: true }], truncated: false }) }] }
+      }));
+    });
+
+    await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+    const upstreamPort = (upstream.address() as AddressInfo).port;
+    process.env.LUCY_PROXY_UPSTREAM_HOST = "127.0.0.1";
+    process.env.LUCY_PROXY_UPSTREAM_PORT = String(upstreamPort);
+
+    const { buildProxy, registerPublishedVersion } = await import("../proxy/mcp-proxy");
+    const { server, host } = buildProxy();
+    await new Promise<void>((resolve) => server.listen(0, host, resolve));
+    const proxyPort = (server.address() as AddressInfo).port;
+    const queryArgs = {
+      connectionId: "mysql-aliyun",
+      measures: ["superstore_orders.sales"],
+      dimensions: [{ field: "superstore_orders.region" }],
+      limit: 5
+    };
+
+    const post = async (id: string, name: string, args: Record<string, unknown>, headers: Record<string, string> = {}) => {
+      const res = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${TOKEN}`,
+          ...headers
+        },
+        body: JSON.stringify({ jsonrpc: "2.0", id, method: "tools/call", params: { name, arguments: args } })
+      });
+      return res.json() as Promise<{ result?: { isError?: boolean; content?: Array<{ text?: string }>; _meta?: { lucy?: { appliedVersion?: string; businessDate?: string; valueKind?: string } } } }>;
+    };
+
+    try {
+      const missing = await post("missing-intent", "lucy_begin_question", {});
+      expect(missing.result?.isError).toBe(true);
+      const missingAudit = await waitForAuditRow("missing-intent");
+      expect(missingAudit.error_detail).toBe("missing_intent_summary");
+
+      const stillQueries = await post("after-missing-intent", "lucy_query", queryArgs);
+      expect(stillQueries.result?.isError).not.toBe(true);
+      expect(upstreamIds).toContain("after-missing-intent");
+
+      const ctDb = new Database(auditDbPath, { readonly: true });
+      const turnsBefore = ctDb.prepare("SELECT COUNT(*) AS n FROM conversation_turns").get() as { n: number };
+      expect(turnsBefore.n).toBe(0);
+      ctDb.close();
+
+      const begun = await post("bind-begin", "lucy_begin_question", { intentSummary: "查询销售额", question: "各地区销售额" }, { "mcp-session-id": "session-bind" });
+      const bound = await post("bind-query", "lucy_query", queryArgs, { "mcp-session-id": "session-bind" });
+      expect(bound.result?.isError).not.toBe(true);
+      const bindAudit = await waitForAuditRow("bind-query");
+      expect(bindAudit.turn_attribution_mode).toBe("session_bound");
+      expect(bindAudit.turn_attribution_confidence).toBe("low");
+      const beginText = begun.result?.content?.[0]?.text ?? "";
+      const { turnId } = JSON.parse(beginText) as { turnId: string };
+      const turnDb = new Database(auditDbPath, { readonly: true });
+      const turnRow = turnDb.prepare("SELECT question_source FROM conversation_turns WHERE turn_id = ?").get(turnId) as { question_source: string };
+      expect(turnRow.question_source).toBe("reported_tool");
+      turnDb.close();
+
+      await post("budget-begin", "lucy_begin_question", { intentSummary: "问询预算" }, { "mcp-session-id": "session-budget" });
+      for (let i = 0; i < 20; i += 1) {
+        const ok = await post(`budget-${i}`, "lucy_query", queryArgs, { "mcp-session-id": "session-budget" });
+        expect(ok.result?.isError).not.toBe(true);
+      }
+      const stopped = await post("budget-stop", "lucy_query", queryArgs, { "mcp-session-id": "session-budget" });
+      const stoppedPayload = JSON.parse(stopped.result?.content?.[0]?.text ?? "{}") as { reason?: string; partial?: boolean; continuable?: boolean };
+      expect(stoppedPayload.reason).toBe("question_budget_exhausted");
+      expect(stoppedPayload.partial).toBe(true);
+      expect(stoppedPayload.continuable).toBe(true);
+      expect(upstreamIds).not.toContain("budget-stop");
+      const stopAudit = await waitForAuditRow("budget-stop", 3000);
+      expect(stopAudit.outcome).toBe("budget_stop");
+      expect(stopAudit.failure_dimension == null || stopAudit.failure_dimension === "").toBe(true);
+
+      const continued = await post("budget-continue", "lucy_query", queryArgs, {
+        "mcp-session-id": "session-budget",
+        "x-lucy-question-continue": String(stopAudit.lucy_turn_id)
+      });
+      expect(continued.result?.isError).not.toBe(true);
+      expect(upstreamIds).toContain("budget-continue");
+
+      const pushdown = await post("pushdown-query", "lucy_query", queryArgs, { "mcp-session-id": "session-push" });
+      expect(pushdown.result?.isError).toBe(true);
+      expect(pushdown.result?.content?.[0]?.text ?? "").not.toContain("STRUCT");
+      const pushdownAudit = await waitForAuditRow("pushdown-query");
+      expect(pushdownAudit.compiler_reason).toBe("filter_pushdown");
+      expect(pushdownAudit.failure_dimension).toBe("过滤条件下推");
+      expect(String(pushdownAudit.generated_sql)).toContain("AS field");
+
+      const truncated = await post("truncated-query", "lucy_query", queryArgs);
+      expect(truncated.result?.isError).toBe(true);
+      const truncatedAudit = await waitForAuditRow("truncated-query");
+      expect(truncatedAudit.compiler_reason).toBe("filter_pushdown");
+      expect(truncatedAudit.generated_sql == null || truncatedAudit.generated_sql === "").toBe(true);
+
+      process.env.LUCY_FILTER_PUSHDOWN_GUARD = "off";
+      const forwarded = await post("pushdown-off", "lucy_query", queryArgs);
+      expect(forwarded.result?.isError).not.toBe(true);
+      expect(forwarded.result?.content?.[0]?.text ?? "").toContain("STRUCT");
+      const forwardedAudit = await waitForAuditRow("pushdown-off");
+      expect(forwardedAudit.compiler_reason == null || forwardedAudit.compiler_reason === "").toBe(true);
+
+      delete process.env.LUCY_FILTER_PUSHDOWN_GUARD;
+      registerPublishedVersion("superstore_orders", {
+        version: "demo-v1",
+        businessDate: "2026-10-01",
+        valueKind: "实际"
+      });
+      const versioned = await post("version-query", "lucy_query", queryArgs);
+      expect(versioned.result?._meta?.lucy?.appliedVersion).toBe("demo-v1");
+      expect(versioned.result?._meta?.lucy?.businessDate).toBe("2026-10-01");
+      expect(versioned.result?._meta?.lucy?.valueKind).toBe("实际");
+      const versionAudit = await waitForAuditRow("version-query");
+      expect(versionAudit.applied_version).toBe("demo-v1");
+    } finally {
+      delete process.env.LUCY_FILTER_PUSHDOWN_GUARD;
       await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
       await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));
     }

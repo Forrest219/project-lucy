@@ -109,6 +109,38 @@ describe("PublishWorkbench", () => {
     expect(screen.queryByRole("link", { name: "表目录" })).not.toBeInTheDocument();
     expect(screen.getByText("生效准备")).toBeInTheDocument();
     expect(screen.getByText("本次将同步的变更")).toBeInTheDocument();
+    expect(screen.queryByTestId("workbench-mirror-only-semantic")).not.toBeInTheDocument();
+  });
+
+  it("warns when the ktx mirror still has semantic files missing from the content root", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/diff") {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                files: [],
+                mirrorOnlySemanticFiles: ["semantic-layer/mysql-aliyun/ai_intl_country_daily.yaml"],
+                mirrorDriftTruncated: false
+              }
+            })
+          );
+        }
+        return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), {
+          status: 404
+        });
+      })
+    );
+
+    renderWorkbench();
+
+    const notice = await screen.findByTestId("workbench-mirror-only-semantic");
+    expect(notice).toHaveTextContent("镜像中仍有内容根已删除的语义文件，本次索引可能继续收录。");
+    expect(notice).toHaveTextContent("semantic-layer/mysql-aliyun/ai_intl_country_daily.yaml");
+    expect(notice.querySelector(".notranslate")).toHaveAttribute("translate", "no");
   });
 
   it("uses queue-gate dual panel and opens change detail only on file click", async () => {

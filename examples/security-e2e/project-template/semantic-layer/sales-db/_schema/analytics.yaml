@@ -1,0 +1,28 @@
+tables:
+  orders_masked:
+    table: analytics.orders_masked
+    columns:
+      - name: order_id
+        type: string
+        pk: true
+        nullable: false
+        descriptions:
+          db: 订单 ID
+          ai: Order business key in the sales database.
+      - name: region
+        type: string
+        nullable: false
+        descriptions:
+          db: 区域
+          ai: Sales region, East or West.
+      - name: amount_cents
+        type: number
+        nullable: false
+        descriptions:
+          db: 订单金额（分）
+          ai: Order amount in integer cents.
+      - name: note
+        type: string
+        descriptions:
+          db: 备注
+          ai: Free-text note.

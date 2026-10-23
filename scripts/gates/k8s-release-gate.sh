@@ -23,6 +23,8 @@ VALUES_FILE=""
 PUBLIC_MCP_URL=""
 TOKEN=""
 SKIP_MCP=1
+EXPECT_IMAGE_DIGEST=""
+DEPLOYMENT_EVIDENCE=""
 
 usage() {
   cat <<'EOF'
@@ -38,6 +40,8 @@ Options:
   --public-mcp-url <url>     External MCP URL for H5 acceptance
   --token <bearer>           MCP bearer token for H5 acceptance
   --with-mcp                 Enable MCP checks in H5 (requires url + token)
+  --expect-image-digest <d>  H5: the Pod must run exactly this registry digest (the candidate)
+  --deployment-evidence <f>  H5: write deployed instance/topology/digest evidence to <f>
   -h, --help                 Show help
 EOF
 }
@@ -53,6 +57,8 @@ while [[ $# -gt 0 ]]; do
     --public-mcp-url) PUBLIC_MCP_URL="$2"; shift 2 ;;
     --token) TOKEN="$2"; shift 2 ;;
     --with-mcp) SKIP_MCP=0; shift ;;
+    --expect-image-digest) EXPECT_IMAGE_DIGEST="$2"; shift 2 ;;
+    --deployment-evidence) DEPLOYMENT_EVIDENCE="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "unknown argument: $1" >&2; usage; exit 1 ;;
   esac
@@ -99,6 +105,8 @@ if [[ "${SKIP_MCP}" -eq 0 ]]; then
 else
   ACCEPT_ARGS+=(--skip-mcp)
 fi
+[[ -z "${EXPECT_IMAGE_DIGEST}" ]] || ACCEPT_ARGS+=(--expect-image-digest "${EXPECT_IMAGE_DIGEST}")
+[[ -z "${DEPLOYMENT_EVIDENCE}" ]] || ACCEPT_ARGS+=(--deployment-evidence "${DEPLOYMENT_EVIDENCE}")
 bash "${ROOT}/scripts/gates/k8s-acceptance.sh" "${ACCEPT_ARGS[@]}"
 
 echo "[k8s-release-gate] OK"

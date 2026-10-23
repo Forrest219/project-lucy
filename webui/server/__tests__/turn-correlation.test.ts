@@ -12,12 +12,14 @@ describe("TurnCorrelationRegistry", () => {
     expect(registry.resolve({ identity, sessionId: "session-a" }, 3_000)).toEqual({
       turnId: "turn-a",
       mode: "session_bound",
-      confidence: "high"
+      confidence: "low",
+      associationStatus: "candidate"
     });
     expect(registry.resolve({ identity, sessionId: "session-b" }, 3_000)).toEqual({
       turnId: "turn-b",
       mode: "session_bound",
-      confidence: "high"
+      confidence: "low",
+      associationStatus: "candidate"
     });
   });
 
@@ -32,6 +34,7 @@ describe("TurnCorrelationRegistry", () => {
     }, 2_000)).toEqual({
       mode: "unassigned",
       confidence: "none",
+      associationStatus: "conflict",
       reason: "turn_attribution_rejected"
     });
   });
@@ -54,7 +57,8 @@ describe("TurnCorrelationRegistry", () => {
     expect(registry.resolve({ identity }, 2_000)).toEqual({
       turnId: "turn-a",
       mode: "identity_inferred",
-      confidence: "low"
+      confidence: "low",
+      associationStatus: "candidate"
     });
   });
 
@@ -65,7 +69,8 @@ describe("TurnCorrelationRegistry", () => {
 
     expect(registry.resolve({ identity }, 3_000)).toEqual({
       mode: "unassigned",
-      confidence: "none"
+      confidence: "none",
+      associationStatus: "unassigned"
     });
   });
 
@@ -74,7 +79,8 @@ describe("TurnCorrelationRegistry", () => {
     registry.record({ identity, sessionId: "session-a", turnId: "turn-a" }, 1_000);
     expect(registry.resolve({ identity, sessionId: "session-a" }, 2_001)).toEqual({
       mode: "unassigned",
-      confidence: "none"
+      confidence: "none",
+      associationStatus: "unassigned"
     });
   });
 
@@ -83,6 +89,7 @@ describe("TurnCorrelationRegistry", () => {
     expect(registry.resolve({ identity, explicitTurnId: "turn-unknown" }, 1_000)).toEqual({
       mode: "unassigned",
       confidence: "none",
+      associationStatus: "conflict",
       reason: "turn_attribution_rejected"
     });
 
@@ -90,7 +97,8 @@ describe("TurnCorrelationRegistry", () => {
     expect(registry.resolve({ identity, explicitTurnId: "turn-known" }, 2_000)).toEqual({
       turnId: "turn-known",
       mode: "explicit",
-      confidence: "high"
+      confidence: "high",
+      associationStatus: "confirmed"
     });
   });
 });

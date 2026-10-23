@@ -18,7 +18,7 @@ function test(name, fn) {
 
 test('listAdapters includes customer adapters', () => {
   const ids = listAdapters().map((item) => item.id);
-  for (const id of ['claude-code', 'hermes', 'cursor', 'openclaw', 'codex', 'generic-cli', 'noop']) {
+  for (const id of ['claude-code', 'hermes', 'cursor', 'openclaw', 'codex', 'workbuddy', 'generic-cli', 'noop']) {
     assert.ok(ids.includes(id), `missing ${id}`);
   }
 });

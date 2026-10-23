@@ -75,6 +75,26 @@ async function buildFreshServer() {
   return buildServer();
 }
 
+// The release status flips on the event loop after the reindex resolves.
+// Polling is deterministic where a fixed sleep is not: on a loaded CI runner a
+// 50 ms wait can expire before the flip has happened.
+async function waitForReleaseStatus(
+  app: Awaited<ReturnType<typeof buildFreshServer>>,
+  releaseId: string,
+  expected: string,
+  timeoutMs = 5_000
+) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const res = await request(app.server).get(
+      `/api/semantic-assets/releases/${releaseId}/status`
+    );
+    if (res.body?.data?.release?.status === expected) return res;
+    if (Date.now() >= deadline) return res;
+    await new Promise((r) => setTimeout(r, 25));
+  }
+}
+
 beforeEach(async () => {
   vi.resetModules();
   previousRoot = process.env.KTX_PROJECT_ROOT;
@@ -171,11 +191,7 @@ describe("POST /api/semantic-assets/publish", () => {
 
     // Let the reindex finish.
     resolveReindex();
-    await new Promise((r) => setTimeout(r, 50));
-
-    const after = await request(app.server).get(
-      `/api/semantic-assets/releases/${releaseId}/status`
-    );
+    const after = await waitForReleaseStatus(app, releaseId, "published");
     expect(after.status).toBe(200);
     expect(after.body.data.release.status).toBe("published");
     expect(after.body.data.release.reindex?.ok).toBe(true);
@@ -217,11 +233,7 @@ describe("POST /api/semantic-assets/publish", () => {
       .post("/api/semantic-assets/publish")
       .send({ validationId, confirmOverwrite: true });
     const releaseId = publishRes.body.data.release.id as string;
-    await new Promise((r) => setTimeout(r, 50));
-
-    const status = await request(app.server).get(
-      `/api/semantic-assets/releases/${releaseId}/status`
-    );
+    const status = await waitForReleaseStatus(app, releaseId, "reindex_failed");
     expect(status.body.data.release.status).toBe("reindex_failed");
     expect(status.body.data.release.reindex?.ok).toBe(false);
     expect(status.body.data.release.reindex?.exitCode).toBe(2);
@@ -516,12 +528,21 @@ describe("POST /api/semantic-assets/publish", () => {
     const publishRes = await request(app.server)
       .post("/api/semantic-assets/publish")
       .send({ validationId, confirmOverwrite: true });
-    await new Promise((r) => setTimeout(r, 50));
-
-    const sidecarRaw = await readFile(
-      path.join(projectRoot, ".ktx-ui", "semantic-asset-releases.json"),
-      "utf8"
+    // The sidecar is written when the release completes; poll for it instead
+    // of assuming a fixed delay is enough.
+    const sidecarPath = path.join(
+      projectRoot,
+      ".ktx-ui",
+      "semantic-asset-releases.json"
     );
+    let sidecarRaw = "";
+    const sidecarDeadline = Date.now() + 5_000;
+    for (;;) {
+      sidecarRaw = await readFile(sidecarPath, "utf8").catch(() => "");
+      if (sidecarRaw.includes("sha256")) break;
+      if (Date.now() >= sidecarDeadline) break;
+      await new Promise((r) => setTimeout(r, 25));
+    }
     const sidecar = JSON.parse(sidecarRaw) as { records: Array<Record<string, unknown>> };
     expect(sidecar.records.length).toBe(1);
     const record = sidecar.records[0] ?? {};

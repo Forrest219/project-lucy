@@ -28,7 +28,7 @@ roles:
     permission_model_version: 2
     allow:
       connections:
-        - demo-mysql
+        - "*"
       source_scope: catalog_bound
       tools:
         - lucy_catalog
@@ -44,6 +44,11 @@ roles:
         - entity_details
         - dictionary_search
         - discover_data
+        - sl_validate
+        - lucy_skill_search
+        - lucy_skill_read
+        - lucy_certified_route
+        - lucy_report_template
 
 users:
   - id: demo_agent

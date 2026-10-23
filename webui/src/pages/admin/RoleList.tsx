@@ -1,12 +1,15 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { apiGet } from "../../lib/apiClient";
 import type { Role } from "../../lib/types";
 import { PageHeader } from "../../components/PageHeader";
 import { MetricCard } from "../../components/MetricCard";
+import { RoleDeleteBlockedNotice } from "../../components/RoleDeleteBlockedNotice";
 import { buildObjectDetailSearch } from "../../lib/objectDetail";
 import { isDeleteProtectedRole } from "../../lib/lucyAdminRole";
+import { roleDeleteBlockedMessage } from "../../lib/roleDeleteBlock";
 import { RowMoreMenu } from "../../components/RowMoreMenu";
 
 type RolesResponse = { roles: Role[] };
@@ -563,7 +566,14 @@ export function RoleList() {
                                         label: "删除",
                                         testId: `role-menu-delete-${role.id}`,
                                         disabled: inUse,
-                                        disabledReason: inUse ? "无法删除被引用的 role" : undefined,
+                                        disabledReason: inUse ? roleDeleteBlockedMessage(role.users) : undefined,
+                                        onBlocked: inUse
+                                          ? () => {
+                                              toast.message(
+                                                <RoleDeleteBlockedNotice users={role.users} className="text-sm leading-5 text-fg-default" />
+                                              );
+                                            }
+                                          : undefined,
                                         onSelect: () => handleDelete(role)
                                       }
                                     ])

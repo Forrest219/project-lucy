@@ -6,11 +6,11 @@ import { queryKeys } from "../../lib/queryKeys";
 import type {
   ConnectionInfo,
   ConnectionTestResult,
-  ConnectionsResponse,
-  ProjectInfo
+  ConnectionsResponse
 } from "../../lib/types";
 import { PageHeader } from "../../components/PageHeader";
 import { ConnectionTestResultPanel } from "../../components/connections";
+import { projectQueryOptions } from "../../lib/displayQueryOptions";
 
 export function ConnectionTest() {
   const [selectedConnId, setSelectedConnId] = useState<string>("");
@@ -22,8 +22,7 @@ export function ConnectionTest() {
     queryFn: () => apiGet<ConnectionsResponse>("/api/connections")
   });
   const projectQuery = useQuery({
-    queryKey: queryKeys.project,
-    queryFn: () => apiGet<ProjectInfo>("/api/project")
+    ...projectQueryOptions()
   });
 
   const connections = connectionsQuery.data?.connections ?? [];

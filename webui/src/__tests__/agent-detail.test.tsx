@@ -55,8 +55,8 @@ function makeAgentDetailResponse(overrides: Record<string, unknown> = {}) {
           tools: ["lucy_query", "lucy_read_source", "lucy_catalog"],
           connections: ["mysql-aliyun"],
           sources: [
-            { connectionId: "mysql-aliyun", schema: "dataforai", sourceName: "dataforai", table: "dataforai.superstore_orders" },
-            { connectionId: "mysql-aliyun", schema: "dataforai", sourceName: "dataforai", table: "dataforai.superstore_returns" }
+            { connectionId: "mysql-aliyun", schema: "dataforai", sourceName: "superstore_orders", table: "dataforai.superstore_orders" },
+            { connectionId: "mysql-aliyun", schema: "dataforai", sourceName: "superstore_returns", table: "dataforai.superstore_returns" }
           ],
           legacyAllow: false
         },
@@ -110,10 +110,10 @@ function stubAgentEndpoints(extraRoles: Array<Record<string, unknown>> = []) {
                 ? "+ constraints:\n+   sources:"
                 : "+ name: 张三编辑",
               proposedYaml: "yaml",
-              ...(body.patch?.constraints !== undefined
+              ...(body.patch?.roles || body.patch?.constraints !== undefined
                 ? {
                     effectivePermissions: {
-                      roleIds: ["analyst"],
+                      roleIds: body.patch?.roles ?? ["analyst"],
                       snapshotHash: "snap-1234",
                       sourceMapVersion: "v1",
                       tools: ["lucy_query"],
@@ -125,7 +125,7 @@ function stubAgentEndpoints(extraRoles: Array<Record<string, unknown>> = []) {
                           tool: "lucy_query",
                           connectionId: "mysql-aliyun",
                           schema: "dataforai",
-                          sourceName: "superstore_orders",
+                          sourceName: body.patch?.roles ? "server_composed_source" : "superstore_orders",
                           physicalTable: "dataforai.superstore_orders",
                           sourceKey: "mysql-aliyun|dataforai|superstore_orders|dataforai.superstore_orders",
                           rowGrant: "all",
@@ -229,8 +229,13 @@ describe("AgentDetail", () => {
       }
     ]);
     renderAgentDetail();
-    const roleSelect = await screen.findByDisplayValue("analyst");
-    fireEvent.change(roleSelect, { target: { value: "ops_readonly" } });
+    const analyst = await screen.findByRole("checkbox", { name: "analyst" });
+    fireEvent.click(screen.getByRole("checkbox", { name: "ops_readonly" }));
+    fireEvent.click(analyst);
+    await waitFor(() => {
+      expect(screen.getByTestId("agent-role-capability")).toHaveTextContent("server_composed_source");
+    });
+    expect(screen.getByTestId("agent-role-capability")).not.toHaveTextContent("lucy_catalog");
     fireEvent.click(screen.getByRole("button", { name: "保存" }));
 
     const modal = await screen.findByTestId("agent-save-confirm-modal");
@@ -243,7 +248,47 @@ describe("AgentDetail", () => {
         (call) => call[1]?.method === "PATCH" && JSON.parse(String(call[1].body)).dryRun === false
       );
       expect(saveCall).toBeTruthy();
-      expect(JSON.parse(String(saveCall?.[1]?.body)).patch.role).toBe("ops_readonly");
+      expect(JSON.parse(String(saveCall?.[1]?.body)).patch.roles).toEqual(["ops_readonly"]);
+    });
+  });
+
+  it("keeps two roles checked and writes both in the save patch", async () => {
+    const fetchMock = stubAgentEndpoints([
+      {
+        id: "ops_readonly",
+        description: "Ops",
+        source: "yaml",
+        tools: ["lucy_query"],
+        connections: ["mysql-aliyun"],
+        sourceNames: ["superstore_orders"],
+        sourceCount: 1,
+        invalid: false,
+        warnings: []
+      }
+    ]);
+    renderAgentDetail();
+    const field = await screen.findByTestId("agent-role-field");
+    expect(within(field).queryByRole("combobox")).not.toBeInTheDocument();
+    const analyst = within(field).getByRole("checkbox", { name: "analyst" });
+    const ops = within(field).getByRole("checkbox", { name: "ops_readonly" });
+    expect(analyst).toBeChecked();
+
+    fireEvent.click(ops);
+
+    expect(analyst).toBeChecked();
+    expect(ops).toBeChecked();
+    await waitFor(() => {
+      expect(screen.getByTestId("agent-role-capability")).toHaveTextContent("analyst, ops_readonly");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    fireEvent.click(within(await screen.findByTestId("agent-save-confirm-modal")).getByRole("button", { name: "确认保存" }));
+
+    await waitFor(() => {
+      const saveCall = fetchMock.mock.calls.find(
+        (call) => call[1]?.method === "PATCH" && JSON.parse(String(call[1].body)).dryRun === false
+      );
+      expect(JSON.parse(String(saveCall?.[1]?.body)).patch.roles).toEqual(["analyst", "ops_readonly"]);
     });
   });
 
@@ -352,20 +397,95 @@ describe("AgentDetail", () => {
     renderAgentDetail();
     fireEvent.click(await screen.findByRole("tab", { name: "Token" }));
 
-    const tokenCard = await screen.findByText("hermes-laptop");
-    const card = tokenCard.closest("div")?.parentElement?.parentElement;
-    expect(card).not.toBeNull();
-    const cardText = card?.textContent ?? "";
-    expect(cardText).toContain("2026-06-18");
-    expect(cardText).toContain("[REDACTED]");
-    expect(cardText).not.toContain("sha256:aaaa0000bbbb1111");
-    expect(cardText).toContain("sl_query");
-    expect(cardText).toContain("ok");
+    const row = await screen.findByTestId("agent-token-row-hermes-laptop");
+    const rowText = row.textContent ?? "";
+    expect(rowText).toContain("2026-06-18");
+    expect(rowText).toContain("[REDACTED]");
+    expect(rowText).not.toContain("sha256:aaaa0000bbbb1111");
+    expect(rowText).toContain("sl_query");
+    expect(rowText).toContain("ok");
+    expect(rowText).not.toContain("身份");
 
     fireEvent.click(screen.getByRole("link", { name: /生成新 Token/ }));
     await waitFor(() => {
       expect(screen.getByTestId("new-token")).toBeInTheDocument();
     });
+  });
+
+  it("Token tab renders five tokens as compact rows without empty context fields", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/admin/agents/zhangsan") {
+        return new Response(
+          JSON.stringify(
+            makeAgentDetailResponse({
+              tokens: [
+                {
+                  hash: "sha256:11110000aaaa1111bbbb2222cccc3333",
+                  label: "sparse",
+                  created: "2026-06-01"
+                },
+                {
+                  hash: "sha256:22220000aaaa1111bbbb2222cccc3333",
+                  label: "noted",
+                  created: "2026-06-02",
+                  device_name: "xingchen-mbp",
+                  last_client: "cursor",
+                  last_client_version: "0.45.0",
+                  last_device_name_seen: "office-imac"
+                },
+                {
+                  hash: "sha256:33330000aaaa1111bbbb2222cccc3333",
+                  label: "expiring",
+                  created: "2026-06-03",
+                  expires_at: "2026-12-01",
+                  last_used: "2026-06-20T08:00:00.000Z"
+                },
+                {
+                  hash: "sha256:44440000aaaa1111bbbb2222cccc3333",
+                  label: "client-only",
+                  created: "2026-06-04",
+                  last_client: "codex"
+                },
+                {
+                  hash: "sha256:55550000aaaa1111bbbb2222cccc3333",
+                  label: "unused",
+                  created: "2026-06-05"
+                }
+              ]
+            })
+          )
+        );
+      }
+      if (url.startsWith("/api/admin/roles")) {
+        return new Response(JSON.stringify({ ok: true, data: { roles: [] } }));
+      }
+      return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderAgentDetail("/admin/agents/zhangsan?tab=tokens");
+
+    const list = await screen.findByTestId("agent-token-list");
+    expect(within(list).getAllByTestId(/^agent-token-row-/)).toHaveLength(5);
+    expect(list).not.toHaveTextContent("身份");
+
+    const sparse = screen.getByTestId("agent-token-row-sparse");
+    expect(sparse).toHaveTextContent("尚未使用");
+    expect(sparse).not.toHaveTextContent("备注");
+    expect(sparse).not.toHaveTextContent("Agent 类型");
+    expect(sparse).not.toHaveTextContent("最近设备名");
+
+    const noted = screen.getByTestId("agent-token-row-noted");
+    expect(noted).toHaveTextContent("备注");
+    expect(noted).toHaveTextContent("xingchen-mbp");
+    expect(noted).toHaveTextContent("cursor 0.45.0");
+    expect(noted).toHaveTextContent("office-imac");
+
+    expect(screen.getByTestId("agent-token-row-client-only")).toHaveTextContent("codex");
+    expect(screen.getByTestId("agent-token-row-client-only")).not.toHaveTextContent("备注");
+    expect(screen.getByTestId("agent-token-row-expiring")).toHaveTextContent("过期 2026-12-01");
+    expect(screen.getByTestId("agent-token-row-unused")).toHaveTextContent("尚未使用");
   });
 
   it("opens Token tab from the tab query parameter", async () => {
@@ -479,15 +599,19 @@ describe("AgentDetail", () => {
     expect(typeof serialized?.sources?.[0]?.predicates?.[0]?.value).toBe("number");
   });
 
-  it("Agent Constraints editor is present and does not claim row filters are live", async () => {
+  it("personal row limit editor explains the tightening and picks granted tables", async () => {
     stubAgentEndpoints();
     renderAgentDetail();
     const editor = await screen.findByTestId("agent-constraints-editor");
-    expect(editor).toHaveTextContent("Agent 强制约束");
+    expect(editor).toHaveTextContent("个人行限制");
+    expect(editor).toHaveTextContent("未添加个人行限制");
+    expect(editor).toHaveTextContent("在这个 Agent 已绑定角色的行级策略之上");
     expect(editor.querySelector(".notranslate")).toBeTruthy();
     expect(editor.textContent ?? "").toMatch(/不表示行级取数已生效/);
-    fireEvent.click(within(editor).getByRole("button", { name: "添加源约束" }));
-    expect(within(editor).getByText(/源约束 1/)).toBeInTheDocument();
+    fireEvent.click(within(editor).getByRole("button", { name: "添加行限制" }));
+    expect(within(editor).getByText(/行限制 1/)).toBeInTheDocument();
+    expect(within(editor).getByRole("checkbox", { name: "superstore_orders" })).toBeInTheDocument();
+    expect(within(editor).queryByRole("textbox", { name: "connection" })).not.toBeInTheDocument();
     expect(await screen.findByTestId("sticky-save-bar")).toBeInTheDocument();
   });
 
@@ -495,20 +619,15 @@ describe("AgentDetail", () => {
     const fetchMock = stubAgentEndpoints();
     renderAgentDetail();
     const editor = await screen.findByTestId("agent-constraints-editor");
-    fireEvent.click(within(editor).getByRole("button", { name: "添加源约束" }));
-
-    const inputs = within(editor).getAllByRole("textbox");
-    expect(inputs.length).toBeGreaterThanOrEqual(5);
-    fireEvent.change(inputs[0]!, { target: { value: "mysql-aliyun" } });
-    fireEvent.change(inputs[1]!, { target: { value: "dataforai" } });
-    fireEvent.change(inputs[2]!, { target: { value: "superstore_orders" } });
-    fireEvent.change(inputs[3]!, { target: { value: "region" } });
-    fireEvent.change(inputs[4]!, { target: { value: "East" } });
+    fireEvent.click(within(editor).getByRole("button", { name: "添加行限制" }));
+    fireEvent.click(within(editor).getByRole("checkbox", { name: "superstore_orders" }));
+    fireEvent.change(within(editor).getByRole("textbox", { name: "字段" }), { target: { value: "region" } });
+    fireEvent.change(within(editor).getByRole("textbox", { name: "取值" }), { target: { value: "East" } });
 
     fireEvent.click(screen.getByRole("button", { name: "保存" }));
 
     const modal = await screen.findByTestId("agent-save-confirm-modal");
-    expect(within(modal).getByText("确认强制约束变更")).toBeInTheDocument();
+    expect(within(modal).getByText("确认个人行限制变更")).toBeInTheDocument();
     // Sticky save bar must not remain mounted — it intercepts pointer events on confirm.
     expect(screen.queryByTestId("sticky-save-bar")).not.toBeInTheDocument();
     const preview = within(modal).getByTestId("confirm-finalrows-preview");
@@ -535,6 +654,50 @@ describe("AgentDetail", () => {
         ]
       });
     });
+  });
+
+  it("marks a personal row limit stale when its table is outside the current role grant", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/admin/agents/zhangsan") {
+        return new Response(JSON.stringify(makeAgentDetailResponse({
+          constraints: {
+            sources: [{
+              connection: "other-db",
+              schema: "other",
+              names: ["secret_table"],
+              predicates: [{ field: "dept", op: "eq", value: "A" }]
+            }]
+          }
+        })));
+      }
+      if (url.startsWith("/api/admin/roles")) {
+        return new Response(JSON.stringify({
+          ok: true,
+          data: {
+            roles: [{
+              id: "analyst",
+              description: "Analyst role",
+              source: "yaml",
+              tools: ["lucy_query"],
+              connections: ["mysql-aliyun"],
+              sourceNames: ["superstore_orders"],
+              sourceCount: 1,
+              invalid: false,
+              warnings: []
+            }]
+          }
+        }));
+      }
+      return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
+    }));
+    renderAgentDetail();
+    const editor = await screen.findByTestId("agent-constraints-editor");
+    expect(editor).toHaveTextContent("已失效");
+    expect(editor).toHaveTextContent("secret_table");
+    expect(within(editor).queryByRole("textbox", { name: "connection" })).not.toBeInTheDocument();
+    expect(within(editor).queryByRole("textbox", { name: "schema" })).not.toBeInTheDocument();
+    expect(within(editor).queryByRole("textbox", { name: "names" })).not.toBeInTheDocument();
   });
 
   it("Effective Permissions tree shows legacy wildcard warning when legacyAllow", async () => {
@@ -634,10 +797,10 @@ describe("AgentDetail", () => {
     vi.stubGlobal("fetch", fetchMock);
     renderAgentDetail();
     await screen.findByDisplayValue("张三");
-    const select = screen.getByRole("combobox") as HTMLSelectElement;
-    const optionValues = Array.from(select.options).map((o) => o.value);
-    expect(optionValues).toContain("analyst");
-    expect(optionValues).not.toContain("ref-template");
+    const field = screen.getByTestId("agent-role-field");
+    expect(field).toHaveTextContent("analyst");
+    expect(field).not.toHaveTextContent("ref-template");
+    expect(screen.getByRole("checkbox", { name: "analyst" })).toBeChecked();
   });
 
   it("Permissions tab: 数据能力 label present; capabilityDigest in details only", async () => {

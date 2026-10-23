@@ -4,6 +4,20 @@ This directory stores repository-level implementation plans that are not scoped 
 
 | Plan | Purpose |
 |---|---|
+| [2026-10-22-upgrade-candidate-verification-plan.md](2026-10-22-upgrade-candidate-verification-plan.md) | **v2.5 需求备忘 L25-13，待落地，非门禁**：用一致性备份在隔离环境验证候选镜像的迁移正确性与业务/审计连续性。原地升级仍为客户现场主线，本条不替代；不切流、不产生放行证据 |
+| [2026-10-21-customer-v2-fresh-install-package-plan.md](2026-10-21-customer-v2-fresh-install-package-plan.md) | **v0.2，执行中**：空集群全新安装 Lucy 2.0.0 / Chart 0.2.6。新后缀 `20261022-fresh`、新 slug `customer-fresh`。原生 amd64 的 G3/G4/G4b/G8 与 F4 完成前不交给客户。不覆盖 r7，也不代替 v0.3 的 P0-3 至 P0-6 |
+| [2026-10-21-customer-20260828-v1-upgrade-package-plan.md](2026-10-21-customer-20260828-v1-upgrade-package-plan.md) | **v0.1，执行中**：供方生成 20260828-v1 客户的 linux/amd64 镜像、私有引导密钥附件和随包文档。构建排除、信任代理渲染和升级白名单纳入本次提交。候选包在原生 amd64 验收前不交给客户。验收合同仍是升级计划 v0.3 |
+| [2026-10-21-customer-20260828-v1-to-lucy-2.0-upgrade-plan.md](2026-10-21-customer-20260828-v1-to-lucy-2.0-upgrade-plan.md) | **v0.3，未执行**：客户现役 `20260828-v1`（Lucy 0.16.0 / Chart 0.1.0，无登录、已有 https 域名）→ Lucy 2.0.0 / Chart 0.2.6。放行前先补升级入口白名单，再对那一次构建做原生升级与恢复验收。客户现场成功后不还原旧卷。当前 `r6` 仍为 Draft，不是放行包。同日评审过程稿已作废。供方出包步骤见同日升级包生成计划 |
+| [2026-10-19-lucy-product-version-2.0.0.md](2026-10-19-lucy-product-version-2.0.0.md) | **仓库版本已落地，运行中容器未重建**：产品版本 `2.0.0`，界面标签 `v2.0.0`。V1–V6 已通过。未构建镜像，未改 KTX 或 Helm Chart 包版本 |
+| [2026-10-19-audit-trust-and-admin-investigation-plan.md](2026-10-19-audit-trust-and-admin-investigation-plan.md) | **设计交付，未实施**：用户批准跨端交叉复核后，拆成 T00–T08；Claude Code 实施，Codex 按 EA-01–36 评审验收。覆盖可信归属、身份、保全、导出与管理员调查，受控客户端范围单列 |
+| [2026-10-19-v2-bootstrap-delivery-scripts-plan.md](2026-10-19-v2-bootstrap-delivery-scripts-plan.md) | **v2.0 脚本已实现、现场待测**：自动生成和复用实例引导密钥，配置 K8s / K3s Secret 与部署入口；15 项 Node 和 11 项 Python 检查通过，实际集群、升级及恢复由用户测试，不新增发布门禁 |
+| [2026-10-19-upgrade-e2e-implementation-plan.md](2026-10-19-upgrade-e2e-implementation-plan.md) | **v2.5 需求备忘，待落地，非门禁**：L25-07 的完整方案，覆盖 Docker / K3s / K8s、真实资产、备份恢复、业务与安全连续性；v2.0 仅做交付验证，不修改当前 CI 或发布规则 |
+| `webui/docs/plans/wo-202610-27-engine-catalog-and-mcp-query-connection.md` | **待审阅，未批准**：Spec 176 v0.3。新建连接显式支持 KTX `driver: athena`。v0.2 引擎目录 / MCP 查询连接已撤回 |
+| `webui/docs/plans/wo-202610-26-suspend-deployment-license.md` | **移除激活码（已实现）**：Spec 175 v0.2。删除许可实现与签发脚本，去掉治理台入口。Docker 未在本次重启 |
+| [2026-10-18-lucy-2.5-upgrade-proposal.md](2026-10-18-lucy-2.5-upgrade-proposal.md) | **Lucy 2.5 升级建议（v1.14）**：治理台五项展示改造（L25-01–L25-04、L25-08），另记可选 SMTP、单点登录（L25-05、L25-06）、升级 E2E 自动化（L25-07）、审计运行时增量（L25-09）、Hive 直连（L25-10）、语义资产批量维护（L25-11）、帮助中心优化（L25-12）、升级候选验证环境（L25-13）、行权限管理（L25-14）。不含实现 WO |
+| `2026-10-18-mcp-audit-serial.md` | **MCP 审计整改串行计划**：D1–D3 已锁定。批次 1 为 Spec 178 / T1，其后 T3、T5、T4、T7、T6、T11、T13、T14、R0–R3、T15 |
+| `2026-10-12-acceptance-gap-closure.md` | **验收缺口修复**：把 SC-15 / SC-19 / SC-20 / SC-23 接到查数路径。工单 `wo-202610-15` |
+| `2026-10-11-customer-log-next-optimizations.md` | **客户日志优化最终版（v1.1，WO-12 已验收）**：P0→P1→P2。Spec 162 v0.3；工单 `wo-202610-12` / `13` / `14` |
 | `2026-10-11-eval-module-functional-upgrade.md` | **Eval 模块产品能力（形态 A，v0.4）**：已细化为待评审 Spec 161 与工单 `webui/docs/plans/wo-202610-11-offline-eval-customer-ops.md` |
 | `2026-10-11-eval-result-policy-context-upgrade.md` | **Eval 升级建议（形态 A）**：结果 / 策略 / 解释分轴，superstore 四臂消融，拒答与澄清，业务轨迹晋升。与 8 月 26 日运营闭环并行；不含实现 WO |
 | `2026-08-26-eval-accuracy-closed-loop-and-change-triggered-regression.md` | **Eval 优化方案（形态 A）**：准确率连续跌破闭环（判定 / ack / Webhook）+ Publish 后变更触发 smoke 回归；不含实现 WO |

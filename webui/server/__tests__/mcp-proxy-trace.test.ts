@@ -16,11 +16,9 @@ const testState = vi.hoisted(() => ({
   recordMcpToolsCallMock: vi.fn(() => ({ callEventId: 1, policyEventId: 2 }))
 }));
 
-vi.mock("../project.js", async (importOriginal) => ({
-  ...await importOriginal<typeof import("../project.js")>(),
-  resolveProjectRoot: vi.fn(() => testState.projectRoot)
-}));
-
+// See `mcp-proxy-acl.test.ts`: the project root is redirected through
+// `KTX_PROJECT_ROOT`, not a module mock, so that `proxy/identity.ts` and
+// `paths.ts` both resolve against this test's temporary project.
 vi.mock("../proxy/audit.js", () => ({
   isTokenRevoked: testState.isTokenRevokedMock,
   writeLog: testState.writeLogMock,
@@ -42,6 +40,9 @@ vi.mock("../trace/evidence.js", async () => {
 });
 
 const TOKEN = "proxy-trace-token";
+
+let previousProjectRoot: string | undefined;
+let previousContentRoot: string | undefined;
 
 function tokenHash(token: string): string {
   return "sha256:" + createHash("sha256").update(token).digest("hex");
@@ -67,13 +68,13 @@ defaults:
   deny_tools: []
 `;
 
-const SCHEMA_YAML = `sources:
-  - source: dataforai.superstore_orders
-    grain: "1 row per order_id"
-    table:
-      connection: dataforai
-      schema: mysql-aliyun
-      table: superstore_orders
+// The source-map loader (`proxy/acl.ts`) only reads `tables:` entries. A
+// `sources:` manifest compiles to zero entries, so every readable-source
+// lookup then fails with `source_not_found` and the request never reaches the
+// upstream failure path this test is about.
+const SCHEMA_YAML = `tables:
+  superstore_orders:
+    table: dataforai.superstore_orders
 `;
 
 async function makeProject(): Promise<string> {
@@ -110,9 +111,17 @@ beforeEach(async () => {
   testState.recordMcpToolsCallMock.mockClear();
   testState.recordMcpToolsCallMock.mockReturnValue({ callEventId: 1, policyEventId: 2 });
   testState.projectRoot = await makeProject();
+  previousProjectRoot = process.env.KTX_PROJECT_ROOT;
+  process.env.KTX_PROJECT_ROOT = testState.projectRoot;
+  previousContentRoot = process.env.LUCY_CONTENT_ROOT;
+  process.env.LUCY_CONTENT_ROOT = ".";
 });
 
 afterEach(async () => {
+  if (previousProjectRoot === undefined) delete process.env.KTX_PROJECT_ROOT;
+  else process.env.KTX_PROJECT_ROOT = previousProjectRoot;
+  if (previousContentRoot === undefined) delete process.env.LUCY_CONTENT_ROOT;
+  else process.env.LUCY_CONTENT_ROOT = previousContentRoot;
   await rm(testState.projectRoot, { recursive: true, force: true });
   testState.projectRoot = "";
 });

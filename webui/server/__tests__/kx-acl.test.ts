@@ -294,7 +294,26 @@ async function makeProject() {
   await mkdir(path.join(root, "webui", "config"), { recursive: true });
   await mkdir(path.join(root, "semantic-layer", "mysql-aliyun", "_schema"), { recursive: true });
   await mkdir(path.join(root, "semantic-layer", "poc-mysql-aliyun", "_schema"), { recursive: true });
-  await writeFile(path.join(root, "ktx.yaml"), "connections: {}\n", "utf8");
+  // Spec 182 — selector matches intersect with the connection's enabled_tables.
+  // Mirror every schema table that selectors in ACCESS_YAML name so the
+  // existing compile expectations stay intact.
+  await writeFile(
+    path.join(root, "ktx.yaml"),
+    `connections:
+  mysql-aliyun:
+    driver: mysql
+    enabled_tables:
+${KX_TABLES.map((table) => `      - ${table}`).join("\n")}
+      - dataforai.superstore_orders
+      - dataforai.superstore_returns
+      - dataforai.superstore_people
+  poc-mysql-aliyun:
+    driver: mysql
+    enabled_tables:
+${POC_TABLES.map((table) => `      - ${table}`).join("\n")}
+`,
+    "utf8"
+  );
   await writeFile(path.join(root, "webui", "config", "access.yaml"), ACCESS_YAML, "utf8");
   await writeFile(path.join(root, "semantic-layer", "mysql-aliyun", "_schema", "dataforai.yaml"), SCHEMA_YAML, "utf8");
   await writeFile(path.join(root, "semantic-layer", "poc-mysql-aliyun", "_schema", "data_agent_poc.yaml"), POC_SCHEMA_YAML, "utf8");
@@ -508,8 +527,9 @@ describe("KX financial domain ACL guardrails", () => {
     await expect(check(identity("wildcard_agent"), "future_table_export", {}))
       .resolves.toEqual({ allowed: false, reason: "tool_unclassified:future_table_export" });
 
+    // Spec §4.1: a wildcard direct-allow grant has no formal Role, so context stays closed.
     await expect(check(identity("wildcard_agent"), "wiki_search", { query: "discount policy" }))
-      .resolves.toEqual({ allowed: true });
+      .resolves.toEqual({ allowed: false, reason: "context_role_required" });
   });
 
   it("protects KX metadata from broad catalog tools", async () => {
@@ -956,7 +976,9 @@ describe("catalog_bound lucy_admin scope (Spec 131)", () => {
     connections: string[];
     withSelectors?: boolean;
     tools?: string[];
+    roleId?: string;
   }) {
+    const roleId = options.roleId ?? "lucy_admin";
     const tools = (options.tools ?? [
       "lucy_catalog",
       "lucy_query",
@@ -973,7 +995,7 @@ describe("catalog_bound lucy_admin scope (Spec 131)", () => {
 `
       : "";
     const yaml = `roles:
-  lucy_admin:
+  ${roleId}:
     description: ops data plane
     permission_model_version: 2
     allow:
@@ -986,7 +1008,7 @@ users:
   - id: ops_agent
     name: Ops
     enabled: true
-    role: lucy_admin
+    role: ${roleId}
     tokens: []
 defaults:
   deny_tools:
@@ -1035,6 +1057,7 @@ defaults:
     expect(resolved.ok).toBe(true);
     if (!resolved.ok) return;
     expect(resolved.permissions.tables.sort()).toEqual([
+      "data_agent_poc.poc_metric_catalog",
       "dataforai.superstore_orders",
       "dataforai.superstore_returns"
     ]);
@@ -1050,8 +1073,51 @@ defaults:
     })).resolves.toMatchObject({ allowed: false });
   });
 
-  it("does not auto-include undeclared connections", async () => {
+  it("lucy_admin includes every connection, including ones added later", async () => {
     await seedCatalogBoundAccess({ connections: ["mysql-aliyun"] });
+    await writeFile(
+      path.join(projectRoot, "ktx.yaml"),
+      `connections:
+  mysql-aliyun:
+    driver: mysql
+    enabled_tables:
+      - dataforai.superstore_orders
+      - dataforai.superstore_returns
+`,
+      "utf8"
+    );
+    const acl = await loadAcl();
+    acl.resetEffectivePolicyForTests();
+    await acl.commitEffectivePolicy();
+    await expect(acl.check(identity("ops_agent"), "lucy_read_source", {
+      sourceName: "poc_metric_catalog",
+      connectionId: "poc-mysql-aliyun"
+    })).resolves.toMatchObject({ allowed: false });
+
+    await writeFile(
+      path.join(projectRoot, "ktx.yaml"),
+      `connections:
+  mysql-aliyun:
+    driver: mysql
+    enabled_tables:
+      - dataforai.superstore_orders
+      - dataforai.superstore_returns
+  poc-mysql-aliyun:
+    driver: mysql
+    enabled_tables:
+      - data_agent_poc.poc_metric_catalog
+`,
+      "utf8"
+    );
+    await acl.commitEffectivePolicy();
+    await expect(acl.check(identity("ops_agent"), "lucy_read_source", {
+      sourceName: "poc_metric_catalog",
+      connectionId: "poc-mysql-aliyun"
+    })).resolves.toEqual({ allowed: true });
+  });
+
+  it("does not auto-include undeclared connections for other catalog_bound roles", async () => {
+    await seedCatalogBoundAccess({ connections: ["mysql-aliyun"], roleId: "catalog_reader" });
     const { check, resetEffectivePolicyForTests, commitEffectivePolicy } = await loadAcl();
     resetEffectivePolicyForTests();
     await commitEffectivePolicy();

@@ -1,26 +1,14 @@
-import { access, readdir, readFile } from "node:fs/promises";
-import path from "node:path";
-import { parse } from "yaml";
-import { resolveProjectRoot } from "../project.js";
-import { loadContentPaths } from "../paths.js";
 import { isSkillSegment } from "./identifiers.js";
 import type { SkillAsset, SkillValidationIssue, SkillValidationResult } from "./types.js";
 
-async function fileExists(filePath: string): Promise<boolean> {
-  try {
-    await access(filePath);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-export async function validateSkill(skill: SkillAsset, customProjectRoot?: string): Promise<SkillValidationResult> {
+/**
+ * Structural checks only. A Skill is a shared, centrally uploaded document:
+ * missing eval cases, Wiki pages, or semantic sources do not fail validation
+ * and do not affect whether an Agent can read it.
+ */
+export function validateSkill(skill: SkillAsset): SkillValidationResult {
   const issues: SkillValidationIssue[] = [];
-  const projectRoot = customProjectRoot ?? (await resolveProjectRoot());
-  const paths = await loadContentPaths();
 
-  // 1. Basic field checks
   if (!skill.name || skill.name.trim() === "") {
     issues.push({ code: "skill_name_required", type: "error", field: "name", message: "Skill 名称不能为空。" });
   } else if (!isSkillSegment(skill.name)) {
@@ -47,6 +35,15 @@ export async function validateSkill(skill: SkillAsset, customProjectRoot?: strin
     });
   }
 
+  if (skill.roles_allowed_invalid && !(skill.roles_allowed.includes("*") && skill.roles_allowed.length > 1)) {
+    issues.push({
+      code: "skill_roles_invalid",
+      type: "error",
+      field: "roles_allowed",
+      message: "可访问角色必须是角色 ID 数组或仅含 * 的数组。",
+    });
+  }
+
   if (skill.roles_allowed.includes("*") && skill.roles_allowed.length > 1) {
     issues.push({
       code: "skill_roles_wildcard_mixed",
@@ -54,10 +51,6 @@ export async function validateSkill(skill: SkillAsset, customProjectRoot?: strin
       field: "roles_allowed",
       message: "全部角色通配符不能与具体角色 ID 同时使用。",
     });
-  }
-
-  if (!skill.version || skill.version.trim() === "") {
-    issues.push({ code: "skill_version_defaulted", type: "warning", field: "version", message: "Skill 版本为空，将使用默认值 1.0.0。" });
   }
 
   const validStatuses = ["draft", "published", "deprecated"];
@@ -70,123 +63,8 @@ export async function validateSkill(skill: SkillAsset, customProjectRoot?: strin
     });
   }
 
-  // 2. Prerequisites validation
-  // 2.1 Sources check in semantic-layer/
-  if (skill.prerequisites?.sources) {
-    for (const source of skill.prerequisites.sources) {
-      // source can be "mysql-aliyun.superstore_orders" or "superstore_orders"
-      const parts = source.split(".");
-      const tableName = parts[parts.length - 1];
-      const connName = parts.length > 1 ? parts[0] : "";
-
-      // Check if any yaml in semantic-layer references this
-      let found = false;
-      const semanticLayerDir = paths.semanticLayer;
-      try {
-        const conns = await readdir(semanticLayerDir, { withFileTypes: true });
-        for (const conn of conns) {
-          if (!conn.isDirectory() || conn.name.startsWith(".")) continue;
-          if (connName && conn.name !== connName) continue;
-          const connDir = path.join(semanticLayerDir, conn.name);
-          const files = await readdir(connDir);
-          for (const f of files) {
-            if (f.endsWith(".yaml") || f.endsWith(".yml")) {
-              if (f.startsWith(tableName)) {
-                found = true;
-                break;
-              }
-              // Also check inside schema file
-              if (f === "dataforai.yaml" || f.startsWith("_schema")) {
-                try {
-                  const content = await readFile(path.join(connDir, f), "utf-8");
-                  if (content.includes(tableName)) {
-                    found = true;
-                    break;
-                  }
-                } catch {}
-              }
-            }
-          }
-          if (found) break;
-        }
-      } catch {
-        // semantic-layer directory might not exist in some lightweight test mocks
-      }
-
-      if (!found && !customProjectRoot) {
-        issues.push({
-          code: "skill_source_unverified",
-          type: "warning",
-          field: "prerequisites.sources",
-          message: `无法在 semantic-layer 目录中确认语义源“${source}”。`,
-        });
-      }
-    }
-  }
-
-  // 2.2 Wiki docs check in wiki/
-  if (skill.prerequisites?.wiki_docs) {
-    for (const wikiDoc of skill.prerequisites.wiki_docs) {
-      const candidates = [
-        path.join(paths.wiki, wikiDoc),
-        path.join(paths.wiki, "global", wikiDoc),
-        path.join(paths.configDir, wikiDoc),
-      ];
-      let exists = false;
-      for (const cand of candidates) {
-        if (await fileExists(cand)) {
-          exists = true;
-          break;
-        }
-      }
-      if (!exists) {
-        issues.push({
-          code: "skill_wiki_missing",
-          type: "error",
-          field: "prerequisites.wiki_docs",
-          message: `引用的 Wiki 文档“${wikiDoc}”不在 wiki/ 目录中。`,
-        });
-      }
-    }
-  }
-
-  // 3. Eval cases check for published skills
-  if (skill.status === "published") {
-    if (!skill.eval_cases || skill.eval_cases.length === 0) {
-      issues.push({
-        code: "skill_eval_required",
-        type: "error",
-        field: "eval_cases",
-        message: "已发布 Skill 至少需要配置一个 eval_cases 评测用例。",
-      });
-    } else {
-      for (const evalCase of skill.eval_cases) {
-        const candidates = [
-          path.join(paths.evals, evalCase),
-          path.join(paths.evals, skill.domain, evalCase),
-          path.join(paths.configDir, evalCase),
-        ];
-        let exists = false;
-        for (const cand of candidates) {
-          if (await fileExists(cand)) {
-            exists = true;
-            break;
-          }
-        }
-        if (!exists && !customProjectRoot) {
-          issues.push({
-            code: "skill_eval_missing",
-            type: "warning",
-            field: "eval_cases",
-            message: `未在 evals/ 目录中找到评测用例文件“${evalCase}”。`,
-          });
-        }
-      }
-    }
-  }
-
   return {
-    valid: issues.filter(i => i.type === "error").length === 0,
+    valid: issues.every((issue) => issue.type !== "error"),
     issues,
   };
 }

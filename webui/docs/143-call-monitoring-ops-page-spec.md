@@ -5,14 +5,16 @@
 | 文档名称 | 调用监控运维页 Spec (Call Monitoring Ops Page Spec) |
 | 文档类型 | Product / API / UX Spec |
 | Spec 编号 | 143 |
-| 版本 | v1.0 |
-| 撰写日期 | 2026-09-04；Implemented 2026-09-24 |
+| 版本 | v1.1 |
+| 撰写日期 | 2026-09-04；Implemented 2026-09-24；v1.1 2026-10-12 |
 | 委托人 | xingchen |
 | 状态 | Implemented |
 | 输出位置 | `webui/docs/143-call-monitoring-ops-page-spec.md` |
 | 上游 Spec / 事实源 | Spec 07（MCP Proxy audit）、Spec 08（问询追溯）、Spec 19/41/100（系统概览 / 运行状态）、Spec 69（governance observability）、Spec 75/78/86/87（使用概况）、Spec 89/94/106（访问日志）、`webui/server/observability.ts`、`webui/server/proxy/audit.ts` |
 | 关联术语 | `webui/docs/00-product-terminology-standard.md` §4.6 / 本 Spec Terminology Compliance |
 | 关联 IA | `webui/docs/06-navigation-ia.md`（本 Spec 修订「运行状态」分组） |
+
+**Spec 165 修订（2026-10-12，已实现）。** 时间窗、窗内折线、刷新失败时保留上一份快照，以及访问日志的 `range=30d`，以 Spec 165 为准。本文件 v1.1 仍然有效：页头不展示统计时间，不展示 SLO 总状态；越线只高亮对应 KPI。下文里「只有近 1 小时 / 近 24 小时」由 Spec 165 取代。
 
 ## 1. 背景与问题
 
@@ -36,7 +38,7 @@
 4. 首屏回答：近窗调用量、成功率、错误率、拒绝率、多数请求耗时（P95）、慢于多数请求数量、Top 工具、最近失败/拒绝短列表。
 5. 时效口径统一为 **单次 MCP 工具调用** 的 `durationMs`（非 Turn 端到端）。
 6. 图表 / 排行 / 列表可下钻到 **访问日志 · 调用流水**（同过滤）并进入 Trace。
-7. 阈值超阈仅做 **页内红标 / 高亮**；不接邮件 / Slack。
+7. 阈值超阈仅做 **对应 KPI 卡片高亮**；页头不展示 SLO 总状态或统计时间；不接邮件 / Slack。
 8. 事实源复用现有 `audit.sqlite` / observability 聚合；**不新造采集管道**。
 
 ## 3. Non-goals
@@ -242,7 +244,6 @@ GET /api/ops/call-monitor?range=24h|1h&slowMs=<optional>
 │  ├─ Breadcrumbs: 运行状态 / 调用监控
 │  ├─ Title: 调用监控
 │  ├─ Description: 准实时查看 MCP 工具调用量、成败与请求时效。
-│  ├─ Badges: 统计时间 · SLO 状态（正常 / 需关注 / 暂无数据）
 │  └─ Actions: 时间窗 segmented（近 24 小时 | 近 1 小时）· 自动刷新开关（默认开，30s）· 刷新
 ├─ Primary KPI row（MetricCard）
 │  ├─ 近 N 调用量
@@ -323,7 +324,8 @@ New terms（须同步登记到术语标准 §4.6）：
 
 既有术语沿用（不得改译）：
 
-- 近 N 调用量、多数请求耗时、慢于多数请求、访问日志、调用流水、统计时间、系统概览、P95、MCP。
+- 近 N 调用量、多数请求耗时、慢于多数请求、访问日志、调用流水、系统概览、P95、MCP。
+- 本页页头不使用「统计时间」，也不使用「正常 / 需关注 / 暂无数据」作为 SLO 总状态。越线只体现在对应 KPI 卡片。
 
 Protected terms：`MCP`、`P95`、tool name、`requestId`、`traceId`、Agent / Token 标识值。
 
@@ -336,9 +338,9 @@ Protected terms：`MCP`、`P95`、tool name、`requestId`、`traceId`、Agent / 
 ## 12. Acceptance Criteria
 
 1. 侧栏 **运行状态** 下可见 **调用监控**，路由 `/ops/calls`；面包屑为 `运行状态 / 调用监控`。
-2. 默认 `range=24h`；可切 `1h`；URL 可分享并恢复。
+2. 默认 `range=24h`。窗口枚举以 Spec 165 为准（`1h`、`24h`、`7d`、`30d`）；URL 可分享并恢复。
 3. 首屏展示 §6.4 全部 KPI + Top 工具 + 最近失败与拒绝；无 Eval / 跑批 / WebUI 自身指标。
-4. 自动刷新默认 30s；可关闭；手动刷新更新「统计时间」。
+4. 自动刷新默认 30s；可关闭；页头不展示统计时间或 SLO 总状态。
 5. 错误率 / 拒绝率 / P95 超阈时对应卡片红标；`businessCalls=0` 为暂无数据而非误报。
 6. 点击失败行或工具排行可进入 `/admin/audit?view=calls` 并带过滤；可继续打开 Trace。
 7. API（或过渡组合）不泄露 Token 明文 / 结果行；`lint:terminology` 通过。

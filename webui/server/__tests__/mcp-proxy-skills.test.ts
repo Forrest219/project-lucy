@@ -25,14 +25,9 @@ function readRequestBody(req: IncomingMessage): Promise<string> {
   });
 }
 
-const ACCESS_YAML = `users:
-  - id: skills_test_agent
-    name: Skills Test Agent
-    enabled: true
-    tokens:
-      - hash: "${tokenHash(TOKEN)}"
-        label: skills-test-token
-        created: 2026-08-29
+const ACCESS_YAML = `roles:
+  skills_analyst:
+    description: Skills test role
     allow:
       connections:
         - mysql-aliyun
@@ -44,6 +39,15 @@ const ACCESS_YAML = `users:
         - lucy_skill_read
         - wiki_search
         - wiki_read
+users:
+  - id: skills_test_agent
+    name: Skills Test Agent
+    enabled: true
+    role: skills_analyst
+    tokens:
+      - hash: "${tokenHash(TOKEN)}"
+        label: skills-test-token
+        created: 2026-08-29
 `;
 
 const KTX_YAML = `connections:
@@ -92,7 +96,7 @@ title: Mock Superstore Profit SOP
 version: 1.0.0
 domain: superstore
 status: published
-roles_allowed: ["*"]
+roles_allowed: ["skills_analyst"]
 prerequisites:
   sources: ["mysql-aliyun.superstore_orders"]
 triggers:
@@ -195,7 +199,7 @@ not for agents
     else process.env.LUCY_CONTENT_ROOT = previousContentRoot;
     await new Promise<void>((resolve) => upstreamServer.close(() => resolve()));
     await new Promise<void>((resolve) => proxyServer.close(() => resolve()));
-    await rm(projectRoot, { recursive: true, force: true });
+    await rm(projectRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
   });
 
   it("injects governed skills in initialize instructions", async () => {
@@ -396,9 +400,20 @@ not for agents
       method: "resources/read",
       params: { uri: "lucy-skill://superstore/mock-profit-skill" }
     });
-    const readJson = await read.json() as { error?: { code: number; message: string } };
-    expect(readJson.error?.code).toBe(-32003);
-    expect(readJson.error?.message).toContain("skill_channel_forbidden:read");
+    const readJson = await read.json() as { result?: { contents?: Array<{ text?: string }> }; error?: { code?: number; message?: string } };
+    // Spec §4.2: discover (lucy_skill_search) does not grant read (lucy_skill_read).
+    expect(readJson.error).toMatchObject({ code: -32003, message: "context_not_available" });
+    expect(JSON.stringify(readJson)).not.toContain("Mock Profit Analysis SOP");
+
+    // Same external shape as an unknown URI: no existence oracle.
+    const unknown = await post({
+      jsonrpc: "2.0",
+      id: "split-unknown",
+      method: "resources/read",
+      params: { uri: "lucy-skill://superstore/does-not-exist" }
+    });
+    const unknownJson = await unknown.json() as { error?: { code?: number; message?: string } };
+    expect(unknownJson.error).toEqual({ ...readJson.error, data: { reason: "context_not_available" } });
   });
 
   it("hides draft skills from all agent channels (Spec 144)", { timeout: 20000 }, async () => {    const post = (body: unknown) =>
@@ -431,7 +446,7 @@ not for agents
     const listJson = (await listRes.json()) as { result?: { resources?: Array<{ name: string }> } };
     expect(listJson.result?.resources?.some((r) => r.name === "mock-draft-skill") ?? false).toBe(false);
 
-    // resources/read of a draft is denied with -32003 / skill_not_published
+    // resources/read of a draft is denied with the uniform -32003 / context_not_available
     const readRes = await post({
       jsonrpc: "2.0",
       id: "read-draft",
@@ -440,7 +455,7 @@ not for agents
     });
     const draftReadJson = (await readRes.json()) as { error?: { code: number; message: string } };
     expect(draftReadJson.error?.code).toBe(-32003);
-    expect(draftReadJson.error?.message).toContain("skill_not_published");
+    expect(draftReadJson.error?.message).toBe("context_not_available");
 
     // lucy_skill_read of a draft is denied
     const toolRes = await post({
@@ -453,7 +468,7 @@ not for agents
       result?: { isError?: boolean; content?: Array<{ text: string }> };
     };
     expect(toolJson.result?.isError).toBe(true);
-    expect(toolJson.result?.content?.[0]?.text).toContain("skill_not_published");
+    expect(toolJson.result?.content?.[0]?.text).toBe("context_not_available");
 
     // lucy_skill_search must not match drafts
     const searchRes = await post({

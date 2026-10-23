@@ -8,7 +8,7 @@
 | 撰写日期 | 2026-08-29 |
 | 撰写人 | Claude / Codex |
 | 委托人 | 张星晨 |
-| 基于材料 | `webui/docs/131-governed-skill-system-and-context-transpass-spec.md`、`skills/domains/superstore/profit-breakdown.skill.md`、`skills/domains/kx_financial/dupont-analysis.skill.md`、`evals/` |
+| 基于材料 | `webui/docs/171-governed-skill-system-and-context-transpass-spec.md`、`skills/domains/superstore/profit-breakdown.skill.md`、`skills/domains/kx_financial/dupont-analysis.skill.md`、`evals/` |
 | 适用范围 | Upper Agents（Claude Code、Codex、Cursor、OpenClaw）数据消费体验验证、Skill 效能量化评测、Golden Cases 质量门禁 |
 | 输出位置 | /Users/zhangxingchen/Projects/project-lucy/webui/docs/132-governed-skill-abtest-and-evaluation-benchmark-spec.md |
 

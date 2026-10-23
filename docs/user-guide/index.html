@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy 帮助文档中心 |
 | 文档类型 | Other |
-| 版本 | v2.3 |
-| 撰写日期 | 2026-06-20；v2.1 更新 2026-06-24（澄清定位措辞、补充业务用户前提说明、修正 Eval 闭环自动化表述）；v2.2 更新 2026-06-24（权限与安全卡片补充边界排除项交叉引用）；v2.3 更新 2026-06-24（Eval 闭环表述改为"可手工/脚本触发即满足本期要求"） |
+| 版本 | 2.0.0 |
+| 撰写日期 | 2026-06-20；v2.1 更新 2026-06-24（澄清定位措辞、补充业务用户前提说明、修正 Eval 闭环自动化表述）；v2.2 更新 2026-06-24（权限与安全卡片补充边界排除项交叉引用）；v2.3 更新 2026-06-24（Eval 闭环表述改为“可手工/脚本触发即满足本期要求”）；2.0.0 更新 2026-10-20（统一品牌叫法为 WebUI、修正版本号、修复跨页深链、去除重复入口、补充浏览器翻译防御） |
 | 撰写人 | Claude |
 | 委托人 | project-lucy 团队 |
 | 基于材料 | project-lucy docs / 用户讨论 / Tableau & KTX 参考结构 |
@@ -16,7 +16,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Lucy 帮助文档中心</title>
+<title translate="no" class="notranslate">帮助文档中心 · Lucy 帮助文档</title>
 <link rel="stylesheet" href="assets/user-guide.css">
 </head>
 <body>
@@ -40,29 +40,29 @@
     </div>
     <div class="nav-group">
       <p class="nav-title">管理员指南</p>
-      <a class="nav-link" href="quickstart-admin.html">快速部署 <span class="wip">WIP</span></a>
-      <a class="nav-link" href="data-sources.html">数据源接入 <span class="wip">WIP</span></a>
-      <a class="nav-link" href="permissions.html">权限与 ACL <span class="wip">WIP</span></a>
-      <a class="nav-link" href="webui-guide.html">KTX WebUI</a>
+      <a class="nav-link" href="quickstart-admin.html">快速部署</a>
+      <a class="nav-link" href="data-sources.html">数据源接入</a>
+      <a class="nav-link" href="permissions.html">权限与 ACL</a>
+      <a class="nav-link" href="webui-guide.html">WebUI 指南</a>
     </div>
     <div class="nav-group">
       <p class="nav-title">治理与安全</p>
       <a class="nav-link" href="trust.html">可信机制</a>
-      <a class="nav-link" href="eval-meta-governance-training.html">Eval 培训</a>
-      <a class="nav-link" href="skills.html">Skill 管理 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="eval-meta-governance-training.html">质量评测培训</a>
+      <a class="nav-link" href="skills.html">Skill 管理</a>
     </div>
     <div class="nav-group">
       <p class="nav-title">参考</p>
-      <a class="nav-link" href="mcp-reference.html">MCP 接入参考 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="mcp-reference.html"><span translate="no" class="notranslate">MCP</span> 接入参考</a>
       <a class="nav-link" href="glossary.html">术语表</a>
-      <a class="nav-link" href="release-notes.html">更新日志 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="release-notes.html">更新日志</a>
     </div>
   </aside>
   <main class="content">
     <header class="hero">
       <span class="eyebrow">Help Center</span>
-      <h1>欢迎使用 Lucy 帮助文档中心</h1>
-      <p class="lead">Lucy 是企业数据资产面向 AI Agent 的可信网关——它不直接回答问题，而是让你已经在用的 Agent（如 Claude Code / Codex）安全、准确地访问企业数据。无论你是业务使用者、BI 管理员，还是集成开发者，这里都有你需要的指引。</p>
+      <h1>Lucy 帮助文档中心</h1>
+      <p class="lead">欢迎使用 Lucy 帮助文档中心。Lucy 是企业数据资产面向 AI <span translate="no" class="notranslate">Agent</span> 的可信网关——它不直接回答问题，而是让你已经在用的 <span translate="no" class="notranslate">Agent</span>（如 Claude Code / Codex）安全、准确地访问企业数据。无论你是业务使用者、BI 管理员，还是集成开发者，这里都有你需要的指引。</p>
     </header>
 
     <!-- 按角色选择路径 -->
@@ -73,11 +73,11 @@
           <div class="hub-card-icon">📊</div>
           <h3>业务用户</h3>
           <p>我要在会议里快速拿到可信、可追问的数据答案。</p>
-          <p style="font-size:13px;color:#6b7785;margin-top:-6px;">前提：你需要一个已配置 Lucy MCP token 的 Agent 客户端（如 Claude Code / Codex）——Lucy 本身不提供独立问答界面，问答由你的 Agent 完成。</p>
+          <p style="font-size:13px;color:#6b7785;margin-top:-6px;">前提：你需要一个已配置 Lucy <span translate="no" class="notranslate">MCP</span> token 的 <span translate="no" class="notranslate">Agent</span> 客户端（如 Claude Code / Codex）——Lucy 本身不提供独立问答界面，问答由你的 <span translate="no" class="notranslate">Agent</span> 完成。</p>
           <ul>
             <li><a href="getting-started.html">5 分钟理解 Lucy</a></li>
-            <li><a href="workflows.html">常见任务流</a></li>
-            <li><a href="asking-better.html">如何问得更好</a></li>
+            <li><a href="workflows.html#meeting">常见任务流</a></li>
+            <li><a href="asking-better.html#rules">如何问得更好</a></li>
             <li><a href="troubleshooting.html">回答不对怎么办</a></li>
           </ul>
         </article>
@@ -86,20 +86,19 @@
           <h3>BI / 数据管理员</h3>
           <p>我要维护企业数据标准，配置语义层，确保答案可信可审计。</p>
           <ul>
-            <li><a href="quickstart-admin.html">快速部署 <span class="wip-inline">WIP</span></a></li>
-            <li><a href="data-sources.html">数据源接入 <span class="wip-inline">WIP</span></a></li>
-            <li><a href="webui-guide.html">KTX WebUI 使用说明</a></li>
-            <li><a href="eval-meta-governance-training.html">Eval 元治理培训</a></li>
+            <li><a href="quickstart-admin.html">快速部署</a></li>
+            <li><a href="data-sources.html">数据源接入</a></li>
+            <li><a href="eval-meta-governance-training.html">质量评测元治理培训</a></li>
           </ul>
         </article>
         <article class="hub-card">
           <div class="hub-card-icon">⚙️</div>
           <h3>集成开发者</h3>
-          <p>我要把 Agent 对接到 Lucy，或在代码里调用 MCP 工具。</p>
+          <p>我要把 <span translate="no" class="notranslate">Agent</span> 对接到 Lucy，或在代码里调用 <span translate="no" class="notranslate">MCP</span> 工具。</p>
           <ul>
-            <li><a href="mcp-reference.html">MCP 接入参考 <span class="wip-inline">WIP</span></a></li>
-            <li><a href="permissions.html">权限与 ACL <span class="wip-inline">WIP</span></a></li>
-            <li><a href="skills.html">Skill 管理 <span class="wip-inline">WIP</span></a></li>
+            <li><a href="mcp-reference.html"><span translate="no" class="notranslate">MCP</span> 接入参考</a></li>
+            <li><a href="permissions.html">权限与 ACL</a></li>
+            <li><a href="skills.html">Skill 管理</a></li>
             <li><a href="concepts.html">核心概念</a></li>
           </ul>
         </article>
@@ -108,164 +107,37 @@
 
     <!-- 按主题浏览 -->
     <section class="hub-section">
-      <h2>快速入门</h2>
+      <h2>按主题浏览</h2>
       <div class="hub-grid">
         <article class="hub-card">
-          <h3>产品介绍</h3>
-          <p>Lucy 是什么、解决什么问题、系统架构与核心模块。</p>
+          <h3>产品与架构</h3>
+          <p>Lucy 是什么、解决什么问题，以及权威的产品架构图。</p>
           <ul>
             <li><a href="product-intro.html">Lucy 产品介绍</a></li>
             <li><a href="lucy-architecture-diagram.html">架构总览（权威图）</a></li>
             <li><a href="lucy-docs-flows.html">摄取与服务流程（权威图）</a></li>
-            <li><a href="product-intro.html#architecture">系统架构示意</a></li>
-            <li><a href="product-intro.html#compare">对比传统 BI</a></li>
           </ul>
         </article>
         <article class="hub-card">
-          <h3>第一次使用</h3>
-          <p>什么问题适合问、什么问题要谨慎、示范问法。</p>
+          <h3>控制面与可信</h3>
+          <p>用 WebUI 维护语义资产，以及数据开放给 <span translate="no" class="notranslate">Agent</span> 前的可信校验链路。</p>
           <ul>
-            <li><a href="getting-started.html">5 分钟理解 Lucy</a></li>
-            <li><a href="concepts.html">核心概念解释</a></li>
-            <li><a href="asking-better.html">提问五条规则</a></li>
+            <li><a href="webui-guide.html">WebUI 指南</a></li>
+            <li><a href="trust.html#provenance">可信机制与来源注脚</a></li>
           </ul>
         </article>
         <article class="hub-card">
-          <h3>管理员部署</h3>
-          <p>从零到可用：连接数据库、配置语义层、发布给团队。</p>
-          <ul>
-            <li><a href="quickstart-admin.html">快速部署指南 <span class="wip-inline">WIP</span></a></li>
-            <li><a href="data-sources.html">数据源接入 <span class="wip-inline">WIP</span></a></li>
-            <li><a href="webui-guide.html">KTX WebUI 使用</a></li>
-          </ul>
-        </article>
-      </div>
-    </section>
-
-    <section class="hub-section">
-      <h2>用户指南</h2>
-      <div class="hub-grid">
-        <article class="hub-card">
-          <h3>常见任务流</h3>
-          <p>四个高频会议场景的完整提问模板，可直接复制使用。</p>
-          <ul>
-            <li><a href="workflows.html#meeting">经营会数据场景</a></li>
-            <li><a href="workflows.html#templates">可复制的任务模板</a></li>
-            <li><a href="workflows.html#suffix">防御性追问句式</a></li>
-          </ul>
-        </article>
-        <article class="hub-card">
-          <h3>提问技巧</h3>
-          <p>五条规则把模糊问题变成 Lucy 能稳定执行的任务。</p>
-          <ul>
-            <li><a href="asking-better.html">如何问得更好</a></li>
-            <li><a href="asking-better.html#rules">五条规则</a></li>
-            <li><a href="asking-better.html#rewrite">从模糊到可验证</a></li>
-          </ul>
-        </article>
-        <article class="hub-card">
-          <h3>故障与限制</h3>
-          <p>Lucy 回答不对时的分类处理方法，以及边界声明。</p>
-          <ul>
-            <li><a href="troubleshooting.html">失败处理指南</a></li>
-            <li><a href="product-intro.html#scope">超出边界的场景</a></li>
-            <li><a href="trust.html">可信机制说明</a></li>
-          </ul>
-        </article>
-      </div>
-    </section>
-
-    <section class="hub-section">
-      <h2>管理员指南</h2>
-      <div class="hub-grid">
-        <article class="hub-card">
-          <h3>数据接入</h3>
-          <p>支持的数据库类型、连接配置、只读账号设置。</p>
-          <ul>
-            <li><a href="data-sources.html">数据源接入指南 <span class="wip-inline">WIP</span></a></li>
-            <li><a href="webui-guide.html">WebUI 数据源管理</a></li>
-          </ul>
-        </article>
-        <article class="hub-card">
-          <h3>语义层配置</h3>
-          <p>在 KTX WebUI 里维护字段描述、指标口径和 Wiki 文档。</p>
-          <ul>
-            <li><a href="webui-guide.html">KTX WebUI 全功能指南</a></li>
-            <li><a href="webui-guide.html#semantic-layer">语义层编辑</a></li>
-            <li><a href="webui-guide.html#wiki">Wiki 文档编写</a></li>
-          </ul>
-        </article>
-        <article class="hub-card">
-          <h3>权限与安全</h3>
-          <p>表级 ACL、用户角色、审计日志配置。列级/行级权限、SSO/LDAP/SAML、SaaS 多租户不在 v1.0 范围（见<a href="product-intro.html#scope">边界声明</a>）。</p>
-          <ul>
-            <li><a href="permissions.html">权限与 ACL 指南 <span class="wip-inline">WIP</span></a></li>
-            <li><a href="trust.html">可信机制</a></li>
-          </ul>
-        </article>
-      </div>
-    </section>
-
-    <section class="hub-section">
-      <h2>治理与安全</h2>
-      <div class="hub-grid">
-        <article class="hub-card">
-          <h3>可信机制</h3>
-          <p>Provenance Footer、只读保证、审计链路的原理与验证方法。</p>
-          <ul>
-            <li><a href="trust.html">可信机制说明</a></li>
-            <li><a href="trust.html#provenance">Provenance Footer 解读</a></li>
-          </ul>
-        </article>
-        <article class="hub-card">
-          <h3>Eval 质量闭环</h3>
-          <p>配置变更经 Eval Runner 校验（可手工或脚本触发）并留痕才允许进入服务侧；自动 Webhook 触发与阈值告警为可选增强，非本期范围。</p>
-          <ul>
-            <li><a href="eval-meta-governance-training.html">Eval 元治理培训</a></li>
-            <li><a href="eval-meta-governance-training.html#safety">安全红线声明</a></li>
-            <li><a href="eval-meta-governance-training.html#drift">漂移判定流</a></li>
-          </ul>
-        </article>
-        <article class="hub-card">
-          <h3>Skill 管理</h3>
-          <p>把高频分析逻辑固化为企业级 Skill，沉淀分析肌肉记忆。</p>
-          <ul>
-            <li><a href="skills.html">Skill 管理指南 <span class="wip-inline">WIP</span></a></li>
-          </ul>
-        </article>
-      </div>
-    </section>
-
-    <section class="hub-section">
-      <h2>参考文档</h2>
-      <div class="hub-grid">
-        <article class="hub-card">
-          <h3>MCP 接入参考</h3>
-          <p>Lucy 提供的 MCP 工具列表、调用格式与认证说明。</p>
-          <ul>
-            <li><a href="mcp-reference.html">MCP 接入参考 <span class="wip-inline">WIP</span></a></li>
-            <li><a href="mcp-reference.html#tools">工具一览</a></li>
-          </ul>
-        </article>
-        <article class="hub-card">
-          <h3>术语表</h3>
-          <p>Lucy、KTX 和数据治理领域的关键术语解释。</p>
+          <h3>参考</h3>
+          <p>术语解释、版本历史与已知问题。</p>
           <ul>
             <li><a href="glossary.html">完整术语表</a></li>
-            <li><a href="concepts.html">核心概念详解</a></li>
-          </ul>
-        </article>
-        <article class="hub-card">
-          <h3>更新日志</h3>
-          <p>版本历史、新功能说明、已知问题与修复记录。</p>
-          <ul>
-            <li><a href="release-notes.html">更新日志 <span class="wip-inline">WIP</span></a></li>
+            <li><a href="release-notes.html">更新日志</a></li>
           </ul>
         </article>
       </div>
     </section>
 
-    <p class="footer">Lucy Help Center · docs/user-guide · v2.0 · 2026-06-20</p>
+    <p class="footer">Lucy Help Center · docs/user-guide · 2.0.0 · 2026-06-20</p>
   </main>
 </div>
 </body>

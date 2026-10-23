@@ -194,6 +194,8 @@ Lucy WebUI 的设计规范事实源在
 
 - **平滑升级（默认，保留账号与 audit 日志）**：`npm run demo:upgrade`（或 `npm run demo:rebuild`；支持 `--no-cache`、`--backup-dir inbox/backups`）。重建镜像并 `--force-recreate` 容器，**不**删除 `lucy-demo-data` volume。
 - **从零 reseed（仅 dev 验收干净模板）**：`npm run demo:upgrade -- --fresh`（等价于删除 `lucy-demo-data` 后重新 seed）。
+- **Compose project name** 来自 `docker compose -f <compose file> config`（`--format json` 的 `name`）。Demo 文件在 `deploy/compose/`，project name 是该目录名（`compose`），named volume 是 `compose_lucy-demo-data`。读不到 compose config 时才回退到当前工作目录名。已设置的 `COMPOSE_PROJECT_NAME` 优先。
+- **空目标卷是失败，不是 `preserved=true`**：解析出的目标 named volume 已存在且挂载点下文件数为 0，同时有运行中的容器挂载了另一个同逻辑卷名（例如 `lucy-demo-data`）且其中有文件时，升级失败，不会把 preserve check 报成 ok。
 - 等价手写：`BUILDX_BUILDER=default bash scripts/upgrade/upgrade-lucy.sh -f deploy/compose/docker-compose.demo.yml`。
 - amd64 开发者覆盖：脚本已按 host 自动选择；若直接 compose，传 `TARGETPLATFORM=linux/amd64 TARGETARCH=amd64`。
 - 客户 amd64 离线包 / K8s integration 大包：推荐 `bash scripts/release/build-customer-amd64-image.sh`（含 G1–G4 + G4b + **G8** 门禁）；或 `docker buildx build --builder lucy-amd64 ...` 并显式 `--build-arg TARGETPLATFORM=linux/amd64 --build-arg TARGETARCH=amd64`（创建 builder 时**不要** `--use`，结束后 `docker buildx use default`）。交付前**必须**完整走一遍 [`docs/runbooks/customer-delivery-preflight-checklist.md`](../runbooks/customer-delivery-preflight-checklist.md) 与 [`docs/runbooks/customer-amd64-image-build-checklist.md`](../runbooks/customer-amd64-image-build-checklist.md)（含 `assert-image-elf-arch.sh` 对 **node+tini** 架构、Python runtime 离线预装 G4b、镜像 UID 10001 + git init **G8**、Helm MCP URL 守卫、**H3 N-1 旧 PVC 升级**及现场验收命令）。K8s 升级方案见 [`deploy/k8s/helm/lucy/UPGRADE.md`](../../deploy/k8s/helm/lucy/UPGRADE.md)。详见 `docs/specs/lucy-customer-amd64-offline-delivery-spec.md` 与 `docs/specs/lucy-202608-08-image-arch-and-ktx-baseline-fix.md`。
@@ -284,37 +286,17 @@ columns:
 
 Claude Desktop 的"添加自定义连接器" UI 要求 HTTPS，且 URL 由 Anthropic 云端做 MCP discovery / OAuth 探测——`localhost` 系列地址（localhost / 127.0.0.1 / *.local）从云端不可达，**本地 HTTPS 反代也救不回来**（验证过：表单接受 `https://localhost:7880/mcp` 但提交后静默卡死）。按客户端分两条路：
 
-**Claude Desktop → stdio**（推荐，无暴露风险）
+**统一入口：Lucy MCP Proxy（`:7879`，Bearer Token 鉴权）**
 
-编辑 `~/Library/Application Support/Claude/claude_desktop_config.json`，在顶层合并：
+所有客户端（Claude Desktop、Claude Code、Codex、Cursor 等）都应通过 Lucy MCP Proxy 接入：Token 校验、停用/吊销、对象 ACL、行级策略、先持久后释放的审计只在 Proxy 上生效。**不得**把 `ktx mcp stdio`（Claude Desktop 直连 KTX 进程）或 KTX `:7878` 直连当作客户或常规开发的接入方式——那会绕过全部上述控制（企业安全整改 Spec 20261018 §3.3；客户 Service/Ingress 不暴露 `7878`）。
 
-```json
-{
-  "mcpServers": {
-    "ktx": {
-      "command": "/Users/zhangxingchen/.local/bin/ktx",
-      "args": ["mcp", "stdio", "--project-dir", "/Users/zhangxingchen/Projects/project-lucy"]
-    }
-  }
-}
-```
+- 配置来源：WebUI「生成 Token」页复制出的 MCP 配置；Token 只放环境变量或客户端的密钥存储，不进命令行和仓库。
+- 仅限本机、非客户数据的 KTX 内核调试可临时直连 `127.0.0.1:7878` 或 stdio，并且必须是回环地址、使用合成/脱敏数据；此类会话不产出任何验收或审计证据，不能用来证明 Lucy 行为。
+- Claude Desktop 的"自定义连接器"要求 HTTPS 且由云端探测，`localhost` 不可达：需要 HTTPS 的客户端请使用已部署的 Lucy（Ingress TLS，`LUCY_PUBLIC_MCP_URL`），不要自行把 `:7878` 隧道出去。
 
-重启 Claude Desktop。每个 stdio 客户端独占一个 KTX 进程；Claude Code 仍走 7878 HTTP，互不影响。
+**Web Claude / 云端 agent**
 
-> `command` 必须用绝对路径——GUI 应用启动时 PATH 不含 `~/.local/bin`。
-
-**Web Claude / 云端 agent → cloudflared**（公网可达，**有暴露风险**）
-
-仅在确实需要从云端访问 KTX 时考虑。KTX 连的是 Aliyun RDS 生产库，直接暴露 endpoint 等同暴露生产数据，**必须配 Cloudflare Access**（Email OTP / GitHub，Audience 限定到自己邮箱）：
-
-```bash
-brew install cloudflared
-cloudflared tunnel login                       # 浏览器绑定域名
-cloudflared tunnel create ktx-local
-# 在 Cloudflare Zero Trust 控制台配 Self-hosted application + Access policy
-```
-
-Quick tunnel（`cloudflared tunnel --url http://localhost:7878`，无鉴权）域名虽随机但会落在 Claude Desktop config / 进程列表 / 浏览器 prefetch 等处，**不算秘密**，仅适合不涉敏数据的一次性调试。本仓库当前未预置 cloudflared 配置。
+仅在确实需要从云端访问 Lucy 时考虑，且暴露的只能是带 Token 鉴权的 Lucy MCP Proxy（`:7879`，经 TLS 终止的 Ingress），**绝不是 `:7878`**；生产数据暴露面必须再叠加 Cloudflare Access 等入口控制。无鉴权的 quick tunnel（含 `cloudflared tunnel --url http://localhost:7878`）会把端点落在客户端配置、进程列表、浏览器 prefetch 中，**不算秘密**，禁止用于任何非合成数据。本仓库当前未预置 cloudflared 配置。
 
 ## 上游依赖：KTX
 

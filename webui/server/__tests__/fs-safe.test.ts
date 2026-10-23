@@ -150,4 +150,38 @@ describe("fs-safe readable paths", () => {
 
     await expectForbidden(() => assertReadable(paths, projectRoot, "evals/secret-link/p"));
   });
+
+  it("rejects reading the durable security store and its sidecars", async () => {
+    const paths = legacyPaths();
+    await writeFile(path.join(projectRoot, ".ktx-ui", "security.sqlite"), "x");
+    for (const name of ["security.sqlite", "security.sqlite-wal", "security.sqlite-shm", "SECURITY.SQLITE"]) {
+      await expectForbidden(() => assertReadable(paths, projectRoot, `.ktx-ui/${name}`));
+    }
+  });
+
+  it("rejects symlink reads that resolve to the security store", async () => {
+    const paths = legacyPaths();
+    await writeFile(path.join(projectRoot, ".ktx-ui", "security.sqlite"), "x");
+    await symlink(path.join(projectRoot, ".ktx-ui", "security.sqlite"), path.join(projectRoot, ".ktx-ui", "innocent.json"));
+    await expectForbidden(() => assertReadable(paths, projectRoot, ".ktx-ui/innocent.json"));
+  });
+
+  it("keeps ordinary .ktx-ui files readable", async () => {
+    const paths = legacyPaths();
+    await writeFile(path.join(projectRoot, ".ktx-ui", "join-candidates.json"), "{}");
+    await expect(assertReadable(paths, projectRoot, ".ktx-ui/join-candidates.json")).resolves.toContain("join-candidates.json");
+  });
+});
+
+describe("fs-safe security store protection (writes)", () => {
+  it("rejects writing the security store and sidecars, including via symlink", async () => {
+    const paths = legacyPaths();
+    for (const name of ["security.sqlite", "security.sqlite-wal", "security.sqlite-shm", "security.sqlite-journal"]) {
+      await expectForbidden(() => safeWrite(paths, projectRoot, `.ktx-ui/${name}`, "x"));
+    }
+    await writeFile(path.join(projectRoot, ".ktx-ui", "security.sqlite"), "orig");
+    await symlink(path.join(projectRoot, ".ktx-ui", "security.sqlite"), path.join(projectRoot, ".ktx-ui", "alias.bin"));
+    await expectForbidden(() => safeWrite(paths, projectRoot, ".ktx-ui/alias.bin", "overwritten"));
+    await expect(readFile(path.join(projectRoot, ".ktx-ui", "security.sqlite"), "utf8")).resolves.toBe("orig");
+  });
 });

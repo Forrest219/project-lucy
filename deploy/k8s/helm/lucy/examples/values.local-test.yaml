@@ -32,7 +32,7 @@
 image:
   repository: project-lucy
   # The tag you `docker tag` + `kind load docker-image` after a local build.
-  tag: "0.17.0"
+  tag: "2.0.0"
   # `Never` forces the local cache. If you forget to `kind load docker-image`
   # the pod will sit in `ImagePullBackOff`.
   pullPolicy: Never
@@ -120,9 +120,14 @@ resources:
 
 lucy:
   enabled: true
-  version: "0.17.0"
+  version: "2.0.0"
   bundledKtxVersion: "0.16.0"
 
 serviceAccount:
   create: true
   name: ""
+
+# Test profile over plain HTTP: allows non-Secure session cookies (Spec §3.1 item 8).
+# Customer installs keep the chart default (Secure cookies, HTTPS ingress).
+security:
+  insecureHttpTestProfile: true

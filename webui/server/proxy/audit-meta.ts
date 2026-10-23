@@ -15,7 +15,10 @@ export async function buildAccessLogAuditMeta(
     tokenHashPrefix: identity.tokenHashPrefix,
     clientVersion: identity.clientVersion,
     decisionReason,
-    policyVersion: runtimePv
+    policyVersion: runtimePv,
+    // Spec 162 §7.6 — the Token's explicit eval mark travels with every row.
+    // Absent stays unmarked; it is never derived from User-Agent or token_label.
+    evalMark: identity.evalMark === true
   };
   if (!snapshot) return tokenMeta;
   return {

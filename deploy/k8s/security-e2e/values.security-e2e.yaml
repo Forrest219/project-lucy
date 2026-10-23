@@ -1,0 +1,50 @@
+# Isolated single-replica K8s test deployment for the real-user E2E release gate (Spec §6.2, §8.3, R8).
+# The candidate image is pinned BY DIGEST (set image.repository/image.digest at deploy time, see deploy-candidate.sh);
+# no credential lives in this file. The fixture project and the one-time bootstrap key are injected by the deploy
+# script from the run directory (kubectl cp / `kubectl create secret --from-file`).
+#
+# This profile exists only for the E2E namespace. It must never be used for a customer install:
+#  - TLS terminates at the test ingress (Secure cookies stay ON unless the test cluster has no TLS, in which case
+#    set security.insecureHttpTestProfile=true for THIS namespace only);
+#  - no fault-injection switch exists in the product or the chart: faults are applied by the test control plane
+#    (kubectl rollout / exec) from outside the pod, never through a Lucy HTTP route.
+image:
+  repository: REPLACE-ME-CANDIDATE-REPOSITORY   # e.g. ghcr.io/<org>/project-lucy (the render fails until replaced)
+  tag: ""
+  digest: ""                                    # sha256:<digest of the gated candidate>
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+persistence:
+  enabled: true
+  accessModes: [ReadWriteOnce]
+  size: 5Gi
+  storageClass: ""
+  existingClaim: ""
+
+env:
+  KTX_PROJECT_ROOT: /data/lucy
+  LUCY_CONTENT_ROOT: .
+  POSTHOG_DISABLED: "1"
+  LUCY_PUBLIC_MCP_URL: ""                       # set by deploy-candidate.sh to the test ingress /mcp URL
+
+bootstrap:
+  existingSecret: lucy-e2e-bootstrap            # Secret with key `token`, created from checker/secrets/bootstrap-token
+
+# B3 disposable DB password: the harness-created Secret (key `password`) is mounted at
+# /var/run/secrets/lucy-db so the rendered ktx.yaml's `password: file:` reference resolves.
+# Set by deploy-candidate.sh from run.json's db.secretName.
+db:
+  existingSecret: ""
+  mountPath: "/var/run/secrets/lucy-db"
+
+security:
+  insecureHttpTestProfile: false
+
+serviceAccount:
+  create: true
+  name: ""
+
+lucy:
+  enabled: true

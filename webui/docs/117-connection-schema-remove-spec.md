@@ -4,7 +4,7 @@
 |---|---|
 | 文档名称 | Connection Schema Remove Spec |
 | 文档类型 | Spec |
-| 版本 | v1.0 |
+| 版本 | v1.1 |
 | 撰写日期 | 2026-08-06 |
 | 撰写人 | Composer |
 | 委托人 | zhangxingchen |
@@ -27,6 +27,7 @@
 
 | 版本 | 变更 |
 |---|---|
+| v1.1 | 成功步页脚只保留「完成」和「同步配置变更」。刷新按钮文案不改为「完成 ✓ · N 张表」。结果卡整行放在说明与页脚之间，主标题「本地目录已刷新」，已发现表数只在「详情」中 |
 | v1.0 | 初稿并落地：对称 Add Schema 的移除闭环；修订 design-schema-onboarding「不做删除」 |
 
 ## 1. 背景
@@ -150,7 +151,7 @@ Body：
 3. 预览必须展示：将移出的已启用表数（可展开列表）、Manifest 是否存在、overlay 候选数、Wiki 引用页数（样本路径）。
 4. 勾选区默认全关：「同时删除 Schema Manifest」「同时删除 semantic overlay」。文案说明 Wiki **不会**被删除。
 5. 若 `removedEnabledTables.length > 0`，确认按钮旁二次提示「将移出 N 张已启用表」。
-6. 成功：Toast「已移除 Schema: \<name\>」；引导 `同步配置变更`；invalidate project/connections/sources/tables/live/catalogReloads。
+6. 成功：Toast「已移除 Schema: \<name\>」；页脚引导「同步配置变更」，刷新前与刷新后文案保持不变，不改为「完成 ✓ · N 张表」。结果卡整行放在说明与页脚之间，主标题「本地目录已刷新」；已发现表数只在「详情」中，不写在按钮上。刷新失败时错误卡同样放在页脚上方。invalidate project/connections/sources/tables/live/catalogReloads。
 
 ## 7. 验收
 
@@ -159,7 +160,8 @@ Body：
 3. 勾选删 Manifest + overlay：对应文件经 `safeRemove` 消失；Wiki 文件仍在。
 4. 未知 Schema → `SCHEMA_NOT_FOUND`。
 5. 单测覆盖 project remove + API envelope + drawer/overview；`lint:terminology` 通过。
-6. 本轮不做浏览器验证。
+6. 成功步页脚只有「完成」和「同步配置变更」。点击同步后按钮仍叫「同步配置变更」，结果卡在页脚上方且标题为「本地目录已刷新」。
+7. 本轮不做浏览器验证。
 
 ## 8. Terminology Compliance
 

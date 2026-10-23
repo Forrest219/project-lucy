@@ -1,0 +1,48 @@
+# Template: rendered into <runDir>/project/ktx.yaml by scripts/e2e/prepare-environment.mjs.
+# Placeholders are replaced per run; no real host, account or password is stored here.
+# DB names and the reader role are namespaced by a per-run isolation id (computed
+# in prepare-environment.mjs) so each run owns an isolated pair of disposable
+# databases + a dedicated LOGIN role.
+connections:
+  fin-db:
+    driver: postgres
+    enabled_tables:
+      - analytics.marketing_daily
+      - analytics.orders_masked
+    host: "{{DB_HOST}}"
+    port: {{DB_PORT}}
+    database: "{{DB_FIN_NAME}}"
+    username: "{{DB_READER_ROLE}}"
+    password: file:{{DB_PASSWORD_FILE}}
+    schemas:
+      - analytics
+  sales-db:
+    driver: postgres
+    enabled_tables:
+      - analytics.orders_masked
+    host: "{{DB_HOST}}"
+    port: {{DB_PORT}}
+    database: "{{DB_SALES_NAME}}"
+    username: "{{DB_READER_ROLE}}"
+    password: file:{{DB_PASSWORD_FILE}}
+    schemas:
+      - analytics
+storage:
+  state: sqlite
+  search: sqlite-fts5
+  git:
+    author: ktx <ktx@example.invalid>
+llm:
+  provider:
+    backend: claude-code
+  models:
+    default: sonnet
+    triage: haiku
+    candidateExtraction: sonnet
+    curator: sonnet
+    reconcile: sonnet
+    repair: sonnet
+setup:
+  database_connection_ids:
+    - fin-db
+    - sales-db

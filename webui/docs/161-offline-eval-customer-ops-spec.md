@@ -5,14 +5,14 @@
 | Spec | 161 |
 | 文档名称 | Offline Eval Customer Ops |
 | 文档类型 | Product / UX / API / Data Contract Spec |
-| 版本 | v0.1 |
-| 状态 | 待评审 |
+| 版本 | v0.2 |
+| 状态 | 已实现（lucy-v2.0 已合入）。G3 已拍板：不完整结果文件整体拒收 |
 | 撰写日期 | 2026-10-11 |
 | 委托人 | xingchen |
 | 来源计划 | [`docs/plans/2026-10-11-eval-module-functional-upgrade.md`](../../docs/plans/2026-10-11-eval-module-functional-upgrade.md) v0.4 |
 | 关联工单 | [`webui/docs/plans/wo-202610-11-offline-eval-customer-ops.md`](plans/wo-202610-11-offline-eval-customer-ops.md) |
 | 关联页面 | `/eval/cases`、`/eval/cases/:domain/:caseId`、`/eval/runs/:id`、`/eval/monitor`、`/eval/field-questions` |
-| 修订 | Spec 46 的套件交换与哈希归档仍有效。客户主路径由「本机 Agent 运行」改为本 Spec 的离线跑批。Spec 65 的安全评测候选不改；本 Spec 另开业务池，不自动晋升、不把成功调用当标准答案 |
+| 修订 | Spec 46 的套件交换与哈希归档仍有效。客户主路径由「本机 Agent 运行」改为本 Spec 的离线跑批。Spec 65 的安全评测候选不改；本 Spec 另开业务池，不自动晋升、不把成功调用当标准答案。v0.2 吸收评审终稿：执行路径不变量、执行身份、趋势页没答出来计数、结果文件完整性；本版移除数据变化 |
 
 ## 1. 评审时要确认的决定
 
@@ -45,6 +45,7 @@
 - 不把四臂消融放进运行参数。
 - 不让现场报错占比触发黄线或红线。
 - 不回填本功能之前的运行。
+- 本版不记录数据变化，不与上一次运行比较数值。基线快照留到下一版。数字变化本身不判失败。
 
 ## 5. 一轮怎么走
 
@@ -113,21 +114,38 @@ v1 用例没有 `executable` 时，不得进入离线跑批；上传旧结果的
 
 `policy_status = noncompliant` 不改变 `outcome`。语句不合规写在次列，主列仍按表的对照结果。
 
+文件级字段：
+
+| 字段 | 取值 |
+|---|---|
+| `complete` | `true` / `false` |
+| `role_id` | 本次跑批使用的角色 |
+
+单条用例超时或数据库中断时，该条记 `not_answered`，跑批继续，`complete` 仍可为 `true`。进程中断、或结果里缺少套件中仍应执行的用例时，`complete = false`。
+
+`complete != true` 的文件不得进入通过率与质量门禁。预检落点已拍板：**整体拒收**，不写入运行历史；维护质量的人修复后重跑整批再上传。
+
+数字相对以往运行发生变化时，不另记原因。结构和勾稽通过则为答对了。
+
 ## 8. 核心流程（伪代码）
 
 ### 8.1 跑批一条用例
 
+跑批必须走客户环境里与 `lucy_query` 同一条语义执行路径：Lucy 侧只做鉴权与转发，编译和执行在 KTX。入口可以是进程内子命令，也可以是随镜像交付的独立命令。脚本里不得另写编译器。
+
+每次跑批选定一个 `role_id`，且该角色属于该 domain 已绑定的角色。查询以这个角色进入与 `lucy_query` 相同的 ACL。未选定角色，或角色不在绑定列表中，整批拒绝执行。角色无权访问时，该条记没答出来，不使用绕过 ACL 的服务身份换一套更宽的结果。
+
 ```text
-function runCase(case, asOf, db):
+function runCase(case, asOf, roleId):
   if case.review_status == needs_review:
     return skip
 
   window = bindWindow(case.as_of_binding, asOf)
-  query = compile(case.executable, window)
+  query = compileAs(roleId, case.executable, window)
   if query.failed:
     return not_answered(mapCompileReason(query.error))
 
-  table = execute(db, query.sql)
+  table = executeAs(roleId, query)
   structure = checkStructure(table, query, case.executable, window)
   if structure.failed:
     return answered_wrong(structure.reason)
@@ -165,8 +183,7 @@ function runCase(case, asOf, db):
 | 上游校验失败 | `upstream_validation` |
 | Wiki 检索或过滤失败 | `wiki_filter_failed` |
 | 其他 | `compile_other` |
-
-数字相对上一次已确认运行发生变化，且结构和勾稽都通过：`outcome = answered_ok`，`reason = data_change`。
+| 单条超时或连接中断 | `execution_interrupted` |
 
 ### 8.2 通过率
 
@@ -181,7 +198,7 @@ function passRate(run):
   return count(answered_ok) / count(scoreable)
 ```
 
-没答出来、待复核跳过、本地变体都不进入这个分母。趋势上的一个点把当天各次运行按各自口径加权：旧运行用旧分母，新运行用上面的分母。黄线和红线只读这个通过率。
+没答出来、待复核跳过、本地变体、`complete != true` 的运行都不进入这个分母。趋势上的一个点把当天各次运行按各自口径加权：旧运行用旧分母，新运行用上面的分母。同一天两种口径都有时，该点标注「旧口径 / 新口径」。黄线和红线只读这个通过率。趋势页在通过率旁并列展示没答出来计数；该计数不进入分子分母，也不点亮黄线或红线。
 
 本地变体（`hash_status = mismatch`）继续按 Spec 46 排除趋势和质量门禁。
 
@@ -207,7 +224,7 @@ function extract(pack):
 
 `shapeHash` 是规范化 JSON 的 sha256：指标名、维度字段、过滤字段，均排序；去掉过滤值、问句、客户版本字符串。分群键是权限快照 `resolved_json.sourceMapVersion`。不用 `policy_version` 列，也不用快照哈希。
 
-`splitInferredTurns`：推断问询的工具调用数大于 50 时，按 `shapeHash` 拆开再进入分组。调用数为 0 的推断问询丢弃。阈值 50 写在服务端常量，页面不提供调节。
+`splitInferredTurns`：推断问询的工具调用数大于 50 时，按 `shapeHash` 拆开再进入分组。调用数为 0 的推断问询丢弃。阈值 50 写在服务端常量，页面不提供调节。依据是客户日志里单条推断问询最多约 242 次调用，50 次以上已经是多次查法叠在一起。
 
 权限拒绝不进入本函数。成功调用不进入本函数。
 
@@ -227,13 +244,13 @@ function fieldPanel(domain, window):
     show 调用量, 报错占比, 拒绝占比, 按 reason 计数
 ```
 
-客户端族只看 User-Agent：
+客户端族在读取访问日志时按 User-Agent 整段名称分类，不把分类结果落库。映射以后可以只改规则、不改历史数据。
 
 | 族 | 匹配 |
 |---|---|
-| 脚本客户端 | 以 `python` 开头 |
-| 对话客户端 | 含 `WorkBuddy`、`undici`、`Codex`、`kscc-code`、`Claude` |
-| 其他 | 其余，含 `curl` |
+| 脚本客户端 | User-Agent 以 `python` 开头 |
+| 对话客户端 | 整段名称是 `WorkBuddy`、`Codex`、`kscc-code`、`Claude` 之一 |
+| 其他 | 其余，含 `curl` 与 `undici` |
 
 某一族调用量为 0 时不画空行。本区块不写 `pass_count`，不改变黄线或红线。
 
@@ -245,7 +262,7 @@ function fieldPanel(domain, window):
 | 评测用例列表 | 保留下载、上传套件、上传结果、哈希预检。本地运行命令改为离线跑批命令，不再默认 Hermes。待复核用例有单独状态 |
 | 运行明细 | 主列是答对了 / 答错了 / 没答出来。展开写原因。页头展示截止日期和窗口。次列写语句是否合规。与另一次运行对比时，新增失败只包含新的答错了；没答出来单独计数 |
 | 现场提问 | 与安全评测候选并列。卡片写业务语言、角色、次数、最近时间、用户看到报错还是表。操作：待审定、忽略、收成评测用例 |
-| 趋势监控 | 保留最新通过率、黄线、红线。增加现场区块。点一条原因打开现场提问并带上该原因；现场提问未启用前，链接不可用 |
+| 趋势监控 | 最新通过率旁边并列没答出来计数。保留黄线、红线。混有旧运行的点标注旧口径 / 新口径。增加现场区块。点一条原因打开现场提问并带上该原因；现场提问未启用前，链接不可用 |
 
 运行明细里的 Drift、Exit Code、Final Text 改为中文说明，放在主列旁边，不另起英文列名。
 
@@ -284,12 +301,12 @@ CREATE TABLE field_question (
 |---|---|---|
 | `POST` | `/api/eval/suites/import` | 接受 v1 与 v2。v2 校验 §6。预检返回套件哈希 |
 | `GET` | `/api/eval/suites/:domain/download` | 下载当前套件。含 v2 字段时 `lucy_eval_schema_version` 为 2 |
-| `POST` | `/api/eval/results/import` | 接受结果版本 1 与 2。版本 2 校验 `runner.kind = lucy_offline_batch` 且 `runner.model` 为空。哈希规则仍按 Spec 46 |
+| `POST` | `/api/eval/results/import` | 接受结果版本 1 与 2。版本 2 校验 `runner.kind = lucy_offline_batch`、`runner.model` 为空、以及 `complete`。`complete != true` 时预检拒绝，不写入运行历史。哈希规则仍按 Spec 46 |
 | `POST` | `/api/eval/field-questions/extract` | 吃证据包。不完整则 422，正文说明未抽取，不插入 |
 | `POST` | `/api/eval/field-questions/:id/promote` | 返回评测用例草稿。不直接写盘，人在编辑器保存 |
 | `GET` | `/api/eval/monitor/field` | 只读现场区块。未绑定角色时返回空行和说明文案 |
 
-跑批命令随交付物提供，读套件文件和截止日期，写结果文件。WebUI 展示该命令，不在服务器上编排 Agent。
+跑批命令随交付物提供，读套件文件、截止日期和 `role_id`，经与 `lucy_query` 相同的路径写结果文件。WebUI 展示该命令，不在服务器上编排 Agent。
 
 ## 12. 验收
 
@@ -301,7 +318,6 @@ CREATE TABLE field_question (
 | SC-4 | 表对照通过，SQL 命中禁止写法 | 主列答对了，次列语句不合规。通过率计入这一行 |
 | SC-5 | 打开本功能之前的运行 | 通过率仍是 pass / total |
 | SC-6 | 问法为「本月」，两个截止日期各跑一次 | 问法相同；两次运行的窗口不同；列和粒度期望不变 |
-| SC-7 | 结构和勾稽通过，只有数字相对上次变化 | 答对了，原因为数据变化 |
 | SC-8 | 语义版本变化后打开用例列表 | 对应用例为待复核，跑批跳过，通过率不含它 |
 | SC-9 | 上传不完整证据包并抽取 | 页面说明未抽取，列表不增加 |
 | SC-10 | 同一语义版本、同一未绑定指标出现两次 | 现场提问有一张待审定卡片。安全评测候选没有它 |
@@ -312,6 +328,11 @@ CREATE TABLE field_question (
 | SC-15 | domain 未绑定角色 | 现场区块说明尚未绑定，不列出访问日志 |
 | SC-16 | 结果文件的套件哈希与线上不一致 | 不进通过率。仍可归档为本地变体，或先同步套件 |
 | SC-17 | 结果文件填写了模型名，或 runner 不是离线跑批 | 预检拒绝，不写入运行历史 |
+| SC-18 | 一次运行里多数用例没答出来，少数答对 | 趋势页通过率旁可见没答出来计数。黄线和红线不因该计数点亮 |
+| SC-19 | 结果文件 `complete` 不是 `true` | 预检拒绝，不写入运行历史 |
+| SC-20 | 未指定角色，或以未绑定角色跑批 | 整批不执行 |
+| SC-21 | 跑批不传时区 | 窗口按部署配置的时区计算 |
+| SC-22 | 同一天既有旧运行也有 v2 运行 | 趋势点标注旧口径 / 新口径 |
 
 ## Terminology Compliance
 
@@ -326,8 +347,7 @@ New terms（评审通过后、界面文案之前写入术语标准 §4.4）：
 | Offline Eval Batch | 离线跑批 | 本地 Agent 运行（作本路径主名称） | 编译并在客户库重新执行的评测运行 |
 | As-of Date | 截止日期 | 快照日期（与本字段混用） | 跑批参数，用来绑定相对时间 |
 | Needs Review | 待复核 | 待审定（审定留给现场提问和安全评测候选） | 语义版本变化后，用例暂停进入通过率 |
-| Data Change | 数据变化 | 数据漂移（作主列原因时） | 结构与勾稽通过，仅数值相对上次变化 |
-| Client Family | 脚本客户端 / 对话客户端 / 其他 | 把 curl 并进脚本客户端 | 趋势监控现场区块的分行 |
+| Client Family | 脚本客户端 / 对话客户端 / 其他 | 把 curl 或 undici 并进脚本客户端或对话客户端 | 趋势监控现场区块的分行；读取时分类，不落库 |
 
 已有说法保持不变：评测用例、评测运行、通过率、趋势监控、安全评测候选。通过率帮助文案改为 §8.2。Eval YAML、suite hash、Result JSON 等标识保持 `translate="no"`。
 

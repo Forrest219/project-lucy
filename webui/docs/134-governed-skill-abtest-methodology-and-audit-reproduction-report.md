@@ -8,7 +8,7 @@
 | 撰写日期 | 2026-08-29 |
 | 撰写人 | Claude / Codex |
 | 委托人 | xingchen / project-lucy 团队 |
-| 基于材料 | `webui/docs/131-governed-skill-system-and-context-transpass-spec.md`, `webui/docs/132-governed-skill-abtest-and-evaluation-benchmark-spec.md`, `webui/server/__tests__/skill-abtest-benchmark.test.ts` |
+| 基于材料 | `webui/docs/171-governed-skill-system-and-context-transpass-spec.md`, `webui/docs/132-governed-skill-abtest-and-evaluation-benchmark-spec.md`, `webui/server/__tests__/skill-abtest-benchmark.test.ts` |
 | 适用范围 | 供客户技术与安全团队进行 Lucy Skill 治理效果评估、合规审计、效果复现与 POC 验收交付 |
 | 输出位置 | `webui/docs/134-governed-skill-abtest-methodology-and-audit-reproduction-report.md` |
 
@@ -239,7 +239,7 @@ LIMIT 10;
 
 ## 8. 附录：相关文件与代码资产索引
 
-- 核心架构 Spec: `webui/docs/131-governed-skill-system-and-context-transpass-spec.md`
+- 核心架构 Spec: `webui/docs/171-governed-skill-system-and-context-transpass-spec.md`
 - A/B 测试设计 Spec: `webui/docs/132-governed-skill-abtest-and-evaluation-benchmark-spec.md`
 - 自动化评测代码: `webui/server/__tests__/skill-abtest-benchmark.test.ts`
 - Skill 运行时引擎: `webui/server/skills/loader.ts`, `webui/server/skills/validator.ts`, `webui/server/proxy/skill-acl.ts`, `webui/server/proxy/mcp-proxy.ts`

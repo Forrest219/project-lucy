@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import request from "supertest";
@@ -154,6 +154,244 @@ describe("POST /api/semantic-assets/reindex", () => {
     expect(historyRes.body.data.records[0].files).toEqual([]);
     expect(historyRes.body.data.records[0].changedSources).toEqual([]);
     expect(historyRes.body.data.total).toBe(1);
+    await app.close();
+  });
+
+  it("records the workbench's pending semantic yaml on the reindex history row", async () => {
+    projectRoot = await makeProject();
+    await mkdir(path.join(projectRoot, "semantic-layer", "demo", "_schema"), { recursive: true });
+    await writeFile(
+      path.join(projectRoot, "semantic-layer", "demo", "_schema", "chatbi.yaml"),
+      `tables:
+  ai_intl_ad_daily:
+    table: chatbi.ai_intl_ad_daily
+    columns:
+      - name: date
+        type: string
+    descriptions:
+      ai: Ad daily.
+`,
+      "utf8"
+    );
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
+    const reindexProject = vi.fn(async () => ({
+      exitCode: 0,
+      stdout: "indexed",
+      stderr: ""
+    }));
+    vi.doMock("../ktx", async () => {
+      const actual = await vi.importActual<typeof import("../ktx")>("../ktx");
+      return {
+        ...actual,
+        reindexProject,
+        validateSource: vi.fn(async () => ({
+          ok: true,
+          exitCode: 0,
+          stdout: "Valid semantic-layer source",
+          stderr: "",
+          issues: []
+        }))
+      };
+    });
+
+    const app = await buildFreshServer();
+    await app.ready();
+    await request(app.server)
+      .post("/api/sources/demo/chatbi/ai_intl_ad_daily/import")
+      .send({
+        dryRun: false,
+        yaml: `name: ai_intl_ad_daily
+table: chatbi.ai_intl_ad_daily
+grain:
+  - date
+measures:
+  - name: spend
+    expr: sum(spend)
+    description: Spend.
+`
+      })
+      .expect(200);
+    await request(app.server).post("/api/semantic-assets/reindex").send({}).expect(200);
+
+    const historyRes = await request(app.server).get("/api/semantic-assets/releases").expect(200);
+    expect(historyRes.body.data.records[0]).toMatchObject({
+      trigger: "webui_manual_reindex",
+      connectionIds: ["demo"],
+      changedSources: [{ connectionId: "demo", sourceName: "ai_intl_ad_daily" }],
+      files: [
+        expect.objectContaining({
+          targetPath: "semantic-layer/demo/ai_intl_ad_daily.yaml",
+          kind: "semanticSource"
+        })
+      ]
+    });
+    expect(historyRes.body.data.records[0].files[0].sha256).toMatch(/^[0-9a-f]{64}$/);
+    const diffRes = await request(app.server).get("/api/diff").expect(200);
+    expect(diffRes.body.data.files).toEqual([]);
+    await app.close();
+  });
+
+  it("keeps pending files when index sync fails", async () => {
+    projectRoot = await makeProject();
+    await mkdir(path.join(projectRoot, "semantic-layer", "demo", "_schema"), { recursive: true });
+    await writeFile(
+      path.join(projectRoot, "semantic-layer", "demo", "_schema", "chatbi.yaml"),
+      "tables:\n  ai_intl_ad_daily:\n    columns:\n      - name: date\n        type: string\n",
+      "utf8"
+    );
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
+    const reindexProject = vi.fn(async () => ({
+      exitCode: 1,
+      stdout: "",
+      stderr: "reindex failed"
+    }));
+    vi.doMock("../ktx", async () => {
+      const actual = await vi.importActual<typeof import("../ktx")>("../ktx");
+      return { ...actual, reindexProject, validateSource: vi.fn(async () => ({
+        ok: true,
+        exitCode: 0,
+        stdout: "Valid semantic-layer source",
+        stderr: "",
+        issues: []
+      })) };
+    });
+
+    const app = await buildFreshServer();
+    await app.ready();
+    await request(app.server)
+      .post("/api/sources/demo/chatbi/ai_intl_ad_daily/import")
+      .send({
+        dryRun: false,
+        yaml: "name: ai_intl_ad_daily\ngrain:\n  - date\nmeasures:\n  - name: spend\n    expr: sum(spend)\n    description: Spend.\n"
+      })
+      .expect(200);
+    await request(app.server).post("/api/semantic-assets/reindex").send({}).expect(200);
+    const diffRes = await request(app.server).get("/api/diff").expect(200);
+    expect(diffRes.body.data.files.map((file: { filePath: string }) => file.filePath)).toContain(
+      "semantic-layer/demo/ai_intl_ad_daily.yaml"
+    );
+    await app.close();
+  });
+
+  it("separates a written overlay from a deleted one and leaves mirror-only files in place", async () => {
+    projectRoot = await mkdtemp(path.join(os.tmpdir(), "lucy-reindex-split-"));
+    const contentRoot = path.join(projectRoot, "config");
+    const overlayDir = path.join(contentRoot, "semantic-layer", "mysql-aliyun");
+    await mkdir(path.join(overlayDir, "_schema"), { recursive: true });
+    await mkdir(path.join(projectRoot, "semantic-layer", "mysql-aliyun"), { recursive: true });
+    const manifest = `tables:
+  ai_intl_ad_daily:
+    columns:
+      - name: date
+        type: string
+  ai_intl_country_daily:
+    columns:
+      - name: date
+        type: string
+`;
+    await writeFile(path.join(overlayDir, "_schema", "chatbi.yaml"), manifest, "utf8");
+    await writeFile(path.join(overlayDir, "ai_intl_ad_daily.yaml"), "name: ai_intl_ad_daily\n", "utf8");
+    await writeFile(path.join(overlayDir, "ai_intl_country_daily.yaml"), "name: ai_intl_country_daily\n", "utf8");
+    await writeFile(
+      path.join(projectRoot, "semantic-layer", "mysql-aliyun", "ai_intl_country_daily.yaml"),
+      "name: ai_intl_country_daily\n",
+      "utf8"
+    );
+    await writeFile(
+      path.join(projectRoot, "ktx.yaml"),
+      `connections:
+  mysql-aliyun:
+    driver: mysql
+    host: localhost
+    port: 3306
+    database: dataforai
+    username: sc
+    password: inline-secret
+    schemas:
+      - chatbi
+    enabled_tables:
+      - chatbi.ai_intl_ad_daily
+      - chatbi.ai_intl_country_daily
+`,
+      "utf8"
+    );
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = contentRoot;
+    const reindexProject = vi.fn(async () => ({
+      exitCode: 0,
+      stdout: "indexed",
+      stderr: ""
+    }));
+    vi.doMock("../ktx", async () => {
+      const actual = await vi.importActual<typeof import("../ktx")>("../ktx");
+      return {
+        ...actual,
+        reindexProject,
+        validateSource: vi.fn(async () => ({
+          ok: true,
+          exitCode: 0,
+          stdout: "Valid semantic-layer source",
+          stderr: "",
+          issues: []
+        }))
+      };
+    });
+
+    const app = await buildFreshServer();
+    await app.ready();
+    const removed = await request(app.server)
+      .post("/api/connections/mysql-aliyun/schemas/remove")
+      .send({ schema: "chatbi", dryRun: false, deleteManifest: true, deleteOverlays: true });
+    expect(removed.status, JSON.stringify(removed.body)).toBe(200);
+
+    await mkdir(path.join(overlayDir, "_schema"), { recursive: true });
+    await writeFile(path.join(overlayDir, "_schema", "chatbi.yaml"), manifest, "utf8");
+    await request(app.server)
+      .post("/api/sources/mysql-aliyun/chatbi/ai_intl_ad_daily/import")
+      .send({
+        dryRun: false,
+        yaml: "name: ai_intl_ad_daily\ngrain:\n  - date\nmeasures:\n  - name: spend\n    expr: sum(spend)\n    description: Spend.\n"
+      })
+      .expect(200);
+    await request(app.server).post("/api/semantic-assets/reindex").send({}).expect(200);
+
+    const historyRes = await request(app.server).get("/api/semantic-assets/releases").expect(200);
+    const record = historyRes.body.data.records[0];
+    expect(record.changedSources).toEqual([
+      { connectionId: "mysql-aliyun", sourceName: "ai_intl_ad_daily" }
+    ]);
+    expect(record.files).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          targetPath: "semantic-layer/mysql-aliyun/_schema/chatbi.yaml",
+          kind: "schemaManifest",
+          sha256: expect.stringMatching(/^[0-9a-f]{64}$/)
+        }),
+        expect.objectContaining({
+          targetPath: "semantic-layer/mysql-aliyun/ai_intl_ad_daily.yaml",
+          kind: "semanticSource",
+          sha256: expect.stringMatching(/^[0-9a-f]{64}$/)
+        }),
+        expect.objectContaining({
+          targetPath: "semantic-layer/mysql-aliyun/ai_intl_country_daily.yaml",
+          kind: "semanticSource",
+          sha256: "",
+          overwritten: false
+        })
+      ])
+    );
+
+    const diffRes = await request(app.server).get("/api/diff").expect(200);
+    expect(diffRes.body.data.files).toEqual([]);
+    expect(diffRes.body.data.mirrorOnlySemanticFiles).toContain(
+      "semantic-layer/mysql-aliyun/ai_intl_country_daily.yaml"
+    );
+    await expect(access(path.join(overlayDir, "ai_intl_country_daily.yaml"))).rejects.toMatchObject({
+      code: "ENOENT"
+    });
+    await access(path.join(projectRoot, "semantic-layer", "mysql-aliyun", "ai_intl_country_daily.yaml"));
     await app.close();
   });
 

@@ -7,6 +7,59 @@ WEBUI_ROOT="${LUCY_WEBUI_ROOT:-${APP_ROOT}/webui}"
 TEMPLATE_ROOT="${LUCY_TEMPLATE_ROOT:-${APP_ROOT}/project-template}"
 SEED_STATE_DIR="${PROJECT_ROOT}/.lucy-seed"
 
+# V-01 (T0A-2) — deployment-mode preflight. Runs before any filesystem work so a
+# customer-mode container can never come up with the WebUI auth switched off.
+# Default mode is customer; invalid values and customer+LUCY_WEBUI_AUTH=off are fatal.
+preflight_deployment_mode() {
+  local mode auth pinned cookie profile access
+  mode="$(printf '%s' "${LUCY_DEPLOYMENT_MODE:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+  auth="$(printf '%s' "${LUCY_WEBUI_AUTH:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+  pinned="$(printf '%s' "${LUCY_CHART_DEPLOYMENT_MODE:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+  cookie="$(printf '%s' "${LUCY_WEBUI_COOKIE_SECURE:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+  profile="$(printf '%s' "${LUCY_WEBUI_TEST_PROFILE:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+  access="$(printf '%s' "${LUCY_WEBUI_ACCESS:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+  [[ -n "${mode}" ]] || mode="customer"
+  case "${mode}" in
+    customer|development) ;;
+    *)
+      echo "[lucy] fatal: invalid LUCY_DEPLOYMENT_MODE='${LUCY_DEPLOYMENT_MODE}'; expected customer or development" >&2
+      exit 1
+      ;;
+  esac
+  # T02: the Chart pins its mode in LUCY_CHART_DEPLOYMENT_MODE; an override that
+  # lands in LUCY_DEPLOYMENT_MODE (e.g. via extraEnvFrom) must not relax it.
+  if [[ -n "${pinned}" && "${pinned}" != "${mode}" ]]; then
+    echo "[lucy] fatal: LUCY_DEPLOYMENT_MODE=${mode} contradicts the Chart-pinned mode ${pinned}; remove the override (for example from extraEnvFrom)" >&2
+    exit 1
+  fi
+  if [[ "${mode}" == "customer" && "${auth}" == "off" ]]; then
+    echo "[lucy] fatal: LUCY_WEBUI_AUTH=off is not allowed when LUCY_DEPLOYMENT_MODE=customer (default); refusing to start" >&2
+    exit 1
+  fi
+  # Customer HTTPS keeps Secure cookies. Intranet HTTP is LUCY_WEBUI_ACCESS=http.
+  # The lab test profile remains LUCY_WEBUI_TEST_PROFILE=1 and must not be combined with it.
+  case "${access}" in
+    ""|http|https) ;;
+    *)
+      echo "[lucy] fatal: invalid LUCY_WEBUI_ACCESS='${LUCY_WEBUI_ACCESS}'; expected http or https" >&2
+      exit 1
+      ;;
+  esac
+  if [[ "${mode}" == "customer" && "${access}" == "http" && ( "${profile}" == "1" || "${profile}" == "true" ) ]]; then
+    echo "[lucy] fatal: LUCY_WEBUI_ACCESS=http cannot be combined with LUCY_WEBUI_TEST_PROFILE; refusing to start" >&2
+    exit 1
+  fi
+  if [[ "${mode}" == "customer" && "${access}" == "http" && ( "${cookie}" == "1" || "${cookie}" == "true" ) ]]; then
+    echo "[lucy] fatal: LUCY_WEBUI_COOKIE_SECURE=1 contradicts LUCY_WEBUI_ACCESS=http; refusing to start" >&2
+    exit 1
+  fi
+  if [[ "${mode}" == "customer" && "${access}" != "http" && ( "${cookie}" == "0" || "${cookie}" == "false" ) && "${profile}" != "1" && "${profile}" != "true" ]]; then
+    echo "[lucy] fatal: LUCY_WEBUI_COOKIE_SECURE=0 is not allowed when LUCY_DEPLOYMENT_MODE=customer (default); set LUCY_WEBUI_ACCESS=http for intranet HTTP, or LUCY_WEBUI_TEST_PROFILE=1 for a lab test profile; refusing to start" >&2
+    exit 1
+  fi
+}
+preflight_deployment_mode
+
 # A2 — Configurable Content Root.
 # Resolves the directory that holds semantic-layer/, wiki/, evals/, skills/.
 # Defaults to <PROJECT_ROOT>/config/ (the M31 layout). Legacy deployments keep
@@ -19,10 +72,13 @@ if [[ -n "${LUCY_CONTENT_ROOT:-}" ]]; then
 else
   CONTENT_ROOT="./config"
 fi
+mkdir -p "${PROJECT_ROOT}"
 if [[ "${CONTENT_ROOT}" = /* ]]; then
-  CONTENT_ROOT_ABS="${CONTENT_ROOT}"
+  mkdir -p "${CONTENT_ROOT}"
+  CONTENT_ROOT_ABS="$(cd "${CONTENT_ROOT}" && pwd -P)"
 else
-  CONTENT_ROOT_ABS="$(cd "${PROJECT_ROOT}" && cd "${CONTENT_ROOT}" && pwd -P 2>/dev/null || echo "${PROJECT_ROOT}/${CONTENT_ROOT}")"
+  mkdir -p "${PROJECT_ROOT}/${CONTENT_ROOT}"
+  CONTENT_ROOT_ABS="$(cd "${PROJECT_ROOT}" && cd "${CONTENT_ROOT}" && pwd -P)"
 fi
 export LUCY_CONTENT_ROOT="${CONTENT_ROOT_ABS}"
 
@@ -113,6 +169,7 @@ seed_project() {
   fi
   sync_context_from_template
   patch_demo_skill_tools
+  patch_lucy_admin_tools
   mkdir -p "${PROJECT_ROOT}/.ktx/secrets" "${PROJECT_ROOT}/.ktx-ui" "${SEED_STATE_DIR}"
   printf "%s\n" "${LUCY_BUNDLED_KTX_VERSION:-unknown}" > "${SEED_STATE_DIR}/bundled-ktx-version"
 }
@@ -179,6 +236,54 @@ if (inserted === 0) process.exit(0);
 const out = text.slice(0, roleStart) + roleBlock + text.slice(roleBlockEnd);
 fs.writeFileSync(path, out);
 console.log(`[lucy] patched demo_readonly tools (+${inserted}) in ${path}`);
+JS
+}
+
+# Existing volumes keep access.yaml. Idempotently grant lucy_admin every
+# non-denied MCP tool added after the role was first seeded.
+patch_lucy_admin_tools() {
+  case "${TEMPLATE_ROOT}" in
+    */examples/docker-demo/project-template) ;;
+    *) return 0 ;;
+  esac
+  local access_yaml="${PROJECT_ROOT}/webui/config/access.yaml"
+  [[ -f "${access_yaml}" ]] || return 0
+  node - "${access_yaml}" <<'JS'
+const fs = require("fs");
+const path = process.argv[2];
+let text = fs.readFileSync(path, "utf8");
+const tools = [
+  "sl_validate",
+  "lucy_skill_search",
+  "lucy_skill_read",
+  "lucy_certified_route",
+  "lucy_report_template"
+];
+const roleMarker = /^(\s*)lucy_admin:\s*$/m;
+const match = roleMarker.exec(text);
+if (!match) process.exit(0);
+const roleIndent = match[1] ?? "";
+const roleStart = match.index;
+const afterRole = text.slice(roleStart + match[0].length);
+const nextRole = afterRole.search(new RegExp(`^${roleIndent}\\S`, "m"));
+const roleBlockEnd = nextRole === -1 ? text.length : roleStart + match[0].length + nextRole;
+let roleBlock = text.slice(roleStart, roleBlockEnd);
+const toolsMatch = roleBlock.match(/^(\s*)tools:\s*$/m);
+if (!toolsMatch) process.exit(0);
+const listIndent = `${toolsMatch[1]}  `;
+let inserted = 0;
+for (const tool of tools) {
+  if (roleBlock.includes(`- ${tool}`)) continue;
+  roleBlock = roleBlock.replace(
+    /^(\s*tools:\s*\n(?:[ \t]*-[ \t]+\S+[ \t]*\n)*)/m,
+    `$1${listIndent}- ${tool}\n`
+  );
+  inserted += 1;
+}
+if (inserted === 0) process.exit(0);
+const out = text.slice(0, roleStart) + roleBlock + text.slice(roleBlockEnd);
+fs.writeFileSync(path, out);
+console.log(`[lucy] patched lucy_admin tools (+${inserted}) in ${path}`);
 JS
 }
 

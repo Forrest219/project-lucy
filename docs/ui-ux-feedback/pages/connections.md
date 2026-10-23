@@ -801,7 +801,7 @@ Reported: 2026-08-06
 4. With live API error, verify fallback to manual input messaging.
 
 ### Notes
-Spec 107 / `wo-202608-40` 已落地（本轮不做浏览器验证，结束后只做 code review）。主题：`live catalog vs local inventory`。
+Spec 107 / `wo-202608-40` 已落地（本轮不做浏览器验证，结束后只做 code review）。主题：`live catalog vs local inventory`。Spec 107 v1.1 起，有候选时不再提供「手动输入 Schema 名称」切换；手输只在目录失败或候选为空时自动出现。
 
 ## UX-CONNECTIONS-031: 启用表范围保存被无效启用（孤儿）阻塞
 

@@ -24,6 +24,46 @@ test("pack script uses quoted heredocs for README and RELEASE_NOTES", async () =
   assert.doesNotMatch(src, /Chart: `0\.2\.1`/);
 });
 
+test("customer README uses the instance entry and ships HTTPS and recovery dependencies", async () => {
+  const src = await readFile(packScript, "utf8");
+  const readme = src.slice(src.indexOf('# Lucy K8s Integration Delivery'), src.indexOf('} > "${PKG_DIR}/README.md"'));
+  assert.match(readme, /prepare-customer-instance\.py/);
+  assert.match(readme, /deploy\.sh --dry-run/);
+  assert.doesNotMatch(readme, /helm upgrade/);
+  for (const file of ['image_identity.py', 'instance.upgrade.https.example.json', 'instance.install.https.example.json', 'instance.install.http.example.json', 'CUSTOMER-UPGRADE.md', 'CUSTOMER-INSTALL.md', 'ACCEPTANCE.md']) {
+    assert.ok(src.includes(file), `${file} must ship`);
+  }
+});
+
+test("every build requires clean source and verifies the final archive's customer entry", async () => {
+  const src = await readFile(packScript, 'utf8');
+  assert.match(src, /clean committed source required/);
+  assert.match(src, /image tag must match the committed package source/);
+  assert.match(src, /python3 -m unittest discover/);
+  assert.match(src, /customer-v2-upgrade-release-checklist\.md/);
+  assert.match(src, /verify-customer-upgrade-package\.py" --tar "\$\{OUTPUT\}"/);
+  assert.ok(src.indexOf('verify-customer-upgrade-package.py') > src.indexOf('COPYFILE_DISABLE=1 tar'));
+  assert.match(src, /existing artifacts must not be overwritten/);
+});
+
+test("customer builds ship the private bootstrap attachment and run the C20 bundle gate", async () => {
+  const src = await readFile(packScript, 'utf8');
+  assert.match(src, /build-bootstrap-attachment\.mjs/);
+  assert.match(src, /verify-bootstrap-attachment\.py/);
+  assert.match(src, /--public-release/);
+  assert.match(src, /--existing-admin/);
+  assert.match(src, /--customer/);
+  assert.match(src, /build-bootstrap-attachment\.test\.mjs/);
+  assert.ok(src.indexOf('build-bootstrap-attachment.mjs') > src.indexOf('verify-customer-upgrade-package.py'));
+  assert.ok(src.indexOf('verify-bootstrap-attachment.py') > src.indexOf('build-bootstrap-attachment.mjs'));
+  assert.match(src, /existing attachment artifacts must not be overwritten/);
+  assert.match(src, /removed incomplete \$\{OUTPUT\} and any bootstrap attachment artifacts/);
+  assert.match(src, /never prints key material/);
+  // The public archive itself must still contain no credential directory.
+  const notes = src.slice(src.indexOf('Release Notes'));
+  assert.match(notes, /private bootstrap\s*$/m);
+});
+
 test("quoted heredoc preserves literal backticks and does not run git init", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "lucy-pack-heredoc-"));
   const out = path.join(dir, "RELEASE_NOTES.md");

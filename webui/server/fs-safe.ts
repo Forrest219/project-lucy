@@ -1,7 +1,18 @@
-import { lstat, mkdir, readdir, realpath, rename, rm, rmdir, writeFile } from "node:fs/promises";
+import { constants as fsConstants } from "node:fs";
+import { lstat, mkdir, open, readdir, realpath, rename, rm, rmdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { mirrorContentFileToProjectRoot } from "./content-mirror";
 import type { ContentPaths } from "./paths";
+import { scopesForPath, withDisplayWriteBarrier, type DisplayScope } from "./display-generation";
+
+/** Spec 174 §3.2 — display scopes touched by writing these absolute targets. */
+function displayScopesFor(contentPaths: ContentPaths, projectRoot: string, targets: string[]): DisplayScope[] {
+  const accessPaths = [path.join(projectRoot, "webui", "config", "access.yaml")];
+  const override = process.env.LUCY_ACCESS_CONFIG_PATH?.trim();
+  if (override) accessPaths.push(path.resolve(override));
+  const context = { projectRoot, semanticLayer: contentPaths.semanticLayer, accessPaths };
+  return [...new Set(targets.flatMap((target) => scopesForPath(target, context)))];
+}
 
 /**
  * Content-dir prefixes. These resolve relative to {@link ContentPaths.configDir},
@@ -18,6 +29,17 @@ const ROOT_PREFIXES = [".ktx-ui", "webui/config"] as const;
 
 const DENY = [".ktx/secrets", "raw-sources", ".git"];
 const ROOT_FILES = ["ktx.yaml"];
+
+/**
+ * Durable security state (Spec §2, ADR D1): `.ktx-ui/security.sqlite` plus its
+ * WAL/SHM/journal sidecars are never readable or writable as an asset.
+ */
+const SECURITY_STATE_NAME_RE = /^security\.sqlite(-wal|-shm|-journal)?$/i;
+
+function isSecurityStatePath(relPath: string): boolean {
+  const parts = relPath.split("/");
+  return parts[0] === ".ktx-ui" && parts.length >= 2 && SECURITY_STATE_NAME_RE.test(parts[parts.length - 1]);
+}
 
 export class ForbiddenPathError extends Error {
   code = "FORBIDDEN_PATH";
@@ -69,6 +91,25 @@ async function resolveExistingTarget(base: string, relPath: string): Promise<str
   return path.join(existing, ...parts.slice(index));
 }
 
+/** Wiki / Skill assets are authorization-bearing context: no symlink is accepted at any layer (Spec §4.5). */
+const SYMLINK_FREE_PREFIXES = ["wiki", "skills"] as const;
+
+async function assertNoSymlinkComponents(baseReal: string, normalized: string): Promise<void> {
+  let current = baseReal;
+  for (const part of normalized.split("/")) {
+    current = path.join(current, part);
+    try {
+      if ((await lstat(current)).isSymbolicLink()) {
+        throw new ForbiddenPathError(`Symlink in path ${normalized} is not allowed`);
+      }
+    } catch (error) {
+      if (error instanceof ForbiddenPathError) throw error;
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+      throw error;
+    }
+  }
+}
+
 /**
  * Resolve a content-dir-relative path (`semantic-layer/...`, `wiki/...`, ...).
  * The base is `contentPaths.configDir`, NOT `projectRoot`, so a default
@@ -80,6 +121,9 @@ async function resolveContentTarget(
   normalized: string
 ): Promise<string> {
   const configDirReal = await realpath(contentPaths.configDir);
+  if (matchesPrefix(normalized, SYMLINK_FREE_PREFIXES)) {
+    await assertNoSymlinkComponents(configDirReal, normalized);
+  }
   const target = await resolveExistingTarget(contentPaths.configDir, normalized);
   if (!isWithin(target, configDirReal)) {
     throw new ForbiddenPathError("Resolved path escapes the content root");
@@ -116,6 +160,9 @@ async function resolveRootTarget(projectRoot: string, normalized: string): Promi
     throw new ForbiddenPathError("Resolved path escapes the project root");
   }
   const targetRel = path.relative(rootReal, target).replaceAll(path.sep, "/");
+  if (isSecurityStatePath(targetRel)) {
+    throw new ForbiddenPathError(`Writing ${targetRel} is forbidden`);
+  }
   if (!matchesPrefix(targetRel, ROOT_PREFIXES) && !ROOT_FILES.includes(targetRel)) {
     throw new ForbiddenPathError(`Resolved path ${targetRel} is not writable`);
   }
@@ -141,7 +188,7 @@ export async function resolveWritable(
   relPath: string
 ): Promise<string> {
   const normalized = normalizeRelative(relPath);
-  if (matchesPrefix(normalized, DENY)) {
+  if (matchesPrefix(normalized, DENY) || isSecurityStatePath(normalized)) {
     throw new ForbiddenPathError(`Writing ${normalized} is forbidden`);
   }
 
@@ -195,7 +242,7 @@ export async function safeWrite(
   const normalized = normalizeRelative(relPath);
   const target = await resolveWritable(contentPaths, projectRoot, normalized);
   await mkdir(path.dirname(target), { recursive: true });
-  await writeFile(target, content, "utf8");
+  await withDisplayWriteBarrier(displayScopesFor(contentPaths, projectRoot, [target]), () => writeFile(target, content, "utf8"));
   await mirrorWriteToSiblingView(contentPaths, projectRoot, normalized, content);
 }
 
@@ -209,7 +256,7 @@ export async function safeWriteBinary(
   const normalized = normalizeRelative(relPath);
   const target = await resolveWritable(contentPaths, projectRoot, normalized);
   await mkdir(path.dirname(target), { recursive: true });
-  await writeFile(target, content);
+  await withDisplayWriteBarrier(displayScopesFor(contentPaths, projectRoot, [target]), () => writeFile(target, content));
   await mirrorWriteToSiblingView(contentPaths, projectRoot, normalized, content);
 }
 
@@ -243,7 +290,7 @@ export async function safeRemove(
     }
     throw error;
   }
-  await rm(target, { force: true });
+  await withDisplayWriteBarrier(displayScopesFor(contentPaths, projectRoot, [target]), () => rm(target, { force: true }));
 }
 
 /**
@@ -300,7 +347,7 @@ export async function safeRemoveDirectory(
   // `rm` on macOS refuses to remove a directory without `recursive`,
   // and `rmdir` already enforces the "empty" invariant we just
   // verified, so it is the safe primitive here.
-  await rmdir(target);
+  await withDisplayWriteBarrier(displayScopesFor(contentPaths, projectRoot, [target]), () => rmdir(target));
 }
 
 /**
@@ -346,7 +393,7 @@ export async function safeRenameDirectory(
   }
 
   await mkdir(path.dirname(target), { recursive: true });
-  await rename(source, target);
+  await withDisplayWriteBarrier(displayScopesFor(contentPaths, projectRoot, [source, target]), () => rename(source, target));
 }
 
 /**
@@ -361,20 +408,23 @@ export async function assertReadable(
   relPath: string
 ): Promise<string> {
   const normalized = normalizeRelative(relPath);
-  if (matchesPrefix(normalized, [".ktx/secrets"])) {
+  if (matchesPrefix(normalized, [".ktx/secrets"]) || isSecurityStatePath(normalized)) {
     throw new ForbiddenPathError(`Reading ${normalized} is forbidden`);
   }
 
   const isContentPath = matchesPrefix(normalized, CONTENT_PREFIXES);
   const base = isContentPath ? contentPaths.configDir : projectRoot;
   const baseReal = await realpath(base);
+  if (isContentPath && matchesPrefix(normalized, SYMLINK_FREE_PREFIXES)) {
+    await assertNoSymlinkComponents(baseReal, normalized);
+  }
   const target = await resolveExistingTarget(base, normalized);
   if (!isWithin(target, baseReal)) {
     throw new ForbiddenPathError("Resolved path escapes the project root");
   }
 
   const targetRel = path.relative(baseReal, target).replaceAll(path.sep, "/");
-  if (matchesPrefix(targetRel, [".ktx/secrets"])) {
+  if (matchesPrefix(targetRel, [".ktx/secrets"]) || isSecurityStatePath(targetRel)) {
     throw new ForbiddenPathError(`Reading ${targetRel} is forbidden`);
   }
 
@@ -486,7 +536,7 @@ export async function safeWriteNewSecretPassword(
     }
   }
 
-  await writeFile(target, passwordPlaintext, { encoding: "utf8", mode: 0o600 });
+  await withDisplayWriteBarrier(["C", "L"], () => writeFile(target, passwordPlaintext, { encoding: "utf8", mode: 0o600 }));
   return { relPath: normalized };
 }
 
@@ -514,5 +564,53 @@ export async function safeRemoveSecretPasswordIfExists(
     }
     throw error;
   }
-  await rm(target, { force: true });
+  await withDisplayWriteBarrier(["C", "L"], () => rm(target, { force: true }));
+}
+const ENCODED_ESCAPE_RE = /%(2e|2f|5c|00)/i;
+
+/**
+ * Spec §4.5 — read one Wiki / Skill file under `rootDir` for the Agent data path.
+ * Refuses any symlink in the chain, traversal and encoded variants (`%2e%2e`, `%2f`, `%5c`,
+ * NUL, backslash), then opens with O_NOFOLLOW and compares the opened file's identity to the
+ * pre-open `lstat` so a swap to a link between check and open is rejected.
+ */
+export async function readContextFile(
+  rootDir: string,
+  relKey: string
+): Promise<{ content: string; mtime: Date }> {
+  if (
+    !relKey ||
+    relKey.includes("\0") ||
+    relKey.includes("\\") ||
+    path.isAbsolute(relKey) ||
+    ENCODED_ESCAPE_RE.test(relKey)
+  ) {
+    throw new ForbiddenPathError("Context path is not allowed");
+  }
+  const parts = relKey.split("/");
+  if (parts.some((part) => part === "" || part === "." || part === "..")) {
+    throw new ForbiddenPathError("Context path traversal is not allowed");
+  }
+  const rootReal = await realpath(rootDir);
+  let current = rootReal;
+  let leaf = await lstat(rootReal);
+  for (const part of parts) {
+    current = path.join(current, part);
+    leaf = await lstat(current);
+    if (leaf.isSymbolicLink()) throw new ForbiddenPathError("Symlink in context path is not allowed");
+  }
+  if (!leaf.isFile()) throw new ForbiddenPathError("Context path is not a regular file");
+  const handle = await open(current, fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0));
+  try {
+    const opened = await handle.stat();
+    if (opened.dev !== leaf.dev || opened.ino !== leaf.ino || !opened.isFile()) {
+      throw new ForbiddenPathError("Context file changed during open");
+    }
+    if (!isWithin(await realpath(current), rootReal)) {
+      throw new ForbiddenPathError("Resolved path escapes the content root");
+    }
+    return { content: await handle.readFile("utf8"), mtime: opened.mtime };
+  } finally {
+    await handle.close();
+  }
 }

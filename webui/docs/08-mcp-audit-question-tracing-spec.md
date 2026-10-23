@@ -204,7 +204,8 @@ mysql-aliyun / dataforai / kx_fact_financial_amount
 ### 6.3 失败语义
 
 - 数据源提取失败不得影响 MCP 请求转发。
-- `access_log` 必须照常写入；`access_log_sources` 可为空。
+- `access_log` 必须照常写入；源未解析时 `access_log_sources` 可为空。
+- 源已解析时按源各写一行，`outcome` 为 error 同样写入。Spec 173 v0.2。
 - 提取异常写入 server log，必要时在 `access_log.decision_reason` 或后续诊断表中记录，但不能暴露敏感参数。
 
 ## 7. Inferred Turn 聚类规则
@@ -239,6 +240,8 @@ excluded: initialize, notifications/initialized, tools/list
 | `LUCY_TURN_INFER_LOOKBACK_HOURS` | `24` | 后台增量推断回看窗口 |
 
 ### 7.3 `question_summary` 生成
+
+Spec 173 v0.2 起，没有上报原文的推断问询摘要固定为「未上报问询原文」。表名留在 `source_summary` 和 `access_log_sources`，不再拼进摘要。只有握手的会话访问仍用「会话建立：」加客户端名。下面的 v0.1 规则不再生成摘要正文。
 
 v0.1 采用规则摘要，不强依赖 LLM：
 
@@ -428,8 +431,7 @@ GET /api/admin/audit/:id/sources
 UI 文案必须避免把 inferred summary 表述为用户原话。推荐：
 
 ```text
-推断问题摘要
-基于工具调用参数自动生成，不等同于用户原文。
+没有客户端上报的原文。问询摘要不是用户原话，涉及的数据表见明细。
 ```
 
 ## 10. 隐私、安全与保留策略

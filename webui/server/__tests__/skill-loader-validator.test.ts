@@ -89,31 +89,68 @@ domain: test_domain
       file_version: "v1",
     };
 
-    const res = await validateSkill(invalidSkill);
+    const res = validateSkill(invalidSkill);
     expect(res.valid).toBe(false);
     const fields = res.issues.map((i) => i.field);
     expect(fields).toContain("name");
     expect(fields).toContain("title");
     expect(fields).toContain("domain");
-    expect(fields).toContain("prerequisites.wiki_docs");
-    expect(fields).toContain("eval_cases");
+    expect(fields).not.toContain("prerequisites.wiki_docs");
+    expect(fields).not.toContain("eval_cases");
   });
 
-  it("loads actual repository skills and finds superstore-profit-breakdown", async () => {
-    const skills = await loadAllSkills();
+  it("accepts a published public skill without eval, wiki, or semantic sources", () => {
+    const skill: SkillAsset = {
+      name: "shared-sop",
+      title: "共享 SOP",
+      domain: "global",
+      version: "1.0.0",
+      status: "published",
+      roles_allowed: ["*"],
+      prerequisites: {
+        sources: ["mysql-aliyun.missing_table"],
+        measures: [],
+        wiki_docs: ["missing-playbook.md"],
+      },
+      triggers: [],
+      eval_cases: [],
+      description: "public skill",
+      uri: "lucy-skill://global/shared-sop",
+      relativePath: "skills/global/shared-sop.md",
+      filePath: "/workspace/skills/global/shared-sop.md",
+      content: "# Body",
+      raw: "raw",
+      file_version: "v1",
+    };
+
+    const res = validateSkill(skill);
+    expect(res.valid).toBe(true);
+    expect(res.issues).toEqual([]);
+  });
+
+  it("loads actual repository skills and finds answer-style", async () => {
+    // Spec 170 retired several warehouse/analysis built-ins; answer-style remains published.
+    // Pass repo skills/ explicitly: default content root is <project>/config/skills (may be empty locally).
+    const { fileURLToPath } = await import("node:url");
+    const { dirname, resolve } = await import("node:path");
+    const repoSkills = resolve(dirname(fileURLToPath(import.meta.url)), "../../../skills");
+    const skills = await loadAllSkills(repoSkills);
     expect(skills.length).toBeGreaterThanOrEqual(1);
 
-    const superstoreSkill = await getSkillByName("superstore-profit-breakdown");
-    expect(superstoreSkill).not.toBeNull();
-    expect(superstoreSkill?.domain).toBe("superstore");
+    const answerStyle = await getSkillByName("answer-style", repoSkills);
+    expect(answerStyle).not.toBeNull();
+    expect(answerStyle?.domain).toBe("answer-style");
 
-    const uriSkill = await getSkillByUri("lucy-skill://superstore/superstore-profit-breakdown");
+    const uriSkill = await getSkillByUri("lucy-skill://answer-style/answer-style", repoSkills);
     expect(uriSkill).not.toBeNull();
-    expect(uriSkill?.name).toBe("superstore-profit-breakdown");
+    expect(uriSkill?.name).toBe("answer-style");
   });
 
   it("exports skills package for claude-code, cursor and mcp-json", async () => {
-    const skills = await loadAllSkills();
+    const { fileURLToPath } = await import("node:url");
+    const { dirname, resolve } = await import("node:path");
+    const repoSkills = resolve(dirname(fileURLToPath(import.meta.url)), "../../../skills");
+    const skills = await loadAllSkills(repoSkills);
     const bundleAll = exportSkillPackage(skills, "all", { proxyUrl: "https://lucy.example.com/mcp" });
     expect(bundleAll.count).toBe(skills.length);
     expect(bundleAll.mcpConfig).toBeDefined();

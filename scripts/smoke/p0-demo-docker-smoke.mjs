@@ -11,7 +11,35 @@ const demoToken = process.env.LUCY_DEMO_AGENT_TOKEN ?? "lucy-demo-agent-token";
 const expectedKtxVersion = process.env.LUCY_EXPECTED_KTX_VERSION ?? "0.16.0";
 const composeFile = "deploy/compose/docker-compose.demo.yml";
 const baselinePath = "examples/docker-demo/mysql/_baseline.json";
+// The compose files default TARGETPLATFORM to linux/arm64 because that is the
+// common developer machine. On any other host that produces an image the host
+// cannot execute ("exec /bin/sh: exec format error"), so default to the host
+// architecture and let an explicit env var win.
+const hostArch = process.arch === "arm64" ? "arm64" : "amd64";
+const targetPlatform = process.env.TARGETPLATFORM ?? `linux/${hostArch}`;
+const targetArch = process.env.TARGETARCH ?? hostArch;
 let tempDockerConfig;
+
+const SQLITE_FILE_SETUP = `
+import { DatabaseSync } from "node:sqlite";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+const root = "/tmp/lucy-sqlite-smoke";
+rmSync(root, { recursive: true, force: true });
+mkdirSync(root + "/project", { recursive: true });
+const dbPath = root + "/smoke.sqlite";
+const db = new DatabaseSync(dbPath);
+db.exec("CREATE TABLE smoke_probe (id INTEGER PRIMARY KEY, label TEXT)");
+db.exec("INSERT INTO smoke_probe (id, label) VALUES (1, 'ok')");
+db.close();
+writeFileSync(root + "/project/ktx.yaml", [
+  "connections:",
+  "  smoke-sqlite:",
+  "    driver: sqlite",
+  "    readonly: true",
+  "    path: " + dbPath,
+  ""
+].join("\\n"));
+`;
 
 function run(command, commandArgs, options = {}) {
   return new Promise((resolve, reject) => {
@@ -20,8 +48,13 @@ function run(command, commandArgs, options = {}) {
     const child = spawn(command, commandArgs, {
       cwd: options.cwd ?? process.cwd(),
       env: { ...process.env, ...(options.env ?? {}) },
-      stdio: options.capture ? ["ignore", "pipe", "pipe"] : "inherit"
+      stdio: options.input != null || options.capture ? ["pipe", "pipe", "pipe"] : "inherit"
     });
+    if (options.input != null) {
+      child.stdin.end(options.input);
+    } else if (options.capture) {
+      child.stdin.end();
+    }
     let stdout = "";
     let stderr = "";
     if (child.stdout) child.stdout.on("data", (chunk) => { stdout += chunk.toString(); });
@@ -101,6 +134,35 @@ function rowsByRegion(headers, rows) {
   return map;
 }
 
+function parseKtxJson(stdout) {
+  const start = stdout.indexOf("{");
+  if (start < 0) throw new Error(`expected JSON from ktx, got: ${stdout.slice(0, 400)}`);
+  return JSON.parse(stdout.slice(start));
+}
+
+async function verifySqliteFile() {
+  await run("docker", composeArgs(["exec", "-T", "lucy", "node", "--input-type=module"]), {
+    input: SQLITE_FILE_SETUP
+  });
+  await run("docker", composeArgs([
+    "exec", "-T", "lucy", "ktx",
+    "--project-dir", "/tmp/lucy-sqlite-smoke/project",
+    "connection", "test", "smoke-sqlite"
+  ]));
+  const query = await run("docker", composeArgs([
+    "exec", "-T", "lucy", "ktx",
+    "--project-dir", "/tmp/lucy-sqlite-smoke/project",
+    "sql", "--connection", "smoke-sqlite", "--json",
+    "SELECT label FROM smoke_probe"
+  ]), { capture: true });
+  const parsed = parseKtxJson(query.stdout);
+  const label = parsed.rows?.[0]?.[0];
+  if (label !== "ok") {
+    throw new Error(`sqlite file query expected label ok, got ${JSON.stringify(parsed)}`);
+  }
+  console.log("[p0-demo-smoke] sqlite file connection test and sql query passed");
+}
+
 function assertRegionSales(label, headers, rows, baseline) {
   const expected = baseline.sales_by_region ?? {};
   const actual = rowsByRegion(headers, rows);
@@ -164,6 +226,47 @@ async function verifyAdvertisedMcpEndpoint() {
   console.log(`[p0-demo-smoke] advertised MCP endpoint matches host publish: ${endpoint.url}`);
 }
 
+function toolText(body) {
+  return (body?.result?.content ?? []).map((item) => item?.text ?? "").join("\n");
+}
+
+// Spec §4 / T05+T06: default-deny Wiki ACL. The template page is granted to the demo role;
+// a synthetic page granted only to another role must answer `context_not_available`
+// (same text as an unknown key) and never leak its body.
+async function verifyContextAcl(sessionId) {
+  const grantedKey = "global/demo-superstore.md";
+  const granted = await rpc(sessionId, "tools/call", { name: "wiki_read", arguments: { key: grantedKey } });
+  if (!granted.res.ok || granted.body?.error || granted.body?.result?.isError) {
+    throw new Error(`wiki_read ${grantedKey} should be authorized for demo_agent: ${granted.text}`);
+  }
+  if (!toolText(granted.body).includes("superstore_orders")) {
+    throw new Error(`wiki_read ${grantedKey} did not return the template page body`);
+  }
+  console.log("[p0-demo-smoke] authorized role can wiki_read the template page");
+
+  const deniedKey = "global/smoke-acl-denied.md";
+  const canary = "SMOKE_ACL_CANARY_DO_NOT_LEAK";
+  const page = ["---", "allowed_roles: [lucy_admin]", "---", "# Smoke ACL denied", canary].join("\n");
+  await run("docker", composeArgs([
+    "exec", "-T", "-e", "SMOKE_ACL_PAGE", "lucy", "sh", "-c",
+    `mkdir -p /data/lucy/config/wiki/global && printf '%s\\n' "$SMOKE_ACL_PAGE" > /data/lucy/config/wiki/${deniedKey}`
+  ]), { env: { SMOKE_ACL_PAGE: page }, capture: true });
+  try {
+    const denied = await rpc(sessionId, "tools/call", { name: "wiki_read", arguments: { key: deniedKey } });
+    const unknown = await rpc(sessionId, "tools/call", { name: "wiki_read", arguments: { key: "global/smoke-acl-unknown.md" } });
+    if (denied.body?.result?.isError !== true || toolText(denied.body) !== "context_not_available") {
+      throw new Error(`unauthorized wiki_read must return context_not_available, got: ${denied.text}`);
+    }
+    if (denied.text.includes(canary)) throw new Error("unauthorized wiki_read leaked the page body");
+    if (toolText(unknown.body) !== toolText(denied.body)) {
+      throw new Error("unauthorized and unknown wiki_read responses must be identical");
+    }
+    console.log("[p0-demo-smoke] unauthorized role gets context_not_available (same as unknown key)");
+  } finally {
+    await run("docker", composeArgs(["exec", "-T", "lucy", "rm", "-f", `/data/lucy/config/wiki/${deniedKey}`]), { capture: true }).catch(() => undefined);
+  }
+}
+
 async function verifyProxyAgentPath(baseline) {
   const init = await rpc("", "initialize", {
     protocolVersion: "2025-03-26",
@@ -224,6 +327,7 @@ async function verifyProxyAgentPath(baseline) {
   }
   assertRegionSales("proxy lucy_query", structured.headers, structured.rows, baseline);
   console.log(`[p0-demo-smoke] proxy lucy_query returned ${structured.rows.length} baseline-matched rows`);
+  await verifyContextAcl(sessionId);
 }
 
 async function main() {
@@ -232,7 +336,9 @@ async function main() {
     LUCY_DEMO_WEBUI_HOST_PORT: webPort,
     LUCY_DEMO_PROXY_HOST_PORT: proxyPort,
     // Keep Advertise aligned with Publish when smoke remaps host ports.
-    LUCY_PUBLIC_MCP_URL: process.env.LUCY_PUBLIC_MCP_URL ?? `http://127.0.0.1:${proxyPort}/mcp`
+    LUCY_PUBLIC_MCP_URL: process.env.LUCY_PUBLIC_MCP_URL ?? `http://127.0.0.1:${proxyPort}/mcp`,
+    TARGETPLATFORM: targetPlatform,
+    TARGETARCH: targetArch
   };
   if (!process.env.DOCKER_CONFIG) {
     tempDockerConfig = await mkdtemp(path.join(tmpdir(), "lucy-demo-docker-config-"));
@@ -249,6 +355,7 @@ async function main() {
     await verifyDemoCounts(baseline);
     await verifyAdvertisedMcpEndpoint();
     await run("docker", composeArgs(["exec", "-T", "lucy", "ktx", "--project-dir", "/data/lucy", "connection", "test", "demo-mysql"]));
+    await verifySqliteFile();
     await run("docker", composeArgs(["exec", "-T", "lucy", "ktx", "--project-dir", "/data/lucy", "admin", "reindex", "--force", "--output", "json"]), { capture: true });
     await run("docker", composeArgs(["exec", "-T", "lucy", "ktx", "--project-dir", "/data/lucy", "sl", "validate", "superstore_orders", "--connection-id", "demo-mysql"]));
     const query = await run("docker", composeArgs([

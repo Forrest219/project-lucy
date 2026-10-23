@@ -38,7 +38,7 @@ Lucy 的测试分三层，不能互相替代：
 | `npm run smoke:p0:delivery-isolation` | platform（Lucy 硬门禁） | `.dockerignore` 排除 A3 路径；可选 `--check-images` 对 Lucy 镜像做 denylist；与 A3 是否启用无关 |
 | `npm run smoke:p0:docker` | runtime + platform | Docker image build, compose up, `/api/health`, MCP proxy port, bundled KTX version；并检查 `project-lucy:p0-smoke` 与 `project-lucy:local` 无 A3 路径 |
 | `npm run smoke:p0:headless-config` | customer config | verifies the recommended `/data/lucy` config package shape, secret references, semantic-layer/wiki/eval/access parseability, and compose override |
-| `npm run smoke:p0:demo` | runtime + platform + customer path | demo DB, KTX connection/reindex/validate/query, Lucy MCP Proxy bearer token, `sl_read_source`, `sl_query` |
+| `npm run smoke:p0:demo` | runtime + platform + customer path | demo MySQL, KTX connection/reindex/validate/query, Lucy MCP Proxy bearer token, `sl_read_source`, `sl_query`; same Lucy container also runs a SQLite file `connection test` and one `ktx sql` |
 | `npm run smoke:p0:postgres-demo` | runtime + platform + customer path | PostgreSQL demo DB, KTX connection/reindex/validate/query, Lucy MCP Proxy bearer token, `sl_read_source`, `sl_query` |
 | `npm run smoke:p0:business-eval` | business eval catalog | verifies core eval suites can be read by runner |
 | `npm run smoke:p0:spider2-lite-eval` | business eval catalog (optional gated) | Spider2-lite Pilot suite list-cases; no StarRocks required；跑法见 [`../qa/suite-semantic-onboard-mcp-eval.md`](../qa/suite-semantic-onboard-mcp-eval.md) §14 |
@@ -260,8 +260,10 @@ Recommended CI jobs:
 | docker-smoke | `npm run smoke:p0:docker`（含 delivery-isolation 双镜像 denylist） |
 | delivery-isolation | `npm run smoke:p0:delivery-isolation`（Lucy 硬门禁；亦由 `smoke:p0` 调用） |
 | headless-config | `npm run smoke:p0:headless-config` |
-| demo-e2e | `npm run smoke:p0:demo` |
-| postgres-demo-e2e | `npm run smoke:p0:postgres-demo` |
+| demo-db-smoke | `npm run smoke:p0:demo`（数据库/演示冒烟，**不是**真实用户 E2E） |
+| postgres-demo-db-smoke | `npm run smoke:p0:postgres-demo`（同上） |
+| real-e2e | 受保护 runner：同一候选 digest 部署到隔离单副本 K8s 后执行 `e2e:real:security` / `e2e:real:management` / `e2e:real:agent`（Spec 20261018 §6） |
+| customer-release-readiness | **客户发布唯一聚合门禁**：`npm run gate:customer-release`，由唯一 verifier 校验证据与签名归档；所有客户发布分支依赖它 |
 | business-eval-catalog | `npm run smoke:p0:business-eval` |
 | p1-context | `npm run smoke:p1:context -- --strict-runtime` in a prepared KTX/proxy environment |
 | p1-skills | `npm run smoke:p1:skills` |
@@ -278,4 +280,4 @@ Recommended CI jobs:
 
 GitHub Actions implementation: `.github/workflows/lucy-release.yml`.
 
-For customer signoff, treat `security-baseline`, `docker-smoke`（含 delivery-isolation）、`headless-config`, `demo-e2e`, `postgres-demo-e2e`, and `business-eval-catalog` as the headless gate set. Optional Agent Chat smokes are maintainer-only and are stripped from the customer source bundle. `spec-and-unit` / WebUI checks can remain required for repository release hygiene, but customer documentation and release notes must describe them as internal quality gates rather than customer operation steps.
+For customer signoff, treat `security-baseline`, `docker-smoke`（含 delivery-isolation）、`headless-config`, `demo-db-smoke`, `postgres-demo-db-smoke`, and `business-eval-catalog` as the headless gate set. **Headless gates are necessary but never sufficient for a customer release**: the customer release additionally requires `real-e2e` + `customer-release-readiness` on the same candidate digest (Spec 20261018 §8.3); a green headless set can not be presented as an E2E pass. Optional Agent Chat smokes are maintainer-only and are stripped from the customer source bundle. `spec-and-unit` / WebUI checks can remain required for repository release hygiene, but customer documentation and release notes must describe them as internal quality gates rather than customer operation steps.

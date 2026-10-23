@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import Database from "better-sqlite3";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import type { FastifyInstance } from "fastify";
 import {
@@ -14,10 +14,20 @@ import {
   targetLabel
 } from "../../src/lib/configAuditLabels.js";
 import { resolveProjectRoot } from "../project.js";
-import { rebuildInferredTurns, purgeExpiredConversationTurns, scrubAccessLogArgsSummaries } from "../proxy/audit.js";
+import { recordProjectionStatus } from "../proxy/audit-write-health.js";
+import { getSecurityStore } from "../security/instance.js";
+import { runProjection, type ProjectionStatus } from "../security/projector.js";
+import { trustedActorFromRequest } from "../security/request-actor.js";
+import { redactAuditDiff, redactAuditSummary, redactAuditText } from "../security/redaction.js";
+import { rebuildInferredTurns, purgeExpiredConversationTurns, scrubAccessLogArgsSummaries, INFERRED_TURN_REBUILD_LOOKBACK_HOURS, sessionVisitSummary, SESSION_VISIT_SUMMARY_PREFIX } from "../proxy/audit.js";
+import { presentStoredClient, type ResolvedClientIdentity } from "../proxy/request-client-meta.js";
 import { buildStoredZip, sha256Hex } from "../proxy/zip-store.js";
 import { MCP_PLAYGROUND_PLATFORM } from "./mcp-playground.js";
 import { resolveLucyVersion } from "../lucy-version.js";
+import {
+  checkAgentAuditRateLimit,
+  extractIpForRateLimit
+} from "./agent-audit-rate-limit.js";
 import {
   ensureTraceEvidenceSchema,
   listTraceEvents,
@@ -30,21 +40,27 @@ import {
 } from "../trace/evidence.js";
 import { readQueryArtifact } from "../audit/query-artifact-store.js";
 import { MCP_PROTOCOL_METHODS as PROTOCOL_TOOLS } from "../proxy/mcp-request-classification.js";
+import {
+  appendClientObservations,
+  resolveAdapterFromToken,
+  validateAgentAuditBody,
+  bodySizeError as agentAuditBodySizeError,
+  isEventCountError as agentAuditIsEventCountError
+} from "./agent-audit-events.js";
 
 // Per-user lazy-rebuild debounce: GET /turns can be polled frequently (UI refresh, multiple
 // users in one window); skip re-running the full delete+reinsert rebuild if we just did it.
 const lastRebuildAt = new Map<string, number>();
 const REBUILD_DEBOUNCE_MS = Number(process.env.LUCY_TURN_INFER_REBUILD_DEBOUNCE_MS ?? 30_000);
 
-async function rebuildInferredTurnsDebounced(userId: string, options?: { lookbackHours?: number }): Promise<void> {
-  // Key on the resolved window size too: a recent rebuild over a narrower window doesn't cover
-  // a wider one, so a different lookbackHours must not be skipped by the debounce.
-  const key = `${userId}:${options?.lookbackHours ?? "default"}`;
+async function rebuildInferredTurnsDebounced(userId: string): Promise<void> {
+  // Spec 172: one fixed horizon. A shorter page window must not rebuild and renumber IDs.
+  const key = userId;
   const now = Date.now();
   const last = lastRebuildAt.get(key);
   if (last !== undefined && now - last < REBUILD_DEBOUNCE_MS) return;
   lastRebuildAt.set(key, now);
-  await rebuildInferredTurns(userId, options);
+  await rebuildInferredTurns(userId, { lookbackHours: INFERRED_TURN_REBUILD_LOOKBACK_HOURS });
 }
 
 let db: Database.Database | null = null;
@@ -83,7 +99,10 @@ const ACCESS_LOG_COLUMNS = [
   ["skill_file_version", "TEXT"],
   ["skill_action", "TEXT"],
   ["skill_roles_allowed", "TEXT"],
-  ["matched_role_id", "TEXT"]
+  ["matched_role_id", "TEXT"],
+  ["is_slow_call", "INTEGER"],
+  ["reported_client", "TEXT"],
+  ["reported_client_version", "TEXT"]
 ] as const;
 const PERMISSION_SNAPSHOT_COLUMNS = [
   ["capability_digest", "TEXT"],
@@ -120,6 +139,55 @@ function auditExportMaxRows(): number {
 function auditExportMaxBytes(): number {
   const configured = Number(process.env.LUCY_AUDIT_EXPORT_MAX_BYTES ?? 64 * 1024 * 1024);
   return Number.isFinite(configured) && configured > 0 ? Math.floor(configured) : 64 * 1024 * 1024;
+}
+
+/**
+ * Spec 162 §8 / SC-18 — cursor paging for the call export.
+ *
+ * A row past the page size is never silently dropped: the page carries a
+ * `nextCursor` that resumes strictly after the last row of this page, so the
+ * second page can reach row 10,001. The cursor encodes the (ts, id) key of
+ * the final row; ordering stays `ts DESC, id DESC`.
+ */
+export type AuditExportCursor = { ts: string; id: number };
+
+const CURSOR_SEPARATOR = "::";
+
+export function encodeAuditExportCursor(cursor: AuditExportCursor): string {
+  return Buffer.from(`${cursor.ts}${CURSOR_SEPARATOR}${cursor.id}`, "utf8").toString("base64url");
+}
+
+export function decodeAuditExportCursor(raw: string | undefined): AuditExportCursor | null {
+  if (!raw || !raw.trim()) return null;
+  try {
+    const decoded = Buffer.from(raw, "base64url").toString("utf8");
+    // The separator is two characters; the id starts after both.
+    const separator = decoded.lastIndexOf(CURSOR_SEPARATOR);
+    if (separator <= 0) return null;
+    const ts = decoded.slice(0, separator);
+    const id = Number(decoded.slice(separator + CURSOR_SEPARATOR.length));
+    if (!ts || !Number.isInteger(id)) return null;
+    return { ts, id };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Applies a resume cursor to an existing WHERE clause. Ordering is
+ * `ts DESC, id DESC`, so "strictly after" is `(ts < ?) OR (ts = ? AND id < ?)`.
+ */
+export function applyAuditExportCursor(
+  conditions: string[],
+  params: Record<string, string | null>,
+  cursor: AuditExportCursor | null,
+): { conditions: string[]; params: Record<string, string | number | null> } {
+  if (!cursor) return { conditions, params };
+  const next: Record<string, string | number | null> = { ...params, cursorTs: cursor.ts, cursorId: cursor.id };
+  return {
+    conditions: [...conditions, "(ts < @cursorTs OR (ts = @cursorTs AND id < @cursorId))"],
+    params: next
+  };
 }
 
 function chunksOf<T>(items: T[], size = 400): T[][] {
@@ -194,16 +262,14 @@ function buildAccessLogFilter(q: AccessLogFilterQuery): {
   }
 
   const includeProtocol = q.includeProtocol === "true" || callSource === "playground";
+  const turnScoped = Boolean((q.turnId && q.turnId.trim()) || (q.key && q.key.trim()));
   const conditions = [...baseConditions];
-  if (!includeProtocol) conditions.push(`tool NOT IN (${PROTOCOL_TOOL_LIST})`);
+  // Spec 172: a turn-id search must return that visit's handshake. The unfiltered list stays quiet.
+  if (!includeProtocol && !turnScoped) conditions.push(`tool NOT IN (${PROTOCOL_TOOL_LIST})`);
 
   return { conditions, baseConditions, params, includeProtocol };
 }
 
-// lucy_begin_question is the report call that *starts* a reported turn, not a linked business call.
-const NON_LINKED_CALL_TOOL_LIST = [...PROTOCOL_TOOLS, "lucy_begin_question"].map((tool) => `'${tool}'`).join(", ");
-const SENSITIVE_KEY_RE = /(?:password|passwd|pwd|token|secret|api[-_]?key|authorization|credential|private[-_]?key|cert)/i;
-const SENSITIVE_PAIR_RE = /\b(password|passwd|pwd|token|secret|api[-_]?key|authorization|credential|private[-_]?key|cert)\b\s*[:=]\s*([^,\s;]+)/gi;
 const CSV_FORMULA_RE = /^[=+\-@]/;
 const CONFIG_AUDIT_DIFF_MAX_BYTES = 256 * 1024;
 const AUDIT_EXPORT_TIMEZONE = "Asia/Shanghai";
@@ -251,22 +317,21 @@ function csvCell(value: unknown): string {
   return `"${escaped}"`;
 }
 
+// T10 — defensive redaction at the audit export boundary. The diff/summary/text
+// rows are already masked at write time by `redactAuditDiff` /
+// `redactAuditSummary` in `security/redaction.ts`, but old rows predating that
+// path could still hold raw secrets. Re-apply the canonical primitives so CSV
+// and JSON exports stay safe even when the write path is bypassed.
 function redactText(value: string): string {
-  return value.replace(SENSITIVE_PAIR_RE, "$1=[REDACTED]");
+  return redactAuditText(value);
 }
 
 function redactSensitive(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(redactSensitive);
-  if (value && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>).map(([key, nested]) => [
-        key,
-        SENSITIVE_KEY_RE.test(key) ? "[REDACTED]" : redactSensitive(nested)
-      ])
-    );
-  }
-  if (typeof value === "string") return redactText(value);
-  return value;
+  // `redactAuditSummary` walks the structure with the canonical
+  // `SECRET_KEY_RE` allowlist (covers `password_hash`, `client_secret`,
+  // `set-cookie`, etc.) and runs `redactAuditText` on every leaf string,
+  // so scrypt-shaped values and bearer tokens never leak either.
+  return redactAuditSummary("audit_export", value);
 }
 
 function redactJsonString(value: string | null): string | null {
@@ -448,6 +513,8 @@ export async function getAuditDb(): Promise<Database.Database> {
     ensureColumn(db, "permission_snapshots", column, definition);
   }
   ensureColumn(db, "conversation_turns", "session_id", "TEXT");
+  ensureColumn(db, "inferred_turns", "client", "TEXT");
+  ensureColumn(db, "inferred_turns", "session_id", "TEXT");
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_al_user_token_ts ON access_log(user_id, token_hash_prefix, ts);
     CREATE INDEX IF NOT EXISTS idx_al_session_ts ON access_log(lucy_session_id, ts);
@@ -494,6 +561,171 @@ export function resetAuditDbForTests(): void {
   }
 }
 
+// ─── T06b: POST /api/agent-audit/events (受控客户端 observation) ───────────
+//
+// Contract §2.5.2 / §6.2. Registered separately so the route lives outside the
+// admin audit routes (no `lucyAdmin` session dependency; this is the
+// controlled-client endpoint). Caller is `webui/server/index.ts`.
+
+export function registerAgentAuditRoutes(app: FastifyInstance): void {
+  app.post<{
+    Body: { events?: unknown };
+  }>("/api/agent-audit/events", async (request, reply) => {
+    // 1. Credential: server-resolved from `X-Agent-Audit-Token`. Body never
+    //    reads / uses / falls back to admin context. Per EA-11 closure.
+    const token = request.headers["x-agent-audit-token"];
+    const adapter = resolveAdapterFromToken(typeof token === "string" ? token : undefined);
+    if (!adapter) {
+      reply.code(401);
+      return {
+        ok: false,
+        error: { code: "CREDENTIAL_INVALID", message: "X-Agent-Audit-Token missing or invalid" }
+      };
+    }
+
+    // 2. Body size: 1 MiB hard cap (envelope 413).
+    const bodyBytes = Number((request.headers["content-length"] ?? "0")) || JSON.stringify(request.body ?? {}).length;
+    const sizeErr = agentAuditBodySizeError(bodyBytes);
+    if (sizeErr) {
+      reply.code(413);
+      return { ok: false, error: { code: "PAYLOAD_TOO_LARGE", message: sizeErr } };
+    }
+
+    // 3. Schema validation (envelope 400).
+    const schemaErrors = validateAgentAuditBody(request.body);
+    if (schemaErrors.length > 0) {
+      reply.code(400);
+      return {
+        ok: false,
+        error: { code: "SCHEMA_INVALID", details: schemaErrors }
+      };
+    }
+    const events = (request.body as { events: Parameters<typeof appendClientObservations>[2] }).events;
+
+    // 4. Event count (envelope 413 — keep distinct from body size).
+    const countErr = agentAuditIsEventCountError(events.length);
+    if (countErr) {
+      reply.code(413);
+      return { ok: false, error: { code: "EVENTS_TOO_MANY", message: countErr } };
+    }
+
+    // 5. Security store: fail-closed (envelope 503) before any persistence.
+    const securityPrecheck = await getSecurityStore();
+    if (!securityPrecheck.ok) {
+      reply.code(503);
+      return {
+        ok: false,
+        error: {
+          code: "STORE_UNAVAILABLE",
+          message: "security store unavailable; refusing to record controlled-client observations"
+        }
+      };
+    }
+
+    // Note: per-IP rate limiting (T08a.1) — applied here as step 6 after
+    //    auth + body + schema pass (so 401/400/413 do NOT count against the
+    //    bucket; this avoids a credential harvester exhausting the bucket
+    //    for legitimate clients). Implementation lives in
+    //    ./agent-audit-rate-limit.ts and is single-instance / module-private
+    //    (matches product config of single-instance Lucy).
+    const rateIp = extractIpForRateLimit(request);
+    const rateVerdict = checkAgentAuditRateLimit(rateIp);
+    if (!rateVerdict.allowed) {
+      reply.code(429);
+      reply.header("Retry-After", String(rateVerdict.retryAfterSeconds));
+      return {
+        ok: false,
+        error: {
+          code: "RATE_LIMITED",
+          message: "per-ip rate limit exceeded on observation endpoint",
+          retryAfter: rateVerdict.retryAfterSeconds
+        }
+      };
+    }
+
+    // 7. Append. Use the security store's own Database handle (T06b added
+    //    `database` getter for this purpose) so the idempotency table writes
+    //    run in the same WAL session as `appendEvent`, avoiding SQLITE_BUSY.
+    let results: ReturnType<typeof appendClientObservations>;
+    try {
+      const secDb = securityPrecheck.value.database;
+      results = appendClientObservations(
+        secDb,
+        adapter,
+        events,
+        "audit-trust-2026-10-19-r1.v1",
+        (input) => {
+          const r = securityPrecheck.value.appendEvent({
+            eventId: input.eventId,
+            operationId: input.operationId,
+            phase: input.phase as "commit",
+            actor: input.actor,
+            actorType: input.actorType,
+            auditEventKind: input.auditEventKind,
+            objectHash: input.objectHash,
+            resultSummary: `${input.resultSummary} sub_kind=client_observed`
+          });
+          if (!r.ok) throw new Error(`ledger_append_failed: ${r.reason ?? "unknown"}`);
+          return { seq: (r.value as { seq: number }).seq, eventId: input.eventId };
+        }
+      );
+
+      // Surface id_conflict and parent_not_visible as 409 in the partial case.
+      const hasIdConflict = results.some((r) => r.status === "id_conflict");
+      const allConflict = results.every((r) => r.status === "id_conflict");
+      const hasParentNotVisible = results.some((r) => r.status === "parent_not_visible");
+
+      if (allConflict) {
+        reply.code(409);
+        return {
+          ok: false,
+          error: { code: "ID_CONFLICT", results: results.map(serializeAgentAuditResult) }
+        };
+      }
+      if (hasIdConflict || hasParentNotVisible) {
+        // Partial: 207 with per-event results.
+        reply.code(207);
+        return { ok: true, partial: true, results: results.map(serializeAgentAuditResult) };
+      }
+
+      reply.code(200);
+      return { ok: true, results: results.map(serializeAgentAuditResult) };
+    } catch (err) {
+      reply.code(500);
+      return { ok: false, error: { code: "INTERNAL", message: String(err) } };
+    }
+  });
+}
+
+function serializeAgentAuditResult(r: ReturnType<typeof appendClientObservations>[number]) {
+  if (r.status === "accepted" || r.status === "idempotent_replay") {
+    return { status: r.status, ...r.persisted };
+  }
+  if (r.status === "id_conflict") {
+    return { status: r.status, existing: r.existing };
+  }
+  return { status: r.status };
+}
+
+// T13 (Spec 185) — snapshot the audit DB to a fresh file using SQLite's online
+// backup API. The destination file is closed/flushed by the time the promise
+// resolves, so a follow-up insert into `source` after this returns cannot be
+// observed by readers who reopen the destination. The sha256 matches the bytes
+// of the destination file, so a verifier can compare it against the on-disk
+// file after the call.
+export async function snapshotAuditDatabase(
+  source: Database.Database,
+  destination: string
+): Promise<string> {
+  await source.backup(destination);
+  const buf = readFileSync(destination);
+  return sha256Hex(buf);
+}
+
+function serializeAuditSummary(changeType: string, value: unknown): string | null {
+  return value === undefined ? null : JSON.stringify(redactAuditSummary(changeType, value));
+}
+
 export async function recordConfigChange(input: {
   filePath: string;
   changeType: string;
@@ -514,12 +746,13 @@ export async function recordConfigChange(input: {
   sessionId?: string | null;
 }): Promise<number | undefined> {
   const database = await getAuditDb();
-  const oldSummaryJson = input.oldSummary === undefined ? null : JSON.stringify(input.oldSummary);
-  const newSummaryJson = input.newSummary === undefined ? null : JSON.stringify(input.newSummary);
-  const safeDiff = input.diff
-    ? Buffer.byteLength(input.diff, "utf8") > CONFIG_AUDIT_DIFF_MAX_BYTES
-      ? `${input.diff.slice(0, CONFIG_AUDIT_DIFF_MAX_BYTES)}\n...[TRUNCATED]`
-      : input.diff
+  const oldSummaryJson = serializeAuditSummary(input.changeType, input.oldSummary);
+  const newSummaryJson = serializeAuditSummary(input.changeType, input.newSummary);
+  const redactedDiff = input.diff ? redactAuditDiff(input.diff) : undefined;
+  const safeDiff = redactedDiff
+    ? Buffer.byteLength(redactedDiff, "utf8") > CONFIG_AUDIT_DIFF_MAX_BYTES
+      ? `${redactedDiff.slice(0, CONFIG_AUDIT_DIFF_MAX_BYTES)}\n...[TRUNCATED]`
+      : redactedDiff
     : null;
   const stableIdempotencyKey = input.idempotencyKey ?? createHash("sha256").update(
     JSON.stringify({
@@ -565,7 +798,7 @@ export async function recordConfigChange(input: {
     request_id: input.requestId ?? null,
     idempotency_key: stableIdempotencyKey,
     write_status: input.writeStatus ?? "committed",
-    error_reason: input.errorReason ?? null
+    error_reason: input.errorReason ? redactAuditText(input.errorReason) : null
   });
   if (typeof result.lastInsertRowid === "number" && result.lastInsertRowid > 0) return result.lastInsertRowid;
   const existing = database.prepare(
@@ -583,11 +816,16 @@ export async function updateConfigChangeStatus(input: {
   newSummary?: unknown;
 }): Promise<void> {
   const database = await getAuditDb();
-  const safeDiff = input.diff
-    ? Buffer.byteLength(input.diff, "utf8") > CONFIG_AUDIT_DIFF_MAX_BYTES
-      ? `${input.diff.slice(0, CONFIG_AUDIT_DIFF_MAX_BYTES)}\n...[TRUNCATED]`
-      : input.diff
-    : input.diff ?? null;
+  const row = database.prepare("SELECT change_type FROM config_change_log WHERE id = ?").get(input.id) as
+    | { change_type: string }
+    | undefined;
+  const changeType = row?.change_type ?? "";
+  const redactedDiff = input.diff ? redactAuditDiff(input.diff) : input.diff;
+  const safeDiff = redactedDiff
+    ? Buffer.byteLength(redactedDiff, "utf8") > CONFIG_AUDIT_DIFF_MAX_BYTES
+      ? `${redactedDiff.slice(0, CONFIG_AUDIT_DIFF_MAX_BYTES)}\n...[TRUNCATED]`
+      : redactedDiff
+    : redactedDiff ?? null;
   database.prepare(`
     UPDATE config_change_log
     SET write_status = @write_status,
@@ -599,10 +837,10 @@ export async function updateConfigChangeStatus(input: {
   `).run({
     id: input.id,
     write_status: input.writeStatus,
-    error_reason: input.errorReason ?? null,
+    error_reason: input.errorReason ? redactAuditText(input.errorReason) : null,
     diff: safeDiff,
-    old_summary: input.oldSummary === undefined ? null : JSON.stringify(input.oldSummary),
-    new_summary: input.newSummary === undefined ? null : JSON.stringify(input.newSummary)
+    old_summary: serializeAuditSummary(changeType, input.oldSummary),
+    new_summary: serializeAuditSummary(changeType, input.newSummary)
   });
 }
 
@@ -653,6 +891,10 @@ interface QueryRow {
   skill_action: "discover" | "read" | null;
   skill_roles_allowed: string | null;
   matched_role_id: string | null;
+  reported_client?: string | null;
+  reported_client_version?: string | null;
+  /** Spec 162 SC-20 stored mark. Distinct from the P95 drill-down flag. */
+  is_slow_call?: number | null;
   /** Joined at read time; only set when lucy_turn_id is empty. */
   inferred_turn_id?: string | null;
 }
@@ -704,7 +946,9 @@ const ACCESS_LOG_CSV_HEADERS = [
   "skill_file_version",
   "skill_action",
   "skill_roles_allowed",
-  "matched_role_id"
+  "matched_role_id",
+  "reported_client",
+  "reported_client_version"
 ] as const;
 
 type CsvFieldMetadata = {
@@ -997,14 +1241,27 @@ const ACCESS_LOG_FIELD_METADATA: Record<(typeof ACCESS_LOG_CSV_HEADERS)[number],
     format: "string|null",
     description: "同时满足对象授权与通道能力的 Role ID。",
     trigger: "Skill 裁决允许且存在闭合 Role 时输出。"
+  },
+  reported_client: {
+    label: "自报客户端",
+    format: "string|null",
+    description: "MCP initialize 的 clientInfo.name。客户端列改用已知产品名时，这里保留原来的自报名。",
+    trigger: "握手带了 clientInfo.name 时输出。"
+  },
+  reported_client_version: {
+    label: "自报客户端版本",
+    format: "string|null",
+    description: "MCP initialize 的 clientInfo.version。与自报客户端成对。",
+    trigger: "握手带了 clientInfo.version 时输出。"
   }
 };
 
 function renderAccessLogCsv(rows: QueryRow[]): string {
   const lines = [
     ACCESS_LOG_CSV_HEADERS.join(","),
-    ...rows.map((row) =>
-      [
+    ...rows.map((row) => {
+      const shown = presentStoredClient(row);
+      return [
         row.id,
         csvCell(row.ts),
         csvCell(formatAuditLocalTimestamp(row.ts)),
@@ -1018,8 +1275,8 @@ function renderAccessLogCsv(rows: QueryRow[]): string {
         csvCell(row.turn_attribution_confidence),
         csvCell(row.turn_attribution_reason),
         csvCell(row.lucy_platform),
-        csvCell(row.client),
-        csvCell(row.client_version),
+        csvCell(shown.client ?? ""),
+        csvCell(shown.clientVersion ?? ""),
         csvCell(row.client_ip),
         csvCell(row.user_agent),
         csvCell(row.device_name),
@@ -1051,9 +1308,11 @@ function renderAccessLogCsv(rows: QueryRow[]): string {
         csvCell(row.skill_file_version),
         csvCell(row.skill_action),
         csvCell(row.skill_roles_allowed),
-        csvCell(row.matched_role_id)
+        csvCell(row.matched_role_id),
+        csvCell(shown.reportedClient ?? ""),
+        csvCell(shown.reportedClientVersion ?? "")
       ].join(",")
-    )
+    })
   ];
   return lines.join("\n");
 }
@@ -1098,6 +1357,10 @@ interface TurnEntry {
   id: string;
   source: "inferred" | "reported";
   userId: string;
+  client?: string;
+  reportedClient?: string;
+  reportedClientVersion?: string;
+  sessionId?: string;
   startedAt: string;
   endedAt: string;
   /** Calls that touched a physical table or were denied with table_forbidden. */
@@ -1278,6 +1541,32 @@ function attachInferredTurnIds(database: Database.Database, rows: QueryRow[]): Q
   }));
 }
 
+/** Spec 173: evidence packs include handshake rows already linked to the exported inquiries. */
+function linkedHandshakeRows(database: Database.Database, rows: QueryRow[]): QueryRow[] {
+  const present = new Set(rows.map((row) => row.id));
+  const turnIds = new Set<string>();
+  for (const row of rows) {
+    if (row.lucy_turn_id) turnIds.add(row.lucy_turn_id);
+    if (row.inferred_turn_id) turnIds.add(row.inferred_turn_id);
+  }
+  if (turnIds.size === 0) return [];
+  const ids = [...turnIds];
+  const placeholders = ids.map(() => "?").join(",");
+  const extra = database.prepare(`
+    SELECT * FROM access_log
+    WHERE tool IN (${PROTOCOL_TOOL_LIST})
+      AND (
+        IFNULL(lucy_turn_id, '') IN (${placeholders})
+        OR EXISTS (
+          SELECT 1 FROM inferred_turn_access_logs ital
+          WHERE ital.access_log_id = access_log.id
+            AND ital.inferred_turn_id IN (${placeholders})
+        )
+      )
+  `).all(...ids, ...ids) as QueryRow[];
+  return extra.filter((row) => !present.has(row.id));
+}
+
 function listTurnAccessLogIds(database: Database.Database, entry: TurnEntry): number[] {
   if (entry.source === "inferred") {
     const links = database
@@ -1286,9 +1575,44 @@ function listTurnAccessLogIds(database: Database.Database, entry: TurnEntry): nu
     return links.map((link) => link.access_log_id);
   }
   const rows = database
-    .prepare(`SELECT id FROM access_log WHERE lucy_turn_id = ? AND tool NOT IN (${NON_LINKED_CALL_TOOL_LIST}) ORDER BY ts ASC`)
+    .prepare(`SELECT id FROM access_log WHERE lucy_turn_id = ? ORDER BY ts ASC`)
     .all(entry.id) as Array<{ id: number }>;
   return rows.map((row) => row.id);
+}
+
+function displayedTurnIdentity(
+  database: Database.Database,
+  accessLogIds: number[],
+  fallback: { client?: string; questionSummary?: string }
+): Pick<TurnEntry, "client" | "reportedClient" | "reportedClientVersion" | "questionSummary"> {
+  let source: Parameters<typeof presentStoredClient>[0] = { client: fallback.client };
+  if (accessLogIds.length > 0) {
+    const row = database.prepare(`
+      SELECT client, client_version, user_agent, reported_client, reported_client_version
+      FROM access_log
+      WHERE id IN (${accessLogIds.map(() => "?").join(",")})
+      ORDER BY CASE WHEN tool = 'initialize' THEN 0 ELSE 1 END, ts ASC
+      LIMIT 1
+    `).get(...accessLogIds) as {
+      client: string | null;
+      client_version: string | null;
+      user_agent: string | null;
+      reported_client: string | null;
+      reported_client_version: string | null;
+    } | undefined;
+    if (row) source = row;
+  }
+  const shown: ResolvedClientIdentity = presentStoredClient(source);
+  const client = shown.client ?? fallback.client;
+  const questionSummary = fallback.questionSummary?.startsWith(SESSION_VISIT_SUMMARY_PREFIX)
+    ? sessionVisitSummary(client)
+    : fallback.questionSummary;
+  return {
+    client,
+    reportedClient: shown.reportedClient,
+    reportedClientVersion: shown.reportedClientVersion,
+    questionSummary
+  };
 }
 
 function enrichTurnEntry(database: Database.Database, entry: TurnEntry, p95Ms: number): TurnEntry {
@@ -1299,8 +1623,10 @@ function enrichTurnEntry(database: Database.Database, entry: TurnEntry, p95Ms: n
   // Reported turns already count every linked non-protocol call as a tool call.
   // Inferred turns: tool call = touched table OR table_forbidden deny.
   const businessCallCount = entry.source === "reported" ? linkedCallCount : toolCallCount;
+  const identity = displayedTurnIdentity(database, accessLogIds, entry);
   return {
     ...entry,
+    ...identity,
     businessCallCount,
     linkedCallCount,
     sources: mergeTurnSources(entry.sources, forbiddenTables),
@@ -1335,7 +1661,6 @@ async function listAuditTurnEntries(
 ): Promise<TurnListResult> {
   const source = q.source === "inferred" || q.source === "reported" ? q.source : "all";
   const windowHours = parseWindowHours(q.hours);
-  const lookbackHours = q.lookbackHours ? parseInt(q.lookbackHours, 10) : windowHours;
   const turnIdNeedle = (q.turnId ?? "").trim().toLowerCase();
   const tableNeedle = (q.tableSearch ?? "").trim().toLowerCase();
   const summaryNeedle = (q.q ?? "").trim().toLowerCase();
@@ -1344,12 +1669,12 @@ async function listAuditTurnEntries(
   const sinceDefault = sinceIsoFromHours(windowHours);
 
   if (source !== "reported") {
-    const cutoff = new Date(Date.now() - lookbackHours * 60 * 60 * 1000).toISOString();
+    const cutoff = new Date(Date.now() - INFERRED_TURN_REBUILD_LOOKBACK_HOURS * 60 * 60 * 1000).toISOString();
     const targetUsers = q.user
       ? [q.user]
       : (database.prepare(`SELECT DISTINCT user_id FROM access_log WHERE ts >= ?`).all(cutoff) as Array<{ user_id: string }>).map((row) => row.user_id);
     for (const userId of targetUsers) {
-      await rebuildInferredTurnsDebounced(userId, lookbackHours ? { lookbackHours } : undefined);
+      await rebuildInferredTurnsDebounced(userId);
     }
   }
 
@@ -1369,6 +1694,8 @@ async function listAuditTurnEntries(
     const rows = database.prepare(`SELECT * FROM inferred_turns ${where} ORDER BY started_at DESC`).all(params) as Array<{
       inferred_turn_id: string;
       user_id: string;
+      client: string | null;
+      session_id: string | null;
       started_at: string;
       ended_at: string;
       business_call_count: number;
@@ -1383,6 +1710,8 @@ async function listAuditTurnEntries(
           id: row.inferred_turn_id,
           source: "inferred",
           userId: row.user_id,
+          client: row.client ?? undefined,
+          sessionId: row.session_id ?? undefined,
           startedAt: row.started_at,
           endedAt: row.ended_at,
           businessCallCount: row.business_call_count,
@@ -1409,14 +1738,16 @@ async function listAuditTurnEntries(
     const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
     const rows = database.prepare(`SELECT * FROM conversation_turns ${where} ORDER BY created_at DESC`).all(params) as Array<{
       turn_id: string;
+      session_id: string | null;
       user_id: string;
+      client: string | null;
       created_at: string;
       question_summary: string | null;
       question_preview: string | null;
     }>;
     for (const row of rows) {
       const linked = database.prepare(`
-        SELECT id, ts, tool FROM access_log WHERE lucy_turn_id = ? AND tool NOT IN (${NON_LINKED_CALL_TOOL_LIST}) ORDER BY ts ASC
+        SELECT id, ts, tool FROM access_log WHERE lucy_turn_id = ? ORDER BY ts ASC
       `).all(row.turn_id) as Array<{ id: number; ts: string; tool: string }>;
       const accessLogIds = linked.map((l) => l.id);
       const sourceRows = accessLogIds.length > 0
@@ -1430,6 +1761,8 @@ async function listAuditTurnEntries(
           id: row.turn_id,
           source: "reported",
           userId: row.user_id,
+          client: row.client ?? undefined,
+          sessionId: row.session_id ?? undefined,
           startedAt: row.created_at,
           endedAt: linked.length > 0 ? linked[linked.length - 1].ts : row.created_at,
           businessCallCount: linked.length,
@@ -1509,6 +1842,8 @@ const TURN_CSV_HEADERS = [
   "问询 ID",
   "来源",
   "Agent",
+  "客户端",
+  "会话 ID",
   "开始时间",
   "开始时间 UTC",
   "结束时间",
@@ -1524,7 +1859,9 @@ const TURN_CSV_HEADERS = [
   "慢调用数",
   "成功次数",
   "拒绝次数",
-  "错误次数"
+  "错误次数",
+  "自报客户端",
+  "自报客户端版本"
 ] as const;
 
 const TURN_FIELD_METADATA: Record<(typeof TURN_CSV_HEADERS)[number], Omit<CsvFieldMetadata, "name">> = {
@@ -1545,6 +1882,18 @@ const TURN_FIELD_METADATA: Record<(typeof TURN_CSV_HEADERS)[number], Omit<CsvFie
     format: "string",
     description: "触发该问询的 Agent 用户 ID。",
     trigger: "每条问询记录均输出。"
+  },
+  "客户端": {
+    label: "客户端",
+    format: "string|null",
+    description: "已知产品的 User-Agent 覆盖空自报名、lucy 或 lucy-mcp-proxy。其余自报名原样保留。",
+    trigger: "问询记录了客户端名时输出。"
+  },
+  "会话 ID": {
+    label: "会话 ID",
+    format: "string|null",
+    description: "MCP 会话 ID，用于把同一次访问的握手和查数收在一条问询上。",
+    trigger: "调用带了会话 ID 时输出。"
   },
   "开始时间": {
     label: "开始时间",
@@ -1641,6 +1990,18 @@ const TURN_FIELD_METADATA: Record<(typeof TURN_CSV_HEADERS)[number], Omit<CsvFie
     format: "integer",
     description: "该问询内 outcome=error 的调用数量。",
     trigger: "每条问询记录均输出。"
+  },
+  "自报客户端": {
+    label: "自报客户端",
+    format: "string|null",
+    description: "MCP initialize 的 clientInfo.name。客户端列改用已知产品名时，这里保留原来的自报名。",
+    trigger: "握手带了 clientInfo.name 时输出。"
+  },
+  "自报客户端版本": {
+    label: "自报客户端版本",
+    format: "string|null",
+    description: "MCP initialize 的 clientInfo.version。与自报客户端成对。",
+    trigger: "握手带了 clientInfo.version 时输出。"
   }
 };
 
@@ -1656,6 +2017,8 @@ function renderTurnCsv(rows: TurnEntry[]): string {
         csvCell(row.id),
         csvCell(turnSourceLabel(row.source)),
         csvCell(row.userId),
+        csvCell(row.client ?? ""),
+        csvCell(row.sessionId ?? ""),
         csvCell(formatAuditLocalTimestamp(row.startedAt)),
         csvCell(row.startedAt),
         csvCell(formatAuditLocalTimestamp(row.endedAt)),
@@ -1671,7 +2034,9 @@ function renderTurnCsv(rows: TurnEntry[]): string {
         row.slowCallCount ?? "",
         row.outcomeSummary?.ok ?? 0,
         row.outcomeSummary?.denied ?? 0,
-        row.outcomeSummary?.error ?? 0
+        row.outcomeSummary?.error ?? 0,
+        csvCell(row.reportedClient ?? ""),
+        csvCell(row.reportedClientVersion ?? "")
       ].join(",")
     )
   ];
@@ -1706,6 +2071,244 @@ function buildAuditCsvFieldMetadata(kind: "calls" | "turns", generatedAt = new D
     generatedAt: generatedAt.toISOString(),
     fields: csvFieldMetadataFields(TURN_CSV_HEADERS, TURN_FIELD_METADATA)
   };
+}
+
+// ─── T04b: v2 CSV columns (audit-trust-2026-10-19-r1) ──────────────────────────
+//
+// Contract §2.8 / §4.2. v2 EXTENDS the v1 header list with new audit-trust
+// fields; v1 columns keep their original semantics. New consumers should use
+// `tool_count_v2` (count(event_type = tool_call)) instead of legacy `tool_count`.
+//
+// v2 CSV path: GET /api/admin/audit/v2/export-metadata (this file).
+
+const ACCESS_LOG_CSV_HEADERS_V2 = [
+  ...ACCESS_LOG_CSV_HEADERS,
+  // Spec 173 v0.3 / contract §2.3 — 4-axis status + event_type
+  "event_type",
+  "transport_sub_type",
+  "transport_status",
+  "authorization_status",
+  "execution_status",
+  "usability_status",
+  // Spec 173 v0.3 / contract §2.1 — association_status + original/effective turn_id
+  "association_status",
+  "original_turn_id",
+  "effective_turn_id",
+  // Contract §2.1 — retry chain
+  "attempt_id",
+  "parent_attempt_id",
+  // Contract §2.1 — instance generation (historical rows NULL)
+  "instance_id",
+  // Contract §2.3 / §4.1 — classification version
+  "classification_version",
+  // Contract §2.5.1 — digest (audit, not security)
+  "digest_value",
+  "digest_version",
+  // Contract §2.2 — optional credential principal (NULL default)
+  "credential_principal_id",
+  // Contract §2.2 — explicit actor + actor_kind (server-resolved)
+  "actor_id",
+  "actor_type"
+] as const;
+
+const ACCESS_LOG_FIELD_METADATA_V2: Record<(typeof ACCESS_LOG_CSV_HEADERS_V2)[number], Omit<CsvFieldMetadata, "name">> = {
+  ...ACCESS_LOG_FIELD_METADATA,
+  event_type: {
+    label: "事件类型",
+    format: "enum {tool_call, protocol, client_observation, audit_management}",
+    description: "事件分类: tool_call (业务工具调用); protocol (MCP 协议方法; 含 handshake/probe/unknown_method/other 子类); client_observation (T06 受控客户端上报); audit_management (审计自身管理操作, T03+ 引入)。",
+    trigger: "audit-trust-2026-10-19-r1 后写入; 历史行 NULL。"
+  },
+  transport_sub_type: {
+    label: "传输子类型",
+    format: "enum {handshake, probe, unknown_method, other}",
+    description: "transport=protocol 时的细分子类。handshake=initialize/notifications/initialized/tools/list; probe=ping/resources/list/resources/templates/list/notifications/cancelled; unknown_method=server/discover 与其他未知方法; other=其他协议调用。",
+    trigger: "event_type=protocol 时输出。"
+  },
+  transport_status: {
+    label: "传输状态",
+    format: "enum {succeeded, failed, unknown}",
+    description: "Lucy 与直接对端的传输层观察。明确指 Lucy 与其通信对端观察, 不证明用户已收到结果 (对账另由 client_observation 提供)。",
+    trigger: "audit-trust-2026-10-19-r1 后写入。"
+  },
+  authorization_status: {
+    label: "授权状态",
+    format: "enum {allowed, denied, not_evaluated, unknown}",
+    description: "四轴之一。独立于 executionStatus; 字段歧义不冒充 denied (G0-03 caveat)。",
+    trigger: "audit-trust-2026-10-19-r1 后写入。"
+  },
+  execution_status: {
+    label: "执行状态",
+    format: "enum {succeeded, failed, not_executed, interrupted, unknown}",
+    description: "四轴之一。not_executed=未执行 (denied); interrupted=中断 (budget_stop)。",
+    trigger: "audit-trust-2026-10-19-r1 后写入。"
+  },
+  usability_status: {
+    label: "可用性状态",
+    format: "enum {usable, empty, partial, metadata_missing, not_applicable, unknown}",
+    description: "四轴之一。metadata_missing 用于字段歧义 (scan_missing/scan_failed/field_ambiguous); not_applicable 用于 (无 rowCount 概念)。",
+    trigger: "audit-trust-2026-10-19-r1 后写入。"
+  },
+  association_status: {
+    label: "关联状态",
+    format: "enum {confirmed, candidate, unassigned, conflict, legacy_unverified}",
+    description: "独立于 execution 的关联质量维度。confirmed 仅来自合法显式 turn 或 begin 自身; legacy_unverified 用于迁移前自动归因, 不允许静默升级 confirmed (T03a backfill)。",
+    trigger: "audit-trust-2026-10-19-r1 后写入。"
+  },
+  original_turn_id: {
+    label: "原始 turn id",
+    format: "string|null",
+    description: "准入时确定的 turn id。",
+    trigger: "准入时记录的 turn id, 后续不允许被响应阶段覆盖。"
+  },
+  effective_turn_id: {
+    label: "生效 turn id",
+    format: "string|null",
+    description: "经过 association_revisions replay 后的 turn id。原值与有效值分开保存 (contract §2.1)。",
+    trigger: "audit-trust-2026-10-19-r1 后写入; 历史行 NULL。"
+  },
+  attempt_id: {
+    label: "尝试 ID",
+    format: "string|null",
+    description: "同一受控任务的重试 attempt UUID。",
+    trigger: "T07 重试链。"
+  },
+  parent_attempt_id: {
+    label: "父 attempt ID",
+    format: "string|null",
+    description: "上一次 attempt 的 attempt_id, 重试链回溯。",
+    trigger: "T07 重试链。"
+  },
+  instance_id: {
+    label: "实例 ID",
+    format: "string|null",
+    description: "Lucy 启动实例唯一 ID, 配对 instance_start_generation。历史行 NULL (不写当前启动常量)。",
+    trigger: "audit-trust-2026-10-19-r1 后写入。"
+  },
+  classification_version: {
+    label: "分类版本",
+    format: "string",
+    description: "4 轴状态 + event_type 字典版本, 当前 audit-trust-2026-10-19-r1.v1。",
+    trigger: "audit-trust-2026-10-19-r1 后写入。"
+  },
+  digest_value: {
+    label: "响应摘要值",
+    format: "string|null",
+    description: "response_prepared 阶段规范化+脱敏字节的 SHA-256。prepared ≠ delivered ≠ client-reported; 对账不覆盖服务端事实。",
+    trigger: "audit-trust-2026-10-19-r1 后写入。"
+  },
+  digest_version: {
+    label: "摘要版本",
+    format: "string|null",
+    description: "摘要算法版本, 与 §2.5.1 digestVersion 对齐。",
+    trigger: "audit-trust-2026-10-19-r1 后写入。"
+  },
+  credential_principal_id: {
+    label: "凭证主体 ID",
+    format: "string|null",
+    description: "服务端持久凭证标识, 默认 NULL; 不作为安全主键 (EA-35)。",
+    trigger: "可选新列, 仅在确需扩展时填写。"
+  },
+  actor_id: {
+    label: "显式使用人",
+    format: "string|null",
+    description: "服务端信任路径写入的 actor id; 普通调用不可知时 NULL。Body / UA 不冒充。",
+    trigger: "audit-trust-2026-10-19-r1 后写入。"
+  },
+  actor_type: {
+    label: "使用人类型",
+    format: "enum {person, automation}",
+    description: "actor_id 类型; 不新增枚举。",
+    trigger: "audit-trust-2026-10-19-r1 后写入。"
+  }
+};
+
+function buildAuditCsvFieldMetadataV2(kind: "calls" | "turns", generatedAt = new Date()) {
+  if (kind === "calls") {
+    return {
+      schemaVersion: "audit-csv-field-metadata/v2",
+      kind,
+      title: "调用流水 CSV 字段说明 (v2)",
+      timezone: AUDIT_EXPORT_TIMEZONE,
+      filenamePattern: "audit-calls-v2-YYYYMMDD-HHmmss-000001.csv",
+      generatedAt: generatedAt.toISOString(),
+      // v2 列说明; v1 字段沿用同 label/format 描述以保持消费者对账。
+      fields: csvFieldMetadataFields(ACCESS_LOG_CSV_HEADERS_V2, ACCESS_LOG_FIELD_METADATA_V2),
+      classificationVersion: "audit-trust-2026-10-19-r1.v1"
+    };
+  }
+  return {
+    schemaVersion: "audit-csv-field-metadata/v2",
+    kind,
+    title: "问询记录 CSV 字段说明 (v2)",
+    timezone: AUDIT_EXPORT_TIMEZONE,
+    filenamePattern: "audit-turns-v2-YYYYMMDD-HHmmss-000001.csv",
+    generatedAt: generatedAt.toISOString(),
+    fields: csvFieldMetadataFields(TURN_CSV_HEADERS, TURN_FIELD_METADATA),
+    classificationVersion: "audit-trust-2026-10-19-r1.v1"
+  };
+}
+
+/**
+ * Spec 162 §8 / SC-21 — auth failures sharing the call timeline.
+ *
+ * The same time/user/client-ip filter applies, but the row type is separate:
+ * an auth failure is never re-labelled as a tool call and never enters
+ * access_log. `auth_failure_log.csv` in the evidence pack stays its own file.
+ */
+export function queryAuthFailures(
+database: Awaited<ReturnType<typeof getAuditDb>>,
+q: { since?: string; until?: string; user?: string; clientIp?: string },
+limit = 50
+): Array<{
+id: number;
+ts: string;
+reason: string;
+client_ip: string | null;
+user_agent: string | null;
+token_hash_prefix: string | null;
+user_id: string | null;
+token_label: string | null;
+request_id: string | null;
+}> {
+const conditions: string[] = [];
+const params: Array<string | number> = [];
+if (q.since) {
+  conditions.push("ts >= ?");
+  params.push(q.since);
+}
+if (q.until) {
+  conditions.push("ts <= ?");
+  params.push(q.until);
+}
+if (q.user) {
+  conditions.push("user_id = ?");
+  params.push(q.user);
+}
+if (q.clientIp) {
+  conditions.push("IFNULL(client_ip, '') LIKE ?");
+  params.push(`%${q.clientIp}%`);
+}
+const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+const suffix = limit > 0 ? " LIMIT ?" : "";
+const sql = `SELECT id, ts, reason, client_ip, user_agent, token_hash_prefix, user_id, token_label, request_id
+     FROM auth_failure_log ${where} ORDER BY ts DESC, id DESC${suffix}`;
+if (limit > 0) params.push(limit);
+return database.prepare(sql).all(...params) as never;
+}
+
+/**
+ * Catch the audit projection up with the security ledger, then report whether it
+ * is complete. A lagging or failed projection is `complete=false` with the lag;
+ * callers must not present such a view as complete (Spec §5.2).
+ */
+async function auditProjectionStatus(database: Database.Database): Promise<ProjectionStatus> {
+  const store = await getSecurityStore();
+  const status: ProjectionStatus = store.ok
+    ? runProjection(store.value, database).status
+    : { complete: false, cursor: 0, latestSeq: 0, lag: 0, delayMs: 0, reason: "security_store_unavailable" };
+  recordProjectionStatus(status);
+  return status;
 }
 
 export function registerAuditRoutes(app: FastifyInstance) {
@@ -1758,7 +2361,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
       tool = row.tool;
     }
 
-    const actor = "local-admin";
+    const actor = trustedActorFromRequest(request).actorId;
     const ts = new Date().toISOString();
     const insertAccess = database.prepare(`
       INSERT INTO query_artifact_access_log
@@ -1895,9 +2498,14 @@ export function registerAuditRoutes(app: FastifyInstance) {
           assetKind: row.asset_kind,
           operation: row.operation ?? undefined,
           targetId: row.target_id ?? undefined,
-          oldSummary: row.old_summary ? JSON.parse(row.old_summary) : undefined,
-          newSummary: row.new_summary ? JSON.parse(row.new_summary) : undefined,
-          diff: row.diff ?? undefined,
+          // T10 — defensively re-apply canonical redaction at the export boundary.
+          // The DB already stores redacted text via `auditDiffForContent` and
+          // `redactAuditSummary`, but a row that pre-dates that path (or a row
+          // written by a future bypass) must not leak a raw password hash or
+          // token value to an admin UI / JSON export.
+          oldSummary: row.old_summary ? redactSensitive(JSON.parse(row.old_summary)) : undefined,
+          newSummary: row.new_summary ? redactSensitive(JSON.parse(row.new_summary)) : undefined,
+          diff: row.diff ? redactAuditDiff(row.diff) : undefined,
           requestId: row.request_id ?? undefined,
           writeStatus: row.write_status
         }))
@@ -2074,11 +2682,16 @@ export function registerAuditRoutes(app: FastifyInstance) {
     Querystring: AccessLogFilterQuery & {
       limit?: string;
       offset?: string;
+      includeAuthFailures?: string;
     };
   }>("/api/admin/audit", async (request) => {
     const q = request.query;
     const limit = Math.min(parseInt(q.limit ?? "50", 10) || 50, 500);
     const offset = parseInt(q.offset ?? "0", 10) || 0;
+    // Spec 162 §8 / SC-21 — the same time filter returns auth failures on the
+    // same timeline. They are a distinct event type, never rewritten as a
+    // `lucy_query` failure, and never written into access_log.
+    const includeAuthFailures = q.includeAuthFailures !== "0" && q.includeAuthFailures !== "false";
 
     const database = await getAuditDb();
     const { conditions, baseConditions, params } = buildAccessLogFilter(q);
@@ -2101,8 +2714,13 @@ export function registerAuditRoutes(app: FastifyInstance) {
       FROM access_log ${baseWhere}
     `).get(params) as { protocol_calls: number | null; business_calls: number | null; denied_calls: number | null; data_bearing_calls: number | null };
 
-    const entries = rows.map((row) => ({
+    const entries = rows.map((row) => {
+      const shown = presentStoredClient(row);
+      return {
       id: row.id,
+      // SC-21 — every entry carries its event type so a call and an auth
+      // failure are distinguishable in one list.
+      eventType: "call" as const,
       ts: row.ts,
       userId: row.user_id,
       tokenLabel: row.token_label ?? undefined,
@@ -2114,8 +2732,10 @@ export function registerAuditRoutes(app: FastifyInstance) {
       turnAttributionConfidence: row.turn_attribution_confidence ?? undefined,
       turnAttributionReason: row.turn_attribution_reason ?? undefined,
       lucyPlatform: row.lucy_platform ?? undefined,
-      client: row.client ?? undefined,
-      clientVersion: row.client_version ?? undefined,
+      client: shown.client,
+      clientVersion: shown.clientVersion,
+      reportedClient: shown.reportedClient,
+      reportedClientVersion: shown.reportedClientVersion,
       clientIp: row.client_ip ?? undefined,
       userAgent: row.user_agent ?? undefined,
       deviceName: row.device_name ?? undefined,
@@ -2148,14 +2768,44 @@ export function registerAuditRoutes(app: FastifyInstance) {
       skillFileVersion: row.skill_file_version ?? undefined,
       skillAction: row.skill_action ?? undefined,
       skillRolesAllowed: row.skill_roles_allowed ? (JSON.parse(row.skill_roles_allowed) as string[]) : undefined,
-      matchedRoleId: row.matched_role_id ?? undefined
-    }));
+      matchedRoleId: row.matched_role_id ?? undefined,
+      usageSlowCall: row.is_slow_call === 1
+    };
+    });
 
+    // SC-21 — auth failures join the same time filter as a separate event
+    // type. They stay in auth_failure_log and are never turned into a call.
+    const authFailureEntries = includeAuthFailures
+      ? queryAuthFailures(database, q, limit + offset)
+        .slice(offset, offset + limit)
+        .map((row) => ({
+          id: row.id,
+          eventType: "auth_failure" as const,
+          ts: row.ts,
+          reason: row.reason,
+          clientIp: row.client_ip ?? undefined,
+          userAgent: row.user_agent ?? undefined,
+          tokenHashPrefix: row.token_hash_prefix ?? undefined,
+          userId: row.user_id ?? undefined,
+          tokenLabel: row.token_label ?? undefined,
+          requestId: row.request_id ?? undefined
+        }))
+      : [];
+    const authFailureCount = includeAuthFailures
+      ? queryAuthFailures(database, q, 0).length
+      : 0;
+    const merged = [...entries, ...authFailureEntries].sort((a, b) =>
+      a.ts === b.ts ? 0 : a.ts < b.ts ? 1 : -1
+    );
+
+    const projection = await auditProjectionStatus(database);
     return {
       ok: true,
       data: {
         total: totalRow.cnt,
-        entries,
+        projection,
+        entries: merged,
+        authFailureCount,
         summary: {
           protocolCalls: summaryRow.protocol_calls ?? 0,
           businessCalls: summaryRow.business_calls ?? 0,
@@ -2189,44 +2839,90 @@ export function registerAuditRoutes(app: FastifyInstance) {
     return reply.send(body);
   });
 
-  // GET /api/admin/audit/export — 调用流水 CSV (Spec 137 / 141)
+  // GET /api/admin/audit/v2/export-metadata — v2 CSV 字段说明 (T04b).
+  // v1 完全保留; v2 走新端点 (contract §2.8 / §4.3).
   app.get<{
-    Querystring: AccessLogFilterQuery & { bom?: string };
+    Querystring: { kind?: string };
+  }>("/api/admin/audit/v2/export-metadata", async (request, reply) => {
+    const kind = request.query.kind ?? "calls";
+    if (kind !== "calls" && kind !== "turns") {
+      reply.code(400);
+      reply.header("Cache-Control", "private, no-store");
+      return {
+        ok: false,
+        error: {
+          code: "ERR_INVALID_AUDIT_METADATA_KIND",
+          message: "字段说明类型仅支持 calls 或 turns"
+        }
+      };
+    }
+    const body = buildAuditCsvFieldMetadataV2(kind);
+    reply.header("Content-Type", "application/json; charset=utf-8");
+    reply.header("Content-Disposition", `attachment; filename="${auditExportFilename(`${kind}-fields-v2`, "json")}"`);
+    reply.header("Cache-Control", "private, no-store");
+    return reply.send(body);
+  });
+
+  // GET /api/admin/audit/export — 调用流水 CSV (Spec 137 / 141 / 162 §8)
+  app.get<{
+    Querystring: AccessLogFilterQuery & { bom?: string; cursor?: string; limit?: string };
   }>("/api/admin/audit/export", async (request, reply) => {
     const q = request.query;
     const database = await getAuditDb();
     const { conditions, params } = buildAccessLogFilter(q);
 
-    const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-    const rows = attachInferredTurnIds(
-      database,
-      database.prepare(`SELECT * FROM access_log ${where} ORDER BY ts DESC`).all(params) as QueryRow[]
-    );
+    // SC-18 — page size defaults to 10,000; `cursor` resumes after the last
+    // row of the previous page so the second page can read row 10,001.
+    const pageSize = Math.min(Math.max(parseInt(q.limit ?? "", 10) || auditExportMaxRows(), 1), auditExportMaxRows());
+    const resumed = applyAuditExportCursor(conditions, params, decodeAuditExportCursor(q.cursor));
+    const where = resumed.conditions.length > 0 ? `WHERE ${resumed.conditions.join(" AND ")}` : "";
+    // Fetch one extra row to learn whether a next page exists without
+    // dropping the overflow.
+    const fetched = database
+      .prepare(`SELECT * FROM access_log ${where} ORDER BY ts DESC, id DESC LIMIT @pageSizePlusOne`)
+      .all({ ...resumed.params, pageSizePlusOne: pageSize + 1 }) as QueryRow[];
+    const hasMore = fetched.length > pageSize;
+    const rows = attachInferredTurnIds(database, hasMore ? fetched.slice(0, pageSize) : fetched);
+    const last = fetched[pageSize - 1] ?? fetched[fetched.length - 1];
+    const nextCursor = hasMore && last
+      ? encodeAuditExportCursor({ ts: last.ts, id: last.id })
+      : undefined;
 
     const body = renderAccessLogCsv(rows);
     const withBom = q.bom === "1" || q.bom === "true" ? `\uFEFF${body}` : body;
     reply.header("Content-Type", "text/csv; charset=utf-8");
     reply.header("Content-Disposition", `attachment; filename="${auditExportFilename("calls", "csv")}"`);
     reply.header("Cache-Control", "private, no-store");
+    // The resume cursor rides in headers so a plain CSV download can be paged
+    // without switching client.
+    reply.header("X-Lucy-Export-Row-Count", String(rows.length));
+    if (nextCursor) reply.header("X-Lucy-Export-Next-Cursor", nextCursor);
     return reply.send(withBom);
   });
 
-  // GET /api/admin/audit/export-pack — 审计证据包 zip (Spec 137)
+  // GET /api/admin/audit/export-pack — 审计证据包 zip (Spec 137 / 162 §8)
   app.get<{
-    Querystring: AccessLogFilterQuery;
+    Querystring: AccessLogFilterQuery & { cursor?: string };
   }>("/api/admin/audit/export-pack", async (request, reply) => {
     const q = request.query;
     const database = await getAuditDb();
     const { conditions, params, includeProtocol } = buildAccessLogFilter(q);
-    const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
     const maxRows = auditExportMaxRows();
+    // SC-18 — the pack pages by cursor too. Without one, an overflowing scope
+    // is reported instead of being silently truncated.
+    const resumed = applyAuditExportCursor(conditions, params, decodeAuditExportCursor(q.cursor));
+    const where = resumed.conditions.length > 0 ? `WHERE ${resumed.conditions.join(" AND ")}` : "";
+    const fetched = database
+      .prepare(`SELECT * FROM access_log ${where} ORDER BY ts DESC, id DESC LIMIT @exportLimit`)
+      .all({ ...resumed.params, exportLimit: maxRows + 1 }) as QueryRow[];
+    const hasMore = fetched.length > maxRows;
+    const filteredRows = attachInferredTurnIds(database, hasMore ? fetched.slice(0, maxRows) : fetched);
+    const handshakeRows = includeProtocol ? [] : linkedHandshakeRows(database, filteredRows);
     const rows = attachInferredTurnIds(
       database,
-      database
-        .prepare(`SELECT * FROM access_log ${where} ORDER BY ts DESC LIMIT @exportLimit`)
-        .all({ ...params, exportLimit: maxRows + 1 }) as QueryRow[]
+      [...filteredRows, ...handshakeRows].sort((a, b) => (a.ts < b.ts ? 1 : a.ts > b.ts ? -1 : b.id - a.id))
     );
-    if (rows.length > maxRows) {
+    if (hasMore && !decodeAuditExportCursor(q.cursor)) {
       reply.code(413);
       reply.header("Cache-Control", "private, no-store");
       return {
@@ -2237,6 +2933,10 @@ export function registerAuditRoutes(app: FastifyInstance) {
         }
       };
     }
+    const lastExported = rows[rows.length - 1];
+    const nextCursor = hasMore && lastExported
+      ? encodeAuditExportCursor({ ts: lastExported.ts, id: lastExported.id })
+      : undefined;
 
     const accessCsv = `\uFEFF${renderAccessLogCsv(rows)}`;
     const accessBuf = Buffer.from(accessCsv, "utf8");
@@ -2373,6 +3073,8 @@ export function registerAuditRoutes(app: FastifyInstance) {
     const foundSnapshotHashes = new Set(snapRows.map((row) => String(row.hash)));
     const missingPermissionSnapshotHashes = hashes.filter((hash) => !foundSnapshotHashes.has(hash));
     const rowsWithoutPermissionSnapshot = rows.filter((row) => !row.permission_snapshot_hash).length;
+    // SC-18 — an empty `policy_version` counts as missing, not as a version.
+    const rowsWithoutPolicyVersion = rows.filter((row) => !row.policy_version || !row.policy_version.trim()).length;
 
     const filesMeta = [
       { name: "access_log.csv", rowCount: rows.length, data: accessBuf, filterScope: "normalized_access_log_filter" },
@@ -2394,6 +3096,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
         }
       };
     }
+    const projection = await auditProjectionStatus(database);
     const manifest = {
       schemaVersion: "audit-export-manifest/v1",
       generatedAt: new Date().toISOString(),
@@ -2401,12 +3104,20 @@ export function registerAuditRoutes(app: FastifyInstance) {
       appVersion: resolveLucyVersion(),
       filter: filterSnapshotForManifest(q, includeProtocol),
       includeProtocol,
+      linkedHandshakeRowCount: handshakeRows.length,
       limits: { maxRows, maxBytes, exportedUncompressedBytes: totalUncompressedBytes },
+      paging: { nextCursor: nextCursor ?? null, pageSize: maxRows },
       completeness: {
+        projection,
         rowsWithoutPermissionSnapshot,
+        // SC-18 — an empty policy_version is reported as missing evidence, but
+        // it does not by itself make the pack incomplete: only a missing
+        // permission snapshot does.
+        rowsWithoutPolicyVersion,
         missingPermissionSnapshotHashes,
         missingSourceAccessLogIds,
         complete:
+          projection.complete &&
           rowsWithoutPermissionSnapshot === 0 &&
           missingPermissionSnapshotHashes.length === 0 &&
           missingSourceAccessLogIds.length === 0
@@ -2427,6 +3138,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
     reply.header("Content-Type", "application/zip");
     reply.header("Content-Disposition", `attachment; filename="${packFilenameStamp()}"`);
     reply.header("Cache-Control", "private, no-store");
+    if (nextCursor) reply.header("X-Lucy-Export-Next-Cursor", nextCursor);
     return reply.send(zip);
   });
 
@@ -2440,7 +3152,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
     }
     const result = await scrubAccessLogArgsSummaries({
       dryRun,
-      actor: "local-admin",
+      actor: trustedActorFromRequest(request).actorId,
       reason: body.reason,
       requestId: String(request.id)
     });
@@ -2481,6 +3193,55 @@ export function registerAuditRoutes(app: FastifyInstance) {
     reply.header("Content-Disposition", `attachment; filename="${auditExportFilename("turns", "csv")}"`);
     reply.header("Cache-Control", "private, no-store");
     return reply.send(withBom);
+  });
+
+  // GET /api/admin/audit/export-inquiry-pack — 问询 CSV 与调用 CSV 同一次查询 (Spec 172)
+  app.get<{
+    Querystring: TurnFilterQuery;
+  }>("/api/admin/audit/export-inquiry-pack", async (request, reply) => {
+    const q = request.query;
+    const database = await getAuditDb();
+    const turns = await listAuditTurnEntries(database, q, { paginate: false });
+    const turnIds = turns.entries.map((entry) => entry.id);
+    const callFilter: AccessLogFilterQuery = {
+      user: q.user,
+      since: q.since,
+      until: q.until,
+      outcome: q.outcome,
+      tableSearch: q.tableSearch,
+      includeProtocol: "true"
+    };
+    const { conditions, params } = buildAccessLogFilter(callFilter);
+    if (turnIds.length > 0) {
+      const placeholders = turnIds.map((_, index) => `@turn${index}`);
+      turnIds.forEach((id, index) => {
+        params[`turn${index}`] = id;
+      });
+      conditions.push(`(
+        IFNULL(lucy_turn_id, '') IN (${placeholders.join(", ")})
+        OR EXISTS (
+          SELECT 1 FROM inferred_turn_access_logs ital
+          WHERE ital.access_log_id = access_log.id AND ital.inferred_turn_id IN (${placeholders.join(", ")})
+        )
+      )`);
+    } else {
+      conditions.push("1 = 0");
+    }
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+    const callRows = attachInferredTurnIds(
+      database,
+      database.prepare(`SELECT * FROM access_log ${where} ORDER BY ts DESC, id DESC`).all(params) as QueryRow[]
+    );
+    const turnsCsv = Buffer.from(`\uFEFF${renderTurnCsv(turns.entries)}`, "utf8");
+    const callsCsv = Buffer.from(`\uFEFF${renderAccessLogCsv(callRows)}`, "utf8");
+    const zip = buildStoredZip([
+      { name: "turns.csv", data: turnsCsv },
+      { name: "calls.csv", data: callsCsv }
+    ]);
+    reply.header("Content-Type", "application/zip");
+    reply.header("Content-Disposition", `attachment; filename="${auditExportFilename("inquiry-pack", "csv").replace(/\.csv$/, ".zip")}"`);
+    reply.header("Cache-Control", "private, no-store");
+    return reply.send(zip);
   });
 
   // GET /api/admin/audit/turns/:turnId — single turn detail (inferred or reported).
@@ -2555,12 +3316,20 @@ export function registerAuditRoutes(app: FastifyInstance) {
       const connMap = connectionByLogId(accessLogIds);
       const { toolCallCount, forbiddenTables } = loadTurnToolCallStats(database, accessLogIds);
       const baseSources = JSON.parse(row.source_summary as string) as TurnEntry["sources"];
+      const identity = displayedTurnIdentity(database, accessLogIds, {
+        client: (row.client as string | null) ?? undefined,
+        questionSummary: (row.question_summary as string | null) ?? undefined
+      });
       return {
         ok: true,
         data: {
           id: row.inferred_turn_id,
           source: "inferred",
           userId: row.user_id,
+          client: identity.client,
+          reportedClient: identity.reportedClient,
+          reportedClientVersion: identity.reportedClientVersion,
+          sessionId: (row.session_id as string | null) ?? undefined,
           startedAt: row.started_at,
           endedAt: row.ended_at,
           callCount: row.call_count,
@@ -2569,7 +3338,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
           confidence: row.confidence,
           tools: JSON.parse(row.tool_summary as string),
           sources: mergeTurnSources(baseSources, forbiddenTables),
-          questionSummary: row.question_summary,
+          questionSummary: identity.questionSummary ?? row.question_summary,
           evidence: JSON.parse(row.evidence_json as string),
           accessLogs: accessLogs.map((logRow) => mapAccessLogRow(logRow, connMap)),
           referenceLatency: { windowHours, p95Ms }
@@ -2584,7 +3353,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
     }
     const accessLogs = database.prepare(`
       SELECT id, ts, tool, outcome, decision_reason, duration_ms, trace_id, tables FROM access_log
-      WHERE lucy_turn_id = ? AND tool NOT IN (${NON_LINKED_CALL_TOOL_LIST})
+      WHERE lucy_turn_id = ?
       ORDER BY ts ASC
     `).all(turnId) as Array<{
       id: number;
@@ -2616,13 +3385,21 @@ export function registerAuditRoutes(app: FastifyInstance) {
       forbiddenTables
     );
     const connMap = connectionByLogId(accessLogIds);
+    const identity = displayedTurnIdentity(database, accessLogIds, {
+      client: (row.client as string | null) ?? undefined,
+      questionSummary: (row.question_summary as string | null) ?? undefined
+    });
     return {
       ok: true,
       data: {
         id: row.turn_id,
         source: "reported",
         userId: row.user_id,
-        questionSummary: row.question_summary,
+        client: identity.client,
+        reportedClient: identity.reportedClient,
+        reportedClientVersion: identity.reportedClientVersion,
+        sessionId: (row.session_id as string | null) ?? undefined,
+        questionSummary: identity.questionSummary ?? row.question_summary,
         questionPreview: row.question_preview,
         questionSource: row.question_source,
         createdAt: row.created_at,
@@ -2674,6 +3451,245 @@ export function registerAuditRoutes(app: FastifyInstance) {
       }
     };
   });
+
+  // T03b — POST /api/admin/audit/association-revisions
+  // 追加一条关联修订（append-only）。actor 来自 request.lucyAdmin
+  // （trustedActorFromRequest）；body.actor / UA 不被读。
+  // Meta-audit write to security_events is REQUIRED for success — without
+  // it we return 503 (EA-11 closure: meta-audit failure must not release
+  // a sensitive audit mutation).
+  app.post<{
+    Body: {
+      originalTurnId?: string;
+      effectiveTurnId?: string;
+      originalAssociationStatus?: string;
+      effectiveAssociationStatus?: string;
+      reason?: string;
+      referenceDoc?: string;
+      attributionRuleVersion?: string;
+      classificationVersion?: string;
+      expectedRevision?: string;
+    };
+  }>("/api/admin/audit/association-revisions", async (request, reply) => {
+    let actor;
+    try {
+      actor = resolveActorOr401(request);
+    } catch (err) {
+      reply.code(401);
+      return { ok: false, error: { code: "ACTOR_UNRESOLVED", message: String(err) } };
+    }
+
+    const body = request.body ?? {};
+    const required = ["originalTurnId", "effectiveAssociationStatus", "reason", "attributionRuleVersion", "classificationVersion"] as const;
+    for (const field of required) {
+      if (!body[field] || typeof body[field] !== "string") {
+        reply.code(400);
+        return { ok: false, error: { code: "MISSING_FIELD", field } };
+      }
+    }
+
+    // Meta-audit precondition: refuse the sensitive write if the security
+    // store is unavailable. We refuse BEFORE appending the revision so the
+    // audit row and its canonical ledger entry succeed or fail together.
+    const securityPrecheck = await getSecurityStore();
+    if (!securityPrecheck.ok) {
+      reply.code(503);
+      return {
+        ok: false,
+        error: {
+          code: "META_AUDIT_STORE_UNAVAILABLE",
+          message: "security store unavailable; refusing to record sensitive audit write (EA-11)"
+        }
+      };
+    }
+
+    const database = await getAuditDb();
+    let row;
+    try {
+      row = appendAssociationRevision(database, {
+        originalTurnId: body.originalTurnId!,
+        effectiveTurnId: body.effectiveTurnId ?? null,
+        originalAssociationStatus: body.originalAssociationStatus ?? null,
+        effectiveAssociationStatus: body.effectiveAssociationStatus!,
+        reason: body.reason!,
+        referenceDoc: body.referenceDoc ?? null,
+        attributionRuleVersion: body.attributionRuleVersion!,
+        classificationVersion: body.classificationVersion!,
+        expectedRevision: body.expectedRevision ?? null,
+        // Server-resolved actor — body.actor / UA cannot override (EA-11).
+        actorKind: actor.actorType === "ui_admin" ? "person" : "automation",
+        actorId: actor.actorId,
+        instanceId: null,
+        instanceStartGeneration: null
+      });
+    } catch (err) {
+      const message = String((err as Error).message ?? err);
+      if (message.includes("UNIQUE constraint failed")) {
+        reply.code(409);
+        return {
+          ok: false,
+          error: {
+            code: "REVISION_DUPLICATE",
+            message: "a revision already exists for (original_turn_id, attribution_rule_version)"
+          }
+        };
+      }
+      if (message.includes("actorKind")) {
+        reply.code(400);
+        return { ok: false, error: { code: "INVALID_ACTOR_KIND", message } };
+      }
+      reply.code(500);
+      return { ok: false, error: { code: "INTERNAL", message } };
+    }
+
+    // T03b EA-11: meta-audit write persisted to security_events canonical ledger.
+    // Use the per-revision row id as the operationId so distinct revisions
+    // don't collapse into one projection operation.
+    const meta = await securityPrecheck.value.appendEvent({
+      eventId: `audit-association-revision-${row.id}`,
+      operationId: `association-revision-${row.id}`,
+      phase: "commit",
+      actor: actor.actorId,
+      actorType: actor.actorType,
+      auditEventKind: "association_revision",
+      objectHash: sha256Hex(Buffer.from(JSON.stringify(row), "utf8")),
+      resultSummary: `original=${row.originalTurnId} effective=${row.effectiveAssociationStatus}`
+    });
+    if (!meta.ok) {
+      // Roll back: delete the just-written revision so the audit row and its
+      // canonical ledger entry remain consistent. EA-11 closure.
+      database
+        .prepare(`DELETE FROM association_revisions WHERE id = ?`)
+        .run(row.id);
+      reply.code(503);
+      return {
+        ok: false,
+        error: {
+          code: "META_AUDIT_WRITE_FAILED",
+          message: `security_events write failed: ${meta.reason ?? "unknown"}`
+        }
+      };
+    }
+    return { ok: true, data: serializeAssociationRevision(row) };
+  });
+
+  // T03b — GET /api/admin/audit/association-revisions
+  // T03c: meta-audit (EA-11): actor from request.lucyAdmin, body never read.
+  // Precheck security store; refuse (503) if unavailable so the audit trail
+  // always records who saw it.
+  app.get<{
+    Querystring: { originalTurnId?: string; limit?: string };
+  }>("/api/admin/audit/association-revisions", async (request, reply) => {
+    let actor;
+    try {
+      actor = resolveActorOr401(request);
+    } catch (err) {
+      reply.code(401);
+      return { ok: false, error: { code: "ACTOR_UNRESOLVED", message: String(err) } };
+    }
+
+    const securityPrecheck = await getSecurityStore();
+    if (!securityPrecheck.ok) {
+      reply.code(503);
+      return {
+        ok: false,
+        error: {
+          code: "META_AUDIT_STORE_UNAVAILABLE",
+          message: "security store unavailable; refusing sensitive read (EA-11)"
+        }
+      };
+    }
+
+    const database = await getAuditDb();
+    const limit = Math.min(parseInt(request.query.limit ?? "50", 10) || 50, 500);
+    const filterTurnId = request.query.originalTurnId ?? null;
+    const rows = listAssociationRevisions(database, {
+      originalTurnId: request.query.originalTurnId,
+      limit
+    });
+
+    // Meta-audit. operationId includes the filter so list investigations can be
+    // tied back to a single operation; failures here are logged but do NOT block
+    // the read response — the audit trail loses fidelity, not the data.
+    const opId = `audit-list-association-revisions-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+    const meta = await securityPrecheck.value.appendEvent({
+      eventId: `${opId}-read`,
+      operationId: opId,
+      phase: "result",
+      actor: actor.actorId,
+      actorType: actor.actorType,
+      auditEventKind: "audit_management",
+      objectHash: sha256Hex(
+        Buffer.from(JSON.stringify({ filterTurnId, limit, rowCount: rows.length }), "utf8")
+      ),
+      resultSummary: `list-association-revisions rows=${rows.length} filter=${filterTurnId ?? "*"}`
+    });
+    if (!meta.ok) {
+      // Surface as a degraded response header; the data is still returned but
+      // marked unverified. EA-11 closure: never silently drop the meta-audit.
+      reply.header("x-audit-trust-meta", "degraded");
+    }
+
+    return { ok: true, data: rows.map(serializeAssociationRevision) };
+  });
+
+  // T03b — GET /api/admin/audit/:id/effective-association
+  // 返回单条 access_log 的 original / effective 双视图。
+  // T03c: meta-audit at single-row detail (EA-11 closure).
+  app.get<{ Params: { id: string } }>(
+    "/api/admin/audit/:id/effective-association",
+    async (request, reply) => {
+      const id = Number(request.params.id);
+      if (!Number.isInteger(id) || id <= 0) {
+        reply.code(400);
+        return { ok: false, error: { code: "INVALID_ID" } };
+      }
+
+      let actor;
+      try {
+        actor = resolveActorOr401(request);
+      } catch (err) {
+        reply.code(401);
+        return { ok: false, error: { code: "ACTOR_UNRESOLVED", message: String(err) } };
+      }
+
+      const securityPrecheck = await getSecurityStore();
+      if (!securityPrecheck.ok) {
+        reply.code(503);
+        return {
+          ok: false,
+          error: {
+            code: "META_AUDIT_STORE_UNAVAILABLE",
+            message: "security store unavailable; refusing sensitive detail (EA-11)"
+          }
+        };
+      }
+
+      const database = await getAuditDb();
+      const view = effectiveAssociationFor(database, id);
+      if (!view) {
+        reply.code(404);
+        return { ok: false, error: { code: "NOT_FOUND" } };
+      }
+
+      const opId = `audit-effective-association-${id}-${Date.now()}`;
+      const meta = await securityPrecheck.value.appendEvent({
+        eventId: `${opId}-read`,
+        operationId: opId,
+        phase: "result",
+        actor: actor.actorId,
+        actorType: actor.actorType,
+        auditEventKind: "audit_management",
+        objectHash: sha256Hex(Buffer.from(JSON.stringify(view), "utf8")),
+        resultSummary: `effective-association access_log_id=${id} rev=${view.revisionCount}`
+      });
+      if (!meta.ok) {
+        reply.header("x-audit-trust-meta", "degraded");
+      }
+
+      return { ok: true, data: view };
+    }
+  );
 }
 
 function serializeTraceEvent(row: TraceEventRow) {
@@ -2711,5 +3727,44 @@ function serializeEvidenceEvent(row: EvidenceEventRow) {
     reviewer: row.reviewer ?? undefined,
     metadata: row.metadata,
     createdAt: row.createdAt
+  };
+}
+
+// ─── T03b: association_revisions endpoints (audit-trust-2026-10-19-r1) ──────
+//
+// Contract §2.6 / §4.2. Actor is resolved from the verified session context
+// (`request.lucyAdmin`) via `trustedActorFromRequest`. Body fields like
+// `actor` / `actor_id` / User-Agent / forwarded headers are **never** consulted.
+// This is the EA-11 closure: meta-audit writes are bound to server-resolved
+// actors; body.actor and UA cannot impersonate.
+
+import {
+  appendAssociationRevision,
+  effectiveAssociationFor,
+  listAssociationRevisions,
+  type AssociationRevisionRow
+} from "../proxy/association-revision.js";
+
+function resolveActorOr401(request: any): ReturnType<typeof trustedActorFromRequest> {
+  return trustedActorFromRequest(request);
+}
+
+function serializeAssociationRevision(row: AssociationRevisionRow) {
+  return {
+    id: row.id,
+    originalTurnId: row.originalTurnId,
+    effectiveTurnId: row.effectiveTurnId,
+    originalAssociationStatus: row.originalAssociationStatus,
+    effectiveAssociationStatus: row.effectiveAssociationStatus,
+    reason: row.reason,
+    referenceDoc: row.referenceDoc,
+    attributionRuleVersion: row.attributionRuleVersion,
+    actorKind: row.actorKind,
+    actorId: row.actorId,
+    instanceId: row.instanceId,
+    instanceStartGeneration: row.instanceStartGeneration,
+    ts: row.ts,
+    classificationVersion: row.classificationVersion,
+    expectedRevision: row.expectedRevision
   };
 }

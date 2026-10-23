@@ -80,7 +80,25 @@ beforeEach(async () => {
   await mkdir(path.join(projectRoot, "webui", "config"), { recursive: true });
   await mkdir(path.join(projectRoot, "semantic-layer", "warehouse", "_schema"), { recursive: true });
   await mkdir(path.join(projectRoot, "semantic-layer", "other", "_schema"), { recursive: true });
-  await writeFile(path.join(projectRoot, "ktx.yaml"), "connections: {}\n", "utf8");
+  // Spec 182 — selector matches intersect with the connection's enabled_tables.
+  // The finance/public_reader selectors target fin.fin_ledger and pub.pub_orders
+  // on `warehouse`, and the duplicate fin_ledger on `other`. Mirror them so the
+  // intersection keeps the same capability set.
+  await writeFile(
+    path.join(projectRoot, "ktx.yaml"),
+    `connections:
+  warehouse:
+    driver: mysql
+    enabled_tables:
+      - fin.fin_ledger
+      - pub.pub_orders
+  other:
+    driver: mysql
+    enabled_tables:
+      - fin.fin_ledger
+`,
+    "utf8"
+  );
   await writeFile(path.join(projectRoot, "webui", "config", "access.yaml"), ACCESS_YAML, "utf8");
   await writeFile(path.join(projectRoot, "semantic-layer", "warehouse", "_schema", "fin.yaml"), SCHEMA_A, "utf8");
   await writeFile(path.join(projectRoot, "semantic-layer", "other", "_schema", "fin.yaml"), SCHEMA_DUP, "utf8");

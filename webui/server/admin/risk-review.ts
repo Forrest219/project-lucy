@@ -22,7 +22,7 @@
 import { createHash } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { resolveProjectRoot } from "../project.js";
-import { previewRolePermissionsForAdmin } from "../proxy/acl.js";
+import { previewRolePermissionsForAdmin, resolveRoleIds } from "../proxy/acl.js";
 import {
   readAccessYaml,
   type YamlAccessConfig,
@@ -281,7 +281,9 @@ async function generateRoleCandidates(
   const roles = config.roles ?? {};
   const userReferencedRoles = new Set<string>();
   for (const user of config.users) {
-    if (user.role) userReferencedRoles.add(user.role);
+    const resolved = resolveRoleIds(user);
+    if (!resolved.ok) continue;
+    for (const roleId of resolved.roleIds) userReferencedRoles.add(roleId);
   }
 
   for (const roleId of Object.keys(roles)) {

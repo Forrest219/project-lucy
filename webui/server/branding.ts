@@ -3,14 +3,15 @@ import path from "node:path";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { parse, stringify } from "yaml";
 import { resolveProjectRoot } from "./project.js";
-import { ForbiddenPathError, assertReadable, safeRemove, safeWrite, safeWriteBinary } from "./fs-safe.js";
+import { ForbiddenPathError, assertReadable, safeRemove, safeWriteBinary } from "./fs-safe.js";
 import { auditedWriteFile } from "./admin/config-audit-write.js";
 import { readRasterImageSize, sniffRasterImageMime } from "./image-raster.js";
+import { loadContentPaths } from "./paths.js";
 
 export const BRANDING_YAML_REL = "webui/config/branding.yaml";
 export const BRANDING_DIR_REL = "webui/config/branding";
 export const DEFAULT_PRODUCT_TITLE = "Lucy WebUI";
-export const DEFAULT_TAGLINE = "Data Agent MCP";
+export const DEFAULT_TAGLINE = "可信 Agent 数据层";
 export const MAX_LOGO_BYTES = 512 * 1024;
 export const MAX_BRAND_TEXT_CHARS = 64;
 export const MIN_LOGO_PX = 32;
@@ -140,7 +141,8 @@ function serializeConfig(config: BrandingConfig): string {
 export async function loadBrandingConfig(projectRoot?: string): Promise<BrandingConfig> {
   const root = projectRoot ?? (await resolveProjectRoot());
   try {
-    const abs = await assertReadable(root, BRANDING_YAML_REL);
+    const paths = await loadContentPaths();
+    const abs = await assertReadable(paths, root, BRANDING_YAML_REL);
     const text = await readFile(abs, "utf8");
     return normalizeConfig(parse(text));
   } catch (error) {
@@ -187,7 +189,8 @@ function logoRelPath(filename: string): string {
 
 async function listLogoFiles(projectRoot: string): Promise<string[]> {
   try {
-    const abs = await assertReadable(projectRoot, BRANDING_DIR_REL);
+    const paths = await loadContentPaths();
+    const abs = await assertReadable(paths, projectRoot, BRANDING_DIR_REL);
     const entries = await readdir(abs);
     return entries
       .filter((name) => Boolean(MIME_BY_EXT[path.extname(name).toLowerCase()]))
@@ -201,8 +204,9 @@ async function listLogoFiles(projectRoot: string): Promise<string[]> {
 
 async function removeAllLogoFiles(projectRoot: string): Promise<void> {
   const files = await listLogoFiles(projectRoot);
+  const paths = await loadContentPaths();
   for (const rel of files) {
-    await safeRemove(projectRoot, rel);
+    await safeRemove(paths, projectRoot, rel);
   }
 }
 
@@ -325,7 +329,8 @@ export async function uploadBrandingLogo(
   const updatedAt = new Date().toISOString();
   const current = await loadBrandingConfig(projectRoot);
   await removeAllLogoFiles(projectRoot);
-  await safeWriteBinary(projectRoot, relPath, buffer);
+  const paths = await loadContentPaths();
+  await safeWriteBinary(paths, projectRoot, relPath, buffer);
 
   const next: BrandingConfig = {
     ...current,
@@ -380,7 +385,8 @@ export async function readBrandingLogoBytes(
   const config = await loadBrandingConfig(projectRoot);
   if (!config.logo) return null;
   try {
-    const abs = await assertReadable(projectRoot, logoRelPath(config.logo.filename));
+    const paths = await loadContentPaths();
+    const abs = await assertReadable(paths, projectRoot, logoRelPath(config.logo.filename));
     const buffer = await readFile(abs);
     return {
       buffer,

@@ -1,19 +1,33 @@
 import { createReadStream } from "node:fs";
-import { lstat, readFile, readdir, stat } from "node:fs/promises";
+import { lstat, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import Fastify, { type FastifyError } from "fastify";
+import Fastify, { type FastifyError, type FastifyReply, type FastifyRequest } from "fastify";
 import { parse, parseDocument } from "yaml";
-import { buildProxy } from "./proxy/mcp-proxy.js";
+import { buildProxy, getDataQaInstructionsStatus } from "./proxy/mcp-proxy.js";
+import { serveStaticAsset } from "./static-assets";
+import { addTiming, registerEntryPerformanceTiming, withRequestTiming } from "./entry-performance-timing";
+import { displayGenerations, onDisplayGenerationChange, withDisplayWriteBarrier } from "./display-generation";
+import { parseProbePurpose, ProbeScheduler, type ProbeTiming } from "./background-probes";
+import {
+  getDisplaySnapshot,
+  prewarmDisplaySnapshots,
+  registerDisplayPrewarmer,
+  ensureDisplayReconciler
+} from "./display-snapshot";
 import { changedFiles, previewDiff, type SessionWrittenFile } from "./diff";
 import { joinCandidatesPath, readJoinCandidates, writeJoinCandidates, type JoinCandidate } from "./joins-sidecar";
 import { formatConnectionErrorMessage } from "./connection-errors";
 import { readKtxRuntimeStatus } from "./ktx-runtime";
 import { resolveLucyVersion } from "./lucy-version.js";
+import { loadRuntimeRevision } from "./lucy-revision.js";
 import { reindexProject, validateSource, testConnection, type ValidationResult } from "./ktx";
+import { applyColumnTypeContractToValidation } from "./publish-gate";
 import {
+  clearLiveCatalogCache,
   listLiveSchemas,
-  LiveCatalogConnectionNotFoundError
+  LiveCatalogConnectionNotFoundError,
+  peekLiveSchemasCache
 } from "./live-catalog";
 import { previewSchemaStructure, SchemaStructureError } from "./schema-structure";
 import {
@@ -28,7 +42,8 @@ import {
   removeConnection,
   removeSchema
 } from "./project";
-import { loadContentPaths } from "./paths";
+import { loadContentPaths, resolveContentPaths } from "./paths";
+import { collectContentLayout, mirrorOnlySemanticRelPaths } from "./content-layout";
 import {
   // Ingest sidecar is M13 legacy. M14 keeps the helpers for the deprecated
   // `/api/connections/:connId/ingest` alias compatibility route.
@@ -54,10 +69,12 @@ import {
 } from "./catalog-assets";
 import type { TablePatch } from "./model";
 import {
-  listManifestSchemas,
-  listSources,
+  listSourcesWithManifests,
+  sourcesDisplayMeta,
+  type SourcesDisplayMeta,
   previewSourcePatch,
   previewSourceYamlImport,
+  readChangedSourceColumnContracts,
   readSource,
   writeSourcePatch,
   writeSourceYamlImport
@@ -94,6 +111,7 @@ import {
   type WikiUploadInput,
   type WikiWriteInput
 } from "./wiki";
+import { FRONTMATTER_ENGINE_FORBIDDEN } from "./markdown-frontmatter";
 import {
   readHelpDiagram,
   readHelpHandbook,
@@ -103,8 +121,8 @@ import { registerAgentRoutes } from "./admin/agents.js";
 import { registerRoleRoutes } from "./admin/roles.js";
 import { registerTokenRoutes } from "./admin/tokens.js";
 import { registerPolicyRuntimeRoutes } from "./admin/policy-runtime.js";
-import { getPolicyRuntimeStatus, isPolicyRuntimeHealthy } from "./proxy/acl.js";
-import { recordConfigChange, registerAuditRoutes } from "./admin/audit.js";
+import { getPolicyRuntimeStatus, isPolicyRuntimeHealthy, runtimeConsistencyForInputs, type DisplayPolicyInputs } from "./proxy/acl.js";
+import { getAuditDb, recordConfigChange, registerAgentAuditRoutes, registerAuditRoutes } from "./admin/audit.js";
 import { auditedWriteFile } from "./admin/config-audit-write.js";
 import { registerMcpToolsRoutes } from "./admin/mcp-tools.js";
 import { registerMcpPlaygroundRoutes } from "./admin/mcp-playground.js";
@@ -115,12 +133,21 @@ import {
 } from "./admin/mcp-runtime.js";
 import { registerRiskReviewRoutes } from "./admin/risk-review.js";
 import { registerReleaseReadinessRoutes } from "./admin/release-readiness-package.js";
-import { registerLicenseRoutes } from "./license/routes.js";
+import { removeLegacyLicenseFile } from "./remove-legacy-license-file.js";
+import { registerImportScopeRoutes } from "./admin/import-scope.js";
 import { registerGovernanceObservabilityRoutes } from "./admin/governance-observability.js";
 import { registerUiUsageRoutes } from "./admin/ui-usage.js";
 import { registerAuthRoutes, registerAdminAccountRoutes } from "./auth/routes.js";
 import { registerBrandingRoutes } from "./branding.js";
-import { requireWebuiAuthHook } from "./auth/guard.js";
+import { actorIdFromRequest, requireWebuiAuthHook } from "./auth/guard.js";
+import { auditActorFields, trustedActorFromRequest } from "./security/request-actor.js";
+import { assertStartupPolicy, resolveCookieSecure } from "./auth/deployment-mode.js";
+import { reconcileBootstrapOnStartup } from "./auth/bootstrap.js";
+import { closeSecurityStore, getSecurityStore } from "./security/instance.js";
+import { recoverInterruptedOperations } from "./security/ledger.js";
+import { AUDIT_PROJECTOR_NAME, createProjectionScheduler, readTargetCursor } from "./security/projector.js";
+import { recoverProjectionCursor } from "./security/recovery.js";
+import { recordProjectionStatus } from "./proxy/audit-write-health.js";
 import { registerWebSecurity } from "./web-security.js";
 import { registerSkillsRoutes } from "./admin/skills.js";
 import { registerCaseRoutes } from "./eval/cases.js";
@@ -128,10 +155,12 @@ import { registerSecurityCandidateRoutes } from "./eval/security-candidates.js";
 import { registerSuiteImportRoutes } from "./eval/suite-import.js";
 import { registerRunnerRoutes } from "./eval/runner.js";
 import { registerMonitorRoutes } from "./eval/monitor.js";
+import { registerFieldQuestionRoutes } from "./eval/field-questions.js";
 import { registerR1ObservabilityRoutes } from "./observability.js";
 import { registerCallMonitorRoutes } from "./ops/call-monitor.js";
 import { safeWrite } from "./fs-safe.js";
 import {
+  describePendingReleaseAssets,
   publishSemanticAssets,
   readSemanticAssetRelease,
   readSemanticAssetReleases,
@@ -143,7 +172,7 @@ import {
   type SemanticAssetReleaseTrigger,
   type SemanticAssetValidateRequest
 } from "./semantic-assets.js";
-import { exportSemanticAssetPackage } from "./semantic-asset-export.js";
+import { exportSemanticAssetPackage, recordSemanticAssetExport } from "./semantic-asset-export.js";
 import {
   buildPublishHistoryCsvRows,
   formatPublishHistoryExportFilenameStamp
@@ -257,48 +286,32 @@ function supportedErrorDetail(error: SupportedError): unknown {
       );
     }
   }
+  if (error.code === "connection_references_remain") {
+    // Spec 179 §3 / §5: blockers let the Admin client say which of 角色 / 用户 /
+    // 业务 Wiki / 本地 YAML 资产 still block deletion. Pinned shape — only `{kind, id}`.
+    const detail = error.detail;
+    if (detail && typeof detail === "object" && Array.isArray((detail as { blockers?: unknown }).blockers)) {
+      const blockers = (detail as { blockers: unknown[] }).blockers
+        .filter(
+          (entry): entry is { kind: string; id: string } =>
+            !!entry &&
+            typeof entry === "object" &&
+            typeof (entry as { kind?: unknown }).kind === "string" &&
+            typeof (entry as { id?: unknown }).id === "string"
+        )
+        .map((entry) => ({ kind: entry.kind, id: entry.id }));
+      return { blockers };
+    }
+  }
   return undefined;
 }
 
 const DEFAULT_WEBUI_PORT = 5174;
-const STATIC_MIME_TYPES: Record<string, string> = {
-  ".css": "text/css; charset=utf-8",
-  ".html": "text/html; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".map": "application/json; charset=utf-8",
-  ".png": "image/png",
-  ".svg": "image/svg+xml",
-  ".ico": "image/x-icon",
-  ".txt": "text/plain; charset=utf-8"
-};
 
 function distDir(): string {
   return process.env.LUCY_WEBUI_DIST_DIR
     ? path.resolve(process.env.LUCY_WEBUI_DIST_DIR)
     : path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../dist");
-}
-
-function contentType(filePath: string): string {
-  return STATIC_MIME_TYPES[path.extname(filePath)] ?? "application/octet-stream";
-}
-
-async function staticFilePath(urlPath: string): Promise<string> {
-  const root = distDir();
-  const pathname = decodeURIComponent(urlPath.split("?")[0] ?? "/");
-  const relative = pathname === "/" ? "index.html" : pathname.replace(/^\/+/, "");
-  const candidate = path.resolve(root, relative);
-  const rootWithSep = root.endsWith(path.sep) ? root : `${root}${path.sep}`;
-  if (candidate !== root && !candidate.startsWith(rootWithSep)) {
-    return path.join(root, "index.html");
-  }
-  try {
-    const info = await stat(candidate);
-    if (info.isFile()) return candidate;
-  } catch {
-    // Fall through to the SPA entry point.
-  }
-  return path.join(root, "index.html");
 }
 
 /**
@@ -535,15 +548,113 @@ async function executionAckForConnection(connectionId: string): Promise<{
   }
 }
 
+type SourcesSnapshotSidecar = {
+  policyInputs: DisplayPolicyInputs | null;
+  meta: Pick<SourcesDisplayMeta, "snapshotVersion" | "generatedAt" | "authorizedCountsState">;
+};
+
+/**
+ * Spec 174 §3.2 — `/api/sources` envelope as a versioned, pre-serialized display
+ * snapshot. The cached payload ends right before `meta`; §3.3 runtimeConsistency
+ * is evaluated against the current runtime policy for every response.
+ */
+function getSourcesDisplaySnapshot(projectRoot: string) {
+  return getDisplaySnapshot("sources", ["D", "P", "C"], async (version) => {
+    const listing = await listSourcesWithManifests(projectRoot);
+    const started = performance.now();
+    const payload = `{"ok":true,"data":{"tables":${JSON.stringify(listing.tables)},"manifestSchemas":${JSON.stringify(listing.manifestSchemas)},"meta":`;
+    const sidecar: SourcesSnapshotSidecar = {
+      policyInputs: listing.policyInputs,
+      meta: { snapshotVersion: version, generatedAt: new Date().toISOString(), authorizedCountsState: listing.authorizedCountsState }
+    };
+    addTiming("serialize", performance.now() - started);
+    return { payload, sidecar: JSON.stringify(sidecar) };
+  });
+}
+
+function sourcesResponseBody(snapshot: { payload: string; sidecar?: string }): string {
+  const sidecar = JSON.parse(snapshot.sidecar ?? "null") as SourcesSnapshotSidecar;
+  const meta = sourcesDisplayMeta(sidecar.meta, runtimeConsistencyForInputs(sidecar.policyInputs));
+  return `${snapshot.payload}${JSON.stringify(meta)}}}`;
+}
+
+registerDisplayPrewarmer("sources", async () => getSourcesDisplaySnapshot(await resolveProjectRoot()));
+
+/** Client disconnect (not normal completion) aborts this request's probe subscription. */
+function clientAbortSignal(reply: FastifyReply): AbortSignal {
+  const controller = new AbortController();
+  reply.raw.once("close", () => {
+    if (!reply.raw.writableFinished) controller.abort();
+  });
+  return controller.signal;
+}
+
+function logProbeTiming(request: FastifyRequest, kind: string, purpose: string, timing: ProbeTiming): void {
+  addTiming("queue", timing.queueMs);
+  request.log.info({ probe: { kind, purpose, queueMs: Math.round(timing.queueMs), executionMs: Math.round(timing.executionMs), totalMs: Math.round(timing.totalMs), shared: timing.shared } }, "connection probe");
+}
+
 export function buildServer() {
+  assertStartupPolicy(); // invalid mode, Chart-mode override or insecure customer cookie refuses to start
   const app = Fastify({ logger: true });
   const writtenFiles: SessionWrittenFile[] = [];
   const changedSources = new Map<string, { conn: string; schema: string; table: string }>();
 
   registerWebSecurity(app);
+  registerEntryPerformanceTiming(app);
+  // Spec 174 §5 — one bounded probe queue per server; config changes cancel stale work.
+  const probeScheduler = new ProbeScheduler({ currentGeneration: () => displayGenerations().L });
+  const stopProbeInvalidation = onDisplayGenerationChange((scopes) => {
+    if (!scopes.includes("L")) return;
+    probeScheduler.invalidateGeneration();
+    clearLiveCatalogCache();
+  });
+  // Spec 174 §3.2 — display snapshots are only served while a reconciler verifies them.
+  let stopOwnReconciler: () => void = () => undefined;
+  app.addHook("onReady", async () => {
+    try {
+      stopOwnReconciler = await ensureDisplayReconciler();
+    } catch (error) {
+      console.warn("[display-snapshot] reconciler unavailable; display reads stay busy:", error);
+    }
+  });
+  // Spec 175: a leftover deployment-license file is not a credential store. Delete it, do not back it up.
+  app.addHook("onReady", async () => {
+    try {
+      await removeLegacyLicenseFile(await resolveProjectRoot());
+    } catch (error) {
+      console.warn("[license] leftover license.yaml was not removed:", error);
+    }
+  });
+  // Close an interrupted first-owner bootstrap before anything can clear admins.yaml (Spec §3.1 item 7).
+  app.addHook("onReady", async () => {
+    try {
+      await reconcileBootstrapOnStartup();
+    } catch (error) {
+      console.warn("[auth] bootstrap reconciliation failed; bootstrap re-checks on the next attempt:", error);
+    }
+  });
+  app.addHook("onClose", async () => {
+    closeSecurityStore();
+    stopOwnReconciler();
+    stopProbeInvalidation();
+    probeScheduler.close();
+  });
   app.addHook("onRequest", requireWebuiAuthHook);
 
-  app.setErrorHandler((error: SupportedError, _request, reply) => {
+  app.setErrorHandler((error: SupportedError, request, reply) => {
+    if (error.code === FRONTMATTER_ENGINE_FORBIDDEN) {
+      // V-08: reads of an already-stored file are 422; upload/save/restore are 400.
+      const reading = request.method === "GET";
+      reply.status(reading ? 422 : 400).send({
+        ok: false,
+        error: {
+          code: "WIKI_FRONTMATTER_UNSUPPORTED",
+          message: reading ? "仅支持 YAML 格式的文档属性，请修复该文档后再读取。" : "仅支持 YAML 格式的文档属性。"
+        }
+      } satisfies ErrorEnvelope);
+      return;
+    }
     const statusCode = error.statusCode ?? 500;
     const code = error.code ?? (statusCode === 500 ? "INTERNAL" : "BAD_REQUEST");
     const payload: ErrorEnvelope = {
@@ -557,12 +668,26 @@ export function buildServer() {
     if (detail !== undefined) {
       payload.error.detail = detail;
     }
+    const retryAfter = (error as { retryAfterSeconds?: unknown }).retryAfterSeconds;
+    if (typeof retryAfter === "number") reply.header("Retry-After", String(retryAfter));
 
     reply.status(statusCode).send(payload);
   });
 
   app.get("/api/health", async () => {
     const policy = getPolicyRuntimeStatus();
+    // Spec 180 §2 — the content layout diagnostic is a *side* check on
+    // `/api/health`. Health must not depend on it resolving: a project root
+    // we cannot locate (early boot, missing ktx.yaml) must still produce
+    // a 200 with the existing policy / ktx / execution signal.
+    let contentLayout: import("./content-layout").ContentLayoutStatus | null = null;
+    try {
+      const projectRoot = await resolveProjectRoot();
+      const contentPaths = await resolveContentPaths(projectRoot);
+      contentLayout = await collectContentLayout(projectRoot, contentPaths);
+    } catch {
+      // leave null; `contentLayout` is omitted from the envelope.
+    }
     const [ktxRuntime, mcpRuntime] = await Promise.all([
       readKtxRuntimeStatus(),
       readMcpRuntimeStatus().catch((error) => ({
@@ -577,13 +702,19 @@ export function buildServer() {
     const executionHardFailure = ["stale", "unavailable", "error"].includes(
       mcpRuntime.execution.status
     );
+    // Spec 180 §2 — drift is informational; it must not turn `status` into a
+    // failure. `healthy` only reflects policy + ktx runtime + MCP execution.
     const healthy = policyHealthy && ktxRuntime.ready && !executionHardFailure;
     return {
       ok: true,
       data: {
         // Spec 98 §8.4 — align with /api/admin/policy-runtime; empty policyVersion is not healthy.
         status: healthy ? "ok" : "degraded",
+        // Spec §3.1 item 8: surfaced only while customer mode runs without Secure cookies (test profile).
+        ...(resolveCookieSecure().insecureTestProfile ? { insecureTestProfile: true } : {}),
         lucyVersion: resolveLucyVersion(),
+        // Commit identity from /app/BUILD_REVISION or the Lucy source checkout. Not LUCY_GIT_SHA.
+        ...loadRuntimeRevision(),
         bundledKtxVersion: process.env.LUCY_BUNDLED_KTX_VERSION ?? "unknown",
         ktxRuntime: {
           ready: ktxRuntime.ready,
@@ -596,7 +727,15 @@ export function buildServer() {
           degradedAgents: policy.degradedAgents,
           healthy: policyHealthy
         },
-        execution: mcpRuntime.execution
+        execution: mcpRuntime.execution,
+        // T9 — guidance is advisory; missing guidance must not fail liveness.
+        // The status is exposed for operator visibility and so an Admin can
+        // confirm the proxy is still functional when the file is being rolled out.
+        dataQaInstructions: getDataQaInstructionsStatus(),
+        // Spec 180 §2 — content root vs. mirror layout snapshot; read-only,
+        // surfaces drift without flipping `status`. Omitted when no project
+        // root can be resolved (e.g. before ktx.yaml is wired up).
+        ...(contentLayout ? { contentLayout } : {})
       }
     };
   });
@@ -609,17 +748,11 @@ export function buildServer() {
     };
   });
 
-  app.get("/api/sources", async () => {
+  app.get("/api/sources", async (request, reply) => withRequestTiming(request, async () => {
     const projectRoot = await resolveProjectRoot();
-    const [tables, manifestSchemas] = await Promise.all([
-      listSources(projectRoot),
-      listManifestSchemas(projectRoot)
-    ]);
-    return {
-      ok: true,
-      data: { tables, manifestSchemas }
-    };
-  });
+    const snapshot = await getSourcesDisplaySnapshot(projectRoot);
+    return reply.type("application/json; charset=utf-8").send(sourcesResponseBody(snapshot));
+  }));
 
   app.get<{
     Params: { conn: string; schema: string; table: string };
@@ -647,7 +780,14 @@ export function buildServer() {
       });
     }
 
-    const preview = await writeSourcePatch(projectRoot, conn, schema, table, request.body?.patch ?? {});
+    const preview = await writeSourcePatch(
+      projectRoot,
+      conn,
+      schema,
+      table,
+      request.body?.patch ?? {},
+      trustedActorFromRequest(request)
+    );
     for (const file of preview.files) {
       writtenFiles.push({ filePath: file.filePath });
     }
@@ -703,7 +843,7 @@ export function buildServer() {
       });
     }
 
-    const preview = await writeSourceYamlImport(projectRoot, conn, schema, table, yaml);
+    const preview = await writeSourceYamlImport(projectRoot, conn, schema, table, yaml, trustedActorFromRequest(request));
     for (const file of preview.files) {
       writtenFiles.push({ filePath: file.filePath });
     }
@@ -795,9 +935,23 @@ export function buildServer() {
 
   app.get("/api/diff", async () => {
     const projectRoot = await resolveProjectRoot();
+    let mirrorOnlySemanticFiles: string[] = [];
+    let mirrorDriftTruncated = false;
+    try {
+      const contentPaths = await resolveContentPaths(projectRoot);
+      const layout = await collectContentLayout(projectRoot, contentPaths);
+      mirrorOnlySemanticFiles = mirrorOnlySemanticRelPaths(layout);
+      mirrorDriftTruncated = layout.driftTruncated;
+    } catch {
+      // Spec 180: drift is advisory and must not fail the pending-change read.
+    }
     return {
       ok: true,
-      data: { files: await changedFiles(projectRoot, writtenFiles) }
+      data: {
+        files: await changedFiles(projectRoot, writtenFiles),
+        mirrorOnlySemanticFiles,
+        mirrorDriftTruncated
+      }
     };
   });
 
@@ -805,9 +959,16 @@ export function buildServer() {
     const projectRoot = await resolveProjectRoot();
     const results: Array<{ conn: string; schema: string; table: string; validation: ValidationResult }> = [];
     for (const source of changedSources.values()) {
+      const validation = await validateSource(projectRoot, source.conn, source.schema, source.table);
+      const contracts = await readChangedSourceColumnContracts(
+        projectRoot,
+        source.conn,
+        source.schema,
+        source.table
+      );
       results.push({
         ...source,
-        validation: await validateSource(projectRoot, source.conn, source.schema, source.table)
+        validation: applyColumnTypeContractToValidation(validation, contracts)
       });
     }
     return {
@@ -884,7 +1045,7 @@ export function buildServer() {
     Params: { key: string };
   }>("/api/wiki/:key", async (request) => {
     const projectRoot = await resolveProjectRoot();
-    const result = await deleteWiki(projectRoot, request.params.key);
+    const result = await deleteWiki(projectRoot, request.params.key, trustedActorFromRequest(request));
     writtenFiles.push({ filePath: result.filePath });
     writtenFiles.push({ filePath: "wiki/.lucy-history/index.json" });
     return {
@@ -911,7 +1072,7 @@ export function buildServer() {
   }>("/api/wiki/:key/move", async (request, reply) => {
     const projectRoot = await resolveProjectRoot();
     const targetDirectory = request.body?.targetDirectory ?? "";
-    const result = await moveWiki(projectRoot, request.params.key, targetDirectory);
+    const result = await moveWiki(projectRoot, request.params.key, targetDirectory, trustedActorFromRequest(request));
     writtenFiles.push({ filePath: result.filePath });
     writtenFiles.push({ filePath: "wiki/.lucy-history/index.json" });
     writtenFiles.push({ filePath: "wiki/.lucy-directories.json" });
@@ -943,7 +1104,7 @@ export function buildServer() {
     Body: WikiUploadInput;
   }>("/api/wiki/upload/commit", async (request) => {
     const projectRoot = await resolveProjectRoot();
-    const preview = await commitWikiUpload(projectRoot, request.body);
+    const preview = await commitWikiUpload(projectRoot, request.body, trustedActorFromRequest(request));
     writtenFiles.push({ filePath: preview.filePath });
     writtenFiles.push({ filePath: "wiki/.lucy-history/index.json" });
     return {
@@ -986,7 +1147,12 @@ export function buildServer() {
     Params: { key: string; versionId: string };
   }>("/api/wiki/:key/versions/:versionId/restore", async (request) => {
     const projectRoot = await resolveProjectRoot();
-    const result = await restoreWikiVersion(projectRoot, request.params.key, request.params.versionId);
+    const result = await restoreWikiVersion(
+      projectRoot,
+      request.params.key,
+      request.params.versionId,
+      trustedActorFromRequest(request)
+    );
     writtenFiles.push({ filePath: result.filePath });
     writtenFiles.push({ filePath: "wiki/.lucy-history/index.json" });
     return {
@@ -1007,15 +1173,16 @@ export function buildServer() {
 
   app.put<{
     Params: { key: string };
-    Body: { dryRun?: boolean; frontmatter?: WikiWriteInput["frontmatter"]; content?: string };
+    Body: { dryRun?: boolean; frontmatter?: WikiWriteInput["frontmatter"]; content?: string; expected_version?: string };
   }>("/api/wiki/:key", async (request) => {
     const projectRoot = await resolveProjectRoot();
     const writeInput: WikiWriteInput = {
       frontmatter: request.body?.frontmatter,
-      content: request.body?.content
+      content: request.body?.content,
+      expected_version: request.body?.expected_version
     };
     const preview = request.body?.dryRun === false
-      ? await writeWiki(projectRoot, request.params.key, writeInput)
+      ? await writeWiki(projectRoot, request.params.key, writeInput, trustedActorFromRequest(request))
       : await previewWikiWrite(projectRoot, request.params.key, writeInput);
     if (request.body?.dryRun === false) {
       writtenFiles.push({ filePath: preview.filePath });
@@ -1084,7 +1251,7 @@ export function buildServer() {
     return { ok: true, data: { connections } };
   });
 
-  const VALID_CREATE_DRIVERS = new Set(["mysql", "postgres", "sqlserver", "oracle", "sqlite"]);
+  const VALID_CREATE_DRIVERS = new Set(["mysql", "postgres", "sqlserver", "oracle", "sqlite", "athena"]);
 
   // Spec 124 Phase A: create connection (secret one-shot write + ktx.yaml patch).
   // dryRun defaults to true. No UI in this spike — API + security tests only.
@@ -1101,6 +1268,10 @@ export function buildServer() {
       username?: string;
       password?: string;
       schemas?: string[];
+      region?: string;
+      s3StagingDir?: string;
+      workgroup?: string;
+      catalog?: string;
       dryRun?: boolean;
       acknowledgeSeparateConnection?: boolean;
       acknowledgeDifferentDatabase?: boolean;
@@ -1113,13 +1284,20 @@ export function buildServer() {
       throw enabledTableError("BAD_REQUEST", "id is required");
     }
     if (!VALID_CREATE_DRIVERS.has(body.driver ?? "")) {
-      throw enabledTableError("BAD_REQUEST", "driver must be one of mysql, postgres, sqlserver, oracle, sqlite");
+      throw enabledTableError("BAD_REQUEST", "driver must be one of mysql, postgres, sqlserver, oracle, sqlite, athena");
     }
-    const isSqlite = body.driver === "sqlite";
+    const skipsHost = body.driver === "sqlite" || body.driver === "athena";
     if (typeof body.database !== "string" || !body.database.trim()) {
       throw enabledTableError("BAD_REQUEST", "database is required");
     }
-    if (!isSqlite) {
+    if (body.driver === "athena") {
+      if (typeof body.region !== "string" || !body.region.trim()) {
+        throw enabledTableError("BAD_REQUEST", "region is required");
+      }
+      if (typeof body.s3StagingDir !== "string" || !body.s3StagingDir.trim()) {
+        throw enabledTableError("BAD_REQUEST", "s3StagingDir is required");
+      }
+    } else if (!skipsHost) {
       if (typeof body.host !== "string" || !body.host.trim()) {
         throw enabledTableError("BAD_REQUEST", "host is required");
       }
@@ -1134,7 +1312,7 @@ export function buildServer() {
       projectRoot,
       {
         id: body.id,
-        driver: body.driver as "mysql" | "postgres" | "sqlserver" | "oracle" | "sqlite",
+        driver: body.driver as "mysql" | "postgres" | "sqlserver" | "oracle" | "sqlite" | "athena",
         ...(typeof body.engine === "string" ? { engine: body.engine } : {}),
         ...(typeof body.wireProtocol === "string" ? { wireProtocol: body.wireProtocol } : {}),
         readonly: body.readonly,
@@ -1143,7 +1321,11 @@ export function buildServer() {
         database: body.database,
         username: body.username,
         ...(typeof body.password === "string" ? { password: body.password } : {}),
-        ...(Array.isArray(body.schemas) ? { schemas: body.schemas } : {})
+        ...(Array.isArray(body.schemas) ? { schemas: body.schemas } : {}),
+        ...(typeof body.region === "string" ? { region: body.region } : {}),
+        ...(typeof body.s3StagingDir === "string" ? { s3StagingDir: body.s3StagingDir } : {}),
+        ...(typeof body.workgroup === "string" ? { workgroup: body.workgroup } : {}),
+        ...(typeof body.catalog === "string" ? { catalog: body.catalog } : {})
       },
       dryRun,
       {
@@ -1156,7 +1338,7 @@ export function buildServer() {
     );
     if (!dryRun) {
       writtenFiles.push({ filePath: "ktx.yaml" });
-      if ("secretRelPath" in result) {
+      if ("secretRelPath" in result && result.secretRelPath) {
         writtenFiles.push({ filePath: result.secretRelPath });
       }
 
@@ -1209,17 +1391,28 @@ export function buildServer() {
       database?: string;
       username?: string;
       password?: string;
+      region?: string;
+      s3StagingDir?: string;
+      workgroup?: string;
+      catalog?: string;
     };
   }>("/api/connections/probe", async (request) => {
     const body = request.body ?? {};
     if (!VALID_CREATE_DRIVERS.has(body.driver ?? "")) {
-      throw enabledTableError("BAD_REQUEST", "driver must be one of mysql, postgres, sqlserver, oracle, sqlite");
+      throw enabledTableError("BAD_REQUEST", "driver must be one of mysql, postgres, sqlserver, oracle, sqlite, athena");
     }
-    const isSqlite = body.driver === "sqlite";
+    const skipsHost = body.driver === "sqlite" || body.driver === "athena";
     if (typeof body.database !== "string" || !body.database.trim()) {
       throw enabledTableError("BAD_REQUEST", "database is required");
     }
-    if (!isSqlite) {
+    if (body.driver === "athena") {
+      if (typeof body.region !== "string" || !body.region.trim()) {
+        throw enabledTableError("BAD_REQUEST", "region is required");
+      }
+      if (typeof body.s3StagingDir !== "string" || !body.s3StagingDir.trim()) {
+        throw enabledTableError("BAD_REQUEST", "s3StagingDir is required");
+      }
+    } else if (!skipsHost) {
       if (typeof body.host !== "string" || !body.host.trim()) {
         throw enabledTableError("BAD_REQUEST", "host is required");
       }
@@ -1234,7 +1427,7 @@ export function buildServer() {
       }
     }
     const data = await probeConnection({
-      driver: body.driver as "mysql" | "postgres" | "sqlserver" | "oracle" | "sqlite",
+      driver: body.driver as "mysql" | "postgres" | "sqlserver" | "oracle" | "sqlite" | "athena",
       ...(typeof body.engine === "string" ? { engine: body.engine } : {}),
       ...(typeof body.wireProtocol === "string" ? { wireProtocol: body.wireProtocol } : {}),
       readonly: body.readonly,
@@ -1242,7 +1435,11 @@ export function buildServer() {
       port: body.port,
       database: body.database,
       username: body.username,
-      password: body.password
+      password: body.password,
+      ...(typeof body.region === "string" ? { region: body.region } : {}),
+      ...(typeof body.s3StagingDir === "string" ? { s3StagingDir: body.s3StagingDir } : {}),
+      ...(typeof body.workgroup === "string" ? { workgroup: body.workgroup } : {}),
+      ...(typeof body.catalog === "string" ? { catalog: body.catalog } : {})
     });
     return { ok: true, data };
   });
@@ -1293,8 +1490,10 @@ export function buildServer() {
 
   app.get<{
     Params: { connId: string };
-    Querystring: { refresh?: string };
-  }>("/api/connections/:connId/live-schemas", async (request) => {
+    Querystring: { refresh?: string; purpose?: string };
+  }>("/api/connections/:connId/live-schemas", async (request, reply) => withRequestTiming(request, async () => {
+    const purpose = parseProbePurpose(request.query?.purpose);
+    if (!purpose) throw enabledTableError("BAD_REQUEST", "purpose must be automatic or manual");
     const projectRoot = await resolveProjectRoot();
     const { connId } = request.params;
     const refresh =
@@ -1302,7 +1501,22 @@ export function buildServer() {
       request.query?.refresh === "true" ||
       request.query?.refresh === "yes";
     try {
-      const data = await listLiveSchemas(projectRoot, connId, { refresh });
+      // Spec 107 10-minute success cache; refresh=1 skips completed results but
+      // still merges with an in-flight probe of the same config generation.
+      const generation = displayGenerations().L;
+      const cached = refresh ? null : peekLiveSchemasCache(projectRoot, connId, generation);
+      if (cached) return { ok: true, data: cached };
+      const { value: data, timing } = await probeScheduler.submit({
+        key: `${projectRoot}\u0000L${generation}\u0000${connId}\u0000live-schemas`,
+        generation,
+        purpose,
+        signal: clientAbortSignal(reply),
+        run: () => listLiveSchemas(projectRoot, connId, { refresh: true }, {
+          generation,
+          currentGeneration: () => displayGenerations().L
+        })
+      });
+      logProbeTiming(request, "live-schemas", purpose, timing);
       return { ok: true, data };
     } catch (err) {
       if (err instanceof LiveCatalogConnectionNotFoundError) {
@@ -1310,7 +1524,7 @@ export function buildServer() {
       }
       throw err;
     }
-  });
+  }));
 
   app.put<{
     Params: { connId: string };
@@ -1347,17 +1561,18 @@ export function buildServer() {
       return { ok: true, data: { diff, proposedYaml, oldEnabledTables, newEnabledTables, warnings } };
     }
 
+    // Spec 174 §3.2 — barrier spans ktx.yaml write → catalog reload → policy commit.
+    return withDisplayWriteBarrier(["C", "D", "P", "L"], async () => {
     const { auditId } = await auditedWriteFile(projectRoot, "ktx.yaml", proposedYaml, {
       enabled: true,
       changeType: "enabled_tables_update",
       assetKind: "governance",
-      actorType: "ui_admin",
+      ...auditActorFields(trustedActorFromRequest(request)),
       source: "connections_enabled_tables_api",
       targetId: connId,
       oldSummary: { count: oldEnabledTables.length, enabledTables: oldEnabledTables },
       newSummary: { count: newEnabledTables.length, enabledTables: newEnabledTables },
-      diff,
-      requestId: request.id
+      diff
     });
 
     let catalogRuntimeAck = false;
@@ -1407,16 +1622,29 @@ export function buildServer() {
         runtimeAck: policyRuntimeAck
       }
     };
+    });
   });
 
   app.post<{
     Params: { connId: string };
-  }>("/api/connections/:connId/test", async (request) => {
+    Body: { purpose?: string };
+  }>("/api/connections/:connId/test", async (request, reply) => withRequestTiming(request, async () => {
+    const purpose = parseProbePurpose(request.body?.purpose);
+    if (!purpose) throw enabledTableError("BAD_REQUEST", "purpose must be automatic or manual");
     const projectRoot = await resolveProjectRoot();
     const { connId } = request.params;
-    const result = await testConnection(projectRoot, connId);
+    // Spec 174 §5 — bounded shared queue; latencyMs stays the KTX command time only.
+    const generation = displayGenerations().L;
+    const { value: result, timing } = await probeScheduler.submit({
+      key: `${projectRoot}\u0000L${generation}\u0000${connId}\u0000test`,
+      generation,
+      purpose,
+      signal: clientAbortSignal(reply),
+      run: () => testConnection(projectRoot, connId)
+    });
+    logProbeTiming(request, "test", purpose, timing);
     return { ok: true, data: result };
-  });
+  }));
 
   app.post<{
     Params: { connId: string };
@@ -1704,10 +1932,11 @@ export function buildServer() {
     const validationId =
       typeof body.validationId === "string" ? body.validationId : "";
     try {
-      const result = await publishSemanticAssets(projectRoot, {
-        validationId,
-        confirmOverwrite: body.confirmOverwrite === true
-      });
+      const result = await publishSemanticAssets(
+        projectRoot,
+        { validationId, confirmOverwrite: body.confirmOverwrite === true },
+        { actor: actorIdFromRequest(request) }
+      );
       return reply.send({ ok: true, data: result });
     } catch (error) {
       if (error instanceof SemanticAssetValidationError) {
@@ -1836,6 +2065,8 @@ export function buildServer() {
       if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
     }
     const startedAt = new Date().toISOString();
+    const consumedFiles = writtenFiles.slice();
+    const consumedSourceEntries = [...changedSources.entries()];
     const reindex = await reindexProject(projectRoot, { force });
     const finishedAt = new Date().toISOString();
     const reindexRecord = {
@@ -1845,12 +2076,31 @@ export function buildServer() {
       stderr: reindex.stderr
     };
     // M32: write a lightweight history record so /publish/history can show
-    // the reindex result alongside normal publish batches.
+    // the reindex result alongside normal publish batches. The snapshot is
+    // the pending set at sync start, so a write that lands during reindex
+    // stays on the workbench for the next sync.
+    const pending = await describePendingReleaseAssets(projectRoot, {
+      filePaths: consumedFiles.map((file) => file.filePath),
+      sources: consumedSourceEntries.map(([, source]) => source)
+    });
     const historyRecord = await recordManualReindex(projectRoot, {
+      actor: actorIdFromRequest(request),
       force,
       startedAt,
-      reindex: reindexRecord
+      reindex: reindexRecord,
+      files: pending.files,
+      changedSources: pending.changedSources,
+      connectionIds: pending.connectionIds
     });
+    if (reindexRecord.ok) {
+      const consumed = new Set(consumedFiles);
+      for (let index = writtenFiles.length - 1; index >= 0; index -= 1) {
+        if (consumed.has(writtenFiles[index])) writtenFiles.splice(index, 1);
+      }
+      for (const [key, value] of consumedSourceEntries) {
+        if (changedSources.get(key) === value) changedSources.delete(key);
+      }
+    }
     return {
       ok: true,
       data: {
@@ -1882,13 +2132,15 @@ export function buildServer() {
             schema: typeof body.scope.schema === "string" ? body.scope.schema : undefined
           }
         : undefined;
-    const result = await exportSemanticAssetPackage(projectRoot, {
+    const exportRequest = {
       ...(scope ? { scope } : {}),
       includeWiki: body.includeWiki === true,
       includeEvals: body.includeEvals === true,
       includeSkills: body.includeSkills === true,
       includeSanitizedKtxYaml: body.includeSanitizedKtxYaml !== false
-    });
+    };
+    const result = await exportSemanticAssetPackage(projectRoot, exportRequest);
+    await recordSemanticAssetExport(actorIdFromRequest(request), exportRequest, result);
     return { ok: true, data: result };
   });
 
@@ -1942,6 +2194,7 @@ export function buildServer() {
   registerTokenRoutes(app);
   registerPolicyRuntimeRoutes(app);
   registerAuditRoutes(app);
+  registerAgentAuditRoutes(app);
   registerMcpToolsRoutes(app);
   registerMcpPlaygroundRoutes(app);
   registerMcpRuntimeRoutes(app);
@@ -1952,11 +2205,12 @@ export function buildServer() {
   registerSuiteImportRoutes(app);
   registerRunnerRoutes(app);
   registerMonitorRoutes(app);
+  registerFieldQuestionRoutes(app);
   registerR1ObservabilityRoutes(app);
   registerCallMonitorRoutes(app);
   registerRiskReviewRoutes(app);
   registerReleaseReadinessRoutes(app);
-  registerLicenseRoutes(app);
+  registerImportScopeRoutes(app);
   registerSkillsRoutes(app);
 
   app.setNotFoundHandler(async (request, reply) => {
@@ -1978,18 +2232,33 @@ export function buildServer() {
         }
       } satisfies ErrorEnvelope);
     }
-    const filePath = await staticFilePath(request.url);
-    return reply.type(contentType(filePath)).send(createReadStream(filePath));
+    return serveStaticAsset(request, reply, distDir());
   });
 
   return app;
 }
 
-async function start() {
+export type StartupTimings = {
+  policyMs: number;
+  catalogScanMs: number;
+  listenMs: number;
+  displayReadyMs: number | null;
+};
+
+/** Spec 174 T0 — shared startup sequence (also used by the performance fixture server). */
+export async function startServer(options: { displayPrewarm?: boolean } = {}): Promise<{
+  app: ReturnType<typeof buildServer>;
+  proxy: ReturnType<typeof buildProxy>["server"];
+  host: string;
+  port: number;
+  timings: StartupTimings;
+}> {
+  const t0 = performance.now();
   // Spec 98 §8.3 — compile verified EffectivePolicy before accepting traffic.
   // Empty policyVersion must not be the steady-state after a clean start.
   const { commitEffectivePolicy } = await import("./proxy/acl.js");
   await commitEffectivePolicy();
+  const t1 = performance.now();
 
   // Perform initial catalog scan so local YAML assets are ready on cold boot
   try {
@@ -1998,19 +2267,76 @@ async function start() {
   } catch (error) {
     console.warn("[catalog-reload] initial scan failed on startup:", error);
   }
+  const t2 = performance.now();
 
   const app = buildServer();
   const host = process.env.LUCY_WEBUI_HOST ?? "127.0.0.1";
   const port = Number(process.env.LUCY_WEBUI_PORT ?? DEFAULT_WEBUI_PORT);
   await app.listen({ host, port });
+  const t3 = performance.now();
+  let displayReadyMs: number | null = null;
+  if (options.displayPrewarm !== false) {
+    await prewarmDisplaySnapshots();
+    displayReadyMs = performance.now() - t3;
+  }
 
-  const { server: proxy, host: proxyHost, port: proxyPort } = buildProxy();
+  await recoverResponseLedger();
+  const projection = createProjectionScheduler({
+    getStore: getSecurityStore,
+    getTarget: getAuditDb,
+    onStatus: recordProjectionStatus
+  });
+  const { server: proxy, host: proxyHost, port: proxyPort } = buildProxy({
+    onOperationSettled: () => projection.trigger()
+  });
+  proxy.on("close", () => projection.stop());
+  projection.start();
   await new Promise<void>((resolve, reject) => {
     proxy.listen(proxyPort, proxyHost, resolve);
     proxy.on("error", reject);
   });
   console.log(`Lucy WebUI listening on http://${host}:${port}`);
   console.log(`MCP proxy listening on http://${proxyHost}:${proxyPort}/mcp`);
+  return {
+    app,
+    proxy,
+    host,
+    port,
+    timings: { policyMs: t1 - t0, catalogScanMs: t2 - t1, listenMs: t3 - t2, displayReadyMs }
+  };
+}
+
+/**
+ * T07 boot recovery, before the proxy listens: close operations the previous
+ * process left open as `interrupted` (never `delivered`), and re-sync the ledger's
+ * projection cursor with what the audit database proves. A failure is logged and
+ * leaves the stricter state: the proxy still fails closed per request.
+ */
+async function recoverResponseLedger(): Promise<void> {
+  const store = await getSecurityStore();
+  if (!store.ok) {
+    console.error(`[lucy-audit] ledger recovery skipped: ${store.code}/${store.reason}`);
+    return;
+  }
+  const interrupted = await recoverInterruptedOperations(store.value);
+  if (!interrupted.ok) console.error(`[lucy-audit] interrupted-operation recovery failed: ${interrupted.code}`);
+  else if (interrupted.value.interrupted.length > 0) {
+    console.warn(
+      `[lucy-audit] closed ${interrupted.value.interrupted.length} operation(s) as interrupted ` +
+        `(${interrupted.value.preparedUnconfirmed.length} had a durable response_prepared)`
+    );
+  }
+  try {
+    const target = await getAuditDb();
+    const cursor = await recoverProjectionCursor(store.value, AUDIT_PROJECTOR_NAME, () => readTargetCursor(target));
+    if (!cursor.ok) console.error(`[lucy-audit] projection cursor recovery failed: ${cursor.code}`);
+  } catch (error) {
+    console.error("[lucy-audit] projection cursor recovery failed", error instanceof Error ? error.message : "unknown");
+  }
+}
+
+async function start() {
+  await startServer();
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

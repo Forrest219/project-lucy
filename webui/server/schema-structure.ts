@@ -67,8 +67,11 @@ export type SchemaStructurePreview = {
   downgraded: SchemaStructureColumn[];
 };
 
+/** `ktx sql --max-rows` accepts 1–10000. A full page is treated as truncated. */
+const SCHEMA_STRUCTURE_MAX_ROWS = 10_000;
+
 export class SchemaStructureError extends Error {
-  code: "CONNECTION_NOT_FOUND" | "SCHEMA_UNSUPPORTED" | "INVALID_SCHEMA";
+  code: "CONNECTION_NOT_FOUND" | "SCHEMA_UNSUPPORTED" | "INVALID_SCHEMA" | "READ_FAILED";
   statusCode: number;
 
   constructor(code: SchemaStructureError["code"], message: string, statusCode = 400) {
@@ -186,12 +189,22 @@ ORDER BY c.table_name, c.ordinal_position
 `.trim().replace(/\s+/g, " ");
 }
 
-function parseColumns(result: SqlResult): ColumnInput[] {
+function structureRows(result: SqlResult): unknown[] {
   const json = result.json;
   const rows =
     json && typeof json === "object" && Array.isArray((json as { rows?: unknown }).rows)
       ? (json as { rows: unknown[] }).rows
-      : [];
+      : null;
+  if (!result.ok || rows === null) {
+    throw new SchemaStructureError("READ_FAILED", "读取表结构失败。");
+  }
+  if (rows.length >= SCHEMA_STRUCTURE_MAX_ROWS) {
+    throw new SchemaStructureError("READ_FAILED", "这个 Schema 的字段数超过一次可读取的上限。");
+  }
+  return rows;
+}
+
+function parseColumns(rows: unknown[]): ColumnInput[] {
   const columns: ColumnInput[] = [];
   for (const row of rows) {
     if (!Array.isArray(row) || row.length < 6) continue;
@@ -231,8 +244,8 @@ export async function previewSchemaStructure(
   }
   const execute = deps.runSqlImpl ?? runSql;
   const result = await execute(projectRoot, connectionId, sqlFor(protocolOf(connection), safeSchema), {
-    maxRows: 20000,
+    maxRows: SCHEMA_STRUCTURE_MAX_ROWS,
     timeoutMs: 30000
   });
-  return buildMinimalSchemaManifest(safeSchema, parseColumns(result));
+  return buildMinimalSchemaManifest(safeSchema, parseColumns(structureRows(result)));
 }

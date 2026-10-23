@@ -1,0 +1,198 @@
+# Lucy 安全缺陷登记（机器可校验事实源）
+# 依据：docs/specs/lucy-20261018-enterprise-security-and-real-e2e-spec.md §8.3a / §8.4
+# 初始化：T00（2026-10-18，runId t00-20261018-0042），基线 lucy-v2.0 / fbed6d4；评估 v1.1（V-01～V-08、D-01～D-02、G-01～G-05、依赖条目）。
+# 规则：P0/P1 只能 open | fixed，不得 accepted_risk；fixed 必须填 fixedIn（提交 SHA）且 verifiedBy 全部为本次 release evidence 中 passed 的 case variant id；
+#       仅 P2 可 accepted_risk（acceptedBy 填 owner 姓名与日期）；依赖 high/critical 只能 fixed 或附可复核说明的 not_reachable。
+# 每个整改任务在关闭/推进对应条目的同一提交内更新本文件。
+version: 1
+findings:
+  # V-01 客户默认部署即开放管理面，可匿名抢占 owner（T0A-2 最小修复；T02 完整修复）
+  # note: T02 已补齐持久引导状态 / 进程内互斥 / 持久限速 / 统一 401 / role 拒绝解析 / customer Cookie Secure；fixedIn 待 T02 提交后回填 SHA
+  - id: V-01
+    severity: P0
+    status: fixed
+    spec: "§3.1"
+    fixedIn: eb4f6f2
+    verifiedBy: [SEC-01, SEC-02, SEC-05, SEC-08]
+    acceptedBy: null
+  # V-02 停用 Agent 绕过 Resources/Prompts（T0A-3 最小修复；T04 完整修复）
+  # note: T04-1 统一准入、T04-2 会话归属、T04-3 撤销发送屏障与客户模式 /mcp/skills passthrough 关闭已落地；fixedIn 待 T04-3 提交后回填 SHA
+  - id: V-02
+    severity: P1
+    status: fixed
+    spec: "§3.3"
+    fixedIn: b2ecc58
+    verifiedBy: [SEC-07, SEC-08, SEC-21]
+    acceptedBy: null
+  # V-03 退出/重置密码后旧管理 Cookie 仍可重放（T03）
+  # note: T03 已落地 v2 持久会话（jti/account_uid/session_epoch）、先吊销后写配置、退出耐久吊销、idle 30min/绝对 12h、no-store、503 AUTH_STATE_UNAVAILABLE；fixedIn 待 T03 提交后回填 SHA
+  - id: V-03
+    severity: P1
+    status: fixed
+    spec: "§3.2"
+    fixedIn: ed4b4d6
+    verifiedBy: [SEC-04]
+    acceptedBy: null
+  # V-04 Wiki / 语义层写入的管理员归因缺失，无登录事件（T08）
+  # note: T08-1/2 已落地：request-actor（可信 actor 只取已验证会话或显式 open 模式 local-admin，无请求用 system actor，已登录请求不再回退 local-admin）已显式透传到 Wiki(5)/语义层(2)/Skill(3)/Agent/Role/Token/ktx.yaml 写入与审计读接口；forwarded/User-Agent/body.actor 不影响归因，actor_ip 只取 socket peer；登录成功/失败/退出/引导/账户创建·改角色·轮换密码·停用·删除写入 security_events；fixedIn 待 T08 提交后回填 SHA。未覆盖：eval/cases、security-candidates、semantic-assets、branding、suite-import 等写入点仍沿用旧默认（见交付报告）
+  - id: V-04
+    severity: P1
+    status: fixed
+    spec: "§5.2"
+    fixedIn: f95049b
+    verifiedBy: [SEC-05, SEC-18, SEC-20]
+    acceptedBy: null
+  # V-05 配置审计 Diff 暴露管理员密码哈希，含历史数据清理（T08）
+  # note: T08-2 写入前脱敏（凭据值逐行掩码、认证事件 key allowlist、Wiki/Skill 正文只存摘要，集中在 recordConfigChange/updateConfigChangeStatus）+ T08-3 历史清理工具 scripts/security/scrub-audit-secrets.mts（dry-run → 校验 digest → 加密备份并回读 → 单事务改写 → 维护事件 → 复扫为 0）；旧数据库备份/已导出文件/本次备份不由工具清理，需按保留策略处置；fixedIn 待 T08 提交后回填 SHA
+  - id: V-05
+    severity: P2
+    status: fixed
+    spec: "§5.3"
+    fixedIn: f95049b
+    verifiedBy: [SEC-17, SEC-20]
+    acceptedBy: null
+  # V-06 首个 owner bootstrap 并发覆盖（T02）
+  # note: 引导互斥区覆盖 fresh read→验证密钥→写管理员→消费引导→commit；并发第二请求 409；fixedIn 待 T02 提交后回填 SHA
+  - id: V-06
+    severity: P2
+    status: fixed
+    spec: "§3.1"
+    fixedIn: eb4f6f2
+    verifiedBy: [SEC-02]
+    acceptedBy: null
+  # V-07 MCP Wiki 读取跟随越界符号链接（T06）
+  # note: T06 已落地 fs-safe `readContextFile`（任一层 symlink / 遍历 / 编码变体 / O_NOFOLLOW+打开后身份检查）并用于 Wiki 与 Skill 读取；assertReadable / resolveWritable 对 wiki/、skills/ 拒绝 symlink；fixedIn 待 T05+T06 提交后回填 SHA
+  - id: V-07
+    severity: P2
+    status: fixed
+    spec: "§4.5"
+    fixedIn: 5ce41a5
+    verifiedBy: [SEC-15]
+    acceptedBy: null
+  # V-08 Wiki frontmatter 服务端代码执行（T0A-1）
+  - id: V-08
+    severity: P0
+    status: fixed
+    spec: "§4.6"
+    fixedIn: ba89b20
+    verifiedBy: [SEC-15-FM-01, SEC-15-FM-02, SEC-15-FM-03, SEC-15-FM-04, SEC-15-FM-05, SEC-15-FM-06]
+    acceptedBy: null
+  # D-01 Spec 170 上下文全开放（T05/T06）
+  # note: T05+T06 同一交付：对象 ACL 默认拒绝（authorizeContext，同角色闭合）、14 篇模板 Wiki / 模板 Skill 显式 ACL、迁移工具与 smoke 授权/拒绝断言；fixedIn 待 T05+T06 提交后回填 SHA
+  - id: D-01
+    severity: P1
+    status: fixed
+    spec: "§4"
+    fixedIn: 5ce41a5
+    verifiedBy: [SEC-10, SEC-13, SEC-14]
+    acceptedBy: null
+  # D-02 审计写失败后仍释放数据（T07）
+  # note: T07-1..4 已落地：所有经准入的 MCP 响应先耐久写 request_admitted、授权复核后耐久写 response_prepared 才释放（非流式 JSON 与有界缓冲 SSE），失败 503 AUDIT_UNAVAILABLE、不 fallback；崩溃遗留标 interrupted 不伪造 delivered；幂等投影 + complete=false；性能预算见 inbox/e2e/<runId>/audit-overhead.json。Plan T07 步骤 5（配置写 intent / Trace 投影）未含；fixedIn 待 T07 提交后回填 SHA
+  - id: D-02
+    severity: P1
+    status: fixed
+    spec: "§5.1"
+    fixedIn: 3260b01
+    verifiedBy: [SEC-19]
+    acceptedBy: null
+  # D-03 行级策略字段绑定对 Schema Manifest 文件名大小写敏感：大写 schema 下合法列被判 unknown
+  # 现象（2026-10-22 客户环境诊断报告）：角色 finbp_cdn 对 sql_server / BIDM / hs_sy_bu_metric 设置行级条件
+  #   hs_manage_bu_l2 = 'CDN产品'（该列在 SQL Server 物理表与 Lucy 语义模型中均存在），PATCH /api/admin/roles/finbp_cdn
+  #   （dryRun: true）返回 400 / INVALID_ROLE / role_resolution_failed:finbp_cdn:row_policy_field_unresolved:unknown；
+  #   移除行级策略后返回 200。正式角色配置与版本回读未变化，新权限未保存生效。
+  # 根因（已用复现用例证明，非推测）：同一份 Schema Manifest 有两条读取路径，对 schema 名的处理不一致——
+  #   源映射 acl.ts:300 用 normalizeRef(basename) 得到小写化名，但通过 glob("**/_schema/*.yaml") 取磁盘真实文件名，能命中 BIDM.yaml；
+  #   字段目录 webui/server/proxy/row-policy.ts 的 loadPhysicalColumnsFromSchema 用已小写化的 entry.schema 拼路径
+  #   （.../_schema/bidm.yaml），在大小写敏感文件系统上不存在 → 物理列集合为空 → overlay 普通列因不在物理列集合中被丢弃、
+  #   计算列因 isProvenRowLevelExpr 依赖物理列也被丢弃 → catalog.columns 为空 → bindRowPolicyField 判定 unknown。
+  # 影响面：清单文件名保留原始大小写（大写 schema，SQL Server / Oracle 常见）的连接上，该表无法保存任何行级条件；
+  #   开发期不可见——macOS / APFS 默认大小写不敏感，bidm.yaml 能命中 BIDM.yaml；客户环境为 Linux，问题必现。
+  #   仓库既有行策略测试全部使用小写 schema（fin），该路径从未被覆盖。
+  # 处置（2026-10-22 Forrest 裁决）：只登记不修，留给 v2.0 线排期；本次不授权实现。
+  #   修复形态与回归要求见 docs/specs/lucy-20261022-v2p5-row-permission-management-spec.md §5.5 与 V19–V22。
+  #   复现步骤（持久记录于本 note 与 L25-14 Spec §1.4 / §5.5）：用 vitest mock node:fs/promises 的 readFile，使其按大小写敏感语义
+  #   判定文件名是否存在；造一份 _schema/BIDM.yaml（含目标列）与同名 overlay，跑一次带 scoped 行级条件的角色编译；
+  #   同一内容仅清单文件名大小写不同（大写 BIDM.yaml / 小写 bidm.yaml），结果从 row_policy_field_unresolved:unknown 变为可绑定。
+  #   工作副本在 inbox/2026-10-22-行级策略字段绑定诊断/（gitignore，不入库）。
+  #   注意：不得以把行级策略改成「全部行」绕过本条报错——那会放宽数据可见范围。
+  - id: D-03
+    severity: P1
+    status: open
+    spec: "L25-14 §1.4 / §5.5"
+    fixedIn: null
+    verifiedBy: []
+    acceptedBy: null
+  # G-01 文档称强制，release workflow 无真实 E2E 依赖（T14）
+  # note: T14 代码已交付并有静态契约测试（scripts/gates/customer-release-workflow.test.mjs）：release-package 与每个客户发布分支都经
+  #       customer-release-readiness 依赖 real-e2e，客户镜像单架构 amd64、只 promote 已测试 digest、门禁后不重建；demo-e2e / postgres-demo-e2e 已改名为
+  #       *-db-smoke。**但 G-01 仅在目标 amd64 单副本 K8s 上真实跑通后才可标 fixed**：该基础设施（R8 受保护 runner + K8s）尚未提供，
+  #       real-e2e job 从未被调度，故保持 open（BLOCKED），fixedIn 不填。
+  - id: G-01
+    severity: P1
+    status: open
+    spec: "§8.3"
+    fixedIn: null
+    verifiedBy: []
+    acceptedBy: null
+  # G-02 blocked / dry-run 可被汇总为 passed（T09/T13）
+  # T13 补充：唯一 verifier 的 GATE-01-V01..V16 反向测试 16/16 通过（本地，经 node:test 事件 API 采集，非 stdout 解析）；最终 release 证据中仍需 GATE-01 passed。
+  # note: T09 旧入口统一 Spec §8.2：p1-governance/publish-regression smoke blocked→exit 2；p1-release-readiness 按子进程退出码判状态（不看 stdout 词语）、dry-run→dry_run/exit 3、--allow-blocked 只 collect/exit 3、不签 releaseReady；p1-agent-e2e blocked=2、dry-run 不计 pass、任意 500 不再算正确 deny；旧 SOW 打包器拒绝 dry-run/跨 run/runner 补造 trace。最终客户判定仍由 T13 独立 verifier 负责；fixedIn 待 T09 提交后回填 SHA
+  - id: G-02
+    severity: P1
+    status: fixed
+    spec: "§8.2"
+    fixedIn: 39da52d
+    verifiedBy: [GATE-01]
+    acceptedBy: null
+  # G-03 Agent 评分与 Trace 完整率不能证明实际查过数据（T12/T13）
+  # note: T12/T13 代码已交付并有反作弊单测（无服务端成功 query 不通过、runner 自造 trace 无效、他人 Token/旧窗口事件不计、3/3 重复、跨产品一致）。
+  #       **G-03 仅在自动两 CLI（Claude Code/OpenClaw）3/3 + 人工 GUI（WorkBuddy/Cursor）清单通过后才可标 fixed**（R4 v5）：缺 CLI 证据或缺人工 pack 时保持 open。
+  - id: G-03
+    severity: P1
+    status: open
+    spec: "§8.1"
+    fixedIn: null
+    verifiedBy: []
+    acceptedBy: null
+  # G-04 用例与夹具落后于最新版功能（selector 33 项、旅程待写、fixture 漂移；T09/T10/T11）
+  # note: T09 关闭 selector 契约（35 项失败 → 0：32 项补录登记、1 项 workbench-pending-count 真实漂移改用 workbench-batch-sync-hint、2 项仅负向引用经正负引用识别归类）、contract fixture（角色/连接/manifest 对齐、development+loopback 显式、实例核对）与旧 agent harness（content root/eval 路径、去机器绑定）漂移。新旅程用例由 T10/T11 编写，不在本条关闭范围；fixedIn 待 T09 提交后回填 SHA
+  - id: G-04
+    severity: P1
+    status: fixed
+    spec: "§6"
+    fixedIn: 39da52d
+    verifiedBy: [GATE-01]
+    acceptedBy: null
+  # G-05 生产依赖风险未纳入发布门禁（T09；对应 SEC-23）
+  # T15 复核：2026-10-18 本地 `npm --prefix webui audit --omit=dev --json`：high=0 critical=0 moderate=4；verifier 的 npm audit 与本登记交叉比对一致（crossCheckDependencies）。
+  # note: T09 overrides.fast-uri 3.1.6 → 3.1.8（修复 GHSA-qw65-cvwx-89v3 / GHSA-58mr-gqgx-xq4g / GHSA-hrr3-gc8f-f4qj），`npm audit --omit=dev` high/critical = 0；剩余 4 条 moderate 逐条登记于 dependencies。CI 依赖门禁接线属 T14；fixedIn 待 T09 提交后回填 SHA
+  - id: G-05
+    severity: P1
+    status: fixed
+    spec: "§8"
+    fixedIn: 39da52d
+    verifiedBy: [SEC-23]
+    acceptedBy: null
+dependencies:
+  # fast-uri：webui/package.json overrides 原锁定 3.1.6（提交 5b31145；受影响 GHSA-qw65-cvwx-89v3 <3.1.7、GHSA-58mr-gqgx-xq4g =3.1.6、GHSA-hrr3-gc8f-f4qj <3.1.8）。T09 升到 3.1.8（含 package-lock），Fastify/ajv 链 `npm ls fast-uri` 全部 deduped 为 3.1.8；`npm audit --omit=dev` high/critical 0
+  - package: fast-uri
+    severity: high
+    status: fixed
+    rationale: null
+  # gray-matter 4.0.3：真实风险为默认 JS 引擎（V-08，已由 server/markdown-frontmatter.ts 唯一入口封堵）；本条 moderate 仅是经 js-yaml 3.x → argparse → sprintf-js 的传递链告警。
+  - package: gray-matter
+    severity: moderate
+    status: not_reachable
+    rationale: "gray-matter 只经 js-yaml 库入口解析 YAML；告警源 sprintf-js<=1.1.3（GHSA-hp3w-g68c-fv3c，不受控精度说明符致 DoS）仅被 argparse 加载，而 argparse 在 js-yaml 3.15.2 中只被 CLI `bin/js-yaml.js` require（`grep -rn require('argparse') node_modules/js-yaml/{lib,index.js}` 无结果）。Lucy 不调用 js-yaml CLI，不向 sprintf-js 传入任何外部格式串；不宣称为远程可利用。若升级 gray-matter 大版本再复核。"
+  - package: js-yaml
+    severity: moderate
+    status: not_reachable
+    rationale: "仅作为 gray-matter 的传递依赖（3.15.2，lock 中由 overrides 固定）。受影响路径在 argparse/sprintf-js（见 gray-matter 条目），库入口 `require('js-yaml')` 不加载 argparse；无 Lucy 代码直接 import js-yaml（Lucy 自有 YAML 解析用 `yaml` 包）。"
+  - package: argparse
+    severity: moderate
+    status: not_reachable
+    rationale: "argparse 1.0.10 只被 js-yaml 的 CLI 入口 `bin/js-yaml.js` 引用，运行时服务进程不加载；其唯一告警来自 sprintf-js 传递依赖，无外部可控参数进入 argparse 的格式化路径。"
+  - package: sprintf-js
+    severity: moderate
+    status: not_reachable
+    rationale: "sprintf-js 1.0.3（GHSA-hp3w-g68c-fv3c，需向 sprintf 传入攻击者可控的超大精度说明符）仅被 argparse 间接使用；该调用链不在 Lucy 运行时加载路径内，也没有任何外部输入作为格式串。性质为本地/构建期 DoS 类告警，不是远程漏洞。"

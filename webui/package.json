@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently \"vite\" \"tsx watch server/index.ts\"",
-    "build": "vite build",
+    "build": "vite build && tsx scripts/precompress-assets.mts",
     "start": "tsx server/index.ts",
     "pretest": "npm run lint:terminology && npm run lint:ia-boundary",
     "test": "vitest run --maxWorkers=1",
@@ -22,13 +22,16 @@
     "pree2e:impacted": "npm run e2e:selector-contract && npm run e2e:fixture",
     "e2e:nightly": "playwright test --grep '@pr-smoke|@pr-impacted|@nightly'",
     "pree2e:nightly": "npm run e2e:selector-contract && npm run e2e:fixture",
-    "e2e:release": "playwright test",
-    "pree2e:release": "npm run e2e:selector-contract && npm run e2e:fixture",
+    "e2e:contract:release": "playwright test",
+    "pree2e:contract:release": "npm run e2e:selector-contract && npm run e2e:fixture",
+    "e2e:release": "echo 'e2e:release is the browser CONTRACT regression (fixture instance, no real Agents, cannot sign a release). Use e2e:contract:release for it and e2e:real:* for real-user gates.' && npm run e2e:contract:release",
+    "e2e:real:management": "node ../scripts/e2e/run-management.mjs",
     "e2e:report": "playwright show-report playwright-report",
     "e2e:selector-contract": "node scripts/check-selector-contract.mjs",
     "pretest:e2e": "npm run e2e:selector-contract",
     "verify:gate": "tsx ../scripts/smoke/verify-202608-access-governance-gate.mjs",
-    "verify:test": "tsx --test ../scripts/smoke/verify-202608-access-governance-gate.test.mjs"
+    "verify:test": "tsx --test ../scripts/smoke/verify-202608-access-governance-gate.test.mjs",
+    "perf:entry": "tsx scripts/entry-performance.mts"
   },
   "keywords": [],
   "author": "",
@@ -55,7 +58,7 @@
     "zod": "^4.4.3"
   },
   "overrides": {
-    "fast-uri": "3.1.6",
+    "fast-uri": "3.1.8",
     "find-my-way": "9.9.0",
     "js-yaml": "3.15.2"
   },

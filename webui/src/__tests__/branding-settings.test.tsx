@@ -10,7 +10,7 @@ import type { BrandingInfo } from "../lib/branding";
 
 const baseBranding: BrandingInfo = {
   productTitle: "Lucy WebUI",
-  tagline: "Data Agent MCP",
+  tagline: "可信 Agent 数据层",
   productTitleOverride: "",
   taglineOverride: "",
   hasCustomLogo: false,
@@ -21,7 +21,7 @@ const baseBranding: BrandingInfo = {
   updatedAt: null,
   defaults: {
     productTitle: "Lucy WebUI",
-    tagline: "Data Agent MCP"
+    tagline: "可信 Agent 数据层"
   }
 };
 
@@ -88,7 +88,7 @@ describe("BrandingSettings", () => {
       "默认值：Lucy WebUI"
     );
     expect(screen.getByTestId("branding-tagline-help")).toHaveTextContent(
-      "默认值：Data Agent MCP"
+      "默认值：可信 Agent 数据层"
     );
     const saveButton = screen.getByRole("button", { name: "保存更改" });
     expect(saveButton.className).toMatch(/pl-btn--primary/);

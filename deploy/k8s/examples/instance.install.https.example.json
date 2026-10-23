@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "instanceId": "must-replace-instance",
+  "profile": "k3s",
+  "intent": "install",
+  "authState": "uninitialized",
+  "credentialState": "new",
+  "context": "MUST-REPLACE-kubectl-context",
+  "namespace": "lucy-test",
+  "release": "lucy-starrocks",
+  "deployment": "lucy",
+  "service": "lucy",
+  "pvcName": "lucy-data",
+  "bootstrapSecret": "lucy-bootstrap",
+  "access": "https",
+  "webuiUrl": "https://MUST-REPLACE-webui-host",
+  "publicMcpUrl": "https://MUST-REPLACE-mcp-host/mcp",
+  "offlineNodes": {
+    "MUST-REPLACE-node": "local"
+  },
+  "values": {
+    "lucy": {
+      "version": "2.0.0",
+      "bundledKtxVersion": "0.16.0"
+    },
+    "env": {
+      "LUCY_TRUST_PROXY": "1",
+      "LUCY_TRUSTED_PROXY_CIDRS": "MUST-REPLACE-gateway-egress-cidr"
+    }
+  },
+  "externalTlsReviewed": false
+}

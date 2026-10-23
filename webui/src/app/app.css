@@ -231,8 +231,8 @@
     @apply object-contain p-0.5;
     background: transparent;
   }
-  /* Single-column brand text: tagline `Data Agent MCP` sizes the track;
-     16px `Lucy WebUI` uses mild letter-spacing so both lines share the
+  /* Single-column brand text: the short `可信 Agent 数据层` tagline sizes the
+     track; 16px `Lucy WebUI` uses mild letter-spacing so both lines share the
      same left/right edges without splitting the wordmark. */
   .pl-brand-text.pl-brand-text {
     display: grid;
@@ -393,16 +393,31 @@
     @apply text-[12px] text-fg-muted/80;
   }
   .pl-sidebar-footer { @apply relative z-10 mt-4 shrink-0 border-t border-border-default bg-bg-surface px-3 pt-3; }
-  /* Help + version on one row: left CTA, right muted version — avoids the
-     version reading as a subtitle under 系统手册. */
-  .pl-sidebar-utility { @apply flex items-center justify-between gap-2; }
+  .pl-sidebar-utility { @apply flex items-center; }
   .pl-sidebar-help-link {
-    @apply flex min-h-9 min-w-0 items-center gap-2.5 rounded-md px-3 text-sm font-medium text-fg-body no-underline transition-colors;
+    @apply flex min-h-9 shrink-0 items-center gap-2.5 whitespace-nowrap rounded-md px-3 text-sm font-medium text-fg-body no-underline transition-colors;
   }
   .pl-sidebar-help-link:hover { @apply bg-bg-muted text-fg-default; }
-  .pl-sidebar-version {
-    @apply shrink-0 px-1 text-xs text-fg-muted;
-  }
+  /* Spec 188: one quiet account row; portal escapes sidebar overflow clipping. */
+  .pl-account { @apply min-w-0 w-full; }
+  .pl-account-trigger { @apply flex min-h-10 w-full min-w-0 items-center gap-2 rounded-md px-3 text-left text-sm font-medium text-fg-body transition-colors; }
+  .pl-account-trigger:hover,
+  .pl-account-trigger[aria-expanded="true"] { @apply bg-bg-muted text-fg-default; }
+  .pl-account-trigger:active { @apply bg-bg-subtle; }
+  .pl-account-trigger:disabled { @apply cursor-wait opacity-60; }
+  .pl-account-name { @apply min-w-0 flex-1 truncate; }
+  .pl-account-chevron { @apply text-fg-muted transition-transform; }
+  .pl-account-chevron--open { @apply rotate-180; }
+  .pl-account-popover { @apply fixed z-50 overflow-y-auto overscroll-contain rounded-md border border-border-default bg-bg-surface p-1 shadow-card; }
+  .pl-account-summary { @apply flex flex-col gap-1 border-b border-border-default px-3 py-3 text-xs text-fg-muted; overflow-wrap: anywhere; }
+  .pl-account-summary strong { @apply text-sm font-medium text-fg-default; }
+  .pl-account-item { @apply flex min-h-9 w-full items-center gap-2 rounded-sm px-3 py-2 text-left text-sm font-normal text-fg-body no-underline transition-colors; }
+  .pl-account-item:hover,
+  .pl-account-item:focus { @apply bg-bg-muted text-fg-default; }
+  .pl-account-item:active { @apply bg-bg-subtle; }
+  .pl-account-trigger:focus-visible,
+  .pl-account-item:focus-visible { @apply outline outline-2 outline-offset-[-2px] outline-primary; }
+  .pl-account-separator { @apply my-1 border-t border-border-default; }
   .pl-help-button {
     @apply inline-flex h-9 w-9 items-center justify-center rounded-sm border border-border-default bg-bg-surface text-sm font-semibold text-fg-default no-underline shadow-card transition-colors;
   }
@@ -609,6 +624,9 @@
      keep their own visual treatment. */
   .pl-metric-card strong { @apply text-xl font-semibold text-fg-default; }
   .pl-metric-card small { @apply text-xs text-fg-muted; }
+  /* Spec 174 PERF-09: the unknown "—" (fallback-font glyph) must not change the value line box when the count arrives. */
+  .pl-connection-metric-value { @apply inline-block h-7 align-top leading-7; }
+  .pl-schema-asset-actions-pending { @apply inline-block h-4 align-top leading-4; }
   .pl-metric-card-value { @apply text-xl font-semibold text-fg-default; }
   .pl-metric-card-value--xl { @apply text-4xl font-semibold leading-none text-fg-default; }
   .pl-checkbox { @apply size-4 cursor-pointer accent-primary; }
@@ -722,6 +740,22 @@
   .pl-textarea { @apply font-mono leading-relaxed; }
   .pl-input:focus,
   .pl-textarea:focus { @apply outline-none ring-2 ring-primary border-primary; }
+  /* One-line secret: the value scrolls instead of wrapping, and the copy
+     action stays a fixed-height sibling so the row never grows to two lines. */
+  .pl-secret-copy {
+    @apply flex h-10 min-w-0 items-stretch overflow-hidden rounded-md border border-border-default bg-bg-muted;
+  }
+  .pl-secret-copy__value {
+    @apply m-0 block h-10 min-w-0 flex-1 overflow-x-auto whitespace-nowrap bg-transparent px-3 font-mono text-[13px] leading-10 text-fg-default select-all;
+    scrollbar-width: none;
+  }
+  .pl-secret-copy__value::-webkit-scrollbar { display: none; }
+  .pl-secret-copy__action {
+    @apply inline-flex shrink-0 items-center whitespace-nowrap border-0 border-l border-border-default bg-bg-surface px-3 text-[13px] font-medium text-fg-default;
+  }
+  .pl-secret-copy__action:hover { @apply bg-bg-subtle; }
+  .pl-secret-copy__action:focus-visible { @apply outline-none ring-2 ring-inset ring-primary; }
+  .pl-secret-copy__action[data-copied="true"] { @apply text-success-strong; }
 
   /* 工具栏 */
   .pl-toolbar { @apply mb-4 flex flex-wrap items-end gap-4; }
@@ -892,7 +926,7 @@
   .pl-agent-list-table-meta { @apply text-xs font-normal text-fg-muted; }
   .pl-agent-list-row-actions { @apply inline-flex flex-wrap items-center gap-2; }
   .pl-agent-list-table .pl-row-action-link { @apply text-xs font-medium text-fg-default no-underline hover:text-primary hover:underline; }
-  .pl-usage-rank-grid { @apply grid gap-3 xl:grid-cols-3; }
+  .pl-usage-rank-grid { @apply grid items-start gap-3 xl:grid-cols-3; }
   /* Spec 135: elastic rank body — collapses on sparse data, scrollable at ≥10 rows */
   .pl-usage-rank-body {
     min-height: 7rem;
@@ -903,14 +937,14 @@
     @apply flex items-center justify-center;
   }
   .pl-usage-rank-list { @apply m-0 grid list-none gap-2.5 p-0; }
-  /* 单行：Label | Value | Bar（布局对齐排行参考图；颜色用 brand，不跟参考图紫/黑） */
+  /* 单行：Label | Value | Bar。数量用中性灰，不跟越线橙色抢语义（Spec 169） */
   .pl-usage-rank-row {
     @apply grid grid-cols-[minmax(0,1fr)_minmax(2.5rem,auto)_minmax(4rem,1.4fr)] items-center gap-x-3;
   }
   .pl-usage-rank-label { @apply min-w-0 truncate text-xs font-medium text-fg-default; }
   .pl-usage-rank-link { @apply text-xs font-medium text-fg-default no-underline hover:underline; }
-  .pl-usage-rank-track { @apply h-2.5 overflow-hidden rounded-full bg-brand-soft; }
-  .pl-usage-rank-bar { @apply h-full rounded-full bg-brand/75; }
+  .pl-usage-rank-track { @apply h-2.5 overflow-hidden rounded-full bg-bg-muted; }
+  .pl-usage-rank-bar { @apply h-full rounded-full bg-fg-muted/40; }
   .pl-usage-rank-value { @apply justify-self-end text-xs font-normal tabular-nums text-fg-body; }
   .pl-usage-rank-empty { @apply m-0 py-4 text-center text-sm text-fg-muted; }
   .pl-catalog-table { min-width: 0; }
@@ -939,12 +973,19 @@
   .pl-row-more-icon { @apply h-4 w-4; }
   .pl-row-more-menu { @apply absolute right-0 top-full z-20 mt-1 min-w-[160px] rounded-md border border-border-default bg-bg-surface py-1 shadow-card; }
   .pl-row-more-item { @apply block w-full px-3 py-1.5 text-left text-sm text-fg-default no-underline transition hover:bg-bg-muted focus:bg-bg-muted focus:outline-none; }
+  .pl-row-more-item-reason { @apply mt-0.5 block max-w-[14rem] whitespace-normal text-xs font-normal leading-4 text-fg-muted; }
+  button.pl-row-more-item--blocked { @apply cursor-not-allowed text-fg-muted; }
+  button.pl-row-more-item--blocked:hover,
+  button.pl-row-more-item--blocked:focus { background-color: transparent; }
+  button.pl-row-more-item--blocked:focus-visible { @apply outline outline-2 outline-offset-1 outline-primary; }
   .pl-overview-grid { @apply grid gap-4; }
   /* M44: outer flat grid replaces the legacy pl-panel wrapper. Cards keep
      their own border; the gap provides a light visual separator between
      consecutive connections. */
   .pl-overview-grid--flat { @apply gap-3; }
   .pl-connection-row { @apply overflow-hidden rounded-lg border border-border-default bg-bg-surface; }
+  /* An open row menu is absolutely positioned and otherwise clipped by the card. */
+  .pl-connection-row:has(.pl-row-action-more[open]) { @apply relative z-30 overflow-visible; }
   .pl-connection-card-header { @apply grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 border-b border-border-default bg-bg-subtle px-4 py-3; }
   .pl-connection-card-title { @apply flex min-w-0 items-center gap-3; }
   .pl-connection-card-title strong { @apply text-base font-semibold leading-5 text-fg-default; }
@@ -959,20 +1000,26 @@
   .pl-connection-engine-icon-svg { @apply h-5 w-5; }
   .pl-connection-card-badges { @apply hidden; }
   .pl-connection-card-meta { @apply col-start-2 row-start-1 flex flex-wrap items-center justify-end justify-self-end gap-x-3 gap-y-1 text-xs text-fg-muted; }
-  /* Spec 108: compact connectivity health on card header right. */
+  /* Spec 108: compact connectivity health. Resting chip + chevron so the
+     control reads as the entry to ConnectionTestDrawer, not plain meta text. */
   .pl-connection-health {
-    @apply inline-flex max-w-full flex-wrap items-baseline gap-x-1 rounded-md border border-transparent px-1.5 py-0.5 text-left text-xs font-medium text-fg-muted transition-colors;
-  }
-  .pl-connection-health:hover {
-    @apply border-border-default bg-bg-surface text-fg-default;
+    @apply inline-flex max-w-full cursor-pointer flex-wrap items-center gap-x-1 rounded-md border px-2 py-0.5 text-left text-xs font-medium transition-colors;
   }
   .pl-connection-health:focus-visible {
     @apply outline outline-2 outline-offset-1 outline-primary;
   }
-  .pl-connection-health--success { @apply text-success-strong; }
-  .pl-connection-health--warning { @apply text-warning-strong; }
-  .pl-connection-health--danger { @apply text-danger-strong; }
-  .pl-connection-health--muted { @apply text-fg-muted; }
+  .pl-connection-health--success {
+    @apply border-success-strong/30 bg-success-soft text-success-strong hover:border-success-strong/60;
+  }
+  .pl-connection-health--warning {
+    @apply border-warning-strong/35 bg-warning-soft text-warning-strong hover:border-warning-strong/70;
+  }
+  .pl-connection-health--danger {
+    @apply border-danger-strong/30 bg-danger-soft text-danger-strong hover:border-danger-strong/60;
+  }
+  .pl-connection-health--muted {
+    @apply border-border-default bg-bg-surface text-fg-muted hover:border-border-strong hover:bg-bg-muted;
+  }
   .pl-connection-health-latency,
   .pl-connection-health-time { @apply font-normal text-fg-muted; }
   .pl-connection-health--success .pl-connection-health-latency,
@@ -980,8 +1027,15 @@
   .pl-connection-health--danger .pl-connection-health-latency {
     @apply text-inherit opacity-90;
   }
+  .pl-connection-health-chevron { @apply size-3 shrink-0 opacity-80; }
   .pl-connection-meta-tag { @apply inline-flex items-center text-xs font-medium text-fg-muted; }
   .pl-connection-meta-tag--warning { @apply text-fg-muted; }
+  .pl-connection-progress {
+    @apply inline-flex cursor-pointer items-center border-0 bg-transparent p-0 text-xs font-medium text-fg-muted underline-offset-2 hover:text-primary hover:underline;
+  }
+  .pl-connection-progress:focus-visible {
+    @apply outline outline-2 outline-offset-1 outline-primary;
+  }
   /* M44: downgraded to a quiet text reminder; no pill border / background. */
   .pl-connection-readonly-status {
     @apply inline-flex items-center text-xs font-normal text-fg-muted;
@@ -1074,6 +1128,13 @@
   .pl-row-action-more-menu {
     @apply absolute right-0 z-20 mt-1 grid min-w-36 gap-2 rounded-md border border-border-default bg-bg-surface p-2 shadow-lg;
   }
+  .pl-connection-more-menu { @apply min-w-64; }
+  .pl-connection-card-meta .pl-row-action-more > summary { @apply text-xs font-medium text-fg-default; }
+  .pl-connection-more-entry { @apply grid gap-0.5 text-left; }
+  .pl-connection-more-hint { @apply text-xs font-normal text-fg-muted; }
+  .pl-connection-more-action { @apply justify-start text-left text-xs font-medium text-fg-default; }
+  .pl-connection-more-separator { @apply border-t border-border-default; }
+  .pl-connection-more-menu .pl-row-action-link--danger { @apply text-danger-strong hover:text-danger-strong; }
   .pl-schema-asset-status { @apply rounded-pill border px-2 py-0.5 text-xs font-semibold; }
   .pl-schema-asset-status--success { @apply border-success-strong bg-success-soft text-success-strong; }
   .pl-schema-asset-status--warning { @apply border-warning-strong bg-warning-soft text-warning-strong; }
@@ -1290,7 +1351,7 @@
     @apply inline-flex flex-wrap items-center gap-2;
   }
   .pl-whitelist-missing-summary {
-    @apply mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-border-default bg-bg-subtle px-3 py-2 text-sm text-fg-muted;
+    @apply mt-4 flex flex-wrap items-center gap-x-3 gap-y-2;
   }
   .pl-missing-manifest-diagnostic {
     @apply grid gap-2 rounded-md border border-border-default bg-bg-subtle p-3 text-sm text-fg-body;
@@ -1331,6 +1392,19 @@
   .pl-table-group-row-count {
     @apply ml-2 text-[11px] font-normal text-fg-muted;
   }
+  .pl-whitelist-group-toggle {
+    @apply flex w-full cursor-pointer items-baseline border-0 bg-transparent p-0 text-left text-xs font-medium tracking-wider text-fg-muted;
+    font-family: inherit;
+  }
+  .pl-whitelist-group-toggle:hover { @apply text-fg-default; }
+  .pl-whitelist-group-toggle-action {
+    @apply ml-auto pl-1 text-[11px] font-normal text-fg-muted;
+  }
+  .pl-whitelist-large-list-notice { @apply mt-4 text-sm text-fg-muted; }
+  .pl-whitelist-pagination {
+    @apply flex items-center justify-between gap-3 text-xs text-fg-muted;
+  }
+  .pl-whitelist-pagination div { @apply flex gap-1; }
   .pl-table-wrapper { @apply grid gap-2; }
   .pl-data-table { @apply w-full; }
 
@@ -1413,7 +1487,21 @@
 
   /* 通知 */
   .pl-notice { @apply text-sm text-fg-muted; }
+  .pl-policy-degrade-notice {
+    @apply grid gap-2 rounded-md border border-warning-strong/40 bg-warning-soft/70 px-3 py-2.5 text-sm text-fg-default;
+  }
+  .pl-policy-degrade-notice-title { @apply font-medium text-warning-strong; }
+  .pl-policy-degrade-notice ul { @apply m-0 grid list-none gap-2 p-0; }
+  .pl-policy-degrade-notice-actions { @apply ml-2 inline-flex flex-wrap gap-x-3; }
+  .pl-policy-degrade-notice-actions a { @apply text-accent underline; }
+  .pl-policy-degrade-notice-foot { @apply text-xs text-fg-muted; }
   .pl-error { @apply text-sm text-danger; }
+
+  /* Spec 174 — static region placeholder / local error (DS 99 临时模式). No animation. */
+  .pl-async-region { @apply grid content-start gap-2 rounded-xl border border-border-default bg-bg-surface p-4; }
+  .pl-async-region--pending { @apply border-dashed; }
+  .pl-async-region--error { @apply justify-items-start; }
+  .pl-async-region-hint { @apply m-0; }
 
   /* 字段描述列表 */
   .pl-field-editor-list { @apply grid gap-3; }
@@ -1598,6 +1686,7 @@
   .pl-inspector-title-row { @apply grid gap-3 rounded-md border border-border-default bg-bg-base p-3; }
   .pl-segmented-control { @apply grid grid-cols-3 gap-1 rounded-md border border-border-default bg-bg-muted p-1; }
   .pl-segmented-control--cols-2 { @apply grid-cols-2; }
+  .pl-segmented-control--cols-4 { @apply grid-cols-4; }
   .pl-segmented-control--auto {
     @apply flex w-fit max-w-full flex-wrap;
   }
@@ -1839,6 +1928,8 @@
   .pl-metric-card--with-icon { @apply gap-2; }
   .pl-metric-card-title { @apply flex items-center justify-between gap-2 text-xs font-medium text-fg-muted; }
   .pl-metric-card-title > span:first-child { @apply truncate; }
+  .pl-metric-card-value-row { @apply flex items-end justify-between gap-3; }
+  .pl-metric-sparkline { @apply h-7 w-20 shrink-0 text-fg-muted; }
   .pl-metric-card-icon { @apply shrink-0 text-fg-muted; }
   .pl-metric-card--with-icon .pl-metric-card-title { @apply justify-start; }
   .pl-icon-help { @apply inline-flex size-6 shrink-0 items-center justify-center rounded-sm text-xs text-fg-muted transition-colors; }
@@ -2517,6 +2608,10 @@
   .pl-wiki-meta-title { @apply text-base font-semibold text-fg-default; }
   .pl-wiki-meta-description { @apply text-xs text-fg-muted; }
   .pl-wiki-meta-close { @apply justify-self-end; }
+  .pl-acl-field { @apply grid gap-2 border-0 p-0 m-0; }
+  .pl-acl-option, .pl-acl-role { @apply flex items-center gap-2 text-sm text-fg-default; }
+  .pl-acl-roles, .pl-acl-confirm { @apply grid gap-1 pl-6; }
+  .pl-acl-role--unknown small { @apply text-xs text-fg-muted; }
   .pl-wiki-upload-ref {
     @apply ml-1 inline-flex rounded-sm bg-bg-muted px-1.5 py-0.5 font-mono text-xs;
   }
@@ -2842,4 +2937,18 @@
   .pl-skill-preflight-impact dd { @apply m-0 text-fg-default; }
   .pl-skill-preflight-diff { @apply mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded-md border border-border-default bg-bg-base p-3 font-mono text-xs leading-relaxed text-fg-default; }
   .pl-skill-wildcard-confirm { @apply flex items-start gap-2 rounded-md border border-warning-strong bg-warning-soft p-3 text-sm font-medium text-warning-strong; }
+
+  /* 2.0 login stays a single card. The field is only a quiet ground. */
+  .pl-login-page {
+    display: flex;
+    min-height: 100vh;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background-color: #f4f5f7;
+    background-image:
+      radial-gradient(circle at 1px 1px, rgba(24, 30, 37, 0.08) 1px, transparent 0),
+      radial-gradient(80% 60% at 50% 100%, rgba(255, 90, 61, 0.14), transparent 70%);
+    background-size: 22px 22px, auto;
+  }
 }

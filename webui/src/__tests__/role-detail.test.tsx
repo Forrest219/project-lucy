@@ -4,8 +4,17 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { toast } from "sonner";
 import { RoleDetail } from "../pages/admin/RoleDetail";
 import type { RoleDetail as RoleDetailType } from "../lib/types";
+
+vi.mock("sonner", () => ({
+  toast: {
+    message: vi.fn(),
+    error: vi.fn(),
+    success: vi.fn()
+  }
+}));
 
 function renderAt(path: string) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
@@ -110,6 +119,7 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  vi.mocked(toast.message).mockClear();
 });
 
 describe("RoleDetail Spec 150", () => {
@@ -171,10 +181,29 @@ describe("RoleDetail Spec 150", () => {
     expect(within(drawer).getByText("完整 YAML diff")).toBeInTheDocument();
     expect(calls).toHaveLength(1);
     expect(calls[0]!.dryRun).toBe(true);
+    expect(calls[0]!.body.role.permission_model_version).toBe(2);
     expect(JSON.stringify(calls[0]!.body)).not.toContain("prefix");
     fireEvent.click(within(drawer).getByRole("button", { name: "确认保存" }));
     await waitFor(() => expect(calls.some((call) => call.dryRun === false)).toBe(true));
     expect(calls[1]!.body.role).toEqual(calls[0]!.body.role);
+  });
+
+  it("omits permission_model_version from an edit patch", async () => {
+    let patchBody: { patch?: Record<string, unknown> } | undefined;
+    installFetch(makeRole(), (url, init) => {
+      if (url === "/api/admin/roles/analyst" && init?.method === "PATCH") {
+        patchBody = JSON.parse(String(init.body));
+        return new Response(JSON.stringify({ ok: true, data: { diff: "+ change", proposedYaml: "yaml", version: "v-preview" } }));
+      }
+    });
+    renderAt("/admin/roles/analyst");
+    fireEvent.change(await screen.findByLabelText("说明"), { target: { value: "Changed" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存权限配置" }));
+    await screen.findByTestId("role-permission-review-drawer");
+    expect(patchBody?.patch).toBeDefined();
+    expect(patchBody?.patch).not.toHaveProperty("permission_model_version");
+    expect(patchBody?.patch?.description).toBe("Changed");
+    expect(patchBody?.patch?.allow).toBeDefined();
   });
 
   it("invalidates a preview after the Drawer is closed and the draft changes", async () => {
@@ -298,6 +327,7 @@ describe("RoleDetail Spec 150", () => {
     installFetch(used);
     renderAt("/admin/roles/analyst");
     expect(await screen.findByRole("button", { name: "删除 Role" })).toBeDisabled();
+    expect(screen.getByTestId("role-delete-blocked-reason")).toHaveTextContent("无法删除：仍被 Agent「Agent 1」引用。请先解除该 Agent 的引用后再删除。");
 
     cleanup();
     const calls: boolean[] = [];
@@ -332,6 +362,23 @@ describe("RoleDetail Spec 150", () => {
     expect(within(drawer).getByText("确认删除 Role")).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "概览", hidden: true })).toHaveAttribute("aria-selected", "true");
     expect(calls).toEqual([true]);
+    expect(toast.message).not.toHaveBeenCalled();
+  });
+
+  it("explains a referenced delete deep link without opening the review drawer", async () => {
+    const calls: string[] = [];
+    installFetch(
+      makeRole({ usageCount: 1, users: [{ id: "invest-uat", name: "Invest UAT", enabled: true, tokenCount: 1 }] }),
+      (url, init) => {
+        if (init?.method === "DELETE") calls.push(String(url));
+      }
+    );
+    renderAt("/admin/roles/analyst?mode=delete");
+    expect(await screen.findByTestId("role-delete-blocked-reason")).toHaveTextContent("Invest UAT");
+    expect(screen.getByRole("button", { name: "删除 Role" })).toBeDisabled();
+    expect(screen.queryByTestId("role-permission-review-drawer")).not.toBeInTheDocument();
+    expect(calls).toEqual([]);
+    await waitFor(() => expect(toast.message).toHaveBeenCalledTimes(1));
   });
 
   it("retains the draft and review Drawer when runtimeAck is false", async () => {
@@ -356,7 +403,8 @@ describe("RoleDetail Spec 150", () => {
   it("lists referencing agents on the usage surface", async () => {
     installFetch(makeRole({ usageCount: 1, users: [{ id: "agent-1", name: "运营问数", enabled: true, tokenCount: 2 }] }));
     renderAt("/admin/roles/analyst?tab=usage");
-    expect(await screen.findByText("运营问数")).toBeInTheDocument();
-    expect(screen.getByText(/agent-1/).closest("a")).toHaveAttribute("href", "/admin/agents/agent-1");
+    const agentLink = await screen.findByRole("link", { name: /运营问数/ });
+    expect(agentLink).toHaveAttribute("href", "/admin/agents/agent-1");
+    expect(agentLink).toHaveTextContent("agent-1");
   });
 });

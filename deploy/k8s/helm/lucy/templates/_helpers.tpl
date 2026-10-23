@@ -109,6 +109,33 @@ entry lands on its own line at the correct indent.
   value: "127.0.0.1"
 - name: LUCY_PROXY_UPSTREAM_PORT
   value: "7878"
+- name: LUCY_DEPLOYMENT_MODE
+  value: "customer"
+- name: LUCY_CHART_DEPLOYMENT_MODE
+  value: "customer"
+{{- $access := .Values.security.access | default "https" }}
+{{- if and .Values.security.insecureHttpTestProfile (eq $access "http") }}
+{{- fail "security.access=http cannot be combined with security.insecureHttpTestProfile" }}
+{{- end }}
+{{- if not (or (eq $access "https") (eq $access "http")) }}
+{{- fail "security.access must be http or https" }}
+{{- end }}
+{{ if .Values.security.insecureHttpTestProfile -}}
+- name: LUCY_WEBUI_COOKIE_SECURE
+  value: "0"
+- name: LUCY_WEBUI_TEST_PROFILE
+  value: "1"
+{{ else if eq $access "http" -}}
+- name: LUCY_WEBUI_COOKIE_SECURE
+  value: "0"
+- name: LUCY_WEBUI_ACCESS
+  value: "http"
+{{ else -}}
+- name: LUCY_WEBUI_COOKIE_SECURE
+  value: "1"
+- name: LUCY_WEBUI_ACCESS
+  value: "https"
+{{ end -}}
 - name: KTX_TELEMETRY_DISABLED
   value: "1"
 - name: POSTHOG_DISABLED
@@ -128,6 +155,14 @@ entry lands on its own line at the correct indent.
 {{ if .Values.env.LUCY_CONTENT_ROOT -}}
 - name: LUCY_CONTENT_ROOT
   value: {{ .Values.env.LUCY_CONTENT_ROOT | quote }}
+{{ end -}}
+{{ if .Values.env.LUCY_TRUST_PROXY -}}
+- name: LUCY_TRUST_PROXY
+  value: {{ .Values.env.LUCY_TRUST_PROXY | quote }}
+{{ end -}}
+{{ if .Values.env.LUCY_TRUSTED_PROXY_CIDRS -}}
+- name: LUCY_TRUSTED_PROXY_CIDRS
+  value: {{ .Values.env.LUCY_TRUSTED_PROXY_CIDRS | quote }}
 {{ end -}}
 {{- end -}}
 

@@ -28,7 +28,7 @@ connections:
 
 agents:
   - id: e2e-default
-    role: local_dev_full_access
+    role: e2e_fixture_reader
 
 mcp:
   bind: 127.0.0.1:7878

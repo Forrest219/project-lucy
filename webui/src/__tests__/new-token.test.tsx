@@ -108,7 +108,12 @@ describe("NewToken", () => {
     fireEvent.change(screen.getByLabelText(/Token 标签/), { target: { value: "hermes-laptop" } });
     fireEvent.click(screen.getByRole("button", { name: "生成 Token" }));
 
-    expect(await screen.findByText("lucy_oneshot_token")).toBeInTheDocument();
+    const token = await screen.findByTestId("plaintext-token");
+    expect(token).toHaveTextContent("lucy_oneshot_token");
+    expect(token).toHaveClass("pl-secret-copy__value");
+    expect(token.className).not.toContain("break-all");
+    expect(token.parentElement).toHaveClass("pl-secret-copy");
+    expect(screen.getByRole("button", { name: "复制 token 明文" })).toHaveClass("pl-secret-copy__action");
     fireEvent.click(screen.getByRole("button", { name: "我已保存，关闭" }));
 
     expect(await screen.findByTestId("agent-detail")).toBeInTheDocument();
@@ -281,8 +286,20 @@ describe("NewToken", () => {
     expect(dateInput.max).toBe(new Date(today + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
     expect(screen.queryByRole("button", { name: "永不过期" })).not.toBeInTheDocument();
 
+    const presets = screen.getByTestId("new-token-expiry-presets");
+    expect(presets).toHaveClass("grid", "grid-cols-4", "gap-2");
+    expect(presets).toHaveAttribute("aria-label", "快捷预设");
+    expect(screen.getByTestId("new-token-expiry-preset-90d")).toHaveClass("pl-btn--primary");
+    expect(screen.getByTestId("new-token-expiry-preset-90d")).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("new-token-expiry-preset-30d")).toHaveClass("pl-btn--secondary");
+    expect(screen.getByTestId("new-token-expiry-preset-30d")).toHaveAttribute("aria-pressed", "false");
+
     fireEvent.click(screen.getByRole("button", { name: "30 天" }));
     expect(dateInput.value).toBe(new Date(today + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
+    expect(screen.getByTestId("new-token-expiry-preset-30d")).toHaveClass("pl-btn--primary");
+    expect(screen.getByTestId("new-token-expiry-preset-30d")).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("new-token-expiry-preset-90d")).toHaveClass("pl-btn--secondary");
+    expect(screen.getByTestId("new-token-expiry-preset-90d")).toHaveAttribute("aria-pressed", "false");
   });
 
   it("supports standalone agent selection when accessed from /admin/tokens/new", async () => {
@@ -324,5 +341,42 @@ describe("NewToken", () => {
 
     expect(await screen.findByRole("heading", { name: /签发新 Token/ })).toBeInTheDocument();
     expect(await screen.findByLabelText("选择所属 Agent")).toBeInTheDocument();
+  });
+});
+
+describe("Spec 174 R2 — Token creation result from a previous account", () => {
+  it("never shows the old account's token or a Toast after the identity changed", async () => {
+    const { bumpAuthEpoch } = await import("../lib/apiClient");
+    const { toast } = await import("sonner");
+    const toastError = vi.spyOn(toast, "error");
+    let releaseToken!: () => void;
+    const tokenGate = new Promise<void>((resolve) => {
+      releaseToken = resolve;
+    });
+    let tokenPosts = 0;
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/project") {
+        return new Response(JSON.stringify({ ok: true, data: { root: "/tmp/p", ktxAvailable: true, connections: [], mcpEndpoint: DEFAULT_MCP_ENDPOINT } }));
+      }
+      if (url === "/api/admin/agents/zhangsan/tokens" && init?.method === "POST") {
+        tokenPosts += 1;
+        await tokenGate;
+        return new Response(JSON.stringify({ ok: true, data: DEFAULT_TOKEN_RESPONSE }));
+      }
+      return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
+    }));
+
+    renderNewToken();
+    fireEvent.change(screen.getByLabelText(/Token 标签/), { target: { value: "hermes-laptop" } });
+    fireEvent.click(screen.getByRole("button", { name: "生成 Token" }));
+    await vi.waitFor(() => expect(tokenPosts).toBe(1));
+    bumpAuthEpoch();
+    releaseToken();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(screen.queryByText("lucy_oneshot_token")).not.toBeInTheDocument();
+    expect(toastError).not.toHaveBeenCalled();
+    expect(tokenPosts).toBe(1);
   });
 });

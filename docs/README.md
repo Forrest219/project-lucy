@@ -37,6 +37,10 @@
 
 | 文档 | 用途 |
 |---|---|
+| [specs/lucy-20261022-v2p5-row-permission-management-spec.md](specs/lucy-20261022-v2p5-row-permission-management-spec.md) | **设计交付，未实施**：v2.5 L25-14 行权限管理。可复用静态行策略模板、保存前最终行约束预览（角色并集 ∧ 个人行限制）、按表反查的行权限视图与配置审计；不改 Spec 99 / 100 运行时语义，动态行策略仍冻结；V01–V18 全部未执行 |
+| [specs/lucy-20261021-v2p5-help-center-spec.md](specs/lucy-20261021-v2p5-help-center-spec.md) | **设计交付，未实施**：v2.5 L25-12 系统手册帮助中心体验优化；手册三层 IA 派生、分类 / 文章 / 本页目录与归属化搜索 |
+| [specs/lucy-20261020-v2p5-semantic-batch-operations-spec.md](specs/lucy-20261020-v2p5-semantic-batch-operations-spec.md) | **设计交付，未实施**：v2.5 L25-11 语义资产批量维护；Catalog 批量下载 / 校验 / 导入与发布工作台生效协作 |
+| [specs/lucy-20261019-audit-trust-and-admin-investigation-spec.md](specs/lucy-20261019-audit-trust-and-admin-investigation-spec.md) | **设计交付，未实施**：审计可信度与管理员调查增量契约；取消近邻强制补绑、分离身份和归属质量、统一计数与导出范围；关联实施 Plan 和独立验收矩阵 |
 | `specs/ceo-one-report-sow-product-risk-register.md` | CEO 一眼报 SOW 对照下的 Lucy 产品功能风险 register，聚焦 Eval/trace/context/reviewer/observability 等非数据主题能力 |
 | `specs/ceo-one-report-sow-eval-uat-contract.md` | CEO 一眼报 SOW 可信 Eval/UAT contract，冻结 trace、scoring、context evidence、per-case artifact 与验收口径 |
 | `specs/ceo-one-report-lucy-migration-delivery-plan.md` | CEO 一眼报从现有 finreport/BI 资产迁移到 Lucy/KTX 的端到端实施交付计划 |
@@ -55,6 +59,7 @@
 | `design/design-lucy-agent-chat-a3.md` | 可选 Agent Chat（A3）：Open WebUI + Hermes API Server 旁路叠加 Lucy MCP；Lucy 独立交付、单租户验证；非默认 headless 交付 |
 | `runbooks/runbook-lucy-agent-chat-a3.md` | A3 手工联调 / 排障 Runbook（compose profile `agent-chat`） |
 | `design/access-governance-design.md` | **跳转桩** → `access-control/design-governance-baseline.md` |
+| `design/design-semantic-platform-ontology-proposal.md` | ⚠️ **提案稿·挂起中** 语义平台本体化架构（四层架构 + 4 个 MCP 端点）。**与 2026-10-14 已裁定的「不建议现在碰本体图引擎」及 `concept-dictionary-spec` Non-goals 冲突，重新裁定前不得实施** |
 
 ## 3. 复核（Review — 已实现代码的审查报告）→ `reviews/`
 
@@ -63,6 +68,11 @@
 | `reviews/review-module1-agent-permissions.md` | **跳转桩** → `access-control/review-agent-permissions-v1.md` |
 | `reviews/review-module2-eval-monitoring.md` | Module 2 Eval 配置与监控代码审查 |
 | `reviews/review-ktx-llm-switch-to-minimax.md` | KTX LLM Backend 切换 Claude Code → MiniMax 结论 |
+| `reviews/2026-10-21-customer-20260828-v1-to-lucy-2.0-upgrade-plan-review.md` | **已作废**：v0.2 计划的评审过程稿，不得执行。结论已纳入计划 v0.3 |
+| `reviews/2026-10-21-customer-20260828-v1-to-lucy-2.0-upgrade-plan-review-crosscheck.md` | **已作废**：上述评审的交叉验证过程稿，不得执行。结论已纳入计划 v0.3 |
+| `reviews/2026-10-20-selectdb-hive-catalog-review.md` | SelectDB / Hive 外部 Catalog 与 Lucy 连接接入评审 |
+| `reviews/2026-10-20-upgrade-feature-validation.md` | 升级功能测试验证与复核（14 项功能映射 + 19 条真实用例） |
+| `reviews/2026-10-23-lucy-v2.0-release-readiness-review.md` | **已审阅**：v2.0 合流 main / 开 2.5 线的发版就绪度评审。D1（受保护 runner）裁定为 **B**：本期不 provisioning，死线为 2.5 首次客户交付前就位；D2（2.5 波次版本号）裁定为 **`2.10.0`**。§4.8–§4.13 记录 CI 恢复后一次性暴露的六项门禁缺陷的根因与修复 |
 
 ## 4. UAT（人工验收用例）→ `uat/`
 
@@ -71,6 +81,9 @@
 | `uat/uat-agent-permissions.md` | **跳转桩** → `access-control/uat-agent-permissions-v1.md` |
 | `uat/uat-module2-eval-monitoring.md` | Module 2 Eval 配置与监控人工 UAT 用例 |
 | `uat/uat-mysql-aliyun-data-qa.md` | MySQL Aliyun 数据问答人工 UAT 用例 |
+| `uat/uat-invest-db-data-qa.md` | invest-db 投研夹具的接入与问数 UAT |
+| `uat/uat-mcp-session-regression.md` | MCP Session 回归 UAT：代理持有上游会话后的无会话标识取数验证 |
+| `uat/uat-mcp-session-customer-verification.md` | 客户环境 MCP Session 修复取证与验收（可交付证明材料；配套 `runbooks/customer-mcp-session-400-upgrade.md`） |
 
 ## 5. WebUI 现状 → `webui/`
 
@@ -96,6 +109,8 @@
 | `runbooks/customer-deployment-guide.md` | 端到端客户部署与运维（⚠️ CI release-artifacts 文案引用） |
 | `runbooks/deployment-docker.md` | Docker Compose 细节（⚠️ 同上） |
 | `runbooks/customer-amd64-docker-deploy-runbook.md` | amd64 离线包客户部署 runbook（配套 `specs/lucy-customer-amd64-offline-delivery-spec.md`） |
+| `runbooks/customer-mcp-session-400-upgrade.md` | 客户 MCP Session 400 的根因、版本对照、升级动作单与对外沟通稿（配套 `uat/uat-mcp-session-customer-verification.md`） |
+| `runbooks/lucy-release-train-workflow.md` | 发版列车流程：分支模型、版本切线、合流与交付阶段、门禁矩阵、回滚 |
 | `user-guide/`（目录） | 现有 HTML 帮助中心；`user-guide.md` 末尾已显式指向此目录，两者是同一主题的 Markdown 摘要 + HTML 详情，非命名冲突 |
 
 ## 7. 发布 / 版本 / 测试门禁 → `governance/`
@@ -104,6 +119,7 @@
 |---|---|
 | `governance/release-ci.md` | Release CI 与 KTX 升级 gate |
 | `governance/version-matrix.md` | 支持的运行时与兼容性矩阵 |
+| `governance/database-support-matrix.md` | 数据库支持矩阵：各数据库类型的支持状态、判定证据、已知协议差异与更新规则（状态唯一真源） |
 | `governance/test-layers-and-release-gates.md` | Runtime/platform/business eval gate 分层；索引 E2E 测试集 |
 | `governance/lucy-test-cases.md` | 全链路 P0/P1/P2 测试用例矩阵（release-artifacts 打包清单依赖） |
 | `qa/e2e-sop.md` | **E2E SOP 总指引**（测试集总表 + 选用决策） |
@@ -123,6 +139,11 @@
 | 文档 | 用途 |
 |---|---|
 | `plans/README.md` | 仓库级 plan 索引 |
+| `plans/2026-10-22-upgrade-candidate-verification-plan.md` | 升级候选验证环境实施方案 v0.1（v2.5 L25-13，待落地、非门禁；用一致性备份在隔离环境验证候选镜像的迁移正确性与业务/审计连续性；原地升级仍为客户现场主线） |
+| `plans/2026-10-21-customer-20260828-v1-upgrade-package-plan.md` | 20260828-v1 客户升级包生成计划 v0.1（待确认；镜像、引导密钥、随包文档；验收前不交给客户） |
+| `plans/2026-10-21-customer-20260828-v1-to-lucy-2.0-upgrade-plan.md` | 客户 20260828-v1 → Lucy 2.0 升级计划 v0.3（未执行；r6 不是放行包；评审过程稿已作废） |
+| `plans/2026-10-12-acceptance-gap-closure.md` | 验收缺口修复：SC-15 / SC-19 / SC-20 / SC-23 接到查数路径，工单 WO-202610-15 |
+| `plans/2026-10-11-customer-log-next-optimizations.md` | 客户日志优化最终版 v1.1；Spec 162 v0.3，WO-12 已验收 |
 | `plans/2026-10-11-eval-module-functional-upgrade.md` | Eval 模块产品能力 v0.4；评审看 Spec 161 与工单 `webui/docs/plans/wo-202610-11-offline-eval-customer-ops.md` |
 | `plans/2026-10-11-eval-result-policy-context-upgrade.md` | Eval 升级建议：结果 / 策略 / 解释分轴、上下文四臂、拒答与轨迹晋升（产品/架构，不含实现 WO） |
 | `plans/2026-08-26-eval-accuracy-closed-loop-and-change-triggered-regression.md` | Eval 优化方案：准确率闭环 + Publish 变更触发 smoke 回归（产品/架构，不含实现 WO） |

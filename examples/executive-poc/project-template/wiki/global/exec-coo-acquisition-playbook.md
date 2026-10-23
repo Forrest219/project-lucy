@@ -1,4 +1,5 @@
 ---
+allowed_roles: [exec_coo_readonly, exec_demo_full]
 sl_refs:
   - demo-exec-mysql/dataforai/fct_acquisition_monthly
   - demo-exec-mysql/dataforai/fct_fulfillment_order

@@ -1,4 +1,5 @@
 ---
+allowed_roles: [customer_readonly]
 title: CEO One Report Business Context
 summary: CEO one-report metric definitions and fact-grounding rules for customer SOW/UAT.
 tags:

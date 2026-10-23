@@ -343,11 +343,18 @@ export function formatProbeFailure(message: string): {
 }
 
 /**
- * Compute progress summary label for connection card.
+ * Shared progress sentence for the connection card tooltip and the setup modal.
+ * Names the current step so it is not read as a completion fraction.
  */
 export function formatAssistantProgressLabel(step: SetupStep): string {
   const meta = SETUP_STEPS.find((s) => s.step === step);
-  return `接入进度 ${step}/6 · 当前：${meta ? meta.title : "继续配置"}`;
+  const title = meta ? meta.title : "继续配置";
+  return `${formatAssistantProgressCompact(step)}，共 6 步 · 当前：${title}`;
+}
+
+/** Compact card label. The modal expands it with the step total and current title. */
+export function formatAssistantProgressCompact(step: SetupStep): string {
+  return `接入进度 · 第 ${step} 步`;
 }
 
 /** Placeholder when callers have not yet loaded `GET /api/project.mcpEndpoint.url`. */

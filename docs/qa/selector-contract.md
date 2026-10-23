@@ -65,7 +65,7 @@
 | `add-schema-drawer-backdrop` | Drawer 背景遮罩 | — |
 | `add-schema-drawer` | Drawer 根 | 标题 `添加 Schema` |
 | `add-schema-close` | 关闭按钮 | — |
-| `add-schema-input` | Schema 名 input | Label `Schema 名` |
+| `add-schema-input` | Schema 名 input | 仅库内目录失败或候选为空时出现；Label `Schema 名称` |
 | `add-schema-input-error` | input 错误提示 | — |
 | `add-schema-preview-btn` | `测试连接可用性` 按钮 | 禁止 `替代测试` |
 | `add-schema-connection-test-failed` | 测试失败错误 | — |
@@ -257,6 +257,7 @@
 | `wiki-edit-grid` | 编辑器 + 预览 grid | — |
 | `wiki-edit-source` | 源编辑区 | — |
 | `wiki-edit-textarea` | Markdown 文本框 | 占主工作区 ≥ 80% |
+| `wiki-acl-field` | 可访问角色（对象授权，默认无人可见） | `components/ObjectAclField.tsx` |
 | `wiki-edit-preview` | 渲染预览 | — |
 
 ### 5.5 WikiSavePreflight.tsx
@@ -286,8 +287,8 @@
 | Test ID | 元素 | 文案约束 |
 |---|---|---|
 | `publish-workbench-layout` | 整体 layout | 桌面双列、窄屏单列 |
-| `workbench-empty-state` | 空态 | 必含 `暂无待发布变更` |
-| `workbench-pending-count` | Header Badge "N 个待发布文件" | `translate="no"` |
+| `workbench-empty-state` | 空态 | 必含 `暂无待同步变更` |
+| `workbench-batch-sync-hint` | 有待同步变更时的批量同步提示（已替代移除的 `workbench-pending-count` Badge） | 仅 `files.length > 0` 时出现；必含 `本批一并同步 N 项` |
 | `workbench-validate` | `校验变更` | 禁止 `Validate changed` |
 | `workbench-reindex` | `强制重建索引` | 禁止 `索引生效` / `重建 KTX 索引` |
 | `workbench-upload-semantic-asset` | `上传语义资产` | 禁止 `上传 YAML` |
@@ -365,7 +366,12 @@
 | `role-dirty-bar` | 角色 dirty 浮条 |
 | `role-list-table` | 角色列表 Data Grid |
 | `role-row-${roleId}` | 角色行（模板） |
+| `${testId}-corrupt` | 对象授权声明损坏提示（`skill-field-roles` / `wiki-acl-field`） | `components/ObjectAclField.tsx` |
+| `${testId}-roles` | 对象授权角色复选区 | `components/ObjectAclField.tsx` |
+| `${testId}-all-confirm` | 所有角色可见二次确认区 | `components/ObjectAclField.tsx` |
+| `${testId}-all-apply` | 所有角色可见确认并应用 | `components/ObjectAclField.tsx` |
 | `role-summary-card` | 角色摘要卡 |
+| `role-context-access` | Role 详情：Wiki / Skill 发现与读取效果（只读） | `pages/admin/RoleDetail.tsx` |
 | `roles-page` | 角色页 |
 | `route-page` | 通用 route 页根 |
 | `snippet-active` | snippet 激活态 |
@@ -400,7 +406,11 @@
 | `agent-row-${agent.id}` | Agent 表行 | `pages/admin/AgentList.tsx` |
 | `agent-row-index-${agent.id}` | 行序号 | `pages/admin/AgentList.tsx` |
 | `agent-role-line-${agent.id}` | 角色单元格 | `pages/admin/AgentList.tsx` |
-| `agent-role-link-${agent.id}` | 角色链接 | `pages/admin/AgentList.tsx` |
+| `agent-role-link-${agent.id}` | 角色链接（恰好一个角色时） | `pages/admin/AgentList.tsx` |
+| `agent-role-link-${agent.id}-${roleId}` | 角色链接 | `pages/admin/AgentList.tsx` |
+| `agent-role-field` | Agent 角色复选框组 | `components/AgentRoleField.tsx` |
+| `agent-role-option` | Agent 角色复选项 | `components/AgentRoleField.tsx` |
+| `agent-role-capability` | 角色集合的数据能力卡 | `components/AgentRoleField.tsx` |
 | `agent-active-tokens-${agent.id}` | 近 7 天活跃 Token | `pages/admin/AgentList.tsx` |
 | `agent-calls-7d-${agent.id}` | 近 7 天调用量 | `pages/admin/AgentList.tsx` |
 | `agent-leave-confirm-modal` | 未保存离开确认 | `pages/admin/AgentDetail.tsx` |
@@ -448,14 +458,19 @@
 | `brand-title` | brand-title | `app/App.tsx` |
 | `brand-tagline` | brand-tagline | `app/App.tsx` |
 | `sidebar-search-trigger` | sidebar-search-trigger | `app/App.tsx` |
-| `sidebar-version` | sidebar-version | `app/App.tsx` |
+| `version-info` | version-info | `pages/admin/VersionInfo.tsx` |
+| `version-info-loading` | version-info-loading | `pages/admin/VersionInfo.tsx` |
+| `version-info-error` | version-info-error | `pages/admin/VersionInfo.tsx` |
+| `version-info-product` | version-info-product | `pages/admin/VersionInfo.tsx` |
+| `version-info-sha` | version-info-sha | `pages/admin/VersionInfo.tsx` |
+| `version-info-copy` | version-info-copy | `pages/admin/VersionInfo.tsx` |
+| `version-info-workspace` | version-info-workspace | `pages/admin/VersionInfo.tsx` |
+| `version-info-ktx` | version-info-ktx | `pages/admin/VersionInfo.tsx` |
 | `sidebar-auth` | sidebar-auth | `app/App.tsx` |
 | `add-schema-select` | add-schema-select | `components/AddSchemaDrawer.tsx` |
 | `add-schema-live-loading` | add-schema-live-loading | `components/AddSchemaDrawer.tsx` |
 | `add-schema-live-fallback` | add-schema-live-fallback | `components/AddSchemaDrawer.tsx` |
 | `add-schema-live-empty` | add-schema-live-empty | `components/AddSchemaDrawer.tsx` |
-| `add-schema-manual-toggle` | add-schema-manual-toggle | `components/AddSchemaDrawer.tsx` |
-| `add-schema-select-toggle` | add-schema-select-toggle | `components/AddSchemaDrawer.tsx` |
 | `role-table-ranges-field` | role-table-ranges-field | `components/AssetHierarchyPicker.tsx` |
 | `brand-logo` | brand-logo | `components/BrandMark.tsx` |
 | `brand-mark-letter` | brand-mark-letter | `components/BrandMark.tsx` |
@@ -529,6 +544,9 @@
 | `remove-schema-enabled-warning` | remove-schema-enabled-warning | `components/RemoveSchemaDrawer.tsx` |
 | `remove-schema-confirm-btn` | remove-schema-confirm-btn | `components/RemoveSchemaDrawer.tsx` |
 | `remove-schema-success-message` | remove-schema-success-message | `components/RemoveSchemaDrawer.tsx` |
+| `remove-schema-done` | remove-schema-done | `components/RemoveSchemaDrawer.tsx` |
+| `remove-schema-reload-catalog` | remove-schema-reload-catalog | `components/RemoveSchemaDrawer.tsx` |
+| `remove-schema-reload-error` | remove-schema-reload-error | `components/RemoveSchemaDrawer.tsx` |
 | `row-more-trigger` | row-more-trigger | `components/RowMoreMenu.tsx` |
 | `row-more-menu` | row-more-menu | `components/RowMoreMenu.tsx` |
 | `segment-editor` | segment-editor | `components/SegmentForm.tsx` |
@@ -817,29 +835,32 @@
 | `governance-agent-usage` | governance-agent-usage | `pages/admin/GovernanceOverview.tsx` |
 | `governance-token-usage` | governance-token-usage | `pages/admin/GovernanceOverview.tsx` |
 | `governance-popular-tables` | governance-popular-tables | `pages/admin/GovernanceOverview.tsx` |
-| `license-form-error` | license-form-error | `pages/admin/LicenseSettings.tsx` |
-| `license-activation-section` | license-activation-section | `pages/admin/LicenseSettings.tsx` |
-| `license-activation-code` | license-activation-code | `pages/admin/LicenseSettings.tsx` |
-| `license-status-card` | license-status-card | `pages/admin/LicenseSettings.tsx` |
-| `license-status-label` | license-status-label | `pages/admin/LicenseSettings.tsx` |
-| `license-mode` | license-mode | `pages/admin/LicenseSettings.tsx` |
-| `license-customer-id` | license-customer-id | `pages/admin/LicenseSettings.tsx` |
-| `license-tier` | license-tier | `pages/admin/LicenseSettings.tsx` |
-| `license-seat-usage` | license-seat-usage | `pages/admin/LicenseSettings.tsx` |
-| `license-expires-at` | license-expires-at | `pages/admin/LicenseSettings.tsx` |
-| `license-days-remaining` | license-days-remaining | `pages/admin/LicenseSettings.tsx` |
 | `mcp-playground-page` | mcp-playground-page | `pages/admin/McpPlayground.tsx` |
 | `mcp-playground-agent` | mcp-playground-agent | `pages/admin/McpPlayground.tsx` |
-| `mcp-playground-mode` | mcp-playground-mode | `pages/admin/McpPlayground.tsx` |
 | `mcp-playground-role` | mcp-playground-role | `pages/admin/McpPlayground.tsx` |
-| `mcp-playground-tool` | mcp-playground-tool | `pages/admin/McpPlayground.tsx` |
-| `mcp-playground-args` | mcp-playground-args | `pages/admin/McpPlayground.tsx` |
-| `mcp-playground-run-preview` | mcp-playground-run-preview | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-task-connect` | 检查能不能连上 | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-task-table` | 检查能不能查某张表 | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-connect` | mcp-playground-connect | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-execution-block` | 问数进程未加载 | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-recheck` | 检测 {连接} | `pages/admin/McpPlayground.tsx` |
 | `mcp-playground-token` | mcp-playground-token | `pages/admin/McpPlayground.tsx` |
-| `mcp-playground-run-live` | mcp-playground-run-live | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-token-error` | 只粘贴 Token | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-run-live` | 检查接入 | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-table` | mcp-playground-table | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-policy-block` | 策略降级 | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-policy-link` | 查看配置审计 | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-role-link` | 去改 Role | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-connection` | mcp-playground-connection | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-source` | mcp-playground-source | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-run-table` | 检查权限 | `pages/admin/McpPlayground.tsx` |
 | `mcp-playground-preview-error` | mcp-playground-preview-error | `pages/admin/McpPlayground.tsx` |
 | `mcp-playground-preview-result` | mcp-playground-preview-result | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-live-error` | mcp-playground-live-error | `pages/admin/McpPlayground.tsx` |
 | `mcp-playground-live-result` | mcp-playground-live-result | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-result-headline` | mcp-playground-result-headline | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-result-detail` | mcp-playground-result-detail | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-result-action` | mcp-playground-result-action | `pages/admin/McpPlayground.tsx` |
+| `mcp-playground-technical` | 技术详情（查表拒绝） | `pages/admin/McpPlayground.tsx` |
 | `mcp-playground-live-confirm` | mcp-playground-live-confirm | `pages/admin/McpPlayground.tsx` |
 | `mcp-playground-confirm-live` | mcp-playground-confirm-live | `pages/admin/McpPlayground.tsx` |
 | `role-connections-field` | role-connections-field | `pages/admin/RoleDetail.tsx` |
@@ -1073,7 +1094,6 @@
 | `skills-row` | Skill 行 | `pages/skills/SkillList.tsx` |
 | `skills-open-detail` | 打开详情 | `pages/skills/SkillList.tsx` |
 | `skill-status` | 状态 | `pages/skills/SkillList.tsx` |
-| `skill-roles-summary` | 可访问角色摘要 | `pages/skills/SkillList.tsx` |
 | `skill-validation` | 校验状态 | `pages/skills/SkillList.tsx` |
 | `skill-detail` | 主区阅读态 | `pages/skills/SkillList.tsx` |
 | `skill-detail-back` | 返回领域治理总览 | `pages/skills/SkillList.tsx` |
@@ -1081,18 +1101,16 @@
 | `skill-detail-content` | 正文详情 | `pages/skills/SkillList.tsx` |
 | `skill-detail-path` | Skill 文件路径 | `pages/skills/SkillList.tsx` |
 | `skill-detail-validation-issues` | 中文校验问题 | `pages/skills/SkillList.tsx` |
+| `skill-detail-roles` | 阅读态可访问角色 | `pages/skills/SkillList.tsx` |
+| `skill-field-roles` | 编辑态可访问角色（对象授权，T05/T06） | `components/ObjectAclField.tsx` |
+| `skill-preflight-roles` | 保存预检：可访问角色变化 / 扩权 | `pages/skills/SkillList.tsx` |
 | `skill-editor-form` | 编辑表单 | `pages/skills/SkillList.tsx` |
-| `skill-metadata-toggle` | 元数据与授权折叠区 | `pages/skills/SkillList.tsx` |
+| `skill-metadata-toggle` | 元数据折叠区 | `pages/skills/SkillList.tsx` |
 | `skill-field-name` | Skill name | `pages/skills/SkillList.tsx` |
 | `skill-field-domain` | Skill domain | `pages/skills/SkillList.tsx` |
 | `skill-field-title` | 标题 | `pages/skills/SkillList.tsx` |
 | `skill-field-version` | 语义版本 | `pages/skills/SkillList.tsx` |
 | `skill-field-status` | 状态选择 | `pages/skills/SkillList.tsx` |
-| `skill-field-roles` | 可访问角色控件 | `pages/skills/SkillList.tsx` |
-| `skill-role-all` | 所有角色可见开关 | `pages/skills/SkillList.tsx` |
-| `skill-role-option` | Role 多选项 | `pages/skills/SkillList.tsx` |
-| `skill-role-none` | 无人可见提示 | `pages/skills/SkillList.tsx` |
-| `skill-role-unknown` | 未配置 Role 警告 | `pages/skills/SkillList.tsx` |
 | `skill-field-triggers` | 触发词 | `pages/skills/SkillList.tsx` |
 | `skill-field-description` | 说明 | `pages/skills/SkillList.tsx` |
 | `skill-field-content` | Markdown 正文 | `pages/skills/SkillList.tsx` |
@@ -1106,9 +1124,7 @@
 | `skill-delete-confirm` | 删除确认 | `pages/skills/SkillList.tsx` |
 | `skill-preflight` | 保存 Skill 前预检 | `pages/skills/SkillList.tsx` |
 | `skill-preflight-diff` | 预检 Diff | `pages/skills/SkillList.tsx` |
-| `skill-wildcard-ack` | 所有角色可见确认 | `pages/skills/SkillList.tsx` |
 | `skill-preflight-confirm` | 确认写入 | `pages/skills/SkillList.tsx` |
-| `role-skill-access-summary` | Role 详情只读业务 Skill 摘要 | `pages/admin/RoleDetail.tsx` |
 
 ## 8. Rename History
 
@@ -1122,6 +1138,7 @@
 | 2026-07-31 | v0.3 重写 | `add-schema-drawer-step-1..4` | （实现缺失，未补） | v0.3 标记 MISSING，待实现补全 |
 | 2026-07-31 | v0.3 重写 | `sl-ref-picker` / `sl-ref-badge-...` | （实现缺失，未补） | v0.3 标记 MISSING，待实现补全 |
 | 2026-07-31 | v0.3 重写 | `catalog-row-...` / `table-editor-*` | （实现严重缺失） | v0.3 标记 MISSING，影响 E2E-SEM-* 整组 |
+| 2026-10-12 | Spec 170 | `skill-roles-summary`、`skill-field-roles`、`skill-role-all`、`skill-role-option`、`skill-role-none`、`skill-role-unknown`、`skill-wildcard-ack`、`role-skill-access-summary` | （删除） | Skill / Wiki 对象授权暂停，控件不再渲染 |
 
 ---
 
@@ -1182,19 +1199,27 @@
 | `governance-interface-loading` | 治理界面加载态 | `pages/admin/GovernanceOverview.tsx` |
 | `governance-interface-usage` | 治理界面使用摘要 | `pages/admin/GovernanceOverview.tsx` |
 | `governance-interface-metrics` | 治理界面指标 | `pages/admin/GovernanceOverview.tsx` |
+| `usage-sparkline-page-views` | 页面访问折线 | `pages/admin/GovernanceOverview.tsx` |
 | `governance-interface-unmapped` | 未映射界面入口 | `pages/admin/GovernanceOverview.tsx` |
 | `governance-interface-rank-grid` | 界面排行 | `pages/admin/GovernanceOverview.tsx` |
 | `governance-interface-groups` | 界面分组 | `pages/admin/GovernanceOverview.tsx` |
 | `governance-interface-menus` | 界面菜单 | `pages/admin/GovernanceOverview.tsx` |
 | `governance-interface-pages` | 界面页面 | `pages/admin/GovernanceOverview.tsx` |
-| `mcp-runtime-connection` | MCP Playground 连接 | `pages/admin/McpPlayground.tsx` |
 | `new-token-expiry-policy-notice` | Token 有效期策略提示 | `pages/admin/NewToken.tsx` |
-| `call-monitor-slo-status` | 调用监控 SLO 状态 | `pages/ops/CallMonitor.tsx` |
 | `call-monitor-page` | 调用监控页面 | `pages/ops/CallMonitor.tsx` |
-| `call-monitor-stats-time` | 调用监控统计时间 | `pages/ops/CallMonitor.tsx` |
 | `call-monitor-controls` | 调用监控控制区 | `pages/ops/CallMonitor.tsx` |
+| `call-monitor-range-${option.range}` | 时间窗（模板） | `pages/ops/CallMonitor.tsx` |
 | `call-monitor-range-24h` | 24 小时时间窗 | `pages/ops/CallMonitor.tsx` |
 | `call-monitor-range-1h` | 1 小时时间窗 | `pages/ops/CallMonitor.tsx` |
+| `call-monitor-range-7d` | 7 天时间窗 | `pages/ops/CallMonitor.tsx` |
+| `call-monitor-range-30d` | 30 天时间窗 | `pages/ops/CallMonitor.tsx` |
+| `call-monitor-sparkline-${seriesMetric}` | 窗内折线（模板） | `components/MetricCard.tsx` |
+| `call-monitor-sparkline-volume` | 调用量折线 | `components/MetricCard.tsx` |
+| `call-monitor-sparkline-success` | 成功率折线 | `components/MetricCard.tsx` |
+| `call-monitor-sparkline-error` | 错误率折线 | `components/MetricCard.tsx` |
+| `call-monitor-sparkline-denied` | 拒绝率折线 | `components/MetricCard.tsx` |
+| `call-monitor-sparkline-p95` | 多数请求耗时折线 | `components/MetricCard.tsx` |
+| `call-monitor-sparkline-slow` | 慢于多数请求折线 | `components/MetricCard.tsx` |
 | `call-monitor-auto-refresh` | 调用监控自动刷新 | `pages/ops/CallMonitor.tsx` |
 | `call-monitor-refresh` | 调用监控手动刷新 | `pages/ops/CallMonitor.tsx` |
 | `call-monitor-error` | 调用监控错误态 | `pages/ops/CallMonitor.tsx` |
@@ -1239,3 +1264,59 @@
 | `role-clear-filters` | RoleList | 清空筛选条件 |
 | `role-advanced-filters` | RoleList | 高级筛选区域 |
 | `role-clear-filters-empty` | RoleList | 空态清空筛选入口 |
+
+## 2026-10-13 · Spec 174 入口性能增量合同
+
+占位 testid 与真实内容 testid 互斥：性能就绪谓词只匹配真实内容（连接卡、表行、Agent 行），占位不复用这些 testid。
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `async-region-pending` | 分区静态占位（`aria-busy`，120 ms 后出现加载文字） | `components/AsyncRegion.tsx` |
+| `async-region-error` | 分区局部错误 | `components/AsyncRegion.tsx` |
+| `async-region-retry` | 分区局部重试 | `components/AsyncRegion.tsx` |
+| `route-chunk-error` | 路由资源加载失败（壳层保留） | `app/App.tsx` |
+| `route-chunk-retry` | 路由资源加载失败后的重试 | `app/App.tsx` |
+| `catalog-runtime-unconfirmed` | 语义资产页「权限生效状态待确认」提示（`meta.runtimeConsistency = unconfirmed`） | `pages/Catalog.tsx` |
+| `agent-runtime-unconfirmed` | Agent 列表「权限生效状态待确认」提示（`meta.runtimeConsistency = unconfirmed`） | `pages/admin/AgentList.tsx` |
+| `execution-runtime-slot` | 连接概览问数提示的稳定占位（卡片出现时状态仍待返回；不可见、无文案） | `pages/connections/ConnectionOverview.tsx` |
+| `schema-actions-pending-${conn.id}-${schema}` | Schema 行依赖 Manifest 事实的动作等待中（写入进行中或尚未重新读取） | `pages/connections/ConnectionOverview.tsx` |
+
+## 2026-10-18 · T09 selector 漂移补录
+
+实现已存在、契约未登记的选择器（Plan T09 步骤 4）。不改变页面行为；负向引用（断言元素不存在）规则见 `webui/scripts/check-selector-contract.mjs`。
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `catalog-bound-scope-note` | 按 Catalog 范围授权时的连接范围说明 | `components/RoleTableGrants.tsx` |
+| `prepare-structure-drawer` | 准备表结构 Drawer | `components/SchemaStructurePrep.tsx` |
+| `${idPrefix}-downgrade-preview` | 读取结构后的降级预览（模板；`add-schema` / `prepare-structure`） | `components/SchemaStructurePrep.tsx` |
+| `${idPrefix}-structure-error` | 读取结构失败提示（模板） | `components/SchemaStructurePrep.tsx` |
+| `${idPrefix}-done` | 结构准备完成/退出按钮（模板） | `components/SchemaStructurePrep.tsx` |
+| `endpoint-gate-panel` | 连接端点冲突门禁面板 | `components/connections/EndpointConflictPanel.tsx` |
+| `endpoint-gate-match-${match.id}` | 同端点已有连接单选项（模板） | `components/connections/EndpointConflictPanel.tsx` |
+| `endpoint-gate-back` | 返回已有连接 | `components/connections/EndpointConflictPanel.tsx` |
+| `endpoint-gate-different-database` | 新建连接（不同数据库） | `components/connections/EndpointConflictPanel.tsx` |
+| `endpoint-gate-retry-live` | 重试读取 | `components/connections/EndpointConflictPanel.tsx` |
+| `endpoint-gate-add-schema` | 添加到已有连接 | `components/connections/EndpointConflictPanel.tsx` |
+| `endpoint-gate-separate` | 仍要新建连接 | `components/connections/EndpointConflictPanel.tsx` |
+| `setup-assistant-progress` | 接入向导步骤进度 | `components/onboarding/SetupAssistantModal.tsx` |
+| `${testId}-copy` | 编写说明复制按钮（模板；`setup-howto-schema-manifest` / `setup-howto-business-wiki`） | `components/onboarding/AuthoringHowTo.tsx` |
+| `${testId}-download` | 编写说明下载按钮（模板） | `components/onboarding/AuthoringHowTo.tsx` |
+| `login-config-unavailable` | 管理员配置不可用提示（`role="alert"`，登录表单隐藏） | `pages/Login.tsx` |
+| `login-bootstrap-token` | 客户部署首次引导 Token 输入 | `pages/Login.tsx` |
+| `login-password-toggle` | 登录页密码显示或隐藏 | `pages/Login.tsx` |
+| `agent-token-list` | Agent 详情 Token 列表 | `pages/admin/AgentDetail.tsx` |
+| `agent-token-row-${token.label}` | Agent Token 行（模板） | `pages/admin/AgentDetail.tsx` |
+| `audit-turn-meta-card` | 问询详情元信息卡 | `pages/admin/Audit.tsx` |
+| `audit-export-inquiry-pack` | 导出问询与调用 | `pages/admin/Audit.tsx` |
+| `audit-call-inferred-turn-id-${entry.id}` | 调用流水推断问询 ID 链接（模板） | `pages/admin/Audit.tsx` |
+| `audit-usage-slow-${entry.id}` | 调用流水问询慢标记（模板） | `pages/admin/Audit.tsx` |
+| `usage-call-monitor-link` | 使用视图跳转调用监控 | `pages/admin/GovernanceOverview.tsx` |
+| `execution-runtime-notice` | 连接概览问数运行时提示 | `pages/connections/ConnectionOverview.tsx` |
+| `connection-more-${conn.id}` | 连接卡更多菜单（模板） | `pages/connections/ConnectionOverview.tsx` |
+| `read-structure-${conn.id}-${schema}` | Schema 行 `从数据库读取表结构`（模板） | `pages/connections/ConnectionOverview.tsx` |
+| `schema-more-${conn.id}-${schema}` | Schema 行更多菜单（模板） | `pages/connections/ConnectionOverview.tsx` |
+| `whitelist-large-list-notice` | 启用表范围大列表折叠/分页提示 | `pages/connections/TableWhitelist.tsx` |
+| `whitelist-group-toggle-${conn.id}-${schema}` | 启用表范围 Schema 分组展开开关（模板） | `pages/connections/TableWhitelist.tsx` |
+| `monitor-field-panel` | 评测监控「现场」面板 | `pages/eval/Monitor.tsx` |
+| `call-monitor-usage-slow-mark` | 调用监控问询慢标记生效说明 | `pages/ops/CallMonitor.tsx` |

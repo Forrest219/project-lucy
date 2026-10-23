@@ -58,6 +58,8 @@ var/screenshots/
 var/logs/
 output/
 tmp/
+# one-off local runners that hardcode an absolute repo path
+scripts/*/__test_run__*
 
 # Build / dependency outputs (webui ships its own .gitignore, this is the root fallback)
 node_modules/
@@ -73,3 +75,6 @@ venv/
 !customer-config.example/.ktx-ui/
 !customer-config.example/.ktx-ui/.gitkeep
 inbox/20260809-gate-c-uat/.tokens.local
+
+# Cursor 本地 MCP 覆盖配置（含 Bearer token，禁止入库）
+.cursor/mcp.json

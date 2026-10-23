@@ -12,6 +12,7 @@ import {
   parseCatalogNavigationEvent,
   queryCatalogNavigationOverview,
   queryUiUsageOverview,
+  parseUsageHours,
   recordCatalogNavigationEvent,
   recordUiPageView
 } from "../admin/ui-usage";
@@ -126,6 +127,73 @@ describe("ui usage recording", () => {
     expect(week.pageViews).toBe(3);
     expect(week.visitorCount).toBe(2);
     expect(week.pages.find((row) => row.id === "wiki")?.visits).toBe(1);
+    expect(recent.pageViewSeries.points).toHaveLength(24);
+    expect(recent.pageViewSeries.points.reduce((sum, point) => sum + point.pageViews, 0)).toBe(recent.pageViews);
+    expect(week.pageViewSeries.points).toHaveLength(7);
+    expect(week.pageViewSeries.points.reduce((sum, point) => sum + point.pageViews, 0)).toBe(week.pageViews);
+  });
+
+  it("splits page views on the rolling window and keeps unknown rows in the total", async () => {
+    const now = new Date("2026-10-12T12:30:00.000Z");
+    await recordUiPageView({
+      pathname: "/not-a-page",
+      adminId: "secret-admin",
+      now: new Date("2026-10-05T13:30:00.000Z")
+    });
+    await recordUiPageView({
+      pathname: "/overview",
+      adminId: "secret-admin",
+      now: new Date("2026-10-06T12:30:00.000Z")
+    });
+    await recordUiPageView({
+      pathname: "/overview",
+      adminId: "secret-admin",
+      now
+    });
+    await recordUiPageView({
+      pathname: "/wiki",
+      adminId: "secret-admin",
+      now: new Date("2026-10-04T12:30:00.000Z")
+    });
+
+    const week = await queryUiUsageOverview(168, now);
+    expect(week.pageViewSeries.bucket).toBe("day");
+    expect(week.pageViewSeries.since).toBe("2026-10-05T12:30:00.000Z");
+    expect(week.pageViewSeries.until).toBe("2026-10-12T12:30:00.000Z");
+    expect(week.pageViewSeries.points).toHaveLength(7);
+    expect(week.pageViewSeries.points[0]?.start).toBe(week.pageViewSeries.since);
+    expect(week.pageViewSeries.points[6]?.end).toBe(week.pageViewSeries.until);
+    expect(week.pageViewSeries.points[6]?.start).toBe("2026-10-11T12:30:00.000Z");
+    week.pageViewSeries.points.forEach((point, index) => {
+      const next = week.pageViewSeries.points[index + 1];
+      if (next) expect(point.end).toBe(next.start);
+    });
+    expect(week.pageViewSeries.points[0]?.pageViews).toBe(1);
+    expect(week.pageViewSeries.points[1]?.pageViews).toBe(1);
+    expect(week.pageViewSeries.points.slice(2).every((point) => point.pageViews === 0)).toBe(true);
+    expect(week.pageViews).toBe(2);
+    expect(week.unmappedViews).toBe(1);
+    expect(week.pageViewSeries.points.reduce((sum, point) => sum + point.pageViews, 0)).toBe(2);
+    const body = JSON.stringify(week);
+    expect(body).not.toContain("secret-admin");
+    expect(body).not.toContain("/not-a-page");
+    expect(body).not.toContain("/wiki");
+
+    const day = await queryUiUsageOverview(24, now);
+    expect(day.pageViewSeries.bucket).toBe("hour");
+    expect(day.pageViewSeries.points).toHaveLength(24);
+    expect(day.pageViewSeries.since).toBe("2026-10-11T12:30:00.000Z");
+    expect(day.pageViewSeries.points[23]?.start).toBe("2026-10-12T11:30:00.000Z");
+    expect(day.pageViewSeries.points[23]?.end).toBe("2026-10-12T12:30:00.000Z");
+    expect(day.pageViews).toBe(0);
+    expect(day.pageViewSeries.points.every((point) => point.pageViews === 0)).toBe(true);
+
+    expect(parseUsageHours(undefined)).toBe(168);
+    expect(parseUsageHours("1")).toBe(168);
+    expect(parseUsageHours("720")).toBe(168);
+    const fallback = await queryUiUsageOverview(parseUsageHours("1"), now);
+    expect(fallback.pageViewSeries.points).toHaveLength(7);
+    expect(fallback.pageViewSeries.since).toBe("2026-10-05T12:30:00.000Z");
   });
 
   it("counts historical usage page views under the current runtime-status group", async () => {

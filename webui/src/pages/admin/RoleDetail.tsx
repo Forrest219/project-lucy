@@ -14,6 +14,8 @@ import type {
   RoleSelector,
 } from "../../lib/types";
 import { PageHeader } from "../../components/PageHeader";
+import { RoleDeleteBlockedNotice } from "../../components/RoleDeleteBlockedNotice";
+import { PolicyDegradeRepairText } from "../../components/PolicyDegradeBanner";
 import { TagInput } from "../../components/TagInput";
 import { RoleTableGrants } from "../../components/RoleTableGrants";
 import { RoleToolGrants } from "../../components/RoleToolGrants";
@@ -31,7 +33,8 @@ import {
   type RowPolicyPredicateDraft,
   type TableGrant,
 } from "../../lib/rolePermissionDraft";
-import { isDeleteProtectedRole } from "../../lib/lucyAdminRole";
+import { isDeleteProtectedRole, LUCY_ADMIN_ROLE_ID } from "../../lib/lucyAdminRole";
+import { queryKeys } from "../../lib/queryKeys";
 
 type PageMode = "create" | "edit" | "copy";
 
@@ -162,14 +165,17 @@ function initializeDraft(detail: RoleDetailType | null, mode: PageMode): DraftIn
 
   const prefix = expandLegacyPrefixes(detail);
   const partitioned = partitionGrantableTools(detail.role.allow.tools ?? []);
-  const scope: RolePermissionDraft["scope"] = detail.role.allow.source_scope === "catalog_bound"
-    ? { mode: "catalog_bound", connections: [...(detail.role.allow.connections ?? [])] }
+  const catalogBound = detail.role.allow.source_scope === "catalog_bound";
+  const adminCatalog = catalogBound && detail.id === LUCY_ADMIN_ROLE_ID && mode !== "copy";
+  const catalogConnections = adminCatalog ? ["*"] : [...(detail.role.allow.connections ?? [])].filter((id) => id !== "*");
+  const scope: RolePermissionDraft["scope"] = catalogBound
+    ? { mode: "catalog_bound", connections: catalogConnections }
     : { mode: "names", tables: prefix.tables };
   const rawBaseline: RolePermissionDraft = {
     roleId: detail.id,
     description: detail.role.description ?? "",
-    scope: detail.role.allow.source_scope === "catalog_bound"
-      ? { mode: "catalog_bound", connections: [...(detail.role.allow.connections ?? [])] }
+    scope: catalogBound
+      ? { mode: "catalog_bound", connections: detail.id === LUCY_ADMIN_ROLE_ID ? ["*"] : catalogConnections }
       : { mode: "names", tables: explicitTables(detail.role.allow.tableSelectors) },
     tools: [...(detail.role.allow.tools ?? [])],
   };
@@ -191,8 +197,11 @@ function serializeDraft(draft: RolePermissionDraft): RoleWritePayload {
   const partitioned = partitionGrantableTools(draft.tools);
   let allow: RoleAllowConfig;
   if (draft.scope.mode === "catalog_bound") {
+    const connections = draft.roleId === LUCY_ADMIN_ROLE_ID
+      ? ["*"]
+      : draft.scope.connections.filter((id) => id !== "*");
     allow = {
-      connections: draft.scope.connections.length ? draft.scope.connections : undefined,
+      connections: connections.length ? connections : undefined,
       source_scope: "catalog_bound",
       tools: partitioned.grantable.length ? partitioned.grantable : undefined,
     };
@@ -294,8 +303,11 @@ function RoleBoundarySummary({
   impact: PermissionImpactSummary;
 }) {
   const tables = draft.scope.mode === "names" ? draft.scope.tables : [];
-  const connections = draft.scope.mode === "catalog_bound"
-    ? draft.scope.connections
+  const followsAllConnections = draft.roleId === LUCY_ADMIN_ROLE_ID && draft.scope.mode === "catalog_bound";
+  const connections = followsAllConnections
+    ? []
+    : draft.scope.mode === "catalog_bound"
+    ? draft.scope.connections.filter((id) => id !== "*")
     : [...new Set(tables.map((table) => table.connection).filter(Boolean))];
   const restricted = tables.filter((table) => table.predicates?.length).length;
   const incompatible = draft.tools.filter((tool) => ROW_POLICY_INCOMPATIBLE_TOOLS.has(tool));
@@ -304,21 +316,17 @@ function RoleBoundarySummary({
     <aside className="pl-card order-first grid content-start gap-4 xl:order-none xl:sticky xl:top-4" data-testid="role-boundary-summary" aria-label="生效边界摘要">
       <div>
         <h2 className="text-sm font-semibold">生效边界摘要</h2>
-        <p className="mt-1 text-xs text-fg-muted">基于当前草稿实时计算；正式保存后才会生效。</p>
       </div>
       <dl className="grid grid-cols-2 gap-3 text-sm">
-        <div><dt className="text-xs text-fg-muted">允许的连接</dt><dd className="mt-1 font-semibold">{connections.length}</dd></div>
+        <div><dt className="text-xs text-fg-muted">允许的连接</dt><dd className="mt-1 font-semibold">{followsAllConnections ? "全部" : connections.length}</dd></div>
         <div><dt className="text-xs text-fg-muted">可访问的表</dt><dd className="mt-1 font-semibold">{draft.scope.mode === "catalog_bound" ? "目录绑定" : tables.length}</dd></div>
         <div><dt className="notranslate text-xs text-fg-muted" translate="no">MCP 工具</dt><dd className="mt-1 font-semibold">{draft.tools.length}</dd></div>
         <div><dt className="text-xs text-fg-muted">限定行表</dt><dd className="mt-1 font-semibold">{restricted}</dd></div>
       </dl>
-      <div className="rounded-md bg-bg-subtle p-3 text-sm">
-        <p className="font-medium">{riskLabel(impact.risk)}</p>
-        <p className="notranslate mt-1 text-xs text-fg-muted" translate="no">受影响 Agent：{detail?.usageCount ?? 0} 个</p>
-      </div>
-      {draft.scope.mode === "catalog_bound" ? (
-        <p className="rounded-md border border-warning-strong bg-warning-soft p-3 text-xs text-warning-strong">后续新启用的表会自动进入，并走扩权审计。</p>
-      ) : null}
+      <p className={`text-xs ${impact.risk === "unchanged" ? "text-fg-muted" : "font-medium text-warning-strong"}`}>
+        {riskLabel(impact.risk)}
+        <span className="notranslate" translate="no"> · 受影响 Agent {detail?.usageCount ?? 0} 个</span>
+      </p>
       {restricted > 0 && incompatible.length > 0 ? (
         <div className="rounded-md border border-warning-strong p-3 text-xs text-warning-strong" data-testid="row-policy-tool-warning">
           受行级策略保护的表上，以下工具会被运行时拒绝：{" "}
@@ -326,27 +334,13 @@ function RoleBoundarySummary({
         </div>
       ) : null}
       {detail?.invalid ? (
-        <div className="rounded-md border border-danger-strong bg-danger-soft p-3 text-xs text-danger" role="alert">
-          当前正式 Role 待修复：{detail.warnings.join("；")}
+        <div className="grid gap-1 rounded-md border border-warning-strong/40 bg-warning-soft p-3 text-xs text-fg-default" role="status" data-testid="role-repair-hint">
+          {detail.warnings.map((warning) => (
+            <p key={warning}>
+              <PolicyDegradeRepairText reason={warning} />
+            </p>
+          ))}
         </div>
-      ) : null}
-      {detail?.skillAccess ? (
-        <section className="rounded-md border border-border p-3 text-xs" data-testid="role-skill-access-summary" aria-label="业务 Skill 摘要">
-          <h3 className="font-medium">业务 Skill</h3>
-          <dl className="mt-2 grid grid-cols-3 gap-2 text-center">
-            <div><dt className="text-fg-muted">可检索</dt><dd className="mt-1 font-semibold">{detail.skillAccess.discoverable.length}</dd></div>
-            <div><dt className="text-fg-muted">可读取</dt><dd className="mt-1 font-semibold">{detail.skillAccess.readable.length}</dd></div>
-            <div><dt className="text-fg-muted">通道不完整</dt><dd className="mt-1 font-semibold">{detail.skillAccess.declaredWithoutChannel.length}</dd></div>
-          </dl>
-          {detail.skillAccess.declared.length > 0 ? (
-            <ul className="mt-2 max-h-28 space-y-1 overflow-auto text-fg-muted">
-              {detail.skillAccess.declared.map((uri) => <li key={uri} className="notranslate break-all font-mono" translate="no">{uri}</li>)}
-            </ul>
-          ) : (
-            <p className="mt-2 text-fg-muted">没有声明给此角色的业务 Skill。</p>
-          )}
-          <p className="mt-2 text-fg-muted">授权修改请前往 Skill 编辑页。</p>
-        </section>
       ) : null}
       {detail?.effectivePermissions ? (
         <details>
@@ -356,6 +350,25 @@ function RoleBoundarySummary({
             {detail.effectivePermissions.capabilityDigest ? <code className="notranslate mt-1 block break-all" translate="no">{detail.effectivePermissions.capabilityDigest}</code> : null}
           </div>
         </details>
+      ) : null}
+      {detail?.wikiAccess || detail?.skillAccess ? (
+        <section aria-label="上下文可见范围" className="text-xs" data-testid="role-context-access">
+          <p className="font-medium">上下文可见范围（只读）</p>
+          <ul className="mt-1 grid gap-1 text-fg-muted">
+            {[
+              { label: "业务 Wiki", access: detail.wikiAccess },
+              { label: "业务 Skill", access: detail.skillAccess }
+            ].map(({ label, access }) =>
+              access ? (
+                <li key={label}>
+                  {label}：可发现 {access.discoverable.length} / 可读取 {access.readable.length}
+                  {access.declaredWithoutChannel.length > 0 ? `；${access.declaredWithoutChannel.length} 个已授权对象缺少通道` : ""}
+                </li>
+              ) : null
+            )}
+          </ul>
+          <p className="mt-1 text-fg-muted">对象授权只在 Wiki / Skill 编辑页修改；通道由「允许的 <span className="notranslate" translate="no">MCP</span> 工具」决定。</p>
+        </section>
       ) : null}
     </aside>
   );
@@ -463,7 +476,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
     void queryClient.invalidateQueries({ queryKey: ["admin", "policy-runtime"] });
     if (!toastAccessWriteAck(result, message)) return false;
     void queryClient.invalidateQueries({ queryKey: ["admin", "roles"] });
-    void queryClient.invalidateQueries({ queryKey: ["admin", "agents"] });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.adminAgents });
     void queryClient.invalidateQueries({ queryKey: ["admin", "role", targetRoleId] });
     setBaseline(draft);
     setRejectedTools([]);
@@ -498,8 +511,14 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
   });
 
   const patchMutation = useMutation({
-    mutationFn: (vars: { dryRun: boolean; payload: RoleWritePayload; version?: string; draftHash: string; impact: PermissionImpactSummary }) =>
-      apiPatch<{ diff: string; proposedYaml: string; version?: string } | AccessWriteAck>(`/api/admin/roles/${encodeURIComponent(roleId)}`, { dryRun: vars.dryRun, version: vars.version, patch: vars.payload }),
+    mutationFn: (vars: { dryRun: boolean; payload: RoleWritePayload; version?: string; draftHash: string; impact: PermissionImpactSummary }) => {
+      const { description, allow } = vars.payload;
+      return apiPatch<{ diff: string; proposedYaml: string; version?: string } | AccessWriteAck>(`/api/admin/roles/${encodeURIComponent(roleId)}`, {
+        dryRun: vars.dryRun,
+        version: vars.version,
+        patch: { description, allow },
+      });
+    },
     onSuccess: (data, vars) => {
       if (vars.dryRun) {
         const preview = data as { diff: string; proposedYaml: string; version?: string };
@@ -519,7 +538,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
         setReview({ kind: "delete", draftHash: rolePermissionDraftHash(draft), version: preview.version ?? vars.version, diff: preview.diff, proposedYaml: preview.proposedYaml, impact: derivePermissionImpact(draft, empty, [], detail?.users ?? []) });
       } else if (toastAccessWriteAck(data as AccessWriteAck, `Role '${roleId}' 已删除`)) {
         void queryClient.invalidateQueries({ queryKey: ["admin", "roles"] });
-        void queryClient.invalidateQueries({ queryKey: ["admin", "agents"] });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.adminAgents });
         navigate("/admin/roles");
       }
     },
@@ -538,7 +557,13 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
     params.set("tab", "overview");
     setSearchParams(params, { replace: true });
 
-    if (detail.source !== "yaml" || detail.usageCount > 0 || isDeleteProtectedRole(detail.id)) return;
+    if (detail.source !== "yaml" || isDeleteProtectedRole(detail.id)) return;
+    if (detail.usageCount > 0) {
+      toast.message(
+        <RoleDeleteBlockedNotice users={detail.users} className="text-sm leading-5 text-fg-default" />
+      );
+      return;
+    }
     reviewTriggerRef.current = deleteButtonRef.current;
     deleteMutation.mutate({ dryRun: true, version: detail.version });
   }, [deleteIntent, detail, searchParams, setSearchParams]);
@@ -601,13 +626,33 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
         description={
           mode === "create" ? <>按表、<span className="notranslate" translate="no">MCP</span> 工具和行级策略分别配置，最后一次确认并保存。</>
             : isReadOnlyTemplate ? <>这是参考模板，全部配置只读。可基于模板创建正式 Role。</>
-              : <>按独立编辑面维护访问边界，所有改动会作为一个原子草稿保存。</>
+              : undefined
         }
         badges={detail ? <><span>{detail.source === "template" ? "参考模板" : "正式 Role"}</span><span>{detail.usageCount} 个 <span className="notranslate" translate="no">Agent</span> 引用</span></> : null}
         actions={
           isReadOnlyTemplate ? <Link to={`/admin/roles/${encodeURIComponent(detail!.id)}?mode=copy&tab=overview`} className="pl-btn pl-btn--primary text-sm">基于此模板创建 Role</Link>
-            : detail?.source === "yaml" && !isDeleteProtectedRole(detail.id) ? <button ref={deleteButtonRef} type="button" className="pl-btn pl-btn--danger text-sm" disabled={detail.usageCount > 0 || deleteMutation.isPending} onClick={(event) => { reviewTriggerRef.current = event.currentTarget; deleteMutation.mutate({ dryRun: true, version: detail.version }); }}>{deleteMutation.isPending ? "检查中…" : "删除 Role"}</button>
-              : null
+            : detail?.source === "yaml" && !isDeleteProtectedRole(detail.id) ? (
+              <div className="flex max-w-sm flex-col items-end gap-1">
+                <button
+                  ref={deleteButtonRef}
+                  type="button"
+                  className="pl-btn pl-btn--danger text-sm"
+                  disabled={detail.usageCount > 0 || deleteMutation.isPending}
+                  aria-describedby={detail.usageCount > 0 ? "role-delete-blocked-reason" : undefined}
+                  onClick={(event) => { reviewTriggerRef.current = event.currentTarget; deleteMutation.mutate({ dryRun: true, version: detail.version }); }}
+                >
+                  {deleteMutation.isPending ? "检查中…" : "删除 Role"}
+                </button>
+                {detail.usageCount > 0 ? (
+                  <RoleDeleteBlockedNotice
+                    id="role-delete-blocked-reason"
+                    testId="role-delete-blocked-reason"
+                    users={detail.users}
+                    className="max-w-sm text-right text-xs leading-4 text-fg-muted"
+                  />
+                ) : null}
+              </div>
+            ) : null
         }
       />
 
@@ -647,15 +692,15 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
 
           {activeSection === "tables" ? (
             <div className="grid gap-4 pb-28">
-              <div><h2 className="text-base font-semibold">可访问的表</h2><p className="mt-1 text-sm text-fg-muted">只选择该 Role 确实需要访问的表；连接由选择结果自动推导。</p></div>
+              <h2 className="text-base font-semibold">可访问的表</h2>
               {connectionsQuery.isError ? <p className="text-sm text-warning-strong">连接候选暂不可用，不能修改表范围。</p> : null}
-              <RoleTableGrants value={draft.scope} connections={connectionCandidates.map((connection) => ({ id: connection.id, schemas: connection.schemas ?? [] }))} candidateTablesByKey={candidateTablesByKey} candidatesLoaded={candidatesLoaded} onChange={(scope) => updateDraft({ ...draft, scope })} disabled={isReadOnlyTemplate || connectionsQuery.isError} />
+              <RoleTableGrants value={draft.scope} connections={connectionCandidates.map((connection) => ({ id: connection.id, schemas: connection.schemas ?? [] }))} candidateTablesByKey={candidateTablesByKey} candidatesLoaded={candidatesLoaded} onChange={(scope) => updateDraft({ ...draft, scope })} disabled={isReadOnlyTemplate || connectionsQuery.isError} grantAllConnections={draft.roleId === LUCY_ADMIN_ROLE_ID} />
             </div>
           ) : null}
 
           {activeSection === "tools" ? (
             <div className="grid max-w-2xl gap-4 pb-28" data-testid="role-tools-field">
-              <div><h2 className="notranslate text-base font-semibold" translate="no">允许的 MCP 工具</h2><p className="mt-1 text-sm text-fg-muted">优先使用职责预设；只有特殊 Role 才展开自定义工具。</p></div>
+              <div><h2 className="notranslate text-base font-semibold" translate="no">允许的 MCP 工具</h2><p className="mt-1 text-sm text-fg-muted">可用职责预设，或在下方勾选具体 <span className="notranslate" translate="no">MCP</span> 工具。全选会授予当前全部可授予工具。</p></div>
               {rejectedTools.length > 0 ? <div className="rounded-md border border-warning-strong bg-warning-soft p-3 text-sm text-warning-strong">旧配置包含 {rejectedTools.length} 个系统禁止工具，保存时将移除。</div> : null}
               <RoleToolGrants candidates={toolsQuery.data?.tools ?? []} value={draft.tools} onChange={(tools) => updateDraft({ ...draft, tools })} disabled={isReadOnlyTemplate} />
               {toolsQuery.isError ? <><p className="text-xs text-warning-strong">工具候选暂不可用，可手工填写工具 ID。</p><TagInput value={draft.tools} onChange={(tools) => updateDraft({ ...draft, tools })} placeholder="输入工具 ID 后回车" /></> : null}

@@ -183,6 +183,8 @@ describe("Onboarding", () => {
     // M41: PageHeader H1 is 系统概览; 运维驾驶舱 is the product mental
     // model, not a user-visible H1.
     expect(await screen.findByRole("heading", { name: "系统概览" })).toBeInTheDocument();
+    // Spec 174: sections render independently; wait for the real MCP section.
+    await screen.findByRole("heading", { name: "MCP 接入" });
     expect(screen.queryByRole("heading", { name: "运维驾驶舱" })).not.toBeInTheDocument();
     expect(screen.queryByText("运行状态")).not.toBeInTheDocument();
     const pageActions = screen.getByLabelText("页面操作");
@@ -394,13 +396,13 @@ describe("Onboarding", () => {
     expect(screen.queryByText("高风险")).not.toBeInTheDocument();
     expect(screen.getByText("确认系统可用，处理当前待办。")).toBeInTheDocument();
     // The MCP section uses its own heading now (no more "实时状态与诊断").
-    expect(screen.getByRole("heading", { name: "MCP 接入" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "MCP 接入" })).toBeInTheDocument();
   });
 
   it("shows 刷新中… while any core query is fetching and 刷新 when idle", async () => {
     renderPage();
     const refreshButton = await screen.findByTestId("onboarding-refresh-button");
-    expect(refreshButton.textContent?.trim()).toBe("刷新首页数据");
+    await waitFor(() => expect(refreshButton.textContent?.trim()).toBe("刷新首页数据"));
 
     // Slow down the refetch so the in-flight label is observable in jsdom.
     const realFetch = globalThis.fetch;
@@ -1106,6 +1108,7 @@ describe("Onboarding", () => {
     const { fetchMock } = renderPage();
     // Wait for the page to settle so the refresh button is in the DOM.
     const refreshButton = await screen.findByTestId("onboarding-refresh-button");
+    await waitFor(() => expect(refreshButton).not.toBeDisabled());
     const callsBefore = fetchMock.mock.calls.length;
     fireEvent.click(refreshButton);
     // Allow the Promise.allSettled chain + the .then() callback to flush.

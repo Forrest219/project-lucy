@@ -72,6 +72,8 @@ POST /api/connections/:connId/schemas/remove     # remove schema from connection
 POST /api/connections/:connId/test
 POST /api/connections/:connId/ingest
 GET  /api/connections/ingest-runs
+POST /api/connections/:connId/schema-structure
+GET  /api/connections/:connectionId/import-scope
 
 POST /api/catalog/reload
 GET  /api/catalog/reloads
@@ -87,6 +89,7 @@ GET    /api/eval/cases/:domain/:caseId
 POST   /api/eval/cases/:domain
 PUT    /api/eval/cases/:domain/:caseId
 DELETE /api/eval/cases/:domain/:caseId
+POST   /api/eval/cases/:domain/:caseId/confirm-review
 POST   /api/eval/suites/import
 GET    /api/eval/suites/:domain/download
 POST   /api/eval/results/import
@@ -105,11 +108,16 @@ GET    /api/eval/monitor/config
 PUT    /api/eval/monitor/config
 GET    /api/eval/monitor/threshold
 PUT    /api/eval/monitor/threshold
+GET    /api/eval/monitor/field
 GET    /api/eval/security-candidates
 POST   /api/eval/security-candidates/extract
 POST   /api/eval/security-candidates/:id/review
 POST   /api/eval/security-candidates/:id/promote/preview
 POST   /api/eval/security-candidates/:id/promote
+
+GET    /api/eval/field-questions
+POST   /api/eval/field-questions/extract
+POST   /api/eval/field-questions/:id/promote
 
 POST   /api/connections/probe
 
@@ -127,6 +135,7 @@ GET    /api/eval/runs/summary
 GET    /api/r1/observability
 GET    /api/help/handbook
 GET    /api/help/search
+GET    /api/help/diagrams/:id
 
 POST   /api/semantic-assets/validate
 POST   /api/semantic-assets/publish
@@ -163,7 +172,13 @@ GET    /api/admin/audit/turns/export
 GET    /api/admin/audit/turns/:turnId
 POST   /api/admin/audit/conversation-turns/purge
 POST   /api/admin/audit/args-summary/scrub
+GET    /api/admin/audit/:id/effective-association
+GET    /api/admin/audit/association-revisions
+POST   /api/admin/audit/association-revisions
+GET    /api/admin/audit/export-inquiry-pack
+GET    /api/admin/audit/v2/export-metadata
 GET    /api/admin/trace/events
+POST   /api/agent-audit/events
 GET    /api/admin/mcp-tools
 POST   /api/admin/mcp-playground/acl-preview
 POST   /api/admin/mcp-playground/live-smoke
@@ -369,7 +384,11 @@ CLI 不可用 → `KTX_CLI_ERROR`（区别于 `VALIDATION_FAILED`）。
 { "ok": true, "data": { "key": "global/revenue.md", "filePath": "wiki/global/revenue.md", "diff": "...", "frontmatter": {}, "content": "# Revenue" }}
 ```
 
-错误码：`BAD_REQUEST` `FORBIDDEN_PATH` `WIKI_NOT_FOUND`。
+错误码：`BAD_REQUEST` `FORBIDDEN_PATH` `WIKI_NOT_FOUND` `WIKI_FRONTMATTER_UNSUPPORTED`。
+
+文档属性（frontmatter）仅支持 YAML（V-08，Spec §4.6）：首行 `---` 后的语言标记去空白并转小写后，只有为空或 `yaml` 才会被解析；`js`、`javascript`、`json` 等其它标记（含大小写与空格变体）一律拒绝，服务端不执行、不写盘。
+- 上传预览 / 上传提交 / `PUT` 保存 / 版本恢复 / 移动：`400 WIKI_FRONTMATTER_UNSUPPORTED`，文案「仅支持 YAML 格式的文档属性。」
+- `GET`（读取已在磁盘上的非法文件）：`422 WIKI_FRONTMATTER_UNSUPPORTED`，需先修复该文档。
 
 ### Wiki 目录治理与版本记录（M51 / M53 / M56）
 
@@ -435,6 +454,8 @@ Wiki Markdown 版本记录与 Table YAML 版本记录对齐：保留最近 5 个
 `POST /api/connections/:connId/remove`（Spec 127）删除连接配置：默认 `dryRun:true`；确认写入时删除 `connections.<id>` 并从 `setup.database_connection_ids` prune。可选 `deleteSecret`（仅约定 `.ktx/secrets/<id>-password`）与 `deleteAssets`（`semantic-layer/<id>/` 下 YAML）。**不**改 `access.yaml`、**不**删 Wiki、**不**触碰物理库。响应与审计 diff 脱敏。
 
 `GET /api/connections/:connId/live-schemas`（Spec 107）经 `ktx sql --json` 只读聚合账号可见 Schema 及 BASE TABLE 数量。Query `refresh=1` 跳过进程内 TTL（默认 10 分钟）。成功 / 连通失败均返回 HTTP 200 + `data.status`（与 connection test 同构，便于分连接 UI）；连接不存在返回 404。字段见 Spec 107 §6。
+
+`POST /api/connections/:connId/schema-structure` 预览指定 schema 的物理表结构，请求体 `{ schema }`；缺 `schema` 返回 `BAD_REQUEST`。`GET /api/connections/:connectionId/import-scope`（Spec 183）只读返回已发现物理表的导入范围分布。
 
 `GET /api/connections/:connId/tables` 从 `semantic-layer/<connId>/_schema/*.yaml` 返回已扫描表名：
 
@@ -539,7 +560,7 @@ dryRun 响应：
 
 `GET /api/eval/domains` 返回 domain 列表与最近运行摘要；`GET /api/eval/domains/:domain` 返回单个 domain。
 
-`GET /api/eval/cases/:domain` / `GET /api/eval/cases/:domain/:caseId` 读取 eval case。`POST /api/eval/cases/:domain` 新增 case；`PUT /api/eval/cases/:domain/:caseId` 更新 case，默认 dryRun；`DELETE` 删除 case。
+`GET /api/eval/cases/:domain` / `GET /api/eval/cases/:domain/:caseId` 读取 eval case。`POST /api/eval/cases/:domain` 新增 case；`PUT /api/eval/cases/:domain/:caseId` 更新 case，默认 dryRun；`DELETE` 删除 case。`POST /api/eval/cases/:domain/:caseId/confirm-review` 将该 case 的 `review_status` 置为 `active`，并把当前 `sourceMapVersion` 记入 `semantic_version_seen`（语义版本变更后需重新确认）。
 
 `POST /api/eval/suites/import` 导入 Eval Suite YAML，默认 `dryRun:true`；`GET /api/eval/suites/:domain/download` 以 YAML 附件下载当前 domain 的 canonical suite，并在响应头返回 suite id/hash 与 runner command；`POST /api/eval/results/import` 导入离线 Result JSON，默认 `dryRun:true`，可选归档本地变体。
 
@@ -580,6 +601,13 @@ Monitor：
 - `GET /api/eval/monitor/drift-distribution?domain=&days=`
 - `GET/PUT /api/eval/monitor/config`
 - `GET/PUT /api/eval/monitor/threshold`
+- `GET /api/eval/monitor/field?domain=&days=`（按 domain 绑定角色统计 access_log 调用 / 错误 / 拒绝，按 client family 分桶）
+
+Field Questions：
+
+- `GET /api/eval/field-questions`（返回 `field_question` 表全部记录，按 `updated_at` 倒序）
+- `POST /api/eval/field-questions/extract`（请求体为现场提问包；抽取分组后落库，拒绝抽取时返回 `422`，成功返回 `data.inserted`）
+- `POST /api/eval/field-questions/:id/promote`（返回用例草稿 `data.draft`；⚠️ 当前只返回内存草稿，**不写入 eval case**，用例仍需人工落地）
 
 常见错误码：`RUNNER_BUSY` `RUN_NOT_FOUND` `RUNNER_PRECHECK_FAILED` `NO_CASES_SELECTED` `UNSUPPORTED_SELECTION_MODE`。
 
@@ -668,6 +696,10 @@ Monitor：
 
 `GET /api/help/handbook` 返回系统手册内容和元数据，供 WebUI 帮助入口展示。该端点只读，不暴露 secret 文件。
 
+`GET /api/help/search` 在手册正文中做只读检索，返回命中章节的 id、标题与片段。
+
+`GET /api/help/diagrams/:id` 返回一张产品架构图（HTML）。`:id` 只能取已登记的两个值之一：`lucy-architecture-diagram`（产品架构图）与 `lucy-docs-flows`（文档流转图）。未知 id 返回 404 `ERR_HELP_DIAGRAM_NOT_FOUND`；路径穿越尝试同样返回 404。该端点只读。
+
 ### Admin / 访问治理
 
 Agent 列表与详情：
@@ -676,29 +708,33 @@ Agent 列表与详情：
 - `GET /api/admin/agents/:userId`
 - `GET /api/admin/agents/:userId/effective-permissions`
 
-写入路径已是 role-first：
+写入路径是 Role Set（Spec 168）：
 
-- `POST /api/admin/agents`：必须传 `agent.role`，拒绝 `agent.allow`；当 role id 来自内置模板时，后端先展开为完整 yaml role 再写入，不保存 `role-template` / `templateId` 指针字段。
-- `PATCH /api/admin/agents/:userId`：只允许 `name`、`note`、`enabled`、`role`；role 可引用 yaml 中已有 role 或内置模板。
+- `POST /api/admin/agents`：必须传 `agent.roles`（至少一个正式角色），拒绝 `agent.allow`。只传 `agent.role` 时当成单元素数组。参考模板不可直接绑定。
+- `PATCH /api/admin/agents/:userId`：允许 `name`、`note`、`enabled`、`roles`、`constraints`。只传 `patch.role` 时当成单元素数组。写入角色集合时落盘删除 `role`。
+- `GET` 返回解析后的 `roles`。恰好一个角色时附带 `role`。`role` 与 `roles` 同时存在于磁盘时返回 `roleResolutionError`。
+- 角色变更的 dryRun 返回服务端 `effectivePermissions`。
 - `DELETE /api/admin/agents/:userId`：删除 agent 前先撤销 token。
 
 新建请求：
 
 ```jsonc
-{ "dryRun": true, "agent": { "id": "wangwu", "name": "王五", "note": "市场部分析助理", "role": "kx_readonly" }}
+{ "dryRun": true, "agent": { "id": "wangwu", "name": "王五", "note": "市场部分析助理", "roles": ["kx_readonly"] }}
 ```
 
 PATCH 请求：
 
 ```jsonc
-{ "dryRun": true, "version": "mtime-hash", "patch": { "role": "kx_readonly", "enabled": true }}
+{ "dryRun": true, "version": "mtime-hash", "patch": { "roles": ["kx_readonly", "analyst"], "enabled": true }}
 ```
 
 拒绝：
 
 - `agent.allow` / `patch.allow` → `LEGACY_ALLOW_READONLY`
-- 缺 role → `ROLE_REQUIRED`
+- 缺角色，或空 `roles` 且没有旧 ACL → `ROLE_REQUIRED`
+- 同时传 `role` 与 `roles` → `ROLE_AND_ROLES`
 - 无效 role → `INVALID_ROLE`
+- 参考模板 → `REFERENCE_TEMPLATE_NOT_ASSIGNABLE`
 - 启用 legacy wildcard agent 且未分配 role → `LEGACY_WILDCARD_AGENT_REQUIRES_ROLE`
 
 Token：
@@ -729,6 +765,12 @@ Audit：
 - `GET /api/admin/audit/turns/:turnId`
 - `POST /api/admin/audit/conversation-turns/purge`
 - `POST /api/admin/audit/args-summary/scrub`
+- `GET /api/admin/audit/:id/effective-association`
+- `GET /api/admin/audit/association-revisions`
+- `POST /api/admin/audit/association-revisions`
+- `GET /api/admin/audit/export-inquiry-pack`
+- `GET /api/admin/audit/v2/export-metadata`
+- `POST /api/agent-audit/events`（受控客户端 observation 上报；凭据取自 `X-Agent-Audit-Token` 头并由服务端解析，不依赖 admin session；缺失或无效返回 `401 CREDENTIAL_INVALID`）
 - `GET /api/admin/mcp-tools`
 
 `GET /api/admin/config-audit` 查询 `config_change_log`，用于追踪 WebUI 对 `ktx.yaml`、`webui/config/access.yaml` 等治理配置的写入记录。
@@ -883,7 +925,7 @@ Query：
 
 `POST /api/admin/ui-usage/page-view` 记录一次 WebUI 页面打开。请求体 `{ "pathname": "/catalog" }`。走现有 WebUI 管理员鉴权；required 且未登录返回 401。成功 `{ ok: true, data: { recorded: true | false } }`（跳转路径可为 `recorded: false`）。非法路径返回 400，错误文案不回显路径。
 
-`GET /api/admin/ui-usage/overview?hours=24|168` 返回界面使用聚合：`pageViews`、`visitorCount`、`activeMenuCount`、`unmappedViews`，以及 `groups` / `menus` / `pages` 排行（`{ id, label, visits }`）。仅接受 24 与 168，缺省或其他值按 168。权威契约见 Spec 148。
+`GET /api/admin/ui-usage/overview?hours=24|168` 返回界面使用聚合：`pageViews`、`visitorCount`、`activeMenuCount`、`unmappedViews`，以及 `groups` / `menus` / `pages` 排行（`{ id, label, visits }`）。仅接受 24 与 168，缺省或其他值按 168。`pageViewSeries` 只拆开 `pageViews`，见 Spec 166。权威契约见 Spec 148 与 Spec 166。
 
 `POST /api/admin/ui-usage/catalog-navigation-event` 记录 `/catalog` P0 的匿名交互事件。请求体 `{ visitId, eventType, contextLevel? }`；只接受 Spec 152 定义的事件与层级枚举。事件只写本机审计库，不保存账户、URL、查询串、搜索词或业务对象名。成功返回 `{ ok: true, data: { recorded: true | false } }`；非法请求返回 `400 CATALOG_NAVIGATION_EVENT_INVALID`。
 
@@ -891,17 +933,54 @@ Query：
 
 ### 调用监控（Spec 143）
 
-`GET /api/ops/call-monitor?range=24h|1h&slowMs=` 返回 MCP 业务工具调用的准实时聚合：吞吐、成功率 / 错误率 / 拒绝率、多数请求耗时（P95）、慢于多数请求计数、SLO 违规、Top 工具（≤10）与最近失败与拒绝短表（≤20）。事实源为 `audit.sqlite` access_log，排除协议工具；响应不得包含 Eval / Hermes 字段。权威契约见 Spec 143。
+`GET /api/ops/call-monitor?range=1h|24h|7d|30d&slowMs=` 返回 MCP 业务工具调用的准实时聚合，以及同一窗口的分桶序列：吞吐、成功率 / 错误率 / 拒绝率、多数请求耗时（P95）、慢于多数请求计数、SLO 违规、Top 工具（≤10）、最近失败与拒绝短表（≤20）和 `series`。事实源为 `audit.sqlite` access_log，排除协议工具；响应不得包含 Eval / Hermes 字段。权威契约见 Spec 143 与 Spec 165。
 
 ### MCP Proxy
 
 `POST /mcp` 在 7879 端口运行，使用 Bearer token 识别 agent，执行 ACL 裁决并写访问日志。代理工具包括 KTX MCP 上游工具和 `kx_catalog` 本地目录工具。
 
-## 5. 通用约定
+### 部署模式与首个所有者引导（企业安全 V-01 · A0 最小版）
 
-- 所有 `:conn/:schema/:table` 段做白名单存在性校验，不存在 → `404 SOURCE_NOT_FOUND`。
-- 写类端点统一支持 `dryRun`，默认 `true`（安全优先：必须显式 `false` 才落盘）。
-- 不存在任何返回 `.ktx/secrets/` 内容的端点。
+`LUCY_DEPLOYMENT_MODE=customer|development`，缺省 `customer`，其他取值拒绝启动。`customer` 下 `GET /api/auth/status` 的 `mode` 永不为 `open`（无启用管理员 → `bootstrap`），`LUCY_WEBUI_AUTH=off` 不生效；`development` 保持原行为。
 
----
-_架构设计 by Claude (architect) · 2026-06-15_
+`POST /api/auth/bootstrap` 在 `customer` 模式下还需请求头 `X-Lucy-Bootstrap-Token`，对照 `LUCY_WEBUI_BOOTSTRAP_TOKEN_FILE` 指向的 Secret 文件（`timingSafeEqual`）。新增错误码：
+
+| 状态码 | 错误码 | 含义 |
+|---|---|---|
+| 503 | `BOOTSTRAP_NOT_PROVISIONED` | 未配置 `LUCY_WEBUI_BOOTSTRAP_TOKEN_FILE`，或文件不可读 / 为空 |
+| 401 | `BOOTSTRAP_TOKEN_INVALID` | 缺少或不匹配 `X-Lucy-Bootstrap-Token` |
+
+持久限速、并发互斥与持久引导状态见企业安全 Spec §3.1 / T02。
+
+### Wiki / Skill 对象授权与并发（企业安全 T05 / T06，取代 Spec 170 的全开放）
+
+**授权事实源：** Skill frontmatter `roles_allowed`、Wiki frontmatter `allowed_roles`。缺失或 `[]` 无人可见；精确 `["*"]` 表示所有有效已分配 Role（不是匿名公开）；`*` 与 Role 混用、非数组、非字符串元素为损坏声明，保存 / 导入返回 `400 CONTEXT_ACL_INVALID`（Skill 为 `400 skill_roles_invalid`），运行时对象拒绝。`sl_refs`、Skill prerequisites、`visibility`、目录名均不授权。Agent 侧同一 Role 须同时匹配对象授权与通道（`wiki_search` / `wiki_read` / `lucy_skill_search` / `lucy_skill_read`）。
+
+**Wiki 版本保护：**
+
+| 端点 | 变更 |
+|---|---|
+| `GET /api/wiki/:key` | 响应增加 `file_version`（`sha256:<hex>`，文件字节）与 `acl`（`missing` / `empty` / `all` / `roles` / `corrupt`）；`frontmatter.allowed_roles` 仅在声明合法时返回 |
+| `PUT /api/wiki/:key`（`dryRun:false`） | 页面已存在时必须带 `expected_version`：缺失 `428 wiki_expected_version_required`，过期 `409 wiki_write_conflict`；`frontmatter.allowed_roles` 为空值之外的合法数组才改写授权，否则保留现有声明 |
+| `POST /api/wiki/upload/preview` | 响应增加 `currentFileVersion`；新页面无 ACL 时 `warnings` 提示无人可见 |
+| `POST /api/wiki/upload/commit` | 覆盖已存在页面须带 `expected_version`（428 / 409 同上）；上传内容未声明 `allowed_roles` 时沿用页面当前授权 |
+| `POST /api/wiki/:key/versions/:versionId/restore` | 恢复正文与属性，但**保留当前** `allowed_roles`，不复活历史上更宽的授权 |
+
+Skill 写入沿用 `expected_version`（428 `skill_expected_version_required` / 409 `skill_write_conflict`）；`POST /api/skills`、`PUT /api/skills/:domain/:name` 现在写入请求中的 `roles_allowed`，新建缺省写 `roles_allowed: []`。
+
+**Role 管理：**
+
+| 状态码 | 错误码 | 含义 |
+|---|---|---|
+| 409 | `ROLE_REFERENCED_BY_CONTEXT` | 删除 Role 时仍有 Wiki / Skill 授权指向它；`error.detail` 为 `{ skills: [...], wiki: [...] }`（仅对象标识） |
+| 409 | `ROLE_ID_RETIRED` | 已删除的 Role 标识永久退役（`role_id_tombstones`），创建 / 复制不可复用 |
+| 409 | `ROLE_ID_HAS_CONTEXT_REFERENCES` | 新 Role 标识已出现在历史 ACL 中；清理引用，或在请求体显式带 `acknowledgeContextReferences:true` 后才创建 |
+| 503 | `SECURITY_STORE_UNAVAILABLE` | 无法读取 / 写入退役状态，拒绝删除或创建 |
+
+`GET /api/admin/roles/:roleId` 增加只读的 `wikiAccess`（与 `skillAccess` 同形）和 `contextPolicyVersion`。
+
+**MCP 外部响应：** 对按 key / URI 指定的未授权、不存在、草稿、停用对象，`resources/read`、`prompts/get` 返回 JSON-RPC error `-32003`，`message` 与 `data.reason` 均为 `context_not_available`；`lucy_skill_read`、`wiki_read` 返回 `isError:true`，文本为 `context_not_available`。无正式 Role 的 legacy direct-allow Agent 返回 `context_role_required`。具体内部原因只进入受保护审计。
+
+**管理侧导出：** `POST /api/semantic-assets/export` 在包含 Wiki / Skill 时向安全账本写入操作者记录（账本不可用返回 `503 SECURITY_STORE_UNAVAILABLE`）；它不是 Agent 通道。
+
+**迁移工具：** `cd webui && npx tsx ../scripts/security/migrate-context-acl.mts --project-dir <dir> --dry-run` 输出仅含元数据的迁移报告（`inventoryDigest`、保留 / 显式全角色 / 待确认 / legacy Agent）；`--apply --owner <id> --expected-digest <digest> --decisions <file> --backup-dir <dir>` 仅 owner 可执行，整批预检通过后才写入，带加密备份与持久 journal。先在合成 fixture 上运行；对客户私有配置执行属部署授权范围。

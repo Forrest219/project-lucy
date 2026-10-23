@@ -1,22 +1,22 @@
-<!DOCTYPE html>
+!DOCTYPE html>
 <!--
 | 元数据 | 内容 |
 |---|---|
-| 文档名称 | 权限与 ACL |
+| 文档名称 | 访问治理：角色 / Agent / Token |
 | 文档类型 | Other |
-| 版本 | v1.0 |
-| 撰写日期 | 2026-06-20 |
+| 版本 | v2.0 |
+| 撰写日期 | 2026-06-20；2026-10-20 按 docs/SYSTEM_HANDBOOK.md §3.5 / §3.10 / §5.1 / §5.3 重写 |
 | 撰写人 | Claude |
 | 委托人 | project-lucy 团队 |
-| 基于材料 | Lucy 权限管理设计 |
-| 适用范围 | BI 管理员配置 Agent 访问权限 |
+| 基于材料 | docs/SYSTEM_HANDBOOK.md；webui/server/proxy/acl.ts；webui/config/access.yaml.example |
+| 适用范围 | 管理员配置 Lucy 数据面访问治理（角色 / Agent / Token / 行级策略） |
 | 输出位置 | docs/user-guide/permissions.html |
 -->
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>权限与 ACL · Lucy 帮助文档</title>
+<title translate="no" class="notranslate">访问治理：角色、Agent 与 Token · Lucy 帮助文档</title>
 <link rel="stylesheet" href="assets/user-guide.css">
 </head>
 <body>
@@ -27,6 +27,8 @@
       <p class="nav-title">开始</p>
       <a class="nav-link" href="index.html">帮助中心首页</a>
       <a class="nav-link" href="product-intro.html">产品介绍</a>
+      <a class="nav-link" href="lucy-architecture-diagram.html">架构总览</a>
+      <a class="nav-link" href="lucy-docs-flows.html">摄取与服务</a>
       <a class="nav-link" href="getting-started.html">5 分钟理解 Lucy</a>
       <a class="nav-link" href="concepts.html">核心概念</a>
     </div>
@@ -38,93 +40,335 @@
     </div>
     <div class="nav-group">
       <p class="nav-title">管理员指南</p>
-      <a class="nav-link" href="quickstart-admin.html">快速部署 <span class="wip">WIP</span></a>
-      <a class="nav-link" href="data-sources.html">数据源接入 <span class="wip">WIP</span></a>
-      <a class="nav-link active" href="permissions.html">权限与 ACL <span class="wip">WIP</span></a>
-      <a class="nav-link" href="webui-guide.html">KTX WebUI</a>
+      <a class="nav-link" href="quickstart-admin.html">快速部署</a>
+      <a class="nav-link" href="data-sources.html">数据源接入</a>
+      <a class="nav-link active" href="permissions.html">权限与 ACL</a>
+      <a class="nav-link" href="webui-guide.html">WebUI 指南</a>
     </div>
     <div class="nav-group">
       <p class="nav-title">治理与安全</p>
       <a class="nav-link" href="trust.html">可信机制</a>
-      <a class="nav-link" href="eval-meta-governance-training.html">Eval 培训</a>
-      <a class="nav-link" href="skills.html">Skill 管理 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="eval-meta-governance-training.html">质量评测培训</a>
+      <a class="nav-link" href="skills.html"><span translate="no" class="notranslate">Skill</span> 管理</a>
     </div>
     <div class="nav-group">
       <p class="nav-title">参考</p>
-      <a class="nav-link" href="mcp-reference.html">MCP 接入参考 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="mcp-reference.html"><span translate="no" class="notranslate">MCP</span> 接入参考</a>
       <a class="nav-link" href="glossary.html">术语表</a>
-      <a class="nav-link" href="release-notes.html">更新日志 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="release-notes.html">更新日志</a>
     </div>
   </aside>
   <main class="content">
     <header class="hero">
       <span class="eyebrow">Admin Guide</span>
-      <h1>权限管理与访问控制</h1>
-      <p class="lead">Lucy 在表级别控制 Agent 的数据访问范围。每个 Agent 身份只能看到被显式授权的表，未授权的查询在网关层被拒绝，不触达数据库。</p>
+      <h1>访问治理：角色、<span translate="no" class="notranslate">Agent</span> 与 <span translate="no" class="notranslate">Token</span></h1>
+      <p class="lead">Lucy 的数据面访问由三个对象决定：角色定义可复用的权限边界，<span translate="no" class="notranslate">Agent</span> 是要对审计负责的接入主体，<span translate="no" class="notranslate">Token</span> 是某台设备或客户端的接入凭证。三者分开治理，配置入口互不相同。</p>
     </header>
 
     <section>
-      <h2>访问控制模型</h2>
-      <p>Lucy 的访问控制分为三个层级：</p>
-      <ol>
-        <li><strong>Agent 身份认证</strong> — 每个 Agent 接入需配置身份标识（API Key 或证书），Lucy 据此判断是哪个 Agent 在请求。</li>
-        <li><strong>表级 ACL</strong> — 为每个 Agent 身份配置可访问的 <code>schema.table</code> 列表，支持通配符（如 <code>dataforai.*</code>）。</li>
-        <li><strong>操作只读约束</strong> — 所有 Agent 身份均只有 SELECT 权限，这是物理约束，不可配置放开。</li>
-      </ol>
-
-      <h3>内置角色</h3>
+      <h2>三个对象，三件事</h2>
       <table>
         <thead>
-          <tr><th>角色</th><th>可访问范围</th><th>适用对象</th></tr>
+          <tr><th>对象</th><th>它是什么</th><th>在哪里配置</th><th>什么时候动它</th></tr>
         </thead>
         <tbody>
-          <tr><td>viewer</td><td>被显式授权的表</td><td>普通业务用户 Agent</td></tr>
-          <tr><td>analyst</td><td>被显式授权的表 + 字典外安全探索</td><td>BI / 分析师 Agent</td></tr>
-          <tr><td>admin</td><td>所有表（只读）+ 语义层管理</td><td>BI 管理员</td></tr>
+          <tr>
+            <td>角色</td>
+            <td>可复用的权限边界：一组允许的连接、表范围与工具清单。</td>
+            <td><code class="notranslate" translate="no">/admin/roles</code></td>
+            <td>权限边界要复用，或要统一收紧、放开一类使用者时。</td>
+          </tr>
+          <tr>
+            <td><span translate="no" class="notranslate">Agent</span></td>
+            <td>接入主体与审计身份：这次调用是谁发起的。</td>
+            <td><code class="notranslate" translate="no">/admin/agents</code></td>
+            <td>新增一个要对审计负责的人或机器人时。</td>
+          </tr>
+          <tr>
+            <td><span translate="no" class="notranslate">Token</span></td>
+            <td>接入凭证：这台设备拿什么连上 Lucy。</td>
+            <td><code class="notranslate" translate="no">/admin/tokens</code> 或 <span translate="no" class="notranslate">Agent</span> 详情</td>
+            <td>新设备接入、<span translate="no" class="notranslate">Token</span> 凭据疑似泄露、需要轮换时。</td>
+          </tr>
         </tbody>
       </table>
-    </section>
-
-    <section>
-      <h2>表级 ACL 配置</h2>
-      <p>表级 ACL 在 KTX WebUI 的「Settings → ACL」中配置。以下是 YAML 格式示例：</p>
-      <pre>agents:
-  claude-code-prod:
-    role: analyst
-    allow_tables:
-      - dataforai.superstore_orders
-      - dataforai.superstore_returns
-      - dataforai.superstore_people</pre>
-
+      <div class="callout">
+        一人一 <span translate="no" class="notranslate">Agent</span>、一 <span translate="no" class="notranslate">MCP</span>；同一 <span translate="no" class="notranslate">Agent</span> 名下的多个 <span translate="no" class="notranslate">Token</span> 权限完全相同，<strong>多 <span translate="no" class="notranslate">Token</span> 只负责鉴权，不改变权限</strong>。要表达权限差异，请拆 <span translate="no" class="notranslate">Agent</span> 或改角色，不要用不同 <span translate="no" class="notranslate">Token</span> 区分。
+      </div>
       <div class="callout warning">
-        📋 ACL 变更会立即生效，无需重启服务。建议在低峰期操作，并在变更后运行 Eval 验证。
+        两个常见误区：每台电脑建一个 <span translate="no" class="notranslate">Agent</span>（审计碎片化），或每个 <span translate="no" class="notranslate">Agent</span> 手搓一份权限（改权成本高、边界易漂移）。同一人多设备应当是<strong>一个 <span translate="no" class="notranslate">Agent</span> + 多个 <span translate="no" class="notranslate">Token</span></strong>；权限差异应当落在角色上。
       </div>
     </section>
 
     <section>
-      <h2>审计日志</h2>
-      <p>Lucy 记录每一次查询请求的完整日志，包含以下字段：</p>
-      <ul>
-        <li><code>timestamp</code> — 请求时间戳</li>
-        <li><code>agent_id</code> — 发起请求的 Agent 身份</li>
-        <li><code>tool_name</code> — 调用的 MCP 工具名</li>
-        <li><code>generated_sql</code> — 实际执行的 SQL</li>
-        <li><code>execution_time_ms</code> — 执行耗时（毫秒）</li>
-        <li><code>row_count</code> — 返回行数</li>
-      </ul>
-      <p>日志默认保留 90 天，支持导出。</p>
+      <h2>WebUI 登录账户与 <span translate="no" class="notranslate">MCP</span> <span translate="no" class="notranslate">Agent</span> / <span translate="no" class="notranslate">Token</span> 是两套体系</h2>
+      <p>Lucy 的控制面和数据面各有自己的身份，混用会同时踩到权限和审计两个坑：</p>
+      <table>
+        <thead>
+          <tr><th>维度</th><th>WebUI 登录账户</th><th><span translate="no" class="notranslate">MCP</span> <span translate="no" class="notranslate">Agent</span> / <span translate="no" class="notranslate">Token</span></th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>管什么</td>
+            <td>连接、语义资产、发布、评测、访问治理配置</td>
+            <td>数据面取数与语义资产查询</td>
+          </tr>
+          <tr>
+            <td>在哪管</td>
+            <td><code class="notranslate" translate="no">/admin/admins</code></td>
+            <td><code class="notranslate" translate="no">/admin/agents</code>、<code class="notranslate" translate="no">/admin/tokens</code></td>
+          </tr>
+          <tr>
+            <td>分级方式</td>
+            <td>只有所有者、运维两级，与数据面角色无关</td>
+            <td>由角色定义连接、表范围与工具清单</td>
+          </tr>
+          <tr>
+            <td>凭据形态</td>
+            <td>登录口令，配置里只存 <span translate="no" class="notranslate">scrypt</span> 哈希，没有明文</td>
+            <td><span translate="no" class="notranslate">Bearer</span> <span translate="no" class="notranslate">Token</span>，配置里只存 <span translate="no" class="notranslate">sha256</span> 哈希</td>
+          </tr>
+          <tr>
+            <td>能否互换</td>
+            <td colspan="2">不能。<span translate="no" class="notranslate">Agent</span> 的 <span translate="no" class="notranslate">Token</span> 不能登录 WebUI；WebUI 会话也不能当作 <span translate="no" class="notranslate">MCP</span> 的 <span translate="no" class="notranslate">Bearer</span> 凭据。</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="callout warning">
+        配置文件里的 <code class="notranslate" translate="no">role: admin</code> 是历史写法，读入时等价于控制面的「运维」登录角色，与数据面的角色无关。数据面<strong>没有内置角色</strong>，每个角色都要自己显式定义。
+      </div>
     </section>
 
     <section>
-      <h2>SSO 与企业身份集成</h2>
-      <div class="callout" style="border-left-color: var(--gold);">
-        此功能正在开发中，预计在后续版本支持与企业 SSO（SAML 2.0 / Okta）集成，届时 Agent 可继承用户身份的 ACL 权限。
+      <h2>治理入口</h2>
+      <p>访问治理分组下的页面各自负责一层对象：</p>
+      <table>
+        <thead>
+          <tr><th>页面</th><th>路径</th><th>用途</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>角色权限</td><td><code class="notranslate" translate="no">/admin/roles</code></td><td>管理角色的连接、表范围与工具授权，并预览权限范围。</td></tr>
+          <tr><td><span translate="no" class="notranslate">Agent</span></td><td><code class="notranslate" translate="no">/admin/agents</code></td><td>创建或禁用 <span translate="no" class="notranslate">Agent</span>，绑定角色，查看该 <span translate="no" class="notranslate">Agent</span> 名下的 <span translate="no" class="notranslate">Token</span> 与最近调用。</td></tr>
+          <tr><td><span translate="no" class="notranslate">Token</span> 凭据</td><td><code class="notranslate" translate="no">/admin/tokens</code></td><td>全局查看、签发与定向吊销 <span translate="no" class="notranslate">Agent</span> 的访问凭据。</td></tr>
+          <tr><td>访问日志</td><td><code class="notranslate" translate="no">/admin/audit</code></td><td>按问询记录和调用流水追溯访问行为、裁决原因与执行耗时。</td></tr>
+          <tr><td><span translate="no" class="notranslate">MCP</span> 调试台</td><td><code class="notranslate" translate="no">/admin/mcp-playground</code></td><td>受控试调：检查这个 <span translate="no" class="notranslate">Agent</span> 能不能连上、能不能查某张表。</td></tr>
+          <tr><td>配置审计</td><td><code class="notranslate" translate="no">/admin/config-audit</code></td><td>查看 <span translate="no" class="notranslate">access.yaml</span> 等配置的写入记录与变更内容。</td></tr>
+          <tr><td>登录账户</td><td><code class="notranslate" translate="no">/admin/admins</code></td><td>管理 WebUI 登录账户（所有者 / 运维）。</td></tr>
+        </tbody>
+      </table>
+      <p>配置的事实源是 <code class="notranslate" translate="no">webui/config/access.yaml</code>，模板见 <code class="notranslate" translate="no">webui/config/access.yaml.example</code>。页面上做的改动最终都落到这个文件，配置文件本身不入库。</p>
+    </section>
+
+    <section>
+      <h2>角色配置</h2>
+      <p><code class="notranslate" translate="no">roles:</code> 是一个<strong>映射</strong>（按角色标识取键），不是列表。一个角色的结构如下：</p>
+      <pre class="notranslate" translate="no">roles:
+  kx_readonly:
+    description: KX 财务数据只读问答
+    allow:
+      connections:
+        - mysql-aliyun
+      tableSelectors:
+        - connection: mysql-aliyun
+          schema: dataforai
+          names:
+            - kx_dim_company
+            - kx_fact_financial_amount
+        - connection: mysql-aliyun
+          schema: dataforai
+          prefix: kx_
+      tools:
+        - lucy_catalog
+        - lucy_query
+        - lucy_read_source
+        - lucy_explain_query
+        - lucy_freshness
+        - lucy_begin_question
+
+users:
+  - id: finance_agent
+    name: Finance Agent
+    enabled: true
+    roles:
+      - kx_readonly
+    tokens:
+      - hash: sha256:&lt;hex&gt;
+        label: laptop
+        created: 2026-07-29
+        expires_at: 2026-10-29T00:00:00Z</pre>
+      <table>
+        <thead>
+          <tr><th>字段</th><th>作用</th><th>约束</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code class="notranslate" translate="no">allow.connections</code></td>
+            <td>这个角色能用哪些连接</td>
+            <td>连接必须真实存在</td>
+          </tr>
+          <tr>
+            <td><code class="notranslate" translate="no">allow.tableSelectors</code></td>
+            <td>可访问的表范围</td>
+            <td>每项带 <code class="notranslate" translate="no">connection</code> 与 <code class="notranslate" translate="no">schema</code>，再加 <code class="notranslate" translate="no">names</code>（指定表名）或 <code class="notranslate" translate="no">prefix</code>（按前缀匹配）二选一；匹配到 0 个语义源会 fail-closed</td>
+          </tr>
+          <tr>
+            <td><code class="notranslate" translate="no">allow.tools</code></td>
+            <td>这个角色能调用的工具清单</td>
+            <td>必须非空；写通配符会让整个角色解析失败</td>
+          </tr>
+        </tbody>
+      </table>
+      <p><span translate="no" class="notranslate">Agent</span> 侧用 <code class="notranslate" translate="no">roles:</code> 数组绑定角色（历史写法 <code class="notranslate" translate="no">role: &lt;角色标识&gt;</code> 等价；两者同时出现会 fail-closed）。多角色的可见范围取并集，行级约束再与 <span translate="no" class="notranslate">Agent</span> 自身的强制约束求交。</p>
+      <div class="callout warning">
+        角色标识建议用业务含义（如 <code class="notranslate" translate="no">kx_readonly</code>），并写清说明。页面上另有「参考模板」，只用于复制后改成正式角色，不要直接当线上权限源；正式角色都写在 <code class="notranslate" translate="no">access.yaml</code> 里。角色被 <span translate="no" class="notranslate">Agent</span> 引用时，先改绑定再删角色。
+      </div>
+    </section>
+
+    <section>
+      <h2><span translate="no" class="notranslate">Agent</span> 与 <span translate="no" class="notranslate">Token</span> 凭据边界</h2>
+      <ul>
+        <li><strong>明文只出现一次</strong>：<span translate="no" class="notranslate">Token</span> 明文在签发时返回一次，<code class="notranslate" translate="no">access.yaml</code> 里只保存 <code class="notranslate" translate="no">sha256:&lt;hex&gt;</code>。页面上的「复制 <span translate="no" class="notranslate">MCP</span> 配置」只产出占位符模板。</li>
+        <li><strong>必须设置过期时间</strong>：<code class="notranslate" translate="no">expires_at</code> 是必填项，管理页默认 90 天、最长 365 天。到期后 <span translate="no" class="notranslate">Proxy</span> 鉴权<strong>硬拒绝 401</strong>（裁决原因 <code class="notranslate" translate="no">token_expired</code>），不是软警告；到期后仍建议在页面显式撤销，避免配置残留。</li>
+        <li><strong>一设备一 <span translate="no" class="notranslate">Token</span></strong>：用标签或设备名区分，标签里不要放任何明文；明文不要进仓库、聊天记录、截图或业务 <span translate="no" class="notranslate">Wiki</span>。</li>
+        <li><strong>撤销即刻生效</strong>：单条撤销在 <code class="notranslate" translate="no">/admin/tokens</code> 行内操作；人员离职或整体轮换时，先在 <span translate="no" class="notranslate">Agent</span> 详情撤销全部 <span translate="no" class="notranslate">Token</span>，再禁用 <span translate="no" class="notranslate">Agent</span>。</li>
+        <li><strong>上游内部凭据不出门</strong>：<code class="notranslate" translate="no">KTX_INTERNAL_TOKEN</code> 只用于 <span translate="no" class="notranslate">Lucy Proxy</span> 调 <span translate="no" class="notranslate">KTX</span> 上游，<strong>不得</strong>分发给任何外部 <span translate="no" class="notranslate">Agent</span>。</li>
+      </ul>
+      <div class="callout">
+        接入请求必须携带 <code class="notranslate" translate="no">Authorization: Bearer &lt;token&gt;</code>。未携带、<span translate="no" class="notranslate">Token</span> 不匹配、已撤销、已过期，一律返回 401。
+      </div>
+      <p>离线接入模板与工具面见<a href="mcp-reference.html">「<span translate="no" class="notranslate">MCP</span> 接入参考」</a>。</p>
+    </section>
+
+    <section>
+      <h2>权限裁决链路</h2>
+      <p>每次工具调用都会重新裁决一遍，链路是：</p>
+      <ol>
+        <li>把请求里的 <span translate="no" class="notranslate">Bearer</span> <span translate="no" class="notranslate">Token</span> 做 <span translate="no" class="notranslate">sha256</span>。</li>
+        <li>在 <code class="notranslate" translate="no">access.yaml</code> 里匹配 <span translate="no" class="notranslate">Token</span> 哈希；已撤销的 <span translate="no" class="notranslate">Token</span> 直接拒绝。</li>
+        <li>比对 <code class="notranslate" translate="no">expires_at</code>：到期或不可解析一律按过期处理。</li>
+        <li>解析该 <span translate="no" class="notranslate">Agent</span> 绑定的角色，得到允许的连接、表范围与工具清单。</li>
+        <li><code class="notranslate" translate="no">tools/list</code> 只返回可见工具；<code class="notranslate" translate="no">tools/call</code> 再做一次工具、连接、表、原始 <span translate="no" class="notranslate">SQL</span>、敏感元数据与并发裁决。</li>
+        <li>允许、拒绝、错误全部写入审计，并带上裁决原因。</li>
+      </ol>
+      <table>
+        <thead>
+          <tr><th>裁决原因</th><th>含义</th><th>先查什么</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code class="notranslate" translate="no">agent_disabled</code></td><td><span translate="no" class="notranslate">Agent</span> 已被禁用</td><td><span translate="no" class="notranslate">Agent</span> 状态</td></tr>
+          <tr><td><code class="notranslate" translate="no">token_expired</code></td><td><span translate="no" class="notranslate">Token</span> 已过期，或过期时间不可解析</td><td>签发新 <span translate="no" class="notranslate">Token</span> 并同步客户端配置</td></tr>
+          <tr><td><code class="notranslate" translate="no">tool_forbidden</code></td><td>角色没有授权这个工具</td><td>角色的工具清单</td></tr>
+          <tr><td><code class="notranslate" translate="no">tool_forbidden_global</code></td><td>命中全局禁用工具清单</td><td><code class="notranslate" translate="no">defaults.deny_tools</code></td></tr>
+          <tr><td><code class="notranslate" translate="no">table_forbidden:&lt;表名&gt;</code></td><td>请求涉及的表不在授权范围</td><td>角色的表选择器</td></tr>
+          <tr><td><code class="notranslate" translate="no">raw_query_forbidden</code></td><td>查询里传了原始 <span translate="no" class="notranslate">SQL</span></td><td>改用语义查询工具</td></tr>
+          <tr><td><code class="notranslate" translate="no">query_concurrency_exceeded</code></td><td>单个 <span translate="no" class="notranslate">Token</span> 的并发查询超限</td><td>降低并发，或把批跑任务拆到独立 <span translate="no" class="notranslate">Agent</span></td></tr>
+          <tr><td><code class="notranslate" translate="no">role_resolution_failed:&lt;角色标识&gt;</code></td><td>角色配置解析失败</td><td>角色配置本身</td></tr>
+        </tbody>
+      </table>
+      <p>全部裁决原因与调用上下文在 <code class="notranslate" translate="no">/admin/audit</code> 的调用流水里可查；调试台上的中文主行与机器码是同一份判定结果。</p>
+    </section>
+
+    <section>
+      <h2>行级策略</h2>
+      <p>行级策略是<strong>静态</strong>的表选择器级配置，挂在角色的表选择器上，用结构化谓词声明「这张表里哪些行对该角色可见」：</p>
+      <table>
+        <thead>
+          <tr><th>配置</th><th>含义</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code class="notranslate" translate="no">row_access: all</code></td><td>该表全部行可见（默认），不得再带行级谓词</td></tr>
+          <tr><td><code class="notranslate" translate="no">row_access: scoped</code></td><td>按谓词限行，至少要有一条谓词</td></tr>
+        </tbody>
+      </table>
+      <ul>
+        <li>谓词只支持两种操作：等于（<code class="notranslate" translate="no">eq</code>）与属于（<code class="notranslate" translate="no">in</code>）。</li>
+        <li>字段必须是该语义源的普通列或行级维度，<strong>禁止</strong>绑到度量名上。</li>
+        <li>多角色的行授予取并集，再与 <span translate="no" class="notranslate">Agent</span> 强制约束求交，得到最终行约束；保存前可用 dryRun 预览摘要与摘要值。</li>
+      </ul>
+      <div class="callout warning">
+        上游对强制谓词的拼接能力当前<strong>默认未证明</strong>。在未证明状态下，受行级策略保护的表用 <code class="notranslate" translate="no">lucy_query</code> 取数会返回 <code class="notranslate" translate="no">row_policy_upstream_unproven</code>，这是<strong>预期的安全拒绝，不是故障</strong>；受保护表上的 <code class="notranslate" translate="no">lucy_read_source</code>、<code class="notranslate" translate="no">lucy_freshness</code>、<code class="notranslate" translate="no">entity_details</code> 会被 <code class="notranslate" translate="no">row_policy_requires_wrapped_tool</code> 拒绝，只允许走已包装的查询路径。排障请用 <code class="notranslate" translate="no">lucy_explain_query</code>，它在本地执行。
+      </div>
+      <p><strong>行级策略不是什么</strong>：不是动态 RLS、不是多租户隔离、也不是数据库原生行级安全。按人或按 <span translate="no" class="notranslate">Token</span> 动态变化的策略尚未立项。</p>
+    </section>
+
+    <section>
+      <h2>审计与留存边界</h2>
+      <p>访问日志有两个粒度：<strong>问询记录</strong>看一次用户问询的整体链路，<strong>调用流水</strong>看单次工具调用的取证细节，两者通过问询 ID 关联。导出遵循当前筛选条件。</p>
+      <table>
+        <thead>
+          <tr><th>存储层</th><th>位置</th><th>存什么</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>热库（默认路径）</td>
+            <td><code class="notranslate" translate="no">.ktx-ui/audit.sqlite</code></td>
+            <td>生成 <span translate="no" class="notranslate">SQL</span> 明文（仅语义查询的编译结果）、查询哈希、脱敏查询预览</td>
+          </tr>
+          <tr>
+            <td>查询原文冷存（可选）</td>
+            <td><code class="notranslate" translate="no">.ktx-ui/audit-cold/query-artifacts/</code></td>
+            <td>查询原文加密副本；需要设置 <code class="notranslate" translate="no">LUCY_AUDIT_QUERY_KEY</code> 才会写入</td>
+          </tr>
+          <tr>
+            <td>对象存储冷归档</td>
+            <td>对象存储</td>
+            <td><strong>规划中</strong>，当前未落地</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="callout">
+        一个常被误解的点：<strong>90 天是 <span translate="no" class="notranslate">Token</span> <code class="notranslate" translate="no">expires_at</code> 的默认有效期，不是日志保留期</strong>。访问日志没有「默认保留 90 天」这回事。
+      </div>
+      <p>热库里不写的东西：原始 <span translate="no" class="notranslate">SQL</span> 攻击载荷、结果行、<span translate="no" class="notranslate">Token</span> 明文。被拒绝的原始 <span translate="no" class="notranslate">SQL</span> 也不会写进生成 <span translate="no" class="notranslate">SQL</span> 列。</p>
+    </section>
+
+    <section>
+      <h2>上线检查清单</h2>
+      <div class="step-list">
+        <div class="step-item">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <h3>连接与启用表范围先就绪</h3>
+            <p>在 <code class="notranslate" translate="no">ktx.yaml</code> 里配好连接与 <code class="notranslate" translate="no">enabled_tables</code>（进入语义层的基础范围），并使用真实的只读数据库账号。只读是物理约束，不在权限模型里放开。</p>
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <h3>配置角色</h3>
+            <p>在 <code class="notranslate" translate="no">/admin/roles</code> 里定义连接、表范围与工具清单。工具要显式列举，不要用通配符。</p>
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <h3>创建 <span translate="no" class="notranslate">Agent</span> 并绑定角色</h3>
+            <p>在 <code class="notranslate" translate="no">/admin/agents</code> 新建 <span translate="no" class="notranslate">Agent</span>，选好角色后先看权限预览再保存。</p>
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">4</div>
+          <div class="step-body">
+            <h3>签发 <span translate="no" class="notranslate">Token</span></h3>
+            <p>在 <span translate="no" class="notranslate">Agent</span> 详情签发 <span translate="no" class="notranslate">Token</span>，设置 <code class="notranslate" translate="no">expires_at</code>，明文立刻存进客户端凭据库。</p>
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">5</div>
+          <div class="step-body">
+            <h3>配置客户端并冒烟</h3>
+            <p>按<a href="mcp-reference.html">「<span translate="no" class="notranslate">MCP</span> 接入参考」</a>配置接入地址与请求头，然后到 <code class="notranslate" translate="no">/admin/audit</code> 确认这次调用被放行。</p>
+          </div>
+        </div>
+      </div>
+      <div class="callout warning">
+        扩权后要<strong>新开</strong> <span translate="no" class="notranslate">MCP</span> session：旧 session 不会自动刷新可见范围，客户端会继续看到旧的范围并继续被拒。
       </div>
     </section>
 
     <nav class="section-nav" aria-label="上一篇和下一篇">
       <a class="prev" href="data-sources.html"><span class="nav-kicker">上一篇</span><span class="nav-label">数据源接入</span></a>
-      <a class="next" href="webui-guide.html"><span class="nav-kicker">下一篇</span><span class="nav-label">KTX WebUI</span></a>
+      <a class="next" href="webui-guide.html"><span class="nav-kicker">下一篇</span><span class="nav-label">WebUI 指南</span></a>
     </nav>
 
     <p class="footer"><a href="index.html">返回帮助中心首页</a></p>

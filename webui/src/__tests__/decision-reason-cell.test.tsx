@@ -11,6 +11,12 @@ describe("DecisionReasonCell", () => {
     expect(screen.getByTestId("decision-reason-code")).toHaveTextContent("tool_forbidden");
   });
 
+  it("keeps the audit dual line for an allow decision", () => {
+    render(<DecisionReasonCell code="allowed" />);
+    expect(screen.getByTestId("decision-reason-label")).toHaveTextContent("允许执行");
+    expect(screen.getByTestId("decision-reason-code")).toHaveTextContent("allowed");
+  });
+
   it("prefers API label when provided", () => {
     render(<DecisionReasonCell code="tool_forbidden" label="自定义文案" />);
     expect(screen.getByTestId("decision-reason-label")).toHaveTextContent("自定义文案");

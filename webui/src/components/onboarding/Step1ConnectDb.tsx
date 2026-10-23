@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Eye, EyeOff, Lock, CheckCircle2, AlertCircle } from "lucide-react";
 import { apiGet, apiPost } from "../../lib/apiClient";
 import {
+  ATHENA_CREDENTIAL_HINT,
   DATABASE_TYPES,
   getDatabaseTypeConfig,
   validateConnectionId,
@@ -52,6 +53,10 @@ export function Step1ConnectDb({
   const [database, setDatabase] = useState(initialValues?.database || "");
   const [username, setUsername] = useState(initialValues?.username || "");
   const [password, setPassword] = useState("");
+  const [region, setRegion] = useState("");
+  const [s3StagingDir, setS3StagingDir] = useState("");
+  const [workgroup, setWorkgroup] = useState("primary");
+  const [catalog, setCatalog] = useState("AwsDataCatalog");
   const [schema, setSchema] = useState(initialValues?.schema || "");
   const [schemaEdited, setSchemaEdited] = useState(Boolean(initialValues?.schema));
   const [showPassword, setShowPassword] = useState(false);
@@ -74,19 +79,28 @@ export function Step1ConnectDb({
       : null;
 
   const isSqlite = databaseType === "sqlite";
-  const canProbe = isSqlite
-    ? Boolean(database.trim())
-    : Boolean(host.trim() && !portIssue && database.trim() && username.trim() && password.length > 0);
+  const isAthena = databaseType === "athena";
+  const regionOk = /^[a-z]{2}-[a-z]+-\d$/.test(region.trim());
+  const stagingOk = s3StagingDir.trim().startsWith("s3://") && !/\s/.test(s3StagingDir.trim());
+  const canProbe = isAthena
+    ? Boolean(regionOk && stagingOk && database.trim())
+    : isSqlite
+      ? Boolean(database.trim())
+      : Boolean(host.trim() && !portIssue && database.trim() && username.trim() && password.length > 0);
   const probeFingerprint = JSON.stringify({
     databaseType,
     driver,
     engine: engine.trim(),
     wireProtocol: wireProtocol.trim(),
-    host: isSqlite ? "" : host.trim(),
-    port: isSqlite ? "" : portNum,
+    host: isSqlite || isAthena ? "" : host.trim(),
+    port: isSqlite || isAthena ? "" : portNum,
     database: database.trim(),
-    username: isSqlite ? "" : username.trim(),
-    password: isSqlite ? "" : password,
+    username: isSqlite || isAthena ? "" : username.trim(),
+    password: isSqlite || isAthena ? "" : password,
+    region: isAthena ? region.trim() : "",
+    s3StagingDir: isAthena ? s3StagingDir.trim() : "",
+    workgroup: isAthena ? workgroup.trim() : "",
+    catalog: isAthena ? catalog.trim() : "",
     schema: schema.trim()
   });
   const probeVerified = Boolean(
@@ -103,22 +117,32 @@ export function Step1ConnectDb({
 
   const probeMutation = useMutation({
     mutationFn: ({ fingerprint: _fingerprint }: { fingerprint: string }) =>
-      apiPost<ProbeConnectionResult>("/api/connections/probe", {
-        driver,
-        ...(engine.trim() ? { engine: engine.trim() } : {}),
-        ...(wireProtocol.trim() ? { wireProtocol: wireProtocol.trim() } : {}),
-        readonly: !isSqlite,
-        ...(isSqlite
-          ? {}
-          : {
-              host: host.trim(),
-              port: portNum,
-              username: username.trim(),
-              password
-            }),
-        database: database.trim(),
-        ...(schema.trim() ? { schema: schema.trim() } : {})
-      }),
+      apiPost<ProbeConnectionResult>("/api/connections/probe", isAthena
+        ? {
+            driver,
+            readonly: true,
+            database: database.trim(),
+            region: region.trim(),
+            s3StagingDir: s3StagingDir.trim(),
+            ...(workgroup.trim() ? { workgroup: workgroup.trim() } : {}),
+            ...(catalog.trim() ? { catalog: catalog.trim() } : {})
+          }
+        : {
+            driver,
+            ...(engine.trim() ? { engine: engine.trim() } : {}),
+            ...(wireProtocol.trim() ? { wireProtocol: wireProtocol.trim() } : {}),
+            readonly: !isSqlite,
+            ...(isSqlite
+              ? {}
+              : {
+                  host: host.trim(),
+                  port: portNum,
+                  username: username.trim(),
+                  password
+                }),
+            database: database.trim(),
+            ...(schema.trim() ? { schema: schema.trim() } : {})
+          }),
     onSuccess: (res, variables) => {
       setProbeResult(res);
       setVerifiedProbeFingerprint(res.status === "ok" ? variables.fingerprint : null);
@@ -146,26 +170,39 @@ export function Step1ConnectDb({
       acknowledgeDifferentDatabase?: boolean;
       epoch: number;
     }) =>
-      apiPost<CreateConnectionResult>("/api/connections", {
-        id: id.trim(),
-        driver,
-        ...(engine.trim() ? { engine: engine.trim() } : {}),
-        ...(wireProtocol.trim() ? { wireProtocol: wireProtocol.trim() } : {}),
-        readonly: !isSqlite,
-        ...(isSqlite
-          ? {}
-          : {
-              host: host.trim(),
-              port: portNum,
-              username: username.trim(),
-              password
-            }),
-        database: database.trim(),
-        schemas: schema.trim() ? [schema.trim()] : isSqlite ? ["main"] : [database.trim()],
-        dryRun: false,
-        ...(input.acknowledgeSeparateConnection ? { acknowledgeSeparateConnection: true } : {}),
-        ...(input.acknowledgeDifferentDatabase ? { acknowledgeDifferentDatabase: true } : {})
-      }),
+      apiPost<CreateConnectionResult>("/api/connections", isAthena
+        ? {
+            id: id.trim(),
+            driver,
+            readonly: true,
+            database: database.trim(),
+            region: region.trim(),
+            s3StagingDir: s3StagingDir.trim(),
+            ...(workgroup.trim() ? { workgroup: workgroup.trim() } : {}),
+            ...(catalog.trim() ? { catalog: catalog.trim() } : {}),
+            schemas: schema.trim() ? [schema.trim()] : [database.trim()],
+            dryRun: false
+          }
+        : {
+            id: id.trim(),
+            driver,
+            ...(engine.trim() ? { engine: engine.trim() } : {}),
+            ...(wireProtocol.trim() ? { wireProtocol: wireProtocol.trim() } : {}),
+            readonly: !isSqlite,
+            ...(isSqlite
+              ? {}
+              : {
+                  host: host.trim(),
+                  port: portNum,
+                  username: username.trim(),
+                  password
+                }),
+            database: database.trim(),
+            schemas: schema.trim() ? [schema.trim()] : isSqlite ? ["main"] : [database.trim()],
+            dryRun: false,
+            ...(input.acknowledgeSeparateConnection ? { acknowledgeSeparateConnection: true } : {}),
+            ...(input.acknowledgeDifferentDatabase ? { acknowledgeDifferentDatabase: true } : {})
+          }),
     onSuccess: (res, input) => {
       if (input.epoch !== gateEpoch.current) return;
       const nextSchema = schema.trim() || (isSqlite ? "main" : database.trim());
@@ -295,10 +332,80 @@ export function Step1ConnectDb({
                 底层走 MySQL 协议；超时策略与原生 MySQL 不同，请优先选此类型而非 MySQL。
               </p>
             ) : null}
+            {isAthena ? (
+              <p className="text-xs text-fg-muted mt-1" data-testid="setup-athena-hint">
+                {ATHENA_CREDENTIAL_HINT}
+              </p>
+            ) : null}
           </div>
         </div>
 
-        {!isSqlite ? (
+        {isAthena ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="setup-region" className="block text-xs font-medium text-fg-default mb-1">
+                区域 <span className="text-danger" aria-hidden="true">*</span>
+              </label>
+              <input
+                id="setup-region"
+                type="text"
+                className="pl-input w-full notranslate"
+                translate="no"
+                placeholder="例如 eu-west-1"
+                value={region}
+                onChange={(e) => setRegion(e.target.value)}
+                required
+                data-testid="setup-region"
+              />
+            </div>
+            <div>
+              <label htmlFor="setup-s3-staging-dir" className="block text-xs font-medium text-fg-default mb-1">
+                结果目录 <span className="text-danger" aria-hidden="true">*</span>
+              </label>
+              <input
+                id="setup-s3-staging-dir"
+                type="text"
+                className="pl-input w-full notranslate"
+                translate="no"
+                placeholder="例如 s3://bucket/athena-results/"
+                value={s3StagingDir}
+                onChange={(e) => setS3StagingDir(e.target.value)}
+                required
+                data-testid="setup-s3-staging-dir"
+              />
+            </div>
+            <div>
+              <label htmlFor="setup-workgroup" className="block text-xs font-medium text-fg-default mb-1">
+                工作组
+              </label>
+              <input
+                id="setup-workgroup"
+                type="text"
+                className="pl-input w-full notranslate"
+                translate="no"
+                value={workgroup}
+                onChange={(e) => setWorkgroup(e.target.value)}
+                data-testid="setup-workgroup"
+              />
+            </div>
+            <div>
+              <label htmlFor="setup-catalog" className="block text-xs font-medium text-fg-default mb-1">
+                数据目录
+              </label>
+              <input
+                id="setup-catalog"
+                type="text"
+                className="pl-input w-full notranslate"
+                translate="no"
+                value={catalog}
+                onChange={(e) => setCatalog(e.target.value)}
+                data-testid="setup-catalog"
+              />
+            </div>
+          </div>
+        ) : null}
+
+        {!isSqlite && !isAthena ? (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="md:col-span-2">
             <label htmlFor="setup-host" className="block text-xs font-medium text-fg-default mb-1">
@@ -341,14 +448,14 @@ export function Step1ConnectDb({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label htmlFor="setup-database" className="block text-xs font-medium text-fg-default mb-1">
-              {isSqlite ? "数据库文件路径" : "数据库名"} <span className="text-danger" aria-hidden="true">*</span>
+              {isSqlite ? "数据库文件路径" : isAthena ? "默认数据库" : "数据库名"} <span className="text-danger" aria-hidden="true">*</span>
             </label>
             <input
               id="setup-database"
               type="text"
               className="pl-input w-full notranslate"
               translate="no"
-              placeholder={isSqlite ? "例如 db/analytics.sqlite" : "如：analytics_db"}
+              placeholder={isSqlite ? "例如 db/analytics.sqlite" : isAthena ? "例如 da_moji" : "如：analytics_db"}
               value={database}
               onChange={(e) => {
                 setDatabase(e.target.value);
@@ -360,14 +467,14 @@ export function Step1ConnectDb({
           </div>
           <div>
             <label htmlFor="setup-schema" className="block text-xs font-medium text-fg-default mb-1 notranslate" translate="no">
-              初始 Schema (可选)
+              {isAthena ? "初始 Glue 数据库 (可选)" : "初始 Schema (可选)"}
             </label>
             <input
               id="setup-schema"
               type="text"
               className="pl-input w-full notranslate"
               translate="no"
-              placeholder={isSqlite ? "留空默认为 main" : database || "留空默认同数据库名"}
+              placeholder={isSqlite ? "留空默认为 main" : isAthena ? "留空默认同默认数据库，写入 databases" : database || "留空默认同数据库名"}
               value={schema}
               onChange={(e) => {
                 setSchema(e.target.value);
@@ -381,7 +488,7 @@ export function Step1ConnectDb({
           </div>
         </div>
 
-        {!isSqlite ? (
+        {!isSqlite && !isAthena ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label htmlFor="setup-username" className="block text-xs font-medium text-fg-default mb-1">

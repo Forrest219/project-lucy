@@ -22,6 +22,7 @@ import { reloadCatalog, type CatalogReloadRun } from "./catalog-reload";
 import { syncContentToProjectRoot } from "./content-mirror";
 import { resolveContentPaths } from "./paths";
 import { readProject } from "./project";
+import { withDisplayWriteBarrier } from "./display-generation";
 
 const MAX_BYTES = 512 * 1024;
 const MAX_RECORDS = 50;
@@ -874,7 +875,8 @@ export async function uploadCatalogAsset(
       throw error;
     }
   }
-  await rename(tempAbs, safety.targetAbs);
+  // Spec 174 §3.2 — the rename bypasses safeWrite; barrier it explicitly (tmp file is ignored).
+  await withDisplayWriteBarrier(["D", "P", "C"], () => rename(tempAbs, safety.targetAbs));
 
   // A2: the ktx daemon/CLI still read the project-root sibling view. Push the
   // just-written manifest (and any other content-root drift) there so query

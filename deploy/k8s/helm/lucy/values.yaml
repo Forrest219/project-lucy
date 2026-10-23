@@ -31,7 +31,7 @@ fullnameOverride: ""
 # non-local install. The default value `project-lucy` is only valid for
 # `kind` / `docker compose` local development where the image is loaded
 # from the local Docker cache. On a real customer K8s cluster the literal
-# default will fail to pull because there is no public `project-lucy:0.17.0`
+# default will fail to pull because there is no public `project-lucy:2.0.0`
 # on Docker Hub.
 #
 # Default platforms shipped from CI:
@@ -51,8 +51,8 @@ image:
   # Production must override to a customer registry path.
   repository: project-lucy
   # Lucy product version (see repo-root VERSION). Override with immutable
-  # customer tag e.g. customer-amd64-0.17.0-YYYYMMDD-<sha>.
-  tag: "0.17.0"
+  # customer tag e.g. customer-amd64-2.0.0-YYYYMMDD-<sha>.
+  tag: "2.0.0"
   # Optional immutable digest (sha256:…). When set, the chart pins the image
   # by digest and ignores tag for the rendered image reference.
   digest: ""
@@ -174,6 +174,66 @@ env:
 existingSecret: ""
 extraSecretData: {}
 
+# First-owner bootstrap secret (V-01). The chart pins LUCY_DEPLOYMENT_MODE=customer,
+# so creating the first WebUI owner requires a one-time secret. Reference an
+# externally-managed Secret holding key `token`; it is mounted read-only at
+# /run/secrets/lucy-bootstrap and exposed via LUCY_WEBUI_BOOTSTRAP_TOKEN_FILE.
+# Empty (default): the Pod still starts, but POST /api/auth/bootstrap returns
+# 503 BOOTSTRAP_NOT_PROVISIONED. NEVER put the secret value in this file.
+bootstrap:
+  existingSecret: ""
+
+# E2E disposable DB password secret (B3). The harness prepares a per-run reader
+# password file (mode 0600) and creates a Secret whose key is `password`; the
+# chart mounts it read-only at /var/run/secrets/lucy-db so the rendered
+# ktx.yaml's `password: file:/var/run/secrets/lucy-db/password` resolves to the
+# in-container file. Empty (default): no DB Secret is mounted and the runner
+# records `db.applied = false`. NEVER put the password value in this file.
+db:
+  existingSecret: ""
+  mountPath: "/var/run/secrets/lucy-db"
+
+# WebUI session cookie (Spec §3.1 item 8). The chart pins LUCY_DEPLOYMENT_MODE=customer.
+# `access: https` (default) sends Secure cookies. `access: http` is the explicit
+# intranet HTTP customer mode: cookies are not Secure, and this is not the lab
+# test profile. `insecureHttpTestProfile: true` remains only for kind / k3s test
+# profiles; /api/health then reports `insecureTestProfile: true`. Do not combine
+# it with `access: http`.
+security:
+  access: https
+  insecureHttpTestProfile: false
+
+# -------------------------------------------------------------------
+# Reserved for v2.5 enterprise OIDC. v2.0 does not inject this block into
+# the pod and does not contact the issuer. Fill it only as a record of the
+# future client registration. Keep the client secret in a Kubernetes Secret,
+# never in this file.
+#
+# Example for an intranet authorization-code client (not applied):
+#   issuer: https://oidc.ksyun.com
+#   public WebUI origin: https://lucy.example.com
+#   scopes: openid profile email offline_access feishu_login
+#   tokenEndpointAuth: client_secret_post   # or client_secret_basic
+#   logoutStyle: id_token_hint               # or access_token
+# A private-network issuer may be http:// only when written here explicitly.
+# -------------------------------------------------------------------
+webui:
+  # HTTPS origin that will be registered as the OIDC redirect_uri origin.
+  publicUrl: ""
+
+oidc:
+  issuer: ""
+  discoveryUrl: ""
+  authorizationEndpoint: ""
+  tokenEndpoint: ""
+  jwksUri: ""
+  endSessionEndpoint: ""
+  clientId: ""
+  scopes: "openid profile email offline_access"
+  tokenEndpointAuth: client_secret_post
+  logoutStyle: id_token_hint
+  redirectPath: /api/auth/oidc/callback
+
 # Extra env sources — for example, projecting keys from existingSecret as
 # env vars (NOT as files). Use sparingly; most customer secrets should
 # land as files in /data/lucy/.ktx/secrets/.
@@ -267,7 +327,7 @@ lucy:
   # Proxy env block (used by templates to keep parity with Compose).
   enabled: true
   # Customer-facing Lucy product version — must match Chart.appVersion / VERSION.
-  version: "0.17.0"
+  version: "2.0.0"
   # Bundled KTX version baked into the image — must match the Dockerfile ARG.
   # Independent of lucy.version; only change when upgrading @kaelio/ktx.
   bundledKtxVersion: "0.16.0"

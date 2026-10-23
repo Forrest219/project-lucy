@@ -559,7 +559,7 @@ describe("GET /api/admin/audit/turns", () => {
       expect(csvRes.text.charCodeAt(0)).toBe(0xFEFF);
       const csvBody = csvRes.text.replace(/^\uFEFF/, "");
       const [headerLine, firstDataLine] = csvBody.split("\n");
-      expect(headerLine).toBe("问询 ID,来源,Agent,开始时间,开始时间 UTC,结束时间,结束时间 UTC,问询时长,问询摘要,关联调用数,工具调用数,涉及工具,涉及数据表,总调用耗时,最大调用耗时,慢调用数,成功次数,拒绝次数,错误次数");
+      expect(headerLine).toBe("问询 ID,来源,Agent,客户端,会话 ID,开始时间,开始时间 UTC,结束时间,结束时间 UTC,问询时长,问询摘要,关联调用数,工具调用数,涉及工具,涉及数据表,总调用耗时,最大调用耗时,慢调用数,成功次数,拒绝次数,错误次数,自报客户端,自报客户端版本");
       const turnHeaders = parseCsvLine(headerLine);
       const turnCells = parseCsvLine(firstDataLine);
       expect(turnCells[turnHeaders.indexOf("开始时间")]).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
@@ -642,10 +642,7 @@ describe("GET /api/admin/audit/turns", () => {
     }]);
     await writeLog({ ts: at(30_000), userId: "turns-user", tool: "sl_read_source", tables: ["dataforai.superstore_orders"], outcome: "ok", durationMs: 1, requestId: "turns-inf-2" });
 
-    // Reported turn: an explicit lucy_begin_question report, linked via lucy_turn_id. The
-    // report call itself also gets an access_log row with lucy_turn_id set to its own turn id
-    // (mirrors mcp-proxy.ts's recordAudit call for the lucy_begin_question branch) — it must NOT
-    // be counted as a linked business call.
+    // Reported turn: lucy_begin_question is a linked call (Spec 172), plus the later query.
     await writeConversationTurn({
       turnId: "lucy_turns_test_1",
       userId: "turns-user",
@@ -659,13 +656,11 @@ describe("GET /api/admin/audit/turns", () => {
     const app = buildServer();
     await app.ready();
     try {
-      // The reported call is only 30s after the inferred pair (well within the 120s gap), so
-      // inferred clustering — which doesn't know about explicit lucy_turn_id — merges all three
-      // business calls into a single cluster. This is expected: inferred and reported turns can
-      // legitimately overlap on the same underlying access_log rows.
+      // Spec 173: calls that already carry lucy_turn_id stay on the reported question.
+      // The two reads have no turn id, so they remain one inferred question.
       const inferredRes = await request(app.server).get("/api/admin/audit/turns?user=turns-user&source=inferred").expect(200);
       expect(inferredRes.body.data.entries).toHaveLength(1);
-      expect(inferredRes.body.data.entries[0]).toMatchObject({ source: "inferred", userId: "turns-user", businessCallCount: 3 });
+      expect(inferredRes.body.data.entries[0]).toMatchObject({ source: "inferred", userId: "turns-user", businessCallCount: 2 });
 
       const reportedRes = await request(app.server).get("/api/admin/audit/turns?user=turns-user&source=reported").expect(200);
       expect(reportedRes.body.data.entries).toHaveLength(1);
@@ -673,7 +668,7 @@ describe("GET /api/admin/audit/turns", () => {
         id: "lucy_turns_test_1",
         source: "reported",
         userId: "turns-user",
-        businessCallCount: 1,
+        businessCallCount: 2,
         questionSummary: "reported test question"
       });
 
@@ -716,8 +711,7 @@ describe("GET /api/admin/audit/turns", () => {
     // Separate user for the reported-turn case, so its access_log rows don't bleed into the
     // inferred-cluster assertion above (clustering is purely time-based per user).
     await writeConversationTurn({ turnId: "lucy_turns_detail_1", userId: "turns-detail-reported-user", questionSummary: "detail test", questionSource: "reported_tool" });
-    // The report call itself also lands in access_log with lucy_turn_id set to its own turn id
-    // (mirrors mcp-proxy.ts) — the detail view's accessLogs must exclude it, same as the list view.
+    // The report call is a linked call (Spec 172) and appears in the detail next to the query.
     await writeLog({ ts: at(5_000), userId: "turns-detail-reported-user", tool: "lucy_begin_question", outcome: "ok", durationMs: 1, requestId: "turns-detail-report-call", lucyTurnId: "lucy_turns_detail_1" });
     const linkedLogId = await writeLog({ ts: at(10_000), userId: "turns-detail-reported-user", tool: "sl_query", tables: ["dataforai.superstore_returns"], outcome: "ok", durationMs: 1, requestId: "turns-detail-linked", lucyTurnId: "lucy_turns_detail_1" });
     await writeAccessLogSources(linkedLogId, at(10_000), "turns-detail-reported-user", "sl_query", [{
@@ -744,9 +738,11 @@ describe("GET /api/admin/audit/turns", () => {
 
       const reportedDetail = await request(app.server).get("/api/admin/audit/turns/lucy_turns_detail_1").expect(200);
       expect(reportedDetail.body.data).toMatchObject({ id: "lucy_turns_detail_1", source: "reported", userId: "turns-detail-reported-user", questionSummary: "detail test" });
-      expect(reportedDetail.body.data.accessLogs).toHaveLength(1);
-      expect(reportedDetail.body.data.accessLogs[0].tool).toBe("sl_query");
-      expect(reportedDetail.body.data.accessLogs[0].connectionId).toBe("demo-mysql");
+      expect(reportedDetail.body.data.accessLogs.map((row: { tool: string }) => row.tool)).toEqual([
+        "lucy_begin_question",
+        "sl_query"
+      ]);
+      expect(reportedDetail.body.data.accessLogs[1].connectionId).toBe("demo-mysql");
 
       await request(app.server).get("/api/admin/audit/turns/inf_does_not_exist").expect(404);
       await request(app.server).get("/api/admin/audit/turns/lucy_does_not_exist").expect(404);
@@ -755,29 +751,371 @@ describe("GET /api/admin/audit/turns", () => {
     }
   });
 
-  it("does not let a narrow-lookbackHours rebuild debounce-skip a wider one for the same user", async () => {
+  it("keeps the inferred turn id when the page window shrinks from 7 days to 1 hour", async () => {
     const { writeLog } = await import("../proxy/audit");
     const now = Date.now();
     const at = (offsetMs: number) => new Date(now + offsetMs).toISOString();
-
-    // A cluster well outside the 1h window but inside the 24h window.
-    await writeLog({ ts: at(-20 * 60 * 60 * 1000), userId: "debounce-window-user", tool: "sl_read_source", tables: ["dataforai.superstore_orders"], outcome: "ok", durationMs: 1, requestId: "debounce-old-1" });
-    // A cluster inside the 1h window.
-    await writeLog({ ts: at(-5 * 60 * 1000), userId: "debounce-window-user", tool: "sl_read_source", tables: ["dataforai.superstore_orders"], outcome: "ok", durationMs: 1, requestId: "debounce-recent-1" });
+    const recentId = await writeLog({ ts: at(-5 * 60 * 1000), userId: "window-stable-user", tool: "sl_read_source", tables: ["dataforai.superstore_orders"], outcome: "ok", durationMs: 1, requestId: "window-recent-1" });
+    await writeLog({ ts: at(-20 * 60 * 60 * 1000), userId: "window-stable-user", tool: "sl_read_source", tables: ["dataforai.superstore_orders"], outcome: "ok", durationMs: 1, requestId: "window-old-1" });
 
     const { buildServer } = await import("../index");
     const app = buildServer();
     await app.ready();
     try {
-      // First call: narrow window, only sees the recent cluster.
-      const narrow = await request(app.server).get("/api/admin/audit/turns?user=debounce-window-user&source=inferred&lookbackHours=1").expect(200);
-      expect(narrow.body.data.entries).toHaveLength(1);
-
-      // Second call, immediately after (well within any debounce window): wide lookback must
-      // still trigger its own rebuild and surface the older cluster too, not be skipped because
-      // a rebuild for this user "just happened" under a different window size.
-      const wide = await request(app.server).get("/api/admin/audit/turns?user=debounce-window-user&source=inferred&lookbackHours=24").expect(200);
+      const wide = await request(app.server).get("/api/admin/audit/turns?user=window-stable-user&source=inferred&hours=168").expect(200);
       expect(wide.body.data.entries).toHaveLength(2);
+      const narrow = await request(app.server).get("/api/admin/audit/turns?user=window-stable-user&source=inferred&hours=1").expect(200);
+      expect(narrow.body.data.entries).toHaveLength(1);
+      expect(narrow.body.data.entries[0].id).toBe(`inf_window-stable-user_${recentId}`);
+      expect(wide.body.data.entries.map((entry: { id: string }) => entry.id)).toContain(narrow.body.data.entries[0].id);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("[v0.3] does NOT back-bind a catalog call 18ms before begin; only begin itself is bound", async () => {
+    const { writeLog, writeConversationTurn, bindPriorSessionCalls } = await import("../proxy/audit");
+    const beginMs = Date.now() - 30_000;
+    const beginAt = new Date(beginMs).toISOString();
+    await writeConversationTurn({
+      turnId: "lucy_bind_18",
+      userId: "bind-18-user",
+      sessionId: "266fc826",
+      client: "cursor-vscode",
+      questionSummary: "列出可访问的表",
+      questionSource: "reported_tool"
+    });
+    await writeLog({
+      ts: new Date(beginMs - 18).toISOString(),
+      userId: "bind-18-user",
+      tool: "lucy_catalog",
+      outcome: "ok",
+      durationMs: 1,
+      requestId: "bind-18-catalog",
+      lucySessionId: "266fc826",
+      tokenHashPrefix: "sha256:aabbccddeeff",
+      turnAttributionMode: "unassigned",
+      client: "cursor-vscode"
+    });
+    await writeLog({
+      ts: beginAt,
+      userId: "bind-18-user",
+      tool: "lucy_begin_question",
+      outcome: "ok",
+      durationMs: 1,
+      requestId: "bind-18-begin",
+      lucySessionId: "266fc826",
+      tokenHashPrefix: "sha256:aabbccddeeff",
+      lucyTurnId: "lucy_bind_18",
+      turnAttributionMode: "explicit",
+      client: "cursor-vscode"
+    });
+    await bindPriorSessionCalls({
+      turnId: "lucy_bind_18",
+      userId: "bind-18-user",
+      tokenHashPrefix: "sha256:aabbccddeeff",
+      sessionId: "266fc826",
+      at: beginAt
+    });
+
+    const { buildServer } = await import("../index");
+    const app = buildServer();
+    await app.ready();
+    try {
+      const reported = await request(app.server)
+        .get("/api/admin/audit/turns?user=bind-18-user&source=reported")
+        .expect(200);
+      expect(reported.body.data.entries).toHaveLength(1);
+      // v0.3: only begin event is bound; catalog 18ms before is NOT back-bound
+      expect(reported.body.data.entries[0].businessCallCount).toBe(1);
+      expect(reported.body.data.entries[0].client).toBe("cursor-vscode");
+      expect(reported.body.data.entries[0].sessionId).toBe("266fc826");
+
+      const calls = await request(app.server)
+        .get("/api/admin/audit?user=bind-18-user&turnId=lucy_bind_18")
+        .expect(200);
+      const catalog = calls.body.data.entries.find((row: { requestId: string }) => row.requestId === "bind-18-catalog");
+      // Catalog NOT bound to begin's turn; remains unassigned / no session_bound
+      expect(catalog?.lucyTurnId ?? null).toBeFalsy();
+      expect(catalog?.turnAttributionMode).not.toBe("session_bound");
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("keeps a handshake-only session as a visit and returns initialize when filtered by turn id", async () => {
+    const { writeLog } = await import("../proxy/audit");
+    const now = Date.now();
+    const at = (offsetMs: number) => new Date(now + offsetMs).toISOString();
+    await writeLog({
+      ts: at(0),
+      userId: "handshake-user",
+      tool: "initialize",
+      outcome: "ok",
+      durationMs: 1,
+      requestId: "hs-init",
+      lucySessionId: "7bad7248",
+      client: "WorkBuddy Connector"
+    });
+    await writeLog({
+      ts: at(10),
+      userId: "handshake-user",
+      tool: "notifications/initialized",
+      outcome: "ok",
+      durationMs: 1,
+      requestId: "hs-ready",
+      lucySessionId: "7bad7248",
+      client: "WorkBuddy Connector"
+    });
+    await writeLog({
+      ts: at(20),
+      userId: "handshake-user",
+      tool: "tools/list",
+      outcome: "ok",
+      durationMs: 1,
+      requestId: "hs-list",
+      lucySessionId: "7bad7248",
+      client: "WorkBuddy Connector"
+    });
+    await writeLog({
+      ts: at(5_000),
+      userId: "handshake-user",
+      tool: "tools/list",
+      outcome: "ok",
+      durationMs: 1,
+      requestId: "hs-list-again",
+      lucySessionId: "7bad7248",
+      client: "WorkBuddy Connector"
+    });
+
+    const { buildServer } = await import("../index");
+    const app = buildServer();
+    await app.ready();
+    try {
+      const turns = await request(app.server)
+        .get("/api/admin/audit/turns?user=handshake-user&source=inferred")
+        .expect(200);
+      expect(turns.body.data.entries).toHaveLength(1);
+      expect(turns.body.data.entries[0]).toMatchObject({
+        questionSummary: "会话建立：WorkBuddy Connector",
+        client: "WorkBuddy Connector",
+        sessionId: "7bad7248"
+      });
+      const turnId = turns.body.data.entries[0].id as string;
+
+      const defaultCalls = await request(app.server)
+        .get("/api/admin/audit?user=handshake-user")
+        .expect(200);
+      expect(defaultCalls.body.data.entries.map((row: { tool: string }) => row.tool)).not.toContain("tools/list");
+      expect(defaultCalls.body.data.entries.map((row: { tool: string }) => row.tool)).not.toContain("initialize");
+
+      const filtered = await request(app.server)
+        .get(`/api/admin/audit?user=handshake-user&turnId=${encodeURIComponent(turnId)}`)
+        .expect(200);
+      const tools = filtered.body.data.entries.map((row: { tool: string }) => row.tool);
+      expect(tools).toContain("initialize");
+      expect(tools.filter((tool: string) => tool === "tools/list")).toHaveLength(1);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("shows workbuddy for a lucy self-report when the User-Agent is WorkBuddy", async () => {
+    const { writeLog } = await import("../proxy/audit");
+    await writeLog({
+      ts: new Date().toISOString(),
+      userId: "wb-display-user",
+      tool: "initialize",
+      outcome: "ok",
+      durationMs: 1,
+      requestId: "wb-display-init",
+      lucySessionId: "wb-display-session",
+      client: "lucy",
+      clientVersion: "1.0.0",
+      userAgent: "WorkBuddy/5.8.3"
+    });
+
+    const { buildServer } = await import("../index");
+    const app = buildServer();
+    await app.ready();
+    try {
+      const turns = await request(app.server)
+        .get("/api/admin/audit/turns?user=wb-display-user&source=inferred")
+        .expect(200);
+      expect(turns.body.data.entries).toHaveLength(1);
+      expect(turns.body.data.entries[0]).toMatchObject({
+        client: "workbuddy",
+        reportedClient: "lucy",
+        reportedClientVersion: "1.0.0",
+        questionSummary: "会话建立：workbuddy"
+      });
+
+      const calls = await request(app.server)
+        .get("/api/admin/audit?user=wb-display-user&includeProtocol=true")
+        .expect(200);
+      expect(calls.body.data.entries[0]).toMatchObject({
+        client: "workbuddy",
+        clientVersion: "5.8.3",
+        reportedClient: "lucy",
+        reportedClientVersion: "1.0.0",
+        userAgent: "WorkBuddy/5.8.3"
+      });
+
+      const exported = await request(app.server)
+        .get("/api/admin/audit/export?user=wb-display-user&includeProtocol=true")
+        .expect(200);
+      const lines = exported.text.replace(/^\uFEFF/, "").trim().split("\n");
+      const headers = parseCsvLine(lines[0]!);
+      expect(headers.slice(-2)).toEqual(["reported_client", "reported_client_version"]);
+      expect(headers.indexOf("client")).toBeLessThan(headers.indexOf("reported_client"));
+      const cells = parseCsvLine(lines[1]!);
+      expect(cells[headers.indexOf("client")]).toBe("workbuddy");
+      expect(cells[headers.indexOf("client_version")]).toBe("5.8.3");
+      expect(cells[headers.indexOf("reported_client")]).toBe("lucy");
+      expect(cells[headers.indexOf("reported_client_version")]).toBe("1.0.0");
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("packs the current turn and call CSVs so every call turn id is in the turn file", async () => {
+    const { writeLog } = await import("../proxy/audit");
+    const now = Date.now();
+    const at = (offsetMs: number) => new Date(now + offsetMs).toISOString();
+    await writeLog({
+      ts: at(0),
+      userId: "pack-user",
+      tool: "lucy_query",
+      tables: ["dataforai.superstore_orders"],
+      outcome: "ok",
+      durationMs: 1,
+      requestId: "pack-a",
+      lucySessionId: "session-a",
+      client: "cursor-vscode"
+    });
+    await writeLog({
+      ts: at(30_000),
+      userId: "pack-user",
+      tool: "lucy_query",
+      tables: ["dataforai.superstore_orders"],
+      outcome: "ok",
+      durationMs: 1,
+      requestId: "pack-b",
+      lucySessionId: "session-b",
+      client: "lucy"
+    });
+    await writeLog({
+      ts: at(60_000),
+      userId: "pack-user",
+      tool: "initialize",
+      outcome: "ok",
+      durationMs: 1,
+      requestId: "pack-hs",
+      lucySessionId: "session-hs",
+      client: "WorkBuddy Connector"
+    });
+
+    const { buildServer } = await import("../index");
+    const app = buildServer();
+    await app.ready();
+    try {
+      const response = await request(app.server)
+        .get("/api/admin/audit/export-inquiry-pack?user=pack-user&source=inferred")
+        .buffer(true)
+        .parse((res, callback) => {
+          const chunks: Buffer[] = [];
+          res.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
+          res.on("end", () => callback(null, Buffer.concat(chunks)));
+        })
+        .expect(200);
+      expect(response.headers["content-type"]).toContain("application/zip");
+      expect(response.headers["content-disposition"]).toMatch(/audit-inquiry-pack-.*\.zip/);
+      const entries = parseStoredZipEntries(response.body as Buffer);
+      expect([...entries.keys()]).toEqual(["turns.csv", "calls.csv"]);
+
+      const turnLines = entries.get("turns.csv")!.toString("utf8").replace(/^\uFEFF/, "").trim().split("\n");
+      const callLines = entries.get("calls.csv")!.toString("utf8").replace(/^\uFEFF/, "").trim().split("\n");
+      const turnHeaders = parseCsvLine(turnLines[0]!);
+      const callHeaders = parseCsvLine(callLines[0]!);
+      expect(turnHeaders).toEqual(expect.arrayContaining(["问询 ID", "客户端", "会话 ID"]));
+      const turnIds = new Set(turnLines.slice(1).map((line) => parseCsvLine(line)[turnHeaders.indexOf("问询 ID")]));
+      expect(turnIds.size).toBe(3);
+      const callTurnIds = new Set<string>();
+      for (const line of callLines.slice(1)) {
+        const cells = parseCsvLine(line);
+        for (const column of ["lucy_turn_id", "inferred_turn_id"]) {
+          const value = cells[callHeaders.indexOf(column)];
+          if (value) callTurnIds.add(value);
+        }
+      }
+      expect(callTurnIds).toEqual(turnIds);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("lists server/discover by default and adds a linked initialize to the evidence pack", async () => {
+    const { writeLog } = await import("../proxy/audit");
+    const ts = new Date().toISOString();
+    await writeLog({
+      ts,
+      userId: "pack-handshake-user",
+      tool: "server/discover",
+      outcome: "error",
+      errorDetail: "upstream_status=400",
+      durationMs: 7,
+      requestId: "pack-discover"
+    });
+    await writeLog({
+      ts,
+      userId: "pack-handshake-user",
+      tool: "initialize",
+      outcome: "ok",
+      durationMs: 1,
+      requestId: "pack-init",
+      lucySessionId: "sess-pack",
+      client: "cursor-vscode",
+      lucyTurnId: "lucy_pack_handshake",
+      turnAttributionMode: "session_bound"
+    });
+    await writeLog({
+      ts,
+      userId: "pack-handshake-user",
+      tool: "lucy_query",
+      tables: ["invest.fact_company"],
+      outcome: "ok",
+      durationMs: 1,
+      requestId: "pack-query",
+      lucySessionId: "sess-pack",
+      client: "cursor-vscode",
+      lucyTurnId: "lucy_pack_handshake",
+      turnAttributionMode: "session_bound"
+    });
+
+    const { buildServer } = await import("../index");
+    const app = buildServer();
+    await app.ready();
+    try {
+      const calls = await request(app.server).get("/api/admin/audit?user=pack-handshake-user").expect(200);
+      const tools = calls.body.data.entries.map((row: { tool: string }) => row.tool);
+      expect(tools).toContain("server/discover");
+      expect(tools).not.toContain("initialize");
+
+      const response = await request(app.server)
+        .get("/api/admin/audit/export-pack?user=pack-handshake-user")
+        .buffer(true)
+        .parse((res, callback) => {
+          const chunks: Buffer[] = [];
+          res.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
+          res.on("end", () => callback(null, Buffer.concat(chunks)));
+        })
+        .expect(200);
+      const entries = parseStoredZipEntries(response.body as Buffer);
+      const manifest = JSON.parse(entries.get("manifest.json")!.toString("utf8")) as { linkedHandshakeRowCount: number };
+      expect(manifest.linkedHandshakeRowCount).toBe(1);
+      const callCsv = entries.get("access_log.csv")!.toString("utf8");
+      expect(callCsv).toContain("initialize");
+      expect(callCsv).toContain("lucy_query");
     } finally {
       await app.close();
     }
@@ -1070,7 +1408,7 @@ describe("Spec 137 audit evidence pack", () => {
         completeness: { complete: boolean };
         files: Array<{ name: string; sha256: string; filterScope: string }>;
       };
-      expect(manifest.appVersion).toBe("0.17.0");
+      expect(manifest.appVersion).toBe("2.0.0");
       expect(manifest.includeProtocol).toBe(true);
       expect(manifest.filter).toMatchObject({
         user: "audit-user",
@@ -1261,6 +1599,68 @@ describe("Spec 137 audit evidence pack", () => {
       expect(Number(row[headers.indexOf("成功次数")])).toBe(2);
       expect(Number(row[headers.indexOf("拒绝次数")])).toBe(1);
       expect(row[headers.indexOf("涉及数据表")]).toContain("superstore_people");
+    } finally {
+      await app.close();
+    }
+  });
+});
+
+describe("T07 audit projection completeness (Spec §5.2)", () => {
+  async function appendLedgerOperation(operationId: string): Promise<void> {
+    const { getSecurityStore } = await import("../security/instance");
+    const store = await getSecurityStore();
+    if (!store.ok) throw new Error(store.message);
+    for (const phase of ["request_admitted", "response_prepared", "response_delivered"] as const) {
+      const result = store.value.appendEvent({
+        eventId: `${operationId}:${phase}`,
+        operationId,
+        phase,
+        actor: "projection-agent",
+        actorType: "agent"
+      });
+      if (!result.ok) throw new Error(result.message);
+    }
+  }
+
+  it("catches the projection up and reports complete=true, then complete=false while a projection failure persists", async () => {
+    const { buildServer } = await import("../index");
+    const app = buildServer();
+    await app.ready();
+    try {
+      await appendLedgerOperation("proj-op-1");
+      const caughtUp = await request(app.server).get("/api/admin/audit?limit=5").expect(200);
+      expect(caughtUp.body.data.projection).toMatchObject({ complete: true, lag: 0, cursor: 3, latestSeq: 3 });
+
+      // A target that rejects the next operation: events stay in the ledger, the view says so.
+      const { getAuditDb } = await import("../admin/audit");
+      (await getAuditDb()).exec(`
+        CREATE TRIGGER proj_poison BEFORE INSERT ON security_operation_projection
+        WHEN NEW.operation_id = 'proj-op-2'
+        BEGIN SELECT RAISE(ABORT, 'injected projection failure'); END;
+      `);
+      await appendLedgerOperation("proj-op-2");
+
+      const lagging = await request(app.server).get("/api/admin/audit?limit=5").expect(200);
+      expect(lagging.body.data.projection).toMatchObject({ complete: false, reason: "projection_failed", lag: 3 });
+
+      const pack = await request(app.server)
+        .get("/api/admin/audit/export-pack")
+        .buffer(true)
+        .parse((res, callback) => {
+          const chunks: Buffer[] = [];
+          res.on("data", (chunk: Buffer) => chunks.push(chunk));
+          res.on("end", () => callback(null, Buffer.concat(chunks)));
+        })
+        .expect(200);
+      const manifest = JSON.parse(parseStoredZipEntries(pack.body as Buffer).get("manifest.json")!.toString("utf8")) as {
+        completeness: { complete: boolean; projection: { complete: boolean; reason?: string } };
+      };
+      expect(manifest.completeness.complete).toBe(false);
+      expect(manifest.completeness.projection).toMatchObject({ complete: false, reason: "projection_failed" });
+
+      (await getAuditDb()).exec("DROP TRIGGER proj_poison");
+      const recovered = await request(app.server).get("/api/admin/audit?limit=5").expect(200);
+      expect(recovered.body.data.projection).toMatchObject({ complete: true, lag: 0, cursor: 6 });
     } finally {
       await app.close();
     }

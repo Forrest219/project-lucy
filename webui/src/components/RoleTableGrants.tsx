@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
-import type { RolePermissionDraft, TableGrant } from "../lib/rolePermissionDraft";
-import { permissionTableKey } from "../lib/rolePermissionDraft";
+import { expansionNotice, permissionTableKey, type RolePermissionDraft, type TableGrant } from "../lib/rolePermissionDraft";
 
 export interface ConnectionSchema {
   id: string;
@@ -14,6 +13,8 @@ export interface RoleTableGrantsProps {
   candidatesLoaded: boolean;
   onChange: (next: RolePermissionDraft["scope"]) => void;
   disabled?: boolean;
+  /** lucy_admin covers every connection, including ones added later. */
+  grantAllConnections?: boolean;
 }
 
 function hasTable(tables: TableGrant[], connection: string, schema: string, name: string): boolean {
@@ -27,6 +28,7 @@ export function RoleTableGrants({
   candidatesLoaded,
   onChange,
   disabled = false,
+  grantAllConnections = false,
 }: RoleTableGrantsProps) {
   const [search, setSearch] = useState("");
   const [confirmMode, setConfirmMode] = useState<"enable" | "disable" | null>(null);
@@ -56,7 +58,7 @@ export function RoleTableGrants({
   }
 
   function confirmScopeChange() {
-    if (confirmMode === "enable") onChange({ mode: "catalog_bound", connections: [] });
+    if (confirmMode === "enable") onChange({ mode: "catalog_bound", connections: grantAllConnections ? ["*"] : [] });
     if (confirmMode === "disable") onChange({ mode: "names", tables: [] });
     setConfirmMode(null);
   }
@@ -73,12 +75,9 @@ export function RoleTableGrants({
 
   return (
     <div data-testid="role-table-grants" className="grid gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
+      {value.mode === "names" ? (
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm font-medium">已选 {tables.length} 张表</p>
-          <p className="text-xs text-fg-muted">连接会根据明确选择的表自动推导。</p>
-        </div>
-        {value.mode === "names" ? (
           <input
             aria-label="搜索可访问的表"
             className="pl-input notranslate max-w-xs"
@@ -88,21 +87,24 @@ export function RoleTableGrants({
             placeholder="搜索连接、Schema 或表名"
             disabled={disabled}
           />
-        ) : null}
-      </div>
+        </div>
+      ) : (
+        <p className="text-sm text-fg-muted" data-testid="catalog-bound-scope-note">
+          {grantAllConnections
+            ? "全部连接上的已启用表都会进入。新连接自动生效。"
+            : <>已允许 {value.connections.length} 个连接。{expansionNotice("catalog_bound")}。{value.connections.length === 0 ? "必须显式选择至少一个连接。" : null}</>}
+        </p>
+      )}
 
       {value.mode === "catalog_bound" ? (
-        <div className="grid gap-3" data-testid="table-grants-manual-connections">
-          <div className="rounded-md border border-warning-strong bg-warning-soft p-3 text-sm text-warning-strong">
-            已声明连接上，后续新启用的表自动进入，并走扩权审计。必须显式选择至少一个连接。
-          </div>
+        <div className="grid gap-2" data-testid="table-grants-manual-connections">
           {connections.map((connection) => (
             <label key={connection.id} className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
-                checked={value.connections.includes(connection.id)}
+                checked={grantAllConnections || value.connections.includes(connection.id)}
                 onChange={(event) => toggleCatalogConnection(connection.id, event.target.checked)}
-                disabled={disabled}
+                disabled={disabled || grantAllConnections}
                 aria-label={`允许的连接 ${connection.id}`}
               />
               <span className="notranslate font-mono" translate="no">{connection.id}</span>
@@ -180,10 +182,7 @@ export function RoleTableGrants({
         <div className="mt-2 rounded-md border border-border-default p-3">
           <label className="flex items-start gap-2 text-sm">
             <input type="checkbox" aria-label="启用目录绑定" checked={value.mode === "catalog_bound"} onChange={(event) => setConfirmMode(event.target.checked ? "enable" : "disable")} disabled={disabled} />
-            <span>
-              启用目录绑定
-              <span className="mt-1 block text-xs text-fg-muted">这是高权限范围。切换模式会清空当前明确表与行级策略，不会保留隐藏授权。</span>
-            </span>
+            <span>启用目录绑定</span>
           </label>
         </div>
       </details>

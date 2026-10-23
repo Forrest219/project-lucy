@@ -159,10 +159,10 @@ n. 操作：用户做什么（界面中文文案，不用内部函数名）
    必须看见：抽屉标题含「添加 Schema」（`add-schema-drawer`）；步骤条含「输入 Schema」「测试连接」「确认并完成」。  
    失败即停：抽屉未打开 → FAIL。
 
-3. 操作：填入 Schema 名 `SCHEMA`。若出现库内下拉且列表没有该项，先点「手动输入 Schema 名称」再输入。  
-   定位：`add-schema-select` 或 `add-schema-input`；手动入口 `add-schema-manual-toggle`。  
-   必须看见：输入框或选择值为 `finance_mart`；无 `add-schema-input-error`。  
-   失败即停：名称校验红字 → FAIL。
+3. 操作：填入 Schema 名 `SCHEMA`。库内目录有候选时从下拉选择；只有目录失败或候选为空时才出现输入框。  
+   定位：`add-schema-select` 或 `add-schema-input`。  
+   必须看见：下拉选中 `finance_mart`，或输入框值为 `finance_mart`；无 `add-schema-input-error`。有候选时不得出现「手动输入 Schema 名称」。  
+   失败即停：名称校验红字 → FAIL。下拉里没有 `finance_mart` → blocked（不能再手填一个目录外的名字）。
 
 4. 操作：点「下一步」。  
    定位：`add-schema-preview-btn`（pending 文案「生成预览...」）。  
@@ -175,19 +175,19 @@ n. 操作：用户做什么（界面中文文案，不用内部函数名）
    失败即停：未成功 → FAIL。  
    截图：添加成功。
 
-6. 操作：在成功页点「上传 Schema Manifest」。  
-   定位：`add-schema-upload-yaml`（若已关抽屉：Schema 行 `schema-row-${CONN_ID}-${SCHEMA}` 内「上传 Manifest」）。  
-   必须看见：上传抽屉 `catalog-asset-upload-drawer`，标题含「上传 … Schema Manifest」。  
+6. 操作：成功页主按钮是「从数据库读取表结构」。本条使用已有 YAML，点「我已有 Schema Manifest」。  
+   定位：`add-schema-have-manifest`。不能读库时主按钮才是「上传 Schema Manifest」（`add-schema-upload-yaml`）。  
+   必须看见：上传抽屉 `catalog-asset-upload-drawer`，标题含「上传 … Schema Manifest」。成功页没有「同步配置变更」。  
    失败即停：抽屉未开 → FAIL。
 
 7. 操作：把 `MANIFEST` 全文粘进文本框，点「上传并同步配置变更」。本条要求目标文件尚不存在，**不要**勾「确认覆盖现有 YAML」。  
    定位：`catalog-asset-upload-textarea`；提交 `catalog-asset-upload-submit`。  
-   必须看见：成功区 `catalog-asset-upload-success` 含「✓ 已上传 Schema Manifest」；解析表数 ≥ 1；行状态变为「已存在」（`schema-asset-status-${CONN_ID}-${SCHEMA}`）。  
+   必须看见：刷新出表后进入 `/connections/enabled-tables?connection=${CONN_ID}&schema=${SCHEMA}`。  
    失败即停：校验失败或未成功 → FAIL。误走到覆盖确认 → FAIL（覆盖是 `UJ-ENG-04`）。  
-   截图：上传成功。
+   截图：启用表范围。
 
-8. 操作：为该 Schema 启用 `TABLE`。点行内「维护启用表范围」，勾选 `fact_revenue`（及其他 Manifest 表如需出现在语义资产中），点「保存变更」。  
-   定位：`schema-whitelist-${CONN_ID}-${SCHEMA}` → `/connections/enabled-tables?connection=…&schema=…`；保存 `whitelist-save-changes`。  
+8. 操作：为该 Schema 启用 `TABLE`。勾选 `fact_revenue`（及其他 Manifest 表如需出现在语义资产中），点「保存变更」。  
+   定位：保存 `whitelist-save-changes`。  
    必须看见：Toast「启用表范围已保存」；浮动条消失或「已修改 0 张表」。  
    失败即停：保存失败 → FAIL。  
    截图：启用表范围已保存。
@@ -974,3 +974,27 @@ n. 操作：用户做什么（界面中文文案，不用内部函数名）
 ## 15. 其余 P0 正文
 
 待已写各条审定后，按同一模板续写 §3 矩阵中「待写」项（数据工程师 ENG-02～07、管理员 ADM-02～05）。
+
+## 附录 A · 真实用户 E2E 自动化绑定（Spec 20261018 §6.5，Plan T11）
+
+2026-10-20 复核：下表是早期本地执行记录，不能据此认定当前候选已验收。`mainline-journey.spec.ts` 已有部分链路代码；`offline-candidate.spec.ts` 仍为结构合同，不是离线评测正向闭环。当前升级用例和执行结果见 [升级功能 Checklist](upgrade-feature-checklist.md)。
+
+本分表原先的旅程是手工/Agent 剧本。企业安全整改后，下列旅程另有**可重复执行的真实浏览器用例**（`webui/tests/real-e2e/`，`customer` 模式 + 认证 required，1440×900 桌面 Chromium，workers=1，retries=0，不 mock API、不用 KTX shim；密码、Token、引导密钥只经 `helpers/secret-capture.ts` 在内存传递，trace / 截图 / 录像全部关闭）。入口：`npm run e2e:real:management -- --run inbox/e2e/<runId>/run.json`。
+
+| 旅程 / 场景 | 用例文件 · 测试 | catalog 变体 | 本地（Mac，无 KTX/DB）状态 |
+|---|---|---|---|
+| 匿名访问被引导到登录 | `admin-auth.spec.ts` | SEC-01-V06 | 已执行通过 |
+| 首个所有者经 UI 受控引导 | `admin-auth.spec.ts` | SEC-02-V06 | 已执行通过 |
+| 所有者添加运维；运维不能治理账户 | `admin-auth.spec.ts` | SEC-03-V05 | 已执行通过 |
+| UJ-ADM-05 UI 停用账户后会话立即失效 | `admin-auth.spec.ts` | SEC-04-V11 | 已执行通过 |
+| UJ-ENG-07 / UJ-ADM-02 Wiki 对象授权 UI → Agent 通道一致 | `context-isolation.spec.ts` | SEC-14-V11 | 已执行通过 |
+| 恶意 Markdown 不执行 | `context-isolation.spec.ts` | SEC-15-V06 | 已执行通过 |
+| UJ-ADM-03 访问日志与导出对账（页面/CSV/zip manifest） | `audit-export.spec.ts` | SEC-18-V06、SEC-20-V01/V02/V06 | 已执行通过 |
+| Token 一次性展示、配置串指向本实例 | `management-journey.spec.ts` | SEC-06-V01 | 已执行通过 |
+| UJ-ADM-05 UI 吊销 Token，同 Agent 另一 Token 继续可用 | `management-journey.spec.ts` | SEC-07-V13 | 已执行通过 |
+| UJ-ENG-02～06（连接向导、Schema、Manifest、启用表、语义保存） | 未编写 | UX-01-V01～V03、SEC-13-V06 | **BLOCKED**：需要真实数据库 + KTX 上游 +（UX-01）真实客户端；连接向导的 UI 自动化尚未编写，不得以预置连接冒充 |
+| 发布后新旧会话 / 版本恢复 | 未编写 | UX-04-V02/V03 | **BLOCKED**：同上 |
+| 离线 Eval 下载→跑批→上传→趋势 | 未编写 | UX-06-V01～V03、V08 | **BLOCKED**：同上（跑批需要真实 KTX/DB） |
+| 现场提问 / 安全候选 / 调用监控对账 | 未编写 | UX-07-* | **BLOCKED**：需要 KTX 上游产生真实调用 |
+
+证据落位：`inbox/e2e/<runId>/results/management.json`（逐 case 状态、已评估断言、产物哈希）；`scripts/e2e/collect-management-results.mjs` 把 Playwright 报告映射为 case 证据——无覆盖用例、能力缺失或用例自标 BLOCKED 一律报 `blocked`，缺声明断言一律报 `failed`。以上"已执行通过"仅指本地 security-integration / 桌面浏览器层，**不**构成客户 K8s 通过或可发布结论。

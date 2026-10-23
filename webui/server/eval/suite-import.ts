@@ -62,6 +62,7 @@ type ResultImportResponse = {
   failCount: number;
   skippedCount: number;
   errorCount: number;
+  notAnsweredCount?: number;
   suiteHashMatched: boolean;
   hashStatus: "matched" | "mismatch";
   unknownCaseIds: string[];
@@ -189,7 +190,7 @@ function suiteFromLegacy(text: string, filename?: string): { suite?: EvalSuite; 
         ? { mode: "live_readonly", snapshot_date: parsed.metadata.snapshot_date }
         : undefined,
     runner_hints: {
-      supported_runners: ["claude_code", "hermes", "cursor", "openclaw", "codex", "generic_cli"]
+      supported_runners: ["claude_code", "hermes", "cursor", "openclaw", "codex", "workbuddy", "generic_cli"]
     },
     cases: parsed.cases.map((c) => normalizeLegacyCase(c, defaultExpectedSource))
   };
@@ -336,7 +337,8 @@ export async function downloadEvalSuiteYaml(projectRoot: string, domain: string)
   return {
     suite,
     yaml: suiteToYaml(suite),
-    runnerCommand: `EVAL_AGENT_ADAPTER=hermes node scripts/eval/lucy-eval-runner.mjs --suite ${domain}-eval-suite.yaml --output result.json --adapter hermes`
+    // Header-safe ASCII only (HTTP forbids non-ASCII / control chars in header values).
+    runnerCommand: `node scripts/eval/lucy-eval-runner.mjs --suite evals/${domain}/eval/${domain}-eval-cases.yaml --output result.json`
   };
 }
 
@@ -358,12 +360,24 @@ function resultError(result: EvalResultCase): string | null {
 }
 
 function summarizeResult(result: EvalResultImport) {
+  if (result.lucy_eval_result_version === 2) {
+    const scoreable = result.results.filter((row) => row.outcome === "answered_ok" || row.outcome === "answered_wrong");
+    return {
+      totalCases: scoreable.length,
+      passCount: result.results.filter((row) => row.outcome === "answered_ok").length,
+      failCount: result.results.filter((row) => row.outcome === "answered_wrong").length,
+      skippedCount: result.results.filter((row) => row.status === "SKIPPED").length,
+      errorCount: result.results.filter((row) => row.outcome === "not_answered").length,
+      notAnsweredCount: result.results.filter((row) => row.outcome === "not_answered").length
+    };
+  }
   return {
     totalCases: result.results.length,
     passCount: result.results.filter((r) => r.status === "PASS").length,
     failCount: result.results.filter((r) => r.status === "FAIL").length,
     skippedCount: result.results.filter((r) => r.status === "SKIPPED").length,
-    errorCount: result.results.filter((r) => r.status === "ERROR").length
+    errorCount: result.results.filter((r) => r.status === "ERROR").length,
+    notAnsweredCount: 0
   };
 }
 
@@ -448,9 +462,9 @@ export async function importEvalResult(
     INSERT INTO eval_run (
       domain, started_at, finished_at, status, triggered_by, trigger, trigger_reason, ktx_mcp_url,
       case_selection, total_cases, pass_count, fail_count, suite_id, suite_hash, runner_metadata_raw,
-      import_source, hash_status
+      import_source, hash_status, result_version, as_of, not_answered_count, complete, role_id
     )
-    VALUES (?, ?, ?, 'succeeded', ?, 'imported_result', ?, '', ?, ?, ?, ?, ?, ?, ?, 'local_runner_import', ?)
+    VALUES (?, ?, ?, 'succeeded', ?, 'imported_result', ?, '', ?, ?, ?, ?, ?, ?, ?, 'local_runner_import', ?, ?, ?, ?, ?, ?)
   `).run(
     result.domain,
     startedAt,
@@ -464,7 +478,12 @@ export async function importEvalResult(
     result.suite_id,
     result.suite_hash,
     JSON.stringify(result.runner),
-    hashStatus
+    hashStatus,
+    result.lucy_eval_result_version,
+    result.as_of ?? null,
+    summary.notAnsweredCount,
+    result.complete === false ? 0 : 1,
+    result.role_id ?? null
   );
   const runId = insert.lastInsertRowid as number;
 
@@ -477,9 +496,9 @@ export async function importEvalResult(
   const insertCase = db.prepare(`
     INSERT INTO eval_run_case (
       run_id, case_id, status, drift, duration_ms, sql, result_raw, expected_raw, actual_raw,
-      failed_assertions, error_message, final_text
+      failed_assertions, error_message, final_text, outcome, reason, policy_status, window_json
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const tx = db.transaction((results: EvalResultCase[]) => {
     for (const row of results) {
@@ -495,7 +514,11 @@ export async function importEvalResult(
         jsonText(row.actual),
         Array.isArray(row.failures) ? JSON.stringify(row.failures) : null,
         resultError(row),
-        row.final_text ?? null
+        row.final_text ?? null,
+        row.outcome ?? null,
+        row.reason ?? null,
+        row.policy_status ?? null,
+        row.window ? JSON.stringify(row.window) : null
       );
     }
   });

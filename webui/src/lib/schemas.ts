@@ -38,5 +38,8 @@ export function schemaFieldHelper(engine?: string, driver?: string): string {
   if (normalized === "postgres" || normalized === "postgresql") {
     return "PostgreSQL 中请填写 schema，不是 database。";
   }
+  if (normalized === "athena") {
+    return "Athena 中填写 Glue 数据库名，写入 ktx.yaml 的 databases。";
+  }
   return "填写要纳入该连接治理的 Schema。";
 }

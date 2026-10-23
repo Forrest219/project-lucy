@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Copy, Check, ExternalLink, Sparkles, CheckCircle2, Key, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
-import { apiGet, apiPost } from "../../lib/apiClient";
+import { apiGet, apiPost, isStaleResponseError } from "../../lib/apiClient";
 import {
   buildClientConfigs,
   buildHelloWorldPrompt,
@@ -15,10 +15,9 @@ import type {
   Agent,
   ConnectionTestResult,
   CreateTokenResponse,
-  McpRuntimeStatus,
-  ProjectInfo,
-  SourcesResponse
+  McpRuntimeStatus
 } from "../../lib/types";
+import { adminAgentsQueryOptions, projectQueryOptions, sourcesQueryOptions } from "../../lib/displayQueryOptions";
 
 export type Step6ConnectAgentProps = {
   connectionId: string;
@@ -41,13 +40,11 @@ export function Step6ConnectAgent({
   const [broadScopeAcknowledged, setBroadScopeAcknowledged] = useState(false);
 
   const { data: projectData } = useQuery({
-    queryKey: queryKeys.project,
-    queryFn: () => apiGet<ProjectInfo>("/api/project")
+    ...projectQueryOptions()
   });
 
   const sourcesQuery = useQuery({
-    queryKey: queryKeys.sources,
-    queryFn: () => apiGet<SourcesResponse>("/api/sources")
+    ...sourcesQueryOptions()
   });
 
   const runtimeQuery = useQuery({
@@ -67,8 +64,7 @@ export function Step6ConnectAgent({
   });
 
   const agentsQuery = useQuery({
-    queryKey: ["admin", "agents"],
-    queryFn: () => apiGet<{ agents: Agent[] }>("/api/admin/agents")
+    ...adminAgentsQueryOptions<{ agents: Agent[] }>()
   });
 
   const agents = agentsQuery.data?.agents ?? [];
@@ -107,7 +103,7 @@ export function Step6ConnectAgent({
       toast.success("体验 Token 已签发，并自动注入下方配置。");
     },
     onError: (err: Error) => {
-      toast.error(`生成 Token 失败: ${err.message}`);
+      if (!isStaleResponseError(err)) toast.error(`生成 Token 失败: ${err.message}`);
     }
   });
 

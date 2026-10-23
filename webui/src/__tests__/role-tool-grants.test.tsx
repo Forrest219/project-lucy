@@ -22,6 +22,9 @@ const FIXTURE_TOOLS: McpToolInfo[] = [
   { name: "lucy_freshness", description: "查询新鲜度元数据", globalDenied: false },
   { name: "lucy_begin_question", description: "记录业务问题", globalDenied: false },
   { name: "sl_validate", description: "验证语义层定义", globalDenied: false },
+  { name: "lucy_skill_search", description: "检索已发布的业务 Skill", globalDenied: false },
+  { name: "lucy_skill_read", description: "读取业务 Skill 的操作规范", globalDenied: false },
+  { name: "custom_probe", description: "ungrouped probe", globalDenied: false },
 ];
 
 // ─── Controlled wrapper ──────────────────────────────────────────────────────
@@ -47,8 +50,27 @@ afterEach(() => cleanup());
 describe("RoleToolGrants", () => {
   it("no sl_query checkbox (globalDenied: true prevents render)", () => {
     render(<Controlled />);
-    fireEvent.click(screen.getByText("自定义 MCP 工具"));
+    expect(screen.getByTestId("role-custom-tools")).toHaveAttribute("open");
     expect(screen.queryByRole("checkbox", { name: /sl_query/ })).not.toBeInTheDocument();
+    // Spec §4.2: Wiki / Skill channels are Role grants again (object ACL is decided on the object).
+    expect(screen.getByRole("checkbox", { name: /lucy_skill_search/ })).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: /lucy_skill_read/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "只读问答 + 知识库" })).not.toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: /custom_probe/ })).toBeInTheDocument();
+  });
+
+  it("全选 grants every visible tool and leaves denied tools out", () => {
+    render(<Controlled initial={["sl_query"]} />);
+    fireEvent.click(screen.getByRole("button", { name: "全选" }));
+    const selected = JSON.parse(screen.getByTestId("selected-value").textContent ?? "[]") as string[];
+    expect(selected).toEqual(expect.arrayContaining([
+      "lucy_query",
+      "custom_probe",
+      "sl_validate",
+    ]));
+    expect(selected).not.toContain("sl_query");
+    expect(selected).toEqual(expect.arrayContaining(["lucy_skill_search", "lucy_skill_read"]));
+    expect(screen.getByRole("button", { name: "全选" })).toBeDisabled();
   });
 
   it("clicking 只读问答: sl_validate not in selected set, count 已选 6 个, no /16, bottom sentence", () => {
@@ -56,7 +78,7 @@ describe("RoleToolGrants", () => {
     render(<Controlled initial={["sl_validate"]} />);
 
     const custom = screen.getByTestId("role-custom-tools");
-    expect(custom).not.toHaveAttribute("open");
+    expect(custom).toHaveAttribute("open");
 
     // No sl_query checkbox before or after preset click
     expect(screen.queryByRole("checkbox", { name: /sl_query/ })).not.toBeInTheDocument();
@@ -94,6 +116,34 @@ describe("RoleToolGrants", () => {
       />
     );
     expect(screen.getByText("当前与只读问答一致")).toBeInTheDocument();
+  });
+
+  it("ignores the four channel tools when matching 只读问答 but still offers and lists them as grants", () => {
+    render(
+      <Controlled
+        initial={[
+          "lucy_catalog",
+          "lucy_read_source",
+          "lucy_query",
+          "lucy_explain_query",
+          "lucy_freshness",
+          "lucy_begin_question",
+          "wiki_search",
+          "lucy_skill_read",
+        ]}
+        tools={[
+          ...FIXTURE_TOOLS,
+          { name: "wiki_search", description: "搜索业务 Wiki", globalDenied: false },
+          { name: "wiki_read", description: "读取业务 Wiki", globalDenied: false },
+        ]}
+      />
+    );
+    expect(screen.getByText("当前与只读问答一致")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: /wiki_search/ })).toBeChecked();
+    const chips = screen.getByRole("list", { name: "当前选择的 MCP 工具" });
+    expect(chips.textContent).toContain("wiki_search");
+    expect(chips.textContent).toContain("lucy_skill_read");
+    expect(chips.textContent).toContain("lucy_query");
   });
 
   it("候选加载成功时不渲染标签输入 (no TagInput when candidates present)", () => {

@@ -5,6 +5,64 @@
 
 ---
 
+## 2026-10-19 · MCP 调试台连上检查只回答能连上或不能连上
+
+### 修改
+- 连上检查不再渲染「这次检测了什么」。没有加载记录时直接给出 Token。
+- 删除 selector `mcp-playground-canary-checks`。`mcp-playground-technical` 只留在查表拒绝。
+
+### 影响映射更新
+- 无新 `data-testid`。不新增 `E2E-*` 测试集。
+
+---
+
+## 2026-10-19 · MCP 调试台连上检查按钮
+
+### 修改
+- `mcp-playground-recheck` 可见文案由「重新检测」改为「检测 {连接}」。检测目标先取确认未加载的连接，再取没有加载记录的连接。
+
+### 影响映射更新
+- Selector 契约：`mcp-playground-recheck` 标签改为「检测 {连接}」；`mcp-playground-canary-checks` 标签改为「这次检测了什么」；新增 `mcp-playground-technical`（技术详情）。不新增 `E2E-*` 测试集。
+
+---
+
+## 2026-10-18 · 客户发布证据清单与 Business Eval 能力清单
+
+### 新增
+- [`e2e-release-checklist.md`](e2e-release-checklist.md) 与 [`checklists/e2e-release-rows.yaml`](checklists/e2e-release-rows.yaml)：冻结目录 32 个场景收成 10 行证据行，二元判定。
+- [`business-eval-checklist.md`](business-eval-checklist.md) 与 [`checklists/business-eval-rows.yaml`](checklists/business-eval-rows.yaml)：superstore、agent_reliability 与 UX-02/03/04 变体收成能力行，阻塞线与良好线分开。
+- `scripts/e2e/__tests__/checklist-links.test.mjs`：引用必须落到 catalog 或既有 eval case；未挂接的良好线不能写成 passed。随 `npm run test:e2e-harness` 执行。
+
+### 影响映射更新
+- 无新 selector。不新增 `E2E-*` 测试集，不改 `gate:customer-release`。
+
+### 投影
+- `npm run e2e:real:project-checklists` 读取一次 run 的 security / management / agent / gates / 人工清单，写出 `checklist-projection.json`。未挂接的良好线保持 blocked。体验轨只认该 run 目录下的 `experience.json`。
+
+---
+
+## 2026-10-12 · Agent 角色多选回归
+
+### 新增
+- `webui/tests/e2e/specs/agent-admin.spec.ts`：新建弹窗与 Agent 详情的角色控件必须是复选框，且同时勾选两项后两项都保持选中。不再用列表页第一个 `<select>` 代替角色控件。
+- Vitest：`agent-detail.test.tsx`、`agent-list.test.tsx` 断言保存或预览请求体里的 `roles` 含两个角色。
+
+### 影响映射更新
+- 无新 selector。使用已登记的 `agent-role-field`、`agent-role-option`。
+
+---
+
+## 2026-10-12 · docs/uat · invest-db 问数用例
+
+### 新增
+- UAT：[`../uat/uat-invest-db-data-qa.md`](../uat/uat-invest-db-data-qa.md)（场景 A–D，用例 INV-00 至 INV-19）
+- 本轮执行结论：`inbox/investment-mcp-eval-smoke-20261012.md`
+
+### 影响映射更新
+- 无新的 WebUI selector。挂在既有 `E2E-ONBOARD-EVAL` 与 `UJ-ANA`，不新开测试集 ID。
+
+---
+
 ## 2026-08-29 · docs/qa · Fast Smoke 与 Full Smoke 升级对齐新特性
 
 ### 新增

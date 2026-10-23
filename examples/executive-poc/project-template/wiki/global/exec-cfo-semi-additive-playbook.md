@@ -1,4 +1,5 @@
 ---
+allowed_roles: [exec_cfo_readonly, exec_demo_full]
 sl_refs:
   - demo-exec-mysql/dataforai/fct_daily_cash_balance
   - demo-exec-mysql/dataforai/fct_ar_aging_detail

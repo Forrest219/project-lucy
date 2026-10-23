@@ -1,0 +1,581 @@
+# Frozen case catalog for the real-user E2E release gate.
+# Authority: docs/specs/lucy-20261018-enterprise-security-and-real-e2e-spec.md §7 (+ listed sub-scenarios).
+# Plan: T10. The expanded variant list is the fixed denominator: scripts/e2e/contracts/case-catalog.lock.json pins
+# its digest and required ids, and case-catalog.test.mjs fails when they drift. Removing a case or flipping
+# `required` therefore needs a reviewed lock change; it can never be done silently after a failing run.
+#
+# Fields (scenario level are defaults, a variant may override any of them):
+#   runner     security | management | agent | gate   which tool produces the evidence
+#   executors  Spec §7 letters: B browser, P protocol, D database, A agent client, O ops/fault, V evidence verifier
+#   requires   capabilities that must exist or the case is BLOCKED (never skipped or passed): lucy-http, fault-control,
+#              ktx-upstream, postgres, browser, agent-client, k8s-amd64, ci-runner, network-profile, clock-control, npm-registry
+#   assert     assertion vocabulary tokens (see scripts/e2e/lib/catalog.mjs ASSERTION_TOKENS), never empty
+#   gold       `none` (pure protocol case) or a question key of examples/security-e2e/gold/compute-gold.mjs
+#   artifacts  evidence files the case must produce
+#   repeat     Agent cases run this many independent times per required product (R9: 3/3 must pass)
+#   matrix     expands `{name}` placeholders in id/t over the cartesian product
+version: 1
+spec: "docs/specs/lucy-20261018-enterprise-security-and-real-e2e-spec.md"
+scenarios:
+  SEC-01:
+    title: 默认管理认证
+    spec: "§3.1"
+    runner: security
+    executors: [P]
+    requires: [lucy-http]
+    assert: [deny, no_side_effect]
+    gold: none
+    artifacts: [security-case-result.json]
+    variants:
+      - {id: SEC-01-V01, t: 匿名查询认证状态不得为 open}
+      - {id: SEC-01-V02, t: 匿名写 Wiki/Agent 被拒且无写盘}
+      - {id: SEC-01-V03, t: 匿名 bootstrap 无密钥被拒且无副作用}
+      - {id: SEC-01-V04, t: 管理员配置损坏进入 unavailable 而非 open, executors: [P, O], requires: [lucy-http, fault-control], assert: [unavailable_not_open, no_side_effect]}
+      - {id: SEC-01-V05, t: 客户模式且 auth=off 拒绝启动, executors: [O], requires: [fault-control], assert: [deny]}
+      - {id: SEC-01-V06, t: 浏览器匿名访问被引导到登录/引导页, runner: management, executors: [B], requires: [lucy-http, browser], artifacts: [management-case-result.json]}
+  SEC-02:
+    title: 引导密钥与并发
+    spec: "§3.1"
+    runner: security
+    executors: [P]
+    requires: [lucy-http]
+    assert: [deny, no_side_effect]
+    gold: none
+    artifacts: [security-case-result.json]
+    variants:
+      - {id: SEC-02-V01, t: 无引导密钥被拒}
+      - {id: SEC-02-V02, t: 错误引导密钥被拒}
+      - {id: SEC-02-V03, t: 两个并发首建恰好一个成功其余 409, assert: [exactly_one_wins, deny]}
+      - {id: SEC-02-V04, t: 已消费密钥再次使用被拒 409}
+      - {id: SEC-02-V05, t: 引导成功后进程被强杀重启不重新公开引导, executors: [P, O], requires: [lucy-http, fault-control], assert: [unavailable_not_open]}
+      - {id: SEC-02-V06, t: 浏览器受控引导创建首个 owner, runner: management, executors: [B], requires: [lucy-http, browser], assert: [allow_control], artifacts: [management-case-result.json]}
+  SEC-03:
+    title: 管理职责（owner/operator）
+    spec: "§1.1"
+    runner: security
+    executors: [P]
+    requires: [lucy-http]
+    assert: [deny]
+    gold: none
+    artifacts: [security-case-result.json]
+    variants:
+      - {id: SEC-03-V01, t: operator 不能新增登录账户}
+      - {id: SEC-03-V02, t: operator 不能重置他人密码}
+      - {id: SEC-03-V03, t: operator 日常已授权操作成功（对照）, assert: [allow_control]}
+      - {id: SEC-03-V04, t: 请求体 actor 字段无法冒充 owner, assert: [deny, audit_event]}
+      - {id: SEC-03-V05, t: 浏览器 owner 与 operator 能力边界, runner: management, executors: [B], assert: [deny, allow_control], artifacts: [management-case-result.json], requires: [lucy-http, browser]}
+  SEC-04:
+    title: 会话回收
+    spec: "§3.2"
+    runner: security
+    executors: [P]
+    requires: [lucy-http]
+    assert: [deny, no_leak]
+    gold: none
+    artifacts: [security-case-result.json]
+    variants:
+      - {id: SEC-04-V01, t: 退出后旧 Cookie 重放被拒}
+      - {id: SEC-04-V02, t: 密码重置后旧 Cookie 被拒}
+      - {id: SEC-04-V03, t: 角色变化后旧 Cookie 被拒}
+      - {id: SEC-04-V04, t: 账户停用后旧 Cookie 被拒}
+      - {id: SEC-04-V05, t: 删除后重建同 id 旧 Cookie 被拒}
+      - {id: SEC-04-V06, t: 进程重启后旧 Cookie 仍被拒, executors: [P, O], requires: [lucy-http, fault-control]}
+      - {id: SEC-04-V07, t: 恢复旧管理员配置与安全库快照不复活已撤销会话, executors: [O], requires: [lucy-http, fault-control]}
+      - {id: SEC-04-V08, t: 空闲 30 分钟到期, executors: [P, O], requires: [lucy-http, clock-control]}
+      - {id: SEC-04-V09, t: 绝对 12 小时到期且延长空闲不突破, executors: [P, O], requires: [lucy-http, clock-control]}
+      - {id: SEC-04-V10, t: 敏感 API no-store 且缓存无旧内容, assert: [consistency, no_leak]}
+      - {id: SEC-04-V11, t: 浏览器端会话被回收后页面不可读写, runner: management, executors: [B], requires: [lucy-http, browser], artifacts: [management-case-result.json]}
+  SEC-05:
+    title: 认证失败与限速
+    spec: "§3.1"
+    runner: security
+    executors: [P]
+    requires: [lucy-http]
+    assert: [deny]
+    gold: none
+    artifacts: [security-case-result.json]
+    variants:
+      - {id: SEC-05-V01, t: 未知账号与错误密码响应一致 401, assert: [consistency, deny]}
+      - {id: SEC-05-V02, t: 账户+来源 5 次失败后 429}
+      - {id: SEC-05-V03, t: 来源总量限速 429}
+      - {id: SEC-05-V04, t: 429 携带 Retry-After}
+      - {id: SEC-05-V05, t: 重启不清零未到期限速桶, executors: [P, O], requires: [lucy-http, fault-control]}
+      - {id: SEC-05-V06, t: 日志与响应中无口令, assert: [no_leak, artifact_scan], requires: [lucy-http, fault-control]}
+      - {id: SEC-05-V07, t: 限速与登录事件含真实 actor 与 socket peer, assert: [audit_event]}
+  SEC-06:
+    title: Token 一次性展示
+    spec: "§3.3"
+    runner: management
+    executors: [B, P, V]
+    requires: [lucy-http, browser]
+    assert: [no_leak, artifact_scan]
+    gold: none
+    artifacts: [management-case-result.json]
+    variants:
+      - {id: SEC-06-V01, t: 明文仅在创建响应出现一次, assert: [allow_control, no_leak]}
+      - {id: SEC-06-V02, t: 再次加载列表不返回明文, runner: security, requires: [lucy-http], artifacts: [security-case-result.json]}
+      - {id: SEC-06-V03, t: URL/存储/argv/日志无明文, runner: gate, executors: [V], requires: [ci-runner], artifacts: [leak-scan.json]}
+      - {id: SEC-06-V04, t: 截图与 trace 无明文, runner: gate, executors: [V], requires: [ci-runner], artifacts: [leak-scan.json]}
+      - {id: SEC-06-V05, t: 导出与审计无明文, runner: gate, executors: [V], requires: [ci-runner], artifacts: [leak-scan.json]}
+  SEC-07:
+    title: 过期/吊销/停用后所有通道
+    spec: "§3.3"
+    runner: security
+    executors: [P]
+    requires: [lucy-http]
+    assert: [deny, no_leak]
+    gold: none
+    artifacts: [security-case-result.json]
+    variants:
+      - {id: SEC-07-V01, t: 停用 Agent 的 tools/call 被拒}
+      - {id: SEC-07-V02, t: 停用 Agent 的 resources/list 被拒}
+      - {id: SEC-07-V03, t: 停用 Agent 的 resources/read 被拒}
+      - {id: SEC-07-V04, t: 停用 Agent 的 prompts/list 被拒}
+      - {id: SEC-07-V05, t: 停用 Agent 的 prompts/get 被拒}
+      - {id: SEC-07-V06, t: 停用 Agent 的 GET 流被拒}
+      - {id: SEC-07-V07, t: 停用 Agent 的 DELETE 被拒}
+      - {id: SEC-07-V08, t: 停用 Agent 的通知被拒}
+      - {id: SEC-07-V09, t: 先 allow 后收窄：旧会话立即被拒, requires: [lucy-http], assert: [allow_control, deny, no_leak]}
+      - {id: SEC-07-V10, t: 先 allow 后收窄：新会话被拒, requires: [lucy-http], assert: [allow_control, deny, no_leak]}
+      - {id: SEC-07-V11, t: 吊销一个 Token 后另一个同权 Token 仍可用（对照）, assert: [deny, allow_control], requires: [lucy-http, ktx-upstream]}
+      - {id: SEC-07-V12, t: 真实客户端在收窄后被拒, runner: agent, executors: [A], requires: [lucy-http, agent-client, ktx-upstream], assert: [deny, no_leak, server_trace], artifacts: [agent-case-result.json]}
+      - {id: SEC-07-V13, t: 浏览器收窄/停用/吊销操作可见生效, runner: management, executors: [B], requires: [lucy-http, browser], artifacts: [management-case-result.json]}
+  SEC-08:
+    title: 错误身份
+    spec: "§3.3"
+    runner: security
+    executors: [P]
+    requires: [lucy-http]
+    assert: [deny, no_leak]
+    gold: none
+    artifacts: [security-case-result.json]
+    variants:
+      - {id: SEC-08-V01, t: 匿名请求 401}
+      - {id: SEC-08-V02, t: 假 Token 401}
+      - {id: SEC-08-V03, t: 管理 Cookie 不能充当 MCP 身份}
+      - {id: SEC-08-V04, t: 外来 sessionId 不能复用别人的上游状态}
+      - {id: SEC-08-V05, t: JSON-RPC batch 被拒不转发}
+      - {id: SEC-08-V06, t: 非对象 envelope 被拒}
+      - {id: SEC-08-V07, t: 未知方法被拒}
+      - {id: SEC-08-V08, t: 未知路径被拒}
+  SEC-09:
+    title: 连接/表/同名 source
+    spec: "§7"
+    runner: security
+    executors: [P, D]
+    requires: [lucy-http, ktx-upstream, postgres]
+    assert: [allow_control, deny, no_leak, upstream_exec_zero]
+    gold: Q-ORDERS-EAST
+    artifacts: [security-case-result.json]
+    variants:
+      - {id: SEC-09-V01, t: 合法控制查询成功且结果等于 gold, assert: [allow_control, typed_gold, real_query]}
+      - {id: SEC-09-V02, t: 连接别名不越权}
+      - {id: SEC-09-V03, t: 物理库表名不越权}
+      - {id: SEC-09-V04, t: 跨库同名 source 不越权, gold: Q-ORDERS-WEST-SALES}
+      - {id: SEC-09-V05, t: 拒绝建议不含域外目录或数据}
+      - {id: SEC-09-S01, t: discover_data 拒绝建议只含授权对象}
+      - {id: SEC-09-S02, t: dictionary_search 拒绝建议只含授权对象}
+      - {id: SEC-09-S03, t: entity_details 拒绝建议只含授权对象}
+      - {id: SEC-09-S04, t: 物理表别名与歧义修复提示只含授权对象}
+      - {id: SEC-09-S05, t: 未知 tool 一律 AbsoluteDeny, requires: [lucy-http, ktx-upstream], assert: [deny, upstream_exec_zero]}
+  SEC-10:
+    title: Role Set
+    spec: "§4.2"
+    runner: security
+    executors: [P, D]
+    requires: [lucy-http, ktx-upstream, postgres]
+    assert: [allow_control, deny, no_leak]
+    gold: Q-ORDERS-EAST
+    artifacts: [security-case-result.json]
+    variants:
+      - {id: SEC-10-V01, t: 同角色闭合：通道与对象在同一角色}
+      - {id: SEC-10-V02, t: 工具×来源不放大}
+      - {id: SEC-10-V03, t: A 有通道 B 有对象授权不可拼权, requires: [lucy-http]}
+      - {id: SEC-10-V04, t: 多角色对完整授权分支 OR}
+      - {id: SEC-10-V05, t: Agent Constraints 与 Role 取 AND}
+  SEC-11:
+    title: 真行集
+    spec: "§6.2"
+    runner: security
+    executors: [P, D]
+    requires: [lucy-http, ktx-upstream, postgres]
+    assert: [typed_gold, real_query, upstream_exec_zero]
+    gold: Q-CAC-EAST
+    artifacts: [security-case-result.json]
+    variants:
+      - {id: "SEC-11-BY{n}", t: "BY-{n} 行集与聚合均落在强制域", matrix: {n: ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19"]}}
+  SEC-12:
+    title: 绕过输入
+    spec: "§7"
+    runner: security
+    executors: [P, D]
+    requires: [lucy-http, ktx-upstream, postgres]
+    assert: [deny, upstream_exec_zero, no_leak]
+    gold: none
+    artifacts: [security-case-result.json]
+    variants:
+      - {id: SEC-12-V01, t: raw SQL 被拒}
+      - {id: SEC-12-V02, t: 表达式注入被拒}
+      - {id: SEC-12-V03, t: 字符串 filter 注入被拒}
+      - {id: SEC-12-V04, t: 越域 join 被拒}
+      - {id: SEC-12-V05, t: 别名绕过被拒}
+      - {id: SEC-12-V06, t: 子查询绕过被拒}
+      - {id: SEC-12-V07, t: Unicode 变体绕过被拒}
+      - {id: SEC-12-V08, t: 注释绕过被拒}
+      - {id: SEC-12-V09, t: 伪造 forced filter 被拒}
+      - {id: SEC-12-V10, t: 伪造 envelope 被拒}
+  SEC-13:
+    title: 策略/启用表变化
+    spec: "§4.4"
+    runner: security
+    executors: [P, O]
+    requires: [lucy-http, ktx-upstream, fault-control]
+    assert: [deny, no_leak]
+    gold: none
+    artifacts: [security-case-result.json]
+    variants:
+      - {id: SEC-13-V01, t: 新增表不自动扩权}
+      - {id: SEC-13-V02, t: 收窄发送屏障生效}
+      - {id: SEC-13-V03, t: ACL 损坏不回退全开放, requires: [lucy-http, fault-control]}
+      - {id: SEC-13-V04, t: 策略编译失败不回退旧宽快照, requires: [lucy-http, fault-control]}
+      - {id: SEC-13-V05, t: 恢复备份不扩权}
+      - {id: SEC-13-V06, t: 浏览器启用表变更后权限同步, runner: management, executors: [B], requires: [lucy-http, browser, ktx-upstream], artifacts: [management-case-result.json]}
+  SEC-14:
+    title: 上下文隔离
+    spec: "§4"
+    runner: security
+    executors: [P]
+    requires: [lucy-http]
+    assert: [deny, allow_control, no_leak, consistency]
+    gold: none
+    artifacts: [security-case-result.json]
+    variants:
+      - {id: SEC-14-V01, t: ACL 缺失对象无人可见, assert: [deny, no_leak]}
+      - {id: SEC-14-V02, t: ACL 为空对象无人可见, assert: [deny, no_leak]}
+      - {id: SEC-14-V03, t: 单角色授权仅该角色可见, assert: [allow_control, deny, no_leak]}
+      - {id: SEC-14-V04, t: 多角色授权按角色分支, assert: [allow_control, deny, no_leak]}
+      - {id: SEC-14-V05, t: 未知角色 ID 不匹配任何角色, assert: [deny, no_leak]}
+      - {id: SEC-14-V06, t: 精确 * 对所有有效角色可见但非匿名, assert: [allow_control, deny, no_leak]}
+      - {id: SEC-14-V07, t: legacy direct-allow Agent 上下文拒绝 context_role_required, assert: [allow_control, deny, no_leak]}
+      - {id: SEC-14-V08, t: visibility public 无 ACL 无人可见, assert: [deny, no_leak]}
+      - {id: SEC-14-V09, t: discover 与 read 通道分离, assert: [allow_control, deny, no_leak]}
+      - {id: SEC-14-V10, t: initialize/resources/prompts/search/read/export 结果一致, assert: [consistency, no_leak]}
+      - {id: SEC-14-V11, t: 浏览器编辑授权后 Agent 通道立即生效, runner: management, executors: [B], requires: [lucy-http, browser, ktx-upstream], artifacts: [management-case-result.json]}
+      - {id: SEC-14-V12, t: 真实客户端的发现与读取符合授权, runner: agent, executors: [A], requires: [lucy-http, agent-client, ktx-upstream], assert: [deny, allow_control, no_leak, server_trace], artifacts: [agent-case-result.json]}
+  SEC-15:
+    title: 文件内容供应链
+    spec: "§4.5-§4.6"
+    runner: security
+    executors: [P]
+    requires: [lucy-http]
+    assert: [deny, no_side_effect, no_leak]
+    gold: none
+    artifacts: [security-case-result.json]
+    variants:
+      - {id: SEC-15-V01, t: 多层 symlink 读取被拒（根外合成 canary）}
+      - {id: SEC-15-V02, t: 检查后替换为链接被拒, executors: [P, O], requires: [lucy-http, fault-control]}
+      - {id: SEC-15-V03, t: 路径编码与遍历逃逸被拒}
+      - {id: SEC-15-V04, t: Markdown/XSS 载荷不执行且合法 Markdown 对照成功, assert: [deny, allow_control]}
+      - {id: SEC-15-V05, t: 超大对象受控拒绝, assert: [deny, no_side_effect]}
+      - {id: SEC-15-V06, t: 浏览器渲染恶意 Markdown 不执行脚本, runner: management, executors: [B], requires: [lucy-http, browser], artifacts: [management-case-result.json]}
+      - {id: SEC-15-FM-01, t: 上传预览拒绝非 YAML frontmatter（零执行/4xx/无写盘）, assert: [deny, no_side_effect, allow_control]}
+      - {id: SEC-15-FM-02, t: 上传提交拒绝非 YAML frontmatter, assert: [deny, no_side_effect, allow_control]}
+      - {id: SEC-15-FM-03, t: 编辑保存（dryRun 与非 dryRun）拒绝非 YAML frontmatter, assert: [deny, no_side_effect, allow_control]}
+      - {id: SEC-15-FM-04, t: 读取磁盘非法文件返回 422 且不执行, assert: [deny, no_side_effect, allow_control], executors: [P, O], requires: [lucy-http, fault-control]}
+      - {id: SEC-15-FM-05, t: 版本恢复拒绝非 YAML frontmatter, assert: [deny, no_side_effect, allow_control]}
+      - {id: SEC-15-FM-06, t: 配置包导入拒绝非 YAML frontmatter, assert: [deny, no_side_effect, allow_control]}
+      - {id: SEC-15-FM-SEED, t: 播种遇非法 frontmatter 时 entrypoint 失败并给出文件名, executors: [O], requires: [fault-control]}
+      - {id: SEC-15-S01, t: 品牌图片/Markdown 脚本载荷不执行且正常品牌对照成功, assert: [deny, allow_control, no_side_effect]}
+  SEC-16:
+    title: 间接提示注入
+    spec: "§7"
+    runner: agent
+    executors: [A, P, D]
+    requires: [lucy-http, agent-client, ktx-upstream, postgres, network-profile]
+    assert: [no_leak, deny, server_trace, real_query]
+    gold: Q-CAC-28D
+    repeat: 3
+    artifacts: [agent-case-result.json]
+    variants:
+      - {id: SEC-16-V01, t: Wiki 内注入指令无法读取域外 canary}
+      - {id: SEC-16-V02, t: Skill 内注入指令无法调用未授权工具}
+      - {id: SEC-16-V03, t: 数据单元格注入无法读取域外 canary}
+      - {id: SEC-16-V04, t: 受控出站 sink 无未授权内容, runner: security, executors: [P], requires: [lucy-http, network-profile], repeat: 1, artifacts: [security-case-result.json]}
+  SEC-17:
+    title: 全载体泄漏
+    spec: "§5.3"
+    runner: gate
+    executors: [V, P]
+    requires: [ci-runner]
+    assert: [no_leak, artifact_scan]
+    gold: none
+    artifacts: [leak-scan.json]
+    variants:
+      - {id: SEC-17-V01, t: JSON 响应无凭据与域外 canary}
+      - {id: SEC-17-V02, t: SSE 响应无凭据与域外 canary}
+      - {id: SEC-17-V03, t: 错误响应无凭据与域外 canary}
+      - {id: SEC-17-V04, t: SQL hot store 无凭据}
+      - {id: SEC-17-V05, t: SQL cold store 仅显式管理流程可读}
+      - {id: SEC-17-V06, t: 服务日志无凭据}
+      - {id: SEC-17-V07, t: 浏览器存储与 DOM 无凭据}
+      - {id: SEC-17-V08, t: CSV 导出无凭据}
+      - {id: SEC-17-V09, t: zip 导出无凭据}
+      - {id: SEC-17-V10, t: 测试产物无凭据}
+  SEC-18:
+    title: 可问责审计
+    spec: "§5.2"
+    runner: security
+    executors: [B, P, V]
+    requires: [lucy-http]
+    assert: [audit_event, consistency]
+    gold: none
+    artifacts: [security-case-result.json]
+    variants:
+      - {id: SEC-18-V01, t: 两管理员事件身份对得上}
+      - {id: SEC-18-V02, t: 两 Agent 事件身份对得上, requires: [lucy-http, ktx-upstream]}
+      - {id: SEC-18-V03, t: UA 与 forwarded 伪造不改可信 actor, assert: [audit_event, deny]}
+      - {id: SEC-18-V04, t: session 与 server traceId 关联, requires: [lucy-http, ktx-upstream]}
+      - {id: SEC-18-V05, t: policy 与 context 版本进入审计, requires: [lucy-http, ktx-upstream]}
+      - {id: SEC-18-S01, t: 迟报问题不将此前业务调用自动确认归属, requires: [lucy-http, ktx-upstream]}
+      - {id: SEC-18-S02, t: 不同客户端会话不并簇, requires: [lucy-http, ktx-upstream]}
+      - {id: SEC-18-S03, t: 一次原始问询不重复生成推断问询, requires: [lucy-http, ktx-upstream]}
+      - {id: SEC-18-S04, t: 初始化与发现探测不虚增业务问询, requires: [lucy-http, ktx-upstream]}
+      - {id: SEC-18-V06, t: 浏览器审计页与导出按 run 对账, runner: management, executors: [B], requires: [lucy-http, browser], artifacts: [management-case-result.json]}
+  SEC-19:
+    title: 审计故障
+    spec: "§5.1"
+    runner: security
+    executors: [O, P]
+    requires: [lucy-http, fault-control, ktx-upstream]
+    assert: [deny, no_leak, audit_event]
+    gold: none
+    artifacts: [security-case-result.json]
+    variants:
+      - {id: SEC-19-V01, t: 磁盘满时不释放敏感内容}
+      - {id: SEC-19-V02, t: 安全库无法打开（只读或损坏）时不释放敏感内容且不创建空库, requires: [lucy-http, fault-control]}
+      - {id: SEC-19-V03, t: 数据库锁时不释放敏感内容, requires: [lucy-http, fault-control]}
+      - {id: SEC-19-V04, t: 提交失败返回 503 AUDIT_UNAVAILABLE, requires: [lucy-http, fault-control]}
+      - {id: SEC-19-V05, t: 进程崩溃后标记 interrupted 不伪造 delivered}
+      - {id: SEC-19-V06, t: 投影断开可恢复且不漏不重}
+      - {id: SEC-19-V07, t: 无 response_prepared 绝不出现 delivered}
+  SEC-20:
+    title: 导出/保留/历史
+    spec: "§5.3"
+    runner: management
+    executors: [B, P, O, V]
+    requires: [lucy-http, browser]
+    assert: [consistency, no_leak]
+    gold: none
+    artifacts: [management-case-result.json]
+    variants:
+      - {id: SEC-20-V01, t: 同窗口过滤分页与 UI/CSV/zip 一致无孤儿}
+      - {id: SEC-20-V02, t: CSV 公式注入受控}
+      - {id: SEC-20-V03, t: 历史凭据清理 dry-run/备份/清理/复扫为 0, runner: security, executors: [P, O], requires: [lucy-http, fault-control], artifacts: [security-case-result.json]}
+      - {id: SEC-20-V04, t: 保留维护不删除未完成与未投影事件, runner: security, executors: [P, O], requires: [lucy-http, fault-control], artifacts: [security-case-result.json]}
+      - {id: SEC-20-V05, t: 备份恢复可验证, runner: security, executors: [O], requires: [lucy-http, fault-control], artifacts: [security-case-result.json]}
+      - {id: SEC-20-V06, t: 浏览器导出清单与哈希可核对}
+  SEC-21:
+    title: 会话跨 Token/客户端
+    spec: "§3.3"
+    runner: security
+    executors: [P]
+    requires: [lucy-http, ktx-upstream]
+    assert: [deny, no_leak, consistency]
+    gold: none
+    artifacts: [security-case-result.json]
+    variants:
+      - {id: SEC-21-V01, t: Agent A 不能取 Agent B 的 session 与事件}
+      - {id: SEC-21-V02, t: 同 Agent 不同 Token 同权但 transport 不串}
+      - {id: SEC-21-V03, t: 取消后不再发送内容}
+      - {id: SEC-21-V04, t: 重连后状态属于同一 Token}
+      - {id: SEC-21-V05, t: 缺 session header 的兼容客户端按 Token 独立会话}
+      - {id: SEC-21-V06, t: 真实客户端会话不串, runner: agent, executors: [A], requires: [lucy-http, agent-client, ktx-upstream], assert: [deny, server_trace], artifacts: [agent-case-result.json]}
+  SEC-22:
+    title: 客户网络
+    spec: "§3.1"
+    runner: security
+    executors: [O, P]
+    requires: [lucy-http]
+    assert: [deny, no_side_effect]
+    gold: none
+    artifacts: [security-case-result.json]
+    variants:
+      - {id: SEC-22-V01, t: customer 模式 Cookie 带 Secure, requires: [lucy-http, network-profile]}
+      - {id: SEC-22-V02, t: HSTS 与安全响应头, requires: [lucy-http, network-profile]}
+      - {id: SEC-22-V03, t: 跨站 Origin 与 CSRF 被拒}
+      - {id: SEC-22-V04, t: 仅可信代理的 forwarded 链被采信, requires: [lucy-http, network-profile]}
+      - {id: SEC-22-V05, t: 7878 无直接入口, requires: [k8s-amd64, network-profile]}
+      - {id: SEC-22-V06, t: 旧 skills passthrough 关闭, assert: [deny, no_leak]}
+      - {id: SEC-22-V07, t: 合法 native 客户端无 Origin 仍可鉴权（对照）, assert: [allow_control, deny]}
+      - {id: SEC-22-S01, t: 管理快照/Skill 导出/下载链接权限与过期含 allow 对照, assert: [deny, allow_control]}
+  SEC-23:
+    title: 依赖与交付
+    spec: "§8"
+    runner: gate
+    executors: [O, V]
+    requires: [ci-runner]
+    assert: [deny, artifact_scan]
+    gold: none
+    artifacts: [gate-result.json]
+    variants:
+      - {id: SEC-23-V01, t: 生产依赖 high/critical 未处置数为 0, requires: [ci-runner, npm-registry]}
+      - {id: SEC-23-V02, t: security-findings 与 npm audit 交叉一致, requires: [ci-runner, npm-registry]}
+      - {id: SEC-23-V03, t: Secret 不入包与镜像, requires: [ci-runner]}
+      - {id: SEC-23-V04, t: 安全库不可被通用 SQLite 与运维连接读取, runner: security, executors: [P], requires: [lucy-http], assert: [deny], artifacts: [security-case-result.json]}
+      - {id: SEC-23-V05, t: G1–G4 ELF 与架构契约不弱化, requires: [ci-runner, k8s-amd64]}
+  UX-01:
+    title: J-01 管理到使用
+    spec: "§6.5"
+    runner: management
+    executors: [B, A, D]
+    requires: [lucy-http, browser, postgres, ktx-upstream, agent-client]
+    assert: [allow_control, typed_gold, real_query, server_trace]
+    gold: Q-CAC-28D
+    artifacts: [management-case-result.json]
+    variants:
+      - {id: UX-01-V01, t: J-01 全链路：引导/接入/语义/Wiki/Skill/角色/Token/复制配置/问数/审计}
+      - {id: UX-01-V02, t: 全链路在同一实例（实例标记核对）}
+      - {id: UX-01-V03, t: 发布版本与问答来源一致}
+  UX-02:
+    title: 业务正确性
+    spec: "§7"
+    runner: agent
+    executors: [A, D]
+    requires: [lucy-http, agent-client, ktx-upstream, postgres]
+    assert: [typed_gold, real_query, server_trace, no_leak, repeat3]
+    gold: Q-CAC-28D
+    repeat: 3
+    artifacts: [agent-case-result.json]
+    variants:
+      - {id: UX-02-V01, t: 金额与比率按 SUM/SUM 且等于 gold}
+      - {id: UX-02-V02, t: 区域口径行数与金额等于 gold, gold: Q-CAC-EAST}
+      - {id: UX-02-V03, t: 同名 source 订单数等于 gold, gold: Q-ORDERS-WEST-SALES}
+      - {id: UX-02-V04, t: 日期锚与时区正确}
+      - {id: UX-02-V05, t: 实际/预测口径不混淆}
+      - {id: UX-02-V06, t: 度量版本与审计 appliedVersion 一致}
+      - {id: UX-02-S01, t: 内建度量 count(*)/count(1) 引导、嵌套聚合拒绝、同名字段消歧、中文度量, gold: Q-ORDERS-EAST}
+  UX-03:
+    title: 空/NULL/0/失败
+    spec: "§7"
+    runner: agent
+    executors: [A, D, O]
+    requires: [lucy-http, agent-client, ktx-upstream, postgres]
+    assert: [typed_gold, real_query, server_trace, repeat3]
+    gold: Q-EMPTY-NORTH
+    repeat: 3
+    artifacts: [agent-case-result.json]
+    variants:
+      - {id: UX-03-V01, t: 空结果明确说明无数据且不编造, gold: Q-EMPTY-NORTH}
+      - {id: UX-03-V02, t: NULL 与 0 区分, gold: Q-NULL-DAYS}
+      - {id: UX-03-V03, t: 零分母说明无法计算, gold: Q-ZERO-DAY}
+      - {id: UX-03-V04, t: 失败可理解且不静默换题}
+      - {id: UX-03-V05, t: 超时后重试可理解且部分结果不冒充完整, requires: [lucy-http, agent-client, ktx-upstream, postgres, fault-control]}
+      - {id: UX-03-V06, t: 截断与取消可理解, requires: [lucy-http, agent-client, ktx-upstream, postgres, fault-control]}
+      - {id: UX-03-S01, t: 问询预算耗尽一次继续且无无限循环（阈值沿用 Spec 162）}
+      - {id: UX-03-S02, t: 查询并发上限与失败后释放执行槽, runner: security, executors: [P, A], repeat: 1, artifacts: [security-case-result.json]}
+      - {id: UX-03-S03, t: 取消、超时重试、空结果与慢调用, requires: [lucy-http, agent-client, ktx-upstream, postgres, fault-control]}
+  UX-04:
+    title: 多轮/发布与恢复
+    spec: "§7"
+    runner: agent
+    executors: [B, A, D]
+    requires: [lucy-http, agent-client, ktx-upstream, postgres]
+    assert: [typed_gold, real_query, server_trace, repeat3]
+    gold: Q-CAC-28D
+    repeat: 3
+    artifacts: [agent-case-result.json]
+    variants:
+      - {id: UX-04-V01, t: 同会话多轮日期粒度不漂移}
+      - {id: UX-04-V02, t: 发布后新旧会话按实际版本查数, runner: management, repeat: 1, requires: [lucy-http, browser, agent-client, ktx-upstream, postgres], artifacts: [management-case-result.json]}
+      - {id: UX-04-V03, t: 版本恢复后语义 hash 与 gold 对得上, runner: management, repeat: 1, requires: [lucy-http, browser, agent-client, ktx-upstream, postgres], artifacts: [management-case-result.json]}
+      - {id: UX-04-S01, t: 认证路径与报告模板沿用原查询 ACL 不扩大来源}
+      - {id: UX-04-S02, t: 模板口径与审计 appliedVersion 一致且模板错误不静默改题}
+  UX-05:
+    title: 多产品一致性
+    spec: "§6.3"
+    runner: agent
+    executors: [A, V]
+    requires: [lucy-http, agent-client, ktx-upstream, postgres]
+    assert: [typed_gold, real_query, server_trace, repeat3, consistency]
+    gold: Q-CAC-28D
+    repeat: 3
+    artifacts: [agent-case-result.json]
+    variants:
+      - {id: UX-05-V01, t: 每个 required 产品相同角色与问题满足相同业务断言}
+      - {id: UX-05-V02, t: 每个 required 产品相同角色与问题满足相同安全断言, assert: [deny, no_leak, server_trace, repeat3], gold: Q-CAC-EAST}
+  UX-06:
+    title: 离线 Eval
+    spec: "Spec 161"
+    runner: management
+    executors: [B, P, D]
+    requires: [lucy-http, browser, postgres, ktx-upstream]
+    assert: [allow_control, deny, real_query]
+    gold: Q-CAC-28D
+    artifacts: [management-case-result.json]
+    variants:
+      - {id: UX-06-V01, t: 下载离线套件, assert: [allow_control], gold: none}
+      - {id: UX-06-V02, t: 指定角色真实跑批, assert: [allow_control, real_query, typed_gold]}
+      - {id: UX-06-V03, t: 上传完整结果并出趋势, assert: [allow_control, consistency], gold: none}
+      - {id: UX-06-V04, t: hash 不匹配被拒, runner: security, executors: [P], requires: [lucy-http], assert: [deny], gold: none, artifacts: [security-case-result.json]}
+      - {id: UX-06-V05, t: 不完整结果被拒, runner: security, executors: [P], requires: [lucy-http], assert: [deny], gold: none, artifacts: [security-case-result.json]}
+      - {id: UX-06-V06, t: 错误 runner 被拒, runner: security, executors: [P], requires: [lucy-http], assert: [deny], gold: none, artifacts: [security-case-result.json]}
+      - {id: UX-06-V07, t: 无角色阻断, runner: security, executors: [P], requires: [lucy-http], assert: [deny], gold: none, artifacts: [security-case-result.json]}
+      - {id: UX-06-V08, t: 版本变化后待复核, assert: [consistency], gold: none}
+  UX-07:
+    title: 现场提问/安全候选
+    spec: "Spec 172/173"
+    runner: management
+    executors: [B, P]
+    requires: [lucy-http, browser, ktx-upstream]
+    assert: [consistency, no_leak]
+    gold: none
+    artifacts: [management-case-result.json]
+    variants:
+      - {id: UX-07-V01, t: 真实权限拒绝进入安全候选池}
+      - {id: UX-07-V02, t: 口径失败进入业务候选池}
+      - {id: UX-07-V03, t: 角色绑定审定与晋升可追溯}
+      - {id: UX-07-V04, t: 候选无客户过滤值泄露}
+      - {id: UX-07-S01, t: 调用监控窗口、慢标记、eval 排除与真实事件对账}
+  OPS-01:
+    title: amd64 K8s 新装/升级/恢复
+    spec: "§9"
+    runner: gate
+    executors: [O, B, P, A]
+    requires: [k8s-amd64, ci-runner]
+    assert: [consistency, deny, no_leak]
+    gold: none
+    artifacts: [gate-result.json]
+    variants:
+      - {id: OPS-01-V01, t: 同一候选 digest 新装通过}
+      - {id: OPS-01-V02, t: N-1 PVC 升级通过}
+      - {id: OPS-01-V03, t: 升级后 Token 吊销状态保留}
+      - {id: OPS-01-V04, t: 升级后权限与 ACL 保留}
+      - {id: OPS-01-V05, t: 升级后审计保留}
+      - {id: OPS-01-V06, t: 升级后管理员按迁移重新登录}
+      - {id: OPS-01-V07, t: 恢复不复活已撤销会话}
+  GATE-01:
+    title: 门禁反向测试
+    spec: "§8.4"
+    runner: gate
+    executors: [V]
+    requires: [ci-runner]
+    assert: [deny]
+    gold: none
+    artifacts: [gate-result.json]
+    variants:
+      - {id: GATE-01-V01, t: 500 不算正确 deny}
+      - {id: GATE-01-V02, t: 超时不算通过}
+      - {id: GATE-01-V03, t: blocked 不可 READY}
+      - {id: GATE-01-V04, t: skipped 不可 READY}
+      - {id: GATE-01-V05, t: dry-run 不可 READY}
+      - {id: GATE-01-V06, t: 缺真实 query 不可 READY}
+      - {id: GATE-01-V07, t: 伪 Trace 不可 READY}
+      - {id: GATE-01-V08, t: 旧证据不可 READY}
+      - {id: GATE-01-V09, t: 错 digest 不可 READY}
+      - {id: GATE-01-V10, t: 缺客户端不可 READY}
+      - {id: GATE-01-V11, t: 分母被篡改不可 READY}
+      - {id: GATE-01-V12, t: 退出码与 JSON 矛盾不可 READY}
+      - {id: GATE-01-V13, t: 产物哈希被篡改不可 READY}
+      - {id: GATE-01-V14, t: 重复 case 不可 READY}
+      - {id: GATE-01-V15, t: P0/P1 未关闭不可 READY}
+      - {id: GATE-01-V16, t: 依赖 high/critical 与登记不一致不可 READY}

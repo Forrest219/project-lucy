@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto";
-import { readdir, readFile, stat } from "node:fs/promises";
+import { readdir } from "node:fs/promises";
 import path from "node:path";
 import { parse } from "yaml";
-import { resolveProjectRoot } from "../project.js";
 import { loadContentPaths } from "../paths.js";
+import { readContextFile } from "../fs-safe.js";
+import { parseObjectAcl } from "../proxy/context-acl.js";
 import type { SkillAsset, SkillFrontmatter } from "./types.js";
 
 const FRONTMATTER_REGEX = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/;
@@ -55,6 +56,10 @@ export function parseSkillMarkdown(rawContent: string, filePath: string, project
   const title = parsed.title ? String(parsed.title).trim() : name;
   const version = parsed.version ? String(parsed.version).trim() : "1.0.0";
   const status = parsed.status === "published" || parsed.status === "deprecated" ? parsed.status : "draft";
+  // Spec §4.1: a non-array / non-string / mixed-wildcard value is corrupt (denied at runtime,
+  // rejected on save), never interpreted as shared.
+  const declaredAcl = parseObjectAcl(parsed.roles_allowed, Object.prototype.hasOwnProperty.call(parsed, "roles_allowed"));
+  const roles_allowed_invalid = declaredAcl.state === "corrupt";
   const roles_allowed = Array.isArray(parsed.roles_allowed)
     ? parsed.roles_allowed.map(r => String(r).trim()).filter(Boolean)
     : [];
@@ -84,6 +89,7 @@ export function parseSkillMarkdown(rawContent: string, filePath: string, project
     domain,
     status,
     roles_allowed,
+    ...(roles_allowed_invalid ? { roles_allowed_invalid } : {}),
     prerequisites,
     triggers,
     eval_cases,
@@ -97,7 +103,12 @@ export function parseSkillMarkdown(rawContent: string, filePath: string, project
   };
 }
 
-async function scanDirectoryForSkills(dir: string, projectRoot: string, accumulator: SkillAsset[]): Promise<void> {
+async function scanDirectoryForSkills(
+  dir: string,
+  projectRoot: string,
+  accumulator: SkillAsset[],
+  skillsRoot: string = dir
+): Promise<void> {
   let entries;
   try {
     entries = await readdir(dir, { withFileTypes: true });
@@ -111,14 +122,15 @@ async function scanDirectoryForSkills(dir: string, projectRoot: string, accumula
       if (entry.name === "node_modules" || entry.name.startsWith(".")) {
         continue;
       }
-      await scanDirectoryForSkills(fullPath, projectRoot, accumulator);
+      await scanDirectoryForSkills(fullPath, projectRoot, accumulator, skillsRoot);
     } else if (entry.isFile() && (entry.name.endsWith(".md") || entry.name.endsWith(".markdown"))) {
       try {
-        const rawContent = await readFile(fullPath, "utf-8");
-        // `dir` is the resolved skills root (ContentPaths.skills), so the
-        // relative path produced for inference is content-dir-relative
-        // (e.g. `<domain>/SKILL.md`), not project-root-relative.
-        const skill = parseSkillMarkdown(rawContent, fullPath, dir);
+        // Spec §4.5: symlink-free, open-time identity checked read.
+        const relative = path.relative(skillsRoot, fullPath).split(path.sep).join("/");
+        const { content: rawContent } = await readContextFile(skillsRoot, relative);
+        // `projectRoot` here is the parent of the skills directory, so the
+        // stored path stays `skills/...` for both domain inference and writes.
+        const skill = parseSkillMarkdown(rawContent, fullPath, projectRoot);
         if (skill) {
           accumulator.push(skill);
         }
@@ -135,11 +147,10 @@ export async function loadAllSkills(customSkillsDir?: string, customProjectRoot?
     return skillsCache;
   }
 
-  const projectRoot = customProjectRoot ?? (await resolveProjectRoot());
   const skillsDir = customSkillsDir ?? (await loadContentPaths()).skills;
 
   const results: SkillAsset[] = [];
-  await scanDirectoryForSkills(skillsDir, projectRoot, results);
+  await scanDirectoryForSkills(skillsDir, path.dirname(skillsDir), results);
 
   if (!customSkillsDir && !customProjectRoot) {
     skillsCache = results;
@@ -149,14 +160,30 @@ export async function loadAllSkills(customSkillsDir?: string, customProjectRoot?
   return results;
 }
 
-export async function getSkillByUri(uri: string, customSkillsDir?: string, customProjectRoot?: string): Promise<SkillAsset | null> {
-  const skills = await loadAllSkills(customSkillsDir, customProjectRoot);
+/** Authorization paths must see the on-disk ACL, not the 2 s listing cache (Spec §4.4). */
+export async function loadAllSkillsFresh(): Promise<SkillAsset[]> {
+  invalidateSkillsCache();
+  return loadAllSkills();
+}
+
+export async function getSkillByUri(
+  uri: string,
+  customSkillsDir?: string,
+  customProjectRoot?: string,
+  options: { fresh?: boolean } = {}
+): Promise<SkillAsset | null> {
+  const skills = options.fresh ? await loadAllSkillsFresh() : await loadAllSkills(customSkillsDir, customProjectRoot);
   const normalized = uri.trim();
   return skills.find(s => s.uri === normalized) ?? null;
 }
 
-export async function getSkillByName(name: string, customSkillsDir?: string, customProjectRoot?: string): Promise<SkillAsset | null> {
-  const skills = await loadAllSkills(customSkillsDir, customProjectRoot);
+export async function getSkillByName(
+  name: string,
+  customSkillsDir?: string,
+  customProjectRoot?: string,
+  options: { fresh?: boolean } = {}
+): Promise<SkillAsset | null> {
+  const skills = options.fresh ? await loadAllSkillsFresh() : await loadAllSkills(customSkillsDir, customProjectRoot);
   const normalized = name.trim().toLowerCase();
   return skills.find(s => s.name.toLowerCase() === normalized) ?? null;
 }

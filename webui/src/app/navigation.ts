@@ -52,6 +52,7 @@ export type NavIconKey =
   | "evalCases"
   | "evalRuns"
   | "monitor"
+  | "fieldQuestions"
   | "securityEval"
   | "governanceOverview"
   | "agents"
@@ -62,7 +63,7 @@ export type NavIconKey =
   | "configAudit"
   | "admins"
   | "branding"
-  | "license";
+  | "versionInfo";
 
 /**
  * Spec 143: overview is no longer a pinned top-level entry. Kept as a named
@@ -230,6 +231,15 @@ export const navGroups: Array<{
         keywords: ["Monitor", "趋势", "基线"]
       },
       {
+        id: "eval-field-questions",
+        label: "现场提问",
+        to: "/eval/field-questions",
+        iconKey: "fieldQuestions",
+        active: (path) => path === "/eval/field-questions",
+        description: "审定访问日志里反复出现的业务问法，补问法后收成评测用例。",
+        keywords: ["现场", "提问"]
+      },
+      {
         id: "eval-security-candidates",
         label: "安全评测候选",
         to: "/eval/security-candidates",
@@ -286,7 +296,7 @@ export const navGroups: Array<{
         to: "/admin/mcp-playground",
         iconKey: "mcpPlayground",
         active: (path) => path === "/admin/mcp-playground" || path.startsWith("/admin/mcp-playground"),
-        description: "预览 Agent 的 MCP 工具权限裁决，并执行受控接入试调。",
+        description: "检查 Agent 能不能连上，或者能不能查某张表。",
         keywords: ["MCP", "Playground", "ACL", "调试"]
       },
       {
@@ -305,15 +315,6 @@ export const navGroups: Array<{
     title: "系统设置",
     items: [
       {
-        id: "admin-license",
-        label: "部署许可",
-        to: "/admin/license",
-        iconKey: "license",
-        active: (path) => path === "/admin/license" || path.startsWith("/admin/license/"),
-        description: "输入激活码，管理本实例的 Agent 席位与部署许可有效期。",
-        keywords: ["激活码", "License", "席位", "付费"]
-      },
-      {
         id: "admin-branding",
         label: "品牌外观",
         to: "/admin/branding",
@@ -330,6 +331,15 @@ export const navGroups: Array<{
         active: (path) => path === "/admin/admins" || path.startsWith("/admin/admins/"),
         description: "管理 WebUI 登录账户，并配置所有者或运维角色。",
         keywords: ["登录", "Owner", "运维", "管理员账户"]
+      },
+      {
+        id: "admin-version",
+        label: "版本信息",
+        to: "/admin/version",
+        iconKey: "versionInfo",
+        active: (path) => path === "/admin/version" || path.startsWith("/admin/version/"),
+        description: "查看产品版本、构建提交和随包 KTX 版本；有未提交改动时显示工作区状态。",
+        keywords: ["提交", "构建", "KTX"]
       }
     ]
   }

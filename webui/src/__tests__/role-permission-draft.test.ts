@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   ABSOLUTE_DENY_TOOL_NAMES,
+  CONTEXT_TOOL_NAMES,
   READONLY_QA_PRESET,
-  READONLY_QA_WIKI_PRESET,
   buildEffectiveDigest,
   buildTableAllow,
   deriveConnections,
@@ -30,7 +30,7 @@ describe("Role permission draft helpers", () => {
   it("stamps presets as replacement and detects exact matches", () => {
     expect(stampPreset(["sl_validate"], READONLY_QA_PRESET)).toEqual([...READONLY_QA_PRESET]);
     expect(matchingPresetName([...READONLY_QA_PRESET])).toBe("只读问答");
-    expect(matchingPresetName([...READONLY_QA_WIKI_PRESET].reverse())).toBe("只读问答 + 知识库");
+    expect(matchingPresetName([...READONLY_QA_PRESET, ...CONTEXT_TOOL_NAMES])).toBe("只读问答");
     expect(matchingPresetName(["lucy_query"])).toBeNull();
   });
 

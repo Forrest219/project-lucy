@@ -37,14 +37,29 @@
 | **P0 实施计划** | [`plans/wo-202608-59-access-control-p0.md`](plans/wo-202608-59-access-control-p0.md) | 可交付开发任务计划 |
 | **WebUI 登录 / Token 失效** | [`design-webui-admin-auth.md`](design-webui-admin-auth.md) · [`plans/wo-202608-62-webui-admin-auth-and-token-expiry.md`](plans/wo-202608-62-webui-admin-auth-and-token-expiry.md) | Token `expires_at` 强制；多管理员本地登录 |
 | 行级策略后续顺序 | [`adr-row-policy-next-iteration.md`](adr-row-policy-next-iteration.md) | 已确认：当前维持静态行级策略；下一次增量候选为可复用静态策略引用；动态数据策略另批 |
+| 行权限管理（v2.5 L25-14） | [`../specs/lucy-20261022-v2p5-row-permission-management-spec.md`](../specs/lucy-20261022-v2p5-row-permission-management-spec.md) v0.1-draft | **待评审，暂不开发**：把 ADR §2.2 的「可复用静态策略引用」落为 v2.5 需求，含最终行约束预览与按表反查视图；不改 Spec 99 / 100 运行时语义，动态策略仍按 §2.3 冻结 |
+| 已登记缺陷（行级策略字段绑定） | [`../qa/security-findings.yaml`](../qa/security-findings.yaml) **D-03（P1 / open）** | **存量缺陷，未修**：大写 schema 的清单文件名按小写化路径查找失败，合法行级字段被判 `row_policy_field_unresolved:unknown`；根因与复现见 L25-14 Spec §1.4。2026-10-22 裁决：只登记不修，留 v2.0 线排期。不得以改成「全部行」绕过 |
 | 实现契约 | [`webui/docs/07-mcp-auth-proxy-spec.md`](../../webui/docs/07-mcp-auth-proxy-spec.md) | Runtime ACL / Proxy（AC-P0 须更新） |
 | Admin 契约 | [`webui/docs/14-agent-admin-enterprise-delivery-spec.md`](../../webui/docs/14-agent-admin-enterprise-delivery-spec.md)、[`15-role-admin-spec.md`](../../webui/docs/15-role-admin-spec.md) | Agent / Role Admin |
 | Role 权限配置结构 | [`webui/docs/150-role-permission-configuration-structure-spec.md`](../../webui/docs/150-role-permission-configuration-structure-spec.md) | Role 详情三个独立编辑面、共享草稿、保存确认 Drawer；不改运行时契约 |
-| Skill 对象授权 | [`webui/docs/151-business-skill-authorization-and-file-safety-spec.md`](../../webui/docs/151-business-skill-authorization-and-file-safety-spec.md) | `roles_allowed` 单一事实源；Role 仅授予 discover/read 通道；同角色闭合 |
+| Skill 对象授权 | [`webui/docs/151-business-skill-authorization-and-file-safety-spec.md`](../../webui/docs/151-business-skill-authorization-and-file-safety-spec.md) | 文件身份与并发版本仍有效。对象授权与通道勾选由 [Spec 170](../../webui/docs/170-mvp-open-skill-wiki-access-spec.md) 暂停：已发布 Skill 与全部 Wiki 对所有已解析角色开放 |
+| 企业安全与真实用户 E2E 整改 | [Spec](../specs/lucy-20261018-enterprise-security-and-real-e2e-spec.md) · [Plan](../plans/2026-10-18-enterprise-security-and-real-e2e-plan.md) · [ADR](./adr-20261018-security-ledger-and-context-acl.md) · [Cursor 提示词](../plans/2026-10-18-enterprise-security-cursor-prompts.md) | **2026-10-18 已批准，按批次实施中。** 修复 P0/P1、用显式角色 ACL 替代 170 全开放；实施完成前运行时仍以上方现行基线为准 |
 
 **冲突裁决：** 与 `design-upgrade.md` 冲突时，以 `design-upgrade.md` 为准，直至对应 Spec 同步更新。
 
 ---
+
+### 1.1 上下文对象授权（2026-10-18 起，取代 Spec 170 全开放）
+
+| 主题 | 口径 |
+|---|---|
+| 事实源 | Skill `roles_allowed` / Wiki `allowed_roles`；缺失或 `[]` 无人可见；`["*"]` = 所有有效已分配 Role（非匿名）；损坏声明拒绝 |
+| 裁决 | `webui/server/proxy/context-acl.ts` 的 `authorizeContext`：同一 Role 须同时匹配对象授权与通道；initialize / resources / prompts / tools / wiki 通道复用；未授权 / 不存在 / 草稿 / 停用统一 `context_not_available`；legacy direct-allow `context_role_required` |
+| 版本与缓存 | `contextPolicyVersion = hash(规范化 ACL + 文件版本 + 角色通道版本)`；裁决不缓存正文，授权文件按请求重读，收窄下一请求即生效 |
+| 管理 | Skill / Wiki 编辑页设置可访问角色（默认无人可见，`*` 需二次确认）；Role 详情只读展示发现 / 读取效果；Wiki `file_version` / `expected_version`；Role 删除检查 ACL 引用并退役标识 |
+| 模板 | `examples/*/project-template` 与 `customer-config.example` 的 14 篇 Wiki 及模板 Skill 随代码提交显式 ACL；`*` 仅 `answer-style`（纯版式指引）；`context-template-acl.test.ts` 为门禁 |
+| 迁移 | `scripts/security/migrate-context-acl.mts`：`--dry-run` 只读报告（含 `inventoryDigest`）；`--apply` 仅 owner，带 `--expected-digest`、逐文件 `expected_version`、加密备份与 journal；空 / 损坏 / 旧 public 不自动变 `*` |
+| 回滚 | 迁移回滚用加密备份还原受影响文件，**不得**运行忽略 ACL 的旧全开放版本，也没有“恢复全开放”开关；只能回到通过同一安全回归的构建，或先隔离入口再恢复 |
 
 ## 2. 目录清单
 
@@ -59,6 +74,7 @@
 | `proposal-access-onboarding-simplification-202609.md` | **待审批**：访问治理「加人 / 开权限」体验简化（意图优先 + 渐进披露；与 Spec 133 顺序裁决） |
 | `integrity-p0-decision.md` | 企业完整性 P0 决策备忘（承诺表 / 已知限制 / 与工程 P0 对齐） |
 | `adr-row-policy-next-iteration.md` | 行级策略后续迭代 ADR；记录静态策略引用与动态数据策略的开工顺序 |
+| `../specs/lucy-20261022-v2p5-row-permission-management-spec.md` | 行权限管理 Spec v0.1-draft（v2.5 L25-14，待评审）；静态策略引用、最终行约束预览、行权限视图与配置审计 |
 | `feasibility-row-acl.SUPERSEDED.md` | **SUPERSEDED**；不得作为实施依据 |
 | `plans/` | 本域 Work Order |
 

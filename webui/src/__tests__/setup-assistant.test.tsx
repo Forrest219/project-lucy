@@ -13,6 +13,7 @@ import {
   getAssistantDraft,
   setAssistantDraft,
   clearAssistantDraft,
+  formatAssistantProgressCompact,
   formatAssistantProgressLabel,
   deriveAssistantResumeState,
   deriveSetupReadiness,
@@ -21,6 +22,8 @@ import {
 import { SetupAssistantModal } from "../components/onboarding/SetupAssistantModal";
 import { Step2UploadManifest } from "../components/onboarding/Step2UploadManifest";
 import { Step4SemanticOverlay } from "../components/onboarding/Step4SemanticOverlay";
+import { Step5BusinessWiki } from "../components/onboarding/Step5BusinessWiki";
+import { authoringHowToNotes, downloadAuthoringHowTo } from "../lib/authoringHowTo";
 import { ConnectionOverview } from "../pages/connections/ConnectionOverview";
 import { assertNoForbiddenTerms } from "./forbidden-terms";
 import type { ConnectionInfo, ProjectInfo, SourcesResponse } from "../lib/types";
@@ -92,9 +95,11 @@ describe("Setup Assistant Library & Utilities", () => {
     ).toBe(6);
   });
 
-  it("formats progress labels", () => {
-    expect(formatAssistantProgressLabel(1)).toContain("1/6");
-    expect(formatAssistantProgressLabel(3)).toContain("3/6");
+  it("formats progress labels as the current step, shared by the card and the modal", () => {
+    expect(formatAssistantProgressCompact(4)).toBe("接入进度 · 第 4 步");
+    expect(formatAssistantProgressLabel(4)).toBe("接入进度 · 第 4 步，共 6 步 · 当前：丰富业务语义");
+    expect(formatAssistantProgressLabel(1)).toContain("当前：连接数据库");
+    expect(formatAssistantProgressLabel(4)).not.toContain("4/6");
   });
 
   it("rehydrates resume state from the authoritative project and sources contracts", () => {
@@ -491,6 +496,9 @@ describe("SetupAssistantModal Component", () => {
       </QueryClientProvider>
     );
 
+    expect(screen.getByTestId("setup-assistant-progress")).toHaveTextContent(
+      "接入进度 · 第 1 步，共 6 步 · 当前：连接数据库"
+    );
     const stepper = screen.getByRole("navigation", { name: "接入步骤" });
     expect(stepper).toHaveTextContent("准备表结构");
     expect(stepper).toHaveTextContent("连接 Agent 客户端");
@@ -502,6 +510,7 @@ describe("SetupAssistantModal Component", () => {
     expect(screen.getByRole("option", { name: "StarRocks（MySQL 协议）" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Apache Doris" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "PostgreSQL" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Amazon Athena" })).toBeInTheDocument();
 
     fireEvent.change(driver, { target: { value: "starrocks" } });
     expect(screen.getByTestId("setup-port")).toHaveValue("9030");
@@ -510,6 +519,18 @@ describe("SetupAssistantModal Component", () => {
     fireEvent.change(driver, { target: { value: "sqlite" } });
     expect(screen.queryByTestId("setup-host")).not.toBeInTheDocument();
     expect(screen.getByLabelText(/数据库文件路径/)).toBeInTheDocument();
+
+    fireEvent.change(driver, { target: { value: "athena" } });
+    expect(screen.queryByTestId("setup-host")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("setup-password")).not.toBeInTheDocument();
+    expect(screen.getByTestId("setup-region")).toBeInTheDocument();
+    expect(screen.getByTestId("setup-s3-staging-dir")).toBeInTheDocument();
+    expect(screen.getByLabelText(/默认数据库/)).toBeInTheDocument();
+    expect(screen.getByTestId("setup-athena-hint")).toHaveTextContent(
+      "凭据使用当前环境的 AWS 凭证，不保存数据库密码。"
+    );
+    expect(screen.queryByText(/KTX 的 athena 驱动/)).not.toBeInTheDocument();
+    expect(screen.queryByTestId("setup-engine-hint")).not.toBeInTheDocument();
   });
 
   it("uses main as the default SQLite schema after switching from a server database", async () => {
@@ -1266,6 +1287,138 @@ describe("Setup Assistant manifest upload contract", () => {
     expect(await screen.findByTestId("setup-manifest-parsed-count")).toHaveTextContent("已解析 8 张表");
     expect(screen.getByTestId("setup-step-3")).toBeInTheDocument();
   });
+
+  it("keeps the schema manifest how-to collapsed when the database can be read", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/project") {
+          return new Response(JSON.stringify({
+            ok: true,
+            data: {
+              connections: [{
+                id: "mysql-aliyun",
+                driver: "mysql",
+                wireProtocol: "mysql",
+                schemas: ["chatbi"],
+                enabledTables: []
+              }]
+            }
+          }));
+        }
+        if (url === "/api/sources") {
+          return new Response(JSON.stringify({ ok: true, data: { tables: [], manifestSchemas: [] } }));
+        }
+        return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
+      })
+    );
+    render(
+      <QueryClientProvider client={queryClient}>
+        <Step2UploadManifest connectionId="mysql-aliyun" schema="chatbi" onSuccess={vi.fn()} onExit={vi.fn()} />
+      </QueryClientProvider>
+    );
+    const howTo = await screen.findByTestId("setup-howto-schema-manifest");
+    await waitFor(() => {
+      expect(screen.getByTestId("setup-step2-next")).toHaveTextContent("从数据库读取表结构");
+    });
+    expect(howTo).not.toHaveAttribute("open");
+    expect(screen.getByText("如何生成 Schema Manifest")).toBeInTheDocument();
+    expect(screen.getByTestId("setup-step2-next")).toBeEnabled();
+  });
+
+  it("opens the schema manifest how-to when the database cannot be read", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/project") {
+          return new Response(JSON.stringify({
+            ok: true,
+            data: {
+              connections: [{
+                id: "sql-prod",
+                driver: "sqlserver",
+                wireProtocol: "sqlserver",
+                schemas: ["dbo"],
+                enabledTables: []
+              }]
+            }
+          }));
+        }
+        if (url === "/api/sources") {
+          return new Response(JSON.stringify({ ok: true, data: { tables: [], manifestSchemas: [] } }));
+        }
+        return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
+      })
+    );
+    render(
+      <QueryClientProvider client={queryClient}>
+        <Step2UploadManifest connectionId="sql-prod" schema="dbo" onSuccess={vi.fn()} onExit={vi.fn()} />
+      </QueryClientProvider>
+    );
+    const howTo = await screen.findByTestId("setup-howto-schema-manifest");
+    await waitFor(() => {
+      expect(howTo).toHaveAttribute("open");
+    });
+    expect(screen.getByTestId("setup-step2-next")).toHaveTextContent("上传 Schema Manifest 并继续");
+    expect(screen.getByText(/要自己准备文件时，把编写说明交给你的/)).toBeInTheDocument();
+    expect(screen.queryByText(/能读取这套数据库时/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/准备当前 Schema 的表结构/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Cursor/)).not.toBeInTheDocument();
+  });
+});
+
+describe("Setup Assistant authoring how-to", () => {
+  let queryClient: QueryClient;
+
+  beforeEach(() => {
+    queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } }
+    });
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+    // The how-to download test stubs global URL; later lazy imports need the real one.
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps the business wiki how-to collapsed beside the optional editor", () => {
+    render(
+      <QueryClientProvider client={queryClient}>
+        <Step5BusinessWiki connectionId="mysql-aliyun" onSuccess={vi.fn()} onSkip={vi.fn()} onBack={vi.fn()} />
+      </QueryClientProvider>
+    );
+    expect(screen.getByTestId("setup-howto-business-wiki")).not.toHaveAttribute("open");
+    expect(screen.getByTestId("setup-step5-skip")).toBeEnabled();
+    fireEvent.click(screen.getByText("如何写业务 Wiki"));
+    expect(screen.getByTestId("setup-howto-business-wiki")).toHaveAttribute("open");
+    expect(screen.getByText(/暂时没有也可以跳过/)).toBeInTheDocument();
+  });
+
+  it("copies and downloads client-neutral authoring notes", () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    const createObjectURL = vi.fn(() => "blob:howto");
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal("URL", { createObjectURL, revokeObjectURL });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <Step5BusinessWiki connectionId="mysql-aliyun" onSuccess={vi.fn()} onSkip={vi.fn()} onBack={vi.fn()} />
+      </QueryClientProvider>
+    );
+    fireEvent.click(screen.getByText("如何写业务 Wiki"));
+    fireEvent.click(screen.getByTestId("setup-howto-business-wiki-copy"));
+    expect(writeText).toHaveBeenCalledWith(authoringHowToNotes("business_wiki"));
+    expect(authoringHowToNotes("schema_manifest")).toContain("不要假定用户使用哪一个客户端");
+    expect(authoringHowToNotes("schema_manifest")).not.toContain("Cursor");
+    fireEvent.click(screen.getByTestId("setup-howto-business-wiki-download"));
+    expect(createObjectURL).toHaveBeenCalled();
+    downloadAuthoringHowTo("schema_manifest");
+    expect(createObjectURL).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe("ConnectionOverview Setup Assistant Bridge", () => {
@@ -1332,13 +1485,16 @@ describe("ConnectionOverview Setup Assistant Bridge", () => {
     await waitFor(() => {
       expect(screen.getByTestId("resume-assistant-demo-db")).toBeInTheDocument();
     });
-    const progress = screen.getByTestId("connection-assistant-banner-demo-db");
-    expect(progress.className).not.toMatch(/border|rounded|bg-primary/);
-    expect(progress).toHaveTextContent("接入进度 2/6");
-    expect(screen.getByTestId("resume-assistant-demo-db")).toHaveTextContent("继续向导");
+    const progress = screen.getByTestId("resume-assistant-demo-db");
+    expect(screen.queryByTestId("connection-assistant-banner-demo-db")).not.toBeInTheDocument();
+    expect(progress.className).not.toMatch(/pl-btn--secondary|bg-primary/);
+    expect(progress).toHaveTextContent("接入进度 · 第 2 步");
+    expect(progress).toHaveAttribute("title", "接入进度 · 第 2 步，共 6 步 · 当前：准备表结构");
+    expect(progress).toHaveAttribute("aria-label", "继续向导，接入进度 · 第 2 步");
+    expect(screen.queryByRole("button", { name: "继续向导" })).not.toBeInTheDocument();
 
     // Click resume
-    fireEvent.click(screen.getByTestId("resume-assistant-demo-db"));
+    fireEvent.click(progress);
     await waitFor(() => {
       expect(screen.getByTestId("setup-assistant-modal")).toBeInTheDocument();
     });

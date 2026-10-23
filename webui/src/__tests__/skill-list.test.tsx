@@ -149,20 +149,34 @@ describe("unified Skill workbench", () => {
     await waitFor(() => expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(true));
   });
 
-  it("requires preflight acknowledgement before granting all roles", async () => {
+  it("offers object authorization: read view, role picker, confirmed wildcard and preflight impact (Spec §4.3)", async () => {
     const fetchMock = stubApis();
     renderPage();
-    fireEvent.click(await screen.findByTestId("skill-edit"));
+    expect(await screen.findByTestId("skill-detail")).toBeInTheDocument();
+    expect(screen.getByTestId("skill-detail-roles")).toHaveTextContent("analyst");
+    fireEvent.click(screen.getByTestId("skill-edit"));
     fireEvent.click(screen.getByTestId("skill-metadata-toggle"));
-    fireEvent.click(screen.getByTestId("skill-role-all"));
-    expect(screen.getByTestId("skill-role-all")).toBeChecked();
+
+    const field = screen.getByTestId("skill-field-roles");
+    expect(within(field).getByLabelText("无人可见")).not.toBeChecked();
+    expect(within(field).getByLabelText("指定角色")).toBeChecked();
+    expect(await within(field).findByLabelText("analyst")).toBeChecked();
+    expect(within(field).getByLabelText("finance_reader")).not.toBeChecked();
+
+    // Wildcard needs its own confirmation: picking the radio alone changes nothing.
+    fireEvent.click(within(field).getByLabelText("所有角色可见"));
+    const apply = within(field).getByTestId("skill-field-roles-all-apply");
+    expect(apply).toBeDisabled();
+    expect(screen.queryByTestId("skill-dirty")).not.toBeInTheDocument();
+    fireEvent.click(within(field).getByLabelText("我确认所有角色可见"));
+    fireEvent.click(apply);
+    expect(screen.getByTestId("skill-dirty")).toBeInTheDocument();
+
     fireEvent.click(screen.getByTestId("skill-save"));
     const dialog = await screen.findByTestId("skill-preflight");
-    const confirmButton = within(dialog).getByTestId("skill-preflight-confirm");
-    expect(confirmButton).toBeDisabled();
-    fireEvent.click(within(dialog).getByTestId("skill-wildcard-ack"));
-    expect(confirmButton).toBeEnabled();
-    fireEvent.click(confirmButton);
+    expect(within(dialog).getByTestId("skill-preflight-roles")).toHaveTextContent("analyst → 所有角色");
+    expect(within(dialog).getByTestId("skill-preflight-roles")).toHaveTextContent("扩权");
+    fireEvent.click(within(dialog).getByTestId("skill-preflight-confirm"));
     await waitFor(() => {
       const put = fetchMock.mock.calls.find(([, init]) => init?.method === "PUT");
       expect(put).toBeTruthy();
@@ -172,12 +186,26 @@ describe("unified Skill workbench", () => {
     });
   });
 
+  it("can choose 无人可见 explicitly and saves it as an empty list", async () => {
+    const fetchMock = stubApis();
+    renderPage();
+    fireEvent.click(await screen.findByTestId("skill-edit"));
+    fireEvent.click(screen.getByTestId("skill-metadata-toggle"));
+    fireEvent.click(within(screen.getByTestId("skill-field-roles")).getByLabelText("无人可见"));
+    fireEvent.click(screen.getByTestId("skill-save"));
+    fireEvent.click(await within(await screen.findByTestId("skill-preflight")).findByTestId("skill-preflight-confirm"));
+    await waitFor(() => {
+      const put = fetchMock.mock.calls.find(([, init]) => init?.method === "PUT");
+      expect(JSON.parse(String(put![1]?.body)).roles_allowed).toEqual([]);
+    });
+  });
+
   it("creates with the selected domain prefilled and metadata expanded", async () => {
     stubApis();
     renderPage("/skills?new=1&domain=kx_financial");
     expect(await screen.findByTestId("skill-editor-form")).toBeInTheDocument();
     expect(screen.getByTestId("skill-metadata-toggle")).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByTestId("skill-field-domain")).toHaveValue("kx_financial");
-    expect(screen.getByTestId("skill-role-none")).toHaveTextContent("无人可见");
+    expect(screen.queryByTestId("skill-role-none")).not.toBeInTheDocument();
   });
 });

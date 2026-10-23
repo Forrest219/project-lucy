@@ -1,0 +1,61 @@
+tables:
+  marketing_daily:
+    table: analytics.marketing_daily
+    columns:
+      - name: day
+        type: time
+        nullable: false
+        descriptions:
+          db: 日期
+          ai: Calendar day of the marketing spend record.
+      - name: region
+        type: string
+        nullable: false
+        descriptions:
+          db: 区域
+          ai: Sales region, East or West.
+      - name: channel
+        type: string
+        nullable: false
+        descriptions:
+          db: 渠道
+          ai: Acquisition channel.
+      - name: spend_cents
+        type: number
+        nullable: false
+        descriptions:
+          db: 投放金额（分）
+          ai: Marketing spend in integer cents.
+      - name: new_customers
+        type: number
+        nullable: true
+        descriptions:
+          db: 新增客户数
+          ai: New customers acquired that day. NULL means the source field is missing, which is not zero.
+  orders_masked:
+    table: analytics.orders_masked
+    columns:
+      - name: order_id
+        type: string
+        pk: true
+        nullable: false
+        descriptions:
+          db: 订单 ID
+          ai: Order business key.
+      - name: region
+        type: string
+        nullable: false
+        descriptions:
+          db: 区域
+          ai: Sales region, East or West.
+      - name: amount_cents
+        type: number
+        nullable: false
+        descriptions:
+          db: 订单金额（分）
+          ai: Order amount in integer cents.
+      - name: note
+        type: string
+        descriptions:
+          db: 备注
+          ai: Free-text note.

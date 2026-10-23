@@ -2,12 +2,16 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { invalidateContentPathsCache } from "../paths";
 import { listManifestSchemas, listSources, readSource } from "../semantic-layer";
 
 let projectRoot: string;
+let previousRoot: string | undefined;
+let previousContentRoot: string | undefined;
 
 beforeEach(async () => {
   projectRoot = await mkdtemp(path.join(os.tmpdir(), "ktx-webui-sl-"));
+  await writeFile(path.join(projectRoot, "ktx.yaml"), "connections: {}\n", "utf8");
   await mkdir(path.join(projectRoot, "semantic-layer", "mysql-aliyun", "_schema"), { recursive: true });
   await writeFile(
     path.join(projectRoot, "semantic-layer", "mysql-aliyun", "_schema", "dataforai.yaml"),
@@ -38,6 +42,11 @@ beforeEach(async () => {
 `,
     "utf8"
   );
+  previousRoot = process.env.KTX_PROJECT_ROOT;
+  previousContentRoot = process.env.LUCY_CONTENT_ROOT;
+  process.env.KTX_PROJECT_ROOT = projectRoot;
+  process.env.LUCY_CONTENT_ROOT = ".";
+  invalidateContentPathsCache();
   await writeFile(
     path.join(projectRoot, "semantic-layer", "mysql-aliyun", "superstore_orders.yaml"),
     `name: superstore_orders
@@ -52,6 +61,11 @@ measures:
 });
 
 afterEach(async () => {
+  invalidateContentPathsCache();
+  if (previousRoot === undefined) delete process.env.KTX_PROJECT_ROOT;
+  else process.env.KTX_PROJECT_ROOT = previousRoot;
+  if (previousContentRoot === undefined) delete process.env.LUCY_CONTENT_ROOT;
+  else process.env.LUCY_CONTENT_ROOT = previousContentRoot;
   await rm(projectRoot, { recursive: true, force: true });
 });
 

@@ -97,10 +97,16 @@ describe("parseEvalSuite — error localization", () => {
     const errors = errorsFor(yaml);
     expect(errors.some((e) => e.path === "lucy_eval_schema_version" && e.code === "REQUIRED_FIELD_MISSING")).toBe(true);
   });
-  it("reports SCHEMA_VERSION_MISMATCH for v2", () => {
-    const yaml = `lucy_eval_schema_version: 2\nkind: lucy_eval_suite\nsuite_id: x\ndomain: x\ntitle: x\ncases: [{id: a, case_type: single_turn, question: q, expected_source: semantic_layer}]\n`;
+  it("reports SCHEMA_VERSION_MISMATCH for v3", () => {
+    const yaml = `lucy_eval_schema_version: 3\nkind: lucy_eval_suite\nsuite_id: x\ndomain: x\ntitle: x\ncases: [{id: a, case_type: single_turn, question: q, expected_source: semantic_layer}]\n`;
     const errors = errorsFor(yaml);
     expect(errors.some((e) => e.code === "SCHEMA_VERSION_MISMATCH")).toBe(true);
+  });
+  it("accepts schema version 2 when the executable contract is present", () => {
+    const yaml = `lucy_eval_schema_version: 2\nkind: lucy_eval_suite\nsuite_id: spend_v1\ndomain: growth\ntitle: 花费\ncases:\n  - id: spend-by-platform\n    case_type: single_turn\n    question: 本月各平台花费\n    expected_source: semantic_layer\n    review_status: active\n    as_of_binding:\n      kind: this_month\n    executable:\n      required_measures: [spend]\n      grain: [platform]\n      required_columns: [platform, spend]\n      required_filters:\n        - field: date\n          bind: as_of_window\n`;
+    const result = parseEvalSuite(yaml);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.suite.lucy_eval_schema_version).toBe(2);
   });
   it("reports kind mismatch", () => {
     const yaml = `lucy_eval_schema_version: 1\nkind: lucy_eval\nsuite_id: x\ndomain: x\ntitle: x\ncases: [{id: a, case_type: single_turn, question: q, expected_source: semantic_layer}]\n`;

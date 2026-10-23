@@ -1,7 +1,33 @@
 # Lucy Helm Chart — Upgrade Guide
 
 Upgrade Lucy on Kubernetes while preserving `/data/lucy` PVC data, Secrets, and MCP tokens.
-Current chart: **0.2.4** (Lucy `0.17.0`, bundled KTX `0.16.0`).
+Current chart: **0.2.6** (Lucy `2.0.0`, bundled KTX `0.16.0`).
+
+## Open-mode upgrade to administrator login
+
+Use this when the existing PVC has never had an administrator and has no `.ktx-ui/security.sqlite`. Keep the PVC. Do not delete `admins.yaml` to force a new claim.
+
+1. Set instance `intent` to `upgrade`, `authState` to `uninitialized`, and `legacyBaselineReviewed` to `true` only after that empty state is confirmed.
+2. Set `access` to `http` or `https` to match the URL operators actually open. Intranet HTTP does not use the lab test profile.
+3. Prepare an instance directory from this package. The generic package does not contain a bootstrap key. The prepare step writes `credentials/webui-bootstrap-token` for that instance.
+4. Deploy from the instance directory. The bootstrap Secret is mounted only as a reference. After the first owner is created, later restarts and upgrades reuse the account on the PVC.
+5. Take a quiesced PVC backup before `helm upgrade`. Helm rollback does not restore `admins.yaml` or `security.sqlite`.
+
+The lab file `examples/values.k3s-test.yaml` is only for the known HTTP test cluster. Copy `examples/instance.upgrade.http.example.json`, replace every MUST-REPLACE value, and point `recovery.instructionsFile` at a filled recovery note.
+
+## Customer upgrade entry
+
+Follow the package-root `CUSTOMER-UPGRADE.md`, `CUSTOMER-FIRST-ADMIN.md`, and `ACCEPTANCE.md`.
+Choose the HTTP or HTTPS instance example, prepare a private instance directory, then run its
+`scripts/deploy.sh --dry-run` followed by `scripts/deploy.sh`. The entry preserves live Helm values,
+backs up the original PVC while quiesced, and configures the per-instance bootstrap Secret.
+
+The original revision and image are stored in `.deployment/baseline.json`, full original Helm values
+in `baseline-values.json`, and the first backup hash in `initial-backup.json`. Preserve these private
+files across retries. Use the filled `RECOVERY.md` to restore volume state as well as the old revision.
+
+Do not use the lab Helm upgrade commands for the first-owner migration: lab values do not provision
+a customer bootstrap Secret. The sections below describe infrastructure diagnostics and lab use.
 
 ## Before you start
 
@@ -45,7 +71,7 @@ Run this from the package root **before** `helm upgrade`. It reports three thing
 
 - a live Deployment that still has a hand-patched `command` / `args`, hotfix volume, or extra init container
 - semantic-layer column `type` values other than `string`, `number`, `time`, `boolean`
-- `roles.*.allow.tools` entries that Lucy 0.17.0 treats as AbsoluteDeny (`sl_query`, `sl_read_source`, and the other names in that set)
+- `roles.*.allow.tools` entries that Lucy 2.0.0 treats as AbsoluteDeny (`sl_query`, `sl_read_source`, and the other names in that set)
 
 `defaults.known_tools` and `defaults.table_touching_tools` are not flagged and are not edited.
 
@@ -278,3 +304,10 @@ If you previously maintained your own Chart (e.g. with `runtime-preflight`):
 - Ship v1/v2 delivery packages as "direct in-place upgrade" builds.
 
 See [`ROLLBACK.md`](ROLLBACK.md) if the upgrade fails.
+
+## Release provenance (T14)
+
+Upgrade only to an image digest that passed `customer-release-readiness`. The release tag is produced by promoting the tested
+candidate digest; if `docker buildx imagetools inspect <tag>` shows a different digest than the evidence, do not deploy.
+Tokens, permissions and audit survive an upgrade; WebUI administrator sessions do not (v2 sessions, Spec §3.2) and
+administrators sign in again.

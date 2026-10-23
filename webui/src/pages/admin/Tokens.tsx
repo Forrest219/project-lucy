@@ -8,6 +8,7 @@ import { PageHeader } from "../../components/PageHeader";
 import { MetricCard } from "../../components/MetricCard";
 import { formatLastSeen } from "./AgentList";
 import { Code2, Terminal, ExternalLink, Key, Trash2 } from "lucide-react";
+import { queryKeys } from "../../lib/queryKeys";
 
 export function Tokens() {
   const navigate = useNavigate();
@@ -41,7 +42,7 @@ export function Tokens() {
       toast.success("Token 凭据已成功吊销");
       setRevokingToken(null);
       void queryClient.invalidateQueries({ queryKey: ["admin", "tokens"] });
-      void queryClient.invalidateQueries({ queryKey: ["admin", "agents"] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.adminAgents });
     },
     onError: (err: Error) => {
       toast.error(`吊销失败：${err.message}`);

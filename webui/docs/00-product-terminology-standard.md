@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy Product Terminology Standard |
 | 文档类型 | System-wide Product Language / Terminology Standard |
-| 版本 | v0.2 |
-| 撰写日期 | 2026-07-31；2026-08-01 v0.2（新增 Data Agent Ops Control Plane / Data Agent 运维控制台，标记『语义维护工作台』与『运维控制面』为弃用别名）；2026-08-05 增补 §4.8 MCP 调试台术语（Spec 99）；同日 Spec 100 交叉审阅补齐 incomplete / impact / evidence / 裁决双行；2026-08-06 Spec 109 增补目录重命名术语；2026-08-06 Spec 114/115 增补表 YAML 导入与工作台校验披露术语；2026-08-06 Spec 117 增补 Remove Schema 术语；2026-08-20 增补 §4.7.1 Trace Read Model 术语（Spec 62 v0.5）；2026-08-25 Spec 127 增补 Delete Connection 术语；2026-08-26 增补 §4.9 可选 Agent Chat（A3）术语；2026-09-03 Spec 140 增补访问日志双粒度 CSV 导出术语；2026-09-03 Spec 141 增补访问日志 CSV 字段说明与本地时间术语；2026-09-04 Spec 143 增补调用监控与运行状态分组术语；2026-09-11 Spec 142 为 `/overview` 聚焦精简；2026-09-23 Spec 144 增补 Skill / 业务 Skill；Spec 145 增补待同步文件与表语义校验分计；同日 Spec 144 v1.1 增补导航组名「业务上下文」（原「语义建模」组更名，「语义建模」保留为概念词）；2026-09-24 Spec 148 增补界面使用、页面访问、访问账户、活跃菜单与分组/菜单/页面访问排行；同日 Spec 149 增补运维问数连接与运维问数角色 |
+| 版本 | v0.2；2026-10-19 v0.2-draft：增补 Spec 173 v0.3 / 2026-10-19 audit-trust 新增术语（凭证主体 / 已确认关联 / 候选关联 / 归属待核验 / 客户端采集范围 / 工具调用数 / 原文登记分组占比 / 证据校验），登记于 §4.7.1，与 `inbox/audit-trust/audit-trust-2026-10-19-r1/T00-r2/` 同批生效 |
+| 撰写日期 | 2026-07-31；2026-08-01 v0.2（新增 Data Agent Ops Control Plane / Data Agent 运维控制台，标记『语义维护工作台』与『运维控制面』为弃用别名）；2026-08-05 增补 §4.8 MCP 调试台术语（Spec 99）；同日 Spec 100 交叉审阅补齐 incomplete / impact / evidence / 裁决双行；2026-08-06 Spec 109 增补目录重命名术语；2026-08-06 Spec 114/115 增补表 YAML 导入与工作台校验披露术语；2026-08-06 Spec 117 增补 Remove Schema 术语；2026-08-20 增补 §4.7.1 Trace Read Model 术语（Spec 62 v0.5）；2026-08-25 Spec 127 增补 Delete Connection 术语；2026-08-26 增补 §4.9 可选 Agent Chat（A3）术语；2026-09-03 Spec 140 增补访问日志双粒度 CSV 导出术语；2026-09-03 Spec 141 增补访问日志 CSV 字段说明与本地时间术语；2026-09-04 Spec 143 增补调用监控与运行状态分组术语；2026-09-11 Spec 142 为 `/overview` 聚焦精简；2026-09-23 Spec 144 增补 Skill / 业务 Skill；Spec 145 增补待同步文件与表语义校验分计；同日 Spec 144 v1.1 增补导航组名「业务上下文」（原「语义建模」组更名，「语义建模」保留为概念词）；2026-09-24 Spec 148 增补界面使用、页面访问、访问账户、活跃菜单与分组/菜单/页面访问排行；同日 Spec 149 增补运维问数连接与运维问数角色；2026-10-12 增补启用表范围「状态筛选」筛选维术语；2026-10-19 Spec 99 v1.3 明确调试台裁决卡与访问日志双行分工；同日 v1.5 连上检查只回答能连上或不能连上 |
 | 适用范围 | Lucy WebUI、API 用户可见错误、Toast、Modal、Drawer、表格列名、导航、测试断言、Spec、Plan、Runbook、交付文档 |
 | 维护者 | Product / UX / Architecture Review |
 | 优先级 | 高于单模块 Spec。单模块 Spec 可新增术语，但不得覆盖本标准中的固定术语 |
@@ -165,6 +165,7 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Semantic Asset | 语义资产 | 表语义资产、结构化 YAML 模型 | 表目录（主导航 / PageHeader 禁用） | 语义建模下的结构化 YAML 模型维护入口 |
 | Semantic Coverage | 语义覆盖 | 完成度（作 overview 主标签） | 分母 = 已启用 ∩ Manifest（`SourceSummary.enabled`）；不含未启用 Manifest 表（Spec 104） |
 | Enabled Scope Filter | 启用范围 | 白名单筛选 | Catalog 工具栏：已启用 / 全部 / 未启用 |
+| Whitelist Status Filter | 状态筛选 | 表状态筛选、启用状态筛选 | 状态（过宽，单独作 Label 易与连接 / Schema 筛选混淆） | 启用表范围工具栏筛选维：全部 / 未启用 / 已启用，待补语义 / 已启用，语义完成 |
 | Metric | 指标 | Metric | 度量混用 | 可聚合的业务数值定义 |
 | Dimension | 维度 | Dimension | 维数 | 分析分组或切片字段 |
 | Measure | 度量 | Measure | 指标混用 | 语义模型内的聚合表达式；当面向业务用户时优先叫“指标” |
@@ -206,12 +207,12 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | WebUI Admin Operator | 运维 | 运维人员 | 管理员（易与所有者混淆）、普通用户 | 日常连接 / 语义 / Eval / Agent Role；不可管登录账户 |
 | WebUI Login | 登录 | 控制面登录 | Sign in 裸用 | `/login` |
 | Customer Branding | 品牌外观 | 客户品牌 | 白标、换皮、皮肤（作导航/标题） | Spec 126：`/admin/branding` |
-| Deployment License | 部署许可 | 软件许可、License | 授权（与数据 ACL 混淆）、激活（与语义生效混淆） | 客户付费后的实例级 entitlement；`/admin/license` |
-| Activation Code | 激活码 | 授权码、License Key | Token（与 MCP Agent Token 混淆）、激活（动词，指语义发布） | 厂商离线签发的部署许可凭证 |
-| License Seat | Agent 席位 | seat、席位上限 | 用户数、Token 数（作 seat 主标签） | 部署许可允许的启用 Agent 数量上限 |
+| Deployment License | 部署许可 | 软件许可、License | 授权（与数据 ACL 混淆）、激活（与语义生效混淆） | 历史对照。Spec 175 v0.2 起从产品移除，不再作为交付概念 |
+| Activation Code | 激活码 | 授权码、License Key | Token（与 MCP Agent Token 混淆）、激活（动词，指语义发布） | 历史对照。Spec 175 v0.2 起不出现在导航、页面或用户可见错误中 |
+| License Seat | Agent 席位 | seat、席位上限 | 用户数、Token 数（作 seat 主标签） | 历史对照。Spec 175 v0.2 起不再作为拒绝原因 |
 | Customer Logo | 客户 Logo | Logo | 头像、图标（作主标签） | 侧栏 mark 与登录页共用；PNG/JPEG/GIF，32–160px |
 | Product Title | 产品名称 | wordmark | 站点名、系统名（作主标签） | 默认 `Lucy WebUI` |
-| Brand Tagline | 副标题 | tagline | 口号、Slogan（作主标签） | 默认 `Data Agent MCP` |
+| Brand Tagline | 副标题 | tagline | 口号、Slogan（作主标签） | 默认 `可信 Agent 数据层` |
 | Token Expiry | 过期时间 | Token 失效时间 | 失效日期（可作为说明同义） | `expires_at`；到期后 Proxy 拒绝 |
 | Config Audit Change Type | 变更类型 | 配置变更类型 | 类型（过宽）、changeType（裸露） | Spec 96 表头与筛选 |
 | Config Audit Asset Kind | 资产域 | 配置资产域 | assetKind、资产类型（与 Semantic Asset Kind 混淆） | Spec 90/96：governance/semantic/wiki/eval/publish |
@@ -246,7 +247,7 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Upstream Forced Predicate Proven | 上游强制谓词已证明 | proven 标志 | 代码写完即已证明 | Gate C bypass 全绿后才可置真；未证明取数 deny |
 | Row Policy Requires Wrapped Tool | 需包装工具 | `row_policy_requires_wrapped_tool` | capability_forbidden（混作主文案） | 受保护源上非 lucy_query 取数通道 |
 | Row Policy Upstream Unproven | 上游契约未证明 | `row_policy_upstream_unproven` | 临时放行碰运气 | FinalRows≠TRUE 且 proven≠true 的取数路径 |
-| Agent Constraints | Agent 强制约束 | 人级收紧、FinalRows 收紧 | Role 间 AND、Row Grant OR（混称）、TokenScope | 挂在 Agent 上、与 EffectiveRowGrant **AND**；**AC-P1.5 Spec 100**；Role 上 forbidden；AC-P1 配置出现即失败 |
+| Agent Constraints | 个人行限制 | 人级收紧、FinalRows 收紧 | 行级策略、行级权限策略、Agent 强制约束（弃用主术语）、Role 间 AND、Row Grant OR（混称）、TokenScope | 挂在 Agent 上、在角色行级策略之上再限制这个人，与 EffectiveRowGrant **AND**；**AC-P1.5 Spec 100**；Role 上 forbidden；AC-P1 配置出现即失败 |
 | Permission Model Version | 权限模型版本 | `permission_model_version`、模型版本 | 用户字段 role/roles、修改历史推断世代 | Role 上 `1`=legacy、`2`=显式模型 |
 | Row Policy | 行级策略 | row_policy、结构化行谓词 | Segment、查询 filters、overlay 表达式当权限 | 仅 `access.yaml` 内 structured 谓词；op∈{eq,in}；Spec 99 |
 | Canonical Source Key | 规范源键 | canonicalSourceKey、源键四元组 | 裸 sourceName、裸 physicalTable 作唯一身份 | `connectionId \| schema \| sourceName \| physicalTable` |
@@ -260,7 +261,7 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Policy Degraded | 策略降级 | 权限降级态、DataPlane 整体拒绝 | 服务不可用、完全健康（降级时） | 编译失败导致受影响 Agent 或整体 DataPlane deny |
 | Table & Row Policy Access | 可访问的表与行策略 | 表授权与行策略 | 资产边界、数据范围 | Role 详情中展示可访问表范围及行级策略配置的区域；对应 `allow.tableSelectors` + `row_policy` |
 | Read-only QA Preset | 只读问答 | 问答预设 | 纯只读、Viewer | 预设工具集：`lucy_catalog`、`lucy_read_source`、`lucy_query`、`lucy_explain_query`、`lucy_freshness`、`lucy_begin_question`，共 6 个；不含 `sl_validate` |
-| Read-only QA + Wiki Preset | 只读问答 + 知识库 | 问答 + Wiki 预设 | 查数+Wiki | 预设工具集：只读问答 6 个加 `wiki_search`、`wiki_read`，共 8 个 |
+| Read-only QA + Wiki Preset | 只读问答 + 知识库 | 问答 + Wiki 预设 | 查数+Wiki | Spec 170 起从角色页撤回。`wiki_search`、`wiki_read`、`lucy_skill_search`、`lucy_skill_read` 对已解析角色始终可用，不再作为预设差集 |
 | Matches Preset | 当前与{预设名}一致 | 与预设匹配 | 已绑定预设、跟随预设 | 当前工具集合与某预设完全相等时的界面提示文案；集合比较与顺序无关 |
 | Row Access: All Rows | 行权限：全部行 | 不限制行 | 全部行 all、row_access 作界面主文案 | 表未配置 `row_policy` 时的显示文案；`row_access` 字段只作存储，不作为界面主文案 |
 | Equals / In | 等于 / 属于 | 等于、属于（单独使用） | eq / in / op 作界面主文案（存储仍为 eq / in） | 行级策略条件的界面展示；存储用 `op: eq` 或 `op: in`，界面主文案用「等于」「属于」 |
@@ -307,6 +308,7 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Delete Connection YAML Assets (optional) | 同时删除本地 YAML 资产 | 默认级联删除 | `semantic-layer/<connId>/` 下 Manifest / overlay（Spec 127） |
 | Connection ID | 连接 ID | 连接名（作主标签） | `connections.<id>` 键；受标识符规则约束 |
 | Connection Password | 数据库密码 | 密钥、Token（作主标签） | 新建表单一次性输入；写入 `.ktx/secrets/<id>-password` 后不可回显 |
+| Amazon Athena | Amazon Athena | Redshift 驱动、JDBC、Athena API（作类型名） | 新建连接的数据库类型。写入 KTX `driver: athena`。Glue 范围用 `databases`，结果前缀用 `s3_staging_dir`。不保存数据库密码 |
 | Password File Reference | 密码文件引用 | 明文密码（配置态） | `password: file:…`；API 只暴露 `passwordSource` |
 | Connection Create Preview | 新建预览 | — | dryRun 脱敏 diff 与 secret 路径预告 |
 | Table Whitelist | 启用表范围 | 白表、表白、表白名单（主导航禁用） | `enabled_tables` 的 UI 管理入口 |
@@ -329,7 +331,7 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Live Catalog | 库内目录 | 物理扫描（作主标签） | Owner 按需只读目录查询结果 |
 | Refresh Live Catalog | 重新拉取库内目录 | 刷新本地目录（易混） | 仅 bypass TTL 重查物理库 |
 | Select Schema | 选择 Schema | 选择架构、选择模式 | Add Schema 下拉候选 |
-| Enter Schema Manually | 手动输入 Schema 名称 | 手动输入架构 | 候选不可用或自定义时 |
+| Enter Schema Manually | 手动输入 Schema 名称 | 手动输入架构 | 仅库内目录失败或候选为空时，表单改为输入框；有候选时不提供切换 |
 | Remove Schema | 移除 Schema | 删除数据库、删库、删除架构、删除模式 | 从连接配置卸载 Schema；不触碰物理库（Spec 117） |
 | Schema Remove Impact | 移除影响 | — | dryRun 摘要：已启用表、Manifest、overlay、Wiki 引用（Spec 117） |
 | Delete Schema Manifest (optional) | 同时删除 Schema Manifest | 默认级联删除 | 可选勾选；默认关；仅 dryRun:false 时生效（Spec 117） |
@@ -347,6 +349,7 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Target Wiki Directory | 目标目录路径 | 新目录（仅预检补充） | 改名后 `wiki/<path>/` |
 | Delete Markdown Document | 删除文档 | 删除 MD、删文件、删除 page | 删除当前已保存 Wiki Markdown（Spec 118） |
 | Document Delete Confirmation | 删除确认 | 删除预检（与上传预检混用） | 删除文档确认对话框；展示目标 `wiki/<key>` |
+| Wiki Frontmatter | 文档属性 | 前置元数据、frontmatter（用户可见文案）、元数据块 | Wiki 文档开头 `---` 之间的属性块；仅支持 YAML 格式，其它格式报「仅支持 YAML 格式的文档属性」（V-08，错误码 `WIKI_FRONTMATTER_UNSUPPORTED`）。`YAML` 为专业英文术语，DOM 须加翻译防御 |
 | Business Annotation | 业务注释 | 查看注释可接受 | 面向业务的表 / 字段解释 |
 | Metric Definition | 指标定义 | 度量定义混用 | 指标口径、聚合方式、过滤条件 |
 | Dimension Definition | 维度定义 | 维数定义 | 维度字段和展示属性 |
@@ -397,16 +400,20 @@ Connection (连接)
 | 资产包导入 / 导出 | Consumer | Consumer | Owner |
 | validate / reindex | 基础刷新后可触发 | 语义变更后必须触发 | 发布 gate 必须触发 |
 
-接入向导主文案（Spec 157 / 158）：
+接入向导主文案（Spec 157 / 158 / 167）：
 
 | 说法 | 用途 | 不使用 |
 |---|---|---|
-| 准备表结构 | 第 2 步标题和第 1 步出口 | 把「上传 Schema Manifest」当作唯一步骤名 |
-| 从数据库读取表结构 | 尚无 Schema Manifest 时的主按钮 | 自动生成清单、跳过 Manifest |
+| 接入进度 · 第 n 步，共 6 步 | 连接卡片与接入向导弹窗共用的当前步骤。卡片写「接入进度 · 第 n 步」，弹窗写全句并带上当前步骤名 | 接入进度 n/6 |
+| 准备表结构 | 第 2 步标题和第 1 步出口；缺 Manifest 时从 Schema 行进入的抽屉标题（Spec 164） | 把「上传 Schema Manifest」当作唯一步骤名 |
+| 从数据库读取表结构 | 尚无 Schema Manifest 时的主按钮。接入向导第 2 步，以及添加 Schema 成功步、缺 Manifest 的 Schema 行（Spec 164） | 自动生成清单、跳过 Manifest |
 | 使用已有 Schema Manifest | 已有资产时的默认主动作 | 请重新上传、强制替换 |
 | 我已有 Schema Manifest | 展开上传 | 裸「上传 YAML」 |
 | 替换已有 Schema Manifest | 主动覆盖入口，确认后再写入 | 自动覆盖 |
 | 结束并稍后继续 | 关闭并保留第 2 步断点 | 稍后上传 Schema Manifest |
+| 如何生成 Schema Manifest | 第 2 步折叠提醒（Spec 167）。展开后只说明：要自己准备文件时，把编写说明交给 Agent。读库由主按钮「从数据库读取表结构」承担 | 下载 Skill、去某个客户端安装、先准备好 YAML 再启动向导 |
+| 如何写业务 Wiki | 第 5 步折叠提醒（Spec 167）。先说明可直接写、上传或跳过；不知道写什么时把编写说明交给 Agent | 维基模板、把业务 Wiki 写成必填 |
+| 编写说明 | 交给 Agent 的生成说明，可复制或下载（Spec 167）。不限定客户端 | Skill、配置作者、业务 Skill |
 | 暂不补充业务语义，使用数据库字段信息继续 | 第 4 步默认动作 | 采用基础字段语义、自动生成语义 |
 | 表结构已准备 | 仅 Schema Manifest 与启用表已满足 | 问答已就绪、服务已就绪 |
 | 服务链路已就绪 | 运行时门禁通过 | 仅结构满足时使用 |
@@ -442,6 +449,9 @@ Connection (连接)
 | Upload Semantic Assets | 上传语义资产 | — | Catalog / 连接等入口；**禁止**作为 `/publish/workbench` 本页入口（Spec 123） |
 | Publish Semantic Assets Drawer | 发布语义资产 | — | 仅上传路径 Drawer 标题；不在工作台本页 |
 | Pending Sync File Count | N 个待同步文件 | 把该数字称为校验通过的文件数 | 本批一并同步的文件数，含 Wiki 与其它非表文件（Spec 145） |
+| Publish Scope Written | 写入 | 把已删除语义源和写入并列 | 发布记录变更范围；只含记录时内容根仍可读的语义源（Spec 85 v1.1） |
+| Publish Scope Removed | 已删除 | 已移除（作变更范围分组）；与写入放在同一组 | 发布记录中已入账、但内容根文件已不存在的语义源 |
+| Mirror Only Semantic Notice | 镜像中仍有内容根已删除的语义文件，本次索引可能继续收录 | 在该提示上提供删除镜像 | 发布工作台只读提示（Spec 180 v0.2）；不删除镜像文件 |
 | Table Validation Result | 表语义校验通过 A/B | 校验成功（不说明校验对象）；校验通过 N 张（不写分母） | 进行态为「正在校验表语义…」。B 为本批进入表语义校验的表数，A 为通过数；与待同步文件数分列（Spec 145） |
 
 审阅与审批的流程分工必须与第 3.1 节一致：
@@ -459,7 +469,13 @@ Connection (连接)
 | Evaluation Run | 评测运行 | 评价运行 | 一次批量评测执行 |
 | Trend Monitoring | 趋势监控 | 趋势监管 | 质量指标随时间变化 |
 | Security Evaluation Candidate | 安全评测候选 | 安全候选（含义不完整） | 从访问拒绝日志提取、待人工审定并转为安全评测用例的权限与数据隔离场景 |
-| Pass Rate | 通过率 | 成功率混用 | 评测通过比例 |
+| Pass Rate | 通过率 | 成功率混用 | 评测通过比例。Spec 161 起，新运行的通过率只算答对了 /（答对了 + 答错了） |
+| Answer Outcome | 答对了 / 答错了 / 没答出来 | 编译终态、结果轴 | 运行明细主列。没答出来不进入通过率分子和分母 |
+| Field Question | 现场提问 | 业务候选、失败池 | 从访问日志中反复出现、待审定并收成评测用例的业务提问 |
+| Offline Eval Batch | 离线跑批 | 本地 Agent 运行（作本路径主名称） | 经与 lucy_query 相同路径编译并在客户库重新执行 |
+| As-of Date | 截止日期 | 快照日期（与本字段混用） | 跑批参数，用来绑定相对时间 |
+| Needs Review | 待复核 | 待审定（审定留给现场提问和安全评测候选） | 语义版本变化后，用例暂停进入通过率 |
+| Client Family | 脚本客户端 / 对话客户端 / 其他 | 把 curl 或 undici 并进脚本客户端或对话客户端 | 趋势监控现场区块的分行；读取时分类，不落库 |
 
 ### 4.5 访问治理 / 使用概况
 
@@ -496,14 +512,15 @@ Connection (连接)
 | Stats Snapshot Time | 统计时间 | — | 上次更新（本页主标签） | 三组 query 成功后的快照新鲜度；相对时间对齐系统概览；位于时间窗口切换左侧 |
 | Device Name Remark | 设备名备注 | 备注 | Device（裸露作主标签）、绑定设备（暗示硬件强绑定） | 签发时可选；不写 access_log；见 Spec 124 |
 | Last Seen Device Name | 最近设备名 | 运行时设备名 | 与备注混用为单一「设备名」 | 仅 `x-lucy-device-name`；见 Spec 124 |
-| Agent Client Type | Agent 类型 | 客户端 | Device 类型 | `clientInfo.name` + version |
+| Agent Client Type | Agent 类型 | 客户端 | Device 类型 | 自报名是空的、`lucy` 或 `lucy-mcp-proxy` 且 User-Agent 属于已知产品时用产品名，否则用 `initialize.clientInfo.name` |
 | Client IP | 访问 IP | 最近访问 IP | remoteAddress、XFF（裸露作主标签） | `access_log.client_ip`；Token 列表派生 `last_ip` |
 | User-Agent | User-Agent | UA | 浏览器指纹 | HTTP 头截断存储；DOM 值 `notranslate` |
-| Client Version | 客户端版本 | — | clientInfo.version（裸露） | MCP `initialize.clientInfo.version` |
+| Client Version | 客户端版本 | — | clientInfo.version（裸露） | 与客户端同一来源。已知产品覆盖占位名时用 User-Agent 里的版本 |
 | Token Device Inventory | Token 设备清单 | 设备视角 Token 列表 | 已登录设备、Sessions | Agent 详情 Token Tab |
 | Interface Usage View | 界面使用 | — | 埋点、telemetry、pageview | `?view=interface`；默认视图仍为数据访问（Spec 148） |
 | Data Access View | 数据访问 | — | 治理概览（作该视图名） | 使用概况默认视图 |
-| Page Views | 近 N 页面访问 | 页面访问（叙述） | 浏览量 | 窗口内页面打开次数 |
+| Page Views | 近 N 页面访问 | 页面访问（叙述） | 浏览量 | 窗口内页面打开次数。折线见 Usage Page View Line |
+| Usage Page View Line | （无可见标题） | — | 趋势图、迷你图、sparkline（作可见文案） | 只在界面使用的「近 N 页面访问」主值右侧。各点相加等于页面访问。访问账户、活跃菜单和数据访问三张卡不加。见 Spec 166 |
 | Visiting Accounts | 近 N 访问账户 | 访问账户（叙述） | 访客、UV | 去重登录账户 |
 | Active Menus | 近 N 活跃菜单 | 活跃菜单（叙述） | 热门菜单（与排行混用） | 窗口内至少打开 1 次的侧栏菜单 |
 | Group Visit Ranking | 分组访问 · 近 N | — | 模块热度 | 全部分组，含 0 次 |
@@ -521,20 +538,22 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 | System Overview | 系统概览 | 系统总览混用 | 全局运行状态页 |
 | Runtime Status | 运行状态 | 运行时间状态 | 服务运行健康情况 |
 | Runtime Status Group | 运行状态 | 把「系统概览」继续当作分组名承载多页；监控中心 | 侧栏分组；含系统概览 + 调用监控 + 使用概况；见 Spec 143 / 156 |
-| Call Monitoring Page | 调用监控 | 日志调用监控看板、调用看板、流量大屏、监控看板（作 H1） | 主路由 `/ops/calls`；侧栏与 H1；准实时 MCP 工具调用盯盘；见 Spec 143 |
+| Call Monitoring Page | 调用监控 | 日志调用监控看板、调用看板、流量大屏、监控看板（作 H1） | 主路由 `/ops/calls`；侧栏与 H1；准实时 MCP 工具调用盯盘；窗口见 Spec 165 |
 | Call Monitor Success Rate | 成功率 | 与评测「通过率」混用 | MCP 工具调用 `ok / businessCalls`；仅调用监控主标签 |
 | Call Monitor Error Rate | 错误率 | 失败率（与拒绝混用） | `error / businessCalls` |
 | Call Monitor Denied Rate | 拒绝率 | 拦截率作唯一主标签 | `denied / businessCalls`；叙述可写 ACL 拒绝率 |
 | Recent Failures List | 最近失败与拒绝 | 告警列表、incident | 调用监控有界短表；非通知通道 |
-| Auto Refresh | 自动刷新 | 实时推送（暗示 SSE） | 默认 30s 轮询；hint 可写「30 秒刷新」 |
+| Auto Refresh | 自动刷新 | 实时推送（暗示 SSE） | 调用监控四个窗口都是 30 秒轮询；刷新失败保留上一份成功快照。hint 可写「30 秒刷新」 |
 | Public MCP URL | Public MCP URL | 公共 MCP 地址 | 部署暴露给外部的 MCP URL |
 | Asset Delivery | 资产交付 | 资产下载区 | 运维级导出、发布、交付入口 |
 | Sidebar Group | 运行状态 / 数据接入 / 业务上下文 / 语义发布 / 质量评测 / 访问治理 / 系统设置 | 6+1 主导航混用其它分组名；继续用「系统概览」作多页分组名 | Lucy WebUI 侧边栏固定 IA；Spec 143 起置顶分组为「运行状态」；Spec 144 v1.1 起「语义建模」组更名「业务上下文」 |
 | Semantic Completion Incomplete | 未完成 | partial / not_started（作用户主文案）、status=partial | Catalog / overview 深链 value=`incomplete`（`!== done`）；见 Spec 100 |
 | Action Impact | 影响 | impact（裸露） | 待办行必填次级文案；Spec 100 |
 | Action Evidence | 证据来源 | evidence（裸露） | 待办行必填；Spec 100 |
+| Call Monitor Window | 近 1 小时 / 近 24 小时 / 近 7 天 / 近 30 天 | 月、周、24H、近 1 月 | 调用监控全页唯一时间切换。URL `range=1h\|24h\|7d\|30d`。见 Spec 165 |
+| Call Monitor In-window Line | （无可见标题） | 趋势图、迷你图、sparkline（作可见文案） | 每张 KPI 内的折线，刻度跟随窗口。无障碍名称用指标、窗口和刻度。禁止与「趋势监控」混称 |
 
-调用监控沿用访问治理既有口径：**近 N 调用量**、**多数请求耗时**（P95 次级括注）、**慢于多数请求**、**统计时间**；时效只计单次 MCP 工具调用 `durationMs`，不计 Turn 端到端。Protected DOM 另含 tool name、`requestId`、`traceId`。详见 Spec 143。
+调用监控沿用访问治理既有口径：**近 N 调用量**、**多数请求耗时**（P95 次级括注）、**慢于多数请求**。时间窗只有一组：近 1 小时、近 24 小时、近 7 天、近 30 天。每张 KPI 里的折线没有自己的标题，也不叫趋势图。页头不展示统计时间或 SLO 总状态。时效只计单次 MCP 工具调用 `durationMs`，不计 Turn 端到端。Protected DOM 另含 tool name、`requestId`、`traceId`。详见 Spec 143 与 Spec 165。
 
 ### 4.7 访问日志 / Admin Audit
 
@@ -544,11 +563,12 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 |---|---|---|---|---|
 | Turn Inquiry Tab | 问询记录 | — | 问题簇、turn（裸露） | 默认视图 `?view=turns`（可省略）；兼容旧 `?tab=turns` |
 | Call Log Tab | 调用流水 | — | 明细（旧 Tab 名）、access_log | 取证视图 `?view=calls`；含 CSV 导出；兼容旧 `?tab=calls` |
-| Turn Inquiry CSV Export | 导出问询记录 | 问询记录 CSV | 问题簇导出、导出问句、按当前页签导出（未说明粒度） | Spec 140：`GET /api/admin/audit/turns/export`；一行代表一次用户问询 |
-| Access Call Log CSV Export | 导出调用流水 | 调用流水 CSV | 审计证据导出（指单文件 CSV）、Audit Export（作唯一主按钮） | Spec 137：`GET /api/admin/audit/export`；内部排障流水 |
+| Current View Export | 导出 | — | 导出问询与调用、把「导出问询记录」和「导出调用流水」并排 | 顶栏主操作。只导出当前页签和当前筛选：问询记录页得到问询记录 CSV，调用流水页得到调用流水 CSV |
+| Turn Inquiry CSV Export | 导出问询记录 | 问询记录 CSV | 问题簇导出、导出问句、作顶栏按钮文案 | 文件与接口名。问询记录页的「导出」指向 `GET /api/admin/audit/turns/export`；一行代表一次用户问询 |
+| Access Call Log CSV Export | 导出调用流水 | 调用流水 CSV | 审计证据导出（指单文件 CSV）、作顶栏按钮文案 | 文件与接口名。调用流水页的「导出」指向 `GET /api/admin/audit/export`；内部排障流水 |
 | Audit CSV Field Metadata | 字段说明 | CSV 字段说明、字段元数据 | 字段字典（作 UI 主称）、数据字典（与业务数据字典混淆） | Spec 141：`GET /api/admin/audit/export-metadata?kind=calls\|turns`；解释列含义、格式和触发条件 |
 | Local Audit Timestamp | 本地时间 | Excel 友好时间 | 中文时间、北京时间（无时区说明） | Spec 141：`Asia/Shanghai`、`YYYY-MM-DD HH:mm:ss`；与 UTC 原始字段并存 |
-| Audit Evidence Pack | 导出审计证据包 | 证据包 zip | 把单 CSV 称为审计证据包、把 SHA 自检称为防篡改签名 | Spec 137：`GET /api/admin/audit/export-pack`；含 Manifest；仅当 Manifest `complete=true` 才用于正式审计验收 |
+| Audit Evidence Pack | 导出审计证据包 | 证据包 zip | 把单 CSV 称为审计证据包、把 SHA 自检称为防篡改签名、按钮上写 Manifest | Spec 137：顶栏文字按钮，`GET /api/admin/audit/export-pack`；Manifest 在 zip 内；仅当 Manifest `complete=true` 才用于正式审计验收 |
 | Export Manifest | Manifest | — | 将 Manifest 翻译成中文主标签 | Spec 137：`manifest.json`；DOM `translate="no"` |
 | Turn / Question cluster | 问询 | 问询摘要 | 问题簇 | 列表行对象；Drawer 标题 |
 | Turn ID | 问询 ID | — | turn id（裸露作主标签）、问题簇 ID | L1 身份列；可复制；关联调用流水 |
@@ -557,8 +577,18 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 | Range preset | 近 24 小时 / 近 7 天 | — | 地址栏 `hours=168`（新写入） | URL `range=24h\|7d`；兼容读 `hours=24\|168` |
 | Reported turn | 已上报问询 | — | reported turn | 来源 badge |
 | Inferred turn | 推断问询 | — | 推断问题（无来源标注） | 来源 badge |
+| Session Visit | 会话访问 | — | 第三种来源 badge、把 User-Agent 写成客户端名 | 没有用户原文时按 MCP 会话生成的推断问询。摘要以「会话建立：」加客户端名开头。Spec 172 |
+| Question Budget | 问询预算 | — | turn budget（裸露作主标签）、8 分钟上限 | 同一问询的数据工具次数或墙钟上限，先到先停；Spec 162 |
+| Continuable | 可继续 | — | 自动续跑 | 问询预算用尽后的一次继续；协议字段 `question_budget_exhausted` 使用 `translate="no"` |
+| Repair Hint | 修复提示 | — | 把角色外的 source 名写进提示 | 只含当前角色可见的来源与连接 |
+| Filter Pushdown | 过滤条件下推 | — | 把 `STRUCT` / `AS field` 当作成功 SQL | 编译结果命中该形状时失败关闭；`filter_pushdown` 使用 `translate="no"` |
+| Actor | 使用人 | — | 把 token 备注当成使用人 | Token 上显式 `actor_id` + `actor_kind=person`；`token_label` 只是备注 |
+| Automation Call | 自动化调用 | — | 把未标记的 Python-urllib 算成自动化 | 仅 `actor_kind=automation` |
+| Eval Mark | 评测标记 | — | 把自动化调用、Token 备注或连接名当成评测 | Token 可选字段 `eval_mark`，缺省未标记；Spec 162。DOM 中的 `eval_mark` 使用 `translate="no"` |
+| Applied Version | 采用的版本 | — | 编造版本号 | 只有发布物声明了默认版本才写入结果 |
 | Turn span | 问询时长 | — | turn span | 开始至结束 wall-clock |
 | Slow call | 慢于多数请求 | 慢调用 | 慢查询 | 相对 P95 参照 |
+| Usage Slow Mark | 问询慢标记 | — | 把「慢于多数请求」改成这个名字 | Spec 162：`lucy_query` 达到 5 秒，或问询墙钟达到 120 秒。生效日 2026-10-12 必须和数字一起出现 |
 | Typical Request Latency | 多数请求耗时 | P95（次级括注） | 响应上限（P95）作主标签 | 与 `/admin/usage` 同算法；**列表页不再展示整句参照文案**（Spec 94） |
 | Source type filter | 来源类型 | — | 全部来源、推断（筛选项裸词） | 选项：`全部 / 用户原始问询 / 系统推断问询`；**仅问询记录 Tab** |
 | Call origin filter | 调用来源 | — | 全部来源（作选项文案）、来源类型（挪用到调用流水） | 调用流水筛选项：`全部 / MCP 调试台受控试调 / Agent 接入调用`；`callSource=playground\|agent`；`playground` 对应 `lucy_platform=mcp-playground` 并自动包含协议调用 |
@@ -577,20 +607,39 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 
 Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token`、`MCP`、`P95`、`Manifest`、tool name、physical table、Agent id、问询 ID / 事件 ID 值、裁决原因码、生成 SQL 文本、`lucy-ops`、`lucy_ops_reader`、`ops_calls`、`ops_call_tables`。
 
-详见 Spec 89；Spec 94 补充来源筛选与列表/Drawer 列名；Spec 99 要求双行 DecisionReasonView；**Spec 106** 要求身份列、共享筛选与 `view`/`range` URL；**Spec 125** 要求调用流水直展生成 SQL（Spec 124 冷存降为 legacy）；**Spec 137** 区分「导出调用流水」与「导出审计证据包」；**Spec 140** 增加「导出问询记录」并要求页面同时暴露问询级与调用级 CSV；**Spec 141** 要求 CSV 文件名精确到秒和流水号、增加本地时间并提供字段说明；**Spec 149** 增加运维问数连接与运维问数角色，问数仍沿用调用流水、生成 SQL、裁决原因。
+详见 Spec 89；Spec 94 补充来源筛选与列表/Drawer 列名；Spec 99 要求双行 DecisionReasonView；**Spec 106** 要求身份列、共享筛选与 `view`/`range` URL；**Spec 125** 要求调用流水直展生成 SQL（Spec 124 冷存降为 legacy）；**Spec 137** 区分「导出调用流水」与「导出审计证据包」；**Spec 140** 增加问询记录 CSV；页头「导出」跟随当前页签，不再并排两个粒度；**Spec 141** 要求 CSV 文件名精确到秒和流水号、增加本地时间并提供字段说明；**Spec 149** 增加运维问数连接与运维问数角色，问数仍沿用调用流水、生成 SQL、裁决原因。**Spec 172** 增加会话访问：没有用户原文时按 MCP 会话保留一条推断问询，摘要以「会话建立：」加客户端名开头。
+
+#### 4.7.1 Spec 173 v0.3 / 2026-10-19 audit-trust 新增术语
+
+依据 `docs/specs/lucy-20261019-audit-trust-and-admin-investigation-spec.md` §6、`inbox/audit-trust/audit-trust-2026-10-19-r1/T00-r2/implementation-contract.md` §6。T00-r2 同批生效；T01 起 UI 文案、API 错误、测试断言均按本节。
+
+| Canonical term | UI 主术语 | 允许补充说法 | 禁止文案 | 说明 |
+|---|---|---|---|---|
+| Credential principal | 凭证主体 | Token 绑定凭证 | Agent（作唯一身份）、token_label（当唯一身份） | `user_id` 列；非空 Agent / Token 绑定的内部完整凭证摘要；与既有 `Agent` 列并存说明，不替换 |
+| Confirmed association | 已确认关联 | 显式关联 | "已绑定"、"已授权关联"（混授权）、关联成功（推断） | `association_status = confirmed`；仅合法显式 turn 或 `lucy_begin_question` 自身；不等同"已授权意图证明" |
+| Candidate association | 候选关联 | 推断关联 | "已确认关联"、关联成功 | `association_status = candidate` + `confidence = low`；自动 session 推断；不进入 `confirmed` 分母 |
+| Association review | 归属待核验 | 待核验关联 | "误关联"、权限冲突（混授权） | `association_status ∈ {conflict, legacy_unverified}`；不自动等同于"越权" |
+| Client coverage | 客户端采集范围 | 采集覆盖 | 未外发、已外发（已验证）、未拦截 | `clientCoverage ∈ {observed, gap, unknown}`；未接入显式显示「后续动作不可见」；不基于此推断"未外发" |
+| Tool call count | 工具调用数 | `tool_count_v2` | 调用数、access_log 行数（混） | `count(event_type = tool_call)`；含目录 / 元数据 / begin / 失败；旧"触达物理表"语义标 `legacy` 保留 |
+| Reported group ratio | 原文登记分组占比 | 原文登记占比 | 真实问询覆盖率、丢日志率（86% 误用） | 分母 = 已上报 + 推断问询；分子只计已上报；握手不入分母；EA-21 |
+| Audit integrity verification | 证据校验 | 完整性校验 | 防篡改（本地 hash 自检）、独立签名（未验证后要求） | 文件 hash / 关系校验 / 独立签名 / 外部保全；本地 hash 自检不称为防篡改签名；EA-12 / EA-19 |
+
+沿用既有「问询记录」「调用流水」「会话访问」「裁决原因」「审计同步延迟」「Manifest」等术语。Spec 173 v0.3 与 Spec 162 / Spec 137 / Spec 141 / Spec 149 共用 §4.7；同号 `!(Agent)` / `(Token)` / `!(MCP)` / `!(P95)` / `!(Manifest)` / `!(tool name)` / `!(physical table)` / `!(Agent id)` / `!(问询 ID)` / `!(事件 ID)` / `!(裁决原因码)` / `!(生成 SQL)` / `!(lucy-ops)` / `!(lucy_ops_reader)` / `!(ops_calls)` / `!(ops_call_tables)` 维持 `translate="no"` 与 `notranslate`。
+
+文案不得把"操作权限 / 业务结果 / 归属 / 证据质量"合并成一个安全结论。**撤销的旧规则**（作废声明，不在 UI / API 中出现）：120 秒近邻回绑（`PRIOR_BIND_MS = 120000`）、写完成时按最近活动 turn 重归因（v0.2 §6 lines 73–76）、把 `session_bound + high` 当作等同 confirmed、把 38 个空 tool / hash + 时间窗 / 维护空日志非空即通过等被推翻结论写回实施。
 
 ### 4.8 MCP 调试台 / ACL 裁决可见性
 
 | Canonical Term | Preferred EN | UI 主术语 | 禁止 / 弃用 | 说明 |
 |---|---|---|---|---|
 | MCP Playground | MCP Playground | MCP 调试台 | API 操场、Playground（单独作 H1）、协议沙箱 | `/admin/mcp-playground`；侧栏与 PageHeader |
-| ACL Decision Preview | ACL Decision Preview | ACL 裁决预览 | 权限模拟、DryRun（单独作主标签） | 默认主模式；不转发上游 |
-| Live Smoke Call | Live Smoke Call | 受控试调 | 真实调用（无「受控」）、生产探测 | 白名单工具 + 确认；Token 不落盘；落库 `lucy_platform=mcp-playground` |
+| ACL Decision Preview | ACL Decision Preview | ACL 裁决预览 | 权限模拟、DryRun（单独作主标签） | 调试台任务文案为「检查能不能查某张表」，不再作为模式下拉；不转发上游 |
+| Live Smoke Call | Live Smoke Call | 受控试调 | 真实调用（无「受控」）、生产探测 | 调试台任务文案为「检查能不能连上」。访问日志 badge 仍为「受控试调」；Token 不落盘；落库 `lucy_platform=mcp-playground` |
 | Call origin · playground | Call origin (playground) | MCP 调试台受控试调 | Playground 调用（裸词）、调试流量 | 访问日志 `callSource=playground` 筛选项与行内 badge「受控试调」 |
 | Call origin · agent | Call origin (agent) | Agent 接入调用 | 用户真实调用（作唯一主标签时易误解 dry-run） | 访问日志 `callSource=agent`：排除 `lucy_platform=mcp-playground` |
-| Decision Reason | Decision Reason | 裁决原因 | 拒绝码、reason（裸露作主标签） | 与访问日志列对齐；主行中文 |
+| Decision Reason | Decision Reason | 裁决原因 | 拒绝码、reason（裸露作主标签） | 访问日志主行中文、次行裁决原因码。调试台用裁决卡，允许时不重复「允许执行」 |
 | Decision Reason Code | Decision Reason Code | 裁决原因码 | — | 机器码（如 `tool_forbidden`）；次行 `notranslate` |
-| Effective Permissions Snapshot | Effective Permissions Snapshot | 生效权限快照 | 权限 dump | DryRun 结果只读摘要 |
+| Effective Permissions Snapshot | Effective Permissions Snapshot | 生效权限快照 | 权限 dump | 调试台结果不展示计数 |
 
 Protected terms（DOM 需 `translate="no"` + `notranslate`）：`MCP`、`Agent`、`Role`、`Token`、`ACL`、tool name、`decision_reason` 码、connection / schema / table、JSON-RPC method。
 
@@ -607,7 +656,7 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`MCP`、`Agent`�
 | Row Access | 行访问 | `row_access: all` / `scoped` | 行级已开启但未注入；Dynamic RLS 已交付 | AC-P0 仅 `all`；AC-P1 允许 `scoped`+`row_policy`（Gate B 后） |
 | Row Policy Editor | 行级策略 | predicates / eq / in | Segment 当行权限 | Role Admin；op 仅 eq\|in |
 | Final Rows Preview | 最终行约束 | FinalRows 摘要 | 已取数成功（explain 场景） | dryRun / explain 诊断；P1.5 须含 Constraints 参与后的 digest（Spec 100） |
-| Agent Constraints Editor | Agent 强制约束 | constraints / 人级收紧 | Role 强制约束、Token 行收紧、多 Role 自动 AND | **仅 Agent Admin**（Spec 100）；Role / Token 不提供 |
+| Agent Constraints Editor | 个人行限制 | constraints / 人级收紧 | 行级策略、Agent 强制约束（按钮与标题弃用）、Role 强制约束、Token 行收紧、多 Role 自动 AND | **仅 Agent Admin**（Spec 100）；从当前角色已授权的表勾选；Role / Token 不提供 |
 | Forced Filters Field | 专用强制字段 | `forced_filters` | 用户 filters 即行权限 | 仅 Proxy 注入 |
 | Row Policy Requires Wrapped Tool | 需包装工具 | 请使用 lucy_query | 表未授权（混用） | Toast / 审计主文案 |
 | Row Policy Upstream Unproven | 上游契约未证明 | 行策略未启用取数 | 临时可用 | proven 前取数 deny |
@@ -655,11 +704,11 @@ Skill 是与语义资产、业务 Wiki 并列的受治理上下文。导航与�
 | Save Skill | 保存 Skill | 发布技能（作保存按钮文案） | Spec 147；写回 frontmatter + Markdown；状态字段仍是 `status` |
 | Delete Skill | 删除 Skill | 删除技能、移除技巧 | Spec 147；删除入口文件，不删共享 `references/` |
 | Skill Governance Overview | Skill 治理总览 | Skill 首页、Skill Hub | Spec 153；`/skills` 默认主工作区，展示全部或领域范围内的治理摘要 |
-| Skill Save Preflight | 保存 Skill 前预检 | 发布 Skill、直接保存 | Spec 153；写入前只读展示 Diff、校验、状态与授权影响；按钮为「保存并预检」 |
+| Skill Save Preflight | 保存 Skill 前预检 | 发布 Skill、直接保存 | Spec 153；写入前只读展示 Diff、校验与状态；按钮为「保存并预检」。Spec 170 起不再展示授权影响 |
 | Markdown Source / Rendered Preview | Markdown 源码 / 渲染预览 | 原文框 / 效果区 | Spec 153；Skill 编辑态双栏标签 |
-| Accessible Roles | 可访问角色 | 授权角色（辅助说明） | Skill 编辑页的 Role 多选；对象授权事实源为 `roles_allowed` |
-| All Roles Visible | 所有角色可见 | 全员可用、公开（作主标签） | 显式写入 `roles_allowed: ["*"]`；开启时需要二次确认 |
-| No Roles Visible | 无人可见 | 私有（含义不明确） | 缺失或空 `roles_allowed`；新建 Skill 默认状态 |
+| Accessible Roles | 可访问角色 | 授权角色（辅助说明） | — | Skill `roles_allowed` / Wiki `allowed_roles` 的对象授权控件（2026-10-18 T05/T06 恢复）；默认无人可见；同一 Role 须同时具备对象授权与通道才可用 |
+| All Roles Visible | 所有角色可见 | 全员可用、公开（作主标签） | 匿名公开、免登录 | 对应 `["*"]`：所有有效已分配 Role 可匹配，仍检查通道与 Skill 状态；需独立开关与二次确认 |
+| No Roles Visible | 无人可见 | 私有（含义不明确） | — | 缺失或空数组；新建 Skill / Wiki 的默认状态，管理台受信任管理员仍可维护 |
 
 Protected terms（DOM 须 `translate="no"` + `notranslate`）：`Skill`、`lucy-skill://`、`lucy_skill_read`、`domain`、`roles_allowed`、Skill 文件路径、`SKILL.md`。
 

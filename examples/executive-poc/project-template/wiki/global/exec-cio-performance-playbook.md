@@ -1,4 +1,5 @@
 ---
+allowed_roles: [exec_demo_full]
 sl_refs:
   - demo-exec-mysql/dataforai/fct_order_line_daily
   - demo-exec-mysql/dataforai/mv_order_quarterly_rollup

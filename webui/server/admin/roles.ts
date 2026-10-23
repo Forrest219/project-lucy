@@ -6,10 +6,11 @@ import {
   normalizePermissionModelVersion,
   previewRolePermissionsForAdmin,
   absoluteDenyOrUnclassifiedReason,
+  resolveRoleIds,
   type EffectivePermissions
 } from "../proxy/acl.js";
 import { parseRowPolicyShape } from "../proxy/row-policy.js";
-import { expandTemplate, isDeleteProtectedRole, ROLE_TEMPLATES } from "./role-templates.js";
+import { expandTemplate, isDeleteProtectedRole, LUCY_ADMIN_ROLE_ID, ROLE_TEMPLATES } from "./role-templates.js";
 import {
   ACCESS_YAML_REL,
   ROLE_ID_RE,
@@ -33,9 +34,18 @@ import {
   type AccessGovernanceOverrideRequest
 } from "../access-governance-gate.js";
 import { actorIdFromRequest } from "../auth/guard.js";
+import { auditActorFields, trustedActorFromRequest } from "../security/request-actor.js";
 import type { FastifyRequest } from "fastify";
 import { loadAllSkills } from "../skills/loader.js";
 import { summarizeRoleSkillAccess } from "../proxy/skill-acl.js";
+import {
+  contextReferencesToRole,
+  hasContextReferences,
+  listContextInventory,
+  summarizeRoleWikiAccess
+} from "../proxy/context-inventory.js";
+import { computeContextPolicyVersion } from "../proxy/context-policy.js";
+import { getSecurityStore } from "../security/instance.js";
 
 type RoleSource = "yaml" | "template";
 
@@ -62,7 +72,10 @@ function findRole(config: YamlAccessConfig, roleId: string): ResolvedRole | unde
 }
 
 function usersReferencingRole(config: YamlAccessConfig, roleId: string) {
-  return config.users.filter((user) => user.role === roleId);
+  return config.users.filter((user) => {
+    const resolved = resolveRoleIds(user);
+    return resolved.ok && resolved.roleIds.includes(roleId);
+  });
 }
 
 function effectivePermissionsToPreview(permissions: EffectivePermissions) {
@@ -557,6 +570,13 @@ async function resolveRoleForWrite(
   if (!migrated.ok) {
     return { ok: false, code: "INVALID_ROLE", message: migrated.reason, status: 400 };
   }
+  const allow = migrated.value.allow;
+  if (allow?.connections?.includes("*") && roleId !== LUCY_ADMIN_ROLE_ID) {
+    return { ok: false, code: "INVALID_ROLE", message: "connections '*' is only valid on lucy_admin", status: 400 };
+  }
+  if (roleId === LUCY_ADMIN_ROLE_ID && allow?.source_scope === "catalog_bound" && allow) {
+    migrated.value = { ...migrated.value, allow: { ...allow, connections: ["*"] } };
+  }
   const resolved = await previewRolePermissionsForAdmin(roleId, { role: migrated.value });
   if (!resolved.ok) {
     return { ok: false, code: "INVALID_ROLE", message: resolved.reason, status: 400 };
@@ -565,6 +585,33 @@ async function resolveRoleForWrite(
     return { ok: false, code: "INVALID_ROLE", message: "role resolves to 0 source", status: 400 };
   }
   return { ok: true, value: migrated.value, migration: migrated.migration };
+}
+
+type RoleContextGuardFailure = { status: number; code: string; message: string; detail?: unknown };
+
+/**
+ * Spec §4.3 — a retired Role id is never reusable, and a new Role must not silently activate
+ * historical Wiki / Skill ACL references to its id (acknowledgement is an explicit, audited choice).
+ */
+async function guardRoleIdForCreate(roleId: string, acknowledged: boolean): Promise<RoleContextGuardFailure | undefined> {
+  const store = await getSecurityStore();
+  const retired = store.ok ? store.value.isRoleIdTombstoned(roleId) : store;
+  if (!store.ok || !retired.ok) {
+    return { status: 503, code: "SECURITY_STORE_UNAVAILABLE", message: "Role id retirement state is unavailable; try again after the security store recovers" };
+  }
+  if (retired.value) {
+    return { status: 409, code: "ROLE_ID_RETIRED", message: `role id '${roleId}' was deleted and cannot be reused` };
+  }
+  const refs = contextReferencesToRole(await listContextInventory(), roleId);
+  if (hasContextReferences(refs) && !acknowledged) {
+    return {
+      status: 409,
+      code: "ROLE_ID_HAS_CONTEXT_REFERENCES",
+      message: `existing Wiki/Skill ACLs already name '${roleId}'; clean them up or acknowledge before creating the role`,
+      detail: refs
+    };
+  }
+  return undefined;
 }
 
 export function registerRoleRoutes(app: FastifyInstance) {
@@ -623,11 +670,11 @@ export function registerRoleRoutes(app: FastifyInstance) {
       resolved.source === "template" ? { role: resolved.role } : undefined
     );
     const sourceNames = sourceNamesFromPreview(preview);
-    const skillAccess = summarizeRoleSkillAccess(
-      resolved.id,
-      resolved.role.allow?.tools ?? [],
-      await loadAllSkills()
-    );
+    const roleTools = resolved.role.allow?.tools ?? [];
+    const skillAccess = summarizeRoleSkillAccess(resolved.id, roleTools, await loadAllSkills());
+    const contextEntries = await listContextInventory();
+    const wikiAccess = summarizeRoleWikiAccess(resolved.id, roleTools, contextEntries);
+    const contextPolicyVersion = computeContextPolicyVersion(contextEntries, `${resolved.id}:${[...roleTools].sort().join(",")}`);
     return {
       ok: true,
       data: {
@@ -643,7 +690,9 @@ export function registerRoleRoutes(app: FastifyInstance) {
           allow: resolved.role.allow ?? {}
         },
         effectivePermissions: preview.ok ? effectivePermissionsToPreview(preview.permissions) : undefined,
-        skillAccess
+        skillAccess,
+        wikiAccess,
+        contextPolicyVersion
       }
     };
   });
@@ -676,7 +725,13 @@ export function registerRoleRoutes(app: FastifyInstance) {
 
   // POST /api/admin/roles — create role (dryRun-first)
   app.post<{
-    Body: { dryRun?: boolean; override?: AccessGovernanceOverrideRequest; roleId?: string; role?: unknown };
+    Body: {
+      dryRun?: boolean;
+      override?: AccessGovernanceOverrideRequest;
+      roleId?: string;
+      role?: unknown;
+      acknowledgeContextReferences?: boolean;
+    };
   }>("/api/admin/roles", async (request, reply) => {
     const dryRun = request.body?.dryRun !== false;
     const { roleId, role } = request.body ?? {};
@@ -691,6 +746,13 @@ export function registerRoleRoutes(app: FastifyInstance) {
     const { config, raw } = await readAccessYaml(projectRoot);
     if (config.roles?.[roleId]) {
       return reply.status(409).send({ ok: false, error: { code: "ROLE_ID_TAKEN", message: `role '${roleId}' already exists` } });
+    }
+    const contextGuard = await guardRoleIdForCreate(roleId, request.body?.acknowledgeContextReferences === true);
+    if (contextGuard) {
+      return reply.status(contextGuard.status).send({
+        ok: false,
+        error: { code: contextGuard.code, message: contextGuard.message, ...(contextGuard.detail ? { detail: contextGuard.detail } : {}) }
+      });
     }
     const newConfig: YamlAccessConfig = {
       ...config,
@@ -753,7 +815,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
       oldSummary: { roleIds: Object.keys(config.roles ?? {}) },
       newSummary: { roleIds: Object.keys(newConfig.roles ?? {}), description: validated.value.description },
       diff,
-      requestId: request.id,
+      ...auditActorFields(trustedActorFromRequest(request)),
       source: "admin_roles_api"
     });
     const detail = await readAccessYaml(projectRoot);
@@ -795,7 +857,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
       dryRun?: boolean;
       version?: string;
       override?: AccessGovernanceOverrideRequest;
-      patch?: { description?: unknown; allow?: unknown };
+      patch?: { description?: unknown; allow?: unknown; permission_model_version?: unknown };
     };
   }>("/api/admin/roles/:roleId", async (request, reply) => {
     const dryRun = request.body?.dryRun !== false;
@@ -814,9 +876,20 @@ export function registerRoleRoutes(app: FastifyInstance) {
       }
       return reply.status(404).send({ ok: false, error: { code: "ROLE_NOT_FOUND", message: `role '${request.params.roleId}' not found` } });
     }
-    const patch = request.body?.patch ?? {};
+    const patch: { description?: unknown; allow?: unknown; permission_model_version?: unknown } = {
+      ...(request.body?.patch ?? {})
+    };
     if (bodyHasOwn(patch, "id") || bodyHasOwn(patch, "roleId")) {
       return reply.status(400).send({ ok: false, error: { code: "BAD_REQUEST", message: "role id cannot be changed" } });
+    }
+    // Echoing the stored field is not an edit. A missing field is not equal to 2
+    // (or to the assumed v1), so sending a version still cannot upgrade v1 to v2.
+    if (
+      bodyHasOwn(patch, "permission_model_version")
+      && existing.permission_model_version !== undefined
+      && patch.permission_model_version === existing.permission_model_version
+    ) {
+      delete patch.permission_model_version;
     }
     for (const key of Object.keys(patch)) {
       if (key !== "description" && key !== "allow") {
@@ -893,7 +966,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
       oldSummary: { description: existing.description, allow: existing.allow },
       newSummary: { description: validated.value.description, allow: validated.value.allow },
       diff,
-      requestId: request.id,
+      ...auditActorFields(trustedActorFromRequest(request)),
       source: "admin_roles_api"
     });
     const detail = await readAccessYaml(projectRoot);
@@ -951,6 +1024,17 @@ export function registerRoleRoutes(app: FastifyInstance) {
           }
         });
       }
+      const contextRefs = contextReferencesToRole(await listContextInventory(), request.params.roleId);
+      if (hasContextReferences(contextRefs)) {
+        return reply.status(409).send({
+          ok: false,
+          error: {
+            code: "ROLE_REFERENCED_BY_CONTEXT",
+            message: `role '${request.params.roleId}' is named by ${contextRefs.skills.length + contextRefs.wiki.length} Wiki/Skill ACL(s); remove them first`,
+            detail: contextRefs
+          }
+        });
+      }
       const existingRole = config.roles[request.params.roleId];
       const newConfig: YamlAccessConfig = {
         ...config,
@@ -1005,6 +1089,16 @@ export function registerRoleRoutes(app: FastifyInstance) {
         await writeGateTrace(gate, undefined, undefined, defaultActor(request));
       }
 
+      // Spec §4.3: retire the id durably BEFORE the config write; a failed write leaves the
+      // stricter state (id retired), never a reusable id.
+      const retireStore = await getSecurityStore();
+      const retired = retireStore.ok ? retireStore.value.tombstoneRoleId(request.params.roleId, "role_deleted") : retireStore;
+      if (!retireStore.ok || !retired.ok) {
+        return reply.status(503).send({
+          ok: false,
+          error: { code: "SECURITY_STORE_UNAVAILABLE", message: "Role id retirement could not be recorded; the role was not deleted" }
+        });
+      }
       const writeResult = await writeAccessYaml(projectRoot, newConfig, {
         enabled: true,
         changeType: "role_delete",
@@ -1012,7 +1106,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
         oldSummary: { roleIds: Object.keys(config.roles ?? {}) },
         newSummary: { roleIds: Object.keys(newConfig.roles ?? {}) },
         diff,
-        requestId: request.id,
+        ...auditActorFields(trustedActorFromRequest(request)),
         source: "admin_roles_api"
       });
       return {
@@ -1038,6 +1132,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
       newRoleId?: string;
       description?: string;
       role?: unknown;
+      acknowledgeContextReferences?: boolean;
     };
   }>("/api/admin/roles/:roleId/copy", async (request, reply) => {
     const dryRun = request.body?.dryRun !== false;
@@ -1063,6 +1158,13 @@ export function registerRoleRoutes(app: FastifyInstance) {
     }
     if (config.roles?.[newRoleId]) {
       return reply.status(409).send({ ok: false, error: { code: "ROLE_ID_TAKEN", message: `role '${newRoleId}' already exists` } });
+    }
+    const copyGuard = await guardRoleIdForCreate(newRoleId, request.body?.acknowledgeContextReferences === true);
+    if (copyGuard) {
+      return reply.status(copyGuard.status).send({
+        ok: false,
+        error: { code: copyGuard.code, message: copyGuard.message, ...(copyGuard.detail ? { detail: copyGuard.detail } : {}) }
+      });
     }
     const newConfig: YamlAccessConfig = {
       ...config,
@@ -1123,7 +1225,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
       oldSummary: { roleIds: Object.keys(config.roles ?? {}), sourceRoleId: request.params.roleId },
       newSummary: { roleIds: Object.keys(newConfig.roles ?? {}), sourceRoleId: request.params.roleId },
       diff,
-      requestId: request.id,
+      ...auditActorFields(trustedActorFromRequest(request)),
       source: "admin_roles_api"
     });
     const detail = await readAccessYaml(projectRoot);

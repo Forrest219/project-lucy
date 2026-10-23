@@ -4,20 +4,20 @@ import type { AddressInfo } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { invalidateContentPathsCache } from "../paths";
 
 const testState = vi.hoisted(() => ({
-  projectRoot: "",
   writeLogMock: vi.fn(() => Promise.resolve()),
   writeAccessLogSourcesMock: vi.fn(() => Promise.resolve()),
   isTokenRevokedMock: vi.fn(() => false),
   recordMcpToolsCallMock: vi.fn(() => ({ callEventId: 1, policyEventId: 2 }))
 }));
 
-vi.mock("../project.js", async (importOriginal) => ({
-  ...await importOriginal<typeof import("../project.js")>(),
-  resolveProjectRoot: vi.fn(() => testState.projectRoot)
-}));
-
+// The project root is redirected through `KTX_PROJECT_ROOT` instead of
+// `vi.mock("../project.js")`: the module mock never reaches the static import
+// inside `proxy/identity.ts`, so `access.yaml` would be read from the real
+// repository instead of this test's temporary project. `resolveProjectRoot`
+// honours the env override for every consumer (identity, paths, acl).
 vi.mock("../proxy/audit.js", () => ({
   isTokenRevoked: testState.isTokenRevokedMock,
   writeLog: testState.writeLogMock,
@@ -97,6 +97,8 @@ const SCHEMA_YAML = `tables:
 `;
 
 let projectRoot: string;
+let previousProjectRoot: string | undefined;
+let previousContentRoot: string | undefined;
 
 async function makeProject() {
   const root = await mkdtemp(path.join(os.tmpdir(), "ktx-mcp-proxy-acl-"));
@@ -116,12 +118,20 @@ beforeEach(async () => {
   testState.recordMcpToolsCallMock.mockClear();
   testState.recordMcpToolsCallMock.mockReturnValue({ callEventId: 1, policyEventId: 2 });
   projectRoot = await makeProject();
-  testState.projectRoot = projectRoot;
+  previousProjectRoot = process.env.KTX_PROJECT_ROOT;
+  process.env.KTX_PROJECT_ROOT = projectRoot;
+  previousContentRoot = process.env.LUCY_CONTENT_ROOT;
+  process.env.LUCY_CONTENT_ROOT = ".";
+  invalidateContentPathsCache();
 });
 
 afterEach(async () => {
+  invalidateContentPathsCache();
+  if (previousProjectRoot === undefined) delete process.env.KTX_PROJECT_ROOT;
+  else process.env.KTX_PROJECT_ROOT = previousProjectRoot;
+  if (previousContentRoot === undefined) delete process.env.LUCY_CONTENT_ROOT;
+  else process.env.LUCY_CONTENT_ROOT = previousContentRoot;
   await rm(projectRoot, { recursive: true, force: true });
-  testState.projectRoot = "";
 });
 
 describe("MCP proxy ACL enforcement", () => {
@@ -165,10 +175,18 @@ describe("MCP proxy ACL enforcement", () => {
     argsSummary?: Record<string, unknown>;
   }) {
     const res = await callTool(port, input.token ?? TOKEN, input.id, input.name, input.args);
-    expect(res.status).toBe(200);
-    const body = await res.json() as { result?: { isError?: boolean; content?: Array<{ text?: string }> } };
-    expect(body.result?.isError).toBe(true);
-    expect(body.result?.content?.[0]?.text).toContain(`Access denied: ${input.reason}`);
+    if (input.reason === "agent_disabled") {
+      // T0A-3: disabled Agents are rejected at the entry with HTTP 403 + JSON-RPC error.
+      expect(res.status).toBe(403);
+      const denied = await res.json() as { id?: string; error?: { code?: number; message?: string } };
+      expect(denied.id).toBe(input.id);
+      expect(denied.error).toEqual({ code: -32003, message: "Access denied: agent_disabled" });
+    } else {
+      expect(res.status).toBe(200);
+      const body = await res.json() as { result?: { isError?: boolean; content?: Array<{ text?: string }> } };
+      expect(body.result?.isError).toBe(true);
+      expect(body.result?.content?.[0]?.text).toContain(`Access denied: ${input.reason}`);
+    }
     expect(testState.writeLogMock).toHaveBeenCalledWith(expect.objectContaining({
       userId: input.userId ?? "superstore_agent",
       tool: input.name,

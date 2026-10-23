@@ -7,6 +7,28 @@ import { prepareTraceDatabase } from "../trace/evidence.js";
 import { resolveSourceRefsForTables } from "./acl.js";
 import { scrubArgsSummaryJson } from "./audit-privacy.js";
 import { MCP_PROTOCOL_METHODS as PROTOCOL_TOOLS } from "./mcp-request-classification.js";
+import { resolveClientIdentity } from "./request-client-meta.js";
+import {
+  CALL_MONITOR_P95_MIN_SAMPLES,
+  callMonitorBucketIndex,
+  callMonitorWindow,
+  parseCallMonitorRange,
+  type CallMonitorRange
+} from "../../src/lib/callMonitorWindow.js";
+import {
+  defaultUsageExcluded,
+  isEmptyResult,
+  isSlowCall,
+  SLOW_CALL_MIN_DURATION_MS,
+  SLOW_DEFINITION_EFFECTIVE_AT,
+  SLOW_TURN_WALL_CLOCK_MS,
+  usageGroup,
+  usageSlowMark,
+  type UsageGroup
+} from "./question-experience.js";
+
+/** SC-26 — a denial with no matched role is its own row, never spread over role_ids. */
+const UNMATCHED_ROLE_ID = "__unmatched_role__";
 
 export interface AccessLogEntry {
   ts: string;
@@ -18,10 +40,47 @@ export interface AccessLogEntry {
   turnAttributionMode?: "explicit" | "session_bound" | "identity_inferred" | "unassigned";
   turnAttributionConfidence?: "high" | "low" | "none";
   turnAttributionReason?: "turn_attribution_rejected";
+  /**
+   * Spec 173 v0.3 / 2026-10-19 audit-trust:正交于 turn_attribution_mode 的关联质量判定。
+   * 由准入路径冻结；不允许在 prepared / delivered 阶段改写。
+   * 历史 `session_bound + high` 行降为 `legacy_unverified`（T03 backfill 接管）。
+   */
+  associationStatus?: "confirmed" | "candidate" | "unassigned" | "conflict" | "legacy_unverified";
+  /** 原始关联：准入时刻捕获，事后不改。历史行 NULL。 */
+  originalTurnId?: string;
+  originalAttributionMode?: "explicit" | "session_bound" | "identity_inferred" | "unassigned";
+  originalAssociationStatus?: "confirmed" | "candidate" | "unassigned" | "conflict" | "legacy_unverified";
+  originalAttributionConfidence?: "high" | "low" | "none";
+  originalReason?: string;
+  /** 有效关联：读路径按事件链 + 修订链 idempotent 计算。准入时与 original 一致。 */
+  effectiveTurnId?: string;
+  effectiveAttributionMode?: "explicit" | "session_bound" | "identity_inferred" | "unassigned";
+  effectiveAssociationStatus?: "confirmed" | "candidate" | "unassigned" | "conflict" | "legacy_unverified";
+  effectiveAttributionConfidence?: "high" | "low" | "none";
+  effectiveReason?: string;
+  /** Spec 173 v0.3 / 2026-10-19 audit-trust:重试链。T07 完整实施，T01 仅占位。 */
+  attemptId?: string;
+  parentAttemptId?: string;
+  /** Spec 173 v0.3 / 2026-10-19 audit-trust:启动代次。新事件写入；历史行 NULL。 */
+  instanceId?: string;
+  instanceStartGeneration?: number;
+  /** T04 由分类函数写入；历史行 NULL。 */
+  eventType?: "tool_call" | "protocol" | "client_observation" | "audit_management";
+  /** Spec 173 v0.3 / 2026-10-19 audit-trust:归因规则版本。 */
+  attributionRuleVersion?: string;
+  /** T04 由分类函数写入。 */
+  classificationVersion?: string;
+  /** T02 / T06 增量；T01 占位。 */
+  credentialPrincipalId?: string;
   lucyPlatform?: string;
   client?: string;
   clientVersion?: string;
+  /** Raw MCP `clientInfo`, kept when `client` was replaced by a known User-Agent product. */
+  reportedClient?: string;
+  reportedClientVersion?: string;
   clientIp?: string;
+  /** Spec 162 §8 / SC-22 — display-only forwarded chain; never used for ACL. */
+  clientForwardedFor?: string;
   userAgent?: string;
   deviceName?: string;
   tool: string;
@@ -33,8 +92,27 @@ export interface AccessLogEntry {
   queryPreview?: string;
   queryArtifactRef?: string;
   generatedSql?: string;
-  outcome: "ok" | "error" | "denied";
+  outcome: "ok" | "error" | "denied" | "budget_stop";
   errorDetail?: string;
+  compilerReason?: string;
+  failureDimension?: string;
+  appliedVersion?: string;
+  appliedBusinessDate?: string;
+  appliedValueKind?: string;
+  actorId?: string;
+  actorKind?: "person" | "automation";
+  /** Spec 162 §7.7 / SC-12 — injected wiki articles: key + wiki version. */
+  wikiInjectedKeys?: string[];
+  wikiVersions?: string[];
+  /** Spec 162 §7.6 — Token's explicit `eval_mark`, mirrored onto the call row. */
+  evalMark?: boolean;
+  /** Spec 162 §8 / SC-20 — slow mark under the new definition. */
+  isSlowCall?: boolean;
+  slowBasis?: "call_duration" | "turn_wall_clock";
+  /** SC-20 — successful call that returned zero rows. */
+  resultEmpty?: boolean;
+  /** SC-20 — elapsed wall clock of the question this call belongs to. */
+  turnWallClockMs?: number;
   durationMs: number;
   requestId: string | number;
   traceId?: string;
@@ -92,6 +170,13 @@ export interface AccessLogSourceRecord {
 }
 
 let db: Database.Database | null = null;
+
+/**
+ * audit-trust-2026-10-19-r1 / T03a: audit.sqlite schema version (independent
+ * of SQLite's internal `PRAGMA schema_version`, which we never read).
+ * Bump together with new audit_meta entries.
+ */
+export const AUDIT_DB_SCHEMA_VERSION = 2;
 const ACCESS_LOG_COLUMNS = [
   ["role_ids", "TEXT"],
   ["permission_snapshot_hash", "TEXT"],
@@ -117,6 +202,7 @@ const ACCESS_LOG_COLUMNS = [
   ["response_truncated", "INTEGER"],
   ["trace_id", "TEXT"],
   ["client_ip", "TEXT"],
+  ["client_forwarded_for", "TEXT"],
   ["user_agent", "TEXT"],
   ["client_version", "TEXT"],
   ["device_name", "TEXT"],
@@ -127,7 +213,47 @@ const ACCESS_LOG_COLUMNS = [
   ["skill_file_version", "TEXT"],
   ["skill_action", "TEXT"],
   ["skill_roles_allowed", "TEXT"],
-  ["matched_role_id", "TEXT"]
+  ["matched_role_id", "TEXT"],
+  ["compiler_reason", "TEXT"],
+  ["failure_dimension", "TEXT"],
+  ["applied_version", "TEXT"],
+  ["applied_business_date", "TEXT"],
+  ["applied_value_kind", "TEXT"],
+  ["actor_id", "TEXT"],
+  ["actor_kind", "TEXT"],
+  ["wiki_injected_keys", "TEXT"],
+  ["wiki_versions", "TEXT"],
+  ["eval_mark", "INTEGER"],
+  ["is_slow_call", "INTEGER"],
+  ["slow_basis", "TEXT"],
+  ["result_empty", "INTEGER"],
+  ["turn_wall_clock_ms", "INTEGER"],
+  ["reported_client", "TEXT"],
+  ["reported_client_version", "TEXT"],
+  // Spec 173 v0.3 / 2026-10-19 audit-trust: association_status + 双视图 + 重试链 + 启动代次。
+  // ensureColumn 形式做 additive 迁移；历史行 NULL。T03 接管 association_revisions 表。
+  ["association_status", "TEXT"],
+  ["original_turn_id", "TEXT"],
+  ["original_attribution_mode", "TEXT"],
+  ["original_association_status", "TEXT"],
+  ["original_attribution_confidence", "TEXT"],
+  ["original_reason", "TEXT"],
+  ["effective_turn_id", "TEXT"],
+  ["effective_attribution_mode", "TEXT"],
+  ["effective_association_status", "TEXT"],
+  ["effective_attribution_confidence", "TEXT"],
+  ["effective_reason", "TEXT"],
+  ["attempt_id", "TEXT"],
+  ["parent_attempt_id", "TEXT"],
+  ["instance_id", "TEXT"],
+  ["instance_start_generation", "INTEGER"],
+  ["event_type", "TEXT"],
+  ["attribution_rule_version", "TEXT"],
+  ["classification_version", "TEXT"],
+  ["credential_principal_id", "TEXT"],
+  // T03a: tracks whether the legacy explicit-turn validation passed (1=confirmed, 0=conflict).
+  // Pre-existing rows stay NULL; backfillAssociationStatus() handles the missing-column fallback.
+  ["explicit_turn_validated", "INTEGER"]
 ] as const;
 const PERMISSION_SNAPSHOT_COLUMNS = [
   ["capability_digest", "TEXT"],
@@ -298,6 +424,43 @@ async function getDb(): Promise<Database.Database> {
       after_digest       TEXT    NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_aml_ts ON audit_maintenance_log(ts);
+    -- audit-trust-2026-10-19-r1 / T03a: 管理审计版本表 + 关联修订事件表。
+    -- audit_meta 只放 schema/classification/digest 版本 + 受认证运行信息 + 受影响行数；
+    -- 维护日志本身进入 security_events canonical ledger，不进 audit_meta。
+    CREATE TABLE IF NOT EXISTS audit_meta (
+      audit_db_schema_version INTEGER PRIMARY KEY,
+      classification_version  TEXT,
+      digest_version          TEXT,
+      last_migration_text     TEXT,
+      running_at_iso          TEXT,
+      running_actor           TEXT,
+      input_sha256            TEXT,
+      output_affected_rows    INTEGER
+    );
+    -- association_revisions: append-only 修订记录表（contract §3.1 / §2.6）。
+    -- 由 T03b 的 POST /api/admin/audit/association-revisions 受认证端点写入；
+    -- 不在 backfill 内自动写。UNIQUE(original_turn_id, attribution_rule_version)
+    -- 保证同一规则版本对同一 turn 只能写一次。
+    CREATE TABLE IF NOT EXISTS association_revisions (
+      id                              INTEGER PRIMARY KEY AUTOINCREMENT,
+      original_turn_id                TEXT NOT NULL,
+      effective_turn_id               TEXT,
+      original_association_status     TEXT,
+      effective_association_status    TEXT NOT NULL,
+      reason                          TEXT NOT NULL,
+      reference_doc                   TEXT,
+      attribution_rule_version         TEXT NOT NULL,
+      actor_kind                      TEXT NOT NULL,
+      actor_id                        TEXT,
+      instance_id                     TEXT,
+      instance_start_generation       INTEGER,
+      ts                              TEXT NOT NULL,
+      classification_version          TEXT NOT NULL,
+      expected_revision               TEXT,
+      UNIQUE(original_turn_id, attribution_rule_version)
+    );
+    CREATE INDEX IF NOT EXISTS idx_ar_original_turn ON association_revisions(original_turn_id);
+    CREATE INDEX IF NOT EXISTS idx_ar_ts ON association_revisions(ts);
   `);
   for (const [column, definition] of ACCESS_LOG_COLUMNS) {
     ensureColumn(db, "access_log", column, definition);
@@ -306,10 +469,18 @@ async function getDb(): Promise<Database.Database> {
     ensureColumn(db, "permission_snapshots", column, definition);
   }
   ensureColumn(db, "conversation_turns", "session_id", "TEXT");
+  ensureColumn(db, "conversation_turns", "association_status", "TEXT");
+  ensureColumn(db, "inferred_turns", "client", "TEXT");
+  ensureColumn(db, "inferred_turns", "session_id", "TEXT");
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_al_user_token_ts ON access_log(user_id, token_hash_prefix, ts);
     CREATE INDEX IF NOT EXISTS idx_al_session_ts ON access_log(lucy_session_id, ts);
     CREATE INDEX IF NOT EXISTS idx_al_client_ip_ts ON access_log(client_ip, ts);
+    CREATE INDEX IF NOT EXISTS idx_al_ts ON access_log(ts);
+    CREATE INDEX IF NOT EXISTS idx_al_association_status ON access_log(association_status);
+    CREATE INDEX IF NOT EXISTS idx_al_attempt_id ON access_log(attempt_id);
+    CREATE INDEX IF NOT EXISTS idx_al_event_type ON access_log(event_type);
+    CREATE INDEX IF NOT EXISTS idx_al_instance_id ON access_log(instance_id);
   `);
   return db;
 }
@@ -332,6 +503,17 @@ function truncateErrorDetail(value: string): string {
 }
 
 export async function writeLog(entry: AccessLogEntry): Promise<number> {
+  const slow = usageSlowMark({
+    tool: entry.tool,
+    durationMs: entry.durationMs,
+    lucyTurnId: entry.lucyTurnId
+  });
+  entry = {
+    ...entry,
+    turnWallClockMs: slow.turnWallClockMs ?? undefined,
+    isSlowCall: slow.isSlowCall,
+    slowBasis: slow.slowBasis ?? undefined
+  };
   const database = await getDb();
   if (entry.permissionSnapshot) {
     if (!snapshotStmt) {
@@ -356,9 +538,9 @@ export async function writeLog(entry: AccessLogEntry): Promise<number> {
   if (!insertStmt) {
     insertStmt = database.prepare(`
       INSERT INTO access_log
-        (ts, user_id, token_label, token_hash_prefix, lucy_session_id, lucy_turn_id, turn_attribution_mode, turn_attribution_confidence, turn_attribution_reason, lucy_platform, client, client_version, client_ip, user_agent, device_name, tool, tables, args_summary, query_hash, query_length, query_operation, query_preview, query_artifact_ref, generated_sql, outcome, error_detail, duration_ms, response_bytes, response_row_count, response_column_count, response_truncated, request_id, trace_id, role_ids, permission_snapshot_hash, effective_tables_count, decision_reason, policy_version, capability_digest, skill_uri, skill_version, skill_file_version, skill_action, skill_roles_allowed, matched_role_id)
+        (ts, user_id, token_label, token_hash_prefix, lucy_session_id, lucy_turn_id, turn_attribution_mode, turn_attribution_confidence, turn_attribution_reason, association_status, original_turn_id, original_attribution_mode, original_association_status, original_attribution_confidence, original_reason, effective_turn_id, effective_attribution_mode, effective_association_status, effective_attribution_confidence, effective_reason, lucy_platform, client, client_version, client_ip, client_forwarded_for, user_agent, device_name, tool, tables, args_summary, query_hash, query_length, query_operation, query_preview, query_artifact_ref, generated_sql, outcome, error_detail, duration_ms, response_bytes, response_row_count, response_column_count, response_truncated, request_id, trace_id, role_ids, permission_snapshot_hash, effective_tables_count, decision_reason, policy_version, capability_digest, skill_uri, skill_version, skill_file_version, skill_action, skill_roles_allowed, matched_role_id, compiler_reason, failure_dimension, applied_version, applied_business_date, applied_value_kind, actor_id, actor_kind, wiki_injected_keys, wiki_versions, eval_mark, is_slow_call, slow_basis, result_empty, turn_wall_clock_ms, reported_client, reported_client_version)
       VALUES
-        (@ts, @userId, @tokenLabel, @tokenHashPrefix, @lucySessionId, @lucyTurnId, @turnAttributionMode, @turnAttributionConfidence, @turnAttributionReason, @lucyPlatform, @client, @clientVersion, @clientIp, @userAgent, @deviceName, @tool, @tables, @argsSummary, @queryHash, @queryLength, @queryOperation, @queryPreview, @queryArtifactRef, @generatedSql, @outcome, @errorDetail, @durationMs, @responseBytes, @responseRowCount, @responseColumnCount, @responseTruncated, @requestId, @traceId, @roleIds, @permissionSnapshotHash, @effectiveTablesCount, @decisionReason, @policyVersion, @capabilityDigest, @skillUri, @skillVersion, @skillFileVersion, @skillAction, @skillRolesAllowed, @matchedRoleId)
+        (@ts, @userId, @tokenLabel, @tokenHashPrefix, @lucySessionId, @lucyTurnId, @turnAttributionMode, @turnAttributionConfidence, @turnAttributionReason, @associationStatus, @originalTurnId, @originalAttributionMode, @originalAssociationStatus, @originalAttributionConfidence, @originalReason, @effectiveTurnId, @effectiveAttributionMode, @effectiveAssociationStatus, @effectiveAttributionConfidence, @effectiveReason, @lucyPlatform, @client, @clientVersion, @clientIp, @clientForwardedFor, @userAgent, @deviceName, @tool, @tables, @argsSummary, @queryHash, @queryLength, @queryOperation, @queryPreview, @queryArtifactRef, @generatedSql, @outcome, @errorDetail, @durationMs, @responseBytes, @responseRowCount, @responseColumnCount, @responseTruncated, @requestId, @traceId, @roleIds, @permissionSnapshotHash, @effectiveTablesCount, @decisionReason, @policyVersion, @capabilityDigest, @skillUri, @skillVersion, @skillFileVersion, @skillAction, @skillRolesAllowed, @matchedRoleId, @compilerReason, @failureDimension, @appliedVersion, @appliedBusinessDate, @appliedValueKind, @actorId, @actorKind, @wikiInjectedKeys, @wikiVersions, @evalMark, @isSlowCall, @slowBasis, @resultEmpty, @turnWallClockMs, @reportedClient, @reportedClientVersion)
     `);
   }
   const result = insertStmt.run({
@@ -371,10 +553,24 @@ export async function writeLog(entry: AccessLogEntry): Promise<number> {
     turnAttributionMode: entry.turnAttributionMode ?? null,
     turnAttributionConfidence: entry.turnAttributionConfidence ?? null,
     turnAttributionReason: entry.turnAttributionReason ?? null,
+    associationStatus: entry.associationStatus ?? null,
+    originalTurnId: entry.originalTurnId ?? null,
+    originalAttributionMode: entry.originalAttributionMode ?? null,
+    originalAssociationStatus: entry.originalAssociationStatus ?? null,
+    originalAttributionConfidence: entry.originalAttributionConfidence ?? null,
+    originalReason: entry.originalReason ?? null,
+    effectiveTurnId: entry.effectiveTurnId ?? null,
+    effectiveAttributionMode: entry.effectiveAttributionMode ?? null,
+    effectiveAssociationStatus: entry.effectiveAssociationStatus ?? null,
+    effectiveAttributionConfidence: entry.effectiveAttributionConfidence ?? null,
+    effectiveReason: entry.effectiveReason ?? null,
     lucyPlatform: entry.lucyPlatform ?? null,
     client: entry.client ?? null,
     clientVersion: entry.clientVersion ?? null,
+    reportedClient: entry.reportedClient ?? null,
+    reportedClientVersion: entry.reportedClientVersion ?? null,
     clientIp: entry.clientIp ?? null,
+    clientForwardedFor: entry.clientForwardedFor ?? null,
     userAgent: entry.userAgent ?? null,
     deviceName: entry.deviceName ?? null,
     tool: entry.tool,
@@ -408,7 +604,21 @@ export async function writeLog(entry: AccessLogEntry): Promise<number> {
     skillFileVersion: entry.skillFileVersion ?? null,
     skillAction: entry.skillAction ?? null,
     skillRolesAllowed: entry.skillRolesAllowed ? JSON.stringify(entry.skillRolesAllowed) : null,
-    matchedRoleId: entry.matchedRoleId ?? null
+    matchedRoleId: entry.matchedRoleId ?? null,
+    compilerReason: entry.compilerReason ?? null,
+    failureDimension: entry.failureDimension ?? null,
+    appliedVersion: entry.appliedVersion ?? null,
+    appliedBusinessDate: entry.appliedBusinessDate ?? null,
+    appliedValueKind: entry.appliedValueKind ?? null,
+    actorId: entry.actorId ?? null,
+    actorKind: entry.actorKind ?? null,
+    wikiInjectedKeys: entry.wikiInjectedKeys ? JSON.stringify(entry.wikiInjectedKeys) : null,
+    wikiVersions: entry.wikiVersions ? JSON.stringify(entry.wikiVersions) : null,
+    evalMark: entry.evalMark === true ? 1 : 0,
+    isSlowCall: entry.isSlowCall === true ? 1 : 0,
+    slowBasis: entry.slowBasis ?? null,
+    resultEmpty: entry.resultEmpty === true ? 1 : 0,
+    turnWallClockMs: entry.turnWallClockMs ?? null
   });
   return Number(result.lastInsertRowid);
 }
@@ -542,6 +752,11 @@ export interface R1AuditObservability {
     p50Ms: number | null;
     p95Ms: number | null;
     slowCalls: number;
+    slowDefinition: {
+      effectiveAt: string;
+      callDurationMs: number;
+      turnWallClockMs: number;
+    };
     slowQueries: Array<{
       ts: string;
       userId: string;
@@ -551,7 +766,10 @@ export interface R1AuditObservability {
       queryPreview?: string;
       decisionReason?: string;
       requestId: string;
+      slowBasis?: "call_duration" | "turn_wall_clock";
     }>;
+    /** SC-20 — successful calls that returned zero rows. */
+    emptyResults: number;
   };
   denials: Array<{ reason: string; count: number }>;
   sourceErrors: Array<{
@@ -567,6 +785,9 @@ export interface R1AuditObservability {
     tools: Array<{ tool: string; calls: number; denied: number; errors: number }>;
     roles: Array<{ roleId: string; calls: number; denied: number }>;
     tokens: Array<{ tokenLabel: string; tokenHashPrefix?: string; calls: number; denied: number }>;
+    actors: Array<{ group: UsageGroup; calls: number }>;
+    /** SC-16 — calls split out of the default view (eval-marked probes). */
+    defaultViewExcluded: number;
   };
 }
 
@@ -601,6 +822,18 @@ function parseJsonArray(value: string | null): string[] {
   }
 }
 
+function parseJsonObject(value: string | null): Record<string, unknown> | null {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function readR1AuditObservability(options: { hours?: number; slowMs?: number } = {}): Promise<R1AuditObservability> {
   const hours = Math.min(Math.max(Math.floor(options.hours ?? 24), 1), 24 * 90);
   const slowMs = Math.max(Math.floor(options.slowMs ?? Number(process.env.LUCY_R1_SLOW_QUERY_MS ?? 30_000)), 1);
@@ -609,7 +842,8 @@ export async function readR1AuditObservability(options: { hours?: number; slowMs
 
   const rows = database.prepare(`
     SELECT ts, user_id, token_label, token_hash_prefix, tool, outcome, duration_ms, request_id,
-           role_ids, decision_reason, query_operation, query_preview, tables
+           role_ids, matched_role_id, decision_reason, query_operation, query_preview, tables,
+           actor_id, actor_kind, client, args_summary, eval_mark, turn_wall_clock_ms, response_row_count
     FROM access_log
     WHERE ts >= ?
     ORDER BY ts DESC, id DESC
@@ -623,25 +857,47 @@ export async function readR1AuditObservability(options: { hours?: number; slowMs
     duration_ms: number;
     request_id: string;
     role_ids: string | null;
+    matched_role_id: string | null;
     decision_reason: string | null;
     query_operation: string | null;
     query_preview: string | null;
     tables: string | null;
+    actor_id: string | null;
+    actor_kind: string | null;
+    client: string | null;
+    args_summary: string | null;
+    eval_mark: number | null;
+    turn_wall_clock_ms: number | null;
+    response_row_count: number | null;
   }>;
 
   const protocolTools = new Set<string>(PROTOCOL_TOOLS);
   const businessRows = rows.filter((row) => !protocolTools.has(row.tool));
-  const okCalls = businessRows.filter((row) => row.outcome === "ok").length;
-  const errorCalls = businessRows.filter((row) => row.outcome === "error").length;
-  const deniedCalls = businessRows.filter((row) => row.outcome === "denied").length;
-  const durations = businessRows.map((row) => row.duration_ms).filter((value) => Number.isFinite(value));
+  // Spec 162 §7.6 / SC-16 — the default view drops protocol traffic and probe
+  // calls that are BOTH name-matched and explicitly eval-marked. Raw rows stay
+  // in access_log; only this default view is split.
+  const defaultRows = businessRows.filter((row) => !defaultUsageExcluded({
+    tool: row.tool,
+    evalMark: row.eval_mark === 1,
+    args: parseJsonObject(row.args_summary)
+  }));
+  const evalProbeRows = businessRows.filter((row) => defaultUsageExcluded({
+    tool: row.tool,
+    evalMark: row.eval_mark === 1,
+    args: parseJsonObject(row.args_summary)
+  }) && !protocolTools.has(row.tool));
+  const okCalls = defaultRows.filter((row) => row.outcome === "ok").length;
+  const errorCalls = defaultRows.filter((row) => row.outcome === "error").length;
+  const deniedCalls = defaultRows.filter((row) => row.outcome === "denied").length;
+  const durations = defaultRows.map((row) => row.duration_ms).filter((value) => Number.isFinite(value));
 
   const denials = new Map<string, number>();
   const tools = new Map<string, { tool: string; calls: number; denied: number; errors: number }>();
   const roles = new Map<string, { roleId: string; calls: number; denied: number }>();
   const tokens = new Map<string, { tokenLabel: string; tokenHashPrefix?: string; calls: number; denied: number }>();
+  const actors = new Map<UsageGroup, number>();
 
-  for (const row of businessRows) {
+  for (const row of defaultRows) {
     if (row.outcome === "denied") {
       const reason = row.decision_reason ?? "unknown";
       denials.set(reason, (denials.get(reason) ?? 0) + 1);
@@ -653,11 +909,21 @@ export async function readR1AuditObservability(options: { hours?: number; slowMs
     if (row.outcome === "error") tool.errors += 1;
     tools.set(row.tool, tool);
 
-    for (const roleId of parseRoleIds(row.role_ids)) {
+    // Spec 162 / SC-26 — calls still aggregate per role in `role_ids`, but a
+    // denial is counted ONCE against `matched_role_id`. Counting it on every
+    // role in `role_ids` inflates the dual-track comparison.
+    const roleIds = parseRoleIds(row.role_ids);
+    for (const roleId of roleIds) {
       const role = roles.get(roleId) ?? { roleId, calls: 0, denied: 0 };
       role.calls += 1;
-      if (row.outcome === "denied") role.denied += 1;
       roles.set(roleId, role);
+    }
+    if (row.outcome === "denied") {
+      const matchedRoleId = (row.matched_role_id ?? "").trim();
+      const denialRoleId = matchedRoleId || UNMATCHED_ROLE_ID;
+      const denialRole = roles.get(denialRoleId) ?? { roleId: denialRoleId, calls: 0, denied: 0 };
+      denialRole.denied += 1;
+      roles.set(denialRoleId, denialRole);
     }
 
     const tokenLabel = row.token_label ?? "unknown";
@@ -666,16 +932,36 @@ export async function readR1AuditObservability(options: { hours?: number; slowMs
     token.calls += 1;
     if (row.outcome === "denied") token.denied += 1;
     tokens.set(tokenKey, token);
+
+    const actorGroup = usageGroup({
+      actorId: row.actor_id,
+      actorKind: row.actor_kind,
+      userId: row.user_id,
+      client: row.client,
+    });
+    actors.set(actorGroup, (actors.get(actorGroup) ?? 0) + 1);
   }
 
-  const slowQueries = businessRows
-    .filter((row) => row.duration_ms >= slowMs)
+  const slowQueries = defaultRows
+    // Spec 162 §8 / SC-20 — usage slow mark: lucy_query at or above 5 seconds,
+    // or any tool once the question wall clock reaches 120 seconds.
+    // Spec 143's call monitor keeps its own threshold.
+    .filter((row) => isSlowCall({
+      tool: row.tool,
+      durationMs: row.duration_ms,
+      turnWallClockMs: row.turn_wall_clock_ms ?? null
+    }).slow)
     .slice(0, 20)
     .map((row) => ({
       ts: row.ts,
       userId: row.user_id,
       tool: row.tool,
       durationMs: row.duration_ms,
+      slowBasis: isSlowCall({
+        tool: row.tool,
+        durationMs: row.duration_ms,
+        turnWallClockMs: row.turn_wall_clock_ms ?? null
+      }).basis ?? undefined,
       queryOperation: row.query_operation ?? undefined,
       queryPreview: row.query_preview ?? undefined,
       decisionReason: row.decision_reason ?? undefined,
@@ -713,15 +999,24 @@ export async function readR1AuditObservability(options: { hours?: number; slowMs
       okCalls,
       errorCalls,
       deniedCalls,
-      successRate: rate(okCalls, businessRows.length),
-      errorRate: rate(errorCalls, businessRows.length),
-      deniedRate: rate(deniedCalls, businessRows.length)
+      successRate: rate(okCalls, defaultRows.length),
+      errorRate: rate(errorCalls, defaultRows.length),
+      deniedRate: rate(deniedCalls, defaultRows.length)
     },
     latency: {
       p50Ms: percentile(durations, 0.5),
       p95Ms: percentile(durations, 0.95),
       slowCalls: slowQueries.length,
-      slowQueries
+      slowQueries,
+      slowDefinition: {
+        effectiveAt: SLOW_DEFINITION_EFFECTIVE_AT,
+        callDurationMs: SLOW_CALL_MIN_DURATION_MS,
+        turnWallClockMs: SLOW_TURN_WALL_CLOCK_MS
+      },
+      emptyResults: defaultRows.filter((row) => isEmptyResult({
+        outcome: row.outcome,
+        responseRowCount: row.response_row_count
+      })).length
     },
     denials: [...denials.entries()]
       .map(([reason, count]) => ({ reason, count }))
@@ -739,16 +1034,41 @@ export async function readR1AuditObservability(options: { hours?: number; slowMs
     usage: {
       tools: [...tools.values()].sort((a, b) => b.calls - a.calls).slice(0, 30),
       roles: [...roles.values()].sort((a, b) => b.calls - a.calls).slice(0, 30),
-      tokens: [...tokens.values()].sort((a, b) => b.calls - a.calls).slice(0, 30)
+      tokens: [...tokens.values()].sort((a, b) => b.calls - a.calls).slice(0, 30),
+      actors: [...actors.entries()].map(([group, calls]) => ({ group, calls })).sort((a, b) => b.calls - a.calls),
+      // SC-16 — split out of the default view, raw rows untouched.
+      defaultViewExcluded: evalProbeRows.length
     }
   };
 }
 
-export type CallMonitorRange = "24h" | "1h";
+export type { CallMonitorRange } from "../../src/lib/callMonitorWindow.js";
+
+export type CallMonitorSeriesPoint = {
+  start: string;
+  businessCalls: number;
+  okCalls: number;
+  errorCalls: number;
+  deniedCalls: number;
+  successRate: number | null;
+  errorRate: number | null;
+  deniedRate: number | null;
+  p95Ms: number | null;
+  slowCalls: number;
+};
 
 export type CallMonitorSnapshot = {
   generatedAt: string;
-  window: { range: CallMonitorRange; hours: number; since: string; slowMs: number };
+  window: {
+    range: CallMonitorRange;
+    timeZone: "Asia/Shanghai";
+    bucket: "5m" | "hour" | "day";
+    bucketCount: number;
+    since: string;
+    until: string;
+    slowMs: number;
+  };
+  series: CallMonitorSeriesPoint[];
   traffic: {
     businessCalls: number;
     okCalls: number;
@@ -786,30 +1106,27 @@ export type CallMonitorSnapshot = {
   }>;
 };
 
-/** Spec 143: MCP-only call monitor aggregate (no Eval / Hermes fields). */
+/** Spec 143 + Spec 165: MCP-only call monitor aggregate (no Eval / Hermes fields). */
 export async function readCallMonitorSnapshot(options: {
   range?: CallMonitorRange;
-  hours?: number;
   slowMs?: number;
+  now?: Date;
 } = {}): Promise<CallMonitorSnapshot> {
-  const range: CallMonitorRange = options.range === "1h" ? "1h" : "24h";
-  const hours = Math.min(
-    Math.max(Math.floor(options.hours ?? (range === "1h" ? 1 : 24)), 1),
-    24 * 90
-  );
+  const range = parseCallMonitorRange(options.range);
   const slowMs = Math.max(
     Math.floor(options.slowMs ?? Number(process.env.LUCY_OBSERVABILITY_SLOW_MS ?? 30_000)),
     1
   );
-  const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+  const now = options.now ?? new Date();
+  const plan = callMonitorWindow(range, now);
   const database = await getDb();
 
   const rows = database.prepare(`
     SELECT id, ts, user_id, tool, outcome, duration_ms, request_id, trace_id, decision_reason
     FROM access_log
-    WHERE ts >= ?
+    WHERE ts >= ? AND ts <= ?
     ORDER BY ts DESC, id DESC
-  `).all(since) as Array<{
+  `).all(plan.since, plan.until) as Array<{
     id: number;
     ts: string;
     user_id: string;
@@ -822,22 +1139,73 @@ export async function readCallMonitorSnapshot(options: {
   }>;
 
   const protocolTools = new Set<string>(PROTOCOL_TOOLS);
-  const businessRows = rows.filter((row) => !protocolTools.has(row.tool));
-  const okCalls = businessRows.filter((row) => row.outcome === "ok").length;
-  const errorCalls = businessRows.filter((row) => row.outcome === "error").length;
-  const deniedCalls = businessRows.filter((row) => row.outcome === "denied").length;
-  const durations = businessRows.map((row) => row.duration_ms).filter((value) => Number.isFinite(value));
-  // Spec 143: slow call is strictly greater than slowMs (not capped by preview slice).
-  const slowCalls = businessRows.filter((row) => row.duration_ms > slowMs).length;
+  const businessRows = rows.filter((row) =>
+    !protocolTools.has(row.tool) && callMonitorBucketIndex(row.ts, plan) >= 0
+  );
 
+  const bucketTotals = plan.buckets.map(() => ({
+    businessCalls: 0,
+    okCalls: 0,
+    errorCalls: 0,
+    deniedCalls: 0,
+    slowCalls: 0,
+    durations: [] as number[]
+  }));
   const tools = new Map<string, { tool: string; calls: number; denied: number; errors: number }>();
+  const durations: number[] = [];
   for (const row of businessRows) {
+    const index = callMonitorBucketIndex(row.ts, plan);
+    const bucket = bucketTotals[index];
+    if (!bucket) continue;
+    bucket.businessCalls += 1;
+    if (row.outcome === "ok") bucket.okCalls += 1;
+    if (row.outcome === "error") bucket.errorCalls += 1;
+    if (row.outcome === "denied") bucket.deniedCalls += 1;
+    if (row.duration_ms > slowMs) bucket.slowCalls += 1;
+    if (Number.isFinite(row.duration_ms)) {
+      bucket.durations.push(row.duration_ms);
+      durations.push(row.duration_ms);
+    }
+
     const tool = tools.get(row.tool) ?? { tool: row.tool, calls: 0, denied: 0, errors: 0 };
     tool.calls += 1;
     if (row.outcome === "denied") tool.denied += 1;
     if (row.outcome === "error") tool.errors += 1;
     tools.set(row.tool, tool);
   }
+
+  const series = plan.buckets.map((bucket, index) => {
+    const totals = bucketTotals[index] ?? {
+      businessCalls: 0,
+      okCalls: 0,
+      errorCalls: 0,
+      deniedCalls: 0,
+      slowCalls: 0,
+      durations: []
+    };
+    const hasCalls = totals.businessCalls > 0;
+    return {
+      start: bucket.start,
+      businessCalls: totals.businessCalls,
+      okCalls: totals.okCalls,
+      errorCalls: totals.errorCalls,
+      deniedCalls: totals.deniedCalls,
+      successRate: hasCalls ? rate(totals.okCalls, totals.businessCalls) : null,
+      errorRate: hasCalls ? rate(totals.errorCalls, totals.businessCalls) : null,
+      deniedRate: hasCalls ? rate(totals.deniedCalls, totals.businessCalls) : null,
+      p95Ms: totals.businessCalls >= CALL_MONITOR_P95_MIN_SAMPLES
+        ? percentile(totals.durations, 0.95)
+        : null,
+      slowCalls: totals.slowCalls
+    };
+  });
+
+  const okCalls = series.reduce((sum, point) => sum + point.okCalls, 0);
+  const errorCalls = series.reduce((sum, point) => sum + point.errorCalls, 0);
+  const deniedCalls = series.reduce((sum, point) => sum + point.deniedCalls, 0);
+  const businessCalls = series.reduce((sum, point) => sum + point.businessCalls, 0);
+  // Spec 143: slow call is strictly greater than slowMs (not capped by preview slice).
+  const slowCalls = series.reduce((sum, point) => sum + point.slowCalls, 0);
 
   const recentFailures = businessRows
     .filter((row): row is typeof row & { outcome: "error" | "denied" } =>
@@ -861,12 +1229,12 @@ export async function readCallMonitorSnapshot(options: {
     maxDeniedRate: Number(process.env.LUCY_OBSERVABILITY_MAX_DENIED_RATE ?? 0.1)
   };
   const p95Ms = percentile(durations, 0.95);
-  const successRate = rate(okCalls, businessRows.length);
-  const errorRate = rate(errorCalls, businessRows.length);
-  const deniedRate = rate(deniedCalls, businessRows.length);
+  const successRate = rate(okCalls, businessCalls);
+  const errorRate = rate(errorCalls, businessCalls);
+  const deniedRate = rate(deniedCalls, businessCalls);
   const violations: Array<"latency_p95" | "error_rate" | "denied_rate"> = [];
   let status: "ok" | "warn" | "no_data" = "ok";
-  if (businessRows.length <= 0) {
+  if (businessCalls <= 0) {
     status = "no_data";
   } else {
     if ((p95Ms ?? 0) > thresholds.p95LatencyMs) violations.push("latency_p95");
@@ -876,10 +1244,19 @@ export async function readCallMonitorSnapshot(options: {
   }
 
   return {
-    generatedAt: new Date().toISOString(),
-    window: { range, hours, since, slowMs },
+    generatedAt: now.toISOString(),
+    window: {
+      range: plan.range,
+      timeZone: plan.timeZone,
+      bucket: plan.bucket,
+      bucketCount: plan.bucketCount,
+      since: plan.since,
+      until: plan.until,
+      slowMs
+    },
+    series,
     traffic: {
-      businessCalls: businessRows.length,
+      businessCalls,
       okCalls,
       errorCalls,
       deniedCalls,
@@ -1143,53 +1520,64 @@ interface SourceSummaryEntry {
   physicalTable: string;
 }
 
-const INFERRED_SUMMARY_ARG_KEYS = ["statement_type", "amount_type", "company_name", "report_period"] as const;
+/** Spec 173 v0.2: an inferred inquiry has no reported question. Tables stay on the source rows. */
+export const UNREPORTED_QUESTION_SUMMARY = "未上报问询原文";
 
-function buildInferredQuestionSummary(sourceSummary: SourceSummaryEntry[], argsSummaries: Array<Record<string, unknown>>): string {
-  const names = [...new Set(sourceSummary.map((s) => s.sourceName ?? s.physicalTable))];
-  const details: string[] = [];
-  for (const args of argsSummaries) {
-    for (const key of INFERRED_SUMMARY_ARG_KEYS) {
-      const value = args[key];
-      if (typeof value === "string" && value && !details.includes(`${key}=${value}`)) {
-        details.push(`${key}=${value}`);
-      }
-    }
-  }
-  if (names.length === 0) return "推断：未识别到具体数据源的调用簇";
-  const sourceText = `推断：触达 ${names.join("、")}`;
-  return details.length > 0 ? `${sourceText}（${details.join("，")}）` : sourceText;
+/** Spec 172: page windows filter display only. Rebuild always covers the longest audit preset. */
+export const INFERRED_TURN_REBUILD_LOOKBACK_HOURS = 24 * 30;
+/**
+ * Spec 173 v0.3 / 2026-10-19 audit-trust: 120 秒近邻回绑已作废。
+ * 此常量保留仅为兼容历史 import；`bindPriorSessionCalls` 不再按此窗口回填 `lucy_turn_id`。
+ * 新代码不得读取本常量；新建会话归因见 `TurnCorrelationRegistry` 与 admission-time freeze。
+ * 历史值 120_000 仅作废声明，不在伪代码中出现。
+ *
+ * @deprecated since Spec 173 v0.3. 撤销依据见 inbox/audit-trust/.../T00-r2/RESPONSE.md §G0-02。
+ */
+export const PRIOR_CALL_BIND_MS = 120_000;
+export const SESSION_VISIT_SUMMARY_PREFIX = "会话建立：";
+
+/** Spec 173 / WO-202610-24: these calls stay in the call log and do not form an inquiry by themselves. */
+const PROBE_TOOLS = new Set([
+  "server/discover",
+  "ping",
+  "resources/list",
+  "resources/templates/list",
+  "notifications/cancelled"
+]);
+
+const HANDSHAKE_TOOLS = ["initialize", "notifications/initialized", "tools/list"] as const;
+
+export function sessionVisitSummary(client: string | null | undefined): string {
+  const name = client?.trim() || "未知客户端";
+  return `${SESSION_VISIT_SUMMARY_PREFIX}${name}`;
 }
 
-export async function rebuildInferredTurns(
-  userId: string,
-  options: { lookbackHours?: number; gapMs?: number; includeCatalogOnly?: boolean } = {}
-): Promise<{ turns: number }> {
-  const lookbackHours = options.lookbackHours ?? Number(process.env.LUCY_TURN_INFER_LOOKBACK_HOURS ?? 24);
-  const gapMs = options.gapMs ?? Number(process.env.LUCY_TURN_INFER_GAP_MS ?? 120_000);
-  const includeCatalogOnly = options.includeCatalogOnly ?? (process.env.LUCY_TURN_INFER_INCLUDE_CATALOG_ONLY === "true");
-  const database = await getDb();
-  const cutoff = new Date(Date.now() - lookbackHours * 60 * 60 * 1000).toISOString();
-  const protocolList = PROTOCOL_TOOLS.map((tool) => `'${tool}'`).join(", ");
+export function inferredTurnId(userId: string, firstAccessLogId: number): string {
+  return `inf_${userId}_${firstAccessLogId}`;
+}
 
-  const rows = database.prepare(`
-    SELECT id, ts, tool, tables, args_summary, policy_version, permission_snapshot_hash
-    FROM access_log
-    WHERE user_id = ? AND ts >= ? AND tool NOT IN (${protocolList})
-    ORDER BY ts ASC, id ASC
-  `).all(userId, cutoff) as Array<{
-    id: number;
-    ts: string;
-    tool: string;
-    tables: string | null;
-    args_summary: string | null;
-    policy_version: string | null;
-    permission_snapshot_hash: string | null;
-  }>;
+type ClusterLogRow = {
+  id: number;
+  ts: string;
+  tool: string;
+  tables: string | null;
+  args_summary: string | null;
+  policy_version: string | null;
+  permission_snapshot_hash: string | null;
+  lucy_session_id: string | null;
+  lucy_turn_id: string | null;
+  client: string | null;
+  client_version: string | null;
+  user_agent: string | null;
+};
 
-  type ClusterRow = (typeof rows)[number];
-  const clusters: ClusterRow[][] = [];
-  let current: ClusterRow[] = [];
+function sessionKeyOf(row: { lucy_session_id: string | null }): string {
+  return row.lucy_session_id?.trim() || "";
+}
+
+function clusterBusinessRows(rows: ClusterLogRow[], gapMs: number): ClusterLogRow[][] {
+  const clusters: ClusterLogRow[][] = [];
+  let current: ClusterLogRow[] = [];
   let lastTs = 0;
   let lastPolicyVersion: string | null | undefined;
   let lastPermissionSnapshot: string | null | undefined;
@@ -1211,6 +1599,117 @@ export async function rebuildInferredTurns(
     lastPermissionSnapshot = row.permission_snapshot_hash;
   }
   if (current.length > 0) clusters.push(current);
+  return clusters;
+}
+
+function firstHandshakeBySession(rows: ClusterLogRow[]): Map<string, ClusterLogRow[]> {
+  const picked = new Map<string, Map<string, ClusterLogRow>>();
+  for (const row of rows) {
+    const sessionId = sessionKeyOf(row);
+    if (!sessionId) continue;
+    if (row.lucy_turn_id?.trim()) continue;
+    if (!HANDSHAKE_TOOLS.includes(row.tool as (typeof HANDSHAKE_TOOLS)[number])) continue;
+    let tools = picked.get(sessionId);
+    if (!tools) {
+      tools = new Map();
+      picked.set(sessionId, tools);
+    }
+    if (!tools.has(row.tool)) tools.set(row.tool, row);
+  }
+  const result = new Map<string, ClusterLogRow[]>();
+  for (const [sessionId, tools] of picked) {
+    result.set(sessionId, [...tools.values()].sort((a, b) => a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : a.id - b.id));
+  }
+  return result;
+}
+
+function displayedClientName(row: ClusterLogRow): string | null {
+  return resolveClientIdentity({
+    client: row.client,
+    clientVersion: row.client_version,
+    userAgent: row.user_agent
+  }).client ?? null;
+}
+
+function clientFromRows(rows: ClusterLogRow[]): string | null {
+  const initialize = rows.find((row) => row.tool === "initialize");
+  const fromInitialize = initialize ? displayedClientName(initialize) : null;
+  if (fromInitialize) return fromInitialize;
+  for (const row of rows) {
+    const name = displayedClientName(row);
+    if (name) return name;
+  }
+  return null;
+}
+
+export async function rebuildInferredTurns(
+  userId: string,
+  options: { lookbackHours?: number; gapMs?: number; includeCatalogOnly?: boolean } = {}
+): Promise<{ turns: number }> {
+  const lookbackHours = options.lookbackHours ?? Number(process.env.LUCY_TURN_INFER_LOOKBACK_HOURS ?? INFERRED_TURN_REBUILD_LOOKBACK_HOURS);
+  const gapMs = options.gapMs ?? Number(process.env.LUCY_TURN_INFER_GAP_MS ?? 120_000);
+  const includeCatalogOnly = options.includeCatalogOnly ?? (process.env.LUCY_TURN_INFER_INCLUDE_CATALOG_ONLY === "true");
+  const database = await getDb();
+  const cutoff = new Date(Date.now() - lookbackHours * 60 * 60 * 1000).toISOString();
+
+  const loaded = database.prepare(`
+    SELECT id, ts, tool, tables, args_summary, policy_version, permission_snapshot_hash, lucy_session_id, lucy_turn_id, client, client_version, user_agent
+    FROM access_log
+    WHERE user_id = ? AND ts >= ?
+    ORDER BY ts ASC, id ASC
+  `).all(userId, cutoff) as ClusterLogRow[];
+
+  const business = loaded.filter((row) =>
+    !PROTOCOL_TOOLS.includes(row.tool as (typeof PROTOCOL_TOOLS)[number])
+    && !row.lucy_turn_id?.trim()
+  );
+  const handshake = firstHandshakeBySession(loaded);
+  const bySession = new Map<string, ClusterLogRow[]>();
+  for (const row of business) {
+    const key = sessionKeyOf(row);
+    const group = bySession.get(key);
+    if (group) group.push(row);
+    else bySession.set(key, [row]);
+  }
+
+  type BuiltCluster = {
+    business: ClusterLogRow[];
+    handshake: ClusterLogRow[];
+    sessionId: string | null;
+    summaryOverride?: string;
+  };
+  const built: BuiltCluster[] = [];
+  const sessionsWithBusiness = new Set<string>();
+  for (const [sessionId, group] of bySession) {
+    for (const cluster of clusterBusinessRows(group, gapMs)) {
+      const noSessionCatalog = sessionId === "" && cluster.every((row) => row.tool === "kx_catalog");
+      if (noSessionCatalog && !includeCatalogOnly) continue;
+      if (cluster.every((row) => PROBE_TOOLS.has(row.tool))) continue;
+      if (sessionId) sessionsWithBusiness.add(sessionId);
+      built.push({
+        business: cluster,
+        handshake: [],
+        sessionId: sessionId || null
+      });
+    }
+  }
+  const earliestBySession = new Map<string, BuiltCluster>();
+  for (const cluster of built) {
+    if (!cluster.sessionId || earliestBySession.has(cluster.sessionId)) continue;
+    earliestBySession.set(cluster.sessionId, cluster);
+  }
+  for (const [sessionId, cluster] of earliestBySession) {
+    cluster.handshake = handshake.get(sessionId) ?? [];
+  }
+  for (const [sessionId, rows] of handshake) {
+    if (sessionsWithBusiness.has(sessionId)) continue;
+    built.push({
+      business: [],
+      handshake: rows,
+      sessionId,
+      summaryOverride: sessionVisitSummary(clientFromRows(rows))
+    });
+  }
 
   const deleteAccessLogsStmt = database.prepare(`
     DELETE FROM inferred_turn_access_logs
@@ -1219,9 +1718,9 @@ export async function rebuildInferredTurns(
   const deleteTurnsStmt = database.prepare(`DELETE FROM inferred_turns WHERE user_id = ? AND started_at >= ?`);
   const insertTurnStmt = database.prepare(`
     INSERT INTO inferred_turns
-      (inferred_turn_id, user_id, started_at, ended_at, call_count, business_call_count, tool_summary, source_summary, question_summary, confidence, evidence_json, created_at, updated_at)
+      (inferred_turn_id, user_id, started_at, ended_at, call_count, business_call_count, tool_summary, source_summary, question_summary, confidence, evidence_json, client, session_id, created_at, updated_at)
     VALUES
-      (@id, @userId, @startedAt, @endedAt, @callCount, @businessCallCount, @toolSummary, @sourceSummary, @questionSummary, @confidence, @evidenceJson, @createdAt, @updatedAt)
+      (@id, @userId, @startedAt, @endedAt, @callCount, @businessCallCount, @toolSummary, @sourceSummary, @questionSummary, @confidence, @evidenceJson, @client, @sessionId, @createdAt, @updatedAt)
   `);
   const insertLinkStmt = database.prepare(`INSERT INTO inferred_turn_access_logs (inferred_turn_id, access_log_id) VALUES (?, ?)`);
   const sourceQueryCache = new Map<string, Array<{ connection_id: string | null; schema_name: string | null; source_name: string | null; physical_table: string }>>();
@@ -1245,58 +1744,55 @@ export async function rebuildInferredTurns(
     deleteTurnsStmt.run(userId, cutoff);
 
     let written = 0;
-    let seq = 0;
-    for (const cluster of clusters) {
-      const isCatalogOnly = cluster.every((row) => row.tool === "kx_catalog");
-      if (isCatalogOnly && !includeCatalogOnly) continue; // preflight_only — spec §7.1, not a formal question
-
-      seq += 1;
-      const accessLogIds = cluster.map((row) => row.id);
-      const businessRows = cluster.filter((row) => row.tables !== null);
+    for (const cluster of built) {
+      const members = [...cluster.handshake, ...cluster.business].sort((a, b) => a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : a.id - b.id);
+      if (members.length === 0) continue;
+      const anchor = cluster.business[0] ?? members[0];
+      const accessLogIds = members.map((row) => row.id);
+      const businessRows = cluster.business.filter((row) => row.tables !== null);
       const dataBearing = businessRows.length > 0;
-      const toolSummary = [...new Set(cluster.map((row) => row.tool))];
-      const sourceRows = sourcesFor(accessLogIds);
+      const toolSummary = [...new Set(members.map((row) => row.tool))];
+      const sourceRows = sourcesFor(cluster.business.map((row) => row.id));
       const sourceSummary: SourceSummaryEntry[] = sourceRows.map((row) => ({
         connectionId: row.connection_id ?? undefined,
         schema: row.schema_name ?? undefined,
         sourceName: row.source_name ?? undefined,
         physicalTable: row.physical_table
       }));
-      const argsSummaries = cluster
-        .map((row) => row.args_summary)
-        .filter((value): value is string => Boolean(value))
-        .map((value) => {
-          try {
-            return JSON.parse(value) as Record<string, unknown>;
-          } catch {
-            return {};
-          }
-        });
-
       const confidence: "medium" | "low" = dataBearing ? "medium" : "low";
-      const questionSummary = buildInferredQuestionSummary(sourceSummary, argsSummaries);
+      const questionSummary = cluster.summaryOverride ?? UNREPORTED_QUESTION_SUMMARY;
       const now = new Date().toISOString();
-      const startedAt = cluster[0].ts;
-      const endedAt = cluster[cluster.length - 1].ts;
-      const inferredTurnId = `inf_${startedAt.replace(/[^0-9]/g, "")}_${userId}_${String(seq).padStart(2, "0")}`;
+      const startedAt = members[0].ts;
+      const endedAt = members[members.length - 1].ts;
+      const inferredId = inferredTurnId(userId, anchor.id);
+      const client = clientFromRows(members);
 
       insertTurnStmt.run({
-        id: inferredTurnId,
+        id: inferredId,
         userId,
         startedAt,
         endedAt,
-        callCount: cluster.length,
+        callCount: members.length,
         businessCallCount: businessRows.length,
         toolSummary: JSON.stringify(toolSummary),
         sourceSummary: JSON.stringify(sourceSummary),
         questionSummary,
         confidence,
-        evidenceJson: JSON.stringify({ accessLogIds, toolSummary, sourceSummary, callCount: cluster.length, businessCallCount: businessRows.length }),
+        evidenceJson: JSON.stringify({
+          accessLogIds,
+          toolSummary,
+          sourceSummary,
+          callCount: members.length,
+          businessCallCount: businessRows.length,
+          sessionId: cluster.sessionId
+        }),
+        client,
+        sessionId: cluster.sessionId,
         createdAt: now,
         updatedAt: now
       });
       for (const accessLogId of accessLogIds) {
-        insertLinkStmt.run(inferredTurnId, accessLogId);
+        insertLinkStmt.run(inferredId, accessLogId);
       }
       written += 1;
     }
@@ -1305,4 +1801,234 @@ export async function rebuildInferredTurns(
 
   const turns = rebuild();
   return { turns };
+}
+
+/**
+ * Spec 173 v0.3 / 2026-10-19 audit-trust: 120 秒近邻回绑已撤销。
+ * 本函数仅做会话握手 attachment（`initialize` / `notifications/initialized` / `tools/list`），
+ * 不再按任何时间窗回填非协议调用。握手 attachment 不进入 `confirmed` 分母；
+ * 标记为 `association_status = candidate` + `turn_attribution_confidence = low`。
+ *
+ * 返回值 = 受影响行数（仅握手）。`prior` 路径在 v0.3 删除；旧的 `Number(prior.changes)` 已改为常量 0。
+ *
+ * 撤销依据：inbox/audit-trust/audit-trust-2026-10-19-r1/T00-r2/RESPONSE.md §G0-02 / §G0-04。
+ * 验收：EA-02 / EA-03 / EA-04 / EA-07。
+ */
+export async function bindPriorSessionCalls(input: {
+  turnId: string;
+  userId: string;
+  tokenHashPrefix?: string;
+  sessionId?: string;
+  at: string;
+}): Promise<number> {
+  if (!input.sessionId) return 0;
+  const database = await getDb();
+  const tokenHash = input.tokenHashPrefix ?? "";
+  const protocolList = PROTOCOL_TOOLS.map((tool) => `'${tool}'`).join(", ");
+
+  // v0.3: 不再按 PRIOR_CALL_BIND_MS 窗口回填非协议调用；保留 handshake attachment 但 candidate/low。
+  const handshakeRows = database.prepare(`
+    SELECT id, tool FROM access_log
+    WHERE user_id = ?
+      AND lucy_session_id = ?
+      AND IFNULL(token_hash_prefix, '') = ?
+      AND tool IN (${protocolList})
+      AND (lucy_turn_id IS NULL OR lucy_turn_id = '')
+    ORDER BY ts ASC, id ASC
+  `).all(input.userId, input.sessionId, tokenHash) as Array<{ id: number; tool: string }>;
+  const seen = new Set<string>();
+  const handshakeIds: number[] = [];
+  for (const row of handshakeRows) {
+    if (seen.has(row.tool)) continue;
+    seen.add(row.tool);
+    handshakeIds.push(row.id);
+  }
+  if (handshakeIds.length > 0) {
+    const placeholders = handshakeIds.map(() => "?").join(",");
+    database.prepare(`
+      UPDATE access_log
+      SET lucy_turn_id = ?,
+          turn_attribution_mode = 'session_bound',
+          turn_attribution_confidence = 'low'
+      WHERE id IN (${placeholders})
+    `).run(input.turnId, ...handshakeIds);
+  }
+  return handshakeIds.length;
+}
+
+// ─── T03a: association_status backfill (audit-trust-2026-10-19-r1) ─────────
+//
+// Contract `inbox/audit-trust/audit-trust-2026-10-19-r1/T00-r2/implementation-contract.md`
+// §3.1 迁移执行顺序 step 2 / §2.1 撤销规则 5:历史行不造当前身份.
+//
+// Mapping (per-row, deterministic, idempotent):
+//   - turn_attribution_mode = 'session_bound' AND association_status IS NULL
+//       → 'legacy_unverified'      (旧 auto 归因;不允许静默升级 confirmed)
+//   - turn_attribution_mode = 'explicit'     AND explicit_turn_validated = 1
+//       → 'confirmed'              (历史已校验的显式 turn)
+//   - turn_attribution_mode = 'unassigned'  (无论 association_status)
+//       → 'unassigned'             (无显式 turn;保持 unassigned;NULL 也合法)
+//   - turn_attribution_mode = 'explicit'     AND explicit_turn_validated = 0
+//       → 'conflict'               (显式 turn 校验失败)
+//
+// Note: the column `reference_doc` (NOT `references`) — `references` is a SQLite
+// reserved word used in FOREIGN KEY syntax.
+//
+// Hard constraints (per §3.1 step 2):
+//   - 不写 instance_id / instance_start_generation (历史行保持 NULL)
+//   - 不默认 event_type='tool_call' / authorization_status='not_evaluated'
+//   - 不重写原始 ledger 行;只 UPDATE association_status 列
+//   - 输出 affected / failed / skipped 计数 + SHA-256;调用方负责持久化到 audit_meta.
+//
+// The function is pure: caller opens db (live or temp copy), runs, then either
+// commits and writes audit_meta + security_events canonical ledger entry, or
+// rolls back by closing the temp DB without persisting.
+
+export type BackfillAssociationStatusResult = {
+  schemaVersion: number;
+  scanned: number;
+  updated: number;
+  unchanged: number;
+  byMode: Record<string, number>;
+  byResult: Record<string, number>;
+  affectedRows: number;
+};
+
+export async function backfillAssociationStatus(
+  database: Database.Database
+): Promise<BackfillAssociationStatusResult> {
+  const scanned = (database
+    .prepare("SELECT COUNT(*) AS n FROM access_log")
+    .get() as { n: number }).n;
+
+  const byMode: Record<string, number> = Object.create(null);
+  const byResult: Record<string, number> = Object.create(null);
+  let updated = 0;
+  let unchanged = 0;
+
+  const txn = database.transaction(() => {
+    const rows = database
+      .prepare(
+        `SELECT id, turn_attribution_mode, association_status
+           FROM access_log`
+      )
+      .all() as Array<{
+      id: number;
+      turn_attribution_mode: string | null;
+      association_status: string | null;
+    }>;
+
+    for (const row of rows) {
+      const mode = row.turn_attribution_mode ?? "<null>";
+      byMode[mode] = (byMode[mode] ?? 0) + 1;
+
+      let target: string | null;
+      // 历史 explicit 已校验: schema 在 access_log 上有 explicit_turn_validated 列;
+      // 若不存在则视为 legacy_unverified,避免静默升级 confirmed.
+      if (mode === "session_bound") {
+        target = "legacy_unverified";
+      } else if (mode === "unassigned") {
+        target = row.association_status ?? "unassigned";
+      } else if (mode === "explicit") {
+        const validated = (database
+          .prepare(
+            `SELECT 1 FROM pragma_table_info('access_log') WHERE name = 'explicit_turn_validated'`
+          )
+          .get() as { 1: number } | undefined);
+        if (!validated) {
+          target = "legacy_unverified";
+        } else {
+          const flag = (database
+            .prepare(
+              `SELECT explicit_turn_validated AS v FROM access_log WHERE id = ?`
+            )
+            .get(row.id) as { v: number | null } | undefined);
+          // NULL = no validation recorded → legacy_unverified (no silent upgrade).
+          // 1 = validated → confirmed. 0 = invalidated → conflict.
+          target = flag?.v === 1 ? "confirmed" : flag?.v === 0 ? "conflict" : "legacy_unverified";
+        }
+      } else {
+        // 'identity_inferred' 或 其他;按 contract 视为非显式候选 → unassigned.
+        target = "unassigned";
+      }
+
+      byResult[target] = (byResult[target] ?? 0) + 1;
+      if (row.association_status === target) {
+        unchanged += 1;
+        continue;
+      }
+      database
+        .prepare(
+          `UPDATE access_log SET association_status = ? WHERE id = ?`
+        )
+        .run(target, row.id);
+      updated += 1;
+    }
+
+    // conversation_turns: 同样规则基于其 turn_id 上的显式登记 (question_source='reported').
+    const ctRows = database
+      .prepare(
+        `SELECT turn_id, question_source, association_status FROM conversation_turns`
+      )
+      .all() as Array<{
+      turn_id: string;
+      question_source: string;
+      association_status: string | null;
+    }>;
+    for (const row of ctRows) {
+      const target = row.question_source === "reported" ? "confirmed" : "unassigned";
+      if (row.association_status === target) continue;
+      database
+        .prepare(`UPDATE conversation_turns SET association_status = ? WHERE turn_id = ?`)
+        .run(target, row.turn_id);
+      updated += 1; // T03a G3: count conversation_turns updates in total affectedRows.
+    }
+  });
+  txn();
+
+  const schemaVersion = AUDIT_DB_SCHEMA_VERSION;
+
+  return {
+    schemaVersion,
+    scanned,
+    updated,
+    unchanged,
+    byMode,
+    byResult,
+    affectedRows: updated
+  };
+}
+
+/**
+ * Persist a backfill run into audit_meta + write a security_events canonical
+ * ledger entry. Idempotent on `audit_db_schema_version`.
+ */
+export async function recordBackfillRun(input: {
+  database: Database.Database;
+  result: BackfillAssociationStatusResult;
+  migrationText: string;
+  classificationVersion: string;
+  digestVersion: string;
+  runningActor: string;
+  inputSha256: string;
+}): Promise<void> {
+  input.database.transaction(() => {
+    input.database
+      .prepare(
+        `INSERT OR REPLACE INTO audit_meta
+           (audit_db_schema_version, classification_version, digest_version,
+            last_migration_text, running_at_iso, running_actor, input_sha256, output_affected_rows)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        input.result.schemaVersion,
+        input.classificationVersion,
+        input.digestVersion,
+        input.migrationText,
+        new Date().toISOString(),
+        input.runningActor,
+        input.inputSha256,
+        input.result.affectedRows
+      );
+  })();
 }

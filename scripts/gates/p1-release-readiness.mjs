@@ -18,9 +18,10 @@ const P0_GATES = [
   ["security-baseline", ["run", "security:baseline"]],
   ["delivery-isolation", ["run", "smoke:p0:delivery-isolation"]],
   ["docker-smoke", ["run", "smoke:p0:docker"]],
-  ["demo-e2e", ["run", "smoke:p0:demo"]],
-  ["postgres-demo-e2e", ["run", "smoke:p0:postgres-demo"]],
-  ["executive-poc-e2e", ["run", "smoke:p0:executive-poc"]]
+  // These run database/demo smoke scripts, not the real-user E2E; the names say so (Spec 20261018 §8.3).
+  ["demo-db-smoke", ["run", "smoke:p0:demo"]],
+  ["postgres-demo-db-smoke", ["run", "smoke:p0:postgres-demo"]],
+  ["executive-poc-db-smoke", ["run", "smoke:p0:executive-poc"]]
 ];
 
 const P1_GATES = [
@@ -45,6 +46,11 @@ const USAGE = `Usage:
   npm run smoke:p1:release-readiness -- --list
 
 Aggregates P1上线达标 and Full Smoke gates and writes evidence JSON.
+
+Exit codes (Spec §8.2): 0 passed, 1 failed, 2 blocked, 3 dry_run / collect-only (--dry-run, --allow-blocked
+with blocked gates). --list exits 0 and prints the gate list as JSON without writing evidence.
+Gate status comes from each child's exit code only (0 passed, 2 or legacy 42 blocked, 3 skipped, else failed);
+stdout wording is never used. This aggregate never sets releaseReady: that verdict belongs to the T13 verifier.
 `;
 
 function valueAfter(flag) {
@@ -59,10 +65,11 @@ function redact(text) {
     .replace(/(token|password|secret|api[_-]?key)=([^\s]+)/gi, "$1=[REDACTED]");
 }
 
-function classifyOutput(code, stdout, stderr) {
-  const combined = `${stdout}\n${stderr}`;
+// Exit-code contract only (Spec §8.2). 42 is the legacy "blocked" code still used by p1-business-eval-full.
+function classifyExitCode(code) {
   if (code === 0) return "passed";
-  if (/\bblocked\b|precheck|missing|required env|not configured|unavailable/i.test(combined)) return "blocked";
+  if (code === 2 || code === 42) return "blocked";
+  if (code === 3) return "skipped";
   return "failed";
 }
 
@@ -71,7 +78,7 @@ function runGate(id, npmArgs, metadata = {}) {
     const label = `npm ${npmArgs.join(" ")}`;
     console.log(`\n[p1-release-readiness] ${id}: ${label}`);
     if (dryRun) {
-      resolve({ id, command: label, ...metadata, status: "dry-run", exitCode: 0, stdout: "", stderr: "" });
+      resolve({ id, command: label, ...metadata, status: "dry_run", exitCode: null, stdout: "", stderr: "" });
       return;
     }
     const child = spawn("npm", npmArgs, {
@@ -101,7 +108,7 @@ function runGate(id, npmArgs, metadata = {}) {
         id,
         command: label,
         ...metadata,
-        status: classifyOutput(exitCode, stdout, stderr),
+        status: classifyExitCode(exitCode),
         exitCode,
         stdout: redact(stdout),
         stderr: redact(stderr)
@@ -117,9 +124,12 @@ async function main() {
   }
   const gates = includeP0 ? [...P0_GATES, ...P1_GATES] : P1_GATES;
   if (listOnly) {
-    for (const [id, npmArgs] of gates) {
-      console.log(`${id}\tnpm ${npmArgs.join(" ")}`);
-    }
+    console.log(JSON.stringify({
+      contract: "lucy-p1-release-readiness-v2",
+      mode: "list",
+      includeP0,
+      gates: gates.map(([id, npmArgs, metadata]) => ({ id, command: `npm ${npmArgs.join(" ")}`, ...metadata }))
+    }, null, 2));
     process.exit(0);
   }
 
@@ -128,24 +138,35 @@ async function main() {
     results.push(await runGate(id, npmArgs, metadata));
   }
 
-  const passed = results.filter((item) => item.status === "passed" || item.status === "dry-run").length;
+  const passed = results.filter((item) => item.status === "passed").length;
   const blocked = results.filter((item) => item.status === "blocked").length;
   const failed = results.filter((item) => item.status === "failed").length;
+  const dryRuns = results.filter((item) => item.status === "dry_run").length;
+  const skipped = results.filter((item) => item.status === "skipped").length;
 
+  // Spec §8.2: failed > blocked > dry_run/collect/skipped > passed. --allow-blocked only downgrades blocked
+  // to collect-only (exit 3); it can never produce a publishable 0.
   let overall = "passed";
   if (failed > 0) overall = "failed";
-  else if (blocked > 0 && !allowBlocked) overall = "failed";
-  else if (blocked > 0) overall = "blocked";
+  else if (blocked > 0) overall = allowBlocked ? "collect" : "blocked";
+  else if (dryRuns > 0) overall = "dry_run";
+  else if (skipped > 0) overall = "collect";
+  const exitCode = { passed: 0, failed: 1, blocked: 2, dry_run: 3, collect: 3 }[overall];
 
   const evidence = {
     contract: "lucy-p1-release-readiness-v2",
     version: "2.0.0",
     checkedAt: new Date().toISOString(),
     status: overall,
+    exitCode,
+    releaseReady: false,
+    // The customer release verdict belongs to scripts/e2e/verify-evidence.mjs; this aggregate only records gates.
+    verdictOwner: "scripts/e2e/verify-evidence.mjs",
+    dryRun,
     allowBlocked,
     includeP0,
     fullMode,
-    summary: { total: results.length, passed, blocked, failed },
+    summary: { total: results.length, passed, blocked, failed, dryRun: dryRuns, skipped },
     gates: results.map(({ id, command, status, exitCode, stdout, stderr, ...meta }) => ({
       id,
       command,
@@ -159,10 +180,10 @@ async function main() {
   const outPath = path.resolve(process.cwd(), outArg);
   await mkdir(path.dirname(outPath), { recursive: true });
   await writeFile(outPath, JSON.stringify(evidence, null, 2), "utf8");
-  console.log(`\n[p1-release-readiness] status=${overall} (${passed}/${results.length} passed, ${blocked} blocked, ${failed} failed)`);
+  console.log(`\n[p1-release-readiness] status=${overall} (${passed}/${results.length} passed, ${blocked} blocked, ${failed} failed, ${dryRuns} dry-run)`);
   console.log(`[p1-release-readiness] wrote ${outPath}`);
 
-  if (overall === "failed") process.exit(1);
+  process.exit(exitCode);
 }
 
 await main();

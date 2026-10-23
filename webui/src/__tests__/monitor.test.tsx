@@ -67,6 +67,12 @@ function stubMonitorFetch({ empty = false }: { empty?: boolean } = {}) {
         })
       );
     }
+    if (url.startsWith("/api/eval/monitor/field")) {
+      return new Response(JSON.stringify({
+        ok: true,
+        data: { bound: false, message: "尚未为该 domain 绑定角色", rows: [] }
+      }));
+    }
     if (url === "/api/eval/monitor/config") {
       return new Response(
         JSON.stringify({

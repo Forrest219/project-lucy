@@ -146,6 +146,9 @@ describe("GET /api/r1/observability", () => {
       queryPreview: "select * from mart.secret_snapshot limit ?",
       requestId: "query-denied",
       roleIds: ["ceo_readonly"],
+      // SC-26: the denial is attributed to the matched role, not to every
+      // role on the token.
+      matchedRoleId: "ceo_readonly",
       decisionReason: "table_denied"
     });
     await writeLog({
@@ -162,6 +165,7 @@ describe("GET /api/r1/observability", () => {
       queryPreview: "select * from mart.ceo_metric_snapshot limit ?",
       requestId: "query-concurrency-denied",
       roleIds: ["ceo_readonly"],
+      matchedRoleId: "ceo_readonly",
       decisionReason: "query_concurrency_exceeded"
     });
     await writeAccessLogSources(deniedLogId, new Date().toISOString(), "workhorse", "lucy_query", [{

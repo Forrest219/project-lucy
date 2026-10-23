@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { flushSync } from "react-dom";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -8,11 +9,18 @@ import type {
   CompletionStatus,
   ConnectionInfo,
   ConnectionTablesResponse,
-  SourceSummary,
-  SourcesResponse
+  SourceSummary
 } from "../../lib/types";
 import { DiffViewer } from "../../components/DiffViewer";
 import { PageHeader } from "../../components/PageHeader";
+import { sourcesQueryOptions } from "../../lib/displayQueryOptions";
+
+function missingManifestSummaryCopy(items: Array<{ schema: string }>): string {
+  if (items.length === 1) {
+    return `${items[0].schema} 缺少 Manifest，暂不可配置表范围。`;
+  }
+  return `${items.length} 个 Schema 缺少 Manifest，暂不可配置表范围。`;
+}
 
 type WhitelistTableRow = {
   connectionId: string;
@@ -105,6 +113,15 @@ function whitelistStatus(row: WhitelistTableRow): WhitelistStatus {
   return "enabled_semantic_pending";
 }
 
+/** Toolbar status filter dimension（术语标准：状态筛选）. */
+export type WhitelistStatusFilter = "all" | "disabled" | "enabled_semantic_pending" | "enabled_complete";
+
+function matchesStatusFilter(row: WhitelistTableRow, filter: WhitelistStatusFilter): boolean {
+  // 未启用 = 当前未勾选（含本次待禁用），服务于「找表启用」的主场景。
+  if (filter === "disabled") return !row.enabledDraft;
+  return whitelistStatus(row) === filter;
+}
+
 function setDifference<T>(a: Iterable<T>, b: Iterable<T>): T[] {
   const bs = new Set(b);
   const out: T[] = [];
@@ -120,6 +137,86 @@ function isEqualSet<T>(a: Iterable<T>, b: Iterable<T>): boolean {
   return true;
 }
 
+/** Above this many filtered rows, mount one Schema group at a time. */
+const WHITELIST_ROW_BUDGET = 50;
+
+type GroupExpansion = { mode: "default" } | { mode: "open"; key: string } | { mode: "closed" };
+
+function whitelistGroupKey(connectionId: string, schema: string): string {
+  return `${connectionId}\0${schema}`;
+}
+
+function sliceGroupsByRowPage<T, G extends { rows: T[] }>(
+  groups: G[],
+  pageIndex: number,
+  pageSize: number
+): Array<G & { totalCount: number }> {
+  const decorated = groups.map((group) => ({ ...group, totalCount: group.rows.length }));
+  const total = decorated.reduce((sum, group) => sum + group.totalCount, 0);
+  if (total <= pageSize) return decorated;
+  const start = Math.min(pageIndex, Math.ceil(total / pageSize) - 1) * pageSize;
+  const end = start + pageSize;
+  let seen = 0;
+  const paged: Array<G & { totalCount: number }> = [];
+  for (const group of decorated) {
+    const groupStart = seen;
+    const groupEnd = seen + group.rows.length;
+    seen = groupEnd;
+    if (groupEnd <= start || groupStart >= end) continue;
+    const from = Math.max(0, start - groupStart);
+    const to = Math.min(group.rows.length, end - groupStart);
+    paged.push({ ...group, rows: group.rows.slice(from, to) });
+  }
+  return paged;
+}
+
+function WhitelistPagination({
+  pageIndex,
+  pageSize,
+  total,
+  onPage,
+  testId,
+  label
+}: {
+  pageIndex: number;
+  pageSize: number;
+  total: number;
+  onPage: (pageIndex: number) => void;
+  testId: string;
+  label: string;
+}) {
+  if (total <= pageSize) return null;
+  const pageCount = Math.ceil(total / pageSize);
+  const safePage = Math.min(pageIndex, pageCount - 1);
+  const start = safePage * pageSize + 1;
+  const end = Math.min(total, (safePage + 1) * pageSize);
+  return (
+    <nav className="pl-whitelist-pagination" aria-label={label} data-testid={testId}>
+      <span>
+        显示 {start}–{end} / {total}
+      </span>
+      <div>
+        <button
+          type="button"
+          className="pl-btn pl-btn--ghost text-xs"
+          disabled={safePage <= 0}
+          onClick={() => onPage(safePage - 1)}
+        >
+          上一页
+        </button>
+        <button
+          type="button"
+          className="pl-btn pl-btn--ghost text-xs"
+          disabled={safePage >= pageCount - 1}
+          onClick={() => onPage(safePage + 1)}
+        >
+          下一页
+        </button>
+      </div>
+    </nav>
+  );
+}
+
 export function TableWhitelist() {
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
@@ -131,6 +228,7 @@ export function TableWhitelist() {
   const [schemaFilter, setSchemaFilter] = useState<string>(
     initialSchemaParam && initialSchemaParam.length > 0 ? initialSchemaParam : "all"
   );
+  const [statusFilter, setStatusFilter] = useState<WhitelistStatusFilter>("all");
   const [userOverrodeConnection, setUserOverrodeConnection] = useState<boolean>(false);
   const [userOverrodeSchema, setUserOverrodeSchema] = useState<boolean>(false);
   const [search, setSearch] = useState("");
@@ -139,6 +237,9 @@ export function TableWhitelist() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [statusTone, setStatusTone] = useState<"success" | "warning" | "danger" | null>(null);
   const [openDetails, setOpenDetails] = useState<Record<string, boolean>>({});
+  const [groupExpansion, setGroupExpansion] = useState<GroupExpansion>({ mode: "default" });
+  const [groupPage, setGroupPage] = useState(0);
+  const [invalidPage, setInvalidPage] = useState(0);
 
   const connectionsQuery = useQuery({
     queryKey: queryKeys.connections,
@@ -147,8 +248,7 @@ export function TableWhitelist() {
   const connections = connectionsQuery.data?.connections ?? [];
 
   const sourcesQuery = useQuery({
-    queryKey: queryKeys.sources,
-    queryFn: () => apiGet<SourcesResponse>("/api/sources")
+    ...sourcesQueryOptions()
   });
 
   const tablesQueries = useQueries({
@@ -271,6 +371,7 @@ export function TableWhitelist() {
       for (const row of rows) {
         if (row.invalidEnabled) continue;
         if (schemaFilter !== "all" && row.schema !== schemaFilter) continue;
+        if (statusFilter !== "all" && !matchesStatusFilter(row, statusFilter)) continue;
         if (lowerSearch) {
           const matched =
             row.table.toLowerCase().includes(lowerSearch) ||
@@ -286,7 +387,7 @@ export function TableWhitelist() {
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([schema, groupedRows]) => ({ conn, schema, rows: groupedRows }));
     });
-  }, [connectionFilteredRows, search, schemaFilter]);
+  }, [connectionFilteredRows, search, schemaFilter, statusFilter]);
 
   // Spec 116: invalid enabled rows shown when filter is all or matches their schema.
   const visibleInvalidGroups = useMemo(() => {
@@ -352,6 +453,42 @@ export function TableWhitelist() {
     (sum, g) => sum + g.rows.filter((r) => r.enabledDraft).length,
     0
   );
+  const largeList = visibleTotal > WHITELIST_ROW_BUDGET;
+  const activeGroupKey = useMemo(() => {
+    if (!largeList || visibleGroups.length === 0) return null;
+    if (groupExpansion.mode === "closed") return null;
+    if (groupExpansion.mode === "open") {
+      const stillVisible = visibleGroups.some(
+        (group) => whitelistGroupKey(group.conn.id, group.schema) === groupExpansion.key
+      );
+      if (stillVisible) return groupExpansion.key;
+    }
+    const first = visibleGroups[0];
+    return whitelistGroupKey(first.conn.id, first.schema);
+  }, [groupExpansion, largeList, visibleGroups]);
+  const expandedGroup =
+    activeGroupKey === null
+      ? null
+      : visibleGroups.find(
+          (group) => whitelistGroupKey(group.conn.id, group.schema) === activeGroupKey
+        ) ?? null;
+  const expandedGroupTotal = expandedGroup?.rows.length ?? 0;
+  const groupPageCount = Math.max(1, Math.ceil(expandedGroupTotal / WHITELIST_ROW_BUDGET));
+  const safeGroupPage = Math.min(groupPage, groupPageCount - 1);
+  const invalidTotal = visibleInvalidGroups.reduce((sum, group) => sum + group.rows.length, 0);
+  const invalidPageCount = Math.max(1, Math.ceil(invalidTotal / WHITELIST_ROW_BUDGET));
+  const safeInvalidPage = Math.min(invalidPage, invalidPageCount - 1);
+  const pagedInvalidGroups = sliceGroupsByRowPage(
+    visibleInvalidGroups,
+    safeInvalidPage,
+    WHITELIST_ROW_BUDGET
+  );
+
+  useEffect(() => {
+    setGroupExpansion({ mode: "default" });
+    setGroupPage(0);
+    setInvalidPage(0);
+  }, [connectionFilter, schemaFilter, statusFilter, search]);
 
   // Dirty check + diff stats
   const diffStats = useMemo(() => {
@@ -658,8 +795,12 @@ export function TableWhitelist() {
                   className="pl-input notranslate"
                   value={connectionFilter}
                   onChange={(e) => {
-                    setUserOverrodeConnection(true);
-                    setConnectionFilter(e.target.value);
+                    // flushSync：保证「用户已手动选择」标记与筛选值在同一提交里生效，
+                    // 避免高负载下 React 优先级调度把两个 setState 拆散（既有 flake）。
+                    flushSync(() => {
+                      setUserOverrodeConnection(true);
+                      setConnectionFilter(e.target.value);
+                    });
                   }}
                   aria-label="连接筛选"
                   translate="no"
@@ -678,8 +819,12 @@ export function TableWhitelist() {
                   className="pl-input notranslate"
                   value={schemaFilter}
                   onChange={(e) => {
-                    setUserOverrodeSchema(true);
-                    setSchemaFilter(e.target.value);
+                    // flushSync：保证「用户已手动选择」标记与筛选值在同一提交里生效，
+                    // 避免高负载下 React 优先级调度把两个 setState 拆散（既有 flake）。
+                    flushSync(() => {
+                      setUserOverrodeSchema(true);
+                      setSchemaFilter(e.target.value);
+                    });
                   }}
                   aria-label="Schema 筛选"
                   translate="no"
@@ -690,6 +835,20 @@ export function TableWhitelist() {
                       {s}
                     </option>
                   ))}
+                </select>
+              </label>
+              <label className="grid gap-1.5 text-sm">
+                <span>状态筛选</span>
+                <select
+                  className="pl-input"
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value as WhitelistStatusFilter)}
+                  aria-label="状态筛选"
+                >
+                  <option value="all">全部</option>
+                  <option value="disabled">未启用</option>
+                  <option value="enabled_semantic_pending">已启用，待补语义</option>
+                  <option value="enabled_complete">已启用，语义完成</option>
                 </select>
               </label>
             </div>
@@ -738,6 +897,27 @@ export function TableWhitelist() {
           </div>
         )}
 
+      {configuredSchemasWithoutTables.length > 0 && !showFocusedMissingManifest ? (
+        <div
+          className="pl-whitelist-missing-summary pl-validation-banner pl-validation-banner--warning notranslate"
+          translate="no"
+          role="status"
+          data-testid="whitelist-missing-manifest-summary"
+        >
+          <span className="notranslate" translate="no">
+            {missingManifestSummaryCopy(configuredSchemasWithoutTables)}
+          </span>
+          <Link
+            to="/connections"
+            className="pl-card-cta notranslate"
+            translate="no"
+            data-testid="whitelist-missing-manifest-summary-link"
+          >
+            去连接概览上传 Manifest ↗
+          </Link>
+        </div>
+      ) : null}
+
       {hiddenInvalidEnabledCount > 0 ? (
         <div
           className="pl-validation-banner pl-validation-banner--warning mt-4"
@@ -751,8 +931,11 @@ export function TableWhitelist() {
             type="button"
             className="pl-btn pl-btn--ghost pl-btn--sm"
             onClick={() => {
-              setUserOverrodeSchema(true);
-              setSchemaFilter("all");
+              // flushSync：同上，保证覆盖标记与筛选值原子提交。
+              flushSync(() => {
+                setUserOverrodeSchema(true);
+                setSchemaFilter("all");
+              });
             }}
             data-testid="whitelist-show-invalid-enabled"
           >
@@ -769,6 +952,18 @@ export function TableWhitelist() {
         </div>
       ) : null}
 
+      {largeList ? (
+        <p
+          className="pl-whitelist-large-list-notice notranslate"
+          translate="no"
+          data-testid="whitelist-large-list-notice"
+        >
+          {visibleGroups.length > 1
+            ? `共 ${visibleTotal} 张表，已按 Schema 折叠，一次展开一组。`
+            : `共 ${visibleTotal} 张表，已分页显示。`}
+        </p>
+      ) : null}
+
       {visibleGroups.length > 0 && (
         <div className="pl-table-wrapper mt-4">
           <table className="pl-data-grid pl-data-table" data-testid="pl-whitelist-table">
@@ -781,22 +976,60 @@ export function TableWhitelist() {
                 <th>操作</th>
               </tr>
             </thead>
-            {visibleGroups.map(({ conn, schema, rows }) => (
+            {visibleGroups.map(({ conn, schema, rows }) => {
+              const key = whitelistGroupKey(conn.id, schema);
+              const expanded = !largeList || key === activeGroupKey;
+              const mountedRows = !expanded
+                ? []
+                : rows.length <= WHITELIST_ROW_BUDGET
+                  ? rows
+                  : rows.slice(
+                      safeGroupPage * WHITELIST_ROW_BUDGET,
+                      (safeGroupPage + 1) * WHITELIST_ROW_BUDGET
+                    );
+              return (
               <tbody
                 key={`${conn.id}-${schema}`}
                 data-testid={`whitelist-group-${conn.id}-${schema}`}
               >
                 <tr className="pl-table-group-row">
                   <td colSpan={5}>
-                    <span className="notranslate" translate="no">
-                      连接：{conn.id} · Schema：{schema}
-                    </span>
-                    <span className="pl-table-group-row-count notranslate" translate="no">
-                      （共 {rows.length} 张表）
-                    </span>
+                    {largeList ? (
+                      <button
+                        type="button"
+                        className="pl-whitelist-group-toggle"
+                        aria-expanded={expanded}
+                        data-testid={`whitelist-group-toggle-${conn.id}-${schema}`}
+                        onClick={() => {
+                          setGroupPage(0);
+                          setGroupExpansion(
+                            expanded ? { mode: "closed" } : { mode: "open", key }
+                          );
+                        }}
+                      >
+                        <span className="notranslate" translate="no">
+                          连接：{conn.id} · Schema：{schema}
+                        </span>
+                        <span className="pl-table-group-row-count notranslate" translate="no">
+                          （共 {rows.length} 张表）
+                        </span>
+                        <span className="pl-whitelist-group-toggle-action">
+                          {expanded ? "收起" : "展开"}
+                        </span>
+                      </button>
+                    ) : (
+                      <>
+                        <span className="notranslate" translate="no">
+                          连接：{conn.id} · Schema：{schema}
+                        </span>
+                        <span className="pl-table-group-row-count notranslate" translate="no">
+                          （共 {rows.length} 张表）
+                        </span>
+                      </>
+                    )}
                   </td>
                 </tr>
-                {rows.map((row) => {
+                {mountedRows.map((row) => {
                   const status = whitelistStatus(row);
                   return (
                     <tr
@@ -827,8 +1060,17 @@ export function TableWhitelist() {
                   );
                 })}
               </tbody>
-            ))}
+              );
+            })}
           </table>
+          <WhitelistPagination
+            pageIndex={safeGroupPage}
+            pageSize={WHITELIST_ROW_BUDGET}
+            total={expandedGroupTotal}
+            onPage={setGroupPage}
+            testId="whitelist-pagination"
+            label="当前 Schema 分页"
+          />
         </div>
       )}
 
@@ -844,7 +1086,7 @@ export function TableWhitelist() {
                 <th>操作</th>
               </tr>
             </thead>
-            {visibleInvalidGroups.map(({ conn, rows }) => (
+            {pagedInvalidGroups.map(({ conn, rows, totalCount }) => (
               <tbody
                 key={`${conn.id}-invalid-enabled`}
                 data-testid={`whitelist-invalid-group-${conn.id}`}
@@ -855,7 +1097,7 @@ export function TableWhitelist() {
                       连接：{conn.id} · 已启用 · 本地无 Manifest
                     </span>
                     <span className="pl-table-group-row-count notranslate" translate="no">
-                      （共 {rows.length} 张表）
+                      （共 {totalCount} 张表）
                     </span>
                   </td>
                 </tr>
@@ -890,26 +1132,14 @@ export function TableWhitelist() {
               </tbody>
             ))}
           </table>
-        </div>
-      ) : null}
-
-      {configuredSchemasWithoutTables.length > 0 && !showFocusedMissingManifest ? (
-        <div
-          className="pl-whitelist-missing-summary notranslate"
-          translate="no"
-          data-testid="whitelist-missing-manifest-summary"
-        >
-          <span className="notranslate" translate="no">
-            {configuredSchemasWithoutTables.length} 个 Schema 缺少 Manifest，暂不可配置表范围。
-          </span>
-          <Link
-            to="/connections"
-            className="pl-card-cta notranslate"
-            translate="no"
-            data-testid="whitelist-missing-manifest-summary-link"
-          >
-            去连接概览上传 Manifest ↗
-          </Link>
+          <WhitelistPagination
+            pageIndex={safeInvalidPage}
+            pageSize={WHITELIST_ROW_BUDGET}
+            total={invalidTotal}
+            onPage={setInvalidPage}
+            testId="whitelist-invalid-pagination"
+            label="无效启用分页"
+          />
         </div>
       ) : null}
 

@@ -20,6 +20,10 @@ Lucy exposes:
 | `7879` | Lucy MCP Proxy for agents | Kubernetes Service / Ingress |
 | `7878` | KTX MCP upstream | Pod-internal only; do not expose |
 
+## v2.0 First Administrator Flow
+
+For a v2.0 installation or an upgrade from an open-mode installation with no administrator, use the [K8s / K3s customer delivery and first administrator flow](customer-v2-k8s-first-admin-delivery-flow.md). The customer-facing sequence is deployment, followed by entering the supplied bootstrap key and creating the first owner in the WebUI. Preparation and deployment scripts are implemented and locally checked; native amd64 K8s/K3s deployment and customer upgrade acceptance remain pending with the delivery operator. Section 8 of that runbook contains commands and test handoff. Existing administrators sign in normally after upgrade.
+
 ## 1. Prerequisites
 
 - `kubectl` access to the target namespace.

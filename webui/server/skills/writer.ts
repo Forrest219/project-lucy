@@ -1,12 +1,14 @@
 import { access } from "node:fs/promises";
 import path from "node:path";
-import { stringify } from "yaml";
+import { parse as parseYaml, stringify } from "yaml";
 import { auditedRemoveFile, auditedWriteFile } from "../admin/config-audit-write.js";
 import { previewDiff } from "../diff.js";
+import { resolveRoleIds } from "../proxy/acl.js";
 import { getAccessConfig } from "../proxy/identity.js";
 import { SKILL_SEGMENT_RE } from "./identifiers.js";
 import { getSkillByUri, invalidateSkillsCache, parseSkillMarkdown } from "./loader.js";
 import { loadContentPaths } from "../paths.js";
+import { auditActorFields, type TrustedActor } from "../security/request-actor.js";
 import { validateSkill } from "./validator.js";
 import type { SkillAsset, SkillStatus, SkillValidationResult, SkillWithValidation } from "./types.js";
 
@@ -118,8 +120,9 @@ async function authorizationAuditSummary(oldRoles: string[], newRoles: string[])
     affectedAgentCount = config.users.filter((user) => {
       if (user.enabled === false) return false;
       if (enteredWildcard || exitedWildcard) return true;
-      const assigned = [...(user.roles ?? []), ...(user.role ? [user.role] : [])];
-      return assigned.some((role) => affected.has(role));
+      const resolved = resolveRoleIds(user);
+      if (!resolved.ok) return false;
+      return resolved.roleIds.some((role) => affected.has(role));
     }).length;
   } catch {
     // Authorization changes must remain writable even if the admin audit cannot
@@ -140,7 +143,25 @@ export function skillRelativePath(domain: string, name: string): string {
   return path.join("skills", assertSegment("domain", domain), `${assertSegment("name", name)}.md`);
 }
 
-export function assembleSkillMarkdown(input: SkillWriteInput): string {
+/** Existing `roles_allowed` strings, carried over when a save does not change authorization. */
+function preservedRolesAllowed(raw: string): string[] | undefined {
+  if (!raw.startsWith("---\n")) return undefined;
+  const end = raw.indexOf("\n---", 4);
+  if (end < 0) return undefined;
+  let data: unknown;
+  try {
+    data = parseYaml(raw.slice(4, end));
+  } catch {
+    return undefined;
+  }
+  if (!data || typeof data !== "object" || Array.isArray(data)) return undefined;
+  if (!Object.prototype.hasOwnProperty.call(data, "roles_allowed")) return undefined;
+  const value = (data as { roles_allowed?: unknown }).roles_allowed;
+  if (!Array.isArray(value)) return undefined;
+  return value.filter((item): item is string => typeof item === "string");
+}
+
+export function assembleSkillMarkdown(input: SkillWriteInput, preservedRolesAllowed?: string[]): string {
   if (typeof input.rawContent === "string") {
     return input.rawContent;
   }
@@ -152,12 +173,16 @@ export function assembleSkillMarkdown(input: SkillWriteInput): string {
     version: input.version?.trim() || "1.0.0",
     domain,
     status: input.status === "published" || input.status === "deprecated" ? input.status : "draft",
-    roles_allowed: normalizeRolesAllowed(input.roles_allowed),
     triggers: Array.isArray(input.triggers) ? input.triggers : [],
     description:
       input.description?.trim() ||
       `${input.title?.trim() || name} - ${domain} domain governed skill SOP`
   };
+  // Spec §4.1/4.3: authorization is always written explicitly; absent input keeps the current
+  // list, and a brand-new Skill defaults to "no one" (`[]`) until roles are chosen.
+  frontmatter.roles_allowed = input.roles_allowed !== undefined
+    ? normalizeRolesAllowed(input.roles_allowed)
+    : (preservedRolesAllowed ?? []);
   if (input.prerequisites) frontmatter.prerequisites = input.prerequisites;
   if (Array.isArray(input.eval_cases) && input.eval_cases.length > 0) {
     frontmatter.eval_cases = input.eval_cases;
@@ -177,6 +202,9 @@ async function parseOrThrow(projectRoot: string, raw: string, filePath: string):
   }
   assertSegment("name", parsed.name);
   assertSegment("domain", parsed.domain);
+  if (parsed.roles_allowed_invalid) {
+    throw new SkillWriteError("skill_roles_invalid", 400);
+  }
   return parsed;
 }
 
@@ -255,7 +283,7 @@ async function prepareUpdateSkillFile(
     title: input.title ?? existing.title,
     version: input.version ?? existing.version,
     status: input.status ?? existing.status,
-    roles_allowed: input.roles_allowed ?? existing.roles_allowed,
+    roles_allowed: input.roles_allowed,
     triggers: input.triggers ?? existing.triggers,
     description: input.description ?? existing.description,
     prerequisites: input.prerequisites ?? existing.prerequisites,
@@ -263,7 +291,11 @@ async function prepareUpdateSkillFile(
     content: input.content ?? existing.content,
     rawContent: input.rawContent
   };
-  const raw = assembleSkillMarkdown(merged);
+  if (existing.roles_allowed_invalid && input.roles_allowed === undefined && typeof input.rawContent !== "string") {
+    // A corrupt ACL is repaired by choosing roles explicitly, never by silently saving "no one".
+    throw new SkillWriteError("skill_roles_invalid", 400);
+  }
+  const raw = assembleSkillMarkdown(merged, preservedRolesAllowed(existing.raw));
   const skillsDir = (await loadContentPaths()).skills;
   const parsed = await parseOrThrow(projectRoot, raw, path.join(skillsDir, relPath.slice("skills/".length)));
   if (parsed.uri !== oldUri) {
@@ -327,7 +359,8 @@ export async function previewUpdateSkillFile(
 
 export async function createSkillFile(
   projectRoot: string,
-  input: SkillWriteInput
+  input: SkillWriteInput,
+  actor?: TrustedActor
 ): Promise<SkillWithValidation> {
   const { relPath, raw, parsed } = await prepareCreateSkillFile(projectRoot, input);
   const authSummary = await authorizationAuditSummary([], parsed.roles_allowed);
@@ -335,7 +368,7 @@ export async function createSkillFile(
     enabled: true,
     changeType: "skill_create",
     assetKind: "skill",
-    actorType: "ui_admin",
+    ...auditActorFields(actor),
     source: "skills_api",
     targetId: parsed.uri,
     operation: "create",
@@ -351,7 +384,8 @@ export async function updateSkillFile(
   projectRoot: string,
   domain: string,
   name: string,
-  input: SkillWriteInput
+  input: SkillWriteInput,
+  actor?: TrustedActor
 ): Promise<SkillWithValidation> {
   const { relPath, raw, parsed, existing } = await prepareUpdateSkillFile(projectRoot, domain, name, input);
 
@@ -361,7 +395,7 @@ export async function updateSkillFile(
     enabled: true,
     changeType: "skill_edit_save",
     assetKind: "skill",
-    actorType: "ui_admin",
+    ...auditActorFields(actor),
     source: "skills_api",
     targetId: parsed.uri,
     operation: "edit_save",
@@ -378,7 +412,8 @@ export async function deleteSkillFile(
   projectRoot: string,
   domain: string,
   name: string,
-  expectedVersion?: string
+  expectedVersion?: string,
+  actor?: TrustedActor
 ): Promise<{ uri: string; relativePath: string }> {
   const uri = `lucy-skill://${assertSegment("domain", domain)}/${assertSegment("name", name)}`;
   const existing = await getSkillByUri(uri);
@@ -389,7 +424,7 @@ export async function deleteSkillFile(
     enabled: true,
     changeType: "skill_delete",
     assetKind: "skill",
-    actorType: "ui_admin",
+    ...auditActorFields(actor),
     source: "skills_api",
     targetId: uri,
     operation: "delete",

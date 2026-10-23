@@ -425,5 +425,85 @@ CREATE TABLE IF NOT EXISTS config_change_log (
 
 `actor` 当前固定为 `local-admin`。`change_type` 包括 `enabled_tables_update`、`agent_create`、`agent_patch`、`agent_delete`、`token_create`、`token_revoke`。token 明文不得进入 yaml、audit、日志。
 
+## 10. 持久安全状态库 `.ktx-ui/security.sqlite`
+
+> 契约来源：`docs/specs/lucy-20261018-enterprise-security-and-real-e2e-spec.md` §2、ADR `docs/access-control/adr-20261018-security-ledger-and-context-acl.md` D1/D2。实现：`webui/server/security/{store,schema,types,recovery}.ts`（T01 存储层与恢复逻辑；T02 接入引导与限速；T03 接入管理员会话 `webui/server/auth/{session,account-state,guard,routes}.ts`，尚未接入 MCP 路由）。
+
+### 10.1 文件与权限
+
+| 项 | 约定 |
+|---|---|
+| 位置 | `<projectRoot>/.ktx-ui/security.sqlite`（+ `-wal` / `-shm`） |
+| 模式 | `journal_mode=WAL`、`synchronous=FULL`、`foreign_keys=ON`；启动时校验生效，否则视为不可用 |
+| 权限 | `.ktx-ui` 目录 0700；db / WAL / SHM 0600；打开时收紧既有宽权限 |
+| 路径安全 | `.ktx-ui` 或 db 为符号链接 / 非目录 → 拒绝打开（`path_unsafe`） |
+| Schema 版本 | `PRAGMA user_version` + `schema_meta.schema_version`，当前 `1`；迁移幂等；更高版本拒绝降级（`schema_unsupported`） |
+| 读写保护 | `fs-safe.ts` 的 `assertReadable` / `resolveWritable` 拒绝 `security.sqlite(-wal|-shm|-journal)`（含符号链接解析后）；语义资产导出已跳过 `.ktx-ui`，不得作为通用 SQLite/运维问数数据源 |
+
+### 10.2 表
+
+| 表 | 要点 |
+|---|---|
+| `admin_account_state` | `account_uid` 主键、`display_id`、`session_epoch`、`status`（`enabled`/`disabled`/`tombstoned`）、凭据指纹；tombstone 后 UID 不可复用；停用/改密/墓碑会递增 epoch 并吊销该账号全部会话；T03 起行在账户首次登录时登记，`admins.yaml` 每个账户带同值不可变 `account_uid`（旧账户首次登录时迁移）；PATCH 改密/改角色走 `bumpSessionEpoch`、停用走 `disabled`、DELETE 走 tombstone，均**先于**配置写入 |
+| `admin_sessions` | 主键为 jti 的 SHA-256；`issued_epoch`、`created_at`/`last_seen_at`/`absolute_expiry`、`revoked_at`；不存原始 Cookie、密码或 Token；校验要求未吊销、未过期、账号 enabled、epoch 一致；T03 起每个管理员请求都查此表：空闲 30 分钟（`last_seen_at` 至多每分钟刷新）与绝对 12 小时（`absolute_expiry`）；退出写 `revoked_at`；Cookie v2 载荷含 `jti`、`account_uid`、`ep`，缺一或与本表不一致即无效 |
+| `bootstrap_state` | 单行；`open` → `consumed` 单向且原子，第二次消费冲突 |
+| `auth_rate_buckets` | `bucket_key`、`window_start`、`count`、`expires_at`；TTL 清理、数量上限（满则 fail-closed）；重启保留未到期桶 |
+| `role_id_tombstones` | 已删除 role id，禁止复用 |
+| `security_events` | `seq` 自增 + 唯一 `event_id`；`operation_id`、阶段、actor、可信网络信息、会话指纹、trace、policy/context 版本、对象哈希、裁决/结果摘要；**触发器禁止 UPDATE/DELETE**；无正文、凭据、过滤值 |
+| `projection_cursors` | `projector` → `last_seq`；只前进，且不得超过已落盘事件 |
+| `pending_operations` | `operation_id`、`kind`、`direction`（`narrow`/`widen`/`neutral`）、`state`（`pending`/`committed`/`aborted`/`needs_review`）、对象哈希、摘要；状态机：`pending → committed/aborted/needs_review`，`needs_review → committed/aborted`，其余终态 |
+
+### 10.3 失败语义（fail-closed）
+
+- 所有 store 方法返回 `SecurityResult`：成功 `{ok:true,value}`；存储失败 `{ok:false, code:"SECURITY_STORE_UNAVAILABLE", reason}`（`path_unsafe` / `permission` / `open_failed` / `schema_unsupported` / `schema_corrupt` / `busy` / `readonly` / `capacity` / `closed` / `io_error`）；业务冲突 `SECURITY_CONFLICT` / `SECURITY_NOT_FOUND`。
+- 绝不创建内存或空 fallback 库；损坏或更高版本的既有库原样保留，供运维处理。
+- 调用方（T02+）遇 unavailable 必须拒绝（登录/引导 503），不得退回放行或无限尝试。
+
+### 10.4 pending 操作恢复（`recovery.ts`）
+
+D2：先写安全库，再改配置文件。`prepareOperation` 在副作用前落盘；崩溃后 `recoverPendingOperations(store, inspect)` 依据调用方提供的证据处理：
+
+| 证据 | narrow / neutral | widen |
+|---|---|---|
+| `not_applied` | abort | abort |
+| `applied` | 前滚 commit | `needs_review`（恢复流程不自动确认更宽权限，`holdWidening=true`） |
+| `unknown` / 检查失败 | 保持 `pending` | 保持 `pending`，`holdWidening=true` |
+
+pending 永不视为成功。`recoverProjectionCursor` 处理“已投影、游标未提交”：只前进到投影端可证明的位置，且不越过已落盘事件；`lag>0` 时 `complete=false`。
+
+
+### 10.5 内容释放前耐久审计与幂等投影（T07）
+
+> 实现：`webui/server/security/{ledger,response-commit,projector}.ts`，接线 `webui/server/proxy/mcp-proxy.ts`（`buildProxy`）与 `webui/server/index.ts`（启动恢复与投影调度）。Spec §5.1 / §5.2。
+
+**事件阶段（`security_events.phase`，仅追加）：** `request_admitted` → `response_prepared` → `response_delivered` | `response_failed`；崩溃遗留的未终结操作在下次启动补 `interrupted`。事件 `event_id` 为 `<operationId>:<phase>`，`operation_id` 为 `mcp_<uuid>`。`resultSummary` 只含 `method` / `tool` / `status` / `bytes` / `sha256` / 固定原因码，不含参数、过滤值、凭据或响应内容。
+
+| 阶段 | 含义 |
+|---|---|
+| `request_admitted` | 准入通过后、任何上游工作前耐久写入；写失败 → 503 `AUDIT_UNAVAILABLE`，处理器不运行 |
+| `response_prepared` | 授权版本复核后、首字节发送前耐久写入；表示“已准备并获准发送”，**不**证明客户端已收到；写失败 → 丢弃缓冲、503 `AUDIT_UNAVAILABLE` |
+| `response_delivered` | 响应已完整交给传输层（`finish`）；不是客户端确认 |
+| `response_failed` | 未发出或发送中断；`verdict` 为固定原因码（`audit_prepare_failed`、`response_too_large`、`response_timeout`、`client_closed`、`client_closed_before_send`、`client_closed_before_finish`、`authorization_revoked` 等） |
+| `interrupted` | 启动恢复：`verdict=before_prepare`（崩溃前未 prepared）或 `prepared_unconfirmed`（prepared 已落盘，内容是否送达未知）。恢复**不**补写 `response_delivered`，也不重发内容 |
+
+**有界缓冲（`response-commit.ts`）：** 准入后 `res.writeHead/write/end`（含 `pipe` 与每个 SSE 块）改为内存缓冲，`end` 后按“授权复核 → 耐久 prepared → 一次性发送”释放；SSE 以有界缓冲后的完整协议 SSE 输出。默认上限单响应 8 MiB、从首字节到 `end` 的墙钟 30 s；环境变量 `LUCY_RESPONSE_BUFFER_MAX_BYTES` / `LUCY_RESPONSE_WALL_CLOCK_MS` 只能**收紧**，更大的值被忽略，不接受请求参数覆盖。超限 → 502 `RESPONSE_TOO_LARGE`，超时 → 504 `RESPONSE_TIMEOUT`，均不含任何缓冲内容；恰好等于上限放行。
+
+**组提交（性能，耐久语义不变）：** 同一事件循环轮次内的账本追加合并为一个事务、一次 fsync；调用方仅在其事件提交后才被唤醒。`synchronous=FULL` 不放宽。
+
+**投影（`projector.ts`）：** 账本为事实源，`.ktx-ui/audit.sqlite` 为可重建投影。
+
+| 表（audit.sqlite） | 要点 |
+|---|---|
+| `security_projection_cursor` | `projector` → `last_seq`；与对应行**同一目标库事务**提交，崩溃不会跳过或重复应用；账本侧 `projection_cursors` 仅作镜像，由 `recoverProjectionCursor` 按目标库证明值对齐 |
+| `security_operation_projection` | 每个 `operation_id` 一行（按事件合并：state、actor、方法/工具、状态码、字节数、sha256、detail 等）；`seq <= last_seq` 的事件重放为空操作，暂停/恢复/整表重放不改变行数与计数 |
+
+投影状态 `{complete, cursor, latestSeq, lag, delayMs, reason?}`：`lag>0` → `complete=false`（`reason=projection_lag`），批次失败 → `projection_failed`（整批回滚、游标不动、事件不跳过），账本不可读 → `security_store_unavailable`。`GET /api/admin/audit` 的 `data.projection` 与导出证据包 `manifest.completeness.projection` 暴露该状态，`completeness.complete` 在投影不完整时为 `false`。
+
+**健康分层（`audit-write-health.ts`）：** `ledger`（核心：账本追加是否失败）与 `projection`（投影延迟）以及原有的 access_log 写入计数相互独立，投影延迟不会掩盖账本失败。
+
+**启动恢复（`index.ts`）：** 代理监听前先 `recoverInterruptedOperations`，再对齐投影游标；投影由 `createProjectionScheduler` 在响应路径之外去抖（200 ms）+ 5 s 兜底轮询运行。
+
+**未纳入本期（T07 后续）：** 配置写 durable intent/committed/failed（Plan T07 步骤 5）与 Trace 事件投影尚未接入；`/api/admin/*` 敏感读/导出尚未走账本。
+
 ---
 _架构设计 by Claude (architect) · 2026-06-15_

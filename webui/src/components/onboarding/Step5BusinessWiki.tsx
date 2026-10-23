@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { BookOpen, FileUp, CheckCircle2, AlertCircle } from "lucide-react";
 import { apiPost } from "../../lib/apiClient";
+import { AuthoringHowTo } from "./AuthoringHowTo";
 
 export type Step5BusinessWikiProps = {
   connectionId: string;
@@ -61,6 +62,8 @@ export function Step5BusinessWiki({
             可选步骤
           </span>
         </div>
+
+        <AuthoringHowTo kind="business_wiki" />
 
         <div className="border-2 border-dashed border-border-default hover:border-primary/50 rounded-lg p-5 text-center bg-bg-surface transition-colors">
           <FileUp className="w-7 h-7 text-fg-muted mx-auto mb-1" />

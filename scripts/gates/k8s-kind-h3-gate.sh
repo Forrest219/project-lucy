@@ -122,11 +122,16 @@ if [[ "${SKIP_BUILD}" != "1" ]]; then
     "${N1_WORKTREE}"
 
   log "building N image from ${N_REF} → ${IMAGE_REPO}:${IMAGE_N_TAG}"
+  N_SHA="$(git -C "${ROOT}" rev-parse HEAD)"
+  N_DIRTY=0
+  [[ -n "$(git -C "${ROOT}" status --porcelain 2>/dev/null || true)" ]] && N_DIRTY=1
   docker build \
     --build-arg "KTX_VERSION=${KTX_VERSION}" \
     --build-arg "TARGETPLATFORM=linux/amd64" \
     --build-arg "TARGETARCH=amd64" \
     --build-arg "LUCY_GATE_BUILD_ID=n-${N_REF}" \
+    --build-arg "LUCY_GIT_SHA=${N_SHA}" \
+    --build-arg "LUCY_GIT_DIRTY=${N_DIRTY}" \
     -t "${IMAGE_REPO}:${IMAGE_N_TAG}" \
     "${ROOT}"
 else

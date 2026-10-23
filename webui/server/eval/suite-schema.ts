@@ -133,12 +133,12 @@ export function parseEvalSuite(text: string): ParseEvalSuiteResult {
   const schemaVersion = root.lucy_eval_schema_version;
   if (schemaVersion === undefined || schemaVersion === null) {
     errors.push(err("REQUIRED_FIELD_MISSING", "lucy_eval_schema_version", "lucy_eval_schema_version is required"));
-  } else if (schemaVersion !== EVAL_SUITE_SCHEMA_VERSION) {
+  } else if (schemaVersion !== 1 && schemaVersion !== 2) {
     errors.push(
       err(
         "SCHEMA_VERSION_MISMATCH",
         "lucy_eval_schema_version",
-        `lucy_eval_schema_version must be ${EVAL_SUITE_SCHEMA_VERSION} (got ${JSON.stringify(schemaVersion)})`
+        `lucy_eval_schema_version must be 1 or 2 (got ${JSON.stringify(schemaVersion)})`
       )
     );
   }
@@ -265,6 +265,9 @@ export function parseEvalSuite(text: string): ParseEvalSuiteResult {
           );
         }
       }
+      if (schemaVersion === 2) {
+        validateV2Case(rawCase, casePath, errors);
+      }
     });
   }
 
@@ -276,7 +279,7 @@ export function parseEvalSuite(text: string): ParseEvalSuiteResult {
   // yaml's parseDocument preserves comments / ordering for round-trip; we only need
   // canonical JSON for hashing and a structured EvalSuite for the caller.
   const suite: EvalSuite = {
-    lucy_eval_schema_version: EVAL_SUITE_SCHEMA_VERSION,
+    lucy_eval_schema_version: schemaVersion as 1 | 2,
     kind: EVAL_SUITE_KIND,
     suite_id: root.suite_id as string,
     domain: root.domain as string,
@@ -417,6 +420,34 @@ export function computeSuiteHash(suite: EvalSuite): string {
 
 // ─── Result JSON (M43 §6) ─────────────────────────────────────────────────────
 
+const AS_OF_KINDS = new Set(["yesterday", "this_month", "business_period"]);
+const REVIEW_STATUSES = new Set(["active", "needs_review"]);
+const VALID_OUTCOMES = new Set(["answered_ok", "answered_wrong", "not_answered"]);
+
+function validateV2Case(rawCase: Record<string, unknown>, casePath: string, errors: SuiteSchemaError[]): void {
+  const review = rawCase.review_status ?? "active";
+  if (typeof review !== "string" || !REVIEW_STATUSES.has(review)) {
+    errors.push(err("INVALID_FIELD_TYPE", `${casePath}.review_status`, `${casePath}.review_status must be active or needs_review`));
+  }
+  const binding = rawCase.as_of_binding;
+  if (!isPlainObject(binding) || typeof binding.kind !== "string" || !AS_OF_KINDS.has(binding.kind)) {
+    errors.push(err("REQUIRED_FIELD_MISSING", `${casePath}.as_of_binding.kind`, `${casePath}.as_of_binding.kind must be yesterday, this_month, or business_period`));
+  }
+  const executable = rawCase.executable;
+  if (!isPlainObject(executable)) {
+    errors.push(err("REQUIRED_FIELD_MISSING", `${casePath}.executable`, `${casePath}.executable is required for schema version 2`));
+    return;
+  }
+  for (const key of ["required_measures", "grain", "required_columns"] as const) {
+    if (!Array.isArray(executable[key]) || executable[key].some((item) => typeof item !== "string")) {
+      errors.push(err("INVALID_FIELD_TYPE", `${casePath}.executable.${key}`, `${casePath}.executable.${key} must be a string array`));
+    }
+  }
+  if (!Array.isArray(executable.required_filters)) {
+    errors.push(err("INVALID_FIELD_TYPE", `${casePath}.executable.required_filters`, `${casePath}.executable.required_filters must be an array`));
+  }
+}
+
 const VALID_RESULT_STATUSES = new Set(["PASS", "FAIL", "SKIPPED", "ERROR"]);
 
 export type ParseEvalResultResult =
@@ -447,12 +478,12 @@ export function parseEvalResultImport(text: string): ParseEvalResultResult {
   }
 
   const version = json.lucy_eval_result_version;
-  if (version !== EVAL_RESULT_VERSION) {
+  if (version !== 1 && version !== 2) {
     errors.push(
       err(
         "RESULT_VERSION_MISMATCH",
         "lucy_eval_result_version",
-        `lucy_eval_result_version must be ${EVAL_RESULT_VERSION} (got ${JSON.stringify(version)})`
+        `lucy_eval_result_version must be 1 or 2 (got ${JSON.stringify(version)})`
       )
     );
   }
@@ -495,6 +526,19 @@ export function parseEvalResultImport(text: string): ParseEvalResultResult {
   const runner = json.runner;
   if (!isPlainObject(runner) || typeof runner.kind !== "string" || runner.kind.length === 0) {
     errors.push(err("RESULT_REQUIRED_FIELD", "runner", "runner.kind is required and must be a non-empty string"));
+  } else if (version === 2) {
+    if (runner.kind !== "lucy_offline_batch") {
+      errors.push(err("RESULT_REQUIRED_FIELD", "runner.kind", "runner.kind must be lucy_offline_batch"));
+    }
+    if (typeof runner.model === "string" && runner.model.length > 0) {
+      errors.push(err("RESULT_REQUIRED_FIELD", "runner.model", "runner.model must be empty"));
+    }
+    if (json.complete !== true) {
+      errors.push(err("RESULT_REQUIRED_FIELD", "complete", "complete must be true; incomplete result files are rejected"));
+    }
+    if (typeof json.role_id !== "string" || json.role_id.length === 0) {
+      errors.push(err("RESULT_REQUIRED_FIELD", "role_id", "role_id is required"));
+    }
   }
 
   const results = json.results;
@@ -517,6 +561,12 @@ export function parseEvalResultImport(text: string): ParseEvalResultResult {
         errors.push(err("RESULT_DUPLICATE_CASE_ID", `${path}.case_id`, `duplicate case_id "${caseId}"`));
       } else {
         seenIds.add(caseId);
+      }
+      if (version === 2) {
+        const outcome = entry.outcome;
+        if (typeof outcome !== "string" || !VALID_OUTCOMES.has(outcome)) {
+          errors.push(err("RESULT_INVALID_STATUS", `${path}.outcome`, `${path}.outcome must be answered_ok, answered_wrong, or not_answered`));
+        }
       }
       const status = entry.status;
       if (typeof status !== "string" || !VALID_RESULT_STATUSES.has(status)) {

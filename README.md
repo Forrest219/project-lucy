@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | project-lucy README |
 | 文档类型 | Other |
-| 版本 | v1.2 |
-| 撰写日期 | 2026-06-18；v1.2 更新 2026-07-06（同步 data agent context compiler + governed MCP runtime 定位与 Proxy instructions 运行时入口） |
+| 版本 | v1.3 |
+| 撰写日期 | 2026-06-18；v1.2 更新 2026-07-06（同步 data agent context compiler + governed MCP runtime 定位与 Proxy instructions 运行时入口）；v1.3 更新 2026-10-23（同步差异化主张：口径、权限、语境是模型之外的资产；详见 `docs/governance/vision.md` §1.2） |
 | 撰写人 | Claude |
 | 委托人 | 待确认 |
 | 基于材料 | AGENTS.md、docs/governance/DEVELOPMENT.md、docs/governance/project-overview.md、ktx.yaml、.mcp.json、docs/specs/lucy-skills-mcp-spec.md、skills/、evals/ |
@@ -26,6 +26,8 @@
 ---
 
 `project-lucy` 是面向中小企业的 **data agent context compiler + governed MCP runtime**，旨在把数据库、BI、文档、人工口径编译成 Claude Code、Codex、Hermes、Cursor 等 data agent 可安全使用、可审计、可回归的数据服务。
+
+**差异化主张：口径、权限、语境是模型之外的资产——模型换代，它们不变。** 企业 Agent 正从 frontier 闭源模型迁到微调后的开源小模型，差异不在模型本身，而在业务逻辑与企业集成；Lucy 把「这家企业的业务逻辑」沉淀为可执行、可授权、可审计、可回归的外部资产，而不是绑在模型权重里的隐式知识。完整定位、自建 / 外购判据与衡量口径见 [`docs/governance/vision.md`](docs/governance/vision.md) §1.2。
 
 本仓库关注的不是单一数据源，而是一套可迁移的 agent context 工程：用 `semantic-layer/` 管理 Semantic Pack，用 `wiki/` 和 `skills/` 承载 Knowledge Pack，用 `evals/`、审计和后续 trusted query 资产形成 Query / Quality Pack，并通过 Lucy MCP Proxy 暴露受治理 MCP runtime。
 
@@ -213,6 +215,9 @@ ktx sl list
 
 - 上下文编译优先：先把数据库、BI、文档、人工口径编译成可维护 context pack，再交给 agent 使用。
 - 语义层优先：让 agent 先理解数据含义，再生成查询或分析。
+- 模型之外的价值：口径、权限、语境是模型之外的资产；换模型、换 agent 客户端时企业资产原地复用，Lucy 不与模型厂商竞争推理能力。
+- 自建边界：唯一到该企业的口径、权限与语境绑定自建；多家公司通用的通用能力（推理、向量库、标注与多样性度量、看板类应用）外购。买来的东西若同时带走了差异，是净损失。
 - 上下文可维护：把业务知识沉淀到 Wiki、Skill、eval 和审计证据，而不是散落在临时对话里。
 - 配置可迁移：数据源、模型和运行环境应通过配置替换，不绑定单一开发实例。
+- 对齐可以慢，上线必须快：价值不在「今天答得快一点」，而在「上线后不返工」。
 - 运行时与开发态隔离：产品问答上下文和开发治理规则分别维护，避免 prompt 污染。

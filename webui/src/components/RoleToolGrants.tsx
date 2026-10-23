@@ -3,7 +3,6 @@ import type { McpToolInfo } from "../lib/types";
 import {
   ABSOLUTE_DENY_TOOL_NAMES,
   READONLY_QA_PRESET,
-  READONLY_QA_WIKI_PRESET,
   matchingPresetName,
   stampPreset,
 } from "../lib/rolePermissionDraft";
@@ -32,6 +31,8 @@ const META_TOOL_NAMES: readonly string[] = [
   "kx_catalog",
   "lucy_skill_search",
   "lucy_skill_read",
+  "lucy_certified_route",
+  "lucy_report_template",
 ];
 
 const DATA_PLANE_SET = new Set<string>(DATA_PLANE_TOOL_NAMES);
@@ -85,6 +86,14 @@ export function RoleToolGrants({
     [grantableCandidates, grantableNameSet]
   );
 
+  const otherGroup = useMemo(
+    () => grantableCandidates.filter((tool) => !DATA_PLANE_SET.has(tool.name) && !META_SET.has(tool.name)),
+    [grantableCandidates]
+  );
+
+  const allGrantableSelected = grantableCandidates.length > 0
+    && grantableCandidates.every((tool) => value.includes(tool.name));
+
   // Count selected grantable tools only (no denominator)
   const selectedGrantableCount = useMemo(
     () => value.filter((n) => grantableNameSet.has(n)).length,
@@ -96,6 +105,13 @@ export function RoleToolGrants({
   function handlePreset(preset: readonly string[]) {
     if (disabled) return;
     onChange(stampPreset(value, preset));
+  }
+
+  function selectAll() {
+    if (disabled || allGrantableSelected) return;
+    const names = grantableCandidates.map((tool) => tool.name);
+    const extras = value.filter((name) => !grantableNameSet.has(name) && !DENY_SET.has(name));
+    onChange([...names, ...extras]);
   }
 
   function toggleTool(name: string, checked: boolean) {
@@ -122,10 +138,10 @@ export function RoleToolGrants({
         <button
           type="button"
           className="pl-btn pl-btn--secondary text-sm"
-          onClick={() => handlePreset(READONLY_QA_WIKI_PRESET)}
-          disabled={disabled}
+          onClick={selectAll}
+          disabled={disabled || allGrantableSelected || grantableCandidates.length === 0}
         >
-          只读问答 + 知识库
+          全选
         </button>
         {presetMatch ? (
           <span className="text-xs text-fg-muted">当前与{presetMatch}一致</span>
@@ -144,7 +160,7 @@ export function RoleToolGrants({
         </ul>
       ) : <p className="text-xs text-fg-muted">当前未授权任何工具。</p>}
 
-      <details data-testid="role-custom-tools">
+      <details open data-testid="role-custom-tools">
         <summary className="notranslate cursor-pointer text-sm font-medium" translate="no">自定义 MCP 工具</summary>
         <div className="mt-3 grid gap-4 rounded-md border border-border-default p-3">
           {dataPlaneGroup.length > 0 ? (
@@ -169,6 +185,20 @@ export function RoleToolGrants({
               <div className="text-sm font-medium">目录与知识</div>
               <div className="grid gap-1">
                 {metaGroup.map((tool) => (
+                  <label key={tool.name} className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" className="mt-0.5" checked={value.includes(tool.name)} onChange={(e) => toggleTool(tool.name, e.target.checked)} disabled={disabled} />
+                    <span className="notranslate font-mono text-xs" translate="no">{tool.name}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {otherGroup.length > 0 ? (
+            <div className="grid gap-2">
+              <div className="text-sm font-medium">其他</div>
+              <div className="grid gap-1">
+                {otherGroup.map((tool) => (
                   <label key={tool.name} className="flex items-center gap-2 text-sm">
                     <input type="checkbox" className="mt-0.5" checked={value.includes(tool.name)} onChange={(e) => toggleTool(tool.name, e.target.checked)} disabled={disabled} />
                     <span className="notranslate font-mono text-xs" translate="no">{tool.name}</span>

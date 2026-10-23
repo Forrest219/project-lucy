@@ -12,6 +12,7 @@ type DomainsResponse = { domains: EvalDomainInfo[] };
 type TrendResponse = { points: EvalTrendPoint[]; thresholds: { yellow: number; red: number } };
 type TopFailuresResponse = { items: Array<{ caseId: string; failCount: number; lastFailAt: string }> };
 type ConfigResponse = { config: MonitorConfig };
+type FieldResponse = { bound: boolean; message?: string; rows: Array<{ family: string; calls: number; errorRate: number; denyRate: number }> };
 
 // SVG line chart (native, no external library)
 function TrendChart({ points, thresholds }: { points: EvalTrendPoint[]; thresholds: { yellow: number; red: number } }) {
@@ -46,7 +47,8 @@ function TrendChart({ points, thresholds }: { points: EvalTrendPoint[]; threshol
   }
 
   const pathD = points
-    .map((p, i) => `${i === 0 ? "M" : "L"} ${xPos(p.date).toFixed(1)} ${yPos(p.passRate).toFixed(1)}`)
+    .filter((p) => typeof p.passRate === "number")
+    .map((p, i) => `${i === 0 ? "M" : "L"} ${xPos(p.date).toFixed(1)} ${yPos(p.passRate ?? 0).toFixed(1)}`)
     .join(" ");
 
   const yellowY = yPos(thresholds.yellow).toFixed(1);
@@ -119,17 +121,19 @@ function TrendChart({ points, thresholds }: { points: EvalTrendPoint[]; threshol
       {/* Data points. Points below the red threshold are highlighted in
           danger colour and exposed as the drill-down target. */}
       {points.map((p) => {
-        const belowRed = p.passRate < thresholds.red;
+        if (typeof p.passRate !== "number") return null;
+        const rate = p.passRate;
+        const belowRed = rate < thresholds.red;
         return (
           <circle
             key={p.date}
             cx={xPos(p.date)}
-            cy={yPos(p.passRate)}
+            cy={yPos(rate)}
             r={belowRed ? 4 : 3}
             fill={belowRed ? "var(--color-danger)" : "var(--color-accent)"}
             data-testid={belowRed ? `monitor-below-red-${p.date}` : `monitor-point-${p.date}`}
           >
-            <title>{p.date}: {Math.round(p.passRate * 100)}% ({p.totalRuns} 个运行)</title>
+            <title>{p.date}: {Math.round(rate * 100)}% ({p.totalRuns} 个运行)</title>
           </circle>
         );
       })}
@@ -196,7 +200,7 @@ function belowRedDeepLinkHref(
   red: number,
   domain: string
 ): string {
-  const first = [...points].reverse().find((point) => point.passRate < red) ?? points[0];
+  const first = [...points].reverse().find((point) => typeof point.passRate === "number" && point.passRate < red) ?? points[0];
   const params = new URLSearchParams();
   if (domain) params.set("domain", domain);
   if (first) params.set("date", first.date);
@@ -234,6 +238,12 @@ export function Monitor() {
     enabled: Boolean(activeDomain)
   });
 
+  const { data: fieldData } = useQuery({
+    queryKey: ["eval", "monitor", "field", activeDomain, days],
+    queryFn: () => apiGet<FieldResponse>(`/api/eval/monitor/field?domain=${encodeURIComponent(activeDomain)}&days=${days}`),
+    enabled: Boolean(activeDomain)
+  });
+
   const { data: configData } = useQuery({
     queryKey: ["eval", "monitor", "config"],
     queryFn: () => apiGet<ConfigResponse>("/api/eval/monitor/config")
@@ -265,8 +275,9 @@ export function Monitor() {
 
   // Alert banner: check last point vs threshold
   const lastPoint = points[points.length - 1];
-  const showAlert = lastPoint && lastPoint.passRate < thresholds.red;
-  const showWarning = lastPoint && !showAlert && lastPoint.passRate < thresholds.yellow;
+  const lastRate = typeof lastPoint?.passRate === "number" ? lastPoint.passRate : undefined;
+  const showAlert = lastRate !== undefined && lastRate < thresholds.red;
+  const showWarning = lastRate !== undefined && !showAlert && lastRate < thresholds.yellow;
   const statusTone: MetricCardTone | undefined = showAlert
     ? "danger"
     : showWarning
@@ -316,9 +327,13 @@ export function Monitor() {
       <div className="pl-metric-grid">
         <MetricCard
           label="最新通过率"
-          value={pct(lastPoint?.passRate)}
-          help="所选时间窗内最后一个统计点的评测通过率。通过率 = PASS / total_cases（PASS + FAIL + SKIP 均计入分母，D2）；仅统计 status='succeeded' 运行。"
-          subValue={lastPoint?.date ?? "暂无趋势数据"}
+          value={pct(lastRate)}
+          help="新口径通过率 = 答对了 /（答对了 + 答错了）。没答出来不进分母，也不点亮黄线或红线。旧结果仍按 PASS / total。"
+          subValue={[
+            lastPoint?.date ?? "暂无趋势数据",
+            lastPoint?.formulaLabel,
+            lastPoint ? `没答出来 ${lastPoint.notAnsweredCount ?? 0}` : ""
+          ].filter(Boolean).join(" · ")}
           tone={statusTone}
           helpId="latest-pass-rate"
         />
@@ -355,12 +370,12 @@ export function Monitor() {
               <span data-testid="monitor-threshold-summary">
                 黄线 {Math.round(thresholds.yellow * 100)}% · 红线 {Math.round(thresholds.red * 100)}%
               </span>
-              {points.some((point) => point.passRate < thresholds.red) ? (
+              {points.some((point) => typeof point.passRate === "number" && point.passRate < thresholds.red) ? (
                 <span
                   className="pl-status-badge pl-status-validation_failed"
                   data-testid="monitor-below-red-summary"
                 >
-                  {points.filter((point) => point.passRate < thresholds.red).length} 个点跌破红线
+                  {points.filter((point) => typeof point.passRate === "number" && point.passRate < thresholds.red).length} 个点跌破红线
                 </span>
               ) : null}
             </div>
@@ -395,14 +410,14 @@ export function Monitor() {
           ) : (
             <>
               <TrendChart points={points} thresholds={thresholds} />
-              {points.some((point) => point.passRate < thresholds.red) ? (
+              {points.some((point) => typeof point.passRate === "number" && point.passRate < thresholds.red) ? (
                 <div
                   className="mt-3 rounded-md border border-danger-strong bg-danger-soft p-3 text-sm text-danger-strong"
                   data-testid="monitor-below-red-callout"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span>
-                      {points.filter((point) => point.passRate < thresholds.red).length} 个点跌破红线，请查看相关运行。
+                      {points.filter((point) => typeof point.passRate === "number" && point.passRate < thresholds.red).length} 个点跌破红线，请查看相关运行。
                     </span>
                     <Link
                       to={belowRedDeepLinkHref(points, thresholds.red, activeDomain)}
@@ -472,6 +487,35 @@ export function Monitor() {
         </section>
       </div>
 
+      <section className="pl-panel" data-testid="monitor-field-panel">
+        <div className="flex items-center justify-between gap-2">
+          <p className="pl-panel-title mb-0">现场</p>
+          <Link className="text-sm" to="/eval/field-questions">查看现场提问</Link>
+        </div>
+        {fieldData?.bound === false ? (
+          <p className="text-sm text-fg-muted mt-2">{fieldData.message}</p>
+        ) : (
+          <table className="w-full text-sm mt-2">
+            <thead>
+              <tr className="text-left text-fg-muted">
+                <th>客户端</th>
+                <th>调用</th>
+                <th>错误率</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(fieldData?.rows ?? []).map((row) => (
+                <tr key={row.family}>
+                  <td>{row.family}</td>
+                  <td>{row.calls}</td>
+                  <td>{pct(row.errorRate)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+
       <section className="pl-panel">
         <p className="pl-panel-title">告警阈值配置</p>
         {domains.length === 0 ? (
@@ -487,6 +531,7 @@ export function Monitor() {
                   <th>黄线（%）</th>
                   <th>红线（%）</th>
                   <th>连续失败告警次数</th>
+                  <th>绑定角色</th>
                 </tr>
               </thead>
               <tbody>
@@ -561,6 +606,23 @@ export function Monitor() {
                               return {
                                 ...cfg,
                                 domains: { ...cfg.domains, [d.domain]: { ...dc, consecutiveFailThreshold: v } }
+                              };
+                            });
+                          }}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          className="pl-input text-sm"
+                          aria-label={`${d.domain} 绑定角色`}
+                          value={(dc.roleIds ?? []).join(", ")}
+                          onChange={(e) => {
+                            const roleIds = e.target.value.split(",").map((item) => item.trim()).filter(Boolean);
+                            setConfigEdit((prev) => {
+                              const cfg = prev ?? { ...currentConfig };
+                              return {
+                                ...cfg,
+                                domains: { ...cfg.domains, [d.domain]: { ...dc, roleIds } }
                               };
                             });
                           }}

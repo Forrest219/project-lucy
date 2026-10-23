@@ -7,7 +7,7 @@ export type CatalogReloadButtonProps = {
   connectionId?: string;
   schema?: string;
   label?: string;
-  variant?: "primary" | "secondary" | "ghost";
+  variant?: "primary" | "secondary" | "ghost" | "menu";
   size?: "sm" | "md";
   testId?: string;
   showCompletionLabel?: boolean;
@@ -27,6 +27,7 @@ function buttonClass(
   variant: CatalogReloadButtonProps["variant"],
   size: CatalogReloadButtonProps["size"]
 ): string {
+  if (variant === "menu") return "pl-row-action-link pl-connection-more-action";
   const variantClass =
     variant === "primary"
       ? "pl-btn pl-btn--primary"

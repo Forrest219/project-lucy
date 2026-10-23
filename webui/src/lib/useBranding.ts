@@ -4,7 +4,7 @@ import { BRANDING_QUERY_KEY, type BrandingInfo } from "./branding";
 
 const FALLBACK: BrandingInfo = {
   productTitle: "Lucy WebUI",
-  tagline: "Data Agent MCP",
+  tagline: "可信 Agent 数据层",
   productTitleOverride: "",
   taglineOverride: "",
   hasCustomLogo: false,
@@ -15,7 +15,7 @@ const FALLBACK: BrandingInfo = {
   updatedAt: null,
   defaults: {
     productTitle: "Lucy WebUI",
-    tagline: "Data Agent MCP"
+    tagline: "可信 Agent 数据层"
   }
 };
 

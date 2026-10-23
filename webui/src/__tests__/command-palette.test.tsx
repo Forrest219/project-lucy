@@ -6,7 +6,7 @@
 
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppFrame } from "../app/App";
@@ -107,12 +107,12 @@ describe("CommandPalette", () => {
     expect(screen.getByTestId("command-palette-hint")).toHaveTextContent("搜索页面、流程或配置对象");
   });
 
-  it("does not navigate when Enter is pressed before the user types", () => {
+  it("does not navigate when Enter is pressed before the user types", async () => {
     renderAt("/connections");
     fireEvent.click(screen.getByTestId("sidebar-search-trigger"));
     fireEvent.keyDown(screen.getByTestId("command-palette-input"), { key: "Enter" });
     expect(screen.getByTestId("command-palette")).toBeInTheDocument();
-    expect(screen.getByTestId("route-page")).toHaveTextContent("ConnectionOverview");
+    await waitFor(() => expect(screen.getByTestId("route-page")).toHaveTextContent("ConnectionOverview"));
   });
 
   it("surfaces an ESC keycap in the palette header", () => {
@@ -150,9 +150,9 @@ describe("CommandPalette", () => {
     // search term "评测" matches the group title "质量评测"; the renamed
     // 安全评测候选 is also a direct label hit, so it ranks ahead of the two
     // group-title-only matches.
-    expect(options.length).toBe(4);
+    expect(options.length).toBe(5);
     const labels = options.map((option) => option.querySelector(".pl-command-palette-item-label")?.textContent);
-    expect(labels).toEqual(["评测用例", "安全评测候选", "运行历史", "趋势监控"]);
+    expect(labels).toEqual(["评测用例", "安全评测候选", "运行历史", "趋势监控", "现场提问"]);
     // M70: the matching group title now lives inside the breadcrumb line.
     // Use a regex match because the highlight helper may split the matched
     // substring ("评测") into its own <mark> node while leaving the rest
@@ -215,7 +215,7 @@ describe("CommandPalette", () => {
     expect(routeHint?.getAttribute("aria-hidden")).toBe("true");
   });
 
-  it("navigates to the selected route and closes the palette on click", () => {
+  it("navigates to the selected route and closes the palette on click", async () => {
     renderAt("/overview");
     fireEvent.click(screen.getByTestId("sidebar-search-trigger"));
     fireEvent.change(screen.getByTestId("command-palette-input"), {
@@ -223,10 +223,10 @@ describe("CommandPalette", () => {
     });
     fireEvent.click(screen.getByTestId("command-palette-option-publish-history"));
     expect(screen.queryByTestId("command-palette")).not.toBeInTheDocument();
-    expect(screen.getByTestId("route-page")).toHaveTextContent("PublishHistory");
+    await waitFor(() => expect(screen.getByTestId("route-page")).toHaveTextContent("PublishHistory"));
   });
 
-  it("supports ArrowDown / ArrowUp navigation and Enter to commit", () => {
+  it("supports ArrowDown / ArrowUp navigation and Enter to commit", async () => {
     renderAt("/overview");
     fireEvent.click(screen.getByTestId("sidebar-search-trigger"));
     fireEvent.change(screen.getByTestId("command-palette-input"), {
@@ -246,7 +246,7 @@ describe("CommandPalette", () => {
 
     fireEvent.keyDown(input, { key: "Enter" });
     expect(screen.queryByTestId("command-palette")).not.toBeInTheDocument();
-    expect(screen.getByTestId("route-page")).toHaveTextContent("WikiEditor");
+    await waitFor(() => expect(screen.getByTestId("route-page")).toHaveTextContent("WikiEditor"));
   });
 
   it("moves the highlight with ArrowDown / ArrowUp across multiple results", () => {
@@ -263,7 +263,7 @@ describe("CommandPalette", () => {
     const input = screen.getByTestId("command-palette-input");
     const list = screen.getByTestId("command-palette-list");
     const options = within(list).getAllByRole("option");
-    expect(options.length).toBe(4);
+    expect(options.length).toBe(5);
     expect(options[0]).toHaveAttribute("data-active", "true");
     expect(screen.queryByTestId("command-palette-enter-hint")).not.toBeInTheDocument();
     expect(screen.getByTestId("command-palette-footer")).toHaveTextContent(
@@ -284,16 +284,19 @@ describe("CommandPalette", () => {
     fireEvent.keyDown(input, { key: "ArrowDown" });
     expect(options[3]).toHaveAttribute("data-active", "true");
 
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    expect(options[4]).toHaveAttribute("data-active", "true");
+
     // Wraps back to the first.
     fireEvent.keyDown(input, { key: "ArrowDown" });
     expect(options[0]).toHaveAttribute("data-active", "true");
 
     // ArrowUp wraps to the last.
     fireEvent.keyDown(input, { key: "ArrowUp" });
-    expect(options[3]).toHaveAttribute("data-active", "true");
+    expect(options[4]).toHaveAttribute("data-active", "true");
   });
 
-  it("does not navigate on Enter when multiple results are still only previewed", () => {
+  it("does not navigate on Enter when multiple results are still only previewed", async () => {
     renderAt("/overview");
     fireEvent.click(screen.getByTestId("sidebar-search-trigger"));
     fireEvent.change(screen.getByTestId("command-palette-input"), {
@@ -306,10 +309,10 @@ describe("CommandPalette", () => {
 
     fireEvent.keyDown(input, { key: "Enter" });
     expect(screen.getByTestId("command-palette")).toBeInTheDocument();
-    expect(screen.getByTestId("route-page")).toHaveTextContent("Onboarding");
+    await waitFor(() => expect(screen.getByTestId("route-page")).toHaveTextContent("Onboarding"));
   });
 
-  it("navigates on Enter after Arrow confirmation when multiple results match", () => {
+  it("navigates on Enter after Arrow confirmation when multiple results match", async () => {
     renderAt("/overview");
     fireEvent.click(screen.getByTestId("sidebar-search-trigger"));
     fireEvent.change(screen.getByTestId("command-palette-input"), {
@@ -319,10 +322,10 @@ describe("CommandPalette", () => {
     fireEvent.keyDown(input, { key: "ArrowDown" });
     fireEvent.keyDown(input, { key: "Enter" });
     expect(screen.queryByTestId("command-palette")).not.toBeInTheDocument();
-    expect(screen.getByTestId("route-page")).toHaveTextContent("Tokens");
+    await waitFor(() => expect(screen.getByTestId("route-page")).toHaveTextContent("Tokens"));
   });
 
-  it("ignores Enter while an IME composition is active", () => {
+  it("ignores Enter while an IME composition is active", async () => {
     renderAt("/overview");
     fireEvent.click(screen.getByTestId("sidebar-search-trigger"));
     fireEvent.change(screen.getByTestId("command-palette-input"), {
@@ -336,7 +339,7 @@ describe("CommandPalette", () => {
       keyCode: 229
     });
     expect(screen.getByTestId("command-palette")).toBeInTheDocument();
-    expect(screen.getByTestId("route-page")).toHaveTextContent("Onboarding");
+    await waitFor(() => expect(screen.getByTestId("route-page")).toHaveTextContent("Onboarding"));
   });
 
   it("wraps ArrowDown at the end of the list", () => {
@@ -523,7 +526,7 @@ describe("CommandPalette", () => {
 
   // M70: clicking a result must still navigate and close the palette. This
   // is the same M61 contract verified with the new layout.
-  it("navigates on click after the result context redesign", () => {
+  it("navigates on click after the result context redesign", async () => {
     renderAt("/overview");
     fireEvent.click(screen.getByTestId("sidebar-search-trigger"));
     fireEvent.change(screen.getByTestId("command-palette-input"), {
@@ -531,6 +534,6 @@ describe("CommandPalette", () => {
     });
     fireEvent.click(screen.getByTestId("command-palette-option-semantic-wiki"));
     expect(screen.queryByTestId("command-palette")).not.toBeInTheDocument();
-    expect(screen.getByTestId("route-page")).toHaveTextContent("WikiEditor");
+    await waitFor(() => expect(screen.getByTestId("route-page")).toHaveTextContent("WikiEditor"));
   });
 });

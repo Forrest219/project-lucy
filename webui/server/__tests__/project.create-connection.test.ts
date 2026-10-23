@@ -7,14 +7,17 @@ import {
   CONNECTION_ID_PATTERN,
   ConnectionAlreadyExistsError,
   ConnectionIdInvalidError,
-  ConnectionPasswordRequiredError,
+  addSchema,
   createConnection,
   connectionSecretRelPath,
-  probeConnection
+  probeConnection,
+  readProject
 } from "../project";
+import { invalidateContentPathsCache } from "../paths";
 import type { ConnectionTestResult } from "../ktx";
 
 let projectRoot: string;
+let previousRoot: string | undefined;
 
 function baseYaml(): string {
   return `connections:
@@ -69,10 +72,21 @@ function failTest(connId: string): ConnectionTestResult {
 }
 
 beforeEach(async () => {
+  previousRoot = process.env.KTX_PROJECT_ROOT;
   await makeProject();
+  // Confirm-write goes through loadContentPaths(), which resolves the project
+  // root from KTX_PROJECT_ROOT rather than the root argument.
+  process.env.KTX_PROJECT_ROOT = projectRoot;
+  invalidateContentPathsCache();
 });
 
 afterEach(async () => {
+  if (previousRoot === undefined) {
+    delete process.env.KTX_PROJECT_ROOT;
+  } else {
+    process.env.KTX_PROJECT_ROOT = previousRoot;
+  }
+  invalidateContentPathsCache();
   if (projectRoot) {
     await rm(projectRoot, { recursive: true, force: true });
   }
@@ -159,6 +173,96 @@ describe("createConnection (Spec 124 Phase A)", () => {
     expect(parsed.setup.database_connection_ids).toEqual(["mysql-aliyun", "demo-mysql"]);
   });
 
+  it("writes KTX athena keys and reads Glue databases back as schemas", async () => {
+    const testFn = vi.fn(async () => okTest("moji-intl"));
+    const result = await createConnection(
+      projectRoot,
+      {
+        id: "moji-intl",
+        driver: "athena",
+        region: "eu-west-1",
+        s3StagingDir: "s3://moji-results/athena/",
+        workgroup: "primary",
+        catalog: "AwsDataCatalog",
+        database: "da_moji",
+        schemas: ["da_moji", "idm"]
+      },
+      false,
+      { testConnectionFn: testFn }
+    );
+
+    expect(result.written).toBe(true);
+    expect(result.secretRelPath).toBe("");
+    expect(result.connection.engine).toBe("athena");
+    await expect(
+      access(path.join(projectRoot, ".ktx", "secrets", "moji-intl-password"))
+    ).rejects.toMatchObject({ code: "ENOENT" });
+
+    const yamlText = await readFile(path.join(projectRoot, "ktx.yaml"), "utf8");
+    const parsed = parse(yamlText) as {
+      connections: Record<string, Record<string, unknown>>;
+    };
+    expect(parsed.connections["moji-intl"]).toEqual({
+      driver: "athena",
+      readonly: true,
+      enabled_tables: [],
+      region: "eu-west-1",
+      s3_staging_dir: "s3://moji-results/athena/",
+      workgroup: "primary",
+      catalog: "AwsDataCatalog",
+      database: "da_moji",
+      databases: ["da_moji", "idm"]
+    });
+    expect(yamlText).not.toMatch(/moji-intl:[\s\S]*\n\s+schemas:/);
+    expect(yamlText).not.toMatch(/moji-intl:[\s\S]*\n\s+host:/);
+
+    const project = await readProject(projectRoot);
+    expect(project.connections.find((row) => row.id === "moji-intl")?.schemas).toEqual(["da_moji", "idm"]);
+
+    await addSchema(projectRoot, "moji-intl", "ods", true);
+    const after = parse(await readFile(path.join(projectRoot, "ktx.yaml"), "utf8")) as {
+      connections: Record<string, { databases?: string[] }>;
+    };
+    expect(after.connections["moji-intl"].databases).toEqual(["da_moji", "idm"]);
+
+    await addSchema(projectRoot, "moji-intl", "ods", false, { testConnectionFn: testFn });
+    const added = parse(await readFile(path.join(projectRoot, "ktx.yaml"), "utf8")) as {
+      connections: Record<string, { databases?: string[] }>;
+    };
+    expect(added.connections["moji-intl"].databases).toEqual(["da_moji", "idm", "ods"]);
+  });
+
+  it("probes athena without a password and without host fields", async () => {
+    let captured = "";
+    const testFn = vi.fn(async (root: string) => {
+      captured = await readFile(path.join(root, "ktx.yaml"), "utf8");
+      return okTest("probe");
+    });
+    const result = await probeConnection(
+      {
+        driver: "athena",
+        region: "eu-west-1",
+        s3StagingDir: "s3://moji-results/athena/",
+        database: "da_moji",
+        workgroup: "primary",
+        catalog: "AwsDataCatalog"
+      },
+      { testConnectionFn: testFn }
+    );
+    expect(result.status).toBe("ok");
+    const parsed = parse(captured) as { connections: { probe: Record<string, unknown> } };
+    expect(parsed.connections.probe).toMatchObject({
+      driver: "athena",
+      region: "eu-west-1",
+      s3_staging_dir: "s3://moji-results/athena/",
+      database: "da_moji",
+      databases: []
+    });
+    expect(parsed.connections.probe).not.toHaveProperty("host");
+    expect(parsed.connections.probe).not.toHaveProperty("password");
+    expect(parsed.connections.probe).not.toHaveProperty("schemas");
+  });
+
   it("keeps secret and yaml when connection test fails", async () => {
     const testFn = vi.fn(async () => failTest("bad-mysql"));
     const result = await createConnection(
@@ -234,7 +338,36 @@ describe("createConnection (Spec 124 Phase A)", () => {
     expect(() => connectionSecretRelPath("Bad_ID")).toThrow(ConnectionIdInvalidError);
   });
 
-  it("requires password on write path", async () => {
+  it("requires password on write path before touching yaml or secrets", async () => {
+    const before = await readFile(path.join(projectRoot, "ktx.yaml"), "utf8");
+    const drivers = [
+      { driver: "mysql" as const, port: 3306 },
+      { driver: "postgres" as const, port: 5432 },
+      { driver: "sqlserver" as const, port: 1433 },
+      { driver: "oracle" as const, port: 1521 }
+    ];
+
+    for (const { driver, port } of drivers) {
+      await expect(
+        createConnection(
+          projectRoot,
+          {
+            id: "demo-db",
+            driver,
+            host: "db.internal",
+            port,
+            database: "analytics",
+            username: "lucy_ro"
+          },
+          false,
+          { testConnectionFn: vi.fn(async () => okTest("demo-db")) }
+        )
+      ).rejects.toMatchObject({
+        name: "ConnectionPasswordRequiredError",
+        statusCode: 400
+      });
+    }
+
     await expect(
       createConnection(
         projectRoot,
@@ -244,12 +377,24 @@ describe("createConnection (Spec 124 Phase A)", () => {
           host: "db.internal",
           port: 3306,
           database: "analytics",
-          username: "lucy_ro"
+          username: "lucy_ro",
+          password: ""
         },
         false,
         { testConnectionFn: vi.fn(async () => okTest("demo-mysql")) }
       )
-    ).rejects.toBeInstanceOf(ConnectionPasswordRequiredError);
+    ).rejects.toMatchObject({
+      name: "ConnectionPasswordRequiredError",
+      statusCode: 400
+    });
+
+    await expect(readFile(path.join(projectRoot, "ktx.yaml"), "utf8")).resolves.toBe(before);
+    await expect(
+      access(path.join(projectRoot, ".ktx", "secrets", "demo-db-password"))
+    ).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(
+      access(path.join(projectRoot, ".ktx", "secrets", "demo-mysql-password"))
+    ).rejects.toMatchObject({ code: "ENOENT" });
   });
 
   it("refuses overwrite when secret file already exists", async () => {
@@ -318,27 +463,113 @@ describe("createConnection (Spec 124 Phase A)", () => {
 
   it("supports sqlite connections without host, port, username, or password", async () => {
     const testFn = vi.fn(async () => okTest("local-sqlite"));
-    const result = await createConnection(
-      projectRoot,
-      {
-        id: "local-sqlite",
-        driver: "sqlite",
-        database: "data/app.sqlite",
-        schemas: ["main"]
-      },
-      false,
-      { testConnectionFn: testFn }
-    );
+    const audit = vi.fn(async () => 7);
+    const sqliteInput = {
+      id: "local-sqlite",
+      driver: "sqlite" as const,
+      database: "data/app.sqlite",
+      schemas: ["main"]
+    };
+    const preview = await createConnection(projectRoot, sqliteInput, true);
+    expect(preview.secretRelPath).toBe("");
+    expect(preview.diff).toContain("path: data/app.sqlite");
+    expect(preview.diff).not.toMatch(/\+\s+password:/);
+
+    const result = await createConnection(projectRoot, sqliteInput, false, {
+      testConnectionFn: testFn,
+      recordConfigChange: audit
+    });
 
     expect(result.written).toBe(true);
+    expect(result.secretRelPath).toBe("");
+    expect(result.auditId).toBe(7);
+    expect(audit).toHaveBeenCalledOnce();
+    const summary = audit.mock.calls[0]?.[0].newSummary as Record<string, unknown>;
+    expect(summary.passwordBytes).toBe(0);
+    expect(summary).not.toHaveProperty("password");
+    expect(JSON.stringify(result)).not.toContain("passwordBytes");
     const yamlText = await readFile(path.join(projectRoot, "ktx.yaml"), "utf8");
     const parsed = parse(yamlText) as {
-      connections: Record<string, { driver: string; database: string }>;
+      connections: Record<string, { driver: string; path: string; database?: string; password?: string }>;
     };
     expect(parsed.connections["local-sqlite"]).toMatchObject({
       driver: "sqlite",
-      database: "data/app.sqlite"
+      path: "data/app.sqlite"
     });
+    expect(parsed.connections["local-sqlite"].database).toBeUndefined();
+    expect(parsed.connections["local-sqlite"].password).toBeUndefined();
+    await expect(
+      access(path.join(projectRoot, ".ktx", "secrets", "local-sqlite-password"))
+    ).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("rolls back yaml and the secret created by this call when recordConfigChange throws", async () => {
+    const before = await readFile(path.join(projectRoot, "ktx.yaml"), "utf8");
+    const plaintext = "s3cret-value";
+    const audit = vi.fn(async () => {
+      throw new Error("audit summary failed");
+    });
+
+    await expect(
+      createConnection(
+        projectRoot,
+        {
+          id: "demo-mysql",
+          driver: "mysql",
+          host: "db.internal",
+          port: 3306,
+          database: "analytics",
+          username: "lucy_ro",
+          password: plaintext
+        },
+        false,
+        {
+          testConnectionFn: vi.fn(async () => okTest("demo-mysql")),
+          recordConfigChange: audit
+        }
+      )
+    ).rejects.toThrow("audit summary failed");
+
+    expect(audit).toHaveBeenCalledOnce();
+    const summary = audit.mock.calls[0]?.[0].newSummary as Record<string, unknown>;
+    expect(summary.passwordBytes).toBe(Buffer.byteLength(plaintext, "utf8"));
+    expect(summary).not.toHaveProperty("password");
+    expect(JSON.stringify(audit.mock.calls)).not.toContain(plaintext);
+    await expect(readFile(path.join(projectRoot, "ktx.yaml"), "utf8")).resolves.toBe(before);
+    await expect(
+      access(path.join(projectRoot, ".ktx", "secrets", "demo-mysql-password"))
+    ).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("rolls back sqlite yaml when recordConfigChange throws and no secret was created", async () => {
+    const before = await readFile(path.join(projectRoot, "ktx.yaml"), "utf8");
+    const audit = vi.fn(async () => {
+      throw new Error("audit summary failed");
+    });
+
+    await expect(
+      createConnection(
+        projectRoot,
+        {
+          id: "local-sqlite",
+          driver: "sqlite",
+          database: "data/app.sqlite"
+        },
+        false,
+        {
+          testConnectionFn: vi.fn(async () => okTest("local-sqlite")),
+          recordConfigChange: audit
+        }
+      )
+    ).rejects.toThrow("audit summary failed");
+
+    const summary = audit.mock.calls[0]?.[0].newSummary as Record<string, unknown>;
+    expect(summary.passwordBytes).toBe(0);
+    expect(summary).not.toHaveProperty("password");
+    await expect(readFile(path.join(projectRoot, "ktx.yaml"), "utf8")).resolves.toBe(before);
+    await expect(
+      access(path.join(projectRoot, ".ktx", "secrets", "local-sqlite-password"))
+    ).rejects.toMatchObject({ code: "ENOENT" });
   });
 
   it("supports sqlserver and oracle drivers", async () => {

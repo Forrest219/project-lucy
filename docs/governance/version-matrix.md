@@ -4,17 +4,17 @@
 |---|---|
 | 文档名称 | Lucy Version Matrix |
 | 文档类型 | Release Metadata / Compatibility Matrix |
-| 版本 | v0.4 |
-| 撰写日期 | 2026-06-21；2026-07-06；2026-08-03（增补：Helm/K8s single-replica supported baseline）；2026-09-02（拆分 Lucy 产品版本与 KTX；基线 0.17.0） |
+| 版本 | v0.5 |
+| 撰写日期 | 2026-06-21；2026-07-06；2026-08-03（增补：Helm/K8s single-replica supported baseline）；2026-09-02（拆分 Lucy 产品版本与 KTX；基线 0.17.0）；2026-10-19（批准切线到 `2.0.0`）；2026-10-21（§4 Database Matrix 状态值改为引用 `docs/governance/database-support-matrix.md`，补齐 StarRocks / Doris / SQL Server / Oracle / SQLite / Athena） |
 | 适用范围 | Lucy release、Docker image、bundled KTX runtime 和 MCP client 兼容性追踪 |
 
 ## 1. Current Baseline
 
 | Component | Current Baseline | Evidence |
 |---|---|---|
-| **Lucy product version** | **`0.17.0`** | repo-root `VERSION`, `Chart.yaml` `appVersion`, `/api/health.data.lucyVersion`, WebUI sidebar |
+| **Lucy product version** | **`2.0.0`** | repo-root `VERSION`, `Chart.yaml` `appVersion`, `/api/health.data.lucyVersion`, WebUI 版本信息页 |
 | Lucy source | `main` after P0 release baseline | commit `e8863b8` established P0 Docker baseline |
-| Lucy package | `project-lucy-eval@0.17.0` | `package.json` (aligned with product version) |
+| Lucy package | `project-lucy-eval@2.0.0` | `package.json` (aligned with product version) |
 | WebUI package | `webui@1.0.0` | `webui/package.json` (npm package only; not customer-facing) |
 | Bundled KTX npm package | `@kaelio/ktx@0.16.0` | `Dockerfile`, `docker-compose.yml`, `npm run smoke:p0:docker` |
 | KTX Python runtime | `0.16.0`, feature `core` | `Dockerfile` runs `ktx admin runtime install --yes --feature core` |
@@ -34,19 +34,33 @@
 
 | Trigger | Bump | Example |
 |---|---|---|
-| Customer delivery package / offline image / K8s tar that the customer will deploy | **Increment the second component by 1** (`0.17.0` → `0.18.0`) | ACL fix + audit hardening shipped as next tar |
-| Large capability jump, breaking config/migration, or bundled KTX major change | **Increment the second component by 10** (`0.17.0` → `0.27.0`) | New permission model; HA chart; KTX 0.17+ with breaking MCP |
+| Customer delivery package / offline image / K8s tar that the customer will deploy | **Increment the second component by 1** (`2.0.0` → `2.1.0`) | ACL fix + audit hardening shipped as next tar |
+| Large capability jump, breaking config/migration, or bundled KTX major change | **Increment the second component by 10** (`2.0.0` → `2.10.0`) | New permission model; HA chart; KTX 0.17+ with breaking MCP |
 | Docs-only handbook refresh with **same** image digest | **No** product bump; package name may still use date (`20260903-v1`) | README / RELEASE_NOTES only |
 | Internal CI / demo rebuild, no customer handoff | **No** bump | `npm run demo:upgrade` |
-| Bundled KTX upgrade alone | Bump `bundledKtxVersion` / `KTX_VERSION`; **also** bump Lucy product version (customer must tell builds apart) | KTX `0.16.0` → `0.17.0` and Lucy `0.18.0` |
+| Bundled KTX upgrade alone | Bump `bundledKtxVersion` / `KTX_VERSION`; **also** bump Lucy product version (customer must tell builds apart) | KTX `0.16.0` → `0.17.0` and Lucy `2.1.0` |
 
-Lucy versions use numeric `X.Y.Z` syntax so npm, Helm, and container tooling can parse them, but the bump policy is a Lucy release-train policy rather than SemVer compatibility signaling. The current `0.Y.0` line increments `Y` as specified above; `Z` remains `0` and is reserved until this matrix defines a separate repack/hotfix policy.
+On 2026-10-19 the product line was explicitly cut from `0.17.0` to `2.0.0`. That cut is not the +1 or +10 rule above. The next major (`3.0.0`) needs the same kind of explicit approval. Patch stays `0` until this matrix defines a hotfix rule.
+
+Lucy versions use numeric `X.Y.Z` syntax so npm, Helm, and container tooling can parse them, but the bump policy is a Lucy release-train policy rather than SemVer compatibility signaling. The current `2.Y.0` line increments `Y` as specified above; `Z` remains `0` and is reserved until this matrix defines a separate repack/hotfix policy.
 
 **SSOT:** edit repo-root `VERSION` first, then align `package.json` + `package-lock.json`, `Dockerfile` `ARG LUCY_VERSION` default, Helm `appVersion` + `lucy.version` + default `image.tag`, and the guarded WebUI fallbacks. Run `npm run lint:version`; release/build jobs must fail when any projection, image tag, or embedded image environment differs. Customer image tag format:
 
 `project-lucy:customer-amd64-<LUCY_VERSION>-<YYYYMMDD>-<gitSha>`
 
 Do **not** put KTX version in the product segment of the tag. KTX remains in `/api/health.data.bundledKtxVersion` and Helm `lucy.bundledKtxVersion`.
+
+## 1.2 Build revision (not a product version)
+
+The 版本信息 page and `/api/health` show the source commit that was built. That value is how an upgrade is matched to `main`. It is not chosen in `VERSION`, Helm, or `LUCY_VERSION`. The sidebar footer does not show it.
+
+| Field | Meaning |
+|---|---|
+| `/api/health.data.gitSha` | Full 40-hex commit, or `unknown` |
+| `/api/health.data.gitDirty` | `true` when the stamped tree had uncommitted changes |
+| WebUI `/admin/version` | Product version, full `gitSha`, a Chinese workspace sentence, and bundled KTX version. The page does not show the word `dirty` |
+
+Normative resolution, stamp file, and the rule that runtime env cannot replace it: [`docs/specs/lucy-20261020-build-revision-identity-spec.md`](../specs/lucy-20261020-build-revision-identity-spec.md). Image builds pass `LUCY_GIT_SHA` only as a Docker build arg because `.dockerignore` excludes `.git`. The image stores the result in `/app/BUILD_REVISION` and does not keep `LUCY_GIT_SHA` in the runtime environment.
 
 ## 2. Runtime Compatibility
 
@@ -74,13 +88,23 @@ Do **not** put KTX version in the product segment of the tag. KTX remains in `/a
 
 ## 4. Database Matrix
 
+Customer-facing summary of the release verified matrix. **The authoritative support status for every database type — including evidence requirements and known protocol differences — lives in `docs/governance/database-support-matrix.md`.** This section must not grow its own status list; update that document instead.
+
 | Database | Status | Gate |
 |---|---|---|
 | MySQL demo (`mysql:8.4`) | verified | `npm run smoke:p0:demo` |
 | Aliyun RDS MySQL | verified locally | `npm run smoke:p0:customer` |
 | PostgreSQL demo (`postgres:16-alpine`) | verified | `npm run smoke:p0:postgres-demo` |
+| SQLite | verified for local file use only | `npm run smoke:p0:demo` |
+| StarRocks | gated — not in the verified matrix until live certification evidence exists | `npm run smoke:p1:starrocks-certification` (blocked without a real config) |
+| Apache Doris | gated — R1 target; evidence required per environment | `npm run r1:doris-smoke`, `npm run r1:readiness:strict` |
+| SQL Server | experimental — connection type available, no live evidence | — |
+| Amazon Athena | experimental — connection type available, no live evidence | — |
+| Oracle | roadmap — not started | — |
 | ClickHouse | not verified for Lucy P0 | future compatibility gate |
 | Snowflake | not verified for Lucy P0 | future compatibility gate |
+
+StarRocks and Apache Doris reuse the `mysql` driver over the MySQL wire protocol. Engines that do not accept `max_execution_time` need an image that carries the compatibility patch — see `docs/governance/database-support-matrix.md` §4 for the symptom, the triage command, and the residual risk.
 
 ## 5. MCP Client Matrix
 
@@ -101,7 +125,7 @@ Every Lucy release should record:
 
 ```yaml
 lucy:
-  version: "0.17.0"
+  version: "2.0.0"
   git_commit: <git-sha>
   docker_image: <registry/image:tag>
 ktx:

@@ -2,16 +2,29 @@ import { createHash, randomUUID } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { createServer, request as httpRequest, type IncomingMessage, type ServerResponse } from "node:http";
 import path from "node:path";
-import { identifyRequestDetailed, setSessionClient, type Identity } from "./identity.js";
+import { setSessionClient, type Identity } from "./identity.js";
+import { admitMcpRequest, MCP_UPSTREAM_PATH, type AdmissionAudit, type AdmittedRequest } from "./admission.js";
+import {
+  AuthorizationRevokedError,
+  beginGuardedRequest,
+  currentAuthorizationSequence,
+  currentBarrierHandle,
+  runWithBarrier
+} from "./authorization-barrier.js";
+import { assertSkillsPassthroughPolicy, skillsPassthroughRequested } from "../auth/deployment-mode.js";
+import { ReleaseLedger, type ReleaseOperationContext } from "../security/ledger.js";
+import { beginGatedResponse, type ResponseCommitConfig } from "../security/response-commit.js";
 import {
   clearUpstreamSession,
   getUpstreamSession,
+  ownsUpstreamSession,
   setUpstreamSession,
-  upstreamSessionKeepaliveEnabled
+  upstreamSessionKeepaliveEnabled,
+  upstreamSessionOwner
 } from "./upstream-session.js";
-import { extractRequestClientMeta } from "./request-client-meta.js";
-import { ensureSkillAuditReady, writeLog, writeAccessLogSources, writeConversationTurn, purgeExpiredConversationTurns, writeAuthFailureLog, type AccessLogSourceRecord } from "./audit.js";
-import { allowedToolNames, check as aclCheck, effectivePermissions, extractTables, extractSourceRefs, resolveSourceRefsForTables, kxCatalog, lucyCatalog, permissionSnapshot, type SourceRef } from "./acl.js";
+import { extractRequestClientMeta, resolveClientIdentity } from "./request-client-meta.js";
+import { ensureSkillAuditReady, writeLog, writeAccessLogSources, writeConversationTurn, purgeExpiredConversationTurns, bindPriorSessionCalls, type AccessLogSourceRecord } from "./audit.js";
+import { allowedToolNames, authorizeAndRewrite, check as aclCheck, effectivePermissions, extractTables, extractSourceRefs, formatIdentityCompilerReason, resolveSourceRefsForTables, kxCatalog, lucyCatalog, permissionSnapshot, type SourceRef } from "./acl.js";
 import {
   redactQuestionText,
   summarizeArgsForAudit,
@@ -21,7 +34,8 @@ import {
 } from "./audit-privacy.js";
 import { buildAccessLogAuditMeta } from "./audit-meta.js";
 import { canAccessWikiKey, canonicalWikiKey, searchAccessibleWikiPages } from "./wiki-acl.js";
-import { loadAllSkills, getSkillByUri, getSkillByName } from "../skills/loader.js";
+import { CONTEXT_NOT_AVAILABLE, CONTEXT_ROLE_REQUIRED } from "./context-acl.js";
+import { loadAllSkillsFresh, getSkillByUri, getSkillByName } from "../skills/loader.js";
 import type { SkillAsset } from "../skills/types.js";
 import { canAccessSkill, filterAccessibleSkills, type SkillAclDecision, type SkillAclAction } from "./skill-acl.js";
 import { readProject, resolveProjectRoot } from "../project.js";
@@ -36,11 +50,35 @@ import {
 } from "../trace/evidence.js";
 import { getAuditDb as getAdminAuditDb } from "../admin/audit.js";
 import { extractSqlFromToolResult, mergeIncludeSql } from "../audit/query-artifact-capture.js";
-import { assertLicenseAllowsMcp, loadLicenseSnapshot } from "../license/entitlement.js";
 import { canonicalizeLucyQueryArgs } from "./lucy-query-normalization.js";
 import { applyLucyQueryForcedFilters, buildExplainForcedPredicateDiagnostics, isScopeIntersectionEmpty } from "./row-policy.js";
 import { TurnCorrelationRegistry } from "./turn-correlation.js";
 import { beginAuditWrite, completeAuditWrite, failAuditWrite } from "./audit-write-health.js";
+import {
+  classifyFailure,
+  denialAllowList,
+  filterPushdownGuardEnabled,
+  isEmptyResult,
+  isFilterPushdownText,
+  isQuestionDataTool,
+  isSlowCall,
+  lookupPublishedVersion,
+  publishedSourceName,
+  questionBudget,
+  questionBudgetEnabled,
+  registerPublishedVersion,
+  repairHint,
+  resolveAppliedVersion,
+  resolveResponseTruncated,
+  TRUNCATION_REPAIR_HINT,
+} from "./question-experience.js";
+import { applyLucyCallGuard, countWithoutSourceBeforeAcl, loadPublishedAmbiguityCatalog, queryGuardrailsEnabled } from "./query-guardrails.js";
+import {
+  lookupReportTemplate,
+  resolveCertifiedRoute,
+} from "./certified-route.js";
+
+export { registerPublishedVersion };
 
 const KTX_HOST = process.env.LUCY_PROXY_UPSTREAM_HOST ?? "127.0.0.1";
 const KTX_PORT = Number(process.env.LUCY_PROXY_UPSTREAM_PORT ?? 7878);
@@ -48,13 +86,10 @@ const KTX_PORT = Number(process.env.LUCY_PROXY_UPSTREAM_PORT ?? 7878);
 // Routed under `/mcp/skills` to keep the existing `/mcp` KTX path unchanged.
 const LUCY_SKILLS_HOST = process.env.LUCY_PROXY_LUCY_SKILLS_HOST ?? "127.0.0.1";
 const LUCY_SKILLS_PORT = Number(process.env.LUCY_PROXY_LUCY_SKILLS_PORT ?? 7881);
-const LUCY_SKILLS_PATH_PREFIX = "/mcp/skills";
 // Spec 144: governed skills are served through the ACL-enforced interceptions on `/mcp`.
 // The legacy lucy-skills upstream has no auth or per-skill ACL of its own, so the
-// passthrough stays disabled unless explicitly enabled for local development.
-const SKILLS_PASSTHROUGH_ENABLED = ["1", "true", "yes"].includes(
-  (process.env.LUCY_PROXY_SKILLS_PASSTHROUGH ?? "").toLowerCase()
-);
+// passthrough stays disabled unless explicitly enabled for local development
+// (`LUCY_DEPLOYMENT_MODE=development`); customer mode refuses to start with it on.
 const MAX_BODY_BYTES = Number(process.env.LUCY_PROXY_MAX_BODY_BYTES ?? 1_048_576);
 const UPSTREAM_TIMEOUT_MS = Number(process.env.LUCY_PROXY_UPSTREAM_TIMEOUT_MS ?? 30_000);
 const QUERY_KEY_RE = /^(?:sql|query)$/i;
@@ -166,6 +201,12 @@ function forwardToUpstream(
   sessionId?: string
 ): Promise<IncomingMessage> {
   return new Promise((resolve, reject) => {
+    // T04-3: no upstream call is started for a request a narrowing already covers.
+    const barrier = currentBarrierHandle();
+    if (barrier && !barrier.isCurrent()) {
+      reject(new AuthorizationRevokedError());
+      return;
+    }
     const headers: Record<string, string | string[]> = {};
     for (const [k, v] of Object.entries(incomingHeaders)) {
       if (v === undefined) continue;
@@ -191,9 +232,37 @@ function forwardToUpstream(
       upstream.destroy(new Error(`${label} upstream timeout after ${UPSTREAM_TIMEOUT_MS}ms`));
     });
     upstream.on("error", reject);
+    barrier?.trackUpstream(upstream);
     if (body) upstream.end(body);
     else upstream.end();
   });
+}
+
+/**
+ * T04-2 — the client's `Mcp-Session-Id` is only honoured when this (Agent,
+ * Token) was issued it. Anything else is dropped before forwarding, so a
+ * borrowed id cannot reach another caller's KTX session; the gateway then
+ * supplies the caller's own default session instead.
+ */
+function headersWithOwnedSession(
+  identity: Identity,
+  headers: IncomingMessage["headers"]
+): IncomingMessage["headers"] {
+  const owner = upstreamSessionOwner(identity);
+  if (ownsUpstreamSession(owner, normalizeHeader(headers["mcp-session-id"]))) return headers;
+  const scoped: IncomingMessage["headers"] = { ...headers };
+  for (const key of Object.keys(scoped)) {
+    if (key.toLowerCase() === "mcp-session-id") delete scoped[key];
+  }
+  return scoped;
+}
+
+/** Session id to send upstream for a non-`initialize` request, or none. */
+function resolveOutboundSession(identity: Identity, headers: IncomingMessage["headers"]): string | undefined {
+  const owner = upstreamSessionOwner(identity);
+  const clientSessionId = normalizeHeader(headers["mcp-session-id"]);
+  if (ownsUpstreamSession(owner, clientSessionId)) return clientSessionId;
+  return upstreamSessionKeepaliveEnabled() ? getUpstreamSession(owner) : undefined;
 }
 
 function readUpstreamBody(upstream: IncomingMessage): Promise<string> {
@@ -243,7 +312,7 @@ async function handshakeUpstreamSession(identity: Identity): Promise<string | un
   const initializedResponse = await forwardToKtx("POST", "/mcp", handshakeHeaders, initializedBody, sessionId);
   await readUpstreamBody(initializedResponse);
 
-  setUpstreamSession(identity.userId, sessionId);
+  setUpstreamSession(upstreamSessionOwner(identity), sessionId);
   return sessionId;
 }
 
@@ -299,14 +368,15 @@ async function forwardToKtxWithSession(
   body: Buffer | undefined
 ): Promise<SessionAwareUpstream> {
   const keepalive = upstreamSessionKeepaliveEnabled();
-  const session = emptyUpstreamSessionState(Boolean(normalizeHeader(incomingHeaders["mcp-session-id"])));
+  const clientSessionId = normalizeHeader(incomingHeaders["mcp-session-id"]);
+  const session = emptyUpstreamSessionState(Boolean(clientSessionId));
   // Lazy on purpose: a client that completed `initialize` already has a cached
   // session, so the normal path costs no extra upstream round-trip. The
   // handshake only runs once KTX actually refuses the request.
-  const sessionId = keepalive ? getUpstreamSession(identity.userId) : undefined;
-  session.gatewaySupplied = Boolean(sessionId) && !session.clientSupplied;
+  const sessionId = resolveOutboundSession(identity, incomingHeaders);
+  session.gatewaySupplied = Boolean(sessionId) && sessionId !== clientSessionId;
 
-  let upstream = await forwardToKtx(method, url, incomingHeaders, body, sessionId);
+  let upstream = await forwardToKtx(method, url, headersWithOwnedSession(identity, incomingHeaders), body, sessionId);
   let upstreamBody = await readUpstreamBody(upstream);
   if (!keepalive) return { upstream, body: upstreamBody, session };
 
@@ -318,7 +388,7 @@ async function forwardToKtxWithSession(
   );
   if (!refused) return { upstream, body: upstreamBody, session };
 
-  clearUpstreamSession(identity.userId);
+  if (sessionId) clearUpstreamSession(upstreamSessionOwner(identity), sessionId);
   session.handshakeAttempted = true;
   const freshSession = await handshakeUpstreamSession(identity).catch(() => undefined);
   if (!freshSession) {
@@ -365,12 +435,43 @@ function toSourceRecords(refs: SourceRef[]): AccessLogSourceRecord[] {
   }));
 }
 
+/**
+ * Spec 173 v0.3 / 2026-10-19 audit-trust: bindOpenSessionTurn is撤销.
+ * The function previously re-resolved attribution at write time; v0.3 forbids write-time
+ * rewrite of `lucy_turn_id` / association_status / effective_*. Attribution must be frozen
+ * at admission (see `reportedTurns.resolve` in the /mcp tools/call handler before
+ * `recordAudit`). New code MUST NOT re-introduce this helper.
+ */
+function _bindOpenSessionTurn_REMOVED_v0_3(
+  _entry: Partial<Parameters<typeof writeLog>[0]>,
+  _owner: Identity
+): void {
+  // intentionally empty; the function body is preserved here only as a tombstone to
+  // catch accidental re-imports. Do not call.
+  return;
+}
+
 function recordAudit(entry: Parameters<typeof writeLog>[0], sources?: SourceRef[]): void {
   beginAuditWrite();
-  writeLog(entry)
+  // A known User-Agent product replaces an empty name or Lucy's own placeholder.
+  // Other self-reported names stay. Unknown agents such as undici are not guessed.
+  // `client_ip` stays the socket peer.
+  const resolved = resolveClientIdentity({
+    client: entry.client,
+    clientVersion: entry.clientVersion,
+    userAgent: entry.userAgent
+  });
+  const normalized: Parameters<typeof writeLog>[0] = {
+    ...entry,
+    client: resolved.client,
+    clientVersion: resolved.clientVersion,
+    reportedClient: resolved.reportedClient,
+    reportedClientVersion: resolved.reportedClientVersion
+  };
+  writeLog(normalized)
     .then((accessLogId) => {
       if (sources && sources.length > 0) {
-        return writeAccessLogSources(accessLogId, entry.ts, entry.userId, entry.tool, toSourceRecords(sources));
+        return writeAccessLogSources(accessLogId, normalized.ts, normalized.userId, normalized.tool, toSourceRecords(sources));
       }
     })
     .then(() => {
@@ -555,8 +656,19 @@ function recordMcpTraceForTool(input: {
     });
 }
 
-async function auditMeta(identity: Identity | null | undefined, decisionReason: string): Promise<Partial<Parameters<typeof writeLog>[0]>> {
-  return buildAccessLogAuditMeta(identity, decisionReason);
+async function auditMeta(
+  identity: Identity | null | undefined,
+  decisionReason: string,
+  extra?: { compilerReason?: string }
+): Promise<Partial<Parameters<typeof writeLog>[0]>> {
+  const meta = await buildAccessLogAuditMeta(identity, decisionReason);
+  if (!identity?.actorId) return extra?.compilerReason ? { ...meta, compilerReason: extra.compilerReason } : meta;
+  return {
+    ...meta,
+    actorId: identity.actorId,
+    actorKind: identity.actorKind,
+    ...(extra?.compilerReason ? { compilerReason: extra.compilerReason } : {})
+  };
 }
 
 function correlationMeta(headers: IncomingMessage["headers"]): Partial<Parameters<typeof writeLog>[0]> {
@@ -564,25 +676,6 @@ function correlationMeta(headers: IncomingMessage["headers"]): Partial<Parameter
     lucySessionId: normalizeHeader(headers["x-lucy-session-id"]) || normalizeHeader(headers["mcp-session-id"]),
     lucyPlatform: normalizeHeader(headers["x-lucy-platform"])
   };
-}
-
-function recordAuthFailure(
-  req: IncomingMessage,
-  result: Awaited<ReturnType<typeof identifyRequestDetailed>>
-): void {
-  if (result.ok) return;
-  const network = extractRequestClientMeta(req);
-  void writeAuthFailureLog({
-    ts: new Date().toISOString(),
-    reason: result.reason,
-    clientIp: network.clientIp,
-    userAgent: network.userAgent,
-    tokenHashPrefix: result.tokenHashPrefix,
-    userId: result.userId,
-    tokenLabel: result.tokenLabel
-  }).catch((error) => {
-    console.error("[lucy-proxy] failed to write auth_failure_log", error);
-  });
 }
 
 function findRawQuery(value: unknown, depth = 0): string | undefined {
@@ -688,7 +781,11 @@ function inspectRowsAndColumns(value: unknown, depth = 0): { rows?: number; colu
   return {};
 }
 
-function responseAuditMeta(body: Buffer, contentType: string | string[] | number | undefined): Partial<Parameters<typeof writeLog>[0]> {
+function responseAuditMeta(
+  body: Buffer,
+  contentType: string | string[] | number | undefined,
+  options: { toolName?: string; rowCap?: number } = {}
+): Partial<Parameters<typeof writeLog>[0]> {
   const meta: Partial<Parameters<typeof writeLog>[0]> = { responseBytes: body.byteLength };
   const type = Array.isArray(contentType) ? contentType.join(",") : String(contentType ?? "");
   if (!type.includes("application/json")) return meta;
@@ -698,6 +795,16 @@ function responseAuditMeta(body: Buffer, contentType: string | string[] | number
     meta.responseRowCount = inspected.rows;
     meta.responseColumnCount = inspected.columns;
     meta.responseTruncated = findBooleanFlag(parsed, "truncated");
+    // Spec 162 §7.5 / SC-10 — a successful lucy_query always writes 0 or 1.
+    // Only lucy_query; lucy_freshness / lucy_explain_query keep their own 0.
+    if (options.toolName === "lucy_query" && meta.responseTruncated !== true) {
+      const resolved = resolveResponseTruncated({
+        upstreamTruncated: meta.responseTruncated,
+        rowCount: inspected.rows ?? null,
+        rowCap: options.rowCap ?? null
+      });
+      meta.responseTruncated = resolved.responseTruncated === 1;
+    }
   } catch {
     // byte size is still useful even when JSON parsing fails.
   }
@@ -955,6 +1062,41 @@ function lucySkillReadTool() {
   };
 }
 
+/**
+ * Spec 162 §7.8 / SC-13 — 认证路径. Executes a published route as a
+ * role-scoped `lucy_query`; the answer carries `routeId` and its source.
+ */
+function lucyCertifiedRouteTool() {
+  return {
+    name: "lucy_certified_route",
+    description: "Run a published certified route. The answer reports the route id and source it read. Access still follows this agent's permissions.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        routeId: { type: "string", description: "Published certified route id" },
+        templateId: { type: "string", description: "Published report template id (pilot: public_cloud_pnl_quarterly)" }
+      },
+      additionalProperties: false
+    }
+  };
+}
+
+/** Spec 162 §7.8 / SC-19 — single P&L template pilot. */
+function lucyReportTemplateTool() {
+  return {
+    name: "lucy_report_template",
+    description: "Run a published report template and get its source plus the applied version. Pilot scope: public_cloud_pnl_quarterly.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        templateId: { type: "string" }
+      },
+      required: ["templateId"],
+      additionalProperties: false
+    }
+  };
+}
+
 // Local tools the proxy serves itself (never forwarded to KTX). Each is only injected
 // into tools/list when visibleTools allows it — same explicit allow-list gate as any
 // other tool (spec 08 §15 decision 2: no derived/bypass condition).
@@ -970,7 +1112,9 @@ function localToolBuilders(): Array<{ name: string; build: () => Record<string, 
     { name: "wiki_search", build: wikiSearchTool },
     { name: "wiki_read", build: wikiReadTool },
     { name: "lucy_skill_search", build: lucySkillSearchTool },
-    { name: "lucy_skill_read", build: lucySkillReadTool }
+    { name: "lucy_skill_read", build: lucySkillReadTool },
+    { name: "lucy_certified_route", build: lucyCertifiedRouteTool },
+    { name: "lucy_report_template", build: lucyReportTemplateTool }
   ];
   if (process.env.LUCY_ENABLE_QUESTION_TOOL !== "false") {
     builders.push({ name: "lucy_begin_question", build: lucyBeginQuestionTool });
@@ -1449,23 +1593,101 @@ async function connectionList(identity: Identity): Promise<{
 // are guidance, not a security boundary, and a buggy rewriter must not block
 // MCP session establishment for every client.
 //
-// The loader is one-shot at module init; if the file is missing or unreadable
-// we treat it as "injection unavailable" and silently pass-through rather than
-// crash the proxy.
+// Loader state for the data-QA guidance injected into MCP `initialize` responses.
+// Project file takes precedence over the bundled mirror; on read failure the next
+// call retries (a missing or temporarily-unreadable file must not poison the
+// proxy for its lifetime). Successes can be cached and tests can call
+// `invalidateDataQaInstructionsCache()` to force a re-read.
+type DataQaInstructionsSource = "project" | "mirror" | "missing";
+
+interface DataQaInstructionsStatus {
+  source: DataQaInstructionsSource;
+  /** Bytes trimmed length of the loaded text. 0 when missing / failed. */
+  length: number;
+  /** Last error message (if any) from a project or mirror read. */
+  lastError: string | null;
+  /** When the cached value was last successfully loaded. */
+  loadedAt: string | null;
+}
+
 let cachedDataQaInstructions: string | undefined;
-let cachedDataQaInstructionsLoaded = false;
-async function loadDataQaInstructions(): Promise<string | undefined> {
-  if (cachedDataQaInstructionsLoaded) return cachedDataQaInstructions;
-  cachedDataQaInstructionsLoaded = true;
+let cachedDataQaInstructionsSource: DataQaInstructionsSource = "missing";
+let cachedDataQaInstructionsError: string | null = null;
+let cachedDataQaInstructionsLoadedAt: string | null = null;
+
+const DEFAULT_DATA_QA_INSTRUCTIONS_MIRROR = "/app/webui/config/data-qa-instructions.md";
+let dataQaInstructionsMirrorOverride: string | null = null;
+
+export function setDataQaInstructionsMirrorPath(mirrorPath: string | null): void {
+  dataQaInstructionsMirrorOverride = mirrorPath;
+  invalidateDataQaInstructionsCache();
+}
+
+export function invalidateDataQaInstructionsCache(): void {
+  cachedDataQaInstructions = undefined;
+  cachedDataQaInstructionsSource = "missing";
+  cachedDataQaInstructionsError = null;
+  cachedDataQaInstructionsLoadedAt = null;
+}
+
+export function getDataQaInstructionsStatus(): DataQaInstructionsStatus {
+  return {
+    source: cachedDataQaInstructionsSource,
+    length: cachedDataQaInstructions?.length ?? 0,
+    lastError: cachedDataQaInstructionsError,
+    loadedAt: cachedDataQaInstructionsLoadedAt
+  };
+}
+
+async function readDataQaInstructionsFile(filePath: string): Promise<string> {
+  const text = (await readFile(filePath, "utf-8")).trim();
+  if (text.length === 0) throw new Error(`data-qa-instructions.md at ${filePath} is empty`);
+  return text;
+}
+
+export async function loadDataQaInstructions(): Promise<string | undefined> {
+  if (cachedDataQaInstructions && cachedDataQaInstructionsLoadedAt) return cachedDataQaInstructions;
+  const projectRoot = await resolveProjectRoot();
+  const projectFilePath = path.join(projectRoot, "webui", "config", "data-qa-instructions.md");
+  const mirrorFilePath = dataQaInstructionsMirrorOverride ?? DEFAULT_DATA_QA_INSTRUCTIONS_MIRROR;
+
+  // Project file wins; ENOENT falls through to the bundled mirror.
   try {
-    const projectRoot = await resolveProjectRoot();
-    const filePath = path.join(projectRoot, "webui", "config", "data-qa-instructions.md");
-    cachedDataQaInstructions = (await readFile(filePath, "utf-8")).trim();
+    const text = await readDataQaInstructionsFile(projectFilePath);
+    cachedDataQaInstructions = text;
+    cachedDataQaInstructionsSource = "project";
+    cachedDataQaInstructionsError = null;
+    cachedDataQaInstructionsLoadedAt = new Date().toISOString();
+    return cachedDataQaInstructions;
   } catch (err) {
-    console.error("[lucy-proxy] failed to load data-qa-instructions.md; initialize will pass through", err);
-    cachedDataQaInstructions = undefined;
+    const projectErr = err instanceof Error ? err.message : String(err);
+    if (!isFileNotFound(err)) {
+      console.error("[lucy-proxy] failed to read project data-qa-instructions.md", err);
+    }
+    try {
+      const text = await readDataQaInstructionsFile(mirrorFilePath);
+      cachedDataQaInstructions = text;
+      cachedDataQaInstructionsSource = "mirror";
+      cachedDataQaInstructionsError = projectErr;
+      cachedDataQaInstructionsLoadedAt = new Date().toISOString();
+      return cachedDataQaInstructions;
+    } catch (mirrorErr) {
+      const message = mirrorErr instanceof Error ? mirrorErr.message : String(mirrorErr);
+      if (!isFileNotFound(mirrorErr)) {
+        console.error("[lucy-proxy] failed to read mirror data-qa-instructions.md", mirrorErr);
+      }
+      cachedDataQaInstructions = undefined;
+      cachedDataQaInstructionsSource = "missing";
+      cachedDataQaInstructionsError = message;
+      cachedDataQaInstructionsLoadedAt = null;
+      console.error("[lucy-proxy] data-qa-instructions unavailable; initialize will pass through", mirrorErr);
+      return undefined;
+    }
   }
-  return cachedDataQaInstructions;
+}
+
+function isFileNotFound(err: unknown): boolean {
+  return Boolean(err && typeof err === "object" && (err as { code?: string }).code === "ENOENT");
 }
 
 async function buildRoleAwareInstructions(identity: Identity): Promise<string | undefined> {
@@ -1474,7 +1696,7 @@ async function buildRoleAwareInstructions(identity: Identity): Promise<string | 
     const catalog = await lucyCatalog(identity);
     let accessibleSkills: Awaited<ReturnType<typeof filterAccessibleSkills>> = [];
     try {
-      const allSkills = await loadAllSkills();
+      const allSkills = await loadAllSkillsFresh();
       accessibleSkills = await filterAccessibleSkills(identity, allSkills, "discover");
     } catch {
       // Best-effort loading of skills for instructions
@@ -1661,6 +1883,21 @@ function wikiKeyFromResult(item: Record<string, unknown>): string | undefined {
   return firstStringValue(item, ["path", "filePath", "file", "uri", "key", "page", "slug", "id"]);
 }
 
+/**
+ * Spec 162 §7.7 / SC-11 — recover candidate wiki keys from a prose block so a
+ * plain-text `wiki_search` answer is filtered by role instead of rejected as
+ * `unparseable_text`.
+ */
+function extractWikiKeysFromText(text: string): string[] {
+  const keys = new Set<string>();
+  const pattern = /(?:wiki\/)?(?:global\/)?[\p{L}\p{N}_./-]*[\p{L}\p{N}_-]+\.md/gu;
+  for (const match of text.matchAll(pattern)) {
+    const raw = match[0].replace(/^wiki\//, "");
+    if (raw.length > 3) keys.add(raw);
+  }
+  return [...keys];
+}
+
 async function filterWikiResultArray(identity: Identity, items: unknown[]): Promise<{ items: unknown[]; filtered: number; sawWikiKeys: boolean }> {
   const output: unknown[] = [];
   let filtered = 0;
@@ -1677,7 +1914,7 @@ async function filterWikiResultArray(identity: Identity, items: unknown[]): Prom
       continue;
     }
     sawWikiKeys = true;
-    const { decision, page } = await canAccessWikiKey(identity, rawKey);
+    const { decision, page } = await canAccessWikiKey(identity, rawKey, "discover");
     if (!decision.allowed || !page) {
       filtered += 1;
       continue;
@@ -1702,6 +1939,28 @@ async function filterWikiSearchObject(identity: Identity, value: unknown): Promi
     sawWikiKeys = sawWikiKeys || result.sawWikiKeys;
   }
   return { value: rewritten, filtered, sawWikiKeys };
+}
+
+/** Only a successful, explicitly empty search can use canonical keyword fallback. */
+function wikiSearchPayloadIsEmpty(payload: unknown): boolean {
+  const rpc = payload as { error?: unknown; result?: Record<string, unknown> } | undefined;
+  if (!rpc?.result || rpc.error || rpc.result.isError) return false;
+  const sizes: number[] = [];
+  const collect = (value: unknown) => {
+    if (Array.isArray(value)) { sizes.push(value.length); return; }
+    if (!value || typeof value !== "object") return;
+    const record = value as Record<string, unknown>;
+    for (const key of ["results", "items", "pages", "matches", "hits"]) {
+      if (Array.isArray(record[key])) sizes.push((record[key] as unknown[]).length);
+    }
+  };
+  collect(rpc.result);
+  collect(rpc.result.structuredContent);
+  if (Array.isArray(rpc.result.content)) for (const item of rpc.result.content) {
+    if (typeof item?.text !== "string") continue;
+    try { collect(JSON.parse(item.text)); } catch { /* Prose is not proof of an empty search. */ }
+  }
+  return sizes.length > 0 && sizes.every((size) => size === 0);
 }
 
 async function filterWikiSearchPayload(identity: Identity, payload: unknown): Promise<{ payload: unknown; filtered: number; failed?: string }> {
@@ -1744,7 +2003,31 @@ async function filterWikiSearchPayload(identity: Identity, payload: unknown): Pr
         sawWikiKeys = sawWikiKeys || textResult.sawWikiKeys;
         content.push({ ...contentRecord, text: JSON.stringify(textResult.value, null, 2) });
       } catch {
-        return { payload, filtered, failed: "wiki_search_filter_failed:unparseable_text" };
+        // Spec 162 §7.7 / SC-11 — a non-JSON content block is prose, not a
+        // parse failure. Scan it for wiki keys the role cannot read; keep the
+        // original text and never answer `unparseable_text`.
+        const keysInText = extractWikiKeysFromText(contentRecord.text);
+        if (keysInText.length === 0) {
+          content.push(contentRecord);
+          continue;
+        }
+        const dropped = new Set<string>();
+        for (const key of keysInText) {
+          const { decision, page } = await canAccessWikiKey(identity, key, "discover");
+          if (decision.allowed && page) continue;
+          filtered += 1;
+          sawWikiKeys = true;
+          dropped.add(key);
+        }
+        if (dropped.size === 0) {
+          content.push(contentRecord);
+          continue;
+        }
+        const redacted = [...dropped].reduce(
+          (text, key) => text.split(key).join("[wiki_not_authorized]"),
+          contentRecord.text
+        );
+        content.push({ ...contentRecord, text: redacted });
       }
     }
     rewrittenResult.content = content;
@@ -1771,6 +2054,16 @@ function rpcErrorResponse(requestId: string | number, message: string, reason: s
       data: { reason }
     }
   };
+}
+
+/** Spec §4.4 — identical external text for unauthorized / unknown / draft / deprecated context objects. */
+function contextExternalReason(internalReason: string | undefined): string {
+  return internalReason === "context_role_required" ? CONTEXT_ROLE_REQUIRED : CONTEXT_NOT_AVAILABLE;
+}
+
+function contextUnavailableRpc(requestId: string | number, internalReason: string | undefined): Record<string, unknown> {
+  const reason = contextExternalReason(internalReason);
+  return rpcErrorResponse(requestId, reason, reason);
 }
 
 function upstreamFailureReason(error: unknown): "source_timeout" | "upstream_unavailable" {
@@ -2014,6 +2307,25 @@ function boundedProvenanceValue(value: unknown, depth = 0): unknown {
   return output;
 }
 
+function appliedLucyVersion(
+  toolName: string,
+  argsRecord: Record<string, unknown>,
+  sourceRefs: SourceRef[]
+): { appliedVersion: string; businessDate: string; valueKind: "实际" | "预测" } | undefined {
+  if (toolName !== "lucy_query") return undefined;
+  const sourceName = publishedSourceName(argsRecord, sourceRefs[0]?.sourceName);
+  const applied = resolveAppliedVersion(
+    { version: firstStringField(argsRecord, ["version", "appliedVersion"]) },
+    lookupPublishedVersion(sourceName)
+  );
+  if (!applied) return undefined;
+  return {
+    appliedVersion: applied.version,
+    businessDate: applied.businessDate,
+    valueKind: applied.valueKind
+  };
+}
+
 function withLucyResultMeta(
   payload: unknown,
   requestId: string | number,
@@ -2036,6 +2348,16 @@ function withLucyResultMeta(
   const orderBy = firstFieldValue(argsRecord, ["orderBy", "order_by"]);
   const inspectedResult = inspectRowsAndColumns(resultRecord);
   const responseTruncated = findBooleanFlag(resultRecord, "truncated");
+  // Spec 162 §7.5 — success rows always report 0 or 1; hitting the row cap
+  // forces 1 and attaches the aggregate repair hint.
+  const truncation = toolName === "lucy_query"
+    ? resolveResponseTruncated({
+      upstreamTruncated: responseTruncated,
+      rowCount: inspectedResult.rows ?? null,
+      rowCap: numericLimit(argsRecord.limit)
+    })
+    : null;
+  const effectiveTruncated = truncation ? truncation.responseTruncated === 1 : responseTruncated;
   return {
     ...record,
     result: {
@@ -2058,8 +2380,10 @@ function withLucyResultMeta(
           result: {
             rowCount: inspectedResult.rows ?? null,
             columnCount: inspectedResult.columns ?? null,
-            truncated: responseTruncated ?? null
+            truncated: effectiveTruncated ?? null
           },
+          ...(truncation?.repair ? { repair: truncation.repair } : {}),
+          ...(appliedLucyVersion(toolName, argsRecord, sourceRefs) ?? {}),
           provenance: {
             connectionId: firstStringField(argsRecord, ["connectionId", "connection_id", "connection"]) ?? null,
             sourceName: firstStringField(argsRecord, ["sourceName", "source_name", "source", "table"]) ?? sourceRefs[0]?.sourceName ?? null,
@@ -2138,6 +2462,7 @@ async function writeUpstreamFailureResponse(
     argsSummary: Record<string, unknown> | undefined;
     queryMeta: Partial<Parameters<typeof writeLog>[0]>;
     tables: string[];
+    sourceRefs: SourceRef[];
     traceId: string;
   }
 ): Promise<void> {
@@ -2147,6 +2472,10 @@ async function writeUpstreamFailureResponse(
     "content-length": responseBytes
   });
   context.res.end(failure.responseBody);
+  // Spec 173 v0.3 / 2026-10-19 audit-trust: attribution is frozen at admission (line 3004-3014 below).
+  // No re-resolution at write time; effective_* and original_* must already be set on requestMeta.
+  // bindOpenSessionTurn(...) removed; the binding helpers (bindPriorSessionCalls + the
+  // admission-time resolve at /mcp tools/call) own the post-begin binding policy.
 
   recordAudit({
     ts: new Date().toISOString(),
@@ -2164,7 +2493,7 @@ async function writeUpstreamFailureResponse(
     traceId: context.traceId,
     ...context.requestMeta,
     ...(await auditMeta(context.identity, failure.reason)),
-  });
+  }, context.sourceRefs);
   recordMcpTraceForTool({
     traceId: context.traceId,
     identity: context.identity,
@@ -2214,12 +2543,15 @@ async function writeLucySemanticResponse(
       argsSummary,
       queryMeta,
       tables: [...new Set([...sourceRefs.map((ref) => ref.physicalTable), ...queryTables])],
+      sourceRefs,
       traceId
     });
     return;
   }
   let body = originalBody;
   let metaFailed: string | undefined;
+  let compilerReason: string | undefined;
+  let preservedGeneratedSql: string | undefined;
   // Buffered tools/call responses are always normalized to application/json when
   // rewrite succeeds. Re-emitting a finite SSE frame with Content-Length +
   // keep-alive causes Streamable HTTP clients (Cursor / Claude Code) to wait for
@@ -2241,6 +2573,30 @@ async function writeLucySemanticResponse(
   } catch (err) {
     metaFailed = `lucy_result_meta_failed:${err instanceof Error ? err.message : String(err)}`;
     body = originalBody;
+  }
+
+  if (toolName === "lucy_query" && filterPushdownGuardEnabled() && isFilterPushdownText(body)) {
+    let originalParsed: unknown;
+    try {
+      originalParsed = JSON.parse(originalBody);
+    } catch {
+      originalParsed = undefined;
+    }
+    const sql = extractSqlFromToolResult(originalParsed);
+    compilerReason = "filter_pushdown";
+    preservedGeneratedSql = sql?.trim() ? sql : undefined;
+    const visible = new Set(sourceRefs.map((ref) => ref.sourceName).filter((name): name is string => Boolean(name)));
+    const hint = repairHint({ failureDimension: "过滤条件下推", suggestedSources: [...visible] }, visible)
+      ?? "这次过滤条件无法下推。请改成等值、包含或枚举条件后再查。";
+    body = JSON.stringify({
+      jsonrpc: "2.0",
+      id: requestId,
+      result: {
+        isError: true,
+        content: [{ type: "text", text: hint }]
+      }
+    });
+    forceJson = true;
   }
 
   const headers = forceJson ? bufferedJsonHeaders(upstream) : passthroughBodyHeaders(upstream);
@@ -2274,15 +2630,32 @@ async function writeLucySemanticResponse(
 
   const structuredTables = sourceRefs.map((ref) => ref.physicalTable);
   const tables = [...new Set([...structuredTables, ...queryTables])];
-  const responseMeta = responseAuditMeta(Buffer.from(body), headers["content-type"]);
-  const decisionReason = outcome === "ok"
-    ? (metaFailed
-      ? "lucy_result_meta_failed"
-      : (options.scopeIntersectionEmpty ? "scope_intersection_empty" : "allowed"))
-    : await classifyUpstreamToolError(originalBody, toolArgs);
-  if (outcome === "ok") {
+  const effectiveRowCap = toolName === "lucy_query"
+    ? numericLimit((toolArgs as Record<string, unknown> | undefined)?.limit)
+    : undefined;
+  const responseMeta = responseAuditMeta(Buffer.from(body), headers["content-type"], {
+    toolName,
+    rowCap: effectiveRowCap
+  });
+  const decisionReason = compilerReason
+    ? "filter_pushdown"
+    : outcome === "ok"
+      ? (metaFailed
+        ? "lucy_result_meta_failed"
+        : (options.scopeIntersectionEmpty ? "scope_intersection_empty" : "allowed"))
+      : await classifyUpstreamToolError(originalBody, toolArgs);
+  if (outcome === "ok" && !compilerReason) {
     await recordSuccessfulQueryObservation(toolName, toolArgs);
   }
+  // Spec 173 v0.3: attribution frozen at admission; no re-resolution at write time.
+  const argsRecord = toolArgs && typeof toolArgs === "object" && !Array.isArray(toolArgs) ? toolArgs as Record<string, unknown> : {};
+  const applied = compilerReason ? undefined : appliedLucyVersion(toolName, argsRecord, sourceRefs);
+  const failureDimension = compilerReason
+    ? "过滤条件下推"
+    : classifyFailure({ outcome, decisionReason, errorDetail });
+  // Spec 162 §8 / SC-20 — the new slow mark and the empty-result flag are
+  // decided at write time so every consumer reads the same verdict.
+  const slowVerdict = isSlowCall({ tool: toolName, durationMs: Date.now() - start });
   const baseEntry: Parameters<typeof writeLog>[0] = {
     ts: new Date().toISOString(),
     userId: identity.userId,
@@ -2291,9 +2664,17 @@ async function writeLucySemanticResponse(
     tables: tables.length > 0 ? tables : undefined,
     argsSummary,
     ...queryMeta,
-    ...generatedSqlAuditFields(toolName, parsedBody),
+    ...generatedSqlAuditFields(toolName, preservedGeneratedSql ? { result: { sql: preservedGeneratedSql } } : parsedBody),
     outcome,
     errorDetail,
+    compilerReason,
+    failureDimension: failureDimension || undefined,
+    isSlowCall: slowVerdict.slow,
+    slowBasis: slowVerdict.basis ?? undefined,
+    resultEmpty: isEmptyResult({ outcome, responseRowCount: responseMeta.responseRowCount ?? null }),
+    appliedVersion: applied?.appliedVersion,
+    appliedBusinessDate: applied?.businessDate,
+    appliedValueKind: applied?.valueKind,
     durationMs: Date.now() - start,
     ...responseMeta,
     requestId,
@@ -2301,7 +2682,7 @@ async function writeLucySemanticResponse(
     ...requestMeta,
     ...(await auditMeta(identity, withUpstreamSessionNote(decisionReason, session))),
   };
-  recordAudit(baseEntry, outcome === "ok" ? sourceRefs : undefined);
+  recordAudit(baseEntry, sourceRefs);
   recordMcpTraceForTool({
     traceId,
     identity,
@@ -2328,6 +2709,50 @@ function toolsListErrorResponse(requestId: string | number, detail: string): Rec
       message: "tools/list filtering failed",
       data: { reason: detail }
     }
+  };
+}
+
+/**
+ * Spec 178 / T1 — a role-compile failure must surface on `tools/list` as a
+ * 403, not as a successful empty `tools: []` body.
+ *
+ * The admission gate already rejects ghost / disabled / revoked / expired
+ * Agents and roles whose YAML declared body is missing; this matcher only
+ * covers the *post-admission* compile failures that `effectivePermissions`
+ * reports. Order matches Spec 177's `compileRole` / `effectivePermissions`
+ * reasons exactly.
+ */
+const COMPILE_DENIAL_PREFIXES = [
+  "role_resolution_failed",
+  "source_map_compile_failed"
+] as const;
+
+function isToolsListCompileDenialReason(reason: string | undefined): boolean {
+  if (!reason) return false;
+  if (reason === "policy_degraded_deny") return true;
+  return COMPILE_DENIAL_PREFIXES.some((prefix) => reason.startsWith(prefix));
+}
+
+/**
+ * Spec 178 §2 — JSON-RPC envelope + HTTP 403. The outward message stays
+ * consistent with the admission layer; only `role_resolution_failed` is
+ * spelled as a bare class so the existing 403 tests keep matching.
+ */
+function compileDeniedToolsListEnvelope(
+  requestId: string | number,
+  reason: string
+): { body: string; statusCode: number; message: string } {
+  const message = reason.startsWith("role_resolution_failed")
+    ? "Access denied: role_resolution_failed"
+    : `Access denied: ${reason}`;
+  return {
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: requestId,
+      error: { code: -32003, message }
+    }),
+    statusCode: 403,
+    message
   };
 }
 
@@ -2368,7 +2793,32 @@ async function writeToolsListResponse(
   res: ServerResponse,
   requestId: string | number,
   session: UpstreamSessionState | undefined
-): Promise<{ filterFailed: boolean; errorDetail?: string; responseBytes: number; upstreamFailure?: UpstreamFailureReason }> {
+): Promise<{
+  filterFailed: boolean;
+  errorDetail?: string;
+  responseBytes: number;
+  upstreamFailure?: UpstreamFailureReason;
+  compileDenied?: boolean;
+}> {
+  // Spec 178 / T1 — `effectivePermissions` compile failure wins over upstream /
+  // filter / empty-list success. Checked first so the cached `result.tools: []`
+  // path never reaches the client for a failed identity.
+  const compiled = await effectivePermissions(identity).catch(() => null);
+  if (compiled && !compiled.ok && isToolsListCompileDenialReason(compiled.reason)) {
+    const envelope = compileDeniedToolsListEnvelope(requestId, compiled.reason);
+    res.writeHead(envelope.statusCode, {
+      "content-type": "application/json",
+      "content-length": Buffer.byteLength(envelope.body)
+    });
+    res.end(envelope.body);
+    return {
+      filterFailed: true,
+      errorDetail: compiled.reason,
+      responseBytes: Buffer.byteLength(envelope.body),
+      compileDenied: true
+    };
+  }
+
   const originalBody = upstreamBody;
   const contentType = String(upstream.headers["content-type"] ?? "");
   const upstreamFailure = classifyUpstreamFailure(upstream.statusCode, contentType, originalBody, requestId, session);
@@ -2479,27 +2929,21 @@ async function writeInitializeResponse(
   return { injectionFailed, errorDetail, responseBytes };
 }
 
-async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<void> {
+async function handlePost(req: IncomingMessage, res: ServerResponse, admitted: AdmittedRequest): Promise<void> {
   const sessionId = normalizeHeader(req.headers["mcp-session-id"]);
   const explicitTurnId = normalizeHeader(req.headers["x-lucy-turn-id"]);
-  const identify = await identifyRequestDetailed(req.headers.authorization, sessionId);
+  const { identity, body } = admitted;
   const networkMeta = extractRequestClientMeta(req);
   const requestMeta: Partial<Parameters<typeof writeLog>[0]> = {
     ...correlationMeta(req.headers),
     clientIp: networkMeta.clientIp,
+    // Spec 162 §8 / SC-22 — forwarded chain is recorded for display only and
+    // never participates in ACL.
+    clientForwardedFor: networkMeta.clientForwardedFor,
     userAgent: networkMeta.userAgent,
     // Runtime device name only — never fall back to YAML remark.
     ...(networkMeta.deviceName ? { deviceName: networkMeta.deviceName } : {})
   };
-  if (!identify.ok) {
-    recordAuthFailure(req, identify);
-    res.writeHead(401, { "content-type": "application/json" });
-    res.end(JSON.stringify({ jsonrpc: "2.0", error: { code: -32001, message: "Unauthorized" }, id: null }));
-    return;
-  }
-  const identity = identify.identity;
-
-  const body = await readBody(req);
   const start = Date.now();
   const traceId = `trace_${randomUUID()}`;
 
@@ -2569,8 +3013,61 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
     entry: Parameters<typeof writeLog>[0],
     sources?: SourceRef[]
   ) => {
+    // Spec 173 v0.3 / 2026-10-19 audit-trust: attribution is frozen at admission (line 3004-3014 below).
+    // No re-resolution at write time. effective_* and original_* must already be set on entry.
+    // The previous bindOpenSessionTurn(...) call here is撤销; do not re-introduce without T00-r2 contract change.
     const withTrace = rpcMethod === "tools/call" ? { ...entry, traceId } : entry;
     recordAudit(withTrace, sources);
+  };
+
+  const respondLocalWikiSearch = async (
+    query: string | undefined,
+    limit: number,
+    results: Awaited<ReturnType<typeof searchAccessibleWikiPages>>,
+    upstreamError?: string
+  ): Promise<void> => {
+    // SC-12 — only articles this role can read are injected, and each one
+    // is audited with its key and wiki version.
+    const wikiInjectedKeys = results.map((hit) => hit.key);
+    const wikiVersions = results.map((hit) => hit.version ?? "unknown");
+    const responseBody = jsonRpcToolResult(requestId, JSON.stringify({
+      query: query ?? "",
+      results,
+      filteredBy: "wiki_acl"
+    }, null, 2), { isError: !query });
+    res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+    res.end(responseBody);
+    recordRequestAudit({
+      ts: new Date().toISOString(),
+      userId: identity.userId,
+      client: identity.client,
+      tool: "wiki_search",
+      argsSummary: query ? { query, limit } : argsSummary,
+      ...queryMeta,
+      wikiInjectedKeys,
+      wikiVersions,
+      outcome: query ? "ok" : "error",
+      errorDetail: query ? upstreamError : "wiki_query_missing",
+      durationMs: Date.now() - start,
+      responseBytes: Buffer.byteLength(responseBody),
+      requestId,
+      ...requestMeta,
+      ...(await auditMeta(identity, query ? "local_wiki_search" : "wiki_query_missing")),
+    });
+    recordMcpTraceForTool({
+      traceId,
+      identity,
+      toolName: "wiki_search",
+      status: query ? "ok" : "error",
+      startedAt: new Date(start).toISOString(),
+      turnId: requestMeta.lucyTurnId ?? null,
+      sessionId: requestMeta.lucySessionId ?? null,
+      requestId,
+      argsSummary: query ? { query, limit } : argsSummary,
+      allowed: Boolean(query),
+      reason: query ? "local_wiki_search" : "wiki_query_missing",
+      policySource: "wiki_acl"
+    });
   };
 
   // Spec 138: Session-bound matching is authoritative. Identity-only matching
@@ -2585,6 +3082,46 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
     requestMeta.turnAttributionMode = attribution.mode;
     requestMeta.turnAttributionConfidence = attribution.confidence;
     requestMeta.turnAttributionReason = attribution.reason;
+    Object.assign(requestMeta, {
+      associationStatus: attribution.associationStatus,
+      originalTurnId: attribution.turnId, effectiveTurnId: attribution.turnId,
+      originalAttributionMode: attribution.mode, effectiveAttributionMode: attribution.mode,
+      originalAssociationStatus: attribution.associationStatus, effectiveAssociationStatus: attribution.associationStatus,
+      originalAttributionConfidence: attribution.confidence, effectiveAttributionConfidence: attribution.confidence,
+      originalReason: attribution.reason, effectiveReason: attribution.reason
+    });
+  }
+  if (requestMeta.lucyTurnId) questionBudget.ensureTurn(requestMeta.lucyTurnId, Date.now());
+
+  // Spec 162 §8 / SC-20 — a cancellation is attached to its question when the
+  // session resolves to an open turn. Without a session there is nothing to
+  // attach, so the notification is recorded without a turn id.
+  if (rpcMethod === "notifications/cancelled") {
+    const attribution = reportedTurns.resolve({
+      identity,
+      sessionId: requestMeta.lucySessionId
+    });
+    if (attribution.turnId) {
+      requestMeta.lucyTurnId = attribution.turnId;
+      requestMeta.turnAttributionMode = attribution.mode;
+      requestMeta.turnAttributionConfidence = attribution.confidence;
+      questionBudget.ensureTurn(attribution.turnId, Date.now());
+    }
+    recordRequestAudit({
+      ts: new Date().toISOString(),
+      userId: identity.userId,
+      client: identity.client,
+      tool: "notifications/cancelled",
+      argsSummary,
+      outcome: "ok",
+      durationMs: Date.now() - start,
+      requestId,
+      ...requestMeta,
+      ...(await auditMeta(identity, "cancelled")),
+    });
+    res.writeHead(202, { "content-length": "0" });
+    res.end();
+    return;
   }
 
   const invalidArgumentsReason = queryNormalizationReason ?? (
@@ -2629,22 +3166,234 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
     return;
   }
 
-  // Deployment license check for tool calls (before data ACL)
-  if (rpcMethod === "tools/call" && toolName) {
-    const licenseSnapshot = await loadLicenseSnapshot();
-    const licenseDecision = assertLicenseAllowsMcp(licenseSnapshot);
-    if (!licenseDecision.allowed) {
-      const errorMsg = licenseDecision.decisionReason ?? licenseDecision.code.toLowerCase();
-      const meta = await auditMeta(identity, errorMsg);
-      const responseBody = JSON.stringify({
-        jsonrpc: "2.0",
-        id: requestId,
-        result: {
-          isError: true,
-          content: [{ type: "text", text: `Access denied: ${errorMsg}` }]
-        }
-      });
-      res.writeHead(200, { "content-type": "application/json" });
+  /**
+ * Spec 162 §7.8 / SC-13 / SC-19 — 认证路径 and the single template pilot.
+ *
+ * Execution is still a role-scoped `lucy_query`: the route/template never
+ * grants access. A role that cannot read the source gets a permission denial
+ * whose repair list is drawn only from that role's ACL. The success payload
+ * always carries the source and, when declared, the applied version.
+ */
+async function writeCertifiedRouteResponse(
+  identity: Identity,
+  toolName: string,
+  toolArgs: unknown,
+  context: {
+    res: ServerResponse;
+    requestId: string | number;
+    start: number;
+    requestMeta: Partial<Parameters<typeof writeLog>[0]>;
+    argsSummary: Record<string, unknown> | undefined;
+    queryMeta: Partial<Parameters<typeof writeLog>[0]>;
+    traceId: string;
+  }
+): Promise<void> {
+  const { res, requestId, start, requestMeta, argsSummary, queryMeta, traceId } = context;
+  const args = (toolArgs && typeof toolArgs === "object" && !Array.isArray(toolArgs)
+    ? toolArgs as Record<string, unknown>
+    : {}) as Record<string, unknown>;
+  const firstString = firstStringField(args, ["routeId", "route_id"]) ?? "";
+  const templateId = firstStringField(args, ["templateId", "template_id"]) ?? "";
+  const identifier = toolName === "lucy_report_template" ? templateId : firstString;
+
+  const resolved = await effectivePermissions(identity).catch(() => null);
+  const permissions = resolved?.ok ? resolved.permissions : undefined;
+  const readsSource = (source: string): boolean => {
+    if (!permissions) return false;
+    if (permissions.tables.includes("*")) return true;
+    return permissions.sources.some((entry) => entry.sourceName === source || entry.table === source);
+  };
+
+  type Gate =
+    | { ok: true; routeId: string; source: string; version?: string; query: Record<string, unknown> }
+    | {
+      ok: false;
+      decision: "permission_denied" | "not_found";
+      reason: string;
+      repair: { connections: string[]; sources: string[] } | null;
+    };
+
+  const denyWith = (decision: "permission_denied" | "not_found", reason: string): Gate => ({
+    ok: false,
+    decision,
+    reason,
+    repair: permissions
+      ? denialAllowList({ connections: permissions.connections, sources: permissions.sources })
+      : null
+  });
+
+  let gate: Gate;
+  if (toolName === "lucy_report_template") {
+    const template = identifier ? lookupReportTemplate(identifier) : undefined;
+    if (!template) {
+      gate = denyWith("not_found", "report_template_not_found");
+    } else if (!readsSource(template.source)) {
+      gate = denyWith("permission_denied", `explicit_table_required:${template.source}`);
+    } else {
+      gate = {
+        ok: true,
+        routeId: template.templateId,
+        source: template.source,
+        version: template.version,
+        query: { connectionId: template.source.split(".")[0], sourceName: template.source }
+      };
+    }
+  } else {
+    const resolvedRoute = resolveCertifiedRoute(identifier, {
+      readsSource,
+      permissions: permissions
+        ? { connections: permissions.connections, sources: permissions.sources }
+        : undefined
+    });
+    if (!resolvedRoute.ok) {
+      gate = resolvedRoute.decision === "permission_denied"
+        ? { ok: false, decision: "permission_denied", reason: resolvedRoute.reason, repair: resolvedRoute.repair }
+        : { ok: false, decision: "not_found", reason: resolvedRoute.reason, repair: null };
+    } else {
+      const route = resolvedRoute.route;
+      gate = {
+        ok: true,
+        routeId: route.routeId,
+        source: route.source,
+        version: route.version,
+        query: route.query
+      };
+    }
+  }
+
+  const respond = async (payload: unknown, isError: boolean, decisionReason: string, errorDetail?: string): Promise<void> => {
+    const responseBody = jsonRpcToolResult(requestId, JSON.stringify(payload, null, 2), isError ? { isError: true } : {});
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(responseBody);
+    const denied = decisionReason.includes("required") || decisionReason.includes("forbidden");
+    recordRequestAudit({
+      ts: new Date().toISOString(),
+      userId: identity.userId,
+      client: identity.client,
+      tool: toolName,
+      argsSummary,
+      ...queryMeta,
+      outcome: isError ? (denied ? "denied" : "error") : "ok",
+      errorDetail,
+      durationMs: Date.now() - start,
+      responseBytes: Buffer.byteLength(responseBody),
+      requestId,
+      ...requestMeta,
+      ...(await auditMeta(identity, decisionReason)),
+    });
+    recordMcpTraceForTool({
+      traceId,
+      identity,
+      toolName,
+      status: isError ? (denied ? "denied" : "error") : "ok",
+      startedAt: new Date(start).toISOString(),
+      turnId: requestMeta.lucyTurnId ?? null,
+      sessionId: requestMeta.lucySessionId ?? null,
+      requestId,
+      argsSummary,
+      allowed: !isError,
+      reason: decisionReason
+    });
+  };
+
+  if (!gate.ok) {
+    const failureDimension = gate.decision === "permission_denied" ? "权限拒绝" : "用法与语义";
+    await respond(
+      {
+        error: gate.reason,
+        failureDimension,
+        ...(gate.decision === "permission_denied" && gate.repair
+          ? { allowedConnections: gate.repair.connections, allowedSources: gate.repair.sources }
+          : {})
+      },
+      true,
+      gate.reason,
+      gate.reason
+    );
+    return;
+  }
+
+  // Execution is a normal role-scoped lucy_query — the ACL still decides.
+  const execution = await forwardAuthorizedLucyQuery(identity, gate.query);
+  if (!execution.ok) {
+    await respond(
+      { error: execution.reason, routeId: gate.routeId, source: gate.source },
+      true,
+      execution.reason,
+      execution.reason
+    );
+    return;
+  }
+
+  await respond(
+    {
+      routeId: gate.routeId,
+      source: gate.source,
+      ...(gate.version ? { appliedVersion: gate.version } : {}),
+      result: execution.payload
+    },
+    false,
+    "allowed"
+  );
+}
+
+/**
+ * Spec 162 §7.3 / SC-14 — the tools whose permission-denial payload carries
+ * the shared allow list. One function, one list, no per-tool divergence.
+ */
+const DENIAL_REPAIR_TOOLS = new Set([
+  "discover_data",
+  "entity_details",
+  "dictionary_search",
+  "lucy_query",
+  "lucy_read_source"
+]);
+
+/**
+ * Builds the ACL-scoped repair payload shared by every permission denial.
+ * Only connections and sources inside the caller's effective permissions are
+ * returned; a resolution failure degrades to no list rather than guessing.
+ */
+async function buildDenialRepairPayload(
+  identity: Identity,
+  reason: string
+): Promise<{ text: string; payload: Record<string, unknown> } | null> {
+  const resolved = await effectivePermissions(identity).catch(() => null);
+  if (!resolved?.ok) return null;
+  const allow = denialAllowList({
+    connections: resolved.permissions.connections,
+    sources: resolved.permissions.sources
+  });
+  const hint = repairHint(
+    { failureDimension: "权限拒绝", suggestedSources: allow.sources },
+    new Set(allow.sources)
+  );
+  const parts: string[] = [];
+  if (allow.connections.length > 0) parts.push(`可用连接：${allow.connections.join("、")}。`);
+  if (allow.sources.length > 0) parts.push(`可用来源：${allow.sources.join("、")}。`);
+  if (hint) parts.push(hint);
+  return {
+    text: parts.length > 0 ? ` ${parts.join(" ")}` : "",
+    payload: {
+      reason,
+      failureDimension: "权限拒绝",
+      connections: allow.connections,
+      sources: allow.sources
+    }
+  };
+}
+
+  // Spec 162 §7.8 — count(*) / count(1) with no source is repaired before the
+  // empty-source ACL deny. A named table still reaches aclCheck.
+  if (rpcMethod === "tools/call" && toolName && queryGuardrailsEnabled()) {
+    const countStop = countWithoutSourceBeforeAcl(toolName, toolArgs);
+    if (countStop) {
+      const responseBody = jsonRpcToolResult(requestId, JSON.stringify({
+        reason: countStop.reason,
+        repair: countStop.repair,
+        failureDimension: countStop.failureDimension
+      }), { isError: true });
+      res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
       res.end(responseBody);
       recordRequestAudit({
         ts: new Date().toISOString(),
@@ -2654,27 +3403,29 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
         tables: queryTables.length > 0 ? queryTables : undefined,
         argsSummary,
         ...queryMeta,
-        outcome: "denied",
-        errorDetail: errorMsg,
+        outcome: "error",
+        decisionReason: countStop.reason,
+        errorDetail: countStop.repair,
+        failureDimension: countStop.failureDimension,
         durationMs: Date.now() - start,
         responseBytes: Buffer.byteLength(responseBody),
         requestId,
         ...requestMeta,
-        ...meta
+        ...(await auditMeta(identity, countStop.reason)),
       });
       recordMcpTraceForTool({
         traceId,
         identity,
         toolName,
-        status: "denied",
+        status: "error",
         startedAt: new Date(start).toISOString(),
         turnId: requestMeta.lucyTurnId ?? null,
         sessionId: requestMeta.lucySessionId ?? null,
         requestId,
         argsSummary,
         allowed: false,
-        reason: errorMsg,
-        matchedRule: errorMsg
+        reason: countStop.reason,
+        policySource: "other"
       });
       return;
     }
@@ -2685,13 +3436,24 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
     const decision = await aclCheck(identity, toolName, toolArgs);
     if (!decision.allowed) {
       const errorMsg = decision.reason ?? "denied";
-      const meta = await auditMeta(identity, errorMsg);
+      const compiled = await effectivePermissions(identity).catch(() => null);
+      const compilerReason = compiled && !compiled.ok
+        ? formatIdentityCompilerReason(compiled.diagnostic)
+        : undefined;
+      const meta = await auditMeta(identity, errorMsg, compilerReason ? { compilerReason } : undefined);
+      // Spec 162 §7.3 / SC-14 — discover_data, entity_details,
+      // dictionary_search, lucy_query and lucy_read_source share this one
+      // allow-list function. Names outside the caller's ACL never appear.
+      const denial = DENIAL_REPAIR_TOOLS.has(toolName)
+        ? await buildDenialRepairPayload(identity, errorMsg)
+        : null;
       const responseBody = JSON.stringify({
         jsonrpc: "2.0",
         id: requestId,
         result: {
           isError: true,
-          content: [{ type: "text", text: `Access denied: ${errorMsg}` }]
+          content: [{ type: "text", text: `Access denied: ${errorMsg}${denial?.text ?? ""}` }],
+          ...(denial ? { data: denial.payload } : {})
         }
       });
       res.writeHead(200, { "content-type": "application/json" });
@@ -2738,6 +3500,66 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
         : undefined;
       if (params) params.arguments = record;
     }
+    // Count before local handlers return as well as before upstream dispatch.
+    if (rpcMethod === "tools/call" && toolName && isQuestionDataTool(toolName) && questionBudgetEnabled()) {
+      const budgetDecision = questionBudget.consume(
+        requestMeta.lucyTurnId,
+        Date.now(),
+        normalizeHeader(req.headers["x-lucy-question-continue"])
+      );
+      if (budgetDecision.action === "stop") {
+        const responseBody = JSON.stringify({
+          jsonrpc: "2.0",
+          id: requestId,
+          result: {
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                reason: budgetDecision.reason,
+                partial: budgetDecision.partial,
+                continueToken: budgetDecision.continueToken,
+                continuable: budgetDecision.continuable
+              })
+            }]
+          }
+        });
+        res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+        res.end(responseBody);
+        recordRequestAudit({
+          ts: new Date().toISOString(),
+          userId: identity.userId,
+          client: identity.client,
+          tool: toolName,
+          tables: queryTables.length > 0 ? queryTables : undefined,
+          argsSummary,
+          ...queryMeta,
+          outcome: "budget_stop",
+          decisionReason: "question_budget_exhausted",
+          errorDetail: "question_budget_exhausted",
+          durationMs: Date.now() - start,
+          responseBytes: Buffer.byteLength(responseBody),
+          requestId,
+          ...requestMeta,
+          ...(await auditMeta(identity, "question_budget_exhausted")),
+        });
+        recordMcpTraceForTool({
+          traceId,
+          identity,
+          toolName,
+          status: "ok",
+          startedAt: new Date(start).toISOString(),
+          turnId: requestMeta.lucyTurnId ?? null,
+          sessionId: requestMeta.lucySessionId ?? null,
+          requestId,
+          argsSummary,
+          allowed: true,
+          reason: "question_budget_exhausted",
+          policySource: "other"
+        });
+        return;
+      }
+    }
+
     if (toolName === "connection_list" || toolName === "lucy_catalog" || toolName === "kx_catalog") {
       const data = toolName === "connection_list"
         ? await connectionList(identity)
@@ -2780,6 +3602,18 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
         allowed: true,
         reason: "allowed",
         matchedRule: decision.reason
+      });
+      return;
+    }
+    if (toolName === "lucy_certified_route" || toolName === "lucy_report_template") {
+      await writeCertifiedRouteResponse(identity, toolName, toolArgs, {
+        res,
+        requestId,
+        start,
+        requestMeta,
+        argsSummary,
+        queryMeta,
+        traceId
       });
       return;
     }
@@ -2839,7 +3673,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       const allowed = Boolean(decision.allowed && page);
       const responseBody = allowed && page
         ? jsonRpcToolResult(requestId, JSON.stringify({ key: page.key, title: page.title, content: page.body }, null, 2))
-        : jsonRpcToolResult(requestId, `Access denied: ${decision.reason ?? "wiki_forbidden"}`, { isError: true });
+        : jsonRpcToolResult(requestId, contextExternalReason(decision.reason), { isError: true });
       res.writeHead(200, { "content-type": "application/json" });
       res.end(responseBody);
       recordRequestAudit({
@@ -2980,6 +3814,13 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
         sessionId: requestMeta.lucySessionId,
         turnId
       });
+      await bindPriorSessionCalls({
+        turnId,
+        userId: identity.userId,
+        tokenHashPrefix: identity.tokenHashPrefix,
+        sessionId: requestMeta.lucySessionId,
+        at: new Date().toISOString()
+      });
       // spec §8.4: lazy, sampled purge trigger on the (low-frequency) report path — no background worker.
       if (Math.random() < Number(process.env.LUCY_QUESTION_PREVIEW_PURGE_SAMPLE_RATE ?? 0.01)) {
         purgeExpiredConversationTurns().catch((err) => {
@@ -3016,6 +3857,11 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
         lucyTurnId: turnId,
         turnAttributionMode: "explicit",
         turnAttributionConfidence: "high",
+        associationStatus: "confirmed",
+        originalTurnId: turnId, effectiveTurnId: turnId,
+        originalAttributionMode: "explicit", effectiveAttributionMode: "explicit",
+        originalAssociationStatus: "confirmed", effectiveAssociationStatus: "confirmed",
+        originalAttributionConfidence: "high", effectiveAttributionConfidence: "high",
         ...(await auditMeta(identity, "allowed")),
       });
       recordMcpTraceForTool({
@@ -3058,7 +3904,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
   if (rpcMethod === "resources/list") {
     let resources: Array<{ uri: string; name: string; description: string; mimeType: string }> = [];
     try {
-      const allSkills = await loadAllSkills();
+      const allSkills = await loadAllSkillsFresh();
       const accessible = await filterAccessibleSkills(identity, allSkills, "discover");
       resources = accessible.map((s) => ({
         uri: s.uri,
@@ -3097,13 +3943,9 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
   if (rpcMethod === "resources/read") {
     const params = parsedRpc?.params as Record<string, unknown> | undefined;
     const uri = typeof params?.uri === "string" ? params.uri.trim() : "";
-    const skill = uri ? await getSkillByUri(uri) : null;
+    const skill = uri ? await getSkillByUri(uri, undefined, undefined, { fresh: true }) : null;
     if (!skill) {
-      const errPayload = {
-        jsonrpc: "2.0",
-        id: requestId,
-        error: { code: -32002, message: `Resource not found: ${uri}` }
-      };
+      const errPayload = contextUnavailableRpc(requestId, "skill_not_found");
       const responseBody = JSON.stringify(errPayload);
       res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
       res.end(responseBody);
@@ -3125,11 +3967,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
 
     const decision = await canAccessSkill(identity, skill, "read");
     if (!decision.allowed) {
-      const errPayload = {
-        jsonrpc: "2.0",
-        id: requestId,
-        error: { code: -32003, message: `Access denied: ${decision.reason ?? "denied_skill_acl"}` }
-      };
+      const errPayload = contextUnavailableRpc(requestId, decision.reason);
       const responseBody = JSON.stringify(errPayload);
       res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
       res.end(responseBody);
@@ -3185,7 +4023,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
   if (rpcMethod === "prompts/list") {
     let prompts: Array<{ name: string; description: string; arguments?: Array<{ name: string; description: string; required: boolean }> }> = [];
     try {
-      const allSkills = await loadAllSkills();
+      const allSkills = await loadAllSkillsFresh();
       const accessible = await filterAccessibleSkills(identity, allSkills, "discover");
       prompts = accessible.map((s) => ({
         name: s.name,
@@ -3229,13 +4067,9 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
   if (rpcMethod === "prompts/get") {
     const params = parsedRpc?.params as Record<string, unknown> | undefined;
     const promptName = typeof params?.name === "string" ? params.name.trim() : "";
-    const skill = promptName ? await getSkillByName(promptName) : null;
+    const skill = promptName ? await getSkillByName(promptName, undefined, undefined, { fresh: true }) : null;
     if (!skill) {
-      const errPayload = {
-        jsonrpc: "2.0",
-        id: requestId,
-        error: { code: -32602, message: `Prompt not found: ${promptName}` }
-      };
+      const errPayload = contextUnavailableRpc(requestId, "skill_not_found");
       const responseBody = JSON.stringify(errPayload);
       res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
       res.end(responseBody);
@@ -3257,11 +4091,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
 
     const decision = await canAccessSkill(identity, skill, "read");
     if (!decision.allowed) {
-      const errPayload = {
-        jsonrpc: "2.0",
-        id: requestId,
-        error: { code: -32003, message: `Access denied: ${decision.reason ?? "denied_skill_acl"}` }
-      };
+      const errPayload = contextUnavailableRpc(requestId, decision.reason);
       const responseBody = JSON.stringify(errPayload);
       res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
       res.end(responseBody);
@@ -3322,7 +4152,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
     const query = typeof rawArgs?.query === "string" ? rawArgs.query.trim().toLowerCase() : (typeof rawArgs?.q === "string" ? rawArgs.q.trim().toLowerCase() : "");
     const domainFilter = typeof rawArgs?.domain === "string" ? rawArgs.domain.trim().toLowerCase() : "";
 
-    const allSkills = await loadAllSkills();
+    const allSkills = await loadAllSkillsFresh();
     const accessible = await filterAccessibleSkills(identity, allSkills, "discover");
 
     const matches = accessible.filter((s) => {
@@ -3386,10 +4216,12 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
   if (rpcMethod === "tools/call" && toolName === "lucy_skill_read") {
     const rawArgs = toolArgs as Record<string, unknown> | undefined;
     const target = typeof rawArgs?.skill_name === "string" ? rawArgs.skill_name.trim() : (typeof rawArgs?.name === "string" ? rawArgs.name.trim() : "");
-    const skill = target.startsWith("lucy-skill://") ? await getSkillByUri(target) : await getSkillByName(target);
+    const skill = target.startsWith("lucy-skill://")
+      ? await getSkillByUri(target, undefined, undefined, { fresh: true })
+      : await getSkillByName(target, undefined, undefined, { fresh: true });
 
     if (!skill) {
-      const responseBody = jsonRpcToolResult(requestId, `Error: Skill "${target}" not found`, { isError: true });
+      const responseBody = jsonRpcToolResult(requestId, contextExternalReason("skill_not_found"), { isError: true });
       res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
       res.end(responseBody);
       recordRequestAudit({
@@ -3411,7 +4243,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
 
     const decision = await canAccessSkill(identity, skill, "read");
     if (!decision.allowed) {
-      const responseBody = jsonRpcToolResult(requestId, `Access denied: ${decision.reason ?? "denied_skill_acl"}`, { isError: true });
+      const responseBody = jsonRpcToolResult(requestId, contextExternalReason(decision.reason), { isError: true });
       res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
       res.end(responseBody);
       recordRequestAudit({
@@ -3465,6 +4297,77 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
     });
     return;
   }
+
+  if (
+    queryGuardrailsEnabled()
+    && rpcMethod === "tools/call"
+    && (toolName === "lucy_query" || toolName === "lucy_read_source")
+    && toolArgs
+    && typeof toolArgs === "object"
+  ) {
+    const resolvedPermissions = await effectivePermissions(identity).catch(() => null);
+    const readable = new Set<string>();
+    if (resolvedPermissions?.ok) {
+      if (resolvedPermissions.permissions.tables.includes("*")) readable.add("*");
+      for (const source of resolvedPermissions.permissions.sources) {
+        if (source.sourceName) readable.add(source.sourceName);
+        if (source.table) readable.add(source.table);
+        if (source.connectionId && source.sourceName) readable.add(`${source.connectionId}.${source.sourceName}`);
+      }
+    }
+    const catalog = await loadPublishedAmbiguityCatalog();
+    const guard = applyLucyCallGuard({
+      toolName,
+      args: toolArgs,
+      readableSourceNames: resolvedPermissions?.ok ? readable : null,
+      catalog
+    });
+    if (guard.action === "stop") {
+      const responseBody = jsonRpcToolResult(requestId, JSON.stringify({
+        reason: guard.reason,
+        repair: guard.repair,
+        failureDimension: guard.failureDimension
+      }), { isError: true });
+      res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+      res.end(responseBody);
+      recordRequestAudit({
+        ts: new Date().toISOString(),
+        userId: identity.userId,
+        client: identity.client,
+        tool: toolName,
+        tables: queryTables.length > 0 ? queryTables : undefined,
+        argsSummary,
+        ...queryMeta,
+        outcome: "error",
+        decisionReason: guard.reason,
+        errorDetail: guard.repair,
+        failureDimension: guard.failureDimension,
+        durationMs: Date.now() - start,
+        responseBytes: Buffer.byteLength(responseBody),
+        requestId,
+        ...requestMeta,
+        ...(await auditMeta(identity, guard.reason)),
+      });
+      recordMcpTraceForTool({
+        traceId,
+        identity,
+        toolName,
+        status: "error",
+        startedAt: new Date(start).toISOString(),
+        turnId: requestMeta.lucyTurnId ?? null,
+        sessionId: requestMeta.lucySessionId ?? null,
+        requestId,
+        argsSummary,
+        allowed: false,
+        reason: guard.reason,
+        policySource: "other"
+      });
+      return;
+    }
+    toolArgs = guard.args;
+    argsSummary = summarizeArgsForAudit(toolName, guard.args);
+  }
+
 
   if (rpcMethod === "tools/call" && toolName === "lucy_query") {
     const slot = acquireLucyQuerySlot(identity);
@@ -3547,13 +4450,13 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
   try {
     if (rpcMethod === "initialize") {
       // `initialize` is what establishes the session; never inject one into it.
-      upstream = await forwardToKtx(req.method ?? "POST", req.url ?? "/mcp", req.headers, outboundBody);
+      upstream = await forwardToKtx(req.method ?? "POST", MCP_UPSTREAM_PATH, headersWithOwnedSession(identity, req.headers), outboundBody);
       upstreamBody = await readUpstreamBody(upstream);
     } else if (bufferedUpstream) {
       const forwarded = await forwardToKtxWithSession(
         identity,
         req.method ?? "POST",
-        req.url ?? "/mcp",
+        MCP_UPSTREAM_PATH,
         req.headers,
         outboundBody
       );
@@ -3563,17 +4466,17 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
     } else {
       upstream = await forwardToKtx(
         req.method ?? "POST",
-        req.url ?? "/mcp",
-        req.headers,
+        MCP_UPSTREAM_PATH,
+        headersWithOwnedSession(identity, req.headers),
         outboundBody,
-        upstreamSessionKeepaliveEnabled() ? getUpstreamSession(identity.userId) : undefined
+        resolveOutboundSession(identity, req.headers)
       );
     }
   } catch (err) {
     if (rpcMethod === "initialize") {
       // The client gets a 200 but KTX holds no session, so anything cached for
-      // this user is stale; drop it and let the next data call re-handshake.
-      clearUpstreamSession(identity.userId);
+      // this Token is stale; drop it and let the next data call re-handshake.
+      clearUpstreamSession(upstreamSessionOwner(identity));
       const instructions = instructionsInjectionEnabled() ? await buildRoleAwareInstructions(identity) : undefined;
       const payload = localInitializePayload(requestId, instructions);
       const responseBody = JSON.stringify(payload);
@@ -3596,6 +4499,30 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       return;
     }
     if (rpcMethod === "tools/list") {
+      // Spec 178 / T1 — compile failure takes priority over the local fallback;
+      // never serve `tools: []` for a failed identity.
+      const compiled = await effectivePermissions(identity).catch(() => null);
+      if (compiled && !compiled.ok && isToolsListCompileDenialReason(compiled.reason)) {
+        const envelope = compileDeniedToolsListEnvelope(requestId, compiled.reason);
+        const responseBytes = Buffer.byteLength(envelope.body);
+        res.writeHead(envelope.statusCode, { "content-type": "application/json", "content-length": responseBytes });
+        res.end(envelope.body);
+        const compilerReason = formatIdentityCompilerReason(compiled.diagnostic);
+        recordRequestAudit({
+          ts: new Date().toISOString(),
+          userId: identity.userId,
+          client: identity.client,
+          tool: rpcMethod,
+          outcome: "denied",
+          errorDetail: compiled.reason,
+          durationMs: Date.now() - start,
+          responseBytes,
+          requestId,
+          ...requestMeta,
+          ...(await auditMeta(identity, compiled.reason, compilerReason ? { compilerReason } : undefined)),
+        });
+        return;
+      }
       const payload = await localToolsListPayload(identity, requestId);
       const responseBody = JSON.stringify(payload);
       res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
@@ -3615,46 +4542,11 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       });
       return;
     }
+
     if (rpcMethod === "tools/call" && toolName === "wiki_search") {
       const { query, limit } = wikiQueryFromArgs(toolArgs);
       const results = query ? await searchAccessibleWikiPages(identity, query, limit) : [];
-      const responseBody = jsonRpcToolResult(requestId, JSON.stringify({
-        query: query ?? "",
-        results,
-        filteredBy: "wiki_acl",
-        upstreamFallback: true
-      }, null, 2), { isError: !query });
-      res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
-      res.end(responseBody);
-      recordRequestAudit({
-        ts: new Date().toISOString(),
-        userId: identity.userId,
-        client: identity.client,
-        tool: toolName,
-        argsSummary: query ? { query, limit } : argsSummary,
-        ...queryMeta,
-        outcome: query ? "ok" : "error",
-        errorDetail: query ? `upstream_unavailable:${err instanceof Error ? err.message : String(err)}` : "wiki_query_missing",
-        durationMs: Date.now() - start,
-        responseBytes: Buffer.byteLength(responseBody),
-        requestId,
-        ...requestMeta,
-        ...(await auditMeta(identity, query ? "local_wiki_search_fallback" : "wiki_query_missing")),
-      });
-      recordMcpTraceForTool({
-        traceId,
-        identity,
-        toolName,
-        status: query ? "ok" : "error",
-        startedAt: new Date(start).toISOString(),
-        turnId: requestMeta.lucyTurnId ?? null,
-        sessionId: requestMeta.lucySessionId ?? null,
-        requestId,
-        argsSummary: query ? { query, limit } : argsSummary,
-        allowed: Boolean(query),
-        reason: query ? "local_wiki_search_fallback" : "wiki_query_missing",
-        policySource: "wiki_acl"
-      });
+      await respondLocalWikiSearch(query, limit, results, `upstream_unavailable:${err instanceof Error ? err.message : String(err)}`);
       return;
     }
     if (rpcMethod === "tools/call") {
@@ -3718,7 +4610,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
     // Hold the session KTX just created, so a client that does not retain
     // `Mcp-Session-Id` still reaches KTX-bound tools on its next call.
     if (responseSessionId && (upstream.statusCode ?? 200) < 400) {
-      setUpstreamSession(identity.userId, responseSessionId);
+      setUpstreamSession(upstreamSessionOwner(identity), responseSessionId);
     }
     if (responseSessionId) requestMeta.lucySessionId = responseSessionId;
     if (responseSessionId && initializeClientInfo) {
@@ -3753,6 +4645,41 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
 
   if (rpcMethod === "tools/list") {
     const toolsList = await writeToolsListResponse(identity, upstream, upstreamBody, res, requestId, upstreamSession);
+    // Spec 178 / T1 — compile failure short-circuits inside writeToolsListResponse
+    // (HTTP 403 + JSON-RPC -32003 already on the wire). Audit must record the
+    // denial with the full machine reason and the structured diagnostic;
+    // `role_ids` stays empty because permissionSnapshot is undefined on failure.
+    if (toolsList.compileDenied) {
+      const compiled = await effectivePermissions(identity).catch(() => null);
+      const compilerReason = compiled && !compiled.ok
+        ? formatIdentityCompilerReason(compiled.diagnostic)
+        : undefined;
+      const denialReason = compiled && !compiled.ok ? compiled.reason : (toolsList.errorDetail ?? "denied");
+      recordRequestAudit({
+        ts: new Date().toISOString(),
+        userId: identity.userId,
+        client: identity.client,
+        tool: rpcMethod,
+        outcome: "denied",
+        errorDetail: denialReason,
+        durationMs: Date.now() - start,
+        responseBytes: toolsList.responseBytes,
+        requestId,
+        ...requestMeta,
+        ...(await auditMeta(
+          identity,
+          denialReason,
+          compilerReason ? { compilerReason } : undefined
+        )),
+      });
+      return;
+    }
+    // Spec 177 — successful compile: the structured diagnostic still rides on
+    // `compiler_reason` for admin review, never into the client body.
+    const compiled = await effectivePermissions(identity).catch(() => null);
+    const compilerReason = compiled && !compiled.ok
+      ? formatIdentityCompilerReason(compiled.diagnostic)
+      : undefined;
     recordRequestAudit({
       ts: new Date().toISOString(),
       userId: identity.userId,
@@ -3764,10 +4691,14 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       responseBytes: toolsList.responseBytes,
       requestId,
       ...requestMeta,
-      ...(await auditMeta(identity, withUpstreamSessionNote(
-        toolsList.upstreamFailure ?? (toolsList.filterFailed ? "tools_list_filter_failed" : "allowed"),
-        upstreamSession
-      ))),
+      ...(await auditMeta(
+        identity,
+        withUpstreamSessionNote(
+          toolsList.upstreamFailure ?? (toolsList.filterFailed ? "tools_list_filter_failed" : "allowed"),
+          upstreamSession
+        ),
+        compilerReason ? { compilerReason } : undefined
+      )),
     });
     return;
   }
@@ -3788,6 +4719,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
         argsSummary,
         queryMeta,
         tables: queryTables,
+        sourceRefs: [],
         traceId
       });
       return;
@@ -3830,6 +4762,17 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       filterFailed = `wiki_search_filter_failed:${err instanceof Error ? err.message : String(err)}`;
       body = JSON.stringify(rpcErrorResponse(requestId, "wiki_search filtering failed", filterFailed));
       forceJson = true;
+    }
+
+    // Preserve upstream search and ACL filtering. A canonical keyword fallback
+    // fills a successful empty index result; it never masks upstream/filter errors.
+    if (!filterFailed && wikiSearchPayloadIsEmpty(JSON.parse(body))) {
+      const { query, limit } = wikiQueryFromArgs(toolArgs);
+      const results = query ? await searchAccessibleWikiPages(identity, query, limit) : [];
+      if (results.length > 0) {
+        await respondLocalWikiSearch(query, limit, results);
+        return;
+      }
     }
 
     const headers = forceJson ? bufferedJsonHeaders(upstream) : passthroughBodyHeaders(upstream);
@@ -3902,6 +4845,27 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
   if (rpcMethod === "tools/call") {
     const responseBody = Buffer.from(upstreamBody);
     const contentType = String(upstream.headers["content-type"] ?? "");
+    let sourceRefs: SourceRef[] = [];
+    let tables: string[] | undefined;
+    if (toolName) {
+      try {
+        const extracted = await extractTables(toolName, toolArgs);
+        const merged = new Set([...extracted, ...queryTables]);
+        if (merged.size > 0) tables = [...merged];
+      } catch {
+        // don't fail the request
+      }
+      if (!tables && queryTables.length > 0) tables = queryTables;
+      try {
+        const structuredRefs = await extractSourceRefs(toolName, toolArgs);
+        const coveredTables = new Set(structuredRefs.map((ref) => ref.physicalTable));
+        const fallbackTables = queryTables.filter((table) => !coveredTables.has(table));
+        const fallbackRefs = fallbackTables.length > 0 ? await resolveSourceRefsForTables(fallbackTables) : [];
+        sourceRefs = [...structuredRefs, ...fallbackRefs];
+      } catch {
+        // source normalization is best-effort; never block the response
+      }
+    }
     const callUpstreamFailure = classifyUpstreamFailure(upstream.statusCode, contentType, upstreamBody, requestId, upstreamSession);
     if (callUpstreamFailure) {
       await writeUpstreamFailureResponse(callUpstreamFailure, {
@@ -3914,7 +4878,8 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
         requestMeta,
         argsSummary,
         queryMeta,
-        tables: queryTables,
+        tables: tables ?? queryTables,
+        sourceRefs,
         traceId
       });
       return;
@@ -3957,7 +4922,6 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
     let errorDetail: string | undefined = callUpstreamStatus >= 400
       ? `upstream_status=${callUpstreamStatus}`
       : undefined;
-    let tables: string[] | undefined;
     try {
       const sniffType = forceJson ? "application/json" : contentType;
       if (sniffType.includes("application/json")) {
@@ -3970,31 +4934,6 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       }
     } catch {
       // best-effort sniff; don't fail the request
-    }
-
-    // Extract tables for logging (best-effort)
-    let sourceRefs: SourceRef[] = [];
-    if (toolName) {
-      try {
-        const extracted = await extractTables(toolName, toolArgs);
-        const merged = new Set([...extracted, ...queryTables]);
-        if (merged.size > 0) tables = [...merged];
-      } catch {
-        // don't fail the request
-      }
-      if (!tables && queryTables.length > 0) tables = queryTables;
-
-      // Structured source normalization for access_log_sources (best-effort, never blocks the response).
-      // kx_catalog is handled by its own local-response branch above and never reaches here.
-      try {
-        const structuredRefs = await extractSourceRefs(toolName, toolArgs);
-        const coveredTables = new Set(structuredRefs.map((ref) => ref.physicalTable));
-        const fallbackTables = queryTables.filter((table) => !coveredTables.has(table));
-        const fallbackRefs = fallbackTables.length > 0 ? await resolveSourceRefsForTables(fallbackTables) : [];
-        sourceRefs = [...structuredRefs, ...fallbackRefs];
-      } catch {
-        // source normalization is best-effort; never block the response
-      }
     }
 
     const responseMeta = responseAuditMeta(responseBody, upstream.headers["content-type"]);
@@ -4013,7 +4952,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
       requestId,
       ...requestMeta,
       ...(await auditMeta(identity, withUpstreamSessionNote(outcome === "ok" ? "allowed" : "upstream_error", upstreamSession))),
-    }, outcome === "ok" ? sourceRefs : undefined);
+    }, sourceRefs);
     recordMcpTraceForTool({
       traceId,
       identity,
@@ -4058,21 +4997,20 @@ async function handlePost(req: IncomingMessage, res: ServerResponse): Promise<vo
   }
 }
 
-async function handlePassthrough(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  const sessionId = normalizeHeader(req.headers["mcp-session-id"]);
-  const identify = await identifyRequestDetailed(req.headers.authorization, sessionId);
-  if (!identify.ok) {
-    recordAuthFailure(req, identify);
-    res.writeHead(401, { "content-type": "application/json" });
-    res.end(JSON.stringify({ error: "Unauthorized" }));
-    return;
-  }
-  const keepalive = upstreamSessionKeepaliveEnabled();
-  const heldSession = keepalive ? getUpstreamSession(identify.identity.userId) : undefined;
+async function handlePassthrough(req: IncomingMessage, res: ServerResponse, admitted: AdmittedRequest): Promise<void> {
+  const { identity } = admitted;
+  const heldSession = resolveOutboundSession(identity, req.headers);
   // `DELETE /mcp` terminates the MCP session; a cached id would otherwise be
   // replayed on the next data call against a session KTX has already dropped.
-  if (keepalive && req.method === "DELETE") clearUpstreamSession(identify.identity.userId);
-  const upstream = await forwardToKtx(req.method ?? "GET", req.url ?? "/mcp", req.headers, undefined, heldSession);
+  // Only a session this Token holds can be terminated here.
+  if (heldSession && req.method === "DELETE") clearUpstreamSession(upstreamSessionOwner(identity), heldSession);
+  const upstream = await forwardToKtx(
+    req.method ?? "GET",
+    MCP_UPSTREAM_PATH,
+    headersWithOwnedSession(identity, req.headers),
+    undefined,
+    heldSession
+  );
   pipeResponse(upstream, res);
 }
 
@@ -4086,25 +5024,12 @@ async function handlePassthrough(req: IncomingMessage, res: ServerResponse): Pro
  *
  * To be revisited: if skills need trace evidence or ACL, fold them in here.
  */
-async function handleSkillsPassthrough(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  const sessionId = normalizeHeader(req.headers["mcp-session-id"]);
-  const identify = await identifyRequestDetailed(req.headers.authorization, sessionId);
-  if (!identify.ok) {
-    recordAuthFailure(req, identify);
-    res.writeHead(401, { "content-type": "application/json" });
-    res.end(JSON.stringify({ error: "Unauthorized" }));
-    return;
-  }
-  // Read body so we can forward POST content (MCP JSON-RPC envelope).
-  // GET / DELETE have no body; readBody returns empty Buffer either way.
-  const body = await readBody(req);
-  // /mcp/skills → /mcp, /mcp/skills/ → /mcp/, /mcp/skills/v1/foo → /mcp/v1/foo
-  const originalUrl = req.url ?? "/mcp/skills";
-  const upstreamUrl = originalUrl.replace(/^\/mcp\/skills(?=\/|$)/, "/mcp") || "/mcp";
+async function handleSkillsPassthrough(req: IncomingMessage, res: ServerResponse, admitted: AdmittedRequest): Promise<void> {
+  const { body } = admitted;
   const upstream = await forwardToUpstream(
     { host: LUCY_SKILLS_HOST, port: LUCY_SKILLS_PORT },
     req.method ?? "GET",
-    upstreamUrl,
+    MCP_UPSTREAM_PATH,
     req.headers,
     body.byteLength > 0 ? body : undefined,
     "lucy-skills"
@@ -4112,37 +5037,126 @@ async function handleSkillsPassthrough(req: IncomingMessage, res: ServerResponse
   pipeResponse(upstream, res);
 }
 
-function isSkillsPath(url: string | undefined): boolean {
-  if (!url) return false;
-  // Strip query string for the match
-  const path = url.split("?")[0];
-  return path === LUCY_SKILLS_PATH_PREFIX || path.startsWith(`${LUCY_SKILLS_PATH_PREFIX}/`);
-}
-
 function normalizeHeader(v: string | string[] | undefined): string | undefined {
   if (!v) return undefined;
   return Array.isArray(v) ? v[0] : v;
 }
 
-export function buildProxy() {
+/** Same gate as a live lucy_query: authorize, then forward the call to KTX. */
+export async function forwardAuthorizedLucyQuery(
+  identity: Identity,
+  args: Record<string, unknown>
+): Promise<{ ok: true; payload: unknown } | { ok: false; reason: string }> {
+  const decision = await authorizeAndRewrite(identity, "lucy_query", args);
+  if (!decision.allowed) return { ok: false, reason: decision.reason ?? "acl_denied" };
+  const outbound = decision.forcedFilters ? { ...args, forced_filters: decision.forcedFilters } : args;
+  try {
+    const sessionId = getUpstreamSession(upstreamSessionOwner(identity)) ?? await handshakeUpstreamSession(identity);
+    if (!sessionId) return { ok: false, reason: "execution_interrupted" };
+    const body = Buffer.from(JSON.stringify({
+      jsonrpc: "2.0",
+      id: `lucy-offline-batch-${randomUUID()}`,
+      method: "tools/call",
+      params: { name: "lucy_query", arguments: outbound }
+    }));
+    const upstream = await forwardToKtx("POST", "/mcp", { "content-type": "application/json" }, body, sessionId);
+    const text = await readUpstreamBody(upstream);
+    if ((upstream.statusCode ?? 200) >= 400) return { ok: false, reason: "execution_interrupted" };
+    return {
+      ok: true,
+      payload: decodeUpstreamPayload(text, String(upstream.headers["content-type"] ?? ""), "offline-batch")
+    };
+  } catch {
+    return { ok: false, reason: "execution_interrupted" };
+  }
+}
+
+const ADMISSION_AUDIT: AdmissionAudit = {
+  record: (entry) => recordAudit(entry),
+  meta: auditMeta,
+  correlation: correlationMeta
+};
+
+/** Method / tool name / id for the ledger; never arguments or content. */
+function ledgerRequestShape(req: IncomingMessage, body: Buffer): {
+  method: string;
+  tool?: string;
+  requestId: string | number | null;
+} {
+  const verb = req.method ?? "GET";
+  if (body.byteLength === 0) return { method: verb, requestId: null };
+  try {
+    const parsed = JSON.parse(body.toString()) as {
+      method?: unknown;
+      id?: unknown;
+      params?: { name?: unknown };
+    };
+    const method = typeof parsed.method === "string" ? parsed.method : verb;
+    const tool = method === "tools/call" && typeof parsed.params?.name === "string" ? parsed.params.name : undefined;
+    const id = typeof parsed.id === "string" || typeof parsed.id === "number" ? parsed.id : null;
+    return { method, tool, requestId: id };
+  } catch {
+    return { method: verb, requestId: null };
+  }
+}
+
+export type BuildProxyOptions = {
+  /** Tests only: override buffer / wall-clock limits. Production reads tighten-only env. */
+  responseCommit?: ResponseCommitConfig;
+  /** Tests only: ledger with an injected store provider. */
+  ledger?: ReleaseLedger;
+  /** Called after an operation reaches a terminal ledger state (projection trigger). */
+  onOperationSettled?: () => void;
+};
+
+export function buildProxy(options: BuildProxyOptions = {}) {
+  assertSkillsPassthroughPolicy();
+  const ledger = options.ledger ?? new ReleaseLedger();
+  const skillsPassthroughEnabled = skillsPassthroughRequested();
   const port = Number(process.env.LUCY_PROXY_PORT ?? 7879);
   const host = process.env.LUCY_PROXY_HOST ?? "127.0.0.1";
 
   const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
     try {
-      if (isSkillsPath(req.url)) {
-        if (!SKILLS_PASSTHROUGH_ENABLED) {
-          const body = JSON.stringify({ error: "Not found" });
-          res.writeHead(404, { "content-type": "application/json", "content-length": Buffer.byteLength(body) });
-          res.end(body);
-          return;
+      // T04-3: stamp before admission so a narrowing committed while identity
+      // is being resolved still covers this request.
+      const authorizationStamp = currentAuthorizationSequence();
+      const admitted = await admitMcpRequest(req, res, ADMISSION_AUDIT, {
+        skillsPassthroughEnabled,
+        readBody
+      });
+      if (!admitted.ok) return;
+      const barrier = beginGuardedRequest(admitted.identity, res, authorizationStamp);
+      // T07 / Spec §5.1: durable `request_admitted` before any upstream work;
+      // content is released only after a durable `response_prepared`.
+      const shape = ledgerRequestShape(req, admitted.body);
+      const context: ReleaseOperationContext = {
+        operationId: `mcp_${randomUUID()}`,
+        actor: admitted.identity.userId,
+        actorType: "agent",
+        networkInfo: req.socket?.remoteAddress,
+        sessionFingerprint: admitted.identity.tokenHashPrefix,
+        method: shape.method,
+        tool: shape.tool
+      };
+      const gated = await beginGatedResponse(res, {
+        ledger,
+        context,
+        requestId: shape.requestId,
+        isCurrent: () => barrier.isCurrent(),
+        config: options.responseCommit,
+        onSettled: options.onOperationSettled
+      });
+      if (!gated) return;
+      await runWithBarrier(barrier, async () => {
+        if (admitted.route === "skills") {
+          await handleSkillsPassthrough(req, res, admitted);
+        } else if (req.method === "POST") {
+          await handlePost(req, res, admitted);
+        } else {
+          await handlePassthrough(req, res, admitted);
         }
-        await handleSkillsPassthrough(req, res);
-      } else if (req.method === "POST") {
-        await handlePost(req, res);
-      } else {
-        await handlePassthrough(req, res);
-      }
+      });
     } catch (err) {
       if (!res.headersSent) {
         const statusCode = err instanceof BodyTooLargeError ? err.statusCode : 502;

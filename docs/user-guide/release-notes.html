@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | 更新日志 |
 | 文档类型 | Release Notes |
-| 版本 | v1.0 |
-| 撰写日期 | 2026-06-20 |
+| 版本 | 2.0.0 |
+| 撰写日期 | 2026-06-20；2.0.0 更新 2026-10-20（统一品牌叫法与术语、补浏览器翻译防御、修跨页链接与文档骨架） |
 | 撰写人 | Claude |
 | 委托人 | project-lucy 团队 |
 | 基于材料 | Lucy 版本历史 |
@@ -16,7 +16,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>更新日志 · Lucy 帮助文档</title>
+<title translate="no" class="notranslate">更新日志 · Lucy 帮助文档</title>
 <link rel="stylesheet" href="assets/user-guide.css">
 </head>
 <body>
@@ -27,6 +27,8 @@
       <p class="nav-title">开始</p>
       <a class="nav-link" href="index.html">帮助中心首页</a>
       <a class="nav-link" href="product-intro.html">产品介绍</a>
+      <a class="nav-link" href="lucy-architecture-diagram.html">架构总览</a>
+      <a class="nav-link" href="lucy-docs-flows.html">摄取与服务</a>
       <a class="nav-link" href="getting-started.html">5 分钟理解 Lucy</a>
       <a class="nav-link" href="concepts.html">核心概念</a>
     </div>
@@ -38,66 +40,107 @@
     </div>
     <div class="nav-group">
       <p class="nav-title">管理员指南</p>
-      <a class="nav-link" href="quickstart-admin.html">快速部署 <span class="wip">WIP</span></a>
-      <a class="nav-link" href="data-sources.html">数据源接入 <span class="wip">WIP</span></a>
-      <a class="nav-link" href="permissions.html">权限与 ACL <span class="wip">WIP</span></a>
-      <a class="nav-link" href="webui-guide.html">KTX WebUI</a>
+      <a class="nav-link" href="quickstart-admin.html">快速部署</a>
+      <a class="nav-link" href="data-sources.html">数据源接入</a>
+      <a class="nav-link" href="permissions.html">权限与 ACL</a>
+      <a class="nav-link" href="webui-guide.html">WebUI 指南</a>
     </div>
     <div class="nav-group">
       <p class="nav-title">治理与安全</p>
       <a class="nav-link" href="trust.html">可信机制</a>
-      <a class="nav-link" href="eval-meta-governance-training.html">Eval 培训</a>
-      <a class="nav-link" href="skills.html">Skill 管理 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="eval-meta-governance-training.html">质量评测培训</a>
+      <a class="nav-link" href="skills.html">Skill 管理</a>
     </div>
     <div class="nav-group">
       <p class="nav-title">参考</p>
-      <a class="nav-link" href="mcp-reference.html">MCP 接入参考 <span class="wip">WIP</span></a>
+      <a class="nav-link" href="mcp-reference.html"><span translate="no" class="notranslate">MCP</span> 接入参考</a>
       <a class="nav-link" href="glossary.html">术语表</a>
-      <a class="nav-link active" href="release-notes.html">更新日志 <span class="wip">WIP</span></a>
+      <a class="nav-link active" href="release-notes.html">更新日志</a>
     </div>
   </aside>
   <main class="content">
     <header class="hero">
       <span class="eyebrow">Reference</span>
       <h1>更新日志</h1>
-      <p class="lead">Lucy 及 KTX 引擎的版本历史与重要变更。当前为早期版本，持续迭代中。</p>
+      <p class="lead">Lucy 及其 <span translate="no" class="notranslate">KTX</span> 引擎的版本历史与重要变更。当前产品版本为 2.0.0，持续迭代中。</p>
     </header>
 
     <div class="callout">
-      📌 此页面正在完善中。如需了解具体版本的变更细节，请查阅 Git 仓库 CHANGELOG 或联系 BI 中心。
+      📌 完整的版本变更细节见仓库根目录的 <code class="notranslate" translate="no">CHANGELOG.md</code>。本页只维护帮助文档站需要对齐的版本与能力状态。
     </div>
 
     <section>
       <h2>当前版本</h2>
-      <table>
-        <thead>
-          <tr><th>版本</th><th>发布日期</th><th>状态</th><th>主要变更</th></tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>v1.x（当前）</td>
-            <td>2026 Q2</td>
-            <td><span class="badge badge-teal">生产可用</span></td>
-            <td>架构图重构、Eval 质量闭环、表级 ACL、Provenance Footer</td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="ref-table-wrap">
+        <table>
+          <thead>
+            <tr><th>版本</th><th>发布日期</th><th>状态</th><th>主要变更</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>2.0.0（当前）</td>
+              <td>2026-10-19</td>
+              <td><span class="badge badge-teal">生产可用</span></td>
+              <td>产品版本线从 0.17.0 切到 2.0.0；Helm chart 版本仍是 0.2.4，内置 <span translate="no" class="notranslate">KTX</span> 仍是 0.16.0，本次切换本身不改变权限、配置或 <span translate="no" class="notranslate">KTX</span> 运行时。</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h2>已上线能力</h2>
+      <div class="ref-table-wrap">
+        <table>
+          <thead>
+            <tr><th>功能</th><th>状态</th><th>说明</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Bearer <span translate="no" class="notranslate">Token</span> 鉴权</td>
+              <td><span class="badge badge-teal">已上线</span></td>
+              <td><span translate="no" class="notranslate">MCP</span> 请求必须携带 <code class="notranslate" translate="no">Authorization: Bearer &lt;token&gt;</code>。未携带、<span translate="no" class="notranslate">Token</span> 不匹配、已撤销、已过期一律返回 401，没有匿名通道。</td>
+            </tr>
+            <tr>
+              <td>访问日志双 CSV 导出</td>
+              <td><span class="badge badge-teal">已上线</span></td>
+              <td>访问日志提供「导出问询记录」与「导出调用流水」两个粒度，另有「导出审计证据包」；CSV 文件名带秒级时间戳和流水号。</td>
+            </tr>
+            <tr>
+              <td>质量评测</td>
+              <td><span class="badge badge-teal">已上线</span></td>
+              <td>评测用例、运行历史、趋势监控、现场提问、安全评测候选五个入口。</td>
+            </tr>
+            <tr>
+              <td>访问治理</td>
+              <td><span class="badge badge-teal">已上线</span></td>
+              <td>角色权限、<span translate="no" class="notranslate">Agent</span>、<span translate="no" class="notranslate">Token</span> 凭据、访问日志、<span translate="no" class="notranslate">MCP</span> 调试台、配置审计六个入口。</td>
+            </tr>
+            <tr>
+              <td>数据库 driver</td>
+              <td><span class="badge badge-teal">已上线</span></td>
+              <td>6 种：<code class="notranslate" translate="no">mysql</code> / <code class="notranslate" translate="no">postgres</code> / <code class="notranslate" translate="no">sqlserver</code> / <code class="notranslate" translate="no">oracle</code> / <code class="notranslate" translate="no">sqlite</code> / <code class="notranslate" translate="no">athena</code>。</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </section>
 
     <section>
       <h2>路线图（计划中）</h2>
-      <table>
-        <thead>
-          <tr><th>功能</th><th>预计版本</th><th>说明</th></tr>
-        </thead>
-        <tbody>
-          <tr><td>SSO / 企业身份集成</td><td>v2.0</td><td>支持 SAML 2.0、Okta</td></tr>
-          <tr><td>Skill 版本管理</td><td>v2.0</td><td>Skill 灰度发布与回滚</td></tr>
-          <tr><td>多租户 API Key</td><td>v2.1</td><td>MCP Server 多客户端认证</td></tr>
-          <tr><td>更多数据源</td><td>v2.x</td><td>ClickHouse、BigQuery 支持</td></tr>
-          <tr><td>审计日志导出</td><td>v2.1</td><td>支持导出到 S3 / 本地文件</td></tr>
-        </tbody>
-      </table>
+      <div class="ref-table-wrap">
+        <table>
+          <thead>
+            <tr><th>功能</th><th>计划版本</th><th>状态</th><th>说明</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>SSO / 企业身份集成</td><td>待定</td><td><span class="badge badge-gold">计划中</span></td><td>支持 SAML 2.0、Okta</td></tr>
+            <tr><td>Skill 版本管理</td><td>待定</td><td><span class="badge badge-gold">计划中</span></td><td>Skill 灰度发布与回滚</td></tr>
+            <tr><td>更多数据源</td><td>待定</td><td><span class="badge badge-gold">计划中</span></td><td>ClickHouse、BigQuery 支持</td></tr>
+            <tr><td>SaaS 多租户部署</td><td>—</td><td><span class="badge badge-red">本期不实现</span></td><td>当前交付形态是单客户自托管，多租户不在范围内</td></tr>
+          </tbody>
+        </table>
+      </div>
     </section>
 
     <nav class="section-nav" aria-label="上一篇">

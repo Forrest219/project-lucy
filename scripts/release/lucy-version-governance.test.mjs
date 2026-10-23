@@ -52,7 +52,7 @@ test("customer build fails before Docker when IMAGE tag disagrees with VERSION",
     }
   });
   assert.equal(result.status, 1);
-  assert.match(result.stderr, /customer image tag must be customer-amd64-0\.17\.0/);
+  assert.match(result.stderr, /customer image tag must be customer-amd64-2\.0\.0/);
   assert.doesNotMatch(result.stdout + result.stderr, /building \(see/);
 });
 
@@ -66,6 +66,6 @@ test("customer build rejects a LUCY_VERSION override that disagrees with VERSION
     }
   });
   assert.equal(result.status, 1);
-  assert.match(result.stderr, /does not match repo VERSION=0\.17\.0/);
+  assert.match(result.stderr, /does not match repo VERSION=2\.0\.0/);
   assert.doesNotMatch(result.stdout + result.stderr, /building \(see/);
 });

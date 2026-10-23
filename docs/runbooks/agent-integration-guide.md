@@ -92,6 +92,14 @@ Globally denied tools:
 - `memory_ingest`
 - `memory_ingest_status`
 
+## 4.1 问询绑定
+
+官方客户端应在同一个 MCP session 里调用 `lucy_begin_question`，带上用户原话和 `intentSummary`。同一 session 内随后的数据工具会记为 `session_bound`。
+
+漏调 `lucy_begin_question`、不传 session、不传问询 ID，都不会拒绝查数。缺少 `intentSummary` 只让这一次上报失败，下一笔已授权的查询仍然执行。
+
+问询预算默认是 20 次数据工具调用或 120 秒，以先到者为准。用尽后结果里给出 `question_budget_exhausted`，同一问询可以继续一次。协议方法不占预算。
+
 ## 5. Smoke Test
 
 Use the demo gate to verify the full agent path:
@@ -103,3 +111,7 @@ npm run smoke:p0:demo
 It initializes an MCP session, lists tools, calls `sl_read_source`, and runs `sl_query` through Lucy MCP Proxy.
 
 For R1 contract validation, use the relevant `lucy_*` endpoint smoke or contract smoke so the evidence proves the governed MCP runtime surface, not only legacy tool forwarding.
+
+## 6. 真实客户端验收（企业安全整改）
+
+客户候选版本上线前，Codex CLI 与 Cursor CLI Agent 两个产品必须用本指南同一套 endpoint 与独立测试 Token 完成真实问答验收（每产品每场景 3 次）。接入方式固定为：用 WebUI「生成 Token」页复制出的 MCP 配置，写成各产品的原生配置（Codex `config.toml` 的 `bearer_token_env_var`、Cursor `.cursor/mcp.json` 的 `${env:…}` 头），**Token 只经环境变量传递，不进命令行和配置文件**；不得改走 KTX stdio 或 `:7878` 直连。执行与判定见 [`real-user-e2e.md`](real-user-e2e.md)。

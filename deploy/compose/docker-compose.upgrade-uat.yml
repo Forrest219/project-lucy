@@ -12,6 +12,8 @@ services:
         TARGETARCH: "${TARGETARCH:-arm64}"
         # Optional PyPI mirror (see Dockerfile ARG block). Empty = official pypi.org.
         UV_INDEX_URL: "${UV_INDEX_URL:-}"
+        LUCY_GIT_SHA: "${LUCY_GIT_SHA:-}"
+        LUCY_GIT_DIRTY: "${LUCY_GIT_DIRTY:-}"
     image: project-lucy:upgrade-uat-${UPGRADE_TAG:-baseline}
     environment:
       LUCY_DISABLE_TEMPLATE_SYNC: "1"

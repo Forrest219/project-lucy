@@ -1,17 +1,28 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import {
   enabledAdmins,
-  findAdmin,
   loadAdminsConfig,
   resolveAuthMode,
+  type AuthMode,
   type WebuiAdminRecord
 } from "./admins-store.js";
-import { readAdminSession, type AdminSession } from "./session.js";
+import { authenticateSession } from "./account-state.js";
+import type { SessionClaims } from "./session.js";
+import { trustedActorFromRequest } from "../security/request-actor.js";
 
 export type RequestAdminContext = {
-  session: AdminSession | null;
+  session: SessionClaims | null;
   admin: WebuiAdminRecord | null;
+  /** True when a session cookie was presented but the durable session state could not be consulted. */
+  stateUnavailable: boolean;
+  /** Set by `requireWebuiAuthHook`; lets the trusted actor tell open mode from an unauthenticated request. */
+  authMode?: AuthMode;
 };
+
+export const AUTH_STATE_UNAVAILABLE = {
+  ok: false,
+  error: { code: "AUTH_STATE_UNAVAILABLE", message: "认证状态暂不可用，请稍后重试或联系部署人员" }
+} as const;
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -41,29 +52,43 @@ export function isPublicApi(method: string, url: string): boolean {
 }
 
 export async function attachAdminContext(request: FastifyRequest): Promise<RequestAdminContext> {
-  const session = await readAdminSession(request);
-  let admin: WebuiAdminRecord | null = null;
-  if (session) {
-    const config = await loadAdminsConfig();
-    const found = findAdmin(config, session.adminId);
-    if (found && found.enabled) admin = found;
-  }
-  const ctx: RequestAdminContext = {
-    session: admin ? session : null,
-    admin
-  };
+  const state = await authenticateSession(request);
+  const ctx: RequestAdminContext =
+    state.kind === "ok"
+      ? { session: state.claims, admin: state.admin, stateUnavailable: false }
+      : { session: null, admin: null, stateUnavailable: state.kind === "unavailable" };
   request.lucyAdmin = ctx;
   return ctx;
+}
+
+/** Spec §3.2: authentication and admin responses must never be stored by browsers or intermediaries. */
+function isSensitiveApi(method: string, url: string): boolean {
+  const pathOnly = url.split("?")[0] ?? url;
+  return pathOnly.startsWith("/api/auth/") || (pathOnly.startsWith("/api/") && !isPublicApi(method, url));
 }
 
 export async function requireWebuiAuthHook(
   request: FastifyRequest,
   reply: FastifyReply
 ): Promise<void> {
+  if (isSensitiveApi(request.method, request.url)) reply.header("Cache-Control", "no-store");
   const ctx = await attachAdminContext(request);
   const mode = await resolveAuthMode();
+  ctx.authMode = mode;
   if (mode === "open") return;
   if (isPublicApi(request.method, request.url)) return;
+
+  if (mode === "unavailable") {
+    return reply.status(503).send({
+      ok: false,
+      error: {
+        code: "AUTH_CONFIG_UNAVAILABLE",
+        message: "管理员配置不可用，请联系部署人员修复后重试"
+      }
+    });
+  }
+
+  if (ctx.stateUnavailable) return reply.status(503).send(AUTH_STATE_UNAVAILABLE);
 
   if (mode === "bootstrap") {
     if (!ctx.admin) {
@@ -89,8 +114,9 @@ export async function requireWebuiAuthHook(
   }
 }
 
+/** Authenticated admin id, or the explicit open-mode `local-admin`; throws instead of guessing (T08-1). */
 export function actorIdFromRequest(request: FastifyRequest): string {
-  return request.lucyAdmin?.admin?.id ?? "local-admin";
+  return trustedActorFromRequest(request).actorId;
 }
 
 export function requireOwner(request: FastifyRequest, reply: FastifyReply): boolean {
