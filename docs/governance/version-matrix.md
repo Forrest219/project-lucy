@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy Version Matrix |
 | 文档类型 | Release Metadata / Compatibility Matrix |
-| 版本 | v0.4 |
-| 撰写日期 | 2026-06-21；2026-07-06；2026-08-03（增补：Helm/K8s single-replica supported baseline）；2026-09-02（拆分 Lucy 产品版本与 KTX；基线 0.17.0）；2026-10-19（批准切线到 `2.0.0`） |
+| 版本 | v0.5 |
+| 撰写日期 | 2026-06-21；2026-07-06；2026-08-03（增补：Helm/K8s single-replica supported baseline）；2026-09-02（拆分 Lucy 产品版本与 KTX；基线 0.17.0）；2026-10-19（批准切线到 `2.0.0`）；2026-10-21（§4 Database Matrix 状态值改为引用 `docs/governance/database-support-matrix.md`，补齐 StarRocks / Doris / SQL Server / Oracle / SQLite / Athena） |
 | 适用范围 | Lucy release、Docker image、bundled KTX runtime 和 MCP client 兼容性追踪 |
 
 ## 1. Current Baseline
@@ -88,13 +88,23 @@ Normative resolution, stamp file, and the rule that runtime env cannot replace i
 
 ## 4. Database Matrix
 
+Customer-facing summary of the release verified matrix. **The authoritative support status for every database type — including evidence requirements and known protocol differences — lives in `docs/governance/database-support-matrix.md`.** This section must not grow its own status list; update that document instead.
+
 | Database | Status | Gate |
 |---|---|---|
 | MySQL demo (`mysql:8.4`) | verified | `npm run smoke:p0:demo` |
 | Aliyun RDS MySQL | verified locally | `npm run smoke:p0:customer` |
 | PostgreSQL demo (`postgres:16-alpine`) | verified | `npm run smoke:p0:postgres-demo` |
+| SQLite | verified for local file use only | `npm run smoke:p0:demo` |
+| StarRocks | gated — not in the verified matrix until live certification evidence exists | `npm run smoke:p1:starrocks-certification` (blocked without a real config) |
+| Apache Doris | gated — R1 target; evidence required per environment | `npm run r1:doris-smoke`, `npm run r1:readiness:strict` |
+| SQL Server | experimental — connection type available, no live evidence | — |
+| Amazon Athena | experimental — connection type available, no live evidence | — |
+| Oracle | roadmap — not started | — |
 | ClickHouse | not verified for Lucy P0 | future compatibility gate |
 | Snowflake | not verified for Lucy P0 | future compatibility gate |
+
+StarRocks and Apache Doris reuse the `mysql` driver over the MySQL wire protocol. Engines that do not accept `max_execution_time` need an image that carries the compatibility patch — see `docs/governance/database-support-matrix.md` §4 for the symptom, the triage command, and the residual risk.
 
 ## 5. MCP Client Matrix
 

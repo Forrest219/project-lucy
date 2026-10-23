@@ -113,6 +113,7 @@
 |---|---|
 | `governance/release-ci.md` | Release CI 与 KTX 升级 gate |
 | `governance/version-matrix.md` | 支持的运行时与兼容性矩阵 |
+| `governance/database-support-matrix.md` | 数据库支持矩阵：各数据库类型的支持状态、判定证据、已知协议差异与更新规则（状态唯一真源） |
 | `governance/test-layers-and-release-gates.md` | Runtime/platform/business eval gate 分层；索引 E2E 测试集 |
 | `governance/lucy-test-cases.md` | 全链路 P0/P1/P2 测试用例矩阵（release-artifacts 打包清单依赖） |
 | `qa/e2e-sop.md` | **E2E SOP 总指引**（测试集总表 + 选用决策） |

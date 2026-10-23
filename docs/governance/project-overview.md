@@ -7,6 +7,7 @@
 | 版本 | v1.22 |
 | v1.22 更新 | 2026-10-22，登记 v2.5 L25-14 行权限管理 Spec v0.1-draft（可复用静态行策略模板 + 最终行约束预览 + 行权限视图 + 配置审计）；同步登记行级策略字段绑定存量缺陷 D-03（P1 / open，只登记不修，留 v2.0 线排期）；仅设计草案，验证未执行，暂不开发 |
 | v1.21 更新 | 2026-10-22，登记 v2.5 L25-13 升级候选验证环境实施方案 v0.1；仅规划，暂不开发，不改变客户现场以原地升级为主线的放行方式 |
+| v1.20 更新 | 2026-10-21，新增数据库支持矩阵（`docs/governance/database-support-matrix.md`）作为数据库支持状态唯一真源；本文件「数据库接入」能力行改为引用它 |
 | v1.19 更新 | 2026-10-20，登记 v2.5 L25-11 语义资产批量维护 Spec v0.1-draft；仅设计草案，验证未执行，暂不开发 |
 | v1.18 更新 | 2026-10-20，登记 v2.5 L25-10 Hive 直连实施方案；仅规划，暂不开发 |
 | 撰写日期 | 2026-06-17；v1.1 更新 2026-06-21；v1.2 更新 2026-06-21；v1.3 更新 2026-06-21；v1.4 更新 2026-06-22；v1.5 更新 2026-06-24（澄清 Lucy 不直接回答问题的定位措辞）；v1.6 更新 2026-07-06（同步交付缺口、headless 边界、运行时 instructions 来源和本机配置治理）；v1.7 更新 2026-07-06（同步 data agent context compiler + governed MCP runtime 定位）；v1.8 更新 2026-07-27（新增 Agent Admin 企业级交付 spec 索引）；v1.9 更新 2026-08-03（新增 Lucy 202608 可靠性交付系统升级蓝图索引）；v1.10 更新 2026-08-03（新增 Lucy 202608 执行总控与 Dynamic RLS POC 索引）；v1.11 更新 2026-08-03（同步 Kubernetes / Helm 单副本 baseline：`deploy/k8s/helm/lucy/`）；v1.12 更新 2026-08-03（将 202608 主线收窄为 Enterprise Governance & Observability）；v1.13 更新 2026-08-03（删除 Dynamic RLS / CLS POC spec / work order，移出 202608 active scope）；v1.14 更新 2026-08-26（索引可选 Agent Chat A3 Design Spec；非默认交付）；v1.15 更新 2026-08-28（索引 API Staging 接入准入 Spec · 计划支持）；v1.16 更新 2026-09-24（索引运维问数连接 Spec 149）；v1.17 更新 2026-10-18（索引 Cloudflare OS 对标差异） |
@@ -119,7 +120,7 @@ WebUI 是本地治理工作台，当前导航有 7 个一级模块：
 | Docker headless customer path | 达到当前交付预期 | 标准入口是 Docker Compose、配置文件、Lucy MCP Proxy、Agent MCP config、smoke/eval 证据 |
 | Kubernetes / Helm customer path | 单副本 supported baseline（2026-08-03 起） | 标准入口是 `deploy/k8s/helm/lucy/`、`docs/runbooks/customer-k8s-deployer-quickstart.md`；`Recreate` strategy + RWO PVC；HA 不在本期 |
 | WebUI 管理台 | 已实现内部治理能力，但非当前客户标准入口 | 代码和测试作为内部质量门禁；客户承诺需另补 UAT、用户文档和稳定性证据 |
-| 数据库接入 | MySQL/PostgreSQL verified；StarRocks P1 gated；Oracle roadmap | StarRocks live certification 前不能写入 verified matrix |
+| 数据库接入 | MySQL/PostgreSQL verified；StarRocks/Doris gated；SQL Server/Athena experimental；SQLite verified（仅本地文件）；Oracle roadmap | 支持状态以 [`docs/governance/database-support-matrix.md`](database-support-matrix.md) 为唯一真源；StarRocks live certification 前不能写入 verified matrix |
 | API Staging 接入（P1-MasterUidExtension） | **计划支持**（Spec 已落盘；ETL / WebUI / 生产域 **暂不开发**） | 见 `docs/specs/api-staging-admission-spec.md`；不承诺 Lucy 原生 HTTP |
 | Semantic layer / Wiki 管理 | 编辑能力已实现，reindex 与 wiki_search 交付证据仍不足 | 不能把 WebUI 维护链路整体标记为 verified 治理闭环 |
 | Skill management | 文件资产存在，Skill Editor / 版本化 / 自动加载闭环未开发 | 当前只能作为代码库治理资产，不是产品化 Skill 管理模块 |
@@ -168,6 +169,7 @@ Lucy MCP Proxy 监听 `LUCY_PROXY_HOST:LUCY_PROXY_PORT`（默认容器内 `0.0.0
 | Kubernetes / Helm 部署（单副本） | `deploy/k8s/helm/lucy/`、`docs/runbooks/customer-k8s-deployer-quickstart.md` |
 | 客户部署 / 运维手册 | `docs/runbooks/customer-deployment-guide.md` |
 | 版本矩阵 | `docs/governance/version-matrix.md` |
+| **数据库支持矩阵（支持状态唯一真源）** | **`docs/governance/database-support-matrix.md`** |
 | 构建修订（版本信息页 / health `gitSha`） | `docs/specs/lucy-20261020-build-revision-identity-spec.md` |
 | 测试分层与发布门禁 | `docs/governance/test-layers-and-release-gates.md` |
 | Release CI | `docs/governance/release-ci.md` |
