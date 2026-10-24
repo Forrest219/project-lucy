@@ -53,7 +53,12 @@ export interface PublishLockHolder {
   kind: PublishEntryKind;
   operationId: string;
   acquiredAt: string;
-  pid: number;
+  /**
+   * The owning process. `undefined` means the owner is unknown — a lock file
+   * written by a build that predates the pid field. An unknown owner can only
+   * be retired by age; a KNOWN owner is never retired by age alone.
+   */
+  pid?: number;
   /** Batch identity, when the holder is a publish batch. */
   validationId?: string;
   releaseId?: string;
@@ -112,9 +117,15 @@ function isProcessAlive(pid: number): boolean {
 /**
  * Decide whether an existing lock file may be reclaimed.
  *
- * A lock is abandoned when either
- *   (a) it is older than `staleAfterMs` (crash recovery), or
- *   (b) it was taken by a process that no longer exists (crash + restart with a new pid).
+ * A lock is abandoned only when the process that took it is gone. Age alone is
+ * NOT sufficient: a long-running publish (or a stalled write) is still a live
+ * holder, and reclaiming it would let a second writer into the critical
+ * section and overwrite the first writer's targets.
+ *
+ * The age check remains only as a fallback for a lock file whose owning pid
+ * cannot be determined (for example a lock written by a build that predates
+ * the pid field). Such a holder is still reclaimed after the stale window, but
+ * a holder with a KNOWN live pid is never reclaimed.
  */
 function isStaleHolder(
   holder: PublishLockHolder | null,
@@ -122,11 +133,13 @@ function isStaleHolder(
   staleAfterMs: number
 ): boolean {
   if (!holder) return false;
+  if (Number.isInteger(holder.pid)) {
+    // The owner is known: only a dead owner may be reclaimed. This also covers
+    // the current process, whose lock must never be stolen.
+    return holder.pid !== process.pid && !isProcessAlive(holder.pid);
+  }
   const acquiredAt = Date.parse(holder.acquiredAt);
   if (Number.isFinite(acquiredAt) && nowMs - acquiredAt > staleAfterMs) return true;
-  if (Number.isInteger(holder.pid) && holder.pid !== process.pid && !isProcessAlive(holder.pid)) {
-    return true;
-  }
   return false;
 }
 
@@ -152,7 +165,11 @@ export async function readPublishCoordinatorLock(
       kind: (typeof parsed?.kind === "string" ? parsed.kind : "batch_import") as PublishEntryKind,
       operationId: typeof parsed?.operationId === "string" ? parsed.operationId : "unknown",
       acquiredAt,
-      pid: typeof parsed?.pid === "number" ? parsed.pid : process.pid,
+      // A lock file written by an older build has no `pid`. It must NOT be
+      // reported as owned by the current process: that would make an ownerless
+      // lock look alive forever and it could never be retired. `pid: undefined`
+      // means "owner unknown", and age is then the only available signal.
+      pid: typeof parsed?.pid === "number" ? parsed.pid : undefined,
       validationId: typeof parsed?.validationId === "string" ? parsed.validationId : undefined,
       releaseId: typeof parsed?.releaseId === "string" ? parsed.releaseId : undefined
     };

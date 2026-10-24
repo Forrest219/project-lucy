@@ -19,7 +19,7 @@ import { getSecurityStore } from "../security/instance.js";
 import { runProjection, type ProjectionStatus } from "../security/projector.js";
 import { trustedActorFromRequest } from "../security/request-actor.js";
 import { redactAuditDiff, redactAuditSummary, redactAuditText } from "../security/redaction.js";
-import { rebuildInferredTurns, purgeExpiredConversationTurns, scrubAccessLogArgsSummaries, INFERRED_TURN_REBUILD_LOOKBACK_HOURS, sessionVisitSummary, SESSION_VISIT_SUMMARY_PREFIX } from "../proxy/audit.js";
+import { rebuildInferredTurns, purgeExpiredConversationTurns, scrubAccessLogArgsSummaries, INFERRED_TURN_REBUILD_LOOKBACK_HOURS, sessionVisitSummary, SESSION_VISIT_SUMMARY_PREFIX, ACCESS_LOG_COLUMNS as AUDIT_ACCESS_LOG_COLUMNS } from "../proxy/audit.js";
 import { presentStoredClient, type ResolvedClientIdentity } from "../proxy/request-client-meta.js";
 import { buildStoredZip, sha256Hex } from "../proxy/zip-store.js";
 import { MCP_PLAYGROUND_PLATFORM } from "./mcp-playground.js";
@@ -47,6 +47,23 @@ import {
   bodySizeError as agentAuditBodySizeError,
   isEventCountError as agentAuditIsEventCountError
 } from "./agent-audit-events.js";
+import {
+  buildExportPackV2,
+  performExportV2,
+  DEFAULT_CATCH_UP_DEADLINE_MS
+} from "./audit-export-v2.js";
+import {
+  CLASSIFICATION_VERSION_V2P5,
+  DIGEST_VERSION_V2P5
+} from "../proxy/audit-classification.js";
+import {
+  countPrimaryStatuses,
+  readPrimaryStatus
+} from "../proxy/audit-reconcile.js";
+import {
+  emptyPrimaryStatusCounts,
+  type PrimaryStatus
+} from "../proxy/audit-derivation.js";
 
 // Per-user lazy-rebuild debounce: GET /turns can be polled frequently (UI refresh, multiple
 // users in one window); skip re-running the full delete+reinsert rebuild if we just did it.
@@ -64,46 +81,9 @@ async function rebuildInferredTurnsDebounced(userId: string): Promise<void> {
 }
 
 let db: Database.Database | null = null;
-const ACCESS_LOG_COLUMNS = [
-  ["role_ids", "TEXT"],
-  ["permission_snapshot_hash", "TEXT"],
-  ["effective_tables_count", "INTEGER"],
-  ["decision_reason", "TEXT"],
-  ["token_label", "TEXT"],
-  ["token_hash_prefix", "TEXT"],
-  ["lucy_session_id", "TEXT"],
-  ["lucy_turn_id", "TEXT"],
-  ["turn_attribution_mode", "TEXT"],
-  ["turn_attribution_confidence", "TEXT"],
-  ["turn_attribution_reason", "TEXT"],
-  ["lucy_platform", "TEXT"],
-  ["query_hash", "TEXT"],
-  ["query_length", "INTEGER"],
-  ["query_operation", "TEXT"],
-  ["query_preview", "TEXT"],
-  ["query_artifact_ref", "TEXT"],
-  ["generated_sql", "TEXT"],
-  ["response_bytes", "INTEGER"],
-  ["response_row_count", "INTEGER"],
-  ["response_column_count", "INTEGER"],
-  ["response_truncated", "INTEGER"],
-  ["trace_id", "TEXT"],
-  ["client_ip", "TEXT"],
-  ["user_agent", "TEXT"],
-  ["client_version", "TEXT"],
-  ["device_name", "TEXT"],
-  ["policy_version", "TEXT"],
-  ["capability_digest", "TEXT"],
-  ["skill_uri", "TEXT"],
-  ["skill_version", "TEXT"],
-  ["skill_file_version", "TEXT"],
-  ["skill_action", "TEXT"],
-  ["skill_roles_allowed", "TEXT"],
-  ["matched_role_id", "TEXT"],
-  ["is_slow_call", "INTEGER"],
-  ["reported_client", "TEXT"],
-  ["reported_client_version", "TEXT"]
-] as const;
+// E-10 (B26): `ACCESS_LOG_COLUMNS` 曾有两份重复常量（此处 + `proxy/audit.ts`），
+// 新增列须两处同步否则导出元数据与写入漂移。现在只有**单一导出常量**。
+const ACCESS_LOG_COLUMNS = AUDIT_ACCESS_LOG_COLUMNS;
 const PERMISSION_SNAPSHOT_COLUMNS = [
   ["capability_digest", "TEXT"],
   ["tool_classification_version", "TEXT"]
@@ -115,6 +95,8 @@ type AccessLogFilterQuery = {
   tokenHashPrefix?: string;
   tool?: string;
   outcome?: string;
+  /** B27：汇总主状态八桶筛选（`succeeded` / `failed` / `denied` / `budget_stopped` / `cancelled` / `timeout` / `indeterminate` / `unknown`）。 */
+  primaryStatus?: string;
   since?: string;
   until?: string;
   tableSearch?: string;
@@ -207,6 +189,9 @@ function buildAccessLogFilter(q: AccessLogFilterQuery): {
     tokenHashPrefix: q.tokenHashPrefix ?? null,
     tool: q.tool ?? null,
     outcome: q.outcome ?? null,
+    // B27：筛选接受 `primaryStatus`（八桶）。历史行的 `primary_status` 为 NULL，
+    // 归入 `unknown` 桶 —— 与读路径的桶映射同源。
+    primaryStatus: q.primaryStatus ?? null,
     since: q.since ?? null,
     until: q.until ?? null,
     tableSearch: q.tableSearch ? `%${q.tableSearch}%` : null,
@@ -225,6 +210,13 @@ function buildAccessLogFilter(q: AccessLogFilterQuery): {
   if (params.tokenHashPrefix) baseConditions.push("token_hash_prefix = @tokenHashPrefix");
   if (params.tool) baseConditions.push("tool = @tool");
   if (params.outcome) baseConditions.push("outcome = @outcome");
+  if (params.primaryStatus) {
+    baseConditions.push(
+      params.primaryStatus === "unknown"
+        ? "(primary_status IS NULL OR primary_status = 'unknown')"
+        : "primary_status = @primaryStatus"
+    );
+  }
   if (params.since) baseConditions.push("ts >= @since");
   if (params.until) baseConditions.push("ts <= @until");
   if (params.tableSearch) baseConditions.push("tables LIKE @tableSearch");
@@ -897,6 +889,18 @@ interface QueryRow {
   is_slow_call?: number | null;
   /** Joined at read time; only set when lucy_turn_id is empty. */
   inferred_turn_id?: string | null;
+  // ─── Lucy v0.25 / L25-09 additive 列（历史行 NULL / 缺省）─────────────────
+  primary_status?: string | null;
+  derivation_version?: string | null;
+  delivery_status?: string | null;
+  null_reason?: string | null;
+  legacy_outcome?: string | null;
+  digest_kind?: string | null;
+  preview_version?: string | null;
+  ingress_event_id?: string | null;
+  endpoint_id?: string | null;
+  ledger_seq?: number | null;
+  error_category?: string | null;
 }
 
 const ACCESS_LOG_CSV_HEADERS = [
@@ -948,7 +952,20 @@ const ACCESS_LOG_CSV_HEADERS = [
   "skill_roles_allowed",
   "matched_role_id",
   "reported_client",
-  "reported_client_version"
+  "reported_client_version",
+  // ─── Lucy v0.25 / L25-09（B27）：八桶主状态 + 规则版本 ────────────────────
+  // 与 API 汇总、v2 导出**同源同函数**。
+  "primary_status",
+  "derivation_version",
+  "delivery_status",
+  "null_reason",
+  "legacy_outcome",
+  "digest_kind",
+  "preview_version",
+  "ingress_event_id",
+  "endpoint_id",
+  "ledger_seq",
+  "error_category"
 ] as const;
 
 type CsvFieldMetadata = {
@@ -1031,6 +1048,73 @@ const ACCESS_LOG_FIELD_METADATA: Record<(typeof ACCESS_LOG_CSV_HEADERS)[number],
     format: "string|null",
     description: "问询归因方式的补充原因。",
     trigger: "归因逻辑需要记录解释时输出。"
+  },
+  // ─── Lucy v0.25 / L25-09（B27）────────────────────────────────────────────
+  primary_status: {
+    label: "汇总主状态",
+    format: "enum {succeeded, failed, denied, budget_stopped, cancelled, timeout, indeterminate, unknown}",
+    description: "S01 派生的唯一汇总状态（八桶）。历史行未核验 → unknown；旧 outcome 单列在 legacy_outcome，不重解释历史数据。",
+    trigger: "v2p5-1 后写入；历史行为空。"
+  },
+  derivation_version: {
+    label: "主状态派生规则版本",
+    format: "string",
+    description: "汇总主状态的派生规则版本（v2p5-1）。",
+    trigger: "v2p5-1 后写入。"
+  },
+  delivery_status: {
+    label: "送达状态",
+    format: "enum {prepared, sent, acknowledged, unknown}",
+    description: "送达维度。unacknowledged 仅保留值域、本期不写入；无回执时接收观察为 unknown。",
+    trigger: "v2p5-1 后写入。"
+  },
+  null_reason: {
+    label: "空值原因",
+    format: "enum {not_applicable, not_collected, redacted, parse_failed, unknown, not_supported}",
+    description: "缺值原因（六值枚举）。",
+    trigger: "v2p5-1 后写入。"
+  },
+  legacy_outcome: {
+    label: "旧结果值",
+    format: "enum {ok, error, denied, budget_stop}",
+    description: "旧 outcome 原样保留，单列，不作为新执行状态的充分证据。",
+    trigger: "v2p5-1 后写入。"
+  },
+  digest_kind: {
+    label: "摘要类型",
+    format: "enum {search_text, sql, result}",
+    description: "摘要的来源类型。",
+    trigger: "有摘要时输出。"
+  },
+  preview_version: {
+    label: "预览版本",
+    format: "string",
+    description: "query_preview 的规则版本（v2p5-1 = 500 码点上限）；历史行保持 180 码点原值。",
+    trigger: "v2p5-1 后写入。"
+  },
+  ingress_event_id: {
+    label: "入口事件 ID",
+    format: "string|null",
+    description: "已提交 received 事件的 event_id；响应头 x-lucy-event-id 回传同一值。",
+    trigger: "v2p5-1 后写入。"
+  },
+  endpoint_id: {
+    label: "入口标识",
+    format: "enum {mcp-http, admin-http, agent-audit-ingest}",
+    description: "逻辑入口；端口是登记属性，不是入口身份。",
+    trigger: "v2p5-1 后写入。"
+  },
+  ledger_seq: {
+    label: "账本序号",
+    format: "integer|null",
+    description: "该行在 canonical ledger 的提交序号，用于 as-of S 视图。",
+    trigger: "v2p5-1 后写入。"
+  },
+  error_category: {
+    label: "错误分类",
+    format: "enum {client_schema_failure, validation_failed, policy_denied, upstream_failed, cancelled, timeout, budget_stopped}",
+    description: "S07 统一错误七分类，与 162 四维并行披露。",
+    trigger: "v2p5-1 后写入。"
   },
   lucy_platform: {
     label: "调用平台",
@@ -1310,7 +1394,20 @@ function renderAccessLogCsv(rows: QueryRow[]): string {
         csvCell(row.skill_roles_allowed),
         csvCell(row.matched_role_id),
         csvCell(shown.reportedClient ?? ""),
-        csvCell(shown.reportedClientVersion ?? "")
+        csvCell(shown.reportedClientVersion ?? ""),
+        // ─── Lucy v0.25 / L25-09（B27）：八桶主状态与规则版本 ─────────────────
+        // 与 API 汇总、v2 导出**同源同函数**（`readPrimaryStatus`）。
+        csvCell(readPrimaryStatus(row as { primary_status?: string | null; outcome?: string | null })),
+        csvCell(row.derivation_version),
+        csvCell(row.delivery_status),
+        csvCell(row.null_reason),
+        csvCell(row.legacy_outcome),
+        csvCell(row.digest_kind),
+        csvCell(row.preview_version),
+        csvCell(row.ingress_event_id),
+        csvCell(row.endpoint_id),
+        row.ledger_seq ?? "",
+        csvCell(row.error_category)
       ].join(",")
     })
   ];
@@ -1347,11 +1444,24 @@ function packFilenameStamp(now = new Date()): string {
   return `audit-pack-${iso}-${hex}.zip`;
 }
 
+/**
+ * B27 / E-12 — 汇总主状态八桶。
+ *
+ * 旧 `outcomeSummary` 只有 3 桶（ok / denied / error），`budget_stop` 被**完全
+ * 丢弃**（F01 的根因）。现在：
+ *   - `outcomeSummary` 保留为**旧直方图**（前端在用，不改形状）；
+ *   - `primaryStatusSummary` 是八桶主状态汇总（`budget_stopped` 不再丢失）。
+ *
+ * 八桶互斥且闭合：各桶之和 == 集合总数。
+ */
 interface TurnOutcomeSummary {
   ok: number;
   denied: number;
   error: number;
 }
+
+/** 八桶主状态汇总（读路径与 API / CSV / v2 导出同源）。 */
+type PrimaryStatusSummary = Record<PrimaryStatus, number>;
 
 interface TurnEntry {
   id: string;
@@ -1377,6 +1487,8 @@ interface TurnEntry {
   maxCallDurationMs?: number;
   slowCallCount?: number;
   outcomeSummary?: TurnOutcomeSummary;
+  /** B27：八桶主状态汇总（`budget_stopped` 不再被丢弃）。 */
+  primaryStatusSummary?: PrimaryStatusSummary;
 }
 
 type TurnFilterQuery = {
@@ -1445,13 +1557,27 @@ function loadAccessLogMetrics(
   maxCallDurationMs: number;
   slowCallCount: number;
   outcomeSummary: TurnOutcomeSummary;
+  /** B27：八桶主状态汇总（`budget_stopped` 不再被丢弃）。 */
+  primaryStatusSummary: PrimaryStatusSummary;
 } {
-  const empty = { totalCallDurationMs: 0, maxCallDurationMs: 0, slowCallCount: 0, outcomeSummary: { ok: 0, denied: 0, error: 0 } };
+  const empty = {
+    totalCallDurationMs: 0,
+    maxCallDurationMs: 0,
+    slowCallCount: 0,
+    outcomeSummary: { ok: 0, denied: 0, error: 0 } as TurnOutcomeSummary,
+    primaryStatusSummary: emptyPrimaryStatusCounts() as PrimaryStatusSummary
+  };
   if (accessLogIds.length === 0) return empty;
   const placeholders = accessLogIds.map(() => "?").join(",");
   const rows = database
-    .prepare(`SELECT outcome, duration_ms FROM access_log WHERE id IN (${placeholders})`)
-    .all(...accessLogIds) as Array<{ outcome: string; duration_ms: number }>;
+    .prepare(
+      `SELECT outcome, primary_status, duration_ms FROM access_log WHERE id IN (${placeholders})`
+    )
+    .all(...accessLogIds) as Array<{
+    outcome: string;
+    primary_status: string | null;
+    duration_ms: number;
+  }>;
   let totalCallDurationMs = 0;
   let maxCallDurationMs = 0;
   let slowCallCount = 0;
@@ -1464,7 +1590,9 @@ function loadAccessLogMetrics(
     else if (row.outcome === "denied") outcomeSummary.denied += 1;
     else if (row.outcome === "error") outcomeSummary.error += 1;
   }
-  return { totalCallDurationMs, maxCallDurationMs, slowCallCount, outcomeSummary };
+  // B27：八桶计数与列表 / CSV / v2 导出**同源同函数**。
+  const primaryStatusSummary = countPrimaryStatuses(rows).counts as PrimaryStatusSummary;
+  return { totalCallDurationMs, maxCallDurationMs, slowCallCount, outcomeSummary, primaryStatusSummary };
 }
 
 const TABLE_FORBIDDEN_PREFIX = "table_forbidden:";
@@ -1501,16 +1629,37 @@ function loadTurnToolCallStats(
   return { toolCallCount, forbiddenTables };
 }
 
+/**
+ * Lucy v0.25 / P0-4 §3.4 (E5): a source is identified by the full
+ * connection / schema / table triple. Two connections may legitimately expose
+ * the same `schema.table`, so deduplicating on `physicalTable` alone merged
+ * two distinct tables into one row and hid the difference from the reader.
+ * The fallback triple uses `unknown` for the parts a row cannot supply, which
+ * keeps the key unambiguous without inventing a connection.
+ */
+function sourceIdentityKey(source: {
+  connectionId?: string;
+  schema?: string;
+  sourceName?: string;
+  physicalTable: string;
+}): string {
+  const connection = source.connectionId ?? "unknown";
+  const schema = source.schema ?? "unknown";
+  const table = source.sourceName ?? source.physicalTable;
+  return `${connection}.${schema}.${table}`;
+}
+
 function mergeTurnSources(
   existing: TurnEntry["sources"],
   forbiddenTables: string[]
 ): TurnEntry["sources"] {
   if (forbiddenTables.length === 0) return existing;
-  const seen = new Set(existing.map((source) => source.physicalTable));
+  const seen = new Set(existing.map(sourceIdentityKey));
   const merged = [...existing];
   for (const physicalTable of forbiddenTables) {
-    if (seen.has(physicalTable)) continue;
-    seen.add(physicalTable);
+    const key = sourceIdentityKey({ physicalTable });
+    if (seen.has(key)) continue;
+    seen.add(key);
     merged.push({ physicalTable });
   }
   return merged;
@@ -2108,11 +2257,24 @@ const ACCESS_LOG_CSV_HEADERS_V2 = [
   "credential_principal_id",
   // Contract §2.2 — explicit actor + actor_kind (server-resolved)
   "actor_id",
-  "actor_type"
+  "actor_type",
+  // ─── Lucy v0.25 / L25-09（B27 / B13）：八桶主状态 + 规则版本 ──────────────
+  "primary_status",
+  "derivation_version",
+  "delivery_status",
+  "null_reason",
+  "legacy_outcome",
+  "digest_kind",
+  "preview_version",
+  "ingress_event_id",
+  "endpoint_id",
+  "ledger_seq",
+  "error_category"
 ] as const;
 
 const ACCESS_LOG_FIELD_METADATA_V2: Record<(typeof ACCESS_LOG_CSV_HEADERS_V2)[number], Omit<CsvFieldMetadata, "name">> = {
   ...ACCESS_LOG_FIELD_METADATA,
+  // B27 新增列的元数据已在 ACCESS_LOG_FIELD_METADATA 中声明（单一来源）。
   event_type: {
     label: "事件类型",
     format: "enum {tool_call, protocol, client_observation, audit_management}",
@@ -2582,17 +2744,55 @@ export function registerAuditRoutes(app: FastifyInstance) {
 
   app.get("/api/admin/audit/sources", async () => {
     const database = await getAuditDb();
+    // Lucy v0.25 / P0-4 §3.4 (E5): the connection identity must come from
+    // `access_log_sources.connection_id` — the audited source rows carry the
+    // real connection / schema / table triple. Deriving it from the
+    // `access_log.tables` string alone cannot tell two connections apart and
+    // used to report every table under one hardcoded "audit-derived" bucket.
+    // Rows without a recorded source keep the explicit `unknown` bucket instead
+    // of being folded into a made-up connection.
     const rows = database.prepare(`
-      SELECT tables, outcome
-      FROM access_log
-      WHERE tool NOT IN (${PROTOCOL_TOOL_LIST}) AND tables IS NOT NULL
-    `).all() as Array<{ tables: string | null; outcome: string }>;
+      SELECT al.tables AS tables, al.outcome AS outcome,
+             als.connection_id AS connection_id,
+             als.schema_name AS schema_name,
+             als.source_name AS source_name,
+             als.physical_table AS physical_table
+      FROM access_log al
+      LEFT JOIN access_log_sources als ON als.access_log_id = al.id
+      WHERE al.tool NOT IN (${PROTOCOL_TOOL_LIST}) AND al.tables IS NOT NULL
+    `).all() as Array<{
+      tables: string | null;
+      outcome: string;
+      connection_id: string | null;
+      schema_name: string | null;
+      source_name: string | null;
+      physical_table: string | null;
+    }>;
     const connections = new Map<string, number>();
     const schemas = new Map<string, number>();
     const tables = new Map<string, { table: string; calls: number; denied: number }>();
 
+    // A source row is the authoritative identity when present; the `tables`
+    // string is only a fallback for rows written before source capture existed.
     for (const row of rows) {
       if (!row.tables) continue;
+      const recordedIdentity = row.physical_table
+        ? {
+            connection: row.connection_id ?? "unknown",
+            schema: row.schema_name ?? "unknown",
+            table: row.source_name ?? row.physical_table
+          }
+        : null;
+      if (recordedIdentity) {
+        connections.set(recordedIdentity.connection, (connections.get(recordedIdentity.connection) ?? 0) + 1);
+        schemas.set(recordedIdentity.schema, (schemas.get(recordedIdentity.schema) ?? 0) + 1);
+        const key = `${recordedIdentity.connection}.${recordedIdentity.schema}.${recordedIdentity.table}`;
+        const existing = tables.get(key) ?? { table: key, calls: 0, denied: 0 };
+        existing.calls += 1;
+        if (row.outcome === "denied") existing.denied += 1;
+        tables.set(key, existing);
+        continue;
+      }
       let parsed: unknown;
       try {
         parsed = JSON.parse(row.tables);
@@ -2605,12 +2805,16 @@ export function registerAuditRoutes(app: FastifyInstance) {
         const parts = item.split(".");
         const schema = parts.length >= 2 ? parts[0] : "unknown";
         const table = parts.length >= 2 ? parts.slice(1).join(".") : item;
-        connections.set("audit-derived", (connections.get("audit-derived") ?? 0) + 1);
+        // No recorded source row for this call: the connection is genuinely
+        // unknown. Report it under an explicit `unknown` connection instead of
+        // inventing one — two connections can hold the same schema.table.
+        connections.set("unknown", (connections.get("unknown") ?? 0) + 1);
         schemas.set(schema, (schemas.get(schema) ?? 0) + 1);
-        const existing = tables.get(item) ?? { table: item, calls: 0, denied: 0 };
+        const key = `unknown.${schema}.${table}`;
+        const existing = tables.get(key) ?? { table: key, calls: 0, denied: 0 };
         existing.calls += 1;
         if (row.outcome === "denied") existing.denied += 1;
-        tables.set(item, existing);
+        tables.set(key, existing);
       }
     }
 
@@ -2714,6 +2918,18 @@ export function registerAuditRoutes(app: FastifyInstance) {
       FROM access_log ${baseWhere}
     `).get(params) as { protocol_calls: number | null; business_calls: number | null; denied_calls: number | null; data_bearing_calls: number | null };
 
+    // ─── B27 / E-12：八桶主状态汇总 ────────────────────────────────────────
+    //
+    // 旧汇总只有 3 桶（ok / denied / error），`budget_stop` 被**完全丢弃**（F01
+    // 根因）。这里按**同一筛选**（baseWhere）统计八桶，与列表 / CSV / v2 导出
+    // **同源同函数**（`countPrimaryStatuses`）。
+    //
+    // 历史行的 `primary_status` 为 NULL → 归 `unknown` 桶（不重解释历史数据）。
+    const primaryStatusRows = database
+      .prepare(`SELECT primary_status, outcome FROM access_log ${baseWhere}`)
+      .all(params) as Array<{ primary_status: string | null; outcome: string | null }>;
+    const primaryStatusCounts = countPrimaryStatuses(primaryStatusRows);
+
     const entries = rows.map((row) => {
       const shown = presentStoredClient(row);
       return {
@@ -2769,7 +2985,9 @@ export function registerAuditRoutes(app: FastifyInstance) {
       skillAction: row.skill_action ?? undefined,
       skillRolesAllowed: row.skill_roles_allowed ? (JSON.parse(row.skill_roles_allowed) as string[]) : undefined,
       matchedRoleId: row.matched_role_id ?? undefined,
-      usageSlowCall: row.is_slow_call === 1
+      usageSlowCall: row.is_slow_call === 1,
+      // B27：汇总主状态（历史行为 NULL → unknown，不重解释历史数据）。
+      primaryStatus: readPrimaryStatus(row as { primary_status?: string | null; outcome?: string | null })
     };
     });
 
@@ -2810,7 +3028,13 @@ export function registerAuditRoutes(app: FastifyInstance) {
           protocolCalls: summaryRow.protocol_calls ?? 0,
           businessCalls: summaryRow.business_calls ?? 0,
           deniedCalls: summaryRow.denied_calls ?? 0,
-          dataBearingCalls: summaryRow.data_bearing_calls ?? 0
+          dataBearingCalls: summaryRow.data_bearing_calls ?? 0,
+          // B27：八桶主状态汇总（旧 3 桶保留为 legacy 直方图）。
+          primaryStatus: primaryStatusCounts.counts,
+          /** 闭合断言：八桶之和 == 集合总数。 */
+          primaryStatusClosed: primaryStatusCounts.closed,
+          /** 旧 outcome 直方图，单列，不作为新执行状态。 */
+          legacyOutcome: primaryStatusCounts.legacyOutcomeCounts
         }
       }
     };
@@ -3690,6 +3914,200 @@ export function registerAuditRoutes(app: FastifyInstance) {
       return { ok: true, data: view };
     }
   );
+
+  // ─── B19 / E-3：v2 导出正式路径 ────────────────────────────────────────────
+  //
+  // 此前 `performExportV2` / `buildExportPackV2` **没有任何 HTTP 路由**，只有测试
+  // 能调用（E-3）。这里把 v2 导出接成正式路径。
+  //
+  // 关键点（B19 / E-2 / B21）：
+  //   - `S` 取 canonical ledger 的**已提交上界**（`security/store.ts` 的
+  //     `maxEventSeq()`），**不取**投影自身的序号。
+  //   - T3 = 60s，自**捕获 S 那一刻**起算；等待重试不重置计时。
+  //   - 正式导出失败时**不发布**半成品包；诊断包必须显式标 partial。
+  app.get<{
+    Querystring: {
+      mode?: string;
+      confirmDiagnostic?: string;
+      from?: string;
+      until?: string;
+      userId?: string;
+      exportedBy?: string;
+      exportReason?: string;
+      exportApprovalRef?: string;
+      prevExportId?: string;
+    };
+  }>("/api/admin/audit/export-v2", async (request, reply) => {
+    const query = request.query;
+    const mode = query.mode === "diagnostic" ? "diagnostic" : "complete";
+    if (mode === "diagnostic" && query.confirmDiagnostic !== "true") {
+      reply.code(400);
+      return {
+        ok: false,
+        error: { code: "DIAGNOSTIC_REQUIRES_CONFIRM", message: "confirmDiagnostic=true is required" }
+      };
+    }
+
+    const store = await getSecurityStore();
+    if (!store.ok) {
+      reply.code(503);
+      return { ok: false, error: { code: "SECURITY_STORE_UNAVAILABLE", message: "security store unavailable" } };
+    }
+    // B19 / E-2：`S` 的唯一正确来源是账本已提交上界。
+    const upperSeq = store.value.maxEventSeq();
+    if (!upperSeq.ok) {
+      reply.code(503);
+      return { ok: false, error: { code: "SECURITY_STORE_UNAVAILABLE", message: "ledger watermark unavailable" } };
+    }
+
+    const database = await getAuditDb();
+    const projection = await auditProjectionStatus(database);
+    // B21：自捕获 S 那一刻起算，等待重试不重置。
+    const catchUpStartedAt = Date.now();
+    const deadlineMs = DEFAULT_CATCH_UP_DEADLINE_MS;
+    const waitUntil = async (): Promise<boolean> => {
+      for (;;) {
+        const status = await auditProjectionStatus(database);
+        if (status.complete && status.latestSeq >= upperSeq.value) return true;
+        if (Date.now() - catchUpStartedAt >= deadlineMs) return false;
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+    };
+    const caughtUp = await waitUntil();
+
+    try {
+      const result = await performExportV2({
+        mode,
+        confirmDiagnostic: query.confirmDiagnostic === "true",
+        fixedFilter: {
+          from: query.from,
+          until: query.until,
+          userId: query.userId
+        },
+        fixedZone: "UTC",
+        projectionLag: projection.lag,
+        auditStoreAvailable: true,
+        securityStoreAvailable: true,
+        backupOk: true,
+        snapshotDb: database,
+        sourceDb: database,
+        classificationVersion: CLASSIFICATION_VERSION_V2P5,
+        digestVersion: DIGEST_VERSION_V2P5,
+        ledgerUpperSeq: upperSeq.value,
+        catchUpStartedAt,
+        catchUpDeadlineMs: deadlineMs,
+        provenance: {
+          exportedBy: query.exportedBy ?? null,
+          exportReason: query.exportReason ?? null,
+          exportApprovalRef: query.exportApprovalRef ?? null
+        },
+        prevExportId: query.prevExportId ?? null
+      });
+      if (mode === "complete" && !caughtUp) {
+        reply.code(409);
+        return {
+          ok: false,
+          error: { code: "PROJECTION_NOT_CAUGHT_UP", message: "projection did not reach the captured ledger watermark" }
+        };
+      }
+      reply.header("content-type", "text/csv; charset=utf-8");
+      reply.header("x-lucy-audit-upper-seq", String(result.upperSeq));
+      return result.csv;
+    } catch (err) {
+      const message = String((err as Error).message ?? err);
+      reply.code(409);
+      return { ok: false, error: { code: "EXPORT_FAILED", message } };
+    }
+  });
+
+  app.get<{
+    Querystring: {
+      mode?: string;
+      confirmDiagnostic?: string;
+      from?: string;
+      until?: string;
+      userId?: string;
+      exportedBy?: string;
+      exportReason?: string;
+      exportApprovalRef?: string;
+      prevExportId?: string;
+    };
+  }>("/api/admin/audit/export-pack-v2", async (request, reply) => {
+    const query = request.query;
+    const mode = query.mode === "diagnostic" ? "diagnostic" : "complete";
+    if (mode === "diagnostic" && query.confirmDiagnostic !== "true") {
+      reply.code(400);
+      return {
+        ok: false,
+        error: { code: "DIAGNOSTIC_REQUIRES_CONFIRM", message: "confirmDiagnostic=true is required" }
+      };
+    }
+
+    const store = await getSecurityStore();
+    if (!store.ok) {
+      reply.code(503);
+      return { ok: false, error: { code: "SECURITY_STORE_UNAVAILABLE", message: "security store unavailable" } };
+    }
+    const upperSeq = store.value.maxEventSeq();
+    if (!upperSeq.ok) {
+      reply.code(503);
+      return { ok: false, error: { code: "SECURITY_STORE_UNAVAILABLE", message: "ledger watermark unavailable" } };
+    }
+
+    const database = await getAuditDb();
+    const projection = await auditProjectionStatus(database);
+    const catchUpStartedAt = Date.now();
+    const deadlineMs = DEFAULT_CATCH_UP_DEADLINE_MS;
+    const waitUntil = async (): Promise<boolean> => {
+      for (;;) {
+        const status = await auditProjectionStatus(database);
+        if (status.complete && status.latestSeq >= upperSeq.value) return true;
+        if (Date.now() - catchUpStartedAt >= deadlineMs) return false;
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+    };
+    const caughtUp = await waitUntil();
+
+    try {
+      const pack = await buildExportPackV2({
+        mode,
+        confirmDiagnostic: query.confirmDiagnostic === "true",
+        fixedFilter: { from: query.from, until: query.until, userId: query.userId },
+        fixedZone: "UTC",
+        projectionLag: projection.lag,
+        auditStoreAvailable: true,
+        securityStoreAvailable: true,
+        backupOk: true,
+        snapshotDb: database,
+        sourceDb: database,
+        classificationVersion: CLASSIFICATION_VERSION_V2P5,
+        digestVersion: DIGEST_VERSION_V2P5,
+        ledgerUpperSeq: upperSeq.value,
+        catchUpStartedAt,
+        catchUpDeadlineMs: deadlineMs,
+        provenance: {
+          exportedBy: query.exportedBy ?? null,
+          exportReason: query.exportReason ?? null,
+          exportApprovalRef: query.exportApprovalRef ?? null
+        },
+        prevExportId: query.prevExportId ?? null
+      });
+      if (mode === "complete" && !caughtUp) {
+        reply.code(409);
+        return {
+          ok: false,
+          error: { code: "PROJECTION_NOT_CAUGHT_UP", message: "projection did not reach the captured ledger watermark" }
+        };
+      }
+      reply.header("content-type", "application/zip");
+      reply.header("x-lucy-audit-upper-seq", String(pack.manifest.ledgerUpperSeq));
+      return reply.send(pack.zip);
+    } catch (err) {
+      const message = String((err as Error).message ?? err);
+      reply.code(409);
+      return { ok: false, error: { code: "EXPORT_FAILED", message } };
+    }
+  });
 }
 
 function serializeTraceEvent(row: TraceEventRow) {

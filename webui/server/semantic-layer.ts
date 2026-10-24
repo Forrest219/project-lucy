@@ -735,7 +735,14 @@ export async function writeSourcePatch(
   patch: TablePatch,
   actor?: TrustedActor
 ): Promise<SourcePreview> {
-  const preview = await buildSourcePatchPreview(projectRoot, conn, schema, table, patch);
+  // Lucy v0.25 (L25-11 D4) — the preview is built INSIDE the publish window.
+  //
+  // Building it outside would let two concurrent edits of different tables
+  // that share one Manifest both compute their patch against the same old
+  // baseline; the later write would then replace the whole file and silently
+  // erase the first edit. Rebuilding under the lock means the second writer
+  // sees the first writer's result.
+  let preview: SourcePreview | undefined;
   // Spec 174 §3.2 — one barrier over the multi-file write (partial failure still invalidates).
   // Lucy v0.25 (L25-11 D4) — the single-table save shares the publish window with the
   // manifest upload, the batch import, the manual reindex and the access.yaml writers.
@@ -743,6 +750,7 @@ export async function writeSourcePatch(
     "semantic_table_save",
     () =>
       withDisplayWriteBarrier(["D", "P"], async () => {
+        preview = await buildSourcePatchPreview(projectRoot, conn, schema, table, patch);
         for (const file of preview.files) {
           await auditedWriteFile(projectRoot, file.filePath, file.proposedYaml, {
             enabled: true,
@@ -758,6 +766,11 @@ export async function writeSourcePatch(
       }),
     { projectRoot }
   );
+  if (!preview) {
+    // The coordinator always runs the callback; this guard only satisfies the
+    // type checker and can never be reached in practice.
+    throw new Error("semantic_table_save did not produce a preview");
+  }
   return preview;
 }
 

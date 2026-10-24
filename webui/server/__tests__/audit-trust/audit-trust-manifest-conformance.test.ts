@@ -278,6 +278,8 @@ describe("T08b.1 manifest v2 schema conformance", () => {
   it("exports ExportV2Manifest with no extra keys beyond the spec surface", async () => {
     // Get the canonical key set by reading the type at compile time via
     // a fixture-shape check. We mirror the spec by listing expected keys.
+    // B13 / U7：manifest 增补来源声明三字段 + 跨文件关系声明 + 排除项声明
+    // + 版本链 / 规则版本 / 文件清单 + 追平时限。
     const expectedKeys = [
       "schemaVersion",
       "classificationVersion",
@@ -293,7 +295,20 @@ describe("T08b.1 manifest v2 schema conformance", () => {
       "lagMs",
       "policyScopeExpanded",
       "untrustedSelfReport",
-      "legalEmptyWindow"
+      "legalEmptyWindow",
+      "provenance",
+      "crossFileRelations",
+      "exclusions",
+      "derivationVersion",
+      "prevExportId",
+      "exportId",
+      "sortKey",
+      "paginationRuleVersion",
+      "protocolInclusionRule",
+      "timeRange",
+      "cutoffAt",
+      "files",
+      "catchUpDeadlineSeconds"
     ];
     const m: ExportV2Manifest = await buildManifest();
     expect(Object.keys(m).sort()).toEqual(expectedKeys.slice().sort());

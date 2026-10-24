@@ -90,7 +90,13 @@ export type SecurityEventPhase =
   | "response_prepared"
   | "response_delivered"
   | "response_failed"
-  | "interrupted";
+  | "interrupted"
+  // Lucy v0.25 / L25-09 S02: the ingress barrier. `received` is the FIRST
+  // durable ledger event for a request — written once the request has been
+  // received at the Lucy boundary, before validation / authorization / budget
+  // evaluation and before any upstream dispatch. Its event_id is the
+  // `ingress_event_id` returned to the client (Spec §6.3 / U12).
+  | "received";
 
 export type SecurityEventInput = {
   eventId: string;
@@ -112,15 +118,29 @@ export type SecurityEventInput = {
    * `client_observation` (T06), `scrub`, `export_prepared`, `export_failed`. The
    * semantic-layer `event_type` column is a different axis (the row's actual
    * subject: tool_call / protocol / etc.).
+   *
+   * `null` is accepted on purpose: a stored event read back from SQLite carries
+   * `string | null`, and re-appending such an event (ledger replay, projection
+   * seeding) must type-check. The writer normalises both `undefined` and `null`
+   * to SQL NULL.
    */
-  auditEventKind?: string;
+  auditEventKind?: string | null;
+  /**
+   * Lucy v0.25 / L25-09 S02 §5.3 — logical ingress endpoint.
+   * `mcp-http` / `admin-http` / `agent-audit-ingest`. The listening port is a
+   * registration attribute, not the endpoint identity; MCP (57881) and admin
+   * (55176) coexist legitimately.
+   */
+  endpointId?: string | null;
 };
 
-export type SecurityEvent = Omit<Required<SecurityEventInput>, "auditEventKind"> & {
+export type SecurityEvent = Omit<Required<Omit<SecurityEventInput, "auditEventKind" | "endpointId">>, "auditEventKind" | "endpointId"> & {
   seq: number;
   createdAt: number;
   /** Spec 173 v0.3 / 2026-10-19 audit-trust §2.3 — NULL for pre-v2 rows. */
   auditEventKind: string | null;
+  /** Lucy v0.25 / L25-09 S02 §5.3 — NULL for pre-v3 rows. */
+  endpointId: string | null;
 };
 
 /** Whether a pending operation narrows, widens, or does not change effective permissions. */

@@ -18,6 +18,7 @@ import type { Identity, PermissionModelVersion } from "./identity.js";
 import {
   buildForcedFiltersPayload,
   compileScopedRowGrant,
+  formatRowPolicyAttribution,
   isUpstreamForcedPredicateProven,
   mergeRowGrants,
   rowGrantDigest,
@@ -196,6 +197,14 @@ export interface SourceMapEntry {
   physicalTable: string; // e.g. "dataforai.superstore_orders"
   connectionId: string;
   schema: string;
+  /**
+   * Lucy v0.25 (L25-14) — the schema name exactly as the Manifest file is named on
+   * disk (`BIDM.yaml` → `BIDM`). Diagnostics and the Admin preview show this so an
+   * operator can locate the file. It NEVER feeds a manifest path: the runtime keeps
+   * using the normalized `schema`, which is what makes D-03 (G5) observable instead
+   * of silently fixed.
+   */
+  schemaDisplay?: string;
   sourceName: string;
 }
 
@@ -299,7 +308,8 @@ async function buildSourceMapFromDisk(now: number): Promise<SourceMapState | nul
       const rel = path.relative(semanticLayerDir, schemaFile);
       const parts = rel.split(path.sep);
       const connectionId = normalizeRef(parts[0] ?? "");
-      const schema = normalizeRef(path.basename(schemaFile, ".yaml"));
+      const schemaFileName = path.basename(schemaFile, ".yaml");
+      const schema = normalizeRef(schemaFileName);
       for (const [sourceName, tableDef] of Object.entries(yaml.tables)) {
         if (!tableDef?.table) continue;
         const normalizedSource = normalizeRef(sourceName);
@@ -308,6 +318,7 @@ async function buildSourceMapFromDisk(now: number): Promise<SourceMapState | nul
           physicalTable,
           connectionId,
           schema,
+          schemaDisplay: schemaFileName,
           sourceName: normalizedSource
         };
         const fKey = forwardSourceKey(connectionId, normalizedSource);
@@ -327,7 +338,16 @@ async function buildSourceMapFromDisk(now: number): Promise<SourceMapState | nul
     .update(JSON.stringify(
       [...forward.entries()]
         .sort(([a], [b]) => a.localeCompare(b))
-        .map(([key, entry]) => [key, entry])
+        // `schemaDisplay` is a diagnostics-only field; it must not move the digest.
+        .map(([key, entry]) => [
+          key,
+          {
+            physicalTable: entry.physicalTable,
+            connectionId: entry.connectionId,
+            schema: entry.schema,
+            sourceName: entry.sourceName
+          }
+        ])
     ))
     .digest("hex")
     .slice(0, 16);
@@ -1243,12 +1263,20 @@ async function compileRole(
           matches.map((entry) => ({
             connectionId: entry.connectionId,
             sourceName: entry.sourceName,
-            schema: entry.schema
+            schema: entry.schema,
+            schemaDisplay: entry.schemaDisplay
           }))
         );
         if (!compiled.ok) {
-          recordStep({ status: "failed", code: `role_resolution_failed:${compiled.reason}`, stage: "row_grant", selectorIndex });
-          return { ok: false, reason: `role_resolution_failed:${roleId}:${compiled.reason}` };
+          // Lucy v0.25 (L25-14 §3.5) — the failure reason carries the four-tuple
+          // (connection / schema / table / field) and the R5 attribution code, so an
+          // operator can tell 「字段不存在」 from 「清单不可用」 / 「目录能力未知」.
+          const detail = compiled.attribution
+            ? `:row_policy_attribution:${formatRowPolicyAttribution(compiled.attribution)}`
+            : "";
+          const reason = `${compiled.reason}${detail}`;
+          recordStep({ status: "failed", code: `role_resolution_failed:${reason}`, stage: "row_grant", selectorIndex });
+          return { ok: false, reason: `role_resolution_failed:${roleId}:${reason}` };
         }
         if (compiled.grant.kind !== "scoped") {
           recordStep({ status: "failed", code: "role_resolution_failed:row_policy_invalid", stage: "row_grant", selectorIndex });
@@ -1892,6 +1920,80 @@ export async function previewAgentPermissionsForAdmin(
     previewConfig,
     policy,
     { freshSourceMap: options.freshSourceMap ?? true }
+  );
+}
+
+/**
+ * Lucy v0.25 (L25-14 §3.2) — does a source-map entry match the table identity the
+ * Admin asked for?
+ *
+ * The comparison is case-insensitive on the schema, exactly like the runtime's
+ * selector matching: the source map lower-cases the schema name when it reads the
+ * Manifest file names, so a requested `BIDM` must still find the entry that carries
+ * `bidm`. The entry's `schemaDisplay` keeps the on-disk case for diagnostics.
+ */
+export function sourceMapEntryMatchesTable(
+  entry: SourceMapEntry,
+  table: { connection: string; schema: string; name: string }
+): boolean {
+  const connection = normalizeRef(table.connection);
+  const schema = normalizeRef(table.schema);
+  const name = normalizeRef(table.name);
+  if (entry.connectionId !== connection) return false;
+  if (entry.schema !== schema) return false;
+  return entry.sourceName === name || entry.physicalTable === name;
+}
+
+/**
+ * Lucy v0.25 (L25-14 §3.2 / §5.3) — read-only preview entry point.
+ *
+ * Resolves ONE subject against an in-memory CANDIDATE configuration through the
+ * runtime's own compile path (`resolveEffectivePermissions`). Nothing is written,
+ * the committed policy is not swapped in, and no second permission algebra is
+ * introduced: the preview and the runtime share this exact function.
+ *
+ * The candidate is built by the caller (draft overlaid on the current config) and
+ * is never read back from disk, so a preview can never describe a stale baseline.
+ */
+export async function previewSubjectPermissionsForCandidate(
+  candidate: AccessConfig,
+  subject: {
+    userId: string;
+    name?: string;
+    enabled?: boolean;
+    role?: string;
+    roles?: string[];
+    constraints?: unknown;
+  },
+  options: {
+    freshSourceMap?: boolean;
+    sourceMap?: SourceMapState;
+    enabledTables?: Map<string, Set<string>>;
+  } = {}
+): Promise<RoleResolutionResult> {
+  const policy = aclPolicy(candidate);
+  const previewUser = {
+    id: subject.userId,
+    name: subject.name ?? subject.userId,
+    enabled: subject.enabled ?? true,
+    ...(subject.role !== undefined ? { role: subject.role } : {}),
+    ...(subject.roles !== undefined ? { roles: subject.roles } : {}),
+    ...(subject.constraints !== undefined ? { constraints: subject.constraints } : {}),
+    tokens: []
+  } as AccessConfig["users"][number];
+  const previewConfig: AccessConfig = {
+    ...candidate,
+    users: [...candidate.users.filter((user) => user.id !== subject.userId), previewUser]
+  };
+  return resolveEffectivePermissions(
+    { userId: subject.userId, tokenLabel: "admin-preview", tokenHashPrefix: "admin-preview" },
+    previewConfig,
+    policy,
+    {
+      freshSourceMap: options.freshSourceMap ?? true,
+      sourceMap: options.sourceMap,
+      enabledTables: options.enabledTables
+    }
   );
 }
 

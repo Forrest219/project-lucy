@@ -643,6 +643,44 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 
 上述英文标识、枚举值、`turnId`、`prevExportId` 及事件／尝试 ID 的 DOM 节点使用 `translate="no"` 与 `notranslate`。
 
+#### 4.7.3 跨模块同名族（摘要族 / 阻断态族）
+
+本节登记 **2026-10-25 v0.25 实施期审阅**发现的两组同名异义问题（N3／N4）。两组都不是「新造术语」，而是**既有同名对象之间缺少边界声明**——引用时必须写明是哪一族，否则无法复核。
+
+**（一）摘要族（N3）**：`access_log` 与相关表上同时存在三套互不等价的「摘要」：
+
+| 摘要族 | 承载列 | 版本列 | 摘要对象 |
+|---|---|---|---|
+| 查询摘要 | `query_hash` | **无** | 查询输入 |
+| 生效能力摘要 | `capability_digest` | `tool_classification_version` | 权限快照的生效能力元组 |
+| 通用摘要 | `digest_kind` + `digest_version` | `digest_version`（v0.25 为 `v2p5-1`） | 受控规范化输入；`digest_kind` 区分 `search_text / sql / result` |
+
+三者的**被摘要对象、版本体系与用途各不相同**：不可互相替代、不可互相校验、不可当作同一口径比对；`query_hash` 没有版本列，因此**不得**与另两族做「摘要一致即同一口径」的推断。
+
+| Canonical term | UI 主术语 | 禁止文案 | 说明 |
+|---|---|---|---|
+| Digest Family | 摘要族 | 摘要（不加限定）、把三类摘要互相比对或互证 | 三套同名异义的摘要；引用时必须写明族名与其版本列 |
+| Query Digest | 查询摘要 | 能力摘要、通用摘要（混用） | `query_hash`；无版本列 |
+| Capability Digest | 生效能力摘要 | 查询摘要、通用摘要（混用） | `capability_digest`；配 `tool_classification_version` |
+| Canonical Digest | 通用摘要 | 查询摘要、能力摘要（混用） | `digest_kind` + `digest_version`；v0.25 算法版本 `v2p5-1` |
+
+**（二）阻断态族（N4）**：代码与台账里同时存在四处 `blocked`，语义各不相同：
+
+| 阻断态 | 位置 | 语义 |
+|---|---|---|
+| 发布阻断 | `semantic-assets` 发布记录的 `status` | 语义资产发布被阻断 |
+| 检查未就绪 | `admin/mcp-runtime` 金丝雀检查的 `status` | 该连接／Agent 尚无 reload 记录，检查未就绪 |
+| 任务阻断 | 语义批量维护审计的 `status` | 批量维护任务被阻断 |
+| 交付阻断 | 发布台账的 `blocked_delivery` | **整批交付不得放行**（发布就绪判定） |
+
+| Canonical term | UI 主术语 | 禁止文案 | 说明 |
+|---|---|---|---|
+| Blocked State Family | 阻断态族 | 阻断（不加限定）、把发布阻断与交付阻断当同一件事 | 四处同名异义；跨模块引用必须写明是哪一处 |
+| Release Blocked | 发布阻断 | 交付阻断、检查未就绪 | 语义资产发布被阻断 |
+| Check Not Ready | 检查未就绪 | 发布阻断、交付阻断 | 金丝雀检查尚无 reload 记录 |
+| Task Blocked | 任务阻断 | 发布阻断、交付阻断 | 批量维护任务被阻断 |
+| Delivery Blocked | 交付阻断 | 发布阻断（混用）、放行受阻 | 发布台账的整批交付判定；**不等于**某一次发布失败 |
+
 ### 4.8 MCP 调试台 / ACL 裁决可见性
 
 | Canonical Term | Preferred EN | UI 主术语 | 禁止 / 弃用 | 说明 |

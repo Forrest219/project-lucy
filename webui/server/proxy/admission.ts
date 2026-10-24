@@ -69,6 +69,20 @@ export type AdmissionOutcome = AdmittedRequest | { ok: false };
 export type AdmissionOptions = {
   skillsPassthroughEnabled: boolean;
   readBody: (req: IncomingMessage) => Promise<Buffer>;
+  /**
+   * Lucy v0.25 / L25-09 S02 / B6 / B22 —— **入口持久化屏障**回调。
+   *
+   * 在 Bearer 认证通过之后、角色解析（授权）与信封校验**之前**调用一次。
+   * 回调负责把 `received` 事件写入 canonical ledger：
+   *   - 成功 → 继续后续流程（信封校验 → 授权 / 预算 → `request_admitted` → 分派）；
+   *   - 失败 → 准入整体失败，回答 503 `AUDIT_UNAVAILABLE`，**不分派、不缓冲**（U3）。
+   *
+   * 未提供该回调时行为与历史一致（无 `received` 事件）；生产代理必须提供。
+   */
+  onReceived?: (input: {
+    identity: Identity;
+    sessionId?: string;
+  }) => Promise<{ ok: true } | { ok: false; reason: string }>;
 };
 
 function headerValue(value: string | string[] | undefined): string | undefined {
@@ -127,6 +141,28 @@ function recordAuthFailure(req: IncomingMessage, result: Awaited<ReturnType<type
     tokenLabel: result.tokenLabel
   }).catch((error) => {
     console.error("[lucy-proxy] failed to write auth_failure_log", error);
+  });
+}
+
+/**
+ * Lucy v0.25 / L25-09 B22 (D2) — record a request that was refused BEFORE the
+ * identity could be established (unknown route, unsupported HTTP method,
+ * disallowed Origin).
+ *
+ * These refusals never reach the canonical ledger, so without this record they
+ * would be invisible to the ingress-coverage denominator: the view would claim
+ * the ingress recorded every request while these were dropped. They are
+ * evidence of an ingress attempt, not of an execution.
+ */
+function recordIngressRefusal(req: IncomingMessage, reason: string): void {
+  const network = extractRequestClientMeta(req);
+  void writeAuthFailureLog({
+    ts: new Date().toISOString(),
+    reason,
+    clientIp: network.clientIp,
+    userAgent: network.userAgent
+  }).catch((error) => {
+    console.error("[lucy-proxy] failed to write ingress refusal record", error);
   });
 }
 
@@ -222,15 +258,18 @@ export async function admitMcpRequest(
 ): Promise<AdmissionOutcome> {
   const { route } = classifyRoute(req);
   if (!route || (route === "skills" && !options.skillsPassthroughEnabled)) {
+    recordIngressRefusal(req, "route_not_found");
     writeJson(res, 404, { error: "Not found" });
     return { ok: false };
   }
   const httpMethod = (req.method ?? "").toUpperCase();
   if (!MCP_METHODS.has(httpMethod)) {
+    recordIngressRefusal(req, "method_not_allowed");
     writeJson(res, 405, { error: "Method not allowed" }, { allow: ALLOW_HEADER });
     return { ok: false };
   }
   if (!originAllowed(req)) {
+    recordIngressRefusal(req, "origin_not_allowed");
     writeJson(res, 403, rpcError(null, -32003, "Access denied: origin_not_allowed"));
     return { ok: false };
   }
@@ -243,6 +282,32 @@ export async function admitMcpRequest(
     return { ok: false };
   }
   const identity = identify.identity;
+
+  // ─── Lucy v0.25 / L25-09 S02 / B6 / B22：入口持久化屏障 ──────────────────
+  //
+  // `received` 是 canonical ledger 的**第一条**事件：写入成功才允许后续的
+  // 信封校验 / 授权 / 预算 / 分派。失败 → 503 AUDIT_UNAVAILABLE，**不分派**
+  // （U3：本期仅阻断、无缓冲）。
+  //
+  // 位置说明：本回调在 **Bearer 认证通过之后**、角色解析与信封校验之前。
+  // HTTP 层认证失败（路径 / Origin / Bearer）按 D2 **不进** canonical ledger，
+  // 仍走 `auth_failure_log`，并作为独立入口证据参与覆盖分母。
+  if (options.onReceived) {
+    let received: { ok: true } | { ok: false; reason: string };
+    try {
+      received = await options.onReceived({ identity, sessionId });
+    } catch (error) {
+      received = { ok: false, reason: error instanceof Error ? error.message : "received_failed" };
+    }
+    if (!received.ok) {
+      console.error(`[lucy-proxy] ingress received append failed reason=${received.reason}`);
+      writeJson(res, 503, {
+        error: "Audit unavailable; no content was released",
+        detail: "AUDIT_UNAVAILABLE"
+      }, { "cache-control": "no-store", "retry-after": "1" });
+      return { ok: false };
+    }
+  }
 
   const body = httpMethod === "POST" ? await options.readBody(req) : Buffer.alloc(0);
   const peeked = peekEnvelope(body);

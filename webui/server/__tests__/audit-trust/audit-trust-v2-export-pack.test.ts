@@ -16,6 +16,7 @@ function makePackDb(): Database.Database {
   db.exec(`
     CREATE TABLE access_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ledger_seq INTEGER,
       ts TEXT NOT NULL,
       user_id TEXT NOT NULL,
       tool TEXT NOT NULL,
@@ -79,6 +80,7 @@ function makePackDb(): Database.Database {
     );
     CREATE TABLE audit_maintenance_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ledger_seq INTEGER,
       ts TEXT NOT NULL,
       event_type TEXT NOT NULL,
       actor TEXT NOT NULL,
@@ -96,22 +98,22 @@ function makePackDb(): Database.Database {
   db.prepare(
     `INSERT INTO access_log (ts, user_id, tool, outcome, decision_reason, duration_ms, response_row_count,
             event_type, transport_sub_type, transport_status, authorization_status, execution_status,
-            usability_status, association_status, original_turn_id, effective_turn_id, classification_version)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            usability_status, association_status, original_turn_id, effective_turn_id, classification_version, ledger_seq)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     "2026-10-19T12:00:00Z", "u1", "lucy_query", "ok", "allowed", 100, 5,
     "tool_call", "other", "succeeded", "allowed", "succeeded", "usable",
-    "confirmed", "turn-1", "turn-1", "audit-trust-2026-10-19-r1.v1"
+    "confirmed", "turn-1", "turn-1", "audit-trust-2026-10-19-r1.v1", 1
   );
   db.prepare(
     `INSERT INTO access_log (ts, user_id, tool, outcome, decision_reason, duration_ms, response_row_count,
             event_type, transport_sub_type, transport_status, authorization_status, execution_status,
-            usability_status, association_status, original_turn_id, effective_turn_id, classification_version)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            usability_status, association_status, original_turn_id, effective_turn_id, classification_version, ledger_seq)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     "2026-10-19T12:01:00Z", "u2", "tools/list", "ok", "allowed", 5, 0,
     "protocol", "handshake", "succeeded", "allowed", "succeeded", "not_applicable",
-    "confirmed", "turn-2", "turn-2", "audit-trust-2026-10-19-r1.v1"
+    "confirmed", "turn-2", "turn-2", "audit-trust-2026-10-19-r1.v1", 2
   );
   db.prepare(`INSERT INTO access_log_sources (access_log_id, ts, user_id, connection_id, schema_name, source_name, physical_table, extraction_method, confidence) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .run(1, "2026-10-19T12:00:00Z", "u1", "main", "public", "users", "users", "literal", "high");
@@ -128,7 +130,9 @@ const baseOptions = {
   auditStoreAvailable: true,
   securityStoreAvailable: true,
   classificationVersion: "audit-trust-2026-10-19-r1.v1",
-  digestVersion: "audit-trust-2026-10-19-r1.v1"
+  digestVersion: "audit-trust-2026-10-19-r1.v1",
+  // B19 / E-2: `S` 由调用方从 canonical ledger 的已提交上界传入。
+  ledgerUpperSeq: 3
 };
 
 describe("T04d buildExportPackV2", () => {
@@ -171,10 +175,11 @@ describe("T04d buildExportPackV2", () => {
     expect(result.manifest.integrityVerification.relationCheckOk).toBe(true);
   });
 
-  it("ledgerUpperSeq anchors to MAX(access_log.id)", async () => {
+  it("ledgerUpperSeq comes from the caller, never from the projection's own seq", async () => {
+    // B19 / E-2: `S` 只能来自 canonical ledger 的已提交上界（maxEventSeq()）。
     const db = makePackDb();
-    const result = await buildExportPackV2({ ...baseOptions, snapshotDb: db });
-    expect(result.manifest.ledgerUpperSeq).toBe(2);
+    const result = await buildExportPackV2({ ...baseOptions, snapshotDb: db, ledgerUpperSeq: 77 });
+    expect(result.manifest.ledgerUpperSeq).toBe(77);
   });
 
   it("rejects complete mode when permission_snapshots empty (relation_check fails)", async () => {

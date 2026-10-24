@@ -14,6 +14,13 @@ import {
 import { assertSkillsPassthroughPolicy, skillsPassthroughRequested } from "../auth/deployment-mode.js";
 import { ReleaseLedger, type ReleaseOperationContext } from "../security/ledger.js";
 import { beginGatedResponse, type ResponseCommitConfig } from "../security/response-commit.js";
+import { getSecurityStore } from "../security/instance.js";
+import {
+  allocateIngressIdentity,
+  appendIngressReceived,
+  buildCorrelationHeaders,
+  runStartupRecoveryScan
+} from "./ingress-registry.js";
 import {
   clearUpstreamSession,
   getUpstreamSession,
@@ -23,15 +30,19 @@ import {
   upstreamSessionOwner
 } from "./upstream-session.js";
 import { extractRequestClientMeta, resolveClientIdentity } from "./request-client-meta.js";
-import { ensureSkillAuditReady, writeLog, writeAccessLogSources, writeConversationTurn, purgeExpiredConversationTurns, bindPriorSessionCalls, type AccessLogSourceRecord } from "./audit.js";
+import { ensureSkillAuditReady, writeLog, writeAccessLogSources, writeConversationTurn, purgeExpiredConversationTurns, bindPriorSessionCalls, loadBudgetState, saveBudgetState, listBudgetScopes, type AccessLogSourceRecord } from "./audit.js";
+import { setLedgerSeqResolver } from "./audit-reconcile.js";
 import { allowedToolNames, authorizeAndRewrite, check as aclCheck, effectivePermissions, extractTables, extractSourceRefs, formatIdentityCompilerReason, resolveSourceRefsForTables, kxCatalog, lucyCatalog, permissionSnapshot, type SourceRef } from "./acl.js";
 import {
   redactQuestionText,
   summarizeArgsForAudit,
   extractQueryTables,
   questionPreviewMaxChars,
-  storeQuestionPreviewEnabled
+  storeQuestionPreviewEnabled,
+  buildQueryPreview,
+  QUERY_PREVIEW_MAX_CODEPOINTS
 } from "./audit-privacy.js";
+import { PREVIEW_VERSION_V2P5 } from "./audit-classification.js";
 import { buildAccessLogAuditMeta } from "./audit-meta.js";
 import { canAccessWikiKey, canonicalWikiKey, searchAccessibleWikiPages } from "./wiki-acl.js";
 import { CONTEXT_NOT_AVAILABLE, CONTEXT_ROLE_REQUIRED } from "./context-acl.js";
@@ -39,6 +50,7 @@ import { loadAllSkillsFresh, getSkillByUri, getSkillByName } from "../skills/loa
 import type { SkillAsset } from "../skills/types.js";
 import { canAccessSkill, filterAccessibleSkills, type SkillAclDecision, type SkillAclAction } from "./skill-acl.js";
 import { readProject, resolveProjectRoot } from "../project.js";
+import { listSources } from "../semantic-layer.js";
 import { loadContentPaths } from "../paths.js";
 import { readKtxYamlDigest, recordExecutionRuntimeObservation } from "../mcp-runtime-state.js";
 import {
@@ -66,11 +78,17 @@ import {
   publishedSourceName,
   questionBudget,
   questionBudgetEnabled,
+  installBudgetPersistence,
+  type BudgetPersistence,
   registerPublishedVersion,
   repairHint,
+  buildRepairClosure,
+  evaluateRepairTarget,
   resolveAppliedVersion,
   resolveResponseTruncated,
   TRUNCATION_REPAIR_HINT,
+  type RepairTargetEvidence,
+  isBudgetUnavailable,
 } from "./question-experience.js";
 import { applyLucyCallGuard, countWithoutSourceBeforeAcl, loadPublishedAmbiguityCatalog, queryGuardrailsEnabled } from "./query-guardrails.js";
 import {
@@ -703,8 +721,34 @@ function redactQueryPreview(query: string): string {
     .replace(/\b(password|passwd|pwd|token|secret|api[-_]?key|authorization|credential)\b\s*[:=]\s*([^,\s;]+)/gi, "$1=[REDACTED]")
     .replace(/\b\d+(?:\.\d+)?\b/g, "?")
     .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 180);
+    .trim();
+}
+
+/**
+ * Lucy v0.25 / L25-09 B5 / U11 — `query_preview` 由 180 扩展至 **500 码点**。
+ *
+ * - 先执行既有脱敏（`redactQueryPreview`），再生成有界预览。
+ * - 按 Unicode 码点截断，**不切断字符**（emoji / 中文边界）。
+ * - 记录 `truncated` 与原始输入 UTF-8 字节长度。
+ * - `preview_version=v2p5-1`；历史行保持 180 原值，**不改写历史行**（D7）。
+ */
+function buildAuditQueryPreview(query: string): {
+  queryPreview: string;
+  previewVersion: string;
+  previewTruncated: boolean;
+  previewOriginalBytes: number;
+} {
+  const redacted = redactQueryPreview(query);
+  const built = buildQueryPreview(redacted, {
+    maxCodePoints: QUERY_PREVIEW_MAX_CODEPOINTS,
+    previewVersion: PREVIEW_VERSION_V2P5
+  });
+  return {
+    queryPreview: built.preview,
+    previewVersion: built.previewVersion,
+    previewTruncated: built.truncated,
+    previewOriginalBytes: built.originalBytes
+  };
 }
 
 function queryOperation(query: string): string {
@@ -718,11 +762,17 @@ function queryOperation(query: string): string {
 function queryAuditMeta(toolArgs: unknown): Partial<Parameters<typeof writeLog>[0]> & { queryTables?: string[] } {
   const rawQuery = findRawQuery(toolArgs);
   if (!rawQuery) return {};
+  const preview = buildAuditQueryPreview(rawQuery);
   return {
     queryHash: createHash("sha256").update(rawQuery).digest("hex"),
     queryLength: rawQuery.length,
     queryOperation: queryOperation(rawQuery),
-    queryPreview: redactQueryPreview(rawQuery),
+    queryPreview: preview.queryPreview,
+    previewVersion: preview.previewVersion,
+    previewTruncated: preview.previewTruncated,
+    previewOriginalBytes: preview.previewOriginalBytes,
+    // U11：摘要基于完整的受控规范化输入，digest_kind 区分来源类型。
+    digestKind: "sql",
     queryTables: extractQueryTables(rawQuery)
   };
 }
@@ -2586,8 +2636,31 @@ async function writeLucySemanticResponse(
     compilerReason = "filter_pushdown";
     preservedGeneratedSql = sql?.trim() ? sql : undefined;
     const visible = new Set(sourceRefs.map((ref) => ref.sourceName).filter((name): name is string => Boolean(name)));
-    const hint = repairHint({ failureDimension: "过滤条件下推", suggestedSources: [...visible] }, visible)
-      ?? "这次过滤条件无法下推。请改成等值、包含或枚举条件后再查。";
+    // B15：过滤下推的修复提示同样要走可用性闭环 —— 只推荐真实存在、
+    // 主体可见、语义可编译且参数形态合法的来源。
+    const { evidence: pushdownEvidence } = await collectRepairEvidence({
+      toolArgs: (toolArgs ?? undefined) as Record<string, unknown> | undefined,
+      candidateSources: [...visible],
+      visibleSources: visible,
+      callable: true,
+      knownExisting: visible
+    });
+    const pushdownClosure = buildRepairClosure({
+      failureDimension: "过滤条件下推",
+      candidates: pushdownEvidence,
+      availableCandidates: [...visible]
+    });
+    const hint =
+      (pushdownClosure.usableTargets.length > 0
+        ? repairHint(
+            { failureDimension: "过滤条件下推", suggestedSources: pushdownClosure.usableTargets },
+            visible
+          )
+        : null) ??
+      (pushdownClosure.usableTargets.length === 0 && pushdownClosure.rejected.length > 0
+        ? pushdownClosure.text
+        : null) ??
+      "这次过滤条件无法下推。请改成等值、包含或枚举条件后再查。";
     body = JSON.stringify({
       jsonrpc: "2.0",
       id: requestId,
@@ -2698,6 +2771,67 @@ async function writeLucySemanticResponse(
     resultSnapshot: resultSnapshotFromAuditMeta(responseMeta),
     sourceRefs: sourceRefs.length > 0 ? sourceRefs : null
   });
+}
+
+/**
+ * B15：收集 repairHint 的可用性证据。
+ *
+ * 五项检查：真实 Schema（对象存在性）、主体可见性、编译能力（语义模型
+ * 完成度）、参数形态、可调用性。
+ *
+ * **不发真实数据查询**：只读 Schema 清单与语义完成度元数据。
+ * Schema 证据不可得时返回 `schemaEvidenceAvailable=false`，由调用方决定
+ * 降级方式（提示是建议性的，不是权限裁决）。
+ */
+async function collectRepairEvidence(input: {
+  toolArgs: Record<string, unknown> | undefined;
+  candidateSources: readonly string[];
+  visibleSources: ReadonlySet<string>;
+  callable: boolean;
+  /** 已知存在的候选（由真实查询解析出来的来源）。 */
+  knownExisting?: ReadonlySet<string>;
+}): Promise<{ evidence: RepairTargetEvidence[]; schemaEvidenceAvailable: boolean }> {
+  const evidence: RepairTargetEvidence[] = [];
+  let schemaByName: Map<string, { compiled: boolean; measureCount: number }> | null = null;
+  try {
+    const projectRoot = await resolveProjectRoot();
+    const sources = await listSources(projectRoot);
+    schemaByName = new Map(
+      sources.map((source) => [
+        source.table,
+        {
+          // `done` / `partial` = 语义模型可编译；`not_started` / `validation_failed` = 不可编译。
+          compiled: source.completion === "done" || source.completion === "partial",
+          measureCount: source.measureCount
+        }
+      ])
+    );
+  } catch {
+    schemaByName = null;
+  }
+  const rawMeasures = input.toolArgs?.measures;
+  const measures = Array.isArray(rawMeasures)
+    ? rawMeasures.filter((item): item is string => typeof item === "string")
+    : [];
+  for (const target of input.candidateSources) {
+    const schema = schemaByName?.get(target);
+    const schemaExists =
+      schemaByName === null
+        ? input.knownExisting?.has(target)
+          ? true
+          : null
+        : schema !== undefined || Boolean(input.knownExisting?.has(target));
+    evidence.push({
+      target,
+      schemaExists,
+      visibleToPrincipal: input.visibleSources.has(target),
+      compiled: schema?.compiled ?? Boolean(input.knownExisting?.has(target)),
+      // 请求了度量时，目标必须真的定义了度量，否则参数形态不合法。
+      parameterShapeValid: measures.length === 0 ? true : (schema?.measureCount ?? 0) > 0,
+      callable: input.callable
+    });
+  }
+  return { evidence, schemaEvidenceAvailable: schemaByName !== null };
 }
 
 function toolsListErrorResponse(requestId: string | number, detail: string): Record<string, unknown> {
@@ -3364,10 +3498,31 @@ async function buildDenialRepairPayload(
     connections: resolved.permissions.connections,
     sources: resolved.permissions.sources
   });
-  const hint = repairHint(
-    { failureDimension: "权限拒绝", suggestedSources: allow.sources },
-    new Set(allow.sources)
-  );
+  // B15：提示内容必须先通过可用性闭环（真实 Schema / 可见性 / 编译能力 /
+  // 参数形态 / 可调用性）。无合法目标时给**事实性错误**与可用候选。
+  const { evidence, schemaEvidenceAvailable } = await collectRepairEvidence({
+    toolArgs: undefined,
+    candidateSources: allow.sources,
+    visibleSources: new Set(allow.sources),
+    callable: true
+  });
+  const closure = buildRepairClosure({
+    failureDimension: "权限拒绝",
+    candidates: evidence,
+    availableCandidates: allow.sources
+  });
+  const hint =
+    closure.usableTargets.length > 0
+      ? repairHint(
+          { failureDimension: "权限拒绝", suggestedSources: closure.usableTargets },
+          new Set(allow.sources)
+        )
+      : schemaEvidenceAvailable
+        ? closure.text
+        : repairHint(
+            { failureDimension: "权限拒绝", suggestedSources: allow.sources },
+            new Set(allow.sources)
+          );
   const parts: string[] = [];
   if (allow.connections.length > 0) parts.push(`可用连接：${allow.connections.join("、")}。`);
   if (allow.sources.length > 0) parts.push(`可用来源：${allow.sources.join("、")}。`);
@@ -3502,12 +3657,49 @@ async function buildDenialRepairPayload(
     }
     // Count before local handlers return as well as before upstream dispatch.
     if (rpcMethod === "tools/call" && toolName && isQuestionDataTool(toolName) && questionBudgetEnabled()) {
-      const budgetDecision = questionBudget.consume(
+      // B16 / B24：持久化预算 + 无 turnId 时按凭证 / 会话级上限兜底。
+      // 兜底作用域键取凭证指纹 + 会话，**不因重连或省略 begin_question 而重置**。
+      const budgetScope = `${identity.tokenHashPrefix ?? "no-token"}:${requestMeta.lucySessionId ?? "no-session"}`;
+      const budgetDecision = await questionBudget.consumePersisted(
         requestMeta.lucyTurnId,
         Date.now(),
-        normalizeHeader(req.headers["x-lucy-question-continue"])
+        normalizeHeader(req.headers["x-lucy-question-continue"]),
+        budgetScope
       );
       if (budgetDecision.action === "stop") {
+        // A durable-store fault is NOT a spent budget. It is refused with 503
+        // and recorded as an error, so a storage fault can never be read back
+        // as a legitimate `budget_stopped` credential.
+        if (isBudgetUnavailable(budgetDecision)) {
+          const failureBody = JSON.stringify({
+            jsonrpc: "2.0",
+            id: requestId,
+            error: { code: -32000, message: "audit_unavailable", data: { reason: budgetDecision.reason } }
+          });
+          res.writeHead(503, {
+            "content-type": "application/json",
+            "content-length": Buffer.byteLength(failureBody)
+          });
+          res.end(failureBody);
+          recordRequestAudit({
+            ts: new Date().toISOString(),
+            userId: identity.userId,
+            client: identity.client,
+            tool: toolName,
+            tables: queryTables.length > 0 ? queryTables : undefined,
+            argsSummary,
+            ...queryMeta,
+            outcome: "error",
+            decisionReason: "question_budget_unavailable",
+            errorDetail: "question_budget_unavailable",
+            durationMs: Date.now() - start,
+            responseBytes: Buffer.byteLength(failureBody),
+            requestId,
+            ...requestMeta,
+            ...(await auditMeta(identity, "question_budget_unavailable")),
+          });
+          return;
+        }
         const responseBody = JSON.stringify({
           jsonrpc: "2.0",
           id: requestId,
@@ -3558,6 +3750,15 @@ async function buildDenialRepairPayload(
         });
         return;
       }
+      // The budget was granted, so this request now holds one unit of the
+      // concurrency occupancy. The occupancy must be released when the request
+      // ends, otherwise the durable `currentConcurrency` only ever grows and
+      // the recorded occupancy stops describing reality.
+      res.once("close", () => {
+        void questionBudget.release(requestMeta.lucyTurnId, budgetScope).catch((error) => {
+          console.error("[lucy-proxy] failed to release budget occupancy", error);
+        });
+      });
     }
 
     if (toolName === "connection_list" || toolName === "lucy_catalog" || toolName === "kx_catalog") {
@@ -5109,6 +5310,42 @@ export type BuildProxyOptions = {
   onOperationSettled?: () => void;
 };
 
+/**
+ * B16：构造预算持久化适配器。
+ *
+ * 审计模块在部分测试里被整体 mock，此时持久化导出不存在 —— 此时返回
+ * `null` 表示**未装配**（降级为进程内计数），而不是在请求路径上抛错。
+ */
+function createBudgetPersistence(): BudgetPersistence | null {
+  try {
+    const load = loadBudgetState;
+    const save = saveBudgetState;
+    const list = listBudgetScopes;
+    if (typeof load !== "function" || typeof save !== "function" || typeof list !== "function") {
+      return null;
+    }
+    return {
+      load: async (scopeKey) => {
+        const persisted = await load(scopeKey);
+        return persisted ? { ...persisted, scopeKey } : null;
+      },
+      save: (scopeKey, state) =>
+        save(scopeKey, {
+          startedAt: state.startedAt,
+          originStartedAt: state.originStartedAt,
+          calls: state.calls,
+          continuations: state.continuations,
+          attempts: state.attempts,
+          peakConcurrency: state.peakConcurrency,
+          currentConcurrency: state.currentConcurrency
+        }),
+      listScopes: () => list()
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function buildProxy(options: BuildProxyOptions = {}) {
   assertSkillsPassthroughPolicy();
   const ledger = options.ledger ?? new ReleaseLedger();
@@ -5116,14 +5353,73 @@ export function buildProxy(options: BuildProxyOptions = {}) {
   const port = Number(process.env.LUCY_PROXY_PORT ?? 7879);
   const host = process.env.LUCY_PROXY_HOST ?? "127.0.0.1";
 
+  // B16：装配**持久化**预算（重启不丢，Spec §10.5「以账本为准幂等重建计数」）。
+  //
+  // 持久层**未装配**（审计模块在测试中被整体 mock）→ 降级为进程内计数：
+  // 预算仍然生效，只是不跨进程。持久层已装配但读写失败仍然失败关闭。
+  installBudgetPersistence(createBudgetPersistence());
+
+  // B25：装配账本序号解析器 —— `access_log.ledger_seq` 记录行写入时
+  // canonical ledger 的已提交上界，供 as-of S 视图纳入。
+  setLedgerSeqResolver(async () => {
+    const store = await getSecurityStore();
+    if (!store.ok) return null;
+    const max = store.value.maxEventSeq();
+    return max.ok ? max.value : null;
+  });
+
+  // B7：启动时**从账本**派生未闭合操作并幂等追加恢复标记；不重放业务。
+  void runStartupRecoveryScan();
+
   const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
     try {
       // T04-3: stamp before admission so a narrowing committed while identity
       // is being resolved still covers this request.
       const authorizationStamp = currentAuthorizationSequence();
+      // ─── Lucy v0.25 / L25-09 S02 / B6 / D3 ────────────────────────────────
+      // 入口身份在**准入之前**分配：operation_id / attempt_id / ingress_event_id
+      // 同时分配（D3）。被拒绝的请求也有 attempt_id，只是 execution=not_executed。
+      const ingress = allocateIngressIdentity({ endpointId: "mcp-http", operationPrefix: "mcp" });
       const admitted = await admitMcpRequest(req, res, ADMISSION_AUDIT, {
         skillsPassthroughEnabled,
-        readBody
+        readBody,
+        // 入口持久化屏障：`received` 写入成功才允许后续的授权 / 分派。
+        onReceived: async ({ identity, sessionId }) => {
+          const store = await getSecurityStore();
+          if (!store.ok) return { ok: false, reason: "security_store_unavailable" };
+          const appended = appendIngressReceived({
+            operationId: ingress.operationId,
+            attemptId: ingress.attemptId,
+            endpointId: ingress.endpointId,
+            actor: identity.userId,
+            actorType: "agent",
+            networkInfo: req.socket?.remoteAddress,
+            sessionFingerprint: identity.tokenHashPrefix,
+            method: req.method ?? "",
+            sessionId,
+            appender: (event) => {
+              const committed = store.value.appendEvent({
+                eventId: event.eventId,
+                operationId: event.operationId,
+                phase: event.phase,
+                actor: event.actor,
+                actorType: event.actorType,
+                networkInfo: event.networkInfo,
+                sessionFingerprint: event.sessionFingerprint,
+                endpointId: event.endpointId,
+                verdict: event.verdict,
+                resultSummary: event.resultSummary
+              });
+              if (!committed.ok) return { ok: false, reason: committed.reason };
+              return { ok: true, seq: committed.value.seq };
+            }
+          });
+          if (!appended.ok) return { ok: false, reason: appended.reason };
+          // U12：仅在 received 已提交后回传三项审计关联头。
+          const headers = buildCorrelationHeaders(ingress);
+          for (const [name, value] of Object.entries(headers)) res.setHeader(name, value);
+          return { ok: true };
+        }
       });
       if (!admitted.ok) return;
       const barrier = beginGuardedRequest(admitted.identity, res, authorizationStamp);
@@ -5131,7 +5427,8 @@ export function buildProxy(options: BuildProxyOptions = {}) {
       // content is released only after a durable `response_prepared`.
       const shape = ledgerRequestShape(req, admitted.body);
       const context: ReleaseOperationContext = {
-        operationId: `mcp_${randomUUID()}`,
+        // 复用入口分配的 operation_id —— `received` 与 `request_admitted` 属同一操作。
+        operationId: ingress.operationId,
         actor: admitted.identity.userId,
         actorType: "agent",
         networkInfo: req.socket?.remoteAddress,

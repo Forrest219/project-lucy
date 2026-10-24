@@ -466,6 +466,11 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
     () => derivePermissionImpact(baseline, draft, rejectedTools, detail?.users ?? []),
     [baseline, draft, rejectedTools, detail?.users]
   );
+  /**
+   * Lucy v0.25 (L25-14 §3.2) — the candidate Role the final-row preview is
+   * computed from. It is the in-memory draft, never the committed configuration.
+   */
+  const rowPolicyPreviewRole = useMemo(() => serializeDraft(draft), [draft]);
   const dirty = mode === "copy"
     || migratedPrefix
     || rejectedTools.length > 0
@@ -710,7 +715,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
           {activeSection === "rowPolicy" ? (
             <div className="grid max-w-3xl gap-4 pb-28">
               <div><h2 className="text-base font-semibold">行级策略（可选）</h2><p className="mt-1 text-sm text-fg-muted">只为必须限制行的表配置静态条件；其余表保持全部行。</p></div>
-              <RoleRowPolicyPanel tables={tables} onChange={(nextTables) => updateDraft({ ...draft, scope: { mode: "names", tables: nextTables } })} disabled={isReadOnlyTemplate} catalogBound={draft.scope.mode === "catalog_bound"} />
+              <RoleRowPolicyPanel tables={tables} onChange={(nextTables) => updateDraft({ ...draft, scope: { mode: "names", tables: nextTables } })} disabled={isReadOnlyTemplate} catalogBound={draft.scope.mode === "catalog_bound"} roleId={draft.roleId} previewRole={rowPolicyPreviewRole} />
             </div>
           ) : null}
 

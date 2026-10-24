@@ -16,6 +16,7 @@ function makeFixtureDb(): Database.Database {
   db.exec(`
     CREATE TABLE access_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ledger_seq INTEGER,
       ts TEXT NOT NULL,
       user_id TEXT NOT NULL,
       tool TEXT NOT NULL,
@@ -46,18 +47,18 @@ function makeFixtureDb(): Database.Database {
   const insert = db.prepare(
     `INSERT INTO access_log (ts, user_id, tool, outcome, decision_reason, duration_ms, response_row_count,
             event_type, transport_sub_type, transport_status, authorization_status, execution_status,
-            usability_status, association_status, original_turn_id, effective_turn_id, classification_version)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            usability_status, association_status, original_turn_id, effective_turn_id, classification_version, ledger_seq)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   insert.run("2026-10-19T12:00:00Z", "u1", "lucy_query", "ok", "allowed", 100, 5,
     "tool_call", "other", "succeeded", "allowed", "succeeded", "usable",
-    "confirmed", "turn-1", "turn-1", "audit-trust-2026-10-19-r1.v1");
+    "confirmed", "turn-1", "turn-1", "audit-trust-2026-10-19-r1.v1", 1);
   insert.run("2026-10-19T12:01:00Z", "u2", "tools/list", "ok", "allowed", 5, 0,
     "protocol", "handshake", "succeeded", "allowed", "succeeded", "not_applicable",
-    null, null, null, "audit-trust-2026-10-19-r1.v1");
+    null, null, null, "audit-trust-2026-10-19-r1.v1", 2);
   insert.run("2026-10-19T12:02:00Z", "u3", "lucy_query", "denied", "permission_denied", 10, 0,
     "tool_call", "other", "failed", "denied", "not_executed", "metadata_missing",
-    "conflict", "turn-2", "turn-2", "audit-trust-2026-10-19-r1.v1");
+    "conflict", "turn-2", "turn-2", "audit-trust-2026-10-19-r1.v1", 3);
   // Sources (1 per access_log row to keep ok=true)
   for (let i = 1; i <= 3; i++) {
     db.prepare(`INSERT INTO access_log_sources (access_log_id) VALUES (?)`).run(i);
@@ -74,7 +75,10 @@ const baseOptions = {
   auditStoreAvailable: true,
   securityStoreAvailable: true,
   classificationVersion: "audit-trust-2026-10-19-r1.v1",
-  digestVersion: "audit-trust-2026-10-19-r1.v1"
+  digestVersion: "audit-trust-2026-10-19-r1.v1",
+  // B19 / E-2: `S` 由调用方从 canonical ledger 的已提交上界传入
+  // （security/store.ts 的 maxEventSeq()），**不**取投影自身的序号。
+  ledgerUpperSeq: 3
 };
 
 describe("T04c performExportV2 complete mode", () => {
@@ -180,12 +184,22 @@ describe("T04c performExportV2 complete mode", () => {
     ).rejects.toThrow(/integrity_or_relation_failed/);
   });
 
-  it("anchors ledger upper seq to MAX(access_log.id)", async () => {
+  it("uses the caller-provided ledger upper seq S (never the projection's own seq)", async () => {
+    // B19 / E-2: `S` 只能来自 canonical ledger 的已提交上界。
+    // 传 99（远大于投影的 MAX(id)=3）时，S 必须是 99，且只导出 id <= 99 的行。
     const db = makeFixtureDb();
-    const r = await performExportV2({ ...baseOptions, snapshotDb: db });
-    expect(r.upperSeq).toBe(3);
+    const r = await performExportV2({ ...baseOptions, snapshotDb: db, ledgerUpperSeq: 99 });
+    expect(r.upperSeq).toBe(99);
+    expect(r.manifest.ledgerUpperSeq).toBe(99);
     expect(r.rowCount).toBe(3);
-    expect(r.manifest.ledgerUpperSeq).toBe(3);
+  });
+
+  it("fails closed when the ledger upper seq is not supplied", async () => {
+    // 不得用投影自身的序号顶替 S。
+    const db = makeFixtureDb();
+    await expect(
+      performExportV2({ ...baseOptions, snapshotDb: db, ledgerUpperSeq: undefined })
+    ).rejects.toThrow(/ledger_upper_seq_required/);
   });
 
   it("diagnostic_requires_confirm: throws when mode=diagnostic without confirm", async () => {

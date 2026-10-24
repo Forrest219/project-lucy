@@ -41,22 +41,138 @@ export type AgentAuditEventInput = {
 export type AgentAuditAdapter = {
   adapter_id: string;
   instance_id: string;
-  /** Allowed parent_event_ids for this adapter. Empty set = none. */
+  /**
+   * Allowed parent_event_ids for this adapter.
+   *
+   * B23 / E-7：此前恒为空集（`new Set<string>()`），任何带 `parent_event_id`
+   * 的客户端观测都被拒 `parent_not_visible`，`acknowledged` 路径**永不可达**。
+   * 现在由服务端按**凭据 scope + 可见性**解析出真实父集合（见
+   * `resolveVisibleParentIds`）。
+   */
   visibleParentIds: Set<string>;
 };
+
+/**
+ * B23 — 服务端按「凭据 scope + 可见性」解析真实父集合。
+ *
+ * 父事件的可见性判据（三者同时成立）：
+ *   1. 父事件存在于 canonical ledger（不是客户端自称的 ID）；
+ *   2. 父事件的 `operation_id` 与该父 ID 的登记 attempt 一致；
+ *   3. 父事件的 actor / session 与当前适配器凭据 scope 一致。
+ *
+ * 解析失败 → 集合为空（fail-closed），**不**放宽为「全部可见」。
+ */
+export type VisibleParentResolver = (input: {
+  parentEventId: string;
+  adapter: AgentAuditAdapter;
+}) => Promise<boolean> | boolean;
+
+/**
+ * 依据服务端账本解析可见父集合。
+ *
+ * @param parentEventIds 候选父 ID（来自请求）。
+ * @param lookup        服务端账本查询：返回父事件的 operation / actor / session。
+ */
+export async function resolveVisibleParentIds(
+  parentEventIds: readonly string[],
+  lookup: (parentEventId: string) => Promise<{
+    operationId: string;
+    actor: string;
+    sessionFingerprint: string;
+  } | null>,
+  scope: { actor: string; sessionFingerprint: string }
+): Promise<Set<string>> {
+  const visible = new Set<string>();
+  for (const parentEventId of parentEventIds) {
+    if (!parentEventId) continue;
+    const parent = await lookup(parentEventId);
+    if (!parent) continue;
+    if (parent.actor !== scope.actor) continue;
+    if (parent.sessionFingerprint !== scope.sessionFingerprint) continue;
+    visible.add(parentEventId);
+  }
+  return visible;
+}
 
 export type PersistedClientObservation = {
   client_event_id: string;
   server_event_id: string;
   server_received_at: string;
+  /**
+   * B23：送达状态。本期只写 `prepared` / `sent` / `acknowledged` / `unknown`；
+   * `unacknowledged` 仅保留值域、本期不写入（U1）。
+   */
+  delivery_status: "prepared" | "sent" | "acknowledged" | "unknown";
 };
 
 export type AgentAuditResult =
-  | { status: "accepted"; persisted: PersistedClientObservation }
+  | { status: "accepted"; persisted: PersistedClientObservation; deliveryReason?: string }
   | { status: "idempotent_replay"; persisted: PersistedClientObservation }
   | { status: "id_conflict"; existing: { server_received_at: string; ack_status: string } }
   | { status: "parent_not_visible" }
   | { status: "schema_invalid"; details: string[] };
+
+/**
+ * B23 — `result_received` 升级 `acknowledged` 的**校验结果**。
+ *
+ * U1 要求：有效回执必须关联同一入口 `event_id`、`attempt_id` 及持久
+ * `response_prepared` 证据 / 摘要，才能写 `acknowledged`。
+ * 接入口 HTTP 成功、heartbeat、发送成功或声明一个父 ID 都**不是**有效接收回执。
+ */
+export type AcknowledgementValidation = {
+  upgraded: boolean;
+  reason: string;
+  /** 校验通过的父入口事件 ID。 */
+  parentIngressEventId: string | null;
+  parentAttemptId: string | null;
+};
+
+/**
+ * B23 — 校验 `result_received` 是否足以升级 `acknowledged`。
+ *
+ * 全部条件同时成立才升级：
+ *   1. 父 `ingress_event_id` 存在且在适配器可见父集合内；
+ *   2. 父 `attempt_id` 与观测声明的 attempt 一致；
+ *   3. 父的**持久** `response_prepared` 摘要与观测声明的摘要一致。
+ *
+ * 任一不满足 → 不升级，记冲突 / unknown。**绝不**部分升级。
+ */
+export function validateAcknowledgement(input: {
+  parentEventId: string | null | undefined;
+  visibleParentIds: ReadonlySet<string>;
+  /** 观测声明的父 attempt ID。 */
+  declaredAttemptId: string | null | undefined;
+  /** 服务端账本中该父 attempt 的 attempt ID。 */
+  parentAttemptId: string | null | undefined;
+  /** 服务端账本中该父的持久 response_prepared 摘要。 */
+  parentPreparedDigest: string | null | undefined;
+  /** 观测声明的响应摘要。 */
+  declaredDigest: string | null | undefined;
+}): AcknowledgementValidation {
+  const parentEventId = input.parentEventId ?? null;
+  const fail = (reason: string): AcknowledgementValidation => ({
+    upgraded: false,
+    reason,
+    parentIngressEventId: parentEventId,
+    parentAttemptId: input.parentAttemptId ?? null
+  });
+
+  if (!parentEventId) return fail("parent_event_id_missing");
+  if (!input.visibleParentIds.has(parentEventId)) return fail("parent_not_visible");
+  if (!input.parentAttemptId) return fail("parent_attempt_unknown");
+  if (!input.declaredAttemptId) return fail("declared_attempt_missing");
+  if (input.declaredAttemptId !== input.parentAttemptId) return fail("parent_attempt_mismatch");
+  if (!input.parentPreparedDigest) return fail("parent_response_prepared_missing");
+  if (!input.declaredDigest) return fail("declared_digest_missing");
+  if (input.declaredDigest !== input.parentPreparedDigest) return fail("parent_digest_mismatch");
+
+  return {
+    upgraded: true,
+    reason: "acknowledged",
+    parentIngressEventId: parentEventId,
+    parentAttemptId: input.parentAttemptId
+  };
+}
 
 const MAX_EVENTS_PER_REQUEST = 100;
 const MAX_BODY_BYTES = 1024 * 1024; // 1 MiB
@@ -145,6 +261,26 @@ export function ensureAgentAuditSchema(securityDb: Database.Database): void {
 }
 
 /**
+ * B23 — 送达状态的**唯一写入点**。
+ *
+ * - `result_received` 且通过 `validateAcknowledgement` → `acknowledged`。
+ * - `result_received` 但校验不通过 → `unknown`（**不是** `unacknowledged`；
+ *   U1 明确「无 ACK 超时」「不推导 unacknowledged」）。
+ * - 其他观测类型（heartbeat / preflight_rejected / artifact_created /
+ *   egress_observed）→ `unknown`（接收观察未知）。
+ *
+ * `unacknowledged` 只保留值域，本期**不写入**。
+ */
+export function resolveDeliveryStatus(input: {
+  eventType: ClientObservationEventType;
+  acknowledgement?: AcknowledgementValidation;
+}): "prepared" | "sent" | "acknowledged" | "unknown" {
+  if (input.eventType !== "result_received") return "unknown";
+  if (input.acknowledgement?.upgraded) return "acknowledged";
+  return "unknown";
+}
+
+/**
  * Persist a batch of observations. Each event produces one row in
  * `security_events` (audit_event_kind = audit_management, sub_kind =
  * client_observation) AND one row in `agent_audit_idempotency`. Existing rows
@@ -172,7 +308,23 @@ export function appendClientObservations(
     observedAt: string;
     serverReceivedAt: number;
     subKind: string;
-  }) => { seq: number; eventId: string }
+    deliveryStatus?: string;
+    parentIngressEventId?: string | null;
+    parentAttemptId?: string | null;
+  }) => { seq: number; eventId: string },
+  /**
+   * B23：服务端账本查询 —— 用于校验 `result_received` 能否升级 `acknowledged`。
+   * 未提供时**不升级**（fail-closed），只记 `unknown`。
+   *
+   * 必须是**同步**函数：better-sqlite3 的 transaction 是同步的，事务体内不能 await。
+   */
+  acknowledgementLookup?: (input: {
+    parentEventId: string;
+    event: AgentAuditEventInput;
+  }) => {
+    parentAttemptId: string | null;
+    parentPreparedDigest: string | null;
+  } | null
 ): AgentAuditResult[] {
   ensureAgentAuditSchema(securityDb);
   const results: AgentAuditResult[] = [];
@@ -206,7 +358,8 @@ export function appendClientObservations(
             persisted: {
               client_event_id: event.client_event_id,
               server_event_id: existing.server_event_id,
-              server_received_at: new Date(existing.server_received_at).toISOString()
+              server_received_at: new Date(existing.server_received_at).toISOString(),
+              delivery_status: normalizeStoredDeliveryStatus(existing.ack_status)
             }
           });
         } else {
@@ -231,6 +384,37 @@ export function appendClientObservations(
         continue;
       }
 
+      // ─── B23：result_received 的 acknowledged 升级校验 ────────────────────
+      let acknowledgement: AcknowledgementValidation | undefined;
+      if (event.event_type === "result_received") {
+        const parent = event.parent_event_id
+          ? acknowledgementLookup?.({ parentEventId: event.parent_event_id, event }) ?? null
+          : null;
+        const payload = (event.payload ?? {}) as Record<string, unknown>;
+        acknowledgement = validateAcknowledgement({
+          parentEventId: event.parent_event_id,
+          visibleParentIds: adapter.visibleParentIds,
+          declaredAttemptId:
+            typeof payload.attempt_id === "string"
+              ? payload.attempt_id
+              : typeof payload.attemptId === "string"
+                ? payload.attemptId
+                : null,
+          parentAttemptId: parent?.parentAttemptId ?? null,
+          parentPreparedDigest: parent?.parentPreparedDigest ?? null,
+          declaredDigest:
+            typeof payload.sha256 === "string"
+              ? payload.sha256
+              : typeof payload.digest === "string"
+                ? payload.digest
+                : null
+        });
+      }
+      const deliveryStatus = resolveDeliveryStatus({
+        eventType: event.event_type,
+        acknowledgement
+      });
+
       const serverReceivedAt = Date.now();
       const eventId = `agent-audit-${adapter.adapter_id}-${event.client_event_id}`;
       const objectHash = sha256Hex({
@@ -251,7 +435,10 @@ export function appendClientObservations(
         eventType: event.event_type,
         observedAt: event.observed_at,
         serverReceivedAt,
-        subKind: "client_observation"
+        subKind: "client_observation",
+        deliveryStatus,
+        parentIngressEventId: acknowledgement?.parentIngressEventId ?? null,
+        parentAttemptId: acknowledgement?.parentAttemptId ?? null
       });
 
       securityDb
@@ -268,23 +455,39 @@ export function appendClientObservations(
           contentHash,
           appended.eventId,
           serverReceivedAt,
-          "accepted",
+          // B23 / E-7：ack_status 不再硬编码 "accepted" —— 记真实送达状态。
+          deliveryStatus,
           event.event_type,
           event.observed_at
         );
 
+      const persisted: PersistedClientObservation = {
+        client_event_id: event.client_event_id,
+        server_event_id: appended.eventId,
+        server_received_at: new Date(serverReceivedAt).toISOString(),
+        delivery_status: deliveryStatus
+      };
+
+      // B23：观测已持久化；送达状态是**独立维度**（Spec §4.3(b)）。
+      // `result_received` 但校验不通过 → 送达状态保持 `unknown` 并记冲突原因，
+      // **不升级**为 acknowledged。`status` 仍是 `accepted`（观测已提交）。
       results.push({
         status: "accepted",
-        persisted: {
-          client_event_id: event.client_event_id,
-          server_event_id: appended.eventId,
-          server_received_at: new Date(serverReceivedAt).toISOString()
-        }
+        persisted,
+        ...(event.event_type === "result_received" && !acknowledgement?.upgraded
+          ? { deliveryReason: acknowledgement?.reason ?? "acknowledgement_unavailable" }
+          : {})
       });
     }
   });
   txn();
   return results;
+}
+
+/** 已存 `ack_status` → 送达状态（历史值 `accepted` 归一为 `unknown`）。 */
+function normalizeStoredDeliveryStatus(ackStatus: string): "prepared" | "sent" | "acknowledged" | "unknown" {
+  if (ackStatus === "acknowledged" || ackStatus === "sent" || ackStatus === "prepared") return ackStatus;
+  return "unknown";
 }
 
 /**

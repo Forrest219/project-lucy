@@ -1,7 +1,7 @@
 import type Database from "better-sqlite3";
 
 /** Bump together with a new entry in {@link MIGRATIONS}. */
-export const SECURITY_SCHEMA_VERSION = 2;
+export const SECURITY_SCHEMA_VERSION = 3;
 
 export const SECURITY_DB_FILE = "security.sqlite";
 
@@ -119,9 +119,27 @@ ALTER TABLE security_events ADD COLUMN audit_event_kind TEXT;
 CREATE INDEX IF NOT EXISTS idx_security_events_audit_kind ON security_events(audit_event_kind);
 `;
 
+/**
+ * SCHEMA_V3 — Lucy v0.25 / L25-09 S02 §5.3（入口登记）.
+ *
+ * Adds the `endpoint_id` column to `security_events` and a supporting index.
+ *
+ * The column is additive (NULL default) so v1/v2 readers ignore it. Pre-v3 rows
+ * stay NULL — historical events are **not** reinterpreted.
+ *
+ * The `received` phase itself is a *value* of the existing `phase` column (TEXT),
+ * so no DDL is required for it; `SecurityEventPhase` in `types.ts` gains the
+ * `received` member and the store accepts it like any other phase.
+ */
+const SCHEMA_V3 = `
+ALTER TABLE security_events ADD COLUMN endpoint_id TEXT;
+CREATE INDEX IF NOT EXISTS idx_security_events_endpoint ON security_events(endpoint_id);
+`;
+
 const MIGRATIONS: ReadonlyArray<{ version: number; sql: string }> = [
   { version: 1, sql: SCHEMA_V1 },
-  { version: 2, sql: SCHEMA_V2 }
+  { version: 2, sql: SCHEMA_V2 },
+  { version: 3, sql: SCHEMA_V3 }
 ];
 
 export type SchemaInitResult =

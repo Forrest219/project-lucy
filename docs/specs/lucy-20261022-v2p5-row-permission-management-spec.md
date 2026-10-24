@@ -6,6 +6,7 @@
 | 日期 / 目标版本 | 2026-10-24 / v0.25 |
 | 功能编号 / 优先级 | L25-14 / P0-2；R2、R4、R5 为 P0，R1、R3 保持 P1 |
 | 状态 | 设计完成、待需求审查；暂不开发，不代表实现或验收通过 |
+| 实施回写 | 2026-10-25 W5 实施回写与勘误见 §13（N1／N2／N7／N8／N12）；只追加不改写，原文条款保留可追溯；未改运行时语义与 §9 验收矩阵 |
 | 授权来源 | 2026-10-24 Forrest 批准首批 Spec 评审 Final 决议，并要求完成四个 P0 设计材料 |
 | 规划入口 | [Lucy v0.25 功能升级建议书](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) §2.8；[P0 Final 决议](../reviews/2026-10-24-lucy-v0.25-p0-final-decision.md) |
 | 审查入口 | [首批 P0 需求审查清单](../plans/2026-10-24-lucy-v0.25-p0-requirements-review-checklist.md) |
@@ -103,6 +104,8 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`row_policy`、`
 
 **登记状态：** 已在机器可校验的缺陷台账 [`docs/qa/security-findings.yaml`](../qa/security-findings.yaml) 登记为 **D-03（P1 / open）**。本次仍不授权实现，不宣称该缺陷已修复，也不把修复计入 v0.25 新功能；`fixedIn` 在实际修复验证前保持为空。
 
+> 实施回写见 §13.1（N1）、§13.3（N7）（2026-10-25）：本节根因记法与 D-03 现状、G5 归因落点及失败原因枚举分布按该两节校准；原文保留可追溯。
+
 ---
 
 ## 2. 需求判断与边界
@@ -141,6 +144,8 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`row_policy`、`
 - 预览结果与运行时注入使用**同一份编译产物**（`compileFinalRowsBySource` → `lookupFinalRows`），并绑定候选 `policyDigest / planDigest`；提交时基线变化须重新预览。
 - 展示结构必须保持 DNF 形态：**任一分支满足其一**。不得把并集拍平成一条 AND 条件——那会让管理员看到比实际更严的约束，得出错误结论。
 
+> 实施回写见 §13.5（N12）（2026-10-25）：本条「并集 + 各 Agent 交集」的承载入口按该节登记；原文保留可追溯。
+
 ### 3.3 R3 行权限视图（P1）
 
 - 以**表**为入口反查：哪些角色对该表设了行策略、每个角色的谓词内容、哪些 Agent 带个人行限制、该表的最终行约束摘要、是否处于「行权限：全部行」状态。
@@ -164,6 +169,8 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`row_policy`、`
   - **清单不可用**：真实路径解析、读取或解析失败，包括 §1.5 的 G5 场景 → 拒绝并指向运维。
   - **目录能力未知**：当前适配器或部署形态不能证明目录可用性 → 拒绝并披露能力边界，不能猜成字段不存在。
 - 三类均失败关闭；诊断只增强归因，**不放宽**任何绑定校验。
+
+> 实施回写见 §13.1（N1）、§13.3（N7）（2026-10-25）：本节三分归因的落点（G5 归「清单不可用」）与失败原因的实际枚举分布按该两节校准；原文保留可追溯。
 
 ---
 
@@ -314,6 +321,8 @@ function computeFinalRowsForTable(tableKey, roles, agents):
 
 要点：`effectiveRowGrant` 是**并集**，可能比任何单个 Role 都宽，但 `all OR scoped = all` 只应在确有 `all` 分支时发生；两个受限 Role 不得因累积初值为 `all` 而显示全部行。预览必须同时给出 `effectiveRowGrant` 与各 Agent 的 `finalRowsByAgent`，并保持 `orArms` 结构；**不得**把 orArms 拍平成一条 AND 条件后再展示。
 
+> 实施回写见 §13.4（N8）（2026-10-25）：本节「OR 的空集单位」与 `row_policy_no_applicable_grant` 的承载物按该节登记；原文保留可追溯。
+
 ### 5.3 保存前校验、预览与审计闭环（拟增）
 
 ```text
@@ -366,6 +375,8 @@ function saveRowPolicyDraft(draft, confirmedCandidateDigest, context):
 
 要点：预览与保存共用 draft 覆盖后的内存候选及运行时编译路径，保存前不读旧配置冒充预览、不提前落盘。配置审计采用 durable intent → 配置写入／`commitEffectivePolicy` → durable terminal；intent 失败零配置写入，terminal 失败回滚并重新换入旧策略，恢复失败则受影响读取和后续写入均失败关闭。只有终结审计与策略生效均可证明时才返回成功。
 
+> 实施回写见 §13.2（N2，原文第 349／355 行两处 `else` 缺 `if` 条件）（2026-10-25）：按该节只加条件语义注记，冻结伪代码原文不改写。
+
 ### 5.4 失败关闭与降级（复用现状，禁止新增宽松旁路）
 
 | 情形 | 期望行为 | 依据 |
@@ -410,6 +421,8 @@ function diagnoseFieldBinding(failure, source, catalogResult):
 ```
 
 归因只影响错误信息与排查方向，不改变拒绝行为；字段不存在、清单不可用、目录能力未知三者均失败关闭。G5 的真实路径大小写修复属 **0.20.Z 维护线**；V19／V22 在 v0.25 仅作为 D-03 集成回归，不表示本 Spec 已实施该修复。
+
+> 实施回写见 §13.1（N1）、§13.2（N2，原文第 396／398／400 行三处 `else` 缺 `if` 条件）、§13.3（N7）（2026-10-25）：本节的实现边界、归因落点、伪代码条件语义注记与失败原因枚举分布按该三节校准；冻结伪代码原文不改写。
 
 ---
 
@@ -543,5 +556,168 @@ D1–D7 已于 2026-10-24 按 P0 Final 决议收口；以下为实现必须遵�
 | `webui/server/admin/roles.ts` | 表选择器写入校验 |
 | `webui/src/pages/admin/RoleDetail.tsx` | 现有「行级策略（可选）」分区 |
 | [`webui/docs/00-product-terminology-standard.md`](../../webui/docs/00-product-terminology-standard.md) | 术语事实源 |
+
+---
+
+## 13. 实施回写（2026-10-25，Lucy v0.25 W5）
+
+本节是 v0.25 实施期（W5）的文档回写，记录实施期实证出的 5 条文档偏差，编号沿用[实施计划](../plans/2026-10-25-lucy-v0.25-p0-implementation-plan.md) §7 待决项表（N1、N2、N7、N8、N12），便于对账。
+
+回写规则：
+
+- **只追加，不改写**：§1.5、§3.2、§3.5、§5.2、§5.3、§5.5 的原文一律保留，可追溯；本节与原文冲突之处以本节为准。
+- **只做可归因诊断**：本节不含任何「已验收通过」「客户交付通过」结论；**§9 验收矩阵 V01–V22 与 A01–A12 状态一律保持「未执行」**。
+- **术语**：沿用 §3.5 既有三分归因标签（字段不存在／清单不可用／目录能力未知），并附对应机器原因码；不引入术语标准之外的新措辞。
+- **行号口径**：证据分两组引用——`HEAD`（v0.25 实施前基线，与 §1.5 原文引用的行号一致）与「工作副本」（本分支 `lucy-v0.25` 未提交的实施期代码）。同一事实在两组行号不同处均标出。
+- **本文档自身行号**：本节引用的本文档行号均为**回写前冻结正文**的行号（与实施计划 §7／§9.0 的引用一致）；本节追加后正文整体后移，需要定位时按上下文检索，§13.2 另给出追加后的行号。
+
+### 13.1 N1 — §5.5 的真实大小写解析与 G5 归因互斥
+
+**（a）偏差事实与证据**
+
+§3.5（原文第 164 行）要求把「§1.5 的 G5 场景」归因到清单不可用（指向运维）；§5.5（原文第 392 行）的伪代码写作 `path = resolveManifestFileFromRealDirectoryEntry(tableKey)  # 保留磁盘真实大小写`。该函数一旦实现即命中磁盘真实文件名 `BIDM.yaml`，G5 随之消失，归因将落到「字段不存在」，与 §1.5 记载的根因、§11 D7 的归属、缺陷台账 D-03 的 `fixedIn: null` 及 §9 中 V19／V22 的前置条件互相矛盾。
+
+代码事实：
+
+| 事实 | 位置 |
+|---|---|
+| 字段目录按 schema 名拼清单路径（大写 schema 被小写化为 `bidm.yaml`） | `HEAD` `webui/server/proxy/row-policy.ts:179`（`files.push(path.join(schemaDir, schema + ".yaml"))`） |
+| 源映射对 schema 名小写化，但清单文件名取磁盘真实名（`glob("**/_schema/*.yaml")`） | `HEAD` `webui/server/proxy/acl.ts:300`；工作副本 `webui/server/proxy/acl.ts:312` |
+| 实施期目录加载**锚定实际请求路径**，不做真实大小写解析 | `webui/server/proxy/row-policy-catalog.ts:264-266`（`resolveManifestFilePath`），调用点 `:325` |
+| 请求路径来自绑定侧实际请求的 schema | `webui/server/proxy/row-policy.ts:317`（`source.schema`） |
+| `resolveManifestFileFromRealDirectoryEntry` 在代码中不存在 | 全仓检索仅命中本 Spec 原文第 392 行 |
+| 清单读不到 → `manifest_unavailable` / `stage=resolve`（`ENOENT` 归入 resolve 阶段） | `webui/server/proxy/row-policy-catalog.ts:324-337`、`:240-245` |
+| D-03 仍为 open，`fixedIn: null`，`verifiedBy` 为空 | `docs/qa/security-findings.yaml:119-125` |
+
+**（b）本次裁决（Forrest 2026-10-25 裁决，改法 1）**
+
+1. v0.25 **只做可归因诊断，不修 G5**：不实现真实大小写解析，且不得把「清单不可用」改判为「字段不存在」。
+2. 目录加载**锚定实际请求路径**（`bidm.yaml`），不做真实大小写解析；该行为由 `resolveManifestFilePath` 单一处承载。
+3. G5 情形下判定为 `manifest_unavailable` 且 `stage=resolve`，归因「清单不可用，指向运维」，对应归因码 `row_policy_catalog_unavailable`。
+4. 真实大小写解析留 **0.20.Z 维护线**，不在 v0.25；D-03 保持 `fixedIn: null`、状态 open；V19／V22 仍是「D-03 集成回归」条件项，保持成立。
+
+**§5.5 边界说明（本轮实现到哪里为止、为什么不修 G5、归因落在哪）**
+
+- **实现到**：清单路径按请求的 schema 名拼装并读取；读取失败按 `resolve → read → parse → catalog` 四阶段记录；失败一律失败关闭，并附连接／Schema／表／字段四元组与目录阶段。
+- **为什么不修 G5**：G5 是 0.20.Z 维护线的存量缺陷（D-03，§11 D7）。本轮修掉它，会使 §3.5 的三分归因失去「清单不可用」分支，V19／V22 失去前置条件，受影响客户场景的交付价值证据将失去独立登记位置。
+- **归因落在哪**：G5 → `manifest_unavailable` / `stage=resolve` → 归因码 `row_policy_catalog_unavailable`（指向运维）；**绝不**落到 `row_policy_field_unknown`（指向用户改条件）。
+- **与 §13.2 的关系**：§5.5 伪代码回写前第 396／398／400 行的三处 `else` 与本条落在同一段；其条件形态问题见 §13.2。N1 决定**行为边界**，N2 决定**表述可判定性**，两者不冲突。
+
+**（c）受影响条款编号**：§3.5（R5 三分归因）、§5.5（清单来源、字段诊断与 0.20.Z 缺陷修复边界，含原文第 392 行）、§1.5（G5 根因与登记状态）、§11 D7（归属与 `fixedIn`）、§9 的 V19／V22（条件项）、缺陷台账 D-03。
+
+**（d）是否改变冻结契约**：**不改变**运行时语义、权限代数、`permission_model_version`、D1–D7 裁决与 §9 验收矩阵，原文一律保留。§5.5 原文第 392 行按本节**降级为 0.20.Z 目标形态、不属 v0.25 交付范围**——这是对既有条款的实施边界勘误，不是新增要求。批准记录来源：§11 D7（[2026-10-24 P0 Final 决议](../reviews/2026-10-24-lucy-v0.25-p0-final-decision.md) 第 34 行）+ 实施计划 §10 待决事项 N1（**已裁决（Forrest，2026-10-25）：改法 1**），其在本 Spec 内的登记即本节。因不引入新条款、不改验收矩阵，文档「文档类型 / 版本」保持 `v0.2-requirements-review`，回写以本节日期与锚点为准。
+
+### 13.2 N2 — 伪代码中 5 处缺 `if` 条件的 `else`
+
+**（a）偏差事实与证据**
+
+本 Spec 的伪代码块中有 5 处 `else`，其**前一行不是条件语句**——没有可挂载的 `if`，读者无法从上下文判定该 `else` 属于哪个分支。逐处核对结果：
+
+| 回写前行号 | 追加后行号 | `else` 前一行 | `else` 分支内容 | 该分支的实际语义（按上下文判定） |
+|---|---|---|---|---|
+| 349 | 358 | `preview.candidateDigest, impact)` | `else return REJECT(audit_intent_unavailable)` | 审计意图未持久化 → 拒绝保存、零配置写入 |
+| 355 | 364 | `durableConfigAuditTerminal(intentId, committed, afterDigest=policyVersion)` | `else throw AuditTerminalUnavailable` | 终结审计未持久化 → 抛错进入 catch → 回滚配置并重新换入旧策略 |
+| 396 | 407 | `bytes = readFile(path)` | `else return {status: manifest_unavailable, stage: read, catalogLoaded: false}` | 清单读取失败 → 清单不可用，阶段 `read` |
+| 398 | 409 | `manifest = parseAndValidateSchemaManifest(bytes)` | `else return {status: manifest_unavailable, stage: parse, catalogLoaded: false}` | 清单解析失败 → 清单不可用，阶段 `parse` |
+| 400 | 411 | `catalog = buildTableCatalog(manifest, tableKey)` | `else return {status: manifest_unavailable, stage: catalog, catalogLoaded: false}` | 目录构建失败 → 清单不可用，阶段 `catalog` |
+
+冻结正文中 `else` 检索共 6 处：除上表 5 处外，§5.2 伪代码第 292 行的 `effective = grant if effective is None else mergeRowGrants(effective, grant)` 是行内条件表达式（正常写法，非悬空 `else`），§5.1 伪代码无 `else`。**§5.2 伪代码块（第 283-313 行）与 §5.4（第 369-382 行的失败关闭表格）无同类悬空写法**，不在本条范围。
+
+第 396／398／400 行（追加后第 407／409／411 行）与 §13.1 的 N1 落在 §5.5 同一段伪代码：这三处的 `else` 分支正是「清单不可用」归因的落点，其 `stage` 取值与实施期目录阶段机（`resolve → read → parse → catalog`，`webui/server/proxy/row-policy-catalog.ts:148`）一一对应。
+
+**（b）本次裁决**
+
+- 这 5 处 `else` 的**原文语义是「该步骤失败即走 else 分支」**：每个 `else` 挂载于上一步骤的成功返回，上一步骤失败即进入本分支。
+- **本轮不改写冻结伪代码原文**，只加注记。理由：伪代码的条件形态属于冻结契约的表述方式，改写它会牵动 §5.5 的验收判据（V20 按 `stage` 区分 read／parse／catalog），且无法在不引入新条款的前提下证明改写后的形式与原意等价。
+- 可判定的写法以**注记形式**给出（不改原伪代码行）：
+  - 第 349 行（追加后第 358 行）：`else` 挂载于 `durableConfigAuditIntent(...)` 的成功返回；该调用失败即进入本分支（意图未持久化 → 零配置写入）。
+  - 第 355 行（追加后第 364 行）：`else` 挂载于 `durableConfigAuditTerminal(...)` 的成功返回；该调用失败即进入本分支（终结审计未持久化 → 抛错并按 §5.3 回滚）。
+  - 第 396 行（追加后第 407 行）：`else` 挂载于 `readFile(path)` 的成功返回；读取失败即进入本分支（`stage=read`）。
+  - 第 398 行（追加后第 409 行）：`else` 挂载于 `parseAndValidateSchemaManifest(bytes)` 的成功返回；解析失败即进入本分支（`stage=parse`）。
+  - 第 400 行（追加后第 411 行）：`else` 挂载于 `buildTableCatalog(manifest, tableKey)` 的成功返回；目录构建失败即进入本分支（`stage=catalog`）。
+
+**（c）受影响条款编号**：§5.5（主，原文第 396／398／400 行）、§5.3（原文第 349／355 行）。§5.2、§5.4 无同类写法。
+
+**（d）是否改变冻结契约**：**不改变**。原伪代码行一律保留，本条只追加条件语义注记，未新增要求、未改验收判据。批准记录来源：实施计划 §9.0 回写状态表的 N2 行（落点 = L25-14 §5.5 伪代码 5 处悬空 `else`，行 349／355／396／398／400）与 §7 待决项 N2 登记；因不引入新条款、不改 §9 验收矩阵，文档「文档类型 / 版本」保持 `v0.2-requirements-review`。
+
+### 13.3 N7 — 字段绑定失败原因的实际枚举分布与归因短路语义
+
+**（a）偏差事实与证据**
+
+§1.5（原文第 96-100 行）把 G5 的复现结果记为 `row_policy_field_unresolved:unknown`，未区分该表 overlay 是否暴露度量。
+
+代码事实：
+
+| 事实 | 位置 |
+|---|---|
+| 目录为 `null` → `row_policy_field_unresolved:no_catalog` | `webui/server/proxy/row-policy.ts:196` |
+| 命中度量 → `row_policy_field_unresolved:measure` | `webui/server/proxy/row-policy.ts:199-201` |
+| 目录非 `null` 但字段不在列集合 → `row_policy_field_unresolved:unknown` | `webui/server/proxy/row-policy.ts:202-204` |
+| 目录为 `null` 的条件：列集合与度量集合同时为空 | `webui/server/proxy/row-policy-catalog.ts:448`（实施前基线同条件见 `HEAD` `webui/server/proxy/row-policy.ts:271-274`） |
+| G5 下物理列为空；overlay 普通列与计算列因依赖物理列被丢弃 | `webui/server/proxy/row-policy-catalog.ts:436-437`（`addProvenOverlayFields` → `isProvenRowLevelExpr`） |
+| overlay 的 measures **无条件**计入，与物理列无关 | `webui/server/proxy/row-policy-catalog.ts:438-442` |
+
+因此实际分布是：**overlay 无 measure → 目录为 `null` → 机器原因 `no_catalog`；overlay 有 measure → 目录非 `null` → 机器原因 `unknown`**。§1.5 记载的 `unknown` 只在后者成立；该节根因叙述中的「catalog.columns 为空 → 判定 unknown」隐含了「目录非 `null`」这一前提。
+
+§5.5 伪代码（原文第 404 行）`if failure != "unknown": return failure` 会把 `no_catalog` 原样漏过，不进入三分归因。实施期实现的归因函数 `attributeBindingFailure`（`webui/server/proxy/row-policy.ts:121-156`）把 `no_catalog` 与 `unknown` 一并视为目录驱动（`:138-140`），再按目录状态分流（`:145-155`）：`catalog_capability_unknown` → `row_policy_catalog_capability_unknown`；`manifest_unavailable` → `row_policy_catalog_unavailable` 并带 `catalogStage`；`loaded` → `row_policy_field_unknown`。即**实现不短路 `no_catalog`**，§5.5 伪代码的首行语义未落地。
+
+**（b）本次裁决**
+
+- 以实现的枚举分布为准登记：`no_catalog` 与 `unknown` 是两个不同的机器原因码，必须各自可被归因；两者都不得被当成「字段不存在」的同义词。
+- `diagnoseFieldBinding` 的首行短路语义按实现理解：**目录驱动类原因（`no_catalog` 与 `unknown`）不得短路**，必须按目录状态分流；`empty`／`unsafe`／`shape`／`cross_source`／`measure` 保留各自原因码，不参与三分归因。
+- §1.5 的记法按本节校准：G5 的复现结果应记为「`row_policy_field_unresolved:no_catalog` 或 `row_policy_field_unresolved:unknown`，取决于该表 overlay 是否暴露度量」；2026-10-22 诊断报告所记的那一次复现落在 `unknown` 分支。
+- 与 §13.1 的关系：G5 情形的**归因码**由 §13.1 规定（`row_policy_catalog_unavailable`）；本条只补记**机器原因码**的分布与短路语义，两者不冲突。
+
+**（c）受影响条款编号**：§1.5（G5 复现记录与根因叙述）、§3.5（三分归因）、§5.5（`diagnoseFieldBinding` 伪代码）、§9 的 V20／V21（归因可区分）。
+
+**（d）是否改变冻结契约**：**不改变**。本条只补记现状枚举分布与短路语义，未新增归因类别、未放宽任何绑定校验；§3.5 的三分归因与 §9 验收判据不变。批准记录来源：实施计划 §9.0 回写状态表的 N7 行（落点 = L25-14 §1.5／§3.5／§5.5）与 §7 待决项 N7 登记；因不引入新条款、不改 §9 验收矩阵，文档「文档类型 / 版本」保持 `v0.2-requirements-review`。
+
+### 13.4 N8 — 「空集」的承载物缺失与 `row_policy_no_applicable_grant`
+
+**（a）偏差事实与证据**
+
+§5.2（原文第 294 行）要求 `return FAIL("row_policy_no_applicable_grant")`，并在第 287 行把并集的初值写成「OR 的空集单位；禁止用 `all` 初始化」。但现行 `RowGrant` 类型只有 `all` 与 `scoped` 两个变体，**没有「空集（无行可见）」的表示**：
+
+| 事实 | 位置 |
+|---|---|
+| `RowGrant` 只有 `all` / `scoped` 两变体，无空集变体 | `webui/server/proxy/row-policy.ts:55-64` |
+| `mergeRowGrants` 以 `all` 为并集吸收元（`all` 与任一分支合并即 `all`），无空集单位 | `webui/server/proxy/row-policy.ts:357-366` |
+| 「无授权分支」在预览层由 `undefined` 哨兵承载，不进 `RowGrant` | `webui/server/proxy/row-policy-preview.ts:92`（`let effective: RowGrant \| undefined`）、`:100-103`（`effective === undefined` → `row_policy_no_applicable_grant`） |
+| 路由层同一原因码 | `webui/server/proxy/row-policy-preview.ts:346-354` |
+| 「空集」在 `RowGrant` 层被表达为**失败**而非值：AND 剪枝为空即失败关闭 | `webui/server/proxy/agent-constraints.ts:362`、`:385`（`final_rows_unsatisfiable`）、`:407-408` |
+
+即：无授权分支与「全部行」在预览层已可区分（前者 `undefined` → `row_policy_no_applicable_grant`，后者 `all`），但 `RowGrant` 本身仍无法表达「经剪枝后无行可见」这一状态值。
+
+**（b）本次裁决**
+
+- §5.2 的「OR 的空集单位」在本轮由**预览层的 `undefined` 哨兵**承载；**禁止**用 `all` 初始化，否则「无授权」会被显示为「行权限：全部行」（与 §5.2 要点一致）。
+- `RowGrant` **不新增变体**：新增变体会牵动 Spec 99／Spec 100 的行授权代数与 `forced_filters` 注入形状，超出本轮边界。
+- **待补项（登记，不在本轮实现）**：`RowGrant` 层的「空集」表示尚未定义——即「并集 ∧ 个人行限制后无任何行可见」目前只能以失败（`final_rows_unsatisfiable`）表达，不能作为可展示、可摘要的授权值。该缺口登记为待补项 T-01，随 P1 迭代一并裁决；本轮不以任何含糊语义掩盖，也不臆造第三种授权含义。
+- 本轮对「无授权分支」的处理边界即上述 `undefined` 哨兵 + `row_policy_no_applicable_grant` 原因码，**不改** §5.2 原文，也不新增放宽旁路。
+
+**（c）受影响条款编号**：§5.2（最终行约束计算，含原文第 287／294 行）、§5.4（失败关闭矩阵，`final_rows_unsatisfiable` 归口）、待补项 T-01（新增，仅本节登记）。
+
+**（d）是否改变冻结契约**：**不改变**。§5.2 的要求与失败关闭语义不变，本条只补记承载物的现状事实与处理边界；新增的 T-01 是待补项登记，不构成对本 Spec 的新增要求，也不进入 §9 验收矩阵。批准记录来源：实施计划 §9.0 回写状态表的 N8 行（落点 = L25-14 §5.2）与 §7 待决项 N8 登记；因不引入新条款、不改 §9 验收矩阵，文档「文档类型 / 版本」保持 `v0.2-requirements-review`。
+
+### 13.5 N12 — 预览入口是否携带 Agent 个人行限制
+
+**（a）偏差事实与证据**
+
+§3.2 要求预览必须同时给出 Role 之间的并集与各 Agent 个人行限制的交集。实施期核对出两个入口，能力不同：
+
+| 入口 | 是否带 Agent 个人行限制 | 证据 |
+|---|---|---|
+| 既有通用角色权限预览 `previewRolePermissionsForAdmin` | **不带**。以假用户 `__role_preview__` 构造候选用户，该用户对象无 `constraints` 键 | `webui/server/proxy/acl.ts:1864-1890`；假用户构造 `:1873`、`:1882-1885`；个人行限制仅在主体带 `constraints` 键时才编译（`:1532`、`:1533`），故该入口的 `agentConstraintsBySource` 为 `null`（`:1597`） |
+| v0.25 新增最终行约束预览 `previewRowPolicyDraft` | **带**。对每个可达 Agent 以其自身 `constraints` 走同一编译路径，再按 Agent 求交集 | `webui/server/proxy/row-policy-preview.ts:222-419`；可达 Agent 判定 `:356-364`；带 `constraints` 解析 `:367-379`；按 Agent 求交集 `:105-113`（`lookupFinalRows`）；路由 `webui/server/admin/row-policy-routes.ts:93`（`POST /api/admin/roles/preview-row-policy`） |
+
+**（b）本次裁决**
+
+- §3.2 的「并集 + 各 Agent 交集」由 v0.25 新增的最终行约束预览入口承载；其验收状态随 §9 的 V08–V13 一律保持「未执行」。
+- 既有 `__role_preview__` 入口**维持现状不改**：它是角色权限解析预览（工具／表／连接可达性），不是最终行约束预览；**不得**用它的产出充当 §3.2 的预览证据，两个入口的口径不得混用。
+- 该差异登记为现状事实，不作为 §3.2 要求的放宽或替代。
+
+**（c）受影响条款编号**：§3.2（最终行约束预览）、§5.2（最终行约束计算）、§5.3（保存前校验、预览与审计闭环）、§6.1（管理台交互）、§9 的 V08–V13。
+
+**（d）是否改变冻结契约**：**不改变**。§3.2 的要求不变，本条只补记「哪个入口承载该要求」的现状事实。批准记录来源：实施计划 §9.0 回写状态表的 N12 行（落点 = L25-14 §3.2）、§5.2 实施条目 C6 与 §7 待决项 N12 登记；因不引入新条款、不改 §9 验收矩阵，文档「文档类型 / 版本」保持 `v0.2-requirements-review`。
 
 — 完

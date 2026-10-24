@@ -1,17 +1,84 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { apiGet } from "../lib/apiClient";
+import { apiGet, apiPost } from "../lib/apiClient";
 import type { SourceDetail } from "../lib/types";
 import type { RowPolicyPredicateDraft, TableGrant } from "../lib/rolePermissionDraft";
 import { permissionTableKey } from "../lib/rolePermissionDraft";
+import {
+  RowPolicyDnfPreview,
+  type RowPolicyDnfGrant
+} from "./admin/RowPolicyDnfPreview";
 
 export interface RoleRowPolicyPanelProps {
   tables: TableGrant[];
   onChange: (tables: TableGrant[]) => void;
   disabled?: boolean;
   catalogBound?: boolean;
+  /** The Role id the draft belongs to — the final-row preview is computed for it. */
+  roleId?: string;
+  /**
+   * The candidate Role (draft). The preview is computed from the in-memory
+   * candidate, never from the committed configuration.
+   */
+  previewRole?: unknown;
 }
+
+type PreviewGrant = RowPolicyDnfGrant;
+
+type PreviewEntry = {
+  requested: { connection: string; schema: string; name: string };
+  catalog: {
+    status: string;
+    catalogLoaded: boolean;
+    stage?: string;
+    reason?: string;
+    manifestPathDigest?: string;
+  };
+  preview?: {
+    effectiveRowGrant?: PreviewGrant;
+    roleIds?: string[];
+    finalRowsByAgent?: Array<{ agentId: string; finalRows: PreviewGrant }>;
+    displayShape?: string;
+  };
+  error?: { code: string; message: string; reason: string };
+};
+
+type PreviewApiResponse = {
+  /** False when at least one table could not be previewed. */
+  ok: boolean;
+  /** Digest of the in-memory candidate the preview was computed from. */
+  candidateDigest: string;
+  /** The policy version the preview was based on. */
+  basePolicyVersion: string;
+  tables: PreviewEntry[];
+};
+
+/**
+ * The operations-side reason for a table whose final row constraints could not
+ * be computed. It MUST replace 「全部行」: an unavailable catalog is an
+ * operations-side fault, not a user configuration error.
+ */
+function previewUnavailableReason(
+  entry: PreviewEntry | undefined,
+  queryFailed: boolean
+): string | null {
+  if (queryFailed) {
+    return "最终行约束预览失败：无法读取字段目录状态，请联系运维核查。";
+  }
+  if (!entry) return null;
+  if (entry.catalog?.status === "manifest_unavailable") {
+    return `清单不可用（需运维处理）：${entry.catalog.stage ?? "unknown"}`;
+  }
+  if (entry.catalog?.status === "catalog_capability_unknown") {
+    return "目录能力未知（需运维处理）：当前适配器无法证明字段目录可用。";
+  }
+  if (entry.error) {
+    return `最终行约束预览失败：${entry.error.message}`;
+  }
+  return null;
+}
+
 
 function normalizePredicates(predicates: RowPolicyPredicateDraft[]): RowPolicyPredicateDraft[] {
   return predicates.map((predicate) => {
@@ -34,12 +101,39 @@ export function RoleRowPolicyPanel({
   onChange,
   disabled = false,
   catalogBound = false,
+  roleId,
+  previewRole,
 }: RoleRowPolicyPanelProps) {
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const drawerTriggerRef = useRef<HTMLButtonElement | null>(null);
   const activeTable = tables.find((table) => permissionTableKey(table) === activeKey) ?? null;
   const [drawerPredicates, setDrawerPredicates] = useState<RowPolicyPredicateDraft[]>([]);
   const [error, setError] = useState<string | null>(null);
+
+  // ── R2: the final-row preview is computed from the in-memory candidate ─────
+  const previewTables = useMemo(
+    () => tables.map((table) => ({ connection: table.connection, schema: table.schema, name: table.name })),
+    [tables]
+  );
+  const previewQuery = useQuery<PreviewApiResponse>({
+    queryKey: ["row-policy-preview", roleId ?? "", previewRole ?? null, previewTables],
+    queryFn: () =>
+      apiPost<PreviewApiResponse>("/api/admin/roles/preview-row-policy", {
+        roleId,
+        role: previewRole,
+        tables: previewTables
+      }),
+    enabled: Boolean(roleId) && previewTables.length > 0
+  });
+
+  const previewEntries = previewQuery.data?.tables ?? [];
+  const previewEntryFor = (table: TableGrant): PreviewEntry | undefined =>
+    previewEntries.find(
+      (entry) =>
+        entry.requested.connection === table.connection &&
+        entry.requested.schema === table.schema &&
+        entry.requested.name === table.name
+    );
 
   useEffect(() => {
     setDrawerPredicates(activeTable?.predicates?.map((predicate) => ({ ...predicate, value: Array.isArray(predicate.value) ? [...predicate.value] : predicate.value })) ?? []);
@@ -94,6 +188,8 @@ export function RoleRowPolicyPanel({
     );
   }
 
+  const previewQueryFailed = previewQuery.isError;
+
   return (
     <>
       <div className="grid gap-3" data-testid="role-row-policy-panel">
@@ -101,27 +197,68 @@ export function RoleRowPolicyPanel({
           <div className="rounded-md border border-border-default bg-bg-subtle p-4 text-sm text-fg-muted">
             请先在“可访问的表”中选择表，再配置行级策略。
           </div>
-        ) : tables.map((table) => (
-          <button
-            type="button"
-            key={permissionTableKey(table)}
-            className="pl-card flex items-center justify-between gap-3 text-left"
-            onClick={(event) => {
-              drawerTriggerRef.current = event.currentTarget;
-              setActiveKey(permissionTableKey(table));
-            }}
-            disabled={disabled}
-            aria-label={`编辑 ${table.name} 行级策略`}
-          >
-            <span>
-              <span className="notranslate block text-sm font-medium" translate="no">{table.name}</span>
-              <span className="notranslate block text-xs text-fg-muted" translate="no">{table.connection} / {table.schema}</span>
-            </span>
-            <span className={`pl-status-badge ${table.predicates?.length ? "pl-status-done" : "pl-status-not_started"}`}>
-              {table.predicates?.length ? `已配置 ${table.predicates.length} 条条件` : "全部行"}
-            </span>
-          </button>
-        ))}
+        ) : tables.map((table) => {
+          const key = permissionTableKey(table);
+          const entry = previewEntryFor(table);
+          const unavailableReason = previewUnavailableReason(entry, previewQueryFailed);
+          const grant = entry?.preview?.effectiveRowGrant;
+          const hasPolicy = Boolean(table.predicates?.length);
+          // 「全部行」 may only be claimed when the preview actually succeeded.
+          const badge = hasPolicy
+            ? { text: `已配置 ${table.predicates!.length} 条条件`, state: "done" as const }
+            : unavailableReason
+              ? { text: "受限状态未知", state: "warning" as const }
+              : grant?.kind === "all"
+                ? { text: "全部行", state: "not_started" as const }
+                : grant?.kind === "scoped"
+                  ? { text: "受其他角色限制", state: "warning" as const }
+                  : { text: "受限状态未知", state: "warning" as const };
+          return (
+            <div key={key} className="grid gap-2" data-testid={`row-policy-entry-${key}`}>
+              <button
+                type="button"
+                className="pl-card flex items-center justify-between gap-3 text-left"
+                onClick={(event) => {
+                  drawerTriggerRef.current = event.currentTarget;
+                  setActiveKey(key);
+                }}
+                disabled={disabled}
+                aria-label={`编辑 ${table.name} 行级策略`}
+              >
+                <span>
+                  <span className="notranslate block text-sm font-medium" translate="no">{table.name}</span>
+                  <span className="notranslate block text-xs text-fg-muted" translate="no">{table.connection} / {table.schema}</span>
+                </span>
+                <span className={`pl-status-badge ${badge.state === "done" ? "pl-status-done" : badge.state === "not_started" ? "pl-status-not_started" : "pl-status-partial"}`}>
+                  {badge.text}
+                </span>
+              </button>
+              {unavailableReason ? (
+                <p className="text-xs text-warning-strong" role="status" data-testid={`row-policy-preview-unavailable-${key}`}>
+                  {unavailableReason}
+                </p>
+              ) : null}
+              <details data-testid={`row-policy-preview-details-${key}`}>
+                <summary className="cursor-pointer text-xs text-fg-muted">最终行约束预览</summary>
+                <div className="mt-2">
+                  <RowPolicyDnfPreview
+                    effectiveRowGrant={grant}
+                    roleIds={entry?.preview?.roleIds}
+                    finalRowsByAgent={entry?.preview?.finalRowsByAgent}
+                    unavailableReason={unavailableReason}
+                    footer={
+                      entry?.preview ? (
+                        <p className="text-xs text-fg-muted notranslate" translate="no">
+                          candidateDigest={previewQuery.data?.candidateDigest ?? ""}
+                        </p>
+                      ) : null
+                    }
+                  />
+                </div>
+              </details>
+            </div>
+          );
+        })}
       </div>
 
       <Dialog.Root open={Boolean(activeTable)} onOpenChange={(open) => { if (!open) setActiveKey(null); }}>

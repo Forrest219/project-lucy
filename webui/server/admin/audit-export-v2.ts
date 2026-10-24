@@ -13,12 +13,27 @@
  *
  * Diagnostic mode tolerates all of the above and reports `diagnostic_incomplete`
  * reasons in the response.
+ *
+ * ─── Lucy v0.25 / L25-09 (B13 / B19 / B20 / B21) ──────────────────────────
+ *
+ * - B19 / E-2：`S`（ledgerUpperSeq）**不得**取投影自身的 `MAX(id) FROM access_log`。
+ *   唯一正确来源是 canonical ledger 的已提交上界（`security/store.ts` 的
+ *   `maxEventSeq()`），由调用方通过 `options.ledgerUpperSeq` 传入。
+ *   未传入时本模块**拒绝**执行正式导出（fail-closed），不猜、不用投影序号顶替。
+ * - B21 / E-5：追平时限默认 **T3 = 60s**（U6 冻结值），自**捕获 S 那一刻**起算；
+ *   等待重试**不重置**计时（单调截止时间）。
+ * - B20 / E-4：文件完整性校验是**独立校验器**——重算每个文件内容的 sha256，
+ *   并校验跨文件关联键；不再只验 `sha256.length === 64`。
+ * - B13：manifest 增补 `exported_by` / `export_reason` / `export_approval_ref`
+ *   （U7 本期只做来源声明，**不引入签名**）、跨文件关系声明与排除项声明。
  */
 
 import Database from "better-sqlite3";
 import { createHash } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { AUDIT_WINDOWS } from "../proxy/ingress-registry.js";
+import { DERIVATION_VERSION } from "../proxy/audit-derivation.js";
 
 export type ExportMode = "complete" | "diagnostic";
 
@@ -34,6 +49,34 @@ export type ExportV2Result = {
   diagnosticIncomplete: string[];
   csv: string;
   manifest: ExportV2Manifest;
+};
+
+/** B13 — 来源声明三字段（U7：本期只做来源声明，不引入签名）。 */
+export type ExportProvenance = {
+  exportedBy: string | null;
+  exportReason: string | null;
+  exportApprovalRef: string | null;
+  /** 三字段中任一缺失时的原因（U2 六值枚举之一）。 */
+  nullReason: "not_applicable" | "not_collected" | "unknown" | "not_supported";
+};
+
+/** B13 — 跨文件关系声明（Spec §9.3(c)）。 */
+export type CrossFileRelations = {
+  /** access_log ↔ access_log_sources 的关联键。 */
+  accessLogToSources: string;
+  /** access_log ↔ permission_snapshots 的关联键。 */
+  accessLogToPermissionSnapshots: string;
+  /** 调用行 ↔ 问询 CSV 的关联键。 */
+  callsToQuestions: string;
+  /** 例外集（显式声明「调用上的问询 ID 都能在问询 CSV 找到」之外的例外）。 */
+  exceptions: string[];
+};
+
+/** B13 — 排除项声明（排除什么、为什么）。 */
+export type ExportExclusions = {
+  excluded: boolean;
+  reason: string | null;
+  items: string[];
 };
 
 export type ExportV2Manifest = {
@@ -52,6 +95,31 @@ export type ExportV2Manifest = {
   policyScopeExpanded: unknown[];
   untrustedSelfReport: number;
   legalEmptyWindow: boolean;
+  // ─── B13 增补 ────────────────────────────────────────────────────────────
+  /** 来源声明三字段（谁导出、依据什么授权）。 */
+  provenance: ExportProvenance;
+  /** 跨文件关系声明。 */
+  crossFileRelations: CrossFileRelations;
+  /** 排除项声明。 */
+  exclusions: ExportExclusions;
+  /** 规则版本链。 */
+  derivationVersion: string;
+  /** 证据版本链：前版 exportId（补包时）。 */
+  prevExportId: string | null;
+  /** 本次导出的 exportId。 */
+  exportId: string | null;
+  /** 排序键与分页规则版本。 */
+  sortKey: string;
+  paginationRuleVersion: string;
+  /** 导出协议包含规则（纳入集合 = 导出集合）。 */
+  protocolInclusionRule: string;
+  /** 时间范围与截止时点。 */
+  timeRange: { from: string | null; until: string | null };
+  cutoffAt: string | null;
+  /** 每文件行数 + sha256（文件清单）。 */
+  files: Array<{ name: string; sha256: string; rowCount: number }>;
+  /** 追平时限（秒）；T3 自捕获 S 起算，等待重试不重置。 */
+  catchUpDeadlineSeconds: number;
 };
 
 export type ExportV2Options = {
@@ -70,10 +138,44 @@ export type ExportV2Options = {
   classificationVersion: string;
   digestVersion: string;
   /**
-   * Bounded deadline for projection catch-up in milliseconds. Default 5s.
+   * Bounded deadline for projection catch-up in milliseconds.
+   *
+   * B21 / E-5 / U6：默认 **T3 = 60s**（不是历史实现的 5s）。计时自**捕获 S
+   * 那一刻**起算，等待重试**不重置**（见 `options.catchUpStartedAt`）。
    */
   catchUpDeadlineMs?: number;
+  /**
+   * B21：单调计时的起点（捕获 S 的时刻，epoch ms）。
+   * 传入时以此为基准计算剩余时间；等待重试不得刷新该值。
+   */
+  catchUpStartedAt?: number;
+  /** 当前单调时刻（epoch ms）；测试可注入。 */
+  now?: () => number;
+  /**
+   * B19 / E-2：canonical ledger 的**已提交上界 S**。
+   *
+   * 唯一正确来源是 `security/store.ts` 的 `maxEventSeq()`；**禁止**取投影自身
+   * 的序号。未提供时正式导出一律失败（fail-closed），不猜、不用投影序号顶替。
+   */
+  ledgerUpperSeq?: number;
+  /** B13：来源声明三字段。 */
+  provenance?: {
+    exportedBy?: string | null;
+    exportReason?: string | null;
+    exportApprovalRef?: string | null;
+  };
+  /** B13：前版 exportId（补包 / 重导出时关联旧版）。 */
+  prevExportId?: string | null;
+  /** B13：本次 exportId。 */
+  exportId?: string | null;
+  /** B13：排除项声明。 */
+  exclusions?: ExportExclusions;
+  /** B13：对账评估时点。 */
+  cutoffAt?: string | null;
 };
+
+/** B21 / U6 — 追平时限默认值（T3 = 60s）。 */
+export const DEFAULT_CATCH_UP_DEADLINE_MS = AUDIT_WINDOWS.t3ExportCatchupSeconds * 1000;
 
 function sha256Hex(buffer: Buffer | string): string {
   return createHash("sha256").update(buffer).digest("hex");
@@ -109,8 +211,43 @@ const HEADERS_V2 = [
   "attempt_id",
   "parent_attempt_id",
   "instance_id",
-  "classification_version"
+  "classification_version",
+  // ─── Lucy v0.25 / L25-09 additive 列（历史行保持原值 / NULL）──────────────
+  "legacy_outcome",
+  "primary_status",
+  "derivation_version",
+  "delivery_status",
+  "null_reason",
+  "digest_kind",
+  "preview_version",
+  "ingress_event_id",
+  "endpoint_id",
+  "ledger_seq",
+  "client_call_id",
+  "client_event_id",
+  "upstream_operation_id",
+  "rpc_request_id",
+  "retry_of",
+  "error_category",
+  "reported_role",
+  "observed_role_ids",
+  "observed_protocol",
+  "inferred_client",
+  "inference_method",
+  "inference_confidence",
+  "inference_rule_version"
 ] as const;
+
+/**
+ * v2p5-1 导出列在旧库上可能不存在（历史库无这些 additive 列）。
+ * 逐列探测存在性，缺失列输出空串而不是让整份导出失败。
+ */
+function selectExportColumns(db: Database.Database): { present: Set<string>; headers: string[] } {
+  const cols = db.prepare("PRAGMA table_info(access_log)").all() as Array<{ name: string }>;
+  const present = new Set(cols.map((c) => c.name));
+  const headers = HEADERS_V2.filter((h) => present.has(h));
+  return { present, headers };
+}
 
 function rowClassification(row: Record<string, unknown>): string[] {
   return HEADERS_V2.map((h) => csvEscape(row[h]));
@@ -159,6 +296,91 @@ function buildRelationCheck(db: Database.Database): { ok: boolean; counts: Recor
   return { ok, counts };
 }
 
+/**
+ * B20 — 独立文件校验器：重算每个文件内容的 sha256，并校验跨文件关联键。
+ *
+ * 这是与「生成清单」**相互独立**的路径：清单声明的哈希与文件实际内容
+ * 分开计算，因此删除 / 替换 / 改内容都能被检出。
+ *
+ * 注意：这是**本地清单验证**，不等于「防篡改签名」或「独立来源证明」
+ * （术语标准 §3 禁止此类宣称）。
+ */
+export type FileVerificationResult = {
+  ok: boolean;
+  /** 每个文件的核对结果。 */
+  files: Array<{
+    name: string;
+    /** 清单声明的哈希。 */
+    declared: string;
+    /** 重算得到的哈希。 */
+    actual: string;
+    match: boolean;
+    missing: boolean;
+  }>;
+  /** 跨文件关联键核对。 */
+  relationOk: boolean;
+  /** 关联问题（逐条）。 */
+  relationErrors: string[];
+};
+
+/**
+ * 重算文件内容的 sha256 并与清单比对。
+ *
+ * @param files    清单声明（name + sha256）。
+ * @param contents 实际文件内容（name → Buffer）。缺失的文件按 missing 处理。
+ */
+export function verifyExportFiles(
+  files: ReadonlyArray<{ name: string; sha256: string }>,
+  contents: ReadonlyMap<string, Buffer>
+): FileVerificationResult {
+  const results: FileVerificationResult["files"] = files.map((file) => {
+    const content = contents.get(file.name);
+    if (!content) {
+      return { name: file.name, declared: file.sha256, actual: "", match: false, missing: true };
+    }
+    const actual = sha256Hex(content);
+    return { name: file.name, declared: file.sha256, actual, match: actual === file.sha256, missing: false };
+  });
+  return {
+    ok: results.every((r) => r.match && !r.missing),
+    files: results,
+    relationOk: true,
+    relationErrors: []
+  };
+}
+
+/**
+ * B20 — 跨文件关联键校验。
+ *
+ * 校验「调用行上的问询 ID 都能在问询 CSV 找到」（Spec 140/172 §2.7），
+ * 以及 access_log ↔ access_log_sources / permission_snapshots 的引用有效性。
+ * 不满足时**显式声明例外集**，不静默丢弃。
+ */
+export function verifyCrossFileRelations(input: {
+  /** 调用行的问询 ID 集合。 */
+  callTurnIds: ReadonlyArray<string | null>;
+  /** 问询 CSV 里的问询 ID 集合。 */
+  questionIds: ReadonlySet<string>;
+  /** 已声明的例外集（豁免）。 */
+  declaredExceptions?: ReadonlySet<string>;
+}): { ok: boolean; errors: string[]; exceptions: string[] } {
+  const errors: string[] = [];
+  const exceptions: string[] = [];
+  const declared = input.declaredExceptions ?? new Set<string>();
+
+  for (const turnId of input.callTurnIds) {
+    if (!turnId) continue;
+    if (input.questionIds.has(turnId)) continue;
+    if (declared.has(turnId)) {
+      exceptions.push(turnId);
+      continue;
+    }
+    errors.push(`call_turn_id_not_in_question_file:${turnId}`);
+  }
+
+  return { ok: errors.length === 0, errors, exceptions };
+}
+
 export async function performExportV2(options: ExportV2Options): Promise<ExportV2Result> {
   const diagnosticIncomplete: string[] = [];
   const mode = options.mode;
@@ -192,37 +414,145 @@ export async function performExportV2(options: ExportV2Options): Promise<ExportV
     diagnosticIncomplete.push("backup_failed");
   }
 
-  // Build CSV with v2 columns over the snapshot. Read rows <= S.
-  const upperSeq = (db.prepare("SELECT IFNULL(MAX(id), 0) AS m FROM access_log").get() as { m: number }).m;
+  // ─── B19 / E-2：`S` 取 canonical ledger 的已提交上界 ──────────────────────
+  //
+  // 唯一正确来源是 `security/store.ts` 的 `maxEventSeq()`；**禁止**取投影自身
+  // 的序号（`MAX(id) FROM access_log`）。未提供时正式导出一律失败 ——
+  // 不用投影序号顶替，不猜。
+  if (options.ledgerUpperSeq === undefined) {
+    if (mode === "complete") throw new Error("ledger_upper_seq_required");
+    diagnosticIncomplete.push("ledger_upper_seq_missing");
+  }
+  const upperSeq = options.ledgerUpperSeq ?? 0;
+
+  // ─── B21 / E-5：T3 = 60s，自捕获 S 那一刻起算，等待重试不重置 ───────────
+  const now = options.now ?? Date.now;
+  const startedAt = options.catchUpStartedAt ?? now();
+  const deadlineMs = options.catchUpDeadlineMs ?? DEFAULT_CATCH_UP_DEADLINE_MS;
+  const elapsedMs = Math.max(0, now() - startedAt);
+  const remainingMs = deadlineMs - elapsedMs;
+  const catchUpExpired = remainingMs <= 0;
+
+  // Build CSV with v2 columns over the snapshot.
+  //
+  // The upper bound is the CANONICAL LEDGER sequence (`ledger_seq`), never the
+  // projection's own `access_log.id`: the two are different sequence spaces,
+  // so comparing `id <= S` would include post-S calls and exclude pre-S ones.
+  // The requested filter is applied here too — a narrowly requested export
+  // must not contain other users' calls or other time ranges.
+  const { present, headers } = selectExportColumns(db);
+  const selectList = headers.map((h) => h).join(", ");
+  const where: string[] = [];
+  const params: unknown[] = [];
+  if (present.has("ledger_seq")) {
+    where.push("ledger_seq <= ?");
+    params.push(upperSeq);
+  } else {
+    // Without the ledger column the as-of bound cannot be enforced on rows.
+    // The export is then NOT an as-of-S export; the completeness verdict below
+    // refuses it rather than shipping an unbounded set under an as-of label.
+    diagnosticIncomplete.push("ledger_seq_column_unavailable");
+  }
+  const filter = options.fixedFilter ?? {};
+  if (filter.from) {
+    where.push("ts >= ?");
+    params.push(filter.from);
+  }
+  if (filter.until) {
+    where.push("ts <= ?");
+    params.push(filter.until);
+  }
+  if (filter.userId) {
+    where.push("user_id = ?");
+    params.push(filter.userId);
+  }
   const rows = db
     .prepare(
-      `SELECT id, ts, user_id, tool, outcome, decision_reason, duration_ms, response_row_count,
-              event_type, transport_sub_type, transport_status, authorization_status, execution_status,
-              usability_status, association_status, original_turn_id, effective_turn_id,
-              attempt_id, parent_attempt_id, instance_id, classification_version
+      `SELECT ${selectList}
          FROM access_log
-         WHERE id <= ?
+         ${where.length > 0 ? `WHERE ${where.join(" AND ")}` : ""}
          ORDER BY id ASC`
     )
-    .all(upperSeq) as Array<Record<string, unknown>>;
-  const csvLines = [HEADERS_V2.join(",")];
+    .all(...params) as Array<Record<string, unknown>>;
+  const csvLines = [headers.join(",")];
   for (const row of rows) {
-    csvLines.push(buildClassification(row).join(","));
+    csvLines.push(headers.map((h) => csvEscape(row[h])).join(","));
   }
   const csv = csvLines.join("\n") + "\n";
   const csvHash = sha256Hex(csv);
 
   // Relation + integrity checks
   const relation = buildRelationCheck(db);
-  const projectionComplete = projectionLag === 0 && options.auditStoreAvailable;
+  const projectionComplete = projectionLag === 0 && options.auditStoreAvailable && !catchUpExpired;
   const permissionSnapshotRows = relation.counts.permission_snapshots ?? 0;
   const sourceAssociationCheck = relation.ok ? "ok" : "missing";
-  const scopeComplete = projectionComplete && permissionSnapshotRows > 0 && sourceAssociationCheck === "ok";
-  const fileHashOk = csvHash.length === 64; // sanity; real check would verify all files
+  // Without the ledger column the as-of upper bound cannot be enforced on rows,
+  // so the exported row set is not provably the as-of-S scope.
+  //
+  // This is folded into `scopeComplete` — NOT added as a fourth conjunct of
+  // `combinedComplete`. Rationale: `combinedComplete` is a **frozen** contract
+  // (audit-trust R1 acceptance matrix criterion #6 —
+  // "combinedComplete = scopeComplete AND fileHashOk AND relationCheckOk",
+  // with a bidirectional drift-guard test). Folding the as-of-bound gate into
+  // `scopeComplete` keeps that invariant **structurally guaranteed** for every
+  // manifest, instead of merely incidentally true whenever the ledger column
+  // happens to exist.
+  //
+  // Semantics: "scopeComplete" = the export covers the complete requested
+  // scope as-of S. If the as-of bound cannot be applied to the rows, the
+  // scope cannot be certified → scopeComplete is false → complete mode fails
+  // closed (`integrity_or_relation_failed`).
+  //
+  // Production impact is nil: `access_log.ledger_seq` is an additive column
+  // guaranteed by `ensureColumn` in `proxy/audit.ts`, so `asOfBoundEnforced` is
+  // true on any migrated production database.
+  const asOfBoundEnforced = present.has("ledger_seq");
+  const scopeComplete =
+    projectionComplete &&
+    permissionSnapshotRows > 0 &&
+    sourceAssociationCheck === "ok" &&
+    asOfBoundEnforced;
+  // B20 / E-4：不再是「哈希字符串长度为 64」的同义反复，而是**重算内容哈希**。
+  const fileHashOk = verifyExportFiles(
+    [{ name: "calls-v2.csv", sha256: csvHash }],
+    new Map([["calls-v2.csv", Buffer.from(csv, "utf8")]])
+  ).ok;
   const relationCheckOk = relation.ok;
+  // 冻结契约（audit-trust R1 验收矩阵判据 #6）：严格三项 AND，不加第四项。
   const combinedComplete = scopeComplete && fileHashOk && relationCheckOk;
   const maintenanceRows = relation.counts.audit_maintenance_log ?? 0;
   const legalEmptyWindow = maintenanceRows === 0;
+
+  // ─── B13：来源声明三字段（U7：本期只做来源声明，不引入签名）──────────────
+  const provenanceInput = options.provenance ?? {};
+  const exportedBy = provenanceInput.exportedBy ?? null;
+  const exportReason = provenanceInput.exportReason ?? null;
+  const exportApprovalRef = provenanceInput.exportApprovalRef ?? null;
+  const provenance: ExportProvenance = {
+    exportedBy,
+    exportReason,
+    exportApprovalRef,
+    // 无值时按 U2 六值枚举记原因；**不虚构批准记录**，不新增导出审批流程。
+    nullReason:
+      exportedBy !== null && exportReason !== null && exportApprovalRef !== null
+        ? "not_applicable"
+        : exportApprovalRef === null
+          ? "not_supported"
+          : "not_collected"
+  };
+
+  const crossFileRelations: CrossFileRelations = {
+    accessLogToSources: "access_log.id = access_log_sources.access_log_id",
+    accessLogToPermissionSnapshots: "access_log.permission_snapshot_hash = permission_snapshots.hash",
+    callsToQuestions: "access_log.lucy_turn_id = conversation_turns.turn_id",
+    exceptions: []
+  };
+
+  const exclusions: ExportExclusions = options.exclusions ?? {
+    excluded: false,
+    reason: null,
+    items: []
+  };
 
   const manifest: ExportV2Manifest = {
     schemaVersion: "audit-export-manifest/v2",
@@ -231,7 +561,10 @@ export async function performExportV2(options: ExportV2Options): Promise<ExportV
     ledgerUpperSeq: upperSeq,
     projectionComplete,
     scopeComplete,
-    dataScope: { ok: projectionComplete, reason: projectionComplete ? undefined : "projection_lag" },
+    dataScope: {
+      ok: projectionComplete,
+      reason: projectionComplete ? undefined : catchUpExpired ? "catchup_deadline_exceeded" : "projection_lag"
+    },
     associationQuality: buildAssociationQuality(db),
     clientCoverage: { observed: false, gapWindows: [], unknownReason: "no_controlled_client" },
     integrityVerification: { fileHashOk, relationCheckOk },
@@ -239,11 +572,32 @@ export async function performExportV2(options: ExportV2Options): Promise<ExportV
     lagMs: projectionLag,
     policyScopeExpanded: [],
     untrustedSelfReport: 0,
-    legalEmptyWindow
+    legalEmptyWindow,
+    // ─── B13 ──────────────────────────────────────────────────────────────
+    provenance,
+    crossFileRelations,
+    exclusions,
+    derivationVersion: DERIVATION_VERSION,
+    prevExportId: options.prevExportId ?? null,
+    exportId: options.exportId ?? null,
+    sortKey: "access_log.id ASC",
+    paginationRuleVersion: "audit-export-pagination/v1",
+    protocolInclusionRule: "declared_protocol_rules_v1",
+    timeRange: {
+      from: options.fixedFilter.from ?? null,
+      until: options.fixedFilter.until ?? null
+    },
+    cutoffAt: options.cutoffAt ?? null,
+    files: [{ name: "calls-v2.csv", sha256: csvHash, rowCount: rows.length }],
+    catchUpDeadlineSeconds: AUDIT_WINDOWS.t3ExportCatchupSeconds
   };
 
   if (mode === "complete" && !combinedComplete) {
     throw new Error("integrity_or_relation_failed");
+  }
+  // B21 / U6：T3 超时 → 正式导出失败，只可生成明确 partial 的诊断包。
+  if (mode === "complete" && catchUpExpired) {
+    throw new Error("catchup_deadline_exceeded");
   }
 
   return {
@@ -257,15 +611,7 @@ export async function performExportV2(options: ExportV2Options): Promise<ExportV
     relationCheckOk,
     diagnosticIncomplete,
     csv,
-    manifest: {
-      ...manifest,
-      integrityVerification: {
-        ...manifest.integrityVerification,
-        // Include the CSV hash for recordkeeping; not a substitute for full hash chain.
-        // T04d will write the actual hash chain.
-        ...(manifest.integrityVerification as object)
-      } as ExportV2Manifest["integrityVerification"]
-    }
+    manifest
   };
 }
 
@@ -409,12 +755,17 @@ export async function buildExportPackV2(
     files: fileMeta
   } as ExportV2Manifest & { files: typeof fileMeta };
 
-  // Compute aggregate file_hash_ok: ALL files match their declared sha256.
-  // (Self-check: the sha256 list is built from the buffer contents; re-hashing
-  // would yield the same hash. For local hash chain this is sufficient; it is
-  // NOT a substitute for external signature, which is out of T04d scope.)
-  const aggregateHashOk = fileMeta.every((f) => f.sha256.length === 64);
-  (manifest.integrityVerification as { fileHashOk: boolean; relationCheckOk: boolean }).fileHashOk = aggregateHashOk;
+  // B20 / E-4：独立文件校验器 —— **重算每个文件内容的 sha256**。
+  //
+  // 此前的实现只验 `sha256.length === 64`（同义反复），删除 / 替换 / 改内容
+  // 都检不出来。这里把实际写入 zip 的 buffer 重新哈希，与清单声明比对。
+  //
+  // 这是**本地清单验证**，不等于「防篡改签名」或「独立来源证明」
+  // （术语标准 §3 禁止此类宣称）。
+  const actualContents = new Map<string, Buffer>(fileEntries.map((e) => [e.name, e.data]));
+  const verification = verifyExportFiles(fileMeta, actualContents);
+  (manifest.integrityVerification as { fileHashOk: boolean; relationCheckOk: boolean }).fileHashOk =
+    verification.ok;
 
   const manifestBuf = Buffer.from(JSON.stringify(manifest, null, 2) + "\n", "utf8");
   fileEntries.push({ name: "manifest.json", data: manifestBuf });

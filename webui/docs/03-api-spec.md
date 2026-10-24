@@ -158,6 +158,7 @@ DELETE /api/admin/agents/:userId/tokens/:label
 GET    /api/admin/roles
 GET    /api/admin/roles/:roleId
 POST   /api/admin/roles/_preview
+POST   /api/admin/roles/preview-row-policy
 POST   /api/admin/roles/:roleId/copy
 GET    /api/admin/config-audit
 GET    /api/admin/config-audit/export.csv
@@ -177,6 +178,11 @@ GET    /api/admin/audit/association-revisions
 POST   /api/admin/audit/association-revisions
 GET    /api/admin/audit/export-inquiry-pack
 GET    /api/admin/audit/v2/export-metadata
+GET    /api/admin/audit/export-v2
+GET    /api/admin/audit/export-pack-v2
+GET    /api/admin/audit/reconciliation/inquiries/:turnId
+GET    /api/admin/audit/reconciliation/usage
+GET    /api/admin/audit/reconciliation/export
 GET    /api/admin/trace/events
 POST   /api/agent-audit/events
 GET    /api/admin/mcp-tools
@@ -809,14 +815,16 @@ Query：
 
 `GET /api/admin/audit/sources` 从访问日志中聚合被 MCP tool 触达的表，供审计来源筛选和治理面板使用。协议类工具调用不计入统计。
 
+Lucy v0.25 / P0-4 §3.4：表以**完整身份** `连接.Schema.表` 标识。同名表在不同连接上**不合并**——两个连接可以各自持有同一个 `Schema.表`。有来源记录（`access_log_sources`）的调用按其真实连接计数；没有来源记录的历史调用归入显式的 `unknown` 连接，不编造连接名。
+
 响应：
 
 ```jsonc
 { "ok": true, "data": {
-  "connections": [{ "connection": "audit-derived", "calls": 3 }],
+  "connections": [{ "connection": "conn_a", "calls": 3 }],
   "schemas": [{ "schema": "dataforai", "calls": 3 }],
-  "topTables": [{ "table": "dataforai.superstore_orders", "calls": 3, "denied": 1 }],
-  "deniedTables": [{ "table": "dataforai.superstore_orders", "calls": 3, "denied": 1 }]
+  "topTables": [{ "table": "conn_a.dataforai.superstore_orders", "calls": 3, "denied": 1 }],
+  "deniedTables": [{ "table": "conn_a.dataforai.superstore_orders", "calls": 3, "denied": 1 }]
 }}
 ```
 
@@ -844,6 +852,37 @@ Query：
 ```
 
 `GET /api/admin/audit` 查询 MCP access log；支持按 user、tool、outcome、时间范围、tableSearch、sessionId、turnId、platform 过滤。默认不包含协议类工具调用；传 `includeProtocol=true` 可包含 `tools/list`、`initialize`、`notifications/initialized`。
+
+## Lucy v0.25 新增端点
+
+### 行级策略预览（只读）
+
+`POST /api/admin/roles/preview-row-policy`
+
+在不落盘的前提下预览行级策略草稿的**最终行约束**。请求体含 `roleId` 与 `tables`；响应给出每个表的预览、字段目录装载状态与候选摘要。预览走与运行时**同一条编译路径**，并把 Agent 个人行限制一并纳入。
+
+- 只读端点，**不进入发布协调器**，不写任何配置或审计终态。
+- 响应含 `candidateDigest`（候选摘要）与 `basePolicyVersion`（基线版本），供确认前比对。
+- 目录不可用、能力未知或预览失败时，响应给出可归因原因，**不得**用「全部行」掩盖运维故障。
+
+### 审计正式导出（v2）
+
+`GET /api/admin/audit/export-v2` 与 `GET /api/admin/audit/export-pack-v2`
+
+L25-09 S06／§12.5 的正式导出路径。账本上界 `S` 由服务端从 canonical ledger 的已提交上界取得，**不得**取投影自身序号。导出须同时满足「投影追上 S」与「能给出 as-of S 的正确视图」，否则失败而不静默换用较新数据。
+
+导出包清单含 `exported_by` / `export_reason` / `export_approval_ref` 与跨文件关系声明；清单校验重算每个文件的 sha256 并校验跨文件关联键，**不以哈希字符串长度代替内容校验**。
+
+### 审计只读对账视图
+
+`GET /api/admin/audit/reconciliation/inquiries/:turnId`、`GET /api/admin/audit/reconciliation/usage`、`GET /api/admin/audit/reconciliation/export`
+
+L25-02、L25-03 的只读对账展示。所有响应携带同一 `reconciliationContext`：规范化筛选、时区、账本上界 `watermarkSeq=S`、快照、计量单位与规则版本。**请求超过 S 的新事件不得混入当前页面或导出。**
+
+- 问询详情给出完整表清单（`连接.Schema.表`，同名表不合并）、轮次、调用与尝试、耗时、预算状态与归属质量。
+- 用法对账给出配置 Token 数（启用／停用分列）与窗口内活跃 Token 数，以及四类差异集合；**只有真实 `budget_stopped` 凭据**才判定「问询预算已用尽」。
+- 比率同时给出 N／D；D=0 或不可观测时**不得**显示 0% 或 100% 的确定结论。
+- CSV 导出与页面同源，保留空值与空值原因、防公式注入、不导出凭据。
 
 `GET /api/admin/audit/export` 使用与 `/api/admin/audit` 相同过滤条件导出**调用流水** CSV，并对 spreadsheet formula 前缀做转义。可选 `bom=1` 前缀 UTF-8 BOM。文件名为 `audit-calls-YYYYMMDD-HHmmss-000001.csv`，按 `Asia/Shanghai` 精确到秒并带流水号；CSV 保留原始 `ts`（UTC），并新增 `ts_local`（`YYYY-MM-DD HH:mm:ss`）用于人工阅读和 Excel 解析。用户可见名称不得称为「审计证据」。权威契约见 Spec 137 与 Spec 141。
 

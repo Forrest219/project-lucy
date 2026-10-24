@@ -51,6 +51,13 @@ import {
   type PublishLockHolder
 } from "./publish-coordinator.js";
 import { syncContentToProjectRoot } from "./content-mirror";
+import {
+  completeRecoveryJournal,
+  createRecoveryJournal,
+  isRecoveryRequired,
+  markRecoveryEntryApplied,
+  restoreRecoveryJournal
+} from "./semantic-recovery-journal.js";
 import { ForbiddenPathError } from "./fs-safe";
 import { reindexProject, validateSource, type Issue, type ValidationResult } from "./ktx";
 import { reloadCatalog } from "./catalog-reload";
@@ -96,7 +103,9 @@ export type SemanticAssetErrorCode =
   /** Spec 162 §8 / SC-24 — a failing TS/Python contract check. */
   | "CONTRACT_VIOLATION"
   | "PUBLISH_IN_PROGRESS"
-  | "REINDEX_IN_PROGRESS";
+  | "REINDEX_IN_PROGRESS"
+  /** Lucy v0.25 / L25-11 §7.1–§7.2 (D3) — an unresolved semantic recovery journal closes publishing and manual reindex. */
+  | "semantic_recovery_required";
 
 export type SemanticAssetWarning = {
   code: SemanticAssetWarningCode;
@@ -1210,6 +1219,17 @@ export async function recordManualReindex(
   projectRoot: string,
   input: ManualReindexInput
 ): Promise<SemanticAssetReleaseRecord> {
+  // Lucy v0.25 / L25-11 §7.1–§7.2 (D3): while a semantic recovery journal is
+  // unresolved, a manual reindex must fail closed — reindexing would re-derive
+  // an index state from targets whose write outcome is still unknown.
+  if (await isRecoveryRequired(projectRoot)) {
+    throw new SemanticAssetValidationError(
+      "semantic_recovery_required",
+      "A previous semantic write left an unresolved recovery journal; manual reindex is closed until it is resolved.",
+      [],
+      409
+    );
+  }
   const createdAt = input.startedAt ?? new Date().toISOString();
   const ok = input.reindex.ok;
   const changedSources = input.changedSources ?? [];
@@ -1877,6 +1897,17 @@ export async function publishSemanticAssets(
   } = {}
 ): Promise<SemanticAssetPublishResponse> {
   const actor = options.actor ?? "local-admin";
+  // Lucy v0.25 / L25-11 §7.1–§7.2 (D3): publishing is closed while a semantic
+  // recovery journal is unresolved. The check runs BEFORE the publish lock is
+  // taken so a rejected publish does not leave a lock behind.
+  if (await isRecoveryRequired(projectRoot)) {
+    throw new SemanticAssetValidationError(
+      "semantic_recovery_required",
+      "上一笔语义写入存在未决恢复日志，恢复核验完成前不允许发布。",
+      [],
+      409
+    );
+  }
   const snapshot = await readSnapshot(projectRoot, request.validationId);
   if (!snapshot) {
     throw new SemanticAssetValidationError(
@@ -2027,9 +2058,38 @@ export async function publishSemanticAssets(
 
   // Promote: write each proposed file atomically. If any step fails we record
   // promote_failed and return. We must NOT trigger reindex.
+  //
+  // Lucy v0.25 / L25-11 §7.2 (D16/D17): the recovery journal is persisted
+  // BEFORE the first target is written. Without it a failure in the middle of
+  // the batch would leave the already-written targets in place with no record
+  // of what the original content was — a partial publish that nobody can roll
+  // back. On failure the journal is restored in reverse order.
   const releaseFiles: SemanticAssetReleaseFile[] = [];
   let promoteFailed = false;
-  for (const file of snapshot.files) {
+  let recoveryJournalId: string | null = null;
+  try {
+    const journal = await createRecoveryJournal(projectRoot, {
+      releaseId,
+      operationId: releaseId,
+      actor,
+      instanceId: process.env.LUCY_AGENT_AUDIT_INSTANCE_ID ?? "lucy-default",
+      targets: snapshot.files.map((file) => ({
+        targetPath: file.targetPath,
+        newContent: file.content
+      }))
+    });
+    recoveryJournalId = journal.journalId;
+  } catch (error) {
+    // A journal that cannot be persisted means the batch cannot be rolled
+    // back: refuse to write anything at all.
+    throw new SemanticAssetValidationError(
+      "semantic_recovery_required",
+      "无法创建恢复日志，本批次未写入任何文件。",
+      [],
+      409
+    );
+  }
+  for (const [order, file] of snapshot.files.entries()) {
     try {
       const { overwritten } = await promoteFile(projectRoot, file.targetPath, file.content);
       releaseFiles.push({
@@ -2038,6 +2098,9 @@ export async function publishSemanticAssets(
         sha256: file.sha256,
         overwritten
       });
+      if (recoveryJournalId) {
+        await markRecoveryEntryApplied(projectRoot, recoveryJournalId, order);
+      }
     } catch (error) {
       promoteFailed = true;
       const failedRecord: SemanticAssetReleaseRecord = {
@@ -2053,11 +2116,28 @@ export async function publishSemanticAssets(
         validation: { ok: true, results: gate.results }
       };
       await appendReleaseRecord(projectRoot, failedRecord);
+      // Restore the already-written targets in reverse order. A restore that
+      // cannot complete leaves the journal in `recovery_required`, which keeps
+      // publishing and manual reindex closed (D3).
+      if (recoveryJournalId) {
+        const restored = await restoreRecoveryJournal(projectRoot, recoveryJournalId);
+        if (!restored || restored.recoveryRequired) {
+          console.error(
+            `[lucy-semantic] recovery restore incomplete for release ${releaseId}; ` +
+              "publishing and manual reindex stay closed until it is resolved"
+          );
+        }
+      }
       await cleanupSemanticPublishStaging(projectRoot, request.validationId);
       await releasePublishLock(projectRoot);
       await deleteSnapshot(projectRoot, request.validationId);
       throw error;
     }
+  }
+
+  // Every target was written — the journal is closed.
+  if (recoveryJournalId) {
+    await completeRecoveryJournal(projectRoot, recoveryJournalId);
   }
 
   // Promote succeeded — record `reindexing` and return immediately.

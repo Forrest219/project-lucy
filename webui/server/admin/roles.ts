@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { randomUUID } from "node:crypto";
 import { resolveProjectRoot } from "../project.js";
 import { getAuditDb } from "./audit.js";
 import {
@@ -10,6 +11,7 @@ import {
   type EffectivePermissions
 } from "../proxy/acl.js";
 import { parseRowPolicyShape } from "../proxy/row-policy.js";
+import { computeCandidateDigest } from "../config-digest.js";
 import { expandTemplate, isDeleteProtectedRole, LUCY_ADMIN_ROLE_ID, ROLE_TEMPLATES } from "./role-templates.js";
 import {
   ACCESS_YAML_REL,
@@ -266,7 +268,110 @@ function isTableTouchingTool(tool: string): boolean {
   ].includes(tool);
 }
 
-function validateRoleShape(role: unknown): { ok: true; value: YamlRole } | { ok: false; reason: string } {
+/**
+ * Lucy v0.25 (L25-14 §3.4 / §7) — R4 row-permission audit attribution.
+ *
+ * The durable audit mechanism already exists (`writeAccessConfigFileWithAuditClosure`
+ * → durable intent → atomic write → runtime commit/ack → durable terminal, inside the
+ * shared publish coordinator). This helper only adds the ROW-POLICY specifics the
+ * configuration-audit record must carry:
+ *
+ * - the affected table identity,
+ * - the before / after digest of the Role's row-policy content,
+ * - the number of Agents the change reaches.
+ *
+ * The attribution rides on the existing `config_change_log` channel — no new audit
+ * store, and nothing is written to the L25-09 inquiry runtime event stream.
+ */
+export interface RowPolicyAuditTableIdentity {
+  connection: string;
+  schema: string;
+  name: string;
+}
+
+export interface RowPolicyAuditAttribution {
+  /** The tables whose row policy changed. */
+  tables: RowPolicyAuditTableIdentity[];
+  /** Digest of the Role's row-policy content before the change. */
+  beforeDigest: string;
+  /** Digest of the Role's row-policy content after the change. */
+  afterDigest: string;
+  /** How many Agents reference the Role (the affected Agents). */
+  affectedAgentCount: number;
+  /** The operation id of this save; it is stored in the audit record's request id. */
+  operationId: string;
+}
+
+type RowPolicyTableDigest = RowPolicyAuditTableIdentity & { digest: string };
+
+function rowPolicyTableDigests(role: YamlRole | undefined): RowPolicyTableDigest[] {
+  const out = new Map<string, RowPolicyTableDigest>();
+  for (const selector of role?.allow?.tableSelectors ?? []) {
+    if (!("names" in selector)) continue;
+    for (const name of selector.names ?? []) {
+      const identity: RowPolicyAuditTableIdentity = {
+        connection: selector.connection ?? "",
+        schema: selector.schema,
+        name
+      };
+      const key = `${identity.connection}/${identity.schema}/${identity.name}`;
+      out.set(key, {
+        ...identity,
+        digest: computeCandidateDigest({
+          row_access: selector.row_access ?? null,
+          row_policy: selector.row_policy ?? null
+        })
+      });
+    }
+  }
+  return [...out.values()].sort((a, b) =>
+    `${a.connection}/${a.schema}/${a.name}`.localeCompare(`${b.connection}/${b.schema}/${b.name}`)
+  );
+}
+
+function agentsReferencingRole(config: YamlAccessConfig, roleId: string): number {
+  return config.users.filter((user) => {
+    const resolved = resolveRoleIds(user);
+    return resolved.ok && resolved.roleIds.includes(roleId);
+  }).length;
+}
+
+/**
+ * Build the R4 attribution for a Role save, or `undefined` when the save does not
+ * touch any row policy (a plain Role edit keeps its own change type).
+ */
+export function buildRowPolicyAuditAttribution(
+  roleId: string,
+  before: YamlRole | undefined,
+  after: YamlRole | undefined,
+  config: YamlAccessConfig,
+  operationId: string
+): RowPolicyAuditAttribution | undefined {
+  const beforeTables = rowPolicyTableDigests(before);
+  const afterTables = rowPolicyTableDigests(after);
+  const beforeDigest = computeCandidateDigest(beforeTables);
+  const afterDigest = computeCandidateDigest(afterTables);
+  if (beforeDigest === afterDigest) return undefined;
+
+  const changed: RowPolicyAuditTableIdentity[] = [];
+  const seen = new Set<string>();
+  for (const table of [...beforeTables, ...afterTables]) {
+    const key = `${table.connection}/${table.schema}/${table.name}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    changed.push({ connection: table.connection, schema: table.schema, name: table.name });
+  }
+
+  return {
+    tables: changed,
+    beforeDigest,
+    afterDigest,
+    affectedAgentCount: agentsReferencingRole(config, roleId),
+    operationId
+  };
+}
+
+export function validateRoleShape(role: unknown): { ok: true; value: YamlRole } | { ok: false; reason: string } {
   if (!role || typeof role !== "object" || Array.isArray(role)) {
     return { ok: false, reason: "role must be an object" };
   }
@@ -808,12 +913,49 @@ export function registerRoleRoutes(app: FastifyInstance) {
       await writeGateTrace(gate, undefined, undefined, defaultActor(request));
     }
 
+    // Lucy v0.25 (L25-14 §3.4) — R4 attribution for a Role create that already
+    // carries a row policy.
+    const operationId = `row_policy_update:${roleId}:${randomUUID()}`;
+    const rowPolicyAttribution = buildRowPolicyAuditAttribution(
+      roleId,
+      undefined,
+      validated.value,
+      config,
+      operationId
+    );
     const writeResult = await writeAccessYaml(projectRoot, newConfig, {
       enabled: true,
-      changeType: "role_create",
+      changeType: rowPolicyAttribution ? "row_policy_update" : "role_create",
+      operation: rowPolicyAttribution ? "row_policy.update" : undefined,
       targetId: roleId,
-      oldSummary: { roleIds: Object.keys(config.roles ?? {}) },
-      newSummary: { roleIds: Object.keys(newConfig.roles ?? {}), description: validated.value.description },
+      oldSummary: {
+        roleIds: Object.keys(config.roles ?? {}),
+        ...(rowPolicyAttribution
+          ? {
+              rowPolicy: {
+                operationId: rowPolicyAttribution.operationId,
+                tables: rowPolicyAttribution.tables,
+                beforeDigest: rowPolicyAttribution.beforeDigest,
+                affectedAgentCount: rowPolicyAttribution.affectedAgentCount
+              }
+            }
+          : {})
+      },
+      newSummary: {
+        roleIds: Object.keys(newConfig.roles ?? {}),
+        description: validated.value.description,
+        ...(rowPolicyAttribution
+          ? {
+              rowPolicy: {
+                operationId: rowPolicyAttribution.operationId,
+                tables: rowPolicyAttribution.tables,
+                beforeDigest: rowPolicyAttribution.beforeDigest,
+                afterDigest: rowPolicyAttribution.afterDigest,
+                affectedAgentCount: rowPolicyAttribution.affectedAgentCount
+              }
+            }
+          : {})
+      },
       diff,
       ...auditActorFields(trustedActorFromRequest(request)),
       source: "admin_roles_api"
@@ -833,6 +975,9 @@ export function registerRoleRoutes(app: FastifyInstance) {
         policyVersion: writeResult.policyVersion,
         policyRuntimeAck: writeResult.policyRuntimeAck,
         runtimeAck: writeResult.runtimeAck,
+        /** The durable audit record id — the intent id of this save. */
+        auditId: writeResult.auditId,
+        rowPolicy: rowPolicyAttribution,
         gate,
         role: {
           ...summary,
@@ -959,12 +1104,50 @@ export function registerRoleRoutes(app: FastifyInstance) {
       await writeGateTrace(gate, undefined, undefined, defaultActor(request));
     }
 
+    // Lucy v0.25 (L25-14 §3.4) — R4 attribution: a save that touches a row policy is
+    // recorded as a row-permission change in the existing configuration-audit channel.
+    const operationId = `row_policy_update:${request.params.roleId}:${randomUUID()}`;
+    const rowPolicyAttribution = buildRowPolicyAuditAttribution(
+      request.params.roleId,
+      existing,
+      validated.value,
+      config,
+      operationId
+    );
     const writeResult = await writeAccessYaml(projectRoot, newConfig, {
       enabled: true,
-      changeType: "role_patch",
+      changeType: rowPolicyAttribution ? "row_policy_update" : "role_patch",
+      operation: rowPolicyAttribution ? "row_policy.update" : undefined,
       targetId: request.params.roleId,
-      oldSummary: { description: existing.description, allow: existing.allow },
-      newSummary: { description: validated.value.description, allow: validated.value.allow },
+      oldSummary: {
+        description: existing.description,
+        allow: existing.allow,
+        ...(rowPolicyAttribution
+          ? {
+              rowPolicy: {
+                operationId: rowPolicyAttribution.operationId,
+                tables: rowPolicyAttribution.tables,
+                beforeDigest: rowPolicyAttribution.beforeDigest,
+                affectedAgentCount: rowPolicyAttribution.affectedAgentCount
+              }
+            }
+          : {})
+      },
+      newSummary: {
+        description: validated.value.description,
+        allow: validated.value.allow,
+        ...(rowPolicyAttribution
+          ? {
+              rowPolicy: {
+                operationId: rowPolicyAttribution.operationId,
+                tables: rowPolicyAttribution.tables,
+                beforeDigest: rowPolicyAttribution.beforeDigest,
+                afterDigest: rowPolicyAttribution.afterDigest,
+                affectedAgentCount: rowPolicyAttribution.affectedAgentCount
+              }
+            }
+          : {})
+      },
       diff,
       ...auditActorFields(trustedActorFromRequest(request)),
       source: "admin_roles_api"
@@ -978,6 +1161,9 @@ export function registerRoleRoutes(app: FastifyInstance) {
         policyVersion: writeResult.policyVersion,
         policyRuntimeAck: writeResult.policyRuntimeAck,
         runtimeAck: writeResult.runtimeAck,
+        /** The durable audit record id — the intent id of this save. */
+        auditId: writeResult.auditId,
+        rowPolicy: rowPolicyAttribution,
         gate
       }
     };

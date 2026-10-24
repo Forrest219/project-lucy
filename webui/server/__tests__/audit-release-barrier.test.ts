@@ -258,7 +258,14 @@ describe("T07-1 — non-streaming JSON: admitted → prepared → send", () => {
     expect(preparedWhenFirstByteArrived).toBe(true);
 
     await until(() => phasesOf().includes("response_delivered"));
-    expect(phasesOf()).toEqual(["request_admitted", "response_prepared", "response_delivered"]);
+    // Lucy v0.25 / L25-09 S02 (B6/B22): `received` 是账本的第一条事件 ——
+    // 收到即持久化，之后才是 admitted / prepared / delivered。
+    expect(phasesOf()).toEqual([
+      "received",
+      "request_admitted",
+      "response_prepared",
+      "response_delivered"
+    ]);
 
     const events = securityRows("SELECT * FROM security_events ORDER BY seq");
     const prepared = events.find((event) => event.phase === "response_prepared")!;
@@ -309,7 +316,9 @@ describe("T07-1 — non-streaming JSON: admitted → prepared → send", () => {
     expect(JSON.parse(probe.body)).toMatchObject({ error: { data: { code: "AUDIT_UNAVAILABLE" } } });
     expect(probe.body).not.toContain(CANARY);
     expect(upstream.calls).toHaveLength(0);
-    expect(phasesOf()).toEqual([]);
+    // B6/B22：`received` 已经提交（入口屏障），失败发生在 admitted 阶段 ——
+    // 账本里保留 received，且**不得**出现 admitted 之后的任何阶段。
+    expect(phasesOf()).toEqual(["received"]);
   });
 
   it("returns 503 when the security store itself is unavailable (no fallback to unaudited success)", async () => {
@@ -440,7 +449,14 @@ describe("T07-2 — SSE: bounded buffer, explicit failure, crash recovery", () =
     expect(probe.body).toContain(CANARY);
     expect(probe.body).toContain("tail");
     await until(() => phasesOf().includes("response_delivered"));
-    expect(phasesOf()).toEqual(["request_admitted", "response_prepared", "response_delivered"]);
+    // Lucy v0.25 / L25-09 S02 (B6/B22): `received` 是账本的第一条事件 ——
+    // 收到即持久化，之后才是 admitted / prepared / delivered。
+    expect(phasesOf()).toEqual([
+      "received",
+      "request_admitted",
+      "response_prepared",
+      "response_delivered"
+    ]);
   });
 
   it("accepts a body of exactly the limit and rejects one byte more with RESPONSE_TOO_LARGE", async () => {

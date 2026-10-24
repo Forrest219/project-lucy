@@ -201,3 +201,80 @@ export function chainScopeChanges(chain: readonly AttemptSummary[]): Array<{
   }
   return out;
 }
+// ─── B9：重连 / 尝试独立性（Spec §6.3 / §10.3）──────────────────────────────
+//
+// 硬规则：
+//   - **重连本身不新增 attempt**：重连只是传输层重连，不是一次新的执行。
+//   - 重连后**重新发送并实际准入执行**的请求必须有**独立 attempt**；
+//     除非既有幂等执行契约已证明只是原尝试续接。
+//   - **不能把「重连」当去重证据**：reconnect_generation 变化不构成
+//     「同一次执行」的证明。
+
+/** 重连代次：同一会话上的连接重建次数。 */
+export type ReconnectGeneration = {
+  sessionId: string;
+  generation: number;
+};
+
+export type AttemptRelationInput = {
+  /** 父 attempt ID（业务重试 / 续接的父尝试）。 */
+  parentAttemptId: string | null;
+  /** 本次使用的 attempt ID。 */
+  attemptId: string;
+  /** 是否只是原尝试的**续接**（既有幂等执行契约已证明）。 */
+  resumedSameAttempt: boolean;
+  /** 是否发生了**实际执行**（已准入并分派）。 */
+  actuallyExecuted: boolean;
+};
+
+export type AttemptRelationVerdict =
+  | { ok: true; independent: boolean; reason?: "reconnect_without_execution" | "resumed_same_attempt" }
+  | { ok: false; reason: "attempt_not_independent" | "attempt_id_required" };
+
+/**
+ * 判定「本次尝试是否拥有独立 attempt」。
+ *
+ * - 未实际执行（纯重连）→ 不新增 attempt，判定为非独立但合规。
+ * - 实际执行且证明为原尝试续接 → attempt_id 必须与父相同。
+ * - 实际执行且非续接 → attempt_id 必须与父**不同**，否则拒绝
+ *   （两次独立执行共用一个 attempt ID 会让重试链失去意义）。
+ */
+export function evaluateAttemptRelation(input: AttemptRelationInput): AttemptRelationVerdict {
+  if (!input.attemptId || input.attemptId.trim().length === 0) {
+    return { ok: false, reason: "attempt_id_required" };
+  }
+  if (!input.actuallyExecuted) {
+    // 重连不新增 attempt。
+    return { ok: true, independent: false, reason: "reconnect_without_execution" };
+  }
+  if (input.resumedSameAttempt) {
+    if (input.parentAttemptId && input.attemptId !== input.parentAttemptId) {
+      return { ok: false, reason: "attempt_not_independent" };
+    }
+    return { ok: true, independent: false, reason: "resumed_same_attempt" };
+  }
+  if (input.parentAttemptId && input.attemptId === input.parentAttemptId) {
+    return { ok: false, reason: "attempt_not_independent" };
+  }
+  return { ok: true, independent: true };
+}
+
+/**
+ * 判定「两次请求是否可被视为同一次逻辑调用」。
+ *
+ * 只有**同一个已认证适配器命名空间内的同一个 `client_call_id`** 才算同一次
+ * 逻辑调用。相同 SQL、相同 request_id、相同 client_event_id 都**不能**
+ * 单独作为同一次执行的证明（Spec §6.2 / A07）。
+ */
+export function isSameLogicalExecution(input: {
+  adapterIdA: string;
+  clientCallIdA: string | null;
+  adapterIdB: string;
+  clientCallIdB: string | null;
+  /** 相同 SQL 只能作为弱线索，不构成同一性证明。 */
+  sameSql?: boolean;
+}): boolean {
+  if (!input.clientCallIdA || !input.clientCallIdB) return false;
+  if (input.adapterIdA !== input.adapterIdB) return false;
+  return input.clientCallIdA === input.clientCallIdB;
+}

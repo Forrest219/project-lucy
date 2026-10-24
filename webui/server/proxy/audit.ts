@@ -6,6 +6,15 @@ import { resolveProjectRoot } from "../project.js";
 import { prepareTraceDatabase } from "../trace/evidence.js";
 import { resolveSourceRefsForTables } from "./acl.js";
 import { scrubArgsSummaryJson } from "./audit-privacy.js";
+import {
+  classifyAuditEvent,
+  CLASSIFICATION_VERSION_V2P5,
+  DIGEST_VERSION_V2P5,
+  type DigestKind,
+  type ExecutionEvidence
+} from "./audit-classification.js";
+import { DERIVATION_VERSION } from "./audit-derivation.js";
+import { resolveLedgerSeq } from "./audit-reconcile.js";
 import { MCP_PROTOCOL_METHODS as PROTOCOL_TOOLS } from "./mcp-request-classification.js";
 import { resolveClientIdentity } from "./request-client-meta.js";
 import {
@@ -39,7 +48,7 @@ export interface AccessLogEntry {
   lucyTurnId?: string;
   turnAttributionMode?: "explicit" | "session_bound" | "identity_inferred" | "unassigned";
   turnAttributionConfidence?: "high" | "low" | "none";
-  turnAttributionReason?: "turn_attribution_rejected";
+  turnAttributionReason?: "turn_attribution_rejected" | "attribution_evidence_conflict";
   /**
    * Spec 173 v0.3 / 2026-10-19 audit-trust:正交于 turn_attribution_mode 的关联质量判定。
    * 由准入路径冻结；不允许在 prepared / delivered 阶段改写。
@@ -141,6 +150,41 @@ export interface AccessLogEntry {
     capabilityDigest?: string;
     toolClassificationVersion?: string;
   };
+  // ─── Lucy v0.25 / L25-09 增量字段（全部 additive；历史行 NULL）────────────
+  /**
+   * 写路径提供的**可核验执行凭据**。缺省即该事实不成立 → 主状态落 `unknown`。
+   * 旧 `outcome=ok` **不**构成执行成功凭据（Spec §4.3(a) 第 9 行）。
+   */
+  executionEvidence?: ExecutionEvidence;
+  /** 入口事件 ID（= 已提交 received 事件的 event_id）。 */
+  ingressEventId?: string;
+  /** 逻辑入口标识（mcp-http / admin-http / agent-audit-ingest）。 */
+  endpointId?: string;
+  /** 账本提交序号（as-of S 视图用）。 */
+  ledgerSeq?: number;
+  /** S03 标识字典。 */
+  clientCallId?: string;
+  clientEventId?: string;
+  upstreamOperationId?: string;
+  rpcRequestId?: string;
+  /** 业务重试指向原入口事件 ID。 */
+  retryOf?: string;
+  /** S01(e) 三族分离。 */
+  reportedRole?: string;
+  observedProtocol?: string;
+  observedRoleIds?: string[];
+  inferredClient?: string;
+  inferenceMethod?: string;
+  inferenceConfidence?: "high" | "low" | "none";
+  inferenceRuleVersion?: string;
+  /** U11 摘要类型与预览版本。 */
+  digestKind?: DigestKind;
+  digestVersion?: string;
+  previewVersion?: string;
+  /** 原始输入 UTF-8 字节长度（预览截断披露）。 */
+  previewOriginalBytes?: number;
+  /** 预览是否被截断。 */
+  previewTruncated?: boolean;
 }
 
 export type AuthFailureReason =
@@ -176,8 +220,18 @@ let db: Database.Database | null = null;
  * of SQLite's internal `PRAGMA schema_version`, which we never read).
  * Bump together with new audit_meta entries.
  */
-export const AUDIT_DB_SCHEMA_VERSION = 2;
-const ACCESS_LOG_COLUMNS = [
+export const AUDIT_DB_SCHEMA_VERSION = 3;
+/**
+ * Lucy v0.25 / L25-09 B26 — the **single** access_log column contract.
+ *
+ * E-10 之前 `ACCESS_LOG_COLUMNS` 有两份重复常量（`proxy/audit.ts` 与
+ * `admin/audit.ts`），新增列须两处同步，否则导出元数据与写入漂移。
+ * 现在只有这一份；`admin/audit.ts` 直接 import，不再自带副本。
+ *
+ * 全部为 additive 列（`ensureColumn` 迁移），历史行保持 NULL；
+ * 历史行**不重解释**（Spec §4.6）。
+ */
+export const ACCESS_LOG_COLUMNS = [
   ["role_ids", "TEXT"],
   ["permission_snapshot_hash", "TEXT"],
   ["effective_tables_count", "INTEGER"],
@@ -253,8 +307,50 @@ const ACCESS_LOG_COLUMNS = [
   ["credential_principal_id", "TEXT"],
   // T03a: tracks whether the legacy explicit-turn validation passed (1=confirmed, 0=conflict).
   // Pre-existing rows stay NULL; backfillAssociationStatus() handles the missing-column fallback.
-  ["explicit_turn_validated", "INTEGER"]
+  ["explicit_turn_validated", "INTEGER"],
+  // ─── Lucy v0.25 / L25-09 (audit increment) additive columns ────────────────
+  // 四轴分类结果（写路径与读路径共用同一分类函数；历史行 NULL）。
+  ["transport_sub_type", "TEXT"],
+  ["transport_status", "TEXT"],
+  ["authorization_status", "TEXT"],
+  ["execution_status", "TEXT"],
+  ["usability_status", "TEXT"],
+  // 汇总主状态八桶（派生视图；derivationVersion=v2p5-1）。
+  ["primary_status", "TEXT"],
+  ["derivation_version", "TEXT"],
+  // 送达状态（prepared / sent / acknowledged / unknown）。
+  ["delivery_status", "TEXT"],
+  // 空值原因（六值枚举）。
+  ["null_reason", "TEXT"],
+  // 旧 outcome 原样保留为 legacy_outcome；不作为新执行状态的证据。
+  ["legacy_outcome", "TEXT"],
+  // 摘要类型与版本（search_text / sql / result；v2p5-1）。
+  ["digest_kind", "TEXT"],
+  ["digest_version", "TEXT"],
+  ["preview_version", "TEXT"],
+  // 入口事件 ID（= 已提交 received 事件的 event_id）。
+  ["ingress_event_id", "TEXT"],
+  ["endpoint_id", "TEXT"],
+  // 账本提交序号（as-of S 视图用）。
+  ["ledger_seq", "INTEGER"],
+  // S03 标识字典补充列。
+  ["client_call_id", "TEXT"],
+  ["client_event_id", "TEXT"],
+  ["upstream_operation_id", "TEXT"],
+  ["rpc_request_id", "TEXT"],
+  ["retry_of", "TEXT"],
+  // S01(e) reported / observed / inferred 三族分离。
+  ["reported_role", "TEXT"],
+  ["observed_role_ids", "TEXT"],
+  ["observed_protocol", "TEXT"],
+  ["inferred_client", "TEXT"],
+  ["inference_method", "TEXT"],
+  ["inference_confidence", "TEXT"],
+  ["inference_rule_version", "TEXT"],
+  // S07 七分类（与 162 四维并行披露）。
+  ["error_category", "TEXT"]
 ] as const;
+export type AccessLogColumnName = (typeof ACCESS_LOG_COLUMNS)[number][0];
 const PERMISSION_SNAPSHOT_COLUMNS = [
   ["capability_digest", "TEXT"],
   ["tool_classification_version", "TEXT"]
@@ -457,11 +553,14 @@ async function getDb(): Promise<Database.Database> {
       ts                              TEXT NOT NULL,
       classification_version          TEXT NOT NULL,
       expected_revision               TEXT,
+      -- B25：as-of S 视图用 —— 该修订在 canonical ledger 的提交序号。
+      ledger_seq                      INTEGER,
       UNIQUE(original_turn_id, attribution_rule_version)
     );
     CREATE INDEX IF NOT EXISTS idx_ar_original_turn ON association_revisions(original_turn_id);
     CREATE INDEX IF NOT EXISTS idx_ar_ts ON association_revisions(ts);
   `);
+  ensureColumn(db, "association_revisions", "ledger_seq", "INTEGER");
   for (const [column, definition] of ACCESS_LOG_COLUMNS) {
     ensureColumn(db, "access_log", column, definition);
   }
@@ -487,6 +586,20 @@ async function getDb(): Promise<Database.Database> {
 
 let insertStmt: Database.Statement | null = null;
 let snapshotStmt: Database.Statement | null = null;
+
+// ─── B25：账本提交序号（as-of S 视图）───────────────────────────────────────
+//
+// `access_log.ledger_seq` / `association_revisions.ledger_seq` 记录该行写入时
+// canonical ledger 的**已提交上界**（`MAX(seq)`）。
+//
+// 口径说明（写入报告的「需要回写 Spec 的偏差清单」）：
+//   - 该口径是**保守上界**：行只在其 ledger_seq 之后才可能被后续账本事件改变，
+//     因此 as-of S 视图纳入 `ledger_seq <= S` 的行是安全的。
+//   - 它**不是**「该行所依赖的全部账本事件序号」：access_log 行在
+//     `response_prepared` 提交**之前**写入，因此行的 `delivery_status` 反映
+//     写入时刻的观测。精确的 as-of 视图仍需账本历史（Spec N18）。
+
+
 
 export function isTokenRevoked(tokenHash: string): Promise<boolean> {
   return getDb().then((database) => {
@@ -536,13 +649,30 @@ export async function writeLog(entry: AccessLogEntry): Promise<number> {
     });
   }
   if (!insertStmt) {
+    // B8: 补写此前「声明了但没写」的列 —— attempt_id / parent_attempt_id /
+    // event_type / instance_id / credential_principal_id / classification_version /
+    // attribution_rule_version。生产真实行此前这些列全为 NULL。
+    // B18: 四轴分类结果与主状态由**同一个**分类函数产出（写路径与读路径共用）。
     insertStmt = database.prepare(`
       INSERT INTO access_log
-        (ts, user_id, token_label, token_hash_prefix, lucy_session_id, lucy_turn_id, turn_attribution_mode, turn_attribution_confidence, turn_attribution_reason, association_status, original_turn_id, original_attribution_mode, original_association_status, original_attribution_confidence, original_reason, effective_turn_id, effective_attribution_mode, effective_association_status, effective_attribution_confidence, effective_reason, lucy_platform, client, client_version, client_ip, client_forwarded_for, user_agent, device_name, tool, tables, args_summary, query_hash, query_length, query_operation, query_preview, query_artifact_ref, generated_sql, outcome, error_detail, duration_ms, response_bytes, response_row_count, response_column_count, response_truncated, request_id, trace_id, role_ids, permission_snapshot_hash, effective_tables_count, decision_reason, policy_version, capability_digest, skill_uri, skill_version, skill_file_version, skill_action, skill_roles_allowed, matched_role_id, compiler_reason, failure_dimension, applied_version, applied_business_date, applied_value_kind, actor_id, actor_kind, wiki_injected_keys, wiki_versions, eval_mark, is_slow_call, slow_basis, result_empty, turn_wall_clock_ms, reported_client, reported_client_version)
+        (ts, user_id, token_label, token_hash_prefix, lucy_session_id, lucy_turn_id, turn_attribution_mode, turn_attribution_confidence, turn_attribution_reason, association_status, original_turn_id, original_attribution_mode, original_association_status, original_attribution_confidence, original_reason, effective_turn_id, effective_attribution_mode, effective_association_status, effective_attribution_confidence, effective_reason, lucy_platform, client, client_version, client_ip, client_forwarded_for, user_agent, device_name, tool, tables, args_summary, query_hash, query_length, query_operation, query_preview, query_artifact_ref, generated_sql, outcome, error_detail, duration_ms, response_bytes, response_row_count, response_column_count, response_truncated, request_id, trace_id, role_ids, permission_snapshot_hash, effective_tables_count, decision_reason, policy_version, capability_digest, skill_uri, skill_version, skill_file_version, skill_action, skill_roles_allowed, matched_role_id, compiler_reason, failure_dimension, applied_version, applied_business_date, applied_value_kind, actor_id, actor_kind, wiki_injected_keys, wiki_versions, eval_mark, is_slow_call, slow_basis, result_empty, turn_wall_clock_ms, reported_client, reported_client_version, attempt_id, parent_attempt_id, event_type, instance_id, credential_principal_id, classification_version, attribution_rule_version, transport_sub_type, transport_status, authorization_status, execution_status, usability_status, primary_status, derivation_version, delivery_status, null_reason, legacy_outcome, digest_kind, digest_version, preview_version, ingress_event_id, endpoint_id, ledger_seq, client_call_id, client_event_id, upstream_operation_id, rpc_request_id, retry_of, reported_role, observed_role_ids, observed_protocol, inferred_client, inference_method, inference_confidence, inference_rule_version, error_category)
       VALUES
-        (@ts, @userId, @tokenLabel, @tokenHashPrefix, @lucySessionId, @lucyTurnId, @turnAttributionMode, @turnAttributionConfidence, @turnAttributionReason, @associationStatus, @originalTurnId, @originalAttributionMode, @originalAssociationStatus, @originalAttributionConfidence, @originalReason, @effectiveTurnId, @effectiveAttributionMode, @effectiveAssociationStatus, @effectiveAttributionConfidence, @effectiveReason, @lucyPlatform, @client, @clientVersion, @clientIp, @clientForwardedFor, @userAgent, @deviceName, @tool, @tables, @argsSummary, @queryHash, @queryLength, @queryOperation, @queryPreview, @queryArtifactRef, @generatedSql, @outcome, @errorDetail, @durationMs, @responseBytes, @responseRowCount, @responseColumnCount, @responseTruncated, @requestId, @traceId, @roleIds, @permissionSnapshotHash, @effectiveTablesCount, @decisionReason, @policyVersion, @capabilityDigest, @skillUri, @skillVersion, @skillFileVersion, @skillAction, @skillRolesAllowed, @matchedRoleId, @compilerReason, @failureDimension, @appliedVersion, @appliedBusinessDate, @appliedValueKind, @actorId, @actorKind, @wikiInjectedKeys, @wikiVersions, @evalMark, @isSlowCall, @slowBasis, @resultEmpty, @turnWallClockMs, @reportedClient, @reportedClientVersion)
+        (@ts, @userId, @tokenLabel, @tokenHashPrefix, @lucySessionId, @lucyTurnId, @turnAttributionMode, @turnAttributionConfidence, @turnAttributionReason, @associationStatus, @originalTurnId, @originalAttributionMode, @originalAssociationStatus, @originalAttributionConfidence, @originalReason, @effectiveTurnId, @effectiveAttributionMode, @effectiveAssociationStatus, @effectiveAttributionConfidence, @effectiveReason, @lucyPlatform, @client, @clientVersion, @clientIp, @clientForwardedFor, @userAgent, @deviceName, @tool, @tables, @argsSummary, @queryHash, @queryLength, @queryOperation, @queryPreview, @queryArtifactRef, @generatedSql, @outcome, @errorDetail, @durationMs, @responseBytes, @responseRowCount, @responseColumnCount, @responseTruncated, @requestId, @traceId, @roleIds, @permissionSnapshotHash, @effectiveTablesCount, @decisionReason, @policyVersion, @capabilityDigest, @skillUri, @skillVersion, @skillFileVersion, @skillAction, @skillRolesAllowed, @matchedRoleId, @compilerReason, @failureDimension, @appliedVersion, @appliedBusinessDate, @appliedValueKind, @actorId, @actorKind, @wikiInjectedKeys, @wikiVersions, @evalMark, @isSlowCall, @slowBasis, @resultEmpty, @turnWallClockMs, @reportedClient, @reportedClientVersion, @attemptId, @parentAttemptId, @eventType, @instanceId, @credentialPrincipalId, @classificationVersion, @attributionRuleVersion, @transportSubType, @transportStatus, @authorizationStatus, @executionStatus, @usabilityStatus, @primaryStatus, @derivationVersion, @deliveryStatus, @nullReason, @legacyOutcome, @digestKind, @digestVersion, @previewVersion, @ingressEventId, @endpointId, @ledgerSeq, @clientCallId, @clientEventId, @upstreamOperationId, @rpcRequestId, @retryOf, @reportedRole, @observedRoleIds, @observedProtocol, @inferredClient, @inferenceMethod, @inferenceConfidence, @inferenceRuleVersion, @errorCategory)
     `);
   }
+  // B18: 生产写路径接入 v2p5-1 分类（读路径共用同一函数）。
+  const classified = classifyAuditEvent({
+    tool: entry.tool,
+    outcome: entry.outcome,
+    decisionReason: entry.decisionReason,
+    failureDimension: entry.failureDimension,
+    responseRowCount: entry.responseRowCount,
+    responseBytes: entry.responseBytes,
+    errorDetail: entry.errorDetail,
+    eventTypeHint: entry.eventType,
+    authorizationStatusHint: entry.associationStatus === "conflict" ? "unknown" : undefined,
+    evidence: entry.executionEvidence
+  });
   const result = insertStmt.run({
     ts: entry.ts,
     userId: entry.userId,
@@ -618,7 +748,48 @@ export async function writeLog(entry: AccessLogEntry): Promise<number> {
     isSlowCall: entry.isSlowCall === true ? 1 : 0,
     slowBasis: entry.slowBasis ?? null,
     resultEmpty: entry.resultEmpty === true ? 1 : 0,
-    turnWallClockMs: entry.turnWallClockMs ?? null
+    turnWallClockMs: entry.turnWallClockMs ?? null,
+    // ─── B8：此前声明但未写的列 ───────────────────────────────────────────
+    attemptId: entry.attemptId ?? null,
+    parentAttemptId: entry.parentAttemptId ?? null,
+    eventType: entry.eventType ?? classified.eventType,
+    instanceId: entry.instanceId ?? null,
+    credentialPrincipalId: entry.credentialPrincipalId ?? null,
+    classificationVersion: entry.classificationVersion ?? CLASSIFICATION_VERSION_V2P5,
+    attributionRuleVersion: entry.attributionRuleVersion ?? null,
+    // ─── B18：分类与派生结果（写 / 读路径同源）────────────────────────────
+    transportSubType: classified.transportSubType,
+    transportStatus: classified.transportStatus,
+    authorizationStatus: classified.authorizationStatus,
+    executionStatus: classified.executionStatus,
+    usabilityStatus: classified.usabilityStatus,
+    primaryStatus: classified.primaryStatus,
+    derivationVersion: classified.derivationVersion,
+    deliveryStatus: classified.deliveryStatus,
+    nullReason: classified.nullReason,
+    legacyOutcome: entry.outcome,
+    errorCategory: classified.errorCategory ?? null,
+    // ─── U11：摘要 / 预览版本 ────────────────────────────────────────────
+    digestKind: entry.digestKind ?? null,
+    digestVersion: entry.digestVersion ?? (entry.digestKind ? DIGEST_VERSION_V2P5 : null),
+    previewVersion: entry.previewVersion ?? null,
+    // ─── S02 / S03：入口与标识 ───────────────────────────────────────────
+    ingressEventId: entry.ingressEventId ?? null,
+    endpointId: entry.endpointId ?? null,
+    ledgerSeq: entry.ledgerSeq ?? (await resolveLedgerSeq()),
+    clientCallId: entry.clientCallId ?? null,
+    clientEventId: entry.clientEventId ?? null,
+    upstreamOperationId: entry.upstreamOperationId ?? null,
+    rpcRequestId: entry.rpcRequestId ?? null,
+    retryOf: entry.retryOf ?? null,
+    // ─── S01(e)：三族分离 ────────────────────────────────────────────────
+    reportedRole: entry.reportedRole ?? null,
+    observedRoleIds: entry.observedRoleIds ? JSON.stringify(entry.observedRoleIds) : null,
+    observedProtocol: entry.observedProtocol ?? null,
+    inferredClient: entry.inferredClient ?? null,
+    inferenceMethod: entry.inferenceMethod ?? null,
+    inferenceConfidence: entry.inferenceConfidence ?? null,
+    inferenceRuleVersion: entry.inferenceRuleVersion ?? null
   });
   return Number(result.lastInsertRowid);
 }
@@ -626,6 +797,122 @@ export async function writeLog(entry: AccessLogEntry): Promise<number> {
 /** Ensures the idempotent access-log migration completed before returning Skill bodies. */
 export async function ensureSkillAuditReady(): Promise<void> {
   await getDb();
+}
+
+// ─── B16 / B24：预算四维的持久化存储 ────────────────────────────────────────
+//
+// 预算计数器此前**纯内存**，进程重启即清零（E-8）→ 重启即可绕过预算。
+// 现在落库；`question-experience.ts` 的 `BudgetPersistence` 接口消费它。
+//
+// 四维：业务调用数 / 尝试次数 / 墙钟起点 / 并发占用峰值 + 当前值。
+// 重连与省略 `begin_question` **不重置**任何一档（作用域键由调用方决定）。
+
+const BUDGET_STATE_TABLE = `
+CREATE TABLE IF NOT EXISTS question_budget_state (
+  scope_key         TEXT PRIMARY KEY,
+  started_at        INTEGER NOT NULL,
+  origin_started_at INTEGER NOT NULL,
+  calls             INTEGER NOT NULL DEFAULT 0,
+  continuations     INTEGER NOT NULL DEFAULT 0,
+  attempts          INTEGER NOT NULL DEFAULT 0,
+  peak_concurrency  INTEGER NOT NULL DEFAULT 0,
+  current_concurrency INTEGER NOT NULL DEFAULT 0,
+  updated_at        INTEGER NOT NULL
+);
+`;
+
+export type PersistedBudgetState = {
+  startedAt: number;
+  originStartedAt: number;
+  calls: number;
+  continuations: number;
+  attempts: number;
+  peakConcurrency: number;
+  currentConcurrency: number;
+};
+
+let budgetTableReady = false;
+
+async function ensureBudgetStateTable(database: Database.Database): Promise<void> {
+  if (budgetTableReady) return;
+  database.exec(BUDGET_STATE_TABLE);
+  budgetTableReady = true;
+}
+
+/** 读取某个作用域的预算状态；不存在返回 null。 */
+export async function loadBudgetState(scopeKey: string): Promise<PersistedBudgetState | null> {
+  const database = await getDb();
+  await ensureBudgetStateTable(database);
+  const row = database
+    .prepare(
+      `SELECT started_at, origin_started_at, calls, continuations, attempts,
+              peak_concurrency, current_concurrency
+         FROM question_budget_state WHERE scope_key = ?`
+    )
+    .get(scopeKey) as
+    | {
+        started_at: number;
+        origin_started_at: number;
+        calls: number;
+        continuations: number;
+        attempts: number;
+        peak_concurrency: number;
+        current_concurrency: number;
+      }
+    | undefined;
+  if (!row) return null;
+  return {
+    startedAt: row.started_at,
+    originStartedAt: row.origin_started_at,
+    calls: row.calls,
+    continuations: row.continuations,
+    attempts: row.attempts,
+    peakConcurrency: row.peak_concurrency,
+    currentConcurrency: row.current_concurrency
+  };
+}
+
+/** 持久化预算状态（upsert）。 */
+export async function saveBudgetState(scopeKey: string, state: PersistedBudgetState): Promise<void> {
+  const database = await getDb();
+  await ensureBudgetStateTable(database);
+  database
+    .prepare(
+      `INSERT INTO question_budget_state
+         (scope_key, started_at, origin_started_at, calls, continuations, attempts,
+          peak_concurrency, current_concurrency, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(scope_key) DO UPDATE SET
+         started_at = excluded.started_at,
+         origin_started_at = excluded.origin_started_at,
+         calls = excluded.calls,
+         continuations = excluded.continuations,
+         attempts = excluded.attempts,
+         peak_concurrency = excluded.peak_concurrency,
+         current_concurrency = excluded.current_concurrency,
+         updated_at = excluded.updated_at`
+    )
+    .run(
+      scopeKey,
+      state.startedAt,
+      state.originStartedAt,
+      state.calls,
+      state.continuations,
+      state.attempts,
+      state.peakConcurrency,
+      state.currentConcurrency,
+      Date.now()
+    );
+}
+
+/** 列出所有已知预算作用域键（恢复 / 重建用）。 */
+export async function listBudgetScopes(): Promise<string[]> {
+  const database = await getDb();
+  await ensureBudgetStateTable(database);
+  const rows = database
+    .prepare(`SELECT scope_key FROM question_budget_state ORDER BY scope_key ASC`)
+    .all() as Array<{ scope_key: string }>;
+  return rows.map((row) => row.scope_key);
 }
 
 export async function writeAuthFailureLog(entry: AuthFailureLogEntry): Promise<number> {

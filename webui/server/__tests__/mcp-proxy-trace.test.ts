@@ -7,13 +7,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const testState = vi.hoisted(() => ({
   projectRoot: "",
-  writeLogMock: vi.fn(() => Promise.resolve()),
-  writeAccessLogSourcesMock: vi.fn(() => Promise.resolve()),
+  // The argument shapes are declared explicitly: an argument-less `vi.fn(() => ...)`
+  // infers an empty parameter tuple, so `mock.calls[i][0]` would not type-check.
+  writeLogMock: vi.fn((_entry: { argsSummary?: unknown }) => Promise.resolve()),
+  writeAccessLogSourcesMock: vi.fn((_entries: unknown[]) => Promise.resolve()),
   isTokenRevokedMock: vi.fn(() => false),
+  // The audit-db getter is mocked so the test can stub a rejection on it
+  // (`mockRejectedValueOnce`).
+  getAuditDbMock: vi.fn(() => Promise.resolve({ name: "<test>" })),
   // Captures every recordMcpToolsCall invocation for assertions. The proxy
   // would otherwise write to the real `.ktx-ui/audit.sqlite`, which we never
   // want to touch from tests.
-  recordMcpToolsCallMock: vi.fn(() => ({ callEventId: 1, policyEventId: 2 }))
+  recordMcpToolsCallMock: vi.fn(
+    (
+      _event: string,
+      _input: { status?: string; toolName?: string; policyDecision?: { allowed?: boolean; reason?: string } }
+    ) => ({ callEventId: 1, policyEventId: 2 })
+  )
 }));
 
 // See `mcp-proxy-acl.test.ts`: the project root is redirected through
@@ -29,7 +39,7 @@ vi.mock("../proxy/audit.js", () => ({
 // without touching any real SQLite file. `getAdminAuditDb` returns a dummy
 // handle; `recordMcpToolsCall` records the call.
 vi.mock("../admin/audit.js", () => ({
-  getAuditDb: vi.fn(() => Promise.resolve({ name: "<test>" }))
+  getAuditDb: testState.getAuditDbMock
 }));
 vi.mock("../trace/evidence.js", async () => {
   const actual = await vi.importActual<typeof import("../trace/evidence.js")>("../trace/evidence.js");
@@ -189,9 +199,8 @@ describe("MCP proxy — Trace / Evidence Kernel integration (202608-01)", () => 
   });
 
   it("does not crash if the audit DB getter rejects", async () => {
-    const audit = await import("../admin/audit.js");
-    const original = audit.getAuditDb.getMockImplementation();
-    vi.mocked(audit.getAuditDb).mockRejectedValueOnce(new Error("trace db unavailable"));
+    const original = testState.getAuditDbMock.getMockImplementation();
+    testState.getAuditDbMock.mockRejectedValueOnce(new Error("trace db unavailable"));
 
     await withProxy(async (port) => {
       const res = await callTool(port, TOKEN, "trace-fail-1", "kx_catalog", {});
@@ -203,9 +212,9 @@ describe("MCP proxy — Trace / Evidence Kernel integration (202608-01)", () => 
 
     // restore for other tests
     if (original) {
-      vi.mocked(audit.getAuditDb).mockImplementation(original);
+      testState.getAuditDbMock.mockImplementation(original);
     } else {
-      vi.mocked(audit.getAuditDb).mockResolvedValue({ name: "<test>" } as never);
+      testState.getAuditDbMock.mockResolvedValue({ name: "<test>" } as never);
     }
   });
 

@@ -151,26 +151,31 @@ describe("shared single-instance publish coordinator", () => {
     expect(await readPublishCoordinatorLock(projectRoot)).toBeNull();
   });
 
-  it("reclaims a lock abandoned by a crashed process once it goes stale", async () => {
+  it("does NOT reclaim a live holder just because the lock is old", async () => {
+    // A long-running publish is still a live holder. Age alone must not let a
+    // second writer into the critical section and overwrite its targets.
     const staleAt = new Date(Date.now() - 60 * 60 * 1000).toISOString();
     await writeRawLock({
       kind: "batch_import",
-      operationId: "crashed-run",
+      operationId: "long-running-run",
       acquiredAt: staleAt,
       pid: process.pid
     });
 
-    const result = await withPublishCoordinator(
-      "role_policy_save",
-      async () => "reclaimed",
-      { projectRoot, staleAfterMs: 30 * 60 * 1000 }
-    );
+    await expect(
+      withPublishCoordinator("role_policy_save", async () => "reclaimed", {
+        projectRoot,
+        staleAfterMs: 30 * 60 * 1000
+      })
+    ).rejects.toThrowError(PublishCoordinatorBusyError);
 
-    expect(result).toBe("reclaimed");
-    expect(await readPublishCoordinatorLock(projectRoot)).toBeNull();
+    const holder = await readPublishCoordinatorLock(projectRoot);
+    expect(holder?.operationId).toBe("long-running-run");
   });
 
   it("reclaims a lock whose owning process no longer exists", async () => {
+    // A crashed process leaves a lock behind. The pid is gone, so the lock is
+    // reclaimed immediately — no waiting for the stale window.
     await writeRawLock({
       kind: "manual_reindex",
       operationId: "dead-pid-run",
@@ -185,6 +190,25 @@ describe("shared single-instance publish coordinator", () => {
     );
 
     expect(result).toBe("reclaimed-dead-pid");
+  });
+
+  it("reclaims an old lock whose owning process cannot be determined", async () => {
+    // A lock written by a build that predates the pid field has no owner to
+    // check; age is then the only available signal.
+    const staleAt = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    await writeRawLock({
+      kind: "batch_import",
+      operationId: "ownerless-run",
+      acquiredAt: staleAt
+    });
+
+    const result = await withPublishCoordinator(
+      "role_policy_save",
+      async () => "reclaimed-ownerless",
+      { projectRoot, staleAfterMs: 30 * 60 * 1000 }
+    );
+
+    expect(result).toBe("reclaimed-ownerless");
   });
 
   it("reports busy for a lock held by a live foreign process", async () => {

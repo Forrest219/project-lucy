@@ -192,8 +192,10 @@ describe("v2.0 OIDC reservation", () => {
     expect(claims.v).toBe(2);
     expect(claims).not.toHaveProperty("logoutHint");
     expect(JSON.stringify(claims)).not.toContain("id-token-hint-value");
-    // Audit-trust T03 already migrated the shared security schema to v2. OIDC reservation adds no migration.
-    expect(SECURITY_SCHEMA_VERSION).toBe(2);
+    // Audit-trust T03 migrated the shared security schema to v2; Lucy v0.25 /
+    // L25-09 B26 migrated it to v3 (audit increment additive columns, including
+    // `endpoint_id`). OIDC reservation itself adds no migration.
+    expect(SECURITY_SCHEMA_VERSION).toBe(3);
   });
 
   it("reports only local login and refuses a password for an OIDC-only account", async () => {

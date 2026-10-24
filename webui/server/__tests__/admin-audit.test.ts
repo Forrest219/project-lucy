@@ -254,11 +254,17 @@ describe("GET /api/admin/audit", () => {
       expect(filtered.body.data.entries[0].requestId).toBe("business-1");
 
       const sources = await request(app.server).get("/api/admin/audit/sources").expect(200);
+      // Lucy v0.25 / P0-4 §3.4 (E5): a table is identified by the full
+      // connection / schema / table triple. This call has no recorded
+      // `access_log_sources` row, so the connection is explicitly `unknown`
+      // instead of a fabricated one — two connections may hold the same
+      // schema.table, so a single flat name would merge them.
       expect(sources.body.data.topTables).toContainEqual({
-        table: "dataforai.kx_fact_financial_amount",
+        table: "unknown.dataforai.kx_fact_financial_amount",
         calls: 1,
         denied: 0
       });
+      expect(sources.body.data.connections).toContainEqual({ connection: "unknown", calls: 1 });
     } finally {
       await app.close();
     }
@@ -966,7 +972,13 @@ describe("GET /api/admin/audit/turns", () => {
         .expect(200);
       const lines = exported.text.replace(/^\uFEFF/, "").trim().split("\n");
       const headers = parseCsvLine(lines[0]!);
-      expect(headers.slice(-2)).toEqual(["reported_client", "reported_client_version"]);
+      // B27：末尾追加了 v2p5-1 additive 列（八桶主状态等），`reported_client`
+      // 不再是最后两列，但**仍然存在**且顺序不变。
+      expect(headers).toContain("reported_client");
+      expect(headers).toContain("reported_client_version");
+      expect(headers.indexOf("reported_client")).toBeLessThan(
+        headers.indexOf("reported_client_version")
+      );
       expect(headers.indexOf("client")).toBeLessThan(headers.indexOf("reported_client"));
       const cells = parseCsvLine(lines[1]!);
       expect(cells[headers.indexOf("client")]).toBe("workbuddy");

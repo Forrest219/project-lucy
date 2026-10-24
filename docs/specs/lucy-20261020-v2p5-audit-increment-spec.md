@@ -55,6 +55,10 @@
 
 **术语级约束**："证据校验"不得宣称"防篡改（本地 hash 自检）"或"独立签名"（术语标准 §3）；导出物的完整性宣称只能写"清单验证通过/失败"。
 
+**显式绑定（2026-10-25 实施回写，N5）**：`combinedComplete` 的判定式**就是** audit-trust R1 验收矩阵判据 #6 的严格三项 AND —— `combinedComplete = scopeComplete AND fileHashOk AND relationCheckOk`，**不得**增设第四个合取项。若需新增完整性闸门（如 as-of 上界），必须**折进已有因子**（本轮做法：折进 `scopeComplete` —— as-of 边界无法落到行上即「范围不可证明完整」→ `scopeComplete=false` → 正式导出 fail-closed），**不得**改写 `combinedComplete` 的合取项个数；否则在缺 `ledger_seq` 列的库上，三项皆为 true 而 combined 为 false，冻结判据 #6 被判 fail，即**修复本身破坏冻结判据**（台账 **D-12**，`docs/qa/security-findings.yaml`，status `fixed`）。§8.2(b) 的六项检查与 R1 判据 #6 **不可互相替代、也不可互相覆盖**：六项检查不可近似替代关联质量或文件完整性（同上表「计量口径 / 完整性维度」行），R1 判据 #6 则是 **manifest 契约的冻结不变式**。
+
+> 实施回写见 §18（2026-10-25，N5）：`combinedComplete` 判定式与 R1 判据 #6 绑定，合取项个数不得改写。
+
 ## 3. 历史样本与冲突登记（只读基线）
 
 以下数值为 2026-10-20 导出的固定历史样本，是 S08 回放的期望基线；任何实现不得要求修改这些数值来"通过"验收。
@@ -71,6 +75,8 @@
 | request_id 复用事实 | 会话 9d2cb7a7 内 request_id 1→{2382,2451}、2→{2383,2452}、3→{2405,2453}、0→{2380,2454}，跨批次顺序复用 | E02+E03 |
 
 **修正原则**（沿用报告 v1.1）：保留原事件与原归档；修正以追加记录（带原因、证据引用、规则版本）生效，不覆盖原记录；证据不足显示 unknown，不据此认定能力存在或不存在。
+
+> 实施回写见 §18（2026-10-25，N22）：「归属统计」行的分母是**工具调用集合（175）**，不是调用流水（177）；原表数值不改，仅补记分母口径。
 
 ## 4. S01 事件状态与响应证据契约
 
@@ -109,6 +115,8 @@ primaryStatus ∈ { succeeded, failed, denied, budget_stopped, cancelled, timeou
 
 同一纳入集合内每个**计量单元**有且仅有一个主状态；生命周期多条账本事件不能重复增加工具调用数（单位见 §8.2）。API、UI、CSV、证据包调用同一版本分类函数。所有八个桶均须有断言，合计等于集合总数；汇总与明细须使用相同账本截止位置 S、筛选、计量单位与规则版本。历史 Codex 的 31 条协议记录原始 outcome 为 23+3+4+1，禁止漏掉 budget_stop，也禁止把这组原始数直接称为已核实的执行状态。
 
+> 实施回写见 §18（2026-10-25，N16、N23、N24）：第 1 行的 `unknown+conflict` 判定条件、第 2 行的 execution 轴取值约定补记；`budget_stop` 不再映射为 `execution=interrupted`。
+
 **（b）authorization / execution / delivery 三视图**
 
 | 视图 | 取值 | 观察点 | 禁止 |
@@ -116,6 +124,8 @@ primaryStatus ∈ { succeeded, failed, denied, budget_stopped, cancelled, timeou
 | authorization | allowed / denied / not_evaluated / unknown | Lucy 裁决时刻 | 把预算终止记为授权拒绝（沿用 20261019 §7） |
 | execution | succeeded / failed / not_executed / interrupted / unknown | 上游或本地执行 | HTTP 200 推定执行成功 |
 | delivery | 本期写入 prepared / sent / acknowledged / unknown；unacknowledged 仅保留值域、不写入 | prepared=持久响应凭据；sent=实际发送观测；acknowledged=已接通 dogfood 适配器提交并通过关联校验的 result_received | sent 不证明用户收到；无回执保留已知 prepared/sent，接收观察为 unknown；无 ACK 超时，不推导 unacknowledged |
+
+> 实施回写见 §18（2026-10-25，N16、N17、N24）：`acknowledged` 路径此前不可达（可见父集合恒为空），本轮已打通；预算终止的 execution / authorization 轴取值补记为 `not_executed` / `not_evaluated`。
 
 **（c）args_summary / query_preview / generated_sql 拆分与省略规则**（对应历史缺陷：2455）
 
@@ -170,6 +180,8 @@ A05（协议成功不等于执行成功）、A06（八桶可达与闭合）、A0
 ### 4.8 裁决状态
 
 U1/U2/U10/U11 已冻结（§15）：ACK 入口 + 1 个 dogfood 适配器，有效回执可写 acknowledged，unacknowledged 本期不写；空值六值枚举；完整派生规则 v2p5-1；新增预览上限 500 个 Unicode 码点、args_summary 单值 512 字节、digest/preview 版本 v2p5-1。
+
+> 实施回写见 §18（2026-10-25，N17）：U1 的「有效回执可写 acknowledged」此前无实现载体（可见父集合恒为空集），本轮已打通并保持 U1 冻结值不变。
 
 ## 5. S02 入口持久化与恢复契约
 
@@ -238,6 +250,8 @@ U3 已由 Kimi 裁决（§15）：本期仅阻断、无缓冲；20261018 §5.1 �
 - 重连记录 reconnect_generation；显式 question_id 仍须通过既有同主体/凭证/会话边界校验。跨会话延续需可验证的续接关系；仅凭 question_id 相同或时间接近不能自动继承。续接机制按 §15-U12 冻结值执行。
 - 重连本身不新增 attempt；重连后重新发送并实际准入执行的请求必须有独立 attempt，除非既有幂等执行契约已证明只是原尝试续接。不能把“重连”当去重证据。
 - 上游不支持 ID 需要能力证据才记 not_supported；尚未取得或历史未知分别按空值原因表达。不可观测边界单列，禁止虚增覆盖率。
+
+> 实施回写见 §18（2026-10-25，N10、N21）：标识列此前「已声明但未写入」（生产真实行恒为 NULL），本轮已补写 INSERT 列表；`ACCESS_LOG_COLUMNS` 原为双份重复常量，本轮收敛为单一来源。
 
 ### 6.4 验收
 
@@ -338,6 +352,8 @@ U5 语义已冻结（§15）：聚类仅生成 candidate、none/low 置信；数
 
 旧 complete/combined_complete 保持原版本定义；新增 auditCoverage 六项结果不静默覆盖旧字段。若要提供新综合结论，须版本化定义组合规则并保留每项状态；unknown 不合成为 pass。
 
+> 实施回写见 §18（2026-10-25，N20、N5）：检查 1「入口接收覆盖」的 D 取 canonical ledger 的 `received` 事件 ID ∪ `auth_failure_log` 拒绝记录 ID（裁决 D2）；`combinedComplete` 的判定式由 §2 显式绑定到 audit-trust R1 判据 #6，与本节六项检查互不替代。
+
 **（c）对账生命周期与差异分类**
 
 ```
@@ -382,11 +398,15 @@ exportId, exportedAt, watermarkSeq(S), 对账评估时点(cutoff_at), 时间范�
 exported_by, export_reason, export_approval_ref（无值按六值 null_reason 记录原因）
 ```
 
+> 实施回写见 §18（2026-10-25，N13）：`watermarkSeq(S)` 的来源此前取投影自身序号，与本节「S 为账本已提交上界」冲突；本轮改为由 canonical ledger 已提交上界供给，未提供时正式导出 fail-closed。
+
 **（b）版本链与封存三件套**
 
 - 补包、纠错、重导出生成**新版本** exportId 并关联前版；旧版本事件集合不得漂移（历史反例：总清单 58/65 通过与 4 处哈希不一致并存——分包清单与总清单是不同层次，分别验证、分别记录）。
 - 封存三件套分开定义：**清单**（覆盖范围与哈希）、**验证步骤**（如何重算）、**来源声明**（谁导出、依据什么授权）分别落字段；同目录可重写的清单不被当作不可抵赖证明。
 - 相同截止位置 + 相同筛选/协议规则/计量单位/规则版本 ⇒ 相同事件集合（A10）；新增握手不改变旧包（A11）；删除/替换文件可被清单验证检测。
+
+> 实施回写见 §18（2026-10-25，N15）：「删除/替换文件可被清单验证检测」此前不可能成立 —— 校验只验哈希字符串长度、不重算内容；本轮改为重算文件内容 sha256 并比对。
 
 **（c）跨文件关系声明**
 
@@ -435,6 +455,8 @@ U7 已由 Kimi 裁决（§15）：本期仅来源声明（manifest 增补 export
 - **预算四维计量**：业务调用数、尝试次数、墙钟、并发占用分别记录；**重连与省略 begin_question 不得重置任何一档预算**；续跑保留终止原因与 continuable 关系（2642 样本）。
 - **禁止虚构**：本地未发出（客户端校验失败）不得记为服务端调用；本地失败与服务端失败分别入账（S05 差异分类）。
 
+> 实施回写见 §18（2026-10-25，N19）：无 `turnId` 的请求此前直接放行且不计预算、预算计数器纯内存重启即清零；本轮按凭证 / 会话级兜底作用域限流并落库持久化。
+
 ### 10.4 验收
 
 A05（错误码保留、成功率不误增）、A06 预算部分；A12 回归样本含 row_count 提示闭环与 2642 续跑关系。
@@ -443,6 +465,8 @@ A05（错误码保留、成功率不误增）、A06 预算部分；A12 回归样
 
 - 失败与恢复：预算计数器持久化失败按 S02 语义阻断（503 AUDIT_UNAVAILABLE），不得无预算放行；恢复后以账本为准幂等重建故障期间的计数，禁止凭内存计数继续。
 - 历史兼容：既有 budget_stop 与可继续语义不变（Spec 162）；failure_dimension 四值不迁移，七分类以 classificationVersion 并行披露。
+
+> 实施回写见 §18（2026-10-25，N19）：预算计数已改为以持久化状态为准；持久层读取失败独立为 `question_budget_unavailable` → HTTP 503，**不记** `budget_stop`，不得被读回为合法预算终止凭据。
 
 ### 10.6 裁决状态
 
@@ -498,6 +522,8 @@ onIngress(request, endpointId):
 ```
 
 每次 durableAppend 使用独立账本 event_id，并引用同一 operation/attempt；durableFailureOrBlock 也必须处理自身提交失败，不能发送无持久凭据的成功内容。沿用现有异常响应、流式中止与告警行为；U3 已冻结本期无缓冲，未来引入须另立 spec 批准。
+
+> 实施回写见 §18（2026-10-25，N20）：认证 / 路径 / Origin 层拒绝发生在任何账本写入之前，从不进 canonical ledger；该类请求改以 `auth_failure_log` 作为独立入口证据参与覆盖分母（裁决 D2）。
 
 ### 12.2 执行、终态与恢复（S01/S02/S07）
 
@@ -560,6 +586,8 @@ reconcile(fixedWatermark, independentlyDeclaredSets):
   never forcePair(unmatched)               # Claude 差额样本保持待核验
 ```
 
+> 实施回写见 §18（2026-10-25，N23）：首分支 `facts.unresolvedContradiction` 原无判定契约，本轮补记可执行判据（互斥闭合凭据 / 无法证明时序 / 闭合凭据与取消或超时并存且先后不可证）。
+
 ### 12.4 归属与修订（S04/S03）
 
 ```text
@@ -594,6 +622,8 @@ onExport(filter):
 ```
 
 若底层投影只保留当前值而无法计算 as-of S，必须沿用可保留历史/重建的账本与冻结设计解决，不能仅给行加 seq 过滤便声称修订视图一致。诊断 partial 包须与正式导出区分，列出实际上界及缺失集合；不得携带“完整”结论。
+
+> 实施回写见 §18（2026-10-25，N13、N14、N18）：v2 导出此前从投影自身取 S 且无 HTTP 路由（仅测试可达），本轮已修正并接入正式路由；投影只保留最新状态的限制仍未消除，as-of S 的实现路径与口径见 §18。
 
 ---
 
@@ -753,6 +783,158 @@ A01↔SEC-19-V05；A02↔SEC-19-V02/V04；A03↔SEC-19-V06 + 幂等投影；A04�
 **责任与变更控制**：Kimi 为原始起草/裁决人，Codex 为原授权修订、审阅和冻结执行人。以后改变冻结契约、参数或目标集合须记录理由、受影响条款/验收、批准记录及新 spec/profile 版本；纯排版更正不改变契约。U5 数值标定纳入后续实施 Plan，不能借此改变候选/证据语义。没有尚待选择的 U 项。
 
 **验证范围**：本轮执行术语门禁、差异/文档结构及冻结值一致性检查；其他任务并行修改的部署文件不纳入本轮差异，也未被本轮回写；历史 177/192/175 与旧 outcome 110/23/43/1 保持不变。A01–A12 及 U9 两阶段运行时验收仍为未执行，现有实现不因设计冻结自动获得通过状态。未修改历史证据或其他工作区文件。
+
+---
+
+## 18. 实施回写（2026-10-25，Lucy v0.25 W5）
+
+### 18.0 本节性质与变更控制
+
+本节记录 **Lucy v0.25 实施期（W1–W4）实证出的 14 条文档偏差**及其处置，逐条给出「偏差事实 + 证据」「本次裁决／处理」「受影响条款」「是否改变冻结契约」四要素。编号 N5、N10、N13–N24 沿用实施计划 `docs/plans/2026-10-25-lucy-v0.25-p0-implementation-plan.md` §9 的偏差清单编号。
+
+**本节不修改 §1–§17 的冻结正文**，原条款文本保持可追溯；受影响条款处只加锚点注记（`> 实施回写见 §18（2026-10-25）`）。文档头部元数据表不变。
+
+**变更控制**：
+
+- spec 版本仍为 **v1.0-frozen**，audit-profile 仍为 **v2p5-1**；本节**不改变冻结契约**。多数条目是实现向冻结契约对齐（原实现违约），正文无需改动。
+- N5、N22、N23、N24 属冻结文本的**消歧与显式绑定**：只在冻结文本已隐含的语义范围内补记可执行判据或口径，不新增状态、不新增取值、不改判定方向、不改任何数值。若后续认定某条超出「消歧」范围，须按 §17「责任与变更控制」另立 spec/profile 版本并记录批准来源，不得以本节为依据原地改写冻结条款。
+- **验收状态一律保持「未执行」**：A01–A12（§13.2）全部子例仍为未执行；§17 的「A01–A12 及 U9 两阶段运行时验收仍为未执行」结论不变。本节**不构成验收通过结论**，也**不构成客户交付通过结论**；实现落地只说明契约已有载体，不等于该场景已被验证。
+- 本节引用的代码位置以**符号名**为主、行号为当前复核位置；源码后续变动时以符号名为准。
+
+### 18.1 §2 唯一事实源与完整性判定式（N5）
+
+#### N5 — `combinedComplete` 的判定式缺显式绑定
+
+- **偏差事实**：§2「生效关系与唯一事实源」表「计量口径 / 完整性维度」行写明「四子域与既有 complete/combined_complete 含义不变」，但**没有写明 `combinedComplete` 的确切判定式**。该判定式实为 audit-trust R1 验收矩阵的**冻结判据 #6**：`combinedComplete = scopeComplete AND fileHashOk AND relationCheckOk`（严格三项 AND，不含第四项）。本轮实施 D-10 修复时，最初把 as-of 上界闸门写成 `combinedComplete` 的第四个合取项（`&& asOfBoundEnforced`），导致 audit-trust manifest conformance 用例 2 条红；更严重的是在「无 `ledger_seq` 列」的库上，三项皆为 true 而 combined 为 false，**冻结判据 #6 被自身的修复判为 fail**。
+- **证据**：判据文本见 `scripts/audit-trust/2026-10-19-r1-acceptance-matrix.mjs` 的 `EXPECTED_CRITERIA_NAMES`（第 6 条，`"combinedComplete = scopeComplete AND fileHashOk AND relationCheckOk"`）；配套 `scripts/audit-trust/__tests__/2026-10-19-r1-acceptance-matrix.test.mjs` 有**双向防漂移守卫测试**（判据集合任一方向的增删改都会失败）。台账见 `docs/qa/security-findings.yaml` 条目 **D-12**（severity P1，status `fixed`，`spec: "audit-trust R1 验收矩阵判据 #6 / L25-09 §12.5"`；`fixedIn` 待回填 SHA）。
+- **本次裁决／处理**：**不改冻结判据、不改判据文本**。as-of 上界闸门折进已有因子 `scopeComplete`（as-of 边界无法落到行上 → 范围不可证明完整 → `scopeComplete=false` → 正式导出 fail-closed），使 `combinedComplete ≡ scope && fileHash && relation` 由**构造**保证、对任何库都成立。落点见 `webui/server/admin/audit-export-v2.ts` 的 `performExportV2`（`asOfBoundEnforced` 判定与 `scopeComplete` 合成）。生产影响为零：`access_log.ledger_seq` 是 additive 列，由 `webui/server/proxy/audit.ts` 的 `ensureColumn` 保证存在，生产库 `scopeComplete` 取值不变。§2 已加注记：① 判定式**就是** R1 判据 #6 的严格三项 AND，**不得**增设第四个合取项；② 新完整性闸门必须**折进已有因子**，**不得**改写合取项个数；③ §8.2(b) 六项检查与 R1 判据 #6 **不可互相替代、也不可互相覆盖** —— 六项检查不可近似替代关联质量或文件完整性，R1 判据 #6 是 manifest 契约的**冻结不变式**。
+- **受影响条款**：§2（唯一事实源表「计量口径 / 完整性维度」行 + §2 末尾注记）、§8.2(b)（六项 auditCoverage 检查与 `combined_complete` 的关系）、§9.3(a)（manifest 必填字段）、§9.3(b)（封存三件套）、§12.5（正式导出 fail-closed）、D-12 台账。
+- **冻结契约**：**不改变**（spec 仍 v1.0-frozen）。本条是既有冻结判据的**显式绑定与引用澄清**，未新增判据、未改判据文本、未改合取项个数。
+
+### 18.2 §3 历史样本分母口径（N22）
+
+#### N22 — 归属统计未声明分母
+
+- **偏差事实**：§3 表「归属统计：137 unassigned·none + 36 session_bound·low + 2 explicit·high」未声明分母是**工具调用（175）**还是**调用流水（177）**；该行与同表首行「调用流水 E02 177 条 = 175 次工具调用 + 2 次 server/discover 探测」并列时，易被误读为同一集合（175 与 177 不是同一集合）。
+- **证据**：审计 Spec §3 表（本文件 §3）；§8.2(a) 计量单位字典已区分「工具调用（E02 175）」与「协议请求（E02 177 是当时调用流水筛选，E03 192 是加入关联握手后的集合）」。
+- **本次裁决／处理**：**口径补记** —— 该三行的分母是**工具调用集合（175）**；`137+36+2=175`，剩余 2 条为 server/discover 探测（归 protocol），不参与归属统计。**§3 原表不改**（历史样本为只读冻结基线，§11.4「期望结果一经登记不得随实现进度回改」），仅在本节登记分母口径并在 §3 加锚点注记。
+- **受影响条款**：§3（历史样本与冲突登记）、§8.2(a)（计量单位字典）、§11.3（历史回放基线）、A12。
+- **冻结契约**：**不改变**。`175 / 177 / 192 / 137 / 36 / 2` 全部保持原值，本条只消除分母歧义。
+
+### 18.3 §4.3(a) / §4.3(b) / §12.3 主状态派生与三视图（N16、N17、N23、N24）
+
+#### N16 — `budget_stop` 映射为 `execution=interrupted`，且四轴分类函数生产未接线
+
+- **偏差事实**：v1.1 四轴分类函数把 `budget_stop` 映射为 `executionStatus="interrupted"`，与 §4.3(a) 第 2 行「预算终止 → 独立 `budget_stopped` 桶」、§4.3(b)「`interrupted` 独占于处理中断且结果未定」冲突；且该分类函数**只在测试中被调用**，生产写 / 读路径均不使用，故 §4.3(a) 末段「API、UI、CSV、证据包调用同一版本分类函数」当时无生产载体。
+- **证据**：`webui/server/proxy/audit-classification.ts` —— 旧函数 `classifyAccessLogEvent`（现 `:119`）在其 `executionStatus` 分支把 `outcome === "budget_stop"` 映射为 `interrupted`（现 `:172`）；新口径函数 `classifyAuditEvent`（现 `:310`，`classificationVersion=v2p5-1`）在 `:324`–`:329` 按预算终止 → `not_executed` 处理。本轮 `classifyAuditEvent` 已接入生产写路径 `webui/server/proxy/audit.ts` 的 `writeLog`（现 `:664` 的 `classifyAuditEvent(...)` 调用），与读路径共用同一函数。
+- **本次裁决／处理**：v2p5-1 口径下预算终止记 `execution=not_executed` + `primary_status=budget_stopped`；主状态派生由 `webui/server/proxy/audit-derivation.ts` 的 `derivePrimaryStatus`（规则 2）与 `deriveExecutionView` 承担。v1.1 函数**保留**（属历史回放契约，不删不改），但不作生产口径。
+- **受影响条款**：§4.3(a)（第 2 行）、§4.3(b)（execution 行）、§4.8（裁决状态）、§12.3（派生伪代码）、A05、A06。
+- **冻结契约**：**不改变**。本条为实现向冻结契约对齐（冻结文本本身无歧义）。
+
+#### N17 — `acknowledged` 路径不可达
+
+- **偏差事实**：`AgentAuditAdapter.visibleParentIds` 恒为空集（`new Set<string>()`），任何带 `parent_event_id` 的客户端观测都被判 `parent_not_visible` 拒绝；U1「有效回执可写 acknowledged」整条契约**无实现载体**。
+- **证据**：`webui/server/admin/agent-audit-events.ts` —— `visibleParentIds` 字段说明（现 `:52`）、本轮新增 `resolveVisibleParentIds`（现 `:76`）、`result_received` 升级校验 `validateAcknowledgement`（现 `:140`–`:171`，含 `parent_not_visible` / `parent_attempt_mismatch` / `parent_digest_mismatch` 等拒绝原因）。
+- **本次裁决／处理**：可见父集合改由服务端按**凭据 scope + 可见性**解析，三条判据同时成立方可见 —— ① 父事件存在于 canonical ledger（不是客户端自称 ID）；② 父事件的 `operation_id` 与该父 ID 的登记 attempt 一致；③ 父事件的 actor / session 与当前适配器凭据 scope 一致。解析失败即空集（fail-closed），**不放宽**为「全部可见」。写 `acknowledged` 仍须父 `ingress_event_id` + `attempt_id` + 持久 `response_prepared` 摘要三重比对通过；不满足者记冲突 / unknown，**不得升级**送达状态，`execution` 不受影响。
+- **受影响条款**：§4.3(b)（delivery 行）、§4.8（裁决状态，U1）、§12.6（客户端接收观测）、§15（U1 行）、A04、A09。
+- **冻结契约**：**不改变**。U1 的冻结值（1 个 dogfood 适配器、`{prepared,sent,acknowledged,unknown}`、unacknowledged 不写、无 ACK 超时）保持原义；本条只补齐实现载体。
+
+#### N23 — `facts.unresolvedContradiction` 无判定契约
+
+- **偏差事实**：§4.3(a) 第 1 行要求「互斥闭合凭据、无法证明时序 / 同一尝试时保留 `unknown+conflict`，不能猜顺序」，但 §12.3 派生伪代码的首分支 `facts.unresolvedContradiction` **未给出判定条件**，实现无唯一依据（同一输入可能既判矛盾又不判矛盾）。
+- **证据**：审计 Spec §4.3(a) 第 1 行 vs §12.3 首分支（本文件两处对照）；实现落点 `webui/server/proxy/audit-derivation.ts` 的 `DerivationFacts.unresolvedContradiction` / `conflictTags`（现 `:91`–`:95`）与 `derivePrimaryStatus` 规则 1（现 `:161`–`:168`）。
+- **本次裁决／处理**：**补记判定条件**（消歧，绑定 §4.3(a) 既有措辞「互斥闭合凭据、无法证明时序时保留 unknown+conflict」）—— 满足以下任一即置 `unresolvedContradiction=true`，命中规则 1 → `primary_status=unknown` + conflict 标签：① 同一 attempt / 同一计量单元内同时存在**互斥的闭合凭据**（如既有可核验执行成功凭据又有可核验执行失败凭据）；② 存在两个闭合凭据但**无法证明时序**（无同一时钟域的可验证顺序，或无法证明属同一尝试）；③ 闭合凭据与「确认取消 / 观察超时」并存且先后不可证。反向约束：仅「取消请求 / 观察超时 / 执行完成并存」且可证明先后时**不**判矛盾（§4.3(a) 正文：多阶段信号并存不自动等于事实矛盾）；`conflict` 标签只允许与 `unknown` 组合。
+- **受影响条款**：§4.3(a)（第 1 行）、§12.3（首分支）、A06。
+- **冻结契约**：**不改变**。补记的是 §4.3(a) 已有措辞的可执行判据，未新增状态、未改判定方向、未改桶集合。
+
+#### N24 — 预算终止时 execution 轴无唯一取值
+
+- **偏差事实**：§4.3(a) 第 2 行「预算引擎明确终止本次尝试，未实际执行 → `budget_stopped`」**未指定 execution 轴取值**；而 §4.3(b) execution 取值域中的 `interrupted` 与 §4.3(a) 第 8 行「有持久前缀、处理中断且结果未定 → `indeterminate`」语义绑定，于是预算终止在 execution 轴出现两个相容读法，**无唯一答案**。
+- **证据**：审计 Spec §4.3(a) 第 2 行 / 第 8 行 与 §4.3(b) execution 行（本文件对照）；实现落点 `webui/server/proxy/audit-derivation.ts` 的 `deriveExecutionView`（现 `:235`，`notExecuted` → `not_executed`；`interrupted` 仅由 `durablePrefix && interruptedWithoutResult` 命中）与 `deriveAuthorizationView`（现 `:223`，预算终止 → `not_evaluated`）；v2p5-1 分类入口 `webui/server/proxy/audit-classification.ts` 的 `classifyAuditEvent`（现 `:310`）。
+- **本次裁决／处理**：**补记取值约定** —— 预算终止且未实际执行时，`execution = not_executed`；`interrupted` **只**用于「有持久前缀、处理中断且结果未定」（对应主状态 `indeterminate`），**不用于**预算终止。同场景 `authorization = not_evaluated`（预算终止不得记为授权拒绝，§4.3(b) 禁止列 + 20261019 §7）；`delivery` 轴独立取值，不因预算终止改写。主状态桶仍为 `budget_stopped`。
+- **受影响条款**：§4.3(a)（第 2 行）、§4.3(b)（execution / authorization 行）、A06。
+- **冻结契约**：**不改变**。该约定是 §4.3(b) execution 取值域与 §4.3(a) 第 8 行在现有取值下的**唯一相容解读**，未新增取值、未改桶定义。
+
+### 18.4 §6 S03 列契约（N10、N21）
+
+#### N10 — 标识列已声明但未写入
+
+- **偏差事实**：`access_log` 表结构（`ensureColumn` additive 迁移）已声明 `attempt_id` / `parent_attempt_id` / `event_type` / `instance_id` / `credential_principal_id` / `classification_version` / `attribution_rule_version` 七列，但 `writeLog` 的 INSERT 语句**不包含这七列**，生产真实行该七列恒为 NULL —— §6.2 标识字典声明的关联凭据在落盘侧全部缺失。
+- **证据**：`webui/server/proxy/audit.ts` —— `ACCESS_LOG_COLUMNS`（现 `:234`，七列声明在 `:300`–`:307`）与 `writeLog`（现 `:618`，`insertStmt` 的 INSERT 列表现 `:658`；`ledgerSeq` 取值 `:779`）。本轮修复后：INSERT 列表已含上述七列，写入值取自 `AccessLogEntry` 同名字段。
+- **本次裁决／处理**：按 §6.2 标识字典补写 INSERT 列表。历史行保持 NULL，**不回填、不重解释**（§4.6 历史兼容：旧 outcome 原样保留为 legacy_outcome）。
+- **受影响条款**：§6（S03 数据契约）、§6.2（标识字典）、§4.6（历史兼容）、A07、A08。
+- **冻结契约**：**不改变**。冻结文本已声明这些列，本条是实现向冻结契约对齐。
+
+#### N21 — `ACCESS_LOG_COLUMNS` 双份重复
+
+- **偏差事实**：`ACCESS_LOG_COLUMNS` 曾同时存在于 `webui/server/proxy/audit.ts` 与 `webui/server/admin/audit.ts` 两处，新增列须两处同步，否则导出元数据与写入漂移（双写隐患）。
+- **证据**：两处常量；本轮已消除重复 —— 保留 `webui/server/proxy/audit.ts` 的单一导出常量，`webui/server/admin/audit.ts` 改为 `import { ACCESS_LOG_COLUMNS as AUDIT_ACCESS_LOG_COLUMNS } from "../proxy/audit.js"`（现 `:22`）后本地引用（现 `:86`），不再自带副本。
+- **本次裁决／处理**：确立单一事实源，新增列只在 `proxy/audit.ts` 增加；`admin/audit.ts` 一律引用导出常量。与 §4.3(a) 末段「API、UI、CSV、证据包调用同一版本分类函数」的同源要求一致。
+- **受影响条款**：§6（S03 数据契约）、§9.3(a)（manifest 列集 / 规则版本）、§12.3（同源要求）、A03、A07、A09。
+- **冻结契约**：**不改变**。本条是实现层去重，不改变任何契约字段。
+
+### 18.5 §8.2(b) / §12.1 入口证据（N20）
+
+#### N20 — 准入先于账本写入，入口接收覆盖的 D 无法计算
+
+- **偏差事实**：认证 / 路径 / Origin 层拒绝发生在**任何账本写入之前**，被拒请求只写 `auth_failure_log`，从不进 canonical ledger；因此 §8.2(b) 检查 1「入口接收覆盖」的 D（由独立入口计数或受控发送凭据确认到达 Lucy 边界的请求 ID）**无法按 §12.1 口径计算**，同一侧投影自证入口无漏记又违反 §8.2(b) 末段与 §8.4。
+- **证据**：`webui/server/proxy/admission.ts` —— `recordAuthFailure`（现 `:131`）、`recordIngressRefusal`（现 `:157`）、准入入口注释（现 `:290`–`:296`：HTTP 层认证失败按 D2 不进 canonical ledger，仍走 `auth_failure_log`）；`webui/server/proxy/mcp-proxy.ts` 的准入调用点；写入侧 `webui/server/proxy/audit.ts` 的 `auth_failure_log` 表（现 `:495`）与 `writeAuthFailureLog`（现 `:918`）。
+- **本次裁决／处理**：**裁决 D2**（实施计划 §4.3 D2）—— 认证 / 路径 / Origin 层拒绝**仍不进** canonical ledger（避免开一条未鉴权写放大面），但 `auth_failure_log` 作为**独立于账本投影**的入口证据参与覆盖分母。据此，检查 1 的 D = canonical ledger 的 `received` 事件 ID ∪ `auth_failure_log` 的拒绝记录 ID；`auth_failure_log` 记录只算「入口尝试」证据，**不算**执行凭据、不进工具调用计量单位（§8.2(a)）。裁决记录来源：实施计划 `docs/plans/2026-10-25-lucy-v0.25-p0-implementation-plan.md` §4.3 D2 与 §4.2 条目 B22。
+- **受影响条款**：§12.1（入口接收与持久化屏障）、§8.2(b)（检查 1）、§8.2(a)（计量单位）、§8.4（禁止同侧自证）、A01、A02、A12。
+- **冻结契约**：**不改变**。D2 是 §8.2(b)「独立入口计数**或**受控发送凭据」与 §12.1 注释「按既有准入解析并分配身份」的既有解释，未新增判定规则、未改检查项定义。
+
+### 18.6 §9.3 / §12.5 导出与封存（N13、N14、N15、N18）
+
+#### N13 — v2 导出从投影自身取 S
+
+- **偏差事实**：v2 导出实现以 `SELECT IFNULL(MAX(id),0) FROM access_log` 取得 `S`，即取**投影自身的序号**；而 §12.5 首行明写「S = canonicalLedger.committedWatermark() # 账本已提交上界，禁止取投影自己的序号」，A10 判定规则明写「从投影取 S 的错误实现必须被检出」—— 这是**已存在的错误实现**，不是待实现项。
+- **证据**：`webui/server/admin/audit-export-v2.ts` 旧实现（已改；现实现见文件头注释 `:19`–`:22`）、`performExportV2`（现 `:384`）的 `options.ledgerUpperSeq`（现 `:160`）与 fail-closed 判定（现 `:422`）。
+- **本次裁决／处理**：`S` 改由 canonical ledger 的**已提交上界**供给（`webui/server/security/store.ts` 的 `maxEventSeq()`，现 `:624`），由调用方经 `options.ledgerUpperSeq` 传入；**未传入时正式导出一律 fail-closed**（不猜、不以投影序号顶替）。诊断 partial 包与正式包分离。
+- **受影响条款**：§9.3(a)（manifest 的 `watermarkSeq(S)`）、§12.5（导出伪代码）、A10。
+- **冻结契约**：**不改变**。本条为实现向冻结契约对齐。
+
+#### N14 — v2 导出无 HTTP 路由
+
+- **偏差事实**：`performExportV2` / `buildExportPackV2` **没有任何 HTTP 路由**，仅在测试中可达；正式导出路径实际仍走旧 v1 导出，§12.5 的正式导出流程（含 T3=60s 追平、失败不发布半成品包）没有生产载体。
+- **证据**：`webui/server/admin/audit-export-v2.ts` 的 `performExportV2`（现 `:384`）与 `buildExportPackV2`（现 `:700`）；本轮已接路由 `GET /api/admin/audit/export-v2`（`webui/server/admin/audit.ts` 现 `:3940`）与 `GET /api/admin/audit/export-pack-v2`（现 `:4035`），路由登记见 `webui/server/index.ts`（`registerAuditRoutes`），路由清单同步见 `webui/docs/03-api-spec.md`。
+- **本次裁决／处理**：把 v2 导出接成**正式路径**；S 来源、投影追平（T3=60s，自捕获 S 那一刻起算、等待重试不重置）、正式导出失败不发布半成品包一并落在该路径。
+- **受影响条款**：§12.5、§9.5（失败与恢复）、A10。
+- **冻结契约**：**不改变**。本条为实现向冻结契约对齐。
+
+#### N15 — 文件完整性校验同义反复
+
+- **偏差事实**：原 `verifyExportFiles` 只校验清单里 sha256 字符串长度是否为 64，**从不重算文件内容**，因此删除 / 替换文件不可能被检出 —— §9.3(b)「删除/替换文件可被清单验证检测」与 A11 判定规则当前不可能通过。
+- **证据**：`webui/server/admin/audit-export-v2.ts` 的 `verifyExportFiles`（现 `:332`，逐文件重算 `sha256Hex(content)` 并与清单声明值比对，现 `:341`–`:342`）、`buildExportPackV2` 中的校验调用（现 `:766`）；实现说明见文件头注释 `:25`–`:26`。
+- **本次裁决／处理**：清单验证从「声明自洽」升级为「**重算内容哈希** + 跨文件关联键校验」；文件清单与总清单分层、分别验证、分别记录（§9.3(b) 第 1 条）。结论表述只能是「清单验证通过 / 失败」，**不得**写成防篡改签名或独立签名（§2 术语级约束、术语标准 §3）。
+- **受影响条款**：§9.3(b)（封存三件套）、§2（术语级约束）、A11。
+- **冻结契约**：**不改变**。本条为实现向冻结契约对齐。
+
+#### N18 — 投影只保留最新状态，as-of S 视图无实现路径
+
+- **偏差事实**：`webui/server/security/projector.ts` 按 `operation_id` 合并事件、只保留**最新状态**，历史凭据被丢弃，因此**无法据投影计算 as-of S 视图**；§12.5 末段已自认该限制（「不能仅给行加 seq 过滤便声称修订视图一致」），但未给出实现路径。
+- **证据**：`webui/server/security/projector.ts` —— `applyBatch`（现 `:238`）、`mergeEvent`（现 `:166`）与 `security_operation_projection` 表结构（`operation_id` 主键、单行覆盖）；实现路径落点为 `webui/server/proxy/audit.ts` 的 `ledger_seq` additive 列（`access_log.ledger_seq` 现 `:335`、`association_revisions.ledger_seq` 现 `:556`–`:557`，口径注释 `:590`–`:600`）与派生层 `webui/server/proxy/audit-derivation.ts`（只消费 as-of S 的可核验证据，`:15`）。
+- **本次裁决／处理**：**登记实现路径** —— 基础行取 `ledger_seq <= S`，再折叠 `ledger_seq <= S` 的修订事件。口径为**保守上界**：行只在其 `ledger_seq` 之后才可能被后续账本事件改变，故纳入 `ledger_seq <= S` 的行是安全的；它**不是**「该行所依赖的全部账本事件序号」—— access_log 行在 `response_prepared` 提交**之前**写入，其 `delivery_status` 反映写入时刻的观测。§12.5 末段的约束**继续有效**：精确 as-of 视图仍需账本历史，本轮未宣称实现，也未把「只按 seq 过滤」当作修订视图一致。
+- **受影响条款**：§12.5（末段）、§9.3(a)（as-of S 与 manifest 声明）、§8.2(b) 检查 3（投影追平）、A10。
+- **冻结契约**：**不改变**。本条只补记实现路径与口径边界，不放宽 §12.5 末段的约束。
+
+### 18.7 §10.3 / §10.5 预算（N19）
+
+#### N19 — 无 `turnId` 直接放行且不计预算；预算计数器纯内存
+
+- **偏差事实**：`question-experience.ts` 对**无 `turnId` 的请求直接放行且不计入预算**；预算计数器为进程内 `Map`，**进程重启即清零**。与 §10.3「重连与省略 begin_question 不得重置任何一档预算」、§10.5「预算计数器持久化失败按 S02 语义阻断（503 AUDIT_UNAVAILABLE），不得无预算放行；恢复后以账本为准幂等重建故障期间的计数，禁止凭内存计数继续」冲突。
+- **证据**：`webui/server/proxy/question-experience.ts` —— 兜底作用域 `scopeKeyFor`（现 `:143`，无 turnId 时取 `scope:<fallbackScope>`）、持久化消费 `consumePersisted`（现 `:187`）、续跑判定 `applyConsume`（现 `:245`，`continuationPresented` / `continuationMatches`）、`isBudgetUnavailable`（现 `:62`）；消费点与 503 分支 `webui/server/proxy/mcp-proxy.ts`（现 `:3663`–`:3699`）。
+- **本次裁决／处理**：① 无 `turnId` 时按**凭证指纹 + 会话**的兜底作用域限流，不再直接放行；② 计数以**持久化状态**为准（落库 `question_budget_state`），重启不丢，恢复后以持久态为准重建；③ 续跑凭据必须**非空**且与作用域匹配（避免两个同缺省值比较相等而白送第二个窗口）；④ 持久层读取失败独立为 `question_budget_unavailable` → HTTP **503**，以 `outcome=error` / `decision_reason=question_budget_unavailable` 记录，**不记** `budget_stop` —— 存储故障不得被读回为合法预算终止凭据。`budget_stop` 凭据仍只由真实预算耗尽产生（§10.2 映射表：`budget_stopped` 无 failure_dimension）。
+- **受影响条款**：§10.3（预算四维计量、重连与省略 begin_question 不重置）、§10.5（失败与恢复）、§4.3(a)（预算终止独立桶）、A06。
+- **冻结契约**：**不改变**。本条为实现向冻结契约对齐。
+
+### 18.8 状态与遗留风险
+
+- **验收矩阵状态**：A01–A12 全部子例**仍为未执行**；本节只登记实现偏差与处置，不改变 §13.2 的任何状态。V01–V22 属其他 Spec 的验收矩阵，本节不涉及。
+- **文档元数据**：头部元数据表（版本 / 状态 / 冻结执行人等）**有意保持不变** —— 本节未改变冻结契约，故不产生新的 spec 版本号；「暂不开发」等表述的时效性不在本轮回写范围。
+- **未在本轮闭环的项**：N18 所述的**精确** as-of S 视图仍需账本历史能力，本轮只交付保守上界口径与 `ledger_seq` 路径；§12.5 末段的约束继续有效。N20 的入口证据双源口径需要在 §8.2(b) 检查 1 的实际断言中与 auditCoverage 实现对齐后才可声称该检查可计算。
+- **交叉引用**：N5 的台账 **D-12**（`docs/qa/security-findings.yaml`）与 N13 的 D-10 相关联 —— D-10 的修复方式由 D-12 收口，两者共同决定 v2 导出的 S 来源与完整性闸门形态。
+
+---
 
 ## Terminology Compliance
 

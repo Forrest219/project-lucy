@@ -7,8 +7,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { invalidateContentPathsCache } from "../paths";
 
 const testState = vi.hoisted(() => ({
-  writeLogMock: vi.fn(() => Promise.resolve()),
-  writeAccessLogSourcesMock: vi.fn(() => Promise.resolve()),
+  // The argument shape is declared explicitly: an argument-less `vi.fn(() => ...)`
+  // infers an empty parameter tuple, so `mock.calls[i][0]` would not type-check
+  // and reading the recorded `argsSummary` would fail to compile.
+  writeLogMock: vi.fn((_entry: { argsSummary?: unknown }) => Promise.resolve()),
+  writeAccessLogSourcesMock: vi.fn((_entries: unknown[]) => Promise.resolve()),
   isTokenRevokedMock: vi.fn(() => false),
   recordMcpToolsCallMock: vi.fn(() => ({ callEventId: 1, policyEventId: 2 }))
 }));
@@ -228,8 +231,21 @@ describe("MCP proxy ACL enforcement", () => {
         name: "dictionary_search",
         args: { query: "financial", password: "redacted", token: "redacted", visible: "kept" },
         reason: "sensitive_metadata_forbidden:kx",
-        argsSummary: { visible: "kept" }
+        // Lucy v0.25 / L25-09 B28：被脱敏的参数**保留存在性**（`[REDACTED]`
+        // 标记）而不保留值 —— 「参数缺失」与「参数存在但已脱敏」必须可区分。
+        argsSummary: {
+          query: "[REDACTED]",
+          password: "[REDACTED]",
+          token: "[REDACTED]",
+          visible: "kept"
+        }
       });
+      // 脱敏值不得出现在任何写入的 args_summary 里。
+      for (const call of testState.writeLogMock.mock.calls) {
+        const summary = JSON.stringify((call[0] as { argsSummary?: unknown }).argsSummary ?? {});
+        expect(summary).not.toContain("financial");
+        expect(summary).not.toContain("redacted");
+      }
 
       await expectDenied(port, {
         id: "proxy-deny-disabled",

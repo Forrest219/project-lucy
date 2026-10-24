@@ -123,6 +123,13 @@ import { registerTokenRoutes } from "./admin/tokens.js";
 import { registerPolicyRuntimeRoutes } from "./admin/policy-runtime.js";
 import { getPolicyRuntimeStatus, isPolicyRuntimeHealthy, runtimeConsistencyForInputs, type DisplayPolicyInputs } from "./proxy/acl.js";
 import { getAuditDb, recordConfigChange, registerAgentAuditRoutes, registerAuditRoutes } from "./admin/audit.js";
+import { registerAuditReconciliationRoutes } from "./admin/audit-reconciliation-routes.js";
+import { configureReconciliationPorts } from "./admin/reconciliation.js";
+import {
+  createProductionAuditCoveragePort,
+  productionPrimaryStatusPort
+} from "./admin/reconciliation-ports.js";
+import { registerRowPolicyRoutes } from "./admin/row-policy-routes.js";
 import { auditedWriteFile } from "./admin/config-audit-write.js";
 import { registerMcpToolsRoutes } from "./admin/mcp-tools.js";
 import { registerMcpPlaygroundRoutes } from "./admin/mcp-playground.js";
@@ -174,6 +181,7 @@ import {
   type SemanticAssetValidateRequest
 } from "./semantic-assets.js";
 import { exportSemanticAssetPackage, recordSemanticAssetExport } from "./semantic-asset-export.js";
+import { recoverPendingRecoveryJournals, isRecoveryRequired } from "./semantic-recovery-journal.js";
 import {
   buildPublishHistoryCsvRows,
   formatPublishHistoryExportFilenameStamp
@@ -2068,7 +2076,21 @@ export function buildServer() {
     const consumedSourceEntries = [...changedSources.entries()];
     const reindex = await withPublishCoordinator(
       "manual_reindex",
-      () => reindexProject(projectRoot, { force }),
+      async () => {
+        // Lucy v0.25 / L25-11 §7.1–§7.2 (D3): the recovery check must run
+        // BEFORE the index is rebuilt. Reindexing while a semantic write is
+        // unresolved would derive an index state from targets whose write
+        // outcome is still unknown.
+        if (await isRecoveryRequired(projectRoot)) {
+          throw new SemanticAssetValidationError(
+            "semantic_recovery_required",
+            "上一笔语义写入存在未决恢复日志，恢复核验完成前不允许手动索引。",
+            [],
+            409
+          );
+        }
+        return reindexProject(projectRoot, { force });
+      },
       { projectRoot }
     );
     const finishedAt = new Date().toISOString();
@@ -2198,6 +2220,16 @@ export function buildServer() {
   registerPolicyRuntimeRoutes(app);
   registerAuditRoutes(app);
   registerAgentAuditRoutes(app);
+  // Lucy v0.25 / P0-4 E1 — the reconciliation view reuses L25-09's own
+  // derivation and coverage sources instead of owning a second set of rules.
+  configureReconciliationPorts({
+    primaryStatus: productionPrimaryStatusPort,
+    auditCoverage: createProductionAuditCoveragePort()
+  });
+  // Lucy v0.25 / L25-14 R2 — 行级策略预览（只读，不进入发布协调器）。
+  registerRowPolicyRoutes(app);
+  // Lucy v0.25 / L25-02、L25-03 — 审计只读对账视图（三端点）。
+  registerAuditReconciliationRoutes(app);
   registerMcpToolsRoutes(app);
   registerMcpPlaygroundRoutes(app);
   registerMcpRuntimeRoutes(app);
@@ -2283,6 +2315,10 @@ export async function startServer(options: { displayPrewarm?: boolean } = {}): P
     displayReadyMs = performance.now() - t3;
   }
 
+  // Lucy v0.25 / L25-11 §7.1–§7.2 (D3): the semantic recovery journal is
+  // resolved BEFORE the ledger recovery and before the proxy starts serving,
+  // so an unresolved journal can already close publishing and manual reindex.
+  await recoverSemanticJournals();
   await recoverResponseLedger();
   const projection = createProjectionScheduler({
     getStore: getSecurityStore,
@@ -2335,6 +2371,35 @@ async function recoverResponseLedger(): Promise<void> {
     if (!cursor.ok) console.error(`[lucy-audit] projection cursor recovery failed: ${cursor.code}`);
   } catch (error) {
     console.error("[lucy-audit] projection cursor recovery failed", error instanceof Error ? error.message : "unknown");
+  }
+}
+
+/**
+ * Lucy v0.25 / L25-11 §7.1–§7.2 (D3) — semantic recovery journal recovery.
+ *
+ * Runs at boot, BEFORE publishing or a manual reindex is allowed. A journal
+ * whose target bytes match neither the recorded old nor the recorded new
+ * digest is not guessed: it is left for a human, and `isRecoveryRequired()`
+ * then keeps publishing and manual reindexing closed.
+ */
+async function recoverSemanticJournals(): Promise<void> {
+  try {
+    const projectRoot = await resolveProjectRoot();
+    const result = await recoverPendingRecoveryJournals(projectRoot);
+    if (result.recovered.length > 0) {
+      console.warn(`[lucy-semantic] recovered ${result.recovered.length} unfinished semantic journal(s)`);
+    }
+    if (result.needsRepair.length > 0) {
+      console.error(
+        `[lucy-semantic] ${result.needsRepair.length} semantic journal(s) need manual repair; ` +
+          "publishing and manual reindex stay closed until they are resolved"
+      );
+    }
+  } catch (error) {
+    console.error(
+      "[lucy-semantic] semantic journal recovery failed",
+      error instanceof Error ? error.message : "unknown"
+    );
   }
 }
 

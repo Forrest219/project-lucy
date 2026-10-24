@@ -116,6 +116,7 @@ function eventFromRow(row: Row): SecurityEvent {
     verdict: row.verdict as string,
     resultSummary: row.result_summary as string,
     auditEventKind: (row.audit_event_kind as string | null) ?? null,
+    endpointId: (row.endpoint_id as string | null) ?? null,
     createdAt: row.created_at as number
   };
 }
@@ -528,8 +529,8 @@ export class SecurityStore {
       (this.insertEventStmt = db.prepare(
         `INSERT INTO security_events
            (event_id, operation_id, phase, actor, actor_type, network_info, session_fingerprint, trace_id,
-            policy_version, context_version, object_hash, verdict, result_summary, audit_event_kind, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            policy_version, context_version, object_hash, verdict, result_summary, audit_event_kind, endpoint_id, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ));
     const event: Omit<SecurityEvent, "seq"> = {
       eventId: input.eventId,
@@ -546,6 +547,7 @@ export class SecurityStore {
       verdict: input.verdict ?? "",
       resultSummary: input.resultSummary ?? "",
       auditEventKind: input.auditEventKind ?? null,
+      endpointId: input.endpointId ?? null,
       createdAt: this.now()
     };
     try {
@@ -564,6 +566,7 @@ export class SecurityStore {
         event.verdict,
         event.resultSummary,
         event.auditEventKind,
+        event.endpointId,
         event.createdAt
       );
       return { seq: Number(info.lastInsertRowid), ...event };
