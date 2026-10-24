@@ -3,7 +3,8 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
-import { collectLedgerErrors } from "./release-ledger.mjs";
+import { fileURLToPath } from "node:url";
+import { collectLedgerErrors, verifyLedgerEntryAgainstRepo } from "./release-ledger.mjs";
 
 const SHA_A = "a".repeat(40);
 const SHA_B = "b".repeat(40);
@@ -44,13 +45,13 @@ async function withRepo(options, fn) {
 describe("release-ledger gate", () => {
   it("accepts a ledger whose current VERSION has an entry", async () => {
     await withRepo({ entries: { "v0.2.0.json": validEntry() } }, (tmp) => {
-      assert.deepEqual(collectLedgerErrors(tmp), []);
+      assert.deepEqual(collectLedgerErrors(tmp, { verifyRepo: false }), []);
     });
   });
 
   it("rejects a VERSION with no ledger entry", async () => {
     await withRepo({ version: "9.9.9", entries: { "v0.2.0.json": validEntry() } }, (tmp) => {
-      const errors = collectLedgerErrors(tmp);
+      const errors = collectLedgerErrors(tmp, { verifyRepo: false });
       assert.ok(errors.some((error) => error.includes("VERSION=9.9.9 has no ledger entry")));
     });
   });
@@ -59,7 +60,7 @@ describe("release-ledger gate", () => {
     await withRepo(
       { entries: { "v0.2.0.json": validEntry({ releaseTag: "v0.3.0" }) } },
       (tmp) => {
-        const errors = collectLedgerErrors(tmp);
+        const errors = collectLedgerErrors(tmp, { verifyRepo: false });
         assert.ok(errors.some((error) => error.includes("does not match productVersion")));
       }
     );
@@ -67,14 +68,14 @@ describe("release-ledger gate", () => {
 
   it("rejects an entry with a malformed commit", async () => {
     await withRepo({ entries: { "v0.2.0.json": validEntry({ commit: "not-a-sha" }) } }, (tmp) => {
-      const errors = collectLedgerErrors(tmp);
+      const errors = collectLedgerErrors(tmp, { verifyRepo: false });
       assert.ok(errors.some((error) => error.includes("must be a full 40-hex sha")));
     });
   });
 
   it("accepts PENDING as the commit before the release commit exists", async () => {
     await withRepo({ entries: { "v0.2.0.json": validEntry({ commit: "PENDING" }) } }, (tmp) => {
-      assert.deepEqual(collectLedgerErrors(tmp), []);
+      assert.deepEqual(collectLedgerErrors(tmp, { verifyRepo: false }), []);
     });
   });
 
@@ -82,7 +83,7 @@ describe("release-ledger gate", () => {
     const entry = validEntry();
     delete entry.noDeliveryReason;
     await withRepo({ entries: { "v0.2.0.json": entry } }, (tmp) => {
-      const errors = collectLedgerErrors(tmp);
+      const errors = collectLedgerErrors(tmp, { verifyRepo: false });
       assert.ok(errors.some((error) => error.includes("noDeliveryReason is missing")));
     });
   });
@@ -91,7 +92,7 @@ describe("release-ledger gate", () => {
     await withRepo(
       { entries: { "v0.2.0.json": validEntry({ gates: [{ name: "real-e2e", status: "notExecuted" }] }) } },
       (tmp) => {
-        const errors = collectLedgerErrors(tmp);
+        const errors = collectLedgerErrors(tmp, { verifyRepo: false });
         assert.ok(errors.some((error) => error.includes("must state a reason")));
       }
     );
@@ -106,7 +107,7 @@ describe("release-ledger gate", () => {
       }
     });
     await withRepo({ entries: { "v0.2.0.json": entry } }, (tmp) => {
-      const errors = collectLedgerErrors(tmp);
+      const errors = collectLedgerErrors(tmp, { verifyRepo: false });
       assert.ok(errors.some((error) => error.includes("builtFromDiffersFromReleaseCommit")));
     });
   });
@@ -122,7 +123,7 @@ describe("release-ledger gate", () => {
       }
     });
     await withRepo({ entries: { "v0.2.0.json": entry } }, (tmp) => {
-      assert.deepEqual(collectLedgerErrors(tmp), []);
+      assert.deepEqual(collectLedgerErrors(tmp, { verifyRepo: false }), []);
     });
   });
 
@@ -135,7 +136,7 @@ describe("release-ledger gate", () => {
         }
       },
       (tmp) => {
-        const errors = collectLedgerErrors(tmp);
+        const errors = collectLedgerErrors(tmp, { verifyRepo: false });
         assert.ok(errors.some((error) => error.includes("is already recorded by")));
       }
     );
@@ -145,8 +146,52 @@ describe("release-ledger gate", () => {
     const entry = validEntry();
     delete entry.releasedAt;
     await withRepo({ entries: { "v0.2.0.json": entry } }, (tmp) => {
-      const errors = collectLedgerErrors(tmp);
+      const errors = collectLedgerErrors(tmp, { verifyRepo: false });
       assert.ok(errors.some((error) => error.includes('missing required field "releasedAt"')));
     });
+  });
+});
+
+describe("release-ledger repository cross-check", () => {
+  const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+
+  it("accepts a ledger entry whose tag points at the recorded commit", () => {
+    const problems = verifyLedgerEntryAgainstRepo({
+      __file: "v0.2.0.json",
+      productVersion: "0.2.0",
+      releaseTag: "v2.0.0",
+      commit: "14a8bee16c55b5d9885c8ab4c3464614503735dc"
+    }, ROOT);
+    assert.deepEqual(problems, []);
+  });
+
+  it("rejects a ledger entry whose tag points at a different commit", () => {
+    const problems = verifyLedgerEntryAgainstRepo({
+      __file: "v0.2.0.json",
+      productVersion: "0.2.0",
+      releaseTag: "v2.0.0",
+      commit: "da5da05d382edb7ec5129c2043c6f53ac360eefd"
+    }, ROOT);
+    assert.ok(problems.some((problem) => problem.includes("points at 14a8bee")));
+  });
+
+  it("rejects a commit that does not exist in the repository", () => {
+    const problems = verifyLedgerEntryAgainstRepo({
+      __file: "v0.2.0.json",
+      productVersion: "0.2.0",
+      releaseTag: "v0.2.0",
+      commit: "f".repeat(40)
+    }, ROOT);
+    assert.ok(problems.some((problem) => problem.includes("does not exist in this repository")));
+  });
+
+  it("skips the commit check while the commit is still PENDING", () => {
+    const problems = verifyLedgerEntryAgainstRepo({
+      __file: "v0.2.0.json",
+      productVersion: "0.2.0",
+      releaseTag: "v0.2.0",
+      commit: "PENDING"
+    }, ROOT);
+    assert.deepEqual(problems, []);
   });
 });

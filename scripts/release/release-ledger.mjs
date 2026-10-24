@@ -17,6 +17,7 @@
  * version-number correction, for example). That is recorded as an explicit
  * `deliveryPackage: null` plus a reason — never as a missing field.
  */
+import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
@@ -48,7 +49,62 @@ function readJson(file) {
   }
 }
 
-export function collectLedgerErrors(root = ROOT) {
+function git(args, cwd) {
+  try {
+    return execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  } catch {
+    return "";
+  }
+}
+
+/** True when the command succeeds. `git cat-file -e` prints nothing on success. */
+function gitSucceeds(args, cwd) {
+  try {
+    execFileSync("git", args, { cwd, stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Verify the ledger entry against the repository itself: the recorded commit
+ * must exist, and when the release tag exists it must point at that commit.
+ *
+ * This is what stops the ledger from drifting into fiction — a SHA that is
+ * well-formed but was never released would otherwise pass every format check.
+ *
+ * A tag that is not present locally (shallow clone, or a tag cut after this
+ * checkout) is not treated as a failure; the format rules still apply.
+ */
+export function verifyLedgerEntryAgainstRepo(entry, cwd) {
+  const problems = [];
+  const where = `docs/releases/${entry.__file ?? "entry"}`;
+
+  if (typeof entry.commit === "string" && entry.commit !== "PENDING") {
+    // `git rev-parse --verify` only validates the SHA's shape; it resolves
+    // unknown objects to themselves and still exits 0. `cat-file -e` is what
+    // actually asks the object database whether the commit exists.
+    if (!gitSucceeds(["cat-file", "-e", `${entry.commit}^{commit}`], cwd)) {
+      problems.push(`${where}: commit ${entry.commit} does not exist in this repository`);
+    }
+  }
+
+  if (typeof entry.releaseTag === "string" && typeof entry.commit === "string" && entry.commit !== "PENDING") {
+    const tagged = git(["rev-list", "-n", "1", `refs/tags/${entry.releaseTag}`], cwd);
+    if (tagged !== "") {
+      if (tagged !== entry.commit) {
+        problems.push(
+          `${where}: release tag ${entry.releaseTag} points at ${tagged}, but the ledger records ${entry.commit}`
+        );
+      }
+    }
+  }
+
+  return problems;
+}
+
+export function collectLedgerErrors(root = ROOT, { verifyRepo = true } = {}) {
   const errors = [];
   const ledgerDir = path.join(root, "docs/releases");
   const versionFile = path.join(root, "VERSION");
@@ -168,6 +224,12 @@ export function collectLedgerErrors(root = ROOT) {
       } else {
         seenVersions.set(productVersion, name);
       }
+    }
+
+    // Cross-check the entry against the repository itself. A well-formed but
+    // never-released SHA would otherwise pass every format check.
+    if (verifyRepo) {
+      errors.push(...verifyLedgerEntryAgainstRepo({ ...entry, __file: name }, root));
     }
   }
 
