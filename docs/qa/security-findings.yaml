@@ -136,7 +136,7 @@ findings:
     severity: P1
     status: fixed
     spec: "L25-09 §10.3 / §10.5"
-    fixedIn: null
+    fixedIn: 21de516
     verifiedBy: []
     acceptedBy: null
   # D-05 v0.25 实施期发现的 fail-open：会话归属按「最新创建时间」选候选
@@ -148,7 +148,7 @@ findings:
     severity: P1
     status: fixed
     spec: "L25-09 §12.4"
-    fixedIn: null
+    fixedIn: 21de516
     verifiedBy: []
     acceptedBy: null
   # D-06 v0.25 实施期发现的 fail-open：陈旧发布锁可按年龄抢占活锁
@@ -160,7 +160,7 @@ findings:
     severity: P1
     status: fixed
     spec: "L25-11 D4 / v0.25 W1a A1"
-    fixedIn: null
+    fixedIn: 21de516
     verifiedBy: []
     acceptedBy: null
   # D-07 v0.25 实施期发现的流程断裂：语义维护包的导出基线校验拒绝一切已编辑的包
@@ -172,7 +172,7 @@ findings:
     severity: P1
     status: fixed
     spec: "L25-11 §5"
-    fixedIn: null
+    fixedIn: 21de516
     verifiedBy: []
     acceptedBy: null
   # D-08 v0.25 实施期发现的部分写风险：发布未写恢复日志，失败时已写目标不回滚
@@ -184,7 +184,7 @@ findings:
     severity: P1
     status: fixed
     spec: "L25-11 §7.2 / D3"
-    fixedIn: null
+    fixedIn: 21de516
     verifiedBy: []
     acceptedBy: null
   # D-09 v0.25 实施期发现的一致性缺陷：审计来源视图把连接硬编码并合并同名表
@@ -197,7 +197,7 @@ findings:
     severity: P1
     status: fixed
     spec: "L25-02/L25-03 §3.4"
-    fixedIn: null
+    fixedIn: 21de516
     verifiedBy: []
     acceptedBy: null
   # D-10 v0.25 实施期发现的导出正确性缺陷：v2 导出用投影序号与账本 S 比较，且过滤条件被忽略
@@ -212,7 +212,7 @@ findings:
     severity: P1
     status: fixed
     spec: "L25-09 §12.5 / §9.3"
-    fixedIn: null
+    fixedIn: 21de516
     verifiedBy: []
     acceptedBy: null
   # D-12 v0.25 实施期发现的**冻结契约破坏**缺陷：D-10 的修复方式改写了 combinedComplete 的语义
@@ -230,7 +230,7 @@ findings:
     severity: P1
     status: fixed
     spec: "audit-trust R1 验收矩阵判据 #6 / L25-09 §12.5"
-    fixedIn: null
+    fixedIn: 21de516
     verifiedBy: []
     acceptedBy: null
   # D-13 v0.25 实施期发现的**不可观测被当成 0**缺陷：配置读取失败被当作「配置了 0 个 Token」
@@ -248,7 +248,7 @@ findings:
     severity: P1
     status: fixed
     spec: "L25-03 §3.3 / §2.4 / §2.6"
-    fixedIn: null
+    fixedIn: 21de516
     verifiedBy: []
     acceptedBy: null
   # D-14 v0.25 W4 本地 compose 冒烟实证：**预存在**的交付种子缺陷——客户默认种子的角色列出代码基线绝对拒绝的工具
@@ -289,7 +289,7 @@ findings:
     severity: P2
     status: fixed
     spec: "实施计划 §8 W4 / lucy-build-revision.mjs"
-    fixedIn: null
+    fixedIn: 21de516
     verifiedBy: []
     acceptedBy: null
   # D-11 v0.25 实施期发现的解包资源耗尽风险：ZIP 解压无输出上限
@@ -304,7 +304,7 @@ findings:
     severity: P1
     status: fixed
     spec: "L25-11 §5"
-    fixedIn: null
+    fixedIn: 21de516
     verifiedBy: []
     acceptedBy: null
   # ─── 2026-10-25 W6 Codex 实战检验（对抗式验证）后核实并登记 ──────────────────
@@ -320,7 +320,7 @@ findings:
     severity: P1
     status: fixed
     spec: "L25-11 §7.1 / §7.2"
-    fixedIn: null
+    fixedIn: 21de516
     verifiedBy: []
     acceptedBy: null
   # D-17 W6 实证：v2 导出**附属文件**未套用筛选与 as-of 上界（D-10 未完全关闭）
