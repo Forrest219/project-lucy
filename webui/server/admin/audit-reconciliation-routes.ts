@@ -24,6 +24,7 @@
  */
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { randomUUID } from "node:crypto";
 import { getAuditDb } from "./audit.js";
 import { getSecurityStore } from "../security/instance.js";
 import { sha256Hex, stableJson } from "../config-digest.js";
@@ -102,15 +103,32 @@ async function requireAdminAuditRead(
     return { ok: false };
   }
 
+  // ★ D-25：meta-audit 的 event_id 必须**跨进程重启唯一**。
+  //
+  // Fastify 的 `request.id` 是**每进程计数器**（base-36）：进程重启后从低位重新走，
+  // 会复用上一轮用过的 id。而 `security_events.event_id` 是 `TEXT NOT NULL UNIQUE` 列
+  // → 重启后凡是复用过的 request id 都会撞唯一约束 → store 抛 SECURITY_CONFLICT
+  // → 本守卫把「安全账本不可用」与「id 撞车」混为一谈，把一次合法的管理员读取
+  // 误判成 503 RECONCILIATION_READ_REFUSED。
+  //
+  // 实证（2026-10-25 W6 重建后冒烟）：W4 那轮写过 reconciliation-read-req-9 / -req-d；
+  // 重建后计数器重新走到 req-9 / req-d 时，这两次读取 503，其余 200。
+  //
+  // 修法：每次读取用随机 UUID 派生唯一 id；`request.id` 降级为**可追溯信息**
+  // （trace_id 与 object_hash 都保留它），不再承担唯一性职责。
+  const readToken = randomUUID();
+  const requestRef = String(request.id ?? "");
+
   const meta = await security.value.appendEvent({
-    eventId: `reconciliation-read-${request.id ?? Date.now()}`,
-    operationId: `audit-reconciliation-read-${request.id ?? Date.now()}`,
+    eventId: `reconciliation-read-${readToken}`,
+    operationId: `audit-reconciliation-read-${readToken}`,
     phase: "result",
     actor: actor.actorId,
     actorType: actor.actorType,
+    traceId: requestRef,
     auditEventKind: "audit_management",
     objectHash: sha256Hex(
-      stableJson({ url: request.url, actor: actor.actorId, at: request.id ?? null })
+      stableJson({ url: request.url, actor: actor.actorId, at: requestRef || null })
     ),
     resultSummary: "audit-reconciliation read"
   });

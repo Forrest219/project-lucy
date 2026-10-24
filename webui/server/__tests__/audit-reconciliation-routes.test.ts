@@ -247,6 +247,29 @@ describe("registerAuditReconciliationRoutes", () => {
     await app.close();
   });
 
+  it("D-25 进程重启复用同一 request id 时，两次读取都成功且留两条不同 meta-audit", async () => {
+    // Fastify 的 request.id 是**每进程计数器**（base-36）：进程重启后会复用上一轮的 id。
+    // 固定 genReqId 模拟「重启后计数器回到同一个值」。
+    const app = Fastify({ logger: false, genReqId: () => "req-fixed" });
+    registerAuditReconciliationRoutes(app);
+
+    const first = await app.inject({ method: "GET", url: "/api/admin/audit/reconciliation/usage" });
+    const second = await app.inject({ method: "GET", url: "/api/admin/audit/reconciliation/usage" });
+
+    // 修复前：第二次会因 event_id 撞 UNIQUE 约束 → SECURITY_CONFLICT → 503。
+    expect(first.statusCode).toBe(200);
+    expect(second.statusCode).toBe(200);
+
+    // 两次读取必须各自留下**不同**的一条 meta-audit（event_id 不得由 request.id 派生）。
+    const reads = ledgerEvents().filter((event) => event.eventId.startsWith("reconciliation-read-"));
+    expect(reads).toHaveLength(2);
+    expect(new Set(reads.map((event) => event.eventId)).size).toBe(2);
+    // request.id 仍可追溯（降级为 trace_id）。
+    expect(reads.every((event) => event.traceId === "req-fixed")).toBe(true);
+
+    await app.close();
+  });
+
   it("问询详情返回统一 reconciliationContext，并只写 meta-audit", async () => {
     const before = ledgerEvents().length;
     const app = makeApp();
