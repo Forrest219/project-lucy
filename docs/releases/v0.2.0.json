@@ -14,7 +14,7 @@
     {
       "id": "40052825697",
       "trigger": "push of the v0.2.0 tag (head = c1ab68b)",
-      "note": "The release tag event. customer-amd64-native only executes on a v* tag ref, so this is where it ran - and failed. See that gate entry."
+      "note": "The release tag event. The four Required checks are green here as well. customer-amd64-native only executes on a v* tag ref, so this is where it ran - and failed. See that gate entry."
     }
   ],
   "gates": [
