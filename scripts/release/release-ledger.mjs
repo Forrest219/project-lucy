@@ -238,11 +238,30 @@ export function collectLedgerErrors(root = ROOT, { verifyRepo = true } = {}) {
         if (!gate.name) {
           errors.push(`${where}: gates[${index}] is missing name`);
         }
-        if (gate.status !== "passed" && gate.status !== "notExecuted") {
-          errors.push(`${where}: gates[${index}] (${gate.name ?? index}) status must be "passed" or "notExecuted"`);
+        if (gate.status !== "passed" && gate.status !== "failed" && gate.status !== "notExecuted") {
+          errors.push(
+            `${where}: gates[${index}] (${gate.name ?? index}) status must be "passed", "failed" or "notExecuted"`
+          );
         }
         if (gate.status === "notExecuted" && !(gate.reason && String(gate.reason).trim())) {
           errors.push(`${where}: gates[${index}] (${gate.name ?? index}) is notExecuted and must state a reason`);
+        }
+        if (gate.status === "failed") {
+          if (!(gate.reason && String(gate.reason).trim())) {
+            errors.push(`${where}: gates[${index}] (${gate.name ?? index}) failed and must state a reason`);
+          }
+          if (gate.required === true) {
+            errors.push(
+              `${where}: gates[${index}] (${gate.name ?? index}) is a Required check and failed. `
+                + `A release must not carry a red Required check; fix the gate or record it as notExecuted.`
+            );
+          }
+        }
+        if ((gate.status === "passed" || gate.status === "failed") && !(gate.run && String(gate.run).trim())) {
+          errors.push(
+            `${where}: gates[${index}] (${gate.name ?? index}) status is "${gate.status}", so it must cite the `
+              + `CI run id it came from in "run"`
+          );
         }
       }
     }
