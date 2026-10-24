@@ -195,3 +195,48 @@ describe("release-ledger repository cross-check", () => {
     assert.deepEqual(problems, []);
   });
 });
+
+describe("release-ledger shallow checkout", () => {
+  it("reports an unverifiable commit instead of claiming it does not exist", async () => {
+    // A shallow checkout cannot answer whether an older release commit is in
+    // the object database. The gate must say so rather than assert either way.
+    const shallow = await mkdtemp(path.join(tmpdir(), "ledger-shallow-"));
+    const source = await mkdtemp(path.join(tmpdir(), "ledger-source-"));
+    try {
+      const { execFileSync } = await import("node:child_process");
+      const git = (cwd, args) => execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8" });
+
+      git(source, ["init", "--quiet"]);
+      git(source, ["config", "user.email", "t@example.com"]);
+      git(source, ["config", "user.name", "t"]);
+      await writeFile(path.join(source, "a.txt"), "a", "utf8");
+      git(source, ["add", "a.txt"]);
+      git(source, ["commit", "--quiet", "-m", "first"]);
+      const first = git(source, ["rev-parse", "HEAD"]).trim();
+      git(source, ["tag", "v1.0.0"]);
+      await writeFile(path.join(source, "a.txt"), "b", "utf8");
+      git(source, ["add", "a.txt"]);
+      git(source, ["commit", "--quiet", "-m", "second"]);
+
+      execFileSync("git", ["clone", "--quiet", "--depth", "1", "--no-tags", `file://${source}`, shallow]);
+      const isShallow = git(shallow, ["rev-parse", "--is-shallow-repository"]).trim();
+      assert.equal(isShallow, "true", "test setup must produce a shallow checkout");
+
+      const problems = verifyLedgerEntryAgainstRepo({
+        __file: "v0.2.0.json",
+        productVersion: "0.2.0",
+        releaseTag: "v1.0.0",
+        commit: first
+      }, shallow);
+      assert.ok(problems.length > 0, "a commit outside a shallow window must not pass silently");
+      assert.ok(
+        problems.every((problem) => !problem.includes("does not exist")),
+        `must not claim the commit is absent: ${problems.join(" | ")}`
+      );
+      assert.ok(problems.some((problem) => problem.includes("shallow")));
+    } finally {
+      await rm(shallow, { recursive: true, force: true });
+      await rm(source, { recursive: true, force: true });
+    }
+  });
+});

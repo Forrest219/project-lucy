@@ -68,6 +68,28 @@ function gitSucceeds(args, cwd) {
 }
 
 /**
+ * True when the commit is genuinely absent, as opposed to merely unreachable
+ * from a shallow checkout.
+ *
+ * CI gate jobs check out with the default shallow depth, so a released commit
+ * from an earlier release is simply not in the object database. That is a
+ * property of the checkout, not a ledger error — but it also means the check
+ * cannot be trusted there. The gate job therefore checks out full history so
+ * the cross-check actually runs; when a checkout is shallow, the absence is
+ * reported as unverifiable rather than silently passed.
+ */
+function commitStatus(entryCommit, cwd) {
+  if (gitSucceeds(["cat-file", "-e", `${entryCommit}^{commit}`], cwd)) {
+    return { state: "present" };
+  }
+  const shallow = git(["rev-parse", "--is-shallow-repository"], cwd);
+  if (shallow === "true") {
+    return { state: "unverifiable", reason: "the checkout is shallow, so the commit is not in the object database" };
+  }
+  return { state: "missing" };
+}
+
+/**
  * Verify the ledger entry against the repository itself: the recorded commit
  * must exist, and when the release tag exists it must point at that commit.
  *
@@ -85,8 +107,14 @@ export function verifyLedgerEntryAgainstRepo(entry, cwd) {
     // `git rev-parse --verify` only validates the SHA's shape; it resolves
     // unknown objects to themselves and still exits 0. `cat-file -e` is what
     // actually asks the object database whether the commit exists.
-    if (!gitSucceeds(["cat-file", "-e", `${entry.commit}^{commit}`], cwd)) {
+    const status = commitStatus(entry.commit, cwd);
+    if (status.state === "missing") {
       problems.push(`${where}: commit ${entry.commit} does not exist in this repository`);
+    } else if (status.state === "unverifiable") {
+      problems.push(
+        `${where}: commit ${entry.commit} cannot be verified because ${status.reason}. `
+          + `The ledger cross-check needs full history — check out with fetch-depth: 0.`
+      );
     }
   }
 
