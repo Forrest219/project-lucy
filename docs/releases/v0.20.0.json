@@ -110,6 +110,6 @@
     "The project owner confirmed that the customer deployed successfully and that the customer's version matches the current v0.20.0. The customerAcceptance field records the resulting manual acceptance, strictly scoped to the customer's actual deployment path; it does not verify either demo Compose path or any other artifact.",
     "The annotated v0.20.0 tag points to abb503cde1a707011116e0b18639913931a28442. The commit and both observed runs are backfilled from Git and CI facts; no GitHub Release or new customer delivery package was created by the tagging operation.",
     "The GitHub customer release chain remains blocked by the pre-existing GHCR namespace/token permission failure and the absence of a protected self-hosted runner. This limits the release scope but does not invalidate the owner-confirmed actual-path acceptance; no GHCR-published candidate, demo Compose path or other unaccepted artifact is included.",
-    "The GitHub Release notes draft is docs/releases/v0.20.0-release-notes.md. The actual GitHub Release has not been created yet."
+    "The formal GitHub Release was created from docs/releases/v0.20.0-release-notes.md at https://github.com/Forrest219/project-lucy/releases/tag/v0.20.0 after explicit owner approval. It preserves the scoped acceptance and release-chain limitations; no release assets or customer delivery package were added."
   ]
 }
