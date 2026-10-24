@@ -32,12 +32,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history + tags: the release ledger cross-checks each recorded
+          # commit against the object database and the release tags.
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
       - run: npm ci
       - run: npm run lint:version
+      - run: npm run lint:release-ledger
       - run: npm run smoke:p0:delivery-isolation
       - name: Materialize private access.yaml stub for lint
         run: |
@@ -582,6 +587,10 @@ jobs:
     if: ${{ startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history + tags: release-artifacts verifies that the release tag
+          # points at the commit being packaged, which is impossible without tags.
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: "22"

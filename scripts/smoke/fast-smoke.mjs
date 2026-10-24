@@ -31,6 +31,9 @@ Checks static governance, metadata, L1 UI contracts, and in-memory MCP handshake
 
 const evidence = {
   contract: "lucy-fast-smoke-v2",
+  // Evidence-contract version. Coincidentally equal to a product version at
+  // some point in time; it is NOT the Lucy product version. Do not bump it
+  // when the product version changes.
   version: "2.0.0",
   generatedBy: "scripts/smoke/fast-smoke.mjs",
   checkedAt: new Date().toISOString(),

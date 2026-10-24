@@ -1,0 +1,65 @@
+{
+  "productVersion": "2.0.0",
+  "releaseTag": "v2.0.0",
+  "commit": "14a8bee16c55b5d9885c8ab4c3464614503735dc",
+  "releasedAt": "2026-10-23",
+  "supersededBy": "v0.2.0",
+  "deliveryPackage": {
+    "name": "lucy-k8s-integration-delivery-20261021-r7.tar.gz",
+    "sha256": "034e7c486ae69d94d57f407c3fcfe97c4ca127e517d9121cd2ed15473eadd8af",
+    "builtFromCommit": "a93880eb1deffab1bd4f8fdfb463bf9613ad6d27",
+    "builtFromDiffersFromReleaseCommit": true,
+    "builtFromDiffNote": "The package was built 36 commits before the release commit. Those 36 commits carry all 11 gate fixes landed for this release, so the package does NOT contain them. The package metadata recorded the true commit (a93880e) — the version label was what drifted.",
+    "chartVersion": "0.2.6",
+    "chartAppVersion": "2.0.0",
+    "imageConfigId": "sha256:32912089e93ae83fce9301576ea3059bbbccf0c7a4da3fb0e9b0a84e9d815581",
+    "platformManifestDigest": "sha256:7162b07d668458f95ebc3fb536408adf92215368fb5b49a1d7c4204be48dca7a",
+    "productionReady": false,
+    "productionReadyReason": "Native linux/amd64 acceptance steps P0-3 through P0-6 were not executed; the local build host was arm64."
+  },
+  "gates": [
+    { "name": "spec-and-webui", "status": "passed", "run": "40039319546", "required": true },
+    { "name": "docker-smoke", "status": "passed", "run": "40039319546", "required": true },
+    { "name": "k8s-static", "status": "passed", "run": "40039319546", "required": true },
+    { "name": "k8s-upgrade-gate", "status": "passed", "run": "40039319546", "required": true },
+    { "name": "headless-config", "status": "passed", "run": "40039319546", "required": false },
+    { "name": "business-eval-catalog", "status": "passed", "run": "40039319546", "required": false },
+    { "name": "ktx-diff-audit", "status": "passed", "run": "40039319546", "required": false },
+    {
+      "name": "real-e2e",
+      "status": "notExecuted",
+      "reason": "No self-hosted runner is registered (labels self-hosted, lucy-protected, linux, amd64). The job stays BLOCKED and never degrades to a headless or local result."
+    },
+    {
+      "name": "customer-release-readiness",
+      "status": "notExecuted",
+      "reason": "Depends on real-e2e and is therefore BLOCKED. No automated release credential was produced."
+    },
+    {
+      "name": "release-package",
+      "status": "notExecuted",
+      "reason": "Depends on customer-release-readiness. Did not run, so no GitHub-gate-produced delivery package exists for this release."
+    },
+    {
+      "name": "customer-amd64-native",
+      "status": "notExecuted",
+      "reason": "Same blocked chain as release-package."
+    },
+    {
+      "name": "P0-3 through P0-6",
+      "status": "notExecuted",
+      "reason": "Manual native linux/amd64 acceptance. The local build host was arm64."
+    },
+    {
+      "name": "demo-db-smoke, postgres-demo-db-smoke",
+      "status": "notExecuted",
+      "reason": "Not one of the four Required checks. First real execution exposed a deployment-layer gap: the demo compose files mount no bootstrap token and hard-code a token path that does not exist in a clean checkout. Deferred to the 2.5 line."
+    }
+  ],
+  "notes": [
+    "The release was merged as a merge commit (242 commits, squash disabled) so the branch head SHA survives verbatim in main history and the commit / image digest / package SHA256 triple stays traceable.",
+    "The GitHub Release for this tag carries the full evidence write-up in prose only; it has no attached machine-readable artifacts.",
+    "This product version was corrected to 0.2.0 on 2026-10-24 because 2.0.0 was too easily confused with the Helm Chart version line 0.2.x. The v2.0.0 tag and its Release are kept as historical fact and are not deleted or moved.",
+    "Root-cause ledger for the 11 gate defects: docs/reviews/2026-10-23-lucy-v2.0-release-readiness-review.md sections 4.8 through 4.20."
+  ]
+}

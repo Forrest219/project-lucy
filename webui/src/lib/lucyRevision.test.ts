@@ -12,9 +12,9 @@ describe("version info revision text", () => {
   });
 
   it("does not turn a product version or a short sha into a commit id", () => {
-    expect(isRecordedCommit("2.0.0")).toBe(false);
+    expect(isRecordedCommit("0.2.0")).toBe(false);
     expect(isRecordedCommit("e8863b8")).toBe(false);
-    expect(formatWorkspaceStatus("2.0.0", false)).toBe("unknown");
+    expect(formatWorkspaceStatus("0.2.0", false)).toBe("unknown");
     expect(formatWorkspaceStatus("e8863b8", true)).toBe("unknown");
   });
 

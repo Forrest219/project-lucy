@@ -21,7 +21,7 @@ test("stamp text accepts a full sha, a dirty sha, and unknown", () => {
   assert.deepEqual(parseStampText(`${SHA}\n`), { gitSha: SHA, gitDirty: false });
   assert.deepEqual(parseStampText(`${SHA}-dirty`), { gitSha: SHA, gitDirty: true });
   assert.deepEqual(parseStampText("unknown\n"), { gitSha: "unknown", gitDirty: false });
-  assert.equal(parseStampText("v2.0.0"), null);
+  assert.equal(parseStampText("v0.2.0"), null);
   assert.equal(parseStampText(`${SHA.toUpperCase()}\n`), null);
 });
 
@@ -118,7 +118,7 @@ test("stamp writer records the build arg and rejects a fake sha", () => {
     assert.equal(readFileSync(out, "utf8"), `${SHA}-dirty\n`);
 
     const bad = spawnSync(process.execPath, [SCRIPT, out], {
-      env: { ...process.env, LUCY_GIT_SHA: "2.0.0", LUCY_GIT_DIRTY: "0" },
+      env: { ...process.env, LUCY_GIT_SHA: "0.2.0", LUCY_GIT_DIRTY: "0" },
       encoding: "utf8"
     });
     assert.notEqual(bad.status, 0);

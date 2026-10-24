@@ -1,6 +1,6 @@
 {
   "name": "project-lucy-eval",
-  "version": "2.0.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "Project Lucy eval runner — wraps Claude Code CLI to exercise KTX MCP tools against evals/superstore/eval cases.",
@@ -16,6 +16,8 @@
     "lint:spec": "node scripts/lint-spec.mjs",
     "lint:version": "node scripts/release/lucy-version-governance.mjs",
     "lint:version:test": "node --test scripts/release/lucy-version-governance.test.mjs scripts/release/lucy-build-revision.test.mjs",
+    "lint:release-ledger": "node scripts/release/release-ledger.mjs",
+    "lint:release-ledger:test": "node --test scripts/release/release-ledger.test.mjs",
     "lint:handbook-baseline": "node scripts/release/handbook-baseline.mjs",
     "lint:handbook-baseline:test": "node --test scripts/release/handbook-baseline.test.mjs",
     "lint:handbook-coverage": "node scripts/gates/handbook-coverage.mjs",

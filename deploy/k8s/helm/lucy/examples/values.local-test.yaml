@@ -32,7 +32,7 @@
 image:
   repository: project-lucy
   # The tag you `docker tag` + `kind load docker-image` after a local build.
-  tag: "2.0.0"
+  tag: "0.2.0"
   # `Never` forces the local cache. If you forget to `kind load docker-image`
   # the pod will sit in `ImagePullBackOff`.
   pullPolicy: Never
@@ -120,7 +120,7 @@ resources:
 
 lucy:
   enabled: true
-  version: "2.0.0"
+  version: "0.2.0"
   bundledKtxVersion: "0.16.0"
 
 serviceAccount:
