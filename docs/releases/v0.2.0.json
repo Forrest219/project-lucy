@@ -1,7 +1,7 @@
 {
   "productVersion": "0.2.0",
   "releaseTag": "v0.2.0",
-  "commit": "PENDING",
+  "commit": "c1ab68b6cb269b09570150a7ac0e5d1f435a66a3",
   "releasedAt": "2026-10-24",
   "deliveryPackage": null,
   "noDeliveryReason": "This release corrects the product version number from 2.0.0 to 0.2.0 and adds the release ledger mechanism. It carries no customer delivery package of its own; the first package that actually ships 0.2.0 contents will be the first delivery of this version line.",
@@ -9,44 +9,44 @@
     {
       "name": "spec-and-webui",
       "status": "passed",
-      "run": "40048966796",
+      "run": "40051808741",
       "required": true,
       "note": "Includes the new lint:release-ledger gate."
     },
     {
       "name": "docker-smoke",
       "status": "passed",
-      "run": "40048966796",
+      "run": "40051808741",
       "required": true
     },
     {
       "name": "k8s-static",
       "status": "passed",
-      "run": "40048966796",
+      "run": "40051808741",
       "required": true
     },
     {
       "name": "k8s-upgrade-gate",
       "status": "passed",
-      "run": "40048966796",
+      "run": "40051808741",
       "required": true
     },
     {
       "name": "headless-config",
       "status": "passed",
-      "run": "40048966796",
+      "run": "40051808741",
       "required": false
     },
     {
       "name": "business-eval-catalog",
       "status": "passed",
-      "run": "40048966796",
+      "run": "40051808741",
       "required": false
     },
     {
       "name": "ktx-diff-audit",
       "status": "passed",
-      "run": "40048966796",
+      "run": "40051808741",
       "required": false
     },
     {
@@ -78,7 +78,7 @@
       "name": "demo-db-smoke, postgres-demo-db-smoke",
       "status": "failed",
       "required": false,
-      "run": "40048966796",
+      "run": "40051808741",
       "reason": "Ran and failed for the known deployment-layer reason recorded in review section 4.20: the demo compose files mount no bootstrap token and hard-code a token path that does not exist in a clean checkout. Not one of the four Required checks, so it did not block the release; deferred to the 2.5 line."
     }
   ],
