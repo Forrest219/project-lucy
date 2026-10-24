@@ -38,9 +38,11 @@
 
 | 文档 | 用途 |
 |---|---|
-| [specs/lucy-20261022-v2p5-row-permission-management-spec.md](specs/lucy-20261022-v2p5-row-permission-management-spec.md) | **设计交付，未实施**：v2.5 L25-14 行权限管理。可复用静态行策略模板、保存前最终行约束预览（角色并集 ∧ 个人行限制）、按表反查的行权限视图与配置审计；不改 Spec 99 / 100 运行时语义，动态行策略仍冻结；V01–V18 全部未执行 |
+| [specs/lucy-20261022-v2p5-row-permission-management-spec.md](specs/lucy-20261022-v2p5-row-permission-management-spec.md) | **v0.25 P0-2，设计完成待需求审查**：L25-14 行权限管理；P0 仅 R2 最终行约束预览、R4 配置审计与 R5 字段诊断，R1 模板与 R3 反查视图归 P1；不改 Spec 99／100 运行时语义，V01–V22 全部未执行 |
 | [specs/lucy-20261021-v2p5-help-center-spec.md](specs/lucy-20261021-v2p5-help-center-spec.md) | **设计交付，未实施**：v2.5 L25-12 系统手册帮助中心体验优化；手册三层 IA 派生、分类 / 文章 / 本页目录与归属化搜索 |
-| [specs/lucy-20261020-v2p5-semantic-batch-operations-spec.md](specs/lucy-20261020-v2p5-semantic-batch-operations-spec.md) | **设计交付，未实施**：v2.5 L25-11 语义资产批量维护；Catalog 批量下载 / 校验 / 导入与发布工作台生效协作 |
+| [specs/lucy-20261020-v2p5-semantic-batch-operations-spec.md](specs/lucy-20261020-v2p5-semantic-batch-operations-spec.md) | **v0.25 P0-3，设计完成待需求审查**：L25-11 语义资产批量维护完整闭环；共享发布协调器覆盖角色保存等写入口，V01–V22 全部未执行，Wave 0b 未解锁保持 `blocked_delivery` |
+| [specs/lucy-20261020-v2p5-audit-increment-spec.md](specs/lucy-20261020-v2p5-audit-increment-spec.md) | **v0.25 P0-1，设计完成待需求审查**：L25-09 审计运行时全量 S01–S08，保留 U1–U12 冻结合同；旧规范 R1–R10／R12 已完成文档同步，功能验收未执行 |
+| [specs/lucy-20261024-v0p25-audit-reconciliation-view-spec.md](specs/lucy-20261024-v0p25-audit-reconciliation-view-spec.md) | **v0.25 P0-4，设计完成待需求审查**：L25-02／03 审计只读对账展示，统一表身份、轮次／调用／尝试、已知耗时、预算凭据及配置／活跃 Token 对账口径；不新增预算、配额或金额，V01–V12 全部未执行 |
 | [specs/lucy-20261019-audit-trust-and-admin-investigation-spec.md](specs/lucy-20261019-audit-trust-and-admin-investigation-spec.md) | **设计交付，未实施**：审计可信度与管理员调查增量契约；取消近邻强制补绑、分离身份和归属质量、统一计数与导出范围；关联实施 Plan 和独立验收矩阵 |
 | `specs/ceo-one-report-sow-product-risk-register.md` | CEO 一眼报 SOW 对照下的 Lucy 产品功能风险 register，聚焦 Eval/trace/context/reviewer/observability 等非数据主题能力 |
 | `specs/ceo-one-report-sow-eval-uat-contract.md` | CEO 一眼报 SOW 可信 Eval/UAT contract，冻结 trace、scoring、context evidence、per-case artifact 与验收口径 |
@@ -73,6 +75,7 @@
 | `reviews/2026-10-21-customer-20260828-v1-to-lucy-2.0-upgrade-plan-review-crosscheck.md` | **已作废**：上述评审的交叉验证过程稿，不得执行。结论已纳入计划 v0.3 |
 | `reviews/2026-10-20-selectdb-hive-catalog-review.md` | SelectDB / Hive 外部 Catalog 与 Lucy 连接接入评审 |
 | `reviews/2026-10-20-upgrade-feature-validation.md` | 升级功能测试验证与复核（14 项功能映射 + 19 条真实用例） |
+| [reviews/2026-10-24-lucy-v0.25-p0-final-decision.md](reviews/2026-10-24-lucy-v0.25-p0-final-decision.md) | **已批准**：v0.25 首批四个 P0 的最终范围、Spec 收口决议、Wave 0b 交付链解锁责任与完整退出口径；不授权实现、部署或发布 |
 | `reviews/2026-10-23-lucy-v2.0-release-readiness-review.md` | **已审阅**：v2.0 合流 main / 开 2.5 线的发版就绪度评审。D1（受保护 runner）裁定为 **B**：本期不 provisioning，死线为 2.5 首次客户交付前就位；D2（2.5 波次版本号）裁定为 **`2.10.0`**。§4.8–§4.20 记录 CI 恢复后暴露的**十一项**门禁缺陷的根因与修复（含 `docker-smoke` 挂死真根因、demo smoke 架构缺陷、WebUI 套件三类时序脆弱点、demo smoke 鉴权缺口） |
 | `reviews/2026-10-24-lucy-v2.0-release-execution-record.md` | **已执行**：v2.0 发版列车阶段一至三的执行记录——11 项门禁修复的落地、PR #45 合流（merge commit `14a8bee`，禁 squash）、`main` 分支保护与 `v*` 标签保护下发、`v2.0.0` tag 与 GitHub Release、`lucy-v2.5` 开线，以及转入 2.5 线的 8 项未决事项（含 D3 待裁定、demo smoke 鉴权缺口） |
 

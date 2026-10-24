@@ -101,7 +101,8 @@ function onToolCall(call):
   if turn is unassigned and call.sessionId maps to an open user turn:
     turn = that turn
     mode = session_bound
-    confidence = high
+    confidence = low
+    association_status = candidate             # 自动会话归属不得升级为 confirmed
 
   if isDataTool(call.tool) and budgetExceeded(turn):
     return continuable(question_budget_exhausted)   # 见 7.2
@@ -183,9 +184,16 @@ function repairHint(result, role):
   if classify(result) == 过滤条件下推:
     return { acceptedFilter: "{ field, op, value }", sources: visible.sources }
   if measure references no source:
-    return { use: "row_count(source) or a published measure name", sources: visible.sources }
+    candidates = visibleRepairCandidates(role, visible)
+    valid = validateRepairSyntaxCapabilityExistenceAndVisibility(candidates)
+    # 只用元数据／编译校验，不为验证提示盲发真实数据查询
+    if valid is not empty:
+      return { use: valid.preferred, sources: visible.sources }
+    return { error: factualValidationError, sources: visible.sources }
   return { sources: visible.sources }
 ```
+
+`row_count(source)` 只有在真实工具 Schema、编译能力、对象存在性、当前主体可见性和可调用性均验证通过时才可进入提示；同名对象存在不构成可调用证明。无法验证时给事实性错误和可用候选，不给虚构函数。
 
 名单里出现 ACL 之外的名字即失败（SC-5、SC-14）。`lucy_read_source` 与 `lucy_query` 使用同一函数。列名同时来自 overlay yaml 和 `_schema/<schema>.yaml` 的 tables；SC-23 夹具应按 manifest 形状编写。
 
@@ -274,15 +282,21 @@ function runCertifiedRoute(routeId, role):
 ```text
 function compileMeasure(measure, source):
   if measure is count star or count(1) without a source:
-    return repairHint(row_count(source))
+    candidate = candidateRepairTarget("row_count", source)
+    if verifyRepairTarget(candidate, currentPrincipal):
+      return repairHint(candidate)
+    return factualErrorWithVisibleCandidates(count_without_source, currentPrincipal)
   if measure wraps an already aggregated published measure in sum:
-    return repairHint(use the published measure name)
+    candidate = candidateRepairTarget(use the published measure name)
+    if verifyRepairTarget(candidate, currentPrincipal):
+      return repairHint(candidate)
+    return factualErrorWithVisibleCandidates(aggregate_of_aggregate, currentPrincipal)
   if measure is completeness:
     require declared numerator and denominator grain
   return compile(measure)
 ```
 
-`compileMeasure` 在 ACL 的空 source 拒绝之前运行；命中时返回修复提示，且不再同时返回 `explicit_table_required:<empty>`。
+`compileMeasure` 在 ACL 的空 source 拒绝之前运行；命中时返回经工具真实 Schema、编译能力、对象存在性、当前主体可见性与可调用性验证的修复提示，且不再同时返回 `explicit_table_required:<empty>`。无法验证候选时只给事实性错误与授权范围内可用候选，不推荐 `row_count(source)` 或其他未验证目标，也不为验证提示发送真实数据查询。
 
 ## 8. 审计字段
 
@@ -321,7 +335,7 @@ function compileMeasure(measure, source):
 | ID | 波次 | 断言 |
 |---|---|---|
 | SC-1 | P0 | 不调用 `lucy_begin_question` 的 `lucy_query` 在授权通过时成功 |
-| SC-2 | P0 | 测试客户端送出 session 时，begin 之后的调用 `turn_attribution_mode=session_bound` 且置信度为 high。生产环境的 turn 绑定率不是本条的退出条件 |
+| SC-2 | P0 | 测试客户端送出 session 时，begin 之后的调用 `turn_attribution_mode=session_bound`、`association_status=candidate` 且置信度为 low；不得升级为 confirmed。生产环境的 turn 绑定率不是本条的退出条件 |
 | SC-3 | P0 | begin 的 `intentSummary` 在问询导出里来源为用户原话；空 summary 返回 `missing_intent_summary` 且不阻断随后的查数 |
 | SC-4 | P0 | 第 21 次数据工具或墙钟超过 120 秒时返回 `question_budget_exhausted`，`outcome=budget_stop`，失败维度为空 |
 | SC-5 | P0 | 修复提示中的 source 全部属于该角色；夹入一个 ACL 外的名字时测试失败 |
@@ -334,7 +348,7 @@ function compileMeasure(measure, source):
 | SC-12 | P1 | 注入 Wiki 的篇目属于该角色，审计含篇目 id 与版本 |
 | SC-13 | P1 | 认证路径的结果含 `routeId` 与 source。角色看不见该 source 时走权限拒绝 |
 | SC-14 | P1 | `discover_data`、`lucy_query`、`lucy_read_source` 的拒绝载荷使用 7.3 的同一名单函数 |
-| SC-15 | P1 | `count(*)` 无 source 时修复提示指向 `row_count(source)`。`sum(已聚合度量)` 不生成 `sum(sum())` |
+| SC-15 | P1 | `count(*)` 无 source 时，只有真实 Schema、编译能力、对象存在性、当前主体可见性与可调用性均验证通过才推荐 `row_count(source)`；同名不可调用、不可见或不存在时只给事实性错误与授权候选。`sum(已聚合度量)` 不生成 `sum(sum())`，修复目标同样须先验证 |
 | SC-16 | P1 | 默认使用 KPI 不含协议工具。参数或连接名含 `probe-`、`rds-test`、`demo-mysql` 且 `eval_mark` 为真的调用在默认视图分开；只命中名称、`eval_mark` 未标记的调用仍在默认视图。不凭 User-Agent 或 `token_label` 推断。原始行仍在 |
 | SC-17 | P1 | 抽样：`COUNT(*)` 的 `upstream_error`、`wiki_not_found`、`explicit_table_required:<empty>` 归用法与语义；`AS field` 归过滤条件下推；超时归引擎超时与并发；`table_forbidden`、`wiki_forbidden`、`explicit_table_required:<table>` 归权限拒绝 |
 | SC-18 | P1 | 导出第二页能取到第 10,001 行。空 `policy_version` 计为缺失。缺快照时 completeness 为 false |

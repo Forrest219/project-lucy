@@ -113,7 +113,7 @@ sessionKey  = identityKey + ":" + lucySessionId
 | 优先级 | 条件 | mode | confidence |
 |---|---|---|---|
 | 1 | 显式 `x-lucy-turn-id` 且属于当前 identity/session | `explicit` | `high` |
-| 2 | 当前 Session 有未过期 active Turn | `session_bound` | `high` |
+| 2 | 当前 Session 有未过期 active Turn；仅形成候选关联 | `session_bound` | `low`，且 `association_status=candidate` |
 | 3 | 无 Session，且当前 identity 只有一个未过期 active Turn | `identity_inferred` | `low` |
 | 4 | 多候选、归属不符或没有候选 | `unassigned` | `none` |
 
@@ -159,12 +159,14 @@ FUNCTION resolveTurn(identity, requestSessionId, explicitTurnId):
   IF requestSessionId exists:
     turn = activeTurnBySession(identity, requestSessionId)
     IF turn exists:
-      RETURN {turnId: turn.id, mode: session_bound, confidence: high}
+      RETURN {turnId: turn.id, mode: session_bound, confidence: low,
+              association_status: candidate}
     RETURN unassigned
 
   candidates = activeTurnsByIdentity(identity)
   IF candidates.count == 1:
-    RETURN {turnId: candidates[0].id, mode: identity_inferred, confidence: low}
+    RETURN {turnId: candidates[0].id, mode: identity_inferred, confidence: low,
+            association_status: candidate}
   RETURN unassigned
 
 FUNCTION handleLucyQuery(request):

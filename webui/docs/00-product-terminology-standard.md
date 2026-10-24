@@ -628,6 +628,21 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 
 文案不得把"操作权限 / 业务结果 / 归属 / 证据质量"合并成一个安全结论。**撤销的旧规则**（作废声明，不在 UI / API 中出现）：120 秒近邻回绑（`PRIOR_BIND_MS = 120000`）、写完成时按最近活动 turn 重归因（v0.2 §6 lines 73–76）、把 `session_bound + high` 当作等同 confirmed、把 38 个空 tool / hash + 时间窗 / 维护空日志非空即通过等被推翻结论写回实施。
 
+#### 4.7.2 v0.25 审计增量术语
+
+| Canonical term | UI 主术语 | 禁止文案 | 说明 |
+|---|---|---|---|
+| Primary Status | 汇总主状态 | 用旧 outcome 冒充执行状态 | 八取值派生视图；与 authorization / execution / delivery 分开 |
+| Null Reason | 空值原因 | 空白、未知填 0 | 六值：`not_applicable / not_collected / redacted / parse_failed / unknown / not_supported` |
+| Protocol Access Denominator | 协议访问分母 | 业务问询分母、工具调用数 | 含握手与探测的独立请求集合 |
+| Business Inquiry Denominator | 业务问询分母 | 事件数、推断分组数 | 按有效显式 turnId 去重的登记问询集合 |
+| Endpoint ID | 入口标识 | 监听端口 | 逻辑入口；端口只是登记属性 |
+| Evidence Version Chain | 证据版本链 | 同目录清单重写 | 通过 `prevExportId` 关联导出版本 |
+| Delivery Status | 送达状态 | HTTP 200 即收到、无 ACK 即未收到 | prepared / sent / acknowledged / unknown；本期不写 unacknowledged |
+| Attempt | 尝试 | 重连、事件重放 | 一次实际执行尝试；父引用只指 attempt ID |
+
+上述英文标识、枚举值、`turnId`、`prevExportId` 及事件／尝试 ID 的 DOM 节点使用 `translate="no"` 与 `notranslate`。
+
 ### 4.8 MCP 调试台 / ACL 裁决可见性
 
 | Canonical Term | Preferred EN | UI 主术语 | 禁止 / 弃用 | 说明 |

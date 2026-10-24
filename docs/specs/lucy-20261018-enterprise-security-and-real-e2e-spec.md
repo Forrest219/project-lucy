@@ -10,7 +10,7 @@
 | 状态 | **已批准（2026-10-18，xingchen）；§10 R1～R10 按默认值生效；R8 基础设施负责人待指定。实施状态四级分别标注（见下表）：已实现 ✅｜本地通过 ✅（范围受限）｜目标 K8s 通过 ❌ BLOCKED｜可发布 ❌** |
 | 实施 Plan | [2026-10-18-enterprise-security-and-real-e2e-plan.md](../plans/2026-10-18-enterprise-security-and-real-e2e-plan.md) |
 | 架构决策 | [ADR — 安全账本与上下文对象授权](../access-control/adr-20261018-security-ledger-and-context-acl.md)（已于 2026-10-18 与本 Spec 同批批准） |
-| 评估来源 | [2026-10-17 评估 v1.1](../../inbox/e2e-security-audit-20261017/assessment.md)及其合成夹具运行证据（含 V-08 复现 `inbox/xv-20261018/`）；该临时目录删除后，本 Spec 的问题映射与验收定义仍独立成立 |
+| 评估来源 | 2026-10-17 评估 v1.1 及其合成夹具运行证据（含 V-08 复现）；历史工作副本路径为 `inbox/e2e-security-audit-20261017/assessment.md` 与 `inbox/xv-20261018/`。这些临时文件未纳入 Git，不作为当前可访问证据；持久口径以本 Spec 的问题映射与验收定义为准，不依赖临时链接 |
 | 输出位置 | `docs/specs/lucy-20261018-enterprise-security-and-real-e2e-spec.md` |
 | 基线 | `lucy-v2.0`，HEAD `5c1e5cf`；工作区存在他人未提交改动，实施前重新确认源码与漏洞状态 |
 | 范围 | 管理认证、MCP 统一准入、Wiki/Skill 授权、耐久审计、真实用户 E2E、客户上线门禁 |
@@ -216,6 +216,8 @@ Wiki 与 Skill 读取、导出、导入后的读取统一使用 fs-safe realpath
 选用现有 SQLite 运行栈新增本地安全账本，WAL + `synchronous=FULL`，无新增队列服务。对所有 MCP 内容/元数据响应、管理敏感读/导出、认证成功、授权变更执行耐久记录。health/help/静态资源等明确公共恢复路径不依赖内容审计；审计不可用时的拒绝可降级到有界脱敏错误日志，但不允许返回敏感内容。
 
 对读取：准入通过后写 `request_admitted`，执行真实调用并在有界缓冲区得到响应，重新验证授权版本，耐久写 `response_prepared`（outcome、行列摘要/响应摘要哈希、所用对象版本），再发出内容。该事件表示“已准备并获准发送”，**不假装证明客户端已经收到**。正常发送后追加 terminal 事件；崩溃留下未完成操作，重启补记 interrupted，不重发原内容。
+
+v0.25 增补：每个逻辑入口登记 `endpoint_id`、传输类型、监听地址与用途；MCP 与管理端口并存是合法部署形态。恢复扫描以 canonical ledger 的持久前缀为准；上游可能已执行而结果无法核验时保留 `indeterminate` 并进入只读凭据核对，禁止为补日志自动重放业务。SEC-19 的耐久屏障与性能预算不变。
 
 流式响应若无法在块发送前完成对应持久记录与版本检查，本期不得直接透传敏感 SSE；采用有界缓冲后输出协议 SSE。超限/超时明确失败，不静默截掉后声称完整。所有支持客户端必须用真实传输验证；客户端协议兼容不能成为跳过审计的理由。
 

@@ -108,9 +108,10 @@ findings:
   # 影响面：清单文件名保留原始大小写（大写 schema，SQL Server / Oracle 常见）的连接上，该表无法保存任何行级条件；
   #   开发期不可见——macOS / APFS 默认大小写不敏感，bidm.yaml 能命中 BIDM.yaml；客户环境为 Linux，问题必现。
   #   仓库既有行策略测试全部使用小写 schema（fin），该路径从未被覆盖。
-  # 处置（2026-10-22 Forrest 裁决）：只登记不修，留给 v2.0 线排期；本次不授权实现。
-  #   修复形态与回归要求见 docs/specs/lucy-20261022-v2p5-row-permission-management-spec.md §5.5 与 V19–V22。
-  #   复现步骤（持久记录于本 note 与 L25-14 Spec §1.4 / §5.5）：用 vitest mock node:fs/promises 的 readFile，使其按大小写敏感语义
+  # 处置（2026-10-24 Final 决议）：归属 0.20.Z 维护线（当前基线 0.20.0）；本次只登记设计，不授权实现。
+  #   它是受影响客户场景的交付价值依赖，不是 L25-14 R2/R4/R5 的开工依赖；V19／V22 证据齐全前不得宣称受影响场景交付价值。
+  #   修复形态与集成回归见 docs/specs/lucy-20261022-v2p5-row-permission-management-spec.md §5.5 与 V19／V22。
+  #   复现步骤（持久记录于本 note 与 L25-14 Spec §1.5 / §5.5）：用 vitest mock node:fs/promises 的 readFile，使其按大小写敏感语义
   #   判定文件名是否存在；造一份 _schema/BIDM.yaml（含目标列）与同名 overlay，跑一次带 scoped 行级条件的角色编译；
   #   同一内容仅清单文件名大小写不同（大写 BIDM.yaml / 小写 bidm.yaml），结果从 row_policy_field_unresolved:unknown 变为可绑定。
   #   工作副本在 inbox/2026-10-22-行级策略字段绑定诊断/（gitignore，不入库）。
@@ -118,7 +119,7 @@ findings:
   - id: D-03
     severity: P1
     status: open
-    spec: "L25-14 §1.4 / §5.5"
+    spec: "L25-14 §1.5 / §5.5"
     fixedIn: null
     verifiedBy: []
     acceptedBy: null
@@ -131,6 +132,18 @@ findings:
     severity: P1
     status: open
     spec: "§8.3"
+    fixedIn: null
+    verifiedBy: []
+    acceptedBy: null
+  # G-06 GHCR 命名空间／令牌权限阻断候选镜像推送，Wave 0b 与 G-01 共同保持 blocked_delivery。
+  # 证据：docs/releases/v0.20.0.json gates.customer-amd64-native（run 40097259604）与 docs/releases/v0.20.0-release-notes.md §已知问题与未执行项。
+  # 原生 amd64 镜像本地构建成功，但 ghcr.io/kaelio/project-lucy 推送被 permission_denied 拒绝，未产生候选 registry digest；
+  # 仓库 owner 为 Forrest219，内置 GITHUB_TOKEN 不能向不同 kaelio 命名空间发布。仅改变量或凭据配置不算关闭；
+  # 必须实际推送并拉取同一候选镜像、登记 registry digest，再与 G-01 的受保护 runner／real-e2e 证据共同解除整批 blocked_delivery。
+  - id: G-06
+    severity: P1
+    status: open
+    spec: "v0.25 Final 决议 §3 / Wave 0b"
     fixedIn: null
     verifiedBy: []
     acceptedBy: null

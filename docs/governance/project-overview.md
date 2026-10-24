@@ -4,7 +4,8 @@
 |---|---|
 | 文档名称 | project-lucy 项目概览 |
 | 文档类型 | Overview |
-| 版本 | v1.23 |
+| 版本 | v1.24 |
+| v1.24 更新 | 2026-10-24，收口 v0.25 首批四个 P0 设计：L25-09 审计全量、L25-14 安全核心、L25-11 语义批量完整闭环及 L25-02／03 审计只读对账展示；全部待需求审查、验收未执行，不授权开发，Wave 0b 未解锁保持 `blocked_delivery` |
 | v1.23 更新 | 2026-10-23，同步差异化主张（口径、权限、语境是模型之外的资产）与 vision.md §1.2 的自建 / 外购判据、差异化边界、衡量口径引用；仅定位与文档口径同步，不改变能力边界与交付状态 |
 | v1.22 更新 | 2026-10-22，登记 v2.5 L25-14 行权限管理 Spec v0.1-draft（可复用静态行策略模板 + 最终行约束预览 + 行权限视图 + 配置审计）；同步登记行级策略字段绑定存量缺陷 D-03（P1 / open，只登记不修，留 v2.0 线排期）；仅设计草案，验证未执行，暂不开发 |
 | v1.21 更新 | 2026-10-22，登记 v2.5 L25-13 升级候选验证环境实施方案 v0.1；仅规划，暂不开发，不改变客户现场以原地升级为主线的放行方式 |
@@ -161,9 +162,11 @@ Lucy MCP Proxy 监听 `LUCY_PROXY_HOST:LUCY_PROXY_PORT`（默认容器内 `0.0.0
 | **竞品分析与差异化立项（20261014）** | **`docs/specs/lucy-20261014-safe-log-to-quality-eval-spec.md`**（P0-1 反馈回流浪程）· **`docs/specs/lucy-20261014-release-bom-spec.md`**（P0-2 发布物料清单）· **`docs/specs/lucy-20261014-concept-dictionary-spec.md`**（P1 概念字典）；工单 `docs/plans/wo-20261014-*.md`；分析底稿与评审历史 `docs/specs/lucy-20261014-fivetran-context-layer-competitive-analysis.md` |
 | Cloudflare OS 对标差异（20261018） | `docs/specs/lucy-20261018-cloudflare-os-benchmark.md`。公开材料对照，不是功能 Spec；未纳入本地实机截图交叉审阅 |
 | Hive 直连（v2.5 L25-10，方案待评审，暂不开发） | [Hive 直连实施方案](../plans/2026-10-20-hive-direct-connection-implementation-plan.md)。Lucy 适配 HiveServer2/JDBC，复用未修改的 KTX Python 语义计算接口；静态接口核查完成，动态验证未执行 |
-| 语义资产批量维护（v2.5 L25-11，P1，草案待评审，暂不开发） | [Spec v0.1-draft](../specs/lucy-20261020-v2p5-semantic-batch-operations-spec.md)。记录运行镜像与源码双基线；Catalog 批量下载 / 校验 / 导入与工作台生效协作，含核心伪代码及 V01–V22 验证矩阵，全部未执行 |
+| 审计事实、可靠性与证据闭环（v0.25 L25-09，P0-1，待需求审查） | [审计增量 Spec](../specs/lucy-20261020-v2p5-audit-increment-spec.md)。S01–S08 全量、U1–U12 冻结语义保留；R1–R10／R12 旧规范文档同步完成，A01–A12 全部未执行 |
+| 审计只读对账展示（v0.25 L25-02／03，P0-4，待需求审查） | [审计只读对账展示 Spec](../specs/lucy-20261024-v0p25-audit-reconciliation-view-spec.md)。统一完整表身份、预算凭据及配置／活跃 Token 对账；只读复用 S05，不新增预算、配额、金额，V01–V12 全部未执行 |
+| 语义资产批量维护（v0.25 L25-11，P0-3，待需求审查） | [语义资产批量维护 Spec](../specs/lucy-20261020-v2p5-semantic-batch-operations-spec.md)。完整闭环、共享发布协调器与失败恢复；D1–D4 已裁决，V01–V22 全部未执行，Wave 0b 未解锁保持 `blocked_delivery` |
 | 升级候选验证环境（v2.5 L25-13，P1，方案待评审，暂不开发） | [实施方案](../plans/2026-10-22-upgrade-candidate-verification-plan.md)。L25-07「独立恢复验证」的细化：用一致性备份在隔离环境验证候选镜像的迁移正确性与业务/审计连续性，13 条 `RVC-*` 断言全部未执行；原地升级仍是客户现场主线 |
-| 行权限管理（v2.5 L25-14，P1，草案待评审，暂不开发） | [Spec v0.1-draft](../specs/lucy-20261022-v2p5-row-permission-management-spec.md)。可复用静态行策略模板 + 保存前最终行约束预览（角色并集 ∧ 个人行限制）+ 按表反查的行权限视图 + 配置审计；模板编译期摊平为现有 `row_policy` 谓词形状，不产生第二套权限代数；动态 / 按人 / 按 Token 行策略仍按 ADR 冻结；V01–V18 全部未执行 |
+| 行权限安全管理（v0.25 L25-14，P0-2，待需求审查） | [行权限管理 Spec](../specs/lucy-20261022-v2p5-row-permission-management-spec.md)。P0 仅 R2 最终行约束预览、R4 配置审计、R5 字段诊断；R1 模板与 R3 反查视图归 P1，D1–D7 已裁决，V01–V22 全部未执行；D-03 归 0.20.Z 维护线 |
 | Lucy 202608 Enterprise Governance & Observability 升级蓝图 | `docs/specs/lucy-202608-reliable-delivery-upgrade-spec.md` |
 | Lucy 202608 升级执行总控 | `docs/specs/lucy-202608-upgrade-execution-control.md` |
 | Lucy 202608 Governance & Observability 差距分析 | `docs/access-control/gap-analysis-202608.md` |

@@ -1,13 +1,14 @@
-# Lucy v2.5 行权限管理 Spec
+# Lucy v0.25 行权限管理 Spec
 
 | 元数据 | 内容 |
 |---|---|
-| 文档类型 / 版本 | 功能设计草案 / v0.1-draft |
-| 日期 / 目标版本 | 2026-10-22 / v2.5 |
-| 功能编号 / 优先级 | L25-14 / P1，访问治理域核心能力 |
-| 状态 | 纳入规划、待评审；仅授权起草和登记，暂不开发 |
-| 授权来源 | 2026-10-22 Forrest 要求：在 v2.5 加入「行权限管理」需求 |
-| 规划入口 | [Lucy 2.5 功能升级建议书](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) §2.8 |
+| 文档类型 / 版本 | 功能设计基线 / v0.2-requirements-review |
+| 日期 / 目标版本 | 2026-10-24 / v0.25 |
+| 功能编号 / 优先级 | L25-14 / P0-2；R2、R4、R5 为 P0，R1、R3 保持 P1 |
+| 状态 | 设计完成、待需求审查；暂不开发，不代表实现或验收通过 |
+| 授权来源 | 2026-10-24 Forrest 批准首批 Spec 评审 Final 决议，并要求完成四个 P0 设计材料 |
+| 规划入口 | [Lucy v0.25 功能升级建议书](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) §2.8；[P0 Final 决议](../reviews/2026-10-24-lucy-v0.25-p0-final-decision.md) |
+| 审查入口 | [首批 P0 需求审查清单](../plans/2026-10-24-lucy-v0.25-p0-requirements-review-checklist.md) |
 | 实施主体 | Lucy；不改 KTX 源码；不新增第二套权限代数 |
 | 上游裁决 | [行级策略后续迭代 ADR](../access-control/adr-row-policy-next-iteration.md) §2.2（可复用静态策略引用为下一次行策略增量候选）；[权限路线图冻结 ADR](../access-control/adr-post-p15-roadmap-freeze.md)（Dynamic RLS / TokenScope / 多租户仍冻结） |
 | 权威现行契约 | Spec 99（行级策略 / FinalRows / 强制谓词）、Spec 100（Agent 个人行限制）、[术语标准](../../webui/docs/00-product-terminology-standard.md) |
@@ -81,7 +82,7 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`row_policy`、`
 
 本条现状判断来自本地源码静态阅读（`webui/server/proxy/`、`webui/server/admin/`、`webui/src/pages/admin/`）与仓库内既有 Spec / ADR，**未**对运行镜像做接口贯通验证，**未**执行任何行策略用例。文中「已具备」指 v2.0 代码路径存在，**不等于**已在客户环境验证通过。
 
-### 1.4 已复现的真实缺陷（2026-10-22 诊断报告）
+### 1.5 已复现的真实缺陷（2026-10-22 诊断报告）
 
 诊断报告记录了一次**已复现**的行级条件保存失败：角色 `finbp_cdn` 对 `sql_server / BIDM / hs_sy_bu_metric` 设置 `hs_manage_bu_l2 = 'CDN产品'`，`PATCH /api/admin/roles/finbp_cdn`（`dryRun: true`）返回 HTTP 400 / `INVALID_ROLE` / `role_resolution_failed:finbp_cdn:row_policy_field_unresolved:unknown`。移除行级策略后返回 200。该列在 SQL Server 物理表和 Lucy 语义模型中均存在。
 
@@ -98,9 +99,9 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`row_policy`、`
 
 **复现步骤：** 用 vitest mock `node:fs/promises` 的 `readFile`，使其按**大小写敏感**语义判定文件名是否存在（macOS / APFS 默认大小写不敏感，直接跑会掩盖问题）；造一份 `_schema/BIDM.yaml`（含目标列）与同名 overlay，跑一次带 `scoped` 行级条件的角色编译。**同一内容仅清单文件名大小写不同**（大写 `BIDM.yaml` / 小写 `bidm.yaml`），结果从 `row_policy_field_unresolved:unknown` 变为可绑定，并可断言代码请求的是小写化路径。工作副本在 `inbox/2026-10-22-行级策略字段绑定诊断/`（`inbox/` 属 gitignore，不入库；持久复现步骤以本节与 §5.5 为准）。
 
-**与本条的关系：** G5 是**存量缺陷**，不是 v2.5 新增能力——它必须在 v2.0 线修复，否则 v2.5 的行权限管理建在不可用的字段绑定之上。本条吸收它的**管理面要求**（R5）与**回归要求**（§9），修复本身的排期见 §11 D7。
+**与本条的关系：** G5 是**存量缺陷**，归属 **0.20.Z 维护线（当前基线 `0.20.0`）**，不是 v0.25 新增能力。它是受影响客户环境的交付价值依赖，**不是 R2／R4／R5 的开工依赖**；本条吸收其管理面要求（R5）与集成回归要求（§9），修复本身的排期见 §11 D7。
 
-**登记状态：** 已在机器可校验的缺陷台账 [`docs/qa/security-findings.yaml`](../qa/security-findings.yaml) 登记为 **D-03（P1 / open）**。2026-10-22 Forrest 裁决：**只登记不修，留给 v2.0 线排期**，本次不授权实现。因此本条**不宣称该缺陷已修复**，也不把它计入 v2.5 的能力范围。
+**登记状态：** 已在机器可校验的缺陷台账 [`docs/qa/security-findings.yaml`](../qa/security-findings.yaml) 登记为 **D-03（P1 / open）**。本次仍不授权实现，不宣称该缺陷已修复，也不把修复计入 v0.25 新功能；`fixedIn` 在实际修复验证前保持为空。
 
 ---
 
@@ -108,7 +109,7 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`row_policy`、`
 
 **判断**：行级策略是 Lucy 权限模型里唯一「按行裁剪数据面」的机制，也是当前唯一没有产品化管理面的权限层。表级授权、工具授权在治理台都有专门视图，行级授权只有一个逐表手填的表单，并且看不到配置后的实际行约束。这不是展示美化问题——**多 Role 行授权取并集**意味着配置看起来更严、实际却更宽，缺少最终行约束预览会直接导致越权投放。
 
-**本期做**：把「行权限」从表单字段提升为可管理的对象——① 可复用的静态行策略模板；② 保存前的最终行约束预览；③ 按表反查的行权限视图；④ 行权限变更的配置审计。
+**P0 做**：R2 保存前最终行约束预览、R4 行权限配置审计、R5 字段绑定诊断，形成最小安全闭环。**P1 保留**：R1 可复用静态行策略模板、R3 按表反查视图；本文保留其设计以避免后续重开权限语义，但不计入 P0 交付承诺。
 
 **本期不做**（明确排除，见 §8 与 §10）：动态 / 按人 / 按 Token 的行策略；多租户隔离；数据库原生 RLS / CLS；新增权限代数；改动现有 `forced_filters` 注入路径；修改 KTX 源码；改变表级与工具级授权语义。
 
@@ -116,15 +117,15 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`row_policy`、`
 
 ## 3. 能力范围
 
-| 编号 | 能力 | 性质 | 是否改变运行时裁决语义 |
-|---|---|---|---|
-| R1 | 可复用静态行策略模板（命名引用） | 新增配置形态 | 否——编译成同一套 `RowPolicyAST` |
-| R2 | 最终行约束预览（保存前 + 详情页） | 新增只读展示 | 否——复用 `compileFinalRowsBySource` 产物 |
-| R3 | 行权限视图（按表反查） | 新增只读视图 | 否 |
-| R4 | 行权限配置审计 | 新增审计事件 | 否 |
-| R5 | 行级条件字段可诊断 | 改进错误信息 | 否——只补上下文，不改绑定语义 |
+| 编号 | 优先级 | 能力 | 性质 | 是否改变运行时裁决语义 |
+|---|---|---|---|---|
+| R1 | P1 | 可复用静态行策略模板（命名引用） | 新增配置形态 | 否——编译成同一套 `RowPolicyAST` |
+| R2 | P0 | 最终行约束预览（保存前 + 详情页） | 新增只读展示 | 否——复用 `compileFinalRowsBySource` 产物 |
+| R3 | P1 | 行权限视图（按表反查） | 新增只读视图 | 否 |
+| R4 | P0 | 行权限配置审计 | 新增审计事件 | 否 |
+| R5 | P0 | 行级条件字段可诊断 | 改进错误信息 | 否——只补上下文，不改绑定语义 |
 
-### 3.1 R1 可复用静态行策略模板
+### 3.1 R1 可复用静态行策略模板（P1）
 
 - 模板是**具名的静态谓词集合**，声明内容仅限：行级字段、比较符（`eq` / `in`）、字面量取值。
 - 模板不引入取值来源：不允许宏、占位符、请求期表达式、环境变量或调用方 claim。取值只能与今天一样是编译期字面量。
@@ -132,34 +133,37 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`row_policy`、`
 - 一个表选择器可同时声明「模板引用」与「附加手写条件」；两者在**同一 Role 分支内取 AND**（同一 `orArm`），跨 Role 仍取 OR（并集）。
 - 引用不产生第二套权限代数：`row_policy` 仍只输出 `predicates` 形状，模板在编译期展开后与手写谓词并列进入同一个 `predicates` 数组。
 
-### 3.2 R2 最终行约束预览
+### 3.2 R2 最终行约束预览（P0）
 
 - 在保存行策略**之前**展示该表的最终行约束，而不是保存后才发现。
 - 预览必须覆盖两层语义：**Role 之间的并集**（OR，可能放宽）+ **与 Agent 个人行限制的交集**（AND，收窄）。
-- 预览结果与运行时注入使用**同一份编译产物**（`compileFinalRowsBySource` → `lookupFinalRows`），不允许管理台另算一套。
+- 预览输入是 **draft 覆盖当前配置后的内存候选配置**，并经运行时同一编译路径 dry-run；不得读取旧配置、另算展示逻辑或先落盘再回读。
+- 预览结果与运行时注入使用**同一份编译产物**（`compileFinalRowsBySource` → `lookupFinalRows`），并绑定候选 `policyDigest / planDigest`；提交时基线变化须重新预览。
 - 展示结构必须保持 DNF 形态：**任一分支满足其一**。不得把并集拍平成一条 AND 条件——那会让管理员看到比实际更严的约束，得出错误结论。
 
-### 3.3 R3 行权限视图
+### 3.3 R3 行权限视图（P1）
 
 - 以**表**为入口反查：哪些角色对该表设了行策略、每个角色的谓词内容、哪些 Agent 带个人行限制、该表的最终行约束摘要、是否处于「行权限：全部行」状态。
 - 与 L25-08 访问关系图的分工：关系图是「谁授权了什么 / 谁访问了什么」的**全局横向**视角；行权限视图是「这张表的行到底受什么约束」的**单表纵向**视角。两者共用同一份编译产物，不重复实现两套数据口径。
 - 视图只读，不提供在此处直接改策略的入口；改动仍从角色详情进入，避免出现第二条写入路径。
 
-### 3.4 R4 行权限配置审计
+### 3.4 R4 行权限配置审计（P0）
 
-- 记录：模板新增 / 修改 / 删除、角色行策略变更、引用与解引用。
-- 每条记录含：actor、operationId、变更对象身份、变更前后摘要、影响面（受影响的表数 / Agent 数）、时间。
+- 记录：P0 的角色行策略变更；R1 进入实施后同时覆盖模板新增 / 修改 / 删除、引用与解引用。
+- 每条记录含：actor、operationId、变更对象身份、变更前后摘要、影响面（受影响的表数 / Agent 数）、时间、intent／terminal 状态与失败原因。
 - 行权限变更属**配置审计**，不写入 L25-09 的问询运行时事件流；两者的事件模型与保留策略互不混用。
+- 审计顺序固定为 **durable intent → 配置写入与 `commitEffectivePolicy` → durable terminal**。intent 失败不得写配置；terminal 失败必须回滚配置并重新换入旧策略。无法恢复时，受影响范围失败关闭并阻断后续写入，不得出现运行时权限已放宽但没有有效终结审计的状态。
 
-### 3.5 R5 行级条件字段可诊断
+### 3.5 R5 行级条件字段可诊断（P0）
 
 诊断报告第 3 条要求：字段无法解析时，返回具体连接、Schema、表和字段，便于定位。现状 `role_resolution_failed:<role>:row_policy_field_unresolved:unknown` 把**失败字段名整个丢掉**，管理员拿到的信息不足以定位。
 
 - 失败原因必须带四元组：连接、Schema、表（sourceName）、字段名，外加失败阶段（`row_grant`）。
-- 必须区分两类原因，不能都报 `unknown`：
-  - **字段不存在**：该表确实没有这一列 → 拒绝，指向用户改条件。
-  - **字段目录不可用**：清单未装载 / 清单文件不可读 / 该表无任何可用列（对应 §1.4 的 G5 缺陷）→ 拒绝，并明确提示「语义层清单未装载 / 不可读」，指向运维，而不是指向用户改条件。
-- 该区分只增强诊断，**不放宽**任何绑定校验；两类的结果都是拒绝取数。
+- 必须区分三类原因，不能都报 `unknown`：
+  - **字段不存在**：目录已可靠装载且该表确实没有这一列 → 拒绝，指向用户改条件。
+  - **清单不可用**：真实路径解析、读取或解析失败，包括 §1.5 的 G5 场景 → 拒绝并指向运维。
+  - **目录能力未知**：当前适配器或部署形态不能证明目录可用性 → 拒绝并披露能力边界，不能猜成字段不存在。
+- 三类均失败关闭；诊断只增强归因，**不放宽**任何绑定校验。
 
 ---
 
@@ -280,12 +284,14 @@ function computeFinalRowsForTable(tableKey, roles, agents):
     # tableKey = (connectionId, schema, sourceName)
 
     # 1) 该表上每个 Role 的行授权：Role 内 AND，Role 间 OR（现状 mergeRowGrants）
-    effective = RowGrant{kind:"all"}
+    effective = None                              # OR 的空集单位；禁止用 all 初始化
     for role in roles that allow this table:
         grant = compileRoleRowGrant(role, tableKey)     # 现状语义，含 §5.1 的模板展开
         if not grant.ok:
             return FAIL(grant.reason)                  # 任一 Role 编译失败 → 该表不可用
-        effective = mergeRowGrants(effective, grant)   # 现状函数：OR；all 胜出
+        effective = grant if effective is None else mergeRowGrants(effective, grant)
+    if effective is None:
+        return FAIL("row_policy_no_applicable_grant")  # 无授权分支不得解释为全部行
 
     # 2) 每个 Agent 的个人行限制（AND），并求最终行约束（现状）
     out = {}
@@ -306,51 +312,59 @@ function computeFinalRowsForTable(tableKey, roles, agents):
     }
 ```
 
-要点：`effectiveRowGrant` 是**并集**，可能比任何单个 Role 都宽。预览必须同时给出 `effectiveRowGrant` 与各 Agent 的 `finalRowsByAgent`，并保持 `orArms` 结构；**不得**把 orArms 拍平成一条 AND 条件后再展示。
+要点：`effectiveRowGrant` 是**并集**，可能比任何单个 Role 都宽，但 `all OR scoped = all` 只应在确有 `all` 分支时发生；两个受限 Role 不得因累积初值为 `all` 而显示全部行。预览必须同时给出 `effectiveRowGrant` 与各 Agent 的 `finalRowsByAgent`，并保持 `orArms` 结构；**不得**把 orArms 拍平成一条 AND 条件后再展示。
 
-### 5.3 保存前校验与预览（拟增）
+### 5.3 保存前校验、预览与审计闭环（拟增）
 
 ```text
-function saveRowPolicyDraft(draft, context):
-    # context = { roles, templates, agents, tableKey, actor }
+function previewRowPolicyDraft(draft, context):
+    # 只读 dry-run；draft 覆盖当前配置形成完整内存候选，不落盘、不换入运行策略
+    candidate = overlayDraftOnCurrentConfigInMemory(context.currentConfig, draft)
+    candidate.roles   # 含当前 draft 的角色、关联 Role
+    candidate.agents  # 含可达 Agent 的个人行限制
+    candidateDigest = digestCanonicalCandidate(candidate)
 
-    # 1) 形状校验（现状 parseRowPolicyShape 扩展接受 template）
-    shape = parseRowPolicyShapeWithTemplate(draft.rowPolicy)
+    # 形状、模板（P1 启用时）、目录与字段检查全部使用 candidate
+    shape = validateCandidateWithRuntimeCompiler(candidate, context.tableKey)
     if not shape.ok:
         return REJECT(section="rowPolicy", reason=shape.reason)
+    catalogResult = loadSourceFieldCatalogWithProvenance(context.tableKey)
+    if catalogResult.status != loaded:
+        return REJECT(section="rowPolicy", reason=diagnoseCatalog(catalogResult))
 
-    # 2) 模板引用存在性
-    if shape.template is not None and context.templates[shape.template] is None:
-        return REJECT(section="rowPolicy", reason="row_policy_template_unresolved")
-
-    # 3) 字段绑定预检（现状 bindRowPolicyField，dry-run，不写盘）
-    catalog = loadSourceFieldCatalog(connectionId, sourceName, schema)   # 现状
-    for pred in shape.resolvedPredicates:
-        bound = bindRowPolicyField(pred.field, sourceName, catalog)       # 现状
-        if not bound.ok:
-            return REJECT(section="rowPolicy", reason=bound.reason)
-
-    # 4) 生成预览（复用 §5.2，不落盘）
-    preview = computeFinalRowsForTable(tableKey, context.roles, context.agents)
+    # 与运行时同一路径生成最终行约束，不读取旧 roles/agents 另行拼装
+    preview = computeFinalRowsForTable(context.tableKey, candidate.roles, candidate.agents)
     if not preview.ok:
         return REJECT(section="rowPolicy", reason=preview.reason)
+    return OK(preview, candidateDigest, basePolicyVersion=context.currentPolicyVersion)
 
-    # 5) 写入（现状 admin/roles.ts 写入路径 + commitEffectivePolicy）
-    persist(draft)
-    await commitEffectivePolicy()        # 现状：重算 policyVersion 并原子换入
-
-    # 6) 配置审计（拟增 R4）
-    audit({
-      actor: context.actor,
-      operation: "row_policy.update",
-      target: tableKey,
-      beforeDigest: ..., afterDigest: ...,
-      impact: { roles: N, agents: M }
-    })
-    return OK(preview)
+function saveRowPolicyDraft(draft, confirmedCandidateDigest, context):
+    with sharedSingleInstancePublishCoordinator:  # 与 L25-11 D4 同一协调器
+        requireCurrentPermissionAndMatchingBaseline(context)
+        preview = previewRowPolicyDraft(draft, context)  # 内存候选，仍不落盘
+        if not preview.ok or preview.candidateDigest != confirmedCandidateDigest:
+            return REJECT(require_new_preview)
+        intentId = durableConfigAuditIntent(actor, operationId, beforeDigest,
+                                            preview.candidateDigest, impact)
+          else return REJECT(audit_intent_unavailable)  # 不得写配置
+        oldConfigAndPolicy = captureRecoveryPoint()
+        try:
+            persistCandidateAtomically(draft, expectedBaseline=preview.basePolicyVersion)
+            await commitEffectivePolicy()             # 重算 policyVersion 并原子换入
+            durableConfigAuditTerminal(intentId, committed, afterDigest=policyVersion)
+              else throw AuditTerminalUnavailable
+            return OK(preview)
+        catch writeCommitOrTerminalFailure:
+            restoreCandidateAtomically(oldConfigAndPolicy)
+            await commitEffectivePolicy()             # 必须重新换入旧策略
+            if rollbackVerified():
+                durableConfigAuditTerminalBestEffort(intentId, rolled_back, failure)
+                return FAIL(rolled_back)
+            blockAffectedReadsAndAllSubsequentWrites(recoveryRequired=true)
+            return FAIL(recovery_required)
 ```
 
-要点：预览在**写入之前**生成（步骤 4 早于 5），不依赖写入后再回读；审计在生效后写，失败按既有 fail-closed 处理，不得因审计写失败而谎称已生效。
+要点：预览与保存共用 draft 覆盖后的内存候选及运行时编译路径，保存前不读旧配置冒充预览、不提前落盘。配置审计采用 durable intent → 配置写入／`commitEffectivePolicy` → durable terminal；intent 失败零配置写入，terminal 失败回滚并重新换入旧策略，恢复失败则受影响读取和后续写入均失败关闭。只有终结审计与策略生效均可证明时才返回成功。
 
 ### 5.4 失败关闭与降级（复用现状，禁止新增宽松旁路）
 
@@ -367,33 +381,35 @@ function saveRowPolicyDraft(draft, context):
 
 **禁止**：模板解析失败时退化为「该表不限制行」。这会把配置错误直接变成越权。
 
-### 5.5 清单文件解析与失败归因（拟增，修复 §1.4 的 G5）
+### 5.5 清单来源、字段诊断与 0.20.Z 缺陷修复边界
+
+R5 的目录状态必须来自实际 I/O 与解析结果，而不是由字段绑定失败反推。`catalogLoaded=true` 仅在 Schema Manifest 的真实路径解析成功、文件读取成功、YAML／结构解析成功且目标表目录建立后成立；任何一步失败均记录具体阶段、稳定原因码与连接／Schema／表四元组。适配器或部署形态未提供可验证目录能力时另记 `catalog_capability_unknown`，不得伪装为已装载或字段不存在。
 
 ```text
-function resolveManifestFile(schemaDir, schema):
-    # schema 是源映射给出的小写化名；磁盘文件名可能保留原始大小写
-    want = normalizeRef(schema)
-    for entry in readdir(schemaDir):            # 与 catalog-reload / index 的做法一致
-        if not entry.isFile(): continue
-        if not (entry.name ends with ".yaml" or entry.name ends with ".yml"): continue
-        if normalizeRef(entry.name without extension) == want:
-            return path.join(schemaDir, entry.name)   # 用磁盘真实文件名
-    return None                                   # 找不到 → 交由上层归因
+function loadSourceFieldCatalogWithProvenance(tableKey, adapterCapabilities):
+    if not adapterCapabilities.schemaManifestCatalogProven:
+        return {status: catalog_capability_unknown, catalogLoaded: false}
+    path = resolveManifestFileFromRealDirectoryEntry(tableKey)  # 保留磁盘真实大小写
+    if path resolution failed:
+        return {status: manifest_unavailable, stage: resolve, catalogLoaded: false}
+    bytes = readFile(path)
+      else return {status: manifest_unavailable, stage: read, catalogLoaded: false}
+    manifest = parseAndValidateSchemaManifest(bytes)
+      else return {status: manifest_unavailable, stage: parse, catalogLoaded: false}
+    catalog = buildTableCatalog(manifest, tableKey)
+      else return {status: manifest_unavailable, stage: catalog, catalogLoaded: false}
+    return {status: loaded, catalogLoaded: true, catalog, manifestPathDigest}
+
+function diagnoseFieldBinding(failure, source, catalogResult):
+    if failure != "unknown": return failure
+    if catalogResult.status == catalog_capability_unknown:
+        return "row_policy_catalog_capability_unknown"  # 能力边界未知 → 失败关闭
+    if catalogResult.catalogLoaded == false:
+        return "row_policy_catalog_unavailable"         # 路径/读取/解析/目录失败 → 运维
+    return "row_policy_field_unknown"                   # 仅在可靠目录中证明字段不存在
 ```
 
-配套的失败归因（写入 `row_grant` 阶段诊断）：
-
-```text
-function diagnoseFieldBinding(failure, source):
-    # failure ∈ {unknown, measure, unsafe, shape, cross_source, no_catalog}
-    if failure == "unknown":
-        if source.catalogLoaded == false:
-            return "row_policy_catalog_unavailable"   # 清单未装载/不可读 → 运维问题
-        return "row_policy_field_unknown"              # 该表确实没有这一列 → 用户问题
-    return failure                                     # 其余保持现状码
-```
-
-要点：归因**只影响错误信息的措辞**，不改变拒绝行为。修复后，「清单未装载」与「字段不存在」必须能被管理员区分——前者指向运维（§1.4 的 G5 场景），后者指向配置者。
+归因只影响错误信息与排查方向，不改变拒绝行为；字段不存在、清单不可用、目录能力未知三者均失败关闭。G5 的真实路径大小写修复属 **0.20.Z 维护线**；V19／V22 在 v0.25 仅作为 D-03 集成回归，不表示本 Spec 已实施该修复。
 
 ---
 
@@ -401,16 +417,16 @@ function diagnoseFieldBinding(failure, source):
 
 ### 6.1 角色详情「行级策略（可选）」分区
 
-- 保留现有逐表手填入口，改为**两种配置形态并存**：引用模板 / 直接写条件 / 两者并用。
-- 每个受控表展示三项：已配置的模板名、内联条件数量、**最终行约束预览**（折叠展开可见完整 DNF 结构）。
+- P0 保留现有逐表手填入口并增加最终行约束预览；R1 实施后才增加「引用模板 / 直接写条件 / 两者并用」，不得把 P1 模板入口算作 P0 已交付。
+- 每个受控表展示三项：已配置的模板名（R1 启用时）、内联条件数量、**最终行约束预览**（折叠展开可见完整 DNF 结构）。
 - 预览区固定一句边界说明：多角色对同一张表的行授权**取并集**，并集可能比单个角色更宽；个人行限制在其上再收窄。
-- 未配置任何行策略的表显示「行权限：全部行」。
-- 模板下拉只列出**当前表字段可绑定**的模板：候选模板按「在目标表上字段可绑定」过滤；对目标表不可绑定的模板不隐藏，但标注「字段在此表不存在」，选择后在保存前给出明确阻断原因，不在保存时才报错。
-- 模板被删除或改名后仍有引用时，配置页显示「引用缺失」并阻断保存，不静默丢弃条件。
+- 未配置任何行策略的表显示「行权限：全部行」；目录状态未知或预览失败不得用该文案掩盖。
+- R1 模板下拉统一展示全部候选并分组：可绑定项可直接选择；不可绑定项不隐藏但禁用并标注「字段在此表不存在」，目录不可用或能力未知时整组禁用并显示运维原因。不得在保存时才首次披露该问题。
+- 仅外部异常造成模板删除或改名后仍有引用时，配置页显示「引用缺失」并阻断保存，不静默丢弃条件；正常写入路径按 D5 禁止这种删除。
 
-### 6.2 行权限视图（按表反查）
+### 6.2 行权限视图（按表反查，P1）
 
-- 入口：语义 / 连接侧已启用表的行权限入口，或治理台「访问治理」分组下的独立页；具体落点见 §11 D3。
+- 入口：治理台「访问治理」分组下的独立只读页，复用同一编译产物，不并入 L25-08。
 - 列：表身份、角色行策略（角色名 + 谓词摘要）、涉及 Agent 与个人行限制、最终行约束摘要（按 Agent）、状态（全部行 / 受限）。
 - 支持按角色、Agent、连接、是否受限筛选；支持键盘可达与表格视图（与 L25-08 的可达性要求一致）。
 - 折叠或降级必须显式说明，不能用空表冒充「没有限制行」。
@@ -425,13 +441,13 @@ L25-01 要求 Agent 详情给出一句话（例如「行级策略按分公司」
 
 | 事件 | 触发 | 关键字段 |
 |---|---|---|
-| `row_policy_template.create` / `.update` / `.delete` | 模板增删改 | 模板名、变更前后谓词摘要、影响引用数 |
-| `row_policy.update` | 角色表选择器的行策略变更 | 表身份、变更前后 digest、模板名 / 内联条件变化、受影响 Agent 数 |
-| `row_policy.reference.add` / `.remove` | 引用与解引用 | 表身份、模板名 |
+| `row_policy_template.create` / `.update` / `.delete`（P1） | 模板增删改 | 模板名、变更前后谓词摘要、影响引用数 |
+| `row_policy.update.intent` / `.terminal`（P0） | 角色表选择器行策略保存前与终结后 | 表身份、actor、operationId、intentId、变更前后 digest、影响 Agent 数、状态与失败原因 |
+| `row_policy.reference.add` / `.remove`（P1） | 引用与解引用 | 表身份、模板名 |
 | `row_policy.degrade` | 行策略编译失败导致降级 | 原因码、影响范围（现状策略降级事件口径） |
 
 - 审计记录进入既有配置审计通道（与 L25-04「Skill 负责人变更」同一通道），不新增独立存储。
-- 审计写入失败按现状 fail-closed 处理；不得先改配置再补审计而宣称已留痕。
+- intent 未持久化不得写配置；terminal 未持久化必须回滚并重新换入旧策略，恢复失败按 §5.3 失败关闭。不得先改配置再补审计而宣称已留痕。
 - 行权限审计**不写入** L25-09 的问询运行时事件流，也不改变其事件状态机与保留策略。
 
 ---
@@ -447,67 +463,67 @@ L25-01 要求 Agent 详情给出一句话（例如「行级策略按分公司」
 | L25-01 Agent / 角色页授权摘要 | 本条提供摘要中「行级策略按什么维度」的数据来源，同源可对账 |
 | L25-08 访问关系图 | 全局横向视角（谁授权、谁访问）vs 本条单表纵向视角（这张表的行受什么约束）；共用编译产物，不重复实现 |
 | L25-09 审计运行时增量 | 问询运行时事件流；本条是配置审计，两者不混用事件模型 |
-| L25-11 语义资产批量维护 | 该条明确不改角色与行级策略；两条对象不同，若同批实施须避免同文件并发写入 |
+| L25-11 语义资产批量维护 | 该条不改角色与行级策略；按 D6 共用单实例发布协调器，角色保存、语义资产写入、运行镜像同步及生效串行，只读预览与独立校验可并行 |
 | L25-10 Hive 直连 | 沿用既有 ACL 与行策略；本条不改变 Hive 适配的权限裁决路径 |
 
 ---
 
 ## 9. 验收矩阵
 
-**全部用例当前未执行**。实施后按 V01–V18 逐条验证；任何一条未通过即不得宣称本能力可用。
+**V01–V22 全部未执行**。P0 功能验收覆盖 R2／R4／R5 对应用例；R1／R3 的用例随 P1 实施验收，不提前计入 P0 完成。V19／V22 是 D-03 在 **0.20.Z 维护线**修复后的集成回归：在受影响场景取得这些证据前，不得宣称该场景交付价值，但不作为 R2／R4／R5 的开工依赖。任何声称完成的范围都必须有其全部适用证据，环境不足保持 blocked。
 
-| 编号 | 场景 | 期望 |
-|---|---|---|
-| V01 | 模板引用一条含 `eq` 的策略 | 编译成功；`RowGrant.kind=scoped`；`digest` 与直接写同条件时一致 |
-| V02 | 模板引用一条含 `in` 的策略 | 同上；`values` 顺序不影响 digest |
-| V03 | 模板 + 内联条件并存 | 同一 Role 分支内 AND；展开后 `predicates` 含两组条件 |
-| V04 | 引用不存在的模板 | 编译失败，原因码 `row_policy_template_unresolved`；该表取数拒绝 |
-| V05 | 模板字段在目标表不存在 | `row_policy_field_unresolved:unknown`；失败关闭 |
-| V06 | 模板引用度量 | `row_policy_field_unresolved:measure`；失败关闭 |
-| V07 | 模板谓词 `op` 非法 | `row_policy_op_forbidden`；失败关闭 |
-| V08 | 同一表被两个角色授权（不同谓词） | 最终行约束预览显示 OR-of-AND；两个分支都在；不拍平成一条 AND |
-| V09 | 两个角色中其一为「全部行」 | 并集结果为全部行；预览显示「行权限：全部行」，不得显示为受限 |
-| V10 | Agent 带个人行限制 | 最终行约束 = 并集 ∧ 个人行限制；预览同时给出并集与交集两个结果 |
-| V11 | 并集 ∧ 个人行限制后 DNF 剪枝为空 | 编译失败关闭；预览显示不可满足，不显示空约束 |
-| V12 | 预览与运行时一致性 | 同一角色 / Agent / 表下，管理台预览的最终行约束与 `lucy_query` 实际注入的 `forced_filters` 等价 |
-| V13 | 保存前预览 | 预览在写入前生成；预览失败时不落盘、不写审计 |
-| V14 | 模板删除 | 被引用时删除被拒绝；未引用时可删；删除后引用方显示「引用缺失」并阻断保存 |
-| V15 | 配置审计 | 模板增删改、角色行策略变更、引用变更各产生一条记录，含 actor 与前后摘要 |
-| V16 | 策略摘要与版本 | 模板增删改后 `policyVersion` 变化；运行时换入生效，无需重启 |
-| V17 | 受保护源工具闸门 | 引用形态下 `lucy_read_source` 等未包装通道仍按 `row_policy_requires_wrapped_tool` 拒绝 |
-| V18 | 上游强制谓词未证明 | 引用形态下取数仍按 `row_policy_upstream_unproven` 拒绝；不得因新增模板而放宽 |
-| V19 | **清单文件名为大写（如 `BIDM.yaml`）** | 在大小写敏感文件系统上，该表的合法行级字段可正常绑定；不再出现 `row_policy_field_unresolved:unknown`（§1.4 的 G5 回归） |
-| V20 | 清单文件不可读 / 缺失 | 拒绝取数；错误归因为「字段目录不可用」，并带连接 / Schema / 表 / 字段四元组 |
-| V21 | 字段确实不存在 | 拒绝取数；错误归因为「字段不存在」，与 V20 可区分，且四元组完整 |
-| V22 | 同一 Role 在大写 schema 表上的行级条件 | 管理台预览与运行时注入的 `forced_filters` 等价（与 V12 同源校验，覆盖大写 schema 场景） |
+| 编号 | 范围 | 场景 | 期望 |
+|---|---|---|---|
+| V01 | R1 / P1 | 模板引用一条含 `eq` 的策略 | 编译成功；`RowGrant.kind=scoped`；`digest` 与直接写同条件时一致 |
+| V02 | R1 / P1 | 模板引用一条含 `in` 的策略 | 同上；`values` 顺序不影响 digest |
+| V03 | R1 / P1 | 模板 + 内联条件并存 | 同一 Role 分支内 AND；展开后 `predicates` 含两组条件 |
+| V04 | R1 / P1 | 引用不存在的模板 | 编译失败，原因码 `row_policy_template_unresolved`；该表取数拒绝 |
+| V05 | R1／R5 | 模板字段在可靠目录的目标表不存在 | `row_policy_field_unknown`；失败关闭 |
+| V06 | R1／R5 | 模板引用度量 | `row_policy_field_unresolved:measure`；失败关闭 |
+| V07 | R1 / P1 | 模板谓词 `op` 非法 | `row_policy_op_forbidden`；失败关闭 |
+| V08 | R2 / P0 | 同一表被两个受限 Role 以不同谓词授权 | 预览显示 OR-of-AND 两个分支，**不得显示全部行**，不拍平成一条 AND |
+| V09 | R2 / P0 | 两个角色中其一为「全部行」 | 并集结果为全部行；预览显示「行权限：全部行」，不得显示为受限 |
+| V10 | R2 / P0 | Agent 带个人行限制 | 最终行约束 = 并集 ∧ 个人行限制；预览同时给出并集与交集两个结果 |
+| V11 | R2 / P0 | 并集 ∧ 个人行限制后 DNF 剪枝为空 | 编译失败关闭；预览显示不可满足，不显示空约束 |
+| V12 | R2 / P0 | 预览与运行时一致性 | 同一候选 digest 下，预览与运行时 `forced_filters` 等价；draft 未落盘前即可得到该结果 |
+| V13 | R2／R4 / P0 | 保存前预览与基线变化 | 使用 draft 覆盖后的内存候选；预览失败零落盘、零 intent；基线或 digest 变化要求重预览 |
+| V14 | R1 / P1 | 模板删除与外部异常引用 | 正常写入路径下，被引用模板删除被拒绝，未引用时可删；仅在外部写入造成缺失引用时显示「引用缺失」并失败关闭 |
+| V15 | R4 / P0 | intent、生效与终结审计故障 | intent 失败零配置写；terminal 失败回滚并重新换入旧策略；无法恢复时受影响读取及后续写入失败关闭；记录 actor 与前后摘要 |
+| V16 | R1／R4 | 策略摘要与版本 | 角色／模板变更后 `policyVersion` 变化；运行时换入生效，无需重启 |
+| V17 | R1 / P1 | 受保护源工具闸门 | 引用形态下 `lucy_read_source` 等未包装通道仍按 `row_policy_requires_wrapped_tool` 拒绝 |
+| V18 | R2 / P0 | 上游强制谓词未证明 | 取数仍按 `row_policy_upstream_unproven` 拒绝；不得因预览或模板而放宽 |
+| V19 | D-03 集成回归 | **清单文件名为大写（如 `BIDM.yaml`）** | 0.20.Z 修复后，在大小写敏感文件系统上合法字段可绑定；不再误报 unknown |
+| V20 | R5 / P0 | 清单不可读、缺失、解析失败或目录能力未知 | 全部失败关闭；分别归因清单不可用或目录能力未知，并带连接 / Schema / 表 / 字段四元组 |
+| V21 | R5 / P0 | 字段确实不存在 | 仅在目录可靠装载时归因「字段不存在」，与 V20 可区分，且四元组完整 |
+| V22 | D-03 集成回归 | 同一 Role 在大写 schema 表上的行级条件 | 管理台预览与运行时注入的 `forced_filters` 等价；修复证据与 v0.25 新功能证据分开登记 |
 
 ---
 
 ## 10. Non-Claim 与不授权声明
 
-- 本条**不授权**代码实现、测试编写、镜像构建、部署或发布；仅授权起草与登记。
+- 本条**不授权**代码实现、测试编写、镜像构建、部署或发布；仅授权设计与需求审查。
 - 设计与规划通过**不等于**运行时或客户交付通过；本文 §9 全部未执行。
 - 不得对外宣称 Lucy 已具备「动态行级安全」「多租户隔离」「按人 / 按 Token 的行权限」。相关能力按冻结 ADR 保持冻结。
 - 不得宣称模板引用已交付、已通过验收或已在客户环境运行。
 - 本条不改变 Spec 99 / Spec 100 的运行时语义；若实现与这两份 Spec 冲突，以这两份 Spec 为准并先修订本文。
-- §1.4 的 G5 是**存量缺陷**，本文只登记其根因、复现工件与回归要求，**不宣称已修复**；修复须另行批准、实施并验证（§11 D7）。
-- 本条不改变「2.5 不把 Lucy 做成对话框、不动权限裁决与预算引擎」的边界；实施主体为 Lucy，不修改 KTX 源码；单实例 / 单副本边界不变。
+- §1.5 的 G5 是**存量缺陷**，本文只登记其根因、复现工件与回归要求，**不宣称已修复**；修复须另行批准、实施并验证（§11 D7）。
+- 本条不改变「v0.25 不把 Lucy 做成对话框、不动权限裁决与预算引擎」的边界；实施主体为 Lucy，不修改 KTX 源码；单实例 / 单副本边界不变。
 
 ---
 
-## 11. 待裁决项
+## 11. 已裁决设计项
 
-以下为起草时发现、需在评审时裁定的问题；本 Spec 已给出默认取向，但不代替裁决。
+D1–D7 已于 2026-10-24 按 P0 Final 决议收口；以下为实现必须遵守的唯一口径，不再留待开发时选择。
 
-| 编号 | 问题 | 默认取向 | 影响 |
-|---|---|---|---|
-| D1 | 模板存放位置 | 与 `access.yaml` 同文件顶层 `row_policy_templates`。现状 `computeAccessConfigDigest` 按整份配置算摘要，同文件可自动进 `policyVersion`；写回路径 `toWrite = {...config}` 可保留未识别顶层键，但 `commitEffectivePolicy` 与配置审计须在实施时复核 | 影响配置写入与审计的实现范围 |
-| D2 | 模板字段在部分表不存在 | 默认**失败关闭**（与内联条件一致）。备选是模板允许声明 per-source 字段映射 | 备选会引入第二套字段解析语义，风险较高 |
-| D3 | 行权限视图落点 | 建议独立入口但复用同一编译产物；不并入 L25-08 关系图，避免一处改动牵动两页 | 影响导航与 IA |
-| D4 | 模板取值来源 | 默认静态字面量，与今天一致；不引入语义层 segment、度量或任何动态取值 | 若允许 segment，会把「权限」与「业务口径」耦合，需另立 Spec |
-| D5 | 模板删除策略 | 默认禁止删除仍被引用的模板，改为先解引用 | 影响配置审计与 UI 提示 |
-| D6 | 与 L25-11 同批实施的写入冲突 | 若两者同期实施，行策略 / 模板写入与语义资产导入须串行化，避免同文件并发写 | 影响排期 |
-| D7 | §1.4 的 G5 存量缺陷在哪个版本修复 | **已裁决（2026-10-22 Forrest）：只登记不修，留给 v2.0 线排期。** 缺陷已登记为 `security-findings.yaml` 的 **D-03（P1 / open）**；修复形态见 §5.5，回归用例见 V19–V22；本条不授权实现，也不宣称已修复 | 客户在 v2.0 修复前仍无法保存大写 schema 表的行级条件；**不得以改成「全部行」绕过**（会放宽数据可见范围） |
+| 编号 | 已裁决值 | 影响 |
+|---|---|---|
+| D1 | R1 模板存放于 `access.yaml` 顶层 `row_policy_templates`；整份配置进入 `policyVersion`，保存与生效复用 §5.3 的 `commitEffectivePolicy` 和 durable intent／terminal 审计合同 | P1 实施不得另建存储或审计旁路 |
+| D2 | 模板字段在部分表不存在时失败关闭，不引入 per-source 第二套字段映射 | R1／R5 |
+| D3 | R3 使用独立只读视图并复用同一编译产物，不并入 L25-08，不提供第二写入入口 | P1 导航与 IA |
+| D4 | 模板取值只允许静态字面量，不引入 segment、度量、宏、claim 或请求期表达式 | 权限语义不变 |
+| D5 | 正常写入路径禁止删除仍被引用的模板；外部异常产生的缺失引用失败关闭 | V14 与配置审计 |
+| D6 | 角色／行策略保存纳入 L25-11 共享单实例发布协调器，与语义资产写入、运行镜像同步及生效串行；只读预览和独立校验可并行 | P0-2 与 P0-3 可并行设计／实施，但写入口与生效不得并发 |
+| D7 | D-03 归属 **0.20.Z 维护线（当前基线 `0.20.0`）**，是受影响客户场景的交付价值依赖，不是 R2／R4／R5 开工依赖；`fixedIn` 未经验证保持为空 | V19／V22 仅作集成回归；不得以「全部行」绕过 |
 
 ---
 

@@ -1,18 +1,20 @@
-# Lucy v2.5 审计可靠性、准确性与链路追踪增量 Spec
+# Lucy v0.25 审计可靠性、准确性与链路追踪增量 Spec
 
 | 元数据 | 内容 |
 |---|---|
-| 文档名称 | Lucy v2.5 审计可靠性、准确性与链路追踪增量 Spec |
+| 文档名称 | Lucy v0.25 审计可靠性、准确性与链路追踪增量 Spec |
 | 文档类型 | Spec（Cross-module Audit / Reliability / Accuracy / Traceability） |
 | 版本 / 日期 | **v1.0-frozen / 2026-10-20，Asia/Shanghai**（v0.1 Kimi 初稿；v0.2 Codex 修订；v0.3 Kimi 裁决；v1.0 Codex 经授权完成复核修正与设计冻结） |
-| target_release | **v2.5** |
-| 状态 | **design_frozen（v2.5 设计基线已冻结；A01–A12 未执行；实现、测试执行及发布须按另行批准计划推进）** |
+| target_release | **v0.25** |
+| 功能编号 / 优先级 | **L25-09 / P0（P0-1）** |
+| 状态 | **design_frozen，待需求审查签核（v0.25 设计基线已冻结；A01–A12 未执行；暂不开发，实现、测试执行及发布须按另行批准计划推进）** |
 | 撰写人 | **Kimi（起草）** |
 | 审阅者 / 冻结执行人 | **Codex（委托人明确授权“修改，完成冻结”）** |
 | 裁决及收口 | **Kimi 完成 U1–U12 原始裁决；Codex 经委托人授权修正复核发现并收口，最终冻结值见 §15；冻结记录见 §17** |
-| 委托人 | xingchen（经 2026-10-20 审计报告 v1.1 批准 S01–S08 纳入 v2.5） |
+| 委托人 | xingchen（经 2026-10-20 审计报告 v1.1 批准 S01–S08 纳入 v0.25） |
 | 依据 | `Lucy日志审计报告20261020.docx` v1.1（F01–F07、S01–S08、A01–A12）及其交叉审阅意见；历史基线样本见 §13 |
 | 关联 Plan | [2026-10-18-lucy-2.5-upgrade-proposal.md](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md)（已同步登记本增量）；实施 Plan 依据本冻结版本另行批准 |
+| 审查入口 | [P0 Final 决议](../reviews/2026-10-24-lucy-v0.25-p0-final-decision.md) §2 L25-09；[首批 P0 需求审查清单](../plans/2026-10-24-lucy-v0.25-p0-requirements-review-checklist.md) |
 | Acceptance | 本文 §13（A01–A12 验收场景详表，全部标注未执行） |
 | 基线 | `lucy-v2.0`，HEAD `2abc472`；历史导出样本为 2026-10-20 只读证据，本 spec 不改写历史证据 |
 | 范围 | 审计事件状态与响应证据（S01）、入口持久化与恢复（S02）、跨端关联与重试标识（S03）、问询归属与来源可信度（S04）、对账指标与完整性（S05）、导出快照与证据封存（S06）、错误重试与预算（S07）、故障注入与历史回放（S08） |
@@ -24,7 +26,7 @@
 
 **目标**
 
-1. 将审计报告 v1.1 批准的 S01–S08 契约整合为 v2.5 唯一事实源，消除"同一指标多种口径"（F01）与"导出一致≠入口无漏记"（F04）两类结构性缺陷。
+1. 将审计报告 v1.1 批准的 S01–S08 契约整合为 v0.25 唯一事实源，消除"同一指标多种口径"（F01）与"导出一致≠入口无漏记"（F04）两类结构性缺陷。
 2. 建立跨端（客户端 ↔ Lucy ↔ 上游）可穿透的关联链与显式不可观测边界（F03、F05、F06）。
 3. 用固定历史样本 + 故障注入把"可靠性声称"变成可执行验收（S08，覆盖全部发现）。
 
@@ -37,9 +39,9 @@
 
 ## 2. 生效关系与唯一事实源
 
-以下为 **v2.5 已冻结的设计关系**，权威版本为本文 v1.0-frozen。§15 为唯一最终裁决记录，正文与伪代码按同一值执行；与既有规范冲突的具体条款以本文及 §14 修订清单为准，其余既有条款保持原义。§14 的旧文件同步属于后续实施准备，不以尚未同步的旧表述重新打开冻结值；实施 Plan 须逐项记录同步结果。设计冻结不代表功能已实现或验收已通过，不追溯覆盖历史证据。
+以下为 **v0.25 已冻结的设计关系**，权威版本为本文 v1.0-frozen。§15 为唯一最终裁决记录，正文与伪代码按同一值执行；与既有规范冲突的具体条款以本文及 §14 修订清单为准，其余既有条款保持原义。§14 的旧文件同步属于后续实施准备，不以尚未同步的旧表述重新打开冻结值；实施 Plan 须逐项记录同步结果。设计冻结不代表功能已实现或验收已通过，不追溯覆盖历史证据。
 
-| 议题 | 唯一事实源（v2.5 起） | 与既有规范的关系 |
+| 议题 | 唯一事实源（v0.25 起） | 与既有规范的关系 |
 |---|---|---|
 | 事件身份 / attempt / 关联状态 | §6（S03），沿用 20261019 Spec §4.1 | 补充 question/client_call 命名映射与回传契约；冲突以本 spec 为准 |
 | 状态模型（六维 + 主状态派生） | §4（S01），沿用 20261019 Spec §4.3 六维字典 | 保留事件类型及五项事实维度；classificationVersion 是规则版本元数据，不是第六维。主状态为派生视图，delivery 为补充观测 |
@@ -49,7 +51,7 @@
 | 计量口径 / 完整性维度 | §8（S05）；新增六项 auditCoverage 检查，保留 20261019 Spec §6 四子域 completeness | 四子域与既有 complete/combined_complete 含义不变；六项检查不可近似替代关联质量或文件完整性 |
 | 导出与证据 | §9（S06），沿用 20261019 Spec §6（序列上界 S、冻结快照、nextCursor） | 补充版本链、排除项声明、跨文件关系 |
 | 错误 / 重试 / 预算 | §10（S07），沿用 Spec 162 预算引擎与 20261019 Spec §7 | 补充统一错误分类、修复提示可用性闭环、防重置规则 |
-| 展示层（治理台 WebUI） | L25-02/L25-03（v2.5 升级建议书） | 展示层对账与计数展示**以 S05 权威口径为数据源**，不得自定口径 |
+| 展示层（治理台 WebUI） | L25-02/L25-03（v0.25 升级建议书） | 展示层对账与计数展示**以 S05 权威口径为数据源**，不得自定口径 |
 
 **术语级约束**："证据校验"不得宣称"防篡改（本地 hash 自检）"或"独立签名"（术语标准 §3）；导出物的完整性宣称只能写"清单验证通过/失败"。
 
@@ -126,7 +128,7 @@ primaryStatus ∈ { succeeded, failed, denied, budget_stopped, cancelled, timeou
 | generated_sql | 实际生成的 SQL 的受控记录或引用 | 未生成时记原因；未知不写成未生成；不强制把完整原文放进热审计存储 |
 | query_hash / digest | 明确 digest_kind（检索文本/SQL/结果）、源字段、规范化版本、编码、是否完整输入 | 检索工具可以有哈希而无 SQL；不能以 generated_sql 为空判哈希不适用。低熵内容按既有受保护摘要策略 |
 
-U11 冻结值（§15）：query_preview 在 v2.5 **由当前实现的 180 扩展至 500 个 Unicode 码点**，这是新增变更；当前 `webui/server/proxy/mcp-proxy.ts` 的 redactQueryPreview 为 `.slice(0, 180)`，不是沿用 500。`question_preview` 的默认 500 属于另一字段，不能作此基线依据。先沿用既有脱敏，再生成有界预览；截断不切断 Unicode 字符，记 preview_version=v2p5-1、truncated、原始输入 UTF-8 字节长度。args_summary 沿用 maxKeys=8，单值序列化后上限 512 UTF-8 字节，不切断字符；结构化值超限改用保留类型的摘要/省略标记，禁止截出无效 JSON。digest_kind 区分 search_text/sql/result，规范化及编码版本为 v2p5-1；摘要基于完整的受控规范化输入，不以截断预览冒充完整输入。新规则不重解释历史 query_hash，历史保留旧值与 legacy/unknown 版本标记。
+U11 冻结值（§15）：query_preview 在 v0.25 **由当前实现的 180 扩展至 500 个 Unicode 码点**，这是新增变更；当前 `webui/server/proxy/mcp-proxy.ts` 的 redactQueryPreview 为 `.slice(0, 180)`，不是沿用 500。`question_preview` 的默认 500 属于另一字段，不能作此基线依据。先沿用既有脱敏，再生成有界预览；截断不切断 Unicode 字符，记 preview_version=v2p5-1、truncated、原始输入 UTF-8 字节长度。args_summary 沿用 maxKeys=8，单值序列化后上限 512 UTF-8 字节，不切断字符；结构化值超限改用保留类型的摘要/省略标记，禁止截出无效 JSON。digest_kind 区分 search_text/sql/result，规范化及编码版本为 v2p5-1；摘要基于完整的受控规范化输入，不以截断预览冒充完整输入。新规则不重解释历史 query_hash，历史保留旧值与 legacy/unknown 版本标记。
 
 历史案例：2455 只保留已观测参数、原始 outcome=ok、自报错误及 conflict_unresolved，不据此回填执行成功或失败。同批 2289/2309/2387/2460 的 query_preview、query_hash、query_length 为检索文本有记录而无 SQL 的正例。
 
@@ -261,7 +263,7 @@ U4/U12 已由 Kimi 裁决（§15）：目标客户端集合 v1 与能力矩阵�
 
 沿用 20261019 Spec §4.1 五态（confirmed/candidate/unassigned/conflict/legacy_unverified）、never backbind（仅按经过时间不回绑旧事件）、追加修订事件（不 UPDATE 原始账本）、§4.4 会话访问入口（仅握手不占业务问询分母）。
 
-**v2.5 归属证据顺序**（不得仅凭排序消解事实冲突；迟到不代表更可信）：
+**v0.25 归属证据顺序**（不得仅凭排序消解事实冲突；迟到不代表更可信）：
 
 ```
 1. 显式绑定（begin_question 及其确认的更正事件）
@@ -414,9 +416,9 @@ U7 已由 Kimi 裁决（§15）：本期仅来源声明（manifest 增补 export
 
 沿用 Spec 162 §7.2（预算默认值 20 次数据工具 / 120 秒墙钟、可继续语义、budget_stop 不是 error 不是 denied）、§7.3（classify() 固定顺序与 repairHint）、20261019 Spec §7（attemptId/scope_change、错误提示边界、预算复用）。
 
-**v2.5 统一错误七分类 → 162 四维度映射**（classificationVersion 版本化，同源分类函数产出）：
+**v0.25 统一错误七分类 → 162 四维度映射**（classificationVersion 版本化，同源分类函数产出）：
 
-| 七分类（v2.5 权威） | 162 failure_dimension | 例（历史样本） |
+| 七分类（v0.25 权威） | 162 failure_dimension | 例（历史样本） |
 |---|---|---|
 | client_schema_failure（入参校验失败） | 用法与语义 | measures 缺省（-32602） |
 | validation_failed（语义校验失败） | 用法与语义 | count_without_source、ambiguous_field、aggregate_of_aggregate |
@@ -677,38 +679,38 @@ A01↔SEC-19-V05；A02↔SEC-19-V02/V04；A03↔SEC-19-V06 + 幂等投影；A04�
 
 ## 14. 既有规范修订清单（冻结内容，后续实施准备同步）
 
-> 原则（沿用 20261019 Spec §2 模式）：下表具体替代关系随本文设计冻结生效，旧文件尚未同步的冲突表述不得继续作为 v2.5 实现依据；实施 Plan 必须登记并完成 R1–R10/R12 的引用/条文同步，R11 已完成。不将设计冻结误记为旧文件已修改或代码已实现。历史 10-19 批次与 10-20 基线分开，旧工单通过不视为本次 v2.5 通过。
+> 原则（沿用 20261019 Spec §2 模式）：2026-10-24 已按 Final 决议完成 R1–R10／R12 的文档同步，R11 维持既有同步；下表记录生效关系，不代表对应代码已实现或验收已通过。历史 10-19 批次与 10-20 基线分开，旧工单通过不视为本次 v0.25 通过。
 
 | # | 目标文件 | 修订内容 | 关联 |
 |---|---|---|---|
-| R1 | `webui/docs/138-lucy-query-execution-and-turn-correlation-reliability-spec.md` §3/§5/§6 | 归因优先级表第 2 条及 §6 伪代码的 session_bound/high 一并修订为 candidate 语义（confidence=low + association_status=candidate），与 20261019 Spec §4.1、Spec 173 v0.3 对齐；历史导出 36 行 session_bound·low 为正例 | S04 |
-| R2 | `webui/docs/140-admin-audit-dual-csv-export-spec.md` §6.1/§6.2/§5 | 保留 v1 原始 outcome；新版本按 S01 八桶完整披露 cancelled/timeout/indeterminate/unknown 等，筛选与汇总同函数同单位同 S，禁止仅四列造成不闭合 | S01/F01 |
+| R1 | `webui/docs/138-lucy-query-execution-and-turn-correlation-reliability-spec.md` §5/§6 | 归因优先级表第 2 条及 §6 伪代码的 session_bound/high 一并修订为 candidate 语义（confidence=low + association_status=candidate），与 20261019 Spec §4.1、Spec 173 v0.3 对齐；历史导出 36 行 session_bound·low 为正例 | S04 |
+| R2 | `webui/docs/140-admin-audit-dual-csv-export-spec.md` §6.1/§6.2 | 保留 v1 原始 outcome；新版本按 S01 八桶完整披露 cancelled/timeout/indeterminate/unknown 等，筛选与汇总同函数同单位同 S，禁止仅四列造成不闭合 | S01/F01 |
 | R3 | `webui/docs/162-customer-query-experience-and-usage-evidence-spec.md` §7.1/§7.3/§8/SC-2/SC-15 | §7.1 与 SC-2 残留 high 对齐 candidate/low；§7.3 与 SC-15 不再无条件推荐 row_count(source)，校验语法、能力、存在性和可见性；七分类保留 explicit_table_required:<empty> 的语义校验分类 | S07 |
-| R4 | `webui/docs/172-audit-session-visit-spec.md` §1/§2/§2.4/§6/SC-3 | PRIOR_BIND_MS=2000、同会话向前 2 秒回绑说明、伪代码 high 及 SC-3 一并标注被 173 v0.3 撤销；握手 attachment 单独列来源与 candidate/low，不混为已确认用户问询 | S04 |
-| R5 | `webui/docs/173-audit-one-question-one-inquiry-spec.md` §2.12/§6 | attemptId 占位正式化（S03 契约，T07 配套）；event_id 回传客户端条款；区分逻辑调用、客户端观测、内部 operation、上游 operation；RPC ID 不作为去重键；重连/重发 attempt 语义对齐 §6 | S03 |
-| R6 | `webui/docs/08-mcp-audit-question-tracing-spec.md` §5.3/§7.2 | 明确 Inferred Turn 聚类（120s gap）为展示层重建、非归属回绑（与 173 v0.3 NEVER backbind 的边界声明）；null 字段保留既有五态并补 not_supported（U2：六值枚举已冻结） | S04/S01 |
+| R4 | `webui/docs/172-audit-session-visit-spec.md` §2 | 在 §2 增加替代声明，覆盖原 §2 第 4 条、§4、§6 与 §8 SC-3：PRIOR_BIND_MS=2000、同会话向前 2 秒回绑说明、伪代码 high 及 SC-3 一并标注被 173 v0.3 撤销；握手 attachment 单独列来源与 candidate/low，不混为已确认用户问询 | S04 |
+| R5 | `webui/docs/173-audit-one-question-one-inquiry-spec.md` §6.1 | attemptId 占位正式化（S03 契约，T07 配套）；event_id 回传客户端条款；区分逻辑调用、客户端观测、内部 operation、上游 operation；RPC ID 不作为去重键；重连/重发 attempt 语义对齐 §6 | S03 |
+| R6 | `webui/docs/08-mcp-audit-question-tracing-spec.md` §7.2 | 明确 Inferred Turn 聚类（120s gap）为展示层重建、非归属回绑（与 173 v0.3 NEVER backbind 的边界声明）；null 字段保留既有五态并补 not_supported（U2：六值枚举已冻结） | S04/S01 |
 | R7 | `webui/docs/137-access-log-audit-evidence-hardening-spec.md` §5/§6.3 | summarizeArgsForAudit 增补工具感知 presence；query_preview 新上限由当前180扩展至500 Unicode码点、版本v2p5-1（不将其误写为137已有值）；args_summary 单值512字节；Manifest 增补版本链、profile及来源三字段（§9.3a） | S01/S06 |
 | R8 | `webui/docs/185-audit-snapshot-spec.md` | 增补导出版本链/补包关联/排除项声明；登记"快照≠封存"边界 | S06 |
 | R9 | `docs/specs/lucy-20261019-audit-trust-and-admin-investigation-spec.md` §4.3/§4.4/§4.5/§6 | §4.3 增补主状态派生函数引用（权威在本文 §4.3）；§4.4 空值无损扩展（U2：六值枚举已冻结）；§4.5 保留 clientEventId 的观测身份并增补调用关联/入口 ID 回传；§6 保留四子域及旧 complete 含义，新增独立 auditCoverage 六项检查 | S01/S02/S03 |
 | R10 | `docs/specs/lucy-20261018-enterprise-security-and-real-e2e-spec.md` §5.1 | SEC-19 语义不变；增补 endpoint_id 登记与 indeterminate 恢复核对引用；性能预算条款不变 | S02 |
-| R11 | `docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md` | 已同步（v1.9：引用本 spec v1.0-frozen；U1–U12 全部收口，设计冻结，展示项沿用版本化指标） | 全部 |
+| R11 | `docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md` | 已同步（v1.15：引用本 spec v1.0-frozen；U1–U12 全部收口，设计冻结，展示项沿用版本化指标） | 全部 |
 | R12 | `webui/docs/00-product-terminology-standard.md` §4.7 分区 | 登记新术语：汇总主状态、空值原因（无损扩展）、协议访问分母、业务问询分母、入口标识、证据版本链、送达状态、尝试（attempt 已含 attemptId 引用但未正式登记词条） | 全部 |
 
 ## 15. U1–U12 最终裁决记录（v1.0 冻结值）
 
-原始裁决：Kimi，2026-10-20（v0.3）；复核收口与冻结：Codex，2026-10-20，经委托人授权“修改，完成冻结”。适用 release profile 为 **v2.5 / audit-profile=v2p5-1**。以下为唯一最终值，正文、伪代码、验收与关联建议书保持一致；不存在仍待裁决的 U 项。U5 只将具体标定数值留给实施 Plan，不改变已冻结语义。不得以实现进度改验收标准，不得在实施 Plan 中无版本地覆盖冻结参数。
+原始裁决：Kimi，2026-10-20（v0.3）；复核收口与冻结：Codex，2026-10-20，经委托人授权“修改，完成冻结”。适用 release profile 为 **v0.25 / audit-profile=v2p5-1**。以下为唯一最终值，正文、伪代码、验收与关联建议书保持一致；不存在仍待裁决的 U 项。U5 只将具体标定数值留给实施 Plan，不改变已冻结语义。不得以实现进度改验收标准，不得在实施 Plan 中无版本地覆盖冻结参数。
 
 | # | 最终批准值 | 理由 / 收口说明 | 接口 / 版本 | 受影响验收 |
 |---|---|---|---|---|
-| U1 | Lucy 侧沿用 `POST /api/agent-audit/events`；v2.5 接入 **1 个 dogfood 客户端适配器（Lucy 调试台/playground）**。通过既有适配器/可见性校验的 result_received 须关联同一入口 event_id、attempt_id 及持久 response_prepared 证据/摘要，才能写 acknowledged。生效值为 **{prepared,sent,acknowledged,unknown}**；unacknowledged 仅保留值域、本期不写，不设 ACK 超时。能力未接通或回执缺失时不冒充已收到；已有 prepared/sent 事实保留，客户端接收观察为 unknown | 修正 v0.3 同时“接 ACK”又“仅预留 acknowledged”的冲突。接入口 HTTP 成功、heartbeat、发送成功或声明一个父 ID 都不是有效接收回执；摘要/父引用不符记冲突，拒绝升级交付状态。ACK 只证明适配器声明的接收观测，不证明用户阅读 | client-observation API v1；delivery 事实追加并保留来源，不改执行主状态 | A04/A09：有效 ACK 正例、未接通/缺失/错配/重复回执反例 |
+| U1 | Lucy 侧沿用 `POST /api/agent-audit/events`；v0.25 接入 **1 个 dogfood 客户端适配器（Lucy 调试台/playground）**。通过既有适配器/可见性校验的 result_received 须关联同一入口 event_id、attempt_id 及持久 response_prepared 证据/摘要，才能写 acknowledged。生效值为 **{prepared,sent,acknowledged,unknown}**；unacknowledged 仅保留值域、本期不写，不设 ACK 超时。能力未接通或回执缺失时不冒充已收到；已有 prepared/sent 事实保留，客户端接收观察为 unknown | 修正 v0.3 同时“接 ACK”又“仅预留 acknowledged”的冲突。接入口 HTTP 成功、heartbeat、发送成功或声明一个父 ID 都不是有效接收回执；摘要/父引用不符记冲突，拒绝升级交付状态。ACK 只证明适配器声明的接收观测，不证明用户阅读 | client-observation API v1；delivery 事实追加并保留来源，不改执行主状态 | A04/A09：有效 ACK 正例、未接通/缺失/错配/重复回执反例 |
 | U2 | 单一六值枚举 `null_reason ∈ {not_applicable,not_collected,redacted,parse_failed,unknown,not_supported}`；历史空白默认 unknown/legacy_unverified，不推定 not_collected | 无损保留全部既有语义，本期不分轴 | additive TEXT 六值，编码即枚举值 | R6/R9/A09 |
 | U3 | 本期仅阻断：503 AUDIT_UNAVAILABLE、fail-closed、**无缓冲**；received/admitted 提交失败不分派，prepared 失败不释放内容 | 沿用屏障，缓冲以后单独 spec 批准；审计性能预算是约束，不是“阻断损失可接受”的实测证明。§12.1 为规范流程，不声称现有实现已经通过 | 无缓冲新接口 | A01/A02 |
-| U4 | 目标客户端集合 v1={Lucy 调试台/playground dogfood、WorkBuddy、Claude Code、Cursor、Codex MCP client}；集合外照常使用并披露不可观测。登记三项**集成验证状态**{读取并落盘回传 event_id、上报 ACK、原始证据落盘}，初始均为未验证/未接通，不能当成客户端物理能力不存在；dogfood 前两项通过相应验收后更新。其他客户端改造不承诺 v2.5 | 保留 Kimi 选定总体，不按采用率缩分母。dogfood 是新增受控样本，不能称为当日历史审计参与方；历史 WorkBuddy 多会话等原样保留。第三项只登记既有证据能力，不扩展结果外传范围 | client-capability 登记 v1，含状态来源与生效时间；能力事实未知仍记 unknown | A07/A09/auditCoverage-5 |
+| U4 | 目标客户端集合 v1={Lucy 调试台/playground dogfood、WorkBuddy、Claude Code、Cursor、Codex MCP client}；集合外照常使用并披露不可观测。登记三项**集成验证状态**{读取并落盘回传 event_id、上报 ACK、原始证据落盘}，初始均为未验证/未接通，不能当成客户端物理能力不存在；dogfood 前两项通过相应验收后更新。其他客户端改造不承诺 v0.25 | 保留 Kimi 选定总体，不按采用率缩分母。dogfood 是新增受控样本，不能称为当日历史审计参与方；历史 WorkBuddy 多会话等原样保留。第三项只登记既有证据能力，不扩展结果外传范围 | client-capability 登记 v1，含状态来源与生效时间；能力事实未知仍记 unknown | A07/A09/auditCoverage-5 |
 | U5 | gap 聚类沿用 Spec 08 §7.2，仅生成 candidate、confidence=none/low；不新增推断方法。具体 `LUCY_TURN_INFER_GAP_MS` 标定留实施 Plan，现基线120000，不回填历史 | 只将候选参数标定后置；显式与会话候选规则沿用，不恢复时间近邻回绑 | attributionRuleVersion 随标定登记 | A08 |
 | U6 | **T1=24h，自账本已提交 received_at（Lucy UTC 时间）起算**；覆盖所有已持久接收请求，包括无 admitted、校验/授权失败及预算终止。attempt 的 admitted_at 仅另计执行耗时，不延后此期限。未闭合项超期列“终态缺失”差异，保留 indeterminate/unknown 执行事实。**T2=72h，同自该请求 received_at 起算**，用于客户端观测差异结算，与 T1 独立且不是 ACK 超时；纯本地未发出观测单列，不伪造 received_at。**T3=60s，自导出捕获已提交账本上界 S 起算**，超时正式导出失败，只可生成明确 partial 的诊断包。重启、重试、晚到数据不重置原请求期限；迟到证据追加保存，差异重开须人工或追加修订事件 | 修补 admitted 前崩溃永不结算，以及 T2 无起算点。保留 24h/72h/60s 数值；这些是审计差异结算上限，不放宽既有上游30s、预算120s或独立故障告警。v0.3 的“实施 Plan 可±50%自行调整”撤销；改值须批准新的 profile/version，并同步验收与 Manifest，不覆盖旧包 | `audit.windows.{t1SettlementHours=24,t2ObservationGraceHours=72,t3ExportCatchupSeconds=60}`；audit-profile=v2p5-1 | A01/A02/A04/A10：无 admitted、期限边界、重启、迟到、追平超时 |
 | U7 | 仅来源声明：Manifest 增补 exported_by/export_reason/export_approval_ref；无签名/外部归档对接。无审批流程或无审批引用时按 U2 标 not_applicable/unknown，不虚构批准记录，也不新增导出审批流程 | 清单校验不等于独立来源证明；外部设施按未来单独 spec | Manifest schema=v2p5-1 | A11 |
 | U8 | 保留未映射：cancelled 的 failure_dimension 留空并记 null_reason=not_applicable；旧四维值域不变，七分类独立版本化 | 兼容旧报表，不静默扩枚举 | classificationVersion=v2p5-1 | A05/A06 |
-| U9 | Stage 1=开发单机全量 A01–A12；Stage 2=v2.5 发布前在 linux/amd64 K8s 单副本重跑 A01/A02/A04/A10/A11，其他项分环境登记。Stage 1 由 Lucy 开发实施、Codex 验；Stage 2 由交付工程执行；两阶段证据独立 | 冻结验证要求，当前两阶段均未执行。可复用 L25-07 或已有故障工具，但不得预设待建设的 L25-07 执行器已存在；实施 Plan 明确可执行路径。此项不把 L25-07 本身从非门禁项目自动变成全局门禁 | 登记 stage/environment/evidencePackId | S08、实施 Plan |
+| U9 | Stage 1=开发单机全量 A01–A12；Stage 2=v0.25 发布前在 linux/amd64 K8s 单副本重跑 A01/A02/A04/A10/A11，其他项分环境登记。Stage 1 由 Lucy 开发实施、Codex 验；Stage 2 由交付工程执行；两阶段证据独立 | 冻结验证要求，当前两阶段均未执行。可复用 L25-07 或已有故障工具，但不得预设待建设的 L25-07 执行器已存在；实施 Plan 明确可执行路径。此项不把 L25-07 本身从非门禁项目自动变成全局门禁 | 登记 stage/environment/evidencePackId | S08、实施 Plan |
 | U10 | 八桶定序与竞争规则按 §4.3(a)/§12.3 冻结：先核验矛盾；未执行的预算终止、授权拒绝；失败闭合；成功闭合；确认取消；未闭合超时；中断未定；其余未知。闭合凭据先于取消/超时；互斥闭合、不可验证顺序的冲突不选边，unknown+conflict。多阶段信号并存不自动等于事实矛盾 | 将原定序中的完成优先例外展开为同一可执行顺序，保持 Kimi 事实优先原则；旧 ok 不证明成功，交付独立 | derivationVersion=v2p5-1，API/UI/CSV/包同源 | S01/A04/A06/A12 |
 | U11 | **新增变更**：query_preview 从当前实现180扩展至 **500个 Unicode 码点**，先执行既有脱敏，记截断/原始 UTF-8 字节长度及 preview_version=v2p5-1；question_preview 默认500是另一字段，不作为沿用依据。args_summary maxKeys=8、单值512 UTF-8字节，边界不切断字符/JSON。digest_kind={search_text,sql,result}；键排序、数组序/NULL/类型/精度保留、UTF-8；摘要取完整受控规范化输入，不重解释历史 query_hash | 保留 Kimi 选定上限，纠正“沿用已实施500”的事实；500/512为上限，不代表完整原文无条件落盘。沿用受保护摘要与原文边界 | preview_version/digest_version=v2p5-1；original_bytes/truncated additive；历史摘要 legacy/unknown | A09/A12/R7：180旧基线、500/501码点、512/513字节、多字节和完整输入摘要 |
 | U12 | 响应头 x-lucy-event-id **固定指向已提交 received 的 ingress_event_id**，不是 admitted 的另一 event_id；operation/attempt 头分别沿用各自 ID。仅在 received 提交成功后回传这三个审计关联头；随后校验/拒绝/admitted/prepared 失败仍回传原 received ID。received 未提交（含提交结果未能确认）、入口解析/分配前失败及明确不纳入路由，不回传任何审计凭据头，不编 ID 或“已接收”。已协商关联扩展的受控 SSE 响应首个 meta 载体携带同等值；旧客户端不插入未经协商的 meta 事件，仅按原协议处理并使用响应头。跨会话凭据 question_continuation 沿用 question_id/original_session_id/continuation_token/claimed_new_session_id；HMAC 绑定主体、凭证、question_id、original_session_id，与服务端问询关系一致并通过既有边界校验后追加续接，不凭同名/时间继承 | 修补错误响应引用不存在 admitted，以及未提交 ID 冒充接收凭据；received 成功不等于 admitted/执行成功。token 延续不重置问询预算。客户端观测 ID≠调用 ID，内部 operation≠上游 ID，父 attempt 只指 attempt | correlationHeaders=v2p5-1；questionContinuation=v2p5-1；未协商客户端兼容规则与受控 SSE 载体纳入 A07/A08 | S03/A02/A03/A07/A08 |
@@ -734,7 +736,7 @@ A01↔SEC-19-V05；A02↔SEC-19-V02/V04；A03↔SEC-19-V06 + 幂等投影；A04�
 | V25-11 | 中 | §14-R1/R3/R4 补旧伪代码、high 验收及 row_count 提示能力校验的同步清单 | 旧规范尚未修改；A12 未执行 |
 | V25-12 | 中 | §11.4/§13 隔离历史回放与在线故障集，按真实事件类型计量，补分支断言 | U9 验证范围；不以静态回放替代故障通过 |
 
-## 17. 设计冻结记录（v1.0-frozen / v2.5）
+## 17. 设计冻结记录（v1.0-frozen / v0.25）
 
 **结论：设计审阅通过，设计基线已冻结。** 2026-10-20 委托人授权 Codex“修改，完成冻结”；本轮完成 v0.3 复核五项问题收口，保留 Kimi 原始裁决来源并将最终生效值统一到 §15。冻结只覆盖 S01–S08 的设计和验收标准，不包含代码开发、故障测试执行或发布放行。
 
@@ -743,10 +745,12 @@ A01↔SEC-19-V05；A02↔SEC-19-V02/V04；A03↔SEC-19-V06 + 幂等投影；A04�
 | ACK 生效范围 | 1 个受控 dogfood；有效回执可写 acknowledged；unacknowledged 不写、无 ACK 超时 | §4.3(b)、U1、§12.6、A04/A09 |
 | 结算盲区与时间锚点 | T1=24h、T2=72h 均从持久 received_at 起算；T3=60s 从捕获 S 起算；覆盖无 admitted，重启/晚到不重置 | §8.2/§8.5、U6、§12.5/§12.6、A01/A02/A09/A10 |
 | 回传 ID 与失败分支 | 指已提交 received；提交未确认不发审计凭据头；未协商旧客户端不插 SSE 扩展帧 | §6、U12、§12.1、A02/A07/A08 |
-| 预览真实基线与新上限 | 当前180；v2.5 新增500 Unicode码点，保持脱敏；单值512 UTF-8字节，保护字符/JSON边界；不改历史 | §4.3(c)、U11、R7、A09/A12 |
-| 文档一致性与生效关系 | 正文、裁决、伪代码及建议书 v1.9 同步；原草案的候选语义已替换，§16 明确为历史记录；R1–R10/R12 后续同步义务不改变冻结值 | §2、§14–§17、关联 Plan §2.3 |
+| 预览真实基线与新上限 | 当前180；v0.25 新增500 Unicode码点，保持脱敏；单值512 UTF-8字节，保护字符/JSON边界；不改历史 | §4.3(c)、U11、R7、A09/A12 |
+| 文档一致性与生效关系 | 正文、裁决、伪代码及建议书 v1.15 同步；原草案的候选语义已替换，§16 明确为历史记录；R1–R10／R12 已于 2026-10-24 完成文档同步，不改变冻结值 | §2、§14–§17、关联 Plan §2.3 |
 
-**责任与变更控制**：Kimi 为原始起草/裁决人，Codex 为本次授权修订、审阅和冻结执行人。以后改变冻结契约、参数或目标集合须记录理由、受影响条款/验收、批准记录及新 spec/profile 版本；纯排版更正不改变契约。U5 数值标定及旧规范条文同步纳入实施 Plan，不能借此改变候选/证据语义。没有尚待选择的 U 项。
+**2026-10-24 收口记录**：按已批准 Final 决议重打 P0-1／v0.25 元数据并完成 R1–R10／R12 文档同步；S01–S08 与 U1–U12 未重开，A01–A12 仍未执行。本次只提交需求审查，不启动开发。
+
+**责任与变更控制**：Kimi 为原始起草/裁决人，Codex 为原授权修订、审阅和冻结执行人。以后改变冻结契约、参数或目标集合须记录理由、受影响条款/验收、批准记录及新 spec/profile 版本；纯排版更正不改变契约。U5 数值标定纳入后续实施 Plan，不能借此改变候选/证据语义。没有尚待选择的 U 项。
 
 **验证范围**：本轮执行术语门禁、差异/文档结构及冻结值一致性检查；其他任务并行修改的部署文件不纳入本轮差异，也未被本轮回写；历史 177/192/175 与旧 outcome 110/23/43/1 保持不变。A01–A12 及 U9 两阶段运行时验收仍为未执行，现有实现不因设计冻结自动获得通过状态。未修改历史证据或其他工作区文件。
 

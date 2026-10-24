@@ -83,7 +83,7 @@
 
 ### 4.3 事件与结果字典
 
-同源分类函数提供API、UI、CSV与证据包，附classificationVersion，不能由各前端独立推断。
+同源分类函数提供API、UI、CSV与证据包，附classificationVersion，不能由各前端独立推断。汇总主状态统一引用 [L25-09 S01](lucy-20261020-v2p5-audit-increment-spec.md#43-数据契约) 的八桶枚举、完整派生顺序与 `derivationVersion=v2p5-1`；本规范不再维护第二套主状态规则，旧 `outcome` 继续保留为历史事实。
 
 | 维度 | 固定取值或规则 |
 |---|---|
@@ -104,7 +104,7 @@
 - 用户问询只显示已登记原文或明确标注的推断问询；仅握手进入独立会话访问入口，默认不占业务问询列表或覆盖率分母。
 - 用“原文登记分组占比”而非“真实问询覆盖率”；展示分子、分母、仅握手排除数和推断未知。已确认关联覆盖率按工具事件算，单独展示候选数。
 - 问询时长仅在已知起止时提供；另列调用观测跨度、累计工具耗时和最大调用耗时。并发可导致累计耗时大于历时。
-- 行数、列数、字节数、截断及SQL缺失分别区分not_applicable/not_collected/redacted/parse_failed/unknown；不能把未知写成0或false。生成前失败可无SQL。
+- 行数、列数、字节数、截断及SQL缺失统一使用 L25-09 U2 冻结的六值空值原因：not_applicable/not_collected/redacted/parse_failed/unknown/not_supported；不能把未知写成0或false。生成前失败可无SQL，历史空白默认 unknown/legacy_unverified，不能无证据推定为 not_collected。
 
 ### 4.5 返回摘要与客户端事件
 
@@ -113,6 +113,8 @@
 普通日志和导出只提供不可逆或按现有隐私策略保护的摘要引用；低熵敏感值需使用现有受保护摘要或HMAC能力，不新增裸值hash泄露通道。接收摘要不能证实结果未被转发；相同数据得相同摘要属于正常结果。
 
 受控客户端事件类型固定为preflight_rejected/result_received/artifact_created/egress_observed/heartbeat，含clientEventId、已认证适配器标识、父事件引用、客户端观察时间、服务端接收时间及脱敏内容摘要。上报中的actor、权限、验证等级不可信，不能覆盖服务端事实。离线补传保持两种时间；按适配器与clientEventId幂等去重，重复ID不同内容为冲突，超出可见范围的父事件不得枚举。
+
+`clientEventId` 仅是适配器侧观测身份，不是 `client_call_id`、Lucy 入口事件或内部操作 ID。调用关联分别保存可选 `client_call_id`、已提交 received 的 `ingress_event_id`、`operationId` 与 `attemptId`；只有 received 持久化成功后才可通过 `x-lucy-event-id` 等已协商载体回传对应 ID。重连或实际重试分配新入口事件、操作与尝试，`retry_of` 指原入口事件、`parent_attempt_id` 只指原尝试；不得用 RPC request_id 去重或跨层复用 ID。
 
 接收入口固定为独立 `POST /api/agent-audit/events`，不伪装成已到达Lucy的MCP工具调用、不转发KTX。使用受控适配器专用、可撤销且限定主体/实例的凭证，不复用管理员Cookie或传入的任意用户ID；事件1至100条、请求不超过1MiB，429/413及安全账本不可用时503均为明确失败。没有普通业务凭证则不能查询数据；观测凭证不授予任何数据面能力。精确错误与逐事件ack字段在T00接口表冻结。
 
@@ -136,6 +138,8 @@
 SQLite backup生成一致快照；导出同一固定筛选、固定事件序列上界S，先使投影到达S，再从冻结快照生成所有文件。期间新事件>S不混入；关联握手只补入同一上界内可解释记录，去重并列明补入原因。分页附nextCursor和范围完整性，不能把“本页完整”写成“全部匹配完整”。
 
 综合completeness.complete保留投影、权限快照和来源关联检查；另外明确dataScope、associationQuality、clientCoverage、integrityVerification。不能只用projection.complete替换综合完整性。lag=0但存储不可用、complete=false时仍不完整。
+
+v0.25 新增独立 `auditCoverage` 六项检查，完整定义与判定统一引用 [L25-09 S05](lucy-20261020-v2p5-audit-increment-spec.md#82-数据契约)：入口接收覆盖、处理终态覆盖、投影追平、关联依赖齐全、跨端匹配、导出覆盖。各项独立取 `pass / fail / unknown / not_applicable`，必须携带计量单位、N/D、独立证据源、截止位置、差异 ID 集合与理由；D=0 或无法建立独立预期集合时不得记 100% 或 pass，禁止用同侧投影自证入口无漏记。旧 `complete / combined_complete` 与上述四子域含义不变，六项检查不得静默覆盖旧字段，也不替代关联质量或文件 hash 校验。
 
 正式完整导出在无法达到S、超时或快照失败时明确失败/可重试；诊断性不完整导出须由管理员显式选择并标记不足，继承权限和隐私规则。现有端点/v1读取保持兼容；新增正式模式与版本化字段通过T00公开API表明确，不改变旧字段含义而不升级版本。新UI默认请求完整模式，旧v1诊断导出继续允许complete=false并显示说明。
 

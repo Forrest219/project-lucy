@@ -231,6 +231,8 @@ excluded: initialize, notifications/initialized, tools/list
 4. 若簇内只有 `kx_catalog`，标记为 `confidence=low`，默认不计入“问题数”主指标。
 5. 若簇内包含至少一个数据承载调用（有 `access_log_sources` 或 `tables`），标记为正式 inferred turn。
 
+**v0.25 边界**：本聚类只用于展示层重建候选分组，不是归属回绑，不得据此修改原始事件归属或把候选提升为 confirmed。聚类结果只产生 `candidate`，置信度为 `none / low`；`LUCY_TURN_INFER_GAP_MS` 的具体标定由实施 Plan 用固定回放样本确定并记录规则版本。空值原因统一使用 `not_applicable / not_collected / redacted / parse_failed / unknown / not_supported` 六值枚举，历史空白默认 `unknown / legacy_unverified`，不推定为未采集。
+
 配置项：
 
 | 环境变量 | 默认值 | 说明 |
