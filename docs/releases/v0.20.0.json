@@ -4,7 +4,18 @@
   "commit": "abb503cde1a707011116e0b18639913931a28442",
   "releasedAt": "2026-10-24",
   "deliveryPackage": null,
-  "noDeliveryReason": "This release corrects the active product version from 0.2.0 to 0.20.0 and the Helm Chart package from 0.2.6 to 0.2.7. It carries no customer delivery package of its own; no Docker, Helm, pure Manifest or other customer artifact is claimed as released or production-ready by this entry.",
+  "noDeliveryReason": "The v0.20.0 tagging operation produced no new customer delivery package, and this entry records no new image digest or package SHA256. Separately, the project owner confirmed successful customer deployment of the same current product version; that manual acceptance applies only to the customer's existing actual deployment path. No other Docker, Helm, pure Manifest or other artifact is claimed as production-ready by this entry.",
+  "customerAcceptance": {
+    "status": "accepted",
+    "scope": "customer actual deployment path only",
+    "productVersion": "0.20.0",
+    "versionMatchesCurrent": true,
+    "evidenceType": "project-owner confirmation",
+    "confirmedAt": "2026-10-24",
+    "githubReleaseChainVerified": false,
+    "newArtifactIdentityRecorded": false,
+    "note": "The project owner confirmed that the customer deployed successfully and that the customer's version matches the current v0.20.0. Acceptance is limited to that actual deployment path; it does not verify the GitHub customer release chain, demo Compose paths or any other artifact."
+  },
   "runs": [
     {
       "id": "40088995603",
@@ -96,8 +107,9 @@
     "Product versions and deployment artifacts are independently versioned. Chart 0.2.7 carries appVersion 0.20.0 and bundled KTX remains 0.16.0.",
     "The build revision identifies the exact source build and supplements product-version ordering; it does not permit a later release in the active line to use a lower product version.",
     "The two failed demo smoke checks are known non-Required issues deferred to the next release cycle. Their presence contributes to the overall workflow failure; neither the main nor tag run may be described as fully green.",
-    "The project owner reports that the customer deployed successfully. That evidence is scoped to the customer's actual deployment path and does not verify either demo Compose path.",
-    "The annotated v0.20.0 tag points to abb503cde1a707011116e0b18639913931a28442. The commit and both observed runs are backfilled from Git and CI facts; no GitHub Release or customer delivery package was created by the tagging operation.",
-    "The customer release chain remains blocked by the pre-existing GHCR namespace/token permission failure and the absence of a protected self-hosted runner. The tag is an immutable version anchor, not a claim of customer production readiness."
+    "The project owner confirmed that the customer deployed successfully and that the customer's version matches the current v0.20.0. The customerAcceptance field records the resulting manual acceptance, strictly scoped to the customer's actual deployment path; it does not verify either demo Compose path or any other artifact.",
+    "The annotated v0.20.0 tag points to abb503cde1a707011116e0b18639913931a28442. The commit and both observed runs are backfilled from Git and CI facts; no GitHub Release or new customer delivery package was created by the tagging operation.",
+    "The GitHub customer release chain remains blocked by the pre-existing GHCR namespace/token permission failure and the absence of a protected self-hosted runner. This limits the release scope but does not invalidate the owner-confirmed actual-path acceptance; no GHCR-published candidate, demo Compose path or other unaccepted artifact is included.",
+    "The GitHub Release notes draft is docs/releases/v0.20.0-release-notes.md. The actual GitHub Release has not been created yet."
   ]
 }

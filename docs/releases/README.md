@@ -25,7 +25,7 @@
 
 ## 文件
 
-- `v0.20.0.json` — 当前版本，annotated tag 已指向 `abb503c`。main 跑批 `40088995603` 与 tag 跑批 `40097259604` 的四项 Required checks 均通过；两项既有非必需 demo 冒烟检查失败并获准留到下一轮修复。tag 跑批中的 `customer-amd64-native` 因既有 GHCR 权限问题失败，下游客户放行链未执行。本版**无客户交付包，未创建 GitHub Release**，不得据此宣称客户生产放行。
+- `v0.20.0.json` — 当前版本，annotated tag 已指向 `abb503c`。main 跑批 `40088995603` 与 tag 跑批 `40097259604` 的四项 Required checks 均通过；项目所有者确认客户已成功部署且版本与当前 `0.20.0` 一致，**仅客户实际部署路径按人工验收放行**。两项既有非必需 demo 冒烟检查失败并获准留到下一轮修复；GHCR 权限问题导致 GitHub 客户放行链未执行，其他制品不在放行范围内。本版未新登记交付包、镜像摘要或包哈希，Release 说明草稿为 `v0.20.0-release-notes.md`，尚未创建 GitHub Release。
 - `v0.2.0.json` — 历史版本，已被 `v0.20.0` 取代。原提交、tag、Release 与门禁事实保持不变；其中“版本号不承担大小序”是当时已撤销的错误口径。
 - `v2.0.0.json` — 历史版本。`v2.0.0` tag 与 Release 保留为历史事实，未删除、未移动。该版本号的客户候选包 `20261021-r7` 实际构建自 `a93880e`（比 tag 早 36 个提交，不含本次 11 项门禁修复），台账用 `builtFromDiffersFromReleaseCommit` 如实留痕。
 
