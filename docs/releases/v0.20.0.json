@@ -1,7 +1,7 @@
 {
   "productVersion": "0.20.0",
   "releaseTag": "v0.20.0",
-  "commit": "PENDING",
+  "commit": "abb503cde1a707011116e0b18639913931a28442",
   "releasedAt": "2026-10-24",
   "deliveryPackage": null,
   "noDeliveryReason": "This release corrects the active product version from 0.2.0 to 0.20.0 and the Helm Chart package from 0.2.6 to 0.2.7. It carries no customer delivery package of its own; no Docker, Helm, pure Manifest or other customer artifact is claimed as released or production-ready by this entry.",
@@ -12,9 +12,9 @@
       "note": "Completed with overall conclusion failure. All four Required checks passed: spec-and-webui, docker-smoke, k8s-static and k8s-upgrade-gate. The two non-Required demo smoke failures are recorded separately below."
     },
     {
-      "id": "PENDING",
-      "trigger": "Push of the future v0.20.0 tag",
-      "note": "Record the actual tag run before release. No v0.20.0 tag or tag run exists yet."
+      "id": "40097259604",
+      "trigger": "push of the v0.20.0 tag at commit abb503cde1a707011116e0b18639913931a28442",
+      "note": "Completed with overall conclusion failure. All four Required checks passed again. customer-amd64-native failed at the GHCR push, and the two known non-Required demo smoke checks failed again; downstream release-chain jobs were skipped."
     }
   ],
   "gates": [
@@ -25,23 +25,64 @@
       "run": "40088995603"
     },
     {
+      "name": "Required tag checks",
+      "status": "passed",
+      "required": true,
+      "run": "40097259604"
+    },
+    {
+      "name": "headless-config",
+      "status": "passed",
+      "required": false,
+      "run": "40097259604"
+    },
+    {
+      "name": "business-eval-catalog",
+      "status": "passed",
+      "required": false,
+      "run": "40097259604"
+    },
+    {
+      "name": "ktx-diff-audit",
+      "status": "passed",
+      "required": false,
+      "run": "40097259604"
+    },
+    {
       "name": "demo-db-smoke",
       "status": "failed",
       "required": false,
       "run": "40088995603",
-      "reason": "Known non-blocking failure: /api/project returned HTTP 401. The identical failure was observed on pre-merge main commit a5e53d683796e21893e2f220e67282a414367c86, and this version correction did not change its workflow, smoke scripts or demo Compose files. The project owner explicitly deferred the fix to the next release cycle; do not claim this demo path is verified."
+      "reason": "Known non-blocking failure: /api/project returned HTTP 401. The identical failure was observed on pre-merge main commit a5e53d683796e21893e2f220e67282a414367c86 and again in tag run 40097259604. This version correction did not change its workflow, smoke scripts or demo Compose files. The project owner explicitly deferred the fix to the next release cycle; do not claim this demo path is verified."
     },
     {
       "name": "postgres-demo-db-smoke",
       "status": "failed",
       "required": false,
       "run": "40088995603",
-      "reason": "Known non-blocking failure: deploy/compose/secrets/webui-bootstrap-token is absent, so the container bind mount fails. The identical failure was observed on pre-merge main commit a5e53d683796e21893e2f220e67282a414367c86, and this version correction did not change its workflow, smoke scripts or demo Compose files. The project owner explicitly deferred the fix to the next release cycle; do not claim this demo path is verified."
+      "reason": "Known non-blocking failure: deploy/compose/secrets/webui-bootstrap-token is absent, so the container bind mount fails. The identical failure was observed on pre-merge main commit a5e53d683796e21893e2f220e67282a414367c86 and again in tag run 40097259604. This version correction did not change its workflow, smoke scripts or demo Compose files. The project owner explicitly deferred the fix to the next release cycle; do not claim this demo path is verified."
     },
     {
-      "name": "release-ci",
+      "name": "customer-amd64-native",
+      "status": "failed",
+      "required": false,
+      "run": "40097259604",
+      "reason": "The native amd64 image built locally as sha256:3b0dd54325bc8a87c11d19abc244f8c5a2854cc77a0206dcabec62548a90cc97 and was tagged ghcr.io/kaelio/project-lucy:candidate-amd64-0.20.0-20261024-abb503c, but the registry push was denied with 'permission_denied: The requested installation does not exist'. The workflow's built-in GITHUB_TOKEN cannot publish to the different kaelio namespace. No candidate registry digest was produced, so G1/G2/G3/G4/G4b/G8 and container-level smoke did not execute. The same pre-existing permission failure is recorded for v0.2.0; it is not a product-version regression."
+    },
+    {
+      "name": "real-e2e",
       "status": "notExecuted",
-      "reason": "The future v0.20.0 tag run has not been executed. Record its actual run and individual tag-only gate results before release; the successful Required checks in the main push run do not replace tag-run evidence."
+      "reason": "Skipped in tag run 40097259604 after upstream customer-amd64-native failed. Independently, the repository still has zero registered self-hosted runners, so the required lucy-protected linux/amd64 runner remains unavailable."
+    },
+    {
+      "name": "customer-release-readiness",
+      "status": "notExecuted",
+      "reason": "Skipped in tag run 40097259604 because its upstream release-chain dependencies did not complete successfully. No automated customer release credential was produced."
+    },
+    {
+      "name": "release-package",
+      "status": "notExecuted",
+      "reason": "Skipped in tag run 40097259604 because customer-release-readiness did not execute. No GitHub-gate-produced package, promoted image or release notes artifact exists."
     },
     {
       "name": "customer delivery gates",
@@ -54,8 +95,9 @@
     "The v0.2.0 and v2.0.0 tags, Releases, commits, artifacts and gate evidence remain immutable historical records; this release does not move or delete them.",
     "Product versions and deployment artifacts are independently versioned. Chart 0.2.7 carries appVersion 0.20.0 and bundled KTX remains 0.16.0.",
     "The build revision identifies the exact source build and supplements product-version ordering; it does not permit a later release in the active line to use a lower product version.",
-    "The two failed demo smoke checks are known non-Required issues deferred to the next release cycle. Their presence makes the overall main workflow result failure; this ledger must not describe the run as fully green.",
+    "The two failed demo smoke checks are known non-Required issues deferred to the next release cycle. Their presence contributes to the overall workflow failure; neither the main nor tag run may be described as fully green.",
     "The project owner reports that the customer deployed successfully. That evidence is scoped to the customer's actual deployment path and does not verify either demo Compose path.",
-    "commit and the future tag run remain PENDING until the actual release exists; backfill them from observed Git and CI facts."
+    "The annotated v0.20.0 tag points to abb503cde1a707011116e0b18639913931a28442. The commit and both observed runs are backfilled from Git and CI facts; no GitHub Release or customer delivery package was created by the tagging operation.",
+    "The customer release chain remains blocked by the pre-existing GHCR namespace/token permission failure and the absence of a protected self-hosted runner. The tag is an immutable version anchor, not a claim of customer production readiness."
   ]
 }
