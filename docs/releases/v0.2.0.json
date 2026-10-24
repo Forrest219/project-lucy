@@ -1,0 +1,22 @@
+{
+  "productVersion": "0.2.0",
+  "releaseTag": "v0.2.0",
+  "commit": "PENDING",
+  "releasedAt": "2026-10-24",
+  "deliveryPackage": null,
+  "noDeliveryReason": "This release corrects the product version number from 2.0.0 to 0.2.0 and adds the release ledger mechanism. It carries no customer delivery package of its own; the first package that actually ships 0.2.0 contents will be the first delivery of this version line.",
+  "gates": [
+    {
+      "name": "customer delivery gates",
+      "status": "notExecuted",
+      "reason": "No customer delivery package exists for this version, so the delivery-side gates (G1-G4b, G8, native amd64 acceptance P0-3 through P0-6) have nothing to run against."
+    }
+  ],
+  "notes": [
+    "Product version corrected from 2.0.0 to 0.2.0 so the product version line no longer resembles the Helm Chart version line (0.2.x). The Helm Chart version stays 0.2.6 and is independent of the product version.",
+    "From this version on, product version numbers do not encode ordering. 0.2.0 is numerically smaller than the earlier 0.17.0 but is the current version. Decide whether a customer is up to date by the build revision (the 40-hex commit), never by comparing product version strings.",
+    "The v2.0.0 tag and its GitHub Release are kept as historical fact. Their product version was 2.0.0 at that time.",
+    "This entry's commit is filled in once the release tag is cut, so the ledger and the tag can never disagree.",
+    "Outbound packaging now refuses to publish a package whose contents do not match the release tag it claims; see scripts/release/release-artifacts.mjs assertReleaseTagMatchesHead."
+  ]
+}

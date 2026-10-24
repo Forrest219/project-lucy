@@ -155,6 +155,9 @@ async function main() {
 
   const evidence = {
     contract: "lucy-p1-release-readiness-v2",
+    // Evidence-contract version. Coincidentally equal to a product version at
+    // some point in time; it is NOT the Lucy product version. Do not bump it
+    // when the product version changes.
     version: "2.0.0",
     checkedAt: new Date().toISOString(),
     status: overall,

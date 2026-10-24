@@ -34,7 +34,7 @@ describe("VersionInfo", () => {
 
   it("shows the four health fields and copies the full commit", async () => {
     vi.mocked(apiGet).mockResolvedValue({
-      lucyVersion: "2.0.0",
+      lucyVersion: "0.2.0",
       gitSha: SHA,
       gitDirty: true,
       bundledKtxVersion: "0.16.0"
@@ -47,7 +47,7 @@ describe("VersionInfo", () => {
 
     renderPage();
 
-    expect(await screen.findByTestId("version-info-product")).toHaveTextContent("v2.0.0");
+    expect(await screen.findByTestId("version-info-product")).toHaveTextContent("v0.2.0");
     expect(screen.getByTestId("version-info-sha")).toHaveTextContent(SHA);
     expect(screen.getByTestId("version-info-workspace")).toHaveTextContent("构建时工作区有未提交改动");
     expect(screen.getByTestId("version-info-ktx")).toHaveTextContent("0.16.0");
@@ -60,7 +60,7 @@ describe("VersionInfo", () => {
 
   it("shows the workspace row only when the recorded build had uncommitted changes", async () => {
     vi.mocked(apiGet).mockResolvedValue({
-      lucyVersion: "2.0.0",
+      lucyVersion: "0.2.0",
       gitSha: SHA,
       gitDirty: false,
       bundledKtxVersion: "0.16.0"
@@ -68,7 +68,7 @@ describe("VersionInfo", () => {
 
     renderPage();
 
-    expect(await screen.findByTestId("version-info-product")).toHaveTextContent("v2.0.0");
+    expect(await screen.findByTestId("version-info-product")).toHaveTextContent("v0.2.0");
     expect(screen.getByTestId("version-info-sha")).toHaveTextContent(SHA);
     expect(screen.getByTestId("version-info-ktx")).toHaveTextContent("0.16.0");
     expect(screen.queryByTestId("version-info-workspace")).not.toBeInTheDocument();
@@ -76,7 +76,7 @@ describe("VersionInfo", () => {
 
   it("shows unknown for a missing commit and does not offer copy", async () => {
     vi.mocked(apiGet).mockResolvedValue({
-      lucyVersion: "2.0.0",
+      lucyVersion: "0.2.0",
       gitSha: "unknown",
       gitDirty: false,
       bundledKtxVersion: ""

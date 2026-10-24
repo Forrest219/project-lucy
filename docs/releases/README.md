@@ -1,0 +1,44 @@
+# 发版台账（Release Ledger）
+
+每个已发布产品版本一份机器可读记录，回答四个问题：**这个版本是什么、它来自哪个提交、交付物是什么、验证到了什么程度。**
+
+`git tag` 只表达**意图**（"我打算在这个点发布"），台账表达**事实**（"发布的就是这个提交，交付物是这些摘要，门禁跑了这些"）。两者必须都在，才能追溯。
+
+## 怎么用
+
+| 想问 | 去哪看 |
+|---|---|
+| 客户手上的包对应哪个提交？ | 对应版本的 `deliveryPackage.builtFromCommit` |
+| 这一版跑了哪些门禁、哪些没跑、为什么？ | 对应版本的 `gates[]`（每条 `notExecuted` 必须写原因） |
+| 这一版能不能直接给客户？ | `deliveryPackage.productionReady` 与 `productionReadyReason` |
+| 客户在跑的是不是新版本？ | **看构建提交**，不要比较产品版本号（见下） |
+| 某个旧版本当时是什么状态？ | 该版本的 `.json` 文件 |
+
+## 版本号不承担大小序
+
+产品版本号**只是发布标识**，不表示新旧顺序。`0.2.0` 的数值小于历史版本 `0.17.0`，但它是当前版本。
+
+判断客户是否需要升级，一律以**构建提交**（40 位 commit）为准：`/api/health.data.gitSha`、WebUI「系统设置 / 版本信息」页、镜像内 `/app/BUILD_REVISION`。仓库里没有任何按产品版本号做大小比较的逻辑，也不允许新增。
+
+## 文件
+
+- `v0.2.0.json` — 当前版本。产品版本由 `2.0.0` 更正而来，本版**无客户交付包**（版本号订正 + 台账机制本身），因此 `deliveryPackage` 为 `null` 并写明 `noDeliveryReason`。
+- `v2.0.0.json` — 历史版本。`v2.0.0` tag 与 Release 保留为历史事实，未删除、未移动。该版本号的客户候选包 `20261021-r7` 实际构建自 `a93880e`（比 tag 早 36 个提交，不含本次 11 项门禁修复），台账用 `builtFromDiffersFromReleaseCommit` 如实留痕。
+
+## 维护规则
+
+1. **打 tag 前**先写条目，`commit` 暂填 `"PENDING"`；tag 打好后回填真实 SHA。门禁会拒绝 `PENDING` 状态下的其他不一致。
+2. **一版一条**，文件名 = 产品版本号（`v0.2.0.json`）。不允许同一版本号有两条记录。
+3. **`deliveryPackage: null` 必须写 `noDeliveryReason`** ——「本版无交付包」是合法状态，但必须显式说明，不能靠字段缺失蒙混。
+4. **`notExecuted` 的门禁必须写 `reason`** ——未跑的门禁不是缺失信息，是交付结论的一部分。
+5. **交付包与发布提交不一致时**，必须显式设 `builtFromDiffersFromReleaseCommit: true` 并在 `builtFromDiffNote` 解释；否则门禁直接判失败。
+6. 跑 `npm run lint:release-ledger` 校验。
+
+## 校验
+
+```bash
+npm run lint:release-ledger        # 校验台账完整性
+npm run lint:release-ledger:test   # 校验器自身的测试
+```
+
+门禁检查：当前 `VERSION` 必须有对应条目；每条必需字段齐全；`releaseTag` 与 `productVersion` 一致；`commit` 是完整 40 位 SHA（或 `PENDING`）；`gates` 是数组且每条有 `name` 与 `status`，`notExecuted` 必须带 `reason`；同一版本号不重复。

@@ -8,6 +8,7 @@ import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import {
   A3_NPM_SCRIPTS,
+  assertReleaseTagMatchesHead,
   assertReleaseVersionProjections,
   createSourceBundle,
   SOURCE_BUNDLE_NAME,
@@ -126,6 +127,45 @@ describe("release-artifacts A3 customer-bundle hygiene", () => {
         { version: "0.17.0", packages: { "": { version: "0.17.0" } } }
       ),
       /package\.json version "0\.16\.0" does not match VERSION 0\.17\.0/
+    );
+  });
+});
+
+describe("release-artifacts release tag binding", () => {
+  const HEAD = "a".repeat(40);
+  const TAGGED = "b".repeat(40);
+
+  it("accepts a tag whose commit is the packaged commit", () => {
+    const result = assertReleaseTagMatchesHead("v0.2.0", {
+      taggedCommit: HEAD,
+      headCommit: HEAD,
+      tagExists: true
+    });
+    assert.deepEqual(result, { checked: true, taggedCommit: HEAD });
+  });
+
+  it("rejects a tag that points at an ancestor commit", () => {
+    assert.throws(
+      () => assertReleaseTagMatchesHead("v0.2.0", {
+        taggedCommit: TAGGED,
+        headCommit: HEAD,
+        tagExists: true
+      }),
+      /points at commit b{40}, but the packaged source is a{40}/
+    );
+  });
+
+  it("skips the check when no release tag is supplied", () => {
+    assert.deepEqual(
+      assertReleaseTagMatchesHead("local", { taggedCommit: "", headCommit: HEAD, tagExists: false }),
+      { checked: false, reason: "no-release-tag" }
+    );
+  });
+
+  it("skips the check when the tag cannot be resolved", () => {
+    assert.deepEqual(
+      assertReleaseTagMatchesHead("v9.9.9", { taggedCommit: "", headCommit: HEAD, tagExists: false }),
+      { checked: false, reason: "tag-not-found" }
     );
   });
 });

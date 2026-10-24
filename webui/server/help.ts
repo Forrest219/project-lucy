@@ -45,7 +45,7 @@ export const SECTION_ID_CONTRACT = new Map<string, string>([
 
   // ---- H3 ----
   ["文档基线（自动同步）", "handbook-baseline"],
-  ["v2.0.0 版本切换说明", "product-version-cutover"],
+  ["版本号说明", "product-version-cutover"],
   ["面向开发者", "faq-developer"],
   ["面向管理员", "faq-admin"],
   ["面向接入协作者", "faq-agent-integration"],

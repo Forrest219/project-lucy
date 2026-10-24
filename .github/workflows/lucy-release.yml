@@ -38,6 +38,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run lint:version
+      - run: npm run lint:release-ledger
       - run: npm run smoke:p0:delivery-isolation
       - name: Materialize private access.yaml stub for lint
         run: |

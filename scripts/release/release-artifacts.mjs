@@ -145,6 +145,27 @@ export function assertReleaseVersionProjections(lucyVersion, rootPkg, rootLock) 
   return lucyVersion;
 }
 
+/**
+ * A release tag names an immutable commit. When the caller passes a real tag,
+ * the tagged commit MUST be the one being packaged — otherwise the package
+ * contents silently drift away from the version it claims to be. A package
+ * built from an ancestor commit still carries the current VERSION file, so
+ * every version projection looks correct while the code does not match.
+ *
+ * A tag that does not exist yet, or a non-tag label such as "local", is not a
+ * release identity and is left alone.
+ */
+export function assertReleaseTagMatchesHead(releaseTag, { taggedCommit, headCommit, tagExists }) {
+  if (!releaseTag || releaseTag === "local") return { checked: false, reason: "no-release-tag" };
+  if (!tagExists) return { checked: false, reason: "tag-not-found" };
+  if (taggedCommit === headCommit) return { checked: true, taggedCommit };
+  throw new Error(
+    `[release-artifacts] release tag ${JSON.stringify(releaseTag)} points at commit ${taggedCommit}, `
+      + `but the packaged source is ${headCommit}. Refusing to publish a package whose contents `
+      + `do not match the version it claims. Checkout the tagged commit, or pass the matching tag.`
+  );
+}
+
 function packageComponents(lock, scope) {
   const packages = lock.packages && typeof lock.packages === "object" ? lock.packages : {};
   const components = [];
@@ -324,6 +345,11 @@ async function main() {
   );
   const gitCommit = run("git", ["rev-parse", "HEAD"]);
   const gitShort = run("git", ["rev-parse", "--short", "HEAD"]);
+  const tagExists = run("git", ["rev-parse", "--verify", "--quiet", `refs/tags/${FINAL_RELEASE_TAG}`], "") !== "";
+  const taggedCommit = tagExists
+    ? run("git", ["rev-list", "-n", "1", `refs/tags/${FINAL_RELEASE_TAG}`], "")
+    : "";
+  assertReleaseTagMatchesHead(FINAL_RELEASE_TAG, { taggedCommit, headCommit: gitCommit, tagExists });
   const imageId = dockerImageId(imageTag);
   const generatedAt = new Date().toISOString();
   const audit = combinedAudit([
@@ -351,6 +377,18 @@ async function main() {
   const metadata = {
     generatedAt,
     releaseTag: FINAL_RELEASE_TAG,
+    // The tag→commit binding is the traceability anchor: it states which
+    // commit this package's contents actually came from, so a later reader
+    // can tell a matching package from one built from an ancestor commit.
+    releaseIdentity: {
+      releaseTag: FINAL_RELEASE_TAG,
+      taggedCommit: tagExists ? taggedCommit : null,
+      packagedCommit: gitCommit,
+      tagMatchesContents: tagExists ? taggedCommit === gitCommit : null,
+      note: tagExists
+        ? "taggedCommit must equal packagedCommit for the package to claim this release tag"
+        : "no resolvable release tag; package identity rests on packagedCommit alone"
+    },
     lucy: {
       gitCommit,
       gitShort,

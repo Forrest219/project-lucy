@@ -10,6 +10,7 @@
 | 子目录 | 内容 |
 |---|---|
 | `governance/` | 开发治理、项目总览、发布/版本/测试门禁、约定 |
+| `releases/` | 发版台账：每个已发布产品版本一份机器可读记录（版本 → tag → 提交 → 交付物摘要 → 门禁执行与未执行原因） |
 | `design/` | 未实现/在建功能的技术设计（`design-*.md` 及设计类文档） |
 | `specs/` | 功能/交付的 spec、plan、contract、register（`lucy-*`、CEO 一眼报系列等） |
 | `runbooks/` | 部署/运维 runbook、客户交付指南、管理与安全指南、SOP |
@@ -120,6 +121,7 @@
 |---|---|
 | `governance/release-ci.md` | Release CI 与 KTX 升级 gate |
 | `governance/version-matrix.md` | 支持的运行时与兼容性矩阵 |
+| `releases/README.md` | **发版台账**：逐版本机器可读记录（版本 → tag → 提交 → 交付物 → 门禁执行情况与未执行原因）；判断客户是否在跑新版本以构建提交为准，不比较产品版本号 |
 | `governance/database-support-matrix.md` | 数据库支持矩阵：各数据库类型的支持状态、判定证据、已知协议差异与更新规则（状态唯一真源） |
 | `governance/test-layers-and-release-gates.md` | Runtime/platform/business eval gate 分层；索引 E2E 测试集 |
 | `governance/lucy-test-cases.md` | 全链路 P0/P1/P2 测试用例矩阵（release-artifacts 打包清单依赖） |
