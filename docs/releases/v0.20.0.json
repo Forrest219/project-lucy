@@ -7,16 +7,41 @@
   "noDeliveryReason": "This release corrects the active product version from 0.2.0 to 0.20.0 and the Helm Chart package from 0.2.6 to 0.2.7. It carries no customer delivery package of its own; no Docker, Helm, pure Manifest or other customer artifact is claimed as released or production-ready by this entry.",
   "runs": [
     {
+      "id": "40088995603",
+      "trigger": "push to main at merge commit abb503cde1a707011116e0b18639913931a28442",
+      "note": "Completed with overall conclusion failure. All four Required checks passed: spec-and-webui, docker-smoke, k8s-static and k8s-upgrade-gate. The two non-Required demo smoke failures are recorded separately below."
+    },
+    {
       "id": "PENDING",
-      "trigger": "Pending merge to main and the subsequent v0.20.0 tag run",
-      "note": "Replace this placeholder with every actual push and tag run before release. No CI run is claimed yet."
+      "trigger": "Push of the future v0.20.0 tag",
+      "note": "Record the actual tag run before release. No v0.20.0 tag or tag run exists yet."
     }
   ],
   "gates": [
     {
+      "name": "Required main checks",
+      "status": "passed",
+      "required": true,
+      "run": "40088995603"
+    },
+    {
+      "name": "demo-db-smoke",
+      "status": "failed",
+      "required": false,
+      "run": "40088995603",
+      "reason": "Known non-blocking failure: /api/project returned HTTP 401. The identical failure was observed on pre-merge main commit a5e53d683796e21893e2f220e67282a414367c86, and this version correction did not change its workflow, smoke scripts or demo Compose files. The project owner explicitly deferred the fix to the next release cycle; do not claim this demo path is verified."
+    },
+    {
+      "name": "postgres-demo-db-smoke",
+      "status": "failed",
+      "required": false,
+      "run": "40088995603",
+      "reason": "Known non-blocking failure: deploy/compose/secrets/webui-bootstrap-token is absent, so the container bind mount fails. The identical failure was observed on pre-merge main commit a5e53d683796e21893e2f220e67282a414367c86, and this version correction did not change its workflow, smoke scripts or demo Compose files. The project owner explicitly deferred the fix to the next release cycle; do not claim this demo path is verified."
+    },
+    {
       "name": "release-ci",
       "status": "notExecuted",
-      "reason": "The correction is still on its review branch. Record the actual main push and tag runs, then replace this entry with the individual gate results; do not infer CI success from local checks."
+      "reason": "The future v0.20.0 tag run has not been executed. Record its actual run and individual tag-only gate results before release; the successful Required checks in the main push run do not replace tag-run evidence."
     },
     {
       "name": "customer delivery gates",
@@ -29,6 +54,8 @@
     "The v0.2.0 and v2.0.0 tags, Releases, commits, artifacts and gate evidence remain immutable historical records; this release does not move or delete them.",
     "Product versions and deployment artifacts are independently versioned. Chart 0.2.7 carries appVersion 0.20.0 and bundled KTX remains 0.16.0.",
     "The build revision identifies the exact source build and supplements product-version ordering; it does not permit a later release in the active line to use a lower product version.",
-    "commit, runs and gates are placeholders only until the actual release exists; backfill them from observed Git and CI facts."
+    "The two failed demo smoke checks are known non-Required issues deferred to the next release cycle. Their presence makes the overall main workflow result failure; this ledger must not describe the run as fully green.",
+    "The project owner reports that the customer deployed successfully. That evidence is scoped to the customer's actual deployment path and does not verify either demo Compose path.",
+    "commit and the future tag run remain PENDING until the actual release exists; backfill them from observed Git and CI facts."
   ]
 }
