@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | 更新日志 |
 | 文档类型 | Release Notes |
-| 版本 | 0.2.0 |
-| 撰写日期 | 2026-06-20；0.2.0 更新 2026-10-24（产品版本由 2.0.0 更正为 0.2.0；统一品牌叫法与术语、补浏览器翻译防御、修跨页链接与文档骨架） |
+| 版本 | 0.20.0 |
+| 撰写日期 | 2026-06-20；0.20.0 更新 2026-10-24（产品版本由 2.0.0 更正为 0.20.0；统一品牌叫法与术语、补浏览器翻译防御、修跨页链接与文档骨架） |
 | 撰写人 | Claude |
 | 委托人 | project-lucy 团队 |
 | 基于材料 | Lucy 版本历史 |
@@ -62,7 +62,7 @@
     <header class="hero">
       <span class="eyebrow">Reference</span>
       <h1>更新日志</h1>
-      <p class="lead">Lucy 及其 <span translate="no" class="notranslate">KTX</span> 引擎的版本历史与重要变更。当前产品版本为 0.2.0，持续迭代中。</p>
+      <p class="lead">Lucy 及其 <span translate="no" class="notranslate">KTX</span> 引擎的版本历史与重要变更。当前产品版本为 0.20.0，持续迭代中。</p>
     </header>
 
     <div class="callout">
@@ -78,16 +78,22 @@
           </thead>
           <tbody>
             <tr>
-              <td>0.2.0（当前）</td>
+              <td>0.20.0（当前）</td>
               <td>2026-10-24</td>
               <td><span class="badge badge-teal">生产可用</span></td>
-              <td>产品版本号由 2.0.0 更正为 0.2.0，避免与 Helm chart 版本线（0.2.x）混淆；本次更正不改变权限、配置或 <span translate="no" class="notranslate">KTX</span> 运行时，内置 <span translate="no" class="notranslate">KTX</span> 仍是 0.16.0。</td>
+              <td>废止错误的 2.0.0 切线，并将短命的 0.2.0 更正为 0.20.0，恢复当前 0.x 版本线的数值顺序：0.20.0 &gt; 0.17.0 &gt; 0.2.0。Helm Chart 包版本为 0.2.7，内置 <span translate="no" class="notranslate">KTX</span> 仍是 0.16.0。</td>
+            </tr>
+            <tr>
+              <td>0.2.0</td>
+              <td>2026-10-24</td>
+              <td><span class="badge badge-gold">已取代</span></td>
+              <td>产品版本号曾由 2.0.0 更正为 0.2.0，但因 0.2.0 低于历史 0.17.0，同日被 0.20.0 取代。原 tag 与 Release 作为历史事实保留。</td>
             </tr>
             <tr>
               <td>2.0.0</td>
               <td>2026-10-19</td>
               <td><span class="badge badge-gold">已取代</span></td>
-              <td>产品版本线从 0.17.0 切到 2.0.0；Helm chart 版本仍是 0.2.4，内置 <span translate="no" class="notranslate">KTX</span> 仍是 0.16.0，本次切换本身不改变权限、配置或 <span translate="no" class="notranslate">KTX</span> 运行时。该版本号已于 2026-10-24 被 0.2.0 取代。</td>
+              <td>产品版本线从 0.17.0 切到 2.0.0；Helm chart 版本仍是 0.2.4，内置 <span translate="no" class="notranslate">KTX</span> 仍是 0.16.0，本次切换本身不改变权限、配置或 <span translate="no" class="notranslate">KTX</span> 运行时。该版本号已于 2026-10-24 被 0.20.0 取代。</td>
             </tr>
           </tbody>
         </table>

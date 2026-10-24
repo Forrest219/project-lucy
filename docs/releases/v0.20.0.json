@@ -1,0 +1,34 @@
+{
+  "productVersion": "0.20.0",
+  "releaseTag": "v0.20.0",
+  "commit": "PENDING",
+  "releasedAt": "2026-10-24",
+  "deliveryPackage": null,
+  "noDeliveryReason": "This release corrects the active product version from 0.2.0 to 0.20.0 and the Helm Chart package from 0.2.6 to 0.2.7. It carries no customer delivery package of its own; no Docker, Helm, pure Manifest or other customer artifact is claimed as released or production-ready by this entry.",
+  "runs": [
+    {
+      "id": "PENDING",
+      "trigger": "Pending merge to main and the subsequent v0.20.0 tag run",
+      "note": "Replace this placeholder with every actual push and tag run before release. No CI run is claimed yet."
+    }
+  ],
+  "gates": [
+    {
+      "name": "release-ci",
+      "status": "notExecuted",
+      "reason": "The correction is still on its review branch. Record the actual main push and tag runs, then replace this entry with the individual gate results; do not infer CI success from local checks."
+    },
+    {
+      "name": "customer delivery gates",
+      "status": "notExecuted",
+      "reason": "No customer delivery package exists for this version, so no artifact-specific delivery or production-readiness gate has been executed."
+    }
+  ],
+  "notes": [
+    "The active 0.x product line is ordered 0.20.0 > 0.17.0 > 0.2.0. The retired 2.0.0 cut is historical and is not the baseline of the active 0.x line.",
+    "The v0.2.0 and v2.0.0 tags, Releases, commits, artifacts and gate evidence remain immutable historical records; this release does not move or delete them.",
+    "Product versions and deployment artifacts are independently versioned. Chart 0.2.7 carries appVersion 0.20.0 and bundled KTX remains 0.16.0.",
+    "The build revision identifies the exact source build and supplements product-version ordering; it does not permit a later release in the active line to use a lower product version.",
+    "commit, runs and gates are placeholders only until the actual release exists; backfill them from observed Git and CI facts."
+  ]
+}

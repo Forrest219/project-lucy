@@ -3,7 +3,7 @@
  * Injected at Vite build time from repo-root VERSION / LUCY_VERSION env.
  * Independent of bundled KTX (`LUCY_BUNDLED_KTX_VERSION`).
  */
-const FALLBACK = "0.2.0";
+const FALLBACK = "0.20.0";
 const PRODUCT_VERSION_RE = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 
 export function normalizeLucyProductVersion(version: string): string | undefined {
@@ -18,7 +18,7 @@ const injectedVersion =
 
 export const LUCY_VERSION: string = normalizeLucyProductVersion(injectedVersion) ?? FALLBACK;
 
-/** Product version label, e.g. `v0.2.0`. */
+/** Product version label, e.g. `v0.20.0`. */
 export function formatLucyVersionLabel(version: string = LUCY_VERSION): string {
   const normalized = normalizeLucyProductVersion(version);
   return normalized ? `v${normalized}` : "vunknown";

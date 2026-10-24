@@ -1157,8 +1157,8 @@ describe("HelpCenter · 真实手册回归", () => {
     expect(baseline, "§0.0 文档基线没有正文落点").toBeInTheDocument();
     expect(cutover, "§0.4 版本号说明没有正文落点").toBeInTheDocument();
     expect(baseline?.textContent ?? "").toContain("产品版本");
-    expect(baseline?.textContent ?? "").toContain("0.2.0");
-    expect(cutover?.textContent ?? "").toContain("0.2.0");
+    expect(baseline?.textContent ?? "").toContain("0.20.0");
+    expect(cutover?.textContent ?? "").toContain("0.20.0");
 
     // 手写「目录」标题本身不进入正文（侧栏已承担目录职责）。
     expect(within(article).queryByRole("heading", { name: "目录" })).not.toBeInTheDocument();
@@ -1267,7 +1267,7 @@ const HANDBOOK_WITH_TOC_MARKDOWN = [
   "",
   "### 0.0 文档基线（自动同步）",
   "",
-  "基线内容：产品版本 0.2.0。",
+  "基线内容：产品版本 0.20.0。",
   "",
   "## 0. 常见问题速查",
   "",
@@ -1291,7 +1291,7 @@ describe("HelpCenter · 手写「目录」块", () => {
     expect(baselineId).toBeTruthy();
     const baseline = document.getElementById(baselineId as string);
     expect(baseline, "「目录」之后的 H3 正文没有落点").toBeInTheDocument();
-    expect(baseline?.textContent ?? "").toContain("基线内容：产品版本 0.2.0。");
+    expect(baseline?.textContent ?? "").toContain("基线内容：产品版本 0.20.0。");
   });
 
   it("侧栏不再保留指向被剥掉的「目录」的入口", async () => {

@@ -23,7 +23,7 @@ function readLucyVersion(): string {
   try {
     fromFile = readFileSync(resolve(here, "../VERSION"), "utf8");
   } catch {
-    return "0.2.0";
+    return "0.20.0";
   }
   return requireLucyVersion(fromFile, "VERSION");
 }
