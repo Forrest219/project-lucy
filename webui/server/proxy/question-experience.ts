@@ -128,6 +128,38 @@ export class QuestionBudget {
   private readonly turns = new Map<string, BudgetState>();
   private persistence: BudgetPersistence | null = null;
 
+  /**
+   * D-24：同一作用域的「加载持久态 → 判定 → 落库」必须**串行**。
+   *
+   * 缺陷：首次消费某个作用域时，状态要从持久层 `await load()`。两个并发请求
+   * 会同时看到「内存里没有这个作用域」，各自 load 到同一份旧计数（如 calls=19），
+   * 各自 +1 后都判定为放行 —— 于是**实际执行了 21 次**，而落库只有 20 次，
+   * 硬上限被并发在途请求穿透。
+   *
+   * 修法：按作用域串行化这一段。**不引入多副本锁** —— Lucy 是单实例／单副本
+   * 边界，进程内串行即已封住这个窗口。
+   */
+  private readonly scopeQueues = new Map<string, Promise<void>>();
+
+  /** D-24：把 fn 排进 scopeKey 的串行队列（前一环失败不影响后一环）。 */
+  private async withScopeSerialization<T>(scopeKey: string, fn: () => Promise<T>): Promise<T> {
+    const previous = this.scopeQueues.get(scopeKey) ?? Promise.resolve();
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const tail = previous.then(() => gate);
+    this.scopeQueues.set(scopeKey, tail);
+    await previous;
+    try {
+      return await fn();
+    } finally {
+      release();
+      // 只有仍是队尾时才清掉，避免把后来者的等待句柄删掉。
+      if (this.scopeQueues.get(scopeKey) === tail) this.scopeQueues.delete(scopeKey);
+    }
+  }
+
   /** B16：注入持久化实现（生产由调用方在启动时装配）。 */
   setPersistence(persistence: BudgetPersistence | null): void {
     this.persistence = persistence;
@@ -191,18 +223,48 @@ export class QuestionBudget {
     fallbackScope?: string
   ): Promise<{ action: "allow" } | BudgetStop> {
     const scopeKey = this.scopeKeyFor(turnId, fallbackScope);
-    let state = this.turns.get(scopeKey);
-    if (!state) {
-      // 持久层**已装配但读取失败** → 失败关闭（不放行）。
-      // 持久层**未装配** → 降级为进程内计数（预算仍生效，只是不跨进程）。
-      let persisted: BudgetState | null = null;
-      if (this.persistence) {
+    // D-24：整个「加载 → 判定 → 落库」在同一作用域内串行，避免并发首次加载
+    // 各拿一份旧计数、各自 +1，从而穿透硬上限。
+    return this.withScopeSerialization(scopeKey, async () => {
+      let state = this.turns.get(scopeKey);
+      if (!state) {
+        // 持久层**已装配但读取失败** → 失败关闭（不放行）。
+        // 持久层**未装配** → 降级为进程内计数（预算仍生效，只是不跨进程）。
+        let persisted: BudgetState | null = null;
+        if (this.persistence) {
+          try {
+            persisted = await this.persistence.load(scopeKey);
+          } catch {
+            // The durable store is INSTALLED but failed. This is a storage fault,
+            // not a spent budget: the request is refused (fail closed) but it must
+            // not be recorded as a budget-termination credential.
+            return {
+              action: "stop",
+              reason: "question_budget_unavailable",
+              partial: true,
+              continueToken: turnId ?? scopeKey,
+              continuable: true
+            };
+          }
+        }
+        state = persisted ?? {
+          startedAt: now,
+          originStartedAt: now,
+          calls: 0,
+          continuations: 0,
+          attempts: 0,
+          peakConcurrency: 0,
+          currentConcurrency: 0,
+          scopeKey
+        };
+        this.turns.set(scopeKey, state);
+      }
+      const decision = this.applyConsume(scopeKey, state, now, continueToken, turnId);
+      if (decision.action === "allow") {
         try {
-          persisted = await this.persistence.load(scopeKey);
+          await this.persist(scopeKey, state);
         } catch {
-          // The durable store is INSTALLED but failed. This is a storage fault,
-          // not a spent budget: the request is refused (fail closed) but it must
-          // not be recorded as a budget-termination credential.
+          // 预算计数器持久化失败 → 阻断（不放行）。同样是存储故障，不是预算用尽。
           return {
             action: "stop",
             reason: "question_budget_unavailable",
@@ -212,34 +274,8 @@ export class QuestionBudget {
           };
         }
       }
-      state = persisted ?? {
-        startedAt: now,
-        originStartedAt: now,
-        calls: 0,
-        continuations: 0,
-        attempts: 0,
-        peakConcurrency: 0,
-        currentConcurrency: 0,
-        scopeKey
-      };
-      this.turns.set(scopeKey, state);
-    }
-    const decision = this.applyConsume(scopeKey, state, now, continueToken, turnId);
-    if (decision.action === "allow") {
-      try {
-        await this.persist(scopeKey, state);
-      } catch {
-        // 预算计数器持久化失败 → 阻断（不放行）。同样是存储故障，不是预算用尽。
-        return {
-          action: "stop",
-          reason: "question_budget_unavailable",
-          partial: true,
-          continueToken: turnId ?? scopeKey,
-          continuable: true
-        };
-      }
-    }
-    return decision;
+      return decision;
+    });
   }
 
   private applyConsume(

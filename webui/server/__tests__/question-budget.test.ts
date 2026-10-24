@@ -208,3 +208,64 @@ describe("usage actor groups", () => {
     expect(identified.identity.actorId).not.toBe(identified.identity.tokenLabel);
   });
 });
+
+// ─── D-24：并发首次消费不得穿透问询预算硬上限 ──────────────────────────────
+//
+// 缺陷：consumePersisted 的「从持久层加载 → 判定 → 落库」之间有 await，
+// 两个并发请求会各自 load 到同一份旧计数、各自 +1 后都判定放行 —— 实际执行
+// 次数因此超过硬上限，而落库只记到上限值。
+// 修法：同一作用域的这三步在进程内串行（单实例／单副本，不引入多副本锁）。
+describe("D-24 concurrent first consume must not exceed the hard cap", () => {
+  function makeBudget(startCalls: number) {
+    const budget = new QuestionBudget();
+    const saved: number[] = [];
+    budget.setPersistence({
+      load: async (scopeKey) => ({
+        startedAt: 0,
+        originStartedAt: 0,
+        calls: startCalls,
+        continuations: 0,
+        attempts: 0,
+        peakConcurrency: 0,
+        currentConcurrency: 0,
+        scopeKey
+      }),
+      save: async (_scopeKey, state) => {
+        saved.push(state.calls);
+      },
+      listScopes: async () => ["turn:d24"]
+    });
+    return { budget, saved };
+  }
+
+  it("两个并发的首次消费只有一个放行", async () => {
+    const { budget, saved } = makeBudget(19);
+    const [a, b] = await Promise.all([
+      budget.consumePersisted("d24", 1_000),
+      budget.consumePersisted("d24", 1_000)
+    ]);
+
+    const actions = [a.action, b.action].sort();
+    expect(actions).toEqual(["allow", "stop"]);
+
+    const stop = a.action === "stop" ? a : b;
+    if (stop.action !== "stop") return;
+    // 是「预算用尽」，不是「存储故障」——两者不得混用。
+    expect(stop.reason).toBe("question_budget_exhausted");
+
+    // 落库的计数不得超过上限。
+    expect(Math.max(...saved)).toBeLessThanOrEqual(20);
+  });
+
+  it("并发消费后落库的计数等于实际放行次数", async () => {
+    const { budget, saved } = makeBudget(0);
+    const results = await Promise.all(
+      Array.from({ length: 25 }, () => budget.consumePersisted("d24", 1_000))
+    );
+    const allowed = results.filter((r) => r.action === "allow").length;
+    expect(allowed).toBe(20);
+    // 落库的最终计数 = 实际放行次数（不多不少）。
+    expect(saved[saved.length - 1]).toBe(allowed);
+  });
+});
+

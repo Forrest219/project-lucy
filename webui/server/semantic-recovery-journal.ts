@@ -333,26 +333,34 @@ export interface RestoreRecoveryJournalResult {
   outcome: string;
 }
 
+/**
+ * D-23：一次恢复尝试的结果。
+ *
+ * - `restored`  —— 目标写落地了，已按原始字节回滚。
+ * - `unchanged` —— 目标仍是原始内容：**写入从未落地**（或已被回滚），无需恢复。
+ * - `conflict`  —— 目标是第三方内容，**不猜、不覆盖**，留给人工。
+ */
+type RestoreEntryOutcome = "restored" | "unchanged" | "conflict";
+
 async function restoreEntry(
   projectRoot: string,
   entry: RecoveryJournalEntry
-): Promise<{ restored: boolean; reason?: string }> {
+): Promise<{ outcome: RestoreEntryOutcome; reason?: string }> {
   const current = await readRecoveryTarget(projectRoot, entry.targetPath);
   const currentDigest = digestOf(current);
   if (currentDigest !== entry.expectedNewDigest) {
-    return {
-      restored: false,
-      reason:
-        currentDigest === entry.originalDigest
-          ? "目标仍是原始内容，无需恢复。"
-          : "目标内容既不是原始内容也不是本批次写入的内容，存在第三方改动，拒绝覆盖。"
-    };
+    return currentDigest === entry.originalDigest
+      ? { outcome: "unchanged", reason: "目标仍是原始内容，无需恢复。" }
+      : {
+          outcome: "conflict",
+          reason: "目标内容既不是原始内容也不是本批次写入的内容，存在第三方改动，拒绝覆盖。"
+        };
   }
   if (entry.originalBase64 === null) {
     // The target did not exist before this batch: remove what we created.
     const abs = await resolveTargetAbsolute(projectRoot, entry.targetPath);
     await rm(abs, { force: true });
-    return { restored: true };
+    return { outcome: "restored" };
   }
   const originalBytes = Buffer.from(entry.originalBase64, "base64");
   const abs = await resolveTargetAbsolute(projectRoot, entry.targetPath);
@@ -365,11 +373,17 @@ async function restoreEntry(
     await rm(temp, { force: true }).catch(() => undefined);
     throw error;
   }
-  return { restored: true };
+  return { outcome: "restored" };
 }
 
 /**
  * Restore the targets this batch changed, in reverse processing order.
+ *
+ * ★ D-23：**遍历日志里的全部 entry**，而不是只遍历 `applied` 列表。
+ * 原因：`applied` 的标记写在 rename **之后**。若 rename 成功而标记写入失败
+ * （磁盘满 / 进程崩溃），目标已被替换却不在 `applied` 里 —— 只信 `applied`
+ * 会漏回滚它，并且因为 `recoveryRequired` 仍为 false 而误报 `restored`。
+ * 判定一律**按实际字节**（`restoreEntry`），不猜。
  *
  * Only the targets recorded in the journal are touched. The runtime mirror is
  * synchronised afterwards so the mirror never shows a state the content root
@@ -388,20 +402,21 @@ export async function restoreRecoveryJournal(
   const skipped: string[] = [];
   let recoveryRequired = false;
 
-  const applied = [...journal.applied].sort((a, b) => b - a);
-  for (const order of applied) {
-    const entry = journal.entries.find((item) => item.order === order);
-    if (!entry) continue;
+  // 逆序处理：与写入顺序相反，后写的先回滚。
+  const ordered = [...journal.entries].sort((a, b) => b.order - a.order);
+  for (const entry of ordered) {
     try {
       const result = await restoreEntry(projectRoot, entry);
-      if (result.restored) {
+      if (result.outcome === "restored") {
         restored.push(entry.targetPath);
-        journal.applied = journal.applied.filter((item) => item !== order);
-      } else {
+      } else if (result.outcome === "conflict") {
         skipped.push(entry.targetPath);
         recoveryRequired = true;
         journal.outcome = result.reason;
       }
+      // `unchanged`：写入从未落地（或已被回滚），既不算恢复，也不算异常。
+      // 该 entry 无论是否曾被标进 applied，都已不再需要恢复。
+      journal.applied = journal.applied.filter((item) => item !== entry.order);
     } catch (error) {
       skipped.push(entry.targetPath);
       recoveryRequired = true;
@@ -465,7 +480,7 @@ export async function recoverPendingRecoveryJournals(
       if (currentDigest === entry.expectedNewDigest) {
         // The write landed but the journal update did not. Roll it back.
         const result = await restoreEntry(projectRoot, entry);
-        if (!result.restored) {
+        if (result.outcome === "conflict") {
           blocked = true;
           journal.outcome = result.reason;
         }

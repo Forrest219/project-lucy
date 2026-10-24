@@ -133,6 +133,59 @@ describe("D16 recovery journal", () => {
   });
 });
 
+// ─── D-23：即时恢复不得只信 applied 列表 ───────────────────────────────────
+//
+// 缺陷：applied 的标记写在 rename **之后**。若 rename 成功而标记写入失败，
+// 目标已被替换却不在 applied 里 —— 只遍历 applied 的即时恢复会漏回滚它，
+// 并且因为 recoveryRequired 仍为 false 而误报 status=restored。
+// 修法：即时恢复遍历日志的**全部 entry**，判定一律按实际字节。
+describe("D-23 immediate restore must not only trust the applied list", () => {
+  it("写入已落地但 applied 标记丢失时，即时恢复必须回滚", async () => {
+    const journal = await createRecoveryJournal(projectRoot, {
+      releaseId: "rel_1",
+      operationId: "op_1",
+      actor: "admin-a",
+      instanceId: "inst-a",
+      targets: [
+        { targetPath: TARGET_A, newContent: "name: a2\n" },
+        { targetPath: TARGET_B, newContent: "name: b2\n" }
+      ]
+    });
+
+    // TARGET_A：正常流程（写入 + 标记 applied）。
+    await atomicReplaceTarget(projectRoot, TARGET_A, "name: a2\n");
+    await markRecoveryEntryApplied(projectRoot, journal.journalId, 0);
+    // TARGET_B：写入已落地，但**标记 applied 失败**（模拟磁盘/进程故障）。
+    await atomicReplaceTarget(projectRoot, TARGET_B, "name: b2\n");
+    expect((await readRecoveryJournal(projectRoot, journal.journalId))?.applied).toEqual([0]);
+
+    const result = await restoreRecoveryJournal(projectRoot, journal.journalId);
+    expect(result?.status).toBe("restored");
+    expect(result?.recoveryRequired).toBe(false);
+    // 两个目标都必须回到原始内容 —— B 不能被漏掉。
+    expect(result?.restored.sort()).toEqual([TARGET_A, TARGET_B].sort());
+    expect(await readFileAt(TARGET_A)).toBe("name: a\n");
+    expect(await readFileAt(TARGET_B)).toBe("name: b\n");
+  });
+
+  it("写入从未落地的目标不算异常，也不算已恢复", async () => {
+    const journal = await createRecoveryJournal(projectRoot, {
+      releaseId: "rel_1",
+      operationId: "op_1",
+      actor: "admin-a",
+      instanceId: "inst-a",
+      targets: [{ targetPath: TARGET_A, newContent: "name: a2\n" }]
+    });
+    // 从未写入 → 目标仍是原始内容。
+    const result = await restoreRecoveryJournal(projectRoot, journal.journalId);
+    expect(result?.status).toBe("restored");
+    expect(result?.recoveryRequired).toBe(false);
+    expect(result?.skipped).toEqual([]);
+    expect(result?.restored).toEqual([]);
+    expect(await readFileAt(TARGET_A)).toBe("name: a\n");
+  });
+});
+
 describe("D17 failure restore", () => {
   it("restores the targets this batch changed, in reverse order", async () => {
     const journal = await createRecoveryJournal(projectRoot, {
