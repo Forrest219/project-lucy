@@ -583,6 +583,10 @@ jobs:
     if: ${{ startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history + tags: release-artifacts verifies that the release tag
+          # points at the commit being packaged, which is impossible without tags.
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
