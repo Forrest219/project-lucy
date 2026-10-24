@@ -44,6 +44,7 @@ jobs:
       - run: npm run lint:version
       - run: npm run lint:release-ledger
       - run: npm run smoke:p0:delivery-isolation
+      - run: npm run smoke:p0:delivery-isolation:test
       - name: Materialize private access.yaml stub for lint
         run: |
           if [ ! -f webui/config/access.yaml ]; then

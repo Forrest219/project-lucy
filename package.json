@@ -48,7 +48,7 @@
     "smoke:full": "node scripts/gates/p1-release-readiness.mjs --full",
     "smoke:p0": "node scripts/gates/p0-smoke.mjs",
     "smoke:p0:delivery-isolation": "node scripts/smoke/lucy-delivery-isolation-smoke.mjs",
-    "smoke:p0:delivery-isolation:test": "node --test scripts/smoke/lucy-delivery-isolation-smoke.test.mjs",
+    "smoke:p0:delivery-isolation:test": "node --test scripts/smoke/lucy-delivery-isolation-smoke.test.mjs scripts/smoke/lucy-runtime-build-context.test.mjs",
     "gate:k8s-static": "bash scripts/gates/helm-lucy-gate.sh",
     "gate:k8s-kind-h3": "bash scripts/gates/k8s-kind-h3-gate.sh",
     "gate:g8-image": "bash scripts/gates/g8-image-k8s-contract-gate.sh",
