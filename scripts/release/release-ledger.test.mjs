@@ -27,6 +27,7 @@ function validEntry(overrides = {}) {
     releasedAt: "2026-10-24",
     deliveryPackage: null,
     noDeliveryReason: "no customer package for this version",
+    runs: [{ id: "1", trigger: "push to main" }],
     gates: [{ name: "spec-and-webui", status: "passed", run: "1" }],
     notes: [],
     ...overrides
@@ -143,6 +144,49 @@ describe("release-ledger gate", () => {
     await withRepo({ entries: { "v0.2.0.json": entry } }, (tmp) => {
       const errors = collectLedgerErrors(tmp, { verifyRepo: false });
       assert.ok(errors.some((error) => error.includes('status must be "passed", "failed" or "notExecuted"')));
+    });
+  });
+
+  it("rejects an entry that lists no runs", async () => {
+    const entry = validEntry({ runs: [] });
+    await withRepo({ entries: { "v0.2.0.json": entry } }, (tmp) => {
+      const errors = collectLedgerErrors(tmp, { verifyRepo: false });
+      assert.ok(errors.some((error) => error.includes("runs must be a non-empty array")));
+    });
+  });
+
+  it("rejects a run entry that does not say what triggered it", async () => {
+    const entry = validEntry({ runs: [{ id: "1" }] });
+    await withRepo({ entries: { "v0.2.0.json": entry } }, (tmp) => {
+      const errors = collectLedgerErrors(tmp, { verifyRepo: false });
+      assert.ok(errors.some((error) => error.includes("is missing trigger")));
+    });
+  });
+
+  it("rejects a gate that cites a run outside the release", async () => {
+    const entry = validEntry({
+      runs: [{ id: "1", trigger: "push to main" }],
+      gates: [{ name: "spec-and-webui", status: "passed", run: "999" }]
+    });
+    await withRepo({ entries: { "v0.2.0.json": entry } }, (tmp) => {
+      const errors = collectLedgerErrors(tmp, { verifyRepo: false });
+      assert.ok(errors.some((error) => error.includes("is not one of this release's runs")));
+    });
+  });
+
+  it("accepts gates spread across the push run and the tag run", async () => {
+    const entry = validEntry({
+      runs: [
+        { id: "1", trigger: "push to main" },
+        { id: "2", trigger: "push of the release tag" }
+      ],
+      gates: [
+        { name: "spec-and-webui", status: "passed", run: "1" },
+        { name: "customer-amd64-native", status: "failed", required: false, run: "2", reason: "push denied" }
+      ]
+    });
+    await withRepo({ entries: { "v0.2.0.json": entry } }, (tmp) => {
+      assert.deepEqual(collectLedgerErrors(tmp, { verifyRepo: false }), []);
     });
   });
 
