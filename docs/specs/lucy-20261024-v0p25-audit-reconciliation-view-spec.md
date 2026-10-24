@@ -148,6 +148,32 @@ reconciliationContext:
 
 **与 §2 的交叉指认**：unknown 连接是表身份三元组中连接段的取值，与 §2 第 1 条八桶汇总主状态中的 `unknown`、§2 第 6 条空值原因六值中的 `unknown` 分属三个不同维度，不得互相替换或互相推断。§2 的七条不变式原文不因本小节修改。
 
+#### N27 meta-audit 的 event_id 由 request.id 派生，重启后复用导致读取被误拒（D-25）
+
+**（a）偏差事实与证据**
+
+§4.3 要求「API 只读、要求现有管理员审计权限与 meta-audit」。本轮实现的三个只读端点在进入读取前先写一条 meta-audit（EA-11：读取敏感审计详情必须留痕；meta-audit 写入失败时**拒绝**该次读取，不静默放行）——方向正确。但该 meta-audit 的 `event_id` 此前取 `reconciliation-read-${request.id}`，而 Fastify 的 `request.id` 是**每进程计数器**（base-36），进程重启后会从低位重新走并复用上一轮用过的 id；`security_events.event_id` 是 `TEXT NOT NULL UNIQUE` 列。
+
+后果：**每次 Lucy 重启后**，凡是 request id 与上一轮重叠的对账读取都会撞唯一约束 → 账本报 `SECURITY_CONFLICT` → 守卫把「id 撞车」与「安全账本不可用」混为一谈 → 一次**合法的管理员读取**被拒为 `503 RECONCILIATION_READ_REFUSED`，且该次读取的 meta-audit 未能落账。这是**本轮 P0-4 实现引入**的缺陷（既有只读路由用 `audit-association-revision-${row.id}` 这类内容派生的稳定 id，跨重启唯一）。
+
+实证（2026-10-25 W6 重建后冒烟）：上一轮写过 `reconciliation-read-req-9` 与 `reconciliation-read-req-d`；重建后计数器重新走到 `req-9` / `req-d` 时，这两次读取 503，其余（`req-a` / `req-b` / `req-c`）200。
+
+**（b）本轮处理**
+
+- meta-audit 的 `event_id` / `operation_id` 改由**每次读取的随机 UUID** 派生（`randomUUID()`），保证跨进程重启唯一；`request.id` **降级为可追溯信息**（写入 `trace_id`，并保留在 `object_hash` 的输入里），不再承担唯一性职责。
+- 拒绝语义不变：actor 不可解析 → 401；安全账本不可用 → 503；meta-audit 写入失败 → 503。**未**放宽任何一条。
+- 已补回归用例：固定 `genReqId` 模拟「重启后计数器回到同一个值」，断言两次读取**都**成功、留下**两条不同**的 meta-audit、且 `trace_id` 仍记录 request id。已做去修复反向验证（移除修复后第二次读取确实 503）。
+
+**（c）受影响条款编号**
+
+- §4.3（API 只读、要求管理员审计权限与 meta-audit；meta-audit 失败不静默放行）。
+- §3.1 / §3.2 / §3.4（三个只读端点的前置守卫）。
+- §7 的 V09、V11、V12。
+
+**（d）是否改变冻结契约**
+
+不改变。§2、§3.1–§3.4、§4.3 正文一字未改；本条是实现向既有条款对齐（条款从未允许「拒绝合法读取」）。本小节不产生验收证据，V01–V12 状态一律保持「未执行」。
+
 ---
 
 ## 4. 只读页面与交互
@@ -173,6 +199,8 @@ reconciliationContext:
 - CSV 至少分问询摘要、完整表清单、调用／尝试、Token 对账与差异集合；每文件携带上下文或由同一 Manifest 关联。
 - CSV 保留 null 与空值原因，防公式注入，不导出超授权原文、凭据值或秘密。Token 仅使用持久 ID 或受保护摘要。
 - API 只读、要求现有管理员审计权限与 meta-audit；分页使用游标并声明是否完整，不把当前页完整冒充全部匹配完整。
+
+> 实施回写见 §3.5（2026-10-25，N27）：meta-audit 的 `event_id` 此前由 `request.id` 派生，而它是**每进程计数器**、重启后会复用 → 撞 `event_id` 唯一约束 → 一次合法读取被误拒为 `503 RECONCILIATION_READ_REFUSED`（本轮 P0-4 引入）。改为每次读取用随机 UUID 派生唯一 id，`request.id` 降级为 `trace_id` 保留可追溯性；**拒绝语义未放宽**（actor 不可解析 401／账本不可用 503／meta-audit 写入失败 503）。
 
 拟议逻辑接口如下，实施时可按仓库 API 风格复用现有端点，但不得改变口径：
 

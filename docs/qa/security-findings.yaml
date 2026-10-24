@@ -473,6 +473,30 @@ findings:
     fixedIn: 2cc79f4
     verifiedBy: []
     acceptedBy: null
+  # D-25 W7 重建复验实证：meta-audit 的 event_id 由 request.id 派生，重启后复用导致合法读取被误拒
+  # 现象（2026-10-25 重建镜像后冒烟复验，admin/audit-reconciliation-routes.ts:106）：
+  #   `eventId: reconciliation-read-${request.id}` —— Fastify 的 request.id 是**每进程计数器**（base-36），
+  #   进程重启后从低位重新走，会复用上一轮用过的 id；而 security_events.event_id 是
+  #   `TEXT NOT NULL UNIQUE` 列（实测 schema）→ 撞唯一约束 → store 抛 SECURITY_CONFLICT。
+  #   守卫把「id 撞车」与「安全账本不可用」混为一谈 → 一次**合法的管理员读取**被拒为
+  #   503 RECONCILIATION_READ_REFUSED，且该次读取的 meta-audit 未能落账。
+  # 实证：上一轮写过 reconciliation-read-req-9 / -req-d；重建后计数器重新走到 req-9 / req-d 时
+  #   这两次读取 503，其余（req-a / req-b / req-c）200。
+  # 后果：**每次 Lucy 重启后**，与上一轮 request id 重叠的对账读取都会被误拒 —— 对账视图间歇性不可用。
+  # 性质：**本轮 P0-4 实现引入**（既有只读路由用 audit-association-revision-${row.id} 这类
+  #   内容派生的稳定 id，跨重启唯一；全仓仅本文件把 request.id 用作 event id）。
+  # 处置：event_id / operation_id 改由每次读取的 randomUUID() 派生（跨进程重启唯一）；
+  #   request.id 降级为可追溯信息（trace_id + object_hash 输入）。
+  #   **拒绝语义未放宽**：actor 不可解析 401／安全账本不可用 503／meta-audit 写入失败 503 全部保持。
+  # 已补回归用例（固定 genReqId 模拟重启后计数器回到同一值 → 两次读取都成功、留两条不同 meta-audit、
+  #   trace_id 仍记录 request id），并做过去修复反向验证（移除修复后第二次读取确实 503）。
+  - id: D-25
+    severity: P1
+    status: fixed
+    spec: "L25-03 §4.3 / §3.5 实施回写 N27"
+    fixedIn: 1fd69e0
+    verifiedBy: []
+    acceptedBy: null
   # G-01 文档称强制，release workflow 无真实 E2E 依赖（T14）
   # note: T14 代码已交付并有静态契约测试（scripts/gates/customer-release-workflow.test.mjs）：release-package 与每个客户发布分支都经
   #       customer-release-readiness 依赖 real-e2e，客户镜像单架构 amd64、只 promote 已测试 digest、门禁后不重建；demo-e2e / postgres-demo-e2e 已改名为
