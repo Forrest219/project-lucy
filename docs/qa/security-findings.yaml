@@ -382,6 +382,97 @@ findings:
     fixedIn: null
     verifiedBy: []
     acceptedBy: null
+  # D-21 W6 实证：角色保存的版本比对在锁外且无 CAS，并发 PATCH 会静默互相覆盖
+  # 现象（2026-10-25 W6 源码核实，admin/roles.ts PATCH /api/admin/roles/:roleId）：
+  #   :1010 `readAccessYamlVersion(projectRoot)` 读出 { raw, version }；
+  #   :1011 用 request.body.version 与 currentVersion 比对（不符即 409 VERSION_CONFLICT）；
+  #   :1014~:1117 基于**这一份旧 raw** 解析并构造整份 newConfig，再交给 writeAccessYaml 落盘。
+  #   writeAccessYaml（admin/access-config.ts:121）只是 withDisplayWriteBarrier(["P"]) → writeAccessYamlInBarrier
+  #   → writeAccessConfigFileWithAuditClosure：屏障防的是「写展示层」，写配置源文件这一段**既无锁内重读、也无 CAS**。
+  #   写本身确实在 withPublishCoordinator 的共享发布窗口内串行（:208），但**入参 content 是调用方在进入窗口之前
+  #   用旧版本构造的** → 串行化只保证写入不交错，拦不住读-改-写丢更新。
+  #   写前的 expectedDigest（:245）是「即将落盘内容的摘要」，不是与盘上旧版本的比较，不构成 CAS。
+  # 后果：两个并发 PATCH 都读到版本 V，各自基于 V 构造整份配置，后写的用旧文档覆盖先写的
+  #   → **先写的角色收紧被静默丢弃**，且因为两者版本号相同、都能通过比对，冲突不会变成 409，
+  #   而是一次「看起来成功」的权限覆盖。角色写路径是管理面权限的源头。
+  # 性质：**预存在**。本轮 roles.ts 的改动未触及该段（`git diff 2895e2d -- webui/server/admin/roles.ts`
+  #   无 version / lock 相关行），不属四个 P0 的实施回归。
+  # 处置：读取版本、构造新配置、比较-交换、落盘必须在同一临界区内完成（版本不符即 409）；
+  #   或改为带条件的原子替换（写临时文件后按读到的版本比对再 rename）。
+  # ⚠️ 本轮不修：涉及管理面写路径与 access.yaml 写入机制，且 admin/agents.ts:1405 是同类路径需一并处理，
+  #   按仓库变更控制须 PM 裁定排期后实施。
+  - id: D-21
+    severity: P1
+    status: open
+    spec: "webui/docs/15-role-admin-spec.md §6.5"
+    fixedIn: null
+    verifiedBy: []
+    acceptedBy: null
+  # D-22 W6 实证：导出 manifest 的必填字段未达标（导出身份与筛选口径不成立）
+  # 现象（2026-10-25 W6 源码核实，admin/audit-export-v2.ts:557~:593 构造 manifest）：
+  #   ① exportId（:582）恒为 null —— 两条生产路由（admin/audit.ts:3979 export-v2、:4072 export-pack-v2）
+  #      都**未传** exportId，performExportV2/buildExportPackV2 的 options.exportId 永远 undefined → 落到 null。
+  #   ② cutoffAt（:590）恒为 null —— 两条路由同样未传。
+  #   ③ manifest **没有 exportedAt 字段**（§9.3(a) 必填）—— key 集合被
+  #      __tests__/audit-trust/audit-trust-manifest-conformance.test.ts:283 的 expectedKeys 固定为 28 项，不含 exportedAt。
+  #   ④ filter 未全量序列化：manifest 只写 timeRange.from / .until（:586-589），
+  #      **丢掉了 fixedFilter.userId** —— 导出实际按 userId 过滤过，声明里却看不到。
+  #   ⑤ prevExportId 有传参通路（:581，路由传 query.prevExportId），但因 exportId 恒 null，
+  #      版本链的两端有一端永远是空的。
+  # 后果：L25-09 §9.3(a) 的必填字段要求（exportId / exportedAt / 对账评估时点 / filter 全量序列化 / 前版 exportId）
+  #   未落地；§9.3(b)「补包、纠错、重导出生成新版本 exportId 并关联前版」无法成立 —— 没有可关联的版本标识。
+  #   证据包可以声明「按某个用户、某个时段导出」，但无法声明「这是第几版导出、评估时点是哪一刻」。
+  # 处置：① 两条路由生成并传递 exportId（稳定可复算、不可静默复用）；② 补 exportedAt；
+  #   ③ cutoffAt 取真实对账评估时点；④ filter 全量序列化（含 userId 与其余固定筛选）；
+  #   ⑤ 前版 exportId 与新 exportId 成对落地。
+  # ⚠️ 本轮不修：新增 exportedAt 会改 manifest v2 的 key 集合（schema 变更），
+  #   必须同步更新 audit-trust-manifest-conformance.test.ts 的 expectedKeys 列表；
+  #   且属冻结契约的 schema 变更，按仓库变更控制须 PM 裁定排期后实施。
+  - id: D-22
+    severity: P1
+    status: open
+    spec: "L25-09 §9.3(a) / §9.3(b)"
+    fixedIn: null
+    verifiedBy: []
+    acceptedBy: null
+  # D-23 W6 实证：即时恢复只信 applied 列表，写入已落地但 applied 标记丢失时漏回滚
+  # 现象（2026-10-25 W6 源码核实，server/semantic-recovery-journal.ts）：
+  #   restoreRecoveryJournal 原本只遍历 `journal.applied`（:388），而 applied 的标记写在 rename **之后**。
+  #   若 rename 成功而标记写入失败（磁盘满 / 进程崩溃），目标已被替换却不在 applied 里
+  #   → 该目标不会被回滚，且 recoveryRequired 仍为 false → 对外报「已恢复」。
+  #   restoreEntry 原本只返回 {restored, reason}，把「写入从未落地」与「存在第三方改动」压在同一
+  #   restored=false 分支里，调用方无法区分「无需恢复」与「拒绝覆盖」。
+  # 后果：语义批量写入失败后，目标文件停在**本批次的新内容**上，而恢复报告称成功
+  #   → 语义层内容与预期不一致却无人察觉，恢复闸门形同虚设。
+  # 处置：恢复一律**遍历 journal.entries 的全部 entry**（逆序），判定一律按**实际字节**
+  #   （restoreEntry 的 digest 比对），不依赖 applied 标记；restoreEntry 返回值改为三态
+  #   restored / unchanged / conflict，把「写入从未落地」与「第三方改动」分开；
+  #   unchanged 既不算恢复也不算异常，conflict 才置 recoveryRequired=true 并拒绝覆盖。
+  #   启动恢复路径 recoverPendingRecoveryJournals 同步适配为同一形态。
+  - id: D-23
+    severity: P1
+    status: fixed
+    spec: "L25-11 §7.1 / §7.2"
+    fixedIn: 2cc79f4
+    verifiedBy: []
+    acceptedBy: null
+  # D-24 W6 实证：预算的「加载 → 判定 → 落库」存在 await 窗口，并发首次消费穿透硬上限
+  # 现象（2026-10-25 W6 源码核实，server/proxy/question-experience.ts consumePersisted）：
+  #   首次消费某作用域时，状态要从持久层 `await persistence.load(scopeKey)`。
+  #   两个并发请求同时看到「内存里没有这个作用域」，各自 load 到**同一份旧计数**（如 calls=19），
+  #   各自 +1 后都判定为放行 → **实际执行了 21 次**，而落库只有 20 次，硬上限被并发在途请求穿透。
+  #   预算上限是防止单个问询把账本打爆的唯一闸门，穿透即失去意义。
+  # 处置：按作用域把这一段**串行化**（QuestionBudget.scopeQueues + withScopeSerialization），
+  #   使「加载 → 判定 → 落库」在同一作用域内互斥。**不引入多副本锁** ——
+  #   Lucy 是单实例／单副本边界，进程内串行即已封住这个窗口；引入分布式锁会越过既有边界。
+  #   已加 2 条并发用例（去修复后实测真红：['allow','allow']，25 次全放行）。
+  - id: D-24
+    severity: P1
+    status: fixed
+    spec: "L25-09 §10.3 / §10.5"
+    fixedIn: 2cc79f4
+    verifiedBy: []
+    acceptedBy: null
   # G-01 文档称强制，release workflow 无真实 E2E 依赖（T14）
   # note: T14 代码已交付并有静态契约测试（scripts/gates/customer-release-workflow.test.mjs）：release-package 与每个客户发布分支都经
   #       customer-release-readiness 依赖 real-e2e，客户镜像单架构 amd64、只 promote 已测试 digest、门禁后不重建；demo-e2e / postgres-demo-e2e 已改名为
