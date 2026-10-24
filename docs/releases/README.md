@@ -41,4 +41,18 @@ npm run lint:release-ledger        # 校验台账完整性
 npm run lint:release-ledger:test   # 校验器自身的测试
 ```
 
-门禁检查：当前 `VERSION` 必须有对应条目；每条必需字段齐全；`releaseTag` 与 `productVersion` 一致；`commit` 是完整 40 位 SHA（或 `PENDING`）；`gates` 是数组且每条有 `name` 与 `status`，`notExecuted` 必须带 `reason`；同一版本号不重复。
+门禁检查：当前 `VERSION` 必须有对应条目；每条必需字段齐全；`releaseTag` 与 `productVersion` 一致；`commit` 是完整 40 位 SHA（或 `PENDING`）；同一版本号不重复。
+
+### 门禁状态是三态，不是两态
+
+`gates[].status` 有三个取值，**"跑了并失败"和"没跑"是两回事，不能混记**：
+
+| status | 含义 | 必填 |
+|---|---|---|
+| `passed` | 跑了，过了 | `run`（CI run id） |
+| `failed` | 跑了，**没过** | `run` + `reason`；且 `required` 不得为 `true` |
+| `notExecuted` | 没跑（skipped / 被阻塞 / 手工项） | `reason` |
+
+`failed` 且 `required: true` 会直接判门禁失败——**一份带红 Required check 的发版记录不允许存在**。若某个非 Required 门禁红了（当前是 `demo-db-smoke` / `postgres-demo-db-smoke`），就如实记 `failed` + 原因，并在评审文档里登记为已知缺陷待修，而不是记成 `notExecuted` 混过去。
+
+`passed` 与 `failed` 必须写 `run`：门禁的价值在于「指向哪一次跑批」，没有 run id 的记录无法被复核。

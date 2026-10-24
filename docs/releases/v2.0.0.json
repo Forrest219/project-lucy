@@ -52,8 +52,10 @@
     },
     {
       "name": "demo-db-smoke, postgres-demo-db-smoke",
-      "status": "notExecuted",
-      "reason": "Not one of the four Required checks. First real execution exposed a deployment-layer gap: the demo compose files mount no bootstrap token and hard-code a token path that does not exist in a clean checkout. Deferred to the 2.5 line."
+      "status": "failed",
+      "required": false,
+      "run": "40039319546",
+      "reason": "Ran and failed for the known deployment-layer reason recorded in review section 4.20: the demo compose files mount no bootstrap token and hard-code a token path that does not exist in a clean checkout. Not one of the four Required checks, so it did not block the release; deferred to the 2.5 line."
     }
   ],
   "notes": [

@@ -7,9 +7,79 @@
   "noDeliveryReason": "This release corrects the product version number from 2.0.0 to 0.2.0 and adds the release ledger mechanism. It carries no customer delivery package of its own; the first package that actually ships 0.2.0 contents will be the first delivery of this version line.",
   "gates": [
     {
+      "name": "spec-and-webui",
+      "status": "passed",
+      "run": "40048966796",
+      "required": true,
+      "note": "Includes the new lint:release-ledger gate."
+    },
+    {
+      "name": "docker-smoke",
+      "status": "passed",
+      "run": "40048966796",
+      "required": true
+    },
+    {
+      "name": "k8s-static",
+      "status": "passed",
+      "run": "40048966796",
+      "required": true
+    },
+    {
+      "name": "k8s-upgrade-gate",
+      "status": "passed",
+      "run": "40048966796",
+      "required": true
+    },
+    {
+      "name": "headless-config",
+      "status": "passed",
+      "run": "40048966796",
+      "required": false
+    },
+    {
+      "name": "business-eval-catalog",
+      "status": "passed",
+      "run": "40048966796",
+      "required": false
+    },
+    {
+      "name": "ktx-diff-audit",
+      "status": "passed",
+      "run": "40048966796",
+      "required": false
+    },
+    {
+      "name": "customer-amd64-native",
+      "status": "notExecuted",
+      "reason": "Depends on the customer-release-readiness chain, which is permanently BLOCKED because no self-hosted runner is registered."
+    },
+    {
+      "name": "real-e2e",
+      "status": "notExecuted",
+      "reason": "No self-hosted runner is registered (labels self-hosted, lucy-protected, linux, amd64). The job stays BLOCKED and never degrades to a headless or local result."
+    },
+    {
+      "name": "customer-release-readiness",
+      "status": "notExecuted",
+      "reason": "Depends on real-e2e and is therefore BLOCKED. No automated release credential was produced."
+    },
+    {
+      "name": "release-package",
+      "status": "notExecuted",
+      "reason": "Depends on customer-release-readiness. Did not run, so no GitHub-gate-produced delivery package exists for this release."
+    },
+    {
       "name": "customer delivery gates",
       "status": "notExecuted",
       "reason": "No customer delivery package exists for this version, so the delivery-side gates (G1-G4b, G8, native amd64 acceptance P0-3 through P0-6) have nothing to run against."
+    },
+    {
+      "name": "demo-db-smoke, postgres-demo-db-smoke",
+      "status": "failed",
+      "required": false,
+      "run": "40048966796",
+      "reason": "Ran and failed for the known deployment-layer reason recorded in review section 4.20: the demo compose files mount no bootstrap token and hard-code a token path that does not exist in a clean checkout. Not one of the four Required checks, so it did not block the release; deferred to the 2.5 line."
     }
   ],
   "notes": [
@@ -17,6 +87,7 @@
     "From this version on, product version numbers do not encode ordering. 0.2.0 is numerically smaller than the earlier 0.17.0 but is the current version. Decide whether a customer is up to date by the build revision (the 40-hex commit), never by comparing product version strings.",
     "The v2.0.0 tag and its GitHub Release are kept as historical fact. Their product version was 2.0.0 at that time.",
     "This entry's commit is filled in once the release tag is cut, so the ledger and the tag can never disagree.",
-    "Outbound packaging now refuses to publish a package whose contents do not match the release tag it claims; see scripts/release/release-artifacts.mjs assertReleaseTagMatchesHead."
+    "Outbound packaging now refuses to publish a package whose contents do not match the release tag it claims; see scripts/release/release-artifacts.mjs assertReleaseTagMatchesHead.",
+    "The ledger gate itself failed its first CI run because the gate job checked out shallow, so the previous release commit was not in the object database. Fixed by checking out full history and by reporting an unverifiable commit as unverifiable rather than absent; see review section 4.21."
   ]
 }

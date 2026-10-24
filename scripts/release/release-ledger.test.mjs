@@ -98,6 +98,54 @@ describe("release-ledger gate", () => {
     );
   });
 
+  it("accepts a non-required gate recorded as failed", async () => {
+    const entry = validEntry({
+      gates: [
+        { name: "spec-and-webui", status: "passed", run: "1" },
+        { name: "demo-db-smoke", status: "failed", required: false, run: "1", reason: "known deployment-layer gap" }
+      ]
+    });
+    await withRepo({ entries: { "v0.2.0.json": entry } }, (tmp) => {
+      assert.deepEqual(collectLedgerErrors(tmp, { verifyRepo: false }), []);
+    });
+  });
+
+  it("rejects a failed Required check", async () => {
+    const entry = validEntry({
+      gates: [{ name: "spec-and-webui", status: "failed", required: true, run: "1", reason: "red" }]
+    });
+    await withRepo({ entries: { "v0.2.0.json": entry } }, (tmp) => {
+      const errors = collectLedgerErrors(tmp, { verifyRepo: false });
+      assert.ok(errors.some((error) => error.includes("must not carry a red Required check")));
+    });
+  });
+
+  it("rejects a failed gate that states no reason", async () => {
+    const entry = validEntry({
+      gates: [{ name: "demo-db-smoke", status: "failed", required: false, run: "1" }]
+    });
+    await withRepo({ entries: { "v0.2.0.json": entry } }, (tmp) => {
+      const errors = collectLedgerErrors(tmp, { verifyRepo: false });
+      assert.ok(errors.some((error) => error.includes("failed and must state a reason")));
+    });
+  });
+
+  it("rejects a passed or failed gate that cites no run", async () => {
+    const entry = validEntry({ gates: [{ name: "spec-and-webui", status: "passed" }] });
+    await withRepo({ entries: { "v0.2.0.json": entry } }, (tmp) => {
+      const errors = collectLedgerErrors(tmp, { verifyRepo: false });
+      assert.ok(errors.some((error) => error.includes("must cite the CI run id")));
+    });
+  });
+
+  it("rejects an unknown gate status", async () => {
+    const entry = validEntry({ gates: [{ name: "spec-and-webui", status: "skipped", run: "1" }] });
+    await withRepo({ entries: { "v0.2.0.json": entry } }, (tmp) => {
+      const errors = collectLedgerErrors(tmp, { verifyRepo: false });
+      assert.ok(errors.some((error) => error.includes('status must be "passed", "failed" or "notExecuted"')));
+    });
+  });
+
   it("rejects a delivery package built from a different commit unless that is declared", async () => {
     const entry = validEntry({
       deliveryPackage: {
