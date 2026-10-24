@@ -1,73 +1,87 @@
 {
   "productVersion": "0.2.0",
   "releaseTag": "v0.2.0",
-  "commit": "PENDING",
+  "commit": "c1ab68b6cb269b09570150a7ac0e5d1f435a66a3",
   "releasedAt": "2026-10-24",
   "deliveryPackage": null,
   "noDeliveryReason": "This release corrects the product version number from 2.0.0 to 0.2.0 and adds the release ledger mechanism. It carries no customer delivery package of its own; the first package that actually ships 0.2.0 contents will be the first delivery of this version line.",
+  "runs": [
+    {
+      "id": "40051808741",
+      "trigger": "push to main (head = c1ab68b, the released commit itself)",
+      "note": "The authoritative gate run for this release: all four Required checks are green here. customer-amd64-native does not apply on a branch ref, so it is skipped in this run and runs in the tag run instead."
+    },
+    {
+      "id": "40052825697",
+      "trigger": "push of the v0.2.0 tag (head = c1ab68b)",
+      "note": "The release tag event. The four Required checks are green here as well. customer-amd64-native only executes on a v* tag ref, so this is where it ran - and failed. See that gate entry."
+    }
+  ],
   "gates": [
     {
       "name": "spec-and-webui",
       "status": "passed",
-      "run": "40048966796",
+      "run": "40051808741",
       "required": true,
       "note": "Includes the new lint:release-ledger gate."
     },
     {
       "name": "docker-smoke",
       "status": "passed",
-      "run": "40048966796",
+      "run": "40051808741",
       "required": true
     },
     {
       "name": "k8s-static",
       "status": "passed",
-      "run": "40048966796",
+      "run": "40051808741",
       "required": true
     },
     {
       "name": "k8s-upgrade-gate",
       "status": "passed",
-      "run": "40048966796",
+      "run": "40051808741",
       "required": true
     },
     {
       "name": "headless-config",
       "status": "passed",
-      "run": "40048966796",
+      "run": "40051808741",
       "required": false
     },
     {
       "name": "business-eval-catalog",
       "status": "passed",
-      "run": "40048966796",
+      "run": "40051808741",
       "required": false
     },
     {
       "name": "ktx-diff-audit",
       "status": "passed",
-      "run": "40048966796",
+      "run": "40051808741",
       "required": false
     },
     {
       "name": "customer-amd64-native",
-      "status": "notExecuted",
-      "reason": "Depends on the customer-release-readiness chain, which is permanently BLOCKED because no self-hosted runner is registered."
+      "status": "failed",
+      "required": false,
+      "run": "40052825697",
+      "reason": "Ran on the v0.2.0 tag push: the job condition is startsWith(github.ref, 'refs/tags/v'), so it is skipped on branch and main pushes but does execute on a release tag. The candidate image built successfully (sha256:1b571064268b074f5a0174c25554241e89a35930a8115e26f833da118a1ab84a, tagged ghcr.io/kaelio/project-lucy:candidate-amd64-0.2.0-20261024-c1ab68b) but the push was denied with 'permission_denied: The requested installation does not exist'. Root cause: the workflow logs in to GHCR with this repository's built-in GITHUB_TOKEN, which can only write packages under the repository owner (Forrest219), while the image repository defaults to the kaelio namespace, a different owner. The 'kaelio' default occurs only in .github/workflows/lucy-release.yml and is referenced by no document or configuration in the repository. Because the candidate digest never reached the registry, the native amd64 gates (G1/G2/G3/G4/G4b/G8) and the container-level smoke were skipped, and real-e2e, customer-release-readiness and release-package were skipped downstream. The identical failure occurred on the v2.0.0 tag run 40040569279, so this is pre-existing and not introduced by this release. Review section 4.23."
     },
     {
       "name": "real-e2e",
       "status": "notExecuted",
-      "reason": "No self-hosted runner is registered (labels self-hosted, lucy-protected, linux, amd64). The job stays BLOCKED and never degrades to a headless or local result."
+      "reason": "Two independent blockers. First, its upstream customer-amd64-native failed on the tag run, so the job was skipped rather than scheduled. Second, even with that fixed, no self-hosted runner is registered (labels self-hosted, lucy-protected, linux, amd64), so the job stays BLOCKED and never degrades to a headless or local result."
     },
     {
       "name": "customer-release-readiness",
       "status": "notExecuted",
-      "reason": "Depends on real-e2e and is therefore BLOCKED. No automated release credential was produced."
+      "reason": "Depends on real-e2e and was therefore skipped in both runs. No automated release credential was produced."
     },
     {
       "name": "release-package",
       "status": "notExecuted",
-      "reason": "Depends on customer-release-readiness. Did not run, so no GitHub-gate-produced delivery package exists for this release."
+      "reason": "Depends on customer-release-readiness and was therefore skipped in both runs, so no GitHub-gate-produced delivery package exists for this release."
     },
     {
       "name": "customer delivery gates",
@@ -78,8 +92,8 @@
       "name": "demo-db-smoke, postgres-demo-db-smoke",
       "status": "failed",
       "required": false,
-      "run": "40048966796",
-      "reason": "Ran and failed for the known deployment-layer reason recorded in review section 4.20: the demo compose files mount no bootstrap token and hard-code a token path that does not exist in a clean checkout. Not one of the four Required checks, so it did not block the release; deferred to the 2.5 line."
+      "run": "40051808741",
+      "reason": "Ran and failed for the known deployment-layer reason recorded in review section 4.20: the demo compose files mount no bootstrap token and hard-code a token path that does not exist in a clean checkout. Not one of the four Required checks, so it did not block the release; deferred to the 2.5 line. The same two jobs also failed on the tag run 40052825697 for the same reason."
     }
   ],
   "notes": [
@@ -88,6 +102,8 @@
     "The v2.0.0 tag and its GitHub Release are kept as historical fact. Their product version was 2.0.0 at that time.",
     "This entry's commit is filled in once the release tag is cut, so the ledger and the tag can never disagree.",
     "Outbound packaging now refuses to publish a package whose contents do not match the release tag it claims; see scripts/release/release-artifacts.mjs assertReleaseTagMatchesHead.",
-    "The ledger gate itself failed its first CI run because the gate job checked out shallow, so the previous release commit was not in the object database. Fixed by checking out full history and by reporting an unverifiable commit as unverifiable rather than absent; see review section 4.21."
+    "The ledger gate itself failed its first CI run because the gate job checked out shallow, so the previous release commit was not in the object database. Fixed by checking out full history and by reporting an unverifiable commit as unverifiable rather than absent; see review section 4.21.",
+    "A release is verified by more than one CI run, so this entry lists both of them under runs. The push run on the released commit is the authoritative gate run; the tag-push run is where the tag-only gates execute. Every gate cites one of the listed runs.",
+    "The customer release chain has a second, independent blocker besides the missing self-hosted runner: the candidate image cannot be pushed to GHCR because the workflow defaults the image namespace to kaelio while the GITHUB_TOKEN only grants write access under the repository owner Forrest219. Review section 4.23. Provisioning a runner alone would not unblock that chain."
   ]
 }

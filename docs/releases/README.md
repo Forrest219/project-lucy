@@ -10,6 +10,7 @@
 |---|---|
 | 客户手上的包对应哪个提交？ | 对应版本的 `deliveryPackage.builtFromCommit` |
 | 这一版跑了哪些门禁、哪些没跑、为什么？ | 对应版本的 `gates[]`（每条 `notExecuted` 必须写原因） |
+| 这一版是哪几次跑批验的？ | 对应版本的 `runs[]` |
 | 这一版能不能直接给客户？ | `deliveryPackage.productionReady` 与 `productionReadyReason` |
 | 客户在跑的是不是新版本？ | **看构建提交**，不要比较产品版本号（见下） |
 | 某个旧版本当时是什么状态？ | 该版本的 `.json` 文件 |
@@ -32,7 +33,21 @@
 3. **`deliveryPackage: null` 必须写 `noDeliveryReason`** ——「本版无交付包」是合法状态，但必须显式说明，不能靠字段缺失蒙混。
 4. **`notExecuted` 的门禁必须写 `reason`** ——未跑的门禁不是缺失信息，是交付结论的一部分。
 5. **交付包与发布提交不一致时**，必须显式设 `builtFromDiffersFromReleaseCommit: true` 并在 `builtFromDiffNote` 解释；否则门禁直接判失败。
-6. 跑 `npm run lint:release-ledger` 校验。
+6. **`runs[]` 必须列出这次发布涉及的全部跑批**，每条要有 `id` 与 `trigger`；每条 `gates[].run` 必须是 `runs[]` 里的某个 id，否则门禁判失败。
+7. 跑 `npm run lint:release-ledger` 校验。
+
+## 一次发布不止一次跑批
+
+`runs[]` 不是冗余字段。一次发布至少涉及**两次** CI 跑批，而**它们跑的门禁集合不同**：
+
+| 跑批 | 触发 | 跑什么 |
+|---|---|---|
+| push run | 合并到 `main`（head = 被发布的提交） | 四项 Required check 与常规门禁。**权威的放行依据** |
+| tag run | 推送 `v*` tag（head 仍是同一个提交） | 只在 tag ref 上才执行的门禁，主要是 `customer-amd64-native` |
+
+`customer-amd64-native` 的条件是 `startsWith(github.ref, 'refs/tags/v')`——在 push / PR 跑批里它是 `skipped`，**在 tag 跑批里它会真跑**。所以「它没跑」和「它跑了并失败」必须由**不同的 run id** 分别记录，不能合并成一条。
+
+门禁会强制 `gates[].run ∈ runs[].id`：这样一条门禁就不可能引用到不属于本次发布的跑批。
 
 ## 校验
 
@@ -41,7 +56,7 @@ npm run lint:release-ledger        # 校验台账完整性
 npm run lint:release-ledger:test   # 校验器自身的测试
 ```
 
-门禁检查：当前 `VERSION` 必须有对应条目；每条必需字段齐全；`releaseTag` 与 `productVersion` 一致；`commit` 是完整 40 位 SHA（或 `PENDING`）；同一版本号不重复。
+门禁检查：当前 `VERSION` 必须有对应条目；每条必需字段齐全；`releaseTag` 与 `productVersion` 一致；`commit` 是完整 40 位 SHA（或 `PENDING`）；同一版本号不重复；`runs[]` 非空且每条有 `id` + `trigger`；每条 `gates[].run` 必须是 `runs[]` 里的 id。
 
 ### 门禁状态是三态，不是两态
 

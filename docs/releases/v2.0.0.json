@@ -17,33 +17,47 @@
     "productionReady": false,
     "productionReadyReason": "Native linux/amd64 acceptance steps P0-3 through P0-6 were not executed; the local build host was arm64."
   },
+  "runs": [
+    {
+      "id": "40040526011",
+      "trigger": "push to main (head = 14a8bee, the released commit itself)",
+      "note": "The authoritative gate run for this release: all four Required checks are green here. customer-amd64-native does not apply on a branch ref, so it is skipped in this run and runs in the tag run instead."
+    },
+    {
+      "id": "40040569279",
+      "trigger": "push of the v2.0.0 tag (head = 14a8bee)",
+      "note": "The release tag event. The four Required checks are green here as well. customer-amd64-native only executes on a v* tag ref, so this is where it ran - and failed. See that gate entry."
+    }
+  ],
   "gates": [
-    { "name": "spec-and-webui", "status": "passed", "run": "40039319546", "required": true },
-    { "name": "docker-smoke", "status": "passed", "run": "40039319546", "required": true },
-    { "name": "k8s-static", "status": "passed", "run": "40039319546", "required": true },
-    { "name": "k8s-upgrade-gate", "status": "passed", "run": "40039319546", "required": true },
-    { "name": "headless-config", "status": "passed", "run": "40039319546", "required": false },
-    { "name": "business-eval-catalog", "status": "passed", "run": "40039319546", "required": false },
-    { "name": "ktx-diff-audit", "status": "passed", "run": "40039319546", "required": false },
+    { "name": "spec-and-webui", "status": "passed", "run": "40040526011", "required": true },
+    { "name": "docker-smoke", "status": "passed", "run": "40040526011", "required": true },
+    { "name": "k8s-static", "status": "passed", "run": "40040526011", "required": true },
+    { "name": "k8s-upgrade-gate", "status": "passed", "run": "40040526011", "required": true },
+    { "name": "headless-config", "status": "passed", "run": "40040526011", "required": false },
+    { "name": "business-eval-catalog", "status": "passed", "run": "40040526011", "required": false },
+    { "name": "ktx-diff-audit", "status": "passed", "run": "40040526011", "required": false },
+    {
+      "name": "customer-amd64-native",
+      "status": "failed",
+      "required": false,
+      "run": "40040569279",
+      "reason": "Ran on the v2.0.0 tag push: the job condition is startsWith(github.ref, 'refs/tags/v'), so it is skipped on branch and main pushes but does execute on a release tag. The candidate image built successfully (sha256:d3a23a66e66220875fdb3d0a4dc632a4ea6a272eaf480878cead3cef1dc81e24, tagged ghcr.io/kaelio/project-lucy:candidate-amd64-2.0.0-20261023-14a8bee) but the push was denied with 'permission_denied: The requested installation does not exist'. Root cause: the workflow logs in to GHCR with this repository's built-in GITHUB_TOKEN, which can only write packages under the repository owner (Forrest219), while the image repository defaults to the kaelio namespace, a different owner. Because the candidate digest never reached the registry, the native amd64 gates and the container-level smoke were skipped, and real-e2e, customer-release-readiness and release-package were skipped downstream. This is the same defect seen on the v0.2.0 tag run 40052825697; review section 4.23."
+    },
     {
       "name": "real-e2e",
       "status": "notExecuted",
-      "reason": "No self-hosted runner is registered (labels self-hosted, lucy-protected, linux, amd64). The job stays BLOCKED and never degrades to a headless or local result."
+      "reason": "Two independent blockers. First, its upstream customer-amd64-native failed on the tag run, so the job was skipped rather than scheduled. Second, even with that fixed, no self-hosted runner is registered (labels self-hosted, lucy-protected, linux, amd64), so the job stays BLOCKED and never degrades to a headless or local result."
     },
     {
       "name": "customer-release-readiness",
       "status": "notExecuted",
-      "reason": "Depends on real-e2e and is therefore BLOCKED. No automated release credential was produced."
+      "reason": "Depends on real-e2e and was therefore skipped in both runs. No automated release credential was produced."
     },
     {
       "name": "release-package",
       "status": "notExecuted",
-      "reason": "Depends on customer-release-readiness. Did not run, so no GitHub-gate-produced delivery package exists for this release."
-    },
-    {
-      "name": "customer-amd64-native",
-      "status": "notExecuted",
-      "reason": "Same blocked chain as release-package."
+      "reason": "Depends on customer-release-readiness and was therefore skipped in both runs, so no GitHub-gate-produced delivery package exists for this release."
     },
     {
       "name": "P0-3 through P0-6",
@@ -54,7 +68,7 @@
       "name": "demo-db-smoke, postgres-demo-db-smoke",
       "status": "failed",
       "required": false,
-      "run": "40039319546",
+      "run": "40040526011",
       "reason": "Ran and failed for the known deployment-layer reason recorded in review section 4.20: the demo compose files mount no bootstrap token and hard-code a token path that does not exist in a clean checkout. Not one of the four Required checks, so it did not block the release; deferred to the 2.5 line."
     }
   ],
@@ -62,6 +76,8 @@
     "The release was merged as a merge commit (242 commits, squash disabled) so the branch head SHA survives verbatim in main history and the commit / image digest / package SHA256 triple stays traceable.",
     "The GitHub Release for this tag carries the full evidence write-up in prose only; it has no attached machine-readable artifacts.",
     "This product version was corrected to 0.2.0 on 2026-10-24 because 2.0.0 was too easily confused with the Helm Chart version line 0.2.x. The v2.0.0 tag and its Release are kept as historical fact and are not deleted or moved.",
-    "Root-cause ledger for the 11 gate defects: docs/reviews/2026-10-23-lucy-v2.0-release-readiness-review.md sections 4.8 through 4.20."
+    "Root-cause ledger for the 11 gate defects: docs/reviews/2026-10-23-lucy-v2.0-release-readiness-review.md sections 4.8 through 4.20.",
+    "A release is verified by more than one CI run, so this entry lists both of them under runs. The push run on the released commit is the authoritative gate run; the tag-push run is where the tag-only gates execute. Every gate cites one of the listed runs.",
+    "The customer release chain was already blocked by the candidate image push failure on the tag run, independently of the missing self-hosted runner. Review section 4.23."
   ]
 }

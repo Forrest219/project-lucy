@@ -227,6 +227,32 @@ export function collectLedgerErrors(root = ROOT, { verifyRepo = true } = {}) {
       }
     }
 
+    // A release is verified by more than one CI run: the push run on the released commit, and the
+    // run triggered by pushing the release tag (some gates only execute on a tag ref). Record which
+    // runs belong to this release, and make every gate cite one of them.
+    const runIds = new Set();
+    if (!Array.isArray(entry.runs) || entry.runs.length === 0) {
+      errors.push(
+        `${where}: runs must be a non-empty array naming every CI run that verified this release `
+          + `(the push run on the released commit, and the run triggered by the release tag)`
+      );
+    } else {
+      for (const [index, run] of entry.runs.entries()) {
+        if (!run || typeof run !== "object") {
+          errors.push(`${where}: runs[${index}] must be an object`);
+          continue;
+        }
+        if (!(run.id && String(run.id).trim())) {
+          errors.push(`${where}: runs[${index}] is missing id`);
+          continue;
+        }
+        if (!(run.trigger && String(run.trigger).trim())) {
+          errors.push(`${where}: runs[${index}] (${run.id}) is missing trigger`);
+        }
+        runIds.add(String(run.id).trim());
+      }
+    }
+
     if (!Array.isArray(entry.gates)) {
       errors.push(`${where}: gates must be an array`);
     } else {
@@ -261,6 +287,12 @@ export function collectLedgerErrors(root = ROOT, { verifyRepo = true } = {}) {
           errors.push(
             `${where}: gates[${index}] (${gate.name ?? index}) status is "${gate.status}", so it must cite the `
               + `CI run id it came from in "run"`
+          );
+        }
+        if (gate.run && runIds.size > 0 && !runIds.has(String(gate.run).trim())) {
+          errors.push(
+            `${where}: gates[${index}] (${gate.name ?? index}) cites run ${gate.run}, which is not one of this `
+              + `release's runs (${[...runIds].join(", ")}). A gate must be cited from a run that verified this release.`
           );
         }
       }
