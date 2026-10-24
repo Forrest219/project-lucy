@@ -6,6 +6,18 @@ All notable user-visible changes to Lucy ship here. Versions follow `<major>.<mi
 
 ---
 
+## 0.20.0
+
+Correct the active Lucy product line from `0.2.0` to `0.20.0` on 2026-10-24, restoring numeric order relative to the earlier `0.17.0` release. The erroneous `2.0.0` cut is retired and remains only as release history. Customer-facing label is `v0.20.0`. Chart package version is `0.2.7`; bundled KTX stays `0.16.0`. Product versions and deployment artifacts are independently versioned, and every delivery path records its own support and gate status.
+
+---
+
+## 0.2.0
+
+Short-lived product-version correction from `2.0.0` to `0.2.0` on 2026-10-24, superseded by `0.20.0` because `0.2.0` is numerically lower than the earlier `0.17.0`. The `v0.2.0` tag, Release, commit and gate evidence remain unchanged as historical fact.
+
+---
+
 ## 2.0.0
 
 Product line cut from `0.17.0` to `2.0.0` on 2026-10-19. Customer-facing label is `v2.0.0`. Bundled KTX stays `0.16.0`. Chart package version is `0.2.6`: `security.access` is `https` or intranet `http`. Customer delivery verifies archive config/manifest/index identities, includes private CA files, and provides one instance deployment entry with durable baseline backups and executable recovery instructions.

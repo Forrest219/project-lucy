@@ -1,6 +1,6 @@
 {
   "name": "project-lucy-eval",
-  "version": "0.2.0",
+  "version": "0.20.0",
   "private": true,
   "type": "module",
   "description": "Project Lucy eval runner — wraps Claude Code CLI to exercise KTX MCP tools against evals/superstore/eval cases.",

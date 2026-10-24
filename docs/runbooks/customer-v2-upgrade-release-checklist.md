@@ -40,7 +40,7 @@
 | C09 | config/manifest/index 身份来自归档验证；内外 SHA、baseChecksumDigest 一致；改脚本、重算 sums、混用实例必须失败 | identity 回归 + 最终归档反向用例 |
 | C10 | 单对象、连续对象、List、多文档六类资源可解析；空/HTML/损坏/尾部垃圾明确失败；不能仅模拟 items | Python 回归 + 真实 Helm/kubectl client 输出 |
 | C11 | 最终归档校验、解压、重新准备实例；其他 cwd 通过绝对路径运行完整 deploy.sh --dry-run，不能只跑 --help | 自动隔离回归 + 另行真实集群 dry-run |
-| C12 | 原生 linux/amd64 K3s：真实 0.17.0、原 RWO PVC，最终实例入口 dry-run 后实际升级至 2.0.0/KTX 0.16.0 | 原生升级记录，绑定包 SHA/提交/运行镜像 ID |
+| C12 | 原生 linux/amd64 K3s：真实 0.17.0、原 RWO PVC，最终实例入口 dry-run 后实际升级至仓库 `VERSION`（当前 0.20.0）/KTX 0.16.0 | 原生升级记录，绑定包 SHA/提交/运行镜像 ID |
 | C13 | 缺引导 Secret 安全失败；Owner 仅认领一次；登录/退出、未登录拒绝；重启及再次 Helm 升级保持账号和 consumed 状态 | 原生管理员旅程；ACCEPTANCE.md |
 | C14 | 原 MCP Token 有效、无 Token 401；原连接/reindex/允许拒绝查询通过；非认证业务文件哈希保持 | 原生业务验收；不输出凭据或完整 values |
 | C15 | 切换前停机备份完整 PVC、核对哈希；保存原 Helm revision/values/镜像；重试不覆盖初始备份 | 原生备份记录；备份受控保存 |
@@ -56,7 +56,7 @@
 
 ```bash
 bash scripts/gates/build-k8s-delivery-package.sh \
-  --image-tag project-lucy:customer-amd64-2.0.0-YYYYMMDD-COMMIT \
+  --image-tag project-lucy:customer-amd64-0.20.0-YYYYMMDD-COMMIT \
   --version-suffix YYYYMMDD-rN --output /absolute/path/delivery.tar.gz \
   [--customer <slug>] [--existing-admin]   # 客户交付默认自动生成私有引导附件
 ```

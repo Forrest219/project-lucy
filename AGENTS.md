@@ -10,13 +10,21 @@ Vibe coding 双核角色协作（thinker / builder）的可选完整交付流水
 | 环境 | 硬件 / 平台 | 用途 |
 |---|---|---|
 | 开发环境 | Apple Silicon Mac（arm64）+ Docker Desktop | 本地开发、demo、冒烟验证、出客户镜像包 |
-| 客户环境 | amd64（x86_64）服务器，**Kubernetes** 部署 | 最终交付与运行 |
+| 客户环境 | amd64（x86_64）服务器；部署方式按客户环境确定 | 最终交付与运行；当前已验证的正式交付形态为 Kubernetes |
 
 由此派生的硬约束：
 
 - **客户镜像是 linux/amd64 单架构**，但构建发生在 arm64 Mac 上：允许 `lucy-amd64` builder + QEMU 跨架构构建，**必须**完整过 G1–G4 硬门禁（ELF 架构门禁不得以元数据代替），禁止 `FROM --platform=$BUILDPLATFORM`，禁止 `docker buildx create --use`（会污染本机 demo 默认 builder）。口径见 [`docs/specs/lucy-customer-amd64-offline-delivery-spec.md`](docs/specs/lucy-customer-amd64-offline-delivery-spec.md) v0.3+ 与 [`docs/runbooks/customer-amd64-image-build-checklist.md`](docs/runbooks/customer-amd64-image-build-checklist.md)。
 - **本地脚本必须兼容 stock macOS bash 3.2**（`readarray` / `mapfile` / 负数数组下标均不可用），相关回归门禁见 `scripts/upgrade/upgrade-lucy.test.mjs`。
-- 单机 compose 栈（`deploy/compose/`）是开发/演示与升级验证环境，**不是**客户交付形态；客户交付以 [`deploy/k8s/helm/lucy/`](deploy/k8s/helm/lucy/) Chart + amd64 镜像为准（契约见 `deploy/k8s/K8S_CONTRACT.md`）。
+- 单机 compose 栈（`deploy/compose/`）是开发/演示与升级验证环境，**不是**已完成客户验收的交付形态；当前正式客户交付以 [`deploy/k8s/helm/lucy/`](deploy/k8s/helm/lucy/) Chart + amd64 镜像为准（契约见 `deploy/k8s/K8S_CONTRACT.md`）。新增 Docker 或其他客户交付形态前，必须另行补齐交付契约及安装、升级、备份恢复、引导密钥和验收门禁。
+
+## 部署方式与版本制品解耦（全局原则）
+
+- **部署方式按客户环境选择，不把 Helm、Docker 或 Kubernetes 绑定为 Lucy 产品本身的统一前置条件。** Kubernetes 技术上也不强制使用 Helm；可以采用纯 Manifest、Kustomize 等方式，但只有经过对应交付验证的路径才能声明为受支持。当前已验证的标准 Kubernetes 交付路径使用 Helm CLI。
+- **产品版本与部署制品版本解耦。** 同一批产品能力无论通过 Docker、Helm Chart、纯 Manifest 或其他方式交付，都使用同一个 Lucy 产品版本；不得按部署渠道分叉产品版本线或让同一代码在不同渠道使用不同产品版本。
+- **各类制品独立编号。** Lucy 产品版本、容器镜像标签、Helm Chart 包版本、交付包修订号和捆绑 KTX 版本互不推导。只修改 Chart 而镜像摘要不变时，可以只递增 Chart 版本，不天然要求产品升版。
+- **同一产品版本可以发布一种或多种交付制品。** 发版台账必须按制品分别记录版本、摘要、支持状态和门禁结果；未发布的制品须说明原因。任何一种部署路径通过验收，都不能推定其他路径已经通过。
+- 新增部署方式属于交付范围扩展，不得夹在无关的产品版本修正中默认完成；必须先明确支持边界并完成对应验证。
 
 ## 客户部署包与引导密钥（每次出包强制遵守）
 

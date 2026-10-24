@@ -6,7 +6,7 @@
 # reads the tag and writes what git says.
 #
 # Usage: bash scripts/release/fill-ledger-commit.sh <version> [tag]
-#   version  product version, e.g. 0.2.0  (entry file docs/releases/v<version>.json)
+#   version  product version, e.g. 0.20.0  (entry file docs/releases/v<version>.json)
 #   tag      release tag, defaults to v<version>
 set -euo pipefail
 
