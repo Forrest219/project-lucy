@@ -1162,7 +1162,7 @@ export type ConfigAuditEntry = {
   newSummary?: unknown;
   diff?: string;
   requestId?: string;
-  writeStatus: "pending" | "committed" | "failed";
+  writeStatus: "pending" | "committed" | "failed" | "rolled_back";
 };
 
 export type ConfigAuditResponse = {

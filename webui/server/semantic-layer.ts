@@ -22,6 +22,7 @@ import { loadContentPaths } from "./paths";
 import { stripManifestOnlyColumnKeys } from "./semantic-overlay-sanitize";
 import { countEntryPerf, timeAsync } from "./entry-performance-timing";
 import { withDisplayWriteBarrier } from "./display-generation";
+import { withPublishCoordinator } from "./publish-coordinator.js";
 
 const TABLE_KEYS = new Set(["table", "descriptions", "grain", "columns", "measures", "segments", "joins"]);
 
@@ -736,20 +737,27 @@ export async function writeSourcePatch(
 ): Promise<SourcePreview> {
   const preview = await buildSourcePatchPreview(projectRoot, conn, schema, table, patch);
   // Spec 174 §3.2 — one barrier over the multi-file write (partial failure still invalidates).
-  await withDisplayWriteBarrier(["D", "P"], async () => {
-    for (const file of preview.files) {
-      await auditedWriteFile(projectRoot, file.filePath, file.proposedYaml, {
-        enabled: true,
-        changeType: "semantic_table_save",
-        assetKind: "semantic",
-        ...auditActorFields(actor),
-        source: "semantic_layer_patch_api",
-        targetId: `${conn}:${schema}:${table}`,
-        diff: file.diff,
-        operation: "save"
-      });
-    }
-  });
+  // Lucy v0.25 (L25-11 D4) — the single-table save shares the publish window with the
+  // manifest upload, the batch import, the manual reindex and the access.yaml writers.
+  await withPublishCoordinator(
+    "semantic_table_save",
+    () =>
+      withDisplayWriteBarrier(["D", "P"], async () => {
+        for (const file of preview.files) {
+          await auditedWriteFile(projectRoot, file.filePath, file.proposedYaml, {
+            enabled: true,
+            changeType: "semantic_table_save",
+            assetKind: "semantic",
+            ...auditActorFields(actor),
+            source: "semantic_layer_patch_api",
+            targetId: `${conn}:${schema}:${table}`,
+            diff: file.diff,
+            operation: "save"
+          });
+        }
+      }),
+    { projectRoot }
+  );
   return preview;
 }
 

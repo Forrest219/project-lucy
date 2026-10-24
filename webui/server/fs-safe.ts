@@ -1,5 +1,6 @@
 import { constants as fsConstants } from "node:fs";
 import { lstat, mkdir, open, readdir, realpath, rename, rm, rmdir, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { mirrorContentFileToProjectRoot } from "./content-mirror";
 import type { ContentPaths } from "./paths";
@@ -243,6 +244,36 @@ export async function safeWrite(
   const target = await resolveWritable(contentPaths, projectRoot, normalized);
   await mkdir(path.dirname(target), { recursive: true });
   await withDisplayWriteBarrier(displayScopesFor(contentPaths, projectRoot, [target]), () => writeFile(target, content, "utf8"));
+  await mirrorWriteToSiblingView(contentPaths, projectRoot, normalized, content);
+}
+
+/**
+ * Atomic write under the same allow-list as {@link safeWrite}.
+ *
+ * The content is written to a temporary file in the SAME directory and then renamed over
+ * the target. A reader therefore never observes a partially written file, and a crash
+ * mid-write leaves the previous content intact. This is the write shape required for
+ * configuration and semantic-asset replacement (v0.25 P0-3 §7.2).
+ */
+export async function safeWriteAtomic(
+  contentPaths: ContentPaths,
+  projectRoot: string,
+  relPath: string,
+  content: string
+): Promise<void> {
+  const normalized = normalizeRelative(relPath);
+  const target = await resolveWritable(contentPaths, projectRoot, normalized);
+  await mkdir(path.dirname(target), { recursive: true });
+  const tmp = path.join(path.dirname(target), `.${path.basename(target)}.tmp-${randomUUID()}`);
+  try {
+    await withDisplayWriteBarrier(displayScopesFor(contentPaths, projectRoot, [target]), async () => {
+      await writeFile(tmp, content, "utf8");
+      await rename(tmp, target);
+    });
+  } catch (err) {
+    await rm(tmp, { force: true }).catch(() => undefined);
+    throw err;
+  }
   await mirrorWriteToSiblingView(contentPaths, projectRoot, normalized, content);
 }
 

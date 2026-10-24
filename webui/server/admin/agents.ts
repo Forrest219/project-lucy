@@ -3,7 +3,7 @@ import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { stringify, parse } from "yaml";
 import type { FastifyInstance, FastifyRequest } from "fastify";
-import { auditedWriteFile } from "./config-audit-write.js";
+import { writeAccessConfigFileWithAuditClosure } from "./access-config.js";
 import { resolveProjectRoot } from "../project.js";
 import { previewDiff } from "../diff.js";
 import { getAuditDb, type ConfigAuditActorType } from "./audit.js";
@@ -161,70 +161,27 @@ async function writeAccessYamlInBarrier(
   policyRuntimeAck: boolean;
   runtimeAck: boolean;
 }> {
-  const accessPath = path.join(projectRoot, ACCESS_YAML_REL);
-  let previousRaw: string | undefined;
-  try {
-    previousRaw = await readFile(accessPath, "utf-8");
-  } catch {
-    previousRaw = undefined;
-  }
-
   // Strip derived last_used before writing
   const toWrite: YamlAccessConfig = {
     ...config,
     users: config.users.map((u) => ({
       ...u,
-      tokens: u.tokens.map(({ ...t }) => {
-        // last_used is never in yaml
-        return t;
-      })
+      tokens: u.tokens.map(({ ...t }) => t)
     }))
   };
   const content = stringify(toWrite, { lineWidth: 0 });
-  const {
-    commitEffectivePolicy,
-    computeAccessConfigDigest,
-    evaluateRuntimeAck
-  } = await import("../proxy/acl.js");
-  const expectedDigest = computeAccessConfigDigest(parse(content) as Parameters<typeof computeAccessConfigDigest>[0]);
-
-  const writeResult = await auditedWriteFile(projectRoot, ACCESS_YAML_REL, content, audit ? {
-    enabled: true,
-    changeType: audit.changeType,
-    assetKind: "governance",
-    actor: audit.actor,
-    actorType: audit.actorType ?? "ui_admin",
-    actorIp: audit.actorIp,
-    sessionId: audit.sessionId,
-    source: audit.source ?? "admin_agents_api",
-    targetId: audit.targetId,
-    oldSummary: audit.oldSummary,
-    newSummary: audit.newSummary,
-    diff: audit.diff,
-    requestId: audit.requestId
-  } : undefined);
-
-  let status = await commitEffectivePolicy();
-  let runtimeAck = evaluateRuntimeAck(status, expectedDigest);
-
-  if (!runtimeAck && previousRaw !== undefined) {
-    const { writeFile } = await import("node:fs/promises");
-    await writeFile(accessPath, previousRaw, "utf8");
-    status = await commitEffectivePolicy();
-    runtimeAck = false;
-  }
-
-  // T04-3 / Spec §3.3 — narrower authority is persisted and committed above;
-  // cancel in-flight work and clear caches before this write reports success.
-  const narrowed = narrowingScopeForWrite(previousRaw, toWrite);
-  if (narrowed) await narrowAuthorization(narrowed);
-
-  return {
-    ...writeResult,
-    policyVersion: status.policyVersion,
-    policyRuntimeAck: runtimeAck,
-    runtimeAck
-  };
+  // Lucy v0.25 — Agent writes share the one access.yaml durable-audit closure with the
+  // Role / row-policy writer (durable intent → atomic write → commit → durable terminal).
+  return writeAccessConfigFileWithAuditClosure(projectRoot, ACCESS_YAML_REL, content, audit, {
+    source: audit?.source ?? "admin_agents_api",
+    kind: "agent_save",
+    onCommitted: async (previousRaw) => {
+      // T04-3 / Spec §3.3 — narrower authority is persisted and committed above;
+      // cancel in-flight work and clear caches before this write reports success.
+      const narrowed = narrowingScopeForWrite(previousRaw, toWrite);
+      if (narrowed) await narrowAuthorization(narrowed);
+    }
+  });
 }
 
 function computeVersion(raw: string, mtimeMs: number): string {

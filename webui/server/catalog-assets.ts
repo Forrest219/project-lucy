@@ -23,6 +23,7 @@ import { syncContentToProjectRoot } from "./content-mirror";
 import { resolveContentPaths } from "./paths";
 import { readProject } from "./project";
 import { withDisplayWriteBarrier } from "./display-generation";
+import { withPublishCoordinator } from "./publish-coordinator.js";
 
 const MAX_BYTES = 512 * 1024;
 const MAX_RECORDS = 50;
@@ -852,6 +853,23 @@ export async function uploadCatalogAsset(
       403
     );
   }
+
+  // Lucy v0.25 (L25-11 D4) — the manifest upload shares the publish window with the
+  // single-table save, the batch import, the manual reindex and the access.yaml writers.
+  return withPublishCoordinator(
+    "manifest_upload",
+    () => writeCatalogAssetIntoWindow(projectRoot, request, validation, safety),
+    { projectRoot }
+  );
+}
+
+async function writeCatalogAssetIntoWindow(
+  projectRoot: string,
+  request: CatalogAssetUploadRequest,
+  validation: CatalogAssetValidateResponse,
+  safety: { safeParentAbs: string; targetAbs: string }
+): Promise<UploadCatalogAssetResult> {
+  const targetRel = validation.targetPath;
 
   // Atomic write: temp file in the same directory, then rename.
   const tempName = `.${randomUUID()}.upload.tmp`;

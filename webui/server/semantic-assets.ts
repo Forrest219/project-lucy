@@ -42,6 +42,14 @@ import { createTwoFilesPatch } from "diff";
 type YamlDocument = ReturnType<typeof parseDocument>;
 import { readProject } from "./project";
 import { assertSafeTarget } from "./catalog-assets";
+import {
+  PUBLISH_COORDINATOR_LOCK_REL,
+  acquirePublishCoordinatorLock,
+  readPublishCoordinatorLock,
+  releasePublishCoordinatorLock,
+  updatePublishCoordinatorLockPayload,
+  type PublishLockHolder
+} from "./publish-coordinator.js";
 import { syncContentToProjectRoot } from "./content-mirror";
 import { ForbiddenPathError } from "./fs-safe";
 import { reindexProject, validateSource, type Issue, type ValidationResult } from "./ktx";
@@ -254,8 +262,10 @@ const MAX_SNAPSHOTS = 50;
 const SIDECAR_RELEASES_REL = ".ktx-ui/semantic-asset-releases.json";
 const SNAPSHOTS_DIR_REL = ".ktx-ui/semantic-asset-snapshots";
 const STAGING_DIR_REL = ".ktx-ui/staging/semantic-publish";
-const PUBLISH_LOCK_REL = ".ktx-ui/semantic-publish.lock";
+const PUBLISH_LOCK_REL = PUBLISH_COORDINATOR_LOCK_REL;
 const DEFAULT_STAGING_TTL_MS = 60 * 60 * 1000;
+/** Holder of the publish window currently owned by this process. */
+let publishLockHolder: PublishLockHolder | null = null;
 const REDACT_PATTERNS: RegExp[] = [
   /password\s*[:=]\s*\S+/gi,
   /token\s*[:=]\s*\S+/gi,
@@ -1230,6 +1240,12 @@ export async function recordManualReindex(
 }
 
 // ─── Publish lock (single-process MVP) ────────────────────────────────────
+//
+// Lucy v0.25 (L25-11 D4) — the publish lock is now the shared publish coordinator's
+// lock, so the batch import, the single-table save, the manifest upload, the manual
+// reindex and the access.yaml writers all exclude each other. The coordinator also
+// reclaims a lock left behind by a crashed process; the previous local lock had no
+// stale recovery and blocked every later publish forever.
 
 type LockHandle = {
   validationId: string;
@@ -1240,37 +1256,29 @@ async function acquirePublishLock(
   projectRoot: string,
   payload: LockHandle
 ): Promise<boolean> {
-  const abs = path.resolve(projectRoot, PUBLISH_LOCK_REL);
-  await mkdir(path.dirname(abs), { recursive: true });
-  try {
-    const fd = await writeFile(
-      abs,
-      JSON.stringify({ ...payload, acquiredAt: new Date().toISOString() }),
-      { encoding: "utf8", flag: "wx" }
-    ).then((res) => res);
-    // `wx` would have thrown if the file already exists. Touching the FD here
-    // is a no-op; we only need the lock file to exist.
-    void fd;
-    return true;
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "EEXIST") return false;
-    throw err;
-  }
+  const { acquired, holder } = await acquirePublishCoordinatorLock(projectRoot, "batch_import", {
+    validationId: payload.validationId,
+    releaseId: payload.releaseId
+  });
+  // Only a lock we actually own becomes the releasable holder.
+  if (acquired) publishLockHolder = holder;
+  return acquired;
 }
 
 async function releasePublishLock(projectRoot: string): Promise<void> {
-  const abs = path.resolve(projectRoot, PUBLISH_LOCK_REL);
-  await rm(abs, { force: true });
+  if (!publishLockHolder) return;
+  const holder = publishLockHolder;
+  publishLockHolder = null;
+  await releasePublishCoordinatorLock(projectRoot, holder);
 }
 
 async function readPublishLock(projectRoot: string): Promise<LockHandle | null> {
-  try {
-    const text = await readFile(path.resolve(projectRoot, PUBLISH_LOCK_REL), "utf8");
-    return JSON.parse(text) as LockHandle;
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
-    throw err;
-  }
+  const holder = await readPublishCoordinatorLock(projectRoot);
+  if (!holder) return null;
+  return {
+    validationId: holder.validationId ?? "in-progress",
+    releaseId: holder.releaseId ?? "pending"
+  };
 }
 
 // ─── Staging helpers ─────────────────────────────────────────────────────
@@ -2144,12 +2152,8 @@ export async function publishSemanticAssets(
 async function acquirePublishLockReleaseId(projectRoot: string, releaseId: string): Promise<void> {
   // Replace the lock payload to include the release id; the existence check
   // already happened via `acquirePublishLock`.
-  const abs = path.resolve(projectRoot, PUBLISH_LOCK_REL);
-  await writeFile(
-    abs,
-    JSON.stringify({ validationId: "in-progress", releaseId, acquiredAt: new Date().toISOString() }),
-    "utf8"
-  );
+  if (!publishLockHolder) return;
+  await updatePublishCoordinatorLockPayload(projectRoot, publishLockHolder, { releaseId });
 }
 
 // ─── Internal test re-exports (intentionally not part of the public API) ──

@@ -5,6 +5,8 @@ import path from "node:path";
 import { parse } from "yaml";
 import { resolveProjectRoot, readConnections } from "../project.js";
 import { loadContentPaths } from "../paths.js";
+import { readAccessRecoveryState } from "../access-recovery.js";
+import { stableJson as canonicalStableJson } from "../config-digest.js";
 import { countEntryPerf } from "../entry-performance-timing.js";
 import {
   getAccessConfig,
@@ -778,12 +780,8 @@ function isWildcardList(value: string[] | undefined): boolean {
 }
 
 function stableJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
-  if (value && typeof value === "object") {
-    const record = value as Record<string, unknown>;
-    return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${stableJson(record[key])}`).join(",")}}`;
-  }
-  return JSON.stringify(value);
+  // Lucy v0.25 — one canonicalization for every digest in the system.
+  return canonicalStableJson(value);
 }
 
 function makePermissions(input: Omit<EffectivePermissions, "snapshotHash">): EffectivePermissions {
@@ -2305,6 +2303,40 @@ async function commitEffectivePolicyUnlocked(): Promise<PolicyRuntimeStatus> {
         degradedAgents: [],
         policyVersion: degraded.policyVersion,
         errorReason: err instanceof Error ? err.message : String(err)
+      });
+    }
+    return getPolicyRuntimeStatus();
+  }
+
+  // Lucy v0.25 (L25-14 §5.3) — an unresolved access-config recovery must fail closed
+  // even when the file parses: the on-disk state is not known to be the intended one,
+  // so the data plane must not serve rows under an unverified policy.
+  const recoveryState = await readAccessRecoveryState(await resolveProjectRoot());
+  if (recoveryState.required) {
+    const recoveryDegraded: EffectivePolicySnapshot = {
+      policyVersion: previous?.policyVersion ?? "",
+      accessConfigDigest: previous?.accessConfigDigest ?? "",
+      sourceMapVersion: previous?.sourceMapVersion ?? "",
+      toolClassificationVersion: TOOL_CLASSIFICATION_VERSION,
+      enabledTablesDigest: previous?.enabledTablesDigest ?? "",
+      degradedGlobal: true,
+      degradedAgents: new Set(),
+      config: previous?.config ?? { users: [] },
+      sourceMap: previous?.sourceMap ?? emptySourceMapState(Date.now()),
+      byUserId: previous?.byUserId ?? new Map(),
+      expandableScopeSourceKeys: previous?.expandableScopeSourceKeys ?? new Map()
+    };
+    effectivePolicyRef = recoveryDegraded;
+    console.error(
+      `[acl] policy_degraded_global: access config recovery required (${recoveryState.reason ?? "unknown"})`
+    );
+    if (!previous?.degradedGlobal) {
+      await recordPolicyDegradeEvent({
+        changeType: "policy_degraded_enter",
+        degradedGlobal: true,
+        degradedAgents: [],
+        policyVersion: recoveryDegraded.policyVersion,
+        errorReason: `access_recovery_required:${recoveryState.reason ?? "unknown"}`
       });
     }
     return getPolicyRuntimeStatus();

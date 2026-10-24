@@ -159,6 +159,7 @@ import { registerFieldQuestionRoutes } from "./eval/field-questions.js";
 import { registerR1ObservabilityRoutes } from "./observability.js";
 import { registerCallMonitorRoutes } from "./ops/call-monitor.js";
 import { safeWrite } from "./fs-safe.js";
+import { isPublishCoordinatorBusy, withPublishCoordinator } from "./publish-coordinator.js";
 import {
   describePendingReleaseAssets,
   publishSemanticAssets,
@@ -2048,26 +2049,28 @@ export function buildServer() {
   }>("/api/semantic-assets/reindex", async (request, reply) => {
     const projectRoot = await resolveProjectRoot();
     const force = request.body?.force === true;
-    const lockPath = path.resolve(projectRoot, ".ktx-ui", "semantic-publish.lock");
-    try {
-      const lockStat = await lstat(lockPath);
-      if (lockStat.isFile()) {
-        reply.status(409);
-        return reply.send({
-          ok: false,
-          error: {
-            code: "REINDEX_IN_PROGRESS",
-            message: "已有发布批次正在重建索引，请等待当前批次完成后再试"
-          }
-        });
-      }
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+    // Lucy v0.25 (L25-11 D4) — the manual reindex shares the publish window. A lock
+    // left behind by a crashed process is reclaimed by the coordinator, so a stale
+    // lock file must not block the reindex forever.
+    const busy = await isPublishCoordinatorBusy(projectRoot);
+    if (busy.busy) {
+      reply.status(409);
+      return reply.send({
+        ok: false,
+        error: {
+          code: "REINDEX_IN_PROGRESS",
+          message: "已有发布批次正在重建索引，请等待当前批次完成后再试"
+        }
+      });
     }
     const startedAt = new Date().toISOString();
     const consumedFiles = writtenFiles.slice();
     const consumedSourceEntries = [...changedSources.entries()];
-    const reindex = await reindexProject(projectRoot, { force });
+    const reindex = await withPublishCoordinator(
+      "manual_reindex",
+      () => reindexProject(projectRoot, { force }),
+      { projectRoot }
+    );
     const finishedAt = new Date().toISOString();
     const reindexRecord = {
       ok: reindex.exitCode === 0,

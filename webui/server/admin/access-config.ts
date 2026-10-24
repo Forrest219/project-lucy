@@ -2,7 +2,16 @@ import { createHash } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { parse, stringify } from "yaml";
-import { auditedWriteFile } from "./config-audit-write.js";
+import { beginConfigAuditIntent, auditedWriteFile, completeConfigAuditTerminal } from "./config-audit-write.js";
+import { withPublishCoordinator, type PublishEntryKind } from "../publish-coordinator.js";
+import { safeRemove, safeWriteAtomic } from "../fs-safe.js";
+import { loadContentPaths } from "../paths.js";
+import {
+  AccessRecoveryRequiredError,
+  assertAccessWritesAllowed,
+  markAccessRecoveryRequired,
+  readAccessRecoveryState
+} from "../access-recovery.js";
 import type { ConfigAuditAssetKind, ConfigAuditActorType } from "./audit.js";
 import { withDisplayWriteBarrier } from "../display-generation.js";
 import { narrowAuthorization, narrowingScopeForWrite } from "../proxy/authorization-barrier.js";
@@ -115,40 +124,38 @@ export async function writeAccessYaml(
   return withDisplayWriteBarrier(["P"], () => writeAccessYamlInBarrier(...args));
 }
 
-async function writeAccessYamlInBarrier(
-  projectRoot: string,
-  config: YamlAccessConfig,
-  audit?: {
-    enabled: boolean;
-    changeType: string;
-    targetId?: string;
-    oldSummary?: unknown;
-    newSummary?: unknown;
-    diff?: string;
-    requestId?: string;
-    source?: string;
-    actorType?: ConfigAuditActorType;
-    actor?: string;
-    actorIp?: string;
-    sessionId?: string | null;
-    idempotencyKey?: string;
-    operation?: string;
-    assetKind?: ConfigAuditAssetKind;
-  }
-): Promise<{
+export interface AccessConfigAuditIntent {
+  enabled: boolean;
+  changeType: string;
+  targetId?: string;
+  oldSummary?: unknown;
+  newSummary?: unknown;
+  diff?: string;
+  requestId?: string;
+  source?: string;
+  actorType?: ConfigAuditActorType;
+  actor?: string;
+  actorIp?: string;
+  sessionId?: string | null;
+  idempotencyKey?: string;
+  operation?: string;
+  assetKind?: ConfigAuditAssetKind;
+}
+
+export interface AccessConfigWriteResult {
   auditId?: number;
   policyVersion: string;
   policyRuntimeAck: boolean;
   runtimeAck: boolean;
-}> {
-  const accessPath = path.join(projectRoot, ACCESS_YAML_REL);
-  let previousRaw: string | undefined;
-  try {
-    previousRaw = await readFile(accessPath, "utf-8");
-  } catch {
-    previousRaw = undefined;
-  }
+  /** true when the write was reverted and the previous policy was re-committed. */
+  rolledBack?: boolean;
+}
 
+async function writeAccessYamlInBarrier(
+  projectRoot: string,
+  config: YamlAccessConfig,
+  audit?: AccessConfigAuditIntent
+): Promise<AccessConfigWriteResult> {
   const toWrite: YamlAccessConfig = {
     ...config,
     users: config.users.map((u) => ({
@@ -157,6 +164,78 @@ async function writeAccessYamlInBarrier(
     }))
   };
   const content = stringify(toWrite, { lineWidth: 0 });
+  return writeAccessConfigFileWithAuditClosure(projectRoot, ACCESS_YAML_REL, content, audit, {
+    source: audit?.source ?? "admin_access_config_api",
+    onCommitted: async (previousRaw) => {
+      // T04-3 / Spec §3.3 — narrower authority is persisted and committed above;
+      // cancel in-flight work and clear caches before this write reports success.
+      const narrowed = narrowingScopeForWrite(previousRaw, toWrite);
+      if (narrowed) await narrowAuthorization(narrowed);
+    }
+  });
+}
+
+/**
+ * Lucy v0.25 (L25-14 §3.4/§5.3, L25-11 §7.2) — the shared access-configuration write
+ * closure. Both the Role / row-policy writer and the Agent writer go through it, so
+ * there is exactly one durable-audit contract for `access.yaml`:
+ *
+ *   durable intent → atomic write → runtime commit/ack → durable terminal
+ *
+ * - The intent is persisted BEFORE any configuration is written. No intent ⇒ no write.
+ * - The terminal is persisted AFTER the write and the runtime swap. A terminal that
+ *   cannot be persisted reverts the configuration and re-commits the previous policy.
+ * - A revert that cannot be verified leaves the recovery gate closed: the runtime
+ *   degrades globally and further writes are rejected.
+ */
+export async function writeAccessConfigFileWithAuditClosure(
+  projectRoot: string,
+  relPath: string,
+  content: string,
+  audit: AccessConfigAuditIntent | undefined,
+  options: {
+    source: string;
+    assetKind?: ConfigAuditAssetKind;
+    /** Which publish-window entry class this write belongs to. */
+    kind?: PublishEntryKind;
+    onCommitted?: (previousRaw: string | undefined) => Promise<void>;
+  }
+): Promise<AccessConfigWriteResult> {
+  // ── shared publish window (L25-11 D4 / L25-14 D6) ────────────────────────
+  // The whole write → commit → terminal sequence runs inside the publish window, so a
+  // role / row-policy save can never interleave with a semantic-asset publish or a
+  // manual reindex.
+  return withPublishCoordinator(
+    options.kind ?? "role_policy_save",
+    () => writeAccessConfigFileWithAuditClosureInner(projectRoot, relPath, content, audit, options),
+    { projectRoot }
+  );
+}
+
+async function writeAccessConfigFileWithAuditClosureInner(
+  projectRoot: string,
+  relPath: string,
+  content: string,
+  audit: AccessConfigAuditIntent | undefined,
+  options: {
+    source: string;
+    assetKind?: ConfigAuditAssetKind;
+    kind?: PublishEntryKind;
+    onCommitted?: (previousRaw: string | undefined) => Promise<void>;
+  }
+): Promise<AccessConfigWriteResult> {
+  // Lucy v0.25 (L25-14 §5.3) — an unresolved recovery blocks every further write.
+  assertAccessWritesAllowed(await readAccessRecoveryState(projectRoot));
+
+  const paths = await loadContentPaths();
+  const accessPath = path.join(projectRoot, relPath);
+  let previousRaw: string | undefined;
+  try {
+    previousRaw = await readFile(accessPath, "utf-8");
+  } catch {
+    previousRaw = undefined;
+  }
+
   const {
     commitEffectivePolicy,
     computeAccessConfigDigest,
@@ -165,43 +244,171 @@ async function writeAccessYamlInBarrier(
   // Digest of the exact YAML bytes we are about to persist (post-stringify parse).
   const expectedDigest = computeAccessConfigDigest(parse(content) as Parameters<typeof computeAccessConfigDigest>[0]);
 
-  const writeResult = await auditedWriteFile(projectRoot, ACCESS_YAML_REL, content, audit ? {
-    enabled: audit.enabled,
-    changeType: audit.changeType,
-    assetKind: audit.assetKind ?? "governance",
-    operation: audit.operation,
-    actor: audit.actor,
-    actorType: audit.actorType ?? "ui_admin",
-    actorIp: audit.actorIp,
-    sessionId: audit.sessionId,
-    source: audit.source ?? "admin_access_config_api",
-    targetId: audit.targetId,
-    oldSummary: audit.oldSummary,
-    newSummary: audit.newSummary,
-    diff: audit.diff,
-    requestId: audit.requestId,
-    idempotencyKey: audit.idempotencyKey
-  } : undefined);
+  // ── durable intent: persisted BEFORE any configuration is written ──────────
+  let intentId: number | undefined;
+  if (audit?.enabled) {
+    const intent = await beginConfigAuditIntent(
+      projectRoot,
+      relPath,
+      {
+        enabled: true,
+        changeType: audit.changeType,
+        assetKind: audit.assetKind ?? options.assetKind ?? "governance",
+        operation: audit.operation,
+        actor: audit.actor,
+        actorType: audit.actorType ?? "ui_admin",
+        actorIp: audit.actorIp,
+        sessionId: audit.sessionId,
+        source: audit.source ?? options.source,
+        targetId: audit.targetId,
+        oldSummary: audit.oldSummary,
+        newSummary: audit.newSummary,
+        diff: audit.diff,
+        requestId: audit.requestId,
+        idempotencyKey: audit.idempotencyKey
+      },
+      { newText: content }
+    );
+    intentId = intent.intentId;
+    if (intentId === undefined) {
+      // No durable intent ⇒ no configuration write at all.
+      throw new Error("audit_intent_unavailable: 配置审计意图未持久化，本次未写入任何配置");
+    }
+  }
+
+  /**
+   * Restore the previous configuration and re-commit the previous policy. When the
+   * restore cannot be verified, Lucy must not keep serving permissions from an unknown
+   * state: the recovery gate degrades the runtime and blocks further writes.
+   */
+  const rollbackAndVerify = async (failure: unknown): Promise<AccessConfigWriteResult> => {
+    const reason = failure instanceof Error ? failure.message : String(failure);
+    try {
+      if (previousRaw !== undefined) {
+        await safeWriteAtomic(paths, projectRoot, relPath, previousRaw);
+      } else {
+        await safeRemove(paths, projectRoot, relPath);
+      }
+    } catch (restoreError) {
+      const restoreReason = restoreError instanceof Error ? restoreError.message : String(restoreError);
+      await markAccessRecoveryRequired(projectRoot, {
+        reason: `restore_failed:${restoreReason}`,
+        operationId: intentId === undefined ? undefined : String(intentId)
+      });
+      await commitEffectivePolicy();
+      await completeConfigAuditTerminal(intentId, {
+        writeStatus: "failed",
+        errorReason: `recovery_required:${restoreReason}`
+      }).catch(() => undefined);
+      throw new AccessRecoveryRequiredError({
+        required: true,
+        reason: `restore_failed:${restoreReason}`
+      });
+    }
+
+    const rollbackStatus = await commitEffectivePolicy();
+    const previousDigest =
+      previousRaw === undefined ? "" : computeAccessConfigDigest(parse(previousRaw) as Parameters<typeof computeAccessConfigDigest>[0]);
+    // Verification is a direct fact — the runtime now reflects the restored bytes.
+    // It must NOT reuse `evaluateRuntimeAck`, whose policy is "the caller may not be
+    // acked", and which would turn a successful rollback into a false recovery alarm.
+    const rollbackVerified =
+      previousRaw === undefined ? true : rollbackStatus.accessConfigDigest === previousDigest;
+
+    if (!rollbackVerified) {
+      await markAccessRecoveryRequired(projectRoot, {
+        reason: `rollback_unverified:${reason}`,
+        operationId: intentId === undefined ? undefined : String(intentId)
+      });
+      // The recovery gate makes the runtime degrade globally: the data plane denies
+      // instead of serving rows under an unverified policy.
+      await commitEffectivePolicy();
+      await completeConfigAuditTerminal(intentId, {
+        writeStatus: "failed",
+        errorReason: `recovery_required:${reason}`
+      }).catch(() => undefined);
+      throw new AccessRecoveryRequiredError({
+        required: true,
+        reason: `rollback_unverified:${reason}`
+      });
+    }
+
+    await completeConfigAuditTerminal(intentId, {
+      writeStatus: "rolled_back",
+      errorReason: reason
+    }).catch(() => undefined);
+
+    return {
+      auditId: intentId,
+      policyVersion: rollbackStatus.policyVersion,
+      policyRuntimeAck: false,
+      runtimeAck: false,
+      rolledBack: true
+    };
+  };
+
+  try {
+    await auditedWriteFile(
+      projectRoot,
+      relPath,
+      content,
+      audit
+        ? {
+            enabled: true,
+            changeType: audit.changeType,
+            assetKind: audit.assetKind ?? options.assetKind ?? "governance",
+            operation: audit.operation,
+            actor: audit.actor,
+            actorType: audit.actorType ?? "ui_admin",
+            actorIp: audit.actorIp,
+            sessionId: audit.sessionId,
+            source: audit.source ?? options.source,
+            targetId: audit.targetId,
+            oldSummary: audit.oldSummary,
+            newSummary: audit.newSummary,
+            diff: audit.diff,
+            requestId: audit.requestId,
+            idempotencyKey: audit.idempotencyKey
+          }
+        : undefined,
+      { intentId, deferTerminal: true }
+    );
+  } catch (error) {
+    await completeConfigAuditTerminal(intentId, {
+      writeStatus: "failed",
+      errorReason: error instanceof Error ? error.message : String(error)
+    }).catch(() => undefined);
+    throw error;
+  }
 
   // Spec 98 §8.2 — commit after write; ack only when runtime digest matches this write.
-  let status = await commitEffectivePolicy();
-  let runtimeAck = evaluateRuntimeAck(status, expectedDigest);
+  const status = await commitEffectivePolicy();
+  const runtimeAck = evaluateRuntimeAck(status, expectedDigest);
 
   // Spec 98 §8.2 step 4 — runtime switch/compile failure → roll disk back; never ack stale widen.
-  if (!runtimeAck && previousRaw !== undefined) {
-    const { writeFile } = await import("node:fs/promises");
-    await writeFile(accessPath, previousRaw, "utf8");
-    status = await commitEffectivePolicy();
-    runtimeAck = false;
+  if (!runtimeAck) {
+    return rollbackAndVerify(new Error("runtime_ack_failed: 运行态策略未确认本次写入"));
+  }
+
+  try {
+    await completeConfigAuditTerminal(intentId, {
+      writeStatus: "committed",
+      diff: audit?.diff,
+      oldSummary: audit?.oldSummary,
+      newSummary: audit?.newSummary
+    });
+  } catch (error) {
+    // The terminal audit could not be persisted. The configuration must not stay in
+    // place without a valid terminal record: revert and re-commit the old policy.
+    return rollbackAndVerify(error);
   }
 
   // T04-3 / Spec §3.3 — narrower authority is persisted and committed above;
   // cancel in-flight work and clear caches before this write reports success.
-  const narrowed = narrowingScopeForWrite(previousRaw, toWrite);
-  if (narrowed) await narrowAuthorization(narrowed);
+  await options.onCommitted?.(previousRaw);
 
   return {
-    ...writeResult,
+    auditId: intentId,
     policyVersion: status.policyVersion,
     policyRuntimeAck: runtimeAck,
     runtimeAck

@@ -277,7 +277,7 @@ let auditExportSequence = 0;
 
 export type ConfigAuditAssetKind = "governance" | "semantic" | "wiki" | "eval" | "publish" | "skill";
 export type ConfigAuditActorType = "ui_admin" | "batch_job" | "system";
-export type ConfigAuditWriteStatus = "pending" | "committed" | "failed";
+export type ConfigAuditWriteStatus = "pending" | "committed" | "failed" | "rolled_back";
 
 function ensureColumn(database: Database.Database, table: string, column: string, definition: string): void {
   const rows = database.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
