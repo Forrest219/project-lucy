@@ -15,32 +15,8 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { loadCatalog } from "./lib/catalog.mjs";
 import { EXIT_CODES, fail, loadRun, parseArgv } from "./lib/common.mjs";
+import { annotationsOf, iterTests, testStatus } from "./lib/playwright-report.mjs";
 import { statusFromAssertions } from "./run-security.mjs";
-
-function* iterTests(suite) {
-  for (const spec of suite.specs ?? []) for (const test of spec.tests ?? []) yield { title: spec.title, test };
-  for (const child of suite.suites ?? []) yield* iterTests(child);
-}
-
-function annotationsOf(test) {
-  // Playwright reports a test's annotations both on the test and on each result; count each fact once.
-  const seen = new Set();
-  return [...(test.annotations ?? []), ...(test.results ?? []).flatMap((r) => r.annotations ?? [])].filter((a) => {
-    const key = `${a.type}\u0000${a.description}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
-function testStatus(test) {
-  const annotations = annotationsOf(test);
-  if (annotations.some((a) => a.type === "blocked")) return "blocked";
-  const last = test.results?.at(-1)?.status;
-  if (test.status === "skipped" || last === "skipped") return "skipped";
-  if (test.status === "expected" && last === "passed") return "passed";
-  return "failed";
-}
 
 export function managementCapabilities(run, env = process.env) {
   const caps = new Set(["lucy-http", "browser"]);

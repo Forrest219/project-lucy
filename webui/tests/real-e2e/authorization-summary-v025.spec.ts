@@ -21,16 +21,12 @@
 //     `case` annotation type instead of `covers()`.
 
 import { expect, test, type TestInfo } from "@playwright/test";
-import { assertion, blockUnless, covers } from "./helpers/blocked";
+import { assertion, blockUnless, covers, coversV025 } from "./helpers/blocked";
 import { fixtureAgentTokens, ownerContext, runContext } from "./helpers/run-context";
 import { vault } from "./helpers/secret-capture";
 
 /** The 14 ASV execution ids, in order. */
 const ASV_IDS = Array.from({ length: 14 }, (_, i) => `ASV25-${String(i + 1).padStart(2, "0")}`);
-
-function coversV025(testInfo: TestInfo, ...executionIds: string[]): void {
-  for (const id of executionIds) testInfo.annotations.push({ type: "case", description: id });
-}
 
 /** Table keys carried by an authorization summary, whatever its exact nesting is. */
 function summaryTableKeys(summary: unknown): string[] {

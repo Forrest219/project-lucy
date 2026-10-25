@@ -28,15 +28,11 @@
 //     `case` annotation type instead of `covers()`.
 
 import { expect, test, type TestInfo } from "@playwright/test";
-import { assertion, blockUnless, covers } from "./helpers/blocked";
+import { assertion, blockUnless, covers, coversV025 } from "./helpers/blocked";
 import { ownerContext, runContext } from "./helpers/run-context";
 
 /** The 14 ACM execution ids, in order. */
 const ACM_IDS = Array.from({ length: 14 }, (_, i) => `ACM25-SC-${String(i + 1).padStart(2, "0")}`);
-
-function coversV025(testInfo: TestInfo, ...executionIds: string[]): void {
-  for (const id of executionIds) testInfo.annotations.push({ type: "case", description: id });
-}
 
 test.describe.configure({ mode: "serial" });
 

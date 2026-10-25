@@ -23,7 +23,7 @@
 //   (the instance itself comes from scripts/e2e/prepare-environment.mjs).
 
 import { test, type TestInfo } from "@playwright/test";
-import { assertion, blockUnless, covers } from "./helpers/blocked";
+import { assertion, blockUnless, covers, coversV025 } from "./helpers/blocked";
 import { fixtureAgentTokens, mcpCall, ownerContext } from "./helpers/run-context";
 import { vault } from "./helpers/secret-capture";
 
@@ -39,11 +39,6 @@ const REGION_QUERY = {
   measures: ["spend_cents"],
   dimensions: ["region"]
 };
-
-/** Records the v0.25 execution ids this test is the browser dimension of. */
-function execution(testInfo: TestInfo, ...ids: string[]): void {
-  for (const id of ids) testInfo.annotations.push({ type: "execution", description: id });
-}
 
 type McpResult = { status: number; text: string };
 
@@ -98,7 +93,7 @@ async function queryRegions(token: string): Promise<{ regions: string[]; raw: st
 
 test("the preview of a multi-role grant keeps the OR-of-AND shape and the runtime honours the same union", async ({ browser, baseURL }, testInfo) => {
   covers(testInfo, "SEC-14-V04", "SEC-14-V10");
-  execution(testInfo, "ROW25-V08", "ROW25-V12");
+  coversV025(testInfo, "ROW25-V08", "ROW25-V12");
   blockUnless(testInfo, "lucy-http", "browser", "postgres", "agent-client");
 
   const tokens = fixtureAgentTokens();
@@ -175,7 +170,7 @@ test("the preview of a multi-role grant keeps the OR-of-AND shape and the runtim
 
 test("a single restricted Role sees only its own rows and never the other Role's branch", async ({}, testInfo) => {
   covers(testInfo, "SEC-14-V03");
-  execution(testInfo, "ROW25-V09", "ROW25-V10");
+  coversV025(testInfo, "ROW25-V09", "ROW25-V10");
   blockUnless(testInfo, "lucy-http", "browser", "postgres", "agent-client");
 
   const tokens = fixtureAgentTokens();
@@ -209,7 +204,7 @@ test("a single restricted Role sees only its own rows and never the other Role's
 
 test("a table the Role does not grant stays invisible, and an unknown Role id matches no Role", async ({ browser, baseURL }, testInfo) => {
   covers(testInfo, "SEC-13-V01", "SEC-14-V05");
-  execution(testInfo, "ROW25-V04", "ROW25-V05");
+  coversV025(testInfo, "ROW25-V04", "ROW25-V05");
   blockUnless(testInfo, "lucy-http", "browser", "postgres", "agent-client");
 
   const tokens = fixtureAgentTokens();

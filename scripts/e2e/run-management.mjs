@@ -17,6 +17,18 @@ import { scanRetainedArtifacts } from "./lib/leak-scan.mjs";
 import { ExternalInstance, LucyProcess } from "./lib/instance.mjs";
 import { reconcileExternalFlag, TargetIdentityError } from "./lib/target-identity.mjs";
 import { managementCapabilities, writeManagementEvidence } from "./collect-management-results.mjs";
+import { writeV025Evidence } from "./collect-v025-results.mjs";
+import { loadCoverage } from "./lib/v025-coverage.mjs";
+
+/** Reads a JSON file if it exists; a missing file is not an error here. */
+function readJsonIfExists(file) {
+  if (!file || !existsSync(file)) return null;
+  try {
+    return JSON.parse(readFileSync(file, "utf8"));
+  } catch {
+    return null;
+  }
+}
 
 function progressLog(run, message) {
   try {
@@ -175,6 +187,16 @@ try {
   if (leak.status === "failed") evidence.status = "failed";
   evidence.artifactScan = leak;
   writeFileSync(out, `${JSON.stringify(evidence, null, 2)}\n`);
+  // v0.25 execution items: the 173 new items get their per-dimension status from
+  // this run's browser leg. The frozen evidence above is NOT affected by this
+  // file — it is a separate report, and a v0.25 item is never a frozen case.
+  const v025 = writeV025Evidence(run, {
+    coverage: loadCoverage(),
+    report,
+    capabilities: managementCapabilities(run),
+    journeyState: readJsonIfExists(path.join(run.paths.runDir, "j01-state.json"))
+  });
+  progressLog(run, `v0.25 execution-item evidence written to ${v025.dir} (${v025.results.length} items)`);
   exitCode = EXIT_CODES[evidence.status];
   process.stdout.write(`${JSON.stringify({ status: evidence.status, exitCode, out, summary: evidence.summary, artifactScan: leak })}\n`);
 } finally {

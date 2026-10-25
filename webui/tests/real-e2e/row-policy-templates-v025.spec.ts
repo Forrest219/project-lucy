@@ -25,7 +25,7 @@
 //     `case` annotation type instead of `covers()`.
 
 import { expect, test, type TestInfo } from "@playwright/test";
-import { assertion, blockUnless, covers } from "./helpers/blocked";
+import { assertion, blockUnless, covers, coversV025 } from "./helpers/blocked";
 import { ownerContext, runContext } from "./helpers/run-context";
 import { vault } from "./helpers/secret-capture";
 
@@ -40,15 +40,6 @@ const RTV_IDS = [
   "RTV25-01", "RTV25-02", "RTV25-03", "RTV25-04",
   "RTV25-05", "RTV25-06", "RTV25-07", "RTV25-08"
 ];
-
-/**
- * Links the v0.25 execution ids to the report. They are not catalog cases, so `covers()`
- * (which the frozen-catalog collector reads) is not used for them; the annotation TYPE is
- * the same (`case`) so a v0.25 collector can read them from the same report.
- */
-function coversV025(testInfo: TestInfo, ...executionIds: string[]): void {
-  for (const id of executionIds) testInfo.annotations.push({ type: "case", description: id });
-}
 
 /** The canonical source key of a row-policy table entry: connection / schema / source. */
 function tableKey(entry: { connectionId?: string; schema?: string; sourceName?: string }): string {

@@ -30,7 +30,7 @@
 
 import type { TestInfo } from "@playwright/test";
 import { expect, test } from "@playwright/test";
-import { assertion, blockUnless, covers } from "./helpers/blocked";
+import { assertion, blockUnless, covers, coversV025 } from "./helpers/blocked";
 import { fixtureAgentTokens, ownerContext, parseCsv, runContext } from "./helpers/run-context";
 import { vault } from "./helpers/secret-capture";
 
@@ -40,16 +40,6 @@ const rpc = (id: number, name: string, args: Record<string, unknown>) => ({
   method: "tools/call",
   params: { name, arguments: args }
 });
-
-/**
- * The v0.25 execution ids are NOT part of the frozen release catalog, so they
- * cannot go through `covers()` (which the frozen management collector reads).
- * They are recorded under their own annotation type; the frozen collector
- * ignores it and the v0.25 result writer reads it.
- */
-function coversV025(testInfo: TestInfo, ...ids: string[]): void {
-  for (const id of ids) testInfo.annotations.push({ type: "v025-case", description: id });
-}
 
 type ReconciliationContext = {
   watermarkSeq?: number;

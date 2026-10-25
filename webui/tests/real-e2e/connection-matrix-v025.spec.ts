@@ -35,7 +35,7 @@
 //   * No trace / screenshot / video; no secret is written to disk or logged.
 
 import { expect, test, type TestInfo } from "@playwright/test";
-import { assertion, blockUnless, covers } from "./helpers/blocked";
+import { assertion, blockUnless, covers, coversV025 } from "./helpers/blocked";
 import { ownerContext, runContext } from "./helpers/run-context";
 import { vault } from "./helpers/secret-capture";
 
@@ -54,10 +54,6 @@ const DATABASE_TYPE_KEYS = [
 const PROBE_HOST = "127.0.0.1";
 const PROBE_PORT = 1;
 const PROBE_PASSWORD = "E2eProbePassword-NotARealCredential";
-
-function coversV025(testInfo: TestInfo, ...executionIds: string[]): void {
-  for (const id of executionIds) testInfo.annotations.push({ type: "case", description: id });
-}
 
 test.describe.configure({ mode: "serial" });
 

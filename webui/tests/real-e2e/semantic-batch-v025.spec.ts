@@ -22,16 +22,11 @@
 //   (the instance itself comes from scripts/e2e/prepare-environment.mjs).
 
 import { expect, test, type TestInfo } from "@playwright/test";
-import { assertion, blockUnless, covers } from "./helpers/blocked";
+import { assertion, blockUnless, covers, coversV025 } from "./helpers/blocked";
 import { fixtureCanaries, ownerContext } from "./helpers/run-context";
 import { vault } from "./helpers/secret-capture";
 
 test.describe.configure({ mode: "serial" });
-
-/** Records the v0.25 execution ids this test is the browser dimension of. */
-function execution(testInfo: TestInfo, ...ids: string[]): void {
-  for (const id of ids) testInfo.annotations.push({ type: "execution", description: id });
-}
 
 /** A semantic overlay that parses but is not a legal asset (YAML top level is a scalar). */
 const ILLEGAL_YAML = "just-a-string-not-a-mapping\n";
@@ -64,7 +59,7 @@ type ValidateResponse = {
 
 test("every semantic-asset read and write path refuses an anonymous or forged session and writes nothing", async ({ browser, baseURL }, testInfo) => {
   covers(testInfo, "SEC-15-V01", "SEC-15-V02", "SEC-15-V03");
-  execution(testInfo, "SEM25-V17", "SEM25-V09");
+  coversV025(testInfo, "SEM25-V17", "SEM25-V09");
   blockUnless(testInfo, "lucy-http", "browser");
 
   const context = await ownerContext(browser);
@@ -134,7 +129,7 @@ test("every semantic-asset read and write path refuses an anonymous or forged se
 
 test("the publish workbench keeps its action boundary and stays behind the login wall", async ({ browser, baseURL }, testInfo) => {
   covers(testInfo, "SEC-15-V04");
-  execution(testInfo, "SEM25-V20", "SEM25-V16");
+  coversV025(testInfo, "SEM25-V20", "SEM25-V16");
   blockUnless(testInfo, "lucy-http", "browser");
 
   // 1. an anonymous browser never reaches the workbench
@@ -176,7 +171,7 @@ test("the publish workbench keeps its action boundary and stays behind the login
 
 test("an illegal semantic batch is refused by validation and by publish, and the committed state does not move", async ({ browser, baseURL }, testInfo) => {
   covers(testInfo, "SEC-15-V05", "SEC-15-FM-01");
-  execution(testInfo, "SEM25-V05", "SEM25-V06");
+  coversV025(testInfo, "SEM25-V05", "SEM25-V06");
   blockUnless(testInfo, "lucy-http", "browser");
 
   const context = await ownerContext(browser);
