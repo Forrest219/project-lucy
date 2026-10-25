@@ -204,10 +204,19 @@ security:
   insecureHttpTestProfile: false
 
 # -------------------------------------------------------------------
-# Reserved for v2.5 enterprise OIDC. v2.0 does not inject this block into
-# the pod and does not contact the issuer. Fill it only as a record of the
-# future client registration. Keep the client secret in a Kubernetes Secret,
-# never in this file.
+# Enterprise OIDC single sign-on (Lucy v0.25 / L25-06).
+#
+# DEFAULT OFF. `oidc.enabled=false` renders NO OIDC ConfigMap, NO OIDC
+# Secret volume, NO mounts and NO env vars — the install is identical to a
+# pre-OIDC deployment. Local login, first-owner bootstrap and break-glass
+# are never affected by OIDC (Spec §10.1 / D10).
+#
+# When enabled, the pod receives exactly two env vars, both FILE paths:
+#   LUCY_OIDC_CONFIG_FILE        -> /data/lucy/oidc/profile.yaml
+#   LUCY_OIDC_CLIENT_SECRET_FILE -> /data/lucy/oidc/client-secret
+# The client secret VALUE never appears in this file, in a ConfigMap, in
+# the pod env, or in a command-line argument. It is referenced by the name
+# of a customer-managed Kubernetes Secret only.
 #
 # Example for an intranet authorization-code client (not applied):
 #   issuer: https://oidc.ksyun.com
@@ -219,9 +228,16 @@ security:
 # -------------------------------------------------------------------
 webui:
   # HTTPS origin that will be registered as the OIDC redirect_uri origin.
+  # Must be an https origin without path, query or fragment. The chart
+  # refuses to render when oidc.enabled=true and this is empty or http.
   publicUrl: ""
 
 oidc:
+  # Master switch. Keep it false unless the customer has an existing OIDC
+  # provider registration AND a client-secret Secret ready. This is the
+  # single most important safety property of the OIDC delivery.
+  enabled: false
+
   issuer: ""
   discoveryUrl: ""
   authorizationEndpoint: ""
@@ -229,10 +245,19 @@ oidc:
   jwksUri: ""
   endSessionEndpoint: ""
   clientId: ""
-  scopes: "openid profile email offline_access"
+  # Spec §4.2: `openid` is mandatory. The default must NOT request
+  # `offline_access` (D12 — no refresh token is stored or used).
+  scopes: "openid profile email"
   tokenEndpointAuth: client_secret_post
   logoutStyle: id_token_hint
   redirectPath: /api/auth/oidc/callback
+
+  # Name of the customer's EXISTING Kubernetes Secret that holds the OIDC
+  # client secret. The chart mounts it read-only and never renders it.
+  # NEVER put the secret value in this file.
+  existingSecret: ""
+  # Key inside `existingSecret` that holds the client secret value.
+  clientSecretKey: ""
 
 # Extra env sources — for example, projecting keys from existingSecret as
 # env vars (NOT as files). Use sparingly; most customer secrets should

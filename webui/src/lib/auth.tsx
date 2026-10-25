@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { QueryClientContext } from "@tanstack/react-query";
 import { apiGet, apiPost, ApiError, bumpAuthEpoch, setAuthLostHandler } from "./apiClient";
 import { isPublicQueryKey } from "./displayQueryOptions";
+import { markLoggedOut } from "./logoutSignal";
 
 export type AuthMode = "open" | "bootstrap" | "required" | "unavailable";
 
@@ -107,6 +108,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     resetProtectedQueries();
     try {
       await apiPost("/api/auth/logout", {});
+      // An explicit signal that this session ended ON PURPOSE. The login page
+      // must not tell a user they logged out when their session merely expired
+      // or they followed a deep link (Spec §7.1).
+      markLoggedOut();
     } finally {
       await refresh();
     }

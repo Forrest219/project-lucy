@@ -168,13 +168,25 @@ export async function readSessionClaims(request: FastifyRequest): Promise<Sessio
   return unseal(raw, secret);
 }
 
-export function setSessionCookie(reply: FastifyReply, token: string, exp: number): void {
+export function buildSessionCookie(token: string, exp: number): string {
   const maxAge = Math.max(0, exp - Math.floor(Date.now() / 1000));
   const secure = resolveCookieSecure().secure ? "; Secure" : "";
-  reply.header(
-    "Set-Cookie",
-    `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`
-  );
+  return `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`;
+}
+
+/**
+ * Unseals a session token directly.
+ *
+ * Used when a session was issued but never delivered to a browser: the caller
+ * holds the token and has to revoke the durable row behind it.
+ */
+export async function parseSessionClaims(token: string): Promise<SessionClaims | null> {
+  const secret = await loadOrCreateSecret();
+  return unseal(token, secret);
+}
+
+export function setSessionCookie(reply: FastifyReply, token: string, exp: number): void {
+  reply.header("Set-Cookie", buildSessionCookie(token, exp));
 }
 
 export function clearSessionCookie(reply: FastifyReply): void {

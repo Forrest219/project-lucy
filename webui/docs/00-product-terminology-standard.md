@@ -4,7 +4,7 @@
 |---|---|
 | 文档名称 | Lucy Product Terminology Standard |
 | 文档类型 | System-wide Product Language / Terminology Standard |
-| 版本 | v0.2；2026-10-19 v0.2-draft：增补 Spec 173 v0.3 / 2026-10-19 audit-trust 新增术语（凭证主体 / 已确认关联 / 候选关联 / 归属待核验 / 客户端采集范围 / 工具调用数 / 原文登记分组占比 / 证据校验），登记于 §4.7.1，与 `inbox/audit-trust/audit-trust-2026-10-19-r1/T00-r2/` 同批生效 |
+| 版本 | v0.2；2026-10-19 v0.2-draft：增补 Spec 173 v0.3 / 2026-10-19 audit-trust 新增术语（凭证主体 / 已确认关联 / 候选关联 / 归属待核验 / 客户端采集范围 / 工具调用数 / 原文登记分组占比 / 证据校验），登记于 §4.7.1，与 `inbox/audit-trust/audit-trust-2026-10-19-r1/T00-r2/` 同批生效；2026-10-25 增补 §4.11 OIDC 单点登录术语；同日增补 §4.10 Skill 负责人和 §4.12 SMTP 通知术语 |
 | 撰写日期 | 2026-07-31；2026-08-01 v0.2（新增 Data Agent Ops Control Plane / Data Agent 运维控制台，标记『语义维护工作台』与『运维控制面』为弃用别名）；2026-08-05 增补 §4.8 MCP 调试台术语（Spec 99）；同日 Spec 100 交叉审阅补齐 incomplete / impact / evidence / 裁决双行；2026-08-06 Spec 109 增补目录重命名术语；2026-08-06 Spec 114/115 增补表 YAML 导入与工作台校验披露术语；2026-08-06 Spec 117 增补 Remove Schema 术语；2026-08-20 增补 §4.7.1 Trace Read Model 术语（Spec 62 v0.5）；2026-08-25 Spec 127 增补 Delete Connection 术语；2026-08-26 增补 §4.9 可选 Agent Chat（A3）术语；2026-09-03 Spec 140 增补访问日志双粒度 CSV 导出术语；2026-09-03 Spec 141 增补访问日志 CSV 字段说明与本地时间术语；2026-09-04 Spec 143 增补调用监控与运行状态分组术语；2026-09-11 Spec 142 为 `/overview` 聚焦精简；2026-09-23 Spec 144 增补 Skill / 业务 Skill；Spec 145 增补待同步文件与表语义校验分计；同日 Spec 144 v1.1 增补导航组名「业务上下文」（原「语义建模」组更名，「语义建模」保留为概念词）；2026-09-24 Spec 148 增补界面使用、页面访问、访问账户、活跃菜单与分组/菜单/页面访问排行；同日 Spec 149 增补运维问数连接与运维问数角色；2026-10-12 增补启用表范围「状态筛选」筛选维术语；2026-10-19 Spec 99 v1.3 明确调试台裁决卡与访问日志双行分工；同日 v1.5 连上检查只回答能连上或不能连上 |
 | 适用范围 | Lucy WebUI、API 用户可见错误、Toast、Modal、Drawer、表格列名、导航、测试断言、Spec、Plan、Runbook、交付文档 |
 | 维护者 | Product / UX / Architecture Review |
@@ -795,8 +795,39 @@ Skill 是与语义资产、业务 Wiki 并列的受治理上下文。导航与�
 | Accessible Roles | 可访问角色 | 授权角色（辅助说明） | — | Skill `roles_allowed` / Wiki `allowed_roles` 的对象授权控件（2026-10-18 T05/T06 恢复）；默认无人可见；同一 Role 须同时具备对象授权与通道才可用 |
 | All Roles Visible | 所有角色可见 | 全员可用、公开（作主标签） | 匿名公开、免登录 | 对应 `["*"]`：所有有效已分配 Role 可匹配，仍检查通道与 Skill 状态；需独立开关与二次确认 |
 | No Roles Visible | 无人可见 | 私有（含义不明确） | — | 缺失或空数组；新建 Skill / Wiki 的默认状态，管理台受信任管理员仍可维护 |
+| Skill Owner | 负责人 | 所有者、管理员、审批人 | L25-04；自由文本人员或团队治理标签，不是登录账户，不产生授权或通知 |
+| Unassigned Skill Owner | 未指定 | 无负责人账户、负责人异常 | Skill 未设置负责人时的正常显示 |
 
-Protected terms（DOM 须 `translate="no"` + `notranslate`）：`Skill`、`lucy-skill://`、`lucy_skill_read`、`domain`、`roles_allowed`、Skill 文件路径、`SKILL.md`。
+Protected terms（DOM 须 `translate="no"` + `notranslate`）：`Skill`、`lucy-skill://`、`lucy_skill_read`、`domain`、`roles_allowed`、`owner`、`owner_invalid`、Skill 文件路径、`SKILL.md`。
+
+### 4.11 OIDC 单点登录（L25-06）
+
+OIDC 只承担 WebUI 认证；登录账户、所有者／运维职责与 MCP 数据面授权仍由 Lucy 既有合同决定。
+
+| Canonical Term | UI 主术语 | 允许补充说法 | 禁止文案 | 说明 |
+|---|---|---|---|---|
+| OIDC Single Sign-On | 单点登录 | OIDC 登录（技术叙述） | 免密登录、统一权限 | Authorization Code Flow；不代表自动授权或自动注册 |
+| Identity Provider | 身份源 | 组织身份源 | 权限源 | 承担 OIDC 凭据认证、找回与客户侧 MFA |
+| Local Login | 本地账户登录 | 本地登录 | 管理员后门 | 正式保留的降级与恢复路径；使用登录账户 id 与本地密码 |
+| OIDC Identity Binding | OIDC 身份绑定 | 身份绑定（上下文明确时） | 邮箱绑定 | 唯一匹配键为 `(issuer, sub)`；email 不参与认证 |
+| Login Method | 登录方式 | 认证方式（技术叙述） | 权限方式 | 本地账户登录或单点登录；不与 MCP Agent Token 混用 |
+| Identity Provider Logout | 身份源退出 | IdP 退出（技术叙述） | 退出所有账户（指 Lucy 本地退出） | L25-06 不实现；退出 Lucy 后身份源会话可能仍有效 |
+
+Protected terms（DOM 须 `translate="no"` + `notranslate`）：`OIDC`、`PKCE`、`IdP`、`issuer`、`sub`、URL、登录账户 id、配置文件名与路径。
+
+### 4.12 可选 SMTP 通知（L25-05）
+
+邮件通知只承载部署方选择的通知，不改变登录账户、认证、恢复或审计事实源。`queued` 表示已加入通知队列，不表示 SMTP 已接受或收件箱已送达。
+
+| Canonical Term | UI 主术语 | 允许补充说法 | 禁止文案 | 说明 |
+|---|---|---|---|---|
+| Email Notification | 邮件通知 | 通知邮件 | 邮箱登录、找回密码 | L25-05 首批仅审计健康提醒与测试邮件 |
+| SMTP Configuration | SMTP 配置 | 发信配置 | 邮箱账户配置 | profile 与 Secret 文件分离；默认关闭 |
+| Notification Queue | 通知队列 | 发信队列（技术叙述） | 已发送、已送达（指 queued） | 持久 outbox；不是审计账本 |
+| Test Email | 测试邮件 | SMTP 测试 | 发送成功（指 202 queued） | 202 主文案为「测试邮件已加入发送队列」 |
+| Audit Health Alert | 审计健康提醒 | 审计账本提醒 | 审计完整保证、全部系统告警 | 仅指账本不可用与对应恢复事件 |
+
+Protected terms（DOM 须 `translate="no"` + `notranslate`）：`SMTP`、`TLS`、`STARTTLS`、`CA`、`Secret`、`queued`、`sending`、`sent`、`dead`、文件名、路径与 URL。
 
 ## 5. 新术语登记流程
 

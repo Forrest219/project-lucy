@@ -153,6 +153,7 @@ import { registerImportScopeRoutes } from "./admin/import-scope.js";
 import { registerGovernanceObservabilityRoutes } from "./admin/governance-observability.js";
 import { registerUiUsageRoutes } from "./admin/ui-usage.js";
 import { registerAuthRoutes, registerAdminAccountRoutes } from "./auth/routes.js";
+import { registerOidcRoutes } from "./auth/oidc-routes.js";
 import { registerBrandingRoutes } from "./branding.js";
 import { actorIdFromRequest, requireWebuiAuthHook } from "./auth/guard.js";
 import { auditActorFields, trustedActorFromRequest } from "./security/request-actor.js";
@@ -2227,6 +2228,7 @@ export function buildServer() {
 
   registerAuthRoutes(app);
   registerAdminAccountRoutes(app);
+  registerOidcRoutes(app);
   registerBrandingRoutes(app);
   registerAgentRoutes(app);
   registerRoleRoutes(app);

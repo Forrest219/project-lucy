@@ -128,6 +128,7 @@ function normalizeConfig(raw: unknown): AdminsConfig {
     throw new AdminsConfigError("admins.yaml `admins` must be a list");
   }
   const admins: WebuiAdminRecord[] = [];
+  const seenIds = new Set<string>();
   const seenUids = new Set<string>();
   const seenSubjects = new Set<string>();
   const seenEmails = new Set<string>();
@@ -138,6 +139,10 @@ function normalizeConfig(raw: unknown): AdminsConfig {
     const row = item as Record<string, unknown>;
     const id = trimmedString(row.id);
     if (!id) throw new AdminsConfigError("admins.yaml entry has no id");
+    // The account id is the login identity: two rows with the same id would make
+    // every account lookup (and every OIDC binding resolution) ambiguous.
+    if (seenIds.has(id)) throw new AdminsConfigError(`admins.yaml has a duplicate admin id '${id}'`);
+    seenIds.add(id);
     const bindings = parseOidcBindings(row.oidc_bindings, id);
     const passwordHash = trimmedString(row.password_hash);
     if (!passwordHash && !bindings?.length) {
@@ -256,6 +261,62 @@ export function publicAdminView(admin: WebuiAdminRecord): {
     enabled: admin.enabled,
     createdAt: admin.created_at
   };
+}
+
+/**
+ * Owner-facing account view (L25-06 §5.3).
+ *
+ * The public view never carries bindings: `/api/auth/status` and `/api/auth/me`
+ * are reachable without a session, so the identity detail stays behind the owner
+ * boundary.
+ */
+export function ownerAdminView(admin: WebuiAdminRecord): {
+  id: string;
+  displayName: string;
+  role: WebuiAdminRole;
+  enabled: boolean;
+  createdAt: string;
+  loginMethods: ("local" | "oidc")[];
+  oidcBindings: OidcBinding[];
+} {
+  const loginMethods: ("local" | "oidc")[] = [];
+  if (admin.password_hash) loginMethods.push("local");
+  if (admin.oidc_bindings?.length) loginMethods.push("oidc");
+  return {
+    ...publicAdminView(admin),
+    loginMethods,
+    oidcBindings: admin.oidc_bindings ?? []
+  };
+}
+
+export type OidcBindingMatch = {
+  admin: WebuiAdminRecord;
+  binding: OidcBinding;
+};
+
+/**
+ * Exact `(issuer, sub)` match — the only key that authenticates an OIDC subject
+ * (L25-06 §3.1). No trailing-slash, case or URL normalization, and no email
+ * fallback: an email is contact information, never an identity.
+ */
+export function findOidcBinding(config: AdminsConfig, issuer: string, sub: string): OidcBindingMatch | undefined {
+  for (const admin of config.admins) {
+    for (const binding of admin.oidc_bindings ?? []) {
+      if (binding.issuer === issuer && binding.sub === sub) return { admin, binding };
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Owners that are enabled AND still hold a local password.
+ *
+ * This is the recovery floor of L25-06 D05: Lucy must never depend on an external
+ * identity provider alone, so at least one such owner has to survive every
+ * narrowing write.
+ */
+export function countEnabledOwnersWithLocalPassword(config: AdminsConfig): number {
+  return config.admins.filter((a) => a.enabled && a.role === "owner" && Boolean(a.password_hash)).length;
 }
 
 export async function saveAdminsConfig(

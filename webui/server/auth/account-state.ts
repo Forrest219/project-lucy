@@ -9,6 +9,7 @@ import {
 } from "./admins-store.js";
 import {
   newSessionJti,
+  parseSessionClaims,
   readSessionClaims,
   sealSession,
   SESSION_ABSOLUTE_MS,
@@ -148,6 +149,25 @@ export async function issueSession(admin: WebuiAdminRecord, input: IssueSessionI
     if (error instanceof SessionKeyError) return { ok: false, status: 503 };
     throw error;
   }
+}
+
+/**
+ * Revokes a session that was issued but never delivered to a browser.
+ *
+ * Spec §6.2: when the durable login event cannot be written, the session that
+ * was already persisted must not survive in the ledger.
+ */
+export async function revokeUndeliveredSession(token: string): Promise<boolean> {
+  let claims: SessionClaims | null;
+  try {
+    claims = await parseSessionClaims(token);
+  } catch {
+    return false;
+  }
+  if (!claims) return false;
+  const store = await openStore();
+  if (!store) return false;
+  return store.revokeSession(hashSessionJti(claims.jti)).ok;
 }
 
 /** A tombstoned/disabled account is a refused login (401); everything else is store unavailability. */

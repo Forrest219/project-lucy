@@ -38,6 +38,54 @@ helm template lucy deploy/k8s/helm/lucy \
   -f deploy/k8s/helm/lucy/examples/values.k3s-test.yaml
 ```
 
+## OIDC single sign-on (optional, default OFF)
+
+`oidc.enabled` is `false` by default. With the default, the chart renders
+**no** OIDC ConfigMap, Secret volume, mount or env var — the install is
+identical to a pre-OIDC deployment and local login is unaffected.
+
+Enabling it wires exactly two env vars, both file paths:
+
+| Env var | Value | Source |
+|---|---|---|
+| `LUCY_OIDC_CONFIG_FILE` | `/data/lucy/oidc/profile.yaml` | chart-rendered ConfigMap (non-sensitive) |
+| `LUCY_OIDC_CLIENT_SECRET_FILE` | `/data/lucy/oidc/client-secret` | the customer's own Kubernetes Secret |
+
+The client secret **value** never appears in values.yaml, in a ConfigMap, in
+the pod env or in a command-line argument. It is referenced by name only:
+
+```yaml
+webui:
+  publicUrl: https://lucy.example.com   # https origin, no path/query/fragment
+oidc:
+  enabled: true
+  issuer: https://idp.example.com
+  authorizationEndpoint: https://idp.example.com/oauth2/authorize
+  tokenEndpoint: https://idp.example.com/oauth2/token
+  jwksUri: https://idp.example.com/oauth2/jwks
+  clientId: lucy-webui
+  scopes: "openid profile email"
+  tokenEndpointAuth: client_secret_post
+  redirectPath: /api/auth/oidc/callback
+  existingSecret: lucy-oidc-secret      # customer-managed Secret
+  clientSecretKey: client-secret        # key inside that Secret
+```
+
+The chart refuses to render (loudly) when `oidc.enabled=true` and
+`webui.publicUrl` is missing or not an https origin, `security.access` is
+not `https`, `existingSecret` / `clientSecretKey` are empty, `scopes` does
+not contain `openid`, or `extraEnvFrom` would project the client secret
+Secret into the pod env.
+
+The chart never contacts the identity provider: `discoveryUrl`, the
+endpoints and `jwksUri` are plain values, so an offline install stays
+offline. Probes are unchanged and never talk to the IdP.
+
+Setting `oidc.enabled=false` (or rolling back the chart) removes the
+wiring. It does not delete the client secret, the bindings in
+`admins.yaml`, or any local password — local login and break-glass keep
+working.
+
 Customer deployment steps are in:
 
 ```text

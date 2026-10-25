@@ -44,6 +44,9 @@ export function isPublicApi(method: string, url: string): boolean {
   if (m === "POST" && pathOnly === "/api/auth/login") return true;
   if (m === "POST" && pathOnly === "/api/auth/bootstrap") return true;
   if (m === "POST" && pathOnly === "/api/auth/logout") return true;
+  // L25-06 OIDC: the provider redirects the browser here, so both entries stay public.
+  if (m === "POST" && pathOnly === "/api/auth/oidc/start") return true;
+  if (m === "GET" && pathOnly === "/api/auth/oidc/callback") return true;
   if (m === "GET" && pathOnly.startsWith("/api/help")) return true;
   // Spec 126: login + shell brand mark need branding before auth.
   if (m === "GET" && pathOnly === "/api/branding") return true;
