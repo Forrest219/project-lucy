@@ -1116,6 +1116,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
     );
     const writeResult = await writeAccessYaml(projectRoot, newConfig, {
       enabled: true,
+      expectedVersion: currentVersion,
       changeType: rowPolicyAttribution ? "row_policy_update" : "role_patch",
       operation: rowPolicyAttribution ? "row_policy.update" : undefined,
       targetId: request.params.roleId,
@@ -1151,7 +1152,16 @@ export function registerRoleRoutes(app: FastifyInstance) {
       diff,
       ...auditActorFields(trustedActorFromRequest(request)),
       source: "admin_roles_api"
+    }).catch((error: unknown) => {
+      if ((error as { code?: string }).code === "VERSION_CONFLICT") return null;
+      throw error;
     });
+    if (writeResult === null) {
+      return reply.status(409).send({
+        ok: false,
+        error: { code: "VERSION_CONFLICT", message: "yaml has been modified by another source, please refresh" }
+      });
+    }
     const detail = await readAccessYaml(projectRoot);
     return {
       ok: true,

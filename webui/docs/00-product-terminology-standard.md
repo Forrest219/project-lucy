@@ -734,7 +734,7 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`MCP`、`Agent`�
 | Needs-review Signal | 需复核信号 | 需复核 | 越权（无调用当时快照证据时） | 当前授权无对应路径但历史有允许访问；快照缺失不得升级结论 |
 | Credential List | 凭证清单 | Token 清单 | 权限节点、凭证流 | 挂在 Agent 下的 Token 附属区，不承载授权、不参与流守恒 |
 
-以上 v0.25 P1 条目仅登记设计术语（2026-10-25 需求审查通过设计口径），不表示对应页面、API 或验收已交付。
+以上 v0.25 P1 条目仅登记设计术语（2026-10-25 需求审查已签核通过，设计口径），不表示对应页面、API 或验收已交付。
 
 Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Role`、`Agent`、`Token`、`MCP`、`YAML`、`policyVersion`、`permission_model_version`、`capability`、`runtimeAck`、`row_policy`、`row_policy_templates`、`row_access`、`forced_filters`、`constraints`、`RowGrant`、`FinalRows`、`AgentConstraints`、`grantPath`、`accessPath`、`policyVersion`、`sourceMapVersion`、`capabilityDigest`、tool name、`sourceName`、`connectionId`、physical table、规范源键四元组、裁决码全文。
 

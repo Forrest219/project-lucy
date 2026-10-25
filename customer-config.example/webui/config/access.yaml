@@ -10,8 +10,11 @@ roles:
           names:
             - ceo_metric_snapshot
       tools:
-        - sl_query
-        - sl_read_source
+        - lucy_catalog
+        - lucy_query
+        - lucy_read_source
+        - lucy_explain_query
+        - lucy_begin_question
         - wiki_search
         - wiki_read
         - connection_list
@@ -34,8 +37,11 @@ defaults:
     - memory_ingest
     - memory_ingest_status
   known_tools:
-    - sl_query
-    - sl_read_source
+    - lucy_query
+    - lucy_read_source
+    - lucy_explain_query
+    - lucy_catalog
+    - lucy_begin_question
     - wiki_search
     - wiki_read
     - entity_details
@@ -47,8 +53,9 @@ defaults:
     - memory_ingest
     - memory_ingest_status
   table_touching_tools:
-    - sl_query
-    - sl_read_source
+    - lucy_query
+    - lucy_read_source
+    - lucy_explain_query
     - entity_details
   sensitive_metadata_tools:
     - dictionary_search

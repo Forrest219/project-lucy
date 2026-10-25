@@ -4,7 +4,7 @@
 |---|---|
 | 版本 / 日期 | v0.2-spec-baseline / 2026-10-20；2026-10-25 收口，Asia/Shanghai |
 | target_release / 规划编号 | v0.25 / L25-10 |
-| 状态 | **已收口为 P1-4 Spec，需求审查通过；未授权开发，所有动态验证均未执行** |
+| 状态 | **已收口为 P1-4 Spec，需求审查已签核通过；未授权开发，所有动态验证均未执行** |
 | 设计基线 | [Lucy v0.25 Hive 直连 Spec](../specs/lucy-20261025-v0p25-hive-direct-connection-spec.md) |
 | 本次交付 | 接入设计、语义编译复用核查、分阶段任务及贯通验证合同 |
 | 实施边界 | 只修改 Lucy；不修改、复制、打补丁或 monkey-patch KTX 源码、npm dist、Python wheel；不 fork KTX |
@@ -293,4 +293,4 @@ Design System Compliance：未来连接界面沿用既有 Drawer、表单、连�
 
 - 已完成：发布包/wheel 静态核查；方案编写；2026-10-25 收口为 P1-4 Spec 并登记项目索引。
 - 未完成且未执行：编译调用、JDBC 连接、HS2 EXPLAIN/查询、POC、代码/测试/镜像/部署变更及客户验证。
-- 当前状态为需求审查通过、暂不开发；登记 v0.25 不等于授权实现或承诺已支持 Hive，数据库支持状态保持 `planned`。
+- 当前状态为需求审查已签核通过、暂不开发；登记 v0.25 不等于授权实现或承诺已支持 Hive，数据库支持状态保持 `planned`。

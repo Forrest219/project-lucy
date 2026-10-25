@@ -29,7 +29,7 @@
  */
 
 import Database from "better-sqlite3";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { AUDIT_WINDOWS } from "../proxy/ingress-registry.js";
@@ -48,6 +48,8 @@ export type ExportV2Result = {
   relationCheckOk: boolean;
   diagnosticIncomplete: string[];
   csv: string;
+  /** Frozen primary selection reused by every pack attachment. */
+  selectedAccessLogIds: number[];
   manifest: ExportV2Manifest;
 };
 
@@ -113,6 +115,10 @@ export type ExportV2Manifest = {
   paginationRuleVersion: string;
   /** 导出协议包含规则（纳入集合 = 导出集合）。 */
   protocolInclusionRule: string;
+  /** 本次导出实际发生的时间。 */
+  exportedAt: string;
+  /** 完整固定筛选；与实际 SQL 使用同一来源。 */
+  filter: { from: string | null; until: string | null; userId: string | null };
   /** 时间范围与截止时点。 */
   timeRange: { from: string | null; until: string | null };
   cutoffAt: string | null;

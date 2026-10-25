@@ -18,6 +18,16 @@ import { narrowAuthorization, narrowingScopeForWrite } from "../proxy/authorizat
 
 export const ACCESS_YAML_REL = "webui/config/access.yaml";
 
+export class AccessVersionConflictError extends Error {
+  readonly code = "VERSION_CONFLICT";
+  readonly statusCode = 409;
+
+  constructor() {
+    super("yaml has been modified by another source, please refresh");
+    this.name = "AccessVersionConflictError";
+  }
+}
+
 export const ROLE_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
 export interface YamlToken {
@@ -140,6 +150,8 @@ export interface AccessConfigAuditIntent {
   idempotencyKey?: string;
   operation?: string;
   assetKind?: ConfigAuditAssetKind;
+  /** Optional optimistic-concurrency token captured by the read/ preview path. */
+  expectedVersion?: string;
 }
 
 export interface AccessConfigWriteResult {
@@ -166,6 +178,7 @@ async function writeAccessYamlInBarrier(
   const content = stringify(toWrite, { lineWidth: 0 });
   return writeAccessConfigFileWithAuditClosure(projectRoot, ACCESS_YAML_REL, content, audit, {
     source: audit?.source ?? "admin_access_config_api",
+    expectedVersion: audit?.expectedVersion,
     onCommitted: async (previousRaw) => {
       // T04-3 / Spec §3.3 — narrower authority is persisted and committed above;
       // cancel in-flight work and clear caches before this write reports success.
@@ -198,6 +211,7 @@ export async function writeAccessConfigFileWithAuditClosure(
     assetKind?: ConfigAuditAssetKind;
     /** Which publish-window entry class this write belongs to. */
     kind?: PublishEntryKind;
+    expectedVersion?: string;
     onCommitted?: (previousRaw: string | undefined) => Promise<void>;
   }
 ): Promise<AccessConfigWriteResult> {
@@ -221,11 +235,19 @@ async function writeAccessConfigFileWithAuditClosureInner(
     source: string;
     assetKind?: ConfigAuditAssetKind;
     kind?: PublishEntryKind;
+    expectedVersion?: string;
     onCommitted?: (previousRaw: string | undefined) => Promise<void>;
   }
 ): Promise<AccessConfigWriteResult> {
   // Lucy v0.25 (L25-14 §5.3) — an unresolved recovery blocks every further write.
   assertAccessWritesAllowed(await readAccessRecoveryState(projectRoot));
+
+  // D-21: compare the preview token after entering the shared publish window.
+  // A stale candidate can no longer overwrite a newer Role or Agent save.
+  if (options.expectedVersion !== undefined) {
+    const current = await readAccessYamlVersion(projectRoot);
+    if (current.version !== options.expectedVersion) throw new AccessVersionConflictError();
+  }
 
   const paths = await loadContentPaths();
   const accessPath = path.join(projectRoot, relPath);

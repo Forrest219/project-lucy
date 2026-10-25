@@ -721,13 +721,29 @@ function extractZipYamlFiles(
       throw new Error(`${filename} 不是合法 zip：文件数据越界`);
     }
     const compressed = buffer.slice(dataStart, dataEnd);
-    const data =
-      method === 0 ? compressed : method === 8 ? inflateRawSync(compressed) : null;
+    let data: Buffer | null;
+    try {
+      data =
+        method === 0
+          ? compressed
+          : method === 8
+            ? inflateRawSync(compressed, { maxOutputLength: MAX_FILE_BYTES + 1 })
+            : null;
+    } catch (error) {
+      throw new Error(
+        `${filename} 包内文件解压失败或超过 ${MAX_FILE_BYTES / 1024} KB：${rawName}`,
+        { cause: error }
+      );
+    }
     if (!data) {
       throw new Error(`${filename} 包内文件使用了不支持的压缩方法：${rawName}`);
     }
     if (data.length > MAX_FILE_BYTES) {
       throw new Error(`${filename} 包内文件解压后超过 ${MAX_FILE_BYTES / 1024} KB：${rawName}`);
+    }
+    const expandedBytes = files.reduce((sum, file) => sum + Buffer.byteLength(file.content, "utf8"), 0) + data.length;
+    if (expandedBytes > MAX_PACKAGE_BYTES) {
+      throw new Error(`${filename} 解压后超过 ${MAX_PACKAGE_BYTES / 1024 / 1024} MB 上限`);
     }
     files.push({ filename: entryName, content: data.toString("utf8") });
   }
@@ -738,7 +754,15 @@ function extractTarGzYamlFiles(
   filename: string,
   buffer: Buffer
 ): Array<{ filename: string; content: string }> {
-  const tar = gunzipSync(buffer);
+  let tar: Buffer;
+  try {
+    tar = gunzipSync(buffer, { maxOutputLength: MAX_PACKAGE_BYTES + 1 });
+  } catch (error) {
+    throw new Error(
+      `${filename} 解压失败或超过 ${MAX_PACKAGE_BYTES / 1024 / 1024} MB 上限`,
+      { cause: error }
+    );
+  }
   if (tar.length > MAX_PACKAGE_BYTES) {
     throw new Error(`${filename} 解压后超过 ${MAX_PACKAGE_BYTES / 1024 / 1024} MB 上限`);
   }

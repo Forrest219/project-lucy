@@ -5,11 +5,11 @@
 | 文档类型 / 版本 | 功能设计基线 / v0.1-requirements-review |
 | 日期 / 目标版本 | 2026-10-25 / v0.25 |
 | 功能编号 / 优先级 | L25-14 R1、R3 / P1-1 |
-| 状态 | **设计完成、需求审查通过（2026-10-25）；暂不开发，不代表实现或验收通过** |
+| 状态 | **设计完成、需求审查已签核通过（2026-10-25）；暂不开发，不代表实现或验收通过** |
 | 授权来源 | 2026-10-25 Forrest 批准按项目规范完成 P1 梯队 Spec；本轮只做设计与需求审查材料 |
 | 规划入口 | [Lucy v0.25 功能升级建议书](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) §2.8；[P0 Final 决议](../reviews/2026-10-24-lucy-v0.25-p0-final-decision.md) §1 |
 | 审查入口 | [P1 需求审查清单](../plans/2026-10-25-lucy-v0.25-p1-requirements-review-checklist.md) |
-| 审查记录 | [P1 需求审查记录](../reviews/2026-10-25-lucy-v0.25-p1-requirements-review-record.md)（2026-10-25 通过；附带 F-01–F-04 实施前待办） |
+| 审查记录 | [P1 需求审查记录](../reviews/2026-10-25-lucy-v0.25-p1-requirements-review-record.md)（2026-10-25 审查执行通过、PM 已签核；附带 F-01–F-04 实施前待办） |
 | 权威上游 | [行权限管理 Spec](lucy-20261022-v2p5-row-permission-management-spec.md) §3.1、§3.3、§4、§5.1–§5.5、§11、§13；Spec 99／100 |
 | 实施边界 | 单实例／单副本；只改 Lucy，不改 KTX；不改变权限代数、运行时合并或强制谓词语义 |
 

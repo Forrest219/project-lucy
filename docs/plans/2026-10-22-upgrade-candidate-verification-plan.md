@@ -6,7 +6,7 @@
 | 文档类型 | Implementation Plan（v0.25 需求备忘落地） |
 | 版本 | v0.2-spec-baseline |
 | 撰写日期 | 2026-10-22；2026-10-25 收口 |
-| 状态 | **已收口为 P1-6 Spec，需求审查通过；暂不开发，非门禁** |
+| 状态 | **已收口为 P1-6 Spec，需求审查已签核通过；暂不开发，非门禁** |
 | 设计基线 | [Lucy v0.25 升级候选验证 Spec](../specs/lucy-20261025-v0p25-upgrade-candidate-verification-spec.md) |
 | 适用范围 | 用现役实例的一致性备份，在隔离环境验证候选镜像的迁移正确性、业务连续性与审计连续性 |
 | 关联 | L25-07 [客户升级 E2E 自动化](2026-10-19-upgrade-e2e-implementation-plan.md)；[全新部署包生成计划](2026-10-21-customer-v2-fresh-install-package-plan.md)；[v1→2.0 客户升级计划](2026-10-21-customer-20260828-v1-to-lucy-2.0-upgrade-plan.md)；[客户交付预检清单](../runbooks/customer-delivery-preflight-checklist.md) |

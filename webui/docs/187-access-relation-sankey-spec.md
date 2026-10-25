@@ -6,14 +6,14 @@
 | 文档类型 / 版本 | 功能设计基线 / v0.3-requirements-review |
 | 日期 / 目标版本 | 2026-10-20；2026-10-25 收口 / v0.25 |
 | 功能编号 / 优先级 | L25-08 / P1-3 |
-| 状态 | **设计完成、需求审查通过（2026-10-25）；暂不开发，不代表实现或验收通过** |
+| 状态 | **设计完成、需求审查已签核通过（2026-10-25）；暂不开发，不代表实现或验收通过** |
 | 授权来源 | 2026-10-25 Forrest 批准按项目规范完成 P1 梯队 Spec；本轮只做设计与需求审查材料 |
 | 撰写人 / 委托人 | Mavis（minimax Code）；v0.3 由 Kimi 收口 / Forrest |
 | 基于材料 | `docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md`（L25-01 / L25-03）；`webui/docs/06-navigation-ia.md`；`webui/docs/00-product-terminology-standard.md`；`webui/docs/131-lucy-admin-catalog-bound-role-spec.md`；`webui/server/admin/permission-display.ts`；`webui/server/proxy/acl.ts`；`webui/server/proxy/audit.ts`；`webui/server/admin/metric-window.ts`；`webui/docs/design-system/README.md` |
 | 适用范围 | v0.25 治理台 WebUI 的访问关系可视化。授权面读取现有 effective permissions，访问面读取现有审计日志。**不新增授权模型，不改变运行时裁决** |
 | 输出位置 | `webui/docs/187-access-relation-sankey-spec.md` |
 | 规划 / 审查入口 | [v0.25 建议书](../../docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md) L25-08；[P0 Final 决议](../../docs/reviews/2026-10-24-lucy-v0.25-p0-final-decision.md) §1；[P1 需求审查清单](../../docs/plans/2026-10-25-lucy-v0.25-p1-requirements-review-checklist.md) |
-| 审查记录 | [P1 需求审查记录](../../docs/reviews/2026-10-25-lucy-v0.25-p1-requirements-review-record.md)（2026-10-25 通过；附带 F-01–F-04 实施前待办） |
+| 审查记录 | [P1 需求审查记录](../../docs/reviews/2026-10-25-lucy-v0.25-p1-requirements-review-record.md)（2026-10-25 审查执行通过、PM 已签核；附带 F-01–F-04 实施前待办） |
 | v0.3 收口 | 统一 v0.25／P1 元数据；明确访问路径与调用次数、L25-01 同源对账、四项原待定口径；全部验收仍未执行 |
 | 冲突裁决 | 与 `webui/docs/07-mcp-auth-proxy-spec.md`（运行时授权/裁决）冲突 → 该文件；与 `docs/access-control/design-upgrade.md` 冲突 → 该文件。本文只做**展示**，不参与任何授权判定 |
 

@@ -38,12 +38,12 @@
 
 | 文档 | 用途 |
 |---|---|
-| [specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md](specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md) | **v0.25 P1-1，需求审查通过**：L25-14 R1 静态行策略模板与 R3 独立只读反查；共享写入协调与同源诊断，RTP／RTV 全部未执行 |
-| [specs/lucy-20261025-v0p25-access-authorization-summary-spec.md](specs/lucy-20261025-v0p25-access-authorization-summary-spec.md) | **v0.25 P1-2，需求审查通过**：L25-01 Agent 与角色授权摘要、资源卡片、行边界和只读深链；ASV-01–14 全部未执行 |
-| [../webui/docs/187-access-relation-sankey-spec.md](../webui/docs/187-access-relation-sankey-spec.md) | **v0.25 P1-3，需求审查通过**：L25-08 授权／访问双层关系图、凭证清单与快照证据；SC-01–14 全部未执行 |
-| [specs/lucy-20261025-v0p25-hive-direct-connection-spec.md](specs/lucy-20261025-v0p25-hive-direct-connection-spec.md) | **v0.25 P1-4，需求审查通过**：HS2 直连、原版 KTX 只编译与 Lucy JDBC；V01–V17 全部未执行，支持状态 `planned` |
-| [specs/lucy-20261025-v0p25-upgrade-e2e-automation-spec.md](specs/lucy-20261025-v0p25-upgrade-e2e-automation-spec.md) | **v0.25 P1-5，需求审查通过、非门禁**：三种 amd64 部署形态的真实旧版原地升级与恢复；UPG-01–16 全部未执行 |
-| [specs/lucy-20261025-v0p25-upgrade-candidate-verification-spec.md](specs/lucy-20261025-v0p25-upgrade-candidate-verification-spec.md) | **v0.25 P1-6，需求审查通过、非门禁**：空卷整卷恢复与候选迁移验证；RVC-01–13 全部未执行，不是交付通道 |
+| [specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md](specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md) | **v0.25 P1-1，需求审查已签核通过**：L25-14 R1 静态行策略模板与 R3 独立只读反查；共享写入协调与同源诊断，RTP／RTV 全部未执行 |
+| [specs/lucy-20261025-v0p25-access-authorization-summary-spec.md](specs/lucy-20261025-v0p25-access-authorization-summary-spec.md) | **v0.25 P1-2，需求审查已签核通过**：L25-01 Agent 与角色授权摘要、资源卡片、行边界和只读深链；ASV-01–14 全部未执行 |
+| [../webui/docs/187-access-relation-sankey-spec.md](../webui/docs/187-access-relation-sankey-spec.md) | **v0.25 P1-3，需求审查已签核通过**：L25-08 授权／访问双层关系图、凭证清单与快照证据；SC-01–14 全部未执行 |
+| [specs/lucy-20261025-v0p25-hive-direct-connection-spec.md](specs/lucy-20261025-v0p25-hive-direct-connection-spec.md) | **v0.25 P1-4，需求审查已签核通过**：HS2 直连、原版 KTX 只编译与 Lucy JDBC；V01–V17 全部未执行，支持状态 `planned` |
+| [specs/lucy-20261025-v0p25-upgrade-e2e-automation-spec.md](specs/lucy-20261025-v0p25-upgrade-e2e-automation-spec.md) | **v0.25 P1-5，需求审查已签核通过、非门禁**：三种 amd64 部署形态的真实旧版原地升级与恢复；UPG-01–16 全部未执行 |
+| [specs/lucy-20261025-v0p25-upgrade-candidate-verification-spec.md](specs/lucy-20261025-v0p25-upgrade-candidate-verification-spec.md) | **v0.25 P1-6，需求审查已签核通过、非门禁**：空卷整卷恢复与候选迁移验证；RVC-01–13 全部未执行，不是交付通道 |
 | [specs/lucy-20261022-v2p5-row-permission-management-spec.md](specs/lucy-20261022-v2p5-row-permission-management-spec.md) | **v0.25 P0-2，设计完成待需求审查**：L25-14 行权限管理；P0 仅 R2 最终行约束预览、R4 配置审计与 R5 字段诊断，R1 模板与 R3 反查视图归 P1；不改 Spec 99／100 运行时语义，V01–V22 全部未执行 |
 | [specs/lucy-20261021-v2p5-help-center-spec.md](specs/lucy-20261021-v2p5-help-center-spec.md) | **设计交付，未实施**：v0.25 L25-12 系统手册帮助中心体验优化；手册三层 IA 派生、分类 / 文章 / 本页目录与归属化搜索 |
 | [specs/lucy-20261020-v2p5-semantic-batch-operations-spec.md](specs/lucy-20261020-v2p5-semantic-batch-operations-spec.md) | **v0.25 P0-3，设计完成待需求审查**：L25-11 语义资产批量维护完整闭环；共享发布协调器覆盖角色保存等写入口，V01–V22 全部未执行，Wave 0b 未解锁保持 `blocked_delivery` |
@@ -81,7 +81,7 @@
 | `reviews/2026-10-21-customer-20260828-v1-to-lucy-2.0-upgrade-plan-review-crosscheck.md` | **已作废**：上述评审的交叉验证过程稿，不得执行。结论已纳入计划 v0.3 |
 | `reviews/2026-10-20-selectdb-hive-catalog-review.md` | SelectDB / Hive 外部 Catalog 与 Lucy 连接接入评审 |
 | `reviews/2026-10-20-upgrade-feature-validation.md` | 升级功能测试验证与复核（14 项功能映射 + 19 条真实用例） |
-| [reviews/2026-10-25-lucy-v0.25-p1-requirements-review-record.md](reviews/2026-10-25-lucy-v0.25-p1-requirements-review-record.md) | **已审阅**：v0.25 六项 P1 的需求审查记录——逐项核对依据、四条实施前待办（F-01–F-04）与核验动作边界；全部 P1 验收仍未执行，不授权开发 |
+| [reviews/2026-10-25-lucy-v0.25-p1-requirements-review-record.md](reviews/2026-10-25-lucy-v0.25-p1-requirements-review-record.md) | **已签核**：v0.25 六项 P1 的需求审查记录——逐项核对依据、四条实施前待办（F-01–F-04）与核验动作边界；全部 P1 验收仍未执行，不授权开发 |
 | [reviews/2026-10-24-lucy-v0.25-p0-final-decision.md](reviews/2026-10-24-lucy-v0.25-p0-final-decision.md) | **已批准**：v0.25 首批四个 P0 的最终范围、Spec 收口决议、Wave 0b 交付链解锁责任与完整退出口径；不授权实现、部署或发布 |
 | `reviews/2026-10-23-lucy-v2.0-release-readiness-review.md` | **已审阅**：v2.0 合流 main / 开 2.5 线的发版就绪度评审。D1（受保护 runner）裁定为 **B**：本期不 provisioning，死线为 2.5 首次客户交付前就位；D2（2.5 波次版本号）裁定为 **`2.10.0`**。§4.8–§4.20 记录 CI 恢复后暴露的**十一项**门禁缺陷的根因与修复（含 `docker-smoke` 挂死真根因、demo smoke 架构缺陷、WebUI 套件三类时序脆弱点、demo smoke 鉴权缺口） |
 | `reviews/2026-10-24-lucy-v2.0-release-execution-record.md` | **已执行**：v2.0 发版列车阶段一至三的执行记录——11 项门禁修复的落地、PR #45 合流（merge commit `14a8bee`，禁 squash）、`main` 分支保护与 `v*` 标签保护下发、`v2.0.0` tag 与 GitHub Release、`lucy-v2.5` 开线，以及转入 2.5 线的 8 项未决事项（含 D3 待裁定、demo smoke 鉴权缺口） |
@@ -152,8 +152,8 @@
 | 文档 | 用途 |
 |---|---|
 | `plans/README.md` | 仓库级 plan 索引 |
-| [plans/2026-10-25-lucy-v0.25-p1-requirements-review-checklist.md](plans/2026-10-25-lucy-v0.25-p1-requirements-review-checklist.md) | **v0.25 P1 唯一需求签核入口**：六项 Spec、跨功能追踪矩阵、依赖、非门禁与全部验收未执行声明；2026-10-25 需求审查通过（不授权开发），逐项依据见 [P1 需求审查记录](reviews/2026-10-25-lucy-v0.25-p1-requirements-review-record.md) |
-| `plans/2026-10-22-upgrade-candidate-verification-plan.md` | 升级候选验证环境实施方案 v0.2-spec-baseline（v0.25 L25-13，已收口 P1-6 Spec、需求审查通过、非门禁；原地升级仍为客户现场主线） |
+| [plans/2026-10-25-lucy-v0.25-p1-requirements-review-checklist.md](plans/2026-10-25-lucy-v0.25-p1-requirements-review-checklist.md) | **v0.25 P1 唯一需求签核入口**：六项 Spec、跨功能追踪矩阵、依赖、非门禁与全部验收未执行声明；2026-10-25 需求审查已签核通过（不授权开发），逐项依据见 [P1 需求审查记录](reviews/2026-10-25-lucy-v0.25-p1-requirements-review-record.md) |
+| `plans/2026-10-22-upgrade-candidate-verification-plan.md` | 升级候选验证环境实施方案 v0.2-spec-baseline（v0.25 L25-13，已收口 P1-6 Spec、需求审查已签核通过、非门禁；原地升级仍为客户现场主线） |
 | `plans/2026-10-21-customer-20260828-v1-upgrade-package-plan.md` | 20260828-v1 客户升级包生成计划 v0.1（待确认；镜像、引导密钥、随包文档；验收前不交给客户） |
 | `plans/2026-10-21-customer-20260828-v1-to-lucy-2.0-upgrade-plan.md` | 客户 20260828-v1 → Lucy 2.0 升级计划 v0.3（未执行；r6 不是放行包；评审过程稿已作废） |
 | `plans/2026-10-12-acceptance-gap-closure.md` | 验收缺口修复：SC-15 / SC-19 / SC-20 / SC-23 接到查数路径，工单 WO-202610-15 |

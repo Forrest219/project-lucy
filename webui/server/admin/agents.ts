@@ -154,6 +154,7 @@ async function writeAccessYamlInBarrier(
     actorType?: ConfigAuditActorType;
     actorIp?: string;
     sessionId?: string | null;
+    expectedVersion?: string;
   }
 ): Promise<{
   auditId?: number;
@@ -175,6 +176,7 @@ async function writeAccessYamlInBarrier(
   return writeAccessConfigFileWithAuditClosure(projectRoot, ACCESS_YAML_REL, content, audit, {
     source: audit?.source ?? "admin_agents_api",
     kind: "agent_save",
+    expectedVersion: audit?.expectedVersion,
     onCommitted: async (previousRaw) => {
       // T04-3 / Spec §3.3 — narrower authority is persisted and committed above;
       // cancel in-flight work and clear caches before this write reports success.
@@ -1546,6 +1548,7 @@ export function registerAgentRoutes(app: FastifyInstance) {
 
     const writeResult = await writeAccessYaml(projectRoot, newConfig, {
       enabled: true,
+      expectedVersion: currentVersion,
       changeType: "agent_patch",
       targetId: updatedUser.id,
       oldSummary: {
@@ -1564,7 +1567,16 @@ export function registerAgentRoutes(app: FastifyInstance) {
       },
       diff,
       ...auditActorFields(trustedActorFromRequest(request))
+    }).catch((error: unknown) => {
+      if ((error as { code?: string }).code === "VERSION_CONFLICT") return null;
+      throw error;
     });
+    if (writeResult === null) {
+      return reply.status(409).send({
+        ok: false,
+        error: { code: "VERSION_CONFLICT", message: "yaml has been modified by another source, please refresh" }
+      });
+    }
     return {
       ok: true,
       data: {
