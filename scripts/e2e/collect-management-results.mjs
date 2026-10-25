@@ -25,6 +25,34 @@ export function managementCapabilities(run, env = process.env) {
   return caps;
 }
 
+/**
+ * The declared assertion tokens the covering specs said they DELIBERATELY do not
+ * evaluate for this case.
+ *
+ * A binding-contract runner (e.g. the offline / candidate UX-06 + UX-07 spec) proves
+ * which endpoint / command / client set a case is bound to and never produces the live
+ * evidence the frozen catalog declares for it. The catalog's rule stays fail-closed —
+ * a token that a live runner forgot is still `failed` — but a token that a runner
+ * explicitly declared it will not evaluate means the case was NEVER EVALUATED.
+ * That is a missing precondition, so it is recorded BLOCKED, not as a product failure.
+ */
+function contractOnlyTokensFor(tests, caseId) {
+  const tokens = new Set();
+  for (const { test } of tests) {
+    for (const annotation of annotationsOf(test).filter((a) => a.type === "contract-only")) {
+      let parsed;
+      try {
+        parsed = JSON.parse(annotation.description);
+      } catch {
+        continue;
+      }
+      const declared = parsed?.[caseId];
+      if (Array.isArray(declared)) for (const token of declared) tokens.add(token);
+    }
+  }
+  return tokens;
+}
+
 /** Pure: maps a parsed Playwright report to management case results. */
 export function collectManagementResults({ run, report, cases, capabilities }) {
   const covering = new Map();
@@ -58,7 +86,21 @@ export function collectManagementResults({ run, report, cases, capabilities }) {
         entry = { ...base, status: "skipped", assertions, detail: "spec skipped without a BLOCKED annotation" };
       } else {
         const verdict = statusFromAssertions(testCase, { assertions });
-        entry = { ...base, status: verdict.status, assertions, detail: verdict.detail };
+        const evaluated = new Set(assertions.map((a) => a.token));
+        const missing = testCase.assert.filter((token) => !evaluated.has(token));
+        const contractOnly = contractOnlyTokensFor(tests, testCase.id);
+        const allContractOnly = missing.length > 0 && missing.every((token) => contractOnly.has(token));
+        if (allContractOnly) {
+          entry = {
+            ...base,
+            status: "blocked",
+            assertions,
+            detail: `the runner bound to this case asserts only the binding contract; the declared live evidence (${missing.join(", ")}) is produced by no runner in this leg`,
+            blockedBy: ["live_evidence_not_evaluated"]
+          };
+        } else {
+          entry = { ...base, status: verdict.status, assertions, detail: verdict.detail };
+        }
       }
     }
     results.push(entry);

@@ -55,8 +55,12 @@ describe("the v0.25 annotation namespace is separate from the frozen catalog", (
       // the helper is the only place that may mint a v025 annotation
       const pushes = [...text.matchAll(/annotations\.push\(\{\s*type:\s*"([^"]+)"/g)].map((m) => m[1]);
       for (const type of pushes) {
+        // "contract-only" is consumed by scripts/e2e/collect-management-results.mjs: a
+        // runner that declares it will not evaluate a case's live evidence makes that
+        // case BLOCKED (never evaluated) instead of FAILED (the product was never
+        // exercised). It carries no v0.25 execution id and no evidence of its own.
         assert.ok(
-          ["case", "v025-case", "assert", "blocked"].includes(type),
+          ["case", "v025-case", "assert", "blocked", "contract-only"].includes(type),
           `${path.relative(REPO_ROOT, file)} pushes an unknown annotation type "${type}"`
         );
       }

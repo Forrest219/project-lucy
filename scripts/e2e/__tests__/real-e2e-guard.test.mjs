@@ -96,3 +96,49 @@ describe("management evidence collection never turns missing work into a pass", 
     assert.equal(find(collectManagementResults({ run, report: failed, cases, capabilities: caps }), "SEC-01-V06").status, "failed");
   });
 });
+
+describe("a binding-contract runner blocks the case instead of failing it", () => {
+  const { cases } = loadCatalog();
+  const run = { runId: "t-run-0001", db: { applied: false } };
+  const caps = new Set(["lucy-http", "browser"]);
+  const a = (token, passed = true) => ({ type: "assert", description: JSON.stringify({ token, passed }) });
+  const contractOnly = (tokensById) => ({ type: "contract-only", description: JSON.stringify(tokensById) });
+  const find = (results, id) => results.find((r) => r.id === id);
+  const test = (caseId, { annotations = [] } = {}) => ({
+    suites: [{ specs: [{ title: `spec ${caseId}`, tests: [{ status: "expected", annotations: [{ type: "case", description: caseId }, ...annotations], results: [{ status: "passed", annotations: [] }] }] }] }]
+  });
+
+  it("a declared token the contract-only runner declared it will not evaluate blocks the case", () => {
+    // UX-06-V02 declares [allow_control, real_query, typed_gold]; the offline
+    // binding-contract runner asserts a command constant and never the live evidence.
+    const report = test("UX-06-V02", { annotations: [contractOnly({ "UX-06-V02": ["allow_control", "real_query", "typed_gold"] })] });
+    const entry = find(collectManagementResults({ run, report, cases, capabilities: caps }), "UX-06-V02");
+    assert.equal(entry.status, "blocked");
+    assert.match(entry.detail, /binding contract/);
+    assert.deepEqual(entry.blockedBy, ["live_evidence_not_evaluated"]);
+  });
+
+  it("the fail-closed rule is unchanged for a runner that stayed silent about the missing token", () => {
+    // Same case, same missing tokens, but the runner never declared itself
+    // contract-only: the case must still FAIL (no vacuous pass).
+    const report = test("UX-06-V02", { annotations: [] });
+    const entry = find(collectManagementResults({ run, report, cases, capabilities: caps }), "UX-06-V02");
+    assert.equal(entry.status, "failed");
+    assert.match(entry.detail, /never evaluated/);
+  });
+
+  it("a declared token that another covering spec DID evaluate still decides the case", () => {
+    // UX-07-V03 declares [consistency, no_leak] and the authorization-summary spec
+    // evaluates both: the contract-only binding spec must not turn a real pass into
+    // a block.
+    const report = test("UX-07-V03", { annotations: [a("consistency"), a("no_leak")] });
+    const entry = find(collectManagementResults({ run, report, cases, capabilities: caps }), "UX-07-V03");
+    assert.equal(entry.status, "passed");
+  });
+
+  it("a contract-only declaration for a DIFFERENT case never rescues this case", () => {
+    const report = test("UX-06-V03", { annotations: [contractOnly({ "UX-06-V02": ["allow_control", "real_query", "typed_gold"] })] });
+    const entry = find(collectManagementResults({ run, report, cases, capabilities: caps }), "UX-06-V03");
+    assert.equal(entry.status, "failed");
+  });
+});

@@ -186,9 +186,20 @@ export function AdminAccounts() {
               onChange={(e) => setDisplayName(e.target.value)}
             />
           </label>
-          <label className="grid gap-1">
-            <span className="text-sm font-medium">角色</span>
+          {/* The role select must NOT stay inside the <label>: a label's text content
+              also captures the control's own option text and the help text below it, so
+              the accessible name of the select became the whole sentence
+              ("角色运维所有者运维：连接、语义、Wiki、发布、Eval、Agent / Role / Token 。所有者：另含登录账户治理。").
+              A screen reader announced that blob instead of "角色", and a substring
+              label lookup ("登录账户") matched the select as well as the account
+              input. The label now names the control through htmlFor, and the help
+              text is a sibling. */}
+          <div className="grid gap-1">
+            <label className="text-sm font-medium" htmlFor="admin-new-role">
+              角色
+            </label>
             <select
+              id="admin-new-role"
               className="pl-input"
               value={role}
               onChange={(e) => setRole(e.target.value as AdminRole)}
@@ -211,7 +222,7 @@ export function AdminAccounts() {
               </span>
               。所有者：另含登录账户治理。
             </span>
-          </label>
+          </div>
           <label className="grid gap-1">
             <span className="text-sm font-medium">初始密码</span>
             <input

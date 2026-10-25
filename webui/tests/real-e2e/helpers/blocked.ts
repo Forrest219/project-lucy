@@ -30,6 +30,34 @@ export function assertion(testInfo: TestInfo, token: string, passed: boolean, de
 }
 
 /**
+ * Declares that this runner is a BINDING-CONTRACT runner: it proves the shape of a
+ * case (which endpoint, which command, which client set) and deliberately does NOT
+ * produce the live evidence the frozen catalog declares for that case.
+ *
+ * Why this has to be machine-readable
+ * ----------------------------------
+ * The frozen catalog's rule is fail-closed: a declared assertion token that the
+ * runner never evaluated means the case FAILED, so no case can pass vacuously.
+ * That rule is right for a live runner that forgot to assert something.
+ *
+ * It is wrong for a runner that SAYS it never claims a live pass. Such a runner
+ * can never evaluate `real_query` / `typed_gold` / `consistency` — those need a
+ * live data plane and a typed gold comparison, not an endpoint constant — so the
+ * case was never evaluated at all. Recording that as `failed` blames a product that
+ * was never exercised; the honest verdict is BLOCKED (not accepted, not passed).
+ *
+ * The distinction is only safe if it is EXPLICIT: a runner that stays silent keeps
+ * the fail-closed `failed` verdict. `scripts/e2e/collect-management-results.mjs`
+ * turns this annotation into a blocked verdict only for the tokens listed here.
+ */
+export function contractOnly(testInfo: TestInfo, tokensById: Record<string, string[]>): void {
+  testInfo.annotations.push({
+    type: "contract-only",
+    description: JSON.stringify(tokensById)
+  });
+}
+
+/**
  * Capabilities whose presence must be PROVEN, never declared.
  *
  * `ktx-upstream` is the data plane the Lucy proxy forwards every query to. If
