@@ -119,17 +119,32 @@ export function actorIdFromRequest(request: FastifyRequest): string {
   return trustedActorFromRequest(request).actorId;
 }
 
-export function requireOwner(request: FastifyRequest, reply: FastifyReply): boolean {
+/**
+ * Owner-only gate.
+ *
+ * The denial is AWAITED, not fired and forgotten. A `void reply.send(...)` plus a
+ * handler that returns `undefined` makes Fastify send a SECOND response after the
+ * first one: `reply.sent` is only true once the response has ENDED, so the
+ * framework's own send races the first one and `writeHead` throws
+ * `ERR_HTTP_HEADERS_SENT` from the onSend hook chain — an uncaught exception that
+ * kills the whole server process. A non-owner calling `POST /api/admin/admins`
+ * could therefore take the instance down with one request.
+ *
+ * `await reply.send(...)` waits for the response to end (Fastify's reply is
+ * thenable), so the handler returns only after the denial is on the wire and the
+ * framework correctly skips its own send.
+ */
+export async function requireOwner(request: FastifyRequest, reply: FastifyReply): Promise<boolean> {
   const admin = request.lucyAdmin?.admin;
   if (!admin) {
-    void reply.status(401).send({
+    await reply.status(401).send({
       ok: false,
       error: { code: "AUTH_REQUIRED", message: "需要登录" }
     });
     return false;
   }
   if (admin.role !== "owner") {
-    void reply.status(403).send({
+    await reply.status(403).send({
       ok: false,
       error: { code: "OWNER_REQUIRED", message: "仅所有者可管理管理员账户" }
     });

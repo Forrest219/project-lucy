@@ -15,7 +15,8 @@ import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { catalogDigest, checkLock, loadCatalog, readLock } from "./lib/catalog.mjs";
 import { EXIT_CODES, fail, loadRun, parseArgv, sha256Text } from "./lib/common.mjs";
-import { ExternalInstance, LucyProcess, portOpen } from "./lib/instance.mjs";
+import { ExternalInstance, LucyProcess } from "./lib/instance.mjs";
+import { startKtxUpstream } from "./lib/ktx-upstream.mjs";
 import { reconcileExternalFlag, TargetIdentityError } from "./lib/target-identity.mjs";
 import { SecurityContext } from "./security/context.mjs";
 
@@ -44,15 +45,19 @@ export function missingCapabilities(testCase, capabilities) {
   return testCase.requires.filter((cap) => !capabilities[cap]);
 }
 
-async function detectCapabilities(run, lucyStarted, external) {
+async function detectCapabilities(run, lucyStarted, external, upstream) {
   const profile = run.profileDigest !== null;
-  // For a runner-started instance the upstream port is probed locally; for an external (K8s) instance the
-  // protected runner declares what the environment really provides.
+  // For a runner-started instance the upstream is the one THIS run started, and the
+  // capability is granted by proof. Probing a host default port (the old behaviour) could
+  // either miss the run's data plane or hand the run somebody else's upstream — and a
+  // data plane that answers empty reads like a product defect and is not one. For an
+  // external (K8s) instance the upstream lives in the cluster and cannot be probed from
+  // here, so the protected runner declares what the environment really provides.
   const declared = new Set((process.env.LUCY_REAL_E2E_CAPABILITIES ?? "").split(",").map((c) => c.trim()).filter(Boolean));
   return {
     "lucy-http": lucyStarted,
     "fault-control": lucyStarted && !external && run.instance.startedBy === "runner",
-    "ktx-upstream": external ? declared.has("ktx-upstream") : await portOpen("127.0.0.1", Number(process.env.LUCY_PROXY_UPSTREAM_PORT ?? 7878)),
+    "ktx-upstream": external ? declared.has("ktx-upstream") : upstream?.ok === true,
     postgres: run.db.applied === true || declared.has("postgres"),
     browser: false,
     "agent-client": false,
@@ -113,7 +118,7 @@ function progressLog(run, message) {
 }
 
 /** Runs the selected security cases and returns the evidence document (also written under results/). */
-export async function runSecurity({ run, cases, handlers, only, dryRun = false, ctxFactory, external = false, onTargetRefused = fail, observerFactory = null }) {
+export async function runSecurity({ run, cases, handlers, only, dryRun = false, ctxFactory, external = false, onTargetRefused = fail, observerFactory = null, ktxBin = "ktx" }) {
   const externalCheck = reconcileExternalFlag({ run, flagValue: external });
   if (!externalCheck.ok) onTargetRefused(`run-security: ${externalCheck.problems.join("; ")}`, EXIT_CODES.blocked);
   const selected = executionOrder(cases.filter((c) => c.runner === "security" && (!only || only.has(c.id) || only.has(c.scenario))));
@@ -123,6 +128,7 @@ export async function runSecurity({ run, cases, handlers, only, dryRun = false, 
   let ctx = null;
   let capabilities = {};
   let activeObserver = null;
+  let upstream = null;
   try {
     if (!dryRun) {
       if (external) {
@@ -143,10 +149,22 @@ export async function runSecurity({ run, cases, handlers, only, dryRun = false, 
         }
         progressLog(run, "external target verified (preflight + postflight)");
       } else {
-        lucy = new LucyProcess(run);
+        // The data plane needs a KTX upstream. The run starts its OWN upstream for its OWN
+        // project (same recipe as the management and agent legs) instead of probing a host
+        // default port: without it every query answers empty, which reads like a product
+        // defect and is not one.
+        upstream = await startKtxUpstream(run, { ktxBin });
+        if (upstream.ok) {
+          progressLog(run, `KTX upstream started for this run on ${upstream.host}:${upstream.port} (log: ${upstream.logPath})`);
+        } else {
+          progressLog(run, `KTX upstream NOT available: ${upstream.reason}; every case that needs the data plane stays BLOCKED`);
+        }
+        lucy = new LucyProcess(run, upstream.ok
+          ? { extraEnv: { LUCY_PROXY_UPSTREAM_HOST: upstream.host, LUCY_PROXY_UPSTREAM_PORT: String(upstream.port) } }
+          : {});
         await lucy.start();
       }
-      capabilities = await detectCapabilities(run, true, external);
+      capabilities = await detectCapabilities(run, true, external, upstream);
       // Default observer factory: only used when the caller did not supply one. The
       // factory is bound to the RUN'S registered target type; for external runs it
       // returns null (no in-process recording), so the SecurityContext reports
@@ -197,8 +215,15 @@ export async function runSecurity({ run, cases, handlers, only, dryRun = false, 
         outcome = await handler(ctx);
       } catch (error) {
         const versions = await versionsOf(ctx);
-        const entry = finish({ status: "failed", ...versions, detail: `handler_error: ${error instanceof Error ? error.message : String(error)}`.slice(0, 500) });
-        entry.artifacts = [writeCaseResult(run, testCase, { id: testCase.id, status: "failed", detail: entry.detail })];
+        const message = error instanceof Error ? error.message : String(error);
+        // A handler that could not obtain a PRECONDITION (e.g. the product's own login
+        // rate limit refused the session) is BLOCKED, not failed: the case was never
+        // evaluated, and reporting it as a product failure would be a false claim.
+        const blockedReason = error?.blockedReason ?? null;
+        const entry = finish(blockedReason
+          ? { status: "blocked", ...versions, detail: `precondition_unavailable: ${message}`.slice(0, 500), blockedBy: [blockedReason] }
+          : { status: "failed", ...versions, detail: `handler_error: ${message}`.slice(0, 500) });
+        entry.artifacts = [writeCaseResult(run, testCase, { id: testCase.id, status: entry.status, detail: entry.detail, blockedBy: entry.blockedBy })];
         continue;
       }
       const verdict = statusFromAssertions(testCase, outcome);
@@ -219,6 +244,7 @@ export async function runSecurity({ run, cases, handlers, only, dryRun = false, 
       try { await activeObserver.stop(); } catch { /* best-effort */ }
     }
     if (lucy) await lucy.stop("SIGTERM");
+    if (upstream?.ok) await upstream.stop();
   }
 
   const count = (status) => results.filter((r) => r.status === status).length;
@@ -231,6 +257,12 @@ export async function runSecurity({ run, cases, handlers, only, dryRun = false, 
     finishedAt: new Date().toISOString(),
     caseCatalogDigest: run.caseCatalogDigest,
     capabilities: Object.fromEntries(Object.entries(capabilities).filter(([key]) => !key.startsWith("_"))),
+    // The data plane this run really had: a local run owns the upstream it started;
+    // an external run's upstream lives in the cluster and is only attested, never
+    // probed from here.
+    upstream: upstream?.ok === true
+      ? { status: "proven", host: upstream.host, port: upstream.port, ownedByRun: true }
+      : { status: external ? "attested_external" : "unavailable", ownedByRun: false, reason: upstream?.reason ?? null },
     summary: {
       selected: results.length,
       passed: count("passed"),
@@ -247,7 +279,7 @@ export async function runSecurity({ run, cases, handlers, only, dryRun = false, 
 const invokedDirectly = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (invokedDirectly) {
   try {
-    const args = parseArgv(process.argv.slice(2), { run: "value", only: "value", "dry-run": "boolean", list: "boolean", external: "boolean" });
+    const args = parseArgv(process.argv.slice(2), { run: "value", only: "value", "dry-run": "boolean", list: "boolean", external: "boolean", "ktx-bin": "value" });
     const { cases } = loadCatalog();
     const lockProblems = checkLock(cases, readLock());
     if (lockProblems.length > 0) fail(`run-security: catalog drifted from its lock:\n- ${lockProblems.join("\n- ")}`, 1);
@@ -265,7 +297,7 @@ if (invokedDirectly) {
       const known = new Set([...security.map((c) => c.id), ...security.map((c) => c.scenario)]);
       for (const id of only) if (!known.has(id)) fail(`run-security: unknown case or scenario "${id}"`, 1);
     }
-    const evidence = await runSecurity({ run, cases, handlers, only, dryRun: args["dry-run"] === true, external: args.external === true });
+    const evidence = await runSecurity({ run, cases, handlers, only, dryRun: args["dry-run"] === true, external: args.external === true, ktxBin: args["ktx-bin"] ?? "ktx" });
     const out = path.join(run.paths.runDir, "results", "security.json");
     mkdirSync(path.dirname(out), { recursive: true });
     writeFileSync(out, `${JSON.stringify(evidence, null, 2)}\n`);

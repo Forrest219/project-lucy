@@ -52,6 +52,11 @@ export async function startKtxUpstream(run, { ktxBin = "ktx", timeoutMs = 30_000
   }
 
   const childEnv = { ...process.env, ...run.instance.env, ...env };
+  // An absolute `--ktx-bin` still needs its own directory on PATH: the CLI
+  // shells out to helpers it expects to find next to itself.
+  if (path.isAbsolute(ktxBin)) {
+    childEnv.PATH = `${path.dirname(ktxBin)}:${childEnv.PATH ?? ""}`;
+  }
   const logPath = path.join(run.paths.logs, "ktx-upstream.log");
   const log = createWriteStream(logPath, { flags: "a" });
   let child;

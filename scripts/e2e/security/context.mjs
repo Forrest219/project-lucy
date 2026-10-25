@@ -428,6 +428,22 @@ export class SecurityContext {
     return { res, cookie: res.status === 200 ? res.cookie : null };
   }
 
+  /**
+   * A login refused by the product's OWN rate limit is a missing precondition, not a
+   * product failure: the case could not be evaluated at all, so it must be BLOCKED.
+   *
+   * The product's limit (5 logins per account+source per 15 min, 30 per source per
+   * 5 min) is a security control and must not be raised for the test suite. This leg
+   * establishes a FRESH operator session per case, so a full run can exhaust the
+   * per-source budget; the honest verdict for a case that could not get a session is
+   * "blocked", never "failed".
+   */
+  static rateLimitError(message) {
+    const error = new Error(message);
+    error.blockedReason = "login_rate_limited";
+    return error;
+  }
+
   /** Bootstraps the first owner exactly once for the run; later calls just log the owner in. */
   async ownerCookie() {
     if (this.cookies.owner) return this.cookies.owner;
@@ -443,7 +459,10 @@ export class SecurityContext {
       return res.cookie;
     }
     const { res, cookie } = await this.login(owner.adminId, owner.password);
-    if (!cookie) throw new Error(`owner login failed: HTTP ${res.status}`);
+    if (!cookie) {
+      if (res.status === 429) throw SecurityContext.rateLimitError(`owner login refused by the rate limit: HTTP ${res.status}`);
+      throw new Error(`owner login failed: HTTP ${res.status}`);
+    }
     this.cookies.owner = res.cookie;
     return cookie;
   }
@@ -489,7 +508,10 @@ export class SecurityContext {
   async freshOperatorSession() {
     const creds = await this.createAdmin("operator");
     const { res, cookie } = await this.login(creds.adminId, creds.password);
-    if (!cookie) throw new Error(`fresh operator login failed: HTTP ${res.status}`);
+    if (!cookie) {
+      if (res.status === 429) throw SecurityContext.rateLimitError(`fresh operator login refused by the rate limit: HTTP ${res.status}`);
+      throw new Error(`fresh operator login failed: HTTP ${res.status}`);
+    }
     return { ...creds, cookie };
   }
 

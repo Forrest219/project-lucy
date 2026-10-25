@@ -285,7 +285,7 @@ export function registerAdminAccountRoutes(app: FastifyInstance): void {
         error: { code: "AUTH_NOT_CONFIGURED", message: "请先完成管理员引导" }
       });
     }
-    if (!requireOwner(request, reply)) return;
+    if (!(await requireOwner(request, reply))) return;
 
     const adminId = request.body?.adminId?.trim() ?? "";
     const displayName = request.body?.displayName?.trim() || adminId;
@@ -364,7 +364,7 @@ export function registerAdminAccountRoutes(app: FastifyInstance): void {
         error: { code: "AUTH_NOT_CONFIGURED", message: "请先完成管理员引导" }
       });
     }
-    if (!requireOwner(request, reply)) return;
+    if (!(await requireOwner(request, reply))) return;
 
     const { adminId } = request.params;
     const config = await loadAdminsConfig({ fresh: true });
@@ -472,7 +472,7 @@ export function registerAdminAccountRoutes(app: FastifyInstance): void {
         error: { code: "AUTH_NOT_CONFIGURED", message: "请先完成管理员引导" }
       });
     }
-    if (!requireOwner(request, reply)) return;
+    if (!(await requireOwner(request, reply))) return;
 
     const { adminId } = request.params;
     const config = await loadAdminsConfig({ fresh: true });

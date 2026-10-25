@@ -37,6 +37,7 @@ import { expectedAskPlan } from "./lib/ask-plan.mjs";
 import { loadCatalog } from "./lib/catalog.mjs";
 import { automatedRequiredClients, countDistinctAutomatedProducts } from "./lib/clients.mjs";
 import { EXIT_CODES, REPO_ROOT, fail, loadRun, parseArgv } from "./lib/common.mjs";
+import { startKtxUpstream } from "./lib/ktx-upstream.mjs";
 import {
   RESOURCE_KIND,
   allocateProbeCanaries,
@@ -52,6 +53,7 @@ import {
 import { ExternalInstance, LucyProcess } from "./lib/instance.mjs";
 import { scanText } from "./lib/leak-scan.mjs";
 import { reconcileExternalFlag, TargetIdentityError } from "./lib/target-identity.mjs";
+import { withProvenUpstream, UPSTREAM_CAPABILITY } from "./lib/upstream-capability.mjs";
 import { statusFromAssertions } from "./run-security.mjs";
 
 function progressLog(run, message) {
@@ -600,7 +602,8 @@ async function main() {
     run: "value",
     clients: "value",
     "allow-unisolated-local": "boolean",
-    external: "boolean"
+    external: "boolean",
+    "ktx-bin": "value"
   });
   if (!args.run) fail("run-agent-journey: --run <run.json> is required", 1);
   const run = loadRun(args.run);
@@ -613,9 +616,16 @@ async function main() {
   const admins = JSON.parse(readFileSync(path.join(run.secretsDir, "admins.json"), "utf8"));
   const secrets = [...Object.values(tokens), admins.owner.password, admins.operator.password, readFileSync(path.join(run.secretsDir, "bootstrap-token"), "utf8").trim()];
   const adapters = await loadAdapters(clientsDoc);
-  const capabilities = new Set(["lucy-http"]);
-  if (run.db?.applied) capabilities.add("postgres");
-  for (const extra of (process.env.LUCY_REAL_E2E_CAPABILITIES ?? "").split(",")) if (extra.trim()) capabilities.add(extra.trim());
+  // The BASE capability set. `ktx-upstream` is deliberately NOT trusted here: it
+  // is granted by proof further down (see `withProvenUpstream`), because the
+  // data plane answers every query with an empty result when the upstream is
+  // missing — which reads like a product defect and is not one.
+  const baseCapabilities = new Set(["lucy-http"]);
+  if (run.db?.applied) baseCapabilities.add("postgres");
+  for (const extra of (process.env.LUCY_REAL_E2E_CAPABILITIES ?? "").split(",")) if (extra.trim()) baseCapabilities.add(extra.trim());
+  // The conservative set: the data-plane capability is NOT in it. It is added
+  // only once this run has PROVEN its own upstream answers.
+  let provenCapabilities = new Set([...baseCapabilities].filter((cap) => cap !== UPSTREAM_CAPABILITY));
   const profile = parse(readFileSync(path.join(REPO_ROOT, "scripts/e2e/profiles/customer-release.yaml"), "utf8"));
   const timeoutMs = profile.limits.maxAgentCaseWallClockSeconds * 1000;
 
@@ -630,7 +640,11 @@ async function main() {
   const canaries = allocateProbeCanaries();
 
   const deps = {
-    env: { ...process.env }, now: () => Date.now(), capabilities, timeoutMs, maxModelCalls: profile.limits.maxModelCallsPerCandidateRun,
+    env: { ...process.env }, now: () => Date.now(), timeoutMs, maxModelCalls: profile.limits.maxModelCallsPerCandidateRun,
+    // A getter, not a snapshot: the capability set is settled once the upstream
+    // state is known, and a snapshot taken earlier could carry a declared-but-
+    // unproven `ktx-upstream` into the cases.
+    get capabilities() { return provenCapabilities; },
     runProcess, spawnSync, locate: locateBinary, allowUnisolated: args["allow-unisolated-local"] === true,
     collect: collectServerEvidence, ledger: undefined,
     bounds: { stdout: 1_000_000, stderr: 256_000 },
@@ -670,6 +684,7 @@ async function main() {
   // the run-scoped marker. A failed preflight, a missing deployment.json, or a needs-bootstrap
   // postflight blocks the run — the agent journey never sees a wrong/missing target.
   let lucy = null;
+  let upstream = null;
   let exitCode = 1;
   try {
     mkdirSync(run.paths.logs, { recursive: true });
@@ -688,12 +703,35 @@ async function main() {
       }
       progressLog(run, "external target verified (preflight + postflight)");
     } else {
-      lucy = new LucyProcess(run);
+      // The data plane needs a KTX upstream. The run starts its OWN upstream for
+      // its OWN project instead of trusting a host service that may not exist:
+      // without it every query answers empty and the run would record a product
+      // defect that is really a missing environment. Same recipe as the
+      // management leg (scripts/e2e/lib/ktx-upstream.mjs).
+      upstream = await startKtxUpstream(run, { ktxBin: args["ktx-bin"] ?? "ktx" });
+      if (upstream.ok) {
+        progressLog(run, `KTX upstream started for this run on ${upstream.host}:${upstream.port} (log: ${upstream.logPath})`);
+      } else {
+        progressLog(run, `KTX upstream NOT available: ${upstream.reason}; every case that needs the data plane stays BLOCKED`);
+      }
+      lucy = new LucyProcess(run, upstream.ok
+        ? { extraEnv: { LUCY_PROXY_UPSTREAM_HOST: upstream.host, LUCY_PROXY_UPSTREAM_PORT: String(upstream.port) } }
+        : {});
       await lucy.start();
       progressLog(run, "lucy started; ensuring owner bootstrap");
       await ensureOwnerBootstrapped(run);
       progressLog(run, "owner bootstrap ready");
     }
+    // The capability set is settled from PROOF: a local run owns the upstream it
+    // just started and saw answer; an external run cannot probe the in-cluster
+    // upstream, so the operator's attestation is the only signal there. A
+    // declaration in the environment never grants it on its own.
+    provenCapabilities = withProvenUpstream(baseCapabilities, {
+      external: args.external === true,
+      upstreamOk: upstream?.ok === true,
+      env: process.env
+    });
+    progressLog(run, `capabilities: ${[...provenCapabilities].sort().join(",")} (ktx-upstream proven=${upstream?.ok === true || (args.external === true && baseCapabilities.has(UPSTREAM_CAPABILITY))})`);
     const result = await runAgentJourney({ run, cases, goldDoc, clientsDoc, adapters, tokens, secrets, deps });
 
     const dir = path.join(run.paths.runDir, "results", "agent");
@@ -713,6 +751,13 @@ async function main() {
       isolation: deps.allowUnisolated ? "not_enforced_local_override" : "probed",
       isolationProvider: deps.provider?.provider ?? null,
       isolationProviderReason: deps.provider?.reason ?? null,
+      // The data plane this run really had: a local run owns the upstream it
+      // started; an external run's upstream lives in the cluster and is only
+      // attested, never probed from here.
+      upstream: upstream?.ok === true
+        ? { status: "proven", host: upstream.host, port: upstream.port, ownedByRun: true }
+        : { status: args.external === true ? "attested_external" : "unavailable", ownedByRun: false, reason: upstream?.reason ?? null },
+      capabilities: [...provenCapabilities].sort(),
       serverEvidence, modelCalls: result.modelCalls, summary: result.summary, status: result.status, cases: result.entries
     };
     const out = path.join(run.paths.runDir, "results", "agent.json");
@@ -721,6 +766,7 @@ async function main() {
     process.stdout.write(`${JSON.stringify({ status: result.status, exitCode, out, summary: result.summary, clients: result.clientInfo.map((c) => ({ product: c.product, probe: c.probe, reasons: c.reasons })) })}\n`);
   } finally {
     if (lucy) await lucy.stop("SIGTERM");
+    if (upstream?.ok) await upstream.stop();
   }
   process.exit(exitCode);
 }

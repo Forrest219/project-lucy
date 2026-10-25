@@ -1103,8 +1103,14 @@ export function buildServer() {
     const page = await readWiki(projectRoot, request.params.key);
     reply
       .header("Content-Type", "text/markdown; charset=utf-8")
-      .header("Content-Disposition", `attachment; filename="${path.posix.basename(page.key)}"`)
-      .send(page.rawMarkdown);
+      .header("Content-Disposition", `attachment; filename="${path.posix.basename(page.key)}"`);
+    // The reply MUST be returned. A handler that sends and then falls through makes
+    // Fastify send a SECOND response: `reply.sent` is only true once the response has
+    // ENDED, so the framework's own send races the first one and `writeHead` throws
+    // `ERR_HTTP_HEADERS_SENT` from the onSend hook chain — an uncaught exception that
+    // kills the whole server process. A plain wiki download could therefore take the
+    // instance down.
+    return reply.send(page.rawMarkdown);
   });
 
   app.post<{

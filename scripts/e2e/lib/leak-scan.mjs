@@ -31,7 +31,14 @@ import { extname } from "node:path";
 const GENERIC_PATTERNS = [
   { kind: "scrypt-password-hash", re: /scrypt:[0-9a-f]{16,}:[0-9a-f]{32,}/g },
   // A masked `password_hash: [REDACTED]` line in a diff is the intended output; only a concrete value is a leak.
-  { kind: "password-hash-value", re: /password_hash["']?\s*[:=]\s*(?!\[?REDACTED\]?|\*+|null\b|"",|'',)/gi },
+  //
+  // The whitespace BEFORE the value is consumed INSIDE the negative lookahead, not outside it.
+  // With `\s*` outside, the engine backtracks it to zero width to re-test the lookahead at the
+  // whitespace itself, where `\[?REDACTED\]?` cannot match — the negative lookahead then passes
+  // and the redacted line is reported as a leak. The product redacts the hash correctly
+  // (`password_hash: [REDACTED]`), so that backtracking produced FALSE POSITIVES in the
+  // security gate. `\bnull\b` and the empty-string forms are masked values too, not leaks.
+  { kind: "password-hash-value", re: /password_hash["']?\s*[:=]\s*(?!\s*(?:\[?REDACTED\]?|\*+|\bnull\b|""|''))/gi },
   { kind: "bearer-token", re: /Bearer\s+lucy_[A-Za-z0-9_-]{16,}/g },
   { kind: "lucy-token", re: /lucy_(?:e2e_)?[a-f0-9]{32,}/g }
 ];
