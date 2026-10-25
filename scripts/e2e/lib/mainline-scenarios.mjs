@@ -27,46 +27,174 @@
 // owned by C2-C5 return `null` from `scenarioFor` so the runner treats them
 // as the catalog's other owner (e.g. SEC-16) is responsible.
 
+// The single user mainline's aggregate identity. J25-01 is a JOURNEY, not an
+// execution item: the eight stages below are `stages[]` of one run-scoped
+// state, and the three frozen UX-01 variants stay the catalog evidence.
+// Never split J25-01 into eight executionIds (approved Spec §1.1 / §4.1-5).
+export const JOURNEY_ID = "J25-01";
+
+/** The three frozen UX-01 variants that carry J25-01's evidence. */
+export const JOURNEY_CATALOG_EVIDENCE = Object.freeze(["UX-01-V01", "UX-01-V02", "UX-01-V03"]);
+
+/**
+ * The canonical J25-01 stage contract (approved Spec §4.2). This is the ONE
+ * place the eight stages are named: the state handover (lib/j01-state.mjs),
+ * the browser specs and the contract tests all read it from here, so the
+ * stage ids / titles / owners cannot drift between the runner and the report.
+ *
+ * `requiredAssertions` uses the frozen catalog's assertion vocabulary
+ * (scripts/e2e/lib/catalog.mjs ASSERTION_TOKENS) — no new token is invented.
+ * `excludedFromMainline` records the low-frequency depth that belongs to a
+ * branch (CONN / SEM / ACCESS / OBSERVE / AGENT / LIFECYCLE), never to J25-01.
+ */
+export const J01_STAGE_CONTRACT = Object.freeze([
+  Object.freeze({
+    stageId: "J01-01",
+    title: "登录与准备",
+    owner: "ACCESS",
+    action: "新实例时经受控引导创建所有者；已有实例则正常登录",
+    input: "run identity",
+    output: "管理会话",
+    requiredAssertions: Object.freeze(["allow_control", "consistency"]),
+    excludedFromMainline: Object.freeze(["并发首建", "错误密钥", "撤权矩阵"]),
+    dependsOn: Object.freeze([])
+  }),
+  Object.freeze({
+    stageId: "J01-02",
+    title: "新建连接",
+    owner: "CONN",
+    action: "在 /connections 通过真实向导新建 PostgreSQL 连接并执行连通测试",
+    input: "测试库参数的秘密引用",
+    output: "connectionId",
+    requiredAssertions: Object.freeze(["allow_control", "real_query", "consistency"]),
+    excludedFromMainline: Object.freeze(["MySQL／Hive／错误凭据／重复端点矩阵"]),
+    dependsOn: Object.freeze(["J01-01"])
+  }),
+  Object.freeze({
+    stageId: "J01-03",
+    title: "启用表与 Manifest",
+    owner: "CONN",
+    action: "选择 Schema，获取或上传本阶段 Manifest，启用问题所需表",
+    input: "connectionId",
+    output: "Schema、规范源键集合",
+    requiredAssertions: Object.freeze(["allow_control", "consistency"]),
+    excludedFromMainline: Object.freeze(["多 Schema 全组合", "上传攻击", "容量边界"]),
+    dependsOn: Object.freeze(["J01-02"])
+  }),
+  Object.freeze({
+    stageId: "J01-04",
+    title: "维护业务上下文",
+    owner: "SEM",
+    action: "在真实 UI 维护一个能回答问题的指标／度量及关联业务 Wiki；必要时使用一个最小业务 Skill",
+    input: "规范源键",
+    output: "语义版本、Wiki 路径、可选 Skill",
+    requiredAssertions: Object.freeze(["allow_control", "consistency", "no_leak"]),
+    excludedFromMainline: Object.freeze(["30 表批量", "200 文件", "复杂 Join／分群矩阵"]),
+    dependsOn: Object.freeze(["J01-03"])
+  }),
+  Object.freeze({
+    stageId: "J01-05",
+    title: "校验并生效",
+    owner: "SEM",
+    action: "经发布工作台执行校验与“同步索引并生效”",
+    input: "语义候选",
+    output: "生效版本／索引状态",
+    requiredAssertions: Object.freeze(["allow_control", "consistency", "server_trace"]),
+    excludedFromMainline: Object.freeze(["并发写", "CAS", "崩溃恢复", "失败 reindex"]),
+    dependsOn: Object.freeze(["J01-04"])
+  }),
+  Object.freeze({
+    stageId: "J01-06",
+    title: "新建访问主体",
+    owner: "ACCESS",
+    action: "在真实 UI 新建专用 Role、Agent、Token，限制到本问题所需范围；复制页面生成的 MCP 配置",
+    input: "生效版本",
+    output: "roleId、agentId、Token 秘密引用、MCP snippet",
+    requiredAssertions: Object.freeze(["allow_control", "no_leak", "consistency"]),
+    excludedFromMainline: Object.freeze(["多 Role 代数", "模板", "行权限深度", "Token 吊销"]),
+    dependsOn: Object.freeze(["J01-05"])
+  }),
+  Object.freeze({
+    stageId: "J01-07",
+    title: "真实 Agent 问答",
+    owner: "AGENT",
+    action: "真实 Agent 使用复制配置提出高频问题，并在同会话自然追问一次",
+    input: "MCP snippet＋问题",
+    output: "最终答案、客户端 transcript、调用关系",
+    requiredAssertions: Object.freeze(["typed_gold", "real_query", "server_trace", "consistency"]),
+    excludedFromMainline: Object.freeze(["大量 Eval", "NULL／0／超时矩阵", "注入与预算耗尽"]),
+    dependsOn: Object.freeze(["J01-06"])
+  }),
+  Object.freeze({
+    stageId: "J01-08",
+    title: "审计与对账",
+    owner: "OBSERVE",
+    action: "管理员在真实 UI 找到本次问询与调用，查看只读对账",
+    input: "问询／调用关联",
+    output: "审计详情与导出证据",
+    requiredAssertions: Object.freeze(["consistency", "server_trace", "no_leak"]),
+    excludedFromMainline: Object.freeze(["历史回放", "导出篡改", "13+ 表", "完整八桶矩阵"]),
+    dependsOn: Object.freeze(["J01-07"])
+  })
+]);
+
+/** The canonical stage ids, in order. */
+export const J01_STAGE_IDS = Object.freeze(J01_STAGE_CONTRACT.map((s) => s.stageId));
+
+/** The canonical stage titles, in order (the approved user-facing stage names). */
+export const J01_STAGE_TITLES = Object.freeze(J01_STAGE_CONTRACT.map((s) => s.title));
+
+/** Returns the canonical stage descriptor, or `null` for an unknown stage id. */
+export function stageContractFor(stageId) {
+  return J01_STAGE_CONTRACT.find((s) => s.stageId === stageId) ?? null;
+}
+
 const SCENARIOS = Object.freeze({
   // ============================================================================
-  // C2: J-01 eight-step user mainline (Spec §6.5, UX-01-V01..V03).
+  // C2: J-01 eight-stage user mainline (approved Spec §4.2, UX-01-V01..V03).
+  // The eight stages are the canonical contract above; the three frozen
+  // UX-01 variants are its evidence, not eight separate execution items.
   // ============================================================================
   "UX-01-V01": {
     catalog: "UX-01-V01",
+    journeyId: JOURNEY_ID,
     j01Step: [1, 2, 3, 4, 5, 6, 7, 8],
-    uiSteps: [
-      "first-owner-bootstrap-or-login",
-      "create-connection-and-sync",
-      "enable-tables-and-manifest",
-      "edit-measure-wiki-skill-acl",
-      "index-and-publish",
-      "create-roles-and-agent-tokens",
-      "copy-native-config-and-autonomous-ask",
-      "audit-export-revoke-narrow"
-    ],
+    stages: J01_STAGE_IDS,
+    // Canonical stage ids (the approved names live in J01_STAGE_CONTRACT).
+    uiSteps: J01_STAGE_IDS,
     productType: "management",
     requires: ["lucy-http", "browser", "postgres", "ktx-upstream", "agent-client"],
     asserts: ["allow_control", "typed_gold", "real_query", "server_trace"],
     gold: "Q-CAC-28D",
     notes: [
       "Real UI writes only (no page.route / API-write mock).",
+      "One continuous same-run journey: login → connection → tables/Manifest → business context → validate & publish → Role/Agent/Token + copied MCP config → real Agent ask & follow-up → audit reconciliation.",
       "First-owner login when the instance is fresh; ordinary login otherwise.",
-      "Independent native configs are generated for each required product (claude-code + openclaw).",
-      "Each configured client autonomously issues the question through its adapter."
+      "Each configured client autonomously issues the question through its adapter.",
+      "Depth (token revocation, sibling tokens, injection, NULL/0, timeout) belongs to the ACCESS / AGENT branches, not to this mainline."
     ]
   },
   "UX-01-V02": {
     catalog: "UX-01-V02",
+    journeyId: JOURNEY_ID,
+    j01Step: [1, 2, 3, 4, 5, 6, 7, 8],
+    stages: J01_STAGE_IDS,
+    uiSteps: J01_STAGE_IDS,
     productType: "management",
     requires: ["lucy-http", "browser", "postgres", "ktx-upstream", "agent-client"],
     asserts: ["consistency"],
     notes: [
       "Run-scoped instance marker must match the run.json the orchestrator loaded (verify-identity).",
-      "Same candidate / instance / fixture digest for management + agent + security legs."
+      "Same candidate / instance / fixture digest for management + agent + security legs.",
+      "Every stage of J25-01 consumes state produced by an earlier stage of the SAME run; cross-run state is rejected."
     ]
   },
   "UX-01-V03": {
     catalog: "UX-01-V03",
+    journeyId: JOURNEY_ID,
+    j01Step: [1, 2, 3, 4, 5, 6, 7, 8],
+    stages: J01_STAGE_IDS,
+    uiSteps: J01_STAGE_IDS,
     productType: "management",
     requires: ["lucy-http", "browser", "postgres", "ktx-upstream", "agent-client"],
     asserts: ["consistency"],

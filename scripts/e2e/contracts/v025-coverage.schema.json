@@ -1,0 +1,97 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Lucy v0.25 E2E coverage manifest (Plan W0-2)",
+  "description": "Static contract for the v0.25 coverage manifest. It records ownership and required evidence only; it never records run status, which lives in the result file (Plan §2.3).",
+  "type": "object",
+  "required": [
+    "version",
+    "spec",
+    "plan",
+    "catalog",
+    "ownerBranches",
+    "existingCatalogMappings",
+    "newScenarios",
+    "journeys"
+  ],
+  "properties": {
+    "version": { "const": 1 },
+    "spec": { "type": "string", "minLength": 1 },
+    "plan": { "type": "string", "minLength": 1 },
+    "catalog": { "type": "string", "minLength": 1 },
+    "ownerBranches": {
+      "type": "array",
+      "items": { "enum": ["CONN", "SEM", "ACCESS", "OBSERVE", "AGENT", "LIFECYCLE"] }
+    },
+    "existingCatalogMappings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["executionId", "ownerBranch"],
+        "properties": {
+          "executionId": { "type": "string", "minLength": 1 },
+          "ownerBranch": { "enum": ["CONN", "SEM", "ACCESS", "OBSERVE", "AGENT", "LIFECYCLE"] },
+          "crossDomainRefs": {
+            "type": "array",
+            "items": { "enum": ["CONN", "SEM", "ACCESS", "OBSERVE", "AGENT", "LIFECYCLE"] }
+          }
+        }
+      }
+    },
+    "newScenarios": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "executionId",
+          "sourceSpec",
+          "sourceRequirementId",
+          "ownerBranch",
+          "priority",
+          "executors",
+          "requires",
+          "assert",
+          "artifacts",
+          "gold"
+        ],
+        "properties": {
+          "executionId": { "type": "string", "minLength": 1 },
+          "sourceSpec": { "type": "string", "minLength": 1 },
+          "sourceRequirementId": { "type": ["string", "null"] },
+          "ownerBranch": { "enum": ["CONN", "SEM", "ACCESS", "OBSERVE", "AGENT", "LIFECYCLE"] },
+          "priority": { "enum": ["P0", "P1", "branch"] },
+          "executors": { "type": "array", "items": { "enum": ["B", "P", "D", "A", "O", "V"] } },
+          "requires": { "type": "array", "items": { "enum": ["lucy-http", "fault-control", "ktx-upstream", "postgres", "browser", "agent-client", "k8s-amd64", "ci-runner", "network-profile", "clock-control", "npm-registry"] } },
+          "assert": { "type": "array", "items": { "enum": ["deny", "allow_control", "no_side_effect", "no_leak", "upstream_exec_zero", "typed_gold", "server_trace", "real_query", "repeat3", "audit_event", "artifact_scan", "unavailable_not_open", "exactly_one_wins", "consistency"] } },
+          "artifacts": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+          "gold": { "type": ["string", "null"] },
+          "title": { "type": "string" },
+          "supportStatus": { "type": "string" }
+        }
+      }
+    },
+    "journeys": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["journeyId", "title", "catalogEvidenceIds", "stages"],
+        "properties": {
+          "journeyId": { "type": "string", "minLength": 1 },
+          "title": { "type": "string", "minLength": 1 },
+          "catalogEvidenceIds": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+          "stages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["stageId", "title", "stageOwnerBranch"],
+              "properties": {
+                "stageId": { "type": "string", "minLength": 1 },
+                "title": { "type": "string", "minLength": 1 },
+                "stageOwnerBranch": { "enum": ["CONN", "SEM", "ACCESS", "OBSERVE", "AGENT", "LIFECYCLE"] }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

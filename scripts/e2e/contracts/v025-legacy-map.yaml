@@ -1,0 +1,347 @@
+# v0.25 编号兼容映射（Plan W0-3）
+#
+# 目的：任何历史编号都能双向追查，且不同来源的同名编号永不混淆。
+# 规则：
+#   1. 255 个既有冻结 variant 以原 catalog ID 直接作为 v0.25 executionId（恒等映射，不改名）；
+#   2. P0/P1 的来源需求编号按 requirement namespace 归位，映射到 <prefix>25-<id>；
+#   3. 旧升级功能清单走 legacy:upgrade-feature 命名空间，不与 P1-5 的 UPG25-* 混用。
+# 校验：scripts/e2e/__tests__/v025-coverage.test.mjs
+version: 1
+catalog: "scripts/e2e/contracts/case-catalog.yaml"
+catalogLock: "scripts/e2e/contracts/case-catalog.lock.json"
+coverage: "scripts/e2e/contracts/v025-coverage.yaml"
+
+# 既有冻结 variant：恒等映射，双向可追查。
+frozenVariants:
+  - { executionId: "SEC-01-V01", legacyId: "SEC-01-V01", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-01-V02", legacyId: "SEC-01-V02", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-01-V03", legacyId: "SEC-01-V03", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-01-V04", legacyId: "SEC-01-V04", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-01-V05", legacyId: "SEC-01-V05", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-01-V06", legacyId: "SEC-01-V06", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-02-V01", legacyId: "SEC-02-V01", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-02-V02", legacyId: "SEC-02-V02", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-02-V03", legacyId: "SEC-02-V03", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-02-V04", legacyId: "SEC-02-V04", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-02-V05", legacyId: "SEC-02-V05", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-02-V06", legacyId: "SEC-02-V06", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-03-V01", legacyId: "SEC-03-V01", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-03-V02", legacyId: "SEC-03-V02", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-03-V03", legacyId: "SEC-03-V03", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-03-V04", legacyId: "SEC-03-V04", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-03-V05", legacyId: "SEC-03-V05", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-04-V01", legacyId: "SEC-04-V01", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-04-V02", legacyId: "SEC-04-V02", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-04-V03", legacyId: "SEC-04-V03", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-04-V04", legacyId: "SEC-04-V04", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-04-V05", legacyId: "SEC-04-V05", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-04-V06", legacyId: "SEC-04-V06", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-04-V07", legacyId: "SEC-04-V07", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-04-V08", legacyId: "SEC-04-V08", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-04-V09", legacyId: "SEC-04-V09", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-04-V10", legacyId: "SEC-04-V10", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-04-V11", legacyId: "SEC-04-V11", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-05-V01", legacyId: "SEC-05-V01", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-05-V02", legacyId: "SEC-05-V02", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-05-V03", legacyId: "SEC-05-V03", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-05-V04", legacyId: "SEC-05-V04", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-05-V05", legacyId: "SEC-05-V05", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-05-V06", legacyId: "SEC-05-V06", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-05-V07", legacyId: "SEC-05-V07", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-06-V01", legacyId: "SEC-06-V01", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-06-V02", legacyId: "SEC-06-V02", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-06-V03", legacyId: "SEC-06-V03", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-06-V04", legacyId: "SEC-06-V04", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-06-V05", legacyId: "SEC-06-V05", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-07-V01", legacyId: "SEC-07-V01", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-07-V02", legacyId: "SEC-07-V02", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-07-V03", legacyId: "SEC-07-V03", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-07-V04", legacyId: "SEC-07-V04", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-07-V05", legacyId: "SEC-07-V05", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-07-V06", legacyId: "SEC-07-V06", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-07-V07", legacyId: "SEC-07-V07", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-07-V08", legacyId: "SEC-07-V08", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-07-V09", legacyId: "SEC-07-V09", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-07-V10", legacyId: "SEC-07-V10", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-07-V11", legacyId: "SEC-07-V11", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-07-V12", legacyId: "SEC-07-V12", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-07-V13", legacyId: "SEC-07-V13", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-08-V01", legacyId: "SEC-08-V01", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-08-V02", legacyId: "SEC-08-V02", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-08-V03", legacyId: "SEC-08-V03", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-08-V04", legacyId: "SEC-08-V04", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-08-V05", legacyId: "SEC-08-V05", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-08-V06", legacyId: "SEC-08-V06", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-08-V07", legacyId: "SEC-08-V07", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-08-V08", legacyId: "SEC-08-V08", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-09-V01", legacyId: "SEC-09-V01", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-09-V02", legacyId: "SEC-09-V02", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-09-V03", legacyId: "SEC-09-V03", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-09-V04", legacyId: "SEC-09-V04", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-09-V05", legacyId: "SEC-09-V05", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-09-S01", legacyId: "SEC-09-S01", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-09-S02", legacyId: "SEC-09-S02", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-09-S03", legacyId: "SEC-09-S03", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-09-S04", legacyId: "SEC-09-S04", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-09-S05", legacyId: "SEC-09-S05", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-10-V01", legacyId: "SEC-10-V01", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-10-V02", legacyId: "SEC-10-V02", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-10-V03", legacyId: "SEC-10-V03", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-10-V04", legacyId: "SEC-10-V04", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-10-V05", legacyId: "SEC-10-V05", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-11-BY01", legacyId: "SEC-11-BY01", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-11-BY02", legacyId: "SEC-11-BY02", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-11-BY03", legacyId: "SEC-11-BY03", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-11-BY04", legacyId: "SEC-11-BY04", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-11-BY05", legacyId: "SEC-11-BY05", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-11-BY06", legacyId: "SEC-11-BY06", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-11-BY07", legacyId: "SEC-11-BY07", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-11-BY08", legacyId: "SEC-11-BY08", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-11-BY09", legacyId: "SEC-11-BY09", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-11-BY10", legacyId: "SEC-11-BY10", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-11-BY11", legacyId: "SEC-11-BY11", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-11-BY12", legacyId: "SEC-11-BY12", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-11-BY13", legacyId: "SEC-11-BY13", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-11-BY14", legacyId: "SEC-11-BY14", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-11-BY15", legacyId: "SEC-11-BY15", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-11-BY16", legacyId: "SEC-11-BY16", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-11-BY17", legacyId: "SEC-11-BY17", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-11-BY18", legacyId: "SEC-11-BY18", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-11-BY19", legacyId: "SEC-11-BY19", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-12-V01", legacyId: "SEC-12-V01", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-12-V02", legacyId: "SEC-12-V02", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-12-V03", legacyId: "SEC-12-V03", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-12-V04", legacyId: "SEC-12-V04", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-12-V05", legacyId: "SEC-12-V05", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-12-V06", legacyId: "SEC-12-V06", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-12-V07", legacyId: "SEC-12-V07", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-12-V08", legacyId: "SEC-12-V08", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-12-V09", legacyId: "SEC-12-V09", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-12-V10", legacyId: "SEC-12-V10", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-13-V01", legacyId: "SEC-13-V01", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-13-V02", legacyId: "SEC-13-V02", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-13-V03", legacyId: "SEC-13-V03", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-13-V04", legacyId: "SEC-13-V04", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-13-V05", legacyId: "SEC-13-V05", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-13-V06", legacyId: "SEC-13-V06", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-14-V01", legacyId: "SEC-14-V01", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-14-V02", legacyId: "SEC-14-V02", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-14-V03", legacyId: "SEC-14-V03", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-14-V04", legacyId: "SEC-14-V04", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-14-V05", legacyId: "SEC-14-V05", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-14-V06", legacyId: "SEC-14-V06", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-14-V07", legacyId: "SEC-14-V07", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-14-V08", legacyId: "SEC-14-V08", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-14-V09", legacyId: "SEC-14-V09", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-14-V10", legacyId: "SEC-14-V10", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-14-V11", legacyId: "SEC-14-V11", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-14-V12", legacyId: "SEC-14-V12", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-15-V01", legacyId: "SEC-15-V01", namespace: "frozen:catalog", ownerBranch: SEM }
+  - { executionId: "SEC-15-V02", legacyId: "SEC-15-V02", namespace: "frozen:catalog", ownerBranch: SEM }
+  - { executionId: "SEC-15-V03", legacyId: "SEC-15-V03", namespace: "frozen:catalog", ownerBranch: SEM }
+  - { executionId: "SEC-15-V04", legacyId: "SEC-15-V04", namespace: "frozen:catalog", ownerBranch: SEM }
+  - { executionId: "SEC-15-V05", legacyId: "SEC-15-V05", namespace: "frozen:catalog", ownerBranch: SEM }
+  - { executionId: "SEC-15-V06", legacyId: "SEC-15-V06", namespace: "frozen:catalog", ownerBranch: SEM }
+  - { executionId: "SEC-15-FM-01", legacyId: "SEC-15-FM-01", namespace: "frozen:catalog", ownerBranch: SEM }
+  - { executionId: "SEC-15-FM-02", legacyId: "SEC-15-FM-02", namespace: "frozen:catalog", ownerBranch: SEM }
+  - { executionId: "SEC-15-FM-03", legacyId: "SEC-15-FM-03", namespace: "frozen:catalog", ownerBranch: SEM }
+  - { executionId: "SEC-15-FM-04", legacyId: "SEC-15-FM-04", namespace: "frozen:catalog", ownerBranch: SEM }
+  - { executionId: "SEC-15-FM-05", legacyId: "SEC-15-FM-05", namespace: "frozen:catalog", ownerBranch: SEM }
+  - { executionId: "SEC-15-FM-06", legacyId: "SEC-15-FM-06", namespace: "frozen:catalog", ownerBranch: SEM }
+  - { executionId: "SEC-15-FM-SEED", legacyId: "SEC-15-FM-SEED", namespace: "frozen:catalog", ownerBranch: SEM }
+  - { executionId: "SEC-15-S01", legacyId: "SEC-15-S01", namespace: "frozen:catalog", ownerBranch: SEM }
+  - { executionId: "SEC-16-V01", legacyId: "SEC-16-V01", namespace: "frozen:catalog", ownerBranch: AGENT }
+  - { executionId: "SEC-16-V02", legacyId: "SEC-16-V02", namespace: "frozen:catalog", ownerBranch: AGENT }
+  - { executionId: "SEC-16-V03", legacyId: "SEC-16-V03", namespace: "frozen:catalog", ownerBranch: AGENT }
+  - { executionId: "SEC-16-V04", legacyId: "SEC-16-V04", namespace: "frozen:catalog", ownerBranch: AGENT }
+  - { executionId: "SEC-17-V01", legacyId: "SEC-17-V01", namespace: "frozen:catalog", ownerBranch: AGENT }
+  - { executionId: "SEC-17-V02", legacyId: "SEC-17-V02", namespace: "frozen:catalog", ownerBranch: AGENT }
+  - { executionId: "SEC-17-V03", legacyId: "SEC-17-V03", namespace: "frozen:catalog", ownerBranch: AGENT }
+  - { executionId: "SEC-17-V04", legacyId: "SEC-17-V04", namespace: "frozen:catalog", ownerBranch: AGENT }
+  - { executionId: "SEC-17-V05", legacyId: "SEC-17-V05", namespace: "frozen:catalog", ownerBranch: AGENT }
+  - { executionId: "SEC-17-V06", legacyId: "SEC-17-V06", namespace: "frozen:catalog", ownerBranch: AGENT }
+  - { executionId: "SEC-17-V07", legacyId: "SEC-17-V07", namespace: "frozen:catalog", ownerBranch: AGENT }
+  - { executionId: "SEC-17-V08", legacyId: "SEC-17-V08", namespace: "frozen:catalog", ownerBranch: AGENT }
+  - { executionId: "SEC-17-V09", legacyId: "SEC-17-V09", namespace: "frozen:catalog", ownerBranch: AGENT }
+  - { executionId: "SEC-17-V10", legacyId: "SEC-17-V10", namespace: "frozen:catalog", ownerBranch: AGENT }
+  - { executionId: "SEC-18-V01", legacyId: "SEC-18-V01", namespace: "frozen:catalog", ownerBranch: OBSERVE }
+  - { executionId: "SEC-18-V02", legacyId: "SEC-18-V02", namespace: "frozen:catalog", ownerBranch: OBSERVE }
+  - { executionId: "SEC-18-V03", legacyId: "SEC-18-V03", namespace: "frozen:catalog", ownerBranch: OBSERVE }
+  - { executionId: "SEC-18-V04", legacyId: "SEC-18-V04", namespace: "frozen:catalog", ownerBranch: OBSERVE }
+  - { executionId: "SEC-18-V05", legacyId: "SEC-18-V05", namespace: "frozen:catalog", ownerBranch: OBSERVE }
+  - { executionId: "SEC-18-S01", legacyId: "SEC-18-S01", namespace: "frozen:catalog", ownerBranch: OBSERVE }
+  - { executionId: "SEC-18-S02", legacyId: "SEC-18-S02", namespace: "frozen:catalog", ownerBranch: OBSERVE }
+  - { executionId: "SEC-18-S03", legacyId: "SEC-18-S03", namespace: "frozen:catalog", ownerBranch: OBSERVE }
+  - { executionId: "SEC-18-S04", legacyId: "SEC-18-S04", namespace: "frozen:catalog", ownerBranch: OBSERVE }
+  - { executionId: "SEC-18-V06", legacyId: "SEC-18-V06", namespace: "frozen:catalog", ownerBranch: OBSERVE }
+  - { executionId: "SEC-19-V01", legacyId: "SEC-19-V01", namespace: "frozen:catalog", ownerBranch: OBSERVE }
+  - { executionId: "SEC-19-V02", legacyId: "SEC-19-V02", namespace: "frozen:catalog", ownerBranch: OBSERVE }
+  - { executionId: "SEC-19-V03", legacyId: "SEC-19-V03", namespace: "frozen:catalog", ownerBranch: OBSERVE }
+  - { executionId: "SEC-19-V04", legacyId: "SEC-19-V04", namespace: "frozen:catalog", ownerBranch: OBSERVE }
+  - { executionId: "SEC-19-V05", legacyId: "SEC-19-V05", namespace: "frozen:catalog", ownerBranch: OBSERVE }
+  - { executionId: "SEC-19-V06", legacyId: "SEC-19-V06", namespace: "frozen:catalog", ownerBranch: OBSERVE }
+  - { executionId: "SEC-19-V07", legacyId: "SEC-19-V07", namespace: "frozen:catalog", ownerBranch: OBSERVE }
+  - { executionId: "SEC-20-V01", legacyId: "SEC-20-V01", namespace: "frozen:catalog", ownerBranch: OBSERVE }
+  - { executionId: "SEC-20-V02", legacyId: "SEC-20-V02", namespace: "frozen:catalog", ownerBranch: OBSERVE }
+  - { executionId: "SEC-20-V03", legacyId: "SEC-20-V03", namespace: "frozen:catalog", ownerBranch: OBSERVE }
+  - { executionId: "SEC-20-V04", legacyId: "SEC-20-V04", namespace: "frozen:catalog", ownerBranch: OBSERVE }
+  - { executionId: "SEC-20-V05", legacyId: "SEC-20-V05", namespace: "frozen:catalog", ownerBranch: LIFECYCLE }
+  - { executionId: "SEC-20-V06", legacyId: "SEC-20-V06", namespace: "frozen:catalog", ownerBranch: OBSERVE }
+  - { executionId: "SEC-21-V01", legacyId: "SEC-21-V01", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-21-V02", legacyId: "SEC-21-V02", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-21-V03", legacyId: "SEC-21-V03", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-21-V04", legacyId: "SEC-21-V04", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-21-V05", legacyId: "SEC-21-V05", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-21-V06", legacyId: "SEC-21-V06", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-22-V01", legacyId: "SEC-22-V01", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-22-V02", legacyId: "SEC-22-V02", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-22-V03", legacyId: "SEC-22-V03", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-22-V04", legacyId: "SEC-22-V04", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-22-V05", legacyId: "SEC-22-V05", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-22-V06", legacyId: "SEC-22-V06", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-22-V07", legacyId: "SEC-22-V07", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-22-S01", legacyId: "SEC-22-S01", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "SEC-23-V01", legacyId: "SEC-23-V01", namespace: "frozen:catalog", ownerBranch: LIFECYCLE }
+  - { executionId: "SEC-23-V02", legacyId: "SEC-23-V02", namespace: "frozen:catalog", ownerBranch: LIFECYCLE }
+  - { executionId: "SEC-23-V03", legacyId: "SEC-23-V03", namespace: "frozen:catalog", ownerBranch: LIFECYCLE }
+  - { executionId: "SEC-23-V04", legacyId: "SEC-23-V04", namespace: "frozen:catalog", ownerBranch: LIFECYCLE }
+  - { executionId: "SEC-23-V05", legacyId: "SEC-23-V05", namespace: "frozen:catalog", ownerBranch: LIFECYCLE }
+  - { executionId: "UX-01-V01", legacyId: "UX-01-V01", namespace: "frozen:catalog", ownerBranch: AGENT }
+  - { executionId: "UX-01-V02", legacyId: "UX-01-V02", namespace: "frozen:catalog", ownerBranch: AGENT }
+  - { executionId: "UX-01-V03", legacyId: "UX-01-V03", namespace: "frozen:catalog", ownerBranch: AGENT }
+  - { executionId: "UX-02-V01", legacyId: "UX-02-V01", namespace: "frozen:catalog", ownerBranch: AGENT }
+  - { executionId: "UX-02-V02", legacyId: "UX-02-V02", namespace: "frozen:catalog", ownerBranch: AGENT }
+  - { executionId: "UX-02-V03", legacyId: "UX-02-V03", namespace: "frozen:catalog", ownerBranch: AGENT }
+  - { executionId: "UX-02-V04", legacyId: "UX-02-V04", namespace: "frozen:catalog", ownerBranch: AGENT }
+  - { executionId: "UX-02-V05", legacyId: "UX-02-V05", namespace: "frozen:catalog", ownerBranch: AGENT }
+  - { executionId: "UX-02-V06", legacyId: "UX-02-V06", namespace: "frozen:catalog", ownerBranch: AGENT }
+  - { executionId: "UX-02-S01", legacyId: "UX-02-S01", namespace: "frozen:catalog", ownerBranch: AGENT }
+  - { executionId: "UX-03-V01", legacyId: "UX-03-V01", namespace: "frozen:catalog", ownerBranch: AGENT }
+  - { executionId: "UX-03-V02", legacyId: "UX-03-V02", namespace: "frozen:catalog", ownerBranch: AGENT }
+  - { executionId: "UX-03-V03", legacyId: "UX-03-V03", namespace: "frozen:catalog", ownerBranch: AGENT }
+  - { executionId: "UX-03-V04", legacyId: "UX-03-V04", namespace: "frozen:catalog", ownerBranch: AGENT }
+  - { executionId: "UX-03-V05", legacyId: "UX-03-V05", namespace: "frozen:catalog", ownerBranch: AGENT }
+  - { executionId: "UX-03-V06", legacyId: "UX-03-V06", namespace: "frozen:catalog", ownerBranch: AGENT }
+  - { executionId: "UX-03-S01", legacyId: "UX-03-S01", namespace: "frozen:catalog", ownerBranch: AGENT }
+  - { executionId: "UX-03-S02", legacyId: "UX-03-S02", namespace: "frozen:catalog", ownerBranch: AGENT }
+  - { executionId: "UX-03-S03", legacyId: "UX-03-S03", namespace: "frozen:catalog", ownerBranch: AGENT }
+  - { executionId: "UX-04-V01", legacyId: "UX-04-V01", namespace: "frozen:catalog", ownerBranch: AGENT }
+  - { executionId: "UX-04-V02", legacyId: "UX-04-V02", namespace: "frozen:catalog", ownerBranch: AGENT }
+  - { executionId: "UX-04-V03", legacyId: "UX-04-V03", namespace: "frozen:catalog", ownerBranch: AGENT }
+  - { executionId: "UX-04-S01", legacyId: "UX-04-S01", namespace: "frozen:catalog", ownerBranch: AGENT }
+  - { executionId: "UX-04-S02", legacyId: "UX-04-S02", namespace: "frozen:catalog", ownerBranch: AGENT }
+  - { executionId: "UX-05-V01", legacyId: "UX-05-V01", namespace: "frozen:catalog", ownerBranch: AGENT }
+  - { executionId: "UX-05-V02", legacyId: "UX-05-V02", namespace: "frozen:catalog", ownerBranch: AGENT }
+  - { executionId: "UX-06-V01", legacyId: "UX-06-V01", namespace: "frozen:catalog", ownerBranch: AGENT }
+  - { executionId: "UX-06-V02", legacyId: "UX-06-V02", namespace: "frozen:catalog", ownerBranch: AGENT }
+  - { executionId: "UX-06-V03", legacyId: "UX-06-V03", namespace: "frozen:catalog", ownerBranch: AGENT }
+  - { executionId: "UX-06-V04", legacyId: "UX-06-V04", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "UX-06-V05", legacyId: "UX-06-V05", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "UX-06-V06", legacyId: "UX-06-V06", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "UX-06-V07", legacyId: "UX-06-V07", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "UX-06-V08", legacyId: "UX-06-V08", namespace: "frozen:catalog", ownerBranch: AGENT }
+  - { executionId: "UX-07-V01", legacyId: "UX-07-V01", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "UX-07-V02", legacyId: "UX-07-V02", namespace: "frozen:catalog", ownerBranch: OBSERVE }
+  - { executionId: "UX-07-V03", legacyId: "UX-07-V03", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "UX-07-V04", legacyId: "UX-07-V04", namespace: "frozen:catalog", ownerBranch: ACCESS }
+  - { executionId: "UX-07-S01", legacyId: "UX-07-S01", namespace: "frozen:catalog", ownerBranch: OBSERVE }
+  - { executionId: "OPS-01-V01", legacyId: "OPS-01-V01", namespace: "frozen:catalog", ownerBranch: LIFECYCLE }
+  - { executionId: "OPS-01-V02", legacyId: "OPS-01-V02", namespace: "frozen:catalog", ownerBranch: LIFECYCLE }
+  - { executionId: "OPS-01-V03", legacyId: "OPS-01-V03", namespace: "frozen:catalog", ownerBranch: LIFECYCLE }
+  - { executionId: "OPS-01-V04", legacyId: "OPS-01-V04", namespace: "frozen:catalog", ownerBranch: LIFECYCLE }
+  - { executionId: "OPS-01-V05", legacyId: "OPS-01-V05", namespace: "frozen:catalog", ownerBranch: LIFECYCLE }
+  - { executionId: "OPS-01-V06", legacyId: "OPS-01-V06", namespace: "frozen:catalog", ownerBranch: LIFECYCLE }
+  - { executionId: "OPS-01-V07", legacyId: "OPS-01-V07", namespace: "frozen:catalog", ownerBranch: LIFECYCLE }
+  - { executionId: "GATE-01-V01", legacyId: "GATE-01-V01", namespace: "frozen:catalog", ownerBranch: LIFECYCLE }
+  - { executionId: "GATE-01-V02", legacyId: "GATE-01-V02", namespace: "frozen:catalog", ownerBranch: LIFECYCLE }
+  - { executionId: "GATE-01-V03", legacyId: "GATE-01-V03", namespace: "frozen:catalog", ownerBranch: LIFECYCLE }
+  - { executionId: "GATE-01-V04", legacyId: "GATE-01-V04", namespace: "frozen:catalog", ownerBranch: LIFECYCLE }
+  - { executionId: "GATE-01-V05", legacyId: "GATE-01-V05", namespace: "frozen:catalog", ownerBranch: LIFECYCLE }
+  - { executionId: "GATE-01-V06", legacyId: "GATE-01-V06", namespace: "frozen:catalog", ownerBranch: LIFECYCLE }
+  - { executionId: "GATE-01-V07", legacyId: "GATE-01-V07", namespace: "frozen:catalog", ownerBranch: LIFECYCLE }
+  - { executionId: "GATE-01-V08", legacyId: "GATE-01-V08", namespace: "frozen:catalog", ownerBranch: LIFECYCLE }
+  - { executionId: "GATE-01-V09", legacyId: "GATE-01-V09", namespace: "frozen:catalog", ownerBranch: LIFECYCLE }
+  - { executionId: "GATE-01-V10", legacyId: "GATE-01-V10", namespace: "frozen:catalog", ownerBranch: LIFECYCLE }
+  - { executionId: "GATE-01-V11", legacyId: "GATE-01-V11", namespace: "frozen:catalog", ownerBranch: LIFECYCLE }
+  - { executionId: "GATE-01-V12", legacyId: "GATE-01-V12", namespace: "frozen:catalog", ownerBranch: LIFECYCLE }
+  - { executionId: "GATE-01-V13", legacyId: "GATE-01-V13", namespace: "frozen:catalog", ownerBranch: LIFECYCLE }
+  - { executionId: "GATE-01-V14", legacyId: "GATE-01-V14", namespace: "frozen:catalog", ownerBranch: LIFECYCLE }
+  - { executionId: "GATE-01-V15", legacyId: "GATE-01-V15", namespace: "frozen:catalog", ownerBranch: LIFECYCLE }
+  - { executionId: "GATE-01-V16", legacyId: "GATE-01-V16", namespace: "frozen:catalog", ownerBranch: LIFECYCLE }
+
+# 来源需求命名空间：同名 V01 / SC-01 / UPG-01 在此各归其位。
+requirementNamespaces:
+  - namespace: "requirement:p0-1-audit-increment"
+    executionPrefix: "AUD25"
+    ownerBranch: OBSERVE
+    sourceSpec: "docs/specs/lucy-20261020-v2p5-audit-increment-spec.md"
+    ids: [A01, A02, A03, A04, A05, A06, A07, A08, A09, A10, A11, A12]
+    executionIds: [AUD25-A01, AUD25-A02, AUD25-A03, AUD25-A04, AUD25-A05, AUD25-A06, AUD25-A07, AUD25-A08, AUD25-A09, AUD25-A10, AUD25-A11, AUD25-A12]
+  - namespace: "requirement:p0-2-row-permission"
+    executionPrefix: "ROW25"
+    ownerBranch: ACCESS
+    sourceSpec: "docs/specs/lucy-20261022-v2p5-row-permission-management-spec.md"
+    ids: [V01, V02, V03, V04, V05, V06, V07, V08, V09, V10, V11, V12, V13, V14, V15, V16, V17, V18, V19, V20, V21, V22]
+    executionIds: [ROW25-V01, ROW25-V02, ROW25-V03, ROW25-V04, ROW25-V05, ROW25-V06, ROW25-V07, ROW25-V08, ROW25-V09, ROW25-V10, ROW25-V11, ROW25-V12, ROW25-V13, ROW25-V14, ROW25-V15, ROW25-V16, ROW25-V17, ROW25-V18, ROW25-V19, ROW25-V20, ROW25-V21, ROW25-V22]
+  - namespace: "requirement:p0-3-semantic-batch"
+    executionPrefix: "SEM25"
+    ownerBranch: SEM
+    sourceSpec: "docs/specs/lucy-20261020-v2p5-semantic-batch-operations-spec.md"
+    ids: [V01, V02, V03, V04, V05, V06, V07, V08, V09, V10, V11, V12, V13, V14, V15, V16, V17, V18, V19, V20, V21, V22]
+    executionIds: [SEM25-V01, SEM25-V02, SEM25-V03, SEM25-V04, SEM25-V05, SEM25-V06, SEM25-V07, SEM25-V08, SEM25-V09, SEM25-V10, SEM25-V11, SEM25-V12, SEM25-V13, SEM25-V14, SEM25-V15, SEM25-V16, SEM25-V17, SEM25-V18, SEM25-V19, SEM25-V20, SEM25-V21, SEM25-V22]
+  - namespace: "requirement:p0-4-audit-reconciliation"
+    executionPrefix: "ARV25"
+    ownerBranch: OBSERVE
+    sourceSpec: "docs/specs/lucy-20261024-v0p25-audit-reconciliation-view-spec.md"
+    ids: [V01, V02, V03, V04, V05, V06, V07, V08, V09, V10, V11, V12]
+    executionIds: [ARV25-V01, ARV25-V02, ARV25-V03, ARV25-V04, ARV25-V05, ARV25-V06, ARV25-V07, ARV25-V08, ARV25-V09, ARV25-V10, ARV25-V11, ARV25-V12]
+  - namespace: "requirement:p1-1-row-policy-templates"
+    executionPrefix: "RTP25"
+    ownerBranch: ACCESS
+    sourceSpec: "docs/specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md"
+    ids: [RTP-01, RTP-02, RTP-03, RTP-04, RTP-05, RTP-06, RTP-07, RTP-08, RTP-09, RTP-10]
+    executionIds: [RTP25-01, RTP25-02, RTP25-03, RTP25-04, RTP25-05, RTP25-06, RTP25-07, RTP25-08, RTP25-09, RTP25-10]
+  - namespace: "requirement:p1-1-row-policy-views"
+    executionPrefix: "RTV25"
+    ownerBranch: ACCESS
+    sourceSpec: "docs/specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md"
+    ids: [RTV-01, RTV-02, RTV-03, RTV-04, RTV-05, RTV-06, RTV-07, RTV-08]
+    executionIds: [RTV25-01, RTV25-02, RTV25-03, RTV25-04, RTV25-05, RTV25-06, RTV25-07, RTV25-08]
+  - namespace: "requirement:p1-2-authorization-summary"
+    executionPrefix: "ASV25"
+    ownerBranch: ACCESS
+    sourceSpec: "docs/specs/lucy-20261025-v0p25-access-authorization-summary-spec.md"
+    ids: [ASV-01, ASV-02, ASV-03, ASV-04, ASV-05, ASV-06, ASV-07, ASV-08, ASV-09, ASV-10, ASV-11, ASV-12, ASV-13, ASV-14]
+    executionIds: [ASV25-01, ASV25-02, ASV25-03, ASV25-04, ASV25-05, ASV25-06, ASV25-07, ASV25-08, ASV25-09, ASV25-10, ASV25-11, ASV25-12, ASV25-13, ASV25-14]
+  - namespace: "requirement:p1-3-access-map"
+    executionPrefix: "ACM25"
+    ownerBranch: OBSERVE
+    sourceSpec: "webui/docs/187-access-relation-sankey-spec.md"
+    ids: [SC-01, SC-02, SC-03, SC-04, SC-05, SC-06, SC-07, SC-08, SC-09, SC-10, SC-11, SC-12, SC-13, SC-14]
+    executionIds: [ACM25-SC-01, ACM25-SC-02, ACM25-SC-03, ACM25-SC-04, ACM25-SC-05, ACM25-SC-06, ACM25-SC-07, ACM25-SC-08, ACM25-SC-09, ACM25-SC-10, ACM25-SC-11, ACM25-SC-12, ACM25-SC-13, ACM25-SC-14]
+  - namespace: "requirement:p1-4-hive-direct"
+    executionPrefix: "HIV25"
+    ownerBranch: CONN
+    sourceSpec: "docs/specs/lucy-20261025-v0p25-hive-direct-connection-spec.md"
+    ids: [V01, V02, V03, V04, V05, V06, V07, V08, V09, V10, V11, V12, V13, V14, V15, V16, V17]
+    executionIds: [HIV25-V01, HIV25-V02, HIV25-V03, HIV25-V04, HIV25-V05, HIV25-V06, HIV25-V07, HIV25-V08, HIV25-V09, HIV25-V10, HIV25-V11, HIV25-V12, HIV25-V13, HIV25-V14, HIV25-V15, HIV25-V16, HIV25-V17]
+  - namespace: "requirement:p1-5-upgrade-e2e"
+    executionPrefix: "UPG25"
+    ownerBranch: LIFECYCLE
+    sourceSpec: "docs/specs/lucy-20261025-v0p25-upgrade-e2e-automation-spec.md"
+    ids: [UPG-01, UPG-02, UPG-03, UPG-04, UPG-05, UPG-06, UPG-07, UPG-08, UPG-09, UPG-10, UPG-11, UPG-12, UPG-13, UPG-14, UPG-15, UPG-16]
+    executionIds: [UPG25-01, UPG25-02, UPG25-03, UPG25-04, UPG25-05, UPG25-06, UPG25-07, UPG25-08, UPG25-09, UPG25-10, UPG25-11, UPG25-12, UPG25-13, UPG25-14, UPG25-15, UPG25-16]
+  - namespace: "requirement:p1-6-upgrade-candidate"
+    executionPrefix: "RVC25"
+    ownerBranch: LIFECYCLE
+    sourceSpec: "docs/specs/lucy-20261025-v0p25-upgrade-candidate-verification-spec.md"
+    ids: [RVC-01, RVC-02, RVC-03, RVC-04, RVC-05, RVC-06, RVC-07, RVC-08, RVC-09, RVC-10, RVC-11, RVC-12, RVC-13]
+    executionIds: [RVC25-01, RVC25-02, RVC25-03, RVC25-04, RVC25-05, RVC25-06, RVC25-07, RVC25-08, RVC25-09, RVC25-10, RVC25-11, RVC25-12, RVC25-13]
+
+# 历史编号族：不是 v0.25 executionId，只作追溯。
+legacyFamilies:
+  - namespace: "legacy:upgrade-feature"
+    ownerBranch: LIFECYCLE
+    sourceFiles: ["docs/qa/upgrade-feature-checklist.md", "scripts/e2e/contracts/upgrade-features.yaml"]
+    ids: [UPG-01, UPG-02, UPG-03, UPG-04, UPG-05, UPG-06, UPG-07, UPG-08, UPG-09, UPG-10, UPG-11, UPG-12, UPG-13, UPG-14]
+    note: "旧升级功能清单。与 requirement:p1-5-upgrade-e2e 的 UPG-01..16 语义完全不相交，但裸编号字符串重叠，禁止直接映射为新用例；追溯时必须带 legacy:upgrade-feature: 前缀。"

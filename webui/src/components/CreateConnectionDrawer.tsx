@@ -295,7 +295,15 @@ export function CreateConnectionDrawer({
           true,
           {}
         );
-        return probe;
+        // The probe endpoint REQUIRES the password — the server rejects a probe without
+        // it (CONNECTION_PASSWORD_REQUIRED / "数据库密码为必填项"). But `connectionRequest`
+        // only carries the password when dryRun is FALSE, and the probe reuses the dry-run
+        // builder and then strips the flag, so the password was structurally dropped: EVERY
+        // credentialed engine (postgres/mysql/sqlserver/oracle) failed the connectivity test
+        // no matter what the user typed. Put it back for the probe ONLY. The dry-run
+        // PREVIEW keeps omitting it on purpose: there the server answers with a secret-file
+        // reference instead of taking the plaintext.
+        return form.password ? { ...probe, password: form.password } : probe;
       })()),
     onSuccess: (data) => {
       setProbeResult(

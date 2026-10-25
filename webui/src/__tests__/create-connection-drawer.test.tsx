@@ -176,6 +176,39 @@ describe("CreateConnectionDrawer", () => {
     expect(screen.queryByTestId("create-connection-engine-hint")).not.toBeInTheDocument();
   });
 
+  it("sends the password to the connectivity probe (the endpoint requires it)", async () => {
+    // The probe endpoint rejects a request without a password
+    // (CONNECTION_PASSWORD_REQUIRED). The probe reused the dry-run payload builder, which
+    // omits the password, so EVERY credentialed engine failed the connectivity test.
+    const bodies: unknown[] = [];
+    stubFetch({
+      "POST /api/connections/probe": (body) => {
+        bodies.push(body);
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: { status: "ok", latencyMs: 12 }
+          })
+        );
+      }
+    });
+
+    renderDrawer();
+    fillRequiredFields();
+    fireEvent.click(screen.getByTestId("create-connection-test-btn"));
+
+    await waitFor(() => {
+      expect(bodies.length).toBe(1);
+    });
+    const payload = bodies[0] as { password?: string; host?: string; username?: string };
+    expect(payload.password).toBe("s3cret");
+    expect(payload.host).toBe("127.0.0.1");
+    expect(payload.username).toBe("lucy_ro");
+    await waitFor(() => {
+      expect(screen.getByTestId("create-connection-probe-result")).toHaveTextContent("连接成功");
+    });
+  });
+
   it("shows dryRun preview without sending password, then confirms create", async () => {
     const bodies: unknown[] = [];
     stubFetch({

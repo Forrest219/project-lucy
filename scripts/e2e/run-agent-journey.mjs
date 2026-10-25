@@ -511,7 +511,22 @@ export async function realIsolationProbe({ adapter, probeInfo, workDir, run, sec
   // hardcoded 127.0.0.1 — an external registered target must keep its identity intact so the
   // B1 external target path can still hit the MCP.
   const mcpHost = run.instance.host ?? "127.0.0.1";
-  const bundle = buildBoundaryBundle({ run, canaries, provider: deps.provider, mcpHost, mcpPort: run.instance.proxyPort });
+  // The client binary must be executable INSIDE the boundary. `denyHome` locks $HOME (to keep
+  // OS private credentials out of reach), which also covers the usual install locations of the
+  // clients this runner drives. Without re-allowing the RESOLVED binary, sandbox-exec refuses
+  // to exec it ("execvp() ... Operation not permitted"), the client never starts, and the probe
+  // mis-reads its own exec failure as "the client reached the resource" — a false isolation
+  // breach that also blocks every official question (0 model calls).
+  const clientBinary = probeInfo?.binaryPath ?? null;
+  deps.clientBinaries = [...new Set([...(deps.clientBinaries ?? []), clientBinary].filter(Boolean))];
+  const bundle = buildBoundaryBundle({
+    run,
+    canaries,
+    provider: deps.provider,
+    mcpHost,
+    mcpPort: run.instance.proxyPort,
+    clientBinaries: deps.clientBinaries
+  });
   if (!bundle.provider) {
     return {
       isolated: false,
@@ -614,7 +629,16 @@ async function main() {
     boundaryRun: (input) => {
       if (!provider.provider) return { completed: false, reason: "unsupported_provider", exitCode: null, stdout: "", stderr: "", timedOut: false };
       const mcpHost = run.instance.host ?? "127.0.0.1";
-      const bundle = buildBoundaryBundle({ run, canaries, provider, mcpHost, mcpPort: run.instance.proxyPort });
+      const bundle = buildBoundaryBundle({
+        run,
+        canaries,
+        provider,
+        mcpHost,
+        mcpPort: run.instance.proxyPort,
+        // Same client binaries the isolation probe registered — the official asks must run
+        // under the SAME boundary the probe proved.
+        clientBinaries: deps.clientBinaries ?? []
+      });
       // The boundary runner is the only native runner the agent journey uses in production.
       const sanitized = sanitizeEnv(input.env, deps.envAllowMatcher, { token: input.env?.[TOKEN_ENV], clientHome: input.cwd, clientWork: input.cwd });
       return runUnderBoundaryLocal({ provider, profileString: bundle.profileString, command: input.command, args: input.args, cwd: input.cwd, env: sanitized, timeoutMs: input.timeoutMs, bounds: input.bounds });

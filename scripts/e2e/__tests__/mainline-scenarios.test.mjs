@@ -19,6 +19,18 @@ import {
   scenarioFor
 } from "../lib/mainline-scenarios.mjs";
 import { computeGold, generateDataset } from "../../../examples/security-e2e/gold/compute-gold.mjs";
+import {
+  computeGold as computeV025Gold,
+  generateDataset as generateV025Dataset,
+  mainlineQuestions
+} from "../../../examples/security-e2e/gold/v025-gold.mjs";
+import {
+  JOURNEY_CATALOG_EVIDENCE,
+  JOURNEY_ID,
+  J01_STAGE_CONTRACT,
+  J01_STAGE_IDS,
+  stageContractFor
+} from "../lib/mainline-scenarios.mjs";
 
 const { cases } = loadCatalog();
 
@@ -193,4 +205,111 @@ test("goldKeyFor returns null for variants that do not have typed-gold (UX-03-V0
   for (const id of ["UX-03-V04", "UX-03-V05", "UX-03-V06", "UX-03-S01", "UX-03-S02", "UX-03-S03"]) {
     assert.equal(goldKeyFor({ id }), null, `${id} must not have a typed gold`);
   }
+});
+
+// ---------------------------------------------------------------------------
+// W1-1: the canonical J25-01 stage contract (approved Spec §4.2).
+// ---------------------------------------------------------------------------
+
+test("the canonical stage contract is the approved eight stages with the approved names and owners", () => {
+  assert.equal(JOURNEY_ID, "J25-01");
+  assert.deepEqual([...JOURNEY_CATALOG_EVIDENCE], ["UX-01-V01", "UX-01-V02", "UX-01-V03"]);
+  assert.deepEqual([...J01_STAGE_IDS], [
+    "J01-01", "J01-02", "J01-03", "J01-04", "J01-05", "J01-06", "J01-07", "J01-08"
+  ]);
+  assert.deepEqual(
+    J01_STAGE_CONTRACT.map((s) => [s.stageId, s.title, s.owner]),
+    [
+      ["J01-01", "登录与准备", "ACCESS"],
+      ["J01-02", "新建连接", "CONN"],
+      ["J01-03", "启用表与 Manifest", "CONN"],
+      ["J01-04", "维护业务上下文", "SEM"],
+      ["J01-05", "校验并生效", "SEM"],
+      ["J01-06", "新建访问主体", "ACCESS"],
+      ["J01-07", "真实 Agent 问答", "AGENT"],
+      ["J01-08", "审计与对账", "OBSERVE"]
+    ]
+  );
+});
+
+test("every stage declares its user action, its input -> output, its required assertions and the depth it excludes", () => {
+  for (const stage of J01_STAGE_CONTRACT) {
+    assert.ok(stage.action.length > 0, `${stage.stageId} must declare the real user action`);
+    assert.ok(stage.input.length > 0, `${stage.stageId} must declare its input`);
+    assert.ok(stage.output.length > 0, `${stage.stageId} must declare its output`);
+    assert.ok(stage.requiredAssertions.length > 0, `${stage.stageId} must declare its required assertions`);
+    assert.ok(stage.excludedFromMainline.length > 0, `${stage.stageId} must record the branch depth it excludes`);
+    for (const dep of stage.dependsOn) {
+      assert.ok(J01_STAGE_IDS.indexOf(dep) < J01_STAGE_IDS.indexOf(stage.stageId), `${stage.stageId} may only depend on earlier stages`);
+    }
+  }
+});
+
+test("the stage contract agrees with the frozen v0.25 coverage manifest", async () => {
+  const { loadCoverage } = await import("../lib/v025-coverage.mjs");
+  const { journeys } = loadCoverage();
+  assert.equal(journeys.length, 1, "there is exactly one journey");
+  assert.equal(journeys[0].journeyId, JOURNEY_ID);
+  assert.deepEqual(
+    journeys[0].stages.map((s) => [s.stageId, s.title, s.stageOwnerBranch]),
+    J01_STAGE_CONTRACT.map((s) => [s.stageId, s.title, s.owner])
+  );
+});
+
+test("UX-01-V01..V03 reference the canonical stage contract instead of a private stage list", () => {
+  for (const id of ["UX-01-V01", "UX-01-V02", "UX-01-V03"]) {
+    const scn = scenarioFor({ id });
+    assert.equal(scn.journeyId, JOURNEY_ID, `${id} must belong to the J25-01 journey`);
+    assert.deepEqual([...scn.stages], [...J01_STAGE_IDS], `${id} must use the canonical stages`);
+    assert.deepEqual([...scn.uiSteps], [...J01_STAGE_IDS], `${id} must use the canonical stage names`);
+    assert.equal(scn.stages.length, 8, `${id} must not grow or shrink the mainline`);
+  }
+});
+
+test("stageContractFor resolves every canonical stage and rejects an unknown one", () => {
+  for (const stageId of J01_STAGE_IDS) {
+    assert.equal(stageContractFor(stageId)?.stageId, stageId);
+  }
+  assert.equal(stageContractFor("J01-09"), null);
+});
+
+// ---------------------------------------------------------------------------
+// W1-6: the v0.25 mainline gold (independently computed from the fixture).
+// ---------------------------------------------------------------------------
+
+test("the v0.25 mainline gold computes its typed answer independently of the Agent", () => {
+  const gold = computeV025Gold(generateV025Dataset("0123456789abcdef0123"));
+  assert.deepEqual(Object.keys(gold.questions), ["Q-J25-CAC-28D", "Q-J25-CAC-7D"]);
+  const first = gold.questions["Q-J25-CAC-28D"];
+  const followUp = gold.questions["Q-J25-CAC-7D"];
+  assert.equal(first.expected.type, "money_cents");
+  assert.equal(first.expected.toleranceCents, 0);
+  assert.equal(followUp.expected.type, "money_cents");
+  assert.ok(Number.isInteger(first.expected.cents) && first.expected.cents > 0);
+  assert.ok(Number.isInteger(followUp.expected.cents) && followUp.expected.cents > 0);
+  // The follow-up is a natural anaphoric question in the same session.
+  assert.match(followUp.question, /那/);
+  assert.equal(mainlineQuestions(generateV025Dataset("0123456789abcdef0123")).length, 2);
+});
+
+test("the v0.25 gold agrees with the frozen catalog's gold for the same fixture and window", () => {
+  // Two independent implementations of the same governed metric must land on
+  // the same cents; a drift means one of them changed its semantics.
+  const frozen = computeGold(generateDataset("0123456789abcdef0123")).questions;
+  const v025 = computeV025Gold(generateV025Dataset("0123456789abcdef0123")).questions;
+  assert.equal(v025["Q-J25-CAC-28D"].expected.cents, frozen["Q-CAC-28D"].expected.cents);
+  assert.equal(v025["Q-J25-CAC-7D"].expected.cents, frozen["Q-CAC-7D"].expected.cents);
+});
+
+test("the v0.25 gold states the NULL / 0 semantics and a discriminating decoy", () => {
+  const gold = computeV025Gold(generateV025Dataset("0123456789abcdef0123"));
+  const first = gold.questions["Q-J25-CAC-28D"];
+  assert.ok(first.nullZeroSemantics.null.rule.includes("NULL"));
+  assert.ok(first.nullZeroSemantics.zero.rule.includes("无法计算"));
+  assert.equal(gold.rowCounts.nullRows, 1, "the fixture has one NULL-customer row");
+  assert.equal(gold.rowCounts.zeroRows, 1, "the fixture has one zero-customer row");
+  // The decoys must actually differ from the correct answer, otherwise they
+  // cannot detect a wrong run.
+  assert.notEqual(first.wrongAnswers.avgOfDailyRatiosCents, first.expected.cents);
+  assert.notEqual(first.wrongAnswers.spendIncludingNullRowsCents, first.expected.cents);
 });

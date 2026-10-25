@@ -1,0 +1,471 @@
+# v0.25 E2E 覆盖清单（Plan W0-1）
+#
+# 权威：Spec docs/specs/lucy-20261025-v0p25-e2e-mainline-and-branch-optimization-spec.md
+# 口径：Plan docs/plans/2026-10-25-lucy-v0.25-e2e-mainline-and-branch-optimization-plan.md §2.3 / §3
+# 校验：scripts/e2e/__tests__/v025-coverage.test.mjs
+#
+# 三组对象互不替代：
+#   existingCatalogMappings —— 255 个既有冻结 variant，只登记 ownerBranch 与跨域引用；
+#     其 executors/requires/assert/artifacts/gold 以 scripts/e2e/contracts/case-catalog.yaml 为唯一真源，本清单不复制。
+#   newScenarios —— 160 个 P0/P1 需求执行项 + CON25-01..12 + LOG25-01。
+#   journeys —— 唯一的聚合主线 J25-01。
+#
+# gold: null 表示该执行项尚未绑定 typed gold 键；assert 含 typed_gold 表示该波实现时必须登记 gold 键，
+# 不得在键存在前伪造引用。此清单为静态合同，不记录任何运行状态。
+version: 1
+spec: "docs/specs/lucy-20261025-v0p25-e2e-mainline-and-branch-optimization-spec.md"
+plan: "docs/plans/2026-10-25-lucy-v0.25-e2e-mainline-and-branch-optimization-plan.md"
+catalog: "scripts/e2e/contracts/case-catalog.yaml"
+ownerBranches: [CONN, SEM, ACCESS, OBSERVE, AGENT, LIFECYCLE]
+
+# 既有冻结 variant 的责任归域（Spec §6.1）。executionId 即原 catalog ID，不复制为 *25-*。
+existingCatalogMappings:
+  - { executionId: "SEC-01-V01", ownerBranch: ACCESS }
+  - { executionId: "SEC-01-V02", ownerBranch: ACCESS }
+  - { executionId: "SEC-01-V03", ownerBranch: ACCESS }
+  - { executionId: "SEC-01-V04", ownerBranch: ACCESS }
+  - { executionId: "SEC-01-V05", ownerBranch: ACCESS }
+  - { executionId: "SEC-01-V06", ownerBranch: ACCESS }
+  - { executionId: "SEC-02-V01", ownerBranch: ACCESS }
+  - { executionId: "SEC-02-V02", ownerBranch: ACCESS }
+  - { executionId: "SEC-02-V03", ownerBranch: ACCESS }
+  - { executionId: "SEC-02-V04", ownerBranch: ACCESS }
+  - { executionId: "SEC-02-V05", ownerBranch: ACCESS }
+  - { executionId: "SEC-02-V06", ownerBranch: ACCESS }
+  - { executionId: "SEC-03-V01", ownerBranch: ACCESS }
+  - { executionId: "SEC-03-V02", ownerBranch: ACCESS }
+  - { executionId: "SEC-03-V03", ownerBranch: ACCESS }
+  - { executionId: "SEC-03-V04", ownerBranch: ACCESS }
+  - { executionId: "SEC-03-V05", ownerBranch: ACCESS }
+  - { executionId: "SEC-04-V01", ownerBranch: ACCESS }
+  - { executionId: "SEC-04-V02", ownerBranch: ACCESS }
+  - { executionId: "SEC-04-V03", ownerBranch: ACCESS }
+  - { executionId: "SEC-04-V04", ownerBranch: ACCESS }
+  - { executionId: "SEC-04-V05", ownerBranch: ACCESS }
+  - { executionId: "SEC-04-V06", ownerBranch: ACCESS }
+  - { executionId: "SEC-04-V07", ownerBranch: ACCESS }
+  - { executionId: "SEC-04-V08", ownerBranch: ACCESS }
+  - { executionId: "SEC-04-V09", ownerBranch: ACCESS }
+  - { executionId: "SEC-04-V10", ownerBranch: ACCESS }
+  - { executionId: "SEC-04-V11", ownerBranch: ACCESS }
+  - { executionId: "SEC-05-V01", ownerBranch: ACCESS }
+  - { executionId: "SEC-05-V02", ownerBranch: ACCESS }
+  - { executionId: "SEC-05-V03", ownerBranch: ACCESS }
+  - { executionId: "SEC-05-V04", ownerBranch: ACCESS }
+  - { executionId: "SEC-05-V05", ownerBranch: ACCESS }
+  - { executionId: "SEC-05-V06", ownerBranch: ACCESS }
+  - { executionId: "SEC-05-V07", ownerBranch: ACCESS }
+  - { executionId: "SEC-06-V01", ownerBranch: ACCESS }
+  - { executionId: "SEC-06-V02", ownerBranch: ACCESS }
+  - { executionId: "SEC-06-V03", ownerBranch: ACCESS }
+  - { executionId: "SEC-06-V04", ownerBranch: ACCESS }
+  - { executionId: "SEC-06-V05", ownerBranch: ACCESS }
+  - { executionId: "SEC-07-V01", ownerBranch: ACCESS }
+  - { executionId: "SEC-07-V02", ownerBranch: ACCESS }
+  - { executionId: "SEC-07-V03", ownerBranch: ACCESS }
+  - { executionId: "SEC-07-V04", ownerBranch: ACCESS }
+  - { executionId: "SEC-07-V05", ownerBranch: ACCESS }
+  - { executionId: "SEC-07-V06", ownerBranch: ACCESS }
+  - { executionId: "SEC-07-V07", ownerBranch: ACCESS }
+  - { executionId: "SEC-07-V08", ownerBranch: ACCESS }
+  - { executionId: "SEC-07-V09", ownerBranch: ACCESS }
+  - { executionId: "SEC-07-V10", ownerBranch: ACCESS }
+  - { executionId: "SEC-07-V11", ownerBranch: ACCESS }
+  - { executionId: "SEC-07-V12", ownerBranch: ACCESS }
+  - { executionId: "SEC-07-V13", ownerBranch: ACCESS }
+  - { executionId: "SEC-08-V01", ownerBranch: ACCESS }
+  - { executionId: "SEC-08-V02", ownerBranch: ACCESS }
+  - { executionId: "SEC-08-V03", ownerBranch: ACCESS }
+  - { executionId: "SEC-08-V04", ownerBranch: ACCESS }
+  - { executionId: "SEC-08-V05", ownerBranch: ACCESS }
+  - { executionId: "SEC-08-V06", ownerBranch: ACCESS }
+  - { executionId: "SEC-08-V07", ownerBranch: ACCESS }
+  - { executionId: "SEC-08-V08", ownerBranch: ACCESS }
+  - { executionId: "SEC-09-V01", ownerBranch: ACCESS, crossDomainRefs: [CONN] }
+  - { executionId: "SEC-09-V02", ownerBranch: ACCESS, crossDomainRefs: [CONN] }
+  - { executionId: "SEC-09-V03", ownerBranch: ACCESS, crossDomainRefs: [CONN] }
+  - { executionId: "SEC-09-V04", ownerBranch: ACCESS, crossDomainRefs: [CONN] }
+  - { executionId: "SEC-09-V05", ownerBranch: ACCESS, crossDomainRefs: [CONN] }
+  - { executionId: "SEC-09-S01", ownerBranch: ACCESS, crossDomainRefs: [CONN] }
+  - { executionId: "SEC-09-S02", ownerBranch: ACCESS, crossDomainRefs: [CONN] }
+  - { executionId: "SEC-09-S03", ownerBranch: ACCESS, crossDomainRefs: [CONN] }
+  - { executionId: "SEC-09-S04", ownerBranch: ACCESS, crossDomainRefs: [CONN] }
+  - { executionId: "SEC-09-S05", ownerBranch: ACCESS, crossDomainRefs: [CONN] }
+  - { executionId: "SEC-10-V01", ownerBranch: ACCESS }
+  - { executionId: "SEC-10-V02", ownerBranch: ACCESS }
+  - { executionId: "SEC-10-V03", ownerBranch: ACCESS }
+  - { executionId: "SEC-10-V04", ownerBranch: ACCESS }
+  - { executionId: "SEC-10-V05", ownerBranch: ACCESS }
+  - { executionId: "SEC-11-BY01", ownerBranch: ACCESS }
+  - { executionId: "SEC-11-BY02", ownerBranch: ACCESS }
+  - { executionId: "SEC-11-BY03", ownerBranch: ACCESS }
+  - { executionId: "SEC-11-BY04", ownerBranch: ACCESS }
+  - { executionId: "SEC-11-BY05", ownerBranch: ACCESS }
+  - { executionId: "SEC-11-BY06", ownerBranch: ACCESS }
+  - { executionId: "SEC-11-BY07", ownerBranch: ACCESS }
+  - { executionId: "SEC-11-BY08", ownerBranch: ACCESS }
+  - { executionId: "SEC-11-BY09", ownerBranch: ACCESS }
+  - { executionId: "SEC-11-BY10", ownerBranch: ACCESS }
+  - { executionId: "SEC-11-BY11", ownerBranch: ACCESS }
+  - { executionId: "SEC-11-BY12", ownerBranch: ACCESS }
+  - { executionId: "SEC-11-BY13", ownerBranch: ACCESS }
+  - { executionId: "SEC-11-BY14", ownerBranch: ACCESS }
+  - { executionId: "SEC-11-BY15", ownerBranch: ACCESS }
+  - { executionId: "SEC-11-BY16", ownerBranch: ACCESS }
+  - { executionId: "SEC-11-BY17", ownerBranch: ACCESS }
+  - { executionId: "SEC-11-BY18", ownerBranch: ACCESS }
+  - { executionId: "SEC-11-BY19", ownerBranch: ACCESS }
+  - { executionId: "SEC-12-V01", ownerBranch: ACCESS }
+  - { executionId: "SEC-12-V02", ownerBranch: ACCESS }
+  - { executionId: "SEC-12-V03", ownerBranch: ACCESS }
+  - { executionId: "SEC-12-V04", ownerBranch: ACCESS }
+  - { executionId: "SEC-12-V05", ownerBranch: ACCESS }
+  - { executionId: "SEC-12-V06", ownerBranch: ACCESS }
+  - { executionId: "SEC-12-V07", ownerBranch: ACCESS }
+  - { executionId: "SEC-12-V08", ownerBranch: ACCESS }
+  - { executionId: "SEC-12-V09", ownerBranch: ACCESS }
+  - { executionId: "SEC-12-V10", ownerBranch: ACCESS }
+  - { executionId: "SEC-13-V01", ownerBranch: ACCESS }
+  - { executionId: "SEC-13-V02", ownerBranch: ACCESS }
+  - { executionId: "SEC-13-V03", ownerBranch: ACCESS }
+  - { executionId: "SEC-13-V04", ownerBranch: ACCESS }
+  - { executionId: "SEC-13-V05", ownerBranch: ACCESS }
+  - { executionId: "SEC-13-V06", ownerBranch: ACCESS }
+  - { executionId: "SEC-14-V01", ownerBranch: ACCESS }
+  - { executionId: "SEC-14-V02", ownerBranch: ACCESS }
+  - { executionId: "SEC-14-V03", ownerBranch: ACCESS }
+  - { executionId: "SEC-14-V04", ownerBranch: ACCESS }
+  - { executionId: "SEC-14-V05", ownerBranch: ACCESS }
+  - { executionId: "SEC-14-V06", ownerBranch: ACCESS }
+  - { executionId: "SEC-14-V07", ownerBranch: ACCESS }
+  - { executionId: "SEC-14-V08", ownerBranch: ACCESS }
+  - { executionId: "SEC-14-V09", ownerBranch: ACCESS }
+  - { executionId: "SEC-14-V10", ownerBranch: ACCESS }
+  - { executionId: "SEC-14-V11", ownerBranch: ACCESS }
+  - { executionId: "SEC-14-V12", ownerBranch: ACCESS }
+  - { executionId: "SEC-15-V01", ownerBranch: SEM, crossDomainRefs: [ACCESS] }
+  - { executionId: "SEC-15-V02", ownerBranch: SEM, crossDomainRefs: [ACCESS] }
+  - { executionId: "SEC-15-V03", ownerBranch: SEM, crossDomainRefs: [ACCESS] }
+  - { executionId: "SEC-15-V04", ownerBranch: SEM, crossDomainRefs: [ACCESS] }
+  - { executionId: "SEC-15-V05", ownerBranch: SEM, crossDomainRefs: [ACCESS] }
+  - { executionId: "SEC-15-V06", ownerBranch: SEM, crossDomainRefs: [ACCESS] }
+  - { executionId: "SEC-15-FM-01", ownerBranch: SEM, crossDomainRefs: [ACCESS] }
+  - { executionId: "SEC-15-FM-02", ownerBranch: SEM, crossDomainRefs: [ACCESS] }
+  - { executionId: "SEC-15-FM-03", ownerBranch: SEM, crossDomainRefs: [ACCESS] }
+  - { executionId: "SEC-15-FM-04", ownerBranch: SEM, crossDomainRefs: [ACCESS] }
+  - { executionId: "SEC-15-FM-05", ownerBranch: SEM, crossDomainRefs: [ACCESS] }
+  - { executionId: "SEC-15-FM-06", ownerBranch: SEM, crossDomainRefs: [ACCESS] }
+  - { executionId: "SEC-15-FM-SEED", ownerBranch: SEM, crossDomainRefs: [ACCESS] }
+  - { executionId: "SEC-15-S01", ownerBranch: SEM, crossDomainRefs: [ACCESS] }
+  - { executionId: "SEC-16-V01", ownerBranch: AGENT, crossDomainRefs: [ACCESS] }
+  - { executionId: "SEC-16-V02", ownerBranch: AGENT, crossDomainRefs: [ACCESS] }
+  - { executionId: "SEC-16-V03", ownerBranch: AGENT, crossDomainRefs: [ACCESS] }
+  - { executionId: "SEC-16-V04", ownerBranch: AGENT, crossDomainRefs: [ACCESS] }
+  - { executionId: "SEC-17-V01", ownerBranch: AGENT, crossDomainRefs: [ACCESS] }
+  - { executionId: "SEC-17-V02", ownerBranch: AGENT, crossDomainRefs: [ACCESS] }
+  - { executionId: "SEC-17-V03", ownerBranch: AGENT, crossDomainRefs: [ACCESS] }
+  - { executionId: "SEC-17-V04", ownerBranch: AGENT, crossDomainRefs: [ACCESS] }
+  - { executionId: "SEC-17-V05", ownerBranch: AGENT, crossDomainRefs: [ACCESS] }
+  - { executionId: "SEC-17-V06", ownerBranch: AGENT, crossDomainRefs: [ACCESS] }
+  - { executionId: "SEC-17-V07", ownerBranch: AGENT, crossDomainRefs: [ACCESS] }
+  - { executionId: "SEC-17-V08", ownerBranch: AGENT, crossDomainRefs: [ACCESS] }
+  - { executionId: "SEC-17-V09", ownerBranch: AGENT, crossDomainRefs: [ACCESS] }
+  - { executionId: "SEC-17-V10", ownerBranch: AGENT, crossDomainRefs: [ACCESS] }
+  - { executionId: "SEC-18-V01", ownerBranch: OBSERVE }
+  - { executionId: "SEC-18-V02", ownerBranch: OBSERVE }
+  - { executionId: "SEC-18-V03", ownerBranch: OBSERVE }
+  - { executionId: "SEC-18-V04", ownerBranch: OBSERVE }
+  - { executionId: "SEC-18-V05", ownerBranch: OBSERVE }
+  - { executionId: "SEC-18-S01", ownerBranch: OBSERVE }
+  - { executionId: "SEC-18-S02", ownerBranch: OBSERVE }
+  - { executionId: "SEC-18-S03", ownerBranch: OBSERVE }
+  - { executionId: "SEC-18-S04", ownerBranch: OBSERVE }
+  - { executionId: "SEC-18-V06", ownerBranch: OBSERVE }
+  - { executionId: "SEC-19-V01", ownerBranch: OBSERVE }
+  - { executionId: "SEC-19-V02", ownerBranch: OBSERVE }
+  - { executionId: "SEC-19-V03", ownerBranch: OBSERVE }
+  - { executionId: "SEC-19-V04", ownerBranch: OBSERVE }
+  - { executionId: "SEC-19-V05", ownerBranch: OBSERVE }
+  - { executionId: "SEC-19-V06", ownerBranch: OBSERVE }
+  - { executionId: "SEC-19-V07", ownerBranch: OBSERVE }
+  - { executionId: "SEC-20-V01", ownerBranch: OBSERVE, crossDomainRefs: [LIFECYCLE] }
+  - { executionId: "SEC-20-V02", ownerBranch: OBSERVE, crossDomainRefs: [LIFECYCLE] }
+  - { executionId: "SEC-20-V03", ownerBranch: OBSERVE, crossDomainRefs: [LIFECYCLE] }
+  - { executionId: "SEC-20-V04", ownerBranch: OBSERVE, crossDomainRefs: [LIFECYCLE] }
+  - { executionId: "SEC-20-V05", ownerBranch: LIFECYCLE, crossDomainRefs: [OBSERVE] }
+  - { executionId: "SEC-20-V06", ownerBranch: OBSERVE, crossDomainRefs: [LIFECYCLE] }
+  - { executionId: "SEC-21-V01", ownerBranch: ACCESS, crossDomainRefs: [OBSERVE] }
+  - { executionId: "SEC-21-V02", ownerBranch: ACCESS, crossDomainRefs: [OBSERVE] }
+  - { executionId: "SEC-21-V03", ownerBranch: ACCESS, crossDomainRefs: [OBSERVE] }
+  - { executionId: "SEC-21-V04", ownerBranch: ACCESS, crossDomainRefs: [OBSERVE] }
+  - { executionId: "SEC-21-V05", ownerBranch: ACCESS, crossDomainRefs: [OBSERVE] }
+  - { executionId: "SEC-21-V06", ownerBranch: ACCESS, crossDomainRefs: [OBSERVE] }
+  - { executionId: "SEC-22-V01", ownerBranch: ACCESS, crossDomainRefs: [LIFECYCLE] }
+  - { executionId: "SEC-22-V02", ownerBranch: ACCESS, crossDomainRefs: [LIFECYCLE] }
+  - { executionId: "SEC-22-V03", ownerBranch: ACCESS, crossDomainRefs: [LIFECYCLE] }
+  - { executionId: "SEC-22-V04", ownerBranch: ACCESS, crossDomainRefs: [LIFECYCLE] }
+  - { executionId: "SEC-22-V05", ownerBranch: ACCESS, crossDomainRefs: [LIFECYCLE] }
+  - { executionId: "SEC-22-V06", ownerBranch: ACCESS, crossDomainRefs: [LIFECYCLE] }
+  - { executionId: "SEC-22-V07", ownerBranch: ACCESS, crossDomainRefs: [LIFECYCLE] }
+  - { executionId: "SEC-22-S01", ownerBranch: ACCESS, crossDomainRefs: [LIFECYCLE] }
+  - { executionId: "SEC-23-V01", ownerBranch: LIFECYCLE }
+  - { executionId: "SEC-23-V02", ownerBranch: LIFECYCLE }
+  - { executionId: "SEC-23-V03", ownerBranch: LIFECYCLE }
+  - { executionId: "SEC-23-V04", ownerBranch: LIFECYCLE }
+  - { executionId: "SEC-23-V05", ownerBranch: LIFECYCLE }
+  - { executionId: "UX-01-V01", ownerBranch: AGENT, crossDomainRefs: [CONN, SEM, ACCESS, OBSERVE, AGENT] }
+  - { executionId: "UX-01-V02", ownerBranch: AGENT, crossDomainRefs: [CONN, SEM, ACCESS, OBSERVE, AGENT] }
+  - { executionId: "UX-01-V03", ownerBranch: AGENT, crossDomainRefs: [CONN, SEM, ACCESS, OBSERVE, AGENT] }
+  - { executionId: "UX-02-V01", ownerBranch: AGENT }
+  - { executionId: "UX-02-V02", ownerBranch: AGENT }
+  - { executionId: "UX-02-V03", ownerBranch: AGENT }
+  - { executionId: "UX-02-V04", ownerBranch: AGENT }
+  - { executionId: "UX-02-V05", ownerBranch: AGENT }
+  - { executionId: "UX-02-V06", ownerBranch: AGENT }
+  - { executionId: "UX-02-S01", ownerBranch: AGENT }
+  - { executionId: "UX-03-V01", ownerBranch: AGENT, crossDomainRefs: [ACCESS, OBSERVE] }
+  - { executionId: "UX-03-V02", ownerBranch: AGENT, crossDomainRefs: [ACCESS, OBSERVE] }
+  - { executionId: "UX-03-V03", ownerBranch: AGENT, crossDomainRefs: [ACCESS, OBSERVE] }
+  - { executionId: "UX-03-V04", ownerBranch: AGENT, crossDomainRefs: [ACCESS, OBSERVE] }
+  - { executionId: "UX-03-V05", ownerBranch: AGENT, crossDomainRefs: [ACCESS, OBSERVE] }
+  - { executionId: "UX-03-V06", ownerBranch: AGENT, crossDomainRefs: [ACCESS, OBSERVE] }
+  - { executionId: "UX-03-S01", ownerBranch: AGENT, crossDomainRefs: [ACCESS, OBSERVE] }
+  - { executionId: "UX-03-S02", ownerBranch: AGENT, crossDomainRefs: [ACCESS, OBSERVE] }
+  - { executionId: "UX-03-S03", ownerBranch: AGENT, crossDomainRefs: [ACCESS, OBSERVE] }
+  - { executionId: "UX-04-V01", ownerBranch: AGENT, crossDomainRefs: [SEM, LIFECYCLE] }
+  - { executionId: "UX-04-V02", ownerBranch: AGENT, crossDomainRefs: [SEM, LIFECYCLE] }
+  - { executionId: "UX-04-V03", ownerBranch: AGENT, crossDomainRefs: [SEM, LIFECYCLE] }
+  - { executionId: "UX-04-S01", ownerBranch: AGENT, crossDomainRefs: [SEM, LIFECYCLE] }
+  - { executionId: "UX-04-S02", ownerBranch: AGENT, crossDomainRefs: [SEM, LIFECYCLE] }
+  - { executionId: "UX-05-V01", ownerBranch: AGENT }
+  - { executionId: "UX-05-V02", ownerBranch: AGENT }
+  - { executionId: "UX-06-V01", ownerBranch: AGENT }
+  - { executionId: "UX-06-V02", ownerBranch: AGENT }
+  - { executionId: "UX-06-V03", ownerBranch: AGENT }
+  - { executionId: "UX-06-V04", ownerBranch: ACCESS, crossDomainRefs: [AGENT] }
+  - { executionId: "UX-06-V05", ownerBranch: ACCESS, crossDomainRefs: [AGENT] }
+  - { executionId: "UX-06-V06", ownerBranch: ACCESS, crossDomainRefs: [AGENT] }
+  - { executionId: "UX-06-V07", ownerBranch: ACCESS, crossDomainRefs: [AGENT] }
+  - { executionId: "UX-06-V08", ownerBranch: AGENT }
+  - { executionId: "UX-07-V01", ownerBranch: ACCESS, crossDomainRefs: [OBSERVE] }
+  - { executionId: "UX-07-V02", ownerBranch: OBSERVE }
+  - { executionId: "UX-07-V03", ownerBranch: ACCESS, crossDomainRefs: [OBSERVE] }
+  - { executionId: "UX-07-V04", ownerBranch: ACCESS, crossDomainRefs: [OBSERVE] }
+  - { executionId: "UX-07-S01", ownerBranch: OBSERVE }
+  - { executionId: "OPS-01-V01", ownerBranch: LIFECYCLE, crossDomainRefs: [SEM, ACCESS, OBSERVE] }
+  - { executionId: "OPS-01-V02", ownerBranch: LIFECYCLE, crossDomainRefs: [SEM, ACCESS, OBSERVE] }
+  - { executionId: "OPS-01-V03", ownerBranch: LIFECYCLE, crossDomainRefs: [SEM, ACCESS, OBSERVE] }
+  - { executionId: "OPS-01-V04", ownerBranch: LIFECYCLE, crossDomainRefs: [SEM, ACCESS, OBSERVE] }
+  - { executionId: "OPS-01-V05", ownerBranch: LIFECYCLE, crossDomainRefs: [SEM, ACCESS, OBSERVE] }
+  - { executionId: "OPS-01-V06", ownerBranch: LIFECYCLE, crossDomainRefs: [SEM, ACCESS, OBSERVE] }
+  - { executionId: "OPS-01-V07", ownerBranch: LIFECYCLE, crossDomainRefs: [SEM, ACCESS, OBSERVE] }
+  - { executionId: "GATE-01-V01", ownerBranch: LIFECYCLE }
+  - { executionId: "GATE-01-V02", ownerBranch: LIFECYCLE }
+  - { executionId: "GATE-01-V03", ownerBranch: LIFECYCLE }
+  - { executionId: "GATE-01-V04", ownerBranch: LIFECYCLE }
+  - { executionId: "GATE-01-V05", ownerBranch: LIFECYCLE }
+  - { executionId: "GATE-01-V06", ownerBranch: LIFECYCLE }
+  - { executionId: "GATE-01-V07", ownerBranch: LIFECYCLE }
+  - { executionId: "GATE-01-V08", ownerBranch: LIFECYCLE }
+  - { executionId: "GATE-01-V09", ownerBranch: LIFECYCLE }
+  - { executionId: "GATE-01-V10", ownerBranch: LIFECYCLE }
+  - { executionId: "GATE-01-V11", ownerBranch: LIFECYCLE }
+  - { executionId: "GATE-01-V12", ownerBranch: LIFECYCLE }
+  - { executionId: "GATE-01-V13", ownerBranch: LIFECYCLE }
+  - { executionId: "GATE-01-V14", ownerBranch: LIFECYCLE }
+  - { executionId: "GATE-01-V15", ownerBranch: LIFECYCLE }
+  - { executionId: "GATE-01-V16", ownerBranch: LIFECYCLE }
+
+# 新增执行项（Spec §7.2 / §7.3 / §7.4）
+newScenarios:
+  - { executionId: "AUD25-A01", sourceSpec: "docs/specs/lucy-20261020-v2p5-audit-increment-spec.md", sourceRequirementId: "A01", ownerBranch: OBSERVE, priority: P0, executors: [P, D, A, O, V], requires: [lucy-http, ktx-upstream, postgres, fault-control, agent-client], assert: [audit_event, artifact_scan, consistency], artifacts: [security-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "AUD25-A02", sourceSpec: "docs/specs/lucy-20261020-v2p5-audit-increment-spec.md", sourceRequirementId: "A02", ownerBranch: OBSERVE, priority: P0, executors: [P, D, A, O, V], requires: [lucy-http, ktx-upstream, postgres, fault-control, agent-client], assert: [audit_event, artifact_scan, consistency], artifacts: [security-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "AUD25-A03", sourceSpec: "docs/specs/lucy-20261020-v2p5-audit-increment-spec.md", sourceRequirementId: "A03", ownerBranch: OBSERVE, priority: P0, executors: [P, D, A, O, V], requires: [lucy-http, ktx-upstream, postgres, fault-control, agent-client], assert: [audit_event, artifact_scan, consistency], artifacts: [security-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "AUD25-A04", sourceSpec: "docs/specs/lucy-20261020-v2p5-audit-increment-spec.md", sourceRequirementId: "A04", ownerBranch: OBSERVE, priority: P0, executors: [P, D, A, O, V], requires: [lucy-http, ktx-upstream, postgres, fault-control, agent-client], assert: [audit_event, artifact_scan, consistency], artifacts: [security-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "AUD25-A05", sourceSpec: "docs/specs/lucy-20261020-v2p5-audit-increment-spec.md", sourceRequirementId: "A05", ownerBranch: OBSERVE, priority: P0, executors: [P, D, A, O, V], requires: [lucy-http, ktx-upstream, postgres, fault-control, agent-client], assert: [audit_event, artifact_scan, consistency], artifacts: [security-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "AUD25-A06", sourceSpec: "docs/specs/lucy-20261020-v2p5-audit-increment-spec.md", sourceRequirementId: "A06", ownerBranch: OBSERVE, priority: P0, executors: [P, D, A, O, V], requires: [lucy-http, ktx-upstream, postgres, fault-control, agent-client], assert: [audit_event, artifact_scan, consistency], artifacts: [security-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "AUD25-A07", sourceSpec: "docs/specs/lucy-20261020-v2p5-audit-increment-spec.md", sourceRequirementId: "A07", ownerBranch: OBSERVE, priority: P0, executors: [P, D, A, O, V], requires: [lucy-http, ktx-upstream, postgres, fault-control, agent-client], assert: [audit_event, artifact_scan, consistency], artifacts: [security-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "AUD25-A08", sourceSpec: "docs/specs/lucy-20261020-v2p5-audit-increment-spec.md", sourceRequirementId: "A08", ownerBranch: OBSERVE, priority: P0, executors: [P, D, A, O, V], requires: [lucy-http, ktx-upstream, postgres, fault-control, agent-client], assert: [audit_event, artifact_scan, consistency], artifacts: [security-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "AUD25-A09", sourceSpec: "docs/specs/lucy-20261020-v2p5-audit-increment-spec.md", sourceRequirementId: "A09", ownerBranch: OBSERVE, priority: P0, executors: [P, D, A, O, V], requires: [lucy-http, ktx-upstream, postgres, fault-control, agent-client], assert: [audit_event, artifact_scan, consistency], artifacts: [security-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "AUD25-A10", sourceSpec: "docs/specs/lucy-20261020-v2p5-audit-increment-spec.md", sourceRequirementId: "A10", ownerBranch: OBSERVE, priority: P0, executors: [P, D, A, O, V], requires: [lucy-http, ktx-upstream, postgres, fault-control, agent-client], assert: [audit_event, artifact_scan, consistency], artifacts: [security-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "AUD25-A11", sourceSpec: "docs/specs/lucy-20261020-v2p5-audit-increment-spec.md", sourceRequirementId: "A11", ownerBranch: OBSERVE, priority: P0, executors: [P, D, A, O, V], requires: [lucy-http, ktx-upstream, postgres, fault-control, agent-client], assert: [audit_event, artifact_scan, consistency], artifacts: [security-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "AUD25-A12", sourceSpec: "docs/specs/lucy-20261020-v2p5-audit-increment-spec.md", sourceRequirementId: "A12", ownerBranch: OBSERVE, priority: P0, executors: [P, D, A, O, V], requires: [lucy-http, ktx-upstream, postgres, fault-control, agent-client], assert: [audit_event, artifact_scan, consistency], artifacts: [security-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "ROW25-V01", sourceSpec: "docs/specs/lucy-20261022-v2p5-row-permission-management-spec.md", sourceRequirementId: "V01", ownerBranch: ACCESS, priority: P0, executors: [P, B, A, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client], assert: [allow_control, deny, no_side_effect, consistency], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "ROW25-V02", sourceSpec: "docs/specs/lucy-20261022-v2p5-row-permission-management-spec.md", sourceRequirementId: "V02", ownerBranch: ACCESS, priority: P0, executors: [P, B, A, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client], assert: [allow_control, deny, no_side_effect, consistency], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "ROW25-V03", sourceSpec: "docs/specs/lucy-20261022-v2p5-row-permission-management-spec.md", sourceRequirementId: "V03", ownerBranch: ACCESS, priority: P0, executors: [P, B, A, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client], assert: [allow_control, deny, no_side_effect, consistency], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "ROW25-V04", sourceSpec: "docs/specs/lucy-20261022-v2p5-row-permission-management-spec.md", sourceRequirementId: "V04", ownerBranch: ACCESS, priority: P0, executors: [P, B, A, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client], assert: [allow_control, deny, no_side_effect, consistency], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "ROW25-V05", sourceSpec: "docs/specs/lucy-20261022-v2p5-row-permission-management-spec.md", sourceRequirementId: "V05", ownerBranch: ACCESS, priority: P0, executors: [P, B, A, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client], assert: [allow_control, deny, no_side_effect, consistency], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "ROW25-V06", sourceSpec: "docs/specs/lucy-20261022-v2p5-row-permission-management-spec.md", sourceRequirementId: "V06", ownerBranch: ACCESS, priority: P0, executors: [P, B, A, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client], assert: [allow_control, deny, no_side_effect, consistency], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "ROW25-V07", sourceSpec: "docs/specs/lucy-20261022-v2p5-row-permission-management-spec.md", sourceRequirementId: "V07", ownerBranch: ACCESS, priority: P0, executors: [P, B, A, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client], assert: [allow_control, deny, no_side_effect, consistency], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "ROW25-V08", sourceSpec: "docs/specs/lucy-20261022-v2p5-row-permission-management-spec.md", sourceRequirementId: "V08", ownerBranch: ACCESS, priority: P0, executors: [P, B, A, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client], assert: [allow_control, deny, no_side_effect, consistency], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "ROW25-V09", sourceSpec: "docs/specs/lucy-20261022-v2p5-row-permission-management-spec.md", sourceRequirementId: "V09", ownerBranch: ACCESS, priority: P0, executors: [P, B, A, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client], assert: [allow_control, deny, no_side_effect, consistency], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "ROW25-V10", sourceSpec: "docs/specs/lucy-20261022-v2p5-row-permission-management-spec.md", sourceRequirementId: "V10", ownerBranch: ACCESS, priority: P0, executors: [P, B, A, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client], assert: [allow_control, deny, no_side_effect, consistency], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "ROW25-V11", sourceSpec: "docs/specs/lucy-20261022-v2p5-row-permission-management-spec.md", sourceRequirementId: "V11", ownerBranch: ACCESS, priority: P0, executors: [P, B, A, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client], assert: [allow_control, deny, no_side_effect, consistency], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "ROW25-V12", sourceSpec: "docs/specs/lucy-20261022-v2p5-row-permission-management-spec.md", sourceRequirementId: "V12", ownerBranch: ACCESS, priority: P0, executors: [P, B, A, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client], assert: [allow_control, deny, no_side_effect, consistency], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "ROW25-V13", sourceSpec: "docs/specs/lucy-20261022-v2p5-row-permission-management-spec.md", sourceRequirementId: "V13", ownerBranch: ACCESS, priority: P0, executors: [P, B, A, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client], assert: [allow_control, deny, no_side_effect, consistency], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "ROW25-V14", sourceSpec: "docs/specs/lucy-20261022-v2p5-row-permission-management-spec.md", sourceRequirementId: "V14", ownerBranch: ACCESS, priority: P0, executors: [P, B, A, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client], assert: [allow_control, deny, no_side_effect, consistency], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "ROW25-V15", sourceSpec: "docs/specs/lucy-20261022-v2p5-row-permission-management-spec.md", sourceRequirementId: "V15", ownerBranch: ACCESS, priority: P0, executors: [P, B, A, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client, fault-control], assert: [allow_control, deny, no_side_effect, consistency], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "ROW25-V16", sourceSpec: "docs/specs/lucy-20261022-v2p5-row-permission-management-spec.md", sourceRequirementId: "V16", ownerBranch: ACCESS, priority: P0, executors: [P, B, A, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client], assert: [allow_control, deny, no_side_effect, consistency], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "ROW25-V17", sourceSpec: "docs/specs/lucy-20261022-v2p5-row-permission-management-spec.md", sourceRequirementId: "V17", ownerBranch: ACCESS, priority: P0, executors: [P, B, A, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client], assert: [allow_control, deny, no_side_effect, consistency], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "ROW25-V18", sourceSpec: "docs/specs/lucy-20261022-v2p5-row-permission-management-spec.md", sourceRequirementId: "V18", ownerBranch: ACCESS, priority: P0, executors: [P, B, A, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client], assert: [allow_control, deny, no_side_effect, consistency], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "ROW25-V19", sourceSpec: "docs/specs/lucy-20261022-v2p5-row-permission-management-spec.md", sourceRequirementId: "V19", ownerBranch: ACCESS, priority: P0, executors: [P, B, A, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client], assert: [allow_control, deny, no_side_effect, consistency], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "ROW25-V20", sourceSpec: "docs/specs/lucy-20261022-v2p5-row-permission-management-spec.md", sourceRequirementId: "V20", ownerBranch: ACCESS, priority: P0, executors: [P, B, A, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client], assert: [allow_control, deny, no_side_effect, consistency], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "ROW25-V21", sourceSpec: "docs/specs/lucy-20261022-v2p5-row-permission-management-spec.md", sourceRequirementId: "V21", ownerBranch: ACCESS, priority: P0, executors: [P, B, A, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client], assert: [allow_control, deny, no_side_effect, consistency], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "ROW25-V22", sourceSpec: "docs/specs/lucy-20261022-v2p5-row-permission-management-spec.md", sourceRequirementId: "V22", ownerBranch: ACCESS, priority: P0, executors: [P, B, A, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client], assert: [allow_control, deny, no_side_effect, consistency], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "SEM25-V01", sourceSpec: "docs/specs/lucy-20261020-v2p5-semantic-batch-operations-spec.md", sourceRequirementId: "V01", ownerBranch: SEM, priority: P0, executors: [B, P, D, O, V], requires: [lucy-http, ktx-upstream, postgres, browser, fault-control], assert: [allow_control, no_side_effect, exactly_one_wins, consistency], artifacts: [management-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "SEM25-V02", sourceSpec: "docs/specs/lucy-20261020-v2p5-semantic-batch-operations-spec.md", sourceRequirementId: "V02", ownerBranch: SEM, priority: P0, executors: [B, P, D, O, V], requires: [lucy-http, ktx-upstream, postgres, browser, fault-control], assert: [allow_control, no_side_effect, exactly_one_wins, consistency], artifacts: [management-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "SEM25-V03", sourceSpec: "docs/specs/lucy-20261020-v2p5-semantic-batch-operations-spec.md", sourceRequirementId: "V03", ownerBranch: SEM, priority: P0, executors: [B, P, D, O, A, V], requires: [lucy-http, ktx-upstream, postgres, browser, fault-control, agent-client], assert: [allow_control, no_side_effect, exactly_one_wins, consistency, typed_gold], artifacts: [management-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "SEM25-V04", sourceSpec: "docs/specs/lucy-20261020-v2p5-semantic-batch-operations-spec.md", sourceRequirementId: "V04", ownerBranch: SEM, priority: P0, executors: [B, P, D, O, V], requires: [lucy-http, ktx-upstream, postgres, browser, fault-control], assert: [allow_control, no_side_effect, exactly_one_wins, consistency], artifacts: [management-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "SEM25-V05", sourceSpec: "docs/specs/lucy-20261020-v2p5-semantic-batch-operations-spec.md", sourceRequirementId: "V05", ownerBranch: SEM, priority: P0, executors: [B, P, D, O, V], requires: [lucy-http, ktx-upstream, postgres, browser, fault-control], assert: [allow_control, no_side_effect, exactly_one_wins, consistency], artifacts: [management-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "SEM25-V06", sourceSpec: "docs/specs/lucy-20261020-v2p5-semantic-batch-operations-spec.md", sourceRequirementId: "V06", ownerBranch: SEM, priority: P0, executors: [B, P, D, O, V], requires: [lucy-http, ktx-upstream, postgres, browser, fault-control], assert: [allow_control, no_side_effect, exactly_one_wins, consistency], artifacts: [management-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "SEM25-V07", sourceSpec: "docs/specs/lucy-20261020-v2p5-semantic-batch-operations-spec.md", sourceRequirementId: "V07", ownerBranch: SEM, priority: P0, executors: [B, P, D, O, V], requires: [lucy-http, ktx-upstream, postgres, browser, fault-control], assert: [allow_control, no_side_effect, exactly_one_wins, consistency], artifacts: [management-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "SEM25-V08", sourceSpec: "docs/specs/lucy-20261020-v2p5-semantic-batch-operations-spec.md", sourceRequirementId: "V08", ownerBranch: SEM, priority: P0, executors: [B, P, D, O, V], requires: [lucy-http, ktx-upstream, postgres, browser, fault-control], assert: [allow_control, no_side_effect, exactly_one_wins, consistency], artifacts: [management-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "SEM25-V09", sourceSpec: "docs/specs/lucy-20261020-v2p5-semantic-batch-operations-spec.md", sourceRequirementId: "V09", ownerBranch: SEM, priority: P0, executors: [B, P, D, O, V], requires: [lucy-http, ktx-upstream, postgres, browser, fault-control], assert: [allow_control, no_side_effect, exactly_one_wins, consistency], artifacts: [management-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "SEM25-V10", sourceSpec: "docs/specs/lucy-20261020-v2p5-semantic-batch-operations-spec.md", sourceRequirementId: "V10", ownerBranch: SEM, priority: P0, executors: [B, P, D, O, V], requires: [lucy-http, ktx-upstream, postgres, browser, fault-control], assert: [allow_control, no_side_effect, exactly_one_wins, consistency], artifacts: [management-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "SEM25-V11", sourceSpec: "docs/specs/lucy-20261020-v2p5-semantic-batch-operations-spec.md", sourceRequirementId: "V11", ownerBranch: SEM, priority: P0, executors: [B, P, D, O, V], requires: [lucy-http, ktx-upstream, postgres, browser, fault-control], assert: [allow_control, no_side_effect, exactly_one_wins, consistency], artifacts: [management-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "SEM25-V12", sourceSpec: "docs/specs/lucy-20261020-v2p5-semantic-batch-operations-spec.md", sourceRequirementId: "V12", ownerBranch: SEM, priority: P0, executors: [B, P, D, O, V], requires: [lucy-http, ktx-upstream, postgres, browser, fault-control], assert: [allow_control, no_side_effect, exactly_one_wins, consistency], artifacts: [management-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "SEM25-V13", sourceSpec: "docs/specs/lucy-20261020-v2p5-semantic-batch-operations-spec.md", sourceRequirementId: "V13", ownerBranch: SEM, priority: P0, executors: [B, P, D, O, V], requires: [lucy-http, ktx-upstream, postgres, browser, fault-control], assert: [allow_control, no_side_effect, exactly_one_wins, consistency], artifacts: [management-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "SEM25-V14", sourceSpec: "docs/specs/lucy-20261020-v2p5-semantic-batch-operations-spec.md", sourceRequirementId: "V14", ownerBranch: SEM, priority: P0, executors: [B, P, D, O, V], requires: [lucy-http, ktx-upstream, postgres, browser, fault-control], assert: [allow_control, no_side_effect, exactly_one_wins, consistency], artifacts: [management-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "SEM25-V15", sourceSpec: "docs/specs/lucy-20261020-v2p5-semantic-batch-operations-spec.md", sourceRequirementId: "V15", ownerBranch: SEM, priority: P0, executors: [B, P, D, O, V], requires: [lucy-http, ktx-upstream, postgres, browser, fault-control], assert: [allow_control, no_side_effect, exactly_one_wins, consistency], artifacts: [management-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "SEM25-V16", sourceSpec: "docs/specs/lucy-20261020-v2p5-semantic-batch-operations-spec.md", sourceRequirementId: "V16", ownerBranch: SEM, priority: P0, executors: [B, P, D, O, V], requires: [lucy-http, ktx-upstream, postgres, browser, fault-control], assert: [allow_control, no_side_effect, exactly_one_wins, consistency], artifacts: [management-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "SEM25-V17", sourceSpec: "docs/specs/lucy-20261020-v2p5-semantic-batch-operations-spec.md", sourceRequirementId: "V17", ownerBranch: SEM, priority: P0, executors: [B, P, D, O, V], requires: [lucy-http, ktx-upstream, postgres, browser, fault-control], assert: [allow_control, no_side_effect, exactly_one_wins, consistency], artifacts: [management-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "SEM25-V18", sourceSpec: "docs/specs/lucy-20261020-v2p5-semantic-batch-operations-spec.md", sourceRequirementId: "V18", ownerBranch: SEM, priority: P0, executors: [B, P, D, O, V], requires: [lucy-http, ktx-upstream, postgres, browser, fault-control], assert: [allow_control, no_side_effect, exactly_one_wins, consistency], artifacts: [management-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "SEM25-V19", sourceSpec: "docs/specs/lucy-20261020-v2p5-semantic-batch-operations-spec.md", sourceRequirementId: "V19", ownerBranch: SEM, priority: P0, executors: [B, P, D, O, V], requires: [lucy-http, ktx-upstream, postgres, browser, fault-control], assert: [allow_control, no_side_effect, exactly_one_wins, consistency], artifacts: [management-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "SEM25-V20", sourceSpec: "docs/specs/lucy-20261020-v2p5-semantic-batch-operations-spec.md", sourceRequirementId: "V20", ownerBranch: SEM, priority: P0, executors: [B, P, D, O, V], requires: [lucy-http, ktx-upstream, postgres, browser, fault-control], assert: [allow_control, no_side_effect, exactly_one_wins, consistency], artifacts: [management-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "SEM25-V21", sourceSpec: "docs/specs/lucy-20261020-v2p5-semantic-batch-operations-spec.md", sourceRequirementId: "V21", ownerBranch: SEM, priority: P0, executors: [B, P, D, O, V], requires: [lucy-http, ktx-upstream, postgres, browser, fault-control], assert: [allow_control, no_side_effect, exactly_one_wins, consistency], artifacts: [management-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "SEM25-V22", sourceSpec: "docs/specs/lucy-20261020-v2p5-semantic-batch-operations-spec.md", sourceRequirementId: "V22", ownerBranch: SEM, priority: P0, executors: [B, P, D, O, V], requires: [lucy-http, ktx-upstream, postgres, browser, fault-control, k8s-amd64], assert: [allow_control, no_side_effect, exactly_one_wins, consistency], artifacts: [management-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "ARV25-V01", sourceSpec: "docs/specs/lucy-20261024-v0p25-audit-reconciliation-view-spec.md", sourceRequirementId: "V01", ownerBranch: OBSERVE, priority: P0, executors: [P, B, D, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client], assert: [audit_event, consistency, deny, no_leak], artifacts: [management-case-result.json, security-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "ARV25-V02", sourceSpec: "docs/specs/lucy-20261024-v0p25-audit-reconciliation-view-spec.md", sourceRequirementId: "V02", ownerBranch: OBSERVE, priority: P0, executors: [P, B, D, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client], assert: [audit_event, consistency, deny, no_leak], artifacts: [management-case-result.json, security-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "ARV25-V03", sourceSpec: "docs/specs/lucy-20261024-v0p25-audit-reconciliation-view-spec.md", sourceRequirementId: "V03", ownerBranch: OBSERVE, priority: P0, executors: [P, B, D, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client], assert: [audit_event, consistency, deny, no_leak], artifacts: [management-case-result.json, security-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "ARV25-V04", sourceSpec: "docs/specs/lucy-20261024-v0p25-audit-reconciliation-view-spec.md", sourceRequirementId: "V04", ownerBranch: OBSERVE, priority: P0, executors: [P, B, D, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client], assert: [audit_event, consistency, deny, no_leak], artifacts: [management-case-result.json, security-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "ARV25-V05", sourceSpec: "docs/specs/lucy-20261024-v0p25-audit-reconciliation-view-spec.md", sourceRequirementId: "V05", ownerBranch: OBSERVE, priority: P0, executors: [P, B, D, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client], assert: [audit_event, consistency, deny, no_leak], artifacts: [management-case-result.json, security-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "ARV25-V06", sourceSpec: "docs/specs/lucy-20261024-v0p25-audit-reconciliation-view-spec.md", sourceRequirementId: "V06", ownerBranch: OBSERVE, priority: P0, executors: [P, B, D, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client], assert: [audit_event, consistency, deny, no_leak], artifacts: [management-case-result.json, security-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "ARV25-V07", sourceSpec: "docs/specs/lucy-20261024-v0p25-audit-reconciliation-view-spec.md", sourceRequirementId: "V07", ownerBranch: OBSERVE, priority: P0, executors: [P, B, D, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client], assert: [audit_event, consistency, deny, no_leak], artifacts: [management-case-result.json, security-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "ARV25-V08", sourceSpec: "docs/specs/lucy-20261024-v0p25-audit-reconciliation-view-spec.md", sourceRequirementId: "V08", ownerBranch: OBSERVE, priority: P0, executors: [P, B, D, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client], assert: [audit_event, consistency, deny, no_leak], artifacts: [management-case-result.json, security-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "ARV25-V09", sourceSpec: "docs/specs/lucy-20261024-v0p25-audit-reconciliation-view-spec.md", sourceRequirementId: "V09", ownerBranch: OBSERVE, priority: P0, executors: [P, B, D, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client], assert: [audit_event, consistency, deny, no_leak], artifacts: [management-case-result.json, security-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "ARV25-V10", sourceSpec: "docs/specs/lucy-20261024-v0p25-audit-reconciliation-view-spec.md", sourceRequirementId: "V10", ownerBranch: OBSERVE, priority: P0, executors: [P, B, D, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client], assert: [audit_event, consistency, deny, no_leak], artifacts: [management-case-result.json, security-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "ARV25-V11", sourceSpec: "docs/specs/lucy-20261024-v0p25-audit-reconciliation-view-spec.md", sourceRequirementId: "V11", ownerBranch: OBSERVE, priority: P0, executors: [P, B, D, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client], assert: [audit_event, consistency, deny, no_leak], artifacts: [management-case-result.json, security-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "ARV25-V12", sourceSpec: "docs/specs/lucy-20261024-v0p25-audit-reconciliation-view-spec.md", sourceRequirementId: "V12", ownerBranch: OBSERVE, priority: P0, executors: [P, B, D, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client, k8s-amd64], assert: [audit_event, consistency, deny, no_leak], artifacts: [management-case-result.json, security-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "RTP25-01", sourceSpec: "docs/specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md", sourceRequirementId: "RTP-01", ownerBranch: ACCESS, priority: P1, executors: [P, B, A, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client], assert: [allow_control, deny, consistency], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "RTP25-02", sourceSpec: "docs/specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md", sourceRequirementId: "RTP-02", ownerBranch: ACCESS, priority: P1, executors: [P, B, A, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client], assert: [allow_control, deny, consistency], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "RTP25-03", sourceSpec: "docs/specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md", sourceRequirementId: "RTP-03", ownerBranch: ACCESS, priority: P1, executors: [P, B, A, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client], assert: [allow_control, deny, consistency], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "RTP25-04", sourceSpec: "docs/specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md", sourceRequirementId: "RTP-04", ownerBranch: ACCESS, priority: P1, executors: [P, B, A, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client], assert: [allow_control, deny, consistency], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "RTP25-05", sourceSpec: "docs/specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md", sourceRequirementId: "RTP-05", ownerBranch: ACCESS, priority: P1, executors: [P, B, A, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client], assert: [allow_control, deny, consistency], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "RTP25-06", sourceSpec: "docs/specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md", sourceRequirementId: "RTP-06", ownerBranch: ACCESS, priority: P1, executors: [P, B, A, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client], assert: [allow_control, deny, consistency], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "RTP25-07", sourceSpec: "docs/specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md", sourceRequirementId: "RTP-07", ownerBranch: ACCESS, priority: P1, executors: [P, B, A, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client], assert: [allow_control, deny, consistency], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "RTP25-08", sourceSpec: "docs/specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md", sourceRequirementId: "RTP-08", ownerBranch: ACCESS, priority: P1, executors: [P, B, A, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client], assert: [allow_control, deny, consistency], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "RTP25-09", sourceSpec: "docs/specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md", sourceRequirementId: "RTP-09", ownerBranch: ACCESS, priority: P1, executors: [P, B, A, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client], assert: [allow_control, deny, consistency], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "RTP25-10", sourceSpec: "docs/specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md", sourceRequirementId: "RTP-10", ownerBranch: ACCESS, priority: P1, executors: [P, B, A, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client], assert: [allow_control, deny, consistency], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "RTV25-01", sourceSpec: "docs/specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md", sourceRequirementId: "RTV-01", ownerBranch: ACCESS, priority: P1, executors: [P, B, V], requires: [lucy-http, ktx-upstream, postgres, browser], assert: [consistency, deny], artifacts: [management-case-result.json], gold: null }
+  - { executionId: "RTV25-02", sourceSpec: "docs/specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md", sourceRequirementId: "RTV-02", ownerBranch: ACCESS, priority: P1, executors: [P, B, V], requires: [lucy-http, ktx-upstream, postgres, browser], assert: [consistency, deny], artifacts: [management-case-result.json], gold: null }
+  - { executionId: "RTV25-03", sourceSpec: "docs/specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md", sourceRequirementId: "RTV-03", ownerBranch: ACCESS, priority: P1, executors: [P, B, V], requires: [lucy-http, ktx-upstream, postgres, browser], assert: [consistency, deny], artifacts: [management-case-result.json], gold: null }
+  - { executionId: "RTV25-04", sourceSpec: "docs/specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md", sourceRequirementId: "RTV-04", ownerBranch: ACCESS, priority: P1, executors: [P, B, V], requires: [lucy-http, ktx-upstream, postgres, browser], assert: [consistency, deny], artifacts: [management-case-result.json], gold: null }
+  - { executionId: "RTV25-05", sourceSpec: "docs/specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md", sourceRequirementId: "RTV-05", ownerBranch: ACCESS, priority: P1, executors: [P, B, V], requires: [lucy-http, ktx-upstream, postgres, browser], assert: [consistency, deny], artifacts: [management-case-result.json], gold: null }
+  - { executionId: "RTV25-06", sourceSpec: "docs/specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md", sourceRequirementId: "RTV-06", ownerBranch: ACCESS, priority: P1, executors: [P, B, V], requires: [lucy-http, ktx-upstream, postgres, browser], assert: [consistency, deny], artifacts: [management-case-result.json], gold: null }
+  - { executionId: "RTV25-07", sourceSpec: "docs/specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md", sourceRequirementId: "RTV-07", ownerBranch: ACCESS, priority: P1, executors: [P, B, V], requires: [lucy-http, ktx-upstream, postgres, browser], assert: [consistency, deny], artifacts: [management-case-result.json], gold: null }
+  - { executionId: "RTV25-08", sourceSpec: "docs/specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md", sourceRequirementId: "RTV-08", ownerBranch: ACCESS, priority: P1, executors: [P, B, V], requires: [lucy-http, ktx-upstream, postgres, browser], assert: [consistency, deny], artifacts: [management-case-result.json], gold: null }
+  - { executionId: "ASV25-01", sourceSpec: "docs/specs/lucy-20261025-v0p25-access-authorization-summary-spec.md", sourceRequirementId: "ASV-01", ownerBranch: ACCESS, priority: P1, executors: [P, B, V], requires: [lucy-http, ktx-upstream, postgres, browser], assert: [consistency, deny, no_leak], artifacts: [management-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "ASV25-02", sourceSpec: "docs/specs/lucy-20261025-v0p25-access-authorization-summary-spec.md", sourceRequirementId: "ASV-02", ownerBranch: ACCESS, priority: P1, executors: [P, B, V], requires: [lucy-http, ktx-upstream, postgres, browser], assert: [consistency, deny, no_leak], artifacts: [management-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "ASV25-03", sourceSpec: "docs/specs/lucy-20261025-v0p25-access-authorization-summary-spec.md", sourceRequirementId: "ASV-03", ownerBranch: ACCESS, priority: P1, executors: [P, B, V], requires: [lucy-http, ktx-upstream, postgres, browser], assert: [consistency, deny, no_leak], artifacts: [management-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "ASV25-04", sourceSpec: "docs/specs/lucy-20261025-v0p25-access-authorization-summary-spec.md", sourceRequirementId: "ASV-04", ownerBranch: ACCESS, priority: P1, executors: [P, B, V], requires: [lucy-http, ktx-upstream, postgres, browser], assert: [consistency, deny, no_leak], artifacts: [management-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "ASV25-05", sourceSpec: "docs/specs/lucy-20261025-v0p25-access-authorization-summary-spec.md", sourceRequirementId: "ASV-05", ownerBranch: ACCESS, priority: P1, executors: [P, B, V], requires: [lucy-http, ktx-upstream, postgres, browser], assert: [consistency, deny, no_leak], artifacts: [management-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "ASV25-06", sourceSpec: "docs/specs/lucy-20261025-v0p25-access-authorization-summary-spec.md", sourceRequirementId: "ASV-06", ownerBranch: ACCESS, priority: P1, executors: [P, B, V], requires: [lucy-http, ktx-upstream, postgres, browser], assert: [consistency, deny, no_leak], artifacts: [management-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "ASV25-07", sourceSpec: "docs/specs/lucy-20261025-v0p25-access-authorization-summary-spec.md", sourceRequirementId: "ASV-07", ownerBranch: ACCESS, priority: P1, executors: [P, B, V], requires: [lucy-http, ktx-upstream, postgres, browser], assert: [consistency, deny, no_leak], artifacts: [management-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "ASV25-08", sourceSpec: "docs/specs/lucy-20261025-v0p25-access-authorization-summary-spec.md", sourceRequirementId: "ASV-08", ownerBranch: ACCESS, priority: P1, executors: [P, B, V], requires: [lucy-http, ktx-upstream, postgres, browser], assert: [consistency, deny, no_leak], artifacts: [management-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "ASV25-09", sourceSpec: "docs/specs/lucy-20261025-v0p25-access-authorization-summary-spec.md", sourceRequirementId: "ASV-09", ownerBranch: ACCESS, priority: P1, executors: [P, B, V], requires: [lucy-http, ktx-upstream, postgres, browser], assert: [consistency, deny, no_leak], artifacts: [management-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "ASV25-10", sourceSpec: "docs/specs/lucy-20261025-v0p25-access-authorization-summary-spec.md", sourceRequirementId: "ASV-10", ownerBranch: ACCESS, priority: P1, executors: [P, B, V], requires: [lucy-http, ktx-upstream, postgres, browser], assert: [consistency, deny, no_leak], artifacts: [management-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "ASV25-11", sourceSpec: "docs/specs/lucy-20261025-v0p25-access-authorization-summary-spec.md", sourceRequirementId: "ASV-11", ownerBranch: ACCESS, priority: P1, executors: [P, B, V], requires: [lucy-http, ktx-upstream, postgres, browser], assert: [consistency, deny, no_leak], artifacts: [management-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "ASV25-12", sourceSpec: "docs/specs/lucy-20261025-v0p25-access-authorization-summary-spec.md", sourceRequirementId: "ASV-12", ownerBranch: ACCESS, priority: P1, executors: [P, B, V], requires: [lucy-http, ktx-upstream, postgres, browser], assert: [consistency, deny, no_leak], artifacts: [management-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "ASV25-13", sourceSpec: "docs/specs/lucy-20261025-v0p25-access-authorization-summary-spec.md", sourceRequirementId: "ASV-13", ownerBranch: ACCESS, priority: P1, executors: [P, B, V], requires: [lucy-http, ktx-upstream, postgres, browser], assert: [consistency, deny, no_leak], artifacts: [management-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "ASV25-14", sourceSpec: "docs/specs/lucy-20261025-v0p25-access-authorization-summary-spec.md", sourceRequirementId: "ASV-14", ownerBranch: ACCESS, priority: P1, executors: [P, B, V], requires: [lucy-http, ktx-upstream, postgres, browser], assert: [consistency, deny, no_leak], artifacts: [management-case-result.json, leak-scan.json], gold: null }
+  - { executionId: "ACM25-SC-01", sourceSpec: "webui/docs/187-access-relation-sankey-spec.md", sourceRequirementId: "SC-01", ownerBranch: OBSERVE, priority: P1, executors: [P, B, V], requires: [lucy-http, ktx-upstream, postgres, browser], assert: [consistency, exactly_one_wins], artifacts: [management-case-result.json], gold: null }
+  - { executionId: "ACM25-SC-02", sourceSpec: "webui/docs/187-access-relation-sankey-spec.md", sourceRequirementId: "SC-02", ownerBranch: OBSERVE, priority: P1, executors: [P, B, V], requires: [lucy-http, ktx-upstream, postgres, browser], assert: [consistency, exactly_one_wins], artifacts: [management-case-result.json], gold: null }
+  - { executionId: "ACM25-SC-03", sourceSpec: "webui/docs/187-access-relation-sankey-spec.md", sourceRequirementId: "SC-03", ownerBranch: OBSERVE, priority: P1, executors: [P, B, V], requires: [lucy-http, ktx-upstream, postgres, browser], assert: [consistency, exactly_one_wins], artifacts: [management-case-result.json], gold: null }
+  - { executionId: "ACM25-SC-04", sourceSpec: "webui/docs/187-access-relation-sankey-spec.md", sourceRequirementId: "SC-04", ownerBranch: OBSERVE, priority: P1, executors: [P, B, V], requires: [lucy-http, ktx-upstream, postgres, browser], assert: [consistency, exactly_one_wins], artifacts: [management-case-result.json], gold: null }
+  - { executionId: "ACM25-SC-05", sourceSpec: "webui/docs/187-access-relation-sankey-spec.md", sourceRequirementId: "SC-05", ownerBranch: OBSERVE, priority: P1, executors: [P, B, V], requires: [lucy-http, ktx-upstream, postgres, browser], assert: [consistency, exactly_one_wins], artifacts: [management-case-result.json], gold: null }
+  - { executionId: "ACM25-SC-06", sourceSpec: "webui/docs/187-access-relation-sankey-spec.md", sourceRequirementId: "SC-06", ownerBranch: OBSERVE, priority: P1, executors: [P, B, V], requires: [lucy-http, ktx-upstream, postgres, browser], assert: [consistency, exactly_one_wins], artifacts: [management-case-result.json], gold: null }
+  - { executionId: "ACM25-SC-07", sourceSpec: "webui/docs/187-access-relation-sankey-spec.md", sourceRequirementId: "SC-07", ownerBranch: OBSERVE, priority: P1, executors: [P, B, V], requires: [lucy-http, ktx-upstream, postgres, browser], assert: [consistency, exactly_one_wins], artifacts: [management-case-result.json], gold: null }
+  - { executionId: "ACM25-SC-08", sourceSpec: "webui/docs/187-access-relation-sankey-spec.md", sourceRequirementId: "SC-08", ownerBranch: OBSERVE, priority: P1, executors: [P, B, V], requires: [lucy-http, ktx-upstream, postgres, browser], assert: [consistency, exactly_one_wins], artifacts: [management-case-result.json], gold: null }
+  - { executionId: "ACM25-SC-09", sourceSpec: "webui/docs/187-access-relation-sankey-spec.md", sourceRequirementId: "SC-09", ownerBranch: OBSERVE, priority: P1, executors: [P, B, V], requires: [lucy-http, ktx-upstream, postgres, browser], assert: [consistency, exactly_one_wins], artifacts: [management-case-result.json], gold: null }
+  - { executionId: "ACM25-SC-10", sourceSpec: "webui/docs/187-access-relation-sankey-spec.md", sourceRequirementId: "SC-10", ownerBranch: OBSERVE, priority: P1, executors: [P, B, V], requires: [lucy-http, ktx-upstream, postgres, browser], assert: [consistency, exactly_one_wins], artifacts: [management-case-result.json], gold: null }
+  - { executionId: "ACM25-SC-11", sourceSpec: "webui/docs/187-access-relation-sankey-spec.md", sourceRequirementId: "SC-11", ownerBranch: OBSERVE, priority: P1, executors: [P, B, V], requires: [lucy-http, ktx-upstream, postgres, browser], assert: [consistency, exactly_one_wins], artifacts: [management-case-result.json], gold: null }
+  - { executionId: "ACM25-SC-12", sourceSpec: "webui/docs/187-access-relation-sankey-spec.md", sourceRequirementId: "SC-12", ownerBranch: OBSERVE, priority: P1, executors: [P, B, V], requires: [lucy-http, ktx-upstream, postgres, browser], assert: [consistency, exactly_one_wins], artifacts: [management-case-result.json], gold: null }
+  - { executionId: "ACM25-SC-13", sourceSpec: "webui/docs/187-access-relation-sankey-spec.md", sourceRequirementId: "SC-13", ownerBranch: OBSERVE, priority: P1, executors: [P, B, V], requires: [lucy-http, ktx-upstream, postgres, browser], assert: [consistency, exactly_one_wins], artifacts: [management-case-result.json], gold: null }
+  - { executionId: "ACM25-SC-14", sourceSpec: "webui/docs/187-access-relation-sankey-spec.md", sourceRequirementId: "SC-14", ownerBranch: OBSERVE, priority: P1, executors: [P, B, V], requires: [lucy-http, ktx-upstream, postgres, browser], assert: [consistency, exactly_one_wins], artifacts: [management-case-result.json], gold: null }
+  - { executionId: "HIV25-V01", sourceSpec: "docs/specs/lucy-20261025-v0p25-hive-direct-connection-spec.md", sourceRequirementId: "V01", ownerBranch: CONN, priority: P1, executors: [P, B, D, A, O, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client, fault-control, k8s-amd64], assert: [allow_control, deny, no_leak], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "HIV25-V02", sourceSpec: "docs/specs/lucy-20261025-v0p25-hive-direct-connection-spec.md", sourceRequirementId: "V02", ownerBranch: CONN, priority: P1, executors: [P, B, D, A, O, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client, fault-control, k8s-amd64], assert: [allow_control, deny, no_leak], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "HIV25-V03", sourceSpec: "docs/specs/lucy-20261025-v0p25-hive-direct-connection-spec.md", sourceRequirementId: "V03", ownerBranch: CONN, priority: P1, executors: [P, B, D, A, O, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client, fault-control, k8s-amd64], assert: [allow_control, deny, no_leak], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "HIV25-V04", sourceSpec: "docs/specs/lucy-20261025-v0p25-hive-direct-connection-spec.md", sourceRequirementId: "V04", ownerBranch: CONN, priority: P1, executors: [P, B, D, A, O, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client, fault-control, k8s-amd64], assert: [allow_control, deny, no_leak], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "HIV25-V05", sourceSpec: "docs/specs/lucy-20261025-v0p25-hive-direct-connection-spec.md", sourceRequirementId: "V05", ownerBranch: CONN, priority: P1, executors: [P, B, D, A, O, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client, fault-control, k8s-amd64], assert: [allow_control, deny, no_leak], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "HIV25-V06", sourceSpec: "docs/specs/lucy-20261025-v0p25-hive-direct-connection-spec.md", sourceRequirementId: "V06", ownerBranch: CONN, priority: P1, executors: [P, B, D, A, O, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client, fault-control, k8s-amd64], assert: [allow_control, deny, no_leak], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "HIV25-V07", sourceSpec: "docs/specs/lucy-20261025-v0p25-hive-direct-connection-spec.md", sourceRequirementId: "V07", ownerBranch: CONN, priority: P1, executors: [P, B, D, A, O, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client, fault-control, k8s-amd64], assert: [allow_control, deny, no_leak], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "HIV25-V08", sourceSpec: "docs/specs/lucy-20261025-v0p25-hive-direct-connection-spec.md", sourceRequirementId: "V08", ownerBranch: CONN, priority: P1, executors: [P, B, D, A, O, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client, fault-control, k8s-amd64], assert: [allow_control, deny, no_leak], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "HIV25-V09", sourceSpec: "docs/specs/lucy-20261025-v0p25-hive-direct-connection-spec.md", sourceRequirementId: "V09", ownerBranch: CONN, priority: P1, executors: [P, B, D, A, O, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client, fault-control, k8s-amd64], assert: [allow_control, deny, no_leak], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "HIV25-V10", sourceSpec: "docs/specs/lucy-20261025-v0p25-hive-direct-connection-spec.md", sourceRequirementId: "V10", ownerBranch: CONN, priority: P1, executors: [P, B, D, A, O, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client, fault-control, k8s-amd64], assert: [allow_control, deny, no_leak], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "HIV25-V11", sourceSpec: "docs/specs/lucy-20261025-v0p25-hive-direct-connection-spec.md", sourceRequirementId: "V11", ownerBranch: CONN, priority: P1, executors: [P, B, D, A, O, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client, fault-control, k8s-amd64], assert: [allow_control, deny, no_leak], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "HIV25-V12", sourceSpec: "docs/specs/lucy-20261025-v0p25-hive-direct-connection-spec.md", sourceRequirementId: "V12", ownerBranch: CONN, priority: P1, executors: [P, B, D, A, O, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client, fault-control, k8s-amd64], assert: [allow_control, deny, no_leak], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "HIV25-V13", sourceSpec: "docs/specs/lucy-20261025-v0p25-hive-direct-connection-spec.md", sourceRequirementId: "V13", ownerBranch: CONN, priority: P1, executors: [P, B, D, A, O, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client, fault-control, k8s-amd64], assert: [allow_control, deny, no_leak], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "HIV25-V14", sourceSpec: "docs/specs/lucy-20261025-v0p25-hive-direct-connection-spec.md", sourceRequirementId: "V14", ownerBranch: CONN, priority: P1, executors: [P, B, D, A, O, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client, fault-control, k8s-amd64], assert: [allow_control, deny, no_leak], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "HIV25-V15", sourceSpec: "docs/specs/lucy-20261025-v0p25-hive-direct-connection-spec.md", sourceRequirementId: "V15", ownerBranch: CONN, priority: P1, executors: [P, B, D, A, O, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client, fault-control, k8s-amd64], assert: [allow_control, deny, no_leak], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "HIV25-V16", sourceSpec: "docs/specs/lucy-20261025-v0p25-hive-direct-connection-spec.md", sourceRequirementId: "V16", ownerBranch: CONN, priority: P1, executors: [P, B, D, A, O, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client, fault-control, k8s-amd64], assert: [allow_control, deny, no_leak], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "HIV25-V17", sourceSpec: "docs/specs/lucy-20261025-v0p25-hive-direct-connection-spec.md", sourceRequirementId: "V17", ownerBranch: CONN, priority: P1, executors: [P, B, D, A, O, V], requires: [lucy-http, ktx-upstream, postgres, browser, agent-client, fault-control, k8s-amd64], assert: [allow_control, deny, no_leak], artifacts: [management-case-result.json, security-case-result.json], gold: null }
+  - { executionId: "UPG25-01", sourceSpec: "docs/specs/lucy-20261025-v0p25-upgrade-e2e-automation-spec.md", sourceRequirementId: "UPG-01", ownerBranch: LIFECYCLE, priority: P1, executors: [O, P, A, V], requires: [lucy-http, ktx-upstream, k8s-amd64, ci-runner, fault-control, agent-client], assert: [consistency, deny, no_leak], artifacts: [gate-result.json, leak-scan.json], gold: null }
+  - { executionId: "UPG25-02", sourceSpec: "docs/specs/lucy-20261025-v0p25-upgrade-e2e-automation-spec.md", sourceRequirementId: "UPG-02", ownerBranch: LIFECYCLE, priority: P1, executors: [O, P, A, V], requires: [lucy-http, ktx-upstream, k8s-amd64, ci-runner, fault-control, agent-client], assert: [consistency, deny, no_leak], artifacts: [gate-result.json, leak-scan.json], gold: null }
+  - { executionId: "UPG25-03", sourceSpec: "docs/specs/lucy-20261025-v0p25-upgrade-e2e-automation-spec.md", sourceRequirementId: "UPG-03", ownerBranch: LIFECYCLE, priority: P1, executors: [O, P, A, V], requires: [lucy-http, ktx-upstream, k8s-amd64, ci-runner, fault-control, agent-client], assert: [consistency, deny, no_leak], artifacts: [gate-result.json, leak-scan.json], gold: null }
+  - { executionId: "UPG25-04", sourceSpec: "docs/specs/lucy-20261025-v0p25-upgrade-e2e-automation-spec.md", sourceRequirementId: "UPG-04", ownerBranch: LIFECYCLE, priority: P1, executors: [O, P, A, V], requires: [lucy-http, ktx-upstream, k8s-amd64, ci-runner, fault-control, agent-client], assert: [consistency, deny, no_leak], artifacts: [gate-result.json, leak-scan.json], gold: null }
+  - { executionId: "UPG25-05", sourceSpec: "docs/specs/lucy-20261025-v0p25-upgrade-e2e-automation-spec.md", sourceRequirementId: "UPG-05", ownerBranch: LIFECYCLE, priority: P1, executors: [O, P, A, V], requires: [lucy-http, ktx-upstream, k8s-amd64, ci-runner, fault-control, agent-client], assert: [consistency, deny, no_leak], artifacts: [gate-result.json, leak-scan.json], gold: null }
+  - { executionId: "UPG25-06", sourceSpec: "docs/specs/lucy-20261025-v0p25-upgrade-e2e-automation-spec.md", sourceRequirementId: "UPG-06", ownerBranch: LIFECYCLE, priority: P1, executors: [O, P, A, V], requires: [lucy-http, ktx-upstream, k8s-amd64, ci-runner, fault-control, agent-client], assert: [consistency, deny, no_leak], artifacts: [gate-result.json, leak-scan.json], gold: null }
+  - { executionId: "UPG25-07", sourceSpec: "docs/specs/lucy-20261025-v0p25-upgrade-e2e-automation-spec.md", sourceRequirementId: "UPG-07", ownerBranch: LIFECYCLE, priority: P1, executors: [O, P, A, V], requires: [lucy-http, ktx-upstream, k8s-amd64, ci-runner, fault-control, agent-client], assert: [consistency, deny, no_leak], artifacts: [gate-result.json, leak-scan.json], gold: null }
+  - { executionId: "UPG25-08", sourceSpec: "docs/specs/lucy-20261025-v0p25-upgrade-e2e-automation-spec.md", sourceRequirementId: "UPG-08", ownerBranch: LIFECYCLE, priority: P1, executors: [O, P, A, V], requires: [lucy-http, ktx-upstream, k8s-amd64, ci-runner, fault-control, agent-client], assert: [consistency, deny, no_leak], artifacts: [gate-result.json, leak-scan.json], gold: null }
+  - { executionId: "UPG25-09", sourceSpec: "docs/specs/lucy-20261025-v0p25-upgrade-e2e-automation-spec.md", sourceRequirementId: "UPG-09", ownerBranch: LIFECYCLE, priority: P1, executors: [O, P, A, V], requires: [lucy-http, ktx-upstream, k8s-amd64, ci-runner, fault-control, agent-client], assert: [consistency, deny, no_leak], artifacts: [gate-result.json, leak-scan.json], gold: null }
+  - { executionId: "UPG25-10", sourceSpec: "docs/specs/lucy-20261025-v0p25-upgrade-e2e-automation-spec.md", sourceRequirementId: "UPG-10", ownerBranch: LIFECYCLE, priority: P1, executors: [O, P, A, V], requires: [lucy-http, ktx-upstream, k8s-amd64, ci-runner, fault-control, agent-client], assert: [consistency, deny, no_leak], artifacts: [gate-result.json, leak-scan.json], gold: null }
+  - { executionId: "UPG25-11", sourceSpec: "docs/specs/lucy-20261025-v0p25-upgrade-e2e-automation-spec.md", sourceRequirementId: "UPG-11", ownerBranch: LIFECYCLE, priority: P1, executors: [O, P, A, V], requires: [lucy-http, ktx-upstream, k8s-amd64, ci-runner, fault-control, agent-client], assert: [consistency, deny, no_leak], artifacts: [gate-result.json, leak-scan.json], gold: null }
+  - { executionId: "UPG25-12", sourceSpec: "docs/specs/lucy-20261025-v0p25-upgrade-e2e-automation-spec.md", sourceRequirementId: "UPG-12", ownerBranch: LIFECYCLE, priority: P1, executors: [O, P, A, V], requires: [lucy-http, ktx-upstream, k8s-amd64, ci-runner, fault-control, agent-client], assert: [consistency, deny, no_leak], artifacts: [gate-result.json, leak-scan.json], gold: null }
+  - { executionId: "UPG25-13", sourceSpec: "docs/specs/lucy-20261025-v0p25-upgrade-e2e-automation-spec.md", sourceRequirementId: "UPG-13", ownerBranch: LIFECYCLE, priority: P1, executors: [O, P, A, V], requires: [lucy-http, ktx-upstream, k8s-amd64, ci-runner, fault-control, agent-client], assert: [consistency, deny, no_leak], artifacts: [gate-result.json, leak-scan.json], gold: null }
+  - { executionId: "UPG25-14", sourceSpec: "docs/specs/lucy-20261025-v0p25-upgrade-e2e-automation-spec.md", sourceRequirementId: "UPG-14", ownerBranch: LIFECYCLE, priority: P1, executors: [O, P, A, V], requires: [lucy-http, ktx-upstream, k8s-amd64, ci-runner, fault-control, agent-client], assert: [consistency, deny, no_leak], artifacts: [gate-result.json, leak-scan.json], gold: null }
+  - { executionId: "UPG25-15", sourceSpec: "docs/specs/lucy-20261025-v0p25-upgrade-e2e-automation-spec.md", sourceRequirementId: "UPG-15", ownerBranch: LIFECYCLE, priority: P1, executors: [O, P, A, V], requires: [lucy-http, ktx-upstream, k8s-amd64, ci-runner, fault-control, agent-client], assert: [consistency, deny, no_leak], artifacts: [gate-result.json, leak-scan.json], gold: null }
+  - { executionId: "UPG25-16", sourceSpec: "docs/specs/lucy-20261025-v0p25-upgrade-e2e-automation-spec.md", sourceRequirementId: "UPG-16", ownerBranch: LIFECYCLE, priority: P1, executors: [O, P, A, V], requires: [lucy-http, ktx-upstream, k8s-amd64, ci-runner, fault-control, agent-client], assert: [consistency, deny, no_leak], artifacts: [gate-result.json, leak-scan.json], gold: null }
+  - { executionId: "RVC25-01", sourceSpec: "docs/specs/lucy-20261025-v0p25-upgrade-candidate-verification-spec.md", sourceRequirementId: "RVC-01", ownerBranch: LIFECYCLE, priority: P1, executors: [O, P, B, V], requires: [lucy-http, ktx-upstream, k8s-amd64, ci-runner, fault-control, agent-client], assert: [consistency, deny, no_leak], artifacts: [gate-result.json, leak-scan.json], gold: null }
+  - { executionId: "RVC25-02", sourceSpec: "docs/specs/lucy-20261025-v0p25-upgrade-candidate-verification-spec.md", sourceRequirementId: "RVC-02", ownerBranch: LIFECYCLE, priority: P1, executors: [O, P, B, V], requires: [lucy-http, ktx-upstream, k8s-amd64, ci-runner, fault-control, agent-client], assert: [consistency, deny, no_leak], artifacts: [gate-result.json, leak-scan.json], gold: null }
+  - { executionId: "RVC25-03", sourceSpec: "docs/specs/lucy-20261025-v0p25-upgrade-candidate-verification-spec.md", sourceRequirementId: "RVC-03", ownerBranch: LIFECYCLE, priority: P1, executors: [O, P, B, V], requires: [lucy-http, ktx-upstream, k8s-amd64, ci-runner, fault-control, agent-client], assert: [consistency, deny, no_leak], artifacts: [gate-result.json, leak-scan.json], gold: null }
+  - { executionId: "RVC25-04", sourceSpec: "docs/specs/lucy-20261025-v0p25-upgrade-candidate-verification-spec.md", sourceRequirementId: "RVC-04", ownerBranch: LIFECYCLE, priority: P1, executors: [O, P, B, V], requires: [lucy-http, ktx-upstream, k8s-amd64, ci-runner, fault-control, agent-client], assert: [consistency, deny, no_leak], artifacts: [gate-result.json, leak-scan.json], gold: null }
+  - { executionId: "RVC25-05", sourceSpec: "docs/specs/lucy-20261025-v0p25-upgrade-candidate-verification-spec.md", sourceRequirementId: "RVC-05", ownerBranch: LIFECYCLE, priority: P1, executors: [O, P, B, V], requires: [lucy-http, ktx-upstream, k8s-amd64, ci-runner, fault-control, agent-client], assert: [consistency, deny, no_leak], artifacts: [gate-result.json, leak-scan.json], gold: null }
+  - { executionId: "RVC25-06", sourceSpec: "docs/specs/lucy-20261025-v0p25-upgrade-candidate-verification-spec.md", sourceRequirementId: "RVC-06", ownerBranch: LIFECYCLE, priority: P1, executors: [O, P, B, V], requires: [lucy-http, ktx-upstream, k8s-amd64, ci-runner, fault-control, agent-client], assert: [consistency, deny, no_leak], artifacts: [gate-result.json, leak-scan.json], gold: null }
+  - { executionId: "RVC25-07", sourceSpec: "docs/specs/lucy-20261025-v0p25-upgrade-candidate-verification-spec.md", sourceRequirementId: "RVC-07", ownerBranch: LIFECYCLE, priority: P1, executors: [O, P, B, V], requires: [lucy-http, ktx-upstream, k8s-amd64, ci-runner, fault-control, agent-client], assert: [consistency, deny, no_leak], artifacts: [gate-result.json, leak-scan.json], gold: null }
+  - { executionId: "RVC25-08", sourceSpec: "docs/specs/lucy-20261025-v0p25-upgrade-candidate-verification-spec.md", sourceRequirementId: "RVC-08", ownerBranch: LIFECYCLE, priority: P1, executors: [O, P, B, V], requires: [lucy-http, ktx-upstream, k8s-amd64, ci-runner, fault-control, agent-client], assert: [consistency, deny, no_leak], artifacts: [gate-result.json, leak-scan.json], gold: null }
+  - { executionId: "RVC25-09", sourceSpec: "docs/specs/lucy-20261025-v0p25-upgrade-candidate-verification-spec.md", sourceRequirementId: "RVC-09", ownerBranch: LIFECYCLE, priority: P1, executors: [O, P, B, V], requires: [lucy-http, ktx-upstream, k8s-amd64, ci-runner, fault-control, agent-client], assert: [consistency, deny, no_leak], artifacts: [gate-result.json, leak-scan.json], gold: null }
+  - { executionId: "RVC25-10", sourceSpec: "docs/specs/lucy-20261025-v0p25-upgrade-candidate-verification-spec.md", sourceRequirementId: "RVC-10", ownerBranch: LIFECYCLE, priority: P1, executors: [O, P, B, V], requires: [lucy-http, ktx-upstream, k8s-amd64, ci-runner, fault-control, agent-client], assert: [consistency, deny, no_leak], artifacts: [gate-result.json, leak-scan.json], gold: null }
+  - { executionId: "RVC25-11", sourceSpec: "docs/specs/lucy-20261025-v0p25-upgrade-candidate-verification-spec.md", sourceRequirementId: "RVC-11", ownerBranch: LIFECYCLE, priority: P1, executors: [O, P, B, V], requires: [lucy-http, ktx-upstream, k8s-amd64, ci-runner, fault-control, agent-client], assert: [consistency, deny, no_leak], artifacts: [gate-result.json, leak-scan.json], gold: null }
+  - { executionId: "RVC25-12", sourceSpec: "docs/specs/lucy-20261025-v0p25-upgrade-candidate-verification-spec.md", sourceRequirementId: "RVC-12", ownerBranch: LIFECYCLE, priority: P1, executors: [O, P, B, V], requires: [lucy-http, ktx-upstream, k8s-amd64, ci-runner, fault-control, agent-client], assert: [consistency, deny, no_leak], artifacts: [gate-result.json, leak-scan.json], gold: null }
+  - { executionId: "RVC25-13", sourceSpec: "docs/specs/lucy-20261025-v0p25-upgrade-candidate-verification-spec.md", sourceRequirementId: "RVC-13", ownerBranch: LIFECYCLE, priority: P1, executors: [O, P, B, V], requires: [lucy-http, ktx-upstream, k8s-amd64, ci-runner, fault-control, agent-client], assert: [consistency, deny, no_leak], artifacts: [gate-result.json, leak-scan.json], gold: null }
+  - { executionId: "CON25-01", sourceSpec: "docs/governance/database-support-matrix.md", sourceRequirementId: null, ownerBranch: CONN, priority: branch, executors: [P, B, D, V], requires: [lucy-http, ktx-upstream], assert: [allow_control, typed_gold, upstream_exec_zero], artifacts: [management-case-result.json, leak-scan.json], gold: null, title: "MySQL 真实连接、采集与代表性只读查询", supportStatus: "verified" }
+  - { executionId: "CON25-02", sourceSpec: "docs/governance/database-support-matrix.md", sourceRequirementId: null, ownerBranch: CONN, priority: branch, executors: [P, B, D, V], requires: [lucy-http, ktx-upstream], assert: [allow_control, typed_gold, upstream_exec_zero], artifacts: [management-case-result.json, leak-scan.json], gold: null, title: "PostgreSQL 真实连接、采集与代表性只读查询", supportStatus: "verified" }
+  - { executionId: "CON25-03", sourceSpec: "docs/governance/database-support-matrix.md", sourceRequirementId: null, ownerBranch: CONN, priority: branch, executors: [P, B, D, V], requires: [lucy-http, ktx-upstream], assert: [allow_control, deny], artifacts: [management-case-result.json, leak-scan.json], gold: null, title: "StarRocks 认证环境内真实连接与查询", supportStatus: "gated" }
+  - { executionId: "CON25-04", sourceSpec: "docs/governance/database-support-matrix.md", sourceRequirementId: null, ownerBranch: CONN, priority: branch, executors: [P, B, D, V], requires: [lucy-http, ktx-upstream], assert: [allow_control, deny], artifacts: [management-case-result.json, leak-scan.json], gold: null, title: "Doris 认证环境内真实连接与查询", supportStatus: "gated" }
+  - { executionId: "CON25-05", sourceSpec: "docs/governance/database-support-matrix.md", sourceRequirementId: null, ownerBranch: CONN, priority: branch, executors: [P, O, V], requires: [lucy-http, ktx-upstream, fault-control], assert: [deny, unavailable_not_open, no_leak], artifacts: [management-case-result.json, leak-scan.json], gold: null, title: "SQL Server 已知限制、失败关闭与支持口径", supportStatus: "experimental" }
+  - { executionId: "CON25-06", sourceSpec: "docs/governance/database-support-matrix.md", sourceRequirementId: null, ownerBranch: CONN, priority: branch, executors: [P, V], requires: [lucy-http, ktx-upstream], assert: [unavailable_not_open, no_leak], artifacts: [management-case-result.json, leak-scan.json], gold: null, title: "Oracle 未承诺边界与口径", supportStatus: "roadmap" }
+  - { executionId: "CON25-07", sourceSpec: "docs/governance/database-support-matrix.md", sourceRequirementId: null, ownerBranch: CONN, priority: branch, executors: [P, B, D, V], requires: [lucy-http, ktx-upstream], assert: [allow_control, typed_gold, upstream_exec_zero], artifacts: [management-case-result.json, leak-scan.json], gold: null, title: "SQLite 本地文件真实连接与只读查询", supportStatus: "verified" }
+  - { executionId: "CON25-08", sourceSpec: "docs/governance/database-support-matrix.md", sourceRequirementId: null, ownerBranch: CONN, priority: branch, executors: [P, O, V], requires: [lucy-http, ktx-upstream, fault-control], assert: [deny, unavailable_not_open, no_leak], artifacts: [management-case-result.json, leak-scan.json], gold: null, title: "Amazon Athena 已知限制、失败关闭与支持口径", supportStatus: "experimental" }
+  - { executionId: "CON25-09", sourceSpec: "docs/governance/database-support-matrix.md", sourceRequirementId: null, ownerBranch: CONN, priority: branch, executors: [P, D, V], requires: [lucy-http, ktx-upstream], assert: [exactly_one_wins, upstream_exec_zero], artifacts: [management-case-result.json, leak-scan.json], gold: null, title: "跨连接／Schema 同名表身份不串", supportStatus: "n/a" }
+  - { executionId: "CON25-10", sourceSpec: "docs/governance/database-support-matrix.md", sourceRequirementId: null, ownerBranch: CONN, priority: branch, executors: [P, V], requires: [lucy-http, ktx-upstream], assert: [deny, no_side_effect, no_leak], artifacts: [management-case-result.json, leak-scan.json], gold: null, title: "错误凭据失败关闭且秘密不泄漏", supportStatus: "n/a" }
+  - { executionId: "CON25-11", sourceSpec: "docs/governance/database-support-matrix.md", sourceRequirementId: null, ownerBranch: CONN, priority: branch, executors: [P, O, V], requires: [lucy-http, ktx-upstream, fault-control, network-profile], assert: [deny, unavailable_not_open], artifacts: [management-case-result.json, leak-scan.json], gold: null, title: "网络不可达与中断的超时、重试与恢复", supportStatus: "n/a" }
+  - { executionId: "CON25-12", sourceSpec: "docs/governance/database-support-matrix.md", sourceRequirementId: null, ownerBranch: CONN, priority: branch, executors: [P, O, V], requires: [lucy-http, ktx-upstream, fault-control], assert: [deny, unavailable_not_open, no_leak], artifacts: [management-case-result.json, leak-scan.json], gold: null, title: "TLS 配置与证书失败的允许／拒绝路径", supportStatus: "n/a" }
+  - { executionId: "LOG25-01", sourceSpec: "docs/specs/lucy-20261025-v0p25-e2e-mainline-and-branch-optimization-spec.md", sourceRequirementId: null, ownerBranch: OBSERVE, priority: branch, executors: [P, A, V], requires: [lucy-http, ktx-upstream, postgres, agent-client], assert: [audit_event, consistency, no_leak], artifacts: [agent-case-result.json, security-case-result.json], gold: null, title: "多轮会话跨轮调用关系重建（UX-07-S01 未覆盖的增量）" }
+
+# 唯一聚合主线（Spec §1.1 / §4.2 / §7.1）。
+# journey 是聚合项而非执行项：它没有 executionId、不进入冻结分母，
+# 因此被排除在 owner 唯一性断言之外（评审记录 §9.6 R-02 裁决）。
+# stageOwnerBranch 用于把主线失败归属到具体责任域，避免被计入 AGENT 的 flake 统计。
+journeys:
+  - journeyId: J25-01
+    title: J-01 管理到使用的唯一连续用户旅程
+    catalogEvidenceIds: [UX-01-V01, UX-01-V02, UX-01-V03]
+    stages:
+      - { stageId: J01-01, title: "登录与准备", stageOwnerBranch: ACCESS }
+      - { stageId: J01-02, title: "新建连接", stageOwnerBranch: CONN }
+      - { stageId: J01-03, title: "启用表与 Manifest", stageOwnerBranch: CONN }
+      - { stageId: J01-04, title: "维护业务上下文", stageOwnerBranch: SEM }
+      - { stageId: J01-05, title: "校验并生效", stageOwnerBranch: SEM }
+      - { stageId: J01-06, title: "新建访问主体", stageOwnerBranch: ACCESS }
+      - { stageId: J01-07, title: "真实 Agent 问答", stageOwnerBranch: AGENT }
+      - { stageId: J01-08, title: "审计与对账", stageOwnerBranch: OBSERVE }

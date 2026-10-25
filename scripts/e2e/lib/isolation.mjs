@@ -36,7 +36,7 @@
 // stays importable in environments where `child_process` is mocked.
 import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import net from "node:net";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
@@ -255,7 +255,7 @@ function randomShortHex() {
  * per-IP are NOT supported. We therefore route model API egress through a localhost sidecar
  * and explicitly refuse `*:N` wildcards.
  */
-export function buildSandboxProfile({ allow = [], deny = [], mcpPorts = [], sidecarPorts = [], denyHome = false, allowHome = null }) {
+export function buildSandboxProfile({ allow = [], deny = [], allowLiterals = [], mcpPorts = [], sidecarPorts = [], denyHome = false, allowHome = null }) {
   const lines = [
     `(version 1)`,
     `(deny default)`,
@@ -305,6 +305,13 @@ export function buildSandboxProfile({ allow = [], deny = [], mcpPorts = [], side
   // client workspace + dedicated HOME + the disposable probe root (so the model can attempt
   // the denial probes against synthetic canaries; the expected outcome is "could not read").
   for (const p of allow) lines.push(`(allow file-read* (subpath ${sbplPath(p)}))`);
+  // Literal file rules: the CLIENT BINARY itself must be readable/executable inside the
+  // boundary, otherwise `sandbox-exec` refuses to exec it ("execvp() ... Operation not
+  // permitted") and the client never starts. A client that never starts proves nothing:
+  // the probe then reads its own exec failure and mis-reads it as "the client reached the
+  // resource". These literals are only the resolved binary paths the runner already
+  // located — they do not widen the boundary to the rest of $HOME.
+  for (const p of allowLiterals) lines.push(`(allow file-read* (literal ${sbplPath(p)}))`);
   if (denyHome && allowHome) {
     lines.push(`(allow file-read* (subpath ${sbplPath(allowHome)}))`);
   }
@@ -669,7 +676,7 @@ function sha256Hex(profileString) {
  * receipt. The release gate must then require a separate kernel-level network policy provider
  * to enforce per-host egress (out of scope for sandbox-exec).
  */
-export function buildBoundaryBundle({ run, canaries, provider, mcpHost, mcpPort, sidecarPort = null }) {
+export function buildBoundaryBundle({ run, canaries, provider, mcpHost, mcpPort, sidecarPort = null, clientBinaries = [] }) {
   // A "supported" provider must have `provider.provider` set to a known string. A plain null,
   // a missing object, or a reason-only object is unsupported; the caller fails closed.
   if (!provider || !provider.provider) return { provider: null, profileString: null, allow: [], deny: [], mcpPorts: [], sidecarPort: null, networkEgressGap: null };
@@ -686,6 +693,25 @@ export function buildBoundaryBundle({ run, canaries, provider, mcpHost, mcpPort,
     path.join(run.paths["client-work"], ".."),
     tmpdir()
   ];
+  // The client binary must be readable/executable INSIDE the boundary, otherwise the client
+  // never starts and the probe proves nothing. `denyHome` locks $HOME (to keep OS private
+  // credentials out of reach), which also covers the usual install locations of the clients
+  // this runner drives (npm/pipx-style installs under ~/.local). The runner therefore passes
+  // the RESOLVED binary paths it already located; only those exact files (plus the directory
+  // holding the resolved binary) are re-allowed. The rest of $HOME stays denied.
+  const allowLiterals = [];
+  for (const binary of clientBinaries) {
+    if (!binary) continue;
+    const resolved = path.resolve(binary);
+    allowLiterals.push(resolved);
+    let real = resolved;
+    try { real = realpathSync(resolved); } catch { /* a missing binary is the runner's problem to report */ }
+    if (real !== resolved) allowLiterals.push(real);
+    // A client installed under a versioned directory (e.g. ~/.local/share/claude/versions/<v>)
+    // may exec siblings; allow that one directory, not the whole install tree.
+    const holder = path.dirname(real);
+    if (!allow.includes(holder)) allow.push(holder);
+  }
   // MCP egress: only allow `localhost:<port>` if the registered host is local. For a remote MCP
   // we record the gap and emit a profile WITHOUT a `localhost:<mcpPort>` rule; the runner cannot
   // wrap a remote-MCP call under sandbox-exec without a `*:<port>` wildcard, which we refuse.
@@ -696,12 +722,13 @@ export function buildBoundaryBundle({ run, canaries, provider, mcpHost, mcpPort,
   const profileString = buildSandboxProfile({
     allow,
     deny,
+    allowLiterals,
     mcpPorts,
     sidecarPorts,
     denyHome: true,
     allowHome: run.paths["client-work"]
   });
-  return { provider, profileString, allow, deny, mcpPorts, sidecarPort, networkEgressGap, mcpHost, mcpHostIsLocal };
+  return { provider, profileString, allow, deny, allowLiterals, mcpPorts, sidecarPort, networkEgressGap, mcpHost, mcpHostIsLocal };
 }
 
 /**
