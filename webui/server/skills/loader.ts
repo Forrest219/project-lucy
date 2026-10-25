@@ -5,6 +5,7 @@ import { parse } from "yaml";
 import { loadContentPaths } from "../paths.js";
 import { readContextFile } from "../fs-safe.js";
 import { parseObjectAcl } from "../proxy/context-acl.js";
+import { parseOwner } from "./owner.js";
 import type { SkillAsset, SkillFrontmatter } from "./types.js";
 
 const FRONTMATTER_REGEX = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/;
@@ -82,6 +83,14 @@ export function parseSkillMarkdown(rawContent: string, filePath: string, project
     ? String(parsed.description).trim()
     : `${title} - ${domain} domain governed skill SOP`;
 
+  // L25-04: the owner is a free-text label, but it is NOT stringified like the
+  // fields above. A non-string / over-long / control-character value is a corrupt
+  // declaration: it is disclosed as `owner_invalid` and never shown as a label.
+  const owner = parseOwner(
+    parsed.owner,
+    Object.prototype.hasOwnProperty.call(parsed, "owner")
+  );
+
   return {
     name,
     title,
@@ -94,6 +103,8 @@ export function parseSkillMarkdown(rawContent: string, filePath: string, project
     triggers,
     eval_cases,
     description,
+    owner: owner.value,
+    ...(owner.invalid ? { owner_invalid: true as const } : {}),
     uri,
     relativePath,
     filePath,

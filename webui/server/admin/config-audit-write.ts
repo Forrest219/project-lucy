@@ -137,9 +137,136 @@ export async function completeConfigAuditTerminal(
  * `deferTerminal` — the caller owns the terminal record. Used by the access-config
  * closure, where the terminal may only be written after the runtime policy swap.
  */
+/**
+ * Thrown when the written content was restored after a failed terminal record.
+ * The change did NOT take effect; the caller reports a failed write, not a
+ * success, and the ledger keeps the `rolled_back` evidence.
+ */
+export class AuditedWriteRolledBackError extends Error {
+  readonly code = "config_audit_rolled_back";
+  constructor(message: string) {
+    super(message);
+    this.name = "AuditedWriteRolledBackError";
+  }
+}
+
+/**
+ * Thrown when the written content could NOT be restored after the terminal
+ * record failed to persist. The evidence stays in the ledger as `pending`, and
+ * the caller must surface a repair request instead of claiming success.
+ */
+export class AuditedWriteRollbackError extends Error {
+  readonly code = "config_audit_rollback_failed";
+  constructor(message: string) {
+    super(message);
+    this.name = "AuditedWriteRollbackError";
+  }
+}
+
+/**
+ * Thrown when the durable audit intent could not be persisted. The content is
+ * NOT written in that case: a change that nobody recorded must not reach disk.
+ */
+export class AuditedWriteIntentError extends Error {
+  readonly code = "config_audit_intent_unavailable";
+  constructor(message: string) {
+    super(message);
+    this.name = "AuditedWriteIntentError";
+  }
+}
+
 export interface AuditedWriteOptions {
   intentId?: number;
   deferTerminal?: boolean;
+  /**
+   * When the audit is enabled but the intent record cannot be persisted, nothing
+   * is written at all. The helper's own contract says a caller that never
+   * receives an intent id must not write configuration (Spec §4.2 / SKO-12).
+   */
+  requireIntent?: boolean;
+  /**
+   * L25-04 / F-03: when the committed terminal record cannot be persisted, the
+   * written content is restored to its previous bytes and the attempt is recorded
+   * as `rolled_back`. Without this, content that was written but never audited
+   * stays on disk while the ledger still says `pending`.
+   */
+  rollbackOnTerminalFailure?: boolean;
+}
+
+type ExistingContent = { text: string; existed: boolean };
+
+/** Read the current content AND whether it existed — a rollback needs both. */
+async function readExistingContent(projectRoot: string, relPath: string): Promise<ExistingContent> {
+  try {
+    const paths = await loadContentPaths();
+    const abs = await assertReadable(paths, projectRoot, relPath);
+    return { text: await readFile(abs, "utf8"), existed: true };
+  } catch {
+    return { text: "", existed: false };
+  }
+}
+
+/** Restore the previous bytes; a file that did not exist is removed again. */
+async function restorePreviousContent(
+  projectRoot: string,
+  relPath: string,
+  previous: ExistingContent
+): Promise<boolean> {
+  try {
+    const paths = await loadContentPaths();
+    if (previous.existed) {
+      await safeWriteAtomic(paths, projectRoot, relPath, previous.text);
+    } else {
+      await safeRemove(paths, projectRoot, relPath);
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Shared terminal-commit path: persist `committed`, and on failure either roll the
+ * content back (opt-in) or surface the original error.
+ */
+async function commitTerminalOrRollback(
+  intentId: number | undefined,
+  projectRoot: string,
+  relPath: string,
+  previous: ExistingContent,
+  terminalInput: {
+    writeStatus: ConfigAuditWriteStatus;
+    diff?: string | null;
+    oldSummary?: unknown;
+    newSummary?: unknown;
+  },
+  options: AuditedWriteOptions
+): Promise<void> {
+  try {
+    await completeConfigAuditTerminal(intentId, terminalInput);
+    return;
+  } catch (terminalError) {
+    if (!options.rollbackOnTerminalFailure) {
+      throw terminalError;
+    }
+    const reason = terminalError instanceof Error ? terminalError.message : String(terminalError);
+    const restored = await restorePreviousContent(projectRoot, relPath, previous);
+    if (!restored) {
+      // The content is still on disk and the ledger still says pending. Do not
+      // claim a rollback that did not happen.
+      throw new AuditedWriteRollbackError(
+        `config audit terminal failed (${reason}) and the previous content could not be restored`
+      );
+    }
+    await completeConfigAuditTerminal(intentId, {
+      writeStatus: "rolled_back",
+      errorReason: reason,
+      diff: terminalInput.diff
+    }).catch(() => undefined);
+    throw new AuditedWriteRolledBackError(
+      `config audit terminal failed (${reason}); the previous content was restored`
+    );
+  }
 }
 
 export async function auditedWriteFile(
@@ -155,7 +282,8 @@ export async function auditedWriteFile(
     return {};
   }
 
-  const oldText = await readTextIfExists(projectRoot, relPath);
+  const previous = await readExistingContent(projectRoot, relPath);
+  const oldText = previous.text;
   const diff = auditDiffForContent({
     assetKind: auditIntent?.assetKind,
     relPath,
@@ -175,6 +303,12 @@ export async function auditedWriteFile(
       )
     ).intentId;
 
+  if (options.requireIntent && intentId === undefined) {
+    throw new AuditedWriteIntentError(
+      `the config audit intent for ${relPath} could not be persisted; nothing was written`
+    );
+  }
+
   try {
     const paths = await loadContentPaths();
     await safeWriteAtomic(paths, projectRoot, relPath, content);
@@ -190,12 +324,19 @@ export async function auditedWriteFile(
   }
 
   if (!options.deferTerminal) {
-    await completeConfigAuditTerminal(intentId, {
-      writeStatus: "committed",
-      diff,
-      oldSummary: auditIntent?.oldSummary,
-      newSummary: auditIntent?.newSummary
-    });
+    await commitTerminalOrRollback(
+      intentId,
+      projectRoot,
+      relPath,
+      previous,
+      {
+        writeStatus: "committed",
+        diff,
+        oldSummary: auditIntent?.oldSummary,
+        newSummary: auditIntent?.newSummary
+      },
+      options
+    );
   }
 
   return { auditId: intentId };
@@ -213,7 +354,8 @@ export async function auditedRemoveFile(
     return {};
   }
 
-  const oldText = await readTextIfExists(projectRoot, relPath);
+  const previous = await readExistingContent(projectRoot, relPath);
+  const oldText = previous.text;
   const diff = auditDiffForContent({
     assetKind: auditIntent?.assetKind,
     relPath,
@@ -233,6 +375,12 @@ export async function auditedRemoveFile(
       )
     ).intentId;
 
+  if (options.requireIntent && intentId === undefined) {
+    throw new AuditedWriteIntentError(
+      `the config audit intent for ${relPath} could not be persisted; nothing was removed`
+    );
+  }
+
   try {
     const paths = await loadContentPaths();
     await safeRemove(paths, projectRoot, relPath);
@@ -248,7 +396,7 @@ export async function auditedRemoveFile(
   }
 
   if (!options.deferTerminal) {
-    await completeConfigAuditTerminal(intentId, { writeStatus: "committed", diff });
+    await commitTerminalOrRollback(intentId, projectRoot, relPath, previous, { writeStatus: "committed", diff }, options);
   }
 
   return { auditId: intentId };

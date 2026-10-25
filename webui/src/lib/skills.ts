@@ -35,6 +35,13 @@ export type SkillAsset = {
   triggers: string[];
   eval_cases: string[];
   description: string;
+  /**
+   * L25-04: the free-text owner label. Empty means "unspecified"; it is not an
+   * account, a role, or an authorization source.
+   */
+  owner: string;
+  /** Server flag: the stored owner declaration is corrupt and must be repaired. */
+  owner_invalid?: boolean;
   uri: string;
   relativePath: string;
   file_version: string;
@@ -66,6 +73,8 @@ export type SkillWritePreview = {
   impact: {
     status: { from: SkillStatus | null; to: SkillStatus };
     rolesAllowed: { from: string[]; to: string[] };
+    /** L25-04: the owner label before and after this write; `from` is null on create. */
+    owner: { from: string | null; to: string };
     enteredWildcard: boolean;
     exitedWildcard: boolean;
     affectedRoleIds: string[];
@@ -83,6 +92,8 @@ export type SkillWritePayload = {
   roles_allowed?: string[];
   triggers?: string[];
   description?: string;
+  /** L25-04: free-text owner label. Absent keeps the current value; "" clears it. */
+  owner?: string;
   content?: string;
   eval_cases?: string[];
   prerequisites?: SkillPrerequisites;
@@ -108,7 +119,11 @@ async function fetchSkillsJson<T>(path: string, init?: RequestInit): Promise<T> 
       skill_write_conflict: "Skill 已被其他操作更新，请重新加载后再试",
       skill_expected_version_required: "缺少 Skill 文件版本，请重新加载后再试",
       skill_identity_immutable: "Skill 的域和名称创建后不可修改",
-      skill_roles_invalid: "可访问角色声明无效，请重新选择"
+      skill_roles_invalid: "可访问角色声明无效，请重新选择",
+      skill_owner_invalid: "负责人声明无效，请填写或清空后再保存",
+      skill_audit_unavailable: "配置审计当前不可用，改动未保存，请稍后重试",
+      skill_write_rolled_back: "保存未生效，已回滚，请重新加载后再试",
+      skill_write_rollback_failed: "写入未完成且回滚失败，请联系所有者修复该 Skill"
     };
     const code = Object.keys(knownErrors).find((candidate) => raw.includes(candidate));
     const message = code

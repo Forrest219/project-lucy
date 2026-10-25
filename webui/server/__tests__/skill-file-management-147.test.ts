@@ -53,6 +53,7 @@ describe("Spec 147 static gates", () => {
       triggers: [],
       eval_cases: [],
       description: "d",
+      owner: "",
       uri: "lucy-skill://d/s",
       relativePath: "skills/d/s.md",
       filePath: "/tmp/s.md",

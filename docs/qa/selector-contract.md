@@ -1102,6 +1102,10 @@
 | `skill-detail-path` | Skill 文件路径 | `pages/skills/SkillList.tsx` |
 | `skill-detail-validation-issues` | 中文校验问题 | `pages/skills/SkillList.tsx` |
 | `skill-detail-roles` | 阅读态可访问角色 | `pages/skills/SkillList.tsx` |
+| `skill-detail-owner` | 阅读态负责人 | `pages/skills/SkillList.tsx` |
+| `skill-owner` | 总览表负责人列 | `pages/skills/SkillList.tsx` |
+| `skill-field-owner` | 编辑态负责人 | `pages/skills/SkillList.tsx` |
+| `skill-preflight-owner` | 保存预检：负责人变化 | `pages/skills/SkillList.tsx` |
 | `skill-field-roles` | 编辑态可访问角色（对象授权，T05/T06） | `components/ObjectAclField.tsx` |
 | `skill-preflight-roles` | 保存预检：可访问角色变化 / 扩权 | `pages/skills/SkillList.tsx` |
 | `skill-editor-form` | 编辑表单 | `pages/skills/SkillList.tsx` |
