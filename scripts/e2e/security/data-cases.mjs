@@ -20,7 +20,7 @@
 // literal true).
 
 import { createHash } from "node:crypto";
-import { Checks, explicitDeny, extractDenyReason } from "./context.mjs";
+import { Checks, explicitDeny, extractDenyReason, measureValue } from "./context.mjs";
 import { checkRealQuery } from "../answer-assertions.mjs";
 
 const bodyText = (res) => res.text ?? "";
@@ -51,7 +51,7 @@ function isSuccessfulGoldMatch(parsed, gold) {
   if (!parsed?.ok) return false;
   const expected = gold?.expected?.value;
   if (typeof expected !== "number") return false;
-  const candidate = parsed.parsed?.aggregate ?? parsed.parsed?.rows?.[0]?.count_distinct_order_id ?? null;
+  const candidate = parsed.parsed?.aggregate ?? measureValue(parsed.parsed, ["order_count"]) ?? null;
   return candidate === expected;
 }
 
@@ -113,10 +113,10 @@ async function sec09v01(ctx) {
 
   const res = await ctx.lucyQuery(token, {
     connectionId: "fin-db",
-    source: "analytics.orders",
-    measures: ["count_distinct_order_id"],
+    source: "analytics.orders_masked",
+    measures: ["order_count"],
     dimensions: [],
-    filters: [{ field: "region", op: "eq", value: "East" }]
+    filters: [{ field: "orders_masked.region", op: "eq", value: "East" }]
   });
 
   // Reject HTTP 500, JSON-RPC internal errors and parse errors as NOT a deny (GATE-01).
@@ -131,7 +131,7 @@ async function sec09v01(ctx) {
   if (parsed.ok) {
     checks.expect("allow_control", true, "entitled query returned a structured result");
     // Aggregate binding
-    const aggregate = parsed.parsed?.aggregate ?? parsed.parsed?.rows?.[0]?.count_distinct_order_id ?? null;
+    const aggregate = parsed.parsed?.aggregate ?? measureValue(parsed.parsed, ["order_count"]) ?? null;
     if (typeof expected === "number") {
       checks.expect("typed_gold", aggregate === expected, `aggregate=${aggregate} vs gold=${expected}`);
     }
@@ -184,8 +184,8 @@ async function sec09v02(ctx) {
 
   const res = await ctx.lucyQuery(token, {
     connectionId: "sales", // alias for sales-db
-    source: "analytics.orders",
-    measures: ["count_distinct_order_id"],
+    source: "analytics.orders_masked",
+    measures: ["order_count"],
     dimensions: [],
     filters: []
   });
@@ -207,10 +207,10 @@ async function sec09v02(ctx) {
   // Control: the entitled connection still returns a parsed success that matches the gold.
   const control = await ctx.lucyQuery(token, {
     connectionId: "fin-db",
-    source: "analytics.orders",
-    measures: ["count_distinct_order_id"],
+    source: "analytics.orders_masked",
+    measures: ["order_count"],
     dimensions: [],
-    filters: [{ field: "region", op: "eq", value: "East" }]
+    filters: [{ field: "orders_masked.region", op: "eq", value: "East" }]
   });
   const controlParsed = ctx.parseMcpToolResult(control);
   const controlMatches = isSuccessfulGoldMatch(controlParsed, gold);
@@ -263,10 +263,10 @@ async function sec09v03(ctx) {
 
   const control = await ctx.lucyQuery(token, {
     connectionId: "fin-db",
-    source: "analytics.orders",
-    measures: ["count_distinct_order_id"],
+    source: "analytics.orders_masked",
+    measures: ["order_count"],
     dimensions: [],
-    filters: [{ field: "region", op: "eq", value: "East" }]
+    filters: [{ field: "orders_masked.region", op: "eq", value: "East" }]
   });
   const controlParsed = ctx.parseMcpToolResult(control);
   checks.expect("allow_control", isSuccessfulGoldMatch(controlParsed, gold), `control: canonical source -> parsed.ok=${controlParsed.ok} reason=${controlParsed.reason ?? "ok"}`);
@@ -299,10 +299,10 @@ async function sec09v04(ctx) {
 
   const res = await ctx.lucyQuery(token, {
     connectionId: "sales-db",
-    source: "analytics.orders",
-    measures: ["count_distinct_order_id"],
+    source: "analytics.orders_masked",
+    measures: ["order_count"],
     dimensions: [],
-    filters: [{ field: "region", op: "eq", value: "West" }]
+    filters: [{ field: "orders_masked.region", op: "eq", value: "West" }]
   });
   if (res.status >= 500) {
     checks.expect("deny", false, `SEC-09-V04: HTTP 5xx is not a deny; got ${res.status}`);
@@ -313,7 +313,7 @@ async function sec09v04(ctx) {
   const parsed = ctx.parseMcpToolResult(res);
   if (parsed.ok) {
     checks.expect("allow_control", true, "sales same-named source ok");
-    const aggregate = parsed.parsed?.aggregate ?? parsed.parsed?.rows?.[0]?.count_distinct_order_id ?? null;
+    const aggregate = parsed.parsed?.aggregate ?? measureValue(parsed.parsed, ["order_count"]) ?? null;
     if (typeof expected === "number") {
       checks.expect("typed_gold", aggregate === expected, `aggregate=${aggregate} vs gold=${expected}`);
     }
@@ -342,8 +342,8 @@ async function sec09v04(ctx) {
   // Cross-DB denial: sales reader hitting fin-db.orders must be denied.
   const cross = await ctx.lucyQuery(token, {
     connectionId: "fin-db",
-    source: "analytics.orders",
-    measures: ["count_distinct_order_id"],
+    source: "analytics.orders_masked",
+    measures: ["order_count"],
     dimensions: [],
     filters: []
   });
@@ -381,8 +381,8 @@ async function sec09v05(ctx) {
 
   const refused = await ctx.lucyQuery(token, {
     connectionId: "sales-db",
-    source: "analytics.orders",
-    measures: ["count_distinct_order_id"],
+    source: "analytics.orders_masked",
+    measures: ["order_count"],
     dimensions: [],
     filters: []
   });
@@ -409,10 +409,10 @@ async function sec09v05(ctx) {
   // Control: the entitled connection still returns a parsed success that matches the gold.
   const control = await ctx.lucyQuery(token, {
     connectionId: "fin-db",
-    source: "analytics.orders",
-    measures: ["count_distinct_order_id"],
+    source: "analytics.orders_masked",
+    measures: ["order_count"],
     dimensions: [],
-    filters: [{ field: "region", op: "eq", value: "East" }]
+    filters: [{ field: "orders_masked.region", op: "eq", value: "East" }]
   });
   const controlParsed = ctx.parseMcpToolResult(control);
   checks.expect("allow_control", isSuccessfulGoldMatch(controlParsed, gold), `control: entitled connection -> parsed.ok=${controlParsed.ok} reason=${controlParsed.reason ?? "ok"}`);
@@ -695,7 +695,7 @@ async function sec12v02(ctx) {
   const res = await issueQuery(ctx, token, {
     connectionId: "fin-db",
     source: "analytics.marketing_daily",
-    measures: [{ name: "spend_per_customer", expr: "SUM(spend_cents) / SUM(new_customers)" }],
+    measures: [{ name: "spend_per_customer", expr: "SUM(marketing_daily.spend_cents) / SUM(marketing_daily.new_customers)" }],
     dimensions: []
   });
   const checks = await shapeChecks(ctx, res, "expr measure", window);
@@ -710,8 +710,8 @@ async function sec12v03(ctx) {
   const res = await issueQuery(ctx, token, {
     connectionId: "fin-db",
     source: "analytics.marketing_daily",
-    measures: ["spend_cents"],
-    dimensions: ["region"],
+    measures: ["total_spend_cents"],
+    dimensions: [{ field: "marketing_daily.region" }],
     filters: ["region = 'West' OR region = 'East'"]
   });
   const checks = await shapeChecks(ctx, res, "string filter", window);
@@ -726,8 +726,8 @@ async function sec12v04(ctx) {
   const res = await issueQuery(ctx, token, {
     connectionId: "fin-db",
     source: "analytics.marketing_daily",
-    measures: ["spend_cents"],
-    dimensions: ["region"],
+    measures: ["total_spend_cents"],
+    dimensions: [{ field: "marketing_daily.region" }],
     joins: [{ source: "analytics.orders", on: "marketing_daily.region = orders.region" }]
   });
   const checks = await shapeChecks(ctx, res, "join", window);
@@ -742,8 +742,8 @@ async function sec12v05(ctx) {
   const res = await issueQuery(ctx, token, {
     connectionId: "fin-db",
     source: "analytics.marketing_daily",
-    measures: ["spend_cents"],
-    dimensions: ["region"],
+    measures: ["total_spend_cents"],
+    dimensions: [{ field: "marketing_daily.region" }],
     filters: [{ field: "mkt.region", op: "eq", value: "West" }]
   });
   const checks = await shapeChecks(ctx, res, "alias", window);
@@ -758,8 +758,8 @@ async function sec12v06(ctx) {
   const res = await issueQuery(ctx, token, {
     connectionId: "fin-db",
     source: "analytics.marketing_daily",
-    measures: ["spend_cents"],
-    dimensions: ["region"],
+    measures: ["total_spend_cents"],
+    dimensions: [{ field: "marketing_daily.region" }],
     subquery: { source: "analytics.orders", where: "region = 'West'" }
   });
   const checks = await shapeChecks(ctx, res, "subquery", window);
@@ -774,8 +774,8 @@ async function sec12v07(ctx) {
   const res = await issueQuery(ctx, token, {
     connectionId: "fin-db",
     source: "analytics.marketing_daily",
-    measures: ["spend_cents"],
-    dimensions: ["region"],
+    measures: ["total_spend_cents"],
+    dimensions: [{ field: "marketing_daily.region" }],
     filters: [{ "ｏｒ": [{ field: "region", op: "eq", value: "West" }] }]
   });
   const checks = await shapeChecks(ctx, res, "Unicode variant", window);
@@ -790,8 +790,8 @@ async function sec12v08(ctx) {
   const res = await issueQuery(ctx, token, {
     connectionId: "fin-db",
     source: "analytics.marketing_daily",
-    measures: ["spend_cents"],
-    dimensions: ["region"],
+    measures: ["total_spend_cents"],
+    dimensions: [{ field: "marketing_daily.region" }],
     filters: [{ field: "region /* FORCED */", op: "eq", value: "West" }]
   });
   const checks = await shapeChecks(ctx, res, "comment", window);
@@ -807,8 +807,8 @@ async function sec12v09(ctx) {
   const res = await issueQuery(ctx, token, {
     connectionId: "fin-db",
     source: "analytics.marketing_daily",
-    measures: ["spend_cents"],
-    dimensions: ["region"],
+    measures: ["total_spend_cents"],
+    dimensions: [{ field: "marketing_daily.region" }],
     filters: [],
     forced_filters: forged,
     forcedFilters: forged

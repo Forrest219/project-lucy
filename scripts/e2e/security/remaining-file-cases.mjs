@@ -59,9 +59,12 @@ async function sec15v02(ctx) {
   symlinkSync(path.join(outside, "canary.txt"), target);
 
   const texts = [];
-  for (const [cookie, label] of [[cookie, "ui"], [null, "agent"]]) {
-    if (cookie) {
-      const res = await ctx.web.request("GET", `/api/wiki/${encodeURIComponent(key)}`, { cookie });
+  // The loop variable must not shadow the session cookie captured above: the
+  // destructuring pattern puts `cookie` in scope for its own initializer, so a
+  // same-named binding would read it in its temporal dead zone.
+  for (const [sessionCookie, label] of [[cookie, "ui"], [null, "agent"]]) {
+    if (sessionCookie) {
+      const res = await ctx.web.request("GET", `/api/wiki/${encodeURIComponent(key)}`, { cookie: sessionCookie });
       texts.push(res.text);
       checks.expect("deny", !res.text.includes(ctx.canaries.outsideFile), `UI TOCTOU read -> ${res.status}`);
     } else {

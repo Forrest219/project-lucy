@@ -76,6 +76,50 @@ function findNamesBlock(yamlText, roleId) {
   return { lines, block, start, end, inRole };
 }
 
+/**
+ * Narrows a role's `names` list to the given entries, in EITHER YAML shape.
+ *
+ * The access.yaml exists in two shapes: the template uses flow sequences
+ * (`names: [marketing_daily, orders_masked]`) while the PREPARED RUN file uses block
+ * sequences (`names:` / `  - marketing_daily` / `  - orders_masked`). The earlier regex
+ * only matched the flow shape, so on the real run file the mutation silently did nothing
+ * and the case reported "could not locate the names block" instead of testing anything.
+ *
+ * Returns the text unchanged when the role or its `names` list cannot be found.
+ */
+function narrowRoleNames(yamlText, roleId, keep) {
+  const lines = yamlText.split("\n");
+  const roleStart = lines.findIndex((line) => new RegExp(`^ {2}${roleId}:\\s*$`).test(line));
+  if (roleStart < 0) return yamlText;
+  let roleEnd = lines.length;
+  for (let i = roleStart + 1; i < lines.length; i += 1) {
+    if (/^ {2}\S/.test(lines[i])) { roleEnd = i; break; }
+  }
+  for (let i = roleStart; i < roleEnd; i += 1) {
+    const flow = /^(\s*)names:\s*\[([^\]]*)\]\s*$/.exec(lines[i]);
+    if (flow) {
+      const kept = flow[2].split(",").map((n) => n.trim()).filter((n) => keep.includes(n));
+      lines[i] = `${flow[1]}names: [${kept.join(", ")}]`;
+      return lines.join("\n");
+    }
+    const block = /^(\s*)names:\s*$/.exec(lines[i]);
+    if (!block) continue;
+    // Block sequence: the entries are the following, more-indented `- item` lines.
+    const entryIndent = block[1].length + 2;
+    const entries = [];
+    for (let j = i + 1; j < roleEnd; j += 1) {
+      const entry = new RegExp(`^\\s{${entryIndent}}-\\s*(.+?)\\s*$`).exec(lines[j]);
+      if (!entry) break;
+      entries.push({ index: j, name: entry[1] });
+    }
+    const kept = entries.filter((e) => keep.includes(e.name));
+    if (kept.length === 0 || kept.length === entries.length) return yamlText;
+    const drop = new Set(entries.filter((e) => !keep.includes(e.name)).map((e) => e.index));
+    return lines.filter((line, index) => !drop.has(index)).join("\n");
+  }
+  return yamlText;
+}
+
 /** SEC-13-V01 — adding a new table to ktx.yaml does NOT widen the existing role grant. */
 async function sec13v01(ctx) {
   const checks = new Checks();
@@ -91,16 +135,18 @@ async function sec13v01(ctx) {
     return checks.result();
   }
   const undo = replaceText(ktx, mutated);
+  // `res` is read after the try/finally, so it must live outside the try block.
+  let res = null;
   try {
     await ctx.lucy.restart("SIGTERM");
     // Issue a query against the new table from the finance role. The role's allow.names
     // does NOT include the new table, so the gate must refuse with
     // explicit_table_required:<name> (not silently serve).
-    const res = await ctx.lucyQuery(ctx.tokens.e2e_finance, {
+    res = await ctx.lucyQuery(ctx.tokens.e2e_finance, {
       connectionId: "fin-db",
       source: "analytics.brand_new_unentitled_table",
-      measures: ["spend_cents"],
-      dimensions: ["region"]
+      measures: ["order_count"],
+      dimensions: [{ field: "brand_new_unentitled_table.region" }]
     });
     checks.expect("deny", explicitDeny(res), `newly-added table to ktx.yaml: ${res.json?.error?.message ?? res.status}`);
     checks.noLeak([res.text], { secrets: ctx.allSecrets, forbiddenCanaries: Object.values(ctx.canaries) });
@@ -117,12 +163,7 @@ async function sec13v02(ctx) {
   const yaml = accessYaml(ctx);
   const original = readFileSync(yaml, "utf8");
   // Narrow finance_reader to only marketing_daily (remove orders_masked from its names list).
-  const mutated = original.replace(/(\s+-\s+finance_reader\n[\s\S]+?names:\s*\[)([^\]]+)(])/,
-    (match, head, names, tail) => {
-      const kept = names.split(",").map((n) => n.trim()).filter((n) => n && n.includes("marketing_daily"));
-      return `${head}${kept.join(", ")}${tail}`;
-    }
-  );
+  const mutated = narrowRoleNames(original, "finance_reader", ["marketing_daily"]);
   if (mutated === original) {
     checks.expect("deny", false, "could not locate finance_reader names block to narrow");
     return checks.result();
@@ -133,19 +174,21 @@ async function sec13v02(ctx) {
     // finance_reader can no longer read orders_masked.
     const res = await ctx.lucyQuery(ctx.tokens.e2e_finance, {
       connectionId: "fin-db",
-      source: "analytics.orders",
-      measures: ["count_distinct_order_id"],
-      dimensions: ["region"]
+      source: "analytics.orders_masked",
+      measures: ["order_count"],
+      dimensions: [{ field: "orders_masked.region" }]
     });
     checks.expect("deny", explicitDeny(res), `narrowed role on orders: ${res.json?.error?.message ?? res.status}`);
     // The same role can still read marketing_daily (control).
     const control = await ctx.lucyQuery(ctx.tokens.e2e_finance, {
       connectionId: "fin-db",
       source: "analytics.marketing_daily",
-      measures: ["spend_cents"],
-      dimensions: ["region"]
+      measures: ["total_spend_cents"],
+      dimensions: [{ field: "marketing_daily.region" }]
     });
     checks.expect("allow_control", control.status === 200 || explicitDeny(control), `marketing_daily still works after narrow: ${control.status}`);
+    // SEC-13 declares [deny, no_leak]: the narrowing must not leak anything either.
+    checks.noLeak([res.text, control.text], { secrets: ctx.allSecrets, forbiddenCanaries: Object.values(ctx.canaries) });
   } finally {
     undo();
     await ctx.lucy.restart("SIGTERM");
@@ -164,8 +207,8 @@ async function sec13v03(ctx) {
     const res = await ctx.lucyQuery(ctx.tokens.e2e_finance, {
       connectionId: "fin-db",
       source: "analytics.marketing_daily",
-      measures: ["spend_cents"],
-      dimensions: ["region"]
+      measures: ["total_spend_cents"],
+      dimensions: [{ field: "marketing_daily.region" }]
     });
     checks.expect("deny", explicitDeny(res) || res.status === 503, `corrupt access.yaml: ${res.json?.error?.message ?? res.status}`);
     // The corrupt-config auth mode check is exercised by SEC-01-V04; here we only
@@ -201,10 +244,12 @@ async function sec13v04(ctx) {
     const res = await ctx.lucyQuery(ctx.tokens.e2e_finance_east, {
       connectionId: "fin-db",
       source: "analytics.marketing_daily",
-      measures: ["spend_cents"],
-      dimensions: ["region"]
+      measures: ["total_spend_cents"],
+      dimensions: [{ field: "marketing_daily.region" }]
     });
     checks.expect("deny", explicitDeny(res) || res.status === 503, `compile failure: ${res.json?.error?.message ?? res.status}`);
+    // SEC-13 declares [deny, no_leak].
+    checks.noLeak([res.text], { secrets: ctx.allSecrets, forbiddenCanaries: Object.values(ctx.canaries) });
   } finally {
     undo();
     await ctx.lucy.restart("SIGTERM");
@@ -221,19 +266,16 @@ async function sec13v05(ctx) {
   const original = readFileSync(yaml, "utf8");
   const backup = path.join(ctx.run.paths.checker, "access.yaml.backup");
   writeFileSync(backup, original);
-  const narrowed = original.replace(
-    /(finance_reader:[^[]+names:\s*)\[marketing_daily, orders_masked\]/,
-    "$1[marketing_daily]"
-  );
+  const narrowed = narrowRoleNames(original, "finance_reader", ["marketing_daily"]);
   const undo = replaceText(yaml, narrowed);
   try {
     await ctx.lucy.restart("SIGTERM");
     // Confirm narrowed state.
     const narrowedRes = await ctx.lucyQuery(ctx.tokens.e2e_finance, {
       connectionId: "fin-db",
-      source: "analytics.orders",
-      measures: ["count_distinct_order_id"],
-      dimensions: ["region"]
+      source: "analytics.orders_masked",
+      measures: ["order_count"],
+      dimensions: [{ field: "orders_masked.region" }]
     });
     checks.expect("deny", explicitDeny(narrowedRes), `narrowed state: ${narrowedRes.json?.error?.message ?? narrowedRes.status}`);
     // Restore the backup; the role must NOT regain orders access.
@@ -241,9 +283,9 @@ async function sec13v05(ctx) {
     await ctx.lucy.restart("SIGTERM");
     const restored = await ctx.lucyQuery(ctx.tokens.e2e_finance, {
       connectionId: "fin-db",
-      source: "analytics.orders",
-      measures: ["count_distinct_order_id"],
-      dimensions: ["region"]
+      source: "analytics.orders_masked",
+      measures: ["order_count"],
+      dimensions: [{ field: "orders_masked.region" }]
     });
     checks.expect("deny", explicitDeny(restored), `restored backup: ${restored.json?.error?.message ?? restored.status}`);
     checks.noLeak([restored.text], { secrets: ctx.allSecrets, forbiddenCanaries: Object.values(ctx.canaries) });

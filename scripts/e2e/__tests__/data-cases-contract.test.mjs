@@ -266,7 +266,7 @@ describe("C1 review #5: SEC-09-V01 / V04 must use the actual request + parsed re
     await dataHandlers["SEC-09-V01"](ctx);
     assert.ok(lastArgs, "SEC-09-V01 must issue a real request");
     assert.equal(lastArgs.connectionId, "fin-db", "must hit the entitled connection");
-    assert.equal(lastArgs.source, "analytics.orders", "must hit the canonical source");
+    assert.equal(lastArgs.source, "analytics.orders_masked", "must hit the canonical source (the fixture's source is named orders_masked since the catalog-freeze commit 86d0773)");
   });
 
   it("SEC-09-V04 issues a real request and binds the parsed response", async () => {
@@ -289,7 +289,7 @@ describe("C1 review #5: SEC-09-V01 / V04 must use the actual request + parsed re
     const entitled = calls.find((a) => a.connectionId === "sales-db");
     const cross = calls.find((a) => a.connectionId === "fin-db");
     assert.ok(entitled, "SEC-09-V04 must hit the entitled sales-db connection");
-    assert.equal(entitled.source, "analytics.orders", "must hit the canonical source");
+    assert.equal(entitled.source, "analytics.orders_masked", "must hit the canonical source (the fixture's source is named orders_masked since the catalog-freeze commit 86d0773)");
     assert.ok(cross, "SEC-09-V04 must also issue the cross-DB denial request");
   });
 });

@@ -24,6 +24,24 @@ import { preflightVerify, postflightVerify, TargetIdentityError } from "./target
 
 export const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/**
+ * How many times a local instance start is retried when the previous process may still be
+ * releasing the port. A start that fails for any other reason is surfaced immediately.
+ */
+const START_ATTEMPTS = 3;
+
+/**
+ * The launch spec for the server under test.
+ *
+ * The `tsx` CLI FORKS a child to run the script, so the process the harness held was only
+ * the wrapper: its `exit` said nothing about the real server, which could still be alive and
+ * still holding the port. `node --import tsx` runs the server in ONE process, so `exit`
+ * means "the server is gone" and a stop/start pair cannot race a still-bound port.
+ */
+export function serverLaunchSpec() {
+  return { command: process.execPath, args: ["--import", "tsx", "server/index.ts"] };
+}
+
 function normalizeBaseUrl(baseUrl) {
   if (!(baseUrl instanceof URL)) {
     throw new Error(`LucyHttp baseUrl must be a URL or string (got ${typeof baseUrl})`);
@@ -206,7 +224,6 @@ export class LucyProcess {
     this.extraEnv = extraEnv;
     this.child = null;
   }
-
   get logPath() {
     return path.join(this.run.paths.logs, "lucy.log");
   }
@@ -216,23 +233,62 @@ export class LucyProcess {
     const { host, webuiPort, proxyPort, env } = this.run.instance;
     if (await portOpen(host, webuiPort)) throw new Error(`port ${webuiPort} is already in use: refusing to attach to an unknown service`);
     if (await portOpen(host, proxyPort)) throw new Error(`port ${proxyPort} is already in use: refusing to attach to an unknown service`);
+    let lastError = null;
+    for (let attempt = 1; attempt <= START_ATTEMPTS; attempt += 1) {
+      try {
+        await this.#launch(host, webuiPort, proxyPort, env);
+        return;
+      } catch (error) {
+        lastError = error;
+        this.child = null;
+        // Only a port still in TIME_WAIT / being released by the previous process is worth
+        // retrying; any other startup failure must surface as-is.
+        if (attempt === START_ATTEMPTS || !this.#logShowsAddressInUse()) break;
+        await sleep(1_000);
+      }
+    }
+    throw lastError;
+  }
+
+  /**
+   * Spawns the server as a SINGLE process (`node --import tsx server/index.ts`).
+   *
+   * The `tsx` CLI forks a child to run the script, so `child.once("exit")` fired for the
+   * WRAPPER while the real server was still alive and still holding the port. A stop/start
+   * pair could then race that still-bound port, the new instance died with EADDRINUSE, and
+   * every case after it was scored against a service that was not running. Spawning one
+   * process makes `exit` mean "the server is gone".
+   */
+  async #launch(host, webuiPort, proxyPort, env) {
     const out = openSync(this.logPath, "a");
-    const tsx = path.join(REPO_ROOT, "webui", "node_modules", ".bin", "tsx");
-    this.child = spawn(tsx, ["server/index.ts"], {
+    const { command, args } = serverLaunchSpec();
+    const child = spawn(command, args, {
       cwd: path.join(REPO_ROOT, "webui"),
       env: { ...process.env, ...env, ...this.extraEnv },
       stdio: ["ignore", out, out],
-      // Own process group: `tsx` forks the real server, and a signal to the wrapper alone would orphan it.
+      // Own process group: a group signal must reach the server and anything it forks.
       detached: true
     });
     closeSync(out);
-    this.exited = new Promise((resolve) => this.child.once("exit", (code, signal) => resolve({ code, signal })));
-    await Promise.race([
-      Promise.all([waitForPort(host, webuiPort), waitForPort(host, proxyPort)]),
-      this.exited.then((exit) => {
-        throw new Error(`Lucy exited during startup (code=${exit.code} signal=${exit.signal}); see ${this.logPath}`);
-      })
+    this.child = child;
+    this.exited = new Promise((resolve) => child.once("exit", (code, signal) => resolve({ code, signal })));
+    const exit = await Promise.race([
+      Promise.all([waitForPort(host, webuiPort), waitForPort(host, proxyPort)]).then(() => null),
+      this.exited
     ]);
+    if (exit) {
+      throw new Error(`Lucy exited during startup (code=${exit.code} signal=${exit.signal}); see ${this.logPath}`);
+    }
+  }
+
+  /** True when the tail of the run log shows the port was still held by someone else. */
+  #logShowsAddressInUse() {
+    try {
+      const raw = readFileSync(this.logPath, "utf8");
+      return raw.slice(-4_000).includes("EADDRINUSE");
+    } catch {
+      return false;
+    }
   }
 
   async stop(signal = "SIGTERM") {
@@ -261,12 +317,14 @@ export class LucyProcess {
    * refused to start, and otherwise which auth mode it serves. Used for customer+off style preflight checks.
    */
   static async probeVariant(run, env, timeoutMs = 40_000) {
-    const tsx = path.join(REPO_ROOT, "webui", "node_modules", ".bin", "tsx");
     const webuiPort = run.instance.webuiPort + 100;
     const proxyPort = run.instance.proxyPort + 100;
     const logPath = path.join(run.paths.logs, `variant-${Date.now()}.log`);
     const log = createWriteStream(logPath);
-    const child = spawn(tsx, ["server/index.ts"], {
+    // Single process, same reason as LucyProcess#launch: the probe must observe the real
+    // server's exit, not a wrapper's.
+    const { command, args } = serverLaunchSpec();
+    const child = spawn(command, args, {
       cwd: path.join(REPO_ROOT, "webui"),
       env: { ...process.env, ...run.instance.env, LUCY_WEBUI_PORT: String(webuiPort), LUCY_PROXY_PORT: String(proxyPort), ...env },
       stdio: ["ignore", "pipe", "pipe"],

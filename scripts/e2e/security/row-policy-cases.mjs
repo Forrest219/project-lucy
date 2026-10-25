@@ -25,7 +25,7 @@
 //     allowlisted denial with a real observer-measured zero.
 
 import { createHash } from "node:crypto";
-import { Checks, explicitDeny, extractDenyReason } from "./context.mjs";
+import { Checks, explicitDeny, extractDenyReason, measureValue } from "./context.mjs";
 import { checkRealQuery } from "../answer-assertions.mjs";
 
 const bodyText = (res) => res.text ?? "";
@@ -33,15 +33,15 @@ const bodyText = (res) => res.text ?? "";
 const SCOPED_QUERY = {
   connectionId: "fin-db",
   source: "analytics.marketing_daily",
-  measures: ["spend_cents"],
-  dimensions: ["region"]
+  measures: ["cac_cents"],
+  dimensions: [{ field: "marketing_daily.region" }]
 };
 
 const UNION_QUERY = {
   connectionId: "fin-db",
   source: "analytics.marketing_daily",
-  measures: ["spend_cents"],
-  dimensions: ["region"],
+  measures: ["cac_cents"],
+  dimensions: [{ field: "marketing_daily.region" }],
   filters: []
 };
 
@@ -108,7 +108,7 @@ function isSuccessfulGoldMatch(parsed, gold, toleranceCents) {
   }
   if (expected.type === "int") {
     if (typeof expected.value !== "number") return false;
-    const aggregate = parsed.parsed?.aggregate ?? parsed.parsed?.rows?.[0]?.count_distinct_order_id ?? null;
+    const aggregate = parsed.parsed?.aggregate ?? measureValue(parsed.parsed, ["cac_cents", "order_count", "total_spend_cents"]) ?? null;
     return aggregate === expected.value;
   }
   return false;
@@ -124,7 +124,7 @@ function bindPositiveControl(ctx, checks, label, parsed, gold) {
   }
   const expected = gold?.expected;
   const aggregateCents = parsed.parsed?.aggregateCents ?? null;
-  const aggregateInt = parsed.parsed?.aggregate ?? parsed.parsed?.rows?.[0]?.count_distinct_order_id ?? null;
+  const aggregateInt = parsed.parsed?.aggregate ?? measureValue(parsed.parsed, ["cac_cents", "order_count", "total_spend_cents"]) ?? null;
   if (expected?.type === "money_cents") {
     checks.expect("allow_control", typeof aggregateCents === "number", `${label}: parsed aggregateCents is not a number (got ${JSON.stringify(aggregateCents)})`);
     checks.expect("typed_gold", typeof aggregateCents === "number" && Math.abs(aggregateCents - expected.cents) <= (expected.toleranceCents ?? 0), `${label}: aggregateCents=${aggregateCents} vs gold=${expected.cents} (±${expected.toleranceCents ?? 0})`);
@@ -218,9 +218,9 @@ async function sec10v02(ctx) {
   const win = await observeWindow(ctx, { label: "SEC-10-V02", ...nowWindow(), agentId: "e2e_finance_east", tokenFingerprint: fp });
   const res = await ctx.lucyQuery(token, {
     connectionId: "fin-db",
-    source: "analytics.orders",
-    measures: ["count_distinct_order_id"],
-    dimensions: ["region"],
+    source: "analytics.orders_masked",
+    measures: ["order_count"],
+    dimensions: [{ field: "orders_masked.region" }],
     filters: []
   });
   const extraction = extractDenyReason(res);
@@ -478,7 +478,7 @@ async function by04(ctx) {
   const win = await observeWindow(ctx, { label: "BY-04", ...nowWindow(), agentId: "e2e_finance_east", tokenFingerprint: fp });
   const res = await ctx.lucyQuery(token, {
     ...SCOPED_QUERY,
-    measures: [{ name: "spend_per_customer", expr: "SUM(spend_cents) / SUM(new_customers)" }]
+    measures: [{ name: "spend_per_customer", expr: "SUM(marketing_daily.spend_cents) / SUM(marketing_daily.new_customers)" }]
   });
   bindDenyControl(ctx, checks, "BY-04 expr", res, null, ctx.gold.questions[Q_CAC_EAST]);
   await win.finish();
@@ -724,8 +724,8 @@ async function by14(ctx) {
     connectionId: "fin-db",
     source: "analytics.marketing_daily",
     alias: "m1",
-    measures: ["spend_cents"],
-    dimensions: ["region"],
+    measures: ["total_spend_cents"],
+    dimensions: [{ field: "marketing_daily.region" }],
     joins: [{ source: "analytics.marketing_daily", alias: "m2", on: "m1.region = m2.region" }]
   });
   bindDenyControl(ctx, checks, "BY-14 self join", res, null, ctx.gold.questions[Q_CAC_EAST]);
@@ -792,8 +792,8 @@ async function by18(ctx) {
   const res = await ctx.lucyExplainQuery(token, {
     connectionId: "fin-db",
     source: "analytics.marketing_daily",
-    measures: ["spend_cents"],
-    dimensions: ["region"]
+    measures: ["total_spend_cents"],
+    dimensions: [{ field: "marketing_daily.region" }]
   });
   if (res.status >= 500) {
     checks.expect("deny", false, `BY-18: HTTP 5xx is not a deny; got ${res.status}`);

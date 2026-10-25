@@ -85,6 +85,48 @@ async function versionsOf(ctx) {
   return out;
 }
 
+/**
+ * True when the handler failed because the TARGET SERVICE was not reachable — not because
+ * the product misbehaved. `fetch` reports an unreachable origin as the aggregate `fetch
+ * failed`; a local instance that died during (re)start surfaces as "exited during startup".
+ *
+ * Such a case was never evaluated, so it must be BLOCKED. Scoring it as a product failure
+ * would attribute a harness/environment outage to the product (R‑11 / R‑16).
+ */
+export function isServiceUnreachable(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/fetch failed|ECONNREFUSED|ECONNRESET|EHOSTUNREACH|ENOTFOUND|exited during startup|socket hang up/i.test(message)) return true;
+  const cause = error?.cause;
+  if (cause) {
+    const causeMessage = cause instanceof Error ? cause.message : String(cause);
+    if (/ECONNREFUSED|ECONNRESET|EHOSTUNREACH|ENOTFOUND|socket hang up/i.test(causeMessage)) return true;
+    if (Array.isArray(cause.errors) && cause.errors.some((e) => /ECONNREFUSED|ECONNRESET/i.test(String(e?.code ?? e?.message ?? e)))) return true;
+  }
+  return false;
+}
+
+/**
+ * How a handler that THREW must be scored.
+ *
+ * A case is only a product failure when the product actually answered and answered wrong.
+ * Two kinds of throw mean the case was never evaluated at all, and both are BLOCKED:
+ *   - a precondition the handler could not obtain (the product's own login rate limit,
+ *     a missing turn id, an empty audit trail) — reported as `precondition_unavailable`;
+ *   - an unreachable target (the service was down) — reported as `service_unreachable`.
+ * Everything else is a real product failure.
+ */
+export function classifyHandlerError(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  const blockedReason = error?.blockedReason ?? null;
+  if (blockedReason) {
+    return { status: "blocked", detail: `precondition_unavailable: ${message}`.slice(0, 500), blockedBy: [blockedReason] };
+  }
+  if (isServiceUnreachable(error)) {
+    return { status: "blocked", detail: `service_unreachable: ${message}`.slice(0, 500), blockedBy: ["service_unreachable"] };
+  }
+  return { status: "failed", detail: `handler_error: ${message}`.slice(0, 500) };
+}
+
 export function statusFromAssertions(testCase, outcome) {
   const evaluated = new Set(outcome.assertions.map((a) => a.token));
   const missing = testCase.assert.filter((token) => !evaluated.has(token));
@@ -215,15 +257,19 @@ export async function runSecurity({ run, cases, handlers, only, dryRun = false, 
         outcome = await handler(ctx);
       } catch (error) {
         const versions = await versionsOf(ctx);
-        const message = error instanceof Error ? error.message : String(error);
-        // A handler that could not obtain a PRECONDITION (e.g. the product's own login
-        // rate limit refused the session) is BLOCKED, not failed: the case was never
-        // evaluated, and reporting it as a product failure would be a false claim.
-        const blockedReason = error?.blockedReason ?? null;
-        const entry = finish(blockedReason
-          ? { status: "blocked", ...versions, detail: `precondition_unavailable: ${message}`.slice(0, 500), blockedBy: [blockedReason] }
-          : { status: "failed", ...versions, detail: `handler_error: ${message}`.slice(0, 500) });
+        const verdict = classifyHandlerError(error);
+        const entry = finish({ ...verdict, ...versions });
         entry.artifacts = [writeCaseResult(run, testCase, { id: testCase.id, status: entry.status, detail: entry.detail, blockedBy: entry.blockedBy })];
+        // Bring the target back before the next case, otherwise every later case would be
+        // scored against a service that is not running.
+        if (verdict.blockedBy?.includes("service_unreachable") && lucy && typeof lucy.restart === "function") {
+          try {
+            await lucy.restart("SIGKILL");
+            progressLog(run, `recovered the Lucy instance after a service outage (${testCase.id})`);
+          } catch (recoveryError) {
+            progressLog(run, `could NOT recover the Lucy instance after a service outage (${testCase.id}): ${recoveryError instanceof Error ? recoveryError.message : String(recoveryError)}`);
+          }
+        }
         continue;
       }
       const verdict = statusFromAssertions(testCase, outcome);
