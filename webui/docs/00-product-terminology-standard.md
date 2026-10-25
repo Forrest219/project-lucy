@@ -723,8 +723,20 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`MCP`、`Agent`�
 | Tool Class Absolute Deny | 绝对拒绝工具 | 代码基线拒绝 | 可配置放开的禁用 | `sl_*` 等；YAML 无法解除 |
 | Tool Class Data Plane | 数据面工具 | DataPlane | 元数据工具 | 须绑 capability |
 | Tool Class Meta | 元信息工具 | Meta | 数据查询工具 | catalog / wiki 等 |
+| Row Policy Template | 行策略模板 | 静态谓词模板 | Dynamic RLS、动态行策略、策略继承 | v0.25 P1 规划；`access.yaml` 顶层具名静态谓词集合，只复用谓词 |
+| Row Policy View | 行权限视图 | 按表反查 | 权限拓扑、访问关系图 | v0.25 P1 规划；独立只读页，展示角色分支、Agent 个人行限制与最终行约束 |
+| Authorization Summary | 授权摘要 | 权限摘要（仅作既有区域名） | 运行时凭据、查询成功证明 | v0.25 P1 规划；同一有效权限快照的可读投影，不是新授权对象 |
+| Authorization Resource Card | 资源卡片 | 授权资源卡片 | 工具并集 × 表并集 | v0.25 P1 规划；按连接 → Schema → 表展示有效数据能力 |
+| Access Map | 访问关系图 | — | 拓扑图、权限流向图、桑基图（作产品名） | v0.25 P1 规划；授权面与实际访问面的只读关系图 |
+| Grant Path | 授权路径 | — | 权限、授权项、访问路径 | 去重 `(Agent, Role, Connection, Schema, Table)` 存在性实例 |
+| Access Path | 访问路径 | — | 调用次数、请求数 | 窗口内至少一次允许调用的去重 `(Agent, Role, Connection, Schema, Table)` 路径 |
+| Dormant Grant | 僵尸授权 | 有权未用 | 未使用权限、闲置资源 | 授权路径数 > 0 且访问路径数 = 0 |
+| Needs-review Signal | 需复核信号 | 需复核 | 越权（无调用当时快照证据时） | 当前授权无对应路径但历史有允许访问；快照缺失不得升级结论 |
+| Credential List | 凭证清单 | Token 清单 | 权限节点、凭证流 | 挂在 Agent 下的 Token 附属区，不承载授权、不参与流守恒 |
 
-Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Role`、`Agent`、`Token`、`MCP`、`YAML`、`policyVersion`、`permission_model_version`、`capability`、`runtimeAck`、`row_policy`、`row_access`、`forced_filters`、`constraints`、`FinalRows`、`AgentConstraints`、tool name、`sourceName`、`connectionId`、physical table、规范源键四元组、裁决码全文。
+以上 v0.25 P1 条目仅登记设计术语（2026-10-25 需求审查通过设计口径），不表示对应页面、API 或验收已交付。
+
+Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Role`、`Agent`、`Token`、`MCP`、`YAML`、`policyVersion`、`permission_model_version`、`capability`、`runtimeAck`、`row_policy`、`row_policy_templates`、`row_access`、`forced_filters`、`constraints`、`RowGrant`、`FinalRows`、`AgentConstraints`、`grantPath`、`accessPath`、`policyVersion`、`sourceMapVersion`、`capabilityDigest`、tool name、`sourceName`、`connectionId`、physical table、规范源键四元组、裁决码全文。
 
 与既有 Role Admin 术语（§3 `Role Permission` / `Role Table Selector` / `Table Name Prefix` 等）并存：升级后「权限摘要」主展示改为 Data Capability Preview，不得回退为仅工具并集+表并集。
 

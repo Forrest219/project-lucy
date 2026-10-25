@@ -204,7 +204,18 @@ Mandatory inline-code 列表（§1.X 表格行内遇到这些字符串必须写 
 - 路径列：必须等于 `topLevelEntry.to` 或 `navGroups[i].items[j].to` 的当前值；写成 inline code（`` `/catalog` ``）。
 - 一句话用途列：每行不超过两行；不展开操作步骤（操作步骤在 §3 各小节）。
 
-### 6.3 深链锚点（v0.2 修订）
+### 6.3 v0.25 P1 规划入口（未实现）
+
+本节只追加设计索引，不修改 §6.1 的当前侧栏镜像，不把规划入口写入系统手册的当前功能表。2026-10-25 需求审查已通过设计口径，但规划入口仍未实现，也不授权开发。
+
+| 规划位置 | 导航项 | 规划路由 | 设计依据 |
+| --- | --- | --- | --- |
+| 角色权限之后 | 行权限视图 | `/admin/row-policies` | [P1-1 Spec](../../docs/specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md) |
+| 行权限视图之后、访问日志之前 | 访问关系图 | `/admin/access-map` | [P1-3 Spec](187-access-relation-sankey-spec.md) |
+
+未来实施时须先更新 `webui/src/app/navigation.ts` 和对应路由，再同步系统手册与本文当前镜像；在代码事实出现前，不显示可用菜单或帮助深链。
+
+### 6.4 深链锚点（v0.2 修订）
 
 `### 1.X WebUI 入口速查（5+1 侧栏地图）` 的 section ID **不依赖自动 stableSlug**：
 

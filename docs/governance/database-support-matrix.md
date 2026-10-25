@@ -80,7 +80,7 @@ KTX 0.16.0 的连接器目录（`dist/connectors/`）比 Lucy 开放范围更大
 | DuckDB | `dist/connectors/duckdb` | 未开放 | 候选，未决策 |
 | MongoDB | `dist/connectors/mongodb` | 未开放 | 候选，未决策（语义层建模路径不同，开放成本高于其它） |
 | Snowflake | `dist/connectors/snowflake` | 未开放 | `version-matrix.md` §4 记为「not verified for Lucy P0」；候选，未决策 |
-| Hive（JDBC / HiveServer2） | 无独立连接器（复用 KTX Python 语义计算接口） | 未开放 | `docs/plans/2026-10-20-hive-direct-connection-implementation-plan.md`；方案待评审，**暂不开发** |
+| Hive（JDBC / HiveServer2） | 无独立连接器（复用 KTX Python 语义计算接口） | 未开放 | **`planned`**：设计基线 `docs/specs/lucy-20261025-v0p25-hive-direct-connection-spec.md`；需求审查通过（2026-10-25）、暂不开发，V01–V17 未执行；缺客户组合证据时为 `blocked_environment` |
 
 > 开放任一候选前必须先补一份支持计划（含 evidence 流程），再更新本表状态。
 

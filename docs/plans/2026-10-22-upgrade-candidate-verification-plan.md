@@ -1,12 +1,13 @@
-# Lucy 2.5 升级候选验证环境实施方案
+# Lucy v0.25 升级候选验证环境实施方案
 
 | 元数据 | 内容 |
 |---|---|
-| 文档名称 | Lucy 2.5 升级候选验证环境实施方案 |
-| 文档类型 | Implementation Plan（v2.5 需求备忘落地） |
-| 版本 | v0.1 |
-| 撰写日期 | 2026-10-22 |
-| 状态 | **待落地，非门禁。** 登记为 v2.5 需求 L25-13，不授权实现、构建、部署或发布 |
+| 文档名称 | Lucy v0.25 升级候选验证环境实施方案 |
+| 文档类型 | Implementation Plan（v0.25 需求备忘落地） |
+| 版本 | v0.2-spec-baseline |
+| 撰写日期 | 2026-10-22；2026-10-25 收口 |
+| 状态 | **已收口为 P1-6 Spec，需求审查通过；暂不开发，非门禁** |
+| 设计基线 | [Lucy v0.25 升级候选验证 Spec](../specs/lucy-20261025-v0p25-upgrade-candidate-verification-spec.md) |
 | 适用范围 | 用现役实例的一致性备份，在隔离环境验证候选镜像的迁移正确性、业务连续性与审计连续性 |
 | 关联 | L25-07 [客户升级 E2E 自动化](2026-10-19-upgrade-e2e-implementation-plan.md)；[全新部署包生成计划](2026-10-21-customer-v2-fresh-install-package-plan.md)；[v1→2.0 客户升级计划](2026-10-21-customer-20260828-v1-to-lucy-2.0-upgrade-plan.md)；[客户交付预检清单](../runbooks/customer-delivery-preflight-checklist.md) |
 | 发布属性 | 非门禁。不改当前 CI、冻结分母、发布聚合器、客户放行条件或已有 gate 判定 |
@@ -17,7 +18,7 @@
 
 1. **原地升级仍是客户现场主线，本方案不替代它。** 本方案落地的是 L25-07 里「独立恢复验证」这一条——它在[升级 E2E 方案](2026-10-19-upgrade-e2e-implementation-plan.md) §6 目前只有一句「备份先恢复到独立卷和独立实例」。
 
-2. **通道定位是验证通道，不是交付通道。** v2.5 阶段只做「用备份在隔离环境跑候选镜像并出报告」。**不切流、不承接客户流量、不作为客户部署形态、不替代原地升级。**
+2. **通道定位是验证通道，不是交付通道。** v0.25 阶段只做「用备份在隔离环境跑候选镜像并出报告」。**不切流、不承接客户流量、不作为客户部署形态、不替代原地升级。**
 
 3. **最关键的一条实现约束：验证环境必须以空卷起步，先整卷覆盖再启动候选镜像。** 顺序反了会得到「新模板 + 旧文件」的混合态——看起来启动成功，实际结构是错的（§4 D2）。
 
@@ -106,7 +107,7 @@
 
 ### D1 通道定位：验证通道，不是交付通道
 
-- v2.5 阶段只产出**报告**，不产出可交付包、不改客户部署形态。
+- v0.25 阶段只产出**报告**，不产出可交付包、不改客户部署形态。
 - 验证环境是一次性的：每次运行独立创建、独立销毁（§4 D5）。
 - 报告**不写入** `release-readiness.json`、`ops.json` 或签名发布包，避免被现有 collector 误认为发布证据（与[升级 E2E 方案](2026-10-19-upgrade-e2e-implementation-plan.md) §8 同一原则）。
 
@@ -372,8 +373,9 @@ New terms:
 
 ## 参考入口
 
-- [Lucy 2.5 升级建议书](2026-10-18-lucy-2.5-upgrade-proposal.md) §2.2（L25-07）
-- [客户升级 E2E 实施方案](2026-10-19-upgrade-e2e-implementation-plan.md) §4、§6、§8
+- [Lucy v0.25 升级建议书](2026-10-18-lucy-2.5-upgrade-proposal.md) L25-07、L25-13
+- [客户升级 E2E 实施方案](2026-10-19-upgrade-e2e-implementation-plan.md) §4、§6、§8；[P1-5 Spec](../specs/lucy-20261025-v0p25-upgrade-e2e-automation-spec.md)
+- [P1-6 升级候选验证 Spec](../specs/lucy-20261025-v0p25-upgrade-candidate-verification-spec.md)
 - [客户 2.0 全新部署包生成计划](2026-10-21-customer-v2-fresh-install-package-plan.md)
 - [客户 20260828-v1 到 Lucy 2.0 升级计划](2026-10-21-customer-20260828-v1-to-lucy-2.0-upgrade-plan.md)
 - [客户交付预检清单](../runbooks/customer-delivery-preflight-checklist.md)

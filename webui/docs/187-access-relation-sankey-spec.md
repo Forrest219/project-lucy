@@ -3,15 +3,18 @@
 | 元数据 | 内容 |
 |---|---|
 | 文档名称 | Lucy 访问关系图（Access Map）Spec |
-| 文档类型 | Spec（**初稿 / draft，未授权实现**） |
-| 版本 | v0.2-draft |
-| 撰写日期 | 2026-10-20 |
-| 撰写人 | Mavis（minimax Code） |
-| 委托人 | Forrest |
+| 文档类型 / 版本 | 功能设计基线 / v0.3-requirements-review |
+| 日期 / 目标版本 | 2026-10-20；2026-10-25 收口 / v0.25 |
+| 功能编号 / 优先级 | L25-08 / P1-3 |
+| 状态 | **设计完成、需求审查通过（2026-10-25）；暂不开发，不代表实现或验收通过** |
+| 授权来源 | 2026-10-25 Forrest 批准按项目规范完成 P1 梯队 Spec；本轮只做设计与需求审查材料 |
+| 撰写人 / 委托人 | Mavis（minimax Code）；v0.3 由 Kimi 收口 / Forrest |
 | 基于材料 | `docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md`（L25-01 / L25-03）；`webui/docs/06-navigation-ia.md`；`webui/docs/00-product-terminology-standard.md`；`webui/docs/131-lucy-admin-catalog-bound-role-spec.md`；`webui/server/admin/permission-display.ts`；`webui/server/proxy/acl.ts`；`webui/server/proxy/audit.ts`；`webui/server/admin/metric-window.ts`；`webui/docs/design-system/README.md` |
-| 适用范围 | v2.5 治理台 WebUI 的访问关系可视化。授权面读取现有 effective permissions，访问面读取现有审计日志。**不新增授权模型，不改变运行时裁决** |
+| 适用范围 | v0.25 治理台 WebUI 的访问关系可视化。授权面读取现有 effective permissions，访问面读取现有审计日志。**不新增授权模型，不改变运行时裁决** |
 | 输出位置 | `webui/docs/187-access-relation-sankey-spec.md` |
-| v2.5 提案登记 | **已登记为 L25-08**（提案 v1.5，2026-10-20，§2 第 5 项）。v0.2-draft 变更：原 v0.1-draft 为「建议登记」，本版随提案 v1.5 落定 |
+| 规划 / 审查入口 | [v0.25 建议书](../../docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md) L25-08；[P0 Final 决议](../../docs/reviews/2026-10-24-lucy-v0.25-p0-final-decision.md) §1；[P1 需求审查清单](../../docs/plans/2026-10-25-lucy-v0.25-p1-requirements-review-checklist.md) |
+| 审查记录 | [P1 需求审查记录](../../docs/reviews/2026-10-25-lucy-v0.25-p1-requirements-review-record.md)（2026-10-25 通过；附带 F-01–F-04 实施前待办） |
+| v0.3 收口 | 统一 v0.25／P1 元数据；明确访问路径与调用次数、L25-01 同源对账、四项原待定口径；全部验收仍未执行 |
 | 冲突裁决 | 与 `webui/docs/07-mcp-auth-proxy-spec.md`（运行时授权/裁决）冲突 → 该文件；与 `docs/access-control/design-upgrade.md` 冲突 → 该文件。本文只做**展示**，不参与任何授权判定 |
 
 ---
@@ -20,13 +23,13 @@
 
 本功能遵循 `webui/docs/00-product-terminology-standard.md`。
 
-### 新增术语（需在术语标准 §4.7.1 登记，见附录 A）
+### 新增术语（需在术语标准 §4.8「访问权限升级」登记，见附录 A）
 
 | Canonical Term | UI 主术语 | 定义 | 禁止混淆 |
 |---|---|---|---|
 | Access Map | 访问关系图 | 展示 Agent 授权面与实际访问面的关系图 | 拓扑图、权限流向图、桑基图（桑基是图形形式，不是产品名） |
 | Grant Path | 授权路径 | 一个 `(Agent, Role, Connection, Schema, Table)` 的存在性实例 | 权限、授权项、访问路径 |
-| Access Path | 访问路径 | 统计窗口内一次被允许的实际访问 `(Agent, Role, Table)` | 调用次数、请求数 |
+| Access Path | 访问路径 | 统计窗口内至少有一次允许调用的去重 `(Agent, Role, Connection, Schema, Table)` 存在性路径 | 调用次数、请求数 |
 | Dormant Grant | 僵尸授权 | 授权路径数 > 0 且访问路径数 = 0 的边 | 未使用权限、闲置资源 |
 | Needs-review Signal | 需复核信号 | 访问路径数 > 0 但当前授权无对应授权路径的边 | 越权（见 §4.9.3，二者不等价） |
 | Credential List | 凭证清单 | 挂在 Agent 下的 Token 附属区，不承载授权 | 权限节点、凭证流 |
@@ -49,7 +52,7 @@
 
 ### 1.1 问题
 
-v2.5 提案 L25-01 的验收标准是「不打开 YAML，能说出这个 Agent 能读哪些表」。当前治理台距离这个标准有明确差距：
+v0.25 提案 L25-01 的验收标准是「不打开 YAML，能说出这个 Agent 能读哪些表」。当前治理台距离这个标准有明确差距：
 
 | 现状 | 位置 | 缺什么 |
 |---|---|---|
@@ -82,8 +85,10 @@ v2.5 提案 L25-01 的验收标准是「不打开 YAML，能说出这个 Agent �
 | SC-08 | 节点数 / 边数超过渲染预算时自动折叠，折叠数量显式可见且可展开 |
 | SC-09 | 提供与桑基图等价的表格视图，键盘可达，屏幕阅读器可读出全部节点与边 |
 | SC-10 | 图上「需复核信号」不表述为「越权」；确凿越权判定单独标注来源为调用当时的授权快照 |
-| SC-11 | 术语 lint 通过（`npm run lint:terminology`），新术语已在术语标准 §4.7.1 登记 |
+| SC-11 | 术语 lint 通过（`npm run lint:terminology`），新术语已在术语标准 §4.8「访问权限升级」登记 |
 | SC-12 | 零回归：现有 Agent 页、角色权限页、访问日志页、MCP 调试台行为不变 |
+| SC-13 | 需复核记录披露快照可关联数、总数、缺失数与覆盖率；缺失／无效快照不判确凿越权，低覆盖率不解释为低越权率 |
+| SC-14 | 与 L25-01 在同一配置／目录快照下按表集合并集对账；授权路径数、去重表数、访问路径数、调用数分别表达 |
 
 ---
 
@@ -98,7 +103,7 @@ v2.5 提案 L25-01 的验收标准是「不打开 YAML，能说出这个 Agent �
 | Token 之间的权限继承或加权 | Token 在 Lucy 里只是凭证，不携带授权（§4.5） |
 | 实时流式刷新 / WebSocket 推送 | 治理台现有页面均为请求-响应式刷新，不引入新的实时通道 |
 | 移动窄屏适配 | 按 `AGENTS.md` 浏览器测试约束，Lucy 默认不做窄屏 |
-| 把本图纳入发布门禁 | 提案 §2.1 明确 v2.5 只做展示，不新增门禁 |
+| 把本图纳入发布门禁 | 提案 §2.1 明确 v0.25 只做展示，不新增门禁 |
 | 自研桑基布局算法 | 引入 `d3-sankey`（§8.1），不自研层分配与交叉最小化 |
 
 ---
@@ -107,9 +112,9 @@ v2.5 提案 L25-01 的验收标准是「不打开 YAML，能说出这个 Agent �
 
 ### 3.1 独立页
 
-- 路由：`/admin/access-map`（与 `/admin/agents`、`/admin/roles`、`/admin/tokens`、`/admin/audit` 同级）。
-- 导航：左侧「访问治理」组新增第 7 项 **访问关系图**。组内现有 6 项（Agent / Token 凭据 / 角色权限 / 访问日志 / MCP 调试台 / 配置审计）顺序不变，新项置于「角色权限」之后、「访问日志」之前——因为它是「授权 + 访问」两个列表页的汇流视图。
-- 需同步更新 `webui/docs/06-navigation-ia.md` 的导航表与 `webui/docs/61-help-sidebar-entry-map-spec.md` 的侧栏地图（§12.3）。
+- 规划路由：`/admin/access-map`（与 `/admin/agents`、`/admin/roles`、`/admin/tokens`、`/admin/audit` 同级）；当前路由与导航尚未实现。
+- 规划导航：P1-1 **行权限视图**位于「角色权限」之后，P1-3 **访问关系图**位于其后、「访问日志」之前。「访问治理」由当前 6 项（Agent / Token 凭据 / 角色权限 / 访问日志 / MCP 调试台 / 配置审计）规划扩为 8 项，现有项相对顺序不变。
+- 本轮只在 `webui/docs/06-navigation-ia.md` 与 `webui/docs/61-help-sidebar-entry-map-spec.md` 登记规划入口（§12.3），不得把规划项写成当前代码事实。
 
 ### 3.2 详情页下钻深链
 
@@ -129,7 +134,7 @@ v2.5 提案 L25-01 的验收标准是「不打开 YAML，能说出这个 Agent �
 - L25-01 验收：Agent 详情页的文字摘要与资源卡片是否说清了能读哪些表。
 - 本 Spec 验收：全局拓扑的守恒性、双层对照的准确性、详情页深链是否正确预置。
 
-若两者同时实施，Agent 详情页的「资源卡片」应直接复用本图 API 返回的同一份 `grantPaths` / 去重 Agent 数，保证两处数字一致（同源同源，SC-01 与 L25-01 交叉断言）。
+两者必须复用同一配置／目录快照与 per-role 编译事实，但**同源不等于同数**：L25-01 资源卡片按规范源键展示去重表集合，本图 `grantPaths` 按 `(Agent, Role, Table)` 计算授权路径。对账断言是“同一 Agent 的摘要表集合 == 本图授权路径的表集合并集”，不是“表数 == 路径数”；多角色重复授权时两者合法不同。共享派生快照身份与集合，不在前端用另一套算法拼数。详见 [L25-01 授权摘要 Spec](../../docs/specs/lucy-20261025-v0p25-access-authorization-summary-spec.md) §2.2、§6。
 
 ---
 
@@ -170,25 +175,28 @@ GrantPath = (AgentId, RoleId, ConnectionId, Schema, TableName)
 **访问路径 Access Path**
 
 ```
-AccessPath = (AgentId, RoleId, TableName) @ ts ∈ [startIso, endIso)
+AccessPath = (AgentId, RoleId, ConnectionId, Schema, TableName)
+  WHERE 该路径在 [startIso, endIso) 内至少有一次 outcome='allow' 调用
 ```
 
-由审计记录派生，只统计 `outcome = 'allow'` 的调用。
+访问路径是统计窗口内的**存在性去重结果**，不是一次调用，也不把 `ts` 放进路径主键。先按当前 Token／信任口径筛选审计调用，再按路径去重；原始调用次数另记 `accessCalls`。因此同一路径调用 1 次或 100 次，`accessPaths` 都为 1，`accessCalls` 分别为 1 或 100。
 
 **Role 归因口径（两侧必须一致）**
 
 - 授权侧：逐 `(Agent, Role)` 单独解析，取该 Role 单独贡献的 source 集合。
 - 访问侧：优先取 `access_log.matched_role_id`（单值）；为空时回退到 `access_log.role_ids`（JSON 数组，逐个展开）；两者都为空时归入伪节点 `role:<unresolved>`（灰显，不可点击）。
 
-**去重主体数与路径数是两个不同的数，不得混用**
+**去重主体数、路径数与调用数是三个不同的数，不得混用**
 
 | 口径 | 定义 | 用途 |
 |---|---|---|
 | `grantPaths` | 授权路径实例数（含角色重复） | 流带宽度、守恒校验 |
 | `grantUsers` | 流过该边的**去重 Agent 数** | 节点标签副标题 |
-| `accessPaths` | 访问路径实例数 | 访问内核宽度 |
+| `accessPaths` | 窗口内有允许调用的去重访问路径数 | 访问内核宽度 |
 | `accessUsers` | 流过该边的去重 Agent 数 | 节点标签副标题、信号计数 |
-| `accessCalls` | 原始调用次数（不按角色展开） | 凭证清单、浮层明细 |
+| `accessCalls` | 当前筛选与角色归因后的调用次数；跨 Role 汇总可能重复 | 凭证清单、浮层明细 |
+
+全局“原始调用数”必须按稳定调用 ID 另行去重，不能把各 Role 边的 `accessCalls` 相加后冒充全局调用数。
 
 **多角色重复授权的处理（Normative）**
 
@@ -295,7 +303,7 @@ AccessPath = (AgentId, RoleId, TableName) @ ts ∈ [startIso, endIso)
 | 需复核信号 | 当前授权无对应授权路径，但审计记录显示发生过允许的访问 | 线索 | 「需复核：当前授权无对应路径」 |
 | 确凿越权 | 用 `access_log.permission_snapshot_hash` 关联 `permission_snapshots.resolved_json`，**当时**的授权快照里也不含该表 | 结论 | 「确凿越权：调用当时授权亦不覆盖」 |
 
-`permission_snapshots` 表已存在（`webui/server/proxy/audit.ts`，字段 `hash` / `roles_json` / `resolved_json` / `capability_digest`），`access_log.permission_snapshot_hash` 已写入，**本期即实现两档判定**。
+`permission_snapshots` 表已存在（`webui/server/proxy/audit.ts`，字段 `hash` / `roles_json` / `resolved_json` / `capability_digest`），`access_log.permission_snapshot_hash` 已写入，**本期设计两档判定**。响应与页面必须披露需复核记录的快照覆盖率：可关联快照数／需复核记录数，以及缺失快照数。快照缺失、损坏或身份不一致时只保留「需复核」，不得判为「确凿越权」，也不得把低覆盖率解释为低越权率。
 
 #### 4.9.3 图不是裁决器（Normative）
 
@@ -441,6 +449,7 @@ type AccessRow = {
 function buildAccessLayer(
   window: MetricWindow,        // 复用 metric-window.ts 的 buildMetricWindow
   trust: "confirmed_only" | "include_candidate",
+  tokenLabel: string | null,   // 只过滤访问层；不参与路径主键或授权骨架
 ): { state: "ok" | "unavailable"; rows: AccessRow[]; denied: number } {
   // A1. 审计库不可用 → 访问层不可用（授权骨架仍可渲染）
   const db = openAuditDb();
@@ -449,21 +458,23 @@ function buildAccessLayer(
   // A2. 取窗口内涉及表的调用；时间条件必须用 metric-window 的半开区间
   //     禁止在 SQL 里内联 datetime('now','-7 days')（Spec 128 HR-5）
   const rows = db.prepare(`
-    SELECT al.user_id, al.matched_role_id, al.role_ids, al.token_label,
+    SELECT al.id, al.user_id, al.matched_role_id, al.role_ids, al.token_label,
            al.outcome, al.ts, al.permission_snapshot_hash,
            als.connection_id, als.schema_name, als.source_name
     FROM access_log al
     JOIN access_log_sources als ON als.access_log_id = al.id
     WHERE al.ts >= :startIso AND al.ts < :endIso
       AND (:trust = 'include_candidate' OR al.association_status = 'confirmed')
-  `).all({ startIso: window.startIso, endIso: window.endIso, trust });
+      AND (:tokenLabel IS NULL OR al.token_label = :tokenLabel)
+  `).all({ startIso: window.startIso, endIso: window.endIso, trust, tokenLabel });
 
   // A3. 归因到 Role：
   //     - matched_role_id 单值优先
   //     - 否则展开 role_ids JSON 数组（多角色 → 每角色一条访问路径，与授权侧同构）
   //     - 都没有 → role:<unresolved>
   // A4. 仅 outcome='allow' 进入访问路径；deny 单独计数（§4.9.3）
-  // A5. 同一 (user, role, conn, schema, table, token) 去重，calls 求和
+  // A5. 同一 (user, role, conn, schema, table) 去重，calls 求和；ts 与 token 不进主键
+  // A6. 全局原始调用数按稳定 al.id 去重；不得累加多 Role 展开后的 accessCalls
   return { state: "ok", rows: normalizeAccessRows(rows), denied: countDenied(rows) };
 }
 ```
@@ -493,10 +504,12 @@ function mergeLayers(
     else if (e.accessPaths === 0)                     e.state = "dormant";
     else                                              e.state = "normal";
 
-    // A3. 确凿越权（§4.9.2 第二档）：用调用当时的授权快照判定
-    e.confirmedUnauthorized = e.state === "needs_review" || e.state === "overflow"
-      ? checkAgainstPermissionSnapshot(e)
-      : false;
+    // A3. 逐条访问路径用调用当时的授权快照判定；不得任取边上的一个 hash 代表全部路径
+    e.reviewEvaluations = e.state === "needs_review" || e.state === "overflow"
+      ? evaluateEachContributingAccessPath(e)
+      : [];
+    e.confirmedUnauthorized = e.reviewEvaluations.some(x => x.result === "confirmed_unauthorized");
+    e.snapshotCoverage = summarizeSnapshotCoverage(e.reviewEvaluations);
 
     // A4. 去重主体数落盘
     e.grantUsersCount = e.grantUsers.size;
@@ -505,13 +518,16 @@ function mergeLayers(
   return [...grant.edges.values()];
 }
 
-// 用调用当时的授权快照判定确凿越权。
 // permission_snapshots.resolved_json 存的是当时的解析结果。
-// 若当时的授权也不含该表 → 确凿越权；快照缺失 → 结论未知，不得判为确凿。
-function checkAgainstPermissionSnapshot(edge: AccessMapEdge): boolean {
-  const snap = loadPermissionSnapshot(edge.lastSnapshotHash);
-  if (!snap) return false;                 // 快照缺失 → 只保留「需复核」档
-  return !snapshotCoversTable(snap, edge.tableId);
+// 有匹配快照且当时也不含该表 → 该路径确凿越权；缺失／损坏／身份不符 → unknown。
+// 边可因任一路径有确凿证据显示 danger，但其它 unknown 路径仍在明细中保留「需复核」。
+function evaluateAccessPathSnapshot(row: AccessRow): SnapshotEvaluation {
+  if (!row.permissionSnapshotHash) return { result: "unknown", reason: "snapshot_missing" };
+  const snap = loadPermissionSnapshot(row.permissionSnapshotHash);
+  if (!snapshotIdentityMatches(snap, row)) return { result: "unknown", reason: "snapshot_invalid" };
+  return snapshotCoversTable(snap, row)
+    ? { result: "covered_at_call_time" }
+    : { result: "confirmed_unauthorized" };
 }
 ```
 
@@ -564,10 +580,11 @@ GET /api/admin/access-map
 {
   "meta": {
     "window": { "startIso": "2026-10-13T...", "endIso": "2026-10-20T...", "asOf": "2026-10-20T..." },
-    "grant": { "state": "ok", "accessConfigVersion": "1712...-a3f9..." },
-    "access": { "state": "ok", "trust": "confirmed_only", "deniedCalls": 12 },
+    "grant": { "state": "ok", "accessConfigVersion": "1712...-a3f9...", "policyVersion": "...", "sourceMapVersion": "...", "capabilityDigest": "..." },
+    "access": { "state": "ok", "trust": "confirmed_only", "deniedCalls": 12, "rawCalls": 12 },
     "counts": { "agents": 3, "roles": 2, "connections": 1, "schemas": 1, "tables": 13, "tokens": 4, "edges": 28 },
     "signals": { "dormantEdges": 5, "needsReviewEdges": 1, "confirmedUnauthorizedEdges": 0 },
+    "snapshotCoverage": { "reviewPaths": 1, "matched": 0, "missingOrInvalid": 1, "ratio": 0 },
     "orphanGrants": 0,
     "folded": { "nodes": 0, "edges": 0 }
   },
@@ -714,19 +731,15 @@ webui/server/admin/access-map.ts 服务端：授权层 + 访问层构建 + 降�
 | `design-system/11-components-data-grid.md` | 表格等价视图复用 Base Contract；列对齐、状态 Tag、行高与现有数据网格一致 |
 | `design-system/20-patterns-page-layout.md` | 标准页面结构：页头（标题 + 描述 + 头部动作）→ 信号条 → 图区 → 侧边明细面板 |
 
-**需要新增的规范条目（须先补规范再落代码）**
+**本轮已完成设计登记（不代表组件已实现）**
 
-当前颜色规范没有覆盖「同一容器内的两组数据系列」（授权层 vs 访问层）这一语义。按 `AGENTS.md` 与 `design-system/99-governance.md` 的临时决策机制，实施前须在 `webui/docs/design-system/99-governance.md` 的「当前临时决策」中登记：
-
-1. 新增两个语义角色：`series/grant`（授权层流带底色）、`series/access`（访问层内核色），各自提供 `default` / `subtle` 两态。
-2. 状态映射：僵尸授权 → `warning`；需复核 → `warning`（虚线描边，与确凿越权的实线 `danger` 区分）；确凿越权 → `danger`。
-3. 两组系列色必须满足流带与背景的对比度要求；`danger` 不得用于非状态语义。
-
-登记完成后，本 Spec 的 §7.4 图例文案与 §4.4 状态色引用以该登记为准。
+`webui/docs/design-system/99-governance.md` 的 TD-187-01 已登记：`series/grant` 与 `series/access` 各有 `default` / `subtle`；僵尸授权与需复核使用 `warning`，确凿越权使用 `danger`；需复核为虚线、确凿越权为实线；禁止裸 hex，状态不得只靠颜色区分。两组系列色实施时仍须验证流带与背景对比度，`danger` 不得用于非状态语义。本 Spec 的 §7.4 图例与 §4.4 状态引用以该登记为准。
 
 ---
 
 ## 10. 验收映射
+
+**SC-01–SC-14 全部未执行。** 本轮仅完成需求与验收设计；未来实施须按授权边界留证，不把文档 lint 或上游既有功能证据转记为本功能验收通过。
 
 | SC | 验收方式 | 断言要点 |
 |---|---|---|
@@ -740,8 +753,10 @@ webui/server/admin/access-map.ts 服务端：授权层 + 访问层构建 + 降�
 | SC-08 | 单元测试 | 注入 200 节点配置，断言 `meta.folded.nodes > 0` 且图上有可见折叠徽标 |
 | SC-09 | E2E / 可访问性检查 | 表格视图可切换，节点列表可 Tab 聚焦，图区有 `aria-label` 摘要 |
 | SC-10 | 文案断言 | 需复核档的 UI 文案不含「越权」二字；确凿越权档文案含「调用当时授权亦不覆盖」 |
-| SC-11 | `npm run lint:terminology` | 通过；术语标准 §4.7.1 已含 §附录 A 的 6 个新词 |
+| SC-11 | `npm run lint:terminology` | 通过；术语标准 §4.8「访问权限升级」已含 §附录 A 的 6 个新词 |
 | SC-12 | 现有测试全量 | `cd webui && npm test` 全绿；现有 Agent / 角色 / 审计页快照无变化 |
+| SC-13 | 单元测试 + 文案断言 | 覆盖 matched／missing／invalid 快照；覆盖率分子分母正确，unknown 不升级为确凿越权 |
+| SC-14 | 跨模块契约测试 | 同快照下摘要表集合等于授权路径表集合并集；多角色、重复访问时四种计数不混用 |
 
 **E2E 边界**：`AGENTS.md` 规定 Lucy 默认不做浏览器测试。本 Spec 的 SC-06 / SC-09 需要 E2E 覆盖，**须在实施计划中显式批准**后才新增对应 Playwright 用例；未获批准前以组件测试 + 单元测试覆盖，不擅自扩展 E2E 套件。
 
@@ -758,8 +773,8 @@ webui/server/admin/access-map.ts 服务端：授权层 + 访问层构建 + 降�
 | **Schema 层展开后横向不可读** | 图不可用 | §4.6 默认折叠 Schema，开关显式 |
 | **Token 过滤造成误读** | 用户以为授权变窄 | §4.5 交互诚实性：只过滤访问层 + 顶部提示条 |
 | **新增图表依赖影响首屏** | 性能回归 | §8.1 动态导入按需加载 + §8.3 性能预算 |
-| **颜色语义缺口** | 违反设计系统 | §9 要求实施前在 `99-governance.md` 登记临时决策 |
-| **与 L25-01 数字不一致** | 同一仓库两个口径 | §3.3 要求同源复用同一份 `grantPaths` |
+| **颜色语义缺口** | 违反设计系统 | TD-187-01 已完成设计登记；实施时验证对比度与文本／线型降级 |
+| **与 L25-01 数字不一致** | 同一仓库两个口径 | §3.3 要求同快照、表集合并集对账；路径数与去重表数分开，SC-14 验证 |
 
 ---
 
@@ -767,45 +782,47 @@ webui/server/admin/access-map.ts 服务端：授权层 + 访问层构建 + 降�
 
 ### 12.1 交叉引用
 
-- `webui/docs/06-navigation-ia.md` — 导航结构（需更新「访问治理」组）
-- `webui/docs/00-product-terminology-standard.md` — 术语标准（需增补 §4.7.1）
+- `webui/docs/06-navigation-ia.md` — 当前导航事实与 v0.25 P1 规划入口分表维护
+- `webui/docs/00-product-terminology-standard.md` — 术语标准 §4.8
 - `webui/docs/07-mcp-auth-proxy-spec.md` — 运行时授权与裁决（本图只读，不改）
 - `webui/docs/14-agent-admin-enterprise-delivery-spec.md` / `15-role-admin-spec.md` — Agent / Role Admin 契约
 - `webui/docs/128-enterprise-kpi-contract-spec.md` — 统计窗口口径（`metric-window.ts`）
 - `webui/docs/131-lucy-admin-catalog-bound-role-spec.md` — `catalog_bound` 源范围语义（影响授权路径的表集合）
 - `webui/docs/124-audit-query-artifact-cold-store-spec.md` / `125-audit-generated-sql-hot-store-spec.md` — 审计存储（访问层数据源）
 - `webui/docs/186-trust-boundary-inventory-spec.md` — 信任边界（`association_status` 口径）
-- `docs/access-control/README.md` — 访问权限域索引（需交叉引用本文）
-- `docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md` — v2.5 提案（v1.5 已登记 L25-08）
+- [P1-1 行策略模板与按表反查 Spec](../../docs/specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md) — 同源行边界与只读深链
+- [P1-2 授权摘要 Spec](../../docs/specs/lucy-20261025-v0p25-access-authorization-summary-spec.md) — 表集合、快照与深链对账
+- `docs/access-control/README.md` — 访问权限域索引
+- `docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md` — v0.25 建议书，登记 L25-08 及本批 P1 范围
 
-### 12.2 已知待定（下一版收敛）
+### 12.2 已裁决设计项
 
-1. **Schema 层是否长期折叠**：本期默认折叠，需在实际客户数据规模上验证是否应改默认值。
-2. **多角色重复授权的 UI 表达**：路径数与 Agent 数并排显示已能区分，但拥挤时是否需要 tooltip 展开，待实机确认。
-3. **访问层与 `access_log_sources.confidence` 的关系**：`confirmed_only` 口径当前以 `association_status` 为准；`confidence` 字段（high/medium/low）是否需要叠加为第三档过滤，留待 audit-trust 域收敛。
-4. **确凿越权判定的快照覆盖率**：`permission_snapshot_hash` 的历史写入覆盖率需实测；若覆盖率低，第二档信号会长期为空，需据此调整优先级。
+1. **Schema 层**：本期默认折叠，可经 URL 开关展开；折叠不改变计数。未来是否调整默认值须另行依据真实规模证据裁决。
+2. **多角色重复授权**：固定使用「去重 Agent 数＋授权路径数」双计数；不得为了图面简化而合并角色路径或把二者互换。
+3. **访问信任口径**：`confirmed_only` 只按 `association_status`；本期不把 `confidence` 叠加成第三档，避免与 audit-trust 域形成第二套口径。
+4. **快照证据边界**：缺失／无效快照只保留需复核，不判确凿越权；响应和页面披露快照覆盖率，低覆盖率不解释为低越权率。
 
-### 12.3 实施前必须完成的登记动作
+### 12.3 设计登记与实施待办
 
 | # | 动作 | 位置 | 状态 |
 |---|---|---|---|
-| 1 | 增补 §附录 A 的 6 个新术语 | `webui/docs/00-product-terminology-standard.md` §4.7.1 | 待办 |
-| 2 | 登记「授权层 / 访问层」两组系列色与状态映射 | `webui/docs/design-system/99-governance.md`「当前临时决策」 | 待办 |
-| 3 | 导航表新增「访问关系图」 | `webui/docs/06-navigation-ia.md` + `webui/docs/61-help-sidebar-entry-map-spec.md` 侧栏地图 | 待办 |
-| 4 | 提案登记 L25-08 条目并更新元数据 | `docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md` §2 与头部版本行 | **已完成**（v1.5，2026-10-20） |
-| 5 | 域索引交叉引用本文 | `docs/access-control/README.md` §1 现行基线表 | 待办 |
+| 1 | 增补 §附录 A 的 6 个新术语 | `webui/docs/00-product-terminology-standard.md` §4.8 | 设计登记完成 |
+| 2 | 登记「授权层 / 访问层」两组系列色与状态映射 | `webui/docs/design-system/99-governance.md` TD-187-01 | 设计登记完成 |
+| 3 | 登记行权限视图与访问关系图规划入口 | `webui/docs/06-navigation-ia.md` + `webui/docs/61-help-sidebar-entry-map-spec.md` | 设计索引已登记；路由与导航实现待办 |
+| 4 | 建议书登记 L25-08 与 P1 Spec | `docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md` | 设计索引已登记 |
+| 5 | 域索引交叉引用本文及 P1-1／P1-2 | `docs/access-control/README.md` §1 | 设计索引已登记 |
 
 ---
 
 ## 附录 A：术语登记清单
 
-供 `webui/docs/00-product-terminology-standard.md` §4.7.1 直接摘录：
+供 `webui/docs/00-product-terminology-standard.md` §4.8「访问权限升级」直接摘录：
 
 | Canonical Term | UI 主术语 | 定义 | 禁止混淆 |
 |---|---|---|---|
 | Access Map | 访问关系图 | 展示 Agent 授权面与实际访问面的关系图 | 拓扑图、权限流向图、桑基图 |
 | Grant Path | 授权路径 | `(Agent, Role, Connection, Schema, Table)` 的存在性实例 | 权限、授权项、访问路径 |
-| Access Path | 访问路径 | 统计窗口内一次被允许的实际访问 `(Agent, Role, Table)` | 调用次数、请求数 |
+| Access Path | 访问路径 | 统计窗口内至少有一次允许调用的去重 `(Agent, Role, Connection, Schema, Table)` 存在性路径 | 调用次数、请求数 |
 | Dormant Grant | 僵尸授权 | 授权路径数 > 0 且访问路径数 = 0 的边 | 未使用权限、闲置资源 |
 | Needs-review Signal | 需复核信号 | 访问路径数 > 0 但当前授权无对应授权路径的边 | 越权 |
 | Credential List | 凭证清单 | 挂在 Agent 下的 Token 附属区，不承载授权 | 权限节点、凭证流 |

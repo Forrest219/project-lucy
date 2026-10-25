@@ -95,6 +95,15 @@ KTX WebUI
 
 > 兼容入口：`/admin/audit-sources` 重定向到 `/admin/audit`，保留为外部链接兼容（M35 → Spec 89 移除 heatmap Tab）。
 
+### v0.25 P1 规划入口（未实现）
+
+下表只登记设计目标，**不属于上方当前导航事实表，也不表示路由或菜单已经存在**。2026-10-25 需求审查已通过设计口径（见 [P1 需求审查清单](../../docs/plans/2026-10-25-lucy-v0.25-p1-requirements-review-checklist.md)），但仍未实现，也不授权开发；未来实现时先更新代码事实源，再同步本节与当前导航表。
+
+| 规划顺序 | 导航项 | 规划路由 | 设计依据 |
+| --- | --- | --- | --- |
+| 角色权限之后 | 行权限视图 | `/admin/row-policies` | [P1-1 Spec](../../docs/specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md) |
+| 行权限视图之后、访问日志之前 | 访问关系图 | `/admin/access-map` | [P1-3 Spec](187-access-relation-sankey-spec.md) |
+
 `表语义编辑` 和 `关联关系` 是上下文页面，不作为固定入口直接列出空态路由；从表目录或单表页进入。
 
 ### 侧栏账户入口（Spec 188，2026-10-21）
