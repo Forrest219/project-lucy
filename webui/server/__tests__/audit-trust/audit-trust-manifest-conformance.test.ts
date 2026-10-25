@@ -305,6 +305,8 @@ describe("T08b.1 manifest v2 schema conformance", () => {
       "sortKey",
       "paginationRuleVersion",
       "protocolInclusionRule",
+      "exportedAt",
+      "filter",
       "timeRange",
       "cutoffAt",
       "files",

@@ -9,7 +9,7 @@ const testState = vi.hoisted(() => ({
   projectRoot: "",
   // The argument shapes are declared explicitly: an argument-less `vi.fn(() => ...)`
   // infers an empty parameter tuple, so `mock.calls[i][0]` would not type-check.
-  writeLogMock: vi.fn((_entry: { argsSummary?: unknown }) => Promise.resolve()),
+  writeLogMock: vi.fn((_entry: { argsSummary?: unknown; rpcRequestId?: string }) => Promise.resolve()),
   writeAccessLogSourcesMock: vi.fn((_entries: unknown[]) => Promise.resolve()),
   isTokenRevokedMock: vi.fn(() => false),
   // The audit-db getter is mocked so the test can stub a rejection on it
@@ -228,6 +228,10 @@ describe("MCP proxy — Trace / Evidence Kernel integration (202608-01)", () => 
     const matched = calls.find(([, input]) => (input as { requestId?: string }).requestId === "trace-reqid-42");
     expect(matched).toBeDefined();
     expect((matched?.[1] as { traceId?: string }).traceId).not.toBe("trace-reqid-42");
+    // D-27: the audit fact uses the actual JSON-RPC id, not the platform trace id.
+    expect(testState.writeLogMock.mock.calls.some(
+      ([entry]) => entry.rpcRequestId === "trace-reqid-42"
+    )).toBe(true);
   });
 
   it("uses a platform traceId that stays unique when JSON-RPC request ids collide", async () => {

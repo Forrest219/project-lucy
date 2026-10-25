@@ -262,16 +262,32 @@ function buildClassification(row: Record<string, unknown>): string[] {
   return rowClassification(row);
 }
 
-function buildAssociationQuality(db: Database.Database): ExportV2Manifest["associationQuality"] {
-  // Counts by association_status; NULL excluded (counts toward 'unassigned').
+function idList(ids: readonly number[]): { sql: string; params: [string] } {
+  // Keep the frozen selection in one JSON parameter. Expanding one placeholder
+  // per call fails once an export exceeds SQLite's bound-variable limit.
+  return { sql: "SELECT value FROM json_each(?)", params: [JSON.stringify(ids)] };
+}
+
+function tableColumns(db: Database.Database, table: string): Set<string> {
+  const rows = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  return new Set(rows.map((row) => row.name));
+}
+
+function buildAssociationQuality(
+  db: Database.Database,
+  selectedIds: readonly number[]
+): ExportV2Manifest["associationQuality"] {
+  const out = { confirmed: 0, candidate: 0, unassigned: 0, conflict: 0, legacyUnverified: 0 };
+  if (selectedIds.length === 0) return out;
+  const ids = idList(selectedIds);
   const rows = db
     .prepare(
       `SELECT COALESCE(association_status, 'unassigned') AS s, COUNT(*) AS n
          FROM access_log
-         GROUP BY COALESCE(association_status, 'unassigned')`
+        WHERE id IN (${ids.sql})
+        GROUP BY COALESCE(association_status, 'unassigned')`
     )
-    .all() as Array<{ s: string; n: number }>;
-  const out = { confirmed: 0, candidate: 0, unassigned: 0, conflict: 0, legacyUnverified: 0 };
+    .all(...ids.params) as Array<{ s: string; n: number }>;
   for (const r of rows) {
     if (r.s === "confirmed") out.confirmed = r.n;
     else if (r.s === "candidate") out.candidate = r.n;
@@ -282,11 +298,28 @@ function buildAssociationQuality(db: Database.Database): ExportV2Manifest["assoc
   return out;
 }
 
-function buildRelationCheck(db: Database.Database): { ok: boolean; counts: Record<string, number> } {
-  const accessLog = (db.prepare("SELECT COUNT(*) AS n FROM access_log").get() as { n: number }).n;
-  const permissionSnapshots = (db.prepare("SELECT COUNT(*) AS n FROM permission_snapshots").get() as { n: number }).n;
+function buildRelationCheck(
+  db: Database.Database,
+  selectedIds: readonly number[]
+): { ok: boolean; counts: Record<string, number> } {
+  const accessLog = selectedIds.length;
+  const ids = idList(selectedIds);
+  const accessLogSources = accessLog === 0
+    ? 0
+    : (db.prepare(`SELECT COUNT(*) AS n FROM access_log_sources WHERE access_log_id IN (${ids.sql})`).get(...ids.params) as { n: number }).n;
+  const accessColumns = tableColumns(db, "access_log");
+  const snapshotColumns = tableColumns(db, "permission_snapshots");
+  const hasSnapshotReferences = accessColumns.has("permission_snapshot_hash") && snapshotColumns.has("hash");
+  const permissionSnapshots = accessLog === 0 || !hasSnapshotReferences
+    ? 0
+    : (db.prepare(
+        `SELECT COUNT(*) AS n FROM permission_snapshots
+          WHERE hash IN (
+            SELECT DISTINCT permission_snapshot_hash FROM access_log
+             WHERE id IN (${ids.sql}) AND permission_snapshot_hash IS NOT NULL
+          )`
+      ).get(...ids.params) as { n: number }).n;
   const associationRevisions = (db.prepare("SELECT COUNT(*) AS n FROM association_revisions").get() as { n: number }).n;
-  const accessLogSources = (db.prepare("SELECT COUNT(*) AS n FROM access_log_sources").get() as { n: number }).n;
   const maintenance = (db.prepare("SELECT COUNT(*) AS n FROM audit_maintenance_log").get() as { n: number }).n;
   const counts = {
     access_log: accessLog,
@@ -295,10 +328,30 @@ function buildRelationCheck(db: Database.Database): { ok: boolean; counts: Recor
     association_revisions: associationRevisions,
     audit_maintenance_log: maintenance
   };
-  // Basic relation check: sources and snapshots both > 0 when access_log > 0.
-  // Spec scope completeness requires both. Tests can supply a fixture that
-  // satisfies this; legacy fixtures may not.
-  const ok = accessLog === 0 || (accessLogSources > 0 && permissionSnapshots > 0);
+  // Without the reference columns there is no scoped snapshot set to verify or
+  // export. Do not fall back to every snapshot in the database.
+  let referencesOk = accessLog === 0 || hasSnapshotReferences;
+  if (accessLog > 0 && hasSnapshotReferences) {
+    const dangling = (db.prepare(
+      `SELECT COUNT(*) AS n
+         FROM access_log AS a
+         LEFT JOIN permission_snapshots AS p ON p.hash = a.permission_snapshot_hash
+        WHERE a.id IN (${ids.sql})
+          AND a.permission_snapshot_hash IS NOT NULL
+          AND p.hash IS NULL`
+    ).get(...ids.params) as { n: number }).n;
+    referencesOk = dangling === 0;
+  }
+  if (accessLog > 0) {
+    const danglingSources = (db.prepare(
+      `SELECT COUNT(*) AS n
+         FROM access_log_sources AS s
+         LEFT JOIN access_log AS a ON a.id = s.access_log_id
+        WHERE s.access_log_id IN (${ids.sql}) AND a.id IS NULL`
+    ).get(...ids.params) as { n: number }).n;
+    referencesOk = referencesOk && danglingSources === 0;
+  }
+  const ok = (accessLog === 0 || (accessLogSources > 0 && permissionSnapshots > 0)) && referencesOk;
   return { ok, counts };
 }
 
@@ -487,8 +540,10 @@ export async function performExportV2(options: ExportV2Options): Promise<ExportV
   const csv = csvLines.join("\n") + "\n";
   const csvHash = sha256Hex(csv);
 
+  // Freeze the primary selection once; every attachment reuses these ids.
+  const selectedAccessLogIds = rows.map((row) => Number(row.id));
   // Relation + integrity checks
-  const relation = buildRelationCheck(db);
+  const relation = buildRelationCheck(db, selectedAccessLogIds);
   const projectionComplete = projectionLag === 0 && options.auditStoreAvailable && !catchUpExpired;
   const permissionSnapshotRows = relation.counts.permission_snapshots ?? 0;
   const sourceAssociationCheck = relation.ok ? "ok" : "missing";
@@ -560,6 +615,7 @@ export async function performExportV2(options: ExportV2Options): Promise<ExportV
     items: []
   };
 
+  const exportedAt = new Date(now()).toISOString();
   const manifest: ExportV2Manifest = {
     schemaVersion: "audit-export-manifest/v2",
     classificationVersion: options.classificationVersion,
@@ -571,7 +627,7 @@ export async function performExportV2(options: ExportV2Options): Promise<ExportV
       ok: projectionComplete,
       reason: projectionComplete ? undefined : catchUpExpired ? "catchup_deadline_exceeded" : "projection_lag"
     },
-    associationQuality: buildAssociationQuality(db),
+    associationQuality: buildAssociationQuality(db, selectedAccessLogIds),
     clientCoverage: { observed: false, gapWindows: [], unknownReason: "no_controlled_client" },
     integrityVerification: { fileHashOk, relationCheckOk },
     combinedComplete,
@@ -585,15 +641,21 @@ export async function performExportV2(options: ExportV2Options): Promise<ExportV
     exclusions,
     derivationVersion: DERIVATION_VERSION,
     prevExportId: options.prevExportId ?? null,
-    exportId: options.exportId ?? null,
+    exportId: options.exportId ?? randomUUID(),
     sortKey: "access_log.id ASC",
     paginationRuleVersion: "audit-export-pagination/v1",
     protocolInclusionRule: "declared_protocol_rules_v1",
+    exportedAt,
+    filter: {
+      from: options.fixedFilter.from ?? null,
+      until: options.fixedFilter.until ?? null,
+      userId: options.fixedFilter.userId ?? null
+    },
     timeRange: {
       from: options.fixedFilter.from ?? null,
       until: options.fixedFilter.until ?? null
     },
-    cutoffAt: options.cutoffAt ?? null,
+    cutoffAt: options.cutoffAt ?? exportedAt,
     files: [{ name: "calls-v2.csv", sha256: csvHash, rowCount: rows.length }],
     catchUpDeadlineSeconds: AUDIT_WINDOWS.t3ExportCatchupSeconds
   };
@@ -617,6 +679,7 @@ export async function performExportV2(options: ExportV2Options): Promise<ExportV
     relationCheckOk,
     diagnosticIncomplete,
     csv,
+    selectedAccessLogIds,
     manifest
   };
 }
@@ -667,15 +730,21 @@ function csvEscapeCell(value: unknown): string {
   return s;
 }
 
-function renderAccessLogSourcesCsv(db: Database.Database): { csv: string; rowCount: number } {
+function renderAccessLogSourcesCsv(
+  db: Database.Database,
+  selectedIds: readonly number[]
+): { csv: string; rowCount: number } {
+  if (selectedIds.length === 0) return { csv: "", rowCount: 0 };
+  const ids = idList(selectedIds);
   const rows = db
     .prepare(
       `SELECT id, access_log_id, ts, user_id, connection_id, schema_name, source_name,
               physical_table, extraction_method, confidence
          FROM access_log_sources
-         ORDER BY id ASC`
+        WHERE access_log_id IN (${ids.sql})
+        ORDER BY id ASC`
     )
-    .all() as Array<Record<string, unknown>>;
+    .all(...ids.params) as Array<Record<string, unknown>>;
   if (rows.length === 0) return { csv: "", rowCount: 0 };
   const headers = Object.keys(rows[0]);
   const lines = [headers.join(",")];
@@ -685,15 +754,25 @@ function renderAccessLogSourcesCsv(db: Database.Database): { csv: string; rowCou
   return { csv: lines.join("\n") + "\n", rowCount: rows.length };
 }
 
-function renderPermissionSnapshotsCsv(db: Database.Database): { csv: string; rowCount: number } {
-  const rows = db
-    .prepare(
-      `SELECT hash, created_at, roles_json, resolved_json, capability_digest,
-              tool_classification_version
-         FROM permission_snapshots
-         ORDER BY created_at ASC`
-    )
-    .all() as Array<Record<string, unknown>>;
+function renderPermissionSnapshotsCsv(
+  db: Database.Database,
+  selectedIds: readonly number[]
+): { csv: string; rowCount: number } {
+  if (selectedIds.length === 0) return { csv: "", rowCount: 0 };
+  const ids = idList(selectedIds);
+  const hasReferences = tableColumns(db, "access_log").has("permission_snapshot_hash") &&
+    tableColumns(db, "permission_snapshots").has("hash");
+  if (!hasReferences) return { csv: "", rowCount: 0 };
+  const rows = db.prepare(
+    `SELECT hash, created_at, roles_json, resolved_json, capability_digest,
+            tool_classification_version
+       FROM permission_snapshots
+      WHERE hash IN (
+        SELECT DISTINCT permission_snapshot_hash FROM access_log
+         WHERE id IN (${ids.sql}) AND permission_snapshot_hash IS NOT NULL
+      )
+      ORDER BY created_at ASC`
+  ).all(...ids.params) as Array<Record<string, unknown>>;
   if (rows.length === 0) return { csv: "", rowCount: 0 };
   const headers = Object.keys(rows[0]);
   const lines = [headers.join(",")];
@@ -709,8 +788,8 @@ export async function buildExportPackV2(
   const exportResult = await performExportV2(options);
   const db = options.snapshotDb ?? options.sourceDb!;
 
-  const sources = renderAccessLogSourcesCsv(db);
-  const snaps = renderPermissionSnapshotsCsv(db);
+  const sources = renderAccessLogSourcesCsv(db, exportResult.selectedAccessLogIds);
+  const snaps = renderPermissionSnapshotsCsv(db, exportResult.selectedAccessLogIds);
 
   const fileEntries: Array<{ name: string; data: Buffer }> = [];
   const fileMeta: Array<{ name: string; sha256: string; rowCount: number }> = [];
@@ -734,16 +813,18 @@ export async function buildExportPackV2(
   // handshake-attributable turns. Heuristic: any access_log row has
   // association_status in {confirmed, legacy_unverified} OR is unassigned AND
   // event_type=protocol.
-  const handshakeRows = db
-    .prepare(
-      `SELECT id, ts, user_id, tool, lucy_turn_id, association_status
-         FROM access_log
-         WHERE event_type = 'protocol'
-           AND (association_status IN ('confirmed','legacy_unverified')
-                OR association_status IS NULL)
-         ORDER BY id ASC`
-    )
-    .all() as Array<Record<string, unknown>>;
+  const selected = idList(exportResult.selectedAccessLogIds);
+  const handshakeRows = exportResult.selectedAccessLogIds.length === 0
+    ? []
+    : db.prepare(
+        `SELECT id, ts, user_id, tool, lucy_turn_id, association_status
+           FROM access_log
+          WHERE id IN (${selected.sql})
+            AND event_type = 'protocol'
+            AND (association_status IN ('confirmed','legacy_unverified')
+                 OR association_status IS NULL)
+          ORDER BY id ASC`
+      ).all(...selected.params) as Array<Record<string, unknown>>;
   if (handshakeRows.length > 0) {
     const jsonl = handshakeRows.map((r) => JSON.stringify(r)).join("\n") + "\n";
     const buf = Buffer.from(jsonl, "utf8");
@@ -772,6 +853,12 @@ export async function buildExportPackV2(
   const verification = verifyExportFiles(fileMeta, actualContents);
   (manifest.integrityVerification as { fileHashOk: boolean; relationCheckOk: boolean }).fileHashOk =
     verification.ok;
+  manifest.combinedComplete = manifest.scopeComplete &&
+    manifest.integrityVerification.fileHashOk &&
+    manifest.integrityVerification.relationCheckOk;
+  if (options.mode === "complete" && !manifest.combinedComplete) {
+    throw new Error("integrity_or_relation_failed");
+  }
 
   const manifestBuf = Buffer.from(JSON.stringify(manifest, null, 2) + "\n", "utf8");
   fileEntries.push({ name: "manifest.json", data: manifestBuf });

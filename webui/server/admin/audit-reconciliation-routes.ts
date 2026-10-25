@@ -46,7 +46,7 @@ import {
 } from "./reconciliation-context.js";
 import {
   buildInquiryReconciliation,
-
+  getReconciliationPorts,
   isProtocolTool,
   paginateByKey,
   probeColumns,
@@ -76,6 +76,23 @@ function boundedLimit(raw: string | undefined): number {
 
 function readMode(raw: string | undefined): ReconciliationMode {
   return raw === "diagnostic" ? "diagnostic" : "complete";
+}
+
+function appendAsOfBound(
+  conditions: string[],
+  params: Record<string, unknown>,
+  columns: Set<string>,
+  context: ReconciliationContext
+): void {
+  if (columns.has("ledger_seq")) {
+    conditions.push("ledger_seq <= @watermarkSeq");
+    params.watermarkSeq = context.watermarkSeq;
+    return;
+  }
+  // Only an explicitly diagnostic context can reach this fallback; complete
+  // mode fails while opening the context when ledger_seq is unavailable.
+  conditions.push("id <= @rowBound");
+  params.rowBound = context.rowBoundAccessLogId;
 }
 
 /**
@@ -226,25 +243,45 @@ export async function openReconciliationContext(input: {
     throw error;
   }
 
-  const rowBound = withFrozenAuditSnapshot(database, () => {
+  const snapshot = withFrozenAuditSnapshot(database, () => {
     const info = probeColumns(database, "access_log");
-    if (!info.has("id")) return 0;
+    if (!info.has("id")) return { rowBound: 0, matchedRowCount: 0, hasLedgerSeq: false };
     const row = database.prepare("SELECT IFNULL(MAX(id), 0) AS m FROM access_log").get() as {
       m: number;
     };
-    return Number(row.m ?? 0);
+    const rowBound = Number(row.m ?? 0);
+    const hasLedgerSeq = info.has("ledger_seq");
+    // D-20: MAX(id) is only a snapshot identifier. Row membership is bounded
+    // by the canonical ledger sequence S, never by the projection's own id.
+    const countRow = hasLedgerSeq
+      ? database.prepare("SELECT COUNT(*) AS c FROM access_log WHERE ledger_seq <= ?").get(
+          watermark.watermarkSeq
+        )
+      : database.prepare("SELECT COUNT(*) AS c FROM access_log WHERE id <= ?").get(rowBound);
+    return {
+      rowBound,
+      matchedRowCount: Number((countRow as { c: number }).c ?? 0),
+      hasLedgerSeq
+    };
   });
 
-  const matchedRowCount = withFrozenAuditSnapshot(database, () => {
-    const info = probeColumns(database, "access_log");
-    if (!info.has("id")) return 0;
-    const row = database.prepare("SELECT COUNT(*) AS c FROM access_log WHERE id <= ?").get(
-      rowBound
-    ) as { c: number };
-    return Number(row.c ?? 0);
-  });
+  if (!snapshot.hasLedgerSeq) reasons.push("ledger_seq_column_unavailable");
+  if (input.mode === "complete" && !snapshot.hasLedgerSeq) {
+    const error = new Error("ledger_seq_column_unavailable") as Error & { code?: string };
+    error.code = "RECONCILIATION_LEDGER_SEQ_UNAVAILABLE";
+    throw error;
+  }
 
-  const context = createReconciliationContext({
+  const completeness = emptyCompleteness(reasons);
+  completeness.dataScope = {
+    ok: coverage.covered && snapshot.hasLedgerSeq,
+    reason: coverage.covered && snapshot.hasLedgerSeq
+      ? null
+      : !snapshot.hasLedgerSeq
+        ? "ledger_seq_column_unavailable"
+        : `projection_not_covered:${coverage.reason}`
+  };
+  const contextInput = {
     instanceId: input.instanceId ?? resolveInstanceId(),
     filter,
     timeRange,
@@ -252,14 +289,24 @@ export async function openReconciliationContext(input: {
     snapshotId: computeReconciliationSnapshotId({
       watermarkSeq: watermark.watermarkSeq,
       filter,
-      rowBoundAccessLogId: rowBound,
-      matchedRowCount
+      rowBoundAccessLogId: snapshot.rowBound,
+      matchedRowCount: snapshot.matchedRowCount
     }),
-    rowBoundAccessLogId: rowBound,
+    rowBoundAccessLogId: snapshot.rowBound,
     metricUnit: input.metricUnit,
-    completeness: emptyCompleteness(reasons),
+    completeness
+  };
+  const preliminary = createReconciliationContext({
+    ...contextInput,
     auditCoverage: emptyAuditCoverage()
   });
+  // D-26: use the configured P0-1 S05 port even before an inquiry scopes the
+  // units. Only projection catch-up has context-level independent evidence;
+  // the other checks are deliberately reported as unknown by the adapter.
+  const auditCoverage = getReconciliationPorts().auditCoverage.summarizeCoverage(preliminary, {
+    units: []
+  });
+  const context = createReconciliationContext({ ...contextInput, auditCoverage });
 
   return {
     context,
@@ -280,6 +327,7 @@ type UsageRow = {
   unitId: string;
   ts: string;
   tool: string;
+  turnId: string | null;
   tokenIdentity: string | null;
   tokenIdentityKind: "hash_prefix" | "credential_principal_id" | null;
   protocol: boolean;
@@ -299,12 +347,12 @@ function collectUsageRows(
   const info = probeColumns(database, "access_log");
   // 审计库尚无 access_log 表（新库 / 未初始化）：返回空集合而不是 500。
   if (!info.has("id")) return { rows: [], protocolEventCount: 0 };
-  const conditions = ["ts >= @from", "ts < @to", "id <= @rowBound"];
+  const conditions = ["ts >= @from", "ts < @to"];
   const params: Record<string, unknown> = {
     from: context.timeRange.from,
-    to: context.timeRange.to,
-    rowBound: context.rowBoundAccessLogId
+    to: context.timeRange.to
   };
+  appendAsOfBound(conditions, params, info, context);
   if (context.filter.user) {
     conditions.push("user_id = @user");
     params.user = context.filter.user;
@@ -334,6 +382,7 @@ function collectUsageRows(
     "id",
     "ts",
     "tool",
+    "lucy_turn_id",
     "token_hash_prefix",
     "credential_principal_id"
   ]
@@ -353,6 +402,7 @@ function collectUsageRows(
       unitId: String(row.id),
       ts: String(row.ts ?? ""),
       tool,
+      turnId: row.lucy_turn_id ? String(row.lucy_turn_id) : null,
       tokenIdentity: principal ?? prefix,
       tokenIdentityKind: principal ? "credential_principal_id" : prefix ? "hash_prefix" : null,
       protocol: isProtocolTool(tool)
@@ -573,6 +623,13 @@ export function registerAuditReconciliationRoutes(app: FastifyInstance): void {
           }
         };
       }
+      if (code === "RECONCILIATION_LEDGER_SEQ_UNAVAILABLE") {
+        reply.code(409);
+        return {
+          ok: false,
+          error: { code, message: "审计行缺少账本序号，无法证明对账范围完整" }
+        };
+      }
       if (code === "RECONCILIATION_SECURITY_STORE_UNAVAILABLE") {
         reply.code(503);
         return { ok: false, error: { code, message: "安全账本不可用，无法确定账本上界" } };
@@ -652,6 +709,13 @@ export function registerAuditReconciliationRoutes(app: FastifyInstance): void {
           }
         };
       }
+      if (code === "RECONCILIATION_LEDGER_SEQ_UNAVAILABLE") {
+        reply.code(409);
+        return {
+          ok: false,
+          error: { code, message: "审计行缺少账本序号，无法证明对账范围完整" }
+        };
+      }
       if (code === "RECONCILIATION_SECURITY_STORE_UNAVAILABLE") {
         reply.code(503);
         return { ok: false, error: { code, message: "安全账本不可用，无法确定账本上界" } };
@@ -696,21 +760,11 @@ export function registerAuditReconciliationRoutes(app: FastifyInstance): void {
           protocolEventCount: usage.protocolEventCount
         });
 
-        const turnIds = new Set<string>();
-        const info = probeColumns(database, "access_log");
-        if (info.has("lucy_turn_id")) {
-          const turnRows = database
-            .prepare(
-              `SELECT DISTINCT IFNULL(lucy_turn_id, '') AS t FROM access_log
-               WHERE ts >= @from AND ts < @to AND id <= @rowBound`
-            )
-            .all({
-              from: bundle.context.timeRange.from,
-              to: bundle.context.timeRange.to,
-              rowBound: bundle.context.rowBoundAccessLogId
-            }) as Array<{ t: string }>;
-          for (const row of turnRows) if (row.t) turnIds.add(row.t);
-        }
+        // Reuse the exact filtered/as-of usage selection; do not run a second
+        // unbounded turn query that could mix post-S or out-of-filter calls in.
+        const turnIds = new Set(
+          usage.rows.map((row) => row.turnId).filter((turnId): turnId is string => Boolean(turnId))
+        );
 
         const inquiries = [...turnIds].map((turnId) =>
           buildInquiryReconciliation({ db: database, context: bundle.context, turnId })
@@ -765,6 +819,13 @@ export function registerAuditReconciliationRoutes(app: FastifyInstance): void {
             code,
             message: "投影未追平账本上界 S，正式对账导出失败（不静默换用较新数据）"
           }
+        };
+      }
+      if (code === "RECONCILIATION_LEDGER_SEQ_UNAVAILABLE") {
+        reply.code(409);
+        return {
+          ok: false,
+          error: { code, message: "审计行缺少账本序号，无法证明对账范围完整" }
         };
       }
       if (code === "RECONCILIATION_SECURITY_STORE_UNAVAILABLE") {

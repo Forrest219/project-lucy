@@ -126,8 +126,24 @@ export function createProductionAuditCoveragePort(
   resolve: (
     context: ReconciliationContext,
     scope: { units: readonly ReconciliationUnit[] }
-  ) => Partial<Record<(typeof AUDIT_COVERAGE_CHECKS)[number], CoverageInput>> = () => ({})
-): AuditCoveragePort {
+  ) => Partial<Record<(typeof AUDIT_COVERAGE_CHECKS)[number], CoverageInput>> = (
+    context
+  ) => ({
+    // D-26: projection catch-up has direct, independent evidence from the
+    // canonical-ledger-vs-projection gate captured in this context. The other
+    // five checks remain unknown until their own independent sources exist.
+    projection_catchup: {
+      id: "projection_catchup",
+      status: context.completeness.dataScope.ok ? "pass" : "fail",
+      numerator: context.completeness.dataScope.ok ? 1 : 0,
+      denominator: 1,
+      unit: context.s05MetricUnit,
+      evidenceSource: "canonical_ledger_and_projection_status",
+      diffIds: context.completeness.dataScope.ok ? [] : ["projection_catchup"],
+      reason: context.completeness.dataScope.reason,
+      exclusions: []
+    }
+  })): AuditCoveragePort {
   return {
     connected: true,
     summarizeCoverage(

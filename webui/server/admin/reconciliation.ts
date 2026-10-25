@@ -332,15 +332,29 @@ export type AccessLogSelection = {
 
 export function selectAccessLogRows(
   db: Database.Database,
-  options: { where: string; params: readonly unknown[]; rowBound: number }
+  options: {
+    where: string;
+    params: readonly unknown[];
+    /** Snapshot/pagination identity only; never an as-of ledger boundary. */
+    rowBound: number;
+    /** Canonical ledger upper bound S. Production callers must supply it. */
+    watermarkSeq?: number;
+  }
 ): AccessLogSelection {
   const columns = probeColumns(db, "access_log");
   if (!columns.has("id")) return { columns, rows: [] };
   const projection = ACCESS_LOG_SELECT_COLUMNS.map((column) =>
     columns.has(column) ? column : `NULL AS ${column}`
   ).join(", ");
-  const sql = `SELECT ${projection} FROM access_log WHERE (${options.where}) AND id <= ? ORDER BY ts ASC, id ASC`;
-  const rows = db.prepare(sql).all(...options.params, options.rowBound) as AccessLogRow[];
+  // D-20: access_log.id and canonical ledger seq are different sequence spaces.
+  // A production context always supplies S; legacy test fixtures without the
+  // additive column retain their explicit row-bound diagnostic behavior.
+  const asOf = columns.has("ledger_seq") && options.watermarkSeq !== undefined
+    ? "ledger_seq <= ?"
+    : "id <= ?";
+  const bound = asOf === "ledger_seq <= ?" ? options.watermarkSeq! : options.rowBound;
+  const sql = `SELECT ${projection} FROM access_log WHERE (${options.where}) AND ${asOf} ORDER BY ts ASC, id ASC`;
+  const rows = db.prepare(sql).all(...options.params, bound) as AccessLogRow[];
   return { columns, rows };
 }
 
@@ -594,7 +608,8 @@ export function buildInquiryReconciliation(
   const { rows } = selectAccessLogRows(db, {
     where: where.where,
     params: where.params,
-    rowBound: context.rowBoundAccessLogId
+    rowBound: context.rowBoundAccessLogId,
+    watermarkSeq: context.watermarkSeq
   });
   const units = rows.map(toReconciliationUnit);
 

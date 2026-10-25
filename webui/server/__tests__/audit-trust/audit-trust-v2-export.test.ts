@@ -36,10 +36,11 @@ function makeFixtureDb(): Database.Database {
       attempt_id TEXT,
       parent_attempt_id TEXT,
       instance_id TEXT,
-      classification_version TEXT
+      classification_version TEXT,
+      permission_snapshot_hash TEXT
     );
     CREATE TABLE access_log_sources (id INTEGER PRIMARY KEY, access_log_id INTEGER);
-    CREATE TABLE permission_snapshots (id INTEGER PRIMARY KEY);
+    CREATE TABLE permission_snapshots (id INTEGER PRIMARY KEY, hash TEXT NOT NULL);
     CREATE TABLE association_revisions (id INTEGER PRIMARY KEY);
     CREATE TABLE audit_maintenance_log (id INTEGER PRIMARY KEY);
   `);
@@ -47,24 +48,25 @@ function makeFixtureDb(): Database.Database {
   const insert = db.prepare(
     `INSERT INTO access_log (ts, user_id, tool, outcome, decision_reason, duration_ms, response_row_count,
             event_type, transport_sub_type, transport_status, authorization_status, execution_status,
-            usability_status, association_status, original_turn_id, effective_turn_id, classification_version, ledger_seq)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            usability_status, association_status, original_turn_id, effective_turn_id, classification_version, ledger_seq,
+            permission_snapshot_hash)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   insert.run("2026-10-19T12:00:00Z", "u1", "lucy_query", "ok", "allowed", 100, 5,
     "tool_call", "other", "succeeded", "allowed", "succeeded", "usable",
-    "confirmed", "turn-1", "turn-1", "audit-trust-2026-10-19-r1.v1", 1);
+    "confirmed", "turn-1", "turn-1", "audit-trust-2026-10-19-r1.v1", 1, "hash-1");
   insert.run("2026-10-19T12:01:00Z", "u2", "tools/list", "ok", "allowed", 5, 0,
     "protocol", "handshake", "succeeded", "allowed", "succeeded", "not_applicable",
-    null, null, null, "audit-trust-2026-10-19-r1.v1", 2);
+    null, null, null, "audit-trust-2026-10-19-r1.v1", 2, "hash-1");
   insert.run("2026-10-19T12:02:00Z", "u3", "lucy_query", "denied", "permission_denied", 10, 0,
     "tool_call", "other", "failed", "denied", "not_executed", "metadata_missing",
-    "conflict", "turn-2", "turn-2", "audit-trust-2026-10-19-r1.v1", 3);
+    "conflict", "turn-2", "turn-2", "audit-trust-2026-10-19-r1.v1", 3, "hash-1");
   // Sources (1 per access_log row to keep ok=true)
   for (let i = 1; i <= 3; i++) {
     db.prepare(`INSERT INTO access_log_sources (access_log_id) VALUES (?)`).run(i);
   }
-  db.prepare(`INSERT INTO permission_snapshots DEFAULT VALUES`).run();
-  db.prepare(`INSERT INTO permission_snapshots DEFAULT VALUES`).run();
+  db.prepare(`INSERT INTO permission_snapshots (hash) VALUES ('hash-1')`).run();
+  db.prepare(`INSERT INTO permission_snapshots (hash) VALUES ('hash-2')`).run();
   return db;
 }
 
@@ -110,6 +112,25 @@ describe("T04c performExportV2 complete mode", () => {
     expect(r.csv.split("\n")[0]).toContain("usability_status");
     expect(r.csv.split("\n")[0]).toContain("instance_id");
     expect(r.csv.split("\n")[0]).toContain("classification_version");
+  });
+
+  it("D-22 自动提供导出身份、评估时点与完整筛选声明", async () => {
+    const db = makeFixtureDb();
+    const now = Date.parse("2026-10-25T08:00:00.000Z");
+    const r = await performExportV2({
+      ...baseOptions,
+      snapshotDb: db,
+      fixedFilter: { from: "2026-10-19T00:00:00Z", until: "2026-10-20T00:00:00Z", userId: "u1" },
+      now: () => now
+    });
+    expect(r.manifest.exportId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(r.manifest.exportedAt).toBe("2026-10-25T08:00:00.000Z");
+    expect(r.manifest.cutoffAt).toBe(r.manifest.exportedAt);
+    expect(r.manifest.filter).toEqual({
+      from: "2026-10-19T00:00:00Z",
+      until: "2026-10-20T00:00:00Z",
+      userId: "u1"
+    });
   });
 
   it("rejects complete mode when projection_lag > 0", async () => {

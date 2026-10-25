@@ -484,7 +484,12 @@ function recordAudit(entry: Parameters<typeof writeLog>[0], sources?: SourceRef[
     client: resolved.client,
     clientVersion: resolved.clientVersion,
     reportedClient: resolved.reportedClient,
-    reportedClientVersion: resolved.reportedClientVersion
+    reportedClientVersion: resolved.reportedClientVersion,
+    // D-27: this is the JSON-RPC id observed on the actual MCP request. Keep
+    // unrelated client/upstream identifiers absent until their real sources exist.
+    rpcRequestId: entry.rpcRequestId ?? (
+      entry.requestId == null || entry.requestId === "" ? undefined : String(entry.requestId)
+    )
   };
   writeLog(normalized)
     .then((accessLogId) => {

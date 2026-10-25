@@ -19,6 +19,11 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openSecurityStore, type SecurityStore } from "../security/store";
 import type { SecurityEvent, SecurityResult } from "../security/types";
+import {
+  configureReconciliationPorts,
+  resetReconciliationPortsForTests
+} from "../admin/reconciliation";
+import { createProductionAuditCoveragePort } from "../admin/reconciliation-ports";
 
 const auditDb = new Database(":memory:");
 
@@ -100,7 +105,8 @@ function resetAuditSchema(): void {
       original_turn_id TEXT,
       event_type TEXT,
       credential_principal_id TEXT,
-      turn_wall_clock_ms INTEGER
+      turn_wall_clock_ms INTEGER,
+      ledger_seq INTEGER
     );
     CREATE TABLE access_log_sources (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -318,6 +324,48 @@ describe("registerAuditReconciliationRoutes", () => {
     expect(body.data.calls).toMatchObject({ complete: true, totalMatched: 0, returned: 0 });
     expect(body.data.calls.nextCursor).toBeNull();
     await app.close();
+  });
+
+  it("D-20 usage 按账本上界 S 选行，不按投影 id 选行", async () => {
+    const insert = auditDb.prepare(
+      `INSERT INTO access_log (id, ts, user_id, tool, request_id, outcome, ledger_seq)
+       VALUES (?, '2026-10-19T12:00:00Z', 'u1', 'lucy_query', ?, 'ok', ?)`
+    );
+    insert.run(1, "req-post-s", 99);
+    insert.run(2, "req-pre-s", 1);
+
+    const app = makeApp();
+    const response = await app.inject({ method: "GET", url: "/api/admin/audit/reconciliation/usage" });
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.data.calls.totalMatched).toBe(1);
+    expect(body.data.calls.items.map((row: { unitId: string }) => row.unitId)).toEqual(["2"]);
+    await app.close();
+  });
+
+  it("D-26 usage 经生产端口返回六项 S05 检查，缺证据项保持 unknown", async () => {
+    auditDb.prepare(
+      `INSERT INTO access_log (id, ts, user_id, tool, request_id, outcome, ledger_seq)
+       VALUES (1, '2026-10-19T12:00:00Z', 'u1', 'lucy_query', 'req-1', 'ok', 2)`
+    ).run();
+    configureReconciliationPorts({ auditCoverage: createProductionAuditCoveragePort() });
+    try {
+      const app = makeApp();
+      const response = await app.inject({ method: "GET", url: "/api/admin/audit/reconciliation/usage" });
+      expect(response.statusCode).toBe(200);
+      const coverage = response.json().data.reconciliationContext.auditCoverage;
+      expect(coverage.version).toBe("v2p5-1");
+      expect(coverage.checks).toHaveLength(6);
+      expect(coverage.checks.find((check: { id: string }) => check.id === "projection_catchup"))
+        .toMatchObject({ status: "pass", numerator: 1, denominator: 1 });
+      expect(coverage.checks.filter((check: { id: string }) => check.id !== "projection_catchup"))
+        .toHaveLength(5);
+      expect(coverage.checks.filter((check: { id: string }) => check.id !== "projection_catchup")
+        .every((check: { status: string }) => check.status === "unknown")).toBe(true);
+      await app.close();
+    } finally {
+      resetReconciliationPortsForTests();
+    }
   });
 
   it("export 端点返回五类 CSV 与 Manifest", async () => {
