@@ -277,6 +277,16 @@ export async function runAgentJourney({ run, cases, goldDoc, clientsDoc, adapter
 
     // Isolation proof with the real client before any official question (Spec §6.2).
     const isolation = await deps.isolationProbe({ adapter, probeInfo, workDir, run, secrets });
+    // The per-resource probe outcomes travel with the evidence: an auditor must be able to
+    // re-derive WHY the boundary was (or was not) established, and the three verdicts
+    // (denied / leaked / inconclusive) must not be collapsed into one boolean.
+    const isolationSummary = {
+      isolated: isolation.isolated ?? false,
+      attemptCompleted: isolation.attemptCompleted ?? false,
+      attempts: isolation.attempts ?? [],
+      leaked: isolation.leaked ?? [],
+      inconclusive: isolation.inconclusive ?? []
+    };
     if (!isolation.attemptCompleted) {
       progressLog(run, `isolation ${client.product} did not complete: ${isolation.detail}`);
       blockAll([`isolation_not_completed: ${isolation.detail}`]);
@@ -284,7 +294,7 @@ export async function runAgentJourney({ run, cases, goldDoc, clientsDoc, adapter
       // attemptCompleted is false AND because the profile hash isn't in the evidence set.
       const lastReceipt = clientInfo[clientInfo.length - 1];
       if (lastReceipt) lastReceipt.isolationReceipt = isolation.receipt ?? null;
-      lastReceipt.isolationSummary = { isolated: isolation.isolated ?? false, attemptCompleted: false, attempts: isolation.attempts ?? [] };
+      lastReceipt.isolationSummary = isolationSummary;
       continue;
     }
     if (!isolation.isolated) {
@@ -292,13 +302,13 @@ export async function runAgentJourney({ run, cases, goldDoc, clientsDoc, adapter
       blockAll([`isolation_not_established: ${isolation.detail}`]);
       const lastReceipt = clientInfo[clientInfo.length - 1];
       if (lastReceipt) lastReceipt.isolationReceipt = isolation.receipt ?? null;
-      lastReceipt.isolationSummary = { isolated: false, attemptCompleted: true, attempts: isolation.attempts ?? [] };
+      lastReceipt.isolationSummary = isolationSummary;
       continue;
     }
     progressLog(run, `isolation ${client.product} ok (${isolation.detail})`);
     const lastReceipt = clientInfo[clientInfo.length - 1];
     if (lastReceipt) lastReceipt.isolationReceipt = isolation.receipt ?? null;
-    lastReceipt.isolationSummary = { isolated: true, attemptCompleted: true, attempts: isolation.attempts ?? [] };
+    lastReceipt.isolationSummary = isolationSummary;
 
     for (const testCase of agentCases) {
       const plan = askPlan(testCase);

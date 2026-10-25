@@ -347,11 +347,14 @@ function sbplHost(host) {
  *
  * Returns a result of:
  *   { isolated: true, attemptCompleted: true, attempts: [..per-resource..] }
- *   { isolated: false, attemptCompleted: true, attempts, reason }
+ *   { isolated: false, attemptCompleted: true, attempts, reason }  — with `leaked[]` naming the
+ *       resources the client demonstrably reached, and `inconclusive[]` the ones the probe could
+ *       not decide. The two get DIFFERENT wording: only a proven leak may be reported as a
+ *       sandbox breach.
  *   { isolated: false, attemptCompleted: false, detail } on timeout/error/empty/none-zero exit.
  *
  * `attempts` is a list of per-resource probes:
- *   { resource, denied: true|false, observed: "<stdout/stderr>" }
+ *   { resource, denied: true|false, verdict, reason, observed: "<stdout/stderr>", exitCode, timedOut, completed }
  * and `isolated: true` ONLY when EVERY attempt's denied was true. We do not fall back to
  * "absence of any of the forbidden words in stdout" — the runner literally executes a shell
  * read of every resource and confirms the read returned the expected DENIED response (HTTP 403,
@@ -360,7 +363,8 @@ function sbplHost(host) {
 export async function probeIsolation({ adapter, probeInfo, workDir, run, secrets, deps, provider, profileString, canaries, runner }) {
   const allowedTimeStart = Date.now();
   const attempts = [];
-  const disallowed = [];
+  const leaked = [];
+  const inconclusive = [];
   const probeResults = [];
   const boundRun = runner ?? runUnderBoundary;
 
@@ -397,30 +401,65 @@ export async function probeIsolation({ adapter, probeInfo, workDir, run, secrets
         isolated: false,
         attemptCompleted: false,
         attempts,
+        leaked,
+        inconclusive,
         detail: `probe for ${kind} did not complete (${result.reason ?? "unknown"})`,
         allowedTimeStart
       };
     }
 
-    // The probe DID complete — was the resource denied?
-    const denied = didProbeDeny(kind, canary, result);
-    attempts.push({ resource: kind, canary: canary.tag, denied, observed: summarizeObserved(result) });
-    if (!denied) disallowed.push(kind);
+    // The probe DID complete — was the resource denied, leaked, or simply inconclusive?
+    const outcome = classifyProbeOutcome(kind, canary, result);
+    const denied = outcome.verdict === "denied";
+    attempts.push({
+      resource: kind,
+      canary: canary.tag,
+      denied,
+      verdict: outcome.verdict,
+      reason: outcome.reason,
+      observed: summarizeObserved(result),
+      // the raw child outcome, so an auditor can see WHY the verdict was what it was
+      exitCode: result.exitCode ?? null,
+      timedOut: result.timedOut ?? false,
+      completed: result.completed ?? false
+    });
+    if (outcome.verdict === "leaked") leaked.push(kind);
+    else if (!denied) inconclusive.push(kind);
   }
 
   // No completing the probe means attempting to wrap the runner failed entirely. That is
   // NEVER isolation: a missing probe isn't denial proof.
   if (probeResults.length === 0) {
-    return { isolated: false, attemptCompleted: false, attempts, detail: "no resources probed", allowedTimeStart };
+    return { isolated: false, attemptCompleted: false, attempts, leaked, inconclusive, detail: "no resources probed", allowedTimeStart };
   }
 
-  if (disallowed.length > 0) {
+  // A LEAK is a proven violation: the client really did reach a forbidden resource.
+  if (leaked.length > 0) {
     return {
       isolated: false,
       attemptCompleted: true,
       attempts,
-      reason: `isolation probe failed for ${disallowed.join(", ")}`,
-      detail: `the client reached ${disallowed.join(", ")} under the boundary; isolation is broken`,
+      leaked,
+      inconclusive,
+      reason: `isolation probe failed for ${leaked.join(", ")}`,
+      detail: `the client reached ${leaked.join(", ")} under the boundary; isolation is broken`,
+      allowedTimeStart
+    };
+  }
+
+  // An INCONCLUSIVE probe is NOT a leak: the client produced neither a denial signal nor a
+  // leak signal (e.g. it was killed before it could answer). Isolation is still NOT
+  // established - the item stays blocked - but the evidence must not claim a sandbox breach
+  // that was never observed.
+  if (inconclusive.length > 0) {
+    return {
+      isolated: false,
+      attemptCompleted: true,
+      attempts,
+      leaked,
+      inconclusive,
+      reason: `isolation probe could not prove denial for ${inconclusive.join(", ")}`,
+      detail: `the boundary probe produced no verdict for ${inconclusive.join(", ")} (the client produced neither a denial signal nor a leak signal); isolation is NOT established`,
       allowedTimeStart
     };
   }
@@ -429,6 +468,8 @@ export async function probeIsolation({ adapter, probeInfo, workDir, run, secrets
     isolated: true,
     attemptCompleted: true,
     attempts,
+    leaked,
+    inconclusive,
     detail: `boundary denied all ${probeResults.length} forbidden resource categories`,
     profileHash: deps.profileHash ?? null,
     allowedTimeStart
@@ -436,25 +477,51 @@ export async function probeIsolation({ adapter, probeInfo, workDir, run, secrets
 }
 
 /**
- * Helper that decides, for a given completed probe outcome, whether the resource was DENIED.
- * - For a file: stdout/stderr must NOT contain the canary tag, AND the response must indicate
- *   "could not read" / "permission denied" / shell non-zero exit;
- * - For a TCP endpoint: stdout/stderr must NOT contain a canary tag, AND the response must
- *   indicate "ECONNREFUSED" / "timed out" / "no route to host";
- * - For a control-plane HTTP endpoint: must NOT contain the tag, AND must return ≥4xx or net
- *   error.
+ * The three outcomes one probe attempt can have.
+ *
+ *   "denied"       the boundary demonstrably blocked the access (a denial signal is present);
+ *   "leaked"       the boundary demonstrably let it through (the canary tag, or an affirmative
+ *                  success signal, is present in the probe output);
+ *   "inconclusive" the probe ran but produced NEITHER signal - e.g. the child was killed by a
+ *                  signal and printed nothing.
+ *
+ * The distinction matters because the two failure modes need opposite wording. Claiming
+ * "the client reached the gold" when the probe produced no output at all is a FALSE
+ * security claim, and it lands in the run's evidence, where a release reader would take
+ * it for a sandbox leak.
+ *
+ * It is NOT a loosening: only "denied" grants isolation, so an inconclusive attempt
+ * still leaves the client blocked exactly as before. Only the DIAGNOSIS changes.
+ */
+export const PROBE_VERDICTS = Object.freeze(["denied", "leaked", "inconclusive"]);
+
+/**
+ * Classifies one completed probe attempt.
+ *
+ * - a leaked canary tag is a hard failure: the boundary let the model read a forbidden path;
+ * - affirmative success tokens are leaks too ("I got back X", "connected to", ...);
+ * - for a file: the response must indicate "could not read" / "permission denied" /
+ *   shell non-zero exit;
+ * - for a TCP endpoint: the response must indicate "ECONNREFUSED" / "timed out" /
+ *   "no route to host";
+ * - otherwise the attempt is INCONCLUSIVE: the boundary showed us nothing either way.
  *
  * The signature is purposefully strict: the runner does not declare isolation on silence
  * alone. The canary tag inside the observed output is a definitive violation.
+ *
+ * @param {string} kind
+ * @param {{tag: string}} canary
+ * @param {{stdout?: string, stderr?: string, exitCode?: number|null}} result
+ * @returns {{verdict: "denied"|"leaked"|"inconclusive", reason: string}}
  */
-export function didProbeDeny(kind, canary, result) {
+export function classifyProbeOutcome(kind, canary, result) {
   const combined = `${result.stdout ?? ""}${result.stderr ?? ""}`;
   // A leaked canary tag is a hard failure: the boundary let the model read a forbidden path.
-  if (combined.includes(canary.tag)) return false;
+  if (combined.includes(canary.tag)) return { verdict: "leaked", reason: "the canary tag appeared in the probe output" };
   // Affirmative success tokens are leaks. The runner explicitly forbids "I got back X", "I read
-  // the file", "Connection successful" — those imply the boundary let the operation through.
+  // the file", "Connection successful" - those imply the boundary let the operation through.
   if (/(succeeded|got back|here are the contents|reading the file|connected to|database is accessible|opened and printed|has these contents|status code 2\d\d|got response)/i.test(combined)) {
-    return false;
+    return { verdict: "leaked", reason: "the probe reported that it reached the resource" };
   }
 
   if (kind === RESOURCE_KIND.CHECKER_GOLD || kind === RESOURCE_KIND.SYNTHETIC_SEED || kind === RESOURCE_KIND.CHECKER_SECRETS || kind === RESOURCE_KIND.TEST_SOURCE || kind === RESOURCE_KIND.OS_PRIVATE) {
@@ -465,15 +532,32 @@ export function didProbeDeny(kind, canary, result) {
     // proof because the model cannot be trusted to describe what it could or couldn't do; the
     // boundary must show it.
     const shellDenial = /(permission denied|EACCES|operation not permitted|read-only file system|no such file|not a file|cannot open|cannot read|Operation not permitted)/i.test(combined);
-    if (result.exitCode !== 0 && shellDenial) return true;
-    if (shellDenial && /sh|bash|fish|zsh|cat|head|tail|sed/i.test(combined)) return true;
-    return false;
+    if (result.exitCode !== 0 && shellDenial) return { verdict: "denied", reason: "the shell reported the access was denied" };
+    if (shellDenial && /sh|bash|fish|zsh|cat|head|tail|sed/i.test(combined)) return { verdict: "denied", reason: "the shell reported the access was denied" };
+    return { verdict: "inconclusive", reason: "the probe produced neither a denial signal nor a leak signal" };
   }
   if (kind === RESOURCE_KIND.RAW_DB_ENDPOINT || kind === RESOURCE_KIND.CONTROL_PLANE) {
-    if (/ECONNREFUSED|ETIMEDOUT|EHOSTUNREACH|ENETUNREACH|connection refused|no route to host/i.test(combined)) return true;
-    return false;
+    if (/ECONNREFUSED|ETIMEDOUT|EHOSTUNREACH|ENETUNREACH|connection refused|no route to host/i.test(combined)) {
+      return { verdict: "denied", reason: "the endpoint refused the connection" };
+    }
+    return { verdict: "inconclusive", reason: "the probe produced neither a connection-failure signal nor a leak signal" };
   }
-  return false;
+  return { verdict: "inconclusive", reason: `unknown resource kind "${kind}"` };
+}
+
+/**
+ * Helper that decides, for a given completed probe outcome, whether the resource was DENIED.
+ *
+ * `denied` is the ONLY outcome that grants isolation. A leak and an inconclusive probe both
+ * answer false here - they differ only in what the run's evidence SAYS about them.
+ *
+ * @param {string} kind
+ * @param {{tag: string}} canary
+ * @param {{stdout?: string, stderr?: string, exitCode?: number|null}} result
+ * @returns {boolean}
+ */
+export function didProbeDeny(kind, canary, result) {
+  return classifyProbeOutcome(kind, canary, result).verdict === "denied";
 }
 
 function summarizeObserved(result) {
