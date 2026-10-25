@@ -22,11 +22,12 @@ export const OIDC_CLIENT_SECRET_FILE_ENV = "LUCY_OIDC_CLIENT_SECRET_FILE";
  * Acceptable modes for the client secret file.
  *
  * 0440 / 0640 are accepted on purpose: the delivered Chart mounts the Secret
- * with `defaultMode: 0400`, but the pod sets `fsGroup: 10001`, so kubelet's
- * fsGroup pass rewrites the file to `root:10001` mode 0440. The container then
- * reads it as UID/GID 10001 — and a runtime that only accepted 0400/0600 would
- * silently disable OIDC on every real customer deployment. The rule that
+ * with `defaultMode: 0440` and the pod sets `fsGroup: 10001`, so the file is
+ * read as `root:10001` mode 0440 — and a runtime that only accepted 0400/0600
+ * would silently disable OIDC on every real customer deployment. The rule that
  * matters is that the file is never readable by "other".
+ *
+ * Spec §4.2 was realigned with this on 2026-10-26 (v0.3-implementation-alignment).
  */
 const ALLOWED_SECRET_MODES = new Set([0o400, 0o440, 0o600, 0o640]);
 

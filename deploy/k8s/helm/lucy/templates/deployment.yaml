@@ -296,11 +296,14 @@ spec:
               - key: profile.yaml
                 path: profile.yaml
         # OIDC client secret, referenced by name only (Spec §4.2: the file is
-        # read-only and never world-readable).
+        # read-only and never world-readable). 0440, not 0400: the pod sets
+        # podSecurityContext.fsGroup, so kubelet rewrites the mounted file to
+        # root:<fsGroup> 0440 even when the template declares 0400. Declaring
+        # 0440 keeps the manifest equal to what the container actually reads.
         - name: oidc-client-secret
           secret:
             secretName: {{ $oidc.existingSecret }}
-            defaultMode: 0400
+            defaultMode: 0440
             items:
               - key: {{ $oidc.clientSecretKey }}
                 path: client-secret

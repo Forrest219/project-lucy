@@ -3,10 +3,10 @@
 | 元数据 | 内容 |
 |---|---|
 | 文档类型 | 功能设计基线（Authentication / WebUI / Customer Deployment） |
-| 文档版本 / 日期 | v0.2-requirements-review / 2026-10-25，Asia/Shanghai |
+| 文档版本 / 日期 | v0.3-implementation-alignment / 2026-10-25 定稿；2026-10-26 回写 §4.2 client secret 权限，Asia/Shanghai |
 | 功能编号 / 目标版本 | L25-06 / v0.25 |
 | 优先级 | P1：企业身份接入；不改变既有 P0／P1 验收与交付阻断状态 |
-| 状态 | **设计完成、需求审查已签核通过（2026-10-25）；暂不开发，不代表实现或验收通过** |
+| 状态 | **需求审查已签核通过（2026-10-25）；2026-10-25 获 PM 开发授权并完成实施（提交 `b89e14d`、`f933c2c`）；OIDC-24／OIDC-25 因真实环境不可得记 `blocked_environment`；§4.2 权限口径已于 2026-10-26 按真实部署事实回写。实现完成不等于验收通过，也不等于客户交付通过** |
 | 需求来源 | [Lucy 2.5 功能升级建议书](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) §2.1 L25-06；2026-10-25 Forrest 要求开始设计并批准评审裁定与 Spec 定稿 |
 | 审查记录 | [L25-06 OIDC Spec 评审记录](../reviews/2026-10-25-lucy-v0.25-l25-06-oidc-spec-review-record.md)（M-01–M-04、F-03、G-01 签核条件已关闭） |
 | 现有基础 | `webui/server/auth/oidc-profile.ts`、`admins.yaml` 的 `oidc_bindings`、v2 持久会话、Helm 预留 `oidc` values |
@@ -165,8 +165,14 @@ publicWebuiUrl: https://lucy.example.com
 - `discoveryUrl` 保留为兼容字段，本期不参与运行时裁决。授权、token 与 JWKS 端点以上述静态配置为唯一事实源，避免双事实源。
 - `redirect_uri` 只能由 `publicWebuiUrl + redirectPath` 生成，不使用请求 `Host`、`Origin` 或 `X-Forwarded-Host`。
 - `endSessionEndpoint` 与 `logoutStyle` 均为可选预留字段；存在时也不触发网络请求，本地退出不依赖 IdP。S1 必须扩展既有 `parseOidcProfile` 落实本款与 `openid` 校验，不重造第二套 parser。
-- client secret 文件在启动加载时必须非空、去除单个末尾换行后使用；权限为 0400 或 0600。文件缺失、不可读或为空时 OIDC 不可用，本地登录继续。
+- client secret 文件在启动加载时必须非空、去除单个末尾换行后使用；**权限必须是 0400、0440、0600 或 0640，且 other 位永不可读**。文件缺失、不可读或为空时 OIDC 不可用，本地登录继续。
 - 不将 client secret 放入命令参数、ConfigMap、普通环境变量、values、页面、异常、审计或证据包。
+
+> **2026-10-26 回写（§4.2 client secret 权限）**：原文写「权限为 0400 或 0600」。实现期查明交付 Chart 的 `podSecurityContext.fsGroup: 10001` 会让 kubelet 在挂载 Secret 时按 fsGroup 改写文件权限——**即使模板声明 `defaultMode: 0400`，容器内实际读到的也是 `root:10001` 0440**。按原文字面实现，OIDC 会在每一种真实客户部署上被运行时拒绝，并**静默失效**（对外只表现为「单点登录不可用」）。
+>
+> 因此把可接受集合改为 **0400／0440／0600／0640**，并把判定依据明确为「**other 位永不可读**」：安全意图与原文一致，其余模式（尤其任何 other 可读位）一律拒绝。0440 与 0640 是**真实部署的常态**而非放宽要求；本次回写不放松本节任何其他约束。
+>
+> 实现口径见 `webui/server/auth/oidc-runtime.ts` 的 `ALLOWED_SECRET_MODES`，验收断言见实施记录 §4 的 OIDC-21 与 §7.2。
 
 ### 4.3 启动与运行时状态
 
