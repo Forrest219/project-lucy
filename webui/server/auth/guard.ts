@@ -137,7 +137,11 @@ export function actorIdFromRequest(request: FastifyRequest): string {
  * thenable), so the handler returns only after the denial is on the wire and the
  * framework correctly skips its own send.
  */
-export async function requireOwner(request: FastifyRequest, reply: FastifyReply): Promise<boolean> {
+export async function requireOwner(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  ownerMessage = "仅所有者可管理管理员账户"
+): Promise<boolean> {
   const admin = request.lucyAdmin?.admin;
   if (!admin) {
     await reply.status(401).send({
@@ -149,7 +153,7 @@ export async function requireOwner(request: FastifyRequest, reply: FastifyReply)
   if (admin.role !== "owner") {
     await reply.status(403).send({
       ok: false,
-      error: { code: "OWNER_REQUIRED", message: "仅所有者可管理管理员账户" }
+      error: { code: "OWNER_REQUIRED", message: ownerMessage }
     });
     return false;
   }

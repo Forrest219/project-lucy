@@ -14,6 +14,10 @@ import { getSmtpRuntimeView } from "./runtime.js";
 import { recordNotifierFailure } from "./state.js";
 
 let unsubscribe: (() => void) | null = null;
+// Preserve transition order all the way through the recovery's incident-row
+// check. Independent fire-and-forget handlers can otherwise query before the
+// matching incident has persisted and silently drop the recovery.
+let transitionQueue: Promise<void> = Promise.resolve();
 
 async function handleTransition(transition: AuditHealthTransition): Promise<void> {
   const view = await getSmtpRuntimeView();
@@ -51,8 +55,11 @@ async function handleTransition(transition: AuditHealthTransition): Promise<void
 export function startNotificationHealthEvents(): void {
   if (unsubscribe) return;
   unsubscribe = onAuditHealthTransition((transition) => {
-    // Fire and forget: the ledger path must never await I/O.
-    void handleTransition(transition);
+    // The ledger path never awaits I/O, but the asynchronous tasks themselves
+    // are serialized so an incident is persisted before its recovery is checked.
+    transitionQueue = transitionQueue
+      .then(() => handleTransition(transition))
+      .catch(() => recordNotifierFailure("store_unavailable"));
   });
 }
 

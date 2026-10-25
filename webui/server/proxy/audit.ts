@@ -220,7 +220,7 @@ let db: Database.Database | null = null;
  * of SQLite's internal `PRAGMA schema_version`, which we never read).
  * Bump together with new audit_meta entries.
  */
-export const AUDIT_DB_SCHEMA_VERSION = 3;
+export const AUDIT_DB_SCHEMA_VERSION = 4;
 /**
  * Lucy v0.25 / L25-09 B26 — the **single** access_log column contract.
  *

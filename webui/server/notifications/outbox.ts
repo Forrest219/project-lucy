@@ -13,6 +13,7 @@
 
 import { randomUUID } from "node:crypto";
 import { getAuditDb } from "../admin/audit.js";
+import { AUDIT_DB_SCHEMA_VERSION } from "../proxy/audit.js";
 
 export type NotificationEventType =
   | "audit_ledger_unavailable"
@@ -96,7 +97,27 @@ export async function ensureNotificationOutbox(): Promise<void> {
       ON notification_outbox(status, next_attempt_at);
     CREATE INDEX IF NOT EXISTS idx_notification_outbox_incident
       ON notification_outbox(incident_id, event_type);
+    CREATE TABLE IF NOT EXISTS audit_meta (
+      audit_db_schema_version INTEGER PRIMARY KEY,
+      classification_version  TEXT,
+      digest_version          TEXT,
+      last_migration_text     TEXT,
+      running_at_iso          TEXT,
+      running_actor           TEXT,
+      input_sha256            TEXT,
+      output_affected_rows    INTEGER
+    );
   `);
+  db.prepare(
+    `INSERT OR IGNORE INTO audit_meta
+       (audit_db_schema_version, last_migration_text, running_at_iso, running_actor, output_affected_rows)
+     VALUES (?, ?, ?, ?, 0)`
+  ).run(
+    AUDIT_DB_SCHEMA_VERSION,
+    "L25-05: add notification_outbox table and indexes",
+    new Date().toISOString(),
+    "system:notifier-init"
+  );
 }
 
 export function notificationDedupKey(eventType: NotificationEventType, incidentId: string | null): string {

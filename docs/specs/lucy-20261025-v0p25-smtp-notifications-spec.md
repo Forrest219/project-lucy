@@ -3,12 +3,12 @@
 | 元数据 | 内容 |
 |---|---|
 | 文档类型 | 功能设计基线（Notification / Audit / Customer Deployment） |
-| 文档版本 / 日期 | v0.4-implementation / 2026-10-26，Asia/Shanghai（v0.2-requirements-review 联合需求审查 → v0.3-pm-signoff PM 签核 → v0.4-implementation 实施 S1） |
+| 文档版本 / 日期 | v0.5-final-review / 2026-10-26，Asia/Shanghai（v0.2-requirements-review 联合需求审查 → v0.3-pm-signoff PM 签核 → v0.4-implementation 实施 S1 → v0.5-final-review S1 最终复审签核） |
 | 功能编号 / 目标版本 | L25-05 / v0.25 |
 | 优先级 | P2、可选能力；不改变既有 P0／P1 验收与交付阻断状态 |
-| 状态 | **需求审查与 PM 签核已通过（2026-10-26）；S1 已实施、自动化覆盖全绿；SMTP-01–26 仍未按验收口径执行。本轮不连接任何 SMTP 服务器、不发信。实现完成不等于验收通过** |
+| 状态 | **需求审查、PM 签核与 S1 最终复审签核均已通过（2026-10-26）；S1 自动化覆盖全绿；SMTP-01–26 仍未按验收口径执行。S2–S4 未开始，本轮不连接任何 SMTP 服务器、不发信。实现完成不等于验收通过** |
 | 需求来源 | [Lucy 2.5 功能升级建议书](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) §2.1 L25-05 |
-| 审查记录 | [L25-04／L25-05 Spec 审阅记录](../reviews/2026-10-25-lucy-v0.25-l25-04-05-spec-review-record.md)（F-01–F-08 已关闭；F-13–F-17 为实施前待办，已回写本文） |
+| 审查记录 | [L25-04／L25-05 Spec 审阅记录](../reviews/2026-10-25-lucy-v0.25-l25-04-05-spec-review-record.md)（F-01–F-08 已关闭；F-13–F-17 已回写本文；F-18–F-22 最终复审发现已修正关闭） |
 | 现有基础 | 单实例 WebUI、审计账本健康状态、审计存储迁移、owner-only 管理门、Helm Secret 文件模式 |
 | 实施主体 | Lucy；不修改 KTX，不引入外部邮件服务依赖 |
 
@@ -118,12 +118,13 @@ notifications:
 | `audit_ledger_unavailable` | 满足稳定窗口的 ledger 失败（见下「抖动抑制」）使 ledger 从 ok 转为 unavailable | 同一事故只 enqueue 一次；持续失败不重复刷屏 |
 | `audit_ledger_recovered` | 同一进程随后满足恢复稳定窗口、使 unavailable 转为 ok | 仅当同 incident 的 unavailable 行已持久化时 enqueue；否则跳过，避免只有恢复没有事故；无事故的启动成功不发恢复邮件 |
 
-实现可在健康模块与通知模块之间增加同步、无副作用的事件适配器；**不得**在 `recordLedgerAppend` 中等待文件、数据库或 SMTP I/O。事件适配器只提交内存任务，outbox 异步落盘失败仅记录通知自身故障，原审计结果不变。
+实现可在健康模块与通知模块之间增加事件适配器；从 ledger 调用路径看，适配器只同步提交内存任务，**不得**在 `recordLedgerAppend` 中等待文件、数据库或 SMTP I/O。适配器内部必须串行处理异步事件，确保事故行落盘后才检查并入队对应恢复事件；outbox 异步落盘失败仅记录通知自身故障，原审计结果不变。
 
 **抖动抑制（必须）**：事故与恢复必须建立在**稳定窗口**上，不得把每一次 ok／unavailable 翻转都当作事件。既有 ledger 在批量场景下会逐事件调用 `recordLedgerAppend`（`webui/server/security/ledger.ts:113`、`:125`、`:133`），一次批次内即可出现 ok→unavailable→ok 的翻转；若照直翻译为事件，同一次瞬时故障会产出一对事故＋恢复邮件，多次抖动即成刷屏。因此：
 
 - **事故判定**：连续 3 次 ledger append 失败，或失败持续满 60 秒，才升级为 `audit_ledger_unavailable`；稳定窗口内的翻转不发事件。
 - **恢复判定**：连续 3 次 append 成功，或成功持续满 60 秒，才判定为 `audit_ledger_recovered`。
+- **窗口计时**：首次失败／恢复成功分别启动可取消、`unref` 的 60 秒计时器；持续满窗口后无需后续 append 即可触发，后续相反结果会取消对应计时器。
 - **incident 语义**：一次事故从升级时刻起算，到恢复判定成立为止共用同一个 `incidentId`；窗口内的重复失败不新建 incident。
 - 上述常量为固定口径，不进入 profile 配置面，不产生额外 Helm 参数。
 
@@ -155,7 +156,7 @@ notifications:
 **创建责任与版本口径**：
 
 - outbox 表必须由 **notifier 自身的初始化路径**幂等创建（`CREATE TABLE IF NOT EXISTS` 及索引），不依赖 `admin/audit.ts` 的 `getAuditDb` 是否已被别处调用过：既有审计库存在两个独立连接句柄（`webui/server/admin/audit.ts:338` 的 `getAuditDb` 与 `webui/server/proxy/audit.ts:378` 的 `getDb`），各自执行自己的 DDL；worker 若在 admin 句柄首次被调用前启动并写库，会命中 `no such table`。worker 必须在开始领取任务前完成该初始化；初始化失败按 §5.3「outbox 不可用」处理，不得进入半可用状态。
-- `audit.sqlite` 有**独立于 security store 的 schema 版本**（`webui/server/proxy/audit.ts:222` 的 `AUDIT_DB_SCHEMA_VERSION`，当前为 3，约定与 `audit_meta` 条目同增）。新增 outbox 表须在该版本机制下登记（递增版本并同步 `audit_meta`）；「不修改 security schema 版本」与「audit schema 版本递增」是两件事，不得互相替代。
+- `audit.sqlite` 有**独立于 security store 的 schema 版本**（`webui/server/proxy/audit.ts:222` 的 `AUDIT_DB_SCHEMA_VERSION`，当前为 4，约定与 `audit_meta` 条目同增）。本次新增 outbox 表已将版本从 3 升为 4，并由 notifier 自身初始化路径以 `INSERT OR IGNORE` 同步登记 `audit_meta`；「不修改 security schema 版本」与「audit schema 版本递增」是两件事，不得互相替代。
 
 | 字段 | 合同 |
 |---|---|
@@ -252,7 +253,7 @@ mark sent after SMTP acceptance:
 | `GET /api/admin/notifications/:id` | owner | id、eventType、status、attempts、时间、lastErrorCode；不返回 payload 或收件人原文 |
 
 - 这些路径不得加入公开 API 白名单；非 owner 返回 403 `OWNER_REQUIRED`，未登录沿用 401。
-- **403 文案归属必须二选一并写死**：既有 `requireOwner` 硬编码「仅所有者可管理管理员账户」（`webui/server/auth/guard.ts:140-156`，无文案参数）。① 直接复用 `requireOwner` 并接受该既有文案（§9 相应删去自定义文案）；② 给 `requireOwner` 增加可选文案参数、仅通知路由传入，并把该签名改动及其对既有路由的回归范围列入 §12 S2。**不得**让通知接口显示「管理管理员账户」。
+- **403 文案归属已定稿为方案②**：`requireOwner(request, reply, ownerMessage?)` 增加可选第三参数，默认仍为「仅所有者可管理管理员账户」，既有调用方行为不变；通知路由统一传入「仅所有者可管理邮件通知」。该共享签名改动及既有路由已纳入 S1 全量回归，后续 S2 通知 API 沿用同一合同。**不得**让通知接口显示「管理管理员账户」。
 - 状态 `state` 封闭为 `disabled`／`unavailable`／`ok`／`degraded`；degraded 仅表示通知队列或发信异常，不改变 `/api/health` 的主服务健康定义。
 - 通知 API 和配置不是认证条件，不出现在登录页，不新增「忘记密码」。
 - 本期不新增 SMTP 设置页；部署人员通过 profile／Helm 管理，owner 通过 API 或后续最小 UI 调用测试。系统手册必须给出配置和排障方法。
@@ -272,7 +273,7 @@ mark sent after SMTP acceptance:
 | 场景 | 码 | 用户主文案 | HTTP |
 |---|---|---|---|
 | 未启用或配置不可用 | `NOTIFICATION_UNAVAILABLE` | 邮件通知当前不可用，请检查通知配置后重启 | 503 |
-| 非所有者 | 既有 `OWNER_REQUIRED` | 见 §7「403 文案归属」：复用 `requireOwner` 时为「仅所有者可管理管理员账户」 | 403 |
+| 非所有者 | 既有 `OWNER_REQUIRED` | 仅所有者可管理邮件通知 | 403 |
 | outbox 满或不可用 | `NOTIFICATION_QUEUE_UNAVAILABLE` | 通知队列暂不可用，请稍后重试 | 503 |
 | 通知 id 不存在 | `NOTIFICATION_NOT_FOUND` | 未找到该通知记录 | 404 |
 | 查询状态 | 不报错 | queued／sending 不代表已送达；dead 不自动重发 | 200 |
@@ -292,7 +293,7 @@ SMTP 原始响应不得直接成为用户可见错误。测试接口返回 202 �
 
 ### 10.2 升级与回滚
 
-1. 升级由 `getAuditDb` 幂等增加 outbox 表和索引，不提升 security schema 版本；升级前备份必须包含 outbox 所在的 `audit.sqlite`，既有 security store 备份合同不变。
+1. 升级由 notifier 自身初始化路径调用 `ensureNotificationOutbox()`，经 `getAuditDb` 幂等增加 outbox 表和索引，并同步登记 `audit_meta`；audit schema 从 3 升为 4，不提升 security schema 版本。升级前备份必须包含 outbox 所在的 `audit.sqlite`，既有 security store 备份合同不变。
 2. 未启用 SMTP 的现有实例除 `audit.sqlite` 新增空 outbox 表外无行为变化，不新增外连。
 3. 设置 `smtp.enabled=false` 后停止新投递，历史 queued 保留；回滚到不识别该表的旧版本前必须按交付 Runbook 清理或保留兼容，不得假装旧版会发送。
 4. 回滚不影响登录账户、审计账本、权限或恢复密钥；密码不进入备份明文附件。
@@ -331,18 +332,18 @@ SMTP 原始响应不得直接成为用户可见错误。测试接口返回 202 �
 | SMTP-25 | 升级与回滚 | 审计存储迁移、备份恢复、禁用和回滚合同通过；无认证或审计语义回退 |
 | SMTP-26 | linux/amd64 真实链路 | 同一候选镜像向客户目标 SMTP 完成测试、事故、恢复、重试与重启证据；否则 blocked |
 
-## 12. 实施拆分与状态（2026-10-26 已授权并实施 S1）
+## 12. 实施拆分与状态（2026-10-26 已授权实施并复审 S1）
 
 实施 Plan 见 [L25-05 实施 Plan](../plans/2026-10-26-lucy-v0.25-l25-05-smtp-notifications-implementation-plan.md)。
 
 | 阶段 | 内容 | 退出条件 | 状态 |
 |---|---|---|---|
-| S1 配置与 outbox | profile／secret 启动缓存、`audit.sqlite` 表与索引、固定事件、队列与状态模型；**F-13 抖动抑制**（稳定窗口）与 **F-14 建表责任** | SMTP-02～05／08～11／15／19／21 的单元用例 | **已实施**，21 项新测试全过；**不连接任何 SMTP 服务器** |
-| S2 SMTP worker 与 API | 库选型、TLS、固定模板、超时重试、owner API；§7 选定方案所需的 `requireOwner` 文案参数改动及其对既有路由的回归范围 | SMTP-06／07／12～18／20 的协议与 API 用例 | **未开始**（需先落定 SMTP 库的许可证、维护状态、lockfile、SBOM 与 amd64 离线镜像） |
+| S1 配置与 outbox | profile／secret 启动缓存、`audit.sqlite` 表与索引、固定事件、队列与状态模型；**F-13 抖动抑制**（稳定窗口）、**F-14 建表责任**与四项最终复审修正 | SMTP-02～05／08～11／15／19／21 的单元用例 | **已实施并通过最终复审签核**，24 项定向测试全过；**不连接任何 SMTP 服务器** |
+| S2 SMTP worker 与 API | 库选型、TLS、固定模板、超时重试、owner API；新增 API 复用 S1 已落地的 `requireOwner` 可选文案参数 | SMTP-06／07／12～18／20 的协议与 API 用例 | **未开始**（需先落定 SMTP 库的许可证、维护状态、lockfile、SBOM 与 amd64 离线镜像） |
 | S3 交付接线 | Helm、Compose 示例、系统手册、升级回滚、依赖与 SBOM | SMTP-01／22～25 | **未开始** |
 | S4 真实验收 | linux/amd64 K8s、客户目标 SMTP 与证据包 | SMTP-26；环境不足保持 blocked | **未开始** |
 
-> **实现完成不等于验收通过。** SMTP-01–26 仍**未按验收口径执行**；本轮没有发出任何邮件，也没有建立任何出网连接。
+> **实现完成不等于验收通过。** SMTP-01–26 仍**未按正式验收口径执行**；本轮没有发出任何邮件，也没有建立任何出网连接。
 
 ## Terminology Compliance
 
@@ -369,3 +370,4 @@ New terms（已同步登记到术语标准 §4.12）:
 - [x] 认可强制 TLS、Secret 文件、启动缓存、默认无外连和真实环境证据边界。
 - [x] PM 签核设计基线（2026-10-26）：设计基线成立，暂不开发；开发授权与验收另行决定。
 - [x] 2026-10-26 取得开发授权并实施 S1（见 §12）；验收（SMTP-01–26）仍未执行，S2／S3／S4 未开始。
+- [x] S1 最终复审签核（2026-10-26）：F-18–F-22 已修正关闭；定向 24／24、全量 336 文件／3981 项通过（1 项跳过），类型无新增错误。仅签核 S1，不改变 SMTP 正式验收与 S2–S4 的未完成状态。

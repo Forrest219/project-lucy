@@ -16,7 +16,7 @@ import { getLastNotifierErrorCode } from "../notifications/state.js";
 
 export function registerNotificationRoutes(app: FastifyInstance): void {
   app.get("/api/admin/notifications/status", async (request: FastifyRequest, reply: FastifyReply) => {
-    if (!(await requireOwner(request, reply))) return;
+    if (!(await requireOwner(request, reply, "仅所有者可管理邮件通知"))) return;
     const view = await getSmtpRuntimeView();
     const queue = await countNotifications();
     return reply.send({

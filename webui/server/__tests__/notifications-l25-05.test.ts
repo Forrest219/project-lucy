@@ -20,6 +20,8 @@ import {
   resetAuditWriteHealthForTests
 } from "../proxy/audit-write-health.js";
 import { resetNotifierStateForTests } from "../notifications/state.js";
+import { startNotificationHealthEvents, stopNotificationHealthEvents } from "../notifications/health-events.js";
+import { AUDIT_DB_SCHEMA_VERSION } from "../proxy/audit.js";
 
 /**
  * Lucy v0.25 — L25-05 可选 SMTP 通知 (S1): the profile contract, the startup
@@ -63,6 +65,7 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
+  stopNotificationHealthEvents();
   setEnv("LUCY_SMTP_PROFILE_FILE", undefined);
   setEnv("LUCY_SMTP_PASSWORD_FILE", undefined);
   setEnv("LUCY_SMTP_CA_FILE", undefined);
@@ -78,6 +81,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  stopNotificationHealthEvents();
   for (const [name, value] of Object.entries(previousEnv)) {
     if (value === undefined) delete process.env[name];
     else process.env[name] = value;
@@ -300,6 +304,29 @@ describe("L25-05 outbox", () => {
     expect(counts.dead).toBe(1);
     expect(counts.pending).toBe(0);
   });
+
+  it("F-14 outbox 初始化同步登记 audit schema 版本与 audit_meta", async () => {
+    const { getAuditDb } = await import("../admin/audit");
+    const db = await getAuditDb();
+    db.prepare("DELETE FROM audit_meta WHERE audit_db_schema_version = ?").run(AUDIT_DB_SCHEMA_VERSION);
+
+    await ensureNotificationOutbox();
+
+    const row = db
+      .prepare(
+        `SELECT audit_db_schema_version, last_migration_text, running_actor
+         FROM audit_meta WHERE audit_db_schema_version = ?`
+      )
+      .get(AUDIT_DB_SCHEMA_VERSION) as {
+      audit_db_schema_version: number;
+      last_migration_text: string;
+      running_actor: string;
+    };
+    expect(AUDIT_DB_SCHEMA_VERSION).toBe(4);
+    expect(row.audit_db_schema_version).toBe(4);
+    expect(row.last_migration_text).toContain("notification_outbox");
+    expect(row.running_actor).toBe("system:notifier-init");
+  });
 });
 
 describe("L25-05 audit-health events (F-13 flap suppression)", () => {
@@ -360,6 +387,54 @@ describe("L25-05 audit-health events (F-13 flap suppression)", () => {
     expect(seen).toEqual([]);
     off();
   });
+
+  it("SMTP-08／09 持续 60 秒无需额外 append 也产生事故与恢复", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-26T00:00:00Z"));
+    const seen: { eventType: string; incidentId: string }[] = [];
+    const off = onAuditHealthTransition((t) => seen.push(t));
+
+    recordLedgerAppend(false);
+    vi.advanceTimersByTime(60_000);
+    expect(seen.map((event) => event.eventType)).toEqual(["audit_ledger_unavailable"]);
+
+    recordLedgerAppend(true);
+    vi.advanceTimersByTime(60_000);
+    expect(seen.map((event) => event.eventType)).toEqual([
+      "audit_ledger_unavailable",
+      "audit_ledger_recovered"
+    ]);
+    expect(seen[1].incidentId).toBe(seen[0].incidentId);
+    off();
+  });
+
+  it("SMTP-09 同批次事故与恢复按顺序持久化，不丢恢复事件", async () => {
+    const profilePath = path.join(workDir, "profile-ordered-events.yaml");
+    await writeFile(profilePath, VALID_PROFILE.replace("username: lucy-notifier\n", ""), "utf8");
+    setEnv("LUCY_SMTP_PROFILE_FILE", profilePath);
+    await getSmtpRuntimeView();
+    startNotificationHealthEvents();
+
+    recordLedgerAppend(false);
+    recordLedgerAppend(false);
+    recordLedgerAppend(false);
+    recordLedgerAppend(true);
+    recordLedgerAppend(true);
+    recordLedgerAppend(true);
+
+    await vi.waitFor(async () => {
+      expect((await countNotifications()).queued).toBe(2);
+    });
+    const { getAuditDb } = await import("../admin/audit");
+    const db = await getAuditDb();
+    const rows = db.prepare("SELECT event_type FROM notification_outbox ORDER BY id").all() as {
+      event_type: string;
+    }[];
+    expect(rows.map((row) => row.event_type)).toEqual([
+      "audit_ledger_unavailable",
+      "audit_ledger_recovered"
+    ]);
+  });
 });
 
 describe("L25-05 status endpoint", () => {
@@ -390,6 +465,7 @@ describe("L25-05 status endpoint", () => {
     const operator = await app2.inject({ method: "GET", url: "/api/admin/notifications/status" });
     expect(operator.statusCode).toBe(403);
     expect(operator.json().error.code).toBe("OWNER_REQUIRED");
+    expect(operator.json().error.message).toBe("仅所有者可管理邮件通知");
     await app2.close();
   });
 

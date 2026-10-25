@@ -70,6 +70,8 @@ let ledgerFailureStreak = 0;
 let ledgerSuccessStreak = 0;
 let ledgerFailureSince: number | null = null;
 let ledgerSuccessSince: number | null = null;
+let ledgerFailureTimer: NodeJS.Timeout | null = null;
+let ledgerSuccessTimer: NodeJS.Timeout | null = null;
 /** The incident currently in progress, or null when the ledger is healthy. */
 let ledgerIncidentId: string | null = null;
 
@@ -98,15 +100,19 @@ function emitTransition(transition: AuditHealthTransition): void {
   }
 }
 
-function evaluateLedgerFailure(now: number): void {
-  ledgerFailureStreak += 1;
-  ledgerSuccessStreak = 0;
-  ledgerSuccessSince = null;
-  if (ledgerFailureSince === null) ledgerFailureSince = now;
-  if (ledgerIncidentId !== null) return; // the incident is already running
-  const stable =
-    ledgerFailureStreak >= LEDGER_FAILURE_STREAK || now - ledgerFailureSince >= LEDGER_FAILURE_WINDOW_MS;
-  if (!stable) return;
+function clearFailureTimer(): void {
+  if (ledgerFailureTimer) clearTimeout(ledgerFailureTimer);
+  ledgerFailureTimer = null;
+}
+
+function clearSuccessTimer(): void {
+  if (ledgerSuccessTimer) clearTimeout(ledgerSuccessTimer);
+  ledgerSuccessTimer = null;
+}
+
+function startLedgerIncident(now: number): void {
+  if (ledgerIncidentId !== null) return;
+  clearFailureTimer();
   const incidentId = randomUUID();
   ledgerIncidentId = incidentId;
   emitTransition({
@@ -116,22 +122,65 @@ function evaluateLedgerFailure(now: number): void {
   });
 }
 
-function evaluateLedgerRecovery(now: number): void {
-  ledgerSuccessStreak += 1;
-  ledgerFailureStreak = 0;
-  ledgerFailureSince = null;
-  if (ledgerSuccessSince === null) ledgerSuccessSince = now;
-  if (ledgerIncidentId === null) return; // no incident ⇒ no recovery event
-  const stable =
-    ledgerSuccessStreak >= LEDGER_SUCCESS_STREAK || now - ledgerSuccessSince >= LEDGER_SUCCESS_WINDOW_MS;
-  if (!stable) return;
+function completeLedgerRecovery(now: number): void {
+  if (ledgerIncidentId === null) return;
+  clearSuccessTimer();
   const incidentId = ledgerIncidentId;
   ledgerIncidentId = null;
+  ledgerSuccessStreak = 0;
+  ledgerSuccessSince = null;
   emitTransition({
     eventType: "audit_ledger_recovered",
     incidentId,
     observedAt: new Date(now).toISOString()
   });
+}
+
+function evaluateLedgerFailure(now: number): void {
+  ledgerFailureStreak += 1;
+  ledgerSuccessStreak = 0;
+  ledgerSuccessSince = null;
+  clearSuccessTimer();
+  if (ledgerFailureSince === null) {
+    ledgerFailureSince = now;
+    // A sustained outage must notify even when no later append arrives to
+    // re-evaluate the window. The timer is unref'd like the outbox worker timer.
+    ledgerFailureTimer = setTimeout(() => {
+      if (ledgerFailureSince === null || ledgerIncidentId !== null) return;
+      const current = Date.now();
+      if (current - ledgerFailureSince >= LEDGER_FAILURE_WINDOW_MS) startLedgerIncident(current);
+    }, LEDGER_FAILURE_WINDOW_MS);
+    ledgerFailureTimer.unref();
+  }
+  if (ledgerIncidentId !== null) return; // the incident is already running
+  const stable =
+    ledgerFailureStreak >= LEDGER_FAILURE_STREAK || now - ledgerFailureSince >= LEDGER_FAILURE_WINDOW_MS;
+  if (stable) startLedgerIncident(now);
+}
+
+function evaluateLedgerRecovery(now: number): void {
+  ledgerFailureStreak = 0;
+  ledgerFailureSince = null;
+  clearFailureTimer();
+  if (ledgerIncidentId === null) {
+    ledgerSuccessStreak = 0;
+    ledgerSuccessSince = null;
+    clearSuccessTimer();
+    return; // no incident ⇒ no recovery event
+  }
+  ledgerSuccessStreak += 1;
+  if (ledgerSuccessSince === null) {
+    ledgerSuccessSince = now;
+    ledgerSuccessTimer = setTimeout(() => {
+      if (ledgerSuccessSince === null || ledgerIncidentId === null) return;
+      const current = Date.now();
+      if (current - ledgerSuccessSince >= LEDGER_SUCCESS_WINDOW_MS) completeLedgerRecovery(current);
+    }, LEDGER_SUCCESS_WINDOW_MS);
+    ledgerSuccessTimer.unref();
+  }
+  const stable =
+    ledgerSuccessStreak >= LEDGER_SUCCESS_STREAK || now - ledgerSuccessSince >= LEDGER_SUCCESS_WINDOW_MS;
+  if (stable) completeLedgerRecovery(now);
 }
 
 /** Result of the latest canonical ledger append; any failure marks the ledger unavailable until the next success. */
@@ -204,6 +253,8 @@ export function resetAuditWriteHealthForTests(): void {
   ledgerSuccessStreak = 0;
   ledgerFailureSince = null;
   ledgerSuccessSince = null;
+  clearFailureTimer();
+  clearSuccessTimer();
   ledgerIncidentId = null;
   transitionListeners.clear();
   projection = { complete: null, lag: 0, delayMs: 0 };
