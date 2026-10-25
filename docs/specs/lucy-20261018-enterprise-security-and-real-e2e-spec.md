@@ -57,7 +57,7 @@
 
 ### 1.1 非目标与信任边界
 
-不增加多副本、分布式锁、TokenScope、Dynamic RLS、多租户 claim、Active Role、完整 CLS、SSO/OIDC/MFA、SMTP 或新的查询语言。遵守 [权限路线图冻结](../access-control/adr-post-p15-roadmap-freeze.md)。同一 Agent 多 Token 仍同权；Token 级会话隔离不构成 Token 级行权限。可选 SMTP 与单点登录已记入 [Lucy 2.5 功能升级建议书](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) L25-05、L25-06，待单独功能 Spec；该记录不改变本 Spec 的非目标。
+不增加多副本、分布式锁、TokenScope、Dynamic RLS、多租户 claim、Active Role、完整 CLS、SSO/OIDC/MFA、SMTP 或新的查询语言。遵守 [权限路线图冻结](../access-control/adr-post-p15-roadmap-freeze.md)。同一 Agent 多 Token 仍同权；Token 级会话隔离不构成 Token 级行权限。可选 SMTP 与单点登录已记入 [Lucy 2.5 功能升级建议书](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) L25-05、L25-06，并分别形成 [可选 SMTP 通知 Spec](lucy-20261025-v0p25-smtp-notifications-spec.md)（已签核）与 [OIDC 单点登录 Spec](lucy-20261025-v0p25-oidc-single-sign-on-spec.md)（已签核）；只有独立 Spec 已签核的明确范围构成有边界例外，其他非目标不变。
 
 保留当前 owner/operator 的职责合同：仅 owner 管理登录账户；operator 可做现有日常连接、语义、Wiki、Skill、Agent/Role/Token 与审计操作。两者都是受信任管理人员，本期不宣称实现双人授权审批或管理员职责分离。操作员能修改业务上下文，故其内容必须视为可能带有间接提示注入的输入，不能提升数据面权限。
 
