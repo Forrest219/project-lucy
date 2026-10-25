@@ -142,7 +142,7 @@ test("a session revoked from the UI stops working immediately in the other brows
   await opPage.goto("/admin/roles");
   await expect(opPage).not.toHaveURL(/\/login/);
 
-  const ownerCtx = await ownerContext(browser);
+  const ownerCtx = await ownerSession(browser, testInfo);
   try {
     const ownerPage = await ownerCtx.newPage();
     await ownerPage.goto("/admin/admins");

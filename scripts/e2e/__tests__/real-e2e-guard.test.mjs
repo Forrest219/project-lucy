@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
 import { REPO_ROOT } from "../lib/common.mjs";
@@ -52,6 +54,46 @@ describe("real-user browser E2E guarantees (Spec §6.4, Plan T11)", () => {
       const covered = [...text.matchAll(/covers\(testInfo,\s*([^)]*)\)/g)].flatMap((m) => [...m[1].matchAll(/"([^"]+)"/g)].map((x) => x[1]));
       assert.ok(covered.length > 0, `${path.relative(REPO_ROOT, file)} covers no case`);
       for (const id of covered) assert.ok(ids.has(id), `${path.relative(REPO_ROOT, file)} covers unknown case ${id}`);
+    }
+  });
+
+  it("the real-e2e specs type-check (webui/tsconfig.json does not cover them)", () => {
+    // `webui/tsconfig.json` includes only `src` and `server`, so NOTHING type-checks the
+    // real-e2e specs. A renamed helper therefore stayed a stale call in a spec until a
+    // REAL run hit it (a `ReferenceError` in the middle of a UAT leg). This check
+    // closes that gap: the specs must compile.
+    const webui = path.join(REPO_ROOT, "webui");
+    const tsc = path.join(webui, "node_modules", ".bin", "tsc");
+    if (!existsSync(tsc)) return; // no toolchain installed — nothing to check against
+    const dir = mkdtempSync(path.join(os.tmpdir(), "lucy-real-e2e-tsc-"));
+    try {
+      const config = path.join(dir, "tsconfig.json");
+      writeFileSync(
+        config,
+        `${JSON.stringify(
+          {
+            extends: path.join(webui, "tsconfig.json"),
+            compilerOptions: {
+              // The temp config lives outside the package, so the node type packages
+              // have to be pointed at explicitly.
+              typeRoots: [path.join(webui, "node_modules", "@types")],
+              types: ["node"],
+              // The specs import plain `.mjs` helpers, which have no type declarations.
+              // Those imports are a known, separate gap; they must not mask real errors.
+              noImplicitAny: false
+            },
+            include: [path.join(webui, "tests", "real-e2e"), path.join(webui, "playwright.real.config.ts")]
+          },
+          null,
+          2
+        )}\n`
+      );
+      const result = spawnSync(tsc, ["--noEmit", "-p", config], { cwd: webui, encoding: "utf8" });
+      const output = `${result.stdout ?? ""}${result.stderr ?? ""}`.trim();
+      assert.equal(output, "", `the real-e2e specs do not type-check:\n${output}`);
+      assert.equal(result.status, 0, `tsc exited ${result.status}`);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
     }
   });
 });
