@@ -13,7 +13,7 @@
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { denyReasonMatches, explicitDeny, extractDenyReason, measureValue } from "../security/context.mjs";
+import { denyReasonMatches, explicitDeny, extractDenyReason, isRefusal, measureValue } from "../security/context.mjs";
 
 /** An MCP tools/call envelope the product returns for a policy denial. */
 const mcpDeny = (text) => ({
@@ -73,10 +73,10 @@ describe("the harness recognises the deny reasons the product really emits", () 
     assert.equal(denyReasonMatches(res, "role_resolution_failed"), true);
   });
 
-  it("a validation error is NOT a deny, and an unknown reason is still not a deny", () => {
-    // What the product returns for an invalid request shape.
-    assert.equal(explicitDeny(mcpDeny("Invalid arguments: invalid_arguments:lucy_query:dimensions_items_must_be_objects")), false);
+  it("an unknown reason is still not a deny", () => {
+    // A reason the product never documents is not a denial, however it is phrased.
     assert.equal(explicitDeny(mcpDeny("Access denied: something_the_product_never_emits")), false);
+    assert.equal(explicitDeny(mcpDeny("Something went wrong: sql_error")), false);
     // A successful result is not a deny.
     assert.equal(explicitDeny({ status: 200, json: { result: { isError: false, content: [{ type: "text", text: "{}" }] } }, text: "{}" }), false);
     // A 5xx is never a deny.
@@ -113,5 +113,70 @@ describe("the gold binder reads the aggregate out of the CURRENT response envelo
     assert.equal(measureValue(envelope(["region", "order_count"], [["East", null]])), null);
     assert.equal(measureValue(envelope(["region", "order_count"], [["East", "n/a"]])), null);
     assert.equal(measureValue({ rows: [["x"]] }), null);
+  });
+});
+
+describe("the product's TWO refusal envelopes are both explicit denials", () => {
+  it("'Access denied: <reason>' is recognised", () => {
+    const res = { status: 200, json: { result: { isError: true, content: [{ type: "text", text: "Access denied: table_forbidden:analytics.x 可用连接：fin-db。" }] } } };
+    const extracted = extractDenyReason(res);
+    assert.equal(extracted.matched, "table_forbidden:analytics.x");
+    assert.equal(extracted.source, "mcp_iserror_access_denied");
+  });
+
+  it("'Invalid arguments: <reason>' is recognised too (the input-validation refusal)", () => {
+    const res = { status: 200, json: { result: { isError: true, content: [{ type: "text", text: "Invalid arguments: invalid_arguments:lucy_query:filters_field_required" }] } } };
+    const extracted = extractDenyReason(res);
+    assert.equal(extracted.matched, "invalid_arguments:lucy_query:filters_field_required");
+    assert.equal(extracted.source, "mcp_iserror_invalid_arguments");
+    assert.equal(explicitDeny(res), true, "a legitimate refusal must not be reported as an unrecognized envelope");
+  });
+
+  it("a case that names a class still matches the detail of either envelope", () => {
+    const res = { status: 200, json: { result: { isError: true, content: [{ type: "text", text: "Invalid arguments: invalid_arguments:lucy_query:filters_field_required" }] } } };
+    assert.equal(denyReasonMatches(res, "invalid_arguments"), true);
+    assert.equal(denyReasonMatches(res, "table_forbidden"), false, "a different reason must not satisfy the expectation");
+  });
+});
+
+describe("the product's input-validation refusal IS a denial (corrected 2026-10-25)", () => {
+  it("'Invalid arguments: invalid_arguments:...' is an explicit denial", () => {
+    // CORRECTION. The previous revision of this test asserted that the product's
+    // input-validation refusal is NOT a denial, on the assumption that only an ACL
+    // refusal counts. The evidence contradicts that assumption on two counts:
+    //
+    //   1. the FROZEN catalog declares the SEC-12 family ("绕过输入 … 被拒") with
+    //      `assert: [deny, upstream_exec_zero, no_leak]` — these cases REQUIRE a
+    //      denial, and the product refuses exactly these inputs with this envelope;
+    //   2. `invalid_arguments` is one of the product's own documented decision reasons
+    //      (AclDecision.reason) and was ALREADY in the harness allowlist — a class the
+    //      product documents and the harness admits cannot be "not a deny".
+    //
+    // The real defect was the opposite one: the harness only recognised the
+    // "Access denied: " prefix, so a legitimate refusal was reported as
+    // "not a recognized denial envelope" and the case could never pass.
+    const res = mcpDeny("Invalid arguments: invalid_arguments:lucy_query:dimensions_items_must_be_objects");
+    assert.equal(explicitDeny(res), true);
+    assert.equal(denyReasonMatches(res, "invalid_arguments"), true);
+    assert.equal(denyReasonMatches(res, "table_forbidden"), false, "the specific-reason demand still holds");
+  });
+});
+
+describe("a transport-level refusal counts as a refusal (the frozen catalog pins no status)", () => {
+  it("a 4xx is a refusal", () => {
+    assert.equal(isRefusal({ status: 400, json: null, text: "bad request" }), true, "a malformed envelope is refused with 400");
+    assert.equal(isRefusal({ status: 404, json: null, text: "not found" }), true, "an unknown method / path is refused with 404");
+    assert.equal(isRefusal({ status: 413, json: null, text: "too large" }), true, "an over-sized object is refused with 413");
+  });
+
+  it("a 5xx is NEVER a refusal (a server fault must not be scored as a green refusal)", () => {
+    assert.equal(isRefusal({ status: 500, json: null, text: "boom" }), false);
+    assert.equal(isRefusal({ status: 502, json: null, text: "bad gateway" }), false);
+  });
+
+  it("a 200 success is not a refusal, and an allowlisted envelope still is", () => {
+    assert.equal(isRefusal({ status: 200, json: { result: { isError: false, content: [{ type: "text", text: "{}" }] } }, text: "{}" }), false);
+    assert.equal(isRefusal(mcpDeny("Access denied: table_forbidden:analytics.x")), true);
+    assert.equal(isRefusal(mcpDeny("Invalid arguments: invalid_arguments:lucy_query:filters_field_required")), true);
   });
 });

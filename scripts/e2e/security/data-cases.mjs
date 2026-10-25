@@ -22,28 +22,9 @@
 import { createHash } from "node:crypto";
 import { Checks, explicitDeny, extractDenyReason, measureValue } from "./context.mjs";
 import { checkRealQuery } from "../answer-assertions.mjs";
+import { observeWindow, observationWindow, expectUpstreamZero, expectAuthorizedUpstream, expectNoUnauthorizedUpstream } from "./observation.mjs";
 
 const bodyText = (res) => res.text ?? "";
-
-/** Acquire a before/after observer pair. Returns the cursor + observation snapshots
- *  plus an `async` helper that records the measured delta into a Checks block.
- *  The previous implementation was synchronous: `ctx.observeUpstream` returned a
- *  Promise-shaped result synchronously (with `toRunnerShape(Promise)` fields all
- *  `undefined`), so the `before` snapshot was unusable. The fix makes the whole
- *  chain actually await — the call sites must `await window.finish()` and the
- *  case handler must `await` shapeChecks/expectUpstreamZero as well. */
-async function observeWindow(ctx, { label, since, until, agentId, tokenFingerprint }) {
-  const before = await ctx.observeUpstream({ since, until, agentId, tokenFingerprint });
-  return {
-    before,
-    after: null,
-    /** Call AFTER the target request and AFTER the control. Resolves with the delta. */
-    async finish() {
-      this.after = await ctx.observeUpstream({ since, until, agentId, tokenFingerprint });
-      return ctx.upstreamDelta(this.before, this.after);
-    }
-  };
-}
 
 /** True when the call returned a typed result whose aggregate matches the gold. Strict:
  *  unproven branch is NOT a successful control. */
@@ -53,27 +34,6 @@ function isSuccessfulGoldMatch(parsed, gold) {
   if (typeof expected !== "number") return false;
   const candidate = parsed.parsed?.aggregate ?? measureValue(parsed.parsed, ["order_count"]) ?? null;
   return candidate === expected;
-}
-
-/** Assert that `upstream_exec_zero` is a real observer snapshot, not a fabricated true.
- *  If the observer returned `unknown`, the case reports a precise conflict (the runner
- *  did not wire a real observer) and the assertion FAILS — never defaults to true. */
-function expectUpstreamZero(ctx, checks, label, window) {
-  if (!window || !window.before || window.after === null) {
-    checks.expect("upstream_exec_zero", false, `${label}: observer window not closed (call window.finish() before asserting)`);
-    return false;
-  }
-  if (window.before.upstreamExecutionCount === "unknown" || window.after?.upstreamExecutionCount === "unknown") {
-    checks.expect("upstream_exec_zero", false, `${label}: independent observer returned 'unknown' (no provider / bad data); missing observation is BLOCKED, not passed`);
-    return false;
-  }
-  const delta = ctx.upstreamDelta(window.before, window.after);
-  if (delta === null) {
-    checks.expect("upstream_exec_zero", false, `${label}: cursor/source/window integrity failed (before.cursor=${window.before.cursor} after.cursor=${window.after?.cursor} source=${window.before.source})`);
-    return false;
-  }
-  checks.expect("upstream_exec_zero", delta === 0, `${label}: measured delta=${delta} (must be 0); source=${window.before.source} cursor=${window.before.cursor}->${window.after.cursor}`);
-  return delta === 0;
 }
 
 /** A non-empty body without `result.isError` and without `error` is treated as a normal
@@ -107,8 +67,7 @@ async function sec09v01(ctx) {
   }
   const tokenFingerprint = createHash("sha256").update(token).digest("hex").slice(0, 12);
   const now = new Date();
-  const since = new Date(now.getTime() - 60_000).toISOString();
-  const until = new Date(now.getTime() + 5_000).toISOString();
+  const { since, until } = observationWindow(now);
   const window = await observeWindow(ctx, { label: "SEC-09-V01", since, until, agentId: "e2e_finance", tokenFingerprint });
 
   const res = await ctx.lucyQuery(token, {
@@ -160,7 +119,15 @@ async function sec09v01(ctx) {
   }
 
   await window.finish();
-  expectUpstreamZero(ctx, checks, "SEC-09-V01", window);
+  if (parsed.ok) {
+    // The entitled control DID execute upstream. The claim is "no UNAUTHORIZED upstream
+    // execution", so the authorized execution is subtracted from the measured delta —
+    // and the positive assertion proves the channel really saw the query (without it,
+    // a channel that is not on the request path would pass vacuously).
+    expectAuthorizedUpstream(ctx, checks, "SEC-09-V01", window, { authorizedRequests: 1 });
+  } else {
+    expectUpstreamZero(ctx, checks, "SEC-09-V01", window, { authorizedRequests: 0 });
+  }
   checks.noLeak([bodyText(res)], { secrets: ctx.allSecrets, forbiddenCanaries: ctx.forbiddenFor(gold?.allowedCanaries ?? []) });
   return { ...checks.result(), denyReason: parsed.ok ? null : extractDenyReason(res).matched ?? extractDenyReason(res).reason };
 }
@@ -178,9 +145,8 @@ async function sec09v02(ctx) {
   const expected = gold?.expected?.value;
   const tokenFingerprint = createHash("sha256").update(token).digest("hex").slice(0, 12);
   const now = new Date();
-  const since = new Date(now.getTime() - 60_000).toISOString();
-  const until = new Date(now.getTime() + 5_000).toISOString();
-  const window = await observeWindow(ctx, { label: "SEC-09-V02", since, until, agentId: "e2e_finance", tokenFingerprint });
+  const { since, until } = observationWindow(now);
+  const window = await observeWindow(ctx, { label: "SEC-09-V02 (denied target)", since, until, agentId: "e2e_finance", tokenFingerprint });
 
   const res = await ctx.lucyQuery(token, {
     connectionId: "sales", // alias for sales-db
@@ -204,7 +170,14 @@ async function sec09v02(ctx) {
     checks.expect("deny", false, `SEC-09-V02: response was not a recognized denial envelope (source=${extraction.source}, status=${res.status}, raw=${JSON.stringify(extraction.raw).slice(0, 80)})`);
   }
 
+  // The refused alias must not have reached the upstream. The window is closed BEFORE
+  // the entitled control runs, so the control's own authorized execution can never be
+  // counted as the refused request's execution.
+  await window.finish();
+  expectUpstreamZero(ctx, checks, "SEC-09-V02 (denied target)", window, { authorizedRequests: 0 });
+
   // Control: the entitled connection still returns a parsed success that matches the gold.
+  const controlWindow = await observeWindow(ctx, { label: "SEC-09-V02 (entitled control)", ...observationWindow(new Date()), agentId: "e2e_finance", tokenFingerprint });
   const control = await ctx.lucyQuery(token, {
     connectionId: "fin-db",
     source: "analytics.orders_masked",
@@ -216,8 +189,8 @@ async function sec09v02(ctx) {
   const controlMatches = isSuccessfulGoldMatch(controlParsed, gold);
   checks.expect("allow_control", controlMatches, `control: entitled connection -> parsed.ok=${controlParsed.ok} reason=${controlParsed.reason ?? "ok"} match=${controlMatches}`);
 
-  await window.finish();
-  expectUpstreamZero(ctx, checks, "SEC-09-V02", window);
+  await controlWindow.finish();
+  expectAuthorizedUpstream(ctx, checks, "SEC-09-V02 (entitled control)", controlWindow, { authorizedRequests: 1 });
   checks.noLeak([bodyText(res), bodyText(control)], { secrets: ctx.allSecrets, forbiddenCanaries: Object.values(ctx.canaries) });
   return { ...checks.result(), denyReason: extraction.matched };
 }
@@ -235,9 +208,8 @@ async function sec09v03(ctx) {
   const expected = gold?.expected?.value;
   const tokenFingerprint = createHash("sha256").update(token).digest("hex").slice(0, 12);
   const now = new Date();
-  const since = new Date(now.getTime() - 60_000).toISOString();
-  const until = new Date(now.getTime() + 5_000).toISOString();
-  const window = await observeWindow(ctx, { label: "SEC-09-V03", since, until, agentId: "e2e_finance", tokenFingerprint });
+  const { since, until } = observationWindow(now);
+  const window = await observeWindow(ctx, { label: "SEC-09-V03 (denied target)", since, until, agentId: "e2e_finance", tokenFingerprint });
 
   const res = await ctx.lucyQuery(token, {
     connectionId: "fin-db",
@@ -261,6 +233,13 @@ async function sec09v03(ctx) {
     checks.expect("deny", false, `SEC-09-V03: response was not a recognized denial envelope (source=${extraction.source}, status=${res.status})`);
   }
 
+  // The refused physical name must not have reached the upstream. The window is closed
+  // BEFORE the entitled control runs, so the control's own authorized execution can
+  // never be counted as the refused request's execution.
+  await window.finish();
+  expectUpstreamZero(ctx, checks, "SEC-09-V03 (denied target)", window, { authorizedRequests: 0 });
+
+  const controlWindow = await observeWindow(ctx, { label: "SEC-09-V03 (entitled control)", ...observationWindow(new Date()), agentId: "e2e_finance", tokenFingerprint });
   const control = await ctx.lucyQuery(token, {
     connectionId: "fin-db",
     source: "analytics.orders_masked",
@@ -271,8 +250,8 @@ async function sec09v03(ctx) {
   const controlParsed = ctx.parseMcpToolResult(control);
   checks.expect("allow_control", isSuccessfulGoldMatch(controlParsed, gold), `control: canonical source -> parsed.ok=${controlParsed.ok} reason=${controlParsed.reason ?? "ok"}`);
 
-  await window.finish();
-  expectUpstreamZero(ctx, checks, "SEC-09-V03", window);
+  await controlWindow.finish();
+  expectAuthorizedUpstream(ctx, checks, "SEC-09-V03 (entitled control)", controlWindow, { authorizedRequests: 1 });
   checks.noLeak([bodyText(res), bodyText(control)], { secrets: ctx.allSecrets, forbiddenCanaries: Object.values(ctx.canaries) });
   return { ...checks.result(), denyReason: extraction.matched };
 }
@@ -293,9 +272,8 @@ async function sec09v04(ctx) {
   }
   const tokenFingerprint = createHash("sha256").update(token).digest("hex").slice(0, 12);
   const now = new Date();
-  const since = new Date(now.getTime() - 60_000).toISOString();
-  const until = new Date(now.getTime() + 5_000).toISOString();
-  const window = await observeWindow(ctx, { label: "SEC-09-V04", since, until, agentId: "e2e_sales", tokenFingerprint });
+  const { since, until } = observationWindow(now);
+  const window = await observeWindow(ctx, { label: "SEC-09-V04 (entitled control)", since, until, agentId: "e2e_sales", tokenFingerprint });
 
   const res = await ctx.lucyQuery(token, {
     connectionId: "sales-db",
@@ -339,7 +317,14 @@ async function sec09v04(ctx) {
     checks.expect("real_query", false, "deny branch: no successful query to bind to gold");
   }
 
-  // Cross-DB denial: sales reader hitting fin-db.orders must be denied.
+  // The entitled sales query executed upstream: the claim is "no UNAUTHORIZED upstream
+  // execution", so its own authorized execution is subtracted.
+  await window.finish();
+  expectAuthorizedUpstream(ctx, checks, "SEC-09-V04 (entitled control)", window, { authorizedRequests: 1 });
+
+  // Cross-DB denial: sales reader hitting fin-db.orders must be denied. It gets its OWN
+  // window, so the entitled control's execution cannot be counted as the denied probe's.
+  const crossWindow = await observeWindow(ctx, { label: "SEC-09-V04 (cross-DB denied target)", ...observationWindow(new Date()), agentId: "e2e_sales", tokenFingerprint });
   const cross = await ctx.lucyQuery(token, {
     connectionId: "fin-db",
     source: "analytics.orders_masked",
@@ -356,8 +341,8 @@ async function sec09v04(ctx) {
     checks.expect("deny", false, `cross-DB same-name attempt was not recognized as a deny (source=${crossExtraction.source})`);
   }
 
-  await window.finish();
-  expectUpstreamZero(ctx, checks, "SEC-09-V04", window);
+  await crossWindow.finish();
+  expectUpstreamZero(ctx, checks, "SEC-09-V04 (cross-DB denied target)", crossWindow, { authorizedRequests: 0 });
   checks.noLeak([bodyText(res), bodyText(cross)], { secrets: ctx.allSecrets, forbiddenCanaries: ctx.forbiddenFor(gold?.allowedCanaries ?? []) });
   return { ...checks.result(), denyReason: crossExtraction.matched };
 }
@@ -375,9 +360,8 @@ async function sec09v05(ctx) {
   const expected = gold?.expected?.value;
   const tokenFingerprint = createHash("sha256").update(token).digest("hex").slice(0, 12);
   const now = new Date();
-  const since = new Date(now.getTime() - 60_000).toISOString();
-  const until = new Date(now.getTime() + 5_000).toISOString();
-  const window = await observeWindow(ctx, { label: "SEC-09-V05", since, until, agentId: "e2e_finance", tokenFingerprint });
+  const { since, until } = observationWindow(now);
+  const window = await observeWindow(ctx, { label: "SEC-09-V05 (denied target)", since, until, agentId: "e2e_finance", tokenFingerprint });
 
   const refused = await ctx.lucyQuery(token, {
     connectionId: "sales-db",
@@ -406,7 +390,13 @@ async function sec09v05(ctx) {
     .filter((canary) => text.includes(canary));
   checks.expect("no_leak", leaks.length === 0, `${leaks.length} out-of-domain canary in the refusal`);
 
+  // The refused wrong-connection request must not have reached the upstream. The window
+  // is closed BEFORE the entitled control runs.
+  await window.finish();
+  expectUpstreamZero(ctx, checks, "SEC-09-V05 (denied target)", window, { authorizedRequests: 0 });
+
   // Control: the entitled connection still returns a parsed success that matches the gold.
+  const controlWindow = await observeWindow(ctx, { label: "SEC-09-V05 (entitled control)", ...observationWindow(new Date()), agentId: "e2e_finance", tokenFingerprint });
   const control = await ctx.lucyQuery(token, {
     connectionId: "fin-db",
     source: "analytics.orders_masked",
@@ -417,8 +407,8 @@ async function sec09v05(ctx) {
   const controlParsed = ctx.parseMcpToolResult(control);
   checks.expect("allow_control", isSuccessfulGoldMatch(controlParsed, gold), `control: entitled connection -> parsed.ok=${controlParsed.ok} reason=${controlParsed.reason ?? "ok"}`);
 
-  await window.finish();
-  expectUpstreamZero(ctx, checks, "SEC-09-V05", window);
+  await controlWindow.finish();
+  expectAuthorizedUpstream(ctx, checks, "SEC-09-V05 (entitled control)", controlWindow, { authorizedRequests: 1 });
   return { ...checks.result(), denyReason: extractDenyReason(refused).matched };
 }
 
@@ -434,9 +424,8 @@ async function sec09s01(ctx) {
   const token = ctx.tokens.e2e_discover_only;
   const tokenFingerprint = createHash("sha256").update(token).digest("hex").slice(0, 12);
   const now = new Date();
-  const since = new Date(now.getTime() - 60_000).toISOString();
-  const until = new Date(now.getTime() + 5_000).toISOString();
-  const window = await observeWindow(ctx, { label: "SEC-09-S01", since, until, agentId: "e2e_discover_only", tokenFingerprint });
+  const { since, until } = observationWindow(now);
+  const window = await observeWindow(ctx, { label: "SEC-09-S01 (denied target)", since, until, agentId: "e2e_discover_only", tokenFingerprint });
 
   const res = await ctx.discoverData(token, { scope: "all" });
   // The response must be a recognized envelope (HTTP 200 with result.content[0].text JSON).
@@ -463,14 +452,24 @@ async function sec09s01(ctx) {
     .filter((c) => c && text.includes(c));
   checks.expect("no_leak", leaks.length === 0, `${leaks.length} out-of-domain canary in discover_data surface`);
 
+  // The refused surface must not have reached the upstream. The window is closed BEFORE
+  // the entitled control runs, so the control's own upstream call can never be counted
+  // as the refused request's execution.
+  await window.finish();
+  expectUpstreamZero(ctx, checks, "SEC-09-S01 (denied target)", window, { authorizedRequests: 0 });
+
   // Control: lucy_catalog (entitled) returns a real structured list.
   const control = await ctx.lucyCatalog(token);
+  const controlWindow = await observeWindow(ctx, { label: "SEC-09-S01 (entitled control)", ...observationWindow(new Date()), agentId: "e2e_control", tokenFingerprint: "control" });
   const controlParsed = ctx.parseMcpToolResult(control);
   const controlOk = controlParsed.ok && (Array.isArray(controlParsed.parsed) || Array.isArray(controlParsed.parsed?.items) || Array.isArray(controlParsed.parsed?.catalog));
   checks.expect("allow_control", controlOk, `control: lucy_catalog must return a structured list (parsed.ok=${controlParsed.ok} reason=${controlParsed.reason ?? "ok"})`);
 
-  await window.finish();
-  expectUpstreamZero(ctx, checks, "SEC-09-S01", window);
+  await controlWindow.finish();
+  // The entitled control is a METADATA surface (lucy_catalog / connection_list): Lucy
+  // answers it from the local semantic layer, so it never reaches the upstream. The
+  // claim that holds is the unauthorized one, not "it must have executed upstream".
+  expectNoUnauthorizedUpstream(ctx, checks, "SEC-09-S01 (entitled control)", controlWindow, { authorizedRequests: 1 });
   return { ...checks.result(), denyReason: explicitDeny(res) ? extractDenyReason(res).matched : null };
 }
 
@@ -482,9 +481,8 @@ async function sec09s02(ctx) {
   const token = ctx.tokens.e2e_finance;
   const tokenFingerprint = createHash("sha256").update(token).digest("hex").slice(0, 12);
   const now = new Date();
-  const since = new Date(now.getTime() - 60_000).toISOString();
-  const until = new Date(now.getTime() + 5_000).toISOString();
-  const window = await observeWindow(ctx, { label: "SEC-09-S02", since, until, agentId: "e2e_finance", tokenFingerprint });
+  const { since, until } = observationWindow(now);
+  const window = await observeWindow(ctx, { label: "SEC-09-S02 (denied target)", since, until, agentId: "e2e_finance", tokenFingerprint });
 
   const res = await ctx.dictionarySearch(token, { q: "order" });
   if (res.status >= 500) {
@@ -503,14 +501,24 @@ async function sec09s02(ctx) {
     .filter((c) => c && text.includes(c));
   checks.expect("no_leak", leaks.length === 0, `${leaks.length} out-of-domain canary in dictionary_search refusal`);
 
+  // The refused surface must not have reached the upstream. The window is closed BEFORE
+  // the entitled control runs, so the control's own upstream call can never be counted
+  // as the refused request's execution.
+  await window.finish();
+  expectUpstreamZero(ctx, checks, "SEC-09-S02 (denied target)", window, { authorizedRequests: 0 });
+
   // Control: lucy_catalog (entitled) still returns a structured list.
   const control = await ctx.lucyCatalog(token);
+  const controlWindow = await observeWindow(ctx, { label: "SEC-09-S02 (entitled control)", ...observationWindow(new Date()), agentId: "e2e_control", tokenFingerprint: "control" });
   const controlParsed = ctx.parseMcpToolResult(control);
   const controlOk = controlParsed.ok && (Array.isArray(controlParsed.parsed) || Array.isArray(controlParsed.parsed?.items) || Array.isArray(controlParsed.parsed?.catalog));
   checks.expect("allow_control", controlOk, `control: lucy_catalog must return a structured list`);
 
-  await window.finish();
-  expectUpstreamZero(ctx, checks, "SEC-09-S02", window);
+  await controlWindow.finish();
+  // The entitled control is a METADATA surface (lucy_catalog / connection_list): Lucy
+  // answers it from the local semantic layer, so it never reaches the upstream. The
+  // claim that holds is the unauthorized one, not "it must have executed upstream".
+  expectNoUnauthorizedUpstream(ctx, checks, "SEC-09-S02 (entitled control)", controlWindow, { authorizedRequests: 1 });
   return { ...checks.result(), denyReason: explicitDeny(res) ? extractDenyReason(res).matched : null };
 }
 
@@ -521,9 +529,8 @@ async function sec09s03(ctx) {
   const token = ctx.tokens.e2e_finance;
   const tokenFingerprint = createHash("sha256").update(token).digest("hex").slice(0, 12);
   const now = new Date();
-  const since = new Date(now.getTime() - 60_000).toISOString();
-  const until = new Date(now.getTime() + 5_000).toISOString();
-  const window = await observeWindow(ctx, { label: "SEC-09-S03", since, until, agentId: "e2e_finance", tokenFingerprint });
+  const { since, until } = observationWindow(now);
+  const window = await observeWindow(ctx, { label: "SEC-09-S03 (denied target)", since, until, agentId: "e2e_finance", tokenFingerprint });
 
   const res = await ctx.entityDetails(token, { connectionId: "sales-db", source: "analytics.orders" });
   if (res.status >= 500) {
@@ -544,14 +551,24 @@ async function sec09s03(ctx) {
   const leaks = Object.values(ctx.canaries).filter((c) => c && text.includes(c));
   checks.expect("no_leak", leaks.length === 0, `${leaks.length} canary in entity_details refusal`);
 
+  // The refused surface must not have reached the upstream. The window is closed BEFORE
+  // the entitled control runs, so the control's own upstream call can never be counted
+  // as the refused request's execution.
+  await window.finish();
+  expectUpstreamZero(ctx, checks, "SEC-09-S03 (denied target)", window, { authorizedRequests: 0 });
+
   // Control: connection_list (entitled) returns a real structured list.
   const control = await ctx.connectionList(token);
+  const controlWindow = await observeWindow(ctx, { label: "SEC-09-S03 (entitled control)", ...observationWindow(new Date()), agentId: "e2e_control", tokenFingerprint: "control" });
   const controlParsed = ctx.parseMcpToolResult(control);
   const controlOk = controlParsed.ok && (Array.isArray(controlParsed.parsed) || Array.isArray(controlParsed.parsed?.items) || Array.isArray(controlParsed.parsed?.connections));
   checks.expect("allow_control", controlOk, `control: connection_list must return a structured list`);
 
-  await window.finish();
-  expectUpstreamZero(ctx, checks, "SEC-09-S03", window);
+  await controlWindow.finish();
+  // The entitled control is a METADATA surface (lucy_catalog / connection_list): Lucy
+  // answers it from the local semantic layer, so it never reaches the upstream. The
+  // claim that holds is the unauthorized one, not "it must have executed upstream".
+  expectNoUnauthorizedUpstream(ctx, checks, "SEC-09-S03 (entitled control)", controlWindow, { authorizedRequests: 1 });
   return { ...checks.result(), denyReason: explicitDeny(res) ? extractDenyReason(res).matched : null };
 }
 
@@ -563,9 +580,8 @@ async function sec09s04(ctx) {
   const token = ctx.tokens.e2e_discover_only;
   const tokenFingerprint = createHash("sha256").update(token).digest("hex").slice(0, 12);
   const now = new Date();
-  const since = new Date(now.getTime() - 60_000).toISOString();
-  const until = new Date(now.getTime() + 5_000).toISOString();
-  const window = await observeWindow(ctx, { label: "SEC-09-S04", since, until, agentId: "e2e_discover_only", tokenFingerprint });
+  const { since, until } = observationWindow(now);
+  const window = await observeWindow(ctx, { label: "SEC-09-S04 (denied target)", since, until, agentId: "e2e_discover_only", tokenFingerprint });
 
   const res = await ctx.discoverData(token, { q: "orders" });
   // Real surface: must be a recognized response shape.
@@ -590,14 +606,24 @@ async function sec09s04(ctx) {
     .filter((c) => c && text.includes(c));
   checks.expect("no_leak", leaks.length === 0, `${leaks.length} out-of-domain canary in disambiguator hint`);
 
+  // The refused surface must not have reached the upstream. The window is closed BEFORE
+  // the entitled control runs, so the control's own upstream call can never be counted
+  // as the refused request's execution.
+  await window.finish();
+  expectUpstreamZero(ctx, checks, "SEC-09-S04 (denied target)", window, { authorizedRequests: 0 });
+
   // Control: lucy_catalog (entitled) returns a real structured list.
   const control = await ctx.lucyCatalog(token);
+  const controlWindow = await observeWindow(ctx, { label: "SEC-09-S04 (entitled control)", ...observationWindow(new Date()), agentId: "e2e_control", tokenFingerprint: "control" });
   const controlParsed = ctx.parseMcpToolResult(control);
   const controlOk = controlParsed.ok && (Array.isArray(controlParsed.parsed) || Array.isArray(controlParsed.parsed?.items) || Array.isArray(controlParsed.parsed?.catalog));
   checks.expect("allow_control", controlOk, `control: lucy_catalog must return a structured list`);
 
-  await window.finish();
-  expectUpstreamZero(ctx, checks, "SEC-09-S04", window);
+  await controlWindow.finish();
+  // The entitled control is a METADATA surface (lucy_catalog / connection_list): Lucy
+  // answers it from the local semantic layer, so it never reaches the upstream. The
+  // claim that holds is the unauthorized one, not "it must have executed upstream".
+  expectNoUnauthorizedUpstream(ctx, checks, "SEC-09-S04 (entitled control)", controlWindow, { authorizedRequests: 1 });
   return { ...checks.result(), denyReason: explicitDeny(res) ? extractDenyReason(res).matched : null };
 }
 
@@ -607,9 +633,8 @@ async function sec09s05(ctx) {
   const token = ctx.tokens.e2e_finance;
   const tokenFingerprint = createHash("sha256").update(token).digest("hex").slice(0, 12);
   const now = new Date();
-  const since = new Date(now.getTime() - 60_000).toISOString();
-  const until = new Date(now.getTime() + 5_000).toISOString();
-  const window = await observeWindow(ctx, { label: "SEC-09-S05", since, until, agentId: "e2e_finance", tokenFingerprint });
+  const { since, until } = observationWindow(now);
+  const window = await observeWindow(ctx, { label: "SEC-09-S05 (denied target)", since, until, agentId: "e2e_finance", tokenFingerprint });
 
   const res = await ctx.mcp(token, ctx.rpc(1, "tools/call", { name: "lucy_not_a_real_tool", arguments: {} }));
   if (res.status >= 500) {
@@ -623,14 +648,24 @@ async function sec09s05(ctx) {
     }
   }
 
+  // The refused surface must not have reached the upstream. The window is closed BEFORE
+  // the entitled control runs, so the control's own upstream call can never be counted
+  // as the refused request's execution.
+  await window.finish();
+  expectUpstreamZero(ctx, checks, "SEC-09-S05 (denied target)", window, { authorizedRequests: 0 });
+
   // Control: a real tool the role is entitled to returns a real structured result.
   const control = await ctx.lucyCatalog(token);
+  const controlWindow = await observeWindow(ctx, { label: "SEC-09-S05 (entitled control)", ...observationWindow(new Date()), agentId: "e2e_control", tokenFingerprint: "control" });
   const controlParsed = ctx.parseMcpToolResult(control);
   const controlOk = controlParsed.ok && (Array.isArray(controlParsed.parsed) || Array.isArray(controlParsed.parsed?.items) || Array.isArray(controlParsed.parsed?.catalog));
   checks.expect("allow_control", controlOk, `control: lucy_catalog must return a structured list`);
 
-  await window.finish();
-  expectUpstreamZero(ctx, checks, "SEC-09-S05", window);
+  await controlWindow.finish();
+  // The entitled control is a METADATA surface (lucy_catalog / connection_list): Lucy
+  // answers it from the local semantic layer, so it never reaches the upstream. The
+  // claim that holds is the unauthorized one, not "it must have executed upstream".
+  expectNoUnauthorizedUpstream(ctx, checks, "SEC-09-S05 (entitled control)", controlWindow, { authorizedRequests: 1 });
   checks.noLeak([bodyText(res), bodyText(control)], { secrets: ctx.allSecrets, forbiddenCanaries: Object.values(ctx.canaries) });
   return { ...checks.result(), denyReason: explicitDeny(res) ? extractDenyReason(res).matched : null };
 }
@@ -676,7 +711,7 @@ async function shapeChecks(ctx, res, label, window) {
 async function sec12v01(ctx) {
   const token = ctx.tokens.e2e_finance_east;
   const now = new Date();
-  const window = await observeWindow(ctx, { label: "SEC-12-V01", since: new Date(now.getTime() - 60_000).toISOString(), until: new Date(now.getTime() + 5_000).toISOString(), agentId: "e2e_finance_east", tokenFingerprint: createHash("sha256").update(token).digest("hex").slice(0, 12) });
+  const window = await observeWindow(ctx, { label: "SEC-12-V01", ...observationWindow(now), agentId: "e2e_finance_east", tokenFingerprint: createHash("sha256").update(token).digest("hex").slice(0, 12) });
   const res = await issueQuery(ctx, token, {
     connectionId: "fin-db",
     query: "SELECT region, COUNT(*) FROM analytics.orders GROUP BY region",
@@ -691,7 +726,7 @@ async function sec12v01(ctx) {
 async function sec12v02(ctx) {
   const token = ctx.tokens.e2e_finance_east;
   const now = new Date();
-  const window = await observeWindow(ctx, { label: "SEC-12-V02", since: new Date(now.getTime() - 60_000).toISOString(), until: new Date(now.getTime() + 5_000).toISOString(), agentId: "e2e_finance_east", tokenFingerprint: createHash("sha256").update(token).digest("hex").slice(0, 12) });
+  const window = await observeWindow(ctx, { label: "SEC-12-V02", ...observationWindow(now), agentId: "e2e_finance_east", tokenFingerprint: createHash("sha256").update(token).digest("hex").slice(0, 12) });
   const res = await issueQuery(ctx, token, {
     connectionId: "fin-db",
     source: "analytics.marketing_daily",
@@ -706,7 +741,7 @@ async function sec12v02(ctx) {
 async function sec12v03(ctx) {
   const token = ctx.tokens.e2e_finance_east;
   const now = new Date();
-  const window = await observeWindow(ctx, { label: "SEC-12-V03", since: new Date(now.getTime() - 60_000).toISOString(), until: new Date(now.getTime() + 5_000).toISOString(), agentId: "e2e_finance_east", tokenFingerprint: createHash("sha256").update(token).digest("hex").slice(0, 12) });
+  const window = await observeWindow(ctx, { label: "SEC-12-V03", ...observationWindow(now), agentId: "e2e_finance_east", tokenFingerprint: createHash("sha256").update(token).digest("hex").slice(0, 12) });
   const res = await issueQuery(ctx, token, {
     connectionId: "fin-db",
     source: "analytics.marketing_daily",
@@ -722,7 +757,7 @@ async function sec12v03(ctx) {
 async function sec12v04(ctx) {
   const token = ctx.tokens.e2e_finance_east;
   const now = new Date();
-  const window = await observeWindow(ctx, { label: "SEC-12-V04", since: new Date(now.getTime() - 60_000).toISOString(), until: new Date(now.getTime() + 5_000).toISOString(), agentId: "e2e_finance_east", tokenFingerprint: createHash("sha256").update(token).digest("hex").slice(0, 12) });
+  const window = await observeWindow(ctx, { label: "SEC-12-V04", ...observationWindow(now), agentId: "e2e_finance_east", tokenFingerprint: createHash("sha256").update(token).digest("hex").slice(0, 12) });
   const res = await issueQuery(ctx, token, {
     connectionId: "fin-db",
     source: "analytics.marketing_daily",
@@ -738,7 +773,7 @@ async function sec12v04(ctx) {
 async function sec12v05(ctx) {
   const token = ctx.tokens.e2e_finance_east;
   const now = new Date();
-  const window = await observeWindow(ctx, { label: "SEC-12-V05", since: new Date(now.getTime() - 60_000).toISOString(), until: new Date(now.getTime() + 5_000).toISOString(), agentId: "e2e_finance_east", tokenFingerprint: createHash("sha256").update(token).digest("hex").slice(0, 12) });
+  const window = await observeWindow(ctx, { label: "SEC-12-V05", ...observationWindow(now), agentId: "e2e_finance_east", tokenFingerprint: createHash("sha256").update(token).digest("hex").slice(0, 12) });
   const res = await issueQuery(ctx, token, {
     connectionId: "fin-db",
     source: "analytics.marketing_daily",
@@ -754,7 +789,7 @@ async function sec12v05(ctx) {
 async function sec12v06(ctx) {
   const token = ctx.tokens.e2e_finance_east;
   const now = new Date();
-  const window = await observeWindow(ctx, { label: "SEC-12-V06", since: new Date(now.getTime() - 60_000).toISOString(), until: new Date(now.getTime() + 5_000).toISOString(), agentId: "e2e_finance_east", tokenFingerprint: createHash("sha256").update(token).digest("hex").slice(0, 12) });
+  const window = await observeWindow(ctx, { label: "SEC-12-V06", ...observationWindow(now), agentId: "e2e_finance_east", tokenFingerprint: createHash("sha256").update(token).digest("hex").slice(0, 12) });
   const res = await issueQuery(ctx, token, {
     connectionId: "fin-db",
     source: "analytics.marketing_daily",
@@ -770,7 +805,7 @@ async function sec12v06(ctx) {
 async function sec12v07(ctx) {
   const token = ctx.tokens.e2e_finance_east;
   const now = new Date();
-  const window = await observeWindow(ctx, { label: "SEC-12-V07", since: new Date(now.getTime() - 60_000).toISOString(), until: new Date(now.getTime() + 5_000).toISOString(), agentId: "e2e_finance_east", tokenFingerprint: createHash("sha256").update(token).digest("hex").slice(0, 12) });
+  const window = await observeWindow(ctx, { label: "SEC-12-V07", ...observationWindow(now), agentId: "e2e_finance_east", tokenFingerprint: createHash("sha256").update(token).digest("hex").slice(0, 12) });
   const res = await issueQuery(ctx, token, {
     connectionId: "fin-db",
     source: "analytics.marketing_daily",
@@ -786,7 +821,7 @@ async function sec12v07(ctx) {
 async function sec12v08(ctx) {
   const token = ctx.tokens.e2e_finance_east;
   const now = new Date();
-  const window = await observeWindow(ctx, { label: "SEC-12-V08", since: new Date(now.getTime() - 60_000).toISOString(), until: new Date(now.getTime() + 5_000).toISOString(), agentId: "e2e_finance_east", tokenFingerprint: createHash("sha256").update(token).digest("hex").slice(0, 12) });
+  const window = await observeWindow(ctx, { label: "SEC-12-V08", ...observationWindow(now), agentId: "e2e_finance_east", tokenFingerprint: createHash("sha256").update(token).digest("hex").slice(0, 12) });
   const res = await issueQuery(ctx, token, {
     connectionId: "fin-db",
     source: "analytics.marketing_daily",
@@ -802,7 +837,7 @@ async function sec12v08(ctx) {
 async function sec12v09(ctx) {
   const token = ctx.tokens.e2e_finance_east;
   const now = new Date();
-  const window = await observeWindow(ctx, { label: "SEC-12-V09", since: new Date(now.getTime() - 60_000).toISOString(), until: new Date(now.getTime() + 5_000).toISOString(), agentId: "e2e_finance_east", tokenFingerprint: createHash("sha256").update(token).digest("hex").slice(0, 12) });
+  const window = await observeWindow(ctx, { label: "SEC-12-V09", ...observationWindow(now), agentId: "e2e_finance_east", tokenFingerprint: createHash("sha256").update(token).digest("hex").slice(0, 12) });
   const forged = { or: [{ and: [{ field: "marketing_daily.region", op: "eq", value: "West" }] }] };
   const res = await issueQuery(ctx, token, {
     connectionId: "fin-db",
@@ -824,7 +859,7 @@ async function sec12v09(ctx) {
 async function sec12v10(ctx) {
   const token = ctx.tokens.e2e_finance_east;
   const now = new Date();
-  const window = await observeWindow(ctx, { label: "SEC-12-V10", since: new Date(now.getTime() - 60_000).toISOString(), until: new Date(now.getTime() + 5_000).toISOString(), agentId: "e2e_finance_east", tokenFingerprint: createHash("sha256").update(token).digest("hex").slice(0, 12) });
+  const window = await observeWindow(ctx, { label: "SEC-12-V10", ...observationWindow(now), agentId: "e2e_finance_east", tokenFingerprint: createHash("sha256").update(token).digest("hex").slice(0, 12) });
   const res = await ctx.mcp(
     token,
     { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "lucy_query", arguments: "this is a string, not an object" } }

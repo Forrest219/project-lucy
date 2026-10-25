@@ -120,6 +120,23 @@ function hashRecordSet(rows) {
  *
  * @returns {Promise<ExecutionObservation>}
  */
+/**
+ * Observation fields the observer may report in addition to the count. They are
+ * carried through verbatim so a caller can tell a measured zero from a zero that
+ * was measured with a different attribution (e.g. instance-wide vs identity
+ * filtered) — the distinction matters when the count is used as a security claim.
+ */
+const CARRIED_OBSERVER_FIELDS = ["attribution", "identityFilterApplied", "upstreamCallCount", "controlCallCount", "queryCount", "sourceReadCount", "recordToolNames"];
+
+function carriedObserverFields(raw) {
+  if (!raw || typeof raw !== "object") return {};
+  const carried = {};
+  for (const key of CARRIED_OBSERVER_FIELDS) {
+    if (raw[key] !== undefined) carried[key] = raw[key];
+  }
+  return carried;
+}
+
 export async function observeExecutions({ runId, instanceId, agentId, tokenFingerprint, since, until, observe, synthetic = false }) {
   const problems = [];
   if (!runId) problems.push("runId is required");
@@ -186,6 +203,7 @@ export async function observeExecutions({ runId, instanceId, agentId, tokenFinge
       upstreamExecutionCount: "unknown",
       window,
       source,
+      ...carriedObserverFields(raw),
       hashes: { resultSetHash, synthetic },
       problems: [...problems, "observer did not return a recordSet (even an empty array is acceptable); the verifier requires a recordSetHash bound to the actual rows the source returned, not a bare count"]
     };
@@ -195,6 +213,7 @@ export async function observeExecutions({ runId, instanceId, agentId, tokenFinge
       upstreamExecutionCount: "unknown",
       window,
       source,
+      ...carriedObserverFields(raw),
       hashes: raw?.hashes ? { ...raw.hashes, resultSetHash: raw.hashes.resultSetHash ?? resultSetHash, synthetic: raw.hashes.synthetic ?? synthetic } : { resultSetHash, synthetic },
       problems: [...problems, ...(Array.isArray(raw?.problems) ? raw.problems : [])]
     };
@@ -204,6 +223,7 @@ export async function observeExecutions({ runId, instanceId, agentId, tokenFinge
       upstreamExecutionCount: "unknown",
       window,
       source,
+      ...carriedObserverFields(raw),
       hashes: raw?.hashes ? { ...raw.hashes, resultSetHash: raw.hashes.resultSetHash ?? resultSetHash, synthetic: raw.hashes.synthetic ?? synthetic } : { resultSetHash, synthetic },
       problems: [...problems, `observer returned a non-integer / negative count: ${JSON.stringify(count)}`]
     };
@@ -213,6 +233,7 @@ export async function observeExecutions({ runId, instanceId, agentId, tokenFinge
       upstreamExecutionCount: "unknown",
       window,
       source,
+      ...carriedObserverFields(raw),
       hashes: raw?.hashes ? { ...raw.hashes, resultSetHash: raw.hashes.resultSetHash ?? resultSetHash, synthetic: raw.hashes.synthetic ?? synthetic } : { resultSetHash, synthetic },
       problems
     };
@@ -221,6 +242,7 @@ export async function observeExecutions({ runId, instanceId, agentId, tokenFinge
     upstreamExecutionCount: count,
     window,
     source,
+    ...carriedObserverFields(raw),
     hashes: raw?.hashes ? { ...raw.hashes, resultSetHash: raw.hashes.resultSetHash ?? resultSetHash, synthetic: raw.hashes.synthetic ?? synthetic } : { resultSetHash, synthetic },
     problems: [...problems, ...(Array.isArray(raw?.problems) ? raw.problems : [])]
   };
@@ -323,13 +345,19 @@ export function createPassThroughObserver({ source, runCommand, identity, runId,
  * sources for release gating.
  */
 export function toRunnerShape(observation) {
-  return {
+  const shape = {
     upstreamExecutionCount: observation.upstreamExecutionCount,
     window: observation.window,
     source: observation.source,
     hashes: observation.hashes,
     problems: observation.problems
   };
+  // The attribution fields ride along: a caller that treats the count as a security
+  // claim has to know whether it was measured instance-wide or identity-filtered.
+  for (const key of CARRIED_OBSERVER_FIELDS) {
+    if (observation[key] !== undefined) shape[key] = observation[key];
+  }
+  return shape;
 }
 
 export const _internals = { PRODUCTION_SOURCES, TEST_ONLY_SOURCES, hashHex, hashRecordSet };

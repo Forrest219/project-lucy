@@ -124,6 +124,13 @@ export function classifyHandlerError(error) {
   if (isServiceUnreachable(error)) {
     return { status: "blocked", detail: `service_unreachable: ${message}`.slice(0, 500), blockedBy: ["service_unreachable"] };
   }
+  // SQLite contention: the case could not be evaluated at all (the run's own store was
+  // locked by another writer). That is a missing precondition, not a product failure —
+  // the product's own SQLITE_BUSY budget is a separate question, reported as an
+  // observation, not as this case's verdict.
+  if (/database is locked|SQLITE_BUSY/i.test(message)) {
+    return { status: "blocked", detail: `environment_contention: ${message}`.slice(0, 500), blockedBy: ["environment_contention"] };
+  }
   return { status: "failed", detail: `handler_error: ${message}`.slice(0, 500) };
 }
 
@@ -138,12 +145,128 @@ export function statusFromAssertions(testCase, outcome) {
   // blocks the case so it cannot claim a green pass; a feature-failure is the
   // existing `failed` verdict. A `blocked` verdict ranks LOWER than `failed` in the
   // summary so an unprovable case never masks a real failure.
-  const measurementGap = (outcome.upstreamExecutions === "unknown" || (outcome.upstreamExecutions && outcome.upstreamExecutions.upstreamExecutionCount === "unknown"));
+  const measurementGap = (outcome.upstreamExecutions === "unknown" || (outcome.upstreamExecutions && outcome.upstreamExecutions.upstreamExecutionCount === "unknown") || outcome.upstreamObservation?.measured === false);
   if (measurementGap && failed.length === 0) {
     return { status: "blocked", detail: "independent observer reported 'unknown' for this case window; the runner cannot prove the authorization claim without a measured source" };
   }
   if (failed.length > 0) return { status: "failed", detail: failed.map((a) => `${a.token}: ${a.detail ?? "failed"}`).join(" | ") };
   return { status: "passed", detail: "" };
+}
+
+/**
+ * The scenarios whose handlers measure the upstream execution count.
+ *
+ * When the independent observation channel is not proven, THESE cases stay BLOCKED:
+ * a "zero upstream executions" claim without a proven channel is a vacuous pass, not
+ * a security result. The other scenarios do not measure the upstream and still run,
+ * so a broken channel does not hide the rest of the leg's findings.
+ */
+export const OBSERVATION_DEPENDENT_SCENARIOS = new Set(["SEC-09", "SEC-10", "SEC-11", "SEC-12"]);
+
+/**
+ * The gate verdict for one case: BLOCKED when the independent observation channel is
+ * not proven and the case MEASURES the upstream. `null` means "run the case".
+ */
+export function observationGateVerdict({ testCase, observationProof }) {
+  if (!observationProof || observationProof.proven === true) return null;
+  if (!OBSERVATION_DEPENDENT_SCENARIOS.has(testCase.scenario)) return null;
+  return {
+    status: "blocked",
+    detail: `the independent upstream observation channel was not proven: ${observationProof.reason}`,
+    blockedBy: ["upstream_observation_unproven"]
+  };
+}
+
+/**
+ * POSITIVE CONTROL for the independent upstream observation channel (W-05).
+ *
+ * The channel only earns trust when it can be shown to SEE an upstream execution.
+ * The control issues authorized queries and requires the observer to have recorded
+ * at least one upstream execution for them. If it did not, every "zero upstream
+ * executions" claim in the leg would be vacuous — so the caller fails closed and the
+ * observation-dependent cases stay BLOCKED instead of being scored against an
+ * unproven measurement.
+ *
+ * The control also MEASURES the authorized baseline: how many upstream executions one
+ * authorized request causes. That number is what lets an allowed case subtract its own
+ * authorized execution from the measured delta (the claim is about UNAUTHORIZED
+ * executions). It is measured, never guessed.
+ *
+ * @returns {Promise<{proven: boolean, required: boolean, reason: string|null, baseline: number|null, probes: object[]}>}
+ */
+export async function proveUpstreamObservation({ ctx, run, observerPath }) {
+  const proof = {
+    status: "not_run",
+    required: false,
+    proven: false,
+    reason: null,
+    baseline: null,
+    checkedAt: new Date().toISOString(),
+    observerPath: observerPath ?? null,
+    probes: []
+  };
+  if (!ctx || typeof ctx.observeUpstream !== "function") {
+    proof.reason = "the run has no security context, so no observation can be made";
+    return proof;
+  }
+  if (observerPath?.status !== "wired") {
+    proof.reason = `the independent observer was not wired on the request path (${observerPath?.status ?? "unknown"}${observerPath?.reason ? `: ${observerPath.reason}` : ""})`;
+    return proof;
+  }
+  proof.required = true;
+  const token = ctx.tokens?.e2e_finance ?? null;
+  if (!token) {
+    proof.reason = "no entitled agent token is available for the positive control";
+    return proof;
+  }
+  const fingerprint = createHash("sha256").update(token).digest("hex").slice(0, 12);
+  // Two shapes, because the allow-branch cases use two different sources and the
+  // per-request upstream cost is measured, not assumed.
+  const probes = [
+    { label: "orders_masked", args: { connectionId: "fin-db", source: "analytics.orders_masked", measures: ["order_count"], dimensions: [], filters: [{ field: "orders_masked.region", op: "eq", value: "East" }] } },
+    { label: "marketing_daily", args: { connectionId: "fin-db", source: "analytics.marketing_daily", measures: ["cac_cents"], dimensions: [], filters: [{ field: "marketing_daily.region", op: "eq", value: "East" }] } }
+  ];
+  let baseline = 0;
+  for (const probe of probes) {
+    const since = new Date(Date.now() - 5_000).toISOString();
+    const until = new Date(Date.now() + 120_000).toISOString();
+    const before = await ctx.observeUpstream({ since, until, agentId: "e2e_finance", tokenFingerprint: fingerprint });
+    let response = null;
+    let error = null;
+    try {
+      response = await ctx.lucyQuery(token, probe.args);
+    } catch (caught) {
+      error = caught instanceof Error ? caught.message : String(caught);
+    }
+    const after = await ctx.observeUpstream({ since, until, agentId: "e2e_finance", tokenFingerprint: fingerprint });
+    const delta = typeof ctx.upstreamDelta === "function" ? ctx.upstreamDelta(before, after) : null;
+    proof.probes.push({
+      label: probe.label,
+      status: response?.status ?? null,
+      error,
+      delta,
+      source: after?.source ?? null,
+      attribution: after?.attribution ?? null,
+      upstreamCallCount: after?.upstreamCallCount ?? null,
+      queryCount: after?.queryCount ?? null,
+      sourceReadCount: after?.sourceReadCount ?? null,
+      controlCallCount: after?.controlCallCount ?? null,
+      // What the upstream actually received: the evidence for the measured baseline.
+      toolNames: after?.recordToolNames ?? null
+    });
+    if (delta !== null && delta > baseline) baseline = delta;
+  }
+  const seen = proof.probes.filter((p) => p.delta !== null && p.delta >= 1);
+  if (seen.length === 0) {
+    proof.reason = `the observer recorded no upstream execution for an authorized query (probes: ${JSON.stringify(proof.probes.map((p) => ({ label: p.label, status: p.status, delta: p.delta, error: p.error })))})`;
+    return proof;
+  }
+  proof.proven = true;
+  proof.status = "proven";
+  proof.baseline = baseline;
+  proof.reason = `the observer recorded ${baseline} upstream execution(s) for an authorized query`;
+  if (ctx) ctx.authorizedUpstreamBaseline = baseline;
+  return proof;
 }
 
 function writeCaseResult(run, testCase, body) {
@@ -159,6 +282,21 @@ function progressLog(run, message) {
   try { appendFileSync(path.join(run.paths.logs, "progress.log"), `${new Date().toISOString()} ${message}\n`); } catch { /* best-effort */ }
 }
 
+/**
+ * Writes the observation-channel proof next to the case results. The proof is the
+ * evidence that the independent measurement channel was live; without it the
+ * observation-dependent cases are blocked rather than scored.
+ */
+function writeObservationProof(run, proof) {
+  try {
+    const dir = path.join(run.paths.runDir, "results");
+    mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, "upstream-observation-proof.json");
+    writeFileSync(file, `${JSON.stringify(proof, null, 2)}\n`);
+    return path.relative(run.paths.runDir, file);
+  } catch { /* best-effort: the proof is also embedded in the run evidence */ }
+}
+
 /** Runs the selected security cases and returns the evidence document (also written under results/). */
 export async function runSecurity({ run, cases, handlers, only, dryRun = false, ctxFactory, external = false, onTargetRefused = fail, observerFactory = null, ktxBin = "ktx" }) {
   const externalCheck = reconcileExternalFlag({ run, flagValue: external });
@@ -171,8 +309,21 @@ export async function runSecurity({ run, cases, handlers, only, dryRun = false, 
   let capabilities = {};
   let activeObserver = null;
   let upstream = null;
+  let observerPath = { status: "not_wired" };
+  let observationProof = null;
   try {
     if (!dryRun) {
+      // The observer factory is resolved BEFORE the instance starts. The independent
+      // observer has to sit ON the request path (Lucy → observer → the run's own KTX
+      // upstream), and Lucy's upstream port IS the observer's port — so the observer
+      // must exist before Lucy does.
+      let factory = observerFactory;
+      if (typeof factory !== "function") {
+        try {
+          const { createDefaultObserverFactory } = await import("./lib/local-loopback-observer.mjs");
+          factory = createDefaultObserverFactory({ run });
+        } catch { /* module optional; missing import leaves factory null */ }
+      }
       if (external) {
         progressLog(run, "external target: running preflight (no auth, no bootstrap)");
         lucy = new ExternalInstance(run);
@@ -201,34 +352,53 @@ export async function runSecurity({ run, cases, handlers, only, dryRun = false, 
         } else {
           progressLog(run, `KTX upstream NOT available: ${upstream.reason}; every case that needs the data plane stays BLOCKED`);
         }
-        lucy = new LucyProcess(run, upstream.ok
-          ? { extraEnv: { LUCY_PROXY_UPSTREAM_HOST: upstream.host, LUCY_PROXY_UPSTREAM_PORT: String(upstream.port) } }
-          : {});
+        // Default: Lucy talks to the upstream directly. When an observer factory is
+        // available, the observer is started FIRST and Lucy is pointed at the observer
+        // instead, so every upstream call passes through the recorder.
+        let extraEnv = upstream.ok
+          ? { LUCY_PROXY_UPSTREAM_HOST: upstream.host, LUCY_PROXY_UPSTREAM_PORT: String(upstream.port) }
+          : {};
+        if (upstream.ok && factory) {
+          const bootstrap = factory({ agentId: "runner-bootstrap", identity: "lucy-e2e-observer", runId: run.runId, instanceId: run.instanceId });
+          if (bootstrap && typeof bootstrap.ensureStarted === "function") {
+            activeObserver = bootstrap;
+            try {
+              const instance = await bootstrap.ensureStarted(`http://${upstream.host}:${upstream.port}`);
+              const baseUrl = typeof instance?.baseUrl === "function" ? instance.baseUrl() : null;
+              if (baseUrl) {
+                const observerUrl = new URL(baseUrl);
+                extraEnv = { LUCY_PROXY_UPSTREAM_HOST: observerUrl.hostname, LUCY_PROXY_UPSTREAM_PORT: observerUrl.port };
+                observerPath = { status: "wired", observerUrl: baseUrl, upstream: `${upstream.host}:${upstream.port}` };
+                progressLog(run, `independent upstream observer wired on ${baseUrl} (Lucy → observer → KTX upstream ${upstream.host}:${upstream.port})`);
+              } else {
+                observerPath = { status: "not_wired", reason: "the observer did not expose a listener URL" };
+                progressLog(run, "the independent upstream observer exposed no listener URL; Lucy talks to the KTX upstream directly");
+              }
+            } catch (error) {
+              observerPath = { status: "not_wired", reason: error instanceof Error ? error.message : String(error) };
+              progressLog(run, `the independent upstream observer could NOT be started (${observerPath.reason}); Lucy talks to the KTX upstream directly`);
+            }
+          }
+        }
+        lucy = new LucyProcess(run, { extraEnv });
         await lucy.start();
       }
       capabilities = await detectCapabilities(run, true, external, upstream);
-      // Default observer factory: only used when the caller did not supply one. The
-      // factory is bound to the RUN'S registered target type; for external runs it
-      // returns null (no in-process recording), so the SecurityContext reports
-      // `unknown`. For local runs the factory constructs a loopback observer that
-      // sits between the LucyProcess and the upstream; the runner is responsible for
-      // calling `ensureStarted(upstreamUrl)` and `stop()` around the case loop.
-      let factory = observerFactory;
-      if (typeof factory !== "function") {
-        try {
-          const { createDefaultObserverFactory } = await import("./lib/local-loopback-observer.mjs");
-          factory = createDefaultObserverFactory({ run });
-        } catch { /* module optional; missing import leaves factory null */ }
-      }
       ctx = ctxFactory
         ? ctxFactory({ run, lucy, capabilities, observerFactory: factory })
         : new SecurityContext({ run, lucy, capabilities, observerFactory: factory });
-      // Stash the active observer on the context so the runner can start/stop it
-      // around the case loop without going through the factory.
-      if (factory) {
+      // The active observer was already started above (it had to be: Lucy's upstream
+      // port IS the observer's port). Keep the handle so the runner can stop it.
+      if (!activeObserver && factory) {
         const sample = factory({ agentId: "runner-bootstrap", identity: "lucy-e2e-observer", runId: run.runId, instanceId: run.instanceId });
         if (sample && typeof sample.ensureStarted === "function") activeObserver = sample;
       }
+      // POSITIVE CONTROL (W-05) — the observation channel must be proven LIVE before
+      // any case is scored against it. Without this, a channel that is not on the
+      // request path would make every "zero upstream executions" claim a vacuous pass.
+      observationProof = await proveUpstreamObservation({ ctx, run, observerPath });
+      progressLog(run, `upstream observation channel: ${observationProof.proven ? "PROVEN" : "NOT PROVEN"} (${observationProof.reason ?? "n/a"})`);
+      writeObservationProof(run, observationProof);
     }
     for (const testCase of selected) {
       const caseStarted = new Date().toISOString();
@@ -245,6 +415,15 @@ export async function runSecurity({ run, cases, handlers, only, dryRun = false, 
       const missing = missingCapabilities(testCase, capabilities);
       if (missing.length > 0) {
         finish({ status: "blocked", policyVersion: "n/a", contextPolicyVersion: "n/a", detail: `missing capability: ${missing.join(", ")}`, blockedBy: missing });
+        continue;
+      }
+      // FAIL CLOSED: when the independent observation channel is not proven, the cases
+      // that MEASURE the upstream cannot be scored — a "zero upstream executions" claim
+      // without a proven channel is a vacuous pass, not a security result. They stay
+      // BLOCKED (a missing precondition), never FAILED and never green.
+      const gate = observationGateVerdict({ testCase, observationProof });
+      if (gate) {
+        finish({ ...gate, policyVersion: "n/a", contextPolicyVersion: "n/a" });
         continue;
       }
       const handler = handlers[testCase.id];
@@ -309,6 +488,11 @@ export async function runSecurity({ run, cases, handlers, only, dryRun = false, 
     upstream: upstream?.ok === true
       ? { status: "proven", host: upstream.host, port: upstream.port, ownedByRun: true }
       : { status: external ? "attested_external" : "unavailable", ownedByRun: false, reason: upstream?.reason ?? null },
+    // The independent observation channel and its positive control. `proven: false`
+    // means the leg's upstream-execution claims were NOT measured, and the cases
+    // that depend on them are blocked rather than scored.
+    observer: observerPath,
+    upstreamObservation: observationProof,
     summary: {
       selected: results.length,
       passed: count("passed"),

@@ -3,7 +3,7 @@
 // directory, outside the product's content root, so only server-side execution can create it.
 import { existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { Checks, explicitDeny } from "./context.mjs";
+import { Checks, explicitDeny, isRefusal } from "./context.mjs";
 import { scanRetainedArtifacts } from "../lib/leak-scan.mjs";
 
 const LANGUAGE_TAGS = ["---js", "---javascript", "---JS", "--- js", "---json"];
@@ -172,7 +172,7 @@ export const handlers = {
     // refusal is an explicit HTTP status rather than a transport error.
     const huge = `---\nsummary: big\nallowed_roles: [finance_reader]\n---\n${"A".repeat(1_048_576 + 4096)}`;
     const res = await ctx.web.request("POST", "/api/wiki/upload/commit", { cookie, body: { key: "e2e-fm/oversize.md", markdown: huge }, timeoutMs: 60_000 });
-    checks.expect("deny", explicitDeny(res), `over-limit upload -> ${res.status}`);
+    checks.expect("deny", isRefusal(res), `over-limit upload -> ${res.status}`);
     checks.expect("no_side_effect", ctx.digest() === before, "nothing was written");
     return checks.result();
   },
@@ -199,7 +199,7 @@ export const handlers = {
     for (const pathname of ["/mcp/skills", "/mcp/skills/tools/list"]) {
       const res = await ctx.mcp(ctx.tokens.e2e_finance, ctx.rpc(1, "tools/list"), { pathname });
       texts.push(res.text);
-      checks.expect("deny", explicitDeny(res), `${pathname} -> ${res.status}`);
+      checks.expect("deny", isRefusal(res), `${pathname} -> ${res.status}`);
     }
     checks.noLeak(texts, { secrets: ctx.allSecrets, forbiddenCanaries: [ctx.canaries.publishedSkill, ctx.canaries.draftSkill] });
     return checks.result();

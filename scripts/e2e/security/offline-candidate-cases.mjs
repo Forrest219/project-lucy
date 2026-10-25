@@ -44,16 +44,25 @@ async function realDomainAndSuite(d6, label) {
   const domainsRes = await d6.web.request("GET", "/api/eval/domains");
   const domains = domainsRes.json?.data?.domains ?? [];
   if (!Array.isArray(domains) || domains.length === 0) {
-    throw new Error(`${label}: /api/eval/domains returned no domains; cannot fabricate one`);
+    // A missing eval domain is a MISSING PRECONDITION, not a product failure: the
+    // product answered (the list is empty), it simply has nothing to evaluate
+    // against. The runner scores a `blockedReason` throw as BLOCKED.
+    const error = new Error(`${label}: /api/eval/domains returned no domains; cannot fabricate one`);
+    error.blockedReason = "no_eval_domain";
+    throw error;
   }
   const domain = domains[0];
   const download = await d6.downloadSuite(domain);
   if (download.status !== 200) {
-    throw new Error(`${label}: /api/eval/suites/${domain}/download returned HTTP ${download.status}; cannot fabricate suite`);
+    const error = new Error(`${label}: /api/eval/suites/${domain}/download returned HTTP ${download.status}; cannot fabricate suite`);
+    error.blockedReason = "no_eval_suite";
+    throw error;
   }
   const suite = download.suite;
   if (!suite || !suite.suite_id || !suite.suite_hash) {
-    throw new Error(`${label}: downloaded suite is missing required fields; got ${JSON.stringify(Object.keys(suite ?? {}))}`);
+    const error = new Error(`${label}: downloaded suite is missing required fields; got ${JSON.stringify(Object.keys(suite ?? {}))}`);
+    error.blockedReason = "eval_suite_malformed";
+    throw error;
   }
   return { domain, suite, downloadRaw: download };
 }

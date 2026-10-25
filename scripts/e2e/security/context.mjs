@@ -96,6 +96,9 @@ const DENY_REASON_ALLOWLIST = new Set([
   "AUDIT_UNAVAILABLE"
 ]);
 
+/** The envelope sources that carry an explicit product refusal. */
+const REFUSAL_SOURCES = new Set(["mcp_iserror_access_denied", "mcp_iserror_invalid_arguments"]);
+
 /**
  * True when the extracted reason is one of the documented product denial classes.
  * The exact reason (class + optional detail) is what callers match against; this only
@@ -111,6 +114,26 @@ function isAllowlistedDenyReason(reason) {
 }
 
 /**
+ * The product's refusal prefixes.
+ *
+ * `Access denied: ` is the ACL / policy refusal (`webui/server/proxy/mcp-proxy.ts`).
+ * `Invalid arguments: ` is the INPUT-VALIDATION refusal (the same file): it carries a
+ * reason token from the SAME vocabulary (`invalid_arguments:lucy_query:...`), so it is
+ * just as explicit a denial. Recognising only the first prefix made the harness report
+ * legitimate refusals as "not a recognized denial envelope".
+ */
+const REFUSAL_PREFIXES = ["Access denied:", "Invalid arguments:"];
+
+/** The refusal prefix a message carries, or null when it carries none. */
+export function refusalPrefix(text) {
+  if (typeof text !== "string") return null;
+  for (const prefix of REFUSAL_PREFIXES) {
+    if (text.startsWith(prefix)) return prefix;
+  }
+  return null;
+}
+
+/**
  * The reason token carried by a denial message.
  *
  * The product emits `Access denied: <reason>[<hint>]` — the hint may be attached with a
@@ -120,7 +143,8 @@ function isAllowlistedDenyReason(reason) {
  */
 function denyReasonToken(message) {
   const text = typeof message === "string" ? message : "";
-  const withoutPrefix = text.startsWith("Access denied:") ? text.slice("Access denied:".length).trim() : text.trim();
+  const prefix = refusalPrefix(text);
+  const withoutPrefix = prefix ? text.slice(prefix.length).trim() : text.trim();
   // A reason token carries a class, an optional `:detail` and source names with dots
   // (`table_forbidden:analytics.orders_masked`), so `.` belongs to the token alphabet.
   return (/^[A-Za-z0-9_\-/:.]+/.exec(withoutPrefix)?.[0]) ?? withoutPrefix;
@@ -178,11 +202,11 @@ export function extractDenyReason(res) {
       // (e.g. "table_forbidden:analytics.x 可用连接：fin-db。"). Anchoring the token at the
       // START — instead of requiring the whole tail to be one token — is what lets the class
       // be recognised when the product appends a hint.
-      const accessPrefix = "Access denied:";
-      if (typeof text === "string" && text.startsWith(accessPrefix)) {
+      const prefix = refusalPrefix(text);
+      if (prefix) {
         const reason = denyReasonToken(text);
         if (isAllowlistedDenyReason(reason)) {
-          return { matched: reason, reason, raw: text, source: "mcp_iserror_access_denied" };
+          return { matched: reason, reason, raw: text, source: prefix === "Access denied:" ? "mcp_iserror_access_denied" : "mcp_iserror_invalid_arguments" };
         }
         return { matched: null, reason, raw: text, source: "mcp_iserror_unmatched_reason" };
       }
@@ -235,6 +259,27 @@ export function explicitDeny(res) {
   return extractDenyReason(res).matched !== null;
 }
 
+/**
+ * True when the response is a REFUSAL in any of the forms the product uses.
+ *
+ * Two forms count:
+ *   - an allowlisted denial envelope ("Access denied: <reason>" / "Invalid arguments:
+ *     <reason>"), and
+ *   - a TRANSPORT-level refusal (HTTP 4xx). The product refuses the protocol-level
+ *     negatives with a 4xx status — a malformed JSON-RPC envelope answers 400, an
+ *     unknown method or path answers 404, an over-sized upload answers 413 — and the
+ *     FROZEN catalog asks exactly those cases to be "被拒" WITHOUT pinning a status
+ *     (`SEC-08-V05…V08`, `SEC-15-V05`, `SEC-22-V06`). Requiring the "Access denied:"
+ *     envelope there made the cases unpassable against a correct product.
+ *
+ * A 5xx is NEVER a refusal: a server fault must not be scored as a green refusal.
+ */
+export function isRefusal(res) {
+  if (!res) return false;
+  if (typeof res.status === "number" && res.status >= 400 && res.status < 500) return true;
+  return explicitDeny(res);
+}
+
 /** True only when the response is an explicit allowlisted denial whose reason matches the
  *  case's `expectedReason`. A wrong reason returns `false`, not a partial pass. */
 export function denyReasonMatches(res, expectedReason) {
@@ -244,7 +289,7 @@ export function denyReasonMatches(res, expectedReason) {
   if (matched === expectedReason) return true;
   // Allow the case to match on a substring (e.g. expectedReason = "tool_absolute_deny:sl_query" matches
   // an emitted reason of the same allowlisted value). Equality is the safe default.
-  if (matched.includes(expectedReason) && source === "mcp_iserror_access_denied") return true;
+  if (matched.includes(expectedReason) && REFUSAL_SOURCES.has(source)) return true;
   return false;
 }
 

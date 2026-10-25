@@ -25,13 +25,13 @@
 //     allowlisted denial with a real observer-measured zero.
 
 import { createHash } from "node:crypto";
-import { Checks, explicitDeny, extractDenyReason, measureValue } from "./context.mjs";
+import { Checks, denyReasonMatches, explicitDeny, extractDenyReason, measureValue } from "./context.mjs";
 import { checkRealQuery } from "../answer-assertions.mjs";
+import { observeWindow, observationWindow, expectUpstreamZero, expectAuthorizedUpstream } from "./observation.mjs";
 
 const bodyText = (res) => res.text ?? "";
 
-const SCOPED_QUERY = {
-  connectionId: "fin-db",
+const SCOPED_QUERY = {  connectionId: "fin-db",
   source: "analytics.marketing_daily",
   measures: ["cac_cents"],
   dimensions: [{ field: "marketing_daily.region" }]
@@ -47,51 +47,15 @@ const UNION_QUERY = {
 
 const Q_CAC_EAST = "Q-CAC-EAST";
 
-/** Begin a before/after observer window for a target Agent identity. The previous
- *  implementation was synchronous and returned a Promise-shaped `before` snapshot
- *  with `toRunnerShape(Promise)` fields all `undefined`. The chain is now async:
- *  the call site must `await win.finish()`. */
-async function observeWindow(ctx, { label, since, until, agentId, tokenFingerprint }) {
-  const before = await ctx.observeUpstream({ since, until, agentId, tokenFingerprint });
-  return {
-    before,
-    after: null,
-    async finish() {
-      this.after = await ctx.observeUpstream({ since, until, agentId, tokenFingerprint });
-      return ctx.upstreamDelta(this.before, this.after);
-    }
-  };
-}
-
-/** Assert measured zero upstream executions (real observer). */
-function expectUpstreamZero(ctx, checks, label, window) {
-  if (!window || !window.before || window.after === null) {
-    checks.expect("upstream_exec_zero", false, `${label}: observer window not closed (call window.finish() before asserting)`);
-    return false;
-  }
-  if (window.before.upstreamExecutionCount === "unknown" || window.after?.upstreamExecutionCount === "unknown") {
-    checks.expect("upstream_exec_zero", false, `${label}: independent observer returned 'unknown' (no provider / bad data); missing observation is BLOCKED, not passed`);
-    return false;
-  }
-  const delta = ctx.upstreamDelta(window.before, window.after);
-  if (delta === null) {
-    checks.expect("upstream_exec_zero", false, `${label}: cursor/source/window integrity failed (before.cursor=${window.before.cursor} after.cursor=${window.after?.cursor} source=${window.before.source})`);
-    return false;
-  }
-  checks.expect("upstream_exec_zero", delta === 0, `${label}: measured delta=${delta} (must be 0); source=${window.before.source} cursor=${window.before.cursor}->${window.after.cursor}`);
-  return delta === 0;
-}
-
 function tokenFingerprint(token) {
   return createHash("sha256").update(token).digest("hex").slice(0, 12);
 }
 
 function nowWindow() {
-  const now = new Date();
-  return {
-    since: new Date(now.getTime() - 60_000).toISOString(),
-    until: new Date(now.getTime() + 5_000).toISOString()
-  };
+  // The shared window: a generous upper bound, so a slow request's upstream execution
+  // is still inside the window (a narrow bound silently dropped it and produced a
+  // vacuous "zero upstream executions").
+  return observationWindow(new Date());
 }
 
 /** True when the call returned a parsed success whose aggregate matches the typed gold
@@ -150,7 +114,7 @@ function bindDenyControl(ctx, checks, label, res, expectedReason, gold) {
     const extraction = extractDenyReason(res);
     if (extraction.matched) {
       if (expectedReason) {
-        checks.expect("deny", extraction.matched === expectedReason || (extraction.matched.includes(expectedReason) && extraction.source === "mcp_iserror_access_denied"), `${label} -> ${extraction.matched} (expected ${expectedReason})`);
+        checks.expect("deny", denyReasonMatches(res, expectedReason), `${label} -> ${extraction.matched} (expected ${expectedReason})`);
       } else {
         checks.expect("deny", true, `${label} -> ${extraction.matched}`);
       }
@@ -183,7 +147,7 @@ async function sec10v01(ctx) {
   const gold = ctx.gold.questions[Q_CAC_EAST];
   const channelOnly = ctx.tokens.e2e_channel_only;
   const channelFp = tokenFingerprint(channelOnly);
-  const win = await observeWindow(ctx, { label: "SEC-10-V01", ...nowWindow(), agentId: "e2e_channel_only", tokenFingerprint: channelFp });
+  const win = await observeWindow(ctx, { label: "SEC-10-V01 (denied target)", ...nowWindow(), agentId: "e2e_channel_only", tokenFingerprint: channelFp });
   // channel_only has wiki_read but not lucy_query; a lucy_query call must be denied.
   const denied = await ctx.lucyQuery(channelOnly, { ...SCOPED_QUERY, filters: [] });
   const deniedExtraction = extractDenyReason(denied);
@@ -196,12 +160,19 @@ async function sec10v01(ctx) {
   } else {
     checks.expect("deny", false, `SEC-10-V01: response was not a recognized denial envelope (source=${deniedExtraction.source}, status=${denied.status})`);
   }
+  // The refused call must not have reached the upstream. The window is closed BEFORE
+  // the entitled control runs, so the control's authorized execution cannot be counted
+  // as the refused call's execution.
+  await win.finish();
+  expectUpstreamZero(ctx, checks, "SEC-10-V01 (denied target)", win, { authorizedRequests: 0 });
+
   // The entitled finance_east role can issue the same call (control, separate assertion).
+  const controlWin = await observeWindow(ctx, { label: "SEC-10-V01 (entitled control)", ...nowWindow(), agentId: "e2e_finance_east", tokenFingerprint: tokenFingerprint(ctx.tokens.e2e_finance_east) });
   const entitled = await ctx.lucyQuery(ctx.tokens.e2e_finance_east, { ...SCOPED_QUERY, filters: [] });
   const entitledParsed = ctx.parseMcpToolResult(entitled);
   bindPositiveControl(ctx, checks, "SEC-10-V01 control", entitledParsed, gold);
-  await win.finish();
-  expectUpstreamZero(ctx, checks, "SEC-10-V01", win);
+  await controlWin.finish();
+  expectAuthorizedUpstream(ctx, checks, "SEC-10-V01 (entitled control)", controlWin, { authorizedRequests: 1 });
   checks.noLeak([bodyText(denied), bodyText(entitled)], { secrets: ctx.allSecrets, forbiddenCanaries: Object.values(ctx.canaries) });
   return { ...checks.result(), denyReason: deniedExtraction.matched };
 }
@@ -215,7 +186,7 @@ async function sec10v02(ctx) {
   const gold = ctx.gold.questions[Q_CAC_EAST];
   const token = ctx.tokens.e2e_finance_east;
   const fp = tokenFingerprint(token);
-  const win = await observeWindow(ctx, { label: "SEC-10-V02", ...nowWindow(), agentId: "e2e_finance_east", tokenFingerprint: fp });
+  const win = await observeWindow(ctx, { label: "SEC-10-V02 (denied target)", ...nowWindow(), agentId: "e2e_finance_east", tokenFingerprint: fp });
   const res = await ctx.lucyQuery(token, {
     connectionId: "fin-db",
     source: "analytics.orders_masked",
@@ -233,12 +204,18 @@ async function sec10v02(ctx) {
   } else {
     checks.expect("deny", false, `SEC-10-V02: response was not a recognized denial envelope (source=${extraction.source})`);
   }
+  // The refused call must not have reached the upstream. The window is closed BEFORE
+  // the entitled control runs.
+  await win.finish();
+  expectUpstreamZero(ctx, checks, "SEC-10-V02 (denied target)", win, { authorizedRequests: 0 });
+
   // Control: same role can call lucy_query on its bound source and match the gold.
+  const controlWin = await observeWindow(ctx, { label: "SEC-10-V02 (entitled control)", ...nowWindow(), agentId: "e2e_finance_east", tokenFingerprint: fp });
   const control = await ctx.lucyQuery(token, { ...SCOPED_QUERY, filters: [] });
   const controlParsed = ctx.parseMcpToolResult(control);
   bindPositiveControl(ctx, checks, "SEC-10-V02 control", controlParsed, gold);
-  await win.finish();
-  expectUpstreamZero(ctx, checks, "SEC-10-V02", win);
+  await controlWin.finish();
+  expectAuthorizedUpstream(ctx, checks, "SEC-10-V02 (entitled control)", controlWin, { authorizedRequests: 1 });
   checks.noLeak([bodyText(res), bodyText(control)], { secrets: ctx.allSecrets, forbiddenCanaries: Object.values(ctx.canaries) });
   return { ...checks.result(), denyReason: extraction.matched };
 }
@@ -275,15 +252,21 @@ async function sec10v04(ctx) {
   try {
     const res = await ctx.lucyQuery(token, { ...UNION_QUERY });
     const extraction = extractDenyReason(res);
+    // Which branch the response took decides the upstream claim: a refused call must
+    // not have reached the upstream, an allowed union query MUST have.
+    let branch = "unrecognized";
     if (res.status >= 500) {
+      branch = "error";
       checks.expect("deny", false, `SEC-10-V04: HTTP 5xx is not a deny; got ${res.status}`);
       checks.expect("allow_control", false, `SEC-10-V04: HTTP 5xx breaks the union proof`);
     } else if (extraction.matched) {
+      branch = "deny";
       checks.expect("deny", true, `multi-role OR East∪West -> ${extraction.matched}`);
       // The control assertion is also evaluated on the deny branch: when the gate
       // refuses the multi-role call, allow_control FAILS (the union proof is incomplete).
       checks.expect("allow_control", false, `SEC-10-V04: deny branch; union proof incomplete (denied with ${extraction.matched})`);
     } else if (extraction.source === "mcp_result_ok") {
+      branch = "allow";
       const parsed = ctx.parseMcpToolResult(res);
       checks.expect("deny", false, `multi-role OR East∪West: response was accepted (deny=false)`);
       // Multi-role: the response must include both East AND West rows (proves UNION,
@@ -333,7 +316,11 @@ async function sec10v04(ctx) {
       checks.expect("allow_control", false, `SEC-10-V04: response was not a recognized envelope`);
     }
     await win.finish();
-    expectUpstreamZero(ctx, checks, "SEC-10-V04", win);
+    if (branch === "allow") {
+      expectAuthorizedUpstream(ctx, checks, "SEC-10-V04", win, { authorizedRequests: 1 });
+    } else {
+      expectUpstreamZero(ctx, checks, "SEC-10-V04", win, { authorizedRequests: 0 });
+    }
     checks.noLeak([bodyText(res)], { secrets: ctx.allSecrets, forbiddenCanaries: Object.values(ctx.canaries) });
     return { ...checks.result(), denyReason: extraction.matched };
   } finally {
@@ -414,16 +401,22 @@ async function by01(ctx) {
   const win = await observeWindow(ctx, { label: "BY-01", ...nowWindow(), agentId: "e2e_finance_east", tokenFingerprint: fp });
   const res = await ctx.lucyQuery(token, { ...SCOPED_QUERY, filters: [] });
   const extraction = extractDenyReason(res);
+  // Which branch the response took decides the upstream claim: the deny branch (the
+  // upstream is not proven) must not have reached the upstream; the success branch DID.
+  let branch = "unrecognized";
   if (res.status >= 500) {
+    branch = "error";
     checks.expect("deny", false, `BY-01: HTTP 5xx is not a deny; got ${res.status}`);
     checks.expect("allow_control", false, `BY-01: HTTP 5xx is not a deny; got ${res.status}`);
   } else if (extraction.matched) {
+    branch = "deny";
     // Upstream is not proven; the bound query is denied. typed_gold is unbound.
     checks.expect("deny", true, `BY-01: deny branch with allowlisted reason '${extraction.matched}'`);
     checks.expect("allow_control", false, `BY-01: deny branch with allowlisted reason '${extraction.matched}'; gold is unbound (upstream is not proven)`);
     checks.expect("typed_gold", false, `BY-01: gold unbound (deny branch)`);
     checks.expect("real_query", false, `BY-01: no successful query to bind to gold`);
   } else if (extraction.source === "mcp_result_ok") {
+    branch = "allow";
     const parsed = ctx.parseMcpToolResult(res);
     checks.expect("deny", false, `BY-01: success branch; gate accepted the bound query`);
     bindPositiveControl(ctx, checks, "BY-01 no user filter", parsed, gold);
@@ -432,7 +425,11 @@ async function by01(ctx) {
     checks.expect("allow_control", false, `BY-01: response was not a recognized envelope (source=${extraction.source})`);
   }
   await win.finish();
-  expectUpstreamZero(ctx, checks, "BY-01", win);
+  if (branch === "allow") {
+    expectAuthorizedUpstream(ctx, checks, "BY-01", win, { authorizedRequests: 1 });
+  } else {
+    expectUpstreamZero(ctx, checks, "BY-01", win, { authorizedRequests: 0 });
+  }
   checks.noLeak([bodyText(res)], { secrets: ctx.allSecrets, forbiddenCanaries: Object.values(ctx.canaries) });
   return { ...checks.result(), denyReason: extraction.matched };
 }
@@ -618,12 +615,17 @@ async function by10(ctx) {
   const agentId = agent?.agentId ?? "e2e_east_west";
   const win = await observeWindow(ctx, { label: "BY-10", ...nowWindow(), agentId, tokenFingerprint: fp });
   try {
+    // Which branch the response took decides the upstream claim: a refused union
+    // query must not have reached the upstream, an allowed one MUST have.
+    let branch = "unrecognized";
     const res = await ctx.lucyQuery(token, { ...UNION_QUERY });
     if (res.status >= 500) {
+      branch = "error";
       checks.expect("deny", false, `BY-10: HTTP 5xx is not a deny; got ${res.status}`);
     } else {
       const extraction = extractDenyReason(res);
       if (extraction.matched) {
+        branch = "deny";
         // Gate refused the call. The case still asserts West rows are absent
         // (no West surface) — measured by canary absence, not by a fabricated zero.
         const text = bodyText(res);
@@ -632,6 +634,7 @@ async function by10(ctx) {
         checks.expect("typed_gold", false, `BY-10: deny branch; gold unbound`);
         checks.expect("real_query", false, `BY-10: deny branch; no successful query to bind`);
       } else if (extraction.source === "mcp_result_ok") {
+        branch = "allow";
         const parsed = ctx.parseMcpToolResult(res);
         const rows = parsed.parsed?.rows ?? [];
         const regions = new Set(rows.map((r) => String(r.region ?? "")).filter(Boolean));
@@ -660,7 +663,11 @@ async function by10(ctx) {
       }
     }
     await win.finish();
-    expectUpstreamZero(ctx, checks, "BY-10", win);
+    if (branch === "allow") {
+      expectAuthorizedUpstream(ctx, checks, "BY-10", win, { authorizedRequests: 1 });
+    } else {
+      expectUpstreamZero(ctx, checks, "BY-10", win, { authorizedRequests: 0 });
+    }
     return { ...checks.result(), denyReason: extractDenyReason(res).matched };
   } finally {
     if (agent?.undo) await agent.undo().catch(() => { /* best-effort */ });
@@ -826,7 +833,10 @@ async function by18(ctx) {
   const real = checkRealQuery({ goldQuestion: gold, evidence: { queries: [] } });
   checks.expect("real_query", real.passed, real.detail);
   await win.finish();
-  expectUpstreamZero(ctx, checks, "BY-18", win);
+  // BY-18 is the one allow-branch case where "zero upstream executions" is the CORRECT
+  // claim: `lucy_explain_query` is a local diagnostic (the proxy runs it in plan-only
+  // mode and never forwards it). Flipping this to a positive assertion would be wrong.
+  expectUpstreamZero(ctx, checks, "BY-18", win, { authorizedRequests: 0 });
   checks.noLeak([bodyText(res)], { secrets: ctx.allSecrets, forbiddenCanaries: Object.values(ctx.canaries) });
   return { ...checks.result(), denyReason: extractDenyReason(res).matched };
 }
@@ -840,7 +850,7 @@ async function by19(ctx) {
   const checks = new Checks();
   const token = ctx.tokens.e2e_finance_east;
   const fp = tokenFingerprint(token);
-  const win = await observeWindow(ctx, { label: "BY-19", ...nowWindow(), agentId: "e2e_finance_east", tokenFingerprint: fp });
+  const win = await observeWindow(ctx, { label: "BY-19 (denied target)", ...nowWindow(), agentId: "e2e_finance_east", tokenFingerprint: fp });
   // The invalid-measure predicate is a runtime request that names a measure
   // (`spend_cents`) as a predicate field. The proxy's row_policy validator
   // must reject the request at compile time.
@@ -860,10 +870,17 @@ async function by19(ctx) {
       checks.expect("deny", false, `BY-19: response was not a recognized envelope (source=${extraction.source})`);
     }
   }
+  // The refused invalid-measure request must not have reached the upstream. The window
+  // is closed BEFORE the valid control runs, so the control's authorized execution
+  // cannot be counted as the refused request's execution.
+  await win.finish();
+  expectUpstreamZero(ctx, checks, "BY-19 (denied target)", win, { authorizedRequests: 0 });
+
   // Valid control: a well-formed policy still works (the role's actual region=East
   // predicate). When upstream is proven, the response matches Q-CAC-EAST; when
   // unproven, the gate refuses — both branches are acceptable as long as the
   // response is a recognized envelope.
+  const controlWin = await observeWindow(ctx, { label: "BY-19 (entitled control)", ...nowWindow(), agentId: "e2e_finance_east", tokenFingerprint: fp });
   const valid = await ctx.lucyQuery(token, { ...SCOPED_QUERY, filters: [] });
   if (valid.status >= 500) {
     checks.expect("deny", false, `BY-19 control: HTTP 5xx is not a deny; got ${valid.status}`);
@@ -908,8 +925,8 @@ async function by19(ctx) {
     : [];
   const real = checkRealQuery({ goldQuestion: gold, evidence: { queries: realQueries } });
   checks.expect("real_query", real.passed, real.detail);
-  await win.finish();
-  expectUpstreamZero(ctx, checks, "BY-19", win);
+  await controlWin.finish();
+  expectAuthorizedUpstream(ctx, checks, "BY-19 (entitled control)", controlWin, { authorizedRequests: 1 });
   checks.noLeak([bodyText(invalid), bodyText(valid)], { secrets: ctx.allSecrets, forbiddenCanaries: Object.values(ctx.canaries) });
   return { ...checks.result(), denyReason: extractDenyReason(invalid).matched };
 }

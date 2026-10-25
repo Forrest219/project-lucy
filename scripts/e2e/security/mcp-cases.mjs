@@ -2,7 +2,7 @@
 // over the real proxy (Spec §3.3, §4). The proxy serves Wiki/Skill locally, so these run without KTX.
 import { writeFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
-import { Checks, explicitDeny } from "./context.mjs";
+import { Checks, explicitDeny, isRefusal } from "./context.mjs";
 
 const SKILL_URI = "lucy-skill://finance/finance-cac-analysis";
 const SKILL_NAME = "finance-cac-analysis";
@@ -165,7 +165,7 @@ export const handlers = {
     const checks = new Checks();
     const batch = [ctx.rpc(1, "tools/list"), ctx.rpc(2, "resources/list")];
     const res = await ctx.mcp(ctx.tokens.e2e_finance, batch);
-    checks.expect("deny", explicitDeny(res), `batch envelope -> ${res.status}`);
+    checks.expect("deny", isRefusal(res), `batch envelope -> ${res.status}`);
     checks.expect("deny", !Array.isArray(res.json), "no per-item batch response was produced");
     checks.noLeak([bodyText(res)], { secrets: ctx.allSecrets, forbiddenCanaries: Object.values(ctx.canaries) });
     return checks.result();
@@ -177,7 +177,7 @@ export const handlers = {
     for (const raw of ['"just a string"', "42", "null", "true"]) {
       const res = await ctx.mcp(ctx.tokens.e2e_finance, undefined, { rawBody: raw, headers: { "content-type": "application/json" } });
       texts.push(bodyText(res));
-      checks.expect("deny", explicitDeny(res), `envelope ${raw} -> ${res.status}`);
+      checks.expect("deny", isRefusal(res), `envelope ${raw} -> ${res.status}`);
     }
     checks.noLeak(texts, { secrets: ctx.allSecrets, forbiddenCanaries: Object.values(ctx.canaries) });
     return checks.result();
@@ -186,7 +186,7 @@ export const handlers = {
   "SEC-08-V07": async (ctx) => {
     const checks = new Checks();
     const res = await ctx.mcp(ctx.tokens.e2e_finance, ctx.rpc(1, "debug/dumpState"));
-    checks.expect("deny", explicitDeny(res), `unknown method -> ${res.status}`);
+    checks.expect("deny", isRefusal(res), `unknown method -> ${res.status}`);
     checks.noLeak([bodyText(res)], { secrets: ctx.allSecrets, forbiddenCanaries: Object.values(ctx.canaries) });
     return checks.result();
   },
@@ -197,7 +197,7 @@ export const handlers = {
     for (const pathname of ["/admin", "/mcp2", "/mcp/../api/admin/agents", "/internal/ktx", "/mcp/unknown"]) {
       const res = await ctx.mcp(ctx.tokens.e2e_finance, ctx.rpc(1, "tools/list"), { pathname });
       texts.push(bodyText(res));
-      checks.expect("deny", explicitDeny(res), `path ${pathname} -> ${res.status}`);
+      checks.expect("deny", isRefusal(res), `path ${pathname} -> ${res.status}`);
     }
     checks.noLeak(texts, { secrets: ctx.allSecrets, forbiddenCanaries: Object.values(ctx.canaries) });
     return checks.result();
