@@ -1,0 +1,84 @@
+# Hive 连接配置示例（只写引用，不写真文凭据）
+#
+# 权威 Spec：docs/specs/lucy-20261025-v0p25-hive-direct-connection-spec.md §3.2
+# 实施计划：docs/plans/2026-10-25-lucy-v0.25-p1-implementation-plan.md §7.2（H1）
+#
+# 这个文件只是示例。真实的连接配置写在
+# `<projectRoot>/webui/config/hive-connections.yaml`，由管理台的连接写入口创建，
+# 不进版本库、不进 `ktx.yaml`。
+#
+# 硬约束（示例本身也要遵守，否则解析会直接失败）：
+#   - 只写凭据**引用**，不写明文密码、keytab 内容或证书内容。
+#   - `none` 与 `nosasl` 是两种不同的认证形态，不共用一个「免密」分支。
+#   - Hive 物理对象是 `database.table`；启用表范围必须写全限定名。
+#   - `default_database` 必须落在 `allowed_databases` 之内。
+#   - `transport: http` 必须给 `http_path`；`transport: tcp` 不得给 `http_path`。
+
+version: 1
+
+connections:
+  # 例 1：Kerberos + TCP。凭据只有 keytab 引用。
+  prod_hive:
+    host: hive.internal.example.com
+    port: 10000
+    default_database: finance
+    allowed_databases:
+      - finance
+      - sales
+    enabled_tables:
+      - finance.orders
+      - finance.order_items
+      - sales.orders
+    transport: tcp
+    auth:
+      kind: kerberos
+      principal: lucy@EXAMPLE.COM
+      keytab_ref: secret://hive/prod.keytab
+      realm: EXAMPLE.COM
+    tls:
+      trust_material_ref: secret://hive/prod-truststore.p12
+      verify_server_certificate: true
+
+  # 例 2：LDAP + HTTP。密码只写引用。
+  reporting_hive:
+    host: knox.internal.example.com
+    port: 8443
+    default_database: reporting
+    allowed_databases:
+      - reporting
+    enabled_tables:
+      - reporting.daily_sales
+    transport: http
+    http_path: /cliservice
+    auth:
+      kind: ldap
+      username: lucy-reader
+      password_ref: secret://hive/reporting.password
+      base_dn: ou=service-accounts,dc=example,dc=com
+
+  # 例 3：SASL 已显式关闭（NOSASL）。这不是「不认证」的同义词：
+  # NONE 表示传输层不做 SASL 协商，NOSASL 表示 SASL 层被显式禁用。
+  staging_hive_nosasl:
+    host: hive-staging.internal.example.com
+    port: 10000
+    default_database: staging
+    allowed_databases:
+      - staging
+    enabled_tables:
+      - staging.events
+    transport: tcp
+    auth:
+      kind: nosasl
+
+  # 例 4：SASL 认证但不做用户名/密码（NONE）。
+  # 与例 3 分开建模，便于分别核对现场服务端配置。
+  lab_hive_none:
+    host: hive-lab.internal.example.com
+    port: 10000
+    allowed_databases:
+      - lab
+    enabled_tables:
+      - lab.samples
+    transport: tcp
+    auth:
+      kind: none

@@ -71,16 +71,16 @@ describe("navigation (shared sidebar config)", () => {
     expect(new Set(iconKeys).size).toBe(iconKeys.length);
   });
 
-  it("navGroups contains 24 second-level items in total", () => {
+  it("navGroups contains 26 second-level items in total", () => {
     const totalItems = navGroups.reduce((sum, g) => sum + g.items.length, 0);
-    expect(totalItems).toBe(24);
+    expect(totalItems).toBe(26);
   });
 
   it("flat sidebar entries match Spec 143 Runtime Status IA", () => {
     const flat: Array<Pick<NavItem, "id" | "label" | "to"> & { group: string }> = navGroups.flatMap(
       (g) => g.items.map((item) => ({ group: g.title, id: item.id, label: item.label, to: item.to }))
     );
-    expect(flat.length).toBe(24);
+    expect(flat.length).toBe(26);
     expect(flat).toEqual([
       { group: "运行状态", id: "overview", label: "系统概览", to: "/overview" },
       { group: "运行状态", id: "ops-calls", label: "调用监控", to: "/ops/calls" },
@@ -100,6 +100,8 @@ describe("navigation (shared sidebar config)", () => {
       { group: "访问治理", id: "admin-agents", label: "Agent", to: "/admin/agents" },
       { group: "访问治理", id: "admin-tokens", label: "Token 凭据", to: "/admin/tokens" },
       { group: "访问治理", id: "admin-roles", label: "角色权限", to: "/admin/roles" },
+      { group: "访问治理", id: "admin-row-policies", label: "行权限视图", to: "/admin/row-policies" },
+      { group: "访问治理", id: "admin-access-map", label: "访问关系图", to: "/admin/access-map" },
       { group: "访问治理", id: "admin-audit", label: "访问日志", to: "/admin/audit" },
       { group: "访问治理", id: "admin-mcp-playground", label: "MCP 调试台", to: "/admin/mcp-playground" },
       { group: "访问治理", id: "admin-config-audit", label: "配置审计", to: "/admin/config-audit" },
@@ -154,6 +156,8 @@ describe("navigation (shared sidebar config)", () => {
       "admin-agents": "管理 Agent 身份、角色、Token 及数据访问边界。",
       "admin-tokens": "全局查看、签发与定向吊销 Agent 访问凭据。",
       "admin-roles": "管理角色的数据库连接、数据表与 MCP 工具授权范围。",
+      "admin-row-policies": "按表反查角色的行策略与 Agent 的最终行约束。",
+      "admin-access-map": "查看授权路径与实际访问路径的对应关系。",
       "admin-audit": "按问询和工具调用追溯 Agent 访问行为、权限裁决与执行耗时。",
       "admin-mcp-playground": "检查 Agent 能不能连上，或者能不能查某张表。",
       "admin-config-audit": "查看各类配置与内容资产的写入记录、变更内容和操作者。",

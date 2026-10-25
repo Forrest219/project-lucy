@@ -68,6 +68,15 @@ export interface RowPolicyPredicateDraft {
   value: string | string[];
 }
 
+/**
+ * Lucy v0.25 P1-1 §3.1 — 行策略模板名的形状。
+ *
+ * 与服务端 `webui/server/admin/row-policy-types.ts` 的
+ * `ROW_POLICY_TEMPLATE_NAME_PATTERN` 同源：模板名要能当 YAML 键、也要能当界面标识。
+ * 前端只做**同形校验**（提前拒绝明显非法的名字），可绑定性仍然只由服务端目录判定。
+ */
+export const ROW_POLICY_TEMPLATE_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_-]*$/;
+
 export interface TableGrant {
   connection: string;
   schema: string;
@@ -75,6 +84,13 @@ export interface TableGrant {
   name: string;
   /** 行级策略谓词列表。空或 undefined 表示全部行。 */
   predicates?: RowPolicyPredicateDraft[];
+  /**
+   * Lucy v0.25 P1-1 §3.1 — 引用的行策略模板名。
+   *
+   * 引用只作**溯源**：模板谓词在运行态展开后与内联谓词进入同一份 `predicates`
+   * （同一条选择器内 AND）。配置里保留引用形态，不写展开后的产物。
+   */
+  rowPolicyTemplate?: string;
 }
 
 export type PermissionSection = "overview" | "tables" | "tools" | "rowPolicy" | "usage";
@@ -102,6 +118,25 @@ export interface PermissionImpactSummary {
   affectedAgents: RoleUserReference[];
 }
 
+/**
+ * Lucy v0.25 P1-1 §3.1 — 选择器上的行策略引用形态。
+ *
+ * `template` 是引用（可缺省 `predicates`），`predicates` 是内联谓词。
+ * 两者同时存在时，运行态把它们展开进同一份谓词列表，在同一条选择器内取交集。
+ */
+export interface RowPolicyReferenceDraft {
+  /** 引用的行策略模板名。 */
+  template?: string;
+  /** 内联谓词（草稿形态，带 sourceName）。 */
+  predicates?: Array<{
+    sourceName: string;
+    field: string;
+    op: "eq" | "in";
+    value?: string;
+    values?: string[];
+  }>;
+}
+
 /** 输出给 access.yaml 的 names selector（草稿形态）。 */
 export interface NamesSelectorDraft {
   connection: string;
@@ -111,15 +146,32 @@ export interface NamesSelectorDraft {
   row_access?: "scoped";
   /**
    * 仅在 row_access === "scoped" 时写入。
-   * predicates 格式与 acl.ts compileScopedRowGrant 期待的 YAML 形状一致。
+   * predicates 格式与 acl.ts compileScopedRowGrant 期待的 YAML 形状一致；
+   * template 是 P1-1 的引用形态（模板谓词在前、内联谓词在后，同一条选择器内 AND）。
    */
+  row_policy?: RowPolicyReferenceDraft;
+}
+
+/**
+ * Lucy v0.25 P1-1 §3.1 — 服务端回读的 Role 选择器（带模板引用）。
+ *
+ * 服务端的 `role_policy` 是 `{ template?, predicates? }`；`types.ts` 的
+ * `RoleRowPolicy` 仍是旧形态（只有 `predicates`），所以角色详情读回时用这个
+ * 放宽后的形状，不改共享类型文件。
+ */
+export interface RoleSelectorWithTemplate {
+  connection?: string;
+  schema: string;
+  names?: string[];
+  prefix?: string;
+  row_access?: "all" | "scoped";
   row_policy?: {
-    predicates: Array<{
-      sourceName: string;
+    template?: string;
+    predicates?: Array<{
       field: string;
       op: "eq" | "in";
-      value?: string;
-      values?: string[];
+      value?: string | number | boolean;
+      values?: Array<string | number | boolean>;
     }>;
   };
 }
@@ -221,21 +273,24 @@ export function deriveConnections(
  * - 策略不同的表拆成独立 selector。
  * - 全部行：不写 row_policy，不写 row_access。
  * - 限定行：写 row_access: "scoped" 与 row_policy.predicates（含 sourceName）。
+ *
+ * Lucy v0.25 P1-1 §3.1：引用模板的表按**模板名**分组——模板不同的表不能合并，
+ * 否则一条选择器只能写一个模板名。分组键因此包含模板名。
  */
 export function groupTableGrants(tables: TableGrant[]): NamesSelectorDraft[] {
   const groups = new Map<
     string,
-    { connection: string; schema: string; names: string[]; predicates?: RowPolicyPredicateDraft[] }
+    { connection: string; schema: string; names: string[]; predicates?: RowPolicyPredicateDraft[]; template?: string }
   >();
 
   for (const table of tables) {
-    const hasPolicy = table.predicates && table.predicates.length > 0;
-    const predicateKey = hasPolicy
+    const template = table.rowPolicyTemplate?.trim() || undefined;
+    const predicateKey = table.predicates?.length
       ? JSON.stringify(
           table.predicates!.map((p) => ({ field: p.field, op: p.op, value: p.value }))
         )
       : "";
-    const groupKey = `${table.connection}\0${table.schema}\0${predicateKey}`;
+    const groupKey = `${table.connection}\0${table.schema}\0${template ?? ""}\0${predicateKey}`;
 
     const existing = groups.get(groupKey);
     if (existing) {
@@ -245,13 +300,14 @@ export function groupTableGrants(tables: TableGrant[]): NamesSelectorDraft[] {
         connection: table.connection,
         schema: table.schema,
         names: [table.name],
-        predicates: hasPolicy ? table.predicates : undefined,
+        predicates: table.predicates?.length ? table.predicates : undefined,
+        template,
       });
     }
   }
 
   return [...groups.values()].map((group): NamesSelectorDraft => {
-    if (!group.predicates || group.predicates.length === 0) {
+    if (!group.template && (!group.predicates || group.predicates.length === 0)) {
       return {
         connection: group.connection,
         schema: group.schema,
@@ -260,9 +316,7 @@ export function groupTableGrants(tables: TableGrant[]): NamesSelectorDraft[] {
     }
 
     // 为每个 table name 展开 predicates（含 sourceName）
-    const predicates: NamesSelectorDraft["row_policy"] extends undefined
-      ? never
-      : NonNullable<NamesSelectorDraft["row_policy"]>["predicates"] = group.names.flatMap((name) =>
+    const predicates: NonNullable<RowPolicyReferenceDraft["predicates"]> = group.names.flatMap((name) =>
       (group.predicates ?? []).map((p) => {
         if (p.op === "in") {
           return {
@@ -286,7 +340,12 @@ export function groupTableGrants(tables: TableGrant[]): NamesSelectorDraft[] {
       schema: group.schema,
       names: group.names,
       row_access: "scoped",
-      row_policy: { predicates },
+      row_policy: {
+        ...(group.template ? { template: group.template } : {}),
+        // 只引用模板时 `predicates` 整体缺省：服务端对空数组会判定为
+        // `row_policy_predicates_required`（P1-1 §4 写入合同）。
+        ...(predicates.length > 0 ? { predicates } : {}),
+      },
     };
   });
 }
@@ -319,15 +378,12 @@ export interface TableAllowSelector {
   names: string[];
   /** "all" = no row restriction (explicit); "scoped" = row_policy applies. */
   row_access?: "all" | "scoped";
-  row_policy?: {
-    predicates: Array<{
-      sourceName: string;
-      field: string;
-      op: "eq" | "in";
-      value?: string;
-      values?: string[];
-    }>;
-  };
+  /**
+   * P1-1 §3.1：`template` 是引用，`predicates` 是内联谓词。
+   * 只引用模板时 `predicates` 缺省；两者并用时服务端把模板谓词展开到内联谓词之前，
+   * 在同一条选择器内取交集。
+   */
+  row_policy?: RowPolicyReferenceDraft;
 }
 
 export interface TableAllowOutput {
@@ -427,6 +483,10 @@ export function normalizeRolePermissionDraft(draft: RolePermissionDraft): RolePe
       connection: table.connection.trim(),
       schema: table.schema.trim(),
       name: table.name.trim(),
+      // P1-1 §3.1：模板引用参与草稿摘要——只加模板（不加内联条件）也是一次变更。
+      ...(table.rowPolicyTemplate?.trim()
+        ? { rowPolicyTemplate: table.rowPolicyTemplate.trim() }
+        : {}),
       ...(table.predicates?.length
         ? { predicates: table.predicates.map(normalizedPredicate).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))) }
         : {}),
@@ -446,9 +506,20 @@ export function rolePermissionDraftHash(draft: RolePermissionDraft): string {
   return JSON.stringify(normalizeRolePermissionDraft(draft));
 }
 
+/**
+ * 一张表的行策略指纹。
+ *
+ * P1-1 §3.1：模板引用参与指纹——「只加模板、不加内联条件」也是一次行策略变更，
+ * 不能因为谓词数组为空就被当成没变。
+ */
 function policyHash(table: TableGrant | undefined): string {
-  if (!table?.predicates?.length) return "";
-  return JSON.stringify(table.predicates.map(normalizedPredicate).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))));
+  if (!table) return "";
+  const template = table.rowPolicyTemplate?.trim() ?? "";
+  const predicates = table.predicates?.length
+    ? JSON.stringify(table.predicates.map(normalizedPredicate).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))))
+    : "";
+  if (!template && !predicates) return "";
+  return `${template}|${predicates}`;
 }
 
 export function derivePermissionImpact(
@@ -471,12 +542,16 @@ export function derivePermissionImpact(
   const rowPolicyExpanded = rowPoliciesChanged.some((key) => {
     const beforePolicy = beforeByKey.get(key)?.predicates?.length ?? 0;
     const afterPolicy = afterByKey.get(key)?.predicates?.length ?? 0;
-    return beforePolicy > 0 && (afterPolicy === 0 || policyHash(beforeByKey.get(key)) !== policyHash(afterByKey.get(key)));
+    if (beforePolicy > 0 && (afterPolicy === 0 || policyHash(beforeByKey.get(key)) !== policyHash(afterByKey.get(key)))) return true;
+    // P1-1 §3.1：移除模板引用 = 移除一层限制 = 放宽。
+    return beforePolicy === 0 && Boolean(beforeByKey.get(key)?.rowPolicyTemplate) && !afterByKey.get(key)?.rowPolicyTemplate;
   });
   const rowPolicyContracted = rowPoliciesChanged.some((key) => {
     const beforePolicy = beforeByKey.get(key)?.predicates?.length ?? 0;
     const afterPolicy = afterByKey.get(key)?.predicates?.length ?? 0;
-    return afterPolicy > 0 && (beforePolicy === 0 || policyHash(beforeByKey.get(key)) !== policyHash(afterByKey.get(key)));
+    if (afterPolicy > 0 && (beforePolicy === 0 || policyHash(beforeByKey.get(key)) !== policyHash(afterByKey.get(key)))) return true;
+    // P1-1 §3.1：新增模板引用 = 新增一层限制 = 收紧。
+    return afterPolicy === 0 && Boolean(afterByKey.get(key)?.rowPolicyTemplate) && !beforeByKey.get(key)?.rowPolicyTemplate;
   });
   const beforeTools = new Set(before.tools);
   const afterTools = new Set(after.tools);

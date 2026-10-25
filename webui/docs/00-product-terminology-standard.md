@@ -336,6 +336,27 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Schema Remove Impact | 移除影响 | — | dryRun 摘要：已启用表、Manifest、overlay、Wiki 引用（Spec 117） |
 | Delete Schema Manifest (optional) | 同时删除 Schema Manifest | 默认级联删除 | 可选勾选；默认关；仅 dryRun:false 时生效（Spec 117） |
 | Delete Semantic Overlays (optional) | 同时删除 semantic overlay | 默认级联删除 | 可选勾选；默认关；仅 dryRun:false 时生效（Spec 117） |
+| HiveServer2 (HS2) | HiveServer2（HS2） | Hive Metastore、Hive 元数据服务（指同一对象时）、Hive 集群 | Hive 查询服务端；连接元数据服务不等于可问数。不得与 Hive Metastore 混称（P1-4） |
+| Hive Direct Connection | Hive 直连 | Doris／SelectDB 外部 Hive Catalog、MySQL／PostgreSQL 协议兼容、Hive 兼容连接 | Lucy 通过受管 Hive JDBC worker 连接 HS2 的连接类型；不是其它引擎的 Hive Catalog 接入（P1-4） |
+| Hive Compile Bridge | Hive 编译桥 | Hive 执行器、Hive 查询引擎、Hive 编译器 | Lucy 调用原版 `ktx-daemon semantic-query`、显式传入 `dialect=hive` 的只编译进程边界；不执行 SQL，不持有数据库凭据（P1-4） |
+
+### 4.1.1 Hive 直连接入边界
+
+「Hive 直连」「HiveServer2（HS2）」「Hive 编译桥」三者的关系固定如下，不得互相替换：
+
+- **Hive 直连** 是 Lucy 的连接类型，连接对象是 HS2，链路为「语义编译 → 严格 AST／来源／策略／能力检查 → 受管 JDBC worker → HS2」。
+- **HiveServer2（HS2）** 是被连接的服务端，只接受 SQL 并返回结果；它不参与语义编译，也不持有 Lucy 的语义资产。
+- **Hive 编译桥** 是 Lucy 内部的只编译进程边界：只把已发布语义资产编译成 Hive SQL 与语义计划，不连库、不执行、不持有凭据。
+
+边界约束：
+
+- 「编译成功」不等于「HS2 可执行」。方言编译产物必须进真实 HS2 实测才算通过，不得用编译结果推断可执行性。
+- Hive database 在治理界面映射为 Schema；沿用既有「连接」「连接 ID」「连通测试」「Schema」「Schema Manifest」「semantic overlay」「启用表范围」「最终行约束」「配置审计」，不另造含混的 Catalog 层级。
+- 缺客户环境时 Hive 支持状态为 `blocked_environment`，不得显示为已支持或已验证。
+
+Protected DOM（用户可见 DOM 须 `translate="no"` + `notranslate`）：`HiveServer2`、`HS2`、`JDBC`、`JRE`、`KTX`、`ktx-daemon`、`semantic-query`、`dialect=hive`、`SourceDefinition`、`forced_filters`、`filters[]`、`predefined_measures_only`、数据库／表／字段标识、文件名、路径与 URL。
+
+跨模块沿用：本节三个主术语在语义建模、访问治理、审计与发布各面的引用沿用同一主术语，不另造别名；其它模块如需新增 Hive 专属概念，先按 §5 登记再写文案。
 
 ### 4.2 语义建模
 

@@ -8,12 +8,12 @@ import type {
   ConnectionTablesResponse,
   ConnectionsResponse,
   McpToolInfo,
-  RoleAllowConfig,
   RoleDetail as RoleDetailType,
   RoleRowPolicyPredicate,
   RoleSelector,
 } from "../../lib/types";
 import { PageHeader } from "../../components/PageHeader";
+import { AuthorizationSummarySection } from "../../components/admin/AuthorizationSummarySection";
 import { RoleDeleteBlockedNotice } from "../../components/RoleDeleteBlockedNotice";
 import { PolicyDegradeRepairText } from "../../components/PolicyDegradeBanner";
 import { TagInput } from "../../components/TagInput";
@@ -27,9 +27,11 @@ import {
   partitionGrantableTools,
   permissionTableKey,
   rolePermissionDraftHash,
+  ROW_POLICY_TEMPLATE_NAME_PATTERN,
   type PermissionImpactSummary,
   type PermissionSection,
   type RolePermissionDraft,
+  type RoleSelectorWithTemplate,
   type RowPolicyPredicateDraft,
   type TableGrant,
 } from "../../lib/rolePermissionDraft";
@@ -38,10 +40,44 @@ import { queryKeys } from "../../lib/queryKeys";
 
 type PageMode = "create" | "edit" | "copy";
 
+/**
+ * Lucy v0.25 P1-1 §3.1 — 写回配置的行策略引用形态。
+ *
+ * `template` 是引用（可缺省 `predicates`），`predicates` 是内联谓词；
+ * 两者并用时服务端把模板谓词展开到内联谓词之前，在同一条选择器内取交集。
+ */
+type RoleRowPolicyPayload = {
+  template?: string;
+  predicates?: RoleRowPolicyPredicate[];
+};
+
+type RoleSelectorPayload =
+  | {
+      connection?: string;
+      schema: string;
+      names: string[];
+      row_access?: "all" | "scoped";
+      row_policy?: RoleRowPolicyPayload;
+    }
+  | {
+      connection?: string;
+      schema: string;
+      prefix: string;
+      row_access?: "all" | "scoped";
+      row_policy?: RoleRowPolicyPayload;
+    };
+
+type RoleAllowPayload = {
+  connections?: string[];
+  source_scope?: "catalog_bound";
+  tableSelectors?: RoleSelectorPayload[];
+  tools?: string[];
+};
+
 type RoleWritePayload = {
   description?: string;
   permission_model_version: 2;
-  allow: RoleAllowConfig;
+  allow: RoleAllowPayload;
 };
 
 type ReviewSnapshot = {
@@ -87,7 +123,7 @@ function toastAccessWriteAck(result: AccessWriteAck, message: string): boolean {
   return true;
 }
 
-function copyPredicates(selector: RoleSelector): RowPolicyPredicateDraft[] | undefined {
+function copyPredicates(selector: RoleSelectorWithTemplate): RowPolicyPredicateDraft[] | undefined {
   if (selector.row_access !== "scoped" || !selector.row_policy?.predicates?.length) return undefined;
   return selector.row_policy.predicates.map((predicate) => ({
     field: String(predicate.field),
@@ -98,16 +134,28 @@ function copyPredicates(selector: RoleSelector): RowPolicyPredicateDraft[] | und
   }));
 }
 
-function explicitTables(selectors: RoleSelector[] | undefined): TableGrant[] {
+/**
+ * Lucy v0.25 P1-1 §3.1 — 选择器引用的行策略模板名。
+ *
+ * 引用形态原样读回草稿：配置里存的是引用，不是展开后的谓词。
+ */
+function copyTemplate(selector: RoleSelectorWithTemplate): string | undefined {
+  if (selector.row_access !== "scoped") return undefined;
+  const template = selector.row_policy?.template;
+  return typeof template === "string" && template.trim() ? template.trim() : undefined;
+}
+
+function explicitTables(selectors: RoleSelectorWithTemplate[] | undefined): TableGrant[] {
   const result: TableGrant[] = [];
   for (const selector of selectors ?? []) {
     if (!("names" in selector)) continue;
-    for (const name of selector.names) {
+    for (const name of selector.names ?? []) {
       result.push({
         connection: selector.connection ?? "",
         schema: selector.schema,
         name,
         predicates: copyPredicates(selector),
+        rowPolicyTemplate: copyTemplate(selector),
       });
     }
   }
@@ -145,6 +193,7 @@ function expandLegacyPrefixes(detail: RoleDetailType): {
         schema: source.schema,
         name: source.sourceName,
         predicates: copyPredicates(selector),
+        rowPolicyTemplate: copyTemplate(selector),
       };
       if (!tables.some((table) => permissionTableKey(table) === permissionTableKey(next))) tables.push(next);
     }
@@ -195,7 +244,7 @@ function initializeDraft(detail: RoleDetailType | null, mode: PageMode): DraftIn
 
 function serializeDraft(draft: RolePermissionDraft): RoleWritePayload {
   const partitioned = partitionGrantableTools(draft.tools);
-  let allow: RoleAllowConfig;
+  let allow: RoleAllowPayload;
   if (draft.scope.mode === "catalog_bound") {
     const connections = draft.roleId === LUCY_ADMIN_ROLE_ID
       ? ["*"]
@@ -207,14 +256,22 @@ function serializeDraft(draft: RolePermissionDraft): RoleWritePayload {
     };
   } else {
     const built = buildTableAllow({ mode: "names", tables: draft.scope.tables });
-    const tableSelectors: RoleSelector[] = (built.tableSelectors ?? []).map((selector) => {
-      const predicates = selector.row_policy?.predicates.map(({ sourceName: _sourceName, ...predicate }) => predicate as RoleRowPolicyPredicate);
+    const tableSelectors: RoleSelectorPayload[] = (built.tableSelectors ?? []).map((selector) => {
+      const predicates = selector.row_policy?.predicates?.map(({ sourceName: _sourceName, ...predicate }) => predicate as RoleRowPolicyPredicate);
+      // P1-1 §3.1：引用形态原样写回——`template` 与内联 `predicates` 可以并存，
+      // 只引用模板时 `predicates` 整体缺省（空数组会被服务端判为形状错误）。
+      const template = selector.row_policy?.template;
+      const rowPolicy: RoleRowPolicyPayload | undefined = template
+        ? { template, ...(predicates?.length ? { predicates } : {}) }
+        : predicates?.length
+          ? { predicates }
+          : undefined;
       return {
         connection: selector.connection || undefined,
         schema: selector.schema,
         names: selector.names,
         row_access: selector.row_access,
-        ...(predicates?.length ? { row_policy: { predicates } } : {}),
+        ...(rowPolicy ? { row_policy: rowPolicy } : {}),
       };
     });
     allow = {
@@ -274,6 +331,11 @@ function validateDraft(draft: RolePermissionDraft, migrationBlocked: string | nu
   }
   if (draft.scope.mode === "names") {
     for (const table of draft.scope.tables) {
+      // P1-1 §3.1：模板名要能当 YAML 键，也要能当界面标识。
+      const template = table.rowPolicyTemplate?.trim();
+      if (template && !ROW_POLICY_TEMPLATE_NAME_PATTERN.test(template)) {
+        return { section: "rowPolicy", message: `${table.name} 引用的行策略模板名不合法（只允许字母、数字、下划线和连字符，且不能以数字开头）` };
+      }
       for (const predicate of table.predicates ?? []) {
         if (!predicate.field.trim()) return { section: "rowPolicy", message: `${table.name} 的行级策略缺少字段` };
         const values = Array.isArray(predicate.value) ? predicate.value : [predicate.value];
@@ -309,7 +371,7 @@ function RoleBoundarySummary({
     : draft.scope.mode === "catalog_bound"
     ? draft.scope.connections.filter((id) => id !== "*")
     : [...new Set(tables.map((table) => table.connection).filter(Boolean))];
-  const restricted = tables.filter((table) => table.predicates?.length).length;
+  const restricted = tables.filter((table) => table.predicates?.length || table.rowPolicyTemplate).length;
   const incompatible = draft.tools.filter((tool) => ROW_POLICY_INCOMPATIBLE_TOOLS.has(tool));
 
   return (
@@ -673,7 +735,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
             {tab.label}
             {tab.key === "tables" && <span className="ml-1 text-xs text-fg-muted">{draft.scope.mode === "catalog_bound" ? "目录" : tables.length}</span>}
             {tab.key === "tools" && <span className="ml-1 text-xs text-fg-muted">{draft.tools.length}</span>}
-            {tab.key === "rowPolicy" && <span className="ml-1 text-xs text-fg-muted">{tables.filter((table) => table.predicates?.length).length}</span>}
+            {tab.key === "rowPolicy" && <span className="ml-1 text-xs text-fg-muted">{tables.filter((table) => table.predicates?.length || table.rowPolicyTemplate).length}</span>}
           </button>
         ))}
       </div>
@@ -682,6 +744,15 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
         <main className="pl-admin-tab-panel min-w-0" role="tabpanel">
           {activeSection === "overview" ? (
             <div className="grid max-w-2xl gap-4 pb-28">
+              {/* Lucy v0.25 P1-2 §4.2 —「概览」显示当前 Role 授权摘要（只读投影）。 */}
+              {mode !== "create" && roleId ? (
+                <AuthorizationSummarySection
+                  kind="role"
+                  id={roleId}
+                  title="授权摘要"
+                  testId="role-authorization-summary"
+                />
+              ) : null}
               <label className="grid gap-1" htmlFor="role-id-input">
                 <span className="text-sm font-medium">角色标识</span>
                 <input id="role-id-input" className="pl-input notranslate" translate="no" value={draft.roleId} disabled={isReadOnlyTemplate || (mode === "edit" || mode === "delete")} onChange={(event) => updateDraft({ ...draft, roleId: event.target.value })} placeholder="例：poc_data_engineer" />

@@ -9,8 +9,9 @@
 | 适用范围 | Lucy WebUI Help Center：`/help`、`docs/SYSTEM_HANDBOOK.md` §1 系统概述与架构拓扑、Help TOC、目录深链与相关测试 |
 | 关联工单 | `webui/docs/plans/wo-M59-help-sidebar-entry-map.md`（待 v0.2 spec 批准后落盘） |
 | 架构决议 | 在 handbook §1 末尾新增一节「WebUI 入口速查（5+1 侧栏地图）」，作为面向三类用户的"全局功能模块入口"结构表；保留 §0 Q&A / §3 主题小节 / §6 故障排查三套入口的职责分工；不动 Help API、不动 Markdown 渲染器、不引入搜索；**事实源唯一为 `webui/src/app/App.tsx` `navGroups` + `topLevelEntry`**；`webui/docs/06-navigation-ia.md` §3 当前仍保留旧路径（`/onboarding` / `/connections/whitelist` / `表目录` / `连通测试（兼容）`），属于"待同步 IA 文档"，**不**与 `navGroups` 并列称为权威源；引入共享导航配置 `webui/src/app/navigation.ts` 让 App 与测试共用同一份事实 |
-| 事实源 | `webui/src/app/App.tsx` line 39–43（`topLevelEntry`）、line 88–146（`navGroups` 5 组共 13 项二级菜单 + 1 个顶部一级入口 = 14 个侧栏可见入口）、`webui/docs/06-navigation-ia.md` §3 line 25–54 与 §4 line 80–101（**待同步**，含旧路径）、`webui/docs/60-help-qa-section-spec.md` v0.2（§0 / §6 边界与翻译防御）、`webui/server/help.ts` `parseHelpToc` line 116–144 + `SECTION_ALIASES` line 12–54、`webui/server/help.ts` `stableSlug` line 94–99（**ASCII-only**）、`webui/src/lib/wiki.ts` `slugifyHeading` line 210–218（**保 Unicode**）、`webui/src/components/MarkdownPreview.tsx` line 59 / 328 / 348（翻译防御范围）、`docs/ui-ux-feedback/pages/catalog.md` line 24 / `wiki.md` line 25（侧栏缺位历史修复）、2026-08-02 用户反馈 + Codex 交叉审阅 5 项发现 |
-| 关联文档 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/06-navigation-ia.md`（待同步）、`webui/docs/30-help-markdown-rendering-spec.md`、`webui/docs/33-help-center-layout-polish-spec.md`、`webui/docs/60-help-qa-section-spec.md`、`webui/docs/37-sidebar-navigation-ia-consolidation-spec.md`、`docs/governance/DEVELOPMENT.md` |
+| 事实源 | `webui/src/app/navigation.ts`（`topLevelEntry` + `navGroups`，**当前 7 个一级分组共 26 个侧栏可见入口**）、`webui/docs/06-navigation-ia.md` §3（已与代码对齐）、`webui/docs/60-help-qa-section-spec.md` v0.2（§0 / §6 边界与翻译防御）、`webui/server/help.ts` `parseHelpToc` + `SECTION_ALIASES`、`webui/server/help.ts` `stableSlug`（**ASCII-only**）、`webui/src/lib/wiki.ts` `slugifyHeading`（**保 Unicode**）、`webui/src/components/MarkdownPreview.tsx`（翻译防御范围）、`docs/ui-ux-feedback/pages/catalog.md` / `wiki.md`（侧栏缺位历史修复）、2026-08-02 用户反馈 + Codex 交叉审阅 5 项发现 |
+| 关联文档 | `webui/docs/00-product-terminology-standard.md`、`webui/docs/06-navigation-ia.md`、`webui/docs/30-help-markdown-rendering-spec.md`、`webui/docs/33-help-center-layout-polish-spec.md`、`webui/docs/60-help-qa-section-spec.md`、`webui/docs/37-sidebar-navigation-ia-consolidation-spec.md`、`docs/governance/DEVELOPMENT.md` |
+| v0.25 P1 同步说明 | 2026-10-25（v0.25 P1 梯队 W6）：侧栏由 6 组 24 项扩为 **7 组 26 项**（新增「行权限视图」「访问关系图」，均属「访问治理」）。**§6.1 当前侧栏镜像表、§6.2 填表约定、§6.4 深链锚点、§7.1 / §7.2 UX 契约已同步为现状**；§1 背景 / §2 决策摘要 / §3 目标表中的「5+1 / 14 项」是 2026-08-02 的历史快照，按 spec 留痕惯例**保留原文不改**。系统手册 `docs/SYSTEM_HANDBOOK.md` §1.5 与本 spec §6.1 逐行一致（26 行）。 |
 
 ## 1. 背景
 
@@ -162,7 +163,7 @@ Mandatory inline-code 列表（§1.X 表格行内遇到这些字符串必须写 
 
 ## 6. 内容结构
 
-### 6.1 §1.X 大纲（v0.2）
+### 6.1 §1.5 大纲（v0.2 起；v0.25 P1 同步为 26 行）
 
 ```text
 ## 1. 系统概述与架构拓扑
@@ -170,57 +171,73 @@ Mandatory inline-code 列表（§1.X 表格行内遇到这些字符串必须写 
 ### 1.1 Lucy 是什么
 ### 1.2 …
 …
-### 1.X WebUI 入口速查（5+1 侧栏地图）
+### 1.5 WebUI 入口速查（运行状态侧栏地图）
 
 本节是侧栏可见入口的镜像视图。
-事实源唯一为 `webui/src/app/App.tsx` `navGroups` + `topLevelEntry`（v0.2 起由 `webui/src/app/navigation.ts` 导出）。
-`webui/docs/06-navigation-ia.md` §3 当前为待同步 IA 文档（含旧路径），不与代码并列称为权威源。
-架构调整时，请先改 `webui/src/app/navigation.ts`，再同步 §1.X 表格，最后开 follow-up 工单修 06 spec §3 / §4。
+事实源唯一为 `webui/src/app/navigation.ts` 的 `navGroups`（Spec 143 起不再使用置顶 `topLevelEntry` 渲染）。
+`webui/docs/06-navigation-ia.md` §3 与代码对齐；架构调整时请先改 `navigation.ts`，再同步 §1.5 表格。
 
 | 分组 | 二级菜单 | 路径 | 一句话用途 |
 | --- | --- | --- | --- |
-| 系统概览 | 系统概览 | `/overview` | … |
-| 数据接入 | 连接概览 | `/connections` | … |
-| 数据接入 | 启用表范围 | `/connections/enabled-tables` | … |
-| 语义建模 | 语义资产 | `/catalog` | … |
-| 语义建模 | 业务 Wiki | `/wiki` | … |
-| 语义发布 | 发布工作台 | `/publish/workbench` | … |
-| 语义发布 | 发布记录 | `/publish/history` | … |
-| 质量评测 | 评测用例 | `/eval/cases` | … |
-| 质量评测 | 运行历史 | `/eval/runs` | … |
-| 质量评测 | 趋势监控 | `/eval/monitor` | … |
-| 访问治理 | Agent 实例 | `/admin/agents` | … |
-| 访问治理 | 角色权限 | `/admin/roles` | … |
-| 访问治理 | 访问日志 | `/admin/audit` | … |
-| 访问治理 | 配置审计 | `/admin/config-audit` | … |
+| 运行状态 | 系统概览 | `/overview` | 确认系统可用，处理当前待办。 |
+| 运行状态 | 调用监控 | `/ops/calls` | 准实时查看 MCP 工具调用量、成败与请求时效。 |
+| 运行状态 | 使用概况 | `/admin/usage` | 查看 Agent、Token、数据表的活跃率，以及 WebUI 页面访问情况。 |
+| 数据接入 | 连接概览 | `/connections` | 管理数据库连接、`Schema` 与 `Schema Manifest`，并查看连通性和本地目录同步状态。 |
+| 数据接入 | 启用表范围 | `/connections/enabled-tables` | 配置各连接进入语义层的表范围，并审阅保存前变更。 |
+| 业务上下文 | 语义资产 | `/catalog` | 管理表、字段、指标、分群与关联等结构化语义资产。 |
+| 业务上下文 | 业务 Wiki | `/wiki` | 管理业务口径、指标说明与分析指引等业务文档。 |
+| 业务上下文 | 业务 Skill | `/skills` | 查看受治理的业务 `Skill` 资产及其发布状态与角色授权。 |
+| 语义发布 | 发布工作台 | `/publish/workbench` | 审阅并校验语义与 `Wiki` 变更，同步索引后使其对 `Agent` 生效。 |
+| 语义发布 | 发布记录 | `/publish/history` | 查看历次语义发布的变更范围、执行结果与操作记录。 |
+| 质量评测 | 评测用例 | `/eval/cases` | 管理数据问答与语义质量的评测用例及预期结果。 |
+| 质量评测 | 运行历史 | `/eval/runs` | 查看评测运行记录、通过率、结果明细与失败诊断。 |
+| 质量评测 | 趋势监控 | `/eval/monitor` | 监控评测通过率、失败集中度与质量漂移趋势。 |
+| 质量评测 | 现场提问 | `/eval/field-questions` | 审定访问日志里反复出现的业务问法，补问法后收成评测用例。 |
+| 质量评测 | 安全评测候选 | `/eval/security-candidates` | 从访问拒绝日志中提取权限与数据隔离场景，审定后转为安全评测用例。 |
+| 访问治理 | Agent | `/admin/agents` | 管理 `Agent` 身份、角色、`Token` 及数据访问边界。 |
+| 访问治理 | Token 凭据 | `/admin/tokens` | 全局查看、签发与定向吊销 `Agent` 访问凭据。 |
+| 访问治理 | 角色权限 | `/admin/roles` | 管理角色的数据库连接、数据表与 `MCP` 工具授权范围。 |
+| 访问治理 | 行权限视图 | `/admin/row-policies` | 按表反查角色的行策略与 `Agent` 的最终行约束。 |
+| 访问治理 | 访问关系图 | `/admin/access-map` | 查看授权路径与实际访问路径的对应关系。 |
+| 访问治理 | 访问日志 | `/admin/audit` | 按问询和工具调用追溯 `Agent` 访问行为、权限裁决与执行耗时。 |
+| 访问治理 | MCP 调试台 | `/admin/mcp-playground` | 检查 `Agent` 能不能连上，或者能不能查某张表。 |
+| 访问治理 | 配置审计 | `/admin/config-audit` | 查看各类配置与内容资产的写入记录、变更内容和操作者。 |
+| 系统设置 | 品牌外观 | `/admin/branding` | 配置客户 `Logo`、产品名称与品牌副标题。 |
+| 系统设置 | 登录账户 | `/admin/admins` | 管理 `WebUI` 登录账户，并配置所有者或运维角色。 |
+| 系统设置 | 版本信息 | `/admin/version` | 查看产品版本、构建提交和随包 `KTX` 版本；有未提交改动时显示工作区状态。 |
 
-> 事实源唯一为 `webui/src/app/App.tsx` `navGroups` + `topLevelEntry`（`webui/src/app/navigation.ts` 导出）；`webui/docs/06-navigation-ia.md` §3 当前为待同步 IA 文档。
+> 事实源唯一为 `webui/src/app/navigation.ts` 的 `navGroups`。
 ```
 
 ### 6.2 表格行填表约定
 
-- 分组列：与 `webui/src/app/navigation.ts` `navGroups[i].title` 逐字一致（v0.2 起由该模块共享导出）；"系统概览"作为顶部一级入口单独一行，分组列填 `系统概览`。
+- 分组列：与 `webui/src/app/navigation.ts` `navGroups[i].title` 逐字一致；「系统概览」自 Spec 143 起是「运行状态」分组下的第一项，不再作为顶部一级入口单独成行。
 - 二级菜单列：与 `topLevelEntry.label` 或 `navGroups[i].items[j].label` 逐字一致。
 - 路径列：必须等于 `topLevelEntry.to` 或 `navGroups[i].items[j].to` 的当前值；写成 inline code（`` `/catalog` ``）。
 - 一句话用途列：每行不超过两行；不展开操作步骤（操作步骤在 §3 各小节）。
+- 行数：与 `navGroups` 展开后的条目数一致（当前 **26 行**）；增删导航项必须同步本表与系统手册 §1.5。
 
-### 6.3 v0.25 P1 规划入口（未实现）
+### 6.3 v0.25 P1 入口（已实现）
 
-本节只追加设计索引，不修改 §6.1 的当前侧栏镜像，不把规划入口写入系统手册的当前功能表。2026-10-25 需求审查已签核通过（设计口径），但规划入口仍未实现，也不授权开发。
+本节登记 v0.25 P1 新增的两个固定入口。实现后它们**已写入 §6.1 的当前侧栏镜像**，不再只是规划索引：2026-10-25 P1 需求审查已签核通过，W6 已挂载路由与导航（`webui/src/app/navigation.ts`、`webui/src/app/App.tsx`）。
 
-| 规划位置 | 导航项 | 规划路由 | 设计依据 |
-| --- | --- | --- | --- |
-| 角色权限之后 | 行权限视图 | `/admin/row-policies` | [P1-1 Spec](../../docs/specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md) |
-| 行权限视图之后、访问日志之前 | 访问关系图 | `/admin/access-map` | [P1-3 Spec](187-access-relation-sankey-spec.md) |
+| 导航位置 | 导航项 | 路由 | 页面内二级入口 | 设计依据 |
+| --- | --- | --- | --- | --- |
+| 角色权限之后 | 行权限视图 | `/admin/row-policies` | `/admin/row-policy-templates` | [P1-1 Spec](../../docs/specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md) |
+| 行权限视图之后、访问日志之前 | 访问关系图 | `/admin/access-map` | — | [P1-3 Spec](187-access-relation-sankey-spec.md) |
 
-未来实施时须先更新 `webui/src/app/navigation.ts` 和对应路由，再同步系统手册与本文当前镜像；在代码事实出现前，不显示可用菜单或帮助深链。
+同步要求：
+
+- §6.1 的当前侧栏镜像与系统手册「WebUI 入口速查」必须与本表一致；「访问治理」由 6 项扩为 8 项，现有项相对顺序不变。
+- 授权摘要（L25-01 / P1-2）**不占独立导航位**，它是 Agent 详情页「权限预览」首屏与 Role 详情页「概览」的只读投影，不进入侧栏镜像。
+- Hive 直连（L25-10 / P1-4）本轮只实现编译侧与配置面，管理台入口属 H25-06，**不进入侧栏镜像**。
 
 ### 6.4 深链锚点（v0.2 修订）
 
-`### 1.X WebUI 入口速查（5+1 侧栏地图）` 的 section ID **不依赖自动 stableSlug**：
+`### 1.5 WebUI 入口速查（运行状态侧栏地图）` 的 section ID **不依赖自动 stableSlug**：
 
 - `webui/server/help.ts` `stableSlug`（line 94–99）只保 ASCII `[a-z0-9-]`，中文字符会被吞；正文章节本地锚点走 `webui/src/lib/wiki.ts` `slugifyHeading`（line 210–218，保 Unicode `[\p{L}\p{N}]`）。两个 slug 规则不一致，依赖自动派生会让 TOC / 深链 / 测试各说各话。
-- 本 spec 实施时**必须**在 `webui/server/help.ts` `SECTION_ALIASES`（line 12–54）追加一条 `[/WebUI 入口速查/, "webui-entry-map"]`，显式锚定 §1.X 的 section id 为 `webui-entry-map`。
+- 本 spec 实施时**必须**在 `webui/server/help.ts` `SECTION_ALIASES`（line 12–54）追加一条 `[/WebUI 入口速查/, "webui-entry-map"]`，显式锚定 §1.5 的 section id 为 `webui-entry-map`。
 - 深链形如 `/help?section=webui-entry-map`，由 `parseHelpToc` 通过 `sectionIdFor` + alias 匹配返回。
 
 ## 7. UX 契约
@@ -230,20 +247,20 @@ Mandatory inline-code 列表（§1.X 表格行内遇到这些字符串必须写 
 | UI 元素 | 要求 |
 |---|---|
 | TOC §1 条目 | 已存在（`[1. 系统概述与架构拓扑]`）；保留不删 |
-| TOC §1.X 条目 | 新增 `[1.X WebUI 入口速查（5+1 侧栏地图）]`；按现有 TOC 规则展示 |
-| 深链定位 | `/help?section=webui-entry-map` 滚动到 §1.X 顶部（v0.2 起由 `SECTION_ALIASES` 显式锚定，不依赖自动 slug） |
+| TOC §1.5 条目 | `[1.5 WebUI 入口速查（运行状态侧栏地图）]`；按现有 TOC 规则展示 |
+| 深链定位 | `/help?section=webui-entry-map` 滚动到 §1.5 顶部（v0.2 起由 `SECTION_ALIASES` 显式锚定，不依赖自动 slug） |
 | 当前项高亮 | TOC 中当前 section 子节 `aria-current="location"`（沿用 spec 33 §5.1） |
 | §0 / §3 / §6 保持 | §0 Q&A / §3 各主题小节 / §6 FAQ 全部不变（spec 60 v0.2 硬约束） |
 
-### 7.2 §1.X 阅读体验
+### 7.2 §1.5 阅读体验
 
 | UI 元素 | 要求 |
 |---|---|
-| 引言段 | 明确说"§1.X 是侧栏可见入口的镜像视图；事实源唯一为 `navGroups` + `topLevelEntry`（v0.2 起由 `navigation.ts` 导出）；06 spec §3 当前为待同步 IA 文档；架构调整需先改 `navigation.ts` 再同步 §1.X，最后开 follow-up 工单修 06 spec" |
-| 表格 | GFM pipe table，四列 14 行；表格本身由 renderer 的 table-block notranslate 兜底 |
+| 引言段 | 明确说"§1.5 是侧栏可见入口的镜像视图；事实源唯一为 `webui/src/app/navigation.ts` 的 `navGroups`（Spec 143 起不再使用置顶 `topLevelEntry` 渲染）；`webui/docs/06-navigation-ia.md` §3 与代码对齐；架构调整需先改 `navigation.ts` 再同步 §1.5 表格" |
+| 表格 | GFM pipe table，四列 26 行（与 `navGroups` 展开条目数一致）；表格本身由 renderer 的 table-block notranslate 兜底 |
 | 关键术语 | 必须 inline code；依赖现有 renderer 兜底 |
 | 一句话用途 | 不超过两行；详细操作跳到 §3 |
-| 引用 | 表格下方一行 `> 事实源唯一为 \`webui/src/app/App.tsx\` \`navGroups\` + \`topLevelEntry\`（\`webui/src/app/navigation.ts\` 导出）；\`webui/docs/06-navigation-ia.md\` §3 当前为待同步 IA 文档。` |
+| 引用 | 表格下方一行 `> 事实源唯一为 \`webui/src/app/navigation.ts\` 的 \`navGroups\`。` |
 
 ### 7.3 Help 页导航
 

@@ -61,6 +61,23 @@ function initialTask(mode: string | null): Task {
   return "";
 }
 
+/**
+ * Tools this page can preview an ACL decision for.
+ *
+ * The URL may carry `tool=` (P1-2 授权摘要 deep link). It selects WHICH tool's
+ * authorization is previewed — nothing else. It must not widen or narrow the
+ * authorization semantics, and an unknown tool is ignored rather than passed
+ * through to the API: the preview must stay a preview of a tool this page
+ * actually knows how to reason about.
+ */
+const PREVIEWABLE_TOOLS = ["lucy_query"] as const;
+
+function readToolPrefill(raw: string | null): string {
+  if (!raw) return "lucy_query";
+  const value = raw.trim();
+  return (PREVIEWABLE_TOOLS as readonly string[]).includes(value) ? value : "lucy_query";
+}
+
 function tokenProblem(value: string): string | null {
   if (value.includes("{") || value.includes("mcpServers")) return "只粘贴 Token 那一串";
   return null;
@@ -89,6 +106,9 @@ export function McpPlayground() {
   const prefill = useMemo(() => readArgsPrefill(searchParams.get("args")), [searchParams]);
   const [agentId, setAgentId] = useState(() => searchParams.get("agentId") ?? "");
   const [task, setTask] = useState<Task>(() => initialTask(searchParams.get("mode")));
+  // P1-2 F-01 — the deep link's `tool` is consumed here instead of being read
+  // and discarded. It only chooses which tool's ACL decision is previewed.
+  const [previewTool] = useState(() => readToolPrefill(searchParams.get("tool")));
   const [connectionId, setConnectionId] = useState(prefill.connectionId);
   const [sourceName, setSourceName] = useState(prefill.sourceName);
   const [bearerToken, setBearerToken] = useState("");
@@ -232,7 +252,7 @@ export function McpPlayground() {
     syncQuery({ agentId, mode: "dry-run" });
     await previewMutation.mutateAsync({
       agentId,
-      tool: "lucy_query",
+      tool: previewTool,
       arguments: { connectionId, sourceName }
     });
   }

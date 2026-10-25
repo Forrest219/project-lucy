@@ -51,6 +51,13 @@ const ConfigAuditRoute = lazyRoute(() => import("../pages/admin/ConfigAudit"), "
 const AuditSourcesRoute = lazyRoute(() => import("../pages/admin/AuditSources"), "AuditSources");
 const RoleListRoute = lazyRoute(() => import("../pages/admin/RoleList"), "RoleList");
 const RoleDetailRoute = lazyRoute(() => import("../pages/admin/RoleDetail"), "RoleDetail");
+// Lucy v0.25 / L25-14 R1、P1-3 — 行权限视图、行策略模板与访问关系图。
+const RowPolicyViewRoute = lazyRoute(() => import("../pages/admin/RowPolicyView"), "RowPolicyView");
+const RowPolicyTemplatesRoute = lazyRoute(() => import("../pages/admin/RowPolicyTemplates"), "RowPolicyTemplates");
+const AccessMapRoute = lazyRoute(() => import("../pages/admin/AccessMap"), "AccessMap");
+// Lucy v0.25 / P1-2 — 授权摘要独立页。它是深链落点（P1-2 §4.2「链接各自摘要」），
+// 因此**不进侧栏导航**（navigation.ts / navIcons.ts 不动），只在 URL 可达。
+const AuthorizationSummaryRoute = lazyRoute(() => import("../pages/admin/AuthorizationSummary"), "AuthorizationSummaryPage");
 const AdminAccountsRoute = lazyRoute(() => import("../pages/admin/AdminAccounts"), "AdminAccounts");
 const BrandingSettingsRoute = lazyRoute(() => import("../pages/admin/BrandingSettings"), "BrandingSettings");
 const VersionInfoRoute = lazyRoute(() => import("../pages/admin/VersionInfo"), "VersionInfo");
@@ -88,6 +95,10 @@ const {
   AuditSources,
   RoleList,
   RoleDetail,
+  RowPolicyView,
+  RowPolicyTemplates,
+  AccessMap,
+  AuthorizationSummary,
   AdminAccounts,
   BrandingSettings,
   VersionInfo,
@@ -124,6 +135,10 @@ const {
   AuditSources: AuditSourcesRoute.Component,
   RoleList: RoleListRoute.Component,
   RoleDetail: RoleDetailRoute.Component,
+  RowPolicyView: RowPolicyViewRoute.Component,
+  RowPolicyTemplates: RowPolicyTemplatesRoute.Component,
+  AccessMap: AccessMapRoute.Component,
+  AuthorizationSummary: AuthorizationSummaryRoute.Component,
   AdminAccounts: AdminAccountsRoute.Component,
   BrandingSettings: BrandingSettingsRoute.Component,
   VersionInfo: VersionInfoRoute.Component,
@@ -156,6 +171,10 @@ const ROUTE_PRELOADS: Array<{ match: (path: string) => boolean; route: LazyRoute
   { match: (p) => p === "/admin/usage", route: GovernanceOverviewRoute },
   { match: (p) => p === "/admin/roles", route: RoleListRoute },
   { match: (p) => p.startsWith("/admin/roles/"), route: RoleDetailRoute },
+  { match: (p) => p === "/admin/row-policies", route: RowPolicyViewRoute },
+  { match: (p) => p === "/admin/row-policy-templates", route: RowPolicyTemplatesRoute },
+  { match: (p) => p === "/admin/access-map", route: AccessMapRoute },
+  { match: (p) => p === "/admin/authorization-summary", route: AuthorizationSummaryRoute },
   { match: (p) => p === "/admin/tokens", route: TokensRoute },
   { match: (p) => p === "/admin/audit", route: AuditRoute },
   { match: (p) => p === "/help", route: HelpCenterRoute },
@@ -528,6 +547,10 @@ export function AppFrame() {
             <Route path="/admin/roles" element={<RoleList />} />
             <Route path="/admin/roles/new" element={<RoleDetail mode="create" />} />
             <Route path="/admin/roles/:roleId" element={<RoleDetail />} />
+            <Route path="/admin/row-policies" element={<RowPolicyView />} />
+            <Route path="/admin/row-policy-templates" element={<RowPolicyTemplates />} />
+            <Route path="/admin/access-map" element={<AccessMap />} />
+            <Route path="/admin/authorization-summary" element={<AuthorizationSummary />} />
             <Route path="/admin/audit" element={<Audit />} />
             <Route path="/admin/audit-sources" element={<AuditSources />} />
             <Route path="/admin/mcp-playground" element={<McpPlayground />} />

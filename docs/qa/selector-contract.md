@@ -1320,3 +1320,393 @@
 | `whitelist-group-toggle-${conn.id}-${schema}` | 启用表范围 Schema 分组展开开关（模板） | `pages/connections/TableWhitelist.tsx` |
 | `monitor-field-panel` | 评测监控「现场」面板 | `pages/eval/Monitor.tsx` |
 | `call-monitor-usage-slow-mark` | 调用监控问询慢标记生效说明 | `pages/ops/CallMonitor.tsx` |
+
+## 2026-10-25 · v0.25 P1 梯队 selector 补录
+
+> 守门脚本 `webui/scripts/check-selector-contract.mjs` 规则 ①：实现的 `data-testid` 必须在本表登记。
+> 本轮 P1 梯队（行策略模板／授权摘要／访问关系图／Hive 编译侧）与此前轮次遗留的未登记元素在此一次性补录；
+> **只登记实现中确实存在的 testid，不发明任何 id**（v0.3 重写原则第 2 条）。
+> 登记后 `npm run e2e:selector-contract` 由红转绿，`npm run e2e:smoke` 的 pre-hook 不再阻断浏览器套件。
+
+### `webui/src/pages/admin/AccessMap.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `access-map-access-unavailable` | 访问关系图：access unavailable | `pages/admin/AccessMap.tsx` |
+| `access-map-back-to-full` | 访问关系图：back to full | `pages/admin/AccessMap.tsx` |
+| `access-map-empty` | 访问关系图：empty | `pages/admin/AccessMap.tsx` |
+| `access-map-error` | 访问关系图：error | `pages/admin/AccessMap.tsx` |
+| `access-map-folded-badge` | 访问关系图：folded badge | `pages/admin/AccessMap.tsx` |
+| `access-map-grant-unavailable` | 访问关系图：grant unavailable | `pages/admin/AccessMap.tsx` |
+| `access-map-layer` | 访问关系图：layer | `pages/admin/AccessMap.tsx` |
+| `access-map-partial-notice` | 访问关系图：partial notice | `pages/admin/AccessMap.tsx` |
+| `access-map-search` | 访问关系图：search | `pages/admin/AccessMap.tsx` |
+| `access-map-search-message` | 访问关系图：search message | `pages/admin/AccessMap.tsx` |
+| `access-map-search-submit` | 访问关系图：search submit | `pages/admin/AccessMap.tsx` |
+| `access-map-snapshot-id` | 访问关系图：snapshot id | `pages/admin/AccessMap.tsx` |
+| `access-map-token-filter-notice` | 访问关系图：token filter notice | `pages/admin/AccessMap.tsx` |
+| `access-map-trust` | 访问关系图：trust | `pages/admin/AccessMap.tsx` |
+| `access-map-view-map` | 访问关系图：view map | `pages/admin/AccessMap.tsx` |
+| `access-map-view-table` | 访问关系图：view table | `pages/admin/AccessMap.tsx` |
+| `access-map-window` | 访问关系图：window | `pages/admin/AccessMap.tsx` |
+
+### `webui/src/pages/admin/AgentList.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `new-agent-modal` | 新建 Agent：modal | `pages/admin/AgentList.tsx` |
+
+### `webui/src/pages/admin/AuthorizationSummary.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `authorization-summary-missing-id` | 授权摘要：summary missing id | `pages/admin/AuthorizationSummary.tsx` |
+
+### `webui/src/pages/admin/RoleDetail.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `role-repair-hint` | 角色修复：hint | `pages/admin/RoleDetail.tsx` |
+
+### `webui/src/pages/admin/RowPolicyTemplates.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `row-policy-template-delete` | 行策略／行权限视图：template delete | `pages/admin/RowPolicyTemplates.tsx` |
+| `row-policy-template-delete-dry-run` | 行策略／行权限视图：template delete dry run | `pages/admin/RowPolicyTemplates.tsx` |
+| `row-policy-template-delete-target-mismatch` | 行策略／行权限视图：template delete target mismatch | `pages/admin/RowPolicyTemplates.tsx` |
+| `row-policy-template-dry-run` | 行策略／行权限视图：template dry run | `pages/admin/RowPolicyTemplates.tsx` |
+| `row-policy-template-edit` | 行策略／行权限视图：template edit | `pages/admin/RowPolicyTemplates.tsx` |
+| `row-policy-template-editor` | 行策略／行权限视图：template editor | `pages/admin/RowPolicyTemplates.tsx` |
+| `row-policy-template-issues` | 行策略／行权限视图：template issues | `pages/admin/RowPolicyTemplates.tsx` |
+| `row-policy-template-reset` | 行策略／行权限视图：template reset | `pages/admin/RowPolicyTemplates.tsx` |
+| `row-policy-template-save` | 行策略／行权限视图：template save | `pages/admin/RowPolicyTemplates.tsx` |
+| `row-policy-templates-error` | 行策略／行权限视图：templates error | `pages/admin/RowPolicyTemplates.tsx` |
+| `row-policy-templates-page` | 行策略／行权限视图：templates page | `pages/admin/RowPolicyTemplates.tsx` |
+
+### `webui/src/pages/admin/RowPolicyView.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `row-policy-view-detail` | 行策略／行权限视图：view detail | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-detail-error` | 行策略／行权限视图：view detail error | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-failures` | 行策略／行权限视图：view failures | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-list-empty` | 行策略／行权限视图：view list empty | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-list-error` | 行策略／行权限视图：view list error | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-list-failures` | 行策略／行权限视图：view list failures | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-list-loading` | 行策略／行权限视图：view list loading | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-list-state` | 行策略／行权限视图：view list state | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-list-state-badge` | 行策略／行权限视图：view list state badge | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-page` | 行策略／行权限视图：view page | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-role-${role.roleId}` | 行策略／行权限视图：view role ${role.roleId} | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-role-access` | 行策略／行权限视图：view role access | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-role-branches` | 行策略／行权限视图：view role branches | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-role-templates` | 行策略／行权限视图：view role templates | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-table-${table.connectionId}-${table.schema}-${table.sourceName}` | 行策略／行权限视图：view table ${table.connectionId} ${table.schema} ${table.sourceName} | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-table-grant` | 行策略／行权限视图：view table grant | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-table-list` | 行策略／行权限视图：view table list | `pages/admin/RowPolicyView.tsx` |
+
+### `webui/src/components/AgentRoleField.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `agent-business-role-options` | Agent 业务角色：options | `components/AgentRoleField.tsx` |
+| `agent-ops-role-group` | Agent 运维角色：group | `components/AgentRoleField.tsx` |
+
+### `webui/src/components/CreateConnectionDrawer.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `create-connection-catalog` | 新建连接抽屉：catalog | `components/CreateConnectionDrawer.tsx` |
+| `create-connection-region` | 新建连接抽屉：region | `components/CreateConnectionDrawer.tsx` |
+| `create-connection-s3-staging-dir` | 新建连接抽屉：s3 staging dir | `components/CreateConnectionDrawer.tsx` |
+| `create-connection-workgroup` | 新建连接抽屉：workgroup | `components/CreateConnectionDrawer.tsx` |
+
+### `webui/src/components/DeleteConnectionDrawer.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `delete-connection-block-reason` | 删除连接抽屉：block reason | `components/DeleteConnectionDrawer.tsx` |
+| `delete-connection-user-count` | 删除连接抽屉：user count | `components/DeleteConnectionDrawer.tsx` |
+| `delete-connection-write-error` | 删除连接抽屉：write error | `components/DeleteConnectionDrawer.tsx` |
+
+### `webui/src/components/RoleRowPolicyPanel.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `row-policy-authoring-mode-${key}` | 行策略／行权限视图：authoring mode ${key} | `components/RoleRowPolicyPanel.tsx` |
+| `row-policy-drawer-template` | 行策略／行权限视图：drawer template | `components/RoleRowPolicyPanel.tsx` |
+| `row-policy-entry-${key}` | 行策略／行权限视图：entry ${key} | `components/RoleRowPolicyPanel.tsx` |
+| `row-policy-preview-details-${key}` | 行策略／行权限视图：preview details ${key} | `components/RoleRowPolicyPanel.tsx` |
+| `row-policy-preview-unavailable-${key}` | 行策略／行权限视图：preview unavailable ${key} | `components/RoleRowPolicyPanel.tsx` |
+| `row-policy-template-error-${key}` | 行策略／行权限视图：template error ${key} | `components/RoleRowPolicyPanel.tsx` |
+| `row-policy-template-missing-${key}` | 行策略／行权限视图：template missing ${key} | `components/RoleRowPolicyPanel.tsx` |
+
+### `webui/src/components/admin/AccessMapCanvas.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `access-map-canvas` | 访问关系图：canvas | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-edge-badge-${link.edge.id}` | 访问关系图：edge badge ${link.edge.id} | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-edge-badge-button-${link.edge.id}` | 访问关系图：edge badge button ${link.edge.id} | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-edge-badges` | 访问关系图：edge badges | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-edge-detail` | 访问关系图：edge detail | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-edge-detail-path-${evaluation.pathKey}` | 访问关系图：edge detail path ${evaluation.pathKey} | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-kernel-${link.edge.id}` | 访问关系图：kernel ${link.edge.id} | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-link-${link.edge.id}` | 访问关系图：link ${link.edge.id} | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-node-${node.id}` | 访问关系图：node ${node.id} | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-node-button-${item.node.id}` | 访问关系图：node button ${item.node.id} | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-node-list` | 访问关系图：node list | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-svg` | 访问关系图：svg | `components/admin/AccessMapCanvas.tsx` |
+
+### `webui/src/components/admin/AccessMapCredentialList.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `access-map-credential-${agent.id}` | 访问关系图：credential ${agent.id} | `components/admin/AccessMapCredentialList.tsx` |
+| `access-map-credential-empty` | 访问关系图：credential empty | `components/admin/AccessMapCredentialList.tsx` |
+| `access-map-credential-list` | 访问关系图：credential list | `components/admin/AccessMapCredentialList.tsx` |
+| `access-map-token-${token.id}` | 访问关系图：token ${token.id} | `components/admin/AccessMapCredentialList.tsx` |
+
+### `webui/src/components/admin/AccessMapLegend.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `access-map-legend` | 访问关系图：legend | `components/admin/AccessMapLegend.tsx` |
+| `access-map-legend-trust` | 访问关系图：legend trust | `components/admin/AccessMapLegend.tsx` |
+| `access-map-legend-window` | 访问关系图：legend window | `components/admin/AccessMapLegend.tsx` |
+
+### `webui/src/components/admin/AccessMapSignalBar.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `access-map-orphan-grants` | 访问关系图：orphan grants | `components/admin/AccessMapSignalBar.tsx` |
+| `access-map-signal-bar` | 访问关系图：signal bar | `components/admin/AccessMapSignalBar.tsx` |
+| `access-map-signal-calls` | 访问关系图：signal calls | `components/admin/AccessMapSignalBar.tsx` |
+| `access-map-signal-confirmed` | 访问关系图：signal confirmed | `components/admin/AccessMapSignalBar.tsx` |
+| `access-map-signal-confirmed-source` | 访问关系图：signal confirmed source（确凿越权档的来源标注，SC-10） | `components/admin/AccessMapSignalBar.tsx` |
+| `access-map-signal-dormant` | 访问关系图：signal dormant | `components/admin/AccessMapSignalBar.tsx` |
+| `access-map-signal-needs-review` | 访问关系图：signal needs review | `components/admin/AccessMapSignalBar.tsx` |
+| `access-map-signal-needs-review-note` | 访问关系图：signal needs review note（需复核档的档位说明，禁称「越权」，SC-10） | `components/admin/AccessMapSignalBar.tsx` |
+| `access-map-snapshot-coverage` | 访问关系图：snapshot coverage | `components/admin/AccessMapSignalBar.tsx` |
+
+### `webui/src/components/admin/AccessMapTable.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `access-map-table` | 访问关系图：table | `components/admin/AccessMapTable.tsx` |
+| `access-map-table-edges` | 访问关系图：table edges | `components/admin/AccessMapTable.tsx` |
+| `access-map-table-empty` | 访问关系图：table empty | `components/admin/AccessMapTable.tsx` |
+| `access-map-table-node-${node.id}` | 访问关系图：table node ${node.id} | `components/admin/AccessMapTable.tsx` |
+| `access-map-table-nodes` | 访问关系图：table nodes | `components/admin/AccessMapTable.tsx` |
+| `access-map-table-row-${edge.id}` | 访问关系图：table row ${edge.id} | `components/admin/AccessMapTable.tsx` |
+
+### `webui/src/components/admin/AuthorizationHeadline.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `authorization-candidate-notice` | 授权摘要：candidate notice | `components/admin/AuthorizationHeadline.tsx` |
+| `authorization-denominator-unknown` | 授权摘要：denominator unknown | `components/admin/AuthorizationHeadline.tsx` |
+| `authorization-diagnostics` | 授权摘要：diagnostics | `components/admin/AuthorizationHeadline.tsx` |
+| `authorization-headline` | 授权摘要：headline | `components/admin/AuthorizationHeadline.tsx` |
+| `authorization-headline-text` | 授权摘要：headline text | `components/admin/AuthorizationHeadline.tsx` |
+| `authorization-headline-unavailable` | 授权摘要：headline unavailable | `components/admin/AuthorizationHeadline.tsx` |
+| `authorization-partial-notice` | 授权摘要：partial notice | `components/admin/AuthorizationHeadline.tsx` |
+| `authorization-scoped-count` | 授权摘要：scoped count | `components/admin/AuthorizationHeadline.tsx` |
+| `authorization-scoped-unknown` | 授权摘要：scoped unknown | `components/admin/AuthorizationHeadline.tsx` |
+
+### `webui/src/components/admin/AuthorizationResourceCard.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `authorization-playground-link` | 授权摘要：playground link | `components/admin/AuthorizationResourceCard.tsx` |
+| `authorization-resource-card` | 授权摘要：resource card | `components/admin/AuthorizationResourceCard.tsx` |
+| `authorization-resource-empty` | 授权摘要：resource empty | `components/admin/AuthorizationResourceCard.tsx` |
+| `authorization-resource-row` | 授权摘要：resource row | `components/admin/AuthorizationResourceCard.tsx` |
+| `authorization-row-summary` | 授权摘要：row summary | `components/admin/AuthorizationResourceCard.tsx` |
+
+### `webui/src/components/admin/AuthorizationRowBoundary.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `authorization-legacy-notice` | 授权摘要：legacy notice | `components/admin/AuthorizationRowBoundary.tsx` |
+| `authorization-row-boundary` | 授权摘要：row boundary | `components/admin/AuthorizationRowBoundary.tsx` |
+| `authorization-row-boundary-basis` | 授权摘要：row boundary basis | `components/admin/AuthorizationRowBoundary.tsx` |
+| `authorization-row-boundary-empty` | 授权摘要：row boundary empty | `components/admin/AuthorizationRowBoundary.tsx` |
+| `authorization-row-boundary-error` | 授权摘要：row boundary error | `components/admin/AuthorizationRowBoundary.tsx` |
+| `authorization-row-boundary-item` | 授权摘要：row boundary item | `components/admin/AuthorizationRowBoundary.tsx` |
+| `authorization-row-boundary-shape` | 授权摘要：row boundary shape | `components/admin/AuthorizationRowBoundary.tsx` |
+
+### `webui/src/components/admin/AuthorizationSummaryPanel.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `authorization-access-map-link` | 授权摘要：access map link | `components/admin/AuthorizationSummaryPanel.tsx` |
+| `authorization-playground-deep-link` | 授权摘要：playground deep link | `components/admin/AuthorizationSummaryPanel.tsx` |
+| `authorization-referencing-agent-${agentId}` | 授权摘要：referencing agent ${agentId} | `components/admin/AuthorizationSummaryPanel.tsx` |
+| `authorization-referencing-agents` | 授权摘要：referencing agents | `components/admin/AuthorizationSummaryPanel.tsx` |
+| `authorization-related-links` | 授权摘要：related links | `components/admin/AuthorizationSummaryPanel.tsx` |
+| `authorization-row-policy-link` | 授权摘要：row policy link | `components/admin/AuthorizationSummaryPanel.tsx` |
+| `authorization-summary-panel` | 授权摘要：summary panel | `components/admin/AuthorizationSummaryPanel.tsx` |
+
+### `webui/src/components/admin/AuthorizationSummarySection.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `authorization-summary-error` | 授权摘要：summary error | `components/admin/AuthorizationSummarySection.tsx` |
+| `authorization-summary-loading` | 授权摘要：summary loading | `components/admin/AuthorizationSummarySection.tsx` |
+
+### `webui/src/components/admin/AuthorizationTechnicalDetails.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `authorization-technical-body` | 授权摘要：technical body | `components/admin/AuthorizationTechnicalDetails.tsx` |
+| `authorization-technical-details` | 授权摘要：technical details | `components/admin/AuthorizationTechnicalDetails.tsx` |
+
+### `webui/src/components/admin/AuthorizationToolGroups.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `authorization-tool-group-${key}` | 授权摘要：tool group ${key} | `components/admin/AuthorizationToolGroups.tsx` |
+| `authorization-tool-groups` | 授权摘要：tool groups | `components/admin/AuthorizationToolGroups.tsx` |
+| `authorization-unclassified-tools` | 授权摘要：unclassified tools | `components/admin/AuthorizationToolGroups.tsx` |
+
+### `webui/src/components/admin/RowPolicyDnfPreview.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `${testId}-all` | 既有模板元素（`${testId}-all`） | `components/admin/RowPolicyDnfPreview.tsx` |
+| `${testId}-arm-${index}` | 既有模板元素（`${testId}-arm-${index}`） | `components/admin/RowPolicyDnfPreview.tsx` |
+| `${testId}-empty` | 既有模板元素（`${testId}-empty`） | `components/admin/RowPolicyDnfPreview.tsx` |
+| `row-policy-dnf-agent-${row.agentId}` | 行策略／行权限视图：dnf agent ${row.agentId} | `components/admin/RowPolicyDnfPreview.tsx` |
+| `row-policy-dnf-agents-section` | 行策略／行权限视图：dnf agents section | `components/admin/RowPolicyDnfPreview.tsx` |
+| `row-policy-dnf-boundary` | 行策略／行权限视图：dnf boundary | `components/admin/RowPolicyDnfPreview.tsx` |
+| `row-policy-dnf-preview` | 行策略／行权限视图：dnf preview | `components/admin/RowPolicyDnfPreview.tsx` |
+| `row-policy-dnf-unavailable` | 行策略／行权限视图：dnf unavailable | `components/admin/RowPolicyDnfPreview.tsx` |
+| `row-policy-dnf-union-section` | 行策略／行权限视图：dnf union section | `components/admin/RowPolicyDnfPreview.tsx` |
+| `row-policy-dnf-union-unavailable` | 行策略／行权限视图：dnf union unavailable | `components/admin/RowPolicyDnfPreview.tsx` |
+
+### `webui/src/components/admin/RowPolicyStateBadge.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `row-policy-snapshot` | 行策略／行权限视图：snapshot | `components/admin/RowPolicyStateBadge.tsx` |
+| `row-policy-status-${status}` | 行策略／行权限视图：status ${status} | `components/admin/RowPolicyStateBadge.tsx` |
+| `row-policy-status-reason` | 行策略／行权限视图：status reason | `components/admin/RowPolicyStateBadge.tsx` |
+
+### `webui/src/components/admin/RowPolicyTemplatePanel.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `row-policy-template-audit-state` | 行策略／行权限视图：template audit state | `components/admin/RowPolicyTemplatePanel.tsx` |
+| `row-policy-template-blocking-references` | 行策略／行权限视图：template blocking references | `components/admin/RowPolicyTemplatePanel.tsx` |
+| `row-policy-template-detail` | 行策略／行权限视图：template detail | `components/admin/RowPolicyTemplatePanel.tsx` |
+| `row-policy-template-detail-empty` | 行策略／行权限视图：template detail empty | `components/admin/RowPolicyTemplatePanel.tsx` |
+| `row-policy-template-empty` | 行策略／行权限视图：template empty | `components/admin/RowPolicyTemplatePanel.tsx` |
+| `row-policy-template-impact` | 行策略／行权限视图：template impact | `components/admin/RowPolicyTemplatePanel.tsx` |
+| `row-policy-template-impact-empty` | 行策略／行权限视图：template impact empty | `components/admin/RowPolicyTemplatePanel.tsx` |
+| `row-policy-template-impact-tables` | 行策略／行权限视图：template impact tables | `components/admin/RowPolicyTemplatePanel.tsx` |
+| `row-policy-template-impact-tables-empty` | 行策略／行权限视图：template impact tables empty | `components/admin/RowPolicyTemplatePanel.tsx` |
+| `row-policy-template-reference-count-${template.name}` | 行策略／行权限视图：template reference count ${template.name} | `components/admin/RowPolicyTemplatePanel.tsx` |
+| `row-policy-template-references` | 行策略／行权限视图：template references | `components/admin/RowPolicyTemplatePanel.tsx` |
+| `row-policy-template-references-empty` | 行策略／行权限视图：template references empty | `components/admin/RowPolicyTemplatePanel.tsx` |
+| `row-policy-template-row-${template.name}` | 行策略／行权限视图：template row ${template.name} | `components/admin/RowPolicyTemplatePanel.tsx` |
+| `row-policy-template-table` | 行策略／行权限视图：template table | `components/admin/RowPolicyTemplatePanel.tsx` |
+| `row-policy-template-usability` | 行策略／行权限视图：template usability | `components/admin/RowPolicyTemplatePanel.tsx` |
+| `row-policy-template-usability-empty` | 行策略／行权限视图：template usability empty | `components/admin/RowPolicyTemplatePanel.tsx` |
+
+### `webui/src/components/admin/RowPolicyTemplatePicker.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `row-policy-authoring-mode-${mode}` | 行策略／行权限视图：authoring mode ${mode} | `components/admin/RowPolicyTemplatePicker.tsx` |
+| `row-policy-template-option-${option.name}` | 行策略／行权限视图：template option ${option.name} | `components/admin/RowPolicyTemplatePicker.tsx` |
+| `row-policy-template-picker` | 行策略／行权限视图：template picker | `components/admin/RowPolicyTemplatePicker.tsx` |
+| `row-policy-template-picker-empty` | 行策略／行权限视图：template picker empty | `components/admin/RowPolicyTemplatePicker.tsx` |
+| `row-policy-template-picker-reason` | 行策略／行权限视图：template picker reason | `components/admin/RowPolicyTemplatePicker.tsx` |
+
+### `webui/src/components/audit-trust/AssociationRevisionTimeline.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `association-revision-effective` | 关联修订时间线：effective | `components/audit-trust/AssociationRevisionTimeline.tsx` |
+| `association-revision-history` | 关联修订时间线：history | `components/audit-trust/AssociationRevisionTimeline.tsx` |
+| `association-revision-item` | 关联修订时间线：item | `components/audit-trust/AssociationRevisionTimeline.tsx` |
+| `association-revision-original` | 关联修订时间线：original | `components/audit-trust/AssociationRevisionTimeline.tsx` |
+| `association-revision-timeline` | 关联修订时间线：timeline | `components/audit-trust/AssociationRevisionTimeline.tsx` |
+
+### `webui/src/components/audit-trust/AuditStatusTriad.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `audit-status-association` | 审计状态三元组：association | `components/audit-trust/AuditStatusTriad.tsx` |
+| `audit-status-coverage` | 审计状态三元组：coverage | `components/audit-trust/AuditStatusTriad.tsx` |
+| `audit-status-execution` | 审计状态三元组：execution | `components/audit-trust/AuditStatusTriad.tsx` |
+| `audit-status-triad` | 审计状态三元组：triad | `components/audit-trust/AuditStatusTriad.tsx` |
+
+### `webui/src/components/audit-trust/AuditTopMetaBar.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `audit-top-meta-bar` | 审计顶栏：meta bar | `components/audit-trust/AuditTopMetaBar.tsx` |
+| `audit-top-meta-refresh` | 审计顶栏：meta refresh | `components/audit-trust/AuditTopMetaBar.tsx` |
+| `audit-top-meta-stats-at` | 审计顶栏：meta stats at | `components/audit-trust/AuditTopMetaBar.tsx` |
+| `audit-top-meta-sync-lag` | 审计顶栏：meta sync lag | `components/audit-trust/AuditTopMetaBar.tsx` |
+| `audit-top-meta-window` | 审计顶栏：meta window | `components/audit-trust/AuditTopMetaBar.tsx` |
+| `audit-top-meta-zone` | 审计顶栏：meta zone | `components/audit-trust/AuditTopMetaBar.tsx` |
+
+### `webui/src/components/audit-trust/ClientCoveragePill.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `client-coverage-pill` | 客户端覆盖：pill | `components/audit-trust/ClientCoveragePill.tsx` |
+
+### `webui/src/components/audit-trust/CredentialPrincipalCell.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `credential-principal-cell` | 凭据主体：cell | `components/audit-trust/CredentialPrincipalCell.tsx` |
+| `credential-principal-copy` | 凭据主体：copy | `components/audit-trust/CredentialPrincipalCell.tsx` |
+| `credential-principal-hint` | 凭据主体：hint | `components/audit-trust/CredentialPrincipalCell.tsx` |
+| `credential-principal-value` | 凭据主体：value | `components/audit-trust/CredentialPrincipalCell.tsx` |
+
+### `webui/src/components/audit-trust/ReadonlySqlRowset.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `readonly-sql-bytes` | 只读 SQL 结果集：bytes | `components/audit-trust/ReadonlySqlRowset.tsx` |
+| `readonly-sql-cols` | 只读 SQL 结果集：cols | `components/audit-trust/ReadonlySqlRowset.tsx` |
+| `readonly-sql-rows` | 只读 SQL 结果集：rows | `components/audit-trust/ReadonlySqlRowset.tsx` |
+| `readonly-sql-rowset` | 只读 SQL 结果集：rowset | `components/audit-trust/ReadonlySqlRowset.tsx` |
+| `readonly-sql-status` | 只读 SQL 结果集：status | `components/audit-trust/ReadonlySqlRowset.tsx` |
+
+### `webui/src/components/onboarding/Step1ConnectDb.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `setup-athena-hint` | 接入向导：athena hint | `components/onboarding/Step1ConnectDb.tsx` |
+| `setup-catalog` | 接入向导：catalog | `components/onboarding/Step1ConnectDb.tsx` |
+| `setup-region` | 接入向导：region | `components/onboarding/Step1ConnectDb.tsx` |
+| `setup-s3-staging-dir` | 接入向导：s3 staging dir | `components/onboarding/Step1ConnectDb.tsx` |
+| `setup-workgroup` | 接入向导：workgroup | `components/onboarding/Step1ConnectDb.tsx` |
+
+### `webui/src/pages/admin/NewToken.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `new-token-expiry-preset-${preset.id}` | 新建 Token：expiry preset ${preset.id} | `pages/admin/NewToken.tsx` |
+| `new-token-expiry-presets` | 新建 Token：expiry presets | `pages/admin/NewToken.tsx` |
+
+### `webui/src/pages/publish/PublishHistory.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `publish-history-scope-manifest` | 发布历史：scope manifest | `pages/publish/PublishHistory.tsx` |
+| `publish-history-scope-removed` | 发布历史：scope removed | `pages/publish/PublishHistory.tsx` |
+| `publish-history-scope-written` | 发布历史：scope written | `pages/publish/PublishHistory.tsx` |
+
+### `webui/src/pages/publish/PublishWorkbench.tsx`
+
+| Test ID | 元素 | 出现位置 |
+|---|---|---|
+| `workbench-mirror-only-semantic` | workbench mirror only semantic | `pages/publish/PublishWorkbench.tsx` |

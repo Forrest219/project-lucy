@@ -176,6 +176,8 @@ function renderHelp(path = "/help") {
               "| 访问治理 | Agent | `/admin/agents` | 管理 `Agent` 身份、角色、`Token` 及数据访问边界。 |",
               "| 访问治理 | Token 凭据 | `/admin/tokens` | 全局查看、签发与定向吊销 `Agent` 访问凭据。 |",
               "| 访问治理 | 角色权限 | `/admin/roles` | 管理角色的数据库连接、数据表与 `MCP` 工具授权范围。 |",
+              "| 访问治理 | 行权限视图 | `/admin/row-policies` | 按表反查角色的行策略与 `Agent` 的最终行约束。 |",
+              "| 访问治理 | 访问关系图 | `/admin/access-map` | 查看授权路径与实际访问路径的对应关系。 |",
               "| 访问治理 | 访问日志 | `/admin/audit` | 按问询和工具调用追溯 `Agent` 访问行为、权限裁决与执行耗时。 |",
               "| 访问治理 | MCP 调试台 | `/admin/mcp-playground` | 检查 `Agent` 能不能连上，或者能不能查某张表。 |",
               "| 访问治理 | 配置审计 | `/admin/config-audit` | 查看各类配置与内容资产的写入记录、变更内容和操作者。 |",
@@ -875,7 +877,7 @@ describe("HelpCenter", () => {
     expect(document.querySelector("section#webui-entry-map")).not.toBeNull();
   });
 
-  it("§1.5 table has 4 columns and 24 rows that mirror navigation.ts", async () => {
+  it("§1.5 table has 4 columns and 26 rows that mirror navigation.ts", async () => {
     renderHelp("/help?section=webui-entry-map");
     await waitFor(() =>
       screen.getByRole("heading", { name: /WebUI 入口速查（运行状态侧栏地图）/ })
@@ -893,13 +895,17 @@ describe("HelpCenter", () => {
     const headers = table.querySelectorAll("thead th");
     expect(headers.length).toBe(4);
 
-    const bodyRows = table.querySelectorAll("tbody tr");
-    expect(bodyRows.length).toBe(24);
-
     // Every visible column must mirror the shared navigation module so the
     // handbook cannot drift from the current menu labels, paths, or copy.
     const expectedItems = navGroups.flatMap((g) => g.items);
     const expectedGroups = navGroups.flatMap((g) => g.items.map(() => g.title));
+
+    const bodyRows = table.querySelectorAll("tbody tr");
+    // The literal count is a tripwire: changing `navigation.ts` must be a
+    // conscious act that also updates the handbook mirror table.
+    expect(bodyRows.length).toBe(26);
+    expect(bodyRows.length).toBe(expectedItems.length);
+
     bodyRows.forEach((tr, idx) => {
       const cells = tr.querySelectorAll("td");
       expect(cells[0]?.textContent).toBe(expectedGroups[idx]);

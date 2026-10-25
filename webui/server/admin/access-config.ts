@@ -60,7 +60,18 @@ export type YamlPermissionModelVersion = 1 | 2;
 export type YamlRowAccess = "all" | "scoped";
 
 export interface YamlRowPolicy {
-  predicates: Array<{
+  /**
+   * Lucy v0.25 P1-1 §3.1 — 行策略模板引用。
+   *
+   * 引用存在时，模板谓词与内联谓词在**同一条选择器内 AND**；模板名只作溯源，不改变
+   * 展开后的语义。引用形态在写入配置时保留，运行时在行策略编译器之前展开
+   * （`proxy/acl.ts` 的模板展开钩子），所以配置文件里不会留下展开后的产物。
+   */
+  template?: string;
+  /**
+   * 内联谓词。引用模板时可缺省（此时模板谓词单独生效）；不引用模板时必须非空。
+   */
+  predicates?: Array<{
     field: string;
     op: "eq" | "in";
     value?: string | number | boolean;

@@ -32,6 +32,14 @@ import {
   compileFinalRowsBySource,
   lookupFinalRows
 } from "./agent-constraints.js";
+import {
+  expandRowPolicySelector as expandRowPolicyTemplateSelector,
+  templateNameOf as rowPolicyTemplateNameOf,
+  validateRowPolicyTemplateCatalog,
+  type AccessConfigWithTemplates,
+  type RowPolicyTemplateCatalog,
+  type RowPolicyTemplateSelectorShape
+} from "../admin/row-policy-templates.js";
 
 export interface AclDecision {
   allowed: boolean;
@@ -930,7 +938,14 @@ function dedupeCapabilities(capabilities: EffectiveCapability[]): EffectiveCapab
   );
 }
 
-function capabilityDigest(capabilities: EffectiveCapability[]): string {
+/**
+ * Digest of a capability set.
+ *
+ * Exported so every Admin read surface (P1-2 授权摘要, P1-3 访问关系图) derives
+ * the SAME digest from the SAME capabilities — the reconciliation contract
+ * ("同源") is only true if the algorithm is literally one implementation.
+ */
+export function capabilityDigest(capabilities: EffectiveCapability[]): string {
   return createHash("sha256")
     .update(
       capabilities
@@ -1120,6 +1135,77 @@ function catalogBoundSources(
   return [...new Map(matches.map((source) => [`${source.connectionId}:${source.sourceName}`, source])).values()];
 }
 
+/**
+ * Lucy v0.25 P1 (L25-14 R1 §5.1) — the template catalog of a configuration.
+ *
+ * An invalid catalog yields an EMPTY catalog, so every reference fails closed
+ * (`row_policy_template_not_found`) instead of silently matching nothing.
+ */
+function rowPolicyTemplateCatalogOf(config: AccessConfig): RowPolicyTemplateCatalog {
+  return validateRowPolicyTemplateCatalog(
+    (config as AccessConfigWithTemplates).row_policy_templates
+  ).templates;
+}
+
+/**
+ * Lucy v0.25 P1 (L25-14 R1 §5.1) — expand `row_policy.template` references into the
+ * SAME `predicates` list an inline policy uses (P1-D2).
+ *
+ * Why the expansion happens HERE and not in the config loader:
+ *
+ *  - The existing compiler (`proxy/row-policy.ts` `parseRowPolicyShape`) accepts a
+ *    `row_policy` object with exactly one key: `predicates`. A `row_policy.template`
+ *    reference has to be expanded into that list before the parser sees it, otherwise
+ *    the role fails closed with `row_policy_invalid_key` and the template never applies.
+ *  - **The config object itself is never rewritten.** `accessConfigDigest` is the digest
+ *    of the COMMITTED configuration, and `admin/access-config.ts` verifies a rollback by
+ *    comparing the runtime digest against the digest of the raw file bytes. If the
+ *    config were expanded before it was digested, those two would disagree for every
+ *    configuration that uses a template, and a successful rollback would be misreported
+ *    as 「回滚未验证」→ the recovery gate would degrade the runtime globally.
+ *  - A selector that does NOT reference a template is passed through byte-identically.
+ *    An existing configuration therefore keeps its current compile behaviour, including
+ *    the reason code it reports for an invalid inline policy.
+ */
+function expandTemplateSelectorsForCompile(
+  roleId: string,
+  selectors: SelectorShape[],
+  templates: RowPolicyTemplateCatalog,
+  permissionModelVersion: PermissionModelVersion
+): { ok: true; selectors: SelectorShape[] } | { ok: false; reason: string } {
+  if (!Array.isArray(selectors) || selectors.length === 0) return { ok: true, selectors: [] };
+  let changed = false;
+  const next: SelectorShape[] = [];
+  for (const selector of selectors) {
+    if (!selector || typeof selector !== "object") {
+      next.push(selector);
+      continue;
+    }
+    const shaped = selector as RowPolicyTemplateSelectorShape;
+    if (rowPolicyTemplateNameOf(shaped) === undefined) {
+      // No template reference: the existing compiler owns this selector unchanged.
+      next.push(selector);
+      continue;
+    }
+    const expanded = expandRowPolicyTemplateSelector(shaped, templates, {
+      roleId,
+      permissionModelVersion
+    });
+    if (!expanded.ok) {
+      // Fail closed: a reference that cannot be resolved never becomes 「全部行」.
+      // The concrete issue code is kept so the operator sees WHY it was refused.
+      return { ok: false, reason: expanded.issues[0]?.code ?? "row_policy_template_unresolved" };
+    }
+    if (!expanded.rowPolicy) {
+      next.push(selector);
+      continue;
+    }
+    changed = true;
+    next.push({ ...shaped, row_policy: expanded.rowPolicy });
+  }
+  return { ok: true, selectors: changed ? next : selectors };
+}
+
 async function compileRole(
   roleId: string,
   role: NonNullable<AccessConfig["roles"]>[string] | undefined,
@@ -1127,7 +1213,8 @@ async function compileRole(
   state: SourceMapState,
   enabledTables: Map<string, Set<string>> | undefined,
   stepOut: RoleCompileStep[] | undefined,
-  ordinal: number
+  ordinal: number,
+  templates: RowPolicyTemplateCatalog
 ): Promise<CompiledRoleResult> {
   const recordStep = (step: Omit<RoleCompileStep, "roleId" | "ordinal">) => {
     if (stepOut) stepOut.push({ roleId, ordinal, ...step });
@@ -1177,7 +1264,20 @@ async function compileRole(
     return { ok: false, reason: `role_resolution_failed:${roleId}:catalog_bound_requires_v2` };
   }
 
-  const selectors = Array.isArray(role.allow.tableSelectors) ? role.allow.tableSelectors : [];
+  // Lucy v0.25 P1 (L25-14 R1 §5.1) — a `row_policy.template` reference is expanded
+  // into the same `predicates` list an inline policy uses, right before the existing
+  // compiler reads the selectors. The configuration object is NOT rewritten here.
+  const templateExpansion = expandTemplateSelectorsForCompile(
+    roleId,
+    Array.isArray(role.allow.tableSelectors) ? role.allow.tableSelectors : [],
+    templates,
+    modelVersion.version
+  );
+  if (!templateExpansion.ok) {
+    recordStep({ status: "failed", code: `role_resolution_failed:${templateExpansion.reason}`, stage: "row_grant" });
+    return { ok: false, reason: `role_resolution_failed:${roleId}:${templateExpansion.reason}` };
+  }
+  const selectors = templateExpansion.selectors;
   const declaredConnections = configList(role.allow.connections, [], { normalize: true });
   if (catalogBound && selectors.length > 0) {
     recordStep({ status: "failed", code: "role_resolution_failed:catalog_bound_selectors_forbidden", stage: "source_scope" });
@@ -1482,9 +1582,10 @@ async function resolveEffectivePermissions(
 
   const compiledRoles: CompiledRole[] = [];
   const steps: RoleCompileStep[] = [];
+  const roleTemplates = rowPolicyTemplateCatalogOf(config);
   for (let ordinal = 0; ordinal < roleSet.roleIds.length; ordinal += 1) {
     const roleId = roleSet.roleIds[ordinal];
-    const compiled = await compileRole(roleId, config.roles?.[roleId], policy, state, options.enabledTables, steps, ordinal);
+    const compiled = await compileRole(roleId, config.roles?.[roleId], policy, state, options.enabledTables, steps, ordinal, roleTemplates);
     if (!compiled.ok) {
       // Spec 177 — failed role's step is already appended by compileRole with
       // status="failed"; every subsequent declared role is "not_run".
@@ -2046,6 +2147,64 @@ export async function resolveEffectivePermissionsBatchForAdmin(
     ));
   }
   return results;
+}
+
+/**
+ * One Role compiled ON ITS OWN.
+ *
+ * The merged `EffectivePermissions.sources` of an Agent is a UNION over its
+ * Roles, and a union loses "which table came from which Role". Any surface
+ * that needs per-Role attribution must therefore compile each Role
+ * separately — it may not take the merged result and try to split it.
+ *
+ * P1-3 §4.3 makes this normative ("不得复用合并结果再尝试拆分"), and P1-2 §2.2
+ * needs the same thing for its role-source column.
+ */
+export interface PerRoleCompilation {
+  roleId: string;
+  ok: boolean;
+  /** Failure reason; present only when `ok` is false. */
+  reason?: string;
+  /** This Role's own capabilities (tool × source × rowGrant). Never merged with other Roles. */
+  capabilities?: EffectiveCapability[];
+  /** This Role's own granted sources. */
+  sources?: EffectiveSource[];
+  /** This Role's own data-plane tools. */
+  dataPlaneTools?: string[];
+  /** This Role's own meta tools. */
+  metaTools?: string[];
+}
+
+/**
+ * Compile a single Role against an existing admin context.
+ *
+ * Shares the exact compiler the runtime uses, so the contribution shown in the
+ * Admin surfaces is the contribution the runtime enforces.
+ */
+export async function compileRoleForAdmin(
+  roleId: string,
+  context: AdminPermissionContext
+): Promise<PerRoleCompilation> {
+  const policy = aclPolicy(context.config);
+  const compiled = await compileRole(
+    roleId,
+    context.config.roles?.[roleId],
+    policy,
+    context.sourceMap,
+    context.enabledTables,
+    undefined,
+    0,
+    rowPolicyTemplateCatalogOf(context.config)
+  );
+  if (!compiled.ok) return { roleId, ok: false, reason: compiled.reason };
+  return {
+    roleId,
+    ok: true,
+    capabilities: buildCapabilities(compiled.role.dataPlaneTools, compiled.role.sources, compiled.role.sourceGrants),
+    sources: compiled.role.sources,
+    dataPlaneTools: compiled.role.dataPlaneTools,
+    metaTools: compiled.role.metaTools
+  };
 }
 
 /** Spec 174 §3.3 — the compile inputs a display permission result was derived from. */

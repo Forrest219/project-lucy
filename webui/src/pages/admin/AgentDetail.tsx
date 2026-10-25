@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, useParams, useSearchParams } from "reac
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AgentRoleCapability, AgentRoleField, agentRoleIds, roleSelectionSavable, sameRoleSet } from "../../components/AgentRoleField";
+import { AuthorizationSummarySection } from "../../components/admin/AuthorizationSummarySection";
 import { DiffViewer } from "../../components/DiffViewer";
 import { PageHeader } from "../../components/PageHeader";
 import { PolicyDegradeNotice } from "../../components/PolicyDegradeBanner";
@@ -1327,6 +1328,13 @@ export function AgentDetail() {
 
         {activeTab === "permissions" && (
           <div data-testid="permissions-tree" className="grid gap-4 max-w-3xl pb-32">
+            {/* Lucy v0.25 P1-2 §4.1 —「权限预览」首屏的授权摘要（只读投影）。 */}
+            <AuthorizationSummarySection
+              kind="agent"
+              id={userId ?? ""}
+              title="授权摘要"
+              testId="agent-authorization-summary"
+            />
             <div className="pl-card">
               <div className="text-sm font-medium">当前角色</div>
               <div className="text-sm text-fg-muted mt-1">

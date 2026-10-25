@@ -1,5 +1,5 @@
 import * as Dialog from "@radix-ui/react-dialog";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apiGet, apiPost } from "../lib/apiClient";
 import type { SourceDetail } from "../lib/types";
@@ -9,6 +9,12 @@ import {
   RowPolicyDnfPreview,
   type RowPolicyDnfGrant
 } from "./admin/RowPolicyDnfPreview";
+import {
+  RowPolicyAuthoringModeBadge,
+  RowPolicyTemplatePicker,
+  type RowPolicyTemplateOption
+} from "./admin/RowPolicyTemplatePicker";
+import type { RowPolicyTemplateListResponse } from "./admin/RowPolicyTemplatePanel";
 
 export interface RoleRowPolicyPanelProps {
   tables: TableGrant[];
@@ -22,6 +28,79 @@ export interface RoleRowPolicyPanelProps {
    * candidate, never from the committed configuration.
    */
   previewRole?: unknown;
+}
+
+/**
+ * Lucy v0.25 P1-1 §3.1 — 一张表的完整身份。
+ *
+ * 逐表可用性只能针对**一张确定的表**判定，所以缺连接标识的表拿不到可用性结论。
+ */
+type TableIdentity = { connectionId: string; schema: string; sourceName: string };
+
+function tableIdentityOf(table: TableGrant): TableIdentity {
+  return {
+    connectionId: table.connection.trim(),
+    schema: table.schema.trim(),
+    sourceName: table.name.trim()
+  };
+}
+
+function isCompleteIdentity(identity: TableIdentity): boolean {
+  return Boolean(identity.connectionId && identity.schema && identity.sourceName);
+}
+
+/**
+ * 模板列表的取数与模板管理页一致（同一个只读端点、同一个 `apiGet` 封装）：
+ * `GET /api/admin/row-policy/templates`，带表身份时额外返回**该表**的可用性。
+ *
+ * 前端不另算一套可用性判断：可绑定 / 字段不存在 / 清单不可用 / 目录能力未知
+ * 四个结论全部来自服务端（P1-1 §3.2、RTP-08）。
+ */
+function templatesUrl(identity: TableIdentity | null): string {
+  if (!identity || !isCompleteIdentity(identity)) return "/api/admin/row-policy/templates";
+  const query = new URLSearchParams({
+    connectionId: identity.connectionId,
+    schema: identity.schema,
+    sourceName: identity.sourceName
+  });
+  return `/api/admin/row-policy/templates?${query.toString()}`;
+}
+
+/**
+ * 把服务端的读模型转成 picker 的选项。
+ *
+ * `usabilityByTable` 里对应这张表的那一条就是这张表的可用性结论；拿不到时
+ * 按「目录能力未知」处理——宁可让运维看见原因，也不能默默当成可绑定。
+ */
+function templateOptionsFor(
+  response: RowPolicyTemplateListResponse | undefined,
+  identity: TableIdentity | null
+): RowPolicyTemplateOption[] {
+  const templates = response?.templates ?? [];
+  const judged = Boolean(identity && isCompleteIdentity(identity));
+  return templates.map((template) => {
+    const entry = judged && identity
+      ? template.usabilityByTable.find(
+          (item) =>
+            item.connectionId === identity.connectionId &&
+            item.schema === identity.schema &&
+            item.sourceName === identity.sourceName
+        )
+      : undefined;
+    const usability = entry?.usability
+      ? (entry.usability as RowPolicyTemplateOption["usability"])
+      : {
+          status: "catalog_unknown" as const,
+          reason: judged
+            ? "服务端未返回该表的可用性结论"
+            : "该表缺少连接标识，无法判定可绑定性"
+        };
+    return {
+      name: template.name,
+      description: template.description,
+      usability
+    };
+  });
 }
 
 type PreviewGrant = RowPolicyDnfGrant;
@@ -135,6 +214,56 @@ export function RoleRowPolicyPanel({
         entry.requested.name === table.name
     );
 
+  // ── P1-1 §3.1 / §6.1: 行策略模板候选与逐表可用性 ────────────────────────────
+  // 每张表一个查询：可用性是**逐表**结论，别处的可绑定不代表这里可绑定。
+  const tableIdentities = useMemo(() => tables.map((table) => tableIdentityOf(table)), [tables]);
+  const templateQueries = useQueries({
+    queries: tableIdentities.map((identity) => ({
+      queryKey: ["admin", "row-policy", "templates", identity.connectionId, identity.schema, identity.sourceName],
+      queryFn: () => apiGet<RowPolicyTemplateListResponse>(templatesUrl(identity)),
+      enabled: isCompleteIdentity(identity)
+    }))
+  });
+  // 缺连接标识的表拿不到逐表可用性：仍要列出**全部候选**（只是全部不可绑定），
+  // 否则运维会看到「没有模板」，误以为模板不存在。
+  const needsCatalogOnlyList = tableIdentities.some((identity) => !isCompleteIdentity(identity));
+  const catalogOnlyQuery = useQuery({
+    queryKey: ["admin", "row-policy", "templates"],
+    queryFn: () => apiGet<RowPolicyTemplateListResponse>("/api/admin/row-policy/templates"),
+    enabled: needsCatalogOnlyList
+  });
+  const templateOptionsForTable = (index: number): RowPolicyTemplateOption[] => {
+    const identity = tableIdentities[index] ?? null;
+    const response = identity && isCompleteIdentity(identity)
+      ? templateQueries[index]?.data
+      : catalogOnlyQuery.data;
+    return templateOptionsFor(response, identity);
+  };
+  const templateQueryFailedAt = (index: number): boolean => {
+    const identity = tableIdentities[index] ?? null;
+    return identity && isCompleteIdentity(identity)
+      ? Boolean(templateQueries[index]?.isError)
+      : Boolean(catalogOnlyQuery.isError);
+  };
+  /** 模板列表已读回（不是加载中、也没有失败）。 */
+  const templateListLoadedAt = (index: number): boolean => {
+    const identity = tableIdentities[index] ?? null;
+    if (identity && isCompleteIdentity(identity)) {
+      return !templateQueries[index]?.isPending && !templateQueries[index]?.isError;
+    }
+    return !catalogOnlyQuery.isPending && !catalogOnlyQuery.isError;
+  };
+
+  function setTableTemplate(table: TableGrant, templateName: string | undefined) {
+    // 只改模板引用，**不动内联谓词**：切到「直接写条件」不丢已写的内容，
+    // 切到「两者并用」也不丢（P1-1 §3.1：模板谓词与内联谓词取交集）。
+    onChange(tables.map((candidate) =>
+      permissionTableKey(candidate) === permissionTableKey(table)
+        ? { ...candidate, rowPolicyTemplate: templateName }
+        : candidate
+    ));
+  }
+
   useEffect(() => {
     setDrawerPredicates(activeTable?.predicates?.map((predicate) => ({ ...predicate, value: Array.isArray(predicate.value) ? [...predicate.value] : predicate.value })) ?? []);
     setError(null);
@@ -197,42 +326,80 @@ export function RoleRowPolicyPanel({
           <div className="rounded-md border border-border-default bg-bg-subtle p-4 text-sm text-fg-muted">
             请先在“可访问的表”中选择表，再配置行级策略。
           </div>
-        ) : tables.map((table) => {
+        ) : tables.map((table, tableIndex) => {
           const key = permissionTableKey(table);
           const entry = previewEntryFor(table);
           const unavailableReason = previewUnavailableReason(entry, previewQueryFailed);
           const grant = entry?.preview?.effectiveRowGrant;
-          const hasPolicy = Boolean(table.predicates?.length);
+          const inlineCount = table.predicates?.length ?? 0;
+          const templateName = table.rowPolicyTemplate;
+          const hasTemplate = Boolean(templateName);
+          const hasPolicy = hasTemplate || inlineCount > 0;
+          const templateOptions = templateOptionsForTable(tableIndex);
+          const templateQueryFailed = templateQueryFailedAt(tableIndex);
           // 「全部行」 may only be claimed when the preview actually succeeded.
-          const badge = hasPolicy
-            ? { text: `已配置 ${table.predicates!.length} 条条件`, state: "done" as const }
-            : unavailableReason
-              ? { text: "受限状态未知", state: "warning" as const }
-              : grant?.kind === "all"
-                ? { text: "全部行", state: "not_started" as const }
-                : grant?.kind === "scoped"
-                  ? { text: "受其他角色限制", state: "warning" as const }
-                  : { text: "受限状态未知", state: "warning" as const };
+          const badge = hasTemplate && inlineCount === 0
+            ? { text: "已引用行策略模板", state: "done" as const }
+            : hasPolicy
+              ? { text: `已配置 ${inlineCount} 条条件`, state: "done" as const }
+              : unavailableReason
+                ? { text: "受限状态未知", state: "warning" as const }
+                : grant?.kind === "all"
+                  ? { text: "全部行", state: "not_started" as const }
+                  : grant?.kind === "scoped"
+                    ? { text: "受其他角色限制", state: "warning" as const }
+                    : { text: "受限状态未知", state: "warning" as const };
           return (
             <div key={key} className="grid gap-2" data-testid={`row-policy-entry-${key}`}>
-              <button
-                type="button"
-                className="pl-card flex items-center justify-between gap-3 text-left"
-                onClick={(event) => {
-                  drawerTriggerRef.current = event.currentTarget;
-                  setActiveKey(key);
-                }}
-                disabled={disabled}
-                aria-label={`编辑 ${table.name} 行级策略`}
-              >
-                <span>
-                  <span className="notranslate block text-sm font-medium" translate="no">{table.name}</span>
-                  <span className="notranslate block text-xs text-fg-muted" translate="no">{table.connection} / {table.schema}</span>
-                </span>
+              <div className="pl-card flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                  onClick={(event) => {
+                    drawerTriggerRef.current = event.currentTarget;
+                    setActiveKey(key);
+                  }}
+                  disabled={disabled}
+                  aria-label={`编辑 ${table.name} 行级策略`}
+                >
+                  <span className="min-w-0">
+                    <span className="notranslate block text-sm font-medium" translate="no">{table.name}</span>
+                    <span className="notranslate block text-xs text-fg-muted" translate="no">{table.connection} / {table.schema}</span>
+                  </span>
+                </button>
                 <span className={`pl-status-badge ${badge.state === "done" ? "pl-status-done" : badge.state === "not_started" ? "pl-status-not_started" : "pl-status-partial"}`}>
                   {badge.text}
                 </span>
-              </button>
+              </div>
+              {hasPolicy ? (
+                <div className="flex items-center gap-2" data-testid={`row-policy-authoring-mode-${key}`}>
+                  <RowPolicyAuthoringModeBadge templateName={templateName} inlinePredicateCount={inlineCount} />
+                  <span className="text-xs text-fg-muted">
+                    {templateName && inlineCount > 0
+                      ? "模板条件与直接写的条件在同一选择器内取交集。"
+                      : templateName
+                        ? "只使用模板条件；模板只作溯源，不改变展开后的语义。"
+                        : "只使用直接写的条件。"}
+                  </span>
+                </div>
+              ) : null}
+              {templateQueryFailed ? (
+                <p className="text-xs text-warning-strong" role="status" data-testid={`row-policy-template-error-${key}`}>
+                  行策略模板列表读取失败，暂时不能选择模板；直接写的条件不受影响。
+                </p>
+              ) : null}
+              {templateName && templateListLoadedAt(tableIndex) && !templateOptions.some((option) => option.name === templateName) ? (
+                <p className="text-xs text-warning-strong" role="status" data-testid={`row-policy-template-missing-${key}`}>
+                  当前引用的行策略模板不在模板列表中，保存会被拒绝；请在模板管理页恢复该模板，或改选其它模板。
+                </p>
+              ) : null}
+              <RowPolicyTemplatePicker
+                templates={templateOptions}
+                value={templateName}
+                onChange={(name) => setTableTemplate(table, name)}
+                disabled={disabled || templateQueryFailed}
+                id={`row-policy-template-${key}`}
+              />
               {unavailableReason ? (
                 <p className="text-xs text-warning-strong" role="status" data-testid={`row-policy-preview-unavailable-${key}`}>
                   {unavailableReason}
@@ -291,7 +458,20 @@ export function RoleRowPolicyPanel({
               ) : null}
               {sourceQuery.data ? (
                 <div className="grid content-start gap-3">
-                  {drawerPredicates.length === 0 ? <p className="text-sm text-fg-muted">当前为全部行。添加条件后保存为限定行。</p> : null}
+                  {activeTable?.rowPolicyTemplate ? (
+                    <p className="text-sm text-fg-muted" data-testid="row-policy-drawer-template">
+                      这张表已引用行策略模板{" "}
+                      <span className="notranslate" translate="no">{activeTable.rowPolicyTemplate}</span>
+                      ，下面直接写的条件与模板条件取交集。
+                    </p>
+                  ) : null}
+                  {drawerPredicates.length === 0 ? (
+                    <p className="text-sm text-fg-muted">
+                      {activeTable?.rowPolicyTemplate
+                        ? "当前没有直接写的条件；这张表的行限制来自引用的模板。"
+                        : "当前为全部行。添加条件后保存为限定行。"}
+                    </p>
+                  ) : null}
                   {drawerPredicates.map((predicate, index) => (
                     <div key={index} className="grid gap-2 rounded-md border border-border-default p-3">
                       <label className="grid gap-1 text-sm">

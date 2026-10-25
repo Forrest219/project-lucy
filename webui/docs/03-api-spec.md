@@ -1023,3 +1023,76 @@ Skill 写入沿用 `expected_version`（428 `skill_expected_version_required` / 
 **管理侧导出：** `POST /api/semantic-assets/export` 在包含 Wiki / Skill 时向安全账本写入操作者记录（账本不可用返回 `503 SECURITY_STORE_UNAVAILABLE`）；它不是 Agent 通道。
 
 **迁移工具：** `cd webui && npx tsx ../scripts/security/migrate-context-acl.mts --project-dir <dir> --dry-run` 输出仅含元数据的迁移报告（`inventoryDigest`、保留 / 显式全角色 / 待确认 / legacy Agent）；`--apply --owner <id> --expected-digest <digest> --decisions <file> --backup-dir <dir>` 仅 owner 可执行，整批预检通过后才写入，带加密备份与持久 journal。先在合成 fixture 上运行；对客户私有配置执行属部署授权范围。
+
+## Lucy v0.25 P1 梯队新增端点
+
+本节登记 v0.25 P1 梯队（P1-1…P1-4）新增的 Admin 端点。权威契约见
+[P1-1 行策略模板与按表反查 Spec](../../docs/specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md)、
+[P1-2 授权摘要 Spec](../../docs/specs/lucy-20261025-v0p25-access-authorization-summary-spec.md)、
+[P1-3 访问关系图 Spec](187-access-relation-sankey-spec.md)、
+[P1-4 Hive 直连 Spec](../../docs/specs/lucy-20261025-v0p25-hive-direct-connection-spec.md)。
+
+四组端点共享同一套口径硬约束：
+
+- **只读面不写配置**：`GET` 端点不进入发布协调器，不写任何配置或审计终态。
+- **同源快照**：每个响应都发布 `configVersion` / `policyVersion` / `sourceMapVersion` / `capabilityDigest` 四元组；一次响应内不得混用两个世代。
+- **计数口径唯一**：授权路径数（去重 `(Agent, Role, Connection, Schema, Table)`）与去重表数（规范源键四元组）是两个不同的数，任何字段不得互相冒充。
+- **降级显式**：配置不可读 / 非法 / 路径不一致时返回 `unavailable` 与可归因原因，**不得**用空集合或 0 冒充「没有授权」。
+
+### 行策略模板与按表反查（P1-1）
+
+| 端点 | 方法 | 说明 |
+|---|---|---|
+| `/api/admin/row-policy/templates` | GET | 模板读取模型。Query：`connectionId` / `schema` / `sourceName`（三者齐全才做按表可用性判定）。响应含模板目录、引用关系、**不可绑定项及其原因**（原因在选择时即披露，不等到保存）、目录级 issue。 |
+| `/api/admin/row-policy/templates/validate` | POST | 候选校验，**不落盘**。请求体 `{ operation }`。 |
+| `/api/admin/row-policy/templates` | POST | 新建模板。请求体 `{ name, description?, predicates, dryRun?, version?, candidateDigest? }`。默认 dryRun。 |
+| `/api/admin/row-policy/templates/:name` | PATCH | 改名 / 改定义。请求体 `{ name?, description?, predicates, dryRun?, version?, candidateDigest? }`。默认 dryRun。 |
+| `/api/admin/row-policy/templates/:name` | DELETE | 删除模板。**有引用时拒绝且零写入**；无引用可经 dry-run 保存。请求体 `{ dryRun?, version?, candidateDigest? }`。 |
+| `/api/admin/row-policy/views/tables` | GET | 按表反查清单。Query：`connectionId` / `schema` / `sourceName` / `roleId` / `agentId` / `restricted`。表集合按**规范源键**去重，同名不同连接 / Schema 不合并。 |
+| `/api/admin/row-policy/views/table` | GET | 单表反查。Query：`connectionId` / `schema` / `sourceName`（三者齐全才定位单表）。响应含逐 Role 分支、Agent 个人行限制与最终行约束。 |
+
+写入端点的共同约定：
+
+- **候选摘要失效**：草稿变更后旧 `candidateDigest` 作废，必须重新 dry-run 才能正式保存。
+- **回滚即失败**：写被回滚（`rolledBack === true`）时返回 `500 ROW_POLICY_TEMPLATE_WRITE_ROLLED_BACK`，**绝不**返回 `written: true`。
+- **目录级与选择器级分离**：目录级 issue 降为 `templateWarnings` 不阻断写入；选择器级非法引用返回 `400`。
+- 角色写入路径对模板引用的校验口径与本组端点一致（引用不可解析 → 400）。
+
+### 授权摘要（P1-2）
+
+| 端点 | 方法 | 说明 |
+|---|---|---|
+| `/api/admin/authorization-summary/agent/:userId` | GET | Agent 的**已提交**授权摘要。Agent 不存在返回 `404 AGENT_NOT_FOUND`。 |
+| `/api/admin/authorization-summary/role/:roleId` | GET | Role 的已提交授权摘要。Role 不存在返回 `404 ROLE_NOT_FOUND`。 |
+| `/api/admin/authorization-summary/agent/:userId/preview` | POST | Agent **草稿候选**摘要。请求体 `{ name?, enabled?, role?, roles?, constraints? }`。草稿只在内存里 overlay，不落盘、不换已提交策略。 |
+| `/api/admin/authorization-summary/role/:roleId/preview` | POST | Role 草稿候选摘要。请求体 `{ role }`。 |
+
+- 响应为 `{ summary, candidateDigest }`；`candidateDigest` 是失效令牌：草稿一变，上一份候选摘要即失效，不得用于确认新草稿。
+- 摘要内 `headline.grantPathCount`（授权路径数）与 `headline.tableCount`（去重表数）**分别表达**；`enabledTableCount` 在分母不可证明时为 `null`，**不是 0**。
+- 行边界保留 `OR-of-AND` 结构：两个受限 Role 仍是两个 OR 分支，不折叠成 AND；Role 摘要不冒充 Agent 的 `FinalRows`。
+- 授权摘要**不占独立侧栏导航位**：它是 Agent 详情页与 Role 详情页的只读投影，独立路由仅 URL 可达。
+
+### 访问关系图（P1-3）
+
+| 端点 | 方法 | 说明 |
+|---|---|---|
+| `/api/admin/access-map` | GET | 授权骨架 ＋ 访问内核的只读关系图。Query：`agent` / `role` / `token` / `table` / `connection` / `window` / `layer` / `trust` / `view` / `focus`。 |
+
+- **非法参数值 → 400**，且**不**静默纠正成默认值（被悄悄改写的分享链接会让用户误以为「这个 Agent 没有授权路径」）。
+- 响应含 `meta.grant`（授权面状态与四元组快照身份）、`meta.access`（访问面状态与口径）、`meta.counts`（`grantPaths` / `tables` / `accessPaths` / `grantUsers` 等，**四种计数分别表达**）、`meta.signals`（`dormantEdges` / `needsReviewEdges` / `confirmedUnauthorizedEdges`）、`meta.snapshotCoverage`（可关联快照数 / 需复核记录数 / 缺失或无效数 / 覆盖率）。
+- **流守恒**：Role / Connection / Schema 等中间节点的入流授权路径数 ＝ 出流授权路径数（误差 0）；Agent 是源点、Table 是汇点、Token 是凭证叶（零流）。守恒自检失败返回 `500 ACCESS_MAP_BUILD_FAILED`，**不返回空图冒充正常结果**。
+- **两档信号措辞**：需复核档文案**不得**出现「越权」二字；确凿越权档必须标注判定来源为**调用当时**的授权快照（`permission_snapshot_hash` 关联 `permission_snapshots`）。快照缺失、损坏或身份不一致时只保留「需复核」，不得升级为确凿越权，也不得把低覆盖率解释为低越权率。
+- 端点为纯 GET：POST / PUT / DELETE 一律 404（只读旁路，不改配置、不改运行时授权）。
+
+### Hive 直连配置面（P1-4，本轮仅编译侧与配置面）
+
+| 端点 | 方法 | 说明 |
+|---|---|---|
+| `/api/admin/hive/connections` | GET | Hive 连接读取模型，并给出与 `ktx.yaml` 合并后的统一连接视图。配置不可读返回 `500 HIVE_CONFIG_UNREADABLE`；连接 id 冲突返回 `409 HIVE_CONNECTION_ID_CONFLICT`（**失败关闭**，不得靠隐藏一侧来消解冲突）。 |
+| `/api/admin/hive/connections` | POST | 新建或整体替换一个连接。请求体 `{ connection }`。非法输入返回 `400 BAD_REQUEST`。 |
+| `/api/admin/hive/connections/:id` | DELETE | 删除一个连接。连接不存在返回 `404 hive_connection_not_found`。 |
+
+- Hive 连接的读改写**整体在写锁内**完成，读到的旧值不得被并发写覆盖。
+- 连接项校验含值级校验：LDAP url 携带明文口令等形态直接拒绝。
+- **规范源名格式** `<schema>_<table>`（如 `finance_orders`）：Manifest 键与 overlay 文件名须遵循，不符即 `hive_source_name_mismatch` 显式报错。
+- 编译侧（只编译、不连库）已可用；**JDBC 执行与 MCP 入口接入本轮未实施**，相关验收（V03–V17）记 `blocked_environment`。

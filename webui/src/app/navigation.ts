@@ -58,6 +58,8 @@ export type NavIconKey =
   | "agents"
   | "tokens"
   | "roles"
+  | "rowPolicies"
+  | "accessMap"
   | "audit"
   | "mcpPlayground"
   | "configAudit"
@@ -280,6 +282,24 @@ export const navGroups: Array<{
         active: (path) => path.startsWith("/admin/roles"),
         description: "管理角色的数据库连接、数据表与 MCP 工具授权范围。",
         keywords: ["Role", "权限", "MCP 工具"]
+      },
+      {
+        id: "admin-row-policies",
+        label: "行权限视图",
+        to: "/admin/row-policies",
+        iconKey: "rowPolicies",
+        active: (path) => path === "/admin/row-policies" || path.startsWith("/admin/row-policy-templates"),
+        description: "按表反查角色的行策略与 Agent 的最终行约束。",
+        keywords: ["行策略", "行权限", "Row Policy", "模板"]
+      },
+      {
+        id: "admin-access-map",
+        label: "访问关系图",
+        to: "/admin/access-map",
+        iconKey: "accessMap",
+        active: (path) => path === "/admin/access-map" || path.startsWith("/admin/access-map"),
+        description: "查看授权路径与实际访问路径的对应关系。",
+        keywords: ["访问关系", "授权路径", "Access Map", "Sankey"]
       },
       {
         id: "admin-audit",

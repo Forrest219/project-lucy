@@ -130,6 +130,14 @@ import {
   productionPrimaryStatusPort
 } from "./admin/reconciliation-ports.js";
 import { registerRowPolicyRoutes } from "./admin/row-policy-routes.js";
+// Lucy v0.25 / L25-14 R1 — 行策略模板与按表反查（P1-1）。
+import { registerRowPolicyTemplateRoutes } from "./admin/routes/row-policy.js";
+// Lucy v0.25 / L25-01 — Agent 与角色授权摘要（P1-2）。
+import { registerAuthorizationSummaryRoutes } from "./admin/routes/authorization-summary.js";
+// Lucy v0.25 / L25-08 — 访问关系图（P1-3）。
+import { registerAccessMapRoutes } from "./admin/routes/access-map.js";
+// Lucy v0.25 / L25-10 — Hive 直连的配置面（P1-4，仅编译侧）。
+import { registerHiveConnectionRoutes } from "./admin/routes/hive.js";
 import { auditedWriteFile } from "./admin/config-audit-write.js";
 import { registerMcpToolsRoutes } from "./admin/mcp-tools.js";
 import { registerMcpPlaygroundRoutes } from "./admin/mcp-playground.js";
@@ -2228,6 +2236,14 @@ export function buildServer() {
   });
   // Lucy v0.25 / L25-14 R2 — 行级策略预览（只读，不进入发布协调器）。
   registerRowPolicyRoutes(app);
+  // Lucy v0.25 / L25-14 R1 — 行策略模板管理 + 按表反查（模板写入口走共享协调器）。
+  registerRowPolicyTemplateRoutes(app);
+  // Lucy v0.25 / L25-01 — Agent 与角色授权摘要（只读）。
+  registerAuthorizationSummaryRoutes(app);
+  // Lucy v0.25 / L25-08 — 访问关系图（只读）。
+  registerAccessMapRoutes(app);
+  // Lucy v0.25 / L25-10 — Hive 连接配置面（凭据只存引用；本轮不含 JDBC 执行）。
+  registerHiveConnectionRoutes(app);
   // Lucy v0.25 / L25-02、L25-03 — 审计只读对账视图（三端点）。
   registerAuditReconciliationRoutes(app);
   registerMcpToolsRoutes(app);

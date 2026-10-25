@@ -35,6 +35,8 @@ import {
   type AccessGovernanceGateDecision,
   type AccessGovernanceOverrideRequest
 } from "../access-governance-gate.js";
+import { ROW_POLICY_TEMPLATE_NAME_PATTERN } from "./row-policy-types.js";
+import { expandRowPolicyTemplatesInConfig, type AccessConfigWithTemplates } from "./row-policy-templates.js";
 import { actorIdFromRequest } from "../auth/guard.js";
 import { auditActorFields, trustedActorFromRequest } from "../security/request-actor.js";
 import type { FastifyRequest } from "fastify";
@@ -371,6 +373,96 @@ export function buildRowPolicyAuditAttribution(
   };
 }
 
+/**
+ * Lucy v0.25 P1-1 §3.1 — a `row_policy` may reference a template.
+ *
+ * The reference form is `{ template, predicates? }`:
+ *  - `template` must be a template name (`ROW_POLICY_TEMPLATE_NAME_PATTERN`);
+ *  - `predicates` are the INLINE predicates and are optional when a template is
+ *    referenced — the template's own predicates apply on their own, and inline
+ *    predicates AND with them inside the same selector;
+ *  - without a template, the inline predicates are still required and must be
+ *    non-empty (the existing `parseRowPolicyShape` contract).
+ *
+ * The reference form is what gets STORED. The expansion into a single predicate
+ * list happens in the runtime, right before the row-policy compiler reads the
+ * selector (`proxy/acl.ts`), so the configuration never holds expanded products.
+ */
+function validateRowPolicyShapeWithTemplate(
+  raw: unknown
+): { ok: true; value: YamlRowPolicy } | { ok: false; reason: string } {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return { ok: false, reason: "row_policy_invalid" };
+  }
+  const record = raw as Record<string, unknown>;
+  for (const key of Object.keys(record)) {
+    if (key !== "predicates" && key !== "template") {
+      return { ok: false, reason: "row_policy_invalid_key" };
+    }
+  }
+  let template: string | undefined;
+  if (record.template !== undefined) {
+    if (typeof record.template !== "string" || !ROW_POLICY_TEMPLATE_NAME_PATTERN.test(record.template.trim())) {
+      return { ok: false, reason: "row_policy_template_name_invalid" };
+    }
+    template = record.template.trim();
+  }
+  if (record.predicates === undefined) {
+    if (template === undefined) return { ok: false, reason: "row_policy_predicates_required" };
+    return { ok: true, value: { template } };
+  }
+  const parsed = parseRowPolicyShape({ predicates: record.predicates });
+  if (!parsed.ok) return { ok: false, reason: parsed.reason };
+  const value: YamlRowPolicy = { predicates: parsed.predicates };
+  if (template !== undefined) value.template = template;
+  return { ok: true, value };
+}
+
+/**
+ * Lucy v0.25 P1-1 §5.1 — refuse a candidate configuration whose template references
+ * cannot be resolved BEFORE it is written.
+ *
+ * A reference that only fails at runtime would deny the Role silently at request time;
+ * a write-time refusal names the template and the Role instead.
+ *
+ * TWO CLASSES of issue, with two different consequences (P2-2):
+ *
+ *  - a REFERENCE issue (a selector references a template that does not exist, or
+ *    references one whose definition is illegal) BLOCKS the write — the Role would
+ *    deny at request time;
+ *  - a CATALOG issue (an illegal template DEFINITION that no selector references) is
+ *    only a diagnostic. It must not refuse an unrelated Role save, and the illegal
+ *    template must survive the save untouched.
+ *
+ * Only TEMPLATE issues are reported here: a selector without a template reference is
+ * not this check's business, so a legacy invalid INLINE policy never blocks an
+ * unrelated save.
+ */
+function roleTemplateDiagnostics(config: YamlAccessConfig): {
+  /** The issue that refuses the write, or null. */
+  blocking: { code: string; message: string } | null;
+  /** The catalog-level issues — reported, never blocking. */
+  warnings: Array<{ code: string; templateName?: string; detail?: string }>;
+} {
+  const expansion = expandRowPolicyTemplatesInConfig(
+    config as unknown as AccessConfigWithTemplates
+  );
+  const reference = expansion.referenceIssues[0];
+  return {
+    blocking: reference
+      ? {
+          code: reference.code,
+          message: reference.detail ?? "行策略模板引用无法解析"
+        }
+      : null,
+    warnings: expansion.catalogIssues.map((issue) => ({
+      code: issue.code,
+      templateName: issue.templateName,
+      detail: issue.detail
+    }))
+  };
+}
+
 export function validateRoleShape(role: unknown): { ok: true; value: YamlRole } | { ok: false; reason: string } {
   if (!role || typeof role !== "object" || Array.isArray(role)) {
     return { ok: false, reason: "role must be an object" };
@@ -472,11 +564,11 @@ export function validateRoleShape(role: unknown): { ok: true; value: YamlRole } 
       }
       let rowPolicy: YamlRowPolicy | undefined;
       if (rowAccess === "scoped") {
-        const parsed = parseRowPolicyShape(raw.row_policy);
+        const parsed = validateRowPolicyShapeWithTemplate(raw.row_policy);
         if (!parsed.ok) {
           return { ok: false, reason: `table selector scoped requires valid row_policy (${parsed.reason})` };
         }
-        rowPolicy = { predicates: parsed.predicates };
+        rowPolicy = parsed.value;
       }
       const hasNames = raw.names !== undefined;
       const hasPrefix = raw.prefix !== undefined;
@@ -584,7 +676,9 @@ export async function migrateRoleToV2(
     nextSelectors = [];
     for (const selector of selectors) {
       if (selector.row_access === "scoped") {
-        const parsed = parseRowPolicyShape(selector.row_policy);
+        // A template reference survives the v1→v2 migration unchanged: the
+        // reference form is what is stored, the expansion happens in the runtime.
+        const parsed = validateRowPolicyShapeWithTemplate(selector.row_policy);
         if (!parsed.ok) {
           return {
             ok: false,
@@ -602,7 +696,7 @@ export async function migrateRoleToV2(
             schema: selector.schema,
             names,
             row_access: "scoped",
-            row_policy: { predicates: parsed.predicates }
+            row_policy: parsed.value
           });
           selectorsChanged = true;
           continue;
@@ -610,7 +704,7 @@ export async function migrateRoleToV2(
         nextSelectors.push({
           ...selector,
           row_access: "scoped",
-          row_policy: { predicates: parsed.predicates }
+          row_policy: parsed.value
         });
         continue;
       }
@@ -646,6 +740,20 @@ export async function migrateRoleToV2(
       expandedPrefixes
     }
   };
+}
+
+/**
+ * The template issue code inside a role-resolution reason, if any.
+ *
+ * The runtime reports a Role whose template reference cannot be resolved as
+ * `role_resolution_failed:<roleId>:row_policy_template_unresolved`. The write
+ * path has to name that code instead of a generic `INVALID_ROLE`, so the
+ * operator sees that the REFERENCE is the problem (P1-1 §5.1).
+ */
+function templateIssueCodeOf(reason: string): string | undefined {
+  return reason
+    .split(":")
+    .find((part) => part.startsWith("row_policy_template_"));
 }
 
 async function resolveRoleForWrite(
@@ -684,7 +792,15 @@ async function resolveRoleForWrite(
   }
   const resolved = await previewRolePermissionsForAdmin(roleId, { role: migrated.value });
   if (!resolved.ok) {
-    return { ok: false, code: "INVALID_ROLE", message: resolved.reason, status: 400 };
+    // A Role that references a template which cannot be resolved gets the
+    // TEMPLATE code, not a generic `INVALID_ROLE`: the operator has to know
+    // that the reference is the problem (P1-1 §5.1, P2-2).
+    return {
+      ok: false,
+      code: templateIssueCodeOf(resolved.reason) ?? "INVALID_ROLE",
+      message: resolved.reason,
+      status: 400
+    };
   }
   if (resolved.permissions.sources.length === 0 && (migrated.value.allow?.tableSelectors?.length ?? 0) > 0) {
     return { ok: false, code: "INVALID_ROLE", message: "role resolves to 0 source", status: 400 };
@@ -866,6 +982,16 @@ export function registerRoleRoutes(app: FastifyInstance) {
         [roleId]: validated.value
       }
     };
+    // Lucy v0.25 P1-1 §5.1 — a template reference that cannot be resolved must be
+    // refused at write time, not at request time. An illegal template DEFINITION
+    // that nothing references is only a warning (P2-2).
+    const templateDiagnostics = roleTemplateDiagnostics(newConfig);
+    if (templateDiagnostics.blocking) {
+      return reply.status(400).send({
+        ok: false,
+        error: { code: templateDiagnostics.blocking.code, message: templateDiagnostics.blocking.message }
+      });
+    }
     // re-stringify via the same stringify used by write
     const proposedYaml = await import("yaml").then(({ stringify }) => stringify(newConfig, { lineWidth: 0 }));
     const diff = makeDiff(raw, proposedYaml);
@@ -880,7 +1006,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
     const gate = evaluateAccessGovernanceGate(gateInput);
 
     if (dryRun) {
-      return { ok: true, data: { diff, proposedYaml, gate, migration: validated.migration } };
+      return { ok: true, data: { diff, proposedYaml, gate, migration: validated.migration, templateWarnings: templateDiagnostics.warnings } };
     }
 
     if (gate.decision === "block") {
@@ -979,6 +1105,8 @@ export function registerRoleRoutes(app: FastifyInstance) {
         auditId: writeResult.auditId,
         rowPolicy: rowPolicyAttribution,
         gate,
+        /** Catalog-level template issues — reported, never blocking (P2-2). */
+        templateWarnings: templateDiagnostics.warnings,
         role: {
           ...summary,
           sourceCount: preview.ok ? preview.permissions.sources.length : 0,
@@ -1058,6 +1186,16 @@ export function registerRoleRoutes(app: FastifyInstance) {
       ...config,
       roles: { ...(config.roles ?? {}), [request.params.roleId]: validated.value }
     };
+    // Lucy v0.25 P1-1 §5.1 — a template reference that cannot be resolved must be
+    // refused at write time, not at request time. An illegal template DEFINITION
+    // that nothing references is only a warning (P2-2).
+    const templateDiagnostics = roleTemplateDiagnostics(newConfig);
+    if (templateDiagnostics.blocking) {
+      return reply.status(400).send({
+        ok: false,
+        error: { code: templateDiagnostics.blocking.code, message: templateDiagnostics.blocking.message }
+      });
+    }
     const proposedYaml = (await import("yaml")).stringify(newConfig, { lineWidth: 0 });
     const diff = makeDiff(raw, proposedYaml);
 
@@ -1071,7 +1209,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
     const gate = evaluateAccessGovernanceGate(gateInput);
 
     if (dryRun) {
-      return { ok: true, data: { diff, proposedYaml, version: currentVersion, gate, migration: validated.migration } };
+      return { ok: true, data: { diff, proposedYaml, version: currentVersion, gate, migration: validated.migration, templateWarnings: templateDiagnostics.warnings } };
     }
 
     if (gate.decision === "block") {
@@ -1174,7 +1312,9 @@ export function registerRoleRoutes(app: FastifyInstance) {
         /** The durable audit record id — the intent id of this save. */
         auditId: writeResult.auditId,
         rowPolicy: rowPolicyAttribution,
-        gate
+        gate,
+        /** Catalog-level template issues — reported, never blocking (P2-2). */
+        templateWarnings: templateDiagnostics.warnings
       }
     };
   });
@@ -1305,6 +1445,20 @@ export function registerRoleRoutes(app: FastifyInstance) {
         ...auditActorFields(trustedActorFromRequest(request)),
         source: "admin_roles_api"
       });
+      // Spec §5.2 — a write that was reverted must NEVER be reported as saved.
+      // `writeAccessYaml` rolls the disk back and re-commits the previous
+      // policy when the runtime does not acknowledge this write. Reporting
+      // `written: true` there would claim the Role was deleted while the
+      // configuration still carries it.
+      if (writeResult.rolledBack === true) {
+        return reply.status(500).send({
+          ok: false,
+          error: {
+            code: "ROLE_DELETE_ROLLED_BACK",
+            message: "the role delete was rolled back; the previous configuration is still in effect"
+          }
+        });
+      }
       return {
         ok: true,
         data: {
@@ -1366,6 +1520,16 @@ export function registerRoleRoutes(app: FastifyInstance) {
       ...config,
       roles: { ...(config.roles ?? {}), [newRoleId]: validated.value }
     };
+    // Lucy v0.25 P1-1 §5.1 — a copied Role inherits its template references, so the
+    // same write-time resolution check applies. An illegal template DEFINITION that
+    // nothing references is only a warning (P2-2).
+    const templateDiagnostics = roleTemplateDiagnostics(newConfig);
+    if (templateDiagnostics.blocking) {
+      return reply.status(400).send({
+        ok: false,
+        error: { code: templateDiagnostics.blocking.code, message: templateDiagnostics.blocking.message }
+      });
+    }
     const proposedYaml = (await import("yaml")).stringify(newConfig, { lineWidth: 0 });
     const diff = makeDiff(raw, proposedYaml);
 
@@ -1381,7 +1545,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
     const gate = evaluateAccessGovernanceGate(gateInput);
 
     if (dryRun) {
-      return { ok: true, data: { diff, proposedYaml, gate, migration: validated.migration } };
+      return { ok: true, data: { diff, proposedYaml, gate, migration: validated.migration, templateWarnings: templateDiagnostics.warnings } };
     }
 
     if (gate.decision === "block") {
@@ -1440,6 +1604,8 @@ export function registerRoleRoutes(app: FastifyInstance) {
         policyRuntimeAck: writeResult.policyRuntimeAck,
         runtimeAck: writeResult.runtimeAck,
         gate,
+        /** Catalog-level template issues — reported, never blocking (P2-2). */
+        templateWarnings: templateDiagnostics.warnings,
         role: {
           ...summary,
           sourceCount: preview.ok ? preview.permissions.sources.length : 0,
