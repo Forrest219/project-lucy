@@ -3,9 +3,10 @@ import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import Fastify from "fastify";
-import { SignJWT, exportJWK } from "jose";
+import { SignJWT, base64url, exportJWK } from "jose";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { resetOidcRuntimeCache } from "../auth/oidc-runtime.js";
+import { sanitizeInternalReturnTo } from "../auth/oidc-routes.js";
 import {
   api,
   cookiePair,
@@ -29,6 +30,20 @@ vi.mock("../admin/audit.js", () => ({
   registerAuditRoutes: vi.fn()
 }));
 
+/** Lets a test make the durable login ledger fail, so the session must not be handed out. */
+const authEventHooks = vi.hoisted(() => ({ fail: false }));
+
+vi.mock("../security/auth-events.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../security/auth-events.js")>();
+  return {
+    ...actual,
+    recordAuthEvent: vi.fn(async (...args: Parameters<typeof actual.recordAuthEvent>) => {
+      if (authEventHooks.fail) return false;
+      return actual.recordAuthEvent(...args);
+    })
+  };
+});
+
 const CLIENT_ID = "lucy-webui";
 const CLIENT_SECRET = "client-secret-value-for-tests";
 const SUB = "opaque-subject-1";
@@ -45,6 +60,8 @@ const savedOidcEnv: Partial<Record<(typeof OIDC_ENV_KEYS)[number], string | unde
  */
 async function startMockIdp() {
   const { publicKey, privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+  // A second key pair the provider never publishes: a token signed with it must be refused.
+  const { privateKey: foreignPrivateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
   const jwk = (await exportJWK(publicKey)) as Record<string, unknown>;
   jwk.kid = "test-key";
   jwk.alg = "RS256";
@@ -57,7 +74,16 @@ async function startMockIdp() {
     lastTokenRequest: null as Record<string, string> | null,
     tokenCalls: 0,
     jwksCalls: 0,
-    overrideClaims: null as Record<string, unknown> | null
+    overrideClaims: null as Record<string, unknown> | null,
+    // The knobs below let a test produce a token that has to be refused.
+    overrideIssuer: null as string | null,
+    overrideAudience: null as string | string[] | null,
+    overrideAzp: null as string | null,
+    overrideTtlSeconds: null as number | null,
+    omitExpiration: false,
+    signWithForeignKey: false,
+    useAlgNone: false,
+    algorithm: "RS256"
   };
 
   const app = Fastify();
@@ -88,16 +114,44 @@ async function startMockIdp() {
     const claims: Record<string, unknown> = {
       nonce: state.expectedNonce,
       email: "bound@example.com",
+      ...(state.overrideAzp ? { azp: state.overrideAzp } : {}),
       ...(state.overrideClaims ?? {})
     };
-    const idToken = await new SignJWT(claims)
-      .setProtectedHeader({ alg: "RS256", kid: "test-key" })
-      .setIssuer(ISSUER)
-      .setAudience(CLIENT_ID)
+    const builder = new SignJWT(claims)
+      .setProtectedHeader({
+        alg: state.algorithm,
+        kid: state.signWithForeignKey ? "foreign-key" : "test-key"
+      })
+      .setIssuer(state.overrideIssuer ?? ISSUER)
+      .setAudience(state.overrideAudience ?? CLIENT_ID)
       .setSubject(state.expectedSub)
-      .setIssuedAt(now)
-      .setExpirationTime(now + 300)
-      .sign(privateKey);
+      .setIssuedAt(now);
+    if (!state.omitExpiration) builder.setExpirationTime(now + (state.overrideTtlSeconds ?? 300));
+    let idToken: string;
+    if (state.useAlgNone) {
+      // An unsigned token: the header claims `none` and the signature segment is empty.
+      const header = base64url.encode(
+        new TextEncoder().encode(JSON.stringify({ alg: "none", kid: "test-key", typ: "JWT" }))
+      );
+      const payload = base64url.encode(
+        new TextEncoder().encode(
+          JSON.stringify({
+            ...claims,
+            iss: state.overrideIssuer ?? ISSUER,
+            aud: state.overrideAudience ?? CLIENT_ID,
+            sub: state.expectedSub,
+            iat: now,
+            exp: now + 300
+          })
+        )
+      );
+      idToken = `${header}.${payload}.`;
+    } else if (state.algorithm.startsWith("HS")) {
+      // A symmetric algorithm signs with a shared secret; an asymmetric one with a key pair.
+      idToken = await builder.sign(Buffer.from("mock-idp-shared-secret-0123456789abcdef", "utf8"));
+    } else {
+      idToken = await builder.sign(state.signWithForeignKey ? foreignPrivateKey : privateKey);
+    }
     return { access_token: "provider-access-token", token_type: "Bearer", id_token: idToken, refresh_token: "provider-refresh-token" };
   });
 
@@ -568,6 +622,273 @@ describe("L25-06 OIDC single sign-on", () => {
     );
     expect(callback.status).toBe(303);
     expect(callback.headers.get("location")).toContain("oidc_error=OIDC_LOGIN_INVALID");
+  });
+
+  it("OIDC-07: a wrong issuer, audience or azp, an expired or expiry-less token, a foreign key and a symmetric signature are all refused", async () => {
+    fx = await createAuthFixture({ secret: "env" });
+    idp = await startMockIdp();
+    const files = await writeOidcFiles({ idp });
+    dir = files.dir;
+    enableOidc(files.profilePath, files.secretPath);
+    lucy = await startLucy();
+
+    await writeBoundAdmins(fx, [{ id: "owner1", role: "owner", sub: SUB, password: true }]);
+
+    // The issuer must equal the configured one byte for byte.
+    idp.state.overrideIssuer = "http://127.0.0.1:1/other-issuer";
+    expect(await oidcLoginRedirect(lucy.baseUrl, idp)).toContain("oidc_error=OIDC_LOGIN_INVALID");
+    idp.state.overrideIssuer = null;
+
+    // The audience must contain this client.
+    idp.state.overrideAudience = "another-client";
+    expect(await oidcLoginRedirect(lucy.baseUrl, idp)).toContain("oidc_error=OIDC_LOGIN_INVALID");
+    idp.state.overrideAudience = null;
+
+    // An azp for somebody else is a mismatch even with a single audience.
+    idp.state.overrideAzp = "another-client";
+    expect(await oidcLoginRedirect(lucy.baseUrl, idp)).toContain("oidc_error=OIDC_LOGIN_INVALID");
+    idp.state.overrideAzp = null;
+
+    // Several audiences without a matching azp are refused.
+    idp.state.overrideAudience = [CLIENT_ID, "another-client"];
+    expect(await oidcLoginRedirect(lucy.baseUrl, idp)).toContain("oidc_error=OIDC_LOGIN_INVALID");
+    idp.state.overrideAudience = null;
+
+    // An expired token is refused (the clock tolerance is 5 s).
+    idp.state.overrideTtlSeconds = -60;
+    expect(await oidcLoginRedirect(lucy.baseUrl, idp)).toContain("oidc_error=OIDC_LOGIN_INVALID");
+    idp.state.overrideTtlSeconds = null;
+
+    // A token without an expiry is refused: `exp` is a required claim.
+    idp.state.omitExpiration = true;
+    expect(await oidcLoginRedirect(lucy.baseUrl, idp)).toContain("oidc_error=OIDC_LOGIN_INVALID");
+    idp.state.omitExpiration = false;
+
+    // A token signed by a key the provider never published is refused.
+    idp.state.signWithForeignKey = true;
+    expect(await oidcLoginRedirect(lucy.baseUrl, idp)).toContain("oidc_error=OIDC_LOGIN_INVALID");
+    idp.state.signWithForeignKey = false;
+
+    // A symmetric signature is refused: only asymmetric algorithms are allowed.
+    idp.state.algorithm = "HS256";
+    expect(await oidcLoginRedirect(lucy.baseUrl, idp)).toContain("oidc_error=OIDC_LOGIN_INVALID");
+    idp.state.algorithm = "RS256";
+
+    // An unsigned token (`alg: none`) is refused as well.
+    idp.state.useAlgNone = true;
+    expect(await oidcLoginRedirect(lucy.baseUrl, idp)).toContain("oidc_error=OIDC_LOGIN_INVALID");
+    idp.state.useAlgNone = false;
+
+    // The valid token still signs in, so the refusals above are specific.
+    const ok = await completeOidcLogin(lucy.baseUrl, idp);
+    expect(ok.callback.status).toBe(303);
+    expect(ok.callback.headers.get("location")).toBe("/overview");
+    expect(ok.sessionCookie).toContain("lucy_admin_session=");
+  });
+
+  it("OIDC-17: a returnTo that leaves Lucy falls back to the overview", () => {
+    expect(sanitizeInternalReturnTo("/overview")).toBe("/overview");
+    expect(sanitizeInternalReturnTo("/admin/agents?tab=roles")).toBe("/admin/agents?tab=roles");
+    expect(sanitizeInternalReturnTo("https://evil.example.com")).toBe("/overview");
+    expect(sanitizeInternalReturnTo("//evil.example.com")).toBe("/overview");
+    expect(sanitizeInternalReturnTo("/\\evil.example.com")).toBe("/overview");
+    expect(sanitizeInternalReturnTo("/path\nwith-control")).toBe("/overview");
+    expect(sanitizeInternalReturnTo("/path with-space")).toBe("/overview");
+    expect(sanitizeInternalReturnTo(undefined)).toBe("/overview");
+    expect(sanitizeInternalReturnTo(42)).toBe("/overview");
+  });
+
+  it("OIDC-05: a profile that changes under a pending login invalidates that transaction", async () => {
+    fx = await createAuthFixture({ secret: "env" });
+    idp = await startMockIdp();
+    const files = await writeOidcFiles({ idp });
+    dir = files.dir;
+    enableOidc(files.profilePath, files.secretPath);
+    lucy = await startLucy();
+
+    await writeBoundAdmins(fx, [{ id: "owner1", role: "owner", sub: SUB, password: true }]);
+
+    const start = await startLogin(lucy.baseUrl);
+    const url = new URL(start.authorizationUrl);
+    const state = url.searchParams.get("state") ?? "";
+    idp.state.expectedChallenge = url.searchParams.get("code_challenge") ?? "";
+    idp.state.expectedNonce = url.searchParams.get("nonce") ?? "";
+
+    // The provider configuration changes underneath the pending login. Only the
+    // scope list changes: it moves the profile digest without touching the
+    // audience, so the refusal below can only come from the digest check.
+    const profileDoc = JSON.parse(await readFile(files.profilePath, "utf8")) as Record<string, unknown>;
+    profileDoc.scopes = "openid profile email offline_access";
+    await writeFile(files.profilePath, JSON.stringify(profileDoc), "utf8");
+    resetOidcRuntimeCache();
+
+    const callback = await fetch(
+      `${lucy.baseUrl}/api/auth/oidc/callback?code=the-code&state=${state}`,
+      { redirect: "manual", headers: { cookie: start.transactionCookie } }
+    );
+    expect(callback.status).toBe(303);
+    expect(callback.headers.get("location")).toContain("oidc_error=OIDC_LOGIN_INVALID");
+    // No session cookie at all: the failure closes the door.
+    expect(cookieNamed(callback, "lucy_admin_session")).toBe("");
+  });
+
+  it("OIDC-13: removing a binding revokes the session it issued, and the identity source no longer leads to the account", async () => {
+    fx = await createAuthFixture({ secret: "env" });
+    idp = await startMockIdp();
+    const files = await writeOidcFiles({ idp });
+    dir = files.dir;
+    enableOidc(files.profilePath, files.secretPath);
+    lucy = await startLucy();
+
+    await writeBoundAdmins(fx, [
+      { id: "owner1", role: "owner", sub: "owner-sub", password: true },
+      { id: "op1", role: "operator", sub: SUB, password: true }
+    ]);
+
+    const { sessionCookie } = await completeOidcLogin(lucy.baseUrl, idp);
+    expect((await api(lucy.baseUrl, "GET", "/api/auth/me", sessionCookie)).status).toBe(200);
+
+    const ownerCookie = await loginCookie(lucy.baseUrl, "owner1");
+    const removed = await api(
+      lucy.baseUrl,
+      "DELETE",
+      `/api/admin/admins/op1/oidc-binding?issuer=${encodeURIComponent(ISSUER)}`,
+      ownerCookie
+    );
+    expect(removed.status).toBe(200);
+
+    // The session the binding had issued is revoked.
+    expect((await api(lucy.baseUrl, "GET", "/api/auth/me", sessionCookie)).status).toBe(401);
+
+    // And the identity source no longer resolves to that account.
+    expect(await oidcLoginRedirect(lucy.baseUrl, idp)).toContain("oidc_error=OIDC_ACCOUNT_NOT_BOUND");
+  });
+
+  it("OIDC-12: a binding cannot be removed from an account that has no other credential", async () => {
+    fx = await createAuthFixture({ secret: "env" });
+    idp = await startMockIdp();
+    const files = await writeOidcFiles({ idp });
+    dir = files.dir;
+    enableOidc(files.profilePath, files.secretPath);
+    lucy = await startLucy();
+
+    // op1 has the identity binding and nothing else: no local password.
+    await writeBoundAdmins(fx, [
+      { id: "owner1", role: "owner", sub: "owner-sub", password: true },
+      { id: "op1", role: "operator", sub: SUB, password: false }
+    ]);
+
+    const ownerCookie = await loginCookie(lucy.baseUrl, "owner1");
+    const removed = await api(
+      lucy.baseUrl,
+      "DELETE",
+      `/api/admin/admins/op1/oidc-binding?issuer=${encodeURIComponent(ISSUER)}`,
+      ownerCookie
+    );
+    expect(removed.status).toBe(400);
+    expect((await removed.json()).error.code).toBe("AUTH_CREDENTIAL_REQUIRED");
+  });
+
+  it("OIDC-19: a login whose durable ledger entry cannot be written hands out no session", async () => {
+    fx = await createAuthFixture({ secret: "env" });
+    idp = await startMockIdp();
+    const files = await writeOidcFiles({ idp });
+    dir = files.dir;
+    enableOidc(files.profilePath, files.secretPath);
+    lucy = await startLucy();
+
+    await writeBoundAdmins(fx, [{ id: "owner1", role: "owner", sub: SUB, password: true }]);
+
+    // The login verifies cryptographically, but its durable login event cannot be written.
+    authEventHooks.fail = true;
+    try {
+      const { callback } = await completeOidcLogin(lucy.baseUrl, idp);
+      expect(callback.status).toBe(303);
+      expect(callback.headers.get("location")).toContain("oidc_error=AUTH_STATE_UNAVAILABLE");
+      // No session is handed out, so the account row cannot outlive the login.
+      expect(cookieNamed(callback, "lucy_admin_session")).toBe("");
+    } finally {
+      authEventHooks.fail = false;
+    }
+  });
+
+  it("OIDC-12: the last local-password owner cannot be disabled, demoted or deleted", async () => {
+    fx = await createAuthFixture({ secret: "env" });
+    idp = await startMockIdp();
+    const files = await writeOidcFiles({ idp });
+    dir = files.dir;
+    enableOidc(files.profilePath, files.secretPath);
+    lucy = await startLucy();
+
+    // owner1 is the only account that can still sign in with a local password;
+    // owner2 is an owner, but it can only arrive through the identity provider.
+    await writeBoundAdmins(fx, [
+      { id: "owner1", role: "owner", sub: "owner-sub", password: true },
+      { id: "owner2", role: "owner", sub: "owner2-sub", password: false }
+    ]);
+
+    const ownerCookie = await loginCookie(lucy.baseUrl, "owner1");
+
+    // Disabling it would leave no enabled owner with a local password.
+    const disabled = await api(lucy.baseUrl, "PATCH", "/api/admin/admins/owner1", ownerCookie, { enabled: false });
+    expect(disabled.status).toBe(400);
+    expect((await disabled.json()).error.code).toBe("LOCAL_OWNER_REQUIRED");
+
+    // Demoting it does the same.
+    const demoted = await api(lucy.baseUrl, "PATCH", "/api/admin/admins/owner1", ownerCookie, { role: "operator" });
+    expect(demoted.status).toBe(400);
+    expect((await demoted.json()).error.code).toBe("LOCAL_OWNER_REQUIRED");
+
+    // Deleting it does the same.
+    const deleted = await api(lucy.baseUrl, "DELETE", "/api/admin/admins/owner1", ownerCookie);
+    expect(deleted.status).toBe(400);
+    expect((await deleted.json()).error.code).toBe("LOCAL_OWNER_REQUIRED");
+  });
+
+  it("OIDC-19: a state that was never issued creates no transaction bucket", async () => {
+    fx = await createAuthFixture({ secret: "env" });
+    idp = await startMockIdp();
+    const files = await writeOidcFiles({ idp });
+    dir = files.dir;
+    enableOidc(files.profilePath, files.secretPath);
+    lucy = await startLucy();
+
+    await writeBoundAdmins(fx, [{ id: "owner1", role: "owner", sub: SUB, password: true }]);
+
+    // The same unknown state, ten times: if each callback created a transaction
+    // bucket, that one bucket would reach its limit (5) and start refusing.
+    for (let i = 0; i < 10; i += 1) {
+      const res = await fetch(`${lucy.baseUrl}/api/auth/oidc/callback?code=abc&state=never-issued`, {
+        redirect: "manual"
+      });
+      expect(res.status).toBe(303);
+      expect(res.headers.get("location")).toContain("oidc_error=OIDC_LOGIN_INVALID");
+    }
+  });
+
+  it("OIDC-19: an OIDC flood cannot open a hole around the local login", async () => {
+    fx = await createAuthFixture({ secret: "env" });
+    idp = await startMockIdp();
+    const files = await writeOidcFiles({ idp });
+    dir = files.dir;
+    enableOidc(files.profilePath, files.secretPath);
+    lucy = await startLucy();
+
+    await writeBoundAdmins(fx, [{ id: "owner1", role: "owner", sub: SUB, password: true }]);
+
+    // Spend the shared source budget on the OIDC entry point.
+    for (let i = 0; i < 31; i += 1) {
+      await fetch(`${lucy.baseUrl}/api/auth/oidc/start`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({})
+      });
+    }
+
+    // The local login shares that budget, so it is refused as well: an OIDC
+    // flood must not buy a caller more local attempts.
+    const local = await login(lucy.baseUrl, "owner1");
+    expect(local.status).toBe(429);
   });
 
   it("OIDC-14: an unreachable provider fails the OIDC login only", async () => {
