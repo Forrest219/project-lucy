@@ -31,14 +31,39 @@ test.describe.configure({ mode: "serial" });
 /** A semantic overlay that parses but is not a legal asset (YAML top level is a scalar). */
 const ILLEGAL_YAML = "just-a-string-not-a-mapping\n";
 
-/** A legal semantic overlay for one table of the fixture connection. */
+/**
+ * A legal semantic overlay for one table of the fixture connection.
+ *
+ * The upload classifier requires a source YAML to carry `table: <schema>.<table>`
+ * (otherwise `OVERLAY_MISSING_TABLE`), and a source with `table:` is a KTX
+ * "standalone" file: it must declare ALL of its physical columns itself, because
+ * it will NOT be merged with the Manifest
+ * (.cursor/skills/lucy-semantic-author/references/schema-lint-rules.md).
+ *
+ * The physical columns are the seeded ones (scripts/e2e/lib/db-seed.mjs):
+ * day DATE, region TEXT, channel TEXT, spend_cents BIGINT, new_customers INTEGER.
+ */
 const LEGAL_OVERLAY = [
   "name: marketing_daily",
+  "table: analytics.marketing_daily",
   "",
   "grain:",
   "  - day",
   "  - region",
   "  - channel",
+  "",
+  "columns:",
+  "  - name: day",
+  "    type: date",
+  "    role: time",
+  "  - name: region",
+  "    type: string",
+  "  - name: channel",
+  "    type: string",
+  "  - name: spend_cents",
+  "    type: number",
+  "  - name: new_customers",
+  "    type: number",
   "",
   "measures:",
   "  - name: total_spend_cents",

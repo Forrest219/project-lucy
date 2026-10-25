@@ -77,7 +77,10 @@ test.describe.configure({ mode: "serial" });
 test("the reconciliation detail agrees with this run's audit events and keeps full table identities", async ({ browser, baseURL }, testInfo) => {
   covers(testInfo, "SEC-18-V06", "SEC-20-V01");
   coversV025(testInfo, "ARV25-V01", "ARV25-V02", "ARV25-V03", "ARV25-V05", "ARV25-V06");
-  blockUnless(testInfo, "lucy-http", "browser");
+  // The reconciliation detail is reconciled against a REAL Agent turn of this run, so the
+  // agent client is a declared dependency of this spec (the runtime check below still blocks
+  // when the capability exists but no turn actually happened).
+  blockUnless(testInfo, "lucy-http", "browser", "agent-client");
 
   const tokens = fixtureAgentTokens();
 
@@ -116,10 +119,21 @@ test("the reconciliation detail agrees with this run's audit events and keeps fu
     expect(listResponse.status()).toBe(200);
     const entries = ((await listResponse.json()) as { data: { entries: AuditEntry[] } }).data.entries;
     const withTurn = entries.filter((e) => turnIdOf(e) !== null);
-    assertion(testInfo, "audit_event", withTurn.length > 0, `this run produced ${withTurn.length} event(s) carrying a turn id`);
+    if (withTurn.length === 0) {
+      // A turn id only exists when a REAL Agent turn happened in this run. Its absence is an
+      // environment condition (no agent leg / no model call), not a defect of the reconciliation
+      // view — so this item is BLOCKED with a reason, never FAILED. The raw MCP call above is
+      // not an Agent turn and carries no turn id by design.
+      testInfo.annotations.push({
+        type: "blocked",
+        description: "this run produced no audit event carrying a turn id (no real Agent turn happened in this run); the reconciliation detail has nothing to reconcile against"
+      });
+      test.skip(true, "BLOCKED: no Agent turn in this run");
+      return;
+    }
+    assertion(testInfo, "audit_event", true, `this run produced ${withTurn.length} event(s) carrying a turn id`);
 
     const target = withTurn.find((e) => e.lucyTurnId) ?? withTurn[0];
-    expect(target, "this run produced no event with a turn id").toBeTruthy();
     const turnId = turnIdOf(target!)!;
 
     // ① the read-only inquiry detail.
@@ -145,13 +159,27 @@ test("the reconciliation detail agrees with this run's audit events and keeps fu
     assertion(testInfo, "consistency", Boolean(context1?.classificationVersion && context1?.derivationVersion), "the context names the classification and derivation versions");
 
     const inquiry = detailPayload.data?.inquiry ?? {};
-    const tables = (inquiry.tables ?? inquiry.tableList ?? []) as Array<Record<string, unknown>>;
+    // The detail answers with the real `InquiryReconciliation` shape
+    // (webui/server/admin/reconciliation.ts): the table evidence is the
+    // `tables.complete` set, and the calls that could not be attributed to a
+    // table land in the separate `tables.unknownBucket` — they are never
+    // merged into the complete set.
+    const tableEvidence = (inquiry.tables ?? {}) as {
+      complete?: Array<Record<string, unknown>>;
+      unknownBucket?: { callCount?: number; reason?: string };
+    };
+    const tables = Array.isArray(tableEvidence.complete) ? tableEvidence.complete : [];
     const identityOf = (row: Record<string, unknown>) =>
       [row.connectionId, row.schema, row.table].filter((part) => part !== undefined && part !== null && part !== "").join(".");
     const identities = tables.map(identityOf).filter((id) => id.length > 0);
     const uniqueIdentities = new Set(identities);
     assertion(testInfo, "audit_event", tables.length >= 0, `the detail lists ${tables.length} table identity row(s)`);
     assertion(testInfo, "consistency", identities.length === uniqueIdentities.size, "the listed table identities are de-duplicated");
+    assertion(testInfo, "consistency",
+      tableEvidence.unknownBucket === undefined
+        || typeof tableEvidence.unknownBucket.callCount === "number"
+        || typeof tableEvidence.unknownBucket.reason === "string",
+      "the unknown-table bucket discloses its count or its reason");
 
     // A row without a table identity must carry a reason, never be dropped or guessed.
     const unknownRows = tables.filter((row) => identityOf(row).length === 0);
@@ -189,11 +217,10 @@ test("the usage view, the token reconciliation and the CSV export close over the
       data?: {
         reconciliationContext?: ReconciliationContext;
         tokenReconciliation?: {
-          configuredCount?: number;
-          activeCount?: number;
-          configuredNotActive?: unknown[];
-          differences?: Array<{ reason?: string }>;
-          unknownIdentityCount?: number;
+          configuredSnapshot?: { available?: boolean; total?: number | null; enabled?: number | null };
+          activeWindow?: { identityCount?: number; toolCallCount?: number };
+          differences?: Array<{ id?: string; count?: number | null; identities?: string[] }>;
+          anomaly?: { flagged?: boolean; reason?: string; activeGreaterThanConfigured?: boolean };
         };
         calls?: { items?: unknown[]; totalMatched?: number; returned?: number; complete?: boolean };
       };
@@ -205,13 +232,31 @@ test("the usage view, the token reconciliation and the CSV export close over the
 
     const context2 = usagePayload.data?.reconciliationContext;
     const tokens = usagePayload.data?.tokenReconciliation ?? {};
-    assertion(testInfo, "consistency", typeof tokens.configuredCount === "number", `the configured token count is a number (${tokens.configuredCount ?? "none"})`);
-    assertion(testInfo, "consistency", typeof tokens.activeCount === "number", `the active token count is a number (${tokens.activeCount ?? "none"})`);
-    assertion(testInfo, "consistency", Array.isArray(tokens.configuredNotActive), "the configured-but-not-active set is disclosed");
+    // The token reconciliation answers with the REAL `TokenReconciliation` shape
+    // (webui/server/admin/reconciliation.ts): the configured counts live in
+    // `configuredSnapshot`, the active identities in `activeWindow`, and the
+    // configured-but-not-active set is one of the `differences` entries.
+    //
+    // A count that cannot be observed is `null` WITH a reason, never `0`
+    // (Spec §2.4／§2.6) — so the assertion accepts a null count only when the
+    // snapshot says it is unavailable.
+    const configured = tokens.configuredSnapshot ?? {};
+    const active = tokens.activeWindow ?? {};
+    assertion(testInfo, "consistency",
+      typeof configured.total === "number" || (configured.available === false && configured.total === null),
+      `the configured token count is observable (total=${String(configured.total)}, available=${String(configured.available)})`);
+    assertion(testInfo, "consistency", typeof active.identityCount === "number",
+      `the active token count is a number (${String(active.identityCount)})`);
+    const configuredNotActive = (tokens.differences ?? []).find((d) => d.id === "configured_not_active");
+    assertion(testInfo, "consistency", Boolean(configuredNotActive),
+      "the configured-but-not-active set is disclosed");
+    assertion(testInfo, "consistency",
+      configuredNotActive ? (typeof configuredNotActive.count === "number" || configuredNotActive.count === null) : true,
+      `the configured-but-not-active count is observable (${String(configuredNotActive?.count)})`);
 
     // An active count above the configured count is explained, never flattened to "anomaly".
-    if (typeof tokens.configuredCount === "number" && typeof tokens.activeCount === "number" && tokens.activeCount > tokens.configuredCount) {
-      const explained = (tokens.differences ?? []).length > 0;
+    if (typeof configured.total === "number" && typeof active.identityCount === "number" && active.identityCount > configured.total) {
+      const explained = (tokens.differences ?? []).length > 0 && tokens.anomaly?.activeGreaterThanConfigured === true;
       assertion(testInfo, "consistency", explained, "an active count above the configured count must be explained by difference reasons");
     }
 
@@ -233,7 +278,13 @@ test("the usage view, the token reconciliation and the CSV export close over the
     }
 
     const context3 = exportPayload.data?.reconciliationContext;
-    assertion(testInfo, "consistency", context2?.watermarkSeq === context3?.watermarkSeq, `usage S=${context2?.watermarkSeq ?? "none"} and export S=${context3?.watermarkSeq ?? "none"}`);
+    // 「统一截止」 binds the details, the summary and the CSV of ONE page query to
+    // the same `watermarkSeq=S` (audit-reconciliation spec §3.3). The usage view
+    // and the export are TWO independent queries, so their S may differ — the
+    // ledger bound only moves forward. Equality is required INSIDE one response.
+    assertion(testInfo, "consistency",
+      typeof context2?.watermarkSeq === "number" && typeof context3?.watermarkSeq === "number" && context3.watermarkSeq >= context2.watermarkSeq,
+      `usage S=${context2?.watermarkSeq ?? "none"} and export S=${context3?.watermarkSeq ?? "none"} (the ledger bound only moves forward)`);
     assertion(testInfo, "consistency", context2?.metricUnit === context3?.metricUnit, "usage and export use the same metric unit");
 
     const files = exportPayload.data?.files ?? [];

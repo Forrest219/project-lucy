@@ -71,11 +71,16 @@ test("新建连接表单提供全部 8 类数据库类型，且失败关闭的�
 
     // ── CON25-01..08：表单提供的数据库类型恰好是 DATABASE_TYPES 的 8 项且同序 ──────────
     await page.goto("/connections");
+    // The page renders EITHER the header's "新建连接" button (always) OR the empty state's
+    // button (only when there are no connections). A bare count() reads 0 while the page is
+    // still rendering and would fall into the wrong branch, so wait for one of them first.
     const createButton = page.getByTestId("create-connection-btn").first();
+    const createEmptyButton = page.getByTestId("create-connection-empty-btn").first();
+    await expect(createButton.or(createEmptyButton).first()).toBeVisible();
     if (await createButton.count()) {
       await createButton.click();
     } else {
-      await page.getByTestId("create-connection-empty-btn").first().click();
+      await createEmptyButton.click();
     }
     const driverSelect = page.getByTestId("create-connection-driver").first();
     await expect(driverSelect).toBeVisible();

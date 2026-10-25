@@ -249,6 +249,57 @@ describe("the browser dimension comes out of the v025-case annotations", () => {
     const report = testEntry("frozen", { annotations: [{ type: "case", description: "UX-01-V01" }] });
     assert.equal(browserDimensionsFromReport(report).size, 0);
   });
+
+  it("a spec that PASSED but recorded one of the item's declared tokens as false fails the dimension", () => {
+    // `assertion()` never throws: a Playwright pass only says the test did not throw. The
+    // item's own verdict is in the recorded assertion tokens, so a refuted declared token
+    // must fail the dimension instead of letting it look proven.
+    const report = testEntry("self-refuting", {
+      annotations: [
+        { type: V025_ANNOTATION_TYPE, description: "X-01" },
+        { type: "assert", description: JSON.stringify({ token: "consistency", passed: false, detail: "9 nodes break the conservation" }) }
+      ]
+    });
+    const dims = browserDimensionsFromReport(report, { declaredTokens: new Map([["X-01", ["consistency"]]]) });
+    assert.equal(dims.get("X-01").status, "failed");
+    assert.match(dims.get("X-01").detail, /9 nodes break the conservation/);
+  });
+
+  it("an assertion the item does not declare does not fail the dimension", () => {
+    const report = testEntry("other-token", {
+      annotations: [
+        { type: V025_ANNOTATION_TYPE, description: "X-01" },
+        { type: "assert", description: JSON.stringify({ token: "no_leak", passed: false, detail: "unrelated" }) }
+      ]
+    });
+    const dims = browserDimensionsFromReport(report, { declaredTokens: new Map([["X-01", ["consistency"]]]) });
+    assert.equal(dims.get("X-01").status, "passed");
+  });
+
+  it("a declared token the browser leg never evaluated leaves the dimension open (not failed)", () => {
+    // The item's token set spans every executor; a token another layer owns is simply not
+    // closed by the browser leg. Failing here would invent a failure.
+    const report = testEntry("partial", {
+      annotations: [
+        { type: V025_ANNOTATION_TYPE, description: "X-01" },
+        { type: "assert", description: JSON.stringify({ token: "consistency", passed: true, detail: "ok" }) }
+      ]
+    });
+    const dims = browserDimensionsFromReport(report, { declaredTokens: new Map([["X-01", ["consistency", "exactly_one_wins"]]]) });
+    assert.equal(dims.get("X-01").status, "passed");
+    assert.deepEqual(dims.get("X-01").assertions.map((a) => a.token), ["consistency"]);
+  });
+
+  it("the recorded assertions travel with the dimension for audit", () => {
+    const report = testEntry("audited", {
+      annotations: [
+        { type: V025_ANNOTATION_TYPE, description: "X-01" },
+        { type: "assert", description: JSON.stringify({ token: "consistency", passed: true, detail: "ok" }) }
+      ]
+    });
+    const dims = browserDimensionsFromReport(report, { declaredTokens: new Map([["X-01", ["consistency"]]]) });
+    assert.deepEqual(dims.get("X-01").assertions, [{ token: "consistency", passed: true, detail: "ok" }]);
+  });
 });
 
 describe("collecting the evidence never paints an unexecuted item green", () => {

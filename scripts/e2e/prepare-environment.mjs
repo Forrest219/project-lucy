@@ -186,7 +186,7 @@ export async function prepareEnvironment(options) {
   secretFile(path.join(paths.checker, "seed-data.sql"), seedDataSql);
   writeFileSync(path.join(paths.outside, "canary.txt"), `${dataset.canaries.outsideFile}\n`);
 
-  const { hashes, fingerprints } = makeSecrets(secretsDir);
+  const { hashes, fingerprints, readerPassword } = makeSecrets(secretsDir);
   const fixtureDigest = treeDigest(FIXTURE_ROOT);
   const logicalInstanceId = randomUUID();
   const markerKey = "shared/e2e-instance-marker";
@@ -206,8 +206,21 @@ export async function prepareEnvironment(options) {
   const dbReaderRole = `lucy_e2e_reader_${safeIso}`;
   const dbOwnerRole = options.dbOwnerRole ?? "postgres";
   const secretFilePath = path.join(secretsDir, "db-reader.password");
-  const secretMountPath = options.dbSecretMountPath ?? "/var/run/secrets/lucy/db";
+  // Where the reader password must be READABLE.
+  //
+  // In a customer deployment the WebUI and the KTX upstream run inside the pod
+  // and the password arrives through a mounted Secret at `/var/run/secrets/...`.
+  // In a LOCAL run both processes run on the host, where that path does not
+  // exist — so the run keeps its own copy inside the run directory. Without it
+  // the host-side processes cannot read the password, the database stays
+  // unreachable and every data-plane call answers empty.
+  const defaultSecretMount = mode === "local" ? path.join(secretsDir, "db") : "/var/run/secrets/lucy/db";
+  const secretMountPath = options.dbSecretMountPath ?? defaultSecretMount;
   const containerPasswordPath = path.join(secretMountPath, "password");
+  if (mode === "local" && options.dbSecretMountPath === undefined) {
+    mkdirSync(secretMountPath, { recursive: true, mode: 0o700 });
+    secretFile(containerPasswordPath, readerPassword);
+  }
   const ownerPasswordFile = path.join(secretsDir, "db-owner.password");
   renderTemplates(path.join(FIXTURE_ROOT, "project-template"), paths.project, {
     ...hashes,

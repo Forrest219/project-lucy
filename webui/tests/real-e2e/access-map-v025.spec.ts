@@ -29,6 +29,7 @@
 
 import { expect, test, type TestInfo } from "@playwright/test";
 import { assertion, blockUnless, covers, coversV025 } from "./helpers/blocked";
+import { accessMapTableParts } from "./helpers/table-identity";
 import { ownerContext, runContext } from "./helpers/run-context";
 
 /** The 14 ACM execution ids, in order. */
@@ -71,7 +72,8 @@ test("访问关系图的四层主干、表格视图与审计事件同源，且�
     const map = mapBody.data;
     const tableNodeIds = (map?.nodes ?? []).filter((n) => n.kind === "table").map((n) => n.id ?? "").sort();
 
-    // SC-02：流守恒——非凭证节点的入流 grantPaths == 出流 grantPaths（误差 0）。
+    // SC-02：流守恒——Agent 是源点（出流 = 路径数），Table 是汇点（入流 = 路径数），
+    // 中间节点入流 == 出流（webui/docs/187-access-relation-sankey-spec.md §4.3 / SC-02）。
     // 这里从公开响应独立重算，不调用实现自带的判定函数。
     const inFlow = new Map<string, number>();
     const outFlow = new Map<string, number>();
@@ -81,18 +83,28 @@ test("访问关系图的四层主干、表格视图与审计事件同源，且�
       outFlow.set(source, (outFlow.get(source) ?? 0) + (edge.grantPaths ?? 0));
       inFlow.set(target, (inFlow.get(target) ?? 0) + (edge.grantPaths ?? 0));
     }
-    const credentialKinds = new Set(["token"]);
-    const credentialIds = new Set(
-      (map?.nodes ?? []).filter((n) => credentialKinds.has(n.kind ?? "")).map((n) => n.id ?? "")
-    );
-    const conservationBreaks = [...new Set([...inFlow.keys(), ...outFlow.keys()])].filter((id) => {
-      if (credentialIds.has(id)) return false;
-      return (inFlow.get(id) ?? 0) !== (outFlow.get(id) ?? 0);
-    });
+    const conservationBreaks: string[] = [];
+    for (const node of map?.nodes ?? []) {
+      if (node.kind === "token") continue;
+      const id = node.id ?? "";
+      const inSum = inFlow.get(id) ?? 0;
+      const outSum = outFlow.get(id) ?? 0;
+      if (inSum === 0 && outSum === 0) continue;
+      const paths = node.meta?.grantPaths ?? 0;
+      if (inSum === 0) {
+        // 源点（Agent）：出流必须等于该节点的路径数。
+        if (outSum !== paths) conservationBreaks.push(`${id}: source out=${outSum} != paths=${paths}`);
+        continue;
+      }
+      if (outSum === 0) {
+        // 汇点（Table）：入流必须等于该节点的路径数。
+        if (inSum !== paths) conservationBreaks.push(`${id}: sink in=${inSum} != paths=${paths}`);
+        continue;
+      }
+      if (inSum !== outSum) conservationBreaks.push(`${id}: in=${inSum} != out=${outSum}`);
+    }
     assertion(testInfo, "consistency", conservationBreaks.length === 0,
-      `${conservationBreaks.length} non-credential node(s) break the flow conservation ` +
-      `(in=${[...inFlow.entries()].filter(([k]) => conservationBreaks.includes(k)).map(([k, v]) => `${k}:${v}`).join(",")} ` +
-      `out=${[...outFlow.entries()].filter(([k]) => conservationBreaks.includes(k)).map(([k, v]) => `${k}:${v}`).join(",")})`);
+      `${conservationBreaks.length} node(s) break the flow conservation (${conservationBreaks.join("; ")})`);
 
     // ── SC-13 / SCM-11：快照覆盖率分档，unknown 不升级为确凿越权 ─────────────────────
     const coverage = map?.meta?.snapshotCoverage;
@@ -107,23 +119,32 @@ test("访问关系图的四层主干、表格视图与审计事件同源，且�
       `meta.folded.nodes=${foldedNodes}; folded badge rendered=${badgeCount > 0}`);
 
     // ── SC-09：表格视图可切换、可访问性 ──────────────────────────────────────────────
+    // The graph region carries the aria-label summary (节点数／边数／信号计数) on the
+    // `role="img"` SVG itself (webui/src/components/admin/AccessMapCanvas.tsx) — the
+    // `access-map-canvas` element is only the layout wrapper and has no label.
+    // The label must be read while the canvas is still MOUNTED: the page renders
+    // EITHER the canvas OR the table (webui/src/pages/admin/AccessMap.tsx), so
+    // switching to the table view unmounts the canvas and the locator would never resolve.
+    const canvasLabel = await page.getByTestId("access-map-svg").getAttribute("aria-label");
+    assertion(testInfo, "consistency", typeof canvasLabel === "string" && canvasLabel.length > 0,
+      `the graph region has an aria-label summary (${String(canvasLabel).slice(0, 80)})`);
+
     await page.getByTestId("access-map-view-table").click();
     await expect(page.getByTestId("access-map-table")).toBeVisible();
     await expect(page.getByTestId("access-map-table-nodes")).toBeVisible();
     await expect(page.getByTestId("access-map-table-edges")).toBeVisible();
-    const canvasLabel = await page.getByTestId("access-map-canvas").getAttribute("aria-label");
-    assertion(testInfo, "consistency", typeof canvasLabel === "string" && canvasLabel.length > 0,
-      `the graph region has an aria-label summary (${String(canvasLabel).slice(0, 80)})`);
 
     // ── SC-10：两档措辞不混用（需复核不含「越权」；确凿越权含规定文案） ────────────────
-    const signalText = await page.getByTestId("access-map-signal-bar").innerText();
-    const needsReviewSection = signalText.split("确凿越权")[0] ?? "";
-    const confirmedSection = signalText.includes("确凿越权") ? signalText.split("确凿越权")[1] ?? "" : "";
-    assertion(testInfo, "consistency", !needsReviewSection.includes("越权") || signalText.includes("确凿越权"),
-      "the 需复核 tier does not borrow the 确凿越权 wording");
-    assertion(testInfo, "consistency",
-      confirmedSection.length === 0 || confirmedSection.includes("调用当时授权亦不覆盖"),
-      `the 确凿越权 tier keeps its declared wording: ${confirmedSection.slice(0, 60)}`);
+    // The two tier notes have their own elements. The wording must be read from
+    // them, not from a split of the whole signal bar: the confirmed tier's own
+    // source note starts with 「确凿越权」, so a naive split cuts the tier count
+    // away from its source note and the assertion would look at the wrong text.
+    const needsReviewNote = await page.getByTestId("access-map-signal-needs-review-note").innerText();
+    const confirmedSource = await page.getByTestId("access-map-signal-confirmed-source").innerText();
+    assertion(testInfo, "consistency", !needsReviewNote.includes("越权"),
+      `the 需复核 tier does not borrow the 越权 wording (${needsReviewNote.slice(0, 40)})`);
+    assertion(testInfo, "consistency", confirmedSource.includes("调用当时授权亦不覆盖"),
+      `the 确凿越权 tier keeps its declared wording (${confirmedSource.slice(0, 60)})`);
 
     // ── SEC-18-V06：审计事件与图按 run 对账（audit_event + consistency） ────────────────
     const auditRes = await page.request.get(new URL("/api/admin/audit?limit=50", baseUrl).toString());
@@ -132,16 +153,34 @@ test("访问关系图的四层主干、表格视图与审计事件同源，且�
       data?: { total?: number; entries?: Array<{ id?: string; eventType?: string }> };
     };
     const auditEntries = auditBody.data?.entries ?? [];
-    assertion(testInfo, "audit_event", auditRes.status === 200 && auditBody.ok === true && auditEntries.length > 0,
+    if (auditEntries.length === 0) {
+      // An audit entry only exists when something really happened in this run. Its
+      // absence is an environment condition (this run made no Agent turn), not a
+      // defect of the graph — so the reconciliation-by-run items are BLOCKED with a
+      // reason, never FAILED.
+      testInfo.annotations.push({
+        type: "blocked",
+        description: "this run produced no audit entry (no real Agent turn happened in this run); the graph cannot be reconciled against audit entries"
+      });
+      test.skip(true, "BLOCKED: no audit entry in this run");
+      return;
+    }
+    // `status` is a METHOD on a Playwright APIResponse — comparing the function
+    // itself with 200 is always false, so the verdict could never be positive.
+    assertion(testInfo, "audit_event", auditRes.status() === 200 && auditBody.ok === true,
       `audit list: ${auditEntries.length} entry(ies) of ${auditBody.data?.total ?? "?"} total`);
 
     // consistency：图上的表集合与审计里的表引用同源（同一 run、同一份授权事实）
+    // The node id is `table:<conn>::<schema>::<source>` — it has NO path separator,
+    // so cutting a "tail" out of it would always yield the empty string and the
+    // comparison could never match. The source name is the common denominator
+    // between the graph node and the audit entry's table reference.
     const auditTableRefs = new Set<string>();
     for (const entry of auditEntries) {
       const raw = JSON.stringify(entry);
       for (const id of tableNodeIds) {
-        const tail = id.split("/").slice(1).join("/");
-        if (tail.length > 0 && raw.includes(tail)) auditTableRefs.add(id);
+        const parts = accessMapTableParts(id);
+        if (parts && parts.sourceName.length > 0 && raw.includes(parts.sourceName)) auditTableRefs.add(id);
       }
     }
     assertion(testInfo, "consistency", tableNodeIds.length === 0 || auditTableRefs.size > 0,

@@ -94,10 +94,24 @@ export function classifyBlockedReason(missing = [], overrides = {}) {
  *
  * A skipped test did NOT produce a verdict, so its dimension is `not_run` —
  * never `passed` and never `failed`.
+ *
+ * A test that PASSED at the Playwright level but recorded one of the item's
+ * DECLARED assertion tokens as false has NOT proven the item: the dimension
+ * is `failed`. This matters because a Playwright pass only says "the test did
+ * not throw"; the item's own verdict is in the recorded assertion tokens, and
+ * `assertion()` never throws.
+ *
+ * A declared token that was never evaluated is NOT a failure here: the item's
+ * token set spans every executor (browser / protocol / database / agent /
+ * ops / verifier), and the tokens another layer owns are simply not closed by
+ * the browser leg. Leaving them open is what keeps the item `not_run` instead
+ * of letting one layer claim the whole item.
+ *
  * @param {any} report a parsed Playwright JSON report
- * @returns {Map<string, {status: string, detail: string, specs: string[], blockedBy: string[]}>}
+ * @param {{declaredTokens?: Map<string, string[]>}} [options] the per-item declared assertion tokens
+ * @returns {Map<string, {status: string, detail: string, specs: string[], blockedBy: string[], assertions: Array<{token: string, passed: boolean, detail: string}>}>}
  */
-export function browserDimensionsFromReport(report) {
+export function browserDimensionsFromReport(report, { declaredTokens = new Map() } = {}) {
   const out = new Map();
   for (const suite of report?.suites ?? []) {
     for (const { title, test } of iterTests(suite)) {
@@ -105,26 +119,51 @@ export function browserDimensionsFromReport(report) {
       const ids = annotations.filter((a) => a.type === V025_ANNOTATION_TYPE).map((a) => a.description);
       if (ids.length === 0) continue;
       const raw = testStatus(test);
-      const status = raw === "skipped" ? "not_run" : raw;
+      const assertions = annotations
+        .filter((a) => a.type === "assert")
+        .map((a) => parseAssertion(a.description))
+        .filter((a) => a !== null);
       const blockedBy = annotations.filter((a) => a.type === "blocked").map((a) => a.description);
       for (const id of ids) {
         // `status: null` means "no record yet" — it must not be confused with a
         // record that says "not_run".
-        const entry = out.get(id) ?? { status: null, detail: "", specs: [], blockedBy: [] };
+        const entry = out.get(id) ?? { status: null, detail: "", specs: [], blockedBy: [], assertions: [] };
+        const declared = new Set(declaredTokens.get(id) ?? []);
+        const refuted = assertions.filter((a) => declared.has(a.token) && a.passed === false);
+        const status = refuted.length > 0 ? "failed" : raw === "skipped" ? "not_run" : raw;
         if (entry.status === null || DIMENSION_PRECEDENCE.indexOf(status) < DIMENSION_PRECEDENCE.indexOf(entry.status)) {
           entry.status = status;
         }
         if (raw === "failed" && !entry.detail) entry.detail = `failing spec: ${title}`;
+        if (refuted.length > 0 && !entry.detail) {
+          entry.detail = `the spec's own assertion(s) failed: ${refuted.map((a) => `${a.token}: ${a.detail ?? "failed"}`).join(" | ")}`.slice(0, 300);
+        }
         if (raw === "blocked") {
           entry.detail = entry.detail || blockedBy.join("; ") || `blocked spec: ${title}`;
           entry.blockedBy.push(...blockedBy);
         }
         if (!entry.specs.includes(title)) entry.specs.push(title);
+        for (const a of assertions) {
+          if (!entry.assertions.some((e) => e.token === a.token && e.passed === a.passed && e.detail === a.detail)) {
+            entry.assertions.push(a);
+          }
+        }
         out.set(id, entry);
       }
     }
   }
   return out;
+}
+
+/** Parses one recorded assertion annotation; a malformed one is ignored. */
+function parseAssertion(description) {
+  try {
+    const parsed = JSON.parse(description);
+    if (!parsed || typeof parsed.token !== "string") return null;
+    return { token: parsed.token, passed: parsed.passed !== false, detail: String(parsed.detail ?? "") };
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -244,7 +283,11 @@ export function collectV025Evidence({
   verifierPassed,
   capabilityReasons = {}
 }) {
-  const browser = report ? browserDimensionsFromReport(report) : new Map();
+  const browser = report
+    ? browserDimensionsFromReport(report, {
+        declaredTokens: new Map((coverage?.newScenarios ?? []).map((s) => [s.executionId, s.assert ?? []]))
+      })
+    : new Map();
   const results = [];
   for (const scenario of coverage?.newScenarios ?? []) {
     const dimensions = {};
@@ -254,7 +297,8 @@ export function collectV025Evidence({
         status: fromBrowser.status,
         detail: fromBrowser.detail,
         evidenceRefs: fromBrowser.specs.map((t) => `playwright:${t}`),
-        specs: fromBrowser.specs
+        specs: fromBrowser.specs,
+        assertions: fromBrowser.assertions ?? []
       };
     }
     for (const [letter, d] of Object.entries(dimensionEvidence?.[scenario.executionId] ?? {})) {

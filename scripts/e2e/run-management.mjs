@@ -15,6 +15,8 @@ import { loadCatalog } from "./lib/catalog.mjs";
 import { EXIT_CODES, REPO_ROOT, fail, loadRun, parseArgv } from "./lib/common.mjs";
 import { scanRetainedArtifacts } from "./lib/leak-scan.mjs";
 import { ExternalInstance, LucyProcess } from "./lib/instance.mjs";
+import { startKtxUpstream } from "./lib/ktx-upstream.mjs";
+import { withProvenUpstream } from "./lib/upstream-capability.mjs";
 import { reconcileExternalFlag, TargetIdentityError } from "./lib/target-identity.mjs";
 import { managementCapabilities, writeManagementEvidence } from "./collect-management-results.mjs";
 import { writeV025Evidence } from "./collect-v025-results.mjs";
@@ -38,7 +40,7 @@ function progressLog(run, message) {
   }
 }
 
-async function runPlaywright(run, { project, grep }) {
+async function runPlaywright(run, { project, grep, upstream }) {
   const webui = path.join(REPO_ROOT, "webui");
   const bin = path.join(webui, "node_modules", ".bin", "playwright");
   const args = ["test", "-c", "playwright.real.config.ts", "--project", project, "--workers", "1", "--retries", "0"];
@@ -46,6 +48,16 @@ async function runPlaywright(run, { project, grep }) {
   const env = { ...process.env, LUCY_REAL_E2E_RUN: path.join(run.paths.runDir, "run.json") };
   for (const key of Object.keys(env)) if (key.startsWith("LUCY_E2E_")) delete env[key];
   env.PATH = (env.PATH ?? "").split(":").filter((entry) => !entry.endsWith("tests/e2e/fixtures/bin")).join(":");
+  // The upstream readiness flag is the ONLY thing that grants the `ktx-upstream`
+  // capability to the specs. It is set here, after the upstream really answered
+  // on its port — never because somebody declared the capability in the env.
+  if (upstream?.ok) {
+    env.LUCY_PROXY_UPSTREAM_HOST = upstream.host;
+    env.LUCY_PROXY_UPSTREAM_PORT = String(upstream.port);
+    env.LUCY_REAL_E2E_UPSTREAM_READY = "1";
+  } else {
+    delete env.LUCY_REAL_E2E_UPSTREAM_READY;
+  }
   const child = spawn(bin, args, { cwd: webui, env, stdio: "inherit" });
   return new Promise((resolve) => child.once("exit", (code) => resolve(code ?? 1)));
 }
@@ -110,9 +122,24 @@ function buildCapturePolicyArtifact(run) {
   };
 }
 
+/**
+ * The capability set the evidence may rely on.
+ *
+ * `ktx-upstream` is granted only by proof — the run's own upstream really
+ * answered on its port. A missing upstream is never papered over, and a
+ * declaration alone never grants it.
+ */
+function v025Capabilities(run, upstream, external, env = process.env) {
+  return withProvenUpstream(managementCapabilities(run, env), {
+    external,
+    upstreamOk: upstream?.ok === true,
+    env
+  });
+}
+
 const args = (() => {
   try {
-    return parseArgv(process.argv.slice(2), { run: "value", project: "value", grep: "value", external: "boolean" });
+    return parseArgv(process.argv.slice(2), { run: "value", project: "value", grep: "value", external: "boolean", "ktx-bin": "value" });
   } catch (error) {
     return fail(`run-management: ${error.message}`, 1);
   }
@@ -127,6 +154,7 @@ if (!externalCheck.ok) fail(`run-management: ${externalCheck.problems.join("; ")
 mkdirSync(path.join(run.paths.runDir, "results"), { recursive: true });
 mkdirSync(run.paths.logs, { recursive: true });
 let lucy = null;
+let upstream = null;
 let exitCode = 1;
 try {
   if (args.external) {
@@ -149,10 +177,24 @@ try {
     }
     progressLog(run, "external target preflight ok; management journey will perform first-owner bootstrap then we re-verify postflight");
   } else {
-    lucy = new LucyProcess(run);
+    // The data plane needs a KTX upstream. The run starts its OWN upstream for
+    // its OWN project instead of trusting a host service that may not exist:
+    // without it every query answers empty and the run would record a product
+    // defect that is really a missing environment.
+    upstream = await startKtxUpstream(run, { ktxBin: args["ktx-bin"] ?? "ktx" });
+    if (upstream.ok) {
+      progressLog(run, `KTX upstream started for this run on ${upstream.host}:${upstream.port} (log: ${upstream.logPath})`);
+    } else {
+      progressLog(run, `KTX upstream NOT available: ${upstream.reason}; the specs that need the data plane stay BLOCKED`);
+    }
+    lucy = new LucyProcess(run, {
+      extraEnv: upstream.ok
+        ? { LUCY_PROXY_UPSTREAM_HOST: upstream.host, LUCY_PROXY_UPSTREAM_PORT: String(upstream.port) }
+        : {}
+    });
     await lucy.start();
   }
-  const playwrightExit = await runPlaywright(run, { project, grep: args.grep });
+  const playwrightExit = await runPlaywright(run, { project, grep: args.grep, upstream });
   const reportPath = path.join(run.paths.runDir, "results", "management-playwright.json");
   if (!existsSync(reportPath)) fail(`run-management: Playwright produced no report (exit ${playwrightExit}); see its output above`, 1);
   const report = JSON.parse(readFileSync(reportPath, "utf8"));
@@ -175,7 +217,11 @@ try {
     progressLog(run, "external target postflight ok (marker read after intended bootstrap)");
   }
   const { cases } = loadCatalog();
-  const { evidence, out } = writeManagementEvidence(run, cases, report, managementCapabilities(run));
+  // The SAME verified capability set feeds the frozen evidence and the v0.25
+  // evidence: a capability the run really has must not be reported missing in one
+  // and present in the other.
+  const capabilities = v025Capabilities(run, upstream, args.external === true);
+  const { evidence, out } = writeManagementEvidence(run, cases, report, capabilities);
   // Capture-policy artifact: required for SEC-06-V04 so the gate collector can prove that
   // trace / screenshot / video are off AND that the run actually produced no client-side
   // attachments. Persisted next to the report; the gate collector reads it from <runDir>/.
@@ -193,7 +239,7 @@ try {
   const v025 = writeV025Evidence(run, {
     coverage: loadCoverage(),
     report,
-    capabilities: managementCapabilities(run),
+    capabilities: v025Capabilities(run, upstream, args.external === true),
     journeyState: readJsonIfExists(path.join(run.paths.runDir, "j01-state.json"))
   });
   progressLog(run, `v0.25 execution-item evidence written to ${v025.dir} (${v025.results.length} items)`);
@@ -201,5 +247,6 @@ try {
   process.stdout.write(`${JSON.stringify({ status: evidence.status, exitCode, out, summary: evidence.summary, artifactScan: leak })}\n`);
 } finally {
   if (lucy) await lucy.stop("SIGTERM");
+  if (upstream?.ok) await upstream.stop();
 }
 process.exit(exitCode);

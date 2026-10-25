@@ -37,6 +37,7 @@ import { managementCapabilities } from "./collect-management-results.mjs";
 import { fail, loadRun, parseArgv } from "./lib/common.mjs";
 import { loadCoverage } from "./lib/v025-coverage.mjs";
 import { collectV025Evidence, journeyVerdictFromState } from "./lib/v025-evidence.mjs";
+import { upstreamReachable, withProvenUpstream } from "./lib/upstream-capability.mjs";
 import { createResult, writeReport, writeResult } from "./lib/v025-result.mjs";
 
 const V025_EXIT_CODES = Object.freeze({ passed: 0, failed: 1, blocked: 2, not_run: 3, not_applicable: 3 });
@@ -176,10 +177,17 @@ if (invokedDirectly) {
     const report = readJsonIfExists(args.report);
     const dimensionEvidence = readJsonIfExists(args.dimensions) ?? {};
     const journeyState = readJsonIfExists(args.journey) ?? readJsonIfExists(path.join(run.paths?.runDir ?? "", "j01-state.json"));
+    // The `ktx-upstream` capability is granted only by proof: the upstream the
+    // proxy forwards to really answered on its port. A declaration alone never
+    // grants it, and a missing upstream is never papered over.
+    const capabilities = withProvenUpstream(managementCapabilities(run), {
+      external: run.executionMode === "release",
+      upstreamOk: await upstreamReachable()
+    });
     const { results, report: out, dir } = writeV025Evidence(run, {
       coverage: loadCoverage(),
       report,
-      capabilities: managementCapabilities(run),
+      capabilities,
       dimensionEvidence,
       journeyState
     });

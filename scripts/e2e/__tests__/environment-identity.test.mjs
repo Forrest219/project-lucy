@@ -562,7 +562,7 @@ describe("B2 external instance: split preflight / postflight orchestration", () 
 });
 
 describe("prepare-environment: --apply-db contract (B3)", () => {
-  it("defaults db.applied to false and records the safe per-run password files + container paths", async () => {
+  it("defaults db.applied to false and records the safe per-run password files + the path the instance reads", async () => {
     const root = tmp();
     const { run } = await prepareEnvironment({ runId: "local-test-db-0001", mode: "local", runRoot: root });
     // `applied` is the contract; it stays false until the producer (apply-db.mjs)
@@ -572,11 +572,19 @@ describe("prepare-environment: --apply-db contract (B3)", () => {
     // The host secret files hold the reader/owner passwords (mode 0600).
     assert.equal(run.db.passwordFile, path.join(run.secretsDir, "db-reader.password"));
     assert.equal(run.db.ownerPasswordFile, path.join(run.secretsDir, "db-owner.password"));
-    assert.equal(run.db.secretMount, "/var/run/secrets/lucy/db");
-    assert.equal(run.db.containerPasswordPath, "/var/run/secrets/lucy/db/password");
-    // The env block must propagate the in-container password path, never the host path.
+    // A LOCAL run serves its instance on the host, so the password must be
+    // readable at a real host path. `/var/run/secrets/lucy/db` only exists
+    // inside the customer's pod — pointing a host-side run at it leaves the
+    // database unreachable and every data-plane call empty.
+    assert.equal(run.db.secretMount, path.join(run.secretsDir, "db"));
+    assert.equal(run.db.containerPasswordPath, path.join(run.secretsDir, "db", "password"));
+    // The env block points at the path the instance actually reads.
     assert.equal(run.instance.env.LUCY_DB_PASSWORD_FILE, run.db.containerPasswordPath);
     assert.notEqual(run.instance.env.LUCY_DB_PASSWORD_FILE, run.db.passwordFile);
+    // And that path really holds the reader password, so the host-side instance
+    // and the KTX upstream can connect to the run's own database.
+    const readerPassword = readFileSync(run.db.containerPasswordPath, "utf8").trim();
+    assert.equal(readerPassword, readFileSync(run.db.passwordFile, "utf8").trim());
   });
 
   it("--apply-db flags applyRequested but does NOT mark db.applied; the producer is the sole writer of applied", async () => {

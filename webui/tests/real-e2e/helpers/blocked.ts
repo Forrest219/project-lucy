@@ -29,11 +29,41 @@ export function assertion(testInfo: TestInfo, token: string, passed: boolean, de
   testInfo.annotations.push({ type: "assert", description: JSON.stringify({ token, passed, detail: detail.slice(0, 300) }) });
 }
 
+/**
+ * Capabilities whose presence must be PROVEN, never declared.
+ *
+ * `ktx-upstream` is the data plane the Lucy proxy forwards every query to. If
+ * it is not listening, every query answers empty — which reads like a product
+ * defect and is not one. So a capability that can be probed is granted only by
+ * the runner's own probe (`LUCY_REAL_E2E_UPSTREAM_READY`), never by somebody
+ * writing the capability into the environment.
+ */
+const PROVEN_CAPABILITIES = new Set(["ktx-upstream"]);
+
+function declaredCapabilities(): string[] {
+  return (process.env.LUCY_REAL_E2E_CAPABILITIES ?? "")
+    .split(",")
+    .map((cap) => cap.trim())
+    .filter(Boolean);
+}
+
 export function capabilities(): Set<string> {
   const caps = new Set<string>(["lucy-http", "browser"]);
-  if (runContext().db.applied) caps.add("postgres");
-  for (const extra of (process.env.LUCY_REAL_E2E_CAPABILITIES ?? "").split(",")) {
-    if (extra.trim()) caps.add(extra.trim());
+  const run = runContext();
+  if (run.db.applied) caps.add("postgres");
+  for (const cap of declaredCapabilities()) {
+    // A declaration alone is never enough for a probe-backed capability.
+    if (PROVEN_CAPABILITIES.has(cap)) continue;
+    caps.add(cap);
+  }
+  for (const cap of PROVEN_CAPABILITIES) {
+    // Local runs: the runner started the upstream and saw it answer.
+    // External runs: the upstream lives inside the cluster and cannot be probed
+    // from here, so the operator's attestation is the only signal available.
+    const proven = run.executionMode === "release"
+      ? declaredCapabilities().includes(cap)
+      : process.env.LUCY_REAL_E2E_UPSTREAM_READY === "1";
+    if (proven) caps.add(cap);
   }
   return caps;
 }

@@ -24,11 +24,21 @@ import { expect, test, type TestInfo } from "@playwright/test";
 import { assertion, blockUnless, covers, coversV025 } from "./helpers/blocked";
 import { fixtureAgentTokens, ownerContext, runContext } from "./helpers/run-context";
 import { vault } from "./helpers/secret-capture";
+import { accessMapTableKeys, authorizationSummaryTableKey } from "./helpers/table-identity";
 
 /** The 14 ASV execution ids, in order. */
 const ASV_IDS = Array.from({ length: 14 }, (_, i) => `ASV25-${String(i + 1).padStart(2, "0")}`);
 
-/** Table keys carried by an authorization summary, whatever its exact nesting is. */
+/**
+ * Table keys carried by an authorization summary, whatever its exact nesting is.
+ *
+ * The summary's canonical source key is a four-tuple
+ * `<connectionId>|<schema>|<sourceName>|<physicalTable>`
+ * (webui/server/admin/authorization-summary.ts). It is parsed into the SAME
+ * canonical form the access map uses, so the two views can actually be compared:
+ * their raw formats use different separators, so a substring comparison could
+ * never match.
+ */
 function summaryTableKeys(summary: unknown): string[] {
   const keys: string[] = [];
   const visit = (node: unknown): void => {
@@ -38,8 +48,11 @@ function summaryTableKeys(summary: unknown): string[] {
     }
     if (!node || typeof node !== "object") return;
     const record = node as Record<string, unknown>;
-    const key = record.tableKey ?? record.canonicalKey ?? record.sourceKey;
-    if (typeof key === "string" && key.length > 0) keys.push(key);
+    const key = record.sourceKey ?? record.tableKey ?? record.canonicalKey;
+    if (typeof key === "string" && key.length > 0) {
+      const canonical = authorizationSummaryTableKey(key);
+      if (canonical) keys.push(canonical);
+    }
     for (const value of Object.values(record)) visit(value);
   };
   visit(summary);
@@ -69,11 +82,11 @@ test("授权摘要与访问关系图在同一快照下给出同一份表集合�
       ok?: boolean;
       data?: { nodes?: Array<{ kind?: string; id?: string }> };
     };
-    const mapTableKeys = (mapBody.data?.nodes ?? [])
-      .filter((n) => n.kind === "table")
-      .map((n) => n.id ?? "")
-      .filter((id) => id.length > 0)
-      .sort();
+    const mapTableKeys = accessMapTableKeys(
+      (mapBody.data?.nodes ?? [])
+        .filter((n) => n.kind === "table")
+        .map((n) => n.id ?? "")
+    );
 
     const summaryKeys = new Set<string>();
     let summariesOk = 0;
@@ -93,7 +106,7 @@ test("授权摘要与访问关系图在同一快照下给出同一份表集合�
 
     // consistency: 摘要里出现的每一张表都必须在访问关系图的表节点里出现（同一份身份）
     const missingFromMap = [...summaryKeys].filter(
-      (key) => mapTableKeys.length > 0 && !mapTableKeys.some((id) => id.endsWith(key) || id.includes(key))
+      (key) => mapTableKeys.size > 0 && !mapTableKeys.has(key)
     );
     assertion(testInfo, "consistency", summariesOk > 0 && missingFromMap.length === 0,
       `${summariesOk} summary(ies) read, ${summariesFailed} unavailable; ` +

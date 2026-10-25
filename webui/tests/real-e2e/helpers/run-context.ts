@@ -84,13 +84,46 @@ export async function currentAuthMode(): Promise<string | undefined> {
 }
 
 /**
+ * The admin session of THIS run, reused by every spec that needs one.
+ *
+ * The product refuses more than 5 logins per account and source in 15 minutes
+ * (`webui/server/auth/rate-limit.ts`: `loginAccountSource`), and a full
+ * management leg opens one browser context PER SPEC — logging in again for each
+ * spec would trip the guard halfway through the leg and the leg could never
+ * finish. So the first spec logs in for real and every later spec reuses that
+ * session's storage state.
+ */
+let cachedSessionState: Awaited<ReturnType<BrowserContext["storageState"]>> | null = null;
+
+/** Is the cached session still accepted by the instance? */
+async function sessionWorks(context: BrowserContext): Promise<boolean> {
+  try {
+    // A PROTECTED endpoint: `/api/auth/status` only reports the auth MODE, so it
+    // cannot tell a valid session from an expired one.
+    const res = await context.request.get(new URL("/api/admin/agents", runContext().instance.baseUrl).toString());
+    return res.ok();
+  } catch {
+    return false;
+  }
+}
+
+/**
  * A fresh browser context signed in as the run's owner through the real login form.
  * When the instance is still awaiting its first owner (a spec run on its own), the owner is created through
  * the real bootstrap form first. Never reuses state written to disk.
  */
 export async function ownerContext(browser: Browser): Promise<BrowserContext> {
   const { owner } = adminCredentials();
-  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const viewport = { viewport: { width: 1440, height: 900 } };
+
+  if (cachedSessionState) {
+    const reused = await browser.newContext({ ...viewport, storageState: cachedSessionState });
+    if (await sessionWorks(reused)) return reused;
+    await reused.close();
+    cachedSessionState = null;
+  }
+
+  const context = await browser.newContext(viewport);
   const page = await context.newPage();
   if ((await currentAuthMode()) === "bootstrap") {
     await page.goto("/login");
@@ -103,6 +136,12 @@ export async function ownerContext(browser: Browser): Promise<BrowserContext> {
     await uiLogin(page, owner);
   }
   await page.close();
+  try {
+    cachedSessionState = await context.storageState();
+  } catch {
+    // A context whose state cannot be read simply means the next spec logs in again.
+    cachedSessionState = null;
+  }
   return context;
 }
 
