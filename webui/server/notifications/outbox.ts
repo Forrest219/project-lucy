@@ -73,6 +73,10 @@ export type NotificationRow = {
 /**
  * Create the outbox table and its indexes. Idempotent, and called by the
  * notifier's own startup path so the table exists before the first write.
+ *
+ * This function is also reached from the enqueue path, so it must stay a
+ * pure schema operation: the audit_meta **registration** lives in
+ * `registerNotificationAuditSchema` and is never written from here.
  */
 export async function ensureNotificationOutbox(): Promise<void> {
   const db = await getAuditDb();
@@ -108,6 +112,30 @@ export async function ensureNotificationOutbox(): Promise<void> {
       output_affected_rows    INTEGER
     );
   `);
+}
+
+/**
+ * Register the audit DB schema version that the notification outbox introduces.
+ *
+ * This is a **startup-path** concern, never an enqueue-path one: `audit_meta`
+ * is the audit DB's governance table, and writing it on every enqueue would
+ * take a write lock on `audit.sqlite` for metadata that never changes.
+ *
+ * `audit_meta.audit_db_schema_version` is a PRIMARY KEY that is **shared** with
+ * the audit-trust backfill run record (`recordBackfillRun` in `proxy/audit.ts`),
+ * so the two writers compete for the same row:
+ *
+ * - this writer uses `INSERT OR IGNORE` — the first writer owns the row;
+ * - the backfill uses `INSERT OR REPLACE` — the last migration run owns it.
+ *
+ * The invariant that must hold is therefore "a row for the current audit schema
+ * version exists", not "the notifier's migration text is the last one written".
+ * The coexistence test pins exactly that, so a future change cannot quietly
+ * turn the registration into a no-op or let it erase the backfill record.
+ */
+export async function registerNotificationAuditSchema(): Promise<void> {
+  await ensureNotificationOutbox();
+  const db = await getAuditDb();
   db.prepare(
     `INSERT OR IGNORE INTO audit_meta
        (audit_db_schema_version, last_migration_text, running_at_iso, running_actor, output_affected_rows)

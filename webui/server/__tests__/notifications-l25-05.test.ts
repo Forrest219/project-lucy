@@ -12,7 +12,8 @@ import {
   ensureNotificationOutbox,
   hasPersistedIncident,
   markExpiredNotificationsDead,
-  NOTIFICATION_PENDING_LIMIT
+  NOTIFICATION_PENDING_LIMIT,
+  registerNotificationAuditSchema
 } from "../notifications/outbox.js";
 import {
   onAuditHealthTransition,
@@ -305,12 +306,12 @@ describe("L25-05 outbox", () => {
     expect(counts.pending).toBe(0);
   });
 
-  it("F-14 outbox 初始化同步登记 audit schema 版本与 audit_meta", async () => {
+  it("F-14 启动路径同步登记 audit schema 版本与 audit_meta", async () => {
     const { getAuditDb } = await import("../admin/audit");
     const db = await getAuditDb();
     db.prepare("DELETE FROM audit_meta WHERE audit_db_schema_version = ?").run(AUDIT_DB_SCHEMA_VERSION);
 
-    await ensureNotificationOutbox();
+    await registerNotificationAuditSchema();
 
     const row = db
       .prepare(
@@ -326,6 +327,74 @@ describe("L25-05 outbox", () => {
     expect(row.audit_db_schema_version).toBe(4);
     expect(row.last_migration_text).toContain("notification_outbox");
     expect(row.running_actor).toBe("system:notifier-init");
+  });
+
+  it("F-14 入队路径不写 audit_meta：登记不是热路径", async () => {
+    const { getAuditDb } = await import("../admin/audit");
+    const db = await getAuditDb();
+    db.prepare("DELETE FROM audit_meta WHERE audit_db_schema_version = ?").run(AUDIT_DB_SCHEMA_VERSION);
+
+    await enqueueNotification({
+      eventType: "audit_ledger_unavailable",
+      incidentId: "hot-path-incident",
+      payload: { eventType: "audit_ledger_unavailable", incidentId: "hot-path-incident" },
+      recipients: ["data-ops@example.internal"]
+    });
+
+    const row = db
+      .prepare("SELECT audit_db_schema_version FROM audit_meta WHERE audit_db_schema_version = ?")
+      .get(AUDIT_DB_SCHEMA_VERSION);
+    expect(row).toBeUndefined();
+  });
+
+  it("F-14 audit_meta 与 audit-trust backfill 共存：版本事实恒成立", async () => {
+    const { getAuditDb } = await import("../admin/audit");
+    const { recordBackfillRun } = await import("../proxy/audit");
+    const db = await getAuditDb();
+    db.prepare("DELETE FROM audit_meta WHERE audit_db_schema_version = ?").run(AUDIT_DB_SCHEMA_VERSION);
+
+    // 1. The notifier registers the current audit schema version.
+    await registerNotificationAuditSchema();
+    const registered = db
+      .prepare("SELECT last_migration_text, running_actor FROM audit_meta WHERE audit_db_schema_version = ?")
+      .get(AUDIT_DB_SCHEMA_VERSION) as { last_migration_text: string; running_actor: string };
+    expect(registered.running_actor).toBe("system:notifier-init");
+
+    // 2. The audit-trust backfill run shares the same PRIMARY KEY and writes
+    //    its own migration record with INSERT OR REPLACE.
+    await recordBackfillRun({
+      database: db,
+      result: {
+        schemaVersion: AUDIT_DB_SCHEMA_VERSION,
+        scanned: 2,
+        updated: 1,
+        unchanged: 1,
+        byMode: {},
+        byResult: {},
+        affectedRows: 1
+      },
+      migrationText: "audit-trust backfill association_status",
+      classificationVersion: "audit-trust-2026-10-19-r1.v1",
+      digestVersion: "audit-trust-2026-10-19-r1.v1",
+      runningActor: "operator:test",
+      inputSha256: "abc123"
+    });
+
+    // 3. The version fact survives the competing writer.
+    const afterBackfill = db
+      .prepare("SELECT * FROM audit_meta WHERE audit_db_schema_version = ?")
+      .get(AUDIT_DB_SCHEMA_VERSION) as Record<string, unknown>;
+    expect(afterBackfill).toBeDefined();
+    expect(afterBackfill.audit_db_schema_version).toBe(AUDIT_DB_SCHEMA_VERSION);
+    expect(afterBackfill.running_actor).toBe("operator:test");
+
+    // 4. Re-registering the notifier must not erase the backfill record.
+    await registerNotificationAuditSchema();
+    const afterReregister = db
+      .prepare("SELECT * FROM audit_meta WHERE audit_db_schema_version = ?")
+      .get(AUDIT_DB_SCHEMA_VERSION) as Record<string, unknown>;
+    expect(afterReregister.running_actor).toBe("operator:test");
+    expect(afterReregister.classification_version).toBe("audit-trust-2026-10-19-r1.v1");
   });
 });
 
@@ -405,6 +474,27 @@ describe("L25-05 audit-health events (F-13 flap suppression)", () => {
       "audit_ledger_recovered"
     ]);
     expect(seen[1].incidentId).toBe(seen[0].incidentId);
+    off();
+  });
+
+  it("SMTP-08 计时器早触发时重排窗口，不静默放弃通知", () => {
+    vi.useFakeTimers();
+    const start = new Date("2026-10-26T00:00:00Z");
+    vi.setSystemTime(start);
+    const seen: { eventType: string; incidentId: string }[] = [];
+    const off = onAuditHealthTransition((t) => seen.push(t));
+
+    recordLedgerAppend(false);
+    // The wall clock is stepped backwards before the window elapses: the timer
+    // fires while the elapsed time is still below the 60s window. The failure
+    // window is still open and no later append is guaranteed, so the timer must
+    // re-arm instead of dropping the notification.
+    vi.setSystemTime(new Date(start.getTime() - 1000));
+    vi.advanceTimersByTime(60_000);
+    expect(seen).toEqual([]);
+
+    vi.advanceTimersByTime(60_000);
+    expect(seen.map((event) => event.eventType)).toEqual(["audit_ledger_unavailable"]);
     off();
   });
 

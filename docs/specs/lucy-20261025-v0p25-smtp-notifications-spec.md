@@ -3,12 +3,12 @@
 | 元数据 | 内容 |
 |---|---|
 | 文档类型 | 功能设计基线（Notification / Audit / Customer Deployment） |
-| 文档版本 / 日期 | v0.5-final-review / 2026-10-26，Asia/Shanghai（v0.2-requirements-review 联合需求审查 → v0.3-pm-signoff PM 签核 → v0.4-implementation 实施 S1 → v0.5-final-review S1 最终复审签核） |
+| 文档版本 / 日期 | v0.6-s2-authorized / 2026-10-26，Asia/Shanghai（v0.2-requirements-review 联合需求审查 → v0.3-pm-signoff PM 签核 → v0.4-implementation 实施 S1 → v0.5-final-review S1 最终复审签核 → v0.6-s2-authorized 推进授权与选型定稿） |
 | 功能编号 / 目标版本 | L25-05 / v0.25 |
 | 优先级 | P2、可选能力；不改变既有 P0／P1 验收与交付阻断状态 |
-| 状态 | **需求审查、PM 签核与 S1 最终复审签核均已通过（2026-10-26）；S1 自动化覆盖全绿；SMTP-01–26 仍未按验收口径执行。S2–S4 未开始，本轮不连接任何 SMTP 服务器、不发信。实现完成不等于验收通过** |
+| 状态 | **需求审查、PM 签核与 S1 最终复审签核均已通过（2026-10-26）；S1 与 S1.1 收口补丁已实施、自动化覆盖全绿；SMTP-01–26 仍未按验收口径执行。S2／S3 本轮实施，**S4 不启动、SMTP-26 保持 blocked**；本轮不连接任何 SMTP 服务器、不发信、不交付。实现完成不等于验收通过** |
 | 需求来源 | [Lucy 2.5 功能升级建议书](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) §2.1 L25-05 |
-| 审查记录 | [L25-04／L25-05 Spec 审阅记录](../reviews/2026-10-25-lucy-v0.25-l25-04-05-spec-review-record.md)（F-01–F-08 已关闭；F-13–F-17 已回写本文；F-18–F-22 最终复审发现已修正关闭） |
+| 审查记录 | [L25-04／L25-05 Spec 审阅记录](../reviews/2026-10-25-lucy-v0.25-l25-04-05-spec-review-record.md)（F-01–F-08 已关闭；F-13–F-17 已回写本文；F-18–F-22 最终复审发现已修正关闭；F-23 audit_meta 共存口径已裁定） |
 | 现有基础 | 单实例 WebUI、审计账本健康状态、审计存储迁移、owner-only 管理门、Helm Secret 文件模式 |
 | 实施主体 | Lucy；不修改 KTX，不引入外部邮件服务依赖 |
 
@@ -34,7 +34,7 @@
 
 | 现有能力 | 本 Spec 的处理 |
 |---|---|
-| 当前依赖中没有 SMTP 客户端 | 实施 Plan 选择维护中的 SMTP 库，审许可证、lockfile、SBOM 与 amd64 离线镜像；不手写 SMTP 协议 |
+| 当前依赖中没有 SMTP 客户端 | **已落定 `nodemailer@10.2.1`**（MIT-0、零运行时依赖、Node ≥20、2026-10 仍在维护）与 devDependency `smtp-server@3.21.1`（同源 fake SMTP 实现）；许可证、lockfile、SBOM 与 amd64 离线镜像影响见 [实施 Plan](../plans/2026-10-26-lucy-v0.25-l25-05-smtp-notifications-implementation-plan.md) §4。不手写 SMTP 协议 |
 | Helm 尚无 SMTP values／挂载 | 新增默认关闭的受控接线；预留 OIDC 模式只作参考，不混用配置 |
 | 登录账户以 id 为主键，无邮箱找回流程 | 保持原样；通知收件人独立于登录账户 |
 | `recordLedgerAppend(ok)` 记录 canonical ledger 成功／失败转换 | 在状态转换后产生审计健康事件；不从 UI 计数或历史失败总数伪造新事故 |
@@ -156,7 +156,8 @@ notifications:
 **创建责任与版本口径**：
 
 - outbox 表必须由 **notifier 自身的初始化路径**幂等创建（`CREATE TABLE IF NOT EXISTS` 及索引），不依赖 `admin/audit.ts` 的 `getAuditDb` 是否已被别处调用过：既有审计库存在两个独立连接句柄（`webui/server/admin/audit.ts:338` 的 `getAuditDb` 与 `webui/server/proxy/audit.ts:378` 的 `getDb`），各自执行自己的 DDL；worker 若在 admin 句柄首次被调用前启动并写库，会命中 `no such table`。worker 必须在开始领取任务前完成该初始化；初始化失败按 §5.3「outbox 不可用」处理，不得进入半可用状态。
-- `audit.sqlite` 有**独立于 security store 的 schema 版本**（`webui/server/proxy/audit.ts:222` 的 `AUDIT_DB_SCHEMA_VERSION`，当前为 4，约定与 `audit_meta` 条目同增）。本次新增 outbox 表已将版本从 3 升为 4，并由 notifier 自身初始化路径以 `INSERT OR IGNORE` 同步登记 `audit_meta`；「不修改 security schema 版本」与「audit schema 版本递增」是两件事，不得互相替代。
+- `audit.sqlite` 有**独立于 security store 的 schema 版本**（`webui/server/proxy/audit.ts:223` 的 `AUDIT_DB_SCHEMA_VERSION`，当前为 4，约定与 `audit_meta` 条目同增）。本次新增 outbox 表已将版本从 3 升为 4，并由 notifier 自身初始化路径以 `INSERT OR IGNORE` 同步登记 `audit_meta`；「不修改 security schema 版本」与「audit schema 版本递增」是两件事，不得互相替代。
+- **`audit_meta` 共存口径（S1.1 裁定）**：`audit_meta.audit_db_schema_version` 是 PRIMARY KEY，被 notifier 登记与 audit-trust 回填运行记录（`recordBackfillRun`）**共同使用**。两者都只写同一主键、都不删除行，因此**「存在当前版本行」这一事实恒成立**；行内容按「最后一次迁移运行」语义由后写者拥有。登记**只发生在启动路径**，不得进入入队热路径（否则每条通知都会在 `audit.sqlite` 上多一次治理表写）；登记失败只告警，不得关闭通知。该不变量由共存回归用例锁定。
 
 | 字段 | 合同 |
 |---|---|
@@ -332,18 +333,20 @@ SMTP 原始响应不得直接成为用户可见错误。测试接口返回 202 �
 | SMTP-25 | 升级与回滚 | 审计存储迁移、备份恢复、禁用和回滚合同通过；无认证或审计语义回退 |
 | SMTP-26 | linux/amd64 真实链路 | 同一候选镜像向客户目标 SMTP 完成测试、事故、恢复、重试与重启证据；否则 blocked |
 
-## 12. 实施拆分与状态（2026-10-26 已授权实施并复审 S1）
+## 12. 实施拆分与状态（2026-10-26 已授权实施 S1／S1.1，并授权推进 S2／S3）
 
 实施 Plan 见 [L25-05 实施 Plan](../plans/2026-10-26-lucy-v0.25-l25-05-smtp-notifications-implementation-plan.md)。
 
 | 阶段 | 内容 | 退出条件 | 状态 |
 |---|---|---|---|
 | S1 配置与 outbox | profile／secret 启动缓存、`audit.sqlite` 表与索引、固定事件、队列与状态模型；**F-13 抖动抑制**（稳定窗口）、**F-14 建表责任**与四项最终复审修正 | SMTP-02～05／08～11／15／19／21 的单元用例 | **已实施并通过最终复审签核**，24 项定向测试全过；**不连接任何 SMTP 服务器** |
-| S2 SMTP worker 与 API | 库选型、TLS、固定模板、超时重试、owner API；新增 API 复用 S1 已落地的 `requireOwner` 可选文案参数 | SMTP-06／07／12～18／20 的协议与 API 用例 | **未开始**（需先落定 SMTP 库的许可证、维护状态、lockfile、SBOM 与 amd64 离线镜像） |
-| S3 交付接线 | Helm、Compose 示例、系统手册、升级回滚、依赖与 SBOM | SMTP-01／22～25 | **未开始** |
-| S4 真实验收 | linux/amd64 K8s、客户目标 SMTP 与证据包 | SMTP-26；环境不足保持 blocked | **未开始** |
+| S1.1 收口补丁 | `audit_meta` 登记移出入队热路径、计时器窗口早触发重排、与 audit-trust backfill 的共存回归 | 定向 27 项 + 全量回归无新增 + 类型无新增 | **已实施**：定向 27／27、全量 336 文件／3985 项通过、类型 68 处与基线一致 |
+| S2 SMTP worker 与 API | 库选型、TLS、固定模板、超时重试、owner API；新增 API 复用 S1 已落地的 `requireOwner` 可选文案参数 | SMTP-06／07／12～18／20 的协议与 API 用例 | **本轮实施**；依赖已落定 `nodemailer@10.2.1` ＋ devDep `smtp-server@3.21.1`（见 Plan §4） |
+| S3 交付接线 | Helm、Compose 示例、系统手册、升级回滚、依赖与 SBOM | SMTP-01／22～25 | **本轮实施** |
+| S4 真实验收 | linux/amd64 K8s、客户目标 SMTP 与证据包 | SMTP-26；环境不足保持 blocked | **⛔ 不启动**：无客户目标 SMTP 与 linux/amd64 K8s 环境，**SMTP-26 保持 blocked**；S1–S3 证据不得记作 SMTP-26 通过 |
+| S5 正式验收执行 | SMTP-01–26 逐条状态表（`✅`／`🟡`／`⛔`） | 逐条状态与未覆盖子项列明 | 待 S2／S3 完成后另起一轮 |
 
-> **实现完成不等于验收通过。** SMTP-01–26 仍**未按正式验收口径执行**；本轮没有发出任何邮件，也没有建立任何出网连接。
+> **实现完成不等于验收通过。** SMTP-01–26 仍**未按正式验收口径执行**；本轮没有发出任何邮件，也没有建立任何出网连接；**本轮不交付**。
 
 ## Terminology Compliance
 
@@ -371,3 +374,5 @@ New terms（已同步登记到术语标准 §4.12）:
 - [x] PM 签核设计基线（2026-10-26）：设计基线成立，暂不开发；开发授权与验收另行决定。
 - [x] 2026-10-26 取得开发授权并实施 S1（见 §12）；验收（SMTP-01–26）仍未执行，S2／S3／S4 未开始。
 - [x] S1 最终复审签核（2026-10-26）：F-18–F-22 已修正关闭；定向 24／24、全量 336 文件／3981 项通过（1 项跳过），类型无新增错误。仅签核 S1，不改变 SMTP 正式验收与 S2–S4 的未完成状态。
+- [x] 2026-10-26 PM 推进授权与选型裁定：SMTP 客户端落定 `nodemailer@10.2.1`、fake SMTP 落定 `smtp-server@3.21.1`（devDependency）；授权推进 S2／S3；**S4 不启动，SMTP-26 保持 blocked**；授权先修 F-21 收口缺口（S1.1）。
+- [x] 2026-10-26 S1.1 收口补丁实施：F-23 audit_meta 共存口径已裁定并回写 §5.1；定向 27／27、全量 336 文件／3985 项通过、类型 68 处与基线一致。**不改变 SMTP-01–26 正式验收未执行的事实。**

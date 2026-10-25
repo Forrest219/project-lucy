@@ -5,7 +5,7 @@
  * how login works, or what the audit ledger records (Spec D01).
  */
 
-import { ensureNotificationOutbox } from "./outbox.js";
+import { ensureNotificationOutbox, registerNotificationAuditSchema } from "./outbox.js";
 import { startNotificationHealthEvents } from "./health-events.js";
 import { getSmtpRuntimeView } from "./runtime.js";
 
@@ -18,6 +18,19 @@ export async function initNotifications(): Promise<void> {
   } catch (error) {
     console.warn(
       "[notifications] the outbox table could not be created:",
+      error instanceof Error ? error.message : String(error)
+    );
+  }
+
+  try {
+    // The audit schema version registration is startup-only metadata. It must
+    // not sit on the enqueue path (it would take a write lock on audit.sqlite
+    // for every notification), and its failure cannot disable the notifier:
+    // the outbox keeps working without the registration row.
+    await registerNotificationAuditSchema();
+  } catch (error) {
+    console.warn(
+      "[notifications] the audit schema version could not be registered:",
       error instanceof Error ? error.message : String(error)
     );
   }

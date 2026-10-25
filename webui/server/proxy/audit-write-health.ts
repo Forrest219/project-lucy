@@ -136,6 +136,54 @@ function completeLedgerRecovery(now: number): void {
   });
 }
 
+/**
+ * Arm the failure window timer.
+ *
+ * The timer expiry IS the window: a sustained outage must notify even when no
+ * later append arrives to re-evaluate it. The timer is unref'd like the outbox
+ * worker timer, so it never keeps the process alive.
+ *
+ * If the timer fires while the elapsed time is still below the window (the
+ * wall clock was stepped backwards, or the timer fired a hair early), the
+ * window is still open and no later append is guaranteed — so the timer is
+ * re-armed for the remaining time instead of silently giving up.
+ */
+function armFailureTimer(): void {
+  clearFailureTimer();
+  const elapsed = ledgerFailureSince === null ? 0 : Date.now() - ledgerFailureSince;
+  const remaining = Math.max(0, LEDGER_FAILURE_WINDOW_MS - elapsed);
+  ledgerFailureTimer = setTimeout(() => {
+    if (ledgerFailureSince === null || ledgerIncidentId !== null) return;
+    const current = Date.now();
+    if (current - ledgerFailureSince >= LEDGER_FAILURE_WINDOW_MS) {
+      startLedgerIncident(current);
+      return;
+    }
+    armFailureTimer();
+  }, remaining);
+  ledgerFailureTimer.unref();
+}
+
+/**
+ * Arm the recovery window timer. Same contract as `armFailureTimer`: the
+ * expiry is the window, and an early fire re-arms rather than gives up.
+ */
+function armSuccessTimer(): void {
+  clearSuccessTimer();
+  const elapsed = ledgerSuccessSince === null ? 0 : Date.now() - ledgerSuccessSince;
+  const remaining = Math.max(0, LEDGER_SUCCESS_WINDOW_MS - elapsed);
+  ledgerSuccessTimer = setTimeout(() => {
+    if (ledgerSuccessSince === null || ledgerIncidentId === null) return;
+    const current = Date.now();
+    if (current - ledgerSuccessSince >= LEDGER_SUCCESS_WINDOW_MS) {
+      completeLedgerRecovery(current);
+      return;
+    }
+    armSuccessTimer();
+  }, remaining);
+  ledgerSuccessTimer.unref();
+}
+
 function evaluateLedgerFailure(now: number): void {
   ledgerFailureStreak += 1;
   ledgerSuccessStreak = 0;
@@ -143,14 +191,7 @@ function evaluateLedgerFailure(now: number): void {
   clearSuccessTimer();
   if (ledgerFailureSince === null) {
     ledgerFailureSince = now;
-    // A sustained outage must notify even when no later append arrives to
-    // re-evaluate the window. The timer is unref'd like the outbox worker timer.
-    ledgerFailureTimer = setTimeout(() => {
-      if (ledgerFailureSince === null || ledgerIncidentId !== null) return;
-      const current = Date.now();
-      if (current - ledgerFailureSince >= LEDGER_FAILURE_WINDOW_MS) startLedgerIncident(current);
-    }, LEDGER_FAILURE_WINDOW_MS);
-    ledgerFailureTimer.unref();
+    armFailureTimer();
   }
   if (ledgerIncidentId !== null) return; // the incident is already running
   const stable =
@@ -171,12 +212,7 @@ function evaluateLedgerRecovery(now: number): void {
   ledgerSuccessStreak += 1;
   if (ledgerSuccessSince === null) {
     ledgerSuccessSince = now;
-    ledgerSuccessTimer = setTimeout(() => {
-      if (ledgerSuccessSince === null || ledgerIncidentId === null) return;
-      const current = Date.now();
-      if (current - ledgerSuccessSince >= LEDGER_SUCCESS_WINDOW_MS) completeLedgerRecovery(current);
-    }, LEDGER_SUCCESS_WINDOW_MS);
-    ledgerSuccessTimer.unref();
+    armSuccessTimer();
   }
   const stable =
     ledgerSuccessStreak >= LEDGER_SUCCESS_STREAK || now - ledgerSuccessSince >= LEDGER_SUCCESS_WINDOW_MS;
