@@ -3,10 +3,10 @@
 | 元数据 | 内容 |
 |---|---|
 | 文档类型 | 功能设计基线（Notification / Audit / Customer Deployment） |
-| 文档版本 / 日期 | v0.3-pm-signoff / 2026-10-26，Asia/Shanghai（v0.2-requirements-review 于 2026-10-25 完成联合需求审查） |
+| 文档版本 / 日期 | v0.4-implementation / 2026-10-26，Asia/Shanghai（v0.2-requirements-review 联合需求审查 → v0.3-pm-signoff PM 签核 → v0.4-implementation 实施 S1） |
 | 功能编号 / 目标版本 | L25-05 / v0.25 |
 | 优先级 | P2、可选能力；不改变既有 P0／P1 验收与交付阻断状态 |
-| 状态 | **需求审查与 PM 签核已通过（2026-10-26）；暂不开发，不代表实现或验收通过。SMTP-01–26 全部未执行；签核只确认设计基线，开发授权另行决定** |
+| 状态 | **需求审查与 PM 签核已通过（2026-10-26）；S1 已实施、自动化覆盖全绿；SMTP-01–26 仍未按验收口径执行。本轮不连接任何 SMTP 服务器、不发信。实现完成不等于验收通过** |
 | 需求来源 | [Lucy 2.5 功能升级建议书](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) §2.1 L25-05 |
 | 审查记录 | [L25-04／L25-05 Spec 审阅记录](../reviews/2026-10-25-lucy-v0.25-l25-04-05-spec-review-record.md)（F-01–F-08 已关闭；F-13–F-17 为实施前待办，已回写本文） |
 | 现有基础 | 单实例 WebUI、审计账本健康状态、审计存储迁移、owner-only 管理门、Helm Secret 文件模式 |
@@ -331,16 +331,18 @@ SMTP 原始响应不得直接成为用户可见错误。测试接口返回 202 �
 | SMTP-25 | 升级与回滚 | 审计存储迁移、备份恢复、禁用和回滚合同通过；无认证或审计语义回退 |
 | SMTP-26 | linux/amd64 真实链路 | 同一候选镜像向客户目标 SMTP 完成测试、事故、恢复、重试与重启证据；否则 blocked |
 
-## 12. 实施拆分建议（不代表已授权）
+## 12. 实施拆分与状态（2026-10-26 已授权并实施 S1）
 
-| 阶段 | 内容 | 退出条件 |
-|---|---|---|
-| S1 配置与 outbox | profile／secret 启动缓存、`audit.sqlite` 表与索引、固定事件、队列与状态模型 | SMTP-02～05／08～11／15／19／21 的单元用例 |
-| S2 SMTP worker 与 API | 库选型、TLS、固定模板、超时重试、owner API；§7 选定方案所需的 `requireOwner` 文案参数改动及其对既有路由的回归范围 | SMTP-06／07／12～18／20 的协议与 API 用例 |
-| S3 交付接线 | Helm、Compose 示例、系统手册、升级回滚、依赖与 SBOM | SMTP-01／22～25 |
-| S4 真实验收 | linux/amd64 K8s、客户目标 SMTP 与证据包 | SMTP-26；环境不足保持 blocked |
+实施 Plan 见 [L25-05 实施 Plan](../plans/2026-10-26-lucy-v0.25-l25-05-smtp-notifications-implementation-plan.md)。
 
-实施 Plan 必须先确定 SMTP 库、版本、许可证、维护状态、`audit.sqlite` 初始化变更和 fake／real SMTP 拓扑；不得把 fake SMTP 或 202 queued 写成真实送达。
+| 阶段 | 内容 | 退出条件 | 状态 |
+|---|---|---|---|
+| S1 配置与 outbox | profile／secret 启动缓存、`audit.sqlite` 表与索引、固定事件、队列与状态模型；**F-13 抖动抑制**（稳定窗口）与 **F-14 建表责任** | SMTP-02～05／08～11／15／19／21 的单元用例 | **已实施**，21 项新测试全过；**不连接任何 SMTP 服务器** |
+| S2 SMTP worker 与 API | 库选型、TLS、固定模板、超时重试、owner API；§7 选定方案所需的 `requireOwner` 文案参数改动及其对既有路由的回归范围 | SMTP-06／07／12～18／20 的协议与 API 用例 | **未开始**（需先落定 SMTP 库的许可证、维护状态、lockfile、SBOM 与 amd64 离线镜像） |
+| S3 交付接线 | Helm、Compose 示例、系统手册、升级回滚、依赖与 SBOM | SMTP-01／22～25 | **未开始** |
+| S4 真实验收 | linux/amd64 K8s、客户目标 SMTP 与证据包 | SMTP-26；环境不足保持 blocked | **未开始** |
+
+> **实现完成不等于验收通过。** SMTP-01–26 仍**未按验收口径执行**；本轮没有发出任何邮件，也没有建立任何出网连接。
 
 ## Terminology Compliance
 
@@ -366,3 +368,4 @@ New terms（已同步登记到术语标准 §4.12）:
 - [x] 认可审计／审计存储整体故障下通知可能不可靠，不以邮件替代原审计失败关闭。
 - [x] 认可强制 TLS、Secret 文件、启动缓存、默认无外连和真实环境证据边界。
 - [x] PM 签核设计基线（2026-10-26）：设计基线成立，暂不开发；开发授权与验收另行决定。
+- [x] 2026-10-26 取得开发授权并实施 S1（见 §12）；验收（SMTP-01–26）仍未执行，S2／S3／S4 未开始。

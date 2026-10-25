@@ -174,7 +174,7 @@ Lucy MCP Proxy 监听 `LUCY_PROXY_HOST:LUCY_PROXY_PORT`（默认容器内 `0.0.0
 | 访问关系图（v0.25 L25-08，P1-3，需求审查已签核通过，暂不开发） | [Access Map Spec](../../webui/docs/187-access-relation-sankey-spec.md)。规划只读访问关系视图，路由尚未实现；SC-01–14 全部未执行，F-02 留作实施前待办 |
 | 升级 E2E 自动化（v0.25 L25-07，P1-5，需求审查已签核通过，非门禁，暂不开发） | [升级 E2E 自动化 Spec](../specs/lucy-20261025-v0p25-upgrade-e2e-automation-spec.md)、[上游实施方案](../plans/2026-10-19-upgrade-e2e-implementation-plan.md)。覆盖 Docker／K3s／K8s、备份恢复及业务与安全连续性；UPG-01–16 全部未执行 |
 | 业务 Skill 负责人（v0.25 L25-04，P2，PM 签核通过、S1／S2 已实施，暂不交付） | [业务 Skill 负责人 Spec](../specs/lucy-20261025-v0p25-skill-owner-spec.md)、[实施记录](../reviews/2026-10-26-lucy-v0.25-l25-04-skill-owner-implementation-record.md)。自由文本人员／团队标签，复用预检、CAS 与配置审计，不改变授权；SKO-01–16 仍未执行 |
-| 可选 SMTP 通知（v0.25 L25-05，P2 可选能力，PM 签核通过、暂不开发） | [可选 SMTP 通知 Spec](../specs/lucy-20261025-v0p25-smtp-notifications-spec.md)、[L25-04／05 联合审阅记录](../reviews/2026-10-25-lucy-v0.25-l25-04-05-spec-review-record.md)。默认关闭，仅覆盖审计账本健康提醒和测试邮件，不含忘记密码或部署许可；SMTP-01–26 全部未执行 |
+| 可选 SMTP 通知（v0.25 L25-05，P2 可选能力，PM 签核通过、S1 已实施，暂不交付） | [可选 SMTP 通知 Spec](../specs/lucy-20261025-v0p25-smtp-notifications-spec.md)、[实施记录](../reviews/2026-10-26-lucy-v0.25-l25-05-smtp-notifications-implementation-record.md)。默认关闭，仅覆盖审计账本健康提醒和测试邮件，不含忘记密码或部署许可；S1 不发信，SMTP-01–26 全部未执行 |
 | v0.25 P1 需求审查与签核入口 | [需求审查清单](../plans/2026-10-25-lucy-v0.25-p1-requirements-review-checklist.md)、[需求审查记录](../reviews/2026-10-25-lucy-v0.25-p1-requirements-review-record.md)。六项 P1 需求审查 9/9 通过并已签核；不授权开发，F-01–F-04 留作实施前待办 |
 | Lucy 202608 Enterprise Governance & Observability 升级蓝图 | `docs/specs/lucy-202608-reliable-delivery-upgrade-spec.md` |
 | Lucy 202608 升级执行总控 | `docs/specs/lucy-202608-upgrade-execution-control.md` |

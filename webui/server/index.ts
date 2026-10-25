@@ -166,6 +166,8 @@ import { recoverProjectionCursor } from "./security/recovery.js";
 import { recordProjectionStatus } from "./proxy/audit-write-health.js";
 import { registerWebSecurity } from "./web-security.js";
 import { registerSkillsRoutes } from "./admin/skills.js";
+import { registerNotificationRoutes } from "./admin/notifications.js";
+import { initNotifications } from "./notifications/init.js";
 import { registerCaseRoutes } from "./eval/cases.js";
 import { registerSecurityCandidateRoutes } from "./eval/security-candidates.js";
 import { registerSuiteImportRoutes } from "./eval/suite-import.js";
@@ -2271,6 +2273,8 @@ export function buildServer() {
   registerReleaseReadinessRoutes(app);
   registerImportScopeRoutes(app);
   registerSkillsRoutes(app);
+  // Lucy v0.25 / L25-05 — 可选 SMTP 通知：只读状态端点（owner-only）。
+  registerNotificationRoutes(app);
 
   app.setNotFoundHandler(async (request, reply) => {
     if (request.url.startsWith("/api/")) {
@@ -2327,6 +2331,9 @@ export async function startServer(options: { displayPrewarm?: boolean } = {}): P
     console.warn("[catalog-reload] initial scan failed on startup:", error);
   }
   const t2 = performance.now();
+
+  // Lucy v0.25 / L25-05 — 通知在监听端口前初始化；失败只关闭通知本身。
+  await initNotifications();
 
   const app = buildServer();
   const host = process.env.LUCY_WEBUI_HOST ?? "127.0.0.1";

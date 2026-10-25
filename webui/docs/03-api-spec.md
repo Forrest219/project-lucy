@@ -1096,3 +1096,17 @@ Skill 写入沿用 `expected_version`（428 `skill_expected_version_required` / 
 - 连接项校验含值级校验：LDAP url 携带明文口令等形态直接拒绝。
 - **规范源名格式** `<schema>_<table>`（如 `finance_orders`）：Manifest 键与 overlay 文件名须遵循，不符即 `hive_source_name_mismatch` 显式报错。
 - 编译侧（只编译、不连库）已可用；**JDBC 执行与 MCP 入口接入本轮未实施**，相关验收（V03–V17）记 `blocked_environment`。
+
+## Lucy v0.25 P2 梯队新增端点
+
+### 可选 SMTP 通知状态（L25-05，S1）
+
+权威契约见 [可选 SMTP 通知 Spec](../../docs/specs/lucy-20261025-v0p25-smtp-notifications-spec.md) §7。
+
+| 端点 | 方法 | 说明 |
+|---|---|---|
+| `/api/admin/notifications/status` | GET | 通知运行状态。**owner-only**，非 owner 返回 `403 OWNER_REQUIRED`，未登录返回 `401`。响应含 `enabled`、`state`（`disabled`／`unavailable`／`ok`／`degraded`）、`auditHealth`、`recipientCount`、队列计数与最近封闭错误码。**不返回 host、username、from、收件人或任何 secret**。 |
+
+- 该路径**不进入公开 API 白名单**，也不在登录页出现；通知不是认证条件。
+- 本端点不改变 `/api/health` 的主服务健康定义：`degraded` 只表示通知队列或发信异常。
+- S1 阶段**没有发送能力**：测试邮件端点与 worker 属于 S2，未实现前不得对外承诺可发信。
