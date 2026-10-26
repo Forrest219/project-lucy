@@ -155,6 +155,7 @@
 | [179-connection-delete-reference-guard-spec.md](179-connection-delete-reference-guard-spec.md) | 删除连接前的引用校验 v0.2：角色、用户、业务 Wiki 或未一并删除的本地 YAML 还在时拒绝删除，并在确认前说明。已实现 | 产品 / UX / API / Frontend |
 | [187-access-relation-sankey-spec.md](187-access-relation-sankey-spec.md) | 访问关系图 v0.2-draft：Agent → 角色 → 连接 → 表的授权骨架 + 访问内核双层桑基图，Token 以凭证清单呈现。v2.5 提案 L25-08。**初稿，未授权实现** | 产品 / UX / 前端 |
 | [190-live-table-discovery-and-continuous-sync-spec.md](190-live-table-discovery-and-continuous-sync-spec.md) | 库表发现与持续感知 v0.2：Schema 级库内表清单、持续感知（持久化成功快照 / 物理基线 / 当前对账状态 / 变更事件历史）、接入预览接入快照、差异读取与列级深查、连接概览最小展示。全程只读，不写 Schema Manifest 与 `enabled_tables`。**待审阅，未授权实现**。工单 WO-202610-26。已并入 2026-10-26 交叉审阅 P0 四条 / P1 六条 | 产品 / API / 后端 / 前端 / 运维 |
+| [191-execution-runtime-reload-spec.md](191-execution-runtime-reload-spec.md) | 执行层重载 v0.2：只重载 KTX daemon（免重启 Pod），用户点确认触发；区分「进程重启成功」与「配置连接级验证通过」；全局串行重载协议与通道能力握手；失败如实报告且不回滚 `ktx.yaml`。**待复审，未批准；未开始实施**。工单 WO-202610-27。审阅记录见 [2026-10-26-spec-191-execution-runtime-reload-plan-review.md](../../docs/reviews/2026-10-26-spec-191-execution-runtime-reload-plan-review.md) | 产品 / 架构 / 后端 / 前端 / 运维 |
 
 ## 与原 README 的关键校正
 
