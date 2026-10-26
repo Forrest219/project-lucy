@@ -339,6 +339,15 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | HiveServer2 (HS2) | HiveServer2（HS2） | Hive Metastore、Hive 元数据服务（指同一对象时）、Hive 集群 | Hive 查询服务端；连接元数据服务不等于可问数。不得与 Hive Metastore 混称（P1-4） |
 | Hive Direct Connection | Hive 直连 | Doris／SelectDB 外部 Hive Catalog、MySQL／PostgreSQL 协议兼容、Hive 兼容连接 | Lucy 通过受管 Hive JDBC worker 连接 HS2 的连接类型；不是其它引擎的 Hive Catalog 接入（P1-4） |
 | Hive Compile Bridge | Hive 编译桥 | Hive 执行器、Hive 查询引擎、Hive 编译器 | Lucy 调用原版 `ktx-daemon semantic-query`、显式传入 `dialect=hive` 的只编译进程边界；不执行 SQL，不持有数据库凭据（P1-4） |
+| Live Table List | 库内表清单 | 物理表清单、扫描结果、库内表名 | 物理库账号可见的表名清单。非 Schema Manifest、非启用表范围（Spec 190） |
+| Table Structure | 表结构 | 表定义、字段清单 | 物理表的列、类型、可空、主键与注释（Spec 190） |
+| Table List Diff | 表清单差异 | 结构差异、变更清单、差异结果 | 自动层的差异：新增表、已消失表、列数变化。按每轮库内结果与上一轮比较得出（Spec 190） |
+| Table Structure Diff | 表结构差异 | 深度扫描结果、列级差异报告 | 按需深查的列级差异：列名、类型、可空、主键的增删改。与「表清单差异」是两层，不得混用（Spec 190） |
+| Reconciliation State | 当前对账状态 | 差异结果、对比结果 | 最新库内表清单与 Schema Manifest、启用表范围的当前差集。随快照或本地资产重算，不累积历史（Spec 190） |
+| Change Event | 变更事件 | 操作日志、变更记录 | 库内前后两轮之间发生过的变化，仅供审计与追踪。不得当作当前状态（Spec 190） |
+| Continuous Discovery | 持续感知 | 自动扫描、定时扫描、后台扫描 | 后台定期读取库内表清单并比对。只读，不改授权（Spec 190） |
+| Discovery Paused | 持续感知已暂停 | 扫描暂停、发现失败 | 凭据或连通性原因导致持续感知停止。必须带具体原因（Spec 190） |
+| Read Table Structure | 读取库表结构 | 扫描、物理扫描、重新扫描物理库 | 只读读取物理库的表结构（Spec 190） |
 
 ### 4.1.1 Hive 直连接入边界
 
