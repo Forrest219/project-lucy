@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Spec 189 / Plan M65 — clipboard helper contract.
+// Spec 192 / Plan M65 — clipboard helper contract.
 //
 // The Clipboard API is `[SecureContext]`-gated: on the supported intranet-HTTP
 // customer mode (`security.access=http`) the browser does not expose

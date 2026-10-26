@@ -112,10 +112,14 @@ M0 → M1 → M2 → M3 →（M4、M5 可并行）→ M6。M6 依赖 M3 已完�
 | [wo-M55-agent-admin-usage-observability-and-role-discoverability.md](wo-M55-agent-admin-usage-observability-and-role-discoverability.md) | M55 | Agent Admin 使用观测与 role 可发现性：活跃 Token、近 7 天调用/拒绝、role 链接与 MCP 工具限制解释 |
 | [wo-M56-business-wiki-directory-document-governance.md](wo-M56-business-wiki-directory-document-governance.md) | M56 | 业务 Wiki 目录与文档治理：顶层目录、目录删除、文档移动、下载作用域与上传覆盖预检清晰化 |
 | [wo-M57-role-admin-ops-ux-clarification.md](wo-M57-role-admin-ops-ux-clarification.md) | M57 | Role Admin 运维心智澄清：正式 Role 优先、参考模板降噪、待修复与已停用语义分离 |
+| [wo-M58-help-qa-section.md](wo-M58-help-qa-section.md) | M58 | Help Center 常见问题速查章节：按开发者 / 管理员 / 接入协作者三角色分组的 Q&A，每条一句话答 + 正文章节深链 + 关键术语 inline code 化 |
+| [wo-M59-help-sidebar-entry-map.md](wo-M59-help-sidebar-entry-map.md) | M59 | Help 侧栏入口速查：§1.5 WebUI 入口地图（5+1 侧栏）、navigation.ts 共享导航配置抽离、入口对齐测试 |
 | [wo-M60-sidebar-brand-navigation-polish.md](wo-M60-sidebar-brand-navigation-polish.md) | M60 | 侧栏品牌与导航体验升级：品牌区、折叠菜单、active 状态和命令面板入口 |
 | [wo-M61-sidebar-brand-navigation-followup.md](wo-M61-sidebar-brand-navigation-followup.md) | M61 | 侧栏品牌与导航二轮修正：Logo 返回、命令面板默认态、菜单字体体系和品牌名对齐 |
+| [wo-M62-connection-schema-identifier-casing-consistency.md](wo-M62-connection-schema-identifier-casing-consistency.md) | M62 | Connection & Schema 标识符大小写一致性：移除 `/connections`、`/connections/enabled-tables`、`/catalog` 三页分组标题的硬编码 `.toUpperCase()`，直接渲染源大小写，与链接文案 / aria-label / URL 口径统一 |
 | [wo-M63-command-palette-result-context.md](wo-M63-command-palette-result-context.md) | M63 | 命令面板结果上下文升级：breadcrumb、页面说明、命中高亮与稳定排序 |
 | [wo-M64-catalog-and-business-wiki-visual-clarity.md](wo-M64-catalog-and-business-wiki-visual-clarity.md) | M64 | Catalog 与业务 Wiki 视觉层级修复：表名字重、Wiki 首页精简、小三角移除与上传预检层级 |
+| [wo-M65-clipboard-non-secure-context-fallback.md](wo-M65-clipboard-non-secure-context-fallback.md) | M65 | 剪贴板复制在非安全上下文的降级：统一 clipboard helper（原生 API → `execCommand` 回退 → 明确失败），迁移 12 处复制入口，补单测 / e2e / QA 来源判定 |
 | [wo-202608-01-trace-evidence-kernel.md](wo-202608-01-trace-evidence-kernel.md) | 202608-01 | Trace / Evidence Kernel：append-only event store、MCP Proxy 基础写入、自检脚本 |
 | [wo-202608-GOV-02-admin-governance-observability-dashboard.md](wo-202608-GOV-02-admin-governance-observability-dashboard.md) | 202608-GOV-02 | Admin Governance Observability Dashboard：**仅补** `/api/admin/governance/*` 聚合 API + Dashboard UI + 测试；不要重做 Trace Detail / Risk Review / Release Package |
 | [wo-202608-GOV-02a-admin-governance-usage-overview-dashboard.md](wo-202608-GOV-02a-admin-governance-usage-overview-dashboard.md) | 202608-GOV-02a | 治理概览 usage-first：8 KPI + Agent/Token 使用 + 最受访问表；对齐 `pl-page-stack` 布局；风险列表主屏下沉 |

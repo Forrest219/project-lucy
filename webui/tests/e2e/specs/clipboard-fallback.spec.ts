@@ -86,7 +86,7 @@ async function readClipboardCalls(page: Page) {
   );
 }
 
-test.describe("Spec 189 clipboard fallback", () => {
+test.describe("Spec 192 clipboard fallback", () => {
   test.beforeAll(() => {
     assertFixtureOnly({ warnIfMissing: true });
   });
