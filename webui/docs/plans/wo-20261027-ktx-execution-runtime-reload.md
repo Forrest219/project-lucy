@@ -275,6 +275,19 @@ UI 约定：
 
 ## 8. 实施记录（2026-10-27）
 
+### 8.0 提交与验收证据
+
+- **提交**：`21d59b83 feat(v0.25): implement Spec 191 execution runtime reload`（分支 `lucy-v0.25`，20 文件，+3090 / −49）。
+- **静态 Code Review**：见 §8.5（7 处修复 + 5 项变异测试）。
+- **验证证据**：Spec 191 相关 5 个测试文件 **44/44 通过**；`scripts/verify/verify-ktx-reload-lifecycle.sh --local` **16/16 通过**；
+  `npm run lint:terminology`、`npm run lint:ia-boundary` 通过；`npx tsc --noEmit` 的 68 个错误**与改动前基线完全一致**，
+  本次新增文件（`mcp-runtime-reload.ts` 等）**0 错误**。
+- **全量回归**：`npm test` 为 **1 failed / 4136 passed（345 文件）**。唯一失败
+  `server/__tests__/audit-reconciliation-routes.test.ts > D-20 usage 按账本上界 S 选行` 在**干净 HEAD 的独立 worktree 中同样复现**，
+  且本次未触碰该路由及其逻辑 ⇒ 属分支既有失败，与本次改动无关。
+- **提交内容自洽性**：把暂存区快照单独导出为独立副本后，其 44 个 Spec 191 用例全绿、生命周期脚本 16/16 通过
+  ⇒ **被提交的那一份代码本身可编译、可测试**，不依赖工作区里其它会话的未提交改动。
+
 ### 8.1 步骤落位
 
 | Step | 落点 | 状态 |
