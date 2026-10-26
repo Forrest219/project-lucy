@@ -6,7 +6,7 @@
 | 文档版本 / 日期 | v0.4-implementation / 2026-10-26，Asia/Shanghai（v0.2-requirements-review 联合需求审查 → v0.3-pm-signoff PM 签核 → v0.4-implementation 实施 S1／S2） |
 | 功能编号 / 目标版本 | L25-04 / v0.25 |
 | 优先级 | P2；不改变既有 P0／P1 验收与交付阻断状态 |
-| 状态 | **需求审查与 PM 签核已通过（2026-10-26）；S1／S2 已实施，自动化覆盖全绿；SKO-01–16 仍未按验收口径执行。实现完成不等于验收通过** |
+| 状态 | **需求审查与 PM 签核已通过（2026-10-26）；S1／S2／S3 已实施，自动化覆盖全绿；SKO-01–16 的验收口径已以自动化断言执行并全绿（正式验收签核与客户交付仍未发生）。实现完成不等于验收通过** |
 | 需求来源 | [Lucy 2.5 功能升级建议书](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) §2 L25-04；[P0 Final 决议](../reviews/2026-10-24-lucy-v0.25-p0-final-decision.md) §1 保持 P2 |
 | 审查记录 | [L25-04／L25-05 Spec 审阅记录](../reviews/2026-10-25-lucy-v0.25-l25-04-05-spec-review-record.md)（F-01–F-08 已关闭；F-09–F-12 为实施前待办，已回写本文） |
 | 现有基础 | Skill frontmatter、统一 Skill 工作台、保存预检、`file_version` 乐观并发、`skill` 类配置审计 |
@@ -231,9 +231,9 @@ confirm write:
 |---|---|---|---|
 | S1 数据与写入 | types、loader、validator、writer、rawContent、preview impact、audit summary；**F-03 的文件回滚闭包**（`requireIntent` + `rollbackOnTerminalFailure`，opt-in，不改变既有调用方行为） | SKO-01～14 的服务端用例 | **已实施**，21 项新测试全过 |
 | S2 工作台 | client types、总览列、详情、编辑字段、预检和错误映射 | SKO-02～05／09／15 的 UI 用例 | **已实施**，6 项新 UI 测试全过 |
-| S3 文档与验证 | selector（新增 `data-testid` 须登记进 `docs/qa/selector-contract.md`）、系统手册、术语复核及定向工程门禁 | SKO-16；未获浏览器测试要求时不自行扩项 | **部分完成**：4 个新 testid 已登记；系统手册待补 |
+| S3 文档与验证 | selector（新增 `data-testid` 须登记进 `docs/qa/selector-contract.md`）、系统手册、术语复核及定向工程门禁 | SKO-16；未获浏览器测试要求时不自行扩项 | **已完成**：4 个新 testid 已登记；系统手册 §3.12 已补「负责人」字段说明；构建、术语与 Spec lint 通过 |
 
-> **实现完成不等于验收通过。** S1／S2 的自动化覆盖已就位并通过，但 SKO-01–16 仍**未按验收口径执行**；SKO-16 的 selector contract 基线仍为既有 24 项欠账（不新增 issue 口径）。
+> **实现完成不等于验收通过。** S1／S2／S3 的自动化覆盖与文档落点已就位并通过，SKO-01–16 的**验收口径已以自动化断言执行并全绿**（服务端 13／13 ＋ 工作台 6／6）；但**正式验收签核与客户交付仍未发生**。SKO-16 的 selector contract 门禁 **fail 数保持 24**（既有 L25-06 欠账，决定退出码的 fail 集未新增）；另新增 1 条 **warn 级 ORPHAN**（`skill-detail-owner`），成因是该 testid 经 `DetailRow` 的 `testId` prop 渲染，而门禁脚本只识别字面量 `data-testid="..."`——运行时实现存在，基线 53 条 ORPHAN 同型。
 
 ## Terminology Compliance
 
@@ -255,3 +255,4 @@ New terms（已同步登记到术语标准 §4.10）:
 - [x] 认可复用预检、CAS 和配置审计闭环，不新增存储。
 - [x] PM 签核设计基线（2026-10-26）：设计基线成立；开发授权与验收另行决定。
 - [x] 2026-10-26 取得开发授权并实施 S1／S2（见 §9）；验收（SKO-01–16）仍未执行。
+- [x] 2026-10-26 补齐 S3 文档项：系统手册 §3.12 增「负责人」字段说明；新增 `data-testid` 全部登记进 selector contract。
