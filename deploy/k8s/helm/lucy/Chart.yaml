@@ -17,7 +17,7 @@ description: |
   Bundled runtime: `@kaelio/ktx@0.16.0` (pinned in Dockerfile / values).
   Product version (`appVersion`) is Lucy-facing and independent of KTX.
 type: application
-version: 0.2.7
+version: 0.2.8
 appVersion: "0.20.0"
 kubeVersion: ">=1.24.0-0"
 home: https://github.com/kaelio/lucy
@@ -38,6 +38,8 @@ annotations:
   category: DataAgent
   licenses: Apache-2.0
   artifacthub.io/changes: |
+    - kind: added
+      description: Chart 0.2.8 adds optional SMTP notification wiring behind smtp.enabled (default OFF). With the default, no SMTP ConfigMap, Secret volume, mount or env var is rendered. When enabled, it renders a non-sensitive SMTP profile ConfigMap, mounts the customer-managed Secret that holds the SMTP password and the optional private CA read-only, and passes only file paths to the process. The password value never enters values.yaml, a ConfigMap, the pod env or a command-line argument. An inline smtp.password, plaintext security, a missing existingSecret, or an empty recipient list are hard render failures. Chart version is 0.2.8. Lucy product version (appVersion) stays 0.20.0 and bundled KTX stays 0.16.0.
     - kind: changed
       description: Correct the Lucy product version (appVersion) from 0.2.0 to 0.20.0 so the active 0.x line is newer than 0.17.0. Chart version is 0.2.7. Bundled KTX stays 0.16.0. The v0.2.0 and v2.0.0 tags and Releases remain as historical fact.
     - kind: changed

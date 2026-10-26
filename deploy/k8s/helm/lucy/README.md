@@ -96,3 +96,63 @@ Origin evidence: this chart was promoted from the internal draft at
 `inbox/k8s-helm-draft/` (kept as historical reference for the kind cluster
 end-to-end verification log, MCP handshake, and `kubectl` / `kubeconform`
 output captured before promotion).
+
+## SMTP notifications (optional, default OFF)
+
+`smtp.enabled` is `false` by default. With the default, the chart renders
+**no** SMTP ConfigMap, Secret volume, mount or env var — the install is
+identical to a pre-SMTP deployment and the pod makes no outbound connection.
+
+Enabling it wires file paths only:
+
+| Env var | Value | Source |
+|---|---|---|
+| `LUCY_SMTP_PROFILE_FILE` | `/data/lucy/smtp/profile.yaml` | chart-rendered ConfigMap (non-sensitive) |
+| `LUCY_SMTP_PASSWORD_FILE` | `/data/lucy/smtp/password` | the customer's own Kubernetes Secret (only when `smtp.username` is set) |
+| `LUCY_SMTP_CA_FILE` | `/data/lucy/smtp/ca.pem` | the customer's own Kubernetes Secret (only when `smtp.ca.enabled` is true) |
+
+The SMTP password **value** never appears in values.yaml, in a ConfigMap, in
+the pod env or in a command-line argument. It is referenced by name only:
+
+```yaml
+smtp:
+  enabled: true
+  host: smtp.customer.internal    # host name or IP; no scheme, path, port or userinfo
+  port: 587                      # always explicit
+  security: starttls             # tls (direct TLS) or starttls; plaintext is not an option
+  from: lucy@customer.internal   # single mailbox address, no display name
+  username: lucy-notifier        # optional; requires existingSecret + passwordKey
+  recipients:                    # 1-20 addresses; they only ever appear in Bcc
+    - data-ops@customer.internal
+  auditHealth: true              # audit-ledger incident/recovery alerts
+  existingSecret: lucy-smtp-secret   # customer-managed Secret
+  passwordKey: password              # key inside that Secret
+  ca:
+    enabled: false
+    existingSecret: lucy-smtp-ca     # customer-managed Secret
+    key: ca.pem
+```
+
+The chart refuses to render (loudly) when `smtp.enabled=true` and any of the
+following holds: an inline `smtp.password` / `smtp.pass` / `smtp.secret` key
+exists; `smtp.username` is set but `smtp.existingSecret` or `smtp.passwordKey`
+is missing; `smtp.security` is not `tls` or `starttls`; `smtp.port` is out of
+range or not an integer; `smtp.host` carries a scheme, a path, a port or
+userinfo; `smtp.from` or any `smtp.recipients` entry is not a mailbox address
+or carries a control character; `smtp.recipients` is empty or has more than 20
+entries; `smtp.ca.enabled` is true without `smtp.ca.existingSecret` /
+`smtp.ca.key`; `extraEnvFrom` would shadow the `LUCY_SMTP` env contract or
+project the SMTP password Secret into the pod env.
+
+The chart never contacts the SMTP server while rendering, and the probes never
+talk to SMTP. The server itself lives in the customer's own network — Lucy
+never reaches a public mail service.
+
+Setting `smtp.enabled=false` (or rolling back the chart) removes the wiring.
+It does not delete the customer Secret, and it does not affect login, the
+audit ledger, permissions or the recovery key. Queued rows stay in the
+notification queue but are not delivered while notifications are off.
+
+Configuration and troubleshooting live in the system handbook, §5.4
+(`docs/SYSTEM_HANDBOOK.md`).
+

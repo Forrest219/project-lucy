@@ -1,0 +1,23 @@
+# Private-CA variant of the SMTP overlay (Lucy v0.25 / L25-05).
+#
+# Apply it IN ADDITION to docker-compose.smtp.yml when the customer's SMTP
+# server presents a certificate issued by a private CA:
+#   docker compose -f docker-compose.yml \
+#     -f deploy/compose/docker-compose.smtp.yml \
+#     -f deploy/compose/docker-compose.smtp-ca.yml up -d
+#
+# Operator-side precondition:
+#   write the PEM -> secrets/smtp-ca (mode 0644 — a certificate is public)
+#
+# The CA file only ADDS trust. It never disables certificate verification:
+# a server whose certificate does not chain to this CA still fails to connect.
+services:
+  lucy:
+    environment:
+      LUCY_SMTP_CA_FILE: /run/secrets/smtp_ca
+    secrets:
+      - smtp_ca
+
+secrets:
+  smtp_ca:
+    file: ./secrets/smtp-ca

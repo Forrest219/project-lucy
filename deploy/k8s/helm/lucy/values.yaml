@@ -259,6 +259,51 @@ oidc:
   # Key inside `existingSecret` that holds the client secret value.
   clientSecretKey: ""
 
+# -------------------------------------------------------------------
+# Optional SMTP notifications (Lucy v0.25 / L25-05, P2 optional).
+#
+# The customer provides the SMTP server in their OWN network; Lucy never
+# reaches a public mail service and never sends mail when this block is off.
+# -------------------------------------------------------------------
+smtp:
+  # Master switch. Keep it false unless the customer has an SMTP server in
+  # their network AND (when a username is set) a Secret with the SMTP
+  # password ready. With the default false, the chart renders NO SMTP
+  # ConfigMap, NO Secret mount and NO SMTP env var at all (SMTP-22).
+  enabled: false
+
+  # Host name or IP of the customer's SMTP server. No scheme, no path, no
+  # port, no userinfo.
+  host: ""
+  # 1-65535. The port is always explicit: the security mode is never inferred.
+  port: 587
+  # `tls` = direct TLS; `starttls` = upgrade in place before any credential
+  # is sent. Plaintext SMTP is not an option and fails the render.
+  security: starttls
+  # A single mailbox address, no display name.
+  from: ""
+  # Optional. When set, smtp.existingSecret + smtp.passwordKey are required.
+  username: ""
+  # 1-20 mailbox addresses. They only ever appear in Bcc.
+  recipients: []
+  # Whether the audit-ledger incident/recovery alerts are sent.
+  auditHealth: false
+
+  # Name of the customer's EXISTING Kubernetes Secret that holds the SMTP
+  # password. The chart mounts it read-only and never renders it.
+  # NEVER put the password value in this file — `smtp.password` is a hard
+  # render failure.
+  existingSecret: ""
+  # Key inside `existingSecret` that holds the SMTP password value.
+  passwordKey: password
+
+  # Optional private CA, mounted from the customer's own Secret. It only
+  # appends trust; certificate verification is never disabled.
+  ca:
+    enabled: false
+    existingSecret: ""
+    key: ca.pem
+
 # Extra env sources — for example, projecting keys from existingSecret as
 # env vars (NOT as files). Use sparingly; most customer secrets should
 # land as files in /data/lucy/.ktx/secrets/.

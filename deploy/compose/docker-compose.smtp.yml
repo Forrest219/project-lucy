@@ -1,0 +1,34 @@
+# Optional SMTP notifications (Lucy v0.25 / L25-05, P2 optional).
+#
+# Overlay — the SMTP channel stays OFF until this file is applied:
+#   docker compose -f docker-compose.yml -f deploy/compose/docker-compose.smtp.yml up -d
+#
+# The SMTP server lives in the customer's own network. Lucy opens no outbound
+# connection until a profile file exists AND that profile says `enabled: true`.
+#
+# Operator-side preconditions (Lucy creates none of these):
+#   1. mkdir -p smtp secrets
+#   2. write the profile   -> smtp/profile.yaml    (mode 0644, non-sensitive)
+#   3. write the password  -> secrets/smtp-password (mode 0600)
+#
+# The profile is read once at startup and cached: a change takes effect on
+# `docker compose restart lucy`, not on a file edit.
+services:
+  lucy:
+    environment:
+      # Deployment configuration, read once at startup. The path is the only
+      # thing the process learns about it — the document itself is a file.
+      LUCY_SMTP_PROFILE_FILE: /data/lucy/smtp/profile.yaml
+      # The password has exactly one home: a separate Secret file. There is no
+      # LUCY_SMTP_PASSWORD env var, and a profile that carries `password`,
+      # `pass` or `secret` is rejected outright.
+      LUCY_SMTP_PASSWORD_FILE: /run/secrets/smtp_password
+    volumes:
+      # Read-only: Lucy never writes the profile.
+      - ./smtp:/data/lucy/smtp:ro
+    secrets:
+      - smtp_password
+
+secrets:
+  smtp_password:
+    file: ./secrets/smtp-password

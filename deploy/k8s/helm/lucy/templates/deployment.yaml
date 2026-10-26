@@ -1,4 +1,5 @@
 {{- $oidc := .Values.oidc | default dict -}}
+{{- $smtp := .Values.smtp | default dict -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -56,6 +57,11 @@ spec:
         # The OIDC profile is read once at startup (Spec §4.3), so a profile
         # change must roll the pod to take effect.
         checksum/oidc-profile: {{ include (print $.Template.BasePath "/oidc-configmap.yaml") . | sha256sum }}
+        {{- end }}
+        {{- if $smtp.enabled }}
+        # The SMTP profile is read once at startup (Spec §3.2), so a profile or
+        # recipient change must roll the pod to take effect.
+        checksum/smtp-profile: {{ include (print $.Template.BasePath "/smtp-configmap.yaml") . | sha256sum }}
         {{- end }}
         {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
@@ -190,6 +196,22 @@ spec:
             - name: LUCY_OIDC_CLIENT_SECRET_FILE
               value: {{ include "lucy.oidc.clientSecretPath" . }}
             {{- end }}
+            {{- if $smtp.enabled }}
+            {{- include "lucy.smtp.validate" . }}
+            # SMTP (Spec §10.1): only FILE PATHS reach the process. The
+            # password VALUE is never an env var, a values key, a ConfigMap
+            # entry or a command-line argument.
+            - name: LUCY_SMTP_PROFILE_FILE
+              value: {{ include "lucy.smtp.profilePath" . }}
+            {{- if $smtp.username }}
+            - name: LUCY_SMTP_PASSWORD_FILE
+              value: {{ include "lucy.smtp.passwordPath" . }}
+            {{- end }}
+            {{- if $smtp.ca.enabled }}
+            - name: LUCY_SMTP_CA_FILE
+              value: {{ include "lucy.smtp.caPath" . }}
+            {{- end }}
+            {{- end }}
           {{- if .Values.extraEnvFrom }}
           # Kubernetes gives an explicit `env` entry precedence over `envFrom`
           # for the same name, so the pinned OIDC file paths, deployment mode
@@ -229,6 +251,28 @@ spec:
               mountPath: {{ include "lucy.oidc.clientSecretPath" . }}
               subPath: client-secret
               readOnly: true
+            {{- end }}
+            {{- if $smtp.enabled }}
+            # SMTP profile (non-sensitive ConfigMap), read-only.
+            - name: smtp-profile
+              mountPath: {{ include "lucy.smtp.profilePath" . }}
+              subPath: profile.yaml
+              readOnly: true
+            {{- if $smtp.username }}
+            # SMTP password: mounted read-only from the customer's own
+            # Kubernetes Secret. Only the file path reaches the process.
+            - name: smtp-password
+              mountPath: {{ include "lucy.smtp.passwordPath" . }}
+              subPath: password
+              readOnly: true
+            {{- end }}
+            {{- if $smtp.ca.enabled }}
+            # Optional private CA: also from a customer-managed Secret.
+            - name: smtp-ca
+              mountPath: {{ include "lucy.smtp.caPath" . }}
+              subPath: ca.pem
+              readOnly: true
+            {{- end }}
             {{- end }}
             {{- /* Secret is intentionally NOT mounted here: see secrets-sync init. */}}
           resources:
@@ -284,6 +328,35 @@ spec:
             items:
               - key: password
                 path: password
+        {{- end }}
+        {{- if $smtp.enabled }}
+        # SMTP profile. The chart renders no Secret for SMTP: the password
+        # Secret below is created and owned by the customer.
+        - name: smtp-profile
+          configMap:
+            name: {{ include "lucy.fullname" . }}-smtp-profile
+            defaultMode: 0444
+            items:
+              - key: profile.yaml
+                path: profile.yaml
+        {{- if $smtp.username }}
+        - name: smtp-password
+          secret:
+            secretName: {{ $smtp.existingSecret }}
+            defaultMode: 0440
+            items:
+              - key: {{ $smtp.passwordKey }}
+                path: password
+        {{- end }}
+        {{- if $smtp.ca.enabled }}
+        - name: smtp-ca
+          secret:
+            secretName: {{ $smtp.ca.existingSecret }}
+            defaultMode: 0444
+            items:
+              - key: {{ $smtp.ca.key }}
+                path: ca.pem
+        {{- end }}
         {{- end }}
         {{- if $oidc.enabled }}
         # OIDC provider profile. The chart renders no Secret for OIDC: the

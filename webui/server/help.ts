@@ -77,6 +77,7 @@ export const SECTION_ID_CONTRACT = new Map<string, string>([
   ["`webui/config/access.yaml`", "webui-config-access-yaml"],
   ["`ktx.yaml`", "ktx-yaml"],
   ["环境变量", "environment-variables"],
+  ["邮件通知（可选 SMTP 通知）", "smtp-notifications"],
   ["为什么提示「未发现本地 manifest」？", "manifest"],
   ["JSON-RPC `Access denied` / `decision_reason` 怎么查？", "json-rpc-access-denied-decision-reason"],
   ["配置文件改动后什么时候生效？", "config-change-effective-timeline"],
@@ -152,7 +153,12 @@ export const SECTION_ID_CONTRACT = new Map<string, string>([
   ["签发", "token-issuance"],
   ["吊销", "token-revocation"],
   ["复制 MCP 配置", "token-mcp-config-copy"],
-  ["边界与常见误用", "token-boundaries"]
+  ["边界与常见误用", "token-boundaries"],
+  ["配置文件", "smtp-config-file"],
+  ["Helm 接线", "smtp-helm-wiring"],
+  ["运维操作", "smtp-operations"],
+  ["排障", "smtp-troubleshooting"],
+  ["禁用与回滚", "smtp-disable-rollback"]
 ]);
 
 /**

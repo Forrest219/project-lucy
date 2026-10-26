@@ -2900,6 +2900,9 @@ setup:
 | `LUCY_QUERY_MAX_INFLIGHT` | `4` | 单 token 并发 `lucy_query` 上限 |
 | `LUCY_R1_SLOW_QUERY_MS` | `30000` | R1 observability 慢查询阈值 |
 | `LUCY_R1_HERMES_ACCURACY_REPORT` | 未设置 | R1 observability 读取外部 Hermes 准确率报告 |
+| `LUCY_SMTP_PROFILE_FILE` | 无 | 邮件通知的 profile 文件路径（只读）。未设置即邮件通知关闭，不产生任何出网连接 |
+| `LUCY_SMTP_PASSWORD_FILE` | 无 | 邮件通知的 SMTP 密码文件路径（只读）。只有配置了用户名时才需要；未设置时该文件不会被读取 |
+| `LUCY_SMTP_CA_FILE` | 无 | 邮件通知的可选私有 CA 文件路径（只读）。只追加信任，不关闭证书校验 |
 
 Docker 常用宿主映射变量：
 
@@ -2909,6 +2912,93 @@ Docker 常用宿主映射变量：
 | `LUCY_PROXY_HOST_PORT` | 宿主机映射到容器 `7879` |
 | `KTX_VERSION` | 构建镜像时安装的 KTX 版本 |
 | `LUCY_EXPECTED_KTX_VERSION` | smoke/health 期望版本 |
+
+### 5.4 邮件通知（可选 SMTP 通知）
+
+邮件通知是**可选能力，默认关闭**。它只承载部署方选定的通知，不改变登录账户、认证、恢复流程或审计事实源。当前批次只有两类邮件：**审计健康提醒**（审计账本不可用／恢复）和**测试邮件**。没有忘记密码、验证码、部署许可或业务数据通知。
+
+**术语边界**：`queued` 表示已加入**通知队列**，不表示 SMTP 已接受、也不表示收件箱已送达；`sending`／`sent`／`dead` 同理。HTTP 202 的文案是「测试邮件已加入发送队列」，**不得**写成「发送成功」。
+
+#### 5.4.1 配置文件
+
+profile 只从 `LUCY_SMTP_PROFILE_FILE` 指向的文件读取；密码只从 `LUCY_SMTP_PASSWORD_FILE` 指向的独立 Secret 文件读取；可选私有 CA 从 `LUCY_SMTP_CA_FILE` 读取。**profile 内不允许出现 `password`／`pass`／`secret` 字段**，出现即整份配置被判为不可用。
+
+```yaml
+# profile.yaml —— 非敏感，可放 ConfigMap
+enabled: true
+host: smtp.customer.internal
+port: 587
+security: starttls        # 只允许 tls（直连 TLS）或 starttls（原地升级）
+from: lucy@customer.internal
+username: lucy-notifier   # 可选；设置时必须同时提供密码文件
+recipients:               # 1-20 个；只出现在 Bcc，收件人互相看不到
+  - data-ops@customer.internal
+notifications:
+  auditHealth: true
+```
+
+| 字段 | 规则 |
+| --- | --- |
+| `host` | 主机名或 IP；不含 scheme、路径、端口、用户信息；最长 253 |
+| `port` | 1–65535，必须显式配置，不从安全模式推断 |
+| `security` | 仅 `tls` 或 `starttls`；**不支持明文 SMTP**，升级失败即终止，不降级 |
+| `from` | 单一邮箱地址，不带显示名，不含换行；最长 254 |
+| `username` | 可选，最长 256；设置时必须有非空密码文件；未设置时密码文件不会被读取 |
+| `recipients` | 1–20 个去重地址；启用时必填 |
+| `notifications.auditHealth` | 布尔，缺省 false；只控制审计账本事故／恢复提醒，不控制测试邮件 |
+
+配置在**启动时读取一次并缓存**，文件变更不热加载，**需要重启才生效**。
+
+#### 5.4.2 Helm 接线
+
+```yaml
+# values.yaml
+smtp:
+  enabled: true
+  host: smtp.customer.internal
+  port: 587
+  security: starttls
+  from: lucy@customer.internal
+  username: lucy-notifier
+  recipients:
+    - data-ops@customer.internal
+  auditHealth: true
+  existingSecret: customer-smtp-secret   # 客户自有的 Kubernetes Secret，只按名字引用
+  passwordKey: password
+```
+
+密码与可选 CA **只能**来自客户自有的 Kubernetes Secret，Chart 只读挂载、只传文件路径，**不会**渲染任何 SMTP Secret。`smtp.enabled=false`（默认）时，渲染产物里**没有** SMTP ConfigMap、没有挂载、没有环境变量，也没有任何网络行为。
+
+以下情况 **render 直接失败**（不会产出装不起来的 Deployment）：`smtp.password` 等内联密码字段；设置了 `username` 却缺 `existingSecret`／`passwordKey`；`security` 不是 `tls`／`starttls`；`port` 越界；`host` 含 scheme／端口／路径；`from` 或 `recipients` 不是合法地址或含控制字符；`recipients` 为空或超过 20 个；`extraEnvFrom` 试图用 `LUCY_SMTP` 前缀覆盖，或把 SMTP 密码 Secret 投影成环境变量。
+
+#### 5.4.3 运维操作
+
+```bash
+# 查通知状态（仅所有者；不返回 host、用户名、发件地址、收件人与任何秘密）
+curl -H "Authorization: Bearer $TOKEN" https://lucy.example.com/api/admin/notifications/status
+
+# 提交一封测试邮件：202 表示已加入发送队列，不表示已发送
+curl -X POST -H "Authorization: Bearer $TOKEN" https://lucy.example.com/api/admin/notifications/test
+
+# 查看单条通知的状态（不返回 payload 与收件人）
+curl -H "Authorization: Bearer $TOKEN" https://lucy.example.com/api/admin/notifications/12
+```
+
+#### 5.4.4 排障
+
+| 现象 | 排查 |
+| --- | --- |
+| 状态为 `disabled` | 未设置 `LUCY_SMTP_PROFILE_FILE`，或 profile 里 `enabled: false` |
+| 状态为 `unavailable` | 看 `errorCode`：`smtp_profile_invalid` 查 profile 形状；`smtp_secret_unavailable` 查密码文件是否存在且非空；`smtp_ca_unavailable` 查 CA 文件是否为 PEM；`smtp_auth_incomplete` 查是否配了用户名却没给密码文件 |
+| 通知一直 `queued` | worker 未运行（配置不可用时 worker 不启动）；或 SMTP 服务器不可达，错误码见 `lastErrorCode` |
+| 通知 `dead` | `last_error_code` 为 `smtp_rejected` 表示服务端永久拒绝（5xx）；`expired` 表示超过 7 天有效期不再投递 |
+| 客户 SMTP 需要自签 CA | 把 CA 放进客户自有 Secret，配置 `smtp.ca.enabled=true` 与 `smtp.ca.existingSecret`；CA **只追加信任**，证书校验不会被关闭 |
+
+SMTP 服务器接受信件**不等于**最终投递到收件箱；Lucy 只记录 SMTP 提交结果，不追踪退信、阅读或外部投递回执。
+
+#### 5.4.5 禁用与回滚
+
+把 `smtp.enabled` 改回 `false` 并重启即停止新投递，已排队的行保留但不投递。回滚到不识别 `notification_outbox` 表的旧版本前，按升级回滚 Runbook 清理或保留兼容该表。禁用与回滚都不影响登录账户、审计账本、权限与恢复密钥；密码不会进入备份明文附件。
 
 ## 6. FAQ 与排障指南
 
