@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { fetchCatalogSchemaManifest } from "../../lib/catalog-assets";
 import { apiGet, apiPost } from "../../lib/apiClient";
+import { copyTextToClipboard } from "../../lib/clipboard";
 import {
   connectionHealthDrawerResult,
   connectionHealthStatusLabel,
@@ -667,7 +668,11 @@ export function ConnectionOverview() {
   }
 
   async function copyWarningPath(key: string, manifestPath: string) {
-    await navigator.clipboard?.writeText(manifestPath);
+    const result = await copyTextToClipboard(manifestPath);
+    if (!result.ok) {
+      toast.error("复制路径失败，请手动选择文本");
+      return;
+    }
     setCopiedWarningPath(key);
   }
 

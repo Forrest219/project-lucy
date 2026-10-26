@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
-import { toast } from "sonner";
 import { PageHeader } from "../../components/PageHeader";
 import { ApiError, apiGet } from "../../lib/apiClient";
+import { copyTextWithToast } from "../../lib/clipboard";
 import { formatLucyVersionLabel } from "../../lib/lucyVersion";
 import {
   formatBundledKtxVersion,
@@ -29,12 +29,10 @@ export function VersionInfo() {
   const ktxVersion = formatBundledKtxVersion(data?.bundledKtxVersion);
 
   async function copySha() {
-    try {
-      await navigator.clipboard.writeText(gitSha);
-      toast.success("已复制构建提交");
-    } catch {
-      toast.error("复制失败，请重试");
-    }
+    await copyTextWithToast(gitSha, {
+      successMessage: "已复制构建提交",
+      failureMessage: "复制失败，请重试"
+    });
   }
 
   return (

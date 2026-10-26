@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { toast } from "sonner";
 import { NewToken } from "../pages/admin/NewToken";
 
 function renderNewToken() {
@@ -170,6 +171,92 @@ describe("NewToken", () => {
     expect(payload).toContain("Bearer lucy_oneshot_token");
     expect(payload).toContain("https://lucy.example.com/mcp");
     expect(payload).not.toContain("http://localhost:7879/mcp");
+  });
+
+  // Spec 189 / Plan M65 — the Clipboard API is `[SecureContext]`-gated, so on
+  // the supported intranet-HTTP customer mode `navigator.clipboard` does not
+  // exist at all. The copy must still succeed through the fallback.
+  describe("Spec 189 非安全上下文降级", () => {
+    const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+    const execCommandDescriptor = Object.getOwnPropertyDescriptor(document, "execCommand");
+
+    afterEach(() => {
+      if (clipboardDescriptor) {
+        Object.defineProperty(navigator, "clipboard", clipboardDescriptor);
+      } else {
+        Reflect.deleteProperty(navigator, "clipboard");
+      }
+      if (execCommandDescriptor) {
+        Object.defineProperty(document, "execCommand", execCommandDescriptor);
+      } else {
+        Reflect.deleteProperty(document, "execCommand");
+      }
+    });
+
+    async function renderGeneratedToken() {
+      renderNewToken();
+      fireEvent.change(screen.getByLabelText(/Token 标签/), { target: { value: "hermes-laptop" } });
+      fireEvent.click(screen.getByRole("button", { name: "生成 Token" }));
+      expect(await screen.findByText("lucy_oneshot_token")).toBeInTheDocument();
+    }
+
+    it("复制当前配置 在没有 Clipboard API 时回退到 execCommand 并进入成功态", async () => {
+      stubNewTokenFetch();
+      Reflect.deleteProperty(navigator, "clipboard");
+      const execCommand = vi.fn(() => true);
+      Object.defineProperty(document, "execCommand", { configurable: true, value: execCommand });
+
+      await renderGeneratedToken();
+      fireEvent.click(screen.getByRole("button", { name: /复制当前/ }));
+
+      await vi.waitFor(() => {
+        expect(screen.getByRole("button", { name: /已复制/ })).toBeInTheDocument();
+      });
+      expect(execCommand).toHaveBeenCalledWith("copy");
+    });
+
+    it("复制当前配置 在两条路径都不可用时提示失败且不谎报成功", async () => {
+      stubNewTokenFetch();
+      const errorSpy = vi.spyOn(toast, "error").mockImplementation((() => "") as never);
+      Reflect.deleteProperty(navigator, "clipboard");
+      Object.defineProperty(document, "execCommand", { configurable: true, value: undefined });
+
+      await renderGeneratedToken();
+      fireEvent.click(screen.getByRole("button", { name: /复制当前/ }));
+
+      const btn = screen.getByRole("button", { name: /复制当前/ });
+      fireEvent.click(btn);
+
+      await vi.waitFor(() => {
+        expect(errorSpy).toHaveBeenCalled();
+      });
+      expect(String(errorSpy.mock.calls[0]?.[0])).not.toContain("lucy_oneshot_token");
+      expect(screen.queryByRole("button", { name: /已复制/ })).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /复制当前/ })).toBeInTheDocument();
+    });
+
+    it("复制 Token 在没有 Clipboard API 时同样回退成功", async () => {
+      stubNewTokenFetch();
+      Reflect.deleteProperty(navigator, "clipboard");
+      const execCommand = vi.fn(() => true);
+      Object.defineProperty(document, "execCommand", { configurable: true, value: execCommand });
+
+      await renderGeneratedToken();
+      fireEvent.click(screen.getByRole("button", { name: "复制 token 明文" }));
+
+      await vi.waitFor(() => {
+        expect(execCommand).toHaveBeenCalledWith("copy");
+      });
+    });
+
+    it("复制当前配置 的可访问名称包含可见文案", async () => {
+      stubNewTokenFetch();
+
+      await renderGeneratedToken();
+      const button = screen.getByRole("button", { name: /复制当前配置/ });
+      expect(button.textContent).toContain("复制当前配置");
+      expect(button.getAttribute("aria-label")).toContain("复制当前配置");
+    });
   });
 
   it("switching to 通用客户端 updates the snippet to JSON config", async () => {

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiGet } from "../lib/apiClient";
+import { copyTextToClipboard } from "../lib/clipboard";
 import { queryKeys } from "../lib/queryKeys";
 import type { Agent, ChangedFilesResponse, McpEndpointInfo } from "../lib/types";
 import { buildMcpConfig } from "../lib/mcpEndpoint";
@@ -470,13 +471,12 @@ export function Onboarding() {
       );
       return false;
     }
-    try {
-      await navigator.clipboard.writeText(mcpConfig);
-      return true;
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "复制失败");
+    const copiedOk = await copyTextToClipboard(mcpConfig);
+    if (!copiedOk) {
+      toast.error("复制失败");
       return false;
     }
+    return true;
   }
 
   async function copyConfig() {

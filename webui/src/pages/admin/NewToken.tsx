@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiPost, isStaleResponseError } from "../../lib/apiClient";
+import { CLIPBOARD_COPY_FAILED_MESSAGE, copyTextToClipboard } from "../../lib/clipboard";
 import { queryKeys } from "../../lib/queryKeys";
 import type { Agent, CreateTokenResponse, McpEndpointInfo } from "../../lib/types";
 import { buildCodexMcpToml, buildMcpConfig } from "../../lib/mcpEndpoint";
@@ -167,12 +168,15 @@ export function NewToken() {
     });
   }
 
-  function handleCopyToken() {
+  async function handleCopyToken() {
     if (!generatedToken) return;
-    void navigator.clipboard.writeText(generatedToken.token).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
+    const result = await copyTextToClipboard(generatedToken.token);
+    if (!result.ok) {
+      toast.error(CLIPBOARD_COPY_FAILED_MESSAGE);
+      return;
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   }
 
   function handleClose() {
@@ -187,13 +191,16 @@ export function NewToken() {
   const snippets = generatedToken && endpoint ? buildClientSnippets(generatedToken.token, endpoint) : null;
   const activeSnippetContent = snippets ? snippets[activeSnippet] : "";
 
-  function handleCopySnippet() {
+  async function handleCopySnippet() {
     if (!activeSnippetContent) return;
-    void navigator.clipboard.writeText(activeSnippetContent).then(() => {
-      setCopiedSnippet(true);
-      toast.success("客户端配置已复制");
-      setTimeout(() => setCopiedSnippet(false), 2000);
-    });
+    const result = await copyTextToClipboard(activeSnippetContent);
+    if (!result.ok) {
+      toast.error("客户端配置复制失败，请手动选择文本");
+      return;
+    }
+    setCopiedSnippet(true);
+    toast.success("客户端配置已复制");
+    setTimeout(() => setCopiedSnippet(false), 2000);
   }
 
   if (generatedToken && snippets) {
@@ -247,7 +254,9 @@ export function NewToken() {
               type="button"
               className="pl-btn pl-btn--secondary text-sm"
               onClick={handleCopySnippet}
-              aria-label="复制当前选中的配置"
+              aria-label={
+                copiedSnippet ? "已复制当前配置" : "复制当前配置（当前选中的客户端）"
+              }
             >
               {copiedSnippet ? "已复制" : "复制当前配置"}
             </button>

@@ -8,6 +8,7 @@ import { DiffViewer } from "../../components/DiffViewer";
 import { PageHeader } from "../../components/PageHeader";
 import { PolicyDegradeNotice } from "../../components/PolicyDegradeBanner";
 import { apiGet, apiPatch, apiDelete } from "../../lib/apiClient";
+import { copyTextWithToast } from "../../lib/clipboard";
 import type {
   AccessWriteAck,
   Agent,
@@ -1302,7 +1303,7 @@ export function AgentDetail() {
                             <button
                               type="button"
                               className="pl-btn pl-btn--ghost w-fit text-xs"
-                              onClick={() => void navigator.clipboard.writeText(token.hash).then(() => toast.success("Hash 已复制"))}
+                              onClick={() => void copyTextWithToast(token.hash, { successMessage: "Hash 已复制" })}
                               aria-label={`复制 ${token.label} 的 hash`}
                             >
                               复制 hash

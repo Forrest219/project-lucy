@@ -3,8 +3,8 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as Tooltip from "@radix-ui/react-tooltip";
-import { toast } from "sonner";
 import { apiGet } from "../../lib/apiClient";
+import { copyTextWithToast } from "../../lib/clipboard";
 import { formatConfigAuditTs } from "../../lib/configAuditLabels";
 import { mergeObjectDetailSearch } from "../../lib/objectDetail";
 import type {
@@ -646,10 +646,10 @@ function CopyableId({ value, testId, label, shortDisplay = false }: { value: str
       data-testid={testId}
       onClick={(event) => {
         event.stopPropagation();
-        void navigator.clipboard
-          ?.writeText(value)
-          .then(() => toast.success(`已复制${label}`))
-          .catch(() => toast.error("复制失败，请重试"));
+        void copyTextWithToast(value, {
+          successMessage: `已复制${label}`,
+          failureMessage: "复制失败，请重试"
+        });
       }}
     >
       {displayValue}

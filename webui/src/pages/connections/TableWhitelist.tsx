@@ -4,6 +4,7 @@ import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/rea
 import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { apiGet, apiPost, apiPut } from "../../lib/apiClient";
+import { copyTextWithToast } from "../../lib/clipboard";
 import { queryKeys } from "../../lib/queryKeys";
 import type {
   CompletionStatus,
@@ -635,16 +636,10 @@ export function TableWhitelist() {
   }
 
   async function copyManifestPath(schemaManifestPath: string) {
-    try {
-      if (!navigator?.clipboard?.writeText) {
-        throw new Error("clipboard unavailable");
-      }
-      await navigator.clipboard.writeText(schemaManifestPath);
-      toast.success("已复制 Manifest 路径");
-    } catch (err) {
-      void err;
-      toast.error("复制路径失败");
-    }
+    await copyTextWithToast(schemaManifestPath, {
+      successMessage: "已复制 Manifest 路径",
+      failureMessage: "复制路径失败"
+    });
   }
 
   function updateSaveProgress(_connId: string, _phase: never, _detail?: string) {
