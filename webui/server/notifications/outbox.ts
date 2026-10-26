@@ -31,6 +31,8 @@ export const NOTIFICATION_MAX_RECIPIENTS = 20;
 export const NOTIFICATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const NOTIFICATION_SENT_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 export const NOTIFICATION_DEAD_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+/** One retention pass deletes at most this many rows; the rest wait. */
+export const NOTIFICATION_RETENTION_BATCH_LIMIT = 500;
 
 /** Bounded backoff, in order: 1m / 5m / 15m / 1h / 4h / 8h / 12h / 24h. */
 export const NOTIFICATION_BACKOFF_MS = [
@@ -60,6 +62,10 @@ export type NotificationRow = {
   id: number;
   event_type: NotificationEventType;
   incident_id: string | null;
+  /** The redacted event payload; never returned by the status API. */
+  payload_json: string;
+  /** The recipient snapshot taken at enqueue time; never returned by the API. */
+  recipients_json: string;
   status: NotificationRowStatus;
   attempts: number;
   next_attempt_at: string;
@@ -262,6 +268,22 @@ export async function hasPersistedIncident(incidentId: string, eventType: Notifi
   }
 }
 
+/**
+ * Read one notification row for the owner status view. The payload and the
+ * recipient list are never returned (Spec §7).
+ */
+export async function readNotificationById(id: number): Promise<NotificationRow | null> {
+  try {
+    const db = await getAuditDb();
+    const row = db.prepare("SELECT * FROM notification_outbox WHERE id = ?").get(id) as
+      | NotificationRow
+      | undefined;
+    return row ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /** Expired rows are never delivered: they become `dead` with reason `expired`. */
 export async function markExpiredNotificationsDead(now: Date = new Date()): Promise<number> {
   try {
@@ -280,18 +302,29 @@ export async function markExpiredNotificationsDead(now: Date = new Date()): Prom
 }
 
 /** Bounded retention cleanup: sent rows keep 7 days, dead rows keep 30 days. */
-export async function cleanupNotificationRetention(now: Date = new Date()): Promise<number> {
+export async function cleanupNotificationRetention(
+  now: Date = new Date(),
+  batchLimit = NOTIFICATION_RETENTION_BATCH_LIMIT
+): Promise<number> {
   try {
     const db = await getAuditDb();
-    const sentBefore = new Date(now.getTime() - NOTIFICATION_SENT_RETENTION_MS).toISOString();
-    const deadBefore = new Date(now.getTime() - NOTIFICATION_DEAD_RETENTION_MS).toISOString();
+    // The cleanup runs in bounded batches: a large backlog must never turn into
+    // one unbounded DELETE on the audit database.
     const result = db
       .prepare(
         `DELETE FROM notification_outbox
-          WHERE (status = 'sent' AND updated_at <= ?)
-             OR (status = 'dead' AND updated_at <= ?)`
+          WHERE id IN (
+            SELECT id FROM notification_outbox
+             WHERE (status = 'sent' AND updated_at <= ?)
+                OR (status = 'dead' AND updated_at <= ?)
+             LIMIT ?
+          )`
       )
-      .run(sentBefore, deadBefore);
+      .run(
+        new Date(now.getTime() - NOTIFICATION_SENT_RETENTION_MS).toISOString(),
+        new Date(now.getTime() - NOTIFICATION_DEAD_RETENTION_MS).toISOString(),
+        batchLimit
+      );
     return Number(result.changes);
   } catch {
     return 0;

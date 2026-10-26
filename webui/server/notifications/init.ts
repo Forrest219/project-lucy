@@ -8,6 +8,7 @@
 import { ensureNotificationOutbox, registerNotificationAuditSchema } from "./outbox.js";
 import { startNotificationHealthEvents } from "./health-events.js";
 import { getSmtpRuntimeView } from "./runtime.js";
+import { startNotificationWorker } from "./worker.js";
 
 export async function initNotifications(): Promise<void> {
   try {
@@ -42,6 +43,9 @@ export async function initNotifications(): Promise<void> {
       return;
     }
     startNotificationHealthEvents();
+    // The worker starts only when the configuration can actually send: a
+    // disabled notifier must not create a network task (Spec D01).
+    startNotificationWorker();
   } catch (error) {
     console.warn(
       "[notifications] initialization failed; notifications stay unavailable:",

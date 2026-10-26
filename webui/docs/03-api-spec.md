@@ -1099,14 +1099,17 @@ Skill 写入沿用 `expected_version`（428 `skill_expected_version_required` / 
 
 ## Lucy v0.25 P2 梯队新增端点
 
-### 可选 SMTP 通知状态（L25-05，S1）
+### 可选 SMTP 通知（L25-05，S1／S2）
 
 权威契约见 [可选 SMTP 通知 Spec](../../docs/specs/lucy-20261025-v0p25-smtp-notifications-spec.md) §7。
 
 | 端点 | 方法 | 说明 |
 |---|---|---|
 | `/api/admin/notifications/status` | GET | 通知运行状态。**owner-only**，非 owner 返回 `403 OWNER_REQUIRED`，未登录返回 `401`。响应含 `enabled`、`state`（`disabled`／`unavailable`／`ok`／`degraded`）、`auditHealth`、`recipientCount`、队列计数与最近封闭错误码。**不返回 host、username、from、收件人或任何 secret**。 |
+| `/api/admin/notifications/test` | POST | 提交一封测试邮件。**owner-only**，非 owner 返回 `403 OWNER_REQUIRED`，未登录返回 `401`。不需要请求体收件人——收件人固定为当前缓存 profile 的全部 `recipients`。配置有效且 enabled 时返回 `202 {ok:true,notificationId,status:"queued"}`，主文案为「测试邮件已加入发送队列」：只表示**已加入通知队列**，不表示 SMTP 已接受，也不表示收件箱已送达。配置不可用返回 `503 NOTIFICATION_UNAVAILABLE`；配置可用但通知队列暂不能收行返回 `503 NOTIFICATION_QUEUE_UNAVAILABLE`。 |
+| `/api/admin/notifications/:id` | GET | 单条通知记录的状态。**owner-only**，非 owner 返回 `403 OWNER_REQUIRED`，未登录返回 `401`。返回 `id`、`eventType`、`status`（`queued`／`sending`／`sent`／`dead`）、`attempts`、各时间字段与 `lastErrorCode`。**不返回 payload 或收件人原文**。id 非正整数或记录不存在，均返回 `404 NOTIFICATION_NOT_FOUND`。 |
 
 - 该路径**不进入公开 API 白名单**，也不在登录页出现；通知不是认证条件。
 - 本端点不改变 `/api/health` 的主服务健康定义：`degraded` 只表示通知队列或发信异常。
-- S1 阶段**没有发送能力**：测试邮件端点与 worker 属于 S2，未实现前不得对外承诺可发信。
+- S2 起具备发送能力：投递由 outbox worker 异步执行，**本轮请求不等待 SMTP**。SMTP 服务器接受信件**不等于**最终送达收件箱——Lucy 只记录 SMTP 提交结果，不追踪退信、阅读或外部投递回执。
+- 不提供重新发送同一行的写接口；owner 通过状态接口与单行查询观察 `queued`／`sending`／`sent`／`dead`。
