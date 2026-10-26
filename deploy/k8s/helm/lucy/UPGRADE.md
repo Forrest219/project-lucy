@@ -1,7 +1,7 @@
 # Lucy Helm Chart — Upgrade Guide
 
 Upgrade Lucy on Kubernetes while preserving `/data/lucy` PVC data, Secrets, and MCP tokens.
-Current chart: **0.2.7** (Lucy `0.20.0`, bundled KTX `0.16.0`).
+Current chart: **0.2.8** (Lucy `0.20.0`, bundled KTX `0.16.0`).
 
 ## Open-mode upgrade to administrator login
 
@@ -161,6 +161,55 @@ Without it the WebUI shows an empty catalog after the upgrade (data is not lost 
 again). New installs leave it empty. `access.yaml`, `.ktx/secrets/` and `.ktx-ui/` always live at the project
 root regardless of this setting.
 
+## Optional SMTP notifications (chart 0.2.8+)
+
+Chart 0.2.8 adds an **optional** SMTP notification channel. It is **off by default** and unrelated to the upgrade
+itself: with `smtp.enabled` absent or `false`, the upgrade renders **no** SMTP ConfigMap, Secret volume, mount or
+env var, and the pod makes **no** outbound connection. Upgrading from chart 0.2.7 or earlier with the default
+values changes nothing about notifications — you do not have to read this section at all.
+
+### Turning it on
+
+The SMTP server lives in **the customer's own network**. Lucy never reaches a public mail service.
+
+1. Put the SMTP password in a **customer-managed** Kubernetes Secret. The chart renders **no** SMTP Secret and
+   never stores the password value in values.yaml, a ConfigMap, the pod env or a command-line argument.
+   An inline `smtp.password` is a hard render failure.
+2. Put the optional private CA in a second customer-managed Secret (only when the customer's SMTP server presents
+   a certificate issued by a private CA). The CA **only appends trust** — certificate verification is never
+   disabled.
+3. Set `smtp.enabled: true` plus `smtp.host`, `smtp.port` (always explicit), `smtp.security`
+   (`tls` or `starttls` — plaintext SMTP is not an option), `smtp.from`, `smtp.recipients` (1–20) and
+   `smtp.existingSecret` (+ `smtp.passwordKey`) when `smtp.username` is set.
+4. `helm upgrade` as usual. The profile ConfigMap carries a `checksum/smtp-profile` annotation, so a profile or
+   recipient change rolls the pod automatically.
+
+| Situation | Behaviour |
+|---|---|
+| `smtp.enabled: false` (default) | No SMTP resources rendered; no outbound connection; the pod starts normally |
+| Profile file edited on the PVC | **Not hot-reloaded** — the profile is read once at startup. Restart the pod |
+| Customer Secret key value changed | Read on the next pod start (the chart mounts it read-only) |
+| Customer Secret deleted from the namespace | The pod fails to mount and stays not-ready; recreate the Secret and restart |
+| `smtp.existingSecret` missing while `smtp.username` is set | `helm upgrade` **fails at render time** — nothing is applied |
+
+### Audit storage
+
+The notification queue lives in the audit database (`audit.sqlite`) as the table `notification_outbox`, and the
+audit schema version moves from **3 to 4**. The version is registered **only on the startup path**, so the upgrade
+itself writes nothing to the audit database — the new version registers it on first start.
+
+Nothing about authentication, the audit ledger's authority facts, ACLs or the recovery key changes. The password
+never enters a backup plain-text attachment: the profile is non-sensitive and the password lives in the
+customer's own Secret, outside every backup Lucy produces.
+
+### Rolling forward again
+
+Re-enabling notifications after a rollback reuses the same `notification_outbox` table — queued rows that were
+never delivered are still there and are delivered once the channel is back on. Rows older than their validity
+window are never delivered; they are moved to `dead` with reason `expired`.
+
+See [`ROLLBACK.md`](ROLLBACK.md) for the rollback contract.
+
 ## Expected downtime
 
 This chart uses `strategy: Recreate` with a single RWO PVC. During upgrade:
@@ -267,6 +316,10 @@ A customer template is provided in `examples/values.customer.example.yaml`.
 | Pod Running but 8276/8277 unreachable | ClusterIP Service | Set `service.type: LoadBalancer` (K3s) or NodePort/Ingress |
 | MCP fallback in WebUI | Missing `LUCY_PUBLIC_MCP_URL` in Helm values | Set in values and `helm upgrade`; no `kubectl set env` |
 | Wrong runtime behaviour | tag/digest mismatch in values vs imported image | Compare `image/image-tag.txt`, `BUILD-INFO.json` |
+| Pod not-ready after enabling SMTP | `smtp.existingSecret` (or the CA Secret) missing in the namespace | Create the customer-managed Secret, then `kubectl -n lucy-test rollout restart deploy/lucy` |
+| `helm upgrade` fails with "refuses smtp.password" | An inline password was put in values.yaml | Remove it; reference the customer's Secret via `smtp.existingSecret` + `smtp.passwordKey` |
+| Notifications stay `disabled` after enabling SMTP | The profile was not re-read (read once at startup) or `enabled: false` inside the profile | Restart the pod; check the profile's `enabled` field |
+| Notifications stay `unavailable` | `errorCode` is `smtp_profile_invalid` / `smtp_secret_unavailable` / `smtp_ca_unavailable` / `smtp_auth_incomplete` | Fix the profile shape, the password file, the CA bundle, or the username/password pairing — see the system handbook §5.4 |
 
 ## Post-upgrade verification
 
@@ -281,6 +334,9 @@ A customer template is provided in `examples/values.customer.example.yaml`.
   leaves existing connections untouched.
 - Customer-owned files unchanged (compare checksums taken before the upgrade): `ktx.yaml`, `semantic-layer/`,
   `wiki/`, `skills/`, `webui/config/`, `.ktx-ui/`, `.git/`.
+- If `smtp.enabled` is on: the pod has exactly the three `LUCY_SMTP_*` **file-path** env vars and no SMTP secret
+  value in its env; the owner-only status endpoint returns `state: "ok"`; a queued test mail reaches `sent`.
+  With `smtp.enabled` off (default), confirm the pod has **no** `LUCY_SMTP_*` env var at all.
 
 ## Migrating from a custom customer Chart
 

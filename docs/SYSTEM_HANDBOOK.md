@@ -2998,7 +2998,7 @@ SMTP 服务器接受信件**不等于**最终投递到收件箱；Lucy 只记录
 
 #### 5.4.5 禁用与回滚
 
-把 `smtp.enabled` 改回 `false` 并重启即停止新投递，已排队的行保留但不投递。回滚到不识别 `notification_outbox` 表的旧版本前，按升级回滚 Runbook 清理或保留兼容该表。禁用与回滚都不影响登录账户、审计账本、权限与恢复密钥；密码不会进入备份明文附件。
+把 `smtp.enabled` 改回 `false` 并重启即停止新投递，已排队的行保留但不投递。回滚到不识别 `notification_outbox` 表的旧版本前，按 Chart 的 `UPGRADE.md`／`ROLLBACK.md`「Optional SMTP notifications (chart 0.2.8+)」段处理该表——**默认保留**（旧版本不读写它），清理是可选项。禁用与回滚都不影响登录账户、审计账本、权限与恢复密钥；密码不会进入备份明文附件。
 
 ## 6. FAQ 与排障指南
 

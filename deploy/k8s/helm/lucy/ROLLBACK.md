@@ -81,6 +81,55 @@ Common failure signatures:
 | Pod Running but not Ready | probe timeout / wrong port | Check HTTP probe on `webui:5174` |
 | Pod Running but 8276/8277 down | ClusterIP Service | Use LoadBalancer / NodePort |
 | MCP fallback in WebUI | missing `LUCY_PUBLIC_MCP_URL` in Helm values | set in values, re-upgrade |
+| Pod not-ready after a rollback that had SMTP enabled | the customer-managed SMTP Secret was removed from the namespace | recreate the Secret, then `rollout restart deploy/lucy` |
+| Notifications stopped but no error is shown | the rolled-back chart has no SMTP wiring, or `smtp.enabled` is false | expected: queued rows are kept and not delivered; see the SMTP section above |
+
+## Optional SMTP notifications (chart 0.2.8+)
+
+This section is the one referenced by the system handbook §5.4.5 ("回滚到不识别 `notification_outbox` 表的旧版本前,
+按升级回滚 Runbook 清理或保留兼容该表"). It applies only when the deployment had `smtp.enabled: true`.
+
+Rolling back to a chart **older than 0.2.8** removes the SMTP wiring from the Deployment: the `LUCY_SMTP_*` env
+vars, the profile ConfigMap mount, the password mount and the CA mount all disappear. The rollout is otherwise
+identical to any other rollback — the PVC, the audit ledger, ACLs, tokens and the recovery key are untouched.
+
+### The `notification_outbox` table: keep it by default
+
+The notification queue lives in the audit database (`audit.sqlite`) as `notification_outbox`, and chart 0.2.8
+registers audit schema version **4** (3 before it). The old version neither reads nor writes that table.
+
+- **Keep the table (default).** It is inert under the old version and the audit ledger's authority facts are
+  unaffected — authentication, ACLs, token issuance and the audit trail do not regress. Rolling forward again
+  reuses it, and rows that were queued but never delivered are still there.
+- **Clean the table up** only if the customer requires the old audit database to be byte-identical. Dropping it
+  loses the queued notifications and nothing else. Do this while Lucy is stopped, against a backup copy, and
+  never as part of an automated rollback.
+
+The audit schema version row in `audit_meta` is **not** a compatibility gate: it is written on the startup path and
+read by no guard, so an old version running on a newer audit database does not refuse to start.
+
+### What rollback does not touch
+
+- The customer's own SMTP Secret (and CA Secret) — the chart never owned them, so `helm rollback` does not delete
+  them. Recreate the wiring later by pointing `smtp.existingSecret` at the same Secret.
+- Login accounts, the audit ledger's authority facts, ACLs, tokens and the recovery key.
+- The SMTP password never entered a backup plain-text attachment in the first place.
+
+### Queue behaviour while notifications are off
+
+With `smtp.enabled: false` (or under an older chart), queued rows **stay in the queue and are not delivered** —
+disabling notifications stops new deliveries, it does not discard history. Rows that pass their validity window
+while the channel is off are never delivered; they are moved to `dead` with reason `expired`.
+
+### Post-rollback check
+
+```bash
+# No SMTP wiring remains in the rolled-back revision:
+kubectl -n lucy-test get deploy lucy -o jsonpath='{range .spec.template.spec.containers[0].env[*]}{.name}{"\n"}{end}' | grep LUCY_SMTP || echo "no SMTP env (expected)"
+```
+
+With SMTP previously enabled, confirm the `notification_outbox` table still exists in the audit database and that
+the audit ledger is intact — the rollback must not have produced an auth or audit semantic regression.
 
 ## PVC and data safety
 
