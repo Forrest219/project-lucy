@@ -2,9 +2,17 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { PageHeader } from "../../components/PageHeader";
+import { McpRuntimeStatusPanel } from "../../components/McpRuntimeStatusPanel";
 import { apiGet, apiPost } from "../../lib/apiClient";
-import type { Agent, EffectivePermissionsPreview, McpRuntimeCanaryResult, McpRuntimeStatus } from "../../lib/types";
+import type {
+  Agent,
+  EffectivePermissionsPreview,
+  McpRuntimeCanaryResult,
+  McpRuntimeReloadResult,
+  McpRuntimeStatus
+} from "../../lib/types";
 import { queryKeys } from "../../lib/queryKeys";
+import { useAuthOptional } from "../../lib/auth";
 import { adminAgentsQueryOptions } from "../../lib/displayQueryOptions";
 
 type AgentsResponse = { agents: Agent[] };
@@ -138,7 +146,17 @@ export function McpPlayground() {
       void runtimeQuery.refetch();
     }
   });
-
+  // Spec 191 §5 — the owner confirmed reload. It restarts ONLY the KTX daemon;
+  // the WebUI and the proxy stay alive.
+  const reloadMutation = useMutation({
+    mutationFn: () =>
+      apiPost<McpRuntimeReloadResult>("/api/admin/mcp-runtime/reload", {
+        reason: "user_confirmed"
+      }),
+    onSuccess: () => {
+      void runtimeQuery.refetch();
+    }
+  });
   const previewMutation = useMutation({
     mutationFn: (body: { agentId: string; tool: string; arguments: unknown }) =>
       apiPost<AclPreviewData>("/api/admin/mcp-playground/acl-preview", body)
@@ -194,6 +212,10 @@ export function McpPlayground() {
   const roleHref = roleId
     ? `/admin/roles/${encodeURIComponent(roleId)}?tab=permissions`
     : `/admin/agents/${encodeURIComponent(agentId)}`;
+  // Spec 191 §8 — the reload is owner-only, so the action is only offered to an
+  // owner. The API refuses it for anyone else.
+  const auth = useAuthOptional();
+  const isOwner = auth?.status?.me?.role === "owner";
   const execution = runtimeQuery.data?.execution;
   const canaryResult = runtimeCanaryMutation.data;
   const executionReady = connectReady(execution, canaryResult);
@@ -273,7 +295,9 @@ export function McpPlayground() {
     ? runtimeQuery.error.message
     : runtimeCanaryMutation.error instanceof Error
       ? runtimeCanaryMutation.error.message
-      : undefined;
+      : reloadMutation.error instanceof Error
+        ? reloadMutation.error.message
+        : undefined;
   const runtimeCard = task === "connect" && execution && runtimeQuery.isSuccess
     ? runtimeVerdict({
         execution,
@@ -352,6 +376,19 @@ export function McpPlayground() {
 
             {task === "connect" ? (
               <div className="grid gap-4" data-testid="mcp-playground-connect">
+                <McpRuntimeStatusPanel
+                  status={runtimeQuery.data}
+                  connectionId={canaryConnection}
+                  canary={canaryResult}
+                  pending={runtimeCanaryMutation.isPending}
+                  onRecheck={() => {
+                    if (!canaryConnection) return;
+                    runtimeCanaryMutation.mutate(canaryConnection);
+                  }}
+                  onReload={isOwner ? () => reloadMutation.mutate() : undefined}
+                  reloadPending={reloadMutation.isPending}
+                  reloadResult={reloadMutation.data}
+                />
                 {runtimeCard ? (
                   <section className="pl-panel" data-testid="mcp-playground-execution-block" data-tone={runtimeCard.tone}>
                     <VerdictCard

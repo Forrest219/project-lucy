@@ -838,6 +838,21 @@ Protected terms（DOM 须 `translate="no"` + `notranslate`）：`OIDC`、`PKCE`�
 
 Protected terms（DOM 须 `translate="no"` + `notranslate`）：`SMTP`、`TLS`、`STARTTLS`、`CA`、`Secret`、`queued`、`sending`、`sent`、`dead`、文件名、路径与 URL。
 
+### 4.13 执行层重载（Spec 191）
+
+执行层重载只重启 KTX 执行进程，使其重新读取最新的连接级配置；**不含**重启 Pod、容器或 WebUI。三个事实分别报告，不得合并成一个「成功」：进程是否完成重启、目标配置是否通过连接级验证、MCP 工具面是否可达。
+
+| Canonical Term | UI 主术语 | 允许补充说法 | 禁止文案 | 说明 |
+|---|---|---|---|---|
+| Execution Runtime Reload | 执行层重载 | 重载执行层（作按钮文案） | 热更新连接、自动同步连接、无需重启 | 只重启 KTX 执行进程并重新读取最新连接配置；不重启 Pod / 容器 / WebUI。Spec 191 |
+| Reload Required | 待重载 | 配置待重载 | 未生效（暗示配置写失败） | 配置已写入磁盘，但执行层尚未确认加载。Spec 191 |
+| Config Verification | 配置验证 | 连接级验证（技术叙述） | 已生效（无证据时） | 以连接级证据确认执行层已加载目标配置；与「重新检测执行层」严格区分。Spec 191 |
+| Execution Runtime Reload Outcome | 重载结果 | — | 成功（把三段事实合并成一个词） | `reloadStatus`（进程级）／`configVerification`（配置级）／`mcpReachable`（诊断）三段正交。Spec 191 |
+| Recheck Execution Runtime | 重新检测执行层 | 检测 | 重载执行层 | 只读检测，**不**加载配置；与「重载执行层」并存且语义不同。Spec 191 |
+| Execution Runtime Unavailable | 执行层不可用 | 问数进程不可用 | 待重载（指进程不可用） | 重载失败后如实报告，不伪报成功；不承诺旧 daemon 仍可用。Spec 191 |
+
+Protected terms（DOM 须 `translate="no"` + `notranslate`）：`MCP`、`KTX`、`Runtime`、`Pod`、`daemon`、`ktx.yaml`、`digest`、`requestId`。
+
 ## 5. 新术语登记流程
 
 任何新功能 Spec 或 Plan 引入新的产品概念时，必须执行以下流程：

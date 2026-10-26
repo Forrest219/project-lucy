@@ -5,7 +5,7 @@
 | 对应 Spec | `webui/docs/191-execution-runtime-reload-spec.md` **v0.2**（已按交叉审阅意见修订） |
 | 审阅意见 | `docs/reviews/2026-10-26-spec-191-execution-runtime-reload-plan-review.md`（8 项批准条件） |
 | 决策基线 | 只重载 KTX daemon / 用户点确认 / 失败不回滚 ktx.yaml / 不推进 S4 |
-| 状态 | **待复审后开工**（`docs/governance/DEVELOPMENT.md` 强制流程） |
+| 状态 | **已实现，未验收**（2026-10-27）。实现完成并通过静态 Code Review 与本地进程级生命周期实测；容器生命周期验收（AC-12）待镜像重建后执行 |
 | 前置已验证 | KTX daemon 收到 SIGTERM 干净退出、端口释放（本地实测）；Proxy 已有 upstream session 恢复机制（`mcp-proxy.ts:381-433`） |
 
 ---
@@ -216,7 +216,8 @@ UI 约定：
 | AC-8 旧证据失效→验证后变 ok | Step 2 | `webui/server/__tests__/mcp-runtime-reload.test.ts` |
 | AC-9 UI 按钮 | Step 5 | `webui/src/__tests__/mcp-runtime-status-panel.test.tsx`（或既有连接概览测试扩展） |
 | AC-10 会话自动恢复 | Step 7 | `webui/server/__tests__/mcp-proxy-upstream-session.test.ts`（扩展） |
-| AC-11 鉴权 | Step 3 | `webui/server/__tests__/mcp-runtime-reload.test.ts` || AC-12 容器生命周期 | Step 8 | `scripts/verify/verify-ktx-reload-lifecycle.sh` |
+| AC-11 鉴权 | Step 3 | `webui/server/__tests__/mcp-runtime-reload.test.ts` |
+| AC-12 容器生命周期 | Step 8 | `scripts/verify/verify-ktx-reload-lifecycle.sh`（`--container` 模式未验收，见 §8.4） |
 | AC-13 超时/迟到回执 | Step 2 | `webui/server/__tests__/mcp-runtime-reload.test.ts` |
 
 ---
@@ -269,3 +270,77 @@ UI 约定：
 按 `docs/governance/DEVELOPMENT.md` 的 Spec 落位规则（仓库级 spec 落 `docs/`，
 实现细节落 `<module>/docs/`），**本计划建议移入 `webui/docs/plans/`** 以便与
 其余实施计划同址并被索引。实施时一并处理。
+
+---
+
+## 8. 实施记录（2026-10-27）
+
+### 8.1 步骤落位
+
+| Step | 落点 | 状态 |
+|---|---|---|
+| Step 1 | `scripts/runtime/docker-entrypoint.sh`（supervisor + 重载通道能力文件） | 完成；`bash -n` + 本地实测 16/16 |
+| Step 2 | `webui/server/admin/mcp-runtime-reload.ts`（新增）；`webui/server/mcp-runtime-state.ts` 新增 `clearExecutionRuntimeObservations()` | 完成 |
+| Step 3 | `webui/server/admin/mcp-runtime.ts`（路由 + 鉴权 + 状态面三维字段 + 审计） | 完成 |
+| Step 4 | `webui/server/index.ts`（5 条写路径返回 `executionRuntimePending`） | 完成 |
+| Step 5 | `webui/src/lib/types.ts`、`webui/src/components/McpRuntimeStatusPanel.tsx`、`webui/src/pages/admin/McpPlayground.tsx` | 完成 |
+| Step 6 | `webui/docs/00-product-terminology-standard.md` §4.13、`webui/docs/README.md`、`docs/SYSTEM_HANDBOOK.md`、`webui/docs/163-connection-overview-card-quiet-spec.md`、`CHANGELOG.md` | 完成 |
+| Step 7 | `webui/server/__tests__/mcp-proxy-upstream-session.test.ts`（新增 2 条边界用例） | 完成 |
+| Step 8 | `scripts/verify/verify-ktx-reload-lifecycle.sh`（新增，`--local` / `--container` 两种模式） | 脚本完成；`--local` 实测通过，`--container` 未执行（本次不做镜像重建） |
+
+### 8.2 §5 决策项处置
+
+| # | 决策项 | 处置 |
+|---|---|---|
+| G-5 | 连接概览是否也放「重载执行层」入口 | **不放**。入口只在 MCP 调试台；已回写 `webui/docs/163-connection-overview-card-quiet-spec.md` §3／§4 |
+| G-6 | 退避上限次数与间隔 | 5 次；1→2→4→8→16s（上限 16s），`LUCY_KTX_RELOAD_BACKOFF_LIMIT` / `_BACKOFF_MAX_S` 可覆盖 |
+| G-7 | 能力心跳阈值 | supervisor 每 5s 更新（25 个 0.2s 轮询拍）；**30s** 判陈旧 |
+| G-8 | 重载等待超时 | **60s**（`LUCY_KTX_RELOAD_TIMEOUT_MS` 可覆盖，测试用短值） |
+| G-9 | 是否加冷却窗口 | **不加**。全局单在途闸门 + 前端禁用 |
+
+### 8.3 实施中的两处偏离（已在代码注释中标注理由）
+
+1. **能力文件增加了 `state` 与 `currentRequestId` 字段。**
+   Spec §9.1 的能力文件示例只有 4 个字段，但 P7／P9 要求 Node 侧在超时后能判断
+   「supervisor 是否仍在执行」。没有这两个字段就无从判断，只能退化成「再发一次」——
+   正是 P7 要禁止的行为。协议版本与心跳语义不变。
+2. **入口脚本增加了 `LUCY_ENTRYPOINT_SUPERVISOR_ONLY=1`。**
+   只跑 supervisor，不做项目播种、不起 WebUI。它让重载生命周期可以在**不重建镜像**的
+   前提下被真实执行（`scripts/verify/verify-ktx-reload-lifecycle.sh --local`），
+   生产路径不设置该变量。
+
+### 8.4 未闭合项
+
+- **AC-12 容器生命周期**：`--container` 模式需要已构建镜像，本次按约束不做 Docker 重建，
+  因此未执行。已交付脚本与 `--local` 实测证据。
+- **AC-1／AC-3 的容器内形态**（旧 PID 退出、新 PID 就绪、WebUI 与 Proxy PID 不变）：
+  `--local` 已覆盖 supervisor 侧的旧 PID 退出与新 PID 就绪；「WebUI 与 Proxy PID 不变」
+  属于容器形态，未在本次范围内实测。
+
+### 8.5 静态 Code Review 发现与修复
+
+自审逐文件复查（含变异测试）后修复了 7 处问题（6 处代码 + 1 处文档），全部有回归用例或本地实测兜底：
+
+| # | 位置 | 问题 | 处置 |
+|---|---|---|---|
+| 1 | `docker-entrypoint.sh` 回执解析 | 请求字段分隔符是**字面 0x1F 控制字符**，diff 与编辑器都不可见，一旦被工具剥离就静默错配 | 改成显式 `"\u001f"` 转义；本地实测 16/16 仍通过 |
+| 2 | `docker-entrypoint.sh` supervisor | 正常退出后 `ktx.pid` 残留，父 shell 的遗留清理可能命中**被复用的 PID** | supervisor 增加 EXIT trap，在有序退出时删除 pid 文件；SIGKILL 不触发 trap，正好是父 shell 需要它的场景 |
+| 3 | `docker-entrypoint.sh` 注释 | `shutdown()` 的说明注释被 `wait_for_ktx_ready` 插到中间，注释与函数错位 | 调整顺序，注释归位 |
+| 4 | `admin/mcp-runtime.ts` 审计 | 未登录（401）与 bootstrap（400）拒绝路径下 `trustedActorFromRequest` **抛错**，审计被 catch 吞掉 ⇒ 拒绝路径**没有审计** | 增加 `reloadAuditActor()` 安全回退（`actor=anonymous`，与 OIDC 路由既有惯例一致），并给 `ConfigAuditActorType` 增加 `anonymous`；变异测试确认该用例能转红 |
+| 5 | `admin/mcp-runtime-reload.ts` 全局闸门 | 闸门在**写请求之后**才置位 ⇒ 两个并发调用各自发一次请求，daemon 被重启两次（违反 P1） | 闸门改为**首个 await 之前**预留；只有上一请求的回执存在才释放；`finally` 只释放自己的预留。补并发用例 + 变异测试 |
+| 6 | `admin/mcp-runtime-reload.ts` 目标连接 | 传入 `ktx.yaml` 里不存在的 `connectionId` 时，验证必然失败但提示含糊 | 明确拒绝并说明「不在当前 ktx.yaml 中」，且不发起重载（无副作用） |
+| 7 | 本文件 §3 AC 映射矩阵 | AC-11 与 AC-12 两行被合并成一行（缺换行）⇒ 表格结构损坏，AC-12 行在 Markdown 渲染中不成立 | 拆回两行，并给 AC-12 行补注「`--container` 模式未验收，见 §8.4」 |
+
+另补两处质量改进：审计 `oldSummary` 记录重载**前**的 activation（原先是占位值
+`unknown`）；前端「重载执行层」按钮按角色收敛为 owner 可见（非 owner 不渲染该动作，
+与 API 的 403 一致）。
+
+**变异测试记录**（每处变异都必须让对应用例转红，否则断言恒真）：
+
+| 变异 | 期望转红 | 结果 |
+|---|---|---|
+| 关掉 `requireOwner` | 401 / 403 用例 | 2 条转红 ✓ |
+| 关掉能力探测 | 3 条 `unsupported` 用例 | 3 条转红 ✓ |
+| 去掉回执 requestId 配对（P6） | 超时后迟到回执用例 | 1 条转红 ✓ |
+| 回退匿名 actor 回退 | 401 审计用例 | 1 条转红 ✓ |
+| 闸门改为「通道不忙即释放」 | 并发用例 | 1 条转红 ✓ |

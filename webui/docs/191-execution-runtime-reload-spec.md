@@ -12,6 +12,7 @@
 | 排查记录 | `inbox/2026-10-26-ktx-config-restart-only-investigation.md`（过程性材料，未入版本库） |
 | 实施计划 | `webui/docs/plans/wo-20261027-ktx-execution-runtime-reload.md` |
 | 决策 | 只重载 KTX daemon；**用户点确认**触发；失败**不回滚** ktx.yaml；不推进上游 KTX reload 能力 |
+| 实施状态 | **已实现，未验收**（2026-10-27）。实施记录见 `webui/docs/plans/wo-20261027-ktx-execution-runtime-reload.md` §8；容器生命周期验收（AC-12）待镜像重建后执行 |
 
 ## v0.2 修订摘要
 

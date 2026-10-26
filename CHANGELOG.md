@@ -24,6 +24,37 @@ Product line cut from `0.17.0` to `2.0.0` on 2026-10-19. Customer-facing label i
 
 ---
 
+## Unreleased — v0.25（开发线）
+
+> 目标版本：v0.25 开发线。版本号在发版台账统一递增，本节只记录用户可见变化，
+> 不代表已切版本。
+
+### Added
+- **执行层重载（Spec 191）**：WebUI 写 `ktx.yaml` 后，所有者可在 MCP 调试台点「重载执行层」，
+  只重启 KTX 执行进程使其重新读取最新连接配置——**不重启 Pod、容器或 WebUI**。
+  - 新增 `POST /api/admin/mcp-runtime/reload`（owner-only；open / bootstrap 模式返回 400
+    `AUTH_NOT_CONFIGURED`，未登录 401，非 owner 403）。成功、失败、拒绝与超时路径均写审计
+    （`changeType: execution_runtime_reload`）。
+  - 新增 `GET /api/admin/mcp-runtime/status` 的三维状态：`activation`（配置生效状态）、
+    `reload`（一次重载操作的状态）、`verification`（连接级证据状态），三者不合并为一个「成功」。
+  - 新增重载通道能力握手：supervisor 发布 `ktx-reload.capability`（协议版本 + 心跳 + 在途状态），
+    无有效 supervisor 时快速返回 `unsupported` 且不产生任何文件或进程副作用。
+  - 新增写路径响应字段 `executionRuntimePending`：连接创建、启用表范围调整与 Schema
+    增删在写入 `ktx.yaml` 后如实回报「执行层尚未加载」，但**不自动触发**重载。
+  - 容器入口 `scripts/runtime/docker-entrypoint.sh` 引入 KTX supervisor：进程归属、信号转发、
+    退出码、首次启动失败不退化、自发退出的有限退避重启与遗留进程清理全部显式定义。
+
+### Changed
+- **文档口径**：`ktx.yaml` 新连接或凭据的生效说明从「可能需要重启 KTX MCP daemon」改为
+  「在 MCP 调试台点『重载执行层』」；`McpRuntimeStatusPanel` 的待确认提示不再指向人工重启。
+
+### 已知限制
+- 容器生命周期验收（首次启动失败、自发退出、SIGTERM 无遗留进程、退出码）需在镜像重建后
+  执行 `scripts/verify/verify-ktx-reload-lifecycle.sh --container`；本次交付只完成了本地
+  进程级实测（`--local`）。
+
+---
+
 ## Unreleased — M31 / A2 — Configurable Content Root
 
 > Target release: M31 (post-0.17.0). WebUI loads `semantic-layer/`, `wiki/`,

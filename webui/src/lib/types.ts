@@ -852,6 +852,28 @@ export type AccessWriteAck = {
 
 export type ExecutionRuntimeStatus = "unknown" | "ok" | "stale" | "unavailable" | "error";
 
+/**
+ * Spec 191 §5 — three orthogonal facts about the execution layer.
+ * `activation` is the configuration state, `reload` is the last operation and
+ * `verification` is the evidence state. They must never be merged.
+ */
+export type ExecutionRuntimeActivation = "current" | "reload_required" | "unknown";
+export type ExecutionRuntimeReloadState = "idle" | "running" | "succeeded" | "failed";
+export type ExecutionRuntimeVerificationState = "unverified" | "verifying" | "verified" | "failed";
+
+export type McpRuntimeReloadResult = {
+  requestId: string;
+  reloadStatus: "succeeded" | "failed" | "already_running" | "unsupported";
+  configVerification: "verified" | "failed" | "unverified";
+  mcpReachable?: "reachable" | "unavailable" | "error";
+  requestedDigest: string;
+  actualDigest?: string;
+  startedAt: string;
+  finishedAt?: string;
+  durationMs?: number;
+  detail?: string;
+};
+
 export type RuntimeAcks = Omit<AccessWriteAck, "policyRuntimeAck"> & {
   policyRuntimeAck: boolean;
   catalogRuntimeAck?: boolean;
@@ -891,6 +913,24 @@ export type McpRuntimeStatus = {
     missingConnections?: string[];
     unknownConnections?: string[];
     lastError?: string;
+    /** Spec 191 — the configuration activation state. */
+    activation?: ExecutionRuntimeActivation;
+    /** Spec 191 — the state of the last reload operation. */
+    reload?: {
+      state: ExecutionRuntimeReloadState;
+      requestId?: string;
+      digest?: string;
+      startedAt?: string;
+      finishedAt?: string;
+      detail?: string;
+    };
+    /** Spec 191 — the connection level evidence state. */
+    verification?: {
+      state: ExecutionRuntimeVerificationState;
+      digest?: string;
+      checkedAt?: string;
+      detail?: string;
+    };
   };
 };
 

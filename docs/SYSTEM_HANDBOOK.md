@@ -3075,7 +3075,7 @@ ktx sl read <source-name> --connection-id <connection-id>
 | `semantic-layer/**/*.yaml` | WebUI 下次 API 读取文件即可看到；KTX/MCP 检索需要 `ktx admin reindex` |
 | `wiki/**/*.md` | WebUI 下次读取文件即可看到；KTX/MCP 检索需要 `ktx admin reindex` |
 | `ktx.yaml enabled_tables` | WebUI 保存后立即写文件；运行静态 `POST /api/catalog/reload` 检查 manifest 对齐 |
-| `ktx.yaml` 新连接或凭据 | 可能需要重启 KTX MCP daemon；至少运行 `ktx connection test <connId>` |
+| `ktx.yaml` 新连接或凭据 | WebUI 保存后执行层尚未加载；在 MCP 调试台点「重载执行层」使其生效（只重启 KTX 执行进程，不重启 Pod）；至少运行 `ktx connection test <connId>` |
 | `webui/config/data-qa-instructions.md` | Proxy 当前实现一次性加载；修改后重启 WebUI/Proxy 才稳妥 |
 
 > **关联：YAML 交付与验收**

@@ -268,7 +268,7 @@ const AUDIT_EXPORT_TIMEZONE = "Asia/Shanghai";
 let auditExportSequence = 0;
 
 export type ConfigAuditAssetKind = "governance" | "semantic" | "wiki" | "eval" | "publish" | "skill";
-export type ConfigAuditActorType = "ui_admin" | "batch_job" | "system";
+export type ConfigAuditActorType = "ui_admin" | "batch_job" | "system" | "anonymous";
 export type ConfigAuditWriteStatus = "pending" | "committed" | "failed" | "rolled_back";
 
 function ensureColumn(database: Database.Database, table: string, column: string, definition: string): void {

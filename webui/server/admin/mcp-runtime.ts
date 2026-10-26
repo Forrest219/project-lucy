@@ -1,6 +1,6 @@
 import { stat } from "node:fs/promises";
 import path from "node:path";
-import type { FastifyInstance, FastifyReply } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { readCatalogReloads } from "../catalog-reload.js";
 import {
   getExecutionRuntimeObservation,
@@ -9,6 +9,15 @@ import {
 } from "../mcp-runtime-state.js";
 import { readProject, resolveProjectRoot } from "../project.js";
 import { effectivePermissions, getPolicyRuntimeStatus, isPolicyRuntimeHealthy } from "../proxy/acl.js";
+import { recordConfigChange } from "./audit.js";
+import {
+  readReloadState,
+  reloadExecutionRuntime,
+  type McpRuntimeReloadResult
+} from "./mcp-runtime-reload.js";
+import { requireOwner } from "../auth/guard.js";
+import { resolveAuthMode } from "../auth/admins-store.js";
+import { auditActorFields, trustedActorFromRequest } from "../security/request-actor.js";
 
 export type ExecutionRuntimeStatus = "unknown" | "ok" | "stale" | "unavailable" | "error";
 export type CanaryCheckStatus = "pass" | "fail" | "blocked";
@@ -37,6 +46,8 @@ type CanaryCheck = {
 
 export type McpRuntimeDependencies = {
   probeExecutionRuntime?: (options?: { force?: boolean }) => Promise<ExecutionProbeResult>;
+  /** Test seam: the reload controller talks to the supervisor channel. */
+  reloadExecutionRuntime?: typeof import("./mcp-runtime-reload.js").reloadExecutionRuntime;
 };
 
 let cachedProbe: { expiresAt: number; result: ExecutionProbeResult } | undefined;
@@ -231,6 +242,11 @@ export async function readMcpRuntimeStatus(
     readCatalogReloads(projectRoot).catch(() => undefined),
     (probeFn ?? probeExecutionRuntime)()
   ]);
+  // Spec 191 §11.2 — the execution surface carries three orthogonal facts:
+  // whether the configuration is activated, whether the last reload operation
+  // succeeded, and whether the target digest was verified with connection
+  // level evidence.
+  const reloadState = await readReloadState(projectRoot, digest);
   const connectionIds = project.connections.map((connection) => connection.id).sort();
   const policy = getPolicyRuntimeStatus();
   const endpoint = upstreamEndpoint();
@@ -263,7 +279,12 @@ export async function readMcpRuntimeStatus(
       ...policy,
       healthy: isPolicyRuntimeHealthy(policy)
     },
-    execution: summarizeExecution(probe, connectionIds, digest)
+    execution: {
+      ...summarizeExecution(probe, connectionIds, digest),
+      activation: reloadState.activation,
+      reload: reloadState.reload,
+      verification: reloadState.verification
+    }
   };
 }
 
@@ -272,6 +293,84 @@ function badRequest(reply: FastifyReply, message: string) {
     ok: false,
     error: { code: "bad_request", message }
   });
+}
+
+type ReloadAuditOutcome =
+  | "succeeded"
+  | "failed"
+  | "already_running"
+  | "unsupported"
+  | "denied";
+
+/**
+ * The actor for a reload audit row.
+ *
+ * `trustedActorFromRequest` THROWS when the request carries no resolved
+ * administrator (an unauthenticated attempt, or the bootstrap mode where no
+ * owner exists yet). The refusal paths must still be audited, so the attempt
+ * is recorded as `anonymous` — the same convention the OIDC routes use for a
+ * login failure. The actor id is never taken from the request body or the
+ * user agent.
+ */
+function reloadAuditActor(request: FastifyRequest): {
+  actor: string;
+  actorType: "ui_admin" | "batch_job" | "system" | "anonymous";
+  actorIp?: string;
+  requestId?: string;
+  sessionId?: string | null;
+} {
+  try {
+    return auditActorFields(trustedActorFromRequest(request));
+  } catch {
+    return {
+      actor: "anonymous",
+      actorType: "anonymous",
+      ...(request.id ? { requestId: String(request.id) } : {})
+    };
+  }
+}
+
+/**
+ * Spec 191 §12.1 — every path writes an audit record: success, failure, the
+ * refusals and the timeout. The audit must never break the request, so a
+ * failing audit write is logged instead of thrown.
+ */
+async function recordReloadAudit(
+  request: FastifyRequest,
+  input: {
+    outcome: ReloadAuditOutcome;
+    result?: McpRuntimeReloadResult;
+    detail?: string;
+    /** The activation statement BEFORE the reload, so the row shows the change. */
+    previousActivation?: string;
+  }
+): Promise<void> {
+  const result = input.result;
+  const detail = input.detail ?? result?.detail;
+  try {
+    await recordConfigChange({
+      filePath: "ktx.yaml",
+      changeType: "execution_runtime_reload",
+      assetKind: "governance",
+      operation: input.outcome,
+      writeStatus: input.outcome === "failed" ? "failed" : "committed",
+      ...(input.outcome === "failed" ? { errorReason: detail ?? "执行层重载失败" } : {}),
+      ...(result?.requestId ? { targetId: result.requestId } : {}),
+      oldSummary: { activation: input.previousActivation ?? "unknown" },
+      newSummary: {
+        outcome: input.outcome,
+        reloadStatus: result?.reloadStatus,
+        configVerification: result?.configVerification,
+        requestedDigest: result?.requestedDigest,
+        actualDigest: result?.actualDigest,
+        ...(detail ? { detail } : {})
+      },
+      ...reloadAuditActor(request),
+      source: "mcp_runtime_reload_api"
+    });
+  } catch (error) {
+    console.error("[mcp-runtime-reload] audit write failed", error);
+  }
 }
 
 export async function runMcpRuntimeCanary(
@@ -372,7 +471,7 @@ export async function runMcpRuntimeCanary(
       decisionReason: "execution_config_stale",
       remediation: {
         label: "重新检测执行层",
-        detail: "请重启或重新加载 KTX MCP Runtime 后，再执行一次只读查询验证。"
+        detail: "配置已写入，执行层尚未加载。请在 MCP 调试台点「重载执行层」使其生效后，再执行一次只读查询验证。"
       }
     };
   }
@@ -443,6 +542,59 @@ export function registerMcpRuntimeRoutes(
           : {})
       }, dependencies.probeExecutionRuntime);
       return { ok: true, data };
+    }
+  );
+
+  /**
+   * Spec 191 §8/§12 — trigger an execution runtime reload.
+   *
+   * `/api/admin/*` does NOT imply owner-only: the global auth hook only
+   * guarantees "an authenticated administrator". The owner check is explicit
+   * and the auth mode is checked FIRST, because `requireOwner` reads
+   * `request.lucyAdmin?.admin` and would answer 401 in open mode where there
+   * is no owner account at all. The existing owner routes use the same
+   * `resolveAuthMode() !== "required"` → 400 AUTH_NOT_CONFIGURED pattern.
+   */
+  app.post<{ Body: { connectionId?: string; reason?: string } }>(
+    "/api/admin/mcp-runtime/reload",
+    async (request, reply) => {
+      if ((await resolveAuthMode()) !== "required") {
+        await recordReloadAudit(request, {
+          outcome: "denied",
+          detail: "尚未配置所有者账户，无法重载执行层"
+        });
+        return reply.status(400).send({
+          ok: false,
+          error: { code: "AUTH_NOT_CONFIGURED", message: "请先完成管理员引导" }
+        });
+      }
+      if (!(await requireOwner(request, reply, "仅所有者可重载执行层"))) {
+        await recordReloadAudit(request, {
+          outcome: "denied",
+          detail: "仅所有者可重载执行层"
+        });
+        return;
+      }
+
+      const connectionId = typeof request.body?.connectionId === "string"
+        ? request.body.connectionId.trim()
+        : "";
+      // The activation statement BEFORE the reload, so the audit row shows the
+      // transition instead of a placeholder.
+      const previousActivation = await resolveProjectRoot()
+        .then((root) => readReloadState(root).then((state) => state.activation))
+        .catch(() => undefined);
+      const reloadFn = dependencies.reloadExecutionRuntime ?? reloadExecutionRuntime;
+      const result = await reloadFn({
+        ...(connectionId ? { connectionId } : {}),
+        ...(typeof request.body?.reason === "string" ? { reason: request.body.reason } : {})
+      });
+      await recordReloadAudit(request, {
+        outcome: result.reloadStatus,
+        result,
+        ...(previousActivation ? { previousActivation } : {})
+      });
+      return { ok: true, data: result };
     }
   );
 }

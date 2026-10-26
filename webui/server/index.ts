@@ -146,6 +146,8 @@ import {
   registerMcpRuntimeRoutes,
   runMcpRuntimeCanary
 } from "./admin/mcp-runtime.js";
+import { markExecutionRuntimePending } from "./admin/mcp-runtime-reload.js";
+import { readKtxYamlDigest } from "./mcp-runtime-state.js";
 import { registerRiskReviewRoutes } from "./admin/risk-review.js";
 import { registerReleaseReadinessRoutes } from "./admin/release-readiness-package.js";
 import { removeLegacyLicenseFile } from "./remove-legacy-license-file.js";
@@ -530,6 +532,29 @@ function validateEnabledTables(
     valid.push(table);
   }
   return { tables: valid, warnings };
+}
+
+/**
+ * Spec 191 §11.1 — a write that changes ktx.yaml leaves the execution layer
+ * behind: the configuration is on disk, but the daemon has not confirmed
+ * loading it. The write path only REPORTS that fact (and never triggers a
+ * reload by itself); the owner decides when to reload.
+ */
+async function noteExecutionRuntimePending(
+  projectRoot: string,
+  digestBefore: string
+): Promise<boolean> {
+  try {
+    return await markExecutionRuntimePending(projectRoot, digestBefore);
+  } catch (error) {
+    console.error("[execution-runtime] failed to record the pending activation", error);
+    return false;
+  }
+}
+
+/** The configuration digest as it was BEFORE a write, for the pending check. */
+async function ktxDigestSnapshot(projectRoot: string): Promise<string> {
+  return readKtxYamlDigest(projectRoot).catch(() => "");
 }
 
 async function executionAckForConnection(connectionId: string): Promise<{
@@ -1334,6 +1359,7 @@ export function buildServer() {
         throw enabledTableError("BAD_REQUEST", "username is required");
       }
     }
+    const digestBefore = await ktxDigestSnapshot(projectRoot);
     const result = await createConnection(
       projectRoot,
       {
@@ -1390,6 +1416,7 @@ export function buildServer() {
       }
 
       const executionAck = await executionAckForConnection(body.id);
+      const executionRuntimePending = await noteExecutionRuntimePending(projectRoot, digestBefore);
 
       return {
         ok: true,
@@ -1399,6 +1426,7 @@ export function buildServer() {
           policyRuntimeAck,
           catalogRuntimeAck,
           ...executionAck,
+          executionRuntimePending,
           runtimeAck: policyRuntimeAck
         }
       };
@@ -1587,6 +1615,8 @@ export function buildServer() {
       return { ok: true, data: { diff, proposedYaml, oldEnabledTables, newEnabledTables, warnings } };
     }
 
+    const digestBefore = await ktxDigestSnapshot(projectRoot);
+
     // Spec 174 §3.2 — barrier spans ktx.yaml write → catalog reload → policy commit.
     return withDisplayWriteBarrier(["C", "D", "P", "L"], async () => {
     const { auditId } = await auditedWriteFile(projectRoot, "ktx.yaml", proposedYaml, {
@@ -1632,6 +1662,7 @@ export function buildServer() {
     }
 
     const executionAck = await executionAckForConnection(connId);
+    const executionRuntimePending = await noteExecutionRuntimePending(projectRoot, digestBefore);
 
     return {
       ok: true,
@@ -1645,6 +1676,7 @@ export function buildServer() {
         policyRuntimeAck,
         catalogRuntimeAck,
         ...executionAck,
+        executionRuntimePending,
         runtimeAck: policyRuntimeAck
       }
     };
@@ -1680,6 +1712,7 @@ export function buildServer() {
     const { connId } = request.params;
     const body = request.body ?? {};
     const dryRun = body.dryRun !== false;
+    const digestBefore = await ktxDigestSnapshot(projectRoot);
     const result = await removeConnection(projectRoot, connId, dryRun, {
       recordConfigChange,
       deleteSecret: body.deleteSecret,
@@ -1693,7 +1726,10 @@ export function buildServer() {
         }
       }
     }
-    return { ok: true, data: result };
+    const executionRuntimePending = dryRun
+      ? false
+      : await noteExecutionRuntimePending(projectRoot, digestBefore);
+    return { ok: true, data: { ...result, executionRuntimePending } };
   });
 
   app.post<{
@@ -1707,13 +1743,17 @@ export function buildServer() {
     if (typeof body.schema !== "string") {
       throw enabledTableError("BAD_REQUEST", "schema is required");
     }
+    const digestBefore = await ktxDigestSnapshot(projectRoot);
     const result = await addSchema(projectRoot, connId, body.schema, dryRun, {
       recordConfigChange
     });
     if (!dryRun) {
       writtenFiles.push({ filePath: "ktx.yaml" });
     }
-    return { ok: true, data: result };
+    const executionRuntimePending = dryRun
+      ? false
+      : await noteExecutionRuntimePending(projectRoot, digestBefore);
+    return { ok: true, data: { ...result, executionRuntimePending } };
   });
 
   app.post<{
@@ -1727,6 +1767,7 @@ export function buildServer() {
     if (typeof body.schema !== "string") {
       throw enabledTableError("BAD_REQUEST", "schema is required");
     }
+    const digestBefore = await ktxDigestSnapshot(projectRoot);
     const result = await removeSchema(projectRoot, connId, body.schema, dryRun, {
       recordConfigChange,
       deleteManifest: body.deleteManifest,
@@ -1740,7 +1781,10 @@ export function buildServer() {
         }
       }
     }
-    return { ok: true, data: result };
+    const executionRuntimePending = dryRun
+      ? false
+      : await noteExecutionRuntimePending(projectRoot, digestBefore);
+    return { ok: true, data: { ...result, executionRuntimePending } };
   });
 
   // M14: deprecated alias for `/api/connections/:connId/ingest`. The M13
