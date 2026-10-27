@@ -2,19 +2,19 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档类型 / 版本 | 功能设计基线 / v0.2-requirements-review |
-| 日期 / 目标版本 | 2026-10-24 / v0.25 |
+| 文档类型 / 版本 | 功能设计基线 / v0.2-requirements-review；2026-10-27 交叉审阅替代条款见 §14 |
+| 日期 / 目标版本 | 2026-10-24 / v0.25；最近修订 2026-10-27 |
 | 功能编号 / 优先级 | L25-14 / P0-2；R2、R4、R5 为 P0，R1、R3 保持 P1 |
-| 状态 | **已实现，未验收**（v0.25 P0-2 / L25-14）。实施计划 `docs/plans/2026-10-25-lucy-v0.25-p0-implementation-plan.md` §P0-2；提交 `21de5168`。R1 模板与 R3 按表反查视图在 P1-1 落地（提交 `28780eae`） |
-| 实施回写 | 2026-10-25 W5 实施回写与勘误见 §13（N1／N2／N7／N8／N12）；只追加不改写，原文条款保留可追溯；未改运行时语义与 §9 验收矩阵 |
-| 授权来源 | 2026-10-24 Forrest 批准首批 Spec 评审 Final 决议，并要求完成四个 P0 设计材料 |
+| 状态 | **Spec／Plan 文档评审已关闭，修订通过（2026-10-27）**；已有局部实现，C14–C18 待实施及实现后静态复审，C19 待正式验收。实施基线 `21de5168`，本次另核对 HEAD `7382bac4`；R1／R3 的 P1 历史实施记录不计入 P0 完成判定；V01–V22 全部未执行 |
+| 实施回写 | 2026-10-25 W5 历史回写见 §13；2026-10-27 经本次用户明确授权完成独立交叉审阅修订，现行规范性替代条款见 §14。文档修订不表示代码已修复 |
+| 授权来源 | 2026-10-24 Forrest 批准首批 Spec 评审 Final 决议；2026-10-25 实施授权见实施计划；2026-10-27 用户授权本次独立核查并直接修订 Spec／Plan |
 | 规划入口 | [Lucy v0.25 功能升级建议书](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) §2.8；[P0 Final 决议](../reviews/2026-10-24-lucy-v0.25-p0-final-decision.md) |
 | 审查入口 | [首批 P0 需求审查清单](../plans/2026-10-24-lucy-v0.25-p0-requirements-review-checklist.md) |
 | 实施主体 | Lucy；不改 KTX 源码；不新增第二套权限代数 |
 | 上游裁决 | [行级策略后续迭代 ADR](../access-control/adr-row-policy-next-iteration.md) §2.2（可复用静态策略引用为下一次行策略增量候选）；[权限路线图冻结 ADR](../access-control/adr-post-p15-roadmap-freeze.md)（Dynamic RLS / TokenScope / 多租户仍冻结） |
 | 权威现行契约 | Spec 99（行级策略 / FinalRows / 强制谓词）、Spec 100（Agent 个人行限制）、[术语标准](../../webui/docs/00-product-terminology-standard.md) |
 
-本文件定义拟实现行为，不代表已实现、已冻结或已经通过验收。本次不修改程序、运行配置、客户资产、镜像或数据库，不新增测试代码，不执行功能验证或部署。
+本文件同时保留原设计条款、历史实施回写与现行替代条款；冲突时按 §14.1 的优先级处理。代码存在、历史测试或历史冒烟均不等于本条验收通过。本次仅修订文档：不修改程序、运行配置、客户资产、镜像或数据库，不新增测试代码，不执行功能验证或部署；V01–V22 全部保持「未执行」。
 
 ---
 
@@ -119,6 +119,8 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`row_policy`、`
 ---
 
 ## 3. 能力范围
+
+> **2026-10-27 替代条款提示**：§3.2、§3.4、§3.5 的现行保存绑定、恢复关闭与目录证明要求分别由 §14.2–§14.4 替换；本节原文仅保留原设计意图和历史追溯，不得脱离 §14 单独作为实现或验收依据。
 
 | 编号 | 优先级 | 能力 | 性质 | 是否改变运行时裁决语义 |
 |---|---|---|---|---|
@@ -250,7 +252,7 @@ roles:
 
 ## 5. 核心流程（伪代码）
 
-以下伪代码描述**拟实现**控制流。带 `现状` 标记的是 v2.0 已存在的函数，本条复用不改语义；带 `拟增` 标记的是本条新增。
+以下伪代码描述原设计控制流。带 `现状` 标记的是 v2.0 已存在的函数，本条复用不改语义；带 `拟增` 标记的是本条新增。**§5.2 的逐 Agent 口径、§5.3 的保存与恢复全流程、§5.5 的目录证明与结构校验已由 §14.2–§14.5 整体替换，原伪代码不再可执行；实现者必须使用 §14 的替代伪代码。** §5.1 的 P1 模板设计及 §5.4 的既有失败关闭边界不在本次替换范围内。
 
 ### 5.1 模板引用编译（拟增 `resolveRowPolicyRefs`，其余复用现状）
 
@@ -483,7 +485,7 @@ L25-01 要求 Agent 详情给出一句话（例如「行级策略按分公司」
 
 ## 9. 验收矩阵
 
-**V01–V22 全部未执行**。P0 功能验收覆盖 R2／R4／R5 对应用例；R1／R3 的用例随 P1 实施验收，不提前计入 P0 完成。V19／V22 是 D-03 在 **0.20.Z 维护线**修复后的集成回归：在受影响场景取得这些证据前，不得宣称该场景交付价值，但不作为 R2／R4／R5 的开工依赖。任何声称完成的范围都必须有其全部适用证据，环境不足保持 blocked。
+**V01–V22 全部未执行**。P0 功能验收覆盖 R2／R4／R5 对应用例；R1／R3 的用例随 P1 实施验收，不提前计入 P0 完成。**V08–V13、V15、V16 的 Role 分支、V20、V21 的可取证判据由 §14.6 替换；下表对应原行仅保留历史索引。** V19／V22 是 D-03 在 **0.20.Z 维护线**修复后的集成回归：在受影响场景取得这些证据前，不得宣称该场景交付价值，但不作为 R2／R4／R5 的开工依赖；V20／V21 不依赖 G5 修复。任何声称完成的范围都必须有其全部适用证据，环境或维护修复前置不足时记录 blocked 原因，不计 passed。
 
 | 编号 | 范围 | 场景 | 期望 |
 |---|---|---|---|
@@ -514,10 +516,10 @@ L25-01 要求 Agent 详情给出一句话（例如「行级策略按分公司」
 
 ## 10. Non-Claim 与不授权声明
 
-- 本条**不授权**代码实现、测试编写、镜像构建、部署或发布；仅授权设计与需求审查。
-- 设计与规划通过**不等于**运行时或客户交付通过；本文 §9 全部未执行。
+- **2026-10-24 原设计阶段边界（历史记录）**：当时仅授权设计与需求审查，不授权实现；2026-10-25 已另行授权实施，授权与历史验证记录见实施计划。该历史声明不撤销后续实施授权，也不证明实施完整。
+- 设计、规划、代码存在或历史测试通过均**不等于**本条运行时验收或客户交付通过；本文 §9 的 V01–V22 在本次交叉审阅中全部保持未执行。
 - 不得对外宣称 Lucy 已具备「动态行级安全」「多租户隔离」「按人 / 按 Token 的行权限」。相关能力按冻结 ADR 保持冻结。
-- 不得宣称模板引用已交付、已通过验收或已在客户环境运行。
+- R1 模板引用与 R3 视图的后续 P1 实施记录按文件头部保留；不得据此宣称其已通过验收、已在客户环境运行，或将其计为 P0 前置。
 - 本条不改变 Spec 99 / Spec 100 的运行时语义；若实现与这两份 Spec 冲突，以这两份 Spec 为准并先修订本文。
 - §1.5 的 G5 是**存量缺陷**，本文只登记其根因、复现工件与回归要求，**不宣称已修复**；修复须另行批准、实施并验证（§11 D7）。
 - 本条不改变「v0.25 不把 Lucy 做成对话框、不动权限裁决与预算引擎」的边界；实施主体为 Lucy，不修改 KTX 源码；单实例 / 单副本边界不变。
@@ -565,10 +567,10 @@ D1–D7 已于 2026-10-24 按 P0 Final 决议收口；以下为实现必须遵�
 
 回写规则：
 
-- **只追加，不改写**：§1.5、§3.2、§3.5、§5.2、§5.3、§5.5 的原文一律保留，可追溯；本节与原文冲突之处以本节为准。
-- **只做可归因诊断**：本节不含任何「已验收通过」「客户交付通过」结论；**§9 验收矩阵 V01–V22 与 A01–A12 状态一律保持「未执行」**。
+- **2026-10-25 历史规则**：本节当时只追加、不改写，§1.5、§3.2、§3.5、§5.2、§5.3、§5.5 的原文保留用于追溯。**2026-10-27 起，§14 经用户明确授权替换其中指定的现行条款；冲突优先级为 Spec 99／100 的现行权限代数 → §14 → §13 → 更早正文。** §13 中关于「不改验收矩阵」的历史声明不限制 §14 对验收判据的显式替代。
+- **只做可归因诊断**：本节不含任何「已验收通过」「客户交付通过」结论；本 Spec 的 **V01–V22** 全部保持「未执行」。A01–A12 属其他 Spec，不是本表的一部分。
 - **术语**：沿用 §3.5 既有三分归因标签（字段不存在／清单不可用／目录能力未知），并附对应机器原因码；不引入术语标准之外的新措辞。
-- **行号口径**：证据分两组引用——`HEAD`（v0.25 实施前基线，与 §1.5 原文引用的行号一致）与「工作副本」（本分支 `lucy-v0.25` 未提交的实施期代码）。同一事实在两组行号不同处均标出。
+- **历史行号口径**：本节的 `HEAD` 指 2026-10-25 回写时的实施前代码基线，「工作副本」指当时未提交实施代码；二者均为历史标签，不代表 2026-10-27 当前 HEAD。本次交叉审阅的实施基线固定为 `21de5168`，当前 HEAD 固定为 `7382bac4`。
 - **本文档自身行号**：本节引用的本文档行号均为**回写前冻结正文**的行号（与实施计划 §7／§9.0 的引用一致）；本节追加后正文整体后移，需要定位时按上下文检索，§13.2 另给出追加后的行号。
 
 ### 13.1 N1 — §5.5 的真实大小写解析与 G5 归因互斥
@@ -719,5 +721,257 @@ D1–D7 已于 2026-10-24 按 P0 Final 决议收口；以下为实现必须遵�
 **（c）受影响条款编号**：§3.2（最终行约束预览）、§5.2（最终行约束计算）、§5.3（保存前校验、预览与审计闭环）、§6.1（管理台交互）、§9 的 V08–V13。
 
 **（d）是否改变冻结契约**：**不改变**。§3.2 的要求不变，本条只补记「哪个入口承载该要求」的现状事实。批准记录来源：实施计划 §9.0 回写状态表的 N12 行（落点 = L25-14 §3.2）、§5.2 实施条目 C6 与 §7 待决项 N12 登记；因不引入新条款、不改 §9 验收矩阵，文档「文档类型 / 版本」保持 `v0.2-requirements-review`。
+
+## 14. 交叉审阅替代条款（2026-10-27，现行）
+
+### 14.1 授权、证据基线与替代范围
+
+本节依据 2026-10-27 用户对本任务的明确授权写入：独立核查 Codex 审阅意见，只落实有代码证据支持的内容，并同步修订 Spec 与实施 Plan。核查对象为实施基线 `21de5168` 与当前 HEAD `7382bac4`；两基线之间的差异已单独识别，历史问题不直接当作当前问题。
+
+本次认同并落实：B-01 的保存确认与共享窗口缺口、H-01 的恢复异常与恢复标记失败关闭缺口、H-02 的回滚对外结果缺口、M-01 的服务端能力事实源缺口、M-02 的结构校验缺口、M-03 的比较主体歧义，以及 L-01 的状态与历史标签清理。R1／R3 仍属 P1；D-03 仍属 0.20.Z；不引入多副本、动态 RLS 或新权限代数。
+
+| 原条款 | 现行替代条款 | 变更理由 |
+|---|---|---|
+| §3.2、§5.3 的预览／保存绑定 | §14.2 | 独立预览摘要必须成为保存的服务端确认输入，并在共享窗口内重算 |
+| §5.2 的逐 Agent 展开与 V08–V12 比较口径 | §14.5、§14.6 | 全局 Role 并集仅用于管理展示，不能替代 Agent 实际 Role Set |
+| §3.4、§5.3、§7 的恢复与对外结果 | §14.3 | 恢复辅助步骤自身可失败；回滚不得被表述为新策略已保存 |
+| §3.5、§5.5 的目录能力与可靠装载 | §14.4 | 能力须由服务端解析，YAML 可解析不等于结构可靠 |
+| §9 的 V08–V13、V15、V16 Role 分支、V20、V21 | §14.6 | 验收须覆盖真实故障路径和产品入口证据 |
+| §11 D6 的协调器范围 | §14.2 | 锁内须包含基线复核、最终预览、写入、生效、终结与恢复 |
+
+未列明的原条款继续有效；§13 的历史回写不删除。Spec 99／100 的权限代数不变。本节是文档合同修订，**不是代码修复记录**；V01–V22 全部保持「未执行」。
+
+### 14.2 R2：成功预览确认与共享发布窗口
+
+#### 14.2.1 预览确认合同
+
+`POST /api/admin/roles/preview-row-policy` 只有在全部受影响表均成功生成最终行约束后，才返回可保存的确认材料。任一表失败时可以返回诊断，但不得返回可被保存接受的确认材料。
+
+```ts
+type RowPolicyPreviewConfirmation = {
+  vocabularyVersion: string;
+  candidateDigest: string;       // draft 覆盖后的完整内存 access 候选
+  baseAccessVersion: string;     // 预览时 access.yaml 的版本／CAS 基线
+  basePolicyVersion: string;     // 预览时的运行时策略输入基线
+  compileInputsDigest: string;   // 下方列明的全部非 access 编译输入
+  impactDigest: string;          // 规范化受影响表与 Agent 集合
+  affectedTables: Array<{ connectionId: string; schema: string; sourceName: string }>;
+  affectedAgentIds: string[];
+};
+```
+
+`compileInputsDigest` 必须由服务端对下列实际输入规范化后计算：源映射及其版本、启用表集合及其摘要、工具分类版本、每个受影响表的 Schema Manifest 实际内容摘要、参与字段／个人行限制编译的 overlay 实际内容摘要，以及服务端解析出的目录能力结果。只记录 Manifest 路径摘要不足以证明内容未变。密钥和连接凭据不得进入确认材料。
+
+`impactDigest` 绑定排序去重后的完整受影响表集合与受影响 Agent 集合。影响面按变更前后 Role、表选择器、Agent Role Set 及个人行限制共同计算；不得只取客户端当前展开的表，也不得只取发生文本变化的谓词。`candidateDigest`、`basePolicyVersion`、`compileInputsDigest`、`impactDigest` 是不同层级，禁止跨层比较。
+
+所有可改变行级策略或其影响面的 Role 写入口都必须消费该确认；至少包括 `PATCH /api/admin/roles/:roleId`，不得以创建、复制或另一服务入口绕过。请求必须携带 `rowPolicyConfirmation`。服务端不信任客户端回传的表／Agent 列表本身，而是在锁内重新计算并比对全部摘要。
+
+缺失确认、预览未成功、候选变化、任一基线变化或影响面变化，统一以 HTTP 409 / `ROW_POLICY_PREVIEW_REQUIRED` 拒绝，`detail.reason` 至少区分 `missing`、`preview_failed`、`candidate_mismatch`、`baseline_changed`、`compile_inputs_changed`、`impact_changed`。这些拒绝全部发生在 durable intent 与配置写入之前，结果为零配置写、零行策略 intent。
+
+#### 14.2.2 规范性预览与保存流程
+
+`previewCandidate` 必须接收调用方已经取得的同一份配置快照和编译输入快照，不得在中途重新读取另一版 `access.yaml`。它复用运行时 `previewSubjectPermissionsForCandidate` → `resolveEffectivePermissions` → `compileFinalRowsBySource` 路径；通用 `__role_preview__` 不能替代该入口。
+
+```text
+function previewRowPolicyDraft(draft, actor):
+    requireCurrentPermission(actor)
+    current = readAccessConfigSnapshotFresh()
+    candidate = overlayDraftOnConfig(current.config, draft)
+    requiredSources = sourcesRequiredBy(current.config, candidate)
+    inputs = readCompilerInputsFresh(requiredSources)
+    impact = computeCompleteImpact(current.config, candidate, inputs)
+    result = previewCandidate(candidate, inputs, impact.tables)
+    if not result.ok:
+        return diagnostic_without_confirmation(result.failures)
+    confirmation = makeConfirmation(
+        candidate, current.version, inputs.basePolicyVersion,
+        inputs.compileInputsDigest, impact)
+    return { ok: true, preview: result.preview, confirmation }
+
+function saveRowPolicyDraft(draft, confirmation, actor):
+    with sharedSingleInstancePublishCoordinator:       # 同一进程内完整发布窗口
+        requireCurrentPermission(actor)
+        requireAccessRecoveryClearOrFailClosed()
+        current = readAccessConfigSnapshotFresh()      # 锁内重读，禁用锁外旧 raw
+        if current.version != confirmation.baseAccessVersion:
+            return REJECT_PREVIEW("baseline_changed") # intent 前
+        candidate = overlayDraftOnConfig(current.config, draft)
+        requiredSources = sourcesRequiredBy(current.config, candidate)
+        inputs = readCompilerInputsFresh(requiredSources)
+        impact = computeCompleteImpact(current.config, candidate, inputs)
+        finalPreview = previewCandidate(candidate, inputs, impact.tables)
+        if not finalPreview.ok:
+            return REJECT_PREVIEW("preview_failed")   # intent 前
+        require confirmation.basePolicyVersion == inputs.basePolicyVersion
+              else REJECT_PREVIEW("baseline_changed")
+        require confirmation.compileInputsDigest == inputs.compileInputsDigest
+              else REJECT_PREVIEW("compile_inputs_changed")
+        require confirmation.impactDigest == digestImpact(impact)
+              else REJECT_PREVIEW("impact_changed")
+        require confirmation.candidateDigest == digestCandidate(candidate)
+              else REJECT_PREVIEW("candidate_mismatch")
+        require finalPreview covers exactly impact.tables and impact.agentIds
+              else REJECT_PREVIEW("impact_changed")
+
+        recoveryPoint = captureCurrentBytesAndRuntimeDigest()
+        intent = durableIntent(actor, operationId, beforeDigest,
+                               confirmation.candidateDigest, impact)
+        if not intent.persisted:
+            return FAIL_AUDIT_INTENT_UNAVAILABLE()     # 零配置写
+        return writeCommitTerminalOrRecover(candidate, recoveryPoint, intent)
+```
+
+共享协调器窗口覆盖：权限／恢复状态复核、access 与编译输入基线重读、候选重建、最终预览与确认比对、intent、配置写入、运行态生效、终结审计，以及失败恢复。只读预览、独立校验和报告查询仍可在窗口外并行；提交复核不得移到窗口外。该要求仅适用于现行单实例／单副本边界。
+
+### 14.3 R4：恢复关闭顺序与三态对外结果
+
+#### 14.3.1 写入、回滚与恢复的规范流程
+
+任何首次配置写入、首次 `commitEffectivePolicy`、committed terminal 的异常都必须进入同一恢复流程；`commitEffectivePolicy` 是可 reject 的异步调用，不得放在无保护的调用点。恢复文件、恢复 commit、恢复核验、恢复标记及恢复终结审计各自都可能失败，必须分别保护。
+
+```text
+function writeCommitTerminalOrRecover(candidate, recoveryPoint, intent):
+    try:
+        atomicWrite(candidate)
+        firstStatus = await commitEffectivePolicy()
+        requireRuntimeAck(firstStatus, candidate) else throw RuntimeAckFailed
+        await durableTerminal(intent, committed, effectiveDigest(firstStatus))
+        return COMMITTED(candidate, firstStatus, intent)
+    catch writeCommitOrCommittedTerminalFailure:
+        return rollbackOrClose(intent, recoveryPoint, writeCommitOrCommittedTerminalFailure)
+
+function rollbackOrClose(intent, recoveryPoint, originalFailure):
+    try:
+        restoreBytesAtomically(recoveryPoint)
+        oldStatus = await commitEffectivePolicy()
+        if not runtimeAndDiskMatchRecoveryPoint(recoveryPoint, oldStatus):
+            throw RecoveryVerificationFailed
+        # 原配置不存在时也必须证明运行态回到对应空基线，不得直接视为成功。
+        terminalState = tryDurableTerminal(intent, rolled_back, originalFailure)
+        return ROLLED_BACK(oldStatus, intent, terminalState)
+    catch recoveryFailure:
+        return closeForRecovery(intent, originalFailure, recoveryFailure)
+
+function closeForRecovery(intent, originalFailure, recoveryFailure):
+    # 第一步不得 await：先在当前进程置闸。
+    latch = setInMemoryRecoveryRequiredSync(originalFailure, recoveryFailure)
+    assertAffectedDataPlaneDenied(latch)
+    assertAllSubsequentAccessWritesDenied(latch)
+
+    markerState = tryPersistRecoveryMarkerAtomically(latch)  # 捕获异常，不解除内存闸
+    degradeState = tryRequestRuntimeDegrade(latch)          # 捕获 reject，不继续放行
+    terminalState = tryDurableTerminal(
+        intent, recovery_required,
+        {originalFailure, recoveryFailure, markerState, degradeState})
+    return RECOVERY_REQUIRED(markerState, degradeState, terminalState)
+```
+
+`setInMemoryRecoveryRequiredSync` 是后续实现必须提供的同步闭锁点；当前仅在 marker 写成功后更新内存状态不满足本合同。数据面热路径和每个 access 写入口都必须检查该内存闸，不能等下一次重新编译才发现恢复失败。所有 `try*` 仅用于收集失败事实并继续执行关闭步骤，不得把异常重新抛出以绕过 `RECOVERY_REQUIRED` 返回。
+
+恢复标记仅把 `ENOENT` 且不存在未终结行策略 intent 视为无待恢复状态。权限不足、其他 I/O 错误、非法 JSON、缺字段、错误类型、未知 `required` 状态均按「恢复状态不可证明」失败关闭，不得等同于 `required:false`。标记写入使用同目录临时文件 + rename；即使标记写失败，当前进程内存闸仍保持关闭。
+
+进程启动时，在开放受影响数据面与 access 写入之前，必须同时核验恢复标记和未终结行策略 intent。任一来源不可读、损坏或无法判定时保守关闭；不得自动覆盖损坏标记或猜测旧操作未落盘。只有管理员显式恢复动作证明磁盘配置、运行态摘要及目标旧策略一致、相关 intent 已对账且恢复标记可可靠更新后，才允许清除闸门；清闸后再次读取核验，失败则保持关闭。
+
+#### 14.3.2 API 与用户可见结果
+
+`written` 表示目标候选是否已被确认提交为当前生效配置，只有 `committed` 可以为 `true`；它不表示过程中从未尝试写入。是否发生过部分写入及恢复现场由 `attemptedWrite`、可取得的磁盘／运行态实际摘要单独披露，不能从 `written:false` 反推磁盘未变化。三种终态不得混用：
+
+| 状态 | HTTP／业务合同 | 必须返回与展示的事实 |
+|---|---|---|
+| `committed` | HTTP 200，`ok:true`，`data.status="committed"`，`written:true`，`runtimeAck:true` | 仅在新配置已生效且 committed terminal 已持久化后使用；返回 actor、operationId、intentId／auditId、candidateDigest、目标与实际生效摘要、影响面 |
+| `rolled_back` | HTTP 500，`ok:false`，`error.code="ROW_POLICY_SAVE_ROLLED_BACK"`，`written:false`，`runtimeAck:false`，`recoveryRequired:false` | 明确旧配置与旧策略已核验恢复，新候选未保存；返回原失败、candidateDigest、恢复后实际摘要及 `terminalAudit="rolled_back"｜"unconfirmed"`。补写 rolled_back terminal 失败时不得声称终结审计已完成 |
+| `recovery_required` | HTTP 503，`ok:false`，`error.code="ACCESS_RECOVERY_REQUIRED"`，`written:false`，`recoveryRequired:true` | 明确受影响读取与后续写入已阻断；返回原失败、恢复失败、候选摘要、可取得的实际摘要，以及 `recoveryMarker`、`terminalAudit` 的 `persisted｜unconfirmed`，不得伪称持久化成功 |
+
+UI 必须按同一终态显示：只有 `committed` 可显示保存成功；`rolled_back` 显示新变更未保存且旧策略已恢复；`recovery_required` 显示需要恢复核验及数据面／写入阻断。前端不得仅凭 HTTP 200、`runtimeAck` 单字段或本地草稿状态推导成功。
+
+### 14.4 R5：服务端能力事实源与可靠目录结构
+
+#### 14.4.1 能力解析与产品入口
+
+新增服务端 `resolveSchemaManifestCatalogCapability(connection, deployment)`，按实际适配器与部署形态返回 `proven｜unknown` 及理由。缺省、调用方未传参数、客户端自报均不得解释为 `proven`。只有当前适配器／部署合同明确支持从 Schema Manifest 建立目录时才可返回 `proven`；文件缺失、拒绝读取或内容非法仍归「清单不可用」，不借能力未知掩盖 I/O／结构故障。
+
+独立预览、保存前最终预览和运行时编译必须调用同一服务端解析结果，并把该结果纳入 `compileInputsDigest`。不得要求客户端传 `schemaManifestCatalogProven`，也不得只在测试直接调用 `compileScopedRowGrant` 时注入该参数。受控验收可以通过服务端适配器／部署夹具制造 `unknown`，但证据必须经 Admin 预览或保存 API 取得。
+
+```text
+function loadSourceFieldCatalogWithProvenance(tableKey, serverContext):
+    capability = resolveSchemaManifestCatalogCapability(
+        serverContext.adapterFor(tableKey.connectionId), serverContext.deployment)
+    if capability.status == unknown:
+        return {status: catalog_capability_unknown, catalogLoaded: false,
+                identity: tableKey, reason: capability.reason}
+
+    path = resolveRequestedManifestPath(tableKey)  # v0.25 不修 D-03 大小写
+    bytes = readFile(path)
+      on missing: return unavailable(stage=resolve, identity=tableKey)
+      on other I/O failure: return unavailable(stage=read, identity=tableKey)
+    manifest = parseYaml(bytes)
+      on failure: return unavailable(stage=parse, identity=tableKey)
+    validated = validateManifestAndTargetTable(manifest, tableKey)
+      on YAML-shape failure: return unavailable(stage=parse, identity=tableKey)
+      on target/catalog failure: return unavailable(stage=catalog, identity=tableKey)
+    overlay = readValidateOptionalOverlayOrFail(tableKey)
+      on YAML syntax failure: return unavailable(stage=parse, identity=tableKey)
+      on other read/structure failure: return unavailable(stage=catalog, identity=tableKey)
+    catalog = buildCatalog(validated, overlay)
+      on failure: return unavailable(stage=catalog, identity=tableKey)
+    return {status: loaded, catalogLoaded: true, catalog,
+            contentDigests: digestsOf(bytes, overlay), identity: tableKey}
+```
+
+#### 14.4.2 可靠结构判据
+
+`catalogLoaded=true` 至少要求：
+
+- Manifest 根是非数组对象，`tables` 是非数组对象；目标表 entry 是非数组对象。
+- 目标表 entry 必须显式包含 `columns` 数组。每个 column 是非数组对象，`name` 是去除空白后非空的字符串。重复规范化列名按目录冲突归 `catalog`，不得静默去重后声称完整。
+- `tables: {table: {}}`、`columns` 缺失／非数组、列项为标量、列名缺失／空串均不是可靠目录。YAML 可解析但形状非法归 `parse`；目标表缺失、目标结构无法建立或重复冲突归 `catalog`，稳定返回，不抛出无归因异常。
+- 显式 `columns: []` 可以是合法零列目录；只有上述结构与参与编译的 overlay 均验证通过后，才可据此判「字段不存在」。合法零列不等于目录能力未知，也不等于全部行。
+- overlay 缺失可按现行规则视为可选；其他读取失败、非法 YAML 或参与编译的 `columns`／`dimensions`／`measures` 结构非法，不得静默吞掉。其失败须保留目录阶段与四元组，不能把 overlay 故障归成字段不存在。
+
+`no_catalog` 与 `unknown` 都进入同一三分归因；`measure`、`shape`、`unsafe`、`cross_source` 等保留原机器原因，不误入字段不存在。每个产品入口错误同时保留机器原因、归因码、`row_grant` 阶段、适用的目录阶段及连接／Schema／表／字段四元组。三分归因只改变诊断，不改变拒绝行为。
+
+### 14.5 R2：全局展示并集与逐 Agent 实际 Role Set
+
+以下只澄清预览与比较主体，不改变 Spec 99／100：
+
+```text
+GlobalEffectiveRowGrant(table) = OR { grant(role, table) | role 为所有允许该表的 Role }
+AgentRoleGrant(agent, table)   = OR { grant(role, table) | role ∈ ActualRoleSet(agent) }
+FinalRows(agent, table)        = AgentRoleGrant(agent, table) AND AgentConstraints(agent, table)
+```
+
+`GlobalEffectiveRowGrant` 仅用于管理展示「该表所有 Role 的全局并集」。每个 Agent 的 `FinalRows` 必须由该 Agent 实际 Role Set 计算，不能把无关 Role 的分支授给该 Agent，也不能用全局并集代替逐 Agent 结果。Agent 没有任何允许该表的 Role 时按无授权／失败关闭处理，不回退为全局并集或全部行。
+
+预览响应可同时返回全局并集与逐 Agent 结果，但字段名、展示标签和证据必须明确区分。V12 固定同一 Agent、目标表、候选与编译输入基线，比较该 Agent 的预览 `FinalRows` 与运行时实际 `forced_filters`；规范化 DNF 分支顺序、AND 谓词顺序及 IN 集合顺序后比较语义等价，不要求展示 digest 与注入 digest 字符串相等。
+
+### 14.6 替代验收判据与证据要求
+
+以下项目全部为**未执行**。文档修订、静态审阅、历史单元测试或历史 HTTP 200 均不得登记为通过。测试直接注入函数参数只能作为补充证据，不能替代要求的产品入口证据。
+
+| 用例 | 当前规范判据与必须保留的证据 |
+|---|---|
+| V08／V09 | 固定小写 Schema 合成目录，覆盖两个受限 Role、真实 all Role、Agent 仅持部分 Role、Agent 无个人行限制及无关 all Role。分别保存全局并集和逐 Agent DNF JSON；只有全局／该 Agent 实际分支确有 all 时才显示「行权限：全部行」 |
+| V10 | 对同一 Agent 比较实际 Role Set 并集与 FinalRows，证明个人行限制 AND 收窄；另一个无关 Role 不得进入该 Agent 结果。保存 Agent Role Set、constraints、全局及逐 Agent 预览 |
+| V11 | 构造实际 Role 并集与个人行限制不可满足，预览给稳定 `final_rows_unsatisfiable`；保存拒绝且零配置写、零 intent，不显示空约束或全部行 |
+| V12 | 固定 Agent／表／candidateDigest／compileInputsDigest，归档逐 Agent FinalRows 与运行时实际 `forced_filters`，按 §14.5 规范化比较；draft 未落盘时先取预览，再以同一已确认候选完成受控运行时验证。禁止用全局并集或 `__role_preview__` 代替 |
+| V13 | 经保存 API 分别提交缺失／失败确认、错误 candidateDigest、access 基线变化、源映射／Manifest／overlay／启用表／工具分类／目录能力／影响面变化；全部在 intent 前拒绝并证明零配置写、零行策略 intent。语义写入／reindex 持窗时保存 busy 或合法重试后重新复核；只读预览与独立校验可并行 |
+| V15 | 在 intent、原子写、首次 commit reject／无 ack、committed terminal、恢复文件、恢复 commit reject、恢复核验、恢复 marker 写入、rolled_back terminal 各阶段真实触发故障。直接读取运行态与强制谓词证明旧策略，不额外 commit「帮助恢复」。核验三种 API 终态；恢复失败证明数据面与后续写入拒绝、marker 不可写仍保持进程内关闭、重启依据 marker／未终结 intent 保守关闭、仅经核验解锁 |
+| V16 | Role 行策略分支证明变更后 policyVersion 与运行态同步变化；R1 模板分支另随 P1 登记，不混作 P0 证据 |
+| V20 | 经 Admin 预览／保存产品入口覆盖：缺文件→resolve；拒绝读取→read；非法 YAML／YAML 可解析但结构非法→合同规定的 parse；目标表或目录不能建立→catalog；服务端能力未证明→capability_unknown。保留机器原因、归因码、row_grant／catalog 阶段与四元组；`no_catalog` 和 `unknown` 均覆盖，measure 等其他原因不误分类 |
+| V21 | 仅在 §14.4.2 完整结构与 overlay 校验通过的目录中验证缺字段，含显式合法零列目录；与 V20 的每类故障可区分，四元组完整且失败关闭 |
+
+V19／V22 仍是 D-03 在 0.20.Z 修复后的集成回归；当前 `status=open`、`fixedIn=null`、`verifiedBy=[]`，前置未满足时登记 blocked 原因，不计 passed。它们不是 R2／R4／R5 的开工依赖。V20／V21 使用小写 Schema、受控目录与服务端能力夹具即可执行，不依赖 G5 修复，也不得以 G5 未修为由跳过。
+
+### 14.7 当前实现核对结论（待实施，不是修复记录）
+
+截至 HEAD `7382bac4`：独立预览已使用 draft 内存候选并复用运行时编译路径；锁内 access 版本复核是后续有效局部修正。但 Role PATCH 尚未消费预览确认，共享窗口尚未包含候选重建与最终预览；首次／恢复 commit 与恢复辅助步骤仍有未保护异常；恢复标记不可读／损坏仍被当作无需恢复；PATCH 回滚后仍返回成功写入；R5 能力未知没有生产入口事实源，Manifest／overlay 结构校验不足。上述事项均须代码实施、静态复审和 §14.6 正式验收后才能关闭。
+
+### 14.8 Spec／Plan 文档评审关闭记录（2026-10-27）
+
+依据用户“关闭 spec 和 plan 评审，commit 本任务”的明确指令，本次独立审阅、Kimi 交叉审阅及 Codex 静态复核的**文档评审已关闭，修订通过**。初审退回意见已落实到 §14.2–§14.6，并映射到实施计划 §5.4 C14–C19；本次无未决 P0 级文档异议。
+
+本次关闭仅针对 Spec 与 Plan 的文档合同，不关闭代码缺口、缺陷台账或验收门禁。C14–C18 仍待代码实施及实现后静态复审，C19 待正式验收；V01–V22 全部保持未执行。D-03 仍归 0.20.Z，V19／V22 的维护修复与环境前置不足时保持 blocked。本次未执行功能测试、浏览器测试、real-e2e、镜像构建、部署或真实环境连接。
+
+初审报告及本次复审关闭记录见 [Codex 独立审阅报告](../reviews/2026-10-27-codex-review-row-permission-management-p0.md)；初审“退回”保留为历史结论，不覆盖本节的文档关闭状态。
 
 — 完
