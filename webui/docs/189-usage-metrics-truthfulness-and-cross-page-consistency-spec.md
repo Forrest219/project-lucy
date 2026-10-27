@@ -349,7 +349,7 @@ function auditDefaultView(filter):
 
 | 验证项 | 命令／入口 | 结果 |
 |---|---|---|
-| 全量测试 | `npx vitest run --maxWorkers=1` | **独占运行：350 文件 / 4212 通过 / 0 失败**（含新增 `usage-classification`、`usage-baseline`、`usage-governance`、`usage-metrics-cross-page`、`eval-monitor-field`） |
+| 全量测试 | `npx vitest run --maxWorkers=1` | **350 文件 / 4213 通过 / 0 失败**（含新增 `usage-classification`、`usage-baseline`、`usage-governance`、`usage-metrics-cross-page`、`eval-monitor-field`）。在**提交内容导出**（HEAD 全部受版本控制的文件 ＋ gitignored 的 `ktx.yaml` ＋ `node_modules` 软链）上独占运行，证明结果不依赖任何未提交改动 |
 | 术语 lint | `npm run lint:terminology` | 通过（997 files scanned） |
 | IA 边界 lint | `npm run lint:ia-boundary` | 通过 |
 | 前端构建 | `npm run build` | 通过 |
