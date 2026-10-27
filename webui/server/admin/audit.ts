@@ -39,7 +39,7 @@ import {
   type EvidenceEventRow
 } from "../trace/evidence.js";
 import { readQueryArtifact } from "../audit/query-artifact-store.js";
-import { MCP_PROTOCOL_METHODS as PROTOCOL_TOOLS } from "../proxy/mcp-request-classification.js";
+import { protocolConditionSql } from "../proxy/usage-classification.js";
 import {
   appendClientObservations,
   resolveAdapterFromToken,
@@ -88,7 +88,15 @@ const PERMISSION_SNAPSHOT_COLUMNS = [
   ["capability_digest", "TEXT"],
   ["tool_classification_version", "TEXT"]
 ] as const;
-const PROTOCOL_TOOL_LIST = PROTOCOL_TOOLS.map((tool) => `'${tool}'`).join(", ");
+/**
+ * Spec 189 §4.2 — one shared protocol condition for every audit read path.
+ * The previous local `tool NOT IN (...)` list could not express the
+ * `server/*` prefix rule, so the audit default view and the audit summary
+ * disagreed with the TypeScript classifier.
+ */
+const PROTOCOL_CONDITION = protocolConditionSql().sql;
+/** The same condition, qualified for the `access_log al` alias. */
+const PROTOCOL_CONDITION_AL = protocolConditionSql("al").sql;
 
 type AccessLogFilterQuery = {
   user?: string;
@@ -257,7 +265,7 @@ function buildAccessLogFilter(q: AccessLogFilterQuery): {
   const turnScoped = Boolean((q.turnId && q.turnId.trim()) || (q.key && q.key.trim()));
   const conditions = [...baseConditions];
   // Spec 172: a turn-id search must return that visit's handshake. The unfiltered list stays quiet.
-  if (!includeProtocol && !turnScoped) conditions.push(`tool NOT IN (${PROTOCOL_TOOL_LIST})`);
+  if (!includeProtocol && !turnScoped) conditions.push(`NOT ${PROTOCOL_CONDITION}`);
 
   return { conditions, baseConditions, params, includeProtocol };
 }
@@ -1723,7 +1731,7 @@ function linkedHandshakeRows(database: Database.Database, rows: QueryRow[]): Que
   const placeholders = ids.map(() => "?").join(",");
   const extra = database.prepare(`
     SELECT * FROM access_log
-    WHERE tool IN (${PROTOCOL_TOOL_LIST})
+    WHERE ${PROTOCOL_CONDITION}
       AND (
         IFNULL(lucy_turn_id, '') IN (${placeholders})
         OR EXISTS (
@@ -2304,7 +2312,7 @@ const ACCESS_LOG_FIELD_METADATA_V2: Record<(typeof ACCESS_LOG_CSV_HEADERS_V2)[nu
   transport_sub_type: {
     label: "传输子类型",
     format: "enum {handshake, probe, unknown_method, other}",
-    description: "transport=protocol 时的细分子类。handshake=initialize/notifications/initialized/tools/list; probe=ping/resources/list/resources/templates/list/notifications/cancelled; unknown_method=server/discover 与其他未知方法; other=其他协议调用。",
+    description: "transport=protocol 时的细分子类。handshake=initialize/notifications/initialized/tools/list; probe=ping/resources/list/resources/templates/list/prompts/list/notifications/cancelled; unknown_method=server/discover 与其他未知方法; other=其他协议调用。",
     trigger: "event_type=protocol 时输出。"
   },
   transport_status: {
@@ -2779,7 +2787,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
              als.physical_table AS physical_table
       FROM access_log al
       LEFT JOIN access_log_sources als ON als.access_log_id = al.id
-      WHERE al.tool NOT IN (${PROTOCOL_TOOL_LIST}) AND al.tables IS NOT NULL
+      WHERE NOT ${PROTOCOL_CONDITION_AL} AND al.tables IS NOT NULL
     `).all() as Array<{
       tables: string | null;
       outcome: string;
@@ -2931,10 +2939,10 @@ export function registerAuditRoutes(app: FastifyInstance) {
     );
     const summaryRow = database.prepare(`
       SELECT
-        SUM(CASE WHEN tool IN (${PROTOCOL_TOOL_LIST}) THEN 1 ELSE 0 END) AS protocol_calls,
-        SUM(CASE WHEN tool NOT IN (${PROTOCOL_TOOL_LIST}) THEN 1 ELSE 0 END) AS business_calls,
+        SUM(CASE WHEN ${PROTOCOL_CONDITION} THEN 1 ELSE 0 END) AS protocol_calls,
+        SUM(CASE WHEN NOT ${PROTOCOL_CONDITION} THEN 1 ELSE 0 END) AS business_calls,
         SUM(CASE WHEN outcome = 'denied' THEN 1 ELSE 0 END) AS denied_calls,
-        SUM(CASE WHEN tool NOT IN (${PROTOCOL_TOOL_LIST}) AND tables IS NOT NULL THEN 1 ELSE 0 END) AS data_bearing_calls
+        SUM(CASE WHEN NOT ${PROTOCOL_CONDITION} AND tables IS NOT NULL THEN 1 ELSE 0 END) AS data_bearing_calls
       FROM access_log ${baseWhere}
     `).get(params) as { protocol_calls: number | null; business_calls: number | null; denied_calls: number | null; data_bearing_calls: number | null };
 

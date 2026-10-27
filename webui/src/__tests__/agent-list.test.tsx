@@ -41,6 +41,8 @@ function makeAgent(overrides: Partial<Agent> = {}): Agent {
     tokens: [],
     stats: {
       callsLast7d: 0,
+      usageCallsLast7d: 0,
+      evalProbeCallsLast7d: 0,
       deniedLast7d: 0,
       activeTokensLast7d: 0,
       configuredTokens: 0,
@@ -171,7 +173,7 @@ describe("AgentList", () => {
   });
 
   it("renders 未访问 for agents that have never been seen", async () => {
-    stubAgentsEndpoints([makeAgent({ id: "no1", name: "冷账号", stats: { callsLast7d: 0, deniedLast7d: 0, topTables: [] } })]);
+    stubAgentsEndpoints([makeAgent({ id: "no1", name: "冷账号", stats: { callsLast7d: 0, usageCallsLast7d: 0, evalProbeCallsLast7d: 0, deniedLast7d: 0, topTables: [] } })]);
 
     renderAgentList();
     expect(await screen.findByRole("heading", { name: "Agent" })).toBeInTheDocument();
@@ -185,7 +187,7 @@ describe("AgentList", () => {
 
   it("renders relative last seen and keeps full timestamp in title attribute", async () => {
     const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-    stubAgentsEndpoints([makeAgent({ id: "zhangsan", name: "张三", stats: { callsLast7d: 4, deniedLast7d: 0, lastSeen: tenMinAgo, topTables: [] } })]);
+    stubAgentsEndpoints([makeAgent({ id: "zhangsan", name: "张三", stats: { callsLast7d: 4, usageCallsLast7d: 4, evalProbeCallsLast7d: 0, deniedLast7d: 0, lastSeen: tenMinAgo, topTables: [] } })]);
 
     renderAgentList();
     await waitFor(() => {
@@ -206,6 +208,8 @@ describe("AgentList", () => {
           callsLast7d: null,
           businessCallsLast7d: null,
           protocolCallsLast7d: null,
+          usageCallsLast7d: null,
+          evalProbeCallsLast7d: null,
           deniedLast7d: null,
           activeTokensLast7d: null,
           usedCredentialsLast7d: null,
@@ -513,6 +517,8 @@ describe("AgentList", () => {
             callsLast7d: 10,
             businessCallsLast7d: 7,
             protocolCallsLast7d: 3,
+            usageCallsLast7d: 7,
+            evalProbeCallsLast7d: 0,
             deniedLast7d: 0,
             activeTokensLast7d: 1,
             usedCredentialsLast7d: 1,
@@ -593,6 +599,8 @@ describe("AgentList", () => {
         role: "demo_readonly",
         stats: {
           callsLast7d: 10,
+          usageCallsLast7d: 10,
+          evalProbeCallsLast7d: 0,
           deniedLast7d: 0,
           activeTokensLast7d: 1,
           configuredTokens: 1,
@@ -637,13 +645,13 @@ describe("AgentList", () => {
         id: "active_agent",
         name: "活跃 Agent",
         role: "demo_readonly",
-        stats: { callsLast7d: 5, deniedLast7d: 0, activeTokensLast7d: 1, configuredTokens: 1, topTables: [] }
+        stats: { callsLast7d: 5, usageCallsLast7d: 5, evalProbeCallsLast7d: 0, deniedLast7d: 0, activeTokensLast7d: 1, configuredTokens: 1, topTables: [] }
       }),
       makeAgent({
         id: "idle_agent",
         name: "空闲 Agent",
         role: "ops_readonly",
-        stats: { callsLast7d: 0, deniedLast7d: 0, activeTokensLast7d: 0, configuredTokens: 1, topTables: [] }
+        stats: { callsLast7d: 0, usageCallsLast7d: 0, evalProbeCallsLast7d: 0, deniedLast7d: 0, activeTokensLast7d: 0, configuredTokens: 1, topTables: [] }
       })
     ]);
 
@@ -731,6 +739,8 @@ describe("AgentList", () => {
         tokens: [{ hash: "sha256:aa", label: "tok", created: "2026-06-01" }],
         stats: {
           callsLast7d: 10,
+          usageCallsLast7d: 10,
+          evalProbeCallsLast7d: 0,
           deniedLast7d: 0,
           activeTokensLast7d: 1,
           configuredTokens: 1,
@@ -753,6 +763,8 @@ describe("AgentList", () => {
                 configuredTokenCount: 1,
                 activeTokenCountLast7d: 1,
                 callsLast7d: 10,
+                usageCallsLast7d: 10,
+                evalProbeCallsLast7d: 0,
                 deniedLast7d: 0
               }
             }
@@ -853,6 +865,8 @@ describe("AgentList", () => {
         name: "Demo Agent",
         stats: {
           callsLast7d: 12,
+          usageCallsLast7d: 12,
+          evalProbeCallsLast7d: 0,
           deniedLast7d: 3,
           activeTokensLast7d: 1,
           configuredTokens: 1,
@@ -909,7 +923,7 @@ describe("agentList helpers", () => {
         { hash: "sha256:aa", label: "a", created: "2026-06-01", last_used: stale },
         { hash: "sha256:bb", label: "b", created: "2026-06-01", last_used: recent }
       ],
-      stats: { callsLast7d: 0, deniedLast7d: 0, activeTokensLast7d: 5, configuredTokens: 2, topTables: [] }
+      stats: { callsLast7d: 0, usageCallsLast7d: 0, evalProbeCallsLast7d: 0, deniedLast7d: 0, activeTokensLast7d: 5, configuredTokens: 2, topTables: [] }
     });
     expect(activeTokenCount(backendAgent, NOW)).toBe(5);
 
@@ -919,14 +933,14 @@ describe("agentList helpers", () => {
         { hash: "sha256:aa", label: "a", created: "2026-06-01", last_used: recent },
         { hash: "sha256:bb", label: "b", created: "2026-06-01", last_used: stale }
       ],
-      stats: { callsLast7d: 0, deniedLast7d: 0, configuredTokens: 2, topTables: [] }
+      stats: { callsLast7d: 0, usageCallsLast7d: 0, evalProbeCallsLast7d: 0, deniedLast7d: 0, configuredTokens: 2, topTables: [] }
     });
     expect(activeTokenCount(fallbackAgent, NOW)).toBe(1);
 
     // 完全无最近访问
     const untouched = makeAgent({
       tokens: [{ hash: "sha256:aa", label: "a", created: "2026-06-01" }],
-      stats: { callsLast7d: 0, deniedLast7d: 0, configuredTokens: 1, topTables: [] }
+      stats: { callsLast7d: 0, usageCallsLast7d: 0, evalProbeCallsLast7d: 0, deniedLast7d: 0, configuredTokens: 1, topTables: [] }
     });
     expect(activeTokenCount(untouched, NOW)).toBe(0);
   });
@@ -939,13 +953,13 @@ describe("agentList helpers", () => {
         tokens: [
           { hash: "sha256:aa", label: "a", created: "2026-06-01", last_used: "2026-08-01T00:00:00.000Z" }
         ],
-        stats: { callsLast7d: 3, deniedLast7d: 1, activeTokensLast7d: 1, configuredTokens: 1, topTables: [] }
+        stats: { callsLast7d: 3, businessCallsLast7d: 3, protocolCallsLast7d: 0, usageCallsLast7d: 3, evalProbeCallsLast7d: 0, deniedLast7d: 1, activeTokensLast7d: 1, configuredTokens: 1, topTables: [] }
       }),
       makeAgent({
         id: "a2",
         enabled: false,
         tokens: [],
-        stats: { callsLast7d: 5, deniedLast7d: 0, activeTokensLast7d: 0, configuredTokens: 0, topTables: [] }
+        stats: { callsLast7d: 5, businessCallsLast7d: 5, protocolCallsLast7d: 0, usageCallsLast7d: 5, evalProbeCallsLast7d: 0, deniedLast7d: 0, activeTokensLast7d: 0, configuredTokens: 0, topTables: [] }
       })
     ];
     const now = new Date("2026-08-02T00:00:00.000Z");
@@ -963,6 +977,9 @@ describe("agentList helpers", () => {
       callsLast7d: 8,
       businessCallsLast7d: 8,
       protocolCallsLast7d: 0,
+      usageCallsLast7d: 8,
+      evalProbeCallsLast7d: 0,
+      usageActiveAgentCountLast7d: 2,
       deniedLast7d: 1,
       metricsState: "ok"
     });

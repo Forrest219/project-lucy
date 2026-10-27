@@ -4,6 +4,7 @@ import path from "node:path";
 import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildServer } from "../index";
+import { isMcpProtocolMethod } from "../proxy/usage-classification.js";
 
 const auditRows = vi.hoisted(() => [] as Array<{
   user_id: string;
@@ -66,23 +67,27 @@ vi.mock("../admin/audit.js", () => ({
         const CUTOFF = Date.now() - 7 * 24 * 60 * 60 * 1000;
         return {
           all: vi.fn((...args: unknown[]) => {
-            const userIds = args.slice(10) as string[];
-            const protocol = new Set(["initialize", "notifications/initialized", "tools/list"]);
+            // Spec 189 — the stats query binds seven window pairs (14 params)
+            // before the user id list. The protocol set comes from the shared
+            // classification module, never from a local copy.
+            const userIds = args.slice(14) as string[];
             return userIds.flatMap((userId) => {
               const allForUser = auditRows.filter((row) => row.user_id === userId);
               if (allForUser.length === 0) return [];
               const matched = allForUser.filter((row) => new Date(row.ts).getTime() >= CUTOFF);
-              const business = matched.filter((row) => !protocol.has(row.tool));
+              const business = matched.filter((row) => !isMcpProtocolMethod(row.tool));
               return [{
                 user_id: userId,
                 calls7: matched.length,
                 business_calls7: business.length,
                 protocol_calls7: matched.length - business.length,
+                usage_calls7: business.length,
+                eval_probe_calls7: 0,
                 denied7: business.filter((row) => row.outcome === "denied").length,
                 active_tokens: new Set(matched.map((row) => row.token_hash_prefix).filter(Boolean)).size,
                 last_seen: allForUser.map((row) => row.ts).sort().at(-1) ?? null,
                 last_business_seen: allForUser
-                  .filter((row) => !protocol.has(row.tool))
+                  .filter((row) => !isMcpProtocolMethod(row.tool))
                   .map((row) => row.ts)
                   .sort()
                   .at(-1) ?? null

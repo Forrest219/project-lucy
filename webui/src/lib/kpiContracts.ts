@@ -72,7 +72,9 @@ export const KPI_REGISTRY: MetricContract[] = [
     id: "active-agent-count",
     kind: "list_kpi",
     label: "活跃 Agent",
-    help: "当前时间窗内访问日志出现过的去重 Agent 数。",
+    // Spec 189: default usage scope. Protocol events and default-view-excluded
+    // eval probes never make an Agent "active".
+    help: "当前时间窗内至少有 1 次默认用量业务调用的去重 Agent 数。排除协议事件与默认视图排除的评测探针（Spec 189）。",
     pages: ["/admin/agents", "/admin/governance/overview"],
     windowed: true
   },
@@ -87,17 +89,28 @@ export const KPI_REGISTRY: MetricContract[] = [
   {
     id: "active-token-count",
     kind: "list_kpi",
-    label: "活跃 Token",
+    label: "近 N 业务活跃 Token",
     // D4: prefix→token mapping may not be unique; partial if ambiguous
-    help: "当前时间窗内访问日志出现过的去重 token_hash_prefix 数。若 prefix 映射不唯一则显示 —（Spec 128 D4）。",
-    pages: ["/admin/agents", "/admin/governance/overview"],
+    help: "当前时间窗内至少有 1 次默认用量业务调用的去重 token_hash_prefix 数。排除协议事件与默认视图排除的评测探针（Spec 189）。若 prefix 映射不唯一则显示 —（Spec 128 D4）。",
+    pages: ["/admin/governance/overview", "/admin/tokens"],
+    windowed: true
+  },
+  {
+    id: "used-credential-count",
+    kind: "list_kpi",
+    label: "近 N 使用过的凭据",
+    // D4: prefix→token mapping may not be unique; partial if ambiguous
+    help: "当前时间窗内访问日志（全量访问口径，含协议事件）出现过的去重凭据 hash prefix 数。可能包含已删除或已吊销凭据；prefix 映射不唯一时显示 —（Spec 128 D4）。与「近 N 业务活跃 Token」口径不同，不可混称。",
+    pages: ["/admin/agents"],
     windowed: true
   },
   {
     id: "calls-7d",
     kind: "list_kpi",
-    label: "近 7 天调用量",
-    help: "近 7 天经 MCP Proxy 记录的调用次数合计。",
+    label: "近 7 天业务调用量",
+    // Spec 189: default usage scope — protocol events and default-view-excluded
+    // eval probes never count as business calls.
+    help: "近 7 天默认用量业务调用次数合计。排除全部协议事件与默认视图排除的评测探针；含真实业务工具或受权限保护内容读取的成功、错误与拒绝尝试（Spec 189）。",
     pages: ["/admin/agents"],
     windowed: true
   },
@@ -120,19 +133,11 @@ export const KPI_REGISTRY: MetricContract[] = [
     windowed: true
   },
   {
-    id: "calls",
-    kind: "list_kpi",
-    label: "调用量",
-    help: "当前时间窗内经 MCP Proxy 记录的所有调用次数（含成功、拒绝、错误）。",
-    pages: ["/admin/governance/overview"],
-    windowed: true
-  },
-  {
     id: "acl-denied",
     kind: "list_kpi",
     // Task 7: query audit DB directly; explicitly exclude auth_error outcomes.
     label: "ACL 拒绝次数",
-    help: "当前时间窗内访问日志中 outcome='denied' 的记录数，直接查询审计库，不含认证失败（auth_error）。",
+    help: "当前时间窗内默认用量业务调用中 outcome='denied' 的记录数，直接查询审计库，不含认证失败（auth_error）；排除协议事件与默认视图排除的评测探针（Spec 189）。该指标当前只作为 API 契约暴露，/admin/usage 不渲染对应卡片。",
     pages: ["/admin/governance/overview"],
     windowed: true
   },
@@ -141,7 +146,7 @@ export const KPI_REGISTRY: MetricContract[] = [
     kind: "list_kpi",
     // Task 7: P95 over non-null duration_ms rows in same call population.
     label: "多数请求耗时",
-    help: "当前时间窗内 95% 的请求完成耗时上限（P95），基于所有有 duration_ms 记录的调用行计算。",
+    help: "当前时间窗内 95% 的默认用量业务调用完成耗时上限（P95），基于有 duration_ms 记录的默认用量调用行计算，不含协议事件（Spec 189）。该指标当前只作为 API 契约暴露，/admin/usage 不渲染对应卡片。",
     pages: ["/admin/governance/overview"],
     windowed: true
   },

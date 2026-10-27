@@ -24,6 +24,14 @@ import { resolveRoleIds } from "../proxy/acl.js";
 import { resolveProjectRoot } from "../project.js";
 import { readAccessYaml } from "./access-config.js";
 import { getAuditDb } from "./audit.js";
+import { defaultUsageConditionSql } from "../proxy/usage-classification.js";
+
+/**
+ * Spec 189 §5.3 — the release readiness usage evidence (business calls,
+ * denials and the derived rate) uses the **Default Usage** layer. The raw
+ * attachments and log references stay complete.
+ */
+const DEFAULT_USAGE_CONDITION = defaultUsageConditionSql().sql;
 import {
   collectRiskReviewCandidates,
   summarizeRiskReview,
@@ -144,7 +152,8 @@ const KNOWN_LIMITATIONS: readonly string[] = [
   "No full Visual Debugger; only the Admin Audit Trace read model is available.",
   "No FDE Copilot mainline; the 202608 iteration focuses on governance and observability, not FDE automation.",
   "No remediation lifecycle for risk review candidates; candidates are evidence-only and never auto-applied.",
-  "One release readiness package shape; the package contains only current Agent / Role / Token / ACL / Audit / Eval facts."
+  "One release readiness package shape; the package contains only current Agent / Role / Token / ACL / Audit / Eval facts.",
+  "Usage evidence (calls / denials / rates) is computed from Default Usage Calls: protocol events and default-view-excluded eval probes are excluded. Raw attachments and log references stay complete."
 ];
 
 // ─── Inventory helpers ───────────────────────────────────────────────────────
@@ -219,6 +228,7 @@ async function readAgentStatsBulk(
                 MAX(ts) AS last_seen
          FROM access_log
          WHERE user_id IN (${placeholders}) AND ts >= ?
+           AND ${DEFAULT_USAGE_CONDITION}
          GROUP BY user_id`
       )
       .all(...userIds, isoCutoff) as Array<{ user_id: string; calls: number; denied: number; last_seen: string | null }>;
@@ -443,7 +453,7 @@ async function buildDenialSummary(
       .prepare(
         `SELECT COUNT(*) AS calls,
                 SUM(CASE WHEN outcome = 'denied' THEN 1 ELSE 0 END) AS denied
-         FROM access_log WHERE ts >= ?`
+         FROM access_log WHERE ts >= ? AND ${DEFAULT_USAGE_CONDITION}`
       )
       .get(isoCutoff) as { calls: number | null; denied: number | null };
     const totalCalls = totals?.calls ?? 0;
@@ -455,6 +465,7 @@ async function buildDenialSummary(
         `SELECT COALESCE(decision_reason, 'unspecified') AS reason, COUNT(*) AS cnt
          FROM access_log
          WHERE outcome = 'denied' AND ts >= ?
+           AND ${DEFAULT_USAGE_CONDITION}
          GROUP BY reason ORDER BY cnt DESC LIMIT 8`
       )
       .all(isoCutoff) as Array<{ reason: string; cnt: number }>;
@@ -464,6 +475,7 @@ async function buildDenialSummary(
         `SELECT tool, COUNT(*) AS cnt
          FROM access_log
          WHERE outcome = 'denied' AND ts >= ?
+           AND ${DEFAULT_USAGE_CONDITION}
          GROUP BY tool ORDER BY cnt DESC LIMIT 8`
       )
       .all(isoCutoff) as Array<{ tool: string; cnt: number }>;
@@ -702,6 +714,7 @@ export function renderReleaseReadinessMarkdown(pkg: ReleaseReadinessPackage): st
   lines.push(`- Generated at: \`${pkg.generatedAt}\``);
   lines.push(`- Access config hash: \`${pkg.accessConfigHash}\``);
   lines.push(`- Fact sources used: ${pkg.factSourcesUsed.map((source) => `\`${source}\``).join(", ")}`);
+  lines.push("- Usage evidence scope: Default Usage Calls (protocol events and default-view-excluded eval probes are excluded; raw attachments and log references stay complete).");
   lines.push("");
   lines.push("> This is the single release readiness evidence package. It uses one audience-neutral package shape and includes only current Agent / Role / Token / ACL / Audit / Eval facts. Token plaintext, raw result rows, raw SQL AST, full original question, DB credentials, and customer row samples are excluded.");
   lines.push("");

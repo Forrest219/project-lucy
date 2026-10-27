@@ -22,6 +22,8 @@ const MOCK_TOKENS_RESPONSE: TokensResponse = {
         roles: ["bi_analyst"]
       },
       last_used: "2026-08-28T10:00:00.000Z",
+      // Spec 189 — 最近业务使用 is a separate source from 最近 MCP 访问.
+      last_business_use: "2026-08-28T10:00:00.000Z",
       last_tool: "sl_query",
       last_outcome: "allow",
       last_ip: "192.168.1.100",
@@ -44,6 +46,7 @@ const MOCK_TOKENS_RESPONSE: TokensResponse = {
         roles: ["data_viewer"]
       },
       last_used: "2026-07-01T08:00:00.000Z",
+      last_business_use: "2026-07-01T08:00:00.000Z",
       status: "expired"
     }
   ],
@@ -100,7 +103,7 @@ describe("Tokens (/admin/tokens)", () => {
     // Verify KPI metrics
     const kpiSection = screen.getByTestId("token-kpis");
     expect(kpiSection).toHaveTextContent("可用 Token");
-    expect(kpiSection).toHaveTextContent("近 7 天活跃");
+    expect(kpiSection).toHaveTextContent("近 7 天业务活跃 Token");
     expect(kpiSection).toHaveTextContent("已过期 / 停用");
 
     // Verify tokens table rows

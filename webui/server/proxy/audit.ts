@@ -15,7 +15,14 @@ import {
 } from "./audit-classification.js";
 import { DERIVATION_VERSION } from "./audit-derivation.js";
 import { resolveLedgerSeq } from "./audit-reconcile.js";
-import { MCP_PROTOCOL_METHODS as PROTOCOL_TOOLS } from "./mcp-request-classification.js";
+import {
+  MCP_HANDSHAKE_METHODS,
+  MCP_PROBE_METHODS,
+  MCP_SERVER_METHODS,
+  classifyUsage,
+  isMcpProtocolMethod,
+  protocolMethodSqlList
+} from "./usage-classification.js";
 import { resolveClientIdentity } from "./request-client-meta.js";
 import {
   CALL_MONITOR_P95_MIN_SAMPLES,
@@ -1158,21 +1165,24 @@ export async function readR1AuditObservability(options: { hours?: number; slowMs
     response_row_count: number | null;
   }>;
 
-  const protocolTools = new Set<string>(PROTOCOL_TOOLS);
-  const businessRows = rows.filter((row) => !protocolTools.has(row.tool));
+  const businessRows = rows.filter((row) => !isMcpProtocolMethod(row.tool));
   // Spec 162 §7.6 / SC-16 — the default view drops protocol traffic and probe
   // calls that are BOTH name-matched and explicitly eval-marked. Raw rows stay
   // in access_log; only this default view is split.
-  const defaultRows = businessRows.filter((row) => !defaultUsageExcluded({
-    tool: row.tool,
-    evalMark: row.eval_mark === 1,
-    args: parseJsonObject(row.args_summary)
-  }));
-  const evalProbeRows = businessRows.filter((row) => defaultUsageExcluded({
-    tool: row.tool,
-    evalMark: row.eval_mark === 1,
-    args: parseJsonObject(row.args_summary)
-  }) && !protocolTools.has(row.tool));
+  //
+  // Spec 189 §4 — classify first, then split. The previous expression
+  // (`defaultUsageExcluded(...) && !protocolTools.has(row.tool)`) re-derived
+  // the probe set by subtracting a 3-method protocol list from an 8-method
+  // one, so every protocol event outside that 3-method list was counted as
+  // an eval probe.
+  const usageClass = (row: { tool: string; eval_mark: number | null; args_summary: string | null }) =>
+    classifyUsage({
+      tool: row.tool,
+      evalMark: row.eval_mark === 1,
+      args: parseJsonObject(row.args_summary)
+    });
+  const defaultRows = businessRows.filter((row) => usageClass(row) === "default_usage");
+  const evalProbeRows = businessRows.filter((row) => usageClass(row) === "eval_probe");
   const okCalls = defaultRows.filter((row) => row.outcome === "ok").length;
   const errorCalls = defaultRows.filter((row) => row.outcome === "error").length;
   const deniedCalls = defaultRows.filter((row) => row.outcome === "denied").length;
@@ -1409,7 +1419,8 @@ export async function readCallMonitorSnapshot(options: {
   const database = await getDb();
 
   const rows = database.prepare(`
-    SELECT id, ts, user_id, tool, outcome, duration_ms, request_id, trace_id, decision_reason
+    SELECT id, ts, user_id, tool, outcome, duration_ms, request_id, trace_id, decision_reason,
+           eval_mark, args_summary
     FROM access_log
     WHERE ts >= ? AND ts <= ?
     ORDER BY ts DESC, id DESC
@@ -1423,11 +1434,20 @@ export async function readCallMonitorSnapshot(options: {
     request_id: string;
     trace_id: string | null;
     decision_reason: string | null;
+    eval_mark: number | null;
+    args_summary: string | null;
   }>;
 
-  const protocolTools = new Set<string>(PROTOCOL_TOOLS);
+  // Spec 189 §5.3 — every KPI, bucket, tool ranking, recent failure and
+  // recent denial on this page is computed from the SAME Default Usage set.
+  // Protocol events and default-view-excluded eval probes are excluded.
   const businessRows = rows.filter((row) =>
-    !protocolTools.has(row.tool) && callMonitorBucketIndex(row.ts, plan) >= 0
+    classifyUsage({
+      tool: row.tool,
+      evalMark: row.eval_mark === 1,
+      args: parseJsonObject(row.args_summary)
+    }) === "default_usage"
+    && callMonitorBucketIndex(row.ts, plan) >= 0
   );
 
   const bucketTotals = plan.buckets.map(() => ({
@@ -1823,16 +1843,19 @@ export const INFERRED_TURN_REBUILD_LOOKBACK_HOURS = 24 * 30;
 export const PRIOR_CALL_BIND_MS = 120_000;
 export const SESSION_VISIT_SUMMARY_PREFIX = "会话建立：";
 
-/** Spec 173 / WO-202610-24: these calls stay in the call log and do not form an inquiry by themselves. */
-const PROBE_TOOLS = new Set([
-  "server/discover",
-  "ping",
-  "resources/list",
-  "resources/templates/list",
-  "notifications/cancelled"
-]);
-
-const HANDSHAKE_TOOLS = ["initialize", "notifications/initialized", "tools/list"] as const;
+/**
+ * Spec 173 / WO-202610-24 + Spec 189: these calls stay in the call log and do
+ * not form an inquiry by themselves. The lists are **derived** from the shared
+ * usage classification module — a local copy would be a second, drift-prone
+ * protocol list.
+ *
+ * The inquiry-probe set is the transport probe set plus the named service
+ * protocol methods, so `server/discover` keeps its Spec 172/173 meaning and
+ * `prompts/list` joins it (listing prompts must not form an inquiry).
+ */
+const PROBE_TOOLS = new Set<string>([...MCP_PROBE_METHODS, ...MCP_SERVER_METHODS]);
+const HANDSHAKE_TOOLS = MCP_HANDSHAKE_METHODS;
+const SERVER_METHODS = new Set<string>(MCP_SERVER_METHODS);
 
 export function sessionVisitSummary(client: string | null | undefined): string {
   const name = client?.trim() || "未知客户端";
@@ -1947,7 +1970,7 @@ export async function rebuildInferredTurns(
   `).all(userId, cutoff) as ClusterLogRow[];
 
   const business = loaded.filter((row) =>
-    !PROTOCOL_TOOLS.includes(row.tool as (typeof PROTOCOL_TOOLS)[number])
+    !isMcpProtocolMethod(row.tool)
     && !row.lucy_turn_id?.trim()
   );
   const handshake = firstHandshakeBySession(loaded);
@@ -2111,7 +2134,7 @@ export async function bindPriorSessionCalls(input: {
   if (!input.sessionId) return 0;
   const database = await getDb();
   const tokenHash = input.tokenHashPrefix ?? "";
-  const protocolList = PROTOCOL_TOOLS.map((tool) => `'${tool}'`).join(", ");
+  const protocolList = protocolMethodSqlList();
 
   // v0.3: 不再按 PRIOR_CALL_BIND_MS 窗口回填非协议调用；保留 handshake attachment 但 candidate/low。
   const handshakeRows = database.prepare(`

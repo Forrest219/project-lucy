@@ -243,8 +243,25 @@ function AgentDetailBody({ target }: { target: AgentTarget }) {
       <DetailRow label="角色" value={agentRoleIds(match).join(", ") || (match.roleResolutionError ? "角色声明冲突" : "旧 ACL")} notranslate />
       <DetailRow label="状态" value={match.enabled ? "启用" : "禁用"} />
       <DetailRow label="Token 数" value={`${match.tokens.length}`} />
-      <DetailRow label="近 7 天调用" value={`${match.stats?.callsLast7d ?? 0}`} />
-      <DetailRow label="近 7 天拒绝" value={`${match.stats?.deniedLast7d ?? 0}`} />
+      {/* Spec 189 §6 — the drawer reads the Default Usage layer; the raw
+          `callsLast7d` (which includes protocol traffic) must not be shown
+          as business call volume. */}
+      <DetailRow
+        label="近 7 天业务调用量"
+        value={
+          match.stats?.usageCallsLast7d === undefined || match.stats?.usageCallsLast7d === null
+            ? "—"
+            : `${match.stats.usageCallsLast7d}`
+        }
+      />
+      <DetailRow
+        label="近 7 天拒绝"
+        value={
+          match.stats?.deniedLast7d === undefined || match.stats?.deniedLast7d === null
+            ? "—"
+            : `${match.stats.deniedLast7d}`
+        }
+      />
       {match.createdAt ? (
         <DetailRow label="创建日期" value={new Date(match.createdAt).toLocaleString("zh-CN")} />
       ) : null}

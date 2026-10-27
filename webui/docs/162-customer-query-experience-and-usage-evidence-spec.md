@@ -14,6 +14,8 @@
 | 关联 Spec | 08 问询追踪、09 R1 工具契约、125 生成 SQL 热库、138 轮次归因、137 审计证据 |
 | 修订 | 不取代 Spec 138 的归因枚举。不改 Eval 跑批的 tool budget（`docs/design/design-eval-tool-budget.md`）。不改 KTX 源码。v0.2：`wiki_not_found` 与 `explicit_table_required:<empty>` 归用法与语义；`wiki_forbidden` 与带表名的 `explicit_table_required` 归权限拒绝。复述只写进 initialize 指导，代理不因缺少确认而拒绝查数。生产环境的 turn 绑定率依赖客户端发版，不是 WO-12 的退出条件。v0.3：SC-16 补上探测连接的评测标记；新增 SC-25、SC-26。慢标记的新定义不覆盖其它工具，也不替换 Spec 143 |
 
+> **Spec 189 修订（2026-10-27）**：本文 §7.6「协议与评测探针退出默认用量 KPI」的规则**保留为基线**，并升级为唯一事实源（T2 建立 `webui/server/proxy/usage-classification.ts`）。两处边界扩展：① 协议集合扩至**完整集合**（新增 `prompts/list` 与任何 `server/*` 方法）；② **准入集合（11 个 JSON-RPC 方法）与协议集合不相等**，两者边界以 `webui/docs/189-usage-metrics-truthfulness-and-cross-page-consistency-spec.md` §4.2 为准。评测探针判定规则（显式 `eval_mark` 为真 **且** 参数／连接名命中探针标记）不变，且只退出默认用量 KPI，仍保留在原始审计、导出、问询关联与真实表访问中。
+
 ## 1. 已拍板
 
 1. 没有 `lucy_begin_question` 时，数据查询仍然成功。KSC 的 60 次 begin 与 60 条原话一一对应，兼容是刚需。

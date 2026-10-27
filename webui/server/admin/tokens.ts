@@ -8,7 +8,7 @@ import { withDisplayWriteBarrier } from "../display-generation.js";
 import { resolveProjectRoot } from "../project.js";
 import { getAuditDb } from "./audit.js";
 import type { YamlAccessConfig } from "./agents.js";
-import { getLastUsedMap } from "./agents.js";
+import { getLastBusinessUseMap, getLastUsedMap } from "./agents.js";
 import {
   evaluateAccessGovernanceGate,
   evaluateGovernanceOverride,
@@ -145,7 +145,10 @@ export function registerTokenRoutes(app: FastifyInstance) {
 
     const users = config.users || [];
     const userIds = users.map((u) => u.id);
-    const lastUsedMap = await getLastUsedMap(userIds);
+    const [lastUsedMap, lastBusinessUseMap] = await Promise.all([
+      getLastUsedMap(userIds),
+      getLastBusinessUseMap(userIds)
+    ]);
 
     const now = Date.now();
     const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
@@ -163,7 +166,14 @@ export function registerTokenRoutes(app: FastifyInstance) {
         enabled: boolean;
         roles: string[];
       };
+      /** 最近 MCP 访问 — any access_log row for this token. */
       last_used?: string;
+      /**
+       * Spec 189 §6 — 最近业务使用: the latest Default Usage Call of this
+       * token. Protocol traffic and default-view-excluded eval probes do not
+       * update it.
+       */
+      last_business_use?: string;
       last_tool?: string;
       last_outcome?: string;
       last_ip?: string | null;
@@ -179,6 +189,7 @@ export function registerTokenRoutes(app: FastifyInstance) {
 
     for (const user of users) {
       const userUsage = lastUsedMap.get(user.id);
+      const userBusinessUse = lastBusinessUseMap.get(user.id);
       const isAgentEnabled = user.enabled !== false;
       const resolvedRoles = resolveRoleIds(user);
       const roles = resolvedRoles.ok ? resolvedRoles.roleIds : [];
@@ -208,6 +219,7 @@ export function registerTokenRoutes(app: FastifyInstance) {
             roles
           },
           last_used: usage?.lastUsed,
+          last_business_use: userUsage ? userBusinessUse?.get(hashPrefix) : undefined,
           last_tool: usage?.lastTool,
           last_outcome: usage?.lastOutcome,
           last_ip: usage?.lastIp ?? null,
@@ -223,9 +235,13 @@ export function registerTokenRoutes(app: FastifyInstance) {
 
     const totalTokens = allTokens.length;
     const availableTokens = allTokens.filter((t) => t.status === "available").length;
+    // Spec 189 §6 — "近 7 天业务活跃 Token" is judged by the **business use**
+    // time. A token whose only recent traffic was a handshake or a
+    // default-view-excluded eval probe is not business-active, even though
+    // `last_used` (最近 MCP 访问) is recent.
     const activeLast7dTokens = allTokens.filter((t) => {
-      if (!t.last_used) return false;
-      const ts = Date.parse(t.last_used);
+      if (!t.last_business_use) return false;
+      const ts = Date.parse(t.last_business_use);
       return !Number.isNaN(ts) && now - ts <= sevenDaysMs;
     }).length;
     const expiringSoonTokens = allTokens.filter((t) => {

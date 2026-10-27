@@ -327,12 +327,16 @@ describe("registerAuditReconciliationRoutes", () => {
   });
 
   it("D-20 usage 按账本上界 S 选行，不按投影 id 选行", async () => {
+    // The row timestamp must sit inside the reconciliation 7-day window, which
+    // is derived from the current clock. A hard-coded date silently dropped
+    // these rows out of the window once it aged past 7 days.
+    const insideWindow = new Date(Date.now() - 60_000).toISOString();
     const insert = auditDb.prepare(
       `INSERT INTO access_log (id, ts, user_id, tool, request_id, outcome, ledger_seq)
-       VALUES (?, '2026-10-19T12:00:00Z', 'u1', 'lucy_query', ?, 'ok', ?)`
+       VALUES (?, ?, 'u1', 'lucy_query', ?, 'ok', ?)`
     );
-    insert.run(1, "req-post-s", 99);
-    insert.run(2, "req-pre-s", 1);
+    insert.run(1, insideWindow, "req-post-s", 99);
+    insert.run(2, insideWindow, "req-pre-s", 1);
 
     const app = makeApp();
     const response = await app.inject({ method: "GET", url: "/api/admin/audit/reconciliation/usage" });
@@ -346,8 +350,8 @@ describe("registerAuditReconciliationRoutes", () => {
   it("D-26 usage 经生产端口返回六项 S05 检查，缺证据项保持 unknown", async () => {
     auditDb.prepare(
       `INSERT INTO access_log (id, ts, user_id, tool, request_id, outcome, ledger_seq)
-       VALUES (1, '2026-10-19T12:00:00Z', 'u1', 'lucy_query', 'req-1', 'ok', 2)`
-    ).run();
+       VALUES (1, ?, 'u1', 'lucy_query', 'req-1', 'ok', 2)`
+    ).run(new Date(Date.now() - 60_000).toISOString());
     configureReconciliationPorts({ auditCoverage: createProductionAuditCoveragePort() });
     try {
       const app = makeApp();

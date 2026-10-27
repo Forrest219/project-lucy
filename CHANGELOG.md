@@ -48,6 +48,29 @@ Product line cut from `0.17.0` to `2.0.0` on 2026-10-19. Customer-facing label i
 - **文档口径**：`ktx.yaml` 新连接或凭据的生效说明从「可能需要重启 KTX MCP daemon」改为
   「在 MCP 调试台点『重载执行层』」；`McpRuntimeStatusPanel` 的待确认提示不再指向人工重启。
 
+### Changed
+- **用量统计口径统一（Spec 189）**：Agent／Token 的「业务活跃」与「业务调用量」不再把协议流量
+  和评测探针算作业务使用。协议事件集合扩展为**完整集合**——握手（`initialize`、
+  `notifications/initialized`、`tools/list`）＋探测（`ping`、`resources/list`、
+  `resources/templates/list`、`prompts/list`、`notifications/cancelled`）＋ 任何 `server/*`
+  方法。评测探针（Token 显式 `eval_mark` 为真**且**参数／连接名命中探针标记）退出默认用量
+  指标，但仍保留在原始审计、导出、问询关联与真实表访问中。
+  - **受影响页面**：使用概况（`/admin/usage` 数据访问视图）、Agent 管理（`/admin/agents`）、
+    Agent 详情、Token 管理（`/admin/tokens`）、调用监控（`/ops/calls`）、访问日志
+    （`/admin/audit` 默认视图）、评测现场（`/eval/monitor`）、访问关系图（`/admin/access-map`）、
+    治理门禁与发布就绪证据包。
+  - **⚠️ 存量数值会变化（下游看板／阈值请复核）**：
+    - `businessCallsLast7d`（Agent API）**可能下降** —— 之前把协议流量算作业务调用。
+    - `protocolCallsLast7d` **可能上升** —— 之前只识别 3 种握手方法。
+    - 「近 N 业务活跃 Token」**可能下降** —— 之前仅按最近 MCP 访问判定（含协议流量）。
+    - Access Governance Gate 的**高流量计数可能下降** —— 输入口径固定为 Raw Business
+      （协议流量排除、真实评测业务调用仍计入），阈值（50）与 P1 `warn` 裁决**不变**。
+    - 旧字段名与恒等式（`calls = business + protocol`）保持不变，但数值按新口径迁移；
+      新增 `usageCallsLast7d`、`evalProbeCallsLast7d`、`usageActiveAgentCountLast7d`
+      供新 UI 使用，旧客户端继续读取旧字段。
+  - **不变量**：原始 `access_log` 不改写；「最近 MCP 访问」与「近 N 使用过的凭据」保持全量
+    访问语义；审计库不可用时窗口指标为 `null`（渲染「—」），Token 前缀碰撞仍为 `partial`。
+
 ### 已知限制
 - 容器生命周期验收（首次启动失败、自发退出、SIGTERM 无遗留进程、退出码）需在镜像重建后
   执行 `scripts/verify/verify-ktx-reload-lifecycle.sh --container`；本次交付只完成了本地

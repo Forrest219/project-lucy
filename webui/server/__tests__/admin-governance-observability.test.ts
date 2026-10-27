@@ -388,7 +388,9 @@ users:
     const roles = await app.inject({ method: "GET", url: "/api/admin/governance/roles?hours=168" });
     expect(roles.statusCode).toBe(200);
     const rolesBody = JSON.parse(roles.payload);
-    expect(rolesBody.data.compatTruncation).toEqual({ auditRowsLimit: 5000 });
+    // Spec 189 §5.3 / SC-13 — the roles usage path is a full-window SQL
+    // aggregate, so the legacy 5000-row compat truncation no longer applies.
+    expect(rolesBody.data.compatTruncation).toEqual({ auditRowsLimit: null });
     expect(rolesBody.data.roles).toContainEqual(expect.objectContaining({ id: "broken_role", status: "broken" }));
     expect(rolesBody.data.roles).toContainEqual(expect.objectContaining({ id: "wildcard_role", status: "over_broad" }));
 

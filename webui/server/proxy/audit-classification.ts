@@ -94,22 +94,17 @@ export const ERROR_CATEGORIES: readonly ErrorCategory[] = [
 export type DigestKind = "search_text" | "sql" | "result";
 
 import {
-  MCP_PROTOCOL_METHODS,
+  MCP_PROBE_METHOD_SET,
+  MCP_HANDSHAKE_METHOD_SET,
   isMcpProtocolMethod
-} from "./mcp-request-classification";
+} from "./usage-classification.js";
 
-const HANDSHAKE_METHODS = new Set<string>([
-  MCP_PROTOCOL_METHODS[0], // "tools/list"
-  MCP_PROTOCOL_METHODS[1], // "initialize"
-  MCP_PROTOCOL_METHODS[2]  // "notifications/initialized"
-]);
-
-const PROBE_METHODS = new Set<string>([
-  "ping",
-  "resources/list",
-  "resources/templates/list",
-  "notifications/cancelled"
-]);
+// Spec 189 §4.2 — the handshake and probe sets are maintained explicitly in
+// the shared classification module. Deriving them from array indexes (the
+// previous behaviour) would silently mislabel `ping` / `prompts/list` as
+// handshake the moment the protocol list grew.
+const HANDSHAKE_METHODS = MCP_HANDSHAKE_METHOD_SET;
+const PROBE_METHODS = MCP_PROBE_METHOD_SET;
 
 /**
  * Classify one access_log-style event into the four-axis status. Outcome

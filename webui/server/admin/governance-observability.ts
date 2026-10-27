@@ -5,6 +5,7 @@ import { parse } from "yaml";
 import { getAuditDb } from "./audit.js";
 import { resolveProjectRoot } from "../project.js";
 import { buildMetricWindow, WINDOW_7D_HOURS } from "./metric-window.js";
+import { defaultUsageConditionSql } from "../proxy/usage-classification.js";
 import { resolveRoleIds } from "../proxy/acl.js";
 
 type RoleConfig = {
@@ -36,16 +37,6 @@ type AccessConfig = {
 };
 
 type CountRow = { count: number };
-type AuditRow = {
-  ts: string;
-  user_id: string;
-  token_hash_prefix: string | null;
-  tool: string;
-  outcome: string;
-  duration_ms: number;
-  decision_reason: string | null;
-  role_ids: string | null;
-};
 
 type PopularTableRow = {
   table: string;
@@ -76,11 +67,19 @@ const DEFAULT_HOURS = WINDOW_7D_HOURS;
 const MAX_HOURS = 720;
 /**
  * Bound for legacy roles/denials paths that still materialize audit rows.
- * Usage KPIs, popularTables, agents usage fields, and overview cards must NOT
- * aggregate through this limiter — they use SQL aggregates instead.
- * Consumers of roles/denials should treat results as potentially truncated.
+ * Spec 189 §5.3 / SC-13 — the legacy 5000-row compat limiter is **removed**:
+ * every usage path (overview KPIs, rankings, per-Agent cards, roles usage
+ * counts) is now a full-window SQL aggregate, so no usage number is silently
+ * truncated. `compatTruncation.auditRowsLimit` reports `null` accordingly.
  */
-const COMPAT_AUDIT_ROW_LIMIT = 5000;
+
+/**
+ * Spec 189 §4.1 — the single Default Usage condition used by every
+ * governance aggregate. It excludes protocol events and default-view-excluded
+ * eval probes, so the overview, the rankings and the per-Agent cards all
+ * describe the same record set.
+ */
+const DEFAULT_USAGE_CONDITION = defaultUsageConditionSql().sql;
 const DEFAULT_SENSITIVE_PREFIXES = ["dataforai.kx_", "finance", "salary"];
 const POPULAR_TABLES_LIMIT = 10;
 const TOKEN_SUMMARY_LIMIT = 20;
@@ -157,16 +156,6 @@ function okResult(
   };
 }
 
-function safeJsonArray(value: string | null): string[] {
-  if (!value) return [];
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed.filter((entry): entry is string => typeof entry === "string") : [];
-  } catch {
-    return [];
-  }
-}
-
 async function readAccessConfig(): Promise<AccessConfig> {
   const projectRoot = await resolveProjectRoot();
   try {
@@ -178,22 +167,31 @@ async function readAccessConfig(): Promise<AccessConfig> {
 }
 
 /**
- * Legacy row fetch for roles (+ optional denials fallback) only.
- * WARNING: silently truncates at COMPAT_AUDIT_ROW_LIMIT. Do not use for usage KPIs.
+ * Spec 189 §5.3 / SC-13 — the roles usage count is a **full-window SQL
+ * aggregate** over Default Usage rows. It replaces the legacy row fetch that
+ * silently truncated at 5000 rows and therefore
+ * under-counted busy roles. The `json_valid` guard keeps a malformed
+ * `role_ids` value from failing the whole query.
  */
-async function recentAuditRows(hours: number): Promise<AuditRow[]> {
+async function queryRoleUsageCounts(hours: number): Promise<Map<string, number>> {
+  const result = new Map<string, number>();
+  const win = buildMetricWindow(hours);
   try {
     const db = await getAuditDb();
-    return db.prepare(`
-      SELECT ts, user_id, token_hash_prefix, tool, outcome, duration_ms, decision_reason, role_ids
-      FROM access_log
-      WHERE ts >= ?
-      ORDER BY ts DESC
-      LIMIT ?
-    `).all(sinceIso(hours), COMPAT_AUDIT_ROW_LIMIT) as AuditRow[];
+    const rows = db.prepare(`
+      SELECT je.value AS role_id, COUNT(*) AS cnt
+      FROM access_log a, json_each(CASE WHEN json_valid(a.role_ids) THEN a.role_ids ELSE '[]' END) je
+      WHERE a.ts >= ? AND a.ts < ?
+        AND ${DEFAULT_USAGE_CONDITION}
+      GROUP BY je.value
+    `).all(win.startIso, win.endIso) as Array<{ role_id: string; cnt: number }>;
+    for (const row of rows) {
+      result.set(row.role_id, row.cnt);
+    }
   } catch {
-    return [];
+    // empty map
   }
+  return result;
 }
 
 async function configChangeCount(hours: number): Promise<number> {
@@ -235,6 +233,7 @@ async function queryCallStats(
         SUM(CASE WHEN outcome = 'error' THEN 1 ELSE 0 END) AS errors
       FROM access_log
       WHERE ts >= ? AND ts < ?
+        AND ${DEFAULT_USAGE_CONDITION}
     `).get(win.startIso, win.endIso) as {
       calls: number;
       avg_latency_ms: number | null;
@@ -261,7 +260,8 @@ async function queryP95LatencyMs(hours: number): Promise<number | null> {
   try {
     const db = await getAuditDb();
     const countRow = db.prepare(`
-      SELECT COUNT(*) AS count FROM access_log WHERE ts >= ? AND ts < ?
+      SELECT COUNT(*) AS count FROM access_log
+      WHERE ts >= ? AND ts < ? AND ${DEFAULT_USAGE_CONDITION}
     `).get(win.startIso, win.endIso) as CountRow | undefined;
     const count = countRow?.count ?? 0;
     if (count <= 0) return 0;
@@ -269,7 +269,7 @@ async function queryP95LatencyMs(hours: number): Promise<number | null> {
     const row = db.prepare(`
       SELECT duration_ms
       FROM access_log
-      WHERE ts >= ? AND ts < ?
+      WHERE ts >= ? AND ts < ? AND ${DEFAULT_USAGE_CONDITION}
       ORDER BY duration_ms ASC
       LIMIT 1 OFFSET ?
     `).get(win.startIso, win.endIso, offset) as { duration_ms: number } | undefined;
@@ -289,6 +289,7 @@ async function queryActiveAgentCount(hours: number): Promise<number | null> {
       WHERE ts >= ? AND ts < ?
         AND user_id IS NOT NULL
         AND user_id != ''
+        AND ${DEFAULT_USAGE_CONDITION}
     `).get(win.startIso, win.endIso) as CountRow | undefined;
     return row?.count ?? 0;
   } catch {
@@ -305,6 +306,7 @@ async function queryActiveTokenCount(hours: number): Promise<number | null> {
       FROM access_log
       WHERE ts >= ? AND ts < ?
         AND token_hash_prefix IS NOT NULL
+        AND ${DEFAULT_USAGE_CONDITION}
     `).get(win.startIso, win.endIso) as CountRow | undefined;
     return row?.count ?? 0;
   } catch {
@@ -353,6 +355,7 @@ async function queryHighDenialAgentCount(hours: number): Promise<number> {
         WHERE ts >= ? AND ts < ?
           AND user_id IS NOT NULL
           AND user_id != ''
+          AND ${DEFAULT_USAGE_CONDITION}
         GROUP BY user_id
         HAVING COUNT(*) >= 3
           AND (100.0 * SUM(CASE WHEN outcome = 'denied' THEN 1 ELSE 0 END) / COUNT(*)) >= 50
@@ -437,6 +440,7 @@ async function queryAgentWindowStats(hours: number): Promise<Map<string, AgentWi
       WHERE ts >= ? AND ts < ?
         AND user_id IS NOT NULL
         AND user_id != ''
+        AND ${DEFAULT_USAGE_CONDITION}
       GROUP BY user_id
     `).all(win.startIso, win.endIso) as AgentWindowStats[];
     for (const row of rows) {
@@ -460,17 +464,18 @@ async function queryAgentP95LatencyMs(hours: number): Promise<Map<string, number
       WHERE ts >= ? AND ts < ?
         AND user_id IS NOT NULL
         AND user_id != ''
+        AND ${DEFAULT_USAGE_CONDITION}
     `).all(win.startIso, win.endIso) as Array<{ user_id: string }>;
 
     const countStmt = db.prepare(`
       SELECT COUNT(*) AS count
       FROM access_log
-      WHERE ts >= ? AND ts < ? AND user_id = ?
+      WHERE ts >= ? AND ts < ? AND user_id = ? AND ${DEFAULT_USAGE_CONDITION}
     `);
     const p95Stmt = db.prepare(`
       SELECT duration_ms
       FROM access_log
-      WHERE ts >= ? AND ts < ? AND user_id = ?
+      WHERE ts >= ? AND ts < ? AND user_id = ? AND ${DEFAULT_USAGE_CONDITION}
       ORDER BY duration_ms ASC
       LIMIT 1 OFFSET ?
     `);
@@ -512,6 +517,7 @@ async function queryAgentTopDeniedReasons(hours: number): Promise<Map<string, st
           AND outcome = 'denied'
           AND user_id IS NOT NULL
           AND user_id != ''
+          AND ${DEFAULT_USAGE_CONDITION}
         GROUP BY user_id, COALESCE(decision_reason, 'denied_access')
       )
       WHERE rn = 1
@@ -539,6 +545,7 @@ async function queryAgentActiveTokenCounts(hours: number): Promise<Map<string, n
         AND user_id IS NOT NULL
         AND user_id != ''
         AND token_hash_prefix IS NOT NULL
+        AND ${DEFAULT_USAGE_CONDITION}
       GROUP BY user_id
     `).all(win.startIso, win.endIso) as AgentActiveTokenRow[];
     for (const row of rows) {
@@ -579,6 +586,7 @@ async function queryActiveTokenPrefixes(hours: number): Promise<Set<string>> {
       FROM access_log
       WHERE ts >= ? AND ts < ?
         AND token_hash_prefix IS NOT NULL
+        AND ${DEFAULT_USAGE_CONDITION}
     `).all(win.startIso, win.endIso) as Array<{ token_hash_prefix: string }>;
     for (const row of rows) result.add(row.token_hash_prefix);
   } catch {
@@ -597,6 +605,7 @@ async function queryTokenCallCounts(hours: number): Promise<Map<string, number>>
       FROM access_log
       WHERE ts >= ? AND ts < ?
         AND token_hash_prefix IS NOT NULL
+        AND ${DEFAULT_USAGE_CONDITION}
       GROUP BY token_hash_prefix
     `).all(win.startIso, win.endIso) as Array<{ token_hash_prefix: string; calls: number }>;
     for (const row of rows) {
@@ -762,7 +771,7 @@ function hasSensitiveScope(role: RoleConfig, sensitivePrefixes: string[]): boole
   return refs.some((ref) => sensitivePrefixes.some((prefix) => ref.includes(prefix.toLowerCase())));
 }
 
-function governanceRoles(config: AccessConfig, rows: AuditRow[]) {
+function governanceRoles(config: AccessConfig, auditUsage: Map<string, number>) {
   const roles = config.roles ?? {};
   const users = config.users ?? [];
   const roleUsage = new Map<string, number>();
@@ -773,11 +782,10 @@ function governanceRoles(config: AccessConfig, rows: AuditRow[]) {
       roleUsage.set(roleId, (roleUsage.get(roleId) ?? 0) + 1);
     }
   }
-  // Audit-derived usage may be truncated when `rows` came from recentAuditRows.
-  for (const row of rows) {
-    for (const roleId of safeJsonArray(row.role_ids)) {
-      roleUsage.set(roleId, (roleUsage.get(roleId) ?? 0) + 1);
-    }
+  // Audit-derived usage: Default Usage Calls per role (full-window SQL
+  // aggregate — no row limit).
+  for (const [roleId, count] of auditUsage) {
+    roleUsage.set(roleId, (roleUsage.get(roleId) ?? 0) + count);
   }
   const sensitivePrefixes = config.defaults?.sensitive_table_prefixes ?? DEFAULT_SENSITIVE_PREFIXES;
   return Object.entries(roles).map(([id, role]) => {
@@ -836,8 +844,10 @@ export function registerGovernanceObservabilityRoutes(app: FastifyInstance): voi
     const { configuredTableCount, hasOpenEndedTableScope } = configuredTableStats(config);
     // Spec 128 D4: prefix collision makes active-token count ambiguous.
     const tokenPrefixAmbiguous = hasTokenPrefixCollision(config);
-    // Status flags are config-derived; skip truncated audit rows for overview cards.
-    const roles = governanceRoles(config, []);
+    // Status flags are config-derived; the overview only needs the role
+    // status breakdown, not the audit-derived usage count (the /roles
+    // endpoint owns that).
+    const roles = governanceRoles(config, new Map<string, number>());
 
     const metricsUnavailable = callStats.metricsState === "unavailable"
       || activeAgentCount === null
@@ -972,14 +982,15 @@ export function registerGovernanceObservabilityRoutes(app: FastifyInstance): voi
 
   app.get<{ Querystring: { hours?: string } }>("/api/admin/governance/roles", async (request) => {
     const hours = boundedHours(request.query.hours ?? String(DEFAULT_HOURS));
-    const [config, rows] = await Promise.all([readAccessConfig(), recentAuditRows(hours)]);
+    const [config, roleUsage] = await Promise.all([readAccessConfig(), queryRoleUsageCounts(hours)]);
     return {
       ok: true,
       data: {
         windowHours: hours,
-        // usageCount from audit role_ids may be truncated at COMPAT_AUDIT_ROW_LIMIT.
-        compatTruncation: { auditRowsLimit: COMPAT_AUDIT_ROW_LIMIT },
-        roles: governanceRoles(config, rows)
+        // Spec 189 — the roles usage path is a full-window SQL aggregate, so
+        // the legacy 5000-row compat truncation no longer applies.
+        compatTruncation: { auditRowsLimit: null },
+        roles: governanceRoles(config, roleUsage)
       }
     };
   });
@@ -1032,6 +1043,7 @@ export function registerGovernanceObservabilityRoutes(app: FastifyInstance): voi
         SELECT COALESCE(decision_reason, 'denied_access') AS reason, COUNT(*) AS count
         FROM access_log
         WHERE ts >= ? AND outcome = 'denied'
+          AND ${DEFAULT_USAGE_CONDITION}
         GROUP BY COALESCE(decision_reason, 'denied_access')
         ORDER BY count DESC
       `).all(since) as Array<{ reason: string; count: number }>;
@@ -1039,6 +1051,7 @@ export function registerGovernanceObservabilityRoutes(app: FastifyInstance): voi
         SELECT tool, COUNT(*) AS count
         FROM access_log
         WHERE ts >= ? AND outcome = 'denied'
+          AND ${DEFAULT_USAGE_CONDITION}
         GROUP BY tool
         ORDER BY count DESC
       `).all(since) as Array<{ tool: string; count: number }>;
@@ -1056,6 +1069,7 @@ export function registerGovernanceObservabilityRoutes(app: FastifyInstance): voi
         SELECT substr(ts, 1, 10) AS date, COUNT(*) AS denied
         FROM access_log
         WHERE ts >= ? AND outcome = 'denied'
+          AND ${DEFAULT_USAGE_CONDITION}
         GROUP BY substr(ts, 1, 10)
         ORDER BY date ASC
       `).all(since) as Array<{ date: string; denied: number }>;

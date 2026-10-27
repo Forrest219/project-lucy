@@ -1110,8 +1110,18 @@ describe("GET /api/admin/audit/turns", () => {
     try {
       const calls = await request(app.server).get("/api/admin/audit?user=pack-handshake-user").expect(200);
       const tools = calls.body.data.entries.map((row: { tool: string }) => row.tool);
-      expect(tools).toContain("server/discover");
+      // Spec 189 §4.2 / §5.3: `server/*` methods are protocol events, so the
+      // default audit view hides them like it hides the handshake.
+      expect(tools).not.toContain("server/discover");
       expect(tools).not.toContain("initialize");
+
+      // …but the raw protocol rows stay auditable.
+      const withProtocol = await request(app.server)
+        .get("/api/admin/audit?user=pack-handshake-user&includeProtocol=true")
+        .expect(200);
+      const protocolTools = withProtocol.body.data.entries.map((row: { tool: string }) => row.tool);
+      expect(protocolTools).toContain("server/discover");
+      expect(protocolTools).toContain("initialize");
 
       const response = await request(app.server)
         .get("/api/admin/audit/export-pack?user=pack-handshake-user")

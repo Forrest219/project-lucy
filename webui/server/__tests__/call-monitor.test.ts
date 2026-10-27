@@ -139,6 +139,79 @@ describe("GET /api/ops/call-monitor", () => {
     }
   });
 
+  it("excludes the full protocol set and eval probes from every KPI (Spec 189)", async () => {
+    const { getAuditDb } = await import("../admin/audit.js");
+    const { writeLog } = await import("../proxy/audit");
+    const ts = new Date().toISOString();
+
+    // One row per protocol method — including the ones the old 3-method list
+    // missed (ping / resources/* / prompts/list / notifications/cancelled /
+    // server/*).
+    for (const tool of [
+      "initialize",
+      "notifications/initialized",
+      "tools/list",
+      "ping",
+      "resources/list",
+      "resources/templates/list",
+      "prompts/list",
+      "notifications/cancelled",
+      "server/discover",
+      "server/unknown"
+    ]) {
+      await writeLog({
+        ts,
+        userId: "agent-protocol",
+        tokenHashPrefix: "sha256:aaaaaaaaaaaa",
+        tool,
+        outcome: "ok",
+        durationMs: 2,
+        requestId: `protocol-${tool}`
+      });
+    }
+
+    // One real business call.
+    await writeLog({
+      ts,
+      userId: "agent-business",
+      tokenHashPrefix: "sha256:bbbbbbbbbbbb",
+      tool: "lucy_query",
+      outcome: "ok",
+      durationMs: 20,
+      requestId: "business-ok"
+    });
+
+    // One explicit eval probe (eval_mark = 1 + a probe-looking argument).
+    const db = await getAuditDb();
+    db.prepare(
+      `INSERT INTO access_log
+         (ts, user_id, token_hash_prefix, tool, outcome, duration_ms, eval_mark,
+          args_summary, request_id)
+       VALUES (?, 'agent-probe', 'sha256:cccccccccccc', 'lucy_query', 'ok', 30, 1, ?, 'probe-1')`
+    ).run(ts, JSON.stringify({ connection: "probe-demo" }));
+
+    const { buildServer } = await import("../index");
+    const app = buildServer();
+    await app.ready();
+    try {
+      const res = await request(app.server).get("/api/ops/call-monitor?range=24h").expect(200);
+
+      // Only the one real business call counts.
+      expect(res.body.data.traffic.businessCalls).toBe(1);
+      expect(res.body.data.traffic.okCalls).toBe(1);
+      expect(res.body.data.traffic.errorCalls).toBe(0);
+      expect(res.body.data.traffic.deniedCalls).toBe(0);
+      expect(
+        res.body.data.series.reduce((sum: number, p: { businessCalls: number }) => sum + p.businessCalls, 0)
+      ).toBe(1);
+      // The tool ranking carries the business tool only.
+      expect(res.body.data.topTools.map((t: { tool: string }) => t.tool)).toEqual(["lucy_query"]);
+      expect(res.body.data.recentFailures).toHaveLength(0);
+    } finally {
+      await app.close();
+    }
+  });
+
   it("returns no_data SLO when the window has no business calls", async () => {
     const { buildServer } = await import("../index");
     const app = buildServer();

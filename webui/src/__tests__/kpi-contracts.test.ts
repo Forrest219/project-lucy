@@ -47,12 +47,49 @@ describe("KPI_REGISTRY", () => {
   });
 
   it("audit-based KPIs are windowed", () => {
-    const windowed = ["active-agent-count", "active-token-count", "calls-7d", "calls", "active-table-count", "p95-latency"];
+    const windowed = ["active-agent-count", "active-token-count", "used-credential-count", "calls-7d", "active-table-count", "p95-latency"];
     for (const id of windowed) {
       const c = getContract(id);
       expect(c, `${id} should be in registry`).toBeDefined();
       expect(c!.windowed, `${id} should be windowed`).toBe(true);
     }
+  });
+
+  it("no longer registers the stale `calls` contract (superseded by calls-7d)", () => {
+    // Spec 189 / WO T1: /admin/usage removed the 调用量 card, so the registry
+    // entry that claimed /admin/governance/overview became a false contract.
+    expect(getContract("calls")).toBeUndefined();
+    expect(getContract("calls-7d")).toBeDefined();
+  });
+
+  it("usage KPI help texts state the default usage scope (Spec 189)", () => {
+    // Guards the registry against regressing to "访问日志出现过" copy, which
+    // would be a lie once protocol events leave the default usage KPI.
+    for (const id of ["active-agent-count", "active-token-count", "calls-7d"]) {
+      const c = getContract(id);
+      expect(c, `${id} should be in registry`).toBeDefined();
+      expect(c!.help, `${id} help must name the default usage scope`).toContain("默认用量业务调用");
+      expect(c!.help, `${id} help must not claim raw access-log presence`).not.toContain("访问日志出现过");
+    }
+  });
+
+  it("business-active token and used-credential contracts stay distinct (Spec 189)", () => {
+    const business = getContract("active-token-count");
+    const credentials = getContract("used-credential-count");
+    expect(business).toBeDefined();
+    expect(credentials).toBeDefined();
+    expect(business!.help).toContain("D4");
+    expect(credentials!.help).toContain("D4");
+    expect(business!.help).toContain("默认用量业务调用");
+    expect(credentials!.help).toContain("全量访问");
+    // The two metrics may legitimately differ; they must never share copy.
+    expect(business!.label).not.toBe(credentials!.label);
+  });
+
+  it("calls-7d uses the qualified business-call label (no unqualified 调用量)", () => {
+    const c = getContract("calls-7d");
+    expect(c).toBeDefined();
+    expect(c!.label).toBe("近 7 天业务调用量");
   });
 
   it("LIST_KPI_CONTRACTS contains only list_kpi entries", () => {

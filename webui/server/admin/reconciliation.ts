@@ -25,7 +25,7 @@
  */
 
 import type Database from "better-sqlite3";
-import { MCP_PROTOCOL_METHODS } from "../proxy/mcp-request-classification.js";
+import { isMcpProtocolMethod } from "../proxy/usage-classification.js";
 import { isQuestionDataTool } from "../proxy/question-experience.js";
 import type { AssociationStatus } from "../proxy/turn-correlation.js";
 import {
@@ -242,10 +242,9 @@ export function createPrimaryStatusPort(
 // 数据库读取（只读；列或表缺失、值为 NULL 一律如实标注）
 // ────────────────────────────────────────────────────────────────────────────
 
-const PROTOCOL_TOOL_SET = new Set<string>(MCP_PROTOCOL_METHODS);
 
 export function isProtocolTool(tool: string | null | undefined): boolean {
-  return typeof tool === "string" && PROTOCOL_TOOL_SET.has(tool);
+  return isMcpProtocolMethod(tool);
 }
 
 /** 探测表是否存在（缺表按「不可观测」处理，不抛错、不伪造）。 */

@@ -176,11 +176,11 @@ export function Tokens() {
         />
         <MetricCard
           helpId="kpi-active-tokens"
-          label={<span>近 7 天活跃</span>}
-          labelText="近 7 天活跃"
+          label={<span>近 7 天业务活跃 <span className="notranslate" translate="no">Token</span></span>}
+          labelText="近 7 天业务活跃 Token"
           value={stats.activeLast7dTokens}
-          help={<span>最近 7 天内至少有一次 <span className="notranslate" translate="no">MCP</span> 调用记录的 <span className="notranslate" translate="no">Token</span> 数量。</span>}
-          subValue="基于访问日志实时统计"
+          help={<span>最近 7 天内至少有一次默认用量业务调用的 <span className="notranslate" translate="no">Token</span> 数量；排除协议事件与默认视图排除的评测探针（<span className="notranslate" translate="no">Spec 189</span>）。</span>}
+          subValue="按业务调用判定"
         />
         <MetricCard
           helpId="kpi-expiring-tokens"
@@ -265,7 +265,7 @@ export function Tokens() {
                 <th>所属 <span className="notranslate" translate="no">Agent</span></th>
                 <th><span className="notranslate" translate="no">Token</span> 前缀</th>
                 <th>生效角色</th>
-                <th>最近活跃</th>
+                <th>最近业务使用</th>
                 <th>过期时间</th>
                 <th className="text-right">操作</th>
               </tr>
@@ -297,7 +297,11 @@ export function Tokens() {
                 </tr>
               ) : (
                 tokens.map((token) => {
-                  const lastSeen = formatLastSeen(token.last_used);
+                  // Spec 189 §6 — the list's main time is 最近业务使用
+                  // (Default Usage Call). 最近 MCP 访问 stays as the
+                  // technical context line underneath.
+                  const lastSeen = formatLastSeen(token.last_business_use);
+                  const lastMcpAccess = formatLastSeen(token.last_used);
                   const expiry = getExpiryDisplay(token.expires_at, token.status);
 
                   return (
@@ -387,6 +391,11 @@ export function Tokens() {
                           <span className="text-xs font-medium text-fg-default" title={lastSeen.title}>
                             {lastSeen.label}
                           </span>
+                          {token.last_business_use && token.last_used && token.last_used !== token.last_business_use && (
+                            <span className="text-xs text-fg-muted truncate max-w-[160px]" title={lastMcpAccess.title}>
+                              最近 <span className="notranslate" translate="no">MCP</span> 访问 {lastMcpAccess.label}
+                            </span>
+                          )}
                           {(token.last_client || token.last_device_name_seen) && (
                             <span className="text-xs text-fg-muted truncate max-w-[160px] notranslate" translate="no">
                               {token.last_client

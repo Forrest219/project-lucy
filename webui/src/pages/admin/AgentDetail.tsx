@@ -1262,7 +1262,8 @@ export function AgentDetail() {
                           <span>创建 {token.created}</span>
                           {token.expires_at ? <span> · 过期 {token.expires_at}</span> : null}
                           <span>
-                            {" · "}最近使用 {token.last_used ? new Date(token.last_used).toLocaleString("zh-CN") : "尚未使用"}
+                            {" · "}最近 <span className="notranslate" translate="no">MCP</span> 访问{" "}
+                            {token.last_used ? new Date(token.last_used).toLocaleString("zh-CN") : "尚未访问"}
                           </span>
                           {token.last_tool ? (
                             <span>

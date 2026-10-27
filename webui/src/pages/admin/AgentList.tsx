@@ -136,9 +136,18 @@ export function summarizeAgents(
   let callsLast7d = 0;
   let businessCallsLast7d = 0;
   let protocolCallsLast7d = 0;
+  let usageCallsLast7d = 0;
+  let evalProbeCallsLast7d = 0;
+  let usageActiveAgentCountLast7d = 0;
   let availableTokens = 0;
   let deniedLast7d = 0;
   let anyUnavailable = false;
+  // Spec 189 §5.2 — a legacy response (no `usage*` fields) must not be
+  // back-filled from `callsLast7d` / `businessCallsLast7d`: those carry a
+  // different record layer and would silently present a wrong number. The
+  // summary reports the usage layer as unavailable instead.
+  let usageMetricsAvailable = true;
+  let businessMetricsAvailable = true;
   for (const agent of agents) {
     if (agent.enabled) enabledAgentCount += 1;
     configuredTokens += configuredTokenCount(agent);
@@ -147,11 +156,30 @@ export function summarizeAgents(
       anyUnavailable = true;
       continue;
     }
-    const businessCalls = agent.stats?.businessCallsLast7d ?? agent.stats?.callsLast7d ?? 0;
-    if (businessCalls > 0) activeAgentCountLast7d += 1;
+    const businessCalls = agent.stats?.businessCallsLast7d;
+    if (businessCalls === undefined || businessCalls === null) {
+      // No Raw Business figure → the legacy business-derived metrics are
+      // unavailable, not zero.
+      businessMetricsAvailable = false;
+    } else {
+      if (businessCalls > 0) activeAgentCountLast7d += 1;
+      businessCallsLast7d += businessCalls;
+    }
+    const usageCalls = agent.stats?.usageCallsLast7d;
+    if (usageCalls === undefined || usageCalls === null) {
+      usageMetricsAvailable = false;
+    } else {
+      usageCallsLast7d += usageCalls;
+      if (usageCalls > 0) usageActiveAgentCountLast7d += 1;
+    }
+    const evalProbeCalls = agent.stats?.evalProbeCallsLast7d;
+    if (evalProbeCalls === undefined || evalProbeCalls === null) {
+      usageMetricsAvailable = false;
+    } else {
+      evalProbeCallsLast7d += evalProbeCalls;
+    }
     activeTokenCountLast7d += activeTokenCount(agent, now);
     callsLast7d += agent.stats?.callsLast7d ?? 0;
-    businessCallsLast7d += businessCalls;
     protocolCallsLast7d += agent.stats?.protocolCallsLast7d ?? 0;
     deniedLast7d += agent.stats?.deniedLast7d ?? 0;
   }
@@ -169,6 +197,9 @@ export function summarizeAgents(
       callsLast7d: null,
       businessCallsLast7d: null,
       protocolCallsLast7d: null,
+      usageCallsLast7d: null,
+      evalProbeCallsLast7d: null,
+      usageActiveAgentCountLast7d: null,
       deniedLast7d: null,
       metricsState: "unavailable"
     };
@@ -176,16 +207,20 @@ export function summarizeAgents(
   return {
     agentCount: agents.length,
     enabledAgentCount,
-    activeAgentCountLast7d,
-    businessActiveAgentCountLast7d: activeAgentCountLast7d,
+    activeAgentCountLast7d: businessMetricsAvailable ? activeAgentCountLast7d : null,
+    businessActiveAgentCountLast7d: businessMetricsAvailable ? activeAgentCountLast7d : null,
     configuredTokenCount: configuredTokens,
     availableTokenCount: availableTokens,
     activeTokenCountLast7d,
     usedCredentialCountLast7d: activeTokenCountLast7d,
     usedCredentialState: "ok",
     callsLast7d,
-    businessCallsLast7d,
+    businessCallsLast7d: businessMetricsAvailable ? businessCallsLast7d : null,
     protocolCallsLast7d,
+    // Spec 189 §5.2 — null (not 0) when the response carries no usage layer.
+    usageCallsLast7d: usageMetricsAvailable ? usageCallsLast7d : null,
+    evalProbeCallsLast7d: usageMetricsAvailable ? evalProbeCallsLast7d : null,
+    usageActiveAgentCountLast7d: usageMetricsAvailable ? usageActiveAgentCountLast7d : null,
     deniedLast7d,
     metricsState: "ok"
   };
@@ -393,11 +428,21 @@ export function AgentList() {
   const summary = data?.summary ?? summarizeAgents(agents);
   // Spec 128 HR-1: metricsState=unavailable means null values; do not coerce to 0
   const auditMetricsState: "ok" | "unavailable" = summary.metricsState === "unavailable" ? "unavailable" : "ok";
-  const activeAgentCountLast7d = summary.businessActiveAgentCountLast7d ?? summary.activeAgentCountLast7d;
+  // Spec 189 §5.2 — the business-active count and the business call volume
+  // read the **usage** layer. `usage*` is null when the response carries no
+  // usage layer (legacy backend) — the UI then shows "—", never a 0 or a
+  // number borrowed from a different record layer.
+  const activeAgentCountLast7d = summary.usageActiveAgentCountLast7d ?? null;
   const usedCredentialTotal = summary.usedCredentialCountLast7d ?? summary.activeTokenCountLast7d;
-  const businessCallsLast7dTotal = summary.businessCallsLast7d ?? summary.callsLast7d;
-  const protocolCallsLast7dTotal = summary.protocolCallsLast7d ?? 0;
+  const businessCallsLast7dTotal = summary.usageCallsLast7d ?? null;
+  const protocolCallsLast7dTotal = summary.protocolCallsLast7d ?? null;
   const usedCredentialState = summary.usedCredentialState ?? auditMetricsState;
+  // Spec 189 §5.2 / §8 — a missing usage layer is "unavailable", not 0. The
+  // card must render "—" instead of a fabricated zero.
+  const usageMetricsState: "ok" | "unavailable" =
+    summary.usageCallsLast7d === null || summary.usageActiveAgentCountLast7d === null
+      ? "unavailable"
+      : "ok";
   const isFilterActive = search !== "" || filterEnabled !== "all" || filterRole !== "all" || filterActivity !== "all";
   function clearFilters() {
     setSearch("");
@@ -423,12 +468,15 @@ export function AgentList() {
     const matchRole =
       filterRole === "all" ||
       (filterRole === "unbound" ? roleIds.length === 0 : roleIds.includes(filterRole));
-    const metricsAvailable = a.stats?.metricsState !== "unavailable";
-    const callsLast7d = a.stats?.businessCallsLast7d ?? a.stats?.callsLast7d ?? 0;
+    // Spec 189 §6 — the activity filter reads the Default Usage layer, the
+    // same layer the KPI card counts. An Agent without a usage figure is
+    // neither "active" nor "inactive": it is excluded from the filter.
+    const usageCalls = a.stats?.usageCallsLast7d;
+    const metricsAvailable = a.stats?.metricsState !== "unavailable" && usageCalls !== undefined && usageCalls !== null;
     const matchActivity =
       filterActivity === "all" ||
-      (metricsAvailable && filterActivity === "active" && callsLast7d > 0) ||
-      (metricsAvailable && filterActivity === "inactive" && callsLast7d === 0);
+      (metricsAvailable && filterActivity === "active" && usageCalls > 0) ||
+      (metricsAvailable && filterActivity === "inactive" && usageCalls === 0);
     return matchSearch && matchEnabled && matchRole && matchActivity;
   });
 
@@ -517,10 +565,10 @@ export function AgentList() {
         <MetricCard
           label={<span>近 7 天活跃 <span className="notranslate" translate="no">Agent</span></span>}
           labelText="近 7 天活跃 Agent"
-          value={activeAgentCountLast7d ?? 0}
-          help="近 7 天至少出现过一次非协议业务调用的去重 Agent 数。"
-          subValue={auditMetricsState === "ok" ? "仅按业务调用判定" : undefined}
-          state={auditMetricsState}
+          value={activeAgentCountLast7d}
+          help="近 7 天至少出现过一次默认用量业务调用的去重 Agent 数（排除协议事件与默认视图排除的评测探针）。"
+          subValue={usageMetricsState === "ok" ? "仅按业务调用判定" : undefined}
+          state={usageMetricsState}
           helpId="active-agent-count"
           testId="metric-active-agent-count"
         />
@@ -548,17 +596,17 @@ export function AgentList() {
         />
         <MetricCard
           label="近 7 天业务调用量"
-          value={businessCallsLast7dTotal ?? 0}
-          help="近 7 天非协议 MCP 调用次数；用于判定真实业务使用。"
-          subValue={auditMetricsState === "ok" ? "排除握手与工具发现" : undefined}
-          state={auditMetricsState}
+          value={businessCallsLast7dTotal}
+          help="近 7 天默认用量业务调用次数；用于判定真实业务使用（排除协议事件与默认视图排除的评测探针）。"
+          subValue={usageMetricsState === "ok" ? "排除协议事件与评测探针" : undefined}
+          state={usageMetricsState}
           helpId="business-calls"
           testId="metric-business-calls"
         />
         <MetricCard
           label="近 7 天协议请求量"
-          value={protocolCallsLast7dTotal ?? 0}
-          help="近 7 天 initialize、notifications/initialized 与 tools/list 请求数。"
+          value={protocolCallsLast7dTotal}
+          help="近 7 天握手、工具／提示发现、资源枚举、取消通知与服务发现等协议请求数。"
           subValue={auditMetricsState === "ok" ? "连接与工具发现" : undefined}
           state={auditMetricsState}
           helpId="protocol-calls"
@@ -690,7 +738,8 @@ export function AgentList() {
                   const legacyWildcard =
                     agent.allow?.tables?.includes("*") || agent.allow?.tools?.includes("*");
                   const metricsUnavailable = agent.stats?.metricsState === "unavailable";
-                  const callsLast7d = agent.stats?.businessCallsLast7d ?? agent.stats?.callsLast7d;
+                  // Spec 189 §6 — the table reads the Default Usage layer.
+                  const callsLast7d = agent.stats?.usageCallsLast7d;
                   const protocolCallsLast7d = agent.stats?.protocolCallsLast7d;
                   const usedCredentials = agent.stats?.usedCredentialsLast7d ?? agent.stats?.activeTokensLast7d;
                   const credentialState = agent.stats?.credentialMetricsState ?? (metricsUnavailable ? "unavailable" : "ok");
@@ -774,7 +823,9 @@ export function AgentList() {
                         className="pl-agent-list-table-num"
                         data-testid={`agent-calls-7d-${agent.id}`}
                       >
-                        {metricsUnavailable ? "—" : callsLast7d ?? 0}
+                        {metricsUnavailable || callsLast7d === undefined || callsLast7d === null
+                          ? "—"
+                          : callsLast7d}
                       </td>
                       <td
                         className="pl-agent-list-table-num"

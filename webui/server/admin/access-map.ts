@@ -66,6 +66,10 @@ import {
   type GrantPathRef
 } from "./counting.js";
 import { buildMetricWindow, type MetricWindow } from "./metric-window.js";
+import { defaultUsageConditionSql } from "../proxy/usage-classification.js";
+
+/** Spec 189 §4.1 — the single Default Usage condition. */
+const DEFAULT_USAGE_CONDITION = defaultUsageConditionSql().sql;
 
 // ─── §6.3 URL 参数 ────────────────────────────────────────────────────────────
 
@@ -1910,6 +1914,10 @@ export function createAdminAccessMapProvider(
           );
 
         // 凭证清单的调用数与 token 过滤无关（凭证清单是固定参照物）。
+        // Spec 189 §6 — the credential inventory's window call count uses the
+        // Default Usage layer. The authorization surface, the access-log
+        // source rows, the call-id de-duplication and the conservation
+        // algorithm are untouched.
         const tokenRows = db
           .prepare(
             `SELECT token_label, COUNT(DISTINCT id) AS calls, MAX(ts) AS last_used
@@ -1917,6 +1925,7 @@ export function createAdminAccessMapProvider(
              WHERE ts >= ? AND ts < ?
                AND (? = 'include_candidate' OR association_status = 'confirmed')
                AND token_label IS NOT NULL
+               AND ${DEFAULT_USAGE_CONDITION}
              GROUP BY token_label`
           )
           .all(input.window.startIso, input.window.endIso, input.trust);

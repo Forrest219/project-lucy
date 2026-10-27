@@ -39,7 +39,22 @@ import { narrowAuthorization, narrowingScopeForWrite } from "../proxy/authorizat
 import { actorIdFromRequest } from "../auth/guard.js";
 import { auditActorFields, trustedActorFromRequest } from "../security/request-actor.js";
 import { isTokenExpired } from "../proxy/identity.js";
-import { MCP_PROTOCOL_METHOD_SQL_LIST } from "../proxy/mcp-request-classification.js";
+import { protocolConditionSql, defaultUsageConditionSql, evalProbeConditionSql } from "../proxy/usage-classification.js";
+
+/**
+ * Spec 189 §4.2 — the single protocol classification condition. It replaces
+ * the local `tool NOT IN (...)` list so every surface agrees on which rows
+ * are protocol events, including the `server/*` prefix rule that a literal
+ * list cannot express.
+ */
+const PROTOCOL_CONDITION = protocolConditionSql().sql;
+/**
+ * Spec 189 §4.1 — the Default Usage layer: not a protocol event AND not a
+ * default-view-excluded eval probe. This is what `usageCallsLast7d` counts.
+ */
+const DEFAULT_USAGE_CONDITION = defaultUsageConditionSql().sql;
+/** Spec 189 §4.3 — the default-view-excluded eval probes (reconciliation aid). */
+const EVAL_PROBE_CONDITION = evalProbeConditionSql().sql;
 import { readAuditWriteHealth, type AuditWriteHealthSnapshot } from "../proxy/audit-write-health.js";
 import { countEntryPerf, timeAsync, withRequestTiming } from "../entry-performance-timing.js";
 import { readAccessSnapshot, resolvePermissionBatch, type PermissionBatch } from "./permission-display.js";
@@ -198,10 +213,21 @@ export interface AgentStatsSummary {
   businessCallsLast7d: number | null;
   /** initialize / notifications/initialized / tools/list rows in the window. */
   protocolCallsLast7d: number | null;
+  /**
+   * Spec 189 §5.2 — Default Usage Calls in the window: business calls minus
+   * the default-view-excluded eval probes. This is the metric the new UI
+   * reads for business activity and business call volume.
+   */
+  usageCallsLast7d: number | null;
+  /**
+   * Spec 189 §5.2 — eval probes excluded from the default usage view. Kept
+   * for reconciliation: `businessCallsLast7d = usageCallsLast7d + evalProbeCallsLast7d`.
+   */
+  evalProbeCallsLast7d: number | null;
   /** Spec 128 HR-1: null when state=unavailable. */
   deniedLast7d: number | null;
   lastSeen?: string;
-  /** All-time latest non-protocol call. */
+  /** All-time latest default-usage business call. */
   lastBusinessSeen?: string;
   /** Number of distinct `token_hash_prefix` values that appear in
    * `access_log` for this user inside the last 7 days. Excludes rows
@@ -280,6 +306,10 @@ function unavailableStats(user: YamlUser, win: MetricWindow): AgentStatsSummary 
     callsLast7d: null,
     businessCallsLast7d: null,
     protocolCallsLast7d: null,
+    // Spec 189 §5.2 / SC-14 — every audit-derived window field stays null when
+    // the audit store is unavailable. The UI must render "—", never 0.
+    usageCallsLast7d: null,
+    evalProbeCallsLast7d: null,
     deniedLast7d: null,
     activeTokensLast7d: null,
     usedCredentialsLast7d: null,
@@ -309,17 +339,21 @@ async function getStatsMap(
         `SELECT
            user_id,
            SUM(CASE WHEN ts >= ? AND ts < ? THEN 1 ELSE 0 END) AS calls7,
-           SUM(CASE WHEN ts >= ? AND ts < ? AND tool NOT IN (${MCP_PROTOCOL_METHOD_SQL_LIST}) THEN 1 ELSE 0 END) AS business_calls7,
-           SUM(CASE WHEN ts >= ? AND ts < ? AND tool IN (${MCP_PROTOCOL_METHOD_SQL_LIST}) THEN 1 ELSE 0 END) AS protocol_calls7,
-           SUM(CASE WHEN ts >= ? AND ts < ? AND tool NOT IN (${MCP_PROTOCOL_METHOD_SQL_LIST}) AND outcome='denied' THEN 1 ELSE 0 END) AS denied7,
+           SUM(CASE WHEN ts >= ? AND ts < ? AND NOT ${PROTOCOL_CONDITION} THEN 1 ELSE 0 END) AS business_calls7,
+           SUM(CASE WHEN ts >= ? AND ts < ? AND ${PROTOCOL_CONDITION} THEN 1 ELSE 0 END) AS protocol_calls7,
+           SUM(CASE WHEN ts >= ? AND ts < ? AND ${DEFAULT_USAGE_CONDITION} THEN 1 ELSE 0 END) AS usage_calls7,
+           SUM(CASE WHEN ts >= ? AND ts < ? AND ${EVAL_PROBE_CONDITION} THEN 1 ELSE 0 END) AS eval_probe_calls7,
+           SUM(CASE WHEN ts >= ? AND ts < ? AND ${DEFAULT_USAGE_CONDITION} AND outcome='denied' THEN 1 ELSE 0 END) AS denied7,
            COUNT(DISTINCT CASE WHEN ts >= ? AND ts < ? AND token_hash_prefix IS NOT NULL THEN token_hash_prefix END) AS active_tokens,
            MAX(ts) AS last_seen,
-           MAX(CASE WHEN tool NOT IN (${MCP_PROTOCOL_METHOD_SQL_LIST}) THEN ts END) AS last_business_seen
+           MAX(CASE WHEN ${DEFAULT_USAGE_CONDITION} THEN ts END) AS last_business_seen
          FROM access_log
          WHERE user_id IN (${placeholders})
          GROUP BY user_id`
       )
       .all(
+        win.startIso, win.endIso,
+        win.startIso, win.endIso,
         win.startIso, win.endIso,
         win.startIso, win.endIso,
         win.startIso, win.endIso,
@@ -331,6 +365,8 @@ async function getStatsMap(
         calls7: number | null;
         business_calls7: number | null;
         protocol_calls7: number | null;
+        usage_calls7: number | null;
+        eval_probe_calls7: number | null;
         denied7: number | null;
         active_tokens: number | null;
         last_seen: string | null;
@@ -342,7 +378,7 @@ async function getStatsMap(
       .prepare(
         `SELECT user_id, tables, COUNT(*) AS cnt FROM access_log
          WHERE user_id IN (${placeholders}) AND ts >= ? AND ts < ?
-           AND tool NOT IN (${MCP_PROTOCOL_METHOD_SQL_LIST}) AND tables IS NOT NULL
+           AND NOT ${PROTOCOL_CONDITION} AND tables IS NOT NULL
          GROUP BY user_id, tables`
       )
       .all(...users.map((user) => user.id), win.startIso, win.endIso) as Array<{
@@ -376,6 +412,9 @@ async function getStatsMap(
         callsLast7d: row?.calls7 ?? 0,
         businessCallsLast7d: row?.business_calls7 ?? 0,
         protocolCallsLast7d: row?.protocol_calls7 ?? 0,
+        // Spec 189 §5.2 — the Default Usage layer. `business = usage + evalProbe`.
+        usageCallsLast7d: row?.usage_calls7 ?? 0,
+        evalProbeCallsLast7d: row?.eval_probe_calls7 ?? 0,
         deniedLast7d: row?.denied7 ?? 0,
         lastSeen: row?.last_seen ?? undefined,
         lastBusinessSeen: row?.last_business_seen ?? undefined,
@@ -412,6 +451,50 @@ export type TokenUsageSnapshot = {
   lastDeviceNameSeen?: string | null;
   distinctIps7d?: number;
 };
+
+/**
+ * Spec 189 §5.3 / §6 — the **last business use** time per token.
+ *
+ * `getLastUsedMap` answers "when was this token last seen on the wire"
+ * (最近 MCP 访问, protocol traffic included). Business activity needs a
+ * different source: the latest **Default Usage Call** of that token. It is a
+ * sibling map, never a reinterpretation of `last_used`.
+ */
+export async function getLastBusinessUseMap(
+  userIds: string[]
+): Promise<Map<string, Map<string, string>>> {
+  // Returns: userId -> (token hash prefix -> last default usage call ts)
+  const result = new Map<string, Map<string, string>>();
+  if (userIds.length === 0) return result;
+  try {
+    const db = await getAuditDb();
+    const placeholders = userIds.map(() => "?").join(", ");
+    const rows = db
+      .prepare(
+        `SELECT user_id, token_hash_prefix, ts
+         FROM (
+           SELECT
+             user_id,
+             token_hash_prefix,
+             ts,
+             ROW_NUMBER() OVER (PARTITION BY user_id, token_hash_prefix ORDER BY ts DESC, id DESC) AS rn
+           FROM access_log
+           WHERE user_id IN (${placeholders}) AND token_hash_prefix IS NOT NULL
+             AND ${DEFAULT_USAGE_CONDITION}
+         )
+         WHERE rn = 1`
+      )
+      .all(...userIds) as Array<{ user_id: string; token_hash_prefix: string; ts: string }>;
+    for (const row of rows) {
+      const byPrefix = result.get(row.user_id) ?? new Map<string, string>();
+      byPrefix.set(row.token_hash_prefix, row.ts);
+      result.set(row.user_id, byPrefix);
+    }
+  } catch {
+    // empty map
+  }
+  return result;
+}
 
 export async function getLastUsedMap(
   userIds: string[]
@@ -817,6 +900,20 @@ function buildAgentsSummary(
   callsLast7d: number | null;
   businessCallsLast7d: number | null;
   protocolCallsLast7d: number | null;
+  /**
+   * Spec 189 §5.2 — Default Usage Calls across the current configured Agents.
+   */
+  usageCallsLast7d: number | null;
+  /**
+   * Spec 189 §5.2 — eval probes excluded from the default usage view.
+   */
+  evalProbeCallsLast7d: number | null;
+  /**
+   * Spec 189 §5.2 — current configured Agents with at least one default usage
+   * business call. Computed server-side; the frontend `summarizeAgents` is only
+   * a compatibility path for legacy responses without a summary.
+   */
+  usageActiveAgentCountLast7d: number | null;
   deniedLast7d: number | null;
   metricsState: "ok" | "unavailable";
   auditCompleteness: Omit<AuditWriteHealthSnapshot, "state"> & {
@@ -832,6 +929,9 @@ function buildAgentsSummary(
   let callsLast7d = 0;
   let businessCallsLast7d = 0;
   let protocolCallsLast7d = 0;
+  let usageCallsLast7d = 0;
+  let evalProbeCallsLast7d = 0;
+  let usageActiveAgentCountLast7d = 0;
   let deniedLast7d = 0;
   let anyUnavailable = globalActiveTokenCount === null;
   let windowStart: string | undefined;
@@ -847,9 +947,13 @@ function buildAgentsSummary(
       continue;
     }
     if ((stats.businessCallsLast7d ?? 0) > 0) activeAgentCountLast7d += 1;
+    // Spec 189 §5.2 — business activity is driven by the Default Usage layer.
+    if ((stats.usageCallsLast7d ?? 0) > 0) usageActiveAgentCountLast7d += 1;
     callsLast7d += stats.callsLast7d ?? 0;
     businessCallsLast7d += stats.businessCallsLast7d ?? 0;
     protocolCallsLast7d += stats.protocolCallsLast7d ?? 0;
+    usageCallsLast7d += stats.usageCallsLast7d ?? 0;
+    evalProbeCallsLast7d += stats.evalProbeCallsLast7d ?? 0;
     deniedLast7d += stats.deniedLast7d ?? 0;
     // All agents share the same window; take the first populated one
     if (!windowStart && stats.windowStart) windowStart = stats.windowStart;
@@ -871,6 +975,9 @@ function buildAgentsSummary(
       callsLast7d: null,
       businessCallsLast7d: null,
       protocolCallsLast7d: null,
+      usageCallsLast7d: null,
+      evalProbeCallsLast7d: null,
+      usageActiveAgentCountLast7d: null,
       deniedLast7d: null,
       metricsState: "unavailable",
       auditCompleteness: { ...auditWriteHealth, state: "unavailable" },
@@ -894,6 +1001,9 @@ function buildAgentsSummary(
     callsLast7d,
     businessCallsLast7d,
     protocolCallsLast7d,
+    usageCallsLast7d,
+    evalProbeCallsLast7d,
+    usageActiveAgentCountLast7d,
     deniedLast7d,
     metricsState: "ok",
     auditCompleteness: auditWriteHealth,
@@ -1500,6 +1610,11 @@ export function registerAgentRoutes(app: FastifyInstance) {
       newUser: updatedUser,
       oldRoleOverrides: existingRoles,
       newRoleOverrides: newConfig.roles,
+      // Spec 189 §6 — the Access Governance Gate input stays **Raw Business**
+      // Tool Call. It must not become the Default Usage layer (real eval
+      // business calls must keep their governance protection) and must not
+      // become the raw `callsLast7d` (pure protocol traffic must not inflate
+      // the high-traffic count).
       callsLast7d: stats.businessCallsLast7d ?? 0
     });
     const gate = evaluateAccessGovernanceGate(gateInput);
@@ -1611,6 +1726,11 @@ export function registerAgentRoutes(app: FastifyInstance) {
       targetId: user.id,
       oldUser: user,
       newUser: { id: user.id, role: undefined, allow: undefined },
+      // Spec 189 §6 — the Access Governance Gate input stays **Raw Business**
+      // Tool Call. It must not become the Default Usage layer (real eval
+      // business calls must keep their governance protection) and must not
+      // become the raw `callsLast7d` (pure protocol traffic must not inflate
+      // the high-traffic count).
       callsLast7d: stats.businessCallsLast7d ?? 0
     });
     const gate = evaluateAccessGovernanceGate(gateInput);

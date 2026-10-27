@@ -474,7 +474,7 @@ export function GovernanceOverview() {
             value={agentCompoundValue}
             help={
               <span>
-                {windowText}活跃 <span className="notranslate" translate="no">Agent</span> / 已配置 <span className="notranslate" translate="no">Agent</span> 总数（含未启用）。活跃率 = 有访问记录的 <span className="notranslate" translate="no">Agent</span> / 总数。
+                {windowText}业务活跃 <span className="notranslate" translate="no">Agent</span> / 已配置 <span className="notranslate" translate="no">Agent</span> 总数（含未启用）。活跃率 = 有默认用量业务调用的 <span className="notranslate" translate="no">Agent</span> / 总数；分子只计当前配置资产，历史日志身份不计入分母。
               </span>
             }
             subValue={agentCardState === "ok" ? <span>活跃率 {formatRate(usage?.agentActiveRate ?? 0)}</span> : undefined}
@@ -489,7 +489,7 @@ export function GovernanceOverview() {
             value={tokenCompoundValue}
             help={
               <span>
-                {windowText}活跃 <span className="notranslate" translate="no">Token</span> / 已下发凭证总数（含未启用 <span className="notranslate" translate="no">Agent</span> 的 <span className="notranslate" translate="no">Token</span>）。D4：若多个 <span className="notranslate" translate="no">Token</span> 共享同一前缀，计数存在歧义（<span className="notranslate" translate="no">partial</span>）。
+                {windowText}业务活跃 <span className="notranslate" translate="no">Token</span> / 已下发凭证总数（含未启用 <span className="notranslate" translate="no">Agent</span> 的 <span className="notranslate" translate="no">Token</span>）。业务活跃 = 窗口内至少有 1 次默认用量业务调用，排除协议事件与默认视图排除的评测探针。D4：若多个 <span className="notranslate" translate="no">Token</span> 共享同一前缀，计数存在歧义（<span className="notranslate" translate="no">partial</span>）。
               </span>
             }
             subValue={tokenCardState === "ok" ? <span>活跃率 {formatRate(usage?.tokenActiveRate ?? 0)}</span> : undefined}

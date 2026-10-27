@@ -17,6 +17,8 @@
 | v0.3 收口 | 统一 v0.25／P1 元数据；明确访问路径与调用次数、L25-01 同源对账、四项原待定口径；全部验收仍未执行 |
 | 冲突裁决 | 与 `webui/docs/07-mcp-auth-proxy-spec.md`（运行时授权/裁决）冲突 → 该文件；与 `docs/access-control/design-upgrade.md` 冲突 → 该文件。本文只做**展示**，不参与任何授权判定 |
 
+> **Spec 189 修订（2026-10-27）**：本文的**授权面**、**`access_log_sources` 访问主体**、调用 ID 去重与守恒算法**全部不变**；仅**凭证清单的「统计期调用次数」**改为 Default Usage Call（排除全部协议事件与默认视图排除的评测探针）。真实表访问事实（含真实评测调用）**不因默认用量口径被过滤**，Access Path 的存在性去重语义不变。口径见 `webui/docs/189-usage-metrics-truthfulness-and-cross-page-consistency-spec.md` §6。
+
 ---
 
 ## Terminology Compliance

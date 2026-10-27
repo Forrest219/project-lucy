@@ -1053,6 +1053,17 @@ export type AgentStats = {
   businessCallsLast7d?: number | null;
   /** Windowed MCP handshake/discovery requests. */
   protocolCallsLast7d?: number | null;
+  /**
+   * Spec 189 §5.2 — windowed Default Usage Calls (business calls minus the
+   * default-view-excluded eval probes). This is the metric business activity
+   * and business call volume must read.
+   */
+  usageCallsLast7d?: number | null;
+  /**
+   * Spec 189 §5.2 — windowed eval probes excluded from the default usage
+   * view. Reconciliation aid: `businessCallsLast7d = usageCallsLast7d + evalProbeCallsLast7d`.
+   */
+  evalProbeCallsLast7d?: number | null;
   /** Spec 128 HR-1: null when metricsState=unavailable */
   deniedLast7d: number | null;
   lastSeen?: string;
@@ -1103,6 +1114,21 @@ export type AgentsResponseSummary = {
   callsLast7d: number | null;
   businessCallsLast7d?: number | null;
   protocolCallsLast7d?: number | null;
+  /**
+   * Spec 189 §5.2 — windowed Default Usage Calls across the current
+   * configured Agents. Authoritative server-side value.
+   */
+  usageCallsLast7d?: number | null;
+  /**
+   * Spec 189 §5.2 — windowed eval probes excluded from the default usage view.
+   */
+  evalProbeCallsLast7d?: number | null;
+  /**
+   * Spec 189 §5.2 — current configured Agents with at least one default usage
+   * business call. The frontend `summarizeAgents` is only a compatibility
+   * path for legacy responses that carry no summary.
+   */
+  usageActiveAgentCountLast7d?: number | null;
   /** Spec 128 HR-1: null when metricsState=unavailable */
   deniedLast7d: number | null;
   /** Spec 128 §3.1: ok or unavailable */
@@ -1164,7 +1190,13 @@ export type TokenInventoryItem = {
     enabled: boolean;
     roles: string[];
   };
+  /** 最近 MCP 访问 — any access_log row for this token. */
   last_used?: string;
+  /**
+   * Spec 189 §6 — 最近业务使用: the latest Default Usage Call of this token.
+   * Protocol traffic and default-view-excluded eval probes do not update it.
+   */
+  last_business_use?: string;
   last_tool?: string;
   last_outcome?: string;
   last_ip?: string | null;

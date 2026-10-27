@@ -12,6 +12,8 @@
 | 适用范围 | 所有 List KPI、Overview Ops 和 Permission Summary 指标卡的定义、状态、口径、渲染规则 |
 | 输出位置 | `webui/docs/128-enterprise-kpi-contract-spec.md` |
 
+> **Spec 189 修订（2026-10-27）**：KPI 文案注册点 `webui/src/lib/kpiContracts.ts` 的「活跃 Agent」「近 N 业务活跃 Token」「近 N 业务调用量」「ACL 拒绝次数」「多数请求耗时」help 文案改为**默认用量**口径（排除全部协议事件与默认视图排除的评测探针）。**D1／D2／D4 锚点不变**；「近 N 使用过的凭据」保持**全量访问**口径，与业务活跃 Token 不混称（两者可以不等）。本 Spec 的 KPI 状态语义（`ok`／`no_data`／`unavailable`／`partial` 与 `—` 渲染）不受影响。详见 `webui/docs/189-usage-metrics-truthfulness-and-cross-page-consistency-spec.md`。
+
 ## 1. 目的
 
 本规范定义 Lucy WebUI 所有 KPI 指标卡的 **合约（Contract）**，防止以下回归：

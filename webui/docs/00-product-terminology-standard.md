@@ -509,7 +509,7 @@ Connection (连接)
 
 ### 4.5 访问治理 / 使用概况
 
-`/admin/usage` 页面（侧栏项 `admin-governance`，位于运行状态；旧 path `/admin/governance` redirect）术语来自 Spec 78 / 84，并由 Spec 86 修订路由与 KPI 主标签。Spec 148 增补「界面使用」视图（`?view=interface`）。Spec 156 将侧栏从访问治理移入运行状态，数据访问视图不再展示调用量、ACL 拒绝次数与多数请求耗时：
+`/admin/usage` 页面（侧栏项 `admin-governance`，位于运行状态；旧 path `/admin/governance` redirect）术语来自 Spec 78 / 84，并由 Spec 86 修订路由与 KPI 主标签。Spec 148 增补「界面使用」视图（`?view=interface`）。Spec 156 将侧栏从访问治理移入运行状态，数据访问视图不再展示调用量、ACL 拒绝次数与多数请求耗时。**Spec 189 修订用量口径**：业务调用量改为「默认用量」口径（排除全部协议事件与默认视图排除的评测探针），并登记「默认用量业务调用」与「近 N 业务活跃 Token」：
 
 | Canonical Term | UI 主术语 | 允许补充说法 | 禁止文案 | 说明 |
 |---|---|---|---|---|
@@ -520,19 +520,21 @@ Connection (连接)
 | Agent List Identity Column | 显示名/用户 ID | — | 列表主列仅写「显示名」而单元格含用户 ID | `/admin/agents` 列表主列头；双行：主行显示名、次行用户 ID（Spec 98） |
 | Agent List Search | 搜索显示名或用户 ID | 搜索 Agent 名称 / 用户 ID | Agent 名称 | 列表搜索 placeholder |
 | Configured Agent Count | Agent 总数 | 已配置实例 | access.yaml 中的实例（主 hint） | 不随窗口变；含 `enabled: false` |
-| Active Agent | 近 N 活跃 Agent | 活跃 Agent（叙述） | 最近活跃 Agent（主标签）；卡底「近 N 有调用」藏窗口 | N 进**标题** |
+| Active Agent | 近 N 活跃 Agent | 活跃 Agent（叙述） | 最近活跃 Agent（主标签）；卡底「近 N 有调用」藏窗口 | N 进**标题**；Spec 189：窗口内至少 1 次**默认用量业务调用**的去重 Agent，纯协议与默认视图排除的评测探针不计入；是否只含当前配置 Agent 按页面人口边界确定 |
 | Agent Active Rate | Agent 活跃率 | 活跃 / 总数 | — | 并入活跃 Agent 卡副行，不独立成卡 |
 | Configured Token Count | 配置 Token | 已下发凭证 | access.yaml 配置数（主 hint） | 不随窗口变 |
 | Available Token Count | 可用 Token | 当前可用凭据 | 活跃 Token、有效 Token（未说明 Agent 状态） | Agent 已启用且 Token 未过期的当前配置数 |
-| Used Credential Count | 近 N 使用过的凭据 | 近窗凭据 | 近 N 活跃 Token | access_log 去重 hash prefix；可能包含已删除/已吊销凭据；有 prefix 碰撞时为部分可信 |
-| Active Token | 近 N 使用过的凭据 | 活跃 Token（仅兼容历史字段叙述） | 近 7 天活跃 Token（写死）；卡底藏窗口 | Deprecated UI term；新 UI 使用 Used Credential Count |
+| Used Credential Count | 近 N 使用过的凭据 | 近窗凭据 | 近 N 活跃 Token | access_log 去重 hash prefix；可能包含已删除/已吊销凭据；有 prefix 碰撞时为部分可信。Spec 189：保持**全量访问**口径（含协议事件），不改名为业务活跃；可以多于「近 N 业务活跃 Token」 |
+| Active Token | 近 N 使用过的凭据 | 活跃 Token（仅兼容历史字段叙述） | 近 7 天活跃 Token（写死）；卡底藏窗口 | Deprecated UI term；新 UI 使用 Used Credential Count。Spec 189 起，业务活跃口径用 Business Active Count（近 N 业务活跃 Token），与本行的全量访问口径并存且不混称 |
 | Token Active Rate | Token 活跃率 | 活跃 / 配置 | access_log 去重 prefix | 并入活跃 Token 卡副行 |
 | Authorized Table Count | 授权表 | 角色已授权表 | 配置表（本页主标签）、白名单表、启用表（本页禁止混用） | ACL 授权去重；≠ 启用表范围；不随窗口变 |
 | Active Table Count | 近 N 活跃表 | 活跃表（叙述） | 热门表（与排行区分）；卡底藏窗口 | N 进标题；活跃率分母=授权表 |
-| Business Call Volume | 近 N 业务调用量 | 业务调用量 | 近 N 调用量（未说明口径）、最近调用 | 排除 initialize、notifications/initialized、tools/list；用于 Agent 活跃判定 |
-| Protocol Request Volume | 近 N 协议请求量 | 协议请求量 | 工具调用量 | 仅 initialize、notifications/initialized、tools/list；保留用于连接诊断 |
-| Last MCP Access | 最近 MCP 访问 | 最近访问时间 | 最近业务使用（混用） | 全历史最后一条 access_log；协议请求也会更新 |
-| Last Business Use | 最近业务使用 | 最近业务调用 | 最近访问时间（混用） | 全历史最后一条非协议调用 |
+| Business Call Volume | 近 N 业务调用量 | 业务调用量 | 近 N 调用量（未说明口径）、最近调用 | Spec 189：**默认用量**口径 —— 排除全部协议事件及符合 Spec 162 条件的评测探针；包含真实业务工具或受权限保护内容读取的成功、错误与拒绝尝试；用于 Agent 活跃判定 |
+| Protocol Request Volume | 近 N 协议请求量 | 协议请求量 | 工具调用量 | Spec 189：全部握手、工具／提示发现、资源枚举、取消通知、服务发现及 `server/*` 协议方法（不再只有 3 种握手）；保留用于连接诊断 |
+| Last MCP Access | 最近 MCP 访问 | 最近访问时间 | 最近业务使用（混用） | 全历史最后一条 access_log；协议请求也会更新；Spec 189 保持不变 |
+| Last Business Use | 最近业务使用 | 最近业务调用 | 最近访问时间（混用） | Spec 189：全历史最后一次**默认用量业务调用**；协议事件与默认视图排除的评测探针不更新；可以早于「最近 MCP 访问」 |
+| Default Usage Call | 默认用量业务调用 | 业务调用（技术口径） | 全部 access_log、协议请求、原始非协议调用 | Spec 189：非协议业务工具调用或受权限保护内容读取，且不是 Spec 162 定义的默认视图排除评测探针；**技术口径**，不新增卡片标题 |
+| Business Active Token | 近 N 业务活跃 Token | 业务活跃 Token（叙述） | 近 N 使用过的凭据、可用 Token、仅发生握手的 Token | Spec 189：当前配置 Token 中，窗口内至少有 1 次默认用量业务调用的 Token |
 | Audit Write Completeness | 审计写入完整性 | 数据完整性 | 日志完整（绝对保证） | 只表达当前 Lucy 进程观测到的 pending / failed 写入状态 |
 | Call Volume | 近 N 调用量 | 调用量（叙述） | 最近调用 | 调用监控页沿用；定义为 Business Call Volume |
 | Typical Request Latency | 多数请求耗时 | P95（次级括注） | 响应上限（P95）作主标签；平均响应时长、AVG(duration_ms) | hint：95% 的请求在此时间内完成 |
@@ -664,7 +666,7 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 |---|---|---|---|
 | Primary Status | 汇总主状态 | 用旧 outcome 冒充执行状态 | 八取值派生视图；与 authorization / execution / delivery 分开 |
 | Null Reason | 空值原因 | 空白、未知填 0 | 六值：`not_applicable / not_collected / redacted / parse_failed / unknown / not_supported` |
-| Protocol Access Denominator | 协议访问分母 | 业务问询分母、工具调用数 | 含握手与探测的独立请求集合 |
+| Protocol Access Denominator | 协议访问分母 | 业务问询分母、工具调用数 | 含握手与探测的独立请求集合 | Spec 189：协议集合扩大后该分母**计数会上升**（新增提示／资源发现、取消通知与服务发现类方法），属预期数值迁移 |
 | Business Inquiry Denominator | 业务问询分母 | 事件数、推断分组数 | 按有效显式 turnId 去重的登记问询集合 |
 | Endpoint ID | 入口标识 | 监听端口 | 逻辑入口；端口只是登记属性 |
 | Evidence Version Chain | 证据版本链 | 同目录清单重写 | 通过 `prevExportId` 关联导出版本 |

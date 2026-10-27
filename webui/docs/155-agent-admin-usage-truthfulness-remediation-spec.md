@@ -9,6 +9,8 @@
 | 页面 | `/admin/agents` |
 | 关联 Spec | 07、128、143 |
 
+> **Spec 189 修订（2026-10-27）**：本文 §1 确立的「协议请求 = `initialize`／`notifications/initialized`／`tools/list`」三方法集合**已被扩展为完整协议集合**（增加 `ping`、`resources/list`、`resources/templates/list`、`prompts/list`、`notifications/cancelled`、`server/discover` 及任何 `server/*` 方法），三方法口径**不再**作为默认用量排除依据。本文的两条保留决策继续有效：「最近 MCP 访问」与「近 N 使用过的凭据」保持**全量访问**语义；「近 7 天业务调用量」改为**默认用量**口径（再排除默认视图排除的评测探针）。存量字段数值迁移方向见 Spec 189 §5.2。
+
 ## 1. 背景与决策
 
 MCP 客户端配置 Lucy 后，初始化握手、工具发现和真实业务工具调用都会进入 `access_log`。旧 Agent 页把这些记录统一计为“调用”，并把最近 7 天窗口内的 `MAX(ts)` 当成“最近访问”，会造成协议握手被误判为真实使用、历史用户被显示为“未访问”、数据库故障被显示为 0。

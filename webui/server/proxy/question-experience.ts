@@ -23,17 +23,6 @@ const ACL_REASONS = new Set([
   "agent_disabled",
 ]);
 
-/** Spec 162 §7.6 — protocol methods never enter the default usage KPI. */
-const PROTOCOL_TOOL_SET = new Set([
-  "tools/list",
-  "resources/list",
-  "resources/templates/list",
-  "ping",
-  "server/discover",
-  "initialize",
-  "notifications/initialized",
-  "notifications/cancelled"
-]);
 
 export type FailureDimension = "" | "引擎超时与并发" | "过滤条件下推" | "用法与语义" | "权限拒绝";
 export type UsageGroup = "使用人" | "Agent" | "自动化调用";
@@ -506,7 +495,6 @@ export function evalMarkFromToken(token: { eval_mark?: unknown } | null | undefi
   return token?.eval_mark === true;
 }
 
-const PROBE_NAME_MARKERS = ["probe-", "rds-test", "demo-mysql"] as const;
 
 /**
  * Spec 162 §8 / WO-14 T1 / SC-20 — the new 慢调用 definition.
@@ -594,43 +582,19 @@ export function isEmptyResult(input: {
   return input.responseRowCount === 0;
 }
 
-/** Probe-looking by name only. SC-16 requires `eval_mark` on top of this. */
-export function hasProbeName(value: string | null | undefined): boolean {
-  if (!value) return false;
-  const lowered = value.toLowerCase();
-  return PROBE_NAME_MARKERS.some((marker) => lowered.includes(marker));
-}
+/**
+ * Spec 189 — the authoritative implementation now lives in the shared usage
+ * classification module. This file keeps the historical export so existing
+ * callers (and Spec 162 tests) keep working.
+ */
+export { hasProbeName, isEvalProbeCall, defaultUsageExcluded, PROBE_NAME_MARKERS } from "./usage-classification.js";
 
 /**
  * Spec 162 §7.6 — a probe call leaves the default usage view only when BOTH
  * hold: the args or connection name looks like a probe, and the Token carries
  * an explicit `eval_mark`. Name-only matches stay in the default view.
  */
-export function isEvalProbeCall(input: {
-  evalMark?: boolean | null;
-  connectionName?: string | null;
-  args?: Record<string, unknown> | null;
-}): boolean {
-  if (!input.evalMark) return false;
-  if (hasProbeName(input.connectionName)) return true;
-  const args = input.args;
-  if (!args || typeof args !== "object") return false;
-  for (const [key, value] of Object.entries(args)) {
-    if (!/connection|source|table|database|schema/i.test(key)) continue;
-    if (typeof value === "string" && hasProbeName(value)) return true;
-  }
-  return false;
-}
 
-/** Spec 162 §7.6 — raw rows are never dropped; only the default view splits. */
-export function defaultUsageExcluded(row: { tool?: string | null; evalMark?: boolean | null; connectionName?: string | null; args?: Record<string, unknown> | null }): boolean {
-  if (row.tool && PROTOCOL_TOOL_SET.has(row.tool)) return true;
-  return isEvalProbeCall({
-    evalMark: row.evalMark,
-    connectionName: row.connectionName,
-    args: row.args
-  });
-}
 
 /**
  * Spec 162 §7.3 — the single allow-list function shared by every permission

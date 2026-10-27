@@ -471,7 +471,10 @@ describe("AgentDetail", () => {
     expect(list).not.toHaveTextContent("身份");
 
     const sparse = screen.getByTestId("agent-token-row-sparse");
-    expect(sparse).toHaveTextContent("尚未使用");
+    // Spec 189 §6 — the Token column shows "最近 MCP 访问", so the empty
+    // state is "尚未访问" (not "尚未使用", which conflated MCP access with
+    // business use).
+    expect(sparse).toHaveTextContent("尚未访问");
     expect(sparse).not.toHaveTextContent("备注");
     expect(sparse).not.toHaveTextContent("Agent 类型");
     expect(sparse).not.toHaveTextContent("最近设备名");
@@ -485,7 +488,7 @@ describe("AgentDetail", () => {
     expect(screen.getByTestId("agent-token-row-client-only")).toHaveTextContent("codex");
     expect(screen.getByTestId("agent-token-row-client-only")).not.toHaveTextContent("备注");
     expect(screen.getByTestId("agent-token-row-expiring")).toHaveTextContent("过期 2026-12-01");
-    expect(screen.getByTestId("agent-token-row-unused")).toHaveTextContent("尚未使用");
+    expect(screen.getByTestId("agent-token-row-unused")).toHaveTextContent("尚未访问");
   });
 
   it("opens Token tab from the tab query parameter", async () => {

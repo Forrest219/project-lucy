@@ -17,6 +17,8 @@
 
 > 改号说明：本文原编号 131，与 `webui/docs/131-lucy-admin-catalog-bound-role-spec.md`（`lucy_admin` 与 `catalog_bound`）重号。2026-10-13 起本文改为 171，131 专指 `lucy_admin` 那份。引用本文的历史材料按 171 理解。
 
+> **Spec 189 修订（2026-10-27）**：本文的 **Skill 内容读取**（`lucy_skill_read` 工具与 `resources/read`／`prompts/get` 通道）属**真实业务工具或受权限保护内容读取**，进入 Raw Business Tool Call，并在无评测探针标记时进入 Default Usage Call —— **不因使用 JSON-RPC 方法名而被误判为协议噪音**。纯提示／资源**发现**（`prompts/list`、`resources/list`、`resources/templates/list`）才是协议事件。口径以 `webui/docs/189-usage-metrics-truthfulness-and-cross-page-consistency-spec.md` §4.2 为准。
+
 ---
 
 ## 1. 背景与核心定位

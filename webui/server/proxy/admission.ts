@@ -24,8 +24,15 @@ const SKILLS_PATH = "/mcp/skills";
 const MCP_METHODS: ReadonlySet<string> = new Set(["POST", "GET", "DELETE"]);
 const ALLOW_HEADER = "POST, GET, DELETE";
 
-/** JSON-RPC methods the gateway knows how to authorize or hand to the upstream. */
-const ALLOWED_RPC_METHODS: ReadonlySet<string> = new Set([
+/**
+ * JSON-RPC methods the gateway knows how to authorize or hand to the upstream.
+ *
+ * Spec 189 — exported read-only so the usage-classification coverage test can
+ * prove that every admitted method has exactly one usage classification.
+ * The admission set is **not** the protocol set: `tools/call`, `resources/read`
+ * and `prompts/get` are admitted *and* business.
+ */
+export const ALLOWED_RPC_METHODS: ReadonlySet<string> = new Set([
   "initialize",
   "ping",
   "notifications/initialized",
