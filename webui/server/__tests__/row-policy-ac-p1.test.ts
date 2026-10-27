@@ -223,6 +223,28 @@ ${BASE_ROLE_TOOLS}`,
     if (!missing.ok) expect(missing.reason).toMatch(/row_policy_/);
   });
 
+  it("regression: scoped row_policy resolves fields when the _schema manifest filename preserves the original (upper/mixed-case) schema name", async () => {
+    projectRoot = await makeProject(accessYaml(SCOPED_EAST_ROLE, SCOPED_EAST_AGENT));
+    // Manifest files keep the schema's original case on disk (see catalog-assets.ts
+    // buildTargetRel), while the source map / selector always normalize schema to
+    // lowercase. Rename fin.yaml -> FIN.yaml to reproduce that on a case-sensitive
+    // filesystem and prove the lookup no longer silently drops physical columns.
+    const { rename } = await import("node:fs/promises");
+    await rename(
+      path.join(projectRoot, "semantic-layer", "warehouse", "_schema", "fin.yaml"),
+      path.join(projectRoot, "semantic-layer", "warehouse", "_schema", "FIN.yaml")
+    );
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
+    const { effectivePermissions } = await loadAcl();
+
+    const resolved = await effectivePermissions(identity("scoped_agent"));
+    expect(resolved.ok).toBe(true);
+    if (resolved.ok) {
+      expect(resolved.permissions.capabilities[0]?.rowGrant.kind).toBe("scoped");
+    }
+  });
+
   it("BY-19: measure field in row_policy fails compilation", async () => {
     projectRoot = await makeProject(accessYaml(
       `  measure_field:

@@ -175,19 +175,23 @@ async function loadPhysicalColumnsFromSchema(
   const physical = new Set<string>();
   const schemaDir = path.join((await loadContentPaths()).semanticLayer, connectionId, "_schema");
   const files: string[] = [];
-  if (schema) {
-    files.push(path.join(schemaDir, `${schema}.yaml`));
-  } else {
-    try {
-      const entries = await readdir(schemaDir);
-      for (const entry of entries) {
-        if (entry.endsWith(".yaml") || entry.endsWith(".yml")) {
-          files.push(path.join(schemaDir, entry));
-        }
+  const wantSchema = schema ? normalizeRef(schema) : undefined;
+  try {
+    const entries = await readdir(schemaDir);
+    for (const entry of entries) {
+      if (!entry.endsWith(".yaml") && !entry.endsWith(".yml")) continue;
+      // Manifest filenames keep the schema's original case (see catalog-assets.ts
+      // buildTargetRel); match case-insensitively instead of reconstructing the
+      // path from an already-normalized schema string, which can miss the file
+      // on a case-sensitive filesystem (e.g. schema "BIDM" -> file "BIDM.yaml").
+      if (wantSchema) {
+        const base = normalizeRef(entry.replace(/\.ya?ml$/i, ""));
+        if (base !== wantSchema) continue;
       }
-    } catch {
-      return physical;
+      files.push(path.join(schemaDir, entry));
     }
+  } catch {
+    return physical;
   }
 
   const want = normalizeRef(sourceName);
