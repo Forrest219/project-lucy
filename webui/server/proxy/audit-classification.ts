@@ -31,7 +31,6 @@
 import {
   derivePrimaryStatus,
   DERIVATION_VERSION,
-  type AuthorizationView,
   type DeliveryStatus,
   type ExecutionView,
   type PrimaryStatus
@@ -225,6 +224,18 @@ export type ExecutionEvidence = {
   conflictTags?: string[];
   /** 明确授权拒绝（真实裁决）。 */
   authorizationDenied?: boolean;
+  /**
+   * 明确授权通过（真实裁决）。
+   *
+   * 与 `budgetStopped` 独立：预算终止不得覆盖已经发生的授权裁决
+   * （Spec §4.3(b) / §18.10 F-03）。
+   */
+  authorizationAllowed?: boolean;
+  /**
+   * 确未评估授权（可证明：请求在授权裁决之前即被终止）。
+   * 证据不足不属于本项 —— 那种情况落 `unknown`。
+   */
+  authorizationNotEvaluated?: boolean;
   /** 本次尝试未实际执行。 */
   notExecuted?: boolean;
   /** 送达状态（本期只写 prepared / sent / acknowledged / unknown）。 */
@@ -326,11 +337,29 @@ export function classifyAuditEvent(input: ClassifyAuditEventInput): ClassifiedAu
   const authorizationDenied =
     evidence.authorizationDenied ?? (legacy.authorizationStatus === "denied");
 
+  // ─── F-03：授权事实保真 ──────────────────────────────────────────────────
+  //
+  // legacy 的 outcome 启发式在「非 ok 非 denied」时一律给 `not_evaluated`。
+  // 那只是**没有证据**，不是「确未评估」；直接采用会让预算终止等场景被反推成
+  // `not_evaluated`，正是 Spec §4.3(b) / §18.10 F-03 禁止的行为。
+  //
+  // 此处只接受两类来源：
+  //   1. 调用方给出的显式裁决凭据（`evidence` / `authorizationStatusHint`）；
+  //   2. legacy 只在 outcome 明确为 ok/succeeded（即授权未拒绝）时才给出 allowed。
+  // 其余一律 `unknown`（派生层另有「执行成功 ⇒ 授权已通过」的推理）。
+  const authorizationAllowed =
+    evidence.authorizationAllowed ??
+    (input.authorizationStatusHint === "allowed" || legacy.authorizationStatus === "allowed");
+  const authorizationNotEvaluated =
+    evidence.authorizationNotEvaluated ?? (input.authorizationStatusHint === "not_evaluated");
+
   const derivation = derivePrimaryStatus({
     unresolvedContradiction: evidence.unresolvedContradiction,
     conflictTags: evidence.conflictTags,
     budgetStopped,
     authorizationDenied,
+    authorizationAllowed,
+    authorizationNotEvaluated,
     notExecuted,
     verifiedSuccess: evidence.verifiedSuccess,
     verifiedFailure: evidence.verifiedFailure,
@@ -338,7 +367,6 @@ export function classifyAuditEvent(input: ClassifyAuditEventInput): ClassifiedAu
     executionTimeout: evidence.executionTimeout,
     durablePrefix: evidence.durablePrefix,
     interruptedWithoutResult: evidence.interruptedWithoutResult,
-    authorizationView: legacy.authorizationStatus as AuthorizationView,
     deliveryStatus: evidence.deliveryStatus,
     legacyOutcome: outcome,
     evidenceRefs: evidence.evidenceRefs

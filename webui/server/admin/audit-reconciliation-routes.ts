@@ -29,6 +29,8 @@ import { getAuditDb } from "./audit.js";
 import { getSecurityStore } from "../security/instance.js";
 import { sha256Hex, stableJson } from "../config-digest.js";
 import { trustedActorFromRequest } from "../security/request-actor.js";
+// F-02：精确 as-of S 的证明由 P0-1 提供（P0-4 不自建第二套口径）。
+import { buildDiagnosticIncomplete } from "../proxy/audit-as-of-proof.js";
 import {
   RECONCILIATION_PROJECTION_DEADLINE_MS,
   buildReconciliationTimeRange,
@@ -50,7 +52,10 @@ import {
   isProtocolTool,
   paginateByKey,
   probeColumns,
+  proveAsOfSForSelection,
+  proveInquiryAsOfS,
   reconcileTokens,
+  type AccessLogRow,
   type ActiveTokenObservation,
   type ConfiguredTokenIdentity,
   type ConfiguredTokenSnapshot,
@@ -93,6 +98,32 @@ function appendAsOfBound(
   // mode fails while opening the context when ledger_seq is unavailable.
   conditions.push("id <= @rowBound");
   params.rowBound = context.rowBoundAccessLogId;
+}
+
+/**
+ * F-02：命中**同一筛选**、但账本位置不可判定的行。
+ *
+ * 它们被 `ledger_seq <= S` 排除在视图之外，却确实落在请求范围内 → 范围完整
+ * 不可证明。没有这一步，视图会静默丢掉位置不可判定的行并自称完整。
+ *
+ * `params` 可以带上账本上界相关的命名参数：better-sqlite3 容忍多余的命名参数
+ * （已实测），多余的键不会进入本查询的绑定。
+ */
+function collectUnplaceableRows(
+  database: import("better-sqlite3").Database,
+  filterConditions: string[],
+  params: Record<string, unknown>,
+  columns: Set<string>
+): number[] {
+  if (!columns.has("ledger_seq")) return [];
+  const rows = database
+    .prepare(
+      `SELECT id FROM access_log
+         WHERE ${filterConditions.join(" AND ")} AND ledger_seq IS NULL
+         ORDER BY id ASC`
+    )
+    .all(params) as Array<{ id: number }>;
+  return rows.map((row) => Number(row.id));
 }
 
 /**
@@ -343,40 +374,44 @@ type UsageRow = {
 function collectUsageRows(
   database: import("better-sqlite3").Database,
   context: ReconciliationContext
-): { rows: UsageRow[]; protocolEventCount: number } {
+): { rows: UsageRow[]; protocolEventCount: number; scopeRows: AccessLogRow[]; unplaceableRowIds: number[] } {
   const info = probeColumns(database, "access_log");
   // 审计库尚无 access_log 表（新库 / 未初始化）：返回空集合而不是 500。
-  if (!info.has("id")) return { rows: [], protocolEventCount: 0 };
-  const conditions = ["ts >= @from", "ts < @to"];
+  if (!info.has("id")) return { rows: [], protocolEventCount: 0, scopeRows: [], unplaceableRowIds: [] };
+  // 筛选条件与账本上界分开构造：同一筛选还要用来查「命中范围但位置不可判定」
+  // 的行（F-02），否则视图会静默丢掉它们并自称完整。
+  const filterConditions = ["ts >= @from", "ts < @to"];
   const params: Record<string, unknown> = {
     from: context.timeRange.from,
     to: context.timeRange.to
   };
-  appendAsOfBound(conditions, params, info, context);
   if (context.filter.user) {
-    conditions.push("user_id = @user");
+    filterConditions.push("user_id = @user");
     params.user = context.filter.user;
   }
   if (context.filter.tool) {
-    conditions.push("tool = @tool");
+    filterConditions.push("tool = @tool");
     params.tool = context.filter.tool;
   }
   if (context.filter.outcome) {
-    conditions.push("outcome = @outcome");
+    filterConditions.push("outcome = @outcome");
     params.outcome = context.filter.outcome;
   }
   if (context.filter.tokenHashPrefix && info.has("token_hash_prefix")) {
-    conditions.push("token_hash_prefix = @tokenHashPrefix");
+    filterConditions.push("token_hash_prefix = @tokenHashPrefix");
     params.tokenHashPrefix = context.filter.tokenHashPrefix;
   }
   if (context.filter.sessionId && info.has("lucy_session_id")) {
-    conditions.push("lucy_session_id = @sessionId");
+    filterConditions.push("lucy_session_id = @sessionId");
     params.sessionId = context.filter.sessionId;
   }
   if (context.filter.platform && info.has("lucy_platform")) {
-    conditions.push("lucy_platform = @platform");
+    filterConditions.push("lucy_platform = @platform");
     params.platform = context.filter.platform;
   }
+  const conditions = [...filterConditions];
+  appendAsOfBound(conditions, params, info, context);
+  const unplaceableRowIds = collectUnplaceableRows(database, filterConditions, params, info);
 
   const projection = [
     "id",
@@ -384,7 +419,8 @@ function collectUsageRows(
     "tool",
     "lucy_turn_id",
     "token_hash_prefix",
-    "credential_principal_id"
+    "credential_principal_id",
+    "ledger_seq"
   ]
     .map((column) => (info.has(column) ? column : `NULL AS ${column}`))
     .join(", ");
@@ -411,7 +447,11 @@ function collectUsageRows(
 
   return {
     rows: usageRows,
-    protocolEventCount: usageRows.filter((row) => row.protocol).length
+    protocolEventCount: usageRows.filter((row) => row.protocol).length,
+    // F-02：同一批范围行，供 as-of S 证明使用（与视图读到的行完全一致）。
+    scopeRows: rows as unknown as AccessLogRow[],
+    // F-02：命中筛选但位置不可判定的行（视图范围不可证明完整）。
+    unplaceableRowIds
   };
 }
 
@@ -594,20 +634,32 @@ export function registerAuditReconciliationRoutes(app: FastifyInstance): void {
     }
 
     try {
+      const mode = readMode(request.query.mode);
       const bundle = await openReconciliationContext({
         filter: { turnId },
         metricUnit: "tool_call",
-        mode: readMode(request.query.mode)
+        mode
       });
       const database = await getAuditDb();
       const detail = withFrozenAuditSnapshot(database, () =>
         buildInquiryReconciliation({ db: database, context: bundle.context, turnId })
       );
+      // F-02：精确 as-of S 证明（范围 = 该问询读到的同一批行）。
+      const asOfProof = withFrozenAuditSnapshot(database, () =>
+        proveInquiryAsOfS(database, bundle.context, turnId)
+      );
+      if (!asOfProof.ok && mode === "complete") {
+        const error = new Error("as_of_s_unprovable") as Error & { code?: string };
+        error.code = "RECONCILIATION_AS_OF_S_UNPROVABLE";
+        throw error;
+      }
       return {
         ok: true,
         data: {
           reconciliationContext: bundle.context,
           projectionCoverage: bundle.coverage,
+          asOfProof,
+          diagnosticIncomplete: asOfProof.ok ? null : buildDiagnosticIncomplete(asOfProof),
           inquiry: detail
         }
       };
@@ -628,6 +680,16 @@ export function registerAuditReconciliationRoutes(app: FastifyInstance): void {
         return {
           ok: false,
           error: { code, message: "审计行缺少账本序号，无法证明对账范围完整" }
+        };
+      }
+      if (code === "RECONCILIATION_AS_OF_S_UNPROVABLE") {
+        reply.code(409);
+        return {
+          ok: false,
+          error: {
+            code,
+            message: "无法证明基础事实、归属修订、关联与聚合可按账本上界 S 精确重建，正式对账读取失败"
+          }
         };
       }
       if (code === "RECONCILIATION_SECURITY_STORE_UNAVAILABLE") {
@@ -655,10 +717,11 @@ export function registerAuditReconciliationRoutes(app: FastifyInstance): void {
     }
 
     try {
+      const mode = readMode(request.query.mode);
       const bundle = await openReconciliationContext({
         filter: request.query,
         metricUnit: "tool_call",
-        mode: readMode(request.query.mode)
+        mode
       });
       const database = await getAuditDb();
       const configured = await readConfiguredTokenSnapshot();
@@ -672,8 +735,18 @@ export function registerAuditReconciliationRoutes(app: FastifyInstance): void {
           unknownIdentity: tokenInput.unknownIdentity,
           protocolEventCount: rows.protocolEventCount
         });
-        return { tokenReconciliation, usageRows: rows.rows };
+        // F-02：精确 as-of S 证明（范围 = 本次读到的同一批行）。
+        const asOfProof = proveAsOfSForSelection(database, bundle.context, rows.scopeRows, rows.unplaceableRowIds);
+        return { tokenReconciliation, usageRows: rows.rows, asOfProof };
       });
+
+      // F-02：上游不能证明按 S 精确重建时，**正式完整读取失败关闭**；
+      // 诊断模式返回显式不完整与实际证据界 / 缺失集合。
+      if (!usage.asOfProof.ok && mode === "complete") {
+        const error = new Error("as_of_s_unprovable") as Error & { code?: string };
+        error.code = "RECONCILIATION_AS_OF_S_UNPROVABLE";
+        throw error;
+      }
 
       const page = paginateByKey({
         items: usage.usageRows,
@@ -687,6 +760,9 @@ export function registerAuditReconciliationRoutes(app: FastifyInstance): void {
         data: {
           reconciliationContext: bundle.context,
           projectionCoverage: bundle.coverage,
+          // F-02：as-of S 证明结果（正式模式不可证明时不会走到这里）。
+          asOfProof: usage.asOfProof,
+          diagnosticIncomplete: usage.asOfProof.ok ? null : buildDiagnosticIncomplete(usage.asOfProof),
           tokenReconciliation: usage.tokenReconciliation,
           calls: {
             items: page.items,
@@ -716,6 +792,16 @@ export function registerAuditReconciliationRoutes(app: FastifyInstance): void {
           error: { code, message: "审计行缺少账本序号，无法证明对账范围完整" }
         };
       }
+      if (code === "RECONCILIATION_AS_OF_S_UNPROVABLE") {
+        reply.code(409);
+        return {
+          ok: false,
+          error: {
+            code,
+            message: "无法证明基础事实、归属修订、关联与聚合可按账本上界 S 精确重建，正式对账读取失败"
+          }
+        };
+      }
       if (code === "RECONCILIATION_SECURITY_STORE_UNAVAILABLE") {
         reply.code(503);
         return { ok: false, error: { code, message: "安全账本不可用，无法确定账本上界" } };
@@ -741,10 +827,11 @@ export function registerAuditReconciliationRoutes(app: FastifyInstance): void {
     }
 
     try {
+      const mode = readMode(request.query.mode);
       const bundle = await openReconciliationContext({
         filter: request.query,
         metricUnit: "tool_call",
-        mode: readMode(request.query.mode)
+        mode
       });
       const database = await getAuditDb();
       const configured = await readConfiguredTokenSnapshot();
@@ -790,8 +877,15 @@ export function registerAuditReconciliationRoutes(app: FastifyInstance): void {
           complete: true
         });
 
-        return { bundleFiles, tokenReconciliation };
+        return { bundleFiles, tokenReconciliation, asOfProof: proveAsOfSForSelection(database, bundle.context, usage.scopeRows, usage.unplaceableRowIds) };
       });
+
+      // F-02：正式完整导出必须失败关闭；诊断模式显式披露不完整与缺失集合。
+      if (!built.asOfProof.ok && mode === "complete") {
+        const error = new Error("as_of_s_unprovable") as Error & { code?: string };
+        error.code = "RECONCILIATION_AS_OF_S_UNPROVABLE";
+        throw error;
+      }
 
       reply.header("Cache-Control", "private, no-store");
       return {
@@ -799,6 +893,8 @@ export function registerAuditReconciliationRoutes(app: FastifyInstance): void {
         data: {
           reconciliationContext: bundle.context,
           projectionCoverage: bundle.coverage,
+          asOfProof: built.asOfProof,
+          diagnosticIncomplete: built.asOfProof.ok ? null : buildDiagnosticIncomplete(built.asOfProof),
           tokenReconciliation: built.tokenReconciliation,
           files: built.bundleFiles.files.map((file) => ({
             name: file.name,
@@ -826,6 +922,16 @@ export function registerAuditReconciliationRoutes(app: FastifyInstance): void {
         return {
           ok: false,
           error: { code, message: "审计行缺少账本序号，无法证明对账范围完整" }
+        };
+      }
+      if (code === "RECONCILIATION_AS_OF_S_UNPROVABLE") {
+        reply.code(409);
+        return {
+          ok: false,
+          error: {
+            code,
+            message: "无法证明基础事实、归属修订、关联与聚合可按账本上界 S 精确重建，正式对账读取失败"
+          }
         };
       }
       if (code === "RECONCILIATION_SECURITY_STORE_UNAVAILABLE") {

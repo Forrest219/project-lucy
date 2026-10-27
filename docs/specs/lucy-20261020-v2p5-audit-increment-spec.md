@@ -976,6 +976,34 @@ A01↔SEC-19-V05；A02↔SEC-19-V02/V04；A03↔SEC-19-V06 + 幂等投影；A04�
 
 **验收状态**：A01–A12 及上述全部命名子例仍为**未执行**，U9 两阶段运行时验收亦未执行。本次交叉审阅和文档修订不替代 UAT、real-e2e 或客户验收，不将未修复的实现缺口标记为已闭环。
 
+### 18.11 交叉审阅缺口的实施轮次（2026-10-28）
+
+**本节性质**：登记 §18.10 的 F-01／F-02／F-03 三项**实现缺口**的落地事实。**不改变** §18.10 的任何判定，不产生验收证据：A01–A12 与全部命名子例、F-04 列出的全部子例、U9 两阶段运行时验收仍为**未执行**。本轮**未**构建镜像、**未**执行浏览器测试／real-e2e、**未**连接真实环境。
+
+**落地范围与验证证据**：代码落点基线为 HEAD `09577828`（文档基线 `30c679a5`；期间并行会话落地 5 个提交，均未触及本轮文件）。验证记录见实施计划 §11.6.2——类型检查按文件核对为本轮文件零错误，全量回归 368 文件 / 4477 用例全绿，静态门禁 G2–G4 全通过（G1 因不做 docker 重建未执行）。**上述均为实现层证据，不构成任何 A／V 验收结论。**
+
+**F-02（精确 as-of S 与正式阻断）——已落地实现，验收未执行**
+
+- 新增 `webui/server/proxy/audit-as-of-proof.ts` 的 `proveExactAsOfS(snapshot, S, filter, baseFacts, revisions, relations, aggregates)`：四个维度**各自独立**判定，产出 `actualBound`（实际证据界）与 `missingSets`（缺失集合）。**「列存在」不再是判据**：旧实现的 `present.has("ledger_seq")` 已废止。
+- 存储侧补齐可证明所需的证据：新增 append-only 归属就地改写日志 `access_log_attribution_mutations`（前像／后像 + 账本序号，**改写与登记同事务**，登记失败则改写回滚）；新增 `access_log_asof_meta` 登记日志基线；`access_log_sources` 新增 additive 列 `ledger_seq` 并在写路径登记；导出包的来源附件按 `ledger_seq <= S` 过滤。
+- 正式完整导出的 `scopeComplete` 改由 `asOfProof.ok` 决定：`complete` 模式不可证明时 **fail-closed**（`integrity_or_relation_failed`），诊断模式输出 `as_of_s_unprovable` 与逐项缺失标识。`combinedComplete = scopeComplete AND fileHashOk AND relationCheckOk` 的**冻结三项 AND** 未改（并有守卫用例）。
+- 「命中同一筛选、但账本位置不可判定（`ledger_seq IS NULL`）的行」**不得被静默丢弃**：导出与 P0-4 均按同一筛选另查这类行并计入 `baseFacts` 缺失集合 —— 否则视图会丢掉落在请求范围内却无法定位到 S 的行，并自称范围完整。
+- P0-4 的三个只读端点在 `mode=complete` 且不可证明时返回 **409 `RECONCILIATION_AS_OF_S_UNPROVABLE`**；诊断模式返回 `diagnostic_incomplete` + 实际证据界 + 缺失集合。
+- **完成边界（不得越界宣称）**：历史库中「基线之前存在未登记的就地改写」**无法被证明** → `S < 基线` 判定为不可证明。台账 **D-28** 保持 `open`。A08、A10-ASOF 与 P0-4 的 V06／V09／V10 仍全部未执行。
+
+**F-03（授权事实保真）——已落地实现，验收未执行**
+
+- `deriveAuthorizationView` 只接受显式裁决凭据：`authorizationDenied` → `denied`；`authorizationAllowed` → `allowed`；`authorizationNotEvaluated` → `not_evaluated`；**证据不足 → `unknown`**。**删除**了「`budgetStopped` → `not_evaluated`」的默认结论，预算桶不再产生任何授权结论，也不得覆盖已发生的授权裁决。
+- `classifyAuditEvent` 不再用 legacy 的 outcome 启发式覆盖派生结果（该启发式在「非 ok 非 denied」时给出的 `not_evaluated` 只是「没有证据」，不是「确未评估」）。
+- 闸序事实（ACL 裁决先于预算闸）使预算终止行的授权**已裁决通过**：写路径显式登记 `authorizationAllowed: true` / `notExecuted: true`。
+- 台账 **D-29** 保持 `open`；A05-AUTH、A06-ORDER 未执行。
+
+**F-01（独立入口证据）——复核确认已合规**
+
+生产覆盖端口只提供 `projection_catchup` 一项独立证据；检查 1「入口接收覆盖」落 `unknown`（`coverage_source_not_available`），**未**以 `received ∪ auth_failure_log` 自证入口无漏记。本轮加守卫用例固定该行为。**独立到达证据仍未建立**，A01-INGRESS、A02-R、A12 未执行。
+
+**本轮识别的既有缺口（未实施）**：写路径从不提供 `executionEvidence`，生产新行的 `verifiedSuccess` / `verifiedFailure` 恒缺 → 主状态落 `unknown`（§4.3(a) 规则 9），`succeeded` / `failed` 两桶在生产不会出现。把 outcome=ok 直接当作执行成功凭据会违反「HTTP 200 不推定执行成功」；可信的执行凭据需写路径按真实执行观测逐点补齐，超出本轮授权范围，登记为后续项。
+
 ---
 
 ## Terminology Compliance

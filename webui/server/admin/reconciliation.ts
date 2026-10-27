@@ -39,6 +39,8 @@ import {
   type NullReason,
   type ReconciliationContext
 } from "./reconciliation-context.js";
+// F-02：精确 as-of S 的证明由 P0-1 提供，P0-4 不自建第二套口径。
+import { proveExactAsOfS, type AsOfSProof } from "../proxy/audit-as-of-proof.js";
 
 /** Spec §2.1 —— 八桶汇总主状态。 */
 export type PrimaryStatusBucket =
@@ -265,7 +267,7 @@ export function probeColumns(db: Database.Database, table: string): Set<string> 
   }
 }
 
-type AccessLogRow = {
+export type AccessLogRow = {
   id: number;
   ts: string;
   user_id: string;
@@ -293,6 +295,8 @@ type AccessLogRow = {
   authorization_view: string | null;
   execution_view: string | null;
   delivery_status: string | null;
+  /** Canonical ledger position of the row (F-02 as-of S proof). */
+  ledger_seq: number | null;
 };
 
 const ACCESS_LOG_SELECT_COLUMNS = [
@@ -321,7 +325,8 @@ const ACCESS_LOG_SELECT_COLUMNS = [
   "primary_status",
   "authorization_view",
   "execution_view",
-  "delivery_status"
+  "delivery_status",
+  "ledger_seq"
 ] as const;
 
 export type AccessLogSelection = {
@@ -355,6 +360,62 @@ export function selectAccessLogRows(
   const sql = `SELECT ${projection} FROM access_log WHERE (${options.where}) AND ${asOf} ORDER BY ts ASC, id ASC`;
   const rows = db.prepare(sql).all(...options.params, bound) as AccessLogRow[];
   return { columns, rows };
+}
+
+// ─── F-02：精确 as-of S 证明（P0-4 复用 P0-1 的证明，不自建第二套）────────────
+
+/**
+ * 对**本批已选出的行**证明精确 as-of S。
+ *
+ * 范围口径与视图完全一致：传入的就是视图读到的行，因此证明不会引入
+ * 「第二种筛选」。`ok=false` 时正式完整读取必须失败关闭（Spec §3.1／§5）。
+ */
+export function proveAsOfSForSelection(
+  db: Database.Database,
+  context: ReconciliationContext,
+  rows: ReadonlyArray<AccessLogRow>,
+  unplaceableRowIds: readonly number[] = []
+): AsOfSProof {
+  return proveExactAsOfS({
+    db,
+    seqUpperBound: context.watermarkSeq,
+    rows: rows.map((row) => ({
+      id: Number(row.id),
+      ledgerSeq:
+        row.ledger_seq === null || row.ledger_seq === undefined ? null : Number(row.ledger_seq),
+      turnId: row.lucy_turn_id ?? null
+    })),
+    unplaceableRowIds
+  });
+}
+
+/** 问询详情的 as-of S 证明（复用 `inquiryWhere` 的同一范围口径）。 */
+export function proveInquiryAsOfS(
+  db: Database.Database,
+  context: ReconciliationContext,
+  turnId: string
+): AsOfSProof {
+  const columns = probeColumns(db, "access_log");
+  const where = inquiryWhere(db, turnId, columns);
+  const { rows } = selectAccessLogRows(db, {
+    where: where.where,
+    params: where.params,
+    rowBound: context.rowBoundAccessLogId,
+    watermarkSeq: context.watermarkSeq
+  });
+  // F-02：命中该问询、但位置不可判定的行（视图范围不可证明完整）。
+  const unplaceableRowIds: number[] = [];
+  if (columns.has("ledger_seq")) {
+    const unplaceable = db
+      .prepare(
+        `SELECT id FROM access_log
+           WHERE (${where.where}) AND ledger_seq IS NULL
+          ORDER BY id ASC`
+      )
+      .all(...where.params) as Array<{ id: number }>;
+    for (const row of unplaceable) unplaceableRowIds.push(Number(row.id));
+  }
+  return proveAsOfSForSelection(db, context, rows, unplaceableRowIds);
 }
 
 function associationOf(row: AccessLogRow): AssociationStatus {

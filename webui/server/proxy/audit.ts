@@ -380,6 +380,119 @@ export function closeAuditDb(): void {
     snapshotStmt = null;
     conversationTurnInsertStmt = null;
   }
+  // F-02：重开数据库后基线需重新核对（换一个库文件时基线不在旧库里）。
+  asofBaselineResolved = false;
+}
+
+// ─── F-02：as-of S 证明的存储侧支撑 ─────────────────────────────────────────
+//
+// 1) 归属就地改写日志（`access_log_attribution_mutations`）：登记每次归属列
+//    就地改写的前像 / 后像与账本序号。没有它，as-of S 视图无法判定「归属有效值」
+//    是否可按 S 精确重建（Spec §18.10 F-02）。
+// 2) 基线（`access_log_asof_meta`）：归属改写日志生效时的账本序号。`S < 基线`
+//    时无法排除「基线之前存在未登记的就地改写」→ 归属维度不可证明。
+// 3) 来源行账本序号（`access_log_sources.ledger_seq`）：没有它，晚于 S 写入的
+//    来源行会被当前视图读到，成为混入的 >S 事实。
+
+const ASOF_BASELINE_KEY = "attribution_journal_baseline_seq";
+let asofBaselineResolved = false;
+
+/**
+ * 登记归属改写日志基线（账本序号）。
+ *
+ * 基线取「归属改写日志开始生效时」的账本已提交上界。账本不可得时**不登记**：
+ * 证明会因此判为「归属维度不可证明」→ 正式导出与正式对账读取失败关闭。
+ * 宁可失败关闭，也不猜一个基线。
+ */
+async function ensureAsOfBaseline(database: Database.Database): Promise<void> {
+  if (asofBaselineResolved) return;
+  try {
+    const existing = database
+      .prepare(`SELECT value FROM access_log_asof_meta WHERE key = ?`)
+      .get(ASOF_BASELINE_KEY) as { value?: string } | undefined;
+    if (existing) {
+      asofBaselineResolved = true;
+      return;
+    }
+    const seq = await resolveLedgerSeq();
+    if (seq === null) return;
+    database
+      .prepare(`INSERT OR REPLACE INTO access_log_asof_meta (key, value) VALUES (?, ?)`)
+      .run(ASOF_BASELINE_KEY, String(seq));
+    asofBaselineResolved = true;
+  } catch {
+    // 基线不可得：as-of 证明保持「不可证明」（失败关闭），不静默放行。
+  }
+}
+
+type AttributionMutationSnapshot = {
+  turnId: string | null;
+  mode: string | null;
+  confidence: string | null;
+  associationStatus: string | null;
+};
+
+/**
+ * 登记一次归属就地改写。
+ *
+ * **必须**与改写本身处在同一事务内：登记失败则改写一并回滚，避免出现「改写
+ * 了却没有历史」的不可证明状态。日志表不存在（历史库 / 精简测试 schema）时
+ * **跳过登记**，改写照常进行 —— 此时 `proveExactAsOfS` 会以「归属改写日志缺失」
+ * 判为不可证明（失败关闭），不会静默放行。
+ */
+function recordAttributionMutation(
+  database: Database.Database,
+  input: {
+    accessLogId: number;
+    kind: "handshake_attachment" | "association_status_backfill";
+    ledgerSeq: number | null;
+    before: AttributionMutationSnapshot;
+    after: AttributionMutationSnapshot;
+  }
+): void {
+  database
+    .prepare(
+      `INSERT INTO access_log_attribution_mutations
+         (access_log_id, ledger_seq, kind,
+          before_turn_id, after_turn_id,
+          before_mode, after_mode,
+          before_confidence, after_confidence,
+          before_association_status, after_association_status,
+          ts)
+       VALUES
+         (@accessLogId, @ledgerSeq, @kind,
+          @beforeTurnId, @afterTurnId,
+          @beforeMode, @afterMode,
+          @beforeConfidence, @afterConfidence,
+          @beforeAssociationStatus, @afterAssociationStatus,
+          @ts)`
+    )
+    .run({
+      accessLogId: input.accessLogId,
+      ledgerSeq: input.ledgerSeq,
+      kind: input.kind,
+      beforeTurnId: input.before.turnId,
+      afterTurnId: input.after.turnId,
+      beforeMode: input.before.mode,
+      afterMode: input.after.mode,
+      beforeConfidence: input.before.confidence,
+      afterConfidence: input.after.confidence,
+      beforeAssociationStatus: input.before.associationStatus,
+      afterAssociationStatus: input.after.associationStatus,
+      ts: new Date().toISOString()
+    });
+}
+
+/** 归属改写日志表是否可用（历史库 / 精简测试 schema 可能没有）。 */
+function hasAttributionMutationTable(database: Database.Database): boolean {
+  try {
+    const row = database
+      .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'access_log_attribution_mutations'`)
+      .get();
+    return row !== undefined;
+  } catch {
+    return false;
+  }
 }
 
 async function getDb(): Promise<Database.Database> {
@@ -463,6 +576,36 @@ async function getDb(): Promise<Database.Database> {
     CREATE INDEX IF NOT EXISTS idx_als_user_ts ON access_log_sources(user_id, ts);
     CREATE INDEX IF NOT EXISTS idx_als_source ON access_log_sources(connection_id, schema_name, source_name);
     CREATE INDEX IF NOT EXISTS idx_als_table ON access_log_sources(physical_table);
+    -- F-02：归属就地改写日志（append-only）。
+    --
+    -- access_log 的归属列（lucy_turn_id / turn_attribution_mode /
+    -- turn_attribution_confidence / association_status）在两处**就地**改写：
+    -- 握手 attachment 与一次性历史归一化。就地改写会让「行内容 = 写入时刻的
+    -- 事实」这一前提失效，as-of S 视图因此无法只用 ledger_seq <= S 过滤
+    -- 还原。本表登记每次就地改写的**前像 / 后像与账本序号**，使归属维度
+    -- 可被 proveExactAsOfS 判定为可证明或不可证明。
+    CREATE TABLE IF NOT EXISTS access_log_attribution_mutations (
+      id                        INTEGER PRIMARY KEY AUTOINCREMENT,
+      access_log_id             INTEGER NOT NULL,
+      ledger_seq                INTEGER,
+      kind                      TEXT NOT NULL,
+      before_turn_id            TEXT,
+      after_turn_id             TEXT,
+      before_mode               TEXT,
+      after_mode                TEXT,
+      before_confidence         TEXT,
+      after_confidence          TEXT,
+      before_association_status TEXT,
+      after_association_status  TEXT,
+      ts                        TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_almut_row ON access_log_attribution_mutations(access_log_id);
+    CREATE INDEX IF NOT EXISTS idx_almut_seq ON access_log_attribution_mutations(ledger_seq);
+    -- F-02：as-of 证明的元数据（当前只存归属改写日志基线）。
+    CREATE TABLE IF NOT EXISTS access_log_asof_meta (
+      key   TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS conversation_turns (
       turn_id               TEXT PRIMARY KEY,
       session_id            TEXT,
@@ -574,6 +717,9 @@ async function getDb(): Promise<Database.Database> {
   for (const [column, definition] of PERMISSION_SNAPSHOT_COLUMNS) {
     ensureColumn(db, "permission_snapshots", column, definition);
   }
+  // F-02：来源行也要有账本序号，否则「关联事实 as-of S」不可证明 ——
+  // 晚于 S 写入的来源行会被当前视图读到，成为混入的 >S 事实。
+  ensureColumn(db, "access_log_sources", "ledger_seq", "INTEGER");
   ensureColumn(db, "conversation_turns", "session_id", "TEXT");
   ensureColumn(db, "conversation_turns", "association_status", "TEXT");
   ensureColumn(db, "inferred_turns", "client", "TEXT");
@@ -588,6 +734,8 @@ async function getDb(): Promise<Database.Database> {
     CREATE INDEX IF NOT EXISTS idx_al_event_type ON access_log(event_type);
     CREATE INDEX IF NOT EXISTS idx_al_instance_id ON access_log(instance_id);
   `);
+  // F-02：归属改写日志基线必须在表建好之后登记（表不存在时无法登记）。
+  await ensureAsOfBaseline(db);
   return db;
 }
 
@@ -958,11 +1106,14 @@ export async function writeAccessLogSources(
   if (!sourceInsertStmt) {
     sourceInsertStmt = database.prepare(`
       INSERT INTO access_log_sources
-        (access_log_id, ts, user_id, tool, connection_id, schema_name, source_name, physical_table, extraction_method, confidence, created_at)
+        (access_log_id, ts, user_id, tool, connection_id, schema_name, source_name, physical_table, extraction_method, confidence, created_at, ledger_seq)
       VALUES
-        (@accessLogId, @ts, @userId, @tool, @connectionId, @schemaName, @sourceName, @physicalTable, @extractionMethod, @confidence, @createdAt)
+        (@accessLogId, @ts, @userId, @tool, @connectionId, @schemaName, @sourceName, @physicalTable, @extractionMethod, @confidence, @createdAt, @ledgerSeq)
     `);
   }
+  // F-02：来源行同样带账本序号 —— 没有它，晚于 S 写入的来源行会被当前视图
+  // 读到，成为混入的 >S 事实，关联维度就不可证明。
+  const ledgerSeq = await resolveLedgerSeq();
   const createdAt = new Date().toISOString();
   for (const source of sources) {
     sourceInsertStmt.run({
@@ -976,7 +1127,8 @@ export async function writeAccessLogSources(
       physicalTable: source.physicalTable,
       extractionMethod: source.extractionMethod,
       confidence: source.confidence,
-      createdAt
+      createdAt,
+      ledgerSeq
     });
   }
 }
@@ -2155,13 +2307,57 @@ export async function bindPriorSessionCalls(input: {
   }
   if (handshakeIds.length > 0) {
     const placeholders = handshakeIds.map(() => "?").join(",");
-    database.prepare(`
-      UPDATE access_log
-      SET lucy_turn_id = ?,
-          turn_attribution_mode = 'session_bound',
-          turn_attribution_confidence = 'low'
-      WHERE id IN (${placeholders})
-    `).run(input.turnId, ...handshakeIds);
+    // F-02：归属就地改写必须留下**前像**与账本序号，否则「归属有效值是否可按
+    // S 精确重建」不可证明（Spec §18.10 F-02）。改写与登记在同一事务内：
+    // 登记失败则改写一并回滚，不留「改写了却没有历史」的状态。
+    const ledgerSeq = await resolveLedgerSeq();
+    const journaled = hasAttributionMutationTable(database);
+    const beforeRows = (
+      database
+        .prepare(
+          `SELECT id, lucy_turn_id, turn_attribution_mode, turn_attribution_confidence, association_status
+             FROM access_log WHERE id IN (${placeholders})`
+        )
+        .all(...handshakeIds) as Array<{
+        id: number;
+        lucy_turn_id: string | null;
+        turn_attribution_mode: string | null;
+        turn_attribution_confidence: string | null;
+        association_status: string | null;
+      }>
+    );
+    const apply = database.transaction(() => {
+      database
+        .prepare(`
+          UPDATE access_log
+          SET lucy_turn_id = ?,
+              turn_attribution_mode = 'session_bound',
+              turn_attribution_confidence = 'low'
+          WHERE id IN (${placeholders})
+        `)
+        .run(input.turnId, ...handshakeIds);
+      if (!journaled) return;
+      for (const row of beforeRows) {
+        recordAttributionMutation(database, {
+          accessLogId: row.id,
+          kind: "handshake_attachment",
+          ledgerSeq,
+          before: {
+            turnId: row.lucy_turn_id,
+            mode: row.turn_attribution_mode,
+            confidence: row.turn_attribution_confidence,
+            associationStatus: row.association_status
+          },
+          after: {
+            turnId: input.turnId,
+            mode: "session_bound",
+            confidence: "low",
+            associationStatus: row.association_status
+          }
+        });
+      }
+    });
+    apply();
   }
   return handshakeIds.length;
 }
@@ -2216,15 +2412,29 @@ export async function backfillAssociationStatus(
   let updated = 0;
   let unchanged = 0;
 
+  // F-02：归属就地改写必须留下前像与账本序号（与改写同事务）。
+  const ledgerSeq = await resolveLedgerSeq();
+  const journaled = hasAttributionMutationTable(database);
+
   const txn = database.transaction(() => {
+    // 历史库 / 精简测试 schema 可能缺归属列：按实际可用列取，缺列取 NULL。
+    const availableColumns = new Set(
+      (
+        database.prepare(`PRAGMA table_info(access_log)`).all() as Array<{ name: string }>
+      ).map((column) => column.name)
+    );
+    const pick = (name: string): string => (availableColumns.has(name) ? name : `NULL AS ${name}`);
     const rows = database
       .prepare(
-        `SELECT id, turn_attribution_mode, association_status
+        `SELECT id, ${pick("lucy_turn_id")}, ${pick("turn_attribution_mode")},
+                ${pick("turn_attribution_confidence")}, ${pick("association_status")}
            FROM access_log`
       )
       .all() as Array<{
       id: number;
+      lucy_turn_id: string | null;
       turn_attribution_mode: string | null;
+      turn_attribution_confidence: string | null;
       association_status: string | null;
     }>;
 
@@ -2272,6 +2482,26 @@ export async function backfillAssociationStatus(
           `UPDATE access_log SET association_status = ? WHERE id = ?`
         )
         .run(target, row.id);
+      if (journaled) {
+        recordAttributionMutation(database, {
+          accessLogId: row.id,
+          kind: "association_status_backfill",
+          ledgerSeq,
+          // 本次归一化只改 association_status；其余归属列原样登记（前像 = 后像）。
+          before: {
+            turnId: row.lucy_turn_id ?? null,
+            mode: row.turn_attribution_mode ?? null,
+            confidence: row.turn_attribution_confidence ?? null,
+            associationStatus: row.association_status ?? null
+          },
+          after: {
+            turnId: row.lucy_turn_id ?? null,
+            mode: row.turn_attribution_mode ?? null,
+            confidence: row.turn_attribution_confidence ?? null,
+            associationStatus: target
+          }
+        });
+      }
       updated += 1;
     }
 

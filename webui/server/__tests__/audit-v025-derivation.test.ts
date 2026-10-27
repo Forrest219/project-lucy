@@ -72,7 +72,30 @@ describe("B1 derivePrimaryStatus — U10 九行有序派生表", () => {
     const r = derivePrimaryStatus({ budgetStopped: true, notExecuted: true });
     expect(r.primaryStatus).toBe("budget_stopped");
     expect(r.rule).toBe(2);
-    expect(r.authorization).toBe("not_evaluated");
+    // F-03：预算终止**不产生**授权结论。没有可证的授权裁决凭据时落 unknown，
+    // 不得反推 not_evaluated。
+    expect(r.authorization).toBe("unknown");
+  });
+
+  it("F-03：预算终止不得覆盖已发生的授权裁决（allowed 保持 allowed）", () => {
+    const r = derivePrimaryStatus({
+      budgetStopped: true,
+      notExecuted: true,
+      authorizationAllowed: true
+    });
+    expect(r.primaryStatus).toBe("budget_stopped");
+    expect(r.authorization).toBe("allowed");
+    expect(r.execution).toBe("not_executed");
+  });
+
+  it("F-03：确未评估必须有可证事实，否则仍是 unknown", () => {
+    const proved = derivePrimaryStatus({
+      budgetStopped: true,
+      notExecuted: true,
+      authorizationNotEvaluated: true
+    });
+    expect(proved.authorization).toBe("not_evaluated");
+    expect(proved.primaryStatus).toBe("budget_stopped");
   });
 
   it("规则 3：授权拒绝 + 未执行 → denied", () => {
@@ -192,9 +215,17 @@ describe("B2 三视图独立判定", () => {
 
   it("deriveAuthorizationView / deriveExecutionView 可单独调用", () => {
     expect(deriveAuthorizationView({ authorizationDenied: true })).toBe("denied");
-    expect(deriveAuthorizationView({ budgetStopped: true })).toBe("not_evaluated");
+    // F-03：预算桶不得反推 not_evaluated；证据不足即 unknown。
+    expect(deriveAuthorizationView({ budgetStopped: true })).toBe("unknown");
+    expect(deriveAuthorizationView({ budgetStopped: true, authorizationAllowed: true })).toBe("allowed");
+    expect(deriveAuthorizationView({ authorizationNotEvaluated: true })).toBe("not_evaluated");
     expect(deriveExecutionView({ notExecuted: true })).toBe("not_executed");
     expect(deriveExecutionView({ durablePrefix: true, interruptedWithoutResult: true })).toBe("interrupted");
+  });
+
+  it("F-03：生成前失败 execution=not_executed（失败凭据不覆盖未执行事实）", () => {
+    expect(deriveExecutionView({ verifiedFailure: true, notExecuted: true })).toBe("not_executed");
+    expect(deriveExecutionView({ verifiedFailure: true })).toBe("failed");
   });
 });
 

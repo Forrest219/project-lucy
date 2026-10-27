@@ -9,7 +9,8 @@
  *   1. 每个计量单元有且仅有一个主状态；八桶互斥且闭合。
  *   2. 先核验矛盾：事实相互矛盾且无法按凭据消解 → `unknown` + conflict 标签。
  *   3. 闭合凭据（失败 / 成功）先于取消 / 超时。
- *   4. 预算终止不是授权拒绝；授权拒绝不是预算终止。
+ *   4. 预算终止不是授权拒绝；预算桶**不得**覆盖已发生的授权裁决，也**不得**
+ *      反推 `not_evaluated`（§4.3(b) / §18.10 F-03）。
  *   5. `execution=succeeded` 不因送达缺失而改变；HTTP 200 不推定执行成功。
  *   6. 旧 `outcome=ok` 不提供任何闭合凭据 → 历史行落 `unknown`。
  *   7. 派生只使用 **as-of S** 的可核验证据。
@@ -97,6 +98,21 @@ export type DerivationFacts = {
   budgetStopped?: boolean;
   /** 明确授权拒绝（真实裁决，不是从入参错误倒推）。 */
   authorizationDenied?: boolean;
+  /**
+   * 明确授权通过（真实裁决凭据）。
+   *
+   * 与 `budgetStopped` **相互独立**：预算终止不得覆盖已经发生的授权裁决
+   * （Spec §4.3(b) / §18.10 F-03）。本项表示「授权已裁决通过」，与本次尝试
+   * 是否被执行无关。
+   */
+  authorizationAllowed?: boolean;
+  /**
+   * 确未评估授权（可证明：请求在授权裁决之前即被终止）。
+   *
+   * 「证据不足」不属本项 —— 那种情况必须落 `unknown`，不得用本项把
+   * `unknown` 洗成 `not_evaluated`。
+   */
+  authorizationNotEvaluated?: boolean;
   /** 本次尝试未实际执行。 */
   notExecuted?: boolean;
 
@@ -218,12 +234,20 @@ export function derivePrimaryStatus(facts: DerivationFacts): PrimaryStatusDeriva
 
 /**
  * authorization 视图：只在 Lucy 裁决时刻判定。
- * 预算终止**不得**记为授权拒绝（沿用 20261019 Spec §7）。
+ *
+ * 硬规则（Spec §4.3(b) / §18.10 F-03）：
+ *   1. **预算终止不产生授权结论**。预算桶既不得被记为授权拒绝，也不得反推
+ *      `not_evaluated`；确未评估必须有可证事实（`authorizationNotEvaluated`）。
+ *   2. **预算不得覆盖已发生的授权裁决**。已裁决通过 → `allowed`；已裁决拒绝 →
+ *      `denied`，与本次尝试是否被执行无关。
+ *   3. 证据不足 → `unknown`。不得用 `not_evaluated` 掩盖「不知道」。
  */
 export function deriveAuthorizationView(facts: DerivationFacts): AuthorizationView {
   if (facts.authorizationDenied === true) return "denied";
-  if (facts.verifiedSuccess === true || facts.verifiedFailure === true) return "allowed";
-  if (facts.budgetStopped === true) return "not_evaluated";
+  if (facts.authorizationAllowed === true) return "allowed";
+  if (facts.authorizationNotEvaluated === true) return "not_evaluated";
+  // 执行发生 ⇒ 授权已通过：调用不可能在授权拒绝之后被执行。
+  if (facts.verifiedSuccess === true) return "allowed";
   return "unknown";
 }
 
@@ -231,11 +255,15 @@ export function deriveAuthorizationView(facts: DerivationFacts): AuthorizationVi
  * execution 视图：上游或本地执行结果。
  * HTTP 200 不推定执行成功；预算终止不是 `interrupted`（`interrupted` 只表示
  * 有持久前缀、处理中断且结果未定）。
+ *
+ * `notExecuted` **先于** `verifiedFailure` 判定：生成前失败（入参 / 语义校验
+ * 失败）已有失败凭据，但并未实际执行 → `execution=not_executed`
+ * （Spec §4.3(a) 第 4 行约束列）。
  */
 export function deriveExecutionView(facts: DerivationFacts): ExecutionView {
   if (facts.verifiedSuccess === true) return "succeeded";
-  if (facts.verifiedFailure === true) return "failed";
   if (facts.notExecuted === true) return "not_executed";
+  if (facts.verifiedFailure === true) return "failed";
   if (facts.durablePrefix === true && facts.interruptedWithoutResult === true) return "interrupted";
   return "unknown";
 }

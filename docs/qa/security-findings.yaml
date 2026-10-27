@@ -532,6 +532,48 @@ findings:
     fixedIn: null
     verifiedBy: []
     acceptedBy: null
+  # D-28 v0.25 P0-1 / P0-4 F-02：精确 as-of S 的**证明能力**缺失（正式完整导出与正式完整对账读取曾以「列存在」充当判据）
+  # 现象（2026-10-27 交叉审阅 F-02 实证）：`admin/audit-export-v2.ts` 以 `present.has("ledger_seq")`
+  #   作为 as-of 判据；但 access_log 的归属列（lucy_turn_id / turn_attribution_mode /
+  #   turn_attribution_confidence / association_status）在握手 attachment 与一次性历史归一化两处
+  #   **就地**改写且不留历史，来源行也没有账本序号 → 「列存在 / seq <= S 可执行」**不等于**
+  #   基础事实、归属修订、关联、聚合可按 S 精确重建。
+  # 后果：正式完整导出可能发布一个声称 as-of S 完整、实则混入 S 之后归属／关联事实的证据包；
+  #   P0-4 正式完整读取同样可能给出不完整却自称完整的结果。
+  # 处置：新增 `webui/server/proxy/audit-as-of-proof.ts` 的 `proveExactAsOfS`（P0-1 唯一口径，
+  #   四个维度各自独立判定 + 缺失集合披露 + 实际证据界）；旧判据废止。不可证明时
+  #   `scopeComplete=false` → 正式完整导出 fail-closed；P0-4 正式完整读取／导出同样 fail-closed，
+  #   诊断模式显式返回 `diagnostic_incomplete` + 实际证据界 + 缺失集合。
+  # 进展：证明函数、归属就地改写日志（`access_log_attribution_mutations`，改写与登记同事务）、
+  #   来源行账本序号与基线登记已落地，并有定向用例；但**基线之前的历史就地改写无法被证明**
+  #   （S < 基线时判定为不可证明），且 A08／A10-ASOF、V06／V09／V10 尚未执行、
+  #   release evidence 未覆盖，保持 open。
+  - id: D-28
+    severity: P1
+    status: open
+    spec: "L25-09 §12.5 / §18.10 F-02 / L25-03 §3.1"
+    fixedIn: null
+    verifiedBy: []
+    acceptedBy: null
+  # D-29 v0.25 P0-1 F-03：授权视图把「预算终止」反推成 `not_evaluated`，覆盖已发生的授权裁决
+  # 现象（2026-10-27 交叉审阅 F-03 实证）：`proxy/audit-derivation.ts` 的
+  #   `deriveAuthorizationView` 以 `budgetStopped → not_evaluated` 收尾，且
+  #   `proxy/audit-classification.ts` 用 legacy 的 outcome 启发式直接覆盖派生结果 →
+  #   预算桶既被反推成授权结论，又覆盖了已经发生的授权裁决（实际闸序为 ACL 裁决先于预算闸，
+  #   预算终止时授权**已裁决通过**）。
+  # 后果：授权轴不再是「Lucy 裁决时刻」的事实；A05-AUTH／A06-ORDER 的授权断言不可成立。
+  # 处置：授权结论只接受显式裁决凭据（`authorizationAllowed` / `authorizationDenied` /
+  #   `authorizationNotEvaluated`）；预算桶不再产生任何授权结论，证据不足落 `unknown`；
+  #   预算终止行由写路径显式登记「授权已裁决通过」。
+  # 进展：派生层与分类层已改，预算终止写路径已补凭据，并有定向用例；A05-AUTH／A06-ORDER
+  #   尚未执行、release evidence 未覆盖，保持 open。
+  - id: D-29
+    severity: P1
+    status: open
+    spec: "L25-09 §4.3(b) / §18.10 F-03"
+    fixedIn: null
+    verifiedBy: []
+    acceptedBy: null
   # G-01 文档称强制，release workflow 无真实 E2E 依赖（T14）
   # note: T14 代码已交付并有静态契约测试（scripts/gates/customer-release-workflow.test.mjs）：release-package 与每个客户发布分支都经
   #       customer-release-readiness 依赖 real-e2e，客户镜像单架构 amd64、只 promote 已测试 digest、门禁后不重建；demo-e2e / postgres-demo-e2e 已改名为

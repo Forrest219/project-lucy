@@ -34,6 +34,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { AUDIT_WINDOWS } from "../proxy/ingress-registry.js";
 import { DERIVATION_VERSION } from "../proxy/audit-derivation.js";
+import { proveExactAsOfS, type AsOfSProof } from "../proxy/audit-as-of-proof.js";
 
 export type ExportMode = "complete" | "diagnostic";
 
@@ -47,6 +48,13 @@ export type ExportV2Result = {
   fileHashOk: boolean;
   relationCheckOk: boolean;
   diagnosticIncomplete: string[];
+  /**
+   * 精确 as-of S 的证明结果（F-02）。
+   *
+   * `ok=false` 时 `scopeComplete=false` → 正式完整导出失败关闭；诊断包据此
+   * 显式披露实际证据界与缺失集合。
+   */
+  asOfProof: AsOfSProof;
   csv: string;
   /** Frozen primary selection reused by every pack attachment. */
   selectedAccessLogIds: number[];
@@ -501,9 +509,28 @@ export async function performExportV2(options: ExportV2Options): Promise<ExportV
   // must not contain other users' calls or other time ranges.
   const { present, headers } = selectExportColumns(db);
   const selectList = headers.map((h) => h).join(", ");
-  const where: string[] = [];
-  const params: unknown[] = [];
-  if (present.has("ledger_seq")) {
+  // 筛选条件与账本上界**分开**构造：同一筛选还要用来查「命中范围但位置不可
+  // 判定」的行（F-02）—— 它们被 `ledger_seq <= S` 排除在视图外，若不单独
+  // 统计，范围完整就无从证明。
+  const filterConditions: string[] = [];
+  const filterParams: unknown[] = [];
+  const filter = options.fixedFilter ?? {};
+  if (filter.from) {
+    filterConditions.push("ts >= ?");
+    filterParams.push(filter.from);
+  }
+  if (filter.until) {
+    filterConditions.push("ts <= ?");
+    filterParams.push(filter.until);
+  }
+  if (filter.userId) {
+    filterConditions.push("user_id = ?");
+    filterParams.push(filter.userId);
+  }
+  const where: string[] = [...filterConditions];
+  const params: unknown[] = [...filterParams];
+  const hasLedgerSeq = present.has("ledger_seq");
+  if (hasLedgerSeq) {
     where.push("ledger_seq <= ?");
     params.push(upperSeq);
   } else {
@@ -511,19 +538,6 @@ export async function performExportV2(options: ExportV2Options): Promise<ExportV
     // The export is then NOT an as-of-S export; the completeness verdict below
     // refuses it rather than shipping an unbounded set under an as-of label.
     diagnosticIncomplete.push("ledger_seq_column_unavailable");
-  }
-  const filter = options.fixedFilter ?? {};
-  if (filter.from) {
-    where.push("ts >= ?");
-    params.push(filter.from);
-  }
-  if (filter.until) {
-    where.push("ts <= ?");
-    params.push(filter.until);
-  }
-  if (filter.userId) {
-    where.push("user_id = ?");
-    params.push(filter.userId);
   }
   const rows = db
     .prepare(
@@ -533,6 +547,20 @@ export async function performExportV2(options: ExportV2Options): Promise<ExportV
          ORDER BY id ASC`
     )
     .all(...params) as Array<Record<string, unknown>>;
+  // 命中同一筛选、但账本位置不可判定的行：它们落在请求范围内却无法定位到 S，
+  // 范围完整不可证明（baseFacts 不成立）。
+  const unplaceableRowIds: number[] = [];
+  if (hasLedgerSeq) {
+    const unplaceable = db
+      .prepare(
+        `SELECT id FROM access_log
+           ${filterConditions.length > 0 ? `WHERE ${filterConditions.join(" AND ")} AND` : "WHERE"}
+             ledger_seq IS NULL
+          ORDER BY id ASC`
+      )
+      .all(...filterParams) as Array<{ id: number }>;
+    for (const row of unplaceable) unplaceableRowIds.push(Number(row.id));
+  }
   const csvLines = [headers.join(",")];
   for (const row of rows) {
     csvLines.push(headers.map((h) => csvEscape(row[h])).join(","));
@@ -564,15 +592,35 @@ export async function performExportV2(options: ExportV2Options): Promise<ExportV
   // scope cannot be certified → scopeComplete is false → complete mode fails
   // closed (`integrity_or_relation_failed`).
   //
-  // Production impact is nil: `access_log.ledger_seq` is an additive column
-  // guaranteed by `ensureColumn` in `proxy/audit.ts`, so `asOfBoundEnforced` is
-  // true on any migrated production database.
-  const asOfBoundEnforced = present.has("ledger_seq");
+  // ─── F-02（2026-10-27 交叉审阅修订）────────────────────────────────────
+  // 旧判据 `present.has("ledger_seq")`（**列存在**）**不等于内容可重建**。
+  // 基础事实／归属修订／关联／聚合任一不可按 S 精确重建，即令
+  // `scopeComplete=false`，正式完整导出失败关闭；诊断包显式披露实际证据界与
+  // 缺失集合。
+  const asOfProof = proveExactAsOfS({
+    db,
+    seqUpperBound: upperSeq,
+    rows: rows.map((row) => ({
+      id: Number(row.id),
+      ledgerSeq:
+        row.ledger_seq === null || row.ledger_seq === undefined ? null : Number(row.ledger_seq),
+      turnId: (row.lucy_turn_id as string | null) ?? null
+    })),
+    unplaceableRowIds
+  });
+  if (!asOfProof.ok) {
+    diagnosticIncomplete.push("as_of_s_unprovable");
+    for (const [dimension, missing] of Object.entries(asOfProof.missingSets)) {
+      for (const identifier of missing) {
+        diagnosticIncomplete.push(`${dimension}:${identifier}`);
+      }
+    }
+  }
   const scopeComplete =
     projectionComplete &&
     permissionSnapshotRows > 0 &&
     sourceAssociationCheck === "ok" &&
-    asOfBoundEnforced;
+    asOfProof.ok;
   // B20 / E-4：不再是「哈希字符串长度为 64」的同义反复，而是**重算内容哈希**。
   const fileHashOk = verifyExportFiles(
     [{ name: "calls-v2.csv", sha256: csvHash }],
@@ -678,6 +726,7 @@ export async function performExportV2(options: ExportV2Options): Promise<ExportV
     fileHashOk,
     relationCheckOk,
     diagnosticIncomplete,
+    asOfProof,
     csv,
     selectedAccessLogIds,
     manifest
@@ -732,19 +781,25 @@ function csvEscapeCell(value: unknown): string {
 
 function renderAccessLogSourcesCsv(
   db: Database.Database,
-  selectedIds: readonly number[]
+  selectedIds: readonly number[],
+  seqUpperBound?: number
 ): { csv: string; rowCount: number } {
   if (selectedIds.length === 0) return { csv: "", rowCount: 0 };
   const ids = idList(selectedIds);
+  // F-02：来源行同样受账本上界约束 —— 晚于 S 写入的来源行是 >S 的关联事实，
+  // 不得混入 as-of S 的证据包。列不存在时无法施加该边界（由证明判为不可证明）。
+  const hasLedgerSeq = tableColumns(db, "access_log_sources").has("ledger_seq");
+  const boundClause = hasLedgerSeq && seqUpperBound !== undefined ? " AND ledger_seq <= ?" : "";
+  const boundParams = hasLedgerSeq && seqUpperBound !== undefined ? [seqUpperBound] : [];
   const rows = db
     .prepare(
       `SELECT id, access_log_id, ts, user_id, connection_id, schema_name, source_name,
               physical_table, extraction_method, confidence
          FROM access_log_sources
-        WHERE access_log_id IN (${ids.sql})
+        WHERE access_log_id IN (${ids.sql})${boundClause}
         ORDER BY id ASC`
     )
-    .all(...ids.params) as Array<Record<string, unknown>>;
+    .all(...ids.params, ...boundParams) as Array<Record<string, unknown>>;
   if (rows.length === 0) return { csv: "", rowCount: 0 };
   const headers = Object.keys(rows[0]);
   const lines = [headers.join(",")];
@@ -788,7 +843,11 @@ export async function buildExportPackV2(
   const exportResult = await performExportV2(options);
   const db = options.snapshotDb ?? options.sourceDb!;
 
-  const sources = renderAccessLogSourcesCsv(db, exportResult.selectedAccessLogIds);
+  const sources = renderAccessLogSourcesCsv(
+    db,
+    exportResult.selectedAccessLogIds,
+    exportResult.upperSeq
+  );
   const snaps = renderPermissionSnapshotsCsv(db, exportResult.selectedAccessLogIds);
 
   const fileEntries: Array<{ name: string; data: Buffer }> = [];

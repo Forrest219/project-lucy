@@ -82,6 +82,8 @@ function ledgerEvents(): SecurityEvent[] {
 function resetAuditSchema(): void {
   auditDb.exec("DROP TABLE IF EXISTS access_log");
   auditDb.exec("DROP TABLE IF EXISTS access_log_sources");
+  auditDb.exec("DROP TABLE IF EXISTS access_log_attribution_mutations");
+  auditDb.exec("DROP TABLE IF EXISTS access_log_asof_meta");
   auditDb.exec("DROP TABLE IF EXISTS conversation_turns");
   auditDb.exec(`
     CREATE TABLE access_log (
@@ -117,8 +119,18 @@ function resetAuditSchema(): void {
       source_name TEXT,
       physical_table TEXT NOT NULL,
       extraction_method TEXT NOT NULL,
-      confidence TEXT NOT NULL
+      confidence TEXT NOT NULL,
+      ledger_seq INTEGER
     );
+    -- F-02：精确 as-of S 的证据（归属改写日志 + 基线）。
+    CREATE TABLE access_log_attribution_mutations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      access_log_id INTEGER NOT NULL,
+      ledger_seq INTEGER,
+      kind TEXT NOT NULL
+    );
+    CREATE TABLE access_log_asof_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+    INSERT INTO access_log_asof_meta (key, value) VALUES ('attribution_journal_baseline_seq', '0');
     CREATE TABLE conversation_turns (
       turn_id TEXT PRIMARY KEY,
       session_id TEXT,

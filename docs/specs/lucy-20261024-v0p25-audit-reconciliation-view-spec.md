@@ -175,6 +175,16 @@ reconciliationContext:
 
 不改变。N27 当时未改 §2、§3.1–§3.4、§4.3 正文；本条是实现向既有条款对齐（条款从未允许「拒绝合法读取」）。2026-10-27 交叉审阅对 §3.1 的后续同步以本节开头修订说明为准，不回写为 N27 的当时事实。本小节不产生验收证据，V01–V12 状态一律保持「未执行」。
 
+#### 精确 as-of S 的正式阻断接线（2026-10-28 实施轮次）
+
+**本小节性质**：登记 §3.1／§5 对「上游精确 as-of S 能力未证明时，正式完整读取与导出必须失败关闭」的实现落地事实。**不产生验收证据**：V01–V12 状态一律保持「未执行」；本轮**未**构建镜像、**未**执行浏览器测试／real-e2e、**未**连接真实环境。
+
+- 证明口径由 **P0-1 提供**（`webui/server/proxy/audit-as-of-proof.ts` 的 `proveExactAsOfS`），本页**不自建**第二套证明：主状态、计量单位、筛选、S 与规则版本仍全部复用 L25-09。
+- 三个只读端点（`GET /api/admin/audit/reconciliation/inquiries/:turnId`、`/usage`、`/export`）在 `mode=complete` 且证明 `ok=false` 时返回 **409 `RECONCILIATION_AS_OF_S_UNPROVABLE`**，**不静默换用较新数据**、不把当前页完整冒充全部匹配完整。
+- `mode=diagnostic` 时返回显式 `diagnostic_incomplete`：含 `reason=as_of_s_unprovable`、`actualBound`（实际证据界）与 `missingSets`（缺失集合），并随 `asOfProof` 一并披露四个维度的判定与原因码。
+- 证明的范围口径与视图**一致**：证明用的就是视图读到的同一批行，不引入第二种筛选。
+- **完成边界**：历史库中「基线之前存在未登记的归属就地改写」无法被证明（`S < 基线` 即判定为不可证明）；台账 D-28 保持 `open`。V06／V09／V10 仍全部未执行。
+
 ---
 
 ## 4. 只读页面与交互

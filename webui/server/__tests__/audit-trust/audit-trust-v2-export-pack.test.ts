@@ -50,7 +50,8 @@ function makePackDb(): Database.Database {
       source_name TEXT,
       physical_table TEXT,
       extraction_method TEXT NOT NULL,
-      confidence TEXT NOT NULL
+      confidence TEXT NOT NULL,
+      ledger_seq INTEGER
     );
     CREATE TABLE permission_snapshots (
       id INTEGER PRIMARY KEY,
@@ -77,8 +78,18 @@ function makePackDb(): Database.Database {
       ts TEXT NOT NULL,
       classification_version TEXT NOT NULL,
       expected_revision TEXT,
+      ledger_seq INTEGER,
       UNIQUE(original_turn_id, attribution_rule_version)
     );
+    -- F-02：精确 as-of S 的证据（归属改写日志 + 基线）。
+    CREATE TABLE access_log_attribution_mutations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      access_log_id INTEGER NOT NULL,
+      ledger_seq INTEGER,
+      kind TEXT NOT NULL
+    );
+    CREATE TABLE access_log_asof_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+    INSERT INTO access_log_asof_meta (key, value) VALUES ('attribution_journal_baseline_seq', '1');
     CREATE TABLE audit_maintenance_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       ledger_seq INTEGER,
@@ -117,10 +128,10 @@ function makePackDb(): Database.Database {
     "confirmed", "turn-2", "turn-2", "audit-trust-2026-10-19-r1.v1", 2
   );
   db.prepare("UPDATE access_log SET permission_snapshot_hash = 'hash-1'").run();
-  db.prepare(`INSERT INTO access_log_sources (access_log_id, ts, user_id, connection_id, schema_name, source_name, physical_table, extraction_method, confidence) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .run(1, "2026-10-19T12:00:00Z", "u1", "main", "public", "users", "users", "literal", "high");
-  db.prepare(`INSERT INTO access_log_sources (access_log_id, ts, user_id, connection_id, schema_name, source_name, physical_table, extraction_method, confidence) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .run(2, "2026-10-19T12:01:00Z", "u2", "main", "public", "users", "users", "literal", "high");
+  db.prepare(`INSERT INTO access_log_sources (access_log_id, ts, user_id, connection_id, schema_name, source_name, physical_table, extraction_method, confidence, ledger_seq) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .run(1, "2026-10-19T12:00:00Z", "u1", "main", "public", "users", "users", "literal", "high", 1);
+  db.prepare(`INSERT INTO access_log_sources (access_log_id, ts, user_id, connection_id, schema_name, source_name, physical_table, extraction_method, confidence, ledger_seq) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .run(2, "2026-10-19T12:01:00Z", "u2", "main", "public", "users", "users", "literal", "high", 1);
   db.prepare(`INSERT INTO permission_snapshots (id, hash, created_at, roles_json, resolved_json, capability_digest, tool_classification_version) VALUES (1, 'hash-1', '2026-10-19T12:00:00Z', '[]', '{}', 'digest-1', 'ac-p0-cls-1')`).run();
   return db;
 }

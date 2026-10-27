@@ -3733,6 +3733,13 @@ async function buildDenialRepairPayload(
           outcome: "budget_stop",
           decisionReason: "question_budget_exhausted",
           errorDetail: "question_budget_exhausted",
+          // 闸序事实：ACL 裁决（上方 aclCheck）先于预算闸。预算终止时授权**已经
+          // 裁决通过**，因此显式记录该凭据 —— 预算桶不得覆盖已发生的授权裁决，
+          // 也不得反推 `not_evaluated`（Spec §4.3(b) / §18.10 F-03）。
+          executionEvidence: {
+            authorizationAllowed: true,
+            notExecuted: true
+          },
           durationMs: Date.now() - start,
           responseBytes: Buffer.byteLength(responseBody),
           requestId,

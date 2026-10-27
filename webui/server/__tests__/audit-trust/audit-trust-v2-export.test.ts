@@ -39,10 +39,16 @@ function makeFixtureDb(): Database.Database {
       classification_version TEXT,
       permission_snapshot_hash TEXT
     );
-    CREATE TABLE access_log_sources (id INTEGER PRIMARY KEY, access_log_id INTEGER);
+    CREATE TABLE access_log_sources (id INTEGER PRIMARY KEY, access_log_id INTEGER, ledger_seq INTEGER);
     CREATE TABLE permission_snapshots (id INTEGER PRIMARY KEY, hash TEXT NOT NULL);
-    CREATE TABLE association_revisions (id INTEGER PRIMARY KEY);
+    CREATE TABLE association_revisions (id INTEGER PRIMARY KEY, original_turn_id TEXT, ledger_seq INTEGER);
     CREATE TABLE audit_maintenance_log (id INTEGER PRIMARY KEY);
+    -- F-02：精确 as-of S 的证据（归属改写日志 + 基线）。
+    CREATE TABLE access_log_attribution_mutations (
+      id INTEGER PRIMARY KEY, access_log_id INTEGER, ledger_seq INTEGER, kind TEXT
+    );
+    CREATE TABLE access_log_asof_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+    INSERT INTO access_log_asof_meta (key, value) VALUES ('attribution_journal_baseline_seq', '1');
   `);
   // Seed 3 access_log rows + 3 source rows + 2 permission snapshots.
   const insert = db.prepare(
@@ -63,7 +69,7 @@ function makeFixtureDb(): Database.Database {
     "conflict", "turn-2", "turn-2", "audit-trust-2026-10-19-r1.v1", 3, "hash-1");
   // Sources (1 per access_log row to keep ok=true)
   for (let i = 1; i <= 3; i++) {
-    db.prepare(`INSERT INTO access_log_sources (access_log_id) VALUES (?)`).run(i);
+    db.prepare(`INSERT INTO access_log_sources (access_log_id, ledger_seq) VALUES (?, 1)`).run(i);
   }
   db.prepare(`INSERT INTO permission_snapshots (hash) VALUES ('hash-1')`).run();
   db.prepare(`INSERT INTO permission_snapshots (hash) VALUES ('hash-2')`).run();
