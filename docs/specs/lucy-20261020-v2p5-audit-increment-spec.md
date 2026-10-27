@@ -7,7 +7,8 @@
 | 版本 / 日期 | **v1.0-frozen / 2026-10-20，Asia/Shanghai**（v0.1 Kimi 初稿；v0.2 Codex 修订；v0.3 Kimi 裁决；v1.0 Codex 经授权完成复核修正与设计冻结） |
 | target_release | **v0.25** |
 | 功能编号 / 优先级 | **L25-09 / P0（P0-1）** |
-| 状态 | **已实现，未验收**（v0.25 P0-1 / L25-09）。实施计划 `docs/plans/2026-10-25-lucy-v0.25-p0-implementation-plan.md` §P0-1；提交 `21de5168`。A01–A12 验收项仍未执行；测试执行与发布仍须按另行批准计划推进 |
+| 状态 | **部分实现，未验收**（v0.25 P0-1 / L25-09）。实施计划 `docs/plans/2026-10-25-lucy-v0.25-p0-implementation-plan.md` §P0-1；实施基准提交 `21de5168`。2026-10-27 交叉审阅确认：独立入口到达证据与精确 as-of S 能力未闭合，正式完整导出及 P0-4 正式完整读取必须阻断；A01–A12 及全部子例仍未执行，测试执行与发布仍须按另行批准计划推进 |
+| 交叉审阅 | **Spec／Plan 文档评审已关闭，修订通过（2026-10-27）**；F-01～F-04 的文档修订记录见 §18.10。关闭仅指文档评审收口，未闭合实现能力与全部未执行验收不因评审关闭而改变 |
 | 撰写人 | **Kimi（起草）** |
 | 审阅者 / 冻结执行人 | **Codex（委托人明确授权“修改，完成冻结”）** |
 | 裁决及收口 | **Kimi 完成 U1–U12 原始裁决；Codex 经委托人授权修正复核发现并收口，最终冻结值见 §15；冻结记录见 §17** |
@@ -115,17 +116,19 @@ primaryStatus ∈ { succeeded, failed, denied, budget_stopped, cancelled, timeou
 
 同一纳入集合内每个**计量单元**有且仅有一个主状态；生命周期多条账本事件不能重复增加工具调用数（单位见 §8.2）。API、UI、CSV、证据包调用同一版本分类函数。所有八个桶均须有断言，合计等于集合总数；汇总与明细须使用相同账本截止位置 S、筛选、计量单位与规则版本。历史 Codex 的 31 条协议记录原始 outcome 为 23+3+4+1，禁止漏掉 budget_stop，也禁止把这组原始数直接称为已核实的执行状态。
 
-> 实施回写见 §18（2026-10-25，N16、N23、N24）：第 1 行的 `unknown+conflict` 判定条件、第 2 行的 execution 轴取值约定补记；`budget_stop` 不再映射为 `execution=interrupted`。
+> 实施回写见 §18（2026-10-25，N16、N23、N24）及 §18.10（2026-10-27 交叉审阅）：第 1 行的 `unknown+conflict` 判定条件、第 2 行的 execution 轴取值约定补记；`budget_stop` 不再映射为 `execution=interrupted`。N24 对 authorization 的固定值已撤销，恢复原三视图事实语义。
 
 **（b）authorization / execution / delivery 三视图**
 
 | 视图 | 取值 | 观察点 | 禁止 |
 |---|---|---|---|
-| authorization | allowed / denied / not_evaluated / unknown | Lucy 裁决时刻 | 把预算终止记为授权拒绝（沿用 20261019 §7） |
+| authorization | allowed / denied / not_evaluated / unknown | Lucy 裁决时刻 | 把预算终止记为授权拒绝；或由预算桶反推、覆盖已经发生的授权裁决（沿用 20261019 §7） |
 | execution | succeeded / failed / not_executed / interrupted / unknown | 上游或本地执行 | HTTP 200 推定执行成功 |
 | delivery | 本期写入 prepared / sent / acknowledged / unknown；unacknowledged 仅保留值域、不写入 | prepared=持久响应凭据；sent=实际发送观测；acknowledged=已接通 dogfood 适配器提交并通过关联校验的 result_received | sent 不证明用户收到；无回执保留已知 prepared/sent，接收观察为 unknown；无 ACK 超时，不推导 unacknowledged |
 
-> 实施回写见 §18（2026-10-25，N16、N17、N24）：`acknowledged` 路径此前不可达（可见父集合恒为空），本轮已打通；预算终止的 execution / authorization 轴取值补记为 `not_executed` / `not_evaluated`。
+预算终止只固定 `execution=not_executed` 与主状态 `budget_stopped`；authorization 按 Lucy 实际裁决凭据独立记录：已评估通过为 `allowed`，已评估拒绝为 `denied`，确未评估为 `not_evaluated`，证据不足为 `unknown`。主状态仍按 §4.3(a) 的证据顺序派生，不以 authorization 单轴覆盖优先闭合凭据。
+
+> 实施回写见 §18（2026-10-25，N16、N17、N24）及 §18.10（2026-10-27 交叉审阅）：`acknowledged` 路径此前不可达（可见父集合恒为空），本轮已打通；预算终止仅固定 `execution=not_executed`，authorization 保留实际裁决事实。
 
 **（c）args_summary / query_preview / generated_sql 拆分与省略规则**（对应历史缺陷：2455）
 
@@ -352,7 +355,7 @@ U5 语义已冻结（§15）：聚类仅生成 candidate、none/low 置信；数
 
 旧 complete/combined_complete 保持原版本定义；新增 auditCoverage 六项结果不静默覆盖旧字段。若要提供新综合结论，须版本化定义组合规则并保留每项状态；unknown 不合成为 pass。
 
-> 实施回写见 §18（2026-10-25，N20、N5）：检查 1「入口接收覆盖」的 D 取 canonical ledger 的 `received` 事件 ID ∪ `auth_failure_log` 拒绝记录 ID（裁决 D2）；`combinedComplete` 的判定式由 §2 显式绑定到 audit-trust R1 判据 #6，与本节六项检查互不替代。
+> 实施回写见 §18（2026-10-25，N20、N5）及 §18.10（2026-10-27 交叉审阅）：N20 的 `received ∪ auth_failure_log` 分母解释已撤销；二者只能作为被核对的观察集合，不能替代独立到达凭据。正常拒绝须按事先声明的路由边界、请求身份映射和排除规则单列，不得混入有 received 的已接收集合；无独立到达集合时检查 1 仍为 unknown。`combinedComplete` 的判定式由 §2 显式绑定到 audit-trust R1 判据 #6，与本节六项检查互不替代。
 
 **（c）对账生命周期与差异分类**
 
@@ -527,7 +530,7 @@ onIngress(request, endpointId):
 
 每次 durableAppend 使用独立账本 event_id，并引用同一 operation/attempt；durableFailureOrBlock 也必须处理自身提交失败，不能发送无持久凭据的成功内容。沿用现有异常响应、流式中止与告警行为；U3 已冻结本期无缓冲，未来引入须另立 spec 批准。
 
-> 实施回写见 §18（2026-10-25，N20）：认证 / 路径 / Origin 层拒绝发生在任何账本写入之前，从不进 canonical ledger；该类请求改以 `auth_failure_log` 作为独立入口证据参与覆盖分母（裁决 D2）。
+> 实施回写见 §18（2026-10-25，N20）及 §18.10（2026-10-27 交叉审阅）：认证 / 路径 / Origin 层拒绝发生在任何账本写入之前，从不进 canonical ledger；`auth_failure_log` 只保留该拒绝观察，**不是独立到达分母**。合法到达但 received 提交失败且拒绝表无行的请求仍须留在独立预期集合的 missing_ids 中；无法取得该独立集合时检查 1 为 unknown。
 
 ### 12.2 执行、终态与恢复（S01/S02/S07）
 
@@ -616,18 +619,25 @@ onExport(filter):
     else return failFormalExport()        # 追平超时仅出诊断 partial 包（§15-U6）
   snapshot = freezeConsistentProjectionSnapshot()
   assert snapshot.covers(S)                # SQLite backup / 一致读快照沿用 Spec 185
+  asOfProof = proveExactAsOfS(snapshot, S, filter,
+                              baseFacts=true, revisions=true,
+                              relations=true, aggregates=true)
+  if !asOfProof.ok:
+    scopeComplete = false                  # 折入既有因子，不增加 combinedComplete 第四项
+    return failFormalExport()              # 仅允许显式诊断 partial，不发布正式完整包
   expectedIds = selectDeclaredSet(snapshot, filter, seq <= S, protocolRules)
   files = renderAllPages(snapshot, expectedIds, seq <= S)
-  # 所有关联、修订生效、聚合均 as-of S；投影已超过 S 也不得混入新事实
+  # 所有基础事实、关联、修订生效、聚合均 as-of S；投影已超过 S 也不得混入新事实
   assert exportedIds(files) == expectedIds and noDuplicateIds(files)
   manifest = buildManifest(files, sha256, filter, S, ruleVersions, exclusions, prevExportId?)
   verifyFilesAndReferences(manifest)
+  assert combinedComplete == (scopeComplete AND fileHashOk AND relationCheckOk)
   atomicallyPublishCompletePackage()       # 中断/校验失败不发布正式半包
 ```
 
-若底层投影只保留当前值而无法计算 as-of S，必须沿用可保留历史/重建的账本与冻结设计解决，不能仅给行加 seq 过滤便声称修订视图一致。诊断 partial 包须与正式导出区分，列出实际上界及缺失集合；不得携带“完整”结论。
+若底层投影只保留当前值而无法计算 as-of S，必须沿用可保留历史/重建的账本与冻结设计解决，不能仅给行加 seq 过滤便声称修订视图一致。`ledger_seq` 列存在或 `seq <= S` 可执行均不等于精确 as-of 可证明；基础执行／交付事实、归属有效值、迟到 ACK、关联及聚合任一项不可证明，均令 `scopeComplete=false` 并阻断正式完整导出。诊断 partial 包须与正式导出区分，列出实际上界及缺失集合；不得携带“完整”结论。
 
-> 实施回写见 §18（2026-10-25，N13、N14、N18）：v2 导出此前从投影自身取 S 且无 HTTP 路由（仅测试可达），本轮已修正并接入正式路由；投影只保留最新状态的限制仍未消除，as-of S 的实现路径与口径见 §18。
+> 实施回写见 §18（2026-10-25，N13、N14、N18）及 §18.10（2026-10-27 交叉审阅）：v2 导出此前从投影自身取 S 且无 HTTP 路由（仅测试可达），本轮已修正并接入正式路由；投影只保留最新状态及精确 as-of S 能力缺口仍未闭合，当前不得以已实现能力放行正式完整导出。
 
 ---
 
@@ -690,18 +700,18 @@ settleAt(cutoff, S):
 
 | ID | 输入 / 前置条件 | 故障点 | 预期事件集合与状态/关系 | 证据位置 | 判定规则 |
 |---|---|---|---|---|---|
-| A01 持久前缀与崩溃恢复 | 合法请求；分别在 received 成功后/admitted 前、admitted 后/分派前、执行后/prepared 前、prepared 后/发送前强杀（O+P） | 各屏障之间崩溃，进程来不及写 interrupted | 只要求故障点之前已经提交的前缀存在；第一子例不强求 admitted。启动从账本派生未闭合操作并追加恢复标记；重复重启幂等，不自动重执行业务 | 账本原前缀、恢复修订、上游观测 | 已持久事件不消失；无 admitted 不分派；仅 received 的请求在 received_at+24h 也须结算；重启不延长截止时间 |
-| A02 各持久化屏障不可用 | 分别注入 received、admitted、response_prepared 提交失败（O+P） | 只读/满/提交超时 | received 失败：无持久接收确认且无上游分派；admitted 失败：可有 received，但无上游分派；prepared 失败：上游可能已执行，不释放内容，保留此前前缀及独立告警 | 账本、入口观测、上游日志、发送观测 | 禁止“无凭据或未执行”二选一；逐屏障断言；U3 已冻结仅阻断；received 失败不回传三项审计凭据头，admitted 前失败若 received 已提交则头指该 received ID，不指不存在的 admitted；无缓冲测试项 |
-| A03 事件重投与业务重试 | 同 event_id 账本重放；同 clientEventId 观测重投；新请求实际重试（P+O） | 重投/重复重启 | 同事件幂等不增调用；同观测 ID 异内容保留冲突；新执行生成新 attempt，retry_of 指原入口 event_id、父 attempt 指原 attempt_id | 账本、投影、客户端观测 | 同一调用多条生命周期/客户端事件不误合并、不重复计工具数 |
+| A01 持久前缀与崩溃恢复 | 合法请求；分别在 received 成功后/admitted 前、admitted 后/分派前、执行后/prepared 前、prepared 后/发送前强杀（O+P）；**A01-INGRESS**：独立到达凭据已知但 received 未提交 | 各屏障之间崩溃，进程来不及写 interrupted；入口提交失败 | 只要求故障点之前已经提交的前缀存在；第一子例不强求 admitted。启动从账本派生未闭合操作并追加恢复标记；重复重启幂等，不自动重执行业务；A01-INGRESS 不从预期集合删除该请求 | 账本原前缀、恢复修订、上游观测、独立到达凭据与差异 ID | 已持久事件不消失；无 admitted 不分派；仅 received 的请求在 received_at+24h 也须结算；重启不延长截止时间；无持久 received 的独立到达项须出现在 missing_ids，不能用 received／拒绝并集吞掉 |
+| A02 各持久化屏障不可用 | **A02-R/A/P**：分别注入 received、admitted、response_prepared 提交失败；**A02-C**：client_observation 提交失败；**A02-D**：观测已提交而 delivery_evidence 失败；**A02-T**：发送后 delivery/terminal 追加失败；**A02-F**：失败响应自身提交失败（O+P） | 只读/满/提交超时；ACK 闭包与失败响应闭包中途失败 | received 失败：无持久接收确认且无上游分派；admitted 失败：可有 received，但无上游分派；prepared 失败：上游可能已执行，不释放内容；A02-C 无 ACK；A02-D 保留 pending observation；A02-T 保留已发送事实并独立告警；A02-F 由 durableFailureOrBlock 阻断 | 账本、入口观测、上游日志、发送观测、pending observation、独立告警及预期事件 ID／关系 | 禁止“无凭据或未执行”二选一；逐屏障断言；U3 仅阻断无缓冲；received 失败无三头，后续失败引用同一 received ID；A02-R 另含合法独立到达但拒绝表无行子例，不缩分母；A02-C 不确认接收；A02-T 不要求撤回已发送内容；任何闭包失败不得伪发成功凭据 |
+| A03 事件重投与业务重试 | 同 event_id 账本重放；同 clientEventId 观测重投；新请求实际重试；**A03-ACK**：观测已落账、delivery_evidence 闭包失败后以同 ID 重投并跨重启恢复（P+O） | 重投/重复重启/ACK 闭包失败 | 同事件幂等不增调用；同观测 ID 异内容保留冲突；新执行生成新 attempt，retry_of 指原入口 event_id、父 attempt 指原 attempt_id；A03-ACK 只补一次审计闭包，保留 source_client_event_id、parent_ingress_event_id、attempt_id 关系 | 账本、投影、客户端观测、ACK 前后事件 ID 集合与关系 | 同一调用多条生命周期/客户端事件不误合并、不重复计工具数；A03-ACK 不重复 observation／ACK、不重执行业务，重启与同 ID 重投均幂等补闭包 |
 | A04 执行与交付断点 | a. Lucy 已持久执行成功但发送丢失；b. 上游执行而回包未达 Lucy（O） | 两种不同断点 | a.execution=succeeded，delivery=unknown/实际发送观测，不能改执行失败；b.execution=unknown、primary=indeterminate，凭据核验后追加结果；无客户端接收证据不写 acknowledged | 账本、上游凭据、客户端接收观测 | 不虚构 Lucy 已知成功、不自动重放；dogfood 有效 result_received 可升级 acknowledged；未接通/缺回执保留 prepared/sent 事实，客户端接收观察为 unknown；72h 仍不写 unacknowledged |
-| A05 协议/执行/错误独立 | HTTP 成功但工具 isError；JSON-RPC -32602；explicit_table_required:<empty>/<table>；上游错误（P） | 不同层错误 | 保留原始码与规范化原因；transport、authorization、execution、usability 分别判定；空 source 归用法语义，有真实授权拒绝才归权限 | 原始响应、调用流水、汇总 | HTTP 200 不增加执行成功；无源错误不编权限拒绝 |
-| A06 八桶与预算连续性 | 按 §15-U10 已裁决派生表构造八桶、完成/取消/超时竞争、预算耗尽与重连/缺 begin/续跑（P） | 取消请求、确认取消、超时、未知与预算终止 | 八桶均可达且互斥闭合；仅取消请求不证明 cancelled；budget_stopped 独立；预算四维不因重连/缺 begin 重置，续跑关系保留 | 同截止明细、汇总、预算事件 | 每单位恰一个桶；闭合失败/成功先于取消/超时，取消请求不算确认取消；同一尝试互斥闭合或无法核验时序则 unknown+conflict；历史旧 outcome 单列 31=23+3+4+1，不当新派生结果 |
+| A05 协议/执行/错误独立 | HTTP 成功但工具 isError；JSON-RPC -32602；explicit_table_required:<empty>/<table>；上游错误；**A05-AUTH**：分别构造授权先于预算、预算先于授权及授权证据不足（P） | 不同层错误；预算与授权顺序变化 | 保留原始码与规范化原因；transport、authorization、execution、usability 分别判定；空 source 归用法语义，有真实授权拒绝才归权限；A05-AUTH 保留实际 allowed／denied，确未评估才 not_evaluated，证据不足 unknown | 原始响应、调用流水、汇总、授权与预算凭据及顺序 | HTTP 200 不增加执行成功；无源错误不编权限拒绝；budget_stopped 不覆盖已发生授权裁决，也不反推 not_evaluated |
+| A06 八桶与预算连续性 | 按 §15-U10 构造八桶、完成/取消/超时竞争、预算耗尽与重连/缺 begin/续跑；**A06-BR/BW**：分别注入预算读取、写入失败；**A06-ORDER**：授权与预算两种先后顺序（P+O） | 取消请求、确认取消、超时、未知、真实预算终止及预算存储故障 | 八桶均可达且互斥闭合；仅取消请求不证明 cancelled；budget_stopped 独立；预算四维不重置，续跑关系保留；A06-BR/BW 均 503 且不分派，不产生 budget_stopped；A06-ORDER 保留真实授权事实 | 同截止明细、汇总、预算事件、持久层故障记录、授权／预算顺序及未分派证据 | 每单位恰一个桶；闭合失败/成功先于取消/超时；互斥闭合或时序不可核验则 unknown+conflict；预算读写失败不得伪造耗尽凭据；历史旧 outcome 单列 31=23+3+4+1，不当新派生结果 |
 | A07 多层 ID 与复用 | 同会话复用 RPC ID 0–3；同 SQL 两独立请求；一 client_call 多观测/多尝试；上游不支持 ID（P） | ID 复用/能力不足 | 独立执行不合并；观测各有 clientEventId；parent_attempt_id 类型正确；内部 operationId 不填 upstream_operation_id | 身份关系清单、账本、投影 | 历史 2380/2454 等关系保留；HTTP/SSE 回传均引用已提交 received，旧客户端未协商时不插 meta 扩展帧；无证据能力不虚报 |
-| A08 重连与归属修订 | 两问询并发、断线重连/重发、迟到 begin、合法/不合法跨会话续接（A+P） | 重连与迟到绑定 | 重连本身不增 attempt，实际新执行有新 attempt；有效续接才延续显式问询；候选低置信；不合法续接保持冲突/未归属；原归属保留 | 归属修订链、续接凭据、预算链 | 无时间回绑、无并发串链；effective_* 可按 S 重建 |
+| A08 重连与归属修订 | 两问询并发、断线重连/重发、迟到 begin、合法/不合法跨会话续接（A+P） | 重连与迟到绑定 | 重连本身不增 attempt，实际新执行有新 attempt；有效续接才延续显式问询；候选低置信；不合法续接保持冲突/未归属；原归属保留 | 归属修订链、续接凭据、预算链 | 无时间回绑、无并发串链；effective_* 可按 S 精确重建，不能以当前有效值或 seq 过滤替代 |
 | A09 参数/结果冲突与未知 | 缺参、空值、有界截断；结果错误码、行列、精度/类型、截断或摘要变异；已知脱敏/解析失败/历史未知（P+V） | 参数或结果单字段变化 | 区分缺参/空值/未知、保留 redacted/parse_failed；摘要按相同版本与完整输入边界比较；结果差异显式，不靠相同 SQL/hash 强配 | 原参数/响应的受控证据与摘要、导出 | 2455 保留冲突；500/501 Unicode码点、512/513 UTF-8字节及 emoji/中文边界不破字符/JSON，摘要不取截断预览；错父事件/错attempt/错摘要/heartbeat 不得升级 ACK；T2 前后与迟到修订分别断言，不补执行事实 |
-| A10 账本领先与导出一致性 | 故意暂停投影使 ledger>S_projection；导出期间并发写入/归属修订，多页导出（P+O） | 投影积压、等待超时、并发 | S 取账本已提交上界；未追平正式导出失败；追平后冻结快照，所有视图 as-of S，分页不重不漏，>S 不混入；诊断 partial 单列 | 账本 S、快照/页 ID 集合、Manifest | 从投影取 S 的错误实现必须被检出；T3 从捕获 S 起算60s，等待重试不重置，超时无正式包；同 S/筛选/规则/单位/profile 结果一致 |
+| A10 账本领先与导出一致性 | 故意暂停投影使 ledger>S_projection；导出期间并发写入/归属修订，多页导出；**A10-ASOF**：捕获 S 后改变基础执行结果／delivery、覆盖归属有效值、追加迟到 ACK 及关联／聚合输入（P+O） | 投影积压、等待超时、并发、S 后事实修订 | S 取账本已提交上界；未追平正式导出失败；追平后冻结快照，所有基础事实、修订、关联、聚合 as-of S，分页不重不漏，>S 不混入；A10-ASOF 同 S 重读不漂移；诊断 partial 单列 | 账本 S、快照/页 ID 集合、前后版本凭据、as-of 证明、Manifest | 从投影取 S 或只凭 ledger_seq 列存在放行的错误实现必须被检出；T3 从捕获 S 起算60s且不重置，超时无正式包；as-of 任一项不可证明则 scopeComplete=false、正式导出失败；同 S/筛选/规则/单位/profile 结果一致 |
 | A11 文件完整性与版本链 | 隔离副本删/改文件、改关联引用、补包/重导出（V+O） | 缺失、内容或关联变化 | 文件完整性与关联检查分别报失败并定位；新 exportId 关联旧版；旧包字节/清单不改 | 两层清单与校验报告、版本关系 | 不把本地 hash 验证当不可抵赖来源证明；来源三字段有值或明确原因，无审批不编审批引用 |
-| A12 历史回放与提示能力样本 | 只读历史 CSV/包；另建隔离 repairHint 能力样本，含合法、同名不可调用、不存在/不可见目标（V+P） | 固定历史差异及提示目标不可用 | 历史 177/192/175；旧 outcome 110/23/43/1〔探测已含〕；归属 137/36/2；19 握手分组+7 业务分组〔5 未上报〕；Session B 50 工具；ID/关系/冲突一致。提示不生成虚构 row_count(source) | 静态回放报告与独立提示校验报告分开 | 2455/Claude 差额不强配；Manifest 65=58通过+3缺失+4不一致只作归档事实，不自动归咎 Lucy；旧180预览保持原样，新500预览按v2p5-1另测；缺独立入口数据项仍 unknown |
+| A12 历史回放与提示能力样本 | 只读历史 CSV/包；另建隔离 repairHint 能力样本，含合法、同名不可调用、不存在/不可见目标（V+P） | 固定历史差异及提示目标不可用 | 历史 177/192/175；旧 outcome 110/23/43/1〔探测已含〕；归属 137/36/2；19 握手分组+7 业务分组〔5 未上报〕；Session B 50 工具；ID/关系/冲突一致。提示不生成虚构 row_count(source) | 静态回放报告与独立提示校验报告分开 | 2455/Claude 差额不强配；Manifest 65=58通过+3缺失+4不一致只作归档事实，不自动归咎 Lucy；旧180预览保持原样，新500预览按v2p5-1另测；缺独立入口数据项仍 unknown，received∪auth_failure_log 不得替代独立到达集合 |
 
 各子例仍为**未执行**。U1–U12 最终值已冻结（§15，Kimi 原始裁决及 Codex 经授权复核收口），各项预期引用 v1.0-frozen / audit-profile=v2p5-1；不得以实现选定值反向补齐验收标准。静态回放与真实故障运行报告分开，不能以回放通过宣称崩溃可靠性已通过。
 
@@ -796,12 +806,13 @@ A01↔SEC-19-V05；A02↔SEC-19-V02/V04；A03↔SEC-19-V06 + 幂等投影；A04�
 
 本节记录 **Lucy v0.25 实施期（W1–W4）实证出的 14 条文档偏差**及其处置，逐条给出「偏差事实 + 证据」「本次裁决／处理」「受影响条款」「是否改变冻结契约」四要素。编号 N5、N10、N13–N24 沿用实施计划 `docs/plans/2026-10-25-lucy-v0.25-p0-implementation-plan.md` §9 的偏差清单编号。
 
-**本节不修改 §1–§17 的冻结正文**，原条款文本保持可追溯；受影响条款处只加锚点注记（`> 实施回写见 §18（2026-10-25）`）。文档头部元数据表不变。
+**本节原则上不修改 §1–§17 的冻结正文**，原条款文本保持可追溯；受影响条款处只加锚点注记（`> 实施回写见 §18（2026-10-25）`）。2026-10-27 经委托人授权的交叉审阅属于例外：仅撤销实施回写对原冻结语义的错误覆盖、澄清正式阻断边界并补齐验收子例，同时更新实现状态；不改变 S01–S08、U1–U12 或验收标准。
 
 **变更控制**：
 
 - spec 版本仍为 **v1.0-frozen**，audit-profile 仍为 **v2p5-1**；本节**不改变冻结契约**。多数条目是实现向冻结契约对齐（原实现违约），正文无需改动。
-- N5、N22、N23、N24 属冻结文本的**消歧与显式绑定**：只在冻结文本已隐含的语义范围内补记可执行判据或口径，不新增状态、不新增取值、不改判定方向、不改任何数值。若后续认定某条超出「消歧」范围，须按 §17「责任与变更控制」另立 spec/profile 版本并记录批准来源，不得以本节为依据原地改写冻结条款。
+- N5、N22、N23、N24 属冻结文本的**消歧与显式绑定**：只在冻结文本已隐含的语义范围内补记可执行判据或口径，不新增状态、不新增取值、不改判定方向、不改任何数值。若后续认定某条超出「消歧」范围，须按 §17「责任与变更控制」另立 spec/profile 版本并记录批准来源，不得以本节为依据原地改写冻结条款。2026-10-27 交叉审阅确认 N20 不属于合法消歧，N24 仅 execution 补记成立；两者错误部分按 §18.10 撤销，不据此改变冻结版本。
+- **2026-10-27 修订批准与范围**：委托人明确授权独立复核 Codex 报告并直接修正认同项；修订记录、受影响条款与未完成能力见 §18.10。Codex 原报告作为历史审阅记录保留，不以其结论代替验收。
 - **验收状态一律保持「未执行」**：A01–A12（§13.2）全部子例仍为未执行；§17 的「A01–A12 及 U9 两阶段运行时验收仍为未执行」结论不变。本节**不构成验收通过结论**，也**不构成客户交付通过结论**；实现落地只说明契约已有载体，不等于该场景已被验证。
 - 本节引用的代码位置以**符号名**为主、行号为当前复核位置；源码后续变动时以符号名为准。
 
@@ -855,9 +866,9 @@ A01↔SEC-19-V05；A02↔SEC-19-V02/V04；A03↔SEC-19-V06 + 幂等投影；A04�
 
 - **偏差事实**：§4.3(a) 第 2 行「预算引擎明确终止本次尝试，未实际执行 → `budget_stopped`」**未指定 execution 轴取值**；而 §4.3(b) execution 取值域中的 `interrupted` 与 §4.3(a) 第 8 行「有持久前缀、处理中断且结果未定 → `indeterminate`」语义绑定，于是预算终止在 execution 轴出现两个相容读法，**无唯一答案**。
 - **证据**：审计 Spec §4.3(a) 第 2 行 / 第 8 行 与 §4.3(b) execution 行（本文件对照）；实现落点 `webui/server/proxy/audit-derivation.ts` 的 `deriveExecutionView`（现 `:235`，`notExecuted` → `not_executed`；`interrupted` 仅由 `durablePrefix && interruptedWithoutResult` 命中）与 `deriveAuthorizationView`（现 `:223`，预算终止 → `not_evaluated`）；v2p5-1 分类入口 `webui/server/proxy/audit-classification.ts` 的 `classifyAuditEvent`（现 `:310`）。
-- **本次裁决／处理**：**补记取值约定** —— 预算终止且未实际执行时，`execution = not_executed`；`interrupted` **只**用于「有持久前缀、处理中断且结果未定」（对应主状态 `indeterminate`），**不用于**预算终止。同场景 `authorization = not_evaluated`（预算终止不得记为授权拒绝，§4.3(b) 禁止列 + 20261019 §7）；`delivery` 轴独立取值，不因预算终止改写。主状态桶仍为 `budget_stopped`。
-- **受影响条款**：§4.3(a)（第 2 行）、§4.3(b)（execution / authorization 行）、A06。
-- **冻结契约**：**不改变**。该约定是 §4.3(b) execution 取值域与 §4.3(a) 第 8 行在现有取值下的**唯一相容解读**，未新增取值、未改桶定义。
+- **本次裁决／处理**：**补记 execution 取值约定** —— 预算终止且未实际执行时，`execution = not_executed`；`interrupted` **只**用于「有持久前缀、处理中断且结果未定」（对应主状态 `indeterminate`），**不用于**预算终止；`delivery` 轴独立取值，主状态桶仍为 `budget_stopped`。**2026-10-27 交叉审阅撤销原 authorization 固定值**：预算终止不得记为授权拒绝，但也不能据此反推未评估；已发生的 `allowed`／`denied` 凭据必须保留，确未评估才为 `not_evaluated`，证据不足为 `unknown`。当前实现按 budgetStopped 默认 `not_evaluated` 属待修缺口，不是规范依据。
+- **受影响条款**：§4.3(a)（第 2 行）、§4.3(b)（execution / authorization 行）、A05、A06。
+- **冻结契约**：**不改变**。execution 补记是 §4.3(b) 取值域与 §4.3(a) 第 8 行的唯一相容解读；authorization 恢复原三视图事实语义，不新增取值、不改桶定义。
 
 ### 18.4 §6 S03 列契约（N10、N21）
 
@@ -883,9 +894,9 @@ A01↔SEC-19-V05；A02↔SEC-19-V02/V04；A03↔SEC-19-V06 + 幂等投影；A04�
 
 - **偏差事实**：认证 / 路径 / Origin 层拒绝发生在**任何账本写入之前**，被拒请求只写 `auth_failure_log`，从不进 canonical ledger；因此 §8.2(b) 检查 1「入口接收覆盖」的 D（由独立入口计数或受控发送凭据确认到达 Lucy 边界的请求 ID）**无法按 §12.1 口径计算**，同一侧投影自证入口无漏记又违反 §8.2(b) 末段与 §8.4。
 - **证据**：`webui/server/proxy/admission.ts` —— `recordAuthFailure`（现 `:131`）、`recordIngressRefusal`（现 `:157`）、准入入口注释（现 `:290`–`:296`：HTTP 层认证失败按 D2 不进 canonical ledger，仍走 `auth_failure_log`）；`webui/server/proxy/mcp-proxy.ts` 的准入调用点；写入侧 `webui/server/proxy/audit.ts` 的 `auth_failure_log` 表（现 `:495`）与 `writeAuthFailureLog`（现 `:918`）。
-- **本次裁决／处理**：**裁决 D2**（实施计划 §4.3 D2）—— 认证 / 路径 / Origin 层拒绝**仍不进** canonical ledger（避免开一条未鉴权写放大面），但 `auth_failure_log` 作为**独立于账本投影**的入口证据参与覆盖分母。据此，检查 1 的 D = canonical ledger 的 `received` 事件 ID ∪ `auth_failure_log` 的拒绝记录 ID；`auth_failure_log` 记录只算「入口尝试」证据，**不算**执行凭据、不进工具调用计量单位（§8.2(a)）。裁决记录来源：实施计划 `docs/plans/2026-10-25-lucy-v0.25-p0-implementation-plan.md` §4.3 D2 与 §4.2 条目 B22。
+- **本次裁决／处理（2026-10-27 撤销原 D2 分母解释）**：认证 / 路径 / Origin 层拒绝**仍不进** canonical ledger，避免开一条未鉴权写放大面；`auth_failure_log` 只算拒绝观察证据，不算执行凭据、不进工具调用计量单位。检查 1 的 D **不得**取 `received ∪ auth_failure_log`：二者都是待核对的同侧观察集合，无法包含合法到达但 received 提交失败且拒绝表无行的请求，也未定义两个 ID 空间的映射与正常拒绝排除规则。D 恢复原定义为独立入口计数或受控到达凭据确认的请求 ID；正常拒绝按事先声明的路由边界、身份映射及排除规则单列。没有独立到达集合时保持 unknown，不能以双源并集声明可计算或通过。
 - **受影响条款**：§12.1（入口接收与持久化屏障）、§8.2(b)（检查 1）、§8.2(a)（计量单位）、§8.4（禁止同侧自证）、A01、A02、A12。
-- **冻结契约**：**不改变**。D2 是 §8.2(b)「独立入口计数**或**受控发送凭据」与 §12.1 注释「按既有准入解析并分配身份」的既有解释，未新增判定规则、未改检查项定义。
+- **冻结契约**：**不改变**。本次恢复原 §8.2(b) 独立入口证据要求，撤销实施回写的错误覆盖；未新增判定规则、未改检查项定义。
 
 ### 18.6 §9.3 / §12.5 导出与封存（N13、N14、N15、N18）
 
@@ -917,9 +928,9 @@ A01↔SEC-19-V05；A02↔SEC-19-V02/V04；A03↔SEC-19-V06 + 幂等投影；A04�
 
 - **偏差事实**：`webui/server/security/projector.ts` 按 `operation_id` 合并事件、只保留**最新状态**，历史凭据被丢弃，因此**无法据投影计算 as-of S 视图**；§12.5 末段已自认该限制（「不能仅给行加 seq 过滤便声称修订视图一致」），但未给出实现路径。
 - **证据**：`webui/server/security/projector.ts` —— `applyBatch`（现 `:238`）、`mergeEvent`（现 `:166`）与 `security_operation_projection` 表结构（`operation_id` 主键、单行覆盖）；实现路径落点为 `webui/server/proxy/audit.ts` 的 `ledger_seq` additive 列（`access_log.ledger_seq` 现 `:335`、`association_revisions.ledger_seq` 现 `:556`–`:557`，口径注释 `:590`–`:600`）与派生层 `webui/server/proxy/audit-derivation.ts`（只消费 as-of S 的可核验证据，`:15`）。
-- **本次裁决／处理**：**登记实现路径** —— 基础行取 `ledger_seq <= S`，再折叠 `ledger_seq <= S` 的修订事件。口径为**保守上界**：行只在其 `ledger_seq` 之后才可能被后续账本事件改变，故纳入 `ledger_seq <= S` 的行是安全的；它**不是**「该行所依赖的全部账本事件序号」—— access_log 行在 `response_prepared` 提交**之前**写入，其 `delivery_status` 反映写入时刻的观测。§12.5 末段的约束**继续有效**：精确 as-of 视图仍需账本历史，本轮未宣称实现，也未把「只按 seq 过滤」当作修订视图一致。
-- **受影响条款**：§12.5（末段）、§9.3(a)（as-of S 与 manifest 声明）、§8.2(b) 检查 3（投影追平）、A10。
-- **冻结契约**：**不改变**。本条只补记实现路径与口径边界，不放宽 §12.5 末段的约束。
+- **本次裁决／处理（2026-10-27 明确未完成与阻断边界）**：`ledger_seq` 记录的是行写入时的账本 MAX，不是该行当前内容版本的提交序号；`ledger_seq <= S` 不能恢复已被覆盖的旧执行／交付事实、归属有效值、迟到 ACK、关联或聚合，原「保守上界即安全」表述撤回。当前 `audit-export-v2.ts` 仅以 `present.has("ledger_seq")` 判定 `asOfBoundEnforced`，只证明列存在，**不证明精确 as-of S**，不得据此发布正式完整包。后续必须基于可保留历史／可重建账本实现并证明基础事实、修订、关联与聚合的同 S 视图；未完成时 `scopeComplete=false`，正式导出失败关闭，P0-4 正式完整读取同样阻断，仅允许显式诊断性不完整结果。范围约束折入 `scopeComplete`，`combinedComplete` 仍严格为三项 AND。
+- **受影响条款**：§2（combinedComplete）、§12.5（末段与正式导出）、§9.3(a)（as-of S 与 manifest 声明）、§8.2(b) 检查 3（投影追平）、A08、A10；P0-4 §3.1／§4.2／§5／§6、V06／V09／V10。
+- **冻结契约**：**不改变**。本条澄清事实与完成边界，恢复 §12.5 的严格要求；不放宽 as-of S、不增加第四合取项。精确 as-of 实现及对应运行验证为阻断性后续工作，本次仅修文档。
 
 ### 18.7 §10.3 / §10.5 预算（N19）
 
@@ -934,8 +945,8 @@ A01↔SEC-19-V05；A02↔SEC-19-V02/V04；A03↔SEC-19-V06 + 幂等投影；A04�
 ### 18.8 状态与遗留风险
 
 - **验收矩阵状态**：A01–A12 全部子例**仍为未执行**；本节只登记实现偏差与处置，不改变 §13.2 的任何状态。V01–V22 属其他 Spec 的验收矩阵，本节不涉及。
-- **文档元数据**：头部元数据表（版本 / 状态 / 冻结执行人等）**有意保持不变** —— 本节未改变冻结契约，故不产生新的 spec 版本号；「暂不开发」等表述的时效性不在本轮回写范围。
-- **未在本轮闭环的项**：N18 所述的**精确** as-of S 视图仍需账本历史能力，本轮只交付保守上界口径与 `ledger_seq` 路径；§12.5 末段的约束继续有效。N20 的入口证据双源口径需要在 §8.2(b) 检查 1 的实际断言中与 auditCoverage 实现对齐后才可声称该检查可计算。
+- **文档元数据**：W5 回写时头部元数据表有意保持不变；2026-10-27 交叉审阅仅将实现状态更正为「部分实现，未验收」，冻结版本、profile 与冻结执行人不变。
+- **未闭环的项**：N18 所述的**精确** as-of S 视图仍需账本历史能力；`ledger_seq` 与列存在检查不是充分实现。当前正式完整导出及 P0-4 正式完整读取不得据此放行，规范阻断要求与当前实现差距见 §18.10。N20 的双源分母解释已撤销；独立到达证据未建立前检查 1 必须保持 unknown，不再以双源并集对齐为可计算目标。
 - **交叉引用**：N5 的台账 **D-12**（`docs/qa/security-findings.yaml`）与 N13 的 D-10 相关联 —— D-10 的修复方式由 D-12 收口，两者共同决定 v2 导出的 S 来源与完整性闸门形态。
 
 ### 18.9 W6 实战检验后补记（2026-10-25，N25 / D-24）
@@ -949,6 +960,21 @@ A01↔SEC-19-V05；A02↔SEC-19-V02/V04；A03↔SEC-19-V06 + 幂等投影；A04�
 - **本次裁决／处理**：按**作用域**把「加载 → 判定 → 落库」整段**串行化**（`QuestionBudget.scopeQueues` + `withScopeSerialization`），使同一作用域的并发请求依次完成该段。**不引入多副本锁**：Lucy 是单实例／单副本边界，进程内串行即已封住该窗口；引入分布式锁会越过既有边界，属另立范围的变更。已补 2 条并发用例，且**做过去修复反向验证**（移除修复后实测真红：`['allow','allow']`、25 次全放行）。
 - **受影响条款**：§10.3（预算四维计量、硬上限不得被重置或绕过）、§10.5（失败与恢复、以账本为准重建计数）、A06。
 - **冻结契约**：**不改变**（spec 仍 v1.0-frozen，audit-profile 仍 v2p5-1）。本条是实现向既有冻结契约对齐 —— 冻结文本从未允许并发穿透硬上限，本轮只是把实现补齐到文本已要求的水位。
+
+### 18.10 交叉审阅修订记录（2026-10-27，F-01～F-04）
+
+**批准与审阅边界**：委托人授权独立复核 `docs/reviews/2026-10-27-codex-review-audit-increment-p0.md` 并直接修正认同项。本次逐项回核冻结正文、实施 Plan、实施提交 `21de5168` 与当前相关源码后，认同 F-01～F-04；仅修订本文、实施 Plan 与 P0-4 接口 Spec。Codex 原报告保持不变；本次不修改代码、不执行功能测试、不构建镜像、不连接真实环境。
+
+| 发现 | 独立复核结论与规范处置 | 受影响条款 / 验收 | 当前实现与后续边界 |
+|---|---|---|---|
+| F-01 独立入口证据 | 撤销 N20／D2 的 `received ∪ auth_failure_log` 分母。恢复原 D／N 与独立到达证据要求；拒绝观察单列，received 提交失败项不得从预期集合消失，缺独立集合为 unknown | §8.2(b)、§12.1、§18.5；A01-INGRESS、A02-R、A12 | 当前没有独立到达集合，检查 1 不得声明 pass／可计算；后续须另建证据源及身份映射 |
+| F-02 精确 as-of S 与正式阻断 | 撤回 N18 的充分性暗示；`ledger_seq` 列存在不等于内容可重建。基础事实、修订、关联、聚合任一不可证明即 `scopeComplete=false`；正式导出及 P0-4 正式完整读取阻断，诊断显式不完整 | §2、§9.3、§12.5、§18.6、§18.8；A08、A10-ASOF；P0-4 §3.1／§5／§6、V09／V10 | 当前 `present.has("ledger_seq")` 判据不满足规范，正式完整能力未闭合；后续实现和运行验证均为阻断性工作 |
+| F-03 授权事实保真 | N24 只保留 `execution=not_executed`；authorization 恢复按实际裁决记录，预算不得覆盖 allowed／denied，也不得反推 not_evaluated | §4.3(b)、§18.3；A05-AUTH、A06-ORDER | 当前 `deriveAuthorizationView` 的 budgetStopped 默认 not_evaluated 仍待修，不得以现状降低标准 |
+| F-04 ACK／重投／预算失败闭包 | 补齐 client_observation 失败、delivery_evidence 失败后同 ID 重投与重启补闭包、发送后追加失败、失败响应自身提交失败、预算读／写失败及授权／预算顺序子例 | §13.2；A02-C/D/T/F、A03-ACK、A05-AUTH、A06-BR/BW/ORDER | 所有新增子例均未执行；骨架、既有单元测试或历史复验不构成这些子例的证据 |
+
+**冻结不变量复核**：S01–S08 全量保留，U1–U12 及 `audit-profile=v2p5-1` 不变；本次是恢复原冻结要求与澄清完成边界，不实质改变冻结合同，故不新增 spec/profile 版本。`combinedComplete = scopeComplete AND fileHashOk AND relationCheckOk` 严格保留三项 AND，as-of 范围充分性进入 `scopeComplete`，auditCoverage 六项不得替代文件哈希或关联检查。P0-4 继续复用本文的主状态、计量单位、筛选、S 与规则版本，不自建口径。
+
+**验收状态**：A01–A12 及上述全部命名子例仍为**未执行**，U9 两阶段运行时验收亦未执行。本次交叉审阅和文档修订不替代 UAT、real-e2e 或客户验收，不将未修复的实现缺口标记为已闭环。
 
 ---
 

@@ -5,7 +5,8 @@
 | 文档类型 / 版本 | 功能设计基线 / v0.1-requirements-review |
 | 日期 / 目标版本 | 2026-10-24 / v0.25 |
 | 功能编号 / 优先级 | L25-02、L25-03 / P0-4 |
-| 状态 | **已实现，未验收**（v0.25 P0-4 / L25-02・03）。实施计划 `docs/plans/2026-10-25-lucy-v0.25-p0-implementation-plan.md` §P0-4；提交 `21de5168`。验收矩阵在取得真实证据前仍为「未执行」 |
+| 状态 | **部分实现，未验收**（v0.25 P0-4 / L25-02・03）。实施计划 `docs/plans/2026-10-25-lucy-v0.25-p0-implementation-plan.md` §P0-4；实施基准提交 `21de5168`。2026-10-27 交叉审阅确认：上游精确 as-of S 能力未闭合，正式完整读取与导出必须阻断；验收矩阵在取得真实证据前仍为「未执行」 |
+| 交叉审阅 | **Spec 文档评审已关闭，修订通过（2026-10-27）**；本次随 P0-1 同步精确 as-of S 阻断边界与 V09／V10 断言。关闭不代表上游能力已闭合或 V01–V12 已执行 |
 | 授权来源 | 2026-10-24 Forrest 批准首批 Spec 评审 Final 决议，并要求完成四个 P0 设计材料 |
 | 权威事实源 | [L25-09 S01／S05／S07](lucy-20261020-v2p5-audit-increment-spec.md)、[审计可信度与管理员调查 Spec](lucy-20261019-audit-trust-and-admin-investigation-spec.md)、Spec 162 问询预算 |
 | 规划入口 | [Lucy v0.25 功能升级建议书](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) §2 L25-02／L25-03；[P0 Final 决议](../reviews/2026-10-24-lucy-v0.25-p0-final-decision.md) |
@@ -77,7 +78,7 @@ reconciliationContext:
   auditCoverage: object          # L25-09 S05 六项独立检查，不由本页重算
 ```
 
-请求超过 S 的新事件不得混入当前页面或导出。刷新产生新的上下文和 S；暂停时冻结筛选与 S。快照无法覆盖 S 时正式对账读取失败或明确标为诊断性不完整，不能静默换用较新数据。
+请求超过 S 的新事件不得混入当前页面或导出。刷新产生新的上下文和 S；暂停时冻结筛选与 S。快照无法覆盖 S，或上游不能证明基础执行／交付事实、归属修订、关联与聚合均可按 S 精确重建时，**正式完整对账读取与导出必须失败关闭**；仅诊断模式可返回显式 `diagnostic_incomplete`、实际证据上界与缺失集合，不能静默换用较新数据、只过滤 `seq <= S` 或保留旧数字冒充当前完整结果。该能力由 P0-1 提供并给出可机器判定的证明状态，P0-4 不以列存在、投影已追平或页面八桶闭合代替。
 
 ### 3.2 问询详情 `InquiryReconciliation`
 
@@ -114,7 +115,7 @@ reconciliationContext:
 
 ### 3.5 实施回写（2026-10-25，Lucy v0.25 W5）
 
-本小节只追加实施期实证的偏差事实与本轮处理，不改写 §2、§3.1–§3.4 正文。文件头部的状态行仍是 2026-10-24 评审基线的表述，不因本小节自动变更；状态变更须另行批准。本小节不产生验收证据，§7 的 V01–V12 状态一律保持「未执行」。
+本小节只追加实施期实证的偏差事实与本轮处理，原则上不改写 §2、§3.1–§3.4 正文。2026-10-27 经委托人授权的交叉审阅属于例外：同步 P0-1 的精确 as-of S 正式阻断边界、实现状态与 V09／V10 验收断言，不改变主状态、计量单位、筛选、S 或规则版本。本小节及交叉审阅均不产生验收证据，§7 的 V01–V12 状态一律保持「未执行」。
 
 #### N9 完整表身份在读路径上不可得
 
@@ -172,7 +173,7 @@ reconciliationContext:
 
 **（d）是否改变冻结契约**
 
-不改变。§2、§3.1–§3.4、§4.3 正文一字未改；本条是实现向既有条款对齐（条款从未允许「拒绝合法读取」）。本小节不产生验收证据，V01–V12 状态一律保持「未执行」。
+不改变。N27 当时未改 §2、§3.1–§3.4、§4.3 正文；本条是实现向既有条款对齐（条款从未允许「拒绝合法读取」）。2026-10-27 交叉审阅对 §3.1 的后续同步以本节开头修订说明为准，不回写为 N27 的当时事实。本小节不产生验收证据，V01–V12 状态一律保持「未执行」。
 
 ---
 
@@ -191,7 +192,7 @@ reconciliationContext:
 - Token 卡片并列显示配置数与窗口内活跃数，并提供差异明细入口；不再只显示「活跃 Token 数超过配置数，数据异常」。
 - 差异明细至少分为已配置未活跃、活跃但当前配置不可见、已停用／删除、身份未核验；无差异时仍披露统计窗口与快照。
 - 表排行保留现有布局，可展开完整表身份；排行、问询详情与调用流水可互相定位，但不提供写操作。
-- 数据加载失败、快照不完整、S 未追平或规则版本不一致时显示阻断／诊断状态，不保留旧数字冒充当前结果。
+- 数据加载失败、快照不完整、S 未追平、精确 as-of S 能力未证明或规则版本不一致时，正式完整读取与导出阻断；诊断模式必须显式标记不完整及缺失范围，不保留旧数字冒充当前结果。
 
 ### 4.3 CSV 与 API
 
@@ -221,7 +222,15 @@ onOpenReconciliation(actor, filter, mode):
   waitUntilProjectionCovers(S, deadline=60s)
     else return blocked_or_explicit_diagnostic
   snapshot = freezeConsistentProjectionSnapshotCovering(S)
-  context = freezeContext(filter, timeRange, S, snapshot.id, ruleVersions)
+  asOfProof = P01.proveExactAsOfS(snapshot, S, filter,
+                                  baseFacts=true, revisions=true,
+                                  relations=true, aggregates=true)
+  if !asOfProof.ok:
+    if mode == formal_complete: return failClosed(AS_OF_S_UNPROVABLE)
+    else return explicitDiagnosticIncomplete(asOfProof.actualBound,
+                                             asOfProof.missingSets)
+  context = freezeContext(filter, timeRange, S, snapshot.id, ruleVersions,
+                          asOfProof)
   return context
 
 loadInquiry(context, turnId):
@@ -257,7 +266,7 @@ exportCurrentView(context):
 ## 6. 失败、兼容与隐私
 
 - 旧数据缺新字段时显示 unknown／legacy_unverified，不批量改写旧 `outcome`、归属、Token 身份或表名。
-- 查询、快照、投影或导出失败时保留可诊断错误；正式完整模式失败不得自动降级为完整成功。
+- 查询、快照、投影、精确 as-of S 证明或导出失败时保留可诊断错误；正式完整模式失败不得自动降级为完整成功。P0-1 能力未完成时，P0-4 正式完整读取与导出同样阻断，只允许显式诊断性不完整结果。
 - 无客户端证据时显示「后续动作不可见」，不显示「未外发」；ACK 缺失不改变已证明的执行成功。
 - 页面与导出沿用现有管理员可见性、脱敏、保留和 meta-audit 规则；完整表名仍受审计详情权限保护。
 - 本 Spec 不延长问询原文、会话或所有日志保留期，不改变客户冻结 profile。
@@ -278,8 +287,8 @@ exportCurrentView(context):
 | V06 | 已确认、候选、冲突、仅握手混合集合 | 分母与计数分别正确，候选不升级，握手不进业务问询分母 | 未执行 |
 | V07 | 配置 5 个 Token，窗口内 3 个活跃 | 两数及已配置未活跃集合与 Token 页、调用流水一致 | 未执行 |
 | V08 | 活跃数大于当前配置数，含停用／删除和未知历史身份 | 按差异原因解释，不统一报数据异常，不强行配平 | 未执行 |
-| V09 | API／UI／CSV 同筛选与 S | 八桶互斥且合计闭合，表清单、Token 集合、规则版本与差异 ID 一致 | 未执行 |
-| V10 | 新事件在导出期间到达、投影未追平、分页 | 当前上下文不混入 >S；未追平正式模式失败；分页不丢重 | 未执行 |
+| V09 | API／UI／CSV 同筛选与 S | 八桶互斥且合计闭合，表清单、Token 集合、规则版本与差异 ID 一致；精确 as-of 未证明时正式完整读取与导出阻断，诊断结果显式不完整 | 未执行 |
+| V10 | 新事件在导出期间到达、投影未追平、分页及 S 后事实修订 | 当前上下文不混入 >S；捕获 S 后改变基础执行／交付事实、覆盖归属有效值或迟到 ACK，同 S 重读仍不漂移；未追平或 as-of 未证明时正式模式失败；分页不丢重 | 未执行 |
 | V11 | 无权限、撤权、敏感表名、Token 与 CSV 注入 | 拒绝或脱敏符合既有策略；meta-audit 完整；无凭据值泄露 | 未执行 |
 | V12 | 候选 linux/amd64 单副本 K8s 证据 | 同一候选镜像完成只读问询与 Token 对账旅程，证据包可复查；缺环境不记 passed | 未执行 |
 
