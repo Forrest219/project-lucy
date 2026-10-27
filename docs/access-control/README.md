@@ -40,6 +40,7 @@
 | 行权限管理（v0.25 L25-14） | [`../specs/lucy-20261022-v2p5-row-permission-management-spec.md`](../specs/lucy-20261022-v2p5-row-permission-management-spec.md) v0.2-requirements-review | **P0-2 设计完成、待需求审查，暂不开发**：P0 仅含 R2 保存前最终行约束预览、R4 配置审计、R5 字段诊断；R1 模板与 R3 反查视图保持 P1。不改 Spec 99 / 100 运行时语义，动态策略仍冻结 |
 | 行策略模板与按表反查（v0.25 P1-1） | [`../specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md`](../specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md) | **设计完成、需求审查已签核通过，暂不开发**：L25-14 R1 静态模板与 R3 独立只读视图；全部 P1 验收未执行 |
 | Agent 与角色授权摘要（v0.25 P1-2） | [`../specs/lucy-20261025-v0p25-access-authorization-summary-spec.md`](../specs/lucy-20261025-v0p25-access-authorization-summary-spec.md) | **设计完成、需求审查已签核通过，暂不开发**：L25-01 同源只读摘要、资源卡片与深链；不改变授权或运行时裁决 |
+| 业务 Wiki 上传授权、独立权限管理与批量授权 | [`../../webui/docs/193-business-wiki-access-management-spec.md`](../../webui/docs/193-business-wiki-access-management-spec.md) · [`../../webui/docs/plans/wo-M66-business-wiki-access-management.md`](../../webui/docs/plans/wo-M66-business-wiki-access-management.md) | **设计方向已确认、待交叉审阅，暂不开发**：保留默认拒绝和逐文档 `allowed_roles` 事实源；首轮含上传授权、单篇独立权限管理、最多 100 篇显式选择的批量授权；不含目录继承 |
 | 访问关系图（v0.25 P1-3） | [`../../webui/docs/187-access-relation-sankey-spec.md`](../../webui/docs/187-access-relation-sankey-spec.md) | **设计完成、需求审查已签核通过，暂不开发**：L25-08 授权／访问双层只读关系图；路径、表与调用计数分开 |
 | 已登记缺陷（行级策略字段绑定） | [`../qa/security-findings.yaml`](../qa/security-findings.yaml) **D-03（P1 / open）** | **存量缺陷，未修**：根因与复现见 L25-14 Spec §1.5。归属 **0.20.Z 维护线（当前基线 `0.20.0`）**，是受影响客户场景的交付价值依赖而非 R2／R4／R5 开工依赖；V19／V22 证据齐全前不得宣称该场景交付价值。不得以改成「全部行」绕过 |
 | 实现契约 | [`webui/docs/07-mcp-auth-proxy-spec.md`](../../webui/docs/07-mcp-auth-proxy-spec.md) | Runtime ACL / Proxy（AC-P0 须更新） |
@@ -81,6 +82,7 @@
 | `../specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md` | v0.25 P1-1 行策略模板与按表反查；需求审查已签核通过、未开发 |
 | `../specs/lucy-20261025-v0p25-access-authorization-summary-spec.md` | v0.25 P1-2 Agent 与角色授权摘要；需求审查已签核通过、未开发 |
 | `../../webui/docs/187-access-relation-sankey-spec.md` | v0.25 P1-3 访问关系图；需求审查已签核通过、未开发 |
+| `../../webui/docs/193-business-wiki-access-management-spec.md` | 业务 Wiki 上传授权、单篇独立权限管理与显式多选批量授权；待交叉审阅、未开发 |
 | `../reviews/2026-10-25-lucy-v0.25-p1-requirements-review-record.md` | v0.25 P1 需求审查记录（2026-10-25 已签核；逐项依据、四条实施前待办 F-01–F-04；全部 P1 验收未执行，不授权开发） |
 | `feasibility-row-acl.SUPERSEDED.md` | **SUPERSEDED**；不得作为实施依据 |
 | `plans/` | 本域 Work Order |
