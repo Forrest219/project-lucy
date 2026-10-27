@@ -255,6 +255,44 @@ describe("admin governance observability", () => {
     await app.close();
   });
 
+  it("reports every window metric as null — never 0 — when the audit store is unavailable (SC-14)", async () => {
+    const db = await getAuditDb();
+    // access_log_sources has an FK to access_log — drop the child first.
+    db.exec("DROP TABLE access_log_sources");
+    db.exec("DROP TABLE access_log");
+
+    const app = buildServer();
+    await app.ready();
+    const res = await app.inject({ method: "GET", url: "/api/admin/governance/overview?hours=168" });
+    expect(res.statusCode).toBe(200);
+    const payload = JSON.parse(res.payload).data;
+    const usage = payload.usageOverview;
+
+    expect(usage.metricsState).toBe("unavailable");
+    expect(usage.calls).toBeNull();
+    expect(usage.denied).toBeNull();
+    expect(usage.p95LatencyMs).toBeNull();
+    expect(usage.avgLatencyMs).toBeNull();
+    expect(usage.activeAgentCount).toBeNull();
+    expect(usage.activeTokenCount).toBeNull();
+    expect(usage.activeTableCount).toBeNull();
+    expect(usage.agentActiveRate).toBeNull();
+    expect(usage.tokenActiveRate).toBeNull();
+
+    // The compatibility cards payload must not fabricate zeros either.
+    const cards = payload.cards;
+    expect(cards.calls).toBeNull();
+    expect(cards.denied).toBeNull();
+    expect(cards.errors).toBeNull();
+    expect(cards.p95LatencyMs).toBeNull();
+    expect(cards.avgLatencyMs).toBeNull();
+    expect(cards.activeAgentCount).toBeNull();
+    expect(cards.activeTokenCount).toBeNull();
+    expect(cards.highDenialAgentCount).toBeNull();
+    expect(cards.staleTokenCount).toBeNull();
+    await app.close();
+  });
+
   it("falls back to access_log.tables when access_log_sources has no rows", async () => {
     resetAuditDbForTests();
     await rm(process.env.LUCY_AUDIT_DB!, { force: true });

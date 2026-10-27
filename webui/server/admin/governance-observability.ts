@@ -343,7 +343,7 @@ async function queryActiveTableCount(hours: number): Promise<number | null> {
   }
 }
 
-async function queryHighDenialAgentCount(hours: number): Promise<number> {
+async function queryHighDenialAgentCount(hours: number): Promise<number | null> {
   const win = buildMetricWindow(hours);
   try {
     const db = await getAuditDb();
@@ -363,7 +363,9 @@ async function queryHighDenialAgentCount(hours: number): Promise<number> {
     `).get(win.startIso, win.endIso) as CountRow | undefined;
     return row?.count ?? 0;
   } catch {
-    return 0;
+    // Spec 189 §8 / SC-14 — an unavailable audit store must not be reported
+    // as "zero high-denial Agents".
+    return null;
   }
 }
 
@@ -917,7 +919,7 @@ export function registerGovernanceObservabilityRoutes(app: FastifyInstance): voi
           configuredAgentCount: agentCount,
           activeTokenCount: activeTokenCount ?? null,
           staleTokenCount: activeTokenCount !== null ? Math.max(0, configuredTokens - activeTokenCount) : null,
-          highDenialAgentCount,
+          highDenialAgentCount: highDenialAgentCount ?? null,
           brokenRoleCount: roles.filter((role) => role.status === "broken").length,
           overBroadRoleCount: roles.filter((role) => role.status === "over_broad").length,
           configChangeCount: changes,

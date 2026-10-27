@@ -356,6 +356,7 @@ function auditDefaultView(filter):
 | 类型检查 | `npx tsc --noEmit` | 与改动前基线同一集合（68 处既有问题），本次涉及文件 0 新增 |
 | SQLite 环境 | Node `v24.14.1` + `better-sqlite3@12.11.1` | 原生绑定可加载并执行 SQL，**ABI 匹配**；SQLite 断言真实执行，无跳过 |
 | 跨页对账 | `server/__tests__/usage-metrics-cross-page.test.ts` | Default Usage 73（全量身份）／59（配置资产）；Raw Business = Default Usage + 2；Raw Audit = Raw Business + 12；人口边界 14；活跃分子 21 > 分母 20 → `partial` |
+| 不可用语义 | `server/__tests__/admin-governance-observability.test.ts` | 审计库不可用时使用概况的全部窗口指标为 `null` 且 `metricsState = "unavailable"`（含高拒绝 Agent 数），无一被折成 0（SC-14） |
 
 **跨页对账结论**：同层同人口的数值在所有表面完全一致；允许的差异只剩**记录层级**（Default Usage／Raw Business／Raw Audit／真实表访问）与**人口边界**（当前配置资产／历史日志身份），且每个差异都被断言为精确数值。
 
