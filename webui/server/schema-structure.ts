@@ -57,6 +57,26 @@ export type SchemaStructureColumn = {
   rawType: string;
 };
 
+/** One physical column of a Schema, as the database reports it. */
+export type SchemaColumnRow = {
+  table: string;
+  column: string;
+  dataType: string;
+  nullable: boolean;
+  primaryKey: boolean;
+  comment: string;
+};
+
+/**
+ * Result of a column read. The three shapes let the caller map the outcome
+ * onto its own vocabulary — Spec 190 needs `TABLE_LIST_TOO_LARGE` where Spec
+ * 164 reports a plain read failure.
+ */
+export type SchemaColumnsRead =
+  | { status: "ok"; columns: SchemaColumnRow[] }
+  | { status: "too_large" }
+  | { status: "error"; message: string };
+
 export type SchemaStructurePreview = {
   schema: string;
   readable: boolean;
@@ -189,21 +209,6 @@ ORDER BY c.table_name, c.ordinal_position
 `.trim().replace(/\s+/g, " ");
 }
 
-function structureRows(result: SqlResult): unknown[] {
-  const json = result.json;
-  const rows =
-    json && typeof json === "object" && Array.isArray((json as { rows?: unknown }).rows)
-      ? (json as { rows: unknown[] }).rows
-      : null;
-  if (!result.ok || rows === null) {
-    throw new SchemaStructureError("READ_FAILED", "读取表结构失败。");
-  }
-  if (rows.length >= SCHEMA_STRUCTURE_MAX_ROWS) {
-    throw new SchemaStructureError("READ_FAILED", "这个 Schema 的字段数超过一次可读取的上限。");
-  }
-  return rows;
-}
-
 function parseColumns(rows: unknown[]): ColumnInput[] {
   const columns: ColumnInput[] = [];
   for (const row of rows) {
@@ -223,7 +228,14 @@ function parseColumns(rows: unknown[]): ColumnInput[] {
   return columns;
 }
 
-export async function previewSchemaStructure(
+/**
+ * Read the column rows of one Schema.
+ *
+ * The query shape is the one Spec 164 established; Spec 190 §7.4 reuses it for
+ * the on-demand column-level deep check. A full page means the answer may be
+ * truncated, so it is reported as `too_large` instead of a partial list.
+ */
+export async function readSchemaColumns(
   projectRoot: string,
   connectionId: string,
   schema: string,
@@ -231,7 +243,7 @@ export async function previewSchemaStructure(
     readConnectionsImpl?: typeof readConnections;
     runSqlImpl?: typeof runSql;
   } = {}
-): Promise<SchemaStructurePreview> {
+): Promise<SchemaColumnsRead> {
   const safeSchema = assertSchemaIdent(schema);
   const read = deps.readConnectionsImpl ?? readConnections;
   const connections = await read(projectRoot);
@@ -243,9 +255,48 @@ export async function previewSchemaStructure(
     throw new SchemaStructureError("SCHEMA_UNSUPPORTED", "当前数据库类型请上传 Schema Manifest");
   }
   const execute = deps.runSqlImpl ?? runSql;
-  const result = await execute(projectRoot, connectionId, sqlFor(protocolOf(connection), safeSchema), {
-    maxRows: SCHEMA_STRUCTURE_MAX_ROWS,
-    timeoutMs: 30000
-  });
-  return buildMinimalSchemaManifest(safeSchema, parseColumns(structureRows(result)));
+  let result: SqlResult;
+  try {
+    result = await execute(projectRoot, connectionId, sqlFor(protocolOf(connection), safeSchema), {
+      maxRows: SCHEMA_STRUCTURE_MAX_ROWS,
+      timeoutMs: 30000
+    });
+  } catch {
+    return { status: "error", message: "读取表结构失败。" };
+  }
+  if (!result.ok) {
+    return { status: "error", message: "读取表结构失败。" };
+  }
+  const json = result.json;
+  const rows =
+    json && typeof json === "object" && Array.isArray((json as { rows?: unknown }).rows)
+      ? (json as { rows: unknown[] }).rows
+      : null;
+  if (rows === null) {
+    return { status: "error", message: "读取表结构失败。" };
+  }
+  if (rows.length >= SCHEMA_STRUCTURE_MAX_ROWS) {
+    return { status: "too_large" };
+  }
+  return { status: "ok", columns: parseColumns(rows) };
+}
+
+export async function previewSchemaStructure(
+  projectRoot: string,
+  connectionId: string,
+  schema: string,
+  deps: {
+    readConnectionsImpl?: typeof readConnections;
+    runSqlImpl?: typeof runSql;
+  } = {}
+): Promise<SchemaStructurePreview> {
+  const safeSchema = assertSchemaIdent(schema);
+  const read = await readSchemaColumns(projectRoot, connectionId, schema, deps);
+  if (read.status === "too_large") {
+    throw new SchemaStructureError("READ_FAILED", "这个 Schema 的字段数超过一次可读取的上限。");
+  }
+  if (read.status === "error") {
+    throw new SchemaStructureError("READ_FAILED", read.message);
+  }
+  return buildMinimalSchemaManifest(safeSchema, read.columns);
 }

@@ -19,10 +19,12 @@ import type {
   CatalogSchemaManifestReadResponse,
   ConnectionInfo,
   ConnectionTestResult,
+  DiscoveryStatusResponse,
   ExecutionRuntimeStatus,
   LiveSchemasResponse,
   SourceSummary,
-  SourcesResponse
+  SourcesResponse,
+  TableDiffResponse
 } from "../../lib/types";
 import {
   canReadDatabaseStructure,
@@ -40,6 +42,11 @@ import {
   triggerCatalogManifestDownload
 } from "../../components/catalog";
 import { ConnectionTestDrawer } from "../../components/connections";
+import {
+  DiscoveryStateCell,
+  LiveTableListCell,
+  discoveryReasonLabel
+} from "../../components/connections/SchemaDiscoveryCells";
 import { PageHeader } from "../../components/PageHeader";
 import { AsyncRegion, asyncStatus } from "../../components/AsyncRegion";
 import { MetricCard } from "./MetricCard";
@@ -470,6 +477,40 @@ export function ConnectionOverview() {
   const liveByConnectionId = new Map(
     connections.map((conn, index) => [conn.id, liveSchemaQueries[index]] as const)
   );
+  // Spec 190 §7.9 — continuous discovery state and the reconciliation state.
+  // Both are read-only sidecar reads: no database round trip on page load.
+  const discoveryQueries = useQueries({
+    queries: connections.map((conn) => ({
+      queryKey: queryKeys.connectionDiscovery(conn.id),
+      queryFn: ({ signal }: { signal: AbortSignal }) =>
+        apiGet<DiscoveryStatusResponse>(
+          `/api/connections/${encodeURIComponent(conn.id)}/discovery`,
+          { signal }
+        ),
+      staleTime: 30_000,
+      retry: false,
+      enabled: probesArmed
+    }))
+  });
+  const tableDiffQueries = useQueries({
+    queries: connections.map((conn) => ({
+      queryKey: queryKeys.connectionTableDiff(conn.id),
+      queryFn: ({ signal }: { signal: AbortSignal }) =>
+        apiGet<TableDiffResponse>(
+          `/api/connections/${encodeURIComponent(conn.id)}/table-diff`,
+          { signal }
+        ),
+      staleTime: 30_000,
+      retry: false,
+      enabled: probesArmed
+    }))
+  });
+  const discoveryByConnectionId = new Map(
+    connections.map((conn, index) => [conn.id, discoveryQueries[index]] as const)
+  );
+  const tableDiffByConnectionId = new Map(
+    connections.map((conn, index) => [conn.id, tableDiffQueries[index]] as const)
+  );
   // Spec 108: parallel connectivity probe on every page entry (staleTime 0).
   // gcTime 0 drops cache on leave so remount cannot show a stale「通」.
   const healthQueries = useQueries({
@@ -801,6 +842,8 @@ export function ConnectionOverview() {
             );
             const liveQuery = liveByConnectionId.get(conn.id);
             const liveData = liveQuery?.data;
+            const discoveryState = discoveryByConnectionId.get(conn.id)?.data;
+            const tableDiffState = tableDiffByConnectionId.get(conn.id)?.data;
             const schemaRows = conn.schemas.map((schema) => {
               const enabledTableCountForSchema = conn.enabledTables.filter((entry) =>
                 entry.startsWith(`${schema}.`)
@@ -1137,6 +1180,20 @@ export function ConnectionOverview() {
                   </dl>
                 </div>
                 <div className="pl-connection-card-body">
+                  {discoveryState && (discoveryState.status === "paused" || discoveryState.status === "error") ? (
+                    <p
+                      className="pl-notice pl-connection-discovery-notice text-sm"
+                      role="status"
+                      data-testid={`connection-discovery-notice-${conn.id}`}
+                    >
+                      <span className="notranslate" translate="no">
+                        {discoveryState.status === "paused" ? "持续感知已暂停：" : "持续感知失败："}
+                      </span>
+                      <span className="notranslate" translate="no">
+                        {discoveryReasonLabel(discoveryState.lastReason) || "原因未知"}
+                      </span>
+                    </p>
+                  ) : null}
                   {showRefreshWarning ? (
                     <div
                       className="pl-connection-refresh-warning notranslate"
@@ -1173,8 +1230,10 @@ export function ConnectionOverview() {
                         <col className="pl-schema-asset-col-schema" />
                         <col className="pl-schema-asset-col-status" />
                         <col className="pl-schema-asset-col-live-count" />
+                        <col className="pl-schema-asset-col-live-tables" />
                         <col className="pl-schema-asset-col-local-count" />
                         <col className="pl-schema-asset-col-enabled-count" />
+                        <col className="pl-schema-asset-col-discovery" />
                         <col className="pl-schema-asset-col-action" />
                       </colgroup>
                       <thead>
@@ -1184,11 +1243,17 @@ export function ConnectionOverview() {
                           <th className="pl-schema-asset-table-num-head notranslate" translate="no" title="物理库中当前账号可见的 BASE TABLE 数量">
                             库内表数
                           </th>
+                          <th className="pl-schema-asset-table-num-head notranslate" translate="no" title="该 Schema 在库内的表清单，可展开查看表名与列数">
+                            库内表清单
+                          </th>
                           <th className="pl-schema-asset-table-num-head notranslate" translate="no" title="本地 Schema Manifest 中的表数量">
                             已发现表数
                           </th>
                           <th className="pl-schema-asset-table-num-head notranslate" translate="no" title="ktx.yaml enabled_tables 中该 Schema 的表数量">
                             已启用表数
+                          </th>
+                          <th className="pl-schema-asset-table-num-head notranslate" translate="no" title="持续感知状态与表清单差异计数">
+                            持续感知
                           </th>
                           <th>操作</th>
                         </tr>
@@ -1239,6 +1304,11 @@ export function ConnectionOverview() {
                                     {liveCount.text}
                                   </span>
                                 </td>
+                                <LiveTableListCell
+                                  connectionId={conn.id}
+                                  schema={schema}
+                                  tableDiff={tableDiffState}
+                                />
                                 <td className="pl-schema-asset-table-num">
                                   <span
                                     className="pl-schema-asset-local-count"
@@ -1270,6 +1340,12 @@ export function ConnectionOverview() {
                                 >
                                   {enabledTableCount} 张表
                                 </td>
+                                <DiscoveryStateCell
+                                  connectionId={conn.id}
+                                  schema={schema}
+                                  discovery={discoveryState}
+                                  tableDiff={tableDiffState}
+                                />
                                 <td className="pl-schema-asset-table-action">
                                   {/* Spec 174 §4.1: Manifest-dependent actions wait for real sources facts. */}
                                   {!sourcesActionsReady ? <span className="pl-notice pl-schema-asset-actions-pending" aria-hidden="true" data-testid={`schema-actions-pending-${conn.id}-${schema}`}>—</span> : (

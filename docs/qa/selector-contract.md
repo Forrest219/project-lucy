@@ -51,12 +51,13 @@
 | `catalog-reload-warning-toggle-${conn.id}-${schema}` | Schema 警告详情开关 | 默认 `查看详情` 且 `aria-expanded=false`；点击后变 `收起详情` |
 | `catalog-reload-warning-${conn.id}-${schema}` | Schema Catalog 警告详情行 | 默认不出现；展开后显示 |
 | `catalog-reload-warning-details-${conn.id}-${schema}` | 警告详情 | — |
-| `schema-asset-table-${conn.id}` | Schema 资产表 | 列：`Schema / Manifest 状态 / 本地表数 / 启用表数 / 操作` |
+| `schema-asset-table-${conn.id}` | Schema 资产表 | 列：`Schema / Manifest 状态 / 库内表数 / 库内表清单 / 已发现表数 / 已启用表数 / 持续感知 / 操作`（Spec 190 起新增「库内表清单」与「持续感知」两列；四个计数口径分列，不得合并） |
 | `schema-row-${conn.id}-${schema}` | Schema 行 | 状态枚举 `已存在` / `缺失 Manifest` / `解析失败` |
 | `schema-asset-status-${conn.id}-${schema}` | Schema Manifest 状态 cell | 必含 `已存在` / `缺失 Manifest` / `解析失败` 之一 |
 | `schema-enabled-count-${conn.id}-${schema}` | Schema 启用表数 cell | 文案为 `<n> 张表`，数值来自该 Schema 下 `enabled_tables` 计数 |
 | `schema-whitelist-${conn.id}-${schema}` | `维护启用范围` / `上传 Manifest` 上下文动作 | 必含 `维护启用范围` 或 `上传 Manifest`；不得出现 `维护白名单` |
 | `add-schema-${conn.id}` | `+ 添加 Schema` 按钮 | 禁止 `添加架构` / `添加模式` |
+| `connection-discovery-notice-${conn.id}` | 连接卡「持续感知」状态提示 | 仅在连接级状态为 `paused` / `error` 时出现；文案 `持续感知已暂停：` / `持续感知失败：` + 原因；不得出现 `扫描` / `重新扫描物理库` |
 
 ### 2.2 AddSchemaDrawer.tsx
 
@@ -155,6 +156,18 @@
 | `connection-test-drawer-run` | Drawer 运行按钮 | — |
 | `connection-test-panel` | 状态面板 | — |
 | `connection-test-${section.label}` | 章节（模板） | — |
+
+### 2.7 SchemaDiscoveryCells.tsx（src/components/connections/）
+
+Spec 190 §7.9 — 库内表清单与持续感知的最小展示。
+
+| Test ID | 元素 | 文案约束 |
+|---|---|---|
+| `live-table-list-toggle-${connectionId}-${schema}` | 库内表清单入口按钮 | 文案 `<n> 张表` 或 `查看表清单`；`aria-expanded` 随展开切换；不得出现 `扫描` / `物理扫描` / `重新扫描物理库` |
+| `live-table-list-${connectionId}-${schema}` | 库内表清单展开面板 | 展开后才出现；每项含表名与 `<n> 列`；读取失败显示原因文案，不得出现 `白名单` |
+| `discovery-state-${connectionId}-${schema}` | 持续感知状态 cell | 状态枚举 `未开启` / `已开启` / `感知失败` / `已暂停`；不得出现 `扫描` |
+| `discovery-paused-reason-${connectionId}-${schema}` | 暂停原因 | 仅在状态为 `已暂停` 时出现；文案取封闭 reason 词表的中文表述 |
+| `table-diff-count-${connectionId}-${schema}` | 表清单差异计数 | 文案 `新增 <n> · 已消失 <n> · 列数变化 <n>`；三项全为 0 时不出现；不得出现 `变更清单` / `差异结果` |
 
 ## 3. 启用表范围（src/pages/connections/TableWhitelist.tsx）
 

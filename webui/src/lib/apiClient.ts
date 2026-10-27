@@ -148,7 +148,7 @@ const DISPLAY_WRITE_PATHS: Array<[RegExp, DisplayReadScope[]]> = [
   [/^\/api\/catalog\/(reload|assets\/upload)/, ["project", "sources"]],
   [/^\/api\/admin\/(agents|roles)(\/|$)/, ["agents", "sources"]]
 ];
-const NON_WRITE_SUFFIXES = /\/(test|live-schemas|probe|preview|validate)(\?|$)/;
+const NON_WRITE_SUFFIXES = /\/(test|live-schemas|live-tables|table-diff|table-structure-diff|discovery|probe|preview|validate)(\?|$)/;
 
 function displayWriteScopes(path: string, body: unknown): DisplayReadScope[] {
   if (body && typeof body === "object" && (body as { dryRun?: unknown }).dryRun === true) return [];

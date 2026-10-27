@@ -152,6 +152,8 @@ import { registerRiskReviewRoutes } from "./admin/risk-review.js";
 import { registerReleaseReadinessRoutes } from "./admin/release-readiness-package.js";
 import { removeLegacyLicenseFile } from "./remove-legacy-license-file.js";
 import { registerImportScopeRoutes } from "./admin/import-scope.js";
+import { registerLiveDiscoveryRoutes } from "./admin/live-discovery.js";
+import { startDiscoveryWorker } from "./live-table-worker.js";
 import { registerGovernanceObservabilityRoutes } from "./admin/governance-observability.js";
 import { registerUiUsageRoutes } from "./admin/ui-usage.js";
 import { registerAuthRoutes, registerAdminAccountRoutes } from "./auth/routes.js";
@@ -678,6 +680,16 @@ export function buildServer() {
     } catch (error) {
       console.warn("[auth] bootstrap reconciliation failed; bootstrap re-checks on the next attempt:", error);
     }
+  });
+  // Spec 190 §8.2 — continuous discovery worker. It only queries a database for
+  // connections whose operator enabled the switch, and it keeps its own probe
+  // quota so it never competes with `test` / `live-schemas`.
+  let stopDiscoveryWorker: () => void = () => undefined;
+  app.addHook("onReady", async () => {
+    stopDiscoveryWorker = startDiscoveryWorker();
+  });
+  app.addHook("onClose", async () => {
+    stopDiscoveryWorker();
   });
   app.addHook("onClose", async () => {
     closeSecurityStore();
@@ -2316,6 +2328,8 @@ export function buildServer() {
   registerRiskReviewRoutes(app);
   registerReleaseReadinessRoutes(app);
   registerImportScopeRoutes(app);
+  // Spec 190 §7 — live table list, reconciliation, structure diff, discovery config.
+  registerLiveDiscoveryRoutes(app);
   registerSkillsRoutes(app);
   // Lucy v0.25 / L25-05 — 可选 SMTP 通知：只读状态端点（owner-only）。
   registerNotificationRoutes(app);

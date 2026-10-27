@@ -48,7 +48,7 @@ GROUP BY owner
 ORDER BY owner
 `.trim().replace(/\s+/g, " ");
 
-type CatalogProtocol = "mysql" | "postgres" | "sqlserver" | "oracle";
+export type CatalogProtocol = "mysql" | "postgres" | "sqlserver" | "oracle";
 
 type CacheEntry = {
   expiresAt: number;
@@ -89,7 +89,12 @@ export function peekLiveSchemasCache(
   return { ...hit.payload, cached: true };
 }
 
-function resolveWireProtocol(conn: ConnectionInfo): CatalogProtocol | "unknown" {
+/**
+ * Spec 107 — protocol judgement for a connection. Spec 190 reuses it so the
+ * table-level list and the Schema-level catalog never disagree on the wire
+ * protocol of the same connection.
+ */
+export function resolveWireProtocol(conn: ConnectionInfo): CatalogProtocol | "unknown" {
   if (
     conn.wireProtocol === "mysql" ||
     conn.wireProtocol === "postgres" ||

@@ -74,6 +74,11 @@ POST /api/connections/:connId/ingest
 GET  /api/connections/ingest-runs
 POST /api/connections/:connId/schema-structure
 GET  /api/connections/:connectionId/import-scope
+GET  /api/connections/:connId/live-tables         # Spec 190: Schema-level live table list
+GET  /api/connections/:connId/table-diff          # Spec 190: reconciliation state + change events
+GET  /api/connections/:connId/table-structure-diff # Spec 190: on-demand column-level deep check
+GET  /api/connections/:connId/discovery           # Spec 190: continuous discovery status
+PUT  /api/connections/:connId/discovery           # Spec 190: owner-only discovery configuration
 
 POST /api/catalog/reload
 GET  /api/catalog/reloads
@@ -461,7 +466,15 @@ Wiki Markdown 版本记录与 Table YAML 版本记录对齐：保留最近 5 个
 
 `GET /api/connections/:connId/live-schemas`（Spec 107）经 `ktx sql --json` 只读聚合账号可见 Schema 及 BASE TABLE 数量。Query `refresh=1` 跳过进程内 TTL（默认 10 分钟）。成功 / 连通失败均返回 HTTP 200 + `data.status`（与 connection test 同构，便于分连接 UI）；连接不存在返回 404。字段见 Spec 107 §6。
 
-`POST /api/connections/:connId/schema-structure` 预览指定 schema 的物理表结构，请求体 `{ schema }`；缺 `schema` 返回 `BAD_REQUEST`。`GET /api/connections/:connectionId/import-scope`（Spec 183）只读返回已发现物理表的导入范围分布。
+`POST /api/connections/:connId/schema-structure` 预览指定 schema 的物理表结构，请求体 `{ schema }`；缺 `schema` 返回 `BAD_REQUEST`。`GET /api/connections/:connectionId/import-scope`（Spec 183）只读返回已发现物理表的导入范围分布。Spec 190 起该端点新增 `discoverySource`（`manual` / `continuous` / `none`）：未传 `discovered` 时改读 `.ktx-ui/live-table-snapshots.json` 中当前代次的成功快照，**不**为填满 `discovered` 而连库。
+
+`GET /api/connections/:connId/live-tables`（Spec 190）只读返回单个 Schema 的库内表清单（表名、表类型、列数、注释）。Query：`schema`（**必填**，标识符白名单）、`refresh=1`（绕过面向人工的 10 分钟 TTL）、`purpose`（`manual` / `automatic`，两套缓存互不命中）。成功与失败均返回 HTTP 200 + `data.status`；失败时 `data.reason` 取封闭词表（`PROTOCOL_UNSUPPORTED` / `TABLE_LIST_UNSUPPORTED` / `CONNECTION_FAILED` / `AUTH_FAILED` / `SCHEMA_NOT_FOUND` / `SCHEMA_NOT_VISIBLE` / `TABLE_LIST_TOO_LARGE` / `QUERY_FAILED` / `PROBE_QUEUE_FULL` / `PROBE_QUEUE_TIMEOUT` / `GENERATION_INVALIDATED` / `PROVIDER_UNAVAILABLE`）。缺 `schema` 或 schema 非法返回 400，连接不存在返回 404。
+
+`GET /api/connections/:connId/table-diff`（Spec 190）只读返回**当前对账状态**（按最新成功快照 + Schema Manifest + `enabled_tables` 每次重算，不累积）与**表清单差异**（本轮库 vs 上一份快照）。Query：`schema`（可选，缺省=全部 Schema）、`includeEvents=1`（附带变更事件历史）。连接不存在返回 404 `CONNECTION_NOT_FOUND`；Manifest 与库表的 Schema / 表名比较大小写不敏感（与 Spec 183 的 `normalizeRef` 同口径）。
+
+`GET /api/connections/:connId/table-structure-diff`（Spec 190）按需深查列级差异，Query：`schema`（必填）、`tables`（必填，逗号分隔，单次最多 20 张）。基线为本地 Schema Manifest 的列定义，逐表独立失败（`ok` / `error` / `not_in_library`）。每次调用都真实只读查库，不读快照；库表名比较大小写不敏感。
+
+`GET /api/connections/:connId/discovery`（Spec 190）返回持续感知状态：连接级聚合 `ok` / `partial` / `error` / `paused` / `never_run`、每 Schema 的最近状态与原因、差异计数。连接不存在返回 404 `CONNECTION_NOT_FOUND`。`PUT /api/connections/:connId/discovery` 请求体 `{ enabled, intervalMs }`，**owner 限定**，`enabled` 必须是布尔值（缺失或类型错返回 400，配置不变），`intervalMs` 取白名单（5 分钟 / 15 分钟 / 30 分钟 / 1 小时 / 6 小时 / 24 小时，默认 1 小时），越界返回 400 且配置不变；写入后重置该连接的失败计数与暂停态。
 
 `GET /api/connections/:connId/tables` 从 `semantic-layer/<connId>/_schema/*.yaml` 返回已扫描表名：
 

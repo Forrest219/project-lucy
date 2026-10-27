@@ -16,6 +16,13 @@ export const queryKeys = {
   connections: ["connections"] as const,
   connectionTables: (connId: string) => ["connections", connId, "tables"] as const,
   connectionLiveSchemas: (connId: string) => ["connections", connId, "live-schemas"] as const,
+  /** Spec 190: Schema-level live table list (`GET .../live-tables`). */
+  connectionLiveTables: (connId: string, schema: string) =>
+    ["connections", connId, "live-tables", schema] as const,
+  /** Spec 190: continuous discovery status (`GET .../discovery`). */
+  connectionDiscovery: (connId: string) => ["connections", connId, "discovery"] as const,
+  /** Spec 190: reconciliation state and change events (`GET .../table-diff`). */
+  connectionTableDiff: (connId: string) => ["connections", connId, "table-diff"] as const,
   /** Spec 108: per-connection connectivity probe (`POST .../test`). */
   connectionHealth: (connId: string) => ["connections", connId, "health"] as const,
   mcpRuntime: ["admin", "mcp-runtime"] as const,

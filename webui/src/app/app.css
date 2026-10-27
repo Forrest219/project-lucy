@@ -1103,13 +1103,16 @@
   .pl-schema-asset-table td { @apply border-b border-border-default px-3 py-1.5 align-middle text-xs font-medium leading-4 text-fg-default; }
   .pl-schema-asset-table code { @apply font-mono text-xs font-medium text-fg-default; }
   /* Spec 107: Schema | Manifest | 库内表数 | 已发现 | 已启用 | 操作
-     Count cols stay near header width; action gets residual so 5 row links fit one line at ~1440. */
-  .pl-schema-asset-col-schema { width: 14%; }
-  .pl-schema-asset-col-status { width: 14%; }
-  .pl-schema-asset-col-live-count { width: 10%; }
-  .pl-schema-asset-col-local-count { width: 10%; }
-  .pl-schema-asset-col-enabled-count { width: 10%; }
-  .pl-schema-asset-col-action { width: 42%; }
+     Count cols stay near header width; action gets residual so 5 row links fit one line at ~1440.
+     Spec 190 adds 库内表清单 and 持续感知; the four count facts stay in separate columns. */
+  .pl-schema-asset-col-schema { width: 11%; }
+  .pl-schema-asset-col-status { width: 11%; }
+  .pl-schema-asset-col-live-count { width: 8%; }
+  .pl-schema-asset-col-live-tables { width: 12%; }
+  .pl-schema-asset-col-local-count { width: 8%; }
+  .pl-schema-asset-col-enabled-count { width: 8%; }
+  .pl-schema-asset-col-discovery { width: 14%; }
+  .pl-schema-asset-col-action { width: 28%; }
   .pl-schema-asset-table th.pl-schema-asset-table-num-head { @apply text-left; }
   .pl-schema-asset-table-num { @apply text-left font-normal tabular-nums whitespace-nowrap text-fg-body; }
   .pl-schema-asset-table-action { @apply whitespace-normal text-left; }
@@ -1140,6 +1143,19 @@
   .pl-schema-asset-status--warning { @apply border-warning-strong bg-warning-soft text-warning-strong; }
   .pl-schema-asset-status--danger { @apply border-danger-strong bg-danger-soft text-danger-strong; }
   .pl-schema-asset-status--muted { @apply border-border-default bg-bg-elevated text-fg-muted; }
+  /* Spec 190 §7.9 — 库内表清单 entry and the continuous discovery state cell. */
+  .pl-schema-live-table-list { @apply mt-1 max-h-48 overflow-y-auto rounded-md border border-border-default bg-bg-subtle p-2; }
+  .pl-schema-live-table-items { @apply grid gap-0.5 list-none p-0 m-0; }
+  .pl-schema-live-table-item { @apply flex items-center justify-between gap-2 text-xs text-fg-body; }
+  .pl-schema-live-table-columns { @apply tabular-nums text-fg-muted; }
+  .pl-schema-live-table-hint { @apply text-xs text-fg-muted; }
+  .pl-schema-discovery-state { @apply mr-1 font-semibold text-fg-muted; }
+  .pl-schema-discovery-state--success { @apply text-success-strong; }
+  .pl-schema-discovery-state--danger { @apply text-danger-strong; }
+  .pl-schema-discovery-meta { @apply block text-xs text-fg-muted; }
+  .pl-schema-discovery-reason { @apply block text-xs text-danger-strong; }
+  .pl-schema-discovery-diff { @apply block text-xs text-fg-body; }
+  .pl-connection-discovery-notice { @apply text-danger-strong; }
   /* UX-CONNECTIONS-005: when local Manifest read 0 but enabled_tables is
      non-empty, the row's local-count cell surfaces the dual-source origin
      via `data-state="drift"`. The drift state visually differentiates the

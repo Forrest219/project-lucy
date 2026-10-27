@@ -8,12 +8,10 @@ import {
   buildImportScopePreview,
   SENSITIVITY_UNCONFIRMED
 } from "../admin/import-scope";
-import {
-  invalidateAccessConfigCache,
-  primeAccessConfigCache,
-  parseAccessConfigText
-} from "../proxy/identity";
+import { invalidateAccessConfigCache, primeAccessConfigCache, parseAccessConfigText } from "../proxy/identity";
 import { invalidateContentPathsCache } from "../paths";
+import { displayGenerations } from "../display-generation";
+import { writeSnapshotPair } from "../live-table-discovery";
 
 vi.mock("../admin/audit.js", () => ({
   getAuditDb: vi.fn(() => ({
@@ -396,6 +394,104 @@ describe("Spec 183 — GET /api/connections/:connectionId/import-scope", () => {
       .expect(404);
     expect(res.body.ok).toBe(false);
     expect(res.body.error.code).toBe("CONNECTION_NOT_FOUND");
+    await app.close();
+  });
+});
+
+/**
+ * Spec 190 §7.2 — the preview consumes the persisted successful snapshot of the
+ * current configuration generation instead of connecting to the database.
+ */
+describe("Spec 190 — import-scope discovery source", () => {
+  it("SC-25: fills `discovered` from the persisted snapshot of this generation", async () => {
+    projectRoot = await writeProject({});
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    primeAccessConfigCache(parseAccessConfigText(ACCESS_YAML));
+    await writeSnapshotPair(projectRoot, "warehouse", "fin", {
+      connectionId: "warehouse",
+      schema: "fin",
+      generation: displayGenerations().L,
+      provider: "ktx_sql",
+      fetchedAt: "2026-01-01T00:00:00.000Z",
+      tables: [
+        { table: "fin_ledger", tableType: "BASE TABLE", columnCount: 6 },
+        { table: "fin_budget", tableType: "BASE TABLE", columnCount: 3 }
+      ]
+    });
+
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .get("/api/connections/warehouse/import-scope")
+      .expect(200);
+    expect(res.body.data.discoverySource).toBe("continuous");
+    expect(res.body.data.discoveryExecuted).toBe(true);
+    expect(res.body.data.discovered).toEqual(["fin.fin_budget", "fin.fin_ledger"]);
+    await app.close();
+  });
+
+  it("SC-25: a snapshot of an older configuration generation is not consumed", async () => {
+    projectRoot = await writeProject({});
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    primeAccessConfigCache(parseAccessConfigText(ACCESS_YAML));
+    await writeSnapshotPair(projectRoot, "warehouse", "fin", {
+      connectionId: "warehouse",
+      schema: "fin",
+      generation: displayGenerations().L + 5,
+      provider: "ktx_sql",
+      fetchedAt: "2026-01-01T00:00:00.000Z",
+      tables: [{ table: "fin_ledger", tableType: "BASE TABLE", columnCount: 6 }]
+    });
+
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .get("/api/connections/warehouse/import-scope")
+      .expect(200);
+    expect(res.body.data.discoverySource).toBe("none");
+    expect(res.body.data.discoveryExecuted).toBe(false);
+    expect(res.body.data.discovered).toEqual([]);
+    await app.close();
+  });
+
+  it("SC-26: an explicit list wins over the persisted snapshot", async () => {
+    projectRoot = await writeProject({});
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    primeAccessConfigCache(parseAccessConfigText(ACCESS_YAML));
+    await writeSnapshotPair(projectRoot, "warehouse", "fin", {
+      connectionId: "warehouse",
+      schema: "fin",
+      generation: displayGenerations().L,
+      provider: "ktx_sql",
+      fetchedAt: "2026-01-01T00:00:00.000Z",
+      tables: [{ table: "fin_ledger", tableType: "BASE TABLE", columnCount: 6 }]
+    });
+
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .get("/api/connections/warehouse/import-scope")
+      .query({ discovered: "fin.fin_uid_dirty" })
+      .expect(200);
+    expect(res.body.data.discoverySource).toBe("manual");
+    expect(res.body.data.discoveryExecuted).toBe(true);
+    expect(res.body.data.discovered).toEqual(["fin.fin_uid_dirty"]);
+    await app.close();
+  });
+
+  it("SC-25: without a snapshot the preview stays empty and is marked as not executed", async () => {
+    projectRoot = await writeProject({});
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    primeAccessConfigCache(parseAccessConfigText(ACCESS_YAML));
+
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .get("/api/connections/warehouse/import-scope")
+      .expect(200);
+    expect(res.body.data.discoverySource).toBe("none");
+    expect(res.body.data.discoveryExecuted).toBe(false);
+    expect(res.body.data.discovered).toEqual([]);
     await app.close();
   });
 });

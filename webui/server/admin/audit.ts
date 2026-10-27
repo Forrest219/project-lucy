@@ -543,6 +543,26 @@ export async function getAuditDb(): Promise<Database.Database> {
     CREATE INDEX IF NOT EXISTS idx_qaal_ts ON query_artifact_access_log(ts);
     CREATE INDEX IF NOT EXISTS idx_qaal_ref ON query_artifact_access_log(artifact_ref, ts);
   `);
+  // Spec 190 §7.8 — live table queries get their own event type. They are
+  // read-only probes, so they never travel through the write audit channel,
+  // but the background poll is treated exactly like a manual read.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS discovery_audit_log (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      ts          TEXT    NOT NULL,
+      actor       TEXT    NOT NULL,
+      connection_id TEXT   NOT NULL,
+      schema_name TEXT    NOT NULL,
+      action      TEXT    NOT NULL,
+      outcome     TEXT    NOT NULL,
+      reason      TEXT,
+      latency_ms  INTEGER NOT NULL,
+      table_count INTEGER NOT NULL,
+      request_id  TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_dal_ts ON discovery_audit_log(ts);
+    CREATE INDEX IF NOT EXISTS idx_dal_conn_ts ON discovery_audit_log(connection_id, ts);
+  `);
   return db;
 }
 

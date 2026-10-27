@@ -15,6 +15,8 @@ import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import { readConnections, resolveProjectRoot } from "../project.js";
 import { loadContentPaths } from "../paths.js";
+import { displayGenerations } from "../display-generation.js";
+import { loadSnapshotsForConnection } from "../live-table-discovery.js";
 import {
   buildAdminPermissionContext,
   displayPolicyInputsOf,
@@ -51,6 +53,11 @@ export interface ImportScopePreview {
   discovered: string[];
   /** True when the caller supplied a discovery list (even an empty one). */
   discoveryExecuted: boolean;
+  /**
+   * Spec 190 §7.2 — where `discovered` came from:
+   * `manual` (caller supplied), `continuous` (persisted snapshot) or `none`.
+   */
+  discoverySource: "manual" | "continuous" | "none";
   manifest: ImportScopeManifestTable[];
   /** `schema.table` entries from this connection's `enabled_tables`. */
   enabled: string[];
@@ -69,6 +76,11 @@ export interface BuildImportScopePreviewInput {
   connectionId: string;
   /** Caller-supplied discovery tables. When omitted, `discovered=[]` + `discoveryExecuted=false`. */
   discovered?: string[];
+  /**
+   * Spec 190 §7.2 — connection configuration generation. Only snapshots of this
+   * generation are consumed; a snapshot of an older configuration is void.
+   */
+  generation?: number;
 }
 
 /** Normalize an arbitrary caller string into a comparable `schema.table` token. */
@@ -87,16 +99,33 @@ function uniqueSorted(values: Iterable<string>): string[] {
 /** Empty `sensitivity` literal — the spec requires `unconfirmed`, never guessed from names. */
 export const SENSITIVITY_UNCONFIRMED = "unconfirmed";
 
-/** Read manifest tables from `<contentRoot>/semantic-layer/<conn>/_schema/*.yaml`. */
-async function readManifestTables(
+/** One column of a Schema Manifest table — the local structure fact. */
+export interface ImportScopeManifestColumn {
+  name: string;
+  /** Mapped type vocabulary (`number` / `string` / `time`). */
+  type: string;
+  nullable: boolean;
+  primaryKey: boolean;
+}
+
+export interface ImportScopeManifestTableDetail extends ImportScopeManifestTable {
+  columns: ImportScopeManifestColumn[];
+}
+
+/**
+ * Read the Schema Manifest tables of one connection including their column
+ * definitions. Spec 190 §7.4 uses the columns as the baseline of the
+ * on-demand column-level deep check.
+ */
+export async function readManifestTableDetails(
   projectRoot: string,
   connectionId: string
-): Promise<ImportScopeManifestTable[]> {
+): Promise<ImportScopeManifestTableDetail[]> {
   const paths = await loadContentPaths();
   const schemaDir = path.join(paths.semanticLayer, connectionId, "_schema");
   const overlayDir = path.join(paths.semanticLayer, connectionId);
   const entries = await readdir(schemaDir, { withFileTypes: true }).catch(() => []);
-  const tables: ImportScopeManifestTable[] = [];
+  const tables: ImportScopeManifestTableDetail[] = [];
   for (const entry of entries) {
     if (!entry.isFile() || !entry.name.endsWith(".yaml")) continue;
     const schemaName = entry.name.replace(/\.yaml$/, "");
@@ -136,15 +165,40 @@ async function readManifestTables(
         const fromManifest = typeof record.sensitivity === "string" ? record.sensitivity.trim() : "";
         return fromManifest;
       })();
+      const columns: ImportScopeManifestColumn[] = [];
+      const rawColumns = record.columns;
+      if (Array.isArray(rawColumns)) {
+        for (const rawColumn of rawColumns) {
+          const column = asRecord(rawColumn);
+          const name = typeof column.name === "string" ? column.name.trim() : "";
+          if (!name) continue;
+          columns.push({
+            name,
+            type: typeof column.type === "string" ? column.type : "string",
+            nullable: column.nullable !== false,
+            primaryKey: column.pk === true
+          });
+        }
+      }
       tables.push({
         physicalTable,
         schema: resolvedSchemaName,
         sourceName: resolvedSourceName,
-        sensitivity: sensitivityRaw || SENSITIVITY_UNCONFIRMED
+        sensitivity: sensitivityRaw || SENSITIVITY_UNCONFIRMED,
+        columns
       });
     }
   }
   return tables.sort((a, b) => a.physicalTable.localeCompare(b.physicalTable));
+}
+
+/** Read manifest tables from `<contentRoot>/semantic-layer/<conn>/_schema/*.yaml`. */
+export async function readManifestTables(
+  projectRoot: string,
+  connectionId: string
+): Promise<ImportScopeManifestTable[]> {
+  const detailed = await readManifestTableDetails(projectRoot, connectionId);
+  return detailed.map(({ columns: _columns, ...rest }) => rest);
 }
 
 /**
@@ -164,7 +218,7 @@ function effectiveTablesForConnection(
   );
 }
 
-async function readEnabledTables(projectRoot: string, connectionId: string): Promise<string[]> {
+export async function readEnabledTables(projectRoot: string, connectionId: string): Promise<string[]> {
   const connections = await readConnections(projectRoot);
   const match = connections.find((conn) => conn.id === connectionId);
   if (!match) {
@@ -236,12 +290,38 @@ export async function buildImportScopePreview(
   roles.sort((a, b) => a.identityId.localeCompare(b.identityId));
 
   const discoveredList = input.discovered;
-  const discovered = discoveredList === undefined ? [] : uniqueSorted(discoveredList);
+  let discovered: string[];
+  let discoveryExecuted: boolean;
+  let discoverySource: ImportScopePreview["discoverySource"];
+
+  if (discoveredList !== undefined) {
+    // 1. An explicit list wins; the endpoint never talks to the database here.
+    discovered = uniqueSorted(discoveredList);
+    discoveryExecuted = true;
+    discoverySource = "manual";
+  } else {
+    // 2. Otherwise consume the persisted successful snapshot of this
+    //    generation (Spec 190 §7.2). A snapshot of an older configuration is
+    //    void and never fills the list.
+    const generation = input.generation ?? displayGenerations().L;
+    const pairs = await loadSnapshotsForConnection(projectRoot, connectionId, generation);
+    const snapshotTables: string[] = [];
+    for (const pair of Object.values(pairs)) {
+      for (const entry of pair.current.tables) {
+        snapshotTables.push(`${pair.current.schema}.${entry.table}`);
+      }
+    }
+    const hasSnapshot = Object.keys(pairs).length > 0;
+    discovered = hasSnapshot ? uniqueSorted(snapshotTables) : [];
+    discoveryExecuted = hasSnapshot;
+    discoverySource = hasSnapshot ? "continuous" : "none";
+  }
 
   return {
     connectionId,
     discovered,
-    discoveryExecuted: discoveredList !== undefined,
+    discoveryExecuted,
+    discoverySource,
     manifest,
     enabled,
     roles,
@@ -282,6 +362,9 @@ export function registerImportScopeRoutes(app: FastifyInstance): void {
       const preview = await buildImportScopePreview({
         projectRoot,
         connectionId,
+        // Spec 190 §7.2 — only snapshots of the current configuration generation
+        // may fill `discovered`.
+        generation: displayGenerations().L,
         ...(discovered !== undefined ? { discovered } : {})
       });
       return reply.send({ ok: true, data: preview });

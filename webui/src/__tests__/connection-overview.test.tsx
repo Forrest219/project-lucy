@@ -98,7 +98,11 @@ function stubOverviewFetch({
 	  mcpEndpoint,
 	  connectionTestById,
 	  mcpExecutionStatus = "unknown",
-	  mcpRuntimeRequestFails = false
+	  mcpRuntimeRequestFails = false,
+	  /** Spec 190: optional overrides for the continuous discovery endpoints. */
+	  discoveryResponse,
+	  tableDiffResponse,
+	  liveTablesResponse
 	}: {
 	  connections?: ConnectionInfo[];
 	  ktxAvailable?: boolean;
@@ -129,6 +133,9 @@ function stubOverviewFetch({
   >;
   mcpExecutionStatus?: "unknown" | "ok" | "stale" | "unavailable" | "error";
   mcpRuntimeRequestFails?: boolean;
+  discoveryResponse?: unknown;
+  tableDiffResponse?: unknown;
+  liveTablesResponse?: unknown;
 } = {}) {
   const resolvedMcpEndpoint = mcpEndpoint ?? {
     url: "https://lucy.example.com/mcp",
@@ -295,6 +302,88 @@ function stubOverviewFetch({
               cached: false,
               wireProtocol: "mysql"
             }
+          })
+        );
+      }
+      // Spec 190: continuous discovery status and the reconciliation state.
+      if (!handler && /^GET \/api\/connections\/[^/?]+\/discovery$/.test(key)) {
+        const connId = (key.match(/\/connections\/([^/?]+)\/discovery/) ?? [])[1] ?? "mysql-aliyun";
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data:
+              discoveryResponse ?? {
+                connectionId: connId,
+                enabled: true,
+                intervalMs: 3_600_000,
+                generation: 0,
+                status: "ok",
+                lastAttemptAt: "2026-08-06T00:00:00.000Z",
+                lastCompletedAt: "2026-08-06T00:00:00.000Z",
+                lastReason: null,
+                schemas: [
+                  {
+                    schema: "dataforai",
+                    status: "ok",
+                    lastAttemptAt: "2026-08-06T00:00:00.000Z",
+                    lastCompletedAt: "2026-08-06T00:00:00.000Z",
+                    lastReason: null,
+                    consecutiveFailures: 0,
+                    nextAttemptAt: null
+                  }
+                ],
+                diffCount: { added: 0, missing: 0, columnCountChanged: 0 }
+              }
+          })
+        );
+      }
+      if (!handler && /^GET \/api\/connections\/[^/?]+\/table-diff$/.test(key)) {
+        const connId = (key.match(/\/connections\/([^/?]+)\/table-diff/) ?? [])[1] ?? "mysql-aliyun";
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data:
+              tableDiffResponse ?? {
+                connectionId: connId,
+                generation: 0,
+                computedAt: "2026-08-06T00:00:00.000Z",
+                schemas: [
+                  {
+                    schema: "dataforai",
+                    reconciliation: {
+                      discoveredInLibrary: ["dataforai.superstore_orders"],
+                      missingInManifest: [],
+                      missingInEnabled: [],
+                      notInLibrary: []
+                    },
+                    listDiff: { added: [], missing: [], columnCountChanged: [] },
+                    snapshotAt: "2026-08-06T00:00:00.000Z"
+                  }
+                ],
+                eventCount: 0
+              }
+          })
+        );
+      }
+      if (!handler && /^GET \/api\/connections\/[^/?]+\/live-tables/.test(key.split("?")[0] ?? key)) {
+        const connId = (key.match(/\/connections\/([^/?]+)\/live-tables/) ?? [])[1] ?? "mysql-aliyun";
+        const schema = new URL(url, "http://localhost").searchParams.get("schema") ?? "dataforai";
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data:
+              liveTablesResponse ?? {
+                status: "ok",
+                connectionId: connId,
+                schema,
+                tables: [
+                  { table: "superstore_orders", tableType: "BASE TABLE", columnCount: 12 },
+                  { table: "customers", tableType: "BASE TABLE", columnCount: 8 }
+                ],
+                fetchedAt: "2026-08-06T00:00:00.000Z",
+                cached: false,
+                wireProtocol: "mysql"
+              }
           })
         );
       }
@@ -1924,13 +2013,33 @@ describe("ConnectionOverview grid visual consistency (M72)", () => {
     expect(numRule![0]).toMatch(/font-normal/);
     expect(numRule![0]).toMatch(/text-fg-body/);
 
-    const liveColRule = css.match(/\.pl-schema-asset-col-live-count\s*\{[^}]*\}/);
-    expect(liveColRule).not.toBeNull();
-    expect(liveColRule![0]).toMatch(/width:\s*10%/);
-
-    const actionColRule = css.match(/\.pl-schema-asset-col-action\s*\{[^}]*\}/);
-    expect(actionColRule).not.toBeNull();
-    expect(actionColRule![0]).toMatch(/width:\s*42%/);
+    // Spec 190 adds 库内表清单 and 持续感知 as their own columns; the four
+    // count facts stay separated and the action column keeps the residual.
+    const widthOf = (className: string): number => {
+      const rule = css.match(new RegExp(`\\.${className}\\s*\\{[^}]*\\}`));
+      expect(rule).not.toBeNull();
+      const width = rule![0].match(/width:\s*(\d+)%/);
+      expect(width).not.toBeNull();
+      return Number(width![1]);
+    };
+    const countColumns = [
+      "pl-schema-asset-col-live-count",
+      "pl-schema-asset-col-live-tables",
+      "pl-schema-asset-col-local-count",
+      "pl-schema-asset-col-enabled-count"
+    ];
+    const actionWidth = widthOf("pl-schema-asset-col-action");
+    for (const className of countColumns) {
+      expect(widthOf(className)).toBeGreaterThan(0);
+      expect(actionWidth).toBeGreaterThanOrEqual(widthOf(className));
+    }
+    const totalWidth =
+      widthOf("pl-schema-asset-col-schema") +
+      widthOf("pl-schema-asset-col-status") +
+      countColumns.reduce((sum, className) => sum + widthOf(className), 0) +
+      widthOf("pl-schema-asset-col-discovery") +
+      actionWidth;
+    expect(totalWidth).toBe(100);
 
     // Design System 02 / page-layout: do not hide core row actions via overflow clipping.
     const actionsRule = css.match(/\.pl-schema-asset-actions\s*\{[^}]*\}/)?.[0] ?? "";
@@ -2162,5 +2271,117 @@ describe("ConnectionOverview grid visual consistency (M72)", () => {
     expect(await screen.findByTestId("connection-test-drawer")).toBeInTheDocument();
     expect(screen.getByTestId("connection-test-banner")).not.toHaveTextContent("尚未测试");
     expect(screen.queryByText("尚未测试")).not.toBeInTheDocument();
+  });
+
+  /**
+   * Spec 190 §7.9 / SC-34 — the Schema row carries the live table list entry,
+   * the continuous discovery state and the table-list difference counters; the
+   * connection card carries the paused notice with its reason.
+   */
+  it("SC-34: shows the live table list entry, the discovery state and the difference counters", async () => {
+    stubOverviewFetch({
+      connections: [
+        {
+          id: "mysql-aliyun",
+          driver: "mysql",
+          host: "127.0.0.1",
+          port: "3306",
+          database: "dataforai",
+          schemas: ["dataforai"],
+          enabledTables: ["dataforai.superstore_orders"]
+        }
+      ],
+      tableDiffResponse: {
+        connectionId: "mysql-aliyun",
+        generation: 0,
+        computedAt: "2026-08-06T00:00:00.000Z",
+        schemas: [
+          {
+            schema: "dataforai",
+            reconciliation: {
+              discoveredInLibrary: ["dataforai.superstore_orders", "dataforai.orders"],
+              missingInManifest: [],
+              missingInEnabled: [],
+              notInLibrary: []
+            },
+            listDiff: {
+              added: ["dataforai.orders"],
+              missing: [],
+              columnCountChanged: [{ table: "dataforai.superstore_orders", before: 11, after: 12 }]
+            },
+            snapshotAt: "2026-08-06T00:00:00.000Z"
+          }
+        ],
+        eventCount: 1
+      }
+    });
+    renderOverview();
+
+    const row = await screen.findByTestId("schema-row-mysql-aliyun-dataforai");
+    // The entry shows the table count of the persisted snapshot.
+    const toggle = within(row).getByTestId("live-table-list-toggle-mysql-aliyun-dataforai");
+    await waitFor(() => expect(toggle).toHaveTextContent("2 张表"));
+
+    // Expanding reads the library and lists table name + column count.
+    fireEvent.click(toggle);
+    const list = await screen.findByTestId("live-table-list-mysql-aliyun-dataforai");
+    expect(await within(list).findByText("superstore_orders")).toBeInTheDocument();
+    expect(within(list).getByText("12 列")).toBeInTheDocument();
+
+    // The difference counters are shown when they are not all zero.
+    const diff = within(row).getByTestId("table-diff-count-mysql-aliyun-dataforai");
+    expect(diff).toHaveTextContent("新增 1");
+    expect(diff).toHaveTextContent("已消失 0");
+    expect(diff).toHaveTextContent("列数变化 1");
+
+    // The discovery state names the switch and the last sensing time.
+    const state = within(row).getByTestId("discovery-state-mysql-aliyun-dataforai");
+    expect(state).toHaveTextContent("已开启");
+  });
+
+  it("SC-34: a paused Schema shows the reason and the card shows the paused notice", async () => {
+    stubOverviewFetch({
+      connections: [
+        {
+          id: "mysql-aliyun",
+          driver: "mysql",
+          schemas: ["dataforai"],
+          enabledTables: []
+        }
+      ],
+      discoveryResponse: {
+        connectionId: "mysql-aliyun",
+        enabled: true,
+        intervalMs: 3_600_000,
+        generation: 0,
+        status: "paused",
+        lastAttemptAt: "2026-08-06T00:00:00.000Z",
+        lastCompletedAt: null,
+        lastReason: "AUTH_FAILED",
+        schemas: [
+          {
+            schema: "dataforai",
+            status: "paused",
+            lastAttemptAt: "2026-08-06T00:00:00.000Z",
+            lastCompletedAt: null,
+            lastReason: "AUTH_FAILED",
+            consecutiveFailures: 10,
+            nextAttemptAt: null
+          }
+        ],
+        diffCount: { added: 0, missing: 0, columnCountChanged: 0 }
+      }
+    });
+    renderOverview();
+
+    const notice = await screen.findByTestId("connection-discovery-notice-mysql-aliyun");
+    expect(notice).toHaveTextContent("持续感知已暂停");
+    expect(notice).toHaveTextContent("凭据无效或被拒绝");
+
+    const row = await screen.findByTestId("schema-row-mysql-aliyun-dataforai");
+    const state = within(row).getByTestId("discovery-state-mysql-aliyun-dataforai");
+    expect(state).toHaveTextContent("已暂停");
+    const reason = within(row).getByTestId("discovery-paused-reason-mysql-aliyun-dataforai");
+    expect(reason).toHaveTextContent("凭据无效或被拒绝");
   });
 });

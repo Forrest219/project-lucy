@@ -299,6 +299,82 @@ export type LiveSchemasResponse = {
   wireProtocol?: "mysql" | "postgres" | "sqlserver" | "oracle" | "unknown";
 };
 
+/** Spec 190 §7.1 — one entry of the Schema-level live table list. */
+export type LiveTableEntry = {
+  table: string;
+  tableType: "BASE TABLE" | "VIEW";
+  columnCount: number;
+  tableComment?: string;
+};
+
+/** Spec 190 §7.1 — GET /api/connections/:connId/live-tables payload. */
+export type LiveTablesResponse = {
+  status: "ok" | "error";
+  connectionId: string;
+  schema: string;
+  tables: LiveTableEntry[];
+  fetchedAt: string;
+  cached: boolean;
+  latencyMs?: number;
+  reason?: string;
+  wireProtocol: "mysql" | "postgres" | "unknown";
+};
+
+/** Spec 190 §7.5 — GET /api/connections/:connId/discovery payload. */
+export type DiscoveryStatusResponse = {
+  connectionId: string;
+  enabled: boolean;
+  intervalMs: number;
+  generation: number;
+  status: "ok" | "partial" | "error" | "paused" | "never_run";
+  lastAttemptAt: string | null;
+  lastCompletedAt: string | null;
+  /** Reason of the connection-level aggregate (added for the paused notice). */
+  lastReason?: string | null;
+  schemas: Array<{
+    schema: string;
+    status: "ok" | "error" | "paused";
+    lastAttemptAt: string;
+    lastCompletedAt: string | null;
+    lastReason: string | null;
+    consecutiveFailures: number;
+    nextAttemptAt: string | null;
+  }>;
+  diffCount: { added: number; missing: number; columnCountChanged: number };
+};
+
+/** Spec 190 §7.3 — GET /api/connections/:connId/table-diff payload. */
+export type TableDiffResponse = {
+  connectionId: string;
+  generation: number;
+  computedAt: string;
+  schemas: Array<{
+    schema: string;
+    reconciliation: {
+      discoveredInLibrary: string[];
+      missingInManifest: string[];
+      missingInEnabled: string[];
+      notInLibrary: string[];
+    };
+    listDiff: {
+      added: string[];
+      missing: string[];
+      columnCountChanged: Array<{ table: string; before: number; after: number }>;
+    };
+    snapshotAt: string | null;
+  }>;
+  events?: Array<{
+    connectionId: string;
+    schema: string;
+    generation: number;
+    at: string;
+    kind: "added" | "missing" | "column_count_changed";
+    tables: string[];
+    provider: "ktx_sql" | "ktx_scan";
+  }>;
+  eventCount: number;
+};
+
 /** Spec 174 §3.3 — display snapshot metadata; counts are unknown unless state is ok. */
 export type SourcesDisplayMeta = {
   snapshotVersion: string;
