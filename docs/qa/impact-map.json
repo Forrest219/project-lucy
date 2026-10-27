@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft-07/schema#",
-  "description": "Lucy WebUI E2E 变更影响映射。维护规则：路由/组件/API 改动 → 必须更新对应映射；CI 通过 git diff 自动计算 L2 准入集合。v0.3.0（T09）：补录 admin/skills/ops 现行路由与组件，映射目标为现行 contract spec 文件（spec:<文件名>），因这些 spec 不带 E2E-* 场景编号；workbench-pending-count 已由 workbench-batch-sync-hint 取代。真实 Agent E2E（SEC-*/UX-* 场景）的影响映射由 T10/T11 目录冻结后另行维护。",
-  "version": "0.3.0",
-  "lastUpdated": "2026-10-18",
+  "description": "Lucy WebUI E2E 变更影响映射。维护规则：路由/组件/API 改动 → 必须更新对应映射；CI 通过 git diff 自动计算 L2 准入集合。v0.4.0（2026-10-27）：新增 MCP Runtime 执行层重载映射（Spec 191 / E2E-MCP-01）——路由 /admin/mcp-playground、组件 McpRuntimeStatusPanel、API GET /api/admin/mcp-runtime/status 与 POST /api/admin/mcp-runtime/reload、selector mcp-runtime-* 四项。v0.3.0（T09）：补录 admin/skills/ops 现行路由与组件，映射目标为现行 contract spec 文件（spec:<文件名>），因这些 spec 不带 E2E-* 场景编号；workbench-pending-count 已由 workbench-batch-sync-hint 取代。真实 Agent E2E（SEC-*/UX-* 场景）的影响映射由 T10/T11 目录冻结后另行维护。",
+  "version": "0.4.0",
+  "lastUpdated": "2026-10-27",
   "route": {
     "/onboarding": ["E2E-CON-01"],
     "/connections": ["E2E-CON-01", "E2E-CON-02", "E2E-CON-03", "E2E-CON-04", "E2E-CON-05", "E2E-CON-06", "E2E-SEC-01"],
@@ -28,6 +28,7 @@
     "/eval/cases": ["spec:admin-data-grid-consistency"],
     "/eval/monitor": ["spec:admin-data-grid-consistency"],
     "/skills": ["spec:business-skill-151"],
+    "/admin/mcp-playground": ["E2E-MCP-01"],
     "/help": ["spec:entry-performance-behavior"]
   },
   "component": {
@@ -62,7 +63,8 @@
     "RoleTableGrants": ["spec:role-permission-structure"],
     "SkillList": ["spec:business-skill-151"],
     "Audit": ["spec:admin-data-grid-consistency"],
-    "CallMonitor": ["spec:admin-data-grid-consistency"]
+    "CallMonitor": ["spec:admin-data-grid-consistency"],
+    "McpRuntimeStatusPanel": ["E2E-MCP-01"]
   },
   "api": {
     "GET /api/connections": ["E2E-CON-01", "E2E-CON-06"],
@@ -85,6 +87,8 @@
     "GET /api/semantic-assets/releases": ["E2E-PUB-06"],
     "GET /api/semantic-assets/releases/:id/status": ["E2E-PUB-04", "E2E-PUB-06"],
     "POST /api/semantic-assets/export": ["E2E-PUB-07", "E2E-SEC-02"],
+    "GET /api/admin/mcp-runtime/status": ["E2E-MCP-01"],
+    "POST /api/admin/mcp-runtime/reload": ["E2E-MCP-01"],
     "GET /api/wiki": ["E2E-WIKI-01", "E2E-WIKI-05"],
     "GET /api/wiki/:key": ["E2E-WIKI-01", "E2E-WIKI-03", "E2E-WIKI-04"],
     "PUT /api/wiki/:key": ["E2E-WIKI-04"]
@@ -175,6 +179,10 @@
     "wiki-yaml-boundary-hint": ["E2E-WIKI-05"],
     "sl-ref-picker": ["E2E-WIKI-03"],
     "sl-ref-badge-<conn>-<schema>-<table>": ["E2E-WIKI-03"],
+    "mcp-runtime-status-chips": ["E2E-MCP-01"],
+    "mcp-runtime-remediation": ["E2E-MCP-01"],
+    "mcp-runtime-reload-${testConnectionId}": ["E2E-MCP-01"],
+    "mcp-runtime-reload-outcome": ["E2E-MCP-01"],
     "skill-role-none": ["spec:business-skill-151 (negative: must be absent)"],
     "role-skill-access-summary": ["spec:role-permission-structure (negative: must be absent)"]
   },

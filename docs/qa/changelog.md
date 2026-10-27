@@ -5,6 +5,33 @@
 
 ---
 
+## 2026-10-27 · MCP Runtime 执行层重载：第一个浏览器契约场景 E2E-MCP-01
+
+### 新增
+- `webui/tests/e2e/specs/mcp-runtime-reload.spec.ts`：MCP Runtime 状态面的**第一个**浏览器契约用例集
+  （`E2E-MCP-01`，L2 PR Impacted，标签 `@pr-impacted`）。覆盖四件事：配置/目录/策略运行时/MCP 执行层
+  四段事实各自成 chip；「重新检测执行层」与「重载执行层」是两个不同动作；待重载提示说「尚未加载」而不是
+  「已生效」；非 owner 形态下不提供重载入口，且拒绝路径不伪报成功。
+
+### 修改
+- `docs/qa/lucy-webui-e2e-test-suite.md`：§7 影响映射示例补 MCP Runtime 四项；§10 用例矩阵新增
+  `E2E-MCP-01`（阶段缩写 `MCP`）；§11 新增 11.3 详细用例，原 11.3 顺延为 11.4。
+- `docs/qa/impact-map.json`：版本 `0.3.0` → `0.4.0`，新增路由 `/admin/mcp-playground`、组件
+  `McpRuntimeStatusPanel`、API `GET /api/admin/mcp-runtime/status` 与
+  `POST /api/admin/mcp-runtime/reload`、selector `mcp-runtime-*` 四项映射。
+
+### 影响映射更新
+- Selector 契约：新增 `mcp-runtime-reload-outcome`、`mcp-runtime-reload-${testConnectionId}`
+  （Spec 191 新增的执行层重载入口与结果分区）。新增 `E2E-MCP-01` 测试集。
+
+### 范围声明
+- 本场景只覆盖**浏览器契约层**。成功重载路径（daemon 旧 PID 退出、新 PID 就绪、连接级验证通过）是
+  **进程级事实**，浏览器无法断言——E2E fixture 跑 `npm run dev` 而非容器入口脚本，本就没有 KTX
+  supervisor 与重载通道能力文件。该路径由 `scripts/verify/verify-ktx-reload-lifecycle.sh --container`
+  负责（Spec 191 AC-12）。
+
+---
+
 ## 2026-10-19 · MCP 调试台连上检查只回答能连上或不能连上
 
 ### 修改

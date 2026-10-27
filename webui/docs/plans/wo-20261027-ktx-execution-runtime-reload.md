@@ -331,12 +331,18 @@ UI 约定：
   属于容器形态，未在本次范围内实测。
 - **E2E 浏览器契约覆盖**：MCP Runtime 状态面（含本次新增的「重载执行层」）此前**完全没有** E2E 覆盖
   （`webui/tests/e2e/specs/` 无相关 spec；`docs/qa/impact-map.json` 无该路由／组件／selector 映射）。
-  按 E2E 套件的维护约定，本次新增的 2 个 selector 已补登到 `docs/qa/selector-contract.md`
-  （`mcp-runtime-reload-outcome`、`mcp-runtime-reload-${testConnectionId}`），
-  使 `npm run e2e:selector-contract` 回到改动前基线（同为 24 issues，`mcp-runtime` 命中 0）。
-  **是否补建 E2E 场景待拍板**；其中「成功重载路径」不应进 E2E——那是进程级事实
-  （daemon PID 变化、配置生效、连接级验证通过），浏览器无法断言，
-  归口到 `scripts/verify/verify-ktx-reload-lifecycle.sh --container`。
+  本次已补齐浏览器契约层：
+  - 新增 `webui/tests/e2e/specs/mcp-runtime-reload.spec.ts`（场景 `E2E-MCP-01`，L2 PR Impacted），
+    覆盖三段事实分开呈现、「重新检测执行层」与「重载执行层」是两个动作、待重载文案口径、
+    非 owner 形态下重载入口不提供且拒绝路径不伪报成功。
+  - `docs/qa/selector-contract.md` 补登 2 个新 selector；`docs/qa/impact-map.json` 升至 v0.4.0，
+    补 route／component／api／selector 四类映射；`docs/qa/lucy-webui-e2e-test-suite.md` §7／§10／§11
+    与 `docs/qa/changelog.md` 同步登记。
+  - 实测：chromium **4/4 通过**；3 处变异（非 owner 也渲染重载按钮／文案混入「请重启」／
+    `activation=current`）**逐一转红**，证明断言非恒真；`npm run e2e:selector-contract` 回到改动前基线
+    （同为 24 issues，`mcp-runtime` 命中 0）。
+  - **「成功重载路径」不进 E2E**——那是进程级事实（daemon PID 变化、配置生效、连接级验证通过），
+    浏览器无法断言；归口到 `scripts/verify/verify-ktx-reload-lifecycle.sh --container`（即 AC-12）。
 
 ### 8.5 静态 Code Review 发现与修复
 
