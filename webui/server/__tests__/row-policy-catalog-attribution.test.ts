@@ -74,6 +74,19 @@ const KTX_YAML = `connections:
       - fin.fin_ledger
 `;
 
+/**
+ * A SQL Server connection whose Schema Manifest is on disk under an UPPERCASE
+ * file name. The customer scenario (D-03 / G5) is a registered connection whose
+ * manifest file keeps its original case, so the fixture must register the
+ * connection AND put the manifest under that connection's directory.
+ */
+const SQL_SERVER_KTX_YAML = `connections:
+  sql_server:
+    driver: sqlserver
+    enabled_tables:
+      - BIDM.hs_sy_bu_metric
+`;
+
 let projectRoot: string;
 let previousRoot: string | undefined;
 let previousContentRoot: string | undefined;
@@ -83,18 +96,28 @@ async function makeProject(options: {
   schemaYaml?: string;
   overlayName?: string;
   overlayYaml?: string;
+  /** The connection the semantic layer belongs to. Defaults to `warehouse`. */
+  connectionId?: string;
+  driver?: string;
 }): Promise<string> {
+  const connectionId = options.connectionId ?? "warehouse";
   const root = await mkdtemp(path.join(os.tmpdir(), "lucy-row-policy-r5-"));
   await mkdir(path.join(root, "webui", "config"), { recursive: true });
-  await mkdir(path.join(root, "semantic-layer", "warehouse", "_schema"), { recursive: true });
-  await writeFile(path.join(root, "ktx.yaml"), KTX_YAML, "utf8");
+  await mkdir(path.join(root, "semantic-layer", connectionId, "_schema"), { recursive: true });
   await writeFile(
-    path.join(root, "semantic-layer", "warehouse", "_schema", options.schemaFileName ?? "fin.yaml"),
+    path.join(root, "ktx.yaml"),
+    connectionId === "warehouse"
+      ? KTX_YAML
+      : `connections:\n  ${connectionId}:\n    driver: ${options.driver ?? "sqlserver"}\n`,
+    "utf8"
+  );
+  await writeFile(
+    path.join(root, "semantic-layer", connectionId, "_schema", options.schemaFileName ?? "fin.yaml"),
     options.schemaYaml ?? FIN_SCHEMA_YAML,
     "utf8"
   );
   await writeFile(
-    path.join(root, "semantic-layer", "warehouse", options.overlayName ?? "fin_ledger.yaml"),
+    path.join(root, "semantic-layer", connectionId, options.overlayName ?? "fin_ledger.yaml"),
     options.overlayYaml ?? FIN_LEDGER_OVERLAY_YAML,
     "utf8"
   );
@@ -282,6 +305,8 @@ describe("R5 行级条件字段可诊断 — three-way attribution", () => {
 describe("R5 — G5 / D-03 attribution boundary (case-sensitive manifest path)", () => {
   it("磁盘 BIDM.yaml + 请求 bidm.yaml → 清单不可用(stage=resolve)，绝不归因为字段不存在", async () => {
     projectRoot = await makeProject({
+      connectionId: "sql_server",
+      driver: "sqlserver",
       schemaFileName: "BIDM.yaml",
       schemaYaml: `tables:
   hs_sy_bu_metric:
@@ -328,6 +353,8 @@ describe("R5 — G5 / D-03 attribution boundary (case-sensitive manifest path)",
 
   it("the compile path keeps the four-tuple and never claims 字段不存在 for the G5 miss", async () => {
     projectRoot = await makeProject({
+      connectionId: "sql_server",
+      driver: "sqlserver",
       schemaFileName: "BIDM.yaml",
       schemaYaml: `tables:
   hs_sy_bu_metric:

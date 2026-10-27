@@ -38,6 +38,10 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { parse } from "yaml";
 import { loadContentPaths } from "../paths.js";
+import type {
+  ResolvedCatalogAdapterCapabilities,
+  RowPolicyCatalogCapabilityStatus
+} from "./row-policy-capability.js";
 
 export function normalizeRef(value: string): string {
   return value.trim().toLowerCase();
@@ -163,9 +167,16 @@ export interface RowPolicyTableIdentity {
  * prove that a Schema Manifest catalog is available. R5 then attributes the
  * failure to 「目录能力未知」and fails closed — it must never be guessed into
  * 「字段不存在」.
+ *
+ * Spec §14.4.1: the value is resolved BY THE SERVER. `undefined` is not
+ * `proven`; a caller that passes nothing gets the server-resolved capability.
  */
 export interface RowPolicyAdapterCapabilities {
   schemaManifestCatalogProven?: boolean;
+  /** Why the capability resolved the way it did. */
+  reason?: string;
+  /** The resolved capability status. */
+  status?: RowPolicyCatalogCapabilityStatus;
 }
 
 export type RowPolicyCatalogResult =
@@ -182,6 +193,15 @@ export type RowPolicyCatalogResult =
       /** Semantic-layer-relative manifest path (deployment independent). */
       manifestPath: string;
       manifestPathDigest: string;
+      /**
+       * Digest of the Manifest CONTENT (not of its path).
+       *
+       * Spec §14.2.1: 「只记录 Manifest 路径摘要不足以证明内容未变」. The preview
+       * confirmation binds the compile inputs to the actual bytes that were read.
+       */
+      manifestContentDigest: string;
+      /** Digest of the overlay CONTENT that took part in the compilation. */
+      overlayContentDigest?: string;
       connectionId: string;
       schema: string;
       sourceName: string;
@@ -217,6 +237,8 @@ interface CachedCatalog {
   reason?: string;
   manifestPath?: string;
   manifestPathDigest?: string;
+  manifestContentDigest?: string;
+  overlayContentDigest?: string;
 }
 
 const catalogCache = new Map<string, CachedCatalog>();
@@ -269,30 +291,109 @@ interface ManifestTableEntry {
   columns?: Array<{ name?: string }>;
 }
 
-interface ManifestShape {
-  tables?: Record<string, ManifestTableEntry>;
+/**
+ * Spec §14.4.2 — reliable catalog structure.
+ *
+ * A Manifest is only a RELIABLE catalog when its shape proves the target table's
+ * column set. YAML being parseable is NOT enough: `tables: {fin: {}}` and
+ * `columns: "oops"` parse fine and would otherwise be reported as 「字段不存在」.
+ *
+ * The stage split is fixed by the contract:
+ * - shape invalid (root / `tables` / table entry / `columns` array / column item /
+ *   column name) → `parse`
+ * - target table absent, target structure unbuildable, duplicate normalized
+ *   column name → `catalog`
+ */
+interface ShapeFailure {
+  stage: RowPolicyCatalogStage;
+  reason: string;
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+/**
+ * Validate the Manifest root and its `tables` map.
+ *
+ * Returns the `tables` record on success; a shape failure on failure.
+ */
+function validateManifestRoot(
+  manifest: unknown
+): { ok: true; tables: Record<string, unknown> } | { ok: false; failure: ShapeFailure } {
+  if (!isPlainObject(manifest)) {
+    return { ok: false, failure: { stage: "parse", reason: "manifest_root_invalid" } };
+  }
+  const tables = manifest.tables;
+  if (!isPlainObject(tables)) {
+    return { ok: false, failure: { stage: "parse", reason: "manifest_tables_invalid" } };
+  }
+  return { ok: true, tables };
+}
+
+/**
+ * Pick the target table entry. A missing target is a `catalog` failure — the
+ * document is well-formed, the table simply is not in it.
+ */
 function pickManifestTableEntry(
-  manifest: ManifestShape | null | undefined,
+  tables: Record<string, unknown>,
   sourceName: string
-): ManifestTableEntry | undefined {
-  const tables = manifest?.tables ?? {};
+): { ok: true; entry: unknown } | { ok: false; failure: ShapeFailure } {
   const direct = tables[sourceName];
-  if (direct) return direct;
+  if (direct !== undefined) return { ok: true, entry: direct };
   const want = normalizeRef(sourceName);
   const found = Object.entries(tables).find(([key]) => normalizeRef(key) === want);
-  return found?.[1];
+  if (found) return { ok: true, entry: found[1] };
+  return {
+    ok: false,
+    failure: { stage: "catalog", reason: `manifest_table_absent:${normalizeRef(sourceName)}` }
+  };
 }
 
-function columnsFromManifestEntry(entry: ManifestTableEntry | undefined): Set<string> {
-  const physical = new Set<string>();
-  for (const col of entry?.columns ?? []) {
-    if (typeof col?.name === "string" && col.name.trim()) {
-      physical.add(normalizeRef(col.name));
-    }
+/**
+ * Validate one table entry and extract its physical column set.
+ *
+ * `columns` must be EXPLICITLY present as an array. An absent `columns` is not a
+ * zero-column table — it is an unreliable catalog, so it must never be reported
+ * as 「字段不存在」.
+ */
+function validateManifestTableEntry(
+  entry: unknown
+): { ok: true; columns: Set<string> } | { ok: false; failure: ShapeFailure } {
+  if (!isPlainObject(entry)) {
+    return { ok: false, failure: { stage: "parse", reason: "manifest_table_entry_invalid" } };
   }
-  return physical;
+  const columns = entry.columns;
+  if (!Array.isArray(columns)) {
+    return {
+      ok: false,
+      failure: {
+        stage: "parse",
+        reason: columns === undefined ? "manifest_columns_missing" : "manifest_columns_not_array"
+      }
+    };
+  }
+  const physical = new Set<string>();
+  for (const col of columns) {
+    if (!isPlainObject(col)) {
+      return { ok: false, failure: { stage: "parse", reason: "manifest_column_invalid" } };
+    }
+    const name = col.name;
+    if (typeof name !== "string" || !name.trim()) {
+      return { ok: false, failure: { stage: "parse", reason: "manifest_column_name_invalid" } };
+    }
+    const normalized = normalizeRef(name);
+    if (physical.has(normalized)) {
+      // A duplicate normalized column name is a CATALOG conflict: the column set
+      // cannot be claimed complete. It must not be silently de-duplicated.
+      return {
+        ok: false,
+        failure: { stage: "catalog", reason: `manifest_duplicate_column:${normalized}` }
+      };
+    }
+    physical.add(normalized);
+  }
+  return { ok: true, columns: physical };
 }
 
 interface PhysicalColumnsOutcome {
@@ -302,6 +403,12 @@ interface PhysicalColumnsOutcome {
   reason?: string;
   /** Semantic-layer-relative manifest path. */
   manifestPath?: string;
+  /** Digest of the Manifest CONTENT that was read. */
+  contentDigest?: string;
+}
+
+function contentDigestOf(content: string): string {
+  return createHash("sha256").update(content).digest("hex").slice(0, 32);
 }
 
 /**
@@ -335,9 +442,9 @@ async function loadPhysicalColumnsWithProvenance(
         reason: `manifest_unreadable:${relPath}:${errorMessage(error)}`
       };
     }
-    let manifest: ManifestShape | null;
+    let manifest: unknown;
     try {
-      manifest = parse(content) as ManifestShape | null;
+      manifest = parse(content);
     } catch (error) {
       return {
         columns: empty,
@@ -346,16 +453,39 @@ async function loadPhysicalColumnsWithProvenance(
         reason: `manifest_unparsable:${relPath}:${errorMessage(error)}`
       };
     }
-    const entry = pickManifestTableEntry(manifest, sourceName);
-    if (!entry) {
+    const root = validateManifestRoot(manifest);
+    if (!root.ok) {
       return {
         columns: empty,
         status: "manifest_unavailable",
-        stage: "catalog",
-        reason: `manifest_table_absent:${relPath}:${normalizeRef(sourceName)}`
+        stage: root.failure.stage,
+        reason: `${root.failure.reason}:${relPath}`
       };
     }
-    return { columns: columnsFromManifestEntry(entry), status: "loaded", manifestPath: relPath };
+    const entry = pickManifestTableEntry(root.tables, sourceName);
+    if (!entry.ok) {
+      return {
+        columns: empty,
+        status: "manifest_unavailable",
+        stage: entry.failure.stage,
+        reason: `${entry.failure.reason}:${relPath}`
+      };
+    }
+    const validated = validateManifestTableEntry(entry.entry);
+    if (!validated.ok) {
+      return {
+        columns: empty,
+        status: "manifest_unavailable",
+        stage: validated.failure.stage,
+        reason: `${validated.failure.reason}:${relPath}`
+      };
+    }
+    return {
+      columns: validated.columns,
+      status: "loaded",
+      manifestPath: relPath,
+      contentDigest: contentDigestOf(content)
+    };
   }
 
   // No schema requested: scan the schema directory (legacy behaviour).
@@ -375,31 +505,59 @@ async function loadPhysicalColumnsWithProvenance(
     .sort((a, b) => a.localeCompare(b));
   let firstFailure: { stage: RowPolicyCatalogStage; reason: string } | undefined;
   for (const fileName of files) {
+    const relPath = `${relDir}/${fileName}`;
     let content: string;
     try {
       content = await readFile(path.join(schemaDir, fileName), "utf-8");
     } catch (error) {
       firstFailure ??= {
         stage: isMissingFileError(error) ? "resolve" : "read",
-        reason: `manifest_unreadable:${relDir}/${fileName}:${errorMessage(error)}`
+        reason: `manifest_unreadable:${relPath}:${errorMessage(error)}`
       };
       continue;
     }
-    let manifest: ManifestShape | null;
+    let manifest: unknown;
     try {
-      manifest = parse(content) as ManifestShape | null;
+      manifest = parse(content);
     } catch (error) {
       firstFailure ??= {
         stage: "parse",
-        reason: `manifest_unparsable:${relDir}/${fileName}:${errorMessage(error)}`
+        reason: `manifest_unparsable:${relPath}:${errorMessage(error)}`
       };
       continue;
     }
-    const entry = pickManifestTableEntry(manifest, sourceName);
-    if (!entry) continue;
-    const columns = columnsFromManifestEntry(entry);
+    const root = validateManifestRoot(manifest);
+    if (!root.ok) {
+      firstFailure ??= {
+        stage: root.failure.stage,
+        reason: `${root.failure.reason}:${relPath}`
+      };
+      continue;
+    }
+    const entry = pickManifestTableEntry(root.tables, sourceName);
+    if (!entry.ok) {
+      firstFailure ??= {
+        stage: entry.failure.stage,
+        reason: `${entry.failure.reason}:${relPath}`
+      };
+      continue;
+    }
+    const validated = validateManifestTableEntry(entry.entry);
+    if (!validated.ok) {
+      firstFailure ??= {
+        stage: validated.failure.stage,
+        reason: `${validated.failure.reason}:${relPath}`
+      };
+      continue;
+    }
+    const columns = validated.columns;
     if (columns.size === 0) continue;
-    return { columns, status: "loaded", manifestPath: `${relDir}/${fileName}` };
+    return {
+      columns,
+      status: "loaded",
+      manifestPath: relPath,
+      contentDigest: contentDigestOf(content)
+    };
   }
   return {
     columns: empty,
@@ -413,6 +571,119 @@ function manifestPathDigest(manifestPath: string): string {
   return createHash("sha256").update(manifestPath).digest("hex").slice(0, 16);
 }
 
+interface OverlayOutcome {
+  /** Proven overlay fields and measures. */
+  columns: Set<string>;
+  measures: Set<string>;
+  /** Digest of the overlay CONTENT (absent when the overlay is optional and missing). */
+  contentDigest?: string;
+  /** Set when the overlay could not be used. */
+  failure?: ShapeFailure;
+}
+
+/**
+ * Spec §14.4.2 — the overlay that takes part in the compilation must be validated.
+ *
+ * The overlay is OPTIONAL: a missing overlay file is not a fault (the physical
+ * columns already form a catalog). Every other overlay fault is a real fault and
+ * must NOT be swallowed:
+ * - YAML syntax failure → `parse`
+ * - read failure (other than "missing") → `catalog`
+ * - invalid `columns` / `dimensions` / `measures` structure → `catalog`
+ *
+ * An overlay fault may never be attributed to 「字段不存在」.
+ */
+async function loadOverlayWithProvenance(
+  connectionId: string,
+  sourceName: string,
+  physicalColumns: Set<string>
+): Promise<OverlayOutcome> {
+  const columns = new Set<string>();
+  const measures = new Set<string>();
+  const overlayPath = path.join(
+    (await loadContentPaths()).semanticLayer,
+    connectionId,
+    `${sourceName}.yaml`
+  );
+  const relPath = `${normalizeRef(connectionId)}/${sourceName}.yaml`;
+
+  let content: string;
+  try {
+    content = await readFile(overlayPath, "utf-8");
+  } catch (error) {
+    if (isMissingFileError(error)) {
+      // The overlay is optional. Nothing to add, nothing to blame.
+      return { columns, measures };
+    }
+    return {
+      columns,
+      measures,
+      failure: { stage: "catalog", reason: `overlay_unreadable:${relPath}:${errorMessage(error)}` }
+    };
+  }
+
+  let yaml: unknown;
+  try {
+    yaml = parse(content);
+  } catch (error) {
+    return {
+      columns,
+      measures,
+      failure: { stage: "parse", reason: `overlay_unparsable:${relPath}:${errorMessage(error)}` }
+    };
+  }
+
+  if (yaml === null || yaml === undefined) {
+    // An empty overlay document carries no fields; treat it as an absent overlay.
+    return { columns, measures, contentDigest: contentDigestOf(content) };
+  }
+  if (!isPlainObject(yaml)) {
+    return {
+      columns,
+      measures,
+      failure: { stage: "catalog", reason: `overlay_root_invalid:${relPath}` }
+    };
+  }
+
+  for (const key of ["columns", "dimensions", "measures"] as const) {
+    const value = yaml[key];
+    if (value === undefined || value === null) continue;
+    if (!Array.isArray(value)) {
+      return {
+        columns,
+        measures,
+        failure: { stage: "catalog", reason: `overlay_${key}_not_array:${relPath}` }
+      };
+    }
+    for (const item of value) {
+      if (!isPlainObject(item)) {
+        return {
+          columns,
+          measures,
+          failure: { stage: "catalog", reason: `overlay_${key}_item_invalid:${relPath}` }
+        };
+      }
+      if (item.name !== undefined && typeof item.name !== "string") {
+        return {
+          columns,
+          measures,
+          failure: { stage: "catalog", reason: `overlay_${key}_name_invalid:${relPath}` }
+        };
+      }
+    }
+  }
+
+  addProvenOverlayFields(yaml.columns as OverlayField[] | undefined, sourceName, physicalColumns, columns);
+  addProvenOverlayFields(yaml.dimensions as OverlayField[] | undefined, sourceName, physicalColumns, columns);
+  for (const measure of (yaml.measures as Array<{ name?: unknown }> | undefined) ?? []) {
+    if (typeof measure?.name === "string" && measure.name.trim()) {
+      measures.add(normalizeRef(measure.name));
+    }
+  }
+
+  return { columns, measures, contentDigest: contentDigestOf(content) };
+}
+
 async function buildCachedCatalog(
   connectionId: string,
   sourceName: string,
@@ -422,38 +693,37 @@ async function buildCachedCatalog(
   const columns = new Set<string>(physical.columns);
   const measures = new Set<string>();
 
-  const overlayPath = path.join(
-    (await loadContentPaths()).semanticLayer,
-    connectionId,
-    `${sourceName}.yaml`
-  );
-  try {
-    const yaml = parse(await readFile(overlayPath, "utf-8")) as {
-      columns?: OverlayField[];
-      dimensions?: OverlayField[];
-      measures?: Array<{ name?: string }>;
-    } | null;
-    addProvenOverlayFields(yaml?.columns, sourceName, physical.columns, columns);
-    addProvenOverlayFields(yaml?.dimensions, sourceName, physical.columns, columns);
-    for (const measure of yaml?.measures ?? []) {
-      if (typeof measure?.name === "string" && measure.name.trim()) {
-        measures.add(normalizeRef(measure.name));
-      }
-    }
-  } catch {
-    // Overlay optional when _schema physical columns exist.
-  }
+  const overlay = await loadOverlayWithProvenance(connectionId, sourceName, physical.columns);
+  for (const name of overlay.columns) columns.add(name);
+  for (const name of overlay.measures) measures.add(name);
 
   const built: SourceFieldCatalog = { columns, measures };
   const catalog = columns.size === 0 && measures.size === 0 ? null : built;
 
-  if (physical.status === "loaded") {
+  if (physical.status === "loaded" && !overlay.failure) {
     const manifestPath = physical.manifestPath ?? `${normalizeRef(connectionId)}/_schema/${schema ?? ""}.yaml`;
     return {
       catalog,
       status: "loaded",
       manifestPath,
-      manifestPathDigest: manifestPathDigest(manifestPath)
+      manifestPathDigest: manifestPathDigest(manifestPath),
+      manifestContentDigest: physical.contentDigest ?? "",
+      overlayContentDigest: overlay.contentDigest
+    };
+  }
+  if (physical.status === "loaded" && overlay.failure) {
+    // The physical columns loaded, but the overlay that takes part in the
+    // compilation is not usable. The catalog is NOT reliable, so the failure is
+    // attributed to the overlay's stage — never to 「字段不存在」.
+    return {
+      catalog,
+      status: "manifest_unavailable",
+      stage: overlay.failure.stage,
+      reason: overlay.failure.reason,
+      manifestPath: physical.manifestPath,
+      manifestPathDigest: manifestPathDigest(physical.manifestPath ?? ""),
+      manifestContentDigest: physical.contentDigest ?? "",
+      overlayContentDigest: overlay.contentDigest
     };
   }
   return {
@@ -517,6 +787,10 @@ export async function loadSourceFieldCatalog(
  * (with the failing stage) or `catalog_capability_unknown`. The adapter
  * capability check happens BEFORE any I/O, and its outcome is never cached as a
  * manifest failure.
+ *
+ * Spec §14.4.1: the capability is resolved BY THE SERVER. When the caller does
+ * not pass an explicit capability, the server resolves it from the adapter and
+ * the deployment — a missing argument is never interpreted as `proven`.
  */
 export async function loadSourceFieldCatalogWithProvenance(
   tableKey: RowPolicyTableIdentity,
@@ -528,11 +802,13 @@ export async function loadSourceFieldCatalogWithProvenance(
     sourceName: tableKey.sourceName
   };
 
-  if (adapterCapabilities?.schemaManifestCatalogProven === false) {
+  const capabilities = adapterCapabilities ?? (await resolveServerCatalogCapability(tableKey.connectionId));
+
+  if (capabilities.schemaManifestCatalogProven !== true) {
     return {
       status: "catalog_capability_unknown",
       catalogLoaded: false,
-      reason: "catalog_capability_not_proven",
+      reason: `catalog_capability_not_proven:${capabilities.reason}`,
       catalog: null,
       ...identity
     };
@@ -551,6 +827,8 @@ export async function loadSourceFieldCatalogWithProvenance(
       catalog: entry.catalog,
       manifestPath: entry.manifestPath ?? "",
       manifestPathDigest: entry.manifestPathDigest ?? "",
+      manifestContentDigest: entry.manifestContentDigest ?? "",
+      overlayContentDigest: entry.overlayContentDigest,
       ...identity
     };
   }
@@ -563,4 +841,20 @@ export async function loadSourceFieldCatalogWithProvenance(
     catalog: entry.catalog,
     ...identity
   };
+}
+
+/**
+ * Spec §14.4.1 — the server-side capability resolution, shared by the preview,
+ * the pre-save final preview and the runtime compile.
+ *
+ * The result is the SAME resolution the preview binds into its compile-inputs
+ * digest, so a preview can never claim a capability the runtime does not have.
+ */
+export async function resolveServerCatalogCapability(
+  connectionId: string
+): Promise<ResolvedCatalogAdapterCapabilities> {
+  const { resolveCatalogCapabilityForConnection, toAdapterCapabilities } = await import(
+    "./row-policy-capability.js"
+  );
+  return toAdapterCapabilities(await resolveCatalogCapabilityForConnection(connectionId));
 }

@@ -962,9 +962,33 @@ FinalRows(agent, table)        = AgentRoleGrant(agent, table) AND AgentConstrain
 
 V19／V22 仍是 D-03 在 0.20.Z 修复后的集成回归；当前 `status=open`、`fixedIn=null`、`verifiedBy=[]`，前置未满足时登记 blocked 原因，不计 passed。它们不是 R2／R4／R5 的开工依赖。V20／V21 使用小写 Schema、受控目录与服务端能力夹具即可执行，不依赖 G5 修复，也不得以 G5 未修为由跳过。
 
-### 14.7 当前实现核对结论（待实施，不是修复记录）
+### 14.7 当前实现核对结论（2026-10-27 实施轮次回写）
 
-截至 HEAD `7382bac4`：独立预览已使用 draft 内存候选并复用运行时编译路径；锁内 access 版本复核是后续有效局部修正。但 Role PATCH 尚未消费预览确认，共享窗口尚未包含候选重建与最终预览；首次／恢复 commit 与恢复辅助步骤仍有未保护异常；恢复标记不可读／损坏仍被当作无需恢复；PATCH 回滚后仍返回成功写入；R5 能力未知没有生产入口事实源，Manifest／overlay 结构校验不足。上述事项均须代码实施、静态复审和 §14.6 正式验收后才能关闭。
+**（a）实施前基线结论（历史，保留）**
+
+截至 HEAD `7382bac4`：独立预览已使用 draft 内存候选并复用运行时编译路径；锁内 access 版本复核是后续有效局部修正。但 Role PATCH 尚未消费预览确认，共享窗口尚未包含候选重建与最终预览；首次／恢复 commit 与恢复辅助步骤仍有未保护异常；恢复标记不可读／损坏仍被当作无需恢复；PATCH 回滚后仍返回成功写入；R5 能力未知没有生产入口事实源，Manifest／overlay 结构校验不足。
+
+**（b）2026-10-27 实施轮次状态（代码存在 ≠ 验收通过）**
+
+C14–C18 已完成代码实施并完成实现后静态复审（自审），落点见实施计划 §5.4。逐条现状：
+
+| 条款 | 实施落点 | 现状 |
+|---|---|---|
+| §14.2.1 预览确认合同 | `server/admin/row-policy-confirmation.ts`、`server/proxy/row-policy-preview.ts`、`server/admin/row-policy-routes.ts` | 确认材料含五个分层摘要与完整影响面；仅当全部受影响表成功才签发；确认缺失／解析失败归 `missing` |
+| §14.2.2 规范性预览与保存流程 | `server/admin/roles.ts`、`server/admin/access-config.ts` | PATCH／CREATE／COPY 三个入口均进入共享发布窗口，窗口内重读基线、重建候选、重跑同一最终预览并逐项比对；所有拒绝发生在 durable intent 与配置写入之前 |
+| §14.3.1 写入、回滚与恢复的规范流程 | `server/admin/access-config.ts`、`server/access-recovery.ts`、`server/proxy/acl.ts` | 写入、首次 `commitEffectivePolicy`、committed terminal 同处一个 try；`closeForRecovery` 先同步置内存闸，再分别尝试原子 marker／运行态降级／终结审计；marker 不可读／损坏／不可写均失败关闭 |
+| §14.3.2 API 与用户可见结果 | `server/admin/access-config.ts`、`src/lib/accessWriteOutcome.ts`、`src/pages/admin/RoleDetail.tsx` | 三态合同统一：`committed` 200、`rolled_back` 500、`recovery_required` 503；UI 仅 `committed` 显示保存成功 |
+| §14.4 R5 能力事实源与可靠目录结构 | `server/proxy/row-policy-capability.ts`、`server/proxy/row-policy-catalog.ts` | 服务端按部署形态与已注册连接解析 `proven｜unknown`；缺省／未传参／客户端自报均不得为 `proven`；结构非法按 `parse`／`catalog` 稳定归因 |
+
+**（c）未闭合事项**
+
+- §14.6 的 V01–V22 **全部仍为「未执行」**。本轮只完成代码实施与实现后静态复审，未取得任何正式验收证据；文档修订、静态复审、单元测试与历史 HTTP 200 均不得登记为通过。
+- C19（正式验收）未执行，需获授权的验收环境。
+- 本轮按约束**未做 docker 重建**，未执行浏览器测试、real-e2e、镜像构建与真实环境连接。
+- D-03（G5）仍归 0.20.Z；V19／V22 保持 `blocked`，本轮不修复。
+- R1 模板与 R3 视图仍属 P1，未因本轮扩张。
+- 恢复闸门分层落地：数据面策略重编译路径只核验持久标记与内存闸（不依赖审计库可用性），未终结行策略 intent 的核验放在进程启动与每次 access 写入准入两处；任一来源不可判定仍保守关闭。
+
 
 ### 14.8 Spec／Plan 文档评审关闭记录（2026-10-27）
 

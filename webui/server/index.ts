@@ -197,6 +197,7 @@ import {
 } from "./semantic-assets.js";
 import { exportSemanticAssetPackage, recordSemanticAssetExport } from "./semantic-asset-export.js";
 import { recoverPendingRecoveryJournals, isRecoveryRequired } from "./semantic-recovery-journal.js";
+import { verifyAccessRecoveryOnStartup } from "./access-recovery.js";
 import {
   buildPublishHistoryCsvRows,
   formatPublishHistoryExportFilenameStamp
@@ -2375,6 +2376,22 @@ export async function startServer(options: { displayPrewarm?: boolean } = {}): P
   timings: StartupTimings;
 }> {
   const t0 = performance.now();
+  // Spec §14.3.1 — the access-configuration recovery is verified BEFORE the
+  // affected data plane and the access writes are opened. The durable marker
+  // AND the unterminated row-policy intents are both checked; a source that
+  // cannot be read, is corrupt or cannot be decided closes the gate
+  // conservatively. A corrupt marker is never overwritten automatically.
+  try {
+    const recoveryRoot = await resolveProjectRoot();
+    const verification = await verifyAccessRecoveryOnStartup(recoveryRoot);
+    if (!verification.ok) {
+      console.error(
+        `[access-recovery] access configuration recovery is required (${verification.reason ?? "unknown"}); the affected data plane and the access writes stay closed until an administrator verifies the recovery`
+      );
+    }
+  } catch (error) {
+    console.error("[access-recovery] the recovery state could not be established:", error);
+  }
   // Spec 98 §8.3 — compile verified EffectivePolicy before accepting traffic.
   // Empty policyVersion must not be the steady-state after a clean start.
   const { commitEffectivePolicy } = await import("./proxy/acl.js");

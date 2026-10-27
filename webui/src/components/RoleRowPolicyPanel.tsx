@@ -1,10 +1,15 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { apiGet, apiPost } from "../lib/apiClient";
+import { apiGet } from "../lib/apiClient";
 import type { SourceDetail } from "../lib/types";
 import type { RowPolicyPredicateDraft, TableGrant } from "../lib/rolePermissionDraft";
 import { permissionTableKey } from "../lib/rolePermissionDraft";
+import {
+  useRowPolicyPreview,
+  type RowPolicyPreviewConfirmation,
+  type RowPolicyPreviewEntry
+} from "../lib/rowPolicyPreview";
 import {
   RowPolicyDnfPreview,
   type RowPolicyDnfGrant
@@ -28,7 +33,17 @@ export interface RoleRowPolicyPanelProps {
    * candidate, never from the committed configuration.
    */
   previewRole?: unknown;
+  /**
+   * Spec §14.2.1 — the preview confirmation the save has to carry.
+   *
+   * The panel reports the confirmation of the CURRENT preview. The save entry
+   * point refuses a save without one, so the confirmation and the draft can
+   * never drift apart.
+   */
+  onConfirmation?: (confirmation: RowPolicyPreviewConfirmation | null) => void;
 }
+
+export type { RowPolicyPreviewConfirmation };
 
 /**
  * Lucy v0.25 P1-1 §3.1 — 一张表的完整身份。
@@ -105,33 +120,7 @@ function templateOptionsFor(
 
 type PreviewGrant = RowPolicyDnfGrant;
 
-type PreviewEntry = {
-  requested: { connection: string; schema: string; name: string };
-  catalog: {
-    status: string;
-    catalogLoaded: boolean;
-    stage?: string;
-    reason?: string;
-    manifestPathDigest?: string;
-  };
-  preview?: {
-    effectiveRowGrant?: PreviewGrant;
-    roleIds?: string[];
-    finalRowsByAgent?: Array<{ agentId: string; finalRows: PreviewGrant }>;
-    displayShape?: string;
-  };
-  error?: { code: string; message: string; reason: string };
-};
-
-type PreviewApiResponse = {
-  /** False when at least one table could not be previewed. */
-  ok: boolean;
-  /** Digest of the in-memory candidate the preview was computed from. */
-  candidateDigest: string;
-  /** The policy version the preview was based on. */
-  basePolicyVersion: string;
-  tables: PreviewEntry[];
-};
+type PreviewEntry = RowPolicyPreviewEntry;
 
 /**
  * The operations-side reason for a table whose final row constraints could not
@@ -182,6 +171,7 @@ export function RoleRowPolicyPanel({
   catalogBound = false,
   roleId,
   previewRole,
+  onConfirmation,
 }: RoleRowPolicyPanelProps) {
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const drawerTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -190,20 +180,9 @@ export function RoleRowPolicyPanel({
   const [error, setError] = useState<string | null>(null);
 
   // ── R2: the final-row preview is computed from the in-memory candidate ─────
-  const previewTables = useMemo(
-    () => tables.map((table) => ({ connection: table.connection, schema: table.schema, name: table.name })),
-    [tables]
-  );
-  const previewQuery = useQuery<PreviewApiResponse>({
-    queryKey: ["row-policy-preview", roleId ?? "", previewRole ?? null, previewTables],
-    queryFn: () =>
-      apiPost<PreviewApiResponse>("/api/admin/roles/preview-row-policy", {
-        roleId,
-        role: previewRole,
-        tables: previewTables
-      }),
-    enabled: Boolean(roleId) && previewTables.length > 0
-  });
+  // The query is shared with the save entry point, so the confirmation the save
+  // carries is the confirmation of the preview the user actually saw.
+  const previewQuery = useRowPolicyPreview({ roleId, previewRole, tables });
 
   const previewEntries = previewQuery.data?.tables ?? [];
   const previewEntryFor = (table: TableGrant): PreviewEntry | undefined =>
@@ -213,6 +192,14 @@ export function RoleRowPolicyPanel({
         entry.requested.schema === table.schema &&
         entry.requested.name === table.name
     );
+
+  // Spec §14.2.1 — report the confirmation of the CURRENT preview. It is null
+  // whenever the preview did not succeed for every affected table, so the save
+  // entry point can refuse a save that has no valid confirmation.
+  const previewConfirmation = previewQuery.data?.confirmation ?? null;
+  useEffect(() => {
+    onConfirmation?.(previewConfirmation);
+  }, [previewConfirmation, onConfirmation]);
 
   // ── P1-1 §3.1 / §6.1: 行策略模板候选与逐表可用性 ────────────────────────────
   // 每张表一个查询：可用性是**逐表**结论，别处的可绑定不代表这里可绑定。

@@ -5,7 +5,7 @@ import path from "node:path";
 import { parse } from "yaml";
 import { resolveProjectRoot, readConnections } from "../project.js";
 import { loadContentPaths } from "../paths.js";
-import { readAccessRecoveryState } from "../access-recovery.js";
+import { isAccessRecoveryRequired, readAccessRecoveryMarkerState } from "../access-recovery.js";
 import { stableJson as canonicalStableJson } from "../config-digest.js";
 import { countEntryPerf } from "../entry-performance-timing.js";
 import {
@@ -2572,7 +2572,13 @@ async function commitEffectivePolicyUnlocked(): Promise<PolicyRuntimeStatus> {
   // Lucy v0.25 (L25-14 §5.3) — an unresolved access-config recovery must fail closed
   // even when the file parses: the on-disk state is not known to be the intended one,
   // so the data plane must not serve rows under an unverified policy.
-  const recoveryState = await readAccessRecoveryState(await resolveProjectRoot());
+  //
+  // Spec §14.3.1 — the MARKER state is checked here, not the full intent state:
+  // the affected data plane must not depend on the availability of the audit
+  // store. The unterminated intents are verified at process startup and before
+  // every access write, and both of them set the in-memory latch, which this
+  // path honours through `isAccessRecoveryRequired()`.
+  const recoveryState = await readAccessRecoveryMarkerState(await resolveProjectRoot());
   if (recoveryState.required) {
     const recoveryDegraded: EffectivePolicySnapshot = {
       policyVersion: previous?.policyVersion ?? "",
@@ -2866,6 +2872,12 @@ export async function authorizeAndRewrite(
   toolName: string,
   args: unknown
 ): Promise<AclDecision> {
+  // Spec §14.3.1 — the IN-MEMORY recovery latch is checked on the hot path.
+  // A recovery that just closed must deny immediately; waiting for the next
+  // policy recompile would keep serving rows under an unverified policy.
+  if (isAccessRecoveryRequired() && isDegradedBlockedTool(toolName)) {
+    return { allowed: false, reason: "policy_degraded_deny" };
+  }
   const runtime = await ensurePolicyRuntime();
   const config = runtime.config;
   const policy = aclPolicy(config);

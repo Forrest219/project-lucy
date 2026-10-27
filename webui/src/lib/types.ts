@@ -924,6 +924,18 @@ export type AccessWriteAck = {
   policyVersion?: string;
   policyRuntimeAck?: boolean;
   runtimeAck?: boolean;
+  /**
+   * Spec §14.3.2 — the terminal state of an access-configuration write.
+   *
+   * Only `committed` is a success: a `rolled_back` write reverted the change and
+   * a `recovery_required` write left the affected reads and the subsequent
+   * writes blocked. The UI must not derive success from the HTTP status alone.
+   */
+  status?: "committed" | "rolled_back" | "recovery_required";
+  /** The recovery gate is closed: the affected reads and the writes are blocked. */
+  recoveryRequired?: boolean;
+  /** The durable audit record id — the intent id of this write. */
+  auditId?: number;
 };
 
 export type ExecutionRuntimeStatus = "unknown" | "ok" | "stale" | "unavailable" | "error";

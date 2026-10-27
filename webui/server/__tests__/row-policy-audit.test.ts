@@ -126,25 +126,53 @@ async function auditRows(): Promise<AuditRow[]> {
     .all() as AuditRow[];
 }
 
+function scopedAllow(value: string) {
+  return {
+    connections: ["warehouse"],
+    tableSelectors: [
+      {
+        connection: "warehouse",
+        schema: "fin",
+        names: ["fin_ledger"],
+        row_access: "scoped",
+        row_policy: { predicates: [{ field: "region", op: "eq", value }] }
+      }
+    ],
+    tools: ["lucy_query"]
+  };
+}
+
 function scopedPatch(value: string) {
   return {
     dryRun: false,
     patch: {
-      allow: {
-        connections: ["warehouse"],
-        tableSelectors: [
-          {
-            connection: "warehouse",
-            schema: "fin",
-            names: ["fin_ledger"],
-            row_access: "scoped",
-            row_policy: { predicates: [{ field: "region", op: "eq", value }] }
-          }
-        ],
-        tools: ["lucy_query"]
-      }
+      allow: scopedAllow(value)
     }
   };
+}
+
+/**
+ * Spec §14.2.1 — the preview confirmation the save has to carry.
+ *
+ * The preview is taken against the SAME candidate the save will write, so the
+ * candidate digest matches and the save is accepted.
+ */
+async function previewConfirmation(app: Awaited<ReturnType<typeof buildServer>>, value: string) {
+  const res = await request(app.server)
+    .post("/api/admin/roles/preview-row-policy")
+    .send({
+      roleId: "analyst",
+      role: {
+        description: "Analyst role",
+        permission_model_version: 2,
+        allow: scopedAllow(value)
+      },
+      tables: [{ connection: "warehouse", schema: "fin", name: "fin_ledger" }]
+    })
+    .expect(200);
+  expect(res.body.data.ok).toBe(true);
+  expect(res.body.data.confirmation).toBeDefined();
+  return res.body.data.confirmation as Record<string, unknown>;
 }
 
 beforeEach(async () => {
@@ -175,11 +203,13 @@ describe("R4 行权限配置审计 — row-policy attribution in the existing au
     const app = buildServer();
     await app.ready();
 
+    const confirmation = await previewConfirmation(app, "East");
     const res = await request(app.server)
       .patch("/api/admin/roles/analyst")
-      .send(scopedPatch("East"))
+      .send({ ...scopedPatch("East"), rowPolicyConfirmation: confirmation })
       .expect(200);
 
+    expect(res.body.data.status).toBe("committed");
     expect(res.body.data.written).toBe(true);
     expect(res.body.data.auditId).toBeGreaterThan(0);
     expect(res.body.data.rowPolicy).toMatchObject({
@@ -245,22 +275,30 @@ describe("R4 行权限配置审计 — row-policy attribution in the existing au
     await app.ready();
 
     // First save succeeds and becomes the new baseline.
+    const firstConfirmation = await previewConfirmation(app, "East");
     await request(app.server)
       .patch("/api/admin/roles/analyst")
-      .send(scopedPatch("East"))
+      .send({ ...scopedPatch("East"), rowPolicyConfirmation: firstConfirmation })
       .expect(200);
     const accessPath = path.join(projectRoot, "webui", "config", "access.yaml");
     const baseline = await readFile(accessPath, "utf8");
 
     hooks.failTerminal = true;
+    const secondConfirmation = await previewConfirmation(app, "West");
     const res = await request(app.server)
       .patch("/api/admin/roles/analyst")
-      .send(scopedPatch("West"))
-      .expect(200);
+      .send({ ...scopedPatch("West"), rowPolicyConfirmation: secondConfirmation })
+      // Spec §14.3.2 — a rollback is NOT a success: the API says so explicitly.
+      .expect(500);
 
     // The configuration is back to its previous content.
     expect(await readFile(accessPath, "utf8")).toBe(baseline);
-    expect(res.body.data.runtimeAck).toBe(false);
+    expect(res.body.ok).toBe(false);
+    expect(res.body.error.code).toBe("ROW_POLICY_SAVE_ROLLED_BACK");
+    expect(res.body.written).toBe(false);
+    expect(res.body.runtimeAck).toBe(false);
+    expect(res.body.recoveryRequired).toBe(false);
+    expect(res.body.data.status).toBe("rolled_back");
 
     const rows = (await auditRows()).filter((row) => row.change_type === "row_policy_update");
     expect(rows).toHaveLength(2);

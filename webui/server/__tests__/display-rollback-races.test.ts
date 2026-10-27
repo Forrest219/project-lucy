@@ -274,12 +274,21 @@ describe("Spec 174 R7 — HTTP races on rollback and failed-write paths (SC-04/0
     {
       name: "Agent writeAccessYaml (admin/agents.ts)",
       send: () => request(app.server).patch("/api/admin/agents/lisi").send({ dryRun: false, patch: { name: "Li Si Unacked" } }),
-      leaked: "Li Si Unacked"
+      leaked: "Li Si Unacked",
+      /**
+       * Spec §14.3.2 — a Role PATCH that was rolled back reports HTTP 500 /
+       * `ROW_POLICY_SAVE_ROLLED_BACK`: the new change was NOT saved and the
+       * old configuration and policy were verified back.
+       */
+      expectStatus: (status: number) => expect(status).toBeLessThan(500),
+      expectErrorCode: undefined as string | undefined
     },
     {
       name: "access-config writeAccessYaml (roles PATCH)",
       send: () => request(app.server).patch("/api/admin/roles/ledger_all").send({ dryRun: false, patch: { description: "Unacked role text" } }),
-      leaked: "Unacked role text"
+      leaked: "Unacked role text",
+      expectStatus: (status: number) => expect(status).toBe(500),
+      expectErrorCode: "ROW_POLICY_SAVE_ROLLED_BACK"
     }
   ];
   for (const scenario of accessRollbacks) {
@@ -303,7 +312,15 @@ describe("Spec 174 R7 — HTTP races on rollback and failed-write paths (SC-04/0
       const res = await scenario.send();
       hooks.afterWrite = null;
       hooks.beforeCommit = null;
-      expect(res.status).toBeLessThan(500);
+      scenario.expectStatus(res.status);
+      if (scenario.expectErrorCode) {
+        expect(res.body.ok).toBe(false);
+        expect(res.body.error.code).toBe(scenario.expectErrorCode);
+        // A rollback is NOT a success: the new change was not saved.
+        expect(res.body.written).toBe(false);
+        expect(res.body.runtimeAck).toBe(false);
+        expect(res.body.recoveryRequired).toBe(false);
+      }
       expect(hooks.commitCalls).toBe(2);
       expect(stages).toHaveLength(3);
       for (const stage of stages) {

@@ -769,8 +769,11 @@ function accessPathOf(root: string): string {
 /** The Admin app with the ROLE routes — the other write path under test. */
 async function buildRoleApp() {
   const { registerRoleRoutes } = await import("../admin/roles");
+  const { registerRowPolicyRoutes } = await import("../admin/row-policy-routes");
   const app = buildApp();
   registerRoleRoutes(app);
+  // The preview confirmation (spec §14.2.1) is served by this route.
+  registerRowPolicyRoutes(app);
   await app.ready();
   return app;
 }
@@ -796,6 +799,34 @@ async function dryRunThenCommit(
     }
   });
   return { preview, commit };
+}
+
+/**
+ * Spec §14.2.1 — the preview confirmation a Role save that carries a row policy
+ * has to carry.
+ *
+ * The preview is taken against the SAME candidate the save writes, so the
+ * candidate digest matches and the save is accepted.
+ */
+async function previewConfirmation(
+  app: Awaited<ReturnType<typeof buildRoleApp>>,
+  roleId: string,
+  role: unknown
+) {
+  const res = await app.inject({
+    method: "POST",
+    url: "/api/admin/roles/preview-row-policy",
+    payload: {
+      roleId,
+      role,
+      tables: [{ connection: "warehouse", schema: "fin", name: "fin_ledger" }]
+    }
+  });
+  expect(res.statusCode).toBe(200);
+  const body = res.json().data as { ok: boolean; confirmation?: unknown };
+  expect(body.ok).toBe(true);
+  expect(body.confirmation).toBeDefined();
+  return body.confirmation;
 }
 
 const NEW_ROLE_PAYLOAD = {
@@ -827,10 +858,16 @@ describe("P2-2 — the illegal template is a diagnostic, never a silent deletion
     process.env.KTX_PROJECT_ROOT = projectRoot;
     const app = await buildRoleApp();
 
+    const createConfirmation = await previewConfirmation(app, "west_role", NEW_ROLE_PAYLOAD);
     const create = await app.inject({
       method: "POST",
       url: "/api/admin/roles",
-      payload: { dryRun: false, roleId: "west_role", role: NEW_ROLE_PAYLOAD }
+      payload: {
+        dryRun: false,
+        roleId: "west_role",
+        role: NEW_ROLE_PAYLOAD,
+        rowPolicyConfirmation: createConfirmation
+      }
     });
     expect(create.statusCode).toBe(200);
     expect(create.json().data.written).toBe(true);
@@ -839,10 +876,21 @@ describe("P2-2 — the illegal template is a diagnostic, never a silent deletion
       expect.objectContaining({ code: "row_policy_template_shape_invalid", templateName: "broken_tpl" })
     ]);
 
+    // The stored Role now carries a row policy, so the save has to carry the
+    // preview confirmation as well (spec §14.2.1).
+    const patchConfirmation = await previewConfirmation(app, "west_role", {
+      description: "改过的说明",
+      permission_model_version: 2,
+      allow: NEW_ROLE_PAYLOAD.allow
+    });
     const patch = await app.inject({
       method: "PATCH",
       url: "/api/admin/roles/west_role",
-      payload: { dryRun: false, patch: { description: "改过的说明" } }
+      payload: {
+        dryRun: false,
+        patch: { description: "改过的说明" },
+        rowPolicyConfirmation: patchConfirmation
+      }
     });
     expect(patch.statusCode).toBe(200);
     expect(patch.json().data.templateWarnings).toEqual([
@@ -1567,26 +1615,30 @@ describe("RTP — the numbered acceptance cases of P1-1 (Spec §8)", () => {
     // policy attribution with the before/after digests and the impact surface.
     const roleApp = await buildRoleApp();
     vi.mocked(audit.recordConfigChange).mockClear();
+    const roleAllow = {
+      connections: ["warehouse"],
+      tableSelectors: [
+        {
+          connection: "warehouse",
+          schema: "fin",
+          names: ["fin_ledger"],
+          row_access: "scoped",
+          row_policy: { template: "by_region", predicates: [{ field: "status", op: "eq", value: "OPEN" }] }
+        }
+      ],
+      tools: ["lucy_query"]
+    };
+    const roleConfirmation = await previewConfirmation(roleApp, "east_role", {
+      permission_model_version: 2,
+      allow: roleAllow
+    });
     const roleWrite = await roleApp.inject({
       method: "PATCH",
       url: "/api/admin/roles/east_role",
       payload: {
         dryRun: false,
-        patch: {
-          allow: {
-            connections: ["warehouse"],
-            tableSelectors: [
-              {
-                connection: "warehouse",
-                schema: "fin",
-                names: ["fin_ledger"],
-                row_access: "scoped",
-                row_policy: { template: "by_region", predicates: [{ field: "status", op: "eq", value: "OPEN" }] }
-              }
-            ],
-            tools: ["lucy_query"]
-          }
-        }
+        patch: { allow: roleAllow },
+        rowPolicyConfirmation: roleConfirmation
       }
     });
     expect(roleWrite.statusCode).toBe(200);

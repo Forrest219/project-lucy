@@ -864,6 +864,31 @@ export async function updateConfigChangeStatus(input: {
   });
 }
 
+/**
+ * Count the row-policy audit intents that were persisted but never terminated.
+ *
+ * Spec §14.3.1 — a `pending` row-policy intent means a configuration write may
+ * have reached the disk without a terminal record. The on-disk state is then not
+ * provable, and the recovery gate must stay closed.
+ *
+ * The counter that the recovery gate uses lives in
+ * {@link file://./config-audit-intents.ts}: it has to exclude the intents this
+ * process currently has in flight, and the configuration-audit module is
+ * replaced wholesale in several test suites.
+ */
+export async function countUnterminatedRowPolicyIntents(): Promise<number> {
+  const database = await getAuditDb();
+  const row = database
+    .prepare(
+      `SELECT COUNT(*) AS count
+       FROM config_change_log
+       WHERE write_status = 'pending'
+         AND (change_type = 'row_policy_update' OR operation = 'row_policy.update')`
+    )
+    .get() as { count?: number } | undefined;
+  return Number(row?.count ?? 0);
+}
+
 interface QueryRow {
   id: number;
   ts: string;

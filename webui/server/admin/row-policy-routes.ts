@@ -15,7 +15,7 @@
  */
 import type { FastifyInstance } from "fastify";
 import { ROLE_ID_RE } from "./access-config.js";
-import { validateRoleShape } from "./roles.js";
+import { normalizeRoleForSave, validateRoleShape } from "./roles.js";
 import { previewRowPolicyDraft } from "../proxy/row-policy-preview.js";
 
 interface PreviewTableInput {
@@ -87,7 +87,17 @@ export function registerRowPolicyRoutes(app: FastifyInstance): void {
           error: { code: "INVALID_ROLE", message: shape.reason }
         });
       }
-      role = shape.value;
+      // Spec §14.2.1 — the preview and the save must build the SAME candidate.
+      // The draft is therefore normalized exactly the way the write path
+      // normalizes it, so the candidate digests can match.
+      const normalized = await normalizeRoleForSave(roleId, shape.value);
+      if (!normalized.ok) {
+        return reply.status(normalized.status).send({
+          ok: false,
+          error: { code: normalized.code, message: normalized.message }
+        });
+      }
+      role = normalized.value;
     }
 
     const outcome = await previewRowPolicyDraft({ roleId, role, tables });
@@ -100,6 +110,12 @@ export function registerRowPolicyRoutes(app: FastifyInstance): void {
         candidateDigest: outcome.candidateDigest,
         /** The policy version the preview was based on. */
         basePolicyVersion: outcome.basePolicyVersion,
+        /**
+         * The save confirmation. Present ONLY when every affected table produced
+         * its final row constraints (spec §14.2.1). A failed table is reported
+         * as a diagnostic and never as material a save could accept.
+         */
+        confirmation: outcome.confirmation,
         tables: outcome.tables.map((table) => ({
           requested: table.requested,
           tableKey: table.tableKey,

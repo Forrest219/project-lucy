@@ -20,6 +20,14 @@ import { TagInput } from "../../components/TagInput";
 import { RoleTableGrants } from "../../components/RoleTableGrants";
 import { RoleToolGrants } from "../../components/RoleToolGrants";
 import { RoleRowPolicyPanel } from "../../components/RoleRowPolicyPanel";
+import {
+  useRowPolicyPreview,
+  type RowPolicyPreviewConfirmation
+} from "../../lib/rowPolicyPreview";
+import {
+  describeAccessWriteFailure,
+  describeAccessWriteOutcome
+} from "../../lib/accessWriteOutcome";
 import { RolePermissionReviewDrawer } from "../../components/RolePermissionReviewDrawer";
 import {
   buildTableAllow,
@@ -113,14 +121,30 @@ const ROW_POLICY_INCOMPATIBLE_TOOLS = new Set([
   "sl_validate",
 ]);
 
+/**
+ * Spec §14.3.2 — only `committed` is a success.
+ *
+ * A rolled-back write reverted the change and the old policy was verified back;
+ * a `recovery_required` write left the affected reads and the subsequent writes
+ * blocked. Neither may be reported as 「保存成功」.
+ */
 function toastAccessWriteAck(result: AccessWriteAck, message: string): boolean {
-  if (result.runtimeAck === false) {
-    toast.error("保存未生效：runtime 未确认（runtimeAck=false）。草稿已保留，请检查策略降级状态。");
-    return false;
-  }
-  const version = result.policyVersion ? ` · policyVersion=${result.policyVersion.slice(0, 12)}…` : "";
-  toast.success(`${message}${version}`);
-  return true;
+  const outcome = describeAccessWriteOutcome(result, message);
+  if (outcome.ok) toast.success(outcome.message);
+  else toast.error(outcome.message);
+  return outcome.ok;
+}
+
+/**
+ * Spec §14.3.2 — a REJECTED write carries the same three terminal states.
+ *
+ * `rolled_back` is HTTP 500 and `recovery_required` is HTTP 503, both with
+ * `ok:false`, so the client raises them as an error. The terminal state is read
+ * from the error envelope, never from the HTTP status alone.
+ */
+function toastAccessWriteError(error: unknown): void {
+  const outcome = describeAccessWriteFailure(error);
+  toast.error(outcome.message);
 }
 
 function copyPredicates(selector: RoleSelectorWithTemplate): RowPolicyPredicateDraft[] | undefined {
@@ -533,6 +557,30 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
    * computed from. It is the in-memory draft, never the committed configuration.
    */
   const rowPolicyPreviewRole = useMemo(() => serializeDraft(draft), [draft]);
+  const tables = draft.scope.mode === "names" ? draft.scope.tables : [];
+  /**
+   * Spec §14.2.1 — the final-row preview.
+   *
+   * The query is shared with the row-policy panel, so the confirmation the save
+   * carries is the confirmation of the preview the operator actually saw.
+   */
+  const rowPolicyPreview = useRowPolicyPreview({
+    roleId: draft.roleId,
+    previewRole: rowPolicyPreviewRole,
+    tables
+  });
+  const rowPolicyConfirmation: RowPolicyPreviewConfirmation | null =
+    rowPolicyPreview.data?.confirmation ?? null;
+  /**
+   * Does this draft touch a row policy at all? A Role that never carries one
+   * has no row-policy impact to confirm.
+   */
+  const draftCarriesRowPolicy = useMemo(() => {
+    const selectors = rowPolicyPreviewRole.allow?.tableSelectors ?? [];
+    return selectors.some(
+      (selector) => selector.row_access === "scoped" || selector.row_policy !== undefined
+    );
+  }, [rowPolicyPreviewRole]);
   const dirty = mode === "copy"
     || migratedPrefix
     || rejectedTools.length > 0
@@ -554,36 +602,38 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
   }
 
   const createMutation = useMutation({
-    mutationFn: (vars: { dryRun: boolean; roleId: string; payload: RoleWritePayload; draftHash: string; impact: PermissionImpactSummary }) =>
-      apiPost<{ diff: string; proposedYaml: string } | AccessWriteAck>("/api/admin/roles", { dryRun: vars.dryRun, roleId: vars.roleId, role: vars.payload }),
+    mutationFn: (vars: { dryRun: boolean; roleId: string; payload: RoleWritePayload; draftHash: string; impact: PermissionImpactSummary; rowPolicyConfirmation?: RowPolicyPreviewConfirmation | null }) =>
+      apiPost<{ diff: string; proposedYaml: string } | AccessWriteAck>("/api/admin/roles", { dryRun: vars.dryRun, roleId: vars.roleId, role: vars.payload, rowPolicyConfirmation: vars.rowPolicyConfirmation ?? undefined }),
     onSuccess: (data, vars) => {
       if (vars.dryRun) {
         const preview = data as { diff: string; proposedYaml: string };
         setReview({ kind: "create", draftHash: vars.draftHash, payload: vars.payload, roleId: vars.roleId, diff: preview.diff, proposedYaml: preview.proposedYaml, impact: vars.impact });
       } else finishSave(data as AccessWriteAck, "Role 已创建", vars.roleId);
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) => toastAccessWriteError(error),
   });
 
   const copyMutation = useMutation({
-    mutationFn: (vars: { dryRun: boolean; roleId: string; payload: RoleWritePayload; draftHash: string; impact: PermissionImpactSummary }) =>
-      apiPost<{ diff: string; proposedYaml: string } | AccessWriteAck>(`/api/admin/roles/${encodeURIComponent(roleId)}/copy`, { dryRun: vars.dryRun, newRoleId: vars.roleId, role: vars.payload }),
+    mutationFn: (vars: { dryRun: boolean; roleId: string; payload: RoleWritePayload; draftHash: string; impact: PermissionImpactSummary; rowPolicyConfirmation?: RowPolicyPreviewConfirmation | null }) =>
+      apiPost<{ diff: string; proposedYaml: string } | AccessWriteAck>(`/api/admin/roles/${encodeURIComponent(roleId)}/copy`, { dryRun: vars.dryRun, newRoleId: vars.roleId, role: vars.payload, rowPolicyConfirmation: vars.rowPolicyConfirmation ?? undefined }),
     onSuccess: (data, vars) => {
       if (vars.dryRun) {
         const preview = data as { diff: string; proposedYaml: string };
         setReview({ kind: "copy", draftHash: vars.draftHash, payload: vars.payload, roleId: vars.roleId, diff: preview.diff, proposedYaml: preview.proposedYaml, impact: vars.impact });
       } else finishSave(data as AccessWriteAck, `Role '${vars.roleId}' 已复制`, vars.roleId);
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) => toastAccessWriteError(error),
   });
 
   const patchMutation = useMutation({
-    mutationFn: (vars: { dryRun: boolean; payload: RoleWritePayload; version?: string; draftHash: string; impact: PermissionImpactSummary }) => {
+    mutationFn: (vars: { dryRun: boolean; payload: RoleWritePayload; version?: string; draftHash: string; impact: PermissionImpactSummary; rowPolicyConfirmation?: RowPolicyPreviewConfirmation | null }) => {
       const { description, allow } = vars.payload;
       return apiPatch<{ diff: string; proposedYaml: string; version?: string } | AccessWriteAck>(`/api/admin/roles/${encodeURIComponent(roleId)}`, {
         dryRun: vars.dryRun,
         version: vars.version,
         patch: { description, allow },
+        // Spec §14.2.1 — the save carries the preview confirmation.
+        rowPolicyConfirmation: vars.rowPolicyConfirmation ?? undefined,
       });
     },
     onSuccess: (data, vars) => {
@@ -592,7 +642,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
         setReview({ kind: "patch", draftHash: vars.draftHash, payload: vars.payload, version: preview.version ?? vars.version, diff: preview.diff, proposedYaml: preview.proposedYaml, impact: vars.impact });
       } else finishSave(data as AccessWriteAck, "Role 已保存", roleId);
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) => toastAccessWriteError(error),
   });
 
   const deleteMutation = useMutation({
@@ -609,7 +659,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
         navigate("/admin/roles");
       }
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) => toastAccessWriteError(error),
   });
 
   useEffect(() => {
@@ -661,7 +711,27 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
       deleteMutation.mutate({ dryRun: false, version: review.version });
       return;
     }
-    const common = { dryRun: false, payload: review.payload!, draftHash: review.draftHash, impact: review.impact };
+    /**
+     * Spec §14.2.1 — a save that can change a row policy MUST carry the
+     * final-row-constraint preview confirmation. Without one the save is
+     * refused here, before anything is written.
+     */
+    if (draftCarriesRowPolicy && !rowPolicyConfirmation) {
+      setReview(null);
+      toast.error(
+        rowPolicyPreview.isError
+          ? "最终行约束预览失败，无法保存行级策略配置。请先解决预览报错。"
+          : "最终行约束预览尚未成功，无法保存行级策略配置。请稍候重试或先查看预览报错。"
+      );
+      return;
+    }
+    const common = {
+      dryRun: false,
+      payload: review.payload!,
+      draftHash: review.draftHash,
+      impact: review.impact,
+      rowPolicyConfirmation: draftCarriesRowPolicy ? rowPolicyConfirmation : null
+    };
     if (review.kind === "create") createMutation.mutate({ ...common, roleId: review.roleId! });
     else if (review.kind === "copy") copyMutation.mutate({ ...common, roleId: review.roleId! });
     else patchMutation.mutate({ ...common, version: review.version });
@@ -683,7 +753,6 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
   }
 
   const mutationPending = createMutation.isPending || copyMutation.isPending || patchMutation.isPending || deleteMutation.isPending;
-  const tables = draft.scope.mode === "names" ? draft.scope.tables : [];
 
   return (
     <div className="pl-page-stack min-w-[880px] xl:min-w-[960px]">
