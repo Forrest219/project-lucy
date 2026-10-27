@@ -862,6 +862,27 @@ Protected terms（DOM 须 `translate="no"` + `notranslate`）：`SMTP`、`TLS`�
 
 Protected terms（DOM 须 `translate="no"` + `notranslate`）：`MCP`、`KTX`、`Runtime`、`Pod`、`daemon`、`ktx.yaml`、`digest`、`requestId`。
 
+### 4.14 业务 Wiki 访问权限（Spec 193）
+
+业务 Wiki 的对象授权仍只由文档 frontmatter `allowed_roles` 决定。管理面必须把「声明授权」与「通道效果」分开表达：声明授权是文档写了什么，通道效果是该 Role 是否开通 `wiki_search` / `wiki_read`。两者都成立才可以说 Agent 可用。
+
+| Canonical Term | UI 主术语 | 允许补充说法 | 禁止文案 | 说明 |
+|---|---|---|---|---|
+| Manage Access | 管理访问权限 | — | 权限编辑、开放文档 | 独立修改单篇 Wiki `allowed_roles`；不改正文。Spec 193 |
+| Manage Access in Bulk | 批量管理权限 | — | 目录授权、继承授权 | 对本次显式选中的多篇文档逐篇修改 ACL；只影响本次选择，不影响以后新增文档。Spec 193 |
+| Add Roles | 添加角色 | — | 合并权限 | 对每篇当前 ACL 加入指定 Role；不接受 `["*"]`。Spec 193 |
+| Replace Accessible Roles | 替换可访问角色 | — | 覆盖目录权限 | 把每篇文档 ACL 设为同一精确值。Spec 193 |
+| Wiki Channel Missing | 缺少 Wiki 访问通道 | — | Agent 无权限 | 对象已声明 Role，但该 Role 缺 search/read 通道；与「无人可见」严格区分。Spec 193 |
+| Access Authorization Anomaly | 授权异常 | — | 权限错误 | `allowed_roles` 声明损坏（非常数组、空元素、`*` 与 Role 混用）；运行时按拒绝处理。Spec 193 |
+| Accessible Roles Count | N 个角色 | — | N 个用户、N 个人 | 声明的角色数量；不表示 Agent 数量。Spec 193 |
+| Affected Agent Count | 受影响 Agent 数 | — | 可访问人数 | 实际绑定该正式 Role 的已启用 Agent 数量。Spec 193 |
+| Adopt Uploaded Authorization | 采用文件内授权 | — | 同步文件权限 | 覆盖上传时显式采用上传文件里的 `allowed_roles`；默认不采用。Spec 193 |
+| Keep Current Authorization | 保留现有授权 | — | 沿用旧权限 | 覆盖上传时默认行为：逐字保留当前持久化授权。Spec 193 |
+
+上传预检的主按钮文案固定为：`上传并授权`、`上传并保持无人可见`、`上传并设为所有角色可见`；覆盖上传为 `覆盖并保留授权`、`覆盖并更新授权`。
+
+Protected terms（DOM 须 `translate="no"` + `notranslate`）：`Agent`、`Role`、`Wiki`、`Markdown`、`allowed_roles`、`wiki_search`、`wiki_read`、Wiki 路径与文件名、`operation_id`、`plan_digest`。
+
 ## 5. 新术语登记流程
 
 任何新功能 Spec 或 Plan 引入新的产品概念时，必须执行以下流程：

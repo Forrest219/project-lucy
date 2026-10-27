@@ -61,10 +61,12 @@ describe("T03a security schema v2 migration", () => {
 
   afterEach(() => db?.close());
 
-  it("bumps SECURITY_SCHEMA_VERSION to 3", () => {
+  it("bumps SECURITY_SCHEMA_VERSION to 4", () => {
     // v3 = Lucy v0.25 / L25-09 S02：新增 `endpoint_id` 列（`received` 是
     // `phase` 的新取值，不需要 DDL）。v2 的 `audit_event_kind` 断言保持不变。
-    expect(SECURITY_SCHEMA_VERSION).toBe(3);
+    // v4 = Spec 193：新增 `wiki_access_operations` / `wiki_access_batches` /
+    // `wiki_access_batch_items` 三张表（业务 Wiki 扩权 hold 与批量 journal）。
+    expect(SECURITY_SCHEMA_VERSION).toBe(4);
   });
 
   it("adds audit_event_kind column + index on fresh DB", () => {
@@ -75,12 +77,12 @@ describe("T03a security schema v2 migration", () => {
     expect(idx.some((i) => i.name === "idx_security_events_audit_kind")).toBe(true);
   });
 
-  it("is idempotent: re-init does not throw on already-v3 DB", () => {
+  it("is idempotent: re-init does not throw on already-v4 DB", () => {
     db = makeSecurityDb();
     const result = initSecuritySchema(db);
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.version).toBe(3);
-    expect(readSchemaVersion(db)).toBe(3);
+    if (result.ok) expect(result.version).toBe(4);
+    expect(readSchemaVersion(db)).toBe(4);
   });
 
   it("rejects DB with newer schema than supported", () => {

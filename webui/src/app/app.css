@@ -2633,6 +2633,83 @@
   .pl-acl-option, .pl-acl-role { @apply flex items-center gap-2 text-sm text-fg-default; }
   .pl-acl-roles, .pl-acl-confirm { @apply grid gap-1 pl-6; }
   .pl-acl-role--unknown small { @apply text-xs text-fg-muted; }
+
+  /* Spec 193 — Business Wiki access management.
+     Scoped rules only: semantic colour / spacing / focus / button tokens,
+     no raw colours and no second global form system. */
+  .pl-wiki-access-editor { @apply grid gap-3; }
+  .pl-wiki-access-editor-head {
+    @apply flex flex-wrap items-center gap-2;
+  }
+  .pl-wiki-access-source {
+    @apply inline-flex items-center rounded-pill border border-border-default bg-bg-muted px-2 py-0.5 text-xs text-fg-muted;
+  }
+  .pl-wiki-access-confirm {
+    @apply flex items-start gap-2 rounded-md border border-warning-strong bg-warning-soft px-3 py-2 text-xs text-warning-strong;
+  }
+  .pl-wiki-access-corrupt { @apply grid gap-2; }
+  .pl-wiki-access-effects { @apply grid gap-2; }
+  .pl-wiki-access-effects-summary {
+    @apply flex flex-wrap items-center gap-2 text-xs text-fg-muted;
+  }
+  .pl-wiki-access-count {
+    @apply inline-flex items-center rounded-pill border border-border-default bg-bg-muted px-2 py-0.5;
+  }
+  .pl-wiki-access-effect-list { @apply grid gap-1 p-0 m-0 list-none; }
+  .pl-wiki-access-effect-row {
+    @apply flex flex-wrap items-center gap-2 text-xs text-fg-body;
+  }
+  .pl-wiki-access-role-id {
+    @apply rounded-sm bg-bg-muted px-1.5 py-0.5 font-mono text-[11px] text-fg-default;
+  }
+  .pl-wiki-access-effect-state { @apply text-fg-body; }
+  .pl-wiki-access-effect-agents { @apply text-fg-muted; }
+  .pl-wiki-access-effect-agent-ids { @apply inline-flex flex-wrap gap-1; }
+  .pl-wiki-access-effect-agent-ids code {
+    @apply rounded-sm bg-bg-muted px-1.5 py-0.5 font-mono text-[10px] text-fg-muted;
+  }
+  .pl-wiki-access-summary {
+    @apply flex flex-wrap items-center gap-1 text-xs text-fg-muted;
+  }
+  .pl-wiki-access-summary code {
+    @apply rounded-sm bg-bg-muted px-1.5 py-0.5 font-mono text-[11px] text-fg-default;
+  }
+  .pl-wiki-access-summary-warning { @apply text-warning-strong; }
+  .pl-wiki-access-status {
+    @apply inline-flex flex-wrap items-center gap-1 text-[11px] text-fg-muted;
+  }
+  .pl-wiki-access-status-primary {
+    @apply inline-flex items-center rounded-pill border border-border-default bg-bg-muted px-2 py-0.5;
+  }
+  .pl-wiki-access-status-secondary { @apply text-warning-strong; }
+  .pl-wiki-read-access {
+    @apply flex flex-wrap items-center gap-2;
+  }
+  .pl-wiki-access-drawer-title { @apply text-base font-semibold text-fg-default; }
+  .pl-wiki-access-drawer-description { @apply text-xs text-fg-muted; }
+  .pl-wiki-access-drawer-section { @apply grid gap-2; }
+  .pl-wiki-library-toolbar {
+    @apply flex flex-wrap items-center gap-2;
+  }
+  .pl-wiki-library-selection-count { @apply text-xs text-fg-muted; }
+  .pl-wiki-library-selection-reason { @apply text-xs text-fg-muted; }
+  .pl-wiki-library-selection-notice {
+    @apply w-full rounded-md border border-warning-strong bg-warning-soft px-3 py-2 text-xs text-warning-strong;
+  }
+  .pl-wiki-library-select { @apply shrink-0; }
+  .pl-wiki-library-document { @apply min-w-0 flex-wrap items-center gap-2; }
+  .pl-wiki-batch-modes { @apply grid gap-1; }
+  .pl-wiki-batch-result { @apply grid gap-3; }
+  .pl-wiki-batch-result-head { @apply grid gap-1; }
+  .pl-wiki-batch-result-total { @apply text-sm font-medium text-fg-default; }
+  .pl-wiki-batch-result-note { @apply block text-[11px] text-fg-muted; }
+  .pl-wiki-batch-result-title { @apply ml-2 text-xs text-fg-muted; }
+  .pl-wiki-batch-result-actions {
+    @apply flex flex-wrap items-center gap-2;
+  }
+  .pl-wiki-batch-result-table code {
+    @apply break-all font-mono text-[11px];
+  }
   .pl-wiki-upload-ref {
     @apply ml-1 inline-flex rounded-sm bg-bg-muted px-1.5 py-0.5 font-mono text-xs;
   }

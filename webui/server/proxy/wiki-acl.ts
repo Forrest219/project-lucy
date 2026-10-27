@@ -14,6 +14,7 @@ import {
   type ObjectAcl
 } from "./context-acl.js";
 import { resolveContextSnapshot } from "./context-policy.js";
+import { isWikiKeyHeld } from "../wiki-access-holds.js";
 
 export interface WikiPage {
   key: string;
@@ -133,6 +134,10 @@ export function wikiToContextAsset(page: Pick<WikiPage, "key" | "metadata">): Co
 /**
  * Spec §4 (supersedes Spec 170): default deny. A Wiki page is visible only to a role that
  * matches `allowed_roles` AND grants the action's channel tool (`wiki_search` / `wiki_read`).
+ *
+ * Spec 193 §9.4 — an unresolved WIDENING holds the whole key: search and read
+ * are both refused until an operator resolves it. A hold projection that cannot
+ * be read is also a refusal (fail closed).
  */
 export async function canAccessWikiPage(
   identity: Identity,
@@ -140,6 +145,9 @@ export async function canAccessWikiPage(
   action: ContextAction = "read",
   snapshot?: ContextSnapshot
 ): Promise<WikiAclDecision> {
+  if (await isWikiKeyHeld(page.key)) {
+    return { allowed: false, reason: "context_not_available" };
+  }
   const resolved = snapshot ?? await resolveContextSnapshot(identity);
   const decision = authorizeContext(identity, wikiToContextAsset(page), action, resolved);
   return decision.allowed ? { allowed: true } : { allowed: false, reason: decision.reason };

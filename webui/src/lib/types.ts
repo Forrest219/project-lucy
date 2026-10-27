@@ -502,11 +502,234 @@ export type WikiAclState =
   | { state: "roles"; roles: string[] }
   | { state: "corrupt"; detail: string };
 
+/**
+ * Spec 193 §4.3 — the direction of an authorization change, computed on the
+ * normalized runtime set (not on YAML text or Role order).
+ */
+export type WikiAccessDirection = "narrow" | "widen" | "neutral";
+
+/**
+ * Spec 193 §4.2 — one declared Role's channel effect.
+ *
+ * `known=false` means the Role id does not exist any more: it matches no Agent
+ * and is never remapped to a newly created same-name Role.
+ */
+export type WikiAccessRoleEffect = {
+  role_id: string;
+  known: boolean;
+  /** The Role grants `wiki_search`. */
+  discover_enabled: boolean;
+  /** The Role grants `wiki_read`. */
+  read_enabled: boolean;
+  /** Enabled Agents that actually bind this formal Role. */
+  assigned_agent_count: number;
+  assigned_agent_ids: string[];
+};
+
+/** Spec 193 §6.2 — a pending / unresolved widening blocks every write on that key. */
+export type WikiAccessPendingChange = {
+  operation_id: string;
+  state: "pending" | "needs_review";
+};
+
+/**
+ * Spec 193 §10.1 — the per-document authorization summary.
+ *
+ * `declared_role_count` is `null` for `all` / `corrupt`, `0` for
+ * `missing` / `empty`, and the declared Role count for `roles`.
+ */
+export type WikiAccessSummary = {
+  key: string;
+  file_version: string;
+  acl: WikiAclState;
+  declared_role_count: number | null;
+  role_effects: WikiAccessRoleEffect[];
+  declared_without_discover: number;
+  declared_without_read: number;
+  role_channel_version: string;
+  pending_change?: WikiAccessPendingChange;
+};
+
+/**
+ * Spec 193 §6.1 — the aggregate list entry. The list never embeds the body,
+ * the full Agent id list or the per-Role effect detail.
+ */
+export type WikiAccessListEntry = {
+  file_version: string;
+  acl: WikiAclState;
+  declared_role_count: number | null;
+  declared_without_discover: number;
+  declared_without_read: number;
+  pending_change?: WikiAccessPendingChange;
+};
+
+/** Spec 193 §5.4 — the explicit upload authorization selection. */
+export type WikiUploadAccessSelection =
+  | { mode: "preserve_current" }
+  | { mode: "use_uploaded" }
+  | { mode: "set"; allowed_roles: string[] };
+
+/** Spec 193 §7.2 — the two supported bulk authorization actions. */
+export type WikiBatchAccessAction =
+  | { mode: "add"; role_ids: string[] }
+  | { mode: "replace"; allowed_roles: string[] };
+
+/** Spec 193 §7.3 — one item of a bulk authorization plan. */
+export type WikiBatchAccessPlanItem = {
+  key: string;
+  title?: string;
+  file_version: string;
+  current_acl: WikiAclState;
+  next_acl: WikiAclState;
+  direction: WikiAccessDirection;
+  noop: boolean;
+  issues: WikiAccessIssue[];
+};
+
+/** Spec 193 §7.3 — a per-document problem found while planning. */
+export type WikiAccessIssue = {
+  code: string;
+  message: string;
+  blocking: boolean;
+};
+
+/** Spec 193 §7.3 — the bulk plan summary. */
+export type WikiBatchAccessPlanSummary = {
+  total: number;
+  widening: number;
+  narrowing: number;
+  unchanged: number;
+  corrupt: number;
+  missing_channel: number;
+  affected_agent_count: number;
+  blocking: number;
+};
+
+/** Spec 193 §7.3 — the bulk authorization preview. */
+export type WikiBatchAccessPlan = {
+  operation_id: string;
+  plan_digest: string;
+  action: WikiBatchAccessAction;
+  role_channel_version: string;
+  items: WikiBatchAccessPlanItem[];
+  summary: WikiBatchAccessPlanSummary;
+  blocking: boolean;
+};
+
+/** Spec 193 §7.4 — the per-document result of a bulk authorization run. */
+export type WikiBatchItemStatus =
+  | "pending"
+  | "applied"
+  | "noop"
+  | "conflict"
+  | "failed"
+  | "not_run"
+  | "needs_review";
+
+/** Spec 193 §7.4 — one per-document result row. */
+export type WikiBatchAccessResultItem = {
+  key: string;
+  title?: string;
+  status: WikiBatchItemStatus;
+  file_version?: string;
+  current_acl?: WikiAclState;
+  next_acl?: WikiAclState;
+  direction?: WikiAccessDirection;
+  error_code?: string;
+  error_message?: string;
+};
+
+/** Spec 193 §7.4 — the durable bulk authorization result. */
+export type WikiBatchAccessResult = {
+  operation_id: string;
+  plan_digest: string;
+  action: WikiBatchAccessAction;
+  role_channel_version: string;
+  status: "pending" | "completed" | "failed";
+  items: WikiBatchAccessResultItem[];
+  summary: WikiBatchAccessPlanSummary;
+  created_at: string;
+  updated_at: string;
+};
+
+/** Spec 193 §6.2 — the request body of the single-document access preview. */
+export type WikiAccessPreviewRequest = {
+  allowed_roles: string[];
+  expected_version: string;
+};
+
+/** Spec 193 §6.2 — the request body of the single-document access save. */
+export type WikiAccessSaveRequest = {
+  allowed_roles: string[];
+  expected_version: string;
+  preview_digest: string;
+};
+
+/** Spec 193 §6.2 — the single-document access preview response. */
+export type WikiAccessPreview = {
+  key: string;
+  file_version: string;
+  current_acl: WikiAclState;
+  next_acl: WikiAclState;
+  direction: WikiAccessDirection;
+  noop: boolean;
+  role_effects: WikiAccessRoleEffect[];
+  declared_role_count: number | null;
+  declared_without_discover: number;
+  declared_without_read: number;
+  role_channel_version: string;
+  preview_digest: string;
+};
+
+/** Spec 193 §6.2 — the single-document access save response. */
+export type WikiAccessSaveResult = {
+  status: "applied" | "noop";
+  key: string;
+  file_version: string;
+  acl: WikiAclState;
+  direction: WikiAccessDirection;
+  role_effects: WikiAccessRoleEffect[];
+  role_channel_version: string;
+};
+
+/** Spec 193 §5.4 — the upload commit request body. */
+export type WikiUploadCommitRequest = {
+  key: string;
+  /** The ORIGINAL selected file text. The preflight's proposed markdown is never the source. */
+  markdown: string;
+  mode: WikiUploadMode;
+  sourceFileName?: string;
+  access: WikiUploadAccessSelection;
+  confirmed_empty?: boolean;
+  confirmed_all?: boolean;
+  expected_version?: string;
+  preview_digest: string;
+};
+
+/** Spec 193 §7.3 — the bulk preview request body. */
+export type WikiBatchAccessPreviewRequest = {
+  items: Array<{ key: string; expected_version: string }>;
+  action: WikiBatchAccessAction;
+};
+
+/** Spec 193 §7.4 — the bulk commit request body. */
+export type WikiBatchAccessCommitRequest = {
+  operation_id: string;
+  plan_digest: string;
+  idempotency_key: string;
+  items: Array<{ key: string; expected_version: string }>;
+  action: WikiBatchAccessAction;
+  confirmed_empty?: boolean;
+  confirmed_all?: boolean;
+};
+
 export type WikiSummary = {
   key: string;
   summary?: string;
   tags: string[];
   slRefs: string[];
+  /** Spec 193 §6.1 — authorization status for this row, from one aggregate response. */
+  access: WikiAccessListEntry;
 };
 
 export type WikiDirectorySummary = {
@@ -576,6 +799,8 @@ export type WikiMoveInput = {
 export type WikiListResponse = {
   pages: WikiSummary[];
   directories?: WikiDirectorySummary[];
+  /** Spec 193 §6.1 — the global Role / channel / Agent binding version behind the list. */
+  role_channel_version?: string;
 };
 
 export type WikiPage = {
@@ -599,6 +824,31 @@ export type WikiPreview = {
 
 export type WikiUploadMode = "create" | "replace";
 
+/**
+ * Spec 193 §5.4 — the authorization facts the upload preflight reports.
+ *
+ * `current_acl` is `null` when the target does not exist yet; `uploaded_acl`
+ * is the declaration inside the uploaded file.
+ */
+export type WikiUploadAccessPreview = {
+  current_acl: WikiAclState | null;
+  uploaded_acl: WikiAclState;
+  /** The authorization that will be written when the current selection commits. */
+  final_acl: WikiAclState;
+  /** The selection the server suggests for the current target state. */
+  suggested_selection: WikiUploadAccessSelection;
+  direction: WikiAccessDirection;
+  role_effects: WikiAccessRoleEffect[];
+  declared_role_count: number | null;
+  declared_without_discover: number;
+  declared_without_read: number;
+  role_channel_version: string;
+  /** Binding digest of target key + mode + content hash + version + selection + role version. */
+  preview_digest: string;
+  /** Blocking problems — a commit is refused while any of them is present. */
+  issues: WikiAccessIssue[];
+};
+
 export type WikiUploadPreview = WikiPreview & {
   exists: boolean;
   mode: WikiUploadMode;
@@ -614,6 +864,8 @@ export type WikiUploadPreview = WikiPreview & {
   title: string;
   slRefs: string[];
   warnings: string[];
+  /** Spec 193 §5.1 — the authorization section, rendered before the diff. */
+  access: WikiUploadAccessPreview;
 };
 
 export type WikiMovePreview = WikiPreview & {
@@ -644,7 +896,9 @@ export type WikiVersionOperation =
   | "restore"
   | "move"
   | "rename"
-  | "delete";
+  | "delete"
+  /** Spec 193 §6.2 — an authorization-only change written by the access drawer. */
+  | "access_update";
 
 export type WikiVersionSummary = {
   versionId: string;

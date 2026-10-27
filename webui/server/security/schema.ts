@@ -1,7 +1,7 @@
 import type Database from "better-sqlite3";
 
 /** Bump together with a new entry in {@link MIGRATIONS}. */
-export const SECURITY_SCHEMA_VERSION = 3;
+export const SECURITY_SCHEMA_VERSION = 4;
 
 export const SECURITY_DB_FILE = "security.sqlite";
 
@@ -136,10 +136,78 @@ ALTER TABLE security_events ADD COLUMN endpoint_id TEXT;
 CREATE INDEX IF NOT EXISTS idx_security_events_endpoint ON security_events(endpoint_id);
 `;
 
+/**
+ * SCHEMA_V4 — Spec 193 §8.2 / §7.5 (business Wiki access management).
+ *
+ * `wiki_access_operations` is the per-key projection of the durable security
+ * operation. It answers one question with a fail-closed result: "is this Wiki
+ * key currently held by an unresolved widening?" A row in state `pending` or
+ * `needs_review` with `direction = 'widen'` is a hold.
+ *
+ * The row is written in the SAME transaction as the `pending_operations` row
+ * (prepare + activate the hold) and released in the SAME transaction as the
+ * commit, so there is no crash window between a durable commit and a hold
+ * release.
+ *
+ * Only the key, the content hashes, the direction and the state are stored.
+ * No Markdown body, no credential and no absolute host path is ever written
+ * here.
+ *
+ * `wiki_access_batches` / `wiki_access_batch_items` are the recoverable bulk
+ * authorization journal and the idempotency binding. They live in the same
+ * FULL-persisted, 0600 database on purpose: a JSON sidecar would be a second
+ * fact source for authorization state.
+ */
+const SCHEMA_V4 = `
+CREATE TABLE IF NOT EXISTS wiki_access_operations (
+  operation_id TEXT PRIMARY KEY REFERENCES pending_operations(operation_id),
+  wiki_key     TEXT NOT NULL,
+  old_hash     TEXT,
+  target_hash  TEXT,
+  direction    TEXT NOT NULL CHECK (direction IN ('narrow','widen','neutral')),
+  state        TEXT NOT NULL CHECK (state IN ('pending','committed','aborted','needs_review')),
+  created_at   INTEGER NOT NULL,
+  resolved_at  INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_wiki_access_operations_key ON wiki_access_operations(wiki_key);
+CREATE INDEX IF NOT EXISTS idx_wiki_access_operations_state ON wiki_access_operations(state);
+
+CREATE TABLE IF NOT EXISTS wiki_access_batches (
+  operation_id        TEXT PRIMARY KEY,
+  plan_digest         TEXT NOT NULL,
+  idempotency_key     TEXT,
+  action_json         TEXT NOT NULL,
+  role_channel_version TEXT NOT NULL,
+  status              TEXT NOT NULL CHECK (status IN ('pending','completed','failed')),
+  created_at          INTEGER NOT NULL,
+  updated_at          INTEGER NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_wiki_access_batches_idempotency
+  ON wiki_access_batches(idempotency_key) WHERE idempotency_key IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS wiki_access_batch_items (
+  operation_id  TEXT NOT NULL REFERENCES wiki_access_batches(operation_id),
+  wiki_key      TEXT NOT NULL,
+  expected_version TEXT,
+  target_hash   TEXT,
+  acl_summary   TEXT,
+  direction     TEXT,
+  status        TEXT NOT NULL CHECK (status IN
+    ('pending','applied','noop','conflict','failed','not_run','needs_review')),
+  error_code    TEXT,
+  error_message TEXT,
+  updated_at    INTEGER NOT NULL,
+  PRIMARY KEY (operation_id, wiki_key)
+);
+CREATE INDEX IF NOT EXISTS idx_wiki_access_batch_items_status
+  ON wiki_access_batch_items(operation_id, status);
+`;
+
 const MIGRATIONS: ReadonlyArray<{ version: number; sql: string }> = [
   { version: 1, sql: SCHEMA_V1 },
   { version: 2, sql: SCHEMA_V2 },
-  { version: 3, sql: SCHEMA_V3 }
+  { version: 3, sql: SCHEMA_V3 },
+  { version: 4, sql: SCHEMA_V4 }
 ];
 
 export type SchemaInitResult =

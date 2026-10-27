@@ -115,9 +115,22 @@ describe("wiki editor storage", () => {
 
   it("lists markdown pages and rejects unsafe keys", async () => {
     await writeWiki(projectRoot, "global/a.md", { content: "A\n" });
-    await expect(listWiki(projectRoot)).resolves.toEqual([
-      { key: "global/a.md", summary: undefined, tags: [], slRefs: [] }
-    ]);
+    const listed = await listWiki(projectRoot);
+    expect(listed).toHaveLength(1);
+    expect(listed[0]).toMatchObject({
+      key: "global/a.md",
+      summary: undefined,
+      tags: [],
+      slRefs: [],
+      // Spec 193 §6.1 — the aggregate list carries the authorization status.
+      access: {
+        acl: { state: "missing" },
+        declared_role_count: 0,
+        declared_without_discover: 0,
+        declared_without_read: 0
+      }
+    });
+    expect(listed[0].access.file_version).toMatch(/^sha256:/);
     await expect(previewWikiWrite(projectRoot, "../raw-sources/a.md", { content: "bad" })).rejects.toBeInstanceOf(ForbiddenPathError);
     await expect(previewWikiWrite(projectRoot, "/tmp/a.md", { content: "bad" })).rejects.toBeInstanceOf(ForbiddenPathError);
   });
@@ -136,9 +149,17 @@ describe("wiki editor storage", () => {
     expect(preview.diff).toContain("+summary: Uploaded");
     await expect(readFile(path.join(projectRoot, "wiki", "global", "uploaded.md"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
 
+    // Spec 193 §5.4 — a commit without an explicit access selection is refused.
+    await expect(
+      commitWikiUpload(projectRoot, { key: "global/uploaded.md", markdown })
+    ).rejects.toMatchObject({ statusCode: 400, code: "wiki_upload_access_required" });
+
     await commitWikiUpload(projectRoot, {
       key: "global/uploaded.md",
-      markdown
+      markdown,
+      access: { mode: "use_uploaded" },
+      confirmed_empty: true,
+      preview_digest: preview.access.preview_digest
     });
     await expect(readFile(path.join(projectRoot, "wiki", "global", "uploaded.md"), "utf8")).resolves.toBe(markdown);
   });
@@ -397,7 +418,12 @@ describe("wiki editor storage", () => {
     const before = await listWikiVersions(projectRoot, "global/to-delete.md");
     expect(before.versions.length).toBeGreaterThan(0);
 
-    const result = await deleteWiki(projectRoot, "global/to-delete.md");
+    const result = await deleteWiki(
+      projectRoot,
+      "global/to-delete.md",
+      undefined,
+      (await readWiki(projectRoot, "global/to-delete.md")).file_version
+    );
     expect(result).toEqual({
       key: "global/to-delete.md",
       deleted: true,
@@ -423,7 +449,9 @@ describe("wiki editor storage", () => {
     try {
       const deleted = await app.inject({
         method: "DELETE",
-        url: "/api/wiki/global%2Fapi-delete-doc.md"
+        url: `/api/wiki/global%2Fapi-delete-doc.md?expected_version=${encodeURIComponent(
+          (await readWiki(projectRoot, "global/api-delete-doc.md")).file_version
+        )}`
       });
       expect(deleted.statusCode).toBe(200);
       expect(deleted.json()).toMatchObject({
@@ -552,10 +580,12 @@ describe("wiki editor storage", () => {
     });
     expect(preview.documentCount).toBe(1);
     expect(preview.directoryCount).toBeGreaterThanOrEqual(2);
-    expect(preview.documents[0]).toEqual({
+    expect(preview.documents[0]).toMatchObject({
       sourceKey: "team/drafts/note.md",
       targetKey: "squad/drafts/note.md"
     });
+    expect(preview.documents[0].fileVersion).toMatch(/^sha256:/);
+    expect(preview.preview_digest).toMatch(/^wdr-/);
 
     await createWikiDirectory(projectRoot, { path: "squad" });
     const conflictPreview = await previewWikiDirectoryRename(projectRoot, {
@@ -695,12 +725,21 @@ describe("wiki editor storage", () => {
       content: "# Second\n",
       expected_version: await versionOf("global/versioned.md")
     });
+    const uploadPreview = await previewWikiUpload(projectRoot, {
+      key: "global/versioned.md",
+      markdown: "# Uploaded\n",
+      mode: "replace",
+      sourceFileName: "uploaded.md"
+    });
     await commitWikiUpload(projectRoot, {
       key: "global/versioned.md",
       markdown: "# Uploaded\n",
-      overwrite: true,
+      mode: "replace",
       sourceFileName: "uploaded.md",
-      expected_version: await versionOf("global/versioned.md")
+      access: { mode: "preserve_current" },
+      confirmed_empty: true,
+      expected_version: await versionOf("global/versioned.md"),
+      preview_digest: uploadPreview.access.preview_digest
     });
 
     let versions = await listWikiVersions(projectRoot, "global/versioned.md");
@@ -724,7 +763,13 @@ describe("wiki editor storage", () => {
     expect(preview.targetTitle).toBe("First");
     await expect(readFile(path.join(projectRoot, "wiki", "global", "versioned.md"), "utf8")).resolves.toContain("# Uploaded");
 
-    const restored = await restoreWikiVersion(projectRoot, "global/versioned.md", createVersion?.versionId ?? "");
+    const restored = await restoreWikiVersion(
+      projectRoot,
+      "global/versioned.md",
+      createVersion?.versionId ?? "",
+      undefined,
+      await versionOf("global/versioned.md")
+    );
     expect(restored.restoredFromVersionId).toBe(createVersion?.versionId);
     await expect(readFile(path.join(projectRoot, "wiki", "global", "versioned.md"), "utf8")).resolves.toContain("# First");
     versions = await listWikiVersions(projectRoot, "global/versioned.md");
@@ -747,15 +792,28 @@ describe("wiki editor storage", () => {
         payload: { dryRun: false, content: "# API First\n" }
       });
       expect(saved.statusCode).toBe(200);
+      const apiUploadPreview = await app.inject({
+        method: "POST",
+        url: "/api/wiki/upload/preview",
+        payload: {
+          key: "global/api-versioned.md",
+          markdown: "# API Uploaded\n",
+          mode: "replace",
+          sourceFileName: "api-uploaded.md"
+        }
+      });
       const upload = await app.inject({
         method: "POST",
         url: "/api/wiki/upload/commit",
         payload: {
           key: "global/api-versioned.md",
           markdown: "# API Uploaded\n",
-          overwrite: true,
+          mode: "replace",
           sourceFileName: "api-uploaded.md",
-          expected_version: await versionOf("global/api-versioned.md")
+          access: { mode: "preserve_current" },
+          confirmed_empty: true,
+          expected_version: await versionOf("global/api-versioned.md"),
+          preview_digest: apiUploadPreview.json().data.access.preview_digest
         }
       });
       expect(upload.statusCode).toBe(200);
@@ -788,7 +846,8 @@ describe("wiki editor storage", () => {
 
       const restored = await app.inject({
         method: "POST",
-        url: `/api/wiki/global%2Fapi-versioned.md/versions/${createVersion.versionId}/restore`
+        url: `/api/wiki/global%2Fapi-versioned.md/versions/${createVersion.versionId}/restore`,
+        payload: { expected_version: await versionOf("global/api-versioned.md") }
       });
       expect(restored.statusCode).toBe(200);
       await expect(readFile(path.join(projectRoot, "wiki", "global", "api-versioned.md"), "utf8")).resolves.toContain("# API First");
@@ -834,7 +893,13 @@ describe("wiki document move (M56 UX-WIKI-011)", () => {
       expected_version: await versionOf("global/cross-team-note.md")
     });
 
-    const result = await moveWiki(projectRoot, "global/cross-team-note.md", "ops/playbooks");
+    const result = await moveWiki(
+      projectRoot,
+      "global/cross-team-note.md",
+      "ops/playbooks",
+      undefined,
+      await versionOf("global/cross-team-note.md")
+    );
     expect(result.key).toBe("ops/playbooks/cross-team-note.md");
     expect(result.previousKey).toBe("global/cross-team-note.md");
 
@@ -905,7 +970,10 @@ describe("wiki document move (M56 UX-WIKI-011)", () => {
       const committed = await app.inject({
         method: "POST",
         url: "/api/wiki/global%2Fapi-move.md/move",
-        payload: { targetDirectory: "ops" }
+        payload: {
+          targetDirectory: "ops",
+          expected_version: await versionOf("global/api-move.md")
+        }
       });
       expect(committed.statusCode).toBe(200);
       expect(committed.json().data).toMatchObject({

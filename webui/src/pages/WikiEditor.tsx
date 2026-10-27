@@ -6,6 +6,9 @@ import { FilePlus, FolderPlus } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "../components/PageHeader";
 import { TemplatePicker } from "../components/TemplatePicker";
+import { WikiAccessDrawer } from "../components/WikiAccessDrawer";
+import { WikiBatchAccessDrawer } from "../components/WikiBatchAccessDrawer";
+import type { WikiBatchAccessDocument } from "../components/WikiBatchAccessDrawer";
 import { WikiDeleteDirectoryDialog } from "../components/WikiDeleteDirectoryDialog";
 import { WikiDeleteDocumentDialog } from "../components/WikiDeleteDocumentDialog";
 import { WikiLibraryHome } from "../components/WikiLibraryHome";
@@ -30,8 +33,17 @@ import {
 import {
   buildSavePreflightState,
   directoryOfWikiKey,
-  wikiDraftVersion
+  pagesUnderDirectory,
+  wikiDraftVersion,
+  wikiTitleFromKey
 } from "../lib/wiki";
+import {
+  isWikiAccessConflict,
+  matchesWikiAccessFilter,
+  wikiAclIsCorrupt,
+  wikiAclIsEmpty
+} from "../lib/wikiAccess";
+import type { WikiAccessFilter } from "../lib/wikiAccess";
 import type {
   WikiFrontmatter,
   WikiListResponse,
@@ -50,6 +62,7 @@ import type {
   WikiDirectorySummary,
   WikiDocumentDeleteResult,
   WikiSummary,
+  WikiUploadAccessSelection,
   WikiUploadPreview
 } from "../lib/types";
 import { sourcesQueryOptions } from "../lib/displayQueryOptions";
@@ -57,6 +70,9 @@ import { sourcesQueryOptions } from "../lib/displayQueryOptions";
 type PageMode = "library" | "loaded" | "draft";
 type WikiUiMode = "read" | "edit";
 type WikiUploadMode = "create" | "replace";
+
+/** Spec 193 §7.1 — the hard server limit after normalization / deduplication. */
+const BATCH_SELECTION_LIMIT = 100;
 
 /**
  * Compute the effective key + mode for the editor. The URL is the
@@ -147,6 +163,19 @@ export function WikiEditor() {
     return dirParam;
   }, [dirParam, key, mode]);
 
+  const batchDirectoryRef = useRef(dirParam);
+  // Spec 193 §7.1 — switching the directory clears the explicit selection so
+  // no hidden document stays selected.
+  useEffect(() => {
+    if (batchDirectoryRef.current === dirParam) {
+      return;
+    }
+    batchDirectoryRef.current = dirParam;
+    setBatchSelectedKeys([]);
+    setBatchSelectionMode(false);
+    setBatchNotice("切换目录已清空批量选择：选择范围只包含当前目录的具体文档。");
+  }, [dirParam]);
+
   // Local buffer for the frontmatter / body the user is editing.
   // The dirty flag tells us to skip applying loaded-page content
   // back over local edits on subsequent renders.
@@ -174,6 +203,21 @@ export function WikiEditor() {
   const [uploadPreview, setUploadPreview] = useState<WikiUploadPreview | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadLoading, setUploadLoading] = useState(false);
+  /* Spec 193 §5 — the explicit authorization selection of the upload. */
+  const [uploadSelection, setUploadSelection] = useState<WikiUploadAccessSelection | null>(null);
+  const [uploadEmptyConfirmed, setUploadEmptyConfirmed] = useState(false);
+  const [uploadAllConfirmed, setUploadAllConfirmed] = useState(false);
+  const [uploadCorruptAcknowledged, setUploadCorruptAcknowledged] = useState(false);
+  const [uploadRoleReady, setUploadRoleReady] = useState(true);
+  /* Spec 193 §6.2 — the independent access drawer. */
+  const [accessDrawerOpen, setAccessDrawerOpen] = useState(false);
+  /* Spec 193 §7 — the explicit bulk selection. */
+  const [accessFilter, setAccessFilter] = useState<WikiAccessFilter>("all");
+  const [batchSelectionMode, setBatchSelectionMode] = useState(false);
+  const [batchSelectedKeys, setBatchSelectedKeys] = useState<string[]>([]);
+  const [batchNotice, setBatchNotice] = useState<string | null>(null);
+  const [batchDrawerOpen, setBatchDrawerOpen] = useState(false);
+  const [batchOperationId, setBatchOperationId] = useState<string | null>(null);
   const [deleteDirectoryPath, setDeleteDirectoryPath] = useState<string | null>(null);
   const [deleteDirectoryError, setDeleteDirectoryError] = useState<string | null>(null);
   const [deleteDocumentKey, setDeleteDocumentKey] = useState<string | null>(null);
@@ -379,18 +423,37 @@ export function WikiEditor() {
       if (!uploadPreview) {
         throw new Error("缺少上传预检结果。");
       }
+      if (!uploadSelection) {
+        throw new Error("缺少明确的访问权限选择。");
+      }
+      const digest = uploadPreview.access?.preview_digest;
+      if (!digest) {
+        throw new Error("缺少上传预检摘要，暂不能提交。");
+      }
+      const finalAcl = uploadPreview.access?.final_acl ?? null;
+      const isEmpty = wikiAclIsEmpty(finalAcl);
+      const isAll = finalAcl?.state === "all";
       return apiPost<WikiUploadPreview>("/api/wiki/upload/commit", {
         key: uploadPreview.targetKey,
-        markdown: uploadPreview.proposedMarkdown,
+        // The ORIGINAL selected file text is the commit source — never the
+        // preview's proposed markdown.
+        markdown: uploadMarkdown,
+        mode: uploadPreview.mode,
         sourceFileName: uploadPreview.sourceFileName,
-        overwrite: uploadMode === "replace" || uploadPreview?.exists === true,
-        expected_version: uploadPreview.currentFileVersion ?? undefined
+        access: uploadSelection,
+        confirmed_empty: isEmpty ? uploadEmptyConfirmed : false,
+        confirmed_all: isAll ? uploadAllConfirmed : false,
+        expected_version: uploadPreview.currentFileVersion ?? undefined,
+        preview_digest: digest
       });
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.wiki });
       queryClient.invalidateQueries({ queryKey: queryKeys.wikiPage(result.key) });
       queryClient.invalidateQueries({ queryKey: queryKeys.wikiVersions(result.key) });
+      // The uploaded authorization can move the effective Agent context
+      // permission digest.
+      queryClient.invalidateQueries({ queryKey: queryKeys.adminAgents });
       queryClient.invalidateQueries({ queryKey: queryKeys.diff });
       markClean();
       sourceRef.current = `${result.key}::uploaded`;
@@ -398,11 +461,18 @@ export function WikiEditor() {
       setUploadOpen(false);
       setUploadPreview(null);
       setUploadError(null);
+      setUploadSelection(null);
+      setUploadEmptyConfirmed(false);
+      setUploadAllConfirmed(false);
       setSearchParams({ key: result.key }, { replace: true });
       toast.success(uploadMode === "replace" ? "Markdown 已覆盖" : "Markdown 已上传");
     },
     onError: (error) => {
       toast.error(`上传失败：${wikiWriteErrorText(error)}`);
+      if (isWikiAccessConflict(error)) {
+        // Keep the administrator's Role selection and ask for a fresh preview.
+        void refreshUploadPreview();
+      }
     }
   });
 
@@ -1092,6 +1162,75 @@ export function WikiEditor() {
     setUiMode("edit");
   }
 
+  /**
+   * Spec 193 §6.2 — the independent access drawer never submits the body
+   * draft. In edit mode with an unsaved draft the entry point is disabled
+   * and explains why; the draft is never silently saved or discarded.
+   */
+  function openAccessDrawer() {
+    if (!key || mode !== "loaded") {
+      toast.error("请先选择已保存的 Markdown 文档。");
+      return;
+    }
+    if (uiMode === "edit" && dirtyRef.current) {
+      toast.error("请先保存或放弃正文草稿。");
+      return;
+    }
+    setAccessDrawerOpen(true);
+  }
+
+  /* Spec 193 §7 — explicit document selection for the bulk authorization. */
+  function startBatchSelection() {
+    setBatchSelectionMode(true);
+    setBatchSelectedKeys([]);
+    setBatchNotice("请勾选要批量管理的文档；选择范围只包含具体文档，不包含目录。");
+  }
+
+  function exitBatchSelection() {
+    setBatchSelectionMode(false);
+    setBatchSelectedKeys([]);
+    setBatchNotice(null);
+  }
+
+  function toggleBatchSelection(keyName: string) {
+    setBatchNotice(null);
+    setBatchSelectedKeys((current) => {
+      if (current.includes(keyName)) {
+        return current.filter((item) => item !== keyName);
+      }
+      if (current.length >= BATCH_SELECTION_LIMIT) {
+        setBatchNotice(
+          `一次最多选择 ${BATCH_SELECTION_LIMIT} 篇文档。请先取消部分选择或缩小筛选范围。`
+        );
+        return current;
+      }      return [...current, keyName];
+    });
+  }
+
+  function selectFilteredBatch() {
+    const candidates = filteredLibraryPages.map((page) => page.key);
+    if (candidates.length > BATCH_SELECTION_LIMIT) {
+      setBatchNotice(
+        `当前筛选结果有 ${candidates.length} 篇，超过 ${BATCH_SELECTION_LIMIT} 篇上限。请先缩小筛选范围，再选择。`
+      );
+      return;
+    }
+    setBatchNotice(null);
+    setBatchSelectedKeys(candidates);
+  }
+
+  function clearBatchSelection() {
+    setBatchNotice(null);
+    setBatchSelectedKeys([]);
+  }
+
+  function openBatchAccessDrawer() {
+    if (batchSelectedKeys.length === 0) {
+      return;
+    }
+    setBatchDrawerOpen(true);
+  }
+
   function openSavePreflight() {
     if (!key) {
       toast.error("请先选择或新建 Markdown 文档。");
@@ -1180,7 +1319,112 @@ export function WikiEditor() {
     setUploadMode(modeToOpen);
     setUploadPreview(null);
     setUploadError(null);
+    setUploadSelection(null);
+    setUploadEmptyConfirmed(false);
+    setUploadAllConfirmed(false);
+    setUploadCorruptAcknowledged(false);
     uploadInputRef.current?.click();
+  }
+
+  /**
+   * The authorization selection an upload starts from.
+   *
+   * A new upload starts from the uploaded declaration (or an explicit empty
+   * selection when the file declares nothing). A replace upload ALWAYS
+   * starts from the persisted authorization — the uploaded declaration is
+   * never adopted silently. A corrupt uploaded declaration cannot be
+   * adopted at all: the owner has to re-set it explicitly.
+   */
+  function computeUploadSelection(
+    modeToPreview: WikiUploadMode,
+    previewResult: WikiUploadPreview
+  ): WikiUploadAccessSelection | null {
+    if (modeToPreview === "replace") {
+      return { mode: "preserve_current" };
+    }
+    const uploaded = previewResult.access?.uploaded_acl ?? null;
+    if (!uploaded || uploaded.state === "corrupt") {
+      return null;
+    }
+    if (uploaded.state === "all") {
+      return { mode: "use_uploaded" };
+    }
+    if (uploaded.state === "roles" && uploaded.roles.length > 0) {
+      return { mode: "use_uploaded" };
+    }
+    return { mode: "set", allowed_roles: [] };
+  }
+
+  async function runUploadPreview(
+    targetKey: string,
+    markdown: string,
+    modeToPreview: WikiUploadMode,
+    sourceFileName: string,
+    selection: WikiUploadAccessSelection | null
+  ): Promise<WikiUploadPreview | null> {
+    const requestId = uploadPreviewRequestRef.current + 1;
+    uploadPreviewRequestRef.current = requestId;
+    setUploadLoading(true);
+    setUploadOpen(true);
+    setUploadError(null);
+    setUploadPreview(null);
+    try {
+      const body: Record<string, unknown> = {
+        key: targetKey,
+        markdown,
+        mode: modeToPreview,
+        sourceFileName
+      };
+      if (selection) {
+        body.access = selection;
+      }
+      const result = await apiPost<WikiUploadPreview>("/api/wiki/upload/preview", body);
+      if (uploadPreviewRequestRef.current !== requestId) {
+        return null;
+      }
+      setUploadPreview(result);
+      return result;
+    } catch (error) {
+      if (uploadPreviewRequestRef.current !== requestId) {
+        return null;
+      }
+      setUploadError(error instanceof Error ? error.message : "未知错误");
+      return null;
+    } finally {
+      if (uploadPreviewRequestRef.current === requestId) {
+        setUploadLoading(false);
+      }
+    }
+  }
+
+  /** Re-issue the preview so the digest binds the current selection. */
+  async function refreshUploadPreview() {
+    const targetKey = uploadPreview?.targetKey ?? uploadTargetKey;
+    if (!targetKey || !uploadMarkdown) {
+      return;
+    }
+    await runUploadPreview(
+      targetKey,
+      uploadMarkdown,
+      uploadMode,
+      uploadFileName,
+      uploadSelection
+    );
+  }
+
+  /** Two upload selections describe the same intent when they match exactly. */
+  function sameUploadSelection(
+    left: WikiUploadAccessSelection | null,
+    right: WikiUploadAccessSelection | null
+  ): boolean {
+    if (!left || !right) return false;
+    if (left.mode !== right.mode) return false;
+    if (left.mode === "set" && right.mode === "set") {
+      const a = [...left.allowed_roles].sort();
+      const b = [...right.allowed_roles].sort();
+      return a.length === b.length && a.every((role, index) => role === b[index]);
+    }
+    return true;
   }
 
   async function previewUpload(
@@ -1189,33 +1433,47 @@ export function WikiEditor() {
     modeToPreview: WikiUploadMode,
     sourceFileName: string
   ) {
-    const requestId = uploadPreviewRequestRef.current + 1;
-    uploadPreviewRequestRef.current = requestId;
-    setUploadLoading(true);
-    setUploadOpen(true);
-    setUploadError(null);
-    setUploadPreview(null);
-    try {
-      const result = await apiPost<WikiUploadPreview>("/api/wiki/upload/preview", {
-        key: targetKey,
-        markdown,
-        sourceFileName,
-        overwrite: modeToPreview === "replace"
-      });
-      if (uploadPreviewRequestRef.current !== requestId) {
-        return;
-      }
-      setUploadPreview(result);
-    } catch (error) {
-      if (uploadPreviewRequestRef.current !== requestId) {
-        return;
-      }
-      setUploadError(error instanceof Error ? error.message : "未知错误");
-    } finally {
-      if (uploadPreviewRequestRef.current === requestId) {
-        setUploadLoading(false);
-      }
+    const first = await runUploadPreview(
+      targetKey,
+      markdown,
+      modeToPreview,
+      sourceFileName,
+      null
+    );
+    if (!first) {
+      return;
     }
+    const draft = computeUploadSelection(modeToPreview, first);
+    setUploadSelection(draft);
+    setUploadEmptyConfirmed(false);
+    setUploadAllConfirmed(false);
+    setUploadCorruptAcknowledged(draft !== null);
+    if (!draft) {
+      // A corrupt uploaded declaration blocks the commit until the owner
+      // explicitly re-sets the authorization.
+      return;
+    }
+    if (sameUploadSelection(draft, first.access?.suggested_selection ?? null)) {
+      // The preview already covers this selection — its digest is usable.
+      return;
+    }
+    await runUploadPreview(targetKey, markdown, modeToPreview, sourceFileName, draft);
+  }
+
+  function handleUploadSelectionChange(next: WikiUploadAccessSelection) {
+    setUploadSelection(next);
+    setUploadEmptyConfirmed(false);
+    setUploadAllConfirmed(false);
+    setUploadCorruptAcknowledged(true);
+    const targetKey = uploadPreview?.targetKey ?? uploadTargetKey;
+    if (!targetKey || !uploadMarkdown) {
+      return;
+    }
+    void runUploadPreview(targetKey, uploadMarkdown, uploadMode, uploadFileName, next);
+  }
+
+  function handleIgnoreCorruptUploadDeclaration() {
+    handleUploadSelectionChange({ mode: "set", allowed_roles: [] });
   }
 
   async function handleUploadFile(file: File | undefined) {
@@ -1308,6 +1566,49 @@ export function WikiEditor() {
     return () => window.removeEventListener("keydown", handle);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uiMode, key, frontmatter, content]);
+
+  /** Spec 193 §6.1 — the aggregate authorization entry of the open document. */
+  const currentPageAccess = useMemo(
+    () => pages.find((item) => item.key === key)?.access ?? null,
+    [key, pages]
+  );
+
+  /** Spec 193 §6.1 — the authorization filter is a view concern only. */
+  const scopedLibraryPages = useMemo(
+    () => (selectedDirectory ? pagesUnderDirectory(pages, selectedDirectory) : []),
+    [pages, selectedDirectory]
+  );
+  const filteredLibraryPages = useMemo(
+    () =>
+      scopedLibraryPages.filter((page) =>
+        matchesWikiAccessFilter(
+          page.access ?? {
+            file_version: "",
+            acl: { state: "missing" },
+            declared_role_count: 0,
+            declared_without_discover: 0,
+            declared_without_read: 0
+          },
+          accessFilter
+        )
+      ),
+    [accessFilter, scopedLibraryPages]
+  );
+
+  /** Spec 193 §7 — the explicit documents the bulk drawer will write. */
+  const batchDocuments = useMemo<WikiBatchAccessDocument[]>(
+    () =>
+      batchSelectedKeys.map((documentKey) => {
+        const page = pages.find((item) => item.key === documentKey);
+        return {
+          key: documentKey,
+          title: page?.summary?.trim() || wikiTitleFromKey(documentKey),
+          file_version: page?.access?.file_version ?? "",
+          acl: page?.access?.acl
+        };
+      }),
+    [batchSelectedKeys, pages]
+  );
 
   const preflightState = useMemo(
     () =>
@@ -1438,6 +1739,25 @@ export function WikiEditor() {
                   </span>
                 ) : null}
                 <button
+                  aria-describedby={isDirty ? "wiki-manage-access-blocked" : undefined}
+                  className="pl-btn pl-btn--ghost"
+                  data-testid="wiki-manage-access-button"
+                  disabled={isDirty}
+                  onClick={openAccessDrawer}
+                  type="button"
+                >
+                  管理访问权限
+                </button>
+                {isDirty ? (
+                  <span
+                    className="pl-wiki-header-status"
+                    data-testid="wiki-manage-access-blocked"
+                    id="wiki-manage-access-blocked"
+                  >
+                    请先保存或放弃正文草稿
+                  </span>
+                ) : null}
+                <button
                   className="pl-btn pl-btn--ghost"
                   data-testid="wiki-back-to-read"
                   onClick={requestBackToRead}
@@ -1538,19 +1858,33 @@ export function WikiEditor() {
           >
             {mode === "library" ? (
               <WikiLibraryHome
+                accessFilter={accessFilter}
                 directories={serverDirectories}
+                onAccessFilterChange={setAccessFilter}
+                onClearSelection={clearBatchSelection}
+                onExitSelection={exitBatchSelection}
+                onOpenBatchAccess={openBatchAccessDrawer}
                 onSelect={navigateTo}
+                onSelectFiltered={selectFilteredBatch}
+                onStartSelection={startBatchSelection}
+                onToggleSelected={toggleBatchSelection}
                 pages={pages}
                 selectedDirectory={selectedDirectory || null}
+                selectedKeys={batchSelectedKeys}
+                selectionMode={batchSelectionMode}
+                selectionNotice={batchNotice}
               />
             ) : uiMode === "read" ? (
               <WikiReadView
+                access={currentPageAccess ?? undefined}
                 content={content}
                 frontmatter={frontmatter}
                 keyName={key}
                 knownSources={knownSlRefs}
                 knownTables={tables}
+                manageAccessBlockedReason={null}
                 onApplyTemplate={applyTemplate}
+                onManageAccess={openAccessDrawer}
                 onOpenTemplatePicker={() => setTemplatePickerOpen(true)}
                 onSwitchToEdit={switchToEdit}
               />
@@ -1711,25 +2045,60 @@ export function WikiEditor() {
       />
 
       <WikiUploadPreflight
+        allConfirmed={uploadAllConfirmed}
+        corruptBlocked={
+          uploadSelection === null &&
+          wikiAclIsCorrupt(uploadPreview?.access?.uploaded_acl ?? null)
+        }
+        emptyConfirmed={uploadEmptyConfirmed}
         error={uploadError}
         directories={uploadDirectories}
         isCommitting={uploadCommitMutation.isPending}
         isLoading={uploadLoading}
         mode={uploadMode}
+        onAllConfirmedChange={setUploadAllConfirmed}
         onCancel={() => {
           setUploadOpen(false);
           setUploadPreview(null);
           setUploadError(null);
+          setUploadSelection(null);
         }}
         onConfirm={() => uploadCommitMutation.mutate()}
+        onEmptyConfirmedChange={setUploadEmptyConfirmed}
+        onIgnoreCorrupt={handleIgnoreCorruptUploadDeclaration}
+        onRoleStateChange={setUploadRoleReady}
+        onSelectionChange={handleUploadSelectionChange}
         onTargetDirectoryChange={handleUploadDirectoryChange}
         open={uploadOpen}
         preview={uploadPreview}
+        roleReady={uploadRoleReady}
+        selection={uploadSelection}
         targetDirectory={
           (uploadPreview?.targetKey ?? uploadTargetKey).includes("/")
             ? (uploadPreview?.targetKey ?? uploadTargetKey).split("/").slice(0, -1).join("/")
             : currentDirectory
         }
+      />
+
+      <WikiAccessDrawer
+        onClose={() => setAccessDrawerOpen(false)}
+        onSaved={() => {
+          queryClient.invalidateQueries({ queryKey: queryKeys.wiki });
+        }}
+        open={accessDrawerOpen}
+        title={wikiTitleFromKey(key)}
+        wikiKey={key}
+      />
+
+      <WikiBatchAccessDrawer
+        documents={batchDocuments}
+        initialOperationId={batchOperationId}
+        onClose={() => setBatchDrawerOpen(false)}
+        onCommitted={(result) => {
+          setBatchOperationId(result.operation_id);
+          queryClient.invalidateQueries({ queryKey: queryKeys.wiki });
+        }}
+        open={batchDrawerOpen}
       />
     </div>
   );

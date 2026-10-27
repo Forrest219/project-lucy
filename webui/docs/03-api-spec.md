@@ -54,6 +54,12 @@ GET  /api/wiki/:key/versions
 GET  /api/wiki/:key/versions/:versionId
 POST /api/wiki/:key/versions/:versionId/restore/preview
 POST /api/wiki/:key/versions/:versionId/restore
+GET  /api/wiki/:key/access
+POST /api/wiki/:key/access/preview
+PUT  /api/wiki/:key/access
+POST /api/wiki/access/batch/preview
+POST /api/wiki/access/batch/commit
+GET  /api/wiki/access/batches/:operationId
 
 GET  /api/diff
 POST /api/validate-changed
@@ -1057,6 +1063,122 @@ Skill 写入沿用 `expected_version`（428 `skill_expected_version_required` / 
 **管理侧导出：** `POST /api/semantic-assets/export` 在包含 Wiki / Skill 时向安全账本写入操作者记录（账本不可用返回 `503 SECURITY_STORE_UNAVAILABLE`）；它不是 Agent 通道。
 
 **迁移工具：** `cd webui && npx tsx ../scripts/security/migrate-context-acl.mts --project-dir <dir> --dry-run` 输出仅含元数据的迁移报告（`inventoryDigest`、保留 / 显式全角色 / 待确认 / legacy Agent）；`--apply --owner <id> --expected-digest <digest> --decisions <file> --backup-dir <dir>` 仅 owner 可执行，整批预检通过后才写入，带加密备份与持久 journal。先在合成 fixture 上运行；对客户私有配置执行属部署授权范围。
+
+### 业务 Wiki 访问权限管理（Spec 193 / Plan M66）
+
+**授权事实源不变：** 业务 Wiki 的对象授权仍然只有文档 frontmatter `allowed_roles`。本节新增的端点**只**改写这一份声明：正文逐字保留，未知 frontmatter 字段及其值语义保留，不经过完整正文草稿往返。
+
+#### 新增端点
+
+```text
+GET  /api/wiki/:key/access
+POST /api/wiki/:key/access/preview
+PUT  /api/wiki/:key/access
+POST /api/wiki/access/batch/preview
+POST /api/wiki/access/batch/commit
+GET  /api/wiki/access/batches/:operationId
+```
+
+`GET /api/wiki/:key/access` → `data` 为授权摘要：
+
+```ts
+type WikiAccessSummary = {
+  key: string;
+  file_version: string;          // sha256:<hex>，文件字节
+  acl: ObjectAcl;                // missing | empty | all | roles | corrupt
+  declared_role_count: number | null;  // roles 取声明数；all/corrupt 为 null；missing/empty 为 0
+  role_effects: Array<{
+    role_id: string;
+    known: boolean;              // 未知 Role 保留为 known=false，不映射同名新 Role
+    discover_enabled: boolean;   // 该 Role 是否开通 wiki_search
+    read_enabled: boolean;       // 该 Role 是否开通 wiki_read
+    assigned_agent_count: number; // 实际绑定该正式 Role 的已启用 Agent 数
+    assigned_agent_ids: string[];
+  }>;
+  declared_without_discover: number;
+  declared_without_read: number;
+  role_channel_version: string;  // 全局 Role/通道/Agent 绑定版本
+  pending_change?: { operation_id: string; state: "pending" | "needs_review" };
+};
+```
+
+`POST /api/wiki/:key/access/preview` 请求 `{ allowed_roles, expected_version }`，返回旧/新 ACL、`direction`（`narrow` / `widen` / `neutral`）、`noop`、Role 通道效果、`role_channel_version` 与 `preview_digest`。摘要绑定 key、当前 `file_version`、规范化候选 ACL 与全局 `role_channel_version`。
+
+`PUT /api/wiki/:key/access` 请求 `{ allowed_roles, expected_version, preview_digest }`。服务端在共享写入队列内重算候选并核对摘要，不信任客户端回传的 direction。规范化后 ACL 无变化 → 返回 `status: "noop"`，不写文件、不新增版本、不写审计。
+
+`POST /api/wiki/access/batch/preview` 请求 `{ items: [{ key, expected_version }], action }`，返回逐篇 `old/new/direction/noop`、汇总、`role_channel_version`、`plan_digest` 与 `operation_id`。`action` 只有两种：
+
+```ts
+type WikiBatchAccessAction =
+  | { mode: "add"; role_ids: string[] }        // 并集；至少一个 Role；不接受 "*"
+  | { mode: "replace"; allowed_roles: string[] }; // 精确值；可 [] 或 ["*"]，各自需独立确认
+```
+
+`POST /api/wiki/access/batch/commit` 请求 `{ operation_id, plan_digest, idempotency_key, items, action, confirmed_empty?, confirmed_all? }`。返回逐篇结果（`applied` / `noop` / `conflict` / `failed` / `not_run` / `needs_review`）。批量**不是**跨文件事务：已成功的文档不回滚。
+
+`GET /api/wiki/access/batches/:operationId` 按 operation id 还原批量结果，页面刷新或断网后可恢复查看。
+
+#### `GET /api/wiki` 的聚合授权字段
+
+`GET /api/wiki` 在**一次**聚合响应中为每篇文档返回 `access`（`file_version`、规范化 `acl`、缺通道计数、pending 状态），并在响应顶层返回 `role_channel_version`。Role / Agent 配置在该请求内只读取一次；列表不嵌入正文、完整 Agent id 清单或逐 Role 效果明细，前端不得为每行再调用 access API。
+
+#### 上传授权选择（`POST /api/wiki/upload/preview` / `commit`）
+
+上传预检的 `data.access` 段包含：`current_acl`（目标不存在时为 `null`）、`uploaded_acl`、`final_acl`、`suggested_selection`、`direction`、`role_effects`、`declared_role_count`、缺通道计数、`role_channel_version`、`preview_digest` 与 `issues`。
+
+提交必须携带**原始 Markdown**、明确的 `access` 选择、`confirmed_empty` / `confirmed_all`（按最终值）、`expected_version`（覆盖已有文档时）与 `preview_digest`：
+
+```ts
+type WikiUploadAccessSelection =
+  | { mode: "preserve_current" }              // 仅覆盖已存在文档；逐字保留当前声明（含损坏声明）
+  | { mode: "use_uploaded" }                  // 要求文件内声明合法
+  | { mode: "set"; allowed_roles: string[] }; // 总是用规范化后的值替换
+```
+
+**不再接受**把预检返回的 `proposedMarkdown` 当作下一次上传源；缺少 `access` → `400 wiki_upload_access_required`（不提供静默沿用旧客户端行为的兼容分支）。
+
+#### 既有写路径的并发基线
+
+| 端点 | 变更 |
+|---|---|
+| `PUT /api/wiki/:key` | 已存在文档缺 `expected_version` → `428 wiki_expected_version_required`，过期 → `409 wiki_write_conflict`；同时改写 `allowed_roles` 时走统一的安全写入原语 |
+| `POST /api/wiki/upload/commit` | 覆盖已存在页面须带 `expected_version`（428 / 409 同上）**以及** `access` 与 `preview_digest`；`mode=create` 要求目标不存在、`mode=replace` 要求目标存在且版本匹配，否则 `409 wiki_write_conflict`（不会自动互相转换） |
+| `POST /api/wiki/:key/versions/:versionId/restore` | 须带 `expected_version`（428 / 409）；恢复正文但**保留当前** `allowed_roles`，不复活历史更宽授权 |
+| `POST /api/wiki/:key/move` | 须带 `expected_version`（428 / 409） |
+| `DELETE /api/wiki/:key` | 须带查询参数 `expected_version`（428 / 409） |
+| `POST /api/wiki/directories/rename` | 预检返回逐文档 `fileVersion` 与 `preview_digest`；提交可带 `expected_versions` 与 `preview_digest`，队列内逐篇重验 |
+
+#### 稳定错误码
+
+| 状态码 | code | 含义 |
+|---|---|---|
+| 400 | `wiki_upload_access_required` | 上传 commit 缺少明确 access selection；零写入 |
+| 400 | `wiki_batch_empty` | 服务端去重后没有文档 key |
+| 400 | `wiki_batch_limit_exceeded` | 去重后超过 100 篇 |
+| 400 | `wiki_batch_blocked` | 批量计划存在阻断性校验问题（例如 add 遇到损坏 ACL）；零写入 |
+| 400 | `wiki_access_frontmatter_invalid` | 文档 frontmatter 无法解析或无法写回；零写入 |
+| 400 | `CONTEXT_ACL_INVALID` | ACL 声明损坏或请求值非法（沿用既有契约） |
+| 409 | `wiki_upload_preview_stale` | 上传候选、目标版本或授权效果已变化；零写入 |
+| 409 | `wiki_expected_version_required` | 已存在文档的写操作缺少 `expected_version`（HTTP 428） |
+| 409 | `wiki_access_preview_stale` | 单篇授权预检已过期 |
+| 409 | `wiki_batch_preview_stale` | 批量提交前至少一项或角色图已过期；零写入、零 journal |
+| 409 | `wiki_batch_idempotency_conflict` | 幂等 key 已绑定另一份 plan |
+| 409 | `wiki_access_change_pending` | 对象存在未决扩权操作；该 key 的 Agent 搜索与读取继续拒绝，其他写路径被阻断 |
+| 409 | `wiki_write_conflict` | 文档版本或目标存在状态冲突（沿用现有 Wiki 并发契约） |
+| 503 | `config_audit_unavailable` | 配置审计 intent/terminal 不可用；不得返回成功 |
+| 503 | `SECURITY_STORE_UNAVAILABLE` | 安全操作或 hold 投影不可用；保持拒绝 |
+
+#### 扩权 hold 与批量 journal
+
+* 任何 `direction=widen` 的授权变更先写 durable security operation，再写文档；hold 由 `.ktx-ui/security.sqlite` 的 per-key 投影派生。hold 存在或投影不可读时，该 Wiki key 的 Agent 搜索与读取**全部**拒绝。
+* 目标字节已落盘但安全状态未提交时，恢复为 `needs_review` 并继续 hold；系统不自动重放扩权写入，也不自动确认扩权。
+* 批量 journal 与幂等记录复用 `.ktx-ui/security.sqlite`（FULL 持久化、0600 权限），不另建含 ACL 明细的 JSON sidecar。journal 仅记录 key、版本、ACL 摘要、状态、actor、时间与稳定错误码，**不写正文、凭据或绝对主机路径**。
+* access 端点与 journal 均不返回或存储 Markdown 正文与 Token。
+
+#### 已知边界
+
+* 队列与 hold 只覆盖 Lucy 支持的单实例、单副本部署；直接编辑 Wiki 文件、多个 WebUI 进程共享写入同一内容目录属于不支持的多写者拓扑，不提供跨进程 CAS 或分布式事务保证。
+* 目录权限继承、Skill 批量授权、定时授权、审批流与移动目录时的权限重算不在本轮范围。
 
 ## Lucy v0.25 P1 梯队新增端点
 

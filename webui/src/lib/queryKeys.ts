@@ -12,6 +12,14 @@ export const queryKeys = {
   wiki: ["wiki"] as const,
   wikiPage: (key: string) => ["wiki", key] as const,
   wikiVersions: (key: string) => ["wiki", "versions", key] as const,
+  /**
+   * Spec 193 §6.2 — the full per-document authorization summary (Role channel
+   * effects + affected Agent ids). The aggregate list keeps using
+   * `queryKeys.wiki`; POST previews are mutations and get no cache key.
+   */
+  wikiAccess: (key: string) => ["wiki", "access", key] as const,
+  /** Spec 193 §7.4 — a durable bulk authorization result, queryable by operation id. */
+  wikiBatchAccess: (operationId: string) => ["wiki", "access", "batch", operationId] as const,
   joinCandidates: ["joins", "candidates"] as const,
   connections: ["connections"] as const,
   connectionTables: (connId: string) => ["connections", connId, "tables"] as const,

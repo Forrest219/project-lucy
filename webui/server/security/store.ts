@@ -3,6 +3,7 @@ import { chmodSync, closeSync, existsSync, lstatSync, mkdirSync, openSync, rmSyn
 import path from "node:path";
 import Database from "better-sqlite3";
 import { initSecuritySchema, SECURITY_DB_FILE } from "./schema";
+import { notifySecurityStateChange } from "./state-changes";
 import type {
   AccountStatus,
   AdminAccountState,
@@ -11,13 +12,18 @@ import type {
   OperationState,
   PendingOperation,
   PrepareOperationInput,
+  PrepareWikiAccessOperationInput,
   RateBucketDecision,
   SecurityEvent,
   SecurityEventInput,
   SecurityFailure,
   SecurityResult,
   SecurityUnavailableReason,
-  SessionValidation
+  SessionValidation,
+  WikiAccessBatchItemRecord,
+  WikiAccessBatchRecord,
+  WikiAccessOperationRecord,
+  WikiBatchItemStatus
 } from "./types";
 
 const DIR_MODE = 0o700;
@@ -118,6 +124,47 @@ function eventFromRow(row: Row): SecurityEvent {
     auditEventKind: (row.audit_event_kind as string | null) ?? null,
     endpointId: (row.endpoint_id as string | null) ?? null,
     createdAt: row.created_at as number
+  };
+}
+
+function wikiAccessOperationFromRow(row: Row): WikiAccessOperationRecord {
+  return {
+    operationId: row.operation_id as string,
+    wikiKey: row.wiki_key as string,
+    oldHash: (row.old_hash as string | null) ?? null,
+    targetHash: (row.target_hash as string | null) ?? null,
+    direction: row.direction as WikiAccessOperationRecord["direction"],
+    state: row.state as OperationState,
+    createdAt: row.created_at as number,
+    resolvedAt: (row.resolved_at as number | null) ?? null
+  };
+}
+
+function wikiAccessBatchFromRow(row: Row): WikiAccessBatchRecord {
+  return {
+    operationId: row.operation_id as string,
+    planDigest: row.plan_digest as string,
+    idempotencyKey: (row.idempotency_key as string | null) ?? null,
+    actionJson: row.action_json as string,
+    roleChannelVersion: row.role_channel_version as string,
+    status: row.status as WikiAccessBatchRecord["status"],
+    createdAt: row.created_at as number,
+    updatedAt: row.updated_at as number
+  };
+}
+
+function wikiAccessBatchItemFromRow(row: Row): WikiAccessBatchItemRecord {
+  return {
+    operationId: row.operation_id as string,
+    wikiKey: row.wiki_key as string,
+    expectedVersion: (row.expected_version as string | null) ?? null,
+    targetHash: (row.target_hash as string | null) ?? null,
+    aclSummary: (row.acl_summary as string | null) ?? null,
+    direction: (row.direction as string | null) ?? null,
+    status: row.status as WikiBatchItemStatus,
+    errorCode: (row.error_code as string | null) ?? null,
+    errorMessage: (row.error_message as string | null) ?? null,
+    updatedAt: row.updated_at as number
   };
 }
 
@@ -733,6 +780,7 @@ export class SecurityStore {
         verdict: next,
         resultSummary: summary
       });
+      notifySecurityStateChange();
       return operationFromRow(db.prepare("SELECT * FROM pending_operations WHERE operation_id = ?").get(operationId) as Row);
     });
   }
@@ -752,5 +800,355 @@ export class SecurityStore {
         operationFromRow
       )
     );
+  }
+
+  // ---- wiki access operations (Spec 193 §8.2) ----------------------------
+
+  /**
+   * Prepare a durable Wiki access operation AND activate its per-key hold in
+   * ONE transaction.
+   *
+   * There is no crash window between "the operation is durable" and "the key
+   * is held": either both happened or neither did.
+   */
+  prepareWikiAccessOperation(input: PrepareWikiAccessOperationInput): SecurityResult<PendingOperation> {
+    return this.write((db) => {
+      const exists = db.prepare("SELECT 1 FROM pending_operations WHERE operation_id = ?").get(input.operationId);
+      if (exists) abort("SECURITY_CONFLICT", "operation_exists", "operation id already prepared");
+      const now = this.now();
+      db.prepare(
+        `INSERT INTO pending_operations
+           (operation_id, kind, direction, state, object_hash, summary, created_at)
+         VALUES (?, 'wiki_access', ?, 'pending', ?, ?, ?)`
+      ).run(input.operationId, input.direction, input.targetHash ?? null, input.summary ?? null, now);
+      db.prepare(
+        `INSERT INTO wiki_access_operations
+           (operation_id, wiki_key, old_hash, target_hash, direction, state, created_at, resolved_at)
+         VALUES (?, ?, ?, ?, ?, 'pending', ?, NULL)`
+      ).run(
+        input.operationId,
+        input.wikiKey,
+        input.oldHash ?? null,
+        input.targetHash ?? null,
+        input.direction,
+        now
+      );
+      this.insertEvent(db, {
+        eventId: `${input.operationId}:prepare`,
+        operationId: input.operationId,
+        phase: "prepare",
+        actor: input.actor,
+        actorType: input.actorType,
+        traceId: input.traceId,
+        objectHash: input.targetHash,
+        verdict: input.direction,
+        resultSummary: `wiki_access:${input.wikiKey}`
+      });
+      notifySecurityStateChange();
+      return operationFromRow(
+        db.prepare("SELECT * FROM pending_operations WHERE operation_id = ?").get(input.operationId) as Row
+      );
+    });
+  }
+
+  /**
+   * Commit the durable operation AND release its hold in ONE transaction.
+   */
+  commitWikiAccessOperation(
+    operationId: string,
+    actor = "system",
+    actorType = "system"
+  ): SecurityResult<PendingOperation> {
+    return this.transitionWikiAccessOperation(operationId, "committed", "commit", actor, actorType);
+  }
+
+  abortWikiAccessOperation(
+    operationId: string,
+    reason: string,
+    actor = "system",
+    actorType = "system"
+  ): SecurityResult<PendingOperation> {
+    return this.transitionWikiAccessOperation(operationId, "aborted", "abort", actor, actorType, reason);
+  }
+
+  markWikiAccessOperationNeedsReview(
+    operationId: string,
+    reason: string
+  ): SecurityResult<PendingOperation> {
+    return this.transitionWikiAccessOperation(operationId, "needs_review", "recovery", "system", "system", reason);
+  }
+
+  private transitionWikiAccessOperation(
+    operationId: string,
+    next: OperationState,
+    phase: "commit" | "abort" | "recovery",
+    actor: string,
+    actorType: string,
+    summary = ""
+  ): SecurityResult<PendingOperation> {
+    return this.write((db) => {
+      const row = db.prepare("SELECT * from pending_operations WHERE operation_id = ?").get(operationId) as
+        | Row
+        | undefined;
+      if (!row) abort("SECURITY_NOT_FOUND", "operation_not_found", "operation not found");
+      const current = row.state as OperationState;
+      if (!OPERATION_TRANSITIONS[current].includes(next)) {
+        abort("SECURITY_CONFLICT", "invalid_transition", `operation ${current} cannot become ${next}`);
+      }
+      const now = this.now();
+      db.prepare("UPDATE pending_operations SET state = ?, resolved_at = ? WHERE operation_id = ?").run(
+        next,
+        next === "needs_review" ? null : now,
+        operationId
+      );
+      db.prepare("UPDATE wiki_access_operations SET state = ?, resolved_at = ? WHERE operation_id = ?").run(
+        next,
+        next === "needs_review" ? null : now,
+        operationId
+      );
+      this.insertEvent(db, {
+        eventId: `${operationId}:${phase}:${next}`,
+        operationId,
+        phase,
+        actor,
+        actorType,
+        objectHash: (row.object_hash as string | null) ?? undefined,
+        verdict: next,
+        resultSummary: summary
+      });
+      notifySecurityStateChange();
+      return operationFromRow(db.prepare("SELECT * FROM pending_operations WHERE operation_id = ?").get(operationId) as Row);
+    });
+  }
+
+  getWikiAccessOperation(operationId: string): SecurityResult<WikiAccessOperationRecord | null> {
+    return this.read((db) => {
+      const row = db.prepare("SELECT * FROM wiki_access_operations WHERE operation_id = ?").get(operationId) as
+        | Row
+        | undefined;
+      return row ? wikiAccessOperationFromRow(row) : null;
+    });
+  }
+
+  listWikiAccessOperationsByKey(wikiKey: string): SecurityResult<WikiAccessOperationRecord[]> {
+    return this.read(
+      (db) =>
+        (
+          db
+            .prepare("SELECT * FROM wiki_access_operations WHERE wiki_key = ? ORDER BY created_at ASC, operation_id ASC")
+            .all(wikiKey) as Row[]
+        ).map(wikiAccessOperationFromRow)
+    );
+  }
+
+  listWikiAccessOperations(state: OperationState): SecurityResult<WikiAccessOperationRecord[]> {
+    return this.read(
+      (db) =>
+        (
+          db
+            .prepare(
+              "SELECT * FROM wiki_access_operations WHERE state = ? ORDER BY created_at ASC, operation_id ASC"
+            )
+            .all(state) as Row[]
+        ).map(wikiAccessOperationFromRow)
+    );
+  }
+
+  /**
+   * Fail-closed hold projection (Spec 193 §8.2).
+   *
+   * `true` when the key has an unresolved WIDENING operation. A read failure
+   * is returned as a failure — never as "not held".
+   */
+  isWikiAccessWideningHeld(wikiKey: string): SecurityResult<boolean> {
+    return this.read((db) => {
+      const row = db
+        .prepare(
+          `SELECT 1 FROM wiki_access_operations
+            WHERE wiki_key = ? AND direction = 'widen' AND state IN ('pending','needs_review')
+            LIMIT 1`
+        )
+        .get(wikiKey);
+      return row !== undefined;
+    });
+  }
+
+  /** The unresolved widening operation of a key, if any. */
+  findWikiAccessHold(wikiKey: string): SecurityResult<WikiAccessOperationRecord | null> {
+    return this.read((db) => {
+      const row = db
+        .prepare(
+          `SELECT * FROM wiki_access_operations
+            WHERE wiki_key = ? AND direction = 'widen' AND state IN ('pending','needs_review')
+            ORDER BY created_at ASC LIMIT 1`
+        )
+        .get(wikiKey) as Row | undefined;
+      return row ? wikiAccessOperationFromRow(row) : null;
+    });
+  }
+
+  /** Every key that currently carries an unresolved widening. */
+  listWikiAccessHolds(): SecurityResult<WikiAccessOperationRecord[]> {
+    return this.read(
+      (db) =>
+        (
+          db
+            .prepare(
+              `SELECT * FROM wiki_access_operations
+                WHERE direction = 'widen' AND state IN ('pending','needs_review')
+                ORDER BY created_at ASC, operation_id ASC`
+            )
+            .all() as Row[]
+        ).map(wikiAccessOperationFromRow)
+    );
+  }
+
+  // ---- wiki access batch journal (Spec 193 §7.5) ------------------------
+
+  /**
+   * Create the durable batch journal AND the idempotency binding in ONE
+   * transaction, together with the per-item baseline rows.
+   */
+  createWikiAccessBatch(input: {
+    operationId: string;
+    planDigest: string;
+    idempotencyKey: string;
+    actionJson: string;
+    roleChannelVersion: string;
+    items: Array<{
+      wikiKey: string;
+      expectedVersion: string | null;
+      targetHash?: string | null;
+      aclSummary?: string | null;
+      direction?: string | null;
+    }>;
+  }): SecurityResult<WikiAccessBatchRecord> {
+    return this.write((db) => {
+      const now = this.now();
+      const existingByIdempotency = db
+        .prepare("SELECT * FROM wiki_access_batches WHERE idempotency_key = ?")
+        .get(input.idempotencyKey) as Row | undefined;
+      if (existingByIdempotency) {
+        abort("SECURITY_CONFLICT", "idempotency_key_exists", "idempotency key is already bound");
+      }
+      db.prepare(
+        `INSERT INTO wiki_access_batches
+           (operation_id, plan_digest, idempotency_key, action_json, role_channel_version, status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)`
+      ).run(
+        input.operationId,
+        input.planDigest,
+        input.idempotencyKey,
+        input.actionJson,
+        input.roleChannelVersion,
+        now,
+        now
+      );
+      for (const item of input.items) {
+        db.prepare(
+          `INSERT INTO wiki_access_batch_items
+             (operation_id, wiki_key, expected_version, target_hash, acl_summary, direction, status, error_code, error_message, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, 'pending', NULL, NULL, ?)`
+        ).run(
+          input.operationId,
+          item.wikiKey,
+          item.expectedVersion ?? null,
+          item.targetHash ?? null,
+          item.aclSummary ?? null,
+          item.direction ?? null,
+          now
+        );
+      }
+      return wikiAccessBatchFromRow(
+        db.prepare("SELECT * FROM wiki_access_batches WHERE operation_id = ?").get(input.operationId) as Row
+      );
+    });
+  }
+
+  getWikiAccessBatch(operationId: string): SecurityResult<WikiAccessBatchRecord | null> {
+    return this.read((db) => {
+      const row = db.prepare("SELECT * FROM wiki_access_batches WHERE operation_id = ?").get(operationId) as
+        | Row
+        | undefined;
+      return row ? wikiAccessBatchFromRow(row) : null;
+    });
+  }
+
+  findWikiAccessBatchByIdempotencyKey(idempotencyKey: string): SecurityResult<WikiAccessBatchRecord | null> {
+    return this.read((db) => {
+      const row = db.prepare("SELECT * FROM wiki_access_batches WHERE idempotency_key = ?").get(idempotencyKey) as
+        | Row
+        | undefined;
+      return row ? wikiAccessBatchFromRow(row) : null;
+    });
+  }
+
+  listWikiAccessBatchItems(operationId: string): SecurityResult<WikiAccessBatchItemRecord[]> {
+    return this.read(
+      (db) =>
+        (
+          db
+            .prepare("SELECT * FROM wiki_access_batch_items WHERE operation_id = ? ORDER BY wiki_key ASC")
+            .all(operationId) as Row[]
+        ).map(wikiAccessBatchItemFromRow)
+    );
+  }
+
+  /** Persist one per-document result. Only metadata is stored — never a body. */
+  updateWikiAccessBatchItemStatus(input: {
+    operationId: string;
+    wikiKey: string;
+    status: WikiBatchItemStatus;
+    targetHash?: string | null;
+    aclSummary?: string | null;
+    direction?: string | null;
+    errorCode?: string | null;
+    errorMessage?: string | null;
+  }): SecurityResult<WikiAccessBatchItemRecord> {
+    return this.write((db) => {
+      const now = this.now();
+      db.prepare(
+        `UPDATE wiki_access_batch_items
+            SET status = ?,
+                target_hash = COALESCE(?, target_hash),
+                acl_summary = COALESCE(?, acl_summary),
+                direction = COALESCE(?, direction),
+                error_code = ?,
+                error_message = ?,
+                updated_at = ?
+          WHERE operation_id = ? AND wiki_key = ?`
+      ).run(
+        input.status,
+        input.targetHash ?? null,
+        input.aclSummary ?? null,
+        input.direction ?? null,
+        input.errorCode ?? null,
+        input.errorMessage ?? null,
+        now,
+        input.operationId,
+        input.wikiKey
+      );
+      const row = db
+        .prepare("SELECT * FROM wiki_access_batch_items WHERE operation_id = ? AND wiki_key = ?")
+        .get(input.operationId, input.wikiKey) as Row | undefined;
+      if (!row) abort("SECURITY_NOT_FOUND", "batch_item_not_found", "batch item not found");
+      return wikiAccessBatchItemFromRow(row);
+    });
+  }
+
+  setWikiAccessBatchStatus(
+    operationId: string,
+    status: WikiAccessBatchRecord["status"]
+  ): SecurityResult<WikiAccessBatchRecord> {
+    return this.write((db) => {
+      db.prepare("UPDATE wiki_access_batches SET status = ?, updated_at = ? WHERE operation_id = ?").run(
+        status,
+        this.now(),
+        operationId
+      );
+      const row = db.prepare("SELECT * FROM wiki_access_batches WHERE operation_id = ?").get(operationId) as Row;
+      if (!row) abort("SECURITY_NOT_FOUND", "batch_not_found", "batch not found");
+      return wikiAccessBatchFromRow(row);
+    });
   }
 }

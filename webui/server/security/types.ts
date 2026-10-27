@@ -170,3 +170,68 @@ export type PrepareOperationInput = {
   summary?: string;
   traceId?: string;
 };
+
+/**
+ * Spec 193 §8.2 — the per-key projection of a durable Wiki access operation.
+ *
+ * A row in state `pending` or `needs_review` with direction `widen` is a
+ * HOLD: the Wiki key is denied to Agent search and read, and every other
+ * write on that key is refused.
+ */
+export type WikiAccessOperationRecord = {
+  operationId: string;
+  wikiKey: string;
+  oldHash: string | null;
+  targetHash: string | null;
+  direction: OperationDirection;
+  state: OperationState;
+  createdAt: number;
+  resolvedAt: number | null;
+};
+
+export type PrepareWikiAccessOperationInput = {
+  operationId: string;
+  wikiKey: string;
+  direction: OperationDirection;
+  actor: string;
+  actorType: string;
+  oldHash?: string;
+  targetHash?: string;
+  /** Short non-sensitive summary; never the Markdown body. */
+  summary?: string;
+  traceId?: string;
+};
+
+/** Spec 193 §7.4 — the durable per-document status of a bulk authorization run. */
+export type WikiBatchItemStatus =
+  | "pending"
+  | "applied"
+  | "noop"
+  | "conflict"
+  | "failed"
+  | "not_run"
+  | "needs_review";
+
+export type WikiAccessBatchRecord = {
+  operationId: string;
+  planDigest: string;
+  idempotencyKey: string | null;
+  actionJson: string;
+  roleChannelVersion: string;
+  status: "pending" | "completed" | "failed";
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type WikiAccessBatchItemRecord = {
+  operationId: string;
+  wikiKey: string;
+  expectedVersion: string | null;
+  targetHash: string | null;
+  aclSummary: string | null;
+  direction: string | null;
+  status: WikiBatchItemStatus;
+  errorCode: string | null;
+  errorMessage: string | null;
+  updatedAt: number;
+};

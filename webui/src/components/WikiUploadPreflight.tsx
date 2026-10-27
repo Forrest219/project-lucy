@@ -1,6 +1,17 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { DiffViewer } from "./DiffViewer";
-import type { WikiUploadPreview } from "../lib/types";
+import { WikiAccessEditor } from "./WikiAccessEditor";
+import type { WikiAccessSource } from "./WikiAccessEditor";
+import {
+  wikiAclDisplayText,
+  wikiAclEquals,
+  wikiAclIsEmpty,
+  wikiAclRoleIds,
+  wikiUploadAuthorizationChanged,
+  wikiUploadCommitGuard,
+  wikiUploadFinalAcl
+} from "../lib/wikiAccess";
+import type { WikiUploadAccessSelection, WikiUploadPreview } from "../lib/types";
 
 export type WikiUploadPreflightProps = {
   open: boolean;
@@ -14,6 +25,26 @@ export type WikiUploadPreflightProps = {
   onCancel: () => void;
   onConfirm: () => void;
   onTargetDirectoryChange: (directory: string) => void;
+  /* Spec 193 §5 — the explicit authorization selection of this upload. */
+  selection: WikiUploadAccessSelection | null;
+  onSelectionChange: (selection: WikiUploadAccessSelection) => void;
+  emptyConfirmed: boolean;
+  onEmptyConfirmedChange: (next: boolean) => void;
+  allConfirmed: boolean;
+  onAllConfirmedChange: (next: boolean) => void;
+  /** The uploaded declaration is corrupt and has not been overridden yet. */
+  corruptBlocked: boolean;
+  onIgnoreCorrupt: () => void;
+  /** The assignable Role list is ready. */
+  roleReady: boolean;
+  /** Reports the assignable Role query state so the commit can be blocked. */
+  onRoleStateChange?: (ready: boolean) => void;
+};
+
+const SOURCE_LABELS: Record<WikiAccessSource, string> = {
+  uploaded: "来自上传文件",
+  current: "保留现有授权",
+  reset: "重新设置"
 };
 
 export function WikiUploadPreflight({
@@ -27,10 +58,60 @@ export function WikiUploadPreflight({
   isCommitting,
   onCancel,
   onConfirm,
-  onTargetDirectoryChange
+  onTargetDirectoryChange,
+  selection,
+  onSelectionChange,
+  emptyConfirmed,
+  onEmptyConfirmedChange,
+  allConfirmed,
+  onAllConfirmedChange,
+  corruptBlocked,
+  onIgnoreCorrupt,
+  roleReady,
+  onRoleStateChange
 }: WikiUploadPreflightProps) {
   const title = mode === "replace" ? "上传覆盖预检" : "上传 Markdown 预检";
   const directoryOptionsId = "wiki-upload-directory-options";
+  const access = preview?.access ?? null;
+  const currentAcl = access?.current_acl ?? null;
+  const uploadedAcl = access?.uploaded_acl ?? null;
+  const finalAcl = wikiUploadFinalAcl(selection, currentAcl, uploadedAcl);
+  const authorizationChanged = wikiUploadAuthorizationChanged(selection, currentAcl, uploadedAcl);
+  const source: WikiAccessSource =
+    selection?.mode === "preserve_current"
+      ? "current"
+      : selection?.mode === "use_uploaded"
+        ? "uploaded"
+        : "reset";
+  const editorValue =
+    selection?.mode === "preserve_current"
+      ? wikiAclRoleIds(currentAcl)
+      : selection?.mode === "use_uploaded"
+        ? wikiAclRoleIds(uploadedAcl)
+        : (selection?.allowed_roles ?? []);
+  const uploadedIsLegal = uploadedAcl !== null && uploadedAcl.state !== "corrupt";
+  const adoptAvailable =
+    mode === "replace" &&
+    uploadedIsLegal &&
+    selection?.mode !== "use_uploaded" &&
+    !wikiAclEquals(uploadedAcl, currentAcl);
+
+  const guard = wikiUploadCommitGuard({
+    mode,
+    selection,
+    currentAcl,
+    uploadedAcl,
+    previewReady: Boolean(preview),
+    previewLoading: isLoading,
+    previewError: error,
+    previewDigest: access?.preview_digest ?? null,
+    roleReady,
+    emptyConfirmed,
+    allConfirmed,
+    corruptBlocked,
+    serverFinalAcl: access?.final_acl ?? null
+  });
+
   return (
     <Dialog.Root onOpenChange={(next) => (!next ? onCancel() : null)} open={open}>
       <Dialog.Portal>
@@ -45,7 +126,7 @@ export function WikiUploadPreflight({
             className="pl-wiki-preflight-description"
             id="wiki-upload-preflight-description"
           >
-            确认目标目录、目标 Wiki 路径、标题、关联表和 Diff 后再写入业务 Wiki。
+            确认目标目录、目标 Wiki 路径、标题、关联表、可访问角色和 Diff 后再写入业务 Wiki。
           </Dialog.Description>
 
           {isLoading ? (
@@ -166,12 +247,122 @@ export function WikiUploadPreflight({
                     </dd>
                   </div>
                 </dl>
+              </section>
+
+              <section className="pl-wiki-preflight-section" data-testid="wiki-upload-access">
+                <h3 className="pl-wiki-preflight-section-title">可访问角色</h3>
+                <dl className="pl-wiki-preflight-summary-list">
+                  {mode === "replace" ? (
+                    <div
+                      className="pl-wiki-preflight-summary-row"
+                      data-testid="wiki-upload-access-current"
+                    >
+                      <dt className="pl-wiki-preflight-summary-label">当前授权</dt>
+                      <dd className="pl-wiki-preflight-summary-value">
+                        {wikiAclDisplayText(currentAcl)}
+                      </dd>
+                    </div>
+                  ) : null}
+                  <div
+                    className="pl-wiki-preflight-summary-row"
+                    data-testid="wiki-upload-access-uploaded"
+                  >
+                    <dt className="pl-wiki-preflight-summary-label">文件内声明</dt>
+                    <dd className="pl-wiki-preflight-summary-value">
+                      {wikiAclDisplayText(uploadedAcl)}
+                    </dd>
+                  </div>
+                  <div
+                    className="pl-wiki-preflight-summary-row"
+                    data-testid="wiki-upload-access-final"
+                  >
+                    <dt className="pl-wiki-preflight-summary-label">最终将采用</dt>
+                    <dd className="pl-wiki-preflight-summary-value">
+                      {wikiAclDisplayText(finalAcl)}（{SOURCE_LABELS[source]}）
+                    </dd>
+                  </div>
+                </dl>
+                {adoptAvailable ? (
+                  <button
+                    className="pl-btn pl-btn--secondary text-sm"
+                    data-testid="wiki-upload-access-adopt"
+                    onClick={() => onSelectionChange({ mode: "use_uploaded" })}
+                    type="button"
+                  >
+                    采用文件内授权
+                  </button>
+                ) : null}
+                {corruptBlocked ? (
+                  <div className="pl-wiki-access-corrupt" data-testid="wiki-upload-access-corrupt">
+                    <p className="pl-error">文件内可访问角色声明已损坏，不能直接采用。</p>
+                    <button
+                      className="pl-btn pl-btn--secondary text-sm"
+                      data-testid="wiki-upload-access-ignore-corrupt"
+                      onClick={onIgnoreCorrupt}
+                      type="button"
+                    >
+                      忽略文件内损坏声明并重新设置
+                    </button>
+                  </div>
+                ) : null}
+                <WikiAccessEditor
+                  allConfirmed={allConfirmed}
+                  emptyConfirmed={emptyConfirmed}
+                  effects={access?.role_effects ?? []}
+                  effectsError={error}
+                  effectsStatus={isLoading ? "loading" : error ? "error" : "ready"}
+                  emptyConfirmationLabel={
+                    <>
+                      我确认上传后 <span className="notranslate" translate="no">Agent</span>{" "}
+                      暂时无法访问
+                    </>
+                  }
+                  onAllConfirmedChange={onAllConfirmedChange}
+                  onChange={(next) => onSelectionChange({ mode: "set", allowed_roles: next })}
+                  onEmptyConfirmedChange={onEmptyConfirmedChange}
+                  onRoleStateChange={(state) => onRoleStateChange?.(state.roleStatus === "ready")}
+                  requireEmptyConfirmation={selection !== null && wikiAclIsEmpty(finalAcl)}
+                  source={source}
+                  testId="wiki-upload-access-editor"
+                  value={editorValue}
+                />
+              </section>
+
+              <section
+                className="pl-wiki-preflight-section"
+                data-testid="wiki-upload-warnings-section"
+              >
+                <h3 className="pl-wiki-preflight-section-title">警告与阻断问题</h3>
                 {preview.warnings.length > 0 ? (
                   <ul className="pl-wiki-upload-warnings" data-testid="wiki-upload-warnings">
                     {preview.warnings.map((warning) => (
                       <li key={warning}>{warning}</li>
                     ))}
                   </ul>
+                ) : (
+                  <p className="pl-notice" data-testid="wiki-upload-warnings-empty">
+                    没有警告。
+                  </p>
+                )}
+                {access && access.issues.length > 0 ? (
+                  <ul className="pl-wiki-upload-warnings" data-testid="wiki-upload-access-issues">
+                    {access.issues.map((issue) => (
+                      <li key={`${issue.code}-${issue.message}`}>
+                        {issue.blocking ? "阻断：" : "提示："}
+                        {issue.message}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                {guard.reason ? (
+                  <p
+                    className="pl-notice notranslate"
+                    data-testid="wiki-upload-commit-reason"
+                    id="wiki-upload-commit-reason"
+                    translate="no"
+                  >
+                    {guard.reason}
+                  </p>
                 ) : null}
               </section>
 
@@ -187,13 +378,17 @@ export function WikiUploadPreflight({
               取消
             </button>
             <button
+              aria-busy={isCommitting}
+              aria-describedby={guard.reason ? "wiki-upload-commit-reason" : undefined}
               className="pl-btn pl-btn--primary"
               data-testid="wiki-upload-confirm"
-              disabled={!preview || isLoading || isCommitting || Boolean(error)}
+              disabled={
+                guard.blocked || !preview || isLoading || isCommitting || Boolean(error)
+              }
               onClick={onConfirm}
               type="button"
             >
-              {isCommitting ? "写入中..." : mode === "replace" ? "确认覆盖" : "确认上传"}
+              {isCommitting ? "写入中..." : guard.label}
             </button>
           </footer>
         </Dialog.Content>

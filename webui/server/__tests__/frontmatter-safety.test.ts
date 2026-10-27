@@ -10,6 +10,7 @@ import {
   parseMarkdownFrontmatter,
   stringifyMarkdownFrontmatter
 } from "../markdown-frontmatter";
+import { wikiContentHash } from "../wiki-hash";
 
 // V-08 / SEC-15-FM-01～06 — only YAML frontmatter is accepted; every other
 // engine is rejected with zero server-side execution and no disk write.
@@ -168,11 +169,12 @@ describe.each(LANGUAGE_TAGS)("V-08 frontmatter engine %s", (languageTag) => {
 
   it("move of an on-disk non-YAML page writes nothing", async () => {
     const tag = uniqueTag(languageTag);
-    await writeFile(wikiFile("global", "fm-move.md"), payloadFor(languageTag, tag), "utf8");
+    const markdown = payloadFor(languageTag, tag);
+    await writeFile(wikiFile("global", "fm-move.md"), markdown, "utf8");
     const res = await app.inject({
       method: "POST",
       url: "/api/wiki/global%2Ffm-move.md/move",
-      payload: { targetDirectory: "ops" }
+      payload: { targetDirectory: "ops", expected_version: wikiContentHash(markdown) }
     });
     expectRejected(res, 400);
     await absent(wikiFile("ops", "fm-move.md"));
@@ -184,10 +186,26 @@ describe("V-08 valid YAML control", () => {
 
   it.each(["---", "---yaml", "--- yaml", "---YAML"])("accepts %s frontmatter on upload and read", async (opener) => {
     const markdown = YAML_DOC.replace(/^---/, opener);
+    // Spec 193 §5.4 — the commit carries the original Markdown, an explicit
+    // authorization selection and the preview digest.
+    const access = { mode: "set", allowed_roles: [] } as const;
+    const preview = await app.inject({
+      method: "POST",
+      url: "/api/wiki/upload/preview",
+      payload: { key: "global/fm-control.md", markdown, mode: "create", access }
+    });
+    expect(preview.statusCode).toBe(200);
     const commit = await app.inject({
       method: "POST",
       url: "/api/wiki/upload/commit",
-      payload: { key: "global/fm-control.md", markdown, overwrite: true }
+      payload: {
+        key: "global/fm-control.md",
+        markdown,
+        mode: "create",
+        access,
+        confirmed_empty: true,
+        preview_digest: preview.json().data.access.preview_digest
+      }
     });
     expect(commit.statusCode).toBe(200);
     expect(commit.json().data.title).toBe("Control note");

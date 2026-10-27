@@ -2,12 +2,12 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 版本 | v0.2 |
+| 版本 | v0.3 |
 | 日期 | 2026-10-27 |
-| 状态 | 评审已关闭；尚未授权产品代码实施 |
+| 状态 | **已实施**（Plan M66）。SC-01–SC-24 证据齐备，静态门禁通过；未执行浏览器与移动窄屏测试。 |
 | 范围 | 业务 Wiki 上传授权、授权状态展示、独立权限管理、批量授权；不含目录权限继承 |
 | 关联 Plan | [`plans/wo-M66-business-wiki-access-management.md`](plans/wo-M66-business-wiki-access-management.md) |
-| 本轮修订 | 对齐现有实现，闭合全写路径并发、扩权恢复、批量重试、API 与验收契约。 |
+| 本轮修订 | v0.3：产品代码落地后的实施注记、SC 证据映射、已知边界与遗留项。契约本体未改。 |
 | 触发来源 | 2026-10-27 客户真实系统反馈：业务 Wiki 上传后默认无人可见，需再次进入编辑态授权 |
 | 权限基线 | [`../../docs/specs/lucy-20261018-enterprise-security-and-real-e2e-spec.md`](../../docs/specs/lucy-20261018-enterprise-security-and-real-e2e-spec.md) §4.1–4.3 |
 
@@ -656,3 +656,81 @@ This feature follows `webui/docs/00-product-terminology-standard.md`.
 3. 实现交付时同步 `docs/access-control/README.md`、`docs/governance/project-overview.md` 和 `docs/webui/webui-impl-status.md` 的状态索引，据实区分设计、实现与验证状态。
 4. 测试至少覆盖既有 `wiki-acl-concurrency`、`context-acl-matrix`、`security-store`、`context-policy-invalidation`、`context-channel-parity`、Wiki 服务/路由及 React Wiki 测试，并按 Plan 的 SC-01–SC-24 映射验收；不得以仅验证 helper 自身实现的镜像测试替代文件、审计、Agent 裁决和 UI 行为断言。
 5. per-key hold 与批量 journal 复用 `SecurityStore`；共享队列使用 unlocked helper 边界。实施不得重新引入独立 JSON ACL/journal 事实源、自动扩权恢复或跨进程保证。
+
+## 19. 实施注记（Plan M66）
+
+> 本节记录产品代码落地后的**实际**事实。契约本体仍以上文为准；本节只回答「做成了什么」「证据在哪里」「还剩什么边界」。
+
+### 19.1 实现锚点
+
+| 能力 | 服务端 | 前端 |
+|---|---|---|
+| 共享 Wiki 写队列 | `server/wiki-write-queue.ts` | — |
+| 统一 ACL 变更协调器 | `server/wiki-access-operation.ts` | — |
+| 扩权 hold 投影与失效通知 | `server/wiki-access-holds.ts` · `server/security/state-changes.ts` | — |
+| 通道 / Agent 效果投影 | `server/wiki-access-effects.ts` | `src/lib/wikiAccess.ts` · `src/components/WikiAccessEffectList.tsx` |
+| 单篇授权 API | `server/wiki-access.ts` | `src/components/WikiAccessDrawer.tsx` · `WikiAccessEditor.tsx` |
+| 批量授权 API + journal | `server/wiki-access-batch.ts` · `server/wiki-access-batch-journal.ts` | `src/components/WikiBatchAccessDrawer.tsx` · `WikiBatchAccessResult.tsx` |
+| 上传授权选择 | `server/wiki.ts`（`previewWikiUpload` / `commitWikiUpload`） | `src/components/WikiUploadPreflight.tsx` |
+| 启动恢复 | `server/wiki-access-recovery.ts`（`onReady` 钩子） | — |
+| 安全库扩展 | `server/security/schema.ts`（v3 → v4） · `security/store.ts` · `security/types.ts` | — |
+
+所有 ACL 变更路径——上传提交、正文编辑保存、版本恢复、移动、删除、单篇授权、批量授权——都经过 `mutateWikiAccessUnlocked`；组合操作使用不再入队的 unlocked helper，不递归获取队列。
+
+### 19.2 实施中修正的四处契约偏差
+
+评审通过的实现初稿与本 Spec 存在四处偏差，已在交付前按 Spec 修正并补回归测试：
+
+| 偏差 | Spec 条款 | 修正 |
+|---|---|---|
+| `roles → empty` / `→ missing` / `→ corrupt` 被判为 `widen`，导致「收窄到无人可见」的崩溃恢复会停在 `needs_review` 而不是提交收窄 | §4.3 runtime-set 矩阵 | `classifyAccessDirection` 改为严格实现 runtime-set 算法（equal → neutral，严格子集 → narrow，其余 → widen）；`wiki-access-effects.test.ts` 固定该矩阵 |
+| `recoverWikiAccessOperations()` 被 import 但没有调用点，启动恢复从未执行，`pending` 扩权永远停在 `pending` | §8.2 | 在 discovery worker 之前注册 `onReady` 钩子执行 hold 投影恢复；`wiki-access-routes.test.ts` 断言启动后 `pending → needs_review` 且 hold 保持 |
+| 批量选择未在去重前规范化 key，同一篇文档的两种写法被算成两项 | §7.3「服务端先规范化 key 并去重」 | `normalizeBatchSelection` 先走 `normalizeWikiKey` 再去重；同 canonical key 携带不同版本返回 409；非法 key 降级为逐篇 `wiki_batch_document_missing`，不中断整批 |
+| 未映射的 SQLite 驱动错误被当成逐篇失败，批量继续往后写文档 | §7.4.5 审计库故障属系统性失败 | 原始驱动错误归入 `config_audit_unavailable`，批量立即停止并把剩余项标记 `not_run` |
+
+### 19.3 SC-01–SC-24 证据映射
+
+| SC | 执行的用例 |
+|---|---|
+| SC-01 | `wiki-upload-access.test.ts`「an empty final authorization is refused without `confirmed_empty`」；`wiki.test.tsx`「opens upload preview from the library home and commits a new Markdown document」 |
+| SC-02 | `wiki-upload-access.test.ts`「create + `use_uploaded` writes the uploaded roles」「create + `set` replaces the uploaded declaration」；`wiki-access-effects.test.ts`「projects none / exact roles / all roles / a corrupt ACL」；`wiki-access-components.test.tsx`「WikiAccessEffectList」 |
+| SC-03 | `wiki-upload-access.test.ts`「reports the uploaded difference but does not adopt it」「adopts the uploaded roles only when the admin explicitly asks for it」；`wiki.test.tsx`「shows the current / uploaded / final comparison for a replace upload」 |
+| SC-04 | `wiki-upload-access.test.ts`「cannot be adopted and refuses the commit」「is repaired by an explicit `set`」；`wiki-access-components.test.tsx`「requires an explicit re-set for a corrupt stored declaration」 |
+| SC-05 | `wiki-upload-access.test.ts`「refuses a commit without an explicit access selection / without the preview digest / a stale digest and writes nothing / a stale target version refuses the commit / a target that appeared after the preview refuses the create / a changed role_channel_version refuses the commit / the mode is never silently converted」；`wiki-acl-concurrency.test.ts` |
+| SC-06 | `wiki-access-effects.test.ts` 聚合形状用例；`wiki.test.tsx`「lists one primary authorization status per row and filters without per-row access calls」（断言 `perRowCalls` 长度为 0） |
+| SC-07 | `wiki-access-effects.test.ts`「distinguishes search+read, search only, read only and neither」「counts only enabled Agents that really bind the formal Role」；`context-channel-parity.test.ts` |
+| SC-08 | `wiki-access-routes.test.ts`「preserves the body verbatim and every unknown frontmatter field」「a canonical no-op writes no file, creates no version and no audit row」；`wiki-access-components.test.tsx`「WikiAccessDrawer」 |
+| SC-09 | `wiki.test.tsx`「disables the access drawer entry while the editor has an unsaved draft」；`wiki-access-components.test.tsx`「keeps the selection on a conflict and requires a new confirmation」 |
+| SC-10 | `wiki-access-routes.test.ts`「428s without a version and 409s with a stale one; nothing is written」 |
+| SC-11 | `wiki-access-batch.test.ts`「merges identical duplicate keys」「rejects an empty selection and creates no operation」「accepts exactly 100 unique keys」「rejects 101 unique keys and creates no operation」「enforces the limit AFTER deduplication and ignores a request-supplied limit」「canonicalizes the key BEFORE deduplicating」；`wiki-batch-access.test.tsx`「refuses the 101st document and leaves the selection unchanged」 |
+| SC-12 | `wiki-access-batch.test.ts`「`add` performs the per-file union」「`replace` repairs a corrupt ACL and writes the exact value」「requires its own confirmation for an empty and for an all-roles replacement」；`wiki-batch-access.test.tsx`「offers exactly the two supported operations」 |
+| SC-13 | `wiki-access-batch.test.ts`「shows the old and the new ACL, the direction, the no-op flag and the summary」「keeps the plan_digest stable and changes it when a baseline changes」；`wiki-batch-access.test.tsx`「previews the per-document difference plus a summary before submitting」 |
+| SC-14 | `wiki-access-batch-faults.test.ts`「rejects with 409 wiki_batch_preview_stale, zero file writes and zero journal rows」 |
+| SC-15 | `wiki-access-batch-faults.test.ts`「marks the conflicting item and still runs the later items」；`wiki-batch-access.test.tsx`「retries only the unfinished items and never retries needs_review」 |
+| SC-16 | `wiki-access-batch-faults.test.ts`「the same key and digest returns the prior status without writing twice」「the same key with a different digest is a 409 idempotency conflict」 |
+| SC-17 | `wiki-access-batch-faults.test.ts`「uses the shared batch operation id as the request id and the trusted actor」；`wiki-access-routes.test.ts`「records the trusted actor, never a body-supplied one」 |
+| SC-18 | `wiki-write-queue.test.ts`（队列串行、每个写路径队列内重验版本 / 目标状态、组合操作不递归入队）；`wiki-acl-concurrency.test.ts`；`wiki.test.ts` |
+| SC-19 | `wiki-access-operation.test.ts`「denies search AND read, even when the widened bytes are already on disk」「a widening whose bytes reached the disk becomes needs_review and stays held」「a pending operation whose bytes are still the old ones is aborted and the hold is released」；`context-acl-matrix.test.ts`；`wiki-access-batch-faults.test.ts`「never auto-commits a widening and never replays the write」 |
+| SC-20 | `wiki-access-operation.test.ts`「a narrowing leaves no hold behind」；`context-policy-invalidation.test.ts`「an ACL edit on disk narrows Wiki and Skill reads immediately」 |
+| SC-21 | `wiki-access-batch-faults.test.ts`「never auto-commits a widening and never replays the write」「contains no body, no secret, no credential and no absolute path」；`wiki-batch-access.test.tsx`「restores a previous run by operation id」 |
+| SC-22 | `wiki-acl-concurrency.test.ts`「version restore never revives an older, wider ACL」「the second admin's ACL overwrite loses to the first (no silent last-writer-wins)」；`wiki.test.ts`（restore / move / delete 的 `expected_version` 门禁） |
+| SC-23 | `wiki-access-auth.test.ts`（未登录读 / 预检 / 写 / 批量提交一律 401；已登录 operator 可读摘要并修改单篇授权）；`wiki-access-routes.test.ts`「records the trusted actor, never a body-supplied one」 |
+| SC-24 | `wiki-access-components.test.tsx`（DOM 标识翻译防御）；`wiki.test.tsx`；`lint-terminology-scan.test.ts`「Spec 193 registered terminology and shared contracts」 |
+
+### 19.4 新增稳定错误码
+
+本 Spec 的错误表未列，落地时新增两个并已登记到 `webui/docs/03-api-spec.md`：
+
+| 状态码 | code | 含义 |
+|---|---|---|
+| 400 | `wiki_batch_blocked` | 批量计划存在阻断性校验问题（例如 add 遇到损坏 ACL）；零写入 |
+| 400 | `wiki_access_frontmatter_invalid` | 文档 frontmatter 无法解析或无法写回；零写入 |
+
+### 19.5 已知边界与未验证项
+
+* **未执行浏览器与移动窄屏测试。** 本轮验证只用 Vitest、Testing Library、`npm run build`、`lint:terminology`、`lint:ia-boundary` 与 `node scripts/lint-spec.mjs`。UI 的视觉与交互回归仍需人工过一遍。
+* **队列与 hold 只覆盖单实例单副本。** 直接编辑 Wiki 文件、或多个 WebUI 进程共享写入同一内容目录，属不支持的多写者拓扑，不提供跨进程 CAS 或分布式事务保证。
+* **`needs_review` 必须人工核对。** 扩权在崩溃后不会自动重放或自动确认；`needs_review` 的文档对 Agent 持续拒绝，管理员需先处理该状态再重试。
+* **批量不是跨文件事务。** 单篇冲突只影响该篇；系统性失败会停止后续文档并把剩余项标记 `not_run`；成功项不回滚。
+* **`role_channel_version` 是全局哈希**（Role 通道 + Agent 启用/绑定），不是某个 Agent 的 `snapshotHash`；Role 图缺失（无 `access.yaml`）按空 Role 图处理，不抛错。
+* **既有测试被同步更新。** 上传契约（必须携带 `access` + `preview_digest`）、结构性写路径的 `expected_version`、安全库 schema v4 三项改动影响了 `audit-actor-propagation.test.ts`、`frontmatter-safety.test.ts`、`oidc-reservation.test.ts` 与 `audit-trust/audit-trust-backfill.test.ts`，这些文件已按新契约更新，不是降低断言。

@@ -165,6 +165,18 @@ import { auditActorFields, trustedActorFromRequest } from "./security/request-ac
 import { assertStartupPolicy, resolveCookieSecure } from "./auth/deployment-mode.js";
 import { reconcileBootstrapOnStartup } from "./auth/bootstrap.js";
 import { closeSecurityStore, getSecurityStore } from "./security/instance.js";
+import {
+  getWikiAccessSummary,
+  previewWikiAccess,
+  saveWikiAccess
+} from "./wiki-access.js";
+import {
+  commitWikiAccessBatch,
+  getWikiAccessBatchResult,
+  previewWikiAccessBatch
+} from "./wiki-access-batch.js";
+import { loadWikiAccessConfigSnapshot } from "./wiki-access-effects.js";
+import { recoverWikiAccessOperations } from "./wiki-access-recovery.js";
 import { recoverInterruptedOperations } from "./security/ledger.js";
 import { AUDIT_PROJECTOR_NAME, createProjectionScheduler, readTargetCursor } from "./security/projector.js";
 import { recoverProjectionCursor } from "./security/recovery.js";
@@ -699,6 +711,24 @@ export function buildServer() {
       console.warn("[auth] bootstrap reconciliation failed; bootstrap re-checks on the next attempt:", error);
     }
   });
+  // Spec 193 §8.2 — reconstruct the widening hold before the Agent Wiki
+  // channel accepts requests. A crash between the durable audit terminal and
+  // the security operation commit leaves a `pending` operation; the recovery
+  // either commits it (the bytes already prove the narrowing) or parks it in
+  // `needs_review` and KEEPS the hold. It never re-writes a document and
+  // never ratifies a widening on its own.
+  app.addHook("onReady", async () => {
+    try {
+      const report = await recoverWikiAccessOperations();
+      if (report.committed.length || report.aborted.length || report.needsReview.length) {
+        console.warn(
+          `[wiki-access] recovered ${report.committed.length} committed / ${report.aborted.length} aborted / ${report.needsReview.length} needs-review access operation(s)`
+        );
+      }
+    } catch (error) {
+      console.warn("[wiki-access] access operation recovery failed; the hold stays in place:", error);
+    }
+  });
   // Spec 190 §8.2 — continuous discovery worker. It only queries a database for
   // connections whose operator enabled the switch, and it keeps its own probe
   // quota so it never competes with `test` / `live-schemas`.
@@ -1054,11 +1084,19 @@ export function buildServer() {
 
   app.get("/api/wiki", async () => {
     const projectRoot = await resolveProjectRoot();
+    // One aggregate response: every row carries its authorization status and
+    // the Role / Agent configuration is read exactly once (Spec 193 §6.1).
+    const [pages, directories, snapshot] = await Promise.all([
+      listWiki(projectRoot),
+      listWikiDirectories(projectRoot),
+      loadWikiAccessConfigSnapshot(projectRoot)
+    ]);
     return {
       ok: true,
       data: {
-        pages: await listWiki(projectRoot),
-        directories: await listWikiDirectories(projectRoot)
+        pages,
+        directories,
+        role_channel_version: snapshot.role_channel_version
       }
     };
   });
@@ -1118,9 +1156,15 @@ export function buildServer() {
 
   app.delete<{
     Params: { key: string };
+    Querystring: { expected_version?: string };
   }>("/api/wiki/:key", async (request) => {
     const projectRoot = await resolveProjectRoot();
-    const result = await deleteWiki(projectRoot, request.params.key, trustedActorFromRequest(request));
+    const result = await deleteWiki(
+      projectRoot,
+      request.params.key,
+      trustedActorFromRequest(request),
+      request.query?.expected_version
+    );
     writtenFiles.push({ filePath: result.filePath });
     writtenFiles.push({ filePath: "wiki/.lucy-history/index.json" });
     return {
@@ -1143,11 +1187,17 @@ export function buildServer() {
 
   app.post<{
     Params: { key: string };
-    Body: WikiMoveInput;
+    Body: WikiMoveInput & { expected_version?: string };
   }>("/api/wiki/:key/move", async (request, reply) => {
     const projectRoot = await resolveProjectRoot();
     const targetDirectory = request.body?.targetDirectory ?? "";
-    const result = await moveWiki(projectRoot, request.params.key, targetDirectory, trustedActorFromRequest(request));
+    const result = await moveWiki(
+      projectRoot,
+      request.params.key,
+      targetDirectory,
+      trustedActorFromRequest(request),
+      request.body?.expected_version
+    );
     writtenFiles.push({ filePath: result.filePath });
     writtenFiles.push({ filePath: "wiki/.lucy-history/index.json" });
     writtenFiles.push({ filePath: "wiki/.lucy-directories.json" });
@@ -1226,13 +1276,15 @@ export function buildServer() {
 
   app.post<{
     Params: { key: string; versionId: string };
+    Body: { expected_version?: string };
   }>("/api/wiki/:key/versions/:versionId/restore", async (request) => {
     const projectRoot = await resolveProjectRoot();
     const result = await restoreWikiVersion(
       projectRoot,
       request.params.key,
       request.params.versionId,
-      trustedActorFromRequest(request)
+      trustedActorFromRequest(request),
+      request.body?.expected_version
     );
     writtenFiles.push({ filePath: result.filePath });
     writtenFiles.push({ filePath: "wiki/.lucy-history/index.json" });
@@ -1240,6 +1292,120 @@ export function buildServer() {
       ok: true,
       data: result
     };
+  });
+
+  // ─── Spec 193: business Wiki access management ────────────────────────────
+  //
+  // The authorization of a document is an object fact of its Markdown file.
+  // These routes manage it WITHOUT touching the body.
+
+  app.get<{
+    Params: { key: string };
+  }>("/api/wiki/:key/access", async (request) => {
+    const projectRoot = await resolveProjectRoot();
+    return {
+      ok: true,
+      data: await getWikiAccessSummary(projectRoot, request.params.key)
+    };
+  });
+
+  app.post<{
+    Params: { key: string };
+    Body: { allowed_roles?: unknown; expected_version?: string };
+  }>("/api/wiki/:key/access/preview", async (request) => {
+    const projectRoot = await resolveProjectRoot();
+    return {
+      ok: true,
+      data: await previewWikiAccess(projectRoot, request.params.key, {
+        allowed_roles: request.body?.allowed_roles,
+        expected_version: request.body?.expected_version
+      })
+    };
+  });
+
+  app.put<{
+    Params: { key: string };
+    Body: { allowed_roles?: unknown; expected_version?: string; preview_digest?: string };
+  }>("/api/wiki/:key/access", async (request) => {
+    const projectRoot = await resolveProjectRoot();
+    const result = await saveWikiAccess(
+      projectRoot,
+      request.params.key,
+      {
+        allowed_roles: request.body?.allowed_roles,
+        expected_version: request.body?.expected_version,
+        preview_digest: request.body?.preview_digest
+      },
+      trustedActorFromRequest(request)
+    );
+    writtenFiles.push({ filePath: `wiki/${request.params.key}` });
+    writtenFiles.push({ filePath: "wiki/.lucy-history/index.json" });
+    return {
+      ok: true,
+      data: result
+    };
+  });
+
+  app.post<{
+    Body: {
+      items?: Array<{ key: string; expected_version?: string }>;
+      action?: unknown;
+      operation_id?: string;
+    };
+  }>("/api/wiki/access/batch/preview", async (request) => {
+    const projectRoot = await resolveProjectRoot();
+    return {
+      ok: true,
+      data: await previewWikiAccessBatch(projectRoot, {
+        items: request.body?.items,
+        action: request.body?.action,
+        operation_id: request.body?.operation_id
+      })
+    };
+  });
+
+  app.post<{
+    Body: {
+      operation_id?: string;
+      plan_digest?: string;
+      idempotency_key?: string;
+      items?: Array<{ key: string; expected_version?: string }>;
+      action?: unknown;
+      confirmed_empty?: boolean;
+      confirmed_all?: boolean;
+    };
+  }>("/api/wiki/access/batch/commit", async (request) => {
+    const projectRoot = await resolveProjectRoot();
+    const result = await commitWikiAccessBatch(
+      projectRoot,
+      {
+        operation_id: request.body?.operation_id,
+        plan_digest: request.body?.plan_digest,
+        idempotency_key: request.body?.idempotency_key,
+        items: request.body?.items,
+        action: request.body?.action,
+        confirmed_empty: request.body?.confirmed_empty,
+        confirmed_all: request.body?.confirmed_all
+      },
+      trustedActorFromRequest(request)
+    );
+    return {
+      ok: true,
+      data: result
+    };
+  });
+
+  app.get<{
+    Params: { operationId: string };
+  }>("/api/wiki/access/batches/:operationId", async (request, reply) => {
+    const result = await getWikiAccessBatchResult(request.params.operationId);
+    if (!result) {
+      return reply.status(404).send({
+        ok: false,
+        error: { code: "wiki_batch_not_found", message: "未找到该批量授权操作。" }
+      });
+    }
+    return { ok: true, data: result };
   });
 
   app.get<{

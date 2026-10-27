@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MarkdownPreview } from "../components/MarkdownPreview";
 import { WikiEditor } from "../pages/WikiEditor";
 import { nextNewNoteKey } from "../lib/slRef";
-import type { WikiDirectorySummary } from "../lib/types";
+import type { WikiAccessListEntry, WikiAclState, WikiDirectorySummary } from "../lib/types";
 import {
   buildWikiDirectoryTree,
   extractWikiToc,
@@ -17,24 +17,48 @@ import {
   wikiTitleFromContent
 } from "../lib/wiki";
 
+/** Spec 193 — the aggregate authorization entry every list row carries. */
+function accessEntry(
+  overrides: Partial<WikiAccessListEntry> = {}
+): WikiAccessListEntry {
+  return {
+    file_version: "sha256:fixture-access",
+    acl: { state: "missing" },
+    declared_role_count: 0,
+    declared_without_discover: 0,
+    declared_without_read: 0,
+    ...overrides
+  };
+}
+
 const WIKI_PAGES = [
   {
     key: "global/superstore-analysis-playbook.md",
     summary: "Superstore guide",
     tags: ["analysis"],
-    slRefs: ["mysql-aliyun/dataforai/superstore_orders"]
+    slRefs: ["mysql-aliyun/dataforai/superstore_orders"],
+    access: accessEntry({
+      acl: { state: "roles", roles: ["analyst", "finance_reader"] },
+      declared_role_count: 2,
+      declared_without_read: 1
+    })
   },
   {
     key: "poc/active-analysis.md",
     summary: "POC active",
     tags: ["poc"],
-    slRefs: ["mysql-aliyun/dataforai/superstore_orders"]
+    slRefs: ["mysql-aliyun/dataforai/superstore_orders"],
+    access: accessEntry()
   },
   {
     key: "kx/financial-analysis-playbook.md",
     summary: "Financial playbook",
     tags: ["playbook"],
-    slRefs: ["mysql-aliyun/dataforai/finance_orders"]
+    slRefs: ["mysql-aliyun/dataforai/finance_orders"],
+    access: accessEntry({
+      acl: { state: "all" },
+      declared_role_count: null
+    })
   }
 ];
 
@@ -79,13 +103,15 @@ const NESTED_WIKI_PAGES = [
     key: "ops/playbooks/month-end-close.md",
     summary: "Month end close",
     tags: ["ops"],
-    slRefs: []
+    slRefs: [],
+    access: accessEntry()
   },
   {
     key: "ops/runbooks/incident-response.md",
     summary: "Incident response",
     tags: ["ops"],
-    slRefs: []
+    slRefs: [],
+    access: accessEntry()
   }
 ];
 
@@ -172,6 +198,103 @@ function renderWiki(initialPath: string) {
   return client;
 }
 
+/** Spec 193 — the uploaded `allowed_roles` declaration of a Markdown file. */
+function parseUploadedAcl(markdown: string): WikiAclState {
+  const match = /allowed_roles:\s*(\[[^\]]*\]|[^\n]*)/.exec(markdown ?? "");
+  if (!match) {
+    return { state: "missing" };
+  }
+  const raw = match[1].trim();
+  if (!raw.startsWith("[")) {
+    // A non-array declaration is corrupt.
+    return { state: "corrupt", detail: "allowed_roles 不是数组" };
+  }
+  const roles = raw
+    .slice(1, -1)
+    .split(",")
+    .map((role) => role.trim().replace(/^["']|["']$/g, ""))
+    .filter(Boolean);
+  if (roles.length === 0) {
+    return { state: "empty" };
+  }
+  if (roles.length === 1 && roles[0] === "*") {
+    return { state: "all" };
+  }
+  if (roles.includes("*")) {
+    // `*` mixed with a Role is a corrupt declaration.
+    return { state: "corrupt", detail: "allowed_roles 混用了 *" };
+  }
+  return { state: "roles", roles };
+}
+
+const MOCK_ROLE_IDS = ["analyst", "finance_reader"];
+
+function mockRoleEffects(acl: WikiAclState) {
+  if (acl.state !== "roles") {
+    return [];
+  }
+  return acl.roles.map((roleId) => {
+    const known = MOCK_ROLE_IDS.includes(roleId);
+    return {
+      role_id: roleId,
+      known,
+      discover_enabled: known,
+      read_enabled: known && roleId !== "finance_reader",
+      assigned_agent_count: known ? 2 : 0,
+      assigned_agent_ids: known ? [`agent-${roleId}`] : []
+    };
+  });
+}
+
+function mockUploadAccessPreview(
+  body: Record<string, unknown>,
+  exists: boolean,
+  currentAcl: WikiAclState | null
+) {
+  const uploadedAcl = parseUploadedAcl(String(body.markdown ?? ""));
+  const requested = (body.access ?? null) as
+    | { mode: "preserve_current" | "use_uploaded" | "set"; allowed_roles?: string[] }
+    | null;
+  const suggestedSelection =
+    exists
+      ? { mode: "preserve_current" as const }
+      : uploadedAcl.state === "corrupt" ||
+          uploadedAcl.state === "missing" ||
+          uploadedAcl.state === "empty"
+        ? { mode: "set" as const, allowed_roles: [] }
+        : { mode: "use_uploaded" as const };
+  const selection = requested ?? suggestedSelection;
+  let finalAcl: WikiAclState | null = uploadedAcl;
+  if (selection.mode === "preserve_current") {
+    finalAcl = currentAcl;
+  } else if (selection.mode === "set") {
+    const roles = selection.allowed_roles ?? [];
+    finalAcl = roles.includes("*")
+      ? { state: "all" }
+      : roles.length === 0
+        ? { state: "empty" }
+        : { state: "roles", roles };
+  }
+  const declaredRoleCount =
+    finalAcl?.state === "roles" ? finalAcl.roles.length : finalAcl?.state === "all" ? null : 0;
+  const selectionKey =
+    selection.mode === "set" ? (selection.allowed_roles ?? []).join("+") : selection.mode;
+  return {
+    current_acl: exists ? currentAcl : null,
+    uploaded_acl: uploadedAcl,
+    final_acl: finalAcl ?? { state: "missing" },
+    suggested_selection: suggestedSelection,
+    direction: "neutral",
+    role_effects: mockRoleEffects(finalAcl ?? { state: "missing" }),
+    declared_role_count: declaredRoleCount,
+    declared_without_discover: 0,
+    declared_without_read: finalAcl?.state === "roles" ? 1 : 0,
+    role_channel_version: "rcv-fixture",
+    preview_digest: `digest-${selectionKey}`,
+    issues: []
+  };
+}
+
 function buildFetchMock(
   pages = WIKI_PAGES,
   sources = SOURCES,
@@ -223,6 +346,8 @@ function buildFetchMock(
           `本地文件名 ${sourceFileName} 与目标路径文件名 ${body.key.split("/").pop()} 不一致，将按目标 Wiki 路径保存。`
         );
       }
+      const exists = body.mode === "replace";
+      const existing = pages.find((p) => p.key === body.key);
       return new Response(
         JSON.stringify({
           ok: true,
@@ -231,15 +356,21 @@ function buildFetchMock(
             filePath: `wiki/${body.key}`,
             diff: `@@\n+# Uploaded\n`,
             proposedMarkdown: body.markdown,
-            exists: Boolean(body.overwrite),
-            mode: body.overwrite ? "replace" : "create",
+            exists,
+            mode: exists ? "replace" : "create",
             sourceFileName,
             targetKey: body.key,
-            existingTitle: body.overwrite ? "Existing title" : null,
+            existingTitle: exists ? "Existing title" : null,
             targetTitle: "Uploaded",
             title: "Uploaded",
             slRefs: ["mysql-aliyun/dataforai/superstore_orders"],
-            warnings
+            warnings,
+            currentFileVersion: exists ? `sha256:fixture-${body.key}` : null,
+            access: mockUploadAccessPreview(
+              body,
+              exists,
+              existing?.access?.acl ?? { state: "missing" }
+            )
           }
         })
       );
@@ -250,6 +381,8 @@ function buildFetchMock(
         typeof body.sourceFileName === "string" && body.sourceFileName.trim()
           ? String(body.sourceFileName).split(/[\\/]/).pop() || String(body.sourceFileName)
           : body.key.split("/").pop() ?? body.key;
+      const exists = body.mode === "replace";
+      const existing = pages.find((p) => p.key === body.key);
       return new Response(
         JSON.stringify({
           ok: true,
@@ -258,15 +391,21 @@ function buildFetchMock(
             filePath: `wiki/${body.key}`,
             diff: `@@\n+# Uploaded\n`,
             proposedMarkdown: body.markdown,
-            exists: Boolean(body.overwrite),
-            mode: body.overwrite ? "replace" : "create",
+            exists,
+            mode: exists ? "replace" : "create",
             sourceFileName,
             targetKey: body.key,
-            existingTitle: body.overwrite ? "Existing title" : null,
+            existingTitle: exists ? "Existing title" : null,
             targetTitle: "Uploaded",
             title: "Uploaded",
             slRefs: ["mysql-aliyun/dataforai/superstore_orders"],
-            warnings: []
+            warnings: [],
+            currentFileVersion: exists ? `sha256:fixture-${body.key}` : null,
+            access: mockUploadAccessPreview(
+              { ...body, access: body.access },
+              exists,
+              existing?.access?.acl ?? { state: "missing" }
+            )
           }
         })
       );
@@ -616,8 +755,20 @@ describe("wiki lib helpers", () => {
 
   it("buildWikiDirectoryTree keeps root-level markdown files separate from top-level directories", () => {
     const tree = buildWikiDirectoryTree([
-      { key: "root-note.md", summary: "Root note", tags: [], slRefs: [] },
-      { key: "global/guide.md", summary: "Guide", tags: [], slRefs: [] }
+      {
+        key: "root-note.md",
+        summary: "Root note",
+        tags: [],
+        slRefs: [],
+        access: accessEntry()
+      },
+      {
+        key: "global/guide.md",
+        summary: "Guide",
+        tags: [],
+        slRefs: [],
+        access: accessEntry()
+      }
     ]);
     expect(tree.map((node) => node.path)).toEqual(["", "global"]);
     expect(tree[0]).toMatchObject({
@@ -828,7 +979,8 @@ describe("WikiEditor Read Mode default (P0)", () => {
         key: "global/orphan.md",
         summary: "Orphan page",
         tags: [],
-        slRefs: ["mysql-aliyun/dataforai/ghost_table"]
+        slRefs: ["mysql-aliyun/dataforai/ghost_table"],
+        access: accessEntry()
       }
     ];
     vi.stubGlobal("fetch", buildFetchMock(pages));
@@ -855,7 +1007,8 @@ describe("WikiEditor Read Mode default (P0)", () => {
         key: "global/ksc-financial-analysis-playbook.md",
         summary: "KSC playbook",
         tags: [],
-        slRefs: refs
+        slRefs: refs,
+        access: accessEntry()
       }
     ];
     vi.stubGlobal("fetch", buildFetchMock(pages));
@@ -1401,13 +1554,15 @@ describe("WikiEditor sl_ref handoff (existing M10 behavior)", () => {
         key: "global/foo.md",
         summary: "Foo",
         tags: [],
-        slRefs: []
+        slRefs: [],
+        access: accessEntry()
       },
       {
         key: "global/foo-wiki.md",
         summary: "Foo Wiki",
         tags: [],
-        slRefs: []
+        slRefs: [],
+        access: accessEntry()
       }
     ]));
     renderWiki("/wiki?sl_ref=mysql-aliyun/dataforai/foo");
@@ -1597,6 +1752,19 @@ describe("WikiEditor Markdown file operations (M47)", () => {
       expect(dialog).toHaveTextContent("wiki/ops/playbooks/uploaded.md");
     });
 
+    // SC-01: a new upload without any declared role stays 无人可见 until the
+    // administrator confirms it — the submit button stays disabled.
+    expect(within(dialog).getByTestId("wiki-upload-confirm")).toBeDisabled();
+    fireEvent.click(
+      within(dialog).getByRole("checkbox", { name: "我确认上传后 Agent 暂时无法访问" })
+    );
+    await waitFor(() => {
+      expect(within(dialog).getByTestId("wiki-upload-confirm")).not.toBeDisabled();
+    });
+    expect(within(dialog).getByTestId("wiki-upload-confirm")).toHaveTextContent(
+      "上传并保持无人可见"
+    );
+
     fireEvent.click(screen.getByTestId("wiki-upload-confirm"));
     await waitFor(() => {
       const commit = fetchMock.mock.calls.find((call) => call[0] === "/api/wiki/upload/commit");
@@ -1605,6 +1773,11 @@ describe("WikiEditor Markdown file operations (M47)", () => {
       expect(body.key).toBe("ops/playbooks/uploaded.md");
       expect(body.markdown).toContain("# Uploaded");
       expect(body.sourceFileName).toBe("uploaded.md");
+      // SC-05: the commit always carries the explicit access selection, the
+      // preview digest and the empty confirmation.
+      expect(body.access).toEqual({ mode: "set", allowed_roles: [] });
+      expect(body.preview_digest).toBe("digest-");
+      expect(body.confirmed_empty).toBe(true);
     });
     await waitFor(() => {
       expect(screen.getByTestId("current-location")).toHaveTextContent(
@@ -1636,14 +1809,31 @@ describe("WikiEditor Markdown file operations (M47)", () => {
     expect(within(dialog).getByTestId("wiki-upload-summary-title")).toHaveTextContent("Uploaded");
     expect(within(dialog).getByTestId("wiki-upload-warnings")).toHaveTextContent("replacement.md");
 
+    // SC-03: a replace upload always starts from the persisted authorization.
+    expect(within(dialog).getByTestId("wiki-upload-access-editor-source")).toHaveTextContent(
+      "保留现有授权"
+    );
+    expect(within(dialog).getByTestId("wiki-upload-access-current")).toHaveTextContent(
+      "analyst、finance_reader"
+    );
+    expect(within(dialog).getByTestId("wiki-upload-access-final")).toHaveTextContent(
+      "analyst、finance_reader（保留现有授权）"
+    );
+    expect(within(dialog).getByTestId("wiki-upload-confirm")).toHaveTextContent(
+      "覆盖并保留授权"
+    );
+
     fireEvent.click(screen.getByTestId("wiki-upload-confirm"));
     await waitFor(() => {
       const commit = fetchMock.mock.calls.find((call) => call[0] === "/api/wiki/upload/commit");
       expect(commit).toBeTruthy();
       const body = JSON.parse(String(commit?.[1]?.body));
       expect(body.key).toBe("global/superstore-analysis-playbook.md");
-      expect(body.overwrite).toBe(true);
+      expect(body.mode).toBe("replace");
+      expect(body.access).toEqual({ mode: "preserve_current" });
       expect(body.sourceFileName).toBe("replacement.md");
+      // SC-05: the ORIGINAL file text is the commit source.
+      expect(body.markdown).toBe("# Replacement\n");
     });
   });
 
@@ -2361,5 +2551,320 @@ describe("Wiki directory-scoped library (Spec 105)", () => {
       expect(screen.getByTestId("current-location")).toHaveTextContent("/wiki?dir=global");
     });
     expect(await screen.findByTestId("wiki-library-documents")).toBeInTheDocument();
+  });
+});
+
+describe("Business Wiki upload authorization (Spec 193 §5 / SC-01 – SC-05)", () => {
+  async function openUpload(content: string, fileName = "uploaded.md") {
+    const fetchMock = buildFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    renderWiki("/wiki");
+    fireEvent.click(await screen.findByTestId("wiki-upload-button"));
+    const input = screen.getByTestId("wiki-upload-input") as HTMLInputElement;
+    fireEvent.change(input, {
+      target: { files: [new File([content], fileName, { type: "text/markdown" })] }
+    });
+    const dialog = await screen.findByTestId("wiki-upload-preflight");
+    await waitFor(() => {
+      expect(within(dialog).getByTestId("wiki-upload-access")).toBeInTheDocument();
+    });
+    return { dialog, fetchMock };
+  }
+
+  it("uses the uploaded declaration as the initial selection and shows its source", async () => {
+    const { dialog } = await openUpload(
+      "---\nallowed_roles: [analyst, finance_reader]\n---\n# Uploaded\n"
+    );
+
+    expect(within(dialog).getByTestId("wiki-upload-access-editor-source")).toHaveTextContent(
+      "来自上传文件"
+    );
+    expect(within(dialog).getByTestId("wiki-upload-access-final")).toHaveTextContent(
+      "analyst、finance_reader（来自上传文件）"
+    );
+    expect(within(dialog).getByTestId("wiki-upload-confirm")).toHaveTextContent("上传并授权");
+    // The selection is editable.
+    expect(within(dialog).getByLabelText("analyst")).toBeChecked();
+  });
+
+  it("blocks the commit of a file without any declared role until it is confirmed", async () => {
+    const { dialog } = await openUpload("---\nsummary: Uploaded\n---\n# Uploaded\n");
+
+    expect(within(dialog).getByTestId("wiki-upload-access-editor-source")).toHaveTextContent(
+      "重新设置"
+    );
+    expect(within(dialog).getByTestId("wiki-upload-access-final")).toHaveTextContent(
+      "无人可见（重新设置）"
+    );
+    expect(within(dialog).getByTestId("wiki-upload-confirm")).toBeDisabled();
+    expect(within(dialog).getByTestId("wiki-upload-confirm")).toHaveTextContent(
+      "上传并保持无人可见"
+    );
+  });
+
+  it("requires the independent all-roles confirmation for a file that declares [*]", async () => {
+    const { dialog } = await openUpload("---\nallowed_roles: ['*']\n---\n# Uploaded\n");
+
+    expect(within(dialog).getByTestId("wiki-upload-confirm")).toBeDisabled();
+    expect(within(dialog).getByTestId("wiki-upload-confirm")).toHaveTextContent(
+      "上传并设为所有角色可见"
+    );
+    const confirm = within(dialog).getByRole("checkbox", { name: "我确认所有角色可见" });
+    expect(confirm).not.toBeChecked();
+    fireEvent.click(confirm);
+    await waitFor(() => {
+      expect(within(dialog).getByTestId("wiki-upload-confirm")).not.toBeDisabled();
+    });
+  });
+
+  it("blocks a corrupt uploaded declaration until it is explicitly re-set", async () => {
+    const { dialog, fetchMock } = await openUpload(
+      "---\nallowed_roles: finance\n---\n# Uploaded\n"
+    );
+
+    expect(within(dialog).getByTestId("wiki-upload-access-corrupt")).toBeInTheDocument();
+    expect(within(dialog).getByTestId("wiki-upload-confirm")).toBeDisabled();
+
+    fireEvent.click(within(dialog).getByTestId("wiki-upload-access-ignore-corrupt"));
+    await waitFor(() => {
+      expect(
+        within(dialog).queryByTestId("wiki-upload-access-corrupt")
+      ).not.toBeInTheDocument();
+    });
+
+    // The empty state still needs its own confirmation.
+    expect(within(dialog).getByTestId("wiki-upload-confirm")).toBeDisabled();
+    fireEvent.click(
+      within(dialog).getByRole("checkbox", { name: "我确认上传后 Agent 暂时无法访问" })
+    );
+    await waitFor(() => {
+      expect(within(dialog).getByTestId("wiki-upload-confirm")).not.toBeDisabled();
+    });
+
+    fireEvent.click(within(dialog).getByTestId("wiki-upload-confirm"));
+    await waitFor(() => {
+      const commit = fetchMock.mock.calls.find((call) => call[0] === "/api/wiki/upload/commit");
+      expect(commit).toBeTruthy();
+      const body = JSON.parse(String(commit?.[1]?.body));
+      expect(body.access).toEqual({ mode: "set", allowed_roles: [] });
+      expect(body.confirmed_empty).toBe(true);
+    });
+  });
+
+  it("shows the current / uploaded / final comparison for a replace upload", async () => {
+    const fetchMock = buildFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    renderWiki("/wiki?key=global%2Fsuperstore-analysis-playbook.md");
+    fireEvent.click(await screen.findByTestId("wiki-upload-replace-button"));
+    const input = screen.getByTestId("wiki-upload-input") as HTMLInputElement;
+    fireEvent.change(input, {
+      target: {
+        files: [
+          new File(["---\nallowed_roles: [analyst]\n---\n# Replacement\n"], "replacement.md", {
+            type: "text/markdown"
+          })
+        ]
+      }
+    });
+
+    const dialog = await screen.findByTestId("wiki-upload-preflight");
+    await waitFor(() => {
+      expect(within(dialog).getByTestId("wiki-upload-access-current")).toHaveTextContent(
+        "analyst、finance_reader"
+      );
+    });
+    expect(within(dialog).getByTestId("wiki-upload-access-uploaded")).toHaveTextContent("analyst");
+    expect(within(dialog).getByTestId("wiki-upload-access-final")).toHaveTextContent(
+      "analyst、finance_reader（保留现有授权）"
+    );
+    expect(within(dialog).getByTestId("wiki-upload-confirm")).toHaveTextContent(
+      "覆盖并保留授权"
+    );
+
+    // The uploaded declaration is visible but not adopted until requested.
+    fireEvent.click(within(dialog).getByTestId("wiki-upload-access-adopt"));
+    await waitFor(() => {
+      expect(within(dialog).getByTestId("wiki-upload-access-final")).toHaveTextContent(
+        "analyst（来自上传文件）"
+      );
+    });
+    expect(within(dialog).getByTestId("wiki-upload-confirm")).toHaveTextContent(
+      "覆盖并更新授权"
+    );
+  });
+});
+
+describe("Business Wiki read / list authorization status (Spec 193 §6.1 / SC-06 – SC-09)", () => {
+  it("shows the compact authorization summary and the access drawer entry on the read view", async () => {
+    vi.stubGlobal("fetch", buildFetchMock());
+    renderWiki("/wiki?key=global%2Fsuperstore-analysis-playbook.md");
+
+    const summary = await screen.findByTestId("wiki-access-summary");
+    expect(summary).toHaveTextContent("可访问角色：");
+    expect(summary).toHaveTextContent("analyst、finance_reader");
+    expect(summary).toHaveTextContent("1 个角色缺少读取通道");
+    expect(screen.getByTestId("wiki-manage-access-button")).toBeEnabled();
+  });
+
+  it("disables the access drawer entry while the editor has an unsaved draft", async () => {
+    vi.stubGlobal("fetch", buildFetchMock());
+    renderWiki("/wiki?key=global%2Fsuperstore-analysis-playbook.md");
+
+    fireEvent.click(await screen.findByTestId("wiki-edit-button"));
+    fireEvent.change(await screen.findByTestId("wiki-edit-textarea"), {
+      target: { value: "# Edited" }
+    });
+
+    const button = screen.getByTestId("wiki-manage-access-button");
+    expect(button).toBeDisabled();
+    expect(screen.getByTestId("wiki-manage-access-blocked")).toHaveTextContent(
+      "请先保存或放弃正文草稿"
+    );
+  });
+
+  it("lists one primary authorization status per row and filters without per-row access calls", async () => {
+    const pages = [
+      {
+        key: "global/none.md",
+        summary: "None",
+        tags: [],
+        slRefs: [],
+        access: accessEntry({ acl: { state: "missing" } })
+      },
+      {
+        key: "global/roles.md",
+        summary: "Roles",
+        tags: [],
+        slRefs: [],
+        access: accessEntry({
+          acl: { state: "roles", roles: ["analyst"] },
+          declared_role_count: 1,
+          declared_without_read: 1
+        })
+      },
+      {
+        key: "global/all.md",
+        summary: "All",
+        tags: [],
+        slRefs: [],
+        access: accessEntry({ acl: { state: "all" }, declared_role_count: null })
+      },
+      {
+        key: "global/broken.md",
+        summary: "Broken",
+        tags: [],
+        slRefs: [],
+        access: accessEntry({
+          acl: { state: "corrupt", detail: "broken" },
+          declared_role_count: null
+        })
+      }
+    ];
+    const fetchMock = buildFetchMock(pages as never);
+    vi.stubGlobal("fetch", fetchMock);
+    renderWiki("/wiki?dir=global");
+
+    await screen.findByTestId("wiki-library-documents");
+    expect(screen.getByTestId("wiki-library-access-status-global/none.md-primary")).toHaveTextContent(
+      "无人可见"
+    );
+    expect(
+      screen.getByTestId("wiki-library-access-status-global/roles.md-primary")
+    ).toHaveTextContent("1 个角色");
+    expect(
+      screen.getByTestId("wiki-library-access-status-global/roles.md-secondary")
+    ).toHaveTextContent("1 个角色缺少读取通道");
+    expect(
+      screen.getByTestId("wiki-library-access-status-global/all.md-primary")
+    ).toHaveTextContent("所有角色可见");
+    expect(
+      screen.getByTestId("wiki-library-access-status-global/broken.md-primary")
+    ).toHaveTextContent("授权异常");
+
+    // The filter is a view concern only.
+    fireEvent.click(screen.getByTestId("wiki-library-access-filter-none"));
+    await waitFor(() => {
+      expect(screen.getAllByTestId("wiki-library-document")).toHaveLength(1);
+    });
+    expect(screen.getByTestId("wiki-library-document-title")).toHaveTextContent("None");
+
+    fireEvent.click(screen.getByTestId("wiki-library-access-filter-all"));
+    await waitFor(() => {
+      expect(screen.getAllByTestId("wiki-library-document")).toHaveLength(4);
+    });
+
+    // The list never calls the per-document access API.
+    const perRowCalls = fetchMock.mock.calls.filter((call) =>
+      String(call[0]).endsWith("/access")
+    );
+    expect(perRowCalls).toHaveLength(0);
+  });
+
+  it("renders the access_update version operation with the registered label", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/wiki") {
+        return new Response(
+          JSON.stringify({ ok: true, data: { pages: WIKI_PAGES, directories: [] } })
+        );
+      }
+      if (url === "/api/admin/roles?includeTemplates=false") {
+        return new Response(
+          JSON.stringify({ ok: true, data: { roles: [{ id: "analyst" }] } })
+        );
+      }
+      if (url === "/api/sources") {
+        return new Response(JSON.stringify({ ok: true, data: { tables: [] } }));
+      }
+      if (url === "/api/wiki/global%2Fsuperstore-analysis-playbook.md/versions") {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              key: "global/superstore-analysis-playbook.md",
+              retentionLimit: 5,
+              versions: [
+                {
+                  versionId: "v-access",
+                  key: "global/superstore-analysis-playbook.md",
+                  createdAt: "2026-10-27T08:00:00.000Z",
+                  operation: "access_update",
+                  title: "Superstore guide",
+                  contentHash: "hash-access"
+                }
+              ]
+            }
+          })
+        );
+      }
+      const pageMatch = url.match(/^\/api\/wiki\/(.+)$/);
+      if (pageMatch) {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              key: decodeURIComponent(pageMatch[1]),
+              frontmatter: { summary: "Superstore guide" },
+              content: "# Superstore guide",
+              rawMarkdown: "# Superstore guide",
+              file_version: "sha256:fixture",
+              acl: { state: "missing" }
+            }
+          })
+        );
+      }
+      return new Response(
+        JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }),
+        { status: 404 }
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    renderWiki("/wiki?key=global%2Fsuperstore-analysis-playbook.md");
+
+    fireEvent.click(await screen.findByTestId("wiki-version-button"));
+    const dialog = await screen.findByTestId("wiki-version-history-dialog");
+    await waitFor(() => {
+      expect(dialog).toHaveTextContent("管理访问权限");
+    });
   });
 });

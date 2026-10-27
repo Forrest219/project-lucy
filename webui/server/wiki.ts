@@ -1,7 +1,11 @@
 import { createHash } from "node:crypto";
 import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
-import { parseMarkdownFrontmatter, stringifyMarkdownFrontmatter } from "./markdown-frontmatter";
+import {
+  assertMarkdownFrontmatterEngine,
+  parseMarkdownFrontmatter,
+  stringifyMarkdownFrontmatter
+} from "./markdown-frontmatter";
 import { assertWritableAcl, parseObjectAcl, type ObjectAcl } from "./proxy/context-acl";
 import { previewDiff } from "./diff";
 import {
@@ -15,8 +19,33 @@ import {
   safeWrite
 } from "./fs-safe";
 import { auditedRemoveFile, auditedWriteFile } from "./admin/config-audit-write.js";
-import { auditActorFields, type TrustedActor } from "./security/request-actor.js";
+import { auditActorFields, systemActor, type TrustedActor } from "./security/request-actor.js";
 import { loadContentPaths } from "./paths";
+import { withWikiWriteQueue } from "./wiki-write-queue.js";
+import { wikiContentHash } from "./wiki-hash.js";
+import { normalizeWikiKey } from "./wiki-key.js";
+import {
+  applyRawAllowedRoles,
+  assertWikiKeyNotHeld,
+  computeWikiAccessDigest,
+  mutateWikiAccessUnlocked,
+  readAclDeclaration,
+  resolveUploadAcl,
+  suggestUploadAccessSelection,
+  WikiAccessError,
+  type RawAclDeclaration,
+  type WikiUploadAccessSelection
+} from "./wiki-access-operation.js";
+import {
+  buildWikiAccessListEntry,
+  canonicalAclKey,
+  classifyAccessDirection,
+  loadWikiAccessConfigSnapshot,
+  resolveWikiAccessEffects,
+  type AccessDirection,
+  type WikiAccessRoleEffect
+} from "./wiki-access-effects.js";
+import { readAllWikiAccessPendingChanges, readWikiAccessPendingChange } from "./wiki-access-holds.js";
 
 export type WikiFrontmatter = {
   summary?: string;
@@ -44,6 +73,21 @@ export type WikiSummary = {
   summary?: string;
   tags: string[];
   slRefs: string[];
+  /**
+   * Spec 193 §6.1 — the authorization status of this row. It comes from the
+   * ONE aggregate list response; the list never calls an access API per row.
+   */
+  access: WikiAccessListEntry;
+};
+
+/** The aggregate list entry — no Role effect detail, no Agent id list. */
+export type WikiAccessListEntry = {
+  file_version: string;
+  acl: ObjectAcl;
+  declared_role_count: number | null;
+  declared_without_discover: number;
+  declared_without_read: number;
+  pending_change?: { operation_id: string; state: "pending" | "needs_review" };
 };
 
 export type WikiDirectorySummary = {
@@ -83,6 +127,13 @@ export type WikiDocumentDeleteResult = {
 export type WikiDirectoryRenameInput = {
   sourcePath: string;
   newName: string;
+  /**
+   * Spec 193 §8.1 — the per-document baselines captured by the preview.
+   * The commit re-checks every one of them inside the write queue.
+   */
+  expected_versions?: Record<string, string>;
+  /** The digest returned by the preview; a stale digest renames nothing. */
+  preview_digest?: string;
 };
 
 export type WikiDirectoryRenamePreview = {
@@ -91,10 +142,12 @@ export type WikiDirectoryRenamePreview = {
   newName: string;
   documentCount: number;
   directoryCount: number;
-  documents: Array<{ sourceKey: string; targetKey: string }>;
+  documents: Array<{ sourceKey: string; targetKey: string; fileVersion: string }>;
   directories: Array<{ sourcePath: string; targetPath: string }>;
   conflicts: string[];
   warnings: string[];
+  /** Binds the source, the target and every per-document baseline. */
+  preview_digest: string;
 };
 
 export type WikiDirectoryRenameResult = {
@@ -135,6 +188,19 @@ export type WikiUploadInput = {
   mode?: WikiUploadMode;
   /** Required (428) when the target page already exists; stale values are rejected (409). */
   expected_version?: string;
+  /**
+   * Spec 193 §5.4 — the explicit authorization selection.
+   *
+   * A commit WITHOUT it is refused (`wiki_upload_access_required`); the
+   * server never infers an authorization from the uploaded frontmatter.
+   */
+  access?: WikiUploadAccessSelection;
+  /** Required when the final authorization is `[]` (无人可见). */
+  confirmed_empty?: boolean;
+  /** Required when the final authorization is `["*"]` (所有角色可见). */
+  confirmed_all?: boolean;
+  /** The digest returned by the preview; a stale digest writes nothing (409). */
+  preview_digest?: string;
 };
 
 export type WikiUploadMode = "create" | "replace";
@@ -155,6 +221,32 @@ export type WikiUploadPreview = WikiPreview & {
   title: string;
   slRefs: string[];
   warnings: string[];
+  /** Spec 193 §5.1 — the authorization section, rendered before the diff. */
+  access: WikiUploadAccessPreview;
+};
+
+/**
+ * Spec 193 §5.4 — the authorization facts the upload preflight reports.
+ */
+export type WikiUploadAccessPreview = {
+  /** The persisted authorization, or `null` when the target does not exist. */
+  current_acl: ObjectAcl | null;
+  /** The declaration inside the uploaded file. */
+  uploaded_acl: ObjectAcl;
+  /** The authorization that will be written when the current selection commits. */
+  final_acl: ObjectAcl;
+  /** The selection the server suggests for the current target state. */
+  suggested_selection: WikiUploadAccessSelection;
+  direction: AccessDirection;
+  role_effects: WikiAccessRoleEffect[];
+  declared_role_count: number | null;
+  declared_without_discover: number;
+  declared_without_read: number;
+  role_channel_version: string;
+  /** Binds the target key, mode, content hash, version, selection and Role version. */
+  preview_digest: string;
+  /** Blocking problems — a commit is refused while one of them is present. */
+  issues: Array<{ code: string; message: string; blocking: boolean }>;
 };
 
 export type WikiMovePreview = WikiPreview & {
@@ -218,7 +310,9 @@ export type WikiVersionOperation =
   | "restore"
   | "move"
   | "rename"
-  | "delete";
+  | "delete"
+  /** Spec 193 §6.2 — an authorization-only change written by the access drawer. */
+  | "access_update";
 
 const WIKI_VERSION_OPERATIONS = new Set<WikiVersionOperation>([
   "create",
@@ -228,7 +322,8 @@ const WIKI_VERSION_OPERATIONS = new Set<WikiVersionOperation>([
   "restore",
   "move",
   "rename",
-  "delete"
+  "delete",
+  "access_update"
 ]);
 
 export type WikiVersionSummary = {
@@ -317,23 +412,7 @@ function assertExpectedWikiVersion(existed: boolean, currentText: string, expect
   if (expected.trim() !== wikiContentHash(currentText)) throw new WikiConcurrencyError("wiki_write_conflict", 409);
 }
 
-export function normalizeWikiKey(key: string): string {
-  const decoded = decodeURIComponent(key);
-  if (!decoded || decoded.startsWith("/") || path.isAbsolute(decoded)) {
-    throw new ForbiddenPathError("Wiki key must be relative to wiki/");
-  }
-  const normalized = path.posix.normalize(decoded).replaceAll("\\", "/");
-  if (
-    normalized === "." ||
-    normalized === ".." ||
-    normalized.startsWith("../") ||
-    normalized.includes("/../") ||
-    !normalized.endsWith(".md")
-  ) {
-    throw new ForbiddenPathError("Wiki key must be a markdown path under wiki/");
-  }
-  return normalized;
-}
+export { normalizeWikiKey } from "./wiki-key.js";
 
 export function normalizeWikiDirectoryPath(value: string): string {
   const decoded = decodeURIComponent(value);
@@ -480,9 +559,7 @@ export function wikiDocumentHash(key: string): string {
   return createHash("sha256").update(normalizeWikiKey(key)).digest("hex").slice(0, 16);
 }
 
-export function wikiContentHash(markdown: string): string {
-  return `sha256:${createHash("sha256").update(markdown).digest("hex")}`;
-}
+export { wikiContentHash } from "./wiki-hash.js";
 
 function versionTimestamp(value: Date = new Date()): string {
   return value.toISOString().replace(/[-:.]/g, "");
@@ -761,7 +838,7 @@ function directoryAncestors(directoryPath: string): string[] {
   return segments.map((_, index) => segments.slice(0, index + 1).join("/"));
 }
 
-function deriveDirectoriesFromPages(pages: WikiSummary[]): Set<string> {
+function deriveDirectoriesFromPages(pages: Array<{ key: string }>): Set<string> {
   const paths = new Set<string>();
   for (const page of pages) {
     const segments = page.key.split("/").filter(Boolean);
@@ -773,7 +850,7 @@ function deriveDirectoriesFromPages(pages: WikiSummary[]): Set<string> {
   return paths;
 }
 
-function countDirectoryDocuments(directoryPath: string, pages: WikiSummary[]): number {
+function countDirectoryDocuments(directoryPath: string, pages: Array<{ key: string }>): number {
   const prefix = `${directoryPath}/`;
   return pages.filter((page) => page.key.startsWith(prefix)).length;
 }
@@ -796,24 +873,62 @@ async function walkMarkdown(dir: string, base: string): Promise<string[]> {
   return keys;
 }
 
-export async function listWiki(projectRoot: string): Promise<WikiSummary[]> {
+/** The raw document facts — no authorization projection. */
+type WikiSummaryBase = {
+  key: string;
+  summary?: string;
+  tags: string[];
+  slRefs: string[];
+  file_version: string;
+  acl: ObjectAcl;
+};
+
+async function readWikiSummaries(projectRoot: string): Promise<WikiSummaryBase[]> {
   const wikiRoot = (await loadContentPaths()).wiki;
   const keys = await walkMarkdown(wikiRoot, "");
-  const summaries: WikiSummary[] = [];
+  const summaries: WikiSummaryBase[] = [];
   for (const key of keys.sort()) {
     const page = await readWiki(projectRoot, key);
     summaries.push({
       key,
       summary: page.frontmatter.summary,
       tags: page.frontmatter.tags ?? [],
-      slRefs: page.frontmatter.sl_refs ?? []
+      slRefs: page.frontmatter.sl_refs ?? [],
+      file_version: page.file_version,
+      acl: page.acl
     });
   }
   return summaries;
 }
 
+/**
+ * Spec 193 §6.1 — ONE aggregate list response.
+ *
+ * The Role / Agent configuration is read exactly once per request and every
+ * row carries its authorization status. The list never embeds the Markdown
+ * body, the full Agent id list or the per-Role effect detail, and the
+ * frontend never calls an access API per row.
+ */
+export async function listWiki(projectRoot: string): Promise<WikiSummary[]> {
+  const bases = await readWikiSummaries(projectRoot);
+  const snapshot = await loadWikiAccessConfigSnapshot(projectRoot);
+  const pendingChanges = await readAllWikiAccessPendingChanges();
+  return bases.map((base) => ({
+    key: base.key,
+    summary: base.summary,
+    tags: base.tags,
+    slRefs: base.slRefs,
+    access: buildWikiAccessListEntry({
+      file_version: base.file_version,
+      acl: base.acl,
+      snapshot,
+      pending_change: pendingChanges.get(base.key)
+    })
+  }));
+}
+
 export async function listWikiDirectories(projectRoot: string): Promise<WikiDirectorySummary[]> {
-  const pages = await listWiki(projectRoot);
+  const pages = await readWikiSummaries(projectRoot);
   const metadata = await readWikiDirectoryMetadata(projectRoot);
   const explicit = new Map(metadata.directories.map((item) => [item.path, item]));
   const paths = deriveDirectoriesFromPages(pages);
@@ -924,49 +1039,53 @@ export async function deleteWikiDirectory(
   directoryPath: string
 ): Promise<WikiDirectoryDeleteResult> {
   const normalizedPath = normalizeWikiDirectoryPath(directoryPath);
-  const relPath = relPathForDirectory(normalizedPath);
-  const paths = await loadContentPaths();
+  return withWikiWriteQueue(async () => {
+    const relPath = relPathForDirectory(normalizedPath);
+    const paths = await loadContentPaths();
 
-  try {
-    await stat(await assertReadable(paths, projectRoot, relPath));
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      throw new WikiDirectoryError(
-        "WIKI_DIRECTORY_NOT_FOUND",
-        "目标目录不存在。",
-        404
-      );
+    try {
+      await stat(await assertReadable(paths, projectRoot, relPath));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        throw new WikiDirectoryError(
+          "WIKI_DIRECTORY_NOT_FOUND",
+          "目标目录不存在。",
+          404
+        );
+      }
+      throw error;
     }
-    throw error;
-  }
 
-  try {
-    await safeRemoveDirectory(paths, projectRoot, relPath);
-  } catch (error) {
-    if (error instanceof DirectoryNotEmptyError) {
-      throw new WikiDirectoryError(
-        "WIKI_DIRECTORY_NOT_EMPTY",
-        "该目录下仍有 Markdown 文档或子目录，请先移动或删除内容。",
-        409
-      );
+    try {
+      // The emptiness re-check happens INSIDE the queue, so a document that
+      // was written while the dialog was open blocks the delete.
+      await safeRemoveDirectory(paths, projectRoot, relPath);
+    } catch (error) {
+      if (error instanceof DirectoryNotEmptyError) {
+        throw new WikiDirectoryError(
+          "WIKI_DIRECTORY_NOT_EMPTY",
+          "该目录下仍有 Markdown 文档或子目录，请先移动或删除内容。",
+          409
+        );
+      }
+      throw error;
     }
-    throw error;
-  }
 
-  const metadata = await readWikiDirectoryMetadata(projectRoot);
-  const filtered = metadata.directories.filter((entry) => entry.path !== normalizedPath);
-  if (filtered.length !== metadata.directories.length) {
-    await writeWikiDirectoryMetadata(projectRoot, {
-      schemaVersion: 1,
-      directories: filtered
-    });
-  }
+    const metadata = await readWikiDirectoryMetadata(projectRoot);
+    const filtered = metadata.directories.filter((entry) => entry.path !== normalizedPath);
+    if (filtered.length !== metadata.directories.length) {
+      await writeWikiDirectoryMetadata(projectRoot, {
+        schemaVersion: 1,
+        directories: filtered
+      });
+    }
 
-  return {
-    path: normalizedPath,
-    deleted: true,
-    filePath: `${relPath}/`
-  };
+    return {
+      path: normalizedPath,
+      deleted: true,
+      filePath: `${relPath}/`
+    };
+  });
 }
 
 /**
@@ -979,40 +1098,51 @@ export async function deleteWikiDirectory(
 export async function deleteWiki(
   projectRoot: string,
   key: string,
-  actor?: TrustedActor
+  actor?: TrustedActor,
+  expectedVersion?: string
 ): Promise<WikiDocumentDeleteResult> {
   const normalized = normalizeWikiKey(key);
-  const filePath = relPathForKey(normalized);
-  if (!(await wikiExists(projectRoot, normalized))) {
-    throw new WikiNotFoundError("Wiki 文档不存在。");
-  }
-
-  await auditedRemoveFile(projectRoot, filePath, {
-    enabled: true,
-    changeType: "wiki_delete",
-    assetKind: "wiki",
-    ...auditActorFields(actor),
-    source: "wiki_api",
-    targetId: normalized,
-    operation: "delete"
-  });
-
-  const index = await readWikiHistoryIndex(projectRoot);
-  const document = index.documents[normalized];
-  if (document) {
-    const paths = await loadContentPaths();
-    for (const version of document.versions) {
-      await safeRemove(paths, projectRoot, version.snapshotPath);
+  return withWikiWriteQueue(async () => {
+    const filePath = relPathForKey(normalized);
+    if (!(await wikiExists(projectRoot, normalized))) {
+      throw new WikiNotFoundError("Wiki 文档不存在。");
     }
-    delete index.documents[normalized];
-    await writeWikiHistoryIndex(projectRoot, index);
-  }
+    const currentText = await readExisting(projectRoot, normalized);
+    if (!expectedVersion?.trim()) {
+      throw new WikiConcurrencyError("wiki_expected_version_required", 428);
+    }
+    if (expectedVersion.trim() !== wikiContentHash(currentText)) {
+      throw new WikiConcurrencyError("wiki_write_conflict", 409);
+    }
+    await assertWikiKeyNotHeld(normalized);
 
-  return {
-    key: normalized,
-    deleted: true,
-    filePath
-  };
+    await auditedRemoveFile(projectRoot, filePath, {
+      enabled: true,
+      changeType: "wiki_delete",
+      assetKind: "wiki",
+      ...auditActorFields(actor),
+      source: "wiki_api",
+      targetId: normalized,
+      operation: "delete"
+    });
+
+    const index = await readWikiHistoryIndex(projectRoot);
+    const document = index.documents[normalized];
+    if (document) {
+      const paths = await loadContentPaths();
+      for (const version of document.versions) {
+        await safeRemove(paths, projectRoot, version.snapshotPath);
+      }
+      delete index.documents[normalized];
+      await writeWikiHistoryIndex(projectRoot, index);
+    }
+
+    return {
+      key: normalized,
+      deleted: true,
+      filePath
+    };
+  });
 }
 
 function normalizeWikiDirectoryName(newName: string): string {
@@ -1100,7 +1230,7 @@ export async function previewWikiDirectoryRename(
     );
   }
 
-  const pages = await listWiki(projectRoot);
+  const pages = await readWikiSummaries(projectRoot);
   const listedDirectories = await listWikiDirectories(projectRoot);
   const sourceExists =
     listedDirectories.some((item) => isUnderWikiDirectoryPrefix(item.path, sourcePath)) ||
@@ -1131,7 +1261,8 @@ export async function previewWikiDirectoryRename(
     .filter((page) => page.key.startsWith(`${sourcePath}/`))
     .map((page) => ({
       sourceKey: page.key,
-      targetKey: rewriteWikiPathPrefix(page.key, sourcePath, targetPath)
+      targetKey: rewriteWikiPathPrefix(page.key, sourcePath, targetPath),
+      fileVersion: page.file_version
     }))
     .sort((a, b) => a.sourceKey.localeCompare(b.sourceKey));
 
@@ -1177,8 +1308,25 @@ export async function previewWikiDirectoryRename(
     documents: documentMappings,
     directories: directoryMappings,
     conflicts: Array.from(new Set(conflicts)),
-    warnings
+    warnings,
+    preview_digest: computeDirectoryRenameDigest(sourcePath, targetPath, documentMappings)
   };
+}
+
+/** The digest that binds a directory rename to its per-document baselines. */
+function computeDirectoryRenameDigest(
+  sourcePath: string,
+  targetPath: string,
+  documents: Array<{ sourceKey: string; targetKey: string; fileVersion: string }>
+): string {
+  const payload = JSON.stringify({
+    sourcePath,
+    targetPath,
+    documents: documents
+      .map((item) => ({ sourceKey: item.sourceKey, targetKey: item.targetKey, fileVersion: item.fileVersion }))
+      .sort((a, b) => a.sourceKey.localeCompare(b.sourceKey))
+  });
+  return `wdr-${createHash("sha256").update(payload).digest("hex").slice(0, 32)}`;
 }
 
 /**
@@ -1193,6 +1341,7 @@ export async function renameWikiDirectory(
   projectRoot: string,
   input: WikiDirectoryRenameInput
 ): Promise<WikiDirectoryRenameResult> {
+  return withWikiWriteQueue(async () => {
   const preview = await previewWikiDirectoryRename(projectRoot, input);
   if (preview.conflicts.length > 0) {
     throw new WikiDirectoryError(
@@ -1202,7 +1351,35 @@ export async function renameWikiDirectory(
     );
   }
 
+  // The commit binds the preview: every per-document baseline and the digest
+  // are re-checked INSIDE the queue.
+  if (input.preview_digest?.trim()) {
+    if (input.preview_digest.trim() !== preview.preview_digest) {
+      throw new WikiDirectoryError(
+        "WIKI_DIRECTORY_CONFLICT",
+        "目录重命名预检已过期，请重新预检。",
+        409
+      );
+    }
+  }
+  if (input.expected_versions) {
+    for (const document of preview.documents) {
+      const expected = input.expected_versions[document.sourceKey];
+      if (expected && expected !== document.fileVersion) {
+        throw new WikiDirectoryError(
+          "WIKI_DIRECTORY_CONFLICT",
+          `文档已被修改，请重新预检：${document.sourceKey}`,
+          409
+        );
+      }
+    }
+  }
+
   const { sourcePath, targetPath, documents, directories } = preview;
+
+  for (const document of documents) {
+    await assertWikiKeyNotHeld(document.sourceKey);
+  }
   const sourceRel = relPathForDirectory(sourcePath);
   const targetRel = relPathForDirectory(targetPath);
   const writtenFiles: string[] = [`${targetRel}/`];
@@ -1333,6 +1510,7 @@ export async function renameWikiDirectory(
     renamedDirectories: directories.length,
     writtenFiles: Array.from(new Set(writtenFiles))
   };
+  });
 }
 
 export async function readWiki(projectRoot: string, key: string): Promise<WikiPage> {
@@ -1372,6 +1550,14 @@ export async function previewWikiWrite(projectRoot: string, key: string, input: 
   };
 }
 
+/**
+ * Spec 193 §8.1 — the combined editor save runs inside the shared write queue.
+ *
+ * When the save also changes `allowed_roles` it goes through the ONE
+ * coordinated mutation (durable security operation + widening hold + audited
+ * write). A body-only save keeps the plain audited write, but it still runs
+ * in the queue and is still blocked by a held key.
+ */
 export async function writeWiki(
   projectRoot: string,
   key: string,
@@ -1379,27 +1565,57 @@ export async function writeWiki(
   actor?: TrustedActor
 ): Promise<WikiPreview> {
   const normalized = normalizeWikiKey(key);
-  const existed = await wikiExists(projectRoot, normalized);
-  const oldText = await readExisting(projectRoot, normalized);
-  assertExpectedWikiVersion(existed, oldText, input.expected_version);
-  const preview = await previewWikiWrite(projectRoot, key, input);
-  await auditedWriteFile(projectRoot, preview.filePath, preview.proposedMarkdown, {
-    enabled: true,
-    changeType: existed ? "wiki_edit_save" : "wiki_create",
-    assetKind: "wiki",
-    ...auditActorFields(actor),
-    source: "wiki_api",
-    targetId: normalized,
-    operation: existed ? "edit_save" : "create",
-    diff: preview.diff
+  return withWikiWriteQueue(async () => {
+    const existed = await wikiExists(projectRoot, normalized);
+    const oldText = await readExisting(projectRoot, normalized);
+    assertExpectedWikiVersion(existed, oldText, input.expected_version);
+    await assertWikiKeyNotHeld(normalized);
+    const preview = await previewWikiWrite(projectRoot, key, input);
+
+    const currentAcl = aclOfDeclaration(readAclDeclaration(oldText));
+    const nextAcl = aclOfDeclaration(readAclDeclaration(preview.proposedMarkdown));
+    const aclChanged = canonicalAclKey(currentAcl) !== canonicalAclKey(nextAcl);
+
+    if (aclChanged) {
+      await mutateWikiAccessUnlocked({
+        projectRoot,
+        key: normalized,
+        expectedVersion: wikiContentHash(oldText),
+        existence: existed ? "must_exist" : "must_not_exist",
+        buildTarget: () => ({ targetMarkdown: preview.proposedMarkdown, nextAcl }),
+        actor: actor ?? systemActor(),
+        versionOperation: existed ? "edit_save" : "create",
+        changeType: existed ? "wiki_edit_save" : "wiki_create",
+        writeVersionSnapshot: async (markdown) => {
+          if (existed) {
+            await ensureWikiBaselineVersion(projectRoot, normalized, oldText);
+          }
+          await createWikiVersionSnapshot(projectRoot, normalized, markdown, {
+            operation: existed ? "edit_save" : "create"
+          });
+        }
+      });
+      return preview;
+    }
+
+    await auditedWriteFile(projectRoot, preview.filePath, preview.proposedMarkdown, {
+      enabled: true,
+      changeType: existed ? "wiki_edit_save" : "wiki_create",
+      assetKind: "wiki",
+      ...auditActorFields(actor),
+      source: "wiki_api",
+      targetId: normalized,
+      operation: existed ? "edit_save" : "create",
+      diff: preview.diff
+    });
+    if (existed) {
+      await ensureWikiBaselineVersion(projectRoot, normalized, oldText);
+    }
+    await createWikiVersionSnapshot(projectRoot, normalized, preview.proposedMarkdown, {
+      operation: existed ? "edit_save" : "create"
+    });
+    return preview;
   });
-  if (existed) {
-    await ensureWikiBaselineVersion(projectRoot, normalized, oldText);
-  }
-  await createWikiVersionSnapshot(projectRoot, normalized, preview.proposedMarkdown, {
-    operation: existed ? "edit_save" : "create"
-  });
-  return preview;
 }
 
 function validateUploadMarkdown(markdown: string): void {
@@ -1410,6 +1626,10 @@ function validateUploadMarkdown(markdown: string): void {
     err.code = "WIKI_MARKDOWN_TOO_LARGE";
     throw err;
   }
+  // V-08 — a non-YAML frontmatter engine is refused before ANY other upload
+  // validation, so the refusal code is the engine's own and not the
+  // authorization contract's.
+  assertMarkdownFrontmatterEngine(markdown);
 }
 
 function uploadTitle(markdown: string, key: string, frontmatter: WikiFrontmatter): string {
@@ -1427,86 +1647,301 @@ function uploadTitle(markdown: string, key: string, frontmatter: WikiFrontmatter
   return path.posix.basename(key).replace(/\.md$/, "");
 }
 
+function aclOfDeclaration(declaration: RawAclDeclaration): ObjectAcl {
+  return parseObjectAcl(declaration.value, declaration.declared);
+}
+
+/**
+ * Spec 193 §5 — the upload preflight.
+ *
+ * The authorization section is part of the preflight: the reader range is a
+ * submit decision, not a setting the admin has to find again after the upload.
+ *
+ * The mode is NEVER silently changed: `create` on an existing target and
+ * `replace` on a missing target are refused at commit time, not converted.
+ */
 export async function previewWikiUpload(projectRoot: string, input: WikiUploadInput): Promise<WikiUploadPreview> {
   const normalized = normalizeWikiKey(input.key);
   validateUploadMarkdown(input.markdown);
   const exists = await wikiExists(projectRoot, normalized);
   const oldText = await readExisting(projectRoot, normalized);
-  // Replace keeps the page's current ACL unless the upload declares a valid one (Spec §4.3).
-  const proposedMarkdown = carryCurrentAcl(input.markdown, oldText);
-  const parsed = parseMarkdownFrontmatter(proposedMarkdown);
-  const frontmatter = frontmatterFromData(parsed.data);
-  const filePath = relPathForKey(normalized);
+  const uploadedDeclaration = readAclDeclaration(input.markdown);
+  const uploadedAcl = aclOfDeclaration(uploadedDeclaration);
+  const currentDeclaration = readAclDeclaration(oldText);
+  const currentAcl = exists ? aclOfDeclaration(currentDeclaration) : null;
+
   const explicitMode = input.mode ?? (input.overwrite ? "replace" : "create");
+  const suggested = suggestUploadAccessSelection({ exists, uploadedAcl });
+  const selection = input.access ?? suggested;
+
+  const filePath = relPathForKey(normalized);
   const sourceFileName = deriveUploadSourceName(input.sourceFileName, normalized);
   const targetKey = normalized;
+  const parsedUpload = parseMarkdownFrontmatter(input.markdown);
+  const frontmatter = frontmatterFromData(parsedUpload.data);
   const targetTitle = uploadTitle(input.markdown, normalized, frontmatter);
-  const existingTitle = exists ? uploadTitle(oldText, normalized, frontmatterFromData(parseMarkdownFrontmatter(oldText).data)) : null;
+  const existingTitle = exists
+    ? uploadTitle(oldText, normalized, frontmatterFromData(parseMarkdownFrontmatter(oldText).data))
+    : null;
   const warnings: string[] = [];
   if (explicitMode === "create" && exists) {
-    warnings.push("目标文档已存在，确认后将按覆盖处理。");
+    warnings.push("目标文档已存在，新建模式会被拒绝，请改用覆盖。");
   }
   if (explicitMode === "replace" && !exists) {
-    warnings.push("覆盖模式下目标文档不存在，将改为新建。");
+    warnings.push("覆盖模式下目标文档不存在，覆盖会被拒绝。");
   }
-  if (!parsed.content.trim()) {
+  if (!parsedUpload.content.trim()) {
     warnings.push("Markdown 正文为空。");
   }
-  const uploadAcl = aclOf(parsed.data);
-  if (uploadAcl.state === "missing" || uploadAcl.state === "empty") {
-    warnings.push("该文档未授权任何角色，保存后 Agent 无人可见。");
+
+  const issues: WikiUploadAccessPreview["issues"] = [];
+  let finalAcl: ObjectAcl = currentAcl ?? uploadedAcl;
+  let resolvedMarkdown = input.markdown;
+  try {
+    const resolution = resolveUploadAcl({
+      exists,
+      currentDeclaration,
+      uploadedDeclaration,
+      selection
+    });
+    finalAcl = resolution.acl;
+    resolvedMarkdown = applyRawAllowedRoles(input.markdown, resolution.declaration);
+  } catch (error) {
+    const code = String((error as { code?: unknown } | null)?.code ?? "wiki_upload_access_required");
+    issues.push({
+      code,
+      message: error instanceof Error ? error.message : "上传授权选择不可用。",
+      blocking: true
+    });
+  }
+  if (!issues.some((issue) => issue.blocking)) {
+    if (finalAcl.state === "empty" || finalAcl.state === "missing") {
+      issues.push({
+        code: "confirm_empty_required",
+        message: "最终授权为空，提交前需要确认上传后 Agent 无人可见。",
+        blocking: false
+      });
+    }
+    if (finalAcl.state === "all") {
+      issues.push({
+        code: "confirm_all_required",
+        message: "最终授权为所有角色可见，提交前需要独立确认。",
+        blocking: false
+      });
+    }
+    if (uploadedAcl.state === "corrupt" && selection.mode !== "use_uploaded") {
+      warnings.push("上传文件内的授权声明已损坏，已按重新设置的授权处理。");
+    }
   }
   if (sourceFileName && path.posix.basename(targetKey) !== sourceFileName) {
     warnings.push(
       `本地文件名 ${sourceFileName} 与目标路径文件名 ${path.posix.basename(targetKey)} 不一致，将按目标 Wiki 路径保存。`
     );
   }
+
+  const snapshot = await loadWikiAccessConfigSnapshot(projectRoot);
+  const effects = resolveWikiAccessEffects(finalAcl, snapshot);
+  const expectedVersion = exists ? wikiContentHash(oldText) : wikiContentHash("");
+  const previewDigest = computeWikiAccessDigest({
+    key: normalized,
+    expectedVersion,
+    nextAcl: finalAcl,
+    roleChannelVersion: snapshot.role_channel_version,
+    mode: explicitMode,
+    contentHash: wikiContentHash(input.markdown)
+  });
+
   return {
     key: normalized,
     filePath,
-    diff: previewDiff(oldText, proposedMarkdown, filePath),
-    proposedMarkdown,
+    diff: previewDiff(oldText, resolvedMarkdown, filePath),
+    proposedMarkdown: resolvedMarkdown,
     currentFileVersion: exists ? wikiContentHash(oldText) : null,
     exists,
-    mode: exists ? "replace" : "create",
+    mode: explicitMode,
     sourceFileName,
     targetKey,
     existingTitle,
     targetTitle,
     title: targetTitle,
     slRefs: frontmatter.sl_refs ?? [],
-    warnings
+    warnings,
+    access: {
+      current_acl: currentAcl,
+      uploaded_acl: uploadedAcl,
+      final_acl: finalAcl,
+      suggested_selection: suggested,
+      direction: classifyAccessDirection(currentAcl ?? { state: "missing" }, finalAcl),
+      role_effects: effects.role_effects,
+      declared_role_count: effects.declared_role_count,
+      declared_without_discover: effects.declared_without_discover,
+      declared_without_read: effects.declared_without_read,
+      role_channel_version: snapshot.role_channel_version,
+      preview_digest: previewDigest,
+      issues
+    }
   };
 }
 
+/**
+ * Spec 193 §5.4 — the upload commit.
+ *
+ * The commit carries the ORIGINAL file text, an explicit authorization
+ * selection and the preview digest. The candidate is rebuilt inside the write
+ * queue from the ORIGINAL text and the SAME current read that the version
+ * check used, so a preview can never be replayed as the write source.
+ */
 export async function commitWikiUpload(
   projectRoot: string,
   input: WikiUploadInput,
   actor?: TrustedActor
 ): Promise<WikiUploadPreview> {
   const normalized = normalizeWikiKey(input.key);
-  const existed = await wikiExists(projectRoot, normalized);
-  const oldText = await readExisting(projectRoot, normalized);
-  assertExpectedWikiVersion(existed, oldText, input.expected_version);
-  const preview = await previewWikiUpload(projectRoot, input);
-  await auditedWriteFile(projectRoot, preview.filePath, preview.proposedMarkdown, {
-    enabled: true,
-    changeType: existed ? "wiki_upload_replace" : "wiki_upload_create",
-    assetKind: "wiki",
-    ...auditActorFields(actor),
-    source: "wiki_api",
-    targetId: normalized,
-    operation: existed ? "upload_replace" : "upload_create",
-    diff: preview.diff
-  });
-  if (existed) {
-    await ensureWikiBaselineVersion(projectRoot, normalized, oldText);
+  validateUploadMarkdown(input.markdown);
+  const access = input.access;
+  if (!access) {
+    throw new WikiAccessError(
+      "wiki_upload_access_required",
+      "上传必须携带明确的授权选择。",
+      400
+    );
   }
-  await createWikiVersionSnapshot(projectRoot, normalized, preview.proposedMarkdown, {
-    operation: existed ? "upload_replace" : "upload_create",
-    sourceFileName: input.sourceFileName
+  const previewDigest = input.preview_digest?.trim() ?? "";
+  if (!previewDigest) {
+    throw new WikiAccessError(
+      "wiki_upload_preview_stale",
+      "缺少上传预检摘要，请重新预检。",
+      409
+    );
+  }
+  const resolvedActor = actor ?? undefined;
+
+  return withWikiWriteQueue(async () => {
+    const existed = await wikiExists(projectRoot, normalized);
+    const oldText = await readExisting(projectRoot, normalized);
+    const explicitMode: WikiUploadMode = input.mode ?? (input.overwrite ? "replace" : "create");
+
+    // The mode contract: a create never becomes a replace and a replace
+    // never becomes a create.
+    if (explicitMode === "create" && existed) {
+      throw new WikiAccessError(
+        "wiki_write_conflict",
+        "目标 Wiki 文档已存在，新建模式已被拒绝。",
+        409
+      );
+    }
+    if (explicitMode === "replace" && !existed) {
+      throw new WikiAccessError(
+        "wiki_write_conflict",
+        "目标 Wiki 文档不存在，覆盖模式已被拒绝。",
+        409
+      );
+    }
+    if (existed) {
+      assertExpectedWikiVersion(existed, oldText, input.expected_version);
+    }
+    await assertWikiKeyNotHeld(normalized);
+
+    const uploadedDeclaration = readAclDeclaration(input.markdown);
+    const currentDeclaration = readAclDeclaration(oldText);
+    const resolution = resolveUploadAcl({
+      exists: existed,
+      currentDeclaration,
+      uploadedDeclaration,
+      selection: access
+    });
+    const finalAcl = resolution.acl;
+
+    if ((finalAcl.state === "empty" || finalAcl.state === "missing") && input.confirmed_empty !== true) {
+      throw new WikiAccessError(
+        "wiki_upload_access_required",
+        "最终授权为空，请确认上传后 Agent 无人可见。",
+        400
+      );
+    }
+    if (finalAcl.state === "all" && input.confirmed_all !== true) {
+      throw new WikiAccessError(
+        "wiki_upload_access_required",
+        "最终授权为所有角色可见，请完成独立确认。",
+        400
+      );
+    }
+
+    const targetMarkdown = applyRawAllowedRoles(input.markdown, resolution.declaration);
+    const expectedVersion = existed ? wikiContentHash(oldText) : wikiContentHash("");
+    const snapshot = await loadWikiAccessConfigSnapshot(projectRoot);
+    const recomputedDigest = computeWikiAccessDigest({
+      key: normalized,
+      expectedVersion,
+      nextAcl: finalAcl,
+      roleChannelVersion: snapshot.role_channel_version,
+      mode: explicitMode,
+      contentHash: wikiContentHash(input.markdown)
+    });
+    if (recomputedDigest !== previewDigest) {
+      throw new WikiAccessError(
+        "wiki_upload_preview_stale",
+        "上传预检已过期，请重新预检后提交。",
+        409
+      );
+    }
+
+    const currentAcl = aclOfDeclaration(currentDeclaration);
+    const aclChanged = canonicalAclKey(currentAcl) !== canonicalAclKey(finalAcl);
+    const versionOperation = existed ? "upload_replace" : "upload_create";
+    const changeType = existed ? "wiki_upload_replace" : "wiki_upload_create";
+
+    if (aclChanged) {
+      await mutateWikiAccessUnlocked({
+        projectRoot,
+        key: normalized,
+        expectedVersion,
+        existence: existed ? "must_exist" : "must_not_exist",
+        buildTarget: () => ({ targetMarkdown, nextAcl: finalAcl }),
+        actor: resolvedActor ?? systemActor(),
+        versionOperation,
+        changeType,
+        expectedDigest: previewDigest,
+        computeDigest: () => recomputedDigest,
+        writeVersionSnapshot: async (markdown) => {
+          if (existed) {
+            await ensureWikiBaselineVersion(projectRoot, normalized, oldText);
+          }
+          await createWikiVersionSnapshot(projectRoot, normalized, markdown, {
+            operation: versionOperation,
+            sourceFileName: input.sourceFileName
+          });
+        }
+      });
+    } else {
+      // The authorization is unchanged: a plain, audited content write.
+      await auditedWriteFile(projectRoot, relPathForKey(normalized), targetMarkdown, {
+        enabled: true,
+        changeType,
+        assetKind: "wiki",
+        ...auditActorFields(resolvedActor),
+        source: "wiki_api",
+        targetId: normalized,
+        operation: versionOperation,
+        diff: previewDiff(oldText, targetMarkdown, relPathForKey(normalized))
+      });
+      if (existed) {
+        await ensureWikiBaselineVersion(projectRoot, normalized, oldText);
+      }
+      await createWikiVersionSnapshot(projectRoot, normalized, targetMarkdown, {
+        operation: versionOperation,
+        sourceFileName: input.sourceFileName
+      });
+    }
+
+    return previewWikiUpload(projectRoot, {
+      key: input.key,
+      markdown: input.markdown,
+      mode: explicitMode,
+      sourceFileName: input.sourceFileName,
+      access
+    });
   });
-  return preview;
 }
 
 function deriveUploadSourceName(sourceFileName: string | undefined, targetKey: string): string {
@@ -1588,39 +2023,50 @@ export async function restoreWikiVersion(
   projectRoot: string,
   key: string,
   versionId: string,
-  actor?: TrustedActor
+  actor?: TrustedActor,
+  expectedVersion?: string
 ): Promise<WikiVersionRestoreResult> {
-  const detail = await readWikiVersion(projectRoot, key, versionId);
-  // Reject non-YAML frontmatter before anything is written (V-08).
-  parseMarkdownFrontmatter(detail.rawMarkdown);
-  const filePath = relPathForKey(detail.key);
-  // Restoring content never revives an older (possibly wider) ACL: the current one is kept.
-  const currentText = await readExisting(projectRoot, detail.key);
-  const restoredMarkdown = carryCurrentAcl(detail.rawMarkdown, currentText, { restore: true });
-  await auditedWriteFile(projectRoot, filePath, restoredMarkdown, {
-    enabled: true,
-    changeType: "wiki_restore",
-    assetKind: "wiki",
-    ...auditActorFields(actor),
-    source: "wiki_api",
-    targetId: detail.key,
-    operation: "restore",
-    diff: previewDiff(currentText, restoredMarkdown, filePath)
+  const normalized = normalizeWikiKey(key);
+  return withWikiWriteQueue(async () => {
+    const detail = await readWikiVersion(projectRoot, normalized, versionId);
+    // Reject non-YAML frontmatter before anything is written (V-08).
+    parseMarkdownFrontmatter(detail.rawMarkdown);
+    const filePath = relPathForKey(detail.key);
+    // Restoring content never revives an older (possibly wider) ACL: the current one is kept.
+    const currentText = await readExisting(projectRoot, detail.key);
+    if (!expectedVersion?.trim()) {
+      throw new WikiConcurrencyError("wiki_expected_version_required", 428);
+    }
+    if (expectedVersion.trim() !== wikiContentHash(currentText)) {
+      throw new WikiConcurrencyError("wiki_write_conflict", 409);
+    }
+    await assertWikiKeyNotHeld(detail.key);
+    const restoredMarkdown = carryCurrentAcl(detail.rawMarkdown, currentText, { restore: true });
+    await auditedWriteFile(projectRoot, filePath, restoredMarkdown, {
+      enabled: true,
+      changeType: "wiki_restore",
+      assetKind: "wiki",
+      ...auditActorFields(actor),
+      source: "wiki_api",
+      targetId: detail.key,
+      operation: "restore",
+      diff: previewDiff(currentText, restoredMarkdown, filePath)
+    });
+    const restored = await createWikiVersionSnapshot(projectRoot, detail.key, restoredMarkdown, {
+      operation: "restore",
+      restoredFromVersionId: detail.versionId,
+      force: true
+    });
+    if (!restored) {
+      throw new WikiVersionError("WIKI_VERSION_INVALID", "版本记录格式不合法。");
+    }
+    return {
+      key: detail.key,
+      restoredFromVersionId: detail.versionId,
+      newVersionId: restored.versionId,
+      filePath
+    };
   });
-  const restored = await createWikiVersionSnapshot(projectRoot, detail.key, restoredMarkdown, {
-    operation: "restore",
-    restoredFromVersionId: detail.versionId,
-    force: true
-  });
-  if (!restored) {
-    throw new WikiVersionError("WIKI_VERSION_INVALID", "版本记录格式不合法。");
-  }
-  return {
-    key: detail.key,
-    restoredFromVersionId: detail.versionId,
-    newVersionId: restored.versionId,
-    filePath
-  };
 }
 
 /**
@@ -1709,9 +2155,11 @@ export async function moveWiki(
   projectRoot: string,
   sourceKey: string,
   targetDirectory: string,
-  actor?: TrustedActor
+  actor?: TrustedActor,
+  expectedVersion?: string
 ): Promise<WikiMoveResult> {
   const normalizedSource = normalizeWikiKey(sourceKey);
+  return withWikiWriteQueue(async () => {
   const targetKey = deriveMoveTarget(normalizedSource, targetDirectory);
   const sourceRelPath = relPathForKey(normalizedSource);
   const targetRelPath = relPathForKey(targetKey);
@@ -1730,6 +2178,14 @@ export async function moveWiki(
       409
     );
   }
+  const currentSourceText = await readExisting(projectRoot, normalizedSource);
+  if (!expectedVersion?.trim()) {
+    throw new WikiConcurrencyError("wiki_expected_version_required", 428);
+  }
+  if (expectedVersion.trim() !== wikiContentHash(currentSourceText)) {
+    throw new WikiConcurrencyError("wiki_write_conflict", 409);
+  }
+  await assertWikiKeyNotHeld(normalizedSource);
   // Materialise the destination directory so the file write below has a
   // real parent. We only ever write under wiki/<...>; safeMkdir is
   // bounded by the allowlist in fs-safe.
@@ -1820,4 +2276,5 @@ export async function moveWiki(
     newVersionId: snapshot.versionId,
     filePath: targetRelPath
   };
+  });
 }

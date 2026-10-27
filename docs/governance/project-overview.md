@@ -159,6 +159,8 @@ Lucy MCP Proxy 监听 `LUCY_PROXY_HOST:LUCY_PROXY_PORT`（默认容器内 `0.0.0
 
 当前 `webui/config/access.yaml` 已含 v1.2 role 模型（例如 `kx_readonly`），Admin UI/API 已按 role-first 写入路径闭环：新建/编辑 Agent 强制 role，legacy `allow` 只读，token 与配置写入进入审计。2026-06-22 P1 增量已补 Role 模板库、模板展开落盘、`lint:spec` 防模板指针漂移、Onboarding MCP 失败原因细分和 `config_change_log` CSV 导出。访问权限升级域档案见 `docs/access-control/`；现行基线 `docs/access-control/design-upgrade.md` v1.1.2。
 
+业务 Wiki 的对象授权仍只由文档 frontmatter `allowed_roles` 决定；管理面在此之上提供三层能力（Spec 193 / Plan M66）：上传预检内直接完成授权（覆盖上传默认保留现有授权，差异只展示不自动采用）、阅读页独立的「管理访问权限」入口（只改写 `allowed_roles`，正文逐字保留）、以及最多 100 篇**显式选择**文档的批量授权（添加角色 / 替换可访问角色）。扩权变更先写 durable security operation 并激活 per-key hold，security operation 提交前该 Wiki key 的 Agent 搜索与读取全部拒绝；崩溃后恢复为 `needs_review` 并继续拒绝，不自动重放或确认扩权。批量不是跨文件事务：整批基线过期零写入零 journal，执行中单篇冲突为单篇结果，成功项不回滚。详见 `webui/docs/193-business-wiki-access-management-spec.md`。
+
 2026-06-22 另验证了「VIEW-as-pseudo-table」变通方案（CIO demo）：role `superstore_region_huadong` 通过 VIEW `dataforai.superstore_orders_huadong` 把表级 ACL 锁定到单一区域，零代理层代码改动；细节见 `docs/access-control/design-governance-baseline.md` §3.2。
 
 ## 9. 关键文档索引
@@ -211,7 +213,7 @@ Lucy MCP Proxy 监听 `LUCY_PROXY_HOST:LUCY_PROXY_PORT`（默认容器内 `0.0.0
 | WebUI 进入性能优化（已实施，2026-10-14 Codex收尾及fixture正式复验完成，未部署） | [Spec 174](../../webui/docs/174-webui-entry-performance-spec.md)、[Cursor实施与验证工单](../../webui/docs/plans/wo-20261013-webui-entry-performance.md)、[审阅修正工单](../../webui/docs/plans/wo-20261013-webui-entry-performance-REVIEW-FIX.md)、[复核与下一步计划](../../webui/docs/plans/wo-20261014-webui-entry-performance-RECHECK.md) |
 | WebUI 内置系统手册 / Help Center | `docs/design/design-system-handbook-help.md`、`docs/SYSTEM_HANDBOOK.md` |
 | WebUI 侧栏账户菜单 | [Spec 188](../../webui/docs/188-sidebar-account-menu-spec.md)：左下角单一账户入口，收纳系统手册及退出登录；本次仅 Code Review，未运行验证或重建 Docker |
-| 业务 Wiki 权限管理 | [Spec 193](../../webui/docs/193-business-wiki-access-management-spec.md) · [Plan M66](../../webui/docs/plans/wo-M66-business-wiki-access-management.md)：上传时授权、单篇独立管理、最多 100 篇显式多选批量授权；目录继承暂缓；设计方向已确认、待交叉审阅，未开发 |
+| 业务 Wiki 权限管理 | [Spec 193](../../webui/docs/193-business-wiki-access-management-spec.md) · [Plan M66](../../webui/docs/plans/wo-M66-business-wiki-access-management.md)：上传时授权、单篇独立管理、最多 100 篇显式多选批量授权；**已实施**（SC-01–SC-24 证据齐备）；目录继承暂缓 |
 | YAML 交付自助运维 / Agent 自检 | `webui/docs/24-yaml-delivery-runbook-spec.md`、`webui/docs/plans/wo-M20-yaml-delivery-runbook.md` |
 | MCP Auth Proxy | `webui/docs/07-mcp-auth-proxy-spec.md` |
 | 访问日志审计证据硬化 | `webui/docs/137-access-log-audit-evidence-hardening-spec.md`、`webui/docs/plans/wo-202609-02-access-log-audit-evidence-hardening.md` |

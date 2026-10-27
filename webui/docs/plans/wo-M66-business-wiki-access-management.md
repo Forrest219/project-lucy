@@ -705,6 +705,49 @@ Synchronize the access-control README, project overview and implementation-statu
 
 List modified files, focused/full validation results, unexecuted browser tests, operation recovery limitations and any remaining review items. Do not mark Spec 193 implemented until all SC-01–SC-24 evidence is mapped and passes.
 
+## Execution Notes
+
+> 本节是 Plan M66 的实施记录，按实际交付结果回填。Task 1–12 全部完成；SC-01–SC-24 的逐条证据映射见 [`../193-business-wiki-access-management-spec.md`](../193-business-wiki-access-management-spec.md) §19.3。
+
+### Task 状态
+
+| Task | 状态 | 落点 |
+|---|---|---|
+| 1 术语与共享契约 | ✅ | `00-product-terminology-standard.md` §4.14；`src/lib/types.ts`；`src/lib/queryKeys.ts` |
+| 2 共享写队列 | ✅ | `server/wiki-write-queue.ts`；`server/wiki.ts` 全部写路径进队列并持锁内重验 |
+| 3 Wiki→Role 效果投影 | ✅ | `server/wiki-access-effects.ts`；`listWiki` 一次聚合响应 |
+| 4 统一协调器与扩权 hold | ✅ | `server/wiki-access-operation.ts` · `wiki-access-holds.ts` · `security/state-changes.ts` · `security/schema.ts` v4 |
+| 5 上传授权选择 | ✅ | `server/wiki.ts` `previewWikiUpload` / `commitWikiUpload` |
+| 6 单篇授权 API | ✅ | `server/wiki-access.ts`；`GET/POST/PUT /api/wiki/:key/access` |
+| 7 批量授权 API + journal | ✅ | `server/wiki-access-batch.ts` · `wiki-access-batch-journal.ts` · `wiki-access-recovery.ts` |
+| 8–11 前端 | ✅ | `src/lib/wikiAccess.ts` · `WikiAccess*.tsx` · `WikiBatchAccess*.tsx` · `WikiUploadPreflight.tsx` · `WikiReadView.tsx` · `WikiLibraryHome.tsx` · `WikiVersionHistoryDialog.tsx` |
+| 12 回归与文档 | ✅ | `03-api-spec.md` · `docs/access-control/README.md` · `docs/governance/project-overview.md` · `docs/webui/webui-impl-status.md` · Spec 193 §19 |
+
+### 验证结果
+
+| 门禁 | 结果 |
+|---|---|
+| `npx vitest run`（全量） | 365 文件 / 4450 测试全绿 |
+| 新增服务端套件（7 个文件） | `wiki-write-queue` · `wiki-access-effects` · `wiki-access-operation` · `wiki-upload-access` · `wiki-access-routes` · `wiki-access-batch` · `wiki-access-batch-faults` |
+| 新增鉴权套件 | `wiki-access-auth.test.ts`（SC-23：未登录 401 / operator 可维护） |
+| 新增前端套件 | `wiki-access-components.test.tsx` · `wiki-batch-access.test.tsx` |
+| `npm run lint:terminology` | 通过（1037 文件） |
+| `npm run lint:ia-boundary` | 通过 |
+| `npm run build` | 通过 |
+| `node scripts/lint-spec.mjs` | 通过（2 条既有 warning 与本轮无关） |
+| `npx tsc --noEmit` | 73 个**既有**错误，本轮新增 0 个 |
+
+### 实施中修正的偏差
+
+评审通过的实现初稿与 Spec 有四处偏差，已在交付前按 Spec 修正并补回归测试（详见 Spec 193 §19.2）：方向分类的 runtime-set 矩阵、启动恢复的 `onReady` 接线、批量 key 规范化去重、未映射审计故障的系统性停止。
+
+### 未执行与遗留
+
+* 浏览器与移动窄屏测试**未执行**（按 Plan 的 Non-Negotiable Boundaries 与 §13 测试策略）。
+* `needs_review` 的扩权必须人工核对后才能重试；系统不会自动重放或自动确认扩权。
+* 队列与 hold 只覆盖单实例单副本；跨进程写入不支持。
+* 既有 4 个测试文件（`audit-actor-propagation` · `frontmatter-safety` · `oidc-reservation` · `audit-trust/audit-trust-backfill`）按新上传契约、`expected_version` 与安全库 schema v4 同步更新，断言强度未降低。
+
 ## Reviewer Checklist
 
 - [ ] Upload replace defaults to current ACL even when the file declares a different one.
