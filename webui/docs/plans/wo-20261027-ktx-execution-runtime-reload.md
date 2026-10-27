@@ -329,6 +329,14 @@ UI 约定：
 - **AC-1／AC-3 的容器内形态**（旧 PID 退出、新 PID 就绪、WebUI 与 Proxy PID 不变）：
   `--local` 已覆盖 supervisor 侧的旧 PID 退出与新 PID 就绪；「WebUI 与 Proxy PID 不变」
   属于容器形态，未在本次范围内实测。
+- **E2E 浏览器契约覆盖**：MCP Runtime 状态面（含本次新增的「重载执行层」）此前**完全没有** E2E 覆盖
+  （`webui/tests/e2e/specs/` 无相关 spec；`docs/qa/impact-map.json` 无该路由／组件／selector 映射）。
+  按 E2E 套件的维护约定，本次新增的 2 个 selector 已补登到 `docs/qa/selector-contract.md`
+  （`mcp-runtime-reload-outcome`、`mcp-runtime-reload-${testConnectionId}`），
+  使 `npm run e2e:selector-contract` 回到改动前基线（同为 24 issues，`mcp-runtime` 命中 0）。
+  **是否补建 E2E 场景待拍板**；其中「成功重载路径」不应进 E2E——那是进程级事实
+  （daemon PID 变化、配置生效、连接级验证通过），浏览器无法断言，
+  归口到 `scripts/verify/verify-ktx-reload-lifecycle.sh --container`。
 
 ### 8.5 静态 Code Review 发现与修复
 

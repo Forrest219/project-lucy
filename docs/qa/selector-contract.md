@@ -1178,6 +1178,7 @@
 | `create-connection-probe-override` | 连接探测覆盖提示 | `components/CreateConnectionDrawer.tsx` |
 | `mcp-runtime-status-chips` | MCP 运行时状态组 | `components/McpRuntimeStatusPanel.tsx` |
 | `mcp-runtime-remediation` | MCP 运行时整改提示 | `components/McpRuntimeStatusPanel.tsx` |
+| `mcp-runtime-reload-outcome` | MCP 运行时重载结果（Spec 191，三维事实分区） | `components/McpRuntimeStatusPanel.tsx` |
 | `role-effective-digest-text` | Role 有效权限摘要 | `components/RoleEffectiveDigest.tsx` |
 | `capability-preview-details` | 能力预览详情 | `components/RoleEffectiveDigest.tsx` |
 | `capability-preview-body` | 能力预览正文 | `components/RoleEffectiveDigest.tsx` |
@@ -1239,6 +1240,7 @@
 | `workbench-validation-rest-files` | 发布校验其余文件 | `pages/publish/PublishWorkbench.tsx` |
 | `mcp-runtime-status-${testConnectionId}` | MCP 运行时状态（模板） | `components/McpRuntimeStatusPanel.tsx` |
 | `mcp-runtime-recheck-${testConnectionId}` | MCP 运行时复检（模板） | `components/McpRuntimeStatusPanel.tsx` |
+| `mcp-runtime-reload-${testConnectionId}` | MCP 运行时重载执行（模板，Spec 191） | `components/McpRuntimeStatusPanel.tsx` |
 | `call-monitor-tool-${row.tool}` | 工具统计行（模板） | `pages/ops/CallMonitor.tsx` |
 | `call-monitor-failure-${row.id}` | 失败调用行（模板） | `pages/ops/CallMonitor.tsx` |
 ## 2026-09-27 · Setup / Catalog / Role / Agent 增量合同
