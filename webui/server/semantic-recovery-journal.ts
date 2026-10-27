@@ -46,6 +46,27 @@ export type RecoveryJournalStatus =
   | "recovery_required"
   | "completed";
 
+/**
+ * The phase of a journal (Lucy v0.25 / L25-11 §7.2).
+ *
+ * The phase decides what a startup recovery is ALLOWED to do:
+ *
+ *   - `write_in_progress` — the batch was still writing. A startup recovery
+ *     rolls the written targets back, because the batch never finished.
+ *   - `files_saved` — every target was written, but the index / terminal
+ *     outcome is not proven. A startup recovery MUST NOT roll back merely
+ *     because the index outcome is unknown: it keeps the files, verifies them
+ *     against the saved plan and leaves the activation unconfirmed.
+ *   - `activation_pending` — the files are saved and verified; the terminal
+ *     evidence is still missing. Same rule as `files_saved`.
+ *   - `completed` — every applicable evidence is durable; nothing to recover.
+ */
+export type RecoveryJournalPhase =
+  | "write_in_progress"
+  | "files_saved"
+  | "activation_pending"
+  | "completed";
+
 export interface RecoveryJournalEntry {
   /** Processing order. Restore walks this in reverse. */
   order: number;
@@ -71,6 +92,12 @@ export interface RecoveryJournal {
   createdAt: string;
   updatedAt: string;
   status: RecoveryJournalStatus;
+  /**
+   * The phase of the batch. A legacy journal without the field is treated as
+   * `write_in_progress` — the conservative reading, because that is the phase
+   * in which a rollback is the correct answer.
+   */
+  phase?: RecoveryJournalPhase;
   /** Every actual target of the batch, in processing order. */
   entries: RecoveryJournalEntry[];
   /** The orders whose target was already replaced. */
@@ -221,6 +248,7 @@ export async function createRecoveryJournal(
     createdAt: new Date(nowMs).toISOString(),
     updatedAt: new Date(nowMs).toISOString(),
     status: "open",
+    phase: "write_in_progress",
     entries,
     applied: [],
     recoveryRequired: false
@@ -307,7 +335,14 @@ export async function markRecoveryEntryApplied(
   return journal;
 }
 
-/** Mark the batch as finished: the journal is no longer needed for rollback. */
+/**
+ * Mark the batch as finished: the journal is no longer needed for rollback.
+ *
+ * ★ L25-11 §7.2: the journal may only be completed once EVERY applicable
+ * evidence is durable — the mirror, the index, the final digest and the
+ * terminal audit / history / status. Calling this right after the promote
+ * would declare a batch finished while its activation is still unknown.
+ */
 export async function completeRecoveryJournal(
   projectRoot: string,
   journalId: string,
@@ -316,9 +351,54 @@ export async function completeRecoveryJournal(
   const journal = await readRecoveryJournal(projectRoot, journalId);
   if (!journal) return null;
   journal.status = "completed";
+  journal.phase = "completed";
   journal.updatedAt = new Date(now()).toISOString();
   await writeRecoveryJournal(projectRoot, journal);
   return journal;
+}
+
+/**
+ * Mark the batch as "files saved, activation not yet proven".
+ *
+ * This is the stage Spec §7.2 describes: the promote succeeded, but the index
+ * and the terminal evidence are still outstanding. The journal stays OPEN so
+ * a startup recovery can still decide what happened — and a startup recovery
+ * MUST NOT roll back a batch in this phase just because the index outcome is
+ * unknown.
+ */
+export async function markRecoveryJournalFilesSaved(
+  projectRoot: string,
+  journalId: string,
+  now: () => number = Date.now
+): Promise<RecoveryJournal | null> {
+  const journal = await readRecoveryJournal(projectRoot, journalId);
+  if (!journal) return null;
+  journal.phase = "files_saved";
+  journal.updatedAt = new Date(now()).toISOString();
+  await writeRecoveryJournal(projectRoot, journal);
+  return journal;
+}
+
+/**
+ * Mark the batch as "activation pending": the files are saved and verified,
+ * the terminal evidence is still missing.
+ */
+export async function markRecoveryJournalActivationPending(
+  projectRoot: string,
+  journalId: string,
+  now: () => number = Date.now
+): Promise<RecoveryJournal | null> {
+  const journal = await readRecoveryJournal(projectRoot, journalId);
+  if (!journal) return null;
+  journal.phase = "activation_pending";
+  journal.updatedAt = new Date(now()).toISOString();
+  await writeRecoveryJournal(projectRoot, journal);
+  return journal;
+}
+
+/** The phase of a journal, with the legacy journals read as `write_in_progress`. */
+export function recoveryJournalPhase(journal: RecoveryJournal): RecoveryJournalPhase {
+  return journal.phase ?? "write_in_progress";
 }
 
 export interface RestoreRecoveryJournalResult {
@@ -450,6 +530,12 @@ export interface RecoverPendingJournalsResult {
   recovered: string[];
   /** Journals that need a human. */
   needsRepair: string[];
+  /**
+   * Journals whose files are saved and verified but whose activation is not
+   * proven. They stay open so the index can be retried; they are NOT rolled
+   * back (Spec §7.2 / §9 `recoverAfterRestart`).
+   */
+  activationPending: string[];
 }
 
 /**
@@ -459,6 +545,12 @@ export interface RecoverPendingJournalsResult {
  *   - the old digest  → the write never landed (or was already rolled back)
  *   - the new digest  → the write landed but the journal was not updated
  *   - anything else   → a third party wrote there; the state is NOT guessed
+ *
+ * ★ L25-11 §7.2: the PHASE decides whether a rollback is allowed at all.
+ * A journal in `write_in_progress` is rolled back (the batch never finished).
+ * A journal in `files_saved` / `activation_pending` is NOT rolled back merely
+ * because the index or the terminal outcome is unknown — the written files are
+ * verified against the saved plan and the activation is left unconfirmed.
  *
  * The caller (the server bootstrap) must run this BEFORE publishing or a
  * manual reindex is allowed.
@@ -470,14 +562,25 @@ export async function recoverPendingRecoveryJournals(
   const now = options.now ?? Date.now;
   const recovered: string[] = [];
   const needsRepair: string[] = [];
+  const activationPending: string[] = [];
 
   for (const journal of await listOpenRecoveryJournals(projectRoot)) {
+    const phase = recoveryJournalPhase(journal);
+    const rollbackAllowed = phase === "write_in_progress";
+
     let blocked = false;
     for (const entry of journal.entries) {
       const current = await readRecoveryTarget(projectRoot, entry.targetPath);
       const currentDigest = digestOf(current);
       if (currentDigest === entry.originalDigest) continue;
       if (currentDigest === entry.expectedNewDigest) {
+        if (!rollbackAllowed) {
+          // The write landed and the batch had already saved its files: the
+          // index / terminal outcome is unknown, but the CONTENT is proven.
+          // Rolling back here would destroy a completed write because of a
+          // missing index — the exact "猜成功 / 猜失败" the spec forbids.
+          continue;
+        }
         // The write landed but the journal update did not. Roll it back.
         const result = await restoreEntry(projectRoot, entry);
         if (result.outcome === "conflict") {
@@ -501,6 +604,20 @@ export async function recoverPendingRecoveryJournals(
       continue;
     }
 
+    if (!rollbackAllowed) {
+      // The written files are verified against the saved plan. The activation
+      // is not proven, so the journal stays open and the release keeps
+      // `activationStatus = unconfirmed` until the index is retried.
+      journal.status = "open";
+      journal.recoveryRequired = false;
+      journal.phase = "activation_pending";
+      journal.updatedAt = new Date(now()).toISOString();
+      await writeRecoveryJournal(projectRoot, journal);
+      await syncRuntimeMirror(projectRoot);
+      activationPending.push(journal.journalId);
+      continue;
+    }
+
     journal.status = "restored";
     journal.recoveryRequired = false;
     journal.applied = [];
@@ -510,7 +627,7 @@ export async function recoverPendingRecoveryJournals(
     recovered.push(journal.journalId);
   }
 
-  return { recovered, needsRepair };
+  return { recovered, needsRepair, activationPending };
 }
 
 /**

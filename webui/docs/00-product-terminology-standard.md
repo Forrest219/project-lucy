@@ -483,6 +483,13 @@ Connection (连接)
 | Publish Scope Removed | 已删除 | 已移除（作变更范围分组）；与写入放在同一组 | 发布记录中已入账、但内容根文件已不存在的语义源 |
 | Mirror Only Semantic Notice | 镜像中仍有内容根已删除的语义文件，本次索引可能继续收录 | 在该提示上提供删除镜像 | 发布工作台只读提示（Spec 180 v0.2）；不删除镜像文件 |
 | Table Validation Result | 表语义校验通过 A/B | 校验成功（不说明校验对象）；校验通过 N 张（不写分母） | 进行态为「正在校验表语义…」。B 为本批进入表语义校验的表数，A 为通过数；与待同步文件数分列（Spec 145） |
+| Batch Selection Scope | 已选择 N 张表 | 把「全部」当作当前页 | Catalog 多选计数；选择项是完整表身份三元组（L25-11 §3.1） |
+| Select All Filtered Results | 选择全部筛选结果 | 全选本页 | 覆盖当前筛选的完整结果集，由服务端解析为范围快照（L25-11 §3.1） |
+| Batch Download Semantic Assets | 批量下载 | 批量导出（作 Catalog 动作文案） | 按所选表生成语义维护包（L25-11 §5） |
+| Batch Semantic Validation | 批量校验 | 全部可查询；业务正确 | 独立批量校验动作与报告（L25-11 §6） |
+| Import Semantic Assets Package | 导入语义资产包 | 上传成功（作结果文案） | 导入受控 staging；导出基线缺失时提示重新导出（L25-11 §5） |
+| Semantic Maintenance Package | 语义维护包 | 完整备份；配置恢复包 | 格式 `semantic-maintenance-package/v1`（L25-11 §5） |
+| Activation Unconfirmed | 生效状态待确认 | 用绿色成功掩盖索引或恢复失败 | 索引或恢复未证明时（L25-11 §7.1） |
 
 审阅与审批的流程分工必须与第 3.1 节一致：
 

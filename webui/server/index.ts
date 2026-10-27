@@ -1,5 +1,6 @@
 import { createReadStream } from "node:fs";
 import { lstat, readFile, readdir } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import Fastify, { type FastifyError, type FastifyReply, type FastifyRequest } from "fastify";
@@ -193,11 +194,27 @@ import {
   type SemanticAssetPublishRequest,
   type SemanticAssetReleaseListQuery,
   type SemanticAssetReleaseTrigger,
-  type SemanticAssetValidateRequest
+  type SemanticAssetValidateRequest,
+  persistSemanticBatchSnapshot
 } from "./semantic-assets.js";
 import { exportSemanticAssetPackage, recordSemanticAssetExport } from "./semantic-asset-export.js";
 import { recoverPendingRecoveryJournals, isRecoveryRequired } from "./semantic-recovery-journal.js";
 import { verifyAccessRecoveryOnStartup } from "./access-recovery.js";
+import { registerSemanticBatchRoutes } from "./semantic-batch-routes.js";
+import {
+  assertSemanticHttpBodySize,
+  exportSemanticMaintenancePackage,
+  isMaintenancePackageZip,
+  parseSemanticValidateEnvelope,
+  stageSemanticMaintenanceImport,
+  SemanticBatchError
+} from "./semantic-batch-service.js";
+import { resolveSemanticInstanceId } from "./semantic-scopes.js";
+import { readMaintenanceExportBaseline } from "./semantic-maintenance-package.js";
+import {
+  buildSemanticBatchAuditPayload,
+  buildSemanticBatchAuditRecord
+} from "./semantic-batch-audit.js";
 import {
   buildPublishHistoryCsvRows,
   formatPublishHistoryExportFilenameStamp
@@ -1970,39 +1987,143 @@ export function buildServer() {
     Body: Partial<SemanticAssetValidateRequest>;
   }>("/api/semantic-assets/validate", async (request, reply) => {
     const projectRoot = await resolveProjectRoot();
-    const body = request.body ?? {};
-    const files = Array.isArray(body.files)
-      ? body.files
-          .filter(
-            (item): item is { filename: string; content: string } =>
-              !!item &&
-              typeof (item as { filename?: unknown }).filename === "string" &&
-              typeof (item as { content?: unknown }).content === "string"
-          )
-          .map((item) => ({
-            filename: item.filename,
-            content: item.content
-          }))
-      : [];
-    const packages = Array.isArray(body.packages)
-      ? body.packages
-          .filter(
-            (item): item is { filename: string; contentBase64: string } =>
-              !!item &&
-              typeof (item as { filename?: unknown }).filename === "string" &&
-              typeof (item as { contentBase64?: unknown }).contentBase64 === "string"
-          )
-          .map((item) => ({
-            filename: item.filename,
-            contentBase64: item.contentBase64
-          }))
-      : [];
+
+    // ★ Lucy v0.25 / L25-11 §8 (D11): the envelope is validated BEFORE any
+    // unpacking or semantic check. A single malformed entry rejects the WHOLE
+    // batch — the old behaviour filtered the bad entries out and then
+    // validated the rest, which silently accepted a 29-valid + 1-broken batch.
+    let envelope;
+    try {
+      assertSemanticHttpBodySize(JSON.stringify(request.body ?? {}).length);
+      envelope = parseSemanticValidateEnvelope(request.body ?? {});
+    } catch (error) {
+      if (error instanceof SemanticBatchError) {
+        reply.status(error.statusCode);
+        return reply.send({
+          ok: false,
+          error: { code: error.code, message: error.message },
+          data: { errors: error.errors }
+        });
+      }
+      throw error;
+    }
+
+    // ★ L25-11 §5 / §12 (D12): a maintenance package is staged against the
+    // SERVER-SIDE export baseline. The client cannot re-authorize anything.
+    // The package declares its kind in its metadata — a generic ZIP of YAML
+    // files keeps its existing meaning.
+    const uploadedPackages = envelope.packages.map((file) => ({
+      filename: file.filename,
+      buffer: Buffer.from(file.contentBase64, "base64")
+    }));
+    const maintenancePackage = uploadedPackages.find((file) =>
+      isMaintenancePackageZip(file.buffer)
+    );
+    if (maintenancePackage) {
+      try {
+        const instanceId = await resolveSemanticInstanceId(projectRoot);
+        const actor = actorIdFromRequest(request);
+        const staged = await stageSemanticMaintenanceImport(projectRoot, {
+          actor,
+          instanceId,
+          zip: maintenancePackage.buffer
+        });        // ★ L25-11 §3.2: the import only writes the CONTROLLED STAGING. The
+        // formal files and the index stay untouched until the publish
+        // workbench confirms the complete plan.
+        if (staged.status === "staged") {
+          await persistSemanticBatchSnapshot(projectRoot, {
+            validationId: staged.validationId,
+            batchId: staged.batchId,
+            scopeId: staged.scopeId,
+            exportId: staged.exportId,
+            instanceId,
+            actor,
+            candidateDigest: staged.candidateDigest,
+            planDigest: staged.planDigest,
+            refs: staged.refs,
+            dependencies: staged.dependencies,
+            targetDigests: staged.targetDigests,
+            overwriteSet: staged.overwriteSet,
+            candidates: staged.candidates,
+            changedSources: staged.changedSources,
+            diff: staged.diff
+          });
+        }
+
+        // ★ L25-11 §7.3 (D22): the staging is audited as "staged" — never as a
+        // publish. The staging itself has no formal effect.
+        const stagePayload = buildSemanticBatchAuditPayload({
+          actor,
+          actorType: "ui_admin",
+          operationId: `stage_${staged.batchId}`,
+          outcome: staged.status === "staged" ? "staged" : "validated",
+          scopeId: staged.scopeId,
+          planDigest: staged.planDigest,
+          candidateDigest: staged.candidateDigest,
+          objectCount: staged.candidates.length,
+          recovery: { recoveryRequired: false, activationStatus: "unknown" },
+          details: {
+            batchId: staged.batchId,
+            exportId: staged.exportId,
+            status: staged.status,
+            overwriteSet: staged.overwriteSet,
+            dependencyCount: staged.dependencies.length
+          }
+        });
+        await recordConfigChange(buildSemanticBatchAuditRecord(stagePayload));
+        return reply.send({
+          ok: true,
+          data: {
+            valid: staged.status === "staged",
+            validationId: staged.validationId,
+            batchId: staged.batchId,
+            status: staged.status,
+            noChange: staged.status === "no_change",
+            scopeId: staged.scopeId,
+            exportId: staged.exportId,
+            candidateDigest: staged.candidateDigest,
+            planDigest: staged.planDigest,
+            targetDigests: staged.targetDigests,
+            overwriteSet: staged.overwriteSet,
+            dependencies: staged.dependencies,
+            readonlyEntries: staged.readonlyEntries,
+            files: staged.candidates.map((candidate) => ({
+              originalFilename: `${candidate.identity.connectionId}/${candidate.identity.table}.yaml`,
+              kind: "semanticSource" as const,
+              targetPath: candidate.targetPath,
+              exists: !candidate.absentBefore,
+              sizeBytes: Buffer.byteLength(candidate.content, "utf8"),
+              sha256: createHash("sha256").update(Buffer.from(candidate.content, "utf8")).digest("hex"),
+              connectionId: candidate.identity.connectionId,
+              schema: candidate.identity.schema,
+              sourceName: candidate.identity.table,
+              physicalTable: `${candidate.identity.schema}.${candidate.identity.table}`,
+              warnings: []
+            })),
+            changedSources: staged.changedSources,
+            diff: staged.diff,
+            warnings: [],
+            errors: []
+          }
+        });
+      } catch (error) {
+        if (error instanceof SemanticBatchError) {
+          reply.status(error.statusCode);
+          return reply.send({
+            ok: false,
+            error: { code: error.code, message: error.message },
+            data: { errors: error.errors }
+          });
+        }
+        throw error;
+      }
+    }
+
     const result = await validateSemanticAssets(projectRoot, {
-      files,
-      packages,
-      defaultConnectionId:
-        typeof body.defaultConnectionId === "string" ? body.defaultConnectionId : undefined,
-      defaultSchema: typeof body.defaultSchema === "string" ? body.defaultSchema : undefined
+      files: envelope.files,
+      packages: envelope.packages,
+      defaultConnectionId: envelope.defaultConnectionId,
+      defaultSchema: envelope.defaultSchema
     });
     return reply.send({ ok: true, data: result });
   });
@@ -2017,7 +2138,16 @@ export function buildServer() {
     try {
       const result = await publishSemanticAssets(
         projectRoot,
-        { validationId, confirmOverwrite: body.confirmOverwrite === true },
+        {
+          validationId,
+          confirmOverwrite: body.confirmOverwrite === true,
+          ...(typeof body.planDigest === "string" ? { planDigest: body.planDigest } : {}),
+          ...(Array.isArray(body.overwriteTargets)
+            ? { overwriteTargets: body.overwriteTargets.filter((t): t is string => typeof t === "string") }
+            : {}),
+          ...(typeof body.idempotencyKey === "string" ? { idempotencyKey: body.idempotencyKey } : {}),
+          ...(body.exemption ? { exemption: body.exemption } : {})
+        },
         { actor: actorIdFromRequest(request) }
       );
       return reply.send({ ok: true, data: result });
@@ -2219,10 +2349,63 @@ export function buildServer() {
       includeEvals?: boolean;
       includeSkills?: boolean;
       includeSanitizedKtxYaml?: boolean;
+      /** Lucy v0.25 / L25-11 §8 — the explicit maintenance-package mode. */
+      packageKind?: string;
+      scopeId?: string;
     };
-  }>("/api/semantic-assets/export", async (request) => {
+  }>("/api/semantic-assets/export", async (request, reply) => {
     const projectRoot = await resolveProjectRoot();
     const body = request.body ?? {};
+
+    // ★ Lucy v0.25 / L25-11 §5 / §8 (D4/D7/D11): the maintenance package is a
+    // DIFFERENT format with its own explicit kind. It is built from a scope
+    // snapshot and carries a server-side export baseline; the generic export
+    // keeps its existing meaning.
+    if (body.packageKind === "semantic-maintenance-package/v1") {
+      try {
+        const scopeId = typeof body.scopeId === "string" ? body.scopeId : "";
+        const instanceId = await resolveSemanticInstanceId(projectRoot);
+        const actor = actorIdFromRequest(request);
+        const result = await exportSemanticMaintenancePackage(projectRoot, {
+          actor,
+          instanceId,
+          scopeId,
+          // ★ L25-11 §7.3 (D22): the export audit is persisted BEFORE the
+          // package is handed out. A failed audit fails the export closed.
+          beforeDeliver: async (info) => {
+            const payload = buildSemanticBatchAuditPayload({
+              actor,
+              actorType: "ui_admin",
+              operationId: `export_${info.exportId}`,
+              outcome: "exported",
+              scopeId,
+              baselineDigest: undefined,
+              objectCount: info.selectedCount,
+              recovery: { recoveryRequired: false, activationStatus: "unknown" },
+              details: {
+                exportId: info.exportId,
+                packageDigest: info.packageDigest,
+                entryCount: info.entryCount,
+                dependencyCount: info.dependencyCount
+              }
+            });
+            await recordConfigChange(buildSemanticBatchAuditRecord(payload));
+          }
+        });
+        return reply.send({ ok: true, data: result });
+      } catch (error) {
+        if (error instanceof SemanticBatchError) {
+          reply.status(error.statusCode);
+          return reply.send({
+            ok: false,
+            error: { code: error.code, message: error.message },
+            data: { errors: error.errors }
+          });
+        }
+        throw error;
+      }
+    }
+
     const scope =
       body.scope && typeof body.scope === "object" && !Array.isArray(body.scope)
         ? {
@@ -2258,6 +2441,19 @@ export function buildServer() {
         }
       });
     }
+    // ★ Lucy v0.25 / L25-11 §4.5: a maintenance package download re-checks the
+    // operator that produced it. An export id is not a bearer token.
+    const baseline = await readMaintenanceExportBaseline(projectRoot, exportId);
+    if (baseline?.actor && baseline.actor !== actorIdFromRequest(request)) {
+      reply.status(403);
+      return reply.send({
+        ok: false,
+        error: {
+          code: "EXPORT_FORBIDDEN",
+          message: "该导出记录属于其他操作者，不能直接下载。"
+        }
+      });
+    }
     const exportsDir = path.resolve(projectRoot, ".ktx-ui", "exports");
     const zipPath = path.join(exportsDir, `${exportId}.zip`);
     let exists = false;
@@ -2284,6 +2480,10 @@ export function buildServer() {
     );
     return reply.send(createReadStream(zipPath));
   });
+
+  // ★ Lucy v0.25 / L25-11 §8 (D11/D10): the batch loop routes — scope
+  // creation, the independent batch check, and the operation polling/cancel.
+  registerSemanticBatchRoutes(app);
 
   registerAuthRoutes(app);
   registerAdminAccountRoutes(app);
@@ -2410,6 +2610,14 @@ export async function startServer(options: { displayPrewarm?: boolean } = {}): P
   // Lucy v0.25 / L25-05 — 通知在监听端口前初始化；失败只关闭通知本身。
   await initNotifications();
 
+  // ★ Lucy v0.25 / L25-11 §7.2 (D18): the semantic recovery journals are
+  // resolved BEFORE the WebUI starts listening. A journal that cannot be
+  // decided must not be reachable through the API: the listener, the asset
+  // writes, the publish and the manual reindex all have to be gated by the
+  // recovery admission. Running this after `app.listen()` would leave a
+  // window in which the API accepted writes on an unverified target.
+  await recoverSemanticJournals();
+
   const app = buildServer();
   const host = process.env.LUCY_WEBUI_HOST ?? "127.0.0.1";
   const port = Number(process.env.LUCY_WEBUI_PORT ?? DEFAULT_WEBUI_PORT);
@@ -2421,10 +2629,6 @@ export async function startServer(options: { displayPrewarm?: boolean } = {}): P
     displayReadyMs = performance.now() - t3;
   }
 
-  // Lucy v0.25 / L25-11 §7.1–§7.2 (D3): the semantic recovery journal is
-  // resolved BEFORE the ledger recovery and before the proxy starts serving,
-  // so an unresolved journal can already close publishing and manual reindex.
-  await recoverSemanticJournals();
   await recoverResponseLedger();
   const projection = createProjectionScheduler({
     getStore: getSecurityStore,
@@ -2481,12 +2685,12 @@ async function recoverResponseLedger(): Promise<void> {
 }
 
 /**
- * Lucy v0.25 / L25-11 §7.1–§7.2 (D3) — semantic recovery journal recovery.
+ * Lucy v0.25 / L25-11 §7.1–§7.2 (D3/D18) — semantic recovery journal recovery.
  *
- * Runs at boot, BEFORE publishing or a manual reindex is allowed. A journal
- * whose target bytes match neither the recorded old nor the recorded new
- * digest is not guessed: it is left for a human, and `isRecoveryRequired()`
- * then keeps publishing and manual reindexing closed.
+ * Runs at boot, BEFORE the WebUI listens and before publishing or a manual
+ * reindex is allowed. A journal whose target bytes match neither the recorded
+ * old nor the recorded new digest is not guessed: it is left for a human, and
+ * `isRecoveryRequired()` then keeps publishing and manual reindexing closed.
  */
 async function recoverSemanticJournals(): Promise<void> {
   try {
@@ -2499,6 +2703,14 @@ async function recoverSemanticJournals(): Promise<void> {
       console.error(
         `[lucy-semantic] ${result.needsRepair.length} semantic journal(s) need manual repair; ` +
           "publishing and manual reindex stay closed until they are resolved"
+      );
+    }
+    if (result.activationPending.length > 0) {
+      // The files are saved and verified, but the activation was never proven.
+      // The release keeps `activationStatus = unconfirmed`; the index can be
+      // retried from the publish workbench.
+      console.warn(
+        `[lucy-semantic] ${result.activationPending.length} semantic journal(s) have saved files with an unconfirmed activation`
       );
     }
   } catch (error) {

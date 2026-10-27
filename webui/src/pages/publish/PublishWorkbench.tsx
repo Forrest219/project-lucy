@@ -1,9 +1,10 @@
 import clsx from "clsx";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DiffViewer } from "../../components/DiffViewer";
 import { PageHeader } from "../../components/PageHeader";
+import { PublishBatchPlanPanel } from "../../components/semantic-assets/PublishBatchPlanPanel";
 import { apiGet, apiPost } from "../../lib/apiClient";
 import { queryKeys } from "../../lib/queryKeys";
 import { buildObjectDetailSearch } from "../../lib/objectDetail";
@@ -235,6 +236,11 @@ export function countDiffLines(diff?: string): { added: number; deleted: number 
 
 export function PublishWorkbench() {
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
+  // ★ Lucy v0.25 / L25-11 §3.2 (D13): the workbench receives a BATCH ID.
+  // It never receives a client-provided disk path — the targets come from the
+  // server-side plan.
+  const batchValidationId = searchParams.get("validationId") ?? "";
   const [selected, setSelected] = useState<string | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [confirmPublishOpen, setConfirmPublishOpen] = useState(false);
@@ -492,6 +498,15 @@ export function PublishWorkbench() {
       />
 
       <div className="pl-review-layout" data-testid="publish-workbench-layout">
+        {batchValidationId ? (
+          <PublishBatchPlanPanel
+            validationId={batchValidationId}
+            onPublished={() => {
+              void queryClient.invalidateQueries({ queryKey: queryKeys.diff });
+              void queryClient.invalidateQueries({ queryKey: queryKeys.semanticAssetReleases });
+            }}
+          />
+        ) : null}
         <aside className="pl-review-sidebar" data-testid="workbench-pending-panel">
           <p className="pl-panel-title mb-2">本次将同步的变更</p>
           {mirrorOnlySemanticFiles.length > 0 ? (

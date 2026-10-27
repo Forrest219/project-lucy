@@ -81,6 +81,8 @@ function apiSpec() {
   const check = "api-spec";
   const files = [
     "webui/server/index.ts",
+    // L25-11：语义批量维护的路由注册在独立模块里，必须同样受 API 文档门禁约束。
+    "webui/server/semantic-batch-routes.ts",
     ...walk("webui/server/admin", (file) => file.endsWith(".ts")),
     ...walk("webui/server/eval", (file) => file.endsWith(".ts")),
     ...walk("webui/server/ops", (file) => file.endsWith(".ts")),

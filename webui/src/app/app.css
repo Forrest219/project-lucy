@@ -949,6 +949,11 @@
   .pl-usage-rank-empty { @apply m-0 py-4 text-center text-sm text-fg-muted; }
   .pl-catalog-table { min-width: 0; }
   .pl-catalog-table-name { @apply grid gap-0.5; }
+  /* Lucy v0.25 / L25-11 §3.1：多选列与批量动作条 */
+  .pl-catalog-table-select-col { @apply w-10 whitespace-nowrap text-left; }
+  .pl-catalog-table-select-col input[type="checkbox"] { @apply h-4 w-4 cursor-pointer; }
+  .pl-catalog-batch-bar { @apply flex flex-wrap items-center gap-2 border-t border-border-default px-3 py-2; }
+  .pl-catalog-batch-count { @apply text-xs text-fg-muted tabular-nums; }
   .pl-catalog-table-name-cell { @apply flex flex-wrap items-center gap-2; }
   .pl-catalog-table-name-link { @apply text-sm font-normal text-fg-default no-underline hover:underline; }
   .pl-catalog-table-structure { @apply whitespace-nowrap text-xs text-fg-muted; }

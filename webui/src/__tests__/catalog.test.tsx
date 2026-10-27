@@ -93,7 +93,9 @@ describe("Catalog density (M- Catalog table refactor)", () => {
     const table = await screen.findByTestId("catalog-table");
     expect(within(table).getByRole("table").className).toContain("pl-data-grid");
     const headers = within(table).getAllByRole("columnheader");
+    // The first column is the L25-11 §3.1 multi-select column.
     expect(headers.map((h) => h.textContent)).toEqual([
+      "选择",
       "表名",
       "语义状态",
       "结构",
@@ -536,5 +538,108 @@ describe("Catalog Connection → Schema scope tree (Spec 152)", () => {
       expect(storedPayload).not.toContain("orders");
       expect(storedPayload).not.toContain("order_id");
     });
+  });
+});
+
+// ─── Lucy v0.25 / L25-11 §3.1: the batch selection ─────────────────────────
+
+describe("Catalog batch selection (L25-11 §3.1)", () => {
+  const selectionTables = [
+    makeSummary({ conn: "conn-a", schema: "schema-a", table: "orders", enabled: true }),
+    makeSummary({ conn: "conn-a", schema: "schema-b", table: "returns", enabled: false }),
+    makeSummary({ conn: "conn-b", schema: "schema-c", table: "customers", enabled: true })
+  ];
+
+  it("counts the selection with the full table identity, not the table name", async () => {
+    renderCatalog(selectionTables, "/catalog?scope=all");
+    await screen.findByTestId("catalog-table");
+
+    expect(screen.getByTestId("catalog-selected-count")).toHaveTextContent("已选择 0 张表");
+
+    fireEvent.click(screen.getByTestId("catalog-row-select-orders"));
+    expect(screen.getByTestId("catalog-selected-count")).toHaveTextContent("已选择 1 张表");
+
+    fireEvent.click(screen.getByTestId("catalog-row-select-returns"));
+    expect(screen.getByTestId("catalog-selected-count")).toHaveTextContent("已选择 2 张表");
+  });
+
+  it("keeps a same-named table of two connections apart", async () => {
+    renderCatalog(
+      [
+        makeSummary({ conn: "conn-a", schema: "schema-a", table: "orders" }),
+        makeSummary({ conn: "conn-b", schema: "schema-c", table: "orders" })
+      ],
+      "/catalog?scope=all"
+    );
+    await screen.findByTestId("catalog-table");
+
+    // Two rows share the table name but not the identity.
+    const checkboxes = screen.getAllByLabelText(/选择 conn-.*\/orders$/);
+    expect(checkboxes).toHaveLength(2);
+    fireEvent.click(checkboxes[0]!);
+    expect(screen.getByTestId("catalog-selected-count")).toHaveTextContent("已选择 1 张表");
+  });
+
+  it("selects the complete filter result, not only the visible rows", async () => {
+    renderCatalog(selectionTables, "/catalog?scope=all");
+    await screen.findByTestId("catalog-table");
+
+    fireEvent.click(screen.getByTestId("catalog-select-all"));
+    expect(screen.getByTestId("catalog-selected-count")).toHaveTextContent("已选择 3 张表");
+
+    fireEvent.click(screen.getByTestId("catalog-select-all"));
+    expect(screen.getByTestId("catalog-selected-count")).toHaveTextContent("已选择 0 张表");
+  });
+
+  it("clears the selection when a filter changes", async () => {
+    renderCatalog(selectionTables, "/catalog?scope=all");
+    await screen.findByTestId("catalog-table");
+
+    fireEvent.click(screen.getByTestId("catalog-row-select-orders"));
+    expect(screen.getByTestId("catalog-selected-count")).toHaveTextContent("已选择 1 张表");
+
+    fireEvent.change(screen.getByPlaceholderText("搜索表名或字段名..."), {
+      target: { value: "orders" }
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("catalog-selected-count")).toHaveTextContent("已选择 0 张表");
+    });
+  });
+
+  it("disables the selection-bound actions without a selection and keeps the import available", async () => {
+    renderCatalog(selectionTables, "/catalog?scope=all");
+    await screen.findByTestId("catalog-table");
+
+    expect(screen.getByTestId("catalog-batch-download")).toBeDisabled();
+    expect(screen.getByTestId("catalog-batch-check")).toBeDisabled();
+    // 「导入语义资产包」 is always available (L25-11 §3.1).
+    expect(screen.getByTestId("catalog-import-package")).not.toBeDisabled();
+
+    fireEvent.click(screen.getByTestId("catalog-row-select-orders"));
+    await waitFor(() => {
+      expect(screen.getByTestId("catalog-batch-download")).not.toBeDisabled();
+      expect(screen.getByTestId("catalog-batch-check")).not.toBeDisabled();
+    });
+  });
+});
+
+// ─── Terminology regression (webui/docs/00-product-terminology-standard.md §4.3) ──
+
+describe("Catalog batch terminology (L25-11 registered terms)", () => {
+  it("uses the registered UI terms for the batch actions", async () => {
+    renderCatalog([makeSummary()], "/catalog?scope=all");
+    await screen.findByTestId("catalog-table");
+
+    // 注册术语：已选择 N 张表 / 选择全部筛选结果 / 批量下载 / 批量校验 / 导入语义资产包
+    expect(screen.getByTestId("catalog-selected-count")).toHaveTextContent("已选择 0 张表");
+    expect(screen.getByTestId("catalog-select-all-filtered")).toHaveTextContent("选择全部筛选结果");
+    expect(screen.getByTestId("catalog-batch-download")).toHaveTextContent("批量下载");
+    expect(screen.getByTestId("catalog-batch-check")).toHaveTextContent("批量校验");
+    expect(screen.getByTestId("catalog-import-package")).toHaveTextContent("导入语义资产包");
+
+    // 禁止文案：把「全部」当作当前页 / 批量导出。
+    expect(screen.queryByText("全选本页")).not.toBeInTheDocument();
+    expect(screen.queryByText("批量导出")).not.toBeInTheDocument();
   });
 });

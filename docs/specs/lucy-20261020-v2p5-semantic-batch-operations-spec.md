@@ -61,11 +61,44 @@
 | 层次 | 当前事实 | 尚待完成及验收关联 |
 |---|---|---|
 | 基础模块 | `21de5168` 已加入身份、范围、维护包、共享限额、共享检查、批量任务、持久幂等、恢复日志与 release 状态等基础模块及模块级用例 | 只能登记“基础模块已落地”；不得由 helper 用例推定完整能力。生产复用与端到端证据见 V01–V21 |
-| 生产入口 | 当前生产导出仍走 `exportSemanticAssetPackage` 和 connection／Schema 路径筛选；`scopes`、独立 `check`、`operations` 路由未注册，新模块未接入生产路由。Catalog 仍无本闭环多选与批量动作，工作台仍只处理既有磁盘变更 | 完成 D11–D15、D18–D23 的真实 API／页面接线、共享限额与无变化候选处理；对应 V01–V07、V09–V13、V17、V20–V21 |
-| 提交与恢复 | 生产发布仍只接收 `validationId/confirmOverwrite`，每次新建 releaseId，未使用完整计划 CAS 与持久幂等。journal 在文件写完后、索引和终结证据前关闭；终结状态部分在协调器外，启动恢复晚于 WebUI 监听，镜像异常与恢复异常未形成完整失败关闭 | 按 §7、§9 补齐计划摘要、覆盖确认、有效键保留、全生命周期 journal、镜像／审计／索引／终结持久化及启动恢复边界；对应 V08、V13–V16、V19 |
+| 生产入口 | `scopes` / `check` / `operations` / `plans` 路由已注册；生产导出支持 `packageKind=semantic-maintenance-package/v1` 并留存服务端导出基线；导入走受控 staging；Catalog 已有多选与批量动作；工作台已能接收批次 ID 并展示完整计划 | 已落地（见 §1.4）；**仍未产生验收证据**，对应 V01–V07、V09–V13、V17、V20–V21 的子断言仍需逐项取证 |
+| 提交与恢复 | 生产发布已按完整计划 CAS（`planDigest`）与持久幂等键执行；journal 引入阶段概念，文件落盘后保持 `files_saved` 直到索引与终结证据可核对；release 增补 `recoveryRequired` / `activationStatus` / `attemptId`；启动恢复前移至 WebUI 监听之前 | 已落地（见 §1.4）；镜像异常与恢复异常的完整失败关闭仍需 V14–V16 的故障注入证据 |
 | 后续源码修复 | D-23 的 rename 后 `applied` 标记丢失漏回滚已由 `2cc79f49` 修复：遍历全部 entry 并按实际字节分 `restored/unchanged/conflict`。生产 ZIP/TGZ 输出上限与角色保存锁内版本复核的源码修复由 `9b249f6d` 落地 | 仅准确登记源码修复，不回填历史缺陷为当前缺陷，也不据此关闭其余恢复、幂等或验收边界。D-19／D-21 台账是否关闭仍按其正式证据处理；V09、V14–V15 及共享协调器相关项保持未执行 |
 | 正式验收 | **V01–V22 全部未执行**；本轮静态审阅、测试源码及历史运行记录均不升级为本轮验收证据 | 按 §10.1 的子断言逐项取得直接证据后才可分别回填；标签不得自动汇总为整项通过 |
 | 客户交付 | Wave 0b 未解锁，整批保持 `blocked_delivery`；V03 的 Agent 级证据与 V22 的客户 linux/amd64 证据仍受该约束 | 本机、模拟、Compose 或静态结果不得替代获授权的 Agent 与客户单副本 Helm 环境证据；本地实现缺口也不能借 Wave 0b 解释为“只欠环境验收” |
+
+### 1.4 2026-10-27 实施落地后的状态校准
+
+本小节记录本轮**实际改动的源码**与**实际执行的测试**。它不产生验收证据：§10 的 V01–V22 状态一律保持「未执行」，因为没有任何一项的全部子断言都取得了直接证据。
+
+**生产接线（已落地，见 §7.5）**
+
+| 实施项 | 本轮落地位置 | 状态 |
+|---|---|---|
+| D11 严格 HTTP 信封 | `webui/server/semantic-batch-service.ts` `parseSemanticValidateEnvelope`；`webui/server/index.ts` `/api/semantic-assets/validate` | 已落地 |
+| D11 新增路由 | `webui/server/semantic-batch-routes.ts`：`scopes` / `check` / `operations/:id` / `operations/:id/cancel` / `operations/:id/report.csv` / `plans/:validationId` | 已落地 |
+| D4／D7 维护包导出与基线 | `webui/server/semantic-batch-service.ts` `exportSemanticMaintenancePackage`；`semantic-maintenance-package.ts` 增补 `scopeId` 与导出记录的 `actor` | 已落地 |
+| D6 共享限额 | `webui/server/semantic-assets.ts` 导入侧改用 `SEMANTIC_BATCH_LIMITS`（替代原 50 YAML／3 MiB） | 已落地 |
+| D8 共享检查 | `semantic-assets.ts` `runValidateGate` 改为调用 `semantic-checks.ts` 的 `runSemanticTableCheck`（与单表保存、独立批量、导入预检同一实现）；无法解析身份的新表仍走原 KTX 门禁 | 已落地 |
+| D12 导入暂存 | `webui/server/semantic-batch-service.ts` `stageSemanticMaintenanceImport`；`semantic-assets.ts` `persistSemanticBatchSnapshot` | 已落地 |
+| D13 完整计划 | `webui/server/semantic-assets.ts` `describeSemanticBatchPlan`（候选 + 既有待同步磁盘变更 + 精确覆盖集合） | 已落地 |
+| D14 计划 CAS | `semantic-assets.ts` `rebuildBatchPlan` + `recomputeSemanticPlanDigest`；批量发布废止全局布尔覆盖确认（`confirmOverwrite` 仅对无批次计划的单文件旧导入路径保留并标记 `@deprecated`） | 已落地 |
+| D15 持久幂等 | `semantic-assets.ts` 发布路径接入 `registerSemanticIdempotencyKey`；重放检查前置于快照读取 | 已落地 |
+| D16／D17 journal 全生命周期 | `semantic-recovery-journal.ts` 增补 `phase`（`write_in_progress` / `files_saved` / `activation_pending` / `completed`）与 `markRecoveryJournalFilesSaved`；启动恢复按阶段分流 | 已落地 |
+| D18 启动恢复准入 | `webui/server/index.ts` `recoverSemanticJournals()` 前移至 `app.listen()` 之前 | 已落地 |
+| D19／D20 生效状态 | `semantic-assets.ts` release 增补 `recoveryRequired` / `activationStatus` / `attemptId` / `planDigest`；`published` 仅在最终 digest 核验与终结审计持久化之后写入 | 已落地 |
+| D21 Catalog 多选 | `webui/src/pages/Catalog.tsx`；`webui/src/components/semantic-assets/CatalogBatchPanel.tsx` | 已落地 |
+| D22 审计 | `semantic-batch-audit.ts` 的 payload／record 用于导出（交付前）、校验与暂存；导出审计失败即导出失败 | 已落地 |
+| D23 共享协调器 | 复核确认：单表保存、Manifest 上传、批量导入、手动 reindex、角色／行策略保存五类写入口**已全部**在 `publish-coordinator.ts` 的同一窗口内 | 已落地（复核确认，非本轮新增） |
+
+**本轮实际执行的测试（局部直接证据，不回填整项）**
+
+| 测试 | 直接覆盖的子断言 | 未覆盖 |
+|---|---|---|
+| `server/__tests__/api.semantic-batch.test.ts` | V05(b) 的「29 合法 + 1 错形整批拒绝」；V05(c) 的「合法包 + 1 错形 package 整批拒绝」；V07(d) 的「未知目标拒绝」；V08(c) 的「精确覆盖集合变化使旧确认失效」；V13(a)/(c) 的同键同 release 与同键异计划冲突 | 其余全部子断言 |
+| `server/__tests__/semantic-batch-journal-lifecycle.test.ts` | §7.2 第 5／6 条的 journal 阶段分流；D19／D20 的 `activationStatus` 状态机 | V14／V15／V16 的故障注入时序、镜像核验与跨重启证据 |
+
+以上测试是**真实 HTTP 入口**用例（`buildServer()` + supertest），不是 helper 单测；但它们只覆盖上表列出的窄子场景。按 §10.1「只有该项全部子断言均在适用环境取得直接证据后，才可把整项改为通过」，**V01–V22 状态一律保持「未执行」**，也不得据此申请 UAT 准入。
 
 ## 2. 需求判断、目标与边界
 
@@ -421,6 +454,8 @@ This feature follows [webui/docs/00-product-terminology-standard.md](../../webui
 | Staged semantic import | 导入语义资产包 / 已暂存 | 不以“上传成功”代替“已生效”；单表继续“导入 YAML” |
 | Selection scope | 已选择 N 张表 | 不用“全部”混淆当前页与完整筛选结果 |
 | Activation unconfirmed | 生效状态待确认 | 不用绿色成功掩盖索引或恢复失败 |
+
+以上术语已按 [webui/docs/00-product-terminology-standard.md](../../webui/docs/00-product-terminology-standard.md) §5 的登记流程写入该标准 §4.3（新增 `Batch Selection Scope` / `Select All Filtered Results` / `Batch Download Semantic Assets` / `Batch Semantic Validation` / `Import Semantic Assets Package` / `Semantic Maintenance Package` / `Activation Unconfirmed` 七行），并在 `webui/src/__tests__/catalog.test.tsx` 中加入关键文案断言防止回归。
 
 Schema、Manifest、semantic overlay、连接、启用表范围沿用现有定义。完整表身份、英文格式名、路径和 URL 的 DOM 节点必须带 `translate="no"` 与 `notranslate`。
 

@@ -151,6 +151,12 @@ GET    /api/semantic-assets/releases/export.csv
 POST   /api/semantic-assets/export
 GET    /api/semantic-assets/exports/:exportId/download
 POST   /api/semantic-assets/reindex
+POST   /api/semantic-assets/scopes
+POST   /api/semantic-assets/check
+GET    /api/semantic-assets/operations/:id
+POST   /api/semantic-assets/operations/:id/cancel
+GET    /api/semantic-assets/operations/:id/report.csv
+GET    /api/semantic-assets/plans/:validationId
 
 GET    /api/admin/agents
 POST   /api/admin/agents
@@ -561,6 +567,18 @@ dryRun 响应：
 `POST /api/semantic-assets/export` 生成语义资产导出任务；`GET /api/semantic-assets/exports/:exportId/download` 下载指定导出产物。
 
 `POST /api/semantic-assets/reindex` 手动触发 semantic-layer 索引重建，并把结果写入发布历史，供发布工作台和历史页展示。
+
+### 语义资产批量维护（L25-11）
+
+`POST /api/semantic-assets/scopes` 把一组**完整表身份**（`connectionId` / `schema` / `table` 三元组）解析成不可变的范围快照：服务端按模型关系解析目标、派生只读依赖闭包并记录基线摘要。客户端不提供任何落盘路径；歧义或缺失身份整批阻断。快照绑定操作者与实例，30 分钟过期。
+
+`POST /api/semantic-assets/check` 对一个范围快照启动**独立批量校验**（4 并发、单表 30 秒、任务 10 分钟），任务在后台执行、报告持久化；返回 `operationId`。`GET /api/semantic-assets/operations/:id` 轮询任务状态与逐表 verdict（`passed` / `failed` / `not_run` / `stale`），**不会重跑检查**；`POST /api/semantic-assets/operations/:id/cancel` 取消运行中的任务（已完成的检查结果保留）；`GET /api/semantic-assets/operations/:id/report.csv` 下载 CSV 报告（公式注入已转义）。
+
+`POST /api/semantic-assets/export` 在 `packageKind=semantic-maintenance-package/v1` 且带 `scopeId` 时生成**语义维护包**：可编辑覆盖层 + 只读 Schema Manifest 上下文，服务端同时留存导出基线记录（7 天有效）。`POST /api/semantic-assets/validate` 上传该维护包时按服务端原记录逐项核验（entry 全集、role、主／共享身份、路径、target/base/baseline 摘要），只读内容被改、身份被改绑或跨实例一律整包拒绝；未改动的包导回为「无变化」，不创建发布、不索引其他待处理变更。
+
+`GET /api/semantic-assets/plans/:validationId` 返回该批次的**完整计划**：本次导入候选 + 既有待同步磁盘变更 + 精确覆盖集合 + `planDigest`。索引是整批同步，不能按 Catalog 勾选伪装为局部生效。
+
+`POST /api/semantic-assets/publish` 接受 `validationId`、`planDigest`、精确覆盖集合与幂等键。服务端在发布窗口内重建完整计划并重算摘要：目标或依赖在预览后被改动、覆盖集合变化、或摘要不匹配，一律 `409 SEMANTIC_PLAN_DIGEST_MISMATCH`，必须重新预览确认。同一幂等键 + 同一计划返回同一个 release 且不重复写盘或索引；同一幂等键 + 不同计划返回 `409 SEMANTIC_IDEMPOTENCY_CONFLICT`。
 
 请求：
 

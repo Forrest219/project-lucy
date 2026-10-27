@@ -2085,6 +2085,21 @@ export type SemanticAssetReleaseRecord = {
       message: string;
     }>;
   };
+  /** Lucy v0.25 L25-11 §7.1 — a recovery obligation is open for this release. */
+  recoveryRequired?: boolean;
+  /**
+   * Lucy v0.25 L25-11 §7.1 — whether the activation is CONFIRMED.
+   * A legacy `published` record is never upgraded to `confirmed`.
+   */
+  activationStatus?: "unconfirmed" | "confirmed" | "unknown";
+  /** The index attempt that produced the current status. */
+  attemptId?: string;
+  /** The plan digest the confirmation was bound to. */
+  planDigest?: string;
+  /** The batch this release came from. */
+  batchId?: string;
+  /** The scope snapshot this release came from. */
+  scopeId?: string;
 };
 
 export type SemanticAssetReleasesResponse = {
@@ -2099,12 +2114,171 @@ export type SemanticAssetReleaseStatusResponse = {
 
 export type SemanticAssetPublishRequest = {
   validationId: string;
+  /** @deprecated L25-11 §7.2 — the plan digest replaces the global boolean. */
   confirmOverwrite?: boolean;
+  /** The digest of the complete plan the operator confirmed. */
+  planDigest?: string;
+  /** The exact overwrite set the confirmation covers. */
+  overwriteTargets?: string[];
+  /** The client idempotency key. */
+  idempotencyKey?: string;
 };
 
 export type SemanticAssetPublishResponse = {
   accepted: boolean;
   release: SemanticAssetReleaseRecord;
+};
+
+// ─── Lucy v0.25 / L25-11: the semantic batch loop ───────────────────────────
+
+/** The full table identity — never a bare table name (L25-11 §4.1). */
+export type SemanticTableIdentity = {
+  connectionId: string;
+  schema: string;
+  table: string;
+};
+
+export type SemanticScopeResponse = {
+  scopeId: string;
+  createdAt: string;
+  expiresAt: string;
+  baselineDigest: string;
+  refs: string[];
+  dependencies: string[];
+  targets: Array<{ path: string; digest: string | null; identity: SemanticTableIdentity | null }>;
+  dependencyTargets: Array<{ path: string; digest: string | null; identity: SemanticTableIdentity | null }>;
+};
+
+export type SemanticMaintenanceExportResponse = {
+  packageKind: "semantic-maintenance-package/v1";
+  exportId: string;
+  filename: string;
+  sizeBytes: number;
+  sha256: string;
+  downloadUrl: string;
+  scopeId: string;
+  baselineDigest: string;
+  expiresAt: string;
+  selected: SemanticTableIdentity[];
+  dependencies: SemanticTableIdentity[];
+  includedFiles: string[];
+  entryCount: number;
+};
+
+export type SemanticBatchCheckRequest = {
+  scopeId: string;
+};
+
+export type SemanticBatchCheckAccepted = {
+  operationId: string;
+  taskId: string;
+  scopeId: string;
+  status: string;
+  selectedCount: number;
+  dependencyCount: number;
+};
+
+export type SemanticVerdict = "passed" | "failed" | "not_run" | "stale";
+
+export type SemanticExecutionEvidence =
+  | "not_applicable"
+  | "evidence_available"
+  | "blocked_evidence"
+  | "unknown";
+
+export type SemanticTableCheckResult = {
+  identity: SemanticTableIdentity;
+  verdict: SemanticVerdict;
+  severity: "blocking" | "warning" | "info";
+  reasons: Array<{ code: string; message: string; severity: "blocking" | "warning" | "info" }>;
+  layers: {
+    scopeInput: { verdict: SemanticVerdict; reasons: unknown[] };
+    semantics: { verdict: SemanticVerdict; reasons: unknown[] };
+    completeness: {
+      hasDescription: boolean;
+      hasGrain: boolean;
+      columnCount: number;
+      describedColumnCount: number;
+      measureCount: number;
+      segmentCount: number;
+    };
+    executionEvidence: { status: SemanticExecutionEvidence; note: string };
+  };
+  durationMs: number;
+};
+
+export type SemanticBatchSummary = {
+  selected: number;
+  passed: number;
+  failed: number;
+  notRun: number;
+  stale: number;
+  dependencies: number;
+};
+
+export type SemanticBatchOperation = {
+  operationId: string;
+  taskId: string;
+  scopeId: string;
+  status: "queued" | "running" | "completed" | "cancelled" | "failed";
+  cancelled: boolean;
+  createdAt: string;
+  startedAt?: string;
+  finishedAt?: string;
+  baselineDigest: string;
+  summary: SemanticBatchSummary;
+  results: SemanticTableCheckResult[];
+  reportJsonUrl?: string;
+  reportCsvUrl?: string;
+  cancelRequested?: boolean;
+  alreadyTerminal?: boolean;
+};
+
+/**
+ * The COMPLETE publish plan of a staged batch (L25-11 §3.2 / §7.2).
+ *
+ * It covers this batch's candidates AND the pending disk changes that would be
+ * indexed together with them — the index is batch-wide, so a partial view
+ * would misrepresent the effect.
+ */
+export type SemanticBatchPlanResponse = {
+  validationId: string;
+  batchId: string;
+  scopeId: string;
+  planDigest: string;
+  candidateDigest: string;
+  candidates: Array<{
+    targetPath: string;
+    identity: SemanticTableIdentity | null;
+    expectedDigest: string | null;
+    overwrite: boolean;
+  }>;
+  unrelatedDiskChanges: Array<{ targetPath: string; expectedDigest: string | null }>;
+  overwriteSet: string[];
+  effectiveTargets: string[];
+  dependencies: SemanticTableIdentity[];
+  readonlyDependencies: SemanticTableIdentity[];
+};
+
+/** The staged state of an imported maintenance package (L25-11 §5 / §7.2). */
+export type SemanticBatchStaging = {  valid: boolean;
+  validationId: string;
+  batchId: string;
+  status: "staged" | "no_change";
+  noChange: boolean;
+  scopeId: string;
+  exportId: string;
+  candidateDigest: string;
+  planDigest: string;
+  targetDigests: Array<{ path: string; digest: string | null }>;
+  overwriteSet: string[];
+  dependencies: SemanticTableIdentity[];
+  readonlyEntries: Array<{ packagePath: string; identity: SemanticTableIdentity }>;
+  files: SemanticAssetFilePreview[];
+  changedSources: SemanticAssetChangedSource[];
+  diff: string;
+  warnings: SemanticAssetWarning[];
+  errors: SemanticAssetError[];
 };
 
 export type SemanticAssetManualReindexResponse = {

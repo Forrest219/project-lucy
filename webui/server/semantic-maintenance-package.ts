@@ -142,6 +142,12 @@ export interface MaintenancePackageMetadata {
   product: { name: string; version: string; revision: string };
   /** Digest of the semantic baseline the package was built from. */
   baselineDigest: string;
+  /**
+   * The scope snapshot this package was exported from. The import binds the
+   * package back to that scope so a package can never be replayed against a
+   * different selection (Lucy v0.25 / L25-11 §5).
+   */
+  scopeId: string;
   /** Every selected table. */
   selected: SemanticTableIdentity[];
   /** Every read-only dependency. */
@@ -430,6 +436,8 @@ export interface BuildMaintenancePackageInput {
   exportId: string;
   instanceId: string;
   product: { name: string; version: string; revision: string };
+  /** The scope snapshot this package is built from. */
+  scopeId?: string;
   selected: readonly SemanticTableIdentity[];
   dependencies: readonly SemanticTableIdentity[];
   /** Digest of the semantic baseline the package was built from. */
@@ -560,6 +568,7 @@ export async function buildMaintenancePackage(
     instanceId: input.instanceId,
     product: input.product,
     baselineDigest: input.baselineDigest,
+    scopeId: input.scopeId ?? "",
     selected: sortUniqueSemanticIdentities(input.selected),
     dependencies: sortUniqueSemanticIdentities(input.dependencies),
     entries
@@ -853,6 +862,11 @@ export function resolveMaintenanceEntryTargets(
 export interface MaintenanceExportBaseline {
   exportId: string;
   instanceId: string;
+  /**
+   * The administrator who produced the export. The download route re-checks
+   * it so an export id is not a bearer token (Lucy v0.25 / L25-11 §4.5).
+   */
+  actor?: string;
   packageDigest: string;
   exportedAt: string;
   expiresAt: string;
@@ -888,6 +902,8 @@ export async function persistMaintenanceExportBaseline(
 export function buildExportBaseline(input: {
   metadata: MaintenancePackageMetadata;
   packageDigest: string;
+  /** The administrator who produced the export. */
+  actor?: string;
   now?: () => number;
 }): MaintenanceExportBaseline {
   const nowMs = (input.now ?? Date.now)();
@@ -895,6 +911,7 @@ export function buildExportBaseline(input: {
   return {
     exportId: input.metadata.exportId,
     instanceId: input.metadata.instanceId,
+    ...(input.actor ? { actor: input.actor } : {}),
     packageDigest: input.packageDigest,
     exportedAt: exportedAt.toISOString(),
     expiresAt: new Date(nowMs + SEMANTIC_BATCH_LIMITS.exportBaselineTtlMs).toISOString(),

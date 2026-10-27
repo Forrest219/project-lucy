@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
   CatalogScopeTree,
@@ -11,14 +11,20 @@ import { PageHeader } from "../components/PageHeader";
 import { AsyncRegion, asyncStatus } from "../components/AsyncRegion";
 import { RowMoreMenu } from "../components/RowMoreMenu";
 import {
+  CatalogBatchPanel,
+  type CatalogBatchMode
+} from "../components/semantic-assets/CatalogBatchPanel";
+import {
   CATALOG_SEARCH_COMMIT_MS,
   createCatalogVisitId,
   recordCatalogNavigationEvent,
   type CatalogNavigationContextLevel,
   type CatalogNavigationEventType
 } from "../lib/catalogNavigationUsage";
-import type { CompletionStatus, SourceSummary } from "../lib/types";
+import type { CompletionStatus, SourceSummary, SemanticBatchStaging } from "../lib/types";
 import { sourcesQueryOptions, useDisplayFactsPending } from "../lib/displayQueryOptions";
+import { apiPost } from "../lib/apiClient";
+import { toast } from "sonner";
 
 /** A disabled fact-dependent link has no href, including for keyboard/new-tab activation. */
 function CatalogFactLink({ factsReady, ...props }: Pick<ComponentProps<typeof Link>, "to" | "children" | "className" | "onClick" | "title" | "aria-label" | "translate"> & { factsReady: boolean; "data-testid"?: string }) {
@@ -90,6 +96,17 @@ function enabledTablesHref(table: SourceSummary): string {
 }
 
 /**
+ * Lucy v0.25 / L25-11 §4.1 — the FULL table identity.
+ *
+ * The selection key is the whole triple, never a bare table name: two
+ * connections (or two schemas) can carry the same table name, and a selection
+ * keyed by the name alone would silently merge them.
+ */
+function catalogIdentityKey(table: SourceSummary): string {
+  return `${table.conn}/${table.schema}/${table.table}`;
+}
+
+/**
  * Format an ISO timestamp as `YYYY-MM-DD HH:mm` in the local time zone.
  * Returns the raw string if the value cannot be parsed; the catalog surfaces
  * this column for at-a-glance triage so it must never throw.
@@ -155,6 +172,7 @@ function catalogEmptyMessage(input: {
 
 export function Catalog() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   // Spec 100 §7.1: URL is the single source of truth so deep links / Back work while mounted.
   // Spec 104: default scope is enabled (omit or scope=enabled).
   const connection = searchParams.get("connection") ?? "all";
@@ -166,6 +184,65 @@ export function Catalog() {
   const visitStartedRef = useRef(false);
   const outcomeRecordedRef = useRef(false);
   const lastCommittedSearchRef = useRef(search);
+
+  // ── Lucy v0.25 / L25-11 §3.1: the batch selection ───────────────────────
+  //
+  // The selection holds FULL table identities. Changing the search, the
+  // connection, the schema, the enable scope or the semantic status clears
+  // it: an invisible implicit selection would let the operator act on tables
+  // they can no longer see.
+  const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
+  const [batchMode, setBatchMode] = useState<CatalogBatchMode | null>(null);
+  const selectionRef = useRef<string[]>([]);
+  selectionRef.current = selectedKeys;
+  const importInputRef = useRef<HTMLInputElement | null>(null);
+
+  function clearSelection(reason: string): void {
+    if (selectionRef.current.length === 0) return;
+    setSelectedKeys([]);
+    toast.message(`筛选条件已变化，已清空选择（${reason}）。`, { id: "catalog-selection-cleared" });
+  }
+
+  /**
+   * ★ Lucy v0.25 / L25-11 §3.1: 「导入语义资产包」 is always available.
+   *
+   * The import scope comes from the PACKAGE CONTENT — it is never silently
+   * narrowed by the page filters. The package is staged (controlled staging
+   * only) and the operator is sent to the publish workbench with the batch
+   * id, where the complete plan is confirmed.
+   */
+  function importMaintenancePackage(): void {
+    importInputRef.current?.click();
+  }
+
+  async function handleImportFile(files: FileList | null): Promise<void> {
+    const file = files?.[0];
+    if (!file) return;
+    try {
+      const buffer = await file.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+      let binary = "";
+      const chunkSize = 0x8000;
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+      }
+      const response = await apiPost<SemanticBatchStaging>("/api/semantic-assets/validate", {
+        packages: [{ filename: file.name, contentBase64: btoa(binary) }]
+      });
+      if (response.noChange) {
+        toast.message("导入预检结果：无变化。未创建发布，也未同步其他待处理变更。", {
+          id: "catalog-import"
+        });
+        return;
+      }
+      toast.success(`已暂存 ${response.files.length} 张表，请在发布工作台确认完整计划。`, {
+        id: "catalog-import"
+      });
+      navigate(`/publish/workbench?validationId=${encodeURIComponent(response.validationId)}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "导入预检失败");
+    }
+  }
 
   function patchSearchParams(patch: {
     connection?: string;
@@ -187,6 +264,9 @@ export function Catalog() {
     apply("completion", patch.completion, "all");
     apply("q", patch.q !== undefined ? patch.q.trim() : undefined, "");
     if (next.toString() !== searchParams.toString()) {
+      // ★ L25-11 §3.1: any filter change clears the selection. The operator
+      // must never act on a selection whose objects are no longer visible.
+      clearSelection("筛选条件变化");
       setSearchParams(next, { replace: true });
     }
   }
@@ -325,6 +405,33 @@ export function Catalog() {
     return Array.from(groups.values());
   }, [filtered]);
 
+  // ── Lucy v0.25 / L25-11 §3.1: the selection helpers ─────────────────────
+  const filteredKeys = useMemo(() => filtered.map(catalogIdentityKey), [filtered]);
+  const selectedSet = useMemo(() => new Set(selectedKeys), [selectedKeys]);
+  const selectedTables = useMemo(
+    () => tables.filter((table) => selectedSet.has(catalogIdentityKey(table))),
+    [selectedSet, tables]
+  );
+  const allFilteredSelected = filteredKeys.length > 0 && filteredKeys.every((key) => selectedSet.has(key));
+  const someFilteredSelected = filteredKeys.some((key) => selectedSet.has(key));
+
+  function toggleTableSelection(table: SourceSummary): void {
+    const key = catalogIdentityKey(table);
+    setSelectedKeys((previous) =>
+      previous.includes(key) ? previous.filter((item) => item !== key) : [...previous, key]
+    );
+  }
+
+  function toggleSelectAllFiltered(): void {
+    // "选择全部筛选结果" covers the COMPLETE filter result, not the visible
+    // page — and it is the server that resolves it into a scope afterwards.
+    if (allFilteredSelected) {
+      setSelectedKeys((previous) => previous.filter((key) => !filteredKeys.includes(key)));
+      return;
+    }
+    setSelectedKeys((previous) => Array.from(new Set([...previous, ...filteredKeys])));
+  }
+
   function selectRoot() {
     if (connection === "all" && schema === "all") return;
     recordEvent("tree_select", "root");
@@ -428,6 +535,68 @@ export function Catalog() {
           </div>
         </div>
 
+        {/* ★ Lucy v0.25 / L25-11 §3.1: the batch action bar. The two actions
+            that need a selection are disabled (with a readable reason) when
+            nothing is selected; "导入语义资产包" is always available. */}
+        <div className="pl-catalog-batch-bar" data-testid="catalog-batch-bar">
+          <span className="pl-catalog-batch-count" data-testid="catalog-selected-count">
+            已选择 {selectedKeys.length} 张表
+          </span>
+          <button
+            className="pl-btn pl-btn--ghost pl-btn--sm"
+            onClick={toggleSelectAllFiltered}
+            disabled={!factsReady || filteredKeys.length === 0}
+            title={
+              allFilteredSelected
+                ? "取消选择当前筛选结果"
+                : "选择全部筛选结果（由服务端解析为范围快照）"
+            }
+            data-testid="catalog-select-all-filtered"
+          >
+            {allFilteredSelected ? "取消全选" : "选择全部筛选结果"}
+          </button>
+          <button
+            className="pl-btn pl-btn--secondary pl-btn--sm"
+            onClick={() => setBatchMode("download")}
+            disabled={!factsReady || selectedKeys.length === 0}
+            title={selectedKeys.length === 0 ? "请先选择至少一张表" : "下载语义维护包"}
+            data-testid="catalog-batch-download"
+          >
+            批量下载
+          </button>
+          <button
+            className="pl-btn pl-btn--secondary pl-btn--sm"
+            onClick={() => setBatchMode("check")}
+            disabled={!factsReady || selectedKeys.length === 0}
+            title={selectedKeys.length === 0 ? "请先选择至少一张表" : "批量校验所选表"}
+            data-testid="catalog-batch-check"
+          >
+            批量校验
+          </button>
+          <button
+            className="pl-btn pl-btn--ghost pl-btn--sm"
+            onClick={() => {
+              void importMaintenancePackage();
+            }}
+            disabled={!factsReady}
+            title="导入语义资产包（导入范围由包内容解析并单独预览）"
+            data-testid="catalog-import-package"
+          >
+            导入语义资产包
+          </button>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".zip"
+            hidden
+            onChange={(event) => {
+              void handleImportFile(event.target.files);
+              event.target.value = "";
+            }}
+            data-testid="catalog-import-package-input"
+          />
+        </div>
+
         {data?.meta?.runtimeConsistency === "unconfirmed" ? (
           <div className="pl-notice mt-4" role="status" data-testid="catalog-runtime-unconfirmed">
             权限生效状态待确认
@@ -453,6 +622,20 @@ export function Catalog() {
           <table className="pl-data-grid pl-catalog-table">
             <thead>
               <tr>
+                <th scope="col" className="pl-catalog-table-select-col">
+                  <span className="sr-only">选择</span>
+                  <input
+                    type="checkbox"
+                    checked={allFilteredSelected}
+                    ref={(node) => {
+                      if (node) node.indeterminate = !allFilteredSelected && someFilteredSelected;
+                    }}
+                    onChange={toggleSelectAllFiltered}
+                    disabled={!factsReady || filteredKeys.length === 0}
+                    aria-label="选择全部筛选结果"
+                    data-testid="catalog-select-all"
+                  />
+                </th>
                 <th scope="col">表名</th>
                 <th scope="col">语义状态</th>
                 <th scope="col">结构</th>
@@ -464,7 +647,7 @@ export function Catalog() {
             {groupedTables.map(({ conn, schema: schemaName, rows }) => (
               <tbody key={`${conn}/${schemaName}`}>
                 <tr className="pl-table-group-row">
-                  <td colSpan={6}>
+                  <td colSpan={7}>
                     <span className="notranslate" translate="no">
                       {groupLabel(conn, schemaName, rows.length)}
                     </span>
@@ -475,8 +658,18 @@ export function Catalog() {
                 const wikiHref = slRefWikiHref(table);
                 const fullRef = `${table.conn}/${table.schema}/${table.table}`;
                 const moreLabel = `更多操作：${fullRef}`;
+                const rowKey = catalogIdentityKey(table);
                 return (
-                  <tr key={`${table.conn}/${table.schema}/${table.table}`} data-testid={`catalog-row-${table.table}`}>
+                  <tr key={rowKey} data-testid={`catalog-row-${table.table}`}>
+                    <td className="pl-catalog-table-select-col">
+                      <input
+                        type="checkbox"
+                        checked={selectedSet.has(rowKey)}
+                        onChange={() => toggleTableSelection(table)}
+                        aria-label={`选择 ${fullRef}`}
+                        data-testid={`catalog-row-select-${table.table}`}
+                      />
+                    </td>
                     <td className="pl-catalog-table-name">
                       <div className="pl-catalog-table-name-cell">
                         <CatalogFactLink
@@ -492,7 +685,11 @@ export function Catalog() {
                         </CatalogFactLink>
                         {!table.enabled ? (
                           <span className="pl-status-badge pl-status-partial" data-testid={`catalog-row-not-enabled-${table.table}`}>
-                            未启用
+                            未启用，不对{" "}
+                            <span className="notranslate" translate="no">
+                              Agent
+                            </span>{" "}
+                            开放
                           </span>
                         ) : null}
                       </div>
@@ -553,6 +750,19 @@ export function Catalog() {
           )}
         </div>
       </section>
+
+      {batchMode ? (
+        <CatalogBatchPanel
+          open
+          mode={batchMode}
+          selection={selectedTables.map((table) => ({
+            connectionId: table.conn,
+            schema: table.schema,
+            table: table.table
+          }))}
+          onClose={() => setBatchMode(null)}
+        />
+      ) : null}
     </div>
   );
 }
