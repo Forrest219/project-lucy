@@ -17,7 +17,7 @@
 | Spec 编号 | 73 |
 | 关联工单 | `webui/docs/plans/wo-202608-04-connections-terminology-and-upload-drawer.md` |
 | 关联页面 | `/connections`（含 Schema Manifest 重新上传抽屉） |
-| 状态 | Draft |
+| 状态 | **已实现**（提交 `2319fd2e` `fix(webui): unify connections grid style and upload terminology`） |
 | 日期 | 2026-08-04 |
 | 范围 | 术语一致性、Host/Database 排版、上传抽屉文案冗余收敛 |
 

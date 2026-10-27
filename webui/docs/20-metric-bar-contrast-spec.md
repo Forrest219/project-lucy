@@ -1,5 +1,7 @@
 # Metric Cards and Bar Contrast Spec
 
+> **状态**：**已实现**。本文是视觉规范稿，无独立工单；验收项对应样式已落地于 `webui/src/app/app.css`（`.pl-progress` 轨道、`.pl-distribution-row` 轨道、Metric 卡片实体浅底与边框）。本轮未重跑 `npm test` / `npm run build`，无独立验收记录。
+
 ## 1. Background
 
 Low-gamut and ordinary office displays make the current light surfaces hard to distinguish from the white page background. The main offenders are metric cards and small progress/bar tracks that rely on alpha gray fills without a visible physical edge.

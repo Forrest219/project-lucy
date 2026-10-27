@@ -15,10 +15,10 @@
 | 字段 | 内容 |
 |---|---|
 | Spec 编号 | 124 |
-| 关联工单 | `webui/docs/plans/wo-202608-58-connection-create-admin.md`（实现工单；本轮仅设计） |
+| 关联工单 | `webui/docs/plans/wo-202608-58-connection-create-admin.md`（实现工单）；Phase A：`webui/docs/plans/wo-202608-58a-connection-create-secret-write-spike.md`；Phase B：`webui/docs/plans/wo-202608-58b-connection-create-ui.md` |
 | 关联页面 | `/connections`（主）；兼容空态：`/connections/enabled-tables`、`/connections/test` |
 | 上游 Spec / 设计 | `docs/design/design-db-connection.md`；Spec 26；ADR-05；ADR-11；Spec 107 / 117（Schema 抽屉模式） |
-| 状态 | Designed（未实现） |
+| 状态 | **已实现**。本行原为「Designed（未实现）」，是设计轮状态；Phase B 已由提交 `81f26e39` `feat(webui): Phase B Create Connection drawer and overview CTA` 落地。实现落点 `webui/src/components/CreateConnectionDrawer.tsx` ＋ `webui/server/project.ts` 的 `createConnection` |
 | 日期 | 2026-08-20 |
 | 范围 | WebUI 新建物理连接配置（host/port/user + 一次性密码落盘）；**不**做编辑凭据、**不**引入 WebUI 登录鉴权。删除连接见 Spec 127。 |
 

@@ -8,6 +8,8 @@
 | 适用页面 | `/admin/roles/new`、`/admin/roles/:roleId` |
 | 现状证据 | `inbox/role-permission-ia-audit-20260926/role-permission-ia-audit.md` 及同目录截图 |
 | 上游契约 | Spec 98 / 99 / 100 / 131；`docs/access-control/design-upgrade.md` |
+| 状态 | **已实现**。三个编辑面（可访问的表 / 允许的 MCP 工具 / 行级策略（可选））与「生效边界」实时摘要已落地于 `webui/src/pages/admin/RoleDetail.tsx`；局部取代 Spec 133 的 RoleDetail 设计 |
+| 关联工单 | `webui/docs/plans/wo-202609-23-role-permission-config-ia.md`（工单状态 Draft；本 Spec 局部取代其 T4–T7 的页面呈现） |
 
 ## 1. 背景与裁决
 

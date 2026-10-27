@@ -6,7 +6,7 @@
 | 文档类型 / 版本 | 功能设计基线 / v0.3-requirements-review |
 | 日期 / 目标版本 | 2026-10-20；2026-10-25 收口 / v0.25 |
 | 功能编号 / 优先级 | L25-08 / P1-3 |
-| 状态 | **设计完成、需求审查已签核通过（2026-10-25）；暂不开发，不代表实现或验收通过** |
+| 状态 | **已实现，未验收**（v0.25 P1-3 / L25-08）。实施计划 `docs/plans/2026-10-25-lucy-v0.25-p1-implementation-plan.md` §1.1 W3；提交 `28780eae`。实现落点 `webui/server/admin/access-map.ts` ＋ `webui/src/pages/admin/AccessMap.tsx`。§9 验收矩阵在取得真实证据前仍为「未执行」 |
 | 授权来源 | 2026-10-25 Forrest 批准按项目规范完成 P1 梯队 Spec；本轮只做设计与需求审查材料 |
 | 撰写人 / 委托人 | Mavis（minimax Code）；v0.3 由 Kimi 收口 / Forrest |
 | 基于材料 | `docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md`（L25-01 / L25-03）；`webui/docs/06-navigation-ia.md`；`webui/docs/00-product-terminology-standard.md`；`webui/docs/131-lucy-admin-catalog-bound-role-spec.md`；`webui/server/admin/permission-display.ts`；`webui/server/proxy/acl.ts`；`webui/server/proxy/audit.ts`；`webui/server/admin/metric-window.ts`；`webui/docs/design-system/README.md` |

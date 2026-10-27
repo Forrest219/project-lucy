@@ -18,7 +18,7 @@
 | 关联工单 | `webui/docs/plans/wo-202609-23-skill-hub-and-publish-clarity.md` |
 | 关联页面 | `/skills`（业务上下文 / 业务 Skill） |
 | 上游 Spec | Spec 171（协议与资产格式仍权威）；本 Spec 只冻结其 MVP 切片 |
-| 状态 | Draft |
+| 状态 | **已实现**（提交 `40a71dcb` `feat(webui): publish a read-only business Skill page for agents`） |
 | 日期 | 2026-09-23 |
 
 ### Changelog

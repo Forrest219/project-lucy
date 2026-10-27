@@ -5,7 +5,7 @@
 | 文档类型 / 版本 | 功能设计基线 / v0.1-requirements-review |
 | 日期 / 目标版本 | 2026-10-25 / v0.25 |
 | 功能编号 / 优先级 | L25-14 R1、R3 / P1-1 |
-| 状态 | **设计完成、需求审查已签核通过（2026-10-25）；暂不开发，不代表实现或验收通过** |
+| 状态 | **已实现，未验收**（v0.25 P1-1 / L25-14 R1・R3）。实施计划 `docs/plans/2026-10-25-lucy-v0.25-p1-implementation-plan.md` §1.1 W1；提交 `28780eae`。验收矩阵在取得真实证据前仍为「未执行」 |
 | 授权来源 | 2026-10-25 Forrest 批准按项目规范完成 P1 梯队 Spec；本轮只做设计与需求审查材料 |
 | 规划入口 | [Lucy v0.25 功能升级建议书](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) §2.8；[P0 Final 决议](../reviews/2026-10-24-lucy-v0.25-p0-final-decision.md) §1 |
 | 审查入口 | [P1 需求审查清单](../plans/2026-10-25-lucy-v0.25-p1-requirements-review-checklist.md) |

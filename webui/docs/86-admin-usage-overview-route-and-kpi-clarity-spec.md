@@ -19,7 +19,7 @@
 | 关联页面 | `/admin/usage`（旧 `/admin/governance` redirect） |
 | 关联台账 | `docs/ui-ux-feedback/pages/admin-governance.md`（`UX-ADMIN-GOV-017`～`020`） |
 | 上游 Spec | Spec 84（调用排行条形图）；Spec 78（KPI 口径） |
-| 状态 | Draft (v1.0) |
+| 状态 | **已实现**（提交 `cf6225a3` `feat(webui): polish usage overview ranks and move route to /admin/usage`） |
 | 日期 | 2026-08-05 |
 | 范围 | 前端路由迁路径 + redirect；排行区 min/max 高度；授权表 / 多数请求耗时文案；术语与 IA / 台账同步 |
 

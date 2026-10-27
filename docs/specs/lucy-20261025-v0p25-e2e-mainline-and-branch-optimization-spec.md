@@ -5,7 +5,7 @@
 | 文档类型 / 版本 | 测试架构设计基线 / v0.3-final |
 | 日期 / 分支 | 2026-10-25 / `lucy-v0.25` |
 | 范围 | 现有真实用户 E2E、WebUI E2E、P0／P1 新增功能与交付场景 |
-| 状态 | **已批准为设计基线；实施授权已下达（W0 启动）；未执行浏览器、E2E、真实 Agent、升级或客户交付验证** |
+| 状态 | **实施中**（W0 已授权启动）。实施计划 `docs/plans/2026-10-25-lucy-v0.25-e2e-mainline-and-branch-optimization-plan.md`；未执行浏览器、E2E、真实 Agent、升级或客户交付验证 |
 | 权威功能基线 | [P0 需求审查清单](../plans/2026-10-24-lucy-v0.25-p0-requirements-review-checklist.md)、[P1 实施计划](../plans/2026-10-25-lucy-v0.25-p1-implementation-plan.md) |
 | 现有 E2E 基线 | [企业安全与真实 E2E Spec](lucy-20261018-enterprise-security-and-real-e2e-spec.md)、[真实用户 E2E 运行手册](../runbooks/real-user-e2e.md) |
 | 评审与签核 | [设计评审记录](../reviews/2026-10-25-lucy-v0.25-e2e-mainline-and-branch-optimization-review.md) §4／§7／§8 |

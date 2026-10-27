@@ -19,7 +19,7 @@
 | 关联页面 | `/admin/usage` |
 | 关联台账 | `docs/ui-ux-feedback/pages/admin-governance.md`（`UX-ADMIN-GOV-021`） |
 | 上游 Spec | Spec 86（路由与 KPI）；系统概览新鲜度模式（`/overview`） |
-| 状态 | Draft (v1.0) |
+| 状态 | **已实现**（提交 `9c2ab357` `feat(webui): show stats snapshot time on usage overview`） |
 | 日期 | 2026-08-05 |
 | 范围 | 前端 PageHeader actions 增加「统计时间」徽标；术语登记；Vitest |
 

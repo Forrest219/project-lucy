@@ -4,7 +4,7 @@
 |---|---|
 | Spec 编号 / 版本 | 180 / v0.2 |
 | 日期 | 2026-10-18 |
-| 状态 | 待实现 |
+| 状态 | **已实现**（串行计划批次 3；提交 `fc74576` `feat(webui): report content-root and mirror drift`）。实现落点 `webui/server/content-mirror.ts` |
 | 范围 | T5。只读说明编辑事实源和派生镜像，并报告漂移 |
 | 治理 | [DEVELOPMENT](../../docs/governance/DEVELOPMENT.md)、[术语标准](00-product-terminology-standard.md) |
 | 依据 | [串行计划](../../docs/plans/2026-10-18-mcp-audit-serial.md) 批次 3 |

@@ -4,7 +4,12 @@
 |---|---|
 | 文档名称 | project-lucy 项目概览 |
 | 文档类型 | Overview |
-| 版本 | v1.26 |
+| 版本 | v1.31 |
+| v1.31 更新 | 2026-10-27，按 Claude Code 第三轮只读复核（最终聚焦）将 L25-15 Spec／Plan 修订至 v0.4，补删除后的强制索引重建与读回、reindex 前全量 upsert 范围、可恢复终态审计协议及四项一致性边界；仍待需求审查、暂不开发，SRR-01–SRR-22 全部未执行 |
+| v1.30 更新 | 2026-10-27，按 SPEC 状态审计结果回填 10 项实现状态：L25-01／02／03／09／11／14（P0 批次，提交 `21de5168`）、L25-07／08／10／13（P1 批次，提交 `28780eae`）；原「待需求审查／暂不开发」统一更正为「已实现，未验收」，验收矩阵仍全部未执行，交付阻断不变 |
+| v1.29 更新 | 2026-10-27，按 Claude Code 第二轮只读复核将 L25-15 Spec／Plan 修订至 v0.3，补受控镜像删除与实际 KTX 扫描范围、单表 YAML 导入、reindexing 启动结算及一致性边界；仍待需求审查、暂不开发，SRR-01–SRR-22 全部未执行 |
+| v1.28 更新 | 2026-10-27，按 Claude Code 只读审查将 L25-15 Spec／Plan 修订至 v0.2，收口 absent 删除、写前记录关联、三态幂等、完整索引范围披露、审计、协调器与保留竞态；仍待需求审查、暂不开发，SRR-01–SRR-22 全部未执行 |
+| v1.27 更新 | 2026-10-27，登记 v0.25 L25-15 语义发布历史版本与整批恢复独立 Spec／Plan；设计完成、待需求审查、暂不开发，SRR-01–SRR-22 全部未执行 |
 | v1.26 更新 | 2026-10-25，PM 签核确认 v0.25 六项 P1 需求审查九项全部通过；需求审查闭环，仍不授权开发、全部功能验收未执行，F-01–F-04 留作实施前待办 |
 | v1.25 更新 | 2026-10-25，登记 v0.25 六项 P1 设计基线与需求审查记录：行策略模板与反查、授权摘要、访问关系图、Hive 直连、升级 E2E 自动化及升级候选验证；需求审查 9/9 通过并已签核，不授权开发，全部功能验收未执行，F-01–F-04 留作实施前待办 |
 | v1.24 更新 | 2026-10-24，收口 v0.25 首批四个 P0 设计：L25-09 审计全量、L25-14 安全核心、L25-11 语义批量完整闭环及 L25-02／03 审计只读对账展示；全部待需求审查、验收未执行，不授权开发，Wave 0b 未解锁保持 `blocked_delivery` |
@@ -163,16 +168,17 @@ Lucy MCP Proxy 监听 `LUCY_PROXY_HOST:LUCY_PROXY_PORT`（默认容器内 `0.0.0
 | Lucy 产品定位与愿景 | `docs/governance/vision.md` |
 | **竞品分析与差异化立项（20261014）** | **`docs/specs/lucy-20261014-safe-log-to-quality-eval-spec.md`**（P0-1 反馈回流浪程）· **`docs/specs/lucy-20261014-release-bom-spec.md`**（P0-2 发布物料清单）· **`docs/specs/lucy-20261014-concept-dictionary-spec.md`**（P1 概念字典）；工单 `docs/plans/wo-20261014-*.md`；分析底稿与评审历史 `docs/specs/lucy-20261014-fivetran-context-layer-competitive-analysis.md` |
 | Cloudflare OS 对标差异（20261018） | `docs/specs/lucy-20261018-cloudflare-os-benchmark.md`。公开材料对照，不是功能 Spec；未纳入本地实机截图交叉审阅 |
-| Hive 直连（v0.25 L25-10，P1-4，需求审查已签核通过，暂不开发） | [Hive 直连 Spec](../specs/lucy-20261025-v0p25-hive-direct-connection-spec.md)、[上游实施方案](../plans/2026-10-20-hive-direct-connection-implementation-plan.md)。Lucy 适配 HiveServer2/JDBC，复用未修改的 KTX Python 语义计算接口；支持状态保持 `planned`，V01–V17 与 H25-01–08 全部未执行 |
-| 审计事实、可靠性与证据闭环（v0.25 L25-09，P0-1，待需求审查） | [审计增量 Spec](../specs/lucy-20261020-v2p5-audit-increment-spec.md)。S01–S08 全量、U1–U12 冻结语义保留；R1–R10／R12 旧规范文档同步完成，A01–A12 全部未执行 |
-| 审计只读对账展示（v0.25 L25-02／03，P0-4，待需求审查） | [审计只读对账展示 Spec](../specs/lucy-20261024-v0p25-audit-reconciliation-view-spec.md)。统一完整表身份、预算凭据及配置／活跃 Token 对账；只读复用 S05，不新增预算、配额、金额，V01–V12 全部未执行 |
-| 语义资产批量维护（v0.25 L25-11，P0-3，待需求审查） | [语义资产批量维护 Spec](../specs/lucy-20261020-v2p5-semantic-batch-operations-spec.md)。完整闭环、共享发布协调器与失败恢复；D1–D4 已裁决，V01–V22 全部未执行，Wave 0b 未解锁保持 `blocked_delivery` |
-| 升级候选验证环境（v0.25 L25-13，P1-6，需求审查已签核通过，非门禁，暂不开发） | [升级候选验证 Spec](../specs/lucy-20261025-v0p25-upgrade-candidate-verification-spec.md)、[上游实施方案](../plans/2026-10-22-upgrade-candidate-verification-plan.md)。以一致性备份在隔离环境验证候选迁移与业务／审计连续性；RVC-01–13 全部未执行，原地升级仍为客户现场主线 |
-| 行权限安全管理（v0.25 L25-14，P0-2，待需求审查） | [行权限管理 Spec](../specs/lucy-20261022-v2p5-row-permission-management-spec.md)。P0 仅 R2 最终行约束预览、R4 配置审计、R5 字段诊断；R1 模板与 R3 反查视图归 P1，D1–D7 已裁决，V01–V22 全部未执行；D-03 归 0.20.Z 维护线 |
-| 行策略模板与按表反查（v0.25 L25-14 R1／R3，P1-1，需求审查已签核通过，暂不开发） | [行策略模板与反查 Spec](../specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md)。复用 P0 行约束预览与字段诊断，不扩张安全语义；RTP-01–10、RTV-01–08 全部未执行 |
-| 授权摘要与调试深链（v0.25 L25-01，P1-2，需求审查已签核通过，暂不开发） | [授权摘要 Spec](../specs/lucy-20261025-v0p25-access-authorization-summary-spec.md)。提供只读授权摘要与既有调试台深链；ASV-01–14 全部未执行，F-01 留作实施前待办 |
-| 访问关系图（v0.25 L25-08，P1-3，需求审查已签核通过，暂不开发） | [Access Map Spec](../../webui/docs/187-access-relation-sankey-spec.md)。规划只读访问关系视图，路由尚未实现；SC-01–14 全部未执行，F-02 留作实施前待办 |
-| 升级 E2E 自动化（v0.25 L25-07，P1-5，需求审查已签核通过，非门禁，暂不开发） | [升级 E2E 自动化 Spec](../specs/lucy-20261025-v0p25-upgrade-e2e-automation-spec.md)、[上游实施方案](../plans/2026-10-19-upgrade-e2e-implementation-plan.md)。覆盖 Docker／K3s／K8s、备份恢复及业务与安全连续性；UPG-01–16 全部未执行 |
+| Hive 直连（v0.25 L25-10，P1-4，已实现（仅编译侧），未验收） | [Hive 直连 Spec](../specs/lucy-20261025-v0p25-hive-direct-connection-spec.md)、[上游实施方案](../plans/2026-10-20-hive-direct-connection-implementation-plan.md)。Lucy 适配 HiveServer2/JDBC，复用未修改的 KTX Python 语义计算接口；支持状态保持 `planned`；提交 `28780eae`，JDBC 执行与 MCP 入口接入本轮未实施（V03–V17 记 `blocked_environment`），H25-01–08 全部未执行 |
+| 审计事实、可靠性与证据闭环（v0.25 L25-09，P0-1，已实现，未验收） | [审计增量 Spec](../specs/lucy-20261020-v2p5-audit-increment-spec.md)。S01–S08 全量、U1–U12 冻结语义保留；R1–R10／R12 旧规范文档同步完成；提交 `21de5168`，A01–A12 全部未执行 |
+| 审计只读对账展示（v0.25 L25-02／03，P0-4，已实现，未验收） | [审计只读对账展示 Spec](../specs/lucy-20261024-v0p25-audit-reconciliation-view-spec.md)。统一完整表身份、预算凭据及配置／活跃 Token 对账；只读复用 S05，不新增预算、配额、金额；提交 `21de5168`，V01–V12 全部未执行 |
+| 语义资产批量维护（v0.25 L25-11，P0-3，已实现，未验收） | [语义资产批量维护 Spec](../specs/lucy-20261020-v2p5-semantic-batch-operations-spec.md)。完整闭环、共享发布协调器与失败恢复；D1–D4 已裁决；提交 `21de5168`，V01–V22 全部未执行，Wave 0b 未解锁保持 `blocked_delivery` |
+| 语义发布历史版本与整批恢复（v0.25 L25-15，P0，待需求审查，暂不开发） | [整批恢复 Spec](../specs/lucy-20261027-v0p25-semantic-release-restore-spec.md)、[实施 Plan](../plans/2026-10-27-lucy-v0.25-semantic-release-restore-implementation-plan.md)。批次前快照、整批 CAS、恢复生成新批次与固定保留；SRR-01–SRR-22 全部未执行 |
+| 升级候选验证环境（v0.25 L25-13，P1-6，已实现，未验收，非门禁） | [升级候选验证 Spec](../specs/lucy-20261025-v0p25-upgrade-candidate-verification-spec.md)、[上游实施方案](../plans/2026-10-22-upgrade-candidate-verification-plan.md)。以一致性备份在隔离环境验证候选迁移与业务／审计连续性；提交 `28780eae`，真实升级与真实备份未执行（记 `blocked_delivery`），RVC-01–13 全部未执行，原地升级仍为客户现场主线 |
+| 行权限安全管理（v0.25 L25-14，P0-2，已实现，未验收） | [行权限管理 Spec](../specs/lucy-20261022-v2p5-row-permission-management-spec.md)。P0 仅 R2 最终行约束预览、R4 配置审计、R5 字段诊断；R1 模板与 R3 反查视图归 P1，D1–D7 已裁决；提交 `21de5168`，V01–V22 全部未执行；D-03 归 0.20.Z 维护线 |
+| 行策略模板与按表反查（v0.25 L25-14 R1／R3，P1-1，已实现，未验收） | [行策略模板与反查 Spec](../specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md)。复用 P0 行约束预览与字段诊断，不扩张安全语义；提交 `28780eae`，RTP-01–10、RTV-01–08 全部未执行 |
+| 授权摘要与调试深链（v0.25 L25-01，P1-2，已实现，未验收） | [授权摘要 Spec](../specs/lucy-20261025-v0p25-access-authorization-summary-spec.md)。提供只读授权摘要与既有调试台深链；提交 `28780eae`，ASV-01–14 全部未执行，F-01 留作实施前待办 |
+| 访问关系图（v0.25 L25-08，P1-3，已实现，未验收） | [Access Map Spec](../../webui/docs/187-access-relation-sankey-spec.md)。只读访问关系视图已落地（落点 `webui/src/pages/admin/AccessMap.tsx`）；提交 `28780eae`，SC-01–14 全部未执行，F-02 留作实施前待办 |
+| 升级 E2E 自动化（v0.25 L25-07，P1-5，已实现，未验收，非门禁） | [升级 E2E 自动化 Spec](../specs/lucy-20261025-v0p25-upgrade-e2e-automation-spec.md)、[上游实施方案](../plans/2026-10-19-upgrade-e2e-implementation-plan.md)。覆盖 Docker／K3s／K8s、备份恢复及业务与安全连续性；提交 `28780eae`，真实升级执行未授权（记 `blocked_delivery`），UPG-01–16 全部未执行 |
 | 业务 Skill 负责人（v0.25 L25-04，P2，PM 签核通过、S1／S2 已实施，暂不交付） | [业务 Skill 负责人 Spec](../specs/lucy-20261025-v0p25-skill-owner-spec.md)、[实施记录](../reviews/2026-10-26-lucy-v0.25-l25-04-skill-owner-implementation-record.md)。自由文本人员／团队标签，复用预检、CAS 与配置审计，不改变授权；SKO-01–16 仍未执行 |
 | 可选 SMTP 通知（v0.25 L25-05，P2 可选能力，PM 签核通过、S1 已实施并完成最终复审签核、S1.1 收口已实施，暂不交付） | [可选 SMTP 通知 Spec](../specs/lucy-20261025-v0p25-smtp-notifications-spec.md)、[实施记录](../reviews/2026-10-26-lucy-v0.25-l25-05-smtp-notifications-implementation-record.md)。默认关闭，仅覆盖审计账本健康提醒和测试邮件，不含忘记密码或部署许可；**S2／S3 本轮实施，S4 不启动、SMTP-26 保持 blocked**；S1 不发信，SMTP-01–26 正式验收全部未执行 |
 | v0.25 P1 需求审查与签核入口 | [需求审查清单](../plans/2026-10-25-lucy-v0.25-p1-requirements-review-checklist.md)、[需求审查记录](../reviews/2026-10-25-lucy-v0.25-p1-requirements-review-record.md)。六项 P1 需求审查 9/9 通过并已签核；不授权开发，F-01–F-04 留作实施前待办 |

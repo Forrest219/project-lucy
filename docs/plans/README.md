@@ -4,6 +4,7 @@ This directory stores repository-level implementation plans that are not scoped 
 
 | Plan | Purpose |
 |---|---|
+| [2026-10-27-lucy-v0.25-semantic-release-restore-implementation-plan.md](2026-10-27-lucy-v0.25-semantic-release-restore-implementation-plan.md) | **v0.25 L25-15，P0，设计完成待需求审查**：语义发布历史版本与整批恢复 Spec／Plan 经 Claude Code 三轮只读审查修订至 v0.4；S0–S7 均为后续授权阶段，SRR-01–SRR-22 全部未执行，不授权开发、浏览器验证或客户交付 |
 | [2026-10-25-lucy-v0.25-p1-requirements-review-checklist.md](2026-10-25-lucy-v0.25-p1-requirements-review-checklist.md) | **v0.25 P1 唯一需求签核入口**：六项 Spec、追踪矩阵、依赖与非门禁边界；全部 P1 验收未执行，2026-10-25 需求审查已签核通过、不授权开发；逐项依据见 [P1 需求审查记录](../reviews/2026-10-25-lucy-v0.25-p1-requirements-review-record.md) |
 | [2026-10-20-hive-direct-connection-implementation-plan.md](2026-10-20-hive-direct-connection-implementation-plan.md) | **v0.25 P1-4 上游方案**：已收口 Hive 直连 Spec，需求审查已签核通过、暂不开发；数据库支持状态保持 `planned`，动态验证未执行 |
 | [2026-10-22-upgrade-candidate-verification-plan.md](2026-10-22-upgrade-candidate-verification-plan.md) | **v0.25 P1-6 上游方案，非门禁**：已收口升级候选验证 Spec，需求审查已签核通过；空卷整卷恢复、候选迁移与业务／审计连续性；原地升级仍为客户现场主线 |
@@ -16,7 +17,7 @@ This directory stores repository-level implementation plans that are not scoped 
 | [2026-10-19-upgrade-e2e-implementation-plan.md](2026-10-19-upgrade-e2e-implementation-plan.md) | **v0.25 P1-5 上游方案，非门禁**：已收口升级 E2E 自动化 Spec，需求审查已签核通过、暂不开发；覆盖 Docker / K3s / K8s、真实资产、备份恢复、业务与安全连续性，UPG-01–16 全部未执行 |
 | `webui/docs/plans/wo-202610-27-engine-catalog-and-mcp-query-connection.md` | **待审阅，未批准**：Spec 176 v0.3。新建连接显式支持 KTX `driver: athena`。v0.2 引擎目录 / MCP 查询连接已撤回 |
 | `webui/docs/plans/wo-202610-26-suspend-deployment-license.md` | **移除激活码（已实现）**：Spec 175 v0.2。删除许可实现与签发脚本，去掉治理台入口。Docker 未在本次重启 |
-| [2026-10-18-lucy-2.5-upgrade-proposal.md](2026-10-18-lucy-2.5-upgrade-proposal.md) | **Lucy v0.25 升级建议（v1.17）**：登记 L25-01–L25-14；首批 P0 为 L25-09 审计全量、L25-14 安全核心、L25-11 语义批量完整闭环及 L25-02／03 审计只读对账展示；六项 P1 设计基线已完成并通过需求审查（2026-10-25，已签核），全部验收未执行、暂不开发；[P1 需求审查清单](2026-10-25-lucy-v0.25-p1-requirements-review-checklist.md) 为 P1 签核入口 |
+| [2026-10-18-lucy-2.5-upgrade-proposal.md](2026-10-18-lucy-2.5-upgrade-proposal.md) | **Lucy v0.25 升级建议（v1.30）**：登记 L25-01–L25-15；L25-15 Spec／Plan 经 Claude Code 三轮只读审查修订至 v0.4，仍待需求审查、暂不开发；首批 P0 与六项 P1 已实现未验收，各自状态见对应 Spec |
 | `2026-10-18-mcp-audit-serial.md` | **MCP 审计整改串行计划**：D1–D3 已锁定。批次 1 为 Spec 178 / T1，其后 T3、T5、T4、T7、T6、T11、T13、T14、R0–R3、T15 |
 | `2026-10-12-acceptance-gap-closure.md` | **验收缺口修复**：把 SC-15 / SC-19 / SC-20 / SC-23 接到查数路径。工单 `wo-202610-15` |
 | `2026-10-11-customer-log-next-optimizations.md` | **客户日志优化最终版（v1.1，WO-12 已验收）**：P0→P1→P2。Spec 162 v0.3；工单 `wo-202610-12` / `13` / `14` |

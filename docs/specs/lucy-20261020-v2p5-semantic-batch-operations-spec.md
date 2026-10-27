@@ -5,7 +5,7 @@
 | 文档类型 / 版本 | 功能设计基线 / v0.2-requirements-review |
 | 日期 / 目标版本 | 2026-10-24 / v0.25 |
 | 功能编号 / 优先级 | L25-11 / P0-3，企业批量运维核心能力 |
-| 状态 | 设计完成、待需求审查；暂不开发，不代表实现或验收通过 |
+| 状态 | **已实现，未验收**（v0.25 P0-3 / L25-11）。实施计划 `docs/plans/2026-10-25-lucy-v0.25-p0-implementation-plan.md` §P0-3；提交 `21de5168`。验收矩阵在取得真实证据前仍为「未执行」 |
 | 授权来源 | 2026-10-24 Forrest 批准首批 Spec 评审 Final 决议，并要求完成四个 P0 设计材料 |
 | 规划入口 | [Lucy v0.25 功能升级建议书](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) §2.5；[P0 Final 决议](../reviews/2026-10-24-lucy-v0.25-p0-final-decision.md) |
 | 审查入口 | [首批 P0 需求审查清单](../plans/2026-10-24-lucy-v0.25-p0-requirements-review-checklist.md) |

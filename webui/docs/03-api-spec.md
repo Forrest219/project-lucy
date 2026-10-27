@@ -195,6 +195,7 @@ POST   /api/admin/mcp-playground/acl-preview
 POST   /api/admin/mcp-playground/live-smoke
 GET    /api/admin/mcp-runtime/status
 POST   /api/admin/mcp-runtime/canary
+POST   /api/admin/mcp-runtime/reload
 GET    /api/admin/governance/overview
 GET    /api/admin/governance/agents
 GET    /api/admin/governance/roles
@@ -972,6 +973,8 @@ L25-02、L25-03 的只读对账展示。所有响应携带同一 `reconciliation
 `GET /api/admin/mcp-runtime/status` 返回 Config、Catalog、Policy Runtime 与常驻 KTX MCP Execution Runtime 的分层状态；Catalog 同时返回 `lastByConnection` 的最近 reload 摘要。响应只包含 `ktx.yaml` 的 SHA-256 摘要和连接 ID，不返回密码、Token 或 `.ktx/secrets/**` 内容。执行层状态为 `unknown | ok | stale | unavailable | error`；MCP 上游可达但无法证明某连接已加载时必须返回 `unknown`，不得把独立 `ktx connection test` CLI 的成功当作运行时确认。
 
 `POST /api/admin/mcp-runtime/canary` 请求体为 `{ connectionId, agentId?, sourceName?, mode? }`，其中 `mode` 为 `connection | tools_list | catalog | query`。响应逐项返回 `config`、`catalog`、`policy`、`execution_tools_list`、`execution_query` 检查及 `executionRuntimeAck`。当当前 KTX 版本无连接加载自省且当前配置摘要没有成功查询证据时，返回 `status="blocked"`、`executionRuntimeAck=false`、`decisionReason="execution_canary_blocked"`；上游不可达返回 `execution_runtime_unavailable`。
+
+`POST /api/admin/mcp-runtime/reload` 请求体为 `{ connectionId?, reason? }`，均可选，`connectionId` 缺省表示全部连接。仅所有者可调用，且鉴权模式先于 owner 校验：鉴权模式非 `required` 返回 400 `AUTH_NOT_CONFIGURED`，未登录返回 401 `AUTH_REQUIRED`，非 owner 返回 403 `OWNER_REQUIRED`。成功返回 `{ ok: true, data: { requestId, reloadStatus, configVerification, mcpReachable?, requestedDigest, actualDigest?, startedAt, finishedAt?, durationMs?, detail? } }`，其中 `reloadStatus` 为 `succeeded | failed | already_running | unsupported`，`configVerification` 为 `verified | failed | unverified`——进程重启成功与配置连接级验证为**正交**两轴，不得互相替代。失败如实报告并允许修复后重试，**不回滚 `ktx.yaml`**。权威契约见 Spec 191 §6–§8。
 
 ### 界面使用（Spec 148）
 

@@ -5,7 +5,7 @@
 | 文档类型 / 版本 | 功能设计基线 / v0.1-requirements-review |
 | 日期 / 目标版本 | 2026-10-24 / v0.25 |
 | 功能编号 / 优先级 | L25-02、L25-03 / P0-4 |
-| 状态 | 设计完成、待需求审查；暂不开发，不代表实现或验收通过 |
+| 状态 | **已实现，未验收**（v0.25 P0-4 / L25-02・03）。实施计划 `docs/plans/2026-10-25-lucy-v0.25-p0-implementation-plan.md` §P0-4；提交 `21de5168`。验收矩阵在取得真实证据前仍为「未执行」 |
 | 授权来源 | 2026-10-24 Forrest 批准首批 Spec 评审 Final 决议，并要求完成四个 P0 设计材料 |
 | 权威事实源 | [L25-09 S01／S05／S07](lucy-20261020-v2p5-audit-increment-spec.md)、[审计可信度与管理员调查 Spec](lucy-20261019-audit-trust-and-admin-investigation-spec.md)、Spec 162 问询预算 |
 | 规划入口 | [Lucy v0.25 功能升级建议书](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) §2 L25-02／L25-03；[P0 Final 决议](../reviews/2026-10-24-lucy-v0.25-p0-final-decision.md) |

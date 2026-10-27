@@ -19,7 +19,7 @@
 | 关联页面 | `/admin/governance`（路由保持；用户可见名称仍为「使用概况」） |
 | 关联台账 | `docs/ui-ux-feedback/pages/admin-governance.md`（`UX-ADMIN-GOV-010`～`016`） |
 | 上游 Spec | Spec 78（使用概况 KPI/窗口）；Spec 82（三表网格轻量遵从，本 Spec **替换**三块为条形排行） |
-| 状态 | Draft (v1.0) |
+| 状态 | **已实现**（提交 `cf6225a3` `feat(webui): polish usage overview ranks and move route to /admin/usage`） |
 | 日期 | 2026-08-05 |
 | 范围 | KPI 标题带窗口；Agent/Token/表调用排行 1×3 条形图；Token API 补 `calls`；顶栏 `pl-segmented-control`；删除「管理角色」；术语/台账同步 |
 

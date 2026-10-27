@@ -15,10 +15,10 @@
 | 字段 | 内容 |
 |---|---|
 | Spec 编号 | 135 |
-| 关联工单 | 待建 |
+| 关联工单 | **未建；不单独开工**。主要要求已由 Spec 86 / 94 / 106 / 165 的工单覆盖实现（时间预设与问询 ID 见 `webui/src/pages/admin/Audit.tsx`；多数请求耗时见同页与 `webui/src/pages/ops/CallMonitor.tsx`）。待决策：关闭本 Spec，或补建工单补齐差异 |
 | 关联页面 | `/admin/usage`（使用概况看板）、`/admin/audit`（访问日志·问询记录 / 调用流水 / 详情抽屉） |
 | 上游 Spec | Spec 08 / Spec 69 / Spec 75 / Spec 78 / Spec 84 / Spec 86 / Spec 87 / Spec 89 / Spec 94 / Spec 106 / Spec 128 |
-| 状态 | Draft / Ready for Review |
+| 状态 | Draft / Ready for Review；**未单独开工**（工单未建；主要要求已由其他 Spec 覆盖） |
 | 日期 | 2026-08-29 |
 | 范围 | 纯前端 UI/UX 提升：指标分层与复合指标卡、排行榜弹性布局与比例感知、抽屉排版与组件内聚、主表高密降噪与语义解耦、快捷时间预设与单行弹性筛选栏 |
 

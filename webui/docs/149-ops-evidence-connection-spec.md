@@ -8,7 +8,7 @@
 | 版本 | v1.0 |
 | 撰写日期 | 2026-09-24 |
 | 委托人 | xingchen |
-| 状态 | Draft / Ready for Review |
+| 状态 | **未实现**。工单 `webui/docs/plans/wo-202609-25-ops-evidence-connection.md` 已建但未落地：`lucy-ops` 连接、`lucy_ops_reader` 角色模板与 `OPS_EVIDENCE_CONNECTION_PROTECTED` 删除保护在代码中均不存在 |
 | 输出位置 | `webui/docs/149-ops-evidence-connection-spec.md` |
 | 关联 WO | `webui/docs/plans/wo-202609-25-ops-evidence-connection.md` |
 | 上游 Spec / 事实源 | Spec 07（审计热库与 ACL）、Spec 125（生成 SQL）、Spec 127（删除连接不触碰物理库）、Spec 131（`lucy_admin` 与 `catalog_bound`）、Spec 143（调用监控口径与 `PROTOCOL_TOOLS`） |

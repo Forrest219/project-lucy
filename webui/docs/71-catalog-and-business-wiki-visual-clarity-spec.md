@@ -6,7 +6,7 @@
 | 关联工单 | `webui/docs/plans/wo-M64-catalog-and-business-wiki-visual-clarity.md` |
 | 关联页面 | `/catalog`、`/wiki` |
 | 关联台账 | `docs/ui-ux-feedback/pages/catalog.md`、`docs/ui-ux-feedback/pages/wiki.md` |
-| 状态 | Draft |
+| 状态 | **已实现**（提交 `e27ca521` `feat+fix(webui): global sidebar polish, command palette hardening, catalog/wiki visual clarity, connection schema casing`） |
 | 日期 | 2026-08-03 |
 | 范围 | Catalog 表格字重、Business Wiki 文档库首页、目录树视觉、上传 Markdown 预检 |
 

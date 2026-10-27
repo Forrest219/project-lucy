@@ -15,10 +15,10 @@
 | 字段 | 内容 |
 |---|---|
 | Spec 编号 | 136 |
-| 关联工单 | 待建 |
+| 关联工单 | **未建；不单独开工**。主要要求已由 Spec 112 / 115 / 119 / 123 的工单覆盖实现（流水线 Stepper 见 `webui/src/pages/publish/PublishWorkbench.tsx` 的 `publish-flow-steps`；Toast 去重见同文件 `workbench-validation` id）。待决策：关闭本 Spec，或补建工单补齐差异 |
 | 关联页面 | `/publish/workbench`（语义发布 / 发布工作台） |
 | 上游 Spec | Spec 35（发布工作台 IA）、Spec 112（流程与门禁 IA）、Spec 115（校验披露）、Spec 119（队列–门禁双栏）、Spec 123（语义生效台） |
-| 状态 | Draft / Ready for Review |
+| 状态 | Draft / Ready for Review；**未单独开工**（工单未建；主要要求已由其他 Spec 覆盖） |
 | 日期 | 2026-08-29 |
 | 范围 | 纯前端 UI/UX 与交互重构：流水线状态机 Stepper、异常驱动静默校验展示、左侧资产树分类与 +N/-M 差异统计、右侧双视图（门禁/Diff）无缝切换、全局 Toast 防抖去重 |
 

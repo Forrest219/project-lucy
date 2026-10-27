@@ -21,7 +21,7 @@
 | 关联页面 | `/admin/governance` |
 | 关联台账 | `docs/ui-ux-feedback/pages/admin-governance.md`（新增 `UX-ADMIN-GOV-009`） |
 | 上游 Spec | Spec 78（使用概况 KPI）；`11-components-data-grid.md`（网格事实源）；Spec 72（connections/catalog 网格先例） |
-| 状态 | Draft (v1.0) |
+| 状态 | **已实现**（提交 `58af0a9d` `fix(webui): align usage overview tables with pl-data-grid`） |
 | 日期 | 2026-08-05 |
 | 范围 | Agent 使用排行 / Token 使用摘要 / 最受访问表：`pl-data-grid` 基线、12px 密度、主标识>数量层级、操作链弱强调、翻译防御；测试断言 class 契约 |
 

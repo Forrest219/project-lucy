@@ -15,10 +15,10 @@
 | 字段 | 内容 |
 |---|---|
 | Spec 编号 | 133 |
-| 关联工单 | `webui/docs/plans/wo-202608-59-access-governance-ux-redesign.md` |
+| 关联工单 | `docs/plans/2026-08-25-role-permission-bulk-select-ux.md`（提交 `9b2898fe` `feat(webui): add connection create/delete, role bulk pick, and journey QA`）。原声明的 `webui/docs/plans/wo-202608-59-access-governance-ux-redesign.md` **从未创建**（两个 plans 目录均无此文件），勿再引用 |
 | 关联页面 | `/admin/roles`、`/admin/roles/new`、`/admin/roles/:roleId`、`/admin/agents`、`/admin/agents/:userId`、`/admin/tokens` |
 | 上游 Spec | Spec 14 / Spec 15 / Spec 59 / Spec 76 / Spec 88 / Spec 89 / Spec 95 / Spec 129 |
-| 状态 | Planned / Approved |
+| 状态 | **已实现，局部被取代**。核心组件 `webui/src/components/CheckboxCandidatePicker.tsx` 已落地；Role 详情长工作台、权限页签与变更预览页签部分已被 **Spec 150** 局部取代 |
 | 日期 | 2026-08-29 |
 | 范围 | 纯前端 UI/UX 提升：组件收敛、信息架构扁平化、安全交互层级隔离、Pre-flight 保存流闭环 |
 

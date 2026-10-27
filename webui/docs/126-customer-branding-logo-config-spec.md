@@ -9,7 +9,8 @@
 | 委托人 | xingchen |
 | 参考 | [Tableau Server `tsm customize`](https://help.tableau.com/current/server/en-us/cli_customize.htm)；Tableau Cloud Site Logo；Lucy Spec 67/68 |
 | 输出位置 | `webui/docs/126-customer-branding-logo-config-spec.md` |
-| 状态 | Approved for implementation（v0.3） |
+| 状态 | **已实现**。实施计划 `docs/plans/2026-08-26-branding-settings-ux-polish.md`；实现落点 `webui/src/pages/admin/BrandingSettings.tsx`。v0.3 默认副标题「可信 Agent 数据层」见 `webui/src/app/App.tsx` |
+| 关联工单 | `docs/plans/2026-08-26-branding-settings-ux-polish.md` |
 
 ### Changelog
 
