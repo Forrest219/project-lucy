@@ -95,7 +95,10 @@ describe("Audit", () => {
     expect(screen.getByTestId("audit-access-context-1")).toHaveTextContent("203.0.113.10");
     expect(screen.getByTestId("audit-access-context-1")).toHaveTextContent("Hermes/1.2.3 (test-agent)");
 
-    fireEvent.click(await screen.findByText("zhangsan"));
+    // 20261019 §5：Agent 列现在并列展示「凭证主体」，同一行会出现两个
+    // "zhangsan"（Agent 主体 + 凭证主体），因此按单元格 testid 定位，
+    // 不用裸文本匹配。
+    fireEvent.click(await screen.findByTestId("audit-call-agent-1"));
     expect(await screen.findByTestId("audit-detail-panels-1")).toBeInTheDocument();
     expect(screen.getByTestId("audit-detail-caller-1")).toHaveTextContent("调用方");
     expect(screen.getByTestId("audit-detail-decision-1")).toHaveTextContent("裁决与权限");

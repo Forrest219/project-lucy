@@ -58,6 +58,11 @@ import {
 } from "../proxy/audit-classification.js";
 import {
   countPrimaryStatuses,
+  readAssociationStatus,
+  readAuthorizationStatus,
+  readDeliveryStatus,
+  readExecutionStatus,
+  readNullReason,
   readPrimaryStatus
 } from "../proxy/audit-reconcile.js";
 import {
@@ -954,6 +959,14 @@ interface QueryRow {
   endpoint_id?: string | null;
   ledger_seq?: number | null;
   error_category?: string | null;
+  // ─── 三条独立判断轴（20261019 §5）────────────────────────────────────
+  execution_status?: string | null;
+  authorization_status?: string | null;
+  association_status?: string | null;
+  effective_association_status?: string | null;
+  usability_status?: string | null;
+  client_event_id?: string | null;
+  credential_principal_id?: string | null;
 }
 
 const ACCESS_LOG_CSV_HEADERS = [
@@ -3040,7 +3053,25 @@ export function registerAuditRoutes(app: FastifyInstance) {
       matchedRoleId: row.matched_role_id ?? undefined,
       usageSlowCall: row.is_slow_call === 1,
       // B27：汇总主状态（历史行为 NULL → unknown，不重解释历史数据）。
-      primaryStatus: readPrimaryStatus(row as { primary_status?: string | null; outcome?: string | null })
+      primaryStatus: readPrimaryStatus(row as { primary_status?: string | null; outcome?: string | null }),
+      // 20261019 §5：三条**独立**判断轴（执行 / 关联 / 覆盖）各读各的列。
+      // 前端不得用其中一条推导另一条（执行成功不自动使关联或覆盖显示绿色已完成）。
+      // 读路径与 `readPrimaryStatus` 同源同函数；历史行一律落 unknown / legacy_unverified。
+      executionStatus: readExecutionStatus(row as { execution_status?: string | null }),
+      authorizationStatus: readAuthorizationStatus(row as { authorization_status?: string | null }),
+      associationStatus: readAssociationStatus(row as {
+        effective_association_status?: string | null;
+        association_status?: string | null;
+      }),
+      deliveryStatus: readDeliveryStatus(row as { delivery_status?: string | null }),
+      nullReason: readNullReason(row as { null_reason?: string | null }),
+      usabilityStatus: row.usability_status ?? "unknown",
+      // 受控客户端覆盖判据：客户端是否就本次调用上报过 observation 事件。
+      // 「有客户端证据」才可显示「客户端已采集」；否则只能是「后续动作不可见」
+      // （**禁止**「未外发」措辞，见 20261019 §5 与 Plan §4 T05）。
+      clientEventId: row.client_event_id ?? undefined,
+      ingressEventId: row.ingress_event_id ?? undefined,
+      credentialPrincipalId: row.credential_principal_id ?? undefined
     };
     });
 
@@ -3450,10 +3481,13 @@ export function registerAuditRoutes(app: FastifyInstance) {
 
     const database = await getAuditDb();
     const result = await listAuditTurnEntries(database, q, { limit, offset, paginate: true });
+    // 审计同步延迟（投影落后账本的程度）。顶部元条在问询页签也要显示它，
+    // 否则两个页签的「同步延迟」口径会不一致。
+    const projection = await auditProjectionStatus(database);
 
     return {
       ok: true,
-      data: result
+      data: { ...result, projection }
     };
   });
 
