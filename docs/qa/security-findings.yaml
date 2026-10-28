@@ -4,6 +4,19 @@
 # 规则：P0/P1 只能 open | fixed，不得 accepted_risk；fixed 必须填 fixedIn（提交 SHA）且 verifiedBy 全部为本次 release evidence 中 passed 的 case variant id；
 #       仅 P2 可 accepted_risk（acceptedBy 填 owner 姓名与日期）；依赖 high/critical 只能 fixed 或附可复核说明的 not_reachable。
 # 每个整改任务在关闭/推进对应条目的同一提交内更新本文件。
+#
+# 【取证口径澄清 —— 这是澄清，不是规则放松】
+#   ① `verifiedBy` 只要求「**本次 release evidence 中 status=passed 的 case variant id**」，
+#      **不要求**该 evidence 来自受信 CI runner 或客户 amd64 K8s。因此开发机 Stage 1
+#      跑出的 bundle 同样满足本规则，可以据以把条目置 fixed。
+#      但那只证明「**修复本身在真实环境里有效**」（真实数据库 + 真实浏览器 + 真实断言），
+#      **不构成发布级验收**：G-01（受保护 amd64 runner 未注册）、G-06（GHCR 推送
+#      permission_denied）等发布门禁**不因此解除**，Wave 0b 与 blocked_delivery 同理。
+#      置 fixed 的条目若引用本地 bundle，必须在自己的 note 里写明该 bundle 的
+#      gate 结论（status / exitCode / releaseReady / provenance / topology）。
+#   ② 反向：条目保持 `open` 的真正判据是「**对应 case variant 是否真的在修复后的
+#      代码上跑过并 passed**」，**不是**「real-e2e 有没有被调度过」。前者是
+#      「证据不存在」，后者只是「证据来源不同」——两者不可混为一谈。
 version: 1
 findings:
   # V-01 客户默认部署即开放管理面，可匿名抢占 owner（T0A-2 最小修复；T02 完整修复）
@@ -849,6 +862,20 @@ findings:
   #   `denied=93`、`budget_stopped=7`；导出 CSV 的 `authorization_status` 与
   #   `execution_status` 两列实测带出 5/6 行观测值。⚠️ `failed` 桶本轮为空
   #   只因本轮没有失败的执行事件（覆盖缺口，不是缺陷）。取证边界见本节上方注释。
+  # note: 取证 = 本地开发机 Stage 1 运行 `inbox/e2e/l2509-stage1b`（真实 PostgreSQL
+  #   + 真实 Playwright 桌面 Chromium 1440×900），候选身份
+  #   `inbox/e2e/l2509-stage1b/candidate-identity.json`，装配证据
+  #   `inbox/e2e/l2509-stage1b/release-evidence.json`。引用的 6 个变体在该 bundle 中
+  #   status=passed，机器校验 `finding_not_verified` **未触发**（反向对照：把 verifiedBy
+  #   注入一个不存在的 id，立刻报 `finding_not_verified`，计数 23→24 ⇒ 该校验是活的）。
+  #   ⚠️ 该 bundle **不是发布级证据**：gate status=failed / exitCode=1 /
+  #   releaseReady=false；untrusted_provenance（非受信 CI runner）、
+  #   topology=local-process（应为 single-replica-k8s）、deployed_digest_mismatch、
+  #   stale_evidence、not_release_execution、omitted_case 184 / case_failed 46 /
+  #   case_blocked 64 / gate_missing 8。
+  #   ⇒ 本条只证明「**修复本身有效**」，**不构成发布级验收**；G-01 保持 open，
+  #   Wave 0b 与 blocked_delivery 不因此解除。取证边界另见
+  #   docs/specs/lucy-20261020-v2p5-audit-increment-spec.md §18.13.4。
   - id: D-33
     severity: P1
     status: fixed
@@ -882,6 +909,20 @@ findings:
   #   "reconciliation"`），全量腿的结果留档在
   #   `inbox/e2e/l2509-stage1b/results/management-full-unscoped.json`。
   # 状态：open（未修）。归属：harness／取证编排侧，不在 L25-09 产品实现范围。
+  # note: 取证 = 本地开发机 Stage 1 运行 `inbox/e2e/l2509-stage1b`（真实 PostgreSQL
+  #   + 真实 Playwright 桌面 Chromium 1440×900），候选身份
+  #   `inbox/e2e/l2509-stage1b/candidate-identity.json`，装配证据
+  #   `inbox/e2e/l2509-stage1b/release-evidence.json`。引用的 6 个变体在该 bundle 中
+  #   status=passed，机器校验 `finding_not_verified` **未触发**（反向对照：把 verifiedBy
+  #   注入一个不存在的 id，立刻报 `finding_not_verified`，计数 23→24 ⇒ 该校验是活的）。
+  #   ⚠️ 该 bundle **不是发布级证据**：gate status=failed / exitCode=1 /
+  #   releaseReady=false；untrusted_provenance（非受信 CI runner）、
+  #   topology=local-process（应为 single-replica-k8s）、deployed_digest_mismatch、
+  #   stale_evidence、not_release_execution、omitted_case 184 / case_failed 46 /
+  #   case_blocked 64 / gate_missing 8。
+  #   ⇒ 本条只证明「**修复本身有效**」，**不构成发布级验收**；G-01 保持 open，
+  #   Wave 0b 与 blocked_delivery 不因此解除。取证边界另见
+  #   docs/specs/lucy-20261020-v2p5-audit-increment-spec.md §18.13.4。
   - id: D-34
     severity: P2
     status: open
