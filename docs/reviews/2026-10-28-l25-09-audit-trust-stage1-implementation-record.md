@@ -12,16 +12,18 @@
 
 | 项 | 结论 |
 |---|---|
-| 语义地基（Gap 1 执行凭据、Gap 4 列名漂移） | **已闭合**（实现层）；A01–A12 验收仍未执行 |
-| 证据链断点（AUD25/ARV25 无法被 `verifiedBy` 采信） | **已闭合**（实现层 + 链路自检）；真实 passed 证据仍未取得 |
+| 语义地基（Gap 1 执行凭据、Gap 4 列名漂移） | **已闭合**（实现层 + Stage 1 真实证据）；**A01–A12 验收仍未执行**（无 spec） |
+| 证据链断点（AUD25/ARV25 无法被 `verifiedBy` 采信） | **已闭合**（实现层 + 链路自检 + 真实取证）；`evidence.cases` 中 **ARV25-V01…V11 共 11 个 variant status=passed** |
 | 管理员第一现场（20261019 §5 六组件 + 三轴 + 八桶 + E7） | **已接入**（实现层）；桌面双分辨率浏览器证据仍未取得 |
-| P0-4 只读对账前端消费（§4 只读页面与交互） | **已接入**（实现层）；V01–V12 验收仍未执行 |
-| Stage 1（开发单机真实取证） | **未取得 passed 证据** |
+| P0-4 只读对账前端消费（§4 只读页面与交互） | **已接入**（实现层）；ARV25-V01…V11 真实 passed，**ARV25-V12 仍 blocked**（需 `k8s-amd64`） |
+| Stage 1（开发单机真实取证） | **部分达成**：ARV25 侧取得 11 个 variant 的真实 passed 证据；**A01–A12（AUD25 全部 12 个 variant）仍无任何 spec、全部 blocked** |
 | Stage 2（客户 amd64 K8s） | **未执行**，阻塞于 G-01 / G-06 |
-| 台账 | D-32 / D-33 新登记为 `open`；审计相关既有条目保持 `open`；P0-2 / P0-3 的 open 项不动 |
+| 台账 | **D-32 / D-33 置 `fixed`**（`fixedIn` = 00cf44d4，`verifiedBy` = 6 个在 release evidence 中 status=passed 的 ARV25 变体）；新增 **D-34**（P2，open，登录限流撞门禁）；其余审计相关条目保持 `open`；P0-2 / P0-3 的 open 项不动 |
 
-**因此本轮不宣称「可交付 UAT」**：交付 UAT 的判据之一是「Stage 1 取证完成、passed 必须是
-真结果」，该判据未满足。
+**因此本轮仍不宣称「可交付 UAT」**，但阻塞点已从「取不到真证据」收窄为可点名的四条：
+**① A01–A12 无 spec**（AUD25 全部 12 个 variant 仍 blocked）；**② ARV25-V12 需 Stage 2**；
+**③ agent 腿未跑**（本机无模型 API key）；**④ 管理腿单窗口必撞登录限流**（D-34）。
+其中 ①③ 属未覆盖、② 属 Stage 2 边界、④ 是新登记的 harness 缺口。
 
 ---
 
@@ -190,3 +192,68 @@ catalog → `expectedExecutions` → runner 结果 → `assembleEvidence` → `e
 - 台账：`docs/qa/security-findings.yaml`（D-32 / D-33）
 - 同日 UAT 复核：`docs/reviews/2026-10-28-uat-p0-l25-09-audit-and-reconciliation.md`
 - 冻结目录：`scripts/e2e/contracts/case-catalog.yaml` + `case-catalog.lock.json`
+
+
+## 8. Stage 1 真实取证结果（2026-10-29，续 §1–§7）
+
+本节是 §5「本轮未执行」与 §6「交付 UAT 尚缺什么」的**结果回写**。原节原文保留不改
+（它们是 2026-10-28 当时的记录），本节取代其中「Stage 1 未取得真实 passed 证据」一条。
+
+### 8.1 执行链与产物
+
+| 步骤 | 结果 |
+|---|---|
+| `prepare-environment --mode local` | run `inbox/e2e/l2509-stage1b` |
+| 准备 PostgreSQL | 一次性 `postgres:16-alpine`（端口 5432），口令取本次 run 生成的 per-run owner 口令 |
+| `apply-db` | **applied=true**；种子 SQL 摘要与数据集摘要**实测一致**；只读探针通过；写拒绝验证 2/2 |
+| `run-security` | 89 passed / 46 failed / 27 blocked（失败项属既有 SEC-19／SEC-20 等他线） |
+| `run-management` | ARV25 作用域：3 用例全通过；**ARV25-V01…V11 共 11 个 variant status=passed**，ARV25-V12 blocked |
+| 装配证据 | `inbox/e2e/l2509-stage1b/release-evidence.json`，`evidence.cases` 共 213 条（passed 103／failed 46／blocked 64） |
+| 候选身份 | `inbox/e2e/l2509-stage1b/candidate-identity.json`（gitSha `fd197e5b`） |
+| 验证 | `verify-evidence.mjs --assemble` 重跑后，D-32/D-33 相关问题 **0**，`p0_p1_unresolved` 33 → 31 |
+
+### 8.2 取证前必须修的三处「声明 ≠ 通过」
+
+catalog 的 `assert` 列表**逐 variant 生效**：冻结 collector 对每个 variant 取「覆盖它的所有
+测试」的断言并集，缺任一 token 即判 failed。首轮取证暴露：
+
+1. ARV25-V04／V07–V10 只被第 2 个测试覆盖，而该测试从不评估 `audit_event`；
+2. ARV25-V01／V02／V03／V05／V06 只被第 1 个测试覆盖，而该测试只在**拒绝分支**评估
+   `deny`、从不评估 `no_leak`；
+3. 第 1 个测试依赖「本轮已有真实 Agent 轮次」，否则整条 skip ⇒ variant 转 blocked；而管理腿
+   在 CI 顺序里跑在 agent 腿**之前**，该依赖在本仓库顺序下永远不成立。
+
+修法（提交 `fd197e5b` 与 `c2a08eec`，**不放宽任何断言的强度**，只补齐缺失的评估）：
+第 1 个测试用真实 `lucy_begin_question`（同一 `x-lucy-session-id` 会话）**自产 turn**，不依赖
+外部 Agent 腿、不伪造 turn id；补 `deny`／`no_leak`；第 2 个测试补 `audit_event`（使用概况
+每一行都必须能在同一窗口的管理员审计列表找到对应事件）与 `deny`；把 V09／V10 的**快照冻结与
+同源**断言做实（usage 与 export 两次独立读取的计量单位与规则版本必须一致；导出 manifest
+内嵌 `context` 与 `completeness` 块必须携带本次导出自己的 snapshotId／账本上界 S／
+计量单位／分类与派生版本）；另补一条 D-32／D-33 回归断言（导出 CSV 的授权／执行两列必须
+带出**观测到的枚举值**，而不是恒为 unknown）。
+
+### 8.3 两条被推翻的旧判断（留痕，避免后人重走）
+
+1. **「usage 端点返回 409 `RECONCILIATION_AS_OF_S_UNPROVABLE` 是 F-02 缺陷在真实链路上命中」
+   ——错。** 那是 §18.11 规定的**失败关闭设计**：窗口内尚无任何审计事件（账本无基线）时
+   不可证明；本轮真实产生事件后同一端点即返回 `ok=true`。该现象不构成 F-02 的证据。
+2. **「V09／V10 不能记 passed」——被实测推翻。** 核对后确认二者的 catalog 声明断言集是
+   `[audit_event, consistency, deny, no_leak]`，**均不以 as-of S 可证明性为前提**；先前判
+   failed 只因 spec 声明了覆盖却没逐条评估断言。补齐断言后二者真实 passed。
+
+### 8.4 取证边界（结论必须与边界一起读）
+
+- Stage 1 证据是对**工作树源码**跑的（real-e2e 本地模式用
+  `node --import tsx server/index.ts` 起实例），工作树含并行会话未提交的 F-02
+  「归属列按日志前像回放」修订。本次运行库 `access_log_attribution_mutations = 0`、
+  `access_log.ledger_seq IS NULL = 0` ⇒ 该路径**从未被触发**，结论不依赖它。
+- 覆盖「按同一 S 重建基础事实与归属修订视图不漂移」的 **A08、A10-ASOF 仍无 spec、仍
+  blocked**；**F-02 未收口**，本轮不据此宣称 F-02 已修复。
+- `failed` 桶本轮为空，只因**本轮没有失败的执行事件**（覆盖缺口，不是缺陷）。
+- agent 腿未执行（本机无任何模型 API key）；Stage 2 未执行（G-01／G-06）。
+- 桌面双分辨率（1440×900／1280×800）浏览器证据仍未取得（real-e2e 配置只跑 1440×900）。
+- **D-34**：全量管理腿实测 62 次独立登录、10 次 429，而
+  `AUTH_RATE_LIMITS.sourceTotal` 冻结为 30 次／5 分钟 ⇒ 单窗口内必然撞限流。Stage 1 取证
+  因此按 spec 作用域跑；全量腿结果留档
+  `inbox/e2e/l2509-stage1b/results/management-full-unscoped.json`。
+
