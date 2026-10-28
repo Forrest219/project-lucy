@@ -1194,10 +1194,32 @@ async function readSidecar(projectRoot: string): Promise<SidecarFile> {
   }
 }
 
+/**
+ * Write the release sidecar ATOMICALLY.
+ *
+ * The sidecar is read on the idempotent-replay path (readSemanticAssetRelease)
+ * while the asynchronous reindex updates it (updateReleaseRecord is a
+ * read-modify-write). A plain `writeFile` truncates the file before the new
+ * content lands, so a reader that arrives in that window parses a half-written
+ * file — `JSON.parse` throws a SyntaxError, which is not a
+ * SemanticAssetValidationError and therefore escapes the publish route as an
+ * HTTP 500 instead of the replayed release.
+ *
+ * Writing to a temp file and renaming it makes the swap atomic: a reader sees
+ * either the previous file or the new one, never a partial one. This mirrors
+ * what the idempotency file already does (semantic-idempotency.ts).
+ */
 async function writeSidecar(projectRoot: string, sidecar: SidecarFile): Promise<void> {
   const abs = path.resolve(projectRoot, SIDECAR_RELEASES_REL);
   await mkdir(path.dirname(abs), { recursive: true });
-  await writeFile(abs, `${JSON.stringify(sidecar, null, 2)}\n`, "utf8");
+  const temp = path.join(path.dirname(abs), `.semantic-asset-releases.tmp-${randomUUID()}`);
+  try {
+    await writeFile(temp, `${JSON.stringify(sidecar, null, 2)}\n`, "utf8");
+    await rename(temp, abs);
+  } catch (error) {
+    await rm(temp, { force: true }).catch(() => undefined);
+    throw error;
+  }
 }
 
 async function appendReleaseRecord(

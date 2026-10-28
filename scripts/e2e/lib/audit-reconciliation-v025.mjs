@@ -236,7 +236,7 @@ const reconciliationCases = [
     executionId: "ARV25-V09",
     sourceRequirementId: "V09",
     sourceScenario: "API／UI／CSV 同筛选与 S",
-    sourceJudgement: "八桶互斥且合计闭合，表清单、Token 集合、规则版本与差异 ID 一致",
+    sourceJudgement: "八桶互斥且合计闭合，表清单、Token 集合、规则版本与差异 ID 一致；精确 as-of 未证明时正式完整读取与导出阻断，诊断结果显式不完整",
     blockedReason: "environment",
     dimensions: [
       CONTRACT_DIMENSION,
@@ -252,8 +252,8 @@ const reconciliationCases = [
   makeDescriptor({
     executionId: "ARV25-V10",
     sourceRequirementId: "V10",
-    sourceScenario: "新事件在导出期间到达、投影未追平、分页",
-    sourceJudgement: "当前上下文不混入 >S；未追平正式模式失败；分页不丢重",
+    sourceScenario: "新事件在导出期间到达、投影未追平、分页及 S 后事实修订",
+    sourceJudgement: "当前上下文不混入 >S；捕获 S 后改变基础执行／交付事实、覆盖归属有效值或迟到 ACK，同 S 重读仍不漂移；未追平或 as-of 未证明时正式模式失败；分页不丢重",
     blockedReason: "environment",
     dimensions: [
       CONTRACT_DIMENSION,
