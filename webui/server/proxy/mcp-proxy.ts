@@ -42,7 +42,7 @@ import {
   buildQueryPreview,
   QUERY_PREVIEW_MAX_CODEPOINTS
 } from "./audit-privacy.js";
-import { PREVIEW_VERSION_V2P5 } from "./audit-classification.js";
+import { PREVIEW_VERSION_V2P5, executionEvidenceFromObservation } from "./audit-classification.js";
 import { buildAccessLogAuditMeta } from "./audit-meta.js";
 import { canAccessWikiKey, canonicalWikiKey, searchAccessibleWikiPages } from "./wiki-acl.js";
 import { CONTEXT_NOT_AVAILABLE, CONTEXT_ROLE_REQUIRED } from "./context-acl.js";
@@ -2731,6 +2731,21 @@ async function writeLucySemanticResponse(
   const failureDimension = compilerReason
     ? "过滤条件下推"
     : classifyFailure({ outcome, decisionReason, errorDetail });
+  // ─── 执行凭据（D1 / L25-09 §4.3(a) 第 9 行）─────────────────────────────
+  // 上游响应**已被真实读取并解析**（上面的 JSON.parse / decodeSseMessage 已
+  // 判定 `outcome`），因此这里登记的是观测到的事实，不是由 outcome 反推的
+  // 结论：解析成功且无 error 信封 → 执行成功；解析到 error 信封或上游 4xx/5xx
+  // → 执行已发生但失败。
+  //
+  // ⚠️ 编译器改写下推失败（compilerReason）时请求**未真正执行**，因此只记
+  // `notExecuted`，不记 `failed` —— 那是入参/语义失败而非执行失败。
+  const upstreamExecutionEvidence = executionEvidenceFromObservation(
+    compilerReason
+      ? { notExecuted: true, authorizationAllowed: true }
+      : outcome === "ok"
+        ? { executed: true, authorizationAllowed: true }
+        : { failed: true, authorizationAllowed: true }
+  );
   // Spec 162 §8 / SC-20 — the new slow mark and the empty-result flag are
   // decided at write time so every consumer reads the same verdict.
   const slowVerdict = isSlowCall({ tool: toolName, durationMs: Date.now() - start });
@@ -2747,6 +2762,7 @@ async function writeLucySemanticResponse(
     errorDetail,
     compilerReason,
     failureDimension: failureDimension || undefined,
+    executionEvidence: upstreamExecutionEvidence,
     isSlowCall: slowVerdict.slow,
     slowBasis: slowVerdict.basis ?? undefined,
     resultEmpty: isEmptyResult({ outcome, responseRowCount: responseMeta.responseRowCount ?? null }),
@@ -3282,6 +3298,12 @@ async function handlePost(req: IncomingMessage, res: ServerResponse, admitted: A
       ...queryMeta,
       outcome: "error",
       errorDetail: invalidArgumentsReason,
+      // 入参 / 语义校验失败发生在上游调用之前 → 本次尝试**未执行**，
+      // 不是执行失败（notExecuted 先于 verifiedFailure 判定）。
+      executionEvidence: executionEvidenceFromObservation({
+        notExecuted: true,
+        authorizationAllowed: true
+      }),
       durationMs: Date.now() - start,
       responseBytes: Buffer.byteLength(responseBody),
       requestId,
@@ -3628,6 +3650,12 @@ async function buildDenialRepairPayload(
         ...queryMeta,
         outcome: "denied",
         errorDetail: errorMsg,
+        // ACL 裁决已真实发生（decision.allowed === false）→ 授权拒绝是观测到的事实；
+        // 本次尝试未执行，故记 notExecuted 而非 failed。
+        executionEvidence: executionEvidenceFromObservation({
+          authorizationDenied: true,
+          notExecuted: true
+        }),
         durationMs: Date.now() - start,
         responseBytes: Buffer.byteLength(responseBody),
         requestId,
@@ -3796,6 +3824,12 @@ async function buildDenialRepairPayload(
         argsSummary,
         ...queryMeta,
         outcome: "ok",
+        // 目录已在本地真实构建并返回（connectionList / lucyCatalog / kxCatalog
+        // 的 await 已完成），执行成功是观测到的事实。
+        executionEvidence: executionEvidenceFromObservation({
+          executed: true,
+          authorizationAllowed: true
+        }),
         durationMs: Date.now() - start,
         responseBytes: Buffer.byteLength(responseBody),
         requestId,
@@ -3847,6 +3881,11 @@ async function buildDenialRepairPayload(
         argsSummary,
         ...queryMeta,
         outcome: "ok",
+        // explain / freshness 的计算已在本地真实完成并返回结果。
+        executionEvidence: executionEvidenceFromObservation({
+          executed: true,
+          authorizationAllowed: true
+        }),
         durationMs: Date.now() - start,
         responseBytes: Buffer.byteLength(responseBody),
         responseRowCount: 0,
@@ -4063,6 +4102,12 @@ async function buildDenialRepairPayload(
         tool: toolName,
         argsSummary,
         outcome: "ok",
+        // 问询登记已真实持久化（writeConversationTurn 成功返回后才走到这里）。
+        // 执行成功是观测到的事实，不是由 outcome 反推的结论。
+        executionEvidence: executionEvidenceFromObservation({
+          executed: true,
+          authorizationAllowed: true
+        }),
         durationMs: Date.now() - start,
         responseBytes: Buffer.byteLength(responseBody),
         requestId,
@@ -4143,6 +4188,12 @@ async function buildDenialRepairPayload(
       client: identity.client,
       tool: rpcMethod,
       outcome: "ok",
+      // resources/list：技能清单已真实加载并按可见性过滤后返回。
+      // 执行成功是观测到的事实，不是由 outcome 反推的结论。
+      executionEvidence: executionEvidenceFromObservation({
+        executed: true,
+        authorizationAllowed: true
+      }),
       durationMs: Date.now() - start,
       responseBytes: Buffer.byteLength(responseBody),
       requestId,
@@ -4223,6 +4274,12 @@ async function buildDenialRepairPayload(
       client: identity.client,
       tool: rpcMethod,
       outcome: "ok",
+      // prompts/list：提示清单已真实加载并按可见性过滤后返回。
+      // 执行成功是观测到的事实，不是由 outcome 反推的结论。
+      executionEvidence: executionEvidenceFromObservation({
+        executed: true,
+        authorizationAllowed: true
+      }),
       durationMs: Date.now() - start,
       responseBytes: Buffer.byteLength(responseBody),
       requestId,
@@ -4267,6 +4324,12 @@ async function buildDenialRepairPayload(
       client: identity.client,
       tool: rpcMethod,
       outcome: "ok",
+      // resources/read：技能内容已真实读取并通过读取 ACL 后返回。
+      // 执行成功是观测到的事实，不是由 outcome 反推的结论。
+      executionEvidence: executionEvidenceFromObservation({
+        executed: true,
+        authorizationAllowed: true
+      }),
       durationMs: Date.now() - start,
       responseBytes: Buffer.byteLength(responseBody),
       requestId,
@@ -4350,6 +4413,12 @@ async function buildDenialRepairPayload(
       client: identity.client,
       tool: rpcMethod,
       outcome: "ok",
+      // prompts/get：提示内容已真实读取并通过读取 ACL 后返回。
+      // 执行成功是观测到的事实，不是由 outcome 反推的结论。
+      executionEvidence: executionEvidenceFromObservation({
+        executed: true,
+        authorizationAllowed: true
+      }),
       durationMs: Date.now() - start,
       responseBytes: Buffer.byteLength(responseBody),
       requestId,
@@ -4402,6 +4471,12 @@ async function buildDenialRepairPayload(
       tool: toolName,
       argsSummary,
       outcome: "ok",
+      // lucy_skill_search：技能集合已真实加载并完成匹配后返回。
+      // 执行成功是观测到的事实，不是由 outcome 反推的结论。
+      executionEvidence: executionEvidenceFromObservation({
+        executed: true,
+        authorizationAllowed: true
+      }),
       durationMs: Date.now() - start,
       responseBytes: Buffer.byteLength(responseBody),
       requestId,
@@ -4487,6 +4562,12 @@ async function buildDenialRepairPayload(
       tool: toolName,
       argsSummary,
       outcome: "ok",
+      // lucy_skill_read：技能内容已真实读取并通过读取 ACL 后返回。
+      // 执行成功是观测到的事实，不是由 outcome 反推的结论。
+      executionEvidence: executionEvidenceFromObservation({
+        executed: true,
+        authorizationAllowed: true
+      }),
       durationMs: Date.now() - start,
       responseBytes: Buffer.byteLength(responseBody),
       requestId,
@@ -4845,6 +4926,12 @@ async function buildDenialRepairPayload(
       client: identity.client,
       tool: rpcMethod,
       outcome: "ok",
+      // initialize：上游握手响应已真实读取并写出。
+      // 执行成功是观测到的事实，不是由 outcome 反推的结论。
+      executionEvidence: executionEvidenceFromObservation({
+        executed: true,
+        authorizationAllowed: true
+      }),
       errorDetail: initResult.injectionFailed ? initResult.errorDetail : undefined,
       durationMs: Date.now() - start,
       responseBytes: initResult.responseBytes,
@@ -5160,6 +5247,13 @@ async function buildDenialRepairPayload(
       ...queryMeta,
       outcome,
       errorDetail,
+      // 上游响应已真实读取并 sniff 解析（上面的 JSON.parse 已判定 outcome），
+      // 因此登记的是观测到的事实，不是由 outcome 反推的结论。
+      executionEvidence: executionEvidenceFromObservation(
+        outcome === "ok"
+          ? { executed: true, authorizationAllowed: true }
+          : { failed: true, authorizationAllowed: true }
+      ),
       durationMs: Date.now() - start,
       ...responseMeta,
       requestId,
