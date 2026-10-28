@@ -586,6 +586,34 @@ findings:
     fixedIn: null
     verifiedBy: []
     acceptedBy: null
+  # D-30 语义发布 sidecar 非原子写：幂等重放在 Linux 上读到半截 JSON 而返回 500
+  # 现象（2026-10-28 lucy-v0.25 首次 CI 实测）：`webui/server/__tests__/api.semantic-batch.test.ts`
+  #   「replays the same idempotency key with the same release and no second write」在 CI（Linux runner）
+  #   首个 publish 返回 200、紧接着的重放返回 **500**（响应 2.6ms，同步抛错而非 I/O 超时）；
+  #   macOS 本地单跑与全量跑均 20/20 通过，缺陷在开发期不可见。
+  # 根因（已用定向用例证明，非推测）：同一份发布 sidecar（`.ktx-ui/semantic-asset-releases.json`）
+  #   有两条并发路径——幂等重放路径 `readSemanticAssetRelease` 读它，而异步 reindex 的
+  #   `updateReleaseRecord`（read-modify-write）在改写它。原 `writeSidecar` 用 `writeFile(abs, ...)`
+  #   直接覆盖写（**非原子**：先截断、内容后落），读者若落在截断与落盘之间即读到半截文件，
+  #   `JSON.parse` 抛 SyntaxError；该异常不是 SemanticAssetValidationError，于是从发布路由
+  #   `throw error` 逃逸为 HTTP 500，而不是返回同一个 release id。
+  #   对照证据：同模块的幂等文件 `.ktx-ui/semantic-idempotency.json` 早已用 temp+rename 原子写
+  #   （semantic-idempotency.ts:110-124），sidecar 却是直接覆盖写——同一模块内的不对称。
+  # 影响面：违反 L25-11 §7.2 (D15)「同一幂等键重放必须返回同一个 release」的契约；客户环境为 Linux，
+  #   在「发布后立即重放」（断线重试 / 客户端自动重试）这一常见路径上会命中。
+  # 处置：sidecar 改为 temp 文件写入 + `rename` 原子替换，与幂等文件一致；读者要么看到旧完整文件、
+  #   要么看到新完整文件，不会看到半截。**未放宽任何发布语义**：字段校验、覆盖确认、计划摘要比对不变。
+  # 进展：修复已落地并有定向用例（webui/server/__tests__/semantic-sidecar-atomic.test.ts，
+  #   以受控闸门确定性地制造「写入已截断、内容未落盘」的窗口；撤掉修复即复现
+  #   `SyntaxError: Unexpected end of JSON input`）。release evidence 未覆盖、Linux runner 上的
+  #   real-e2e 未取得，保持 open，fixedIn 不填。
+  - id: D-30
+    severity: P1
+    status: open
+    spec: "L25-11 §7.2 (D15)"
+    fixedIn: null
+    verifiedBy: []
+    acceptedBy: null
   # G-01 文档称强制，release workflow 无真实 E2E 依赖（T14）
   # note: T14 代码已交付并有静态契约测试（scripts/gates/customer-release-workflow.test.mjs）：release-package 与每个客户发布分支都经
   #       customer-release-readiness 依赖 real-e2e，客户镜像单架构 amd64、只 promote 已测试 digest、门禁后不重建；demo-e2e / postgres-demo-e2e 已改名为
