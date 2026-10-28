@@ -364,6 +364,24 @@ function parseTurnId(res) {
   }
 }
 
+/**
+ * The origin the DELIBERATE rate-limit flood runs from.
+ *
+ * D-34 (2026-10-29): the product buckets logins by source
+ * (`webui/server/auth/rate-limit.ts`: `sourceTotal` = 30 per 5 minutes, keyed on the
+ * normalized remote address). SEC-05-V02/V03/V04/V05 MUST burn that bucket — V03 fires 40
+ * bad-password logins on purpose to prove the source-wide limit fires — but the legitimate
+ * traffic of the run used to share the same bucket. Whenever the management leg started
+ * within 5 minutes of the security leg ending, it inherited a saturated bucket and the
+ * SAME full management leg scored 16 passed in one run and 1 passed in the next.
+ *
+ * The flood therefore gets its OWN source address: on a locally started instance the
+ * WebUI listens dual-stack, so the IPv6 loopback reaches the same server while the
+ * server sees `::1` instead of `::ffff:127.0.0.1`. The product still counts every attempt
+ * from that address against that address's buckets; the rest of the run keeps its own.
+ * No threshold, window or key is changed, and the assertions keep testing exactly the
+ * same control.
+ */
 export class SecurityContext {
   /** The data tools that need an open question scope. */
   static DATA_TOOLS = DATA_TOOLS;
@@ -373,6 +391,11 @@ export class SecurityContext {
     this.lucy = lucy;
     this.capabilities = capabilities;
     this.web = new LucyHttp(run.instance.baseUrl);
+    // The deliberate rate-limit flood runs from its OWN source (D-34): the product buckets
+    // logins by source, so the flood must not consume the bucket the rest of the run
+    // depends on. Resolved once, lazily, by `floodClient()`.
+    this.floodClientPromise = null;
+    this.floodIsolation = null;
     // Use the registered MCP URL verbatim (Spec §6.2 / §6.5 / §8.3): it already encodes the proxy port,
     // the non-default pathname and any query prefix the operator chose. Building a new
     // `http://${host}:${proxyPort}` URL would silently drop the pathname/query and, on a real
@@ -599,6 +622,45 @@ export class SecurityContext {
   async login(adminId, password) {
     const res = await this.web.request("POST", "/api/auth/login", { body: { adminId, password } });
     return { res, cookie: res.status === 200 ? res.cookie : null };
+  }
+
+  /**
+   * A login issued from the flood's OWN source (see the class-level note on D-34).
+   *
+   * Only the rate-limit cases may use it: they exist to prove the limit fires, so their
+   * attempts must consume a bucket that nobody else depends on.
+   *
+   * When no separate source is available (an externally started instance we may not
+   * re-bind), the flood falls back to the MAIN source and says so in `floodIsolation`.
+   * The fallback keeps the rate-limit coverage intact; the management leg is then
+   * protected by the rate-limit wait in the Playwright helper (`uiLoginWithRateLimitWait`).
+   */
+  async floodLogin(adminId, password) {
+    const client = await this.floodClient();
+    const res = await client.request("POST", "/api/auth/login", { body: { adminId, password } });
+    return { res, cookie: res.status === 200 ? res.cookie : null };
+  }
+
+  /** The client the flood uses, plus WHY it is (or is not) source-isolated. */
+  async floodClient() {
+    if (this.floodClientPromise) return this.floodClientPromise;
+    this.floodClientPromise = (async () => {
+      const floodBaseUrl = this.run.instance?.floodBaseUrl ?? null;
+      if (!floodBaseUrl) {
+        this.floodIsolation = { isolated: false, reason: "no_flood_origin" };
+        return this.web;
+      }
+      try {
+        const probe = await new LucyHttp(floodBaseUrl).request("GET", "/api/auth/status");
+        if (probe.status !== 200) throw new Error(`probe returned HTTP ${probe.status}`);
+        this.floodIsolation = { isolated: true, origin: floodBaseUrl };
+        return new LucyHttp(floodBaseUrl);
+      } catch (error) {
+        this.floodIsolation = { isolated: false, reason: `flood_origin_unreachable: ${error?.message ?? String(error)}` };
+        return this.web;
+      }
+    })();
+    return this.floodClientPromise;
   }
 
   /**

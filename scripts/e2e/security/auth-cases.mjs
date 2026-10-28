@@ -326,7 +326,7 @@ export const handlers = {
     const checks = new Checks();
     const id = "e2e-throttle-target";
     const statuses = [];
-    for (let i = 0; i < 6; i += 1) statuses.push((await ctx.login(id, "Wrong-password-123")).res.status);
+    for (let i = 0; i < 6; i += 1) statuses.push((await ctx.floodLogin(id, "Wrong-password-123")).res.status);
     ctx.throttleStatuses = statuses;
     checks.expect("deny", statuses.slice(0, 5).every((s) => s === 401), `first 5 failures -> ${statuses.slice(0, 5).join(",")}`);
     checks.expect("deny", statuses[5] === 429, `6th attempt -> ${statuses[5]}`);
@@ -335,7 +335,7 @@ export const handlers = {
 
   "SEC-05-V04": async (ctx) => {
     const checks = new Checks();
-    const res = await ctx.login("e2e-throttle-target", "Wrong-password-123");
+    const res = await ctx.floodLogin("e2e-throttle-target", "Wrong-password-123");
     const retry = Number(res.res.headers["retry-after"]);
     checks.expect("deny", res.res.status === 429, `throttled -> ${res.res.status}`);
     checks.expect("deny", Number.isFinite(retry) && retry > 0, `Retry-After: ${res.res.headers["retry-after"] ?? "(missing)"}`);
@@ -345,7 +345,7 @@ export const handlers = {
   "SEC-05-V05": async (ctx) => {
     const checks = new Checks();
     await ctx.lucy.restart("SIGKILL");
-    const res = await ctx.login("e2e-throttle-target", "Wrong-password-123");
+    const res = await ctx.floodLogin("e2e-throttle-target", "Wrong-password-123");
     checks.expect("deny", res.res.status === 429, `after restart the bucket still throttles -> ${res.res.status}`);
     return { ...checks.result(), denyReason: `status:${res.res.status}` };
   },
@@ -353,7 +353,7 @@ export const handlers = {
   "SEC-05-V03": async (ctx) => {
     const checks = new Checks();
     const statuses = [];
-    for (let i = 0; i < 40; i += 1) statuses.push((await ctx.login(`e2e-scan-${i}`, "Wrong-password-123")).res.status);
+    for (let i = 0; i < 40; i += 1) statuses.push((await ctx.floodLogin(`e2e-scan-${i}`, "Wrong-password-123")).res.status);
     const firstThrottle = statuses.indexOf(429);
     checks.expect("deny", firstThrottle !== -1 && firstThrottle <= 31, `source throttle began at attempt ${firstThrottle + 1}`);
     return { ...checks.result(), denyReason: "status:429" };

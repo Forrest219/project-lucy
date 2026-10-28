@@ -380,9 +380,13 @@ async function sec05v07(ctx) {
   // client_ip must be the loopback socket peer. Forwarded-chain assertions
   // (sec22v04) live in their own case; here we only check the peer.
   const peer = authRow?.client_ip ?? "";
+  // The peer must be a LOOPBACK socket peer (NOT a forwarded chain). The deliberate
+  // rate-limit flood runs from its own loopback address (D-34: 127.0.0.2 by default),
+  // so the whole 127/8 range is accepted — the intent is "loopback peer", not one
+  // specific address.
   checks.expect(
     "deny",
-    /^(127\.0\.0\.1|::1|::ffff:127\.0\.0\.1)$/.test(peer),
+    /^(127\.\d{1,3}\.\d{1,3}\.\d{1,3}|::1|::ffff:127\.\d{1,3}\.\d{1,3}\.\d{1,3})$/.test(peer),
     `socket peer is loopback (got "${peer}")`
   );
   // user_id is either null (digest-only) or the typed-id digest. The raw

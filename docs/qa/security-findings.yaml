@@ -883,33 +883,46 @@ findings:
     fixedIn: 00cf44d47c0118116d178d11acb6a1a4916e20eb
     verifiedBy: ["ARV25-V04", "ARV25-V07", "ARV25-V08", "ARV25-V09", "ARV25-V10", "ARV25-V11"]
     acceptedBy: null
-  # D-34 real-e2e 管理腿在单个运行窗口内必然撞登录限流，证据腿无法一次跑完
+  # D-34 real-e2e 管理腿与安全腿在同一 5 分钟窗口内相继启动时，管理腿继承被打满的登录限流桶
   # 现象（2026-10-29 开发单机实测，非代码推断）：run `inbox/e2e/l2509-stage1b`
-  #   的**全量**管理腿（run-management.mjs，不带 --grep）实测
-  #   **62 次独立 `POST /api/auth/login`**，其中 **10 次返回 429
-  #   AUTH_RATE_LIMITED**；受影响的 spec 至少含
-  #   `audit-reconciliation-v025.spec.ts`（串行模式下后续测试未跑，其余
-  #   ARV25 变体因「本轮无 spec 覆盖」退化为 blocked）。
-  # 根因（两侧都是既有事实，不是推断）：
+  #   的**全量**管理腿（run-management.mjs，不带 --grep）11 次独立
+  #   `POST /api/auth/login` 中 **10 次返回 429 AUTH_RATE_LIMITED**，该腿结论
+  #   塌为 **1 passed / 17 failed / 33 blocked**。
+  # 根因（两侧都是既有事实，不是推断；已按同代码两 run 的对照修正）：
   #   · 产品侧：`webui/server/auth/rate-limit.ts` 的 `AUTH_RATE_LIMITS`
   #     冻结为 `sourceTotal = 30 次 / 5 分钟`（OIDC Spec §8.2.1 明文「既有
   #     30 次／5 分钟」），桶按可信 source 计数，**成功登录只清
   #     (account, source) 桶、不清 source 总量桶**；该阈值无环境变量旋钮。
-  #   · harness 侧：`webui/tests/real-e2e/helpers/run-context.ts` 的
-  #     `ownerContext()` 虽有 `cachedSessionState` 复用，但实测缓存未稳定命中
-  #     （25 次会话探针 / 62 次登录），全量套件在同一 source 上产生远超
-  #     30 次的登录尝试。
-  # 影响：管理腿**无法在一个运行窗口内跑完**；被限流打掉的 spec 会被记成
-  #   failed 或退化为 blocked，使「整条腿的证据」不可用——Stage 1 与
-  #   Stage 2 的发布门禁都受影响（Stage 2 的客户 K8s 同样是单 source）。
-  # 处置：**不改产品阈值**（那是冻结合同，且弱化它属于安全回归），改为收敛
-  #   harness 侧登录次数——复用会话／减少每 spec 的登录、或把登录预算做成
-  #   显式可观测的 harness 配置；并在取证记录里登记本条。
-  #   2026-10-29 的 Stage 1 取证因此**按 spec 作用域**跑（`--grep
-  #   "reconciliation"`），全量腿的结果留档在
-  #   `inbox/e2e/l2509-stage1b/results/management-full-unscoped.json`。
-  # 状态：open（未修）。归属：harness／取证编排侧，不在 L25-09 产品实现范围。
-  # note: 取证 = 本地开发机 Stage 1 运行 `inbox/e2e/l2509-stage1b`（真实 PostgreSQL
+  #   · harness 侧：**打满这个桶的是安全腿，不是管理腿**。安全腿的限流用例按设计
+  #     必须烧掉 source-wide 桶（SEC-05-V02 故意连打 6 次错密码、SEC-05-V03
+  #     故意连打 40 次），实测安全腿 69–70 次登录（12–13×200、33–42×401 故意
+  #     错密码、15–24×429）；**管理腿自身只需 9–11 次登录**，远低于 30/5min 配额。
+  #     ⇒ 真正的触发条件是**两条腿的启动间隔**：同代码两 run 中，安全腿结束后
+  #     **隔 19 分钟**才启动管理腿的那次（`inbox/e2e/l2509-stage1`）管理腿 9 次
+  #     登录**全部 200、零 429**，全量腿结论 **16 passed / 9 failed / 26 blocked**；
+  #     隔 1 分钟启动的那次（`l2509-stage1b`）10/11 次 429，结论塌为 1 passed。
+  #     （此前本条把「62 次登录」记成管理腿的，属归属错误，已更正。）
+  # 影响：**管理腿在单独窗口内可以跑完**（`l2509-stage1` 即证）；受影响的是
+  #   「安全腿与管理腿在同一 5 分钟窗口内相继启动」这一编排——此时管理腿继承
+  #   被打满的桶，被限流打掉的 spec 会被记成 failed 或退化为 blocked，使
+  #   「整条腿的证据」不可用（Stage 2 的客户 K8s 同样是单 source）。
+  # 处置：**不改产品阈值**（那是冻结合同，弱化它属于安全回归），改为 harness 侧
+  #   双保险：
+  #   · **A（洪水独立源）**：限流洪水改从**独立 source** 发起，使它烧的桶不再
+  #     是主体流量的桶。本地实例以双栈监听（`LUCY_WEBUI_HOST=::`），洪水走
+  #     IPv6 回环 `[::1]` ⇒ 服务端看到 `::1`，主体流量仍是
+  #     `::ffff:127.0.0.1`（归一化为 `127.0.0.1`）⇒ 两个不同的桶。产品的阈值、
+  #     窗口与键一律未动，限流断言仍在测同一道控制。
+  #   · **A′（限流退避重试）**：管理腿的表单登录被产品自身限流拒绝时，按响应
+  #     `Retry-After` 退避重试（`webui/tests/real-e2e/helpers/run-context.ts` 的
+  #     `uiLoginWithRateLimitWait`），等待窗口滚动而不是把用例判死。
+  #   · 外部启动的实例（客户 K8s）与 release 镜像不归 harness 改绑定 ⇒ 无独立
+  #     洪水源，洪水回落主源（`SecurityContext.floodIsolation` 显式登记），由 A′
+  #     兜底。
+  # 状态：open（修复已落地，待取证复跑确认后置 fixed）。归属：harness／取证编排
+  #   侧，不在 L25-09 产品实现范围。取证边界另见
+  #   docs/specs/lucy-20261020-v2p5-audit-increment-spec.md §18.13.4。
+  # note: 修复前的取证 = 本地开发机 Stage 1 运行 `inbox/e2e/l2509-stage1b`（真实 PostgreSQL
   #   + 真实 Playwright 桌面 Chromium 1440×900），候选身份
   #   `inbox/e2e/l2509-stage1b/candidate-identity.json`，装配证据
   #   `inbox/e2e/l2509-stage1b/release-evidence.json`。引用的 6 个变体在该 bundle 中
