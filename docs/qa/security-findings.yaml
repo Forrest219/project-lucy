@@ -919,29 +919,48 @@ findings:
   #   · 外部启动的实例（客户 K8s）与 release 镜像不归 harness 改绑定 ⇒ 无独立
   #     洪水源，洪水回落主源（`SecurityContext.floodIsolation` 显式登记），由 A′
   #     兜底。
-  # 状态：open（修复已落地，待取证复跑确认后置 fixed）。归属：harness／取证编排
-  #   侧，不在 L25-09 产品实现范围。取证边界另见
+  # 状态：fixed（2026-10-29，提交 `ea3c52bc`）。归属：harness／取证编排侧，
+  #   不在 L25-09 产品实现范围。取证边界另见
   #   docs/specs/lucy-20261020-v2p5-audit-increment-spec.md §18.13.4。
-  # note: 修复前的取证 = 本地开发机 Stage 1 运行 `inbox/e2e/l2509-stage1b`（真实 PostgreSQL
-  #   + 真实 Playwright 桌面 Chromium 1440×900），候选身份
-  #   `inbox/e2e/l2509-stage1b/candidate-identity.json`，装配证据
-  #   `inbox/e2e/l2509-stage1b/release-evidence.json`。引用的 6 个变体在该 bundle 中
-  #   status=passed，机器校验 `finding_not_verified` **未触发**（反向对照：把 verifiedBy
-  #   注入一个不存在的 id，立刻报 `finding_not_verified`，计数 23→24 ⇒ 该校验是活的）。
+  # note: 取证 = 本地开发机 Stage 1 运行 `inbox/e2e/l2510-d34fix`（真实 PostgreSQL
+  #   + 真实 Playwright 桌面 Chromium 1440×900），**两条腿紧邻启动（间隔 < 1 分钟）**
+  #   —— 即修复前会塌成 1 passed 的那个场景；候选身份
+  #   `inbox/e2e/l2510-d34fix/candidate-identity.json`，装配证据
+  #   `inbox/e2e/l2510-d34fix/release-evidence.json`。
+  #   实测：洪水 48 次请求全部落在 IPv6 源 `::1`（27×401 故意错密码、21×429），
+  #   主体流量在 `127.0.0.1` 上仅 **1 次 429**（17×200、8×401）；**全量管理腿
+  #   16 passed / 9 failed / 26 blocked**，与干净基线 `l2509-stage1` **逐字相同**
+  #   （修复前同一紧邻场景 `l2509-stage1b` 为 1 passed / 17 failed / 33 blocked）。
+  #   顺带修好两个基线失败用例 SEC-05-V02 与 SEC-05-V05（安全腿 89→91 passed）。
+  #   引用的变体在该 bundle 中 status=passed，机器校验 `finding_not_verified`
+  #   **未触发**。
   #   ⚠️ 该 bundle **不是发布级证据**：gate status=failed / exitCode=1 /
   #   releaseReady=false；untrusted_provenance（非受信 CI runner）、
-  #   topology=local-process（应为 single-replica-k8s）、deployed_digest_mismatch、
-  #   stale_evidence、not_release_execution、omitted_case 184 / case_failed 46 /
-  #   case_blocked 64 / gate_missing 8。
+  #   topology=local-process（应为 single-replica-k8s）、not_release_execution、
+  #   omitted_case / case_failed / case_blocked / gate_missing 均非零。
   #   ⇒ 本条只证明「**修复本身有效**」，**不构成发布级验收**；G-01 保持 open，
-  #   Wave 0b 与 blocked_delivery 不因此解除。取证边界另见
-  #   docs/specs/lucy-20261020-v2p5-audit-increment-spec.md §18.13.4。
+  #   Wave 0b 与 blocked_delivery 不因此解除。
   - id: D-34
     severity: P2
-    status: open
+    status: fixed
     spec: "release evidence 编排（real-e2e 管理腿）／L25-09 §13.2 U9 取证口径"
-    fixedIn: null
-    verifiedBy: []
+    fixedIn: "ea3c52bc1f931e5a7b4b4d54a05b0897bd03f58f"
+    verifiedBy:
+      - ARV25-V01
+      - ARV25-V02
+      - ARV25-V03
+      - ARV25-V04
+      - ARV25-V05
+      - ARV25-V06
+      - ARV25-V07
+      - ARV25-V08
+      - ARV25-V09
+      - ARV25-V10
+      - ARV25-V11
+      - SEC-05-V02
+      - SEC-05-V03
+      - SEC-05-V04
+      - SEC-05-V05
     acceptedBy: null
 dependencies:
   # fast-uri：webui/package.json overrides 原锁定 3.1.6（提交 5b31145；受影响 GHSA-qw65-cvwx-89v3 <3.1.7、GHSA-58mr-gqgx-xq4g =3.1.6、GHSA-hrr3-gc8f-f4qj <3.1.8）。T09 升到 3.1.8（含 package-lock），Fastify/ajv 链 `npm ls fast-uri` 全部 deduped 为 3.1.8；`npm audit --omit=dev` high/critical 0
