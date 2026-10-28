@@ -267,24 +267,40 @@ function isMissingFileError(error: unknown): boolean {
 }
 
 /**
- * ── v0.25 POLICY (D-03 / G5 boundary) ─────────────────────────────────────────
+ * ── D-03 / G5 RESOLUTION ──────────────────────────────────────────────────────
  * Resolve the Schema Manifest file for one schema, from the schema name the
- * BINDING asked for, and from that name ONLY.
+ * BINDING asked for.
  *
- * The function deliberately performs NO case-insensitive lookup in the real
- * directory. The source map lower-cases the schema name when it reads the
- * Manifest file names, so on a case-sensitive filesystem a disk file
- * `BIDM.yaml` is not reachable as `bidm.yaml`; the resulting miss is reported
- * as `manifest_unavailable` / `stage=resolve` (operations), never as
- * 「字段不存在」.
+ * The source map lower-cases the schema name when it reads the Manifest file
+ * names, while the files on disk keep their original case (`BIDM.yaml`). On a
+ * case-sensitive filesystem the plain `bidm.yaml` path does not exist, so the
+ * resolution scans the schema directory and matches the manifest file name
+ * case-insensitively — the behaviour spec §5.5 prescribes, and the only place
+ * allowed to grow such a scan.
  *
- * D-03 (the real case-insensitive resolution) belongs to the 0.20.Z maintenance
- * line (spec §11 D7; docs/qa/security-findings.yaml D-03 `fixedIn: null`). When
- * that line ships, THIS FUNCTION is the single place to change.
+ * The exact disk file name that was matched is returned, so the caller reports
+ * the real path in its reason / manifestPath instead of the requested one.
+ *
+ * When the directory cannot be listed, the requested path is returned unchanged
+ * and the caller reports `manifest_unavailable` / `stage=resolve` (operations) —
+ * never as 「字段不存在」.
  * ──────────────────────────────────────────────────────────────────────────────
  */
-export function resolveManifestFilePath(schemaDir: string, schema: string): string {
-  return path.join(schemaDir, `${schema}.yaml`);
+export async function resolveManifestFilePath(schemaDir: string, schema: string): Promise<string> {
+  const requested = path.join(schemaDir, `${schema}.yaml`);
+  const want = normalizeRef(schema);
+  let entries: string[];
+  try {
+    entries = await readdir(schemaDir);
+  } catch {
+    return requested;
+  }
+  for (const entry of entries) {
+    if (!entry.endsWith(".yaml") && !entry.endsWith(".yml")) continue;
+    if (normalizeRef(entry.replace(/\.ya?ml$/i, "")) !== want) continue;
+    return path.join(schemaDir, entry);
+  }
+  return requested;
 }
 
 interface ManifestTableEntry {
@@ -429,8 +445,11 @@ async function loadPhysicalColumnsWithProvenance(
   const relDir = `${normalizeRef(connectionId)}/_schema`;
 
   if (schema) {
-    const file = resolveManifestFilePath(schemaDir, schema);
-    const relPath = `${relDir}/${schema}.yaml`;
+    const file = await resolveManifestFilePath(schemaDir, schema);
+    // The resolved file may keep its original case on disk (`BIDM.yaml`); report
+    // the real relative path so the reason and manifestPath point at the file
+    // that was actually read.
+    const relPath = `${relDir}/${path.basename(file)}`;
     let content: string;
     try {
       content = await readFile(file, "utf-8");
