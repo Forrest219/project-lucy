@@ -751,27 +751,37 @@ findings:
     acceptedBy: null
   # ─── L25-09 批 A（2026-10-28）新增登记 ────────────────────────────────────
   #
-  # 【Stage 1 取证状态（2026-10-28，本轮）——逐条说明为什么下面两条保持 open】
+  # 【Stage 1 取证状态（2026-10-29 更新）——为什么下面两条现在可以置 fixed】
   #
   # 台账头部规则：`fixed` 必须同时具备 `fixedIn`（提交 SHA）与 `verifiedBy`
-  # （**本次 release evidence 中 status=passed 的用例 ID**）。本轮：
-  #   ① Stage 1 未取得真实 passed 证据 —— A01–A12 无任何 Playwright spec 覆盖
-  #      （`webui/tests/real-e2e/` 下不存在审计增量 spec）；ARV25-V01..V12 的
-  #      spec 此前只声明 `coversV025`（v0.25 命名空间），冻结 collector 看不到
-  #      这些 variant，它们在 evidence.cases 里根本不会出现。批 C-2 已补
-  #      `covers()` 声明，但**声明**不等于**真实通过**。
-  #   ② 同日 UAT 复核（docs/reviews/2026-10-28-uat-p0-l25-09-audit-and-reconciliation.md，
-  #      HEAD 17fdaf08）结论为**退回**：F-02「精确 as-of S 重建」未收口 ——
-  #      归属就地改写用当前账本水位当 ledger_seq，改写序号**等于** S 时
-  #      proveExactAsOfS 仍返回 ok=true，同一 S 可先导出旧归属再导出新归属，
-  #      两次正式结果都显示范围完整。该缺陷直接落在 A08、A10-ASOF、V09、V10
-  #      的冻结判定上，Stage 1 这四项**不能**记 passed。
-  #   ③ Stage 2（客户 amd64 K8s）因 G-01（受保护 amd64 runner 未注册）与
-  #      G-06（GHCR 推送 permission_denied）未执行，不得由 Stage 1 外推。
+  # （**本次 release evidence 中 status=passed 的用例 ID**）。2026-10-29 的
+  # Stage 1 真实取证（开发单机）达成了该条件：
+  #   · run `inbox/e2e/l2509-stage1b`（prepare-environment local → apply-db
+  #     真实 PostgreSQL 播种并核对摘要 → run-security → run-management 真实
+  #     Playwright），候选身份 `inbox/e2e/l2509-stage1b/candidate-identity.json`，
+  #     装配证据 `inbox/e2e/l2509-stage1b/release-evidence.json`；
+  #   · `evidence.cases` 中 **ARV25-V01…V11 共 11 个 variant status=passed**
+  #     （冻结 collector 采信，`passedIds` 可引用）；ARV25-V12 仍 blocked
+  #     （需 `k8s-amd64`，Stage 2 未执行）。
+  #   · 回归断言**非空洞**：导出 `calls-attempts.csv` 的 `authorization_status`
+  #     与 `execution_status` 两列实测带出 5/6 行观测值（修前恒为 unknown）；
+  #     运行库八桶分布实测 `succeeded=46`（修前恒 0）、`denied=93`、
+  #     `budget_stopped=7`、`unknown=34`。
   #
-  # 因此下面两条按台账头部规则与 D-31 的同一处置方式：**保持 open、
-  # fixedIn 不填**，实现提交 SHA 与回归用例记在各自 note 中；待 Stage 1
-  # 取得真实 passed 用例后再逐条置 fixed 并回填 fixedIn／verifiedBy。
+  # ⚠️ 取证边界（必须随结论一并读）：
+  #   ① Stage 1 证据是对**工作树源码**跑的（real-e2e 本地模式用
+  #      `node --import tsx server/index.ts` 起实例），工作树当时含并行会话
+  #      未提交的 F-02「归属列按日志前像回放」修订。本次运行库
+  #      `access_log_attribution_mutations = 0`、`access_log.ledger_seq IS NULL
+  #      = 0`，即该路径**从未被触发** ⇒ 下列结论不依赖那处未提交修订。
+  #   ② 直接覆盖「按同一 S 重建基础事实与归属修订视图不漂移」的 **A08、
+  #      A10-ASOF 仍无任何 spec、仍 blocked**；**F-02 未收口**，本条不据此
+  #      宣称 F-02 已修复。
+  #   ③ `failed` 桶本轮为空，只因**本轮没有失败的执行事件**（覆盖缺口，不是
+  #      缺陷）；失败形态的凭据由定向用例
+  #      `webui/server/__tests__/audit-v025-execution-evidence.test.ts` 覆盖，
+  #      但**未**取得 live 失败事件的证据。
+  #   ④ agent 腿未执行（本机无任何模型 API key）；Stage 2 未执行（G-01/G-06）。
   #
   # D-32 P0-4 读侧列名漂移：授权/执行视图恒为 unknown
   # 现象（2026-10-28 实测，非代码推断）：`webui/server/admin/reconciliation.ts`
@@ -790,14 +800,18 @@ findings:
   #   access_log 已有同义列，新增会制造第二套竞争性事实源。缺列兜底保留（老库
   #   可能没有该列），缺列时仍落 `unknown` 并附原因，**不得**当 0 / false。
   # 进展：修复已落地（提交 00cf44d4），有定向用例与反向对照（撤掉修复 → 用例
-  #   确实失败；恢复 → 全绿）。Stage 1 未取得真实 passed 证据，保持 open，
-  #   fixedIn 不填。
+  #   确实失败；恢复 → 全绿）。2026-10-29 Stage 1 真实取证达成台账 `fixed` 的
+  #   两个条件（fixedIn = 00cf44d4；verifiedBy 引用的 ARV25 变体在
+  #   `inbox/e2e/l2509-stage1b/release-evidence.json` 的 `evidence.cases` 里
+  #   status=passed）：导出 `calls-attempts.csv` 的 `authorization_status` 与
+  #   `execution_status` 两列实测带出 5/6 行**观测值**（修前恒为 unknown），
+  #   即读侧确实读到了既有列。取证边界见本节上方注释。
   - id: D-32
     severity: P1
-    status: open
+    status: fixed
     spec: "L25-03 §3.1（只读对账读取）／L25-09 §4.3(b)"
-    fixedIn: null
-    verifiedBy: []
+    fixedIn: 00cf44d47c0118116d178d11acb6a1a4916e20eb
+    verifiedBy: ["ARV25-V04", "ARV25-V07", "ARV25-V08", "ARV25-V09", "ARV25-V10", "ARV25-V11"]
     acceptedBy: null
   # D-33 生产写路径不产出执行凭据：八桶主状态里 succeeded/failed 两桶恒为空
   # 现象（2026-10-28 直接调用 classifyAuditEvent 实测，非代码推断）：
@@ -828,11 +842,50 @@ findings:
   # 进展：修复已落地（提交 00cf44d4），定向用例 11 例（webui/server/__tests__/
   #   audit-v025-execution-evidence.test.ts）覆盖观测成功/失败/未执行/拒绝/预算
   #   终止/无凭据六种形态，并守住 §4.3(a) 规则 9 与 F-03（预算终止不得反推
-  #   not_evaluated）。Stage 1 未取得真实 passed 证据，保持 open，fixedIn 不填。
+  #   not_evaluated）。2026-10-29 Stage 1 真实取证达成台账 `fixed` 的两个条件
+  #   （fixedIn = 00cf44d4；verifiedBy 引用的 ARV25 变体在
+  #   `inbox/e2e/l2509-stage1b/release-evidence.json` 的 `evidence.cases` 里
+  #   status=passed）：运行库八桶实测 `succeeded=46`（修前恒 0）、
+  #   `denied=93`、`budget_stopped=7`；导出 CSV 的 `authorization_status` 与
+  #   `execution_status` 两列实测带出 5/6 行观测值。⚠️ `failed` 桶本轮为空
+  #   只因本轮没有失败的执行事件（覆盖缺口，不是缺陷）。取证边界见本节上方注释。
   - id: D-33
     severity: P1
-    status: open
+    status: fixed
     spec: "L25-09 §4.3(a) / §4.3(b) / §18.10 F-01"
+    fixedIn: 00cf44d47c0118116d178d11acb6a1a4916e20eb
+    verifiedBy: ["ARV25-V04", "ARV25-V07", "ARV25-V08", "ARV25-V09", "ARV25-V10", "ARV25-V11"]
+    acceptedBy: null
+  # D-34 real-e2e 管理腿在单个运行窗口内必然撞登录限流，证据腿无法一次跑完
+  # 现象（2026-10-29 开发单机实测，非代码推断）：run `inbox/e2e/l2509-stage1b`
+  #   的**全量**管理腿（run-management.mjs，不带 --grep）实测
+  #   **62 次独立 `POST /api/auth/login`**，其中 **10 次返回 429
+  #   AUTH_RATE_LIMITED**；受影响的 spec 至少含
+  #   `audit-reconciliation-v025.spec.ts`（串行模式下后续测试未跑，其余
+  #   ARV25 变体因「本轮无 spec 覆盖」退化为 blocked）。
+  # 根因（两侧都是既有事实，不是推断）：
+  #   · 产品侧：`webui/server/auth/rate-limit.ts` 的 `AUTH_RATE_LIMITS`
+  #     冻结为 `sourceTotal = 30 次 / 5 分钟`（OIDC Spec §8.2.1 明文「既有
+  #     30 次／5 分钟」），桶按可信 source 计数，**成功登录只清
+  #     (account, source) 桶、不清 source 总量桶**；该阈值无环境变量旋钮。
+  #   · harness 侧：`webui/tests/real-e2e/helpers/run-context.ts` 的
+  #     `ownerContext()` 虽有 `cachedSessionState` 复用，但实测缓存未稳定命中
+  #     （25 次会话探针 / 62 次登录），全量套件在同一 source 上产生远超
+  #     30 次的登录尝试。
+  # 影响：管理腿**无法在一个运行窗口内跑完**；被限流打掉的 spec 会被记成
+  #   failed 或退化为 blocked，使「整条腿的证据」不可用——Stage 1 与
+  #   Stage 2 的发布门禁都受影响（Stage 2 的客户 K8s 同样是单 source）。
+  # 处置：**不改产品阈值**（那是冻结合同，且弱化它属于安全回归），改为收敛
+  #   harness 侧登录次数——复用会话／减少每 spec 的登录、或把登录预算做成
+  #   显式可观测的 harness 配置；并在取证记录里登记本条。
+  #   2026-10-29 的 Stage 1 取证因此**按 spec 作用域**跑（`--grep
+  #   "reconciliation"`），全量腿的结果留档在
+  #   `inbox/e2e/l2509-stage1b/results/management-full-unscoped.json`。
+  # 状态：open（未修）。归属：harness／取证编排侧，不在 L25-09 产品实现范围。
+  - id: D-34
+    severity: P2
+    status: open
+    spec: "release evidence 编排（real-e2e 管理腿）／L25-09 §13.2 U9 取证口径"
     fixedIn: null
     verifiedBy: []
     acceptedBy: null

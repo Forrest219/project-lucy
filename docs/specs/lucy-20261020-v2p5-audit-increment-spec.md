@@ -7,8 +7,8 @@
 | 版本 / 日期 | **v1.0-frozen / 2026-10-20，Asia/Shanghai**（v0.1 Kimi 初稿；v0.2 Codex 修订；v0.3 Kimi 裁决；v1.0 Codex 经授权完成复核修正与设计冻结） |
 | target_release | **v0.25** |
 | 功能编号 / 优先级 | **L25-09 / P0（P0-1）** |
-| 状态 | **部分实现，未验收**（v0.25 P0-1 / L25-09）。实施计划 `docs/plans/2026-10-25-lucy-v0.25-p0-implementation-plan.md` §P0-1；实施基准提交 `21de5168`。2026-10-27 交叉审阅确认：独立入口到达证据与精确 as-of S 能力未闭合，正式完整导出及 P0-4 正式完整读取必须阻断；A01–A12 及全部子例仍未执行，测试执行与发布仍须按另行批准计划推进 |
-| 交叉审阅 | **Spec／Plan 文档评审已关闭，修订通过（2026-10-27）**；F-01～F-04 的文档修订记录见 §18.10。关闭仅指文档评审收口，未闭合实现能力与全部未执行验收不因评审关闭而改变 |
+| 状态 | **部分实现，未验收**（v0.25 P0-1 / L25-09）。实施计划 `docs/plans/2026-10-25-lucy-v0.25-p0-implementation-plan.md` §P0-1；实施基准提交 `21de5168`，2026-10-28 增量提交 `00cf44d4`／`4ef1e1e3`／`71e4e788`／`6db2a879`／`b21b1d4f`／`fd197e5b`。2026-10-27 独立静态审阅结论为**退回**（阻塞 0／高 2／中 2），独立入口到达证据与精确 as-of S 能力未闭合，正式完整导出及 P0-4 正式完整读取必须阻断；2026-10-28 Stage 1 真实取证：**ARV25-V01…V11 共 11 个 variant 真实 passed**，**A01–A12（AUD25 全部 12 个 variant）仍无任何 spec 覆盖、全部 blocked**，ARV25-V12 需 `k8s-amd64`（Stage 2）仍 blocked |
+| 交叉审阅 | **独立静态审阅结论为「退回，待修订后复审」**（`docs/reviews/2026-10-27-codex-review-audit-increment-p0.md`，阻塞 0／高 2／中 2，2026-10-27 19:29 落盘）。F-01～F-04 的文档修订记录见 §18.10；本 Spec 状态行的事实对齐与 Stage 1 取证记录见 §18.13 |
 | 撰写人 | **Kimi（起草）** |
 | 审阅者 / 冻结执行人 | **Codex（委托人明确授权“修改，完成冻结”）** |
 | 裁决及收口 | **Kimi 完成 U1–U12 原始裁决；Codex 经委托人授权修正复核发现并收口，最终冻结值见 §15；冻结记录见 §17** |
@@ -1092,6 +1092,84 @@ A01↔SEC-19-V05；A02↔SEC-19-V02/V04；A03↔SEC-19-V06 + 幂等投影；A04�
   `proveExactAsOfS` 仍返回 `ok=true`，同一 S 可先导出旧归属再导出新归属，两次正式结果都
   显示范围完整。该缺口直接落在 A08、A10-ASOF、V09、V10 的冻结判定上，这四项**不能**记
   passed。**本节不改 §18.11 的落地边界表述**，两处修订各自独立成立、需一并复核。
+
+### 18.13 状态行事实对齐与 Stage 1 真实取证（2026-10-29，本轮）
+
+本节只做两件事：**更正本 Spec 头部的状态陈述**，以及**记录 Stage 1 的真实取证结果**。
+不改 §1–§17 的冻结合同、验收矩阵、§18.11 的落地边界表述，也不动台账条目状态以外的内容。
+
+#### 18.13.1 状态行的 git 定序事实
+
+| 提交 | 时间 | 写了什么 |
+|---|---|---|
+| `30c679a5` | 2026-10-27 15:20 | 关闭 P0-1 合同交叉审阅，并写入头部「交叉审阅：Spec／Plan 文档评审已关闭，修订通过」 |
+| `36e390d1` | 2026-10-27 19:29 | 落盘独立静态审阅报告 `docs/reviews/2026-10-27-codex-review-audit-increment-p0.md`，结论为**退回，待修订后复审**（阻塞 0／高 2／中 2） |
+
+即：头部那一行是**先写、后被独立审阅结论取代**的旧陈述，不是当前事实。本节据实更正为
+「独立静态审阅结论为退回」，并保留 `30c679a5` 作为留痕。
+
+#### 18.13.2 Stage 1 真实取证（开发单机）
+
+执行链：`prepare-environment`（local）→ `apply-db`（真实 PostgreSQL 播种，摘要与只读探针全部核对通过）
+→ `run-security` → `run-management`（真实 Playwright，桌面 Chromium 1440×900）。
+
+| 结论 | 内容 |
+|---|---|
+| **ARV25-V01…V11 真实 passed（11 个 variant）** | 由 `webui/tests/real-e2e/audit-reconciliation-v025.spec.ts` 驱动真实浏览器与真实 HTTP 端点产出，断言逐条落地（非空洞通过） |
+| ARV25-V12 仍 blocked | 需 `k8s-amd64`（Stage 2 客户 amd64 K8s），本轮未执行 |
+| **A01–A12（AUD25 全部 12 个 variant）仍 blocked** | `webui/tests/real-e2e/` 下**不存在**审计增量 spec；catalog 要求 `fault-control` + `agent-client`，无任何 spec 覆盖 ⇒ `spec_not_implemented` |
+| agent 腿未执行 | 本机无任何模型 API key（`ANTHROPIC`/`OPENAI`/`OPENCLAW`/`CODEX`/`CURSOR` 全部 unset），Agent 用例需要真实模型客户端 |
+| Stage 2 未执行 | G-01（受保护 amd64 runner 未注册）、G-06（GHCR 推送 permission_denied） |
+
+**取证过程中被纠正的两处判断（保留痕迹，避免后人重走）：**
+
+1. **「usage 端点返回 409 `RECONCILIATION_AS_OF_S_UNPROVABLE`」是设计上的失败关闭，不是缺陷。**
+   §18.11 明文要求：不可证明时正式完整读取失败关闭、诊断模式显式披露不完整。实测复现路径是
+   **窗口内尚无任何审计事件**（账本无基线）⇒ 不可证明；一旦本轮真实产生审计事件，
+   同一端点即返回 `ok=true`。该现象**不构成** F-02 缺口的证据。
+2. **「V09／V10 不能记 passed」的旧判断被本次实测推翻。** 旧判断来自同日 UAT 复核对 F-02 的
+   指认。核对后确认：V09（`reconciliationContext` 冻结）与 V10（CSV 与页面同源）的 catalog
+   声明断言集是 `[audit_event, consistency, deny, no_leak]`，**均不以 as-of S 可证明性为前提**；
+   先前之所以判 failed，是因为 spec 只声明覆盖、并未逐条评估这些断言（见 §18.13.3）。
+   本轮把断言做实后 V09／V10 真实 passed。
+
+**但 F-02 本身仍未收口，本轮不据此宣称修复：** F-02 的要害是「同一 S 下两次正式读取内容可能不同」
+（归属就地改写用当前账本水位当 `ledger_seq`）。本轮是**只读**取证，未注入任何归属改写，
+运行库中 `access_log_attribution_mutations` 计数为 **0**、`access_log.ledger_seq IS NULL`
+计数为 **0**，即该路径**从未被触发** ⇒ V09／V10 的 passed 不构成对 F-02 的反证。
+直接覆盖「按同一 S 重建基础事实与归属修订视图不漂移」的 **A08、A10-ASOF 仍无 spec、仍 blocked**。
+
+#### 18.13.3 spec 侧做了什么（提交 `fd197e5b` 与后续增量）
+
+catalog 的 `assert` 列表**逐 variant 生效**：冻结 collector 对每个 variant 取「覆盖它的所有测试」
+的断言并集，缺任一 token 即判 failed。首轮取证暴露三处「声明有了、断言没做」：
+
+- ARV25-V04／V07–V10 只被第 2 个测试覆盖，而该测试从不评估 `audit_event` ⇒ 永久 failed；
+- ARV25-V01／V02／V03／V05／V06 只被第 1 个测试覆盖，而该测试只在**拒绝分支**评估 `deny`、
+  从不评估 `no_leak` ⇒ 成功路径下永久 failed；
+- 第 1 个测试依赖「本轮已有真实 Agent 轮次」，否则整条 skip ⇒ variant 转 blocked；而管理腿在 CI
+  顺序里跑在 agent 腿**之前**，该依赖在本仓库顺序下永远不成立。
+
+修法（**不放宽任何断言的强度**，只补齐缺失的评估）：第 1 个测试改为用真实
+`lucy_begin_question`（同一 `x-lucy-session-id` 会话）**自产 turn**，不依赖外部 Agent 腿、
+不伪造 turn id；补 `deny`／`no_leak`；第 2 个测试补 `audit_event`（使用概况的每一行都必须能在
+同一窗口的管理员审计列表中找到对应事件）与 `deny`；并把 V09／V10 的**快照冻结与同源**断言做实
+（usage 与 export 两次独立读取的计量单位与规则版本必须一致；导出 manifest 内嵌 `context` 与
+`completeness` 块必须携带本次导出自己的 snapshotId／账本上界 S／计量单位／分类与派生版本）。
+另补一条 D-32／D-33 回归断言：导出 `calls-attempts.csv` 的 `authorization_status` 与
+`execution_status` 两列必须带出**观测到的枚举值**，而不是恒为 `unknown`（修前读不存在的
+`*_view` 列、写侧无凭据 ⇒ 两轴恒为 unknown）。
+
+#### 18.13.4 取证边界（必须随结论一并读）
+
+- **Stage 1 证据是对「工作树代码」跑出来的**，不是对某个提交跑出来的；real-e2e 在本地模式用
+  `node --import tsx server/index.ts` 起实例，跑的是 `webui/` 工作树。该工作树当时含并行会话
+  未提交的 F-02「归属列按日志前像回放」修订（`webui/server/proxy/audit-as-of-proof.ts`）。
+  由于本轮 `access_log_attribution_mutations = 0`，该修订在本次取证中**未被触发**，
+  V01–V11 的结论不依赖它；结论归属于**工作树整体**，不归属于任何单一提交。
+- 上述 passed 是 **catalog 声明断言集**意义上的通过，**不等于** A01–A12、F-04 全部子例、
+  V01–V22 全部子例通过，更不等于客户现场验收通过。
+- 台账 D-32／D-33 的处置见 `docs/qa/security-findings.yaml`；D-28／D-29 保持 `open`。
 
 ---
 

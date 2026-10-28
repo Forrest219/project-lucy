@@ -410,6 +410,27 @@ test("the usage view, the token reconciliation and the CSV export close over the
 
     const files = exportPayload.data?.files ?? [];
     assertion(testInfo, "artifact_scan", files.length > 0, `the export produced ${files.length} file(s)`);
+    // D-32 / D-33 回归：导出的调用明细必须真的带出**授权**与**执行**两条独立轴，
+    // 而不是恒为 unknown。
+    //   · D-32：读侧曾读不存在的 `authorization_view` / `execution_view`，被
+    //     `probeColumns` 兜底投影成 NULL ⇒ 授权/执行视图静默恒为 unknown；
+    //   · D-33：写侧从不提供执行凭据 ⇒ 授权轴因「无显式裁决证据」恒为 unknown。
+    // 修好之后本轮新写入的行必须带出真实枚举值；恒为 unknown 即回归。
+    const attemptsFile = files.find((file) => file.name === "calls-attempts.csv");
+    if (attemptsFile) {
+      const attemptRows = parseCsv(attemptsFile.csv ?? "");
+      const header = attemptRows[0] ?? [];
+      const authIdx = header.indexOf("authorization_status");
+      const execIdx = header.indexOf("execution_status");
+      const attemptData = attemptRows.slice(1);
+      const authValues = authIdx >= 0 ? attemptData.map((row) => String(row[authIdx] ?? "")) : [];
+      const execValues = execIdx >= 0 ? attemptData.map((row) => String(row[execIdx] ?? "")) : [];
+      const authObserved = authValues.filter((value) => value.length > 0 && value !== "unknown");
+      const execObserved = execValues.filter((value) => value.length > 0 && value !== "unknown");
+      assertion(testInfo, "consistency",
+        authIdx >= 0 && execIdx >= 0 && authObserved.length > 0 && execObserved.length > 0,
+        `calls-attempts.csv carries observed authorization (${authObserved.length}/${attemptData.length} row(s)) and execution (${execObserved.length}/${attemptData.length} row(s)) values instead of a constant unknown`);
+    }
     for (const file of files) {
       const rows = parseCsv(file.csv ?? "");
       const header = rows[0] ?? [];
