@@ -144,11 +144,14 @@ findings:
   # 处置：续跑要求非空且匹配作用域的凭据；存储故障独立成 `question_budget_unavailable`（503，不记 budget_stop）；
   #   请求结束时经 res.once("close") 释放占用。
   # 影响面：问询预算（Spec 162 §10.3／§10.5）与审计主状态 budget_stopped 桶的真实性。
+  # 状态改判（2026-10-28 N28）：本条实现已落地于 21de516，回归用例在库；但 verifiedBy 要求引用
+  #   本次 release evidence 中 passed 的用例 ID，而 real-e2e 从未被调度（见 G-01），尚无正式验收证据，
+  #   故按台账头部规则改判为 open、不填 fixedIn／verifiedBy；取证后方可置 fixed 并回填。
   - id: D-04
     severity: P1
-    status: fixed
+    status: open
     spec: "L25-09 §10.3 / §10.5"
-    fixedIn: 21de516
+    fixedIn: null
     verifiedBy: []
     acceptedBy: null
   # D-05 v0.25 实施期发现的 fail-open：会话归属按「最新创建时间」选候选
@@ -156,11 +159,14 @@ findings:
   #   取第一个，等于按时间回绑；Spec §12.4 要求 `exactlyOneSessionCandidate()`，多个候选时必须 unassigned/none。
   # 后果：晚到的 A 轮调用会被挂到更新的 B 轮，掩盖真实的竞争候选。
   # 处置：仅在会话候选恰好为一个时才作 session_bound 推断；多个候选记 conflict 并保持 unassigned。
+  # 状态改判（2026-10-28 N28）：本条实现已落地于 21de516，回归用例在库；但 verifiedBy 要求引用
+  #   本次 release evidence 中 passed 的用例 ID，而 real-e2e 从未被调度（见 G-01），尚无正式验收证据，
+  #   故按台账头部规则改判为 open、不填 fixedIn／verifiedBy；取证后方可置 fixed 并回填。
   - id: D-05
     severity: P1
-    status: fixed
+    status: open
     spec: "L25-09 §12.4"
-    fixedIn: 21de516
+    fixedIn: null
     verifiedBy: []
     acceptedBy: null
   # D-06 v0.25 实施期发现的 fail-open：陈旧发布锁可按年龄抢占活锁
@@ -168,11 +174,14 @@ findings:
   #   一个长耗时或卡住的发布会被第二个写入方抢锁，两个写入方同时进入临界区。
   # 后果：共享发布窗口的互斥失效，后写方可能覆盖前写方的目标文件。
   # 处置：已知 pid 的持有者只在进程确实死亡时被回收；pid 未知（旧格式锁）才回退到年龄判定。
+  # 状态改判（2026-10-28 N28）：本条实现已落地于 21de516，回归用例在库；但 verifiedBy 要求引用
+  #   本次 release evidence 中 passed 的用例 ID，而 real-e2e 从未被调度（见 G-01），尚无正式验收证据，
+  #   故按台账头部规则改判为 open、不填 fixedIn／verifiedBy；取证后方可置 fixed 并回填。
   - id: D-06
     severity: P1
-    status: fixed
+    status: open
     spec: "L25-11 D4 / v0.25 W1a A1"
-    fixedIn: 21de516
+    fixedIn: null
     verifiedBy: []
     acceptedBy: null
   # D-07 v0.25 实施期发现的流程断裂：语义维护包的导出基线校验拒绝一切已编辑的包
@@ -180,11 +189,14 @@ findings:
   #   服务端导出记录的整包摘要；可编辑 overlay 按定义就应当与导出字节不同，于是「导出 → 编辑 → 导入」主流程必然失败。
   # 后果：P0-3 的核心往返能力不可用。
   # 处置：改为逐 entry 核验——只读 entry 必须字节一致；可编辑 overlay 允许内容变化，但其表身份绑定与原导出摘要不得被改写。
+  # 状态改判（2026-10-28 N28）：本条实现已落地于 21de516，回归用例在库；但 verifiedBy 要求引用
+  #   本次 release evidence 中 passed 的用例 ID，而 real-e2e 从未被调度（见 G-01），尚无正式验收证据，
+  #   故按台账头部规则改判为 open、不填 fixedIn／verifiedBy；取证后方可置 fixed 并回填。
   - id: D-07
     severity: P1
-    status: fixed
+    status: open
     spec: "L25-11 §5"
-    fixedIn: 21de516
+    fixedIn: null
     verifiedBy: []
     acceptedBy: null
   # D-08 v0.25 实施期发现的部分写风险：发布未写恢复日志，失败时已写目标不回滚
@@ -192,11 +204,14 @@ findings:
   #   中途失败只记 promote_failed 并删 staging，已写入的目标留在磁盘上且无原内容记录，无人可回滚。
   # 后果：一次失败的发布可能留下部分生效的语义资产。
   # 处置：写入前持久化恢复日志（记录原字节/缺失标记、预期新摘要、处理顺序），失败按逆序恢复并置 recoveryRequired。
+  # 状态改判（2026-10-28 N28）：本条实现已落地于 21de516，回归用例在库；但 verifiedBy 要求引用
+  #   本次 release evidence 中 passed 的用例 ID，而 real-e2e 从未被调度（见 G-01），尚无正式验收证据，
+  #   故按台账头部规则改判为 open、不填 fixedIn／verifiedBy；取证后方可置 fixed 并回填。
   - id: D-08
     severity: P1
-    status: fixed
+    status: open
     spec: "L25-11 §7.2 / D3"
-    fixedIn: 21de516
+    fixedIn: null
     verifiedBy: []
     acceptedBy: null
   # D-09 v0.25 实施期发现的一致性缺陷：审计来源视图把连接硬编码并合并同名表
@@ -205,11 +220,14 @@ findings:
   # 后果：P0-4 §3.4 要求的完整表身份不可得，管理员无法区分同名表来自哪个连接。
   # 处置：连接取自 access_log_sources.connection_id；无来源记录的历史调用归入显式的 unknown 连接，不编造连接名；
   #   去重键改为 connection/schema/table 三元组。
+  # 状态改判（2026-10-28 N28）：本条实现已落地于 21de516，回归用例在库；但 verifiedBy 要求引用
+  #   本次 release evidence 中 passed 的用例 ID，而 real-e2e 从未被调度（见 G-01），尚无正式验收证据，
+  #   故按台账头部规则改判为 open、不填 fixedIn／verifiedBy；取证后方可置 fixed 并回填。
   - id: D-09
     severity: P1
-    status: fixed
+    status: open
     spec: "L25-02/L25-03 §3.4"
-    fixedIn: 21de516
+    fixedIn: null
     verifiedBy: []
     acceptedBy: null
   # D-10 v0.25 实施期发现的导出正确性缺陷：v2 导出用投影序号与账本 S 比较，且过滤条件被忽略
@@ -220,11 +238,14 @@ findings:
   # 处置：上界改用 access_log.ledger_seq（B25 已写入的账本序号）；fixedFilter 落到查询条件；
   #   缺 ledger_seq 列时不得声称 as-of 完整——as-of 上界无法落到行上即**范围不可证明完整**，
   #   由 scopeComplete=false 表达（实现细节见 D-12：不得改写 combinedComplete 的冻结语义）。
+  # 状态改判（2026-10-28 N28）：本条实现已落地于 21de516，回归用例在库；但 verifiedBy 要求引用
+  #   本次 release evidence 中 passed 的用例 ID，而 real-e2e 从未被调度（见 G-01），尚无正式验收证据，
+  #   故按台账头部规则改判为 open、不填 fixedIn／verifiedBy；取证后方可置 fixed 并回填。
   - id: D-10
     severity: P1
-    status: fixed
+    status: open
     spec: "L25-09 §12.5 / §9.3"
-    fixedIn: 21de516
+    fixedIn: null
     verifiedBy: []
     acceptedBy: null
   # D-12 v0.25 实施期发现的**冻结契约破坏**缺陷：D-10 的修复方式改写了 combinedComplete 的语义
@@ -238,11 +259,14 @@ findings:
   #   （as-of 边界无法落到行上 → 范围不可证明完整 → scopeComplete=false → 正式导出 fail-closed）。
   #   这样 combinedComplete ≡ scope && fileHash && relation 由**构造**保证，对任何库都成立；
   #   生产库经 ensureColumn 必有 access_log.ledger_seq，行为不变。
+  # 状态改判（2026-10-28 N28）：本条实现已落地于 21de516，回归用例在库；但 verifiedBy 要求引用
+  #   本次 release evidence 中 passed 的用例 ID，而 real-e2e 从未被调度（见 G-01），尚无正式验收证据，
+  #   故按台账头部规则改判为 open、不填 fixedIn／verifiedBy；取证后方可置 fixed 并回填。
   - id: D-12
     severity: P1
-    status: fixed
+    status: open
     spec: "audit-trust R1 验收矩阵判据 #6 / L25-09 §12.5"
-    fixedIn: 21de516
+    fixedIn: null
     verifiedBy: []
     acceptedBy: null
   # D-13 v0.25 实施期发现的**不可观测被当成 0**缺陷：配置读取失败被当作「配置了 0 个 Token」
@@ -256,11 +280,14 @@ findings:
   #   配置计数为 null（不是 0）、比率分母为 null 且 ratio=null+not_collected、
   #   三个依赖配置的差异集合 count=null+not_collected、不判定对账失败（reason=configuration_not_observable）；
   #   CSV 的 configured 段显式写不可观测，差异集合不可观测时写空值原因而不写 "empty"。
+  # 状态改判（2026-10-28 N28）：本条实现已落地于 21de516，回归用例在库；但 verifiedBy 要求引用
+  #   本次 release evidence 中 passed 的用例 ID，而 real-e2e 从未被调度（见 G-01），尚无正式验收证据，
+  #   故按台账头部规则改判为 open、不填 fixedIn／verifiedBy；取证后方可置 fixed 并回填。
   - id: D-13
     severity: P1
-    status: fixed
+    status: open
     spec: "L25-03 §3.3 / §2.4 / §2.6"
-    fixedIn: 21de516
+    fixedIn: null
     verifiedBy: []
     acceptedBy: null
   # D-14 v0.25 W4 本地 compose 冒烟实证：**预存在**的交付种子缺陷——客户默认种子的角色列出代码基线绝对拒绝的工具
@@ -297,11 +324,14 @@ findings:
   #   `--build-arg "LUCY_GIT_SHA=$(git rev-parse HEAD)" --build-arg "LUCY_GIT_DIRTY=$(test -n "$(git status --porcelain)" && echo 1 || echo 0)"`；
   #   发布路径（.github/workflows/lucy-release.yml:286）本就用了 `--build-arg "LUCY_GIT_SHA=${GITHUB_SHA}"`，
   #   **不受本条影响**——本条只针对本轮实施计划文档与本地 W4 流程。
+  # 状态改判（2026-10-28 N28）：本条实现已落地于 21de516，回归用例在库；但 verifiedBy 要求引用
+  #   本次 release evidence 中 passed 的用例 ID，而 real-e2e 从未被调度（见 G-01），尚无正式验收证据，
+  #   故按台账头部规则改判为 open、不填 fixedIn／verifiedBy；取证后方可置 fixed 并回填。
   - id: D-15
     severity: P2
-    status: fixed
+    status: open
     spec: "实施计划 §8 W4 / lucy-build-revision.mjs"
-    fixedIn: 21de516
+    fixedIn: null
     verifiedBy: []
     acceptedBy: null
   # D-11 v0.25 实施期发现的解包资源耗尽风险：ZIP 解压无输出上限
@@ -312,11 +342,14 @@ findings:
   # ⚠️ 2026-10-25 W6 复核：**修复只覆盖了 semantic-maintenance-package.ts 一条路径**；
   #   生产发布／校验入口 semantic-assets.ts 的解包未受限（D-19）。本条按「部分修复」记，
   #   生产入口的缺口另立 D-19 跟踪，**不得**据此认为解包风险已关闭。
+  # 状态改判（2026-10-28 N28）：本条实现已落地于 21de516，回归用例在库；但 verifiedBy 要求引用
+  #   本次 release evidence 中 passed 的用例 ID，而 real-e2e 从未被调度（见 G-01），尚无正式验收证据，
+  #   故按台账头部规则改判为 open、不填 fixedIn／verifiedBy；取证后方可置 fixed 并回填。
   - id: D-11
     severity: P1
-    status: fixed
+    status: open
     spec: "L25-11 §5"
-    fixedIn: 21de516
+    fixedIn: null
     verifiedBy: []
     acceptedBy: null
   # ─── 2026-10-25 W6 Codex 实战检验（对抗式验证）后核实并登记 ──────────────────
@@ -328,11 +361,14 @@ findings:
   #   与 D-13 同类：**不可观测被当成空/无**。
   # 处置：只有 ENOENT（目录不存在 = 确实没有恢复任务）才当作空集合，其余错误一律传播；
   #   三个调用点（publish / manual reindex / 启动恢复）对异常都按拒绝处理 → 失败关闭。
+  # 状态改判（2026-10-28 N28）：本条实现已落地于 21de516，回归用例在库；但 verifiedBy 要求引用
+  #   本次 release evidence 中 passed 的用例 ID，而 real-e2e 从未被调度（见 G-01），尚无正式验收证据，
+  #   故按台账头部规则改判为 open、不填 fixedIn／verifiedBy；取证后方可置 fixed 并回填。
   - id: D-16
     severity: P1
-    status: fixed
+    status: open
     spec: "L25-11 §7.1 / §7.2"
-    fixedIn: 21de516
+    fixedIn: null
     verifiedBy: []
     acceptedBy: null
   # D-17 W6 实证：v2 导出**附属文件**未套用筛选与 as-of 上界（D-10 未完全关闭）
@@ -468,11 +504,14 @@ findings:
   #   restored / unchanged / conflict，把「写入从未落地」与「第三方改动」分开；
   #   unchanged 既不算恢复也不算异常，conflict 才置 recoveryRequired=true 并拒绝覆盖。
   #   启动恢复路径 recoverPendingRecoveryJournals 同步适配为同一形态。
+  # 状态改判（2026-10-28 N28）：本条实现已落地于 2cc79f4，回归用例在库；但 verifiedBy 要求引用
+  #   本次 release evidence 中 passed 的用例 ID，而 real-e2e 从未被调度（见 G-01），尚无正式验收证据，
+  #   故按台账头部规则改判为 open、不填 fixedIn／verifiedBy；取证后方可置 fixed 并回填。
   - id: D-23
     severity: P1
-    status: fixed
+    status: open
     spec: "L25-11 §7.1 / §7.2"
-    fixedIn: 2cc79f4
+    fixedIn: null
     verifiedBy: []
     acceptedBy: null
   # D-24 W6 实证：预算的「加载 → 判定 → 落库」存在 await 窗口，并发首次消费穿透硬上限
@@ -485,11 +524,14 @@ findings:
   #   使「加载 → 判定 → 落库」在同一作用域内互斥。**不引入多副本锁** ——
   #   Lucy 是单实例／单副本边界，进程内串行即已封住这个窗口；引入分布式锁会越过既有边界。
   #   已加 2 条并发用例（去修复后实测真红：['allow','allow']，25 次全放行）。
+  # 状态改判（2026-10-28 N28）：本条实现已落地于 2cc79f4，回归用例在库；但 verifiedBy 要求引用
+  #   本次 release evidence 中 passed 的用例 ID，而 real-e2e 从未被调度（见 G-01），尚无正式验收证据，
+  #   故按台账头部规则改判为 open、不填 fixedIn／verifiedBy；取证后方可置 fixed 并回填。
   - id: D-24
     severity: P1
-    status: fixed
+    status: open
     spec: "L25-09 §10.3 / §10.5"
-    fixedIn: 2cc79f4
+    fixedIn: null
     verifiedBy: []
     acceptedBy: null
   # D-25 W7 重建复验实证：meta-audit 的 event_id 由 request.id 派生，重启后复用导致合法读取被误拒
@@ -509,11 +551,14 @@ findings:
   #   **拒绝语义未放宽**：actor 不可解析 401／安全账本不可用 503／meta-audit 写入失败 503 全部保持。
   # 已补回归用例（固定 genReqId 模拟重启后计数器回到同一值 → 两次读取都成功、留两条不同 meta-audit、
   #   trace_id 仍记录 request id），并做过去修复反向验证（移除修复后第二次读取确实 503）。
+  # 状态改判（2026-10-28 N28）：本条实现已落地于 1fd69e0，回归用例在库；但 verifiedBy 要求引用
+  #   本次 release evidence 中 passed 的用例 ID，而 real-e2e 从未被调度（见 G-01），尚无正式验收证据，
+  #   故按台账头部规则改判为 open、不填 fixedIn／verifiedBy；取证后方可置 fixed 并回填。
   - id: D-25
     severity: P1
-    status: fixed
+    status: open
     spec: "L25-03 §4.3 / §3.5 实施回写 N27"
-    fixedIn: 1fd69e0
+    fixedIn: null
     verifiedBy: []
     acceptedBy: null
   # D-26 v0.25 P0-4 生产对账读路径未消费已注入的 S05 auditCoverage 端口
@@ -676,6 +721,33 @@ findings:
     spec: "§8"
     fixedIn: 39da52d
     verifiedBy: [SEC-23]
+    acceptedBy: null
+  # D-31 v0.25 安全台账取证完整性缺陷：15 条缺陷以 `status: fixed` 登记，但 `verifiedBy` 全为空
+  # 现象（2026-10-28 lucy-v0.25 首次 CI 实测）：`scripts/e2e/__tests__/case-catalog.test.mjs`
+  #   的「every finding in the register is well-formed and cites only real catalog ids」失败，
+  #   报 `D-04 is fixed without verifiedBy`——该断言在首个违规条目处即停止，故 CI 只显示 D-04 一条。
+  #   全量复核：v0.25 上 `status: fixed` 且 `verifiedBy: []` 的共 **15 条**——
+  #   D-04／D-05／D-06／D-07／D-08／D-09／D-10／D-11／D-12／D-13／D-15／D-16／D-23／D-24／D-25
+  #   （14 条 P1 + 1 条 P2 D-15），与原登记「D-04 一条」的范围不符，已按实际扩记。
+  # 根因（非推测，已逐条核对）：这 15 条由 v0.25 的 21de5168／2cc79f4／1fd69e0 登记为 fixed，
+  #   但从未补 verifiedBy。台账头部规则要求 verifiedBy 全部为本次 release evidence 中 passed 的
+  #   case variant id，而 real-e2e 从未被调度（见 G-01），取证证据根本不存在——
+  #   即「fixed」这一状态声明在当时就没有成立的依据。
+  #   `main` 无此问题（其台账仅 3 条 findings，无 fixed+verifiedBy 为空的条目）：
+  #   该状态是 v0.25 引入的，又因 v0.25 此前从未跑过 CI，门禁一直没能发现。
+  # 影响面：安全台账对外声称的「已修复且已验证」与实际取证状态不符（15 条），
+  #   客户交付就绪判断被高估；且台账自身不满足自身规则，冻结分母校验长期红灯。
+  # 处置：这 15 条按台账头部规则改判为 `open`、`fixedIn: null`，实现提交 SHA 保留在各自 note 中；
+  #   待 real-e2e 出具 passed 用例后，再逐条置 fixed 并回填 fixedIn／verifiedBy。
+  #   **未放宽门禁**：case-catalog.test.mjs 与 verify-evidence.mjs 的校验逻辑一行未改；
+  #   改判后门禁仍然要求 fixed 必须有非空 verifiedBy。
+  # 进展：改判已落地并由门禁校验；取证（real-e2e）未取得，保持 open，fixedIn 不填。
+  - id: D-31
+    severity: P1
+    status: open
+    spec: "§8.3a（台账格式与取证规则）／台账头部规则"
+    fixedIn: null
+    verifiedBy: []
     acceptedBy: null
 dependencies:
   # fast-uri：webui/package.json overrides 原锁定 3.1.6（提交 5b31145；受影响 GHSA-qw65-cvwx-89v3 <3.1.7、GHSA-58mr-gqgx-xq4g =3.1.6、GHSA-hrr3-gc8f-f4qj <3.1.8）。T09 升到 3.1.8（含 package-lock），Fastify/ajv 链 `npm ls fast-uri` 全部 deduped 为 3.1.8；`npm audit --omit=dev` high/critical 0
