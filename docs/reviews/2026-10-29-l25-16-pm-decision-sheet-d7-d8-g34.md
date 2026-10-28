@@ -139,7 +139,7 @@ if (batch.instanceId !== context.instanceId) → 403「该批次属于其他实�
 
 ---
 
-## 连带裁决三：取证环境现状（Docker／磁盘）——**报告的失败当前不可复现**
+## 连带裁决三：取证环境现状（Docker／磁盘）——**报告的失败当前不成立**
 
 另一会话报告（2026-10-29）：镜像＋构建缓存合计约 **84GB**，entrypoint 第 201 行 `printf: write error: No space left on device`，容器退出码 1，演示容器健康检查拿不到 200，浏览器／Docker 维度全部 `not_run`。
 
@@ -167,6 +167,8 @@ if (batch.instanceId !== context.instanceId) → 403「该批次属于其他实�
 > 本条不影响 G34／D7／D8 的签字，属取证环境的前置体检项。
 
 ---
+
+## 签核栏
 
 | 编号 | 决策 | 选项 | 签字 | 日期 |
 |---|---|---|---|---|
