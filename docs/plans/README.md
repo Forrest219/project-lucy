@@ -18,7 +18,7 @@ This directory stores repository-level implementation plans that are not scoped 
 | [2026-10-19-upgrade-e2e-implementation-plan.md](2026-10-19-upgrade-e2e-implementation-plan.md) | **v0.25 P1-5 上游方案，非门禁**：已收口升级 E2E 自动化 Spec，需求审查已签核通过、暂不开发；覆盖 Docker / K3s / K8s、真实资产、备份恢复、业务与安全连续性，UPG-01–16 全部未执行 |
 | `webui/docs/plans/wo-202610-27-engine-catalog-and-mcp-query-connection.md` | **待审阅，未批准**：Spec 176 v0.3。新建连接显式支持 KTX `driver: athena`。v0.2 引擎目录 / MCP 查询连接已撤回 |
 | `webui/docs/plans/wo-202610-26-suspend-deployment-license.md` | **移除激活码（已实现）**：Spec 175 v0.2。删除许可实现与签发脚本，去掉治理台入口。Docker 未在本次重启 |
-| [2026-10-18-lucy-2.5-upgrade-proposal.md](2026-10-18-lucy-2.5-upgrade-proposal.md) | **Lucy v0.25 升级建议（v1.39）**：登记 L25-01–L25-16；L25-15 Spec／Plan 经**三轮**独立审阅定稿至 v0.8（24 条发现全部核实成立并处置，产品语义成立不撤销），待最终复核、暂不开发；L25-16 运维控制面 MCP 已按**七轮**审阅修订并收敛至 Spec v1.0／Plan v0.8（第 5／6／7 轮均判「不可交付开发」，26 条发现全部核实落修），未取得「可交付开发」结论；首批 P0 与六项 P1 状态**各不一致**，以本册 §2.3／§2.5／§2.8 与 §9 登记为准：L25-09 部分实现未验收、L25-11 独立审阅退回待修订、L25-14 已实现未验收，**均未获验收**（本行版本号随本册升版同步，勿据此判定各条状态） |
+| [2026-10-18-lucy-2.5-upgrade-proposal.md](2026-10-18-lucy-2.5-upgrade-proposal.md) | **Lucy v0.25 升级建议（版本以文件顶部为准）**：登记 L25-01–L25-16，**本目录的权威登记册**；各条 Spec／Plan 的**版本、审阅轮次与状态一律以本册 §2.1–§2.12 登记为准**，本行不复述（版本号与状态双写必然漂移：建议书每次升版都会使本行过期一格）。首批 P0 与六项 P1 状态**各不一致**：L25-09 部分实现未验收、L25-11 独立审阅退回待修订、L25-14 已实现未验收，**均未获验收** |
 | `2026-10-18-mcp-audit-serial.md` | **MCP 审计整改串行计划**：D1–D3 已锁定。批次 1 为 Spec 178 / T1，其后 T3、T5、T4、T7、T6、T11、T13、T14、R0–R3、T15 |
 | `2026-10-12-acceptance-gap-closure.md` | **验收缺口修复**：把 SC-15 / SC-19 / SC-20 / SC-23 接到查数路径。工单 `wo-202610-15` |
 | `2026-10-11-customer-log-next-optimizations.md` | **客户日志优化最终版（v1.1，WO-12 已验收）**：P0→P1→P2。Spec 162 v0.3；工单 `wo-202610-12` / `13` / `14` |
