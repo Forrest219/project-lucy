@@ -90,22 +90,38 @@ test("the reconciliation detail agrees with this run's audit events and keeps fu
   const tokens = fixtureAgentTokens();
 
   // Real events produced by THIS run: one allowed read and one cross-domain denial.
+  //
+  // The turn id comes from a REAL `lucy_begin_question` call in the SAME session:
+  // the proxy registers that turn for (credential, session) and binds the
+  // following tool calls of that session to it.  This is the documented
+  // client-side way to open a business question, so the reconciliation view has
+  // a genuine turn to reconcile against — the spec does NOT depend on an
+  // external Agent leg, and it never fabricates a turn id.
+  const financeSession = `e2e-arv25-finance-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const salesSession = `e2e-arv25-sales-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const mcpHeaders = (token: string, sessionId: string) => ({
+    authorization: `Bearer ${token}`,
+    "content-type": "application/json",
+    accept: "application/json, text/event-stream",
+    "x-lucy-session-id": sessionId
+  });
+  const opened = await fetch(runContext().instance.mcpUrl, {
+    method: "POST",
+    headers: mcpHeaders(tokens.e2e_finance, financeSession),
+    body: JSON.stringify(rpc(0, "lucy_begin_question", {
+      question: "E2E reconciliation: open one business question for this run",
+      intentSummary: "Open a business question so the reconciliation view has a real turn to reconcile against"
+    }))
+  });
+  expect(opened.status).toBe(200);
   const allowed = await fetch(runContext().instance.mcpUrl, {
     method: "POST",
-    headers: {
-      authorization: `Bearer ${tokens.e2e_finance}`,
-      "content-type": "application/json",
-      accept: "application/json, text/event-stream"
-    },
+    headers: mcpHeaders(tokens.e2e_finance, financeSession),
     body: JSON.stringify(rpc(1, "wiki_read", { path: "finance/cac-definition.md" }))
   });
   const denied = await fetch(runContext().instance.mcpUrl, {
     method: "POST",
-    headers: {
-      authorization: `Bearer ${tokens.e2e_sales}`,
-      "content-type": "application/json",
-      accept: "application/json, text/event-stream"
-    },
+    headers: mcpHeaders(tokens.e2e_sales, salesSession),
     body: JSON.stringify(rpc(2, "wiki_read", { path: "finance/cac-definition.md" }))
   });
   expect(allowed.status).toBe(200);
@@ -150,6 +166,34 @@ test("the reconciliation detail agrees with this run's audit events and keeps fu
       error?: { code?: string };
       data?: { reconciliationContext?: ReconciliationContext; inquiry?: Record<string, unknown> };
     };
+    // The frozen catalog declares `deny` + `no_leak` for EVERY ARV25 variant.
+    // The variants this test covers are covered by NO other test, so the two
+    // tokens must be evaluated HERE — on both the success and the refusal path,
+    // otherwise the variant can never pass (the harness is fail-closed on a
+    // declared assertion that no runner evaluated).
+    assertion(testInfo, "no_leak",
+      !vault.contains(JSON.stringify(detailPayload)),
+      "the inquiry detail carries no credential value");
+    {
+      // The same read model must refuse an anonymous caller: the detail of one
+      // inquiry is admin-audit material.
+      const anonymous = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+      try {
+        const anonPage = await anonymous.newPage();
+        const refused = await anonPage.request.get(
+          new URL(`/api/admin/audit/reconciliation/inquiries/${encodeURIComponent(turnId)}`, baseURL!).toString()
+        );
+        const refusedPayload = (await refused.json().catch(() => ({}))) as { ok?: boolean };
+        assertion(testInfo, "deny",
+          refused.status() >= 400 || refusedPayload.ok === false,
+          `an unauthenticated inquiry read was refused (HTTP ${refused.status()}, ok=${String(refusedPayload.ok)})`);
+        assertion(testInfo, "no_leak",
+          !vault.contains(JSON.stringify(refusedPayload)),
+          "the refused inquiry body carries no credential value");
+      } finally {
+        await anonymous.close();
+      }
+    }
     if (!detailPayload.ok) {
       // The read model may refuse (projection not covered / ledger seq missing).
       // That refusal is itself the fail-closed contract (ARV25-V10).
@@ -238,6 +282,42 @@ test("the usage view, the token reconciliation and the CSV export close over the
 
     const context2 = usagePayload.data?.reconciliationContext;
     const tokens = usagePayload.data?.tokenReconciliation ?? {};
+    // ARV25-V04/V07..V10: the usage view is a view OVER the audit event stream.
+    // The frozen catalog declares `audit_event` for every ARV25 variant, and the
+    // variants this test covers are covered by NO other test — so the rows this
+    // view reports must be traceable to the admin audit list of the SAME window.
+    // A usage view that is not backed by audit events is not a reconciled view.
+    // The check is fail-closed: an empty window proves nothing, so it does not
+    // count as a pass.
+    const auditListResponse = await page.request.get(
+      new URL(`/api/admin/audit?${filter}&includeProtocol=true&limit=500`, baseURL!).toString()
+    );
+    const auditEntries = auditListResponse.status() === 200
+      ? ((((await auditListResponse.json()) as { data?: { entries?: unknown[] } }).data?.entries ?? []) as Array<{ id?: unknown }>)
+      : [];
+    const auditIds = new Set(auditEntries.map((entry) => String(entry.id)));
+    const usageItems = (usagePayload.data?.calls?.items ?? []) as Array<{ unitId?: unknown }>;
+    const usageUnitIds = usageItems.map((item) => String(item.unitId ?? "")).filter((id) => id.length > 0);
+    const unbacked = usageUnitIds.filter((id) => !auditIds.has(id));
+    assertion(testInfo, "audit_event",
+      auditIds.size > 0 && usageUnitIds.length > 0 && unbacked.length === 0,
+      `${usageUnitIds.length - unbacked.length}/${usageUnitIds.length} usage row(s) are backed by an admin audit event of this run (audit events in window: ${auditIds.size})`);
+    // ARV25-V04/V07..V11: the same surface must refuse an anonymous caller.
+    {
+      const anonymous = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+      try {
+        const anonPage = await anonymous.newPage();
+        const refused = await anonPage.request.get(
+          new URL(`/api/admin/audit/reconciliation/usage?${filter}`, baseURL!).toString()
+        );
+        const refusedPayload = (await refused.json().catch(() => ({}))) as { ok?: boolean };
+        assertion(testInfo, "deny",
+          refused.status() >= 400 || refusedPayload.ok === false,
+          `an unauthenticated usage read was refused (HTTP ${refused.status()}, ok=${String(refusedPayload.ok)})`);
+      } finally {
+        await anonymous.close();
+      }
+    }
     // The token reconciliation answers with the REAL `TokenReconciliation` shape
     // (webui/server/admin/reconciliation.ts): the configured counts live in
     // `configuredSnapshot`, the active identities in `activeWindow`, and the
@@ -292,6 +372,41 @@ test("the usage view, the token reconciliation and the CSV export close over the
       typeof context2?.watermarkSeq === "number" && typeof context3?.watermarkSeq === "number" && context3.watermarkSeq >= context2.watermarkSeq,
       `usage S=${context2?.watermarkSeq ?? "none"} and export S=${context3?.watermarkSeq ?? "none"} (the ledger bound only moves forward)`);
     assertion(testInfo, "consistency", context2?.metricUnit === context3?.metricUnit, "usage and export use the same metric unit");
+    // ARV25-V09（reconciliationContext 冻结）：两次独立读取各自冻结自己的 S，
+    // 但**计量单位与规则版本**必须一致 —— 否则同一份数据会按两套口径被解读。
+    assertion(testInfo, "consistency",
+      context2?.classificationVersion === context3?.classificationVersion && context2?.derivationVersion === context3?.derivationVersion,
+      `usage and export name the same rule versions (classification ${context2?.classificationVersion ?? "none"} / ${context3?.classificationVersion ?? "none"}, derivation ${context2?.derivationVersion ?? "none"} / ${context3?.derivationVersion ?? "none"})`);
+    // ARV25-V10（CSV 与页面同源）：导出的 manifest 必须携带**这次导出自己的**
+    // 快照与规则版本，而不是另算一份 —— 否则 CSV 与页面会各说各话。
+    // 形状按 `ReconciliationCsvManifest`：整份 context 嵌在 `manifest.context`，
+    // 规则版本与计量单位另在 `manifest.completeness` 里再声明一次。
+    const manifest = (exportPayload.data?.manifest ?? {}) as {
+      schemaVersion?: string;
+      context?: ReconciliationContext;
+      completeness?: {
+        watermarkSeq?: number;
+        snapshotId?: string;
+        metricUnit?: string;
+        derivationVersion?: string;
+        classificationVersion?: string;
+        complete?: boolean;
+      };
+    };
+    const manifestContext = manifest.context ?? {};
+    assertion(testInfo, "consistency",
+      manifestContext.snapshotId === context3?.snapshotId && manifestContext.watermarkSeq === context3?.watermarkSeq,
+      `the export manifest carries the export's own snapshot (manifest S=${manifestContext.watermarkSeq ?? "none"} / context S=${context3?.watermarkSeq ?? "none"}, snapshot ${manifestContext.snapshotId === context3?.snapshotId ? "same" : "different"})`);
+    assertion(testInfo, "consistency",
+      manifestContext.metricUnit === context3?.metricUnit &&
+        manifestContext.classificationVersion === context3?.classificationVersion &&
+        manifestContext.derivationVersion === context3?.derivationVersion,
+      "the export manifest carries the export's own metric unit and rule versions");
+    assertion(testInfo, "consistency",
+      manifest.completeness?.metricUnit === context3?.metricUnit &&
+        manifest.completeness?.classificationVersion === context3?.classificationVersion &&
+        manifest.completeness?.derivationVersion === context3?.derivationVersion,
+      "the export manifest's completeness block declares the same metric unit and rule versions");
 
     const files = exportPayload.data?.files ?? [];
     assertion(testInfo, "artifact_scan", files.length > 0, `the export produced ${files.length} file(s)`);
