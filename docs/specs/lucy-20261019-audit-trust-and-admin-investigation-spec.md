@@ -4,7 +4,7 @@
 |---|---|
 | 文档类型 | Cross-module Product / Security / Audit Spec |
 | 版本与日期 | v0.1，2026-10-19，Asia/Shanghai |
-| 状态 | 设计交付，尚未实施；依据已获用户批准的交叉复核结论，不表示新代码或现场验收已通过 |
+| 状态 | 设计交付；**主体运行时骨架已实施**（2026-10-19-r1／2026-10-25 r2 批次，见 `docs/reviews/2026-10-28-l25-09-audit-trust-stage1-implementation-record.md`）；**管理员第一现场（§5）已于 2026-10-28 接入 Audit 页与 P0-4 使用概况页**。**现场验收（EA 矩阵）仍未执行**，本状态不表示验收已通过 |
 | 委托人 | Forrest |
 | 设计与验收 | Codex |
 | 计划实施 | Claude Code；逐批提交实施证据后由 Codex 评审验收 |

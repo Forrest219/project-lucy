@@ -749,6 +749,93 @@ findings:
     fixedIn: null
     verifiedBy: []
     acceptedBy: null
+  # ─── L25-09 批 A（2026-10-28）新增登记 ────────────────────────────────────
+  #
+  # 【Stage 1 取证状态（2026-10-28，本轮）——逐条说明为什么下面两条保持 open】
+  #
+  # 台账头部规则：`fixed` 必须同时具备 `fixedIn`（提交 SHA）与 `verifiedBy`
+  # （**本次 release evidence 中 status=passed 的用例 ID**）。本轮：
+  #   ① Stage 1 未取得真实 passed 证据 —— A01–A12 无任何 Playwright spec 覆盖
+  #      （`webui/tests/real-e2e/` 下不存在审计增量 spec）；ARV25-V01..V12 的
+  #      spec 此前只声明 `coversV025`（v0.25 命名空间），冻结 collector 看不到
+  #      这些 variant，它们在 evidence.cases 里根本不会出现。批 C-2 已补
+  #      `covers()` 声明，但**声明**不等于**真实通过**。
+  #   ② 同日 UAT 复核（docs/reviews/2026-10-28-uat-p0-l25-09-audit-and-reconciliation.md，
+  #      HEAD 17fdaf08）结论为**退回**：F-02「精确 as-of S 重建」未收口 ——
+  #      归属就地改写用当前账本水位当 ledger_seq，改写序号**等于** S 时
+  #      proveExactAsOfS 仍返回 ok=true，同一 S 可先导出旧归属再导出新归属，
+  #      两次正式结果都显示范围完整。该缺陷直接落在 A08、A10-ASOF、V09、V10
+  #      的冻结判定上，Stage 1 这四项**不能**记 passed。
+  #   ③ Stage 2（客户 amd64 K8s）因 G-01（受保护 amd64 runner 未注册）与
+  #      G-06（GHCR 推送 permission_denied）未执行，不得由 Stage 1 外推。
+  #
+  # 因此下面两条按台账头部规则与 D-31 的同一处置方式：**保持 open、
+  # fixedIn 不填**，实现提交 SHA 与回归用例记在各自 note 中；待 Stage 1
+  # 取得真实 passed 用例后再逐条置 fixed 并回填 fixedIn／verifiedBy。
+  #
+  # D-32 P0-4 读侧列名漂移：授权/执行视图恒为 unknown
+  # 现象（2026-10-28 实测，非代码推断）：`webui/server/admin/reconciliation.ts`
+  #   的 `ACCESS_LOG_SELECT_COLUMNS` 读 `authorization_view` / `execution_view`，
+  #   而 `access_log` 里**这两列从不存在**（写库写的是 `authorization_status` /
+  #   `execution_status`）。因同文件 `probeColumns` 兜底把缺列投影成
+  #   `NULL AS 列名`，**不报错**，而是静默让 P0-4 的授权/执行视图恒为 `unknown`。
+  # 实证：真实 SQLite 库（`LUCY_AUDIT_DB` 指向临时库）验证 `authorization_view` /
+  #   `execution_view` 两列 `exists: false`，`authorization_status` /
+  #   `execution_status` 两列 `exists: true`。全仓检索确认：除 P0-4 读取侧外，
+  #   无任何地方创建或写入 `*_view` 两列；`reconciliation-csv.ts` 早已使用正确列名。
+  # 影响：P0-4 只读对账（Token 对账、差异集合）拿到的授权/执行维度是空的；
+  #   A05-AUTH／A06-ORDER 与 V01–V08 的相关断言不可能成立。
+  # 处置：**改读侧**（reconciliation.ts + reconciliation-ports.ts 改读既有
+  #   `authorization_status` / `execution_status`），**不新增** `*_view` 列 ——
+  #   access_log 已有同义列，新增会制造第二套竞争性事实源。缺列兜底保留（老库
+  #   可能没有该列），缺列时仍落 `unknown` 并附原因，**不得**当 0 / false。
+  # 进展：修复已落地（提交 00cf44d4），有定向用例与反向对照（撤掉修复 → 用例
+  #   确实失败；恢复 → 全绿）。Stage 1 未取得真实 passed 证据，保持 open，
+  #   fixedIn 不填。
+  - id: D-32
+    severity: P1
+    status: open
+    spec: "L25-03 §3.1（只读对账读取）／L25-09 §4.3(b)"
+    fixedIn: null
+    verifiedBy: []
+    acceptedBy: null
+  # D-33 生产写路径不产出执行凭据：八桶主状态里 succeeded/failed 两桶恒为空
+  # 现象（2026-10-28 直接调用 classifyAuditEvent 实测，非代码推断）：
+  #   `webui/server/proxy/audit.ts` 的 `writeLog` 只透传 `entry.executionEvidence`，
+  #   而全仓仅预算终止分支提供该证据。正常成功/失败路径都不提供 →
+  #   verifiedSuccess / verifiedFailure 恒缺 → `derivePrimaryStatus` 落规则 9
+  #   （§4.3(a)：旧 `outcome=ok` 不推定成功；HTTP 200 不推定执行成功）。
+  # 实测：outcome=ok → primaryStatus=unknown、execution=unknown；
+  #   outcome=error → unknown；outcome=denied → denied/not_executed；
+  #   outcome=budget_stop → budget_stopped/not_executed。真实 SQLite 库
+  #   （`LUCY_AUDIT_DB` 指向临时库 + writeLog 实际写入）验证落库值为
+  #   `{"primary_status":"unknown","authorization_status":"allowed",
+  #     "execution_status":"unknown","delivery_status":"unknown"}`。
+  # 影响：生产数据里 succeeded / failed 两桶恒为 0，主状态实际只有 unknown /
+  #   denied / budget_stopped 三种取值。这不是保守，是信息量为零；管理员无法
+  #   区分「执行成功」与「压根没执行」。
+  # 处置：引入**执行观测点**（不是入口猜测）：
+  #   `webui/server/proxy/audit-classification.ts` 新增 `ExecutionObservation` 与
+  #   `executionEvidenceFromObservation()` —— 唯一允许构造 ExecutionEvidence 的
+  #   入口，executed / failed 互斥，空观测返回 undefined；
+  #   `webui/server/proxy/mcp-proxy.ts` 在 **13 处真实观测到执行结果**的位置逐点
+  #   登记凭据（主上游路径、catalog、explain/freshness、begin_question、skills
+  #   协议、initialize、最终上游路径、ACL 拒绝、入参校验失败），每处带独立注释
+  #   说明为何是观测事实。**禁止**把 `outcome === "ok"` 映射为 verifiedSuccess；
+  #   无法可靠判定「是否真实执行已观测」时**不登记凭据**（落 unknown），不得猜测。
+  #   `notifications/cancelled`（协议通知）与 initialize/tools_list 的上游不可用
+  #   本地回退**不登记**凭据（那不是上游执行）。
+  # 进展：修复已落地（提交 00cf44d4），定向用例 11 例（webui/server/__tests__/
+  #   audit-v025-execution-evidence.test.ts）覆盖观测成功/失败/未执行/拒绝/预算
+  #   终止/无凭据六种形态，并守住 §4.3(a) 规则 9 与 F-03（预算终止不得反推
+  #   not_evaluated）。Stage 1 未取得真实 passed 证据，保持 open，fixedIn 不填。
+  - id: D-33
+    severity: P1
+    status: open
+    spec: "L25-09 §4.3(a) / §4.3(b) / §18.10 F-01"
+    fixedIn: null
+    verifiedBy: []
+    acceptedBy: null
 dependencies:
   # fast-uri：webui/package.json overrides 原锁定 3.1.6（提交 5b31145；受影响 GHSA-qw65-cvwx-89v3 <3.1.7、GHSA-58mr-gqgx-xq4g =3.1.6、GHSA-hrr3-gc8f-f4qj <3.1.8）。T09 升到 3.1.8（含 package-lock），Fastify/ajv 链 `npm ls fast-uri` 全部 deduped 为 3.1.8；`npm audit --omit=dev` high/critical 0
   - package: fast-uri

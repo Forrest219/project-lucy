@@ -1004,6 +1004,95 @@ A01↔SEC-19-V05；A02↔SEC-19-V02/V04；A03↔SEC-19-V06 + 幂等投影；A04�
 
 **本轮识别的既有缺口（未实施）**：写路径从不提供 `executionEvidence`，生产新行的 `verifiedSuccess` / `verifiedFailure` 恒缺 → 主状态落 `unknown`（§4.3(a) 规则 9），`succeeded` / `failed` 两桶在生产不会出现。把 outcome=ok 直接当作执行成功凭据会违反「HTTP 200 不推定执行成功」；可信的执行凭据需写路径按真实执行观测逐点补齐，超出本轮授权范围，登记为后续项。
 
+### 18.12 审计可信度接入与证据链接入冻结 catalog（2026-10-28，本轮）
+
+本节记录 2026-10-28 委托人拍板（D1–D4）后落地的四个批次。**§18.11 的原文保留不改**（含
+「写路径从不提供 `executionEvidence`……超出本轮授权范围，登记为后续项」的判断）——那句话是
+2026-10-27/28 那轮的**当时事实**；该缺口已在本轮获授权并实施，本节取代它的「未实施」结论。
+
+#### 18.12.1 授权边界（本轮）
+
+| 决策 | 裁定 | 对本节的约束 |
+|---|---|---|
+| D1 | **授权**补齐执行凭据，按逐点判据实施 | 禁止把 `outcome === "ok"` 映射为 `verifiedSuccess`；HTTP 200 不推定执行成功；无法可靠判定「是否真实执行已观测」时**不登记凭据**（落 `unknown`），不得猜测 |
+| D2 | AUD25/ARV25 **并入冻结 catalog**（路径 A），走 lock 审阅变更 | 不在装配层另开 v025 通道；catalog 是冻结契约，变更须经审阅 |
+| D3 | 交付 **Stage 1**；Stage 2 明确标未执行 | 不得把 Stage 1 结果外推为 Stage 2 通过，不得冒充客户发布通过 |
+| D4 | 台账仅回填**审计链路直接相关**条目 | P0-2／P0-3 自身的 open 项不动；其余条目保持 open 并写明阻塞原因，不得为凑绿改判 |
+
+#### 18.12.2 执行凭据（D-33，写路径）
+
+- 新增 `webui/server/proxy/audit-classification.ts` 的 `ExecutionObservation` 与
+  `executionEvidenceFromObservation()`：唯一允许构造 `ExecutionEvidence` 的入口，
+  `executed` / `failed` 互斥，空观测返回 `undefined`。
+- `webui/server/proxy/mcp-proxy.ts` 在 **13 处真实观测到执行结果**的位置逐点登记凭据
+  （主上游路径、catalog、explain/freshness、begin_question、skills 协议、initialize、
+  最终上游路径、ACL 拒绝、入参校验失败），每处带独立注释说明为何是观测事实。
+- **不登记凭据**的两处：`notifications/cancelled`（协议通知）与 initialize/tools_list 的
+  上游不可用本地回退（本地降级，不是上游执行）。
+- 分类层与派生层一行未改；`derivePrimaryStatus` 九规则表保持原样，凭据到位后
+  `succeeded` / `failed` 两桶才可能出现在生产数据里。
+- 定向用例：`webui/server/__tests__/audit-v025-execution-evidence.test.ts`（11 例），覆盖
+  观测成功／失败／未执行／拒绝／预算终止／无凭据六种形态，并守住 §4.3(a) 规则 9 与
+  F-03（预算终止不得反推 `not_evaluated`）。
+
+#### 18.12.3 列名漂移（D-32，P0-4 读取侧）
+
+- `webui/server/admin/reconciliation.ts` 与 `reconciliation-ports.ts` 改读 `access_log`
+  真实存在的 `authorization_status` / `execution_status`；**不新增** `*_view` 列
+  （`access_log` 已有同义列，新增会制造第二套竞争性事实源）。
+- `reconciliation-csv.ts` 早已使用正确列名，无需改。
+- 缺列兜底保留（老库可能没有该列）：缺列时仍落 `unknown` 并附原因，**不得**当 0 / false。
+
+#### 18.12.4 AUD25/ARV25 并入冻结 catalog（D2 路径 A）
+
+断点：这两个场景此前只登记在 v0.25 覆盖清单，不在冻结 catalog 里；`assemble.mjs` 的
+`loadResults()` 不读 `v025/`，`verify-evidence.mjs` 的 `passedIds` 来自 `evidence.cases`
+⇒ 即使本地跑出 passed，台账的 `verifiedBy` 也永远填不上。
+
+- `scripts/e2e/contracts/case-catalog.yaml` 新增 `AUD25`（12 variant）与 `ARV25`
+  （12 variant）两个场景；`case-catalog.lock.json` 同步重推（255 → 279 cases）。
+- 字段唯一真源分层：`existingCatalogMappings`（279）只登记 ownerBranch + 需求归属；
+  `executors`/`requires`/`assert`/`artifacts`/`gold` 的唯一真源是**冻结 catalog**；
+  `newScenarios`（149）仍是其余执行项的真源。`audit-v025.mjs` 的 `executionContract()`
+  统一封装这层分层。
+- 链路自检：`scripts/e2e/__tests__/audit-v025-evidence-chain.test.mjs` 证明
+  catalog → `expectedExecutions` → runner 结果 → `assembleEvidence` → `evidence.cases`
+  → `passedIds` 逐段接通，且**无 runner 结果的 variant 不会被凭空补成 passed**。
+
+#### 18.12.5 前端接入（20261019 规格 §5 管理员第一现场）
+
+- `webui/src/pages/admin/Audit.tsx` 挂载 `webui/src/components/audit-trust/` 六组件；
+  状态列改展示**八桶** `primaryStatus` + 三条**独立**判断轴（执行／关联／覆盖）；
+  旧 `outcome` 只作 legacy 直方图单列。
+- 后端补齐读路径（`readExecutionStatus` / `readAuthorizationStatus` /
+  `readAssociationStatus` / `readDeliveryStatus` / `readNullReason`），历史行一律落
+  `unknown` / `legacy_unverified`，不重解释历史数据。
+- E7 去截断：涉及数据表不再写「等 N 个」，抽屉默认展开全部并可复制完整清单。
+- 新增 `/admin/audit-reconciliation`（P0-4 使用概况页）：消费三个只读端点，展示
+  Token 对账、四类差异集合与完整使用明细；规模为 null 显示「不可观测 + 原因」
+  而非 0；as-of S 不可证明时显式披露为诊断视图。
+
+#### 18.12.6 验收状态（**未执行** —— 本节不构成验收通过结论）
+
+- **A01–A12（§13.2）与 P0-4 V01–V12 的运行时验收仍未执行。** 本轮落地的是执行凭据
+  的**载体**、读取侧的正确性，以及让 passed 结果**能被采信**的证据链；这三者都不等于
+  场景已被验证。定向用例全绿不是验收。
+- **Stage 1（开发单机）未取得真实 passed 证据**：A01–A12 无任何 Playwright spec 覆盖
+  （`webui/tests/real-e2e/` 下不存在审计增量 spec）；ARV25-V01..V12 的 spec 此前只声明
+  `coversV025`（v0.25 命名空间），冻结 collector 看不到这些 variant。本轮已补
+  `covers()` 声明，但**声明**不等于**真实通过**。
+- **Stage 2（客户 amd64 K8s）未执行**，阻塞原因：G-01（受保护 amd64 runner 未注册，
+  real-e2e job 不可调度）、G-06（GHCR 推送 permission_denied）。
+- 台账按 §18.11 同款纪律处理：D-32 / D-33 登记为 `open`、`fixedIn` 不填，实现提交
+  SHA 与回归用例记在各自 note 中；待 Stage 1 取得真实 passed 用例后再逐条置 fixed
+  并回填 `fixedIn` / `verifiedBy`。D-28 / D-29 保持 open。
+- 2026-10-28 同日 UAT 复核（`docs/reviews/2026-10-28-uat-p0-l25-09-audit-and-reconciliation.md`，
+  HEAD `17fdaf08`）结论为**退回**，并登记了 F-02「精确 as-of S 重建」缺口
+  （UAT-20261028-01）：归属就地改写用当前账本水位当 `ledger_seq`，改写序号**等于** S 时
+  `proveExactAsOfS` 仍返回 `ok=true`，同一 S 可先导出旧归属再导出新归属，两次正式结果都
+  显示范围完整。该缺口直接落在 A08、A10-ASOF、V09、V10 的冻结判定上，这四项**不能**记
+  passed。**本节不改 §18.11 的落地边界表述**，两处修订各自独立成立、需一并复核。
+
 ---
 
 ## Terminology Compliance
