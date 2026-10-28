@@ -237,6 +237,8 @@ UX-02–UX-05 直接归 AGENT；UX-06 按 variant 分归 AGENT／ACCESS；UX-07 
 | UX-07 | 现场提问／安全候选 | OBSERVE | V01、V03、V04 归 ACCESS；V02、S01 归 OBSERVE |
 | OPS-01 | amd64 K8s 新装／升级／恢复 | LIFECYCLE | 全部；业务、安全和审计连续性引用对应域 |
 | GATE-01 | 门禁反向测试 | LIFECYCLE | 全部；作为交付与发布生命周期守门，不新增第七域 |
+| AUD25 | 审计增量运行时验收 | OBSERVE | 全部；2026-10-28 由 v0.25 影子清单并入冻结 catalog，成为 release 门禁的一部分 |
+| ARV25 | 审计只读对账展示 | OBSERVE | 全部；同 AUD25，来源需求为 L25-02／L25-03 |
 
 ### 6.2 其他测试资产
 

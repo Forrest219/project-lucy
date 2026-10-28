@@ -46,6 +46,7 @@ import {
   OBSERVE_EXPECTATIONS,
   OBSERVE_EXPECTED_VERDICTS,
   OBSERVE_VERDICTS,
+  executionContract,
   hasNoAdvanceStep,
   hasRefusalStep,
   judgeFailClosed,
@@ -76,7 +77,13 @@ import {
 // ── helpers ─────────────────────────────────────────────────────────────────
 
 const coverage = loadCoverage();
-const manifestById = new Map(coverage.newScenarios.map((s) => [s.executionId, s]));
+// 2026-10-28（D2 路径 A）：AUD25/ARV25 已并入冻结 catalog，在覆盖清单里从
+// newScenarios 移到 existingCatalogMappings（existing 必须恰好等于
+// lock.requiredIds，两者不可重叠）。所以这里两个集合都要查。
+const manifestById = new Map([
+  ...coverage.newScenarios.map((s) => [s.executionId, s]),
+  ...coverage.existing.map((s) => [s.executionId, s])
+]);
 
 const ALL_CASES = [
   ...AUDIT_V025_CASES,
@@ -237,13 +244,16 @@ describe("W2-OBSERVE: executor / capability / assertion vocabulary", () => {
     }
   });
 
-  it("mirrors the manifest entry exactly", () => {
+  it("mirrors the approved entry exactly", () => {
+    // 已并入冻结 catalog 的执行项：真源是冻结 catalog；
+    // 其余执行项：真源是覆盖清单的 newScenarios。两者都由 executionContract
+    // 统一给出，描述符不得自行复制任何字段。
     for (const d of ALL_CASES) {
-      const entry = manifestEntry(d.executionId);
-      assert.deepEqual([...d.requiredExecutors], [...entry.executors], `${d.executionId} executors`);
-      assert.deepEqual([...d.requiredCapabilities], [...entry.requires], `${d.executionId} capabilities`);
-      assert.deepEqual([...d.assertionTokens], [...entry.assert], `${d.executionId} assertion tokens`);
-      assert.deepEqual([...d.expectedArtifacts], [...entry.artifacts], `${d.executionId} artifacts`);
+      const contract = executionContract(d.executionId);
+      assert.deepEqual([...d.requiredExecutors], [...contract.executors], `${d.executionId} executors`);
+      assert.deepEqual([...d.requiredCapabilities], [...contract.requires], `${d.executionId} capabilities`);
+      assert.deepEqual([...d.assertionTokens], [...contract.assert], `${d.executionId} assertion tokens`);
+      assert.deepEqual([...d.expectedArtifacts], [...contract.artifacts], `${d.executionId} artifacts`);
     }
   });
 

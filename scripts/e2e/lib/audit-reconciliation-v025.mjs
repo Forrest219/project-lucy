@@ -18,7 +18,7 @@
 // comes from scripts/e2e/lib/audit-v025.mjs so the three OBSERVE modules
 // cannot drift apart.
 
-import { manifestEntry } from "./audit-v025.mjs";
+import { executionContract, manifestEntry } from "./audit-v025.mjs";
 
 export const RECONCILIATION_SOURCE_SPEC = "docs/specs/lucy-20261024-v0p25-audit-reconciliation-view-spec.md";
 export const RECONCILIATION_SOURCE_TABLE = "§7";
@@ -64,6 +64,9 @@ function makeDescriptor({
   references = []
 }) {
   const entry = manifestEntry(executionId);
+  // 2026-10-28（D2 路径 A）：ARV25-* 已并入冻结 catalog，executors/requires/
+  // assert/artifacts 的唯一真源是冻结 catalog，不是覆盖清单的 newScenarios。
+  const contract = executionContract(executionId);
   return Object.freeze({
     executionId,
     sourceRequirementId,
@@ -71,10 +74,10 @@ function makeDescriptor({
     sourceTable: RECONCILIATION_SOURCE_TABLE,
     ownerBranch: entry.ownerBranch,
     priority: entry.priority,
-    requiredExecutors: Object.freeze([...entry.executors]),
-    requiredCapabilities: Object.freeze([...entry.requires]),
-    assertionTokens: Object.freeze([...entry.assert]),
-    expectedArtifacts: Object.freeze([...entry.artifacts]),
+    requiredExecutors: Object.freeze([...contract.executors]),
+    requiredCapabilities: Object.freeze([...contract.requires]),
+    assertionTokens: Object.freeze([...contract.assert]),
+    expectedArtifacts: Object.freeze([...contract.artifacts]),
     publicSurfaces: RECONCILIATION_PUBLIC_SURFACES,
     source: Object.freeze({
       scenario: sourceScenario,

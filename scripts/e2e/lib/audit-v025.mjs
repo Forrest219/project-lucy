@@ -142,13 +142,61 @@ export function hasNoAdvanceStep(descriptor) {
 // ── descriptor assembly ─────────────────────────────────────────────────────
 
 const coverage = loadCoverage();
-const manifestById = new Map(coverage.newScenarios.map((s) => [s.executionId, s]));
+// 2026-10-28（D2 路径 A）：AUD25-A01..A12 与 ARV25-V01..V12 已并入**冻结
+// catalog**，因此在覆盖清单里从 newScenarios 移到 existingCatalogMappings
+// （existing 必须恰好等于 lock.requiredIds，两者不可重叠）。
+//
+// 字段来源随之改变，且**仍然只有一个真源**：
+//   - `existing` 条目只登记 ownerBranch（与 §6.1 责任表一致）；
+//   - executors / requires / assert / artifacts / gold 的唯一真源是**冻结
+//     catalog**（`case-catalog.yaml`），不是本模块的本地副本。
+// 所以这里从 catalog 取这些字段，从清单取 ownerBranch。
+import { loadCatalog } from "./catalog.mjs";
+
+const catalogCases = loadCatalog().cases;
+const catalogById = new Map(catalogCases.map((c) => [c.id, c]));
+const manifestById = new Map([
+  ...coverage.newScenarios.map((s) => [s.executionId, s]),
+  ...coverage.existing.map((s) => [s.executionId, s])
+]);
+const frozenById = new Map(
+  coverage.existing
+    .filter((s) => catalogById.has(s.executionId))
+    .map((s) => [s.executionId, catalogById.get(s.executionId)])
+);
 
 /** The approved manifest entry for an execution id (never a local copy). */
 export function manifestEntry(executionId) {
   const entry = manifestById.get(executionId);
   if (!entry) throw new Error(`no approved coverage manifest entry for ${executionId}`);
   return entry;
+}
+
+/**
+ * The executors / requires / assert / artifacts for an execution id.
+ *
+ * 已并入冻结 catalog 的执行项：取自 catalog（唯一真源）。
+ * 其余执行项：取自覆盖清单的 newScenarios（同样是唯一真源，不是本地副本）。
+ */
+export function executionContract(executionId) {
+  const frozen = frozenById.get(executionId);
+  if (frozen) {
+    return {
+      executors: frozen.executors,
+      requires: frozen.requires,
+      assert: frozen.assert,
+      artifacts: frozen.artifacts,
+      gold: frozen.gold
+    };
+  }
+  const entry = manifestEntry(executionId);
+  return {
+    executors: entry.executors,
+    requires: entry.requires,
+    assert: entry.assert,
+    artifacts: entry.artifacts,
+    gold: entry.gold
+  };
 }
 
 function makeDescriptor({
@@ -166,6 +214,7 @@ function makeDescriptor({
   references = []
 }) {
   const entry = manifestEntry(executionId);
+  const contract = executionContract(executionId);
   return Object.freeze({
     executionId,
     sourceRequirementId,
@@ -173,10 +222,10 @@ function makeDescriptor({
     sourceTable,
     ownerBranch: entry.ownerBranch,
     priority: entry.priority,
-    requiredExecutors: Object.freeze([...entry.executors]),
-    requiredCapabilities: Object.freeze([...entry.requires]),
-    assertionTokens: Object.freeze([...entry.assert]),
-    expectedArtifacts: Object.freeze([...entry.artifacts]),
+    requiredExecutors: Object.freeze([...contract.executors]),
+    requiredCapabilities: Object.freeze([...contract.requires]),
+    assertionTokens: Object.freeze([...contract.assert]),
+    expectedArtifacts: Object.freeze([...contract.artifacts]),
     source: Object.freeze({
       scenario: sourceScenario,
       judgement: sourceJudgement,

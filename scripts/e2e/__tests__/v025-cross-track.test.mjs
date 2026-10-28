@@ -4,8 +4,10 @@
 // internals — the tracks own that. It proves the property that only the whole
 // set can violate:
 //
-//   * every one of the 173 new execution ids is implemented by EXACTLY ONE
-//     track (no id implemented twice, no id left unimplemented);
+//   * every one of the 173 v0.25 execution ids (149 in newScenarios + the 24
+//     AUD25/ARV25 ids that were migrated INTO the frozen catalog on 2026-10-28)
+//     is implemented by EXACTLY ONE track (no id implemented twice, no id left
+//     unimplemented);
 //   * each track's ids are disjoint from every other track's;
 //   * each descriptor re-declares the owner branch, source spec and source
 //     requirement id exactly as the approved coverage manifest recorded them
@@ -95,7 +97,22 @@ const V025_MARKERS = [
 
 const coverage = loadCoverage();
 const manifestNew = coverage.newScenarios;
-const manifestById = new Map(manifestNew.map((s) => [s.executionId, s]));
+// 2026-10-28（D2 路径 A）：AUD25-A01..A12 与 ARV25-V01..V12 的**执行合同**已并入
+// 冻结 catalog（case-catalog.yaml），因此在覆盖清单里从 newScenarios 移到
+// existingCatalogMappings。但它们**仍由 track C 实现**，仍受本门禁约束 ——
+// 所以「已批准」= newScenarios ∪ existing，「必须被实现」= newScenarios ∪ 这 24 个迁移项。
+const manifestById = new Map(
+  [...coverage.newScenarios, ...coverage.existing].map((s) => [s.executionId, s])
+);
+const MIGRATED_IDS = new Set(
+  coverage.existing
+    .filter((s) => s.sourceRequirementId !== undefined && s.sourceRequirementId !== null)
+    .map((s) => s.executionId)
+);
+const mustBeImplemented = new Set([
+  ...manifestNew.map((s) => s.executionId),
+  ...MIGRATED_IDS
+]);
 
 /**
  * Reads the descriptors a module publishes.
@@ -180,10 +197,10 @@ describe("v0.25 cross-track consistency (Plan s1-b)", () => {
       assert.ok(!seen.has(id), `${id} is implemented by both track ${seen.get(id)} and track ${track}`);
       seen.set(id, track);
     }
-    const manifestIds = new Set(manifestNew.map((s) => s.executionId));
+    const manifestIds = new Set(mustBeImplemented);
     const implemented = new Set(seen.keys());
     assert.deepEqual(
-      [...implemented].filter((id) => !manifestIds.has(id)),
+      [...implemented].filter((id) => !manifestById.has(id)),
       [],
       "ids implemented but not in the approved manifest"
     );
@@ -222,10 +239,13 @@ describe("v0.25 cross-track consistency (Plan s1-b)", () => {
   });
 
   it("the frozen release directory did not move", () => {
+    // 2026-10-28（D2 路径 A）：冻结目录**有意**扩容过一次 —— AUD25-A01..A12 与
+    // ARV25-V01..V12 并入冻结 catalog（分母 255 → 279，digest 240bff0f → c62cf23f）。
+    // 这条断言守的是「此后不再无声漂移」：catalog 必须逐字等于冻结 lock。
     const { cases } = loadCatalog();
     const lock = readLock();
     assert.equal(catalogDigest(cases), lock.catalogDigest);
-    assert.equal(lock.count, 255);
+    assert.equal(lock.count, 279);
   });
 
   it("the v0.25 coverage contract still validates", () => {
