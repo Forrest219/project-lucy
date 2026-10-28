@@ -116,6 +116,18 @@ findings:
   #   同一内容仅清单文件名大小写不同（大写 BIDM.yaml / 小写 bidm.yaml），结果从 row_policy_field_unresolved:unknown 变为可绑定。
   #   工作副本在 inbox/2026-10-22-行级策略字段绑定诊断/（gitignore，不入库）。
   #   注意：不得以把行级策略改成「全部行」绕过本条报错——那会放宽数据可见范围。
+  # 实现（2026-10-28 Forrest 批准后落地于本线 lucy-v0.25）：修复落在 row-policy-catalog.ts 的 resolveManifestFilePath
+  #   单一开关点（该模块唯一允许长出大小写目录扫描的位置），改为按磁盘真实文件名做大小写不敏感匹配，
+  #   并返回真实命中的文件名，使 manifestPath / 原因码指向实际读取的文件；未放宽任何字段校验，
+  #   不存在的字段、度量、跨源引用仍分别按 unknown／measure／cross_source 拒绝。
+  #   回归证据（仓库内自动化，随 CI 在 Linux 大小写敏感环境执行）：
+  #     webui/server/__tests__/row-policy-d03-uppercase.test.ts — V19（合法列在大写 schema 表上正常绑定）、
+  #       V22（同一表的预览与运行时 forced_filters 等价）；已用「撤掉修复」对照验证两条用例确实失败，非假阳性。
+  #     webui/server/__tests__/row-policy-catalog-attribution.test.ts — V20 五类故障路径
+  #       （resolve／read／parse／catalog／capability_unknown）全部失败关闭且带四元组；V21 字段不存在仅在目录可靠装载时归因。
+  #   状态说明：代码已修复且回归用例在库，但 status 仍为 open——verifiedBy 要求引用本次 release evidence 中
+  #   passed 的用例 ID，而 real-e2e 从未被调度（见 G-01），V19／V22 尚无正式验收证据，故不填 fixedIn／verifiedBy，
+  #   不得据此宣称受影响客户场景已交付价值。取证后方可置 fixed 并回填。
   - id: D-03
     severity: P1
     status: open
