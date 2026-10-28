@@ -317,7 +317,7 @@ users:
 
 **为什么必须分层**：`config_change_log` 对 `idempotency_key` 执行 `ON CONFLICT(idempotency_key) DO NOTHING`（`webui/server/admin/audit.ts:802`）。若把业务幂等键直接写进该列，重放时的第二条审计行会被**静默丢弃**，失败痕迹之后无法追加成功记录。因此：
 
-- **业务幂等记录**存于**独立存储**（非配置审计表），字段含 `operation_key` / `target_key` / `status` / `plan_digest` / `actor` / `tool_name` / `result`；
+- **业务幂等记录**存于**独立存储**（逻辑独立：非 `config_change_log` 表、字段与状态机自成一套），**但物理上与审计表同库**——幂等表建在 **`audit.sqlite`** 内（与 `config_change_log` **同库不同表**）。**这是 G34 同事务可实现的前提**：认领与审计行要在**同一次 `db.transaction()`** 内提交，二者必须落在同一个 SQLite 文件。**不得另建独立库**（另建库即跨库，跨库无事务，G34 落地条款随之落空）；「独立存储」指**逻辑独立**，不是**物理独立**。字段含 `operation_key` / `target_key` / `status` / `plan_digest` / `actor` / `tool_name` / `result`；
 - **状态取值**（五态，Normative）：
   | 状态 | 含义 | 可否重放 | 审计写法 |
   |---|---|---|---|
