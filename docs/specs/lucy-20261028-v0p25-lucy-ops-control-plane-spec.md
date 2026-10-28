@@ -2,19 +2,18 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档类型 / 版本 | 功能设计基线 / **v1.0-converged** |
-| 日期 / 目标版本 | 2026-10-28 首版 / 2026-10-29 v1.0 收敛 / 目标 v0.25 |
-| 功能编号 / 优先级 | **L25-16** / P1（首期为写能力，见 §7） |
-| 状态 | **已按第 1–7 轮审阅逐条修订并收敛：R01–R16 + S01–S03、N01–N11 + 6 条未闭合、F01–F09、Q01–Q08、F5-01–F5-07、F6-01–F6-11、F7-01–F7-10。第 7 轮后按 PM 要求停止 Codex CLI，由 MiniMax Code 自行收敛第 7 轮发现并逐条回查源码。**尚未提交需求审查，不授权代码实现。** |
-| 评审状态 | 第 1 轮：**退回修订**（[审阅报告](../reviews/2026-10-28-codex-review-lucy-ops-control-plane.md)）；第 2–4 轮：**需再修订**；第 5 轮：**不可交付开发**（Q01/Q02/Q03/F5-01）；第 6 轮：**不可交付开发**（F6-01–F6-03 阻塞 + F6-04–F6-09 高危 + F6-10/F6-11 中危）；**第 7 轮：不可交付开发**（F7-01–F7-03 阻塞 + F7-04–F7-07 高危 + F7-08–F7-10 中危）。**第 7 轮后按 PM 要求停止 Codex CLI**，本版由 MiniMax Code 自行收敛 F7 系列并逐条回查源码；**因未经第 8 轮独立复审，本版不宣称「已可交付开发」**（见 §8.2 交付判定台账） |
-| 决策来源 | 2026-10-28 PM 拍板：D1 = C 混合授权；D2 = 首期直接做 Phase 1；D3 = 保留 preview→commit + 部分成功可重放；D4 = 采纳不工具化清单；D5 = 首期拆两个工作流 |
-| 本版修订 | 第一轮：R01–R16 + S01–S03。第二轮：N01–N11 + 六条未闭合项，**并修正第一轮引入的授权收窄回归**（改为逐对象完整匹配）。第三轮：F01–F09。第四轮：Q01–Q08。第五轮：F5-01–F5-07 + Q01/Q02/Q03 回归修复（结果四分类 `kind` 取代 `ok` 二值判定）。第六轮：F6-01–F6-11（**operation 状态聚合统一为唯一函数**、**同一原计划可分多次提交**、**批量校验不产出可发布计划——适配器改为消费既有 staged 批次**、TTL 优先级前置、**组级异常边界扩到撤销与核验**、**唯一 `Outcome` 构造器**、认领与审计绑定的事务边界、**发布窗口不覆盖终态核验的事实更正**、语义内容删除纳入发布窗口、阶段退出条件补齐、G15 阶段限定矛盾消除）。第七轮收敛（v1.0）：F7-01–F7-10 —— **执行态 `claimed` 与持久态五态分离**（废止 `skipped`/`reused` 残留）、**C5 完整恢复既有成员状态**（失败痕迹不被抹掉）、**语义发布执行集 = 整个已确认原子组**（分离 `requestedRefs` 与 `effectiveExecutionSet`）、**staged 批次归属与消费合同**（登记 D8）、**异常协议覆盖认领与终态结算**、**恢复分支保留 `release` 字段**、**operation 与 attempt 的审计关系**（无悬垂 pending 行）、**恢复合同单一化**；缺口 G1–G38，验收 VOPS-01–78 |
+| 文档类型 / 版本 | 功能设计基线 / **v1.1-dev-ready** |
+| 日期 / 目标版本 | 2026-10-28 首版 / 2026-10-29 v1.1 / 目标 v0.25 |
+| 功能编号 / 优先级 | **L25-16** / P1（可交付开发的范围是 W-A，见 §7） |
+| 状态 | **W-A 已授权实现**（2026-10-29 PM：交给 Claude Code 落地 S1–S4）。W-B 仍不可交付开发，S5 不得开始。本授权不产生验收证据，VOPS-01–78 仍未执行。 |
+| 评审状态 | 第 1–7 轮 Codex 结论保留在 §8.2（第 5–7 轮均为「不可交付开发」）。**第 8 轮未进行。** 2026-10-29 PM 直签关闭 W-A 设计门禁：失败重放与 attempt 审计两条伪代码已改到与正文一致；D7 已确认；G34 定为「同库同事务 + 文件写窗口的最小恢复协议」。未经第 8 轮独立复审这一事实保留，不把直签写成 Codex 复审通过。 |
+| 决策来源 | 2026-10-28 PM 拍板 D1–D5。2026-10-29 PM 批准本修订：D7 确认；G34 = 同库同事务 + 文件写窗口最小恢复协议；可交付开发范围 = W-A；D8 仍未决，W-B 不进入本版实现 |
+| 本版修订 | v1.0 及以前各轮见 §8.2。**v1.1（2026-10-29，PM 批准）**：① C5 失败且在本次 `execSet` 内的成员进入新 attempt 认领，不再落入「已认领未终结」；② attempt 级审计按**本 attempt 成员**收敛，operation 记录仍按全集聚合；③ 连接表整批全成或全拒，部分成功只存在于源表导入的组间；④ G34 定案为幂等存储与审计行同库同事务，另加文件写窗口的最小恢复协议；⑤ 控制面首期不接受 `deleteManifest` / `deleteOverlays`；⑥ 可交付开发范围收窄为 W-A。缺口仍为 G1–G38，验收仍为 VOPS-01–78（全部未执行）。 |
 | 需求来源 | 2026-10-28 客户口头需求：「提个小需求，做个可以批量运维的接口」；客户为技术全面的 Agent 工程师，明确不走 WebUI |
 | 实施主体 | Lucy；复用既有 Proxy / Admin / 语义资产服务层，不修改 KTX 源码 |
 | 落位依据 | [`docs/governance/DEVELOPMENT.md`](../governance/DEVELOPMENT.md)「Spec 落位规则」：跨模块产品视图落 `docs/`；访问权限域交叉引用 `docs/access-control/` |
 
-> 本文件是**设计基线**，用于对齐范围与口径。文中任何条目均不构成实现授权，也不产生验收证据。
-> 授权、实现、取证是三段分离的：需求签核 → 实现授权 → 正式验收证据，缺一不得宣称完成。
+> 本文件是**设计基线**。2026-10-29 PM 已单独授权实现，范围只限 W-A（Plan S1–S4 与对应测试）。S5、S8、语义发布、只读巡检不在授权内。授权不产生验收证据，VOPS 未实际执行前不得改成通过。不授权提交、推送、镜像、部署。
 
 ---
 
@@ -237,13 +236,18 @@ users:
 
 ### 3.3 工具清单与 WebUI 等价映射
 
-**首期范围（D2 = Phase 1）**
+**本版可交付开发（W-A）**
 
-| 工具 | 等价 WebUI 动作 | 复用端点 | 批量服务来源 |
+| 工具 | 等价 WebUI 动作 | 复用端点 | 原子性 |
 |---|---|---|---|
-| `lucy_ops_semantic_publish` | Catalog + 发布工作台 | `/api/semantic-assets/*` | **复用 L25-11 既有服务**（两段式见 §6.4） |
-| `lucy_ops_connection_tables` | 数据库接入 / 启用表范围 / 移除 Schema | `PUT /api/connections/:connId/enabled-tables`、`/api/connections/:connId/schemas/remove` | **新建批量服务** |
-| `lucy_ops_source_import` | 表语义编辑 / 版本回滚 | `POST /api/sources/:conn/:schema/:table/import`（restore 经 import 写服务，R14） | **新建批量服务** |
+| `lucy_ops_connection_tables` | 数据库接入 / 启用表范围 / 移除 Schema（只改 `ktx.yaml`，不删语义文件） | `PUT /api/connections/:connId/enabled-tables`、`/api/connections/:connId/schemas/remove` | 整批全成或全拒 |
+| `lucy_ops_source_import` | 表语义编辑 / 版本回滚 | `POST /api/sources/:conn/:schema/:table/import`（restore 经 import 写服务，R14） | 组内全成或全败，组间部分成功 |
+
+**保留在 Spec、本版不实现（W-B）**
+
+| 工具 | 等价 WebUI 动作 | 复用端点 | 说明 |
+|---|---|---|---|
+| `lucy_ops_semantic_publish` | Catalog + 发布工作台 | `/api/semantic-assets/*` | 整批阻断。D8 与 L25-11 未关闭前不进入实现 |
 
 **后续期（不在首期，工具清单待需求审查时确认是否保留）**
 
@@ -357,7 +361,7 @@ users:
 
 **⚠️ 未知状态显式拒绝（Normative）**：成员状态出现五态之外的值（含 `null` / `undefined` / 拼写错误）时，`aggregateOperationState` **必须抛错**并让调用方返回稳定原因码 `ops_state_corrupt`，**不得**静默落入「当作 failed 重试」。重入分派同样适用：未识别的 operation 状态一律按**最保守分支**处理（拒绝），不得进入新 attempt。
 
-**⚠️ operation 终结的完成条件（Normative）**：operation 只有在**原计划全部成员**都取得终态时才终结。任一成员仍在 `pending` / `recovery_required` / `pending_activation`，operation 就不是终态，**不得**写终态审计、**不得**终结。
+**⚠️ operation 记录与 attempt 审计分开终结（Normative）**：operation **记录**只有在**原计划全部成员**都取得终态时才终结。任一成员仍在 `pending` / `recovery_required` / `pending_activation`，operation 记录就不是终态。这**不**推迟本 attempt 的审计行：本 attempt 的成员若已全部终态，该 attempt 的 operation 级审计行按本 attempt 的结果收敛，即使全集里还有未执行成员。
 
 **非终态必须持久化，不得只停留在内存（Q02，Normative）**：`pending_activation` 与 `recovery_required` **不是**「什么都不做」，必须留下可恢复的凭据：
 
@@ -368,35 +372,34 @@ users:
 
 **「终态」的定义（Normative）**：**只有 `succeeded` 与 `failed` 是终态**。`pending` / `recovery_required` / `pending_activation` 均**不得**写失败审计、**不得**终结、**不得**使 operation 被当作可重试失败（Q01 / Q02）。
 
-**⚠️ operation 与 attempt 的审计关系（F7-06，Normative）**：**一次调用 = 一个 attempt = 1 条 operation 级审计 + N 条 target 级审计**（§4.4）。同一逻辑 operation 的**多个 attempt 各有各的 operation 级审计行**（`audit_key` 含 attempt，天然唯一），**不存在**「一条 operation 审计行挂到全集完成才终结」的写法——那会在分次提交时留下永远 `pending` 的悬垂行：
+**⚠️ operation 与 attempt 的审计关系（F7-06，Normative）**：**一次调用 = 一个 attempt = 1 条 operation 级审计 + N 条 target 级审计**（§4.4）。同一逻辑 operation 的多个 attempt 各有各的 operation 级审计行（`audit_key` 含 attempt）。禁止把一条 operation 审计行挂到全集完成才终结。
 
-- **attempt 级审计行随该 attempt 收敛**：该 attempt 的成员全部终态 → 该行转 `committed` / `failed`；该 attempt 留有非终态成员（`recovery_required` / `pending_activation`）→ 该行**保持 `pending`**，由收敛路径按 `auditId` 更新；
-- **attempt 之间不得互相改写对方的审计行**；
-- **悬垂 `pending` 行不得存在**：由于「非终态 operation 禁止新 attempt」（§4.2 聚合规则），任何保持 `pending` 的 attempt 行都必然有恢复路径负责闭合它；不存在「开了新 attempt 却把旧 attempt 的 pending 行晾在那里」的状态；
-- 因此「原计划分多次提交」不会产生无法解释的审计行。
+- **attempt 审计按本 attempt 的成员收敛，不按全集聚合。** 本 attempt 成员全部 `succeeded` → 该行 `committed`；全部终态且至少一个 `failed` → 该行 `failed`；留有 `recovery_required` / `pending_activation` / 已认领未终结 → 该行保持 `pending`，由收敛路径按 `auditId` 更新。只提交 B 且 B 成功时，B 这一行是 `committed`，即使 A 此前失败、operation 记录因此是 `failed`。
+- **operation 记录按全集聚合**（上表）。全集未终态时 operation 记录保持 `pending`，允许下一 attempt 补交未执行成员或重放失败成员。`recovery_required` 与 `pending_activation` 才禁止新 attempt；普通 `pending` 不禁止。
+- **attempt 之间不得互相改写对方的审计行。**
+- 新 attempt 只能在上一 attempt 没有未终结认领时开启（§6.2 C4.1）。因此不会出现「旧 attempt 的审计仍 pending，又开了新 attempt」。分次提交时，已结束的 attempt 审计已经按该 attempt 的成员写成终态。
 
 **⚠️ operation 记录与 attempt 记录分离（Normative）**：operation 记录（业务幂等存储）保存**全集**状态与成员清单；attempt 记录保存**本次范围**（`execSet` / `groupIds`）、本次 attempt 号、该 attempt 的 `auditId` 与成员结论。二者**不共用一行**：operation 记录回答「整个逻辑操作走到哪一步」，attempt 记录回答「这一次尝试做了什么」。
 
-**认领先于效果（R08，Normative）**：幂等意图必须在**任何正式效果发生前**以原子方式持久化（`claimIdempotency`），绑定 actor、tool、plan。**认领在 operation 与 target 两级分别进行**：operation 键认领整次调用，target 键认领单个目标；二者均须在写入前完成。
+**认领先于效果（R08 / G34，Normative）**：本 attempt 的 operation 认领、operation 审计行、本次待执行 target 的认领与 target 审计行，必须在 `audit.sqlite` 的**同一次** `db.transaction()` 里提交，然后才允许产生文件效果。事务提交前崩溃或回滚：本 attempt 不留下幂等行，也不留下审计行。事务覆盖不到业务文件写（`writeKtxYaml` 与语义目录写入是文件系统写）。文件已改而终态未写入时，走 §6.2 的最小恢复协议，不得把文件写说成事务的一部分。
 
 **崩溃后必须有可执行的收敛路径（N07，Normative）**：幂等记录必须持久化 `before` / `after` / `effect_phase`（`none` / `written` / `activated`）/ `attempt` / `auditId`。重启或重试时按 §6.2 的收敛顺序判定：复用、补记、组回滚或阻断，**不得静默重跑**。认领竞争（两个并发请求同键）必须由存储层原子保证只有一个进入执行，另一个得到冲突或复用结果。
 
-### 4.3 原子性与重放（D3 = 部分成功可重放）
+### 4.3 原子性与重放（D3，按工具分三种）
 
-**统一规则：控制面批量写为「部分成功可重放」。**
+失败痕迹的规则三种工具相同：失败目标保留原因码与阶段；重放复用该目标的 `target_key`，不产生重复副作用；重放成功**追加**一条 target 级审计（`writeStatus: committed`，`audit_key` 含新 attempt），**不覆盖**首次失败行。
 
-- 逐目标独立执行，单个目标失败**不阻断**其余目标；
-- 失败目标保留失败原因码与阶段，可单独重放；
-- 重放复用该目标的 `target_key`，不产生重复副作用；
-- 重放成功**追加**一条 target 级审计（`writeStatus: committed`，`audit_key` 含新 attempt），**不覆盖**首次失败行——失败痕迹必须留存。
+**三种原子性（Normative，2026-10-29 PM 确认）**：
 
-**重放的正确顺序（R09，Normative）**：commit 时**先定位并核验已有幂等记录**，对已 `succeeded` 的目标直接返回原结果；**只有尚未执行的目标**才做基线比较与计划有效性检查。已成功目标改变了自身基线，若先做全量基线检查，原请求重试会被自己的变更阻断，永远到不了复用分支。
+| 工具 | 原子性 | 原因 |
+|---|---|---|
+| `lucy_ops_connection_tables` | **整批全成或全拒** | 全部 KTX 连接配置都在同一份 `ktx.yaml`。一次合并写就是一个原子组，组内不能报告部分成功 |
+| `lucy_ops_source_import` | **组内全成或全败，组间部分成功可重放** | 写集相交的目标合成一个原子组；写集不相交的组互不阻断 |
+| `lucy_ops_semantic_publish` | **整批阻断** | 沿用 L25-11 的 planDigest CAS。本版不交付开发，合同保留供 W-B 解锁后使用 |
 
-**唯一例外：`lucy_ops_semantic_publish`。** 它包装 L25-11 既有批量服务，其批量语义为 planDigest CAS 的「全或无」（整批阻断）。本 Spec **不改变**该语义——变更会触及已冻结并已被独立审阅的合同。差异必须写进工具描述与文档，不得让调用方按同一心智模型对待。
+**重放的正确顺序（R09，Normative）**：commit 时**先定位并核验已有幂等记录**，对已 `succeeded` 的目标直接返回原结果；**只有尚未执行的目标**才做基线比较与计划有效性检查。已成功目标改变了自身基线，若先做全量基线检查，原请求重试会被自己的变更阻断，永远到不了复用分支。连接表没有「组内部分成功后再重放其余连接」：整批失败则整批重放，整批成功则整批复用。
 
-> 此例外由本 Spec 判定并显式记录，可在需求审查时挑战。
-
-**⚠️ D3 的必要限定：同写集原子组（D7，因 R11 / N04 派生）**。源表导入的写集存在跨目标的共享文件：
+**⚠️ 源表导入的同写集原子组（D7，已确认）**。源表导入的写集存在跨目标的共享文件：
 
 - Manifest 文件 `semantic-layer/<conn>/<schema>.yaml` —— 同连接同 Schema 多表共享；
 - **Overlay 文件 `semantic-layer/<conn>/<table>.yaml` 路径中不含 Schema**（`webui/server/overlay.ts:74`）—— 同连接不同 Schema 的同名表也写同一文件；
@@ -411,7 +414,7 @@ users:
 - 组级回滚**不得整份回滚全局历史索引**，只回滚本组条目；
 - 组的身份必须由**实际写集交集**决定（§6.3），不得只用 Schema 近似。
 
-本限定是对 D3「部分成功可重放」的**范围收窄**，由文件模型强制导出，**需 PM 知悉确认**（D7）。
+D7 已由 PM 于 2026-10-29 确认。连接表不使用「组间部分成功」：它的写集是同一份 `ktx.yaml`，整批就是一个原子组。
 
 ### 4.4 审计粒度
 
@@ -454,9 +457,9 @@ users:
     - 控制面的语义发布**不得**自行持锁，但**必须**依赖底层在窗口内重建计划并比对 `planDigest`（`semantic-assets.ts:2266-2290`）这一 CAS 保护；
     - 若未来确需控制面包住整个发布生命周期，必须改造底层提供**显式的所有权移交入口**（把已持有的 holder 传入发布路径），不得靠外层再取同一把锁实现。
 13. **⚠️ 旧 Schema 移除入口的写集超出 `ktx.yaml`，必须纳入同一临界区（F5-04，Normative）**：`POST /api/connections/:connId/schemas/remove` 接受 `deleteManifest` / `deleteOverlays`（`webui/server/index.ts:1955-1971`），而 `removeSchema` 的实际写集**包含 Manifest 与 Overlay 文件删除**——且这些删除发生在 `writeKtxYaml` **返回之后**（`webui/server/project.ts:947-962`），即在 ktx 写锁**之外**。因此：
-    - 该入口必须整体进入同一 `withKtxYamlWriteLock`，锁内完成「重读 → 改 `ktx.yaml` → 删 Manifest/Overlay → 提交审计」全链；
-    - 控制面是否暴露删除选项须在 §3.3 工具入参中显式声明；若支持，其写集必须计入 §6.3 的组划分；
-    - 改造前，控制面的批量导入与该入口之间**不存在互斥**，不得宣称「批量写与既有写入口互斥」已成立。
+    - 旧 REST 入口必须进入同一把 `withKtxYamlWriteLock`。它若删除 Manifest / Overlay，还要取得发布窗口并保留文件前像（§6.3）；
+    - **控制面不接受这两个删除字段**，传入即 `ops_schema_content_delete_unsupported`；
+    - 旧入口改造完成前，不得宣称批量导入与 Schema 移除互斥。
 14. **⚠️ 版本历史裁剪必须纳入组事务（F5-05，Normative）**：源表导入的版本快照走 `createTableYamlVersionSnapshot`，该函数在写入新快照后**立即裁剪**超限旧版本——`pruneVersions` 会 `safeRemove` 掉被裁剪版本的快照文件（`webui/server/table-yaml-history.ts:279-294`），且**裁剪发生在索引写盘之前**（同文件 `:333-334`）。若组内后续成员失败而仅回滚索引条目，被裁剪的快照内容**已不可恢复**。因此组级事务必须**延迟裁剪至组终结之后**，或把被裁剪快照及其索引前像一并纳入组恢复日志；不得在组内成员尚未全部确认前执行裁剪。
 
 ### 4.6 失败与重试
@@ -507,7 +510,7 @@ users:
 | **G31** | **发布窗口不覆盖终态核验与持久化**（F6-08） | `webui/server/semantic-assets.ts:2692-2694`（锁释放）、`:2718`（摘要核验）、`:2743`（终态审计）、`:2764`（`published`）、`:2779`（日志完成） | 锁在 `reindexImpl` 返回时释放，**早于**终态证据持久化；不得宣称发布窗口覆盖整个发布生命周期。登记为 W-B 对 L25-11 的依赖 |
 | **G32** | **语义内容删除与发布窗口不相交**（F6-09） | `webui/server/index.ts:1955-1971`、`webui/server/project.ts:947-962` | 删除 Manifest / Overlay 只持 ktx 写锁，而语义发布与后台索引取的是发布协调窗口，二者互不相干，可交错删除正在被发布的文件 |
 | **G33** | **非终态缺少收敛入口**（F6-01） | `webui/server/index.ts:2409-2422`（release 状态查询只返回记录） | 五态中两种非终态只「拒绝新 attempt」而无收敛路径：须补恢复扫描入口、release 终态回写入口、排他所有权与审计更新 |
-| **G34** | **幂等认领与审计绑定的事务边界未定**（F6-07） | `webui/server/admin/audit.ts:802-807`（`ON CONFLICT` 去重）、`:835-861`（按 id 更新）、`webui/server/project.ts:440-460`（`writeKtxYaml` 为**文件系统写**）、`webui/server/project.ts:700-712`（先写文件后插审计） | 「原子认领并绑定」若跨多次调用即不原子。**范围澄清（2026-10-29 源码复核）**：业务文件写是 `readFile`→`parseDocument`→写 `ktx.yaml`，互斥靠 `withKtxYamlWriteLock` 进程内队列，**无法纳入 SQLite 事务** ⇒ 「同库同事务」只能覆盖**幂等存储 ↔ 审计行**，**覆盖不了「文件已改、幂等/审计未提交」窗口**。故此缺口**不是二选一，而是两层叠加**：**(a)** 幂等存储与审计表同库同事务（保留「认领与绑定原子」这一有限承诺）**＋** 最小恢复协议（覆盖文件写窗口）；**(b)** 仅完整恢复协议并删除原子声明（对外只承诺「幂等且可恢复」） |
+| **G34** | **幂等认领与审计绑定的事务边界（F6-07，已定案）** | `webui/server/admin/audit.ts:802-807`、`:835-861`；`webui/server/project.ts:440-460` | **2026-10-29 PM 定案 = (a) + 最小恢复协议。** 幂等存储与 `config_change_log` 同在 `audit.sqlite`，本 attempt 的认领与审计插入走同一次 `db.transaction()`。业务文件写是文件系统写，不在该事务内。文件已改而终态未落库时，按 §6.2 恢复顺序核验，不得宣称文件写与审计行原子提交 |
 | **G35** | **执行态与持久态未分离**（F7-07） | Spec §4.2、§6.2 | `claimed`（执行态）此前被写入持久态与聚合输入；`skipped` / `reused` 为废止残留。须分离两层词汇，聚合只接受持久态，未知值 → `ops_state_corrupt` |
 | **G36** | **既有成员状态在续跑时被覆盖**（F7-01） | Spec §6.2 C5 | C5 只处理 `succeeded`，其余既有记录被无条件改为「未执行」，抹掉失败痕迹并让全集聚合出错。须完整恢复既有持久态 / attempt / result / audit 绑定 |
 | **G37** | **语义发布执行集与通用规则冲突**（F7-02） | `webui/server/semantic-assets.ts:2991-2996` | 完整影响集含非批次 refs 的附带磁盘变更；按参数收窄会导致组不完整。须分离 `requestedRefs` 与 `effectiveExecutionSet`，执行集固定为整个已确认原子组 |
@@ -675,19 +678,10 @@ function runCommit(toolName, targets, args, actor, delegatedFrom, authorized):
     #    只执行 R 会造成「组不完整」而被拒，而把 U 塞进参数又违反「参数必须属于批次 refs」的声明。
     #    语义发布已在 §6.4 完成【完整影响集】的授权确认，故此处不再按参数收窄。
 
-    # C4. 认领 + 审计原子绑定（claim-and-bind，Q05 / F6-07）
+    # C4. 重入分派（只决定 attempt，不在这里写库）
+    #     本 attempt 的 operation / target 认领与审计行在 C5.1 的同一次事务里提交（G34）。
     if opRec is None:
         attempt = newAttempt()
-        # 认领必须连同【完整计划引用】与【本次执行范围】一起持久化：
-        #   planRef（供后续 attempt 再授权）、execSet（供本次 attempt 恢复）
-        opRec = claimIdempotency(opKey, actor, plan.toolName, plan.planDigest,
-                                 status="pending", attempt=attempt,
-                                 planRef=plan.planId, execSet=execSet)
-        opAuditId = claimAndBindAudit(opKey, attempt, op_level, auditKey(opKey, attempt))
-        # claimAndBindAudit 必须是单次原子操作：写审计行 + 绑定 auditId + 登记 attempt。
-        # 若在绑定前崩溃，恢复分支 0 按 (opKey, attempt) 查回既有行并补建绑定——
-        # 【不得重插】：同键重插会被 ON CONFLICT(idempotency_key) DO NOTHING 静默丢弃
-        # （webui/server/admin/audit.ts:802）。
     else:
         if opRec.planDigest != plan.planDigest:          return deny("ops_idempotency_conflict")
         if opRec.actor != actor:                          return deny("ops_idempotency_actor_mismatch")
@@ -726,17 +720,13 @@ function runCommit(toolName, targets, args, actor, delegatedFrom, authorized):
         if not set(ids(args.targets)).issubset(eligible):
             return deny("ops_operation_scope_mismatch")  # 只能继续未执行或已失败的成员
         attempt = newAttempt()
-        opRec = restartAttempt(opKey, attempt, opRec, execSet=execSet)  # 原子转换；execSet 随 attempt 持久化
-        opAuditId = claimAndBindAudit(opKey, attempt, op_level, auditKey(opKey, attempt))
 
-    # C5. 逐对象分流 + 【target 级认领】，均先于任何正式效果（R08 / F03 / F6-07 / F7-01）
+    # C5. 逐对象分流：只分类，不写库（F7-01）
+    toClaim = []
     for t in plan.perTarget:
-        t.idempotencyKey = hash(args.idempotency_key, plan.toolName, t.id)  # 随目标保存
+        t.idempotencyKey = hash(args.idempotency_key, plan.toolName, t.id)
         prior = loadTargetRecord(t.idempotencyKey)
         if prior is not None:
-            # ⚠️ 既有记录必须【完整恢复】，不得覆盖（F7-01）：
-            #   保留其持久态、attempt、result 与 audit 绑定。
-            #   既有状态不在五态之内 → 立即拒绝（ops_state_corrupt），不得进入执行。
             if prior.status not in PERSISTENT_STATES:
                 return deny("ops_state_corrupt")
             t.state = prior.status
@@ -744,35 +734,43 @@ function runCommit(toolName, targets, args, actor, delegatedFrom, authorized):
             t.result = prior.result
             t.auditId = prior.auditId
             if prior.status == "succeeded":
-                continue                                   # 已成功：幂等复用，不重复执行
+                continue                                   # 幂等复用，不进入 toClaim
             if prior.status in ("recovery_required","pending_activation"):
-                return deny("ops_operation_recovery_required")  # 非终态禁止新 attempt（§4.2）
+                return deny("ops_operation_recovery_required")  # 事务尚未开始，此处拒绝不留半截认领
             if prior.status == "failed":
-                # 已失败：**可在新 attempt 中重放**（D3「失败目标可单独重放」）。
-                # 旧 attempt 的失败审计行**保留不动**，失败痕迹不丢（§4.2 键分层）。
-                if t not in execSet:
-                    continue                               # 本次不在范围内：保留失败状态
+                # 失败痕迹留在旧 attempt。本次范围内的失败成员进入新 attempt 认领。
+                if t in execSet:
+                    toClaim.append(t)
+                continue
             # prior.status == "pending"
             if prior.attempt is not None:
                 if isActivelyExecuting(prior):
-                    return deny("ops_operation_in_flight")  # 并发同键：不得进入恢复（F04）
+                    return deny("ops_operation_in_flight")
                 continue                                   # 已认领未终结：必须先恢复，不得重跑
-        if t not in execSet:
-            # 范围外的成员【保留既有状态】；只有【无既有记录】者才初始化为「未执行」。
-            # ⚠️ 绝不可把既有的失败成员改成「未执行」——那会抹掉失败痕迹，
-            #    并让 operation 的全集聚合得出错误结论（F7-01）。
-            if prior is None:
-                t.state = "pending"                        # 持久态 pending
-                t.attempt = None                          # attempt = null ⇒ 从未执行
+            if t not in execSet:
+                continue                                   # 从未执行且本次不提交：保持 pending / attempt=null
+            toClaim.append(t)
             continue
-        # target 级认领与审计绑定必须是【同一个原子操作】（F6-07）：
-        # 先插审计再认领、或先认领再插审计，只要不在同一事务内，
-        # 就会留下「已插审计未认领」或「已认领无审计」的崩溃窗口。
-        t.auditId = claimTargetAndBindAudit(t.idempotencyKey, actor, t.planDigest,
-                                            attempt=attempt, targetId=t.id,
-                                            auditKey=auditKey(t.idempotencyKey, attempt))
-        t.state = "claimed"                               # 执行态（不落库）
-        t.attempt = attempt                               # ★ 聚合依赖它，必须赋值（F7-07）
+        if t not in execSet:
+            t.state = "pending"
+            t.attempt = None
+            continue
+        toClaim.append(t)
+
+    # C5.1 本 attempt 一次事务提交（G34 / F7-04）
+    #      写入：operation 认领（planRef + execSet + attempt）、1 条 operation 审计、
+    #      toClaim 中每个 target 的持久态 pending + 各 1 条 target 审计。
+    #      提交前不得进入 C6。失败或提交前崩溃：全部回滚，返回 ops_claim_failed，
+    #      不留本 attempt 的幂等行与审计行，不产生文件效果。
+    try:
+        bound = claimAttemptTransaction(opKey, attempt, actor, plan, execSet, toClaim)
+    except Exception:
+        return deny("ops_claim_failed")
+    opAuditId = bound.opAuditId
+    for t in toClaim:
+        t.auditId = bound.targetAuditId[t.id]
+        t.state = "claimed"                               # 执行态，不落库
+        t.attempt = attempt                               # 持久态已在事务中写成 pending + 本次 attempt
 
     # C6. 【组级状态机】prepare → 认领 → 执行 → 确认 → 统一终结（F02）
     for g in plan.groups:
@@ -808,7 +806,7 @@ function runCommit(toolName, targets, args, actor, delegatedFrom, authorized):
                 if not rollback.complete:
                     markGroupRecoveryRequired(g)          # 保持恢复阻断，阻断相关读写
                     for t in claimed:
-                        t.result = Outcome.recoveryRequired(detail=rollback)
+                        t.result = Outcome.recoveryRequired(keep=existingResultOf(t), detail=rollback)
                         t.state = "recovery_required"      # 不发布任何成员的终态
                     continue
                 for t in claimed:
@@ -875,21 +873,25 @@ function runCommit(toolName, targets, args, actor, delegatedFrom, authorized):
         # 审计行保持 pending：既不写 committed，也不写 failed。
         # 从未被认领的成员（attempt == null）没有审计行，不补建——它不是「尝试过但没结论」。
 
-    # C7.2 operation 级聚合与终结（§4.2 唯一聚合函数，Q02 / F6-01）
-    opState = aggregateOperationState(plan.perTarget)      # 唯一实现，三处共用
+    # C7.2 全集聚合写 operation 记录；本 attempt 审计按本 attempt 成员收敛（F7-06）
+    opState = aggregateOperationState(plan.perTarget)      # 全集，三处共用这一个函数
+    attemptMembers = [t for t in plan.perTarget if t.attempt == attempt and t in toClaim]
+    attemptState = aggregateOperationState(attemptMembers)
     try:
+        if attemptState in ("succeeded","failed") and opAuditId is not None:
+            # 只更新本 attempt 的 operation 审计。A 失败、本次只做成功的 B 时，
+            # 本行是 committed，不得因为全集里还有失败成员而改成 failed。
+            updateAuditById(opAuditId,
+                            writeStatus=("committed" if attemptState == "succeeded" else "failed"),
+                            errorReason=(None if attemptState == "succeeded" else "ops_attempt_failed"))
         if opState in ("succeeded","failed"):
-            finalizeOperation(opKey, opState, summary, opAuditId)
-            if opAuditId is not None:
-                updateAuditById(opAuditId,
-                                writeStatus=("committed" if opState == "succeeded" else "failed"),
-                                errorReason=(None if opState == "succeeded" else "ops_operation_failed"))
+            finalizeOperation(opKey, opState, summary)
         else:
-            # pending / recovery_required / pending_activation：【不得】终结，
-            # 不得写失败审计，不得让 operation 表现为「可重试失败」（Q02）
-            persistOperationProgress(opKey, opState, unfinishedTargetsOf(plan.perTarget), opAuditId)
+            # 全集仍有未执行或非终态成员：operation 记录不终结。
+            # recovery_required / pending_activation 禁止新 attempt；
+            # 普通 pending 允许之后补交。本 attempt 若已终态，其审计行已在上面闭合。
+            persistOperationProgress(opKey, opState, unfinishedTargetsOf(plan.perTarget))
     except Exception as e:
-        # operation 终结/进度写入失败 → 返回稳定原因码并保留已收敛结果，不得重复执行（F7-04）
         return ok({ per_target: results, succeeded: n_ok, failed: n_fail,
                     pending: n_pending, groups: groupSummary,
                     warning: "ops_finalize_incomplete", detail: e })
@@ -947,7 +949,7 @@ function runCommit(toolName, targets, args, actor, delegatedFrom, authorized):
 
 **崩溃恢复收敛顺序（R08 / N07 / F04 / F06）**：`recoverPending` 必须先取得**排他所有权**（排除仍在执行的活跃请求），再按以下顺序判定并收敛，不盲目重跑——
 
-0. **operation 已认领但无审计行**（认领与审计之间的崩溃窗口）→ 按 `(opKey, attempt)` **查回**该 attempt 的 operation 审计行并补建绑定，再继续判定（Q05）。**不得重插**：同键重插会被 `ON CONFLICT(idempotency_key) DO NOTHING` 静默丢弃（`webui/server/admin/audit.ts:802`）；补建必须按 `(opKey, attempt)` 核对既有行后再决定是补行还是补绑定；
+0. **认领事务提交前崩溃**：本 attempt 没有幂等行，也没有审计行，恢复什么都不补。认领事务提交之后才进入下面的效果核验。禁止在「审计已插入、绑定未写入」之间补行——这个窗口由同一次 `db.transaction()` 关掉（G34）。同键重插仍会被 `ON CONFLICT(idempotency_key) DO NOTHING` 丢掉（`webui/server/admin/audit.ts:802`），所以恢复更新审计只能按已绑定的 `auditId`。
 0.1 **恢复范围必须绑定 attempt（F5-02）**：恢复**只处理该 attempt 持久化的 `execSet` / `groupIds`**，**不得**按「全部未终结目标」继续——否则「本次只提交 A 组、原计划含 A/B」的请求在崩溃恢复后会执行 B 组（本次未请求的对象）。未在 `execSet` 内的目标保持原状态，不参与本次恢复；
 1. 全部目标已终结为 `succeeded` → 补记 operation 终态，返回原结果；
 2. 部分目标已 `succeeded`、其余无副作用痕迹 → 只对未终结目标继续；
@@ -982,8 +984,9 @@ function runCommit(toolName, targets, args, actor, delegatedFrom, authorized):
 
 ### 6.3 组划分、锁与写入路径
 
-**组划分（N04，Normative）**：组的身份必须由**实际写集的交集**决定，不能只用 Schema：
+**组划分（N04 / D7，Normative）**：组的身份必须由**实际写集的交集**决定，不能只用 Schema：
 
+- `ktx.yaml`：全部 KTX 连接配置共享这一份文件。`lucy_ops_connection_tables` 的一批目标是**一个**原子组，整批全成或全拒；
 - Manifest 文件：`semantic-layer/<conn>/<schema>.yaml` —— 同连接同 Schema 的多表共享；
 - Overlay 文件：`semantic-layer/<conn>/<table>.yaml`（`webui/server/overlay.ts:74`）—— **路径中不含 Schema**，故**同连接不同 Schema 的同名表也会写同一文件**；
 - 版本快照与历史索引：`.ktx-ui/table-yaml-history/`（`webui/server/table-yaml-history.ts:14-16`）—— **全局单一索引文件**。
@@ -999,7 +1002,7 @@ function runCommit(toolName, targets, args, actor, delegatedFrom, authorized):
 
 | 工具族 | 锁顺序 | 写入文件 | 生效步骤 |
 |---|---|---|---|
-| `lucy_ops_connection_tables` | `withKtxYamlWriteLock` → `withDisplayWriteBarrier` | `ktx.yaml`（一次合并写） | catalog 重载 → 策略提交 |
+| `lucy_ops_connection_tables` | `withKtxYamlWriteLock` → `withDisplayWriteBarrier` | `ktx.yaml`（一次合并写，整批一个原子组） | catalog 重载 → 策略提交；任一目标失败则整批不写 |
 | `lucy_ops_source_import` | `withKtxYamlWriteLock`（如涉 ktx）→ `withDisplayWriteBarrier` → `withPublishCoordinator` | 语义目录文件（同组合并为单版本） | `validateSource` → 版本快照 → 索引 |
 | `lucy_ops_semantic_publish` | **控制面不取发布窗口**；由底层发布入口独占持有（见 F5-01） | 语义目录文件（整批） | L25-11 既有发布链路（窗口内重建计划并比对 `planDigest`） |
 
@@ -1028,11 +1031,9 @@ function runCommit(toolName, targets, args, actor, delegatedFrom, authorized):
 
 **⚠️ 旧 Schema 移除入口的写集（F5-04，Normative）**：`POST /api/connections/:connId/schemas/remove` 的实际写集**不止 `ktx.yaml`**——它可删除 Manifest 与 Overlay 文件（`webui/server/index.ts:1955-1971` 接受 `deleteManifest` / `deleteOverlays`；`webui/server/project.ts:947-962` 在 `writeKtxYaml` 返回**之后**执行删除，即在 ktx 写锁**之外**）。因此：
 
-- 该入口必须整体进入同一 `withKtxYamlWriteLock`，锁内完成「重读 → 改 `ktx.yaml` → 删 Manifest/Overlay → 提交审计」全链；
-- **⚠️ 仅 ktx 写锁不够（F6-09）**：语义发布与后台索引取的是**发布协调窗口**，与 ktx 写锁**互不相干**。若删除 Manifest / Overlay 只持 ktx 锁，它仍可与语义发布、后台 reindex **交错**，删除正在被发布/索引的文件。因此**凡删除语义内容文件**（Manifest、Overlay），旧 REST 入口与控制面入口**都必须**按固定顺序取得发布窗口：`withKtxYamlWriteLock → withDisplayWriteBarrier → withPublishCoordinator → 删文件`；
-- 删除语义内容文件时**必须保留文件前像**（内容 + 摘要）并纳入组恢复日志，否则删除失败或后续成员失败时不可恢复；
-- 控制面若暴露删除能力，其写集**必须计入 §6.3 的组划分**（Manifest 按连接+Schema、Overlay 按连接+表名）；
-- 改造完成前，控制面批量导入与该入口之间**不存在互斥**，不得对外宣称「批量写与既有写入口互斥」已成立。
+- **控制面首期不提供语义内容删除。** `lucy_ops_connection_tables` 不接受 `deleteManifest` / `deleteOverlays`；参数里出现这两个字段即拒绝，原因码 `ops_schema_content_delete_unsupported`。Schema 移除若只改 `ktx.yaml` 里的启用范围，仍属于整批合并写；
+- 旧 REST `POST /api/connections/:connId/schemas/remove` 今天仍可能删除 Manifest / Overlay，且删除发生在 `writeKtxYaml` 返回之后。该入口必须进入同一把 `withKtxYamlWriteLock`。凡实际删除语义内容文件，还要按 `withKtxYamlWriteLock → withDisplayWriteBarrier → withPublishCoordinator` 取得发布窗口，并保留文件前像。这是为了让 WebUI 旧入口不和源表导入交错，不是控制面新增删除能力；
+- 改造完成前，不得宣称「批量导入与既有 Schema 移除入口互斥」。
 
 **⚠️ 版本历史裁剪必须纳入组事务（F5-05，Normative）**：源表导入创建的版本快照会触发**保留数量裁剪**——`createTableYamlVersionSnapshot` 在写入新快照后立即调用 `pruneVersions`，后者 `safeRemove` 掉被裁剪版本的快照文件（`webui/server/table-yaml-history.ts:279-294`），且**裁剪先于索引写盘**（同文件 `:333-334`），保留上限为 5（`TABLE_YAML_VERSION_RETENTION_LIMIT`）。若组内后续成员失败，而组级回滚只恢复索引条目，**被裁剪的快照内容已不可恢复**。因此：
 
@@ -1197,15 +1198,16 @@ function executeSemanticGroup(group, claimed):
 
 ---
 
-## 7. 分期路线（D2 = 首期直接做 Phase 1）
+## 7. 分期路线（可交付开发的范围是 W-A）
 
 | 期 | 范围 | 风险 | 前置 |
 |---|---|---|---|
-| **首期（Phase 1）** | W-A：`lucy_ops_connection_tables`、`lucy_ops_source_import`；W-B：`lucy_ops_semantic_publish` | 中高（首批即含写） | W-A：G1–G14、G16–G21、G24–G27、G29、G32–G34（**G15、G22、G23、G28、G30、G31 限定为 W-B，不得阻塞 W-A**，见 D5）；W-B：G1–G34 全部 + L25-11 审阅通过 |
-| 后续（Phase 2） | 角色 / 行策略 / 凭证治理：`lucy_ops_role_apply`、`lucy_ops_row_policy_apply`、`lucy_ops_agent_apply`、`lucy_ops_token_issue`、`lucy_ops_admin_apply` | 高（owner-only 与权限变更） | 首期验收 + 委托语义（G9）落地 + G13 门禁补齐 |
-| 后续（Phase 3） | 业务上下文与质量：`lucy_ops_wiki_access_apply`、`lucy_ops_skill_publish`、评测相关读工具 | 中 | Phase 2 |
+| **本版可交付开发（W-A）** | `lucy_ops_connection_tables`、`lucy_ops_source_import` | 中高（首批即含写） | 设计门禁已关闭。2026-10-29 已授权实现 S1–S4。G15、G22、G23、G28、G30、G31、G38 与 D8 不得阻塞 W-A |
+| **不在本版（W-B）** | `lucy_ops_semantic_publish` | 高 | D8 拍板 + L25-11 的 B01／H01–H05 审阅通过 + G30／G31 由 L25-11 维护者关闭 |
+| 后续（Phase 2） | 角色 / 行策略 / 凭证治理 | 高（owner-only 与权限变更） | W-A 验收 + 委托语义落地 + G13 门禁补齐 |
+| 后续（Phase 3） | Wiki 访问、业务 Skill、评测相关读工具 | 中 | Phase 2 |
 
-**只读巡检能力**（`lucy_ops_status` / `lucy_ops_governance_overview` / `lucy_ops_catalog_scan` / `lucy_ops_audit_search`）不构成首期阻塞，可并行纳入首期交付以提前验证授权模型与审计链路。
+**只读巡检工具不在本版可交付开发范围内。** 它们仍列在 §3.3 的后续期，避免在对象范围未确认时把只读工具一起做成首期合同。
 
 ### 7.1 首期阻塞项：L25-11 当前状态
 
@@ -1229,8 +1231,8 @@ function executeSemanticGroup(group, claimed):
 
 | 工作流 | 工具 | 依赖 | 解锁条件 |
 |---|---|---|---|
-| **W-A 先行** | `lucy_ops_connection_tables`、`lucy_ops_source_import` | 无外部依赖；两者均为**新建批量服务** | 需求审查签核 + 实施授权后即可开工 |
-| **W-B 跟随** | `lucy_ops_semantic_publish` | 包装 L25-11 既有服务 | **L25-11 的 B01／H01–H05 修复完成且审阅通过** + **D8（staged 批次归属与消费）已拍板** + **G30／G31 已由 L25-11 维护者关闭** 后方可开工 |
+| **W-A，本版可交付开发** | `lucy_ops_connection_tables`、`lucy_ops_source_import` | 无 L25-11 依赖；两者均为新建批量服务 | 2026-10-29 已授权实现 S1–S4 |
+| **W-B，本版不交付开发** | `lucy_ops_semantic_publish` | 包装 L25-11 既有服务 | **D8 已拍板** + **L25-11 的 B01／H01–H05 修复完成且审阅通过** + **G30／G31 已由 L25-11 维护者关闭** |
 
 **排除项**：不得包装当前 L25-11 服务——该服务已退回且存在 1 项阻塞缺陷（B01），包装它等于把阻塞缺陷带入控制面契约。
 
@@ -1259,20 +1261,21 @@ function executeSemanticGroup(group, claimed):
 | 编号 | 决策 | 结论 | 状态 |
 |---|---|---|---|
 | **D1** | 控制面授权走哪条身份平面 | **C 混合**：Agent 身份 + `allow.ops` 单独授权 + `delegated_from` 委托 | ✅ 已拍板（2026-10-28） |
-| **D2** | 首期范围 | **Phase 1：语义与连接表配置** | ✅ 已拍板（2026-10-28） |
-| **D3** | 批量写语义 | **保留 preview→commit + 部分成功可重放**；`semantic_publish` 例外（沿用 L25-11 全或无） | ✅ 已拍板（2026-10-28）；**D7 对其收窄** |
-| **D4** | §3.4 不工具化清单 | **采纳** | ✅ 已拍板（2026-10-28） |
-| **D5** | L25-11 阻塞处置 | **首期拆两个工作流**：W-A 先行，W-B 待 L25-11 审阅通过 | ✅ 已拍板（2026-10-28） |
-| **D7** | **同写集原子组**（由 R11 派生） | 组的身份由**实际写集交集**决定：Manifest 按连接+Schema；**Overlay 路径不含 Schema，故同连接不同 Schema 的同名表同属一组**；历史索引为全局单一文件，属**共享元数据**不参与分组判定。组内全成或全败，组间部分成功可重放。**这是对 D3 的必要收窄，由共享文件模型强制导出** | ⏳ **待 PM 知悉确认**（Codex 第 5 轮亦将其列为必须由 PM 拍板、审阅方不得代决的开放项） |
-| **D8** | **staged 批次由谁创建、Agent 如何合法消费**（F7-03） | 底层读计划严格校验批次 actor 与 instance（`semantic-assets.ts:2941-2950`），既有 staging 是管理员流程 ⇒ **Agent 无权消费管理员批次**。补齐方式三选一：(a) 新增 Agent 身份下的 staging 能力；(b) 显式批次交接（保留原校验 + 独立授权 + 审计归因）；(c) 控制面以受信委托人身份代为 staging | ⏳ **待 PM 拍板**；**D8 未决前 W-B 保持未解锁**，且不得以伪装 actor 绕过 |
+| **D2** | 可交付开发的范围 | **W-A：连接表配置与源表导入。** 语义发布留在 Spec，不进入本版实现 | ✅ 2026-10-29 收窄（原 2026-10-28「Phase 1 含语义发布」不再作为开工范围） |
+| **D3** | 批量写语义 | preview→commit。连接表整批全成或全拒；源表导入组间部分成功；语义发布整批阻断 | ✅ 2026-10-29 按工具写成三种，不再用一条「部分成功」覆盖全部工具 |
+| **D4** | §3.4 不工具化清单 | **采纳**。另：控制面首期不接受 `deleteManifest` / `deleteOverlays` | ✅ 已拍板（2026-10-28）；删除标志于 2026-10-29 明确拒绝 |
+| **D5** | L25-11 阻塞处置 | W-A 不包装 L25-11。W-B 待 L25-11 审阅通过且 D8 拍板 | ✅ 已拍板（2026-10-28）；2026-10-29 起 W-B 不是可交付开发范围 |
+| **D7** | **同写集原子组** | 组身份由实际写集交集决定。Overlay 路径不含 Schema，同连接不同 Schema 的同名表同属一组。历史索引是共享元数据，不参与分组。源表导入组内全成或全败、组间部分成功。连接表因共享 `ktx.yaml`，整批一个原子组 | ✅ **2026-10-29 PM 确认** |
+| **G34** | 认领与审计的事务边界 | 幂等存储与审计行在 `audit.sqlite` 同一次事务中提交。文件写不在事务内，靠最小恢复协议覆盖 | ✅ **2026-10-29 PM 定案**（取 (a) + 最小恢复协议） |
+| **D8** | staged 批次由谁创建、Agent 如何合法消费 | 三选一仍开放：(a) Agent 自己 staging；(b) 显式批次交接；(c) 受信委托人代为 staging | ⏳ **未决。W-B 保持关闭** |
 | D6 | 后续期工具清单是否保留 | 待需求审查 | ⏳ 待 PM 裁决 |
 
 ### 8.1 需向客户确认的口径
 
-1. 要批量处理的对象是**数据表 / 连接 / Schema**（首期已覆盖），还是后续期的**角色、Agent 账号、Token、权限**？
-2. 期望调用形态是 **MCP 工具**（已确认首选），是否也需要 HTTP 批量端点作为底座对外暴露？
-3. 批量动作以**写操作**（发布、启停表、导入）为主，还是也需要**批量巡检出报告**？
-4. 是否接受「先预览变更清单 → 再确认提交」的两段式？（已按此设计）
+1. W-A 的对象是连接、Schema 与源表。角色、Agent、Token 仍由 D6 决定，不阻塞 W-A。
+2. 本版只交付 MCP 工具，不新增 HTTP 批量端点。
+3. 本版只做写。只读巡检不在本版。
+4. preview → commit 已确认。
 
 ### 8.2 交付判定台账
 
@@ -1284,12 +1287,16 @@ function executeSemanticGroup(group, claimed):
 | 第 4 轮 | Codex | **需再修订** | Q01、Q02、Q03 | Spec v0.7 / Plan v0.5 |
 | 第 5 轮 | Codex | **不可交付开发** | Q01（回归）、Q02、Q03、F5-01 | Spec v0.8 / Plan v0.6 |
 | 第 6 轮 | Codex | **不可交付开发** | F6-01、F6-02、F6-03 + 高危 F6-04–F6-09 + 中危 F6-10 / F6-11 | Spec v0.9 / Plan v0.7 |
-| 第 7 轮 | Codex | **不可交付开发** | F7-01、F7-02、F7-03 + 高危 F7-04–F7-07 + 中危 F7-08–F7-10 | **Spec v1.0 / Plan v0.8（本版，PM 要求停止 Codex 后由 MiniMax Code 自行收敛）** |
-| 第 8 轮 | — | **未进行**（PM 要求停止 Codex CLI） | — | — |
+| 第 7 轮 | Codex | **不可交付开发** | F7-01、F7-02、F7-03 + 高危 F7-04–F7-07 + 中危 F7-08–F7-10 | Spec v1.0 / Plan v0.8 |
+| 第 8 轮 | — | **未进行** | PM 于 2026-10-29 选择不开独立复审，改为直签 W-A | — |
+| PM 直签 | PM | **W-A 可交付开发；W-B 不可交付开发** | 直签关闭的是已点名的伪代码冲突、D7 与 G34。D8 仍开放 | **Spec v1.1 / Plan v0.9** |
 
-**说明**：每轮 Codex 结论**不直接采信**——MiniMax Code 对全部发现逐条回查源码核实后再落报告；确认为属自己引入的回归时明确标出并修正（第 4 轮引入的 Q01 回归即属此类，第 5 轮已修）。审阅报告见 [`docs/reviews/`](../reviews/) 下 `2026-10-28-codex-review-lucy-ops-control-plane*.md`。
+**当前交付判定**：
 
-**当前交付判定**：**未取得「可交付开发」结论**。第 5–7 轮的 26 条发现均已逐条回查源码并在本版落地修订；第 7 轮后按 PM 要求**停止 Codex CLI**，故**本版未经第 8 轮独立复审**，**不得据此宣称「设计已闭合、可交付开发」**。开工前仍须：① D7（同写集原子组）与 **D8（staged 批次归属与消费）** 的 PM 签字；② 需求审查签核；③ 实施授权；④ **W-B 另需 L25-11 审阅通过**；⑤ **G34（幂等认领与审计绑定的事务边界）必须先定案**——该项**同时约束 W-A 与 W-B**（见 §7 前置表：W-A 前置含 G32–G34；W-B 前置含 G1–G34 全部），是第 6 轮 Codex 判定为「设计层仍未闭合」的唯一一条，本版**只登记为开放缺口、未定案**（§7 缺口表 G34）。**定案框架已按 2026-10-29 源码复核修正为「两层叠加」而非二选一**（业务文件写是文件系统写，**进不了 SQLite 事务**，故「同库同事务」覆盖不了文件写窗口）：**(a)** 幂等存储与审计表**同库同事务**（保留「认领与绑定原子」这一**有限**承诺）**＋** 最小恢复协议覆盖文件写窗口；**(b)** **仅**完整恢复协议并**删除**原子声明（对外只承诺「幂等且可恢复」）。**不得带此缺口开工**。PM 决策输入见 [`docs/reviews/2026-10-29-l25-16-pm-decision-sheet-d7-d8-g34.md`](../reviews/2026-10-29-l25-16-pm-decision-sheet-d7-d8-g34.md)。**本批文档产出本身不构成实现授权。**
+- **W-A 设计可交付开发。** 2026-10-29 PM 批准并授权把修订写入 Spec / Plan。D7 已确认，G34 已定为同库同事务加文件写窗口的最小恢复协议。失败重放与 attempt 审计的伪代码已与正文对齐。
+- **W-B 不可交付开发。** D8 未决，L25-11 仍是审阅退回。
+- **第 8 轮 Codex 复审没有做。** 本判定是 PM 直签，不是新的独立对抗审阅。
+- **2026-10-29 PM 已授权实现 W-A（S1–S4）。** 该授权不产生 VOPS 证据。VOPS-01–78 仍全部未执行。S5 不得开始。
 
 ---
 
@@ -1316,10 +1323,10 @@ function executeSemanticGroup(group, claimed):
 | VOPS-11 | preview 产出的计划含逐目标 before/after 与 blockers | 未执行 |
 | VOPS-12 | plan 过期 / digest 不符 / actor 不符 / 工具不符时 commit 拒绝 | 未执行 |
 | VOPS-13 | 预览后目标被其他写入改动时冲突拒绝 | 未执行 |
-| VOPS-14 | 批量写为部分成功：单目标失败不阻断其余目标，返回逐目标结果 | 未执行 |
+| VOPS-14 | 源表导入组间部分成功：一个原子组失败不阻断写集不相交的其他组，并返回逐目标结果。连接表与语义发布不适用本条 | 未执行 |
 | VOPS-15 | 失败目标可单独重放，且不产生重复副作用 | 未执行 |
 | VOPS-16 | 重放成功追加 target 级审计，首次失败行不被覆盖 | 未执行 |
-| VOPS-17 | `ktx.yaml` 批量写为一次合并写，多连接改动互不丢失 | 未执行 |
+| VOPS-17 | `ktx.yaml` 一次合并写，多连接改动互不丢失；任一连接失败或外部修改则整批不写 | 未执行 |
 | VOPS-18 | 外部修改 `ktx.yaml` 时批量写在写入前冲突拒绝 | 未执行 |
 | VOPS-19 | 整批在一个显示写屏障窗口内完成，catalog 不可见中间态 | 未执行 |
 | VOPS-20 | 涉及语义发布的写操作全部经过发布协调窗口，无并发穿透 | 未执行 |
@@ -1364,22 +1371,22 @@ function executeSemanticGroup(group, claimed):
 | **VOPS-59** | **发布受理态不得触发回滚或终结**：受理返回后目标保持 `pending_activation`、审计行保持 `pending`、组不撤销；仅当 `activationStatus == confirmed` 才置成功；`reindex_failed` 同样按受理态处理（保留已写文件、激活未确认）（Q01） | 未执行 |
 | **VOPS-60** | **五态持久化与重入穷尽**：两种非终态在进程重启后仍可判定；`recovery_required` / `pending_activation` 的 operation 拒绝新 attempt 并分别进入恢复 / release 收敛；operation 状态按 §4.2 聚合规则计算（Q02） | 未执行 |
 | **VOPS-61** | **语义发布授权覆盖完整影响集**：未授权连接上的附带待生效磁盘变更（`unrelatedDiskChanges`）必须阻断发布；`effectiveTargets` 为空或含不可解析对象时整批拒绝（Q03） | 未执行 |
-| **VOPS-62** | **认领与审计原子绑定（claim-and-bind）**：新建与重试两条路径在「审计已插入、绑定前」崩溃后，重启能按 `(opKey, attempt)` 查回既有行并补建绑定，**不产生重复审计行**（Q05） | 未执行 |
+| **VOPS-62** | **认领事务**：本 attempt 的 operation 认领、operation 审计、target 认领与 target 审计在同一次 `audit.sqlite` 事务中提交。事务回滚或提交前崩溃后，不存在本 attempt 的幂等行与审计行，也不产生文件效果（G34） | 未执行 |
 | **VOPS-63** | **语义发布锁所有权**：真实调用链可受理、**不自报 busy**；受理后其他写入口仍被发布窗口排除（F5-01） | 未执行 |
 | **VOPS-64** | **执行子集绑定 attempt**：原计划含 A/B 组、本次只提交 A 时，崩溃恢复**绝不执行 B**；非法子集被拒且**不遗留 pending operation**（F5-02） | 未执行 |
-| **VOPS-65** | **组执行异常边界**：分别注入效果前异常、效果后异常、审计写入异常，三者均不静默失败、不中断后续组，已完成组结果不丢失（F5-03） | 未执行 |
+| **VOPS-65** | **异常不丢已完成结果**：认领事务失败时不留本 attempt 的 pending 行且不产生效果；效果前异常、效果后异常、终态审计更新失败、target 终结失败、operation 终结失败都不静默吞掉，不中断后续组，已完成组的结果仍返回（F5-03 / F7-04） | 未执行 |
 | **VOPS-66** | **旧 Schema 移除纳入同一临界区**：批量导入持锁期间，旧移除入口不得删除其 Manifest / Overlay；该入口失败可恢复全部效果（F5-04） | 未执行 |
 | **VOPS-67** | **历史版本裁剪纳入组事务**：已有 5 个版本时，组内新增版本后另一成员失败，原 5 个版本仍全部可读，索引无悬空引用（F5-05） | 未执行 |
 | **VOPS-68** | **消费既有 staged 批次**：preview 的 `plan_id` 必须是**合法 staged 批次的 `validationId`**（快照存在且带 `batch` 段）；以普通 `taskId` / `operationId` 或不存在的 `validation_id` 调用**一律拒绝**；合法 `validation_id` 可读出计划并被 publish 消费（F5-06 / F6-03 / F7-09） | 未执行 |
 | **VOPS-69** | **计划 TTL 与幂等重放优先级**：计划过期后，已成功的同键重放仍返回原结果；尚未执行的提交按过期拒绝；pending operation 仍可恢复（F5-07） | 未执行 |
 | **VOPS-70** | **operation 状态聚合唯一且一致**：同一聚合函数在重入分派、终结与恢复后三处结果一致；存在未终结成员时**不得**转 `failed` 终态；成员状态出现五态之外的值时返回 `ops_state_corrupt` 而非当作失败重试（F6-01） | 未执行 |
 | **VOPS-71** | **同一原计划可分多次提交**：原计划含 A/B 组，首次只提交 A 并成功后，operation 保持 `pending`；随后可提交 B 且**不重复执行 A**；B 成功后 operation 才终结为 `succeeded`（F6-02） | 未执行 |
-| **VOPS-72** | **结果字段完整一致**：所有分支经唯一 `Outcome` 构造器产出结果，`kind` 与 `ok` 始终成对；语义发布先判 `recoveryRequired` 再判 `activationStatus`；成功路径**保留** `release` 等既有字段不覆盖（F6-06） | 未执行 |
+| **VOPS-72** | **结果字段完整一致**：所有分支经唯一 `Outcome` 构造器产出结果，`kind` 与 `ok` 成对，重建分支使用 `keep=`。语义发布先判 `recoveryRequired` 再判 `activationStatus`。`recoveryRequired=true` 经适配器、编排、持久化与重启后，`release` 与 `activationStatus` 仍在（F6-06 / F7-05）。本条随 W-B 取证，不阻塞 W-A | 未执行 |
 | **VOPS-73** | **失败成员不被抹掉**：A 失败后提交 B，A 的失败状态与失败审计行**原样保留**，operation 聚合结果为「A.failed + B.succeeded」而非把 A 当未执行（F7-01） | 未执行 |
 | **VOPS-74** | **损坏状态在新认领前被拒绝**：成员持久态出现五态之外的值时，commit 返回 `ops_state_corrupt`，**不产生任何效果**（F7-01 / F7-07） | 未执行 |
 | **VOPS-75** | **语义发布执行集 = 完整影响集**：授权覆盖 `R ∪ U` 时可发布；`U` 中存在未授权对象时在**认领前**即被拒绝；执行集不得被参数收窄（F7-02） | 未执行 |
 | **VOPS-76** | **批次归属校验不被绕过**：跨操作者、跨实例消费 staged 批次一律拒绝（`ops_batch_not_owned`）；控制面不以管理员身份代读、不伪装 actor（F7-03） | 未执行 |
-| **VOPS-77** | **分次提交不留悬垂 pending 审计**：原计划分 A/B 两次完成（含中途重启）后，全部审计行均可解释，无永久 `pending`；attempt 之间不互相改写（F7-06） | 未执行 |
+| **VOPS-77** | **分次提交的审计可解释**：只提交 A 且 A 成功时，该 attempt 的 operation 审计为 `committed`，operation 记录仍为 `pending`。再提交 B 成功后，B 的审计单独为 `committed`，A 的审计行不被改写。A 失败后再提交成功的 B：A 的审计保持 `failed`，B 的审计为 `committed`，operation 记录为 `failed`。全程无永久 `pending` 行（F7-06） | 未执行 |
 | **VOPS-78** | **恢复合同自洽**：恢复 A 后的首次调用**不执行 B**（只收敛已认领未终结的成员），再次提交 B 才执行并按全集聚合（F7-10） | 未执行 |
 
 ---
