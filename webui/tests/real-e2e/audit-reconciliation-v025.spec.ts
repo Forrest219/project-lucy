@@ -76,6 +76,11 @@ test.describe.configure({ mode: "serial" });
 
 test("the reconciliation detail agrees with this run's audit events and keeps full table identities", async ({ browser, baseURL }, testInfo) => {
   covers(testInfo, "SEC-18-V06", "SEC-20-V01");
+  // 2026-10-28（D2 路径 A）：ARV25 已并入冻结 catalog，因此**同时**用 `covers`
+  // 声明给冻结 collector（`case` 命名空间），否则这些 variant 在
+  // evidence.cases 里根本不会出现，`passedIds` 也就永远填不上。
+  // `coversV025` 保留：v0.25 影子清单的维度证据仍按自己的命名空间采集。
+  covers(testInfo, "ARV25-V01", "ARV25-V02", "ARV25-V03", "ARV25-V05", "ARV25-V06");
   coversV025(testInfo, "ARV25-V01", "ARV25-V02", "ARV25-V03", "ARV25-V05", "ARV25-V06");
   // The reconciliation detail is reconciled against a REAL Agent turn of this run, so the
   // agent client is a declared dependency of this spec (the runtime check below still blocks
@@ -198,6 +203,7 @@ test("the reconciliation detail agrees with this run's audit events and keeps fu
 
 test("the usage view, the token reconciliation and the CSV export close over the same snapshot", async ({ browser, baseURL }, testInfo) => {
   covers(testInfo, "SEC-20-V01", "SEC-20-V02");
+  covers(testInfo, "ARV25-V04", "ARV25-V07", "ARV25-V08", "ARV25-V09", "ARV25-V10", "ARV25-V11");
   coversV025(testInfo, "ARV25-V04", "ARV25-V07", "ARV25-V08", "ARV25-V09", "ARV25-V10", "ARV25-V11");
   blockUnless(testInfo, "lucy-http", "browser");
 
@@ -315,6 +321,7 @@ test("the usage view, the token reconciliation and the CSV export close over the
 
 test("a reconciliation read without the admin identity is refused, leaves a meta-audit trace and leaks nothing", async ({ browser, baseURL }, testInfo) => {
   covers(testInfo, "SEC-18-V01");
+  covers(testInfo, "ARV25-V11");
   coversV025(testInfo, "ARV25-V11");
   blockUnless(testInfo, "lucy-http", "browser");
 
