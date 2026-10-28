@@ -194,6 +194,31 @@ test("the reconciliation detail agrees with this run's audit events and keeps fu
         await anonymous.close();
       }
     }
+    // ARV25-V06：正式完整读取在不可证明时**失败关闭**，而**诊断模式必须仍然可读**
+    // 并显式披露「是否可证明」与「缺什么」。这一半此前完全没被验证 —— spec 只
+    // 读了默认的 complete 模式，所以「诊断模式显式不完整」是空转的。
+    // §18.11：mode=diagnostic 时返回 diagnostic_incomplete + 实际证据界 + 缺失集合。
+    {
+      const diagnosticResponse = await page.request.get(
+        new URL(`/api/admin/audit/reconciliation/inquiries/${encodeURIComponent(turnId)}?mode=diagnostic`, baseURL!).toString()
+      );
+      const diagnosticPayload = (await diagnosticResponse.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: { code?: string };
+        data?: { asOfProof?: { ok?: boolean; actualBound?: unknown; missingSets?: unknown }; diagnosticIncomplete?: unknown };
+      };
+      assertion(testInfo, "consistency",
+        diagnosticPayload.ok === true && typeof diagnosticPayload.data?.asOfProof?.ok === "boolean",
+        `the diagnostic read is readable even where the formal read fails closed (ok=${String(diagnosticPayload.ok)}, asOfProof.ok=${String(diagnosticPayload.data?.asOfProof?.ok)}, code=${diagnosticPayload.error?.code ?? "none"})`);
+      assertion(testInfo, "consistency",
+        diagnosticPayload.data?.asOfProof?.ok === true
+          ? diagnosticPayload.data?.diagnosticIncomplete === null || diagnosticPayload.data?.diagnosticIncomplete === undefined
+          : Boolean(diagnosticPayload.data?.diagnosticIncomplete),
+        "the diagnostic read marks itself incomplete exactly when the as-of proof does not hold");
+      assertion(testInfo, "no_leak",
+        !vault.contains(JSON.stringify(diagnosticPayload)),
+        "the diagnostic read carries no credential value");
+    }
     if (!detailPayload.ok) {
       // The read model may refuse (projection not covered / ledger seq missing).
       // That refusal is itself the fail-closed contract (ARV25-V10).
