@@ -1,6 +1,6 @@
 {
   "generatedAt": "2026-10-29",
-  "purpose": "Spec/Plan 文档形态门禁（scripts/lint-spec-docs.mjs）的存量豁免清单。**只减不增**：新违规必须修，不得写入本清单；清单条目在违规消失后应被移除（门禁会报 STALE）。",
+  "purpose": "Spec/Plan 文档形态门禁（scripts/lint-spec-docs.mjs）的存量豁免清单。**只减不增**：新违规必须修，不得写入本清单；清单条目在违规消失后应被移除（门禁会报 STALE）。 **只覆盖已进入 HEAD 的存量文档**；未入库的在途文档不在豁免范围（它们须自行合规，或由其 owner 单独立条豁免并写明理由）。",
   "ruleNotes": {
     "index": "存量 Spec/Plan 未登记进对应索引 README。索引为策展式，存量覆盖不完整；自本清单生效起新增文档必须登记。",
     "ds-shape": "存量 Spec 含 Design System Compliance 小节但未采用 webui/docs/design-system/30-pr-compliance-template.md 的四段式模板。",
@@ -1339,34 +1339,6 @@
       "rule": "plan-parts"
     },
     {
-      "file": "docs/plans/2026-10-29-ci-restoration-plan.md",
-      "rule": "index"
-    },
-    {
-      "file": "docs/plans/2026-10-29-ci-restoration-plan.md",
-      "rule": "metadata"
-    },
-    {
-      "file": "docs/plans/2026-10-29-ci-restoration-plan.md",
-      "rule": "plan-parts"
-    },
-    {
-      "file": "docs/plans/2026-10-29-ci-restoration-plan.md",
-      "rule": "plan-parts"
-    },
-    {
-      "file": "docs/plans/2026-10-29-ci-restoration-plan.md",
-      "rule": "plan-parts"
-    },
-    {
-      "file": "docs/plans/2026-10-29-ci-restoration-plan.md",
-      "rule": "term-shape"
-    },
-    {
-      "file": "docs/plans/2026-10-29-ci-restoration-plan.md",
-      "rule": "term-shape"
-    },
-    {
       "file": "docs/plans/M31-config-subdir-migration.md",
       "rule": "index"
     },
@@ -2177,18 +2149,6 @@
     {
       "file": "docs/specs/lucy-aicon-online-capability-scorecard.md",
       "rule": "pseudocode"
-    },
-    {
-      "file": "docs/specs/lucy-ci-restoration-spec.md",
-      "rule": "index"
-    },
-    {
-      "file": "docs/specs/lucy-ci-restoration-spec.md",
-      "rule": "term-shape"
-    },
-    {
-      "file": "docs/specs/lucy-ci-restoration-spec.md",
-      "rule": "term-shape"
     },
     {
       "file": "docs/specs/lucy-customer-amd64-offline-delivery-spec.md",
