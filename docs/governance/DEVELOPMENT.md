@@ -117,6 +117,51 @@ Lucy 当前只支持**单实例、单副本**部署，不支持多个 WebUI / MC
 - WO「必含章节」列表（若该域使用）应包含「核心流程（伪代码）/ Core Algorithm」；**不替代**本文件为本规则的事实源
 - **不**要求立刻用 `lint:spec` 机械检测伪代码质量；稳定后再考虑弱 warn（例如仅检查小节标题是否存在）
 
+## 新增 Spec / Plan 的落盘清单
+
+**本节是「落盘一份新 Spec / Plan 要做完哪几件事」的唯一清单。** 规则分散在多个文件里，逐个读容易漏，故在此集中列出，并注明每条的出处。**清单本身可作为交付物的一节**（审阅者直接查），但**不得替代**被引用的文件为事实源。
+
+### 为什么有这一节
+
+既有机器门禁（`lint:spec` / `lint:terminology` / `lint:ia-boundary`）只覆盖**机器可判定项**（路由 / API / 术语 / 元数据），**几乎不覆盖文档形态**。门禁全绿**不等于**文档合规。2026-10-29 实测：一份按规范写就的 Spec／Plan 仍有两处形态不合规（Design System 小节未用规定模板、新增 lint 命令未在测试门禁文档登记），而当时三个机器门禁**全部全绿**。
+
+### 落盘清单（逐条勾销）
+
+| # | 要求 | 出处 | 机器门禁 |
+|---|---|---|---|
+| 1 | **Spec 落 `docs/specs/`、Plan 落 `docs/plans/`**，命名 `lucy-YYYYMMDD-<slug>-spec.md` / `YYYY-MM-DD-lucy-<slug>-plan.md` | 本文件「Spec 落位规则」 | `lint:spec-docs` |
+| 2 | **Spec 含「核心流程（伪代码）」/「Core Algorithm」**，或**显式写明伪代码豁免** | 本文件「Spec 内容规格」 | `lint:spec-docs`（规则 `pseudocode`） |
+| 3 | **Spec 头部元数据含「文档类型 / 版本」与「状态」**；**Plan 头部含「状态」「授权边界」「验收」** | 本文件「Spec 内容规格」 | `lint:spec-docs`（规则 `metadata`） |
+| 4 | **Plan 含 目标 / 开工前置 / 验收 / 完成定义 / 风险 五类小节**（措辞可不同，按语义匹配） | 本文件「强制流程：Plan Mode」与本节 | `lint:spec-docs`（规则 `plan-parts`） |
+| 5 | **含 `Terminology Compliance` 小节 ⇒ 必须含 `This feature follows …` 与 `New terms:`** | 本文件「新模块必填 Terminology Compliance」 | `lint:spec-docs`（规则 `term-shape`） |
+| 6 | **含 `Design System Compliance` 小节 ⇒ 必须用规定模板四段式**（`Referenced Specs` / `What This Change Follows` / `Exceptions (If Any)` / `Follow-up Needed`） | 本文件「WebUI 设计规范」＋ [`webui/docs/design-system/30-pr-compliance-template.md`](../../webui/docs/design-system/30-pr-compliance-template.md) | `lint:spec-docs`（规则 `ds-shape`） |
+| 7 | **Spec / Plan 必须登记进对应索引**：`docs/specs/` → `docs/README.md`；`docs/plans/` → `docs/plans/README.md` | 本节 | `lint:spec-docs`（规则 `index`） |
+| 8 | **新增命令 / CI job 必须在测试门禁文档登记** | [`docs/governance/test-layers-and-release-gates.md`](test-layers-and-release-gates.md) §2「Current Commands」与 §8「CI Mapping」 | 无（人工核对） |
+| 9 | **功能编号待 PM 指派**，由权威登记册登记 | [`docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md`](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) | 无（人工核对） |
+| 10 | **落盘后跑一遍机器门禁并逐条勾销本表**；不得以「门禁全绿」替代形态自查 | 本节 | `lint:spec-docs` + `lint:spec` + `lint:terminology` + `lint:ia-boundary` |
+
+### 索引登记的判据（避免误判）
+
+`docs/README.md` 与 `docs/plans/README.md` 是**策展式索引**，不是全量目录：
+
+- 2026-10-29 实测：`docs/specs/` 46 份中已索引 16 份；`docs/plans/` 74 份中已索引 15 份。
+- 因此**存量文档不要求补登记**；但**自本节生效起新增的文档必须登记**（清单第 7 条）。
+- **不得**把「索引未收录」当作「可以不登记」的依据，也**不得**把「别人没登记」当作惯例引用——**先数目录覆盖率，再下结论**。
+
+### 存量豁免与基线（只减不增）
+
+形态门禁 `npm run lint:spec-docs` 对全量 `docs/specs/` 与 `docs/plans/` 生效。存量违规冻结在
+[`docs/governance/spec-plan-doc-baseline.json`](spec-plan-doc-baseline.json)：
+
+- **新增违规 ⇒ exit 1**，必须修，**不得写入基线**；
+- 基线条目在违规消失后，门禁报 `STALE`，提示从基线移除——**基线只减不增**；
+- 确需豁免某一份存量文档时，在基线里为**该文件 + 该规则**单独立一条并写明理由，**不得整规则豁免**。
+
+### Review 要求
+
+- Spec / Plan 评审必须检查：本清单 10 条是否逐条可答；回答不得是「门禁全绿」。
+- 评审发现形态不合规时，**先修文档形态**，再论内容。
+
 ## 全系统术语规范
 
 Lucy 的系统级术语事实源是

@@ -1,0 +1,2266 @@
+{
+  "generatedAt": "2026-10-29",
+  "purpose": "Spec/Plan 文档形态门禁（scripts/lint-spec-docs.mjs）的存量豁免清单。**只减不增**：新违规必须修，不得写入本清单；清单条目在违规消失后应被移除（门禁会报 STALE）。",
+  "ruleNotes": {
+    "index": "存量 Spec/Plan 未登记进对应索引 README。索引为策展式，存量覆盖不完整；自本清单生效起新增文档必须登记。",
+    "ds-shape": "存量 Spec 含 Design System Compliance 小节但未采用 webui/docs/design-system/30-pr-compliance-template.md 的四段式模板。",
+    "term-shape": "存量 Spec 的 Terminology Compliance 缺少 This feature follows 句式或 New terms: 字段。",
+    "pseudocode": "存量 Spec 无「核心流程（伪代码）」/「Core Algorithm」小节，也未写明伪代码豁免。",
+    "plan-parts": "存量 Plan 缺少目标/开工前置/验收/完成定义/风险 五类小节中的若干。",
+    "metadata": "存量文档头部元数据缺少文档类型/版本/状态（Spec）或状态/授权边界/验收（Plan）。"
+  },
+  "entries": [
+    {
+      "file": "docs/plans/2026-08-03-lucy-enterprise-data-agent-access-governance-plan.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/2026-08-03-lucy-enterprise-data-agent-access-governance-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-08-03-lucy-enterprise-data-agent-access-governance-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-03-lucy-enterprise-data-agent-access-governance-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-03-lucy-enterprise-data-agent-access-governance-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-03-lucy-enterprise-data-agent-access-governance-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-20-trace-evidence-p0-plan.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/2026-08-20-trace-evidence-p0-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-08-20-trace-evidence-p0-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-20-trace-evidence-p0-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-20-trace-evidence-p0-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-20-trace-evidence-p0-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-20-trace-evidence-p0-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-20-trace-evidence-p0-plan.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/plans/2026-08-20-trace-evidence-p0-plan.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/plans/2026-08-25-create-connection-field-alignment.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/2026-08-25-create-connection-field-alignment.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-08-25-create-connection-field-alignment.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-25-create-connection-field-alignment.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-25-create-connection-field-alignment.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-25-create-connection-field-alignment.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-25-role-permission-bulk-select-ux.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/2026-08-25-role-permission-bulk-select-ux.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-08-25-role-permission-bulk-select-ux.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-25-role-permission-bulk-select-ux.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-25-role-permission-bulk-select-ux.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-25-role-permission-bulk-select-ux.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-25-role-permission-bulk-select-ux.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-25-role-permission-bulk-select-ux.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/plans/2026-08-25-user-journey-playbook-design.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/2026-08-25-user-journey-playbook-design.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-08-25-user-journey-playbook-design.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-25-user-journey-playbook-design.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-25-user-journey-playbook-design.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-25-user-journey-playbook-design.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-26-admin-audit-uiux-remediation.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/2026-08-26-admin-audit-uiux-remediation.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-08-26-admin-audit-uiux-remediation.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-26-admin-audit-uiux-remediation.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-26-admin-audit-uiux-remediation.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-26-admin-audit-uiux-remediation.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-26-admin-audit-uiux-remediation.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-26-admin-audit-uiux-remediation.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/plans/2026-08-26-admin-audit-uiux-remediation.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/plans/2026-08-26-admin-data-grid-frame-consistency.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/plans/2026-08-26-admin-data-grid-frame-consistency.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/plans/2026-08-26-admin-data-grid-frame-consistency.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/plans/2026-08-26-admin-data-grid-frame-consistency.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/plans/2026-08-26-admin-data-grid-frame-consistency.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/2026-08-26-admin-data-grid-frame-consistency.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-08-26-admin-data-grid-frame-consistency.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-26-admin-data-grid-frame-consistency.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-26-admin-data-grid-frame-consistency.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-26-admin-data-grid-frame-consistency.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-26-admin-data-grid-frame-consistency.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-26-branding-settings-ux-polish.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/plans/2026-08-26-branding-settings-ux-polish.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/plans/2026-08-26-branding-settings-ux-polish.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/plans/2026-08-26-branding-settings-ux-polish.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/plans/2026-08-26-branding-settings-ux-polish.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/2026-08-26-branding-settings-ux-polish.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-08-26-branding-settings-ux-polish.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-26-branding-settings-ux-polish.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-26-branding-settings-ux-polish.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-26-branding-settings-ux-polish.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-26-branding-settings-ux-polish.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-26-enterprise-kpi-contract-remediation.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/2026-08-26-enterprise-kpi-contract-remediation.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-08-26-enterprise-kpi-contract-remediation.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-26-enterprise-kpi-contract-remediation.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-26-enterprise-kpi-contract-remediation.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-26-eval-accuracy-closed-loop-and-change-triggered-regression.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/2026-08-26-eval-accuracy-closed-loop-and-change-triggered-regression.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-08-26-eval-accuracy-closed-loop-and-change-triggered-regression.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-26-eval-accuracy-closed-loop-and-change-triggered-regression.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-26-eval-accuracy-closed-loop-and-change-triggered-regression.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/plans/2026-08-26-eval-accuracy-closed-loop-and-change-triggered-regression.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/plans/2026-08-26-lucy-agent-chat-a3-optimization-plan.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/2026-08-26-lucy-agent-chat-a3-optimization-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-08-26-lucy-agent-chat-a3-optimization-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-26-lucy-agent-chat-a3-optimization-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-26-lucy-agent-chat-a3-optimization-plan.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/plans/2026-08-26-lucy-agent-chat-a3-optimization-plan.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/plans/2026-08-26-webui-navigation-subtitle-copy.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/2026-08-26-webui-navigation-subtitle-copy.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-08-26-webui-navigation-subtitle-copy.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-26-webui-navigation-subtitle-copy.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-26-webui-navigation-subtitle-copy.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-26-webui-navigation-subtitle-copy.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-08-26-webui-navigation-subtitle-copy.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-09-08-lucy-mcp-execution-runtime-ack-debug-plan.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/2026-09-08-lucy-mcp-execution-runtime-ack-debug-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-09-08-lucy-mcp-execution-runtime-ack-debug-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-09-08-lucy-mcp-execution-runtime-ack-debug-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-09-08-lucy-mcp-execution-runtime-ack-debug-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-09-08-lucy-mcp-execution-runtime-ack-debug-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-09-08-lucy-mcp-execution-runtime-ack-debug-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-09-25-repo-directory-reorganization-plan.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/2026-09-25-repo-directory-reorganization-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-09-25-repo-directory-reorganization-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-09-25-repo-directory-reorganization-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-09-25-repo-directory-reorganization-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-09-26-audit-p0-data-grid-convergence.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/2026-09-26-audit-p0-data-grid-convergence.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-09-26-audit-p0-data-grid-convergence.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-09-26-audit-p0-data-grid-convergence.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-09-27-ktx-upstream-session-merge-test-plan.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/2026-09-27-ktx-upstream-session-merge-test-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-09-27-ktx-upstream-session-merge-test-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-09-27-ktx-upstream-session-merge-test-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-09-27-ktx-upstream-session-merge-test-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-09-27-ktx-upstream-session-merge-test-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-09-27-setup-assistant-p0-p2-fixes.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/2026-09-27-setup-assistant-p0-p2-fixes.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-09-27-setup-assistant-p0-p2-fixes.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-09-27-setup-assistant-p0-p2-fixes.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-09-27-setup-assistant-p0-p2-fixes.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-09-27-setup-assistant-p0-p2-fixes.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-09-28-spec-160-p1-remediation.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/2026-09-28-spec-160-p1-remediation.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-09-28-spec-160-p1-remediation.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-09-28-spec-160-p1-remediation.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-09-28-spec-160-p1-remediation.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-09-28-spec-160-p1-remediation.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-09-28-spec-160-p1-remediation.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-11-customer-log-next-optimizations.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/2026-10-11-customer-log-next-optimizations.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-10-11-customer-log-next-optimizations.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-11-customer-log-next-optimizations.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-11-customer-log-next-optimizations.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-11-customer-log-next-optimizations.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-11-customer-log-next-optimizations.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-11-eval-module-functional-upgrade.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/2026-10-11-eval-module-functional-upgrade.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-10-11-eval-module-functional-upgrade.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-11-eval-module-functional-upgrade.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-11-eval-module-functional-upgrade.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-11-eval-module-functional-upgrade.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-11-eval-result-policy-context-upgrade.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/2026-10-11-eval-result-policy-context-upgrade.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-10-11-eval-result-policy-context-upgrade.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-11-eval-result-policy-context-upgrade.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-11-eval-result-policy-context-upgrade.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-11-eval-result-policy-context-upgrade.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-12-acceptance-gap-closure.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/2026-10-12-acceptance-gap-closure.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-10-12-acceptance-gap-closure.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-12-acceptance-gap-closure.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-12-acceptance-gap-closure.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-12-acceptance-gap-closure.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-18-e2e-remediation-plan.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/2026-10-18-e2e-remediation-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-10-18-e2e-remediation-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-18-e2e-remediation-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-18-e2e-remediation-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-18-e2e-remediation-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-18-e2e-remediation-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-18-enterprise-security-and-real-e2e-plan.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/plans/2026-10-18-enterprise-security-and-real-e2e-plan.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/plans/2026-10-18-enterprise-security-and-real-e2e-plan.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/plans/2026-10-18-enterprise-security-and-real-e2e-plan.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/plans/2026-10-18-enterprise-security-and-real-e2e-plan.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/2026-10-18-enterprise-security-and-real-e2e-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-10-18-enterprise-security-and-real-e2e-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-18-enterprise-security-and-real-e2e-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-18-enterprise-security-and-real-e2e-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-18-enterprise-security-and-real-e2e-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-18-enterprise-security-and-real-e2e-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-18-enterprise-security-and-real-e2e-plan.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/plans/2026-10-18-enterprise-security-and-real-e2e-plan.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/plans/2026-10-18-enterprise-security-cursor-prompts.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/2026-10-18-enterprise-security-cursor-prompts.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-10-18-enterprise-security-cursor-prompts.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-18-enterprise-security-cursor-prompts.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-18-enterprise-security-cursor-prompts.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-18-enterprise-security-cursor-prompts.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-18-enterprise-security-cursor-prompts.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-18-mcp-audit-serial.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/2026-10-18-mcp-audit-serial.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-10-18-mcp-audit-serial.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-18-mcp-audit-serial.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-18-mcp-audit-serial.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-18-mcp-audit-serial.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-18-mcp-audit-serial.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-18-r0-readonly-snapshot-spec.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/2026-10-18-r0-readonly-snapshot-spec.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-10-18-r0-readonly-snapshot-spec.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-18-r0-readonly-snapshot-spec.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-18-r0-readonly-snapshot-spec.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-18-r0-readonly-snapshot-spec.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-18-r0-readonly-snapshot-spec.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-18-r1-restore-candidate-spec.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/2026-10-18-r1-restore-candidate-spec.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-10-18-r1-restore-candidate-spec.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-18-r1-restore-candidate-spec.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-18-r1-restore-candidate-spec.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-18-r1-restore-candidate-spec.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-18-r1-restore-candidate-spec.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-19-audit-trust-and-admin-investigation-plan.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/plans/2026-10-19-audit-trust-and-admin-investigation-plan.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/plans/2026-10-19-audit-trust-and-admin-investigation-plan.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/plans/2026-10-19-audit-trust-and-admin-investigation-plan.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/plans/2026-10-19-audit-trust-and-admin-investigation-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-10-19-audit-trust-and-admin-investigation-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-19-audit-trust-and-admin-investigation-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-19-audit-trust-and-admin-investigation-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-19-audit-trust-and-admin-investigation-plan.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/plans/2026-10-19-audit-trust-and-admin-investigation-plan.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/plans/2026-10-19-lucy-product-version-2.0.0.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-10-19-lucy-product-version-2.0.0.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-19-lucy-product-version-2.0.0.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-19-lucy-product-version-2.0.0.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-19-lucy-product-version-2.0.0.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-19-lucy-product-version-2.0.0.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-19-upgrade-e2e-implementation-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-10-19-upgrade-e2e-implementation-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-19-upgrade-e2e-implementation-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-19-upgrade-e2e-implementation-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-19-upgrade-e2e-implementation-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-19-v2-bootstrap-delivery-scripts-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-10-19-v2-bootstrap-delivery-scripts-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-19-v2-bootstrap-delivery-scripts-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-19-v2-bootstrap-delivery-scripts-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-20-build-time-bootstrap-credential-plan.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/2026-10-20-build-time-bootstrap-credential-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-10-20-build-time-bootstrap-credential-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-20-build-time-bootstrap-credential-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-20-build-time-bootstrap-credential-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-20-build-time-bootstrap-credential-plan.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/plans/2026-10-20-hive-direct-connection-implementation-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-10-20-hive-direct-connection-implementation-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-20-hive-direct-connection-implementation-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-20-hive-direct-connection-implementation-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-20-hive-direct-connection-implementation-plan.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/plans/2026-10-20-upgrade-feature-test-coverage.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/2026-10-20-upgrade-feature-test-coverage.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-10-20-upgrade-feature-test-coverage.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-20-upgrade-feature-test-coverage.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-20-upgrade-feature-test-coverage.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-20-upgrade-feature-test-coverage.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-20-upgrade-feature-test-coverage.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/plans/2026-10-20-upgrade-feature-test-coverage.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/plans/2026-10-20-v2-open-mode-customer-upgrade-delivery-plan.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/2026-10-20-v2-open-mode-customer-upgrade-delivery-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-10-20-v2-open-mode-customer-upgrade-delivery-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-20-v2-open-mode-customer-upgrade-delivery-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-20-v2-open-mode-customer-upgrade-delivery-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-20-v2-open-mode-customer-upgrade-delivery-plan.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/plans/2026-10-21-customer-20260828-v1-to-lucy-2.0-upgrade-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-10-21-customer-20260828-v1-to-lucy-2.0-upgrade-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-21-customer-20260828-v1-to-lucy-2.0-upgrade-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-21-customer-20260828-v1-to-lucy-2.0-upgrade-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-21-customer-20260828-v1-upgrade-package-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-10-21-customer-20260828-v1-upgrade-package-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-21-customer-20260828-v1-upgrade-package-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-21-customer-20260828-v1-upgrade-package-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-21-customer-20260828-v1-upgrade-package-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-21-customer-20260828-v1-upgrade-package-plan.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/plans/2026-10-21-customer-v2-fresh-install-package-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-10-21-customer-v2-fresh-install-package-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-21-customer-v2-fresh-install-package-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-21-customer-v2-fresh-install-package-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-21-customer-v2-fresh-install-package-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-22-upgrade-candidate-verification-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-10-22-upgrade-candidate-verification-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-22-upgrade-candidate-verification-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-22-upgrade-candidate-verification-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-22-upgrade-candidate-verification-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-24-lucy-v0.25-branch-startup.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/2026-10-24-lucy-v0.25-branch-startup.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-10-24-lucy-v0.25-branch-startup.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-24-lucy-v0.25-branch-startup.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-24-lucy-v0.25-branch-startup.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-24-lucy-v0.25-branch-startup.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-24-lucy-v0.25-branch-startup.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-24-lucy-v0.25-p0-requirements-review-checklist.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/2026-10-24-lucy-v0.25-p0-requirements-review-checklist.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-10-24-lucy-v0.25-p0-requirements-review-checklist.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-24-lucy-v0.25-p0-requirements-review-checklist.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-24-lucy-v0.25-p0-requirements-review-checklist.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-24-lucy-v0.25-p0-requirements-review-checklist.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-24-lucy-v0.25-p0-requirements-review-checklist.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-25-lucy-v0.25-e2e-implementation-plan.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/2026-10-25-lucy-v0.25-e2e-implementation-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-25-lucy-v0.25-e2e-implementation-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-25-lucy-v0.25-e2e-implementation-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-25-lucy-v0.25-e2e-mainline-and-branch-optimization-plan.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/2026-10-25-lucy-v0.25-e2e-mainline-and-branch-optimization-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-10-25-lucy-v0.25-e2e-mainline-and-branch-optimization-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-25-lucy-v0.25-e2e-mainline-and-branch-optimization-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-25-lucy-v0.25-l25-06-oidc-implementation-plan.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/2026-10-25-lucy-v0.25-l25-06-oidc-implementation-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-10-25-lucy-v0.25-l25-06-oidc-implementation-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-25-lucy-v0.25-l25-06-oidc-implementation-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-25-lucy-v0.25-l25-06-oidc-implementation-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-25-lucy-v0.25-p0-implementation-plan.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/2026-10-25-lucy-v0.25-p0-implementation-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-10-25-lucy-v0.25-p0-implementation-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-25-lucy-v0.25-p0-implementation-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-25-lucy-v0.25-p0-implementation-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-25-lucy-v0.25-p0-implementation-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-25-lucy-v0.25-p1-implementation-plan.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/2026-10-25-lucy-v0.25-p1-implementation-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-10-25-lucy-v0.25-p1-implementation-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-25-lucy-v0.25-p1-implementation-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-25-lucy-v0.25-p1-implementation-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-25-lucy-v0.25-p1-implementation-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-25-lucy-v0.25-p1-requirements-review-checklist.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-10-25-lucy-v0.25-p1-requirements-review-checklist.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-25-lucy-v0.25-p1-requirements-review-checklist.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-25-lucy-v0.25-p1-requirements-review-checklist.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-25-lucy-v0.25-p1-requirements-review-checklist.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-25-lucy-v0.25-p1-requirements-review-checklist.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-26-lucy-v0.25-l25-04-skill-owner-implementation-plan.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/2026-10-26-lucy-v0.25-l25-04-skill-owner-implementation-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-10-26-lucy-v0.25-l25-04-skill-owner-implementation-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-26-lucy-v0.25-l25-04-skill-owner-implementation-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-26-lucy-v0.25-l25-04-skill-owner-implementation-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-26-lucy-v0.25-l25-04-skill-owner-implementation-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-26-lucy-v0.25-l25-05-smtp-notifications-implementation-plan.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/2026-10-26-lucy-v0.25-l25-05-smtp-notifications-implementation-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-10-26-lucy-v0.25-l25-05-smtp-notifications-implementation-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-26-lucy-v0.25-l25-05-smtp-notifications-implementation-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-26-lucy-v0.25-l25-05-smtp-notifications-implementation-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-27-lucy-v0.25-semantic-release-restore-implementation-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-28-lucy-v0.25-lucy-ops-control-plane-implementation-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-29-ci-restoration-plan.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/2026-10-29-ci-restoration-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/2026-10-29-ci-restoration-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-29-ci-restoration-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-29-ci-restoration-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-10-29-ci-restoration-plan.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/plans/2026-10-29-ci-restoration-plan.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/plans/M31-config-subdir-migration.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/M31-config-subdir-migration.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/M31-config-subdir-migration.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/M31-config-subdir-migration.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/M31-config-subdir-migration.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/M31-config-subdir-migration.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/M31-config-subdir-migration.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/o-202608-49-chatbi-semantic-publish-and-100-eval.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/o-202608-49-chatbi-semantic-publish-and-100-eval.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/o-202608-49-chatbi-semantic-publish-and-100-eval.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-202608-00-spec-branch-isolation.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/wo-202608-00-spec-branch-isolation.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/wo-202608-00-spec-branch-isolation.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-202608-00-spec-branch-isolation.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-202608-00-spec-branch-isolation.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-202608-00-spec-branch-isolation.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-202608-00-spec-branch-isolation.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-202608-05-demo-builder-arm-default.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/wo-202608-05-demo-builder-arm-default.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/wo-202608-05-demo-builder-arm-default.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-202608-05-demo-builder-arm-default.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-202608-05-demo-builder-arm-default.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-202608-06-governance-review-release-evidence.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/wo-202608-06-governance-review-release-evidence.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/wo-202608-06-governance-review-release-evidence.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-202608-06-governance-review-release-evidence.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-202608-06-governance-review-release-evidence.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-202608-07-customer-amd64-delivery.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/wo-202608-07-customer-amd64-delivery.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/wo-202608-07-customer-amd64-delivery.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-202608-07-customer-amd64-delivery.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-202608-07-customer-amd64-delivery.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-202608-08-image-arch-and-ktx-baseline.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/wo-202608-08-image-arch-and-ktx-baseline.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/wo-202608-08-image-arch-and-ktx-baseline.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-202608-08-image-arch-and-ktx-baseline.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-202608-08-image-arch-and-ktx-baseline.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-202608-27-customer-k8s-delivery.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/wo-202608-27-customer-k8s-delivery.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/wo-202608-27-customer-k8s-delivery.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-202608-27-customer-k8s-delivery.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/plans/wo-202608-27-customer-k8s-delivery.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/plans/wo-202608-49-chatbi-semantic-publish-and-100-eval.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/wo-202608-49-chatbi-semantic-publish-and-100-eval.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/wo-202608-49-chatbi-semantic-publish-and-100-eval.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-202608-49-chatbi-semantic-publish-and-100-eval.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-202608-58-spider2-lite-sqlite-stress-harness.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/wo-202608-58-spider2-lite-sqlite-stress-harness.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/wo-202608-58-spider2-lite-sqlite-stress-harness.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-202608-58-spider2-lite-sqlite-stress-harness.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-202608-58-spider2-lite-sqlite-stress-harness.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-202608-59-access-control-p0.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/wo-202608-59-access-control-p0.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/wo-202608-59-access-control-p0.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-202608-59-access-control-p0.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-202608-59-access-control-p0.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-202608-59-access-control-p0.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-202608-59-access-control-p0.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-202608-60-access-control-p1.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/wo-202608-60-access-control-p1.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/wo-202608-60-access-control-p1.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-202608-60-access-control-p1.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-202608-60-access-control-p1.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-202608-60-access-control-p1.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-202608-60-access-control-p1.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-202608-61-access-control-p15-agent-constraints.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/wo-202608-61-access-control-p15-agent-constraints.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/wo-202608-61-access-control-p15-agent-constraints.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-202608-61-access-control-p15-agent-constraints.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-202608-61-access-control-p15-agent-constraints.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-202608-61-access-control-p15-agent-constraints.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-202608-61-access-control-p15-agent-constraints.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-202609-02-lucy-version-governance-hardening.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/wo-202609-02-lucy-version-governance-hardening.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/wo-202609-02-lucy-version-governance-hardening.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-202609-02-lucy-version-governance-hardening.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-202609-02-lucy-version-governance-hardening.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-202609-02-lucy-version-governance-hardening.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-202609-02-lucy-version-governance-hardening.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-20260901-k8s-delivery-hardening.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/wo-20260901-k8s-delivery-hardening.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/wo-20260901-k8s-delivery-hardening.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-20260901-k8s-delivery-hardening.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-20260901-k8s-delivery-hardening.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-20261014-concept-dictionary.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/wo-20261014-concept-dictionary.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/wo-20261014-concept-dictionary.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-20261014-release-bom.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/wo-20261014-release-bom.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/wo-20261014-release-bom.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-20261014-release-bom.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-20261014-safe-log-to-quality-eval.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/wo-20261014-safe-log-to-quality-eval.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/wo-20261014-safe-log-to-quality-eval.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/wo-20261014-safe-log-to-quality-eval.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/specs/api-staging-admission-spec.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/specs/api-staging-admission-spec.md",
+      "rule": "pseudocode"
+    },
+    {
+      "file": "docs/specs/api-staging-admission-spec.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/specs/api-staging-admission-spec.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/specs/ceo-one-report-lucy-data-model-notes.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/specs/ceo-one-report-lucy-data-model-notes.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/specs/ceo-one-report-lucy-data-model-notes.md",
+      "rule": "pseudocode"
+    },
+    {
+      "file": "docs/specs/ceo-one-report-lucy-migration-delivery-plan.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/specs/ceo-one-report-lucy-migration-delivery-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/specs/ceo-one-report-lucy-migration-delivery-plan.md",
+      "rule": "pseudocode"
+    },
+    {
+      "file": "docs/specs/ceo-one-report-sow-eval-uat-contract.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/specs/ceo-one-report-sow-eval-uat-contract.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/specs/ceo-one-report-sow-eval-uat-contract.md",
+      "rule": "pseudocode"
+    },
+    {
+      "file": "docs/specs/ceo-one-report-sow-product-risk-register.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/specs/ceo-one-report-sow-product-risk-register.md",
+      "rule": "pseudocode"
+    },
+    {
+      "file": "docs/specs/lucy-202608-05-demo-builder-arm-default-spec.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/specs/lucy-202608-05-demo-builder-arm-default-spec.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/specs/lucy-202608-05-demo-builder-arm-default-spec.md",
+      "rule": "pseudocode"
+    },
+    {
+      "file": "docs/specs/lucy-202608-08-image-arch-and-ktx-baseline-fix.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/specs/lucy-202608-08-image-arch-and-ktx-baseline-fix.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/specs/lucy-202608-08-image-arch-and-ktx-baseline-fix.md",
+      "rule": "pseudocode"
+    },
+    {
+      "file": "docs/specs/lucy-202608-access-governance-gap-analysis.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/specs/lucy-202608-access-governance-gap-analysis.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/specs/lucy-202608-access-governance-gap-analysis.md",
+      "rule": "pseudocode"
+    },
+    {
+      "file": "docs/specs/lucy-202608-reliable-delivery-upgrade-spec.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/specs/lucy-202608-reliable-delivery-upgrade-spec.md",
+      "rule": "pseudocode"
+    },
+    {
+      "file": "docs/specs/lucy-202608-reliable-delivery-upgrade-spec.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/specs/lucy-202608-upgrade-execution-control.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/specs/lucy-202608-upgrade-execution-control.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/specs/lucy-202608-upgrade-execution-control.md",
+      "rule": "pseudocode"
+    },
+    {
+      "file": "docs/specs/lucy-202608-upgrade-execution-control.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/specs/lucy-202608-upgrade-execution-control.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261014-concept-dictionary-spec.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/specs/lucy-20261014-concept-dictionary-spec.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/specs/lucy-20261014-fivetran-context-layer-competitive-analysis.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/specs/lucy-20261014-fivetran-context-layer-competitive-analysis.md",
+      "rule": "pseudocode"
+    },
+    {
+      "file": "docs/specs/lucy-20261014-release-bom-spec.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/specs/lucy-20261014-release-bom-spec.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/specs/lucy-20261014-safe-log-to-quality-eval-spec.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/specs/lucy-20261014-safe-log-to-quality-eval-spec.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/specs/lucy-20261018-cloudflare-os-benchmark.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/specs/lucy-20261018-cloudflare-os-benchmark.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/specs/lucy-20261018-cloudflare-os-benchmark.md",
+      "rule": "pseudocode"
+    },
+    {
+      "file": "docs/specs/lucy-20261018-enterprise-security-and-real-e2e-spec.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261018-enterprise-security-and-real-e2e-spec.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261018-enterprise-security-and-real-e2e-spec.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261018-enterprise-security-and-real-e2e-spec.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261018-enterprise-security-and-real-e2e-spec.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/specs/lucy-20261018-enterprise-security-and-real-e2e-spec.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261019-audit-trust-and-admin-investigation-spec.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261019-audit-trust-and-admin-investigation-spec.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261019-audit-trust-and-admin-investigation-spec.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261019-audit-trust-and-admin-investigation-spec.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261019-audit-trust-and-admin-investigation-spec.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261020-build-revision-identity-spec.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261020-build-revision-identity-spec.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261020-build-revision-identity-spec.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261020-build-revision-identity-spec.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261020-build-revision-identity-spec.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/specs/lucy-20261020-v2p5-audit-increment-spec.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261020-v2p5-audit-increment-spec.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261020-v2p5-audit-increment-spec.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261020-v2p5-audit-increment-spec.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261020-v2p5-audit-increment-spec.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261020-v2p5-semantic-batch-operations-spec.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261020-v2p5-semantic-batch-operations-spec.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261020-v2p5-semantic-batch-operations-spec.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261020-v2p5-semantic-batch-operations-spec.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261020-v2p5-semantic-batch-operations-spec.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261021-v2p5-help-center-spec.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261021-v2p5-help-center-spec.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261021-v2p5-help-center-spec.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261021-v2p5-help-center-spec.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261021-v2p5-help-center-spec.md",
+      "rule": "pseudocode"
+    },
+    {
+      "file": "docs/specs/lucy-20261021-v2p5-help-center-spec.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261021-v2p5-help-center-spec.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261024-v0p25-audit-reconciliation-view-spec.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261024-v0p25-audit-reconciliation-view-spec.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261024-v0p25-audit-reconciliation-view-spec.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261024-v0p25-audit-reconciliation-view-spec.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261024-v0p25-audit-reconciliation-view-spec.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261024-v0p25-audit-reconciliation-view-spec.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261025-v0p25-access-authorization-summary-spec.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261025-v0p25-access-authorization-summary-spec.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261025-v0p25-access-authorization-summary-spec.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261025-v0p25-access-authorization-summary-spec.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261025-v0p25-e2e-mainline-and-branch-optimization-spec.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/specs/lucy-20261025-v0p25-hive-direct-connection-spec.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261025-v0p25-hive-direct-connection-spec.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261025-v0p25-hive-direct-connection-spec.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261025-v0p25-hive-direct-connection-spec.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261025-v0p25-oidc-single-sign-on-spec.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261025-v0p25-skill-owner-spec.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261025-v0p25-smtp-notifications-spec.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261026-warehouse-table-scan-capability-analysis.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/specs/lucy-20261026-warehouse-table-scan-capability-analysis.md",
+      "rule": "pseudocode"
+    },
+    {
+      "file": "docs/specs/lucy-20261027-v0p25-semantic-release-restore-spec.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261027-v0p25-semantic-release-restore-spec.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261027-v0p25-semantic-release-restore-spec.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261027-v0p25-semantic-release-restore-spec.md",
+      "rule": "ds-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261027-v0p25-semantic-release-restore-spec.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261028-v0p25-lucy-ops-control-plane-spec.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/specs/lucy-aicon-online-capability-scorecard.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/specs/lucy-aicon-online-capability-scorecard.md",
+      "rule": "pseudocode"
+    },
+    {
+      "file": "docs/specs/lucy-ci-restoration-spec.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/specs/lucy-ci-restoration-spec.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/specs/lucy-ci-restoration-spec.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/specs/lucy-customer-amd64-offline-delivery-spec.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/specs/lucy-customer-amd64-offline-delivery-spec.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/specs/lucy-customer-amd64-offline-delivery-spec.md",
+      "rule": "pseudocode"
+    },
+    {
+      "file": "docs/specs/lucy-mcp-execution-runtime-ack-debug-spec.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/specs/lucy-mcp-execution-runtime-ack-debug-spec.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/specs/lucy-platform-goal-checklist.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/specs/lucy-platform-goal-checklist.md",
+      "rule": "pseudocode"
+    },
+    {
+      "file": "docs/specs/lucy-poc-demo-isolation-spec.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/specs/lucy-poc-demo-isolation-spec.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/specs/lucy-poc-demo-isolation-spec.md",
+      "rule": "pseudocode"
+    },
+    {
+      "file": "docs/specs/lucy-r1-controlled-data-service-plan.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/specs/lucy-r1-controlled-data-service-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/specs/lucy-r1-controlled-data-service-plan.md",
+      "rule": "pseudocode"
+    },
+    {
+      "file": "docs/specs/lucy-skills-mcp-spec.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/specs/lucy-skills-mcp-spec.md",
+      "rule": "pseudocode"
+    },
+    {
+      "file": "docs/specs/starrocks-r1-support-plan.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/specs/starrocks-r1-support-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/specs/starrocks-r1-support-plan.md",
+      "rule": "pseudocode"
+    }
+  ]
+}

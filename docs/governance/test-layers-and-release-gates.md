@@ -33,6 +33,7 @@ Lucy 的测试分三层，不能互相替代：
 | `npm run smoke:fast` | platform + tier 0 fast smoke | 快速静态规范、元数据契约、WebUI L1 及轻量握手（≤45s，PR 阻塞门禁） |
 | `npm run smoke:full` | aggregate + tier 1 full smoke | 全量多数据源容器、License、Token 资产、发布回归、监控审计与 Agent E2E 就绪门禁 |
 | `npm run lint:spec` | platform | spec drift checks for routes/API/skills/evals/access roles |
+| `npm run lint:spec-docs` | platform | Spec／Plan 文档**形态**门禁：索引登记、伪代码小节、元数据、Plan 必备小节、Design System／Terminology 小节模板形态。存量豁免冻结在 `docs/governance/spec-plan-doc-baseline.json`（只减不增）。规范出处：`docs/governance/DEVELOPMENT.md`「新增 Spec / Plan 的落盘清单」 |
 | `npm run security:baseline` | security + platform | token hash, wildcard ACL, deny tools, audit hooks, secrets exclusion baseline |
 | `npm run smoke:p0` | platform | local build/test/spec/WebUI health/static SPA smoke（含 delivery-isolation 静态门禁） |
 | `npm run smoke:p0:delivery-isolation` | platform（Lucy 硬门禁） | `.dockerignore` 排除 A3 路径；可选 `--check-images` 对 Lucy 镜像做 denylist；与 A3 是否启用无关 |
@@ -255,7 +256,7 @@ Recommended CI jobs:
 
 | Job | Commands |
 |---|---|
-| spec-and-unit | `npm run lint:spec`; `cd webui && npm test` |
+| spec-and-unit | `npm run lint:spec`; `npm run lint:spec-docs`; `cd webui && npm test` |
 | security-baseline | `npm run security:baseline` |
 | docker-smoke | `npm run smoke:p0:docker`（含 delivery-isolation 双镜像 denylist） |
 | delivery-isolation | `npm run smoke:p0:delivery-isolation`（Lucy 硬门禁；亦由 `smoke:p0` 调用） |

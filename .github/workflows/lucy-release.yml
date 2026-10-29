@@ -56,6 +56,7 @@ jobs:
             cp webui/config/access.yaml.example webui/config/access.yaml
           fi
       - run: npm run lint:spec
+      - run: npm run lint:spec-docs
       - run: npm run security:baseline
       - uses: actions/setup-node@v4
         with:
