@@ -1,0 +1,71 @@
+# Lucy typecheck — the type check runs as its OWN workflow, on purpose.
+#
+# Contract: docs/specs/lucy-ci-restoration-spec.md v1.0 §1.1 item 2 and §4.1.
+#
+# Why it is separate:
+#   - The product type debt is a known, recorded baseline, not a defect introduced by the CI
+#     change. A non-zero baseline is reported as a debt list; the product types are NOT changed
+#     in this milestone.
+#   - This workflow's failure never changes the conclusion of .github/workflows/lucy-ci.yml and
+#     it is never part of ci-required. The daily CI recovery does not wait for the type debt to
+#     reach zero.
+#   - The command is an explicit `tsc --noEmit`. There is no baseline allowlist, no test-file
+#     exclusion and no continue-on-error that would render a diagnostic count as success.
+#
+# Folding the type check into the daily workflow, or into ci-required, needs a separate
+# approval AND a zero clean baseline (Spec §4.1).
+name: Lucy typecheck
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      # TEMPORARY: integration-branch entry, same lifetime as the lucy-ci.yml one.
+      - lucy-v0.25
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lucy-typecheck-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/lucy-v0.25' }}
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: webui/package-lock.json
+      - run: npm ci
+        working-directory: webui
+      - name: Type check (tsc --noEmit)
+        run: |
+          set -uo pipefail
+          # The runner runs this script with `bash -e`, so a failing tsc aborts the step at
+          # that line and the diagnostic count below is never printed. Capture the exit code
+          # first, report the baseline, and exit with the same code: the job still fails on a
+          # non-zero diagnostic count, it now also records how big that count is.
+          rc=0
+          webui/node_modules/.bin/tsc --noEmit --incremental false -p webui/tsconfig.json > typecheck-report.txt 2>&1 || rc=$?
+          echo "tsc exit code: ${rc}"
+          echo "diagnostics: $(grep -c ': error TS' typecheck-report.txt || true)"
+          echo "files with diagnostics: $(grep ': error TS' typecheck-report.txt | sed 's/: error TS.*//' | sed 's/(.*//' | sort -u | wc -l)"
+          cat typecheck-report.txt
+          # A non-zero diagnostic count fails this job. It does not fail any other workflow.
+          exit "${rc}"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: typecheck-report
+          path: typecheck-report.txt
+          retention-days: 14
+          if-no-files-found: warn
