@@ -1,0 +1,837 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Registry of every tracked root test file: the runner, the environment it needs, its side effects and the command that runs it. The daily gate must never sweep the whole repository with a blind `node --test`; every file is classified here and every exclusion states a reason.",
+  "owner": "docs/specs/lucy-ci-restoration-spec.md v1.0 §4.1 (root test registry)",
+  "entries": [
+    {
+      "path": "scripts/audit-trust/__tests__/2026-10-19-r1-acceptance-matrix.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/audit-trust/__tests__/2026-10-19-r1-acceptance-matrix.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/audit-trust/__tests__/2026-10-19-r1-perf-baseline.test.mjs",
+      "runner": "node --test",
+      "environment": "local-perf-baseline",
+      "sideEffects": "writes a perf baseline artifact under inbox/",
+      "command": "node --test scripts/audit-trust/__tests__/2026-10-19-r1-perf-baseline.test.mjs",
+      "gate": null,
+      "gateCommand": null,
+      "reason": "Fails at 3d1a01a1 (T08a.2 perf-baseline script smoke). Pre-existing failure outside dcb08cf0; it needs its own review, not a CI-restoration change."
+    },
+    {
+      "path": "scripts/deploy/probe-customer-auth-state.test.mjs",
+      "runner": "node --test",
+      "environment": "customer-instance",
+      "sideEffects": "probes a deployed instance over HTTP",
+      "command": "node --test scripts/deploy/probe-customer-auth-state.test.mjs",
+      "gate": null,
+      "gateCommand": null,
+      "reason": "Needs a running customer instance (BS-08 probe). No such instance exists in the daily CI, and the daily gate must not talk to a customer deployment."
+    },
+    {
+      "path": "scripts/e2e/__tests__/a7-integrity.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/a7-integrity.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/adapter-contract.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/adapter-contract.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/answer-assertions.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/answer-assertions.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/archive-carrier-scan.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/archive-carrier-scan.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/case-catalog.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/case-catalog.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/checklist-links.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/checklist-links.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/checklist-projection.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/checklist-projection.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/collect-gate-carrier.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/collect-gate-carrier.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/data-cases-contract.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/data-cases-contract.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/db-seed-pg-integration.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/db-seed-pg-integration.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/db-seed.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/db-seed.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/deploy-candidate-cli-contract.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/deploy-candidate-cli-contract.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/dynamic-secret-registry.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/dynamic-secret-registry.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/environment-identity.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/environment-identity.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/evidence-verifier.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/evidence-verifier.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/execution-observer.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/execution-observer.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/isolation.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/isolation.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/leak-scan.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/leak-scan.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/lifecycle.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/lifecycle.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/local-loopback-observer.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/local-loopback-observer.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/mainline-scenarios.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/mainline-scenarios.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/measure-evidence.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/measure-evidence.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/observer-async-chain.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/observer-async-chain.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/offline-candidate-cases.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/offline-candidate-cases.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/phase-control.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/phase-control.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/real-browser-source-guard.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/real-browser-source-guard.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/real-e2e-guard.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/real-e2e-guard.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/remaining-auth-content-cases.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/remaining-auth-content-cases.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/run-management-capture-policy.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/run-management-capture-policy.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/run-security-observer-wiring.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/run-security-observer-wiring.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/security-runner.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/security-runner.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/server-evidence-binding.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/server-evidence-binding.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/sow-packager.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/sow-packager.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/target-identity.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/target-identity.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/upgrade-feature-coverage.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/upgrade-feature-coverage.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/ux07-safety-pool-cases.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/ux07-safety-pool-cases.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/eval/eval-adapters.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/eval/eval-adapters.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/eval/eval-runner.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/eval/eval-runner.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/gates/build-k8s-delivery-package.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes the delivery package under a temporary directory",
+      "command": "node --test scripts/gates/build-k8s-delivery-package.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:k8s-delivery-package",
+      "reason": null
+    },
+    {
+      "path": "scripts/gates/ci-required-gate.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "reads the workflow and script sources; writes nothing",
+      "command": "node --test scripts/gates/ci-required-gate.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:ci-workflow-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/gates/customer-release-readiness.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "reads the workflow and script sources; writes nothing",
+      "command": "node --test scripts/gates/customer-release-readiness.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/gates/customer-release-workflow.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "reads the workflow and script sources; writes nothing",
+      "command": "node --test scripts/gates/customer-release-workflow.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/gates/handbook-anchor-gate.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/gates/handbook-anchor-gate.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/gates/handbook-coverage.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/gates/handbook-coverage.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/gates/k8s-gate-negative.test.mjs",
+      "runner": "node --test",
+      "environment": "helm",
+      "sideEffects": "renders the chart into a temporary directory",
+      "command": "node --test scripts/gates/k8s-gate-negative.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:k8s-gate-negative",
+      "reason": null
+    },
+    {
+      "path": "scripts/gates/lucy-ci-workflow.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "reads the workflow and script sources; writes nothing",
+      "command": "node --test scripts/gates/lucy-ci-workflow.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:ci-workflow-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/gates/p1-release-readiness.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/gates/p1-release-readiness.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/gates/root-test-registry.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "reads the workflow and script sources; writes nothing",
+      "command": "node --test scripts/gates/root-test-registry.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:ci-workflow-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/release/build-bootstrap-attachment.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/release/build-bootstrap-attachment.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/release/customer-bootstrap-state.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/release/customer-bootstrap-state.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/release/handbook-baseline.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/release/handbook-baseline.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/release/lucy-build-revision.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/release/lucy-build-revision.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/release/lucy-version-governance.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/release/lucy-version-governance.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/release/release-artifacts.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/release/release-artifacts.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/release/release-ledger.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/release/release-ledger.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/runtime/docker-build-mirrors.test.sh",
+      "runner": "bash",
+      "environment": "docker",
+      "sideEffects": "drives a Docker build and reads the Docker daemon",
+      "command": "bash scripts/runtime/docker-build-mirrors.test.sh",
+      "gate": null,
+      "gateCommand": null,
+      "reason": "Shell test, not a node --test file: the daily contract job runs the node test runner only. Its Docker-dependent path belongs to the docker-smoke layer."
+    },
+    {
+      "path": "scripts/runtime/docker-entrypoint.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "exercises the entrypoint script against a temporary directory",
+      "command": "node --test scripts/runtime/docker-entrypoint.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run smoke:p0:docker-entrypoint:test",
+      "reason": null
+    },
+    {
+      "path": "scripts/runtime/docker-healthcheck.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/runtime/docker-healthcheck.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/smoke/access-template-question-tool.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/smoke/access-template-question-tool.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/smoke/agent-chat-a3-smoke.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/smoke/agent-chat-a3-smoke.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/smoke/ensure-webui-bootstrap-token.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes the bootstrap token under a temporary directory",
+      "command": "node --test scripts/smoke/ensure-webui-bootstrap-token.test.mjs",
+      "gate": "spec-and-webui",
+      "gateCommand": "npm run smoke:p0:upgrade-lucy:test",
+      "reason": null
+    },
+    {
+      "path": "scripts/smoke/lucy-delivery-isolation-smoke.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/smoke/lucy-delivery-isolation-smoke.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/smoke/lucy-r1-doris-smoke.test.mjs",
+      "runner": "node --test",
+      "environment": "r1-evidence",
+      "sideEffects": "writes R1 readiness evidence under inbox/",
+      "command": "node --test scripts/smoke/lucy-r1-doris-smoke.test.mjs",
+      "gate": null,
+      "gateCommand": null,
+      "reason": "Fails at 3d1a01a1: the R1 readiness checker reports 336 pass / 2 fail against the R1 plan and runbook content. Pre-existing R1 documentation drift, unrelated to dcb08cf0; it needs its own review and must not be folded into the CI restoration."
+    },
+    {
+      "path": "scripts/smoke/lucy-r1-hermes-report.test.mjs",
+      "runner": "node --test",
+      "environment": "r1-evidence",
+      "sideEffects": "writes R1 readiness evidence under inbox/",
+      "command": "node --test scripts/smoke/lucy-r1-hermes-report.test.mjs",
+      "gate": null,
+      "gateCommand": null,
+      "reason": "Fails at 3d1a01a1: the R1 readiness checker reports 336 pass / 2 fail against the R1 plan and runbook content. Pre-existing R1 documentation drift, unrelated to dcb08cf0; it needs its own review and must not be folded into the CI restoration."
+    },
+    {
+      "path": "scripts/smoke/lucy-r1-local-gates.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/smoke/lucy-r1-local-gates.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/smoke/lucy-r1-mcp-contract-smoke.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/smoke/lucy-r1-mcp-contract-smoke.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/smoke/lucy-r1-readiness.test.mjs",
+      "runner": "node --test",
+      "environment": "r1-evidence",
+      "sideEffects": "writes R1 readiness evidence under inbox/",
+      "command": "node --test scripts/smoke/lucy-r1-readiness.test.mjs",
+      "gate": null,
+      "gateCommand": null,
+      "reason": "Fails at 3d1a01a1: the R1 readiness checker reports 336 pass / 2 fail against the R1 plan and runbook content. Pre-existing R1 documentation drift, unrelated to dcb08cf0; it needs its own review and must not be folded into the CI restoration."
+    },
+    {
+      "path": "scripts/smoke/lucy-r1-release-bundle.test.mjs",
+      "runner": "node --test",
+      "environment": "r1-evidence",
+      "sideEffects": "writes R1 readiness evidence under inbox/",
+      "command": "node --test scripts/smoke/lucy-r1-release-bundle.test.mjs",
+      "gate": null,
+      "gateCommand": null,
+      "reason": "Fails at 3d1a01a1: the R1 readiness checker reports 336 pass / 2 fail against the R1 plan and runbook content. Pre-existing R1 documentation drift, unrelated to dcb08cf0; it needs its own review and must not be folded into the CI restoration."
+    },
+    {
+      "path": "scripts/smoke/lucy-r1-status.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/smoke/lucy-r1-status.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/smoke/p1-agent-e2e-local-hermes.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/smoke/p1-agent-e2e-local-hermes.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/smoke/p1-agent-e2e.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/smoke/p1-agent-e2e.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/smoke/p1-business-eval-full.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/smoke/p1-business-eval-full.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/smoke/p1-context-smoke.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/smoke/p1-context-smoke.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/smoke/p1-endpoint-smoke.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/smoke/p1-endpoint-smoke.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/smoke/p1-skills-smoke.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/smoke/p1-skills-smoke.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/smoke/p1-smoke-exit-codes.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/smoke/p1-smoke-exit-codes.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/smoke/p1-starrocks-certification.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/smoke/p1-starrocks-certification.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/smoke/verify-202608-access-governance-gate.test.mjs",
+      "runner": "node --test",
+      "environment": "webui-native-addon",
+      "sideEffects": "opens the local SQLite store through the better-sqlite3 native addon",
+      "command": "node --test scripts/smoke/verify-202608-access-governance-gate.test.mjs",
+      "gate": null,
+      "gateCommand": null,
+      "reason": "Needs the webui native addon (better-sqlite3) built for the running Node. The daily contract job installs the root dependencies only; the webui entry point (webui npm run verify:test) stays the owner of this check."
+    },
+    {
+      "path": "scripts/uat/mcp-session-regression.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/uat/mcp-session-regression.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/upgrade/upgrade-lucy.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes the bootstrap token under a temporary directory",
+      "command": "node --test scripts/upgrade/upgrade-lucy.test.mjs",
+      "gate": "spec-and-webui",
+      "gateCommand": "npm run smoke:p0:upgrade-lucy:test",
+      "reason": null
+    }
+  ]
+}

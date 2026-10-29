@@ -1,0 +1,342 @@
+# Lucy CI — the daily verification workflow.
+#
+# Contract: docs/specs/lucy-ci-restoration-spec.md v1.0 §4.1 and §6.
+#
+# Scope boundaries:
+#   - This workflow is DAILY verification only. It carries no customer publish path, no
+#     registry write, no self-hosted runner and no model call.
+#   - The customer release path stays in .github/workflows/lucy-release.yml and is entered
+#     only by a `v*` tag or an explicit manual dispatch with mode=customer-candidate.
+#   - The type check is a THIRD workflow (.github/workflows/lucy-typecheck.yml). Its failure
+#     never changes this workflow's conclusion and it is not part of ci-required
+#     (Spec §1.1 item 2).
+#
+# TEMPORARY ENTRY — the `lucy-v0.25` push trigger below exists only while lucy-v0.25 is the
+# integration branch. DELETE this push trigger when lucy-v0.25 is merged into main or stops
+# being an integration branch (Spec §1.1 item 6). It is not a permanent second trunk.
+name: Lucy CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      # TEMPORARY: integration-branch entry. See the note above.
+      - lucy-v0.25
+  workflow_dispatch:
+
+# Read-only by default. Only the release workflow's candidate-image and promote jobs own
+# packages:write, and they are not part of this workflow (Spec §5).
+permissions:
+  contents: read
+
+# A new commit on a pull request cancels the previous run of that pull request.
+# A push to main / lucy-v0.25 cancels a stale daily run of the same ref.
+# pull_request and push use different group keys, so they never cancel each other
+# (Spec §1.1 item 6, §5).
+concurrency:
+  group: lucy-ci-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/lucy-v0.25' }}
+
+env:
+  KTX_VERSION: "0.16.0"
+  LUCY_EXPECTED_KTX_VERSION: "0.16.0"
+
+jobs:
+  spec-and-webui:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          # Full history + tags: the release ledger cross-checks each recorded commit
+          # against the object database and the release tags.
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run smoke:p0:upgrade-lucy:test
+      - run: npm run lint:version
+      - run: npm run lint:release-ledger
+      - run: npm run smoke:p0:delivery-isolation
+      - name: Materialize private access.yaml stub for lint
+        run: |
+          if [ ! -f webui/config/access.yaml ]; then
+            cp webui/config/access.yaml.example webui/config/access.yaml
+          fi
+      - run: npm run lint:spec
+      - run: npm run security:baseline
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: webui/package-lock.json
+      - run: cp ktx.yaml.example ktx.yaml
+      - run: npm ci
+        working-directory: webui
+      - run: npm run lint:terminology
+        working-directory: webui
+      - run: npm test
+        working-directory: webui
+      - run: npm run build
+        working-directory: webui
+
+  workflow-contracts:
+    # Workflow syntax plus the DAG / permission / anti-bypass contracts of the split.
+    # Deterministic root tests live here (see scripts/gates/root-test-registry.json).
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          # Full history + tags: the registered root tests include the release ledger
+          # cross-check, which resolves each recorded release tag and commit against the
+          # object database. A shallow checkout makes that check report the commit as
+          # unverifiable instead of verified.
+          fetch-depth: 0
+          persist-credentials: false
+      - name: actionlint (pinned release, checksum verified)
+        env:
+          ACTIONLINT_VERSION: "1.7.7"
+          ACTIONLINT_SHA256: "023070a287cd8cccd71515fedc843f1985bf96c436b7effaecce67290e7e0757"
+        run: |
+          set -euo pipefail
+          ARCHIVE="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          curl -fsSL --retry 3 --retry-delay 2 -o "/tmp/${ARCHIVE}" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/${ARCHIVE}"
+          echo "${ACTIONLINT_SHA256}  /tmp/${ARCHIVE}" | sha256sum --check --strict
+          tar -xzf "/tmp/${ARCHIVE}" -C /tmp actionlint
+          /tmp/actionlint -color -config-file .github/actionlint.yaml .github/workflows/*.yml
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Daily workflow DAG, aggregate gate and release anti-bypass contracts
+        run: npm run test:ci-workflow-contracts
+      - name: Registered deterministic root tests
+        run: npm run test:root-contracts
+
+  k8s-static:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: azure/setup-helm@b9e51907a09c216f16ebe8536097933489208112 # v4.3.0
+        with:
+          version: v3.16.4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      # scripts/gates/preflight-upgrade-lib.mjs resolves the YAML parser from
+      # webui/node_modules/yaml (the customer container path), so the webui dependencies must be
+      # installed in this job too. Without them the gate library throws before it can print, and
+      # the negative contract tests fail on an empty stdout instead of on a real defect.
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: webui/package-lock.json
+      - run: npm ci
+        working-directory: webui
+      - run: npm run gate:k8s-static
+      - run: npm run test:k8s-delivery-package
+      - run: npm run test:k8s-gate-negative
+      - run: npm run smoke:p0:docker-entrypoint:test
+      # Real-user E2E harness: catalog freeze, runners, verifier reverse tests, release workflow wiring.
+      - run: npm run test:e2e-harness
+
+  docker-smoke:
+    runs-on: ubuntu-24.04
+    needs: spec-and-webui
+    # Bound the gate. Without this the job inherits the 360-minute default and a
+    # hang blocks the train for six hours with no diagnosable failure.
+    # The legitimate path is ~25 min (two cold image builds + compose + probes).
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm ci
+        working-directory: webui
+      # p0-smoke runs the WebUI suite and the WebUI server with cwd=webui, and
+      # findProjectRoot() walks up from there looking for ktx.yaml. The file is
+      # gitignored (it is environment-specific), so a clean CI checkout has no
+      # project root and every WebUI test that resolves one fails with
+      # PROJECT_NOT_FOUND. Same materialisation as spec-and-webui above.
+      - run: cp ktx.yaml.example ktx.yaml
+      # The WebUI suite is spec-and-webui's job and this job depends on it, so
+      # the suite has already run and passed here. Running it a second time
+      # only doubles the chance of a load-sensitive flake reddening the train.
+      - run: npm run smoke:p0:docker -- --skip-webui-suite
+
+  k8s-upgrade-gate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: azure/setup-helm@b9e51907a09c216f16ebe8536097933489208112 # v4.3.0
+        with:
+          version: v3.16.4
+      - uses: helm/kind-action@a1b0e391336a6ee6713a0583f8c6240d70863de3 # v1.12.0
+        with:
+          install_only: true
+      - name: H3/H4 kind in-place upgrade gate
+        env:
+          KTX_VERSION: ${{ env.KTX_VERSION }}
+        run: npm run gate:k8s-kind-h3
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: k8s-h3-evidence
+          path: inbox/k8s-h3-evidence-*
+          if-no-files-found: ignore
+
+  business-eval-catalog:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run smoke:p0:business-eval
+
+  headless-config:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run smoke:p0:headless-config
+
+  ktx-diff-audit:
+    # Upstream drift audit. It stays in the daily workflow and it is NOT a required check
+    # (Spec §1.1 item 3). The only permitted change to it is pinning the upstream clone to a
+    # fixed commit SHA instead of the upstream default branch HEAD.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Checkout upstream KTX at the pinned commit
+        env:
+          KTX_UPSTREAM_REPO: https://github.com/Kaelio/ktx
+          # Pinned upstream commit. Do not replace this with a branch: the audit must be
+          # reproducible, and the report has to name the upstream SHA it compared against.
+          KTX_UPSTREAM_SHA: 49a4ae6f5b28c904da921afc0ee72da6db7ac202
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/ktx-upstream
+          git init -q /tmp/ktx-upstream
+          cd /tmp/ktx-upstream
+          git remote add origin "${KTX_UPSTREAM_REPO}"
+          git fetch -q --depth 1 origin "${KTX_UPSTREAM_SHA}" \
+            || git fetch -q --depth 200 origin main
+          git checkout -q "${KTX_UPSTREAM_SHA}"
+          test "$(git rev-parse HEAD)" = "${KTX_UPSTREAM_SHA}"
+          echo "upstream KTX commit: $(git rev-parse HEAD)"
+      - name: Generate diff audit
+        run: npm run audit:ktx-diff -- --ktx /tmp/ktx-upstream --out inbox/ktx-lucy-diff-ci.md
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ktx-lucy-diff-audit
+          path: inbox/ktx-lucy-diff-ci.md
+
+  demo-db-smoke:
+    # Runs smoke:p0:demo (MySQL demo plus an in-container SQLite file probe). It is NOT the
+    # real-user E2E gate; see real-e2e in .github/workflows/lucy-release.yml.
+    runs-on: ubuntu-24.04
+    needs: docker-smoke
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run smoke:p0:demo
+
+  postgres-demo-db-smoke:
+    # Runs smoke:p0:postgres-demo (database/demo smoke). It is NOT the real-user E2E gate.
+    runs-on: ubuntu-24.04
+    needs: docker-smoke
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run smoke:p0:postgres-demo
+
+  ci-required:
+    # Aggregate gate for the DAILY workflow. It reads ONLY needs.<job>.result.
+    # A dependency whose result is not "success" — failure, skipped, cancelled, timed out, or
+    # missing entirely — makes this job fail. It never parses a test total
+    # (Spec §1.1 item 5, §6).
+    # `if: always()` is mandatory: without it this job would be skipped whenever a dependency
+    # failed, and a skipped aggregate would read as "not run" instead of "failed".
+    runs-on: ubuntu-24.04
+    needs:
+      - spec-and-webui
+      - workflow-contracts
+      - k8s-static
+      - docker-smoke
+      - k8s-upgrade-gate
+      - business-eval-catalog
+      - headless-config
+      - ktx-diff-audit
+      - demo-db-smoke
+      - postgres-demo-db-smoke
+    if: always()
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+      - name: Every daily job must have succeeded
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+          EXPECTED_JOBS: "spec-and-webui,workflow-contracts,k8s-static,docker-smoke,k8s-upgrade-gate,business-eval-catalog,headless-config,ktx-diff-audit,demo-db-smoke,postgres-demo-db-smoke"
+        run: node scripts/gates/ci-required-gate.mjs --needs-json "$NEEDS_JSON" --expect "$EXPECTED_JOBS"
