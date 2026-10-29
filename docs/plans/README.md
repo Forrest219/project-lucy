@@ -5,7 +5,7 @@ This directory stores repository-level implementation plans that are not scoped 
 | Plan | Purpose |
 |---|---|
 | [2026-10-27-lucy-v0.25-semantic-release-restore-implementation-plan.md](2026-10-27-lucy-v0.25-semantic-release-restore-implementation-plan.md) | **v0.25 L25-15，P0，设计完成待需求审查**：语义发布历史版本与整批恢复 Spec／Plan 经 Claude Code 三轮只读审查修订至 v0.4；S0–S7 均为后续授权阶段，SRR-01–SRR-22 全部未执行，不授权开发、浏览器验证或客户交付 |
-| [2026-10-28-lucy-v0.25-lucy-ops-control-plane-implementation-plan.md](2026-10-28-lucy-v0.25-lucy-ops-control-plane-implementation-plan.md) | **v0.25 L25-16，P1，Plan v0.10，W-A 已授权实现 S1–S4，W-B 不可交付开发**：2026-10-29 PM 授权从 S1 开始。S5 另须 L25-11（审阅通过 + G30／G31 关闭）；**D8 已签（(b) 显式批次交接）**。VOPS-01–78 未执行 |
+| [2026-10-28-lucy-v0.25-lucy-ops-control-plane-implementation-plan.md](2026-10-28-lucy-v0.25-lucy-ops-control-plane-implementation-plan.md) | **v0.25 L25-16，P1，Plan v0.11，W-A 已授权实现 S1–S4，W-B 不可交付开发**：2026-10-29 PM 授权从 S1 开始。S5 另须 L25-11（审阅通过 + G30／G31 关闭）；**D8 已签（(b) 显式批次交接）**。VOPS-01–78 未执行 |
 | [2026-10-25-lucy-v0.25-p1-requirements-review-checklist.md](2026-10-25-lucy-v0.25-p1-requirements-review-checklist.md) | **v0.25 P1 唯一需求签核入口**：六项 Spec、追踪矩阵、依赖与非门禁边界；全部 P1 验收未执行，2026-10-25 需求审查已签核通过、不授权开发；逐项依据见 [P1 需求审查记录](../reviews/2026-10-25-lucy-v0.25-p1-requirements-review-record.md) |
 | [2026-10-20-hive-direct-connection-implementation-plan.md](2026-10-20-hive-direct-connection-implementation-plan.md) | **v0.25 P1-4 上游方案**：已收口 Hive 直连 Spec，需求审查已签核通过、暂不开发；数据库支持状态保持 `planned`，动态验证未执行 |
 | [2026-10-22-upgrade-candidate-verification-plan.md](2026-10-22-upgrade-candidate-verification-plan.md) | **v0.25 P1-6 上游方案，非门禁**：已收口升级候选验证 Spec，需求审查已签核通过；空卷整卷恢复、候选迁移与业务／审计连续性；原地升级仍为客户现场主线 |

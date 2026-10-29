@@ -6,8 +6,8 @@
 | 日期 / 测量时刻 | 2026-10-29 09:35（行数为该时刻 `git diff --numstat` 实测快照） |
 | 对象 | L25-16 运维控制面 MCP（`lucy_ops_*`）W-A 实现批次（连接表配置 + 源表导入，S1–S4） |
 | 触发 | PM 指令「检查本进程进展」后核实外部执行器（`claude -p` 无头进程，PID 13252）的产出与归属 |
-| 结论 | **批次影响面远大于 `webui/server/ops/` 目录**：另触及 **14 个既有文件**；另有 **2 个文件归属混杂**（既是本批次产物，又被其它并发会话在 2026-10-29 09:30–09:31 继续改动）⇒ **共享工作树内无法做行级归属，提交必须按文件范围显式 `git add`，禁止 `git add -A`** |
-| 口径 | Spec v1.2／Plan v0.10、G1–G38、VOPS-01–78（**全部未执行**）、W-A 已授权实现 S1–S4、**D8 与 L25-15 S0 已由 PM 于 2026-10-29 签下**（D8 = (b) 显式批次交接；S0 = (a) 单独立项修既有路径，须另立工作项）、第 8 轮独立复审未做 |
+| 结论 | **批次影响面远大于 `webui/server/ops/` 目录**：另触及 **17 个既有文件**；另有 **2 个文件归属混杂**（既是本批次产物，又被其它并发会话在 2026-10-29 09:30–09:31 继续改动）⇒ **共享工作树内无法做行级归属，提交必须按文件范围显式 `git add`，禁止 `git add -A`** |
+| 口径 | Spec v1.3／Plan v0.11、G1–G38、VOPS-01–78（**全部未执行**）、W-A 已授权实现 S1–S4、**D8 与 L25-15 S0 已由 PM 于 2026-10-29 签下**（D8 = (b) 显式批次交接；S0 = (a) 单独立项修既有路径，须另立工作项）、第 8 轮独立复审未做 |
 
 ---
 
@@ -24,7 +24,7 @@
 
 ---
 
-## 2. 新增文件（17 个，未跟踪）
+## 2. 新增文件（**18 个**，未跟踪：`webui/server/ops/` 下 **17** 个 ＋ `ops/` 之外的 `webui/server/enabled-tables.ts` **1** 个）
 
 | 路径 | 行数 | 说明 |
 |---|---|---|
@@ -52,7 +52,7 @@
 
 ---
 
-## 3. 既有文件改动（14 个，写盘在执行器窗口内）
+## 3. 既有文件改动（**17 个**，写盘在执行器窗口内）
 
 | 文件 | 行数 | 本批次改动性质 |
 |---|---|---|
@@ -68,6 +68,7 @@
 | `webui/server/proxy/identity.ts` | +15 / -0 | 委托身份字段 |
 | `webui/server/project.ts` | +38 / -3 | 写集合说明（连接表写集宽于 `ktx.yaml`） |
 | `webui/server/index.ts` | +23 / -194 | **抽取式重构**：YAML patch 逻辑搬到 `enabled-tables.ts`（`escapeRegExp`／`lineIndent`／`findYamlBlockEnd`／`assertProposedKtxYaml`／`patchConnectionEnabledTablesYaml` 等移出）。**-194 不是功能删除**，`previewSourceYamlImport` 等既有导出仍存在（`semantic-layer.ts:959`、`index.ts:89,768`） |
+| `webui/server/model.ts` | +6 / -0 | **G26／VOPS-66 的类型合同**：新增 `deletedFilePreImages?: Array<{ filePath: string; content: string }>`（注释标 `L25-16 F5-04`），`project.ts:947-1018` 实际在用该字段 |
 | `webui/server/table-yaml-history.ts` | +126 / -0 | **纯新增** `createTableYamlVersionSnapshotDeferred`（G27：裁剪延后到组终结之后），未删任何既有行 |
 | `webui/server/semantic-layer.ts` ⚠️ | +103 / -24 | N05 / G17：旧源表导入入口接入**同一把** `ktx.yaml` 写锁 |
 | `scripts/lint-spec.mjs` | +53 / -2 | `allow.ops` schema 校验 + 控制面工具登记表与 `ops/control-plane.ts` 交叉核对 + 禁止用 `allow.tools` 授予控制面工具（**收紧，非放宽**） |
