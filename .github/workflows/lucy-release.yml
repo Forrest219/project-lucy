@@ -1,14 +1,38 @@
+# Lucy release gates — the CUSTOMER RELEASE / DIAGNOSTICS path only.
+#
+# Contract: docs/specs/lucy-ci-restoration-spec.md v1.0 §4.2.
+#
+# Triggers (deliberately narrow):
+#   - a `v*` tag, or
+#   - an explicit manual dispatch that first picks a mode.
+# The daily pull_request / push-to-main triggers were REMOVED in the same commit that added
+# .github/workflows/lucy-ci.yml, so no job of this workflow and no job of the daily workflow
+# ever runs on the same event (Spec §4.1: existing job ids must not appear in two workflows for
+# the same event).
+#
+# The daily verification jobs are still repeated HERE on purpose: the release path must re-run
+# the daily and delivery gates on the SAME sha it packages. They are reached from this workflow
+# only, never through workflow_run, so no trust boundary is crossed.
+#
+# The jobs that also exist in the daily workflow carry a `release / ` display name so their
+# GitHub check context never collides with the daily one.
 name: Lucy release gates
 
 on:
-  pull_request:
   push:
-    branches:
-      - main
     tags:
       - "v*"
   workflow_dispatch:
     inputs:
+      mode:
+        description: "diagnostics (read-only, default) | ktx-compat (compatibility only) | customer-candidate (builds and promotes a candidate)"
+        required: true
+        default: "diagnostics"
+        type: choice
+        options:
+          - diagnostics
+          - ktx-compat
+          - customer-candidate
       ktx_version:
         description: "Bundled @kaelio/ktx npm version to validate"
         required: false
@@ -18,15 +42,15 @@ on:
         required: false
 
 # release-package promotes the tested linux/amd64 digest. It does not build.
-# Other jobs only build and smoke; they do not need write access.
+# Only the candidate-image job and the promote job need write access; every other job here is
+# read-only (Spec §5).
 permissions:
   contents: read
-  packages: write
 
-# Cancel a superseded pull request run. Push to main and tag runs finish.
+# Release runs are never auto-cancelled: a cancelled candidate run must not look like a passed one.
 concurrency:
-  group: lucy-release-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: lucy-release-${{ github.workflow }}-${{ github.ref }}-${{ github.run_id }}
+  cancel-in-progress: false
 
 env:
   KTX_VERSION: ${{ inputs.ktx_version || '0.16.0' }}
@@ -34,14 +58,17 @@ env:
 
 jobs:
   spec-and-webui:
+    name: release / spec-and-webui
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           # Full history + tags: the release ledger cross-checks each recorded
           # commit against the object database and the release tags.
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
           cache: npm
@@ -57,7 +84,7 @@ jobs:
           fi
       - run: npm run lint:spec
       - run: npm run security:baseline
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
           cache: npm
@@ -73,11 +100,15 @@ jobs:
         working-directory: webui
 
   business-eval-catalog:
+    name: release / business-eval-catalog
     runs-on: ubuntu-24.04
     needs: spec-and-webui
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
           cache: npm
@@ -85,25 +116,59 @@ jobs:
       - run: npm run smoke:p0:business-eval
 
   ktx-diff-audit:
+    # The upstream drift audit also runs in the DAILY workflow (.github/workflows/lucy-ci.yml).
+    # This copy is the release-time re-run: the release path re-runs the gates on the same sha.
+    # It is not a required check, and it is not the daily job's replacement.
+    name: release / ktx-diff-audit
     runs-on: ubuntu-24.04
     needs: spec-and-webui
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
           cache: npm
       - run: npm ci
-      - name: Checkout upstream KTX
-        run: git clone --depth 1 https://github.com/Kaelio/ktx /tmp/ktx-upstream
+      - name: Checkout upstream KTX at the pinned commit
+        env:
+          KTX_UPSTREAM_REPO: https://github.com/Kaelio/ktx
+          # Same pinned upstream commit as the daily workflow.
+          KTX_UPSTREAM_SHA: 49a4ae6f5b28c904da921afc0ee72da6db7ac202
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/ktx-upstream
+          git init -q /tmp/ktx-upstream
+          cd /tmp/ktx-upstream
+          git remote add origin "${KTX_UPSTREAM_REPO}"
+          git fetch -q --depth 1 origin "${KTX_UPSTREAM_SHA}" \
+            || git fetch -q --depth 200 origin main
+          git checkout -q "${KTX_UPSTREAM_SHA}"
+          test "$(git rev-parse HEAD)" = "${KTX_UPSTREAM_SHA}"
+          echo "upstream KTX commit: $(git rev-parse HEAD)"
       - name: Generate diff audit
         run: npm run audit:ktx-diff -- --ktx /tmp/ktx-upstream --out inbox/ktx-lucy-diff-ci.md
-      - uses: actions/upload-artifact@v4
+      - name: Record the identities the report was produced against
+        env:
+          KTX_UPSTREAM_SHA: 49a4ae6f5b28c904da921afc0ee72da6db7ac202
+        run: |
+          {
+            echo "lucy_sha=${GITHUB_SHA}"
+            echo "ktx_npm_version=${KTX_VERSION}"
+            echo "ktx_upstream_sha=${KTX_UPSTREAM_SHA}"
+          } > inbox/ktx-lucy-diff-ci.identities.txt
+          cat inbox/ktx-lucy-diff-ci.identities.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ktx-lucy-diff-audit
-          path: inbox/ktx-lucy-diff-ci.md
+          path: |
+            inbox/ktx-lucy-diff-ci.md
+            inbox/ktx-lucy-diff-ci.identities.txt
 
   docker-smoke:
+    name: release / docker-smoke
     runs-on: ubuntu-24.04
     needs: spec-and-webui
     # Bound the gate. Without this the job inherits the 360-minute default and a
@@ -111,8 +176,10 @@ jobs:
     # The legitimate path is ~25 min (two cold image builds + compose + probes).
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
           cache: npm
@@ -131,13 +198,17 @@ jobs:
       - run: npm run smoke:p0:docker -- --skip-webui-suite
 
   k8s-static:
+    name: release / k8s-static
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: azure/setup-helm@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: azure/setup-helm@b9e51907a09c216f16ebe8536097933489208112 # v4.3.0
         with:
           version: v3.16.4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
           cache: npm
@@ -146,7 +217,7 @@ jobs:
       # (the customer container path), so the webui dependencies must be installed in this job too.
       # Without them the gate library throws before it can print, and the negative contract tests
       # fail on an empty stdout instead of on a real defect.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
           cache: npm
@@ -161,23 +232,25 @@ jobs:
       - run: npm run test:e2e-harness
 
   k8s-upgrade-gate:
+    name: release / k8s-upgrade-gate
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
-      - uses: azure/setup-helm@v4
+          persist-credentials: false
+      - uses: azure/setup-helm@b9e51907a09c216f16ebe8536097933489208112 # v4.3.0
         with:
           version: v3.16.4
-      - uses: helm/kind-action@v1
+      - uses: helm/kind-action@a1b0e391336a6ee6713a0583f8c6240d70863de3 # v1.12.0
         with:
           install_only: true
       - name: H3/H4 kind in-place upgrade gate
         env:
           KTX_VERSION: ${{ env.KTX_VERSION }}
         run: npm run gate:k8s-kind-h3
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: k8s-h3-evidence
@@ -185,11 +258,15 @@ jobs:
           if-no-files-found: ignore
 
   headless-config:
+    name: release / headless-config
     runs-on: ubuntu-24.04
     needs: spec-and-webui
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
           cache: npm
@@ -198,11 +275,15 @@ jobs:
 
   demo-db-smoke:
     # Runs smoke:p0:demo (MySQL demo plus an in-container SQLite file probe). It is NOT the real-user E2E gate; see real-e2e below.
+    name: release / demo-db-smoke
     runs-on: ubuntu-24.04
     needs: docker-smoke
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
           cache: npm
@@ -211,11 +292,15 @@ jobs:
 
   postgres-demo-db-smoke:
     # Runs smoke:p0:postgres-demo (database/demo smoke). It is NOT the real-user E2E gate.
+    name: release / postgres-demo-db-smoke
     runs-on: ubuntu-24.04
     needs: docker-smoke
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
           cache: npm
@@ -223,6 +308,8 @@ jobs:
       - run: npm run smoke:p0:postgres-demo
 
   ktx-upgrade-compat:
+    # Compatibility verification only. It never mints a customer image or package.
+    name: release / ktx-upgrade-compat
     runs-on: ubuntu-24.04
     needs:
       - docker-smoke
@@ -230,10 +317,13 @@ jobs:
       - demo-db-smoke
       - postgres-demo-db-smoke
       - business-eval-catalog
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.ktx_version != '0.16.0' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'ktx-compat' }}
+    timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
           cache: npm
@@ -246,15 +336,23 @@ jobs:
     # and package are produced by release-package after customer-release-readiness passed, by promoting THIS digest
     # (no rebuild, Spec §8.3). arm64 dev hosts (qemu-user) segfault when executing the ktx CLI module graph, so all
     # ktx-executing gates (G4/G4b, container smoke) run here on real amd64. Single-arch linux/amd64 only.
+    #
+    # This job and release-package are the ONLY jobs in this repository with packages:write.
     runs-on: ubuntu-24.04
-    if: ${{ startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' }}
+    permissions:
+      contents: read
+      packages: write
+    if: ${{ startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.mode == 'customer-candidate') }}
+    timeout-minutes: 120
     outputs:
       image_digest: ${{ steps.build-push.outputs.digest }}
       image_ref: ${{ steps.build-push.outputs.ref }}
       image_repository: ${{ steps.build-push.outputs.repository }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
           cache: npm
@@ -268,7 +366,7 @@ jobs:
           echo "lucy=${LUCY_VERSION}" >> "$GITHUB_OUTPUT"
           echo "date=$(date +%Y%m%d)" >> "$GITHUB_OUTPUT"
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
         with:
           registry: ${{ vars.LUCY_IMAGE_REGISTRY || 'ghcr.io' }}
           username: ${{ github.actor }}
@@ -354,7 +452,7 @@ jobs:
           exit "${overall}"
       - name: Container-level smoke (native amd64)
         run: npm run smoke:p0:docker
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: customer-amd64-native-evidence
@@ -372,7 +470,7 @@ jobs:
       - k8s-static
       - k8s-upgrade-gate
     timeout-minutes: 240
-    if: ${{ startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' }}
+    if: ${{ startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.mode == 'customer-candidate') }}
     outputs:
       run_id: ${{ steps.ids.outputs.run_id }}
     env:
@@ -390,8 +488,10 @@ jobs:
       OPENCLAW_API_KEY: ${{ secrets.LUCY_E2E_OPENCLAW_API_KEY }}
       LUCY_REAL_E2E_CAPABILITIES: ${{ vars.LUCY_E2E_CAPABILITIES }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
           cache: npm
@@ -400,7 +500,7 @@ jobs:
         working-directory: webui
       - run: npx playwright install chromium
         working-directory: webui
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: customer-amd64-native-evidence
           path: release/
@@ -519,7 +619,7 @@ jobs:
           RUN_DIR="inbox/e2e/${{ steps.ids.outputs.run_id }}"
           node scripts/e2e/archive-evidence.mjs --run "${RUN_DIR}/run.json" --candidate release/candidate-identity.json --out "${RUN_DIR}/archive" || true
           rm -f "${LUCY_EVIDENCE_SIGNING_KEY_FILE}"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: real-e2e-evidence
@@ -544,19 +644,22 @@ jobs:
       - k8s-upgrade-gate
       - headless-config
       - business-eval-catalog
-    if: ${{ startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' }}
+    if: ${{ startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.mode == 'customer-candidate') }}
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
           cache: npm
       - run: npm ci
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: customer-amd64-native-evidence
           path: release/
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: real-e2e-evidence
           path: inbox/e2e/${{ needs.real-e2e.outputs.run_id }}/
@@ -570,7 +673,7 @@ jobs:
           printf '%s' "${EVIDENCE_PUBLIC_KEY}" > "${LUCY_EVIDENCE_PUBLIC_KEY_FILE}"
           node scripts/e2e/archive-evidence.mjs --verify --out "inbox/e2e/${RUN_ID}/archive"
           npm run gate:customer-release -- --candidate release/candidate-identity.json --run "inbox/e2e/${RUN_ID}/run.json"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: customer-release-readiness
@@ -581,6 +684,9 @@ jobs:
     # Promotes EXACTLY the tested candidate digest to the customer release tag and attaches the evidence. It never
     # builds: a rebuild after the gates would be an untested image (Spec §8.3). Single-arch linux/amd64.
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
     needs:
       - customer-amd64-native
       - customer-release-readiness
@@ -592,14 +698,16 @@ jobs:
       - postgres-demo-db-smoke
       - business-eval-catalog
       - ktx-diff-audit
-    if: ${{ startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' }}
+    if: ${{ startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.mode == 'customer-candidate') }}
+    timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           # Full history + tags: release-artifacts verifies that the release tag
           # points at the commit being packaged, which is impossible without tags.
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
           cache: npm
@@ -615,9 +723,12 @@ jobs:
         id: release
         env:
           LUCY_VERSION: ${{ steps.lucy-version.outputs.version }}
+          # The manual input is passed through the environment, never spliced into the shell
+          # source (Spec §2.2 F12). A tag is validated by lucy-version-governance below.
+          RELEASE_TAG_INPUT: ${{ inputs.release_tag }}
         run: |
           set -euo pipefail
-          TAG="${{ inputs.release_tag }}"
+          TAG="${RELEASE_TAG_INPUT:-}"
           if [ -z "$TAG" ]; then
             if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
               TAG="${GITHUB_REF_NAME}"
@@ -628,7 +739,7 @@ jobs:
           node scripts/release/lucy-version-governance.mjs --release-tag "$TAG"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
         with:
           registry: ${{ vars.LUCY_IMAGE_REGISTRY || 'ghcr.io' }}
           username: ${{ github.actor }}
@@ -688,7 +799,7 @@ jobs:
           printf '%s\n' "${IMAGE_LUCY_VERSION}" > release/lucy-version.txt
           bash scripts/gates/g8-image-k8s-contract-gate.sh "${IMAGE_REF}"
           docker image inspect "${IMAGE_REF}" --format '{{.Id}}' > release/image-config-id.txt
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: customer-release-readiness
           path: release/evidence/
@@ -698,8 +809,8 @@ jobs:
           LUCY_DOCKER_IMAGE: ${{ steps.promote.outputs.image }}
           LUCY_IMAGE_DIGEST: ${{ steps.promote.outputs.digest }}
           LUCY_PLATFORMS: linux/amd64
-        run: npm run release:artifacts -- --tag "${{ steps.release.outputs.tag }}"
-      - uses: actions/upload-artifact@v4
+        run: npm run release:artifacts -- --tag "$LUCY_RELEASE_TAG"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: lucy-release-artifacts
           path: release/
