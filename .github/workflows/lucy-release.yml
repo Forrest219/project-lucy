@@ -398,11 +398,13 @@ jobs:
           docker push "${IMAGE}"
           # Resolve pushed digest via RepoDigests (layers already local; pull is instant)
           DIGEST="$(docker pull "${IMAGE}" --quiet >/dev/null && docker image inspect "${IMAGE}" --format '{{index .RepoDigests 0}}' | sed 's/.*@//')"
-          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-          echo "repository=${REPOSITORY}" >> "$GITHUB_OUTPUT"
-          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
-          echo "ref=${REPOSITORY}@${DIGEST}" >> "$GITHUB_OUTPUT"
+          {
+            echo "image=${IMAGE}"
+            echo "tag=${TAG}"
+            echo "repository=${REPOSITORY}"
+            echo "digest=${DIGEST}"
+            echo "ref=${REPOSITORY}@${DIGEST}"
+          } >> "$GITHUB_OUTPUT"
           mkdir -p release/results
           {
             echo "git_sha=${GITHUB_SHA}"
@@ -431,20 +433,32 @@ jobs:
             [ "${rc}" -eq 0 ] || overall=1
           }
           set -e
+          # The gates below run their check through `bash -c` with a single-quoted inner
+          # script. The single quotes are deliberate: the OUTER shell must not expand
+          # IMAGE_REF / KTX_VERSION / LUCY_VERSION / GITHUB_SHA, the INNER bash expands them
+          # from the step environment. ShellCheck cannot see that intent through the `gate`
+          # wrapper, and actionlint always prepends a `set -eo pipefail` line to the script
+          # it hands to ShellCheck, so the directive cannot be file-scoped: it has to sit
+          # directly above each affected command.
           # G1: metadata arch
+          # shellcheck disable=SC2016
           gate g1-metadata-arch bash -c 'test "$(docker image inspect "${IMAGE_REF}" --format "{{.Os}}/{{.Architecture}}")" = "linux/amd64"'
           # G2: ELF arch of node + tini (metadata alone is not proof)
           gate g2-elf-arch bash scripts/release/assert-image-elf-arch.sh "${IMAGE_REF}" amd64
           # G3: runtime smoke
           gate g3-runtime-smoke docker run --rm --network=none --platform linux/amd64 --entrypoint /bin/sh "${IMAGE_REF}" -c "echo ok"
           # G4: ktx CLI version (requires native amd64; segfaults under qemu-user)
+          # shellcheck disable=SC2016
           gate g4-ktx-version bash -c 'docker run --rm --network=none --platform linux/amd64 --entrypoint ktx "${IMAGE_REF}" --version > release/ktx-version.txt && grep -q "${KTX_VERSION}" release/ktx-version.txt'
           # G4b: baked Python runtime for offline customers
           gate g4b-python-runtime docker run --rm --network=none --platform linux/amd64 --entrypoint /bin/sh "${IMAGE_REF}" -c \
             "test -x /home/lucy/.ktx/runtime/${KTX_VERSION}/.venv/bin/python && /home/lucy/.ktx/runtime/${KTX_VERSION}/.venv/bin/python --version"
           # LUCY_VERSION baked correctly
+          # shellcheck disable=SC2016
           gate lucy-version-baked bash -c 'test "$(docker run --rm --network=none --platform linux/amd64 --entrypoint printenv "${IMAGE_REF}" LUCY_VERSION)" = "${LUCY_VERSION}"'
+          # shellcheck disable=SC2016
           gate lucy-build-revision bash -c 'test "$(docker run --rm --network=none --platform linux/amd64 --entrypoint cat "${IMAGE_REF}" /app/BUILD_REVISION | tr -d "[:space:]")" = "${GITHUB_SHA}"'
+          # shellcheck disable=SC2016
           gate lucy-build-revision-not-env bash -c 'test -z "$(docker run --rm --network=none --platform linux/amd64 --entrypoint printenv "${IMAGE_REF}" LUCY_GIT_SHA 2>/dev/null || true)"'
           # G8: K8s contract gate
           gate g8-k8s-contract bash scripts/gates/g8-image-k8s-contract-gate.sh "${IMAGE_REF}"
@@ -763,9 +777,11 @@ jobs:
             exit 1
           fi
           mkdir -p release
-          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
-          echo "digest=${PROMOTED}" >> "$GITHUB_OUTPUT"
-          echo "ref=${REPOSITORY}@${PROMOTED}" >> "$GITHUB_OUTPUT"
+          {
+            echo "image=${IMAGE}"
+            echo "digest=${PROMOTED}"
+            echo "ref=${REPOSITORY}@${PROMOTED}"
+          } >> "$GITHUB_OUTPUT"
           {
             echo "git_sha=${GITHUB_SHA}"
             echo "image=${IMAGE}"
