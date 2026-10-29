@@ -4,7 +4,8 @@
 |---|---|
 | 文档名称 | project-lucy 项目概览 |
 | 文档类型 | Overview |
-| 版本 | v1.57 |
+| 版本 | v1.58 |
+| v1.58 更新 | 2026-10-29，**问询预算窗口与预算终止可观测性优化（新条目，编号待 PM 指派，建议 L25-17）登记**：源于 2026-10-29 生产事故（用户 liuzongxuan / `codex-mcp-client`，零次数据工具调用即被 `question_budget_exhausted` 拦下，客户侧无法自救）。Spec／Plan 已落盘（`docs/specs/lucy-20261029-question-budget-window-optimization-spec.md` v0.2、`docs/plans/2026-10-29-lucy-question-budget-window-optimization-plan.md` v0.3）；**第 1 轮 Codex 独立审阅结论「退回修订」（4 阻塞 / 8 高 / 1 中 / 1 低，共 14 条）**，其中 R01／R06／R07 三条直接击穿原稿伪代码前提、R11 推翻「导出服务端写死 outcome=ok」的归因、R10 指出认证路由／报表模板为预算旁路；14 条已在 Spec §10 逐条回应并落修，**第 2 轮复审未进行**，修订稿是否闭合 14 条**尚未经独立复核**。**D1–D9 全部未拍板；SC-01–SC-41 全部未执行；不授权开发、测试执行、治理文件变更、浏览器验证、镜像、部署或提交**。⚠️ 版本号为跨会话共享计数器，写前须实读顶部版本行取 current+1 |
 | v1.57 更新 | 2026-10-29，L25-15 **登记册同步（事实对齐，按 PM 后续决定）：Spec／Plan 升 v0.10**——把 §9 该条目所载**外部工作项依赖**状态写准为「**编号待定且已挂起**」：PM 于 2026-10-29 决定**暂不设 L25-11 owner 会话**，**G30／G31 与该外部工作项一并挂起**（见本表 v1.55 行），编号**仍为待定**且**无 owner、无法推进**，**恢复条件 = PM 重新指派 L25-11 owner（或授权复审）**。据此三项口径：① **开工不受影响**（v0.9 已解除的开工前置不因此回退）；② **交付不得以该修复落地为前提**，挂起期间它**不提供任何保障**；③ **恢复路径自身的保障必须自足**——恢复锁持有到终态、基线复核与重叠拒绝三条是本功能在此问题上的**唯一保障**，不得视为临时替代；与 L25-11 维护方协调验收矩阵与回归范围因无 owner 而**无法在本功能内推进**，只作已知依赖登记。**产品语义未变**，SRR-01–SRR-24 全部未执行，不授权开发。⚠️ **现值口径**：本表 v1.53 行所载「修订至 v0.9」为**当时记录**，L25-15 的现值以本行为准（**Spec v0.10／Plan v0.10**）；历史行按惯例不回改。⚠️ 版本号为跨会话共享计数器，写前须实读顶部版本行取 current+1 |
 | v1.56 更新 | 2026-10-29，L25-16 **收尾批次：① 逐处作废「D8 与 L25-15 S0 仍未签」的残留表述（6 处历史行）；② 影响面清单数字更正；③ 把 D8 = (b) 落进验收侧 VOPS-76**（据登记册一致性会话告知，本方独立回查核实后采纳）：① **6 处作废**——本表 v1.49／v1.50／v1.51 三行与升级建议书 v1.47／v1.48／v1.49 三行所载「D8 与 L25-15 S0 仍未签」**是状态陈述而非历史快照，一律以本行为准、该表述已作废**；**现值口径：D8 与 L25-15 S0 已于 2026-10-29 由 PM 签下**（D8 = (b) 显式批次交接；S0 = (a) 单独立项修既有路径，须另立工作项；决策纸提交 `fc72a7b9`）。② **影响面清单更正**：既有文件 **14→17**（补 `webui/server/model.ts` +6/-0，承载 G26／VOPS-66 类型合同；§3 原标题 14 与表格 16 行自相矛盾）、新增文件合计 **17→18**（`ops/` 下 17 ＋ `enabled-tables.ts` 1），数字旁已注明口径。③ **验收侧补全**：VOPS-76 并入 D8 = (b) 的「消费方须持独立授权 ＋ 两笔归因可查 ＋ 既有校验不得放宽」，Spec 升 **v1.3**、Plan 升 **v0.11**。④ **口径未变**：G1–G38、VOPS-01–78 全部未执行、W-A 已授权实现 S1–S4、第 8 轮独立复审未做；**规格条款未放宽**。⑤ **W-B 剩余阻塞**：**L25-11 审阅通过 + G30／G31 关闭**；**PM 已决定暂不设 L25-11 owner、G30／G31 与 S0 外部工作项一并挂起**（见本表 v1.55 行）⇒ **W-B 主动挂起，W-A 的 S1–S4 不受影响**。⚠️ 版本号为跨会话共享计数器，写前须实读顶部版本行取 current+1 |
 | v1.55 更新 | 2026-10-29，L25-11 **PM 决定：暂不设 owner 会话，G30／G31 与 S0 外部工作项一并挂起**（决策登记；L25-11 条目由登记册一致性会话维护）：① **暂不设 L25-11 owner**——本仓现有专责会话仅 L25-16／审计增量／L25-15 三个，**无 L25-11 维护者**（`session list` 全量核查确认），L25-11 的复审与推进**无人承接**。② **一并挂起**：**G30**（批量校验不产出可发布计划，F6-03）与 **G31**（发布窗口不覆盖终态核验与持久化，F6-08——与 L25-15 S0 同源）**挂起**；L25-15 S0 裁定的**外部工作项**（另立、含编号／owner／排期）**因无 owner 而挂起**，编号仍为待定。③ **直接后果**：**W-B 保持关闭**（仍须 L25-11 审阅通过 + G30／G31 关闭）；**不影响 W-A 已授权实现的 S1–S4**（连接表配置与源表导入），二者互不依赖。④ **L25-11 自身状态不变**：独立静态审阅「退回」（1 阻塞 + 5 高 + 2 中）结论与缺口表原样保留、**尚未复审**；V01–V22 全部未执行；Wave 0b 未解锁保持 `blocked_delivery`。⑤ **恢复条件**：PM 重新指派 L25-11 owner（或授权复审）后，G30／G31 与外部工作项方可推进。**未变更口径**：L25-11 Spec v0.2-requirements-review 及其冻结合同不变，本条只登记 PM 决定与当前状态。⚠️ 版本号为跨会话共享计数器，写前须实读顶部版本行取 current+1 |
@@ -194,6 +195,7 @@ Lucy MCP Proxy 监听 `LUCY_PROXY_HOST:LUCY_PROXY_PORT`（默认容器内 `0.0.0
 | 主题 | 文档 |
 |---|---|
 | Lucy 产品定位与愿景 | `docs/governance/vision.md` |
+| **问询预算窗口与预算终止可观测性（20261029，编号待 PM 指派，建议 L25-17；P0，第 1 轮审阅未通过，待第 2 轮复审）** | [问询预算优化 Spec](../specs/lucy-20261029-question-budget-window-optimization-spec.md)（v0.2）· [实施 Plan](../plans/2026-10-29-lucy-question-budget-window-optimization-plan.md)（v0.3）· [第 1 轮 Codex 审阅结论](../reviews/2026-10-29-codex-review-question-budget-window-optimization.md)。问询预算墙钟口径改写、续查通道、预算终止可观测化；**D1–D9 未拍板，SC-01–SC-41 全部未执行，不授权开发** |
 | **竞品分析与差异化立项（20261014）** | **`docs/specs/lucy-20261014-safe-log-to-quality-eval-spec.md`**（P0-1 反馈回流浪程）· **`docs/specs/lucy-20261014-release-bom-spec.md`**（P0-2 发布物料清单）· **`docs/specs/lucy-20261014-concept-dictionary-spec.md`**（P1 概念字典）；工单 `docs/plans/wo-20261014-*.md`；分析底稿与评审历史 `docs/specs/lucy-20261014-fivetran-context-layer-competitive-analysis.md` |
 | Cloudflare OS 对标差异（20261018） | `docs/specs/lucy-20261018-cloudflare-os-benchmark.md`。公开材料对照，不是功能 Spec；未纳入本地实机截图交叉审阅 |
 | Hive 直连（v0.25 L25-10，P1-4，已实现（仅编译侧），未验收） | [Hive 直连 Spec](../specs/lucy-20261025-v0p25-hive-direct-connection-spec.md)、[上游实施方案](../plans/2026-10-20-hive-direct-connection-implementation-plan.md)。Lucy 适配 HiveServer2/JDBC，复用未修改的 KTX Python 语义计算接口；支持状态保持 `planned`；提交 `28780eae`，JDBC 执行与 MCP 入口接入本轮未实施（V03–V17 记 `blocked_environment`），H25-01–08 全部未执行 |
@@ -266,7 +268,6 @@ Lucy MCP Proxy 监听 `LUCY_PROXY_HOST:LUCY_PROXY_PORT`（默认容器内 `0.0.0
 | Spec 审计与整改 | `inbox/spec-audit-2026-06-21.md`、`inbox/spec-remediation-plan-2026-06-21.md` |
 
 ## 10. 当前整改优先级
-
 1. ✅ 2026-06-22 P0-1 Admin Role-First 已闭环；访问权限升级见 `docs/access-control/design-upgrade.md` v1.1.2 与 `docs/access-control/plans/wo-202608-59-access-control-p0.md`。
 2. ✅ `access.yaml` 等治理配置写入已补 dryRun、diff、输入校验与审计；`config_change_log` 支持 CSV 导出。真实 `ktx.yaml` 已改为本机 ignored 配置，仓库只提交 `ktx.yaml.example`。
 3. ✅ 建立 spec 防漂移检查：route/status、API/spec、skill dependencies、eval schema、access role selector，并新增模板指针字段 fail 规则。

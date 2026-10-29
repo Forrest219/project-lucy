@@ -5,14 +5,16 @@
 | Spec | 162 |
 | 文档名称 | Customer Query Experience and Usage Evidence |
 | 文档类型 | Product / Proxy / Audit / Semantic Contract Spec |
-| 版本 | v0.3 |
-| 状态 | 已实现（lucy-v2.0）。WO-202610-12 / WO-13 / WO-14 均已验收合入；调用路径补丁见 WO-202610-15 |
+| 版本 | v0.4 |
+| 状态 | 已实现（lucy-v2.0）。WO-202610-12 / WO-13 / WO-14 均已验收合入；调用路径补丁见 WO-202610-15。**v0.4 为「修订声明」**：§7.2 的墙钟口径与续查兑现通道已由问询预算优化 Spec 修订，**但该修订尚未实现**，运行时仍以 §7.2 现行文本为准；生效条件见 §7.2 修订小节 |
 | 撰写日期 | 2026-10-11 |
 | 委托人 | xingchen |
 | 来源计划 | [`docs/plans/2026-10-11-customer-log-next-optimizations.md`](../../docs/plans/2026-10-11-customer-log-next-optimizations.md) v1.1 |
 | 关联工单 | [`wo-202610-12`](plans/wo-202610-12-query-turn-budget-and-repair.md)、[`wo-202610-13`](plans/wo-202610-13-usage-evidence-and-query-guardrails.md)、[`wo-202610-14`](plans/wo-202610-14-usage-signal-and-publish-gate.md) |
 | 关联 Spec | 08 问询追踪、09 R1 工具契约、125 生成 SQL 热库、138 轮次归因、137 审计证据 |
-| 修订 | 不取代 Spec 138 的归因枚举。不改 Eval 跑批的 tool budget（`docs/design/design-eval-tool-budget.md`）。不改 KTX 源码。v0.2：`wiki_not_found` 与 `explicit_table_required:<empty>` 归用法与语义；`wiki_forbidden` 与带表名的 `explicit_table_required` 归权限拒绝。复述只写进 initialize 指导，代理不因缺少确认而拒绝查数。生产环境的 turn 绑定率依赖客户端发版，不是 WO-12 的退出条件。v0.3：SC-16 补上探测连接的评测标记；新增 SC-25、SC-26。慢标记的新定义不覆盖其它工具，也不替换 Spec 143 |
+| 修订 | 不取代 Spec 138 的归因枚举。不改 Eval 跑批的 tool budget（`docs/design/design-eval-tool-budget.md`）。不改 KTX 源码。v0.2：`wiki_not_found` 与 `explicit_table_required:<empty>` 归用法与语义；`wiki_forbidden` 与带表名的 `explicit_table_required` 归权限拒绝。复述只写进 initialize 指导，代理不因缺少确认而拒绝查数。生产环境的 turn 绑定率依赖客户端发版，不是 WO-12 的退出条件。v0.3：SC-16 补上探测连接的评测标记；新增 SC-25、SC-26。慢标记的新定义不覆盖其它工具，也不替换 Spec 143。**v0.4（2026-10-29，PM 授权代改）：§7.2 的墙钟口径与续查兑现通道由 `docs/specs/lucy-20261029-question-budget-window-optimization-spec.md` v0.2 修订**——墙钟第二维度改为「已结算的数据处理时长」（空闲不计入）；新增 `lucy_continue_question` 续查通道（持久化「声明—消费」）；`continuable` 改为「该调用者是否仍有可达的继续通道」。**该修订未实现、不改变现行运行时行为**，§7.1／§7.3／§7.8 其余语义、§10 SC-1–SC-26 现行判定均不变 |
+
+> **问询预算优化 Spec 修订（2026-10-29）**：本文 §7.2 的**墙钟口径**与**续查兑现通道**由 [`docs/specs/lucy-20261029-question-budget-window-optimization-spec.md`](../../docs/specs/lucy-20261029-question-budget-window-optimization-spec.md)（v0.2）修订，逐条改动见 §7.2 的「修订后口径（尚未实现）」小节。⚠️ **该修订尚未实现**：运行时仍以 §7.2 现行文本为准——墙钟仍是问询年龄的流逝时间（`webui/server/proxy/question-experience.ts` 的 `QUESTION_BUDGET_MAX_WALL_MS = 120000`），`continuable` 仍硬编码为 `true`，续查仍只经 HTTP 头兑现。**新口径自该 Spec 的 SC-01–SC-41 全部执行完毕并发布之日起生效**；在此之前不得按新口径解释既有审计行或验收结论。本次修订**不改变** §7.1 归因、§7.3 失败四维度、§7.8 认证路径的其余语义，也不改变 §10 的现行判定。
 
 > **Spec 189 修订（2026-10-27）**：本文 §7.6「协议与评测探针退出默认用量 KPI」的规则**保留为基线**，并升级为唯一事实源（T2 建立 `webui/server/proxy/usage-classification.ts`）。两处边界扩展：① 协议集合扩至**完整集合**（新增 `prompts/list` 与任何 `server/*` 方法）；② **准入集合（11 个 JSON-RPC 方法）与协议集合不相等**，两者边界以 `webui/docs/189-usage-metrics-truthfulness-and-cross-page-consistency-spec.md` §4.2 为准。评测探针判定规则（显式 `eval_mark` 为真 **且** 参数／连接名命中探针标记）不变，且只退出默认用量 KPI，仍保留在原始审计、导出、问询关联与真实表访问中。
 
@@ -63,7 +65,7 @@ New terms:
 
 | Canonical Term | 中文主术语 | 约束 |
 |---|---|---|
-| Question Budget | 问询预算 | 用尽时的状态是「可继续」，不得写成失败或拒绝 |
+| Question Budget | 问询预算 | 用尽时的状态是「可继续」，不得写成失败或拒绝。**`continuable` 字段取值语义见 §7.2 修订小节（尚未实现）：修订后该值表示「该调用者是否仍有可达的继续通道」，额度用尽但无可达通道时如实为 `false`；这不改变本行「状态是可继续、不得写成失败或拒绝」的约束** |
 | Repair Hint | 修复提示 | 只含当前角色可见的连接和 source |
 | Filter Pushdown | 过滤条件下推 | 失败维度名。不得在 UI 里把 `upstream_error` 显示成这个名字 |
 | Actor | 使用人 | 与 Agent、自动化调用并列。`token_label` 仍叫 Token 备注 |
@@ -141,6 +143,17 @@ function continuable(reason):
 模型侧指导的事实源是 `webui/config/data-qa-instructions.md`，由 Spec 07 §4.4 在 `initialize` 注入。注入失败 fail-open，不是权限边界。WO-12 的 T3 已把该文件改成与本节一致：同一问询最多 20 次数据工具或 120 秒，并写明可以继续一次。指导不得再宽于代理预算。
 
 P0 不拆句。复述范围在 P1，载体仍是这份指导，不新增代理拦截。见 §7.2 的下一段，任务在 WO-13 T8。
+#### 修订后口径（**尚未实现**，2026-10-29）
+
+由 [`docs/specs/lucy-20261029-question-budget-window-optimization-spec.md`](../../docs/specs/lucy-20261029-question-budget-window-optimization-spec.md) v0.2 修订，**三处变更**：
+
+1. **墙钟口径**：第二维度由「问询年龄流逝时间」改为「**已结算的数据处理时长**」，agent 思考等**空闲时间不计入**。配套约束：在途处理时长按**有界超支**计入（≤ 并发上限 × 绝对执行时限）；问询年龄退出额度判定，**只作观测**（慢标记用途不变，见 §8）。
+2. **续查兑现通道**：新增 `lucy_continue_question` 工具，以**持久化待兑现状态**打通「声明 → 消费」；HTTP 头 `x-lucy-question-continue` 保留为次要路径。
+3. **`continuable` 语义**：由「是否还有额度」改为「**该调用者是否仍有可达的继续通道**」（额度 **与** 通道可达性两个条件）。旧客户端看不到新工具时该值如实为 `false`。
+
+**生效条件**：新 Spec 的 SC-01–SC-41 全部执行完毕并发布后生效；生效时本小节取代上方现行文本，§10 的 SC-4 须**同期改写**。**在此之前，本小节不构成运行时事实源**，也不改变 SC-4 的现行判定。
+
+模型侧指导（`webui/config/data-qa-instructions.md`）的同步修订与本小节**同批发布**，避免指导口径宽于代理预算或指向不可见工具。
 
 问询原文含指代或两个意图时，指导要求模型先复述账户、月份和产品线。用户尚未确认时，由模型不发 `lucy_query`。没有原文的推断问询跳过复述。代理不因请求里没有确认字段而拒绝查询，否则没有该字段的旧客户端会被切断，违反 SC-1。
 
@@ -363,5 +376,7 @@ function compileMeasure(measure, source):
 | SC-22 | P2 | User-Agent `kscc-code/1.3.7 (cli)` 在 `client` 为空时解析出客户端与版本。无转发头时 `client_forwarded_for` 为空，`client_ip` 仍为对端 |
 | SC-23 | P2 | 歧义列的修复提示是 ACL 内的限定名。不生成自动 join。本条测试不依赖 SC-24 的门禁 |
 | SC-24 | P2 | `columns.0.type` 契约失败拒绝发布。豁免行含操作者、原因、到期时间；到期后发布再次失败。用户可见入口是工作台已有的 `validate-changed` 检查，不新增端点 |
+
+> **SC-4 的口径说明（2026-10-29）**：SC-4 按**现行实现**判定（第 21 次数据工具或问询墙钟超过 120 秒）。问询预算优化 Spec 修订的「已结算数据处理时长」口径**自其 SC-01–SC-41 全部执行完毕并发布之日起**取代本口径，**届时 SC-4 须同期改写**；在此之前 SC-4 的表述与判定**均不变**。
 
 客户验收基线见来源计划的表。实现测试用夹具，不把客户日志原文提交进仓库。

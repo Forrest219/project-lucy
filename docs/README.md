@@ -56,6 +56,7 @@
 | [specs/lucy-20261019-audit-trust-and-admin-investigation-spec.md](specs/lucy-20261019-audit-trust-and-admin-investigation-spec.md) | **设计交付，未实施**：审计可信度与管理员调查增量契约；取消近邻强制补绑、分离身份和归属质量、统一计数与导出范围；关联实施 Plan 和独立验收矩阵 |
 | [specs/lucy-20261028-v0p25-lucy-ops-control-plane-spec.md](specs/lucy-20261028-v0p25-lucy-ops-control-plane-spec.md) | **v0.25 L25-16，P1，Spec v1.3，W-A 已授权实现 S1–S4，W-B 不可交付开发**：2026-10-29 PM 授权 Claude Code 落地连接表与源表导入。语义发布留待 L25-11（审阅通过 + G30／G31 关闭）；**D8 已签（(b) 显式批次交接）**。VOPS-01–78 全部未执行 |
 | `specs/ceo-one-report-sow-product-risk-register.md` | CEO 一眼报 SOW 对照下的 Lucy 产品功能风险 register，聚焦 Eval/trace/context/reviewer/observability 等非数据主题能力 |
+| [specs/lucy-20261029-question-budget-window-optimization-spec.md](specs/lucy-20261029-question-budget-window-optimization-spec.md) | **v0.25（修订线，建议 L25-17），P0，Spec v0.2；第 1 轮 Codex 审阅未通过（退回修订 4 阻塞/8 高/1 中/1 低），已按 14 条发现修订，待第 2 轮复审**：问询预算窗口与预算终止可观测性优化。源于 2026-10-29 生产事故（用户 liuzongxuan / `codex-mcp-client`，零次数据工具调用即被 `question_budget_exhausted` 拦下，客户侧无法自救）。修订要点：稳定预算身份（作用域键脱离 turn 注册表）、统一结算与窗口票据、墙钟口径改为已结算数据处理时长（含可证明的有界超支）、续查改为持久化「声明—消费」两段式、`continuable` 重定义为可执行能力、旁路入口纳管、撤回「导出服务端写死 outcome=ok」的错误归因。**D1–D9 暂未拍板；SC-01–SC-41 全部未执行；不授权开发** |
 | `specs/ceo-one-report-sow-eval-uat-contract.md` | CEO 一眼报 SOW 可信 Eval/UAT contract，冻结 trace、scoring、context evidence、per-case artifact 与验收口径 |
 | `specs/ceo-one-report-lucy-migration-delivery-plan.md` | CEO 一眼报从现有 finreport/BI 资产迁移到 Lucy/KTX 的端到端实施交付计划 |
 | `specs/ceo-one-report-lucy-data-model-notes.md` | CEO 一眼报 MVP 源表/SQL 到 Lucy 专用服务层表的建模理解和 DDL 索取清单 |
@@ -103,6 +104,7 @@
 | [reviews/2026-10-25-lucy-v0.25-e2e-implementation-record.md](reviews/2026-10-25-lucy-v0.25-e2e-implementation-record.md) | **s3 实施记录**：v0.25 E2E 优化的落地汇总——范围与授权、五条 track 的逐项交付物与验收证据（新增自动化 **206 例全绿**，173 个执行 id 恰好各实现一次）、门禁结果、本轮发现并修复的缺陷、**未完成与 blocked 清单**、遗留项与责任人、与设计基线的偏差说明、提交纪律与文件归属核对（纳入 54 个文件，**排除并发 agent 的 10 个 `webui/server/**` 文件**）。未对「客户交付通过」做任何声明 |
 | [reviews/2026-10-24-lucy-v0.25-p0-final-decision.md](reviews/2026-10-24-lucy-v0.25-p0-final-decision.md) | **已批准**：v0.25 首批四个 P0 的最终范围、Spec 收口决议、Wave 0b 交付链解锁责任与完整退出口径；不授权实现、部署或发布 |
 | `reviews/2026-10-23-lucy-v2.0-release-readiness-review.md` | **已审阅**：v2.0 合流 main / 开 2.5 线的发版就绪度评审。D1（受保护 runner）裁定为 **B**：本期不 provisioning，死线为 2.5 首次客户交付前就位；D2（2.5 波次版本号）裁定为 **`2.10.0`**。§4.8–§4.20 记录 CI 恢复后暴露的**十一项**门禁缺陷的根因与修复（含 `docker-smoke` 挂死真根因、demo smoke 架构缺陷、WebUI 套件三类时序脆弱点、demo smoke 鉴权缺口） |
+| [reviews/2026-10-29-codex-review-question-budget-window-optimization.md](reviews/2026-10-29-codex-review-question-budget-window-optimization.md) | **结论：退回修订**：问询预算窗口与预算终止可观测性优化（Spec v0.2／Plan v0.3）第 1 轮独立审阅（本机 Codex 只读对抗式设计审阅 + MiniMax Code 逐条回查源码核实）；发现 **4 阻塞 / 8 高 / 1 中 / 1 低** 共 14 条，其中 R01／R06／R07 三条**直接击穿原稿伪代码前提**（续查意图无传递通道、10 分钟后换桶逃逸、取代丢失身份隔离），R11 推翻「导出服务端写死 outcome=ok」的归因，R10 指出认证路由／报表模板是预算旁路；14 条已在 Spec §10 逐条回应，**第 2 轮复审未进行** |
 | `reviews/2026-10-24-lucy-v2.0-release-execution-record.md` | **已执行**：v2.0 发版列车阶段一至三的执行记录——11 项门禁修复的落地、PR #45 合流（merge commit `14a8bee`，禁 squash）、`main` 分支保护与 `v*` 标签保护下发、`v2.0.0` tag 与 GitHub Release、`lucy-v2.5` 开线，以及转入 2.5 线的 8 项未决事项（含 D3 待裁定、demo smoke 鉴权缺口） |
 
 ## 4. UAT（人工验收用例）→ `uat/`
@@ -167,7 +169,6 @@
 | `runbooks/kx-security-guardrail-test-process.md` | KX Security Guardrail 测试流程 |
 
 ## 9. 仓库级执行计划 → `plans/`
-
 | 文档 | 用途 |
 |---|---|
 | `plans/README.md` | 仓库级 plan 索引 |
@@ -176,10 +177,11 @@
 | [plans/2026-10-25-lucy-v0.25-e2e-implementation-plan.md](plans/2026-10-25-lucy-v0.25-e2e-implementation-plan.md) | **v0.25 E2E 优化实施计划**：三工作流（s1 开发＋Code Review＋Debug&优化 → s2 重建 Docker＋模拟用户 UAT＋输出测试报告 → s3 汇总＋交付审阅＋commit）、五条并行 track 的**文件所有权互斥**、与外部并发 agent 的隔离协议、证据边界与完成定义。落地结果见[实施记录](reviews/2026-10-25-lucy-v0.25-e2e-implementation-record.md)与[测试报告](reviews/2026-10-25-lucy-v0.25-e2e-test-report.md) |
 | [plans/2026-10-25-lucy-v0.25-p1-requirements-review-checklist.md](plans/2026-10-25-lucy-v0.25-p1-requirements-review-checklist.md) | **v0.25 P1 唯一需求签核入口**：六项 Spec、跨功能追踪矩阵、依赖、非门禁与全部验收未执行声明；2026-10-25 需求审查已签核通过（不授权开发），逐项依据见 [P1 需求审查记录](reviews/2026-10-25-lucy-v0.25-p1-requirements-review-record.md) |
 | `plans/2026-10-22-upgrade-candidate-verification-plan.md` | 升级候选验证环境实施方案 v0.2-spec-baseline（v0.25 L25-13，已收口 P1-6 Spec、需求审查已签核通过、非门禁；原地升级仍为客户现场主线） |
+| [plans/2026-10-29-lucy-question-budget-window-optimization-plan.md](plans/2026-10-29-lucy-question-budget-window-optimization-plan.md) | **v0.25（修订线），P0，Plan v0.3，Spec v0.2；第 1 轮 Codex 审阅未通过，已按 14 条发现修订，待第 2 轮复审**：问询预算窗口与预算终止可观测性优化实施 Plan。阶段重排为「可观测性先行」，原 S2 拆为**稳定预算身份与持久化正确性 / 统一结算与窗口票据 / 墙钟口径**三个独立可验收单元，S5 续查与 S8 治理文本同批启用。**D1–D9 暂未拍板；SC-01–SC-41 全部未执行；不授权开发、测试执行、治理文件变更、浏览器验证、镜像、部署或提交** |
 | `plans/2026-10-21-customer-20260828-v1-upgrade-package-plan.md` | 20260828-v1 客户升级包生成计划 v0.1（待确认；镜像、引导密钥、随包文档；验收前不交给客户） |
 | `plans/2026-10-21-customer-20260828-v1-to-lucy-2.0-upgrade-plan.md` | 客户 20260828-v1 → Lucy 2.0 升级计划 v0.3（未执行；r6 不是放行包；评审过程稿已作废） |
 | `plans/2026-10-12-acceptance-gap-closure.md` | 验收缺口修复：SC-15 / SC-19 / SC-20 / SC-23 接到查数路径，工单 WO-202610-15 |
-| `plans/2026-10-11-customer-log-next-optimizations.md` | 客户日志优化最终版 v1.1；Spec 162 v0.3，WO-12 已验收 |
+| `plans/2026-10-11-customer-log-next-optimizations.md` | 客户日志优化最终版 v1.1；Spec 162 v0.4（v0.4 为问询预算修订声明，未实现），WO-12 已验收 |
 | `plans/2026-10-11-eval-module-functional-upgrade.md` | Eval 模块产品能力 v0.4；评审看 Spec 161 与工单 `webui/docs/plans/wo-202610-11-offline-eval-customer-ops.md` |
 | `plans/2026-10-11-eval-result-policy-context-upgrade.md` | Eval 升级建议：结果 / 策略 / 解释分轴、上下文四臂、拒答与轨迹晋升（产品/架构，不含实现 WO） |
 | `plans/2026-08-26-eval-accuracy-closed-loop-and-change-triggered-regression.md` | Eval 优化方案：准确率闭环 + Publish 变更触发 smoke 回归（产品/架构，不含实现 WO） |
