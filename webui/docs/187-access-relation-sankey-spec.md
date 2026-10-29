@@ -6,8 +6,8 @@
 | 文档类型 / 版本 | 功能设计基线 / v0.3-requirements-review |
 | 日期 / 目标版本 | 2026-10-20；2026-10-25 收口 / v0.25 |
 | 功能编号 / 优先级 | L25-08 / P1-3 |
-| 状态 | **已实现，未验收**（v0.25 P1-3 / L25-08）。实施计划 `docs/plans/2026-10-25-lucy-v0.25-p1-implementation-plan.md` §1.1 W3；提交 `28780eae`。实现落点 `webui/server/admin/access-map.ts` ＋ `webui/src/pages/admin/AccessMap.tsx`。§9 验收矩阵在取得真实证据前仍为「未执行」 |
-| 授权来源 | 2026-10-25 Forrest 批准按项目规范完成 P1 梯队 Spec；本轮只做设计与需求审查材料 |
+| 状态 | **已实现，未验收**（v0.25 P1-3 / L25-08）。实施计划 `docs/plans/2026-10-25-lucy-v0.25-p1-implementation-plan.md` §1.1 W3；提交 `28780eae`。实现落点 `webui/server/admin/access-map.ts` ＋ `webui/src/pages/admin/AccessMap.tsx`。§10 验收矩阵在取得真实证据前仍为「未执行」 |
+| 授权来源 | 2026-10-25 Forrest 批准按项目规范完成 P1 梯队 Spec |
 | 撰写人 / 委托人 | Mavis（minimax Code）；v0.3 由 Kimi 收口 / Forrest |
 | 基于材料 | `docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md`（L25-01 / L25-03）；`webui/docs/06-navigation-ia.md`；`webui/docs/00-product-terminology-standard.md`；`webui/docs/131-lucy-admin-catalog-bound-role-spec.md`；`webui/server/admin/permission-display.ts`；`webui/server/proxy/acl.ts`；`webui/server/proxy/audit.ts`；`webui/server/admin/metric-window.ts`；`webui/docs/design-system/README.md` |
 | 适用范围 | v0.25 治理台 WebUI 的访问关系可视化。授权面读取现有 effective permissions，访问面读取现有审计日志。**不新增授权模型，不改变运行时裁决** |
@@ -114,9 +114,9 @@ v0.25 提案 L25-01 的验收标准是「不打开 YAML，能说出这个 Agent 
 
 ### 3.1 独立页
 
-- 规划路由：`/admin/access-map`（与 `/admin/agents`、`/admin/roles`、`/admin/tokens`、`/admin/audit` 同级）；当前路由与导航尚未实现。
-- 规划导航：P1-1 **行权限视图**位于「角色权限」之后，P1-3 **访问关系图**位于其后、「访问日志」之前。「访问治理」由当前 6 项（Agent / Token 凭据 / 角色权限 / 访问日志 / MCP 调试台 / 配置审计）规划扩为 8 项，现有项相对顺序不变。
-- 本轮只在 `webui/docs/06-navigation-ia.md` 与 `webui/docs/61-help-sidebar-entry-map-spec.md` 登记规划入口（§12.3），不得把规划项写成当前代码事实。
+- 路由：`/admin/access-map`（与 `/admin/agents`、`/admin/roles`、`/admin/tokens`、`/admin/audit` 同级）。路由与导航已挂载。
+- 导航：P1-1 **行权限视图**位于「角色权限」之后，P1-3 **访问关系图**位于其后、「访问日志」之前。
+- 入口同时登记在 `webui/docs/06-navigation-ia.md` 与 `webui/docs/61-help-sidebar-entry-map-spec.md`（§12.3）。验收矩阵仍未执行。
 
 ### 3.2 详情页下钻深链
 
@@ -733,7 +733,7 @@ webui/server/admin/access-map.ts 服务端：授权层 + 访问层构建 + 降�
 | `design-system/11-components-data-grid.md` | 表格等价视图复用 Base Contract；列对齐、状态 Tag、行高与现有数据网格一致 |
 | `design-system/20-patterns-page-layout.md` | 标准页面结构：页头（标题 + 描述 + 头部动作）→ 信号条 → 图区 → 侧边明细面板 |
 
-**本轮已完成设计登记（不代表组件已实现）**
+**设计登记已完成，组件已挂载，验收未执行。**
 
 `webui/docs/design-system/99-governance.md` 的 TD-187-01 已登记：`series/grant` 与 `series/access` 各有 `default` / `subtle`；僵尸授权与需复核使用 `warning`，确凿越权使用 `danger`；需复核为虚线、确凿越权为实线；禁止裸 hex，状态不得只靠颜色区分。两组系列色实施时仍须验证流带与背景对比度，`danger` 不得用于非状态语义。本 Spec 的 §7.4 图例与 §4.4 状态引用以该登记为准。
 
@@ -741,7 +741,7 @@ webui/server/admin/access-map.ts 服务端：授权层 + 访问层构建 + 降�
 
 ## 10. 验收映射
 
-**SC-01–SC-14 全部未执行。** 本轮仅完成需求与验收设计；未来实施须按授权边界留证，不把文档 lint 或上游既有功能证据转记为本功能验收通过。
+**SC-01–SC-14 全部未执行。** 实现完成不等于验收通过；不把文档 lint 或上游既有功能证据转记为本功能验收通过。
 
 | SC | 验收方式 | 断言要点 |
 |---|---|---|
@@ -810,7 +810,7 @@ webui/server/admin/access-map.ts 服务端：授权层 + 访问层构建 + 降�
 |---|---|---|---|
 | 1 | 增补 §附录 A 的 6 个新术语 | `webui/docs/00-product-terminology-standard.md` §4.8 | 设计登记完成 |
 | 2 | 登记「授权层 / 访问层」两组系列色与状态映射 | `webui/docs/design-system/99-governance.md` TD-187-01 | 设计登记完成 |
-| 3 | 登记行权限视图与访问关系图规划入口 | `webui/docs/06-navigation-ia.md` + `webui/docs/61-help-sidebar-entry-map-spec.md` | 设计索引已登记；路由与导航实现待办 |
+| 3 | 登记行权限视图与访问关系图入口 | `webui/docs/06-navigation-ia.md` + `webui/docs/61-help-sidebar-entry-map-spec.md` | 路由与导航已挂载；验收未执行 |
 | 4 | 建议书登记 L25-08 与 P1 Spec | `docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md` | 设计索引已登记 |
 | 5 | 域索引交叉引用本文及 P1-1／P1-2 | `docs/access-control/README.md` §1 | 设计索引已登记 |
 

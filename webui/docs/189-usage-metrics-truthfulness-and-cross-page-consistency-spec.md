@@ -5,7 +5,7 @@
 | 文档名称 | 用量统计真实性与跨页面口径统一 Spec |
 | 版本 | v1.1（吸收交叉审阅复核裁决） |
 | 日期 | 2026-10-27 |
-| 状态 | **已实施（WO-202610-28 T1～T6 已完成）；自动化验收通过（见 §10）；未做浏览器／Docker 验证** |
+| 状态 | **已实施（WO-202610-28 T1～T6 已完成）；未验收**。浏览器与 Docker 验证未执行。§10 的全量数字是历史声称，不是当前 HEAD 的验收证据 |
 | 优先级 | P0（统计真实性） |
 | 委托人 | Forrest |
 | 适用范围 | `/admin/usage`、`/admin/agents`、`/admin/agents/:userId`、`/admin/tokens`、`/admin/audit`、`/ops/calls`、`/admin/access-map`、`/eval/monitor`、共用 Agent 对象详情抽屉，以及 §5.3 列明的审计派生 API |
@@ -349,7 +349,7 @@ function auditDefaultView(filter):
 
 | 验证项 | 命令／入口 | 结果 |
 |---|---|---|
-| 全量测试 | `npx vitest run --maxWorkers=1` | **350 文件 / 4213 通过 / 0 失败**（含新增 `usage-classification`、`usage-baseline`、`usage-governance`、`usage-metrics-cross-page`、`eval-monitor-field`）。在**提交内容导出**（HEAD 全部受版本控制的文件 ＋ gitignored 的 `ktx.yaml` ＋ `node_modules` 软链）上独占运行，证明结果不依赖任何未提交改动 |
+| 全量测试 | `npx vitest run --maxWorkers=1` | 历史声称，**不是当前 HEAD 的证据**：一处写 350 文件 / 4213 通过 / 0 失败，同节噪声说明写 350 文件 / 4212 通过 / 0 失败，工单 SC-18 写 349 文件 / 4205 通过 / 0 失败。三组数字不能同时作为同一次全量。未在当前 HEAD 重跑之前，不引用其中任何一组作为验收通过 |
 | 术语 lint | `npm run lint:terminology` | 通过（997 files scanned） |
 | IA 边界 lint | `npm run lint:ia-boundary` | 通过 |
 | 前端构建 | `npm run build` | 通过 |
@@ -362,7 +362,7 @@ function auditDefaultView(filter):
 
 **未执行项（保持未验收）**：浏览器验证、移动窄屏验证、Docker 镜像重建、客户包发布 —— 按计划默认不做。
 
-**已知环境噪声**：与其它 vitest 进程**并发**跑全量时会出现 0–3 个既有 flaky（失败集合逐次不同、每个单独复跑均通过，集中在审计库／Access Governance Gate／展示权限／语义资产链路）。已定位到具体机制：这些用例写**固定路径**产物（如发布就绪证据包固定写 `inbox/202608-governance-release-readiness.md`，`resolveProjectRoot()` 在 `KTX_PROJECT_ROOT` 未设置时回落到仓库根目录），并行进程会写同一文件；仓库 `test/setup.ts` 亦记录了"测试文件共享进程、环境变量会串"的结构性风险。**独占运行全量为 350 文件 / 4212 通过 / 0 失败**。判定流程：出现此类失败必须**单独复跑确认**后再判定，不得直接写成回归。
+**已知环境噪声**：与其它 vitest 进程**并发**跑全量时会出现 0–3 个既有 flaky（失败集合逐次不同、每个单独复跑均通过，集中在审计库／Access Governance Gate／展示权限／语义资产链路）。已定位到具体机制：这些用例写**固定路径**产物（如发布就绪证据包固定写 `inbox/202608-governance-release-readiness.md`，`resolveProjectRoot()` 在 `KTX_PROJECT_ROOT` 未设置时回落到仓库根目录），并行进程会写同一文件；仓库 `test/setup.ts` 亦记录了"测试文件共享进程、环境变量会串"的结构性风险。历史独占运行记录与上表全量数字不一致，见上表，不作为当前 HEAD 的通过证据。判定流程：出现此类失败必须**单独复跑确认**后再判定，不得直接写成回归。
 
 ## 11. 实施与交付边界
 
@@ -370,4 +370,4 @@ function auditDefaultView(filter):
 - 按“共享分类 → Agent／Token → 使用概况及 Governance API → 调用监控／审计／现场／访问关系图与治理证据 → 跨页对账”顺序实施。
 - 每阶段保留原始日志与旧字段兼容，不以全量重写 API 响应替代定点修改；协议集合扩大造成的旧字段数值变化必须在发布说明中显式列出。
 - 自动化环境若存在 Node 与 `better-sqlite3` ABI 不匹配，应先记录并修复测试环境再执行 SQLite 验证；不得把未运行写成通过，也不得为赶进度静默跳过后端统计断言。
-- 完成后同步 Spec 64、128、155、161、162、171、187 的交叉引用、KPI 注册表与术语标准；本 Spec 的状态只有在实现和验收完成后才能改为 Implemented（当前为「实施中（T1～T6 已完成）；未验收」—— 浏览器／Docker 验证按计划默认不做）。
+- 完成后同步 Spec 64、128、155、161、162、171、187 的交叉引用、KPI 注册表与术语标准。当前状态与文首一致：「已实施（T1～T6 已完成）；未验收」。浏览器与 Docker 验证未执行。实现完成不等于验收通过。
