@@ -249,7 +249,7 @@ Lucy MCP Proxy 监听 `LUCY_PROXY_HOST:LUCY_PROXY_PORT`（默认容器内 `0.0.0
 | 企业级 Data Agent 可回答性与交付标准 | `webui/docs/139-enterprise-data-agent-answerability-and-delivery-standard.md` |
 | 业务 Skill MVP（只读 Hub + Agent 读取） | `webui/docs/144-skill-hub-mvp-spec.md`、`webui/docs/plans/wo-202609-23-skill-hub-and-publish-clarity.md` |
 | 发布工作台校验口径 | `webui/docs/145-publish-validation-count-clarity-spec.md` |
-| 运维问数连接 v1.1（未实现：只读审计视图、运维问数 Skill、连接级 Wiki、Docker demo 的 `demo_ops`） | `webui/docs/149-ops-evidence-connection-spec.md`、`webui/docs/plans/wo-202609-25-ops-evidence-connection.md` |
+| 运维问数连接 v1.2 定稿（未进入开发：内容根、启动前确保、只读视图、运维问数 Skill、Docker demo 的 `demo_ops`） | `webui/docs/149-ops-evidence-connection-spec.md`、`webui/docs/plans/wo-202609-25-ops-evidence-connection.md` |
 | **访问权限域档案（入口）** | **`docs/access-control/README.md`** |
 | 访问权限升级设计 v1.1.2 | `docs/access-control/design-upgrade.md` |
 | 企业完整性 P0 决策备忘 | `docs/access-control/integrity-p0-decision.md` |
