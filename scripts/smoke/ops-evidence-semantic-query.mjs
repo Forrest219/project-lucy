@@ -22,20 +22,13 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3";
+import { readPinnedKtxVersion } from "../verify/verify-host-ktx-version.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const webuiRoot = path.join(repoRoot, "webui");
 const opsEvidenceCli = path.join(webuiRoot, "server", "ops-evidence", "cli.ts");
 const tsxBin = path.join(webuiRoot, "node_modules", ".bin", "tsx");
 const templateRoot = path.join(webuiRoot, "config", "ops-evidence");
-
-/** 镜像钉住的 KTX 版本（T0 的唯一依据）。 */
-async function pinnedKtxVersion() {
-  const dockerfile = await readFile(path.join(repoRoot, "Dockerfile"), "utf8");
-  const match = dockerfile.match(/^ARG KTX_VERSION=(\S+)$/m);
-  if (!match) throw new Error("Dockerfile has no ARG KTX_VERSION");
-  return match[1];
-}
 
 function resolveKtxBin() {
   if (process.env.LUCY_KTX_BIN) return process.env.LUCY_KTX_BIN;
@@ -134,7 +127,7 @@ function assertRows(rows, expected, label) {
 }
 
 async function main() {
-  const pinned = await pinnedKtxVersion();
+  const pinned = await readPinnedKtxVersion(repoRoot);
   const ktxBin = resolveKtxBin();
   const version = ktxVersion(ktxBin);
   if (!version) {
