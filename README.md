@@ -132,8 +132,9 @@ cp webui/config/access.yaml.example webui/config/access.yaml
 # 2. 创建密钥目录并写入数据库密码
 mkdir -p .ktx/secrets && echo '<your-db-password>' > .ktx/secrets/<connection>-password
 
-# 3. 安装 KTX CLI（或使用本机 dev 版本）
-npm install -g @kaelio/ktx@latest
+# 3. 安装 KTX CLI（版本必须与镜像捆绑版本一致；不要用 @latest）
+npm install -g @kaelio/ktx@$(sed -n 's/^ARG KTX_VERSION=//p' Dockerfile)
+npm run verify:host-ktx
 
 # 4. 启动 KTX MCP daemon；外部客户端应通过 Lucy MCP Proxy :7879 接入
 ktx mcp start --project-dir "$(pwd)"

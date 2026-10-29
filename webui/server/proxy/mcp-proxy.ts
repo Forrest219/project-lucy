@@ -56,6 +56,7 @@ import { isControlPlaneTool } from "../ops/control-plane.js";
 import { invokeOpsTool, opsToolDescriptors } from "../ops/ops-tools.js";
 import { listSources } from "../semantic-layer.js";
 import { loadContentPaths } from "../paths.js";
+import { OPS_EVIDENCE_CONNECTION_ID } from "../ops-evidence/contract.js";
 import { readKtxYamlDigest, recordExecutionRuntimeObservation } from "../mcp-runtime-state.js";
 import {
   recordMcpToolsCall,
@@ -1640,7 +1641,15 @@ async function connectionList(identity: Identity): Promise<{
   filteredBy: "effective_permissions";
 }> {
   const resolved = await effectivePermissions(identity);
-  const connections = resolved.ok ? resolved.permissions.connections : [];
+  let connections = resolved.ok ? resolved.permissions.connections : [];
+  // Spec 149 §6 — 运维问数连接未就绪时不列出（目录与连接清单一致）。
+  if (connections.some((id) => id === OPS_EVIDENCE_CONNECTION_ID)) {
+    const { readOpsEvidenceReadiness } = await import("../ops-evidence/readiness.js");
+    const state = await readOpsEvidenceReadiness();
+    if (state.readiness !== "current") {
+      connections = connections.filter((id) => id !== OPS_EVIDENCE_CONNECTION_ID);
+    }
+  }
   return {
     connections,
     items: connections.map((connectionId) => ({ id: connectionId, connectionId })),

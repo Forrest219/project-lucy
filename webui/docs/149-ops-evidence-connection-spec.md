@@ -8,7 +8,7 @@
 | 版本 | v1.2 |
 | 撰写日期 | 2026-09-24；v1.1 修订 2026-10-28；v1.2 定稿 2026-10-29 |
 | 委托人 | xingchen |
-| 状态 | **定稿，未进入开发**。定稿依据 [Codex 审阅](../../docs/reviews/2026-10-29-codex-review-spec149-ops-evidence.md)（结论：退回修订）。v1.2 处置 R01–R09。工单 v2.1 与本版对齐。代码中仍不存在 `lucy-ops`、`lucy_ops_reader`、`OPS_EVIDENCE_CONNECTION_PROTECTED`、运维问数 Skill 与 `demo_ops` |
+| 状态 | **v1.2 定稿；实现已落地到工作树（未提交）**。定稿依据 [Codex 审阅](../../docs/reviews/2026-10-29-codex-review-spec149-ops-evidence.md)（结论：退回修订）。v1.2 处置 R01–R09。工单 v2.1 与本版对齐。T0 冻结结果见 §5.2。实现覆盖 SC-01–SC-23 的自动化断言，**尚未执行浏览器/E2E/镜像与客户环境验收** |
 | 输出位置 | `webui/docs/149-ops-evidence-connection-spec.md` |
 | 关联 WO | `webui/docs/plans/wo-202609-25-ops-evidence-connection.md` |
 | 上游 Spec / 事实源 | Spec 07、125、127、131、144、151、171、189、191；内容根 `webui/server/paths.ts`；内容镜像 `webui/server/content-mirror.ts` |
@@ -158,6 +158,21 @@ T0 分别记录下面四项，不允许把其中一项的字符串抄给另一�
 | enabled_tables | 连接块里的启用表范围 | 与 physicalTable 相同的字符串 | 与 physicalTable 使用同一套，不使用 sourceName 代替 |
 
 Role 匹配 schema 的方式是 `_schema/*.yaml` 的文件名（`acl.ts` 的 `schemaFileName`），不是物理表名。
+
+#### T0 冻结结果（2026-10-29，KTX 0.16.0）
+
+用镜像 `ARG KTX_VERSION=0.16.0` 钉住的包执行 SQLite 目录，得到：
+
+| 字段 | 冻结值 | 依据 |
+|---|---|---|
+| schema | `main` | 目录返回的表不带 schema；我们自己写 `_schema/main.yaml`，文件名即 Role 匹配依据，因此 Role schema **保持 `main`** |
+| sourceName | `ops_calls`、`ops_call_tables` | Manifest 表键 = overlay 文件名 = Role `names` |
+| physicalTable | `ops_calls`、`ops_call_tables`（**裸名**） | 该版本 SQLite 目录的 `catalog` 与 `db` 均为 null，物理名不带 `main.` 前缀 |
+| enabled_tables | `ops_calls`、`ops_call_tables` | 与 physicalTable 同一套 |
+
+`physicalTable` 取裸名而不是 `main.ops_calls`，还有一条硬证据：该版本的启用表范围解析对带段的名字会解析出 `db=main`，与 SQLite 的命名空间（`catalog=null`、`db=null`）不匹配而**落空**；裸名才命中。
+
+冻结结果的落点：`webui/server/ops-evidence/contract.ts` 的 `OPS_EVIDENCE_FROZEN`，Manifest、overlay、Role 模板、Docker demo Role 与连接块都从这一处取值。KTX 版本变化后必须重做 T0 并同步该文件。
 
 ### 5.3 行排除
 

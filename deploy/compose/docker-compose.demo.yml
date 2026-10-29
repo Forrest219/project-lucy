@@ -81,6 +81,14 @@ services:
       # below (57881). If you override LUCY_DEMO_PROXY_HOST_PORT, also set
       # LUCY_PUBLIC_MCP_URL to the same host:port (or your reverse-proxy URL).
       LUCY_PUBLIC_MCP_URL: "${LUCY_PUBLIC_MCP_URL:-http://127.0.0.1:57881/mcp}"
+      # Customer-equivalent auth. CI and `npm run demo:upgrade` supply the
+      # one-time secret; a clean checkout has no gitignored token file.
+      LUCY_DEPLOYMENT_MODE: customer
+      LUCY_WEBUI_BOOTSTRAP_TOKEN_FILE: /run/secrets/webui_bootstrap_token
+      # Local HTTP loopback: the only form allowed to serve non-Secure cookies
+      # in customer mode. /api/health reports insecureTestProfile while set.
+      LUCY_WEBUI_COOKIE_SECURE: "0"
+      LUCY_WEBUI_TEST_PROFILE: "1"
       POSTHOG_DISABLED: "1"
     ports:
       - "${LUCY_DEMO_WEBUI_HOST_PORT:-55176}:5174"
@@ -92,6 +100,8 @@ services:
       # WebUI reads from <configRoot>/evals, so the bind mount target moved
       # from /data/lucy/evals to /data/lucy/config/evals.
       - ../../examples/docker-demo/project-template/evals:/data/lucy/config/evals:ro
+    secrets:
+      - webui_bootstrap_token
     depends_on:
       lucy-data-init:
         condition: service_completed_successfully
@@ -100,3 +110,7 @@ services:
 
 volumes:
   lucy-demo-data:
+
+secrets:
+  webui_bootstrap_token:
+    file: ${LUCY_DEMO_SECRET_DIR:-./secrets}/webui-bootstrap-token

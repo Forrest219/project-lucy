@@ -13,6 +13,10 @@ import {
   formatProbeClock
 } from "../../lib/connectionHealth";
 import { queryKeys } from "../../lib/queryKeys";
+import {
+  OPS_EVIDENCE_CONNECTION_DISPLAY_NAME,
+  OPS_EVIDENCE_CONNECTION_ID
+} from "../../lib/opsEvidence";
 import type {
   CatalogReloadsResponse,
   CatalogReloadRun,
@@ -71,6 +75,8 @@ function engineLabel(engine?: string) {
   if (normalized === "doris") return "Doris";
   if (normalized === "starrocks") return "StarRocks";
   if (normalized === "athena") return "Athena";
+  // Spec 149 §4 — 运维问数连接指向审计热库，引擎显示 SQLite。
+  if (normalized === "sqlite") return "SQLite";
   return "DB";
 }
 
@@ -912,7 +918,24 @@ export function ConnectionOverview() {
                       <Database className="pl-connection-engine-icon-svg" strokeWidth={1.8} />
                     </span>
                     <span className="pl-connection-title-copy">
-                      <strong className="notranslate" translate="no">{conn.id}</strong>
+                      {/* Spec 149 §10 — 运维问数连接的卡片主称是「运维问数连接」；
+                          连接 ID 仍然以 translate="no" 单独呈现。 */}
+                      {conn.id === OPS_EVIDENCE_CONNECTION_ID ? (
+                        <>
+                          <strong data-testid={`connection-title-${conn.id}`}>
+                            {OPS_EVIDENCE_CONNECTION_DISPLAY_NAME}
+                          </strong>
+                          <code
+                            className="notranslate"
+                            translate="no"
+                            data-testid={`connection-id-${conn.id}`}
+                          >
+                            {conn.id}
+                          </code>
+                        </>
+                      ) : (
+                        <strong className="notranslate" translate="no">{conn.id}</strong>
+                      )}
                       <span
                         className="pl-engine-badge notranslate"
                         data-testid={`engine-badge-${conn.id}`}
@@ -1134,6 +1157,7 @@ export function ConnectionOverview() {
                           </p>
                         </div>
                         <div className="pl-connection-more-separator" role="separator" />
+                        {/* Spec 149 §10 — 运维问数连接不可删除：入口不可用。 */}
                         <button
                           type="button"
                           className="pl-row-action-link pl-row-action-link--danger pl-connection-more-action notranslate"
@@ -1143,6 +1167,8 @@ export function ConnectionOverview() {
                           }}
                           data-testid={`delete-connection-${conn.id}`}
                           translate="no"
+                          disabled={conn.id === OPS_EVIDENCE_CONNECTION_ID}
+                          aria-disabled={conn.id === OPS_EVIDENCE_CONNECTION_ID}
                         >
                           删除连接
                         </button>

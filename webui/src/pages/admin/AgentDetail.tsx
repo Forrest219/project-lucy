@@ -21,6 +21,7 @@ import type {
 } from "../../lib/types";
 import { formatFinalRowsPreviewLabel, formatRowGrantPreviewLabel } from "../../lib/row-grant-preview";
 import { isLucyAdminDataPlaneRole } from "../../lib/lucyAdminRole";
+import { OPS_EVIDENCE_ROLE_ID, OPS_EVIDENCE_ROLE_WARNING } from "../../lib/opsEvidence";
 import { queryKeys } from "../../lib/queryKeys";
 
 type AgentDetailResponse = { agent: Agent; version: string };
@@ -725,6 +726,8 @@ export function AgentDetail() {
     const match = formalRoles.find((role) => role.id === roleId);
     return isLucyAdminDataPlaneRole(match) || roleId === "lucy_admin";
   });
+  // Spec 149 §6 / SC-23 — 绑定运维问数角色时的警示。
+  const showOpsEvidenceWarning = selectedRoleIds.some((roleId) => roleId === OPS_EVIDENCE_ROLE_ID);
   const effective = editRoles !== null
     ? roleCapabilityQuery.data?.effectivePermissions
     : agent.effectivePermissions;
@@ -884,6 +887,14 @@ export function AgentDetail() {
                       Token
                     </span>{" "}
                     时建议设置过期时间。
+                  </div>
+                )}
+                {showOpsEvidenceWarning && (
+                  <div
+                    className="rounded-md border border-warning-strong bg-warning-soft p-3 text-sm text-warning-strong"
+                    data-testid="agent-ops-evidence-role-warning"
+                  >
+                    {OPS_EVIDENCE_ROLE_WARNING}
                   </div>
                 )}
                 {editRoles !== null && (

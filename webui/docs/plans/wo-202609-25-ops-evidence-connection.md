@@ -9,7 +9,7 @@
 | 撰写人 | Cursor Agent |
 | 委托人 | xingchen |
 | 基于材料 | Spec 149 v1.2；[Codex 审阅](../../../docs/reviews/2026-10-29-codex-review-spec149-ops-evidence.md) |
-| 状态 | **定稿，未进入开发** |
+| 状态 | **v2.1 定稿；实现已落地到工作树（未提交）**。T0 冻结结果见 [Spec 149 §5.2](../149-ops-evidence-connection-spec.md)。任务 T0–T9 已实现，自动化覆盖 SC-01–SC-23；**尚未执行浏览器/E2E/镜像与客户环境验收** |
 | 适用范围 | 审计库只读视图、内容根资产、项目根镜像、KTX 启动前确保、`lucy_ops_reader`、Docker demo 的 `demo_ops`、就绪门与单测 |
 | 输出位置 | `webui/docs/plans/wo-202609-25-ops-evidence-connection.md` |
 

@@ -168,9 +168,14 @@ Lucy WebUI 的设计规范事实源在
 3. `mkdir -p .ktx/secrets && echo '<your-db-password>' > .ktx/secrets/<connection>-password`（该目录已在 `.gitignore` 排除）
 4. `cp webui/config/access.yaml.example webui/config/access.yaml`（`access.yaml` 已 gitignore；按需改成你的私有 Agent / token）
 5. 私有语义层 / wiki / eval：自行维护在本机（例如 `semantic-layer/<your-connection>/`），**不要 commit**；仓库仅跟踪 `semantic-layer/demo-mysql/`（CI stub）与 `examples/*/project-template/`
-6. 安装 KTX CLI：`npm install -g @kaelio/ktx@latest`（或在本地 ktx 仓跑 `pnpm install && pnpm run link:dev`）
+6. 安装 KTX CLI，**版本必须与镜像捆绑版本一致**（事实源是 `Dockerfile` 的 `ARG KTX_VERSION`）：
+   `npm install -g @kaelio/ktx@$(sed -n 's/^ARG KTX_VERSION=//p' Dockerfile)`
+   （或在本地 ktx 仓跑 `pnpm install && pnpm run link:dev`）
 7. 启动本地 MCP daemon：`ktx mcp start --project-dir <本仓库绝对路径>`
-8. 验证：`ktx status` 报告 `Agent integration ready: yes`，并跑一次 `ktx sl "<keyword>"` 看连接是否通
+8. 验证：`ktx status` 报告 `Agent integration ready: yes`，并跑一次 `ktx sl "<keyword>"` 看连接是否通；
+   再跑 `npm run verify:host-ktx` 确认宿主 CLI 版本与镜像捆绑版本一致。**宿主版本落后不会让任何门禁变红**
+   （仓库里的版本断言全部打在镜像/容器内），但本机直接跑的 WebUI 是 `execFile("ktx", …)`，
+   拿到的是 PATH 上的宿主 CLI，语义层、目录与连接测试结果会因此与交付产物不同。
 9. 启动 Lucy MCP Proxy（`:7879`）：`cd webui && npm run dev`
 10. 配置 `.mcp.json`，指向 Lucy MCP Proxy：
    ```json

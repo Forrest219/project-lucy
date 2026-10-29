@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { parse } from "yaml";
+import { ensureWebuiBootstrapToken } from "./ensure-webui-bootstrap-token.mjs";
 
 const project = process.env.LUCY_POSTGRES_DEMO_COMPOSE_PROJECT ?? process.env.LUCY_DEMO_COMPOSE_PROJECT ?? "lucy-p0-postgres-demo";
 const webPort = process.env.LUCY_POSTGRES_DEMO_WEBUI_HOST_PORT ?? "55177";
@@ -237,9 +238,17 @@ async function verifyProxyAgentPath() {
 async function main() {
   const secretDir = process.env.LUCY_POSTGRES_DEMO_SECRET_DIR ?? await (async () => {
     tempSecretDir = await mkdtemp(path.join(tmpdir(), "lucy-postgres-demo-secrets-"));
-    await writeFile(path.join(tempSecretDir, "postgres-password"), demoPassword, { mode: 0o600 });
+    // Compose implements file-based secrets as bind mounts, so the container sees the
+    // host file's mode and owner. The lucy container runs as UID 10001 and reads this
+    // password through /run/secrets/postgres_password, so a 0600 file owned by the host
+    // user fails with EACCES. The directory from mkdtemp is 0700, so the file itself can
+    // be readable without exposing the secret to other host users.
+    const passwordFile = path.join(tempSecretDir, "postgres-password");
+    await writeFile(passwordFile, demoPassword, { mode: 0o644 });
+    await chmod(passwordFile, 0o644);
     return tempSecretDir;
   })();
+  await ensureWebuiBootstrapToken(secretDir);
   const env = {
     LUCY_POSTGRES_DEMO_WEBUI_HOST_PORT: webPort,
     LUCY_POSTGRES_DEMO_PROXY_HOST_PORT: proxyPort,

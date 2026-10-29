@@ -985,3 +985,29 @@ describe("agentList helpers", () => {
     });
   });
 });
+
+describe("Spec 149 — 绑定运维问数角色的高权限警示（SC-23）", () => {
+  it("选中运维问数角色时可见「运维问数角色可查看生成 SQL」，且不含禁用词", async () => {
+    stubAgentsEndpoints(
+      [],
+      [
+        { ...analystRole, id: "demo_readonly" },
+        { ...analystRole, id: "lucy_ops_reader", description: "运维问数角色" }
+      ]
+    );
+
+    renderAgentList();
+    await waitFor(() => expect(screen.getByRole("button", { name: "新建 Agent" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "新建 Agent" }));
+
+    fireEvent.change(screen.getByPlaceholderText("例：wangwu"), { target: { value: "hehe" } });
+    fireEvent.change(screen.getByPlaceholderText("例：王五"), { target: { value: "何老师" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: /lucy_ops_reader/ }));
+
+    const warning = await screen.findByTestId("agent-ops-evidence-role-warning");
+    expect(warning).toHaveTextContent("运维问数角色可查看生成 SQL");
+    for (const forbidden of ["所有者", "登录管理员", "超管"]) {
+      expect(warning.textContent ?? "").not.toContain(forbidden);
+    }
+  });
+});

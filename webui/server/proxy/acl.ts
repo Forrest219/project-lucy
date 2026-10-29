@@ -5,6 +5,11 @@ import path from "node:path";
 import { parse } from "yaml";
 import { resolveProjectRoot, readConnections } from "../project.js";
 import { loadContentPaths } from "../paths.js";
+import {
+  OPS_EVIDENCE_CONNECTION_CONFLICT,
+  OPS_EVIDENCE_CONNECTION_ID,
+  OPS_EVIDENCE_RUNTIME_NOT_READY
+} from "../ops-evidence/contract.js";
 import { isAccessRecoveryRequired, readAccessRecoveryMarkerState } from "../access-recovery.js";
 import { stableJson as canonicalStableJson } from "../config-digest.js";
 import { countEntryPerf } from "../entry-performance-timing.js";
@@ -1163,6 +1168,34 @@ async function loadEnabledTablesByConnection(): Promise<Map<string, Set<string>>
 /** lucy_admin follows every configured connection, including ones added later. */
 const LUCY_ADMIN_ROLE_ID = "lucy_admin";
 
+/**
+ * Spec 149 §6 — 运维问数连接（`lucy-ops`）只认**显式列出**。
+ *
+ * `*`（含 `lucy_admin` 的通配）与 `catalog_bound` 都不算显式写出，
+ * 因此编译期就把该连接从通配 / 目录绑定路径里剔除。
+ */
+function isOpsEvidenceConnection(connectionId: string): boolean {
+  return normalizeRef(connectionId) === OPS_EVIDENCE_CONNECTION_ID;
+}
+
+/**
+ * Spec 149 §6 / §8 — 运维问数连接的就绪门。
+ *
+ * 返回 `undefined` 表示放行；否则返回拒绝原因码：
+ * - `conflict` → `OPS_EVIDENCE_CONNECTION_CONFLICT`
+ * - 其它非 `current` → `OPS_EVIDENCE_RUNTIME_NOT_READY`
+ *
+ * 动态 import：`ops-evidence/readiness` 依赖 `project.js`，静态引入会形成
+ * 模块初始化环。
+ */
+async function opsEvidenceReadinessDenial(): Promise<string | undefined> {
+  const { readOpsEvidenceReadiness } = await import("../ops-evidence/readiness.js");
+  const state = await readOpsEvidenceReadiness();
+  if (state.readiness === "conflict") return OPS_EVIDENCE_CONNECTION_CONFLICT;
+  if (state.readiness !== "current") return OPS_EVIDENCE_RUNTIME_NOT_READY;
+  return undefined;
+}
+
 function resolveCatalogConnections(
   roleId: string,
   declaredConnections: string[],
@@ -1173,7 +1206,11 @@ function resolveCatalogConnections(
     return { ok: false, reason: `role_resolution_failed:${roleId}:catalog_bound_wildcard_forbidden` };
   }
   if (roleId === LUCY_ADMIN_ROLE_ID) {
-    return { ok: true, connections: [...enabledByConnection.keys()] };
+    // Spec 149 §6 — `lucy-ops` 不随通配生效：运维问数连接只认显式列出的 Role。
+    return {
+      ok: true,
+      connections: [...enabledByConnection.keys()].filter((id) => !isOpsEvidenceConnection(id))
+    };
   }
   return { ok: true, connections: declaredConnections };
 }
@@ -1203,6 +1240,8 @@ function catalogBoundSources(
   const matches: EffectiveSource[] = [];
   for (const entry of state.forward.values()) {
     if (!allowedConnections.has(entry.connectionId)) continue;
+    // Spec 149 §6 — `catalog_bound` 不构成对运维问数连接的显式授权。
+    if (isOpsEvidenceConnection(entry.connectionId)) continue;
     if (!isInEnabledTableRange(entry, enabledByConnection)) continue;
     matches.push({
       connectionId: entry.connectionId,
@@ -1777,6 +1816,10 @@ async function resolveEffectivePermissions(
   const sources = sourcesFromCapabilities(capabilities);
   const tables = uniqueSorted(sources.map((source) => source.table));
   // Roles with selectors derive their connections from capabilities; pure Meta Roles use the declared list.
+  //
+  // Spec 149 §6 — 这里**不**按就绪状态剔除 `lucy-ops`：查询门要靠它在
+  // `connections.length > 0` 分支里触发就绪判定（`OPS_EVIDENCE_RUNTIME_NOT_READY`）。
+  // 目录侧的不列出由 `lucyCatalog` / `connectionList` 负责。
   const connections = uniqueSorted([
     ...capabilities.map((capability) => capability.connectionId),
     ...compiledRoles.filter((role) => !role.hasSelectors).flatMap((role) => role.declaredConnections)
@@ -1953,8 +1996,15 @@ export async function lucyCatalog(identity: Identity): Promise<{
   if (!resolved.ok) {
     return { connections: [], sources: [], examples: [] };
   }
-  const connections = resolved.permissions.connections;
+  // Spec 149 §6 — 连接未就绪时，目录里既不出现连接，也不出现它的 source。
+  const opsEvidenceHidden = resolved.permissions.connections.some((id) => isOpsEvidenceConnection(id))
+    ? (await opsEvidenceReadinessDenial()) !== undefined
+    : false;
+  const connections = opsEvidenceHidden
+    ? resolved.permissions.connections.filter((id) => !isOpsEvidenceConnection(id))
+    : resolved.permissions.connections;
   const sources = resolved.permissions.sources
+    .filter((source) => !(opsEvidenceHidden && isOpsEvidenceConnection(source.connectionId)))
     .map((source) => ({
       connectionId: source.connectionId,
       schema: source.schema,
@@ -3075,6 +3125,12 @@ export async function authorizeAndRewrite(
         return { allowed: false, reason: "unknown_or_forbidden_connection:<missing>" };
       }
       for (const connection of requestedConnections) {
+        // Spec 149 §8 `authorizeQuery` — 就绪判定先于可见性判定：
+        // 冲突 → OPS_EVIDENCE_CONNECTION_CONFLICT；未就绪 → OPS_EVIDENCE_RUNTIME_NOT_READY。
+        if (isOpsEvidenceConnection(connection)) {
+          const denial = await opsEvidenceReadinessDenial();
+          if (denial) return { allowed: false, reason: denial };
+        }
         if (!connections.includes(connection)) {
           return { allowed: false, reason: `unknown_or_forbidden_connection:${connection}` };
         }

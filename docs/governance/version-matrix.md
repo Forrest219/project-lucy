@@ -5,7 +5,7 @@
 | 文档名称 | Lucy Version Matrix |
 | 文档类型 | Release Metadata / Compatibility Matrix |
 | 版本 | v0.6 |
-| 撰写日期 | 2026-06-21；2026-07-06；2026-08-03（增补：Helm/K8s single-replica supported baseline）；2026-09-02（拆分 Lucy 产品版本与 KTX；基线 0.17.0）；2026-10-19（批准切线到 `2.0.0`）；2026-10-21（§4 Database Matrix 状态值改为引用 `docs/governance/database-support-matrix.md`，补齐 StarRocks / Doris / SQL Server / Oracle / SQLite / Athena）；2026-10-24（产品版本由 `2.0.0` 经 `0.2.0` 更正为 `0.20.0`；§1.1.1 改为同一版本线按数值递增；登记产品版本与部署制品解耦原则） |
+| 撰写日期 | 2026-06-21；2026-07-06；2026-08-03（增补：Helm/K8s single-replica supported baseline）；2026-09-02（拆分 Lucy 产品版本与 KTX；基线 0.17.0）；2026-10-19（批准切线到 `2.0.0`）；2026-10-21（§4 Database Matrix 状态值改为引用 `docs/governance/database-support-matrix.md`，补齐 StarRocks / Doris / SQL Server / Oracle / SQLite / Athena）；2026-10-24（产品版本由 `2.0.0` 经 `0.2.0` 更正为 `0.20.0`；§1.1.1 改为同一版本线按数值递增；登记产品版本与部署制品解耦原则）；2026-10-29（客户镜像 CI 改为原生 linux/amd64 单架构，不再写 QEMU 多架构清单） |
 | 适用范围 | Lucy release、Docker image、bundled KTX runtime 和 MCP client 兼容性追踪 |
 
 ## 1. Current Baseline
@@ -23,10 +23,10 @@
 | Headless customer config | `customer-config/` bind mount to `/data/lucy` | `deploy/compose/docker-compose.customer-config.yml`, `customer-config.example/`, `npm run smoke:p0:headless-config` |
 | Demo DB | `mysql:8.4`, `postgres:16-alpine` | `deploy/compose/docker-compose.demo.yml`, `deploy/compose/docker-compose.postgres-demo.yml` |
 | Customer DB path | MySQL validated locally | `npm run smoke:p0:customer` |
-| Kubernetes / Helm deployment | Single-replica only; `Recreate` strategy; RWO PVC at `/data/lucy`; multi-arch manifest list `linux/amd64` (primary) + `linux/arm64` (secondary) | `deploy/k8s/helm/lucy/`, `docs/runbooks/customer-k8s-deployer-quickstart.md`, `.github/workflows/lucy-release.yml` |
-| Image architecture baseline | `linux/amd64` primary; `linux/arm64` secondary; metadata **and** layer ELF must match | `Dockerfile` (`TARGETPLATFORM` + `TARGETARCH`), `scripts/release/assert-image-elf-arch.sh`, `.github/workflows/lucy-release.yml` (`buildx` + QEMU) |
+| Kubernetes / Helm deployment | Single-replica only; `Recreate` strategy; RWO PVC at `/data/lucy`; customer image is linux/amd64 | `deploy/k8s/helm/lucy/`, `docs/runbooks/customer-k8s-deployer-quickstart.md`, `.github/workflows/lucy-release.yml` |
+| Image architecture baseline | Customer CI image is linux/amd64 only, built natively on `ubuntu-24.04`. Metadata and layer ELF must match. Local Apple Silicon demos still build linux/arm64 for that host. | `Dockerfile` (`TARGETPLATFORM` + `TARGETARCH`), `scripts/release/assert-image-elf-arch.sh`, `.github/workflows/lucy-release.yml` |
 | MCP endpoint | Lucy MCP Proxy on container `7879` | `docs/runbooks/deployment-docker.md`, `docs/runbooks/customer-k8s-deployer-quickstart.md`, `npm run smoke:p0:demo` |
-| Release CI | GitHub Actions release gates; multi-arch manifest list push via `docker buildx` | `.github/workflows/lucy-release.yml`, `docs/governance/release-ci.md` |
+| Release CI | GitHub Actions on `ubuntu-24.04`. Pull requests and `main` run headless gates. Tag and manual runs promote one linux/amd64 digest to GHCR. | `.github/workflows/lucy-release.yml`, `docs/governance/release-ci.md` |
 
 ## 1.1 When to bump Lucy product version
 

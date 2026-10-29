@@ -1,6 +1,11 @@
 // Negative/contract tests for the customer release pipeline wiring (Spec §8.3, Plan T14).
 // They parse the real workflow and scripts; a customer package or tag must be impossible without
 // customer-release-readiness, and the amd64 single-arch / no-rebuild / no `buildx create --use` rules must hold.
+//
+// The daily verification was split out into .github/workflows/lucy-ci.yml (Spec v1.0 §4.1). This file
+// still owns the CUSTOMER RELEASE anti-bypass contract, and it now also reads the daily workflow so
+// that the split cannot be used to walk around the gate: the daily workflow must not be able to
+// publish, and the release workflow must not be reachable from a pull request.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { readFileSync, readdirSync } from "node:fs";
@@ -11,9 +16,27 @@ import { REQUIRED_EXISTING_GATES } from "../e2e/verify-evidence.mjs";
 import { REPO_ROOT } from "../e2e/lib/common.mjs";
 
 const WORKFLOW_PATH = path.join(REPO_ROOT, ".github/workflows/lucy-release.yml");
+const DAILY_WORKFLOW_PATH = path.join(REPO_ROOT, ".github/workflows/lucy-ci.yml");
 const workflowText = readFileSync(WORKFLOW_PATH, "utf8");
 const workflow = parse(workflowText);
 const jobs = workflow.jobs;
+
+const dailyWorkflowText = readFileSync(DAILY_WORKFLOW_PATH, "utf8");
+const dailyWorkflow = parse(dailyWorkflowText);
+const dailyJobs = dailyWorkflow.jobs;
+
+// YAML comments carry the rationale of the split; they must never be read as configuration.
+const stripYamlComments = (text) =>
+  text
+    .split("\n")
+    .map((line) => {
+      if (line.trim().startsWith("#")) return "";
+      const index = line.indexOf(" #");
+      return index === -1 ? line : line.slice(0, index);
+    })
+    .join("\n");
+const dailyWorkflowCode = stripYamlComments(dailyWorkflowText);
+const workflowCode = stripYamlComments(workflowText);
 
 const needsOf = (name) => {
   const needs = jobs[name]?.needs ?? [];
@@ -39,8 +62,11 @@ const DIGEST = `sha256:${"a".repeat(64)}`;
 describe("release workflow cannot produce a customer release without customer-release-readiness", () => {
   it("renames the smoke jobs that were mistaken for E2E gates, everywhere", () => {
     assert.ok(jobs["demo-db-smoke"] && jobs["postgres-demo-db-smoke"]);
+    assert.ok(dailyJobs["demo-db-smoke"] && dailyJobs["postgres-demo-db-smoke"]);
     assert.ok(!jobs["demo-e2e"] && !jobs["postgres-demo-e2e"]);
+    assert.ok(!dailyJobs["demo-e2e"] && !dailyJobs["postgres-demo-e2e"]);
     assert.ok(!/\bdemo-e2e\b|\bpostgres-demo-e2e\b/.test(workflowText), "no stale job name remains in a needs list or comment");
+    assert.ok(!/\bdemo-e2e\b|\bpostgres-demo-e2e\b/.test(dailyWorkflowText), "no stale job name remains in the daily workflow");
     const readiness = readFileSync(path.join(REPO_ROOT, "scripts/gates/p1-release-readiness.mjs"), "utf8");
     assert.ok(!/"demo-e2e"|"postgres-demo-e2e"/.test(readiness));
   });
@@ -56,7 +82,7 @@ describe("release workflow cannot produce a customer release without customer-re
   it("every job that can publish or tag a customer artifact depends on the readiness gate (or only pushes the candidate)", () => {
     for (const name of releaseJobs) {
       const text = stepsText(name);
-      const publishesRelease = /imagetools create|release:artifacts|upload-artifact@v4[\s\S]*lucy-release-artifacts/.test(text) || name === "release-package";
+      const publishesRelease = /imagetools create|release:artifacts|upload-artifact@[^\s]*[\s\S]*lucy-release-artifacts/.test(text) || name === "release-package";
       if (publishesRelease) {
         assert.ok(transitiveNeeds(name).has("customer-release-readiness"), `${name} publishes without customer-release-readiness`);
       }
@@ -227,5 +253,38 @@ describe("K8s gate scripts bind evidence to the candidate digest", () => {
     const values = parse(readFileSync(path.join(REPO_ROOT, "deploy/k8s/security-e2e/values.security-e2e.yaml"), "utf8"));
     assert.equal(values.replicaCount, 1);
     assert.match(values.image.repository, /^REPLACE-ME-/, "the profile cannot render until a real candidate repository is supplied");
+  });
+});
+
+describe("the daily/release split cannot be used to walk around the release gate", () => {
+  it("the daily workflow carries no customer publish job and no registry write", () => {
+    for (const name of ["customer-amd64-native", "real-e2e", "customer-release-readiness", "release-package"]) {
+      assert.ok(!dailyJobs[name], `the daily workflow must not contain the customer job ${name}`);
+    }
+    assert.ok(!/packages:\s*write/.test(dailyWorkflowCode), "the daily workflow must not write to the registry");
+    assert.ok(!/imagetools create/.test(dailyWorkflowCode), "the daily workflow must not promote an image");
+    assert.ok(!/lucy-release-artifacts/.test(dailyWorkflowCode), "the daily workflow must not emit customer artifacts");
+  });
+
+  it("the release workflow is not reachable from a pull request", () => {
+    const on = workflow.on ?? workflow[true];
+    assert.equal(on.pull_request, undefined, "a pull request must not be able to start the customer release path");
+    assert.equal(on.push?.branches, undefined, "a branch push must not be able to start the customer release path");
+    assert.deepEqual(on.push.tags, ["v*"]);
+  });
+
+  it("the release path still re-runs the daily gates on its own sha", () => {
+    // The daily gates are repeated inside the release workflow on purpose: the release path must
+    // not infer a pass from an unrelated earlier run. The daily workflow must not replace them.
+    for (const id of ["demo-db-smoke", "postgres-demo-db-smoke", "docker-smoke", "k8s-static", "k8s-upgrade-gate", "headless-config", "business-eval-catalog", "spec-and-webui", "ktx-diff-audit"]) {
+      assert.ok(jobs[id], `the release workflow must still run the daily gate ${id}`);
+    }
+    assert.ok(!needsOf("release-package").some((dep) => dep === "ci-required"), "the release path does not borrow the daily aggregate");
+  });
+
+  it("no arm64 or multi-arch build appears in either workflow", () => {
+    assert.ok(!/linux\/arm64/.test(dailyWorkflowText), "arm64 must not appear in the daily pipeline");
+    assert.ok(!/linux\/arm64/.test(workflowText), "arm64 must not appear in the customer pipeline");
+    assert.ok(!/setup-qemu-action|setup-buildx-action/.test(dailyWorkflowText));
   });
 });

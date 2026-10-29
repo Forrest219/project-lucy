@@ -13,6 +13,7 @@ import { MetricCard } from "../../components/MetricCard";
 import { buildObjectDetailSearch } from "../../lib/objectDetail";
 import { RowMoreMenu } from "../../components/RowMoreMenu";
 import { isLucyAdminDataPlaneRole } from "../../lib/lucyAdminRole";
+import { OPS_EVIDENCE_ROLE_ID, OPS_EVIDENCE_ROLE_WARNING } from "../../lib/opsEvidence";
 import { adminAgentsQueryOptions } from "../../lib/displayQueryOptions";
 import { queryKeys } from "../../lib/queryKeys";
 
@@ -311,6 +312,8 @@ function NewAgentModal({ roles, onClose, onCreated }: { roles: Role[]; onClose: 
   }
 
   const showLucyAdminWarning = selectedRoles.some((roleId) => isLucyAdminDataPlaneRole(formalRoles.find((item) => item.id === roleId)) || roleId === "lucy_admin");
+  // Spec 149 §6 / SC-23 — 绑定运维问数角色时的警示。
+  const showOpsEvidenceWarning = selectedRoles.some((roleId) => roleId === OPS_EVIDENCE_ROLE_ID);
 
   return (
     <div className="pl-modal-backdrop">
@@ -365,6 +368,14 @@ function NewAgentModal({ roles, onClose, onCreated }: { roles: Role[]; onClose: 
                     Token
                   </span>{" "}
                   时建议设置过期时间。
+                </div>
+              )}
+              {showOpsEvidenceWarning && (
+                <div
+                  className="rounded-md border border-warning-strong bg-warning-soft p-3 text-sm text-warning-strong"
+                  data-testid="agent-ops-evidence-role-warning"
+                >
+                  {OPS_EVIDENCE_ROLE_WARNING}
                 </div>
               )}
               {selectedRoles.length > 0 && canSubmit && (

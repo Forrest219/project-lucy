@@ -36,6 +36,7 @@ import { withPublishCoordinator } from "./publish-coordinator.js";
 import type { ConnectionTestResult } from "./ktx";
 import { withDisplayWriteBarrier, type DisplayScope } from "./display-generation";
 import { connectionDeleteBlockText } from "../src/lib/deleteConnectionGuard.js";
+import { OPS_EVIDENCE_CONNECTION_ID } from "./ops-evidence/contract.js";
 
 const KTX_YAML_DISPLAY_SCOPES: DisplayScope[] = ["C", "D", "P", "L"];
 
@@ -244,6 +245,22 @@ export class ConnectionReferencesRemainError extends Error {
     super(message);
     this.name = "ConnectionReferencesRemainError";
     this.detail = { blockers };
+  }
+}
+
+/**
+ * Spec 149 §8 — 运维问数连接受删除保护。
+ *
+ * dryRun 与确认写入都返回 HTTP 400 `OPS_EVIDENCE_CONNECTION_PROTECTED`，
+ * 不写 `config_change_log`，不删审计库、内容根资产或项目根镜像。
+ */
+export class OpsEvidenceConnectionProtectedError extends Error {
+  code = "OPS_EVIDENCE_CONNECTION_PROTECTED";
+  statusCode = 400;
+
+  constructor(message: string) {
+    super(message);
+    this.name = "OpsEvidenceConnectionProtectedError";
   }
 }
 
@@ -1268,6 +1285,12 @@ async function removeConnectionUnbarriered(
     throw new ConnectionIdInvalidError(
       `Connection ID '${connId}' does not match pattern ${CONNECTION_ID_PATTERN}`
     );
+  }
+
+  // Spec 149 §8 — 运维问数连接不可删除。检查放在 dryRun 早返回**之前**，
+  // 因此预览与确认写入都拒绝；也不会走到下面的 `recordConfigChange`。
+  if (connId === OPS_EVIDENCE_CONNECTION_ID) {
+    throw new OpsEvidenceConnectionProtectedError("运维问数连接不能删除");
   }
 
   const ktxPath = path.join(root, "ktx.yaml");
