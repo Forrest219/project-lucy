@@ -23,6 +23,33 @@ roles:
         - lucy_skill_read
         - lucy_skill_search
 
+  # Spec 149 §6.1 — 运维问数角色：只授权运维问数连接（lucy-ops）的两张视图。
+  # 允许集与参考模板 `lucy_ops_reader` 相同；schema 用 T0 冻结值。
+  lucy_ops_reader:
+    description: 运维问数角色（只读调用流水，可查看生成 SQL）
+    allow:
+      connections:
+        - lucy-ops
+      tableSelectors:
+        - connection: lucy-ops
+          schema: main
+          names:
+            - ops_calls
+            - ops_call_tables
+          row_access: all
+      tools:
+        - lucy_catalog
+        - connection_list
+        - lucy_query
+        - lucy_read_source
+        - lucy_explain_query
+        - lucy_freshness
+        - lucy_begin_question
+        - wiki_search
+        - wiki_read
+        - lucy_skill_search
+        - lucy_skill_read
+
   lucy_admin:
     description: 平台运维数据面（非 WebUI 登录账户）
     permission_model_version: 2
@@ -60,6 +87,18 @@ users:
         label: p0-demo
         created: 2026-06-21
     role: demo_readonly
+
+  # Spec 149 §6.1 — 演示运维问数 Agent。模板只存哈希；明文走
+  # LUCY_DEMO_OPS_TOKEN 环境变量，不写入 Spec，也不进客户包。
+  - id: demo_ops
+    name: 演示运维问数
+    enabled: true
+    note: "Demo 运维问数账号，请勿用于生产。"
+    tokens:
+      - hash: "sha256:493dadbc029220d9f5ed3af0b5793e5b25c9d13c4ef24bfd84dba446bf0c88fc"
+        label: demo-ops
+        created: 2026-10-29
+    role: lucy_ops_reader
 
 defaults:
   deny_tools:

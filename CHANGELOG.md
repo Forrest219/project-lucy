@@ -43,6 +43,20 @@ Product line cut from `0.17.0` to `2.0.0` on 2026-10-19. Customer-facing label i
     增删在写入 `ktx.yaml` 后如实回报「执行层尚未加载」，但**不自动触发**重载。
   - 容器入口 `scripts/runtime/docker-entrypoint.sh` 引入 KTX supervisor：进程归属、信号转发、
     退出码、首次启动失败不退化、自发退出的有限退避重启与遗留进程清理全部显式定义。
+- **运维问数连接（Spec 149）**：新增只读连接 `lucy-ops`，把审计热库的调用流水做成两张视图
+  （`ops_calls`、`ops_call_tables`），授权后的 Agent 可追问「某张表上谁被拒绝、生成 SQL 是什么」
+  「某个工具的失败是否集中在一个 Agent」。
+  - 连接在**启动时**幂等建立：容器入口在 KTX daemon 启动**之前**完成视图、连接块、内容根资产
+    与项目根镜像，并写下 `ktx.yaml` 摘要戳；已有卷第一次补上该连接时状态为「未就绪」，
+    需所有者按 Spec 191 确认重载后才可查询，**不自动重载**。
+  - 授权只认**显式列出**：只有 `allow.connections` 里写明 `lucy-ops` 的 Role 能看见并查询它；
+    `*` 与 `catalog_bound`（含 `lucy_admin`）都不算。
+  - 连接不可删除：删除接口在预览与写入时都返回 400 `OPS_EVIDENCE_CONNECTION_PROTECTED`，
+    审计库与三类资产保持不动。
+  - 本连接只回答**活跃 Agent**：不把 `token_label` 去重称为业务活跃 Token，不回答访问账户，
+    `call_day` 是 UTC 日历日，生成 SQL 只在过滤后的明细里取。
+  - Docker demo 模板新增演示运维问数 Agent `demo_ops` 与运维问数角色 `lucy_ops_reader`；
+    `demo_readonly` 与 `lucy_admin` 的既有权限不变。
 
 ### Changed
 - **文档口径**：`ktx.yaml` 新连接或凭据的生效说明从「可能需要重启 KTX MCP daemon」改为

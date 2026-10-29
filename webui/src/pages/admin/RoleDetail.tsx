@@ -45,6 +45,7 @@ import {
   type TableGrant,
 } from "../../lib/rolePermissionDraft";
 import { isDeleteProtectedRole, LUCY_ADMIN_ROLE_ID } from "../../lib/lucyAdminRole";
+import { isOpsEvidenceRole, OPS_EVIDENCE_ROLE_WARNING } from "../../lib/opsEvidence";
 import { queryKeys } from "../../lib/queryKeys";
 
 type PageMode = "create" | "edit" | "copy";
@@ -831,6 +832,17 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
       {migratedPrefix ? (
         <div className={`rounded-md border p-3 text-sm ${migrationBlocked ? "border-danger-strong bg-danger-soft text-danger" : "border-warning-strong bg-warning-soft text-warning-strong"}`} data-testid="legacy-prefix-migration">
           {migrationBlocked ?? "已将旧版前缀规则展开为当前明确表清单；保存后完成 v2 迁移，不再保留 prefix。"}
+        </div>
+      ) : null}
+
+      {/* Spec 149 §6 / SC-23 — 运维问数角色的高权限警示。
+          文案不含「所有者」「登录管理员」「超管」。 */}
+      {isOpsEvidenceRole(detail) ? (
+        <div
+          className="rounded-md border border-warning-strong bg-warning-soft p-3 text-sm text-warning-strong"
+          data-testid="ops-evidence-role-warning"
+        >
+          {OPS_EVIDENCE_ROLE_WARNING}
         </div>
       ) : null}
 

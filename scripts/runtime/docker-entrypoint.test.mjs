@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -95,7 +96,10 @@ test("entrypoint restores missing semantic context for an existing volume", asyn
   assert.match(result.stdout, /synced 2 missing semantic-layer \(config\) file/);
   await assert.doesNotReject(readFile(path.join(projectRoot, "config/semantic-layer/mysql-aliyun/_schema/dataforai.yaml"), "utf8"));
   await assert.doesNotReject(readFile(path.join(projectRoot, "config/semantic-layer/mysql-aliyun/orders.yaml"), "utf8"));
-  assert.equal(await readFile(path.join(projectRoot, "ktx.yaml"), "utf8"), "connections: {}\n");
+  // Spec 149：客户自己的 ktx.yaml 不被改写；唯一的新增是运维问数连接块。
+  const seededYaml = await readFile(path.join(projectRoot, "ktx.yaml"), "utf8");
+  assert.match(seededYaml, /lucy-ops:/);
+  assert.doesNotMatch(seededYaml, /mysql-aliyun:/);
 
   await rm(root, { recursive: true, force: true });
 });
@@ -125,7 +129,10 @@ test("entrypoint does not overwrite existing customer semantic context", async (
     await readFile(path.join(projectRoot, "config/semantic-layer/mysql-aliyun/_schema/dataforai.yaml"), "utf8"),
     "tables: {}\n"
   );
-  assert.equal(await readFile(path.join(projectRoot, "ktx.yaml"), "utf8"), "connections: {}\n");
+  // Spec 149：客户的连接块不被改写；唯一的新增是运维问数连接块。
+  const preservedYaml = await readFile(path.join(projectRoot, "ktx.yaml"), "utf8");
+  assert.match(preservedYaml, /lucy-ops:/);
+  assert.doesNotMatch(preservedYaml, /mysql-aliyun:/);
 
   await rm(root, { recursive: true, force: true });
 });
@@ -417,5 +424,50 @@ test("entrypoint refuses a deployment mode that contradicts the Chart-pinned mod
     LUCY_DEPLOYMENT_MODE: "customer"
   });
   assert.equal(ok.status, 0, ok.stderr);
+  await rm(root, { recursive: true, force: true });
+});
+
+// Spec 149 §8 / WO T7 — 启动顺序：运维问数连接必须在 KTX daemon 启动之前就位。
+test("entrypoint seeds the ops evidence connection before the daemon starts (SC-19)", async () => {
+  const root = await makeRoot("lucy-entrypoint-ops-evidence-");
+  const templateRoot = path.join(root, "template");
+  const projectRoot = path.join(root, "project");
+  await mkdir(path.join(templateRoot, "semantic-layer/mysql-aliyun/_schema"), { recursive: true });
+  await mkdir(projectRoot, { recursive: true });
+  await writeFile(path.join(templateRoot, "ktx.yaml"), "connections: {}\n");
+  await writeFile(path.join(templateRoot, "semantic-layer/mysql-aliyun/_schema/dataforai.yaml"), "tables: {}\n");
+
+  const result = runSeedOnly(templateRoot, projectRoot);
+  assert.equal(result.status, 0, result.stderr);
+
+  // 连接块：只读、sqlite、启用表用冻结的 physicalTable。
+  const yaml = await readFile(path.join(projectRoot, "ktx.yaml"), "utf8");
+  assert.match(yaml, /lucy-ops:/);
+  assert.match(yaml, /driver: sqlite/);
+  assert.match(yaml, /readonly: true/);
+  assert.match(yaml, /- ops_calls/);
+  assert.match(yaml, /- ops_call_tables/);
+  // Goal 5 — 不进 setup.database_connection_ids。
+  const setupSection = yaml.split("setup:")[1] ?? "";
+  assert.ok(!setupSection.includes("lucy-ops"), setupSection);
+
+  // 项目根同级目录（KTX 读取的位置）已有语义、Skill 与 Wiki。
+  await access(path.join(projectRoot, "semantic-layer/lucy-ops/_schema/main.yaml"));
+  await access(path.join(projectRoot, "semantic-layer/lucy-ops/ops_calls.yaml"));
+  await access(path.join(projectRoot, "skills/lucy-ops/ops-questioning.md"));
+  await access(path.join(projectRoot, "wiki/lucy-ops/ops-questioning.md"));
+
+  // 内容根是事实源：资产先落在内容根，再镜像到项目根。
+  await access(path.join(projectRoot, "config/semantic-layer/lucy-ops/_schema/main.yaml"));
+
+  // 摘要戳存在且等于当前 ktx.yaml 的摘要 → 就绪为 current。
+  const stamp = (await readFile(path.join(projectRoot, ".lucy-seed/ops-evidence-ktx-digest"), "utf8")).trim();
+  assert.match(stamp, /^[0-9a-f]{64}$/);
+  const digest = createHash("sha256").update(await readFile(path.join(projectRoot, "ktx.yaml"))).digest("hex");
+  assert.equal(stamp, digest);
+
+  // 没有发出 Spec 191 的重载请求（自动重载被明确排除）。
+  await assert.rejects(access(path.join(projectRoot, ".ktx-ui/ktx-reload.request")));
+
   await rm(root, { recursive: true, force: true });
 });

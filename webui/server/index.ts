@@ -2587,6 +2587,24 @@ export async function startServer(options: { displayPrewarm?: boolean } = {}): P
   } catch (error) {
     console.error("[access-recovery] the recovery state could not be established:", error);
   }
+  // Spec 149 §8 — 运维问数连接的确保在**策略编译之前**：
+  // 视图、连接块、内容根资产与项目根镜像都要在 EffectivePolicy 提交前就位，
+  // 否则目录能看见连接而执行层不认。失败只关闭这一个连接，不影响其它数据面。
+  try {
+    const { ensureOpsEvidence } = await import("./ops-evidence/ensure.js");
+    const opsEvidence = await ensureOpsEvidence();
+    if (opsEvidence.readiness !== "current") {
+      console.warn(
+        `[ops-evidence] readiness=${opsEvidence.readiness}` +
+          `${opsEvidence.detail ? ` (${opsEvidence.detail})` : ""}; the ops evidence connection is not queryable`
+      );
+    }
+  } catch (error) {
+    console.error(
+      "[ops-evidence] ensure failed; the ops evidence connection stays unavailable:",
+      error
+    );
+  }
   // Spec 98 §8.3 — compile verified EffectivePolicy before accepting traffic.
   // Empty policyVersion must not be the steady-state after a clean start.
   const { commitEffectivePolicy } = await import("./proxy/acl.js");

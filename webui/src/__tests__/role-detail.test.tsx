@@ -408,3 +408,42 @@ describe("RoleDetail Spec 150", () => {
     expect(agentLink).toHaveTextContent("agent-1");
   });
 });
+
+describe("Spec 149 — 运维问数角色的高权限警示（SC-23）", () => {
+  it("运维问数角色的详情可见「运维问数角色可查看生成 SQL」，且不含禁用词", async () => {
+    installFetch(
+      makeRole({
+        id: "lucy_ops_reader",
+        description: "运维问数角色",
+        usageCount: 0,
+        connections: ["lucy-ops"],
+        sourceNames: ["ops_calls", "ops_call_tables"],
+        sourceCount: 2,
+        role: {
+          description: "运维问数角色",
+          allow: {
+            connections: ["lucy-ops"],
+            tableSelectors: [
+              { connection: "lucy-ops", schema: "main", names: ["ops_calls", "ops_call_tables"], row_access: "all" }
+            ],
+            tools: ["lucy_query", "wiki_search", "wiki_read", "lucy_skill_search", "lucy_skill_read"]
+          }
+        }
+      })
+    );
+    renderAt("/admin/roles/lucy_ops_reader");
+
+    const warning = await screen.findByTestId("ops-evidence-role-warning");
+    expect(warning).toHaveTextContent("运维问数角色可查看生成 SQL");
+    for (const forbidden of ["所有者", "登录管理员", "超管"]) {
+      expect(warning.textContent ?? "").not.toContain(forbidden);
+    }
+  });
+
+  it("其它角色不显示该警示", async () => {
+    installFetch(makeRole());
+    renderAt("/admin/roles/analyst");
+    expect(await screen.findByDisplayValue("Analyst role")).toBeInTheDocument();
+    expect(screen.queryByTestId("ops-evidence-role-warning")).not.toBeInTheDocument();
+  });
+});

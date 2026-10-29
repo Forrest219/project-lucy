@@ -10,6 +10,9 @@ const project = process.env.LUCY_DEMO_COMPOSE_PROJECT ?? "lucy-p0-demo";
 const webPort = process.env.LUCY_DEMO_WEBUI_HOST_PORT ?? "55176";
 const proxyPort = process.env.LUCY_DEMO_PROXY_HOST_PORT ?? "57881";
 const demoToken = process.env.LUCY_DEMO_AGENT_TOKEN ?? "lucy-demo-agent-token";
+// Spec 149 §6.1 — 演示运维问数 Agent（demo_ops）的 Token 明文。
+// 模板里只存哈希；明文只存在于本文件与调用方的环境变量里，不打印、不进客户包。
+const demoOpsToken = process.env.LUCY_DEMO_OPS_TOKEN ?? "lucy-demo-ops-token";
 const expectedKtxVersion = process.env.LUCY_EXPECTED_KTX_VERSION ?? "0.16.0";
 const composeFile = "deploy/compose/docker-compose.demo.yml";
 const baselinePath = "examples/docker-demo/mysql/_baseline.json";
@@ -227,11 +230,11 @@ async function verifyDemoCounts(baseline) {
   console.log(`[p0-demo-smoke] demo counts match baseline: orders=${counts.orders}, people=${counts.people}, returns=${counts.returns}`);
 }
 
-async function rpc(sessionId, method, params) {
+async function rpc(sessionId, method, params, token = demoToken) {
   const headers = {
     "content-type": "application/json",
     accept: "application/json, text/event-stream",
-    authorization: `Bearer ${demoToken}`
+    authorization: `Bearer ${token}`
   };
   if (sessionId) headers["mcp-session-id"] = sessionId;
   const res = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
@@ -241,6 +244,41 @@ async function rpc(sessionId, method, params) {
   });
   const text = await res.text();
   return { res, body: parseRpcBody(text), text };
+}
+
+// Spec 149 §6.1 — 演示运维问数 Agent 的**只读探针**。
+//
+// 这不是断言：运维问数连接未就绪时本连接不可查询，demo 的其余部分照常通过。
+// 探针只报告「能不能看见 lucy-ops」，不比较任何数值 gold。
+async function probeOpsDemoAgent() {
+  try {
+    const init = await rpc("", "initialize", {
+      protocolVersion: "2025-03-26",
+      capabilities: {},
+      clientInfo: { name: "lucy-p0-demo-ops-smoke", version: "0.1.0" }
+    }, demoOpsToken);
+    if (!init.res.ok || init.body?.error) {
+      console.log(`[p0-demo-smoke] ops demo agent could not initialize (not gated): ${init.text?.slice(0, 200)}`);
+      return;
+    }
+    const sessionId = init.res.headers.get("mcp-session-id");
+    if (!sessionId) {
+      console.log("[p0-demo-smoke] ops demo agent got no mcp-session-id (not gated)");
+      return;
+    }
+    await rpc(sessionId, "notifications/initialized", {}, demoOpsToken);
+    const list = await rpc(sessionId, "tools/call", { name: "connection_list", arguments: {} }, demoOpsToken);
+    const connections = list.body?.result?.structuredContent?.connections
+      ?? list.body?.result?.connections
+      ?? [];
+    const visible = Array.isArray(connections) && connections.includes("lucy-ops");
+    console.log(
+      `[p0-demo-smoke] ops demo agent sees lucy-ops: ${visible}` +
+        ` (connections: ${Array.isArray(connections) ? connections.join(", ") : "n/a"})`
+    );
+  } catch (error) {
+    console.log(`[p0-demo-smoke] ops demo agent probe skipped (not gated): ${error.message}`);
+  }
 }
 
 async function verifyAdvertisedMcpEndpoint() {
@@ -411,6 +449,7 @@ async function main() {
     assertRegionSales("cli sl query", parsedQuery.headers, parsedQuery.rows, baseline);
     console.log("[p0-demo-smoke] cli sl query region totals match baseline");
     await verifyProxyAgentPath(baseline);
+    await probeOpsDemoAgent();
     await run("docker", composeArgs(["ps"]));
     console.log("\n[p0-demo-smoke] PASS");
   } finally {
