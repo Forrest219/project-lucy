@@ -61,7 +61,8 @@ export interface RowPolicyDeployment {
 /**
  * Controlled fixture for the `unknown` capability.
  *
- * Format: `unknown` | `unknown:<connectionId>` | `proven:<connectionId>`.
+ * Format: `unknown` | `unknown:<connectionId>`.
+ * `proven` is never taken from this fixture.
  * It is a SERVER-side deployment fixture: it changes what the server resolves,
  * so the Admin preview / save API is the place where the evidence is taken.
  */
@@ -91,12 +92,11 @@ function parseFixture(raw: string | undefined): { status: RowPolicyCatalogCapabi
   if (!raw) return null;
   const value = raw.trim().toLowerCase();
   if (value === "unknown") return { status: "unknown", scope: "*" };
-  if (value === "proven") return { status: "proven", scope: "*" };
   const separator = value.indexOf(":");
   if (separator <= 0) return null;
   const status = value.slice(0, separator);
   const scope = value.slice(separator + 1).trim();
-  if (status !== "unknown" && status !== "proven") return null;
+  if (status !== "unknown") return null;
   if (!scope) return null;
   return { status, scope };
 }

@@ -53,6 +53,8 @@ export function registerRowPolicyRoutes(app: FastifyInstance): void {
       roleId?: string;
       /** The candidate Role (draft). When absent the committed Role is previewed. */
       role?: unknown;
+      /** Candidate is the configuration with this Role removed. */
+      removeRole?: boolean;
       tables?: PreviewTableInput[];
     };
   }>("/api/admin/roles/preview-row-policy", async (request, reply) => {
@@ -70,8 +72,9 @@ export function registerRowPolicyRoutes(app: FastifyInstance): void {
         error: { code: "INVALID_ROLE_ID", message: "roleId must match ^[A-Za-z0-9_-]{1,64}$" }
       });
     }
+    const removeRole = body.removeRole === true;
     const tables = normalizeTables(body.tables);
-    if (tables.length === 0) {
+    if (tables.length === 0 && !removeRole) {
       return reply.status(400).send({
         ok: false,
         error: { code: "BAD_REQUEST", message: "tables must contain at least one table identity" }
@@ -79,7 +82,7 @@ export function registerRowPolicyRoutes(app: FastifyInstance): void {
     }
 
     let role: unknown;
-    if (body.role !== undefined && body.role !== null) {
+    if (!removeRole && body.role !== undefined && body.role !== null) {
       const shape = validateRoleShape(body.role);
       if (!shape.ok) {
         return reply.status(400).send({
@@ -100,7 +103,7 @@ export function registerRowPolicyRoutes(app: FastifyInstance): void {
       role = normalized.value;
     }
 
-    const outcome = await previewRowPolicyDraft({ roleId, role, tables });
+    const outcome = await previewRowPolicyDraft({ roleId, role, removeRole, tables });
     return {
       ok: true,
       data: {

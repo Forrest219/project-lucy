@@ -438,3 +438,32 @@ describe("R5 — G5 / D-03 resolution (case-sensitive manifest path)", () => {
     expect(compiled.grant.kind).toBe("scoped");
   });
 });
+
+describe("L25-14 §14.4.1 — the capability fixture cannot force proven", () => {
+  const previous = process.env.LUCY_ROW_POLICY_CATALOG_CAPABILITY;
+
+  afterEach(() => {
+    if (previous === undefined) delete process.env.LUCY_ROW_POLICY_CATALOG_CAPABILITY;
+    else process.env.LUCY_ROW_POLICY_CATALOG_CAPABILITY = previous;
+  });
+
+  it("proven and proven:<id> fall through to the adapter contract", async () => {
+    const capability = await import("../proxy/row-policy-capability.js");
+    capability.resetRowPolicyCapabilityCacheForTests();
+    const deployment = {
+      form: "test",
+      schemaManifestCatalogSupported: true,
+      semanticLayerRoot: ".",
+      reason: "test"
+    };
+    for (const fixture of ["proven", "proven:c1"]) {
+      process.env.LUCY_ROW_POLICY_CATALOG_CAPABILITY = fixture;
+      const resolved = await capability.resolveSchemaManifestCatalogCapability(
+        { id: "c1", driver: "not-a-driver" },
+        deployment
+      );
+      expect(resolved.status).toBe("unknown");
+      expect(resolved.reason.startsWith("deployment_fixture:proven")).toBe(false);
+    }
+  });
+});

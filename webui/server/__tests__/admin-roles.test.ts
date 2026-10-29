@@ -937,6 +937,46 @@ describe("DELETE /api/admin/roles/:roleId", () => {
     await app.close();
   });
 
+  it("refuses to delete a row-policy role without a preview confirmation", async () => {
+    await rm(projectRoot, { recursive: true, force: true });
+    projectRoot = await makeProject(`roles:
+  scoped_unused:
+    allow:
+      connections:
+        - mysql-aliyun
+      tableSelectors:
+        - connection: mysql-aliyun
+          schema: dataforai
+          names:
+            - superstore_orders
+          row_access: scoped
+          row_policy:
+            predicates:
+              - field: region
+                op: eq
+                value: East
+      tools:
+        - lucy_query
+users: []
+defaults:
+  deny_tools:
+    - sql_execution
+`);
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .delete("/api/admin/roles/scoped_unused")
+      .send({ dryRun: false })
+      .expect(409);
+    expect(res.body.error.code).toBe("ROW_POLICY_PREVIEW_REQUIRED");
+    expect(res.body.written).not.toBe(true);
+    const yaml = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
+    expect(yaml).toContain("scoped_unused");
+    await app.close();
+  });
+
   it("returns 400 TEMPLATE_ROLE_READONLY when deleting a template", async () => {
     const app = buildServer();
     await app.ready();

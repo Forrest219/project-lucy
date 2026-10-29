@@ -351,7 +351,11 @@ async function writeAccessConfigFileWithAuditClosureInner(
   let previousRaw: string | undefined;
   try {
     previousRaw = await readFile(accessPath, "utf-8");
-  } catch {
+  } catch (error) {
+    const code = error && typeof error === "object" ? (error as NodeJS.ErrnoException).code : undefined;
+    if (code !== "ENOENT" && code !== "ENOTDIR") {
+      throw error;
+    }
     previousRaw = undefined;
   }
 
@@ -519,10 +523,7 @@ async function writeAccessConfigFileWithAuditClosureInner(
     // Verification is a direct fact — the runtime now reflects the restored bytes.
     // It must NOT reuse `evaluateRuntimeAck`, whose policy is "the caller may not be
     // acked", and which would turn a successful rollback into a false recovery alarm.
-    const rollbackVerified =
-      recoveryPoint.raw === undefined
-        ? true
-        : rollbackStatus.accessConfigDigest === recoveryPoint.accessConfigDigest;
+    const rollbackVerified = rollbackStatus.accessConfigDigest === recoveryPoint.accessConfigDigest;
     if (!rollbackVerified) {
       return closeForRecovery(
         originalFailure,

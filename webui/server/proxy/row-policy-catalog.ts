@@ -759,8 +759,6 @@ async function cachedCatalogEntry(
   schema?: string
 ): Promise<CachedCatalog> {
   const key = catalogCacheKey(connectionId, sourceName, schema);
-  const cached = catalogCache.get(key);
-  if (cached) return cached;
   const built = await buildCachedCatalog(connectionId, sourceName, schema);
   catalogCache.set(key, built);
   return built;

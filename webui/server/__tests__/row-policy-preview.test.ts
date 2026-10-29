@@ -244,6 +244,24 @@ describe("R2 computeFinalRowsForTable — union keeps the DNF shape", () => {
     if (computed.ok) return;
     expect(computed.reason).toBe("row_policy_no_applicable_grant");
   });
+
+  it("an Agent missing this table's FinalRows fails closed and does not inherit the global union", async () => {
+    const { computeFinalRowsForTable } = await loadPreview();
+    const grant = {
+      kind: "scoped" as const,
+      digest: "east",
+      predicates: [{ field: "region", sourceName: "fin_ledger", op: "eq" as const, value: "East" }],
+      orArms: [[{ field: "region", sourceName: "fin_ledger", op: "eq" as const, value: "East" }]]
+    };
+    const computed = computeFinalRowsForTable(
+      { connectionId: "warehouse", schema: "fin", sourceName: "fin_ledger" },
+      [{ roleId: "east_role", grant }],
+      [{ agentId: "agent-without-key", finalRowsBySource: {} }]
+    );
+    expect(computed.ok).toBe(false);
+    if (computed.ok) return;
+    expect(computed.reason).toBe("row_policy_no_applicable_grant");
+  });
 });
 
 describe("R2 previewRowPolicyDraft — the in-memory candidate", () => {
