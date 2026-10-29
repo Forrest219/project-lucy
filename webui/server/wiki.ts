@@ -909,9 +909,12 @@ async function readWikiSummaries(projectRoot: string): Promise<WikiSummaryBase[]
  * body, the full Agent id list or the per-Role effect detail, and the
  * frontend never calls an access API per row.
  */
-export async function listWiki(projectRoot: string): Promise<WikiSummary[]> {
+export async function listWiki(
+  projectRoot: string,
+  snapshot?: Awaited<ReturnType<typeof loadWikiAccessConfigSnapshot>>
+): Promise<WikiSummary[]> {
   const bases = await readWikiSummaries(projectRoot);
-  const snapshot = await loadWikiAccessConfigSnapshot(projectRoot);
+  const resolvedSnapshot = snapshot ?? (await loadWikiAccessConfigSnapshot(projectRoot));
   const pendingChanges = await readAllWikiAccessPendingChanges();
   return bases.map((base) => ({
     key: base.key,
@@ -921,7 +924,7 @@ export async function listWiki(projectRoot: string): Promise<WikiSummary[]> {
     access: buildWikiAccessListEntry({
       file_version: base.file_version,
       acl: base.acl,
-      snapshot,
+      snapshot: resolvedSnapshot,
       pending_change: pendingChanges.get(base.key)
     })
   }));
