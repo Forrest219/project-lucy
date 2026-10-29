@@ -250,6 +250,8 @@ export interface MemberRuntime {
   attempt: number | null;
   result: unknown;
   auditId: number | null;
+  /** 本次执行看到的效果阶段。非终态收尾必须写它，不能退回认领时的 prior。 */
+  effectPhase: OpsEffectPhase;
   prior: OpsTargetRecord | undefined;
 }
 
@@ -261,6 +263,7 @@ function runtimeOf(target: OpsPlanTarget, key: string, prior?: OpsTargetRecord):
     attempt: prior?.attempt ?? null,
     result: prior?.result ?? null,
     auditId: prior?.auditId ?? null,
+    effectPhase: prior?.effectPhase ?? "none",
     prior
   };
 }
@@ -630,8 +633,9 @@ export async function runOpsCommit(options: OpsCommitOptions): Promise<OpsEnvelo
       setEffectPhase: (targetId, phase) => {
         const member = claimed.find((item) => item.target.id === targetId);
         if (!member) return;
-        setTargetEffectPhase(database, member.targetKey, phase);
+        member.effectPhase = phase;
         if (member.prior) member.prior.effectPhase = phase;
+        setTargetEffectPhase(database, member.targetKey, phase);
       }
     };
     try {
@@ -757,7 +761,7 @@ export async function runOpsCommit(options: OpsCommitOptions): Promise<OpsEnvelo
         attempt: member.attempt,
         auditId: member.auditId,
         result: member.result,
-        effectPhase: member.prior?.effectPhase ?? "none"
+        effectPhase: member.effectPhase
       });
     }
   }

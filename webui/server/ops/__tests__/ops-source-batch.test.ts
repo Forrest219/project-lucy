@@ -415,6 +415,39 @@ describe("L25-16 S4 版本裁剪延后到组成功之后", () => {
   });
 });
 
+describe("L25-16 S4 重启后没有写后摘要", () => {
+  it("内容偏离基线且没有 postimage 时判 unknown，不得当成成功", async () => {
+    const { createHash } = await import("node:crypto");
+    const relPath = "semantic-layer/conn_a/_schema/s1.yaml";
+    const before = "tables:\n  orders:\n    table: orders\n";
+    const current = `${before}    extra: true\n`;
+    await writeFile(path.join(projectRoot, relPath), current, "utf8");
+    const adapter = new OpsSourceImportAdapter();
+    const verified = await adapter.verifyGroup({
+      projectRoot,
+      group: { id: "g-restart", memberIds: ["conn_a:s1:orders"], sharedFiles: [relPath] },
+      members: [{
+        id: "conn_a:s1:orders",
+        groupId: "g-restart",
+        connectionId: "conn_a",
+        payload: {},
+        before: { files: [{ filePath: relPath, contentHash: createHash("sha256").update(before).digest("hex") }] },
+        after: null,
+        blockers: [],
+        writeSet: [relPath],
+        audit: { changeType: "semantic_table_import", assetKind: "semantic", targetId: "conn_a:s1:orders", filePath: relPath }
+      }],
+      actor: "ops_agent",
+      delegatedFrom: null,
+      executionId: "restart-no-postimage",
+      setEffectPhase: () => undefined
+    });
+    expect(verified.members).toEqual([
+      expect.objectContaining({ id: "conn_a:s1:orders", state: "unknown" })
+    ]);
+  });
+});
+
 /**
  * 列出某表的历史快照文件（相对路径）。
  *

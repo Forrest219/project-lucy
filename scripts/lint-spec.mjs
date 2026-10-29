@@ -377,6 +377,13 @@ function accessRolePolicy() {
           if (grant.instance_scope !== undefined && grant.instance_scope !== "read_only") {
             add(check, "fail", `webui/config/access.yaml: ${where} instance_scope must be 'read_only' when set`);
           }
+          if (grant.instance_scope === "read_only") {
+            for (const tool of grantTools) {
+              if (controlPlaneTools.has(tool)) {
+                add(check, "fail", `webui/config/access.yaml: ${where} instance_scope read_only cannot grant write tool ${tool}`);
+              }
+            }
+          }
         }
       }
     }

@@ -509,6 +509,8 @@ export type AddSchemaOptions = {
   recordConfigChange?: typeof import("./admin/audit").recordConfigChange;
   testConnectionFn?: typeof testConnection;
   execFileImpl?: Parameters<typeof testConnection>[2];
+  /** Caller already holds withKtxYamlWriteLock. Re-entering the lock self-waits. */
+  lockHeld?: boolean;
 };
 
 function schemasList(node: import("yaml").YAMLSeq | undefined): string[] {
@@ -659,9 +661,35 @@ export async function addSchema(
   dryRun: boolean,
   options: AddSchemaOptions = {}
 ): Promise<AddSchemaPreview | AddSchemaResult> {
-  // Spec 174 §3.2 — the display barrier spans the whole confirmed transaction (incl. rollback).
-  if (dryRun) return addSchemaUnbarriered(root, connId, schema, dryRun, options);
-  return withDisplayWriteBarrier(KTX_YAML_DISPLAY_SCOPES, () => addSchemaUnbarriered(root, connId, schema, dryRun, options));
+  if (dryRun || options.lockHeld) return addSchemaUnbarriered(root, connId, schema, dryRun, options);
+  // Connection test stays outside the lock: it shells out to ktx and must not
+  // block every other ktx.yaml writer. The read that produces the patch and the
+  // write both happen inside the lock below.
+  if (typeof schema !== "string" || !SCHEMA_NAME_RE.test(schema)) {
+    throw new SchemaNameInvalidError(
+      `Schema name '${schema}' does not match pattern ${SCHEMA_NAME_PATTERN}`
+    );
+  }
+  const testFn = options.testConnectionFn ?? testConnection;
+  const execFileImpl = options.execFileImpl ?? execFile;
+  const testResult = await testFn(root, connId, execFileImpl);
+  if (testResult.status !== "ok") {
+    throw new ConnectionTestFailedError(
+      `ktx connection test failed for '${connId}': ${testResult.reason ?? "unknown error"}`,
+      {
+        stdout: testResult.stdout ?? testResult.detail ?? "",
+        stderr: testResult.stderr ?? testResult.reason ?? "",
+        reason: testResult.reason ?? "Connection test failed"
+      }
+    );
+  }
+  // L25-16 N05 — same order as the control-plane batch path and removeSchema:
+  // withKtxYamlWriteLock → withDisplayWriteBarrier → read + write.
+  return withKtxYamlWriteLock(() =>
+    withDisplayWriteBarrier(KTX_YAML_DISPLAY_SCOPES, () =>
+      addSchema(root, connId, schema, false, { ...options, lockHeld: true })
+    )
+  );
 }
 
 async function addSchemaUnbarriered(
@@ -697,26 +725,29 @@ async function addSchemaUnbarriered(
     };
   }
 
-  // Phase 2 — write path. Pre-flight `ktx connection test` first; if it fails
-  // we have not touched ktx.yaml yet, so no rollback is needed.
-  const testFn = options.testConnectionFn ?? testConnection;
-  const execFileImpl = options.execFileImpl ?? execFile;
-  const testResult = await testFn(root, connId, execFileImpl);
-  if (testResult.status !== "ok") {
-    throw new ConnectionTestFailedError(
-      `ktx connection test failed for '${connId}': ${testResult.reason ?? "unknown error"}`,
-      {
-        stdout: testResult.stdout ?? testResult.detail ?? "",
-        stderr: testResult.stderr ?? testResult.reason ?? "",
-        reason: testResult.reason ?? "Connection test failed"
-      }
-    );
+  // Phase 2 — connection test already ran outside the lock when lockHeld is set.
+  // A direct call that still reaches here without the lock re-checks, so a
+  // failed test never writes.
+  if (!options.lockHeld) {
+    const testFn = options.testConnectionFn ?? testConnection;
+    const execFileImpl = options.execFileImpl ?? execFile;
+    const testResult = await testFn(root, connId, execFileImpl);
+    if (testResult.status !== "ok") {
+      throw new ConnectionTestFailedError(
+        `ktx connection test failed for '${connId}': ${testResult.reason ?? "unknown error"}`,
+        {
+          stdout: testResult.stdout ?? testResult.detail ?? "",
+          stderr: testResult.stderr ?? testResult.reason ?? "",
+          reason: testResult.reason ?? "Connection test failed"
+        }
+      );
+    }
   }
 
-  // Phase 3 — actually persist via fs-safe. Re-run the same mutator (idempotent
-  // because the doc still has the original `schemas` list — writeKtxYaml reads
-  // fresh text from disk each call).
-  await writeKtxYaml(root, mutator, { dryRun: false });
+  // Phase 3 — persist. The public write path already holds the ktx lock; passing
+  // lockHeld avoids self-wait. A caller that has not taken the lock still goes
+  // through writeKtxYaml's own lock.
+  await writeKtxYaml(root, mutator, { dryRun: false, lockHeld: options.lockHeld === true });
 
   let auditId: number | undefined;
   if (options.recordConfigChange) {
@@ -1043,6 +1074,8 @@ export type RemoveConnectionOptions = {
   listWikiFn?: typeof import("./wiki").listWiki;
   deleteSecret?: boolean;
   deleteAssets?: boolean;
+  /** Caller already holds withKtxYamlWriteLock. Re-entering the lock self-waits. */
+  lockHeld?: boolean;
 };
 
 function yamlScalarString(item: unknown): string | null {
@@ -1270,9 +1303,22 @@ export async function removeConnection(
   dryRun: boolean,
   options: RemoveConnectionOptions = {}
 ): Promise<DeleteConnectionPreview | DeleteConnectionResult> {
-  // Spec 174 §3.2 — the display barrier spans the whole confirmed transaction (incl. rollback).
-  if (dryRun) return removeConnectionUnbarriered(root, connId, dryRun, options);
-  return withDisplayWriteBarrier(KTX_YAML_DISPLAY_SCOPES, () => removeConnectionUnbarriered(root, connId, dryRun, options));
+  if (dryRun || options.lockHeld) return removeConnectionUnbarriered(root, connId, dryRun, options);
+  // L25-16 N05 — read and write stay in one critical section, same order as
+  // removeSchema: withKtxYamlWriteLock → withDisplayWriteBarrier → (publish
+  // window when semantic files are deleted) → write.
+  const deletesSemanticContent = Boolean(options.deleteAssets);
+  return withKtxYamlWriteLock(() =>
+    withDisplayWriteBarrier(KTX_YAML_DISPLAY_SCOPES, () =>
+      deletesSemanticContent
+        ? withPublishCoordinator(
+            "manifest_upload",
+            () => removeConnection(root, connId, false, { ...options, lockHeld: true }),
+            { projectRoot: root }
+          )
+        : removeConnection(root, connId, false, { ...options, lockHeld: true })
+    )
+  );
 }
 
 async function removeConnectionUnbarriered(
@@ -1397,7 +1443,7 @@ async function removeConnectionUnbarriered(
     }
   }
 
-  await writeKtxYaml(root, mutator, { dryRun: false });
+  await writeKtxYaml(root, mutator, { dryRun: false, lockHeld: options.lockHeld === true });
 
   const deletedFiles: string[] = [];
   if (options.deleteSecret && secretRelPath) {

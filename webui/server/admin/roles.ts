@@ -474,8 +474,8 @@ function roleTemplateDiagnostics(config: YamlAccessConfig): {
 /**
  * L25-16 / G13 — 该角色是否授予了 **owner-only** 的控制面工具。
  *
- * 授予 owner-only 能力必须与 owner 本身同级，因此角色写入路径需要 owner 门禁
- * （Spec §3.2.2 规则 8）。W-A 的两个工具都不是 owner-only，此处按登记表通用判定。
+ * 授予 owner-only 能力必须与 owner 本身同级。这只是规则 8 的一部分：
+ * 任何 `allow.ops` 的创建或修改都要 owner，不能用「工具不是 owner-only」代替。
  */
 export function roleGrantsOwnerOnlyTool(role: YamlRole | undefined): boolean {
   for (const grant of role?.allow?.ops ?? []) {
@@ -484,6 +484,12 @@ export function roleGrantsOwnerOnlyTool(role: YamlRole | undefined): boolean {
     }
   }
   return false;
+}
+
+/** 角色是否带控制面授权。创建或修改这类角色必须是 owner（Spec §3.2.2 规则 8）。 */
+export function roleCarriesOpsGrant(role: YamlRole | undefined): boolean {
+  const ops = role?.allow?.ops;
+  return Array.isArray(ops) && ops.length > 0;
 }
 
 export function validateRoleShape(role: unknown): { ok: true; value: YamlRole } | { ok: false; reason: string } {
@@ -710,6 +716,12 @@ export function validateRoleShape(role: unknown): { ok: true; value: YamlRole } 
           return { ok: false, reason: "allow.ops instance_scope must be 'read_only' when set" };
         }
         instanceScope = "read_only";
+      }
+      if (instanceScope === "read_only") {
+        const writeTool = grantTools.find((tool) => getOpsToolSpec(tool)?.write);
+        if (writeTool) {
+          return { ok: false, reason: `allow.ops instance_scope read_only cannot grant write tool ${writeTool}` };
+        }
       }
       built.push({
         tools: grantTools,
@@ -1115,9 +1127,10 @@ export function registerRoleRoutes(app: FastifyInstance) {
     if (config.roles?.[roleId]) {
       return reply.status(409).send({ ok: false, error: { code: "ROLE_ID_TAKEN", message: `role '${roleId}' already exists` } });
     }
-    // L25-16 / G13 — 授予 owner-only 控制面工具必须 owner。
-    if (roleGrantsOwnerOnlyTool(validated.value)) {
-      if (!(await requireOwnerForOps(request, reply, "仅所有者可授予 owner-only 控制面工具"))) return;
+    // L25-16 / G13 — 任何 allow.ops 都是控制面可达范围，创建时必须 owner。
+    // 不能只拦 owner-only 工具：W-A 的两个写工具都不是 owner-only。
+    if (roleCarriesOpsGrant(validated.value)) {
+      if (!(await requireOwnerForOps(request, reply, "仅所有者可授予控制面授权（allow.ops）"))) return;
     }
     const contextGuard = await guardRoleIdForCreate(roleId, request.body?.acknowledgeContextReferences === true);
     if (contextGuard) {
@@ -1356,10 +1369,6 @@ export function registerRoleRoutes(app: FastifyInstance) {
       }
       return reply.status(404).send({ ok: false, error: { code: "ROLE_NOT_FOUND", message: `role '${request.params.roleId}' not found` } });
     }
-    // L25-16 / G13 — 既有角色若已授予 owner-only 控制面工具，其任何修改都必须是 owner 动作。
-    if (roleGrantsOwnerOnlyTool(existing)) {
-      if (!(await requireOwnerForOps(request, reply, "仅所有者可修改含 owner-only 控制面工具的角色"))) return;
-    }
     // The write entry point that can change a row policy consumes the preview
     // confirmation (spec §14.2.1). The confirmation is REQUIRED whenever the
     // Role carries a row-policy surface — before or after the change.
@@ -1399,6 +1408,11 @@ export function registerRoleRoutes(app: FastifyInstance) {
         ? (patch.allow as YamlRole["allow"])
         : existing.allow
     };
+    // L25-16 / G13 — 旧角色或改完后的角色带 allow.ops，都必须是 owner。
+    // 检查放在合并之后：只看修改前会漏掉「普通角色被 PATCH 进控制面工具」。
+    if (roleCarriesOpsGrant(existing) || roleCarriesOpsGrant(next)) {
+      if (!(await requireOwnerForOps(request, reply, "仅所有者可修改带控制面授权（allow.ops）的角色"))) return;
+    }
     const validated = await resolveRoleForWrite(request.params.roleId, next, { allowTemplateId: true });
     if (!validated.ok) {
       return reply.status(validated.status).send({ ok: false, error: { code: validated.code, message: validated.message } });

@@ -150,7 +150,8 @@ export type OpsGrantMismatchReason =
   | "tool_not_listed"
   | "kind_not_covered"
   | "connection_scope_absent"
-  | "connection_out_of_scope";
+  | "connection_out_of_scope"
+  | "read_only_scope";
 
 export interface OpsGrantMatch {
   /** 是否存在一条 grant 自身完整覆盖该对象。 */
@@ -173,6 +174,11 @@ export function matchOpsGrantForTarget(
   for (const grant of grants) {
     if (!grant.tools.includes(tool.name)) {
       reasons.push("tool_not_listed");
+      continue;
+    }
+    // Spec §3.2.2 规则 5：只读 grant 不得用于任何写类工具。
+    if (grant.instance_scope === "read_only" && tool.write) {
+      reasons.push("read_only_scope");
       continue;
     }
     const kindsCovered = tool.managedAssetKinds.every((kind) => grant.asset_kinds.includes(kind));

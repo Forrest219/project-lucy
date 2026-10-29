@@ -348,4 +348,41 @@ describe("L25-16 S1 逐对象完整匹配", () => {
     expect(match.matched).toBe(false);
     expect(match.reasons).toContain("kind_not_covered");
   });
+
+  it("instance_scope read_only 不能授权写类控制面工具", async () => {
+    const { matchOpsGrantForTarget } = await import("../ops-grants");
+    const { getOpsToolSpec } = await import("../control-plane");
+    const spec = getOpsToolSpec("lucy_ops_connection_tables");
+    expect(spec).toBeDefined();
+    if (!spec) return;
+    const match = matchOpsGrantForTarget(
+      [{
+        tools: ["lucy_ops_connection_tables"],
+        asset_kinds: ["governance"],
+        connections: ["conn_a"],
+        instance_scope: "read_only"
+      }],
+      spec,
+      "conn_a"
+    );
+    expect(match.matched).toBe(false);
+    expect(match.reasons).toContain("read_only_scope");
+  });
+
+  it("角色保存拒绝 read_only grant 带写工具", async () => {
+    const { validateRoleShape } = await import("../../admin/roles");
+    const result = validateRoleShape({
+      allow: {
+        ops: [{
+          tools: ["lucy_ops_connection_tables"],
+          asset_kinds: ["governance"],
+          connections: ["conn_a"],
+          instance_scope: "read_only"
+        }]
+      }
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toContain("read_only cannot grant write tool");
+  });
 });

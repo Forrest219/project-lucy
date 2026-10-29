@@ -407,7 +407,9 @@ export class OpsConnectionTablesAdapter implements OpsToolAdapter {
         await safeWriteAtomic(paths, ctx.projectRoot, "ktx.yaml", proposedYaml);
         state.wrote = true;
         for (const target of targets) {
-          ctx.setEffectPhase(target.connectionId, "written");
+          // 持久态按目标 id 索引（`tables:<conn>` / `schema:<conn>:<schema>`），
+          // 不能传 connectionId，否则崩溃恢复会把已写入当成「无效果」。
+          ctx.setEffectPhase(connectionTableTargetId(target), "written");
         }
 
         // 生效确认：catalog 重载 + 策略提交。
@@ -431,7 +433,7 @@ export class OpsConnectionTablesAdapter implements OpsToolAdapter {
           );
         }
         for (const target of targets) {
-          ctx.setEffectPhase(target.connectionId, "activated");
+          ctx.setEffectPhase(connectionTableTargetId(target), "activated");
         }
       }
     );

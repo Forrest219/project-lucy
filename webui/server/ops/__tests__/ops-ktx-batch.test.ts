@@ -15,7 +15,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { getOpsToolSpec } from "../control-plane";
 import { runOpsCommit, runOpsPreview } from "../ops-batch";
 import { getOpsDatabase } from "../ops-idempotency";
@@ -222,5 +222,72 @@ describe("L25-16 S3 连接表整批全成或全拒", () => {
 
     // 整批不写：ktx.yaml 必须仍是**外部修改之后**的内容（回滚不得覆盖别人的改动）。
     expect(await readFile(ktxPath, "utf8")).toBe(externallyModified);
+  });
+
+  it("写入成功后效果阶段按目标 id 落成 activated，而不是停在 none", async () => {
+    const adapter = new OpsConnectionTablesAdapter();
+    const { planId, digest } = await preview(adapter, [
+      { connectionId: "conn_a", enabledTables: ["s1.orders"] }
+    ]);
+
+    const envelope = await runOpsCommit({
+      adapter,
+      projectRoot,
+      actor: "ops_agent",
+      delegatedFrom: null,
+      idempotencyKey: "idem-ktx-effect-phase",
+      planId,
+      confirmDigest: digest,
+      requestTargetIds: ["tables:conn_a"],
+      grants: GRANTS,
+      tool: getOpsToolSpec(TOOL)
+    });
+
+    expect(envelope.ok).toBe(true);
+    if (!envelope.ok) return;
+    const data = envelope.data as { per_target: Array<{ id: string; kind: string }> };
+    expect(data.per_target.map((item) => item.kind)).toEqual(["succeeded"]);
+
+    const database = await getOpsDatabase();
+    const row = database
+      .prepare("SELECT target_id, effect_phase, status FROM ops_targets WHERE target_id = ?")
+      .get("tables:conn_a") as { target_id: string; effect_phase: string; status: string };
+    expect(row.effect_phase).toBe("activated");
+    expect(row.status).toBe("succeeded");
+  });
+
+  it("catalog 重载失败后 effect_phase 停在 written，收尾不得写回 none", async () => {
+    const catalog = await import("../../catalog-reload.js");
+    const reload = vi.spyOn(catalog, "reloadCatalog").mockRejectedValueOnce(new Error("reload failed"));
+    try {
+      const adapter = new OpsConnectionTablesAdapter();
+      const { planId, digest } = await preview(adapter, [
+        { connectionId: "conn_a", enabledTables: ["s1.orders"] }
+      ]);
+      const envelope = await runOpsCommit({
+        adapter,
+        projectRoot,
+        actor: "ops_agent",
+        delegatedFrom: null,
+        idempotencyKey: "idem-ktx-reload-fail",
+        planId,
+        confirmDigest: digest,
+        requestTargetIds: ["tables:conn_a"],
+        grants: GRANTS,
+        tool: getOpsToolSpec(TOOL)
+      });
+      expect(envelope.ok).toBe(true);
+      if (!envelope.ok) return;
+      const data = envelope.data as { per_target: Array<{ kind: string }> };
+      expect(data.per_target.map((item) => item.kind)).toEqual(["recovery_required"]);
+      const database = await getOpsDatabase();
+      const row = database
+        .prepare("SELECT effect_phase, status FROM ops_targets WHERE target_id = ?")
+        .get("tables:conn_a") as { effect_phase: string; status: string };
+      expect(row.status).toBe("recovery_required");
+      expect(row.effect_phase).toBe("written");
+    } finally {
+      reload.mockRestore();
+    }
   });
 });

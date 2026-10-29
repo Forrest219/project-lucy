@@ -641,7 +641,11 @@ export class OpsSourceImportAdapter implements OpsToolAdapter {
           detail = { filePath, reason: "not_written" };
           break;
         } else {
-          verdict = "succeeded";
+          // 进程重启后写后摘要不在内存里。内容已经偏离基线，无法区分
+          // 「本组写完了」和「别人改过文件」，必须判不可判定。
+          verdict = "unknown";
+          detail = { filePath, reason: "postimage_unavailable" };
+          break;
         }
       }
       members.push({ id: member.id, state: verdict, detail });
