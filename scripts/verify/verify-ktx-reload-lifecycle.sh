@@ -10,13 +10,13 @@
 #                reload request → daemon restart → receipt, SIGTERM → no leftover
 #                process, capability handshake.
 #
-#   --container  Exercise the real container: compose start, healthcheck, reload
-#                window, graceful shutdown. Requires an already built image
-#                (LUCY_RELOAD_VERIFY_IMAGE). This mode does NOT build anything.
+#   --container  Reserved for the real container (Step 8 / AC-12). Requires an
+#                already built image (LUCY_RELOAD_VERIFY_IMAGE) and does NOT
+#                build one. Until those checks run, this mode exits 2 and must
+#                not print PASSED.
 #
-# The container mode is the Plan's Step 8 table verbatim. The local mode is the
-# same acceptance surface minus the container runtime, so the supervisor can be
-# proven without a Docker rebuild.
+# Local mode covers the supervisor acceptance surface without a container.
+# Container mode does not yet run the Step 8 table; it refuses a zero-check pass.
 #
 # Usage:
 #   scripts/verify/verify-ktx-reload-lifecycle.sh --local
@@ -374,8 +374,9 @@ run_container() {
     return 2
   fi
   echo "using image ${image}"
-  echo "NOTE: this mode drives the real container. It is not executed by the"
-  echo "      static review gate; run it against a built image to close AC-12."
+  echo "NOT RUN: container mode has not executed the Step 8 checks" >&2
+  echo "         (first-start failure, spontaneous exit, SIGTERM, exit code," >&2
+  echo "         no leftover process). AC-12 stays open." >&2
   return 0
 }
 
@@ -389,5 +390,9 @@ echo
 if [[ "${FAILURES}" -gt 0 ]]; then
   echo "FAILED: ${FAILURES} of ${CHECKS} checks failed" >&2
   exit 1
+fi
+if [[ "${CHECKS}" -eq 0 ]]; then
+  echo "NOT RUN: ${CHECKS} checks executed; this is not a pass" >&2
+  exit 2
 fi
 echo "PASSED: ${CHECKS} checks"
