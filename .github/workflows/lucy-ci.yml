@@ -92,6 +92,11 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
+          # Full history + tags: the registered root tests include the release ledger
+          # cross-check, which resolves each recorded release tag and commit against the
+          # object database. A shallow checkout makes that check report the commit as
+          # unverifiable instead of verified.
+          fetch-depth: 0
           persist-credentials: false
       - name: actionlint (pinned release, checksum verified)
         env:
