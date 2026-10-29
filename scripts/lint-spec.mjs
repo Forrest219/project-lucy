@@ -254,11 +254,11 @@ function accessRolePolicy() {
   const sources = loadSourceEntries();
   const topLevelKeys = new Set(["roles", "users", "defaults"]);
   const roleKeys = new Set(["description", "permission_model_version", "allow"]);
-  const roleAllowKeys = new Set(["connections", "tableSelectors", "tools", "source_scope"]);
+  const roleAllowKeys = new Set(["connections", "tableSelectors", "tools", "source_scope", "ops"]);
   // row_policy listed so "all"+row_policy can be rejected explicitly; scoped+row_policy
   // remains blocked by the scoped Gate-B gate below until WP-I1.
   const selectorKeys = new Set(["connection", "schema", "names", "prefix", "row_access", "row_policy"]);
-  const userKeys = new Set(["id", "name", "note", "enabled", "role", "roles", "tokens", "allow", "constraints"]);
+  const userKeys = new Set(["id", "name", "note", "enabled", "role", "roles", "tokens", "allow", "constraints", "delegated_from"]);
   const userAllowKeys = new Set(["tables", "tools", "connections"]);
   const tokenKeys = new Set(["hash", "label", "created", "expires_at"]);
   const defaultsKeys = new Set([
@@ -321,12 +321,63 @@ function accessRolePolicy() {
       "lucy_skill_search",
       "lucy_skill_read"
     ]);
+    // L25-16 — 控制面工具登记表（必须与 webui/server/ops/control-plane.ts 一致）。
+    const controlPlaneTools = new Set([
+      "lucy_ops_connection_tables",
+      "lucy_ops_source_import"
+    ]);
+    const opsAssetKinds = new Set(["governance", "semantic", "wiki", "eval", "publish", "skill"]);
     for (const tool of tools) {
       if (denyTools.has(tool)) add(check, "fail", `webui/config/access.yaml: role ${roleId} allows globally denied tool ${tool}`);
       if (absoluteDenyTools.has(tool)) {
         add(check, "fail", `webui/config/access.yaml: role ${roleId} allow.tools contains AbsoluteDeny tool ${tool}`);
+      } else if (controlPlaneTools.has(tool)) {
+        // 控制面工具只能由 allow.ops 授予；写进 allow.tools 是两个授权平面的混用。
+        add(check, "fail", `webui/config/access.yaml: role ${roleId} allow.tools contains control-plane tool ${tool} (use allow.ops)`);
       } else if (!classifiedRoleTools.has(tool)) {
         add(check, "fail", `webui/config/access.yaml: role ${roleId} allow.tools contains unclassified tool ${tool}`);
+      }
+    }
+    // L25-16 — allow.ops schema 校验（Spec §3.2.1 / §3.2.2 规则 2、4、5）。
+    if (allow.ops !== undefined) {
+      if (!Array.isArray(allow.ops)) {
+        add(check, "fail", `webui/config/access.yaml: role ${roleId} allow.ops must be an array`);
+      } else {
+        for (const [index, grant] of allow.ops.entries()) {
+          const where = `role ${roleId}.allow.ops[${index}]`;
+          if (!grant || typeof grant !== "object" || Array.isArray(grant)) {
+            add(check, "fail", `webui/config/access.yaml: ${where} must be an object`);
+            continue;
+          }
+          checkAllowedKeys(check, grant, new Set(["tools", "asset_kinds", "connections", "instance_scope"]), where);
+          const grantTools = Array.isArray(grant.tools) ? grant.tools : [];
+          if (!Array.isArray(grant.tools) || grantTools.length === 0) {
+            add(check, "fail", `webui/config/access.yaml: ${where} tools must be a non-empty array`);
+          }
+          if (grantTools.includes("*")) {
+            add(check, "fail", `webui/config/access.yaml: ${where} tools contains * (wildcard forbidden)`);
+          }
+          for (const tool of grantTools) {
+            if (typeof tool !== "string" || !controlPlaneTools.has(tool)) {
+              add(check, "fail", `webui/config/access.yaml: ${where} tools contains unknown control-plane tool ${tool}`);
+            }
+          }
+          const kinds = Array.isArray(grant.asset_kinds) ? grant.asset_kinds : [];
+          if (!Array.isArray(grant.asset_kinds) || kinds.length === 0) {
+            add(check, "fail", `webui/config/access.yaml: ${where} asset_kinds must be a non-empty array`);
+          }
+          for (const kind of kinds) {
+            if (typeof kind !== "string" || !opsAssetKinds.has(kind)) {
+              add(check, "fail", `webui/config/access.yaml: ${where} asset_kinds contains unknown kind ${kind}`);
+            }
+          }
+          if (grant.connections !== undefined && !Array.isArray(grant.connections)) {
+            add(check, "fail", `webui/config/access.yaml: ${where} connections must be a string array`);
+          }
+          if (grant.instance_scope !== undefined && grant.instance_scope !== "read_only") {
+            add(check, "fail", `webui/config/access.yaml: ${where} instance_scope must be 'read_only' when set`);
+          }
+        }
       }
     }
     const sourceScope = typeof allow.source_scope === "string" ? allow.source_scope.trim() : undefined;

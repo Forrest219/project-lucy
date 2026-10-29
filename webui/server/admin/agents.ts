@@ -36,7 +36,7 @@ import {
 } from "../access-governance-gate.js";
 import { invalidateAccessConfigCache } from "../proxy/identity.js";
 import { narrowAuthorization, narrowingScopeForWrite } from "../proxy/authorization-barrier.js";
-import { actorIdFromRequest } from "../auth/guard.js";
+import { actorIdFromRequest, requireOwnerForOps } from "../auth/guard.js";
 import { auditActorFields, trustedActorFromRequest } from "../security/request-actor.js";
 import { isTokenExpired } from "../proxy/identity.js";
 import { protocolConditionSql, defaultUsageConditionSql, evalProbeConditionSql } from "../proxy/usage-classification.js";
@@ -101,6 +101,11 @@ export interface YamlUser {
     tools: string[];
     connections?: string[];
   };
+  /**
+   * L25-16 — 委托人（`admins.yaml` 中的管理员 id，Spec §3.2.2 规则 6）。
+   * 只用于 owner-only 操作的委托校验与审计归因，不放大 `allow.ops` 的域与连接范围。
+   */
+  delegated_from?: string;
   /** Spec 100 Agent Constraints; validated at EffectivePolicy compile. */
   constraints?: unknown;
 }
@@ -116,6 +121,16 @@ export interface YamlRole {
       | { connection?: string; schema: string; prefix: string; row_access?: "all" | "scoped"; row_policy?: { predicates: unknown[] } }
     >;
     tools?: string[];
+    /**
+     * L25-16 — 控制面授权维度（Spec §3.2.1）。与 `tools`（数据面）完全独立。
+     * 形状：`{ tools: string[]; asset_kinds: string[]; connections?: string[]; instance_scope?: "read_only" }[]`
+     */
+    ops?: Array<{
+      tools: string[];
+      asset_kinds: string[];
+      connections?: string[];
+      instance_scope?: "read_only";
+    }>;
   };
 }
 
@@ -129,6 +144,52 @@ export interface YamlAccessConfig {
     sensitive_metadata_tools?: string[];
     sensitive_table_prefixes?: string[];
   };
+}
+
+// ─── L25-16 委托与控制面可达范围（G13 / Spec §3.2.2 规则 8） ─────────────────
+
+/**
+ * 该角色集合是否触及**控制面可达范围**（即某个角色带非空 `allow.ops`）。
+ *
+ * 授予控制面能力是提权通道的入口，因此必须 owner-only（G13）。
+ */
+export function rolesTouchControlPlane(
+  roles: Record<string, YamlRole> | undefined,
+  roleIds: readonly string[]
+): boolean {
+  if (!roles) return false;
+  return roleIds.some((roleId) => (roles[roleId]?.allow?.ops?.length ?? 0) > 0);
+}
+
+/**
+ * 校验 `delegated_from`：必须指向 `admins.yaml` 中**存在且启用**的管理员。
+ *
+ * fail-closed：`admins.yaml` 不可读 ⇒ 拒绝写入（委托是提权通道，不能在无法证明
+ * 委托人的情况下放行）。委托人是否必须是 owner 由**使用时刻**的
+ * `resolveDelegatingPrincipal` 判定，这里只保证「委托存在且指向真实管理员」。
+ */
+export async function validateDelegatedFrom(
+  delegatedFrom: unknown
+): Promise<{ ok: true; value: string | undefined } | { ok: false; reason: string }> {
+  if (delegatedFrom === undefined || delegatedFrom === null) {
+    return { ok: true, value: undefined };
+  }
+  if (typeof delegatedFrom !== "string" || !delegatedFrom.trim()) {
+    return { ok: false, reason: "delegated_from must be a non-empty admin id" };
+  }
+  const value = delegatedFrom.trim();
+  const { findAdmin, loadAdminsConfig } = await import("../auth/admins-store.js");
+  let principal;
+  try {
+    principal = findAdmin(await loadAdminsConfig(), value);
+  } catch {
+    return { ok: false, reason: "delegated_from cannot be verified (admins config unreadable)" };
+  }
+  if (!principal) return { ok: false, reason: `delegated_from '${value}' is not a known admin id` };
+  if (principal.enabled === false) {
+    return { ok: false, reason: `delegated_from '${value}' refers to a disabled admin` };
+  }
+  return { ok: true, value };
 }
 
 async function readAccessYaml(projectRoot: string): Promise<{ config: YamlAccessConfig; raw: string; version: string }> {
@@ -1331,7 +1392,16 @@ export function registerAgentRoutes(app: FastifyInstance) {
     Body: {
       dryRun?: boolean;
       override?: AccessGovernanceOverrideRequest;
-      agent: { id: string; name: string; note?: string; role?: string; roles?: string[]; allow?: unknown }
+      agent: {
+        id: string;
+        name: string;
+        note?: string;
+        role?: string;
+        roles?: string[];
+        allow?: unknown;
+        /** L25-16 — 委托人（`admins.yaml` 中的管理员 id）。 */
+        delegated_from?: string;
+      }
     };
   }>("/api/admin/agents", async (request, reply) => {
     const dryRun = request.body?.dryRun !== false;
@@ -1366,13 +1436,23 @@ export function registerAgentRoutes(app: FastifyInstance) {
       return reply.status(409).send({ ok: false, error: { code: "AGENT_ID_TAKEN", message: `Agent id '${agentInput.id}' already exists` } });
     }
 
+    // L25-16 / G13 — 建立委托、或授予触及控制面可达范围的角色 ⇒ 必须 owner。
+    const delegatedFrom = await validateDelegatedFrom(agentInput.delegated_from);
+    if (!delegatedFrom.ok) {
+      return reply.status(400).send({ ok: false, error: { code: "INVALID_DELEGATED_FROM", message: delegatedFrom.reason } });
+    }
+    if (delegatedFrom.value || rolesTouchControlPlane(config.roles, validatedRoles.ids)) {
+      if (!(await requireOwnerForOps(request, reply, "仅所有者可为 Agent 建立委托或授予控制面能力"))) return;
+    }
+
     const newUser: YamlUser = {
       id: agentInput.id,
       name: agentInput.name,
       note: agentInput.note,
       enabled: true,
       tokens: [],
-      roles: validatedRoles.ids
+      roles: validatedRoles.ids,
+      ...(delegatedFrom.value ? { delegated_from: delegatedFrom.value } : {})
     };
     const newConfig: YamlAccessConfig = {
       ...config,
@@ -1503,6 +1583,8 @@ export function registerAgentRoutes(app: FastifyInstance) {
         id?: unknown;
         /** Spec 100 — set Agent Constraints; `null` clears the key. */
         constraints?: unknown;
+        /** L25-16 — set / change / revoke the delegation principal. `null` revokes. */
+        delegated_from?: string | null;
       };
     };
   }>("/api/admin/agents/:userId", async (request, reply) => {
@@ -1558,12 +1640,44 @@ export function registerAgentRoutes(app: FastifyInstance) {
         error: { code: "LEGACY_WILDCARD_AGENT_REQUIRES_ROLE", message: "Assign a role before re-enabling a legacy wildcard agent" }
       });
     }
+
+    // L25-16 / G13 — 委托与控制面可达范围的管理面门禁。
+    //   ① 设置 / 修改 / 撤销 `delegated_from` ⇒ owner；
+    //   ② 变更 Agent 的 `role` / `roles` 且触及控制面可达范围 ⇒ owner；
+    //   ③ 已有委托的 Agent 变更角色集 ⇒ owner（否则 operator 可借委托链取得 owner 能力）。
+    const delegatedPatchTouched = bodyHasOwn(patch, "delegated_from");
+    if (delegatedPatchTouched) {
+      if (!(await requireOwnerForOps(request, reply, "仅所有者可设置、修改或撤销委托（delegated_from）"))) return;
+    }
+    if (parsedRoles.touched) {
+      const resolvedExisting = resolveRoleIds(existingUser);
+      const existingRoleIds = resolvedExisting.ok ? resolvedExisting.roleIds : [];
+      const touchesControlPlane =
+        rolesTouchControlPlane(existingRoles, existingRoleIds)
+        || rolesTouchControlPlane(config.roles, nextRoleIds);
+      if (touchesControlPlane || Boolean(existingUser.delegated_from)) {
+        if (!(await requireOwnerForOps(request, reply, "仅所有者可变更影响控制面可达范围的角色"))) return;
+      }
+    }
+    let nextDelegatedFrom = existingUser.delegated_from;
+    if (delegatedPatchTouched) {
+      const validated = await validateDelegatedFrom(patch.delegated_from === null ? undefined : patch.delegated_from);
+      if (!validated.ok) {
+        return reply.status(400).send({ ok: false, error: { code: "INVALID_DELEGATED_FROM", message: validated.reason } });
+      }
+      nextDelegatedFrom = validated.value;
+    }
+
     const updatedUser: YamlUser = {
       ...existingUser,
       ...(patch.name !== undefined ? { name: patch.name } : {}),
       ...(patch.note !== undefined ? { note: patch.note } : {}),
       ...(patch.enabled !== undefined ? { enabled: patch.enabled } : {})
     };
+    if (delegatedPatchTouched) {
+      if (nextDelegatedFrom) updatedUser.delegated_from = nextDelegatedFrom;
+      else delete updatedUser.delegated_from;
+    }
     if (parsedRoles.touched && !("error" in parsedRoles)) applyRoleSet(updatedUser, nextRoleIds);
 
     const patchHasConstraints = bodyHasOwn(patch, "constraints");

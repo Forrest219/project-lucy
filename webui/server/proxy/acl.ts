@@ -40,6 +40,14 @@ import {
   type RowPolicyTemplateCatalog,
   type RowPolicyTemplateSelectorShape
 } from "../admin/row-policy-templates.js";
+// L25-16 — 控制面工具登记表（工具名单 / 适用域的唯一事实源）。
+// 本模块不得反向 import `ops/*` 中除 `control-plane.js` 与 `ops-grants.js` 之外的文件：
+// 那两个文件不依赖 acl.ts，导入不会形成循环。
+import {
+  CONTROL_PLANE_TOOL_NAMES,
+  isControlPlaneTool
+} from "../ops/control-plane.js";
+import { collectOpsGrants, normalizeOpsGrant, type OpsGrant } from "../ops/ops-grants.js";
 
 export interface AclDecision {
   allowed: boolean;
@@ -51,7 +59,13 @@ export interface AclDecision {
 /** AC-P0 Spec 98 §4.3 — bumps with classification table changes; feeds policyVersion (WP-I5). */
 export const TOOL_CLASSIFICATION_VERSION = "ac-p0-cls-1";
 
-export type ToolClass = "AbsoluteDeny" | "DataPlane" | "Meta";
+/**
+ * L25-16 — `ControlPlane` 是第四类工具（Spec §3.1 / G1）。
+ *
+ * 控制面工具走**独立于数据面**的授权维度（`role.allow.ops`），既不要求数据面能力，
+ * 也不能被 `allow.tools` 授予。
+ */
+export type ToolClass = "AbsoluteDeny" | "DataPlane" | "Meta" | "ControlPlane";
 
 /** Spec 98 §4.2 AbsoluteDeny — code baseline; YAML cannot remove (U-DENY-01). */
 export const ABSOLUTE_DENY_TOOLS = [
@@ -93,6 +107,8 @@ export const META_TOOLS = [
 const ABSOLUTE_DENY_TOOL_SET = new Set<string>(ABSOLUTE_DENY_TOOLS);
 const DATA_PLANE_TOOL_SET = new Set<string>(DATA_PLANE_TOOLS);
 const META_TOOL_SET = new Set<string>(META_TOOLS);
+/** L25-16 — 控制面工具集合（与 `ops/control-plane.ts` 的登记表同源）。 */
+const CONTROL_PLANE_TOOL_SET = new Set<string>(CONTROL_PLANE_TOOL_NAMES);
 
 /**
  * Business context tools (Wiki / Skill discover + read channels). Spec §4.2: a channel is
@@ -109,14 +125,18 @@ const CONTEXT_TOOL_SET = new Set<string>(CONTEXT_TOOLS);
 
 export function classifyTool(toolName: string): ToolClass {
   if (ABSOLUTE_DENY_TOOL_SET.has(toolName)) return "AbsoluteDeny";
+  // L25-16 — 控制面先于数据面判定：控制面工具不得被 `lucy_` 前缀分支误判为数据面。
+  if (CONTROL_PLANE_TOOL_SET.has(toolName)) return "ControlPlane";
   if (DATA_PLANE_TOOL_SET.has(toolName)) return "DataPlane";
   if (META_TOOL_SET.has(toolName)) return "Meta";
   return "AbsoluteDeny"; // unclassified → fail-closed
 }
 
-/** Returns deny reason when tool is AbsoluteDeny baseline or unclassified; undefined if DataPlane/Meta. */
+/** Returns deny reason when tool is AbsoluteDeny baseline or unclassified; undefined if DataPlane/Meta/ControlPlane. */
 export function absoluteDenyOrUnclassifiedReason(toolName: string): string | undefined {
   if (ABSOLUTE_DENY_TOOL_SET.has(toolName)) return `tool_absolute_deny:${toolName}`;
+  // L25-16 — 控制面工具已登记，不是「未分类」。
+  if (CONTROL_PLANE_TOOL_SET.has(toolName)) return undefined;
   if (!DATA_PLANE_TOOL_SET.has(toolName) && !META_TOOL_SET.has(toolName)) {
     return `tool_unclassified:${toolName}`;
   }
@@ -132,10 +152,13 @@ const DEFAULT_DENY_TOOLS = [
   "sl_read_source"
 ] as const;
 
-const DEFAULT_KNOWN_TOOLS = [
+export const DEFAULT_KNOWN_TOOLS = [
   ...ABSOLUTE_DENY_TOOLS,
   ...DATA_PLANE_TOOLS,
-  ...META_TOOLS
+  ...META_TOOLS,
+  // L25-16 — 控制面工具同样是「已登记工具」，必须在 known_tools 里，
+  // 否则 `allowedToolNames` 的 `policy.knownTools.has(tool)` 会把它们全部藏掉。
+  ...CONTROL_PLANE_TOOL_NAMES
 ] as const;
 
 const DEFAULT_TABLE_TOUCHING_TOOLS = [
@@ -197,6 +220,41 @@ function aclPolicy(config: AccessConfig): AclPolicy {
     sensitiveMetadataTools: new Set(mergedConfigList(defaults.sensitive_metadata_tools, DEFAULT_SENSITIVE_METADATA_TOOLS)),
     sensitiveTablePrefixes: mergedConfigList(defaults.sensitive_table_prefixes, DEFAULT_SENSITIVE_TABLE_PREFIXES, { normalize: true })
   };
+}
+
+// ─── L25-16 控制面授权维度（Spec §3.2.1 / §3.2.2） ─────────────────────────
+
+/**
+ * 读取一个角色的 `allow.ops` grant 列表。
+ *
+ * ⚠️ 只读 `role.allow.ops`。旧式 `user.allow` 直配（`hasLegacyDirectAllow`）
+ * **不获得任何 ops 授权**（Spec §3.2.2 规则 3）。
+ *
+ * 非法 grant（`*` 通配、域词汇非法、连接域类型非法）**整条丢弃**而不是让整个角色编译失败：
+ * 一条写错的 grant 只能让它自己不生效，不得连带关停该 Agent 的全部权限。
+ */
+function roleOpsGrants(role: { allow?: { ops?: unknown } } | undefined): OpsGrant[] {
+  const raw = role?.allow?.ops;
+  if (!Array.isArray(raw)) return [];
+  const grants: OpsGrant[] = [];
+  for (const item of raw) {
+    const normalized = normalizeOpsGrant(item);
+    if (!normalized.ok) continue;
+    grants.push(normalized.value);
+  }
+  return grants;
+}
+
+/** 角色上显式授予的控制面工具名（`allow.ops[].tools` 的并集）。 */
+function roleOpsToolNames(role: { allow?: { ops?: unknown } } | undefined): string[] {
+  const names = new Set<string>();
+  for (const grant of roleOpsGrants(role)) {
+    for (const tool of grant.tools) {
+      // 只有登记在案的控制面工具才算授予；未知工具名一律忽略（fail-closed）。
+      if (isControlPlaneTool(tool)) names.add(tool);
+    }
+  }
+  return [...names].sort();
 }
 
 // ─── Canonical Source Map: (connectionId, sourceName) / (connectionId, physicalTable) ─
@@ -712,6 +770,20 @@ export interface EffectivePermissions {
   capabilities: EffectiveCapability[];
   /** Spec 98 §5.1 EffectiveMetaTools */
   metaTools: string[];
+  /**
+   * L25-16 — 控制面工具授予集合（`role.allow.ops[].tools` 的并集）。
+   *
+   * 与数据面 `tools` **完全独立**：出现在这里不代表有数据面能力，反之亦然。
+   * 旧式 `user.allow` 直配的用户恒为空集（Spec §3.2.2 规则 3）。
+   */
+  opsTools: string[];
+  /**
+   * L25-16 — 控制面 grant 全集（多角色并集）。
+   *
+   * 逐对象授权判定（Spec §3.2.2 规则 4）需要 grant 的**完整**三元组
+   * （工具 / 域 / 连接），`opsTools` 只有工具名，不够用。
+   */
+  opsGrants: OpsGrant[];
   /** Per-role Meta grants, retained so Skill audience and channel grants cannot be stitched across Roles. */
   roleMetaTools?: Record<string, string[]>;
   capabilityDigest: string;
@@ -826,7 +898,10 @@ function makePermissions(input: Omit<EffectivePermissions, "snapshotHash">): Eff
     legacyAllow: input.legacyAllow,
     roleMetaTools: input.roleMetaTools ?? null,
     agentConstraintsBySource: input.agentConstraintsBySource ?? null,
-    finalRowsBySource: input.finalRowsBySource ?? null
+    finalRowsBySource: input.finalRowsBySource ?? null,
+    // L25-16 — 控制面授予参与快照摘要：授予变化必须让快照失效。
+    opsTools: input.opsTools ?? [],
+    opsGrants: input.opsGrants ?? []
   };
   return {
     ...input,
@@ -1041,6 +1116,10 @@ interface CompiledRole {
   dataPlaneTools: string[];
   metaTools: string[];
   deniedTools: string[];
+  /** L25-16 — 该角色通过 `allow.ops` 授予的控制面工具。 */
+  opsTools: string[];
+  /** L25-16 — 该角色的控制面 grant 全集（逐对象授权判定需要完整三元组）。 */
+  opsGrants: OpsGrant[];
   sources: EffectiveSource[];
   /** Per (connectionId, physicalTable) row grant for this Role. */
   sourceGrants: Map<string, RowGrant>;
@@ -1237,7 +1316,10 @@ async function compileRole(
   }
 
   const roleTools = configList(role.allow.tools, []);
-  if (roleTools.length === 0 || roleTools.includes("*")) {
+  // L25-16 — 控制面维度与数据面维度相互独立：只声明 `allow.ops` 的**纯控制面角色**
+  // 必须能编译成功（`allow.tools` 为空是合法的）。两个维度都为空才是无效声明。
+  const hasOpsDimension = Array.isArray(role.allow.ops) && role.allow.ops.length > 0;
+  if ((roleTools.length === 0 && !hasOpsDimension) || roleTools.includes("*")) {
     recordStep({ status: "failed", code: "role_resolution_failed", stage: "role_declaration" });
     return failed;
   }
@@ -1245,6 +1327,12 @@ async function compileRole(
     if (!policy.knownTools.has(tool)) {
       recordStep({ status: "failed", code: "role_resolution_failed", stage: "tool_classification" });
       return failed;
+    }
+    // L25-16 — 控制面工具**只能**由 `allow.ops` 授予；写进 `allow.tools` 是两个平面的
+    // 混用，必须 fail-closed（否则 `allow.tools` 会被当成控制面授权的旁路）。
+    if (isControlPlaneTool(tool)) {
+      recordStep({ status: "failed", code: "role_resolution_failed:control_plane_tool_in_allow_tools", stage: "tool_classification" });
+      return { ok: false, reason: `role_resolution_failed:${roleId}:control_plane_tool_in_allow_tools` };
     }
     const absoluteOrUnclassified = absoluteDenyOrUnclassifiedReason(tool);
     if (absoluteOrUnclassified) {
@@ -1450,6 +1538,8 @@ async function compileRole(
       dataPlaneTools: dataPlane,
       metaTools: meta,
       deniedTools: denied,
+      opsTools: roleOpsToolNames(role),
+      opsGrants: roleOpsGrants(role),
       sources: [...new Map(sourceMatches.map((source) => [`${source.connectionId}:${source.sourceName}`, source])).values()],
       sourceGrants,
       declaredConnections: catalogBound ? effectiveConnections : declaredConnections,
@@ -1570,6 +1660,9 @@ async function resolveEffectivePermissions(
         capabilities,
         metaTools: uniqueSorted(meta),
         roleMetaTools: { __legacy__: uniqueSorted(meta) },
+        // L25-16 — 旧式 `user.allow` 直配**不获得任何 ops 授权**（Spec §3.2.2 规则 3）。
+        opsTools: [],
+        opsGrants: [],
         capabilityDigest: capabilityDigest(capabilities),
         sourceMapVersion,
         rolesJson: null,
@@ -1676,6 +1769,10 @@ async function resolveEffectivePermissions(
   const roleMetaTools = Object.fromEntries(
     compiledRoles.map((role) => [role.roleId, uniqueSorted(role.metaTools)])
   );
+  // L25-16 — 多角色的 ops grant 取并集（与数据面工具的多角色语义一致）。
+  const opsTools = uniqueSorted(compiledRoles.flatMap((role) => role.opsTools));
+  // L25-16 — 多角色的 ops grant 取并集；判定仍逐条 grant、逐个对象进行（禁止跨 grant 拼接）。
+  const opsGrants = compiledRoles.flatMap((role) => role.opsGrants);
   const tools = uniqueSorted([...capabilityTools, ...metaTools]);
   const sources = sourcesFromCapabilities(capabilities);
   const tables = uniqueSorted(sources.map((source) => source.table));
@@ -1694,6 +1791,9 @@ async function resolveEffectivePermissions(
     sources,
     capabilities,
     roleMetaTools,
+    // L25-16 — 控制面授予在解析结果里可见（管理面可核对「授了什么」）。
+    opsTools,
+    opsGrants,
     sourceMapVersion,
     agentConstraintsBySource: agentConstraintsBySource ?? null,
     finalRowsBySource
@@ -1710,6 +1810,8 @@ async function resolveEffectivePermissions(
       capabilities,
       metaTools,
       roleMetaTools,
+      opsTools,
+      opsGrants,
       capabilityDigest: capabilityDigest(capabilities),
       sourceMapVersion,
       rolesJson,
@@ -2252,13 +2354,19 @@ export async function allowedToolNames(identity: Identity): Promise<string[]> {
     ? [...policy.knownTools]
     : resolved.permissions.tools;
 
+  // L25-16 — 控制面授予独立于数据面：可见性只看 `allow.ops`，不要求任何数据面能力。
+  const opsTools = resolved.permissions.opsTools ?? [];
+
   const capabilityTools = new Set(resolved.permissions.capabilities.map((capability) => capability.tool));
 
-  const listed = uniqueSorted(tools.filter((tool) => {
+  const listed = uniqueSorted([...tools, ...opsTools].filter((tool) => {
     if (absoluteDenyOrUnclassifiedReason(tool)) return false;
     if (!policy.knownTools.has(tool) || policy.denyTools.has(tool)) return false;
     // Spec 98 §8.5 — global degrade hides DataPlane / data Meta from listTools; Wiki may remain.
     if (runtime.degradedGlobal && isDegradedBlockedTool(tool)) return false;
+    // ⚠️ 控制面分支必须**先于** `lucy_` 前缀分支：控制面工具名以 `lucy_ops_` 开头，
+    //    若先落到前缀分支会被误要求数据面能力（Spec §3.1 规则 2 / G12）。
+    if (CONTROL_PLANE_TOOL_SET.has(tool)) return opsTools.includes(tool);
     const wildcardTables = resolved.permissions.tables.includes("*");
     // P-GATE-03: DataPlane visible iff ≥1 capability — except legacy tables:* (capability list empty by design).
     if (DATA_PLANE_TOOL_SET.has(tool)) return wildcardTables || capabilityTools.has(tool);
@@ -2906,6 +3014,20 @@ export async function authorizeAndRewrite(
 
   const resolved = runtime.byUserId.get(identity.userId)
     ?? await resolveEffectivePermissions(identity, config, policy, { sourceMap: runtime.sourceMap });
+
+  // ─── L25-16 控制面门禁（Spec §6.1 步骤 5 / 7） ─────────────────────────
+  // 控制面工具**不进入**数据面的能力 / 表级判定：它们的授权维度是 `role.allow.ops`。
+  // 本分支只做「工具级」判定（是否被 allow.ops 授予）；**逐对象**判定由控制面工具
+  // 自身在解析出目标连接后完成（Spec §3.2.2 规则 4）。
+  if (CONTROL_PLANE_TOOL_SET.has(toolName)) {
+    if (!resolved.ok) return { allowed: false, reason: resolved.reason };
+    const opsTools = resolved.permissions.opsTools ?? [];
+    if (!opsTools.includes(toolName)) {
+      return { allowed: false, reason: `ops_not_granted:${toolName}` };
+    }
+    return { allowed: true };
+  }
+
   if (CONTEXT_TOOL_SET.has(toolName)) {
     // Spec §4.1/4.2: a degraded or unresolvable policy cannot prove an ACL → deny; legacy
     // direct-allow has no formal Role → `context_role_required`; otherwise the tool must be

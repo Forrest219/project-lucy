@@ -9,7 +9,7 @@ import {
 } from "../mcp-runtime-state.js";
 import { readProject, resolveProjectRoot } from "../project.js";
 import { effectivePermissions, getPolicyRuntimeStatus, isPolicyRuntimeHealthy } from "../proxy/acl.js";
-import { recordConfigChange } from "./audit.js";
+import { recordConfigChange, type ConfigAuditActorType } from "./audit.js";
 import {
   readReloadState,
   reloadExecutionRuntime,
@@ -314,7 +314,7 @@ type ReloadAuditOutcome =
  */
 function reloadAuditActor(request: FastifyRequest): {
   actor: string;
-  actorType: "ui_admin" | "batch_job" | "system" | "anonymous";
+  actorType: ConfigAuditActorType;
   actorIp?: string;
   requestId?: string;
   sessionId?: string | null;

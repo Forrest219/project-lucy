@@ -281,7 +281,17 @@ const AUDIT_EXPORT_TIMEZONE = "Asia/Shanghai";
 let auditExportSequence = 0;
 
 export type ConfigAuditAssetKind = "governance" | "semantic" | "wiki" | "eval" | "publish" | "skill";
-export type ConfigAuditActorType = "ui_admin" | "batch_job" | "system" | "anonymous";
+/**
+ * `mcp_control_plane` — L25-16 控制面工具（`lucy_ops_*`）的执行主体。
+ * 与 `ui_admin` 分开：控制面写入由 MCP 会话发起，审计归因需要区分「人操作 UI」
+ * 与「Agent 调用控制面工具」。
+ */
+export type ConfigAuditActorType =
+  | "ui_admin"
+  | "batch_job"
+  | "system"
+  | "anonymous"
+  | "mcp_control_plane";
 export type ConfigAuditWriteStatus = "pending" | "committed" | "failed" | "rolled_back";
 
 function ensureColumn(database: Database.Database, table: string, column: string, definition: string): void {
@@ -533,6 +543,8 @@ export async function getAuditDb(): Promise<Database.Database> {
   ensureColumn(db, "config_change_log", "write_status", "TEXT NOT NULL DEFAULT 'committed'");
   ensureColumn(db, "config_change_log", "error_reason", "TEXT");
   ensureColumn(db, "config_change_log", "actor_ip", "TEXT");
+  // L25-16 — 控制面委托归因：记录本次调用的委托人（`users[].delegated_from`）。
+  ensureColumn(db, "config_change_log", "delegated_from", "TEXT");
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_ccl_asset_kind_ts ON config_change_log(asset_kind, ts);
     CREATE UNIQUE INDEX IF NOT EXISTS uq_ccl_idempotency ON config_change_log(idempotency_key);
@@ -751,7 +763,7 @@ function serializeAuditSummary(changeType: string, value: unknown): string | nul
   return value === undefined ? null : JSON.stringify(redactAuditSummary(changeType, value));
 }
 
-export async function recordConfigChange(input: {
+export type ConfigChangeInput = {
   filePath: string;
   changeType: string;
   actor?: string;
@@ -769,8 +781,21 @@ export async function recordConfigChange(input: {
   diff?: string;
   requestId?: string;
   sessionId?: string | null;
-}): Promise<number | undefined> {
-  const database = await getAuditDb();
+  /** L25-16 — 控制面委托的委托人（`users[].delegated_from`）。 */
+  delegatedFrom?: string | null;
+};
+
+/**
+ * L25-16 / G34 — `config_change_log` 的**同步**写入核心。
+ *
+ * 暴露为同步函数，是为了让「本 attempt 的幂等认领 + 审计插入」能落在
+ * `audit.sqlite` 的**同一次** `db.transaction()` 里（better-sqlite3 的 transaction
+ * 回调必须是同步函数）。
+ */
+export function insertConfigChangeRow(
+  database: Database.Database,
+  input: ConfigChangeInput
+): number | undefined {
   const oldSummaryJson = serializeAuditSummary(input.changeType, input.oldSummary);
   const newSummaryJson = serializeAuditSummary(input.changeType, input.newSummary);
   const redactedDiff = input.diff ? redactAuditDiff(input.diff) : undefined;
@@ -801,9 +826,9 @@ export async function recordConfigChange(input: {
 
   const result = database.prepare(`
     INSERT INTO config_change_log
-      (ts, actor, actor_type, actor_ip, source, session_id, file_path, change_type, asset_kind, operation, target_id, old_summary, new_summary, diff, request_id, idempotency_key, write_status, error_reason)
+      (ts, actor, actor_type, actor_ip, source, session_id, file_path, change_type, asset_kind, operation, target_id, old_summary, new_summary, diff, request_id, idempotency_key, write_status, error_reason, delegated_from)
     VALUES
-      (@ts, @actor, @actor_type, @actor_ip, @source, @session_id, @file_path, @change_type, @asset_kind, @operation, @target_id, @old_summary, @new_summary, @diff, @request_id, @idempotency_key, @write_status, @error_reason)
+      (@ts, @actor, @actor_type, @actor_ip, @source, @session_id, @file_path, @change_type, @asset_kind, @operation, @target_id, @old_summary, @new_summary, @diff, @request_id, @idempotency_key, @write_status, @error_reason, @delegated_from)
     ON CONFLICT(idempotency_key) DO NOTHING
   `).run({
     ts: new Date().toISOString(),
@@ -823,7 +848,8 @@ export async function recordConfigChange(input: {
     request_id: input.requestId ?? null,
     idempotency_key: stableIdempotencyKey,
     write_status: input.writeStatus ?? "committed",
-    error_reason: input.errorReason ? redactAuditText(input.errorReason) : null
+    error_reason: input.errorReason ? redactAuditText(input.errorReason) : null,
+    delegated_from: input.delegatedFrom ?? null
   });
   if (typeof result.lastInsertRowid === "number" && result.lastInsertRowid > 0) return result.lastInsertRowid;
   const existing = database.prepare(
@@ -832,15 +858,28 @@ export async function recordConfigChange(input: {
   return existing?.id;
 }
 
-export async function updateConfigChangeStatus(input: {
+export async function recordConfigChange(input: ConfigChangeInput): Promise<number | undefined> {
+  const database = await getAuditDb();
+  return insertConfigChangeRow(database, input);
+}
+
+export type ConfigChangeStatusInput = {
   id: number;
   writeStatus: ConfigAuditWriteStatus;
   errorReason?: string;
   diff?: string | null;
   oldSummary?: unknown;
   newSummary?: unknown;
-}): Promise<void> {
-  const database = await getAuditDb();
+};
+
+/**
+ * L25-16 / G34 — `config_change_log` 的**同步**终态更新核心（按 `auditId` 更新既有行，
+ * 不重插——同键重插会被 `ON CONFLICT(idempotency_key) DO NOTHING` 静默丢弃）。
+ */
+export function updateConfigChangeRow(
+  database: Database.Database,
+  input: ConfigChangeStatusInput
+): void {
   const row = database.prepare("SELECT change_type FROM config_change_log WHERE id = ?").get(input.id) as
     | { change_type: string }
     | undefined;
@@ -867,6 +906,11 @@ export async function updateConfigChangeStatus(input: {
     old_summary: serializeAuditSummary(changeType, input.oldSummary),
     new_summary: serializeAuditSummary(changeType, input.newSummary)
   });
+}
+
+export async function updateConfigChangeStatus(input: ConfigChangeStatusInput): Promise<void> {
+  const database = await getAuditDb();
+  updateConfigChangeRow(database, input);
 }
 
 /**

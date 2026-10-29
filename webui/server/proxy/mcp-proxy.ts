@@ -50,6 +50,10 @@ import { loadAllSkillsFresh, getSkillByUri, getSkillByName } from "../skills/loa
 import type { SkillAsset } from "../skills/types.js";
 import { canAccessSkill, filterAccessibleSkills, type SkillAclDecision, type SkillAclAction } from "./skill-acl.js";
 import { readProject, resolveProjectRoot } from "../project.js";
+// L25-16 — 控制面工具由代理**本地**服务，绝不转发给 KTX。
+// 工具名单与描述来自 `ops/control-plane.ts`（单一事实源）。
+import { isControlPlaneTool } from "../ops/control-plane.js";
+import { invokeOpsTool, opsToolDescriptors } from "../ops/ops-tools.js";
 import { listSources } from "../semantic-layer.js";
 import { loadContentPaths } from "../paths.js";
 import { readKtxYamlDigest, recordExecutionRuntimeObservation } from "../mcp-runtime-state.js";
@@ -1174,6 +1178,11 @@ function localToolBuilders(): Array<{ name: string; build: () => Record<string, 
   if (process.env.LUCY_ENABLE_QUESTION_TOOL !== "false") {
     builders.push({ name: "lucy_begin_question", build: lucyBeginQuestionTool });
   }
+  // L25-16 — 控制面工具（`lucy_ops_*`）同样由代理本地服务。可见性只取决于
+  // `role.allow.ops`（`allowedToolNames` 的控制面分支），**不要求任何数据面能力**。
+  for (const descriptor of opsToolDescriptors()) {
+    builders.push({ name: descriptor.name, build: () => descriptor });
+  }
   return builders;
 }
 
@@ -1459,7 +1468,14 @@ function validateLucyToolArgs(toolName: string, args: unknown): string | undefin
     toolName === "lucy_catalog" ||
     toolName === "lucy_begin_question" ||
     toolName === "lucy_skill_search" ||
-    toolName === "lucy_skill_read"
+    toolName === "lucy_skill_read" ||
+    // L25-16 — 控制面工具的入参形状是 `{ targets: [...] }`，由控制面自己的
+    // 适配器校验（`parseTargets`）；数据面的 `connectionId` 规则不适用。
+    //
+    // 这里按**前缀**豁免（而不是按登记表）：登记表之外的 `lucy_ops_*` 也必须走
+    // 分类闸门（ACL → `tool_unclassified:<tool>`）得到准确的原因码，而不是先被
+    // 数据面的入参规则拦下、报出误导性的 `connection_required`。
+    toolName.startsWith("lucy_ops_")
   ) {
     return undefined;
   }
@@ -1897,6 +1913,41 @@ function passthroughBodyHeaders(upstream: IncomingMessage): Record<string, strin
   headers["content-type"] = upstream.headers["content-type"] ?? "application/json";
   return headers;
 }
+
+/**
+ * L25-16 — 控制面拒绝码中「**效果未发生**」的集合。
+ *
+ * 这些拒绝都发生在任何正式效果（文件写 / 幂等终态）之前，审计里必须记
+ * `notExecuted` 而不是 `failed`——否则「授权通过但没写成」会被误读成「执行失败」。
+ */
+const OPS_NO_EFFECT_DENIAL_CODES = new Set<string>([
+  "tool_not_control_plane",
+  "ops_agent_disabled",
+  "ops_idempotency_key_required",
+  "ops_plan_id_required",
+  "ops_confirm_digest_required",
+  "ops_grant_unmatched",
+  "ops_owner_delegation_required",
+  "ops_target_unresolvable",
+  "ops_plan_not_found",
+  "ops_plan_expired",
+  "ops_plan_digest_mismatch",
+  "ops_plan_actor_mismatch",
+  "ops_plan_tool_mismatch",
+  "ops_confirm_digest_mismatch",
+  "ops_plan_blocked",
+  "ops_plan_target_set_mismatch",
+  "ops_plan_param_target_mismatch",
+  "ops_group_subset_incomplete",
+  "ops_idempotency_conflict",
+  "ops_idempotency_actor_mismatch",
+  "ops_operation_recovery_required",
+  "ops_operation_pending_activation",
+  "ops_operation_in_flight",
+  "ops_operation_scope_mismatch",
+  "ops_state_corrupt",
+  "ops_claim_failed"
+]);
 
 function jsonRpcToolResult(requestId: string | number, text: string, options: { isError?: boolean } = {}): string {
   return JSON.stringify({
@@ -3687,6 +3738,83 @@ async function buildDenialRepairPayload(
         ? parsedRpc.params as Record<string, unknown>
         : undefined;
       if (params) params.arguments = record;
+    }
+    // L25-16 — 控制面工具分流：`lucy_ops_*` 由**代理本地**执行，
+    // 绝不转发给 KTX（KTX 不认识这些工具）。
+    //
+    // fail-closed 的两道闸：
+    // ① 上面的 ACL 判定已按 `role.allow.ops` 放行或拒绝；未在登记表里的
+    //    `lucy_ops_*`（例如 W-B 的 `lucy_ops_semantic_publish`）在 ACL 阶段
+    //    就被判为 `tool_unclassified:` 并拒绝，不会走到这里。
+    // ② 控制面自己的授权判定在 `invokeOpsTool` 内再做一次（工具级 + 逐对象）。
+    if (rpcMethod === "tools/call" && toolName && isControlPlaneTool(toolName)) {
+      const projectRoot = await resolveProjectRoot();
+      const opsArgs = toolArgs && typeof toolArgs === "object" && !Array.isArray(toolArgs)
+        ? (toolArgs as Record<string, unknown>)
+        : {};
+      const envelope = await invokeOpsTool({
+        toolName,
+        args: opsArgs,
+        userId: identity.userId,
+        projectRoot
+      });
+      const isError = envelope.ok === false;
+      const payload = envelope.ok ? envelope.data : envelope.error;
+      const responseBody = JSON.stringify({
+        jsonrpc: "2.0",
+        id: requestId,
+        result: {
+          ...(isError ? { isError: true } : {}),
+          content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
+          data: payload
+        }
+      });
+      res.writeHead(200, {
+        "content-type": "application/json",
+        "content-length": Buffer.byteLength(responseBody)
+      });
+      res.end(responseBody);
+      const errorDetail = envelope.ok ? undefined : envelope.error.code;
+      recordRequestAudit({
+        ts: new Date().toISOString(),
+        userId: identity.userId,
+        client: identity.client,
+        tool: toolName,
+        argsSummary,
+        ...queryMeta,
+        outcome: isError ? "error" : "ok",
+        errorDetail,
+        // 控制面信封是**观测到的事实**：ok 表示这次调用走到了执行与结算；
+        // 拒绝码若属于「效果发生前」的集合，则本次尝试**未执行**。
+        executionEvidence: executionEvidenceFromObservation({
+          authorizationAllowed: true,
+          ...(isError
+            ? (OPS_NO_EFFECT_DENIAL_CODES.has(envelope.error.code)
+              ? { notExecuted: true }
+              : { failed: true })
+            : { executed: true })
+        }),
+        durationMs: Date.now() - start,
+        responseBytes: Buffer.byteLength(responseBody),
+        requestId,
+        ...requestMeta,
+        ...(await auditMeta(identity, errorDetail ?? "ops_control_plane_call"))
+      });
+      recordMcpTraceForTool({
+        traceId,
+        identity,
+        toolName,
+        status: isError ? "error" : "ok",
+        startedAt: new Date(start).toISOString(),
+        turnId: requestMeta.lucyTurnId ?? null,
+        sessionId: requestMeta.lucySessionId ?? null,
+        requestId,
+        argsSummary,
+        allowed: true,
+        reason: errorDetail ?? "ops_control_plane_call",
+        policySource: "access_policy"
+      });
+      return;
     }
     // Count before local handlers return as well as before upstream dispatch.
     if (rpcMethod === "tools/call" && toolName && isQuestionDataTool(toolName) && questionBudgetEnabled()) {

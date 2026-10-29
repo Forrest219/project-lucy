@@ -32,6 +32,7 @@ import type {
 import { previewDiff } from "./diff";
 import { assertEndpointGate, type EndpointFlags } from "./connection-endpoint-gate.js";
 import { withKtxYamlWriteLock } from "./ktx-yaml-write-lock.js";
+import { withPublishCoordinator } from "./publish-coordinator.js";
 import type { ConnectionTestResult } from "./ktx";
 import { withDisplayWriteBarrier, type DisplayScope } from "./display-generation";
 import { connectionDeleteBlockText } from "../src/lib/deleteConnectionGuard.js";
@@ -783,7 +784,23 @@ export async function removeSchema(
 ): Promise<RemoveSchemaPreview | RemoveSchemaResult> {
   // Spec 174 §3.2 — the display barrier spans the whole confirmed transaction (incl. rollback).
   if (dryRun) return removeSchemaUnbarriered(root, connId, schema, dryRun, options);
-  return withDisplayWriteBarrier(KTX_YAML_DISPLAY_SCOPES, () => removeSchemaUnbarriered(root, connId, schema, dryRun, options));
+  // L25-16 N05 / F5-04 — the legacy Schema removal entry joins the SAME ktx.yaml write lock as
+  // the control-plane batch services. Its write set is wider than ktx.yaml (optional Manifest /
+  // Overlay deletion), so when it does delete semantic content files it also takes the publish
+  // window — the mandated order is
+  // `withKtxYamlWriteLock → withDisplayWriteBarrier → withPublishCoordinator → write`.
+  const deletesSemanticContent = Boolean(options.deleteManifest || options.deleteOverlays);
+  return withKtxYamlWriteLock(() =>
+    withDisplayWriteBarrier(KTX_YAML_DISPLAY_SCOPES, () =>
+      deletesSemanticContent
+        ? withPublishCoordinator(
+            "manifest_upload",
+            () => removeSchemaUnbarriered(root, connId, schema, dryRun, options),
+            { projectRoot: root }
+          )
+        : removeSchemaUnbarriered(root, connId, schema, dryRun, options)
+    )
+  );
 }
 
 async function removeSchemaUnbarriered(
@@ -944,12 +961,23 @@ async function removeSchemaUnbarriered(
     }
   }
 
-  await writeKtxYaml(root, mutator, { dryRun: false });
+  // L25-16 N05 / F5-04 — the caller already holds withKtxYamlWriteLock; re-entering it
+  // would self-wait. Use the existing `lockHeld: true` path.
+  await writeKtxYaml(root, mutator, { dryRun: false, lockHeld: true });
 
   const deletedFiles: string[] = [];
+  // L25-16 F5-04 — keep the pre-image of every deleted semantic content file so the
+  // deletion can be reversed / audited.
+  const deletedFilePreImages: Array<{ filePath: string; content: string }> = [];
 
   // Optional: delete manifest (safeRemove no-ops ENOENT).
   if (options.deleteManifest && hasManifest) {
+    deletedFilePreImages.push({
+      filePath: manifestPath,
+      content: await readFile(path.join(paths.semanticLayer, connId, "_schema", `${schema}.yaml`), "utf8").catch(
+        () => ""
+      )
+    });
     await safeRemove(paths, root, manifestPath);
     deletedFiles.push(manifestPath);
   }
@@ -957,6 +985,12 @@ async function removeSchemaUnbarriered(
   // Optional: delete overlays.
   if (options.deleteOverlays) {
     for (const overlayPath of overlayPaths) {
+      deletedFilePreImages.push({
+        filePath: overlayPath,
+        content: await readFile(path.join(paths.semanticLayer, connId, overlayPath.slice(overlayPath.lastIndexOf("/") + 1)), "utf8").catch(
+          () => ""
+        )
+      });
       await safeRemove(paths, root, overlayPath);
       deletedFiles.push(overlayPath);
     }
@@ -980,7 +1014,8 @@ async function removeSchemaUnbarriered(
     oldSchemas,
     newSchemas,
     removedEnabledTables,
-    deletedFiles
+    deletedFiles,
+    deletedFilePreImages
   };
 }
 

@@ -11,6 +11,9 @@ import {
   type EffectivePermissions
 } from "../proxy/acl.js";
 import { parseRowPolicyShape } from "../proxy/row-policy.js";
+// L25-16 — 控制面工具登记表（角色保存路径校验 `allow.ops` 用）。
+import { isControlPlaneTool, isOpsAssetKind, getOpsToolSpec } from "../ops/control-plane.js";
+import { requireOwnerForOps } from "../auth/guard.js";
 import { verifyRowPolicyPreviewConfirmation } from "../proxy/row-policy-preview.js";
 import { readAccessRecoveryState } from "../access-recovery.js";
 import { computeCandidateDigest } from "../config-digest.js";
@@ -468,6 +471,21 @@ function roleTemplateDiagnostics(config: YamlAccessConfig): {
   };
 }
 
+/**
+ * L25-16 / G13 — 该角色是否授予了 **owner-only** 的控制面工具。
+ *
+ * 授予 owner-only 能力必须与 owner 本身同级，因此角色写入路径需要 owner 门禁
+ * （Spec §3.2.2 规则 8）。W-A 的两个工具都不是 owner-only，此处按登记表通用判定。
+ */
+export function roleGrantsOwnerOnlyTool(role: YamlRole | undefined): boolean {
+  for (const grant of role?.allow?.ops ?? []) {
+    for (const tool of grant.tools) {
+      if (getOpsToolSpec(tool)?.ownerOnly) return true;
+    }
+  }
+  return false;
+}
+
 export function validateRoleShape(role: unknown): { ok: true; value: YamlRole } | { ok: false; reason: string } {
   if (!role || typeof role !== "object" || Array.isArray(role)) {
     return { ok: false, reason: "role must be an object" };
@@ -497,7 +515,9 @@ export function validateRoleShape(role: unknown): { ok: true; value: YamlRole } 
   }
   const allow = obj.allow as Record<string, unknown>;
   for (const key of Object.keys(allow)) {
-    if (key !== "connections" && key !== "tableSelectors" && key !== "tools" && key !== "source_scope") {
+    // L25-16 — `allow.ops` 必须放行：否则控制面授权无法通过正式角色保存路径落盘
+    // （Spec §3.2.1 / G3 / R12）。
+    if (key !== "connections" && key !== "tableSelectors" && key !== "tools" && key !== "source_scope" && key !== "ops") {
       return { ok: false, reason: `allow.${key} is not allowed` };
     }
   }
@@ -637,6 +657,70 @@ export function validateRoleShape(role: unknown): { ok: true; value: YamlRole } 
     return { ok: false, reason: "connections must be set when role uses table selectors, catalog_bound, or table-touching tools" };
   }
 
+  // L25-16 — 控制面 grant 校验（Spec §3.2.1 / §3.2.2 规则 2、4、5）。
+  let ops: NonNullable<YamlRole["allow"]>["ops"] | undefined;
+  if (allow.ops !== undefined) {
+    if (!Array.isArray(allow.ops)) {
+      return { ok: false, reason: "allow.ops must be an array" };
+    }
+    const built: NonNullable<YamlRole["allow"]>["ops"] = [];
+    for (const raw of allow.ops as Array<Record<string, unknown>>) {
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+        return { ok: false, reason: "allow.ops entry must be an object" };
+      }
+      for (const key of Object.keys(raw)) {
+        if (key !== "tools" && key !== "asset_kinds" && key !== "connections" && key !== "instance_scope") {
+          return { ok: false, reason: `allow.ops entry ${key} is not allowed` };
+        }
+      }
+      if (!Array.isArray(raw.tools) || raw.tools.length === 0
+        || raw.tools.some((item) => typeof item !== "string" || !item.trim())) {
+        return { ok: false, reason: "allow.ops tools must be a non-empty string array" };
+      }
+      const grantTools = (raw.tools as string[]).map((item) => item.trim()).filter(Boolean);
+      if (grantTools.includes("*")) {
+        return { ok: false, reason: "allow.ops tools must not contain '*'" };
+      }
+      for (const tool of grantTools) {
+        if (!isControlPlaneTool(tool)) {
+          return { ok: false, reason: `allow.ops tools contains unknown control-plane tool ${tool}` };
+        }
+      }
+      if (!Array.isArray(raw.asset_kinds) || raw.asset_kinds.length === 0
+        || raw.asset_kinds.some((item) => typeof item !== "string" || !item.trim())) {
+        return { ok: false, reason: "allow.ops asset_kinds must be a non-empty string array" };
+      }
+      const assetKinds = (raw.asset_kinds as string[]).map((item) => item.trim()).filter(Boolean);
+      for (const kind of assetKinds) {
+        if (!isOpsAssetKind(kind)) {
+          return { ok: false, reason: `allow.ops asset_kinds contains unknown kind ${kind}` };
+        }
+      }
+      let grantConnections: string[] | undefined;
+      if (raw.connections !== undefined) {
+        if (!Array.isArray(raw.connections)
+          || raw.connections.some((item) => typeof item !== "string")) {
+          return { ok: false, reason: "allow.ops connections must be a string array" };
+        }
+        grantConnections = (raw.connections as string[]).map((item) => item.trim()).filter(Boolean);
+      }
+      let instanceScope: "read_only" | undefined;
+      if (raw.instance_scope !== undefined) {
+        if (raw.instance_scope !== "read_only") {
+          return { ok: false, reason: "allow.ops instance_scope must be 'read_only' when set" };
+        }
+        instanceScope = "read_only";
+      }
+      built.push({
+        tools: grantTools,
+        asset_kinds: assetKinds,
+        ...(grantConnections ? { connections: grantConnections } : {}),
+        ...(instanceScope ? { instance_scope: instanceScope } : {})
+      });
+    }
+    ops = built;
+  }
+
   return {
     ok: true,
     value: {
@@ -646,7 +730,8 @@ export function validateRoleShape(role: unknown): { ok: true; value: YamlRole } 
         connections,
         source_scope: sourceScope,
         tableSelectors,
-        tools
+        tools,
+        ops
       }
     }
   };
@@ -1030,6 +1115,10 @@ export function registerRoleRoutes(app: FastifyInstance) {
     if (config.roles?.[roleId]) {
       return reply.status(409).send({ ok: false, error: { code: "ROLE_ID_TAKEN", message: `role '${roleId}' already exists` } });
     }
+    // L25-16 / G13 — 授予 owner-only 控制面工具必须 owner。
+    if (roleGrantsOwnerOnlyTool(validated.value)) {
+      if (!(await requireOwnerForOps(request, reply, "仅所有者可授予 owner-only 控制面工具"))) return;
+    }
     const contextGuard = await guardRoleIdForCreate(roleId, request.body?.acknowledgeContextReferences === true);
     if (contextGuard) {
       return reply.status(contextGuard.status).send({
@@ -1266,6 +1355,10 @@ export function registerRoleRoutes(app: FastifyInstance) {
         return reply.status(400).send({ ok: false, error: { code: "TEMPLATE_ROLE_READONLY", message: "template roles are read-only" } });
       }
       return reply.status(404).send({ ok: false, error: { code: "ROLE_NOT_FOUND", message: `role '${request.params.roleId}' not found` } });
+    }
+    // L25-16 / G13 — 既有角色若已授予 owner-only 控制面工具，其任何修改都必须是 owner 动作。
+    if (roleGrantsOwnerOnlyTool(existing)) {
+      if (!(await requireOwnerForOps(request, reply, "仅所有者可修改含 owner-only 控制面工具的角色"))) return;
     }
     // The write entry point that can change a row policy consumes the preview
     // confirmation (spec §14.2.1). The confirmation is REQUIRED whenever the
@@ -1532,7 +1625,13 @@ export function registerRoleRoutes(app: FastifyInstance) {
   // DELETE /api/admin/roles/:roleId — delete yaml role, blocked if in use
   app.delete<{
     Params: { roleId: string };
-    Body?: { dryRun?: boolean; version?: string; override?: AccessGovernanceOverrideRequest };
+    Body?: {
+      dryRun?: boolean;
+      version?: string;
+      override?: AccessGovernanceOverrideRequest;
+      /** Spec §14.2.1 — required when the Role being deleted carries a row policy. */
+      rowPolicyConfirmation?: unknown;
+    };
   }>(
     "/api/admin/roles/:roleId",
     async (request, reply) => {
@@ -1582,6 +1681,33 @@ export function registerRoleRoutes(app: FastifyInstance) {
         });
       }
       const existingRole = config.roles[request.params.roleId];
+      if (!dryRun && roleCarriesRowPolicy(existingRole)) {
+        const fresh = await readAccessYaml(projectRoot);
+        if (request.body?.version && request.body.version !== fresh.version) {
+          return reply.status(409).send({
+            ok: false,
+            error: { code: "VERSION_CONFLICT", message: "yaml has been modified by another source, please refresh" }
+          });
+        }
+        const freshConfig = (await import("yaml")).parse(fresh.raw) as YamlAccessConfig;
+        const verification = await verifyRowPolicyPreviewConfirmation({
+          roleId: request.params.roleId,
+          removeRole: true,
+          confirmation: request.body?.rowPolicyConfirmation,
+          baseConfig: freshConfig as never,
+          baseAccessVersion: fresh.version
+        });
+        if (!verification.ok) {
+          return reply.status(409).send({
+            ok: false,
+            error: {
+              code: "ROW_POLICY_PREVIEW_REQUIRED",
+              message: verification.message ?? "最终行约束预览确认缺失或已失效",
+              detail: { reason: verification.reason, ...(verification.detail ?? {}) }
+            }
+          });
+        }
+      }
       const newConfig: YamlAccessConfig = {
         ...config,
         roles: Object.fromEntries(
@@ -1655,31 +1781,15 @@ export function registerRoleRoutes(app: FastifyInstance) {
         ...auditActorFields(trustedActorFromRequest(request)),
         source: "admin_roles_api"
       });
-      // Spec §5.2 — a write that was reverted must NEVER be reported as saved.
-      // `writeAccessYaml` rolls the disk back and re-commits the previous
-      // policy when the runtime does not acknowledge this write. Reporting
-      // `written: true` there would claim the Role was deleted while the
-      // configuration still carries it.
-      if (writeResult.rolledBack === true) {
-        return reply.status(500).send({
-          ok: false,
-          error: {
-            code: "ROLE_DELETE_ROLLED_BACK",
-            message: "the role delete was rolled back; the previous configuration is still in effect"
-          }
-        });
-      }
-      return {
-        ok: true,
-        data: {
-          written: true,
-          version: (await readAccessYaml(projectRoot)).version,
-          policyVersion: writeResult.policyVersion,
-          policyRuntimeAck: writeResult.policyRuntimeAck,
-          runtimeAck: writeResult.runtimeAck,
-          gate
-        }
-      };
+      // Spec §14.3.2 — only `committed` is a success. `recovery_required` is
+      // 503 with written:false; a rollback is not a saved deletion.
+      const response = accessWriteResponseBody(writeResult, {
+        version: (await readAccessYaml(projectRoot)).version,
+        policyVersion: writeResult.policyVersion,
+        policyRuntimeAck: writeResult.policyRuntimeAck,
+        gate
+      });
+      return reply.status(response.statusCode).send(response.body);
     }
   );
 
