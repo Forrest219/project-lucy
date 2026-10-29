@@ -2273,68 +2273,83 @@ export function buildServer() {
     const startedAt = new Date().toISOString();
     const consumedFiles = writtenFiles.slice();
     const consumedSourceEntries = [...changedSources.entries()];
-    const reindex = await withPublishCoordinator(
-      "manual_reindex",
-      async () => {
-        // Lucy v0.25 / L25-11 §7.1–§7.2 (D3): the recovery check must run
-        // BEFORE the index is rebuilt. Reindexing while a semantic write is
-        // unresolved would derive an index state from targets whose write
-        // outcome is still unknown.
-        if (await isRecoveryRequired(projectRoot)) {
-          throw new SemanticAssetValidationError(
-            "semantic_recovery_required",
-            "上一笔语义写入存在未决恢复日志，恢复核验完成前不允许手动索引。",
-            [],
-            409
-          );
+    try {
+      // The history record is part of the same critical section as the index
+      // (L25-11 §7.2). Writing it after the coordinator returns would let
+      // another writer in before the terminal record exists.
+      const outcome = await withPublishCoordinator(
+        "manual_reindex",
+        async () => {
+          // Lucy v0.25 / L25-11 §7.1–§7.2 (D3): the recovery check must run
+          // BEFORE the index is rebuilt. Reindexing while a semantic write is
+          // unresolved would derive an index state from targets whose write
+          // outcome is still unknown.
+          if (await isRecoveryRequired(projectRoot)) {
+            throw new SemanticAssetValidationError(
+              "semantic_recovery_required",
+              "上一笔语义写入存在未决恢复日志，恢复核验完成前不允许手动索引。",
+              [],
+              409
+            );
+          }
+          const reindex = await reindexProject(projectRoot, { force });
+          const finishedAt = new Date().toISOString();
+          const reindexRecord = {
+            ok: reindex.exitCode === 0,
+            exitCode: reindex.exitCode,
+            stdout: reindex.stdout,
+            stderr: reindex.stderr
+          };
+          // M32: write a lightweight history record so /publish/history can show
+          // the reindex result alongside normal publish batches. The snapshot is
+          // the pending set at sync start, so a write that lands during reindex
+          // stays on the workbench for the next sync.
+          const pending = await describePendingReleaseAssets(projectRoot, {
+            filePaths: consumedFiles.map((file) => file.filePath),
+            sources: consumedSourceEntries.map(([, source]) => source)
+          });
+          const historyRecord = await recordManualReindex(projectRoot, {
+            actor: actorIdFromRequest(request),
+            force,
+            startedAt,
+            reindex: reindexRecord,
+            files: pending.files,
+            changedSources: pending.changedSources,
+            connectionIds: pending.connectionIds
+          });
+          if (reindexRecord.ok) {
+            const consumed = new Set(consumedFiles);
+            for (let index = writtenFiles.length - 1; index >= 0; index -= 1) {
+              if (consumed.has(writtenFiles[index])) writtenFiles.splice(index, 1);
+            }
+            for (const [key, value] of consumedSourceEntries) {
+              if (changedSources.get(key) === value) changedSources.delete(key);
+            }
+          }
+          return { historyRecord, finishedAt, reindexRecord };
+        },
+        { projectRoot }
+      );
+      return {
+        ok: true,
+        data: {
+          id: outcome.historyRecord.id,
+          force,
+          startedAt,
+          finishedAt: outcome.finishedAt,
+          reindex: outcome.reindexRecord
         }
-        return reindexProject(projectRoot, { force });
-      },
-      { projectRoot }
-    );
-    const finishedAt = new Date().toISOString();
-    const reindexRecord = {
-      ok: reindex.exitCode === 0,
-      exitCode: reindex.exitCode,
-      stdout: reindex.stdout,
-      stderr: reindex.stderr
-    };
-    // M32: write a lightweight history record so /publish/history can show
-    // the reindex result alongside normal publish batches. The snapshot is
-    // the pending set at sync start, so a write that lands during reindex
-    // stays on the workbench for the next sync.
-    const pending = await describePendingReleaseAssets(projectRoot, {
-      filePaths: consumedFiles.map((file) => file.filePath),
-      sources: consumedSourceEntries.map(([, source]) => source)
-    });
-    const historyRecord = await recordManualReindex(projectRoot, {
-      actor: actorIdFromRequest(request),
-      force,
-      startedAt,
-      reindex: reindexRecord,
-      files: pending.files,
-      changedSources: pending.changedSources,
-      connectionIds: pending.connectionIds
-    });
-    if (reindexRecord.ok) {
-      const consumed = new Set(consumedFiles);
-      for (let index = writtenFiles.length - 1; index >= 0; index -= 1) {
-        if (consumed.has(writtenFiles[index])) writtenFiles.splice(index, 1);
+      };
+    } catch (error) {
+      if (error instanceof SemanticAssetValidationError) {
+        reply.status(error.statusCode);
+        return reply.send({
+          ok: false,
+          error: { code: error.code, message: error.message }
+        });
       }
-      for (const [key, value] of consumedSourceEntries) {
-        if (changedSources.get(key) === value) changedSources.delete(key);
-      }
+      throw error;
     }
-    return {
-      ok: true,
-      data: {
-        id: historyRecord.id,
-        force,
-        startedAt,
-        finishedAt,
-        reindex: reindexRecord
-      }
-    };
   });
 
   app.post<{

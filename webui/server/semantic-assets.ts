@@ -57,6 +57,7 @@ import {
   isRecoveryRequired,
   markRecoveryEntryApplied,
   markRecoveryJournalActivationPending,
+  markRecoveryJournalBlocked,
   markRecoveryJournalFilesSaved,
   restoreRecoveryJournal
 } from "./semantic-recovery-journal.js";
@@ -2167,6 +2168,14 @@ export async function publishSemanticAssets(
     reindexImpl?: typeof reindexProject;
     now?: () => Date;
     instanceId?: string;
+    /**
+     * Test seam. Runs at the start of the lock-release step, after the
+     * terminal release state has been persisted and before the publish window
+     * is given up. Production callers leave it unset.
+     */
+    beforeLockRelease?: () => Promise<void> | void;
+    /** Test seam. Production uses {@link restoreRecoveryJournal}. */
+    restoreImpl?: typeof restoreRecoveryJournal;
   } = {}
 ): Promise<SemanticAssetPublishResponse> {
   const actor = options.actor ?? "local-admin";
@@ -2659,135 +2668,152 @@ export async function publishSemanticAssets(
   // Staging must be removed once the formal files are in place.
   await cleanupSemanticPublishStaging(projectRoot, request.validationId).catch(() => undefined);
 
-  // Kick off async reindex; do NOT await. Keep the publish lock until reindex
-  // reaches a terminal state so no second publish can promote files while the
-  // Agent index is being rebuilt.
-  //
-  // ★ L25-11 §7.2 (D16/D19/D20): the journal is completed ONLY here, and only
-  // after EVERY applicable evidence is durable — the runtime mirror, the index,
-  // the final digest verification and the terminal audit / history / status.
-  // `published` is not written before that.
+  // Kick off async reindex; do NOT await. The publish lock stays held until
+  // the terminal evidence is durable (L25-11 §7.2 / D23). Releasing it when
+  // the index command returns would let another writer in before the digest
+  // check, the terminal audit, `published` and the journal completion.
   const reindexImpl = options.reindexImpl ?? reindexProject;
-  const runReindex = async () => {
-    let reindexResult;
-    try {
-      reindexResult = await reindexImpl(projectRoot, { force: false });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      // The files stay saved; the activation is NOT confirmed. The journal
-      // stays open in the activation-pending phase so the index can be retried
-      // without rolling back a write that actually landed.
-      if (recoveryJournalId) {
-        await markRecoveryJournalActivationPending(projectRoot, recoveryJournalId);
-      }
-      await updateReleaseRecord(projectRoot, releaseId, {
-        status: "reindex_failed",
-        reindex: { ok: false, exitCode: 1, stderr: message },
-        recoveryRequired: false,
-        activationStatus: "unconfirmed",
-        attemptId
-      });
-      await reloadCatalog(projectRoot).catch(() => undefined);
-      return;
-    } finally {
-      await releasePublishLock(projectRoot).catch(() => undefined);
+  const persistReindexFailure = async (
+    reindex: { ok: false; exitCode: number; stdout?: string; stderr?: string }
+  ) => {
+    if (recoveryJournalId) {
+      await markRecoveryJournalActivationPending(projectRoot, recoveryJournalId);
     }
-    const ok = reindexResult.exitCode === 0;
-    if (!ok) {
-      if (recoveryJournalId) {
-        await markRecoveryJournalActivationPending(projectRoot, recoveryJournalId);
+    await updateReleaseRecord(projectRoot, releaseId, {
+      status: "reindex_failed",
+      reindex,
+      recoveryRequired: false,
+      activationStatus: "unconfirmed",
+      attemptId
+    });
+    await reloadCatalog(projectRoot).catch(() => undefined);
+  };
+  const runReindex = async () => {
+    let settled = false;
+    try {
+      let reindexResult;
+      try {
+        reindexResult = await reindexImpl(projectRoot, { force: false });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        // The files stay saved; the activation is NOT confirmed. The journal
+        // stays open in the activation-pending phase so the index can be retried
+        // without rolling back a write that actually landed.
+        await persistReindexFailure({ ok: false, exitCode: 1, stderr: message });
+        settled = true;
+        return;
       }
-      await updateReleaseRecord(projectRoot, releaseId, {
-        status: "reindex_failed",
-        reindex: {
+      const ok = reindexResult.exitCode === 0;
+      if (!ok) {
+        await persistReindexFailure({
           ok: false,
+          exitCode: reindexResult.exitCode,
+          stdout: redactText(reindexResult.stdout),
+          stderr: redactText(reindexResult.stderr)
+        });
+        settled = true;
+        return;
+      }
+
+      // The index succeeded — now the remaining evidence must be verified before
+      // `published` may be written (L25-11 §7.2). The lock is still held.
+      const digestCheck = await verifyFinalTargetDigests(projectRoot, snapshot.files);
+      if (!digestCheck.ok) {
+        // The formal files or the runtime mirror do not match the plan: stop,
+        // restore this batch and do NOT claim a success. A restore that throws
+        // before it can mark the journal must still leave `recovery_required`,
+        // not an activation-pending journal that the next publish would skip.
+        const restore = options.restoreImpl ?? restoreRecoveryJournal;
+        if (recoveryJournalId) {
+          try {
+            const restored = await restore(projectRoot, recoveryJournalId);
+            if (!restored || restored.recoveryRequired) {
+              console.error(
+                `[lucy-semantic] release ${releaseId} failed its final digest check and could not be restored; ` +
+                  "publishing and manual reindex stay closed until it is resolved"
+              );
+            }
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            console.error(
+              `[lucy-semantic] release ${releaseId} failed its final digest check and the restore threw; ` +
+                "the journal stays recovery_required"
+            );
+            await markRecoveryJournalBlocked(projectRoot, recoveryJournalId, message);
+          }
+        }
+        await updateReleaseRecord(projectRoot, releaseId, {
+          status: "promote_failed",
+          recoveryRequired: true,
+          activationStatus: "unconfirmed",
+          attemptId
+        });
+        await reloadCatalog(projectRoot).catch(() => undefined);
+        settled = true;
+        return;
+      }
+
+      // The terminal audit / history / status are persisted INSIDE the same
+      // critical section, before the journal is completed.
+      await recordConfigChange({
+        filePath: "semantic-layer/",
+        changeType: "semantic_publish_terminal",
+        assetKind: "publish",
+        actor: actor,
+        actorType: "ui_admin",
+        source: "publish_workbench_api",
+        targetId: releaseId,
+        operation: "publish_terminal",
+        requestId: request.validationId,
+        oldSummary: { releaseId, attemptId },
+        newSummary: {
+          releaseId,
+          attemptId,
+          fileCount: releaseFiles.length,
+          activationStatus: "confirmed",
+          ...(confirmedPlanDigest ? { planDigest: confirmedPlanDigest } : {})
+        },
+        diff: snapshot.diff
+      });
+
+      await updateReleaseRecord(projectRoot, releaseId, {
+        status: "published",
+        reindex: {
+          ok: true,
           exitCode: reindexResult.exitCode,
           stdout: redactText(reindexResult.stdout),
           stderr: redactText(reindexResult.stderr)
         },
         recoveryRequired: false,
-        activationStatus: "unconfirmed",
-        attemptId
-      });
-      await reloadCatalog(projectRoot).catch(() => undefined);
-      return;
-    }
-
-    // The index succeeded — now the remaining evidence must be verified before
-    // `published` may be written (L25-11 §7.2).
-    const digestCheck = await verifyFinalTargetDigests(projectRoot, snapshot.files);
-    if (!digestCheck.ok) {
-      // The formal files or the runtime mirror do not match the plan: stop,
-      // restore this batch and do NOT claim a success.
-      if (recoveryJournalId) {
-        const restored = await restoreRecoveryJournal(projectRoot, recoveryJournalId);
-        if (!restored || restored.recoveryRequired) {
-          console.error(
-            `[lucy-semantic] release ${releaseId} failed its final digest check and could not be restored; ` +
-              "publishing and manual reindex stay closed until it is resolved"
-          );
-        }
-      }
-      await updateReleaseRecord(projectRoot, releaseId, {
-        status: "promote_failed",
-        recoveryRequired: true,
-        activationStatus: "unconfirmed",
-        attemptId
-      });
-      await reloadCatalog(projectRoot).catch(() => undefined);
-      return;
-    }
-
-    // The terminal audit / history / status are persisted INSIDE the same
-    // critical section, before the journal is completed.
-    await recordConfigChange({
-      filePath: "semantic-layer/",
-      changeType: "semantic_publish_terminal",
-      assetKind: "publish",
-      actor: actor,
-      actorType: "ui_admin",
-      source: "publish_workbench_api",
-      targetId: releaseId,
-      operation: "publish_terminal",
-      requestId: request.validationId,
-      oldSummary: { releaseId, attemptId },
-      newSummary: {
-        releaseId,
-        attemptId,
-        fileCount: releaseFiles.length,
         activationStatus: "confirmed",
-        ...(confirmedPlanDigest ? { planDigest: confirmedPlanDigest } : {})
-      },
-      diff: snapshot.diff
-    });
+        attemptId
+      });
 
-    await updateReleaseRecord(projectRoot, releaseId, {
-      status: "published",
-      reindex: {
-        ok: true,
-        exitCode: reindexResult.exitCode,
-        stdout: redactText(reindexResult.stdout),
-        stderr: redactText(reindexResult.stderr)
-      },
-      recoveryRequired: false,
-      activationStatus: "confirmed",
-      attemptId
-    });
-
-    // Only now is every applicable evidence durable: close the journal.
-    if (recoveryJournalId) {
-      await completeRecoveryJournal(projectRoot, recoveryJournalId);
+      // Only now is every applicable evidence durable: close the journal.
+      if (recoveryJournalId) {
+        await completeRecoveryJournal(projectRoot, recoveryJournalId);
+      }
+      await reloadCatalog(projectRoot).catch(() => undefined);
+      settled = true;
+    } catch (error) {
+      if (!settled) {
+        const message = error instanceof Error ? error.message : String(error);
+        await persistReindexFailure({ ok: false, exitCode: 1, stderr: message }).catch(() => undefined);
+      }
+    } finally {
+      try {
+        if (options.beforeLockRelease) await options.beforeLockRelease();
+      } finally {
+        await releasePublishLock(projectRoot).catch(() => undefined);
+      }
     }
-    await reloadCatalog(projectRoot).catch(() => undefined);
   };
   const scheduleReindex =
     typeof setImmediate === "function"
       ? setImmediate
       : (fn: () => void) => setTimeout(fn, 0);
   scheduleReindex(() => {
-    void runReindex().catch(async () => {
-      await releasePublishLock(projectRoot).catch(() => undefined);
-    });
+    void runReindex();
   });
   // `promoteFailed` is checked in case the await above threw — unreachable
   // here but keeps the linter quiet.

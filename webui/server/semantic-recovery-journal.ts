@@ -40,6 +40,21 @@ import type { SemanticTableIdentity } from "./semantic-identity";
 
 const JOURNALS_DIR_REL = ".ktx-ui/semantic-recovery-journals";
 
+/**
+ * Process-local fail-closed latch. Set when a recovery journal cannot be
+ * marked `recovery_required` on disk. Reads and publishes stay closed until
+ * the process restarts and startup recovery classifies the bytes again.
+ */
+let semanticRecoveryAdmissionLatched = false;
+
+export function latchSemanticRecoveryAdmission(): void {
+  semanticRecoveryAdmissionLatched = true;
+}
+
+export function isSemanticRecoveryAdmissionLatched(): boolean {
+  return semanticRecoveryAdmissionLatched;
+}
+
 export type RecoveryJournalStatus =
   | "open"
   | "restored"
@@ -631,15 +646,215 @@ export async function recoverPendingRecoveryJournals(
 }
 
 /**
- * Is any batch still waiting for a human?
+ * A journal still blocks publishing, manual reindex, and affected reads.
+ *
+ * `recovery_required` is the human-repair state. An ordinary `write_in_progress`
+ * journal is the same kind of unresolved write: the batch has not saved its
+ * files, so a missing `recoveryRequired` flag must not let the next publish
+ * through (Spec §7.2). `files_saved` / `activation_pending` mean the bytes were
+ * verified and only the activation is unconfirmed — those stay open so the
+ * index can be retried, and they do not permanently close the next publish.
+ */
+export function journalBlocksSemanticAccess(journal: RecoveryJournal): boolean {
+  if (journal.recoveryRequired || journal.status === "recovery_required") return true;
+  return recoveryJournalPhase(journal) === "write_in_progress";
+}
+
+/**
+ * Is any batch still waiting for a human, or still mid-write?
  *
  * The publish coordinator and the manual reindex route use this to fail
- * closed: while a recovery is required, publishing and manual reindexing are
- * refused (Spec §7.1 / §7.2, D3).
+ * closed (Spec §7.1 / §7.2, D3). A journal directory that cannot be read
+ * throws — callers must treat that as closed, never as "nothing to recover".
  */
 export async function isRecoveryRequired(projectRoot: string): Promise<boolean> {
+  if (semanticRecoveryAdmissionLatched) return true;
   const journals = await listOpenRecoveryJournals(projectRoot);
-  return journals.some((journal) => journal.recoveryRequired || journal.status === "recovery_required");
+  return journals.some((journal) => journalBlocksSemanticAccess(journal));
+}
+
+/**
+ * Persist the human-repair state when a restore cannot finish.
+ * If the journal cannot be written, latch admission closed so the next
+ * publish and Lucy read still fail closed.
+ */
+export async function markRecoveryJournalBlocked(
+  projectRoot: string,
+  journalId: string,
+  outcome: string,
+  now: () => number = Date.now
+): Promise<void> {
+  try {
+    const journal = await readRecoveryJournal(projectRoot, journalId);
+    if (!journal) {
+      latchSemanticRecoveryAdmission();
+      return;
+    }
+    journal.status = "recovery_required";
+    journal.recoveryRequired = true;
+    journal.outcome = outcome;
+    journal.updatedAt = new Date(now()).toISOString();
+    await writeRecoveryJournal(projectRoot, journal);
+  } catch (error) {
+    latchSemanticRecoveryAdmission();
+    throw error;
+  }
+}
+
+export interface SemanticRecoveryReadBlock {
+  code: "semantic_recovery_required" | "semantic_recovery_unreadable";
+  message: string;
+}
+
+/**
+ * Tokens a Lucy read can be matched against: a source name, a
+ * `connection.schema.table` qualifier, or the source prefix of a measure.
+ */
+export function semanticReadHintsFromArgs(args: unknown): string[] {
+  if (!args || typeof args !== "object" || Array.isArray(args)) return [];
+  const record = args as Record<string, unknown>;
+  const hints = new Set<string>();
+  const push = (value: unknown) => {
+    if (typeof value !== "string") return;
+    const trimmed = value.trim();
+    if (trimmed) hints.add(trimmed);
+  };
+  for (const key of [
+    "connectionId",
+    "connection_id",
+    "connection",
+    "sourceName",
+    "source_name",
+    "source",
+    "table",
+    "schema"
+  ]) {
+    push(record[key]);
+  }
+  collectSemanticQualifiers(record.measures, hints);
+  collectSemanticQualifiers(record.dimensions, hints);
+  for (const key of [
+    "filters",
+    "where",
+    "segments",
+    "joins",
+    "join",
+    "orderBy",
+    "order_by",
+    "sort",
+    "sorts",
+    "having",
+    "groupBy",
+    "group_by"
+  ]) {
+    collectSemanticQualifiers(record[key], hints);
+  }
+  return [...hints];
+}
+
+function collectSemanticQualifiers(value: unknown, hints: Set<string>): void {
+  if (typeof value === "string") {
+    if (value.includes(".")) hints.add(value.slice(0, value.lastIndexOf(".")));
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) collectSemanticQualifiers(item, hints);
+    return;
+  }
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    if (typeof record.field === "string") collectSemanticQualifiers(record.field, hints);
+    if (typeof record.expr === "string") collectSemanticQualifiers(record.expr, hints);
+  }
+}
+
+function entryLabels(entry: RecoveryJournalEntry): string[] {
+  const labels = new Set<string>();
+  const addIdentity = (identity: SemanticTableIdentity) => {
+    labels.add(`${identity.connectionId}.${identity.schema}.${identity.table}`);
+    labels.add(`${identity.schema}.${identity.table}`);
+    labels.add(`${identity.connectionId}.${identity.table}`);
+    labels.add(identity.table);
+  };
+  if (entry.identity) addIdentity(entry.identity);
+  const schemaFile = /^semantic-layer\/([^/]+)\/_schema\/([^/]+)\.yaml$/.exec(entry.targetPath);
+  if (schemaFile) {
+    labels.add(`${schemaFile[1]}.${schemaFile[2]}`);
+    return [...labels];
+  }
+  const overlay = /^semantic-layer\/([^/]+)\/([^/]+)\.yaml$/.exec(entry.targetPath);
+  if (overlay) {
+    labels.add(`${overlay[1]}.${overlay[2]}`);
+    labels.add(overlay[2]!);
+  }
+  return [...labels];
+}
+
+function hintHitsLabel(hint: string, label: string): boolean {
+  if (
+    hint === label
+    || hint.endsWith(`.${label}`)
+    || hint.startsWith(`${label}.`)
+    || label.startsWith(`${hint}.`)
+  ) {
+    return true;
+  }
+  // A bare table or schema token still touches every label that contains it.
+  if (!hint.includes(".")) {
+    return label.endsWith(`.${hint}`) || label.includes(`.${hint}.`);
+  }
+  return false;
+}
+
+/**
+ * Fail closed a Lucy read of an asset whose write is still unresolved.
+ *
+ * Returns null when every blocking journal names its targets and none of the
+ * hints touch them. An empty hint list, or a target that cannot be named,
+ * closes the read: the caller cannot prove the request is disjoint
+ * (Spec §7.2, D3).
+ */
+export async function semanticRecoveryReadBlock(
+  projectRoot: string,
+  hints: readonly string[]
+): Promise<SemanticRecoveryReadBlock | null> {
+  if (semanticRecoveryAdmissionLatched) {
+    return {
+      code: "semantic_recovery_unreadable",
+      message: "语义恢复日志无法落成待修复状态，涉及资产的读取和查询已关闭。"
+    };
+  }
+  const journals = await listOpenRecoveryJournals(projectRoot);
+  const blocking = journals.filter((journal) => journalBlocksSemanticAccess(journal));
+  if (blocking.length === 0) return null;
+
+  const labels: string[] = [];
+  for (const journal of blocking) {
+    for (const entry of journal.entries) {
+      const named = entryLabels(entry);
+      if (named.length === 0) {
+        return {
+          code: "semantic_recovery_required",
+          message: "存在无法命名的未决语义恢复，本次读取无法判定是否涉及该资产，已关闭。"
+        };
+      }
+      labels.push(...named);
+    }
+  }
+
+  if (hints.length === 0) {
+    return {
+      code: "semantic_recovery_required",
+      message: "存在未决语义恢复，且本次读取没有指明资产，已关闭。"
+    };
+  }
+
+  const hit = hints.some((hint) => labels.some((label) => hintHitsLabel(hint, label)));
+  if (!hit) return null;
+  return {
+    code: "semantic_recovery_required",
+    message: "该语义资产仍有未决恢复日志，恢复核验完成前不能读取或查询。"
+  };
 }
 
 /** Whether the target file exists (diagnostics). */

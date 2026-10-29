@@ -50,6 +50,7 @@ import { loadAllSkillsFresh, getSkillByUri, getSkillByName } from "../skills/loa
 import type { SkillAsset } from "../skills/types.js";
 import { canAccessSkill, filterAccessibleSkills, type SkillAclDecision, type SkillAclAction } from "./skill-acl.js";
 import { readProject, resolveProjectRoot } from "../project.js";
+import { semanticReadHintsFromArgs, semanticRecoveryReadBlock } from "../semantic-recovery-journal.js";
 // L25-16 — 控制面工具由代理**本地**服务，绝不转发给 KTX。
 // 工具名单与描述来自 `ops/control-plane.ts`（单一事实源）。
 import { isControlPlaneTool } from "../ops/control-plane.js";
@@ -1957,6 +1958,20 @@ const OPS_NO_EFFECT_DENIAL_CODES = new Set<string>([
   "ops_state_corrupt",
   "ops_claim_failed"
 ]);
+
+async function readSemanticRecoveryDenial(
+  toolArgs: unknown
+): Promise<{ code: string; message: string } | null> {
+  try {
+    const projectRoot = await resolveProjectRoot();
+    return await semanticRecoveryReadBlock(projectRoot, semanticReadHintsFromArgs(toolArgs));
+  } catch {
+    return {
+      code: "semantic_recovery_unreadable",
+      message: "语义恢复日志无法读取，涉及资产的读取和查询已关闭。"
+    };
+  }
+}
 
 function jsonRpcToolResult(requestId: string | number, text: string, options: { isError?: boolean } = {}): string {
   return JSON.stringify({
@@ -4002,6 +4017,50 @@ async function buildDenialRepairPayload(
       return;
     }
     if (toolName === "lucy_explain_query" || toolName === "lucy_freshness") {
+      // lucy_explain_query is served locally and returns before the shared
+      // query gate below. The recovery admission has to run here.
+      if (toolName === "lucy_explain_query") {
+        const block = await readSemanticRecoveryDenial(toolArgs);
+        if (block) {
+          const responseBody = jsonRpcToolResult(requestId, JSON.stringify({
+            code: block.code,
+            message: block.message
+          }), { isError: true });
+          res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+          res.end(responseBody);
+          recordRequestAudit({
+            ts: new Date().toISOString(),
+            userId: identity.userId,
+            client: identity.client,
+            tool: toolName,
+            argsSummary,
+            ...queryMeta,
+            outcome: "error",
+            decisionReason: block.code,
+            errorDetail: block.message,
+            durationMs: Date.now() - start,
+            responseBytes: Buffer.byteLength(responseBody),
+            requestId,
+            ...requestMeta,
+            ...(await auditMeta(identity, block.code)),
+          });
+          recordMcpTraceForTool({
+            traceId,
+            identity,
+            toolName,
+            status: "error",
+            startedAt: new Date(start).toISOString(),
+            turnId: requestMeta.lucyTurnId ?? null,
+            sessionId: requestMeta.lucySessionId ?? null,
+            requestId,
+            argsSummary,
+            allowed: false,
+            reason: block.code,
+            policySource: "other"
+          });
+          return;
+        }
+      }
       const data = toolName === "lucy_explain_query"
         ? await lucyExplainQuery(identity, toolArgs)
         : await lucyFreshness(identity, toolArgs);
@@ -4799,6 +4858,55 @@ async function buildDenialRepairPayload(
     argsSummary = summarizeArgsForAudit(toolName, guard.args);
   }
 
+  // L25-11 §7.2 / D3 — an unresolved semantic write closes the affected Lucy
+  // read. This runs before the query slot is taken and before the call is
+  // forwarded, so a blocked asset never reaches KTX.
+  if (
+    rpcMethod === "tools/call"
+    && (toolName === "lucy_query" || toolName === "lucy_read_source" || toolName === "lucy_explain_query")
+  ) {
+    const block = await readSemanticRecoveryDenial(toolArgs);
+    if (block) {
+      const responseBody = jsonRpcToolResult(requestId, JSON.stringify({
+        code: block.code,
+        message: block.message
+      }), { isError: true });
+      res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+      res.end(responseBody);
+      recordRequestAudit({
+        ts: new Date().toISOString(),
+        userId: identity.userId,
+        client: identity.client,
+        tool: toolName,
+        tables: queryTables.length > 0 ? queryTables : undefined,
+        argsSummary,
+        ...queryMeta,
+        outcome: "error",
+        decisionReason: block.code,
+        errorDetail: block.message,
+        durationMs: Date.now() - start,
+        responseBytes: Buffer.byteLength(responseBody),
+        requestId,
+        ...requestMeta,
+        ...(await auditMeta(identity, block.code)),
+      });
+      recordMcpTraceForTool({
+        traceId,
+        identity,
+        toolName,
+        status: "error",
+        startedAt: new Date(start).toISOString(),
+        turnId: requestMeta.lucyTurnId ?? null,
+        sessionId: requestMeta.lucySessionId ?? null,
+        requestId,
+        argsSummary,
+        allowed: false,
+        reason: block.code,
+        policySource: "other"
+      });
+      return;
+    }
+  }
 
   if (rpcMethod === "tools/call" && toolName === "lucy_query") {
     const slot = acquireLucyQuerySlot(identity);

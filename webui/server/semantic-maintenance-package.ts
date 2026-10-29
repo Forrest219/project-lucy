@@ -871,12 +871,20 @@ export interface MaintenanceExportBaseline {
   exportedAt: string;
   expiresAt: string;
   baselineDigest: string;
+  /** The selection the server exported. The client cannot shrink or retarget it. */
+  selected: SemanticTableIdentity[];
+  /** The read-only dependencies the server exported. */
+  dependencies: SemanticTableIdentity[];
   entries: Array<{
     entryId: string;
     packagePath: string;
     exportedDigest: string;
     targetDigest: string | null;
     identity: SemanticTableIdentity;
+    role: MaintenanceEntryRole;
+    sharedIdentities: SemanticTableIdentity[];
+    baseTarget: "present" | "absent";
+    baselineDigest: string;
   }>;
 }
 
@@ -916,12 +924,18 @@ export function buildExportBaseline(input: {
     exportedAt: exportedAt.toISOString(),
     expiresAt: new Date(nowMs + SEMANTIC_BATCH_LIMITS.exportBaselineTtlMs).toISOString(),
     baselineDigest: input.metadata.baselineDigest,
+    selected: input.metadata.selected.map((identity) => ({ ...identity })),
+    dependencies: input.metadata.dependencies.map((identity) => ({ ...identity })),
     entries: input.metadata.entries.map((entry) => ({
       entryId: entry.entryId,
       packagePath: entry.packagePath,
       exportedDigest: entry.exportedDigest,
       targetDigest: entry.targetDigest,
-      identity: entry.identity
+      identity: entry.identity,
+      role: entry.role,
+      sharedIdentities: (entry.sharedIdentities ?? []).map((identity) => ({ ...identity })),
+      baseTarget: entry.baseTarget,
+      baselineDigest: entry.baselineDigest
     }))
   };
 }
@@ -992,7 +1006,44 @@ export async function verifyMaintenanceExportBaseline(
     //   - a read-only entry must still carry its exported content byte for byte;
     //   - an editable overlay may differ, but its identity binding and its
     //     recorded original digest must not have been rewritten.
+    if (!record.selected || !record.dependencies || record.entries.some((entry) => !entry.role)) {
+      throw new MaintenancePackageError(
+        "PACKAGE_BASELINE_MISMATCH",
+        "服务端导出记录缺少角色或选择集，无法按原记录核验；请重新导出。",
+        409
+      );
+    }
+    if (!sameIdentitySet(record.selected, metadata.selected)) {
+      throw new MaintenancePackageError(
+        "PACKAGE_BASELINE_MISMATCH",
+        "包内选择集与服务端导出记录不一致，无法核验来源。",
+        409
+      );
+    }
+    if (!sameIdentitySet(record.dependencies, metadata.dependencies)) {
+      throw new MaintenancePackageError(
+        "PACKAGE_BASELINE_MISMATCH",
+        "包内依赖集与服务端导出记录不一致，无法核验来源。",
+        409
+      );
+    }
     const recordByEntryId = new Map(record.entries.map((entry) => [entry.entryId, entry]));
+    if (record.entries.length !== unpacked.entries.length) {
+      throw new MaintenancePackageError(
+        "PACKAGE_BASELINE_MISMATCH",
+        "包内条目数量与服务端导出记录不一致，无法核验来源。",
+        409
+      );
+    }
+    for (const original of record.entries) {
+      if (!unpacked.entries.some((entry) => entry.meta.entryId === original.entryId)) {
+        throw new MaintenancePackageError(
+          "PACKAGE_BASELINE_MISMATCH",
+          `服务端导出记录中的条目 ${original.entryId} 已从包内删除，无法核验来源。`,
+          409
+        );
+      }
+    }
     for (const entry of unpacked.entries) {
       const original = recordByEntryId.get(entry.meta.entryId);
       if (!original) {
@@ -1002,7 +1053,45 @@ export async function verifyMaintenanceExportBaseline(
           409
         );
       }
-      if (entry.meta.role === "readonly_context") {
+      // Role, path and the original digests come from the server record.
+      // The uploaded role must not be able to opt a read-only entry out of
+      // the byte check (L25-11 §5 / D7).
+      if (entry.meta.role !== original.role) {
+        throw new MaintenancePackageError(
+          "PACKAGE_BASELINE_MISMATCH",
+          `包内条目 ${entry.meta.packagePath} 的角色与服务端导出记录不一致，无法核验来源。`,
+          409
+        );
+      }
+      if (entry.meta.packagePath !== original.packagePath) {
+        throw new MaintenancePackageError(
+          "PACKAGE_BASELINE_MISMATCH",
+          `包内条目 ${entry.meta.entryId} 的路径与服务端导出记录不一致，无法核验来源。`,
+          409
+        );
+      }
+      if (!sameIdentitySet(entry.meta.sharedIdentities ?? [], original.sharedIdentities ?? [])) {
+        throw new MaintenancePackageError(
+          "PACKAGE_BASELINE_MISMATCH",
+          `包内条目 ${entry.meta.packagePath} 的共享身份与服务端导出记录不一致，无法核验来源。`,
+          409
+        );
+      }
+      if (entry.meta.baseTarget !== original.baseTarget || entry.meta.targetDigest !== original.targetDigest) {
+        throw new MaintenancePackageError(
+          "PACKAGE_BASELINE_MISMATCH",
+          `包内条目 ${entry.meta.packagePath} 的目标基线与服务端导出记录不一致，无法核验来源。`,
+          409
+        );
+      }
+      if (entry.meta.baselineDigest !== original.baselineDigest) {
+        throw new MaintenancePackageError(
+          "PACKAGE_BASELINE_MISMATCH",
+          `包内条目 ${entry.meta.packagePath} 的语义基线摘要与服务端导出记录不一致，无法核验来源。`,
+          409
+        );
+      }
+      if (original.role === "readonly_context") {
         const current = createHash("sha256").update(Buffer.from(entry.content, "utf8")).digest("hex");
         if (current !== original.exportedDigest) {
           throw new MaintenancePackageError(
@@ -1033,6 +1122,20 @@ export async function verifyMaintenanceExportBaseline(
     }
   }
   return record;
+}
+
+function identityKey(identity: SemanticTableIdentity): string {
+  return `${identity.connectionId}\0${identity.schema}\0${identity.table}`;
+}
+
+function sameIdentitySet(
+  left: readonly SemanticTableIdentity[],
+  right: readonly SemanticTableIdentity[]
+): boolean {
+  const sort = (list: readonly SemanticTableIdentity[]) => list.map((identity) => identityKey(identity)).sort();
+  const a = sort(left);
+  const b = sort(right);
+  return a.length === b.length && a.every((key, index) => key === b[index]);
 }
 
 /** Remove expired export baselines (opportunistic GC). */

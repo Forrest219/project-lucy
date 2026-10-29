@@ -22,9 +22,12 @@ import {
   isRecoveryRequired,
   listOpenRecoveryJournals,
   markRecoveryEntryApplied,
+  markRecoveryJournalFilesSaved,
   readRecoveryJournal,
   recoverPendingRecoveryJournals,
-  restoreRecoveryJournal
+  restoreRecoveryJournal,
+  semanticReadHintsFromArgs,
+  semanticRecoveryReadBlock
 } from "../semantic-recovery-journal";
 
 let projectRoot: string;
@@ -325,5 +328,82 @@ describe("D-16 recovery journal directory read failures", () => {
 
     await expect(isRecoveryRequired(projectRoot)).rejects.toThrow();
     await expect(listOpenRecoveryJournals(projectRoot)).rejects.toThrow();
+  });
+});
+
+describe("D3 semantic recovery admission", () => {
+  it("closes publish on an ordinary in-progress journal and opens it once the files are saved", async () => {
+    const journal = await createRecoveryJournal(projectRoot, {
+      releaseId: "rel_1",
+      operationId: "op_1",
+      actor: "admin-a",
+      instanceId: "inst-a",
+      targets: [{
+        targetPath: TARGET_A,
+        identity: { connectionId: "shop-db", schema: "public", table: "a" },
+        newContent: "name: a2\n"
+      }]
+    });
+    expect(await isRecoveryRequired(projectRoot)).toBe(true);
+
+    await markRecoveryJournalFilesSaved(projectRoot, journal.journalId);
+    expect(await isRecoveryRequired(projectRoot)).toBe(false);
+  });
+
+  it("closes a Lucy read of the affected asset and leaves a different asset open", async () => {
+    await createRecoveryJournal(projectRoot, {
+      releaseId: "rel_1",
+      operationId: "op_1",
+      actor: "admin-a",
+      instanceId: "inst-a",
+      targets: [{
+        targetPath: TARGET_A,
+        identity: { connectionId: "shop-db", schema: "public", table: "a" },
+        newContent: "name: a2\n"
+      }]
+    });
+
+    const blocked = await semanticRecoveryReadBlock(projectRoot, ["shop-db.public.a"]);
+    expect(blocked?.code).toBe("semantic_recovery_required");
+
+    const sameConnection = await semanticRecoveryReadBlock(projectRoot, ["shop-db"]);
+    expect(sameConnection?.code).toBe("semantic_recovery_required");
+
+    const other = await semanticRecoveryReadBlock(projectRoot, ["shop-db.public.b"]);
+    expect(other).toBeNull();
+
+    const unnamed = await semanticRecoveryReadBlock(projectRoot, []);
+    expect(unnamed?.code).toBe("semantic_recovery_required");
+  });
+
+  it("reads the source qualifier out of a measure and an order_by field", () => {
+    expect(semanticReadHintsFromArgs({
+      connectionId: "shop-db",
+      measures: ["shop-db.public.a.revenue"],
+      order_by: [{ field: "shop-db.public.a.dt", direction: "asc" }]
+    })).toEqual(expect.arrayContaining(["shop-db", "shop-db.public.a"]));
+  });
+
+  it("closes a read when the connection id itself contains a dot", async () => {
+    await createRecoveryJournal(projectRoot, {
+      releaseId: "rel_2",
+      operationId: "op_2",
+      actor: "admin-a",
+      instanceId: "inst-a",
+      targets: [{
+        targetPath: TARGET_A,
+        identity: { connectionId: "mysql.aliyun", schema: "public", table: "a" },
+        newContent: "name: a2\n"
+      }]
+    });
+
+    const blocked = await semanticRecoveryReadBlock(
+      projectRoot,
+      semanticReadHintsFromArgs({
+        connectionId: "mysql.aliyun",
+        measures: ["other.revenue"]
+      })
+    );
+    expect(blocked?.code).toBe("semantic_recovery_required");
   });
 });

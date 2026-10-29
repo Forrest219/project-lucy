@@ -404,6 +404,42 @@ describe("D7 export baseline", () => {
       verifyMaintenanceExportBaseline(projectRoot, tamperedReadonly, { instanceId: "inst-a" })
     ).rejects.toThrowError(/不一致/);
   });
+
+  it("refuses a read-only entry whose uploaded role was changed to editable", async () => {
+    const built = await buildPackage();
+    const record = buildExportBaseline({ metadata: built.metadata, packageDigest: built.packageDigest });
+    await persistMaintenanceExportBaseline(projectRoot, record);
+    const unpacked = unpackMaintenancePackage(built.zip);
+    const tampered = {
+      ...unpacked,
+      packageDigest: "0".repeat(64),
+      entries: unpacked.entries.map((entry) =>
+        entry.meta.role === "readonly_context"
+          ? { ...entry, meta: { ...entry.meta, role: "editable_overlay" as const } }
+          : entry
+      )
+    };
+
+    await expect(
+      verifyMaintenanceExportBaseline(projectRoot, tampered, { instanceId: "inst-a" })
+    ).rejects.toThrowError(/角色/);
+  });
+
+  it("refuses a package that dropped an entry from the server record", async () => {
+    const built = await buildPackage();
+    const record = buildExportBaseline({ metadata: built.metadata, packageDigest: built.packageDigest });
+    await persistMaintenanceExportBaseline(projectRoot, record);
+    const unpacked = unpackMaintenancePackage(built.zip);
+    const tampered = {
+      ...unpacked,
+      packageDigest: "1".repeat(64),
+      entries: unpacked.entries.filter((entry) => entry.meta.role !== "readonly_context")
+    };
+
+    await expect(
+      verifyMaintenanceExportBaseline(projectRoot, tampered, { instanceId: "inst-a" })
+    ).rejects.toThrowError(/删除|数量/);
+  });
 });
 
 // ─── helpers ────────────────────────────────────────────────────────────────
