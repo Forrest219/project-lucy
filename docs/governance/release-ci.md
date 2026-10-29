@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy Release CI |
 | 文档类型 | Release / CI Spec |
-| 版本 | v0.3 |
-| 撰写日期 | 2026-06-22；2026-07-06；2026-09-02 v0.3 最终 digest 门禁与 Required checks |
+| 版本 | v0.4 |
+| 撰写日期 | 2026-06-22；2026-07-06；2026-09-02 v0.3 最终 digest 门禁与 Required checks；2026-10-29 v0.4 日常门禁钉 ubuntu-24.04、PR 取消并发，并修正 registry 与单架构口径 |
 | 适用范围 | GitHub Actions release gates、Docker image build、KTX upgrade compatibility |
 
 ## 1. CI Workflow
@@ -49,12 +49,22 @@ Manual inputs:
 | `ktx-upgrade-compat` | manual candidate version only; runs `npm run compat:ktx-upgrade` |
 | `release-package` | tag/manual only；依赖 `customer-release-readiness`；**只 promote 已测试的候选 digest**（`imagetools create`，不重建、不创建 builder）→ 对 `${IMAGE}@${DIGEST}` 复跑 G1/G2/G4b/G8 → 写 identity metadata；**禁止 gate 后再 build**；客户镜像只有 linux/amd64 单架构 |
 
-### Branch protection Required checks（建议）
+Hosted jobs use `ubuntu-24.04`. Pull request runs in the same ref cancel the previous in-progress run. Pushes to `main` and tags do not.
 
+`demo-db-smoke` and `postgres-demo-db-smoke` run on every pull request and on `main`. They are not branch-protection required checks until one green run is recorded; do not mark a red workflow as accepted by ignoring them.
+
+### Branch protection Required checks
+
+Currently enforced on `main`:
+
+- `spec-and-webui`
+- `docker-smoke`
 - `k8s-static`
 - `k8s-upgrade-gate`
-- `docker-smoke`
-- Release 路径额外要求：最终 digest 门禁步骤（`release-package` 内）与 `npm run gate:k8s-package`（offline 包）
+
+Add `demo-db-smoke` and `postgres-demo-db-smoke` after they pass on a pull request. Release paths additionally require the final digest gates inside `release-package` and `npm run gate:k8s-package` for an offline package.
+
+Hosted runners do not satisfy `real-e2e`. That job stays on `[self-hosted, lucy-protected, linux, amd64]` and stays unschedulable until that runner exists. Do not replace it with a headless smoke to make a tag green.
 
 ## 3. KTX Upgrade Compatibility
 
@@ -102,12 +112,12 @@ StarRocks R1 P1 note:
 
 ## 5. Registry Publishing
 
-Current CI builds and tags the image inside the workflow runner. Registry push is intentionally not enabled until the target registry, image namespace, and credentials policy are decided.
+Tag and `workflow_dispatch` runs push one linux/amd64 image to GHCR with `GITHUB_TOKEN`. The image name is `ghcr.io/<namespace>/project-lucy`, where `<namespace>` is `vars.LUCY_IMAGE_NAMESPACE` or, when that variable is unset, the repository owner in lowercase. Pull requests and pushes to `main` do not push.
 
-Candidate registry policies:
+Leave `LUCY_IMAGE_NAMESPACE` unset unless the token can write that namespace. The old default `kaelio` is denied for this repository.
 
 | Registry | Status | Notes |
 |---|---|---|
-| GHCR | planned | Natural default for GitHub releases |
-| Private customer registry | planned | Requires customer-specific credentials and retention policy |
-| Docker Hub | not selected | Requires namespace and token policy |
+| GHCR | tag and manual release | `packages: write`; namespace defaults to the repository owner |
+| Private customer registry | not wired | Needs a customer credential and a `LUCY_IMAGE_REGISTRY` override |
+| Docker Hub | not selected | Needs a namespace and token policy |

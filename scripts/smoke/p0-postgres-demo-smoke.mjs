@@ -5,6 +5,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { parse } from "yaml";
+import { ensureWebuiBootstrapToken } from "./ensure-webui-bootstrap-token.mjs";
 
 const project = process.env.LUCY_POSTGRES_DEMO_COMPOSE_PROJECT ?? process.env.LUCY_DEMO_COMPOSE_PROJECT ?? "lucy-p0-postgres-demo";
 const webPort = process.env.LUCY_POSTGRES_DEMO_WEBUI_HOST_PORT ?? "55177";
@@ -240,6 +241,7 @@ async function main() {
     await writeFile(path.join(tempSecretDir, "postgres-password"), demoPassword, { mode: 0o600 });
     return tempSecretDir;
   })();
+  await ensureWebuiBootstrapToken(secretDir);
   const env = {
     LUCY_POSTGRES_DEMO_WEBUI_HOST_PORT: webPort,
     LUCY_POSTGRES_DEMO_PROXY_HOST_PORT: proxyPort,

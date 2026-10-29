@@ -103,4 +103,4 @@ secrets:
   postgres_password:
     file: ${LUCY_POSTGRES_DEMO_SECRET_DIR:-../../secrets}/postgres-password
   webui_bootstrap_token:
-    file: ./secrets/webui-bootstrap-token
+    file: ${LUCY_POSTGRES_DEMO_SECRET_DIR:-./secrets}/webui-bootstrap-token

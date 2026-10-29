@@ -17,11 +17,16 @@ on:
         description: "Optional Docker/image tag used by release-package"
         required: false
 
-# release-package pushes a multi-arch manifest list to the container registry.
-# Other jobs only build & smoke; they do not need write access.
+# release-package promotes the tested linux/amd64 digest. It does not build.
+# Other jobs only build and smoke; they do not need write access.
 permissions:
   contents: read
   packages: write
+
+# Cancel a superseded pull request run. Push to main and tag runs finish.
+concurrency:
+  group: lucy-release-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   KTX_VERSION: ${{ inputs.ktx_version || '0.16.0' }}
@@ -29,7 +34,7 @@ env:
 
 jobs:
   spec-and-webui:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
@@ -41,6 +46,7 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
+      - run: npm run smoke:p0:upgrade-lucy:test
       - run: npm run lint:version
       - run: npm run lint:release-ledger
       - run: npm run smoke:p0:delivery-isolation
@@ -67,7 +73,7 @@ jobs:
         working-directory: webui
 
   business-eval-catalog:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: spec-and-webui
     steps:
       - uses: actions/checkout@v4
@@ -79,7 +85,7 @@ jobs:
       - run: npm run smoke:p0:business-eval
 
   ktx-diff-audit:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: spec-and-webui
     steps:
       - uses: actions/checkout@v4
@@ -98,7 +104,7 @@ jobs:
           path: inbox/ktx-lucy-diff-ci.md
 
   docker-smoke:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: spec-and-webui
     # Bound the gate. Without this the job inherits the 360-minute default and a
     # hang blocks the release train for six hours with no diagnosable failure.
@@ -125,7 +131,7 @@ jobs:
       - run: npm run smoke:p0:docker -- --skip-webui-suite
 
   k8s-static:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: azure/setup-helm@v4
@@ -155,7 +161,7 @@ jobs:
       - run: npm run test:e2e-harness
 
   k8s-upgrade-gate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
@@ -179,7 +185,7 @@ jobs:
           if-no-files-found: ignore
 
   headless-config:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: spec-and-webui
     steps:
       - uses: actions/checkout@v4
@@ -192,7 +198,7 @@ jobs:
 
   demo-db-smoke:
     # Runs smoke:p0:demo (MySQL demo plus an in-container SQLite file probe). It is NOT the real-user E2E gate; see real-e2e below.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: docker-smoke
     steps:
       - uses: actions/checkout@v4
@@ -205,7 +211,7 @@ jobs:
 
   postgres-demo-db-smoke:
     # Runs smoke:p0:postgres-demo (database/demo smoke). It is NOT the real-user E2E gate.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: docker-smoke
     steps:
       - uses: actions/checkout@v4
@@ -217,7 +223,7 @@ jobs:
       - run: npm run smoke:p0:postgres-demo
 
   ktx-upgrade-compat:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs:
       - docker-smoke
       - headless-config
@@ -240,7 +246,7 @@ jobs:
     # and package are produced by release-package after customer-release-readiness passed, by promoting THIS digest
     # (no rebuild, Spec §8.3). arm64 dev hosts (qemu-user) segfault when executing the ktx CLI module graph, so all
     # ktx-executing gates (G4/G4b, container smoke) run here on real amd64. Single-arch linux/amd64 only.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: ${{ startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' }}
     outputs:
       image_digest: ${{ steps.build-push.outputs.digest }}
@@ -271,11 +277,13 @@ jobs:
         id: build-push
         env:
           REGISTRY: ${{ vars.LUCY_IMAGE_REGISTRY || 'ghcr.io' }}
-          IMAGE_NAMESPACE: ${{ vars.LUCY_IMAGE_NAMESPACE || 'kaelio' }}
+          IMAGE_NAMESPACE: ${{ vars.LUCY_IMAGE_NAMESPACE || github.repository_owner }}
           LUCY_VERSION: ${{ steps.v.outputs.lucy }}
         run: |
           set -euo pipefail
           TAG="candidate-amd64-${LUCY_VERSION}-${{ steps.v.outputs.date }}-${GITHUB_SHA::7}"
+          # GHCR package names are lowercase. github.repository_owner keeps the account's case.
+          IMAGE_NAMESPACE="$(printf '%s' "${IMAGE_NAMESPACE}" | tr '[:upper:]' '[:lower:]')"
           REPOSITORY="${REGISTRY}/${IMAGE_NAMESPACE}/project-lucy"
           IMAGE="${REPOSITORY}:${TAG}"
           # Native amd64 runner: plain docker build. No buildx builder is created and no QEMU/binfmt is involved.
@@ -525,7 +533,7 @@ jobs:
   customer-release-readiness:
     # REQUIRED CHECK. The only customer-release aggregate gate. Independently re-verifies the evidence with the one
     # verifier and checks the signed archive; every customer release branch depends on this job.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs:
       - customer-amd64-native
       - real-e2e
@@ -572,7 +580,7 @@ jobs:
   release-package:
     # Promotes EXACTLY the tested candidate digest to the customer release tag and attaches the evidence. It never
     # builds: a rebuild after the gates would be an untested image (Spec §8.3). Single-arch linux/amd64.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs:
       - customer-amd64-native
       - customer-release-readiness

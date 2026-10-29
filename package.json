@@ -76,7 +76,7 @@
     "demo:upgrade": "bash scripts/upgrade/upgrade-lucy.sh -f deploy/compose/docker-compose.demo.yml",
     "lucy:upgrade": "bash scripts/upgrade/upgrade-lucy.sh -f docker-compose.yml",
     "lucy:upgrade:customer": "bash scripts/upgrade/upgrade-lucy.sh -f docker-compose.yml -f deploy/compose/docker-compose.customer-config.yml",
-    "smoke:p0:upgrade-lucy:test": "node --test scripts/upgrade/upgrade-lucy.test.mjs",
+    "smoke:p0:upgrade-lucy:test": "node --test scripts/upgrade/upgrade-lucy.test.mjs scripts/smoke/ensure-webui-bootstrap-token.test.mjs",
     "executive-poc:gen-data": "node examples/executive-poc/scripts/gen-executive-poc-data.mjs",
     "executive-poc:rebuild": "bash scripts/demo/rebuild-executive-poc-lucy.sh",
     "smoke:p0:executive-poc": "node scripts/smoke/p0-executive-poc-smoke.mjs",
