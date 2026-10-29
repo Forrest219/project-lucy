@@ -15,8 +15,16 @@
  *
  * 存量违规冻结在 docs/governance/spec-plan-doc-baseline.json：**基线只减不增**。
  * 新增违规 → exit 1；基线里已不再违规的条目 → 报 stale（提示可从基线移除），不阻塞。
+ *
+ * 判定范围按 **git 跟踪状态** 分流（共享工作区纪律）：
+ *   - **已跟踪文件**（已提交或已 git add）的基线外违规 ⇒ **阻塞**（exit 1）；
+ *   - **未跟踪文件**（尚未 git add 的在途草稿）的基线外违规 ⇒ **只报 WARN，不阻塞**。
+ * 理由：共享工作区里，一个会话的在途草稿不该把另一个会话的门禁打成红；但该文件一旦被
+ * git add 或提交，同一条违规**立即转为阻塞项**——CI 侧工作树干净、文件均已跟踪，
+ * 判定口径与本地一致，规则一点不松。
  */
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -145,12 +153,46 @@ export function loadBaseline() {
   }
 }
 
-/** 把违规按基线分类：不在基线内的为新增违规（阻塞）；基线里已不再违规的为 stale。 */
-export function classifyViolations(violations, baselineEntries) {
+/**
+ * 取 git 已跟踪文件集合（含**已暂存**的新增文件）。
+ * 返回 null = 无法判定（例如不在 git 仓库内 / git 不可用）→ 调用方按「已跟踪」保守处理。
+ */
+export function loadTrackedFiles() {
+  try {
+    const out = execFileSync("git", ["ls-files", "-z"], {
+      cwd: repoRoot,
+      encoding: "utf8",
+      maxBuffer: 64 * 1024 * 1024
+    });
+    return new Set(out.split("\0").filter(Boolean));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 把违规按基线分类：
+ *   - 基线内 → 不报；
+ *   - 基线外且**已跟踪** → blocking（exit 1）；
+ *   - 基线外且**未跟踪** → warnings（只提醒，不阻塞共享工作区）；
+ *   - 基线里已不再违规的条目 → stale。
+ *
+ * trackedFiles 传 null 时一律按「已跟踪」处理（保守：宁可阻塞，不可漏报）。
+ */
+export function classifyViolations(violations, baselineEntries, trackedFiles = null) {
   const baselineKeys = new Set(baselineEntries.map((e) => `${e.file}::${e.rule}`));
   const currentKeys = new Set(violations.map((v) => `${v.file}::${v.rule}`));
+  const blocking = [];
+  const warnings = [];
+  for (const v of violations) {
+    if (baselineKeys.has(`${v.file}::${v.rule}`)) continue;
+    const tracked = trackedFiles === null ? true : trackedFiles.has(v.file);
+    if (tracked) blocking.push(v);
+    else warnings.push(v);
+  }
   return {
-    blocking: violations.filter((v) => !baselineKeys.has(`${v.file}::${v.rule}`)),
+    blocking,
+    warnings,
     stale: baselineEntries.filter((e) => !currentKeys.has(`${e.file}::${e.rule}`))
   };
 }
@@ -178,13 +220,23 @@ export function scanRepo() {
   }
 
   const baseline = loadBaseline();
-  const { blocking, stale } = classifyViolations(violations, baseline.entries);
+  const trackedFiles = loadTrackedFiles();
+  const { blocking, warnings, stale } = classifyViolations(violations, baseline.entries, trackedFiles);
 
-  return { violations, blocking, stale, baseline, scanned: specFiles.length + planFiles.length };
+  return {
+    violations,
+    blocking,
+    warnings,
+    stale,
+    baseline,
+    trackedFiles,
+    scanned: specFiles.length + planFiles.length
+  };
 }
 
 export function formatReport(result) {
   const lines = [];
+  const warnings = result.warnings ?? [];
   if (result.blocking.length) {
     lines.push("Spec/Plan doc lint FAILED — 以下为新增形态违规（基线外）：");
     for (const v of result.blocking) lines.push(`  ${v.file} [${v.rule}] ${v.message}`);
@@ -192,7 +244,13 @@ export function formatReport(result) {
     lines.push("修法：见 docs/governance/DEVELOPMENT.md「新增 Spec / Plan 的落盘清单」。");
     lines.push("若确认某项为存量豁免而非遗漏，请把它写进 docs/governance/spec-plan-doc-baseline.json 并说明理由 —— 基线只减不增。");
   } else {
-    lines.push(`Spec/Plan doc lint passed (${result.scanned} files scanned, ${result.baseline.entries.length} baseline exemptions).`);
+    const warnNote = warnings.length ? `, ${warnings.length} warnings on untracked files` : "";
+    lines.push(`Spec/Plan doc lint passed (${result.scanned} files scanned, ${result.baseline.entries.length} baseline exemptions${warnNote}).`);
+  }
+  if (warnings.length) {
+    lines.push("");
+    lines.push("WARN — 以下文件尚未被 git 跟踪（未 git add），形态违规不阻塞本工作树；一旦 git add 或提交即转为阻塞项：");
+    for (const v of warnings) lines.push(`  ${v.file} [${v.rule}] ${v.message}`);
   }
   if (result.stale.length) {
     lines.push("");

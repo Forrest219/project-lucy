@@ -151,3 +151,35 @@ test("仓库现状：门禁在基线之上必须通过（不得有新增违规�
     `新增形态违规 ${result.blocking.length} 条：\n` + result.blocking.map((v) => `  ${v.file} [${v.rule}]`).join("\n")
   );
 });
+
+test("判定范围：未跟踪文件的违规只告警，不阻塞（共享工作区不互相误伤）", () => {
+  const violations = [
+    { file: "docs/specs/draft.md", rule: "index", message: "" },
+    { file: "docs/specs/tracked.md", rule: "index", message: "" }
+  ];
+  const tracked = new Set(["docs/specs/tracked.md"]);
+  const { blocking, warnings } = classifyViolations(violations, [], tracked);
+  assert.equal(blocking.length, 1);
+  assert.equal(blocking[0].file, "docs/specs/tracked.md");
+  assert.equal(warnings.length, 1);
+  assert.equal(warnings[0].file, "docs/specs/draft.md");
+});
+
+test("判定范围：无法判定跟踪状态时保守按阻塞处理（宁可阻塞不可漏报）", () => {
+  const violations = [{ file: SPEC, rule: "index", message: "" }];
+  const { blocking, warnings } = classifyViolations(violations, [], null);
+  assert.equal(blocking.length, 1);
+  assert.equal(warnings.length, 0);
+});
+
+test("判定范围：git 跟踪集合含已入库文件；已跟踪文件不得降级为告警", () => {
+  const result = scanRepo();
+  assert.ok(result.trackedFiles instanceof Set, "trackedFiles 必须是 Set");
+  assert.ok(result.trackedFiles.has("docs/README.md"), "已入库的索引文件应在跟踪集合内");
+  for (const w of result.warnings ?? []) {
+    assert.ok(
+      !result.trackedFiles.has(w.file),
+      `${w.file} 已被 git 跟踪，不应只落在告警通道`
+    );
+  }
+});
