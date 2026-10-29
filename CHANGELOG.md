@@ -85,6 +85,12 @@ Product line cut from `0.17.0` to `2.0.0` on 2026-10-19. Customer-facing label i
   - **不变量**：原始 `access_log` 不改写；「最近 MCP 访问」与「近 N 使用过的凭据」保持全量
     访问语义；审计库不可用时窗口指标为 `null`（渲染「—」），Token 前缀碰撞仍为 `partial`。
 
+### Fixed
+- **筛选栏文本输入框的中文输入法**：在访问日志、配置审计、Token 管理、语义资产与发布历史页的
+  筛选栏文本输入框中输入中文时，输入法组合不再被打断——候选窗不再逐键消失，拼音缓冲不再被
+  追加成 `zhongzhongwen` 一类的拼接乱码，最终上屏为正常中文。键入的末尾空格会原样保留在
+  输入框里，筛选结果不受影响。
+
 ### 已知限制
 - 容器生命周期验收（首次启动失败、自发退出、SIGTERM 无遗留进程、退出码）需在镜像重建后
   执行 `scripts/verify/verify-ktx-reload-lifecycle.sh --container`；本次交付只完成了本地

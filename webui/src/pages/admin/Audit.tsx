@@ -7,6 +7,7 @@ import { apiGet } from "../../lib/apiClient";
 import { copyTextWithToast } from "../../lib/clipboard";
 import { formatConfigAuditTs } from "../../lib/configAuditLabels";
 import { mergeObjectDetailSearch } from "../../lib/objectDetail";
+import { useUrlMirroredField } from "../../lib/useUrlMirroredField";
 import type {
   Agent,
   AuditLogEntry,
@@ -993,6 +994,19 @@ function writeFilterSnapshot(snapshot: FilterSnapshot) {
     // localStorage may be disabled (e.g. private mode); fall back to URL-only.
   }
 }
+
+/**
+ * Persist one filter field into the last-used snapshot. The stored value is
+ * the **raw** text the user typed — the URL keeps the raw text too, so the
+ * snapshot and the URL stay in sync (Spec §7.1).
+ */
+function persistFilterSnapshot(key: string, value: string) {
+  if (!(FILTER_PERSIST_FIELDS as readonly string[]).includes(key)) return;
+  const snapshot = readFilterSnapshot();
+  if (value) snapshot[key as (typeof FILTER_PERSIST_FIELDS)[number]] = value;
+  else delete snapshot[key as (typeof FILTER_PERSIST_FIELDS)[number]];
+  writeFilterSnapshot(snapshot);
+}
 const SENSITIVE_KEY = /(password|token|secret|api[_-]?key|private[_-]?key|cert|credentials?)/i;
 const SENSITIVE_PAIR = /\b(password|token|secret|api[_-]?key|private[_-]?key|cert|credentials?)\b\s*[:=]\s*([^,\s;]+)/gi;
 
@@ -1494,6 +1508,101 @@ export function Audit() {
   const range = parseRangePreset(searchParams);
   const hours = rangeToHours(range);
 
+  // ── 局部状态镜像（Spec §5.2／§5.3）──────────────────────────────────────
+  //
+  // 这 7 个筛选栏文本输入框的 `value` 一律由**本地 state** 驱动，URL 作为下游
+  // 事实源跟随。直接把 `value={searchParams.get(...)}` 绑上去会让 React 在旧 URL 值
+  // 渲染的那一帧写 `node.value`，Chrome 随即取消进行中的 IME 组合
+  // （Spec §1.3）。反向同步走回声协议：只有 POP 与真正的外部 PUSH／REPLACE
+  // 才写草稿，自身回声与晚到的旧值都不写（Spec §5.3）。
+  const userMirror = useUrlMirroredField({
+    read: (sp) => sp.get("user") ?? "",
+    write: (prev, raw) => {
+      const next = new URLSearchParams(prev);
+      if (raw) next.set("user", raw);
+      else next.delete("user");
+      return next;
+    },
+    history: "push"
+  });
+  const toolMirror = useUrlMirroredField({
+    read: (sp) => sp.get("tool") ?? "",
+    write: (prev, raw) => {
+      const next = new URLSearchParams(prev);
+      if (raw) next.set("tool", raw);
+      else next.delete("tool");
+      return next;
+    },
+    history: "push"
+  });
+  const sessionIdMirror = useUrlMirroredField({
+    read: (sp) => sp.get("sessionId") ?? "",
+    write: (prev, raw) => {
+      const next = new URLSearchParams(prev);
+      if (raw) next.set("sessionId", raw);
+      else next.delete("sessionId");
+      return next;
+    },
+    history: "push"
+  });
+  const clientIpMirror = useUrlMirroredField({
+    read: (sp) => sp.get("clientIp") ?? "",
+    write: (prev, raw) => {
+      const next = new URLSearchParams(prev);
+      if (raw) next.set("clientIp", raw);
+      else next.delete("clientIp");
+      return next;
+    },
+    history: "push"
+  });
+  const deviceNameMirror = useUrlMirroredField({
+    read: (sp) => sp.get("deviceName") ?? "",
+    write: (prev, raw) => {
+      const next = new URLSearchParams(prev);
+      if (raw) next.set("deviceName", raw);
+      else next.delete("deviceName");
+      return next;
+    },
+    history: "push"
+  });
+  const tableSearchMirror = useUrlMirroredField({
+    read: (sp) => sp.get("tableSearch") ?? "",
+    write: (prev, raw) => {
+      const next = new URLSearchParams(prev);
+      if (raw) next.set("tableSearch", raw);
+      else next.delete("tableSearch");
+      return next;
+    },
+    history: "push"
+  });
+  /**
+   * 统一搜索：一个输入框聚合 `key`（含遗留 `turnIdFilter`）／`turnSearch`／
+   * `tableSearch`。`read` 保持既有聚合口径；`write` 仍按 `looksLikeIdQuery`
+   * 与当前 tab 分派，但写入**原文**（不再 trim）。
+   */
+  const unifiedSearchMirror = useUrlMirroredField({
+    read: (sp) => {
+      const key = sp.get("key") ?? sp.get("turnIdFilter") ?? "";
+      const turnSearch = sp.get("turnSearch") ?? "";
+      const tableSearchValue = sp.get("tableSearch") ?? "";
+      return key || (tab === "turns" ? turnSearch : tableSearchValue);
+    },
+    write: (prev, raw) => {
+      const next = new URLSearchParams(prev);
+      next.delete("key");
+      next.delete("turnIdFilter");
+      next.delete("turnSearch");
+      if (tab === "calls") next.delete("tableSearch");
+      if (raw) {
+        if (looksLikeIdQuery(raw)) next.set("key", raw);
+        else if (tab === "turns") next.set("turnSearch", raw);
+        else next.set("tableSearch", raw);
+      }
+      return next;
+    },
+    history: "push"
+  });
+
   useEffect(() => {
     if (hasHydratedFromStorage) return;
     if (searchParams.toString().length > 0) {
@@ -1536,57 +1645,59 @@ export function Audit() {
   }, []);
 
   function updateParam(key: string, value: string) {
-    const next = new URLSearchParams(searchParams);
-    if (value) next.set(key, value);
-    else next.delete(key);
-    // Drop legacy aliases when writing canonical keys
-    if (key === "view") next.delete("tab");
-    if (key === "range") next.delete("hours");
-    if (key === "key") next.delete("turnIdFilter");
-    setSearchParams(next);
+    // 函数式更新：从 prev 拷贝后再改本字段，禁止闭包快照（Spec §5.2 写入契约）。
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (value) next.set(key, value);
+      else next.delete(key);
+      // Drop legacy aliases when writing canonical keys
+      if (key === "view") next.delete("tab");
+      if (key === "range") next.delete("hours");
+      if (key === "key") next.delete("turnIdFilter");
+      return next;
+    });
     setPage(0);
-    if ((FILTER_PERSIST_FIELDS as readonly string[]).includes(key)) {
-      const snapshot = readFilterSnapshot();
-      if (value) snapshot[key as (typeof FILTER_PERSIST_FIELDS)[number]] = value;
-      else delete snapshot[key as (typeof FILTER_PERSIST_FIELDS)[number]];
-      writeFilterSnapshot(snapshot);
-    }
+    persistFilterSnapshot(key, value);
   }
 
-  /** Spec 135: single search box — ID-like → key; else turnSearch (turns) / tableSearch (calls). */
-  function applyUnifiedSearch(raw: string) {
-    const next = new URLSearchParams(searchParams);
-    next.delete("key");
-    next.delete("turnIdFilter");
-    next.delete("turnSearch");
-    if (tab === "calls") next.delete("tableSearch");
-
-    const value = raw.trim();
-    if (value) {
-      if (looksLikeIdQuery(value)) {
-        next.set("key", value);
-      } else if (tab === "turns") {
-        next.set("turnSearch", value);
-      } else {
-        next.set("tableSearch", value);
-      }
-    }
-
-    setSearchParams(next);
+  /**
+   * Mirror-backed text change. The raw text goes into the local draft and into
+   * the URL (no trim / case / split / filter — INV-2); the snapshot stores the
+   * same raw text so URL and snapshot agree (Spec §7.1).
+   */
+  function applyMirroredText(
+    mirror: { onChange: (raw: string) => void },
+    raw: string,
+    snapshotKey?: string
+  ) {
+    mirror.onChange(raw);
     setPage(0);
+    if (snapshotKey) persistFilterSnapshot(snapshotKey, raw);
+  }
+
+  /**
+   * Unified search snapshot. The dispatch mirrors the URL write: ID-like →
+   * `key`, otherwise `turnSearch` (turns) / `tableSearch` (calls).
+   */
+  function persistUnifiedSearchSnapshot(raw: string) {
     const snapshot = readFilterSnapshot();
     delete snapshot.key;
     delete snapshot.turnSearch;
     if (tab === "calls") delete snapshot.tableSearch;
-    if (value) {
-      if (looksLikeIdQuery(value)) snapshot.key = value;
-      else if (tab === "turns") snapshot.turnSearch = value;
-      else snapshot.tableSearch = value;
+    if (raw) {
+      if (looksLikeIdQuery(raw)) snapshot.key = raw;
+      else if (tab === "turns") snapshot.turnSearch = raw;
+      else snapshot.tableSearch = raw;
     }
     writeFilterSnapshot(snapshot);
   }
 
-  const unifiedSearchValue = keySearch || (tab === "turns" ? turnSearch : tableSearch);
+  /** Spec 135: single search box — ID-like → key; else turnSearch (turns) / tableSearch (calls). */
+  function applyUnifiedSearch(raw: string) {
+    unifiedSearchMirror.onChange(raw);
+    setPage(0);
+    persistUnifiedSearchSnapshot(raw);
+  }
 
   function setCallSource(nextSource: string) {
     const next = new URLSearchParams(searchParams);
@@ -1705,6 +1816,15 @@ export function Audit() {
     if (keepObject) next.set("object", keepObject);
     if (keepEventId) next.set("eventId", keepEventId);
     setSearchParams(next);
+    // ★ INV-3：只重建 URL 不够。若某个参数本来就是空的，urlValue 不变，反向同步
+    // 的 effect 不会跑，输入框会留下旧文本。必须逐个把镜像草稿归零。
+    userMirror.reset("");
+    toolMirror.reset("");
+    sessionIdMirror.reset("");
+    clientIpMirror.reset("");
+    deviceNameMirror.reset("");
+    tableSearchMirror.reset("");
+    unifiedSearchMirror.reset("");
     const snapshot = readFilterSnapshot();
     for (const field of FILTER_PERSIST_FIELDS) {
       if (field === "view" || field === "range" || field === "turnId") continue;
@@ -1738,10 +1858,11 @@ export function Audit() {
     hours,
     since: localDateTimeValueToIso(since),
     until: localDateTimeValueToIso(until),
-    tableSearch: tableSearch || undefined,
-    turnId: keySearch || undefined,
+    // 消费点规范化：URL 与输入框保留原文，发请求前再 trim（SC-23）。
+    tableSearch: tableSearch.trim() || undefined,
+    turnId: keySearch.trim() || undefined,
     outcome: outcome || undefined,
-    q: turnSearch || undefined,
+    q: turnSearch.trim() || undefined,
     limit: PAGE_SIZE,
     offset: page * PAGE_SIZE
   });
@@ -1760,11 +1881,11 @@ export function Audit() {
     outcome: outcome || undefined,
     since: localDateTimeValueToIso(since),
     until: localDateTimeValueToIso(until),
-    tableSearch: tableSearch || undefined,
+    tableSearch: tableSearch.trim() || undefined,
     sessionId: sessionId || undefined,
     clientIp: clientIp || undefined,
     deviceName: deviceNameFilter || undefined,
-    key: keySearch || undefined,
+    key: keySearch.trim() || undefined,
     platform: platform || undefined,
     callSource: callSource || undefined,
     includeProtocol,
@@ -1838,10 +1959,10 @@ export function Audit() {
     hours,
     since: localDateTimeValueToIso(since),
     until: localDateTimeValueToIso(until),
-    tableSearch: tableSearch || undefined,
-    turnId: keySearch || undefined,
+    tableSearch: tableSearch.trim() || undefined,
+    turnId: keySearch.trim() || undefined,
     outcome: outcome || undefined,
-    q: turnSearch || undefined
+    q: turnSearch.trim() || undefined
   });
   const callExportFilterQuery = buildQuery({
     user: resolvedUserFilter || user || undefined,
@@ -1850,11 +1971,11 @@ export function Audit() {
     outcome: outcome || undefined,
     since: localDateTimeValueToIso(since),
     until: localDateTimeValueToIso(until),
-    tableSearch: tableSearch || undefined,
+    tableSearch: tableSearch.trim() || undefined,
     sessionId: sessionId || undefined,
     clientIp: clientIp || undefined,
     deviceName: deviceNameFilter || undefined,
-    key: keySearch || undefined,
+    key: keySearch.trim() || undefined,
     platform: platform || undefined,
     callSource: callSource || undefined,
     includeProtocol
@@ -2058,8 +2179,8 @@ export function Audit() {
           translate="no"
           placeholder="Agent 名称或 ID"
           aria-label="按 Agent 名称或 ID 筛选"
-          value={user}
-          onChange={(e) => updateParam("user", e.target.value)}
+          value={userMirror.value}
+          onChange={(e) => applyMirroredText(userMirror, e.target.value, "user")}
         />
         <select
           className="pl-input w-28"
@@ -2078,7 +2199,7 @@ export function Audit() {
           placeholder={tab === "turns" ? "搜索问询 ID / 摘要 / 表名" : "事件 ID / 问询 ID / 表名"}
           aria-label="统一搜索"
           data-testid="audit-key-search"
-          value={unifiedSearchValue}
+          value={unifiedSearchMirror.value}
           onChange={(e) => applyUnifiedSearch(e.target.value)}
         />
         {/* Hidden time inputs kept for test compatibility and custom mode */}
@@ -2175,32 +2296,32 @@ export function Audit() {
                 translate="no"
                 placeholder="工具名"
                 aria-label="按工具名筛选"
-                value={tool}
-                onChange={(e) => updateParam("tool", e.target.value)}
+                value={toolMirror.value}
+                onChange={(e) => applyMirroredText(toolMirror, e.target.value, "tool")}
               />
               <input
                 className="pl-input w-40 notranslate"
                 translate="no"
                 placeholder="Session ID"
                 aria-label="按 Session ID 筛选"
-                value={sessionId}
-                onChange={(e) => updateParam("sessionId", e.target.value)}
+                value={sessionIdMirror.value}
+                onChange={(e) => applyMirroredText(sessionIdMirror, e.target.value, "sessionId")}
               />
               <input
                 className="pl-input w-36 notranslate"
                 translate="no"
                 placeholder="访问 IP"
-                value={clientIp}
+                value={clientIpMirror.value}
                 aria-label="访问 IP"
-                onChange={(e) => updateParam("clientIp", e.target.value)}
+                onChange={(e) => applyMirroredText(clientIpMirror, e.target.value, "clientIp")}
               />
               <input
                 className="pl-input w-36 notranslate"
                 translate="no"
                 placeholder="最近设备名"
-                value={deviceNameFilter}
+                value={deviceNameMirror.value}
                 aria-label="最近设备名"
-                onChange={(e) => updateParam("deviceName", e.target.value)}
+                onChange={(e) => applyMirroredText(deviceNameMirror, e.target.value, "deviceName")}
               />
               <label className="flex items-center gap-2 text-sm text-fg-muted">
                 <input type="checkbox" checked={includeProtocol} onChange={(e) => updateParam("includeProtocol", e.target.checked ? "true" : "")} />
@@ -2214,8 +2335,8 @@ export function Audit() {
               translate="no"
               placeholder="表名"
               aria-label="按表名筛选"
-              value={tableSearch}
-              onChange={(e) => updateParam("tableSearch", e.target.value)}
+              value={tableSearchMirror.value}
+              onChange={(e) => applyMirroredText(tableSearchMirror, e.target.value, "tableSearch")}
             />
           ) : null}
           <label className="flex items-center gap-2 text-sm text-fg-muted">

@@ -4,7 +4,8 @@
 |---|---|
 | 文档名称 | project-lucy 项目概览 |
 | 文档类型 | Overview |
-| 版本 | v1.59 |
+| 版本 | v1.60 |
+| v1.60 更新 | 2026-10-30，**URL 驱动输入法组合中断优化已落地**：Spec／Plan v1.0。13 处筛选栏文本框改为局部状态镜像。本地验收通过。SC-17 有 Chrome 156 探针记录。远端 CI 未跑。不授权镜像、部署或客户交付。记录 `docs/reviews/2026-10-30-url-driven-input-ime-acceptance.md`。⚠️ 版本号为跨会话共享计数器，写前须实读顶部版本行取 current+1 |
 | v1.59 更新 | 2026-10-29，**问询预算窗口与预算终止可观测性优化作者定稿**：Spec 升 **v0.3**、Plan 升 **v0.6**。收口四处内部冲突：墙钟维持结算口径软上限（准入不预占在途）、`consume`／`settle` 改为 `commit` 落库先行并进入同一作用域锁、停机凭证不得回传 `scopeKey`、「可继续」进入 SC-41。**第 2 轮复审未进行；D1–D9 未拍板；SC-01–SC-41 全部未执行；不授权开发。** 本表 v1.58 行所载 Spec v0.2／Plan v0.3 为当时快照，现值以本行为准。⚠️ 版本号为跨会话共享计数器，写前须实读顶部版本行取 current+1 |
 | v1.58 更新 | 2026-10-29，**问询预算窗口与预算终止可观测性优化（新条目，编号待 PM 指派，建议 L25-17）登记**：源于 2026-10-29 生产事故（用户 liuzongxuan / `codex-mcp-client`，零次数据工具调用即被 `question_budget_exhausted` 拦下，客户侧无法自救）。Spec／Plan 已落盘（`docs/specs/lucy-20261029-question-budget-window-optimization-spec.md` v0.2、`docs/plans/2026-10-29-lucy-question-budget-window-optimization-plan.md` v0.3）；**第 1 轮 Codex 独立审阅结论「退回修订」（4 阻塞 / 8 高 / 1 中 / 1 低，共 14 条）**，其中 R01／R06／R07 三条直接击穿原稿伪代码前提、R11 推翻「导出服务端写死 outcome=ok」的归因、R10 指出认证路由／报表模板为预算旁路；14 条已在 Spec §10 逐条回应并落修，**第 2 轮复审未进行**，修订稿是否闭合 14 条**尚未经独立复核**。**D1–D9 全部未拍板；SC-01–SC-41 全部未执行；不授权开发、测试执行、治理文件变更、浏览器验证、镜像、部署或提交**。⚠️ 版本号为跨会话共享计数器，写前须实读顶部版本行取 current+1 |
 | v1.57 更新 | 2026-10-29，L25-15 **登记册同步（事实对齐，按 PM 后续决定）：Spec／Plan 升 v0.10**——把 §9 该条目所载**外部工作项依赖**状态写准为「**编号待定且已挂起**」：PM 于 2026-10-29 决定**暂不设 L25-11 owner 会话**，**G30／G31 与该外部工作项一并挂起**（见本表 v1.55 行），编号**仍为待定**且**无 owner、无法推进**，**恢复条件 = PM 重新指派 L25-11 owner（或授权复审）**。据此三项口径：① **开工不受影响**（v0.9 已解除的开工前置不因此回退）；② **交付不得以该修复落地为前提**，挂起期间它**不提供任何保障**；③ **恢复路径自身的保障必须自足**——恢复锁持有到终态、基线复核与重叠拒绝三条是本功能在此问题上的**唯一保障**，不得视为临时替代；与 L25-11 维护方协调验收矩阵与回归范围因无 owner 而**无法在本功能内推进**，只作已知依赖登记。**产品语义未变**，SRR-01–SRR-24 全部未执行，不授权开发。⚠️ **现值口径**：本表 v1.53 行所载「修订至 v0.9」为**当时记录**，L25-15 的现值以本行为准（**Spec v0.10／Plan v0.10**）；历史行按惯例不回改。⚠️ 版本号为跨会话共享计数器，写前须实读顶部版本行取 current+1 |
@@ -196,6 +197,7 @@ Lucy MCP Proxy 监听 `LUCY_PROXY_HOST:LUCY_PROXY_PORT`（默认容器内 `0.0.0
 | 主题 | 文档 |
 |---|---|
 | Lucy 产品定位与愿景 | `docs/governance/vision.md` |
+| **筛选栏输入法组合中断（20261030，v0.25 修订线缺陷，不另派 L25；Spec v1.0／Plan v1.0 已定稿）** | [Spec](../specs/lucy-20261029-url-driven-input-ime-composition-spec.md)（v1.0）· [Plan](../plans/2026-10-29-lucy-url-driven-input-ime-composition-plan.md)（v1.0）· [审批记录](../reviews/2026-10-30-url-driven-input-ime-approval.md)。13 处 URL 驱动文本框改为局部状态镜像，反向同步走回声协议。**2026-10-30 已落地并完成本地验收。** SC-17 有 Chrome 156 探针记录。远端 CI 未跑 |
 | **问询预算窗口与预算终止可观测性（20261029，编号待 PM 指派，建议 L25-17；P0，Spec v0.3／Plan v0.6 作者定稿，待第 2 轮复审与 PM 拍板）** | [问询预算优化 Spec](../specs/lucy-20261029-question-budget-window-optimization-spec.md)（v0.3）· [实施 Plan](../plans/2026-10-29-lucy-question-budget-window-optimization-plan.md)（v0.6）· [第 1 轮 Codex 审阅结论](../reviews/2026-10-29-codex-review-question-budget-window-optimization.md)。问询预算墙钟口径改写、续查通道、预算终止可观测化；**D1–D9 未拍板，SC-01–SC-41 全部未执行，不授权开发** |
 | **竞品分析与差异化立项（20261014）** | **`docs/specs/lucy-20261014-safe-log-to-quality-eval-spec.md`**（P0-1 反馈回流浪程）· **`docs/specs/lucy-20261014-release-bom-spec.md`**（P0-2 发布物料清单）· **`docs/specs/lucy-20261014-concept-dictionary-spec.md`**（P1 概念字典）；工单 `docs/plans/wo-20261014-*.md`；分析底稿与评审历史 `docs/specs/lucy-20261014-fivetran-context-layer-competitive-analysis.md` |
 | Cloudflare OS 对标差异（20261018） | `docs/specs/lucy-20261018-cloudflare-os-benchmark.md`。公开材料对照，不是功能 Spec；未纳入本地实机截图交叉审阅 |

@@ -24,6 +24,7 @@
 - `11-components-data-grid.md`：数据网格规范（字体、对齐、列宽、密度、测试契约）
 - `12-components-metric-card.md`：列表页 KPI Metric Card（Connections 基准、必有 ⓘ；见 Spec 103）
 - `13-components-toast.md`：Toast 落点与语义（默认 `bottom-right`，避让 PageHeader；见 Spec 120）
+- `14-components-filter-input.md`：筛选栏文本输入框（`value` 源、URL 跟随、清除动作 `reset`、INV-1–INV-3）
 - `20-patterns-page-layout.md`：页面布局模式骨架（列表页/概览页/配置页）
 - `30-pr-compliance-template.md`：PR 的 Design System Compliance 模板
 - `99-governance.md`：规范变更流程与执行要求

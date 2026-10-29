@@ -95,6 +95,8 @@ jobs:
         working-directory: webui
       - run: npm run lint:terminology
         working-directory: webui
+      - run: npm run lint:url-driven-input
+        working-directory: webui
       - run: npm test
         working-directory: webui
       - run: npm run build

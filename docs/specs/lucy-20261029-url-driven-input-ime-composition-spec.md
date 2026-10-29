@@ -2,18 +2,18 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档类型 / 版本 | 功能设计基线 / **v0.1-draft** |
-| 日期 / 目标版本 | 2026-10-29 首版 / 目标 v0.25（修订线） |
-| 功能编号 / 优先级 | **待 PM 指派**（建议 L25-18——L25-17 已被同日《问询预算窗口》Spec 建议占用，最终编号由 PM 分配；**权威登记册**为 [`docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md`](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md)，新条目须由登记册维护会话登记）/ **P0**（13 处 URL 驱动输入框）、**P1**（2 处变换写回）、**P2**（静态门禁与规范补齐） |
-| 状态 | **待审阅，未批准**。本文件是设计基线，不授权开发、浏览器验证或客户交付。 |
-| 评审状态 | **第 1 轮审阅未进行**（2026-10-29 PM 指示「准备进入审阅」） |
+| 文档类型 / 版本 | 功能设计基线 / **v1.0** |
+| 日期 / 目标版本 | 2026-10-29 首版；2026-10-30 定稿 / 目标 v0.25（修订线） |
+| 功能编号 / 优先级 | **不另派 L25 编号**。这是 v0.25 修订线上的 WebUI 交互缺陷修复，不进入 [`docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md`](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) 功能台账。同日《问询预算窗口》曾建议的 L25-17 已被该条目自己撤回（沿用 Spec 162），本条目不占用下一个空号。/ **P0**（13 处 URL 驱动输入框）、**P1**（2 处变换写回）、**P2**（静态门禁与规范补齐） |
+| 状态 | **v1.0 已落地，本地验收通过（2026-10-30）**。SC-01–SC-19、SC-22、SC-23 通过。SC-17 有 Chrome 156 探针记录。SC-20 本次相关用例通过；全量 WebUI 测试有既有服务端 flake，未改服务端。SC-21 本地 lint 全绿，CI 已接线，远端 job 未跑。不授权镜像、部署或客户交付。 |
+| 评审状态 | **2026-10-30 审批通过并完成复审验收**。审批见 [审批记录](../reviews/2026-10-30-url-driven-input-ime-approval.md)，验收见 [验收记录](../reviews/2026-10-30-url-driven-input-ime-acceptance.md)。 |
 | 决策来源 | 2026-10-29 PM 指示：针对 Audit 页「Agent 名称或 ID」搜索框的输入法无法切换反馈，落盘优化 Spec 与 Plan，**并要求排查全量存在此类型 bug 的筛选器** |
 | 需求来源 | 用户反馈：Audit 页 agent 名称或 ID 搜索框「输入法无法切换」 |
 | 实施主体 | Lucy WebUI（`webui/src`）；不修改 KTX 源码、不改后端 API |
 | 落位依据 | [`docs/governance/DEVELOPMENT.md`](../governance/DEVELOPMENT.md)「Spec 落位规则」：仓库级跨模块设计落 `docs/`；本文是 WebUI 前端交互层的实现约束，不修订任何既有 Spec 的业务语义 |
 | 与既有 Spec 的关系 | **不修订**既有 Spec。仅新增一条 WebUI 实现约束（§5.1–§5.5）与一条防回归门禁。既有页面行为语义（URL 即筛选事实源、分享链接可用、深链可复现）**保持不变** |
 
-> 本文件是**设计基线**。审阅未闭环、决策未拍板之前，不授权实现。
+> 本文件是 **v1.0 设计基线**。D1–D6 已拍板。2026-10-30 已按该基线落地，并通过本地验收，见 [验收记录](../reviews/2026-10-30-url-driven-input-ime-acceptance.md)。
 
 ---
 
@@ -84,7 +84,7 @@
 
 外加：伴生缺陷 C-1、C-2（§1.4）；静态防回归门禁（§5.5）；设计规范补齐（§10）。
 
-> ⚠️ **范围与上轮 PM 口径的差异**：2026-10-29 PM 在修复范围问卷中批的是「Audit + Catalog + Tokens 全量（9 处）」，该数字来自首轮按变量名匹配的启发式排查。**本轮传递闭包全量排查新增 4 处**——配置审计 3 处（#8–#10）与发布历史 1 处（#13）。四者与已批范围**同根因、同修法**，建议一并纳入（决策点 **D2**）。
+> **D2 已拍板为 13 处全量。** 2026-10-29 修复范围问卷里的 9 处来自变量名启发式排查；传递闭包补上的配置审计 3 处与发布历史 1 处同根因、同修法，一并纳入。静态门禁不设白名单。
 
 ### 2.2 本期不包括
 
@@ -110,16 +110,16 @@
 
 ---
 
-## 4. 决策表（待 PM 拍板）
+## 4. 决策表（2026-10-30 已拍板）
 
-| 编号 | 决策 | 选项 | 推荐 | 影响面 |
+| 编号 | 决策 | 选项 | 裁定 | 理由 |
 |---|---|---|---|---|
-| **D1** | 修法形态 | (a) 局部状态镜像（value 取本地 state，URL 跟随）｜(b) (a) + URL 写入防抖｜(c) 仅加 `isComposing` 守卫 | **(a)** | **开工阻塞**。决定全部 13 处的改法。已实测：(c) 无效——守卫只拦 Enter 键，拦不住 `node.value` 写回；(b) 可选叠加项，见 D4 |
-| **D2** | 修复范围 | (a) 13 处全量（含新增 4 处）｜(b) 仅上轮已批的 9 处 | **(a)** | **开工阻塞**。选 (b) 会留下 4 处同类缺陷，且静态门禁无法对 4 处放行 ⇒ 门禁要么误报要么需白名单 |
-| **D3** | 防回归手段 | (a) 静态门禁为主 + 真浏览器探针为辅｜(b) 仅真浏览器探针 | **(a)** | 探针需系统 Chrome + 运行中的 WebUI，**不适合做 CI 门禁**；静态门禁可在 CI 常驻 |
-| **D4** | URL 写入时机 | (a) 保持每次按键即写（分享链接实时可用）｜(b) 防抖写入（300ms） | **(a)** | 选 (b) 会改变「复制地址栏即得当前筛选」的实时性，属产品行为变更，不应顺手改 |
-| **D5** | 伴生缺陷 C-1 / C-2 是否本期修 | (a) 一并修｜(b) 仅登记不修 | **(a)** | C-2 与 IME 无关也独立成 bug（键入 `", "` 被抹除），同批修性价比高 |
-| **D6** | 设计规范补齐 | (a) 补 `design-system` 输入框章节｜(b) 仅在 `99-governance.md` 记临时决策 | **(a) 与 (b) 都做**：先记临时决策，再提章节 | `design-system` 现无输入框／筛选栏组件章节，本次是规范缺口 |
+| **D1** | 修法形态 | (a) 局部状态镜像｜(b) (a) + URL 防抖｜(c) 仅加 `isComposing` 守卫 | **(a)** | (c) 已实测无效：守卫拦不住 `node.value` 写回。(b) 不采用，见 D4。镜像的反向同步必须遵守 §5.3 回声协议，不得照抄 `HelpCenter` 的无条件 `setDraft` |
+| **D2** | 修复范围 | (a) 13 处全量｜(b) 仅原先 9 处 | **(a)** | 新增 4 处同根因。选 (b) 会迫使门禁加白名单 |
+| **D3** | 防回归手段 | (a) 静态门禁为主 + 真浏览器探针为辅｜(b) 仅真浏览器探针 | **(a)** | 探针依赖系统 Chrome，不进 CI |
+| **D4** | URL 写入时机 | (a) 每次按键即写｜(b) 防抖 300ms | **(a)** | 保持「复制地址栏即得当前筛选」。各调用点现有的 push / `replace: true` **保持原样**，不统一改成某一种 |
+| **D5** | 伴生缺陷 C-1 / C-2 | (a) 一并修｜(b) 仅登记 | **(a)** | C-2 让用户无法键入 `", "`，与 IME 无关也是独立缺陷 |
+| **D6** | 设计规范补齐 | (a) 补输入框章节｜(b) 只记临时决策 | **(a) 与 (b) 都做** | S6 先把临时决策写入 `99-governance.md`，并新增 `14-components-filter-input.md`。章节落地前，本 Spec §5 仍是该约束的事实源 |
 
 ---
 
@@ -174,58 +174,110 @@ function isUrlDriven(input, seeds):
 | `value={search}`，其中 `search` 为 `useState("")` | 通过 | 正确范式 |
 | `value={turnId}`，其中 `turnId = useState(searchParams.get("turnId"))` | 通过 | 初值来自 URL，但**受控源是本地 state** |
 
-### 5.2 局部状态镜像模式（主修法，对应 D1=(a)）
+### 5.2 局部状态镜像模式（主修法，D1=(a)）
+
+`value` 绑定本地 `draft`。用户输入先同步写入 `draft`，再把**原文**写入 URL。URL 回写必须走 §5.3，禁止 `useEffect(() => setDraft(urlValue), [urlValue])` 这种无条件覆盖。`HelpCenter.tsx` 的 `draftQuery` 只说明「本地 state + URL 跟随」这一形状已经存在；它的无条件 effect **不是**本修法的同步协议。
 
 ```text
-function useUrlMirroredField(paramKey):
-    urlValue ← searchParams.get(paramKey) ?? ""
+function useUrlMirroredField({ read, write, history }):
+    # read(searchParams) → 当前应显示的字符串
+    # write(prev, raw) → 下一份 URLSearchParams；不得改写 raw
+    # history：保持该调用点现状。"push" 或 "replace"
+    urlValue ← read(searchParams)
     [draft, setDraft] ← useState(urlValue)
+    latestSubmitted ← ref(urlValue)
+    pending ← ref([])          # 本字段已提交、尚未被位置变化分类的原文，旧→新
+    superseded ← ref([])       # 已被更新的提交盖过的原文，最多保留 8 条
 
-    # (1) URL 外部变更 → 反向同步（深链 / hydration / 后退 / 清除筛选 / 其它入口）
-    useEffect(() => { setDraft(urlValue) }, [urlValue])
-
-    # (2) 用户输入 → 本地立即回显 + URL 跟随
     function onChange(e):
-        v ← e.target.value
-        setDraft(v)                     # ← 同步；先于任何异步副作用
-        next ← new URLSearchParams(searchParams)
-        if v ≠ "": next.set(paramKey, v) else next.delete(paramKey)
-        setSearchParams(next)            # ← 异步副作用；是否防抖见 D4
+        v ← e.target.value               # 原文。禁止 trim / 大小写 / split / filter
+        setDraft(v)
+        latestSubmitted ← v
+        pending.push(v)
+        setSearchParams(prev => write(prev, v), historyMode(history))
 
-    return { value: draft, onChange }
+    # 反向同步见 §5.3。清除筛选等「URL 可能不变、但草稿必须归零」的动作
+    # 必须调用 reset(nextValue)，不能只依赖 effect。
+    function reset(nextValue):
+        pending.clear()
+        superseded.clear()
+        latestSubmitted ← nextValue
+        setDraft(nextValue)
+
+    return { value: draft, onChange, reset }
 ```
+
+**写入契约**
+
+- `setSearchParams` 必须使用函数式更新，从 `prev` 拷贝后再改本字段。禁止 `new URLSearchParams(searchParams)` 闭包快照，否则同页其它字段或 hydration 会互相覆盖。
+- `write` 落进 URL 的是 `raw` 原文。分类、查询、提交可以在**消费点** `trim`，不得把 trim 后的值写回受控 state，也不得把 trim 后的值写回 URL 再靠反向同步抹掉空格。
+- 现网两处会在写 URL 时 trim，改造时删掉这一步：`Audit.tsx` 的 `applyUnifiedSearch`（`:1564`）与 `Catalog.tsx` 的 `patchSearchParams` 对 `q` 的 `trim()`（`:265`）。查询请求仍在发请求前 trim，避免末尾空格改变现网结果。
+- `Tokens.tsx` 的 `updateParam` 把值 `"all"` 当成「清空」哨兵（`:54`）。该哨兵只适用于下拉框。搜索框必须把 `"all"` 当作普通文本写入 `search`，否则键入 all 会被 URL 删参，反向同步再把输入框抹空。
+- 统一搜索框不是单参数字段。`read` 保持现有聚合：`key`（含遗留 `turnIdFilter`）优先，否则按当前 tab 取 `turnSearch` 或 `tableSearch`。`write` 仍按 `looksLikeIdQuery` 与当前 tab 分派到对应参数，但写入原文；`looksLikeIdQuery` 继续只在内部分类时 trim。tab 切换使派生显示值改变时，视为外部变更：清空 pending / superseded，采用新的派生值。
+- 历史模式按调用点保持现状：Audit、配置审计、Token、发布历史的文本框是 push；目录的 `patchSearchParams` 是 `replace: true`。
 
 **三条不变量（验收断言的唯一来源）**
 
-- **INV-1（组合存活）**：组合进行中 `draft` 与 DOM 值**恒等** ⇒ React 的 `value` prop 永不 ≠ DOM 值 ⇒ Chrome 不会取消组合。**这是本修法唯一的必要条件**。
-- **INV-2（禁止变换写回）**：`onChange` 中**不得**对 `e.target.value` 做 `trim` / 大小写 / 拆分 / 过滤后再 `setState`。任何变换都会让 state ≠ DOM 值，触发写回（伴生缺陷 C-1、C-2 即此类）。
-- **INV-3（不得脱节）**：任何**非用户输入**引起的 URL 变更，必须经由 (1) 的反向同步路径把 `draft` 拉回。否则输入框显示的文本与 URL 表达的筛选条件不一致。
+- **INV-1（组合存活）**：组合进行中 `draft` 与 DOM 值**恒等** ⇒ React 的 `value` prop 永不 ≠ DOM 值 ⇒ Chrome 不会取消组合。本地 state 只挡住「旧 URL 渲染一帧」；挡住「更早一次按键的 URL 提交晚到」还要靠 §5.3。
+- **INV-2（禁止变换写回）**：`onChange` 中**不得**对 `e.target.value` 做 `trim` / 大小写 / 拆分 / 过滤后再 `setState`，也不得把变换后的字符串写进 URL。伴生缺陷 C-1、C-2，以及统一搜索 / 目录 `q` 的写前 trim，都属此类。
+- **INV-3（不得脱节）**：后退、深链、hydration、清除筛选、其它入口改同一参数，最终都必须把 `draft` 拉回 URL 所表达的文本。清除筛选不能只改 URL。
 
 **INV-3 的高危触发源（实现时必须逐条处理）**
 
 | 触发源 | Audit 页落点 | 要求 |
 |---|---|---|
 | 首次挂载 / 深链 | `Audit.tsx:1478` | `draft` 初值 = URL 值 |
-| localStorage 快照 hydration | `Audit.tsx:1497-1521` | 经 (1) 同步 |
-| **清除筛选** | `Audit.tsx:1693` `clearFilters` | **必须显式重置全部镜像 draft**。该函数把 URL 整体重建为仅含 `range`/`view`/`turnId`/`object`/`eventId`，若不重置 draft，7 个输入框仍显示旧文本而 URL 已清空 ⇒ 违反 INV-3。**本项是本次改造最高回归风险** |
-| 浏览器后退 / 前进 | router popstate | 经 (1) 同步 |
-| 其它入口改同一 param | 跨组件 | 经 (1) 同步 |
+| localStorage 快照 hydration | `Audit.tsx:1497-1521` | 这是外部 PUSH。按 §5.3 采用 URL，不把它当成自身回声 |
+| **清除筛选** | `Audit.tsx:1693` `clearFilters` | **必须调用每个镜像的 `reset("")`**（或该字段清除后的派生值）。只改 URL 不够：若某个参数本来就是空的，`urlValue` 不变，effect 不会跑，输入框会留下旧文本。`reset` 同时清掉 pending / superseded。**本项是本次改造最高回归风险** |
+| 浏览器后退 / 前进 | router `POP` | 按 §5.3 无条件采用，即使正在组合 |
+| 其它入口改同一 param | 跨组件 | 按 §5.3 外部 PUSH/REPLACE 采用 |
 
-### 5.3 URL 反向同步的时序
+### 5.3 URL 反向同步的时序（回声协议）
+
+无条件 `setDraft(urlValue)` 会在连续按键时把草稿打回较早的 URL 值。输入法下一次按键经常快过路由提交：先提交 `"z"`，草稿已是 `"zh"`，随后 `"z"` 的导航落地，effect 若写回 `"z"`，React 就会在组合中改 `node.value`，INV-1 失败。这是 v0.1 伪代码的缺陷，v1.0 用下面的分类取代它。
 
 ```text
-用户键入 "zh"（组合中）
-  → onChange: setDraft("zh")            # 同步，DOM 立即回显
-  → setSearchParams(...user=zh)          # 异步导航
-  → [导航完成] location.search 变化 → urlValue = "zh"
-  → useEffect([urlValue]) → setDraft("zh")   # 同值 ⇒ React 状态更新被跳过 ⇒ 不产生额外渲染
+位置变化到达 (urlValue, navType)：   # navType 来自 useNavigationType()
 
-URL 外部变更（后退）
-  → location.search 变化 → urlValue = "zh"
-  → useEffect([urlValue]) → setDraft("zh")   # 输入框回显新值
+  if navType == POP:                  # 浏览器后退 / 前进。即使用户正在组合，也采用
+      pending.clear(); superseded.clear()
+      latestSubmitted ← urlValue
+      setDraft(urlValue)
+      return
+
+  if urlValue == latestSubmitted:     # 最新一次本地提交的回声
+      superseded.extend(pending)
+      superseded ← superseded 的最后 8 条
+      pending.clear()
+      return                          # 不 setDraft
+
+  if pending 含 urlValue:             # 更早一次本地提交晚到
+      删掉 pending 里直到并包含该值的前缀
+      return                          # 不 setDraft
+
+  if superseded 含 urlValue:          # 更新的提交已经确认后，旧值又晚到
+      return                          # 不 setDraft
+
+  # 其余 PUSH / REPLACE：深链、hydration、清除、抽屉回填、其它入口
+  pending.clear(); superseded.clear()
+  latestSubmitted ← urlValue
+  setDraft(urlValue)
 ```
 
-**关键**：反向同步写入的是**同一个值**时，React 会跳过该状态更新（`Object.is` 相等），因此**不产生额外渲染、不触发 DOM 写回**。这是 INV-1 成立的前提，不得改成「每次 effect 都强制写」。
+同值回声不调用 `setDraft`。不得改成「每次位置变化都强制写草稿」。
+
+```text
+用户键入 "z" 后立刻键入 "zh"（组合中）
+  → onChange("z"): draft="z"，pending=["z"]，发起导航
+  → onChange("zh"): draft="zh"，pending=["z","zh"]，发起导航
+  → 导航落地 url="z"（POP 除外）
+      pending 命中 "z" → 吃掉该前缀 → draft 保持 "zh"
+  → 导航落地 url="zh"
+      url == latestSubmitted → 清空 pending → draft 保持 "zh"
+  → 若 "zh" 先到、"z" 后到：
+      先按 latestSubmitted 确认 "zh"，"z" 进入 superseded
+      后到的 "z" 命中 superseded → 忽略
+```
 
 ### 5.4 变换写回的处理（对应 INV-2 / 伴生缺陷 C-1、C-2）
 
@@ -278,10 +330,10 @@ main():
 对 §2.1 表中每一处，改造后必须同时满足：
 
 1. 输入框的 `value` **不取自** URL 派生变量（改由本地 state 驱动）；
-2. 用户键入文本后，URL 对应 param **立即等于**输入文本（若 D4 选防抖，则在防抖窗口结束后 ≤ delay + 100ms 内相等）；
+2. 用户键入文本后，URL 对应 param **立即等于输入原文**（D4 已否决防抖）。末尾空格保留在输入框和 URL 里；
 3. 深链打开（`?user=analyst_zhang`）时输入框显示该值；
-4. 浏览器后退后输入框回到前一个值；
-5. 该页「清除筛选」类动作执行后，输入框清空且 URL 无对应 param。
+4. 浏览器后退 / 前进（`POP`）后输入框回到该历史条目的值，即使焦点仍在输入框内；
+5. 该页「清除筛选」类动作执行后，输入框清空且 URL 无对应 param。参数原本为空时也必须清空。
 
 ### 6.2 防回归门禁（SC-14 – SC-16）
 
@@ -300,16 +352,18 @@ main():
 
 **该验收不可用 jsdom 替代**（§1.2 已实测 jsdom 不可复现）。
 
-### 6.4 伴生缺陷与回归（SC-18 – SC-21）
+### 6.4 伴生缺陷、回声与回归（SC-18 – SC-23）
 
 - **SC-18**（C-1）：`AuditReconciliation` 问询 ID 输入框输入带首尾空格的文本后，**输入框保留原文**，查询仍按 trim 后的值发起。
 - **SC-19**（C-2）：`CaseEditor` 期望指标输入框可键入 `", "` 且不被立即抹除；受控值为原文，解析值只用于下游。
 - **SC-20**：`cd webui && npm test` 全绿；既有 URL 断言测试（如 `audit.test.tsx:212` 的 `user=analyst_zhang` 服务端查询断言、`admin-audit-turns.test.tsx:777` 的「清除筛选」用例）**不得回归**。
 - **SC-21**：`npm run lint:terminology`、`npm run lint:ia-boundary`、`npm run lint:spec` 全绿；新增 `npm run lint:url-driven-input` 全绿；CI job 增绿。
+- **SC-22**（回声）：连续两次输入使草稿到达 `"zh"` 之后，较早的 URL 值 `"z"` 落地时，草稿保持 `"zh"`，组合期间 `value` setter 仍为 0。覆盖「旧值晚到」与「新值先确认、旧值后到」两种顺序。可用可控延迟的 router 替身在 vitest 里断言；SC-17 的真浏览器探针再覆盖组合不被打断。
+- **SC-23**（写前 trim 的两处现网行为）：Audit 统一搜索与目录 `q` 键入末尾空格时，输入框与 URL 保留该空格；发往接口或过滤函数的消费值仍 trim。Token 搜索框可以保留文本 `all`，URL 参数 `search=all` 存在。下拉框的 `"all"` 清空哨兵不变。
 
 ### 6.5 交付判定
 
-SC-01 – SC-21 **全部执行且通过** 方可判定交付。其中 **SC-17 必须有真实浏览器运行记录**（含探针脚本与输出留痕，落 `inbox/`），jsdom 结果**不得**充当该项证据。
+SC-01 – SC-23 **全部执行且通过** 方可判定交付。其中 **SC-17 必须有真实浏览器运行记录**（含探针脚本与输出留痕，落 `inbox/`），jsdom 结果**不得**充当该项证据。SC-22 的 vitest 不能代替 SC-17。
 
 ---
 
@@ -318,7 +372,7 @@ SC-01 – SC-21 **全部执行且通过** 方可判定交付。其中 **SC-17 �
 ### 7.1 兼容
 
 - URL 参数名、含义、格式**全部不变**；既有深链、分享链接、外部跳转**继续可用**。
-- `localStorage` 筛选快照键 `lucy:webui:audit:filters:v3`（`Audit.tsx:945`）**不变**，无数据迁移。
+- `localStorage` 筛选快照键 `lucy:webui:audit:filters:v3`（`Audit.tsx:945`）**不变**，无键迁移。统一搜索写入快照的值改为原文，与 URL 一致。
 - 后端 API、审计语义**不变**。
 
 ### 7.2 迁移
@@ -330,10 +384,11 @@ SC-01 – SC-21 **全部执行且通过** 方可判定交付。其中 **SC-17 �
 | 风险 | 等级 | 缓解 |
 |---|---|---|
 | **「清除筛选」后输入框与 URL 脱节**（`clearFilters` 整体重建 URL，未重置镜像 draft） | **高** | INV-3 + SC-01(5)；实现时必须显式重置；`admin-audit-turns.test.tsx:777` 已有「清除筛选」用例可作回归哨兵 |
-| 本地 state 与 URL 双源在「后退 / 深链 / hydration」时序错位 | 中 | INV-3 的反向同步路径 + SC-01(3)(4) |
+| 本地 state 与 URL 双源在「后退 / 深链 / hydration」时序错位 | 中 | §5.3 回声协议 + SC-01(3)(4) + SC-22 |
+| 无条件 `setDraft(urlValue)` 把较快的按键打回较早的 URL 值，组合再次被取消 | **高** | §5.3：自身回声与 superseded 旧值不写草稿；只有 `POP` 与真正的外部 PUSH/REPLACE 才 `setDraft` |
 | 13 处分散在 5 个文件，遗漏 1 处即门禁变红 | 中 | 静态门禁是唯一收敛保证（SC-14） |
 | 探针依赖系统 Chrome + 运行中的 WebUI，CI 不可用 | 中 | 门禁以静态检查为主（SC-14–16），探针仅作一次性验收（SC-17） |
-| 改造顺带改变了「每次按键即写 URL」的历史行为（若 D4 选防抖） | 中 | D4 默认选 (a) 不改该行为 |
+| 改造顺带改变了「每次按键即写 URL」或 push / replace | 低 | D4 已定为每次按键即写，并保持各调用点现有历史模式 |
 | 误把 `useState(searchParams.get(...))` 判为缺陷、或误判 `onChange` 写 URL 为缺陷 | 低 | 门禁单测覆盖四类判定（SC-16） |
 | 只修主缺陷、放任 C-2（键入 `", "` 被抹除） | 低 | SC-19 |
 
@@ -345,9 +400,9 @@ SC-01 – SC-21 **全部执行且通过** 方可判定交付。其中 **SC-17 �
 
 ## 8. 交付判定
 
-- 本 Spec 及配套 [实施 Plan](../plans/2026-10-29-lucy-url-driven-input-ime-composition-plan.md) 落盘并进入审阅，**不代表**任何实现获授权。
-- 审阅通过、**D1–D6 全部拍板**后方可开工；D1（修法形态）、D2（范围）为开工阻塞项。
-- 交付判定以 §6 的 SC-01 – SC-21 为准，SC-17 必须有真实浏览器记录。
+- 本 Spec **v1.0** 与配套 [实施 Plan](../plans/2026-10-29-lucy-url-driven-input-ime-composition-plan.md) **v1.0** 已定稿。D1–D6 已拍板，可按 Plan S1–S7 开工。
+- 交付判定以 §6 的 SC-01 – SC-23 为准，SC-17 必须有真实浏览器记录。
+- 不授权镜像、部署或客户交付。git 提交须另获授权。
 
 ---
 
@@ -392,5 +447,13 @@ New terms:
 
 ### Follow-up Needed
 
-- 建议新增 `webui/docs/design-system/14-components-filter-input.md`：输入框 / 筛选栏组件规范（`value` 源约定、状态镜像与 URL 同步时序、清除动作的联动要求、IME 组合不变量 INV-1–INV-3）。
-- **该章节补齐前，本 Spec §5 为该约束的事实源**；章节补齐方式归属决策点 **D6**。
+- D6 已要求新增 `webui/docs/design-system/14-components-filter-input.md`：输入框 / 筛选栏组件规范（`value` 源约定、§5.3 回声协议、清除动作必须 `reset`、不变量 INV-1–INV-3）。
+- **该章节写入仓库之前，本 Spec §5 为该约束的事实源。**
+
+---
+
+## 定稿记录
+
+2026-10-30 用户授权审批并定稿。审批对照当时工作树核对了 §2.1 的 13 处行号、`clearFilters`、两处变换写回，以及 Audit / 目录 / Token 的现网写入行为。v0.1 的修法方向成立，但无条件反向同步会在连续按键时把草稿打回旧 URL 值，已改为 §5.3 回声协议。D1=(a)、D2=13 处、D3=静态门禁为主、D4=每次按键即写且保持现有 push/replace、D5=同批修 C-1/C-2、D6=临时决策与组件章节都做。不另派 L25 编号。
+
+完整条目见 [审批记录](../reviews/2026-10-30-url-driven-input-ime-approval.md)。同日落地与复审见 [验收记录](../reviews/2026-10-30-url-driven-input-ime-acceptance.md)。

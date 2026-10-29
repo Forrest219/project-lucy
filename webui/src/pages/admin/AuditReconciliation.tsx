@@ -41,7 +41,15 @@ const RANGE_HOURS: Record<RangePreset, number> = { "24h": 24, "7d": 168, "30d": 
 
 export function AuditReconciliation() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [turnId, setTurnId] = useState(searchParams.get("turnId") ?? "");
+  /**
+   * ★ 伴生缺陷 C-1（Spec §5.4）：输入框存**原文**。
+   * 旧写法 `setTurnId(e.target.value.trim())` 让 state ≠ DOM 值 ⇒ React 回写
+   * `node.value` ⇒ IME 组合可被打断；且用户输入的首尾空格被静默抹除。
+   * 规范化只发生在下游消费点（发起查询前再 trim）。
+   */
+  const [turnIdDraft, setTurnIdDraft] = useState(searchParams.get("turnId") ?? "");
+  /** 消费点规范化：发请求前 trim（SC-18）。 */
+  const turnId = turnIdDraft.trim();
 
   const range = (searchParams.get("range") as RangePreset) ?? "7d";
   const hours = RANGE_HOURS[range] ?? 168;
@@ -309,8 +317,8 @@ export function AuditReconciliation() {
                 translate="no"
                 placeholder="问询 ID（turn id）"
                 aria-label="问询 ID"
-                value={turnId}
-                onChange={(e) => setTurnId(e.target.value.trim())}
+                value={turnIdDraft}
+                onChange={(e) => setTurnIdDraft(e.target.value)}
                 data-testid="reconciliation-inquiry-input"
               />
             </div>

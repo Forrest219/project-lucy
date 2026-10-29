@@ -29,6 +29,7 @@
     "lint:handbook-anchors:test": "node --test scripts/gates/handbook-anchor-gate.test.mjs",
     "lint:terminology": "node webui/scripts/lint-terminology.mjs",
     "lint:ia-boundary": "node webui/scripts/lint-ia-boundary.mjs",
+    "lint:url-driven-input": "node webui/scripts/lint-url-driven-input.mjs",
     "r1:doris-smoke": "node scripts/smoke/lucy-r1-doris-smoke.mjs",
     "r1:doris-smoke:test": "node --test scripts/smoke/lucy-r1-doris-smoke.test.mjs",
     "r1:starrocks-smoke": "node scripts/smoke/lucy-r1-doris-smoke.mjs --engine starrocks --out inbox/starrocks-r1-evidence.json",

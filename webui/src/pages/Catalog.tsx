@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useUrlMirroredField } from "../lib/useUrlMirroredField";
 import { useQuery } from "@tanstack/react-query";
 import {
   CatalogScopeTree,
@@ -183,7 +184,22 @@ export function Catalog() {
   const [visitId] = useState(createCatalogVisitId);
   const visitStartedRef = useRef(false);
   const outcomeRecordedRef = useRef(false);
-  const lastCommittedSearchRef = useRef(search);
+  const lastCommittedSearchRef = useRef(search.trim());
+
+  // ── 局部状态镜像（Spec §5.2／§5.3）──────────────────────────────────────
+  // 搜索框的 `value` 由本地 state 驱动，URL 作为下游事实源跟随。
+  // 历史模式保持现状：replace（目录的地址栏不因每次按键堆历史）。
+  // ★ `q` **不再写前 trim**：URL 存原文，过滤消费点再 trim（SC-23）。
+  const searchMirror = useUrlMirroredField({
+    read: (sp) => sp.get("q") ?? "",
+    write: (prev, raw) => {
+      const next = new URLSearchParams(prev);
+      if (raw) next.set("q", raw);
+      else next.delete("q");
+      return next;
+    },
+    history: "replace"
+  });
 
   // ── Lucy v0.25 / L25-11 §3.1: the batch selection ───────────────────────
   //
@@ -249,7 +265,6 @@ export function Catalog() {
     schema?: string;
     scope?: ScopeFilter;
     completion?: StatusFilter;
-    q?: string;
   }) {
     const next = new URLSearchParams(searchParams);
     const apply = (key: string, value: string | undefined, clearWhen: string) => {
@@ -262,7 +277,6 @@ export function Catalog() {
     // Default scope is enabled: omit from URL when enabled to keep deep links clean.
     apply("scope", patch.scope, "enabled");
     apply("completion", patch.completion, "all");
-    apply("q", patch.q !== undefined ? patch.q.trim() : undefined, "");
     if (next.toString() !== searchParams.toString()) {
       // ★ L25-11 §3.1: any filter change clears the selection. The operator
       // must never act on a selection whose objects are no longer visible.
@@ -324,9 +338,9 @@ export function Catalog() {
   }, [data, visitId]);
 
   useEffect(() => {
-    if (!data || search === lastCommittedSearchRef.current) return;
+    if (!data || search.trim() === lastCommittedSearchRef.current) return;
     const handle = window.setTimeout(() => {
-      lastCommittedSearchRef.current = search;
+      lastCommittedSearchRef.current = search.trim();
       recordCatalogNavigationEvent({ visitId, eventType: "search_commit" });
     }, CATALOG_SEARCH_COMMIT_MS);
     return () => window.clearTimeout(handle);
@@ -490,8 +504,14 @@ export function Catalog() {
               <input
                 className="pl-input pl-whitelist-search-input notranslate"
                 translate="no"
-                value={search}
-                onChange={(event) => patchSearchParams({ q: event.target.value })}
+                value={searchMirror.value}
+                onChange={(event) => {
+                  const raw = event.target.value;
+                  // ★ L25-11 §3.1: 搜索条件变化同样清空选择——操作员不得对
+                  // 「已经看不见的对象」执行操作。镜像不得改变树形筛选的 URL。
+                  if (raw !== searchMirror.value) clearSelection("筛选条件变化");
+                  searchMirror.onChange(raw);
+                }}
                 placeholder="搜索表名或字段名..."
               />
             </label>

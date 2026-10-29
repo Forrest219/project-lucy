@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiGet, apiDelete } from "../../lib/apiClient";
+import { useUrlMirroredField } from "../../lib/useUrlMirroredField";
 import type { TokensResponse, TokenInventoryItem } from "../../lib/types";
 import { PageHeader } from "../../components/PageHeader";
 import { MetricCard } from "../../components/MetricCard";
@@ -18,6 +19,23 @@ export function Tokens() {
   const search = searchParams.get("search") ?? "";
   const filterAgent = searchParams.get("agent") ?? "all";
   const filterStatus = searchParams.get("status") ?? "all";
+
+  // ── 局部状态镜像（Spec §5.2／§5.3）──────────────────────────────────────
+  // 搜索框的 `value` 由本地 state 驱动，URL 作为下游事实源跟随。
+  //
+  // ★ 搜索框**不复用** `updateParam` 里的 `value !== "all"` 清空哨兵——那个哨兵
+  // 只适用于下拉框。文本 `all` 必须是普通文本：留在输入框里，也留在 `search`
+  // 参数里（Spec §5.2 写入契约、SC-23）。
+  const searchMirror = useUrlMirroredField({
+    read: (sp) => sp.get("search") ?? "",
+    write: (prev, raw) => {
+      const next = new URLSearchParams(prev);
+      if (raw) next.set("search", raw);
+      else next.delete("search");
+      return next;
+    },
+    history: "push"
+  });
 
   const [revokingToken, setRevokingToken] = useState<{ userId: string; label: string } | null>(null);
 
@@ -50,13 +68,16 @@ export function Tokens() {
   });
 
   const updateParam = (key: string, value: string) => {
-    const next = new URLSearchParams(searchParams);
-    if (value && value !== "all") {
-      next.set(key, value);
-    } else {
-      next.delete(key);
-    }
-    setSearchParams(next);
+    // 函数式更新：从 prev 拷贝后再改本字段，禁止闭包快照（Spec §5.2 写入契约）。
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (value && value !== "all") {
+        next.set(key, value);
+      } else {
+        next.delete(key);
+      }
+      return next;
+    });
   };
 
   const tokens = data?.tokens ?? [];
@@ -211,8 +232,8 @@ export function Tokens() {
               className="pl-input max-w-xs text-sm notranslate"
               translate="no"
               placeholder="搜索 Token 标签、备注、Agent、客户端…"
-              value={search}
-              onChange={(e) => updateParam("search", e.target.value)}
+              value={searchMirror.value}
+              onChange={(e) => searchMirror.onChange(e.target.value)}
               aria-label="搜索 Token"
             />
             {agentOptions.length > 0 && (

@@ -24,6 +24,18 @@ function emptyCase(domain: string): EvalCase {
   };
 }
 
+/**
+ * Parse the comma-separated measure list. This is a **consumption point**
+ * normalization — it must never be applied to the value the input box holds
+ * (Spec §5.4 / INV-2 / SC-19).
+ */
+function parseMeasureList(raw: string): string[] {
+  return raw
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 export function CaseEditor() {
   const { domain = "", caseId } = useParams<{ domain: string; caseId?: string }>();
   const [searchParams] = useSearchParams();
@@ -37,6 +49,17 @@ export function CaseEditor() {
   const [activeTab, setActiveTab] = useState<"meta" | "question" | "sql" | "result" | "advanced" | "yaml" | "raw">("meta");
   const [rawText, setRawText] = useState("");
   const [rawError, setRawError] = useState<string | null>(null);
+  /**
+   * ★ 伴生缺陷 C-2（Spec §5.4）：期望指标的**原文 draft**。
+   * 旧写法把 `form.expected_measures.join(", ")` 直接绑给输入框，onChange 里
+   * 立刻 split/trim/filter 再写回 ⇒ state ≠ DOM 值 ⇒ React 回写 node.value
+   * ⇒ IME 组合可被打断；且用户键入的 `", "` 会被立即抹掉。
+   * 现在：受控输入框绑定原文 draft，解析值只用于下游；提交前再解析。
+   * `null` 表示「还没被用户编辑过」，此时显示服务端返回的期望指标。
+   */
+  const [expectedMeasuresDraft, setExpectedMeasuresDraft] = useState<string | null>(null);
+  const expectedMeasuresText =
+    expectedMeasuresDraft ?? (form.expected_measures ?? []).join(", ");
 
   const { data: caseData, isLoading } = useQuery({
     queryKey: ["eval", "case", domain, caseId],
@@ -53,6 +76,7 @@ export function CaseEditor() {
   useEffect(() => {
     if (caseData) {
       setForm(caseData);
+      setExpectedMeasuresDraft(null);
     }
   }, [caseData]);
 
@@ -63,6 +87,7 @@ export function CaseEditor() {
         id: `${copySource.id}-copy`,
         notes: copySource.notes ? `${copySource.notes}\nUAT copy test` : "UAT copy test"
       });
+      setExpectedMeasuresDraft(null);
     }
   }, [copySource]);
 
@@ -71,15 +96,20 @@ export function CaseEditor() {
       if (!form.question?.trim()) {
         throw new Error("问法不能为空");
       }
+      // 提交前再解析一次原文 draft（Spec §5.4）。
+      const payload: EvalCase = {
+        ...form,
+        expected_measures: parseMeasureList(expectedMeasuresText)
+      };
       if (isNew) {
         return apiPost<{ diff?: string; proposedYaml?: string; written?: boolean }>(
           `/api/eval/cases/${domain}`,
-          { dryRun, case: form }
+          { dryRun, case: payload }
         );
       }
       return apiPut<{ diff?: string; proposedYaml?: string; written?: boolean }>(
         `/api/eval/cases/${domain}/${caseId}`,
-        { dryRun, case: form }
+        { dryRun, case: payload }
       );
     },
     onSuccess: (data, dryRun) => {
@@ -287,8 +317,12 @@ export function CaseEditor() {
               <label className="text-sm font-medium">expected_measures（逗号分隔）</label>
               <input
                 className="pl-input"
-                value={(form.expected_measures ?? []).join(", ")}
-                onChange={(e) => setForm((p) => ({ ...p, expected_measures: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) }))}
+                value={expectedMeasuresText}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  setExpectedMeasuresDraft(raw);
+                  setForm((p) => ({ ...p, expected_measures: parseMeasureList(raw) }));
+                }}
                 placeholder="weighted_discount, profit_margin"
               />
             </div>

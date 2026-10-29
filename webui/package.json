@@ -12,6 +12,7 @@
     "test": "vitest run --maxWorkers=1",
     "lint:terminology": "node scripts/lint-terminology.mjs",
     "lint:ia-boundary": "node scripts/lint-ia-boundary.mjs",
+    "lint:url-driven-input": "node scripts/lint-url-driven-input.mjs",
     "typecheck": "tsc --noEmit --incremental false -p tsconfig.json",
     "acceptance:api": "tsx scripts/api-acceptance.ts",
     "backfill:access-log-sources": "tsx scripts/backfill-access-log-sources.ts",

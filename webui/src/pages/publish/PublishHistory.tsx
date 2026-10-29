@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "../../components/PageHeader";
 import { apiGet } from "../../lib/apiClient";
+import { useUrlMirroredField } from "../../lib/useUrlMirroredField";
 import {
   PUBLISH_HISTORY_PAGE_SIZE,
   coerceTrigger,
@@ -347,6 +348,20 @@ export function PublishHistory() {
   const reindexStatus = searchParams.get("reindexStatus") ?? "";
   const actor = searchParams.get("actor") ?? "";
 
+  // ── 局部状态镜像（Spec §5.2／§5.3）──────────────────────────────────────
+  // 「操作人」输入框的 `value` 由本地 state 驱动，URL 作为下游事实源跟随。
+  // 历史模式保持现状：push。`window`/`since`/`until` 与文本框互不干扰。
+  const actorMirror = useUrlMirroredField({
+    read: (sp) => sp.get("actor") ?? "",
+    write: (prev, raw) => {
+      const next = new URLSearchParams(prev);
+      if (raw) next.set("actor", raw);
+      else next.delete("actor");
+      return next;
+    },
+    history: "push"
+  });
+
   useEffect(() => {
     if (didInitDefaultWindow.current) return;
     didInitDefaultWindow.current = true;
@@ -360,10 +375,13 @@ export function PublishHistory() {
   }, [searchParams, setSearchParams]);
 
   function updateParam(key: string, value: string) {
-    const next = new URLSearchParams(searchParams);
-    if (value) next.set(key, value);
-    else next.delete(key);
-    setSearchParams(next);
+    // 函数式更新：从 prev 拷贝后再改本字段，禁止闭包快照（Spec §5.2 写入契约）。
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (value) next.set(key, value);
+      else next.delete(key);
+      return next;
+    });
     setPage(0);
   }
 
@@ -505,8 +523,8 @@ export function PublishHistory() {
           className="pl-input w-40 notranslate"
           translate="no"
           placeholder="操作人"
-          value={actor}
-          onChange={(e) => updateParam("actor", e.target.value)}
+          value={actorMirror.value}
+          onChange={(e) => actorMirror.onChange(e.target.value)}
           aria-label="操作人"
           data-testid="publish-history-actor"
         />

@@ -34,6 +34,7 @@ Lucy 的测试分三层，不能互相替代：
 | `npm run smoke:full` | aggregate + tier 1 full smoke | 全量多数据源容器、License、Token 资产、发布回归、监控审计与 Agent E2E 就绪门禁 |
 | `npm run lint:spec` | platform | spec drift checks for routes/API/skills/evals/access roles |
 | `npm run lint:spec-docs` | platform | Spec／Plan 文档**形态**门禁：索引登记、伪代码小节、元数据、Plan 必备小节、Design System／Terminology 小节模板形态。存量豁免冻结在 `docs/governance/spec-plan-doc-baseline.json`（只减不增）。**判定按 git 跟踪状态分流：已跟踪文件的基线外违规阻塞（exit 1），未跟踪的在途草稿只报 WARN 不阻塞**（见 `docs/governance/DEVELOPMENT.md`「门禁的判定范围（按 git 跟踪状态分流）」）。规范出处：`docs/governance/DEVELOPMENT.md`「新增 Spec / Plan 的落盘清单」 |
+| `npm run lint:url-driven-input` | platform | 扫描 `webui/src` 的受控文本输入框，判定其 `value` 是否源自路由状态（`useSearchParams`／`useParams` 派生变量），防止「输入法组合被打断」缺陷回流。判据是 `value` 的**来源**，不是 `onChange` 是否写 URL；**不设白名单**。规范出处：[`docs/specs/lucy-20261029-url-driven-input-ime-composition-spec.md`](../specs/lucy-20261029-url-driven-input-ime-composition-spec.md) §5.5 与 [`webui/docs/design-system/14-components-filter-input.md`](../../webui/docs/design-system/14-components-filter-input.md) |
 | `npm run security:baseline` | security + platform | token hash, wildcard ACL, deny tools, audit hooks, secrets exclusion baseline |
 | `npm run smoke:p0` | platform | local build/test/spec/WebUI health/static SPA smoke（含 delivery-isolation 静态门禁） |
 | `npm run smoke:p0:delivery-isolation` | platform（Lucy 硬门禁） | `.dockerignore` 排除 A3 路径；可选 `--check-images` 对 Lucy 镜像做 denylist；与 A3 是否启用无关 |
@@ -256,7 +257,7 @@ Recommended CI jobs:
 
 | Job | Commands |
 |---|---|
-| spec-and-unit | `npm run lint:spec`; `npm run lint:spec-docs`; `cd webui && npm test` |
+| spec-and-unit | `npm run lint:spec`; `npm run lint:spec-docs`; `npm run lint:url-driven-input`; `cd webui && npm test` |
 | security-baseline | `npm run security:baseline` |
 | docker-smoke | `npm run smoke:p0:docker`（含 delivery-isolation 双镜像 denylist） |
 | delivery-isolation | `npm run smoke:p0:delivery-isolation`（Lucy 硬门禁；亦由 `smoke:p0` 调用） |
@@ -280,5 +281,10 @@ Recommended CI jobs:
 | customer-real-db | manual or protected secret environment: `npm run smoke:p0:customer` |
 
 GitHub Actions implementation: `.github/workflows/lucy-release.yml`.
+
+**表内作业名与 workflow job 的对应**：本表的 `spec-and-unit` 对应
+`.github/workflows/lucy-release.yml` 中的 job **`spec-and-webui`**（作业名沿用现状，本条目
+**不重命名**）。该 job 内 `npm run lint:url-driven-input` 紧随 `npm run lint:terminology`
+之后执行，与 `lint:terminology` 并列。
 
 For customer signoff, treat `security-baseline`, `docker-smoke`（含 delivery-isolation）、`headless-config`, `demo-db-smoke`, `postgres-demo-db-smoke`, and `business-eval-catalog` as the headless gate set. **Headless gates are necessary but never sufficient for a customer release**: the customer release additionally requires `real-e2e` + `customer-release-readiness` on the same candidate digest (Spec 20261018 §8.3); a green headless set can not be presented as an E2E pass. Optional Agent Chat smokes are maintainer-only and are stripped from the customer source bundle. `spec-and-unit` / WebUI checks can remain required for repository release hygiene, but customer documentation and release notes must describe them as internal quality gates rather than customer operation steps.

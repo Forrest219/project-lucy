@@ -42,6 +42,7 @@
 | TD-174-01 | 页面分区静态占位 + 120 ms 延迟局部加载文字（`AsyncRegion`） | Spec 174：`/connections`、`/catalog`、`/overview`、Agent 列表首屏不再整页等待；仅用于这四页的数据区 | 占位立即出现、固定尺寸、无动画；120 ms 后才出现「正在加载…」；`aria-busy` 只在对应区域；错误留在依赖模块并提供「重试」；已有数据后台刷新不替换主内容；占位不得复用真实内容的 `data-testid`；沿用 existing tokens，不改 Spec 142 布局层级 | Spec 174 执行者；Spec 174 关闭时升级到 `20-patterns-page-layout.md` 或移除本条 |
 | TD-187-01 | 访问关系图授权层／访问层双系列与信号样式 | Spec 187 v0.3：同一流带容器叠加授权骨架与访问内核；仅用于 v0.25 P1 访问关系图设计（2026-10-25 需求审查已签核通过，设计口径），不代表组件已实现 | 新增语义角色 `series/grant`、`series/access`，各含 `default` / `subtle`；僵尸授权与需复核用 `warning`，确凿越权用 `danger`；需复核虚线、确凿越权实线；禁止裸 hex；状态必须同时有文字或线型，不只靠颜色；实施时验证对比度 | Spec 187 执行者；Spec 187 实施验收时升级到 `01-foundations-color.md` 或移除本条 |
 | TD-188-01 | 侧栏底部账户菜单 | Spec 188：将账户信息、系统手册和退出登录合并为单一入口 | 单行低干扰按钮；Portal 浮层向上展开，宽 288px、视口边距和入口间距 8px；沿用语义色、圆角及阴影；高度受可用空间约束、内部滚动；完整键盘访问与焦点归还；开放模式及未登录保留独立手册 | Spec 188 执行者；下一次导航组件规范迭代时升级为正式章节并移除此条 |
+| TD-20261029-01 | 筛选栏文本输入框的 `value` 源（URL 驱动 vs 局部状态镜像） | Spec [`lucy-20261029-url-driven-input-ime-composition-spec.md`](../../../docs/specs/lucy-20261029-url-driven-input-ime-composition-spec.md)：受控文本输入框的 `value` 取自路由状态时，React 会在「旧 URL 值渲染的那一帧」写 `node.value`，Chrome 随即**取消进行中的 IME 组合**（中文输入法组合被打断）。范围：全站筛选栏的**文本**输入框；不含 `<select>`／勾选框／日期等非文本输入与非受控输入框 | **筛选栏文本输入框的 `value` 必须由局部状态驱动，URL 作为下游事实源跟随**；禁止把 `value` 直接绑到 `searchParams.get(...)` 派生变量；规范化（trim／大小写／拆分／过滤）只发生在下游消费点，不得写回受控 state 或 URL；清除筛选必须对每个镜像调用 `reset` | 2026-10-30 执行者；[`14-components-filter-input.md`](14-components-filter-input.md) 落地后本条改为指向该章节。该章落地前的事实源是上述 Spec §5 |
 
 ## 与 UI/UX Ledger 的关系
 

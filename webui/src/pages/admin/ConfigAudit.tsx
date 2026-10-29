@@ -14,6 +14,7 @@ import {
   type ConfigAuditAssetKind
 } from "../../lib/configAuditLabels";
 import { buildObjectDetailSearch } from "../../lib/objectDetail";
+import { useUrlMirroredField } from "../../lib/useUrlMirroredField";
 import type { ConfigAuditEntry, ConfigAuditResponse } from "../../lib/types";
 
 const PAGE_SIZE = 20;
@@ -157,6 +158,40 @@ export function ConfigAudit() {
   const until = searchParams.get("until") ?? "";
   const windowPreset = searchParams.get("window") ?? "";
 
+  // ── 局部状态镜像（Spec §5.2／§5.3）──────────────────────────────────────
+  // 三个文本筛选框的 `value` 由本地 state 驱动，URL 作为下游事实源跟随。
+  // 历史模式保持现状：push。
+  const targetIdMirror = useUrlMirroredField({
+    read: (sp) => sp.get("targetId") ?? "",
+    write: (prev, raw) => {
+      const next = new URLSearchParams(prev);
+      if (raw) next.set("targetId", raw);
+      else next.delete("targetId");
+      return next;
+    },
+    history: "push"
+  });
+  const filePathMirror = useUrlMirroredField({
+    read: (sp) => sp.get("filePath") ?? "",
+    write: (prev, raw) => {
+      const next = new URLSearchParams(prev);
+      if (raw) next.set("filePath", raw);
+      else next.delete("filePath");
+      return next;
+    },
+    history: "push"
+  });
+  const sourceMirror = useUrlMirroredField({
+    read: (sp) => sp.get("source") ?? "",
+    write: (prev, raw) => {
+      const next = new URLSearchParams(prev);
+      if (raw) next.set("source", raw);
+      else next.delete("source");
+      return next;
+    },
+    history: "push"
+  });
+
   useEffect(() => {
     if (didInitDefaultWindow.current) return;
     didInitDefaultWindow.current = true;
@@ -170,9 +205,12 @@ export function ConfigAudit() {
   }, [searchParams, setSearchParams]);
 
   function updateParam(key: string, value: string) {
-    const next = new URLSearchParams(searchParams);
-    if (value) next.set(key, value); else next.delete(key);
-    setSearchParams(next);
+    // 函数式更新：从 prev 拷贝后再改本字段，禁止闭包快照（Spec §5.2 写入契约）。
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (value) next.set(key, value); else next.delete(key);
+      return next;
+    });
     setPage(0);
   }
 
@@ -317,22 +355,22 @@ export function ConfigAudit() {
           className="pl-input w-40 notranslate"
           translate="no"
           placeholder="目标 ID"
-          value={targetId}
-          onChange={(e) => updateParam("targetId", e.target.value)}
+          value={targetIdMirror.value}
+          onChange={(e) => targetIdMirror.onChange(e.target.value)}
           aria-label="目标 ID"
         />
         <input
           className="pl-input w-48"
           placeholder="文件路径"
-          value={filePath}
-          onChange={(e) => updateParam("filePath", e.target.value)}
+          value={filePathMirror.value}
+          onChange={(e) => filePathMirror.onChange(e.target.value)}
           aria-label="文件路径"
         />
         <input
           className="pl-input w-40"
           placeholder="来源"
-          value={source}
-          onChange={(e) => updateParam("source", e.target.value)}
+          value={sourceMirror.value}
+          onChange={(e) => sourceMirror.onChange(e.target.value)}
           aria-label="来源"
         />
       </div>
