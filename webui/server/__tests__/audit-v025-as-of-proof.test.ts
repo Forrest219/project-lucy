@@ -15,6 +15,7 @@ import { join } from "node:path";
 import {
   AS_OF_PROOF_DIMENSIONS,
   AS_OF_PROOF_VERSION,
+  projectAttributionAsOfS,
   proveExactAsOfS
 } from "../proxy/audit-as-of-proof";
 import { performExportV2, type ExportMode } from "../admin/audit-export-v2";
@@ -184,6 +185,32 @@ describe("F-02 proveExactAsOfS —— 四维度独立判定", () => {
     expect(proof.missingSets.revisions).toContain("pre_baseline_bound:10");
   });
 
+  it("归属改写序号等于 S → revisions 不成立（同水位不能当成捕获前已可见）", () => {
+    const db = makeDb({ mutationLedgerSeq: 3 });
+    const proof = proveExactAsOfS({
+      db,
+      seqUpperBound: 3,
+      rows: [{ id: 1, ledgerSeq: 1, turnId: "turn-1" }]
+    });
+    expect(proof.ok).toBe(false);
+    expect(proof.missingSets.revisions.some((id) => id.startsWith("attribution_mutation_after_bound:"))).toBe(true);
+  });
+
+  it("已按前像回放的同水位改写，以及已排除的晚到源，不再否决可证明的 S", () => {
+    const db = makeDb({ mutationLedgerSeq: 3, sourceLedgerSeq: 9 });
+    const mutation = db.prepare(`SELECT id FROM access_log_attribution_mutations`).get() as { id: number };
+    const source = db.prepare(`SELECT id FROM access_log_sources`).get() as { id: number };
+    const proof = proveExactAsOfS({
+      db,
+      seqUpperBound: 3,
+      rows: [{ id: 1, ledgerSeq: 1, turnId: "turn-1" }],
+      replayedMutationIds: [mutation.id],
+      excludedSourceIds: [source.id]
+    });
+    expect(proof.ok).toBe(true);
+    expect(proof.missingTotal).toBe(0);
+  });
+
   it("归属改写发生在 S 之后 → revisions 不成立（当前视图含 >S 的归属事实）", () => {
     const db = makeDb({ mutationLedgerSeq: 9 });
     const proof = proveExactAsOfS({
@@ -314,5 +341,32 @@ describe("F-02 漂移守卫 —— 事实列不可变（代码层不变量）", 
       }
     }
     expect(offenders).toEqual([]);
+  });
+});
+
+describe("F-02 同水位归属改写按前像回放", () => {
+  it("ledger_seq 等于 S 时导出列回到前像，证明在回放之后通过", () => {
+    const db = makeDb({ mutationLedgerSeq: 3 });
+    db.exec(`ALTER TABLE access_log_attribution_mutations ADD COLUMN before_turn_id TEXT`);
+    db.exec(`ALTER TABLE access_log_attribution_mutations ADD COLUMN before_association_status TEXT`);
+    db.prepare(
+      `UPDATE access_log_attribution_mutations
+          SET before_turn_id = 'turn-before', before_association_status = 'candidate'`
+    ).run();
+    const projected = projectAttributionAsOfS(
+      db,
+      [{ id: 1, lucy_turn_id: "turn-after", association_status: "confirmed", effective_turn_id: "turn-after" }],
+      3
+    );
+    expect(projected.rows[0].lucy_turn_id).toBe("turn-before");
+    expect(projected.rows[0].association_status).toBe("candidate");
+    expect(projected.unreplayableMutationIds).toEqual([]);
+    const proof = proveExactAsOfS({
+      db,
+      seqUpperBound: 3,
+      rows: [{ id: 1, ledgerSeq: 1, turnId: projected.rows[0].lucy_turn_id }],
+      replayedMutationIds: projected.replayedMutationIds
+    });
+    expect(proof.ok).toBe(true);
   });
 });

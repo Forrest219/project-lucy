@@ -982,7 +982,9 @@ A01↔SEC-19-V05；A02↔SEC-19-V02/V04；A03↔SEC-19-V06 + 幂等投影；A04�
 
 **落地范围与验证证据**：文档基线为 `30c679a5`，代码落点提交为 `898aa2a1`（其父提交 `09577828` 为最终验证时的 HEAD，其间并行会话落地 5 个提交，均未触及本轮文件）。验证记录见实施计划 §11.6.2——类型检查按文件核对为本轮文件零错误，全量回归 368 文件 / 4477 用例全绿，静态门禁 G2–G4 全通过（G1 因不做 docker 重建未执行）。**上述均为实现层证据，不构成任何 A／V 验收结论。**
 
-**F-02（精确 as-of S 与正式阻断）——已落地实现，验收未执行**
+**F-02（精确 as-of S 与正式阻断）——失败关闭已接线；归属列按日志前像回放（2026-10-28 修订），验收未执行**
+
+2026-10-28 核对：`898aa2a1` 把 `ledger_seq == S` 的归属改写当成不晚于 S，正式导出和对账会读到改写后的当前列，同一次 S 的两次读取内容不同。修订后的落地边界是：`ledger_seq < S` 的已登记改写留在 S 视图；`ledger_seq >= S` 的改写按日志前像回放后才允许证明通过；已经从证据包排除的 `ledger_seq > S` 来源行不再把该 S 判失败。缺前像列的改写仍然不可证明。这不是 A08／A10-ASOF 通过。
 
 - 新增 `webui/server/proxy/audit-as-of-proof.ts` 的 `proveExactAsOfS(snapshot, S, filter, baseFacts, revisions, relations, aggregates)`：四个维度**各自独立**判定，产出 `actualBound`（实际证据界）与 `missingSets`（缺失集合）。**「列存在」不再是判据**：旧实现的 `present.has("ledger_seq")` 已废止。
 - 存储侧补齐可证明所需的证据：新增 append-only 归属就地改写日志 `access_log_attribution_mutations`（前像／后像 + 账本序号，**改写与登记同事务**，登记失败则改写回滚）；新增 `access_log_asof_meta` 登记日志基线；`access_log_sources` 新增 additive 列 `ledger_seq` 并在写路径登记；导出包的来源附件按 `ledger_seq <= S` 过滤。
@@ -994,7 +996,7 @@ A01↔SEC-19-V05；A02↔SEC-19-V02/V04；A03↔SEC-19-V06 + 幂等投影；A04�
 **F-03（授权事实保真）——已落地实现，验收未执行**
 
 - `deriveAuthorizationView` 只接受显式裁决凭据：`authorizationDenied` → `denied`；`authorizationAllowed` → `allowed`；`authorizationNotEvaluated` → `not_evaluated`；**证据不足 → `unknown`**。**删除**了「`budgetStopped` → `not_evaluated`」的默认结论，预算桶不再产生任何授权结论，也不得覆盖已发生的授权裁决。
-- `classifyAuditEvent` 不再用 legacy 的 outcome 启发式覆盖派生结果（该启发式在「非 ok 非 denied」时给出的 `not_evaluated` 只是「没有证据」，不是「确未评估」）。
+- `classifyAuditEvent` 不再用 legacy 的 outcome 启发式覆盖派生结果。`outcome=ok` 不写成 `authorization=allowed`；没有显式 `authorizationAllowed` 或 `authorizationStatusHint=allowed` 时，授权轴保持 `unknown`。
 - 闸序事实（ACL 裁决先于预算闸）使预算终止行的授权**已裁决通过**：写路径显式登记 `authorizationAllowed: true` / `notExecuted: true`。
 - 台账 **D-29** 保持 `open`；A05-AUTH、A06-ORDER 未执行。
 

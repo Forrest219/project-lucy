@@ -34,7 +34,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { AUDIT_WINDOWS } from "../proxy/ingress-registry.js";
 import { DERIVATION_VERSION } from "../proxy/audit-derivation.js";
-import { proveExactAsOfS, type AsOfSProof } from "../proxy/audit-as-of-proof.js";
+import { projectAttributionAsOfS, proveExactAsOfS, type AsOfSProof } from "../proxy/audit-as-of-proof.js";
 
 export type ExportMode = "complete" | "diagnostic";
 
@@ -546,7 +546,9 @@ export async function performExportV2(options: ExportV2Options): Promise<ExportV
          ${where.length > 0 ? `WHERE ${where.join(" AND ")}` : ""}
          ORDER BY id ASC`
     )
-    .all(...params) as Array<Record<string, unknown>>;
+    .all(...params) as Array<Record<string, unknown> & { id: number }>;
+  const projected = projectAttributionAsOfS(db, rows, upperSeq);
+  const asOfRows = projected.rows;
   // 命中同一筛选、但账本位置不可判定的行：它们落在请求范围内却无法定位到 S，
   // 范围完整不可证明（baseFacts 不成立）。
   const unplaceableRowIds: number[] = [];
@@ -562,14 +564,14 @@ export async function performExportV2(options: ExportV2Options): Promise<ExportV
     for (const row of unplaceable) unplaceableRowIds.push(Number(row.id));
   }
   const csvLines = [headers.join(",")];
-  for (const row of rows) {
+  for (const row of asOfRows) {
     csvLines.push(headers.map((h) => csvEscape(row[h])).join(","));
   }
   const csv = csvLines.join("\n") + "\n";
   const csvHash = sha256Hex(csv);
 
   // Freeze the primary selection once; every attachment reuses these ids.
-  const selectedAccessLogIds = rows.map((row) => Number(row.id));
+  const selectedAccessLogIds = asOfRows.map((row) => Number(row.id));
   // Relation + integrity checks
   const relation = buildRelationCheck(db, selectedAccessLogIds);
   const projectionComplete = projectionLag === 0 && options.auditStoreAvailable && !catchUpExpired;
@@ -600,13 +602,15 @@ export async function performExportV2(options: ExportV2Options): Promise<ExportV
   const asOfProof = proveExactAsOfS({
     db,
     seqUpperBound: upperSeq,
-    rows: rows.map((row) => ({
+    rows: asOfRows.map((row) => ({
       id: Number(row.id),
       ledgerSeq:
         row.ledger_seq === null || row.ledger_seq === undefined ? null : Number(row.ledger_seq),
       turnId: (row.lucy_turn_id as string | null) ?? null
     })),
-    unplaceableRowIds
+    unplaceableRowIds,
+    replayedMutationIds: projected.replayedMutationIds,
+    excludedSourceIds: projected.excludedSourceIds
   });
   if (!asOfProof.ok) {
     diagnosticIncomplete.push("as_of_s_unprovable");
