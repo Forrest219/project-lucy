@@ -12,9 +12,9 @@
 | 来源计划 | [`docs/plans/2026-10-11-customer-log-next-optimizations.md`](../../docs/plans/2026-10-11-customer-log-next-optimizations.md) v1.1 |
 | 关联工单 | [`wo-202610-12`](plans/wo-202610-12-query-turn-budget-and-repair.md)、[`wo-202610-13`](plans/wo-202610-13-usage-evidence-and-query-guardrails.md)、[`wo-202610-14`](plans/wo-202610-14-usage-signal-and-publish-gate.md) |
 | 关联 Spec | 08 问询追踪、09 R1 工具契约、125 生成 SQL 热库、138 轮次归因、137 审计证据 |
-| 修订 | 不取代 Spec 138 的归因枚举。不改 Eval 跑批的 tool budget（`docs/design/design-eval-tool-budget.md`）。不改 KTX 源码。v0.2：`wiki_not_found` 与 `explicit_table_required:<empty>` 归用法与语义；`wiki_forbidden` 与带表名的 `explicit_table_required` 归权限拒绝。复述只写进 initialize 指导，代理不因缺少确认而拒绝查数。生产环境的 turn 绑定率依赖客户端发版，不是 WO-12 的退出条件。v0.3：SC-16 补上探测连接的评测标记；新增 SC-25、SC-26。慢标记的新定义不覆盖其它工具，也不替换 Spec 143。**v0.4（2026-10-29，PM 授权代改）：§7.2 的墙钟口径与续查兑现通道由 `docs/specs/lucy-20261029-question-budget-window-optimization-spec.md` v0.2 修订**——墙钟第二维度改为「已结算的数据处理时长」（空闲不计入）；新增 `lucy_continue_question` 续查通道（持久化「声明—消费」）；`continuable` 改为「该调用者是否仍有可达的继续通道」。**该修订未实现、不改变现行运行时行为**，§7.1／§7.3／§7.8 其余语义、§10 SC-1–SC-26 现行判定均不变 |
+| 修订 | 不取代 Spec 138 的归因枚举。不改 Eval 跑批的 tool budget（`docs/design/design-eval-tool-budget.md`）。不改 KTX 源码。v0.2：`wiki_not_found` 与 `explicit_table_required:<empty>` 归用法与语义；`wiki_forbidden` 与带表名的 `explicit_table_required` 归权限拒绝。复述只写进 initialize 指导，代理不因缺少确认而拒绝查数。生产环境的 turn 绑定率依赖客户端发版，不是 WO-12 的退出条件。v0.3：SC-16 补上探测连接的评测标记；新增 SC-25、SC-26。慢标记的新定义不覆盖其它工具，也不替换 Spec 143。**v0.4（2026-10-29，PM 授权代改）：§7.2 的墙钟口径与续查兑现通道由 `docs/specs/lucy-20261029-question-budget-window-optimization-spec.md` v0.3 修订**——墙钟第二维度改为「已结算的数据处理时长」（空闲不计入）；新增 `lucy_continue_question` 续查通道（持久化「声明—消费」）；`continuable` 改为「该调用者是否仍有可达的继续通道」。**该修订未实现、不改变现行运行时行为**，§7.1／§7.3／§7.8 其余语义、§10 SC-1–SC-26 现行判定均不变 |
 
-> **问询预算优化 Spec 修订（2026-10-29）**：本文 §7.2 的**墙钟口径**与**续查兑现通道**由 [`docs/specs/lucy-20261029-question-budget-window-optimization-spec.md`](../../docs/specs/lucy-20261029-question-budget-window-optimization-spec.md)（v0.2）修订，逐条改动见 §7.2 的「修订后口径（尚未实现）」小节。⚠️ **该修订尚未实现**：运行时仍以 §7.2 现行文本为准——墙钟仍是问询年龄的流逝时间（`webui/server/proxy/question-experience.ts` 的 `QUESTION_BUDGET_MAX_WALL_MS = 120000`），`continuable` 仍硬编码为 `true`，续查仍只经 HTTP 头兑现。**新口径自该 Spec 的 SC-01–SC-41 全部执行完毕并发布之日起生效**；在此之前不得按新口径解释既有审计行或验收结论。本次修订**不改变** §7.1 归因、§7.3 失败四维度、§7.8 认证路径的其余语义，也不改变 §10 的现行判定。
+> **问询预算优化 Spec 修订（2026-10-29）**：本文 §7.2 的**墙钟口径**与**续查兑现通道**由 [`docs/specs/lucy-20261029-question-budget-window-optimization-spec.md`](../../docs/specs/lucy-20261029-question-budget-window-optimization-spec.md)（v0.3）修订，逐条改动见 §7.2 的「修订后口径（尚未实现）」小节。⚠️ **该修订尚未实现**：运行时仍以 §7.2 现行文本为准——墙钟仍是问询年龄的流逝时间（`webui/server/proxy/question-experience.ts` 的 `QUESTION_BUDGET_MAX_WALL_MS = 120000`），`continuable` 仍硬编码为 `true`，续查仍只经 HTTP 头兑现。**新口径自该 Spec 的 SC-01–SC-41 全部执行完毕并发布之日起生效**；在此之前不得按新口径解释既有审计行或验收结论。本次修订**不改变** §7.1 归因、§7.3 失败四维度、§7.8 认证路径的其余语义，也不改变 §10 的现行判定。
 
 > **Spec 189 修订（2026-10-27）**：本文 §7.6「协议与评测探针退出默认用量 KPI」的规则**保留为基线**，并升级为唯一事实源（T2 建立 `webui/server/proxy/usage-classification.ts`）。两处边界扩展：① 协议集合扩至**完整集合**（新增 `prompts/list` 与任何 `server/*` 方法）；② **准入集合（11 个 JSON-RPC 方法）与协议集合不相等**，两者边界以 `webui/docs/189-usage-metrics-truthfulness-and-cross-page-consistency-spec.md` §4.2 为准。评测探针判定规则（显式 `eval_mark` 为真 **且** 参数／连接名命中探针标记）不变，且只退出默认用量 KPI，仍保留在原始审计、导出、问询关联与真实表访问中。
 
@@ -145,9 +145,9 @@ function continuable(reason):
 P0 不拆句。复述范围在 P1，载体仍是这份指导，不新增代理拦截。见 §7.2 的下一段，任务在 WO-13 T8。
 #### 修订后口径（**尚未实现**，2026-10-29）
 
-由 [`docs/specs/lucy-20261029-question-budget-window-optimization-spec.md`](../../docs/specs/lucy-20261029-question-budget-window-optimization-spec.md) v0.2 修订，**三处变更**：
+由 [`docs/specs/lucy-20261029-question-budget-window-optimization-spec.md`](../../docs/specs/lucy-20261029-question-budget-window-optimization-spec.md) v0.3 修订，**三处变更**：
 
-1. **墙钟口径**：第二维度由「问询年龄流逝时间」改为「**已结算的数据处理时长**」，agent 思考等**空闲时间不计入**。配套约束：在途处理时长按**有界超支**计入（≤ 并发上限 × 绝对执行时限）；问询年龄退出额度判定，**只作观测**（慢标记用途不变，见 §8）。
+1. **墙钟口径**：第二维度由「问询年龄流逝时间」改为「**已结算的数据处理时长**」，agent 思考等**空闲时间不计入**。准入只看已结算时长，**不把在途预占进准入**；在途超支上界为并发上限 × 绝对执行时限。问询年龄退出额度判定，**只作观测**（慢标记用途不变，见 §8）。
 2. **续查兑现通道**：新增 `lucy_continue_question` 工具，以**持久化待兑现状态**打通「声明 → 消费」；HTTP 头 `x-lucy-question-continue` 保留为次要路径。
 3. **`continuable` 语义**：由「是否还有额度」改为「**该调用者是否仍有可达的继续通道**」（额度 **与** 通道可达性两个条件）。旧客户端看不到新工具时该值如实为 `false`。
 

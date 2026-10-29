@@ -2,17 +2,17 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档版本 / 日期 | **v0.5** / 2026-10-29 |
+| 文档版本 / 日期 | **v0.6** / 2026-10-29 |
 | 目标版本 / 优先级 | v0.25（修订线）/ **P0**（S2–S5）+ P1（S1、S6）+ P2（S7） |
-| 主 Spec | [问询预算窗口与预算终止可观测性优化 Spec](../specs/lucy-20261029-question-budget-window-optimization-spec.md)（**v0.2**） |
+| 主 Spec | [问询预算窗口与预算终止可观测性优化 Spec](../specs/lucy-20261029-question-budget-window-optimization-spec.md)（**v0.3**） |
 | 需求来源 | 2026-10-29 生产事故（用户 liuzongxuan / `codex-mcp-client`）：零次数据工具调用即被 `question_budget_exhausted` 拦下，客户侧无法自行恢复 |
-| 状态 | **待第 2 轮审阅，未批准**。第 1 轮 Codex 审阅（4 阻塞 / 8 高 / 1 中 / 1 低）已落盘，本版据其重排；**第 2 轮未进行** |
+| 状态 | **v0.6 作者定稿基线，未批准**。第 1 轮 Codex 审阅（4 阻塞 / 8 高 / 1 中 / 1 低）已落盘；本版与 Spec v0.3 对齐。**第 2 轮未进行** |
 | 授权边界 | **无。** 不授权 S1–S9 任何阶段的编码、不授权测试执行、不授权治理文件变更、不授权浏览器验证、镜像、部署或 git 提交 |
 | 验收 | SC-01–SC-41 **全部未执行** |
 | 实施主体 | Lucy（Proxy 问询预算层 + Admin 审计导出层）；不修改 KTX 源码 |
 | 已拍板决策 | **无**。Spec §4 的 D1–D9 全部待 PM 拍板 |
 | 待确认 | **D1–D9 全部未拍板**。D1（墙钟口径）、D3（续查兑现通道）、D9（旁路纳管）为开工阻塞项；其余可同批拍板但不得由实现侧代决 |
-| 本版修订 | **v0.3（2026-10-29）**：据第 1 轮审阅 14 条发现重排。**R12** → 阶段重排为「**可观测性先行**」，原 S2 拆为 **S2 稳定预算身份与持久化正确性 / S3 统一结算与窗口票据 / S4 墙钟口径**三个独立可验收单元，S5 续查与 S8 治理文本**同批启用**（避免指导指向不可见工具）；**R01/R04/R05** → S5 增「持久化待兑现状态 + 落库先行」；**R02/R03** → S3 增「结算协调器 + 并发上限 + 绝对执行时限」；**R06** → S2 增「作用域键脱离 turn 注册表 + 全字段恢复 + 真实重启验收」；**R07/R08** → S7 增「身份隔离 + 同会话串行 + 事务内重检」；**R09** → S5 增 `acl.ts` / known tools / 角色授予 / 迁移；**R10** → S6 新增旁路入口纳管；**R11** → S1 把导出发起侧拆为独立排查项、不再宣称服务端默认值；**R14** → S8 增术语标准修订与章节引用修正。**v0.4（2026-10-29，PM 授权代改 Spec 162 + 自查补漏）**：Spec 162 升 v0.4 并落**修订声明**（顶部 callout + §7.2「修订后口径（尚未实现）」小节 + §10 SC-4 口径说明），**不写现行已实现语义**，新口径自本 Spec SC 全部执行并发布后生效；§3.3 补 `scripts/lint-spec.mjs`（新增工具的 `classifiedRoleTools` 硬编码白名单，不同步则 `lint:spec` 失败）与 `webui/config/access.yaml`（治理类文件）两个实施落点，并补 `docs/README.md`／`docs/governance/project-overview.md` 两处登记册；§3.2 补术语标准第三条词条「可继续 Continuable」；修正 `turn-correlation.ts` 引用行号与「跨进程」措辞（触部署拓扑红线边界）。**v0.5（2026-10-29，形态门禁落地后补勾销 + 权威登记册登记项）**：新增 §9「落盘清单勾销」，逐条勾销 `docs/governance/DEVELOPMENT.md`「新增 Spec / Plan 的落盘清单」10 条（第 6 条 Design System 四段式与第 8 条新增命令登记标**不适用并写明理由**，第 9 条功能编号标**待 PM 指派**）；S9 补「编号指派后须在权威登记册登记」。**注**：并发会话同期新增了形态门禁 `lint:spec-docs`（`scripts/lint-spec-docs.mjs`），本 Spec／Plan 已通过该门禁（120 files scanned）。**v0.1、v0.2 见文末。** |
+| 本版修订 | **v0.6（2026-10-29，作者定稿）**：与 Spec v0.3 对齐，不改阶段顺序、不改 D1–D9 推荐、不授权开发。① S3/S5 写明 `settle` 与 `consume` 走同一 `commit` 与同一把作用域锁；② S2 状态字段补 `presentedToken`（停机凭证，禁止回传 `scopeKey`）与 `archivedBusyMsByWindow`；③ S8 / 术语验收改为三条词条，含「可继续」；④ 审阅基线改为 Spec v0.3 / 本 Plan v0.6。**v0.3（2026-10-29）**：据第 1 轮审阅 14 条发现重排。**R12** → 阶段重排为「**可观测性先行**」，原 S2 拆为 **S2 稳定预算身份与持久化正确性 / S3 统一结算与窗口票据 / S4 墙钟口径**三个独立可验收单元，S5 续查与 S8 治理文本**同批启用**（避免指导指向不可见工具）；**R01/R04/R05** → S5 增「持久化待兑现状态 + 落库先行」；**R02/R03** → S3 增「结算协调器 + 并发上限 + 绝对执行时限」；**R06** → S2 增「作用域键脱离 turn 注册表 + 全字段恢复 + 真实重启验收」；**R07/R08** → S7 增「身份隔离 + 同会话串行 + 事务内重检」；**R09** → S5 增 `acl.ts` / known tools / 角色授予 / 迁移；**R10** → S6 新增旁路入口纳管；**R11** → S1 把导出发起侧拆为独立排查项、不再宣称服务端默认值；**R14** → S8 增术语标准修订与章节引用修正。**v0.4（2026-10-29，PM 授权代改 Spec 162 + 自查补漏）**：Spec 162 升 v0.4 并落**修订声明**（顶部 callout + §7.2「修订后口径（尚未实现）」小节 + §10 SC-4 口径说明），**不写现行已实现语义**，新口径自本 Spec SC 全部执行并发布后生效；§3.3 补 `scripts/lint-spec.mjs`（新增工具的 `classifiedRoleTools` 硬编码白名单，不同步则 `lint:spec` 失败）与 `webui/config/access.yaml`（治理类文件）两个实施落点，并补 `docs/README.md`／`docs/governance/project-overview.md` 两处登记册；§3.2 补术语标准第三条词条「可继续 Continuable」；修正 `turn-correlation.ts` 引用行号与「跨进程」措辞（触部署拓扑红线边界）。**v0.5（2026-10-29，形态门禁落地后补勾销 + 权威登记册登记项）**：新增 §9「落盘清单勾销」，逐条勾销 `docs/governance/DEVELOPMENT.md`「新增 Spec / Plan 的落盘清单」10 条（第 6 条 Design System 四段式与第 8 条新增命令登记标**不适用并写明理由**，第 9 条功能编号标**待 PM 指派**）；S9 补「编号指派后须在权威登记册登记」。**注**：并发会话同期新增了形态门禁 `lint:spec-docs`（`scripts/lint-spec-docs.mjs`），本 Spec／Plan 已通过该门禁（120 files scanned）。**v0.1、v0.2 见文末。** |
 
 ---
 
@@ -55,7 +55,7 @@
 - **D9（旁路纳管）**——阻塞 S6。
 - D2、D4、D5、D6、D7、D8 可与上述同批拍板，但不得由实现侧代决。
 
-审阅基线：**Spec v0.2 / 本 Plan v0.3**。第 1 轮 Codex 结论与 v0.2 的逐条回应见 [`docs/reviews/2026-10-29-codex-review-question-budget-window-optimization.md`](../reviews/2026-10-29-codex-review-question-budget-window-optimization.md) 与 Spec §10。
+审阅基线：**Spec v0.3 / 本 Plan v0.6**（作者定稿）。第 1 轮 Codex 结论与逐条回应见 [`docs/reviews/2026-10-29-codex-review-question-budget-window-optimization.md`](../reviews/2026-10-29-codex-review-question-budget-window-optimization.md) 与 Spec §10。第 2 轮尚未覆盖 v0.3 / v0.6。
 
 **退出条件（待满足）**：D1–D9 全部裁定并回写 Spec §4；PM 在 §4 签字栏留下裁定结论。
 
@@ -116,7 +116,7 @@
 | `webui/src/pages/admin/Audit.tsx` | **导出入口参数来源排查与修正**；非零桶展示 | S1 |
 | `webui/docs/162-customer-query-experience-and-usage-evidence-spec.md` | §7.2 口径与续查通道的**修订声明**（**PM 授权代改，已完成 v0.4**）；**只写修订条款，不改现行已实现语义**——运行时仍以 §7.2 现行文本为准，新口径自新 Spec SC 全部执行并发布后生效 | S9 |
 | `webui/config/data-qa-instructions.md` | **治理类文件**，走 Plan Mode，与 S5 同批 | S8 |
-| `webui/docs/00-product-terminology-standard.md` | **治理类文件**，修订「问询预算」「关联调用数」两条既有词条 | S8 |
+| `webui/docs/00-product-terminology-standard.md` | **治理类文件**，修订「问询预算」「关联调用数」「可继续」三条既有词条 | S8 |
 | `docs/specs/lucy-20261029-question-budget-window-optimization-spec.md` | D1–D9 裁定回写 | S0 |
 | `docs/plans/README.md` | 索引行 | S9 |
 | `docs/README.md` | **文档地图登记**：§2 设计区加 Spec 行、§3 复核区加审阅结论行、§9 计划区加 Plan 行 | S9 |
@@ -152,10 +152,10 @@
 **关键动作**
 
 1. **作用域键语义变更**：`scopeKey` 由 `turn:<turnId>` 改为 `bq:<identityKey>:<sessionId>`，与 turn 注册表**解耦**。`identityKey` 沿用 `turn-correlation.ts` 的 `userId|tokenHashPrefix` 口径；无会话时为 `-`。
-2. `BudgetState` 扩字段：`round`、`turnId`、`windowId`、`busyMs`、`inflight`、`pendingToken`。
+2. `BudgetState` 扩字段：`round`、`turnId`、`windowId`、`busyMs`、`inflight`、`pendingToken`、`presentedToken`、`archivedBusyMsByWindow`。`presentedToken` 在 S5 才写入；S2 只建列，停机响应仍不得回传 `scopeKey`。
 3. **装载时机修正**：内存已有该键**不等于**已装载；`loaded` 标志控制持久层装载（R05 纪律）。恢复**全部**累计字段；**在途占用不恢复**（崩溃前在途的进程已死）。
 4. **落库纪律统一**：候选态 → 落库 → 发布内存 + 发审计；落库失败保留旧态并**标记作用域不可用**，后续准入一并拒绝。
-5. 持久层表扩列与**幂等**迁移；旧键（`turn:*` / `scope:*`）的行保留只读，**不**迁移计数（避免跨问询额度继承）。
+5. 持久层表扩列与**幂等**迁移，列含 `presented_token` 与旧窗口归档耗时；旧键（`turn:*` / `scope:*`）的行保留只读，**不**迁移计数（避免跨问询额度继承）。
 
 **退出条件**：SC-01、SC-02、SC-03、SC-04、SC-05 通过。其中 **SC-04 必须经真实代理重启后经 MCP 发起调用**，直接调函数的写法视为不通过。
 
@@ -169,8 +169,8 @@
 
 **关键动作**
 
-1. **结算协调器**：在请求生命周期**开始**时创建票据（`scopeKey` / `windowId` / `round` / `requestId` / `startMonoMs` / `settled`）。结算点 = **上游真正结束**或**确认取消完成**；`res.close` 仅作为「客户端断开」信号 → 触发取消上游 → 取消确认后结算；若取消不可行则继续计时。
-2. **幂等结算**：同一票据只结算一次；全部失败出口（正常结束、超时、取消、异常）汇入同一结算函数。
+1. **结算协调器**：在请求生命周期**开始**时创建票据（`scopeKey` / `windowId` / `round` / `requestId` / `startMonoMs` / `settled`）。结算点 = **上游真正结束**或**确认取消完成**；`res.close` 仅作为「客户端断开」信号 → 触发取消上游 → 取消确认后结算；若取消不可行则继续计时。调用方只有收到 `ALLOW` 之后才向上游发起调用。
+2. **幂等结算**：结算走 Spec §6.4 的 `commit`，幂等键是 `requestId`，与 `busyMs` 或旧窗口归档同一事务。`ticket.settled` 只在 `commit` 成功后置真。全部失败出口（正常结束、超时、取消、异常）汇入同一结算函数，且与 `consume` 共用作用域锁。`commit` 失败时内存保持旧态，作用域在本进程内不可用，并按同一 `requestId` 重试。
 3. **窗口票据**：结算按票据的 `windowId` 归口；窗口已换则**归档**旧窗口耗时，**不污染**新窗口。
 4. **并发上限**：准入时 `inflight >= MAX_INFLIGHT` 则以「并发超限」拒绝，**不**消耗 `calls`、**不**累计 `busyMs`、单独记账。
 5. **绝对执行时限**：数据调用超过 `ABS_EXEC_MS` 主动取消上游并按实际已耗时结算，审计标记超时。
@@ -205,10 +205,10 @@
 
 **关键动作**
 
-1. **待兑现状态**：预算状态行新增 `pendingToken`（**持久化**），实现「声明 → 消费」两段式：
-   - 声明（工具路径）：在作用域队列内校验（幂等 / 已有 pending / 无额度 / 未用尽），**先落库**再发布内存与审计；
-   - 消费（数据工具路径）：`consume` 内检查 `pendingToken`，与本次放行**同批落库**完成「归零 + 换窗 + 消费」，并发出续查生效事实。
-2. **头部路径保留**为次要路径；两条路径汇入同一次 `consume`，`continuations < 1` 为**唯一**闸门 ⇒ 并发双路径不会把额度加两次。
+1. **待兑现状态**：预算状态行使用 `pendingToken` 与 `presentedToken`，实现「声明 → 消费」两段式。`consume`、声明与结算进入**同一把作用域锁**，写路径一律是 Spec §6.4 的 `commit`：
+   - 声明（工具路径）：在锁内校验（幂等 / 已有 pending / 无额度 / 未用尽 / 与 `presentedToken` 不一致），`commit` 成功后才发审计；
+   - 消费（数据工具路径）：`consume` 内检查 `pendingToken` 或匹配的头部凭证，与本次放行**同一次 `commit`** 完成「归零 + 换窗 + 消费」；只有收到 `ALLOW` 之后才向上游发起调用。
+2. **头部路径保留**为次要路径。停机凭证是 `presentedToken`：有 turn 时等于既有 `turnId`，否则为不透明随机值，**禁止**回传 `scopeKey` 或 `identityKey`。两条路径汇入同一次 `consume`，`continuations < 1` 为**唯一**闸门 ⇒ 并发双路径不会把额度加两次。已落库的 `pendingToken` 优先于头部。
 3. **`continuable` 重定义为「可执行能力」**：代理按**当前调用者的可见工具集合**计算——`lucy_continue_question` 对其可见且已授权才为 `true`。
 4. **ACL 落点（v0.3 新增）**：新工具须分类入既有工具集合（`webui/server/proxy/acl.ts:99-136`）、登记 known tools、纳入**角色授予**并提供**升级迁移**；**不得**只登记不授权。覆盖仅 Wiki 角色、无 `begin_question`、受限角色。
 5. 新工具**不计入数据额度、不累计 `busyMs`**；其审计分类与使用量归口明确（不得误改协议方法分类来豁免预算）。
@@ -261,7 +261,7 @@
 
 1. `webui/config/data-qa-instructions.md` 同步新口径：「20 次数据工具调用，或累计 120 秒数据处理时长（**不含思考时间**）」；写明遇 `question_budget_exhausted` 时按 `continuable` 分支处置（`true` → 调 `lucy_continue_question`；`false` → 直接交付部分结果并说明缺口，**不要重试**）；删去已失效的「不要在 catalog 之后长时间不查数」类表述。
 2. 指导文本**不得宽于**代理预算，也不得把 `true` 一律导向**该调用者不可见**的工具。
-3. `webui/docs/00-product-terminology-standard.md` **修订两条既有词条**（不新增）：「问询预算」口径定义；「关联调用数」恒等式。
+3. `webui/docs/00-product-terminology-standard.md` **修订三条既有词条**（不新增）：「问询预算」口径定义；「关联调用数」恒等式；「可继续」改为可达的继续通道。验收为 SC-41。
 4. 修正 Spec 内部章节引用（SC-40 指向 §4 D8 与 Plan S8；v0.1 的失效引用随 SC 全表重写一并消解）。
 
 **退出条件**：SC-40、SC-41 通过；与 S5 同一发布单元。
@@ -351,9 +351,11 @@ SC-01–SC-41 逐条留证（用例、输入、实际输出），并由独立审
 
 ## 8. 本次文档交付的实际范围
 
-本次交付：Spec v0.2、Plan v0.3，以及第 1 轮 Codex 审阅结论落盘（该结论已在上一轮落盘，本轮为其配套的修订回应，回应表在 Spec §10）。
+本次交付：Spec v0.3、Plan v0.6，作为作者定稿基线。第 1 轮 Codex 审阅结论仍是退回修订；v0.3 / v0.6 收口的是作者侧口径冲突，**不是**第 2 轮通过，也**不是**开工授权。
 
-**本轮已做（v0.4）**：按 PM 授权代改 `webui/docs/162-customer-query-experience-and-usage-evidence-spec.md` 的**修订声明**（v0.4）；同步四处登记册；补 `scripts/lint-spec.mjs`、`webui/config/access.yaml` 两个实施落点；修正术语标准第三条词条、引用行号与部署拓扑措辞。
+**本轮已做（v0.6）**：Spec 升 v0.3、Plan 升 v0.6，收口软上限表述、`commit` 落库顺序、停机凭证不得回传作用域键，以及「可继续」进入 SC-41 / S8。Spec 162 的修订声明仍只指向尚未实现的新口径，版本指针改为 v0.3。
+
+**此前已做（v0.4）**：按 PM 授权代改 `webui/docs/162-customer-query-experience-and-usage-evidence-spec.md` 的**修订声明**（v0.4）；同步四处登记册；补 `scripts/lint-spec.mjs`、`webui/config/access.yaml` 两个实施落点；修正术语标准第三条词条、引用行号与部署拓扑措辞。
 
 **未做**：未修改任何生产代码、未执行任何测试、未改动 `webui/config/data-qa-instructions.md` 与术语标准**本体**（其修订在 S8）、未提交 git、未构建镜像、未部署。
 
@@ -375,6 +377,6 @@ SC-01–SC-41 逐条留证（用例、输入、实际输出），并由独立审
 | 7 | Spec / Plan 必须登记进对应索引 | `docs/README.md` §2（Spec 行）、§3（审阅结论行）、§9（Plan 行）；`docs/plans/README.md`（Plan 行） | ✅ 符合 |
 | 8 | 新增命令 / CI job 必须在测试门禁文档登记 | **本次未新增任何命令或 CI job** ⇒ 不适用（并发会话同期新增的 `lint:spec-docs` 属另一条目，不在本条目范围） | ⚪ **不适用**（非遗漏：本条目只交付文档，零代码、零脚本、零 workflow 改动） |
 | 9 | 功能编号待 PM 指派，由权威登记册登记 | 编号**待 PM 指派**（建议 L25-17）；**尚未**登记权威登记册 `docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md` | ⏳ **待 PM 指派**（登记册条目均已指派编号，无「待指派」位；指派后由 S9 登记） |
-| 10 | 落盘后跑一遍机器门禁并逐条勾销本表；不得以「门禁全绿」替代形态自查 | `lint:spec-docs`（PASS，120 files scanned）、`lint:spec`（PASS）、`lint:terminology`（PASS，1064 files）、`lint:ia-boundary`（PASS）；**本表即为逐条勾销** | ✅ 符合 |
+| 10 | 落盘后跑一遍机器门禁并逐条勾销本表；不得以「门禁全绿」替代形态自查 | v0.5 时 `lint:spec-docs`／`lint:spec`／`lint:terminology`／`lint:ia-boundary` 均为 PASS。v0.6 复跑 `lint:spec-docs`：本 Spec 与本 Plan **不在**违规列表。当时全量失败来自另一条目的 `docs/specs/lucy-ci-restoration-spec.md` 与 `docs/plans/2026-10-29-ci-restoration-plan.md`，不在本条目范围。**本表即为逐条勾销** | ✅ 符合 |
 
 **门禁覆盖范围说明**：`lint:spec-docs` 覆盖 index / ds-shape / term-shape / pseudocode / plan-parts / metadata 六类**机器可判定**形态项；它**不覆盖**决策表完整性、证据等级标注、状态陈述真实性与文档间口径一致性——后者由本表的人工勾销与 Codex 审阅承担。

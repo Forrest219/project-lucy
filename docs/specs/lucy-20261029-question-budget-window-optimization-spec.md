@@ -2,19 +2,19 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档类型 / 版本 | 功能设计基线 / **v0.2** |
+| 文档类型 / 版本 | 功能设计基线 / **v0.3** |
 | 日期 / 目标版本 | 2026-10-29 首版 / v0.1 按第 1 轮 Codex 审阅修订 / 目标 v0.25（修订线） |
 | 功能编号 / 优先级 | **待 PM 指派**（建议 L25-17）/ **P0**（预算窗口语义 + 续查可达）、P1（可观测性）、P2（归属与恢复正确性） |
-| 状态 | **v0.2 待审阅，未批准**。第 1 轮审阅未通过（4 阻塞 / 8 高 / 1 中 / 1 低），本版据其修订并回应；**第 2 轮审阅未进行**。不授权开发、浏览器验证或客户交付。 |
+| 状态 | **v0.3 作者定稿基线，未批准**。第 1 轮审阅未通过（4 阻塞 / 8 高 / 1 中 / 1 低），v0.2 已逐条回应；v0.3 收口作者侧复核的口径冲突。**第 2 轮审阅未进行，D1–D9 未拍板。** 不授权开发、浏览器验证或客户交付。 |
 | 评审状态 | **第 1 轮 Codex 审阅结论：退回修订**，14 条发现逐条回应见 §10 与 [`docs/reviews/2026-10-29-codex-review-question-budget-window-optimization.md`](../reviews/2026-10-29-codex-review-question-budget-window-optimization.md)。**第 2 轮未进行。** |
 | 决策来源 | 2026-10-29 PM 指示：基于 2026-10-29 09:19–09:24 UTC 生产事故（用户 liuzongxuan / 客户端 `codex-mcp-client`）设计优化 Spec 与 Plan，交付 Codex 审阅并落盘审阅结论；后指示「综合 codex 审阅意见，修正 spec 和 plan」。 |
 | 需求来源 | 生产事故：一次问询在**零次数据工具调用**的情况下被 `question_budget_exhausted` 拦下，客户侧无法自行恢复。 |
 | 实施主体 | Lucy（Proxy 问询预算层 + Admin 审计导出层）；不修改 KTX 源码 |
 | 落位依据 | [`docs/governance/DEVELOPMENT.md`](../governance/DEVELOPMENT.md)「Spec 落位规则」：仓库级跨模块设计落 `docs/`；本文修订 `webui/docs/162-customer-query-experience-and-usage-evidence-spec.md` §7.2（问询预算）的口径与续查通道 |
 | 与既有 Spec 的关系 | **修订 Spec 162 §7.2 的墙钟口径与续查兑现通道**；Spec 162 其余条款、失败四维度、使用分析口径不变。§7.2 的权威事实源在本次修订后指向本文 §6–§9。 |
-| 本版修订 | **v0.2（2026-10-29）**：据第 1 轮审阅 14 条发现修订。**R01** → §6.3 引入持久化 `pendingToken` 声明—消费机制，续查意图有了真实传递通道；**R02** → §6.2 统一结算协调器 + 窗口票据，`res.close` 不再充当结算点；**R03** → §5 D1 明确 120 秒为**结算口径软上限**，给出可证明的有界超支与绝对执行时限；**R04** → §6.2 票据携带 `windowId`，旧窗口耗时归档不污染新窗口；**R05** → §6.4 全链路改为「候选态 → 落库 → 发布内存 + 审计」；**R06** → §6.1 引入**稳定预算身份**（身份+会话，脱离 turn 注册表过期），修「10 分钟后换桶逃逸」；**R07** → §6.5 作用域键含身份，取代天然隔离；**R08** → §6.5 取代与握手回填纳入同会话串行 + 事务内重检；**R09** → §6.3 `continuable` 重新定义为「**可执行能力**」并补 ACL 落点；**R10** → §2.3 / §6.6 纳管 `lucy_certified_route` / `lucy_report_template` 两条旁路；**R11** → §1.4 C **撤回**「导出服务端写死 outcome=ok」的错误归因，改为待查证的发起侧带参；**R12** → Plan 阶段重排，可观测性先行、S2 拆三单元；**R13** → §7 全部 SC 补初态/输入/模式/观测时点；**R14** → §3.2 与 §9 修订术语标准两条既有词条、修正章节引用、「协议方法」改称「不计预算的本地工具」。 |
+| 本版修订 | **v0.3（2026-10-29，作者定稿）**：不改 D1–D9 的推荐选项，只消除 v0.2 内部冲突。① §10 对 R03 的「在途计入准入」改为与 D1(a) 一致的软上限（准入只看已结算 `busyMs`）；② §6.2 / §6.3 的 `settle` / `consume` 改为与 §6.4 相同的 `commit`（候选态 → 按 `requestId` 幂等落库 → 再发布），且 `consume` 进入作用域串行队列；③ 停机凭证改为 `presentedToken`（有 turn 时等于既有 `turnId`，否则为不透明随机值），**禁止**回传含身份材料的 `scopeKey`；④ 「可继续」补进 §11 与 SC-41；⑤ §8.3 的阶段引用改为 Plan S5 / S8。**v0.2（2026-10-29）**：据第 1 轮审阅 14 条发现修订。**R01** → §6.3 引入持久化 `pendingToken` 声明—消费机制，续查意图有了真实传递通道；**R02** → §6.2 统一结算协调器 + 窗口票据，`res.close` 不再充当结算点；**R03** → §5 D1 明确 120 秒为**结算口径软上限**，给出可证明的有界超支与绝对执行时限；**R04** → §6.2 票据携带 `windowId`，旧窗口耗时归档不污染新窗口；**R05** → §6.4 全链路改为「候选态 → 落库 → 发布内存 + 审计」；**R06** → §6.1 引入**稳定预算身份**（身份+会话，脱离 turn 注册表过期），修「10 分钟后换桶逃逸」；**R07** → §6.5 作用域键含身份，取代天然隔离；**R08** → §6.5 取代与握手回填纳入同会话串行 + 事务内重检；**R09** → §6.3 `continuable` 重新定义为「**可执行能力**」并补 ACL 落点；**R10** → §2.3 / §6.6 纳管 `lucy_certified_route` / `lucy_report_template` 两条旁路；**R11** → §1.4 C **撤回**「导出服务端写死 outcome=ok」的错误归因，改为待查证的发起侧带参；**R12** → Plan 阶段重排，可观测性先行、S2 拆三单元；**R13** → §7 全部 SC 补初态/输入/模式/观测时点；**R14** → §3.2 与 §9 修订术语标准两条既有词条、修正章节引用、「协议方法」改称「不计预算的本地工具」。 |
 
-> 本文件是**设计基线**。第 2 轮审阅未闭环、决策未拍板之前，不授权实现。
+> 本文件是**作者定稿基线（v0.3）**。第 2 轮审阅未闭环、D1–D9 未拍板之前，不授权实现。
 
 ---
 
@@ -211,6 +211,8 @@ type BudgetState = {
   currentConcurrency: number
   continuations: number      # 已用续查额度（≤ 1）
   pendingToken: string|null  # 待兑现的续查声明（持久化，见 §6.3）
+  presentedToken: string|null # 停机响应交给客户端的凭证。有 turn 时等于 turnId；否则为不透明随机值。禁止等于 scopeKey
+  archivedBusyMsByWindow: map # 旧窗口耗时。与当前窗口 busyMs 分列，同一事务写入
   startedAt: number
   originStartedAt: number    # 问询年龄（观测用，不作门禁）
   loaded: boolean
@@ -222,105 +224,131 @@ MAX_INFLIGHT     = 4          # 同作用域并发数据调用上限（D1 有界
 ABS_EXEC_MS      = 120_000    # 单次数据调用的绝对执行时限（D1 有界超支的第三个因子）
 ```
 
-**有界超支的可证明上界**：准入条件只看已结算的 `busyMs`；准入后到结算前，最多有 `MAX_INFLIGHT` 个在途请求，每个最长 `ABS_EXEC_MS`。故单问询数据处理总时长 ≤ `MAX_BUSY_MS + MAX_INFLIGHT × ABS_EXEC_MS` = **600 秒**。空闲时间**永不计入**。
+**有界超支的可证明上界**：准入条件**只**看已结算的 `busyMs`，**不**把在途时长预占进准入（那是 D1 备选 (b)，本版不采用）。准入后到结算前，最多有 `MAX_INFLIGHT` 个在途请求，每个最长 `ABS_EXEC_MS`。故单问询数据处理总时长 ≤ `MAX_BUSY_MS + MAX_INFLIGHT × ABS_EXEC_MS` = **600 秒**。空闲时间**永不计入**。
 
 ### 6.2 统一结算与窗口票据（D1 / R02 / R04）
 
 ```text
-# ── 票据：在请求生命周期开始时创建 ────────────────────────────
+# ── 票据：在请求生命周期开始时创建；调用方只有收到 ALLOW 之后才向上游发起调用 ──
 type Ticket = {
   scopeKey: string
   windowId: number       # 准入时的窗口版本（R04：旧请求不得记入新窗口）
   round: number
-  requestId: string
+  requestId: string      # 结算幂等键，与 busyMs 更新同一事务
   startMonoMs: number    # 单调时钟
-  settled: boolean
+  settled: boolean       # 仅在 commit 成功后置真
 }
 
 # 结算点 = 上游真正结束，或确认取消完成。
 # res.close 只表示「客户端断开」，不作为结算点（R02）。
 function settle(ticket, endMonoMs):
-  if ticket.settled: return              # 幂等：同一票据只结算一次
-  ticket.settled = true
+  if ticket.settled: return
   withScopeSerialization(ticket.scopeKey, async () => {
+    if ticket.settled: return
     state = loadState(ticket.scopeKey)
     delta = endMonoMs - ticket.startMonoMs
-    if state.windowId === ticket.windowId:
-      state.busyMs += delta               # 记入当前窗口
+    candidate = clone(state)
+    if candidate.windowId == ticket.windowId:
+      candidate.busyMs += delta
     else:
-      archiveWindowCost(ticket.windowId, delta)   # 旧窗口：归档，不污染新窗口（R04）
-    state.inflight = max(0, state.inflight - 1)
-    state.currentConcurrency = max(0, state.currentConcurrency - 1)
-    persist(state)
+      candidate.archivedBusyMsByWindow[ticket.windowId] += delta   # 同事务归档，不污染新窗口
+    candidate.inflight = max(0, candidate.inflight - 1)
+    candidate.currentConcurrency = max(0, candidate.currentConcurrency - 1)
+    committed = commit(ticket.scopeKey, candidate, idempotencyKey = ticket.requestId)
+    if committed: ticket.settled = true
+    # commit 失败时 ticket.settled 保持 false；作用域按 §6.4 进程内不可用，后台按 requestId 重试
   })
 ```
 
 **挂载点**：`settle` 挂在**上游处理结束**处，而非 `res.once("close")`。客户端断开 → 触发取消上游 → 取消确认后结算；若取消不可行，则**继续计时**直至上游自然结束（此时仍计费，但计入的是真实处理时长）。
 
-**并发上限**：准入时若 `state.inflight >= MAX_INFLIGHT`，本次调用**不进入预算判定**，直接以 `并发超限` 拒绝并单独记账（不消耗 `calls`、不累计 `busyMs`）。
+**并发上限**：该判断在 `consume` 的同一把作用域锁内、预算判定之前执行。若 `state.inflight >= MAX_INFLIGHT`，本次调用**不进入预算判定**，直接以 `并发超限` 拒绝并单独记账（不消耗 `calls`、不累计 `busyMs`、不写预算状态行）。
 
 **绝对执行时限**：数据工具调用超过 `ABS_EXEC_MS` 仍未结束时，主动取消上游并按超时结算（计入实际已耗时）。
 
 ### 6.3 续查：声明 — 消费（两段式，持久化待兑现）（D2 / D3 / R01 / R05 / R09）
 
 ```text
+function presentToken(state, turnId):
+  if state.presentedToken != null: return state.presentedToken
+  # 有 turn：沿用既有契约，凭证 = turnId（现有 e2e 不破）
+  # 无 turn：签发不透明随机值。禁止回传 scopeKey / identityKey
+  return turnId != null ? turnId : newOpaqueToken()
+
 # ── 路径一：工具声明 ────────────────────────────────────────
-function declareContinuation(scopeKey, token, identity, sessionId):
-  # 全程在作用域队列内串行；**先落库，后发布内存与审计**（R05）
+function declareContinuation(scopeKey, token):
   withScopeSerialization(scopeKey, async () => {
     state = loadState(scopeKey)
-    if state.pendingToken == token: return OK(idempotent=True)       # 同 token 重复声明：幂等
-    if state.pendingToken != null:   return REJECT(pending_exists)   # 一个作用域只能有一个待兑现
-    if state.continuations >= 1:     return REJECT(no_credit)        # 续查额度已用尽
-    if not exhausted(state):          return REJECT(not_exhausted)    # 未用尽时无需续查
+    if state.processUnavailable: return UNAVAILABLE("question_budget_unavailable")
+    if state.pendingToken == token: return OK(idempotent=True)
+    if state.pendingToken != null:  return REJECT(pending_exists)
+    if state.continuations >= 1:    return REJECT(no_credit)
+    if not exhausted(state):         return REJECT(not_exhausted)
+    if token != state.presentedToken: return REJECT(mismatch)     # SC-22
     candidate = { ...state, pendingToken: token }
-    persist(candidate)                 # ← 落库先行
-    publish(candidate)                 # ← 再发布内存
-    audit(budget_continuation_declared, {scopeKey, token, windowId: state.windowId})
+    if not commit(scopeKey, candidate, idempotencyKey = "declare:"+token):
+      return UNAVAILABLE("question_budget_unavailable")
+    audit(budget_continuation_declared, {scopeKey, windowId: state.windowId})
     return OK(declared=True)
   })
 
-# ── 路径二：数据工具调用时消费 ────────────────────────────────
-function consume(scopeKey, turnId, headerToken, now, capability):
-  state = loadState(scopeKey)
-  exhausted = state.calls >= MAX_CALLS or state.busyMs >= MAX_BUSY_MS
+# ── 路径二：数据工具调用时消费（与声明、结算同一把作用域锁）────
+function consume(scopeKey, turnId, headerToken, capability):
+  return withScopeSerialization(scopeKey, async () => {
+    state = loadState(scopeKey)
+    if state.processUnavailable: return UNAVAILABLE("question_budget_unavailable")
+    if state.inflight >= MAX_INFLIGHT:
+      return REJECT_CONCURRENCY          # 不写预算状态行
 
-  token, trusted = pickToken(state, headerToken, turnId, scopeKey)
-    # 头部路径：headerToken 非空时，trusted = (headerToken == (turnId ?? scopeKey))
-    # 工具路径：state.pendingToken 非空时，trusted = true（同作用域声明，天然可信）
+    exhausted = state.calls >= MAX_CALLS or state.busyMs >= MAX_BUSY_MS
+    headerTrusted = headerToken != null and headerToken == state.presentedToken
+    toolTrusted = state.pendingToken != null
+    # 双路径同时命中只兑现一次；已落库的 pendingToken 优先于头部
+    useContinuation = exhausted and state.continuations < 1 and (toolTrusted or headerTrusted)
 
-  if exhausted and token != null and trusted and state.continuations < 1:
-    state.calls = 0
-    state.busyMs = 0
-    state.windowId += 1                 # 换窗（R04：旧窗口耗时归档）
-    state.continuations += 1
-    state.pendingToken = null           # 消费即清除
-    # 续查生效事实与本次放行**同批落库**（R05）
+    candidate = clone(state)
+    if useContinuation:
+      candidate.calls = 0
+      candidate.busyMs = 0
+      candidate.windowId += 1
+      candidate.continuations += 1
+      candidate.pendingToken = null
+      candidate.presentedToken = null
 
-  stillExhausted = state.calls >= MAX_CALLS or state.busyMs >= MAX_BUSY_MS
-  if stillExhausted:
-    return STOP(
-      reason        = "question_budget_exhausted",
-      partial       = true,
-      continueToken = turnId ?? scopeKey,
-      continuable   = capability.canContinue and state.continuations < 1   # ← D2 / R09：可执行能力
-    )
+    if candidate.calls >= MAX_CALLS or candidate.busyMs >= MAX_BUSY_MS:
+      if candidate.presentedToken == null:
+        candidate.presentedToken = presentToken(candidate, turnId)
+      if not commit(scopeKey, candidate, idempotencyKey = "stop:"+candidate.presentedToken):
+        return UNAVAILABLE("question_budget_unavailable")
+      return STOP(
+        reason        = "question_budget_exhausted",
+        partial       = true,
+        continueToken = candidate.presentedToken,    # 永不等于 scopeKey
+        continuable   = capability.canContinue and candidate.continuations < 1
+      )
 
-  state.calls += 1
-  state.attempts += 1
-  state.inflight += 1
-  state.currentConcurrency += 1
-  persist(state)                        # 与放行同批落库
-  return ALLOW(ticket = {scopeKey, windowId: state.windowId, round: state.round, ...})
+    requestId = newRequestId()
+    candidate.calls += 1
+    candidate.attempts += 1
+    candidate.inflight += 1
+    candidate.currentConcurrency += 1
+    candidate.peakConcurrency = max(candidate.peakConcurrency, candidate.currentConcurrency)
+    if not commit(scopeKey, candidate, idempotencyKey = "admit:"+requestId):
+      return UNAVAILABLE("question_budget_unavailable")
+    if useContinuation:
+      audit(budget_continued, {scopeKey, windowId: candidate.windowId, requestId})
+    return ALLOW(ticket = {scopeKey, windowId: candidate.windowId, round: candidate.round,
+                           requestId, startMonoMs: monoNow(), settled: false})
+  })
 ```
 
 **关键点**
 
-- **两条路径汇入同一次 `consume`**，`state.continuations < 1` 是**唯一**闸门 ⇒ 并发双路径不会把续查额度加两次（R01）。
-- **声明与消费是持久化的两段式**：`pendingToken` 存在预算状态行里，**代理重启后仍可恢复**，并发安全由作用域串行队列保证；工具声明后即使代理重启，待兑现状态仍在（R01）。
-- **续查生效与数据调用放行同批落库** ⇒ 不存在「审计已称续查生效、实际没放行」的窗口（R05）。
-- **`continuable` 是「可执行能力」**：代理在生成停机响应时按**当前调用者的可见工具集合**计算 `capability.canContinue`（`lucy_continue_question` 对该调用者可见且已授权）。旧客户端看不到该工具 ⇒ `continuable=false` ⇒ 模型不会重试一条不可达的路径（R09）。
-- **头部路径保留**为次要路径，其 token 仍须逐字匹配（既有契约不变）。
+- **`consume`、`declareContinuation`、`settle` 进入同一把作用域锁。** `continuations < 1` 是续查的唯一闸门，并发的头部路径与工具路径只会换窗一次（R01、SC-21）。
+- **声明与消费是持久化的两段式**：`pendingToken` 存在预算状态行里，代理重启后仍可恢复（R01）。声明须逐字等于已下发的 `presentedToken`。
+- **续查生效与本次放行同一次 `commit`**。审计只在 `commit` 成功之后发出（R05）。调用方只有收到 `ALLOW` 之后才能向上游发起数据调用。
+- **`continuable` 是「可执行能力」**：代理按当前调用者的可见工具集合计算 `capability.canContinue`（`lucy_continue_question` 对该调用者可见且已授权）。旧客户端看不到该工具时为 `false`（R09）。
+- **头部路径保留**为次要路径。凭证是 `presentedToken`：有 turn 时等于既有 `turnId`，无 turn 时为不透明随机值。响应与审计都不得回传 `scopeKey` 或 `identityKey`。
 
 ### 6.4 装载、落库与发布顺序（D5 / R05）
 
@@ -332,14 +360,31 @@ function loadState(scopeKey):
     memory.set(scopeKey, state)
   if persistence != null and not state.loaded:
     persisted = persistence.load(scopeKey)      # 失败 → question_budget_unavailable（fail closed）
-    if persisted != null: state = merge(state, persisted)   # 恢复**全部**累计字段（R06）
+    if persisted != null: state = merge(state, persisted)   # 恢复全部累计字段（R06）
     state.loaded = true
+    state.processUnavailable = false
   return state
+
+# 唯一写路径。先落库，成功后再发布内存与允许发审计。
+function commit(scopeKey, candidate, idempotencyKey):
+  try:
+    persistence.save(candidate, idempotencyKey)  # 同一事务；重复键视为已成功
+    publish(candidate)
+    return true
+  catch:
+    persisted = persistence.load(scopeKey)
+    if persisted.appliedKeys contains idempotencyKey:
+      publish(merge(loadState(scopeKey), persisted))
+      return true
+    # 磁盘仍是旧态。本进程标记不可用，禁止后续准入；不把失败候选写进内存。
+    # 不另写一条「不可用」持久行：进程退出后重启会装载最后一次成功提交。
+    memory.get(scopeKey).processUnavailable = true
+    return false
 ```
 
-**落库纪律（全程适用）**：任何状态变更一律 **候选态 → 落库 → 发布内存 + 发审计**。落库失败时**保留旧态**，不发布、不发审计。作用域在落库失败后**标记为不可用**，后续准入一律拒绝（避免内存与持久态分叉）。
+**落库纪律（全程适用）**：任何状态变更一律 **候选态 → `commit` → 发布内存；审计只在 `commit` 成功后发出**。`commit` 失败时内存保持旧态。结算失败时按同一 `requestId` 做有限次立即重试，其后保持进程内不可用并后台重试；成功后解除不可用。进程在提交成功前退出时，该笔未提交增量丢失，单次损失 ≤ `ABS_EXEC_MS`，不得把崩溃前的在途占用恢复成活跃并发。
 
-**恢复字段清单**：`calls`、`busyMs`、`continuations`、`pendingToken`、`windowId`、`round`、`turnId`、`attempts`、`peakConcurrency`、`originStartedAt`、`startedAt`。**在途占用不恢复**（崩溃前在途的进程已死，不得盲目恢复为活跃并发）。
+**恢复字段清单**：`calls`、`busyMs`、`continuations`、`pendingToken`、`presentedToken`、`archivedBusyMsByWindow`、`windowId`、`round`、`turnId`、`attempts`、`peakConcurrency`、`originStartedAt`、`startedAt`。**在途占用不恢复**（崩溃前在途的进程已死）。`processUnavailable` 只存在于本进程内存。
 
 ### 6.5 同会话重开问询的显式取代（D6 / R07 / R08）
 
@@ -355,7 +400,8 @@ on lucy_begin_question:
       candidate = { ...state, round: state.round + 1, turnId: turnId,
                     calls: 0, busyMs: 0, windowId: state.windowId + 1,
                     continuations: 0, pendingToken: null }
-      persist(candidate); publish(candidate)
+      if not commit(scopeKey, candidate, idempotencyKey = "supersede:"+turnId):
+        return UNAVAILABLE("question_budget_unavailable")   # 不发布、不发审计
       audit(turn_superseded, {from: previousTurn, to: turnId, scopeKey})
     bindPriorSessionCalls(turnId, ...)         # 现状保留，但见下方并发约束
     reportedTurns.record(identity, sessionId, turnId)
@@ -422,7 +468,7 @@ on lucy_certified_route / lucy_report_template:
 | SC-08 | 全新作用域 | 数据调用次数达到 20 | settled | 第 21 次准入时 | `question_budget_exhausted`（与处理时长无关） |
 | SC-09 | 全新作用域 | 协议方法 / `lucy_catalog` / `lucy_skill_search` / 被 ACL 拒绝的调用 | settled | 其后首个数据调用准入时 | 四类均**不**累计 `calls` / `busyMs`，且**不**创建或重置窗口 |
 | SC-10 | 全新作用域 | 事故等价复现：同一 turn 先 `lucy_catalog` → 空闲 318 秒 → 首次 `lucy_read_source` | settled + elapsed 对照 | 首次读准入时 | `settled` **放行**；`elapsed` **拒绝**；两口径在同一用例内对照。**用可控时钟构造，不需要真实等待 318 秒** |
-| SC-11 | `busyMs=0`，有一个数据调用在途（未结算） | 此刻再发起 4 个并发数据调用 | settled | 第 5 个并发准入时 | 第 5 个被 `并发超限` 拒绝；**不**消耗 `calls`、**不**累计 `busyMs` |
+| SC-11 | `busyMs=0`，已有 1 个数据调用在途，`MAX_INFLIGHT=4` | 再并发提交 4 个数据调用 | settled | 第 4 个新请求准入时 | 前 3 个新请求放行（在途达到 4）；第 4 个新请求（并发序号 5）以「并发超限」拒绝，且该次拒绝**不**消耗 `calls`、**不**累计 `busyMs` |
 | SC-12 | 旧窗口已有在途请求 A | A 未完成时发生续查，B 进入新窗口 | settled | A 结算时 | A 的耗时**归档到旧窗口**；新窗口 `busyMs` **不受影响**；A 的结算**幂等**（重复调用只生效一次） |
 | SC-13 | 一个数据调用处理中 | 客户端提前断开连接 | settled | 结算时 | 触发取消上游；取消确认后结算已耗时；**不因 `res.close` 而提前少计** |
 | SC-14 | 一个数据调用处理中 | 处理时长超过 `ABS_EXEC_MS` | settled | 结算时 | 主动取消上游；按实际已耗时结算；审计标记超时 |
@@ -431,7 +477,7 @@ on lucy_certified_route / lucy_report_template:
 
 | 编号 | 初态 | 输入 | 模式 | 观测时点 | 验收 |
 |---|---|---|---|---|---|
-| SC-15 | 预算刚用尽，`continuations=0` | 首次触发停机 | settled | 响应生成时 | `continuable=true`（该调用者**可见且已授权** `lucy_continue_question`）；`continueToken` 有效 |
+| SC-15 | 预算刚用尽，`continuations=0` | 首次触发停机 | settled | 响应生成时 | `continuable=true`（该调用者**可见且已授权** `lucy_continue_question`）；`continueToken` 等于 `presentedToken`（有 turn 时为 `turnId`，否则为不透明随机值），**不得**包含 `scopeKey` 或 `identityKey` |
 | SC-16 | 同上，但该调用者**不可见**该工具 | 首次触发停机 | settled | 响应生成时 | `continuable=false`；模型不得被引导重试不可达路径 |
 | SC-17 | 预算用尽，`continuations=0` | 调用 `lucy_continue_question(token)`，随后发起数据调用 | settled | 数据调用准入时 | 声明被接受；该次数据调用获得**归零后**的窗口（准入后 `calls=1`、`busyMs=0`、`windowId` +1）；续查生效事实与该次放行**同批落库** |
 | SC-18 | 续查额度已用尽（`continuations=1`） | 再调用 `lucy_continue_question` | settled | 响应生成时 | 被拒绝（`no_credit`）；**不得**重置窗口 |
@@ -472,7 +518,7 @@ on lucy_certified_route / lucy_report_template:
 | SC-38 | 任意 | `LUCY_QUESTION_BUDGET_SCOPE=legacy` | settled | 各次准入时 | 作用域键回到旧语义；用于新旧口径对照，不作为生产形态 |
 | SC-39 | 任意 | `LUCY_QUESTION_BUDGET=off` | — | 各次准入时 | 预算整体关闭，既有行为不变 |
 | SC-40 | 任意 | 读取 `webui/config/data-qa-instructions.md` | — | 文件内容 | 与 §4 D8 及 Plan S8 的新口径一致；指导文本**不得宽于**代理预算；写明遇 `question_budget_exhausted` 时按 `continuable` 分支处置 |
-| SC-41 | 任意 | 读取术语标准两条词条 | — | 文件内容 | 「问询预算」与「关联调用数」两条词条定义已按 §3.2 修订 |
+| SC-41 | 任意 | 读取术语标准三条词条 | — | 文件内容 | 「问询预算」「关联调用数」「可继续」三条词条定义已按 §3.2 修订 |
 
 ---
 
@@ -488,7 +534,7 @@ on lucy_certified_route / lucy_report_template:
 
 ### 8.2 迁移
 
-- `question_budget_state` 新增列：`busy_ms`、`round`、`turn_id`、`identity_key`、`session_id`、`window_id`、`pending_token`、`status`。
+- `question_budget_state` 新增列：`busy_ms`、`round`、`turn_id`、`identity_key`、`session_id`、`window_id`、`pending_token`、`presented_token`、`status`。结算幂等键与旧窗口归档耗时与上述列同一事务写入。
 - **旧键语义**（`turn:<turnId>` / `scope:<hash>:<session>`）的行**保留只读**，不被新逻辑命中；新语义另起键 `bq:<identityKey>:<sessionId>`。
 - **存量行不回填业务语义**：存量 `calls` 无法映射到新作用域，**新作用域从零开始**；这是刻意的——把旧 turn 的计数迁移到新桶会造成跨问询额度继承。
 - 迁移脚本须幂等；存量 `question_budget_state` 行不删除（保留审计追溯）。
@@ -500,16 +546,16 @@ on lucy_certified_route / lucy_report_template:
 | 作用域键语义变更影响既有 e2e / 集成用例 | 高 | `LUCY_QUESTION_BUDGET_SCOPE=legacy` 保留旧语义用于对照；§7.6 专项验收 |
 | 预算上限退化为软上限 | 中 | 有界超支界限可证明（§4 D1）；绝对执行时限 + 并发上限两个因子均显式化并纳入验收 |
 | 续查通道可达后可能被用于反复重试 | 中 | 续查额度仍为 1 次/问询；续查只换窗不加额度；`continuable` 按调用者能力如实返回 |
-| 新工具需 ACL 登记与角色迁移，遗漏则**不可见** | 高 | Plan S3 显式列出 `acl.ts`、known tools、角色授予与升级迁移；SC-16 覆盖不可见场景 |
+| 新工具需 ACL 登记与角色迁移，遗漏则**不可见** | 高 | Plan S5 显式列出 `acl.ts`、known tools、角色授予与升级迁移；SC-16 覆盖不可见场景 |
 | 导出默认口径变化影响既有消费方 | 中 | 无筛选与显式筛选两种情形分别验收（SC-25 / SC-26）；导出发起侧列为独立排查项 |
-| 指导文本与术语标准变更属治理类文件 | 中 | 走 Plan Mode；与 S4 同批验收 |
+| 指导文本与术语标准变更属治理类文件 | 中 | 走 Plan Mode；与 S5 同批验收（Plan S8） |
 | 旁路入口纳管可能影响既有认证路由使用 | 中 | SC-35 / SC-36 双向验收；纳管按「一次外部调用记一次额度」 |
 
 ---
 
 ## 9. 交付判定
 
-- **本文状态**：设计基线 v0.2，**待第 2 轮审阅**。第 1 轮结论已落盘（见页首「评审状态」）。
+- **本文状态**：作者定稿基线 v0.3，**待第 2 轮审阅**。第 1 轮结论已落盘（见页首「评审状态」）。v0.3 只收口内部口径，不代替复审，也不代替 PM 拍板。
 - **决策状态**：D1–D9 全部**待拍板**。未拍板不得进入实现。
 - **验收状态**：SC-01–SC-41 **全部未执行**。
 - **授权状态**：**不授权**开发、浏览器验证、客户交付、镜像或部署。
@@ -523,18 +569,18 @@ on lucy_certified_route / lucy_report_template:
 |---|---|---|---|
 | R01 续查意图无传递通道 | 阻塞 | 引入**持久化 `pendingToken`** 的声明—消费两段式；头部与工具两路径汇入同一次 `consume`，`continuations < 1` 为唯一闸门 | §6.3、SC-17～SC-24 |
 | R02 `res.close` ≠ 处理结束 | 阻塞 | 改用**统一结算协调器**，结算点=上游真正结束/确认取消；单调时钟；幂等；全部失败出口走同一结算 | §6.2、SC-12～SC-14 |
-| R03 120 秒封顶不成立 | 高 | 明确为**结算口径软上限**，配**有界在途超支**（≤ 并发上限 × 绝对执行时限 = 600 秒）与**绝对执行时限**；在途计入准入 | §4 D1、§6.1、§6.2、SC-07、SC-11、SC-14 |
+| R03 120 秒封顶不成立 | 高 | 明确为**结算口径软上限**。准入只看已结算 `busyMs`，**不**把在途预占进准入。超支上界 = `MAX_BUSY_MS + MAX_INFLIGHT × ABS_EXEC_MS` = 600 秒，另有绝对执行时限 | §4 D1、§6.1、§6.2、SC-07、SC-11、SC-14 |
 | R04 释放无窗口版本 | 高 | 引入**窗口票据**（含 `windowId`），结算按票据归档旧窗口耗时；结算进作用域队列 | §6.2、SC-12 |
 | R05 审计先于持久提交 | 阻塞 | 全链路改为**候选态 → 落库 → 发布内存 + 发审计**；续查生效与数据调用放行同批落库；落库失败保留旧态并标记作用域不可用 | §6.3、§6.4、SC-05、SC-17、SC-30 |
 | R06 恢复不足致换桶逃逸 | 高 | 引入**稳定预算身份**（身份+会话，脱离注册表过期）；补全字段恢复；SC-04 要求经真实代理重启验证 | §6.1、§6.4、SC-02、SC-03、SC-04 |
 | R07 取代丢失身份隔离 | 阻塞 | 作用域键含 `identityKey`；取代只作用于同身份同会话；无会话桶按身份隔离 | §6.5、SC-31、SC-32 |
 | R08 并发 begin 突破不回改 | 高 | 同身份+会话的 begin 全流程串行；握手回填事务内重检「仍未归属」；只为实际更新行记录前像 | §6.5、SC-33、SC-34 |
-| R09 工具授权落点缺失 | 高 | `continuable` 重定义为**可执行能力**；Plan S3 显式列出 `acl.ts`/known tools/角色授予/迁移 | §6.3、SC-15、SC-16、§3.1 |
+| R09 工具授权落点缺失 | 高 | `continuable` 重定义为**可执行能力**；Plan S5 显式列出 `acl.ts`/known tools/角色授予/迁移 | §6.3、SC-15、SC-16、§3.1 |
 | R10 旁路入口绕过预算 | 高 | `lucy_certified_route` / `lucy_report_template` 纳入统一 consume，内部查询以内部执行上下文免重复记账 | §2.3、§6.6、SC-35、SC-36 |
 | R11 导出归因错误 | 高 | **撤回**「服务端写死 outcome=ok」；改为「导出请求发起侧带参」且列为**待查证**；分离规定无筛选与显式筛选两种期望；补前端落点 | §1.2、§1.4 C、§6.7、SC-25、SC-26 |
 | R12 阶段顺序与回滚 | 高 | Plan 重排：**可观测性先行**；S2 拆为持久化正确性/统一结算/时间算法三单元；SC-37 缩为「仅时间判定兼容」 | Plan §4、§7.6 |
 | R13 SC 不可验证 | 中 | 全部 SC 重写为「初态/输入/模式/观测时点」五列表；SC-10 用可控时钟构造 | §7 |
-| R14 术语与引用未完成 | 低 | §3.2 明确修订两条既有词条（问询预算口径、关联调用数恒等式）；v0.1 的失效章节引用随 SC 全表重写一并消解（SC-40 改指 §4 D8 与 Plan S8）；「协议方法」改称「不计预算的本地工具」 | §3.2、§7.6、Plan S8 |
+| R14 术语与引用未完成 | 低 | §3.2 修订三条既有词条（问询预算、关联调用数、可继续）；SC-41 覆盖这三条。v0.1 的失效章节引用随 SC 全表重写一并消解（SC-40 改指 §4 D8 与 Plan S8）；「协议方法」改称「不计预算的本地工具」 | §3.2、§7.6、SC-41、Plan S8 |
 
 ---
 
@@ -545,6 +591,6 @@ This feature follows `webui/docs/00-product-terminology-standard.md`.
 New terms:
 - None
 
-**既有词条修订**（详见 §3.2）：「问询预算」口径定义、「关联调用数」恒等式。修订在术语标准中进行，不新增术语。
+**既有词条修订**（详见 §3.2，验收见 SC-41）：「问询预算」口径定义、「关联调用数」恒等式、「可继续」可达性定义。修订在术语标准中进行，不新增术语。
 
 协议字段 `question_budget_exhausted` 保持 `translate="no"`。新增工具名 `lucy_continue_question` 为协议标识符（英文），不进入用户可见文案，不适用翻译。
