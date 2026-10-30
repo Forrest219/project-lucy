@@ -19,6 +19,8 @@
 
 > **Spec 189 修订（2026-10-27）**：本文的**授权面**、**`access_log_sources` 访问主体**、调用 ID 去重与守恒算法**全部不变**；仅**凭证清单的「统计期调用次数」**改为 Default Usage Call（排除全部协议事件与默认视图排除的评测探针）。真实表访问事实（含真实评测调用）**不因默认用量口径被过滤**，Access Path 的存在性去重语义不变。口径见 `webui/docs/189-usage-metrics-truthfulness-and-cross-page-consistency-spec.md` §6。
 
+> **呈现修订（待审阅，2026-10-30）**：数据语义、API、URL 与边状态判定不变。页头、信号条、图面着色、图下清单、凭证清单与数据表的阅读方式见 [`docs/specs/lucy-20261030-access-map-quiet-reading-spec.md`](../../docs/specs/lucy-20261030-access-map-quiet-reading-spec.md)。审阅通过前，本节 §4.4 的 UI 表现列仍是现行实现口径。
+
 ---
 
 ## Terminology Compliance
