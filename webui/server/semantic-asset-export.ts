@@ -25,9 +25,10 @@ import { buildStoredZip } from "./proxy/zip-store.js";
 import { getSecurityStore } from "./security/instance.js";
 import { loadContentPaths } from "./paths.js";
 import type { ContentPaths } from "./paths.js";
+import { SEMANTIC_BATCH_LIMITS, assertSingleYamlLimit } from "./semantic-limits.js";
 
-const MAX_EXPORT_FILES = 200;
-const MAX_EXPORT_TOTAL_BYTES = 16 * 1024 * 1024;
+const MAX_EXPORT_FILES = SEMANTIC_BATCH_LIMITS.maxYamlEntries;
+const MAX_EXPORT_TOTAL_BYTES = SEMANTIC_BATCH_LIMITS.maxUnpackedBytes;
 const EXPORT_DIR_REL = ".ktx-ui/exports";
 const YAML_EXTENSIONS = new Set([".yaml", ".yml"]);
 const MARKDOWN_EXTENSIONS = new Set([".md", ".markdown"]);
@@ -381,6 +382,12 @@ export async function exportSemanticAssetPackage(
     } else {
       const data = await readFile(entry.absPath);
       zipEntries.push({ name: entry.relPath.split(path.sep).join("/"), data });
+    }
+  }
+  // Enforce the same YAML byte limit as import, including sanitized config.
+  for (const entry of zipEntries) {
+    if (YAML_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) {
+      assertSingleYamlLimit(entry.data.length, entry.name);
     }
   }
   const zipBuffer = buildStoredZip(zipEntries);

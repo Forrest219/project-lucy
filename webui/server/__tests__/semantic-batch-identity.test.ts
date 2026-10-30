@@ -386,7 +386,7 @@ describe("identity helpers", () => {
 describe("D6 shared limits", () => {
   it("exposes the decided capacity values", () => {
     expect(SEMANTIC_BATCH_LIMITS.maxYamlEntries).toBe(200);
-    expect(SEMANTIC_BATCH_LIMITS.maxSingleYamlBytes).toBe(512 * 1024);
+    expect(SEMANTIC_BATCH_LIMITS.maxSingleYamlBytes).toBe(8 * 1024 * 1024);
     expect(SEMANTIC_BATCH_LIMITS.maxMetadataBytes).toBe(256 * 1024);
     expect(SEMANTIC_BATCH_LIMITS.maxUnpackedBytes).toBe(16 * 1024 * 1024);
     expect(SEMANTIC_BATCH_LIMITS.maxZipBytes).toBe(20 * 1024 * 1024);
@@ -401,7 +401,8 @@ describe("D6 shared limits", () => {
   it("refuses over-limit input instead of truncating", () => {
     expect(() => assertYamlEntryLimit(200)).not.toThrow();
     expect(() => assertYamlEntryLimit(201)).toThrowError(SemanticLimitError);
-    expect(() => assertSingleYamlLimit(512 * 1024 + 1, "a.yaml")).toThrowError(
+    expect(() => assertSingleYamlLimit(8 * 1024 * 1024, "a.yaml")).not.toThrow();
+    expect(() => assertSingleYamlLimit(8 * 1024 * 1024 + 1, "a.yaml")).toThrowError(
       /单文件上限/
     );
     expect(() => assertUnpackedLimit(16 * 1024 * 1024 + 1)).toThrowError(/解压内容总计/);

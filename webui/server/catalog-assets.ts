@@ -24,8 +24,9 @@ import { resolveContentPaths } from "./paths";
 import { readProject } from "./project";
 import { withDisplayWriteBarrier } from "./display-generation";
 import { withPublishCoordinator } from "./publish-coordinator.js";
+import { SEMANTIC_BATCH_LIMITS } from "./semantic-limits.js";
 
-const MAX_BYTES = 512 * 1024;
+const MAX_BYTES = SEMANTIC_BATCH_LIMITS.maxSingleYamlBytes;
 const MAX_RECORDS = 50;
 const SIDECAR_REL = ".ktx-ui/catalog-asset-uploads.json";
 
@@ -565,7 +566,7 @@ function buildBaseValidation(
   if (sizeBytes > MAX_BYTES) {
     errors.push({
       code: "FILE_TOO_LARGE",
-      message: `文件超过 ${MAX_BYTES / 1024} KB 上限`
+      message: `文件超过 ${MAX_BYTES / 1024 / 1024} MiB 上限，请减少文件内容后重试。`
     });
   }
 

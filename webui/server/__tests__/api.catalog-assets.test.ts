@@ -3,6 +3,8 @@ import os from "node:os";
 import path from "node:path";
 import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { parse as parseYaml } from "yaml";
+import { SEMANTIC_BATCH_LIMITS } from "../semantic-limits";
 
 // M17 mirror of the M14 ingest-route defense: the WebUI catalog-asset routes
 // must never shell out to the ktx CLI. Mock the whole ktx module so any
@@ -338,7 +340,102 @@ describe("POST /api/catalog/assets/validate", () => {
     await app.close();
   });
 
-  it("rejects oversize content (over 512 KB)", async () => {
+  it("validates and uploads a complete Manifest larger than the default HTTP limit", async () => {
+    projectRoot = await makeProject(baseYaml());
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
+    process.env.LUCY_AUDIT_DB = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
+    const app = await buildFreshServer();
+    await app.ready();
+    try {
+      const content = "tables:\n" + Array.from({ length: 298 }, (_, table) =>
+        `  source_${table}:\n    table: openclaw_db.table_${table}\n    columns:\n` +
+        Array.from({ length: table < 191 ? 22 : 21 }, (_, column) =>
+          `      - name: column_${column}\n        type: string\n        descriptions:\n          ai: ${"测试字段说明".repeat(8)}\n`
+        ).join("")
+      ).join("");
+      expect(Buffer.byteLength(content)).toBeGreaterThan(1024 * 1024);
+      const payload = {
+        connectionId: "demo-mysql", schema: "openclaw_db", assetKind: "schema_manifest",
+        filename: "openclaw_db.yaml", content
+      };
+      const checked = await app.inject({ method: "POST", url: "/api/catalog/assets/validate", payload });
+      expect(checked.statusCode).toBe(200);
+      expect(checked.json().data).toMatchObject({ valid: true, tables: 298 });
+      const uploaded = await app.inject({ method: "POST", url: "/api/catalog/assets/upload", payload });
+      expect(uploaded.statusCode).toBe(200);
+      expect(uploaded.json().data.validation).toMatchObject({ valid: true, tables: 298 });
+      const stored = await readFile(path.join(projectRoot, "semantic-layer/demo-mysql/_schema/openclaw_db.yaml"), "utf8");
+      expect(stored).toBe(content);
+      const tables = Object.values(parseYaml(stored).tables) as Array<{ columns: unknown[] }>;
+      expect(tables).toHaveLength(298);
+      expect(tables.reduce((count, table) => count + table.columns.length, 0)).toBe(6449);
+    } finally {
+      await app.close();
+    }
+  }, 30_000);
+
+  it("accepts the UTF-8 file size boundary and rejects one extra byte before parsing", async () => {
+    projectRoot = await makeProject(baseYaml());
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
+    process.env.LUCY_AUDIT_DB = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
+    const app = await buildFreshServer();
+    await app.ready();
+    try {
+      const prefix = SAMPLE_MANIFEST + "# 中文字段说明";
+      const content = prefix + "x".repeat(8 * 1024 * 1024 - Buffer.byteLength(prefix));
+      for (const extra of ["", "x"]) {
+        const response = await app.inject({ method: "POST", url: "/api/catalog/assets/validate", payload: {
+          connectionId: "demo-mysql", schema: "openclaw_db", assetKind: "schema_manifest",
+          filename: "openclaw_db.yaml", content: content + extra
+        } });
+        expect(response.statusCode).toBe(200);
+        expect(response.json().data.valid).toBe(extra === "");
+        expect(response.json().data.sizeBytes).toBe(8 * 1024 * 1024 + extra.length);
+        if (extra) expect(response.json().data.errors).toContainEqual(expect.objectContaining({ code: "FILE_TOO_LARGE" }));
+      }
+      const rejectedUpload = await app.inject({ method: "POST", url: "/api/catalog/assets/upload", payload: {
+        connectionId: "demo-mysql", schema: "openclaw_db", assetKind: "schema_manifest",
+        filename: "openclaw_db.yaml", content: content + "x"
+      } });
+      expect(rejectedUpload.statusCode).toBe(400);
+      expect(rejectedUpload.json().error.code).toBe("FILE_TOO_LARGE");
+      await expect(readFile(path.join(projectRoot, "semantic-layer/demo-mysql/_schema/openclaw_db.yaml"))).rejects.toMatchObject({ code: "ENOENT" });
+    } finally {
+      await app.close();
+    }
+  }, 30_000);
+
+  it("enforces the HTTP byte boundary only on routes carrying asset contents", async () => {
+    projectRoot = await makeProject(baseYaml());
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
+    process.env.LUCY_AUDIT_DB = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
+    const app = await buildFreshServer();
+    await app.ready();
+    try {
+      // No valid assets: accepted HTTP requests cannot parse YAML or write files.
+      const base = JSON.stringify({ assetKind: "invalid", padding: "中文" });
+      const payload = base.slice(0, -1) + " ".repeat(SEMANTIC_BATCH_LIMITS.maxHttpBodyBytes - Buffer.byteLength(base)) + "}";
+      expect(Buffer.byteLength(payload)).toBe(32 * 1024 * 1024);
+      for (const url of ["/api/catalog/assets/validate", "/api/catalog/assets/upload", "/api/semantic-assets/validate"]) {
+        const accepted = await app.inject({ method: "POST", url, headers: { "content-type": "application/json" }, payload });
+        expect(accepted.statusCode).toBe(url === "/api/catalog/assets/upload" ? 400 : 200);
+        const rejected = await app.inject({ method: "POST", url, headers: { "content-type": "application/json" }, payload: payload + " " });
+        expect(rejected.statusCode).toBe(413);
+        expect(rejected.json().error).toMatchObject({ code: "FST_ERR_CTP_BODY_TOO_LARGE", message: expect.stringContaining("32 MiB") });
+        expect(rejected.json().error.message).toContain("请减少");
+      }
+      const ordinary = await app.inject({ method: "POST", url: "/api/catalog/reload", headers: { "content-type": "application/json" }, payload: JSON.stringify({ padding: "x".repeat(1024 * 1024) }) });
+      expect(ordinary.statusCode).toBe(413);
+      expect(ordinary.json().error.message).toContain("1 MiB");
+    } finally {
+      await app.close();
+    }
+  }, 30_000);
+
+  it("rejects oversize content (over 8 MiB)", async () => {
     projectRoot = await makeProject(baseYaml());
     auditDbPath = path.join(projectRoot, ".ktx-ui", "audit.sqlite");
     process.env.KTX_PROJECT_ROOT = projectRoot;
@@ -347,7 +444,7 @@ describe("POST /api/catalog/assets/validate", () => {
 
     const app = await buildFreshServer();
     await app.ready();
-    const big = "x".repeat(513 * 1024);
+    const big = "x".repeat(8 * 1024 * 1024 + 1);
     const res = await request(app.server)
       .post("/api/catalog/assets/validate")
       .send({
