@@ -695,6 +695,11 @@
      instead of two unrelated components. */
   .pl-btn--xs { @apply h-8 min-w-[7.5rem] px-3 text-xs font-medium; }
   .pl-btn:disabled { @apply opacity-50 cursor-not-allowed; }
+  /* A button blocked by a precondition stays focusable (it must be able to
+     show the reason on hover and on focus), so it cannot use the native
+     `disabled`. `aria-disabled="true"` carries the same appearance as
+     `:disabled` — translucent, not-allowed cursor. */
+  .pl-btn[aria-disabled="true"] { @apply opacity-50 cursor-not-allowed; }
   .pl-row-action-link { @apply inline-flex cursor-pointer items-center whitespace-nowrap rounded-sm text-sm font-normal text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary; }
   /* M39 polish: lightweight text-link CTA used by the snapshot / risk /
      action-required cards on the ops dashboard. Replaces the ad-hoc

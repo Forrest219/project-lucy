@@ -106,7 +106,7 @@ describe("navigation (shared sidebar config)", () => {
       { group: "访问治理", id: "admin-mcp-playground", label: "MCP 调试台", to: "/admin/mcp-playground" },
       { group: "访问治理", id: "admin-config-audit", label: "配置审计", to: "/admin/config-audit" },
       { group: "系统设置", id: "admin-branding", label: "品牌外观", to: "/admin/branding" },
-      { group: "系统设置", id: "admin-accounts", label: "登录账户", to: "/admin/admins" },
+      { group: "系统设置", id: "admin-accounts", label: "登录账户", to: "/admin/accounts" },
       { group: "系统设置", id: "admin-version", label: "版本信息", to: "/admin/version" }
     ]);
   });
@@ -122,6 +122,20 @@ describe("navigation (shared sidebar config)", () => {
     for (const path of forbiddenPaths) {
       expect(allPaths).not.toContain(path);
     }
+  });
+
+  it("SC-02 侧栏「登录账户」指向 /admin/accounts，旧路径不再是侧栏目标", () => {
+    const accounts = navGroups
+      .flatMap((g) => g.items)
+      .find((item) => item.id === "admin-accounts");
+    expect(accounts?.label).toBe("登录账户");
+    expect(accounts?.to).toBe("/admin/accounts");
+    // 当前页高亮这条。
+    expect(accounts?.active("/admin/accounts")).toBe(true);
+    expect(accounts?.active("/admin/other")).toBe(false);
+
+    const allPaths = navGroups.flatMap((g) => g.items.map((i) => i.to));
+    expect(allPaths).not.toContain("/admin/admins");
   });
 
   it("every nav item has a non-empty description for command palette context", () => {
@@ -226,7 +240,7 @@ describe("navigation (shared sidebar config)", () => {
       expect(findGroupIdForPathname("/admin/mcp-playground")).toBe("governance");
       expect(findGroupIdForPathname("/admin/config-audit")).toBe("governance");
       expect(findGroupIdForPathname("/admin/branding")).toBe("system-settings");
-      expect(findGroupIdForPathname("/admin/admins")).toBe("system-settings");
+      expect(findGroupIdForPathname("/admin/accounts")).toBe("system-settings");
       expect(findGroupIdForPathname("/admin/version")).toBe("system-settings");
     });
   });

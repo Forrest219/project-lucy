@@ -217,7 +217,7 @@ KTX CLI / MCP daemon
 | 访问治理 | MCP 调试台 | `/admin/mcp-playground` | 检查 `Agent` 能不能连上，或者能不能查某张表。 |
 | 访问治理 | 配置审计 | `/admin/config-audit` | 查看各类配置与内容资产的写入记录、变更内容和操作者。 |
 | 系统设置 | 品牌外观 | `/admin/branding` | 配置客户 `Logo`、产品名称与品牌副标题。 |
-| 系统设置 | 登录账户 | `/admin/admins` | 管理 `WebUI` 登录账户，并配置所有者或运维角色。 |
+| 系统设置 | 登录账户 | `/admin/accounts` | 管理 `WebUI` 登录账户，并配置所有者或运维角色。 |
 | 系统设置 | 版本信息 | `/admin/version` | 查看产品版本、构建提交和随包 `KTX` 版本；有未提交改动时显示工作区状态。 |
 
 > 事实源唯一为 `webui/src/app/navigation.ts` 的 `navGroups`。
@@ -1139,7 +1139,7 @@ PUT /api/wiki/:key
 | MCP 调试台 | `/admin/mcp-playground` | 检查 `Agent` 能不能连上，或者能不能查某张表 |
 | 数据源热力 | `/admin/audit-sources` | 查看 source/table 调用和拒绝分布 |
 | 配置变更 | `/admin/config-audit` | 查看 `access.yaml`、`ktx.yaml`、`admins.yaml` 等配置变更 |
-| 管理员 | `/admin/admins` | WebUI 登录账户（所有者 / 运维）；仅所有者可增删账户 |
+| 管理员 | `/admin/accounts` | WebUI 登录账户（所有者 / 运维）；仅所有者可增删账户 |
 
 权威配置：
 
@@ -1312,7 +1312,7 @@ Lucy 是自托管控制面：管理面登录与 SaaS「邮箱注册 / 邮箱找�
 | 评测用例 / 运行 / 趋势监控 | ✓ | ✓ |
 | Agent、Role（`access.yaml`）、Token 发行与撤销 | ✓ | ✓ |
 | 访问日志 / 配置审计 / MCP 调试台 | ✓ | ✓ |
-| `/admin/admins` 登录账户增删改 | ✓ | ✗ |
+| `/admin/accounts` 登录账户增删改 | ✓ | ✗ |
 
 说明：运维即可完成「连接、配置语义、质量评测、添加和管理 Agent Role」等日常工作；所有者额外负责控制面账户与 break-glass 相关治理。旧配置里的 `role: admin` 读入时等价于 `operator`。
 
@@ -1337,7 +1337,7 @@ Lucy 是自托管控制面：管理面登录与 SaaS「邮箱注册 / 邮箱找�
 **优先路径 A — 仍有可登录的所有者**
 
 1. 用其他所有者登录 WebUI。
-2. 打开 `/admin/admins`，为遗忘账户重置密码，或禁用后新建。
+2. 打开 `/admin/accounts`，为遗忘账户重置密码，或禁用后新建。
 3. 确认配置审计里出现 `admin_patch` / `admin_create` 记录。
 
 **路径 B — 无人可登录（配置卷恢复）**

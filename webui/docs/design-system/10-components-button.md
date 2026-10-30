@@ -4,7 +4,7 @@
 |---|---|
 | 文档名称 | Lucy WebUI 按钮规范（Components） |
 | 文档类型 | Spec |
-| 版本 | v1.3 |
+| 版本 | v1.4 |
 | 撰写日期 | 2026-08-05 |
 | 撰写人 | Composer |
 | 委托人 | zhangxingchen |
@@ -20,6 +20,7 @@
 | v1.1 | Spec 101：选中态分离、Header 动作预算、`pl-icon-btn`、loading/disabled 可解释性 |
 | v1.2 | 登记 `pl-segmented-control--auto`（动态选项数量）；明确并列导出/维护操作统一 secondary |
 | v1.3 | 时间窗仍用 segmented。换整页内容的视图用已有 `pl-admin-tabbar`（Spec 169） |
+| v1.4 | 补 `aria-disabled="true"`：因前置条件不可执行、又必须能悬浮和聚焦的按钮，用它代替原生 `disabled`，外观与 `:disabled` 相同 |
 
 ## 1. 设计目标
 
@@ -69,6 +70,7 @@
 - `loading` 时设置 `data-loading="true"` 与 `aria-busy="true"`；宽度应尽量稳定（锁 `min-width` 或固定预设），防止布局抖动。
 - `disabled` 需视觉可识别，且屏蔽触发行为。
 - 若存在可解释前置条件，disabled 必须提供 tooltip 或 `aria-describedby`（例如「请先选择至少一个对象」）。
+- **因前置条件不可执行、又必须能悬浮和聚焦的按钮**，使用 `aria-disabled="true"`，不用原生 `disabled`：外观与 `.pl-btn:disabled` 相同（半透明、不可用光标），按钮仍可聚焦。原因用 `aria-describedby` 指向常驻在 DOM 里的说明节点（气泡关闭时也必须在），并在悬浮与聚焦时用 tooltip 显示同一句。点击、Enter、Space 不得触发动作。首个用例是登录账户页的四条保护（`docs/specs/lucy-20261030-login-accounts-spec.md`）。
 - `focus-visible` 必须清晰可见，不得被容器裁切。
 - `pl-icon-btn` 无可见文案时，`aria-label` 为强制项；tooltip 在 hover/focus 可见。
 

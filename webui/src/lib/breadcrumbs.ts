@@ -94,7 +94,7 @@ export function breadcrumbItems(pathname: string): string[] {
     if (parts[1] === "branding") {
       return ["系统设置", "品牌外观"];
     }
-    if (parts[1] === "admins") {
+    if (parts[1] === "accounts") {
       return ["系统设置", "登录账户"];
     }
     if (parts[1] === "version") {

@@ -849,6 +849,19 @@ OIDC 只承担 WebUI 认证；登录账户、所有者／运维职责与 MCP 数
 
 Protected terms（DOM 须 `translate="no"` + `notranslate`）：`OIDC`、`PKCE`、`IdP`、`issuer`、`sub`、URL、登录账户 id、配置文件名与路径。
 
+### 4.11.1 登录账户页呈现（lucy-20261030-login-accounts）
+
+页面路径是 `/admin/accounts`。`/admin/admins` 只作为 WebUI 里的替换入口，打开后地址栏变为 `/admin/accounts`。接口仍是 `/api/admin/admins`。侧栏和页头继续叫「登录账户」。账户接口、所有者底线和绑定语义仍以 L25-06 为准。
+
+| Canonical Term | UI 主术语 | 允许补充说法 | 禁止文案 | 说明 |
+|---|---|---|---|---|
+| Current Login Mark | 当前登录 | — | 我、本人、当前用户 | 标在与当前会话登录账户 id 相同的那一行 |
+| Create Login Account | 新建账户 | — | 新建用户、添加用户、用户管理、账户管理（作页头或侧栏） | 页头主操作和对话框标题。提交按钮仍是「创建账户」 |
+| Manage Login Account | 管理 | — | 编辑用户、用户详情 | 所有者打开该登录账户抽屉的行内动作。运维不可见 |
+| Delete Login Account Confirm | 删除登录账户 | — | 输入用户名确认 | 删除前必须输入该登录账户 id。确认按钮是「删除账户」 |
+
+用户可见的 `/admin/accounts` 与登录账户 id 使用 `translate="no"` 与 `notranslate`。
+
 ### 4.12 可选 SMTP 通知（L25-05）
 
 邮件通知只承载部署方选择的通知，不改变登录账户、认证、恢复或审计事实源。`queued` 表示已加入通知队列，不表示 SMTP 已接受或收件箱已送达。

@@ -49,6 +49,7 @@ docs/ui-ux-feedback/
 | Admin Governance / Usage Overview | `/admin/usage`（旧 `/admin/governance` redirect） | [`pages/admin-governance.md`](pages/admin-governance.md) |
 | Admin Audit / Access Log | `/admin/audit` | [`pages/admin-audit.md`](pages/admin-audit.md) |
 | Admin MCP Playground | `/admin/mcp-playground` | [`pages/admin-mcp-playground.md`](pages/admin-mcp-playground.md) |
+| Login Accounts | `/admin/accounts` | [`pages/admin-admins.md`](pages/admin-admins.md) |
 | Global Shell | all WebUI routes, including `/overview` | [`pages/global-shell.md`](pages/global-shell.md) |
 | Overview | `/overview` | [`pages/overview.md`](pages/overview.md) |
 

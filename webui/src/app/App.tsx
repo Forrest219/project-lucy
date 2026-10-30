@@ -562,7 +562,10 @@ export function AppFrame() {
             <Route path="/admin/config-audit" element={<ConfigAudit />} />
             <Route path="/admin/branding" element={<BrandingSettings />} />
             <Route path="/admin/license" element={<Navigate to="/overview" replace />} />
-            <Route path="/admin/admins" element={<AdminAccounts />} />
+            <Route path="/admin/accounts" element={<AdminAccounts />} />
+            {/* Spec 155 / D2 — the old path is a WebUI-only alias. It replaces
+                the address with the canonical one; the API stays /api/admin/admins. */}
+            <Route path="/admin/admins" element={<Navigate to="/admin/accounts" replace />} />
             <Route path="/admin/version" element={<VersionInfo />} />
             <Route path="/eval/cases" element={<CaseList />} />
             <Route path="/eval/cases/:domain" element={<CaseList />} />

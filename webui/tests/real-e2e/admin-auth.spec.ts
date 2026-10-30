@@ -92,14 +92,15 @@ test("owner adds an operator in the UI; the operator cannot govern accounts but 
   const ownerCtx = await ownerSession(browser, testInfo);
   try {
     const page = await ownerCtx.newPage();
-    await page.goto("/admin/admins");
-    await expect(page.getByRole("heading", { name: "添加登录账户" })).toBeVisible();
-    const form = page.locator("form", { has: page.getByRole("heading", { name: "添加登录账户" }) });
-    await form.getByLabel("登录账户").fill(operator.adminId);
-    await form.getByLabel("显示名").fill("E2E Operator");
-    await form.getByLabel("角色").selectOption("operator");
-    await form.getByLabel("初始密码").fill(operator.password);
-    await form.getByRole("button", { name: "创建账户" }).click();
+    await page.goto("/admin/accounts");
+    await page.getByRole("button", { name: "新建账户" }).click();
+    const createDialog = page.getByTestId("admin-account-create-modal");
+    await expect(createDialog).toBeVisible();
+    await createDialog.getByLabel("登录账户").fill(operator.adminId);
+    await createDialog.getByLabel("显示名").fill("E2E Operator");
+    await createDialog.getByLabel("角色").selectOption("operator");
+    await createDialog.getByLabel("初始密码").fill(operator.password);
+    await createDialog.getByRole("button", { name: "创建账户" }).click();
     await expect(page.getByTestId("admin-accounts-table").getByText(operator.adminId)).toBeVisible();
   } finally {
     await ownerCtx.close();
@@ -109,10 +110,11 @@ test("owner adds an operator in the UI; the operator cannot govern accounts but 
   try {
     const page = await opCtx.newPage();
     await uiLogin(page, operator);
-    await page.goto("/admin/admins");
-    const governs = await page.getByRole("heading", { name: "添加登录账户" }).count();
+    await page.goto("/admin/accounts");
+    const governs = await page.getByRole("button", { name: "新建账户" }).count();
+    const manageButtons = await page.getByRole("button", { name: "管理" }).count();
     const disableButtons = await page.getByRole("button", { name: "禁用" }).count();
-    assertion(testInfo, "deny", governs === 0 && disableButtons === 0, `operator sees account governance controls: form=${governs} buttons=${disableButtons}`);
+    assertion(testInfo, "deny", governs === 0 && manageButtons === 0 && disableButtons === 0, `operator sees account governance controls: create=${governs} manage=${manageButtons} buttons=${disableButtons}`);
     const apiDenied = await page.request.post(new URL("/api/admin/admins", baseURL!).toString(), {
       data: { adminId: "e2e-ui-made-owner", password: "Ui-made-password-1", role: "owner" }
     });
@@ -145,9 +147,12 @@ test("a session revoked from the UI stops working immediately in the other brows
   const ownerCtx = await ownerSession(browser, testInfo);
   try {
     const ownerPage = await ownerCtx.newPage();
-    await ownerPage.goto("/admin/admins");
+    await ownerPage.goto("/admin/accounts");
     const row = ownerPage.locator("tr", { hasText: operator.adminId });
-    await row.getByRole("button", { name: "禁用" }).click();
+    await row.getByRole("button", { name: "管理" }).click();
+    const drawer = ownerPage.getByTestId(`admin-account-drawer-${operator.adminId}`);
+    await expect(drawer).toBeVisible();
+    await drawer.getByRole("button", { name: "禁用" }).click();
     await expect(row.getByText("已禁用")).toBeVisible();
   } finally {
     await ownerCtx.close();

@@ -346,9 +346,9 @@ export const navGroups: Array<{
       {
         id: "admin-accounts",
         label: "登录账户",
-        to: "/admin/admins",
+        to: "/admin/accounts",
         iconKey: "admins",
-        active: (path) => path === "/admin/admins" || path.startsWith("/admin/admins/"),
+        active: (path) => path === "/admin/accounts" || path.startsWith("/admin/accounts/"),
         description: "管理 WebUI 登录账户，并配置所有者或运维角色。",
         keywords: ["登录", "Owner", "运维", "管理员账户"]
       },
