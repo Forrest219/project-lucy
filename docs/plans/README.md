@@ -4,6 +4,7 @@ This directory stores repository-level implementation plans that are not scoped 
 
 | Plan | Purpose |
 |---|---|
+| [2026-10-30-lucy-sqlserver-table-identity-plan.md](2026-10-30-lucy-sqlserver-table-identity-plan.md) | **v1.0 已在本分支实现，待审阅**：SQL Server 逻辑名与物理名。D1–D9 已冻结。SC-01–SC-11 有自动化测试。不授权客户出包。Spec 见 [lucy-20261030-sqlserver-table-identity-spec.md](../specs/lucy-20261030-sqlserver-table-identity-spec.md) |
 | [2026-10-30-lucy-row-policy-view-presentation-plan.md](2026-10-30-lucy-row-policy-view-presentation-plan.md) | **已落地，SC 待验收**：行权限视图呈现修订。S0 已通过，D1–D10 已按原文冻结；S1–S4 已实施完毕。SC-01–SC-18 均有自动化证据，尚未验收。功能编号待 PM 指派。Spec 见 [lucy-20261030-row-policy-view-presentation-spec.md](../specs/lucy-20261030-row-policy-view-presentation-spec.md) |
 | [2026-10-30-lucy-access-map-quiet-reading-plan.md](2026-10-30-lucy-access-map-quiet-reading-plan.md) | **待审阅，不授权开发**：访问关系图阅读降噪。S0 待拍板 D1–D8。S1–S4 未开始。SC-01–SC-16 未执行。功能编号待 PM 指派。Spec 见 [lucy-20261030-access-map-quiet-reading-spec.md](../specs/lucy-20261030-access-map-quiet-reading-spec.md) |
 | [2026-10-30-lucy-audit-context-bar-plan.md](2026-10-30-lucy-audit-context-bar-plan.md) | **v1.0 已实现，待审阅**：访问日志上下文条呈现。D1–D6 已冻结。SC-01–SC-08 待审阅。功能编号待 PM 指派。Spec 见 [lucy-20261030-audit-context-bar-spec.md](../specs/lucy-20261030-audit-context-bar-spec.md) |

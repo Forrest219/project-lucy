@@ -84,6 +84,7 @@ function defaultHandlers(opts: {
   connection?: ConnectionInfo;
   tables?: string[];
   tablesByConnection?: Record<string, string[]>;
+  physicalNamesByConnection?: Record<string, Record<string, string>>;
   sources?: SourceSummary[];
   catalogReload?: Partial<CatalogReloadRun>;
 } = {}): HandlerMap {
@@ -107,7 +108,10 @@ function defaultHandlers(opts: {
   for (const conn of connections) {
     const tables = opts.tablesByConnection?.[conn.id] ?? opts.tables ?? TEST_TABLES;
     handlers[`GET /api/connections/${conn.id}/tables`] = () =>
-      new Response(JSON.stringify({ ok: true, data: { tables } }));
+      new Response(JSON.stringify({
+        ok: true,
+        data: { tables, physicalNames: opts.physicalNamesByConnection?.[conn.id] ?? {} }
+      }));
     handlers[`PUT /api/connections/${conn.id}/enabled-tables`] = (body) => {
       const b = body as { dryRun?: boolean; enabledTables?: string[] };
       const newEnabled = b.enabledTables ?? [];
@@ -1224,6 +1228,128 @@ describe("TableWhitelist", () => {
     expect(
       within(screen.getByTestId("whitelist-row-dataforai.t_01")).getByRole("checkbox")
     ).toBeChecked();
+  });
+
+  describe("SQL Server logical and physical table names", () => {
+    const SQL_SERVER_CONN: ConnectionInfo = {
+      id: "sql_server",
+      driver: "sqlserver",
+      engine: "sqlserver",
+      wireProtocol: "tds",
+      readOnlyExpected: true,
+      schemas: ["BIDM"],
+      enabledTables: ["bidm.dbo.hs_sy_company_metric"]
+    };
+
+    const SQL_SERVER_SOURCE = makeSource("hs_sy_company_metric", {
+      conn: "sql_server",
+      schema: "BIDM",
+      qualifiedName: "bidm.dbo.hs_sy_company_metric",
+      columnCount: 21,
+      completion: "done"
+    });
+
+    it("matches a physical enabled table to one logical Manifest row", async () => {
+      stubWhitelistFetch(
+        defaultHandlers({
+          connection: SQL_SERVER_CONN,
+          tables: ["BIDM.hs_sy_company_metric"],
+          physicalNamesByConnection: {
+            sql_server: { "BIDM.hs_sy_company_metric": "bidm.dbo.hs_sy_company_metric" }
+          },
+          sources: [SQL_SERVER_SOURCE]
+        })
+      );
+      renderWhitelist(["/?connection=sql_server&schema=BIDM"]);
+
+      const row = await screen.findByTestId("whitelist-row-bidm.dbo.hs_sy_company_metric");
+      expect(within(row).getByRole("checkbox")).toBeChecked();
+      expect(await within(row).findByText("21 个")).toBeInTheDocument();
+      expect(await within(row).findByText("已启用，语义完成")).toBeInTheDocument();
+      expect(screen.queryByText("无效启用")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("whitelist-invalid-enabled-section")).not.toBeInTheDocument();
+      expect(screen.getAllByTestId(/^whitelist-row-/)).toHaveLength(1);
+    });
+
+    it("keeps one row when logical and physical aliases are both enabled", async () => {
+      stubWhitelistFetch(
+        defaultHandlers({
+          connection: {
+            ...SQL_SERVER_CONN,
+            enabledTables: ["BIDM.dm_cpu_asset_cost", "bidm.dbo.dm_cpu_asset_cost"]
+          },
+          tables: ["BIDM.dm_cpu_asset_cost"],
+          physicalNamesByConnection: {
+            sql_server: { "BIDM.dm_cpu_asset_cost": "bidm.dbo.dm_cpu_asset_cost" }
+          },
+          sources: [
+            makeSource("dm_cpu_asset_cost", {
+              conn: "sql_server",
+              schema: "BIDM",
+              qualifiedName: "bidm.dbo.dm_cpu_asset_cost",
+              columnCount: 13,
+              completion: "done"
+            })
+          ]
+        })
+      );
+      renderWhitelist(["/?connection=sql_server&schema=BIDM"]);
+
+      const row = await screen.findByTestId("whitelist-row-bidm.dbo.dm_cpu_asset_cost");
+      expect(within(row).getByRole("checkbox")).toBeChecked();
+      expect(screen.queryByText("无效启用")).not.toBeInTheDocument();
+      expect(screen.getAllByTestId(/^whitelist-row-/)).toHaveLength(1);
+    });
+
+    it("saves the Manifest physical name when enabling a logical row", async () => {
+      const { fetchMock } = stubWhitelistFetch(
+        defaultHandlers({
+          connection: { ...SQL_SERVER_CONN, enabledTables: [] },
+          tables: ["BIDM.hs_sy_company_metric"],
+          physicalNamesByConnection: {
+            sql_server: { "BIDM.hs_sy_company_metric": "bidm.dbo.hs_sy_company_metric" }
+          },
+          sources: [SQL_SERVER_SOURCE]
+        })
+      );
+      renderWhitelist(["/?connection=sql_server&schema=BIDM"]);
+
+      const row = await screen.findByTestId("whitelist-row-bidm.dbo.hs_sy_company_metric");
+      fireEvent.click(within(row).getByRole("checkbox"));
+      fireEvent.click(await screen.findByTestId("whitelist-save-changes"));
+
+      await waitFor(() => {
+        const putCall = fetchMock.mock.calls.find(
+          (call) =>
+            String(call[0]).includes("/api/connections/sql_server/enabled-tables") &&
+            (call[1] as RequestInit | undefined)?.method === "PUT"
+        );
+        expect(putCall).toBeTruthy();
+        const body = JSON.parse(String((putCall?.[1] as RequestInit).body));
+        expect(body.enabledTables).toEqual(["bidm.dbo.hs_sy_company_metric"]);
+      });
+    });
+
+    it("leaves an unmapped enabled value in 无效启用", async () => {
+      stubWhitelistFetch(
+        defaultHandlers({
+          connection: {
+            ...SQL_SERVER_CONN,
+            enabledTables: ["bidm.dbo.hs_sy_company_metric", "BIDM.not_in_manifest"]
+          },
+          tables: ["BIDM.hs_sy_company_metric"],
+          physicalNamesByConnection: {
+            sql_server: { "BIDM.hs_sy_company_metric": "bidm.dbo.hs_sy_company_metric" }
+          },
+          sources: [SQL_SERVER_SOURCE]
+        })
+      );
+      renderWhitelist(["/?connection=sql_server&schema=BIDM"]);
+
+      expect(await screen.findByTestId("whitelist-row-bidm.dbo.hs_sy_company_metric")).toBeInTheDocument();
+      expect(await screen.findByTestId("whitelist-invalid-row-BIDM.not_in_manifest")).toBeInTheDocument();
+      expect(screen.getAllByText("无效启用").length).toBeGreaterThan(0);
+    });
   });
 
   describe("Spec 116: invalid enabled (orphan) drift", () => {

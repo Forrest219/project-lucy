@@ -36,6 +36,7 @@ import { withPublishCoordinator } from "./publish-coordinator.js";
 import type { ConnectionTestResult } from "./ktx";
 import { withDisplayWriteBarrier, type DisplayScope } from "./display-generation";
 import { connectionDeleteBlockText } from "../src/lib/deleteConnectionGuard.js";
+import { schemaInferredFromEnabledTable } from "../src/lib/enabled-table-identity.js";
 import { OPS_EVIDENCE_CONNECTION_ID } from "./ops-evidence/contract.js";
 
 const KTX_YAML_DISPLAY_SCOPES: DisplayScope[] = ["C", "D", "P", "L"];
@@ -400,7 +401,9 @@ export async function readProject(projectRoot: string): Promise<ProjectInfo> {
     const enabledTables = stringArray(conn.enabled_tables);
     const enabledSchemas = driverName === "athena"
       ? []
-      : enabledTables.map((table) => table.split(".")[0]).filter(Boolean);
+      : enabledTables
+          .map((table) => schemaInferredFromEnabledTable(table))
+          .filter((schema): schema is string => Boolean(schema));
     const schemas = Array.from(new Set([...explicitSchemas, ...enabledSchemas])).sort();
     const engine = connectionEngine(conn);
     const readOnlyExpected = booleanValue(conn.readonly ?? conn.read_only ?? conn.readOnly) ?? true;

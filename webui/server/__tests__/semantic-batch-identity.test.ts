@@ -117,6 +117,23 @@ describe("D1 identity resolution contract", () => {
     expect(entry?.overlayExists).toBe(true);
   });
 
+  it("keeps a SQL Server three-part physical name instead of falling back to the logical name", async () => {
+    await writeFileAt(
+      "semantic-layer/sql_server/_schema/BIDM.yaml",
+      `tables:
+  hs_sy_company_metric:
+    table: bidm.dbo.hs_sy_company_metric
+`
+    );
+    const index = await buildSemanticModelIndex(projectRoot);
+    const entry = index.byKey.get("sql_server/BIDM/hs_sy_company_metric");
+    expect(entry?.qualifiedName).toBe("bidm.dbo.hs_sy_company_metric");
+    expect(entry?.physicalSchema).toBe("bidm.dbo");
+    expect(entry?.physicalTable).toBe("hs_sy_company_metric");
+    expect(entry?.schemaMismatch).toBe(false);
+    expect(index.byQualifiedName.get("bidm.dbo.hs_sy_company_metric")).toHaveLength(1);
+  });
+
   it("keeps same-named tables of two connections apart", async () => {
     await seedSingleConnection();
     await writeFileAt(

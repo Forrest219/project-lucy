@@ -25,10 +25,11 @@ function makeDiff(oldText: string, newText: string): string {
 import {
   enabledTableError,
   patchConnectionEnabledTablesYaml,
-  scannedPhysicalTables,
+  scannedTableCatalog,
   validateEnabledTables,
   type EnabledTableWarning
 } from "./enabled-tables";
+import { isSqlServerDriver, normalizeEnabledTableNames } from "../src/lib/enabled-table-identity.js";
 import { joinCandidatesPath, readJoinCandidates, writeJoinCandidates, type JoinCandidate } from "./joins-sidecar";
 import { formatConnectionErrorMessage } from "./connection-errors";
 import { readKtxRuntimeStatus } from "./ktx-runtime";
@@ -1523,23 +1524,11 @@ export function buildServer() {
   }>("/api/connections/:connId/tables", async (request) => {
     const projectRoot = await resolveProjectRoot();
     const { connId } = request.params;
-    const schemaDir = path.join((await loadContentPaths()).semanticLayer, connId, "_schema");
-    const entries = await readdir(schemaDir, { withFileTypes: true }).catch(() => []);
-    const tables: string[] = [];
-    for (const entry of entries) {
-      if (!entry.isFile() || !entry.name.endsWith(".yaml")) {
-        continue;
-      }
-      const schemaName = entry.name.replace(/\.yaml$/, "");
-      const text = await readFile(path.join(schemaDir, entry.name), "utf8").catch(() => "");
-      const doc = parse(text) as Record<string, unknown> | null;
-      if (doc && typeof doc === "object" && doc.tables && typeof doc.tables === "object") {
-        for (const tableName of Object.keys(doc.tables as Record<string, unknown>)) {
-          tables.push(`${schemaName}.${tableName}`);
-        }
-      }
-    }
-    return { ok: true, data: { tables: tables.sort() } };
+    const catalog = await scannedTableCatalog(projectRoot, connId);
+    return {
+      ok: true,
+      data: { tables: catalog.logicalNames, physicalNames: catalog.physicalNames }
+    };
   });
 
   app.post<{
@@ -1615,13 +1604,19 @@ export function buildServer() {
     if (!connections || !connections[connId]) {
       throw enabledTableError("CONNECTION_NOT_FOUND", `Connection '${connId}' not found in ktx.yaml`);
     }
-    const scanned = await scannedPhysicalTables(projectRoot, connId);
+    const catalog = await scannedTableCatalog(projectRoot, connId);
+    const driver = typeof connections[connId].driver === "string" ? connections[connId].driver : "";
+    const normalized = normalizeEnabledTableNames(
+      enabledTables,
+      catalog.entries,
+      isSqlServerDriver(driver)
+    );
     const oldEnabledTables = Array.isArray(connections[connId].enabled_tables)
       ? connections[connId].enabled_tables.filter((item): item is string => typeof item === "string")
       : [];
     const { tables: newEnabledTables, warnings } = validateEnabledTables(
-      enabledTables,
-      scanned,
+      normalized.tables,
+      catalog.physicalTables,
       new Set(oldEnabledTables)
     );
 

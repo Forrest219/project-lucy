@@ -9,11 +9,18 @@
  * 不把整份 YAML 重新序列化（否则 diff 噪音巨大）。
  */
 
-import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { parseDocument } from "yaml";
-import { ktxYamlWithBlockConnections } from "./project.js";
+import { copyFile, readFile, writeFile } from "node:fs/promises";
+import { ktxYamlWithBlockConnections, readProject } from "./project.js";
 import { resolveContentPaths } from "./paths.js";
+import {
+  ENABLED_TABLE_NAME_RE,
+  isSqlServerDriver,
+  normalizeEnabledTableNames,
+  type EnabledTableRewrite,
+  type TableIdentityEntry
+} from "../src/lib/enabled-table-identity.js";
 
 export function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -237,7 +244,7 @@ export function validateEnabledTables(
       !table ||
       /[\\/\u0000-\u001F]/.test(table) ||
       table.includes("..") ||
-      !/^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$/.test(table)
+      !ENABLED_TABLE_NAME_RE.test(table)
     ) {
       throw enabledTableError("INVALID_ENABLED_TABLE", `Invalid enabled table '${item}'`);
     }
@@ -260,18 +267,29 @@ export function validateEnabledTables(
   return { tables: valid, warnings };
 }
 
-/** 扫描该连接已扫描到的物理表。 */
-export async function scannedPhysicalTables(projectRoot: string, connId: string): Promise<Set<string>> {
+export type ScannedTableCatalog = {
+  entries: TableIdentityEntry[];
+  /** 逻辑名，`schemaFile.sourceKey`，已排序。 */
+  logicalNames: string[];
+  /** 逻辑名 → Manifest `table:` 的精确物理名。缺 `table:` 时等于逻辑名。 */
+  physicalNames: Record<string, string>;
+  physicalTables: Set<string>;
+};
+
+/** 扫描该连接的 Schema Manifest，同时保留逻辑名与物理名。 */
+export async function scannedTableCatalog(projectRoot: string, connId: string): Promise<ScannedTableCatalog> {
   // 按传入的 projectRoot 解析语义层目录——控制面可能在临时项目根上跑，
   // 不得落到全局解析结果上。
   const schemaDir = path.join((await resolveContentPaths(projectRoot)).semanticLayer, connId, "_schema");
   const { readdir } = await import("node:fs/promises");
-  const entries = await readdir(schemaDir, { withFileTypes: true }).catch(() => []);
-  const tables = new Set<string>();
-  for (const entry of entries) {
-    if (!entry.isFile() || !entry.name.endsWith(".yaml")) continue;
-    const schemaName = entry.name.replace(/\.yaml$/, "");
-    const text = await readFile(path.join(schemaDir, entry.name), "utf8").catch(() => "");
+  const files = await readdir(schemaDir, { withFileTypes: true }).catch(() => []);
+  const entries: TableIdentityEntry[] = [];
+  const physicalNames: Record<string, string> = {};
+  const physicalTables = new Set<string>();
+  for (const file of files) {
+    if (!file.isFile() || !file.name.endsWith(".yaml")) continue;
+    const schemaName = file.name.replace(/\.yaml$/, "");
+    const text = await readFile(path.join(schemaDir, file.name), "utf8").catch(() => "");
     const doc = parseDocument(text).toJSON() as
       | { tables?: Record<string, { table?: string }> }
       | null;
@@ -280,11 +298,86 @@ export async function scannedPhysicalTables(projectRoot: string, connId: string)
       : {};
     for (const [sourceName, value] of Object.entries(rawTables)) {
       const tableDef = value && typeof value === "object" ? value : {};
+      const logicalName = `${schemaName}.${sourceName}`;
       const physical = typeof tableDef.table === "string" && tableDef.table.trim()
         ? tableDef.table.trim()
-        : `${schemaName}.${sourceName}`;
-      tables.add(physical);
+        : logicalName;
+      entries.push({ logicalName, physicalName: physical });
+      physicalNames[logicalName] = physical;
+      physicalTables.add(physical);
     }
   }
-  return tables;
+  const logicalNames = entries.map((entry) => entry.logicalName).sort((a, b) => a.localeCompare(b));
+  return { entries, logicalNames, physicalNames, physicalTables };
+}
+
+/** 扫描该连接已扫描到的物理表。 */
+export async function scannedPhysicalTables(projectRoot: string, connId: string): Promise<Set<string>> {
+  return (await scannedTableCatalog(projectRoot, connId)).physicalTables;
+}
+
+export type EnabledTablesMigrationChange = {
+  connectionId: string;
+  before: string[];
+  after: string[];
+  rewritten: EnabledTableRewrite[];
+  droppedDuplicates: string[];
+  unmapped: string[];
+  ambiguous: string[];
+};
+
+function sameEnabledList(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((item, index) => item === right[index]);
+}
+
+/** 按 Manifest 规划 `enabled_tables` 归一化。不写盘。映射不到的项保留。 */
+export async function planEnabledTablesMigration(projectRoot: string): Promise<EnabledTablesMigrationChange[]> {
+  const project = await readProject(projectRoot);
+  const changes: EnabledTablesMigrationChange[] = [];
+  for (const conn of project.connections) {
+    const catalog = await scannedTableCatalog(projectRoot, conn.id);
+    const normalized = normalizeEnabledTableNames(
+      conn.enabledTables,
+      catalog.entries,
+      isSqlServerDriver(conn.driver)
+    );
+    const after = Array.isArray(normalized.tables)
+      ? normalized.tables.filter((item): item is string => typeof item === "string")
+      : [...conn.enabledTables];
+    changes.push({
+      connectionId: conn.id,
+      before: [...conn.enabledTables],
+      after,
+      rewritten: normalized.rewritten,
+      droppedDuplicates: normalized.droppedDuplicates,
+      unmapped: normalized.unmapped,
+      ambiguous: normalized.ambiguous
+    });
+  }
+  return changes;
+}
+
+/**
+ * 把规划结果写回 `ktx.yaml`。写入前在同目录复制一份备份。
+ * 没有变化时不写、也不做备份。重复执行不再改文件。
+ */
+export async function applyEnabledTablesMigration(projectRoot: string): Promise<{
+  backupPath: string | null;
+  changes: EnabledTablesMigrationChange[];
+  written: boolean;
+}> {
+  const changes = await planEnabledTablesMigration(projectRoot);
+  const dirty = changes.filter((change) => !sameEnabledList(change.before, change.after));
+  if (dirty.length === 0) return { backupPath: null, changes, written: false };
+  const yamlPath = path.join(projectRoot, "ktx.yaml");
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const backupPath = path.join(projectRoot, `ktx.yaml.bak-enabled-tables-${stamp}`);
+  await copyFile(yamlPath, backupPath);
+  const original = await readFile(yamlPath, "utf8");
+  const proposed = patchConnectionsEnabledTablesYaml(
+    original,
+    dirty.map((change) => ({ connId: change.connectionId, enabledTables: change.after }))
+  ).proposedYaml;
+  await writeFile(yamlPath, proposed);
+  return { backupPath, changes, written: true };
 }

@@ -18,6 +18,7 @@ import {
 } from "./admin/permission-display.js";
 import type { DisplayPolicyInputs } from "./proxy/acl.js";
 import { readConnections } from "./project";
+import { isSqlServerDriver, manifestTableIsEnabled } from "../src/lib/enabled-table-identity.js";
 import { loadContentPaths } from "./paths";
 import { stripManifestOnlyColumnKeys } from "./semantic-overlay-sanitize";
 import { countEntryPerf, timeAsync } from "./entry-performance-timing";
@@ -439,14 +440,17 @@ export async function listSourcesWithManifests(projectRoot: string): Promise<Sou
   const authorizedInputs: AuthorizedCountInput[] = [];
 
   let enabledByConnection = new Map<string, Set<string>>();
+  let driverByConnection = new Map<string, string | undefined>();
   try {
     const connections = await readConnections(projectRoot);
     enabledByConnection = new Map(
       connections.map((conn) => [conn.id, new Set(conn.enabledTables)])
     );
+    driverByConnection = new Map(connections.map((conn) => [conn.id, conn.driver]));
   } catch {
     // Missing / unreadable ktx.yaml: treat every Manifest table as not enabled.
     enabledByConnection = new Map();
+    driverByConnection = new Map();
   }
 
   const schemaFiles = await timeAsync("manifest", () => readSchemaFiles(projectRoot));
@@ -488,9 +492,17 @@ export async function listSourcesWithManifests(projectRoot: string): Promise<Sou
       entry.overlay
     );
 
-    const qualifiedName = model.qualifiedName ?? `${entry.file.schema}.${entry.table}`;
-    const enabled =
-      enabledByConnection.get(entry.file.conn)?.has(qualifiedName) ?? false;
+    const logicalName = `${entry.file.schema}.${entry.table}`;
+    const qualifiedName = model.qualifiedName?.trim() || logicalName;
+    const enabledNames = enabledByConnection.get(entry.file.conn);
+    const enabled = enabledNames
+      ? manifestTableIsEnabled(
+          [...enabledNames],
+          logicalName,
+          qualifiedName,
+          isSqlServerDriver(driverByConnection.get(entry.file.conn))
+        )
+      : false;
 
     return {
       conn: entry.file.conn,

@@ -149,6 +149,8 @@ export type ConnectionsResponse = {
 
 export type ConnectionTablesResponse = {
   tables: string[];
+  /** 逻辑名 → Manifest `table:` 物理名。保存启用表时以物理名为准。 */
+  physicalNames?: Record<string, string>;
 };
 
 export type IngestResult = {

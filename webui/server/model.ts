@@ -56,7 +56,7 @@ export type SourceSummary = {
   conn: string;
   schema: string;
   table: string;
-  /** Physical `schema.table` used to match `ktx.yaml` `enabled_tables`. */
+  /** Manifest `table:` 物理名，用来对齐 `ktx.yaml` `enabled_tables`。两段或三段都可以。 */
   qualifiedName: string;
   filePath: string;
   columnCount: number;

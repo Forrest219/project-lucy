@@ -18,9 +18,10 @@ import { reloadCatalog } from "../catalog-reload.js";
 import {
   patchConnectionsEnabledTablesYaml,
   patchRemoveSchemaYaml,
-  scannedPhysicalTables,
+  scannedTableCatalog,
   validateEnabledTables
 } from "../enabled-tables.js";
+import { isSqlServerDriver, normalizeEnabledTableNames } from "../../src/lib/enabled-table-identity.js";
 import { safeWriteAtomic } from "../fs-safe.js";
 import { readHiveConnections } from "../hive/config.js";
 import { resolveContentPaths } from "../paths.js";
@@ -82,7 +83,10 @@ interface KtxGroupState {
 /** 组级暂存——按 `executionId` 绑定到具体的一次 attempt。 */
 const KTX_GROUP_STATES = new Map<string, KtxGroupState>();
 
-function readConnectionState(text: string, connectionId: string): { enabledTables: string[]; schemas: string[] } | undefined {
+function readConnectionState(
+  text: string,
+  connectionId: string
+): { enabledTables: string[]; schemas: string[]; driver: string } | undefined {
   const doc = parseDocument(text, { keepSourceTokens: true });
   const connections = doc.get("connections", true) as
     | { get?: (key: string, keepScalar?: boolean) => unknown }
@@ -103,7 +107,9 @@ function readConnectionState(text: string, connectionId: string): { enabledTable
       })
       .filter((value): value is string => value !== null);
   };
-  return { enabledTables: seqOf("enabled_tables"), schemas: seqOf("schemas") };
+  const driverNode = conn.get?.("driver");
+  const driver = typeof driverNode === "string" ? driverNode : "";
+  return { enabledTables: seqOf("enabled_tables"), schemas: seqOf("schemas"), driver };
 }
 
 function sameList(left: string[], right: string[]): boolean {
@@ -300,15 +306,21 @@ export class OpsConnectionTablesAdapter implements OpsToolAdapter {
           removedEnabledTables
         };
       } else {
-        const scanned = await scannedPhysicalTables(ctx.projectRoot, target.connectionId);
+        const catalog = await scannedTableCatalog(ctx.projectRoot, target.connectionId);
+        const normalized = normalizeEnabledTableNames(
+          target.enabledTables,
+          catalog.entries,
+          isSqlServerDriver(state.driver)
+        );
         try {
           const validated = validateEnabledTables(
-            target.enabledTables,
-            scanned,
+            normalized.tables,
+            catalog.physicalTables,
             new Set(state.enabledTables)
           );
           before = { enabledTables: state.enabledTables, warnings: validated.warnings };
           after = { enabledTables: validated.tables, warnings: validated.warnings };
+          target.enabledTables = validated.tables;
         } catch (err) {
           targetBlockers = [(err as { code?: string }).code ?? "ops_invalid_enabled_tables"];
         }

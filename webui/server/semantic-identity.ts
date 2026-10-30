@@ -48,6 +48,7 @@
 import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { parseDocument } from "yaml";
+import { ENABLED_TABLE_NAME_RE } from "../src/lib/enabled-table-identity.js";
 import { resolveContentPaths } from "./paths";
 
 /** The complete identity of one physical table. Never a bare table string. */
@@ -152,14 +153,18 @@ function valueAsRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
-const QUALIFIED_TABLE_RE = /^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$/;
-
-/** Split `<schema>.<table>`; returns null when the value is not qualified. */
+/**
+ * Split a physical object name.
+ * Two parts: `schema.table`. Three parts: `database.schema.table`
+ * (`schema` is everything except the last segment). One or four parts return null.
+ */
 export function parseQualifiedTable(value: string): { schema: string; table: string } | null {
   const trimmed = value.trim();
-  if (!QUALIFIED_TABLE_RE.test(trimmed)) return null;
-  const [schema, table] = trimmed.split(".");
-  return { schema, table };
+  if (!ENABLED_TABLE_NAME_RE.test(trimmed)) return null;
+  const parts = trimmed.split(".");
+  const table = parts[parts.length - 1];
+  if (!table) return null;
+  return { schema: parts.slice(0, -1).join("."), table };
 }
 
 async function fileExists(absPath: string): Promise<boolean> {
@@ -264,6 +269,7 @@ export async function buildSemanticModelIndex(projectRoot: string): Promise<Sema
         const physicalSchema = qualified?.schema ?? schema;
         const physicalTable = qualified?.table ?? sourceName;
         const qualifiedName = qualified ? `${qualified.schema}.${qualified.table}` : `${schema}.${sourceName}`;
+        const declaredPartCount = declared ? declared.split(".").length : 0;
         const overlayRelPath = path.posix.join("semantic-layer", connectionId, `${sourceName}.yaml`);
         const identity: SemanticTableIdentity = { connectionId, schema, table: sourceName };
         const key = semanticIdentityKey(identity);
@@ -280,7 +286,9 @@ export async function buildSemanticModelIndex(projectRoot: string): Promise<Sema
           manifestRelPath,
           overlayRelPath,
           overlayExists: await fileExists(path.join(semanticRoot, connectionId, `${sourceName}.yaml`)),
-          schemaMismatch: qualified ? qualified.schema !== schema : false
+          // A three-part SQL Server name's leading segments are database.schema,
+          // not the Manifest file name. That is not a file/schema mismatch.
+          schemaMismatch: qualified !== null && declaredPartCount === 2 && qualified.schema !== schema
         };
         entries.push(entry);
         if (!byKey.has(key)) byKey.set(key, entry);

@@ -15,6 +15,11 @@ import type {
 import { DiffViewer } from "../../components/DiffViewer";
 import { PageHeader } from "../../components/PageHeader";
 import { sourcesQueryOptions } from "../../lib/displayQueryOptions";
+import {
+  canonicalEnabledTables,
+  enabledNameMatchesRow,
+  type TableIdentityEntry
+} from "../../lib/enabled-table-identity";
 
 function missingManifestSummaryCopy(items: Array<{ schema: string }>): string {
   if (items.length === 1) {
@@ -27,6 +32,9 @@ type WhitelistTableRow = {
   connectionId: string;
   schema: string;
   table: string;
+  /** Manifest 逻辑名。无效启用行没有逻辑名时等于原始启用值。 */
+  logicalName: string;
+  /** 保存时写入 `enabled_tables` 的权威物理名。 */
   qualifiedName: string;
   enabledPersisted: boolean;
   enabledDraft: boolean;
@@ -278,19 +286,24 @@ export function TableWhitelist() {
       const scannedSet = new Set(tables);
       const persisted = conn.enabledTables;
       const draft = draftByConnection[conn.id] ?? persisted;
-      const persistedSet = new Set(persisted);
-      const draftSet = new Set(draft);
-      const rows: WhitelistTableRow[] = tables.map((qualifiedName) => {
-        const { schema, table } = parseQualifiedName(qualifiedName);
+      const caseInsensitive = conn.driver === "sqlserver";
+      const rows: WhitelistTableRow[] = tables.map((logicalName) => {
+        const { schema, table } = parseQualifiedName(logicalName);
         const key = `${conn.id}.${schema}.${table}`;
         const source = sourceByKey.get(key);
+        const physicalName = tablesData?.physicalNames?.[logicalName] ?? logicalName;
+        const matches = (name: string) =>
+          enabledNameMatchesRow(name, logicalName, physicalName, caseInsensitive);
+        for (const name of persisted) if (matches(name)) scannedSet.add(name);
+        for (const name of draft) if (matches(name)) scannedSet.add(name);
         return {
           connectionId: conn.id,
           schema,
           table,
-          qualifiedName,
-          enabledPersisted: persistedSet.has(qualifiedName),
-          enabledDraft: draftSet.has(qualifiedName),
+          logicalName,
+          qualifiedName: physicalName,
+          enabledPersisted: persisted.some(matches),
+          enabledDraft: draft.some(matches),
           invalidEnabled: false,
           columnCount: source?.columnCount,
           hasTableDesc: source?.hasTableDesc,
@@ -307,9 +320,10 @@ export function TableWhitelist() {
           connectionId: conn.id,
           schema,
           table,
+          logicalName: qualifiedName,
           qualifiedName,
-          enabledPersisted: persistedSet.has(qualifiedName),
-          enabledDraft: draftSet.has(qualifiedName),
+          enabledPersisted: persisted.includes(qualifiedName),
+          enabledDraft: draft.includes(qualifiedName),
           invalidEnabled: true
         });
       }
@@ -491,26 +505,46 @@ export function TableWhitelist() {
     setInvalidPage(0);
   }, [connectionFilter, schemaFilter, statusFilter, search]);
 
-  // Dirty check + diff stats
+  function identityEntries(connId: string): TableIdentityEntry[] {
+    const idx = connections.findIndex((item) => item.id === connId);
+    const physicalNames = tablesQueries[idx]?.data?.physicalNames ?? {};
+    return Object.entries(physicalNames).map(([logicalName, physicalName]) => ({
+      logicalName,
+      physicalName
+    }));
+  }
+
+  function canonicalFor(conn: ConnectionInfo, names: readonly string[]): string[] {
+    return canonicalEnabledTables(names, identityEntries(conn.id), conn.driver === "sqlserver");
+  }
+
+  function withoutRow(names: readonly string[], row: WhitelistTableRow, caseInsensitive: boolean): string[] {
+    if (row.invalidEnabled) return names.filter((name) => name !== row.qualifiedName);
+    return names.filter(
+      (name) => !enabledNameMatchesRow(name, row.logicalName, row.qualifiedName, caseInsensitive)
+    );
+  }
+
+  // Dirty check + diff stats. 比较的是即将保存的物理名，和磁盘上的原始启用值。
   const diffStats = useMemo(() => {
     let added = 0;
     let removed = 0;
     for (const { conn } of connectionRows) {
-      const draft = new Set(draftByConnection[conn.id] ?? conn.enabledTables);
-      const persisted = new Set(conn.enabledTables);
+      const draft = canonicalFor(conn, draftByConnection[conn.id] ?? conn.enabledTables);
+      const persisted = conn.enabledTables;
       added += setDifference(draft, persisted).length;
       removed += setDifference(persisted, draft).length;
     }
     return { added, removed, isDirty: added + removed > 0 };
-  }, [connectionRows, draftByConnection]);
+  }, [connectionRows, draftByConnection, connections, tablesQueries]);
   const changedTableCount = diffStats.added + diffStats.removed;
 
   const changedConnections = useMemo(() => {
     return connectionRows.filter(({ conn }) => {
-      const draft = draftByConnection[conn.id] ?? conn.enabledTables;
+      const draft = canonicalFor(conn, draftByConnection[conn.id] ?? conn.enabledTables);
       return !isEqualSet(draft, conn.enabledTables);
     });
-  }, [connectionRows, draftByConnection]);
+  }, [connectionRows, draftByConnection, connections, tablesQueries]);
 
   function setDraftForConnection(connId: string, newDraft: string[]) {
     setDraftByConnection((prev) => ({ ...prev, [connId]: newDraft }));
@@ -519,10 +553,11 @@ export function TableWhitelist() {
   function toggleRow(row: WhitelistTableRow) {
     const conn = connections.find((c) => c.id === row.connectionId);
     if (!conn) return;
-    const current = new Set(draftByConnection[conn.id] ?? conn.enabledTables);
-    if (current.has(row.qualifiedName)) current.delete(row.qualifiedName);
-    else current.add(row.qualifiedName);
-    setDraftForConnection(conn.id, Array.from(current));
+    const caseInsensitive = conn.driver === "sqlserver";
+    const current = draftByConnection[conn.id] ?? conn.enabledTables;
+    const kept = withoutRow(current, row, caseInsensitive);
+    const next = row.enabledDraft ? kept : [...kept, row.qualifiedName];
+    setDraftForConnection(conn.id, next);
     setPreviewOpen(false);
   }
 
@@ -531,9 +566,13 @@ export function TableWhitelist() {
     setDraftByConnection((prev) => {
       const next = { ...prev };
       for (const { conn, rows } of visibleGroups) {
-        const current = new Set(next[conn.id] ?? conn.enabledTables);
-        for (const r of rows) current.add(r.qualifiedName);
-        next[conn.id] = Array.from(current);
+        const caseInsensitive = conn.driver === "sqlserver";
+        let names = [...(next[conn.id] ?? conn.enabledTables)];
+        for (const row of rows) {
+          names = withoutRow(names, row, caseInsensitive);
+          names.push(row.qualifiedName);
+        }
+        next[conn.id] = names;
       }
       return next;
     });
@@ -544,12 +583,18 @@ export function TableWhitelist() {
     setDraftByConnection((prev) => {
       const next = { ...prev };
       for (const { conn, rows } of visibleGroups) {
-        const current = new Set(next[conn.id] ?? conn.enabledTables);
-        for (const r of rows) {
-          if (current.has(r.qualifiedName)) current.delete(r.qualifiedName);
-          else current.add(r.qualifiedName);
+        const caseInsensitive = conn.driver === "sqlserver";
+        let names = [...(next[conn.id] ?? conn.enabledTables)];
+        for (const row of rows) {
+          const enabled = names.some((name) =>
+            row.invalidEnabled
+              ? name === row.qualifiedName
+              : enabledNameMatchesRow(name, row.logicalName, row.qualifiedName, caseInsensitive)
+          );
+          names = withoutRow(names, row, caseInsensitive);
+          if (!enabled) names.push(row.qualifiedName);
         }
-        next[conn.id] = Array.from(current);
+        next[conn.id] = names;
       }
       return next;
     });
@@ -653,7 +698,7 @@ export function TableWhitelist() {
     mutationFn: async () => {
       const results: EnabledTablesPreviewByConnection[] = [];
       for (const { conn } of changedConnections) {
-        const draft = draftByConnection[conn.id] ?? conn.enabledTables;
+        const draft = canonicalFor(conn, draftByConnection[conn.id] ?? conn.enabledTables);
         const preview = await apiPut<EnabledTablesPreview>(
           `/api/connections/${encodeURIComponent(conn.id)}/enabled-tables`,
           { dryRun: true, enabledTables: draft }
@@ -671,7 +716,7 @@ export function TableWhitelist() {
     mutationFn: async () => {
       const results: Array<{ connId: string; write: EnabledTablesWrite }> = [];
       for (const { conn } of changedConnections) {
-        const draft = draftByConnection[conn.id] ?? conn.enabledTables;
+        const draft = canonicalFor(conn, draftByConnection[conn.id] ?? conn.enabledTables);
         const write = await apiPut<EnabledTablesWrite>(
           `/api/connections/${encodeURIComponent(conn.id)}/enabled-tables`,
           { dryRun: false, enabledTables: draft }

@@ -196,6 +196,144 @@ describe("connection enabled_tables API", () => {
     await app.close();
   });
 
+  it("accepts a scanned SQL Server three-part physical table name", async () => {
+    await mkdir(path.join(projectRoot, "semantic-layer", "sql_server", "_schema"), { recursive: true });
+    await writeFile(
+      path.join(projectRoot, "semantic-layer", "sql_server", "_schema", "BIDM.yaml"),
+      `tables:
+  hs_sy_company_metric:
+    table: bidm.dbo.hs_sy_company_metric
+    columns:
+      - name: id
+        type: number
+`,
+      "utf8"
+    );
+    await writeFile(
+      path.join(projectRoot, "ktx.yaml"),
+      `connections:
+  sql_server:
+    driver: sqlserver
+    enabled_tables: []
+`,
+      "utf8"
+    );
+
+    const app = buildServer();
+    await app.ready();
+    const listed = await request(app.server).get("/api/connections/sql_server/tables").expect(200);
+    expect(listed.body.data.tables).toEqual(["BIDM.hs_sy_company_metric"]);
+    expect(listed.body.data.physicalNames).toEqual({
+      "BIDM.hs_sy_company_metric": "bidm.dbo.hs_sy_company_metric"
+    });
+
+    const response = await request(app.server)
+      .put("/api/connections/sql_server/enabled-tables")
+      .send({ dryRun: true, enabledTables: ["bidm.dbo.hs_sy_company_metric"] })
+      .expect(200);
+
+    expect(response.body.data.newEnabledTables).toEqual(["bidm.dbo.hs_sy_company_metric"]);
+    expect(response.body.data.warnings).toEqual([]);
+    await app.close();
+  });
+
+  it("rejects four-part enabled table input", async () => {
+    await writeConnectionProject();
+    const app = buildServer();
+    await app.ready();
+    const response = await request(app.server)
+      .put("/api/connections/mysql-aliyun/enabled-tables")
+      .send({ dryRun: true, enabledTables: ["server.database.schema.table"] })
+      .expect(400);
+
+    expect(response.body.error.code).toBe("INVALID_ENABLED_TABLE");
+    await app.close();
+  });
+
+  it("normalizes a SQL Server logical name to the Manifest physical name and drops the alias", async () => {
+    await mkdir(path.join(projectRoot, "semantic-layer", "sql_server", "_schema"), { recursive: true });
+    await writeFile(
+      path.join(projectRoot, "semantic-layer", "sql_server", "_schema", "BIDM.yaml"),
+      `tables:
+  dm_cpu_asset_cost:
+    table: dbo.dm_cpu_asset_cost
+    columns:
+      - name: id
+        type: number
+`,
+      "utf8"
+    );
+    await writeFile(
+      path.join(projectRoot, "ktx.yaml"),
+      `connections:
+  sql_server:
+    driver: sqlserver
+    enabled_tables:
+      - dbo.dm_cpu_asset_cost
+`,
+      "utf8"
+    );
+
+    const app = buildServer();
+    await app.ready();
+    const response = await request(app.server)
+      .put("/api/connections/sql_server/enabled-tables")
+      .send({
+        dryRun: true,
+        enabledTables: ["BIDM.dm_cpu_asset_cost", "DBO.dm_cpu_asset_cost"]
+      })
+      .expect(200);
+
+    expect(response.body.data.newEnabledTables).toEqual(["dbo.dm_cpu_asset_cost"]);
+    expect(response.body.data.warnings).toEqual([]);
+    await app.close();
+  });
+
+  it("keeps an enabled name that does not map to a Manifest table", async () => {
+    await mkdir(path.join(projectRoot, "semantic-layer", "sql_server", "_schema"), { recursive: true });
+    await writeFile(
+      path.join(projectRoot, "semantic-layer", "sql_server", "_schema", "BIDM.yaml"),
+      `tables:
+  dm_cpu_asset_cost:
+    table: dbo.dm_cpu_asset_cost
+    columns:
+      - name: id
+        type: number
+`,
+      "utf8"
+    );
+    await writeFile(
+      path.join(projectRoot, "ktx.yaml"),
+      `connections:
+  sql_server:
+    driver: sqlserver
+    enabled_tables:
+      - dbo.dm_cpu_asset_cost
+      - bidm.dbo.dm_cpu_asset_cost
+`,
+      "utf8"
+    );
+
+    const app = buildServer();
+    await app.ready();
+    const response = await request(app.server)
+      .put("/api/connections/sql_server/enabled-tables")
+      .send({
+        dryRun: true,
+        enabledTables: ["dbo.dm_cpu_asset_cost", "bidm.dbo.dm_cpu_asset_cost"]
+      })
+      .expect(200);
+
+    expect(response.body.data.newEnabledTables).toEqual([
+      "dbo.dm_cpu_asset_cost",
+      "bidm.dbo.dm_cpu_asset_cost"
+    ]);
+    expect(response.body.data.warnings.map((warning: { table: string }) => warning.table)).toEqual([
+      "bidm.dbo.dm_cpu_asset_cost"
+    ]);
+    await app.close();
+  });
+
   it("rejects tables that are not in scanned schema files", async () => {
     await writeConnectionProject();
     const app = buildServer();

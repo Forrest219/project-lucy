@@ -4,6 +4,7 @@ import { ChevronRight, Database, Server } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { fetchCatalogSchemaManifest } from "../../lib/catalog-assets";
+import { countEnabledForSchema, manifestTableIsEnabled } from "../../lib/enabled-table-identity";
 import { apiGet, apiPost } from "../../lib/apiClient";
 import { copyTextToClipboard } from "../../lib/clipboard";
 import {
@@ -347,10 +348,19 @@ function localManifestSchemaRefs(
 }
 
 function enabledLocalTableCount(connections: ConnectionInfo[], tables: SourceSummary[]): number {
-  const enabledByConnection = new Map(connections.map((conn) => [conn.id, new Set(conn.enabledTables)]));
-  return tables.filter((table) =>
-    enabledByConnection.get(table.conn)?.has(table.qualifiedName ?? `${table.schema}.${table.table}`)
-  ).length;
+  const byId = new Map(connections.map((conn) => [conn.id, conn]));
+  return tables.filter((table) => {
+    const conn = byId.get(table.conn);
+    if (!conn) return false;
+    const logicalName = `${table.schema}.${table.table}`;
+    const physicalName = table.qualifiedName?.trim() || logicalName;
+    return manifestTableIsEnabled(
+      conn.enabledTables,
+      logicalName,
+      physicalName,
+      conn.driver === "sqlserver"
+    );
+  }).length;
 }
 
 function readOnlyStatus(conn: ConnectionInfo): { label: string; tone: "safe" | "risk"; title: string } {
@@ -856,9 +866,12 @@ export function ConnectionOverview() {
             const discoveryState = discoveryByConnectionId.get(conn.id)?.data;
             const tableDiffState = tableDiffByConnectionId.get(conn.id)?.data;
             const schemaRows = conn.schemas.map((schema) => {
-              const enabledTableCountForSchema = conn.enabledTables.filter((entry) =>
-                entry.startsWith(`${schema}.`)
-              ).length;
+              const enabledTableCountForSchema = countEnabledForSchema(
+                schema,
+                conn.enabledTables,
+                semanticTables.filter((table) => table.conn === conn.id),
+                conn.driver === "sqlserver"
+              );
               return {
                 schema,
                 assetState: schemaAssetState(
