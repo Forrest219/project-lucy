@@ -22,7 +22,7 @@
 | E | S5 + S8 续查与指导 | `lucy_continue_question`（schema 只有 token）+ 声明—消费两段式；指导文本与术语三条词条同批 | `mcp-proxy.ts`、`acl.ts`、`admin/role-templates.ts`、`admin/mcp-tools.ts`、`scripts/lint-spec.mjs`、`webui/config/data-qa-instructions.md`、`webui/docs/00-product-terminology-standard.md` | `question-budget-continuation.test.ts`（SC-15…SC-24／29／30／42／45／47）、`data-qa-instructions-contract.test.ts`（SC-40） |
 | F | S6 旁路纳管 | 认证路由／报表模板纳入统一 consume；一次外部调用记 1 次，内部查询只计时长 | `mcp-proxy.ts` | `question-budget-bypass-scope.test.ts`（SC-35／36／46／39） |
 | G | S7 显式取代 | 同身份同会话的新 `begin_question` 取代旧轮次；归属登记与握手回填的事务内重检 | `question-experience.ts`、`turn-correlation.ts`、`mcp-proxy.ts`、`audit.ts` | `question-budget-turn-supersede.test.ts`（SC-31／32／33／34／43／44） |
-| H | S9 文档回写 | 登记册同步；**Spec 162 的生效声明不翻**（运行时未发布），升级建议书里的「120 秒墙钟」句子保持原描述 | `docs/plans/README.md`、`docs/README.md` | `lint:spec-docs` 形态门禁 |
+| H | S9 文档回写 | 登记册同步。波次 H 当时不翻生效声明；2026-10-30 收口已把 Spec 162 §7.2 与升级建议书 §2.3 改为已结算数据处理时长 | `docs/plans/README.md`、`docs/README.md` | `lint:spec-docs` 形态门禁 |
 
 ---
 

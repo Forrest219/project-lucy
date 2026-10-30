@@ -29,7 +29,7 @@ This directory stores repository-level implementation plans that are not scoped 
 | [2026-10-18-lucy-2.5-upgrade-proposal.md](2026-10-18-lucy-2.5-upgrade-proposal.md) | **Lucy v0.25 升级建议（版本以文件顶部为准）**：登记 L25-01–L25-16，**本目录的权威登记册**；各条 Spec／Plan 的**版本、审阅轮次与状态一律以本册 §2.1–§2.12 登记为准**，本行不复述（版本号与状态双写必然漂移：建议书每次升版都会使本行过期一格）。首批 P0 与六项 P1 状态**各不一致**：L25-09 部分实现未验收、L25-11 独立审阅退回待修订、L25-14 已实现未验收，**均未获验收** |
 | `2026-10-18-mcp-audit-serial.md` | **MCP 审计整改串行计划**：D1–D3 已锁定。批次 1 为 Spec 178 / T1，其后 T3、T5、T4、T7、T6、T11、T13、T14、R0–R3、T15 |
 | `2026-10-12-acceptance-gap-closure.md` | **验收缺口修复**：把 SC-15 / SC-19 / SC-20 / SC-23 接到查数路径。工单 `wo-202610-15` |
-| `2026-10-11-customer-log-next-optimizations.md` | **客户日志优化最终版（v1.1，WO-12 已验收）**：P0→P1→P2。Spec 162 v0.4（v0.4 为问询预算修订声明，未实现）；工单 `wo-202610-12` / `13` / `14` |
+| `2026-10-11-customer-log-next-optimizations.md` | **客户日志优化最终版（v1.1，WO-12 已验收）**：P0→P1→P2。Spec 162 v0.4 问询预算修订已是现行口径，开发完成；工单 `wo-202610-12` / `13` / `14`。不构成客户交付 |
 | `2026-10-11-eval-module-functional-upgrade.md` | **Eval 模块产品能力（形态 A，v0.4）**：已细化为待评审 Spec 161 与工单 `webui/docs/plans/wo-202610-11-offline-eval-customer-ops.md` |
 | `2026-10-11-eval-result-policy-context-upgrade.md` | **Eval 升级建议（形态 A）**：结果 / 策略 / 解释分轴，superstore 四臂消融，拒答与澄清，业务轨迹晋升。与 8 月 26 日运营闭环并行；不含实现 WO |
 | `2026-08-26-eval-accuracy-closed-loop-and-change-triggered-regression.md` | **Eval 优化方案（形态 A）**：准确率连续跌破闭环（判定 / ack / Webhook）+ Publish 后变更触发 smoke 回归；不含实现 WO |

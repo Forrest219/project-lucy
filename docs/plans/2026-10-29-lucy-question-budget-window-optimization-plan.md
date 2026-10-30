@@ -6,8 +6,8 @@
 | 目标版本 / 优先级 | v0.25（修订线）/ **P0**（S2–S5）+ P1（S1、S6）+ P2（S7） |
 | 主 Spec | [问询预算窗口与预算终止可观测性优化 Spec](../specs/lucy-20261029-question-budget-window-optimization-spec.md)（**v1.0**） |
 | 需求来源 | 2026-10-29 生产事故（用户 liuzongxuan / `codex-mcp-client`）：零次数据工具调用即被 `question_budget_exhausted` 拦下，客户侧无法自行恢复 |
-| 状态 | **定稿 v1.0，本分支已实现（2026-10-30）**。D1–D9 已冻结。代码已进入代理与审计汇总 |
-| 授权边界 | 2026-10-30 用户授权开工、自测并提交。实现不改 D1–D9。SC 全表尚未独立验收。不授权客户镜像或部署 |
+| 状态 | **定稿 v1.0，本分支开发完成（2026-10-30）**。D1–D9 已冻结。代码已进入代理与审计汇总 |
+| 授权边界 | 2026-10-30 用户授权开工、自测并提交，随后批准收口。实现不改 D1–D9。逐条记录见验收表。不授权客户镜像或部署 |
 | 验收 | 自动化用例覆盖窗口、续查、恢复、并发上限与停机幂等。逐条记录见 [验收表](../reviews/2026-10-30-question-budget-acceptance.md)。SC-04 有进程内 MCP 自动化（关服务、清模块、再经 HTTP 调用），不是操作系统或容器重启 |
 | 实施主体 | Lucy（Proxy 问询预算层 + Admin 审计导出层）；不修改 KTX 源码 |
 | 已拍板决策 | **D1–D9 已冻结**（2026-10-30，按 Spec §4 推荐项）。D3 为 `lucy_continue_question` 主路径，HTTP 头保留为次要路径 |
@@ -114,7 +114,7 @@ D1–D9 已于 2026-10-30 按 Spec §4 推荐项冻结：
 | `webui/server/proxy/turn-correlation.ts` | 增加 `supersede` 与按身份+会话的活跃查询 | S7 |
 | `webui/server/admin/audit.ts` | 问询汇总新增「预算终止次数」列并修正恒等式；字段说明文案 | S1 |
 | `webui/src/pages/admin/Audit.tsx` | **导出入口参数来源排查与修正**；非零桶展示 | S1 |
-| `webui/docs/162-customer-query-experience-and-usage-evidence-spec.md` | §7.2 口径与续查通道的**修订声明**（**PM 授权代改，已完成 v0.4**）；**只写修订条款，不改现行已实现语义**——运行时仍以 §7.2 现行文本为准，新口径自新 Spec SC 全部执行并发布后生效 | S9 |
+| `webui/docs/162-customer-query-experience-and-usage-evidence-spec.md` | §7.2 已是现行口径：已结算数据处理时长，并提供 `lucy_continue_question`。历史审计行不按新口径重解释 | S9 |
 | `webui/config/data-qa-instructions.md` | **治理类文件**，走 Plan Mode，与 S5 同批 | S8 |
 | `webui/docs/00-product-terminology-standard.md` | **治理类文件**，修订「问询预算」「关联调用数」「可继续」三条既有词条 | S8 |
 | `docs/specs/lucy-20261029-question-budget-window-optimization-spec.md` | D1–D9 裁定回写 | S0 |
@@ -279,7 +279,7 @@ D1–D9 已于 2026-10-30 按 Spec §4 推荐项冻结：
 
 1. **Spec 162 修订（PM 已授权代改，已完成）**：`webui/docs/162-customer-query-experience-and-usage-evidence-spec.md` 升 **v0.4**，落三处修订声明——① 顶部 callout 块（仿既有「Spec 189 修订」块形态）写明修订来源、**未实现**事实与生效条件；② §7.2 追加「修订后口径（尚未实现）」小节（三处变更 + 生效条件 + SC-4 同期改写要求）；③ §10 追加 SC-4 口径说明。**不写现行已实现语义**——该 Spec 状态为「已实现（lucy-v2.0）」，改写其运行时语义会与代码不符；修订声明与生效条件是唯一诚实的写法。
    **编号**：本文修订的是 Spec 162，流水号仍是 162，不新发 WebUI 编号，也不把 `L25-*` 台账号当作本文编号。升级建议书里的 `L25-*` 是 v0.25 工作项号；若以后要把本修订单独挂进那本台账，再由台账维护者加一行，不阻塞本 Spec 定稿。
-   **登记的下游联动项（不在本次改）**：`docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md` §登记行硬编码了「问询预算引擎（Spec 162，20 次数据工具或 120 秒，先到先停）」——**在新口径生效前该描述仍为真**，故不改；新口径生效时须同步。
+   **登记的下游联动项**：`docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md` §2.3 已在 2026-10-30 改为「20 次数据工具或累计 120 秒已结算数据处理时长，先到先停」。
 2. **三处登记册同步**（本次自查发现，原 v0.3 漏登记）：`docs/plans/README.md` 增 Plan 行；`docs/README.md` §2 增 Spec 行、§3 增审阅结论行、§9 增 Plan 行；`docs/governance/project-overview.md` §9 索引表增条目并按「跨会话共享计数器」纪律写顶部版本更新行。
    **归属边界**：本条目是 Spec 162 的修订，不属 L25-16 维护会话独占登记范围，可独立登记。
 3. 同步 `docs/specs/…-spec.md` §4 决策表与本 Plan 头部的已冻结决策。v1.0 已完成这项同步。
