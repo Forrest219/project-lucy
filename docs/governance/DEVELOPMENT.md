@@ -61,11 +61,57 @@ Lucy 当前只支持**单实例、单副本**部署，不支持多个 WebUI / MC
 ## Spec 落位规则
 
 - 仓库级 spec / 治理 / 跨模块产品视图落在 `docs/`，作为本仓库的事实来源
-- **访问权限（Access Control）域档案**落在 [`docs/access-control/`](../access-control/README.md)：域设计 / ADR / UAT / 本域 WO；Proxy/Admin 编号实现 Spec 仍就近留在 `webui/docs/`（如 `07`/`14`/`15`），由域 README 交叉引用
+- **新的产品功能 Spec** 只落 `docs/specs/lucy-YYYYMMDD-<slug>-spec.md`。`webui/docs/` 已有的数字流水号 Spec 保持原路径，不再新增 `NNN-*-spec.md`，也不与 `docs/specs/` 各写一份。文件名与闭口层级见下方「功能闭口与发布取证」
+- **访问权限（Access Control）域档案**落在 [`docs/access-control/`](../access-control/README.md)：域设计 / ADR / UAT / 本域 WO；Proxy/Admin 编号实现 Spec 仍就近留在 `webui/docs/`（如 `07`/`14`/`15`），由域 README 交叉引用。这些是已封板的存量路径，不作为新编号的先例
 - 子模块自带的架构 / API / 数据模型等实现细节允许放在 `<module>/docs/`（当前实例：`webui/docs/01–06`），并在 `docs/governance/project-overview.md` 注册索引
 - `webui` 的 M0–M5 开发已由 Codex 串行完成，对应工单包 `webui/docs/codex/` 作为执行历史归档保留，不再领取；后续若新增工单仍遵循「就近放 `<module>/docs/`」原则
 - 个人分析 / 协作笔记不进本仓库，按既有约定放 Obsidian
 - eval cases（YAML，agent 测）与 quiz HTML（人类测）的设计原则、命名约定、数据获取路径见 `docs/governance/eval-quiz-conventions.md`；新增 dataset 的 eval/quiz 前必读
+
+## 功能闭口与发布取证
+
+本节是仓库级设计原则。功能合同和发布取证回答两个不同的问题，出口不能写在同一条 Spec 里。
+
+| 层级 | 证明什么 | 不证明什么 |
+|---|---|---|
+| 功能合同 | 这一条用户可观察的承诺，在它自己的接口上成立 | 这些承诺叠在目标拓扑上仍能一起成立。功能收口不能当成可以上线 |
+| 发布取证 | 这一批已收口的承诺，在这次跑到的系统路径上没有互相拆掉。它是兜底，用来抓住组合、时序、拓扑和环境编排才会露出的问题 | 每个模块的合同都成立。没跑到的分支、失败关闭、并发和权限边角仍然可以是错的 |
+
+功能合同的出口使用能打假这条承诺的检查。事务边界、失败关闭、持久化这类只有在真实进程里才成立的不变量，留在功能合同里。证明这些不变量所需的真实进程检查和局部故障注入也留在功能合同里，例如写入失败不能返回成功、事务中途失败不能留下半份数据。整库旅程、Agent 路径、跨模块或系统级故障演练，以及证据等级（本机 / CI / 客户环境）归发布取证。
+
+发布取证失败时，只打回被证伪的那一条功能合同，不把整批已收口的模块重新打开。发布取证必须有主人和触发点：这一批已收口功能组成候选。不得把发布取证写成某条功能合同的出口，同时标注「未执行且不排期」。
+
+上线只发生在第三件事：这一批模块都已按自己的合同收口，并且这次兜底跑在目标拓扑上、证据等级也够。
+
+### 新 Spec 只有一个身份
+
+新的产品 Spec 文件名固定为 `lucy-YYYYMMDD-<slug>-spec.md`，Plan 固定为 `YYYY-MM-DD-lucy-<slug>-plan.md`。`slug` 只使用小写字母、数字和连字符。版本写在头部元数据，不写进文件名。机器只拒绝 `v<数字>p<数字>` 这种版本段，例如 `v0p25`、`v2p5`。`v8` 这类技术专名可以留在 slug 里。其余像产品版本这样的写法由评审核对。文档之间用这个文件名互相引用。
+
+台账号只出现在元数据中。功能挂在某本登记册上时写该号，没有就写「无」。不把台账号或 WebUI 流水号当作 Spec 的名字，也不为同一功能另派第二套编号。
+
+`webui/docs/` 里已有的数字流水号 Spec 保持原路径，含子目录里已有的文件。此后不在任何 `<module>/docs/`（含子目录）新增一位及以上数字开头的 `*-spec.md`。模块内部、不构成产品承诺的实现笔记仍可放在 `<module>/docs/`，但不得使用新的数字流水号 Spec 文件名。
+
+验收编号在本 Spec 内从 `SC-01` 起。不把其他 Spec 的验收编号写进本条出口。
+
+### 必填小节
+
+每份新的功能 Spec 包含：
+
+```md
+## 闭口层级
+
+- 层级：功能合同
+- 本条承诺：一句话，一条用户可观察的承诺
+- 本条出口：能打假这条承诺的检查
+- 不在本条出口：整库旅程、Agent 路径、跨模块或系统级故障演练、证据等级
+- 上线关系：本条收口不表示可上线
+```
+
+发布取证 Spec 使用同一小节。「层级」写「发布取证」，「不在本条出口」写各模块自己的合同，「上线关系」写「本条通过不表示各模块无问题」。
+
+「是不是刚好一条承诺」由评审判断。`lint:spec-docs` 只检查小节是否存在、层级取值，以及文件名是否符合本节。
+
+存量 Spec 与 Plan 不改名、不补写本小节。2026-10-30 引入本规则时，已跟踪且不符合的文件按「该文件 + 该规则」写入 [`docs/governance/spec-plan-doc-baseline.json`](spec-plan-doc-baseline.json)。此后基线只减不增。未跟踪的在途草稿不适用该豁免，`git add` 或提交时必须合规。
 
 ## Spec 内容规格：重要功能必含伪代码
 
@@ -129,7 +175,7 @@ Lucy 当前只支持**单实例、单副本**部署，不支持多个 WebUI / MC
 
 | # | 要求 | 出处 | 机器门禁 |
 |---|---|---|---|
-| 1 | **Spec 落 `docs/specs/`、Plan 落 `docs/plans/`**，命名 `lucy-YYYYMMDD-<slug>-spec.md` / `YYYY-MM-DD-lucy-<slug>-plan.md` | 本文件「Spec 落位规则」 | `lint:spec-docs` |
+| 1 | **Spec 落 `docs/specs/`、Plan 落 `docs/plans/`**，命名 `lucy-YYYYMMDD-<slug>-spec.md` / `YYYY-MM-DD-lucy-<slug>-plan.md`。`slug` 只用小写字母、数字和连字符，**不得把版本号写入文件名** | 本文件「Spec 落位规则」与「功能闭口与发布取证」 | `lint:spec-docs`（规则 `filename`） |
 | 2 | **Spec 含「核心流程（伪代码）」/「Core Algorithm」**，或**显式写明伪代码豁免** | 本文件「Spec 内容规格」 | `lint:spec-docs`（规则 `pseudocode`） |
 | 3 | **Spec 头部元数据含「文档类型 / 版本」与「状态」**；**Plan 头部含「状态」「授权边界」「验收」** | 本文件「Spec 内容规格」 | `lint:spec-docs`（规则 `metadata`） |
 | 4 | **Plan 含 目标 / 开工前置 / 验收 / 完成定义 / 风险 五类小节**（措辞可不同，按语义匹配） | 本文件「强制流程：Plan Mode」与本节 | `lint:spec-docs`（规则 `plan-parts`） |
@@ -137,8 +183,9 @@ Lucy 当前只支持**单实例、单副本**部署，不支持多个 WebUI / MC
 | 6 | **含 `Design System Compliance` 小节 ⇒ 必须用规定模板四段式**（`Referenced Specs` / `What This Change Follows` / `Exceptions (If Any)` / `Follow-up Needed`） | 本文件「WebUI 设计规范」＋ [`webui/docs/design-system/30-pr-compliance-template.md`](../../webui/docs/design-system/30-pr-compliance-template.md) | `lint:spec-docs`（规则 `ds-shape`） |
 | 7 | **Spec / Plan 必须登记进对应索引**：`docs/specs/` → `docs/README.md`；`docs/plans/` → `docs/plans/README.md` | 本节 | `lint:spec-docs`（规则 `index`） |
 | 8 | **新增命令 / CI job 必须在测试门禁文档登记** | [`docs/governance/test-layers-and-release-gates.md`](test-layers-and-release-gates.md) §2「Current Commands」与 §8「CI Mapping」 | 无（人工核对） |
-| 9 | **功能编号待 PM 指派**，由权威登记册登记 | [`docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md`](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) | 无（人工核对） |
+| 9 | **文件名是 Spec 的身份**。台账号只写在元数据里，且仅当该功能挂在对应登记册上（v0.25 登记册见 [`docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md`](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md)）；没有则写「无」。不把台账号或 WebUI 流水号当作 Spec 的名字，也不另派第二套编号 | 本文件「功能闭口与发布取证」 | 文件名见第 1 条；元数据里的台账号由评审核对 |
 | 10 | **落盘后跑一遍机器门禁并逐条勾销本表**；不得以「门禁全绿」替代形态自查 | 本节 | `lint:spec-docs` + `lint:spec` + `lint:terminology` + `lint:ia-boundary` |
+| 11 | **功能 Spec 含「闭口层级」**。层级只能是「功能合同」或「发布取证」，并写明本条承诺、本条出口、不在本条出口、上线关系。功能合同写「本条收口不表示可上线」；发布取证写「本条通过不表示各模块无问题」 | 本文件「功能闭口与发布取证」 | `lint:spec-docs`（规则 `close-layer`） |
 
 ### 索引登记的判据（避免误判）
 
@@ -150,7 +197,7 @@ Lucy 当前只支持**单实例、单副本**部署，不支持多个 WebUI / MC
 
 ### 存量豁免与基线（只减不增）
 
-形态门禁 `npm run lint:spec-docs` 对全量 `docs/specs/` 与 `docs/plans/` 生效。存量违规冻结在
+形态门禁 `npm run lint:spec-docs` 对全量 `docs/specs/` 与 `docs/plans/` 生效，并递归检查各模块 `<module>/docs/` 是否新出现一位及以上数字流水号 Spec。存量违规冻结在
 [`docs/governance/spec-plan-doc-baseline.json`](spec-plan-doc-baseline.json)：
 
 - **新增违规 ⇒ exit 1**，必须修，**不得写入基线**；
@@ -159,7 +206,7 @@ Lucy 当前只支持**单实例、单副本**部署，不支持多个 WebUI / MC
 
 ### 门禁的判定范围（按 git 跟踪状态分流）
 
-形态门禁扫描 `docs/specs/` 与 `docs/plans/` 的**全部文件**，但**判定按 git 跟踪状态分流**：
+形态门禁扫描 `docs/specs/` 与 `docs/plans/` 的**全部文件**，并递归检查各模块 `<module>/docs/` 下一位及以上数字开头的 `*-spec.md`。**判定按 git 跟踪状态分流**：
 
 | 文件状态 | 基线外违规的处置 | 理由 |
 |---|---|---|
@@ -173,8 +220,9 @@ Lucy 当前只支持**单实例、单副本**部署，不支持多个 WebUI / MC
 
 ### Review 要求
 
-- Spec / Plan 评审必须检查：本清单 10 条是否逐条可答；回答不得是「门禁全绿」。
+- Spec / Plan 评审必须检查：本清单 11 条是否逐条可答；回答不得是「门禁全绿」。
 - 评审发现形态不合规时，**先修文档形态**，再论内容。
+- 缺「闭口层级」，或功能合同的出口写入整库旅程、Agent 路径、跨模块或系统级故障演练、证据等级，先退回形态。这些内容属于发布取证。证明本条不变量所需的局部故障注入留在功能合同里。
 
 ## 全系统术语规范
 

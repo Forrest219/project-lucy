@@ -12,6 +12,8 @@
  *   pseudocode  Spec 必须有「核心流程（伪代码）」/「Core Algorithm」，或显式写明伪代码豁免
  *   plan-parts  Plan 必须有 目标 / 开工前置 / 验收 / 完成定义 / 风险 五类小节
  *   metadata    Spec 须有 文档类型·版本·状态；Plan 须有 状态·授权边界·验收
+ *   filename    新 Spec / Plan 使用唯一文件名；模块 docs 数字流水号 Spec 已封板
+ *   close-layer 新功能 Spec 必须有「闭口层级」，且层级只能是功能合同或发布取证
  *
  * 存量违规冻结在 docs/governance/spec-plan-doc-baseline.json：**基线只减不增**。
  * 新增违规 → exit 1；基线里已不再违规的条目 → 报 stale（提示可从基线移除），不阻塞。
@@ -36,6 +38,14 @@ const PLAN_DIR = "docs/plans";
 const SPEC_INDEX = "docs/README.md";
 const PLAN_INDEX = "docs/plans/README.md";
 const BASELINE_FILE = "docs/governance/spec-plan-doc-baseline.json";
+
+const SPEC_FILENAME = /^lucy-(\d{8})-([a-z0-9]+(?:-[a-z0-9]+)*)-spec\.md$/;
+const PLAN_FILENAME = /^(\d{4}-\d{2}-\d{2})-lucy-([a-z0-9]+(?:-[a-z0-9]+)*)-plan\.md$/;
+const NUMBERED_SPEC_BASENAME = /^\d+-.+-spec\.md$/;
+const MODULE_DOCS_SKIP = new Set(["docs", "inbox", "node_modules"]);
+/** 只拒绝 v0p25、v2p5 这种产品版本段。v8 这类技术专名不在此列。 */
+const VERSION_SEGMENT = /^v\d+p\d+$/i;
+const CLOSE_LAYER_FIELDS = ["不在本条出口", "本条承诺", "本条出口", "上线关系", "层级"];
 
 const DS_TEMPLATE_PARTS = [
   { re: /Referenced\s+Specs/i, label: "Referenced Specs" },
@@ -69,6 +79,194 @@ function listMarkdown(dirRel) {
     .map((name) => path.posix.join(dirRel, name));
 }
 
+/** 递归列出某个模块 docs 目录下的数字流水号 Spec。relDir 使用 posix 分隔。 */
+export function listNumberedSpecsUnder(absDir, relDir) {
+  const found = [];
+  function walk(abs, rel) {
+    for (const name of readdirSync(abs)) {
+      if (name === "node_modules") continue;
+      const absChild = path.join(abs, name);
+      const relChild = `${rel}/${name}`;
+      if (statSync(absChild).isDirectory()) {
+        walk(absChild, relChild);
+      } else if (NUMBERED_SPEC_BASENAME.test(name)) {
+        found.push(relChild);
+      }
+    }
+  }
+  if (existsSync(absDir) && statSync(absDir).isDirectory()) walk(absDir, relDir);
+  return found.sort();
+}
+
+function listNumberedModuleSpecs() {
+  const found = [];
+  for (const name of readdirSync(repoRoot)) {
+    if (MODULE_DOCS_SKIP.has(name) || name.startsWith(".")) continue;
+    const abs = path.join(repoRoot, name, "docs");
+    if (!existsSync(abs) || !statSync(abs).isDirectory()) continue;
+    found.push(...listNumberedSpecsUnder(abs, `${name}/docs`));
+  }
+  return found.sort();
+}
+
+function isNumberedModuleSpec(relPath) {
+  const normalized = relPath.split(path.sep).join("/");
+  if (normalized.startsWith("docs/")) return false;
+  const base = path.posix.basename(normalized);
+  if (!NUMBERED_SPEC_BASENAME.test(base)) return false;
+  return /(?:^|\/)[^/]+\/docs\/(?:[^/]+\/)*\d+-.+-spec\.md$/.test(normalized);
+}
+
+function isYyyymmdd(value) {
+  if (!/^\d{8}$/.test(value)) return false;
+  const year = Number(value.slice(0, 4));
+  const month = Number(value.slice(4, 6));
+  const day = Number(value.slice(6, 8));
+  return year >= 2020 && year <= 2099 && month >= 1 && month <= 12 && day >= 1 && day <= 31;
+}
+
+function isIsoDate(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return false;
+  return isYyyymmdd(`${match[1]}${match[2]}${match[3]}`);
+}
+
+function versionSegment(slug) {
+  return slug.split("-").find((part) => VERSION_SEGMENT.test(part)) ?? null;
+}
+
+/** 文件名身份。规范见 DEVELOPMENT.md「功能闭口与发布取证」。 */
+export function collectFilenameViolation(relPath) {
+  const base = path.posix.basename(relPath);
+  if (relPath.startsWith(`${SPEC_DIR}/`)) {
+    const match = SPEC_FILENAME.exec(base);
+    if (!match || !isYyyymmdd(match[1])) {
+      return {
+        file: relPath,
+        rule: "filename",
+        message: "Spec 文件名必须是 lucy-YYYYMMDD-<slug>-spec.md；slug 只用小写字母、数字和连字符，版本写在头部"
+      };
+    }
+    const version = versionSegment(match[2]);
+    if (version) {
+      return {
+        file: relPath,
+        rule: "filename",
+        message: `Spec 文件名不得包含版本段「${version}」；版本写在头部`
+      };
+    }
+    return null;
+  }
+  if (relPath.startsWith(`${PLAN_DIR}/`)) {
+    const match = PLAN_FILENAME.exec(base);
+    if (!match || !isIsoDate(match[1])) {
+      return {
+        file: relPath,
+        rule: "filename",
+        message: "Plan 文件名必须是 YYYY-MM-DD-lucy-<slug>-plan.md；slug 只用小写字母、数字和连字符，版本写在头部"
+      };
+    }
+    const version = versionSegment(match[2]);
+    if (version) {
+      return {
+        file: relPath,
+        rule: "filename",
+        message: `Plan 文件名不得包含版本段「${version}」；版本写在头部`
+      };
+    }
+    return null;
+  }
+  if (isNumberedModuleSpec(relPath)) {
+    return {
+      file: relPath,
+      rule: "filename",
+      message: "模块 docs 的数字流水号 Spec 已封板（含子目录、一位及以上数字）；新产品 Spec 只写 docs/specs/lucy-YYYYMMDD-<slug>-spec.md"
+    };
+  }
+  return null;
+}
+
+function sectionBody(text, titlePattern) {
+  const lines = text.split("\n");
+  let start = -1;
+  let level = 0;
+  for (let i = 0; i < lines.length; i += 1) {
+    const match = /^(#{2,4})\s+(.+)$/.exec(lines[i]);
+    if (!match) continue;
+    const title = match[2].trim();
+    if (start === -1 && titlePattern.test(title)) {
+      start = i + 1;
+      level = match[1].length;
+      continue;
+    }
+    if (start !== -1 && match[1].length <= level) return lines.slice(start, i).join("\n");
+  }
+  return start === -1 ? null : lines.slice(start).join("\n");
+}
+
+function parseCloseLayerField(line) {
+  const trimmed = line.trim().replace(/^[-*]\s+/, "");
+  for (const name of CLOSE_LAYER_FIELDS) {
+    const match = new RegExp(`^${name}\\s*[:：]\\s*(.*)$`).exec(trimmed);
+    if (!match) continue;
+    return { name, value: match[1].trim() };
+  }
+  return null;
+}
+
+function collectCloseLayerViolations(relPath, text) {
+  const body = sectionBody(text, /闭口层级$/);
+  if (body === null) {
+    return [{ file: relPath, rule: "close-layer", message: "Spec 缺少「闭口层级」小节" }];
+  }
+  const fields = new Map();
+  for (const line of body.split("\n")) {
+    const parsed = parseCloseLayerField(line);
+    if (!parsed) continue;
+    if (!fields.has(parsed.name)) fields.set(parsed.name, []);
+    fields.get(parsed.name).push(parsed.value);
+  }
+  const violations = [];
+  const missing = [];
+  for (const name of ["层级", "本条承诺", "本条出口", "不在本条出口", "上线关系"]) {
+    const values = fields.get(name) ?? [];
+    if (values.length !== 1 || values[0] === "") missing.push(name);
+  }
+  if (missing.length) {
+    violations.push({
+      file: relPath,
+      rule: "close-layer",
+      message: `「闭口层级」缺少或为空：${missing.join("、")}`
+    });
+  }
+  const layerValues = (fields.get("层级") ?? []).filter((value) => value !== "");
+  const uniqueLayer = [...new Set(layerValues)];
+  const layerOk = uniqueLayer.length === 1 && (uniqueLayer[0] === "功能合同" || uniqueLayer[0] === "发布取证");
+  if (layerValues.length > 0 && !layerOk) {
+    violations.push({
+      file: relPath,
+      rule: "close-layer",
+      message: "「闭口层级」的层级只能是「功能合同」或「发布取证」之一"
+    });
+  }
+  const ship = (fields.get("上线关系") ?? []).find((value) => value !== "") ?? "";
+  if (uniqueLayer.length === 1 && uniqueLayer[0] === "功能合同" && ship && !ship.includes("本条收口不表示可上线")) {
+    violations.push({
+      file: relPath,
+      rule: "close-layer",
+      message: "功能合同的上线关系必须写「本条收口不表示可上线」"
+    });
+  }
+  if (uniqueLayer.length === 1 && uniqueLayer[0] === "发布取证" && ship && !ship.includes("本条通过不表示各模块无问题")) {
+    violations.push({
+      file: relPath,
+      rule: "close-layer",
+      message: "发布取证的上线关系必须写「本条通过不表示各模块无问题」"
+    });
+  }
+  return violations;
+}
+
 function headings(text) {
   return [...text.matchAll(/^(#{2,4})\s+(.+)$/gm)].map((m) => ({
     level: m[1].length,
@@ -96,8 +294,11 @@ export function collectDocViolations(relPath, text) {
   const violations = [];
   const isSpec = relPath.startsWith(`${SPEC_DIR}/`);
   const hs = headings(text);
+  const filenameViolation = collectFilenameViolation(relPath);
+  if (filenameViolation) violations.push(filenameViolation);
 
   if (isSpec) {
+    violations.push(...collectCloseLayerViolations(relPath, text));
     const hasPseudo = hs.some((h) => /核心流程（伪代码）/.test(h.title) || /Core Algorithm/i.test(h.title));
     const hasExemption = /伪代码(豁免|不适用|不触发)/.test(text);
     if (!hasPseudo && !hasExemption) {
@@ -201,10 +402,15 @@ export function classifyViolations(violations, baselineEntries, trackedFiles = n
 export function scanRepo() {
   const specFiles = listMarkdown(SPEC_DIR);
   const planFiles = listMarkdown(PLAN_DIR);
+  const webuiNumbered = listNumberedModuleSpecs();
   const specIndex = linkedBasenames(SPEC_INDEX);
   const planIndex = linkedBasenames(PLAN_INDEX);
 
   const violations = [];
+  for (const relPath of webuiNumbered) {
+    const filenameViolation = collectFilenameViolation(relPath);
+    if (filenameViolation) violations.push(filenameViolation);
+  }
   for (const relPath of [...specFiles, ...planFiles]) {
     const text = read(relPath);
     const isSpec = relPath.startsWith(`${SPEC_DIR}/`);
@@ -230,7 +436,7 @@ export function scanRepo() {
     stale,
     baseline,
     trackedFiles,
-    scanned: specFiles.length + planFiles.length
+    scanned: specFiles.length + planFiles.length + webuiNumbered.length
   };
 }
 

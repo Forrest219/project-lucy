@@ -1,13 +1,18 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import test from "node:test";
 import {
   classifyViolations,
   collectDocViolations,
+  collectFilenameViolation,
+  listNumberedSpecsUnder,
   scanRepo
 } from "./lint-spec-docs.mjs";
 
-const SPEC = "docs/specs/sample-spec.md";
-const PLAN = "docs/plans/sample-plan.md";
+const SPEC = "docs/specs/lucy-20261030-sample-spec.md";
+const PLAN = "docs/plans/2026-10-30-lucy-sample-plan.md";
 
 const SPEC_HEADER = [
   "# 示例 Spec",
@@ -22,6 +27,14 @@ const SPEC_HEADER = [
 ].join("\n");
 
 const SPEC_BODY = [
+  "## 闭口层级",
+  "",
+  "- 层级：功能合同",
+  "- 本条承诺：示例承诺",
+  "- 本条出口：契约测试",
+  "- 不在本条出口：整库旅程、Agent 路径、故障注入、证据等级",
+  "- 上线关系：本条收口不表示可上线",
+  "",
   "## 5. 核心流程（伪代码）",
   "",
   "```text",
@@ -170,6 +183,119 @@ test("判定范围：无法判定跟踪状态时保守按阻塞处理（宁可�
   const { blocking, warnings } = classifyViolations(violations, [], null);
   assert.equal(blocking.length, 1);
   assert.equal(warnings.length, 0);
+});
+
+test("文件名：规范 Spec / Plan 不报 filename", () => {
+  assert.equal(collectFilenameViolation(SPEC), null);
+  assert.equal(collectFilenameViolation(PLAN), null);
+});
+
+test("文件名：无日期、版本段、截断日期 → filename 违规", () => {
+  const undated = collectFilenameViolation("docs/specs/lucy-ci-restoration-spec.md");
+  assert.equal(undated.rule, "filename");
+  const versioned = collectFilenameViolation("docs/specs/lucy-20261028-v0p25-ops-spec.md");
+  assert.match(versioned.message, /版本段「v0p25」/);
+  const shortDate = collectFilenameViolation("docs/specs/lucy-202608-05-demo-spec.md");
+  assert.equal(shortDate.rule, "filename");
+  const planVersion = collectFilenameViolation("docs/plans/2026-10-28-lucy-v0.25-ops-plan.md");
+  assert.equal(planVersion.rule, "filename");
+});
+
+test("文件名：v8 技术专名不当作版本段", () => {
+  assert.equal(collectFilenameViolation("docs/specs/lucy-20261030-v8-runtime-spec.md"), null);
+});
+
+test("文件名：webui 数字流水号 Spec 已封板", () => {
+  const violation = collectFilenameViolation("webui/docs/194-access-grade-spec.md");
+  assert.equal(violation.rule, "filename");
+  assert.match(violation.message, /数字流水号/);
+  const oneDigit = collectFilenameViolation("webui/docs/7-access-grade-spec.md");
+  assert.equal(oneDigit.rule, "filename");
+  const nested = collectFilenameViolation("webui/docs/submodule/194-access-grade-spec.md");
+  assert.equal(nested.rule, "filename");
+});
+
+test("扫描：模块 docs 子目录与一位流水号会被扫到", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "lucy-spec-docs-"));
+  try {
+    const nested = path.join(root, "webui", "docs", "submodule");
+    mkdirSync(nested, { recursive: true });
+    writeFileSync(path.join(nested, "194-access-grade-spec.md"), "# x\n");
+    writeFileSync(path.join(root, "webui", "docs", "7-access-grade-spec.md"), "# x\n");
+    writeFileSync(path.join(root, "webui", "docs", "readme.md"), "# x\n");
+    const found = listNumberedSpecsUnder(path.join(root, "webui", "docs"), "webui/docs");
+    assert.deepEqual(found, [
+      "webui/docs/7-access-grade-spec.md",
+      "webui/docs/submodule/194-access-grade-spec.md"
+    ]);
+    for (const rel of found) {
+      assert.equal(collectFilenameViolation(rel).rule, "filename");
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+  const repo = scanRepo();
+  assert.ok(
+    repo.violations.some((v) => v.file === "webui/docs/07-mcp-auth-proxy-spec.md" && v.rule === "filename"),
+    "仓库扫描必须覆盖 webui/docs 下已有的数字流水号 Spec"
+  );
+});
+
+test("闭口层级：发布取证写法通过", () => {
+  const text = SPEC_HEADER + [
+    "## 闭口层级",
+    "",
+    "- 层级：发布取证",
+    "- 本条承诺：这一批承诺在目标拓扑上一起成立",
+    "- 本条出口：候选集上的系统路径",
+    "- 不在本条出口：各模块自己的合同",
+    "- 上线关系：本条通过不表示各模块无问题",
+    "",
+    "## 5. 核心流程（伪代码）",
+    "",
+    "```text",
+    "step()",
+    "```",
+    ""
+  ].join("\n");
+  assert.ok(!rulesOf(collectDocViolations(SPEC, text)).includes("close-layer"));
+});
+
+test("闭口层级：字段按行精确解析", () => {
+  const notContract = SPEC_HEADER + SPEC_BODY.replace("层级：功能合同", "层级：非功能合同");
+  assert.match(
+    collectDocViolations(SPEC, notContract).find((v) => v.rule === "close-layer").message,
+    /只能是/
+  );
+
+  const emptyPromise = SPEC_HEADER + SPEC_BODY.replace("本条承诺：示例承诺", "本条承诺：");
+  assert.match(
+    collectDocViolations(SPEC, emptyPromise).find((v) => v.rule === "close-layer").message,
+    /本条承诺/
+  );
+
+  const mentionEvidence = SPEC_HEADER + SPEC_BODY.replace(
+    "不在本条出口：整库旅程、Agent 路径、故障注入、证据等级",
+    "不在本条出口：发布取证层级的整库旅程"
+  );
+  assert.ok(!rulesOf(collectDocViolations(SPEC, mentionEvidence)).includes("close-layer"));
+});
+
+test("闭口层级：缺少小节、层级写两个、功能合同缺上线关系 → close-layer 违规", () => {
+  const missing = collectDocViolations(SPEC, SPEC_HEADER + "## 5. 核心流程（伪代码）\n");
+  assert.match(missing.find((v) => v.rule === "close-layer").message, /缺少「闭口层级」/);
+
+  const both = SPEC_HEADER + SPEC_BODY.replace("层级：功能合同", "层级：功能合同或发布取证");
+  assert.match(
+    collectDocViolations(SPEC, both).find((v) => v.rule === "close-layer").message,
+    /只能是/
+  );
+
+  const noShip = SPEC_HEADER + SPEC_BODY.replace("本条收口不表示可上线", "待定");
+  assert.match(
+    collectDocViolations(SPEC, noShip).find((v) => v.rule === "close-layer").message,
+    /本条收口不表示可上线/
+  );
 });
 
 test("判定范围：git 跟踪集合含已入库文件；已跟踪文件不得降级为告警", () => {
