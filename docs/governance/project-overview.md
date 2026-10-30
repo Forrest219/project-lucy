@@ -233,7 +233,7 @@ Lucy MCP Proxy 监听 `LUCY_PROXY_HOST:LUCY_PROXY_PORT`（默认容器内 `0.0.0
 | 客户部署 / 运维手册 | `docs/runbooks/customer-deployment-guide.md` |
 | 版本矩阵 | `docs/governance/version-matrix.md` |
 | **数据库支持矩阵（支持状态唯一真源）** | **`docs/governance/database-support-matrix.md`** |
-| 构建修订（版本信息页 / health `gitSha`） | `docs/specs/lucy-20261020-build-revision-identity-spec.md` |
+| 构建修订（版本信息页 / health `gitSha`） | `docs/specs/lucy-20261020-build-revision-identity-spec.md`。页面呈现以 `docs/specs/lucy-20261030-version-info-identity-spec.md`（已落地，SC 待验收）为准；健康检查、构建戳记与侧栏页脚仍由构建修订合同约束 |
 | 测试分层与发布门禁 | `docs/governance/test-layers-and-release-gates.md` |
 | Release CI | `docs/governance/release-ci.md` |
 | Docker demo | `examples/docker-demo/README.md` |

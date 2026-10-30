@@ -63,13 +63,13 @@ Do **not** put KTX version in the product segment of the tag. KTX remains in `/a
 
 ## 1.2 Build revision (not a product version)
 
-The 版本信息 page and `/api/health` show the source commit that was built. That value is how an upgrade is matched to `main`. It is not chosen in `VERSION`, Helm, or `LUCY_VERSION`. The sidebar footer does not show it.
+The 版本信息 page and `/api/health` show the source commit that was built. `/api/health` keeps the full 40-hex commit; the 版本信息 page shows its first 12 characters and keeps the full value in the copy action. That value is how an upgrade is matched to `main`. It is not chosen in `VERSION`, Helm, or `LUCY_VERSION`. The sidebar footer does not show it.
 
 | Field | Meaning |
 |---|---|
 | `/api/health.data.gitSha` | Full 40-hex commit, or `unknown` |
 | `/api/health.data.gitDirty` | `true` when the stamped tree had uncommitted changes |
-| WebUI `/admin/version` | Product version, full `gitSha`, a Chinese workspace sentence, and bundled KTX version. The page does not show the word `dirty` |
+| WebUI `/admin/version` | Product version, the first 12 characters of `gitSha` (the full value stays in `title` and the copy action), a Chinese workspace sentence, and bundled KTX version. The page does not show the word `dirty` |
 
 Normative resolution, stamp file, and the rule that runtime env cannot replace it: [`docs/specs/lucy-20261020-build-revision-identity-spec.md`](../specs/lucy-20261020-build-revision-identity-spec.md). Image builds pass `LUCY_GIT_SHA` only as a Docker build arg because `.dockerignore` excludes `.git`. The image stores the result in `/app/BUILD_REVISION` and does not keep `LUCY_GIT_SHA` in the runtime environment.
 

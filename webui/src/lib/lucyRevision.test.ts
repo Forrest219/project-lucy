@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { formatBundledKtxVersion, formatWorkspaceStatus, isRecordedCommit } from "./lucyRevision";
+import {
+  formatBundledKtxVersion,
+  formatVisibleBuildCommit,
+  formatWorkspaceStatus,
+  isRecordedCommit
+} from "./lucyRevision";
 
 const SHA = "e8863b8a".padEnd(40, "0");
 
@@ -22,5 +27,25 @@ describe("version info revision text", () => {
     expect(formatBundledKtxVersion("0.16.0")).toBe("0.16.0");
     expect(formatBundledKtxVersion("  ")).toBe("unknown");
     expect(formatBundledKtxVersion(undefined)).toBe("unknown");
+  });
+
+  it("SC-10 shortens only a full lowercase 40-hex commit", () => {
+    expect(formatVisibleBuildCommit(SHA)).toBe(SHA.slice(0, 12));
+    expect(formatVisibleBuildCommit(SHA)).toHaveLength(12);
+  });
+
+  it("SC-10 shows a malformed commit as-is", () => {
+    expect(formatVisibleBuildCommit("0.2.0")).toBe("0.2.0");
+    expect(formatVisibleBuildCommit("e8863b8")).toBe("e8863b8");
+    expect(formatVisibleBuildCommit("unknown")).toBe("unknown");
+    expect(formatVisibleBuildCommit(SHA.toUpperCase())).toBe(SHA.toUpperCase());
+    expect(formatVisibleBuildCommit("g".repeat(40))).toBe("g".repeat(40));
+    expect(formatVisibleBuildCommit("z".repeat(40))).toBe("z".repeat(40));
+  });
+
+  it("SC-10 keeps an empty or missing commit as unknown", () => {
+    expect(formatVisibleBuildCommit("")).toBe("unknown");
+    expect(formatVisibleBuildCommit(undefined)).toBe("unknown");
+    expect(formatVisibleBuildCommit(null)).toBe("unknown");
   });
 });
