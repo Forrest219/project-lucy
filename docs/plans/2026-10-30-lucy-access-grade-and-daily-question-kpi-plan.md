@@ -5,14 +5,14 @@
 | 文档版本 / 日期 | **v1.0** / 2026-10-30 |
 | 目标版本 / 优先级 | 不绑定产品版本号 / **P0**（S1–S2）+ P1（S3） |
 | 主 Spec | [访问分级与日真实问询 KPI Spec](../specs/lucy-20261030-access-grade-and-daily-question-kpi-spec.md)（**v1.0**） |
-| 功能编号 | **待 PM 指派**。不占用 WebUI 流水号，也不占用 `L25-*` |
+| 功能编号 | **Spec 194**。WebUI 流水号，`webui/docs/` 已占用至 193，本项取下一号。不进入 v0.25 升级台账，不占用 `L25-*` |
 | 需求来源 | 2026-10-30 客户反馈：每天要统计真实问询数，而不是把连接、浏览和查数混在一个用量里 |
 | 状态 | **S1–S3 已落地**（2026-10-30）。未做浏览器验证，未做 Docker 重建 |
 | 授权边界 | 2026-10-30 授权实现 Spec。不包含 Docker 重建，也不包含浏览器验证 |
 | 验收 | SC-01–SC-24、SC-26 已由自动化测试覆盖。SC-25 沿用 `webui/server/__tests__/proxy-audit.test.ts` 中「会话建立：claude-code」的既有断言，本轮未改问询重建 |
 | 实施主体 | Lucy（用量分类读取层 + 使用概况 API 与数据访问视图）。不修改 KTX 源码 |
 | 已拍板决策 | Spec §4 的 D1–D9 已冻结 |
-| 待确认 | 功能编号待 PM 指派。没有未决的口径选项 |
+| 待确认 | 没有未决项。功能编号已取 Spec 194 |
 
 ---
 
@@ -152,7 +152,7 @@ D1–D9 已按 Spec §4 冻结。2026-10-30 授权实现，不含 Docker 重建�
 3. 数据访问视图能看出真实问询、未上报查数会话、仅连接会话、浏览未问会话和按日分布。
 4. 界面使用、调用监控、审计问询列表的既有主指标没有改口径。
 5. 用户可见文案与术语标准 §4.5 的新行一致。
-6. 功能编号若已由 PM 指派，回写本 Plan 与 Spec 头部，并记入当时的权威登记册。未指派不阻断 S1–S3 的实现授权，但发布说明里写「编号待指派」。
+6. 功能编号为 **Spec 194**，已回写本 Plan 与 Spec 头部，并占用 `webui/docs/194-access-grade-and-daily-question-kpi-spec.md`。不写入 v0.25 升级台账。
 
 ## 7. 风险
 
@@ -184,5 +184,5 @@ D1–D9 已按 Spec §4 冻结。2026-10-30 授权实现，不含 Docker 重建�
 | 6 | Spec 的 Design System Compliance 含规定四段 |
 | 7 | 已登记 `docs/README.md` 与 `docs/plans/README.md` |
 | 8 | 不适用。本功能不新增命令或 CI job |
-| 9 | 功能编号待 PM 指派。指派后按 §6 第 6 条回写 |
+| 9 | 功能编号 **Spec 194**。已回写 Spec、本 Plan，并占用 WebUI 流水号文件。不写入 v0.25 升级台账 |
 | 10 | 2026-10-30 已跑。`lint:terminology`、`lint:spec`、`lint:ia-boundary` 通过。`lint:spec-docs` 对本 Spec 与本 Plan 无形态违规。同一次命令还报了仓库里已有的 `docs/specs/lucy-ci-restoration-spec.md` 与 `docs/plans/2026-10-29-ci-restoration-plan.md`，与本功能无关，不写入基线。门禁结果不代替本表 |
