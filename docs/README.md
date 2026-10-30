@@ -38,6 +38,7 @@
 
 | 文档 | 用途 |
 |---|---|
+| [specs/lucy-20261030-publish-workbench-three-column-spec.md](specs/lucy-20261030-publish-workbench-three-column-spec.md) | **v0.2，设计方向获认可，文档待评审、暂不开发**：发布工作台三栏、统一待发布口径，以及确认侧栏逐表影响原因/证据/完整范围；[实施 Plan](plans/2026-10-30-publish-workbench-three-column-plan.md)，PWB-01–26 全部未执行 |
 | [specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md](specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md) | **v0.25 P1-1，需求审查已签核通过；已实现未验收**（提交 `28780eae`）：L25-14 R1 静态行策略模板与 R3 独立只读反查；共享写入协调与同源诊断，RTP／RTV 全部未执行 |
 | [specs/lucy-20261025-v0p25-access-authorization-summary-spec.md](specs/lucy-20261025-v0p25-access-authorization-summary-spec.md) | **v0.25 P1-2，需求审查已签核通过；已实现未验收**（提交 `28780eae`）：L25-01 Agent 与角色授权摘要、资源卡片、行边界和只读深链；ASV-01–14 全部未执行 |
 | [../webui/docs/187-access-relation-sankey-spec.md](../webui/docs/187-access-relation-sankey-spec.md) | **v0.25 P1-3，需求审查已签核通过**：L25-08 授权／访问双层关系图、凭证清单与快照证据；SC-01–14 全部未执行 |
