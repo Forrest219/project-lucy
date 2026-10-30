@@ -39,7 +39,7 @@
 | 文档 | 用途 |
 |---|---|
 | [specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md](specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md) | **v0.25 P1-1，需求审查已签核通过；已实现未验收**（提交 `28780eae`）：L25-14 R1 静态行策略模板与 R3 独立只读反查；共享写入协调与同源诊断，RTP／RTV 全部未执行 |
-| [specs/lucy-20261030-row-policy-view-presentation-spec.md](specs/lucy-20261030-row-policy-view-presentation-spec.md) | **待审阅，不授权开发**：行权限视图呈现修订。点表与清单筛选拆开，深链三参数仍只打开详情。D1–D10 待拍板。SC-01–SC-18 未执行。功能编号待 PM 指派。Plan 见 [2026-10-30-lucy-row-policy-view-presentation-plan.md](plans/2026-10-30-lucy-row-policy-view-presentation-plan.md) |
+| [specs/lucy-20261030-row-policy-view-presentation-spec.md](specs/lucy-20261030-row-policy-view-presentation-spec.md) | **已落地，SC 待验收**：行权限视图呈现修订。点表与清单筛选拆开，深链三参数仍只打开详情。D1–D10 已按原文冻结并落地。SC-01–SC-18 均有自动化证据，尚未验收。功能编号待 PM 指派。Plan 见 [2026-10-30-lucy-row-policy-view-presentation-plan.md](plans/2026-10-30-lucy-row-policy-view-presentation-plan.md) |
 | [specs/lucy-20261025-v0p25-access-authorization-summary-spec.md](specs/lucy-20261025-v0p25-access-authorization-summary-spec.md) | **v0.25 P1-2，需求审查已签核通过；已实现未验收**（提交 `28780eae`）：L25-01 Agent 与角色授权摘要、资源卡片、行边界和只读深链；ASV-01–14 全部未执行 |
 | [../webui/docs/187-access-relation-sankey-spec.md](../webui/docs/187-access-relation-sankey-spec.md) | **v0.25 P1-3，需求审查已签核通过**：L25-08 授权／访问双层关系图、凭证清单与快照证据；SC-01–14 全部未执行 |
 | [specs/lucy-20261030-access-map-quiet-reading-spec.md](specs/lucy-20261030-access-map-quiet-reading-spec.md) | **待审阅，不授权开发**：访问关系图阅读降噪。只改 Spec 187 的呈现，不改 API、边状态、URL 值与两档措辞。D1–D8 待拍板。SC-01–SC-16 未执行。功能编号待 PM 指派。Plan 见 [2026-10-30-lucy-access-map-quiet-reading-plan.md](plans/2026-10-30-lucy-access-map-quiet-reading-plan.md) |

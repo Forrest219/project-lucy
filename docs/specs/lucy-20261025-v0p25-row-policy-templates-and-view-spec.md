@@ -218,6 +218,7 @@ readTableRowPolicy(actor, tableKey, filters):
 - 单表详情按 Role 分支展示模板与内联条件，再按 Agent 展示个人行限制与最终行约束；OR-of-AND 不得拍平。
 - “全部行”只在编译结果确为 `all` 时显示。无授权、不可满足、目录失败、部分失败和空筛选结果分别显示，不共用空态。
 - 提供到角色详情和 L25-01 摘要的只读深链；不提供行内编辑。
+- 呈现以 [`docs/specs/lucy-20261030-row-policy-view-presentation-spec.md`](lucy-20261030-row-policy-view-presentation-spec.md) §5 为准，语义仍以本节前文和 RTV-01–RTV-08 为准。该修订只改呈现：当前表三参数与清单筛选分开，目录状态留在单表详情，清单不逐表读目录。
 
 ## 7. Design System Compliance
 

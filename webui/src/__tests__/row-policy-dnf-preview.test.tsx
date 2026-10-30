@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { RowPolicyDnfPreview } from "../components/admin/RowPolicyDnfPreview";
 import { RoleRowPolicyPanel } from "../components/RoleRowPolicyPanel";
@@ -92,6 +92,114 @@ describe("RowPolicyDnfPreview — the DNF shape", () => {
     expect(screen.getByTestId("row-policy-dnf-agent-zhangsan-rows-arm-0")).toHaveTextContent(
       "region 等于 East 且 category 属于 Book、Office"
     );
+  });
+});
+
+/**
+ * 呈现修订：可选 prop 的合同（Spec §5.4 / D9 / D10）。
+ *
+ * 每一个可选 prop 都有默认值，默认行为与今天完全一样——角色编辑页不传这些
+ * prop，它的预览不能少任何东西。
+ */
+describe("RowPolicyDnfPreview — 可选 prop（呈现修订 Spec §5.4）", () => {
+  /** The order of the test ids inside the preview — the reading order. */
+  function previewOrder(): string[] {
+    return Array.from(
+      screen.getByTestId("row-policy-dnf-preview").querySelectorAll("[data-testid]")
+    ).map((node) => node.getAttribute("data-testid") ?? "");
+  }
+
+  const TWO_ARMS = {
+    kind: "scoped" as const,
+    orArms: [
+      [{ field: "region", op: "eq" as const, value: "East" }],
+      [{ field: "region", op: "eq" as const, value: "West" }]
+    ]
+  };
+
+  it("默认：边界句在上、没有中间插槽、Agent 不折叠", () => {
+    render(
+      <RowPolicyDnfPreview
+        effectiveRowGrant={TWO_ARMS}
+        finalRowsByAgent={[{ agentId: "agent_a", finalRows: { kind: "all" } }]}
+      />
+    );
+    const order = previewOrder();
+    expect(order.indexOf("row-policy-dnf-boundary")).toBeLessThan(
+      order.indexOf("row-policy-dnf-union-section")
+    );
+    // 没有中间插槽，也没有统一 Agent 句。
+    expect(screen.queryByTestId("row-policy-view-agent-uniform")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("row-policy-view-agent-expand")).not.toBeInTheDocument();
+    expect(screen.getByTestId("row-policy-dnf-agent-agent_a")).toBeInTheDocument();
+  });
+
+  it("footnote + children：结论 → 边界句 → 中间插槽 → Agent", () => {
+    render(
+      <RowPolicyDnfPreview
+        effectiveRowGrant={{ kind: "all" }}
+        boundaryPlacement="footnote"
+        finalRowsByAgent={[{ agentId: "agent_a", finalRows: { kind: "all" } }]}
+      >
+        <section data-testid="role-groups">角色分组</section>
+      </RowPolicyDnfPreview>
+    );
+    const order = previewOrder();
+    expect(order.indexOf("row-policy-dnf-union-section")).toBeLessThan(
+      order.indexOf("row-policy-dnf-boundary")
+    );
+    expect(order.indexOf("row-policy-dnf-boundary")).toBeLessThan(order.indexOf("role-groups"));
+    expect(order.indexOf("role-groups")).toBeLessThan(
+      order.indexOf("row-policy-dnf-agents-section")
+    );
+  });
+
+  it("collapseUniformAllRows：全体都是全部行时先给一句统一结论，展开后逐个渲染", () => {
+    render(
+      <RowPolicyDnfPreview
+        collapseUniformAllRows
+        finalRowsByAgent={[
+          { agentId: "agent_a", finalRows: { kind: "all" } },
+          { agentId: "agent_b", finalRows: { kind: "all" } }
+        ]}
+      />
+    );
+    expect(screen.getByTestId("row-policy-view-agent-uniform")).toHaveTextContent(
+      "这 2 个 Agent 的最终行约束都是行权限：全部行。"
+    );
+    expect(screen.queryByTestId("row-policy-dnf-agent-agent_a")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("row-policy-view-agent-expand"));
+    expect(screen.getByTestId("row-policy-dnf-agent-agent_a")).toBeInTheDocument();
+    expect(screen.getByTestId("row-policy-dnf-agent-agent_b")).toBeInTheDocument();
+  });
+
+  it("collapseUniformAllRows：有一个受限 Agent 时不折叠", () => {
+    render(
+      <RowPolicyDnfPreview
+        collapseUniformAllRows
+        finalRowsByAgent={[
+          { agentId: "agent_a", finalRows: { kind: "all" } },
+          { agentId: "agent_b", finalRows: { kind: "scoped", orArms: [[{ field: "region", op: "eq", value: "East" }]] } }
+        ]}
+      />
+    );
+    expect(screen.queryByTestId("row-policy-view-agent-uniform")).not.toBeInTheDocument();
+    expect(screen.getByTestId("row-policy-dnf-agent-agent_a")).toBeInTheDocument();
+    expect(screen.getByTestId("row-policy-dnf-agent-agent_b")).toBeInTheDocument();
+  });
+
+  it("predicateLayout=stacked：一支一块，支间看得见「或」；默认仍是今天的单行", () => {
+    const { unmount } = render(
+      <RowPolicyDnfPreview predicateLayout="stacked" effectiveRowGrant={TWO_ARMS} />
+    );
+    expect(screen.getByTestId("row-policy-dnf-union-arm-0")).toHaveTextContent("region 等于 East");
+    expect(screen.getByTestId("row-policy-dnf-union-arm-1")).toHaveTextContent("region 等于 West");
+    expect(screen.getByText("或")).toBeInTheDocument();
+    unmount();
+
+    render(<RowPolicyDnfPreview effectiveRowGrant={TWO_ARMS} />);
+    expect(screen.getByTestId("row-policy-dnf-union-arm-0")).toHaveTextContent("region 等于 East");
+    expect(screen.queryByText("或")).not.toBeInTheDocument();
   });
 });
 

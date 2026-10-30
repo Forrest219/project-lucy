@@ -2,15 +2,15 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档版本 / 日期 | **v0.1** / 2026-10-30 |
+| 文档版本 / 日期 | **v0.3** / 2026-10-30 |
 | 目标版本 / 优先级 | 不绑定产品版本号 / **P1**。功能编号待 PM 指派 |
-| 主 Spec | [行权限视图呈现修订 Spec](../specs/lucy-20261030-row-policy-view-presentation-spec.md)（**v0.1 待审阅**） |
+| 主 Spec | [行权限视图呈现修订 Spec](../specs/lucy-20261030-row-policy-view-presentation-spec.md)（**v0.3 已落地，SC 待验收**） |
 | 权威语义 | [行策略模板与行权限视图 Spec](../specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md) §6.2、RTV-01–RTV-08。本 Plan 不改行授权代数，不改深链参数名 |
-| 状态 | **待审阅**。S1–S4 未开始 |
-| 授权边界 | 只交付本 Plan 与主 Spec。**不授权**改页面、改清单响应、改父 Spec §6.2、构建镜像或部署 |
-| 验收 | SC-01–SC-18 未执行 |
-| 实施主体 | Lucy WebUI。清单类型与 `listRowPolicyTables` 只在 D8 通过时增加 `grantStatus`。不修改 KTX |
-| 待拍板 | **D1**（点表不收窄清单）与 **D3**（改筛选不关闭当前表）。D8、D10 可单独否决 |
+| 状态 | **已落地，SC 待验收**。S0 已通过（2026-10-30 PM 书面授权），D1–D10 已按原文冻结；S1–S4 已实施完毕 |
+| 授权边界 | **已授权**按本文 §3 的文件范围与 §4 的 S1–S4 落地。**不授权**改模板管理页、KTX、Helm、镜像、术语标准、系统手册；**不授权**改行授权代数、深链参数名、角色编辑页的预览调用参数；**不授权** push／commit、构建镜像或部署。工作区里其它会话的未提交改动一律不回滚、不重排、不顺手提交 |
+| 验收 | SC-01–SC-18 均有自动化证据（见主 Spec §7.1），**尚未由 PM 验收** |
+| 实施主体 | Lucy WebUI。清单类型与 `listRowPolicyTables` 按 D8 增加 `grantStatus`。不修改 KTX |
+| 待拍板 | 无。D1–D10 已按原文冻结，没有否决项 |
 
 ---
 
@@ -52,6 +52,8 @@
 | D10 | 详情顺序改为结论、角色、Agent；全体为全部行时 Agent 默认可折叠 |
 
 D1 被否决时，S1 只实施 D3：停止在改筛选时删除 `sourceName`，并改掉 `defaultValue`。点表仍收窄清单。D8 被否决时，S2 不改 `row-policy-views.ts`。D10 被否决时，S3 不重排详情、不折叠 Agent。S0 通过前不改 `webui/src` 与 `webui/server`。
+
+**S0 结论（2026-10-30）**：PM 书面授权，D1–D10 全部通过，没有否决项。D1／D3／D8／D10 各自写着「可单独否决」的退路**均不适用**；S1–S4 按本文 §4 的原文全量实施。功能编号仍待 PM 指派，实现期间不占用 `L25-*`。
 
 ## 3. 文件落点
 
@@ -118,6 +120,22 @@ D1 被否决时，S1 只实施 D3：停止在改筛选时删除 `sourceName`，�
 
 **出口**：SC-15、SC-18。S4 不把「测试绿了」写成验收通过。
 
+### 4.1 落地记录（2026-10-30）
+
+S1–S4 全部实施完毕，D1–D10 无一条走退路。改动只落在 §3.1 的文件范围内。
+
+| 阶段 | 落点 | 做了什么 |
+|---|---|---|
+| S1 | `webui/src/pages/admin/RowPolicyView.tsx` | 当前表三参数与 `list*` 筛选拆开；五个筛选改接 `useUrlMirroredField`（`history:"push"`，原文进 URL）；连接／Schema 改下拉，选项走另一次不带筛选的清单请求；清单请求按 `listRequest` 映射；页头改「按表查看实际生效的行约束。」＋ secondary 模板按钮；分段控件「全部表／仅受限表」；「清除筛选」；只读提示；`RowPolicyStateBadge.tsx` 的快照改为默认折叠的 `<details>` |
+| S2 | `webui/server/admin/row-policy-views.ts`、`webui/src/pages/admin/RowPolicyView.tsx` | 清单行新增 `grantStatus`（四态，从已有并集结果派生，不逐表读目录）与机器 reason `grantStatusReason`；清单改 `pl-data-grid` / `pl-data-table` + frame／scroll；主文 sourceName、次行「connectionId · schema」；按钮 `aria-label` 三元组；选中行 `aria-current="true"` + `bg-bg-muted` |
+| S3 | `webui/src/components/admin/RowPolicyDnfPreview.tsx`、`webui/src/pages/admin/RowPolicyView.tsx` | 预览组件加四个可选 prop（`boundaryPlacement` / `children` / `collapseUniformAllRows` / `predicateLayout`，默认保持今天）；目录状态改中文标签并保留 `data-catalog-status`；复制按钮调 `copyTextWithToast`；D9 两侧皆空不渲染编写方式徽章；详情顺序改为结论 → 边界句 → 角色分组 → Agent；角色分三组；角色与 Agent 各加授权摘要链接 |
+| S4 | `docs/qa/selector-contract.md`、父 Spec §6.2、本文与主 Spec 状态 | 五个新 test id 登记；父 Spec §6.2 末尾加交叉引用；跑单测与 `npm run lint:terminology`；状态改为「已落地，SC 待验收」并登记自动化证据 |
+
+落地期的两处实现取舍（不改任何已冻结口径）：
+
+1. 清单行带出机器 reason 的字段名取 `grantStatusReason`，页面只把它放进单元格 `title`，不写成可见主文案——主 Spec §5.3 要求 reason 上 `title`，需要一个载体。
+2. `RowPolicyDnfAgentRow` 增加可选的 `summaryHref`，由页面给每个 Agent 填授权摘要深链；不传时（角色编辑页）Agent 行不渲染任何链接，角色编辑页的调用参数未改。
+
 ## 5. 验收
 
 验收正文是主 Spec §7 的 SC-01–SC-18。本 Plan 不另起编号。
@@ -143,6 +161,10 @@ D1 被否决时，S1 只实施 D3：停止在改筛选时删除 `sourceName`，�
 5. SC-18 已跑过。
 6. 主 Spec 与本 Plan 的状态句已更新。
 7. `rowPolicyViewUrlForTable()` 的查询字符串仍是 `connectionId`、`schema`、`sourceName`。
+
+完成定义核对（2026-10-30）：七条全部满足。① 拍板记录见 §2 的 S0 结论；② S1–S3 代码与测试在仓库里，SC 断言见主 Spec §7.1；③ 父 Spec §6.2 末尾已加交叉引用，RTV 表与深链参数名未改；④ 五个新 test id 已入选择器契约，原有 `row-policy-view-*` id 全在；⑤ `npm run lint:terminology` 退出码 0；⑥ 两份状态句已更新为「已落地，SC 待验收」；⑦ `rowPolicyViewUrlForTable()` 未改动。
+
+**这七条是实现完成度，不是验收结论。** SC-01–SC-18 仍待 PM 验收。
 
 ## 7. 风险
 

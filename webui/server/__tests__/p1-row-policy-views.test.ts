@@ -372,6 +372,69 @@ describe("RTV-04 — the full table identity is kept", () => {
   });
 });
 
+/**
+ * 呈现修订 D8 / SC-08：清单的「有效行授予」列由并集结果派生。
+ *
+ * 四态是四句话：「行权限：全部行」「受限行授予」「无授权」「编译失败」。
+ * 「无授权」与「编译失败」不得合成同一个 null——那正是清单再次出现「—」的原因。
+ */
+describe("SC-08 — 清单授予列的 grantStatus", () => {
+  it("四态从并集结果派生，不逐表读目录", async () => {
+    const { rowPolicyGrantStatusOf } = await import("../admin/row-policy-views");
+    expect(
+      rowPolicyGrantStatusOf({ ok: true, preview: { effectiveRowGrant: { kind: "all" } } })
+    ).toEqual({ grantStatus: "all" });
+    expect(
+      rowPolicyGrantStatusOf({
+        ok: true,
+        preview: {
+          effectiveRowGrant: {
+            kind: "scoped",
+            digest: "d1",
+            predicates: [],
+            orArms: [[]]
+          }
+        }
+      })
+    ).toEqual({ grantStatus: "scoped" });
+    expect(rowPolicyGrantStatusOf({ ok: false, reason: "row_policy_no_applicable_grant" })).toEqual({
+      grantStatus: "no_applicable_grant",
+      grantStatusReason: "row_policy_no_applicable_grant"
+    });
+    expect(rowPolicyGrantStatusOf({ ok: false, reason: "role_resolution_failed:broken_role" })).toEqual({
+      grantStatus: "compile_failed",
+      grantStatusReason: "role_resolution_failed:broken_role"
+    });
+  });
+
+  it("受限并集是 scoped，真实 all 并集是 all", async () => {
+    projectRoot = await makeProject(
+      accessYaml(`${scopedRole("east_role", "East")}\n`, agent("agent_a", ["east_role"]))
+    );
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    const { listRowPolicyTables } = await loadViews();
+    const list = await listRowPolicyTables(projectRoot);
+    expect(list.tables).toHaveLength(1);
+    expect(list.tables[0].grantStatus).toBe("scoped");
+    expect(list.tables[0].grantStatusReason).toBeUndefined();
+    expect(list.tables[0].effectiveRowGrant?.kind).toBe("scoped");
+  });
+
+  it("真实 all 并集才是 all，受限分支不冒充", async () => {
+    projectRoot = await makeProject(
+      accessYaml(
+        `${scopedRole("east_role", "East")}\n${allRowsRole("all_role")}\n`,
+        agent("agent_a", ["east_role", "all_role"])
+      )
+    );
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    const { listRowPolicyTables } = await loadViews();
+    const list = await listRowPolicyTables(projectRoot);
+    expect(list.tables[0].grantStatus).toBe("all");
+    expect(list.tables[0].effectiveRowGrant?.kind).toBe("all");
+  });
+});
+
 describe("RTV-08 — one response never mixes two generations", () => {
   it("the response publishes the four snapshot identity fields", async () => {
     projectRoot = await makeProject(

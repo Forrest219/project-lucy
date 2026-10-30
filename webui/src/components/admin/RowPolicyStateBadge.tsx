@@ -73,24 +73,38 @@ export type RowPolicySnapshotIdentity = {
   capabilityDigest: string;
 };
 
+/**
+ * The four snapshot identity fields, folded into a `<details>`.
+ *
+ * The four hashes used to sit next to the page title and pushed the description
+ * out of the page. They are now folded behind a 「快照」 summary — CLOSED by
+ * default, but the content stays in the DOM so the identity is still readable
+ * (and assertable) without expanding anything.
+ *
+ * The `row-policy-snapshot` test id is kept — it now marks the `<details>`
+ * element that carries the whole snapshot.
+ */
 export function RowPolicySnapshotBadge({ identity }: { identity: RowPolicySnapshotIdentity }) {
   return (
-    <dl className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-fg-muted" data-testid="row-policy-snapshot">
-      {(
-        [
-          ["配置版本", identity.configVersion],
-          ["策略版本", identity.policyVersion],
-          ["Source Map 版本", identity.sourceMapVersion],
-          ["能力摘要", identity.capabilityDigest]
-        ] as const
-      ).map(([label, value]) => (
-        <div key={label} className="flex gap-1">
-          <dt>{label}</dt>
-          <dd className="notranslate" translate="no">
-            {value}
-          </dd>
-        </div>
-      ))}
-    </dl>
+    <details className="text-xs text-fg-muted" data-testid="row-policy-snapshot">
+      <summary className="cursor-pointer">快照</summary>
+      <dl className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+        {(
+          [
+            ["配置版本", identity.configVersion],
+            ["策略版本", identity.policyVersion],
+            ["Source Map 版本", identity.sourceMapVersion],
+            ["能力摘要", identity.capabilityDigest]
+          ] as const
+        ).map(([label, value]) => (
+          <div key={label} className="flex gap-1">
+            <dt>{label}</dt>
+            <dd className="notranslate" translate="no">
+              {value}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </details>
   );
 }

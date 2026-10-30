@@ -546,7 +546,52 @@ export type RowPolicyTableListEntry = {
   effectiveRowGrant: RowGrant | null;
   /** `scoped` when any branch restricts rows. */
   restricted: boolean;
+  /**
+   * The grant column state, derived from the union this list already computed
+   * (Spec §5.3). It is NOT a second read: no catalog is loaded per table.
+   */
+  grantStatus: RowPolicyGrantStatus;
+  /**
+   * The machine reason behind a failed `grantStatus`. It is never the visible
+   * label — the page puts it on the cell's `title` only.
+   */
+  grantStatusReason?: string;
 };
+
+/**
+ * The four states of the list's grant column (Spec §5.3).
+ *
+ * `no_applicable_grant` and `compile_failed` are two DIFFERENT failures: the
+ * first says no Role grants the table, the second says the compile did not
+ * produce a usable result. Folding them into one `null` is the 「—」 misread.
+ */
+export type RowPolicyGrantStatus =
+  | "all"
+  | "scoped"
+  | "no_applicable_grant"
+  | "compile_failed";
+
+/**
+ * Derive the grant column state from the union result the list already has.
+ *
+ * The union is the SAME `computeFinalRowsForTable(..., agents: [])` call the
+ * list has always made — this only reads its outcome. `all` is claimed only
+ * when the union really is `all`; a failed union splits on its reason so that
+ * 「无授权」and「编译失败」never share one wording.
+ */
+export function rowPolicyGrantStatusOf(
+  union:
+    | { ok: true; preview: { effectiveRowGrant: RowGrant } }
+    | { ok: false; reason: string }
+): { grantStatus: RowPolicyGrantStatus; grantStatusReason?: string } {
+  if (union.ok) {
+    const grant = union.preview.effectiveRowGrant;
+    return grant.kind === "all" ? { grantStatus: "all" } : { grantStatus: "scoped" };
+  }
+  return union.reason === "row_policy_no_applicable_grant"
+    ? { grantStatus: "no_applicable_grant", grantStatusReason: union.reason }
+    : { grantStatus: "compile_failed", grantStatusReason: union.reason };
+}
 
 export type RowPolicyTableListFilters = {
   connectionId?: string;
@@ -672,12 +717,17 @@ export async function listRowPolicyTables(
     );
     const restricted = entry.grants.some((item) => item.grant.kind === "scoped");
     if (filters.restrictedOnly && !restricted) continue;
+    // The grant column state is derived from the union computed right above —
+    // no second compile, no per-table catalog read (Spec §5.3).
+    const grantState = rowPolicyGrantStatusOf(union);
     tables.push({
       ...entry.table,
       roleCount: entry.roleIds.size,
       agentCount: agents.size,
       effectiveRowGrant: union.ok ? union.preview.effectiveRowGrant : null,
-      restricted
+      restricted,
+      grantStatus: grantState.grantStatus,
+      grantStatusReason: grantState.grantStatusReason
     });
   }
   tables.sort(

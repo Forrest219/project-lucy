@@ -1416,6 +1416,8 @@ Spec 190 §7.9 — 库内表清单与持续感知的最小展示。
 
 | Test ID | 元素 | 出现位置 |
 |---|---|---|
+| `row-policy-view-clear-filters` | 行策略／行权限视图：view clear filters | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-copy-identity` | 行策略／行权限视图：view copy identity | `pages/admin/RowPolicyView.tsx` |
 | `row-policy-view-detail` | 行策略／行权限视图：view detail | `pages/admin/RowPolicyView.tsx` |
 | `row-policy-view-detail-error` | 行策略／行权限视图：view detail error | `pages/admin/RowPolicyView.tsx` |
 | `row-policy-view-failures` | 行策略／行权限视图：view failures | `pages/admin/RowPolicyView.tsx` |
@@ -1425,6 +1427,7 @@ Spec 190 §7.9 — 库内表清单与持续感知的最小展示。
 | `row-policy-view-list-loading` | 行策略／行权限视图：view list loading | `pages/admin/RowPolicyView.tsx` |
 | `row-policy-view-list-state` | 行策略／行权限视图：view list state | `pages/admin/RowPolicyView.tsx` |
 | `row-policy-view-list-state-badge` | 行策略／行权限视图：view list state badge | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-outside-filter` | 行策略／行权限视图：view outside filter | `pages/admin/RowPolicyView.tsx` |
 | `row-policy-view-page` | 行策略／行权限视图：view page | `pages/admin/RowPolicyView.tsx` |
 | `row-policy-view-role-${role.roleId}` | 行策略／行权限视图：view role ${role.roleId} | `pages/admin/RowPolicyView.tsx` |
 | `row-policy-view-role-access` | 行策略／行权限视图：view role access | `pages/admin/RowPolicyView.tsx` |
@@ -1613,6 +1616,8 @@ Spec 190 §7.9 — 库内表清单与持续感知的最小展示。
 | `row-policy-dnf-unavailable` | 行策略／行权限视图：dnf unavailable | `components/admin/RowPolicyDnfPreview.tsx` |
 | `row-policy-dnf-union-section` | 行策略／行权限视图：dnf union section | `components/admin/RowPolicyDnfPreview.tsx` |
 | `row-policy-dnf-union-unavailable` | 行策略／行权限视图：dnf union unavailable | `components/admin/RowPolicyDnfPreview.tsx` |
+| `row-policy-view-agent-expand` | 行策略／行权限视图：view agent expand | `components/admin/RowPolicyDnfPreview.tsx` |
+| `row-policy-view-agent-uniform` | 行策略／行权限视图：view agent uniform | `components/admin/RowPolicyDnfPreview.tsx` |
 
 ### `webui/src/components/admin/RowPolicyStateBadge.tsx`
 

@@ -2,11 +2,12 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档类型 / 版本 | 呈现修订 / **v0.1 待审阅** |
+| 文档类型 / 版本 | 呈现修订 / **v0.3 已落地，SC 待验收** |
 | 日期 / 目标版本 | 2026-10-30 / 不绑定产品版本号。功能编号待 PM 指派，不占用 `L25-*`，不升父 Spec 版本号 |
 | 功能编号 / 优先级 | **待 PM 指派** / **P1** |
-| 状态 | **待审阅**。不授权改页面，不授权改清单响应，不授权改父 Spec §6.2 |
+| 状态 | **已落地，SC 待验收**。S0 已通过，D1–D10 已按原文冻结；S1–S4 已实施。**实现完成不等于验收通过**——SC-01–SC-18 有自动化证据，但尚未由 PM 验收 |
 | 决策来源 | 2026-10-30 对 `http://127.0.0.1:55176/admin/row-policies` 的页面探查。12 张表的有效行授予都是「行权限：全部行」。点开 `superstore_orders` 后清单收成 1 行；再勾「仅看受限表」，地址栏丢掉 `sourceName`，表名框仍显示 `superstore_orders`，清单变成「空筛选」 |
+| 开工授权 | 2026-10-30 PM 书面授权：按本文与配套 Plan 完成开发落地。D1–D10 全部通过，没有否决项。不存在「只做 D3」或「不做 D8／D10」的退路。功能编号仍待 PM 指派 |
 | 需求来源 | 行权限视图要先回答「这张表实际受什么行约束」，再允许换一张表。筛选、选表、快照哈希不再挤在同一条阅读流里 |
 | 实施主体 | Lucy WebUI 行权限视图（`webui/src/pages/admin/RowPolicyView.tsx` 与其直接使用的展示组件）。清单响应只增加 `grantStatus`。不修改 KTX，不修改行授权代数 |
 | 落位依据 | [`docs/governance/DEVELOPMENT.md`](../governance/DEVELOPMENT.md)「Spec 落位规则」：仓库级呈现修订落 `docs/specs/` |
@@ -14,7 +15,7 @@
 | 筛选输入 | 文本筛选遵守 [`docs/specs/lucy-20261029-url-driven-input-ime-composition-spec.md`](lucy-20261029-url-driven-input-ime-composition-spec.md) §5，使用 `useUrlMirroredField` |
 | 实施计划 | [`docs/plans/2026-10-30-lucy-row-policy-view-presentation-plan.md`](../plans/2026-10-30-lucy-row-policy-view-presentation-plan.md) |
 
-> v0.1 供审阅。D1–D10 在拍板前都是提议。拍板前，点表仍写入 `connectionId` / `schema` / `sourceName`，并把这三项同时当作清单筛选。
+> **开工记录（2026-10-30）**：S0 审阅已通过。D1–D10 按原文冻结，没有否决项，也没有退路。本文的呈现规格 §5 与配套 Plan §4 的 S1–S4 是本次授权的全部实现口径。实现完成不等于验收通过——SC-01–SC-18 的执行状态见 §7 与 Plan 文首。
 
 ---
 
@@ -202,7 +203,7 @@ Page Header
 | `ok == false` 且 reason 为 `row_policy_no_applicable_grant` | `no_applicable_grant` | 无授权 |
 | 其他失败 | `compile_failed` | 编译失败 |
 
-机器 reason 放在单元格的 `title` 上，并加翻译防御。不把 reason 当主文案。
+机器 reason 放在单元格的 `title` 上，并加翻译防御。不把 reason 当主文案。清单行随 `grantStatus` 一并带出该机器 reason（`grantStatusReason`），页面只把它放进 `title`，不把它写成可见主文案。
 
 ### 5.4 详情
 
@@ -309,7 +310,38 @@ renderListEmpty(status):
 | SC-17 | 边界句原文仍是 `ROW_POLICY_PREVIEW_BOUNDARY` |
 | SC-18 | `npm run lint:terminology` 通过 |
 
-SC-01–SC-18 在本 Spec 获批前全部未执行。实现完成不等于验收通过。
+SC-01–SC-18 的自动化证据见 §7.1。**实现完成不等于验收通过**——下列证据只说明断言存在且通过，验收仍待 PM 做出。
+
+### 7.1 落地状态与自动化证据（2026-10-30）
+
+S1–S4 已按配套 Plan §4 实施完毕，D1–D10 全部落地，没有走任何退路。下列是**自动化证据**，不是验收结论——SC 仍待 PM 验收。
+
+| ID | 自动化证据 |
+|---|---|
+| SC-01 | `webui/src/__tests__/row-policy-view.test.tsx`「SC-01 点表只打开详情，清单请求不带当前表三参数」 |
+| SC-02 | 同上「SC-02 深链三参数只打开详情，三个清单筛选控件为空」 |
+| SC-03 | 同上「SC-03 切到仅受限表时当前表三参数保留，表筛选框不显示当前表名」 |
+| SC-04 | 同上「SC-04 可见值来自本地镜像，URL 存原文，请求参数才 trim」 |
+| SC-05 | 同上「SC-05 空筛选的徽章与句子不与无授权、快照不可用混用」 |
+| SC-06 | 同上「SC-06 清除筛选去掉整组清单筛选，当前表三参数保留」 |
+| SC-07 | 同上「SC-07 清单是数据网格，选中行 aria-current，列表按钮 aria-label 是三元组」 |
+| SC-08 | 页面测试「SC-08 四态 grantStatus 显示四句话，编译失败不写无授权」＋ 服务端 `webui/server/__tests__/p1-row-policy-views.test.ts`「SC-08 — 清单授予列的 grantStatus」（四态派生 + scoped／all 集成） |
+| SC-09 | 页面测试「SC-09 两个受限分支仍是两个 arm，分支之间看得见「或」」＋ `webui/src/__tests__/row-policy-dnf-preview.test.tsx`「predicateLayout=stacked」 |
+| SC-10 | 页面测试「SC-10 没有模板也没有内联条件的角色不显示编写方式徽章」 |
+| SC-11 | 页面测试「SC-11 角色与 Agent 各有授权摘要只读深链」 |
+| SC-12 | 页面测试「SC-12 全体 Agent 都是全部行时先给一句统一结论，展开后仍逐个渲染」＋ DNF 预览测试「collapseUniformAllRows」两条＋「默认：边界句在上、没有中间插槽、Agent 不折叠」 |
+| SC-13 | 页面测试「SC-13 快照默认折叠但仍在 DOM，模板入口是 secondary 按钮」 |
+| SC-14 | 页面测试「SC-14 复制表身份调用 copyTextWithToast，参数是三元组」 |
+| SC-15 | 页面测试「SC-15 页面只读：没有保存／删除／预演，既有 row-policy-view-* id 仍在」＋ 五个新 test id 已登记进 `docs/qa/selector-contract.md` |
+| SC-16 | 页面测试「SC-16 当前表不在筛选结果中时详情仍渲染并说明」 |
+| SC-17 | 页面测试「SC-17 边界句原文不变」＋ DNF 预览测试「carries the fixed boundary sentence」 |
+| SC-18 | 仓库根目录 `npm run lint:terminology` 退出码 0 |
+
+实现备注：
+
+- 清单行随 `grantStatus` 一并带出机器 reason（`grantStatusReason`），页面只把它放进单元格的 `title`，不写成可见主文案（§5.3）。
+- `webui/scripts/check-selector-contract.mjs`（`npm run e2e:selector-contract`）对本轮三个实现文件**无告警**；该门禁当前整体仍为红，报出的 139 条 UNREGISTERED 全部来自与本轮无关的既有组件，不是本轮引入。
+- 浏览器点击验收不在本轮范围内，未做窄屏与 Playwright 验证。
 
 ## 8. 落盘清单
 
