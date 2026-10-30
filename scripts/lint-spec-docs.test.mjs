@@ -12,7 +12,7 @@ import {
 } from "./lint-spec-docs.mjs";
 
 const SPEC = "docs/specs/lucy-20261030-sample-spec.md";
-const PLAN = "docs/plans/2026-10-30-lucy-sample-plan.md";
+const PLAN = "docs/plans/lucy-20261030-sample-plan.md";
 
 const SPEC_HEADER = [
   "# 示例 Spec",
@@ -185,9 +185,18 @@ test("判定范围：无法判定跟踪状态时保守按阻塞处理（宁可�
   assert.equal(warnings.length, 0);
 });
 
-test("文件名：规范 Spec / Plan 不报 filename", () => {
+test("文件名：Spec 与 Plan 共用 lucy-YYYYMMDD-<slug>", () => {
   assert.equal(collectFilenameViolation(SPEC), null);
   assert.equal(collectFilenameViolation(PLAN), null);
+  assert.equal(
+    collectFilenameViolation("docs/plans/2026-10-30-lucy-sample-plan.md").rule,
+    "filename"
+  );
+  assert.equal(collectFilenameViolation("docs/plans/lucy-20261030-v8-runtime-plan.md"), null);
+  assert.match(
+    collectFilenameViolation("docs/plans/lucy-20261030-v0p25-ops-plan.md").message,
+    /版本段「v0p25」/
+  );
 });
 
 test("文件名：无日期、版本段、截断日期 → filename 违规", () => {

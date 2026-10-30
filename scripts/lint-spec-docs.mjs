@@ -40,7 +40,7 @@ const PLAN_INDEX = "docs/plans/README.md";
 const BASELINE_FILE = "docs/governance/spec-plan-doc-baseline.json";
 
 const SPEC_FILENAME = /^lucy-(\d{8})-([a-z0-9]+(?:-[a-z0-9]+)*)-spec\.md$/;
-const PLAN_FILENAME = /^(\d{4}-\d{2}-\d{2})-lucy-([a-z0-9]+(?:-[a-z0-9]+)*)-plan\.md$/;
+const PLAN_FILENAME = /^lucy-(\d{8})-([a-z0-9]+(?:-[a-z0-9]+)*)-plan\.md$/;
 const NUMBERED_SPEC_BASENAME = /^\d+-.+-spec\.md$/;
 const MODULE_DOCS_SKIP = new Set(["docs", "inbox", "node_modules"]);
 /** 只拒绝 v0p25、v2p5 这种产品版本段。v8 这类技术专名不在此列。 */
@@ -125,12 +125,6 @@ function isYyyymmdd(value) {
   return year >= 2020 && year <= 2099 && month >= 1 && month <= 12 && day >= 1 && day <= 31;
 }
 
-function isIsoDate(value) {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (!match) return false;
-  return isYyyymmdd(`${match[1]}${match[2]}${match[3]}`);
-}
-
 function versionSegment(slug) {
   return slug.split("-").find((part) => VERSION_SEGMENT.test(part)) ?? null;
 }
@@ -159,11 +153,11 @@ export function collectFilenameViolation(relPath) {
   }
   if (relPath.startsWith(`${PLAN_DIR}/`)) {
     const match = PLAN_FILENAME.exec(base);
-    if (!match || !isIsoDate(match[1])) {
+    if (!match || !isYyyymmdd(match[1])) {
       return {
         file: relPath,
         rule: "filename",
-        message: "Plan 文件名必须是 YYYY-MM-DD-lucy-<slug>-plan.md；slug 只用小写字母、数字和连字符，版本写在头部"
+        message: "Plan 文件名必须是 lucy-YYYYMMDD-<slug>-plan.md，且与对应 Spec 的 lucy-YYYYMMDD-<slug> 相同"
       };
     }
     const version = versionSegment(match[2]);

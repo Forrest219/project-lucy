@@ -8,7 +8,7 @@
     "pseudocode": "存量 Spec 无「核心流程（伪代码）」/「Core Algorithm」小节，也未写明伪代码豁免。",
     "plan-parts": "存量 Plan 缺少目标/开工前置/验收/完成定义/风险 五类小节中的若干。",
     "metadata": "存量文档头部元数据缺少文档类型/版本/状态（Spec）或状态/授权边界/验收（Plan）。",
-    "filename": "2026-10-30 起新 Spec/Plan 必须使用唯一文件名（lucy-YYYYMMDD-<slug>-spec.md / YYYY-MM-DD-lucy-<slug>-plan.md）。机器拒绝的版本段只有 v<数字>p<数字>（如 v0p25、v2p5）；v8 这类技术专名不拒绝。本条豁免的是该日已跟踪、尚未符合该文件名的存量文件，以及已存在的模块 docs 数字流水号 Spec（含子目录、一位及以上数字）。此后不得再加。",
+    "filename": "2026-10-30 起新 Spec 与 Plan 共用编号 lucy-YYYYMMDD-<slug>，文件名分别为 lucy-YYYYMMDD-<slug>-spec.md 与 lucy-YYYYMMDD-<slug>-plan.md。机器拒绝的版本段只有 v<数字>p<数字>（如 v0p25、v2p5）；v8 这类技术专名不拒绝。本条豁免的是引入该规则时已跟踪、尚未符合该文件名的存量文件，以及已存在的模块 docs 数字流水号 Spec（含子目录、一位及以上数字）。此后不得再加。",
     "close-layer": "2026-10-30 起新功能 Spec 必须有「闭口层级」。本条豁免的是该日已跟踪、尚无此小节的存量 Spec。此后不得再加。"
   },
   "entries": [
@@ -3618,6 +3618,50 @@
     },
     {
       "file": "webui/docs/99-mcp-playground-acl-decision-visibility-spec.md",
+      "rule": "filename"
+    },
+    {
+      "file": "docs/plans/2026-08-03-lucy-enterprise-data-agent-access-governance-plan.md",
+      "rule": "filename"
+    },
+    {
+      "file": "docs/plans/2026-08-26-lucy-agent-chat-a3-optimization-plan.md",
+      "rule": "filename"
+    },
+    {
+      "file": "docs/plans/2026-09-08-lucy-mcp-execution-runtime-ack-debug-plan.md",
+      "rule": "filename"
+    },
+    {
+      "file": "docs/plans/2026-10-29-lucy-question-budget-window-optimization-plan.md",
+      "rule": "filename"
+    },
+    {
+      "file": "docs/plans/2026-10-29-lucy-url-driven-input-ime-composition-plan.md",
+      "rule": "filename"
+    },
+    {
+      "file": "docs/plans/2026-10-30-lucy-access-grade-and-daily-question-kpi-plan.md",
+      "rule": "filename"
+    },
+    {
+      "file": "docs/plans/2026-10-30-lucy-access-map-quiet-reading-plan.md",
+      "rule": "filename"
+    },
+    {
+      "file": "docs/plans/2026-10-30-lucy-audit-context-bar-plan.md",
+      "rule": "filename"
+    },
+    {
+      "file": "docs/plans/2026-10-30-lucy-question-budget-uat-closure-plan.md",
+      "rule": "filename"
+    },
+    {
+      "file": "docs/plans/2026-10-30-lucy-row-policy-view-presentation-plan.md",
+      "rule": "filename"
+    },
+    {
+      "file": "docs/plans/2026-10-30-lucy-sqlserver-table-identity-plan.md",
       "rule": "filename"
     }
   ]

@@ -85,7 +85,7 @@ Lucy 当前只支持**单实例、单副本**部署，不支持多个 WebUI / MC
 
 ### 新 Spec 只有一个身份
 
-新的产品 Spec 文件名固定为 `lucy-YYYYMMDD-<slug>-spec.md`，Plan 固定为 `YYYY-MM-DD-lucy-<slug>-plan.md`。`slug` 只使用小写字母、数字和连字符。版本写在头部元数据，不写进文件名。机器只拒绝 `v<数字>p<数字>` 这种版本段，例如 `v0p25`、`v2p5`。`v8` 这类技术专名可以留在 slug 里。其余像产品版本这样的写法由评审核对。文档之间用这个文件名互相引用。
+新的产品 Spec 与 Plan 共用同一个编号 `lucy-YYYYMMDD-<slug>`。Spec 文件名是 `lucy-YYYYMMDD-<slug>-spec.md`，Plan 文件名是 `lucy-YYYYMMDD-<slug>-plan.md`。日期和 slug 必须相同，只换 `-spec` / `-plan` 后缀。`slug` 只使用小写字母、数字和连字符。版本写在头部元数据，不写进文件名。机器只拒绝 `v<数字>p<数字>` 这种版本段，例如 `v0p25`、`v2p5`。`v8` 这类技术专名可以留在 slug 里。其余像产品版本这样的写法由评审核对。文档之间用这个文件名互相引用。
 
 台账号只出现在元数据中。功能挂在某本登记册上时写该号，没有就写「无」。不把台账号或 WebUI 流水号当作 Spec 的名字，也不为同一功能另派第二套编号。
 
@@ -175,7 +175,7 @@ Lucy 当前只支持**单实例、单副本**部署，不支持多个 WebUI / MC
 
 | # | 要求 | 出处 | 机器门禁 |
 |---|---|---|---|
-| 1 | **Spec 落 `docs/specs/`、Plan 落 `docs/plans/`**，命名 `lucy-YYYYMMDD-<slug>-spec.md` / `YYYY-MM-DD-lucy-<slug>-plan.md`。`slug` 只用小写字母、数字和连字符，**不得把版本号写入文件名** | 本文件「Spec 落位规则」与「功能闭口与发布取证」 | `lint:spec-docs`（规则 `filename`） |
+| 1 | **Spec 落 `docs/specs/`、Plan 落 `docs/plans/`**。二者共用编号 `lucy-YYYYMMDD-<slug>`，文件名分别为 `lucy-YYYYMMDD-<slug>-spec.md` 与 `lucy-YYYYMMDD-<slug>-plan.md`。`slug` 只用小写字母、数字和连字符，**不得把版本号写入文件名** | 本文件「Spec 落位规则」与「功能闭口与发布取证」 | `lint:spec-docs`（规则 `filename`） |
 | 2 | **Spec 含「核心流程（伪代码）」/「Core Algorithm」**，或**显式写明伪代码豁免** | 本文件「Spec 内容规格」 | `lint:spec-docs`（规则 `pseudocode`） |
 | 3 | **Spec 头部元数据含「文档类型 / 版本」与「状态」**；**Plan 头部含「状态」「授权边界」「验收」** | 本文件「Spec 内容规格」 | `lint:spec-docs`（规则 `metadata`） |
 | 4 | **Plan 含 目标 / 开工前置 / 验收 / 完成定义 / 风险 五类小节**（措辞可不同，按语义匹配） | 本文件「强制流程：Plan Mode」与本节 | `lint:spec-docs`（规则 `plan-parts`） |
@@ -223,6 +223,7 @@ Lucy 当前只支持**单实例、单副本**部署，不支持多个 WebUI / MC
 - Spec / Plan 评审必须检查：本清单 11 条是否逐条可答；回答不得是「门禁全绿」。
 - 评审发现形态不合规时，**先修文档形态**，再论内容。
 - 缺「闭口层级」，或功能合同的出口写入整库旅程、Agent 路径、跨模块或系统级故障演练、证据等级，先退回形态。这些内容属于发布取证。证明本条不变量所需的局部故障注入留在功能合同里。
+- 同一功能的 Spec 与 Plan 编号不一致（日期或 slug 不同），先退回形态。
 
 ## 全系统术语规范
 
