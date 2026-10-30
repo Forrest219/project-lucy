@@ -376,6 +376,7 @@ Spec 190 §7.9 — 库内表清单与持续感知的最小展示。
 | `plaintext-token` | 明文 token |
 | `role-detail` | 角色详情 |
 | `role-diff` | 角色 diff |
+| `role-permission-review-drawer` | 删除或保存 Role 前的确认抽屉 | `components/RolePermissionReviewDrawer.tsx` |
 | `role-dirty-bar` | 角色 dirty 浮条 |
 | `role-list-table` | 角色列表 Data Grid |
 | `role-row-${roleId}` | 角色行（模板） |
@@ -592,6 +593,12 @@ Spec 190 §7.9 — 库内表清单与持续感知的最小展示。
 | `wiki-library-document` | wiki-library-document | `components/WikiLibraryHome.tsx` |
 | `wiki-library-document-title` | wiki-library-document-title | `components/WikiLibraryHome.tsx` |
 | `wiki-library-document-path` | wiki-library-document-path | `components/WikiLibraryHome.tsx` |
+| `wiki-library-access-filter-${filter}` | 目录文档按授权状态筛选 | `components/WikiLibraryHome.tsx` |
+| `wiki-library-batch-start` | 进入批量管理权限 | `components/WikiLibraryHome.tsx` |
+| `wiki-library-batch-continue` | 对已选文档继续批量管理权限 | `components/WikiLibraryHome.tsx` |
+| `wiki-batch-drawer` | 批量管理权限抽屉 | `components/WikiBatchAccessDrawer.tsx` |
+| `wiki-batch-preview` | 预检批量授权 | `components/WikiBatchAccessDrawer.tsx` |
+| `wiki-batch-submit` | 提交批量授权 | `components/WikiBatchAccessDrawer.tsx` |
 | `wiki-move-document-dialog` | wiki-move-document-dialog | `components/WikiMoveDocumentDialog.tsx` |
 | `wiki-move-source` | wiki-move-source | `components/WikiMoveDocumentDialog.tsx` |
 | `wiki-move-source-key` | wiki-move-source-key | `components/WikiMoveDocumentDialog.tsx` |
@@ -773,6 +780,8 @@ Spec 190 §7.9 — 库内表清单与持续感知的最小展示。
 | `wiki-upload-replace-button` | wiki-upload-replace-button | `pages/WikiEditor.tsx` |
 | `wiki-delete-document-button` | wiki-delete-document-button | `pages/WikiEditor.tsx` |
 | `wiki-status-pill` | wiki-status-pill | `pages/WikiEditor.tsx` |
+| `wiki-manage-access-button` | 打开单篇文档的管理访问权限 | `pages/WikiEditor.tsx` |
+| `wiki-manage-access-blocked` | 正文未保存时不能管理访问权限 | `pages/WikiEditor.tsx` |
 | `wiki-sidebar-create-directory` | wiki-sidebar-create-directory | `pages/WikiEditor.tsx` |
 | `wiki-sidebar-create-document` | wiki-sidebar-create-document | `pages/WikiEditor.tsx` |
 | `wiki-upload-input` | wiki-upload-input | `pages/WikiEditor.tsx` |

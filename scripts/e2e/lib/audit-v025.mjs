@@ -142,13 +142,61 @@ export function hasNoAdvanceStep(descriptor) {
 // ── descriptor assembly ─────────────────────────────────────────────────────
 
 const coverage = loadCoverage();
-const manifestById = new Map(coverage.newScenarios.map((s) => [s.executionId, s]));
+// 2026-10-28（D2 路径 A）：AUD25-A01..A12 与 ARV25-V01..V12 已并入**冻结
+// catalog**，因此在覆盖清单里从 newScenarios 移到 existingCatalogMappings
+// （existing 必须恰好等于 lock.requiredIds，两者不可重叠）。
+//
+// 字段来源随之改变，且**仍然只有一个真源**：
+//   - `existing` 条目只登记 ownerBranch（与 §6.1 责任表一致）；
+//   - executors / requires / assert / artifacts / gold 的唯一真源是**冻结
+//     catalog**（`case-catalog.yaml`），不是本模块的本地副本。
+// 所以这里从 catalog 取这些字段，从清单取 ownerBranch。
+import { loadCatalog } from "./catalog.mjs";
+
+const catalogCases = loadCatalog().cases;
+const catalogById = new Map(catalogCases.map((c) => [c.id, c]));
+const manifestById = new Map([
+  ...coverage.newScenarios.map((s) => [s.executionId, s]),
+  ...coverage.existing.map((s) => [s.executionId, s])
+]);
+const frozenById = new Map(
+  coverage.existing
+    .filter((s) => catalogById.has(s.executionId))
+    .map((s) => [s.executionId, catalogById.get(s.executionId)])
+);
 
 /** The approved manifest entry for an execution id (never a local copy). */
 export function manifestEntry(executionId) {
   const entry = manifestById.get(executionId);
   if (!entry) throw new Error(`no approved coverage manifest entry for ${executionId}`);
   return entry;
+}
+
+/**
+ * The executors / requires / assert / artifacts for an execution id.
+ *
+ * 已并入冻结 catalog 的执行项：取自 catalog（唯一真源）。
+ * 其余执行项：取自覆盖清单的 newScenarios（同样是唯一真源，不是本地副本）。
+ */
+export function executionContract(executionId) {
+  const frozen = frozenById.get(executionId);
+  if (frozen) {
+    return {
+      executors: frozen.executors,
+      requires: frozen.requires,
+      assert: frozen.assert,
+      artifacts: frozen.artifacts,
+      gold: frozen.gold
+    };
+  }
+  const entry = manifestEntry(executionId);
+  return {
+    executors: entry.executors,
+    requires: entry.requires,
+    assert: entry.assert,
+    artifacts: entry.artifacts,
+    gold: entry.gold
+  };
 }
 
 function makeDescriptor({
@@ -166,6 +214,7 @@ function makeDescriptor({
   references = []
 }) {
   const entry = manifestEntry(executionId);
+  const contract = executionContract(executionId);
   return Object.freeze({
     executionId,
     sourceRequirementId,
@@ -173,10 +222,10 @@ function makeDescriptor({
     sourceTable,
     ownerBranch: entry.ownerBranch,
     priority: entry.priority,
-    requiredExecutors: Object.freeze([...entry.executors]),
-    requiredCapabilities: Object.freeze([...entry.requires]),
-    assertionTokens: Object.freeze([...entry.assert]),
-    expectedArtifacts: Object.freeze([...entry.artifacts]),
+    requiredExecutors: Object.freeze([...contract.executors]),
+    requiredCapabilities: Object.freeze([...contract.requires]),
+    assertionTokens: Object.freeze([...contract.assert]),
+    expectedArtifacts: Object.freeze([...contract.artifacts]),
     source: Object.freeze({
       scenario: sourceScenario,
       judgement: sourceJudgement,
@@ -218,7 +267,7 @@ const auditCases = [
     sourceSpec: AUDIT_SOURCE_SPEC,
     sourceTable: AUDIT_SOURCE_TABLE,
     sourceScenario: "持久前缀与崩溃恢复",
-    sourceJudgement: "已持久事件不消失；无 admitted 不分派；仅 received 的请求在 received_at+24h 也须结算；重启不延长截止时间",
+    sourceJudgement: "已持久事件不消失；无 admitted 不分派；仅 received 的请求在 received_at+24h 也须结算；重启不延长截止时间；无持久 received 的独立到达项须出现在 missing_ids，不能用 received／拒绝并集吞掉",
     sourceColumns: AUDIT_SOURCE_COLUMNS,
     blockedReason: "environment",
     noBusinessReexecution: true,
@@ -247,7 +296,7 @@ const auditCases = [
     sourceSpec: AUDIT_SOURCE_SPEC,
     sourceTable: AUDIT_SOURCE_TABLE,
     sourceScenario: "各持久化屏障不可用",
-    sourceJudgement: "禁止“无凭据或未执行”二选一；逐屏障断言；U3 已冻结仅阻断；received 失败不回传三项审计凭据头，admitted 前失败若 received 已提交则头指该 received ID，不指不存在的 admitted；无缓冲测试项",
+    sourceJudgement: "禁止“无凭据或未执行”二选一；逐屏障断言；U3 仅阻断无缓冲；received 失败无三头，后续失败引用同一 received ID；A02-R 另含合法独立到达但拒绝表无行子例，不缩分母；A02-C 不确认接收；A02-T 不要求撤回已发送内容；任何闭包失败不得伪发成功凭据",
     sourceColumns: AUDIT_SOURCE_COLUMNS,
     blockedReason: "environment",
     noBusinessReexecution: true,
@@ -275,7 +324,7 @@ const auditCases = [
     sourceSpec: AUDIT_SOURCE_SPEC,
     sourceTable: AUDIT_SOURCE_TABLE,
     sourceScenario: "事件重投与业务重试",
-    sourceJudgement: "同一调用多条生命周期/客户端事件不误合并、不重复计工具数",
+    sourceJudgement: "同一调用多条生命周期/客户端事件不误合并、不重复计工具数；A03-ACK 不重复 observation／ACK、不重执行业务，重启与同 ID 重投均幂等补闭包",
     sourceColumns: AUDIT_SOURCE_COLUMNS,
     blockedReason: "environment",
     noBusinessReexecution: true,
@@ -324,7 +373,7 @@ const auditCases = [
     sourceSpec: AUDIT_SOURCE_SPEC,
     sourceTable: AUDIT_SOURCE_TABLE,
     sourceScenario: "协议/执行/错误独立",
-    sourceJudgement: "HTTP 200 不增加执行成功；无源错误不编权限拒绝",
+    sourceJudgement: "HTTP 200 不增加执行成功；无源错误不编权限拒绝；budget_stopped 不覆盖已发生授权裁决，也不反推 not_evaluated",
     sourceColumns: AUDIT_SOURCE_COLUMNS,
     blockedReason: "environment",
     dimensions: [
@@ -348,7 +397,7 @@ const auditCases = [
     sourceSpec: AUDIT_SOURCE_SPEC,
     sourceTable: AUDIT_SOURCE_TABLE,
     sourceScenario: "八桶与预算连续性",
-    sourceJudgement: "每单位恰一个桶；闭合失败/成功先于取消/超时，取消请求不算确认取消；同一尝试互斥闭合或无法核验时序则 unknown+conflict；历史旧 outcome 单列 31=23+3+4+1，不当新派生结果",
+    sourceJudgement: "每单位恰一个桶；闭合失败/成功先于取消/超时；互斥闭合或时序不可核验则 unknown+conflict；预算读写失败不得伪造耗尽凭据；历史旧 outcome 单列 31=23+3+4+1，不当新派生结果",
     sourceColumns: AUDIT_SOURCE_COLUMNS,
     blockedReason: "environment",
     dimensions: [
@@ -399,7 +448,7 @@ const auditCases = [
     sourceSpec: AUDIT_SOURCE_SPEC,
     sourceTable: AUDIT_SOURCE_TABLE,
     sourceScenario: "重连与归属修订",
-    sourceJudgement: "无时间回绑、无并发串链；effective_* 可按 S 重建",
+    sourceJudgement: "无时间回绑、无并发串链；effective_* 可按 S 精确重建，不能以当前有效值或 seq 过滤替代",
     sourceColumns: AUDIT_SOURCE_COLUMNS,
     blockedReason: "environment",
     dimensions: [
@@ -447,7 +496,7 @@ const auditCases = [
     sourceSpec: AUDIT_SOURCE_SPEC,
     sourceTable: AUDIT_SOURCE_TABLE,
     sourceScenario: "账本领先与导出一致性",
-    sourceJudgement: "从投影取 S 的错误实现必须被检出；T3 从捕获 S 起算60s，等待重试不重置，超时无正式包；同 S/筛选/规则/单位/profile 结果一致",
+    sourceJudgement: "从投影取 S 或只凭 ledger_seq 列存在放行的错误实现必须被检出；T3 从捕获 S 起算60s且不重置，超时无正式包；as-of 任一项不可证明则 scopeComplete=false、正式导出失败；同 S/筛选/规则/单位/profile 结果一致",
     sourceColumns: AUDIT_SOURCE_COLUMNS,
     blockedReason: "environment",
     dimensions: [
@@ -496,7 +545,7 @@ const auditCases = [
     sourceSpec: AUDIT_SOURCE_SPEC,
     sourceTable: AUDIT_SOURCE_TABLE,
     sourceScenario: "历史回放与提示能力样本",
-    sourceJudgement: "2455/Claude 差额不强配；Manifest 65=58通过+3缺失+4不一致只作归档事实，不自动归咎 Lucy；旧180预览保持原样，新500预览按v2p5-1另测；缺独立入口数据项仍 unknown",
+    sourceJudgement: "2455/Claude 差额不强配；Manifest 65=58通过+3缺失+4不一致只作归档事实，不自动归咎 Lucy；旧180预览保持原样，新500预览按v2p5-1另测；缺独立入口数据项仍 unknown，received∪auth_failure_log 不得替代独立到达集合",
     sourceColumns: AUDIT_SOURCE_COLUMNS,
     blockedReason: "delivery",
     dimensions: [

@@ -267,9 +267,11 @@ test("ensure-bootstrap-token.sh generates a 0600 secret once and prints only the
 });
 
 test("demo compose files mount the bootstrap secret as a file secret", () => {
+  const tokenFile = String.raw`file: (?:\.\/secrets\/webui-bootstrap-token|\$\{[A-Z0-9_]+:-\.\/secrets\}\/webui-bootstrap-token)`;
   for (const name of ["demo", "postgres-demo", "executive-poc", "customer-config"]) {
     const text = readFileSync(path.join(repoRoot, `deploy/compose/docker-compose.${name}.yml`), "utf8");
     assert.match(text, /LUCY_WEBUI_BOOTSTRAP_TOKEN_FILE: \/run\/secrets\/webui_bootstrap_token/, name);
-    assert.match(text, /file: \.\/secrets\/webui-bootstrap-token/, name);
+    assert.match(text, new RegExp(tokenFile), name);
+    assert.match(text, /webui-bootstrap-token/, name);
   }
 });

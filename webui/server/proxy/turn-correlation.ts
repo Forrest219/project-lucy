@@ -12,6 +12,21 @@ export type TurnAttributionConfidence = "high" | "low" | "none";
  */
 export type AssociationStatus = "confirmed" | "candidate" | "unassigned" | "conflict" | "legacy_unverified";
 
+/** 关联质量五态值域（读路径归一化的唯一依据）。 */
+export const ASSOCIATION_STATUSES = [
+  "confirmed",
+  "candidate",
+  "unassigned",
+  "conflict",
+  "legacy_unverified"
+] as const;
+
+const ASSOCIATION_STATUS_SET: ReadonlySet<string> = new Set(ASSOCIATION_STATUSES);
+
+export function isAssociationStatus(value: unknown): value is AssociationStatus {
+  return typeof value === "string" && ASSOCIATION_STATUS_SET.has(value);
+}
+
 export type TurnAttribution = {
   turnId?: string;
   mode: TurnAttributionMode;

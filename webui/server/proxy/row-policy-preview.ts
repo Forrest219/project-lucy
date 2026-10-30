@@ -40,7 +40,7 @@ import {
   type RowPolicyCatalogStatus
 } from "./row-policy-catalog.js";
 import { mergeRowGrants, type RowGrant } from "./row-policy.js";
-import { lookupFinalRows } from "./agent-constraints.js";
+import { constraintsSourceKey, lookupFinalRows } from "./agent-constraints.js";
 import {
   digestCompileInputs,
   digestImpact,
@@ -127,15 +127,18 @@ export function computeFinalRowsForTable(
     return { ok: false, reason: "row_policy_no_applicable_grant" };
   }
 
-  const finalRowsByAgent = agents.map((agent) => ({
-    agentId: agent.agentId,
-    finalRows: lookupFinalRows(
-      agent.finalRowsBySource,
-      tableKey.connectionId,
-      tableKey.sourceName,
-      effective
-    )
-  }));
+  const sourceKey = constraintsSourceKey(tableKey.connectionId, tableKey.sourceName);
+  const finalRowsByAgent = [];
+  for (const agent of agents) {
+    const own = agent.finalRowsBySource?.[sourceKey];
+    if (!own) {
+      return { ok: false, reason: "row_policy_no_applicable_grant" };
+    }
+    finalRowsByAgent.push({
+      agentId: agent.agentId,
+      finalRows: lookupFinalRows(agent.finalRowsBySource, tableKey.connectionId, tableKey.sourceName, own)
+    });
+  }
 
   return {
     ok: true,
@@ -169,6 +172,11 @@ export interface RowPolicyPreviewRequest {
   roleId: string;
   /** The candidate Role (draft). When absent the committed Role is previewed. */
   role?: unknown;
+  /**
+   * Spec §14.2.1 — the candidate is the configuration with this Role removed.
+   * Used by Role deletion. It is not an overlay of a replacement Role.
+   */
+  removeRole?: boolean;
   /** The tables the caller is interested in. The COMPLETE impact set is derived. */
   tables: Array<{ connection: string; schema: string; name: string }>;
 }
@@ -445,21 +453,30 @@ export async function buildRowPolicyPreviewSession(params: {
   roleId: string;
   /** The candidate Role (draft). When absent the committed Role is used. */
   role?: unknown;
+  /** The candidate omits this Role. Takes precedence over `role`. */
+  removeRole?: boolean;
   /** The configuration the draft is overlaid on. */
   baseConfig: AccessConfig;
   /** The access.yaml version of `baseConfig` (the CAS baseline). */
   baseAccessVersion: string;
 }): Promise<RowPolicyPreviewSession> {
-  const { roleId, role, baseConfig, baseAccessVersion } = params;
-  const candidate: AccessConfig = role
+  const { roleId, role, removeRole, baseConfig, baseAccessVersion } = params;
+  const candidate: AccessConfig = removeRole
     ? {
         ...baseConfig,
-        roles: {
-          ...(baseConfig.roles ?? {}),
-          [roleId]: role as NonNullable<AccessConfig["roles"]>[string]
-        }
+        roles: Object.fromEntries(
+          Object.entries(baseConfig.roles ?? {}).filter(([id]) => id !== roleId)
+        )
       }
-    : baseConfig;
+    : role
+      ? {
+          ...baseConfig,
+          roles: {
+            ...(baseConfig.roles ?? {}),
+            [roleId]: role as NonNullable<AccessConfig["roles"]>[string]
+          }
+        }
+      : baseConfig;
 
   const context = await buildAdminPermissionContext(baseConfig);
   const basePolicyVersion = computePolicyVersion(
@@ -834,13 +851,14 @@ export async function previewRowPolicyDraft(
 
   const session = await buildRowPolicyPreviewSession({
     roleId: request.roleId,
-    role: request.role,
+    role: request.removeRole ? undefined : request.role,
+    removeRole: request.removeRole,
     baseConfig: currentConfig,
     baseAccessVersion: currentVersion.version
   });
 
   const tables = await previewSessionTables(session);
-  const ok = tables.every((outcome) => Boolean(outcome.preview));
+  const ok = tables.every((outcome) => previewOutcomeAcceptsConfirmation(outcome, request.removeRole === true));
 
   return {
     ok,
@@ -884,10 +902,25 @@ export interface RowPolicyConfirmationVerification {
  * Every rejection happens BEFORE the durable intent and before any
  * configuration write: zero configuration write, zero row-policy intent.
  */
+/**
+ * A table with no remaining grant is a successful description of a Role
+ * deletion: the table is not granted. It is not 「全部行」, and it is not a
+ * confirmation of any other write.
+ */
+function previewOutcomeAcceptsConfirmation(
+  outcome: RowPolicyPreviewTableOutcome,
+  removeRole: boolean
+): boolean {
+  if (outcome.preview) return true;
+  return removeRole && outcome.error?.reason === "row_policy_no_applicable_grant";
+}
+
 export async function verifyRowPolicyPreviewConfirmation(params: {
   roleId: string;
   /** The candidate Role (draft) that is about to be written. */
   role?: unknown;
+  /** The candidate is the configuration with this Role removed. */
+  removeRole?: boolean;
   /** The untrusted confirmation from the request body. */
   confirmation: unknown;
   /** The FRESH access configuration, read inside the publish window. */
@@ -895,7 +928,7 @@ export async function verifyRowPolicyPreviewConfirmation(params: {
   /** The FRESH access.yaml version, read inside the publish window. */
   baseAccessVersion: string;
 }): Promise<RowPolicyConfirmationVerification> {
-  const { roleId, role, confirmation, baseConfig, baseAccessVersion } = params;
+  const { roleId, role, removeRole, confirmation, baseConfig, baseAccessVersion } = params;
 
   const parsed = parseRowPolicyConfirmation(confirmation);
   if (!parsed) {
@@ -933,7 +966,8 @@ export async function verifyRowPolicyPreviewConfirmation(params: {
   // 2) Rebuild the candidate from the fresh configuration.
   const session = await buildRowPolicyPreviewSession({
     roleId,
-    role,
+    role: removeRole ? undefined : role,
+    removeRole,
     baseConfig,
     baseAccessVersion
   });
@@ -943,7 +977,7 @@ export async function verifyRowPolicyPreviewConfirmation(params: {
   //    that cannot be produced is the real reason and must not be reported as a
   //    changed digest.
   const outcomes = await previewSessionTables(session);
-  const failed = outcomes.find((outcome) => !outcome.preview);
+  const failed = outcomes.find((outcome) => !previewOutcomeAcceptsConfirmation(outcome, removeRole === true));
   if (failed) {
     return {
       ok: false,

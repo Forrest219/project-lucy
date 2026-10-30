@@ -201,6 +201,43 @@ seed_project() {
   printf "%s\n" "${LUCY_BUNDLED_KTX_VERSION:-unknown}" > "${SEED_STATE_DIR}/bundled-ktx-version"
 }
 
+# ─── Spec 149 §8 / WO T7 — 运维问数连接 ────────────────────────────────────────
+#
+# KTX daemon 只在**启动时**解析连接：写盘不会让已经跑起来的 daemon 看见新连接。
+# 因此视图、连接块、内容根资产与项目根镜像都必须在 supervise_ktx 之前完成，
+# 摘要戳也必须在这之后写（见 write_ops_evidence_stamp）。
+#
+# 失败只关闭这一个连接：不阻断启动，也不影响其它数据面。
+OPS_EVIDENCE_CLI="${WEBUI_ROOT}/server/ops-evidence/cli.ts"
+
+ops_evidence_cli() {
+  local subcommand="$1"
+  local tsx_bin="${WEBUI_ROOT}/node_modules/.bin/tsx"
+  if [[ ! -f "${OPS_EVIDENCE_CLI}" ]]; then
+    echo "[lucy] ops-evidence CLI not found; the ops evidence connection stays unavailable"
+    return 1
+  fi
+  if [[ ! -x "${tsx_bin}" ]]; then
+    echo "[lucy] warning: tsx is not available; the ops evidence connection stays unavailable" >&2
+    return 1
+  fi
+  "${tsx_bin}" "${OPS_EVIDENCE_CLI}" "${subcommand}"
+}
+
+ensure_ops_evidence() {
+  if ! ops_evidence_cli ensure; then
+    echo "[lucy] warning: the ops evidence ensure failed; the connection stays unavailable" >&2
+  fi
+  return 0
+}
+
+write_ops_evidence_stamp() {
+  if ! ops_evidence_cli stamp; then
+    echo "[lucy] warning: the ops evidence digest stamp could not be written" >&2
+  fi
+  return 0
+}
+
 # Reuse the volume-backed internal token across container recreate. Generating a
 # new one on every start invalidates clients that were given this credential.
 load_or_create_internal_token() {
@@ -825,9 +862,15 @@ fi
 
 ensure_git_repo
 seed_project
-sync_runtime_mirror
 load_or_create_internal_token
+# 内容根校验在运维问数确保**之前**：该守卫要拦住的是「模板本身没有数据源」，
+# 不能被运维问数自带的语义文件顶成一个非零计数。
 validate_project_context
+# Spec 149 §8 — 运维问数连接必须在 KTX daemon 启动之前就位。
+ensure_ops_evidence
+sync_runtime_mirror
+# 摘要戳写在这之后：它是「daemon 启动前配置已就绪」的证据。
+write_ops_evidence_stamp
 
 if [[ "${LUCY_ENTRYPOINT_SEED_ONLY:-0}" == "1" ]]; then
   echo "[lucy] seed-only mode complete"

@@ -226,6 +226,12 @@ export type RemoveSchemaResult = {
   newSchemas: string[];
   removedEnabledTables: string[];
   deletedFiles: string[];
+  /**
+   * L25-16 F5-04 — pre-image of every deleted semantic content file.
+   * The legacy Schema removal entry deletes Manifest / Overlay files; keeping the
+   * pre-image makes the deletion reversible / auditable.
+   */
+  deletedFilePreImages?: Array<{ filePath: string; content: string }>;
 };
 
 /** Spec 179: reference kind that blocks connection deletion before write. */

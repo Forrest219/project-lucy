@@ -36,8 +36,17 @@ import type { PrimaryStatus } from "../proxy/audit-derivation.js";
 type AuditRow = {
   primary_status?: string | null;
   outcome?: string | null;
-  authorization_view?: string | null;
-  execution_view?: string | null;
+  /**
+   * 授权 / 执行视图读自**既有**的 `access_log.authorization_status` 与
+   * `access_log.execution_status` 列。
+   *
+   * ⚠️ 此前这里声明的是 `authorization_view` / `execution_view` —— 那两列从未
+   * 被创建（写路径写的是 `*_status`），于是读路径经 `probeColumns` 兜底把
+   * 它们投影成 `NULL AS ...`，授权/执行视图**静默恒为 unknown**（D-32）。
+   * 修法是改读既有列，不新增第二套同义列。
+   */
+  authorization_status?: string | null;
+  execution_status?: string | null;
   delivery_status?: string | null;
 };
 
@@ -48,8 +57,8 @@ function readRow(unit: ReconciliationUnit): AuditRow {
   return {
     primary_status: unit.primaryStatusColumn ?? null,
     outcome: unit.legacyOutcome ?? null,
-    authorization_view: unit.authorizationViewColumn ?? null,
-    execution_view: unit.executionViewColumn ?? null,
+    authorization_status: unit.authorizationViewColumn ?? null,
+    execution_status: unit.executionViewColumn ?? null,
     delivery_status: unit.deliveryStatusColumn ?? null
   };
 }
@@ -93,8 +102,8 @@ export const productionPrimaryStatusPort: PrimaryStatusPort = {
     const row = readRow(unit);
     const primaryStatus: PrimaryStatus = readPrimaryStatus(row);
     const statusKnown = primaryStatus !== "unknown";
-    const authorization = toAuthorization(row.authorization_view);
-    const execution = toExecution(row.execution_view);
+    const authorization = toAuthorization(row.authorization_status);
+    const execution = toExecution(row.execution_status);
     const delivery = toDelivery(row.delivery_status);
     return {
       primaryStatus,

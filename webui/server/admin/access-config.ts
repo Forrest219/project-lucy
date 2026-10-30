@@ -57,6 +57,11 @@ export interface YamlUser {
     tools: string[];
     connections?: string[];
   };
+  /**
+   * L25-16 — 委托人（`admins.yaml` 中的管理员 id，Spec §3.2.2 规则 6）。
+   * 只用于 owner-only 操作的委托校验与审计归因，不放大 `allow.ops` 的域与连接范围。
+   */
+  delegated_from?: string;
 }
 
 /** Spec 98 §7 — Role generation; Admin writes always persist `2`. */
@@ -97,7 +102,20 @@ export interface YamlRole {
     source_scope?: "catalog_bound";
     tableSelectors?: YamlTableSelector[];
     tools?: string[];
+    /**
+     * L25-16 — 控制面授权维度（Spec §3.2.1）。与 `tools`（数据面）完全独立。
+     * 形状：`{ tools: string[]; asset_kinds: string[]; connections?: string[]; instance_scope?: "read_only" }[]`
+     */
+    ops?: YamlOpsGrant[];
   };
+}
+
+/** L25-16 — `allow.ops[]` 的单条 grant（Spec §3.2.1）。 */
+export interface YamlOpsGrant {
+  tools: string[];
+  asset_kinds: string[];
+  connections?: string[];
+  instance_scope?: "read_only";
 }
 
 export interface YamlAccessConfig {
@@ -333,7 +351,11 @@ async function writeAccessConfigFileWithAuditClosureInner(
   let previousRaw: string | undefined;
   try {
     previousRaw = await readFile(accessPath, "utf-8");
-  } catch {
+  } catch (error) {
+    const code = error && typeof error === "object" ? (error as NodeJS.ErrnoException).code : undefined;
+    if (code !== "ENOENT" && code !== "ENOTDIR") {
+      throw error;
+    }
     previousRaw = undefined;
   }
 
@@ -501,10 +523,7 @@ async function writeAccessConfigFileWithAuditClosureInner(
     // Verification is a direct fact — the runtime now reflects the restored bytes.
     // It must NOT reuse `evaluateRuntimeAck`, whose policy is "the caller may not be
     // acked", and which would turn a successful rollback into a false recovery alarm.
-    const rollbackVerified =
-      recoveryPoint.raw === undefined
-        ? true
-        : rollbackStatus.accessConfigDigest === recoveryPoint.accessConfigDigest;
+    const rollbackVerified = rollbackStatus.accessConfigDigest === recoveryPoint.accessConfigDigest;
     if (!rollbackVerified) {
       return closeForRecovery(
         originalFailure,

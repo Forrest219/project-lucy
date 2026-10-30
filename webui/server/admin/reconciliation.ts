@@ -40,7 +40,7 @@ import {
   type ReconciliationContext
 } from "./reconciliation-context.js";
 // F-02：精确 as-of S 的证明由 P0-1 提供，P0-4 不自建第二套口径。
-import { proveExactAsOfS, type AsOfSProof } from "../proxy/audit-as-of-proof.js";
+import { projectAttributionAsOfS, proveExactAsOfS, type AsOfSProof } from "../proxy/audit-as-of-proof.js";
 
 /** Spec §2.1 —— 八桶汇总主状态。 */
 export type PrimaryStatusBucket =
@@ -292,8 +292,17 @@ export type AccessLogRow = {
   turn_wall_clock_ms: number | null;
   /** L25-09 S01 derived columns (schema V3). NULL on rows written before the migration. */
   primary_status: string | null;
-  authorization_view: string | null;
-  execution_view: string | null;
+  /**
+   * 授权视图读自**既有** `access_log.authorization_status` 列。
+   *
+   * ⚠️ 这里曾经读 `authorization_view` —— 该列从未被创建过（写路径写的是
+   * `authorization_status`），于是 `probeColumns` 兜底把它投影成
+   * `NULL AS authorization_view`，授权视图**静默恒为 unknown**（D-32）。
+   * 修法是改读既有列，不新增第二套同义列。
+   */
+  authorization_status: string | null;
+  /** 执行视图读自既有 `access_log.execution_status` 列（理由同 `authorization_status`）。 */
+  execution_status: string | null;
   delivery_status: string | null;
   /** Canonical ledger position of the row (F-02 as-of S proof). */
   ledger_seq: number | null;
@@ -323,8 +332,8 @@ const ACCESS_LOG_SELECT_COLUMNS = [
   "credential_principal_id",
   "turn_wall_clock_ms",
   "primary_status",
-  "authorization_view",
-  "execution_view",
+  "authorization_status",
+  "execution_status",
   "delivery_status",
   "ledger_seq"
 ] as const;
@@ -415,7 +424,20 @@ export function proveInquiryAsOfS(
       .all(...where.params) as Array<{ id: number }>;
     for (const row of unplaceable) unplaceableRowIds.push(Number(row.id));
   }
-  return proveAsOfSForSelection(db, context, rows, unplaceableRowIds);
+  const projected = projectAttributionAsOfS(db, rows, context.watermarkSeq);
+  return proveExactAsOfS({
+    db,
+    seqUpperBound: context.watermarkSeq,
+    rows: projected.rows.map((row) => ({
+      id: Number(row.id),
+      ledgerSeq:
+        row.ledger_seq === null || row.ledger_seq === undefined ? null : Number(row.ledger_seq),
+      turnId: row.lucy_turn_id ?? null
+    })),
+    unplaceableRowIds,
+    replayedMutationIds: projected.replayedMutationIds,
+    excludedSourceIds: projected.excludedSourceIds
+  });
 }
 
 function associationOf(row: AccessLogRow): AssociationStatus {
@@ -453,8 +475,8 @@ export function toReconciliationUnit(row: AccessLogRow): ReconciliationUnit {
     // The L25-09-derived columns are carried through so the view can report
     // the SAME bucket the audit list reports for this row.
     primaryStatusColumn: row.primary_status ?? null,
-    authorizationViewColumn: row.authorization_view ?? null,
-    executionViewColumn: row.execution_view ?? null,
+    authorizationViewColumn: row.authorization_status ?? null,
+    executionViewColumn: row.execution_status ?? null,
     deliveryStatusColumn: row.delivery_status ?? null
   };
 }
@@ -665,19 +687,21 @@ export function buildInquiryReconciliation(
 
   const columns = probeColumns(db, "access_log");
   const where = inquiryWhere(db, turnId, columns);
-  const { rows } = selectAccessLogRows(db, {
+  const selected = selectAccessLogRows(db, {
     where: where.where,
     params: where.params,
     rowBound: context.rowBoundAccessLogId,
     watermarkSeq: context.watermarkSeq
   });
+  const projected = projectAttributionAsOfS(db, selected.rows, context.watermarkSeq);
+  const rows = projected.rows;
   const units = rows.map(toReconciliationUnit);
 
   const toolUnits = units.filter((unit) => unit.unitKind === "tool_call");
   const protocolUnits = units.filter((unit) => unit.unitKind === "protocol_request");
 
   // ── 调用与尝试 ────────────────────────────────────────────────────────────
-  const sourceRows = readSourceRowsForCalls(db, rows.map((row) => row.id));
+  const sourceRows = readSourceRowsForCalls(db, rows.map((row) => row.id), context.watermarkSeq);
   const sourcesByCall = new Map<number, SourceRow[]>();
   for (const source of sourceRows) {
     const list = sourcesByCall.get(source.access_log_id);
@@ -1016,7 +1040,7 @@ type SourceRow = {
   confidence: string | null;
 };
 
-function readSourceRowsForCalls(db: Database.Database, callIds: number[]): SourceRow[] {
+function readSourceRowsForCalls(db: Database.Database, callIds: number[], seqUpperBound?: number): SourceRow[] {
   if (callIds.length === 0) return [];
   if (!tableExists(db, "access_log_sources")) return [];
   const info = probeColumns(db, "access_log_sources");
@@ -1035,11 +1059,15 @@ function readSourceRowsForCalls(db: Database.Database, callIds: number[]): Sourc
     info.has(column) ? column : `NULL AS ${column}`
   ).join(", ");
   const placeholders = callIds.map(() => "?").join(", ");
+  const bound = info.has("ledger_seq") && seqUpperBound !== undefined;
   const rows = db
     .prepare(
-      `SELECT ${projection} FROM access_log_sources WHERE access_log_id IN (${placeholders}) ORDER BY id ASC`
+      `SELECT ${projection} FROM access_log_sources
+        WHERE access_log_id IN (${placeholders})
+        ${bound ? "AND (ledger_seq IS NULL OR ledger_seq <= ?)" : ""}
+        ORDER BY id ASC`
     )
-    .all(...callIds) as Array<Record<string, unknown>>;
+    .all(...(bound ? [...callIds, seqUpperBound] : callIds)) as Array<Record<string, unknown>>;
   return rows.map((row) => ({
     access_log_id: Number(row.access_log_id),
     ts: (row.ts as string | null) ?? null,

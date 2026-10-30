@@ -20,6 +20,7 @@ import {
   MCP_PROBE_METHODS,
   MCP_SERVER_METHODS,
   classifyUsage,
+  defaultUsageConditionSql,
   isMcpProtocolMethod,
   protocolMethodSqlList
 } from "./usage-classification.js";
@@ -737,6 +738,151 @@ async function getDb(): Promise<Database.Database> {
   // F-02：归属改写日志基线必须在表建好之后登记（表不存在时无法登记）。
   await ensureAsOfBaseline(db);
   return db;
+}
+
+// ─── Spec 149 §8：运维问数连接的两张只读视图 ─────────────────────────────────
+//
+// 视图建在**审计热库**上，只读暴露调用流水。三条硬约束：
+// 1. SELECT 列表**不得**含 Token 哈希、client_ip、user_agent、device_name、
+//    权限快照、args_summary、eval_mark、问询原文（SC-06）；WHERE 可以引用后两列。
+// 2. 默认用量口径复用 `defaultUsageConditionSql(alias).sql`（Spec 189 唯一事实源），
+//    不维护第二份协议名单。
+// 3. **按事件排除**自身追问：一次调用只要有一行来源属于自身追问，整次事件从
+//    两张视图**同时**消失，不留下另一张表的残余行（R09）。
+//
+// 每次确保都 DROP VIEW 后重建；**不得** DROP 基表。
+
+/**
+ * 自身追问的物理表名回退集合。
+ *
+ * 只在**连接归属缺失**（`connection_id` 为空）时生效：其他连接上真实存在的
+ * 同名业务表不会被误删（R09 / SC-22）。
+ */
+const OPS_EVIDENCE_SELF_PHYSICAL_TABLES = [
+  "main.ops_calls",
+  "main.ops_call_tables",
+  "ops_calls",
+  "ops_call_tables"
+] as const;
+
+/** 视图 SELECT 列表里**不允许**出现的列（SC-06）。 */
+export const OPS_EVIDENCE_FORBIDDEN_SELECT_COLUMNS = [
+  "token_hash",
+  "token_hash_prefix",
+  "client_ip",
+  "user_agent",
+  "device_name",
+  "permission_snapshot_hash",
+  "args_summary",
+  "eval_mark",
+  "query_preview",
+  "question_preview"
+] as const;
+
+/** 自身追问谓词（两张视图共用同一段 SQL）。 */
+function opsEvidenceSelfExclusionSql(alias: string): string {
+  const physicalList = OPS_EVIDENCE_SELF_PHYSICAL_TABLES.map((name) => `'${name}'`).join(", ");
+  return `NOT EXISTS (
+    SELECT 1 FROM access_log_sources AS self
+    WHERE self.access_log_id = ${alias}.id
+      AND (
+        self.connection_id = 'lucy-ops'
+        OR (
+          COALESCE(self.connection_id, '') = ''
+          AND self.physical_table IN (${physicalList})
+        )
+      )
+  )`;
+}
+
+/**
+ * 重建两张只读视图。幂等：先 DROP VIEW 再 CREATE。
+ *
+ * 调用方负责打开**审计热库**（本进程的单例连接与 KTX 读的是同一个文件）。
+ * 基表 `access_log` / `access_log_sources` 不会被触碰。
+ */
+export async function recreateOpsEvidenceViews(): Promise<void> {
+  const database = await getDb();
+  const defaultUsage = defaultUsageConditionSql("access_log").sql;
+  const selfExclusion = opsEvidenceSelfExclusionSql("access_log");
+
+  database.exec("DROP VIEW IF EXISTS ops_call_tables; DROP VIEW IF EXISTS ops_calls;");
+
+  database.exec(`
+CREATE VIEW ops_calls AS
+SELECT
+  id AS event_id,
+  ts,
+  user_id AS agent_id,
+  token_label,
+  tool,
+  outcome,
+  duration_ms,
+  decision_reason,
+  error_detail,
+  generated_sql,
+  tables AS tables_json,
+  request_id
+FROM access_log
+WHERE ${defaultUsage}
+  AND ${selfExclusion};
+`);
+
+  database.exec(`
+CREATE VIEW ops_call_tables AS
+SELECT
+  access_log.id AS event_id,
+  access_log.ts,
+  access_log.user_id AS agent_id,
+  access_log.token_label,
+  access_log.tool,
+  access_log.outcome,
+  access_log.duration_ms,
+  access_log.decision_reason,
+  access_log.error_detail,
+  access_log.generated_sql,
+  access_log.request_id,
+  s.connection_id,
+  s.schema_name,
+  s.source_name,
+  s.physical_table
+FROM access_log
+JOIN access_log_sources AS s ON s.access_log_id = access_log.id
+WHERE ${defaultUsage}
+  AND ${selfExclusion};
+`);
+}
+
+/**
+ * 断言两张视图的 SELECT 列表不含禁止列，且基表仍在（SC-06 / §8）。
+ *
+ * 视图是 SQLite 对象，`PRAGMA table_info(view)` 给出的就是 SELECT 列表。
+ */
+export function assertOpsEvidenceViewsSafe(database: Database.Database): void {
+  for (const viewName of ["ops_calls", "ops_call_tables"]) {
+    const columns = database
+      .prepare(`PRAGMA table_info(${viewName})`)
+      .all() as Array<{ name: string }>;
+    if (columns.length === 0) {
+      throw new Error(`ops evidence view ${viewName} does not exist`);
+    }
+    const present = new Set(columns.map((column) => column.name.toLowerCase()));
+    for (const forbidden of OPS_EVIDENCE_FORBIDDEN_SELECT_COLUMNS) {
+      if (present.has(forbidden.toLowerCase())) {
+        throw new Error(
+          `ops evidence view ${viewName} exposes a forbidden column: ${forbidden}`
+        );
+      }
+    }
+  }
+  for (const baseTable of ["access_log", "access_log_sources"]) {
+    const row = database
+      .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`)
+      .get(baseTable);
+    if (row === undefined) {
+      throw new Error(`ops evidence base table ${baseTable} is missing`);
+    }
+  }
 }
 
 let insertStmt: Database.Statement | null = null;

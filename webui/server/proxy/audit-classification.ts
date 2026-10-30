@@ -244,6 +244,61 @@ export type ExecutionEvidence = {
   evidenceRefs?: string[];
 };
 
+/**
+ * 写路径的**执行观测** —— 凭据的唯一合法来源。
+ *
+ * 纪律（D1 / Spec §4.3(a) 第 9 行）：
+ * - 凭据只在**真实执行已发生且结果可核验**时构造；
+ * - **禁止**由 `outcome === "ok"` 推导成功凭据 —— HTTP 200 不推定执行成功；
+ * - 观测不到结果 → **不构造任何凭据**（落 `unknown`），不得猜测。
+ */
+export type ExecutionObservation = {
+  /**
+   * 真实执行已发生，且结果可核验（响应已读取并解析，语义校验通过）。
+   */
+  executed?: boolean;
+  /**
+   * 真实执行已发生，但结果不可核验（上游错误 / 入参或语义校验失败）。
+   *
+   * 与「未执行」区分：未执行走 `notExecuted`，不记 `failed`。
+   */
+  failed?: boolean;
+  /**
+   * 本次尝试未实际执行（授权拒绝 / 预算终止 / 入参校验失败）。
+   */
+  notExecuted?: boolean;
+  /**
+   * 授权裁决的真实结果（与预算闸独立）。
+   */
+  authorizationAllowed?: boolean;
+  authorizationDenied?: boolean;
+  authorizationNotEvaluated?: boolean;
+};
+
+/**
+ * 把执行观测转成写路径凭据。
+ *
+ * 这是**唯一**允许构造 `ExecutionEvidence` 的入口：它要求调用方显式声明
+ * 观测到的事实，不接受 `outcome` 之类的间接信号，因此无法被 outcome 映射偷懒。
+ *
+ * 观测不充分时返回 `undefined` —— 缺省即该事实不成立，主状态落 `unknown`。
+ */
+export function executionEvidenceFromObservation(
+  observation: ExecutionObservation | undefined
+): ExecutionEvidence | undefined {
+  if (!observation) return undefined;
+  const evidence: ExecutionEvidence = {};
+  if (observation.authorizationAllowed === true) evidence.authorizationAllowed = true;
+  if (observation.authorizationDenied === true) evidence.authorizationDenied = true;
+  if (observation.authorizationNotEvaluated === true) evidence.authorizationNotEvaluated = true;
+  if (observation.notExecuted === true) evidence.notExecuted = true;
+  // `executed` 与 `failed` 互斥：执行成功与执行失败是竞争凭据，同时给出即事实矛盾。
+  if (observation.executed === true) evidence.verifiedSuccess = true;
+  else if (observation.failed === true) evidence.verifiedFailure = true;
+  if (Object.keys(evidence).length === 0) return undefined;
+  return evidence;
+}
+
 /** S01(e) reported / observed / inferred 三族分离。 */
 export type EvidenceFamilies = {
   /** 客户端声明。 */
@@ -343,13 +398,11 @@ export function classifyAuditEvent(input: ClassifyAuditEventInput): ClassifiedAu
   // 那只是**没有证据**，不是「确未评估」；直接采用会让预算终止等场景被反推成
   // `not_evaluated`，正是 Spec §4.3(b) / §18.10 F-03 禁止的行为。
   //
-  // 此处只接受两类来源：
-  //   1. 调用方给出的显式裁决凭据（`evidence` / `authorizationStatusHint`）；
-  //   2. legacy 只在 outcome 明确为 ok/succeeded（即授权未拒绝）时才给出 allowed。
-  // 其余一律 `unknown`（派生层另有「执行成功 ⇒ 授权已通过」的推理）。
+  // 此处只接受显式裁决凭据（`evidence.authorizationAllowed` 或
+  // `authorizationStatusHint=allowed`）。`outcome=ok` 不是授权凭据，
+  // legacy 的 allowed 不得补上。其余一律不记 allowed，派生层落到 unknown。
   const authorizationAllowed =
-    evidence.authorizationAllowed ??
-    (input.authorizationStatusHint === "allowed" || legacy.authorizationStatus === "allowed");
+    evidence.authorizationAllowed === true || input.authorizationStatusHint === "allowed";
   const authorizationNotEvaluated =
     evidence.authorizationNotEvaluated ?? (input.authorizationStatusHint === "not_evaluated");
 

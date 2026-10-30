@@ -320,6 +320,48 @@ exportCurrentView(context):
 
 ---
 
+### 3.6 实施回写（2026-10-28，本轮：读取侧列名修复 + 只读页面接入）
+
+2026-10-28 委托人拍板 D2（路径 A）与 D4（台账范围）后落地。本节**不改 §1–§5 的冻结正文**。
+
+**3.6.1 读取侧列名漂移（D-32）—— §3.1／§3.3 的读取实现此前读的是不存在的列**
+
+- 现象：`webui/server/admin/reconciliation.ts` 的 `ACCESS_LOG_SELECT_COLUMNS` 读
+  `authorization_view` / `execution_view`，而 `access_log` 里**这两列从不存在**（写库写的是
+  `authorization_status` / `execution_status`）。因 `probeColumns` 兜底把缺列投影成
+  `NULL AS 列名`，**不报错**，而是静默让授权/执行视图恒为 `unknown`。
+- 实证：真实 SQLite 库（`LUCY_AUDIT_DB` 指向临时库）验证 `authorization_view` /
+  `execution_view` 两列 `exists: false`，`authorization_status` / `execution_status`
+  两列 `exists: true`。`reconciliation-csv.ts` 早已使用正确列名。
+- 处置：**改读侧**（`reconciliation.ts` + `reconciliation-ports.ts` 改读既有列），
+  **不新增** `*_view` 列 —— `access_log` 已有同义列，新增会制造第二套竞争性事实源。
+  缺列兜底保留（老库可能没有该列）：缺列时仍落 `unknown` 并附原因，**不得**当 0 / false。
+
+**3.6.2 只读页面接入（§4.1／§4.2／§4.3）—— 此前三个端点前端零消费**
+
+- 新增 `/admin/audit-reconciliation`（P0-4 使用概况页；不在侧栏导航，只在 URL 可达），
+  消费 `GET /api/admin/audit/reconciliation/usage`（Token 对账 + 完整使用明细）、
+  `GET /api/admin/audit/reconciliation/inquiries/:turnId`（单问询对账详情）与
+  `GET /api/admin/audit/reconciliation/export`（对账证据包 CSV + 对账清单）。
+- 展示口径：规模为 null 一律显示「不可观测 + 原因」，**不显示 0**；比率同时给出 N／D，
+  分母为 0 或不可观测时不显示 0% / 100%；as-of S 不可证明时显式披露为**诊断视图**，
+  不静默当完整结论；「活跃数 > 配置数」**不自动等于数据异常**。
+- 治理页（`/admin/usage`）的 Token 卡片改为**配置数 · 活跃数并列**，并给出四类差异集合
+  的明细入口；旧文案「活跃 Token 数超过配置数，数据异常」改为「口径未同时一致，不自动
+  等于数据异常」。
+
+**3.6.3 V01–V12 的验收状态（**未执行**）**
+
+- V01–V12 的运行时验收**仍未执行**。本轮落地的是读取侧的正确性、页面对三个只读端点的
+  消费，以及让 passed 结果**能被 `verify-evidence.mjs` 采信**的证据链（AUD25/ARV25 并入
+  冻结 catalog）；三者都不等于场景已被验证。定向用例全绿不是验收。
+- **Stage 1（开发单机）未取得真实 passed 证据**：ARV25-V01..V12 的 spec 此前只声明
+  `coversV025`（v0.25 命名空间），冻结 collector 看不到这些 variant，它们在
+  `evidence.cases` 里根本不会出现；本轮已补 `covers()` 声明，但**声明**不等于**真实通过**。
+- **Stage 2（客户 amd64 K8s）未执行**，阻塞原因 G-01 / G-06。
+- 台账 D-32 按 §18.11 同款纪律登记为 `open`、`fixedIn` 不填（实现提交 SHA 与回归用例
+  记在 note 中）；待 Stage 1 取得真实 passed 用例后再置 fixed 并回填。
+
 ## Terminology Compliance
 
 遵循 [产品术语标准](../../webui/docs/00-product-terminology-standard.md) §4.7 及 §4.7.2。沿用「问询」「工具调用数」「关联调用数」「汇总主状态」「空值原因」「业务问询分母」「证据版本链」「送达状态」「尝试」「问询预算」「可继续」。

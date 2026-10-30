@@ -41,6 +41,8 @@ const POC_R1_TEMPLATE_SOURCES = [
   "poc_ad_revenue_by_type_daily",
   "poc_ceo_metric_snapshot"
 ];
+// Spec 149 — 运维问数模板的两个 source（连接与物理名都不同）。
+const OPS_EVIDENCE_TEMPLATE_SOURCES = ["ops_calls", "ops_call_tables"];
 
 const EMPTY_ACCESS_YAML = `roles: {}
 users: []
@@ -134,6 +136,7 @@ async function makeProject(yamlContent = EMPTY_ACCESS_YAML) {
   await mkdir(path.join(root, "webui", "config"), { recursive: true });
   await mkdir(path.join(root, "semantic-layer", "mysql-aliyun", "_schema"), { recursive: true });
   await mkdir(path.join(root, "semantic-layer", "poc-mysql-aliyun", "_schema"), { recursive: true });
+  await mkdir(path.join(root, "semantic-layer", "lucy-ops", "_schema"), { recursive: true });
   await mkdir(path.join(root, ".ktx-ui"), { recursive: true });
   // Spec 182 — selector matches intersect with the connection's enabled_tables.
   // Mirror every schema table name declared by the templates so the
@@ -149,6 +152,11 @@ ${ALL_TEMPLATE_SOURCES.map((source) => `      - dataforai.${source}`).join("\n")
     driver: mysql
     enabled_tables:
 ${POC_R1_TEMPLATE_SOURCES.map((source) => `      - data_agent_poc.${source}`).join("\n")}
+  lucy-ops:
+    driver: sqlite
+    readonly: true
+    enabled_tables:
+${OPS_EVIDENCE_TEMPLATE_SOURCES.map((source) => `      - ${source}`).join("\n")}
 `,
     "utf8"
   );
@@ -164,6 +172,13 @@ ${ALL_TEMPLATE_SOURCES.map((source) => `  ${source}:\n    table: dataforai.${sou
     path.join(root, "semantic-layer", "poc-mysql-aliyun", "_schema", "data_agent_poc.yaml"),
     `tables:
 ${POC_R1_TEMPLATE_SOURCES.map((source) => `  ${source}:\n    table: data_agent_poc.${source}`).join("\n")}
+`,
+    "utf8"
+  );
+  await writeFile(
+    path.join(root, "semantic-layer", "lucy-ops", "_schema", "main.yaml"),
+    `tables:
+${OPS_EVIDENCE_TEMPLATE_SOURCES.map((source) => `  ${source}:\n    table: ${source}`).join("\n")}
 `,
     "utf8"
   );
@@ -184,17 +199,18 @@ afterEach(async () => {
 });
 
 describe("GET /api/admin/roles", () => {
-  it("returns the six role templates when yaml has no roles", async () => {
+  it("returns every role template when yaml has no roles", async () => {
     const app = buildServer();
     await app.ready();
     const res = await request(app.server).get("/api/admin/roles").expect(200);
 
-    expect(res.body.data.roles).toHaveLength(7);
+    expect(res.body.data.roles).toHaveLength(8);
     expect(res.body.data.roles.map((role: { id: string }) => role.id).sort()).toEqual([
       "dev_superstore",
       "guard_test",
       "kx_readonly",
       "lucy_admin",
+      "lucy_ops_reader",
       "lucy_r1_exact_readonly",
       "superstore_readonly",
       "wiki_only"
@@ -231,7 +247,7 @@ describe("GET /api/admin/roles", () => {
     await app.ready();
     const res = await request(app.server).get("/api/admin/roles").expect(200);
 
-    expect(res.body.data.roles).toHaveLength(7);
+    expect(res.body.data.roles).toHaveLength(8);
     expect(res.body.data.roles.find((role: { id: string }) => role.id === "kx_readonly")).toMatchObject({
       source: "yaml",
       description: "Custom yaml KX role",
@@ -934,6 +950,46 @@ describe("DELETE /api/admin/roles/:roleId", () => {
     expect(res.body.data.written).toBe(true);
     const yaml = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
     expect(yaml).not.toContain("delete_me");
+    await app.close();
+  });
+
+  it("refuses to delete a row-policy role without a preview confirmation", async () => {
+    await rm(projectRoot, { recursive: true, force: true });
+    projectRoot = await makeProject(`roles:
+  scoped_unused:
+    allow:
+      connections:
+        - mysql-aliyun
+      tableSelectors:
+        - connection: mysql-aliyun
+          schema: dataforai
+          names:
+            - superstore_orders
+          row_access: scoped
+          row_policy:
+            predicates:
+              - field: region
+                op: eq
+                value: East
+      tools:
+        - lucy_query
+users: []
+defaults:
+  deny_tools:
+    - sql_execution
+`);
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .delete("/api/admin/roles/scoped_unused")
+      .send({ dryRun: false })
+      .expect(409);
+    expect(res.body.error.code).toBe("ROW_POLICY_PREVIEW_REQUIRED");
+    expect(res.body.written).not.toBe(true);
+    const yaml = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
+    expect(yaml).toContain("scoped_unused");
     await app.close();
   });
 

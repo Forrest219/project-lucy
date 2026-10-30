@@ -516,7 +516,7 @@ describe("Spec 193 §7.5 — a restart reconciles the journal without continuing
     expect((await listWikiVersions(projectRoot, "global/a.md")).versions).toHaveLength(0);
 
     const readBack = await getWikiAccessBatchResult("wbo-restart");
-    expect(readBack?.items[0]?.status).toBe("pending");
+    expect(readBack?.items[0]?.status).toBe("needs_review");
     expect(readBack?.status).toBe("pending");
   });
 });

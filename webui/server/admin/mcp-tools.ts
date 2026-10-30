@@ -34,7 +34,10 @@ const KNOWN_TOOLS: Array<{ name: string; description: string }> = [
   { name: "sql_execution", description: "执行原始 SQL（受限）" },
   { name: "sql_dialect_notes", description: "读取 SQL 方言说明（受限）" },
   { name: "memory_ingest", description: "注入记忆" },
-  { name: "memory_ingest_status", description: "查询记忆注入状态" }
+  { name: "memory_ingest_status", description: "查询记忆注入状态" },
+  // L25-16 — 控制面工具（由 role.allow.ops 授权，不在 allow.tools 里授予）。
+  { name: "lucy_ops_connection_tables", description: "批量维护连接的启用表范围（控制面工具）" },
+  { name: "lucy_ops_source_import", description: "批量导入源表语义（控制面工具）" }
 ];
 
 export function registerMcpToolsRoutes(app: FastifyInstance) {

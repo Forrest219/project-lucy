@@ -2,7 +2,9 @@
 #
 # 目的：任何历史编号都能双向追查，且不同来源的同名编号永不混淆。
 # 规则：
-#   1. 255 个既有冻结 variant 以原 catalog ID 直接作为 v0.25 executionId（恒等映射，不改名）；
+#   1. 279 个既有冻结 variant 以原 catalog ID 直接作为 v0.25 executionId（恒等映射，不改名）；
+#      其中 AUD25-A01..A12 与 ARV25-V01..V12 于 2026-10-28 并入冻结 catalog（D2 路径 A），
+#      同样走恒等映射，ownerBranch 归 OBSERVE；
 #   2. P0/P1 的来源需求编号按 requirement namespace 归位，映射到 <prefix>25-<id>；
 #   3. 旧升级功能清单走 legacy:upgrade-feature 命名空间，不与 P1-5 的 UPG25-* 混用。
 # 校验：scripts/e2e/__tests__/v025-coverage.test.mjs
@@ -13,6 +15,30 @@ coverage: "scripts/e2e/contracts/v025-coverage.yaml"
 
 # 既有冻结 variant：恒等映射，双向可追查。
 frozenVariants:
+  - { executionId: "AUD25-A01", legacyId: "AUD25-A01", namespace: "frozen:catalog", ownerBranch: OBSERVE }
+  - { executionId: "AUD25-A02", legacyId: "AUD25-A02", namespace: "frozen:catalog", ownerBranch: OBSERVE }
+  - { executionId: "AUD25-A03", legacyId: "AUD25-A03", namespace: "frozen:catalog", ownerBranch: OBSERVE }
+  - { executionId: "AUD25-A04", legacyId: "AUD25-A04", namespace: "frozen:catalog", ownerBranch: OBSERVE }
+  - { executionId: "AUD25-A05", legacyId: "AUD25-A05", namespace: "frozen:catalog", ownerBranch: OBSERVE }
+  - { executionId: "AUD25-A06", legacyId: "AUD25-A06", namespace: "frozen:catalog", ownerBranch: OBSERVE }
+  - { executionId: "AUD25-A07", legacyId: "AUD25-A07", namespace: "frozen:catalog", ownerBranch: OBSERVE }
+  - { executionId: "AUD25-A08", legacyId: "AUD25-A08", namespace: "frozen:catalog", ownerBranch: OBSERVE }
+  - { executionId: "AUD25-A09", legacyId: "AUD25-A09", namespace: "frozen:catalog", ownerBranch: OBSERVE }
+  - { executionId: "AUD25-A10", legacyId: "AUD25-A10", namespace: "frozen:catalog", ownerBranch: OBSERVE }
+  - { executionId: "AUD25-A11", legacyId: "AUD25-A11", namespace: "frozen:catalog", ownerBranch: OBSERVE }
+  - { executionId: "AUD25-A12", legacyId: "AUD25-A12", namespace: "frozen:catalog", ownerBranch: OBSERVE }
+  - { executionId: "ARV25-V01", legacyId: "ARV25-V01", namespace: "frozen:catalog", ownerBranch: OBSERVE }
+  - { executionId: "ARV25-V02", legacyId: "ARV25-V02", namespace: "frozen:catalog", ownerBranch: OBSERVE }
+  - { executionId: "ARV25-V03", legacyId: "ARV25-V03", namespace: "frozen:catalog", ownerBranch: OBSERVE }
+  - { executionId: "ARV25-V04", legacyId: "ARV25-V04", namespace: "frozen:catalog", ownerBranch: OBSERVE }
+  - { executionId: "ARV25-V05", legacyId: "ARV25-V05", namespace: "frozen:catalog", ownerBranch: OBSERVE }
+  - { executionId: "ARV25-V06", legacyId: "ARV25-V06", namespace: "frozen:catalog", ownerBranch: OBSERVE }
+  - { executionId: "ARV25-V07", legacyId: "ARV25-V07", namespace: "frozen:catalog", ownerBranch: OBSERVE }
+  - { executionId: "ARV25-V08", legacyId: "ARV25-V08", namespace: "frozen:catalog", ownerBranch: OBSERVE }
+  - { executionId: "ARV25-V09", legacyId: "ARV25-V09", namespace: "frozen:catalog", ownerBranch: OBSERVE }
+  - { executionId: "ARV25-V10", legacyId: "ARV25-V10", namespace: "frozen:catalog", ownerBranch: OBSERVE }
+  - { executionId: "ARV25-V11", legacyId: "ARV25-V11", namespace: "frozen:catalog", ownerBranch: OBSERVE }
+  - { executionId: "ARV25-V12", legacyId: "ARV25-V12", namespace: "frozen:catalog", ownerBranch: OBSERVE }
   - { executionId: "SEC-01-V01", legacyId: "SEC-01-V01", namespace: "frozen:catalog", ownerBranch: ACCESS }
   - { executionId: "SEC-01-V02", legacyId: "SEC-01-V02", namespace: "frozen:catalog", ownerBranch: ACCESS }
   - { executionId: "SEC-01-V03", legacyId: "SEC-01-V03", namespace: "frozen:catalog", ownerBranch: ACCESS }

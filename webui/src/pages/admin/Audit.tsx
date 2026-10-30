@@ -10,6 +10,7 @@ import { mergeObjectDetailSearch } from "../../lib/objectDetail";
 import type {
   Agent,
   AuditLogEntry,
+  AuditPrimaryStatus,
   AuditResponse,
   AuditTurnDetailResponse,
   AuditTurnEntry,
@@ -18,6 +19,25 @@ import type {
 import { callMonitorWindow } from "../../lib/callMonitorWindow";
 import { PageHeader } from "../../components/PageHeader";
 import { DecisionReasonCell } from "../../components/DecisionReasonCell";
+import {
+  AssociationRevisionTimeline,
+  AuditStatusTriad,
+  AuditTopMetaBar,
+  ClientCoveragePill,
+  CredentialPrincipalCell,
+  ReadonlySqlRowset,
+  type AssociationRevisionTimelineItem
+} from "../../components/audit-trust";
+import {
+  associationAxisFrom,
+  coverageAxisFrom,
+  executionAxisFrom,
+  LEGACY_OUTCOME_LABELS,
+  PRIMARY_STATUS_ORDER,
+  primaryStatusLabel,
+  primaryStatusPalette,
+  sqlRowsetStatusFrom
+} from "../../lib/auditTrust";
 
 // 202608-01 — Trace / Evidence Kernel read model
 type LucySpanTypeView =
@@ -495,7 +515,12 @@ export function TraceLink({ traceId }: { traceId: string }) {
   );
 }
 
-const OUTCOME_LABELS = { ok: "成功", error: "错误", denied: "拒绝" };
+/**
+ * 旧三桶 outcome。**只作 legacy 直方图**，不作为执行状态展示
+ * （B27 / Spec §4.3(a) 规则 9：旧 `outcome=ok` 不推定成功）。
+ * 执行状态一律用八桶 `primaryStatus` + 三条独立判断轴。
+ */
+const OUTCOME_LABELS = LEGACY_OUTCOME_LABELS;
 const PAGE_SIZE = 50;
 
 function playgroundReplayHref(entry: Pick<AuditLogEntry, "userId" | "tool" | "argsSummary">): string {
@@ -657,11 +682,30 @@ function CopyableId({ value, testId, label, shortDisplay = false }: { value: str
   );
 }
 
+/**
+ * 涉及数据表清单。
+ *
+ * E7：**不截断**、不写「等 N 个」——完整清单必须可见（可复制）。
+ * 单表直接显示；多表用换行 + 分隔符逐个列出。
+ */
 function formatTablesCell(sources: AuditTurnEntry["sources"]): string {
   const tables = sources.map((s) => s.physicalTable).filter(Boolean);
   if (tables.length === 0) return "—";
-  if (tables.length === 1) return tables[0]!;
-  return `${tables[0]} 等 ${tables.length} 个`;
+  return tables.join("、");
+}
+
+/**
+ * 问询行的八桶主状态（非零桶，按八桶固定顺序）。
+ *
+ * 一次问询聚合多次调用，因此**不合成单一结论** —— 逐桶列出真实计数。
+ * 历史行没有 primary_status 时，八桶全部落在 `unknown`。
+ */
+function turnStatusBuckets(entry: AuditTurnEntry): Array<{ bucket: AuditPrimaryStatus; count: number }> {
+  const counts = entry.primaryStatusSummary;
+  if (!counts) return [];
+  return PRIMARY_STATUS_ORDER.map((bucket) => ({ bucket, count: counts[bucket] ?? 0 })).filter(
+    (item) => item.count > 0
+  );
 }
 
 const TURN_SOURCE_FILTER_TITLE =
@@ -704,20 +748,28 @@ function TurnDetailDrawer({
   onOpenChange: (open: boolean) => void;
   agentNameById: Map<string, string>;
 }) {
-  const [tablesExpanded, setTablesExpanded] = useState(false);
   const query = useQuery({
     queryKey: ["admin", "audit", "turn", turnId, hours],
     queryFn: () => apiGet<AuditTurnDetailResponse>(`/api/admin/audit/turns/${encodeURIComponent(turnId ?? "")}?hours=${hours}`),
     enabled: open && Boolean(turnId)
   });
   const detail = query.data;
-  useEffect(() => {
-    setTablesExpanded(false);
-  }, [turnId]);
   const drawerSources = Array.isArray(detail?.sources)
     ? (detail.sources as Array<{ connectionId?: string; physical_table?: string; physicalTable?: string }>)
     : [];
-  const visibleSources = tablesExpanded ? drawerSources : drawerSources.slice(0, 4);
+  // 关联修订（只读）。历史更正**不改写原始账本**，因此这里展示时间线，
+  // 最新一条是生效视图，更早的是历史。
+  const revisionsQuery = useQuery({
+    queryKey: ["admin", "audit", "association-revisions", turnId],
+    queryFn: () =>
+      apiGet<{ data: AssociationRevisionTimelineItem[] }>(
+        `/api/admin/audit/association-revisions?originalTurnId=${encodeURIComponent(turnId ?? "")}&limit=50`
+      ),
+    enabled: open && Boolean(turnId)
+  });
+  const revisions = revisionsQuery.data?.data ?? [];
+  // 最早一条修订的 pre-image = 准入时记录的原始关联状态（不可变）。
+  const originalAssociation = revisions.length > 0 ? revisions[revisions.length - 1]?.originalAssociationStatus ?? null : null;
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -784,10 +836,22 @@ function TurnDetailDrawer({
                 </section>
               ) : null}
 
+              {/* 关联修订时间线（只读）。历史更正**不改写原始账本**：
+                  生效视图与历史修订分开展示，准入时的原始状态单列。 */}
+              <section className="pl-card grid gap-2" data-testid="audit-turn-association-revisions">
+                <h3 className="text-sm font-semibold text-fg-default">关联修订</h3>
+                <AssociationRevisionTimeline
+                  revisions={revisions}
+                  originalFromAccessLog={originalAssociation}
+                />
+              </section>
+
               {drawerSources.length > 0 ? (
                 <div className="flex flex-wrap items-center gap-1.5 text-xs" data-testid="audit-turn-tables-inline">
                   <span className="text-fg-muted whitespace-nowrap">触达表：</span>
-                  {visibleSources.map((source, idx) => (
+                  {/* E7：默认**全部展开**，不再截断为前 4 个、不写「+N 更多」。
+                      完整清单必须可见（管理员要据此判断范围）。 */}
+                  {drawerSources.map((source, idx) => (
                     <span
                       key={idx}
                       className="inline-flex items-center gap-1 rounded bg-bg-muted px-2 py-0.5 font-mono text-fg-default notranslate"
@@ -797,16 +861,21 @@ function TurnDetailDrawer({
                       <span>{source.physicalTable ?? source.physical_table ?? "—"}</span>
                     </span>
                   ))}
-                  {drawerSources.length > 4 ? (
-                    <button
-                      type="button"
-                      className="pl-btn pl-btn--ghost text-xs h-6 px-1.5"
-                      data-testid="audit-turn-tables-expand"
-                      onClick={() => setTablesExpanded((v) => !v)}
-                    >
-                      {tablesExpanded ? "收起" : `+${drawerSources.length - 4} 更多`}
-                    </button>
-                  ) : null}
+                  <button
+                    type="button"
+                    className="pl-btn pl-btn--ghost text-xs h-6 px-1.5"
+                    data-testid="audit-turn-tables-copy"
+                    onClick={() => {
+                      void copyTextWithToast(
+                        drawerSources
+                          .map((source) => `${source.connectionId ? `${source.connectionId} · ` : ""}${source.physicalTable ?? source.physical_table ?? ""}`)
+                          .join("、"),
+                        { successMessage: "已复制触达表清单", failureMessage: "复制失败，请重试" }
+                      );
+                    }}
+                  >
+                    复制清单
+                  </button>
                 </div>
               ) : null}
 
@@ -1035,8 +1104,8 @@ function EntryRow({
 }) {
   const [searchParams] = useSearchParams();
   const [expanded, setExpanded] = useState(false);
-  const outcomeClass =
-    entry.outcome === "ok" ? "pl-status-done" : entry.outcome === "denied" ? "pl-status-partial" : "pl-status-validation_failed";
+  // 八桶主状态（不是旧三桶 outcome）。历史行 → unknown。
+  const primaryStatus = entry.primaryStatus ?? "unknown";
   const redactedArgs = entry.argsSummary ? redactValue(entry.argsSummary) : null;
   const callOrigin = formatCallOriginLabel(entry.lucyPlatform);
   const auditEventHref = {
@@ -1110,16 +1179,50 @@ function EntryRow({
             <span className="text-fg-muted">—</span>
           )}
         </td>
-        <td className="notranslate" translate="no">{formatAgentLabel(entry.userId, agentNameById)}</td>
+        <td className="notranslate" translate="no" data-testid={`audit-call-agent-${entry.id}`}>
+          {/* 原 Agent 列保留**产品 Agent 含义**；「凭证主体」并列说明，
+              不用 token 备注替换 Agent（20261019 §5）。 */}
+          <div className="flex flex-col items-start gap-1">
+            <span>{formatAgentLabel(entry.userId, agentNameById)}</span>
+            <CredentialPrincipalCell
+              userId={entry.credentialPrincipalId ?? entry.userId}
+              hint={
+                entry.credentialPrincipalId && entry.credentialPrincipalId !== entry.userId
+                  ? "凭证主体"
+                  : "凭证主体（未单独登记，等同 Agent 主体）"
+              }
+            />
+          </div>
+        </td>
         <td>
           <AccessContextCell
             clientIp={entry.clientIp}
             userAgent={entry.userAgent}
             testId={`audit-access-context-${entry.id}`}
           />
+          <ClientCoveragePill
+            observed={coverageAxisFrom(entry) === "observed"}
+            reason={coverageAxisFrom(entry) === "observed" ? undefined : "no_client_observation"}
+          />
         </td>
         <td>
-          <span className={`pl-status-badge ${outcomeClass}`}>{OUTCOME_LABELS[entry.outcome]}</span>
+          <div className="flex flex-col items-start gap-1" data-testid={`audit-status-cell-${entry.id}`}>
+            {/* 八桶主状态（B27）。旧 outcome 只作 legacy 说明，不是执行状态。 */}
+            <span
+              className={`pl-status-badge ${primaryStatusPalette(primaryStatus)}`}
+              data-testid={`audit-primary-status-${entry.id}`}
+              data-primary-status={primaryStatus}
+            >
+              {primaryStatusLabel(primaryStatus)}
+            </span>
+            {/* 三条独立判断轴：执行 / 关联 / 覆盖互不推导。
+                执行成功**不会**让关联或覆盖变成绿色已完成。 */}
+            <AuditStatusTriad
+              execution={executionAxisFrom(entry)}
+              association={associationAxisFrom(entry.associationStatus)}
+              coverage={coverageAxisFrom(entry)}
+            />
+          </div>
         </td>
         <td className="pl-audit-table-muted">
           <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
@@ -1173,6 +1276,18 @@ function EntryRow({
           ) : (
             <span className="text-fg-muted">—</span>
           )}
+          {/* 返回规模：行 / 列 / 字节。缺值按**六值空值原因**展示，
+              未知不得写成 0（20261019 §4.4 / U2）。
+              组件与既有「生成 SQL」入口**并存**，不替换其可发现性。 */}
+          <ReadonlySqlRowset
+            rows={entry.responseRowCount ?? null}
+            cols={entry.responseColumnCount ?? null}
+            bytes={entry.responseBytes ?? null}
+            status={sqlRowsetStatusFrom(
+              entry.responseRowCount !== undefined && entry.responseRowCount !== null,
+              entry.nullReason
+            )}
+          />
         </td>
       </tr>
       {expanded && (
@@ -1353,6 +1468,11 @@ export function Audit() {
   const [turnDrawerOpen, setTurnDrawerOpen] = useState(Boolean(searchParams.get("turnId")));
   const [now, setNow] = useState(() => new Date());
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  /**
+   * 刷新状态。暂停时**冻结**筛选与序列上界：后台不得换范围、不得把更新的
+   * 数据悄悄塞进来（20261019 §5「暂停固定筛选和序列上界，不能后台换范围」）。
+   */
+  const [refreshPaused, setRefreshPaused] = useState(false);
   const [timePreset, setTimePreset] = useState<TimePreset>(() => parseRangePreset(searchParams));
 
   const user = searchParams.get("user") ?? "";
@@ -1629,7 +1749,8 @@ export function Audit() {
   const turnsQuery = useQuery({
     queryKey: ["admin", "audit", "turns", turnsQueryStr],
     queryFn: () => apiGet<AuditTurnsResponse>(`/api/admin/audit/turns${turnsQueryStr}`),
-    enabled: tab === "turns"
+    enabled: tab === "turns",
+    refetchInterval: refreshPaused ? false : 30_000
   });
 
   const callsQueryStr = buildQuery({
@@ -1654,7 +1775,8 @@ export function Audit() {
   const callsQuery = useQuery({
     queryKey: ["admin", "audit", "calls", callsQueryStr, slowOnly],
     queryFn: () => apiGet<AuditResponse>(`/api/admin/audit${callsQueryStr}`),
-    enabled: tab === "calls"
+    enabled: tab === "calls",
+    refetchInterval: refreshPaused ? false : 30_000
   });
 
   const turnEntries = turnsQuery.data?.entries ?? [];
@@ -1688,6 +1810,27 @@ export function Audit() {
 
   const statsUpdatedAtMs = tab === "turns" ? turnsQuery.dataUpdatedAt : callsQuery.dataUpdatedAt;
   const statsTimeLabel = formatStatsTimeLabel(statsUpdatedAtMs > 0 ? new Date(statsUpdatedAtMs) : null, now);
+
+  // ── 顶部元条（20261019 §5）─────────────────────────────────────────────
+  // 固定起止时间：就是**这一次查询实际用的窗口**（与请求参数同源），
+  // 不是「最近 N 小时」的口头说法。
+  const fixedStartIso = localDateTimeValueToIso(since) ?? sinceForRange(range);
+  const fixedEndIso = localDateTimeValueToIso(until) ?? new Date(now).toISOString();
+  const zone = useMemo(() => {
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().timeZone || "本地时区";
+    } catch {
+      return "本地时区";
+    }
+  }, []);
+  const statsAtIso = statsUpdatedAtMs > 0 ? new Date(statsUpdatedAtMs).toISOString() : new Date(now).toISOString();
+  // 审计同步延迟 = 最老未投影事件的滞留时长（服务端投影状态，真实观测值）。
+  const projection = tab === "turns" ? turnsQuery.data?.projection : callsQuery.data?.projection;
+  const syncLagMs = projection?.delayMs ?? 0;
+  const projectionComplete = projection?.complete ?? false;
+
+  // ── 八桶主状态汇总（B27；与列表 / CSV / v2 导出同源同函数）──────────────
+  const primaryStatusCounts = callsQuery.data?.summary?.primaryStatus;
 
   const turnExportFilterQuery = buildQuery({
     user: resolvedUserFilter || undefined,
@@ -1806,6 +1949,40 @@ export function Audit() {
           调用流水
         </Link>
       </div>
+
+      {/* 顶部元条：固定起止时间、时区、统计时间、刷新/暂停状态、审计同步延迟。
+          暂停时筛选与序列上界被冻结，后台不得换范围。 */}
+      <AuditTopMetaBar
+        fixedStart={fixedStartIso}
+        fixedEnd={fixedEndIso}
+        zone={zone}
+        statsAt={statsAtIso}
+        refreshState={refreshPaused ? "paused" : "live"}
+        pauseReason="筛选与序列上界已冻结"
+        syncLagMs={syncLagMs}
+        trailing={
+          <div className="flex flex-wrap items-center gap-2">
+            {!projectionComplete ? (
+              <span
+                className="pl-status-badge pl-status-warning"
+                data-testid="audit-projection-lagging"
+                title={projection?.reason ?? "审计投影尚未追平账本上界"}
+              >
+                审计投影未追平
+              </span>
+            ) : null}
+            <button
+              type="button"
+              className="pl-btn pl-btn--ghost text-xs"
+              data-testid="audit-refresh-toggle"
+              aria-pressed={refreshPaused}
+              onClick={() => setRefreshPaused((v) => !v)}
+            >
+              {refreshPaused ? "恢复刷新" : "暂停刷新"}
+            </button>
+          </div>
+        }
+      />
 
       <div className="pl-notice flex flex-wrap items-center justify-between gap-3" data-testid="audit-granularity-help">
         <span>
@@ -2102,8 +2279,10 @@ export function Audit() {
                   <tr><td colSpan={12} className="px-3 py-6 text-center text-fg-muted">暂无问询记录</td></tr>
                 ) : (
                   filteredTurnEntries.map((entry, index) => {
+                    // 「未下发」提示用 legacy outcome 的 denied 计数：它回答的是
+                    // 「这次问询有没有被下发过表」，与「执行结果」不是同一维度。
+                    // 执行结果一律看八桶（见下方 turnStatusBuckets）。
                     const denied = entry.outcomeSummary?.denied ?? 0;
-                    const errors = entry.outcomeSummary?.error ?? 0;
                     return (
                       <tr
                         key={entry.id}
@@ -2135,20 +2314,24 @@ export function Audit() {
                             : formatTablesCell(entry.sources)}
                         </td>
                         <td>
+                          {/* 八桶主状态（B27）。「成功」只在**全部**关联调用都落在
+                              succeeded 桶时才成立；旧三桶（denied/error）不再
+                              充当执行结论 —— 预算终止 / 未执行 / 未知都不是
+                              「成功」，也不是「异常」。 */}
                           <span className="inline-flex flex-wrap items-center gap-1">
-                            {denied > 0 ? (
-                              <>
-                                <span className="pl-status-badge pl-status-partial">已拦截</span>
-                                <span className="text-xs text-fg-muted tabular-nums">({denied})</span>
-                              </>
+                            {turnStatusBuckets(entry).map(({ bucket, count }) => (
+                              <span
+                                key={bucket}
+                                className={`pl-status-badge ${primaryStatusPalette(bucket)}`}
+                                data-testid={`audit-turn-status-${entry.id}-${bucket}`}
+                                data-bucket={bucket}
+                              >
+                                {primaryStatusLabel(bucket)} <span className="tabular-nums">{count}</span>
+                              </span>
+                            ))}
+                            {turnStatusBuckets(entry).length === 0 ? (
+                              <span className="text-fg-muted">无关联调用</span>
                             ) : null}
-                            {errors > 0 ? (
-                              <>
-                                <span className="pl-status-badge pl-status-validation_failed">异常</span>
-                                <span className="text-xs text-fg-muted tabular-nums">({errors})</span>
-                              </>
-                            ) : null}
-                            {denied === 0 && errors === 0 ? <span className="pl-status-badge pl-status-done">成功</span> : null}
                             {(entry.slowCallCount ?? 0) > 0 ? (
                               <span className="pl-status-badge pl-status-partial">含 {entry.slowCallCount} 慢</span>
                             ) : null}
@@ -2177,6 +2360,39 @@ export function Audit() {
               ? `本页慢调用 ${callEntries.length} 条（筛选前共 ${callTotal} 条）`
               : (callTotal === 0 ? "共 0 条" : `${page * PAGE_SIZE + 1}–${Math.min((page + 1) * PAGE_SIZE, callTotal)} / 共 ${callTotal} 条`)}
           </div>
+          {/* 八桶主状态汇总（B27）。旧三桶 outcome 只作 legacy 直方图单列，
+              不作为执行状态 —— 两者不混在同一处。 */}
+          {primaryStatusCounts ? (
+            <div
+              className="flex flex-wrap items-center gap-2 text-xs"
+              data-testid="audit-primary-status-summary"
+              data-closed={callsQuery.data?.summary?.primaryStatusClosed ? "true" : "false"}
+            >
+              <span className="text-fg-muted whitespace-nowrap">主状态：</span>
+              {PRIMARY_STATUS_ORDER.map((bucket) => (
+                <span
+                  key={bucket}
+                  className={`pl-status-badge ${primaryStatusPalette(bucket)}`}
+                  data-testid={`audit-primary-status-count-${bucket}`}
+                  data-bucket={bucket}
+                >
+                  {primaryStatusLabel(bucket)} {primaryStatusCounts[bucket] ?? 0}
+                </span>
+              ))}
+              {callsQuery.data?.summary?.legacyOutcome ? (
+                <span
+                  className="pl-status-badge pl-status-neutral"
+                  data-testid="audit-legacy-outcome-histogram"
+                  title="旧 outcome 直方图（legacy），不作为执行状态"
+                >
+                  旧 outcome（legacy）：{Object.entries(callsQuery.data.summary.legacyOutcome)
+                    .filter(([key]) => key !== "null")
+                    .map(([key, count]) => `${LEGACY_OUTCOME_LABELS[key] ?? key} ${count}`)
+                    .join(" · ") || "无"}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
           <section className="pl-data-grid-frame" data-testid="audit-calls-grid-frame">
             <div
               className="pl-data-grid-scroll pl-audit-grid-scroll"

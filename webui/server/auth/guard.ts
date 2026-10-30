@@ -160,6 +160,42 @@ export async function requireOwner(
   return true;
 }
 
+/**
+ * L25-16 / G13 — 委托与 Token 面的 owner 门禁。
+ *
+ * 与 `requireOwner` 的唯一差别：**open 模式**（`LUCY_WEBUI_AUTH=off`）下实例只有一个
+ * 隐式管理者 `local-admin`，根本不存在 operator / owner 之分，因此门禁视为已满足。
+ * `required` 模式下必须是已登录且 `role === "owner"` 的管理员。
+ *
+ * 适用范围（Spec §3.2.2 规则 8）：设置 / 修改 / 撤销 `delegated_from`；为已有 owner
+ * 委托的 Agent 签发 Token；授予含 owner-only 工具的角色；修改影响控制面可达范围的
+ * Agent `role` / `roles` / `allow.ops`。
+ */
+export async function requireOwnerForOps(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  ownerMessage = "仅所有者可管理委托与控制面授权"
+): Promise<boolean> {
+  const ctx = request.lucyAdmin;
+  // open 模式：唯一的管理者就是实例所有者本人，不存在越权面。
+  if (ctx?.authMode === "open") return true;
+  if (!ctx?.admin) {
+    await reply.status(401).send({
+      ok: false,
+      error: { code: "AUTH_REQUIRED", message: "需要登录" }
+    });
+    return false;
+  }
+  if (ctx.admin.role !== "owner") {
+    await reply.status(403).send({
+      ok: false,
+      error: { code: "OWNER_REQUIRED", message: ownerMessage }
+    });
+    return false;
+  }
+  return true;
+}
+
 export async function listEnabledAdminSummaries() {
   const config = await loadAdminsConfig();
   return enabledAdmins(config).map((a) => ({

@@ -5,7 +5,7 @@
 | 文档类型 / 版本 | 功能设计基线 / v0.2-requirements-review；2026-10-27 交叉审阅替代条款见 §14 |
 | 日期 / 目标版本 | 2026-10-24 / v0.25；最近修订 2026-10-27 |
 | 功能编号 / 优先级 | L25-14 / P0-2；R2、R4、R5 为 P0，R1、R3 保持 P1 |
-| 状态 | **Spec／Plan 文档评审已关闭，修订通过（2026-10-27）**；已有局部实现，C14–C18 待实施及实现后静态复审，C19 待正式验收。实施基线 `21de5168`，本次另核对 HEAD `7382bac4`；R1／R3 的 P1 历史实施记录不计入 P0 完成判定；V01–V22 全部未执行 |
+| 状态 | **Spec／Plan 文档评审已关闭，修订通过（2026-10-27）**；C14–C18 已实施、未验收，C19 待正式验收。实施基线 `21de5168`，2026-10-27 另核对 HEAD `7382bac4`；R1／R3 的 P1 历史实施记录不计入 P0 完成判定；V01–V22 全部未执行。代码实施完成不等于验收通过 |
 | 实施回写 | 2026-10-25 W5 历史回写见 §13；2026-10-27 经本次用户明确授权完成独立交叉审阅修订，现行规范性替代条款见 §14。文档修订不表示代码已修复 |
 | 授权来源 | 2026-10-24 Forrest 批准首批 Spec 评审 Final 决议；2026-10-25 实施授权见实施计划；2026-10-27 用户授权本次独立核查并直接修订 Spec／Plan |
 | 规划入口 | [Lucy v0.25 功能升级建议书](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) §2.8；[P0 Final 决议](../reviews/2026-10-24-lucy-v0.25-p0-final-decision.md) |
@@ -722,6 +722,38 @@ D1–D7 已于 2026-10-24 按 P0 Final 决议收口；以下为实现必须遵�
 
 **（d）是否改变冻结契约**：**不改变**。§3.2 的要求不变，本条只补记「哪个入口承载该要求」的现状事实。批准记录来源：实施计划 §9.0 回写状态表的 N12 行（落点 = L25-14 §3.2）、§5.2 实施条目 C6 与 §7 待决项 N12 登记；因不引入新条款、不改 §9 验收矩阵，文档「文档类型 / 版本」保持 `v0.2-requirements-review`。
 
+### 13.6 N1 修订 — 授权在 v0.25 实施 D-03 的大小写不敏感解析
+
+**（a）背景与本次授权**
+
+§13.1（N1，Forrest 2026-10-25 裁决「改法 1」）当时裁定：v0.25 只做可归因诊断、**不修 G5**，真实大小写解析留 0.20.Z 维护线。**2026-10-28 Forrest 批准实施**，本节记录该裁决的修订及其依据；§13.1 原文保留不删，作为决策留痕。
+
+依据的现实变化：① `main` 自 2026-10-24 发布 v0.20.0 后已停更，`lucy-v0.25` 领先 71 个提交且完整包含 `main` 的全部提交，v0.25 已是唯一活跃开发线，「0.20.Z 维护线」不再是合适的落点；② 客户场景（大写 schema 表无法保存任何行级条件）是交付价值依赖，长期挂起不可接受。
+
+**（b）本次裁决**
+
+1. **授权在 v0.25 实施 D-03 修复**，落点为 `webui/server/proxy/row-policy-catalog.ts` 的 `resolveManifestFilePath` 单一开关点——§13.1 确立的「该模块唯一允许长出大小写目录扫描的位置」约束**继续成立**，修复不违反它。
+2. 该函数改为按磁盘真实文件名做大小写不敏感匹配，并返回**实际命中的文件名**，使 `manifestPath` 与原因码指向真正读取的文件。
+3. **不放宽任何字段校验**：不存在的字段、度量、跨源引用仍分别按 `unknown`／`measure`／`cross_source` 拒绝；不得以改成「全部行」绕过。
+4. **三分归因的「清单不可用」分支不消失**——这是 §13.1「为什么不修 G5」第 2 条理由不再成立的原因：该分支由 `resolve`／`read`／`parse`／`catalog` 四类**独立于 G5** 的故障路径支撑，修复 G5 只消除了 `resolve` 阶段中「因大小写不匹配而未命中」的那一种，其余三类（拒绝读取、解析失败、结构非法）保持不变，`capability_unknown` 分支亦不受影响。
+5. **V19／V22 由「条件项」转为本条的可取证项**：二者的前置（D-03 已修）现已满足，但**验收状态仍按 §14.6 保持「未执行」**——仓库内自动化回归用例不等于正式验收证据。
+6. **D-03 台账状态保持 `open`**、`fixedIn` 仍为空：`verifiedBy` 要求引用本次 release evidence 中 passed 的用例 ID，而 real-e2e 从未被调度（见 G-01），V19／V22 尚无正式验收证据。不得据此宣称受影响客户场景已交付价值。
+
+**（c）回归证据（仓库内自动化，随 CI 在 Linux 大小写敏感环境执行）**
+
+| 用例 | 位置 | 覆盖 |
+|---|---|---|
+| V19 | `webui/server/__tests__/row-policy-d03-uppercase.test.ts` | 大写 schema 表上合法列正常绑定 |
+| V22 | 同上 | 同一表的预览 `forced_filters` ≡ 运行时 `forced_filters` |
+| V20 | `webui/server/__tests__/row-policy-catalog-attribution.test.ts` | 五类故障路径（resolve／read／parse／catalog／capability_unknown）全部失败关闭、带四元组 |
+| V21 | 同上 | 字段不存在仅在目录可靠装载时归因「字段不存在」，与 V20 可区分 |
+
+上述用例用 vitest mock `node:fs/promises` 的 `readFile` 使 `_schema` 目录具备大小写敏感语义，使 macOS／APFS 与 Linux 行为一致；**已用「撤掉修复」对照验证 V19／V22 确实失败**，非假阳性。
+
+**（d）受影响条款编号**：§13.1（N1 修订）、§1.5（G5 根因与登记状态）、§5.5（清单来源与字段诊断）、§9 的 V19／V20／V21／V22、§14.6（替代判据）、§11 D7（归属与 `fixedIn`）、缺陷台账 D-03。
+
+**（e）是否改变冻结契约**：**不改变**运行时语义、权限代数、`permission_model_version`、D1–D7 裁决与 §9 验收矩阵。§5.5 原文第 392 行的伪代码目标形态**在本条落地**，即 §13.1 所述「降级为 0.20.Z 目标形态」的边界勘误作废并由本节取代。批准记录来源：Forrest 2026-10-28 授权「按建议执行」；因不引入新条款、不改 §9 验收矩阵，文档「文档类型 / 版本」保持 `v0.2-requirements-review`。
+
 ## 14. 交叉审阅替代条款（2026-10-27，现行）
 
 ### 14.1 授权、证据基线与替代范围
@@ -739,7 +771,7 @@ D1–D7 已于 2026-10-24 按 P0 Final 决议收口；以下为实现必须遵�
 | §9 的 V08–V13、V15、V16 Role 分支、V20、V21 | §14.6 | 验收须覆盖真实故障路径和产品入口证据 |
 | §11 D6 的协调器范围 | §14.2 | 锁内须包含基线复核、最终预览、写入、生效、终结与恢复 |
 
-未列明的原条款继续有效；§13 的历史回写不删除。Spec 99／100 的权限代数不变。本节是文档合同修订，**不是代码修复记录**；V01–V22 全部保持「未执行」。
+未列明的原条款继续有效；§13 的历史回写不删除。Spec 99／100 的权限代数不变。本节写的是现行合同；C14–C18 的代码实施见 §14.7，实施完成不等于验收通过。V01–V22 全部保持「未执行」。
 
 ### 14.2 R2：成功预览确认与共享发布窗口
 
@@ -767,6 +799,8 @@ type RowPolicyPreviewConfirmation = {
 所有可改变行级策略或其影响面的 Role 写入口都必须消费该确认；至少包括 `PATCH /api/admin/roles/:roleId`，不得以创建、复制或另一服务入口绕过。请求必须携带 `rowPolicyConfirmation`。服务端不信任客户端回传的表／Agent 列表本身，而是在锁内重新计算并比对全部摘要。
 
 缺失确认、预览未成功、候选变化、任一基线变化或影响面变化，统一以 HTTP 409 / `ROW_POLICY_PREVIEW_REQUIRED` 拒绝，`detail.reason` 至少区分 `missing`、`preview_failed`、`candidate_mismatch`、`baseline_changed`、`compile_inputs_changed`、`impact_changed`。这些拒绝全部发生在 durable intent 与配置写入之前，结果为零配置写、零行策略 intent。
+
+删除 Role 的候选是从配置中移除该 Role，不是用空 `allow` 覆盖。受影响表在候选里已经没有任何授予时，预览结果是「无适用授予」，可以签发确认；不得把它写成全部行，也不得回退为全局并集。目录、编译或其他预览失败仍然拒绝确认。
 
 #### 14.2.2 规范性预览与保存流程
 
@@ -900,7 +934,7 @@ function loadSourceFieldCatalogWithProvenance(tableKey, serverContext):
         return {status: catalog_capability_unknown, catalogLoaded: false,
                 identity: tableKey, reason: capability.reason}
 
-    path = resolveRequestedManifestPath(tableKey)  # v0.25 不修 D-03 大小写
+    path = resolveRequestedManifestPath(tableKey)  # 本分支按磁盘真实文件名做大小写不敏感匹配；D-03 台账仍 open，直到 release evidence
     bytes = readFile(path)
       on missing: return unavailable(stage=resolve, identity=tableKey)
       on other I/O failure: return unavailable(stage=read, identity=tableKey)
@@ -994,7 +1028,7 @@ C14–C18 已完成代码实施并完成实现后静态复审（自审），落�
 
 依据用户“关闭 spec 和 plan 评审，commit 本任务”的明确指令，本次独立审阅、Kimi 交叉审阅及 Codex 静态复核的**文档评审已关闭，修订通过**。初审退回意见已落实到 §14.2–§14.6，并映射到实施计划 §5.4 C14–C19；本次无未决 P0 级文档异议。
 
-本次关闭仅针对 Spec 与 Plan 的文档合同，不关闭代码缺口、缺陷台账或验收门禁。C14–C18 仍待代码实施及实现后静态复审，C19 待正式验收；V01–V22 全部保持未执行。D-03 仍归 0.20.Z，V19／V22 的维护修复与环境前置不足时保持 blocked。本次未执行功能测试、浏览器测试、real-e2e、镜像构建、部署或真实环境连接。
+本次关闭仅针对 Spec 与 Plan 的文档合同，不关闭缺陷台账或验收门禁。C14–C18 已实施、未验收，C19 待正式验收；V01–V22 全部保持未执行。D-03 台账仍为 open（`fixedIn: null`，`verifiedBy: []`），本分支已有大小写不敏感解析，但 release evidence 未齐，V19／V22 在大小写敏感环境上保持 blocked。代码实施完成不等于验收通过。
 
 初审报告及本次复审关闭记录见 [Codex 独立审阅报告](../reviews/2026-10-27-codex-review-row-permission-management-p0.md)；初审“退回”保留为历史结论，不覆盖本节的文档关闭状态。
 

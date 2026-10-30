@@ -248,6 +248,10 @@ export async function prepareEnvironment(options) {
   const proxyPort = Number(options.proxyPort ?? 17879);
   // An external (K8s) instance is addressed by its ingress URLs; the runner then never starts a process.
   const external = Boolean(options.baseUrl);
+  // The dual-stack flood origin exists ONLY for the locally started development instance:
+  // an externally started instance and the release-mode image keep their own bind
+  // address, because their networking is not the harness' to change.
+  const floodOriginAvailable = !external && mode === "local";
   if (external && mode !== "release") throw new PrepareError("--base-url (external instance) is only valid in release mode");
   if (external && !options.mcpUrl) throw new PrepareError("--base-url requires --mcp-url");
   // --apply-db opts the run into the postgresql probe. prepare-environment only
@@ -282,10 +286,23 @@ export async function prepareEnvironment(options) {
       mcpUrl: external ? options.mcpUrl : `http://127.0.0.1:${proxyPort}/mcp`,
       startedBy: external ? "external" : "runner",
       markerWikiKey: markerKey,
+      // The rate-limit flood of the security leg needs a SOURCE ADDRESS of its own: the
+      // product buckets logins by source (`webui/server/auth/rate-limit.ts`,
+      // `sourceTotal` = 30 per 5 minutes), and the flood deliberately burns that bucket.
+      // On a locally started instance the WebUI listens dual-stack, so the IPv6 loopback
+      // reaches the SAME server while the server sees `::1` instead of `::ffff:127.0.0.1`
+      // — a different bucket, with no product threshold, window or key touched.
+      // An externally started instance (customer K8s) and the release-mode image are not
+      // ours to re-bind, so they have no flood origin and the flood falls back to the main
+      // source (see `SecurityContext.floodLogin`).
+      floodBaseUrl: floodOriginAvailable ? `http://[::1]:${webuiPort}` : null,
       env: {
         LUCY_DEPLOYMENT_MODE: "customer",
         LUCY_WEBUI_AUTH: "required",
-        LUCY_WEBUI_HOST: "127.0.0.1",
+        // Dual-stack on a locally started instance: the main traffic keeps arriving on
+        // 127.0.0.1 (the server sees `::ffff:127.0.0.1`, normalized to `127.0.0.1`),
+        // while the rate-limit flood can arrive over the IPv6 loopback as `::1`.
+        LUCY_WEBUI_HOST: floodOriginAvailable ? "::" : "127.0.0.1",
         LUCY_WEBUI_PORT: String(webuiPort),
         LUCY_PROXY_PORT: String(proxyPort),
         // The WebUI generates copyable client configs from this value; pointing it at the run keeps copied configs on the run's own instance.

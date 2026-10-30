@@ -9,9 +9,9 @@
 //     and the CON25 / LOG25 increment scenarios.
 //
 // The manifest never becomes a second source of truth: existing variants carry
-// only `ownerBranch` (+ cross-domain refs); their executors / requires / assert /
-// artifacts / gold stay in the frozen catalog. Run status never lives here —
-// it lives in the result file (v025-result.mjs).
+// `ownerBranch` (+ the requirement attribution + cross-domain refs); their
+// executors / requires / assert / artifacts / gold stay in the frozen catalog.
+// Run status never lives here — it lives in the result file (v025-result.mjs).
 //
 // Schema validation reuses scripts/e2e/lib/schema.mjs `validateAgainstSchema()`
 // and the frozen-catalog check reuses catalog.mjs `checkLock()`; neither is
@@ -115,8 +115,13 @@ export function loadCoverage(file = V025_COVERAGE_PATH) {
 export function parseSpecScenarioOwners(specText) {
   const section = specText.split("### 6.1")[1]?.split("### 6.2")[0] ?? "";
   const out = new Map();
+  // AUD25／ARV25 于 2026-10-28（D2 路径 A）并入冻结 catalog，因而也进入本表的
+  // 场景责任表 —— 它们是 release 门禁的一部分，必须有明确 owner，否则
+  // 「owner 一致性」校验会静默跳过它们。
+  // 注意：这两个场景 id **没有**数字后缀（场景名即 AUD25／ARV25），
+  // 而变体 id 才是 AUD25-A01／ARV25-V01。
   for (const m of section.matchAll(
-    /^\|\s*((?:SEC|UX|OPS|GATE)-\d+)\s*\|([^|]*)\|\s*([A-Z]+)\s*\|([^|]*)\|/gm
+    /^\|\s*((?:SEC|UX|OPS|GATE)-\d+|AUD25|ARV25)\s*\|([^|]*)\|\s*([A-Z]+)\s*\|([^|]*)\|/gm
   )) {
     out.set(m[1], { title: m[2].trim(), owner: m[3].trim(), rule: m[4].trim() });
   }
@@ -186,7 +191,10 @@ export function validateCoverage(loaded, options = {}) {
 
   // 4. owner table agreement with the approved Spec §6.1
   const owners = parseSpecScenarioOwners(specText);
-  if (owners.size !== 32) problems.push(`Spec §6.1 scenario rows ${owners.size} != 32`);
+  // 2026-10-28（D2 路径 A）：AUD25／ARV25 并入冻结 catalog 后也进入本表，
+  // 场景行数由 32 增至 34。
+  const expectedOwnerRows = 34;
+  if (owners.size !== expectedOwnerRows) problems.push(`Spec §6.1 scenario rows ${owners.size} != ${expectedOwnerRows}`);
   const exceptionById = new Map(VARIANT_OWNER_EXCEPTIONS.map((e) => [e.executionId, e]));
   const byId = new Map(existing.map((m) => [m.executionId, m]));
   for (const [scenarioId, info] of owners) {
@@ -241,7 +249,21 @@ export function validateCoverage(loaded, options = {}) {
   }
   const withSource = newScenarios.filter((s) => s.sourceRequirementId !== null && s.sourceRequirementId !== undefined);
   const actualIds = new Set(withSource.map((s) => s.executionId));
-  for (const id of setDiff([...expectedIds], [...actualIds])) problems.push(`newScenarios missing ${id}`);
+  // 2026-10-28（D2 路径 A）：AUD25-A01..A12 与 ARV25-V01..V12 已**并入冻结
+  // catalog**，因此它们在覆盖清单里从 newScenarios 移到 existingCatalogMappings
+  // （existing 必须恰好等于 lock.requiredIds，两者不可重叠）。
+  //
+  // 它们的 source requirement 覆盖**没有丢失**：那 24 个 requirement id 现在由
+  // 冻结 catalog 承载（catalog 是 executors/requires/assert/artifacts/gold 的
+  // 唯一真源，且已进入 evidence.cases 与 passedIds）。所以下面的覆盖检查必须
+  // 把「已并入冻结 catalog 的执行项」也计入已覆盖集合，否则会把一次**加强**
+  // （从影子清单提升为冻结门禁）误报成「遗漏」。
+  const frozenIds = new Set(lock.requiredIds);
+  const coveredIds = new Set([
+    ...actualIds,
+    ...[...expectedIds].filter((id) => frozenIds.has(id))
+  ]);
+  for (const id of setDiff([...expectedIds], [...coveredIds])) problems.push(`newScenarios missing ${id}`);
   for (const id of setDiff([...actualIds], [...expectedIds])) problems.push(`newScenarios has unapproved id ${id}`);
   for (const s of withSource) {
     const group = SOURCE_GROUPS.find((g) => s.executionId.startsWith(`${g.key}-`));

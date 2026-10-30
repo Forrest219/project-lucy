@@ -2385,3 +2385,43 @@ describe("ConnectionOverview grid visual consistency (M72)", () => {
     expect(reason).toHaveTextContent("凭据无效或被拒绝");
   });
 });
+
+describe("Spec 149 — 运维问数连接卡片", () => {
+  it("主称是「运维问数连接」，连接 ID 用 translate=no，删除入口不可用", async () => {
+    stubOverviewFetch({
+      connections: [
+        {
+          id: "lucy-ops",
+          driver: "sqlite",
+          schemas: ["main"],
+          enabledTables: ["ops_calls", "ops_call_tables"]
+        },
+        {
+          id: "mysql-aliyun",
+          driver: "mysql",
+          schemas: ["dataforai"],
+          enabledTables: ["dataforai.superstore_orders"]
+        }
+      ],
+      tables: [sourceSummary("superstore_orders")]
+    });
+    renderOverview();
+
+    const card = await screen.findByTestId("connection-card-lucy-ops");
+    const title = within(card).getByTestId("connection-title-lucy-ops");
+    expect(title).toHaveTextContent("运维问数连接");
+    expect(within(card).getByTestId("engine-badge-lucy-ops")).toHaveTextContent("SQLite");
+
+    const idNode = within(card).getByTestId("connection-id-lucy-ops");
+    expect(idNode).toHaveTextContent("lucy-ops");
+    expect(idNode).toHaveClass("notranslate");
+    expect(idNode).toHaveAttribute("translate", "no");
+
+    const deleteButton = within(card).getByTestId("delete-connection-lucy-ops");
+    expect(deleteButton).toBeDisabled();
+
+    // 普通连接的删除入口仍然可用。
+    const normalDelete = await screen.findByTestId("delete-connection-mysql-aliyun");
+    expect(normalDelete).not.toBeDisabled();
+  });
+});

@@ -76,6 +76,11 @@ test.describe.configure({ mode: "serial" });
 
 test("the reconciliation detail agrees with this run's audit events and keeps full table identities", async ({ browser, baseURL }, testInfo) => {
   covers(testInfo, "SEC-18-V06", "SEC-20-V01");
+  // 2026-10-28（D2 路径 A）：ARV25 已并入冻结 catalog，因此**同时**用 `covers`
+  // 声明给冻结 collector（`case` 命名空间），否则这些 variant 在
+  // evidence.cases 里根本不会出现，`passedIds` 也就永远填不上。
+  // `coversV025` 保留：v0.25 影子清单的维度证据仍按自己的命名空间采集。
+  covers(testInfo, "ARV25-V01", "ARV25-V02", "ARV25-V03", "ARV25-V05", "ARV25-V06");
   coversV025(testInfo, "ARV25-V01", "ARV25-V02", "ARV25-V03", "ARV25-V05", "ARV25-V06");
   // The reconciliation detail is reconciled against a REAL Agent turn of this run, so the
   // agent client is a declared dependency of this spec (the runtime check below still blocks
@@ -85,22 +90,38 @@ test("the reconciliation detail agrees with this run's audit events and keeps fu
   const tokens = fixtureAgentTokens();
 
   // Real events produced by THIS run: one allowed read and one cross-domain denial.
+  //
+  // The turn id comes from a REAL `lucy_begin_question` call in the SAME session:
+  // the proxy registers that turn for (credential, session) and binds the
+  // following tool calls of that session to it.  This is the documented
+  // client-side way to open a business question, so the reconciliation view has
+  // a genuine turn to reconcile against — the spec does NOT depend on an
+  // external Agent leg, and it never fabricates a turn id.
+  const financeSession = `e2e-arv25-finance-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const salesSession = `e2e-arv25-sales-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const mcpHeaders = (token: string, sessionId: string) => ({
+    authorization: `Bearer ${token}`,
+    "content-type": "application/json",
+    accept: "application/json, text/event-stream",
+    "x-lucy-session-id": sessionId
+  });
+  const opened = await fetch(runContext().instance.mcpUrl, {
+    method: "POST",
+    headers: mcpHeaders(tokens.e2e_finance, financeSession),
+    body: JSON.stringify(rpc(0, "lucy_begin_question", {
+      question: "E2E reconciliation: open one business question for this run",
+      intentSummary: "Open a business question so the reconciliation view has a real turn to reconcile against"
+    }))
+  });
+  expect(opened.status).toBe(200);
   const allowed = await fetch(runContext().instance.mcpUrl, {
     method: "POST",
-    headers: {
-      authorization: `Bearer ${tokens.e2e_finance}`,
-      "content-type": "application/json",
-      accept: "application/json, text/event-stream"
-    },
+    headers: mcpHeaders(tokens.e2e_finance, financeSession),
     body: JSON.stringify(rpc(1, "wiki_read", { path: "finance/cac-definition.md" }))
   });
   const denied = await fetch(runContext().instance.mcpUrl, {
     method: "POST",
-    headers: {
-      authorization: `Bearer ${tokens.e2e_sales}`,
-      "content-type": "application/json",
-      accept: "application/json, text/event-stream"
-    },
+    headers: mcpHeaders(tokens.e2e_sales, salesSession),
     body: JSON.stringify(rpc(2, "wiki_read", { path: "finance/cac-definition.md" }))
   });
   expect(allowed.status).toBe(200);
@@ -145,6 +166,59 @@ test("the reconciliation detail agrees with this run's audit events and keeps fu
       error?: { code?: string };
       data?: { reconciliationContext?: ReconciliationContext; inquiry?: Record<string, unknown> };
     };
+    // The frozen catalog declares `deny` + `no_leak` for EVERY ARV25 variant.
+    // The variants this test covers are covered by NO other test, so the two
+    // tokens must be evaluated HERE — on both the success and the refusal path,
+    // otherwise the variant can never pass (the harness is fail-closed on a
+    // declared assertion that no runner evaluated).
+    assertion(testInfo, "no_leak",
+      !vault.contains(JSON.stringify(detailPayload)),
+      "the inquiry detail carries no credential value");
+    {
+      // The same read model must refuse an anonymous caller: the detail of one
+      // inquiry is admin-audit material.
+      const anonymous = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+      try {
+        const anonPage = await anonymous.newPage();
+        const refused = await anonPage.request.get(
+          new URL(`/api/admin/audit/reconciliation/inquiries/${encodeURIComponent(turnId)}`, baseURL!).toString()
+        );
+        const refusedPayload = (await refused.json().catch(() => ({}))) as { ok?: boolean };
+        assertion(testInfo, "deny",
+          refused.status() >= 400 || refusedPayload.ok === false,
+          `an unauthenticated inquiry read was refused (HTTP ${refused.status()}, ok=${String(refusedPayload.ok)})`);
+        assertion(testInfo, "no_leak",
+          !vault.contains(JSON.stringify(refusedPayload)),
+          "the refused inquiry body carries no credential value");
+      } finally {
+        await anonymous.close();
+      }
+    }
+    // ARV25-V06：正式完整读取在不可证明时**失败关闭**，而**诊断模式必须仍然可读**
+    // 并显式披露「是否可证明」与「缺什么」。这一半此前完全没被验证 —— spec 只
+    // 读了默认的 complete 模式，所以「诊断模式显式不完整」是空转的。
+    // §18.11：mode=diagnostic 时返回 diagnostic_incomplete + 实际证据界 + 缺失集合。
+    {
+      const diagnosticResponse = await page.request.get(
+        new URL(`/api/admin/audit/reconciliation/inquiries/${encodeURIComponent(turnId)}?mode=diagnostic`, baseURL!).toString()
+      );
+      const diagnosticPayload = (await diagnosticResponse.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: { code?: string };
+        data?: { asOfProof?: { ok?: boolean; actualBound?: unknown; missingSets?: unknown }; diagnosticIncomplete?: unknown };
+      };
+      assertion(testInfo, "consistency",
+        diagnosticPayload.ok === true && typeof diagnosticPayload.data?.asOfProof?.ok === "boolean",
+        `the diagnostic read is readable even where the formal read fails closed (ok=${String(diagnosticPayload.ok)}, asOfProof.ok=${String(diagnosticPayload.data?.asOfProof?.ok)}, code=${diagnosticPayload.error?.code ?? "none"})`);
+      assertion(testInfo, "consistency",
+        diagnosticPayload.data?.asOfProof?.ok === true
+          ? diagnosticPayload.data?.diagnosticIncomplete === null || diagnosticPayload.data?.diagnosticIncomplete === undefined
+          : Boolean(diagnosticPayload.data?.diagnosticIncomplete),
+        "the diagnostic read marks itself incomplete exactly when the as-of proof does not hold");
+      assertion(testInfo, "no_leak",
+        !vault.contains(JSON.stringify(diagnosticPayload)),
+        "the diagnostic read carries no credential value");
+    }
     if (!detailPayload.ok) {
       // The read model may refuse (projection not covered / ledger seq missing).
       // That refusal is itself the fail-closed contract (ARV25-V10).
@@ -198,6 +272,7 @@ test("the reconciliation detail agrees with this run's audit events and keeps fu
 
 test("the usage view, the token reconciliation and the CSV export close over the same snapshot", async ({ browser, baseURL }, testInfo) => {
   covers(testInfo, "SEC-20-V01", "SEC-20-V02");
+  covers(testInfo, "ARV25-V04", "ARV25-V07", "ARV25-V08", "ARV25-V09", "ARV25-V10", "ARV25-V11");
   coversV025(testInfo, "ARV25-V04", "ARV25-V07", "ARV25-V08", "ARV25-V09", "ARV25-V10", "ARV25-V11");
   blockUnless(testInfo, "lucy-http", "browser");
 
@@ -232,6 +307,42 @@ test("the usage view, the token reconciliation and the CSV export close over the
 
     const context2 = usagePayload.data?.reconciliationContext;
     const tokens = usagePayload.data?.tokenReconciliation ?? {};
+    // ARV25-V04/V07..V10: the usage view is a view OVER the audit event stream.
+    // The frozen catalog declares `audit_event` for every ARV25 variant, and the
+    // variants this test covers are covered by NO other test — so the rows this
+    // view reports must be traceable to the admin audit list of the SAME window.
+    // A usage view that is not backed by audit events is not a reconciled view.
+    // The check is fail-closed: an empty window proves nothing, so it does not
+    // count as a pass.
+    const auditListResponse = await page.request.get(
+      new URL(`/api/admin/audit?${filter}&includeProtocol=true&limit=500`, baseURL!).toString()
+    );
+    const auditEntries = auditListResponse.status() === 200
+      ? ((((await auditListResponse.json()) as { data?: { entries?: unknown[] } }).data?.entries ?? []) as Array<{ id?: unknown }>)
+      : [];
+    const auditIds = new Set(auditEntries.map((entry) => String(entry.id)));
+    const usageItems = (usagePayload.data?.calls?.items ?? []) as Array<{ unitId?: unknown }>;
+    const usageUnitIds = usageItems.map((item) => String(item.unitId ?? "")).filter((id) => id.length > 0);
+    const unbacked = usageUnitIds.filter((id) => !auditIds.has(id));
+    assertion(testInfo, "audit_event",
+      auditIds.size > 0 && usageUnitIds.length > 0 && unbacked.length === 0,
+      `${usageUnitIds.length - unbacked.length}/${usageUnitIds.length} usage row(s) are backed by an admin audit event of this run (audit events in window: ${auditIds.size})`);
+    // ARV25-V04/V07..V11: the same surface must refuse an anonymous caller.
+    {
+      const anonymous = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+      try {
+        const anonPage = await anonymous.newPage();
+        const refused = await anonPage.request.get(
+          new URL(`/api/admin/audit/reconciliation/usage?${filter}`, baseURL!).toString()
+        );
+        const refusedPayload = (await refused.json().catch(() => ({}))) as { ok?: boolean };
+        assertion(testInfo, "deny",
+          refused.status() >= 400 || refusedPayload.ok === false,
+          `an unauthenticated usage read was refused (HTTP ${refused.status()}, ok=${String(refusedPayload.ok)})`);
+      } finally {
+        await anonymous.close();
+      }
+    }
     // The token reconciliation answers with the REAL `TokenReconciliation` shape
     // (webui/server/admin/reconciliation.ts): the configured counts live in
     // `configuredSnapshot`, the active identities in `activeWindow`, and the
@@ -286,9 +397,65 @@ test("the usage view, the token reconciliation and the CSV export close over the
       typeof context2?.watermarkSeq === "number" && typeof context3?.watermarkSeq === "number" && context3.watermarkSeq >= context2.watermarkSeq,
       `usage S=${context2?.watermarkSeq ?? "none"} and export S=${context3?.watermarkSeq ?? "none"} (the ledger bound only moves forward)`);
     assertion(testInfo, "consistency", context2?.metricUnit === context3?.metricUnit, "usage and export use the same metric unit");
+    // ARV25-V09（reconciliationContext 冻结）：两次独立读取各自冻结自己的 S，
+    // 但**计量单位与规则版本**必须一致 —— 否则同一份数据会按两套口径被解读。
+    assertion(testInfo, "consistency",
+      context2?.classificationVersion === context3?.classificationVersion && context2?.derivationVersion === context3?.derivationVersion,
+      `usage and export name the same rule versions (classification ${context2?.classificationVersion ?? "none"} / ${context3?.classificationVersion ?? "none"}, derivation ${context2?.derivationVersion ?? "none"} / ${context3?.derivationVersion ?? "none"})`);
+    // ARV25-V10（CSV 与页面同源）：导出的 manifest 必须携带**这次导出自己的**
+    // 快照与规则版本，而不是另算一份 —— 否则 CSV 与页面会各说各话。
+    // 形状按 `ReconciliationCsvManifest`：整份 context 嵌在 `manifest.context`，
+    // 规则版本与计量单位另在 `manifest.completeness` 里再声明一次。
+    const manifest = (exportPayload.data?.manifest ?? {}) as {
+      schemaVersion?: string;
+      context?: ReconciliationContext;
+      completeness?: {
+        watermarkSeq?: number;
+        snapshotId?: string;
+        metricUnit?: string;
+        derivationVersion?: string;
+        classificationVersion?: string;
+        complete?: boolean;
+      };
+    };
+    const manifestContext = manifest.context ?? {};
+    assertion(testInfo, "consistency",
+      manifestContext.snapshotId === context3?.snapshotId && manifestContext.watermarkSeq === context3?.watermarkSeq,
+      `the export manifest carries the export's own snapshot (manifest S=${manifestContext.watermarkSeq ?? "none"} / context S=${context3?.watermarkSeq ?? "none"}, snapshot ${manifestContext.snapshotId === context3?.snapshotId ? "same" : "different"})`);
+    assertion(testInfo, "consistency",
+      manifestContext.metricUnit === context3?.metricUnit &&
+        manifestContext.classificationVersion === context3?.classificationVersion &&
+        manifestContext.derivationVersion === context3?.derivationVersion,
+      "the export manifest carries the export's own metric unit and rule versions");
+    assertion(testInfo, "consistency",
+      manifest.completeness?.metricUnit === context3?.metricUnit &&
+        manifest.completeness?.classificationVersion === context3?.classificationVersion &&
+        manifest.completeness?.derivationVersion === context3?.derivationVersion,
+      "the export manifest's completeness block declares the same metric unit and rule versions");
 
     const files = exportPayload.data?.files ?? [];
     assertion(testInfo, "artifact_scan", files.length > 0, `the export produced ${files.length} file(s)`);
+    // D-32 / D-33 回归：导出的调用明细必须真的带出**授权**与**执行**两条独立轴，
+    // 而不是恒为 unknown。
+    //   · D-32：读侧曾读不存在的 `authorization_view` / `execution_view`，被
+    //     `probeColumns` 兜底投影成 NULL ⇒ 授权/执行视图静默恒为 unknown；
+    //   · D-33：写侧从不提供执行凭据 ⇒ 授权轴因「无显式裁决证据」恒为 unknown。
+    // 修好之后本轮新写入的行必须带出真实枚举值；恒为 unknown 即回归。
+    const attemptsFile = files.find((file) => file.name === "calls-attempts.csv");
+    if (attemptsFile) {
+      const attemptRows = parseCsv(attemptsFile.csv ?? "");
+      const header = attemptRows[0] ?? [];
+      const authIdx = header.indexOf("authorization_status");
+      const execIdx = header.indexOf("execution_status");
+      const attemptData = attemptRows.slice(1);
+      const authValues = authIdx >= 0 ? attemptData.map((row) => String(row[authIdx] ?? "")) : [];
+      const execValues = execIdx >= 0 ? attemptData.map((row) => String(row[execIdx] ?? "")) : [];
+      const authObserved = authValues.filter((value) => value.length > 0 && value !== "unknown");
+      const execObserved = execValues.filter((value) => value.length > 0 && value !== "unknown");
+      assertion(testInfo, "consistency",
+        authIdx >= 0 && execIdx >= 0 && authObserved.length > 0 && execObserved.length > 0,
+        `calls-attempts.csv carries observed authorization (${authObserved.length}/${attemptData.length} row(s)) and execution (${execObserved.length}/${attemptData.length} row(s)) values instead of a constant unknown`);
+    }
     for (const file of files) {
       const rows = parseCsv(file.csv ?? "");
       const header = rows[0] ?? [];
@@ -315,6 +482,7 @@ test("the usage view, the token reconciliation and the CSV export close over the
 
 test("a reconciliation read without the admin identity is refused, leaves a meta-audit trace and leaks nothing", async ({ browser, baseURL }, testInfo) => {
   covers(testInfo, "SEC-18-V01");
+  covers(testInfo, "ARV25-V11");
   coversV025(testInfo, "ARV25-V11");
   blockUnless(testInfo, "lucy-http", "browser");
 

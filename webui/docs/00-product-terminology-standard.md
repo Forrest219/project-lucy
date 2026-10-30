@@ -643,10 +643,12 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 | Generated SQL | 生成 SQL | compiled SQL | 热库 SQL 原文（过宽）、raw SQL | Spec 125：`lucy_query` 编译结果；热库 `generated_sql`；调用流水列 / CSV |
 | Ops Evidence Connection | 运维问数连接 | 连接 ID `lucy-ops` | 管理员连接、默认业务连接、审计库连接（作卡片主称） | Spec 149：指向审计热库只读视图的系统连接；不进入 `database_connection_ids` |
 | Ops Evidence Role | 运维问数角色 | `lucy_ops_reader` | Lucy 运维数据面角色、WebUI 所有者、登录管理员（作本 Role 主称） | Spec 149：只授权 `ops_calls` / `ops_call_tables` 的参考模板；与 `lucy_admin` 正交 |
+| Ops Evidence Skill | 运维问数 Skill | Skill 名 `ops-questioning` | 业务 Skill（作本篇主称）、全局 Skill | Spec 149 v1.2：只授权给运维问数角色的已发布 Skill；口径不进全局 Wiki。本连接不把 `token_label` 去重称为业务活跃 Token |
+| Demo Ops Agent | 演示运维问数 Agent | 用户 ID `demo_ops` | 把 `demo_readonly` 或 `lucy_admin` 当作本 Agent | Spec 149 v1.2：只存在于 Docker demo 模板；不在启动时创建 |
 
-Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token`、`MCP`、`P95`、`Manifest`、tool name、physical table、Agent id、问询 ID / 事件 ID 值、裁决原因码、生成 SQL 文本、`lucy-ops`、`lucy_ops_reader`、`ops_calls`、`ops_call_tables`。
+Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token`、`MCP`、`P95`、`Manifest`、tool name、physical table、Agent id、问询 ID / 事件 ID 值、裁决原因码、生成 SQL 文本、`lucy-ops`、`lucy_ops_reader`、`ops_calls`、`ops_call_tables`、`ops-questioning`、`demo_ops`。
 
-详见 Spec 89；Spec 94 补充来源筛选与列表/Drawer 列名；Spec 99 要求双行 DecisionReasonView；**Spec 106** 要求身份列、共享筛选与 `view`/`range` URL；**Spec 125** 要求调用流水直展生成 SQL（Spec 124 冷存降为 legacy）；**Spec 137** 区分「导出调用流水」与「导出审计证据包」；**Spec 140** 增加问询记录 CSV；页头「导出」跟随当前页签，不再并排两个粒度；**Spec 141** 要求 CSV 文件名精确到秒和流水号、增加本地时间并提供字段说明；**Spec 149** 增加运维问数连接与运维问数角色，问数仍沿用调用流水、生成 SQL、裁决原因。**Spec 172** 增加会话访问：没有用户原文时按 MCP 会话保留一条推断问询，摘要以「会话建立：」加客户端名开头。
+详见 Spec 89；Spec 94 补充来源筛选与列表/Drawer 列名；Spec 99 要求双行 DecisionReasonView；**Spec 106** 要求身份列、共享筛选与 `view`/`range` URL；**Spec 125** 要求调用流水直展生成 SQL（Spec 124 冷存降为 legacy）；**Spec 137** 区分「导出调用流水」与「导出审计证据包」；**Spec 140** 增加问询记录 CSV；页头「导出」跟随当前页签，不再并排两个粒度；**Spec 141** 要求 CSV 文件名精确到秒和流水号、增加本地时间并提供字段说明；**Spec 149** 增加运维问数连接与运维问数角色；v1.2 定稿增加运维问数 Skill 与演示运维问数 Agent。问数仍沿用调用流水、生成 SQL、裁决原因。本连接不回答业务活跃 Token。**Spec 172** 增加会话访问：没有用户原文时按 MCP 会话保留一条推断问询，摘要以「会话建立：」加客户端名开头。
 
 #### 4.7.1 Spec 173 v0.3 / 2026-10-19 audit-trust 新增术语
 

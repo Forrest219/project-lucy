@@ -4,7 +4,7 @@
 |---|---|
 | 版本 | v0.3 |
 | 日期 | 2026-10-27 |
-| 状态 | **已实施**（Plan M66）。SC-01–SC-24 证据齐备，静态门禁通过；未执行浏览器与移动窄屏测试。 |
+| 状态 | **已实施**（Plan M66）。服务端定向测试不能代替 SC-01–SC-24 验收；浏览器、移动窄屏与 Docker 真实复核未执行。 |
 | 范围 | 业务 Wiki 上传授权、授权状态展示、独立权限管理、批量授权；不含目录权限继承 |
 | 关联 Plan | [`plans/wo-M66-business-wiki-access-management.md`](plans/wo-M66-business-wiki-access-management.md) |
 | 本轮修订 | v0.3：产品代码落地后的实施注记、SC 证据映射、已知边界与遗留项。契约本体未改。 |
@@ -536,6 +536,8 @@ type WikiAccessSummary = {
 | `wiki_batch_limit_exceeded` | 去重后超过 100 篇 |
 | `wiki_batch_idempotency_conflict` | 幂等 key 已绑定另一 plan |
 | `wiki_access_change_pending` | 对象存在未决扩权操作，当前写路径禁止继续 |
+| `wiki_batch_blocked` | 批量计划存在阻断性校验问题（例如 add 遇到损坏 ACL）；零写入 |
+| `wiki_access_frontmatter_invalid` | 文档 frontmatter 无法解析或无法写回；零写入 |
 | `CONTEXT_ACL_INVALID` | ACL 声明损坏或请求值非法；保留既有契约 |
 | `wiki_write_conflict` | 文档版本或目标存在状态冲突；沿用现有 Wiki 并发契约 |
 | `config_audit_unavailable` | 配置审计 intent/terminal 不可用；不得返回成功 |
@@ -712,7 +714,7 @@ This feature follows `webui/docs/00-product-terminology-standard.md`.
 | SC-18 | `wiki-write-queue.test.ts`（队列串行、每个写路径队列内重验版本 / 目标状态、组合操作不递归入队）；`wiki-acl-concurrency.test.ts`；`wiki.test.ts` |
 | SC-19 | `wiki-access-operation.test.ts`「denies search AND read, even when the widened bytes are already on disk」「a widening whose bytes reached the disk becomes needs_review and stays held」「a pending operation whose bytes are still the old ones is aborted and the hold is released」；`context-acl-matrix.test.ts`；`wiki-access-batch-faults.test.ts`「never auto-commits a widening and never replays the write」 |
 | SC-20 | `wiki-access-operation.test.ts`「a narrowing leaves no hold behind」；`context-policy-invalidation.test.ts`「an ACL edit on disk narrows Wiki and Skill reads immediately」 |
-| SC-21 | `wiki-access-batch-faults.test.ts`「never auto-commits a widening and never replays the write」「contains no body, no secret, no credential and no absolute path」；`wiki-batch-access.test.tsx`「restores a previous run by operation id」 |
+| SC-21 | `wiki-access-batch-faults.test.ts`「never auto-commits a widening and never replays the write」：重启后未提交扩权的 journal 项为 `needs_review`，不是 `pending`；不自动 commit、不重放。「contains no body, no secret, no credential and no absolute path」；`wiki-batch-access.test.tsx`「restores a previous run by operation id」。该行是证据映射，不是验收通过。 |
 | SC-22 | `wiki-acl-concurrency.test.ts`「version restore never revives an older, wider ACL」「the second admin's ACL overwrite loses to the first (no silent last-writer-wins)」；`wiki.test.ts`（restore / move / delete 的 `expected_version` 门禁） |
 | SC-23 | `wiki-access-auth.test.ts`（未登录读 / 预检 / 写 / 批量提交一律 401；已登录 operator 可读摘要并修改单篇授权）；`wiki-access-routes.test.ts`「records the trusted actor, never a body-supplied one」 |
 | SC-24 | `wiki-access-components.test.tsx`（DOM 标识翻译防御）；`wiki.test.tsx`；`lint-terminology-scan.test.ts`「Spec 193 registered terminology and shared contracts」 |

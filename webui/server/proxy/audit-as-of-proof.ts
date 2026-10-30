@@ -21,15 +21,14 @@
  * ─── 各维度的可证明依据（运行时证据）────────────────────────────────────
  *
  * - **baseFacts**：范围内每一行都有账本序号且 `ledger_seq <= S`（行在 S 时刻已存在），
- *   且行的**事实列**在写入后未被改写。事实列的不可变性由代码层不变量保证
- *   （生产代码不存在对事实列的 UPDATE；由漂移守卫测试 `audit-as-of-drift.test.ts`
- *   机械校验），本模块在事实列缺失改写证据时给出 `fact_columns_immutable` 结论。
- * - **revisions**：归属修订（`association_revisions`）与归属就地改写
- *   （`access_log_attribution_mutations`）都有账本序号，且都**不晚于 S**；
- *   归属改写日志的基线（`access_log_asof_meta.attribution_journal_baseline_seq`）
- *   必须存在且 `S >= baseline` —— 否则无法排除「基线之前存在未登记的就地改写」。
- * - **relations**：来源行（`access_log_sources`）都有账本序号且 `ledger_seq <= S`；
- *   晚于 S 的来源行必须**从视图与导出中排除**，不得混入。
+ *   归属列的有效值不靠「列不可变」证明，而靠改写日志前像回放。
+ * - **revisions**：归属修订与归属就地改写都有账本序号。改写日志记的是
+ *   「改写发生时的已提交上界」，不是一条新的账本事件，因此 `ledger_seq == S`
+ *   不能证明该改写在捕获 S 时已经可见。只有 `ledger_seq < S` 的改写留在 S
+ *   视图里；`ledger_seq >= S` 的改写必须按前像回放后才能证明。基线必须存在
+ *   且 `S >= baseline`。
+ * - **relations**：来源行都有账本序号。`ledger_seq > S` 的来源行从视图与导出
+ *   排除，排除本身不否定已经可证明的 S。未排除的晚到行仍然不可证明。
  * - **aggregates**：由上述三项派生的计数 / 汇总，只在三者都成立时成立。
  */
 
@@ -101,6 +100,16 @@ export type ProveExactAsOfSInput = {
    * 空集只是调用方「没有检查」，不是「已证明没有」；调用方必须显式传入。
    */
   unplaceableRowIds?: readonly number[];
+  /**
+   * 调用方已经按前像回放、从 S 视图拿掉的归属改写 id。
+   * 这些改写的 `ledger_seq >= S`，不得再把证明判失败。
+   */
+  replayedMutationIds?: readonly number[];
+  /**
+   * 调用方已经从视图和证据包排除的来源行 id（`ledger_seq > S`）。
+   * 排除本身不把可证明的 S 改成失败。
+   */
+  excludedSourceIds?: readonly number[];
 };
 
 function tableExists(db: Database.Database, name: string): boolean {
@@ -209,10 +218,12 @@ export function proveExactAsOfS(input: ProveExactAsOfSInput): AsOfSProof {
             WHERE access_log_id IN (${placeholders})`
         )
         .all(...scopeIds) as Array<{ id: number; access_log_id: number; ledger_seq: number | null }>;
+      const replayed = new Set(input.replayedMutationIds ?? []);
       for (const mutation of mutations) {
         if (mutation.ledger_seq === null) {
           missingSets.revisions.push(`undated_attribution_mutation:${mutation.id}`);
-        } else if (mutation.ledger_seq > seqUpperBound) {
+        } else if (mutation.ledger_seq >= seqUpperBound && !replayed.has(mutation.id)) {
+          // `== S` 与 `> S` 一样不能留在当前列里：改写序号是当时的已提交上界。
           missingSets.revisions.push(`attribution_mutation_after_bound:${mutation.id}`);
         }
       }
@@ -264,10 +275,11 @@ export function proveExactAsOfS(input: ProveExactAsOfSInput): AsOfSProof {
             WHERE access_log_id IN (${placeholders})`
         )
         .all(...scopeIds) as Array<{ id: number; ledger_seq: number | null }>;
+      const excludedSources = new Set(input.excludedSourceIds ?? []);
       for (const source of sources) {
         if (source.ledger_seq === null) {
           missingSets.relations.push(`unpositioned_source:${source.id}`);
-        } else if (source.ledger_seq > seqUpperBound) {
+        } else if (source.ledger_seq > seqUpperBound && !excludedSources.has(source.id)) {
           missingSets.relations.push(`source_after_bound:${source.id}`);
         }
       }
@@ -287,9 +299,7 @@ export function proveExactAsOfS(input: ProveExactAsOfSInput): AsOfSProof {
     {
       id: "baseFacts",
       ok: baseFactsOk,
-      reason: baseFactsOk
-        ? "fact_columns_immutable_and_rows_positioned"
-        : "row_position_undeterminable",
+      reason: baseFactsOk ? "rows_positioned" : "row_position_undeterminable",
       missingCount: missingSets.baseFacts.length
     },
     {
@@ -339,6 +349,93 @@ export type DiagnosticIncomplete = {
   reason: "as_of_s_unprovable";
   proof: AsOfSProof;
 };
+
+type ReplayableRow = {
+  id: number;
+  lucy_turn_id?: string | null;
+  effective_turn_id?: string | null;
+  association_status?: string | null;
+};
+
+/**
+ * 把 `ledger_seq >= S` 的归属改写从当前列上剥掉，恢复日志前像。
+ *
+ * 改写序号等于 S 时，不能判断改写发生在捕获 S 之前还是之后。S 视图使用前像，
+ * 同一次 S 的再次读取才不会改口。缺前像列时该改写记为不可回放，证明不得通过。
+ */
+export function projectAttributionAsOfS<T extends ReplayableRow>(
+  db: Database.Database,
+  rows: readonly T[],
+  seqUpperBound: number
+): {
+  rows: T[];
+  replayedMutationIds: number[];
+  unreplayableMutationIds: number[];
+  excludedSourceIds: number[];
+} {
+  const projected = rows.map((row) => ({ ...row }));
+  const replayedMutationIds: number[] = [];
+  const unreplayableMutationIds: number[] = [];
+  const byRow = new Map<number, T>();
+  for (const row of projected) byRow.set(Number(row.id), row);
+
+  if (tableExists(db, "access_log_attribution_mutations") && projected.length > 0) {
+    const info = db.prepare(`PRAGMA table_info(access_log_attribution_mutations)`).all() as Array<{ name: string }>;
+    const names = new Set(info.map((column) => column.name));
+    const canReplay = names.has("before_turn_id") && names.has("before_association_status");
+    const ids = projected.map((row) => Number(row.id));
+    const placeholders = ids.map(() => "?").join(",");
+    const selected = canReplay
+      ? "id, access_log_id, ledger_seq, before_turn_id, before_association_status"
+      : "id, access_log_id, ledger_seq";
+    const mutations = db
+      .prepare(
+        `SELECT ${selected}
+           FROM access_log_attribution_mutations
+          WHERE access_log_id IN (${placeholders})
+          ORDER BY id DESC`
+      )
+      .all(...ids) as Array<{
+      id: number;
+      access_log_id: number;
+      ledger_seq: number | null;
+      before_turn_id?: string | null;
+      before_association_status?: string | null;
+    }>;
+    for (const mutation of mutations) {
+      if (mutation.ledger_seq === null || mutation.ledger_seq < seqUpperBound) continue;
+      if (!canReplay) {
+        unreplayableMutationIds.push(mutation.id);
+        continue;
+      }
+      const row = byRow.get(mutation.access_log_id);
+      if (!row) continue;
+      row.lucy_turn_id = mutation.before_turn_id ?? null;
+      row.effective_turn_id = mutation.before_turn_id ?? null;
+      row.association_status = mutation.before_association_status ?? null;
+      replayedMutationIds.push(mutation.id);
+    }
+  }
+
+  const excludedSourceIds: number[] = [];
+  if (
+    tableExists(db, "access_log_sources") &&
+    columnExists(db, "access_log_sources", "ledger_seq") &&
+    projected.length > 0
+  ) {
+    const ids = projected.map((row) => Number(row.id));
+    const placeholders = ids.map(() => "?").join(",");
+    const late = db
+      .prepare(
+        `SELECT id FROM access_log_sources
+          WHERE access_log_id IN (${placeholders}) AND ledger_seq > ?`
+      )
+      .all(...ids, seqUpperBound) as Array<{ id: number }>;
+    for (const source of late) excludedSourceIds.push(Number(source.id));
+  }
+
+  return { rows: projected, replayedMutationIds, unreplayableMutationIds, excludedSourceIds };
+}
 
 export function buildDiagnosticIncomplete(proof: AsOfSProof): DiagnosticIncomplete {
   return {

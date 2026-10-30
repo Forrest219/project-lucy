@@ -51,12 +51,17 @@ describe("v0.25 coverage manifest (Plan W0-1 / W0-2)", () => {
     assert.deepEqual(problems, [], `coverage manifest problems:\n${problems.join("\n")}`);
   });
 
-  it("covers all 255 frozen required variants exactly once (F-01)", () => {
+  it("covers all frozen required variants exactly once (F-01)", () => {
+    // 2026-10-28（D2 路径 A）：冻结 catalog 增补了 AUD25-A01..A12 与
+    // ARV25-V01..V12，共 255 → 279 个 variant。这 24 个执行项因此从
+    // newScenarios 移到 existingCatalogMappings —— existing 必须**恰好等于**
+    // lock.requiredIds，两者不可重叠。
     const lock = readLock();
-    assert.equal(lock.count, 255);
+    const expectedCount = 279;
+    assert.equal(lock.count, expectedCount);
     const ids = coverage.existing.map((m) => m.executionId);
-    assert.equal(ids.length, 255);
-    assert.equal(new Set(ids).size, 255, "no duplicate existing executionId");
+    assert.equal(ids.length, expectedCount);
+    assert.equal(new Set(ids).size, expectedCount, "no duplicate existing executionId");
     assert.deepEqual([...ids].sort(), [...lock.requiredIds].sort());
   });
 
@@ -78,8 +83,14 @@ describe("v0.25 coverage manifest (Plan W0-1 / W0-2)", () => {
     const actual = coverage.newScenarios
       .filter((s) => s.sourceRequirementId !== null && s.sourceRequirementId !== undefined)
       .map((s) => s.executionId);
-    assert.equal(actual.length, 160);
-    assert.deepEqual([...actual].sort(), [...expected].sort());
+    // 已并入冻结 catalog 的执行项（AUD25 / ARV25 共 24 个）由 catalog 承载，
+    // 不再重复登记在 newScenarios 里，但其 source requirement 覆盖不得丢失。
+    const lock = readLock();
+    const inFrozenCatalog = [...actual].filter((id) => lock.requiredIds.includes(id));
+    assert.equal(actual.length, 160 - 24, "AUD25/ARV25 已并入冻结 catalog，不再重复登记");
+    const covered = new Set([...actual, ...[...expected].filter((id) => lock.requiredIds.includes(id))]);
+    assert.deepEqual([...covered].sort(), [...expected].sort(), "160 个 source requirement id 仍全覆盖");
+    assert.equal(inFrozenCatalog.length, 0);
   });
 
   it("gives the two previously empty branches real execution ids (F-02)", () => {
@@ -160,16 +171,18 @@ describe("v0.25 coverage manifest (Plan W0-1 / W0-2)", () => {
 
   it("summarizes coverage without implying any run status", () => {
     const summary = coverageSummary(coverage);
-    assert.equal(summary.existingCount, 255);
-    assert.equal(summary.newScenarioCount, 173);
+    assert.equal(summary.existingCount, 279);
+    assert.equal(summary.newScenarioCount, 149);
     assert.equal(summary.journeyCount, 1);
-    assert.equal(summary.withSourceRequirement, 160);
+    // AUD25/ARV25 的 24 个 source requirement 已随执行项并入冻结 catalog，
+    // 不再登记在 newScenarios 里 —— 覆盖没有丢失，只是承载位置变了。
+    assert.equal(summary.withSourceRequirement, 136);
   });
 });
 
 describe("v0.25 legacy id compatibility map (Plan W0-3)", () => {
-  it("maps all 255 frozen ids by identity so history stays traceable both ways", () => {
-    assert.equal(legacyMap.frozenVariants.length, 255);
+  it("maps all frozen ids by identity so history stays traceable both ways", () => {
+    assert.equal(legacyMap.frozenVariants.length, 279);
     const lock = readLock();
     assert.deepEqual(
       legacyMap.frozenVariants.map((v) => v.executionId).sort(),

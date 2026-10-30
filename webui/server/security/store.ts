@@ -1136,6 +1136,20 @@ export class SecurityStore {
     });
   }
 
+  /** Spec 193 §7.5 — a recovered uncommitted widening is needs_review, not pending. */
+  markPendingWikiBatchItemsNeedsReview(wikiKey: string, reason: string): SecurityResult<number> {
+    return this.write((db) => {
+      const result = db
+        .prepare(
+          `UPDATE wiki_access_batch_items
+              SET status = 'needs_review', error_code = 'needs_review', error_message = ?, updated_at = ?
+            WHERE wiki_key = ? AND status = 'pending'`
+        )
+        .run(reason, this.now(), wikiKey);
+      return Number(result.changes);
+    });
+  }
+
   setWikiAccessBatchStatus(
     operationId: string,
     status: WikiAccessBatchRecord["status"]

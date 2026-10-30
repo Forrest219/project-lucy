@@ -45,6 +45,16 @@ describe("case catalog (Spec §7, frozen denominator)", () => {
     assert.deepEqual(readLock().requiredIds, requiredIds(cases));
   });
 
+  it("the frozen denominator is pinned here (the ONE literal of the digest and the case count)", () => {
+    // 冻结分母的唯一字面量钉。变更必须**有意**进行：改 case-catalog.yaml → 重推
+    // case-catalog.lock.json → 更新下面两行 → 在评审里说明为什么动分母。
+    //
+    // 2026-10-28（D2 路径 A）：AUD25-A01..A12 与 ARV25-V01..V12 并入冻结 catalog，
+    // 分母 255 → 279、digest 240bff0f…4a694 → c62cf23f…ae4。
+    assert.equal(cases.length, 279);
+    assert.equal(catalogDigest(cases), "sha256:c62cf23f112484589e41486b7e53886d6e412e3bfc4bd587833eed3d0585aae4");
+  });
+
   it("rejects a silently removed variant (the denominator cannot shrink)", () => {
     const smaller = cases.filter((c) => c.id !== "SEC-15-FM-03");
     const problems = checkLock(smaller, readLock());

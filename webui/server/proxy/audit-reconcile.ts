@@ -16,12 +16,20 @@
  */
 
 import {
+  DELIVERY_STATUSES,
   PRIMARY_STATUSES,
   emptyPrimaryStatusCounts,
+  isAuthorizationView,
+  isExecutionView,
   isPrimaryStatus,
   summarizePrimaryStatuses,
+  type AuthorizationView,
+  type DeliveryStatus,
+  type ExecutionView,
   type PrimaryStatus
 } from "./audit-derivation.js";
+import { isAssociationStatus, type AssociationStatus } from "./turn-correlation.js";
+import { normalizeNullReason, type NullReason } from "./audit-null-reasons.js";
 
 /**
  * B27 — 读路径的行 → 主状态映射（**唯一**实现）。
@@ -74,8 +82,59 @@ export function countPrimaryStatuses(
   };
 }
 
-// ─── 计量单位字典（Spec §8.2(a)）────────────────────────────────────────────
+// ─── 三条独立判断轴的读路径（20261019 规格 §5）────────────────────────────
+//
+// 「执行成功不自动使关联或证据覆盖显示绿色已完成」——三条轴各读各的列，
+// **互不推导**：
+//
+//   执行轴   ← access_log.execution_status          （写路径登记的真实执行凭据）
+//   关联轴   ← access_log.effective_association_status（修订后的生效归属）
+//   覆盖轴   ← 由受控客户端上报事实推导（见 audit.ts 的 coverageFromClientEvidence）
+//
+// 读侧只做**归一化**：历史行 / 非法字面量一律落 `unknown`（或关联轴的
+// `legacy_unverified`），**不得**从旧 `outcome` 推定任何一轴成立 —— 与
+// `readPrimaryStatus` 同一纪律（Spec §4.3(a) 规则 9）。
 
+/** 执行轴读路径。历史行（NULL）→ `unknown`，不重解释历史数据。 */
+export function readExecutionStatus(row: { execution_status?: string | null }): ExecutionView {
+  return isExecutionView(row.execution_status) ? row.execution_status : "unknown";
+}
+
+/** 授权轴读路径。历史行（NULL）→ `unknown`，不从 outcome=ok 倒推 allowed。 */
+export function readAuthorizationStatus(row: { authorization_status?: string | null }): AuthorizationView {
+  return isAuthorizationView(row.authorization_status) ? row.authorization_status : "unknown";
+}
+
+/**
+ * 关联轴读路径。
+ *
+ * 取 `effective_association_status`（修订后的生效归属）。历史行没有该列值
+ * → `legacy_unverified`（**不是** `unassigned`）：「没有证据」与「证据表明
+ * 没有归属」是两件事，不得混同（Spec §4.4 / 20261019 §5「归因状态」）。
+ */
+export function readAssociationStatus(row: {
+  effective_association_status?: string | null;
+  association_status?: string | null;
+}): AssociationStatus {
+  if (isAssociationStatus(row.effective_association_status)) return row.effective_association_status;
+  if (isAssociationStatus(row.association_status)) return row.association_status;
+  return "legacy_unverified";
+}
+
+/** 送达状态读路径。历史行 → `unknown`。 */
+export function readDeliveryStatus(row: { delivery_status?: string | null }): DeliveryStatus {
+  const value = row.delivery_status;
+  return typeof value === "string" && (DELIVERY_STATUSES as readonly string[]).includes(value)
+    ? (value as DeliveryStatus)
+    : "unknown";
+}
+
+/** 空值原因读路径。六值枚举的唯一归一化入口（历史空白 → `unknown`）。 */
+export function readNullReason(row: { null_reason?: string | null }): NullReason {
+  return normalizeNullReason(row.null_reason);
+}
+
+// ─── 计量单位字典（Spec §8.2(a)）────────────────────────────────────────────
 export const METRIC_UNITS = [
   "protocol_request",
   "tool_call",

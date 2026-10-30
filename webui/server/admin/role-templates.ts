@@ -1,5 +1,10 @@
 import type { YamlRole } from "./agents.js";
 import { DATA_PLANE_TOOLS, META_TOOLS } from "../proxy/acl.js";
+import {
+  OPS_EVIDENCE_CONNECTION_ID,
+  OPS_EVIDENCE_FROZEN,
+  OPS_EVIDENCE_ROLE_ID
+} from "../ops-evidence/contract.js";
 
 export interface RoleTemplate extends YamlRole {
   id: string;
@@ -138,6 +143,47 @@ export const ROLE_TEMPLATES: Record<string, RoleTemplate> = {
         }
       ],
       tools: [...READONLY_TOOLS, "discover_data", "dictionary_search"]
+    }
+  },
+  /**
+   * Spec 149 §6 — 运维问数角色。
+   *
+   * 连接只有 `lucy-ops`；表只有两张视图；`row_access: all`；禁止
+   * `source_scope: catalog_bound`。`schema` 用 T0 冻结的 schema 字段，
+   * `names` 用 sourceName（都**不是** physicalTable）。
+   *
+   * 工具含目录、查询、解释，以及 Wiki 与 Skill 的四个只读通道工具。
+   */
+  [OPS_EVIDENCE_ROLE_ID]: {
+    id: OPS_EVIDENCE_ROLE_ID,
+    description:
+      "运维问数角色：只读访问运维问数连接（lucy-ops）的两张调用流水视图，可查看生成 SQL。与 lucy_admin 正交，不并入 lucy_admin。",
+    allow: {
+      connections: [OPS_EVIDENCE_CONNECTION_ID],
+      tableSelectors: [
+        {
+          connection: OPS_EVIDENCE_CONNECTION_ID,
+          schema: OPS_EVIDENCE_FROZEN.schema,
+          names: [
+            OPS_EVIDENCE_FROZEN.sourceName.ops_calls,
+            OPS_EVIDENCE_FROZEN.sourceName.ops_call_tables
+          ],
+          row_access: "all"
+        }
+      ],
+      tools: [
+        "lucy_catalog",
+        "connection_list",
+        "lucy_query",
+        "lucy_read_source",
+        "lucy_explain_query",
+        "lucy_freshness",
+        "lucy_begin_question",
+        "wiki_search",
+        "wiki_read",
+        "lucy_skill_search",
+        "lucy_skill_read"
+      ]
     }
   }
 };

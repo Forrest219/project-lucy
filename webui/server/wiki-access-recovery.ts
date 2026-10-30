@@ -108,6 +108,10 @@ async function reconcileOne(
         "recovered: a widening reached the disk without a committed security operation"
       );
       if (needsReview.ok) {
+        store.value.markPendingWikiBatchItemsNeedsReview(
+          record.wikiKey,
+          "recovered: a widening reached the disk without a committed security operation"
+        );
         report.needsReview.push(record.operationId);
         report.holdWidening = true;
         return;

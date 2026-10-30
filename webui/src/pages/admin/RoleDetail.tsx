@@ -22,7 +22,8 @@ import { RoleToolGrants } from "../../components/RoleToolGrants";
 import { RoleRowPolicyPanel } from "../../components/RoleRowPolicyPanel";
 import {
   useRowPolicyPreview,
-  type RowPolicyPreviewConfirmation
+  type RowPolicyPreviewConfirmation,
+  type RowPolicyPreviewResponse
 } from "../../lib/rowPolicyPreview";
 import {
   describeAccessWriteFailure,
@@ -44,6 +45,7 @@ import {
   type TableGrant,
 } from "../../lib/rolePermissionDraft";
 import { isDeleteProtectedRole, LUCY_ADMIN_ROLE_ID } from "../../lib/lucyAdminRole";
+import { isOpsEvidenceRole, OPS_EVIDENCE_ROLE_WARNING } from "../../lib/opsEvidence";
 import { queryKeys } from "../../lib/queryKeys";
 
 type PageMode = "create" | "edit" | "copy";
@@ -646,8 +648,12 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (vars: { dryRun: boolean; version?: string }) =>
-      apiDelete<{ diff: string; proposedYaml: string; version?: string } | AccessWriteAck>(`/api/admin/roles/${encodeURIComponent(roleId)}`, { dryRun: vars.dryRun, version: vars.version }),
+    mutationFn: (vars: { dryRun: boolean; version?: string; rowPolicyConfirmation?: RowPolicyPreviewConfirmation }) =>
+      apiDelete<{ diff: string; proposedYaml: string; version?: string } | AccessWriteAck>(`/api/admin/roles/${encodeURIComponent(roleId)}`, {
+        dryRun: vars.dryRun,
+        version: vars.version,
+        rowPolicyConfirmation: vars.rowPolicyConfirmation
+      }),
     onSuccess: (data, vars) => {
       if (vars.dryRun) {
         const preview = data as { diff: string; proposedYaml: string; version?: string };
@@ -700,7 +706,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
     else patchMutation.mutate({ dryRun: true, payload, version: detail?.version, draftHash, impact });
   }
 
-  function confirmReview() {
+  async function confirmReview() {
     if (!review) return;
     if (review.kind !== "delete" && rolePermissionDraftHash(draft) !== review.draftHash) {
       setReview(null);
@@ -708,7 +714,38 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
       return;
     }
     if (review.kind === "delete") {
-      deleteMutation.mutate({ dryRun: false, version: review.version });
+      const selectors = detail?.role.allow.tableSelectors ?? [];
+      const carriesRowPolicy = selectors.some(
+        (selector) => selector.row_access === "scoped" || selector.row_policy !== undefined
+      );
+      let rowPolicyConfirmation: RowPolicyPreviewConfirmation | undefined;
+      if (carriesRowPolicy) {
+        const tables = selectors.flatMap((selector) =>
+          "names" in selector
+            ? selector.names.map((name) => ({
+                connection: selector.connection ?? "",
+                schema: selector.schema,
+                name
+              }))
+            : []
+        );
+        try {
+          const preview = await apiPost<RowPolicyPreviewResponse>("/api/admin/roles/preview-row-policy", {
+            roleId,
+            removeRole: true,
+            tables
+          });
+          if (!preview.ok || !preview.confirmation) {
+            toast.error("最终行约束预览失败，无法删除带行级策略的 Role。请先解决预览报错。");
+            return;
+          }
+          rowPolicyConfirmation = preview.confirmation;
+        } catch (error) {
+          toastAccessWriteError(error instanceof Error ? error : new Error(String(error)));
+          return;
+        }
+      }
+      deleteMutation.mutate({ dryRun: false, version: review.version, rowPolicyConfirmation });
       return;
     }
     /**
@@ -795,6 +832,17 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
       {migratedPrefix ? (
         <div className={`rounded-md border p-3 text-sm ${migrationBlocked ? "border-danger-strong bg-danger-soft text-danger" : "border-warning-strong bg-warning-soft text-warning-strong"}`} data-testid="legacy-prefix-migration">
           {migrationBlocked ?? "已将旧版前缀规则展开为当前明确表清单；保存后完成 v2 迁移，不再保留 prefix。"}
+        </div>
+      ) : null}
+
+      {/* Spec 149 §6 / SC-23 — 运维问数角色的高权限警示。
+          文案不含「所有者」「登录管理员」「超管」。 */}
+      {isOpsEvidenceRole(detail) ? (
+        <div
+          className="rounded-md border border-warning-strong bg-warning-soft p-3 text-sm text-warning-strong"
+          data-testid="ops-evidence-role-warning"
+        >
+          {OPS_EVIDENCE_ROLE_WARNING}
         </div>
       ) : null}
 

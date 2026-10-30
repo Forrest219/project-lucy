@@ -20,7 +20,7 @@ import {
 import { resolveRoleIds } from "../proxy/acl.js";
 import { invalidateAccessConfigCache, isTokenExpired } from "../proxy/identity.js";
 import { narrowAuthorization, tokenHashPrefixOf } from "../proxy/authorization-barrier.js";
-import { actorIdFromRequest } from "../auth/guard.js";
+import { actorIdFromRequest, requireOwnerForOps } from "../auth/guard.js";
 import { auditActorFields, trustedActorFromRequest } from "../security/request-actor.js";
 import { normalizeNewTokenExpiry, TokenExpiryPolicyError } from "./token-expiry-policy.js";
 
@@ -345,6 +345,13 @@ export function registerTokenRoutes(app: FastifyInstance) {
       const user = config.users[userIndex];
       if (user.tokens.some((t) => t.label === label)) {
         return reply.status(409).send({ ok: false, error: { code: "TOKEN_LABEL_TAKEN", message: `Token label '${label}' already exists for this agent` } });
+      }
+
+      // L25-16 / G13 — 为**已有委托**的 Agent 签发 Token 必须 owner：
+      // 否则 operator 可以借「委托链」给一个已被委托的 Agent 增发凭证，
+      // 而该 Agent 的控制面操作将以 owner 身份生效。
+      if (user.delegated_from) {
+        if (!(await requireOwnerForOps(request, reply, "仅所有者可为已有委托的 Agent 签发 Token"))) return;
       }
 
       // Access Governance Gate — Token create escalates to P1 when the

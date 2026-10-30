@@ -305,11 +305,13 @@ export function GovernanceOverview() {
     </span>
   ) : 0;
 
+  // E8：配置数与活跃数**并列**（不再是「活跃 / 总数」这种会被读成比值的写法）。
   const tokenCompoundValue = tokenCardState !== "unavailable" ? (
     <span className="tabular-nums">
-      <span className="text-fg-muted text-base font-normal">活跃 </span>
+      <span className="text-fg-muted text-base font-normal">配置 </span>
+      <span>{usage?.configuredTokenCount ?? 0}</span>
+      <span className="text-fg-muted text-base font-normal"> · 活跃 </span>
       <span>{usage?.activeTokenCount ?? 0}</span>
-      <span className="text-fg-muted text-base font-normal"> / {usage?.configuredTokenCount ?? 0}</span>
     </span>
   ) : 0;
 
@@ -496,7 +498,9 @@ export function GovernanceOverview() {
             state={tokenCardState}
             unavailableReason={
               tokenCardState === "partial"
-                ? (usage?.tokenPrefixAmbiguous ? "配置 Token 前缀存在冲突（D4），计数存在歧义" : "活跃 Token 数超过配置数，数据异常")
+                ? (usage?.tokenPrefixAmbiguous
+                    ? "配置 Token 前缀存在冲突（D4），计数存在歧义"
+                    : "活跃 Token 数超过配置数：身份／窗口／快照口径未同时一致，不自动等于数据异常；差异明细见下方入口")
                 : undefined
             }
             helpId="token-asset"
@@ -519,6 +523,23 @@ export function GovernanceOverview() {
             helpId="table-asset"
             testId="metric-table-asset"
           />
+        </div>
+        {/* E8：差异明细入口。四类差异集合的权威口径只在 P0-4 只读对账页；
+            这里不重算、不下结论，只把管理员送到能看见差异明细与空值原因的地方。 */}
+        <div
+          className="pl-notice flex flex-wrap items-center justify-between gap-2"
+          data-testid="governance-token-difference-entry"
+        >
+          <span>
+            <span className="notranslate" translate="no">Token</span> 差异明细：已配置未活跃 · 活跃但当前配置不可见 · 已停用或已删除 · 身份未核验。「活跃数 &gt; 配置数」不自动等于数据异常。
+          </span>
+          <Link
+            className="pl-link"
+            to="/admin/audit-reconciliation"
+            data-testid="governance-token-difference-link"
+          >
+            打开审计对账 · 使用概况
+          </Link>
         </div>
       </div>
 

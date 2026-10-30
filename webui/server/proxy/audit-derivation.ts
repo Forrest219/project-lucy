@@ -56,6 +56,23 @@ export function emptyPrimaryStatusCounts(): Record<PrimaryStatus, number> {
 export type AuthorizationView = "allowed" | "denied" | "not_evaluated" | "unknown";
 export type ExecutionView = "succeeded" | "failed" | "not_executed" | "interrupted" | "unknown";
 
+/** 授权视图值域（读路径归一化的唯一依据）。 */
+export const AUTHORIZATION_VIEWS = ["allowed", "denied", "not_evaluated", "unknown"] as const;
+
+/** 执行视图值域（读路径归一化的唯一依据）。 */
+export const EXECUTION_VIEWS = ["succeeded", "failed", "not_executed", "interrupted", "unknown"] as const;
+
+const AUTHORIZATION_VIEW_SET: ReadonlySet<string> = new Set(AUTHORIZATION_VIEWS);
+const EXECUTION_VIEW_SET: ReadonlySet<string> = new Set(EXECUTION_VIEWS);
+
+export function isAuthorizationView(value: unknown): value is AuthorizationView {
+  return typeof value === "string" && AUTHORIZATION_VIEW_SET.has(value);
+}
+
+export function isExecutionView(value: unknown): value is ExecutionView {
+  return typeof value === "string" && EXECUTION_VIEW_SET.has(value);
+}
+
 /** 本期**写入**的送达状态（Spec §4.3(b) / U1）。 */
 export const DELIVERY_STATUSES = ["prepared", "sent", "acknowledged", "unknown"] as const;
 export type DeliveryStatus = (typeof DELIVERY_STATUSES)[number];

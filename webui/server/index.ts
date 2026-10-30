@@ -9,6 +9,7 @@ import { buildProxy, getDataQaInstructionsStatus } from "./proxy/mcp-proxy.js";
 import { serveStaticAsset } from "./static-assets";
 import { addTiming, registerEntryPerformanceTiming, withRequestTiming } from "./entry-performance-timing";
 import { displayGenerations, onDisplayGenerationChange, withDisplayWriteBarrier } from "./display-generation";
+import { withKtxYamlWriteLock } from "./ktx-yaml-write-lock";
 import { parseProbePurpose, ProbeScheduler, type ProbeTiming } from "./background-probes";
 import {
   getDisplaySnapshot,
@@ -17,6 +18,17 @@ import {
   ensureDisplayReconciler
 } from "./display-snapshot";
 import { changedFiles, previewDiff, type SessionWrittenFile } from "./diff";
+function makeDiff(oldText: string, newText: string): string {
+  return previewDiff(oldText, newText, "ktx.yaml");
+}
+
+import {
+  enabledTableError,
+  patchConnectionEnabledTablesYaml,
+  scannedPhysicalTables,
+  validateEnabledTables,
+  type EnabledTableWarning
+} from "./enabled-tables";
 import { joinCandidatesPath, readJoinCandidates, writeJoinCandidates, type JoinCandidate } from "./joins-sidecar";
 import { formatConnectionErrorMessage } from "./connection-errors";
 import { readKtxRuntimeStatus } from "./ktx-runtime";
@@ -378,194 +390,6 @@ function distDir(): string {
  * This helper validates the structure with the YAML parser, then applies a
  * line-level replacement to the target block so unrelated bytes stay untouched.
  */
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function lineIndent(line: string): number {
-  return line.match(/^ */)?.[0].length ?? 0;
-}
-
-function isStructuralYamlLine(line: string): boolean {
-  const trimmed = line.trim();
-  return Boolean(trimmed) && !trimmed.startsWith("#");
-}
-
-function findYamlBlockEnd(lines: string[], start: number, parentIndent: number): number {
-  for (let i = start; i < lines.length; i += 1) {
-    if (!isStructuralYamlLine(lines[i])) continue;
-    if (lineIndent(lines[i]) <= parentIndent) return i;
-  }
-  return lines.length;
-}
-
-function enabledTablesBlock(indent: number, enabledTables: string[]): string[] {
-  const pad = " ".repeat(indent);
-  if (enabledTables.length === 0) {
-    return [`${pad}enabled_tables: []`];
-  }
-  return [`${pad}enabled_tables:`, ...enabledTables.map((table) => `${pad}  - ${table}`)];
-}
-
-function assertProposedKtxYaml(proposedYaml: string): { proposedYaml: string } {
-  const check = parseDocument(proposedYaml);
-  if (check.errors.length > 0) {
-    throw new KtxYamlParseError(
-      `Failed to patch ktx.yaml enabled_tables: ${check.errors[0]?.message ?? "unknown error"}`
-    );
-  }
-  return { proposedYaml };
-}
-
-function patchConnectionEnabledTablesYaml(
-  rawYamlText: string,
-  connId: string,
-  newEnabledTables: string[]
-): { proposedYaml: string } {
-  // Flow mappings cannot host a block `enabled_tables` list. Convert first so
-  // the line-level patch never emits illegal YAML.
-  const yamlText = ktxYamlWithBlockConnections(rawYamlText);
-  const doc = parseDocument(yamlText, { keepSourceTokens: true });
-  const connections = doc.get("connections", true);
-  if (!connections || typeof connections !== "object") {
-    throw enabledTableError("CONNECTION_NOT_FOUND", `Connection '${connId}' not found in ktx.yaml`);
-  }
-  const connNode = connections.get(connId, true);
-  if (!connNode) {
-    throw enabledTableError("CONNECTION_NOT_FOUND", `Connection '${connId}' not found in ktx.yaml`);
-  }
-
-  const lines = yamlText.split("\n");
-  const connectionsLine = lines.findIndex((line) => /^(\s*)connections:\s*(?:#.*)?$/.test(line));
-  if (connectionsLine === -1) {
-    throw enabledTableError("CONNECTION_NOT_FOUND", `Connection '${connId}' not found in ktx.yaml`);
-  }
-
-  const connectionsIndent = lineIndent(lines[connectionsLine]);
-  const connectionsEnd = findYamlBlockEnd(lines, connectionsLine + 1, connectionsIndent);
-  const connPattern = new RegExp(`^(\\s*)${escapeRegExp(connId)}:\\s*(?:#.*)?$`);
-  let connLine = -1;
-  for (let i = connectionsLine + 1; i < connectionsEnd; i += 1) {
-    if (connPattern.test(lines[i]) && lineIndent(lines[i]) > connectionsIndent) {
-      connLine = i;
-      break;
-    }
-  }
-  if (connLine === -1) {
-    throw enabledTableError("CONNECTION_NOT_FOUND", `Connection '${connId}' not found in ktx.yaml`);
-  }
-
-  const connIndent = lineIndent(lines[connLine]);
-  const connEnd = findYamlBlockEnd(lines, connLine + 1, connIndent);
-  let enabledTablesLine = -1;
-  for (let i = connLine + 1; i < connEnd; i += 1) {
-    if (/^\s*enabled_tables:\s*(?:.*)?$/.test(lines[i]) && lineIndent(lines[i]) > connIndent) {
-      enabledTablesLine = i;
-      break;
-    }
-  }
-
-  if (enabledTablesLine === -1) {
-    const firstFieldLine = lines
-      .slice(connLine + 1, connEnd)
-      .find((line) => isStructuralYamlLine(line) && lineIndent(line) > connIndent);
-    const fieldIndent = firstFieldLine ? lineIndent(firstFieldLine) : connIndent + 2;
-    lines.splice(connEnd, 0, ...enabledTablesBlock(fieldIndent, newEnabledTables));
-    return assertProposedKtxYaml(lines.join("\n"));
-  }
-
-  const fieldIndent = lineIndent(lines[enabledTablesLine]);
-  const enabledTablesEnd = findYamlBlockEnd(lines, enabledTablesLine + 1, fieldIndent);
-  lines.splice(
-    enabledTablesLine,
-    enabledTablesEnd - enabledTablesLine,
-    ...enabledTablesBlock(fieldIndent, newEnabledTables)
-  );
-  return assertProposedKtxYaml(lines.join("\n"));
-}
-
-function makeDiff(oldText: string, newText: string): string {
-  return previewDiff(oldText, newText, "ktx.yaml");
-}
-
-function enabledTableError(code: string, message: string) {
-  const err = new Error(message) as Error & { statusCode: number; code: string };
-  err.statusCode = code === "CONNECTION_NOT_FOUND" ? 404 : 400;
-  err.code = code;
-  return err;
-}
-
-async function scannedPhysicalTables(projectRoot: string, connId: string): Promise<Set<string>> {
-  const schemaDir = path.join((await loadContentPaths()).semanticLayer, connId, "_schema");
-  const entries = await readdir(schemaDir, { withFileTypes: true }).catch(() => []);
-  const tables = new Set<string>();
-  for (const entry of entries) {
-    if (!entry.isFile() || !entry.name.endsWith(".yaml")) continue;
-    const schemaName = entry.name.replace(/\.yaml$/, "");
-    const text = await readFile(path.join(schemaDir, entry.name), "utf8").catch(() => "");
-    const doc = parse(text) as Record<string, unknown> | null;
-    const rawTables = doc && typeof doc === "object" && doc.tables && typeof doc.tables === "object"
-      ? doc.tables as Record<string, unknown>
-      : {};
-    for (const [sourceName, value] of Object.entries(rawTables)) {
-      const tableDef = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-      const physical = typeof tableDef.table === "string" && tableDef.table.trim()
-        ? tableDef.table.trim()
-        : `${schemaName}.${sourceName}`;
-      tables.add(physical);
-    }
-  }
-  return tables;
-}
-
-type EnabledTableWarning = {
-  code: "ENABLED_TABLE_NOT_SCANNED";
-  table: string;
-  message: string;
-};
-
-/**
- * Spec 116: only *newly added* tables must be in the scanned Manifest.
- * Tables already present in oldEnabledTables may be retained (invalid enabled /
- * orphan drift) and are reported via warnings instead of blocking the write.
- */
-function validateEnabledTables(
-  enabledTables: unknown,
-  scanned: Set<string>,
-  previouslyEnabled: Set<string>
-): { tables: string[]; warnings: EnabledTableWarning[] } {
-  if (!Array.isArray(enabledTables)) {
-    throw enabledTableError("INVALID_ENABLED_TABLE", "enabledTables must be an array");
-  }
-  const seen = new Set<string>();
-  const valid: string[] = [];
-  const warnings: EnabledTableWarning[] = [];
-  for (const item of enabledTables) {
-    if (typeof item !== "string") {
-      throw enabledTableError("INVALID_ENABLED_TABLE", "enabled table must be a string");
-    }
-    const table = item.trim();
-    if (!table || /[\\/\u0000-\u001F]/.test(table) || table.includes("..") || !/^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$/.test(table)) {
-      throw enabledTableError("INVALID_ENABLED_TABLE", `Invalid enabled table '${item}'`);
-    }
-    if (seen.has(table)) {
-      throw enabledTableError("DUPLICATE_ENABLED_TABLE", `Duplicate enabled table '${table}'`);
-    }
-    if (!scanned.has(table) && !previouslyEnabled.has(table)) {
-      throw enabledTableError("TABLE_NOT_SCANNED", `Table '${table}' is not present in scanned semantic-layer schema`);
-    }
-    if (!scanned.has(table)) {
-      warnings.push({
-        code: "ENABLED_TABLE_NOT_SCANNED",
-        table,
-        message: `Table '${table}' is enabled but not present in scanned semantic-layer schema`
-      });
-    }
-    seen.add(table);
-    valid.push(table);
-  }
-  return { tables: valid, warnings };
-}
 
 /**
  * Spec 191 §11.1 — a write that changes ktx.yaml leaves the execution layer
@@ -1098,10 +922,10 @@ export function buildServer() {
     const projectRoot = await resolveProjectRoot();
     // One aggregate response: every row carries its authorization status and
     // the Role / Agent configuration is read exactly once (Spec 193 §6.1).
-    const [pages, directories, snapshot] = await Promise.all([
-      listWiki(projectRoot),
-      listWikiDirectories(projectRoot),
-      loadWikiAccessConfigSnapshot(projectRoot)
+    const snapshot = await loadWikiAccessConfigSnapshot(projectRoot);
+    const [pages, directories] = await Promise.all([
+      listWiki(projectRoot, snapshot),
+      listWikiDirectories(projectRoot)
     ]);
     return {
       ok: true,
@@ -1826,7 +1650,11 @@ export function buildServer() {
     const digestBefore = await ktxDigestSnapshot(projectRoot);
 
     // Spec 174 §3.2 — barrier spans ktx.yaml write → catalog reload → policy commit.
-    return withDisplayWriteBarrier(["C", "D", "P", "L"], async () => {
+    // L25-16 N05 / G17 — the legacy write entry joins the SAME ktx.yaml write lock as the
+    // control-plane batch service; otherwise the batch service's mutual-exclusion promise
+    // does not hold (the legacy entry could interleave while the batch holds the lock).
+    return withKtxYamlWriteLock(() =>
+    withDisplayWriteBarrier(["C", "D", "P", "L"], async () => {
     const { auditId } = await auditedWriteFile(projectRoot, "ktx.yaml", proposedYaml, {
       enabled: true,
       changeType: "enabled_tables_update",
@@ -1888,7 +1716,8 @@ export function buildServer() {
         runtimeAck: policyRuntimeAck
       }
     };
-    });
+    })
+    );
   });
 
   app.post<{
@@ -2770,6 +2599,24 @@ export async function startServer(options: { displayPrewarm?: boolean } = {}): P
   } catch (error) {
     console.error("[access-recovery] the recovery state could not be established:", error);
   }
+  // Spec 149 §8 — 运维问数连接的确保在**策略编译之前**：
+  // 视图、连接块、内容根资产与项目根镜像都要在 EffectivePolicy 提交前就位，
+  // 否则目录能看见连接而执行层不认。失败只关闭这一个连接，不影响其它数据面。
+  try {
+    const { ensureOpsEvidence } = await import("./ops-evidence/ensure.js");
+    const opsEvidence = await ensureOpsEvidence();
+    if (opsEvidence.readiness !== "current") {
+      console.warn(
+        `[ops-evidence] readiness=${opsEvidence.readiness}` +
+          `${opsEvidence.detail ? ` (${opsEvidence.detail})` : ""}; the ops evidence connection is not queryable`
+      );
+    }
+  } catch (error) {
+    console.error(
+      "[ops-evidence] ensure failed; the ops evidence connection stays unavailable:",
+      error
+    );
+  }
   // Spec 98 §8.3 — compile verified EffectivePolicy before accepting traffic.
   // Empty policyVersion must not be the steady-state after a clean start.
   const { commitEffectivePolicy } = await import("./proxy/acl.js");
@@ -2795,6 +2642,14 @@ export async function startServer(options: { displayPrewarm?: boolean } = {}): P
   // recovery admission. Running this after `app.listen()` would leave a
   // window in which the API accepted writes on an unverified target.
   await recoverSemanticJournals();
+
+  // ★ Lucy v0.25 / L25-16 §6.2 (F6-01 / G33): the control plane's non-terminal
+  // convergence entry. The operations that the previous process left in a
+  // non-terminal state are scanned and converged BEFORE the listener accepts
+  // traffic, so no operation can be "in flight" at that moment. Without this,
+  // the two non-terminal states would only ever refuse a new attempt and never
+  // converge (Spec §6.2 / G33).
+  await recoverOpsControlPlane();
 
   const app = buildServer();
   const host = process.env.LUCY_WEBUI_HOST ?? "127.0.0.1";
@@ -2894,6 +2749,64 @@ async function recoverSemanticJournals(): Promise<void> {
   } catch (error) {
     console.error(
       "[lucy-semantic] semantic journal recovery failed",
+      error instanceof Error ? error.message : "unknown"
+    );
+  }
+}
+
+/**
+ * Lucy v0.25 / L25-16 §6.2 (F6-01 / G33) — the control plane's convergence
+ * entry at boot.
+ *
+ * Two entries are required by the contract, and neither may be delegated to
+ * the existing release-status endpoint (that endpoint only returns records and
+ * never writes the control-plane state back):
+ *
+ * 1. **Recovery scan** — scan the non-terminal operations by operation record
+ *    and walk each of them through the §6.2 convergence order.
+ * 2. **Release convergence** — write the release terminal state back onto the
+ *    targets and the operation.
+ *
+ * The exclusive ownership of the convergence is held by `recoverPending`
+ * (the `recovering` set in `ops-recovery.ts`), so a concurrent recovery of the
+ * same operation key is refused rather than entered twice.
+ *
+ * A failure here is logged and leaves the stricter state: the operation keeps
+ * its non-terminal state, and the proxy still fails closed per request.
+ */
+async function recoverOpsControlPlane(): Promise<void> {
+  try {
+    const { getOpsDatabase } = await import("./ops/ops-idempotency.js");
+    const { recoverNonTerminalOperations, convergePendingActivation } = await import(
+      "./ops/ops-recovery.js"
+    );
+    const { opsAdapterFor } = await import("./ops/ops-tools.js");
+    const projectRoot = await resolveProjectRoot();
+    const database = await getOpsDatabase();
+
+    const recovery = await recoverNonTerminalOperations({
+      adapterFor: opsAdapterFor,
+      projectRoot,
+      actor: "system",
+      delegatedFrom: null,
+      database
+    });
+    const scanned =
+      (recovery.ok ? (recovery.data as { scanned?: number }).scanned : undefined) ?? 0;
+    if (scanned > 0) {
+      console.warn(`[lucy-ops] converged ${scanned} non-terminal control-plane operation(s)`);
+    }
+
+    const activation = await convergePendingActivation({ adapterFor: opsAdapterFor, database });
+    const converged = (
+      activation.ok ? (activation.data as { converged?: unknown[] }).converged : undefined
+    ) ?? [];
+    if (converged.length > 0) {
+      console.warn(`[lucy-ops] wrote back ${converged.length} pending_activation target(s)`);
+    }
+  } catch (error) {
+    console.error(
+      "[lucy-ops] control-plane convergence failed",
       error instanceof Error ? error.message : "unknown"
     );
   }

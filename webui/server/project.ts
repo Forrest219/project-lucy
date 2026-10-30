@@ -32,9 +32,11 @@ import type {
 import { previewDiff } from "./diff";
 import { assertEndpointGate, type EndpointFlags } from "./connection-endpoint-gate.js";
 import { withKtxYamlWriteLock } from "./ktx-yaml-write-lock.js";
+import { withPublishCoordinator } from "./publish-coordinator.js";
 import type { ConnectionTestResult } from "./ktx";
 import { withDisplayWriteBarrier, type DisplayScope } from "./display-generation";
 import { connectionDeleteBlockText } from "../src/lib/deleteConnectionGuard.js";
+import { OPS_EVIDENCE_CONNECTION_ID } from "./ops-evidence/contract.js";
 
 const KTX_YAML_DISPLAY_SCOPES: DisplayScope[] = ["C", "D", "P", "L"];
 
@@ -243,6 +245,22 @@ export class ConnectionReferencesRemainError extends Error {
     super(message);
     this.name = "ConnectionReferencesRemainError";
     this.detail = { blockers };
+  }
+}
+
+/**
+ * Spec 149 §8 — 运维问数连接受删除保护。
+ *
+ * dryRun 与确认写入都返回 HTTP 400 `OPS_EVIDENCE_CONNECTION_PROTECTED`，
+ * 不写 `config_change_log`，不删审计库、内容根资产或项目根镜像。
+ */
+export class OpsEvidenceConnectionProtectedError extends Error {
+  code = "OPS_EVIDENCE_CONNECTION_PROTECTED";
+  statusCode = 400;
+
+  constructor(message: string) {
+    super(message);
+    this.name = "OpsEvidenceConnectionProtectedError";
   }
 }
 
@@ -783,7 +801,23 @@ export async function removeSchema(
 ): Promise<RemoveSchemaPreview | RemoveSchemaResult> {
   // Spec 174 §3.2 — the display barrier spans the whole confirmed transaction (incl. rollback).
   if (dryRun) return removeSchemaUnbarriered(root, connId, schema, dryRun, options);
-  return withDisplayWriteBarrier(KTX_YAML_DISPLAY_SCOPES, () => removeSchemaUnbarriered(root, connId, schema, dryRun, options));
+  // L25-16 N05 / F5-04 — the legacy Schema removal entry joins the SAME ktx.yaml write lock as
+  // the control-plane batch services. Its write set is wider than ktx.yaml (optional Manifest /
+  // Overlay deletion), so when it does delete semantic content files it also takes the publish
+  // window — the mandated order is
+  // `withKtxYamlWriteLock → withDisplayWriteBarrier → withPublishCoordinator → write`.
+  const deletesSemanticContent = Boolean(options.deleteManifest || options.deleteOverlays);
+  return withKtxYamlWriteLock(() =>
+    withDisplayWriteBarrier(KTX_YAML_DISPLAY_SCOPES, () =>
+      deletesSemanticContent
+        ? withPublishCoordinator(
+            "manifest_upload",
+            () => removeSchemaUnbarriered(root, connId, schema, dryRun, options),
+            { projectRoot: root }
+          )
+        : removeSchemaUnbarriered(root, connId, schema, dryRun, options)
+    )
+  );
 }
 
 async function removeSchemaUnbarriered(
@@ -944,12 +978,23 @@ async function removeSchemaUnbarriered(
     }
   }
 
-  await writeKtxYaml(root, mutator, { dryRun: false });
+  // L25-16 N05 / F5-04 — the caller already holds withKtxYamlWriteLock; re-entering it
+  // would self-wait. Use the existing `lockHeld: true` path.
+  await writeKtxYaml(root, mutator, { dryRun: false, lockHeld: true });
 
   const deletedFiles: string[] = [];
+  // L25-16 F5-04 — keep the pre-image of every deleted semantic content file so the
+  // deletion can be reversed / audited.
+  const deletedFilePreImages: Array<{ filePath: string; content: string }> = [];
 
   // Optional: delete manifest (safeRemove no-ops ENOENT).
   if (options.deleteManifest && hasManifest) {
+    deletedFilePreImages.push({
+      filePath: manifestPath,
+      content: await readFile(path.join(paths.semanticLayer, connId, "_schema", `${schema}.yaml`), "utf8").catch(
+        () => ""
+      )
+    });
     await safeRemove(paths, root, manifestPath);
     deletedFiles.push(manifestPath);
   }
@@ -957,6 +1002,12 @@ async function removeSchemaUnbarriered(
   // Optional: delete overlays.
   if (options.deleteOverlays) {
     for (const overlayPath of overlayPaths) {
+      deletedFilePreImages.push({
+        filePath: overlayPath,
+        content: await readFile(path.join(paths.semanticLayer, connId, overlayPath.slice(overlayPath.lastIndexOf("/") + 1)), "utf8").catch(
+          () => ""
+        )
+      });
       await safeRemove(paths, root, overlayPath);
       deletedFiles.push(overlayPath);
     }
@@ -980,7 +1031,8 @@ async function removeSchemaUnbarriered(
     oldSchemas,
     newSchemas,
     removedEnabledTables,
-    deletedFiles
+    deletedFiles,
+    deletedFilePreImages
   };
 }
 
@@ -1233,6 +1285,12 @@ async function removeConnectionUnbarriered(
     throw new ConnectionIdInvalidError(
       `Connection ID '${connId}' does not match pattern ${CONNECTION_ID_PATTERN}`
     );
+  }
+
+  // Spec 149 §8 — 运维问数连接不可删除。检查放在 dryRun 早返回**之前**，
+  // 因此预览与确认写入都拒绝；也不会走到下面的 `recordConfigChange`。
+  if (connId === OPS_EVIDENCE_CONNECTION_ID) {
+    throw new OpsEvidenceConnectionProtectedError("运维问数连接不能删除");
   }
 
   const ktxPath = path.join(root, "ktx.yaml");

@@ -23,7 +23,7 @@
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { loadCatalog, catalogDigest } from "../lib/catalog.mjs";
+import { loadCatalog, catalogDigest, readLock } from "../lib/catalog.mjs";
 import { loadHandlers, statusFromAssertions } from "../run-security.mjs";
 import { handlers as dataHandlers } from "../security/data-cases.mjs";
 import { handlers as rowPolicyHandlers } from "../security/row-policy-cases.mjs";
@@ -110,7 +110,11 @@ describe("C1 data-cases module contract", () => {
   });
 
   it("the catalog digest is unchanged by the C1 implementation (denominator preserved)", () => {
-    assert.equal(catalogDigest(cases), "sha256:240bff0f8085058405b0f6a0ae835b9934b651a1db17526d27af3b804714a694");
+    // 2026-10-28（D2 路径 A）：冻结目录**有意**扩容过一次 —— AUD25-A01..A12 与
+    // ARV25-V01..V12 并入冻结 catalog，分母 255 → 279、digest 240bff0f → c62cf23f。
+    // 这里不再钉死字面量，改为「catalog ≡ 冻结 lock」：分母的唯一权威是
+    // case-catalog.lock.json，变更走 lock 审阅（见 case-catalog.test.mjs 的独立钉）。
+    assert.equal(catalogDigest(cases), readLock().catalogDigest);
   });
 });
 

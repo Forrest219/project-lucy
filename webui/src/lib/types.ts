@@ -1487,6 +1487,51 @@ export type TokensResponse = {
   stats: TokenInventoryStats;
 };
 
+/**
+ * B27 八桶汇总主状态（`primary_status`）。历史行 NULL → `unknown`。
+ * 与后端 `webui/server/proxy/audit-derivation.ts` 的 `PRIMARY_STATUSES` 同值域。
+ */
+export type AuditPrimaryStatus =
+  | "succeeded"
+  | "failed"
+  | "denied"
+  | "budget_stopped"
+  | "cancelled"
+  | "timeout"
+  | "indeterminate"
+  | "unknown";
+
+/** 执行轴（五值）。 */
+export type AuditExecutionStatus =
+  | "succeeded"
+  | "failed"
+  | "not_executed"
+  | "interrupted"
+  | "unknown";
+
+/** 授权轴（四值）。 */
+export type AuditAuthorizationStatus = "allowed" | "denied" | "not_evaluated" | "unknown";
+
+/** 关联轴（五态）。 */
+export type AuditAssociationStatus =
+  | "confirmed"
+  | "candidate"
+  | "unassigned"
+  | "conflict"
+  | "legacy_unverified";
+
+/** 送达状态（本期写入值域）。 */
+export type AuditDeliveryStatus = "prepared" | "sent" | "acknowledged" | "unknown";
+
+/** 六值空值原因（U2 冻结枚举）。历史空白 → `unknown`，**不得**推定为 `not_collected`。 */
+export type AuditNullReason =
+  | "not_applicable"
+  | "not_collected"
+  | "redacted"
+  | "parse_failed"
+  | "unknown"
+  | "not_supported";
+
 export type AuditLogEntry = {
   id: number;
   ts: string;
@@ -1538,6 +1583,29 @@ export type AuditLogEntry = {
   matchedRoleId?: string;
   /** Spec 162 SC-20b. Stored `is_slow_call` on the calls list, not the P95 `isSlowCall`. */
   usageSlowCall?: boolean;
+  /**
+   * B27 八桶汇总主状态（历史行 NULL → `unknown`，不重解释历史数据）。
+   * 旧 `outcome` 只是 legacy 直方图，**不是**执行状态。
+   */
+  primaryStatus?: AuditPrimaryStatus;
+  /**
+   * 三条**独立**判断轴（20261019 §5）。各读各的列，互不推导：
+   * 执行成功不自动使关联或证据覆盖显示为绿色已完成。
+   */
+  executionStatus?: AuditExecutionStatus;
+  authorizationStatus?: AuditAuthorizationStatus;
+  associationStatus?: AuditAssociationStatus;
+  deliveryStatus?: AuditDeliveryStatus;
+  /** 六值空值原因（U2 冻结枚举）；历史空白 → `unknown`。 */
+  nullReason?: AuditNullReason;
+  /** 结果可用性（usable / empty / partial / metadata_missing / not_applicable / unknown）。 */
+  usabilityStatus?: string;
+  /** 受控客户端 observation 事件 ID；有值才可显示「客户端已采集」。 */
+  clientEventId?: string;
+  /** 已提交 received 事件的入口事件 ID。 */
+  ingressEventId?: string;
+  /** 凭证主体 ID（与「Agent」产品含义并列展示，不替代它）。 */
+  credentialPrincipalId?: string;
 };
 
 export type AuditQuery = {
@@ -1593,14 +1661,35 @@ export type AuditSourcesResponse = {
   deniedTables: Array<{ table: string; calls: number; denied: number }>;
 };
 
+/**
+ * 审计投影状态（`runProjection` 的结果）。
+ * `delayMs` = 最老未投影事件的滞留时长 = 顶部元条的「审计同步延迟」。
+ */
+export type AuditProjectionStatus = {
+  complete: boolean;
+  cursor: number;
+  latestSeq: number;
+  lag: number;
+  delayMs: number;
+  reason?: string;
+};
+
 export type AuditResponse = {
   total: number;
   entries: AuditLogEntry[];
+  /** 审计投影状态（同步延迟 / 是否追平账本上界）。 */
+  projection?: AuditProjectionStatus;
   summary?: {
     protocolCalls: number;
     businessCalls: number;
     deniedCalls: number;
     dataBearingCalls: number;
+    /** B27：八桶主状态汇总（与列表 / CSV / v2 导出同源同函数）。 */
+    primaryStatus?: Record<AuditPrimaryStatus, number>;
+    /** 闭合断言：八桶之和 == 集合总数。 */
+    primaryStatusClosed?: boolean;
+    /** 旧 outcome 直方图，单列，不作为新执行状态。 */
+    legacyOutcome?: Record<string, number>;
   };
 };
 
@@ -1631,6 +1720,11 @@ export type AuditTurnEntry = {
   maxCallDurationMs?: number;
   slowCallCount?: number;
   outcomeSummary?: AuditTurnOutcomeSummary;
+  /**
+   * B27 八桶主状态汇总（该问询下所有关联调用）。
+   * 与列表 / CSV / v2 导出**同源同函数**（`countPrimaryStatuses`）。
+   */
+  primaryStatusSummary?: Record<AuditPrimaryStatus, number>;
 };
 
 export type AuditTurnReferenceLatency = {
@@ -1644,6 +1738,8 @@ export type AuditTurnsResponse = {
   total: number;
   entries: AuditTurnEntry[];
   referenceLatency: AuditTurnReferenceLatency;
+  /** 审计投影状态（同步延迟 / 是否追平账本上界）。 */
+  projection?: AuditProjectionStatus;
   summary: {
     reportedCount: number;
     inferredCount: number;
