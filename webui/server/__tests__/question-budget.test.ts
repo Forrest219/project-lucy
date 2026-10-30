@@ -40,11 +40,18 @@ describe("question budget and repair hints", () => {
     expect(budget.consume("turn-1", 1_000, "turn-1").action).toBe("stop");
   });
 
-  it("stops when the wall clock reaches 120 seconds", () => {
-    const budget = new QuestionBudget();
-    expect(budget.consume("turn-wall", 5_000).action).toBe("allow");
-    const stopped = budget.consume("turn-wall", 5_000 + 120_000);
-    expect(stopped.action).toBe("stop");
+  it("stops when elapsed wall mode reaches 120 seconds", () => {
+    const previous = process.env.LUCY_QUESTION_BUDGET_WALL_MODE;
+    process.env.LUCY_QUESTION_BUDGET_WALL_MODE = "elapsed";
+    try {
+      const budget = new QuestionBudget();
+      expect(budget.consume("turn-wall", 5_000).action).toBe("allow");
+      const stopped = budget.consume("turn-wall", 5_000 + 120_000);
+      expect(stopped.action).toBe("stop");
+    } finally {
+      if (previous === undefined) delete process.env.LUCY_QUESTION_BUDGET_WALL_MODE;
+      else process.env.LUCY_QUESTION_BUDGET_WALL_MODE = previous;
+    }
   });
 
   it("does not count a call that has no turn, and ignores protocol tools", () => {
@@ -257,14 +264,14 @@ describe("D-24 concurrent first consume must not exceed the hard cap", () => {
     expect(Math.max(...saved)).toBeLessThanOrEqual(20);
   });
 
-  it("并发消费后落库的计数等于实际放行次数", async () => {
+  it("并发消费受在途上限约束，落库次数等于实际放行次数", async () => {
     const { budget, saved } = makeBudget(0);
     const results = await Promise.all(
       Array.from({ length: 25 }, () => budget.consumePersisted("d24", 1_000))
     );
     const allowed = results.filter((r) => r.action === "allow").length;
-    expect(allowed).toBe(20);
-    // 落库的最终计数 = 实际放行次数（不多不少）。
+    expect(allowed).toBe(4);
+    expect(results.filter((r) => r.action === "reject").length).toBe(21);
     expect(saved[saved.length - 1]).toBe(allowed);
   });
 });

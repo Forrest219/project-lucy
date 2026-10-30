@@ -318,6 +318,7 @@ function accessRolePolicy() {
       "wiki_search",
       "wiki_read",
       "lucy_begin_question",
+      "lucy_continue_question",
       "lucy_skill_search",
       "lucy_skill_read"
     ]);

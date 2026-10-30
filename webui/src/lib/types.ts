@@ -1697,6 +1697,7 @@ export type AuditTurnOutcomeSummary = {
   ok: number;
   denied: number;
   error: number;
+  budgetStop?: number;
 };
 
 export type AuditTurnEntry = {

@@ -383,6 +383,7 @@ export function closeAuditDb(): void {
   }
   // F-02：重开数据库后基线需重新核对（换一个库文件时基线不在旧库里）。
   asofBaselineResolved = false;
+  budgetTableReady = false;
 }
 
 // ─── F-02：as-of S 证明的存储侧支撑 ─────────────────────────────────────────
@@ -622,6 +623,7 @@ async function getDb(): Promise<Database.Database> {
       created_at            TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_ct_user_created ON conversation_turns(user_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_ct_session ON conversation_turns(session_id);
     CREATE TABLE IF NOT EXISTS inferred_turns (
       inferred_turn_id     TEXT PRIMARY KEY,
       user_id              TEXT NOT NULL,
@@ -1122,6 +1124,24 @@ CREATE TABLE IF NOT EXISTS question_budget_state (
 );
 `;
 
+const BUDGET_STATE_COLUMNS = [
+  ["busy_ms", "INTEGER NOT NULL DEFAULT 0"],
+  ["round", "INTEGER NOT NULL DEFAULT 0"],
+  ["turn_id", "TEXT"],
+  ["window_id", "INTEGER NOT NULL DEFAULT 0"],
+  ["pending_token", "TEXT"],
+  ["presented_token", "TEXT"],
+  ["archived_busy_json", "TEXT"]
+] as const;
+
+const BUDGET_IDEMPOTENCY_TABLE = `
+CREATE TABLE IF NOT EXISTS question_budget_idempotency (
+  scope_key TEXT NOT NULL,
+  idempotency_key TEXT NOT NULL,
+  PRIMARY KEY (scope_key, idempotency_key)
+);
+`;
+
 export type PersistedBudgetState = {
   startedAt: number;
   originStartedAt: number;
@@ -1130,6 +1150,14 @@ export type PersistedBudgetState = {
   attempts: number;
   peakConcurrency: number;
   currentConcurrency: number;
+  busyMs?: number;
+  round?: number;
+  turnId?: string | null;
+  windowId?: number;
+  pendingToken?: string | null;
+  presentedToken?: string | null;
+  archivedBusyMsByWindow?: Record<string, number>;
+  scopeKey?: string | null;
 };
 
 let budgetTableReady = false;
@@ -1137,17 +1165,24 @@ let budgetTableReady = false;
 async function ensureBudgetStateTable(database: Database.Database): Promise<void> {
   if (budgetTableReady) return;
   database.exec(BUDGET_STATE_TABLE);
+  database.exec(BUDGET_IDEMPOTENCY_TABLE);
+  for (const [column, definition] of BUDGET_STATE_COLUMNS) {
+    ensureColumn(database, "question_budget_state", column, definition);
+  }
   budgetTableReady = true;
 }
 
 /** 读取某个作用域的预算状态；不存在返回 null。 */
-export async function loadBudgetState(scopeKey: string): Promise<PersistedBudgetState | null> {
+export async function loadBudgetState(
+  scopeKey: string
+): Promise<{ row: PersistedBudgetState; appliedKeys: string[] } | null> {
   const database = await getDb();
   await ensureBudgetStateTable(database);
   const row = database
     .prepare(
       `SELECT started_at, origin_started_at, calls, continuations, attempts,
-              peak_concurrency, current_concurrency
+              peak_concurrency, current_concurrency, busy_ms, round, turn_id,
+              window_id, pending_token, presented_token, archived_busy_json
          FROM question_budget_state WHERE scope_key = ?`
     )
     .get(scopeKey) as
@@ -1159,51 +1194,123 @@ export async function loadBudgetState(scopeKey: string): Promise<PersistedBudget
         attempts: number;
         peak_concurrency: number;
         current_concurrency: number;
+        busy_ms: number | null;
+        round: number | null;
+        turn_id: string | null;
+        window_id: number | null;
+        pending_token: string | null;
+        presented_token: string | null;
+        archived_busy_json: string | null;
       }
     | undefined;
   if (!row) return null;
+  let archived: Record<string, number> = {};
+  if (row.archived_busy_json) {
+    try {
+      const parsed = JSON.parse(row.archived_busy_json) as Record<string, number>;
+      if (parsed && typeof parsed === "object") archived = parsed;
+    } catch {
+      archived = {};
+    }
+  }
+  const keys = database
+    .prepare(`SELECT idempotency_key FROM question_budget_idempotency WHERE scope_key = ?`)
+    .all(scopeKey) as Array<{ idempotency_key: string }>;
   return {
-    startedAt: row.started_at,
-    originStartedAt: row.origin_started_at,
-    calls: row.calls,
-    continuations: row.continuations,
-    attempts: row.attempts,
-    peakConcurrency: row.peak_concurrency,
-    currentConcurrency: row.current_concurrency
+    row: {
+      startedAt: row.started_at,
+      originStartedAt: row.origin_started_at,
+      calls: row.calls,
+      continuations: row.continuations,
+      attempts: row.attempts,
+      peakConcurrency: row.peak_concurrency,
+      currentConcurrency: row.current_concurrency,
+      busyMs: row.busy_ms ?? 0,
+      round: row.round ?? 0,
+      turnId: row.turn_id,
+      windowId: row.window_id ?? 0,
+      pendingToken: row.pending_token,
+      presentedToken: row.presented_token,
+      archivedBusyMsByWindow: archived,
+      scopeKey
+    },
+    appliedKeys: keys.map((entry) => entry.idempotency_key)
   };
 }
 
-/** 持久化预算状态（upsert）。 */
-export async function saveBudgetState(scopeKey: string, state: PersistedBudgetState): Promise<void> {
+/** 持久化预算状态。重复幂等键返回已提交行，不覆盖磁盘。 */
+export async function saveBudgetState(
+  scopeKey: string,
+  state: PersistedBudgetState,
+  idempotencyKey?: string
+): Promise<{ row: PersistedBudgetState; appliedKeys: string[] }> {
   const database = await getDb();
   await ensureBudgetStateTable(database);
-  database
-    .prepare(
-      `INSERT INTO question_budget_state
-         (scope_key, started_at, origin_started_at, calls, continuations, attempts,
-          peak_concurrency, current_concurrency, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(scope_key) DO UPDATE SET
-         started_at = excluded.started_at,
-         origin_started_at = excluded.origin_started_at,
-         calls = excluded.calls,
-         continuations = excluded.continuations,
-         attempts = excluded.attempts,
-         peak_concurrency = excluded.peak_concurrency,
-         current_concurrency = excluded.current_concurrency,
-         updated_at = excluded.updated_at`
-    )
-    .run(
-      scopeKey,
-      state.startedAt,
-      state.originStartedAt,
-      state.calls,
-      state.continuations,
-      state.attempts,
-      state.peakConcurrency,
-      state.currentConcurrency,
-      Date.now()
-    );
+  const write = database.transaction(() => {
+    if (idempotencyKey) {
+      const existing = database
+        .prepare(
+          `SELECT 1 AS hit FROM question_budget_idempotency WHERE scope_key = ? AND idempotency_key = ?`
+        )
+        .get(scopeKey, idempotencyKey) as { hit: number } | undefined;
+      if (existing) return;
+    }
+    database
+      .prepare(
+        `INSERT INTO question_budget_state
+           (scope_key, started_at, origin_started_at, calls, continuations, attempts,
+            peak_concurrency, current_concurrency, updated_at, busy_ms, round, turn_id,
+            window_id, pending_token, presented_token, archived_busy_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(scope_key) DO UPDATE SET
+           started_at = excluded.started_at,
+           origin_started_at = excluded.origin_started_at,
+           calls = excluded.calls,
+           continuations = excluded.continuations,
+           attempts = excluded.attempts,
+           peak_concurrency = excluded.peak_concurrency,
+           current_concurrency = excluded.current_concurrency,
+           updated_at = excluded.updated_at,
+           busy_ms = excluded.busy_ms,
+           round = excluded.round,
+           turn_id = excluded.turn_id,
+           window_id = excluded.window_id,
+           pending_token = excluded.pending_token,
+           presented_token = excluded.presented_token,
+           archived_busy_json = excluded.archived_busy_json`
+      )
+      .run(
+        scopeKey,
+        state.startedAt,
+        state.originStartedAt,
+        state.calls,
+        state.continuations,
+        state.attempts,
+        state.peakConcurrency,
+        state.currentConcurrency,
+        Date.now(),
+        state.busyMs ?? 0,
+        state.round ?? 0,
+        state.turnId ?? null,
+        state.windowId ?? 0,
+        state.pendingToken ?? null,
+        state.presentedToken ?? null,
+        JSON.stringify(state.archivedBusyMsByWindow ?? {})
+      );
+    if (idempotencyKey) {
+      database
+        .prepare(
+          `INSERT INTO question_budget_idempotency (scope_key, idempotency_key) VALUES (?, ?)`
+        )
+        .run(scopeKey, idempotencyKey);
+    }
+  });
+  write();
+  const loaded = await loadBudgetState(scopeKey);
+  if (!loaded || !("row" in loaded)) {
+    throw new Error("question_budget_state_missing_after_save");
+  }
+  return loaded;
 }
 
 /** 列出所有已知预算作用域键（恢复 / 重建用）。 */

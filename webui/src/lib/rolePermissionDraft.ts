@@ -32,6 +32,7 @@ export const READONLY_QA_PRESET = [
   "lucy_explain_query",
   "lucy_freshness",
   "lucy_begin_question",
+  "lucy_continue_question",
 ] as const;
 
 /**

@@ -617,8 +617,8 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 | Reported turn | 已上报问询 | — | reported turn | 来源 badge |
 | Inferred turn | 推断问询 | — | 推断问题（无来源标注） | 来源 badge |
 | Session Visit | 会话访问 | — | 第三种来源 badge、把 User-Agent 写成客户端名 | 没有用户原文时按 MCP 会话生成的推断问询。摘要以「会话建立：」加客户端名开头。Spec 172 |
-| Question Budget | 问询预算 | — | turn budget（裸露作主标签）、8 分钟上限 | 同一问询的数据工具次数或墙钟上限，先到先停；Spec 162 |
-| Continuable | 可继续 | — | 自动续跑 | 问询预算用尽后的一次继续；协议字段 `question_budget_exhausted` 使用 `translate="no"` |
+| Question Budget | 问询预算 | — | turn budget（裸露作主标签）、8 分钟上限 | 同一问询的数据工具次数上限与数据处理时长上限；不含 agent 思考等空闲时间；Spec 162 |
+| Continuable | 可继续 | — | 自动续跑 | 问询预算用尽后，该调用者是否仍有一条可达的继续通道；协议字段 `question_budget_exhausted` 使用 `translate="no"` |
 | Repair Hint | 修复提示 | — | 把角色外的 source 名写进提示 | 只含当前角色可见的来源与连接 |
 | Filter Pushdown | 过滤条件下推 | — | 把 `STRUCT` / `AS field` 当作成功 SQL | 编译结果命中该形状时失败关闭；`filter_pushdown` 使用 `translate="no"` |
 | Actor | 使用人 | — | 把 token 备注当成使用人 | Token 上显式 `actor_id` + `actor_kind=person`；`token_label` 只是备注 |
@@ -632,7 +632,7 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 | Source type filter | 来源类型 | — | 全部来源、推断（筛选项裸词） | 选项：`全部 / 用户原始问询 / 系统推断问询`；**仅问询记录 Tab** |
 | Call origin filter | 调用来源 | — | 全部来源（作选项文案）、来源类型（挪用到调用流水） | 调用流水筛选项：`全部 / MCP 调试台受控试调 / Agent 接入调用`；`callSource=playground\|agent`；`playground` 对应 `lucy_platform=mcp-playground` 并自动包含协议调用 |
 | Tool call count | 工具调用数 | — | 调用数 | L1 列表列；触达物理表或 `table_forbidden` 拒绝 |
-| Linked call count | 关联调用数 | — | 调用总数（与工具调用数混用） | 问询记录 / CSV；成功 + 拒绝 + 错误 = 本列 |
+| Linked call count | 关联调用数 | — | 调用总数（与工具调用数混用） | 问询记录 / CSV；成功 + 拒绝 + 错误 + 预算终止 = 本列 |
 | Tables touched | 涉及数据表 | — | 工具 / 表 | L1 与 Drawer 列；列表仅 physical table（含 `table_forbidden` 拒绝的表） |
 | Database connection | 数据库连接 | — | connection_id（裸露） | Drawer 调用明细列 |
 | Stats Snapshot Time | 统计时间 | — | 上次更新（本页主标签） | 顶栏 24h/7d 左侧 |

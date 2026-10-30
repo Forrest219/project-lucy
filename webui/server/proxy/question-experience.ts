@@ -4,8 +4,38 @@
  * KTX is not modified. These functions fail closed inside the Lucy proxy.
  */
 
+import { randomUUID } from "node:crypto";
+
 export const QUESTION_BUDGET_MAX_CALLS = 20;
 export const QUESTION_BUDGET_MAX_WALL_MS = 120_000;
+export const QUESTION_BUDGET_MAX_BUSY_MS = 120_000;
+export const QUESTION_BUDGET_MAX_INFLIGHT = 4;
+export const QUESTION_BUDGET_ABS_EXEC_MS = 120_000;
+
+/** D7：默认 settled。elapsed 只把时间判定退回流逝时间。 */
+export function questionBudgetWallMode(): "settled" | "elapsed" {
+  return process.env.LUCY_QUESTION_BUDGET_WALL_MODE === "elapsed" ? "elapsed" : "settled";
+}
+
+/** D7：默认 stable。legacy 回到 `turn:` / `scope:` 键。 */
+export function questionBudgetScopeMode(): "stable" | "legacy" {
+  return process.env.LUCY_QUESTION_BUDGET_SCOPE === "legacy" ? "legacy" : "stable";
+}
+
+/** D9：默认纳管认证路由与报表模板。off 时这两条入口不消耗预算。 */
+export function questionBudgetBypassEnabled(): boolean {
+  return process.env.LUCY_QUESTION_BUDGET_BYPASS !== "off";
+}
+
+/** 与 Spec §6.1 一致：`userId|tokenHashPrefix`。字段同 turn 归属身份，分隔符用 `|` 以便从作用域键还原。 */
+export function budgetIdentityKey(userId: string, tokenHashPrefix: string): string {
+  return `${userId}|${tokenHashPrefix}`;
+}
+
+export function budgetScopeKey(identityKey: string, sessionId?: string | null): string {
+  const session = sessionId && sessionId.length > 0 ? sessionId : "-";
+  return `bq:${identityKey}:${session}`;
+}
 
 const DATA_TOOLS = new Set([
   "lucy_query",
@@ -39,8 +69,38 @@ export type BudgetStop = {
   reason: "question_budget_exhausted" | "question_budget_unavailable";
   partial: true;
   continueToken: string;
-  continuable: true;
+  continuable: boolean;
+  continuationPresented?: boolean;
+  continuationMatched?: boolean;
+  continuationCreditLeft?: boolean;
+  canContinueByCapability?: boolean;
 };
+
+export type BudgetConcurrencyReject = {
+  action: "reject";
+  reason: "question_budget_concurrency_exceeded";
+};
+
+export type BudgetTicket = {
+  scopeKey: string;
+  windowId: number;
+  round: number;
+  requestId: string;
+  startMonoMs: number;
+  settled: boolean;
+};
+
+export type BudgetAllow = {
+  action: "allow";
+  ticket?: BudgetTicket;
+  continued?: boolean;
+};
+
+export type BudgetDecision = BudgetAllow | BudgetStop | BudgetConcurrencyReject;
+
+export type ContinuationDeclaration =
+  | { ok: true; idempotent?: boolean; declared?: boolean }
+  | { ok: false; reason: "question_budget_unavailable" | "pending_exists" | "no_credit" | "not_exhausted" | "mismatch" };
 
 /**
  * A budget stop caused by the durable store being unreadable/unwritable, not by
@@ -78,20 +138,37 @@ export type BudgetState = {
    * 可选：持久化实现不需要重复存它（键就是主键）。
    */
   scopeKey?: string | null;
+  round?: number;
+  turnId?: string | null;
+  windowId?: number;
+  busyMs?: number;
+  inflight?: number;
+  pendingToken?: string | null;
+  presentedToken?: string | null;
+  archivedBusyMsByWindow?: Record<string, number>;
+  /** 内存标志：已从持久层装载。不是「内存里已有键」。 */
+  loaded?: boolean;
+  /** 只存在于本进程内存，不写入预算表。 */
+  processUnavailable?: boolean;
+  commitUnverified?: boolean;
+  unverifiedKey?: string | null;
 };
 
+export type BudgetLoadResult = BudgetState | { row: BudgetState; appliedKeys?: string[] } | null;
+
 /**
- * B16 / B24 —— 预算**持久化**接口。
+ * B16 / B24 —— 预算持久化接口。
  *
- * 生产实现把状态落到数据库（重启不丢）；测试可注入内存实现。
- * 计数器的持久化失败必须**阻断**（S02 语义），不得用内存计数继续。
+ * `save` 在支持幂等键的实现里返回权威行。返回 void 的旧实现仍可用：
+ * 调用方把候选态当作已发布行。重复键不得覆盖已提交行。
  */
 export interface BudgetPersistence {
-  /** 读取状态；不存在返回 null。 */
-  load(scopeKey: string): Promise<BudgetState | null>;
-  /** 持久化状态。 */
-  save(scopeKey: string, state: BudgetState): Promise<void>;
-  /** 列出所有已知作用域键（恢复 / 重建用）。 */
+  load(scopeKey: string): Promise<BudgetLoadResult>;
+  save(
+    scopeKey: string,
+    state: BudgetState,
+    idempotencyKey?: string
+  ): Promise<void | { row: BudgetState; appliedKeys: string[] }>;
   listScopes(): Promise<string[]>;
 }
 /**
@@ -175,6 +252,18 @@ export class QuestionBudget {
    * 生产代理使用 `consumePersisted`（异步、落库）；本同步方法保留给
    * 纯内存场景与既有测试。
    */
+  private readonly memoryKeys = new Map<string, Set<string>>();
+  private monoClock: () => number = () => performance.now();
+
+  /** 测试注入单调时钟。生产用 `performance.now()`。 */
+  setMonoClock(clock: () => number): void {
+    this.monoClock = clock;
+  }
+
+  monoNow(): number {
+    return this.monoClock();
+  }
+
   consume(
     turnId: string | undefined,
     now: number,
@@ -184,86 +273,156 @@ export class QuestionBudget {
     const scopeKey = this.scopeKeyFor(turnId, fallbackScope);
     let state = this.turns.get(scopeKey);
     if (!state) {
-      state = {
-        startedAt: now,
-        originStartedAt: now,
-        calls: 0,
-        continuations: 0,
-        attempts: 0,
-        peakConcurrency: 0,
-        currentConcurrency: 0,
-        scopeKey
-      };
+      state = this.freshState(scopeKey, now);
+      state.loaded = true;
       this.turns.set(scopeKey, state);
     }
-    return this.applyConsume(scopeKey, state, now, continueToken, turnId);
+    const decision = this.applyConsume(scopeKey, state, now, continueToken, turnId, true);
+    return decision.action === "reject"
+      ? {
+          action: "stop",
+          reason: "question_budget_exhausted",
+          partial: true,
+          continueToken: state.presentedToken ?? turnId ?? "",
+          continuable: false
+        }
+      : decision;
   }
 
   /**
-   * 消费预算（**持久化**路径）。
+   * 消费预算（持久化路径）。
    *
-   * 计数以**持久化状态**为准 → 重启不丢（B16）。
-   * 持久化不可用时**失败关闭**：返回 stop，不放行（S02 语义）。
+   * 有 `identityKey` 且作用域模式为 stable 时，键是 `bq:<identity>:<session>`。
+   * 未传身份时保持 `turn:` / `scope:`，供既有并发测试使用。
+   * 持久化不可用时失败关闭，原因是 `question_budget_unavailable`。
    */
   async consumePersisted(
     turnId: string | undefined,
     now: number,
     continueToken?: string,
-    fallbackScope?: string
-  ): Promise<{ action: "allow" } | BudgetStop> {
-    const scopeKey = this.scopeKeyFor(turnId, fallbackScope);
-    // D-24：整个「加载 → 判定 → 落库」在同一作用域内串行，避免并发首次加载
-    // 各拿一份旧计数、各自 +1，从而穿透硬上限。
+    fallbackScope?: string,
+    options?: {
+      identityKey?: string;
+      sessionId?: string | null;
+      canContinue?: boolean;
+    }
+  ): Promise<BudgetDecision> {
+    const scopeKey = this.resolveScopeKey(turnId, fallbackScope, options);
     return this.withScopeSerialization(scopeKey, async () => {
-      let state = this.turns.get(scopeKey);
-      if (!state) {
-        // 持久层**已装配但读取失败** → 失败关闭（不放行）。
-        // 持久层**未装配** → 降级为进程内计数（预算仍生效，只是不跨进程）。
-        let persisted: BudgetState | null = null;
-        if (this.persistence) {
-          try {
-            persisted = await this.persistence.load(scopeKey);
-          } catch {
-            // The durable store is INSTALLED but failed. This is a storage fault,
-            // not a spent budget: the request is refused (fail closed) but it must
-            // not be recorded as a budget-termination credential.
-            return {
-              action: "stop",
-              reason: "question_budget_unavailable",
-              partial: true,
-              continueToken: turnId ?? scopeKey,
-              continuable: true
-            };
-          }
-        }
-        state = persisted ?? {
-          startedAt: now,
-          originStartedAt: now,
-          calls: 0,
-          continuations: 0,
-          attempts: 0,
-          peakConcurrency: 0,
-          currentConcurrency: 0,
-          scopeKey
-        };
-        this.turns.set(scopeKey, state);
+      const state = await this.loadState(scopeKey, now);
+      if (state.processUnavailable) return this.unavailableStop(state);
+      if ((state.inflight ?? 0) >= QUESTION_BUDGET_MAX_INFLIGHT) {
+        return { action: "reject", reason: "question_budget_concurrency_exceeded" };
       }
-      const decision = this.applyConsume(scopeKey, state, now, continueToken, turnId);
-      if (decision.action === "allow") {
-        try {
-          await this.persist(scopeKey, state);
-        } catch {
-          // 预算计数器持久化失败 → 阻断（不放行）。同样是存储故障，不是预算用尽。
-          return {
-            action: "stop",
-            reason: "question_budget_unavailable",
-            partial: true,
-            continueToken: turnId ?? scopeKey,
-            continuable: true
-          };
-        }
+      const canContinue = options?.canContinue ?? true;
+      const decision = this.decideConsume(state, now, continueToken, turnId, canContinue);
+      if (decision.kind === "reject") {
+        return { action: "reject", reason: "question_budget_concurrency_exceeded" };
       }
-      return decision;
+      const committed = await this.commit(scopeKey, decision.candidate, decision.idempotencyKey, now);
+      if (!committed) return this.unavailableStop(state);
+      if (decision.kind === "stop") {
+        return this.stopFrom(committed, canContinue, decision.presented, decision.matched);
+      }
+      const ticket: BudgetTicket = {
+        scopeKey,
+        windowId: committed.windowId ?? 0,
+        round: committed.round ?? 0,
+        requestId: decision.requestId,
+        startMonoMs: this.monoNow(),
+        settled: false
+      };
+      return { action: "allow", ticket, continued: decision.continued };
+    });
+  }
+
+  /** 装载作用域，供归属冻结之前恢复 turnId。 */
+  async preload(identityKey: string, sessionId: string | null | undefined, now = Date.now()): Promise<BudgetState | null> {
+    if (questionBudgetScopeMode() !== "stable") return null;
+    const scopeKey = budgetScopeKey(identityKey, sessionId);
+    return this.withScopeSerialization(scopeKey, () => this.loadState(scopeKey, now));
+  }
+
+  async declareContinuation(scopeKey: string, token: string, now = Date.now()): Promise<ContinuationDeclaration> {
+    return this.withScopeSerialization(scopeKey, async () => {
+      const state = await this.loadState(scopeKey, now);
+      if (state.processUnavailable) return { ok: false, reason: "question_budget_unavailable" };
+      if (state.pendingToken === token) return { ok: true, idempotent: true };
+      if (state.pendingToken) return { ok: false, reason: "pending_exists" };
+      if ((state.continuations ?? 0) >= 1) return { ok: false, reason: "no_credit" };
+      if (!this.isExhausted(state, now)) return { ok: false, reason: "not_exhausted" };
+      if (token !== state.presentedToken) return { ok: false, reason: "mismatch" };
+      const candidate = this.cloneState(state);
+      candidate.pendingToken = token;
+      const published = await this.commit(scopeKey, candidate, `declare:${candidate.round}:${token}`, now);
+      if (!published) return { ok: false, reason: "question_budget_unavailable" };
+      return { ok: true, declared: true };
+    });
+  }
+
+  async beginQuestion(input: {
+    identityKey: string;
+    sessionId?: string | null;
+    turnId: string;
+    now?: number;
+  }): Promise<{ ok: true; previousTurnId: string | null; state: BudgetState } | { ok: false; reason: "question_budget_unavailable" }> {
+    const now = input.now ?? Date.now();
+    const scopeKey = questionBudgetScopeMode() === "legacy"
+      ? this.scopeKeyFor(input.turnId)
+      : budgetScopeKey(input.identityKey, input.sessionId);
+    return this.withScopeSerialization(scopeKey, async () => {
+      const state = await this.loadState(scopeKey, now);
+      if (state.processUnavailable || state.commitUnverified) {
+        return { ok: false, reason: "question_budget_unavailable" };
+      }
+      const candidate = this.cloneState(state);
+      if (state.turnId || (state.calls ?? 0) > 0 || (state.busyMs ?? 0) > 0) {
+        this.addArchived(candidate, state.round ?? 0, state.windowId ?? 0, state.busyMs ?? 0);
+      }
+      if (state.turnId) candidate.round = (state.round ?? 0) + 1;
+      else candidate.round = Math.max(1, state.round ?? 0);
+      const previousTurnId = state.turnId ?? null;
+      candidate.turnId = input.turnId;
+      candidate.calls = 0;
+      candidate.busyMs = 0;
+      candidate.windowId = (state.windowId ?? 0) + 1;
+      candidate.continuations = 0;
+      candidate.pendingToken = null;
+      candidate.presentedToken = null;
+      candidate.originStartedAt = now;
+      candidate.startedAt = now;
+      const published = await this.commit(scopeKey, candidate, `begin:${input.turnId}`, now);
+      if (!published) return { ok: false, reason: "question_budget_unavailable" };
+      return { ok: true, previousTurnId, state: published };
+    });
+  }
+
+  async settle(
+    ticket: BudgetTicket,
+    endMonoMs: number,
+    flags?: { timeoutUnconfirmed?: boolean }
+  ): Promise<{ settled: boolean; timeoutUnconfirmed?: boolean }> {
+    if (ticket.settled) return { settled: true };
+    return this.withScopeSerialization(ticket.scopeKey, async () => {
+      if (ticket.settled) return { settled: true };
+      const state = await this.loadState(ticket.scopeKey, Date.now());
+      if (state.commitUnverified || state.processUnavailable) return { settled: false };
+      const delta = Math.min(
+        QUESTION_BUDGET_ABS_EXEC_MS,
+        Math.max(0, endMonoMs - ticket.startMonoMs)
+      );
+      const candidate = this.cloneState(state);
+      if ((state.round ?? 0) === ticket.round && (state.windowId ?? 0) === ticket.windowId) {
+        candidate.busyMs = (candidate.busyMs ?? 0) + delta;
+      } else {
+        this.addArchived(candidate, ticket.round, ticket.windowId, delta);
+      }
+      candidate.inflight = Math.max(0, (candidate.inflight ?? 0) - 1);
+      candidate.currentConcurrency = Math.max(0, (candidate.currentConcurrency ?? 0) - 1);
+      const committed = await this.commit(ticket.scopeKey, candidate, `settle:${ticket.requestId}`, Date.now());
+      if (!committed) return { settled: false, timeoutUnconfirmed: flags?.timeoutUnconfirmed };
+      ticket.settled = true;
+      return { settled: true, timeoutUnconfirmed: flags?.timeoutUnconfirmed };
     });
   }
 
@@ -272,87 +431,338 @@ export class QuestionBudget {
     state: BudgetState,
     now: number,
     continueToken: string | undefined,
-    turnId: string | undefined
-  ): { action: "allow" } | BudgetStop {
-    const exhausted = state.calls >= QUESTION_BUDGET_MAX_CALLS || now - state.startedAt >= QUESTION_BUDGET_MAX_WALL_MS;
-    // A continuation is only honoured when the caller actually presented a
-    // non-empty continuation credential that matches the scope it is claiming.
-    // Comparing two possibly-absent values (`undefined === undefined`) would
-    // hand every caller a free second window on first exhaustion.
-    const continuationPresented = typeof continueToken === "string" && continueToken.length > 0;
-    const continuationMatches = continuationPresented && continueToken === (turnId ?? scopeKey);
-    if (exhausted && continuationMatches && state.continuations < 1) {
-      // 续跑只重置**窗口**，不重置问询年龄、不重置尝试次数。
-      state.calls = 0;
-      state.startedAt = now;
-      state.continuations += 1;
+    turnId: string | undefined,
+    canContinue: boolean
+  ): BudgetDecision {
+    const decided = this.decideConsume(state, now, continueToken, turnId, canContinue);
+    if (decided.kind === "reject") {
+      return { action: "reject", reason: "question_budget_concurrency_exceeded" };
     }
-    const stillExhausted = state.calls >= QUESTION_BUDGET_MAX_CALLS || now - state.startedAt >= QUESTION_BUDGET_MAX_WALL_MS;
-    if (stillExhausted) {
-      return {
-        action: "stop",
-        reason: "question_budget_exhausted",
-        partial: true,
-        continueToken: turnId ?? scopeKey,
-        continuable: true,
-      };
-    }
-    state.calls += 1;
-    state.attempts += 1;
-    state.currentConcurrency += 1;
-    state.peakConcurrency = Math.max(state.peakConcurrency, state.currentConcurrency);
-    void scopeKey;
+    Object.assign(state, decided.candidate);
+    this.turns.set(scopeKey, state);
+    if (decided.kind === "stop") return this.stopFrom(state, canContinue, decided.presented, decided.matched);
     return { action: "allow" };
   }
 
-  /** 释放一次并发占用（请求结束）。 */
+  /** 释放一次并发占用。稳定作用域下优先按票据结算，这里只服务旧的 `turn:` 键。 */
   async release(turnId: string | undefined, fallbackScope?: string): Promise<void> {
     const scopeKey = this.scopeKeyFor(turnId, fallbackScope);
     const state = this.turns.get(scopeKey);
     if (!state) return;
-    state.currentConcurrency = Math.max(0, state.currentConcurrency - 1);
-    await this.persist(scopeKey, state);
+    state.currentConcurrency = Math.max(0, (state.currentConcurrency ?? 0) - 1);
+    state.inflight = Math.max(0, (state.inflight ?? 0) - 1);
+    if (this.persistence) await this.persistence.save(scopeKey, state);
   }
 
-  private async persist(scopeKey: string, state: BudgetState): Promise<void> {
-    if (!this.persistence) return;
-    await this.persistence.save(scopeKey, state);
-  }
-
-  /** First sight of a question. Later calls keep the original start. */
   ensureTurn(turnId: string | undefined, now: number): void {
-    if (!turnId) return;
+    if (!turnId || questionBudgetScopeMode() === "stable") return;
     const scopeKey = this.scopeKeyFor(turnId);
     if (this.turns.has(scopeKey)) return;
-    this.turns.set(scopeKey, {
-      startedAt: now,
-      originStartedAt: now,
-      calls: 0,
-      continuations: 0,
-      attempts: 0,
-      peakConcurrency: 0,
-      currentConcurrency: 0,
-      scopeKey
-    });
+    const state = this.freshState(scopeKey, now);
+    state.loaded = false;
+    this.turns.set(scopeKey, state);
   }
 
-  /** Milliseconds since the question was first seen. Null when the turn was never opened. */
+  /** 问询年龄。稳定作用域读该 turn 所在行的 originStartedAt，不再读 `turn:<id>` 桶。 */
   wallClockMs(turnId: string | undefined, now: number): number | null {
     if (!turnId) return null;
-    const state = this.turns.get(this.scopeKeyFor(turnId));
-    if (!state) return null;
-    return Math.max(0, now - state.originStartedAt);
+    for (const state of this.turns.values()) {
+      if (state.turnId === turnId) return Math.max(0, now - state.originStartedAt);
+    }
+    const legacy = this.turns.get(this.scopeKeyFor(turnId));
+    if (!legacy) return null;
+    return Math.max(0, now - legacy.originStartedAt);
   }
 
-  /**
-   * B16 —— 预算四维快照（供审计 / 展示）。
-   */
   snapshot(turnId: string | undefined, fallbackScope?: string): BudgetState | null {
     return this.turns.get(this.scopeKeyFor(turnId, fallbackScope)) ?? null;
   }
 
+  snapshotScope(scopeKey: string): BudgetState | null {
+    return this.turns.get(scopeKey) ?? null;
+  }
+
   resetForTests(): void {
     this.turns.clear();
+    this.memoryKeys.clear();
+  }
+
+  private resolveScopeKey(
+    turnId: string | undefined,
+    fallbackScope: string | undefined,
+    options?: { identityKey?: string; sessionId?: string | null }
+  ): string {
+    if (questionBudgetScopeMode() === "stable" && options?.identityKey) {
+      return budgetScopeKey(options.identityKey, options.sessionId);
+    }
+    return this.scopeKeyFor(turnId, fallbackScope);
+  }
+
+  private freshState(scopeKey: string, now: number): BudgetState {
+    return {
+      scopeKey,
+      round: 0,
+      turnId: null,
+      windowId: 0,
+      calls: 0,
+      busyMs: 0,
+      inflight: 0,
+      attempts: 0,
+      peakConcurrency: 0,
+      currentConcurrency: 0,
+      continuations: 0,
+      pendingToken: null,
+      presentedToken: null,
+      archivedBusyMsByWindow: {},
+      startedAt: now,
+      originStartedAt: now,
+      loaded: false,
+      processUnavailable: false,
+      commitUnverified: false,
+      unverifiedKey: null
+    };
+  }
+
+  private cloneState(state: BudgetState): BudgetState {
+    return {
+      ...state,
+      archivedBusyMsByWindow: { ...(state.archivedBusyMsByWindow ?? {}) }
+    };
+  }
+
+  private addArchived(state: BudgetState, round: number, windowId: number, delta: number): void {
+    const key = `${round}:${windowId}`;
+    const archived = { ...(state.archivedBusyMsByWindow ?? {}) };
+    archived[key] = (archived[key] ?? 0) + delta;
+    state.archivedBusyMsByWindow = archived;
+  }
+
+  private isExhausted(state: BudgetState, now: number): boolean {
+    const callsExhausted = (state.calls ?? 0) >= QUESTION_BUDGET_MAX_CALLS;
+    const timeExhausted = questionBudgetWallMode() === "elapsed"
+      ? now - state.startedAt >= QUESTION_BUDGET_MAX_WALL_MS
+      : (state.busyMs ?? 0) >= QUESTION_BUDGET_MAX_BUSY_MS;
+    return callsExhausted || timeExhausted;
+  }
+
+  private presentToken(state: BudgetState, turnId: string | undefined): string {
+    if (state.presentedToken) return state.presentedToken;
+    if (turnId) return turnId;
+    return randomUUID();
+  }
+
+  private decideConsume(
+    state: BudgetState,
+    now: number,
+    continueToken: string | undefined,
+    turnId: string | undefined,
+    canContinue: boolean
+  ): 
+    | { kind: "reject" }
+    | {
+        kind: "stop" | "allow";
+        candidate: BudgetState;
+        idempotencyKey: string;
+        requestId: string;
+        continued: boolean;
+        presented: boolean;
+        matched: boolean;
+      } {
+    const headerPresented = typeof continueToken === "string" && continueToken.length > 0;
+    const headerTrusted = headerPresented && (
+      continueToken === state.presentedToken
+      || (state.turnId != null && continueToken === state.turnId)
+      || (turnId != null && continueToken === turnId)
+    );
+    const toolTrusted = state.pendingToken != null;
+    const exhausted = this.isExhausted(state, now);
+    const useContinuation = exhausted && (state.continuations ?? 0) < 1 && (toolTrusted || headerTrusted);
+    const candidate = this.cloneState(state);
+    if (useContinuation) {
+      this.addArchived(candidate, candidate.round ?? 0, candidate.windowId ?? 0, candidate.busyMs ?? 0);
+      candidate.calls = 0;
+      candidate.busyMs = 0;
+      candidate.startedAt = now;
+      candidate.windowId = (candidate.windowId ?? 0) + 1;
+      candidate.continuations = (candidate.continuations ?? 0) + 1;
+      candidate.pendingToken = null;
+      candidate.presentedToken = null;
+    }
+    const presented = headerPresented || toolTrusted;
+    const matched = Boolean(useContinuation);
+    if (this.isExhausted(candidate, now)) {
+      if (!candidate.presentedToken) candidate.presentedToken = this.presentToken(candidate, turnId ?? state.turnId ?? undefined);
+      const token = candidate.presentedToken;
+      return {
+        kind: "stop",
+        candidate,
+        idempotencyKey: `stop:${candidate.round ?? 0}:${candidate.windowId ?? 0}:${token}`,
+        requestId: "",
+        continued: false,
+        presented,
+        matched: headerPresented ? Boolean(headerTrusted) : false
+      };
+    }
+    const requestId = randomUUID();
+    candidate.calls = (candidate.calls ?? 0) + 1;
+    candidate.attempts = (candidate.attempts ?? 0) + 1;
+    candidate.inflight = (candidate.inflight ?? 0) + 1;
+    candidate.currentConcurrency = (candidate.currentConcurrency ?? 0) + 1;
+    candidate.peakConcurrency = Math.max(candidate.peakConcurrency ?? 0, candidate.currentConcurrency);
+    void canContinue;
+    return {
+      kind: "allow",
+      candidate,
+      idempotencyKey: `admit:${requestId}`,
+      requestId,
+      continued: useContinuation,
+      presented,
+      matched
+    };
+  }
+
+  private stopFrom(state: BudgetState, canContinue: boolean, presented: boolean, matched: boolean): BudgetStop {
+    const token = state.presentedToken ?? "";
+    return {
+      action: "stop",
+      reason: "question_budget_exhausted",
+      partial: true,
+      continueToken: token,
+      continuable: canContinue && (state.continuations ?? 0) < 1,
+      continuationPresented: presented,
+      continuationMatched: matched,
+      continuationCreditLeft: (state.continuations ?? 0) < 1,
+      canContinueByCapability: canContinue
+    };
+  }
+
+  private unavailableStop(state: BudgetState): BudgetStop {
+    return {
+      action: "stop",
+      reason: "question_budget_unavailable",
+      partial: true,
+      continueToken: state.presentedToken ?? state.turnId ?? "",
+      continuable: false,
+      canContinueByCapability: false
+    };
+  }
+
+  private async loadState(scopeKey: string, now: number): Promise<BudgetState> {
+    let state = this.turns.get(scopeKey);
+    if (!state) {
+      state = this.freshState(scopeKey, now);
+      this.turns.set(scopeKey, state);
+    }
+    if (this.persistence && !state.loaded) {
+      let loaded: BudgetLoadResult;
+      try {
+        loaded = await this.persistence.load(scopeKey);
+      } catch {
+        state.processUnavailable = true;
+        return state;
+      }
+      const normalized = this.normalizeLoad(loaded);
+      if (normalized.row) {
+        state = this.cloneState({ ...this.freshState(scopeKey, now), ...normalized.row, scopeKey });
+        state.inflight = 0;
+        state.currentConcurrency = 0;
+        this.turns.set(scopeKey, state);
+        const keys = this.memoryKeys.get(scopeKey) ?? new Set<string>();
+        for (const key of normalized.appliedKeys) keys.add(key);
+        this.memoryKeys.set(scopeKey, keys);
+      }
+      state.loaded = true;
+      state.processUnavailable = false;
+      state.commitUnverified = false;
+      state.unverifiedKey = null;
+    }
+    if (state.commitUnverified) {
+      const recovered = await this.recover(state);
+      if (!recovered) return state;
+      state = recovered.row;
+    }
+    return state;
+  }
+
+  private normalizeLoad(raw: BudgetLoadResult): { row: BudgetState | null; appliedKeys: string[] } {
+    if (!raw) return { row: null, appliedKeys: [] };
+    if ("row" in raw && raw.row && typeof raw.row === "object" && "calls" in raw.row) {
+      return { row: raw.row, appliedKeys: raw.appliedKeys ?? [] };
+    }
+    if ("calls" in raw && "startedAt" in raw) return { row: raw, appliedKeys: [] };
+    return { row: null, appliedKeys: [] };
+  }
+
+  private async recover(current: BudgetState): Promise<{ row: BudgetState; keyApplied: boolean } | null> {
+    if (!current.commitUnverified) return { row: current, keyApplied: false };
+    if (!this.persistence) return null;
+    let loaded: BudgetLoadResult;
+    try {
+      loaded = await this.persistence.load(current.scopeKey ?? "");
+    } catch {
+      current.processUnavailable = true;
+      return null;
+    }
+    const normalized = this.normalizeLoad(loaded);
+    const row = normalized.row
+      ? this.cloneState({ ...this.freshState(current.scopeKey ?? "", current.startedAt), ...normalized.row })
+      : this.freshState(current.scopeKey ?? "", current.startedAt);
+    row.loaded = true;
+    row.processUnavailable = false;
+    row.commitUnverified = false;
+    row.unverifiedKey = null;
+    row.inflight = 0;
+    row.currentConcurrency = 0;
+    this.turns.set(row.scopeKey ?? current.scopeKey ?? "", row);
+    const keyApplied = normalized.appliedKeys.includes(current.unverifiedKey ?? "");
+    return { row, keyApplied };
+  }
+
+  private publish(row: BudgetState): void {
+    const published = this.cloneState(row);
+    published.loaded = true;
+    published.processUnavailable = false;
+    published.commitUnverified = false;
+    published.unverifiedKey = null;
+    if (published.scopeKey) this.turns.set(published.scopeKey, published);
+  }
+
+  private async commit(scopeKey: string, candidate: BudgetState, idempotencyKey: string, now: number): Promise<BudgetState | null> {
+    const current = await this.loadState(scopeKey, now);
+    if (current.processUnavailable || current.commitUnverified) return null;
+    const known = this.memoryKeys.get(scopeKey);
+    if (known?.has(idempotencyKey)) return this.turns.get(scopeKey) ?? current;
+    candidate.scopeKey = scopeKey;
+    if (!this.persistence) {
+      this.publish(candidate);
+      const keys = known ?? new Set<string>();
+      keys.add(idempotencyKey);
+      this.memoryKeys.set(scopeKey, keys);
+      return this.turns.get(scopeKey) ?? candidate;
+    }
+    try {
+      const saved = await this.persistence.save(scopeKey, candidate, idempotencyKey);
+      const row = saved && typeof saved === "object" && "row" in saved ? saved.row : candidate;
+      row.scopeKey = scopeKey;
+      if (saved && typeof saved === "object" && "appliedKeys" in saved) {
+        this.memoryKeys.set(scopeKey, new Set(saved.appliedKeys));
+      } else {
+        const keys = known ?? new Set<string>();
+        keys.add(idempotencyKey);
+        this.memoryKeys.set(scopeKey, keys);
+      }
+      this.publish(row);
+      return this.turns.get(scopeKey) ?? row;
+    } catch {
+      current.commitUnverified = true;
+      current.processUnavailable = true;
+      current.unverifiedKey = idempotencyKey;
+      this.turns.set(scopeKey, current);
+      const recovered = await this.recover(current);
+      if (!recovered) return null;
+      if (recovered.keyApplied) return recovered.row;
+      return null;
+    }
   }
 }
 

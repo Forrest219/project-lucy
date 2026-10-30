@@ -565,7 +565,7 @@ describe("GET /api/admin/audit/turns", () => {
       expect(csvRes.text.charCodeAt(0)).toBe(0xFEFF);
       const csvBody = csvRes.text.replace(/^\uFEFF/, "");
       const [headerLine, firstDataLine] = csvBody.split("\n");
-      expect(headerLine).toBe("问询 ID,来源,Agent,客户端,会话 ID,开始时间,开始时间 UTC,结束时间,结束时间 UTC,问询时长,问询摘要,关联调用数,工具调用数,涉及工具,涉及数据表,总调用耗时,最大调用耗时,慢调用数,成功次数,拒绝次数,错误次数,自报客户端,自报客户端版本");
+      expect(headerLine).toBe("问询 ID,来源,Agent,客户端,会话 ID,开始时间,开始时间 UTC,结束时间,结束时间 UTC,问询时长,问询摘要,关联调用数,工具调用数,涉及工具,涉及数据表,总调用耗时,最大调用耗时,慢调用数,成功次数,拒绝次数,错误次数,预算终止次数,自报客户端,自报客户端版本");
       const turnHeaders = parseCsvLine(headerLine);
       const turnCells = parseCsvLine(firstDataLine);
       expect(turnCells[turnHeaders.indexOf("开始时间")]).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);

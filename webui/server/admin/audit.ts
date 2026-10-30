@@ -471,6 +471,7 @@ export async function getAuditDb(): Promise<Database.Database> {
       created_at            TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_ct_user_created ON conversation_turns(user_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_ct_session ON conversation_turns(session_id);
     CREATE TABLE IF NOT EXISTS inferred_turns (
       inferred_turn_id     TEXT PRIMARY KEY,
       user_id              TEXT NOT NULL,
@@ -1568,6 +1569,7 @@ interface TurnOutcomeSummary {
   ok: number;
   denied: number;
   error: number;
+  budgetStop: number;
 }
 
 /** 八桶主状态汇总（读路径与 API / CSV / v2 导出同源）。 */
@@ -1674,7 +1676,7 @@ function loadAccessLogMetrics(
     totalCallDurationMs: 0,
     maxCallDurationMs: 0,
     slowCallCount: 0,
-    outcomeSummary: { ok: 0, denied: 0, error: 0 } as TurnOutcomeSummary,
+    outcomeSummary: { ok: 0, denied: 0, error: 0, budgetStop: 0 } as TurnOutcomeSummary,
     primaryStatusSummary: emptyPrimaryStatusCounts() as PrimaryStatusSummary
   };
   if (accessLogIds.length === 0) return empty;
@@ -1691,7 +1693,7 @@ function loadAccessLogMetrics(
   let totalCallDurationMs = 0;
   let maxCallDurationMs = 0;
   let slowCallCount = 0;
-  const outcomeSummary: TurnOutcomeSummary = { ok: 0, denied: 0, error: 0 };
+  const outcomeSummary: TurnOutcomeSummary = { ok: 0, denied: 0, error: 0, budgetStop: 0 };
   for (const row of rows) {
     totalCallDurationMs += row.duration_ms;
     maxCallDurationMs = Math.max(maxCallDurationMs, row.duration_ms);
@@ -1699,6 +1701,7 @@ function loadAccessLogMetrics(
     if (row.outcome === "ok") outcomeSummary.ok += 1;
     else if (row.outcome === "denied") outcomeSummary.denied += 1;
     else if (row.outcome === "error") outcomeSummary.error += 1;
+    else if (row.outcome === "budget_stop") outcomeSummary.budgetStop += 1;
   }
   // B27：八桶计数与列表 / CSV / v2 导出**同源同函数**。
   const primaryStatusSummary = countPrimaryStatuses(rows).counts as PrimaryStatusSummary;
@@ -2119,6 +2122,7 @@ const TURN_CSV_HEADERS = [
   "成功次数",
   "拒绝次数",
   "错误次数",
+  "预算终止次数",
   "自报客户端",
   "自报客户端版本"
 ] as const;
@@ -2193,7 +2197,7 @@ const TURN_FIELD_METADATA: Record<(typeof TURN_CSV_HEADERS)[number], Omit<CsvFie
   "关联调用数": {
     label: "关联调用数",
     format: "integer",
-    description: "该问询关联的全部非协议工具调用数量；成功次数 + 拒绝次数 + 错误次数等于本列。",
+    description: "该问询关联的全部非协议工具调用数量；成功次数 + 拒绝次数 + 错误次数 + 预算终止次数等于本列。",
     trigger: "每条问询记录均输出。"
   },
   "工具调用数": {
@@ -2250,6 +2254,12 @@ const TURN_FIELD_METADATA: Record<(typeof TURN_CSV_HEADERS)[number], Omit<CsvFie
     description: "该问询内 outcome=error 的调用数量。",
     trigger: "每条问询记录均输出。"
   },
+  "预算终止次数": {
+    label: "预算终止次数",
+    format: "integer",
+    description: "该问询内 outcome=budget_stop 的调用数量。这是 legacy 四桶之一，不是执行结论。执行结论看八桶主状态。",
+    trigger: "每条问询记录均输出。"
+  },
   "自报客户端": {
     label: "自报客户端",
     format: "string|null",
@@ -2294,6 +2304,7 @@ function renderTurnCsv(rows: TurnEntry[]): string {
         row.outcomeSummary?.ok ?? 0,
         row.outcomeSummary?.denied ?? 0,
         row.outcomeSummary?.error ?? 0,
+        row.outcomeSummary?.budgetStop ?? 0,
         csvCell(row.reportedClient ?? ""),
         csvCell(row.reportedClientVersion ?? "")
       ].join(",")

@@ -84,6 +84,11 @@ import {
   publishedSourceName,
   questionBudget,
   questionBudgetEnabled,
+  questionBudgetScopeMode,
+  questionBudgetBypassEnabled,
+  budgetIdentityKey,
+  budgetScopeKey,
+  QUESTION_BUDGET_ABS_EXEC_MS,
   installBudgetPersistence,
   type BudgetPersistence,
   registerPublishedVersion,
@@ -1048,6 +1053,22 @@ function lucyBeginQuestionTool() {
   };
 }
 
+function lucyContinueQuestionTool() {
+  return {
+    name: "lucy_continue_question",
+    description:
+      "Continue the current question after question_budget_exhausted. Pass the continueToken from that response. This does not start a new question and does not require a database connection.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        token: { type: "string" }
+      },
+      required: ["token"],
+      additionalProperties: false
+    }
+  };
+}
+
 function connectionListTool() {
   return {
     name: "connection_list",
@@ -1179,6 +1200,7 @@ function localToolBuilders(): Array<{ name: string; build: () => Record<string, 
   ];
   if (process.env.LUCY_ENABLE_QUESTION_TOOL !== "false") {
     builders.push({ name: "lucy_begin_question", build: lucyBeginQuestionTool });
+    builders.push({ name: "lucy_continue_question", build: lucyContinueQuestionTool });
   }
   // L25-16 — 控制面工具（`lucy_ops_*`）同样由代理本地服务。可见性只取决于
   // `role.allow.ops`（`allowedToolNames` 的控制面分支），**不要求任何数据面能力**。
@@ -1469,6 +1491,7 @@ function validateLucyToolArgs(toolName: string, args: unknown): string | undefin
     !toolName.startsWith("lucy_") ||
     toolName === "lucy_catalog" ||
     toolName === "lucy_begin_question" ||
+    toolName === "lucy_continue_question" ||
     toolName === "lucy_skill_search" ||
     toolName === "lucy_skill_read" ||
     // L25-16 — 控制面工具的入参形状是 `{ targets: [...] }`，由控制面自己的
@@ -3302,6 +3325,19 @@ async function handlePost(req: IncomingMessage, res: ServerResponse, admitted: A
 
   // Spec 138: Session-bound matching is authoritative. Identity-only matching
   // remains a low-confidence compatibility fallback only when one candidate exists.
+  if (rpcMethod === "tools/call" && toolName && questionBudgetScopeMode() === "stable") {
+    const preloaded = await questionBudget.preload(
+      budgetIdentityKey(identity.userId, identity.tokenHashPrefix ?? ""),
+      requestMeta.lucySessionId
+    );
+    if (preloaded?.turnId) {
+      reportedTurns.record({
+        identity,
+        sessionId: requestMeta.lucySessionId,
+        turnId: preloaded.turnId
+      }, preloaded.originStartedAt);
+    }
+  }
   if (rpcMethod === "tools/call" && toolName && toolName !== "lucy_begin_question") {
     const attribution = reportedTurns.resolve({
       identity,
@@ -3546,6 +3582,62 @@ async function writeCertifiedRouteResponse(
       gate.reason,
       gate.reason
     );
+    return;
+  }
+
+  if (questionBudgetBypassEnabled() && questionBudgetEnabled()) {
+    const compiledBudget = await effectivePermissions(identity).catch(() => null);
+    const allowedTools = compiledBudget && compiledBudget.ok ? (compiledBudget.permissions.tools ?? []) : [];
+    const budgetDecision = await questionBudget.consumePersisted(
+      requestMeta.lucyTurnId,
+      Date.now(),
+      undefined,
+      undefined,
+      {
+        identityKey: budgetIdentityKey(identity.userId, identity.tokenHashPrefix ?? ""),
+        sessionId: requestMeta.lucySessionId,
+        canContinue: allowedTools.includes("lucy_continue_question") || allowedTools.includes("*")
+      }
+    );
+    if (budgetDecision.action !== "allow") {
+      await respond(
+        {
+          reason: budgetDecision.reason,
+          ...(budgetDecision.action === "stop"
+            ? { partial: budgetDecision.partial, continueToken: budgetDecision.continueToken, continuable: budgetDecision.continuable }
+            : { partial: true })
+        },
+        true,
+        budgetDecision.reason,
+        budgetDecision.reason
+      );
+      return;
+    }
+    const ticket = budgetDecision.ticket;
+    try {
+      const execution = await forwardAuthorizedLucyQuery(identity, gate.query);
+      if (!execution.ok) {
+        await respond(
+          { error: execution.reason, routeId: gate.routeId, source: gate.source },
+          true,
+          execution.reason,
+          execution.reason
+        );
+        return;
+      }
+      await respond(
+        {
+          routeId: gate.routeId,
+          source: gate.source,
+          ...(gate.version ? { appliedVersion: gate.version } : {}),
+          result: execution.payload
+        },
+        false,
+        "allowed"
+      );
+    } finally {
+      if (ticket) await questionBudget.settle(ticket, questionBudget.monoNow());
+    }
     return;
   }
 
@@ -3845,12 +3937,46 @@ async function buildDenialRepairPayload(
       // B16 / B24：持久化预算 + 无 turnId 时按凭证 / 会话级上限兜底。
       // 兜底作用域键取凭证指纹 + 会话，**不因重连或省略 begin_question 而重置**。
       const budgetScope = `${identity.tokenHashPrefix ?? "no-token"}:${requestMeta.lucySessionId ?? "no-session"}`;
+      const compiledBudget = await effectivePermissions(identity).catch(() => null);
+      const allowedTools = compiledBudget && compiledBudget.ok ? (compiledBudget.permissions.tools ?? []) : [];
+      const canContinue = allowedTools.includes("lucy_continue_question") || allowedTools.includes("*");
       const budgetDecision = await questionBudget.consumePersisted(
         requestMeta.lucyTurnId,
         Date.now(),
         normalizeHeader(req.headers["x-lucy-question-continue"]),
-        budgetScope
+        budgetScope,
+        {
+          identityKey: budgetIdentityKey(identity.userId, identity.tokenHashPrefix ?? ""),
+          sessionId: requestMeta.lucySessionId,
+          canContinue
+        }
       );
+      if (budgetDecision.action === "reject") {
+        const responseBody = jsonRpcToolResult(requestId, JSON.stringify({
+          reason: budgetDecision.reason,
+          partial: true
+        }), { isError: true });
+        res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+        res.end(responseBody);
+        recordRequestAudit({
+          ts: new Date().toISOString(),
+          userId: identity.userId,
+          client: identity.client,
+          tool: toolName,
+          argsSummary,
+          ...queryMeta,
+          outcome: "error",
+          decisionReason: budgetDecision.reason,
+          errorDetail: budgetDecision.reason,
+          executionEvidence: { authorizationAllowed: true, notExecuted: true },
+          durationMs: Date.now() - start,
+          responseBytes: Buffer.byteLength(responseBody),
+          requestId,
+          ...requestMeta,
+          ...(await auditMeta(identity, budgetDecision.reason)),
+        });
+        return;
+      }
       if (budgetDecision.action === "stop") {
         // A durable-store fault is NOT a spent budget. It is refused with 503
         // and recorded as an error, so a storage fault can never be read back
@@ -3908,11 +4034,19 @@ async function buildDenialRepairPayload(
           client: identity.client,
           tool: toolName,
           tables: queryTables.length > 0 ? queryTables : undefined,
-          argsSummary,
           ...queryMeta,
           outcome: "budget_stop",
           decisionReason: "question_budget_exhausted",
           errorDetail: "question_budget_exhausted",
+          argsSummary: {
+            ...(argsSummary ?? {}),
+            budgetContinuation: {
+              continuationPresented: budgetDecision.continuationPresented ?? false,
+              continuationMatched: budgetDecision.continuationMatched ?? false,
+              continuationCreditLeft: budgetDecision.continuationCreditLeft ?? false,
+              canContinueByCapability: budgetDecision.canContinueByCapability ?? false
+            }
+          },
           // 闸序事实：ACL 裁决（上方 aclCheck）先于预算闸。预算终止时授权**已经
           // 裁决通过**，因此显式记录该凭据 —— 预算桶不得覆盖已发生的授权裁决，
           // 也不得反推 `not_evaluated`（Spec §4.3(b) / §18.10 F-03）。
@@ -3942,15 +4076,19 @@ async function buildDenialRepairPayload(
         });
         return;
       }
-      // The budget was granted, so this request now holds one unit of the
-      // concurrency occupancy. The occupancy must be released when the request
-      // ends, otherwise the durable `currentConcurrency` only ever grows and
-      // the recorded occupancy stops describing reality.
-      res.once("close", () => {
-        void questionBudget.release(requestMeta.lucyTurnId, budgetScope).catch((error) => {
-          console.error("[lucy-proxy] failed to release budget occupancy", error);
+      if (budgetDecision.ticket) {
+        const ticket = budgetDecision.ticket;
+        const timer = setTimeout(() => {
+          void questionBudget.settle(ticket, ticket.startMonoMs + QUESTION_BUDGET_ABS_EXEC_MS, {
+            timeoutUnconfirmed: true
+          });
+        }, QUESTION_BUDGET_ABS_EXEC_MS);
+        timer.unref();
+        res.once("finish", () => {
+          clearTimeout(timer);
+          void questionBudget.settle(ticket, questionBudget.monoNow());
         });
-      });
+      }
     }
 
     if (toolName === "connection_list" || toolName === "lucy_catalog" || toolName === "kx_catalog") {
@@ -4155,6 +4293,42 @@ async function buildDenialRepairPayload(
       });
       return;
     }
+    if (toolName === "lucy_continue_question") {
+      const args = (toolArgs as Record<string, unknown> | undefined) ?? {};
+      const token = typeof args.token === "string" ? args.token : "";
+      const scopeKey = budgetIdentityKey(identity.userId, identity.tokenHashPrefix ?? "");
+      const declared = await questionBudget.declareContinuation(
+        questionBudgetScopeMode() === "stable"
+          ? budgetScopeKey(scopeKey, requestMeta.lucySessionId)
+          : `turn:${requestMeta.lucyTurnId ?? "none"}`,
+        token
+      );
+      const responseBody = jsonRpcToolResult(
+        requestId,
+        JSON.stringify(declared.ok
+          ? { ok: true, idempotent: declared.idempotent === true, declared: declared.declared === true }
+          : { ok: false, reason: declared.reason }),
+        declared.ok ? {} : { isError: true }
+      );
+      res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+      res.end(responseBody);
+      recordRequestAudit({
+        ts: new Date().toISOString(),
+        userId: identity.userId,
+        client: identity.client,
+        tool: toolName,
+        argsSummary: { tokenPresent: token.length > 0 },
+        outcome: declared.ok ? "ok" : "error",
+        decisionReason: declared.ok ? "budget_continuation_declared" : declared.reason,
+        errorDetail: declared.ok ? undefined : declared.reason,
+        durationMs: Date.now() - start,
+        responseBytes: Buffer.byteLength(responseBody),
+        requestId,
+        ...requestMeta,
+        ...(await auditMeta(identity, declared.ok ? "budget_continuation_declared" : declared.reason)),
+      });
+      return;
+    }
     if (toolName === "lucy_begin_question") {
       const args = (toolArgs as Record<string, unknown> | undefined) ?? {};
       const intentSummary = typeof args.intentSummary === "string" ? args.intentSummary.trim() : "";
@@ -4257,6 +4431,35 @@ async function buildDenialRepairPayload(
         });
         return;
       }
+      const begun = await questionBudget.beginQuestion({
+        identityKey: budgetIdentityKey(identity.userId, identity.tokenHashPrefix ?? ""),
+        sessionId: requestMeta.lucySessionId,
+        turnId
+      });
+      if (!begun.ok) {
+        const responseBody = jsonRpcToolResult(requestId, JSON.stringify({
+          reason: begun.reason
+        }), { isError: true });
+        res.writeHead(503, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+        res.end(responseBody);
+        recordRequestAudit({
+          ts: new Date().toISOString(),
+          userId: identity.userId,
+          client: identity.client,
+          tool: toolName,
+          argsSummary,
+          outcome: "error",
+          decisionReason: begun.reason,
+          errorDetail: begun.reason,
+          durationMs: Date.now() - start,
+          responseBytes: Buffer.byteLength(responseBody),
+          requestId,
+          ...requestMeta,
+          ...(await auditMeta(identity, begun.reason)),
+        });
+        return;
+      }
+      if (begun.previousTurnId) reportedTurns.forget(begun.previousTurnId);
       reportedTurns.record({
         identity,
         sessionId: requestMeta.lucySessionId,
@@ -5676,20 +5879,8 @@ function createBudgetPersistence(): BudgetPersistence | null {
       return null;
     }
     return {
-      load: async (scopeKey) => {
-        const persisted = await load(scopeKey);
-        return persisted ? { ...persisted, scopeKey } : null;
-      },
-      save: (scopeKey, state) =>
-        save(scopeKey, {
-          startedAt: state.startedAt,
-          originStartedAt: state.originStartedAt,
-          calls: state.calls,
-          continuations: state.continuations,
-          attempts: state.attempts,
-          peakConcurrency: state.peakConcurrency,
-          currentConcurrency: state.currentConcurrency
-        }),
+      load: (scopeKey) => load(scopeKey),
+      save: (scopeKey, state, idempotencyKey) => save(scopeKey, state, idempotencyKey),
       listScopes: () => list()
     };
   } catch {

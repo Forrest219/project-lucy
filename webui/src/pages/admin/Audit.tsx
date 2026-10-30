@@ -2390,6 +2390,7 @@ export function Audit() {
                   <th className="whitespace-nowrap">会话 ID</th>
                   <th className="pl-audit-turns-col-summary whitespace-nowrap">问询摘要</th>
                   <th className="pl-audit-turns-col-calls whitespace-nowrap">关联调用数</th>
+                  <th className="whitespace-nowrap">预算终止次数</th>
                   <th className="pl-audit-turns-col-tables whitespace-nowrap">涉及数据表</th>
                   <th className="pl-audit-turns-col-result whitespace-nowrap">结果</th>
                   <th className="pl-audit-turns-col-source pl-audit-turn-source-cell whitespace-nowrap">来源</th>
@@ -2397,7 +2398,7 @@ export function Audit() {
               </thead>
               <tbody>
                 {filteredTurnEntries.length === 0 ? (
-                  <tr><td colSpan={12} className="px-3 py-6 text-center text-fg-muted">暂无问询记录</td></tr>
+                  <tr><td colSpan={13} className="px-3 py-6 text-center text-fg-muted">暂无问询记录</td></tr>
                 ) : (
                   filteredTurnEntries.map((entry, index) => {
                     // 「未下发」提示用 legacy outcome 的 denied 计数：它回答的是
@@ -2429,6 +2430,7 @@ export function Audit() {
                         <td className="pl-audit-table-mono notranslate" translate="no">{entry.sessionId || "—"}</td>
                         <td className="pl-audit-turn-summary-cell">{entry.questionPreview ?? entry.questionSummary ?? "—"}</td>
                         <td className="pl-audit-table-num">{entry.linkedCallCount}</td>
+                        <td className="pl-audit-table-num">{entry.outcomeSummary?.budgetStop ?? 0}</td>
                         <td className="pl-audit-table-muted pl-audit-turn-tables-cell notranslate" translate="no" title={entry.sources.map((s) => s.physicalTable).filter(Boolean).join(", ") || undefined}>
                           {entry.sources.length === 0 && denied > 0
                             ? <span className="text-fg-muted">未下发</span>

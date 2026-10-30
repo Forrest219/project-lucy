@@ -17,6 +17,7 @@ const READONLY_TOOLS = [
   "lucy_explain_query",
   "lucy_freshness",
   "lucy_begin_question",
+  "lucy_continue_question",
   "kx_catalog",
   "wiki_search",
   "wiki_read",
@@ -28,7 +29,8 @@ export const LUCY_R1_EXACT_TOOLS = [
   "lucy_query",
   "lucy_explain_query",
   "lucy_freshness",
-  "lucy_begin_question"
+  "lucy_begin_question",
+  "lucy_continue_question"
 ];
 const SUPERSTORE_NAMES = ["superstore_orders", "superstore_people", "superstore_returns"];
 const POC_R1_NAMES = [
@@ -179,6 +181,7 @@ export const ROLE_TEMPLATES: Record<string, RoleTemplate> = {
         "lucy_explain_query",
         "lucy_freshness",
         "lucy_begin_question",
+        "lucy_continue_question",
         "wiki_search",
         "wiki_read",
         "lucy_skill_search",

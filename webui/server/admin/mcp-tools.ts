@@ -26,6 +26,7 @@ const KNOWN_TOOLS: Array<{ name: string; description: string }> = [
   { name: "lucy_explain_query", description: "解释 Lucy 对查询的权限与 guardrail 判断" },
   { name: "lucy_freshness", description: "查询当前 agent 已授权 source 的新鲜度元数据" },
   { name: "lucy_begin_question", description: "记录一次业务问题，用于审计链路关联" },
+  { name: "lucy_continue_question", description: "问询预算用尽后继续同一问询，再开一档数据额度" },
   { name: "kx_catalog", description: "列出当前 agent 可访问的 KX 财务语义层 source" },
   { name: "lucy_skill_search", description: "检索已发布的业务 Skill" },
   { name: "lucy_skill_read", description: "读取业务 Skill 的操作规范" },

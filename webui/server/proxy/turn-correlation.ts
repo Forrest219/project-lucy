@@ -73,6 +73,11 @@ export class TurnCorrelationRegistry {
     });
   }
 
+  /** 同一身份的新问询接替旧轮次。只移出内存候选，不改已写入的审计行。 */
+  forget(turnId: string | undefined): void {
+    if (turnId) this.turns.delete(turnId);
+  }
+
   /**
    * 解析问询归属。
    *

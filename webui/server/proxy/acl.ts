@@ -102,6 +102,7 @@ export const META_TOOLS = [
   "wiki_search",
   "wiki_read",
   "lucy_begin_question",
+  "lucy_continue_question",
   "lucy_skill_search",
   "lucy_skill_read",
   // Spec 162 §7.8 — certified route / template run through lucy_query's ACL.
