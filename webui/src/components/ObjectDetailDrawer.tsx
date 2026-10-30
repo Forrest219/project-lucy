@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, type ReactNode } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -237,6 +237,15 @@ function AgentDetailBody({ target }: { target: AgentTarget }) {
       </div>
     );
   }
+  // Agent 名册 Spec §5.5 / D13 —— 先判断 metricsState，再判断字段是不是空。
+  // 指标不可用时，五个审计派生值都是「—」；即使 usageCallsLast7d 为 0、
+  // 或两个时间字段缺失，也不写「未使用」或「未访问」。
+  const metricsUnavailable = match.stats?.metricsState === "unavailable";
+  const usageCallsLast7d = match.stats?.usageCallsLast7d;
+  const deniedLast7d = match.stats?.deniedLast7d;
+  const protocolCallsLast7d = match.stats?.protocolCallsLast7d;
+  const lastBusinessSeen = match.stats?.lastBusinessSeen;
+  const lastSeen = match.stats?.lastSeen;
   return (
     <div className="grid gap-3" data-testid="object-detail-agent-body">
       <DetailRow label="显示名" value={match.name} />
@@ -249,17 +258,50 @@ function AgentDetailBody({ target }: { target: AgentTarget }) {
       <DetailRow
         label="近 7 天业务调用量"
         value={
-          match.stats?.usageCallsLast7d === undefined || match.stats?.usageCallsLast7d === null
+          metricsUnavailable || usageCallsLast7d === undefined || usageCallsLast7d === null
             ? "—"
-            : `${match.stats.usageCallsLast7d}`
+            : `${usageCallsLast7d}`
         }
       />
       <DetailRow
         label="近 7 天拒绝"
         value={
-          match.stats?.deniedLast7d === undefined || match.stats?.deniedLast7d === null
+          metricsUnavailable || deniedLast7d === undefined || deniedLast7d === null
             ? "—"
-            : `${match.stats.deniedLast7d}`
+            : `${deniedLast7d}`
+        }
+      />
+      {/* 协议请求量：null 或缺失写「—」，不写成 0。 */}
+      <DetailRow
+        label="近 7 天协议请求量"
+        value={
+          metricsUnavailable || protocolCallsLast7d === undefined || protocolCallsLast7d === null
+            ? "—"
+            : `${protocolCallsLast7d}`
+        }
+      />
+      <DetailRow
+        label="最近业务使用"
+        value={
+          metricsUnavailable
+            ? "—"
+            : lastBusinessSeen
+              ? new Date(lastBusinessSeen).toLocaleString("zh-CN")
+              : "未使用"
+        }
+      />
+      <DetailRow
+        label={
+          <>
+            最近 <span className="notranslate" translate="no">MCP</span> 访问
+          </>
+        }
+        value={
+          metricsUnavailable
+            ? "—"
+            : lastSeen
+              ? new Date(lastSeen).toLocaleString("zh-CN")
+              : "未访问"
         }
       />
       {match.createdAt ? (
@@ -524,7 +566,8 @@ function DetailRow({
   value,
   notranslate
 }: {
-  label: string;
+  /** Accepts a node so mixed labels can keep translation defense on the English term. */
+  label: ReactNode;
   value: string;
   notranslate?: boolean;
 }) {

@@ -121,6 +121,61 @@ export function activeTokenCount(agent: Agent, now: Date = new Date()): number {
 }
 
 /**
+ * 名册活动分档 —— Agent 名册 Spec §6。
+ *
+ * 分类只在页面派生，不新增接口字段。窗口只用本响应的
+ * `summary.windowStart` / `summary.windowEnd`，半开区间 [windowStart, windowEnd)。
+ * 缺 summary 或缺任一端时时间条款不成立；协议请求量大于 0 仍可标仅连接。
+ */
+export type AgentActivityBucket = "business" | "connect_only" | "idle" | "unknown";
+
+export type AgentActivityWindow = {
+  windowStart?: string;
+  windowEnd?: string;
+};
+
+function parseTimestamp(value?: string | null): number | null {
+  if (!value) return null;
+  const ts = new Date(value).getTime();
+  return Number.isNaN(ts) ? null : ts;
+}
+
+/**
+ * 把一个 Agent 分到 business / connect_only / idle / unknown 四档。
+ *
+ * - unknown：指标不可用，或近 7 天业务调用量缺失 / 为 null。不是 0，也不是闲置。
+ * - business：近 7 天业务调用量大于 0。
+ * - connect_only：协议请求量大于 0，或最近 MCP 访问落在窗口内而最近业务使用为空或早于窗口。
+ * - idle：其余。近 7 天没有业务调用，且不是仅连接。
+ */
+export function classifyAgentActivity(
+  agent: Pick<Agent, "stats">,
+  window: AgentActivityWindow = {}
+): AgentActivityBucket {
+  const stats = agent.stats;
+  const calls = stats?.usageCallsLast7d;
+  if (stats?.metricsState === "unavailable" || calls === undefined || calls === null) {
+    return "unknown";
+  }
+  if (calls > 0) return "business";
+  const protocol = stats?.protocolCallsLast7d ?? 0;
+  const windowStart = parseTimestamp(window.windowStart);
+  const windowEnd = parseTimestamp(window.windowEnd);
+  const lastSeen = parseTimestamp(stats?.lastSeen);
+  const lastBusinessSeen = parseTimestamp(stats?.lastBusinessSeen);
+  const mcpInWindow =
+    windowStart !== null &&
+    windowEnd !== null &&
+    lastSeen !== null &&
+    lastSeen >= windowStart &&
+    lastSeen < windowEnd;
+  const businessOutside =
+    lastBusinessSeen === null ||
+    (windowStart !== null && windowEnd !== null && lastBusinessSeen < windowStart);
+  return protocol > 0 || (mcpInWindow && businessOutside) ? "connect_only" : "idle";
+}
+
+/**
  * Aggregate metrics for the AgentList page. Mirrors the optional
  * `summary` field returned by `GET /api/admin/agents` and also acts
  * as the client-side fallback when the backend has not yet shipped
@@ -424,7 +479,9 @@ export function AgentList() {
   const [search, setSearch] = useState("");
   const [filterEnabled, setFilterEnabled] = useState<"all" | "enabled" | "disabled">("all");
   const [filterRole, setFilterRole] = useState<"all" | "unbound" | string>("all");
-  const [filterActivity, setFilterActivity] = useState<"all" | "active" | "inactive">("all");
+  const [filterActivity, setFilterActivity] = useState<
+    "all" | "business" | "connect_only" | "idle"
+  >("all");
 
   const agentsQuery = useQuery({
     ...adminAgentsQueryOptions<AgentsResponse>()
@@ -437,17 +494,18 @@ export function AgentList() {
 
   const agents = data?.agents ?? [];
   const summary = data?.summary ?? summarizeAgents(agents);
-  // Spec 128 HR-1: metricsState=unavailable means null values; do not coerce to 0
-  const auditMetricsState: "ok" | "unavailable" = summary.metricsState === "unavailable" ? "unavailable" : "ok";
+  // 名册窗口只读本响应的 summary。缺 summary 或缺任一端时按缺窗口处理，
+  // 不在页面自造 7 天（Agent 名册 Spec D12）。
+  const activityWindow: AgentActivityWindow = {
+    windowStart: data?.summary?.windowStart,
+    windowEnd: data?.summary?.windowEnd
+  };
   // Spec 189 §5.2 — the business-active count and the business call volume
   // read the **usage** layer. `usage*` is null when the response carries no
   // usage layer (legacy backend) — the UI then shows "—", never a 0 or a
   // number borrowed from a different record layer.
   const activeAgentCountLast7d = summary.usageActiveAgentCountLast7d ?? null;
-  const usedCredentialTotal = summary.usedCredentialCountLast7d ?? summary.activeTokenCountLast7d;
   const businessCallsLast7dTotal = summary.usageCallsLast7d ?? null;
-  const protocolCallsLast7dTotal = summary.protocolCallsLast7d ?? null;
-  const usedCredentialState = summary.usedCredentialState ?? auditMetricsState;
   // Spec 189 §5.2 / §8 — a missing usage layer is "unavailable", not 0. The
   // card must render "—" instead of a fabricated zero.
   const usageMetricsState: "ok" | "unavailable" =
@@ -479,15 +537,10 @@ export function AgentList() {
     const matchRole =
       filterRole === "all" ||
       (filterRole === "unbound" ? roleIds.length === 0 : roleIds.includes(filterRole));
-    // Spec 189 §6 — the activity filter reads the Default Usage layer, the
-    // same layer the KPI card counts. An Agent without a usage figure is
-    // neither "active" nor "inactive": it is excluded from the filter.
-    const usageCalls = a.stats?.usageCallsLast7d;
-    const metricsAvailable = a.stats?.metricsState !== "unavailable" && usageCalls !== undefined && usageCalls !== null;
-    const matchActivity =
-      filterActivity === "all" ||
-      (metricsAvailable && filterActivity === "active" && usageCalls > 0) ||
-      (metricsAvailable && filterActivity === "inactive" && usageCalls === 0);
+    // Agent 名册 Spec §5.4 —— 四档筛选：全部、有业务调用、仅连接、闲置。
+    // 指标不可用的行落在 unknown，只留在「全部」；四档都不改变行的先后。
+    const bucket = classifyAgentActivity(a, activityWindow);
+    const matchActivity = filterActivity === "all" || bucket === filterActivity;
     return matchSearch && matchEnabled && matchRole && matchActivity;
   });
 
@@ -556,13 +609,7 @@ export function AgentList() {
         </div>
       ) : null}
 
-      {usedCredentialState === "partial" ? (
-        <div className="pl-notice" data-testid="agent-credential-partial-notice">
-          当前配置存在相同的 <span className="notranslate" translate="no">Token hash prefix</span>，近 7 天使用过的凭据无法可靠映射到唯一凭据，已隐藏精确值。
-        </div>
-      ) : null}
-
-      <div className="pl-metric-grid pl-metric-grid--three" data-testid="agent-metric-grid">
+      <div className="pl-metric-grid" data-testid="agent-metric-grid">
         {/* D1: config-class — always ok, reads directly from config response */}
         <MetricCard
           label={<span><span className="notranslate" translate="no">Agent</span> 总数</span>}
@@ -584,6 +631,15 @@ export function AgentList() {
           testId="metric-active-agent-count"
         />
         <MetricCard
+          label="近 7 天业务调用量"
+          value={businessCallsLast7dTotal}
+          help="近 7 天默认用量业务调用次数；用于判定真实业务使用（排除协议事件与默认视图排除的评测探针）。"
+          subValue={usageMetricsState === "ok" ? "排除协议事件与评测探针" : undefined}
+          state={usageMetricsState}
+          helpId="business-calls"
+          testId="metric-business-calls"
+        />
+        <MetricCard
           label={
             <span>
               可用 <span className="notranslate" translate="no">Token</span>
@@ -595,33 +651,6 @@ export function AgentList() {
           subValue={`配置 ${summary.configuredTokenCount} 个`}
           helpId="active-token-count"
           testId="metric-active-token-count"
-        />
-        <MetricCard
-          label="近 7 天使用过的凭据"
-          value={usedCredentialTotal ?? 0}
-          help="近 7 天访问日志中出现过的去重凭据 hash prefix；可能包含已删除或已吊销凭据。"
-          subValue={usedCredentialState === "ok" ? "按访问日志去重" : undefined}
-          state={usedCredentialState}
-          helpId="used-credentials"
-          testId="metric-used-credentials"
-        />
-        <MetricCard
-          label="近 7 天业务调用量"
-          value={businessCallsLast7dTotal}
-          help="近 7 天默认用量业务调用次数；用于判定真实业务使用（排除协议事件与默认视图排除的评测探针）。"
-          subValue={usageMetricsState === "ok" ? "排除协议事件与评测探针" : undefined}
-          state={usageMetricsState}
-          helpId="business-calls"
-          testId="metric-business-calls"
-        />
-        <MetricCard
-          label="近 7 天协议请求量"
-          value={protocolCallsLast7dTotal}
-          help="近 7 天握手、工具／提示发现、资源枚举、取消通知与服务发现等协议请求数。"
-          subValue={auditMetricsState === "ok" ? "连接与工具发现" : undefined}
-          state={auditMetricsState}
-          helpId="protocol-calls"
-          testId="metric-protocol-calls"
         />
       </div>
 
@@ -673,12 +702,15 @@ export function AgentList() {
               <select
                 className="pl-input pl-catalog-filter-select"
                 value={filterActivity}
-                onChange={(e) => setFilterActivity(e.target.value as "all" | "active" | "inactive")}
+                onChange={(e) =>
+                  setFilterActivity(e.target.value as "all" | "business" | "connect_only" | "idle")
+                }
                 aria-label="近 7 天活跃"
               >
                 <option value="all">全部</option>
-                <option value="active">有业务调用</option>
-                <option value="inactive">无业务调用</option>
+                <option value="business">有业务调用</option>
+                <option value="connect_only">仅连接</option>
+                <option value="idle">闲置</option>
               </select>
             </label>
           </div>
@@ -726,50 +758,45 @@ export function AgentList() {
             >
               <thead>
                 <tr>
-                  <th scope="col">序号</th>
                   <th scope="col">显示名/用户 ID</th>
                   <th scope="col">角色</th>
-                  <th scope="col">当前状态</th>
-                  <th scope="col">
-                    配置 <span className="notranslate" translate="no">Token</span>
-                  </th>
-                  <th scope="col">
-                    可用 <span className="notranslate" translate="no">Token</span>
-                  </th>
-                  <th scope="col">近 7 天使用过的凭据</th>
+                  <th scope="col" className="notranslate" translate="no">Token</th>
                   <th scope="col">近 7 天业务调用量</th>
-                  <th scope="col">近 7 天协议请求量</th>
                   <th scope="col">最近业务使用</th>
-                  <th scope="col">最近 <span className="notranslate" translate="no">MCP</span> 访问</th>
                   <th scope="col">操作</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((agent, index) => {
+                {filtered.map((agent) => {
                   const legacyWildcard =
                     agent.allow?.tables?.includes("*") || agent.allow?.tools?.includes("*");
                   const metricsUnavailable = agent.stats?.metricsState === "unavailable";
                   // Spec 189 §6 — the table reads the Default Usage layer.
                   const callsLast7d = agent.stats?.usageCallsLast7d;
-                  const protocolCallsLast7d = agent.stats?.protocolCallsLast7d;
-                  const usedCredentials = agent.stats?.usedCredentialsLast7d ?? agent.stats?.activeTokensLast7d;
-                  const credentialState = agent.stats?.credentialMetricsState ?? (metricsUnavailable ? "unavailable" : "ok");
+                  // Agent 名册 Spec §6 —— 分档在页面派生，窗口只读响应里的 summary。
+                  const bucket = classifyAgentActivity(agent, activityWindow);
                   const configuredTokens = configuredTokenCount(agent);
                   const availableTokens = agent.stats?.availableTokens ?? (agent.enabled ? configuredTokens : 0);
+                  const noAvailableToken = availableTokens === 0 && configuredTokens > 0;
 
                   return (
                     <tr key={agent.id} data-testid={`agent-row-${agent.id}`}>
-                      <td className="pl-agent-list-table-num" data-testid={`agent-row-index-${agent.id}`}>{index + 1}</td>
                       <td>
                         <div className="pl-agent-list-table-name">
-                          <Link
-                            to={buildObjectDetailSearch({ kind: "agent", agentId: agent.id })}
-                            className="font-medium pl-agent-list-table-name-link"
-                            aria-label={`查看 ${agent.name} 的对象详情`}
-                            data-testid={`agent-name-link-${agent.id}`}
-                          >
-                            {agent.name}
-                          </Link>
+                          <div className="flex items-center gap-1.5">
+                            <Link
+                              to={buildObjectDetailSearch({ kind: "agent", agentId: agent.id })}
+                              className="font-medium pl-agent-list-table-name-link"
+                              aria-label={`查看 ${agent.name} 的对象详情`}
+                              data-testid={`agent-name-link-${agent.id}`}
+                            >
+                              {agent.name}
+                            </Link>
+                            {/* Agent 名册 Spec D4 —— 已启用不放任何状态标记；未启用只标「已禁用」。 */}
+                            {!agent.enabled ? (
+                              <span className="pl-status-badge pl-status-not_started">已禁用</span>
+                            ) : null}
+                          </div>
                           <span className="pl-agent-list-table-meta notranslate" translate="no">
                             {agent.id}
                           </span>
@@ -802,62 +829,44 @@ export function AgentList() {
                           <span className="pl-agent-list-table-meta notranslate" translate="no">legacy wildcard</span>
                         )}
                       </td>
-                      <td>
-                        <span
-                          className={`pl-status-badge ${agent.enabled ? "pl-status-done" : "pl-status-not_started"}`}
-                        >
-                          {agent.enabled ? "启用" : "禁用"}
-                        </span>
-                        {metricsUnavailable ? (
-                          <span className="pl-agent-list-table-meta" data-testid={`agent-metrics-unavailable-${agent.id}`}>数据不可用</span>
-                        ) : null}
+                      <td data-testid={`agent-active-tokens-${agent.id}`}>
+                        <div className="pl-agent-list-table-name">
+                          {noAvailableToken ? (
+                            <span className="text-warning-strong">
+                              无可用 <span className="notranslate" translate="no">Token</span>
+                            </span>
+                          ) : (
+                            <span className="pl-agent-list-table-num">可用 {availableTokens}</span>
+                          )}
+                          <span className="pl-agent-list-table-meta">配置 {configuredTokens}</span>
+                        </div>
                       </td>
-                      <td className="pl-agent-list-table-num notranslate" translate="no">
-                        {configuredTokens}
-                      </td>
-                      <td
-                        className="pl-agent-list-table-num notranslate"
-                        translate="no"
-                        data-testid={`agent-active-tokens-${agent.id}`}
-                      >
-                        {availableTokens}
-                      </td>
-                      <td
-                        className="pl-agent-list-table-num notranslate"
-                        translate="no"
-                        data-testid={`agent-used-credentials-${agent.id}`}
-                        title={credentialState === "partial" ? "Token hash prefix 冲突，无法可靠映射唯一凭据" : undefined}
-                      >
-                        {credentialState === "ok" ? usedCredentials ?? 0 : "—"}
-                      </td>
-                      <td
-                        className="pl-agent-list-table-num"
-                        data-testid={`agent-calls-7d-${agent.id}`}
-                      >
-                        {metricsUnavailable || callsLast7d === undefined || callsLast7d === null
-                          ? "—"
-                          : callsLast7d}
-                      </td>
-                      <td
-                        className="pl-agent-list-table-num"
-                        data-testid={`agent-protocol-calls-7d-${agent.id}`}
-                      >
-                        {metricsUnavailable ? "—" : protocolCallsLast7d ?? 0}
+                      <td data-testid={`agent-calls-7d-${agent.id}`}>
+                        <div className="pl-agent-list-table-name">
+                          <span className="pl-agent-list-table-num">
+                            {bucket === "unknown" ? "—" : callsLast7d}
+                          </span>
+                          {metricsUnavailable ? (
+                            <span className="pl-agent-list-table-meta" data-testid={`agent-metrics-unavailable-${agent.id}`}>数据不可用</span>
+                          ) : null}
+                        </div>
                       </td>
                       <td>
-                        <LastSeen
-                          lastSeen={agent.stats?.lastBusinessSeen}
-                          unavailable={metricsUnavailable}
-                          emptyLabel="未使用"
-                          ariaPrefix="最近业务使用"
-                        />
-                      </td>
-                      <td>
-                        <LastSeen
-                          lastSeen={agent.stats?.lastSeen}
-                          unavailable={metricsUnavailable}
-                          ariaPrefix="最近 MCP 访问"
-                        />
+                        {bucket === "unknown" ? (
+                          <span className="text-fg-muted">—</span>
+                        ) : (
+                          <>
+                            <LastSeen
+                              lastSeen={agent.stats?.lastBusinessSeen}
+                              emptyLabel="未使用"
+                              ariaPrefix="最近业务使用"
+                            />
+                            {/* Agent 名册 Spec D6 —— 仅连接是次级文字，不上 warning 色。 */}
+                            {bucket === "connect_only" ? (
+                              <span className="text-fg-muted"> · 仅连接</span>
+                            ) : null}
+                          </>
+                        )}
                       </td>
                       <td>
                         <div className="pl-agent-list-row-actions">

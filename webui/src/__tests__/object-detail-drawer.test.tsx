@@ -87,6 +87,8 @@ const roleFixture = {
   }
 };
 
+let drawerStats: Record<string, unknown> | undefined;
+
 function stubDrawerFetch() {
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
@@ -107,7 +109,7 @@ function stubDrawerFetch() {
                 tokens: [],
                 createdAt: "2026-01-01T00:00:00.000Z",
                 configUpdatedAt: "2026-06-15T00:00:00.000Z",
-                stats: { callsLast7d: 1, deniedLast7d: 0, topTables: [] }
+                stats: drawerStats ?? { callsLast7d: 1, deniedLast7d: 0, topTables: [] }
               }
             ]
           }
@@ -171,10 +173,20 @@ function stubDrawerFetch() {
 }
 
 afterEach(() => {
+  drawerStats = undefined;
   cleanup();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
+
+/** 读取抽屉里某个标签对应的值。DetailRow 的结构是 label span + value span。 */
+function drawerValue(body: HTMLElement, label: string): string {
+  const labelNode = [...body.querySelectorAll("span")].find(
+    (span) => span.textContent?.replace(/\s+/g, " ").trim() === label
+  );
+  expect(labelNode, `drawer row "${label}" should exist`).toBeTruthy();
+  return labelNode?.nextElementSibling?.textContent?.trim() ?? "";
+}
 
 describe("ObjectDetailDrawer", () => {
   it("opens a table drawer with translation defense for code-like identifiers", async () => {
@@ -276,6 +288,76 @@ describe("ObjectDetailDrawer", () => {
 
     const link = await screen.findByTestId("object-detail-agent-audit-link");
     expect(link).toHaveAttribute("href", "/admin/audit?user=zhangsan");
+  });
+
+  it("SC-10 指标可用时抽屉展示协议请求量与两个时间，业务调用量读 usageCallsLast7d", async () => {
+    drawerStats = {
+      callsLast7d: 99,
+      usageCallsLast7d: 4,
+      protocolCallsLast7d: 3,
+      deniedLast7d: 2,
+      metricsState: "ok",
+      lastSeen: "2026-10-26T00:00:00.000Z",
+      lastBusinessSeen: "2026-10-25T00:00:00.000Z",
+      topTables: []
+    };
+    stubDrawerFetch();
+    renderAt("/?object=agent&agentId=zhangsan");
+
+    const body = await screen.findByTestId("object-detail-agent-body");
+    // 业务调用量读 usageCallsLast7d，不读 callsLast7d。
+    expect(drawerValue(body, "近 7 天业务调用量")).toBe("4");
+    expect(drawerValue(body, "近 7 天协议请求量")).toBe("3");
+    expect(drawerValue(body, "近 7 天拒绝")).toBe("2");
+    expect(drawerValue(body, "最近业务使用")).toBe(
+      new Date("2026-10-25T00:00:00.000Z").toLocaleString("zh-CN")
+    );
+    expect(drawerValue(body, "最近 MCP 访问")).toBe(
+      new Date("2026-10-26T00:00:00.000Z").toLocaleString("zh-CN")
+    );
+  });
+
+  it("SC-10 指标可用但时间为空时写「未使用」和「未访问」", async () => {
+    drawerStats = {
+      callsLast7d: 0,
+      usageCallsLast7d: 0,
+      protocolCallsLast7d: 0,
+      deniedLast7d: 0,
+      metricsState: "ok",
+      topTables: []
+    };
+    stubDrawerFetch();
+    renderAt("/?object=agent&agentId=zhangsan");
+
+    const body = await screen.findByTestId("object-detail-agent-body");
+    expect(drawerValue(body, "最近业务使用")).toBe("未使用");
+    expect(drawerValue(body, "最近 MCP 访问")).toBe("未访问");
+    // 协议量是 0 时写 0，不写「—」。
+    expect(drawerValue(body, "近 7 天协议请求量")).toBe("0");
+  });
+
+  it("SC-10 指标不可用时五个值都是「—」，正文不出现「未使用」或「未访问」", async () => {
+    drawerStats = {
+      callsLast7d: null,
+      usageCallsLast7d: 0,
+      protocolCallsLast7d: null,
+      deniedLast7d: null,
+      metricsState: "unavailable",
+      lastSeen: null,
+      lastBusinessSeen: null,
+      topTables: []
+    };
+    stubDrawerFetch();
+    renderAt("/?object=agent&agentId=zhangsan");
+
+    const body = await screen.findByTestId("object-detail-agent-body");
+    expect(drawerValue(body, "近 7 天业务调用量")).toBe("—");
+    expect(drawerValue(body, "近 7 天拒绝")).toBe("—");
+    expect(drawerValue(body, "近 7 天协议请求量")).toBe("—");
+    expect(drawerValue(body, "最近业务使用")).toBe("—");
+    expect(drawerValue(body, "最近 MCP 访问")).toBe("—");
+    expect(body.textContent).not.toContain("未使用");
+    expect(body.textContent).not.toContain("未访问");
   });
 
   it("renders a run drawer with the recent failed case list", async () => {

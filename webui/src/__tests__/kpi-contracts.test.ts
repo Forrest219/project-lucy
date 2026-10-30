@@ -20,8 +20,35 @@ describe("KPI_REGISTRY", () => {
       expect(c.label, `${c.id} must have label`).toBeTruthy();
       expect(c.help, `${c.id} must have help`).toBeTruthy();
       expect(c.pages, `${c.id} must have pages array`).toBeInstanceOf(Array);
-      expect(c.pages.length, `${c.id} must have at least one page`).toBeGreaterThan(0);
+      // Agent 名册 Spec SC-12 —— 「近 N 使用过的凭据」条目保留，但名册不再展示
+      // 该卡和该列，因此这一条允许 pages 为空；其它条目仍至少有一页。
+      if (c.id !== "used-credential-count") {
+        expect(c.pages.length, `${c.id} must have at least one page`).toBeGreaterThan(0);
+      }
       expect(typeof c.windowed, `${c.id}.windowed must be boolean`).toBe("boolean");
+    }
+  });
+
+  it("SC-12 名册不再登记「近 N 使用过的凭据」，其它条目仍指向本页", () => {
+    const used = getContract("used-credential-count");
+    expect(used).toBeDefined();
+    // 条目保留，帮助文案继续区分全量访问凭据与近 N 业务活跃 Token。
+    expect(used!.help).toContain("全量访问");
+    expect(used!.help).toContain("近 N 业务活跃 Token");
+    expect(used!.pages).not.toContain("/admin/agents");
+    expect(used!.pages).toEqual([]);
+
+    // calls-7d 与活跃 Agent 仍登记在 /admin/agents。
+    for (const id of ["calls-7d", "active-agent-count"]) {
+      const contract = getContract(id);
+      expect(contract, `${id} should be in registry`).toBeDefined();
+      expect(contract!.pages).toContain("/admin/agents");
+    }
+
+    // 其它条目仍至少有一页。
+    for (const c of KPI_REGISTRY) {
+      if (c.id === "used-credential-count") continue;
+      expect(c.pages.length, `${c.id} must have at least one page`).toBeGreaterThan(0);
     }
   });
 

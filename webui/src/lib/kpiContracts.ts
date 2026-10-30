@@ -101,7 +101,9 @@ export const KPI_REGISTRY: MetricContract[] = [
     label: "近 N 使用过的凭据",
     // D4: prefix→token mapping may not be unique; partial if ambiguous
     help: "当前时间窗内访问日志（全量访问口径，含协议事件）出现过的去重凭据 hash prefix 数。可能包含已删除或已吊销凭据；prefix 映射不唯一时显示 —（Spec 128 D4）。与「近 N 业务活跃 Token」口径不同，不可混称。",
-    pages: ["/admin/agents"],
+    // Agent 名册 Spec D10 / SC-12 —— 名册不再展示该卡和该列，条目本身保留，
+    // 帮助文案继续区分「全量访问凭据」与「近 N 业务活跃 Token」。因此 pages 允许为空。
+    pages: [],
     windowed: true
   },
   {

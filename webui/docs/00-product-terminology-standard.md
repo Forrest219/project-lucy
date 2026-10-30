@@ -5,7 +5,7 @@
 | 文档名称 | Lucy Product Terminology Standard |
 | 文档类型 | System-wide Product Language / Terminology Standard |
 | 版本 | v0.2；2026-10-19 v0.2-draft：增补 Spec 173 v0.3 / 2026-10-19 audit-trust 新增术语（凭证主体 / 已确认关联 / 候选关联 / 归属待核验 / 客户端采集范围 / 工具调用数 / 原文登记分组占比 / 证据校验），登记于 §4.7.1，与 `inbox/audit-trust/audit-trust-2026-10-19-r1/T00-r2/` 同批生效；2026-10-25 增补 §4.11 OIDC 单点登录术语；同日增补 §4.10 Skill 负责人和 §4.12 SMTP 通知术语 |
-| 撰写日期 | 2026-07-31；2026-08-01 v0.2（新增 Data Agent Ops Control Plane / Data Agent 运维控制台，标记『语义维护工作台』与『运维控制面』为弃用别名）；2026-08-05 增补 §4.8 MCP 调试台术语（Spec 99）；同日 Spec 100 交叉审阅补齐 incomplete / impact / evidence / 裁决双行；2026-08-06 Spec 109 增补目录重命名术语；2026-08-06 Spec 114/115 增补表 YAML 导入与工作台校验披露术语；2026-08-06 Spec 117 增补 Remove Schema 术语；2026-08-20 增补 §4.7.1 Trace Read Model 术语（Spec 62 v0.5）；2026-08-25 Spec 127 增补 Delete Connection 术语；2026-08-26 增补 §4.9 可选 Agent Chat（A3）术语；2026-09-03 Spec 140 增补访问日志双粒度 CSV 导出术语；2026-09-03 Spec 141 增补访问日志 CSV 字段说明与本地时间术语；2026-09-04 Spec 143 增补调用监控与运行状态分组术语；2026-09-11 Spec 142 为 `/overview` 聚焦精简；2026-09-23 Spec 144 增补 Skill / 业务 Skill；Spec 145 增补待同步文件与表语义校验分计；同日 Spec 144 v1.1 增补导航组名「业务上下文」（原「语义建模」组更名，「语义建模」保留为概念词）；2026-09-24 Spec 148 增补界面使用、页面访问、访问账户、活跃菜单与分组/菜单/页面访问排行；同日 Spec 149 增补运维问数连接与运维问数角色；2026-10-12 增补启用表范围「状态筛选」筛选维术语；2026-10-19 Spec 99 v1.3 明确调试台裁决卡与访问日志双行分工；同日 v1.5 连上检查只回答能连上或不能连上；2026-10-30 访问日志「统计时间」改为上下文条内只出现一次 |
+| 撰写日期 | 2026-07-31；2026-08-01 v0.2（新增 Data Agent Ops Control Plane / Data Agent 运维控制台，标记『语义维护工作台』与『运维控制面』为弃用别名）；2026-08-05 增补 §4.8 MCP 调试台术语（Spec 99）；同日 Spec 100 交叉审阅补齐 incomplete / impact / evidence / 裁决双行；2026-08-06 Spec 109 增补目录重命名术语；2026-08-06 Spec 114/115 增补表 YAML 导入与工作台校验披露术语；2026-08-06 Spec 117 增补 Remove Schema 术语；2026-08-20 增补 §4.7.1 Trace Read Model 术语（Spec 62 v0.5）；2026-08-25 Spec 127 增补 Delete Connection 术语；2026-08-26 增补 §4.9 可选 Agent Chat（A3）术语；2026-09-03 Spec 140 增补访问日志双粒度 CSV 导出术语；2026-09-03 Spec 141 增补访问日志 CSV 字段说明与本地时间术语；2026-09-04 Spec 143 增补调用监控与运行状态分组术语；2026-09-11 Spec 142 为 `/overview` 聚焦精简；2026-09-23 Spec 144 增补 Skill / 业务 Skill；Spec 145 增补待同步文件与表语义校验分计；同日 Spec 144 v1.1 增补导航组名「业务上下文」（原「语义建模」组更名，「语义建模」保留为概念词）；2026-09-24 Spec 148 增补界面使用、页面访问、访问账户、活跃菜单与分组/菜单/页面访问排行；同日 Spec 149 增补运维问数连接与运维问数角色；2026-10-12 增补启用表范围「状态筛选」筛选维术语；2026-10-19 Spec 99 v1.3 明确调试台裁决卡与访问日志双行分工；同日 v1.5 连上检查只回答能连上或不能连上；2026-10-30 访问日志「统计时间」改为上下文条内只出现一次；同日名册 Spec 登记仅连接、闲置、无可用 Token 与 Agent 列表 Token 列 |
 | 适用范围 | Lucy WebUI、API 用户可见错误、Toast、Modal、Drawer、表格列名、导航、测试断言、Spec、Plan、Runbook、交付文档 |
 | 维护者 | Product / UX / Architecture Review |
 | 优先级 | 高于单模块 Spec。单模块 Spec 可新增术语，但不得覆盖本标准中的固定术语 |
@@ -516,7 +516,7 @@ Connection (连接)
 
 ### 4.5 访问治理 / 使用概况
 
-`/admin/usage` 页面（侧栏项 `admin-governance`，位于运行状态；旧 path `/admin/governance` redirect）术语来自 Spec 78 / 84，并由 Spec 86 修订路由与 KPI 主标签。Spec 148 增补「界面使用」视图（`?view=interface`）。Spec 156 将侧栏从访问治理移入运行状态，数据访问视图不再展示调用量、ACL 拒绝次数与多数请求耗时。**Spec 189 修订用量口径**：业务调用量改为「默认用量」口径（排除全部协议事件与默认视图排除的评测探针），并登记「默认用量业务调用」与「近 N 业务活跃 Token」。**Spec 194** 另登记真实问询及其伴随指标；这些词不替换业务调用量或近 N 活跃 Agent，落地前界面尚未展示：
+`/admin/usage` 页面（侧栏项 `admin-governance`，位于运行状态；旧 path `/admin/governance` redirect）术语来自 Spec 78 / 84，并由 Spec 86 修订路由与 KPI 主标签。Spec 148 增补「界面使用」视图（`?view=interface`）。Spec 156 将侧栏从访问治理移入运行状态，数据访问视图不再展示调用量、ACL 拒绝次数与多数请求耗时。**Spec 189 修订用量口径**：业务调用量改为「默认用量」口径（排除全部协议事件与默认视图排除的评测探针），并登记「默认用量业务调用」与「近 N 业务活跃 Token」。**Spec 194** 另登记真实问询及其伴随指标；这些词不替换业务调用量或近 N 活跃 Agent。**名册 Spec**（`docs/specs/lucy-20261030-agent-roster-spec.md`）登记 Agent 列表的「仅连接」「闲置」「无可用 Token」和 Token 列；名册页面尚未按该 Spec 改版：
 
 | Canonical Term | UI 主术语 | 允许补充说法 | 禁止文案 | 说明 |
 |---|---|---|---|---|
@@ -531,14 +531,14 @@ Connection (连接)
 | Agent Active Rate | Agent 活跃率 | 活跃 / 总数 | — | 并入活跃 Agent 卡副行，不独立成卡 |
 | Configured Token Count | 配置 Token | 已下发凭证 | access.yaml 配置数（主 hint） | 不随窗口变 |
 | Available Token Count | 可用 Token | 当前可用凭据 | 活跃 Token、有效 Token（未说明 Agent 状态） | Agent 已启用且 Token 未过期的当前配置数 |
-| Used Credential Count | 近 N 使用过的凭据 | 近窗凭据 | 近 N 活跃 Token | access_log 去重 hash prefix；可能包含已删除/已吊销凭据；有 prefix 碰撞时为部分可信。Spec 189：保持**全量访问**口径（含协议事件），不改名为业务活跃；可以多于「近 N 业务活跃 Token」 |
+| Used Credential Count | 近 N 使用过的凭据 | 近窗凭据 | 近 N 活跃 Token | access_log 去重 hash prefix；可能包含已删除/已吊销凭据；有 prefix 碰撞时为部分可信。Spec 189：保持**全量访问**口径（含协议事件），不改名为业务活跃；可以多于「近 N 业务活跃 Token」。Agent 名册不展示该卡和该列 |
 | Active Token | 近 N 使用过的凭据 | 活跃 Token（仅兼容历史字段叙述） | 近 7 天活跃 Token（写死）；卡底藏窗口 | Deprecated UI term；新 UI 使用 Used Credential Count。Spec 189 起，业务活跃口径用 Business Active Count（近 N 业务活跃 Token），与本行的全量访问口径并存且不混称 |
 | Token Active Rate | Token 活跃率 | 活跃 / 配置 | access_log 去重 prefix | 并入活跃 Token 卡副行 |
 | Authorized Table Count | 授权表 | 角色已授权表 | 配置表（本页主标签）、白名单表、启用表（本页禁止混用） | ACL 授权去重；≠ 启用表范围；不随窗口变 |
 | Active Table Count | 近 N 活跃表 | 活跃表（叙述） | 热门表（与排行区分）；卡底藏窗口 | N 进标题；活跃率分母=授权表 |
 | Business Call Volume | 近 N 业务调用量 | 业务调用量 | 近 N 调用量（未说明口径）、最近调用 | Spec 189：**默认用量**口径 —— 排除全部协议事件及符合 Spec 162 条件的评测探针；包含真实业务工具或受权限保护内容读取的成功、错误与拒绝尝试；用于 Agent 活跃判定 |
-| Protocol Request Volume | 近 N 协议请求量 | 协议请求量 | 工具调用量 | Spec 189：全部握手、工具／提示发现、资源枚举、取消通知、服务发现及 `server/*` 协议方法（不再只有 3 种握手）；保留用于连接诊断 |
-| Last MCP Access | 最近 MCP 访问 | 最近访问时间 | 最近业务使用（混用） | 全历史最后一条 access_log；协议请求也会更新；Spec 189 保持不变 |
+| Protocol Request Volume | 近 N 协议请求量 | 协议请求量 | 工具调用量 | Spec 189：全部握手、工具／提示发现、资源枚举、取消通知、服务发现及 `server/*` 协议方法（不再只有 3 种握手）；保留用于连接诊断。名册顶部卡和主表不展示，对象详情抽屉展示 |
+| Last MCP Access | 最近 MCP 访问 | 最近访问时间 | 最近业务使用（混用） | 全历史最后一条 access_log；协议请求也会更新；Spec 189 保持不变。名册主表不展示，对象详情抽屉展示 |
 | Last Business Use | 最近业务使用 | 最近业务调用 | 最近访问时间（混用） | Spec 189：全历史最后一次**默认用量业务调用**；协议事件与默认视图排除的评测探针不更新；可以早于「最近 MCP 访问」 |
 | Default Usage Call | 默认用量业务调用 | 业务调用（技术口径） | 全部 access_log、协议请求、原始非协议调用 | Spec 189：非协议业务工具调用或受权限保护内容读取，且不是 Spec 162 定义的默认视图排除评测探针；**技术口径**，不新增卡片标题 |
 | Business Active Token | 近 N 业务活跃 Token | 业务活跃 Token（叙述） | 近 N 使用过的凭据、可用 Token、仅发生握手的 Token | Spec 189：当前配置 Token 中，窗口内至少有 1 次默认用量业务调用的 Token |
@@ -546,6 +546,11 @@ Connection (连接)
 | Unreported Query Session | 近 N 未上报查数会话 | 未上报查数会话 | 未上报调用量；把它加进真实问询 | 窗口内有查数、且该会话从未落下原文问询的去重会话 |
 | Connect-only Session | 近 N 仅连接会话 | 仅连接会话 | 活跃会话（未说明只有连接）；把它加进真实问询 | 窗口内该会话的调用全部是连接级 |
 | Browse-without-ask Session | 近 N 浏览未问会话 | 浏览未问会话 | 浏览量；把它加进真实问询 | 到了浏览或准备，没有问询动作，也没有查数 |
+| Connect-only Agent | 仅连接 | — | 仅连接会话（混称）；近 N 活跃 Agent；活跃 | `/admin/agents` 的标记和筛选项。近 7 天业务调用量为 0，且近 7 天协议请求量大于 0，或最近 MCP 访问落在本页窗口内而最近业务使用早于该窗口或为空。不计入近 N 活跃 Agent。指标不可用时不标记。与「近 N 仅连接会话」不是同一粒度。见 `docs/specs/lucy-20261030-agent-roster-spec.md`。名册改版前页面尚未展示 |
+| Idle Agent | 闲置 | — | 无业务调用（把仅连接或指标不可用算进本档）；未使用（作筛选项） | 只作 `/admin/agents` 筛选档。近 7 天没有业务调用，且不是仅连接。指标不可用的行不属于闲置，只留在「全部」。列表不另写「闲置」；空的最近业务使用仍写「未使用」 |
+| No Available Token | 无可用 Token | — | 无可用凭据 | 可用 Token 为 0 且配置 Token 大于 0。名册 Token 格的主行，使用既有 warning 色。可用大于 0 时主行写「可用 n」 |
+| Agent Roster Token Column | Token | — | 凭据、Token 凭据（作本列列头） | `/admin/agents` 列头。次行写「配置 n」。与顶部「可用 Token」同一口径。侧栏「Token 凭据」仍是 `/admin/tokens` 的页面名 |
+| Agent Disabled Mark | 已禁用 | — | 启用行上的启用胶囊、绿点、灰点 | 只出现在未启用 Agent 的显示名旁，用既有中性状态标记。筛选继续写「已启用 / 已禁用」 |
 | Daily Question Table | 按日问询 | — | 趋势图、迷你图、sparkline（作本表标题） | Asia/Shanghai 日历日。各日相加等于同一窗口的四张卡。边缘日标明「未覆盖全天」 |
 | Queries per Question | 每问询查数 | — | 平均调用量（未说明分母是原文问询） | 挂到本窗口原文问询上的查数次数除以近 N 真实问询。分母为 0 时不显示数字 |
 | Unassigned Query Call | 未归属查数 | — | 未上报查数会话（混用） | 没有会话 ID 的查数次数，不折算成会话 |

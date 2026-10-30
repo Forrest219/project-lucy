@@ -5,7 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AgentList, activeTokenCount, configuredTokenCount, summarizeAgents } from "../pages/admin/AgentList";
-import type { Agent, McpEndpointInfo, Role } from "../lib/types";
+import type { Agent, AgentStats, McpEndpointInfo, Role } from "../lib/types";
 
 function renderAgentList() {
   const client = new QueryClient({
@@ -66,12 +66,15 @@ const analystRole: Role = {
 
 afterEach(() => {
   agentsMeta = undefined;
+  agentsSummary = undefined;
   cleanup();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
 let agentsMeta: { runtimeConsistency: "matched" | "unconfirmed" } | undefined;
+/** 服务端 aggregate。Agent 名册的窗口（summary.windowStart / windowEnd）只从这里来。 */
+let agentsSummary: Record<string, unknown> | undefined;
 
 function stubAgentsEndpoints(
   agents: Agent[],
@@ -111,7 +114,7 @@ function stubAgentsEndpoints(
       );
     }
     if (url === "/api/admin/agents" && (!init || !init.method || init.method === "GET")) {
-      return new Response(JSON.stringify({ ok: true, data: { agents, version: "v1", ...(agentsMeta ? { meta: agentsMeta } : {}) } }));
+      return new Response(JSON.stringify({ ok: true, data: { agents, version: "v1", ...(agentsMeta ? { meta: agentsMeta } : {}), ...(agentsSummary ? { summary: agentsSummary } : {}) } }));
     }
     if (url.startsWith("/api/admin/roles")) {
       return new Response(JSON.stringify({ ok: true, data: { roles } }));
@@ -172,7 +175,7 @@ describe("AgentList", () => {
     expect(screen.queryByTestId("agent-runtime-unconfirmed")).not.toBeInTheDocument();
   });
 
-  it("renders 未访问 for agents that have never been seen", async () => {
+  it("renders 未使用 for agents that have never been used", async () => {
     stubAgentsEndpoints([makeAgent({ id: "no1", name: "冷账号", stats: { callsLast7d: 0, usageCallsLast7d: 0, evalProbeCallsLast7d: 0, deniedLast7d: 0, topTables: [] } })]);
 
     renderAgentList();
@@ -182,24 +185,28 @@ describe("AgentList", () => {
     await waitFor(() => {
       expect(screen.getByText("冷账号")).toBeInTheDocument();
     });
-    expect(screen.getByText("未访问")).toBeInTheDocument();
+    // Agent 名册 Spec §5.2 —— 主表空的最近业务使用写「未使用」。
+    // 「未访问」只留在对象详情抽屉的「最近 MCP 访问」，主表不再出现。
+    expect(screen.getByText("未使用")).toBeInTheDocument();
+    expect(screen.queryByText("未访问")).not.toBeInTheDocument();
   });
 
-  it("renders relative last seen and keeps full timestamp in title attribute", async () => {
+  it("renders relative last business use and keeps full timestamp in title attribute", async () => {
     const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-    stubAgentsEndpoints([makeAgent({ id: "zhangsan", name: "张三", stats: { callsLast7d: 4, usageCallsLast7d: 4, evalProbeCallsLast7d: 0, deniedLast7d: 0, lastSeen: tenMinAgo, topTables: [] } })]);
+    stubAgentsEndpoints([makeAgent({ id: "zhangsan", name: "张三", stats: { callsLast7d: 4, usageCallsLast7d: 4, evalProbeCallsLast7d: 0, deniedLast7d: 0, lastBusinessSeen: tenMinAgo, topTables: [] } })]);
 
     renderAgentList();
     await waitFor(() => {
       expect(screen.getByText("张三")).toBeInTheDocument();
     });
+    // Agent 名册 Spec §5.2 —— 可见的相对时间由 lastBusinessSeen 驱动。
     const seen = screen.getByText(/\d+ 分钟前/);
     expect(seen).toBeInTheDocument();
     expect(seen.getAttribute("title")).toBeTruthy();
     expect(seen.getAttribute("title")?.length ?? 0).toBeGreaterThan(0);
   });
 
-  it("renders unavailable row metrics as dashes and does not classify the row as inactive", async () => {
+  it("renders unavailable row metrics as dashes and does not classify the row as idle", async () => {
     stubAgentsEndpoints([
       makeAgent({
         id: "unknown1",
@@ -225,11 +232,11 @@ describe("AgentList", () => {
     renderAgentList();
     await screen.findByTestId("agent-row-unknown1");
     expect(screen.getByTestId("agent-calls-7d-unknown1")).toHaveTextContent("—");
-    expect(screen.getByTestId("agent-protocol-calls-7d-unknown1")).toHaveTextContent("—");
     expect(screen.getByTestId("agent-metrics-unavailable-unknown1")).toHaveTextContent("数据不可用");
 
+    // Agent 名册 Spec §5.4 —— 指标不可用的行只留在「全部」，不进「闲置」。
     fireEvent.change(screen.getByRole("combobox", { name: "近 7 天活跃" }), {
-      target: { value: "inactive" }
+      target: { value: "idle" }
     });
     expect(screen.queryByTestId("agent-row-unknown1")).not.toBeInTheDocument();
   });
@@ -504,7 +511,7 @@ describe("AgentList", () => {
     expect(link.getAttribute("href")).toBe("/admin/roles");
   });
 
-  it("renders stability-and-adoption top metrics", async () => {
+  it("renders stability-and-adoption top metrics（SC-01）", async () => {
     stubAgentsEndpoints(
       [
         makeAgent({
@@ -549,16 +556,17 @@ describe("AgentList", () => {
     await screen.findByRole("heading", { name: "Agent" });
     await screen.findByTestId("metric-agent-count");
 
-    // 顶部指标：配置存量 → 业务活跃 → 凭据生命周期 → 业务/协议调用
+    // Agent 名册 Spec SC-01 —— 顶部恰好四张卡：Agent 总数、近 7 天活跃 Agent、
+    // 近 7 天业务调用量、可用 Token。没有「近 7 天使用过的凭据」，没有「近 7 天协议请求量」。
     expect(screen.getByTestId("metric-agent-count")).toHaveTextContent("Agent 总数");
     expect(screen.getByTestId("metric-active-agent-count")).toHaveTextContent("近 7 天活跃 Agent");
     expect(screen.getByTestId("metric-active-agent-count")).toHaveTextContent("1");
-    expect(screen.getByTestId("metric-active-token-count")).toHaveTextContent("可用 Token");
-    expect(screen.getByTestId("metric-active-token-count")).toHaveTextContent("1");
-    expect(screen.getByTestId("metric-used-credentials")).toHaveTextContent("近 7 天使用过的凭据");
     expect(screen.getByTestId("metric-business-calls")).toHaveTextContent("近 7 天业务调用量");
     expect(screen.getByTestId("metric-business-calls")).toHaveTextContent("7");
-    expect(screen.getByTestId("metric-protocol-calls")).toHaveTextContent("3");
+    expect(screen.getByTestId("metric-active-token-count")).toHaveTextContent("可用 Token");
+    expect(screen.getByTestId("metric-active-token-count")).toHaveTextContent("1");
+    expect(screen.queryByTestId("metric-used-credentials")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("metric-protocol-calls")).not.toBeInTheDocument();
 
     const metricOrder = [
       ...document.querySelectorAll("[data-testid='agent-metric-grid'] > [data-testid^='metric-']")
@@ -566,10 +574,8 @@ describe("AgentList", () => {
     expect(metricOrder).toEqual([
       "metric-agent-count",
       "metric-active-agent-count",
-      "metric-active-token-count",
-      "metric-used-credentials",
       "metric-business-calls",
-      "metric-protocol-calls"
+      "metric-active-token-count"
     ]);
     expect(screen.getByTestId("metric-help-agent-count")).toBeInTheDocument();
     expect(screen.getByTestId("metric-help-business-calls")).toBeInTheDocument();
@@ -588,7 +594,9 @@ describe("AgentList", () => {
     expect(screen.queryByTestId("agent-auto-refresh")).not.toBeInTheDocument();
     expect(screen.queryByText("自动刷新")).not.toBeInTheDocument();
     expect(screen.getByTestId("agent-refresh")).toBeInTheDocument();
-    expect(screen.getByTestId("agent-metric-grid")).toHaveClass("pl-metric-grid", "pl-metric-grid--three");
+    // 默认 pl-metric-grid：窄屏两列、xl 四张一行。不再使用三列变体。
+    expect(screen.getByTestId("agent-metric-grid")).toHaveClass("pl-metric-grid");
+    expect(screen.getByTestId("agent-metric-grid")).not.toHaveClass("pl-metric-grid--three");
   });
 
   it("agent table row links role id to role detail and exposes 查看权限 in RowMoreMenu", async () => {
@@ -664,7 +672,8 @@ describe("AgentList", () => {
     expect(screen.queryByTestId("agent-row-idle_agent")).not.toBeInTheDocument();
 
     fireEvent.change(screen.getByRole("combobox", { name: "角色" }), { target: { value: "all" } });
-    fireEvent.change(screen.getByRole("combobox", { name: "近 7 天活跃" }), { target: { value: "inactive" } });
+    // Agent 名册 Spec §5.4 —— 四档：全部、有业务调用、仅连接、闲置。
+    fireEvent.change(screen.getByRole("combobox", { name: "近 7 天活跃" }), { target: { value: "idle" } });
     expect(screen.getByTestId("agent-row-idle_agent")).toBeInTheDocument();
     expect(screen.queryByTestId("agent-row-active_agent")).not.toBeInTheDocument();
   });
@@ -858,7 +867,7 @@ describe("AgentList", () => {
     });
   });
 
-  it("renders prioritized table columns for ops value", async () => {
+  it("renders prioritized table columns for ops value（SC-02）", async () => {
     stubAgentsEndpoints([
       makeAgent({
         id: "demo_agent",
@@ -877,28 +886,26 @@ describe("AgentList", () => {
 
     renderAgentList();
     await screen.findByTestId("agent-row-demo_agent");
-    expect(screen.getByRole("columnheader", { name: "序号" })).toBeInTheDocument();
+    // Agent 名册 Spec SC-02 —— 表头恰好六列。
     expect(screen.getByRole("columnheader", { name: "显示名/用户 ID" })).toBeInTheDocument();
-    expect(screen.getByRole("columnheader", { name: "当前状态" })).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "序号" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "当前状态" })).not.toBeInTheDocument();
     expect(screen.queryByRole("columnheader", { name: "配置最后变更时间" })).not.toBeInTheDocument();
     expect(screen.queryByRole("columnheader", { name: "创建日期" })).not.toBeInTheDocument();
     expect(screen.queryByRole("columnheader", { name: "近 7 天拒绝" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "近 7 天协议请求量" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "最近 MCP 访问" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "近 7 天使用过的凭据" })).not.toBeInTheDocument();
 
     const headers = [...document.querySelectorAll("[data-testid='agent-list-table'] thead th")].map(
       (th) => th.textContent?.replace(/\s+/g, " ").trim()
     );
     expect(headers).toEqual([
-      "序号",
       "显示名/用户 ID",
       "角色",
-      "当前状态",
-      "配置 Token",
-      "可用 Token",
-      "近 7 天使用过的凭据",
+      "Token",
       "近 7 天业务调用量",
-      "近 7 天协议请求量",
       "最近业务使用",
-      "最近 MCP 访问",
       "操作"
     ]);
   });
@@ -1009,5 +1016,328 @@ describe("Spec 149 — 绑定运维问数角色的高权限警示（SC-23）", (
     for (const forbidden of ["所有者", "登录管理员", "超管"]) {
       expect(warning.textContent ?? "").not.toContain(forbidden);
     }
+  });
+});
+
+// ─── Agent 名册 Spec（docs/specs/lucy-20261030-agent-roster-spec.md）───
+
+const ROSTER_WINDOW_START = "2026-10-23T00:00:00.000Z";
+const ROSTER_WINDOW_END = "2026-10-30T00:00:00.000Z";
+
+type RosterRow = {
+  id: string;
+  enabled?: boolean;
+  metricsState?: "ok" | "unavailable";
+  /** 省略即字段缺失（与 null 同支，进 unknown）。 */
+  usageCallsLast7d?: number | null;
+  protocolCallsLast7d?: number;
+  lastSeen?: string;
+  lastBusinessSeen?: string;
+  tokenCount?: number;
+  availableTokens?: number;
+};
+
+/** Spec §7.1 共用活动夹具。响应里的 Agent 顺序就是下表顺序。 */
+const ROSTER_ROWS: RosterRow[] = [
+  { id: "a-business", usageCallsLast7d: 4, protocolCallsLast7d: 1, lastSeen: "2026-10-26T00:00:00.000Z", lastBusinessSeen: "2026-10-26T00:00:00.000Z" },
+  { id: "a-protocol", usageCallsLast7d: 0, protocolCallsLast7d: 3, lastSeen: "2026-10-26T00:00:00.000Z", lastBusinessSeen: "2026-10-01T00:00:00.000Z" },
+  { id: "a-time", usageCallsLast7d: 0, protocolCallsLast7d: 0, lastSeen: "2026-10-23T00:00:00.000Z" },
+  { id: "a-idle", usageCallsLast7d: 0, protocolCallsLast7d: 0, lastSeen: "2026-10-01T00:00:00.000Z", lastBusinessSeen: "2026-10-01T00:00:00.000Z" },
+  { id: "a-edge-end", usageCallsLast7d: 0, protocolCallsLast7d: 0, lastSeen: "2026-10-30T00:00:00.000Z", lastBusinessSeen: "2026-10-01T00:00:00.000Z" },
+  { id: "a-inside-business-time", usageCallsLast7d: 0, protocolCallsLast7d: 0, lastSeen: "2026-10-26T00:00:00.000Z", lastBusinessSeen: "2026-10-23T00:00:00.000Z" },
+  { id: "a-protocol-inside", usageCallsLast7d: 0, protocolCallsLast7d: 2, lastSeen: "2026-10-26T00:00:00.000Z", lastBusinessSeen: "2026-10-23T00:00:00.000Z" },
+  { id: "a-unknown", metricsState: "unavailable", usageCallsLast7d: 0, protocolCallsLast7d: 9, lastSeen: "2026-10-26T00:00:00.000Z" },
+  { id: "a-missing-usage", protocolCallsLast7d: 5, lastSeen: "2026-10-26T00:00:00.000Z" }
+];
+
+function rosterAgent(row: RosterRow): Agent {
+  const tokenCount = row.tokenCount ?? 1;
+  const stats: AgentStats = {
+    callsLast7d: 0,
+    evalProbeCallsLast7d: 0,
+    deniedLast7d: 0,
+    protocolCallsLast7d: row.protocolCallsLast7d,
+    lastSeen: row.lastSeen,
+    lastBusinessSeen: row.lastBusinessSeen,
+    metricsState: row.metricsState ?? "ok",
+    topTables: []
+  };
+  // usageCallsLast7d 缺失时不能补 0 —— 缺失与 null 都进 unknown。
+  if (row.usageCallsLast7d !== undefined) stats.usageCallsLast7d = row.usageCallsLast7d;
+  if (row.availableTokens !== undefined) stats.availableTokens = row.availableTokens;
+  return {
+    id: row.id,
+    name: row.id,
+    enabled: row.enabled ?? true,
+    role: "analyst",
+    tokens: Array.from({ length: tokenCount }, (_, index) => ({
+      hash: `sha256:${String(index).padStart(4, "0")}aaaa`,
+      label: `tok-${index}`,
+      created: "2026-06-01"
+    })),
+    stats
+  };
+}
+
+/** 服务端 aggregate。窗口（windowStart / windowEnd）只从这里进页面。 */
+function rosterSummary(agents: Agent[], window: { windowStart?: string; windowEnd?: string }) {
+  const usageCallsLast7d = agents.reduce((sum, agent) => sum + (agent.stats?.usageCallsLast7d ?? 0), 0);
+  return {
+    agentCount: agents.length,
+    enabledAgentCount: agents.filter((agent) => agent.enabled).length,
+    configuredTokenCount: agents.reduce((sum, agent) => sum + agent.tokens.length, 0),
+    availableTokenCount: agents.reduce(
+      (sum, agent) => sum + (agent.stats?.availableTokens ?? (agent.enabled ? agent.tokens.length : 0)),
+      0
+    ),
+    activeTokenCountLast7d: 0,
+    usedCredentialCountLast7d: 0,
+    usedCredentialState: "ok",
+    callsLast7d: usageCallsLast7d,
+    usageCallsLast7d,
+    evalProbeCallsLast7d: 0,
+    // 活跃 Agent 分子只数 usageCallsLast7d > 0 的行；仅连接不参与。
+    usageActiveAgentCountLast7d: agents.filter((agent) => (agent.stats?.usageCallsLast7d ?? 0) > 0).length,
+    deniedLast7d: 0,
+    metricsState: "ok",
+    ...window
+  };
+}
+
+async function renderRoster(
+  options: {
+    rows?: RosterRow[];
+    window?: { windowStart?: string; windowEnd?: string };
+    withSummary?: boolean;
+  } = {}
+) {
+  const agents = (options.rows ?? ROSTER_ROWS).map(rosterAgent);
+  if (options.withSummary !== false) {
+    agentsSummary = rosterSummary(
+      agents,
+      options.window ?? { windowStart: ROSTER_WINDOW_START, windowEnd: ROSTER_WINDOW_END }
+    );
+  }
+  stubAgentsEndpoints(agents);
+  renderAgentList();
+  await screen.findByTestId("agent-list-table");
+  return agents;
+}
+
+function rosterRowIds(): string[] {
+  return [...document.querySelectorAll("[data-testid='agent-list-table'] tbody tr")].map((row) =>
+    (row.getAttribute("data-testid") ?? "").replace(/^agent-row-/, "")
+  );
+}
+
+function rosterCells(id: string): HTMLElement[] {
+  return within(screen.getByTestId(`agent-row-${id}`)).getAllByRole("cell");
+}
+
+function hasConnectOnly(id: string): boolean {
+  return within(screen.getByTestId(`agent-row-${id}`)).queryAllByText(/仅连接/).length > 0;
+}
+
+function setActivityFilter(value: "all" | "business" | "connect_only" | "idle") {
+  fireEvent.change(screen.getByRole("combobox", { name: "近 7 天活跃" }), { target: { value } });
+}
+
+describe("Agent 名册 Spec —— 名册呈现（SC-03～SC-09、SC-11、SC-14、SC-15）", () => {
+  it("SC-03 已启用的行没有状态标记，未启用的行在显示名旁标「已禁用」", async () => {
+    stubAgentsEndpoints([
+      makeAgent({ id: "on", name: "张三" }),
+      makeAgent({ id: "off", name: "李四", enabled: false })
+    ]);
+    renderAgentList();
+    await screen.findByTestId("agent-row-on");
+
+    const enabledRow = screen.getByTestId("agent-row-on");
+    expect(enabledRow).not.toHaveTextContent("启用");
+    expect(enabledRow.querySelector(".pl-status-badge")).toBeNull();
+
+    const disabledRow = screen.getByTestId("agent-row-off");
+    const badge = within(disabledRow).getByText("已禁用");
+    expect(badge).toHaveClass("pl-status-badge");
+    expect(badge).toHaveClass("pl-status-not_started");
+  });
+
+  it("SC-04 Token 格按可用数与配置数写主行与次行", async () => {
+    const tokens = (n: number) =>
+      Array.from({ length: n }, (_, index) => ({
+        hash: `sha256:${index}`,
+        label: `tok-${index}`,
+        created: "2026-06-01"
+      }));
+    const baseStats = { callsLast7d: 0, usageCallsLast7d: 0, evalProbeCallsLast7d: 0, deniedLast7d: 0, topTables: [] };
+    stubAgentsEndpoints([
+      makeAgent({ id: "tk-zero", name: "零可用", tokens: tokens(3), stats: { ...baseStats, availableTokens: 0 } }),
+      makeAgent({ id: "tk-ok", name: "可用两个", tokens: tokens(2), stats: { ...baseStats, availableTokens: 2 } }),
+      makeAgent({ id: "tk-missing-on", name: "缺字段启用", tokens: tokens(2), stats: { ...baseStats } }),
+      makeAgent({ id: "tk-missing-off", name: "缺字段停用", enabled: false, tokens: tokens(2), stats: { ...baseStats } }),
+      makeAgent({ id: "tk-empty", name: "零配置", tokens: [], stats: { ...baseStats, availableTokens: 0 } })
+    ]);
+    renderAgentList();
+    await screen.findByTestId("agent-row-tk-zero");
+
+    const zero = screen.getByTestId("agent-active-tokens-tk-zero");
+    expect(zero).toHaveTextContent("无可用 Token");
+    expect(zero).toHaveTextContent("配置 3");
+    expect(zero.querySelector(".text-warning-strong")).not.toBeNull();
+
+    const ok = screen.getByTestId("agent-active-tokens-tk-ok");
+    expect(ok).toHaveTextContent("可用 2");
+    expect(ok).toHaveTextContent("配置 2");
+    expect(ok.querySelector(".text-warning-strong")).toBeNull();
+
+    // availableTokens 缺失、已启用：回退到配置数。
+    const missingOn = screen.getByTestId("agent-active-tokens-tk-missing-on");
+    expect(missingOn).toHaveTextContent("可用 2");
+    expect(missingOn).toHaveTextContent("配置 2");
+    expect(missingOn.querySelector(".text-warning-strong")).toBeNull();
+
+    // availableTokens 缺失、未启用：回退到 0，「已禁用」和「无可用 Token」同时出现。
+    const missingOff = screen.getByTestId("agent-active-tokens-tk-missing-off");
+    expect(missingOff).toHaveTextContent("无可用 Token");
+    expect(missingOff).toHaveTextContent("配置 2");
+    expect(missingOff.querySelector(".text-warning-strong")).not.toBeNull();
+    expect(within(screen.getByTestId("agent-row-tk-missing-off")).getByText("已禁用")).toBeInTheDocument();
+
+    // 配置为 0：主行「可用 0」，不上 warning 色。
+    const empty = screen.getByTestId("agent-active-tokens-tk-empty");
+    expect(empty).toHaveTextContent("可用 0");
+    expect(empty).toHaveTextContent("配置 0");
+    expect(empty.querySelector(".text-warning-strong")).toBeNull();
+  });
+
+  it("SC-05 仅连接可以被看见，但不进活跃 Agent 分子", async () => {
+    await renderRoster();
+    expect(hasConnectOnly("a-protocol")).toBe(true);
+    expect(hasConnectOnly("a-business")).toBe(false);
+    // 活跃 Agent 卡只数 usageCallsLast7d > 0 的行：仅连接行不增加它。
+    expect(screen.getByTestId("metric-active-agent-count")).toHaveTextContent("1");
+    expect(screen.getByTestId("metric-business-calls")).toHaveTextContent("4");
+    // 页面侧回退聚合的分子同样只数业务调用。
+    const countable = ROSTER_ROWS.map(rosterAgent).filter(
+      (agent) =>
+        agent.stats?.metricsState !== "unavailable" &&
+        typeof agent.stats?.usageCallsLast7d === "number"
+    );
+    expect(summarizeAgents(countable).usageActiveAgentCountLast7d).toBe(1);
+  });
+
+  it("SC-06 闲置行不带「仅连接」标记", async () => {
+    await renderRoster();
+    for (const id of ["a-idle", "a-edge-end", "a-inside-business-time"]) {
+      expect(hasConnectOnly(id)).toBe(false);
+    }
+  });
+
+  it("SC-07 指标不可用的行显示「—」，只有 metricsState=unavailable 写「数据不可用」", async () => {
+    await renderRoster();
+    for (const id of ["a-unknown", "a-missing-usage"]) {
+      const cells = rosterCells(id);
+      expect(cells[3]).toHaveTextContent("—");
+      expect(cells[4]).toHaveTextContent("—");
+      expect(hasConnectOnly(id)).toBe(false);
+    }
+    expect(screen.getByTestId("agent-metrics-unavailable-a-unknown")).toHaveTextContent("数据不可用");
+    expect(screen.queryByTestId("agent-metrics-unavailable-a-missing-usage")).not.toBeInTheDocument();
+
+    // 两行只出现在「全部」，不出现在后三档。
+    setActivityFilter("business");
+    expect(rosterRowIds()).toEqual(["a-business"]);
+    setActivityFilter("connect_only");
+    expect(rosterRowIds()).toEqual(["a-protocol", "a-time", "a-protocol-inside"]);
+    setActivityFilter("idle");
+    expect(rosterRowIds()).toEqual(["a-idle", "a-edge-end", "a-inside-business-time"]);
+  });
+
+  it("SC-08 近 7 天活跃四档互斥、且不改变行序", async () => {
+    await renderRoster();
+    const select = screen.getByRole("combobox", { name: "近 7 天活跃" });
+    expect([...select.querySelectorAll("option")].map((option) => option.textContent)).toEqual([
+      "全部",
+      "有业务调用",
+      "仅连接",
+      "闲置"
+    ]);
+    expect(rosterRowIds()).toEqual(ROSTER_ROWS.map((row) => row.id));
+
+    setActivityFilter("business");
+    expect(rosterRowIds()).toEqual(["a-business"]);
+    setActivityFilter("connect_only");
+    expect(rosterRowIds()).toEqual(["a-protocol", "a-time", "a-protocol-inside"]);
+    setActivityFilter("idle");
+    expect(rosterRowIds()).toEqual(["a-idle", "a-edge-end", "a-inside-business-time"]);
+    setActivityFilter("all");
+    expect(rosterRowIds()).toEqual(ROSTER_ROWS.map((row) => row.id));
+  });
+
+  it("SC-09 去掉 windowStart 时协议量大于 0 仍是仅连接，协议量为 0 不再是", async () => {
+    await renderRoster({ window: { windowEnd: ROSTER_WINDOW_END } });
+    expect(hasConnectOnly("a-protocol")).toBe(true);
+    expect(hasConnectOnly("a-protocol-inside")).toBe(true);
+    // a-time：协议量 0，lastSeen 等于窗口起点，最近业务使用缺失 —— 时间条款不成立。
+    expect(hasConnectOnly("a-time")).toBe(false);
+    setActivityFilter("idle");
+    expect(rosterRowIds()).toEqual(["a-time", "a-idle", "a-edge-end", "a-inside-business-time"]);
+  });
+
+  it("SC-09 去掉 windowEnd 时协议量为 0 不标仅连接", async () => {
+    const rows = ROSTER_ROWS.map((row) =>
+      row.id === "a-time" ? { ...row, lastBusinessSeen: "2026-10-01T00:00:00.000Z" } : row
+    );
+    await renderRoster({ rows, window: { windowStart: ROSTER_WINDOW_START } });
+    // a-time：协议量 0，lastSeen 等于窗口起点，最近业务使用早于窗口 —— 不标仅连接。
+    expect(hasConnectOnly("a-time")).toBe(false);
+    setActivityFilter("idle");
+    expect(rosterRowIds()).toContain("a-time");
+  });
+
+  it("SC-09 缺整个 summary 时协议量大于 0 可标仅连接，协议量为 0 不标", async () => {
+    await renderRoster({ withSummary: false });
+    expect(hasConnectOnly("a-protocol")).toBe(true);
+    expect(hasConnectOnly("a-time")).toBe(false);
+    setActivityFilter("idle");
+    expect(rosterRowIds()).toContain("a-time");
+  });
+
+  it("SC-11 名册不再提示凭据 prefix 冲突", async () => {
+    const agents = ROSTER_ROWS.map(rosterAgent);
+    agentsSummary = {
+      ...rosterSummary(agents, { windowStart: ROSTER_WINDOW_START, windowEnd: ROSTER_WINDOW_END }),
+      usedCredentialState: "partial",
+      usedCredentialReason: "token_prefix_collision"
+    };
+    stubAgentsEndpoints(agents);
+    renderAgentList();
+    await screen.findByTestId("agent-list-table");
+    expect(screen.queryByTestId("agent-credential-partial-notice")).not.toBeInTheDocument();
+    expect(screen.queryByText(/无法可靠映射/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Token hash prefix/)).not.toBeInTheDocument();
+  });
+
+  it("SC-14 a-time 在窗口内是仅连接，最近 MCP 访问改成窗口终点后不再是", async () => {
+    await renderRoster();
+    expect(hasConnectOnly("a-time")).toBe(true);
+    cleanup();
+    await renderRoster({
+      rows: ROSTER_ROWS.map((row) =>
+        row.id === "a-time" ? { ...row, lastSeen: ROSTER_WINDOW_END } : row
+      )
+    });
+    expect(hasConnectOnly("a-time")).toBe(false);
+    setActivityFilter("idle");
+    expect(rosterRowIds()).toEqual(["a-time", "a-idle", "a-edge-end", "a-inside-business-time"]);
+  });
+
+  it("SC-15 窗口内的业务时间不构成仅连接，协议量大于 0 仍是", async () => {
+    await renderRoster();
+    expect(hasConnectOnly("a-inside-business-time")).toBe(false);
+    expect(hasConnectOnly("a-protocol-inside")).toBe(true);
+    setActivityFilter("idle");
+    expect(rosterRowIds()).toEqual(["a-idle", "a-edge-end", "a-inside-business-time"]);
+    setActivityFilter("connect_only");
+    expect(rosterRowIds()).toEqual(["a-protocol", "a-time", "a-protocol-inside"]);
   });
 });
