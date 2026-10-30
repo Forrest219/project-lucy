@@ -22,6 +22,7 @@ import {
   computeReconciliationSnapshotId,
   createReconciliationContext,
   normalizeReconciliationFilter,
+  resolveReconciliationWindowHours,
   waitUntilProjectionCovers,
   withFrozenAuditSnapshot,
   type Completeness
@@ -105,6 +106,34 @@ describe("buildReconciliationTimeRange", () => {
     const range = buildReconciliationTimeRange(filter, now);
     expect(range.from).toBe("2026-10-01T00:00:00.000Z");
     expect(range.to).toBe("2026-10-02T00:00:00.000Z");
+  });
+});
+
+describe("resolveReconciliationWindowHours", () => {
+  it("缺省与空白都是 168，只接受 24 / 168 / 720", () => {
+    expect(resolveReconciliationWindowHours({})).toEqual({ ok: true, windowHours: 168 });
+    expect(resolveReconciliationWindowHours({ hours: "  " })).toEqual({ ok: true, windowHours: 168 });
+    expect(resolveReconciliationWindowHours({ hours: "24" })).toEqual({ ok: true, windowHours: 24 });
+    expect(resolveReconciliationWindowHours({ hours: "720" })).toEqual({ ok: true, windowHours: 720 });
+    expect(resolveReconciliationWindowHours({ hours: "15" })).toEqual({
+      ok: false,
+      code: "RECONCILIATION_WINDOW_HOURS_INVALID"
+    });
+  });
+
+  it("since 或 until 已给出时忽略 hours，包括非法值", () => {
+    expect(
+      resolveReconciliationWindowHours({
+        hours: "15",
+        since: "2026-10-01T00:00:00.000Z"
+      })
+    ).toEqual({ ok: true, windowHours: 168 });
+    expect(
+      resolveReconciliationWindowHours({
+        hours: "24",
+        until: "2026-10-02T00:00:00.000Z"
+      })
+    ).toEqual({ ok: true, windowHours: 168 });
   });
 });
 

@@ -50,6 +50,11 @@ export const RECONCILIATION_BUDGET_RULE_VERSION = "spec-162-question-budget/v1";
 export const RECONCILIATION_TIMEZONE = "Asia/Shanghai";
 /** 默认窗口（小时），与 `admin/metric-window.ts` 的 7 天窗口一致。 */
 export const RECONCILIATION_DEFAULT_WINDOW_HOURS = 168;
+/**
+ * 对账页分段控件对应的窗口。缺省是 168。
+ * 其他值必须失败关闭，不能悄悄当成 7 天。
+ */
+export const RECONCILIATION_WINDOW_HOUR_PRESETS = [24, 168, 720] as const;
 /** E3：投影追平时限（毫秒）。与 L25-09 U6 / §12.5 的 T3=60s 一致。 */
 export const RECONCILIATION_PROJECTION_DEADLINE_MS = 60_000;
 /** 追平轮询间隔（毫秒）。 */
@@ -120,12 +125,41 @@ export type ReconciliationFilterInput = {
   since?: string | undefined;
   until?: string | undefined;
   includeProtocol?: string | undefined;
+  /**
+   * 滚动窗口小时数。只在 `since` / `until` 都缺省时生效。
+   * 合法值是 24、168、720；缺省为 168。
+   */
+  hours?: string | undefined;
 };
 
 function trimmedOrNull(value: string | undefined): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+export type ReconciliationWindowHours =
+  | { ok: true; windowHours: number }
+  | { ok: false; code: "RECONCILIATION_WINDOW_HOURS_INVALID" };
+
+/**
+ * 解析滚动窗口。
+ *
+ * `since` 或 `until` 已给出时忽略 `hours`，由显式边界决定时间窗。
+ * 两者都缺省时，只接受 24 / 168 / 720；空白视为缺省 168；其他值不可用。
+ */
+export function resolveReconciliationWindowHours(
+  input: Pick<ReconciliationFilterInput, "since" | "until" | "hours"> = {}
+): ReconciliationWindowHours {
+  if (trimmedOrNull(input.since) || trimmedOrNull(input.until)) {
+    return { ok: true, windowHours: RECONCILIATION_DEFAULT_WINDOW_HOURS };
+  }
+  const raw = trimmedOrNull(input.hours);
+  if (!raw) return { ok: true, windowHours: RECONCILIATION_DEFAULT_WINDOW_HOURS };
+  if (raw === "24" || raw === "168" || raw === "720") {
+    return { ok: true, windowHours: Number(raw) };
+  }
+  return { ok: false, code: "RECONCILIATION_WINDOW_HOURS_INVALID" };
 }
 
 /** 规范化筛选：缺失值一律显式为 `null`，不静默丢弃字段。 */

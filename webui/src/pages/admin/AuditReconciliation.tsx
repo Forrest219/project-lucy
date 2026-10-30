@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { apiGet } from "../../lib/apiClient";
+import { ApiError, apiGet } from "../../lib/apiClient";
 import { PageHeader } from "../../components/PageHeader";
 import {
   RECONCILIATION_DIFFERENCE_LABELS,
@@ -9,6 +9,7 @@ import {
   formatReconciliationCount,
   formatReconciliationRatio,
   type ReconciliationDifferenceId,
+  type ReconciliationAsOfProof,
   type ReconciliationExportResponse,
   type ReconciliationUsageResponse
 } from "../../lib/auditReconciliation";
@@ -39,6 +40,27 @@ const RANGE_LABELS: Record<RangePreset, string> = {
 
 const RANGE_HOURS: Record<RangePreset, number> = { "24h": 24, "7d": 168, "30d": 720 };
 
+const ASOF_DIMENSION_LABELS: Record<string, string> = {
+  baseFacts: "基础事实",
+  revisions: "归属修订",
+  relations: "关联",
+  aggregates: "聚合"
+};
+
+function asOfMissingSummary(proof: ReconciliationAsOfProof | undefined): string | null {
+  if (!proof || proof.ok || typeof proof.missingTotal !== "number") return null;
+  const countOf = (id: string) => {
+    const dimension = proof.dimensions?.find((item) => item.id === id);
+    if (typeof dimension?.missingCount === "number") return dimension.missingCount;
+    const rows = proof.missingSets?.[id];
+    return Array.isArray(rows) ? rows.length : 0;
+  };
+  const parts = ["baseFacts", "revisions", "relations", "aggregates"].map(
+    (id) => `${ASOF_DIMENSION_LABELS[id]} ${countOf(id)}`
+  );
+  return `缺失 ${proof.missingTotal} 项：${parts.join("、")}`;
+}
+
 export function AuditReconciliation() {
   const [searchParams, setSearchParams] = useSearchParams();
   /**
@@ -56,17 +78,24 @@ export function AuditReconciliation() {
 
   const usageQuery = useQuery({
     queryKey: ["admin", "audit", "reconciliation", "usage", range],
-    queryFn: () =>
-      apiGet<ReconciliationUsageResponse>(
-        `/api/admin/audit/reconciliation/usage?hours=${hours}`
-      ),
+    queryFn: async () => {
+      const completeUrl = `/api/admin/audit/reconciliation/usage?hours=${hours}`;
+      try {
+        return await apiGet<ReconciliationUsageResponse>(completeUrl);
+      } catch (error) {
+        if (error instanceof ApiError && error.code === "RECONCILIATION_AS_OF_S_UNPROVABLE") {
+          return apiGet<ReconciliationUsageResponse>(`${completeUrl}&mode=diagnostic`);
+        }
+        throw error;
+      }
+    },
     retry: false
   });
 
   const inquiryQuery = useQuery({
     queryKey: ["admin", "audit", "reconciliation", "inquiry", turnId, range],
     queryFn: () =>
-      apiGet<{ data: { inquiry: Record<string, unknown> } }>(
+      apiGet<{ inquiry: Record<string, unknown> }>(
         `/api/admin/audit/reconciliation/inquiries/${encodeURIComponent(turnId)}?hours=${hours}`
       ),
     enabled: Boolean(turnId),
@@ -74,6 +103,7 @@ export function AuditReconciliation() {
   });
 
   const usageData = usageQuery.data;
+  const missingSummary = asOfMissingSummary(usageData?.asOfProof);
   const token = usageData?.tokenReconciliation;
   const configured = token?.configuredSnapshot;
   const differences = useMemo(() => {
@@ -162,6 +192,9 @@ export function AuditReconciliation() {
         <div className="pl-notice pl-status-validation_failed" data-testid="reconciliation-asof-incomplete">
           无法证明本次读取可按账本上界 S 精确重建（正式模式已失败关闭）。本页展示的是
           <strong>诊断视图</strong>，不作为完整对账结论。
+          {missingSummary ? (
+            <span data-testid="reconciliation-asof-missing"> {missingSummary}</span>
+          ) : null}
         </div>
       ) : null}
 
@@ -308,38 +341,38 @@ export function AuditReconciliation() {
               {usageData.calls.nextCursor ? " · 还有更多（按游标分页）" : " · 已到末页"}
             </div>
           </section>
-
-          <section className="pl-card grid gap-3" data-testid="reconciliation-inquiry">
-            <h3 className="text-sm font-semibold text-fg-default">单问询对账</h3>
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                className="pl-input w-72 notranslate"
-                translate="no"
-                placeholder="问询 ID（turn id）"
-                aria-label="问询 ID"
-                value={turnIdDraft}
-                onChange={(e) => setTurnIdDraft(e.target.value)}
-                data-testid="reconciliation-inquiry-input"
-              />
-            </div>
-            {inquiryQuery.isLoading ? <div className="pl-notice">加载中…</div> : null}
-            {inquiryQuery.error ? (
-              <div className="pl-notice pl-status-validation_failed" data-testid="reconciliation-inquiry-error">
-                {(inquiryQuery.error as Error).message}
-              </div>
-            ) : null}
-            {inquiryQuery.data ? (
-              <pre
-                className="pl-code-block overflow-auto text-xs notranslate"
-                translate="no"
-                data-testid="reconciliation-inquiry-detail"
-              >
-                {JSON.stringify(inquiryQuery.data.data.inquiry, null, 2)}
-              </pre>
-            ) : null}
-          </section>
         </>
       ) : null}
+
+      <section className="pl-card grid gap-3" data-testid="reconciliation-inquiry">
+        <h3 className="text-sm font-semibold text-fg-default">单问询对账</h3>
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            className="pl-input w-72 notranslate"
+            translate="no"
+            placeholder="问询 ID（turn id）"
+            aria-label="问询 ID"
+            value={turnIdDraft}
+            onChange={(e) => setTurnIdDraft(e.target.value)}
+            data-testid="reconciliation-inquiry-input"
+          />
+        </div>
+        {inquiryQuery.isLoading ? <div className="pl-notice">加载中…</div> : null}
+        {inquiryQuery.error ? (
+          <div className="pl-notice pl-status-validation_failed" data-testid="reconciliation-inquiry-error">
+            {(inquiryQuery.error as Error).message}
+          </div>
+        ) : null}
+        {inquiryQuery.data ? (
+          <pre
+            className="pl-code-block overflow-auto text-xs notranslate"
+            translate="no"
+            data-testid="reconciliation-inquiry-detail"
+          >
+            {JSON.stringify(inquiryQuery.data.inquiry, null, 2)}
+          </pre>
+        ) : null}
+      </section>
     </div>
   );
 }

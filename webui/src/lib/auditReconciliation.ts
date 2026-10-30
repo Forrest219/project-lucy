@@ -93,10 +93,18 @@ export type ReconciliationUsageRow = {
   protocol: boolean;
 };
 
+export type ReconciliationAsOfDimension = {
+  id: string;
+  ok: boolean;
+  missingCount: number;
+};
+
 export type ReconciliationAsOfProof = {
   ok: boolean;
+  missingTotal?: number;
+  dimensions?: ReconciliationAsOfDimension[];
   actualBound?: unknown;
-  missingSets?: Record<string, unknown>;
+  missingSets?: Record<string, string[]>;
   reason?: string | null;
 };
 

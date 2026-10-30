@@ -377,7 +377,9 @@ export function selectAccessLogRows(
  * 对**本批已选出的行**证明精确 as-of S。
  *
  * 范围口径与视图完全一致：传入的就是视图读到的行，因此证明不会引入
- * 「第二种筛选」。`ok=false` 时正式完整读取必须失败关闭（Spec §3.1／§5）。
+ * 「第二种筛选」。与问询详情相同，先把 `ledger_seq >= S` 的归属改写按日志前像
+ * 打回，再把已回放的改写和已排除的晚到源交给证明。缺前像列时该改写不会进入
+ * 已回放集合，证明保持失败关闭。`ok=false` 时正式完整读取必须失败关闭（Spec §3.1／§5）。
  */
 export function proveAsOfSForSelection(
   db: Database.Database,
@@ -385,16 +387,19 @@ export function proveAsOfSForSelection(
   rows: ReadonlyArray<AccessLogRow>,
   unplaceableRowIds: readonly number[] = []
 ): AsOfSProof {
+  const projected = projectAttributionAsOfS(db, rows, context.watermarkSeq);
   return proveExactAsOfS({
     db,
     seqUpperBound: context.watermarkSeq,
-    rows: rows.map((row) => ({
+    rows: projected.rows.map((row) => ({
       id: Number(row.id),
       ledgerSeq:
         row.ledger_seq === null || row.ledger_seq === undefined ? null : Number(row.ledger_seq),
       turnId: row.lucy_turn_id ?? null
     })),
-    unplaceableRowIds
+    unplaceableRowIds,
+    replayedMutationIds: projected.replayedMutationIds,
+    excludedSourceIds: projected.excludedSourceIds
   });
 }
 

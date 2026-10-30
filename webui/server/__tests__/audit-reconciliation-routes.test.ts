@@ -78,6 +78,14 @@ function ledgerEvents(): SecurityEvent[] {
   return result.ok ? result.value : [];
 }
 
+/** 下一次对账读取会先写一条 meta-audit，水位变成当前最大序号 + 1。 */
+function nextReadWatermark(): number {
+  if (!store.ok) throw new Error("security store unavailable");
+  const max = store.value.maxEventSeq();
+  if (!max.ok) throw new Error(max.message);
+  return max.value + 1;
+}
+
 /** 重建与生产同形的最小审计库结构。 */
 function resetAuditSchema(): void {
   auditDb.exec("DROP TABLE IF EXISTS access_log");
@@ -401,6 +409,226 @@ describe("registerAuditReconciliationRoutes", () => {
     ]);
     expect(body.data.manifest.context.watermarkSeq).toBe(ledgerEvents().length);
     expect(response.headers["cache-control"]).toBe("private, no-store");
+    await app.close();
+  });
+
+  it("窗口含无序号行时正式读取 409，24 小时窗口与单问询证明分开", async () => {
+    const recent = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+    const insert = auditDb.prepare(
+      `INSERT INTO access_log (id, ts, user_id, tool, request_id, outcome, lucy_turn_id, ledger_seq)
+       VALUES (?, ?, 'u1', 'lucy_query', ?, 'ok', ?, ?)`
+    );
+    insert.run(11, threeDaysAgo, "req-unpositioned", null, null);
+    insert.run(12, recent, "req-positioned", "turn-window", 1);
+
+    const app = makeApp();
+
+    const defaultUsage = await app.inject({
+      method: "GET",
+      url: "/api/admin/audit/reconciliation/usage"
+    });
+    expect(defaultUsage.statusCode).toBe(409);
+    expect(defaultUsage.json().error.code).toBe("RECONCILIATION_AS_OF_S_UNPROVABLE");
+
+    const weekUsage = await app.inject({
+      method: "GET",
+      url: "/api/admin/audit/reconciliation/usage?hours=168"
+    });
+    expect(weekUsage.statusCode).toBe(409);
+    expect(weekUsage.json().error.code).toBe("RECONCILIATION_AS_OF_S_UNPROVABLE");
+
+    const diagnostic = await app.inject({
+      method: "GET",
+      url: "/api/admin/audit/reconciliation/usage?hours=168&mode=diagnostic"
+    });
+    expect(diagnostic.statusCode).toBe(200);
+    const proof = diagnostic.json().data.asOfProof;
+    expect(proof.ok).toBe(false);
+    expect(proof.missingSets.baseFacts).toContain("unpositioned_row:11");
+    expect(proof.missingSets.aggregates).toContain("derived_from_base_facts");
+    expect(proof.missingSets.revisions).toEqual([]);
+    expect(proof.missingSets.relations).toEqual([]);
+    expect(proof.missingTotal).toBe(proof.missingSets.baseFacts.length + 1);
+
+    const dayUsage = await app.inject({
+      method: "GET",
+      url: "/api/admin/audit/reconciliation/usage?hours=24"
+    });
+    expect(dayUsage.statusCode).toBe(200);
+    const dayBody = dayUsage.json();
+    expect(dayBody.data.asOfProof.ok).toBe(true);
+    expect(dayBody.data.asOfProof.missingTotal).toBe(0);
+    expect(dayBody.data.calls.items.map((row: { unitId: string }) => row.unitId)).toEqual(["12"]);
+    const daySpan =
+      Date.parse(dayBody.data.reconciliationContext.timeRange.to) -
+      Date.parse(dayBody.data.reconciliationContext.timeRange.from);
+    expect(daySpan).toBeGreaterThan(23 * 60 * 60 * 1000);
+    expect(daySpan).toBeLessThan(25 * 60 * 60 * 1000);
+
+    const monthUsage = await app.inject({
+      method: "GET",
+      url: "/api/admin/audit/reconciliation/usage?hours=720"
+    });
+    expect(monthUsage.statusCode).toBe(409);
+    expect(monthUsage.json().error.code).toBe("RECONCILIATION_AS_OF_S_UNPROVABLE");
+
+    const invalidHours = await app.inject({
+      method: "GET",
+      url: "/api/admin/audit/reconciliation/usage?hours=15"
+    });
+    expect(invalidHours.statusCode).toBe(400);
+    expect(invalidHours.json().error.code).toBe("RECONCILIATION_WINDOW_HOURS_INVALID");
+
+    const since = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    const bounded = await app.inject({
+      method: "GET",
+      url: `/api/admin/audit/reconciliation/usage?hours=720&since=${encodeURIComponent(since)}`
+    });
+    expect(bounded.statusCode).toBe(200);
+    expect(bounded.json().data.asOfProof.ok).toBe(true);
+    expect(bounded.json().data.calls.items.map((row: { unitId: string }) => row.unitId)).toEqual(["12"]);
+    expect(bounded.json().data.reconciliationContext.timeRange.from).toBe(since);
+
+    const inquiry = await app.inject({
+      method: "GET",
+      url: "/api/admin/audit/reconciliation/inquiries/turn-window"
+    });
+    expect(inquiry.statusCode).toBe(200);
+    expect(inquiry.json().data.asOfProof.ok).toBe(true);
+    expect(inquiry.json().data.asOfProof.missingTotal).toBe(0);
+
+    const usageStillBlocked = await app.inject({
+      method: "GET",
+      url: "/api/admin/audit/reconciliation/usage?hours=168"
+    });
+    expect(usageStillBlocked.statusCode).toBe(409);
+
+    const dayExport = await app.inject({
+      method: "GET",
+      url: "/api/admin/audit/reconciliation/export?hours=24"
+    });
+    expect(dayExport.statusCode).toBe(200);
+    expect(dayExport.json().data.asOfProof.ok).toBe(true);
+
+    const weekExport = await app.inject({
+      method: "GET",
+      url: "/api/admin/audit/reconciliation/export"
+    });
+    expect(weekExport.statusCode).toBe(409);
+    expect(weekExport.json().error.code).toBe("RECONCILIATION_AS_OF_S_UNPROVABLE");
+
+    await app.close();
+  });
+
+  it("同水位归属改写有前像时，用量与导出使用前像问询编号", async () => {
+    const recent = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    auditDb.exec(`
+      ALTER TABLE access_log_attribution_mutations ADD COLUMN before_turn_id TEXT;
+      ALTER TABLE access_log_attribution_mutations ADD COLUMN before_association_status TEXT;
+    `);
+    auditDb
+      .prepare(
+        `INSERT INTO access_log (
+           id, ts, user_id, tool, request_id, outcome,
+           lucy_turn_id, effective_turn_id, original_turn_id, ledger_seq
+         ) VALUES (21, ?, 'u1', 'lucy_query', 'req-replay', 'ok', 'turn-after', 'turn-after', 'turn-before', 0)`
+      )
+      .run(recent);
+    const pinMutation = auditDb.prepare(
+      `INSERT INTO access_log_attribution_mutations (
+         id, access_log_id, ledger_seq, kind, before_turn_id, before_association_status
+       ) VALUES (7, 21, ?, 'attribution_rewrite', 'turn-before', 'confirmed')`
+    );
+    const retargetMutation = auditDb.prepare(
+      `UPDATE access_log_attribution_mutations SET ledger_seq = ? WHERE id = 7`
+    );
+
+    const app = makeApp();
+    pinMutation.run(nextReadWatermark());
+    const usage = await app.inject({
+      method: "GET",
+      url: "/api/admin/audit/reconciliation/usage"
+    });
+    expect(usage.statusCode).toBe(200);
+    const usageBody = usage.json();
+    expect(usageBody.data.asOfProof.ok).toBe(true);
+    expect(usageBody.data.asOfProof.missingTotal).toBe(0);
+    expect(usageBody.data.calls.items).toEqual([
+      expect.objectContaining({ unitId: "21", turnId: "turn-before" })
+    ]);
+
+    retargetMutation.run(nextReadWatermark());
+    const inquiry = await app.inject({
+      method: "GET",
+      url: "/api/admin/audit/reconciliation/inquiries/turn-before"
+    });
+    expect(inquiry.statusCode).toBe(200);
+    const inquiryBody = inquiry.json();
+    expect(inquiryBody.data.asOfProof.ok).toBe(true);
+    expect(inquiryBody.data.inquiry.inquiry.turnId).toBe("turn-before");
+    expect(inquiryBody.data.inquiry.calls.items.map((row: { unitId: string }) => row.unitId)).toEqual(["21"]);
+
+    retargetMutation.run(nextReadWatermark());
+    const exported = await app.inject({
+      method: "GET",
+      url: "/api/admin/audit/reconciliation/export"
+    });
+    expect(exported.statusCode).toBe(200);
+    expect(exported.json().data.asOfProof.ok).toBe(true);
+    const summary = exported.json().data.files.find(
+      (file: { name: string }) => file.name === "inquiry-summary.csv"
+    ) as { csv: string };
+    const calls = exported.json().data.files.find(
+      (file: { name: string }) => file.name === "calls-attempts.csv"
+    ) as { csv: string };
+    expect(summary.csv).toContain("turn-before");
+    expect(summary.csv).not.toContain("turn-after");
+    expect(calls.csv).toContain("turn-before");
+    expect(calls.csv).toContain("21");
+    expect(calls.csv).not.toContain("turn-after");
+    await app.close();
+  });
+
+  it("同水位归属改写缺前像列时，用量正式读取失败关闭", async () => {
+    const recent = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    auditDb
+      .prepare(
+        `INSERT INTO access_log (
+           id, ts, user_id, tool, request_id, outcome, lucy_turn_id, ledger_seq
+         ) VALUES (22, ?, 'u1', 'lucy_query', 'req-unreplayable', 'ok', 'turn-after', 0)`
+      )
+      .run(recent);
+    const pinMutation = auditDb.prepare(
+      `INSERT INTO access_log_attribution_mutations (id, access_log_id, ledger_seq, kind)
+       VALUES (8, 22, ?, 'attribution_rewrite')`
+    );
+    const retargetMutation = auditDb.prepare(
+      `UPDATE access_log_attribution_mutations SET ledger_seq = ? WHERE id = 8`
+    );
+
+    const app = makeApp();
+    pinMutation.run(nextReadWatermark());
+    const usage = await app.inject({
+      method: "GET",
+      url: "/api/admin/audit/reconciliation/usage"
+    });
+    expect(usage.statusCode).toBe(409);
+    expect(usage.json().error.code).toBe("RECONCILIATION_AS_OF_S_UNPROVABLE");
+
+    retargetMutation.run(nextReadWatermark());
+    const diagnostic = await app.inject({
+      method: "GET",
+      url: "/api/admin/audit/reconciliation/usage?mode=diagnostic"
+    });
+    expect(diagnostic.statusCode).toBe(200);
+    const proof = diagnostic.json().data.asOfProof;
+    expect(proof.ok).toBe(false);
+    expect(proof.missingSets.revisions.some((id: string) => id.startsWith("attribution_mutation_after_bound:"))).toBe(true);
+    expect(diagnostic.json().data.diagnosticIncomplete).toMatchObject({
+      status: "diagnostic_incomplete",
+      reason: "as_of_s_unprovable"
+    });
     await app.close();
   });
 });

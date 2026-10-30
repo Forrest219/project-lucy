@@ -11,7 +11,7 @@
  */
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AuditReconciliation } from "../pages/admin/AuditReconciliation";
@@ -260,6 +260,94 @@ describe("批 C-2：P0-4 使用概况页", () => {
     await waitFor(() => expect(screen.getByTestId("reconciliation-export")).toBeInTheDocument());
     const href = screen.getByTestId("reconciliation-export").getAttribute("href") ?? "";
     expect(href).toContain("/api/admin/audit/reconciliation/export");
+  });
+
+  it("时间范围把对应 hours 带到用量读取和导出", async () => {
+    const fetchMock = stubUsage(usagePayload());
+    renderPage("/admin/audit-reconciliation?range=24h");
+
+    await waitFor(() => {
+      const urls = fetchMock.mock.calls.map((call) => String(call[0]));
+      expect(urls.some((url) => url.includes("/usage?") && url.includes("hours=24"))).toBe(true);
+    });
+    expect(screen.getByTestId("reconciliation-export").getAttribute("href")).toContain("hours=24");
+
+    fireEvent.click(screen.getByTestId("reconciliation-range-30d"));
+    await waitFor(() => {
+      const urls = fetchMock.mock.calls.map((call) => String(call[0]));
+      expect(urls.some((url) => url.includes("hours=720"))).toBe(true);
+    });
+    expect(screen.getByTestId("reconciliation-export").getAttribute("href")).toContain("hours=720");
+
+    fireEvent.click(screen.getByTestId("reconciliation-range-7d"));
+    await waitFor(() => {
+      const urls = fetchMock.mock.calls.map((call) => String(call[0]));
+      expect(urls.some((url) => url.includes("hours=168"))).toBe(true);
+    });
+    expect(screen.getByTestId("reconciliation-export").getAttribute("href")).toContain("hours=168");
+  });
+
+  it("正式读取 409 后展示诊断缺失，单问询仍按自己的结果渲染", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith("/api/admin/audit/reconciliation/usage") && !url.includes("mode=diagnostic")) {
+        return new Response(
+          JSON.stringify({
+            ok: false,
+            error: {
+              code: "RECONCILIATION_AS_OF_S_UNPROVABLE",
+              message: "无法证明基础事实、归属修订、关联与聚合可按账本上界 S 精确重建，正式对账读取失败"
+            }
+          }),
+          { status: 409 }
+        );
+      }
+      if (url.includes("mode=diagnostic")) {
+        return new Response(
+          JSON.stringify(
+            usagePayload({
+              asOfProof: {
+                ok: false,
+                missingTotal: 2,
+                dimensions: [
+                  { id: "baseFacts", ok: false, missingCount: 1 },
+                  { id: "revisions", ok: true, missingCount: 0 },
+                  { id: "relations", ok: true, missingCount: 0 },
+                  { id: "aggregates", ok: false, missingCount: 1 }
+                ]
+              }
+            })
+          ),
+          { status: 200 }
+        );
+      }
+      if (url.includes("/inquiries/turn-kept")) {
+        return new Response(
+          JSON.stringify({ ok: true, data: { inquiry: { turnId: "turn-kept" } } }),
+          { status: 200 }
+        );
+      }
+      return new Response(JSON.stringify({ ok: true, data: { inquiry: {} } }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    renderPage("/admin/audit-reconciliation?range=7d&turnId=turn-kept");
+
+    await waitFor(() => expect(screen.getByTestId("reconciliation-asof-missing")).toBeInTheDocument());
+    expect(screen.getByTestId("reconciliation-asof-incomplete")).toHaveTextContent("诊断视图");
+    expect(screen.getByTestId("reconciliation-asof-missing")).toHaveTextContent("缺失 2 项");
+    expect(screen.getByTestId("reconciliation-asof-missing")).toHaveTextContent("基础事实 1");
+    expect(screen.getByTestId("reconciliation-asof-missing")).toHaveTextContent("聚合 1");
+    expect(screen.getByTestId("reconciliation-inquiry-input")).toBeInTheDocument();
+    expect(screen.queryByTestId("reconciliation-inquiry-error")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId("reconciliation-inquiry-detail")).toHaveTextContent("turn-kept"));
+    expect(screen.getByTestId("reconciliation-token-card")).toBeInTheDocument();
+
+    const urls = fetchMock.mock.calls.map((call) => String(call[0]));
+    expect(urls.some((url) => url.includes("/usage?") && url.includes("hours=168") && !url.includes("mode="))).toBe(
+      true
+    );
+    expect(urls.some((url) => url.includes("mode=diagnostic"))).toBe(true);
+    expect(urls.some((url) => url.includes("/inquiries/turn-kept"))).toBe(true);
   });
 
   it("完整使用明细逐行列出并给出分页计数", async () => {

@@ -30,7 +30,7 @@ import { getSecurityStore } from "../security/instance.js";
 import { sha256Hex, stableJson } from "../config-digest.js";
 import { trustedActorFromRequest } from "../security/request-actor.js";
 // F-02：精确 as-of S 的证明由 P0-1 提供（P0-4 不自建第二套口径）。
-import { buildDiagnosticIncomplete } from "../proxy/audit-as-of-proof.js";
+import { buildDiagnosticIncomplete, projectAttributionAsOfS } from "../proxy/audit-as-of-proof.js";
 import {
   RECONCILIATION_PROJECTION_DEADLINE_MS,
   buildReconciliationTimeRange,
@@ -38,6 +38,7 @@ import {
   computeReconciliationSnapshotId,
   createReconciliationContext,
   normalizeReconciliationFilter,
+  resolveReconciliationWindowHours,
   waitUntilProjectionCovers,
   withFrozenAuditSnapshot,
   type AuditCoverage,
@@ -242,8 +243,14 @@ export async function openReconciliationContext(input: {
   mode: ReconciliationMode;
   instanceId?: string;
 }): Promise<ReconciliationContextBundle> {
+  const windowHours = resolveReconciliationWindowHours(input.filter);
+  if (!windowHours.ok) {
+    const error = new Error("window_hours_invalid") as Error & { code?: string };
+    error.code = windowHours.code;
+    throw error;
+  }
   const filter = normalizeReconciliationFilter(input.filter);
-  const timeRange = buildReconciliationTimeRange(filter);
+  const timeRange = buildReconciliationTimeRange(filter, Date.now(), windowHours.windowHours);
 
   const security = await getSecurityStore();
   if (!security.ok) {
@@ -430,10 +437,17 @@ function collectUsageRows(
     )
     .all(params) as Array<Record<string, unknown>>;
 
-  const usageRows: UsageRow[] = rows.map((row) => {
+  // 与问询详情同一套前像：用量行和随后的证明都看回放后的问询编号。
+  const projected = projectAttributionAsOfS(
+    database,
+    rows as unknown as AccessLogRow[],
+    context.watermarkSeq
+  );
+
+  const usageRows: UsageRow[] = projected.rows.map((row) => {
     const tool = String(row.tool ?? "");
-    const principal = (row.credential_principal_id as string | null) ?? null;
-    const prefix = (row.token_hash_prefix as string | null) ?? null;
+    const principal = row.credential_principal_id ?? null;
+    const prefix = row.token_hash_prefix ?? null;
     return {
       unitId: String(row.id),
       ts: String(row.ts ?? ""),
@@ -448,8 +462,8 @@ function collectUsageRows(
   return {
     rows: usageRows,
     protocolEventCount: usageRows.filter((row) => row.protocol).length,
-    // F-02：同一批范围行，供 as-of S 证明使用（与视图读到的行完全一致）。
-    scopeRows: rows as unknown as AccessLogRow[],
+    // F-02：同一批已回放的范围行，供 as-of S 证明使用。
+    scopeRows: projected.rows,
     // F-02：命中筛选但位置不可判定的行（视图范围不可证明完整）。
     unplaceableRowIds
   };
@@ -802,6 +816,13 @@ export function registerAuditReconciliationRoutes(app: FastifyInstance): void {
           }
         };
       }
+      if (code === "RECONCILIATION_WINDOW_HOURS_INVALID") {
+        reply.code(400);
+        return {
+          ok: false,
+          error: { code, message: "时间窗口只接受 24、168 或 720 小时" }
+        };
+      }
       if (code === "RECONCILIATION_SECURITY_STORE_UNAVAILABLE") {
         reply.code(503);
         return { ok: false, error: { code, message: "安全账本不可用，无法确定账本上界" } };
@@ -932,6 +953,13 @@ export function registerAuditReconciliationRoutes(app: FastifyInstance): void {
             code,
             message: "无法证明基础事实、归属修订、关联与聚合可按账本上界 S 精确重建，正式对账读取失败"
           }
+        };
+      }
+      if (code === "RECONCILIATION_WINDOW_HOURS_INVALID") {
+        reply.code(400);
+        return {
+          ok: false,
+          error: { code, message: "时间窗口只接受 24、168 或 720 小时" }
         };
       }
       if (code === "RECONCILIATION_SECURITY_STORE_UNAVAILABLE") {
