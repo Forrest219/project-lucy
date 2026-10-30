@@ -144,6 +144,32 @@ afterEach(async () => {
 });
 
 describe("POST /api/semantic-assets/validate", () => {
+  it.each(["yaml", "zip"])("accepts a Manifest over 1 MiB through the %s upload path", async (format) => {
+    projectRoot = await makeProject();
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
+    const app = await buildFreshServer();
+    await app.ready();
+    try {
+      const content = MANIFEST_YAML + "# " + "测试".repeat(200_000) + "\n";
+      const zip = buildStoredZip([{ name: "semantic-layer/customer-db/_schema/chatbi.yaml", data: content }]);
+      const payload = {
+        defaultConnectionId: "customer-db",
+        defaultSchema: "chatbi",
+        ...(format === "yaml"
+          ? { files: [{ filename: "chatbi.yaml", content }] }
+          : { packages: [{ filename: "semantic-assets.zip", contentBase64: zip.toString("base64") }] })
+      };
+      expect(Buffer.byteLength(JSON.stringify(payload))).toBeGreaterThan(1024 * 1024);
+      const response = await app.inject({ method: "POST", url: "/api/semantic-assets/validate", payload });
+      expect(response.statusCode).toBe(200);
+      expect(response.json().data).toMatchObject({ valid: true, files: [expect.objectContaining({ kind: "schemaManifest" })] });
+      expect(await readFile(path.join(projectRoot, "semantic-layer/customer-db/_schema/chatbi.yaml"), "utf8")).toBe("tables: {}\n");
+    } finally {
+      await app.close();
+    }
+  });
+
   it("classifies manifest + overlay, computes server-side target paths, and writes no formal file", async () => {
     projectRoot = await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;

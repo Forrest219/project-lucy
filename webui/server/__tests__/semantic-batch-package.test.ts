@@ -51,7 +51,7 @@ afterEach(async () => {
   if (projectRoot) await rm(projectRoot, { recursive: true, force: true });
 });
 
-async function buildPackage(overrides: { instanceId?: string; exportId?: string } = {}) {
+async function buildPackage(overrides: { instanceId?: string; exportId?: string; readonlyContent?: string } = {}) {
   return buildMaintenancePackage({
     projectRoot,
     exportId: overrides.exportId ?? newMaintenanceExportId(),
@@ -77,13 +77,22 @@ async function buildPackage(overrides: { instanceId?: string; exportId?: string 
         connectionId: "shop-db",
         schema: "public",
         targetPath: "semantic-layer/shop-db/_schema/public.yaml",
-        content: "tables:\n  orders:\n    table: public.orders\n"
+        content: overrides.readonlyContent ?? "tables:\n  orders:\n    table: public.orders\n"
       }
     ]
   });
 }
 
 describe("D4 package structure", () => {
+  it("round-trips an 8 MiB Manifest and rejects one extra byte on export", async () => {
+    const prefix = "tables:\n  orders:\n    table: public.orders\n# 中文";
+    const content = prefix + "x".repeat(8 * 1024 * 1024 - Buffer.byteLength(prefix));
+    const built = await buildPackage({ readonlyContent: content });
+    const unpacked = unpackMaintenancePackage(built.zip);
+    expect(unpacked.entries.find((entry) => entry.meta.role === "readonly_context")?.content).toBe(content);
+    await expect(buildPackage({ readonlyContent: content + "x" })).rejects.toThrow(/单文件上限/);
+  }, 30_000);
+
   it("carries metadata, editable overlays and read-only context", async () => {
     const built = await buildPackage();
     const unpacked = unpackMaintenancePackage(built.zip);

@@ -560,6 +560,8 @@ dryRun 响应：
 
 `POST /api/catalog/assets/upload` 在校验通过后写入 `semantic-layer/<connection>/_schema/<schema>.yaml`，目标路径由系统根据 connection/schema 计算，不接受客户端任意路径。
 
+容量契约（2026-10-30 修订）：上述 Manifest 校验、上传接口与 `POST /api/semantic-assets/validate` 的 HTTP 请求体上限为 32 MiB；单 YAML 文件上限为 8 MiB，按 UTF-8 字节数计算。超出请求体上限返回 HTTP 413、`FST_ERR_CTP_BODY_TOO_LARGE` 及中文说明；目录 Manifest 文件超限返回既有 `FILE_TOO_LARGE` 校验错误。上传、导出与维护包导入统一引用 `server/semantic-limits.ts`，包总量及数量上限不变。只传引用的发布、批量校验等接口维持默认 HTTP 上限。
+
 `GET /api/catalog/assets/uploads` 返回 Schema Manifest 上传审计记录。
 
 `GET /api/catalog/assets/schema-manifest` 返回当前 connection + schema 的 Schema Manifest 内容（用于资产工作台读取物理表结构）。`conn` / `schema` 走 query string；目标路径服务端按 `semantic-layer/<conn>/_schema/<schema>.yaml` 解析，不接受客户端任意路径。Manifest 缺失 → `404 SCHEMA_MANIFEST_NOT_FOUND`。

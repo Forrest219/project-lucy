@@ -213,6 +213,7 @@ import { exportSemanticAssetPackage, recordSemanticAssetExport } from "./semanti
 import { recoverPendingRecoveryJournals, isRecoveryRequired } from "./semantic-recovery-journal.js";
 import { verifyAccessRecoveryOnStartup } from "./access-recovery.js";
 import { registerSemanticBatchRoutes } from "./semantic-batch-routes.js";
+import { SEMANTIC_BATCH_LIMITS } from "./semantic-limits.js";
 import {
   assertSemanticHttpBodySize,
   exportSemanticMaintenancePackage,
@@ -748,6 +749,17 @@ export function buildServer() {
   app.addHook("onRequest", requireWebuiAuthHook);
 
   app.setErrorHandler((error: SupportedError, request, reply) => {
+    if (error.code === "FST_ERR_CTP_BODY_TOO_LARGE") {
+      const limitMiB = request.routeOptions.bodyLimit / 1024 / 1024;
+      reply.status(413).send({
+        ok: false,
+        error: {
+          code: error.code,
+          message: `请求体超过 ${limitMiB} MiB 上限，请减少本次提交内容后重试。`
+        }
+      } satisfies ErrorEnvelope);
+      return;
+    }
     if (error.code === FRONTMATTER_ENGINE_FORBIDDEN) {
       // V-08: reads of an already-stored file are 422; upload/save/restore are 400.
       const reading = request.method === "GET";
@@ -2064,7 +2076,7 @@ export function buildServer() {
 
   app.post<{
     Body: Partial<CatalogAssetValidateRequest>;
-  }>("/api/catalog/assets/validate", async (request, reply) => {
+  }>("/api/catalog/assets/validate", { bodyLimit: SEMANTIC_BATCH_LIMITS.maxHttpBodyBytes }, async (request, reply) => {
     const projectRoot = await resolveProjectRoot();
     const body = request.body ?? {};
     const rawAssetKind = (body as { assetKind?: unknown }).assetKind;
@@ -2082,7 +2094,7 @@ export function buildServer() {
 
   app.post<{
     Body: Partial<CatalogAssetUploadRequest>;
-  }>("/api/catalog/assets/upload", async (request, reply) => {
+  }>("/api/catalog/assets/upload", { bodyLimit: SEMANTIC_BATCH_LIMITS.maxHttpBodyBytes }, async (request, reply) => {
     const projectRoot = await resolveProjectRoot();
     const body = request.body ?? {};
     const rawAssetKind = (body as { assetKind?: unknown }).assetKind;
@@ -2151,7 +2163,7 @@ export function buildServer() {
 
   app.post<{
     Body: Partial<SemanticAssetValidateRequest>;
-  }>("/api/semantic-assets/validate", async (request, reply) => {
+  }>("/api/semantic-assets/validate", { bodyLimit: SEMANTIC_BATCH_LIMITS.maxHttpBodyBytes }, async (request, reply) => {
     const projectRoot = await resolveProjectRoot();
 
     // ★ Lucy v0.25 / L25-11 §8 (D11): the envelope is validated BEFORE any
@@ -2160,7 +2172,7 @@ export function buildServer() {
     // validated the rest, which silently accepted a 29-valid + 1-broken batch.
     let envelope;
     try {
-      assertSemanticHttpBodySize(JSON.stringify(request.body ?? {}).length);
+      assertSemanticHttpBodySize(Buffer.byteLength(JSON.stringify(request.body ?? {}), "utf8"));
       envelope = parseSemanticValidateEnvelope(request.body ?? {});
     } catch (error) {
       if (error instanceof SemanticBatchError) {

@@ -24,7 +24,7 @@ export const SEMANTIC_BATCH_LIMITS = {
   /** Max YAML entries in one package (editable overlays + read-only context). */
   maxYamlEntries: 200,
   /** Max size of one YAML file inside a package. */
-  maxSingleYamlBytes: 512 * 1024,
+  maxSingleYamlBytes: 8 * 1024 * 1024,
   /** Max size of the `package.json` metadata document. */
   maxMetadataBytes: 256 * 1024,
   /** Max total uncompressed content of one package. */
