@@ -15,7 +15,7 @@
 
 > **交叉引用（2026-10-30）**：本文的三层分类、恒等式和「近 N 活跃 Agent」保持不变。每天的真实问询数由 [`docs/specs/lucy-20261030-access-grade-and-daily-question-kpi-spec.md`](../../docs/specs/lucy-20261030-access-grade-and-daily-question-kpi-spec.md) 定义，单位是已落库的原文问询，不是业务调用量。该指标已在源码中另计，不改本文数字。
 >
-> **名册呈现（2026-10-30）**：`/admin/agents` 的卡片和列由 [`docs/specs/lucy-20261030-agent-roster-spec.md`](../../docs/specs/lucy-20261030-agent-roster-spec.md) 规定。本文 §6 里该页的用量口径不变：活跃 Agent、业务调用量和最近业务使用仍只认默认用量业务调用。名册不再渲染协议请求卡、使用过的凭据和主表上的最近 MCP 访问。该呈现尚未改代码。
+> **名册呈现（2026-10-30）**：`/admin/agents` 的卡片和列由 [`docs/specs/lucy-20261030-agent-roster-spec.md`](../../docs/specs/lucy-20261030-agent-roster-spec.md) 规定。本文 §6 里该页的用量口径不变：活跃 Agent、业务调用量和最近业务使用仍只认默认用量业务调用。名册不再渲染协议请求卡、使用过的凭据和主表上的最近 MCP 访问。该呈现已按名册 Spec v1.2 落地；本文的用量口径不变。
 
 ---
 

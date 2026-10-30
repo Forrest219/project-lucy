@@ -11,7 +11,7 @@
 
 > **Spec 189 修订（2026-10-27）**：本文 §1 确立的「协议请求 = `initialize`／`notifications/initialized`／`tools/list`」三方法集合**已被扩展为完整协议集合**（增加 `ping`、`resources/list`、`resources/templates/list`、`prompts/list`、`notifications/cancelled`、`server/discover` 及任何 `server/*` 方法），三方法口径**不再**作为默认用量排除依据。本文的两条保留决策继续有效：「最近 MCP 访问」与「近 N 使用过的凭据」保持**全量访问**语义；「近 7 天业务调用量」改为**默认用量**口径（再排除默认视图排除的评测探针）。存量字段数值迁移方向见 Spec 189 §5.2。
 >
-> **名册呈现（2026-10-30）**：`/admin/agents` 展示哪些卡和列，改由 [`docs/specs/lucy-20261030-agent-roster-spec.md`](../../docs/specs/lucy-20261030-agent-roster-spec.md) 规定。本文的指标定义继续有效。名册不再把协议请求量、最近 MCP 访问、近 N 使用过的凭据放在顶部卡或主表；接口字段保留，协议请求量与最近 MCP 访问改在对象详情抽屉展示。该呈现尚未改代码。
+> **名册呈现（2026-10-30）**：`/admin/agents` 展示哪些卡和列，改由 [`docs/specs/lucy-20261030-agent-roster-spec.md`](../../docs/specs/lucy-20261030-agent-roster-spec.md) 规定。本文的指标定义继续有效。名册不再把协议请求量、最近 MCP 访问、近 N 使用过的凭据放在顶部卡或主表；接口字段保留，协议请求量与最近 MCP 访问改在对象详情抽屉展示。该呈现已按名册 Spec v1.2 落地；本文的指标定义不变。
 
 ## 1. 背景与决策
 

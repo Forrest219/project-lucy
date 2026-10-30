@@ -336,6 +336,41 @@ describe("ObjectDetailDrawer", () => {
     expect(drawerValue(body, "近 7 天协议请求量")).toBe("0");
   });
 
+  it("SC-10 指标可用且协议量为 null 或缺失时写「—」，不写成 0", async () => {
+    drawerStats = {
+      callsLast7d: 99,
+      usageCallsLast7d: 4,
+      protocolCallsLast7d: null,
+      deniedLast7d: 0,
+      metricsState: "ok",
+      lastSeen: "2026-10-26T00:00:00.000Z",
+      lastBusinessSeen: "2026-10-25T00:00:00.000Z",
+      topTables: []
+    };
+    stubDrawerFetch();
+    renderAt("/?object=agent&agentId=zhangsan");
+
+    const nullBody = await screen.findByTestId("object-detail-agent-body");
+    expect(drawerValue(nullBody, "近 7 天业务调用量")).toBe("4");
+    expect(drawerValue(nullBody, "近 7 天协议请求量")).toBe("—");
+
+    cleanup();
+    drawerStats = {
+      callsLast7d: 99,
+      usageCallsLast7d: 4,
+      deniedLast7d: 0,
+      metricsState: "ok",
+      lastSeen: "2026-10-26T00:00:00.000Z",
+      lastBusinessSeen: "2026-10-25T00:00:00.000Z",
+      topTables: []
+    };
+    stubDrawerFetch();
+    renderAt("/?object=agent&agentId=zhangsan");
+
+    const missingBody = await screen.findByTestId("object-detail-agent-body");
+    expect(drawerValue(missingBody, "近 7 天协议请求量")).toBe("—");
+  });
+
   it("SC-10 指标不可用时五个值都是「—」，正文不出现「未使用」或「未访问」", async () => {
     drawerStats = {
       callsLast7d: null,

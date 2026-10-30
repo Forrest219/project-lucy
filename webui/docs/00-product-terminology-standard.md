@@ -516,7 +516,7 @@ Connection (连接)
 
 ### 4.5 访问治理 / 使用概况
 
-`/admin/usage` 页面（侧栏项 `admin-governance`，位于运行状态；旧 path `/admin/governance` redirect）术语来自 Spec 78 / 84，并由 Spec 86 修订路由与 KPI 主标签。Spec 148 增补「界面使用」视图（`?view=interface`）。Spec 156 将侧栏从访问治理移入运行状态，数据访问视图不再展示调用量、ACL 拒绝次数与多数请求耗时。**Spec 189 修订用量口径**：业务调用量改为「默认用量」口径（排除全部协议事件与默认视图排除的评测探针），并登记「默认用量业务调用」与「近 N 业务活跃 Token」。**Spec 194** 另登记真实问询及其伴随指标；这些词不替换业务调用量或近 N 活跃 Agent。**名册 Spec**（`docs/specs/lucy-20261030-agent-roster-spec.md`）登记 Agent 列表的「仅连接」「闲置」「无可用 Token」和 Token 列；名册页面尚未按该 Spec 改版：
+`/admin/usage` 页面（侧栏项 `admin-governance`，位于运行状态；旧 path `/admin/governance` redirect）术语来自 Spec 78 / 84，并由 Spec 86 修订路由与 KPI 主标签。Spec 148 增补「界面使用」视图（`?view=interface`）。Spec 156 将侧栏从访问治理移入运行状态，数据访问视图不再展示调用量、ACL 拒绝次数与多数请求耗时。**Spec 189 修订用量口径**：业务调用量改为「默认用量」口径（排除全部协议事件与默认视图排除的评测探针），并登记「默认用量业务调用」与「近 N 业务活跃 Token」。**Spec 194** 另登记真实问询及其伴随指标；这些词不替换业务调用量或近 N 活跃 Agent。**名册 Spec**（`docs/specs/lucy-20261030-agent-roster-spec.md` v1.2）登记 Agent 列表的「仅连接」「闲置」「无可用 Token」和 Token 列；名册呈现已按该 Spec 落地：
 
 | Canonical Term | UI 主术语 | 允许补充说法 | 禁止文案 | 说明 |
 |---|---|---|---|---|
@@ -546,7 +546,7 @@ Connection (连接)
 | Unreported Query Session | 近 N 未上报查数会话 | 未上报查数会话 | 未上报调用量；把它加进真实问询 | 窗口内有查数、且该会话从未落下原文问询的去重会话 |
 | Connect-only Session | 近 N 仅连接会话 | 仅连接会话 | 活跃会话（未说明只有连接）；把它加进真实问询 | 窗口内该会话的调用全部是连接级 |
 | Browse-without-ask Session | 近 N 浏览未问会话 | 浏览未问会话 | 浏览量；把它加进真实问询 | 到了浏览或准备，没有问询动作，也没有查数 |
-| Connect-only Agent | 仅连接 | — | 仅连接会话（混称）；近 N 活跃 Agent；活跃 | `/admin/agents` 的标记和筛选项。近 7 天业务调用量为 0，且近 7 天协议请求量大于 0，或最近 MCP 访问落在本页窗口内而最近业务使用早于该窗口或为空。不计入近 N 活跃 Agent。指标不可用时不标记。与「近 N 仅连接会话」不是同一粒度。见 `docs/specs/lucy-20261030-agent-roster-spec.md`。名册改版前页面尚未展示 |
+| Connect-only Agent | 仅连接 | — | 仅连接会话（混称）；近 N 活跃 Agent；活跃 | `/admin/agents` 的标记和筛选项。近 7 天业务调用量为 0，且近 7 天协议请求量大于 0，或最近 MCP 访问落在本页窗口内而最近业务使用早于该窗口或为空。不计入近 N 活跃 Agent。指标不可用时不标记。与「近 N 仅连接会话」不是同一粒度。见 `docs/specs/lucy-20261030-agent-roster-spec.md`。名册页面已展示 |
 | Idle Agent | 闲置 | — | 无业务调用（把仅连接或指标不可用算进本档）；未使用（作筛选项） | 只作 `/admin/agents` 筛选档。近 7 天没有业务调用，且不是仅连接。指标不可用的行不属于闲置，只留在「全部」。列表不另写「闲置」；空的最近业务使用仍写「未使用」 |
 | No Available Token | 无可用 Token | — | 无可用凭据 | 可用 Token 为 0 且配置 Token 大于 0。名册 Token 格的主行，使用既有 warning 色。可用大于 0 时主行写「可用 n」 |
 | Agent Roster Token Column | Token | — | 凭据、Token 凭据（作本列列头） | `/admin/agents` 列头。次行写「配置 n」。与顶部「可用 Token」同一口径。侧栏「Token 凭据」仍是 `/admin/tokens` 的页面名 |

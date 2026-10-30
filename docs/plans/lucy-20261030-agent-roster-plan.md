@@ -125,7 +125,7 @@ D1–D13 已按 Spec §4 冻结。术语标准 §4.5 已登记仅连接、闲置
 | `webui/src/__tests__/agent-list.test.tsx` | SC-01–SC-09、SC-11、SC-14、SC-15；替换 §3 S1 点名的旧断言 |
 | `webui/src/__tests__/kpi-contracts.test.ts` | SC-12 |
 | `webui/src/components/ObjectDetailDrawer.tsx` | 抽屉三行；不可用先于空值；`DetailRow` 标签接受节点以保留 `MCP` 的翻译防御 |
-| `webui/src/__tests__/object-detail-drawer.test.tsx` | SC-10 三支 |
+| `webui/src/__tests__/object-detail-drawer.test.tsx` | SC-10 四支 |
 
 SC 与测试的对应：
 
@@ -140,7 +140,7 @@ SC 与测试的对应：
 | SC-07 | `agent-list.test.tsx` → `SC-07 指标不可用的行显示「—」，只有 metricsState=unavailable 写「数据不可用」` |
 | SC-08 | `agent-list.test.tsx` → `SC-08 近 7 天活跃四档互斥、且不改变行序` |
 | SC-09 | `agent-list.test.tsx` → 三支：`去掉 windowStart 时协议量大于 0 仍是仅连接，协议量为 0 不再是` / `去掉 windowEnd 时协议量为 0 不标仅连接` / `缺整个 summary 时协议量大于 0 可标仅连接，协议量为 0 不标` |
-| SC-10 | `object-detail-drawer.test.tsx` → 三支：`指标可用时抽屉展示协议请求量与两个时间，业务调用量读 usageCallsLast7d` / `指标可用但时间为空时写「未使用」和「未访问」` / `指标不可用时五个值都是「—」，正文不出现「未使用」或「未访问」` |
+| SC-10 | `object-detail-drawer.test.tsx` → 四支：`指标可用时抽屉展示协议请求量与两个时间，业务调用量读 usageCallsLast7d` / `指标可用但时间为空时写「未使用」和「未访问」` / `指标可用且协议量为 null 或缺失时写「—」，不写成 0` / `指标不可用时五个值都是「—」，正文不出现「未使用」或「未访问」` |
 | SC-11 | `agent-list.test.tsx` → `SC-11 名册不再提示凭据 prefix 冲突` |
 | SC-12 | `kpi-contracts.test.ts` → `SC-12 名册不再登记「近 N 使用过的凭据」，其它条目仍指向本页` |
 | SC-13 | 既有接口测试，未另写服务端测试：`server/__tests__/admin-agents.test.ts` → `separates protocol requests from business usage and keeps all-time last access`（`protocolCallsLast7d`、`lastSeen`）、`marks used-credential metrics partial when configured token prefixes collide`（`usedCredentialCountLast7d`） |
@@ -173,6 +173,8 @@ S1 退出条件（反证）：
 全量套件里 12 条失败的归属：`api.semantic-assets.reindex.test.ts`（发布记录 CSV 表头「重建索引状态」与存量断言不一致，HEAD 已存在）、`admin-accounts-oidc.test.tsx` 与 `admin-accounts.test.tsx`（其它会话未提交的 OIDC 改动）、`navigation.test.ts` 与 `help.test.ts`（其它会话未提交的侧栏与手册改动）、`release-ux-invariants.test.ts`（其它会话未跟踪的新测试）、`display-rollback-races.test.ts`（其它会话未提交的 `webui/server/index.ts` 改动）。没有一条来自本功能改动的文件。
 
 未做：浏览器走查、移动窄屏、Docker 重建、客户交付，均不在本 Plan 的完成定义内。
+
+2026-10-30 审阅收口：SC-10 补上指标可用且协议量为 `null` 或字段缺失时写「—」的断言。术语标准与 Spec 155 / 189 改为名册呈现已落地，用量口径不变。产品实现未改。
 
 ## 6. 完成定义
 
