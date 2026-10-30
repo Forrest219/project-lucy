@@ -92,6 +92,21 @@ describe("KPI_REGISTRY", () => {
     expect(c!.label).toBe("近 7 天业务调用量");
   });
 
+  it("real-question contracts stay distinct from business call volume", () => {
+    const real = getContract("real-questions");
+    const calls = getContract("calls-7d");
+    const active = getContract("active-agent-count");
+    const questionActive = getContract("question-active-agents");
+    expect(real).toBeDefined();
+    expect(real!.label).toBe("近 N 真实问询");
+    expect(real!.label).not.toBe(calls!.label);
+    expect(real!.help).not.toContain("业务调用量");
+    expect(questionActive!.label).not.toBe(active!.label);
+    expect(getContract("unreported-query-sessions")!.label).toBe("近 N 未上报查数会话");
+    expect(getContract("connect-only-sessions")!.label).toBe("近 N 仅连接会话");
+    expect(getContract("browse-without-ask-sessions")!.label).toBe("近 N 浏览未问会话");
+  });
+
   it("LIST_KPI_CONTRACTS contains only list_kpi entries", () => {
     for (const c of LIST_KPI_CONTRACTS) {
       expect(c.kind).toBe("list_kpi");

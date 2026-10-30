@@ -13,6 +13,8 @@
 | 实施计划 | `webui/docs/plans/wo-202610-28-usage-metrics-truthfulness.md` |
 | 审阅记录 | `webui/docs/plans/review-spec189-wo-202610-28.md`；首轮审阅（v1.0）的阻断结论已在本版吸收，并按复核证据修正技能内容读取、评测现场和治理门禁口径；v1.1 复审结论为 **PASS**，附 4 条计划侧修订，已落入 WO-202610-28 |
 
+> **交叉引用（2026-10-30）**：本文的三层分类、恒等式和「近 N 活跃 Agent」保持不变。每天的真实问询数由 [`docs/specs/lucy-20261030-access-grade-and-daily-question-kpi-spec.md`](../../docs/specs/lucy-20261030-access-grade-and-daily-question-kpi-spec.md) 定义，单位是已落库的原文问询，不是业务调用量。该指标已在源码中另计，不改本文数字。
+
 ---
 
 ## Terminology Compliance

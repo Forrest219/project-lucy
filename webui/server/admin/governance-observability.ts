@@ -6,6 +6,7 @@ import { getAuditDb } from "./audit.js";
 import { resolveProjectRoot } from "../project.js";
 import { buildMetricWindow, WINDOW_7D_HOURS } from "./metric-window.js";
 import { defaultUsageConditionSql } from "../proxy/usage-classification.js";
+import { queryDailyQuestionKpi, unavailableQuestionKpi, type QuestionKpiPayload } from "./daily-question-kpi.js";
 import { resolveRoleIds } from "../proxy/acl.js";
 
 type RoleConfig = {
@@ -96,6 +97,15 @@ interface MetricResult {
   windowStart?: string;
   windowEnd?: string;
   unavailableReason?: string;
+}
+
+async function loadQuestionKpi(hours: number, now: Date): Promise<QuestionKpiPayload> {
+  try {
+    const db = await getAuditDb();
+    return queryDailyQuestionKpi(db, hours, now);
+  } catch {
+    return unavailableQuestionKpi(buildMetricWindow(hours, now));
+  }
 }
 
 function boundedHours(value: unknown): number {
@@ -815,6 +825,7 @@ function governanceRoles(config: AccessConfig, auditUsage: Map<string, number>) 
 export function registerGovernanceObservabilityRoutes(app: FastifyInstance): void {
   app.get<{ Querystring: { hours?: string } }>("/api/admin/governance/overview", async (request) => {
     const hours = boundedHours(request.query.hours ?? String(DEFAULT_HOURS));
+    const questionNow = new Date();
     const [
       config,
       callStats,
@@ -825,7 +836,8 @@ export function registerGovernanceObservabilityRoutes(app: FastifyInstance): voi
       popularTablesResult,
       changes,
       configChangeByAssetKindMap,
-      highDenialAgentCount
+      highDenialAgentCount,
+      questionKpi
     ] = await Promise.all([
       readAccessConfig(),
       queryCallStats(hours),
@@ -836,7 +848,8 @@ export function registerGovernanceObservabilityRoutes(app: FastifyInstance): voi
       queryPopularTables(hours),
       configChangeCount(hours),
       configChangeByAssetKind(hours),
-      queryHighDenialAgentCount(hours)
+      queryHighDenialAgentCount(hours),
+      loadQuestionKpi(hours, questionNow)
     ]);
     const { rows: popularTables, tableStatsSource } = popularTablesResult;
 
@@ -930,7 +943,8 @@ export function registerGovernanceObservabilityRoutes(app: FastifyInstance): voi
           agentActiveRate,
           configuredTokenCount: configuredTokens,
           tokenActiveRate
-        }
+        },
+        ...questionKpi
       }
     };
   });

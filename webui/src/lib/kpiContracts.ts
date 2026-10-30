@@ -114,6 +114,54 @@ export const KPI_REGISTRY: MetricContract[] = [
     pages: ["/admin/agents"],
     windowed: true
   },
+  {
+    id: "real-questions",
+    kind: "list_kpi",
+    label: "近 N 真实问询",
+    help: "当前时间窗内已落库的原文问询数，按问询 ID 去重。来源只认 reported_tool 与历史 reported。单位是问询，不是业务调用。不含协议连接、浏览、准备和评测探针。",
+    pages: ["/admin/usage"],
+    windowed: true
+  },
+  {
+    id: "unreported-query-sessions",
+    kind: "list_kpi",
+    label: "近 N 未上报查数会话",
+    help: "当前时间窗内有查数、且该会话从未落下原文问询的去重会话数。不加入真实问询。没有会话 ID 的查数另计为未归属查数。",
+    pages: ["/admin/usage"],
+    windowed: true
+  },
+  {
+    id: "connect-only-sessions",
+    kind: "list_kpi",
+    label: "近 N 仅连接会话",
+    help: "当前时间窗内调用全部是连接级的去重会话数。握手、探测和服务发现算连接。不加入真实问询。",
+    pages: ["/admin/usage"],
+    windowed: true
+  },
+  {
+    id: "browse-without-ask-sessions",
+    kind: "list_kpi",
+    label: "近 N 浏览未问会话",
+    help: "当前时间窗内到了浏览或准备、没有问询动作也没有查数的去重会话数。不加入真实问询。",
+    pages: ["/admin/usage"],
+    windowed: true
+  },
+  {
+    id: "queries-per-question",
+    kind: "list_kpi",
+    label: "每问询查数",
+    help: "挂到本窗口原文问询上的查数次数，除以近 N 真实问询。分母为 0 时不显示数字。",
+    pages: ["/admin/usage"],
+    windowed: true
+  },
+  {
+    id: "question-active-agents",
+    kind: "list_kpi",
+    label: "近 N 问询活跃 Agent",
+    help: "当前时间窗内至少有 1 条原文问询，或 1 个未上报查数会话的去重 Agent 数。不替换近 N 活跃 Agent。",
+    pages: ["/admin/usage"],
+    windowed: true
+  },
   // ── GovernanceOverview ───────────────────────────────────────────────────
   {
     id: "configured-table-count",

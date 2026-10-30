@@ -55,7 +55,20 @@ function stubFetch() {
           cards: {
             calls: hours === 24 ? 1 : 3,
             deniedRate: 33.3
-          }
+          },
+          realQuestions: { metricId: "real-questions", state: "ok", value: 4 },
+          unreportedQuerySessions: { metricId: "unreported-query-sessions", state: "ok", value: 1 },
+          connectOnlySessions: { metricId: "connect-only-sessions", state: "ok", value: 2 },
+          browseWithoutAskSessions: { metricId: "browse-without-ask-sessions", state: "ok", value: 3 },
+          unassignedQueryCalls: { metricId: "unassigned-query-calls", state: "ok", value: 0 },
+          unlinkedQueryCalls: { metricId: "unlinked-query-calls", state: "ok", value: 0 },
+          queriesPerQuestion: { metricId: "queries-per-question", state: "ok", value: 2 },
+          questionActiveAgents: { metricId: "question-active-agents", state: "ok", value: 2 },
+          skippedBadTimestamp: 0,
+          dailyQuestions: [
+            { date: "2026-10-29", partialDay: true, realQuestions: 1, unreportedQuerySessions: 0, connectOnlySessions: 1, browseWithoutAskSessions: 0 },
+            { date: "2026-10-30", partialDay: false, realQuestions: 3, unreportedQuerySessions: 1, connectOnlySessions: 1, browseWithoutAskSessions: 3 }
+          ]
         }
       }));
     }
@@ -179,6 +192,13 @@ describe("GovernanceOverview", () => {
     expect(screen.queryByTestId("metric-calls")).not.toBeInTheDocument();
     expect(screen.queryByTestId("metric-acl-denied")).not.toBeInTheDocument();
     expect(screen.queryByTestId("metric-p95-latency")).not.toBeInTheDocument();
+    expect(screen.getByTestId("metric-real-questions")).toHaveTextContent("4");
+    expect(screen.getByTestId("metric-unreported-query-sessions")).toHaveTextContent("1");
+    expect(screen.getByTestId("metric-connect-only-sessions")).toHaveTextContent("2");
+    expect(screen.getByTestId("metric-browse-without-ask-sessions")).toHaveTextContent("3");
+    expect(screen.getByTestId("daily-question-table")).toBeInTheDocument();
+    expect(screen.getByTestId("daily-question-2026-10-29")).toHaveTextContent("未覆盖全天");
+    expect(screen.queryByText("近 7 天调用量")).not.toBeInTheDocument();
     expect(screen.getByTestId("usage-call-monitor-link")).toHaveAttribute("href", "/ops/calls?range=24h");
     expect(screen.queryByTestId("usage-sparkline-page-views")).not.toBeInTheDocument();
     expect(screen.getByText(/调用是否报错、被拒绝或变慢，到调用监控查看/)).toBeInTheDocument();
@@ -336,6 +356,8 @@ describe("GovernanceOverview", () => {
     expect(within(screen.getByTestId("governance-interface-page-rank")).getByText("趋势监控")).toBeInTheDocument();
     expect(screen.getByText(/页面访问、访问账户与菜单使用/)).toBeInTheDocument();
     expect(screen.queryByTestId("governance-usage-rank-grid")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("metric-real-questions")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("daily-question-table")).not.toBeInTheDocument();
 
     const callsBeforeWindow = fetchMock.mock.calls.length;
     fireEvent.click(screen.getByTestId("governance-window-24h"));

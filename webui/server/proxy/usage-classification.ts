@@ -1,3 +1,5 @@
+import { CONTROL_PLANE_TOOL_NAMES } from "../ops/control-plane.js";
+
 /**
  * Spec 189 — the single usage classification fact source.
  *
@@ -247,4 +249,106 @@ export function defaultUsageConditionSql(alias?: string): SqlCondition {
 /** The single Raw Business SQL condition: not a protocol event. */
 export function rawBusinessConditionSql(alias?: string): SqlCondition {
   return { sql: `NOT ${protocolConditionSql(alias).sql}` };
+}
+
+// ---------------------------------------------------------------------------
+// Access grade (daily real-question KPI). Orthogonal to classifyUsage.
+// ---------------------------------------------------------------------------
+
+/** Browse: opened the catalog or a list, and has not asked or queried. */
+export const ACCESS_BROWSE_TOOLS = [
+  "connection_list",
+  "lucy_catalog",
+  "kx_catalog",
+  "dictionary_search",
+  "discover_data",
+  "lucy_skill_search"
+] as const;
+
+/** Prepare: read context or a source, still not a question and not a query. */
+export const ACCESS_PREPARE_TOOLS = [
+  "wiki_search",
+  "wiki_read",
+  "lucy_skill_read",
+  "lucy_read_source",
+  "lucy_freshness",
+  "entity_details",
+  "sl_validate",
+  "resources/read",
+  "prompts/get"
+] as const;
+
+/** The begin-question call. A row of this grade is not itself a real question. */
+export const ACCESS_ASK_TOOLS = ["lucy_begin_question"] as const;
+
+/**
+ * Fact queries. Narrower than question-experience DATA_TOOLS: wiki and
+ * read-source stay in prepare, because those calls are not a user question
+ * and are not a completed data query.
+ */
+export const ACCESS_QUERY_TOOLS = [
+  "lucy_query",
+  "lucy_explain_query",
+  "lucy_certified_route",
+  "lucy_report_template"
+] as const;
+
+export type AccessGrade =
+  | "connect"
+  | "browse"
+  | "prepare"
+  | "ask"
+  | "query"
+  | "control"
+  | "unclassified";
+
+const ACCESS_BROWSE_SET: ReadonlySet<string> = new Set(ACCESS_BROWSE_TOOLS);
+const ACCESS_PREPARE_SET: ReadonlySet<string> = new Set(ACCESS_PREPARE_TOOLS);
+const ACCESS_ASK_SET: ReadonlySet<string> = new Set(ACCESS_ASK_TOOLS);
+const ACCESS_QUERY_SET: ReadonlySet<string> = new Set(ACCESS_QUERY_TOOLS);
+const ACCESS_CONTROL_SET: ReadonlySet<string> = new Set(CONTROL_PLANE_TOOL_NAMES);
+
+/**
+ * Exclusive access grade of one tool name.
+ *
+ * Protocol methods are connect, including `server/*`. An empty or unknown
+ * name is unclassified and must not fall through into query or ask.
+ */
+export function accessGrade(tool: string | null | undefined): AccessGrade {
+  if (isMcpProtocolMethod(tool)) return "connect";
+  if (typeof tool !== "string" || tool.length === 0) return "unclassified";
+  if (ACCESS_BROWSE_SET.has(tool)) return "browse";
+  if (ACCESS_PREPARE_SET.has(tool)) return "prepare";
+  if (ACCESS_ASK_SET.has(tool)) return "ask";
+  if (ACCESS_QUERY_SET.has(tool)) return "query";
+  if (ACCESS_CONTROL_SET.has(tool)) return "control";
+  return "unclassified";
+}
+
+function sqlStringList(values: readonly string[]): string {
+  return values.map((value) => `'${value.replaceAll("'", "''")}'`).join(", ");
+}
+
+function toolInList(toolExpr: string, values: readonly string[]): string {
+  if (values.length === 0) return "0";
+  return `${toolExpr} IN (${sqlStringList(values)})`;
+}
+
+/**
+ * SQL CASE whose result matches `accessGrade` for the same tool string.
+ * `server/` uses the same case-sensitive prefix as `protocolConditionSql`.
+ */
+export function accessGradeSql(alias?: string): SqlCondition {
+  const tool = `${qualifier(alias)}tool`;
+  return {
+    sql: `CASE
+      WHEN ${protocolConditionSql(alias).sql} THEN 'connect'
+      WHEN ${toolInList(tool, ACCESS_BROWSE_TOOLS)} THEN 'browse'
+      WHEN ${toolInList(tool, ACCESS_PREPARE_TOOLS)} THEN 'prepare'
+      WHEN ${toolInList(tool, ACCESS_ASK_TOOLS)} THEN 'ask'
+      WHEN ${toolInList(tool, ACCESS_QUERY_TOOLS)} THEN 'query'
+      WHEN ${toolInList(tool, CONTROL_PLANE_TOOL_NAMES)} THEN 'control'
+      ELSE 'unclassified'
+    END`
+  };
 }

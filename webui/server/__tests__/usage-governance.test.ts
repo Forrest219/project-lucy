@@ -134,6 +134,8 @@ describe("Spec 189 — /api/admin/governance/overview", () => {
     // identities) = 73
     expect(usage.calls).toBe(73);
     expect(usage.denied).toBe(1);
+    // Question KPI is a separate unit. It must not change the call-volume identity.
+    expect(data.realQuestions).toMatchObject({ state: "ok", value: 0 });
     // `errors` is exposed on the compatibility cards payload.
     expect(data.cards.errors).toBe(1);
     // Protocol-only Agents and the probe-only Agent are not active.

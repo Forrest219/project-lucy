@@ -516,7 +516,7 @@ Connection (连接)
 
 ### 4.5 访问治理 / 使用概况
 
-`/admin/usage` 页面（侧栏项 `admin-governance`，位于运行状态；旧 path `/admin/governance` redirect）术语来自 Spec 78 / 84，并由 Spec 86 修订路由与 KPI 主标签。Spec 148 增补「界面使用」视图（`?view=interface`）。Spec 156 将侧栏从访问治理移入运行状态，数据访问视图不再展示调用量、ACL 拒绝次数与多数请求耗时。**Spec 189 修订用量口径**：业务调用量改为「默认用量」口径（排除全部协议事件与默认视图排除的评测探针），并登记「默认用量业务调用」与「近 N 业务活跃 Token」：
+`/admin/usage` 页面（侧栏项 `admin-governance`，位于运行状态；旧 path `/admin/governance` redirect）术语来自 Spec 78 / 84，并由 Spec 86 修订路由与 KPI 主标签。Spec 148 增补「界面使用」视图（`?view=interface`）。Spec 156 将侧栏从访问治理移入运行状态，数据访问视图不再展示调用量、ACL 拒绝次数与多数请求耗时。**Spec 189 修订用量口径**：业务调用量改为「默认用量」口径（排除全部协议事件与默认视图排除的评测探针），并登记「默认用量业务调用」与「近 N 业务活跃 Token」。**2026-10-30 访问分级 Spec** 另登记真实问询及其伴随指标；这些词不替换业务调用量或近 N 活跃 Agent，落地前界面尚未展示：
 
 | Canonical Term | UI 主术语 | 允许补充说法 | 禁止文案 | 说明 |
 |---|---|---|---|---|
@@ -542,6 +542,15 @@ Connection (连接)
 | Last Business Use | 最近业务使用 | 最近业务调用 | 最近访问时间（混用） | Spec 189：全历史最后一次**默认用量业务调用**；协议事件与默认视图排除的评测探针不更新；可以早于「最近 MCP 访问」 |
 | Default Usage Call | 默认用量业务调用 | 业务调用（技术口径） | 全部 access_log、协议请求、原始非协议调用 | Spec 189：非协议业务工具调用或受权限保护内容读取，且不是 Spec 162 定义的默认视图排除评测探针；**技术口径**，不新增卡片标题 |
 | Business Active Token | 近 N 业务活跃 Token | 业务活跃 Token（叙述） | 近 N 使用过的凭据、可用 Token、仅发生握手的 Token | Spec 189：当前配置 Token 中，窗口内至少有 1 次默认用量业务调用的 Token |
+| Real Question Count | 近 N 真实问询 | 真实问询 | 近 N 业务调用量、近 N 调用量（作本卡标题）；真实问询覆盖率 | 窗口内已落库原文问询，按问询 ID 去重。来源只认 `reported_tool` 与历史 `reported`。见 `docs/specs/lucy-20261030-access-grade-and-daily-question-kpi-spec.md` |
+| Unreported Query Session | 近 N 未上报查数会话 | 未上报查数会话 | 未上报调用量；把它加进真实问询 | 窗口内有查数、且该会话从未落下原文问询的去重会话 |
+| Connect-only Session | 近 N 仅连接会话 | 仅连接会话 | 活跃会话（未说明只有连接）；把它加进真实问询 | 窗口内该会话的调用全部是连接级 |
+| Browse-without-ask Session | 近 N 浏览未问会话 | 浏览未问会话 | 浏览量；把它加进真实问询 | 到了浏览或准备，没有问询动作，也没有查数 |
+| Daily Question Table | 按日问询 | — | 趋势图、迷你图、sparkline（作本表标题） | Asia/Shanghai 日历日。各日相加等于同一窗口的四张卡。边缘日标明「未覆盖全天」 |
+| Queries per Question | 每问询查数 | — | 平均调用量（未说明分母是原文问询） | 挂到本窗口原文问询上的查数次数除以近 N 真实问询。分母为 0 时不显示数字 |
+| Unassigned Query Call | 未归属查数 | — | 未上报查数会话（混用） | 没有会话 ID 的查数次数，不折算成会话 |
+| Unlinked Query Call | 未挂接查数 | — | 失败调用（混用） | 没有挂到任何原文问询上的查数次数 |
+| Question Active Agent | 近 N 问询活跃 Agent | 问询活跃 Agent（叙述） | 近 N 活跃 Agent（混称）；最近活跃 Agent | 窗口内至少 1 条原文问询，或 1 个未上报查数会话。不替换 Spec 189 的近 N 活跃 Agent |
 | Audit Write Completeness | 审计写入完整性 | 数据完整性 | 日志完整（绝对保证） | 只表达当前 Lucy 进程观测到的 pending / failed 写入状态 |
 | Call Volume | 近 N 调用量 | 调用量（叙述） | 最近调用 | 调用监控页沿用；定义为 Business Call Volume |
 | Typical Request Latency | 多数请求耗时 | P95（次级括注） | 响应上限（P95）作主标签；平均响应时长、AVG(duration_ms) | hint：95% 的请求在此时间内完成 |
