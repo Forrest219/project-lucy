@@ -623,7 +623,6 @@ async function getDb(): Promise<Database.Database> {
       created_at            TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_ct_user_created ON conversation_turns(user_id, created_at);
-    CREATE INDEX IF NOT EXISTS idx_ct_session ON conversation_turns(session_id);
     CREATE TABLE IF NOT EXISTS inferred_turns (
       inferred_turn_id     TEXT PRIMARY KEY,
       user_id              TEXT NOT NULL,
@@ -728,6 +727,8 @@ async function getDb(): Promise<Database.Database> {
   ensureColumn(db, "inferred_turns", "client", "TEXT");
   ensureColumn(db, "inferred_turns", "session_id", "TEXT");
   db.exec(`
+    -- 存量库可能没有 session_id 列 —— 索引必须在 ensureColumn 之后建。
+    CREATE INDEX IF NOT EXISTS idx_ct_session ON conversation_turns(session_id);
     CREATE INDEX IF NOT EXISTS idx_al_user_token_ts ON access_log(user_id, token_hash_prefix, ts);
     CREATE INDEX IF NOT EXISTS idx_al_session_ts ON access_log(lucy_session_id, ts);
     CREATE INDEX IF NOT EXISTS idx_al_client_ip_ts ON access_log(client_ip, ts);
@@ -2541,35 +2542,41 @@ export async function bindPriorSessionCalls(input: {
   const tokenHash = input.tokenHashPrefix ?? "";
   const protocolList = protocolMethodSqlList();
 
-  // v0.3: 不再按 PRIOR_CALL_BIND_MS 窗口回填非协议调用；保留 handshake attachment 但 candidate/low。
-  const handshakeRows = database.prepare(`
-    SELECT id, tool FROM access_log
-    WHERE user_id = ?
-      AND lucy_session_id = ?
-      AND IFNULL(token_hash_prefix, '') = ?
-      AND tool IN (${protocolList})
-      AND (lucy_turn_id IS NULL OR lucy_turn_id = '')
-    ORDER BY ts ASC, id ASC
-  `).all(input.userId, input.sessionId, tokenHash) as Array<{ id: number; tool: string }>;
-  const seen = new Set<string>();
-  const handshakeIds: number[] = [];
-  for (const row of handshakeRows) {
-    if (seen.has(row.tool)) continue;
-    seen.add(row.tool);
-    handshakeIds.push(row.id);
-  }
-  if (handshakeIds.length > 0) {
+  // F-02：归属就地改写必须留下**前像**与账本序号，否则「归属有效值是否可按
+  // S 精确重建」不可证明（Spec §18.10 F-02）。改写与登记在同一事务内：
+  // 登记失败则改写一并回滚，不留「改写了却没有历史」的状态。
+  const ledgerSeq = await resolveLedgerSeq();
+  const journaled = hasAttributionMutationTable(database);
+
+  // Spec 162 §6.5 / SC-33：握手回填在**事务内**重新检查「仍未归属」，
+  // 只为**实际被更新**的行记录前像。SELECT 与 UPDATE 带同一谓词且同事务，
+  // 因此不会出现「查到的行已被别的轮次绑定，还要再绑一次」。
+  const apply = database.transaction(() => {
+    // v0.3: 不再按 PRIOR_CALL_BIND_MS 窗口回填非协议调用；保留 handshake attachment 但 candidate/low。
+    const handshakeRows = database.prepare(`
+      SELECT id, tool FROM access_log
+      WHERE user_id = ?
+        AND lucy_session_id = ?
+        AND IFNULL(token_hash_prefix, '') = ?
+        AND tool IN (${protocolList})
+        AND (lucy_turn_id IS NULL OR lucy_turn_id = '')
+      ORDER BY ts ASC, id ASC
+    `).all(input.userId, input.sessionId, tokenHash) as Array<{ id: number; tool: string }>;
+    const seen = new Set<string>();
+    const handshakeIds: number[] = [];
+    for (const row of handshakeRows) {
+      if (seen.has(row.tool)) continue;
+      seen.add(row.tool);
+      handshakeIds.push(row.id);
+    }
+    if (handshakeIds.length === 0) return 0;
     const placeholders = handshakeIds.map(() => "?").join(",");
-    // F-02：归属就地改写必须留下**前像**与账本序号，否则「归属有效值是否可按
-    // S 精确重建」不可证明（Spec §18.10 F-02）。改写与登记在同一事务内：
-    // 登记失败则改写一并回滚，不留「改写了却没有历史」的状态。
-    const ledgerSeq = await resolveLedgerSeq();
-    const journaled = hasAttributionMutationTable(database);
     const beforeRows = (
       database
         .prepare(
           `SELECT id, lucy_turn_id, turn_attribution_mode, turn_attribution_confidence, association_status
-             FROM access_log WHERE id IN (${placeholders})`
+             FROM access_log WHERE id IN (${placeholders})
+               AND (lucy_turn_id IS NULL OR lucy_turn_id = '')`
         )
         .all(...handshakeIds) as Array<{
         id: number;
@@ -2579,17 +2586,17 @@ export async function bindPriorSessionCalls(input: {
         association_status: string | null;
       }>
     );
-    const apply = database.transaction(() => {
-      database
-        .prepare(`
-          UPDATE access_log
-          SET lucy_turn_id = ?,
-              turn_attribution_mode = 'session_bound',
-              turn_attribution_confidence = 'low'
-          WHERE id IN (${placeholders})
-        `)
-        .run(input.turnId, ...handshakeIds);
-      if (!journaled) return;
+    database
+      .prepare(`
+        UPDATE access_log
+        SET lucy_turn_id = ?,
+            turn_attribution_mode = 'session_bound',
+            turn_attribution_confidence = 'low'
+        WHERE id IN (${placeholders})
+          AND (lucy_turn_id IS NULL OR lucy_turn_id = '')
+      `)
+      .run(input.turnId, ...handshakeIds);
+    if (journaled) {
       for (const row of beforeRows) {
         recordAttributionMutation(database, {
           accessLogId: row.id,
@@ -2609,10 +2616,10 @@ export async function bindPriorSessionCalls(input: {
           }
         });
       }
-    });
-    apply();
-  }
-  return handshakeIds.length;
+    }
+    return beforeRows.length;
+  });
+  return apply();
 }
 
 // ─── T03a: association_status backfill (audit-trust-2026-10-19-r1) ─────────

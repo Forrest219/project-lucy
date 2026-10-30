@@ -1600,8 +1600,14 @@ describe("Spec 137 audit evidence pack", () => {
       const entry = turns.body.data.entries[0];
       expect(entry.linkedCallCount).toBe(3);
       expect(entry.businessCallCount).toBe(2);
-      expect(entry.outcomeSummary).toEqual({ ok: 2, denied: 1, error: 0 });
-      expect(entry.outcomeSummary.ok + entry.outcomeSummary.denied + entry.outcomeSummary.error).toBe(
+      // Spec 162 修订：legacy 四桶 = 成功 / 拒绝 / 错误 / **预算终止**。
+      expect(entry.outcomeSummary).toEqual({ ok: 2, denied: 1, error: 0, budgetStop: 0 });
+      expect(
+        entry.outcomeSummary.ok
+        + entry.outcomeSummary.denied
+        + entry.outcomeSummary.error
+        + entry.outcomeSummary.budgetStop
+      ).toBe(
         entry.linkedCallCount
       );
       expect(entry.sources.map((s: { physicalTable: string }) => s.physicalTable)).toContain(
@@ -1683,6 +1689,120 @@ describe("T07 audit projection completeness (Spec §5.2)", () => {
       (await getAuditDb()).exec("DROP TRIGGER proj_poison");
       const recovered = await request(app.server).get("/api/admin/audit?limit=5").expect(200);
       expect(recovered.body.data.projection).toMatchObject({ complete: true, lag: 0, cursor: 6 });
+    } finally {
+      await app.close();
+    }
+  });
+});
+
+/**
+ * Spec 162 修订 / Plan S1 —— 预算终止的可观测性。
+ *
+ * SC-27：问询汇总有独立的「预算终止次数」列，恒等式
+ *        **关联调用数 = 成功 + 拒绝 + 错误 + 预算终止**。
+ * SC-28：执行结论仍以**八桶主状态**为准，四桶不是执行结论。
+ * SC-25 / SC-26：导出的两种情形 —— 不带 `outcome` 参数必须包含预算终止行；
+ *        显式 `outcome=ok` 只含 ok 行（显式筛选语义不被破坏）。
+ */
+describe("GET /api/admin/audit budget-stop observability (Spec 162 SC-25…SC-28)", () => {
+  it("SC-27 / SC-28 keeps budget terminations in their own bucket and keeps the linked-call identity", async () => {
+    const { writeConversationTurn, writeLog } = await import("../proxy/audit");
+    const now = Date.now();
+    const at = (offsetMs: number) => new Date(now + offsetMs).toISOString();
+
+    await writeConversationTurn({
+      turnId: "lucy_turn_budget_1",
+      userId: "budget-user",
+      questionSummary: "预算桶恒等式",
+      questionSource: "reported_tool"
+    });
+    const rows: Array<{ tool: string; outcome: "ok" | "denied" | "error" | "budget_stop"; reason?: string }> = [
+      { tool: "lucy_query", outcome: "ok" },
+      { tool: "lucy_read_source", outcome: "denied" },
+      { tool: "lucy_query", outcome: "error" },
+      { tool: "lucy_query", outcome: "budget_stop", reason: "question_budget_exhausted" }
+    ];
+    for (const [index, row] of rows.entries()) {
+      await writeLog({
+        ts: at(index * 1_000),
+        userId: "budget-user",
+        tool: row.tool,
+        outcome: row.outcome,
+        decisionReason: row.reason,
+        durationMs: 5,
+        requestId: `budget-call-${index}`,
+        lucyTurnId: "lucy_turn_budget_1"
+      });
+    }
+
+    const { buildServer } = await import("../index");
+    const app = buildServer();
+    await app.ready();
+    try {
+      const listRes = await request(app.server)
+        .get("/api/admin/audit/turns?user=budget-user&source=reported")
+        .expect(200);
+      const entry = listRes.body.data.entries[0];
+      expect(entry.outcomeSummary).toMatchObject({ ok: 1, denied: 1, error: 1, budgetStop: 1 });
+      // 恒等式：关联调用数 = 成功 + 拒绝 + 错误 + 预算终止。
+      const buckets = entry.outcomeSummary;
+      expect(buckets.ok + buckets.denied + buckets.error + buckets.budgetStop).toBe(entry.linkedCallCount);
+      expect(entry.linkedCallCount).toBe(4);
+      // 执行结论仍以八桶主状态为准（预算终止进 budget_stopped 桶，不是错误桶）。
+      expect(entry.primaryStatusSummary.budget_stopped).toBe(1);
+
+      const csvRes = await request(app.server)
+        .get("/api/admin/audit/turns/export?user=budget-user&source=reported")
+        .expect(200);
+      const [headerLine, dataLine] = csvRes.text.replace(/^﻿/, "").split("\n");
+      const headers = parseCsvLine(headerLine);
+      const cells = parseCsvLine(dataLine);
+      expect(cells[headers.indexOf("预算终止次数")]).toBe("1");
+      expect(cells[headers.indexOf("关联调用数")]).toBe("4");
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("SC-25 / SC-26 exports budget-stop rows unless the caller asks for outcome=ok", async () => {
+    const { writeLog } = await import("../proxy/audit");
+    const now = Date.now();
+
+    await writeLog({
+      ts: new Date(now).toISOString(),
+      userId: "export-user",
+      tool: "lucy_query",
+      outcome: "budget_stop",
+      decisionReason: "question_budget_exhausted",
+      durationMs: 5,
+      requestId: "export-budget-call"
+    });
+    await writeLog({
+      ts: new Date(now + 1_000).toISOString(),
+      userId: "export-user",
+      tool: "lucy_query",
+      outcome: "ok",
+      durationMs: 5,
+      requestId: "export-ok-call"
+    });
+
+    const { buildServer } = await import("../index");
+    const app = buildServer();
+    await app.ready();
+    try {
+      // 无 `outcome` 参数：必须包含预算终止行。
+      const all = await request(app.server)
+        .get("/api/admin/audit/export?user=export-user")
+        .expect(200);
+      expect(all.text).toContain("export-budget-call");
+      expect(all.text).toContain("export-ok-call");
+
+      // 显式 `outcome=ok`：只含 ok 行。
+      const okOnly = await request(app.server)
+        .get("/api/admin/audit/export?user=export-user&outcome=ok")
+        .expect(200);
+      expect(okOnly.text).toContain("export-ok-call");
+      expect(okOnly.text).not.toContain("export-budget-call");
     } finally {
       await app.close();
     }

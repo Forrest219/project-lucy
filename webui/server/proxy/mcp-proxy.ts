@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
-import { createServer, request as httpRequest, type IncomingMessage, type ServerResponse } from "node:http";
+import { createServer, request as httpRequest, type ClientRequest, type IncomingMessage, type ServerResponse } from "node:http";
 import path from "node:path";
 import { setSessionClient, type Identity } from "./identity.js";
 import { admitMcpRequest, MCP_UPSTREAM_PATH, type AdmissionAudit, type AdmittedRequest } from "./admission.js";
@@ -101,6 +101,7 @@ import {
   type RepairTargetEvidence,
   isBudgetUnavailable,
 } from "./question-experience.js";
+import { bindQuestionBudgetSettlement } from "./question-budget-lifecycle.js";
 import { applyLucyCallGuard, countWithoutSourceBeforeAcl, loadPublishedAmbiguityCatalog, queryGuardrailsEnabled } from "./query-guardrails.js";
 import {
   lookupReportTemplate,
@@ -215,9 +216,10 @@ function forwardToKtx(
   url: string,
   incomingHeaders: IncomingMessage["headers"],
   body?: Buffer,
-  sessionId?: string
+  sessionId?: string,
+  onRequest?: (request: ClientRequest) => void
 ): Promise<IncomingMessage> {
-  return forwardToUpstream({ host: KTX_HOST, port: KTX_PORT }, method, url, incomingHeaders, body, "KTX", sessionId);
+  return forwardToUpstream({ host: KTX_HOST, port: KTX_PORT }, method, url, incomingHeaders, body, "KTX", sessionId, onRequest);
 }
 
 function forwardToUpstream(
@@ -227,7 +229,8 @@ function forwardToUpstream(
   incomingHeaders: IncomingMessage["headers"],
   body: Buffer | undefined,
   label: string,
-  sessionId?: string
+  sessionId?: string,
+  onRequest?: (request: ClientRequest) => void
 ): Promise<IncomingMessage> {
   return new Promise((resolve, reject) => {
     // T04-3: no upstream call is started for a request a narrowing already covers.
@@ -257,6 +260,8 @@ function forwardToUpstream(
       { hostname: target.host, port: target.port, path: url, method, headers },
       resolve
     );
+    // Spec 162 §6.2 / SC-13：把在途请求句柄交给调用方，客户端断开时可以取消上游。
+    onRequest?.(upstream);
     upstream.setTimeout(UPSTREAM_TIMEOUT_MS, () => {
       upstream.destroy(new Error(`${label} upstream timeout after ${UPSTREAM_TIMEOUT_MS}ms`));
     });
@@ -394,7 +399,8 @@ async function forwardToKtxWithSession(
   method: string,
   url: string,
   incomingHeaders: IncomingMessage["headers"],
-  body: Buffer | undefined
+  body: Buffer | undefined,
+  onRequest?: (request: ClientRequest) => void
 ): Promise<SessionAwareUpstream> {
   const keepalive = upstreamSessionKeepaliveEnabled();
   const clientSessionId = normalizeHeader(incomingHeaders["mcp-session-id"]);
@@ -405,7 +411,7 @@ async function forwardToKtxWithSession(
   const sessionId = resolveOutboundSession(identity, incomingHeaders);
   session.gatewaySupplied = Boolean(sessionId) && sessionId !== clientSessionId;
 
-  let upstream = await forwardToKtx(method, url, headersWithOwnedSession(identity, incomingHeaders), body, sessionId);
+  let upstream = await forwardToKtx(method, url, headersWithOwnedSession(identity, incomingHeaders), body, sessionId, onRequest);
   let upstreamBody = await readUpstreamBody(upstream);
   if (!keepalive) return { upstream, body: upstreamBody, session };
 
@@ -430,7 +436,7 @@ async function forwardToKtxWithSession(
   for (const key of Object.keys(retryHeaders)) {
     if (key.toLowerCase() === "mcp-session-id") delete retryHeaders[key];
   }
-  upstream = await forwardToKtx(method, url, retryHeaders, body, freshSession);
+  upstream = await forwardToKtx(method, url, retryHeaders, body, freshSession, onRequest);
   upstreamBody = await readUpstreamBody(upstream);
   const stillRefused = isSessionRequiredFailure(
     upstream.statusCode,
@@ -3211,6 +3217,25 @@ async function handlePost(req: IncomingMessage, res: ServerResponse, admitted: A
   let parsedRpc: Record<string, unknown> | undefined;
   let initializeClientInfo: { name: string; version?: string } | undefined;
   let queryNormalizationReason: string | undefined;
+  // Spec 162 §6.2 / SC-13：在途上游请求句柄。客户端断开时据此取消上游。
+  // 结算发生在取消确认（上游 close）或绝对执行时限，不发生在 res.close。
+  let upstreamRequestHandle: ClientRequest | null = null;
+  let cancelUpstreamOnCapture = false;
+  const captureUpstreamRequest = (request: ClientRequest): void => {
+    upstreamRequestHandle = request;
+    if (!cancelUpstreamOnCapture || request.destroyed) return;
+    try {
+      request.destroy(new Error("client_disconnected"));
+    } catch {
+      // 句柄已经结束。
+    }
+  };
+  // Spec 162 §6.2 / SC-13 / SC-14：结算事实（绝对执行时限到点、取消未确认、
+  // 客户端断开）写进本次调用的审计行，不另开一行，避免污染四桶恒等式。
+  const noteBudgetSettlement = (facts: Record<string, unknown>): void => {
+    const previous = (argsSummary?.budgetSettlement ?? {}) as Record<string, unknown>;
+    argsSummary = { ...(argsSummary ?? {}), budgetSettlement: { ...previous, ...facts } };
+  };
 
   try {
     const parsed = JSON.parse(body.toString()) as Record<string, unknown>;
@@ -3325,17 +3350,21 @@ async function handlePost(req: IncomingMessage, res: ServerResponse, admitted: A
 
   // Spec 138: Session-bound matching is authoritative. Identity-only matching
   // remains a low-confidence compatibility fallback only when one candidate exists.
-  if (rpcMethod === "tools/call" && toolName && questionBudgetScopeMode() === "stable") {
+  if (rpcMethod === "tools/call" && toolName && questionBudgetScopeMode() === "stable" && questionBudgetEnabled()) {
     const preloaded = await questionBudget.preload(
       budgetIdentityKey(identity.userId, identity.tokenHashPrefix ?? ""),
       requestMeta.lucySessionId
     );
     if (preloaded?.turnId) {
+      // Spec 162 §6.4 / SC-03：归属在**冻结前**从稳定作用域恢复。
+      // 注册表条目的 TTL 锚点是**恢复时刻**，不是问询原始起点 ——
+      // 否则一个已超过 10 分钟的问询刚恢复就被 purge 掉，归属当次丢失。
+      // 问询年龄（慢问询标记）仍读稳定作用域的 `originStartedAt`。
       reportedTurns.record({
         identity,
         sessionId: requestMeta.lucySessionId,
         turnId: preloaded.turnId
-      }, preloaded.originStartedAt);
+      });
     }
   }
   if (rpcMethod === "tools/call" && toolName && toolName !== "lucy_begin_question") {
@@ -3614,8 +3643,26 @@ async function writeCertifiedRouteResponse(
       return;
     }
     const ticket = budgetDecision.ticket;
+    // Spec 162 §6.2：旁路入口同样受绝对执行时限约束。到点停止等待、取消上游，
+    // 记账封顶；取消未确认的事实写进审计。
+    let upstreamHandle: ClientRequest | null = null;
+    const deadlineTimer = ticket
+      ? setTimeout(() => {
+          try {
+            upstreamHandle?.destroy(new Error("absolute_execution_deadline"));
+          } catch {
+            // 上游句柄可能已关闭；忽略。
+          }
+          void questionBudget.settle(ticket, ticket.startMonoMs + QUESTION_BUDGET_ABS_EXEC_MS, {
+            timeoutUnconfirmed: true
+          });
+        }, QUESTION_BUDGET_ABS_EXEC_MS)
+      : null;
+    deadlineTimer?.unref();
     try {
-      const execution = await forwardAuthorizedLucyQuery(identity, gate.query);
+      const execution = await forwardAuthorizedLucyQuery(identity, gate.query, (request) => {
+        upstreamHandle = request;
+      });
       if (!execution.ok) {
         await respond(
           { error: execution.reason, routeId: gate.routeId, source: gate.source },
@@ -3636,6 +3683,8 @@ async function writeCertifiedRouteResponse(
         "allowed"
       );
     } finally {
+      if (deadlineTimer) clearTimeout(deadlineTimer);
+      // 成功、异常和提前退出都结算**同一张票据**（Spec §6.6）。
       if (ticket) await questionBudget.settle(ticket, questionBudget.monoNow());
     }
     return;
@@ -4076,17 +4125,47 @@ async function buildDenialRepairPayload(
         });
         return;
       }
+      if (budgetDecision.continued) {
+        // Spec 162 §6.7 / SC-30：续查生效是**独立于声明**的可区分事实，
+        // 并挂到本次数据调用上（同一 requestId）。声明事实写在
+        // `lucy_continue_question` 那一行的 `budgetContinuation.declared`。
+        const appliedFact = {
+          applied: true,
+          windowId: budgetDecision.ticket?.windowId ?? null,
+          round: budgetDecision.ticket?.round ?? null,
+          requestId: budgetDecision.ticket?.requestId ?? null
+        };
+        const previousFact = (argsSummary?.budgetContinuation ?? {}) as Record<string, unknown>;
+        argsSummary = { ...(argsSummary ?? {}), budgetContinuation: { ...previousFact, ...appliedFact } };
+      }
       if (budgetDecision.ticket) {
         const ticket = budgetDecision.ticket;
-        const timer = setTimeout(() => {
-          void questionBudget.settle(ticket, ticket.startMonoMs + QUESTION_BUDGET_ABS_EXEC_MS, {
-            timeoutUnconfirmed: true
-          });
-        }, QUESTION_BUDGET_ABS_EXEC_MS);
-        timer.unref();
-        res.once("finish", () => {
-          clearTimeout(timer);
-          void questionBudget.settle(ticket, questionBudget.monoNow());
+        // Spec 162 §6.2 / SC-13：res.close 只取消上游。结算等上游 close（取消确认），
+        // 或绝对执行时限。断开本身不清定时器，也不按断开时刻少计。
+        bindQuestionBudgetSettlement({
+          res,
+          getUpstream: () => upstreamRequestHandle,
+          now: () => questionBudget.monoNow(),
+          startMonoMs: ticket.startMonoMs,
+          absMs: QUESTION_BUDGET_ABS_EXEC_MS,
+          settle: (endMonoMs, flags) => {
+            void questionBudget.settle(ticket, endMonoMs, flags);
+          },
+          onDisconnected: () => {
+            cancelUpstreamOnCapture = true;
+            noteBudgetSettlement({ clientDisconnected: true });
+          },
+          onDeadline: (upstream) => {
+            try {
+              upstream?.destroy(new Error("absolute_execution_deadline"));
+            } catch {
+              // 上游句柄可能已经关闭；忽略，记账照常进行。
+            }
+            noteBudgetSettlement({
+              absoluteExecutionDeadlineMs: QUESTION_BUDGET_ABS_EXEC_MS,
+              timeoutUnconfirmed: true
+            });
+          }
         });
       }
     }
@@ -4317,7 +4396,17 @@ async function buildDenialRepairPayload(
         userId: identity.userId,
         client: identity.client,
         tool: toolName,
-        argsSummary: { tokenPresent: token.length > 0 },
+        argsSummary: {
+          tokenPresent: token.length > 0,
+          // Spec 162 §6.7 / SC-30：续查**声明**事实。与后续数据调用上的
+          // `budgetContinuation.applied` 是两条可区分事实。
+          budgetContinuation: {
+            declared: declared.ok === true && declared.declared === true,
+            idempotent: declared.ok === true && declared.idempotent === true,
+            windowId: declared.ok ? declared.windowId ?? null : null,
+            round: declared.ok ? declared.round ?? null : null
+          }
+        },
         outcome: declared.ok ? "ok" : "error",
         decisionReason: declared.ok ? "budget_continuation_declared" : declared.reason,
         errorDetail: declared.ok ? undefined : declared.reason,
@@ -4431,11 +4520,14 @@ async function buildDenialRepairPayload(
         });
         return;
       }
-      const begun = await questionBudget.beginQuestion({
-        identityKey: budgetIdentityKey(identity.userId, identity.tokenHashPrefix ?? ""),
-        sessionId: requestMeta.lucySessionId,
-        turnId
-      });
+      // Spec 162 §7.6 / SC-39：预算整体关闭时，问询开题不受预算存储故障牵连。
+      const begun = questionBudgetEnabled()
+        ? await questionBudget.beginQuestion({
+            identityKey: budgetIdentityKey(identity.userId, identity.tokenHashPrefix ?? ""),
+            sessionId: requestMeta.lucySessionId,
+            turnId
+          })
+        : { ok: true as const, previousTurnId: null, state: null as never };
       if (!begun.ok) {
         const responseBody = jsonRpcToolResult(requestId, JSON.stringify({
           reason: begun.reason
@@ -4459,12 +4551,20 @@ async function buildDenialRepairPayload(
         });
         return;
       }
-      if (begun.previousTurnId) reportedTurns.forget(begun.previousTurnId);
-      reportedTurns.record({
+      if (begun.previousTurnId) {
+        // Spec 162 §6.5：同身份同会话的新问询**显式取代**旧轮次。
+        // 取代事实写进本次开题的审计行（不另开一行，避免污染四桶恒等式）。
+        // 审计不得回传 scopeKey / identityKey —— 只记两个 turnId。
+        argsSummary = {
+          ...(argsSummary ?? {}),
+          budgetSupersession: { from: begun.previousTurnId, to: turnId }
+        };
+      }
+      reportedTurns.supersede({
         identity,
         sessionId: requestMeta.lucySessionId,
         turnId
-      });
+      }, begun.previousTurnId ?? undefined);
       await bindPriorSessionCalls({
         turnId,
         userId: identity.userId,
@@ -5192,7 +5292,7 @@ async function buildDenialRepairPayload(
   try {
     if (rpcMethod === "initialize") {
       // `initialize` is what establishes the session; never inject one into it.
-      upstream = await forwardToKtx(req.method ?? "POST", MCP_UPSTREAM_PATH, headersWithOwnedSession(identity, req.headers), outboundBody);
+      upstream = await forwardToKtx(req.method ?? "POST", MCP_UPSTREAM_PATH, headersWithOwnedSession(identity, req.headers), outboundBody, undefined, captureUpstreamRequest);
       upstreamBody = await readUpstreamBody(upstream);
     } else if (bufferedUpstream) {
       const forwarded = await forwardToKtxWithSession(
@@ -5200,7 +5300,8 @@ async function buildDenialRepairPayload(
         req.method ?? "POST",
         MCP_UPSTREAM_PATH,
         req.headers,
-        outboundBody
+        outboundBody,
+        captureUpstreamRequest
       );
       upstream = forwarded.upstream;
       upstreamBody = forwarded.body;
@@ -5211,7 +5312,8 @@ async function buildDenialRepairPayload(
         MCP_UPSTREAM_PATH,
         headersWithOwnedSession(identity, req.headers),
         outboundBody,
-        resolveOutboundSession(identity, req.headers)
+        resolveOutboundSession(identity, req.headers),
+        captureUpstreamRequest
       );
     }
   } catch (err) {
@@ -5800,7 +5902,8 @@ function normalizeHeader(v: string | string[] | undefined): string | undefined {
 /** Same gate as a live lucy_query: authorize, then forward the call to KTX. */
 export async function forwardAuthorizedLucyQuery(
   identity: Identity,
-  args: Record<string, unknown>
+  args: Record<string, unknown>,
+  onRequest?: (request: ClientRequest) => void
 ): Promise<{ ok: true; payload: unknown } | { ok: false; reason: string }> {
   const decision = await authorizeAndRewrite(identity, "lucy_query", args);
   if (!decision.allowed) return { ok: false, reason: decision.reason ?? "acl_denied" };
@@ -5814,7 +5917,7 @@ export async function forwardAuthorizedLucyQuery(
       method: "tools/call",
       params: { name: "lucy_query", arguments: outbound }
     }));
-    const upstream = await forwardToKtx("POST", "/mcp", { "content-type": "application/json" }, body, sessionId);
+    const upstream = await forwardToKtx("POST", "/mcp", { "content-type": "application/json" }, body, sessionId, onRequest);
     const text = await readUpstreamBody(upstream);
     if ((upstream.statusCode ?? 200) >= 400) return { ok: false, reason: "execution_interrupted" };
     return {

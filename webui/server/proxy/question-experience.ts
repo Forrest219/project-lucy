@@ -99,7 +99,7 @@ export type BudgetAllow = {
 export type BudgetDecision = BudgetAllow | BudgetStop | BudgetConcurrencyReject;
 
 export type ContinuationDeclaration =
-  | { ok: true; idempotent?: boolean; declared?: boolean }
+  | { ok: true; idempotent?: boolean; declared?: boolean; windowId?: number; round?: number }
   | { ok: false; reason: "question_budget_unavailable" | "pending_exists" | "no_credit" | "not_exhausted" | "mismatch" };
 
 /**
@@ -356,7 +356,7 @@ export class QuestionBudget {
       candidate.pendingToken = token;
       const published = await this.commit(scopeKey, candidate, `declare:${candidate.round}:${token}`, now);
       if (!published) return { ok: false, reason: "question_budget_unavailable" };
-      return { ok: true, declared: true };
+      return { ok: true, declared: true, windowId: published.windowId, round: published.round };
     });
   }
 
@@ -376,10 +376,12 @@ export class QuestionBudget {
         return { ok: false, reason: "question_budget_unavailable" };
       }
       const candidate = this.cloneState(state);
-      if (state.turnId || (state.calls ?? 0) > 0 || (state.busyMs ?? 0) > 0) {
+      // Spec 162 §6.5：`state.turnId != null` 判空（空串也是「有旧轮次」），
+      // 与伪代码一致，避免空串 turnId 让轮次不推进。
+      if (state.turnId != null || (state.calls ?? 0) > 0 || (state.busyMs ?? 0) > 0) {
         this.addArchived(candidate, state.round ?? 0, state.windowId ?? 0, state.busyMs ?? 0);
       }
-      if (state.turnId) candidate.round = (state.round ?? 0) + 1;
+      if (state.turnId != null) candidate.round = (state.round ?? 0) + 1;
       else candidate.round = Math.max(1, state.round ?? 0);
       const previousTurnId = state.turnId ?? null;
       candidate.turnId = input.turnId;
@@ -400,8 +402,8 @@ export class QuestionBudget {
   async settle(
     ticket: BudgetTicket,
     endMonoMs: number,
-    flags?: { timeoutUnconfirmed?: boolean }
-  ): Promise<{ settled: boolean; timeoutUnconfirmed?: boolean }> {
+    flags?: { timeoutUnconfirmed?: boolean; clientDisconnected?: boolean }
+  ): Promise<{ settled: boolean; timeoutUnconfirmed?: boolean; clientDisconnected?: boolean }> {
     if (ticket.settled) return { settled: true };
     return this.withScopeSerialization(ticket.scopeKey, async () => {
       if (ticket.settled) return { settled: true };
@@ -420,9 +422,11 @@ export class QuestionBudget {
       candidate.inflight = Math.max(0, (candidate.inflight ?? 0) - 1);
       candidate.currentConcurrency = Math.max(0, (candidate.currentConcurrency ?? 0) - 1);
       const committed = await this.commit(ticket.scopeKey, candidate, `settle:${ticket.requestId}`, Date.now());
-      if (!committed) return { settled: false, timeoutUnconfirmed: flags?.timeoutUnconfirmed };
+      if (!committed) {
+        return { settled: false, timeoutUnconfirmed: flags?.timeoutUnconfirmed, clientDisconnected: flags?.clientDisconnected };
+      }
       ticket.settled = true;
-      return { settled: true, timeoutUnconfirmed: flags?.timeoutUnconfirmed };
+      return { settled: true, timeoutUnconfirmed: flags?.timeoutUnconfirmed, clientDisconnected: flags?.clientDisconnected };
     });
   }
 
@@ -569,10 +573,12 @@ export class QuestionBudget {
         matched: boolean;
       } {
     const headerPresented = typeof continueToken === "string" && continueToken.length > 0;
+    // Spec 162 §6.3：可信头部**只有**两种 —— 已下发的 `presentedToken`，
+    // 或作用域行上已落库的**活跃 turnId**。请求解析出的 turnId 不作数：
+    // 它可能指向已失效或陈旧的轮次，用它换窗等于多出一条不核对凭证的续查入口。
     const headerTrusted = headerPresented && (
       continueToken === state.presentedToken
       || (state.turnId != null && continueToken === state.turnId)
-      || (turnId != null && continueToken === turnId)
     );
     const toolTrusted = state.pendingToken != null;
     const exhausted = this.isExhausted(state, now);
@@ -816,6 +822,14 @@ export function classifyFailure(input: {
   }
   if (reason === "timeout" || reason === "query_concurrency_exceeded" || text.includes("Timeout")) {
     return "引擎超时与并发";
+  }
+  // Spec 162 §6.2：并发超限是并发问题，不是用法问题（与 audit-classification 同口径）。
+  if (reason === "question_budget_concurrency_exceeded") {
+    return "引擎超时与并发";
+  }
+  // Spec 162 §6.3：续查声明被拒是调用者用错了续查通道。
+  if (reason === "pending_exists" || reason === "no_credit" || reason === "not_exhausted" || reason === "mismatch") {
+    return "用法与语义";
   }
   if (isFilterPushdownText(text) || reason === "filter_pushdown") return "过滤条件下推";
   if (input.outcome && input.outcome !== "ok") return "用法与语义";

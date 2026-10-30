@@ -479,6 +479,17 @@ const SCHEMA_FAILURE_REASONS = new Set([
   "missing_required_argument"
 ]);
 
+/**
+ * Spec 162 §6.3 —— 续查声明被拒的四种原因。它们都是**调用者用错了续查通道**
+ * （额度已用、已有待兑现声明、预算尚未用尽、凭证不匹配），归「用法与语义」。
+ */
+const CONTINUATION_DECLARATION_REJECTIONS = new Set([
+  "pending_exists",
+  "no_credit",
+  "not_exhausted",
+  "mismatch"
+]);
+
 export type ClassifiedError = {
   /** 七分类（v0.25 权威）。 */
   category: ErrorCategory | null;
@@ -518,6 +529,16 @@ export function classifyErrorCategory(input: ClassifyErrorInput): ClassifiedErro
   // budget_stop：主状态有 bucket_stopped 桶，162 四维保持无维度。
   if (outcome === "budget_stop" || reason === "question_budget_exhausted") {
     return { category: "budget_stopped", failureDimension: "", nullReason: "not_applicable" };
+  }
+
+  // Spec 162 §6.2：并发超限是**并发**问题，不是用法问题，也不消耗额度。
+  if (reason === "question_budget_concurrency_exceeded") {
+    return { category: "upstream_failed", failureDimension: "引擎超时与并发", nullReason: "not_applicable" };
+  }
+
+  // Spec 162 §6.3：续查声明被拒是调用者用错了续查通道 → 用法与语义。
+  if (CONTINUATION_DECLARATION_REJECTIONS.has(reason)) {
+    return { category: "validation_failed", failureDimension: "用法与语义", nullReason: "not_applicable" };
   }
 
   // cancelled：U8 —— 维度留空 + null_reason=not_applicable。

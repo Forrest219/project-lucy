@@ -471,7 +471,6 @@ export async function getAuditDb(): Promise<Database.Database> {
       created_at            TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_ct_user_created ON conversation_turns(user_id, created_at);
-    CREATE INDEX IF NOT EXISTS idx_ct_session ON conversation_turns(session_id);
     CREATE TABLE IF NOT EXISTS inferred_turns (
       inferred_turn_id     TEXT PRIMARY KEY,
       user_id              TEXT NOT NULL,
@@ -532,6 +531,8 @@ export async function getAuditDb(): Promise<Database.Database> {
   ensureColumn(db, "inferred_turns", "client", "TEXT");
   ensureColumn(db, "inferred_turns", "session_id", "TEXT");
   db.exec(`
+    -- 存量库可能没有 session_id 列 —— 索引必须在 ensureColumn 之后建。
+    CREATE INDEX IF NOT EXISTS idx_ct_session ON conversation_turns(session_id);
     CREATE INDEX IF NOT EXISTS idx_al_user_token_ts ON access_log(user_id, token_hash_prefix, ts);
     CREATE INDEX IF NOT EXISTS idx_al_session_ts ON access_log(lucy_session_id, ts);
     CREATE INDEX IF NOT EXISTS idx_al_client_ip_ts ON access_log(client_ip, ts);

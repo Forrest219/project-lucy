@@ -79,6 +79,39 @@ export class TurnCorrelationRegistry {
   }
 
   /**
+   * Spec 162 §6.5 / D6：同一身份 + 会话的新问询**显式取代**旧轮次。
+   * 取代只切换**后续**调用的归属；被取代轮次的归档计数保留可见，
+   * 不修改任何已写入的审计行。
+   */
+  supersede(input: {
+    identity: TurnCorrelationIdentity;
+    sessionId?: string;
+    turnId: string;
+  }, previousTurnId?: string): void {
+    if (previousTurnId) this.forget(previousTurnId);
+    this.record(input);
+  }
+
+  /**
+   * Spec 162 §6.5 / R07：按**身份 + 会话**查活跃 turn。
+   * 两个身份即使提交相同或空的 session 标识，也分属不同作用域，互不可见。
+   */
+  activeTurnFor(input: {
+    identity: TurnCorrelationIdentity;
+    sessionId?: string;
+  }, now = Date.now()): string | null {
+    this.purge(now);
+    const ownerKey = identityKey(input.identity);
+    let active: TurnEntry | null = null;
+    for (const entry of this.turns.values()) {
+      if (entry.identityKey !== ownerKey) continue;
+      if (input.sessionId !== undefined && entry.sessionId !== input.sessionId) continue;
+      if (!active || entry.createdAt > active.createdAt) active = entry;
+    }
+    return active?.turnId ?? null;
+  }
+
+  /**
    * 解析问询归属。
    *
    * B10：本方法**只负责收集证据**，裁决交给 `resolveAttributionByEvidence` ——
