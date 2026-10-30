@@ -4,6 +4,7 @@ This directory stores repository-level implementation plans that are not scoped 
 
 | Plan | Purpose |
 |---|---|
+| [2026-10-30-publish-workbench-three-column-plan.md](2026-10-30-publish-workbench-three-column-plan.md) | **v0.2，文档待评审、暂不开发**：发布工作台三栏与待发布口径，S0–S6 分阶段计划，新增确认侧栏逐表影响原因、证据、完整范围与阅读布局；PWB-01–26 全部未执行，不授权编码或部署 |
 | [lucy-20261030-agent-roster-plan.md](lucy-20261030-agent-roster-plan.md) | **v1.2 已定稿**：Agent 名册。第 3 轮 Codex 确认可定稿。可以按 S1、S2 开发。见 [审阅](../reviews/2026-10-30-codex-review-agent-roster.md)。Spec 见 [lucy-20261030-agent-roster-spec.md](../specs/lucy-20261030-agent-roster-spec.md) |
 | [lucy-20261030-login-accounts-plan.md](lucy-20261030-login-accounts-plan.md) | **v1.3：S1–S2 已落地（2026-10-30）**：登录账户页。SC-01–SC-18 全部有通过记录（组件测试、导航测试、术语检查）。未做浏览器走查、Docker 重建和客户交付。见 [第 3 轮](../reviews/2026-10-30-codex-review-login-accounts-round3.md)。Spec 见 [lucy-20261030-login-accounts-spec.md](../specs/lucy-20261030-login-accounts-spec.md) |
 | [lucy-20261030-version-info-identity-plan.md](lucy-20261030-version-info-identity-plan.md) | **已落地，SC 待验收**：版本信息身份块。F05、F06 已写入。SC-01–SC-10 的测试已通过。Spec 见 [lucy-20261030-version-info-identity-spec.md](../specs/lucy-20261030-version-info-identity-spec.md) |

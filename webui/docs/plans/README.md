@@ -68,6 +68,7 @@ M0 → M1 → M2 → M3 →（M4、M5 可并行）→ M6。M6 依赖 M3 已完�
 
 | 工单 | 里程碑 | 主题 |
 | --- | --- | --- |
+| [wo-20261030-display-snapshot-invalidation-isolation.md](wo-20261030-display-snapshot-invalidation-isolation.md) | 20261030 | Spec 195：展示快照变更去重与影响范围隔离，重点解决同版本重复重建和普通 overlay 牵连 Agent；**仅文档落盘，实现未开始，SI-01–SI-14 未执行** |
 | [wo-202609-03-admin-audit-csv-readability-metadata.md](wo-202609-03-admin-audit-csv-readability-metadata.md) | 202609-03 | Spec 141：访问日志 CSV 本地时间、秒级流水号文件名与字段说明元数据 |
 | [wo-202609-03-admin-audit-dual-csv-export.md](wo-202609-03-admin-audit-dual-csv-export.md) | 202609-03 | Spec 140：访问日志双粒度 CSV 导出，问询记录一问一行、调用流水一调用一行 |
 | [wo-202609-03-lucy-query-and-answer-reliability.md](wo-202609-03-lucy-query-and-answer-reliability.md) | 202609-03 | Spec 138/139：查询参数与 Turn 归因可靠性、Data Agent 可回答性和最终交付门禁（Implemented，未部署） |

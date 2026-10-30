@@ -4,7 +4,8 @@
 |---|---|
 | 文档名称 | project-lucy 项目概览 |
 | 文档类型 | Overview |
-| 版本 | v1.69 |
+| 版本 | v1.70 |
+| v1.70 更新 | 2026-10-30，登记两份远程新规格，仅文档落盘、未开发：① Spec 195 / WO-20261030 展示快照变更去重与影响范围隔离，SI-01–SI-14 未执行，不变更运行时授权、检测窗口或部署状态；② 发布工作台三栏 Spec v0.2 / Plan v0.2，PWB-01–26 未执行。⚠️ 版本号为跨会话共享计数器，写前须实读顶部版本行取 current+1 |
 | v1.69 更新 | 2026-10-30，**问询预算收口已执行**。用户批准四步。SC-13 的结算改到取消确认或绝对时限；SC-09 补了四类不计预算的 MCP 用例。SC-01–SC-48 逐条记录见 `docs/reviews/2026-10-30-question-budget-acceptance.md`。SC-04 有进程内 MCP 自动化（关服务、清模块、再经 HTTP 调用），不是操作系统或容器重启。Spec 162 §7.2 与升级建议书 §2.3 已改为已结算数据处理时长。不构成客户交付。⚠️ 版本号为跨会话共享计数器，写前须实读顶部版本行取 current+1 |
 | v1.67 更新 | 2026-10-30，L25-14 解开 V19／V22 与 D-03 台账的互相等待。大小写解析已落地；release evidence 未 passed 之前记 blocked，passed 的同一提交才填 `fixedIn`。C19 只收 P0 子集。V01–V22 仍未执行，D-03 仍 open。不关闭客户交付。⚠️ 版本号为跨会话共享计数器，写前须实读顶部版本行取 current+1 |
 | v1.66 更新 | 2026-10-30，L25-15 **§9 正文锁句作废**。v1.65 只改了条目前段，后段仍把「S1–S7 不得触及 `semantic-assets.ts` 锁生命周期、三条成为唯一保障」写在现行条目里。该句是 `3b7e8d32` 之前的口径，按它开工会把快照留在已经关上的临界区外面。现行锁落点改回主 Spec §5.2.1：快照接在该临界区内部，释放点不得提前。Spec／Plan 仍为 v0.11。SRR-01–SRR-24 仍未执行。本修订不改运行代码。⚠️ 版本号为跨会话共享计数器，写前须实读顶部版本行取 current+1 |
@@ -201,6 +202,8 @@ Lucy MCP Proxy 监听 `LUCY_PROXY_HOST:LUCY_PROXY_PORT`（默认容器内 `0.0.0
 2026-06-22 另验证了「VIEW-as-pseudo-table」变通方案（CIO demo）：role `superstore_region_huadong` 通过 VIEW `dataforai.superstore_orders_huadong` 把表级 ACL 锁定到单一区域，零代理层代码改动；细节见 `docs/access-control/design-governance-baseline.md` §3.2。
 
 ## 9. 关键文档索引
+
+展示快照变更去重与影响范围隔离：[Spec 195](../../webui/docs/195-display-snapshot-invalidation-isolation-spec.md) · [实施计划 WO-20261030](../../webui/docs/plans/wo-20261030-display-snapshot-invalidation-isolation.md)。重点为同版本去重和 overlay / Agent 影响隔离；仅文档落盘，实现及验收未开始。
 
 | 主题 | 文档 |
 |---|---|
