@@ -4,6 +4,7 @@ This directory stores repository-level implementation plans that are not scoped 
 
 | Plan | Purpose |
 |---|---|
+| [2026-10-30-lucy-row-policy-view-presentation-plan.md](2026-10-30-lucy-row-policy-view-presentation-plan.md) | **待审阅，不授权开发**：行权限视图呈现修订。S0 待拍板 D1–D10。S1–S4 未开始。SC-01–SC-18 未执行。功能编号待 PM 指派。Spec 见 [lucy-20261030-row-policy-view-presentation-spec.md](../specs/lucy-20261030-row-policy-view-presentation-spec.md) |
 | [2026-10-30-lucy-access-map-quiet-reading-plan.md](2026-10-30-lucy-access-map-quiet-reading-plan.md) | **待审阅，不授权开发**：访问关系图阅读降噪。S0 待拍板 D1–D8。S1–S4 未开始。SC-01–SC-16 未执行。功能编号待 PM 指派。Spec 见 [lucy-20261030-access-map-quiet-reading-spec.md](../specs/lucy-20261030-access-map-quiet-reading-spec.md) |
 | [2026-10-30-lucy-access-grade-and-daily-question-kpi-plan.md](2026-10-30-lucy-access-grade-and-daily-question-kpi-plan.md) | **S1–S3 已落地（2026-10-30），未做 Docker 重建**：访问分级与日真实问询 KPI。等级函数、overview 聚合、使用概况数据访问视图。D1–D9 已冻结。SC-01–SC-24、SC-26 有自动化测试。功能编号待 PM 指派。Spec 见 [lucy-20261030-access-grade-and-daily-question-kpi-spec.md](../specs/lucy-20261030-access-grade-and-daily-question-kpi-spec.md) |
 | [2026-10-29-lucy-question-budget-window-optimization-plan.md](2026-10-29-lucy-question-budget-window-optimization-plan.md) | **修订 Spec 162，P0，Plan v1.0 / Spec v1.0，2026-10-30 本分支已实现**：问询预算窗口与预算终止可观测性优化。D1–D9 已冻结。代理已按新口径运行。SC 全表尚未独立验收。SC-04 真实 MCP 重启未执行。报告见 [第 3 轮定稿](../reviews/2026-10-30-question-budget-round3-final.md) |
