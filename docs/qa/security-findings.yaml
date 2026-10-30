@@ -139,8 +139,13 @@ findings:
   #     webui/server/__tests__/row-policy-catalog-attribution.test.ts — V20 五类故障路径
   #       （resolve／read／parse／catalog／capability_unknown）全部失败关闭且带四元组；V21 字段不存在仅在目录可靠装载时归因。
   #   状态说明：代码已修复且回归用例在库，但 status 仍为 open——verifiedBy 要求引用本次 release evidence 中
-  #   passed 的用例 ID，而 real-e2e 从未被调度（见 G-01），V19／V22 尚无正式验收证据，故不填 fixedIn／verifiedBy，
-  #   不得据此宣称受影响客户场景已交付价值。取证后方可置 fixed 并回填。
+  #   passed 的用例 ID。采集器不再把「fixedIn 为空」写成「V19／V22 永远不能通过」：证据未齐时记 blocked，
+  #   release evidence 里 ROW25-V19 与 ROW25-V22 为 passed 的那次提交才填 fixedIn／verifiedBy。
+  #   仓库 mock、本机大小写不敏感卷、以及尚未进入 release evidence 的实跑都不填这两个字段。
+  #   2026-10-30：row-policy-d03-realfs.test.ts 在本机 Case-sensitive APFS 卷上通过
+  #   （LUCY_D03_REQUIRE_CASE_SENSITIVE=1）。这只证明解析器在真实大小写敏感文件系统上能命中 BIDM.yaml，
+  #   不是 release evidence，不填 fixedIn／verifiedBy。
+  #   不得据此宣称受影响客户场景已交付价值。G-01 与 Wave 0b 不因此解除。
   - id: D-03
     severity: P1
     status: open

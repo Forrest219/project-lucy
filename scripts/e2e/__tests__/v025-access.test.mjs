@@ -10,8 +10,9 @@
 //   * every id has id-SPECIFIC assertion steps — a copy-paste regression fails;
 //   * the fail-closed ids encode a refusal, and a permissive result is rejected
 //     (V15, V20, V21 among them);
-//   * V19 / V22 are D-03 maintenance-line conditional items: while D-03 is open
-//     their status can never be `passed`;
+//   * V19 / V22 stay conditional on D-03. While fixedIn is null their descriptor
+//     status stays not_run; a release-evidence pass is what may later record
+//     them as passed and fill fixedIn in the same commit.
 //   * the status semantics are the approved ones: an item whose only executed
 //     layer is the unit layer is `not_run`, never `passed`.
 //
@@ -34,9 +35,11 @@ import {
 } from "../lib/v025-coverage.mjs";
 import { BLOCKED_REASONS, RESULT_STATUSES, statusFromDimensions } from "../lib/v025-result.mjs";
 import {
+  ROW25_C19_IDS,
   ROW25_EXECUTION_GROUPS,
   ROW25_EXECUTION_IDS,
   ROW25_OWNER_BRANCH,
+  ROW25_P1_IDS,
   ROW25_SOURCE_SPEC,
   accessCase,
   accessCases,
@@ -210,19 +213,18 @@ describe("ROW25 execution descriptors (W2-ACCESS, Plan §5.3)", () => {
     }
   });
 
-  it("keeps V19 / V22 as D-03 maintenance-line conditional items that cannot be passed", () => {
+  it("keeps V19 / V22 conditional on D-03 until release evidence fills fixedIn", () => {
     assert.ok(d03, "D-03 must exist in the defect ledger");
-    assert.equal(d03.status, "open", "D-03's real state is open — this test must not forge a fix");
-    assert.equal(d03.fixedIn, null, "D-03's fixedIn stays empty until a fix is verified");
+    assert.equal(d03.status, "open", "D-03 stays open until release evidence passes");
+    assert.equal(d03.fixedIn, null, "fixedIn stays empty until that same evidence commit");
+    assert.deepEqual(d03.verifiedBy, []);
 
     const conditional = cases.filter((c) => c.conditional);
     assert.deepEqual(conditional.map((c) => c.executionId).sort(), ["ROW25-V19", "ROW25-V22"]);
     for (const c of conditional) {
       assert.equal(c.conditionalOn, "D-03", `${c.executionId} must name D-03 as its condition`);
       assert.equal(c.expectedStatus, "not_run", `${c.executionId} must not claim a status`);
-      assert.ok(c.expectedStatus !== "passed", `${c.executionId} can never be passed while D-03 is open`);
-      // the status derivation cannot produce a pass for these items either:
-      // only the unit layer is executable in this environment
+      assert.ok(!ROW25_C19_IDS.includes(c.executionId), `${c.executionId} is not a C19 id`);
       const status = statusFromDimensions(
         { unit: { status: "passed" } },
         { required: [...c.requiredExecutors], verifierPassed: true }
@@ -230,9 +232,25 @@ describe("ROW25 execution descriptors (W2-ACCESS, Plan §5.3)", () => {
       assert.equal(status, "not_run", `${c.executionId}: a single passing layer is never a pass`);
       const maintenance = c.evidenceDimensions.find((d) => d.dimension === "customer-maintenance-line");
       assert.ok(maintenance, `${c.executionId} must carry the maintenance-line dimension`);
-      assert.equal(maintenance.blockedReason, "delivery", `${c.executionId} is blocked on the 0.20.Z delivery`);
-      assert.equal(c.localCoverage.length, 0, `${c.executionId} has no repository layer that proves the fix`);
+      assert.equal(maintenance.state, "blocked");
+      assert.equal(maintenance.blockedReason, "environment");
+      assert.ok(
+        c.localCoverage.includes("webui/server/__tests__/row-policy-d03-realfs.test.ts"),
+        `${c.executionId} points at the real-filesystem regression`
+      );
     }
+  });
+
+  it("keeps template ids at P1 and out of the C19 set", () => {
+    for (const id of ROW25_P1_IDS) {
+      assert.equal(accessCase(id).priority, "P1", id);
+      assert.ok(!ROW25_C19_IDS.includes(id), `${id} is a template id`);
+    }
+    for (const id of ROW25_C19_IDS) {
+      assert.equal(accessCase(id).priority, "P0", id);
+      assert.ok(!ROW25_P1_IDS.includes(id), id);
+    }
+    assert.equal(ROW25_C19_IDS.length, 11);
   });
 
   it("keeps the fault dimension on V15 and no other id", () => {

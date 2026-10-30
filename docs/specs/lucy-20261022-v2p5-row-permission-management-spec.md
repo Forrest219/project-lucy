@@ -485,7 +485,7 @@ L25-01 要求 Agent 详情给出一句话（例如「行级策略按分公司」
 
 ## 9. 验收矩阵
 
-**V01–V22 全部未执行**。P0 功能验收覆盖 R2／R4／R5 对应用例；R1／R3 的用例随 P1 实施验收，不提前计入 P0 完成。**V08–V13、V15、V16 的 Role 分支、V20、V21 的可取证判据由 §14.6 替换；下表对应原行仅保留历史索引。** V19／V22 是 D-03 在 **0.20.Z 维护线**修复后的集成回归：在受影响场景取得这些证据前，不得宣称该场景交付价值，但不作为 R2／R4／R5 的开工依赖；V20／V21 不依赖 G5 修复。任何声称完成的范围都必须有其全部适用证据，环境或维护修复前置不足时记录 blocked 原因，不计 passed。
+**V01–V22 全部未执行**。P0 功能验收覆盖 R2／R4／R5 对应用例；R1／R3 的用例随 P1 实施验收，不提前计入 P0 完成。**V08–V13、V15、V16 的 Role 分支、V18、V20、V21 的可取证判据由 §14.6 替换；下表对应原行仅保留历史索引。C19 只收这一子集。** V19／V22 是 D-03 的大小写敏感集成回归。大小写不敏感解析已在本分支落地；release evidence 未出现 passed 之前记 blocked，不计 passed。该证据 passed 之后，才允许把这两条记为 passed，并在同一提交填写 `fixedIn` 与 `verifiedBy`。在此之前不得宣称受影响客户场景已交付。它们不是 R2／R4／R5 的开工依赖。V20／V21 使用小写 Schema 即可执行。任何声称完成的范围都必须有其全部适用证据，环境前置不足时记录 blocked 原因，不计 passed。
 
 | 编号 | 范围 | 场景 | 期望 |
 |---|---|---|---|
@@ -507,10 +507,10 @@ L25-01 要求 Agent 详情给出一句话（例如「行级策略按分公司」
 | V16 | R1／R4 | 策略摘要与版本 | 角色／模板变更后 `policyVersion` 变化；运行时换入生效，无需重启 |
 | V17 | R1 / P1 | 受保护源工具闸门 | 引用形态下 `lucy_read_source` 等未包装通道仍按 `row_policy_requires_wrapped_tool` 拒绝 |
 | V18 | R2 / P0 | 上游强制谓词未证明 | 取数仍按 `row_policy_upstream_unproven` 拒绝；不得因预览或模板而放宽 |
-| V19 | D-03 集成回归 | **清单文件名为大写（如 `BIDM.yaml`）** | 0.20.Z 修复后，在大小写敏感文件系统上合法字段可绑定；不再误报 unknown |
+| V19 | D-03 集成回归 | **清单文件名为大写（如 `BIDM.yaml`）** | 在大小写敏感文件系统上合法字段可绑定；不再误报 unknown。证据未齐时记 blocked |
 | V20 | R5 / P0 | 清单不可读、缺失、解析失败或目录能力未知 | 全部失败关闭；分别归因清单不可用或目录能力未知，并带连接 / Schema / 表 / 字段四元组 |
 | V21 | R5 / P0 | 字段确实不存在 | 仅在目录可靠装载时归因「字段不存在」，与 V20 可区分，且四元组完整 |
-| V22 | D-03 集成回归 | 同一 Role 在大写 schema 表上的行级条件 | 管理台预览与运行时注入的 `forced_filters` 等价；修复证据与 v0.25 新功能证据分开登记 |
+| V22 | D-03 集成回归 | 同一 Role 在大写 schema 表上的行级条件 | 管理台预览与运行时注入的 `forced_filters` 等价；修复证据与 v0.25 新功能证据分开登记。证据未齐时记 blocked |
 
 ---
 
@@ -994,7 +994,7 @@ FinalRows(agent, table)        = AgentRoleGrant(agent, table) AND AgentConstrain
 | V20 | 经 Admin 预览／保存产品入口覆盖：缺文件→resolve；拒绝读取→read；非法 YAML／YAML 可解析但结构非法→合同规定的 parse；目标表或目录不能建立→catalog；服务端能力未证明→capability_unknown。保留机器原因、归因码、row_grant／catalog 阶段与四元组；`no_catalog` 和 `unknown` 均覆盖，measure 等其他原因不误分类 |
 | V21 | 仅在 §14.4.2 完整结构与 overlay 校验通过的目录中验证缺字段，含显式合法零列目录；与 V20 的每类故障可区分，四元组完整且失败关闭 |
 
-V19／V22 仍是 D-03 在 0.20.Z 修复后的集成回归；当前 `status=open`、`fixedIn=null`、`verifiedBy=[]`，前置未满足时登记 blocked 原因，不计 passed。它们不是 R2／R4／R5 的开工依赖。V20／V21 使用小写 Schema、受控目录与服务端能力夹具即可执行，不依赖 G5 修复，也不得以 G5 未修为由跳过。
+V19／V22 是 D-03 的大小写敏感集成回归。当前 `status=open`、`fixedIn=null`、`verifiedBy=[]`。release evidence 未 passed 时登记 blocked，不计 passed。passed 之后才在同一提交填写 `fixedIn` 与 `verifiedBy`。它们不是 R2／R4／R5 的开工依赖，也不进入 C19。V20／V21 使用小写 Schema、受控目录与服务端能力夹具即可执行。
 
 ### 14.7 当前实现核对结论（2026-10-27 实施轮次回写）
 
@@ -1031,5 +1031,13 @@ C14–C18 已完成代码实施并完成实现后静态复审（自审），落�
 本次关闭仅针对 Spec 与 Plan 的文档合同，不关闭缺陷台账或验收门禁。C14–C18 已实施、未验收，C19 待正式验收；V01–V22 全部保持未执行。D-03 台账仍为 open（`fixedIn: null`，`verifiedBy: []`），本分支已有大小写不敏感解析，但 release evidence 未齐，V19／V22 在大小写敏感环境上保持 blocked。代码实施完成不等于验收通过。
 
 初审报告及本次复审关闭记录见 [Codex 独立审阅报告](../reviews/2026-10-27-codex-review-row-permission-management-p0.md)；初审“退回”保留为历史结论，不覆盖本节的文档关闭状态。
+
+### 14.9 验收口径（2026-10-30）
+
+本节只解开 V19／V22 与 D-03 台账的互相等待，不把任何 V 项改成已执行，也不关闭 C19。
+
+- C19 的正式验收集合是 V08–V13、V15、V16 的 Role 分支、V18、V20、V21。V01–V07、V14、V17 保持 P1。V15 在完整故障注入之前保持 blocked。
+- 仓库里经管理台预览／保存入口跑过的用例，只说明本机产品入口有回归锁。它们不填写验收通过，也不填写 D-03 的 `fixedIn`。
+- D-03 的大小写不敏感解析已经落在 `resolveManifestFilePath`。台账保持 `open` / `fixedIn: null` / `verifiedBy: []`，直到 release evidence 里 V19 与 V22 为 passed。那一次提交再填写 `fixedIn` 与 `verifiedBy`。这不解除客户场景交付。
 
 — 完
