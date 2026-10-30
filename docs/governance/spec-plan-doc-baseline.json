@@ -2777,10 +2777,6 @@
       "rule": "close-layer"
     },
     {
-      "file": "docs/specs/lucy-20261030-access-map-quiet-reading-spec.md",
-      "rule": "close-layer"
-    },
-    {
       "file": "docs/specs/lucy-20261030-audit-context-bar-spec.md",
       "rule": "close-layer"
     },

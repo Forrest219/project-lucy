@@ -2,15 +2,15 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档版本 / 日期 | **v0.1** / 2026-10-30 |
-| 目标版本 / 优先级 | 不绑定产品版本号 / **P1**。功能编号待 PM 指派 |
-| 主 Spec | [访问关系图阅读降噪 Spec](../specs/lucy-20261030-access-map-quiet-reading-spec.md)（**v0.1 待审阅**） |
-| 权威语义 | [Spec 187](../../webui/docs/187-access-relation-sankey-spec.md)。本 Plan 不改其 API、边状态、URL 值、两档措辞 |
-| 状态 | **待审阅**。S1–S4 未开始 |
-| 授权边界 | 只交付本 Plan 与主 Spec。**不授权**改页面、改 `TD-187-01`、改 Spec 187 §4.4、构建镜像或部署 |
-| 验收 | SC-01–SC-16 未执行 |
+| 文档版本 / 日期 | **v0.3** / 2026-10-30 |
+| 目标版本 / 优先级 | 不绑定产品版本号 / **P1**。功能编号无，不进入 v0.25 登记册 |
+| 主 Spec | [访问关系图阅读降噪 Spec](../specs/lucy-20261030-access-map-quiet-reading-spec.md)（**v0.3 已验收**） |
+| 权威语义 | [Spec 187](../../webui/docs/187-access-relation-sankey-spec.md)。本 Plan 不改其 API、边状态、URL 值、两档措辞。Spec 187 的 SC-01–SC-14 不在本条出口 |
+| 状态 | **v0.3 已验收**（2026-10-30）。S0–S4 已完成。SC-01–SC-16 关闭。本条收口不表示可上线 |
+| 授权边界 | 已按授权实施：改页面、改 `TD-187-01`、改 Spec 187 §4.4 僵尸授权行的 UI 表现。**不涉及**构建镜像、部署、`git commit` / `git push`、浏览器走查 |
+| 验收 | SC-01–SC-16 **已验收**（2026-10-30）。依据是 `access-map.test.tsx` 与 `access-map-layout.test.tsx` 合计 36 项通过，以及 `npm run lint:terminology` 退出码 0。浏览器走查不在本条出口 |
 | 实施主体 | Lucy WebUI `webui/src`。不修改 KTX，不修改 `webui/server/admin/access-map.ts` |
-| 待拍板 | **D3**（僵尸授权流带改中性）与 **D5**（图下清单视觉隐藏）。否决其中一条时，其余阶段仍可做 |
+| 待拍板 | **已关闭**（2026-10-30）：D1–D8 全部采纳，D3 与 D5 均未否决，否决退路已关闭 |
 
 ---
 
@@ -23,7 +23,7 @@
 1. **页壳**：页头、分段窗口、`pl-admin-tabbar`、三张 Metric Card、口径说明与快照折叠。
 2. **图面**：列标题、定宽卡片、按 Spec §5.3 着色、横向滚动、视觉隐藏的键盘清单。
 3. **明细与次级表**：聚焦面包屑、边明细抽屉、凭证表、数据表的可见标题与中文类型。
-4. **登记**：审阅通过后更新 `TD-187-01` 与 Spec 187 §4.4 的僵尸授权 UI 表现列。
+4. **登记**：`TD-187-01` 与 Spec 187 §4.4 的僵尸授权 UI 表现已指向主 Spec §5.3。
 
 实施原则：
 
@@ -34,7 +34,9 @@
 
 ## 2. 开工前置
 
-### S0 审阅（当前阶段）
+### S0 审阅（已关闭）
+
+**2026-10-30 拍板结论**：D1–D8 全部按 Spec §4 的「提议」列采纳，**无否决项**。D3、D5 的否决退路已关闭。本节保留原拍板清单作为记录。
 
 开工前要有书面拍板，至少覆盖：
 
@@ -49,7 +51,7 @@
 | D7 | 凭证清单改表 |
 | D8 | 视图用 `pl-admin-tabbar`；窗口可见文案改为近 24 小时 / 近 7 天 / 近 30 天 |
 
-D3 或 D5 被否决时，按 Spec §4 的退路写进拍板记录，再开工。S0 通过前不改 `webui/src`。
+D3 与 D5 均未否决，否决退路已关闭。S0 通过前未改 `webui/src`。
 
 ## 3. 文件落点
 
@@ -64,8 +66,9 @@ D3 或 D5 被否决时，按 Spec §4 的退路写进拍板记录，再开工。
 | `webui/src/components/admin/AccessMapTable.tsx` | 可见标题、中文类型、状态徽章、数字右对齐、表头吸顶 | S3 |
 | `webui/src/components/admin/AccessMapCredentialList.tsx` | 改为单表 | S3 |
 | `webui/src/__tests__/access-map.test.tsx` | 按 SC-14 更新断言，保留 test id | S1–S3 |
-| `webui/docs/design-system/99-governance.md` | `TD-187-01` 的僵尸授权着色句 | S4，且仅在 D3 通过后 |
-| `webui/docs/187-access-relation-sankey-spec.md` | §4.4 僵尸授权 UI 表现改为引用本 Spec §5.3 | S4，且仅在 D3 通过后 |
+| `webui/src/__tests__/access-map-layout.test.tsx` | 新增：布局几何自检（SC-07）与源码色值扫描（SC-15） | S2、S4 |
+| `webui/docs/design-system/99-governance.md` | `TD-187-01` 的僵尸授权着色句已指向主 Spec §5.3 | S4 |
+| `webui/docs/187-access-relation-sankey-spec.md` | §4.4 僵尸授权 UI 表现已改为引用主 Spec §5.3 | S4 |
 
 ### 3.2 不改
 
@@ -90,7 +93,7 @@ D3 或 D5 被否决时，按 Spec §4 的退路写进拍板记录，再开工。
 
 1. `layoutAccessMap` 把节点宽度改为定宽卡片，高度取 `max(两行字, 流量高度)`。
 2. 流带锚点改到卡片左右缘。单测断言：任一节点文字盒与任一流带采样点不重叠。
-3. 按 Spec §5.3 改 `ribbonStrokeClass` / `kernelStrokeClass`。D3 若被否决，这一步跳过，只保留卡片布局。
+3. 按 Spec §5.3 改 `ribbonStrokeClass` / `kernelStrokeClass`。D3 已采纳，这一步已执行。
 4. SVG 去掉 `max-w-full`。外层 `overflow-x: auto`。
 5. 节点清单与异常边清单加视觉隐藏 class。`data-testid`、按钮回调、`aria-expanded` 保留。
 6. 列标题按当前 `layer` 渲染。
@@ -109,11 +112,11 @@ D3 或 D5 被否决时，按 Spec §4 的退路写进拍板记录，再开工。
 
 ### S4 登记与回归
 
-1. D3 通过时，改 `TD-187-01` 与 Spec 187 §4.4 僵尸授权行的 UI 表现，指向本 Spec §5.3。判定条件与状态名不动。
+1. D3 已采纳。`TD-187-01` 与 Spec 187 §4.4 僵尸授权行的 UI 表现已指向主 Spec §5.3。判定条件与状态名未改。
 2. 跑 `webui` 下访问关系图相关单测，以及 `npm run lint:terminology`。
-3. 把主 Spec 与本 Plan 的状态从「待审阅」改为「已落地，SC 待验收」，并写明哪些 SC 有自动化证据。
+3. 主 Spec 与本 Plan 的状态已写成「v0.3 已验收」，并写明 SC-01–SC-16 的证据。
 
-**出口**：SC-14、SC-16。S4 不把「测试绿了」写成验收通过。
+**出口**：SC-14、SC-16。2026-10-30 已随 SC-01–SC-16 一并验收。
 
 ## 5. 验收
 
@@ -125,24 +128,37 @@ D3 或 D5 被否决时，按 Spec §4 的退路写进拍板记录，再开工。
 - SC-14 以该测试文件加 `docs/qa/selector-contract.md` 的既有 id 仍能对上为准。
 - SC-15 以源码检索 `AccessMap*.tsx` 无新的 `#` 色值为准。
 - SC-16 以 `npm run lint:terminology` 退出码 0 为准。
-- 浏览器点击验收不在本 Plan 的默认范围内。若审阅把某条 SC 改成必须真浏览器，再单列，不默认补 Playwright。
+
+落地现状（2026-10-30）：
+
+| 证据项 | 落点 | 状态 |
+|---|---|---|
+| SC-01–SC-13 | `webui/src/__tests__/access-map.test.tsx` | 有断言 |
+| SC-07 的几何自检 | `webui/src/__tests__/access-map-layout.test.tsx` | 有断言 |
+| SC-14 | `webui/src/__tests__/access-map.test.tsx`（既有 test id 仍可找到） | 有断言 |
+| SC-15 | `webui/src/__tests__/access-map-layout.test.tsx`（源码扫描无裸十六进制） | 有断言 |
+| SC-16 | 仓库根 `npm run lint:terminology` | 已跑，退出码 0 |
+
+2026-10-30 用户批准验收。上表即本条出口，SC-01–SC-16 关闭。浏览器走查归 [`lucy-20261030-webui-release-ux-review-spec.md`](../specs/lucy-20261030-webui-release-ux-review-spec.md) 的必走表面，不在本条出口。Spec 187 的 SC-01–SC-14 不因本 Plan 收口而关闭。
 
 ## 6. 完成定义
 
-同时满足才算本 Plan 做完：
+2026-10-30 本 Plan 已收口。下列条件均已满足：
 
-1. S0 的八条决策有拍板记录，否决项写明了退路。
-2. S1–S3 的代码与测试在仓库里，且对应 SC 有断言。
-3. D3 通过时，`TD-187-01` 与 Spec 187 §4.4 已改完；D3 否决时，这两处保持原句。
-4. SC-16 已跑过。
-5. 主 Spec 与本 Plan 的状态句已更新。
+1. S0 的八条决策有拍板记录。D3、D5 未否决，否决退路已关闭。
+2. S1–S3 的代码与测试在仓库里，且 SC-01–SC-15 有断言。
+3. `TD-187-01` 与 Spec 187 §4.4 僵尸授权行的 UI 表现已指向主 Spec §5.3。
+4. SC-16 已跑过，`npm run lint:terminology` 退出码 0。
+5. 主 Spec 与本 Plan 的状态句为「v0.3 已验收」。
 6. 没有改动 `/api/admin/access-map` 的响应形状。
+
+浏览器走查、Spec 187 的 SC-01–SC-14、镜像构建、部署与 git 提交不在本完成定义内。本条收口不表示可上线。
 
 ## 7. 风险
 
 | 风险 | 表现 | 对策 |
 |---|---|---|
-| D3 与 `TD-187-01` 同时生效 | 代码已是中性流带，治理条文仍写 warning | S2 着色与 S4 条文同一批提交。S0 未通过 D3 时不改着色函数 |
+| D3 与 `TD-187-01` 同时生效 | 代码已是中性流带，治理条文仍写 warning | S2 着色与 S4 条文已在同一批落地。D3 已采纳 |
 | 卡片最小高度拉高表列 | 表多时图变长，左列留白变大 | 接受留白。流量仍决定高度下限以上的比例。不把标签再放回流带通道 |
 | 视觉隐藏被写成 `display: none` | 读屏与测试都丢按钮 | Spec §5.7 禁止 `display: none` 与 `aria-hidden`。SC-09 断言按钮存在且不占布局高度 |
 | 抽屉吞掉 Esc | 聚焦态无法用键盘返回全图 | Esc 分两段：开着抽屉只关闭，关着才清 `focus`。SC-11 覆盖返回全图 |
@@ -163,5 +179,6 @@ D3 或 D5 被否决时，按 Spec §4 的退路写进拍板记录，再开工。
 | 6 | Spec 的 Design System Compliance 含四段 |
 | 7 | `docs/README.md` 与 `docs/plans/README.md` 已登记 |
 | 8 | 无新命令、无新 CI job |
-| 9 | 功能编号待 PM 指派 |
-| 10 | 落盘后执行 `npm run lint:spec-docs`，结果写在审阅回复里 |
+| 9 | 功能编号无。不进入 v0.25 登记册 |
+| 10 | 2026-10-30 闭口时执行 `npm run lint:spec-docs`。本 Spec 与本 Plan 无新增形态违规。工作区里另有与本功能无关的既有违规，整条命令退出码不是 0 |
+| 11 | 主 Spec 已含「闭口层级」，层级为功能合同 |

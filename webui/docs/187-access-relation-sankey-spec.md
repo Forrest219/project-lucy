@@ -19,7 +19,7 @@
 
 > **Spec 189 修订（2026-10-27）**：本文的**授权面**、**`access_log_sources` 访问主体**、调用 ID 去重与守恒算法**全部不变**；仅**凭证清单的「统计期调用次数」**改为 Default Usage Call（排除全部协议事件与默认视图排除的评测探针）。真实表访问事实（含真实评测调用）**不因默认用量口径被过滤**，Access Path 的存在性去重语义不变。口径见 `webui/docs/189-usage-metrics-truthfulness-and-cross-page-consistency-spec.md` §6。
 
-> **呈现修订（待审阅，2026-10-30）**：数据语义、API、URL 与边状态判定不变。页头、信号条、图面着色、图下清单、凭证清单与数据表的阅读方式见 [`docs/specs/lucy-20261030-access-map-quiet-reading-spec.md`](../../docs/specs/lucy-20261030-access-map-quiet-reading-spec.md)。审阅通过前，本节 §4.4 的 UI 表现列仍是现行实现口径。
+> **呈现修订（已验收，2026-10-30）**：数据语义、API、URL 与边状态判定不变。页头、信号条、图面着色、图下清单、凭证清单与数据表的阅读方式以 [`docs/specs/lucy-20261030-access-map-quiet-reading-spec.md`](../../docs/specs/lucy-20261030-access-map-quiet-reading-spec.md) v0.3 为准。本文 §4.4 僵尸授权行的 UI 表现指向该 Spec §5.3。本文 SC-01–SC-14 仍未执行。
 
 ---
 
@@ -236,7 +236,7 @@ AccessPath = (AgentId, RoleId, ConnectionId, Schema, TableName)
 | 条件 | 边状态 | UI 表现 | 含义 |
 |---|---|---|---|
 | `grantPaths > 0` 且 `accessPaths > 0` | `normal` | 内核填充，无描边 | 正常 |
-| `grantPaths > 0` 且 `accessPaths == 0` | `dormant` | 内核缺失，节点徽标「僵尸授权 N」 | 有权未用（僵尸授权） |
+| `grantPaths > 0` 且 `accessPaths == 0` | `dormant` | 内核缺失，节点徽标「僵尸授权 N」；**流带本体的 UI 表现见 [呈现修订 Spec §5.3](../../docs/specs/lucy-20261030-access-map-quiet-reading-spec.md)**（判定条件与状态名不变） | 有权未用（僵尸授权） |
 | `grantPaths == 0` 且 `accessPaths > 0` | `needs_review` | 警示描边 + 计数 | 需复核信号（§4.9） |
 | `grantPaths > 0` 且 `accessPaths > grantPaths` | `overflow` | 警示描边 | 当前授权口径下访问路径多于授权路径 |
 
@@ -737,7 +737,7 @@ webui/server/admin/access-map.ts 服务端：授权层 + 访问层构建 + 降�
 
 **设计登记已完成，组件已挂载，验收未执行。**
 
-`webui/docs/design-system/99-governance.md` 的 TD-187-01 已登记：`series/grant` 与 `series/access` 各有 `default` / `subtle`；僵尸授权与需复核使用 `warning`，确凿越权使用 `danger`；需复核为虚线、确凿越权为实线；禁止裸 hex，状态不得只靠颜色区分。两组系列色实施时仍须验证流带与背景对比度，`danger` 不得用于非状态语义。本 Spec 的 §7.4 图例与 §4.4 状态引用以该登记为准。
+`webui/docs/design-system/99-governance.md` 的 TD-187-01 已登记：`series/grant` 与 `series/access` 各含 `default` / `subtle`；僵尸授权的流带本体使用 `series/grant` 的 `default`（状态由卡片文字承担）、需复核使用 `warning`，确凿越权使用 `danger`；需复核为虚线、确凿越权为实线；禁止裸 hex，状态不得只靠颜色区分。着色口径的逐项表述见 [呈现修订 Spec §5.3](../../docs/specs/lucy-20261030-access-map-quiet-reading-spec.md)。两组系列色实施时仍须验证流带与背景对比度，`danger` 不得用于非状态语义。本 Spec 的 §7.4 图例与 §4.4 状态引用以该登记为准。
 
 ---
 

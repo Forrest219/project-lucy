@@ -143,6 +143,44 @@ export type AccessMapResponse = {
   };
 };
 
+/**
+ * 节点类型的中文列名（数据表「类型」列与图面列标题共用）。
+ *
+ * 技术标识 `agent` / `role` / `connection` / `table` / `schema` **不得**原样出现在
+ * 数据表「类型」列（呈现修订 Spec「Forbidden terms」），所以这里只保留一处映射。
+ */
+export function accessMapNodeKindLabel(kind: AccessMapNodeKind): string {
+  switch (kind) {
+    case "agent":
+      return "Agent";
+    case "role":
+      return "角色";
+    case "connection":
+      return "连接";
+    case "schema":
+      return "Schema";
+    case "table":
+      return "表";
+    default:
+      return "Token";
+  }
+}
+
+/**
+ * 统计窗口的**可见**文案。URL 里的值仍是 `24h` / `168h` / `720h`（Spec 187 §6.3），
+ * 两者不能互相替代：URL 值是可分享的技术参数，可见文案是给人读的。
+ */
+export function accessMapWindowLabel(value: string): string {
+  switch (value) {
+    case "24h":
+      return "近 24 小时";
+    case "720h":
+      return "近 30 天";
+    default:
+      return "近 7 天";
+  }
+}
+
 /** 节点副行：「N 个 Agent · M 条路径」。路径数绝不能显示成 Agent 数（§4.2）。 */
 export function accessMapNodeSubtitle(node: AccessMapNode): string {
   const agents = node.meta.grantUsers ?? 0;
@@ -192,6 +230,25 @@ export const ACCESS_MAP_NEEDS_REVIEW_TIER_NOTE =
  */
 export const ACCESS_MAP_CONFIRMED_TIER_SOURCE =
   "确凿越权判定来源：调用当时授权亦不覆盖（取自调用当时的授权快照）";
+
+/**
+ * 僵尸授权档的口径说明（呈现修订 Spec §5.2 指标卡 ⓘ 内容）。
+ *
+ * 这是「有权未用」的判据，**不含任何越权字样**：僵尸授权是配置事实，
+ * 不是行为指控。
+ */
+export const ACCESS_MAP_DORMANT_TIER_NOTE =
+  "授权路径数大于 0，且窗口内访问路径数为 0";
+
+/**
+ * Token 过滤提示句（Spec 187 §4.5「交互诚实性」）。
+ *
+ * **逐字固定**：读者必须能分清「访问层被过滤」与「授权层被收窄」。
+ * 首尾两段拆出来是为了让 Token label 单独包在 `notranslate` 节点里，
+ * 而整句的可见文字必须保持「已按 Token {label} 过滤访问层，授权层不受影响。」
+ */
+export const ACCESS_MAP_TOKEN_FILTER_NOTICE_HEAD = "已按 Token ";
+export const ACCESS_MAP_TOKEN_FILTER_NOTICE_TAIL = " 过滤访问层，授权层不受影响。";
 
 /**
  * 降级原因文案（§5.5 / §7.6）。

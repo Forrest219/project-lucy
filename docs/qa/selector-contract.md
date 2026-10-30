@@ -1501,6 +1501,7 @@ L25-15 整批恢复抽屉。三个分区各自独立，不合并成一句「同�
 | `access-map-edge-badges` | 访问关系图：edge badges | `components/admin/AccessMapCanvas.tsx` |
 | `access-map-edge-detail` | 访问关系图：edge detail | `components/admin/AccessMapCanvas.tsx` |
 | `access-map-edge-detail-path-${evaluation.pathKey}` | 访问关系图：edge detail path ${evaluation.pathKey} | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-edge-drawer` | 访问关系图：edge drawer（边明细右侧抽屉，呈现修订 D6） | `components/admin/AccessMapCanvas.tsx` |
 | `access-map-kernel-${link.edge.id}` | 访问关系图：kernel ${link.edge.id} | `components/admin/AccessMapCanvas.tsx` |
 | `access-map-link-${link.edge.id}` | 访问关系图：link ${link.edge.id} | `components/admin/AccessMapCanvas.tsx` |
 | `access-map-node-${node.id}` | 访问关系图：node ${node.id} | `components/admin/AccessMapCanvas.tsx` |
