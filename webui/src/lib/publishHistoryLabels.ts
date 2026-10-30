@@ -29,19 +29,20 @@ export type PublishHistoryReindexStatusFilter =
   | "running"
   | "not_run";
 
-export type TriggerLabel = "WebUI 发布" | "WebUI 强制重建索引" | "系统";
+export type TriggerLabel = "WebUI 发布" | "WebUI 强制重建索引" | "整批恢复" | "系统";
 export type ReindexLabel = "成功" | "失败" | "进行中" | "未执行";
 
 export function coerceTrigger(
   raw: SemanticAssetReleaseTrigger | undefined
 ): SemanticAssetReleaseTrigger {
-  if (raw === "webui_manual_reindex" || raw === "webui_publish") return raw;
+  if (raw === "webui_manual_reindex" || raw === "webui_publish" || raw === "webui_restore") return raw;
   return "webui_publish";
 }
 
 export function triggerLabelFor(record: SemanticAssetReleaseRecord): TriggerLabel {
   const trigger = coerceTrigger(record.trigger);
   if (trigger === "webui_manual_reindex") return "WebUI 强制重建索引";
+  if (trigger === "webui_restore") return "整批恢复";
   if (trigger === "webui_publish") return "WebUI 发布";
   return "系统";
 }
@@ -70,9 +71,12 @@ export function reindexStatusFilterValue(
 }
 
 export function statusLabelFor(record: SemanticAssetReleaseRecord): string {
+  if (record.terminalAuditPending === true) return "生效待确认";
   switch (record.status as SemanticAssetReleaseStatus) {
     case "blocked":
       return "已阻断";
+    case "promoting":
+      return "写入中";
     case "promote_failed":
       return "落盘失败";
     case "reindexing":
@@ -208,6 +212,16 @@ function csvCell(value: unknown): string {
   const raw = value == null ? "" : String(value);
   if (/[",\n\r]/.test(raw)) return `"${raw.replace(/"/g, '""')}"`;
   return raw;
+}
+
+/** Hide an unconfirmed terminal success from every public payload. */
+export function projectPublicRelease<T extends SemanticAssetReleaseRecord>(record: T): T {
+  if (record.terminalAuditPending !== true) return record;
+  return {
+    ...record,
+    status: "reindexing",
+    activationStatus: "unconfirmed"
+  };
 }
 
 export function buildPublishHistoryCsvRows(

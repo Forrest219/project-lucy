@@ -48,6 +48,12 @@ export interface SemanticIdempotencyRecord {
   /** The release this key produced. Replayed requests return the same id. */
   releaseId: string;
   validationId?: string;
+  /**
+   * L25-15 — intent is reserved before the first formal write, applied after
+   * the release is durable, failed when the attempt settled without a write.
+   * A record written before this field is treated as applied.
+   */
+  phase?: "intent" | "applied" | "failed";
   createdAt: string;
   expiresAt: string;
 }
@@ -66,6 +72,17 @@ export class SemanticIdempotencyConflictError extends Error {
   ) {
     super(message);
     this.name = "SemanticIdempotencyConflictError";
+  }
+}
+
+/** The store is full of keys that are still inside the 24 hour retention. */
+export class SemanticIdempotencyCapacityError extends Error {
+  readonly code = "SEMANTIC_IDEMPOTENCY_CAPACITY";
+  readonly statusCode = 409;
+
+  constructor(message: string) {
+    super(message);
+    this.name = "SemanticIdempotencyCapacityError";
   }
 }
 
@@ -153,6 +170,7 @@ export async function registerSemanticIdempotencyKey(
     planDigest: string;
     releaseId: string;
     validationId?: string;
+    phase?: SemanticIdempotencyRecord["phase"];
     now?: () => number;
   }
 ): Promise<SemanticIdempotencyOutcome> {
@@ -182,17 +200,57 @@ export async function registerSemanticIdempotencyKey(
     planDigest: input.planDigest,
     releaseId: input.releaseId,
     ...(input.validationId ? { validationId: input.validationId } : {}),
+    ...(input.phase ? { phase: input.phase } : {}),
     createdAt: new Date(nowMs).toISOString(),
     expiresAt: new Date(nowMs + SEMANTIC_BATCH_LIMITS.idempotencyRetentionMs).toISOString()
   };
 
-  const records = [
-    ...file.records.filter((item) => item.key !== key),
-    record
-  ].slice(-MAX_RECORDS);
+  // Expired keys may be dropped. A key that is still inside 24 hours must not
+  // be evicted to make room (Spec §7.2 / V13(d)). Refuse the new intent.
+  const retained = file.records.filter(
+    (item) => item.key !== key && Date.parse(item.expiresAt) > nowMs
+  );
+  if (retained.length >= MAX_RECORDS) {
+    throw new SemanticIdempotencyCapacityError(
+      "幂等记录已满，且仍有未满 24 小时的有效键。请稍后再试，不能提前淘汰这些键。"
+    );
+  }
 
-  await writeIdempotencyFile(projectRoot, { version: 1, records });
+  await writeIdempotencyFile(projectRoot, { version: 1, records: [...retained, record] });
   return { kind: "accepted", record };
+}
+
+/** Release ids still named by an unexpired idempotency record. */
+export async function listLiveIdempotencyReleaseIds(
+  projectRoot: string,
+  now: () => number = Date.now
+): Promise<Set<string>> {
+  const file = await readIdempotencyFile(projectRoot);
+  const ids = new Set<string>();
+  for (const record of file.records) {
+    if (Date.parse(record.expiresAt) <= now()) continue;
+    if (record.releaseId) ids.add(record.releaseId);
+  }
+  return ids;
+}
+
+/** Move an unexpired key to applied or failed. A missing key is left untouched. */
+export async function settleSemanticIdempotencyPhase(
+  projectRoot: string,
+  input: { instanceId: string; actor: string; clientKey: string; phase: "applied" | "failed" },
+  now: () => number = Date.now
+): Promise<SemanticIdempotencyRecord | null> {
+  const key = computeSemanticIdempotencyKey(input);
+  const file = await readIdempotencyFile(projectRoot);
+  let updated: SemanticIdempotencyRecord | null = null;
+  const records = file.records.map((record) => {
+    if (record.key !== key || Date.parse(record.expiresAt) <= now()) return record;
+    updated = { ...record, phase: input.phase };
+    return updated;
+  });
+  if (!updated) return null;
+  await writeIdempotencyFile(projectRoot, { version: 1, records });
+  return updated;
 }
 
 /** Drop expired records (opportunistic GC). */

@@ -16,6 +16,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  SemanticIdempotencyCapacityError,
   SemanticIdempotencyConflictError,
   computeSemanticIdempotencyKey,
   pruneSemanticIdempotencyKeys,
@@ -112,6 +113,72 @@ describe("D15 idempotency store", () => {
 
     const pruned = await pruneSemanticIdempotencyKeys(projectRoot, () => createdAt + 25 * 60 * 60_000);
     expect(pruned).toBe(1);
+  });
+
+  it("refuses a new key instead of evicting one that is still inside 24 hours", async () => {
+    const now = Date.parse("2026-10-30T00:00:00.000Z");
+    for (let index = 0; index < 500; index += 1) {
+      await registerSemanticIdempotencyKey(projectRoot, {
+        ...base,
+        clientKey: `key-${index}`,
+        releaseId: `rel_${index}`,
+        now: () => now
+      });
+    }
+
+    await expect(
+      registerSemanticIdempotencyKey(projectRoot, {
+        ...base,
+        clientKey: "key-new",
+        releaseId: "rel_new",
+        now: () => now + 1_000
+      })
+    ).rejects.toBeInstanceOf(SemanticIdempotencyCapacityError);
+
+    const oldest = await readSemanticIdempotencyKey(
+      projectRoot,
+      { instanceId: base.instanceId, actor: base.actor, clientKey: "key-0" },
+      () => now + 1_000
+    );
+    expect(oldest?.releaseId).toBe("rel_0");
+
+    const replay = await registerSemanticIdempotencyKey(projectRoot, {
+      ...base,
+      clientKey: "key-0",
+      releaseId: "rel_ignored",
+      now: () => now + 1_000
+    });
+    expect(replay.kind).toBe("replay");
+    expect(replay.record.releaseId).toBe("rel_0");
+  });
+
+  it("drops expired keys before accepting a new one", async () => {
+    const createdAt = Date.parse("2026-10-25T00:00:00.000Z");
+    for (let index = 0; index < 500; index += 1) {
+      await registerSemanticIdempotencyKey(projectRoot, {
+        ...base,
+        clientKey: `old-${index}`,
+        releaseId: `rel_old_${index}`,
+        now: () => createdAt
+      });
+    }
+
+    const later = createdAt + 25 * 60 * 60_000;
+    const outcome = await registerSemanticIdempotencyKey(projectRoot, {
+      ...base,
+      clientKey: "fresh",
+      releaseId: "rel_fresh",
+      now: () => later
+    });
+    expect(outcome.kind).toBe("accepted");
+    expect(outcome.record.releaseId).toBe("rel_fresh");
+    expect(
+      await readSemanticIdempotencyKey(
+        projectRoot,
+        { instanceId: base.instanceId, actor: base.actor, clientKey: "old-0" },
+        () => later
+      )
+    ).toBeNull();
   });
 });
 

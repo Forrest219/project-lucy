@@ -27,6 +27,12 @@ import { withDisplayWriteBarrier } from "./display-generation";
 // 否则控制面批量导入的互斥承诺不成立（旧入口可以在批量持锁期间交错写）。
 import { withKtxYamlWriteLock } from "./ktx-yaml-write-lock";
 import { withPublishCoordinator } from "./publish-coordinator.js";
+import { openPromotingContentRelease, closeContentBatch, failContentBatch } from "./semantic-assets.js";
+import { readOrCreateSemanticInstanceId } from "./semantic-release-snapshots.js";
+import {
+  createRecoveryJournal,
+  markRecoveryJournalFilesSaved
+} from "./semantic-recovery-journal.js";
 
 const TABLE_KEYS = new Set(["table", "descriptions", "grain", "columns", "measures", "segments", "joins"]);
 
@@ -766,17 +772,68 @@ export async function writeSourcePatch(
     () =>
       withDisplayWriteBarrier(["D", "P"], async () => {
         preview = await buildSourcePatchPreview(projectRoot, conn, schema, table, patch);
-        for (const file of preview.files) {
-          await auditedWriteFile(projectRoot, file.filePath, file.proposedYaml, {
-            enabled: true,
-            changeType: "semantic_table_save",
-            assetKind: "semantic",
-            ...auditActorFields(actor),
-            source: "semantic_layer_patch_api",
-            targetId: `${conn}:${schema}:${table}`,
-            diff: file.diff,
-            operation: "save"
+        if (preview.files.length > 0) {
+          const opened = await openPromotingContentRelease({
+            projectRoot,
+            actor: actor?.actorId ?? "local-admin",
+            targets: preview.files.map((file) => ({
+              targetPath: file.filePath,
+              expectedNewDigest: createHash("sha256").update(file.proposedYaml, "utf8").digest("hex"),
+              assetKind: file.filePath.includes("/_schema/") ? "manifest" : "overlay",
+              identity: { connectionId: conn, schema, table }
+            }))
           });
+          const journal = await createRecoveryJournal(projectRoot, {
+            releaseId: opened.releaseId,
+            operationId: opened.releaseId,
+            actor: actor?.actorId ?? "local-admin",
+            instanceId: await readOrCreateSemanticInstanceId(projectRoot),
+            targets: preview.files.map((file) => ({
+              targetPath: file.filePath,
+              identity: { connectionId: conn, schema, table },
+              newContent: file.proposedYaml
+            }))
+          });
+          try {
+            for (const file of preview.files) {
+              await auditedWriteFile(projectRoot, file.filePath, file.proposedYaml, {
+                enabled: true,
+                changeType: "semantic_table_save",
+                assetKind: "semantic",
+                ...auditActorFields(actor),
+                source: "semantic_layer_patch_api",
+                targetId: `${conn}:${schema}:${table}`,
+                diff: file.diff,
+                operation: "save"
+              });
+            }
+            await markRecoveryJournalFilesSaved(projectRoot, journal.journalId);
+            // L25-15 — the batch has to reach a terminal state inside the
+            // publish window. A record left at `promoting` blocks every later
+            // content write.
+            await closeContentBatch(projectRoot, {
+              releaseId: opened.releaseId,
+              attemptId: opened.attemptId,
+              actor: actor?.actorId ?? "local-admin",
+              journalId: journal.journalId,
+              changeType: "semantic_table_save_terminal",
+              source: "semantic_layer_patch_api",
+              targetId: `${conn}:${schema}:${table}`,
+              operation: "save_terminal",
+              newSummary: { connectionId: conn, schema, table, fileCount: preview.files.length }
+            });
+          } catch (error) {
+            // Spec 174 §3.2 / IM-02: a partial failure after touching disk
+            // still invalidates the cache and leaves the written content in
+            // place. Rolling a landed write back would contradict that
+            // contract, so the batch settles with the files as they are.
+            await failContentBatch(projectRoot, {
+              releaseId: opened.releaseId,
+              journalId: journal.journalId,
+              keepLandedWrites: true
+            });
+            throw error;
+          }
         }
       }),
     { projectRoot }
@@ -1038,20 +1095,73 @@ export async function writeSourceYamlImport(
   // L25-16 N05 / G17 — 旧的源表导入写入口接入**同一把** ktx.yaml 写锁。
   // 锁顺序与控制面批量服务一致：withKtxYamlWriteLock → withDisplayWriteBarrier → 写。
   await withKtxYamlWriteLock(() =>
-    withDisplayWriteBarrier(["D", "P"], async () => {
-      for (const file of preview.files) {
-        await auditedWriteFile(projectRoot, file.filePath, file.proposedYaml, {
-          enabled: true,
-          changeType: "semantic_table_import",
-          assetKind: "semantic",
-          ...auditActorFields(actor),
-          source: "semantic_layer_import_api",
-          targetId: `${conn}:${schema}:${table}`,
-          diff: file.diff,
-          operation: "import"
-        });
-      }
-    })
+    withDisplayWriteBarrier(["D", "P"], () =>
+      withPublishCoordinator(
+        "semantic_table_save",
+        async () => {
+          if (preview.files.length === 0) return;
+          const opened = await openPromotingContentRelease({
+            projectRoot,
+            actor: actor?.actorId ?? "local-admin",
+            targets: preview.files.map((file) => ({
+              targetPath: file.filePath,
+              expectedNewDigest: createHash("sha256").update(file.proposedYaml, "utf8").digest("hex"),
+              assetKind: file.filePath.includes("/_schema/") ? "manifest" : "overlay",
+              identity: { connectionId: conn, schema, table }
+            }))
+          });
+          const journal = await createRecoveryJournal(projectRoot, {
+            releaseId: opened.releaseId,
+            operationId: opened.releaseId,
+            actor: actor?.actorId ?? "local-admin",
+            instanceId: await readOrCreateSemanticInstanceId(projectRoot),
+            targets: preview.files.map((file) => ({
+              targetPath: file.filePath,
+              identity: { connectionId: conn, schema, table },
+              newContent: file.proposedYaml
+            }))
+          });
+          try {
+            for (const file of preview.files) {
+              await auditedWriteFile(projectRoot, file.filePath, file.proposedYaml, {
+                enabled: true,
+                changeType: "semantic_table_import",
+                assetKind: "semantic",
+                ...auditActorFields(actor),
+                source: "semantic_layer_import_api",
+                targetId: `${conn}:${schema}:${table}`,
+                diff: file.diff,
+                operation: "import"
+              });
+            }
+            await markRecoveryJournalFilesSaved(projectRoot, journal.journalId);
+            await closeContentBatch(projectRoot, {
+              releaseId: opened.releaseId,
+              attemptId: opened.attemptId,
+              actor: actor?.actorId ?? "local-admin",
+              journalId: journal.journalId,
+              changeType: "semantic_table_import_terminal",
+              source: "semantic_layer_import_api",
+              targetId: `${conn}:${schema}:${table}`,
+              operation: "import_terminal",
+              newSummary: { connectionId: conn, schema, table, fileCount: preview.files.length }
+            });
+          } catch (error) {
+            // Spec 174 §3.2 / IM-02: a partial failure after touching disk
+            // still invalidates the cache and leaves the written content in
+            // place. Rolling a landed write back would contradict that
+            // contract, so the batch settles with the files as they are.
+            await failContentBatch(projectRoot, {
+              releaseId: opened.releaseId,
+              journalId: journal.journalId,
+              keepLandedWrites: true
+            });
+            throw error;
+          }
+        },
+        { projectRoot }
+      )
+    )
   );
   return preview;
 }

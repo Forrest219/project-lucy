@@ -1020,6 +1020,49 @@ async function removeSchemaUnbarriered(
   // L25-16 F5-04 — keep the pre-image of every deleted semantic content file so the
   // deletion can be reversed / audited.
   const deletedFilePreImages: Array<{ filePath: string; content: string }> = [];
+  const semanticDeleteTargets = [
+    ...(options.deleteManifest && hasManifest ? [manifestPath] : []),
+    ...(options.deleteOverlays ? overlayPaths : [])
+  ];
+  let semanticDeleteJournalId: string | null = null;
+  let semanticDeleteReleaseId: string | null = null;
+  let semanticDeleteAttemptId: string | null = null;
+  if (semanticDeleteTargets.length > 0) {
+    const { openPromotingContentRelease } = await import("./semantic-assets.js");
+    const { createRecoveryJournal, readOrCreateInstanceForDelete } = {
+      createRecoveryJournal: (await import("./semantic-recovery-journal.js")).createRecoveryJournal,
+      readOrCreateInstanceForDelete: (await import("./semantic-release-snapshots.js"))
+        .readOrCreateSemanticInstanceId
+    };
+    const opened = await openPromotingContentRelease({
+      projectRoot: root,
+      actor: "local-admin",
+      targets: semanticDeleteTargets.map((targetPath) => ({
+        targetPath,
+        expectedNewDigest: null,
+        assetKind: targetPath.includes("/_schema/") ? ("manifest" as const) : ("overlay" as const),
+        identity: { connectionId: connId, schema, table: schema }
+      }))
+    });
+    semanticDeleteReleaseId = opened.releaseId;
+    semanticDeleteAttemptId = opened.attemptId;
+    // L25-15 — the journal covers the content-root target only. The general
+    // mirror never deletes (Spec §2.3), so the ktx sibling target of a
+    // deleted file is deliberately left in place; the controlled mirror
+    // delete belongs to the restore plan alone.
+    const journal = await createRecoveryJournal(root, {
+      releaseId: opened.releaseId,
+      operationId: opened.releaseId,
+      actor: "local-admin",
+      instanceId: await readOrCreateInstanceForDelete(root),
+      targets: semanticDeleteTargets.map((targetPath) => ({
+        targetPath,
+        newContent: null,
+        identity: { connectionId: connId, schema, table: schema }
+      }))
+    });
+    semanticDeleteJournalId = journal.journalId;
+  }
 
   // Optional: delete manifest (safeRemove no-ops ENOENT).
   if (options.deleteManifest && hasManifest) {
@@ -1044,6 +1087,31 @@ async function removeSchemaUnbarriered(
       });
       await safeRemove(paths, root, overlayPath);
       deletedFiles.push(overlayPath);
+    }
+  }
+  if (semanticDeleteJournalId) {
+    const { markRecoveryJournalFilesSaved } = await import("./semantic-recovery-journal.js");
+    try {
+      await markRecoveryJournalFilesSaved(root, semanticDeleteJournalId);
+      const { closeContentBatch } = await import("./semantic-assets.js");
+      await closeContentBatch(root, {
+        releaseId: semanticDeleteReleaseId!,
+        attemptId: semanticDeleteAttemptId!,
+        actor: "local-admin",
+        journalId: semanticDeleteJournalId,
+        changeType: "semantic_schema_delete_terminal",
+        source: "project_schema_remove_api",
+        targetId: `${connId}:${schema}`,
+        operation: "schema_remove_terminal",
+        newSummary: { connectionId: connId, schema, deletedFileCount: semanticDeleteTargets.length }
+      });
+    } catch (error) {
+      const { failContentBatch } = await import("./semantic-assets.js");
+      await failContentBatch(root, {
+        releaseId: semanticDeleteReleaseId!,
+        journalId: semanticDeleteJournalId
+      });
+      throw error;
     }
   }
 
@@ -1457,14 +1525,78 @@ async function removeConnectionUnbarriered(
       // yaml already committed; leftover secret is recoverable by hand
     }
   }
-  if (options.deleteAssets) {
-    for (const assetPath of yamlAssetPaths) {
+  if (options.deleteAssets && yamlAssetPaths.length > 0) {
+    const semanticPaths = yamlAssetPaths.filter(
+      (assetPath) => assetPath.startsWith("semantic-layer/") && assetPath.endsWith(".yaml")
+    );
+    if (semanticPaths.length > 0) {
+      const { openPromotingContentRelease, closeContentBatch, failContentBatch } = await import(
+        "./semantic-assets.js"
+      );
+      const { createRecoveryJournal, markRecoveryJournalFilesSaved } = await import(
+        "./semantic-recovery-journal.js"
+      );
+      const { readOrCreateSemanticInstanceId } = await import("./semantic-release-snapshots.js");
+      const opened = await openPromotingContentRelease({
+        projectRoot: root,
+        actor: "local-admin",
+        targets: semanticPaths.map((targetPath) => ({
+          targetPath,
+          expectedNewDigest: null,
+          assetKind: targetPath.includes("/_schema/") ? ("manifest" as const) : ("overlay" as const)
+        }))
+      });
+      const journal = await createRecoveryJournal(root, {
+        releaseId: opened.releaseId,
+        operationId: opened.releaseId,
+        actor: "local-admin",
+        instanceId: await readOrCreateSemanticInstanceId(root),
+        // The general mirror never deletes (Spec §2.3): only the content-root
+        // target is deleted, so only it belongs in the journal.
+        targets: semanticPaths.map((targetPath) => ({
+          targetPath,
+          newContent: null,
+          surface: "content_root" as const
+        }))
+      });
+      for (const assetPath of yamlAssetPaths) {
+        try {
+          const paths = await loadContentPaths();
+          await safeRemove(paths, root, assetPath);
+          deletedFiles.push(assetPath);
+        } catch {
+          // leftover YAML assets are recoverable by hand
+        }
+      }
       try {
-        const paths = await loadContentPaths();
-        await safeRemove(paths, root, assetPath);
-        deletedFiles.push(assetPath);
-      } catch {
-        // leftover YAML assets are recoverable by hand
+        await markRecoveryJournalFilesSaved(root, journal.journalId);
+        await closeContentBatch(root, {
+          releaseId: opened.releaseId,
+          attemptId: opened.attemptId,
+          actor: "local-admin",
+          journalId: journal.journalId,
+          changeType: "semantic_connection_delete_terminal",
+          source: "project_connection_remove_api",
+          targetId: connId,
+          operation: "connection_remove_terminal",
+          newSummary: { connectionId: connId, deletedFileCount: semanticPaths.length }
+        });
+      } catch (error) {
+        await failContentBatch(root, {
+          releaseId: opened.releaseId,
+          journalId: journal.journalId
+        });
+        throw error;
+      }
+    } else {
+      for (const assetPath of yamlAssetPaths) {
+        try {
+          const paths = await loadContentPaths();
+          await safeRemove(paths, root, assetPath);
+          deletedFiles.push(assetPath);
+        } catch {
+          // leftover YAML assets are recoverable by hand
+        }
       }
     }
   }
@@ -2097,6 +2229,11 @@ export type ApplyConnectionIdChangeOptions = {
    * at the Spec 181 injection point.
    */
   injectFailure?: "before_wiki";
+  /**
+   * Internal. The shared publish window is held for mutual exclusion only.
+   * A connection id change does not capture a content snapshot.
+   */
+  publishWindowHeld?: boolean;
 };
 
 export type PlanConnectionIdChangeOptions = {
@@ -2757,6 +2894,17 @@ export async function applyConnectionIdChange(
     );
   }
   validateConnectionIdsForRename(fromId, toId);
+  if (options.publishWindowHeld !== true) {
+    return withPublishCoordinator(
+      "batch_import",
+      () =>
+        applyConnectionIdChange(projectRoot, fromId, toId, {
+          ...options,
+          publishWindowHeld: true
+        }),
+      { projectRoot }
+    );
+  }
 
   // Snapshot the files we may mutate so a partial failure can restore them.
   const ktxPath = path.join(projectRoot, "ktx.yaml");

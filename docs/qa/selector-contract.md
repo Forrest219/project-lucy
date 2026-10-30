@@ -357,6 +357,21 @@ Spec 190 §7.9 — 库内表清单与持续感知的最小展示。
 | `semantic-asset-export-download` | 下载按钮 | 必含 `下载当前快照` / `导出当前快照 (.zip)` |
 | `semantic-asset-export-excluded` | 被排除项列表 | — |
 
+### 6.5 RestoreReleaseDrawer.tsx（src/components/semantic-assets/）
+
+L25-15 整批恢复抽屉。三个分区各自独立，不合并成一句「同步镜像」。
+
+| Test ID | 元素 | 文案约束 |
+|---|---|---|
+| `restore-release-drawer` | Drawer 根 | — |
+| `restore-package-export` | 导出恢复包链接 | — |
+| `restore-preview-targets` | 预检结果区 | — |
+| `restore-preview-index-scope` | 全局索引范围与既有待同步变更分区 | 必含「无法逐文件确认的内容也可能被本次索引纳入」 |
+| `restore-preview-mirror-sync-write-set` | 镜像同步写集分区 | 必含「变化方向是镜像向内容根对齐」 |
+| `restore-preview-semantic-deletion` | 恢复后从模型中消失的表 | — |
+| `restore-preview-readback` | 删除方向读回预期 | — |
+| `restore-release-confirm` | 确认恢复按钮 | 唯一 primary；禁用时给出「重新预检」入口 |
+
 ## 7. 其它（与 E2E 弱相关但已存在）
 
 | Test ID | 元素 |
@@ -980,6 +995,7 @@ Spec 190 §7.9 — 库内表清单与持续感知的最小展示。
 | `publish-history-trigger` | publish-history-trigger | `pages/publish/PublishHistory.tsx` |
 | `publish-history-reindex-filter` | publish-history-reindex-filter | `pages/publish/PublishHistory.tsx` |
 | `publish-history-actor` | publish-history-actor | `pages/publish/PublishHistory.tsx` |
+| `publish-history-restore` | publish-history-restore | `pages/publish/PublishHistory.tsx` |
 | `publish-history-page-range` | publish-history-page-range | `pages/publish/PublishHistory.tsx` |
 | `publish-history-table` | publish-history-table | `pages/publish/PublishHistory.tsx` |
 | `publish-history-serial` | publish-history-serial | `pages/publish/PublishHistory.tsx` |

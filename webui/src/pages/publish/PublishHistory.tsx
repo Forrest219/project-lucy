@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "../../components/PageHeader";
+import { RestoreReleaseDrawer } from "../../components/semantic-assets/RestoreReleaseDrawer";
 import { apiGet } from "../../lib/apiClient";
 import { useUrlMirroredField } from "../../lib/useUrlMirroredField";
 import {
@@ -349,6 +350,7 @@ export function PublishHistory() {
   const [page, setPage] = useState(0);
   const [expandedDiffId, setExpandedDiffId] = useState<string | null>(null);
   const [expandedErrorId, setExpandedErrorId] = useState<string | null>(null);
+  const [restoreReleaseId, setRestoreReleaseId] = useState<string | null>(null);
   const didInitDefaultWindow = useRef(false);
 
   const windowPreset = searchParams.get("window") ?? "";
@@ -522,6 +524,7 @@ export function PublishHistory() {
           <option value="">全部触发方式</option>
           <option value="webui_publish">WebUI 发布</option>
           <option value="webui_manual_reindex">WebUI 强制重建索引</option>
+          <option value="webui_restore">整批恢复</option>
         </select>
         <select
           className="pl-input w-36"
@@ -668,6 +671,17 @@ export function PublishHistory() {
                             </span>
                           </td>
                           <td>
+                            {coerceTrigger(record.trigger) !== "webui_manual_reindex" ? (
+                              <button
+                                type="button"
+                                className="pl-row-action-link"
+                                disabled={!record.snapshotId || record.terminalAuditPending === true}
+                                onClick={() => setRestoreReleaseId(record.id)}
+                                data-testid="publish-history-restore"
+                              >
+                                {record.snapshotId ? "可预检恢复" : "快照不可用"}
+                              </button>
+                            ) : null}
                             <RowActions
                               record={record}
                               expandedDiff={isDiffOpen ? record.diff ?? "" : null}
@@ -731,6 +745,14 @@ export function PublishHistory() {
             </div>
           );
         })}
+        {restoreReleaseId ? (
+          <RestoreReleaseDrawer
+            releaseId={restoreReleaseId}
+            createdAt={records.find((record) => record.id === restoreReleaseId)?.createdAt ?? ""}
+            actor={records.find((record) => record.id === restoreReleaseId)?.actor ?? ""}
+            onClose={() => setRestoreReleaseId(null)}
+          />
+        ) : null}
       </section>
     </div>
   );

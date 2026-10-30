@@ -5,11 +5,24 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   PUBLISH_COORDINATOR_LOCK_REL,
   PublishCoordinatorBusyError,
+  acquirePublishCoordinatorLock,
   isInsidePublishCoordinator,
   isPublishCoordinatorBusy,
   readPublishCoordinatorLock,
-  withPublishCoordinator
+  releasePublishCoordinatorLock,
+  withPublishCoordinator,
+  type PublishEntryKind
 } from "../publish-coordinator.js";
+import {
+  SemanticRecoveryClosedError,
+  createRecoveryJournal,
+  isSemanticRecoveryAdmissionLatched,
+  markRecoveryJournalActivationPending,
+  markRecoveryJournalBlocked,
+  markRecoveryJournalFilesSaved,
+  recoverSemanticJournalsAtStartup,
+  resetSemanticRecoveryAdmissionForTests
+} from "../semantic-recovery-journal.js";
 
 let projectRoot: string;
 
@@ -25,6 +38,7 @@ describe("shared single-instance publish coordinator", () => {
   });
 
   afterEach(async () => {
+    resetSemanticRecoveryAdmissionForTests();
     await rm(projectRoot, { recursive: true, force: true });
   });
 
@@ -240,5 +254,123 @@ describe("shared single-instance publish coordinator", () => {
 
   it("does not treat an absent lock as busy", async () => {
     expect(await isPublishCoordinatorBusy(projectRoot)).toEqual({ busy: false, holder: null });
+  });
+
+  it("releases only the lock with the same operationId", async () => {
+    const { holder } = await acquirePublishCoordinatorLock(projectRoot, "batch_import", {}, {
+      operationId: "op-ours"
+    });
+    await writeRawLock({
+      kind: "batch_import",
+      operationId: "op-theirs",
+      acquiredAt: holder.acquiredAt,
+      pid: process.pid
+    });
+
+    await releasePublishCoordinatorLock(projectRoot, holder);
+
+    const current = await readPublishCoordinatorLock(projectRoot);
+    expect(current?.operationId).toBe("op-theirs");
+  });
+
+  it("removes the lock when the operationId matches", async () => {
+    const { holder } = await acquirePublishCoordinatorLock(projectRoot, "batch_import", {}, {
+      operationId: "op-ours"
+    });
+
+    await releasePublishCoordinatorLock(projectRoot, holder);
+
+    expect(await readPublishCoordinatorLock(projectRoot)).toBeNull();
+  });
+});
+
+describe("semantic recovery closes the shared write window", () => {
+  beforeEach(async () => {
+    projectRoot = await mkdtemp(path.join(tmpdir(), "lucy-publish-coord-"));
+    resetSemanticRecoveryAdmissionForTests();
+  });
+
+  afterEach(async () => {
+    resetSemanticRecoveryAdmissionForTests();
+    await rm(projectRoot, { recursive: true, force: true });
+  });
+
+  async function openJournal(): Promise<string> {
+    const journal = await createRecoveryJournal(projectRoot, {
+      releaseId: "rel-gate",
+      operationId: "op-gate",
+      actor: "admin-a",
+      instanceId: "inst-a",
+      targets: [{
+        targetPath: "semantic-layer/demo.yaml",
+        originalContent: "old\n",
+        newContent: "new\n"
+      }]
+    });
+    return journal.journalId;
+  }
+
+  async function expectWriteRefused(kind: PublishEntryKind): Promise<void> {
+    let called = false;
+    await expect(
+      withPublishCoordinator(kind, async () => {
+        called = true;
+      }, { projectRoot })
+    ).rejects.toBeInstanceOf(SemanticRecoveryClosedError);
+    expect(called).toBe(false);
+    expect(await readPublishCoordinatorLock(projectRoot)).toBeNull();
+  }
+
+  it("refuses table save, manifest upload, and access writes during write_in_progress", async () => {
+    await openJournal();
+    const kinds: PublishEntryKind[] = [
+      "semantic_table_save",
+      "manifest_upload",
+      "role_policy_save",
+      "agent_save"
+    ];
+    for (const kind of kinds) {
+      await expectWriteRefused(kind);
+    }
+  });
+
+  it("refuses those writes while recovery_required is persisted", async () => {
+    const journalId = await openJournal();
+    await markRecoveryJournalBlocked(projectRoot, journalId, "needs a human");
+    await expectWriteRefused("semantic_table_save");
+    await expectWriteRefused("manifest_upload");
+    await expectWriteRefused("role_policy_save");
+  });
+
+  it("keeps files_saved and activation_pending open for the next write", async () => {
+    const saved = await openJournal();
+    await markRecoveryJournalFilesSaved(projectRoot, saved);
+    let savedCalled = false;
+    await withPublishCoordinator("semantic_table_save", async () => {
+      savedCalled = true;
+    }, { projectRoot });
+    expect(savedCalled).toBe(true);
+
+    const pending = await openJournal();
+    await markRecoveryJournalActivationPending(projectRoot, pending);
+    let pendingCalled = false;
+    await withPublishCoordinator("manifest_upload", async () => {
+      pendingCalled = true;
+    }, { projectRoot });
+    expect(pendingCalled).toBe(true);
+    expect(await readPublishCoordinatorLock(projectRoot)).toBeNull();
+  });
+
+  it("latches admission when startup recovery cannot read the journal directory", async () => {
+    const journals = path.join(projectRoot, ".ktx-ui", "semantic-recovery-journals");
+    await mkdir(path.dirname(journals), { recursive: true });
+    await writeFile(journals, "not-a-directory", "utf8");
+
+    expect(isSemanticRecoveryAdmissionLatched()).toBe(false);
+    await expect(recoverSemanticJournalsAtStartup(projectRoot)).resolves.toBeNull();
+    expect(isSemanticRecoveryAdmissionLatched()).toBe(true);
+
+    await expectWriteRefused("semantic_table_save");
+    await expectWriteRefused("role_policy_save");
   });
 });

@@ -14,7 +14,7 @@
 //  - A reindex failure keeps the saved files with `activationStatus =
 //    unconfirmed` — the activation is never claimed.
 
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import request from "supertest";
@@ -23,6 +23,7 @@ import {
   atomicReplaceTarget,
   completeRecoveryJournal,
   createRecoveryJournal,
+  isRecoveryRequired,
   listOpenRecoveryJournals,
   markRecoveryJournalFilesSaved,
   readRecoveryJournal,
@@ -402,5 +403,270 @@ describe("D19/D20 — the activation state of a release", () => {
     expect(record?.status).toBe("promote_failed");
     expect(record?.recoveryRequired).toBe(true);
     await app.close();
+  });
+
+  it("leaves the journal open when the catalog reload fails", async () => {
+    vi.resetModules();
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    vi.doMock("../ktx", async () => {
+      const actual = await vi.importActual<typeof import("../ktx")>("../ktx");
+      return {
+        ...actual,
+        validateSource: vi.fn(async () => ({
+          ok: true,
+          exitCode: 0,
+          stdout: "",
+          stderr: "",
+          issues: []
+        })),
+        reindexProject: vi.fn(async () => ({ exitCode: 0, stdout: "indexed", stderr: "" }))
+      };
+    });
+
+    const { buildServer } = await import("../index");
+    const { publishSemanticAssets, readSemanticAssetRelease } = await import("../semantic-assets");
+    const app = buildServer();
+    await app.ready();
+
+    const validate = await request(app.server)
+      .post("/api/semantic-assets/validate")
+      .send({ files: [{ filename: "orders.yaml", content: OVERLAY }] });
+    expect(validate.status).toBe(200);
+
+    let releaseId = "";
+    let statusAtRelease = "";
+    const response = await publishSemanticAssets(
+      projectRoot,
+      { validationId: validate.body.data.validationId, confirmOverwrite: true },
+      {
+        reindexImpl: async () => ({ exitCode: 0, stdout: "indexed", stderr: "" }),
+        reloadCatalogImpl: async () => {
+          throw new Error("catalog reload failed");
+        },
+        beforeLockRelease: async () => {
+          const record = await readSemanticAssetRelease(projectRoot, releaseId);
+          statusAtRelease = record?.status ?? "missing";
+        }
+      }
+    );
+    releaseId = response.release.id;
+
+    const deadline = Date.now() + 5_000;
+    while (!statusAtRelease && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+
+    const record = await readSemanticAssetRelease(projectRoot, releaseId);
+    expect(statusAtRelease).toBe("reindex_failed");
+    expect(record?.recoveryRequired).toBe(false);
+    expect(record?.activationStatus).toBe("unconfirmed");
+    const open = await listOpenRecoveryJournals(projectRoot);
+    expect(open).toHaveLength(1);
+    expect(open[0]?.phase).toBe("activation_pending");
+    expect(await isRecoveryRequired(projectRoot)).toBe(false);
+    await app.close();
+  });
+
+  it("closes publishing when terminal evidence throws after the index succeeds", async () => {
+    vi.resetModules();
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    vi.doMock("../ktx", async () => {
+      const actual = await vi.importActual<typeof import("../ktx")>("../ktx");
+      return {
+        ...actual,
+        validateSource: vi.fn(async () => ({
+          ok: true,
+          exitCode: 0,
+          stdout: "",
+          stderr: "",
+          issues: []
+        })),
+        reindexProject: vi.fn(async () => ({ exitCode: 0, stdout: "indexed", stderr: "" }))
+      };
+    });
+
+    const { buildServer } = await import("../index");
+    const { publishSemanticAssets, readSemanticAssetRelease } = await import("../semantic-assets");
+    const app = buildServer();
+    await app.ready();
+
+    const validate = await request(app.server)
+      .post("/api/semantic-assets/validate")
+      .send({ files: [{ filename: "orders.yaml", content: OVERLAY }] });
+    expect(validate.status).toBe(200);
+
+    let releaseId = "";
+    let blockedAtRelease = false;
+    const response = await publishSemanticAssets(
+      projectRoot,
+      { validationId: validate.body.data.validationId, confirmOverwrite: true },
+      {
+        reindexImpl: async () => ({ exitCode: 0, stdout: "indexed", stderr: "" }),
+        reloadCatalogImpl: async () => undefined,
+        beforeTerminalAudit: async () => {
+          throw new Error("terminal audit io");
+        },
+        beforeLockRelease: async () => {
+          blockedAtRelease = await isRecoveryRequired(projectRoot);
+        }
+      }
+    );
+    releaseId = response.release.id;
+
+    const deadline = Date.now() + 5_000;
+    let record: { status?: string; recoveryRequired?: boolean } | null = null;
+    for (;;) {
+      record = await readSemanticAssetRelease(projectRoot, releaseId);
+      if (blockedAtRelease && record?.status === "promote_failed") break;
+      if (Date.now() >= deadline) break;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+
+    expect(blockedAtRelease).toBe(true);
+    expect(record?.status).toBe("promote_failed");
+    expect(record?.recoveryRequired).toBe(true);
+    await app.close();
+  });
+
+  it("rechecks recovery after the lock is held and releases the window on reject", async () => {
+    vi.resetModules();
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    vi.doMock("../ktx", async () => {
+      const actual = await vi.importActual<typeof import("../ktx")>("../ktx");
+      return {
+        ...actual,
+        validateSource: vi.fn(async () => ({
+          ok: true,
+          exitCode: 0,
+          stdout: "",
+          stderr: "",
+          issues: []
+        })),
+        reindexProject: vi.fn(async () => ({ exitCode: 0, stdout: "indexed", stderr: "" }))
+      };
+    });
+
+    const { buildServer } = await import("../index");
+    const { publishSemanticAssets } = await import("../semantic-assets");
+    const { readPublishCoordinatorLock } = await import("../publish-coordinator");
+    const app = buildServer();
+    await app.ready();
+
+    const validate = await request(app.server)
+      .post("/api/semantic-assets/validate")
+      .send({ files: [{ filename: "orders.yaml", content: OVERLAY }] });
+    expect(validate.status).toBe(200);
+
+    await expect(
+      publishSemanticAssets(
+        projectRoot,
+        { validationId: validate.body.data.validationId, confirmOverwrite: true },
+        {
+          afterLockAcquired: async () => {
+            await createRecoveryJournal(projectRoot, {
+              releaseId: "rel-race",
+              operationId: "op-race",
+              actor: "admin-a",
+              instanceId: "inst-a",
+              targets: [{ targetPath: TARGET, newContent: "name: orders-v2\n" }]
+            });
+          }
+        }
+      )
+    ).rejects.toMatchObject({ code: "semantic_recovery_required", statusCode: 409 });
+
+    expect(await readPublishCoordinatorLock(projectRoot)).toBeNull();
+    await app.close();
+  });
+
+  it("retries a failed publish-window release on the next publish", async () => {
+    vi.resetModules();
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    vi.doMock("../ktx", async () => {
+      const actual = await vi.importActual<typeof import("../ktx")>("../ktx");
+      return {
+        ...actual,
+        validateSource: vi.fn(async () => ({
+          ok: true,
+          exitCode: 0,
+          stdout: "",
+          stderr: "",
+          issues: []
+        })),
+        reindexProject: vi.fn(async () => ({ exitCode: 0, stdout: "indexed", stderr: "" }))
+      };
+    });
+
+    const { buildServer } = await import("../index");
+    const { publishSemanticAssets, readSemanticAssetRelease } = await import("../semantic-assets");
+    const app = buildServer();
+    await app.ready();
+    const lockDir = path.join(projectRoot, ".ktx-ui");
+
+    try {
+      const validate = await request(app.server)
+        .post("/api/semantic-assets/validate")
+        .send({ files: [{ filename: "orders.yaml", content: OVERLAY }] });
+      expect(validate.status).toBe(200);
+
+      let releaseId = "";
+      let armed = false;
+      const response = await publishSemanticAssets(
+        projectRoot,
+        { validationId: validate.body.data.validationId, confirmOverwrite: true },
+        {
+          reindexImpl: async () => ({ exitCode: 0, stdout: "indexed", stderr: "" }),
+          reloadCatalogImpl: async () => undefined,
+          beforeLockRelease: async () => {
+            await chmod(lockDir, 0o555);
+            armed = true;
+          }
+        }
+      );
+      releaseId = response.release.id;
+
+      const deadline = Date.now() + 5_000;
+      let record: { status?: string } | null = null;
+      for (;;) {
+        record = await readSemanticAssetRelease(projectRoot, releaseId);
+        if (armed && record?.status === "published") break;
+        if (Date.now() >= deadline) break;
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(record?.status).toBe("published");
+      const held = await readFile(path.join(lockDir, "semantic-publish.lock"), "utf8");
+      expect(held.length).toBeGreaterThan(0);
+
+      await chmod(lockDir, 0o755);
+      const second = await request(app.server)
+        .post("/api/semantic-assets/validate")
+        .send({
+          files: [{
+            filename: "orders_v2.yaml",
+            content: OVERLAY.replace("name: orders", "name: orders_v2")
+          }]
+        });
+      expect(second.status).toBe(200);
+      const again = await request(app.server)
+        .post("/api/semantic-assets/publish")
+        .send({ validationId: second.body.data.validationId, confirmOverwrite: true });
+      expect(again.status).toBe(200);
+      const secondId = again.body.data.release.id as string;
+      const secondDeadline = Date.now() + 5_000;
+      for (;;) {
+        const status = await readSemanticAssetRelease(projectRoot, secondId);
+        const lockGone = await readFile(path.join(lockDir, "semantic-publish.lock"), "utf8").then(
+          () => false,
+          () => true
+        );
+        if (status?.status === "published" && lockGone) break;
+        if (Date.now() >= secondDeadline) break;
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+    } finally {
+      await chmod(lockDir, 0o755).catch(() => undefined);
+      await app.close();
+    }
   });
 });

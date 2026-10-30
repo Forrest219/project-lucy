@@ -2,6 +2,7 @@ import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { AsyncLocalStorage } from "node:async_hooks";
+import { assertSemanticWritesOpen } from "./semantic-recovery-journal.js";
 
 /**
  * Lucy v0.25 — shared single-instance publish coordinator.
@@ -38,7 +39,8 @@ export type PublishEntryKind =
   | "batch_import"
   | "manual_reindex"
   | "role_policy_save"
-  | "agent_save";
+  | "agent_save"
+  | "semantic_restore";
 
 export const PUBLISH_ENTRY_KINDS: readonly PublishEntryKind[] = [
   "semantic_table_save",
@@ -46,8 +48,29 @@ export const PUBLISH_ENTRY_KINDS: readonly PublishEntryKind[] = [
   "batch_import",
   "manual_reindex",
   "role_policy_save",
-  "agent_save"
+  "agent_save",
+  "semantic_restore"
 ];
+
+/**
+ * Where a held publish window is inside its critical section.
+ * The entry kind stays one of the six frozen values; the phase tells an
+ * operator whether this holder is rebuilding the index, checking digests,
+ * or writing the terminal record.
+ */
+export type PublishWindowPhase = "reindexing" | "verify_digest" | "terminal";
+
+const PUBLISH_WINDOW_PHASES: ReadonlySet<string> = new Set([
+  "reindexing",
+  "verify_digest",
+  "terminal"
+]);
+
+const PUBLISH_WINDOW_PHASE_LABEL: Record<PublishWindowPhase, string> = {
+  reindexing: "重建索引",
+  verify_digest: "核验摘要",
+  terminal: "写终态"
+};
 
 export interface PublishLockHolder {
   kind: PublishEntryKind;
@@ -62,17 +85,42 @@ export interface PublishLockHolder {
   /** Batch identity, when the holder is a publish batch. */
   validationId?: string;
   releaseId?: string;
+  /** Set by the publish path while the window stays held across reindex. */
+  phase?: PublishWindowPhase;
+}
+
+export function formatPublishWindowBusy(
+  holder: PublishLockHolder | null,
+  requestedKind?: PublishEntryKind
+): string {
+  if (!holder) {
+    return requestedKind
+      ? `发布窗口被占用：${requestedKind} 无法取得发布锁。请稍后重试。`
+      : "已有发布批次正在执行，请等待当前批次完成后再试";
+  }
+  const phase = holder.phase ? PUBLISH_WINDOW_PHASE_LABEL[holder.phase] : "";
+  const phaseText = phase ? `，阶段 ${phase}` : "";
+  return `发布窗口被占用：当前持有者 ${holder.kind}（operationId=${holder.operationId}，${holder.acquiredAt}${phaseText}）。请稍后重试或先确认该发布是否已结束。`;
+}
+
+/** True when `current` is the lock file written for `holder`. */
+export function publishLockOwnedBy(
+  current: PublishLockHolder,
+  holder: PublishLockHolder
+): boolean {
+  const currentId = current.operationId;
+  const holderId = holder.operationId;
+  if (currentId && holderId && currentId !== "unknown" && holderId !== "unknown") {
+    return currentId === holderId;
+  }
+  return current.acquiredAt === holder.acquiredAt;
 }
 
 export class PublishCoordinatorBusyError extends Error {
   readonly code = "PUBLISH_COORDINATOR_BUSY";
 
   constructor(readonly holder: PublishLockHolder | null, readonly requestedKind: PublishEntryKind) {
-    super(
-      holder
-        ? `发布窗口被占用：当前持有者 ${holder.kind}（operationId=${holder.operationId}，${holder.acquiredAt}）。请稍后重试或先确认该发布是否已结束。`
-        : `发布窗口被占用：${requestedKind} 无法取得发布锁。请稍后重试。`
-    );
+    super(formatPublishWindowBusy(holder, requestedKind));
     this.name = "PublishCoordinatorBusyError";
   }
 }
@@ -94,6 +142,27 @@ const DEFAULT_STALE_AFTER_MS = 30 * 60 * 1000;
  * (e.g. a batch publish that internally re-checks a baseline) do not deadlock.
  */
 const coordinatorHeld = new AsyncLocalStorage<true>();
+
+/**
+ * The holder object this process acquired. Snapshot capture compares this
+ * reference (and its pid / acquiredAt) with the lock file. The AsyncLocalStorage
+ * flag and a lock file that merely exists are not proof of ownership.
+ */
+let processPublishHolder: PublishLockHolder | null = null;
+
+export function currentProcessPublishHolder(): PublishLockHolder | null {
+  return processPublishHolder;
+}
+
+function rememberProcessHolder(holder: PublishLockHolder): void {
+  processPublishHolder = holder;
+}
+
+function forgetProcessHolder(holder: PublishLockHolder): void {
+  if (processPublishHolder && publishLockOwnedBy(processPublishHolder, holder)) {
+    processPublishHolder = null;
+  }
+}
 
 export function isInsidePublishCoordinator(): boolean {
   return coordinatorHeld.getStore() === true;
@@ -171,7 +240,10 @@ export async function readPublishCoordinatorLock(
       // means "owner unknown", and age is then the only available signal.
       pid: typeof parsed?.pid === "number" ? parsed.pid : undefined,
       validationId: typeof parsed?.validationId === "string" ? parsed.validationId : undefined,
-      releaseId: typeof parsed?.releaseId === "string" ? parsed.releaseId : undefined
+      releaseId: typeof parsed?.releaseId === "string" ? parsed.releaseId : undefined,
+      phase: PUBLISH_WINDOW_PHASES.has(parsed?.phase ?? "")
+        ? (parsed?.phase as PublishWindowPhase)
+        : undefined
     };
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
@@ -228,6 +300,7 @@ async function tryCreateLock(
 export interface PublishLockPayload {
   validationId?: string;
   releaseId?: string;
+  phase?: PublishWindowPhase;
 }
 
 /**
@@ -253,26 +326,37 @@ export async function acquirePublishCoordinatorLock(
     ...(payload.releaseId === undefined ? {} : { releaseId: payload.releaseId })
   };
 
-  if (await tryCreateLock(projectRoot, holder)) return { acquired: true, holder };
+  if (await tryCreateLock(projectRoot, holder)) {
+    rememberProcessHolder(holder);
+    return { acquired: true, holder };
+  }
 
   const existing = await readPublishCoordinatorLock(projectRoot);
   if (existing && isStaleHolder(existing, now(), staleAfterMs)) {
     if (await reclaimStaleLock(projectRoot, existing)) {
-      if (await tryCreateLock(projectRoot, holder)) return { acquired: true, holder };
+      if (await tryCreateLock(projectRoot, holder)) {
+        rememberProcessHolder(holder);
+        return { acquired: true, holder };
+      }
     }
   }
   return { acquired: false, holder };
 }
 
-/** Release a lock acquired by {@link acquirePublishCoordinatorLock}. Only our own lock is removed. */
+/**
+ * Release a lock acquired by {@link acquirePublishCoordinatorLock}.
+ * Only our own lock is removed. Identity is `operationId`, not the timestamp:
+ * two holders can share an `acquiredAt` millisecond. A delete that throws
+ * leaves the file in place so the caller can retry the same holder.
+ */
 export async function releasePublishCoordinatorLock(
   projectRoot: string,
   holder: PublishLockHolder
 ): Promise<void> {
   const current = await readPublishCoordinatorLock(projectRoot);
-  if (!current || current.acquiredAt === holder.acquiredAt) {
-    await rm(lockPath(projectRoot), { force: true });
-  }
+  if (current && !publishLockOwnedBy(current, holder)) return;
+  await rm(lockPath(projectRoot), { force: true });
+  forgetProcessHolder(holder);
 }
 
 /**
@@ -287,11 +371,15 @@ export async function updatePublishCoordinatorLockPayload(
   const next: PublishLockHolder = {
     ...holder,
     ...(payload.validationId === undefined ? {} : { validationId: payload.validationId }),
-    ...(payload.releaseId === undefined ? {} : { releaseId: payload.releaseId })
+    ...(payload.releaseId === undefined ? {} : { releaseId: payload.releaseId }),
+    ...(payload.phase === undefined ? {} : { phase: payload.phase })
   };
   const current = await readPublishCoordinatorLock(projectRoot);
-  if (current && current.acquiredAt !== holder.acquiredAt) return;
+  if (current && !publishLockOwnedBy(current, holder)) return;
   await writeFile(lockPath(projectRoot), JSON.stringify(next), "utf8");
+  holder.validationId = next.validationId;
+  holder.releaseId = next.releaseId;
+  holder.phase = next.phase;
 }
 
 /**
@@ -324,6 +412,10 @@ export async function withPublishCoordinator<T>(
   }
 
   try {
+    // The lock is already ours. A recovery journal opened between the previous
+    // check and this one still closes the write, and the finally block drops
+    // the window so a rejected entry does not keep it.
+    await assertSemanticWritesOpen(options.projectRoot);
     return await coordinatorHeld.run(true, fn);
   } finally {
     await releasePublishCoordinatorLock(options.projectRoot, holder);

@@ -190,6 +190,7 @@
 | 文档 | 用途 |
 |---|---|
 | `plans/README.md` | 仓库级 plan 索引 |
+| [plans/lucy-20261030-l25-15-semantic-release-restore-task-plan.md](plans/lucy-20261030-l25-15-semantic-release-restore-task-plan.md) | **v0.25 L25-15，P0，实现 Task v1.0，2026-10-30 波次 A–F 运行代码已落地**：整批恢复按 Plan S1–S6 接入快照、恢复 API 与发布历史。S7、浏览器、镜像与客户交付不在授权内。SRR-01–SRR-24 仍未执行。测试通过不等于验收通过 |
 | [plans/2026-10-27-lucy-v0.25-semantic-release-restore-implementation-plan.md](plans/2026-10-27-lucy-v0.25-semantic-release-restore-implementation-plan.md) | **v0.25 L25-15，P0，Plan v0.11，第 4 轮复核通过，设计定稿，S1–S6 可交付开发**：语义发布历史版本与整批恢复。现行基线见 [第 4 轮复核](reviews/2026-10-30-l25-15-implementation-ready-review.md) 与主 Spec §5.2.1。快照接在 `3b7e8d32` 已盖住的临界区内部，释放点不得提前。v0.10「不得触及 `semantic-assets.ts` 锁生命周期、外部工作项是唯一保障」已作废。SRR-01–SRR-24 仍未执行。S7、浏览器、镜像与客户交付仍须单独授权 |
 | [plans/2026-10-28-lucy-v0.25-lucy-ops-control-plane-implementation-plan.md](plans/2026-10-28-lucy-v0.25-lucy-ops-control-plane-implementation-plan.md) | **v0.25 L25-16，P1，Plan v0.11，W-A 已授权实现 S1–S4，W-B 不可交付开发**：2026-10-29 PM 授权从 S1 开始。S5 另须 L25-11（审阅通过 + G30／G31 关闭）；**D8 已签（(b) 显式批次交接）**。VOPS-01–78 未执行 |
 | [plans/2026-10-25-lucy-v0.25-e2e-implementation-plan.md](plans/2026-10-25-lucy-v0.25-e2e-implementation-plan.md) | **v0.25 E2E 优化实施计划**：三工作流（s1 开发＋Code Review＋Debug&优化 → s2 重建 Docker＋模拟用户 UAT＋输出测试报告 → s3 汇总＋交付审阅＋commit）、五条并行 track 的**文件所有权互斥**、与外部并发 agent 的隔离协议、证据边界与完成定义。落地结果见[实施记录](reviews/2026-10-25-lucy-v0.25-e2e-implementation-record.md)与[测试报告](reviews/2026-10-25-lucy-v0.25-e2e-test-report.md) |

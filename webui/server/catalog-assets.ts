@@ -871,6 +871,46 @@ async function writeCatalogAssetIntoWindow(
   safety: { safeParentAbs: string; targetAbs: string }
 ): Promise<UploadCatalogAssetResult> {
   const targetRel = validation.targetPath;
+  const { openPromotingContentRelease, closeContentBatch, failContentBatch } = await import(
+    "./semantic-assets.js"
+  );
+  const { createRecoveryJournal, markRecoveryJournalFilesSaved } = await import(
+    "./semantic-recovery-journal.js"
+  );
+  const { readOrCreateSemanticInstanceId } = await import("./semantic-release-snapshots.js");
+  const opened = await openPromotingContentRelease({
+    projectRoot,
+    actor: "local-admin",
+    targets: [
+      {
+        targetPath: targetRel,
+        assetKind: "manifest",
+        expectedNewDigest: createHash("sha256").update(request.content, "utf8").digest("hex"),
+        identity: {
+          connectionId: request.connectionId,
+          schema: request.schema,
+          table: request.schema
+        }
+      }
+    ]
+  });
+  const journal = await createRecoveryJournal(projectRoot, {
+    releaseId: opened.releaseId,
+    operationId: opened.releaseId,
+    actor: "local-admin",
+    instanceId: await readOrCreateSemanticInstanceId(projectRoot),
+    targets: [
+      {
+        targetPath: targetRel,
+        identity: {
+          connectionId: request.connectionId,
+          schema: request.schema,
+          table: request.schema
+        },
+        newContent: request.content
+      }
+    ]
+  });
 
   // Atomic write: temp file in the same directory, then rename.
   const tempName = `.${randomUUID()}.upload.tmp`;
@@ -940,6 +980,32 @@ async function writeCatalogAssetIntoWindow(
     reloadRunId: reload.id
   };
   await appendRecord(projectRoot, finalRecord);
+  await markRecoveryJournalFilesSaved(projectRoot, journal.journalId);
+  // L25-15 — the batch has to reach a terminal state inside the publish
+  // window. A record left at `promoting` blocks every later content write.
+  try {
+    await closeContentBatch(projectRoot, {
+      releaseId: opened.releaseId,
+      attemptId: opened.attemptId,
+      actor: "local-admin",
+      journalId: journal.journalId,
+      changeType: "manifest_upload_terminal",
+      source: "catalog_asset_upload_api",
+      targetId: targetRel,
+      operation: "upload_terminal",
+      newSummary: {
+        connectionId: validation.connectionId,
+        schema: validation.schema,
+        tableCount: validation.tables
+      }
+    });
+  } catch (error) {
+    await failContentBatch(projectRoot, {
+      releaseId: opened.releaseId,
+      journalId: journal.journalId
+    });
+    throw error;
+  }
   return {
     uploaded: true,
     record: finalRecord,

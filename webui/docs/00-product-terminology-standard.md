@@ -912,6 +912,28 @@ Protected terms（DOM 须 `translate="no"` + `notranslate`）：`MCP`、`KTX`、
 
 Protected terms（DOM 须 `translate="no"` + `notranslate`）：`Agent`、`Role`、`Wiki`、`Markdown`、`allowed_roles`、`wiki_search`、`wiki_read`、Wiki 路径与文件名、`operation_id`、`plan_digest`。
 
+### 4.15 语义发布整批恢复（L25-15）
+
+整批恢复把一条内容发布退回到该批次写入前的语义文件。它生成一条新的发布记录。来源记录保持原状。纯手动重建索引没有内容写入，不提供这个动作。
+
+| Canonical Term | UI 主术语 | 允许补充说法 | 禁止文案 | 说明 |
+|---|---|---|---|---|
+| Pre-release batch snapshot | 批次前快照 | — | recovery journal、完整备份、全库时间点 | 格式名 `semantic-release-snapshot/v1`。旧记录没有该快照时显示快照不可用，不从已发布反推 |
+| Restore to before this release | 恢复到本批次发布前 | 整批恢复 | 撤销全部后续修改 | 确认按钮为「确认恢复」 |
+| Batch restore preview | 恢复预检 | — | 恢复成功 | 预检、导出和 HTTP accepted 都不是恢复成功 |
+| Snapshot unavailable | 快照不可用 | — | 可恢复 | 旧记录、已清理或损坏的快照 |
+| Activation pending confirmation | 生效待确认 | — | 已发布、已生效 | `terminalAuditPending=true` 时所有公开出口使用这一文案 |
+| Restore package | 恢复包 | 导出恢复包 | 上传恢复、导入恢复包 | 只读导出，没有上传入口 |
+| Restore write set | 恢复写集 | 本次恢复目标 | 同步文件、待同步文件 | 本次恢复写入的文件与其一一对应的受控 ktx 视图目标。进恢复日志 |
+| Mirror sync write set | 镜像同步写集 | 既有待同步变更 | 同步镜像、镜像同步 | 内容根与 ktx 视图之间已有的漂移。变化方向是镜像向内容根对齐，**不由本次恢复写入**，不进恢复日志 |
+| Semantic deletion set | 语义删除集合 | 恢复后会从模型中消失的表 | 删除的文件 | 由恢复前后合并模型差异推导。删掉 Manifest 中一张表也算，即使文件本身仍是恢复目标 |
+| Force rebuild | 强制重建 | 强制重建索引 | 清空索引、重建 | 语义删除集合非空时采用；沿用发布记录里的模式，重试与启动续跑不改判 |
+| Readback expectation | 读回预期 | 删除方向的读回预期 | 整表消失 | 分两类：整表不可检索不可读取；业务扩展不可见但表结构仍然可见 |
+
+Protected terms（DOM 须 `translate="no"` + `notranslate`）：`semantic-release-snapshot/v1`、`releaseId`、`snapshotId`、`planDigest`、`scopeDigest`、路径、digest 与恢复包 URL。
+
+**「不修改无关文件」的两种方向不得合并表述**：内容根侧，恢复写集之外的文件内容与摘要完全不变；ktx 视图侧，允许变化的恰为「恢复写集的受控镜像目标 ∪ 已确认的镜像同步写集」两类。两类变化方向不同，分区展示、分别核对。
+
 ## 5. 新术语登记流程
 
 任何新功能 Spec 或 Plan 引入新的产品概念时，必须执行以下流程：

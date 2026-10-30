@@ -472,3 +472,40 @@ journeys:
       - { stageId: J01-06, title: "新建访问主体", stageOwnerBranch: ACCESS }
       - { stageId: J01-07, title: "真实 Agent 问答", stageOwnerBranch: AGENT }
       - { stageId: J01-08, title: "审计与对账", stageOwnerBranch: OBSERVE }
+
+# ── L25-15 语义发布历史版本与整批恢复：SRR 验收矩阵映射 ──────────────────
+#
+# SRR-01–SRR-24 是 L25-15 的功能验收编号，事实源为
+#   docs/specs/lucy-20261027-v0p25-semantic-release-restore-spec.md §10.1。
+#
+# 本节**不进入**冻结分母：上面的 existingCatalogMappings / newScenarios /
+# journeys 计数不变，SRR 不伪装成 v0.25 的执行项。本节只登记「SRR → 证据层 →
+# 状态」的对应关系，供发布取证核对。
+#
+# 状态口径与 Spec §10.1 验收矩阵一致：未执行保持未执行，blocked 保持 blocked。
+# 本节不记录任何运行状态，也不把 not_run 折叠成通过。
+srrMappings:
+  - { srrId: "SRR-01", spec: "docs/specs/lucy-20261027-v0p25-semantic-release-restore-spec.md", evidenceLayer: "unit", status: "not_run" }
+  - { srrId: "SRR-02", spec: "docs/specs/lucy-20261027-v0p25-semantic-release-restore-spec.md", evidenceLayer: "unit", status: "not_run" }
+  - { srrId: "SRR-03", spec: "docs/specs/lucy-20261027-v0p25-semantic-release-restore-spec.md", evidenceLayer: "integration", status: "not_run" }
+  - { srrId: "SRR-04", spec: "docs/specs/lucy-20261027-v0p25-semantic-release-restore-spec.md", evidenceLayer: "unit", status: "not_run" }
+  - { srrId: "SRR-05", spec: "docs/specs/lucy-20261027-v0p25-semantic-release-restore-spec.md", evidenceLayer: "unit", status: "not_run" }
+  - { srrId: "SRR-06", spec: "docs/specs/lucy-20261027-v0p25-semantic-release-restore-spec.md", evidenceLayer: "unit", status: "not_run" }
+  - { srrId: "SRR-07", spec: "docs/specs/lucy-20261027-v0p25-semantic-release-restore-spec.md", evidenceLayer: "unit", status: "not_run" }
+  - { srrId: "SRR-08", spec: "docs/specs/lucy-20261027-v0p25-semantic-release-restore-spec.md", evidenceLayer: "integration", status: "not_run" }
+  - { srrId: "SRR-09", spec: "docs/specs/lucy-20261027-v0p25-semantic-release-restore-spec.md", evidenceLayer: "unit", status: "not_run" }
+  - { srrId: "SRR-10", spec: "docs/specs/lucy-20261027-v0p25-semantic-release-restore-spec.md", evidenceLayer: "unit", status: "not_run" }
+  - { srrId: "SRR-11", spec: "docs/specs/lucy-20261027-v0p25-semantic-release-restore-spec.md", evidenceLayer: "integration", status: "not_run" }
+  - { srrId: "SRR-12", spec: "docs/specs/lucy-20261027-v0p25-semantic-release-restore-spec.md", evidenceLayer: "unit", status: "not_run" }
+  - { srrId: "SRR-13", spec: "docs/specs/lucy-20261027-v0p25-semantic-release-restore-spec.md", evidenceLayer: "unit", status: "not_run" }
+  - { srrId: "SRR-14", spec: "docs/specs/lucy-20261027-v0p25-semantic-release-restore-spec.md", evidenceLayer: "integration", status: "not_run" }
+  - { srrId: "SRR-15", spec: "docs/specs/lucy-20261027-v0p25-semantic-release-restore-spec.md", evidenceLayer: "unit", status: "not_run" }
+  - { srrId: "SRR-16", spec: "docs/specs/lucy-20261027-v0p25-semantic-release-restore-spec.md", evidenceLayer: "unit", status: "not_run" }
+  - { srrId: "SRR-17", spec: "docs/specs/lucy-20261027-v0p25-semantic-release-restore-spec.md", evidenceLayer: "unit", status: "not_run" }
+  - { srrId: "SRR-18", spec: "docs/specs/lucy-20261027-v0p25-semantic-release-restore-spec.md", evidenceLayer: "integration", status: "not_run" }
+  - { srrId: "SRR-19", spec: "docs/specs/lucy-20261027-v0p25-semantic-release-restore-spec.md", evidenceLayer: "unit", status: "not_run" }
+  - { srrId: "SRR-20", spec: "docs/specs/lucy-20261027-v0p25-semantic-release-restore-spec.md", evidenceLayer: "unit", status: "not_run" }
+  - { srrId: "SRR-21", spec: "docs/specs/lucy-20261027-v0p25-semantic-release-restore-spec.md", evidenceLayer: "unit", status: "not_run" }
+  - { srrId: "SRR-22", spec: "docs/specs/lucy-20261027-v0p25-semantic-release-restore-spec.md", evidenceLayer: "delivery", status: "blocked_environment", deliveryStatus: "blocked_delivery" }
+  - { srrId: "SRR-23", spec: "docs/specs/lucy-20261027-v0p25-semantic-release-restore-spec.md", evidenceLayer: "unit", status: "not_run" }
+  - { srrId: "SRR-24", spec: "docs/specs/lucy-20261027-v0p25-semantic-release-restore-spec.md", evidenceLayer: "unit", status: "not_run" }

@@ -32,7 +32,7 @@
  */
 
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { syncContentToProjectRoot } from "./content-mirror";
 import { resolveContentPaths } from "./paths";
@@ -53,6 +53,44 @@ export function latchSemanticRecoveryAdmission(): void {
 
 export function isSemanticRecoveryAdmissionLatched(): boolean {
   return semanticRecoveryAdmissionLatched;
+}
+
+/** Test-only. Production admission stays latched until the process restarts. */
+export function resetSemanticRecoveryAdmissionForTests(): void {
+  semanticRecoveryAdmissionLatched = false;
+}
+
+export class SemanticRecoveryClosedError extends Error {
+  readonly code = "semantic_recovery_required";
+  readonly statusCode = 409;
+
+  constructor(message: string) {
+    super(message);
+    this.name = "SemanticRecoveryClosedError";
+  }
+}
+
+/**
+ * Fail closed before a shared-coordinator write.
+ *
+ * `recovery_required` and `write_in_progress` close the write. A journal
+ * directory that cannot be read is the same as closed: the latch stays set
+ * so a later call cannot treat the failure as "nothing to recover".
+ */
+export async function assertSemanticWritesOpen(projectRoot: string): Promise<void> {
+  try {
+    if (await isRecoveryRequired(projectRoot)) {
+      throw new SemanticRecoveryClosedError(
+        "上一笔语义写入存在未决恢复日志，恢复核验完成前不允许写入。"
+      );
+    }
+  } catch (error) {
+    if (error instanceof SemanticRecoveryClosedError) throw error;
+    latchSemanticRecoveryAdmission();
+    throw new SemanticRecoveryClosedError(
+      "语义恢复日志无法读取，恢复核验完成前不允许写入。"
+    );
+  }
 }
 
 export type RecoveryJournalStatus =
@@ -87,15 +125,40 @@ export interface RecoveryJournalEntry {
   order: number;
   /** Project-root-relative target path. */
   targetPath: string;
+  /**
+   * Which surface this entry describes.
+   *
+   * `content_root` is the authoring surface under the resolved content root.
+   * `ktx_sibling` is the same relative path in the project-root sibling view
+   * that ktx actually reads. A restore writes both surfaces, so both need a
+   * pre-image — but only the restore write set is journalled, never the
+   * mirror sync write set (Spec v0.11 §2.3).
+   *
+   * A journal written before this field existed has no `surface` and is read
+   * as `content_root`.
+   */
+  surface?: RecoveryJournalSurface;
   /** The table identity that owns the target, when it is an overlay. */
   identity?: SemanticTableIdentity;
   /** The original bytes (base64), or null when the target did not exist. */
   originalBase64: string | null;
   /** Digest of the original content, or null when the target was absent. */
   originalDigest: string | null;
-  /** Digest of the content the batch intends to write. */
-  expectedNewDigest: string;
+  /**
+   * Digest of the content the batch intends to write.
+   * `null` means the target must be absent after the batch (L25-15 delete).
+   */
+  expectedNewDigest: string | null;
 }
+
+/**
+ * The two writable surfaces of one semantic target.
+ *
+ * The legacy layout (`LUCY_CONTENT_ROOT=.`) collapses them: the content root
+ * *is* the project root, so a journal registers the path once and the
+ * controlled mirror write/delete runs once.
+ */
+export type RecoveryJournalSurface = "content_root" | "ktx_sibling";
 
 export interface RecoveryJournal {
   version: 1;
@@ -154,18 +217,45 @@ function digestOfRequired(content: Buffer | string): string {
   return createHash("sha256").update(buffer).digest("hex");
 }
 
-async function resolveTargetAbsolute(projectRoot: string, relPath: string): Promise<string> {
+async function resolveTargetAbsolute(
+  projectRoot: string,
+  relPath: string,
+  surface: RecoveryJournalSurface = "content_root"
+): Promise<string> {
   const contentPaths = await resolveContentPaths(projectRoot);
+  if (surface === "ktx_sibling") {
+    return path.resolve(projectRoot, relPath);
+  }
   return path.resolve(contentPaths.configDir, relPath);
+}
+
+/**
+ * True when the content root and the project-root sibling view are the same
+ * directory. The legacy layout (`LUCY_CONTENT_ROOT=.`) collapses the two
+ * surfaces into one: a journal registers a path once and the controlled
+ * mirror write/delete runs once (Spec v0.11 §2.2).
+ */
+export async function contentRootAndSiblingAreSameDir(projectRoot: string): Promise<boolean> {
+  const contentPaths = await resolveContentPaths(projectRoot);
+  try {
+    const [contentRoot, projectRootReal] = await Promise.all([
+      realpath(contentPaths.configDir),
+      realpath(projectRoot)
+    ]);
+    return contentRoot === projectRootReal;
+  } catch {
+    return false;
+  }
 }
 
 /** Read the current bytes of a target, or null when it does not exist. */
 export async function readRecoveryTarget(
   projectRoot: string,
-  relPath: string
+  relPath: string,
+  surface: RecoveryJournalSurface = "content_root"
 ): Promise<Buffer | null> {
   try {
-    return await readFile(await resolveTargetAbsolute(projectRoot, relPath));
+    return await readFile(await resolveTargetAbsolute(projectRoot, relPath, surface));
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
     throw error;
@@ -180,9 +270,10 @@ export async function readRecoveryTarget(
 export async function atomicReplaceTarget(
   projectRoot: string,
   relPath: string,
-  content: string
+  content: string,
+  surface: RecoveryJournalSurface = "content_root"
 ): Promise<void> {
-  const abs = await resolveTargetAbsolute(projectRoot, relPath);
+  const abs = await resolveTargetAbsolute(projectRoot, relPath, surface);
   await mkdir(path.dirname(abs), { recursive: true });
   const temp = path.join(path.dirname(abs), `.${path.basename(abs)}.tmp-${randomUUID()}`);
   try {
@@ -194,10 +285,21 @@ export async function atomicReplaceTarget(
   }
 }
 
-/** Keep the ktx-facing sibling view in sync with the content root. */
+/**
+ * Keep the ktx-facing sibling view in sync with the content root.
+ *
+ * A rejected sync or a per-file failure is fatal here. Callers must not mark
+ * a journal `restored` or a release `published` after this throws (Spec §7.2).
+ */
 export async function syncRuntimeMirror(projectRoot: string): Promise<void> {
   const contentPaths = await resolveContentPaths(projectRoot);
-  await syncContentToProjectRoot(projectRoot, contentPaths).catch(() => undefined);
+  const result = await syncContentToProjectRoot(projectRoot, contentPaths);
+  if (result.failed > 0) {
+    throw new RecoveryJournalError(
+      "MIRROR_SYNC_FAILED",
+      `运行镜像有 ${result.failed} 个文件未能同步，恢复保持阻断。`
+    );
+  }
 }
 
 export interface CreateRecoveryJournalInput {
@@ -213,8 +315,17 @@ export interface CreateRecoveryJournalInput {
   targets: ReadonlyArray<{
     targetPath: string;
     identity?: SemanticTableIdentity;
-    /** The new content the batch will write. */
-    newContent: string;
+    /**
+     * Which surface this target describes. Defaults to `content_root`.
+     * A restore registers the content-root target and the matching
+     * `ktx_sibling` target — but only when the two surfaces are distinct.
+     */
+    surface?: RecoveryJournalSurface;
+    /**
+     * The new content the batch will write.
+     * `null` means the batch deletes the target; the expected digest is then absent.
+     */
+    newContent: string | null;
     /** The original content; null means the target did not exist. */
     originalContent?: string | null;
   }>;
@@ -236,20 +347,22 @@ export async function createRecoveryJournal(
 
   for (let order = 0; order < input.targets.length; order += 1) {
     const target = input.targets[order]!;
+    const surface = target.surface ?? "content_root";
     let originalBytes: Buffer | null;
     if (target.originalContent !== undefined) {
       originalBytes =
         target.originalContent === null ? null : Buffer.from(target.originalContent, "utf8");
     } else {
-      originalBytes = await readRecoveryTarget(projectRoot, target.targetPath);
+      originalBytes = await readRecoveryTarget(projectRoot, target.targetPath, surface);
     }
     entries.push({
       order,
       targetPath: target.targetPath,
+      ...(surface === "content_root" ? {} : { surface }),
       ...(target.identity ? { identity: target.identity } : {}),
       originalBase64: originalBytes ? originalBytes.toString("base64") : null,
       originalDigest: digestOf(originalBytes),
-      expectedNewDigest: digestOfRequired(target.newContent)
+      expectedNewDigest: target.newContent === null ? null : digestOfRequired(target.newContent)
     });
   }
 
@@ -421,6 +534,14 @@ export interface RestoreRecoveryJournalResult {
   status: RecoveryJournalStatus;
   /** Targets that were put back. */
   restored: string[];
+  /**
+   * Targets whose write had landed and was deliberately kept.
+   *
+   * Only the display write paths set `keepLandedWrites`: Spec 174 §3.2
+   * keeps a partial write in place and invalidates the cache instead of
+   * rolling it back.
+   */
+  kept: string[];
   /** Targets that were left alone because a third party wrote there. */
   skipped: string[];
   /** True when publishing and manual reindexing must stay blocked. */
@@ -434,14 +555,17 @@ export interface RestoreRecoveryJournalResult {
  * - `restored`  —— 目标写落地了，已按原始字节回滚。
  * - `unchanged` —— 目标仍是原始内容：**写入从未落地**（或已被回滚），无需恢复。
  * - `conflict`  —— 目标是第三方内容，**不猜、不覆盖**，留给人工。
+ * - `kept`      —— 写入已落地，按显示写入合同**保留**（见 `keepLandedWrites`）。
  */
-type RestoreEntryOutcome = "restored" | "unchanged" | "conflict";
+type RestoreEntryOutcome = "restored" | "unchanged" | "conflict" | "kept";
 
 async function restoreEntry(
   projectRoot: string,
-  entry: RecoveryJournalEntry
+  entry: RecoveryJournalEntry,
+  keepLandedWrites: boolean
 ): Promise<{ outcome: RestoreEntryOutcome; reason?: string }> {
-  const current = await readRecoveryTarget(projectRoot, entry.targetPath);
+  const surface = entry.surface ?? "content_root";
+  const current = await readRecoveryTarget(projectRoot, entry.targetPath, surface);
   const currentDigest = digestOf(current);
   if (currentDigest !== entry.expectedNewDigest) {
     return currentDigest === entry.originalDigest
@@ -451,14 +575,20 @@ async function restoreEntry(
           reason: "目标内容既不是原始内容也不是本批次写入的内容，存在第三方改动，拒绝覆盖。"
         };
   }
+  if (keepLandedWrites) {
+    // Spec 174 §3.2 / IM-02: a partial failure after touching disk still
+    // invalidates the cache and leaves the written content in place. The
+    // display write paths must not roll a landed write back.
+    return { outcome: "kept", reason: "写入已落地，按显示写入合同保留。" };
+  }
   if (entry.originalBase64 === null) {
     // The target did not exist before this batch: remove what we created.
-    const abs = await resolveTargetAbsolute(projectRoot, entry.targetPath);
+    const abs = await resolveTargetAbsolute(projectRoot, entry.targetPath, surface);
     await rm(abs, { force: true });
     return { outcome: "restored" };
   }
   const originalBytes = Buffer.from(entry.originalBase64, "base64");
-  const abs = await resolveTargetAbsolute(projectRoot, entry.targetPath);
+  const abs = await resolveTargetAbsolute(projectRoot, entry.targetPath, surface);
   await mkdir(path.dirname(abs), { recursive: true });
   const temp = path.join(path.dirname(abs), `.${path.basename(abs)}.restore-${randomUUID()}`);
   try {
@@ -487,13 +617,15 @@ async function restoreEntry(
 export async function restoreRecoveryJournal(
   projectRoot: string,
   journalId: string,
-  options: { now?: () => number } = {}
+  options: { now?: () => number; keepLandedWrites?: boolean } = {}
 ): Promise<RestoreRecoveryJournalResult | null> {
   const journal = await readRecoveryJournal(projectRoot, journalId);
   if (!journal) return null;
   const now = options.now ?? Date.now;
+  const keepLandedWrites = options.keepLandedWrites === true;
 
   const restored: string[] = [];
+  const kept: string[] = [];
   const skipped: string[] = [];
   let recoveryRequired = false;
 
@@ -501,9 +633,11 @@ export async function restoreRecoveryJournal(
   const ordered = [...journal.entries].sort((a, b) => b.order - a.order);
   for (const entry of ordered) {
     try {
-      const result = await restoreEntry(projectRoot, entry);
+      const result = await restoreEntry(projectRoot, entry, keepLandedWrites);
       if (result.outcome === "restored") {
         restored.push(entry.targetPath);
+      } else if (result.outcome === "kept") {
+        kept.push(entry.targetPath);
       } else if (result.outcome === "conflict") {
         skipped.push(entry.targetPath);
         recoveryRequired = true;
@@ -519,7 +653,25 @@ export async function restoreRecoveryJournal(
     }
   }
 
-  await syncRuntimeMirror(projectRoot);
+  try {
+    await syncRuntimeMirror(projectRoot);
+  } catch (error) {
+    recoveryRequired = true;
+    journal.outcome = error instanceof Error ? error.message : String(error);
+    journal.status = "recovery_required";
+    journal.recoveryRequired = true;
+    journal.updatedAt = new Date(now()).toISOString();
+    await writeRecoveryJournal(projectRoot, journal);
+    return {
+      journalId,
+      status: "recovery_required",
+      restored,
+      kept,
+      skipped,
+      recoveryRequired: true,
+      outcome: journal.outcome
+    };
+  }
 
   journal.status = recoveryRequired ? "recovery_required" : "restored";
   journal.recoveryRequired = recoveryRequired;
@@ -530,6 +682,7 @@ export async function restoreRecoveryJournal(
     journalId,
     status: journal.status,
     restored,
+    kept,
     skipped,
     recoveryRequired,
     outcome:
@@ -597,7 +750,7 @@ export async function recoverPendingRecoveryJournals(
           continue;
         }
         // The write landed but the journal update did not. Roll it back.
-        const result = await restoreEntry(projectRoot, entry);
+        const result = await restoreEntry(projectRoot, entry, false);
         if (result.outcome === "conflict") {
           blocked = true;
           journal.outcome = result.reason;
@@ -619,6 +772,18 @@ export async function recoverPendingRecoveryJournals(
       continue;
     }
 
+    try {
+      await syncRuntimeMirror(projectRoot);
+    } catch (error) {
+      journal.status = "recovery_required";
+      journal.recoveryRequired = true;
+      journal.outcome = error instanceof Error ? error.message : String(error);
+      journal.updatedAt = new Date(now()).toISOString();
+      await writeRecoveryJournal(projectRoot, journal);
+      needsRepair.push(journal.journalId);
+      continue;
+    }
+
     if (!rollbackAllowed) {
       // The written files are verified against the saved plan. The activation
       // is not proven, so the journal stays open and the release keeps
@@ -628,7 +793,6 @@ export async function recoverPendingRecoveryJournals(
       journal.phase = "activation_pending";
       journal.updatedAt = new Date(now()).toISOString();
       await writeRecoveryJournal(projectRoot, journal);
-      await syncRuntimeMirror(projectRoot);
       activationPending.push(journal.journalId);
       continue;
     }
@@ -638,11 +802,29 @@ export async function recoverPendingRecoveryJournals(
     journal.applied = [];
     journal.updatedAt = new Date(now()).toISOString();
     await writeRecoveryJournal(projectRoot, journal);
-    await syncRuntimeMirror(projectRoot);
     recovered.push(journal.journalId);
   }
 
   return { recovered, needsRepair, activationPending };
+}
+
+/**
+ * Boot path. A thrown scan is not "nothing to recover": latch admission so
+ * the process does not listen while writes are still open.
+ */
+export async function recoverSemanticJournalsAtStartup(
+  projectRoot: string
+): Promise<RecoverPendingJournalsResult | null> {
+  try {
+    return await recoverPendingRecoveryJournals(projectRoot);
+  } catch (error) {
+    latchSemanticRecoveryAdmission();
+    console.error(
+      "[lucy-semantic] semantic journal recovery failed; writes stay closed",
+      error instanceof Error ? error.message : "unknown"
+    );
+    return null;
+  }
 }
 
 /**

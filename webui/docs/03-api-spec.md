@@ -154,6 +154,11 @@ GET    /api/semantic-assets/releases
 GET    /api/semantic-assets/releases/export.csv
 GET    /api/semantic-assets/releases/:id/status
 GET    /api/semantic-assets/releases/export.csv
+POST   /api/semantic-assets/releases/:id/restore/preview
+POST   /api/semantic-assets/releases/:id/restore
+GET    /api/semantic-assets/releases/:id/restore-package
+GET    /api/semantic-assets/releases/:id/restore-index-scope
+POST   /api/semantic-assets/releases/:id/restore-retry-index
 POST   /api/semantic-assets/export
 GET    /api/semantic-assets/exports/:exportId/download
 POST   /api/semantic-assets/reindex
@@ -574,7 +579,31 @@ dryRun 响应：
 
 `POST /api/semantic-assets/export` 生成语义资产导出任务；`GET /api/semantic-assets/exports/:exportId/download` 下载指定导出产物。
 
-`POST /api/semantic-assets/reindex` 手动触发 semantic-layer 索引重建，并把结果写入发布历史，供发布工作台和历史页展示。
+`POST /api/semantic-assets/reindex` 手动触发 semantic-layer 索引重建，并把结果写入发布历史，供发布工作台和历史页展示。纯手动重建不生成批次前快照，也不能整批恢复。
+
+`POST /api/semantic-assets/releases/:id/restore/preview` 对一条已有批次前快照的内容发布做恢复预检。它不写正式语义文件。返回 `previewId`、`planDigest`、目标、冲突和 verdict。预检 30 分钟后失效。
+
+预检返回三个**互相独立**的分区，客户端必须分区展示，不得合并成一句「同步镜像」：
+
+| 分区 | 字段 | 含义 |
+|---|---|---|
+| 本次恢复目标 | `targets[]`（含 `action`、当前摘要、恢复后摘要、ktx 视图摘要） | 本次恢复实际写入的文件 |
+| 全局索引范围与既有待同步变更 | `fullIndexScope[]`、`knownPending[]`、`unknownCoverage` | 索引会扫到的全部文件、其中已知有差异的文件，以及**无法逐文件确认**的比例。Lucy 没有索引摘要账本，`unknownCoverage` 不会假装是 0 |
+| 镜像同步写集 | `mirrorSyncWriteSet[]`（内容根路径、ktx 视图路径、两侧摘要） | 内容根与 ktx 视图之间已有的漂移。**不由本次恢复写入**，变化方向是镜像向内容根对齐，不进恢复日志 |
+
+预检同时返回 `reindexMode`（`incremental` / `force`）、`semanticDeletionSet` 和 `readbackExpectations`。索引模式由**恢复前后合并模型差异**推导的语义删除集合决定：Manifest 原地回写删掉一张表也算语义删除，即使该文件本身仍是恢复目标。读回预期分两类——`table_gone` 断言整表不可检索不可读取；`extension_invisible` 断言业务扩展不可见但表结构仍然可见。
+
+`POST /api/semantic-assets/releases/:id/restore` 的请求体只有 `previewId`、`planDigest` 和 `idempotencyKey`。服务端在 `semantic_restore` 发布窗口内重算基线并提交。成功时生成一条新的发布记录，来源记录保持原状。同一幂等键再次提交返回同一条恢复记录。
+
+只读幂等查询发生在**取锁之前**：恢复锁覆盖后台重建索引直到终态，若在锁内查询，进行中的同键重放会先撞 `semantic_publish_busy` 而不是返回真实进行中的批次。取锁后完整重做三态判定。
+
+`GET /api/semantic-assets/releases/:id/restore-package` 重新核验快照后下载只读恢复包。没有对应的上传接口。超过恢复包条目或体积上限时返回 `semantic_restore_package_limit`，不返回截断包。超限快照仍可在服务端恢复。
+
+`GET /api/semantic-assets/releases/:id/restore-index-scope` 返回该恢复批次的**索引范围确认对象**：当前 ktx 实际扫描集合、当前镜像同步写集、`reindexMode` 与 `scopeDigest`。它只确认索引范围，**不重算内容恢复计划**——对来源批次预检会因恢复已落地而 CAS 冲突，对恢复批次预检等于构建反向恢复。
+
+`POST /api/semantic-assets/releases/:id/restore-retry-index` 请求体只有 `scopeDigest` 和 `idempotencyKey`。它**不重复恢复写盘**，只重跑索引与必要的语义读回，沿用发布记录里的 `reindexMode`，保留原失败 attempt。范围与确认对象不一致时返回 `semantic_restore_plan_stale`，要求重新确认而不是重新恢复。
+
+`terminalAuditPending=true` 的发布记录在列表、状态和 CSV 中显示为「生效待确认」，不把内部的已发布状态直接暴露出来。触发方式 `webui_restore` 与普通发布、强制重建索引分开筛选。
 
 ### 语义资产批量维护（L25-11）
 

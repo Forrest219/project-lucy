@@ -223,7 +223,7 @@ import {
   persistSemanticBatchSnapshot
 } from "./semantic-assets.js";
 import { exportSemanticAssetPackage, recordSemanticAssetExport } from "./semantic-asset-export.js";
-import { recoverPendingRecoveryJournals, isRecoveryRequired } from "./semantic-recovery-journal.js";
+import { recoverSemanticJournalsAtStartup, isRecoveryRequired } from "./semantic-recovery-journal.js";
 import { verifyAccessRecoveryOnStartup } from "./access-recovery.js";
 import { registerSemanticBatchRoutes } from "./semantic-batch-routes.js";
 import { SEMANTIC_BATCH_LIMITS } from "./semantic-limits.js";
@@ -243,8 +243,18 @@ import {
 } from "./semantic-batch-audit.js";
 import {
   buildPublishHistoryCsvRows,
-  formatPublishHistoryExportFilenameStamp
+  formatPublishHistoryExportFilenameStamp,
+  projectPublicRelease
 } from "../src/lib/publishHistoryLabels.js";
+import {
+  buildSemanticRestorePackage,
+  previewSemanticRestore,
+  readRestoreIndexScope,
+  reconcileSemanticReleaseStartup,
+  retryRestoreIndex,
+  SemanticRestoreError,
+  submitSemanticRestore
+} from "./semantic-release-restore.js";
 
 type ErrorEnvelope = {
   ok: false;
@@ -2179,7 +2189,9 @@ export function buildServer() {
     offset?: string;
   }): SemanticAssetReleaseListQuery {
     const trigger =
-      q.trigger === "webui_publish" || q.trigger === "webui_manual_reindex"
+      q.trigger === "webui_publish" ||
+      q.trigger === "webui_manual_reindex" ||
+      q.trigger === "webui_restore"
         ? (q.trigger as SemanticAssetReleaseTrigger)
         : undefined;
     const reindexStatus =
@@ -2215,7 +2227,11 @@ export function buildServer() {
   }>("/api/semantic-assets/releases", async (request) => {
     const projectRoot = await resolveProjectRoot();
     const query = parseReleaseListQuery(request.query);
-    return { ok: true, data: await readSemanticAssetReleases(projectRoot, query) };
+    const listed = await readSemanticAssetReleases(projectRoot, query);
+    return {
+      ok: true,
+      data: { ...listed, records: listed.records.map((record) => projectPublicRelease(record)) }
+    };
   });
 
   app.get<{
@@ -2232,7 +2248,8 @@ export function buildServer() {
     // Export ignores pagination — full filtered set.
     delete query.limit;
     delete query.offset;
-    const { records } = await readSemanticAssetReleases(projectRoot, query);
+    const listed = await readSemanticAssetReleases(projectRoot, query);
+    const records = listed.records.map((record) => projectPublicRelease(record));
     const stamp = formatPublishHistoryExportFilenameStamp();
     const filename = `publish-history-${stamp}.csv`;
     reply.header("Content-Type", "text/csv; charset=utf-8");
@@ -2255,14 +2272,136 @@ export function buildServer() {
         }
       });
     }
-    return { ok: true, data: { release: record } };
+    return { ok: true, data: { release: projectPublicRelease(record) } };
+  });
+
+  app.post<{ Params: { id: string } }>(
+    "/api/semantic-assets/releases/:id/restore/preview",
+    async (request, reply) => {
+      const projectRoot = await resolveProjectRoot();
+      try {
+        const preview = await previewSemanticRestore(
+          projectRoot,
+          request.params.id,
+          actorIdFromRequest(request)
+        );
+        return { ok: true, data: preview };
+      } catch (error) {
+        if (error instanceof SemanticRestoreError) {
+          reply.status(error.statusCode);
+          return { ok: false, error: { code: error.code, message: error.message } };
+        }
+        throw error;
+      }
+    }
+  );
+
+  app.post<{
+    Params: { id: string };
+    Body: { previewId?: string; planDigest?: string; idempotencyKey?: string };
+  }>("/api/semantic-assets/releases/:id/restore", async (request, reply) => {
+    const projectRoot = await resolveProjectRoot();
+    const body = request.body ?? {};
+    try {
+      const result = await submitSemanticRestore(projectRoot, {
+        sourceReleaseId: request.params.id,
+        previewId: typeof body.previewId === "string" ? body.previewId : "",
+        planDigest: typeof body.planDigest === "string" ? body.planDigest : "",
+        idempotencyKey: typeof body.idempotencyKey === "string" ? body.idempotencyKey : "",
+        actor: actorIdFromRequest(request)
+      });
+      return { ok: true, data: { ...result, release: projectPublicRelease(result.release) } };
+    } catch (error) {
+      if (error instanceof SemanticRestoreError) {
+        reply.status(error.statusCode);
+        return { ok: false, error: { code: error.code, message: error.message } };
+      }
+      throw error;
+    }
+  });
+
+  app.get<{ Params: { id: string } }>(
+    "/api/semantic-assets/releases/:id/restore-package",
+    async (request, reply) => {
+      const projectRoot = await resolveProjectRoot();
+      try {
+        const packed = await buildSemanticRestorePackage(projectRoot, request.params.id);
+        reply.header("Content-Type", "application/zip");
+        reply.header("Content-Disposition", `attachment; filename="${packed.filename}"`);
+        return reply.send(packed.body);
+      } catch (error) {
+        if (error instanceof SemanticRestoreError) {
+          reply.status(error.statusCode);
+          return { ok: false, error: { code: error.code, message: error.message } };
+        }
+        throw error;
+      }
+    }
+  );
+
+  /**
+   * L25-15 §5.6 — the index range confirmation object of a restore batch.
+   *
+   * It confirms the index scope without recomputing a content restore plan.
+   * A pre-check against the source batch would fail the CAS (the restore
+   * already landed); a pre-check against the restore batch would build a
+   * reverse restore.
+   */
+  app.get<{ Params: { id: string } }>(
+    "/api/semantic-assets/releases/:id/restore-index-scope",
+    async (request, reply) => {
+      const projectRoot = await resolveProjectRoot();
+      try {
+        return { ok: true, data: await readRestoreIndexScope(projectRoot, request.params.id) };
+      } catch (error) {
+        if (error instanceof SemanticRestoreError) {
+          reply.status(error.statusCode);
+          return { ok: false, error: { code: error.code, message: error.message } };
+        }
+        throw error;
+      }
+    }
+  );
+
+  /**
+   * L25-15 §5.6 — the restore batch's own index retry.
+   *
+   * The restore write set is not written again. The retry re-runs the index
+   * with the mode the release record persisted and keeps the original failed
+   * attempt.
+   */
+  app.post<{
+    Params: { id: string };
+    Body: { scopeDigest?: string; idempotencyKey?: string };
+  }>("/api/semantic-assets/releases/:id/restore-retry-index", async (request, reply) => {
+    const projectRoot = await resolveProjectRoot();
+    const body = request.body ?? {};
+    try {
+      const result = await retryRestoreIndex(projectRoot, {
+        releaseId: request.params.id,
+        scopeDigest: typeof body.scopeDigest === "string" ? body.scopeDigest : "",
+        idempotencyKey: typeof body.idempotencyKey === "string" ? body.idempotencyKey : "",
+        actor: actorIdFromRequest(request)
+      });
+      return { ok: true, data: { ...result, release: projectPublicRelease(result.release) } };
+    } catch (error) {
+      if (error instanceof SemanticRestoreError) {
+        reply.status(error.statusCode);
+        return { ok: false, error: { code: error.code, message: error.message } };
+      }
+      throw error;
+    }
   });
 
   app.post<{
-    Body: { force?: boolean };
+    Body: { force?: boolean; pendingDigest?: string };
   }>("/api/semantic-assets/reindex", async (request, reply) => {
     const projectRoot = await resolveProjectRoot();
     const force = request.body?.force === true;
+    const confirmedPendingDigest =
+      typeof request.body?.pendingDigest === "string" && request.body.pendingDigest.trim()
+        ? request.body.pendingDigest.trim()
+        : null;
     // Lucy v0.25 (L25-11 D4) — the manual reindex shares the publish window. A lock
     // left behind by a crashed process is reclaimed by the coordinator, so a stale
     // lock file must not block the reindex forever.
@@ -2736,30 +2875,30 @@ async function recoverResponseLedger(): Promise<void> {
  * `isRecoveryRequired()` then keeps publishing and manual reindexing closed.
  */
 async function recoverSemanticJournals(): Promise<void> {
-  try {
-    const projectRoot = await resolveProjectRoot();
-    const result = await recoverPendingRecoveryJournals(projectRoot);
-    if (result.recovered.length > 0) {
-      console.warn(`[lucy-semantic] recovered ${result.recovered.length} unfinished semantic journal(s)`);
-    }
-    if (result.needsRepair.length > 0) {
-      console.error(
-        `[lucy-semantic] ${result.needsRepair.length} semantic journal(s) need manual repair; ` +
-          "publishing and manual reindex stay closed until they are resolved"
-      );
-    }
-    if (result.activationPending.length > 0) {
-      // The files are saved and verified, but the activation was never proven.
-      // The release keeps `activationStatus = unconfirmed`; the index can be
-      // retried from the publish workbench.
-      console.warn(
-        `[lucy-semantic] ${result.activationPending.length} semantic journal(s) have saved files with an unconfirmed activation`
-      );
-    }
-  } catch (error) {
+  const projectRoot = await resolveProjectRoot();
+  const result = await recoverSemanticJournalsAtStartup(projectRoot);
+  await reconcileSemanticReleaseStartup(projectRoot).catch((error: unknown) => {
     console.error(
-      "[lucy-semantic] semantic journal recovery failed",
+      "[lucy-semantic] release startup reconciliation failed",
       error instanceof Error ? error.message : "unknown"
+    );
+  });
+  if (!result) return;
+  if (result.recovered.length > 0) {
+    console.warn(`[lucy-semantic] recovered ${result.recovered.length} unfinished semantic journal(s)`);
+  }
+  if (result.needsRepair.length > 0) {
+    console.error(
+      `[lucy-semantic] ${result.needsRepair.length} semantic journal(s) need manual repair; ` +
+        "publishing and manual reindex stay closed until they are resolved"
+    );
+  }
+  if (result.activationPending.length > 0) {
+    // The files are saved and verified, but the activation was never proven.
+    // The release keeps `activationStatus = unconfirmed`; the index can be
+    // retried from the publish workbench.
+    console.warn(
+      `[lucy-semantic] ${result.activationPending.length} semantic journal(s) have saved files with an unconfirmed activation`
     );
   }
 }

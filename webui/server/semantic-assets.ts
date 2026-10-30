@@ -45,12 +45,14 @@ import { assertSafeTarget } from "./catalog-assets";
 import {
   PUBLISH_COORDINATOR_LOCK_REL,
   acquirePublishCoordinatorLock,
+  formatPublishWindowBusy,
+  publishLockOwnedBy,
   readPublishCoordinatorLock,
   releasePublishCoordinatorLock,
   updatePublishCoordinatorLockPayload,
-  type PublishLockHolder
+  type PublishLockHolder,
+  type PublishWindowPhase
 } from "./publish-coordinator.js";
-import { syncContentToProjectRoot } from "./content-mirror";
 import {
   completeRecoveryJournal,
   createRecoveryJournal,
@@ -59,13 +61,21 @@ import {
   markRecoveryJournalActivationPending,
   markRecoveryJournalBlocked,
   markRecoveryJournalFilesSaved,
-  restoreRecoveryJournal
+  restoreRecoveryJournal,
+  syncRuntimeMirror
 } from "./semantic-recovery-journal.js";
 import {
+  listLiveIdempotencyReleaseIds,
   readSemanticIdempotencyKey,
   registerSemanticIdempotencyKey,
+  SemanticIdempotencyCapacityError,
   SemanticIdempotencyConflictError
 } from "./semantic-idempotency.js";
+import {
+  assetKindForTarget,
+  writeSemanticReleaseSnapshot,
+  SemanticReleaseSnapshotError
+} from "./semantic-release-snapshots.js";
 import {
   recomputeSemanticPlanDigest,
   resolveSemanticInstanceId
@@ -137,7 +147,16 @@ export type SemanticAssetErrorCode =
    * Lucy v0.25 / L25-11 §7.2 (D15) — the idempotency key is required for a
    * batch import.
    */
-  | "SEMANTIC_IDEMPOTENCY_KEY_REQUIRED";
+  | "SEMANTIC_IDEMPOTENCY_KEY_REQUIRED"
+  /**
+   * Lucy v0.25 / L25-11 §7.2 (D15) — the store still holds 500 keys that have
+   * not reached 24 hours. The new intent is refused instead of evicting them.
+   */
+  | "SEMANTIC_IDEMPOTENCY_CAPACITY"
+  /** L25-15 — the pre-release snapshot could not be persisted. No formal file was written. */
+  | "semantic_snapshot_unavailable"
+  /** L25-15 — another content batch is still promoting, reindexing, or waiting on its terminal audit. */
+  | "semantic_publish_busy";
 
 export type SemanticAssetWarning = {
   code: SemanticAssetWarningCode;
@@ -191,6 +210,7 @@ export type SemanticAssetValidateResponse = {
 
 export type SemanticAssetReleaseStatus =
   | "blocked"
+  | "promoting"
   | "promote_failed"
   | "reindexing"
   | "published"
@@ -220,7 +240,7 @@ export type SemanticAssetReindexRecord = {
   stderr?: string;
 };
 
-export type SemanticAssetReleaseTrigger = "webui_publish" | "webui_manual_reindex";
+export type SemanticAssetReleaseTrigger = "webui_publish" | "webui_manual_reindex" | "webui_restore";
 
 export type SemanticAssetReleaseRecord = {
   id: string;
@@ -268,6 +288,40 @@ export type SemanticAssetReleaseRecord = {
   scopeId?: string;
   /** The client idempotency key that produced this release (L25-11 §7.2, D15). */
   idempotencyKey?: string;
+  /** L25-15 — this batch's own pre-write snapshot. Missing means unknown, not "has a snapshot". */
+  snapshotId?: string;
+  /** L25-15 — set only on a restore batch. The source release is left unchanged. */
+  restoreOfReleaseId?: string;
+  restoreSourceSnapshotId?: string;
+  restorePlanDigest?: string;
+  /**
+   * L25-15 — the terminal audit has not been re-read yet.
+   * Public projections must say 生效待确认 while this is true.
+   */
+  terminalAuditPending?: boolean;
+  /** L25-15 — force rebuild when the batch's semantic deletion set is non-empty. */
+  reindexMode?: "incremental" | "force";
+  recoveryJournalId?: string;
+  /**
+   * L25-15 — the index scope confirmation object of a restore batch.
+   *
+   * An index retry is independent of the content restore: it confirms the
+   * index scope (the files ktx scans, the mirror sync write set and the
+   * index mode) without recomputing a content restore plan. The retry is
+   * only allowed while this object still matches the current scope.
+   */
+  restoreIndexScope?: {
+    scope: string[];
+    /** The restore write set — excluded from the drift list, like the preview. */
+    restoreWriteSet: string[];
+    mirrorSyncWriteSet: Array<{
+      contentRelPath: string;
+      contentDigest: string | null;
+      siblingDigest: string | null;
+    }>;
+    reindexMode: "incremental" | "force";
+    scopeDigest: string;
+  };
 };
 
 export type SemanticAssetReleasesResponse = {
@@ -357,6 +411,8 @@ const PUBLISH_LOCK_REL = PUBLISH_COORDINATOR_LOCK_REL;
 const DEFAULT_STAGING_TTL_MS = 60 * 60 * 1000;
 /** Holder of the publish window currently owned by this process. */
 let publishLockHolder: PublishLockHolder | null = null;
+/** Set only when deleting our lock file threw. A live holder must not be released by the next caller. */
+let publishLockReleaseFailed = false;
 const REDACT_PATTERNS: RegExp[] = [
   /password\s*[:=]\s*\S+/gi,
   /token\s*[:=]\s*\S+/gi,
@@ -1228,14 +1284,27 @@ async function appendReleaseRecord(
   record: SemanticAssetReleaseRecord
 ): Promise<void> {
   const current = await readSidecar(projectRoot);
-  const next: SidecarFile = {
-    version: 1,
-    records: [...current.records, record].slice(-MAX_RELEASE_RECORDS)
-  };
-  await writeSidecar(projectRoot, next);
+  const combined = [...current.records.filter((item) => item.id !== record.id), record];
+  let protectedIds = new Set<string>();
+  try {
+    protectedIds = await listLiveIdempotencyReleaseIds(projectRoot);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(
+      `[lucy-semantic] idempotency retention could not be read; release truncation is skipped. ${message}`
+    );
+    await writeSidecar(projectRoot, { version: 1, records: combined });
+    return;
+  }
+  const visible = combined.slice(-MAX_RELEASE_RECORDS);
+  const visibleIds = new Set(visible.map((item) => item.id));
+  const protectedExtras = combined.filter(
+    (item) => !visibleIds.has(item.id) && protectedIds.has(item.id)
+  );
+  await writeSidecar(projectRoot, { version: 1, records: [...protectedExtras, ...visible] });
 }
 
-async function updateReleaseRecord(
+export async function updateReleaseRecord(
   projectRoot: string,
   releaseId: string,
   patch: Partial<SemanticAssetReleaseRecord>
@@ -1252,6 +1321,226 @@ async function updateReleaseRecord(
   return updated;
 }
 
+export async function assertNoUnsettledContentRelease(
+  projectRoot: string,
+  exceptReleaseId?: string
+): Promise<void> {
+  const sidecar = await readSidecar(projectRoot);
+  const blocking = sidecar.records.find((record) => {
+    if (exceptReleaseId && record.id === exceptReleaseId) return false;
+    if (record.terminalAuditPending === true) return true;
+    return record.status === "promoting" || record.status === "reindexing";
+  });
+  if (!blocking) return;
+  throw new SemanticAssetValidationError(
+    "semantic_publish_busy",
+    "已有批次处于写入中、重建索引或生效待确认，完成前不能开始下一次内容写入。",
+    [],
+    409
+  );
+}
+
+export async function openPromotingContentRelease(input: {
+  projectRoot: string;
+  actor: string;
+  trigger?: SemanticAssetReleaseTrigger;
+  targets: Array<{
+    targetPath: string;
+    expectedNewDigest: string | null;
+    identity?: { connectionId: string; schema: string; table: string };
+    assetKind?: "overlay" | "manifest";
+  }>;
+  restoreOfReleaseId?: string;
+  restoreSourceSnapshotId?: string;
+  restorePlanDigest?: string;
+  idempotencyKey?: string;
+}): Promise<{ releaseId: string; snapshotId: string; attemptId: string }> {
+  const releaseId = newReleaseId();
+  const attemptId = `att_${randomUUID()}`;
+  const connectionIds = Array.from(
+    new Set(
+      input.targets
+        .map((target) => target.identity?.connectionId)
+        .filter((value): value is string => Boolean(value))
+    )
+  );
+  const record: SemanticAssetReleaseRecord = {
+    id: releaseId,
+    createdAt: new Date().toISOString(),
+    actor: input.actor,
+    status: "promoting",
+    trigger: input.trigger ?? "webui_publish",
+    connectionIds,
+    files: input.targets.map((target) => ({
+      targetPath: target.targetPath,
+      kind: (target.assetKind ?? assetKindForTarget(target.targetPath)) === "manifest"
+        ? "schemaManifest"
+        : "semanticSource",
+      sha256: target.expectedNewDigest ?? "",
+      overwritten: false
+    })),
+    changedSources: [],
+    validation: { ok: true, results: [] },
+    recoveryRequired: false,
+    activationStatus: "unconfirmed",
+    attemptId,
+    ...(input.restoreOfReleaseId ? { restoreOfReleaseId: input.restoreOfReleaseId } : {}),
+    ...(input.restoreSourceSnapshotId ? { restoreSourceSnapshotId: input.restoreSourceSnapshotId } : {}),
+    ...(input.restorePlanDigest ? { restorePlanDigest: input.restorePlanDigest } : {}),
+    ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {})
+  };
+  await appendReleaseRecord(input.projectRoot, record);
+  try {
+    const written = await writeSemanticReleaseSnapshot({
+      projectRoot: input.projectRoot,
+      releaseId,
+      actor: input.actor,
+      entries: input.targets.map((target, order) => ({
+        order,
+        targetPath: target.targetPath,
+        assetKind: target.assetKind ?? assetKindForTarget(target.targetPath),
+        ...(target.identity ? { identity: target.identity } : {}),
+        expectedNewDigest: target.expectedNewDigest
+      }))
+    });
+    const linked = await updateReleaseRecord(input.projectRoot, releaseId, {
+      snapshotId: written.snapshotId
+    });
+    if (!linked?.snapshotId) {
+      throw new SemanticReleaseSnapshotError(
+        "semantic_snapshot_unavailable",
+        "snapshotId 未能写入发布记录。"
+      );
+    }
+    return { releaseId, snapshotId: written.snapshotId, attemptId };
+  } catch (error) {
+    await updateReleaseRecord(input.projectRoot, releaseId, {
+      status: "promote_failed",
+      activationStatus: "unconfirmed",
+      recoveryRequired: false
+    }).catch(() => undefined);
+    throw error;
+  }
+}
+
+/**
+ * L25-15 — close a content batch that has no index step.
+ *
+ * The single-table save, the single-table YAML import, the manifest upload
+ * and the semantic file deletions write the content root and then sync the
+ * ktx sibling view. The daemon reads the semantic layer per request, so
+ * there is no index command for these paths — the activation is the mirror
+ * sync.
+ *
+ * The release still has to reach a terminal state. A record left at
+ * `promoting` blocks every later content write, and the startup settlement
+ * would only see it as a batch that needs manual repair.
+ *
+ * The order is the one of Spec §8.1: terminal audit, then the release
+ * terminal state together with the pending flag, then the audit check that
+ * clears it, then the recovery journal.
+ */
+export async function finalizeContentRelease(
+  projectRoot: string,
+  input: {
+    releaseId: string;
+    actor: string;
+    attemptId: string;
+    journalId?: string;
+    changeType: string;
+    source: string;
+    targetId?: string;
+    operation: string;
+    newSummary?: Record<string, unknown>;
+    diff?: string;
+  }
+): Promise<SemanticAssetReleaseRecord | null> {
+  await recordConfigChange({
+    filePath: "semantic-layer/",
+    changeType: input.changeType,
+    assetKind: "publish",
+    actor: input.actor,
+    actorType: "ui_admin",
+    source: input.source,
+    targetId: input.targetId,
+    operation: input.operation,
+    idempotencyKey: semanticTerminalAuditKey(input.releaseId, input.attemptId),
+    oldSummary: { releaseId: input.releaseId, attemptId: input.attemptId },
+    newSummary: {
+      releaseId: input.releaseId,
+      attemptId: input.attemptId,
+      activationStatus: "confirmed",
+      ...(input.newSummary ?? {})
+    },
+    ...(input.diff ? { diff: input.diff } : {})
+  });
+  const terminal = await updateReleaseRecord(projectRoot, input.releaseId, {
+    status: "published",
+    activationStatus: "confirmed",
+    recoveryRequired: false,
+    terminalAuditPending: true,
+    attemptId: input.attemptId
+  });
+  await updateReleaseRecord(projectRoot, input.releaseId, { terminalAuditPending: false });
+  if (input.journalId) {
+    await completeRecoveryJournal(projectRoot, input.journalId);
+  }
+  return terminal;
+}
+
+/**
+ * L25-15 — the successful end of a content batch that has no index step.
+ *
+ * The mirror sync is part of the activation here: the ktx daemon reads the
+ * sibling view, so a content write is only in effect once the sibling view
+ * agrees with the content root.
+ */
+export async function closeContentBatch(
+  projectRoot: string,
+  input: {
+    releaseId: string;
+    attemptId: string;
+    actor: string;
+    journalId: string;
+    changeType: string;
+    source: string;
+    targetId?: string;
+    operation: string;
+    newSummary?: Record<string, unknown>;
+    diff?: string;
+  }
+): Promise<void> {
+  await syncRuntimeMirror(projectRoot);
+  await finalizeContentRelease(projectRoot, input);
+}
+
+/**
+ * L25-15 — the failed end of a content batch.
+ *
+ * The journal is rolled back by the actual bytes and the release is settled
+ * as `promote_failed`. `recoveryRequired` stays true when the rollback could
+ * not be proven, so publishing stays closed until a human checks it.
+ */
+export async function failContentBatch(
+  projectRoot: string,
+  input: { releaseId: string; journalId: string; keepLandedWrites?: boolean }
+): Promise<void> {
+  let rollbackProven = true;
+  try {
+    const restored = await restoreRecoveryJournal(projectRoot, input.journalId, {
+      keepLandedWrites: input.keepLandedWrites === true
+    });
+    if (!restored || restored.recoveryRequired) rollbackProven = false;
+  } catch {
+    rollbackProven = false;
+  }
+  await updateReleaseRecord(projectRoot, input.releaseId, {
+    status: "promote_failed",
+    activationStatus: "unconfirmed",
+    recoveryRequired: !rollbackProven
+  }).catch(() => undefined);
+}
+
 function matchesReleaseQuery(
   record: SemanticAssetReleaseRecord,
   query: SemanticAssetReleaseListQuery | undefined
@@ -1261,7 +1550,9 @@ function matchesReleaseQuery(
   if (query.until && record.createdAt > query.until) return false;
   if (query.trigger) {
     const trigger =
-      record.trigger === "webui_manual_reindex" || record.trigger === "webui_publish"
+      record.trigger === "webui_manual_reindex" ||
+      record.trigger === "webui_publish" ||
+      record.trigger === "webui_restore"
         ? record.trigger
         : "webui_publish";
     if (trigger !== query.trigger) return false;
@@ -1282,13 +1573,14 @@ function matchesReleaseQuery(
   return true;
 }
 
+
 export async function readSemanticAssetReleases(
   projectRoot: string,
   query?: SemanticAssetReleaseListQuery
 ): Promise<SemanticAssetReleasesResponse> {
   const sidecar = await readSidecar(projectRoot);
-  const records = sidecar.records.slice(-MAX_RELEASE_RECORDS);
-  records.sort(sortRecordsByCreatedAtDesc);
+  // Original pipeline, unchanged: cap the sidecar, then filter, then paginate.
+  const records = [...sidecar.records].sort(sortRecordsByCreatedAtDesc).slice(0, MAX_RELEASE_RECORDS);
   const filtered = records.filter((record) => matchesReleaseQuery(record, query));
   const total = filtered.length;
   const offset = query?.offset != null && Number.isFinite(query.offset) ? Math.max(0, query.offset) : 0;
@@ -1315,6 +1607,25 @@ export function sortRecordsByCreatedAtDesc(
   if (a.id < b.id) return 1;
   if (a.id > b.id) return -1;
   return 0;
+}
+
+export async function readAllSemanticAssetReleaseRecords(
+  projectRoot: string
+): Promise<SemanticAssetReleaseRecord[]> {
+  const sidecar = await readSidecar(projectRoot);
+  return sidecar.records;
+}
+
+/**
+ * L25-15 — the terminal audit identity of one attempt.
+ *
+ * Spec v0.11 §8.1 makes `releaseId + attemptId + "terminal"` the unique key of
+ * a terminal audit. The audit store refuses a duplicate `idempotency_key`, so
+ * a startup replay that re-appends the same terminal audit is a no-op rather
+ * than a second success record.
+ */
+export function semanticTerminalAuditKey(releaseId: string, attemptId: string): string {
+  return `${releaseId}:${attemptId}:terminal`;
 }
 
 export async function readSemanticAssetRelease(
@@ -1499,24 +1810,69 @@ type LockHandle = {
   releaseId: string;
 };
 
-async function acquirePublishLock(
+async function tryAcquirePublishLock(
   projectRoot: string,
   payload: LockHandle
 ): Promise<boolean> {
+  // Batch publish keeps kind `batch_import`. Restore batches use `semantic_restore`.
+  // The phase field distinguishes this publish from a table save or a manual reindex.
   const { acquired, holder } = await acquirePublishCoordinatorLock(projectRoot, "batch_import", {
     validationId: payload.validationId,
     releaseId: payload.releaseId
   });
-  // Only a lock we actually own becomes the releasable holder.
   if (acquired) publishLockHolder = holder;
   return acquired;
+}
+
+async function acquirePublishLock(
+  projectRoot: string,
+  payload: LockHandle
+): Promise<boolean> {
+  if (await tryAcquirePublishLock(projectRoot, payload)) return true;
+  // A previous release failed while this process was still alive. The file is
+  // not stale (the pid is ours), so reclaim will not take it. Retry the delete
+  // once, then take the window again.
+  if (!(await retryOwnPublishLockRelease(projectRoot))) return false;
+  return tryAcquirePublishLock(projectRoot, payload);
+}
+
+async function retryOwnPublishLockRelease(projectRoot: string): Promise<boolean> {
+  if (!publishLockReleaseFailed || !publishLockHolder) return false;
+  const current = await readPublishCoordinatorLock(projectRoot);
+  if (!current || !publishLockOwnedBy(current, publishLockHolder)) return false;
+  try {
+    await releasePublishCoordinatorLock(projectRoot, publishLockHolder);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(
+      `[lucy-semantic] publish window release retry failed; the holder is kept. ${message}`
+    );
+    return false;
+  }
+  publishLockHolder = null;
+  publishLockReleaseFailed = false;
+  return true;
 }
 
 async function releasePublishLock(projectRoot: string): Promise<void> {
   if (!publishLockHolder) return;
   const holder = publishLockHolder;
-  publishLockHolder = null;
-  await releasePublishCoordinatorLock(projectRoot, holder);
+  try {
+    await releasePublishCoordinatorLock(projectRoot, holder);
+  } catch (error) {
+    publishLockReleaseFailed = true;
+    throw error;
+  }
+  // Clear the in-memory holder only after the file operation succeeded, or
+  // after we confirmed the file now belongs to someone else. A thrown delete
+  // keeps the holder so the same operationId can be released later.
+  publishLockReleaseFailed = false;
+  if (publishLockHolder === holder) publishLockHolder = null;
+}
+
+async function notePublishPhase(projectRoot: string, phase: PublishWindowPhase): Promise<void> {
+  if (!publishLockHolder) return;
+  await updatePublishCoordinatorLockPayload(projectRoot, publishLockHolder, { phase });
 }
 
 async function readPublishLock(projectRoot: string): Promise<LockHandle | null> {
@@ -1840,7 +2196,7 @@ async function promoteFile(
   // A2: keep the ktx-facing sibling view in sync so MCP query execution sees
   // the promoted overlay immediately (the async reindex below also syncs via
   // prepareSemanticLayerForKtx, but the daemon reads per request).
-  await syncContentToProjectRoot(projectRoot, await resolveContentPaths(projectRoot));
+  await syncRuntimeMirror(projectRoot);
   return { overwritten: safety.exists };
 }
 
@@ -2176,6 +2532,29 @@ export async function publishSemanticAssets(
     beforeLockRelease?: () => Promise<void> | void;
     /** Test seam. Production uses {@link restoreRecoveryJournal}. */
     restoreImpl?: typeof restoreRecoveryJournal;
+    /**
+     * Test seam. Runs after the publish window is held and before the
+     * in-window recovery check. Production callers leave it unset.
+     */
+    afterLockAcquired?: () => Promise<void> | void;
+    /**
+     * Test seam. Production uses {@link reloadCatalog}. The return value is
+     * not used — the seam exists to inject a failure, not to report a run.
+     */
+    reloadCatalogImpl?: (projectRoot: string) => Promise<unknown>;
+    /**
+     * Test seam. Runs after the catalog reload and before the terminal audit.
+     * Production callers leave it unset.
+     */
+    beforeTerminalAudit?: () => Promise<void> | void;
+    /**
+     * Test seam. Production appends the promote_failed release record.
+     * A throw must not skip rollback.
+     */
+    recordPromoteFailureImpl?: (
+      projectRoot: string,
+      record: SemanticAssetReleaseRecord
+    ) => Promise<void>;
   } = {}
 ): Promise<SemanticAssetPublishResponse> {
   const actor = options.actor ?? "local-admin";
@@ -2255,12 +2634,38 @@ export async function publishSemanticAssets(
     releaseId: "pending"
   });
   if (!acquired) {
+    const current = await readPublishCoordinatorLock(projectRoot);
     throw new SemanticAssetValidationError(
       "PUBLISH_IN_PROGRESS",
-      "已有发布批次正在执行，请等待当前批次完成后再试",
+      formatPublishWindowBusy(current),
       [],
       409
     );
+  }
+  // The check before the lock avoids leaving a lock behind on a fast reject.
+  // Repeat it inside the window: a writer that does not hold this lock can
+  // open a journal between the two checks.
+  try {
+    if (options.afterLockAcquired) await options.afterLockAcquired();
+    if (await isRecoveryRequired(projectRoot)) {
+      throw new SemanticAssetValidationError(
+        "semantic_recovery_required",
+        "上一笔语义写入存在未决恢复日志，恢复核验完成前不允许发布。",
+        [],
+        409
+      );
+    }
+    await assertNoUnsettledContentRelease(projectRoot);
+  } catch (error) {
+    try {
+      await releasePublishLock(projectRoot);
+    } catch (releaseError) {
+      const message = releaseError instanceof Error ? releaseError.message : String(releaseError);
+      console.error(
+        `[lucy-semantic] failed to release the publish window after the in-window recovery check. ${message}`
+      );
+    }
+    throw error;
   }
 
   const now = options.now ?? (() => new Date());
@@ -2482,10 +2887,15 @@ export async function publishSemanticAssets(
         );
       }
     } catch (error) {
-      if (error instanceof SemanticIdempotencyConflictError) {
+      if (
+        error instanceof SemanticIdempotencyConflictError
+        || error instanceof SemanticIdempotencyCapacityError
+      ) {
         await releasePublishLock(projectRoot);
         throw new SemanticAssetValidationError(
-          "SEMANTIC_IDEMPOTENCY_CONFLICT",
+          error instanceof SemanticIdempotencyCapacityError
+            ? "SEMANTIC_IDEMPOTENCY_CAPACITY"
+            : "SEMANTIC_IDEMPOTENCY_CONFLICT",
           error.message,
           [],
           409
@@ -2494,6 +2904,73 @@ export async function publishSemanticAssets(
       await releasePublishLock(projectRoot);
       throw error;
     }
+  }
+
+  // L25-15 — promoting record, then the pre-write snapshot, then the journal.
+  // All three sit inside the publish window already held by this process.
+  // A snapshot failure leaves the release promote_failed and writes no target.
+  const promotingRecord: SemanticAssetReleaseRecord = {
+    id: releaseId,
+    createdAt,
+    actor,
+    status: "promoting",
+    trigger: "webui_publish",
+    connectionIds: Array.from(new Set(snapshot.files.map((file) => file.connectionId))),
+    files: [],
+    changedSources: snapshot.changedSources,
+    diff: snapshot.diff,
+    validation: { ok: true, results: gate.results },
+    recoveryRequired: false,
+    activationStatus: "unconfirmed",
+    attemptId,
+    ...(confirmedPlanDigest ? { planDigest: confirmedPlanDigest } : {}),
+    ...(snapshot.batch?.batchId ? { batchId: snapshot.batch.batchId } : {}),
+    ...(snapshot.batch?.scopeId ? { scopeId: snapshot.batch.scopeId } : {}),
+    ...(request.idempotencyKey ? { idempotencyKey: request.idempotencyKey } : {})
+  };
+  await appendReleaseRecord(projectRoot, promotingRecord);
+  try {
+    const written = await writeSemanticReleaseSnapshot({
+      projectRoot,
+      releaseId,
+      actor,
+      entries: snapshot.files.map((file, order) => ({
+        order,
+        targetPath: file.targetPath,
+        assetKind: file.kind === "schemaManifest" ? "manifest" : "overlay",
+        ...(file.connectionId && file.schema && file.sourceName
+          ? {
+              identity: {
+                connectionId: file.connectionId,
+                schema: file.schema,
+                table: file.sourceName
+              }
+            }
+          : {}),
+        expectedNewDigest: file.sha256
+      }))
+    });
+    const linked = await updateReleaseRecord(projectRoot, releaseId, {
+      snapshotId: written.snapshotId
+    });
+    if (!linked?.snapshotId) {
+      throw new SemanticReleaseSnapshotError(
+        "semantic_snapshot_unavailable",
+        "snapshotId 未能写入发布记录。"
+      );
+    }
+  } catch (error) {
+    await updateReleaseRecord(projectRoot, releaseId, {
+      status: "promote_failed",
+      activationStatus: "unconfirmed"
+    }).catch(() => undefined);
+    await releasePublishLock(projectRoot);
+    throw new SemanticAssetValidationError(
+      "semantic_snapshot_unavailable",
+      error instanceof Error ? error.message : "批次前快照未能落盘，本次没有写入正式文件。",
+      [],
+      409
+    );
   }
 
   // Promote: write each proposed file atomically. If any step fails we record
@@ -2519,9 +2996,15 @@ export async function publishSemanticAssets(
       }))
     });
     recoveryJournalId = journal.journalId;
+    await updateReleaseRecord(projectRoot, releaseId, { recoveryJournalId: journal.journalId });
   } catch (error) {
     // A journal that cannot be persisted means the batch cannot be rolled
-    // back: refuse to write anything at all.
+    // back: refuse to write anything at all. The promoting record must not
+    // stay open, or the next content write is blocked forever.
+    await updateReleaseRecord(projectRoot, releaseId, {
+      status: "promote_failed",
+      activationStatus: "unconfirmed"
+    }).catch(() => undefined);
     await releasePublishLock(projectRoot);
     throw new SemanticAssetValidationError(
       "semantic_recovery_required",
@@ -2567,47 +3050,86 @@ export async function publishSemanticAssets(
       }
     } catch (error) {
       promoteFailed = true;
-      const failedRecord: SemanticAssetReleaseRecord = {
-        id: releaseId,
-        createdAt,
-        actor,
-        status: "promote_failed",
-        trigger: "webui_publish",
-        connectionIds: Array.from(new Set(snapshot.files.map((f) => f.connectionId))),
-        files: releaseFiles,
-        changedSources: snapshot.changedSources,
-        diff: snapshot.diff,
-        validation: { ok: true, results: gate.results },
-        // ★ L25-11 §7.1 (D19): a failed promote leaves the activation unproven.
-        recoveryRequired: false,
-        activationStatus: "unconfirmed",
-        attemptId: attemptId,
-        ...(confirmedPlanDigest ? { planDigest: confirmedPlanDigest } : {}),
-        ...(snapshot.batch?.batchId ? { batchId: snapshot.batch.batchId } : {}),
-        ...(snapshot.batch?.scopeId ? { scopeId: snapshot.batch.scopeId } : {}),
-        ...(request.idempotencyKey ? { idempotencyKey: request.idempotencyKey } : {})
-      };
-      await appendReleaseRecord(projectRoot, failedRecord);
-      // Restore the already-written targets in reverse order. A restore that
-      // cannot complete leaves the journal in `recovery_required`, which keeps
-      // publishing and manual reindex closed (D3).
+      // Rollback first. A failure-record write must not be able to skip it
+      // (Spec §7.2). The window stays held until the restore finishes or
+      // `recovery_required` is persisted.
       let restoreRequired = false;
       if (recoveryJournalId) {
-        const restored = await restoreRecoveryJournal(projectRoot, recoveryJournalId);
-        if (!restored || restored.recoveryRequired) {
+        try {
+          const restore = options.restoreImpl ?? restoreRecoveryJournal;
+          const restored = await restore(projectRoot, recoveryJournalId);
+          if (!restored || restored.recoveryRequired) {
+            restoreRequired = true;
+            console.error(
+              `[lucy-semantic] recovery restore incomplete for release ${releaseId}; ` +
+                "publishing and manual reindex stay closed until it is resolved"
+            );
+          }
+        } catch (restoreError) {
           restoreRequired = true;
+          const message = restoreError instanceof Error ? restoreError.message : String(restoreError);
           console.error(
-            `[lucy-semantic] recovery restore incomplete for release ${releaseId}; ` +
-              "publishing and manual reindex stay closed until it is resolved"
+            `[lucy-semantic] release ${releaseId} restore threw during promote failure. ${message}`
           );
+          try {
+            await markRecoveryJournalBlocked(projectRoot, recoveryJournalId, message);
+          } catch (blockError) {
+            const blockMessage = blockError instanceof Error ? blockError.message : String(blockError);
+            console.error(
+              `[lucy-semantic] release ${releaseId} could not persist recovery_required. ${blockMessage}`
+            );
+          }
         }
       }
-      if (restoreRequired) {
-        await updateReleaseRecord(projectRoot, releaseId, { recoveryRequired: true });
+      try {
+        const failedRecord: SemanticAssetReleaseRecord = {
+          id: releaseId,
+          createdAt,
+          actor,
+          status: "promote_failed",
+          trigger: "webui_publish",
+          connectionIds: Array.from(new Set(snapshot.files.map((f) => f.connectionId))),
+          files: releaseFiles,
+          changedSources: snapshot.changedSources,
+          diff: snapshot.diff,
+          validation: { ok: true, results: gate.results },
+          recoveryRequired: restoreRequired,
+          activationStatus: "unconfirmed",
+          attemptId: attemptId,
+          ...(confirmedPlanDigest ? { planDigest: confirmedPlanDigest } : {}),
+          ...(snapshot.batch?.batchId ? { batchId: snapshot.batch.batchId } : {}),
+          ...(snapshot.batch?.scopeId ? { scopeId: snapshot.batch.scopeId } : {}),
+          ...(request.idempotencyKey ? { idempotencyKey: request.idempotencyKey } : {})
+        };
+        await updateReleaseRecord(projectRoot, releaseId, {
+          status: "promote_failed",
+          files: releaseFiles,
+          changedSources: snapshot.changedSources,
+          diff: snapshot.diff,
+          validation: { ok: true, results: gate.results },
+          recoveryRequired: restoreRequired,
+          activationStatus: "unconfirmed",
+          attemptId
+        });
+        if (options.recordPromoteFailureImpl) {
+          await options.recordPromoteFailureImpl(projectRoot, failedRecord);
+        }
+      } catch (recordError) {
+        const message = recordError instanceof Error ? recordError.message : String(recordError);
+        console.error(
+          `[lucy-semantic] release ${releaseId} could not persist promote_failed; rollback was not skipped. ${message}`
+        );
       }
-      await cleanupSemanticPublishStaging(projectRoot, request.validationId);
-      await releasePublishLock(projectRoot);
-      await deleteSnapshot(projectRoot, request.validationId);
+      await cleanupSemanticPublishStaging(projectRoot, request.validationId).catch(() => undefined);
+      try {
+        await releasePublishLock(projectRoot);
+      } catch (releaseError) {
+        const message = releaseError instanceof Error ? releaseError.message : String(releaseError);
+        console.error(
+          `[lucy-semantic] release ${releaseId} failed to release the publish window after promote rollback. ${message}`
+        );
+      }
+      await deleteSnapshot(projectRoot, request.validationId).catch(() => undefined);
       throw error;
     }
   }
@@ -2622,27 +3144,25 @@ export async function publishSemanticAssets(
   }
 
   // Promote succeeded — record `reindexing` and return immediately.
-  const reindexingRecord: SemanticAssetReleaseRecord = {
-    id: releaseId,
-    createdAt,
-    actor,
+  const reindexingRecord = await updateReleaseRecord(projectRoot, releaseId, {
     status: "reindexing",
-    trigger: "webui_publish",
-    connectionIds: Array.from(new Set(snapshot.files.map((f) => f.connectionId))),
     files: releaseFiles,
     changedSources: snapshot.changedSources,
     diff: snapshot.diff,
     validation: { ok: true, results: gate.results },
-    // ★ L25-11 §7.1 (D19): "reindexing" is NOT "已生效".
     recoveryRequired: false,
     activationStatus: "unconfirmed",
-    attemptId,
-    ...(confirmedPlanDigest ? { planDigest: confirmedPlanDigest } : {}),
-    ...(snapshot.batch?.batchId ? { batchId: snapshot.batch.batchId } : {}),
-    ...(snapshot.batch?.scopeId ? { scopeId: snapshot.batch.scopeId } : {}),
-    ...(request.idempotencyKey ? { idempotencyKey: request.idempotencyKey } : {})
-  };
-  await appendReleaseRecord(projectRoot, reindexingRecord);
+    attemptId
+  });
+  if (!reindexingRecord) {
+    await releasePublishLock(projectRoot);
+    throw new SemanticAssetValidationError(
+      "semantic_snapshot_unavailable",
+      "promoting 记录在转入重建索引前消失，本次没有继续写入。",
+      [],
+      409
+    );
+  }
   await recordConfigChange({
     filePath: "semantic-layer/",
     changeType: "semantic_publish",
@@ -2673,6 +3193,7 @@ export async function publishSemanticAssets(
   // the index command returns would let another writer in before the digest
   // check, the terminal audit, `published` and the journal completion.
   const reindexImpl = options.reindexImpl ?? reindexProject;
+  const reloadImpl = options.reloadCatalogImpl ?? reloadCatalog;
   const persistReindexFailure = async (
     reindex: { ok: false; exitCode: number; stdout?: string; stderr?: string }
   ) => {
@@ -2688,9 +3209,30 @@ export async function publishSemanticAssets(
     });
     await reloadCatalog(projectRoot).catch(() => undefined);
   };
+  const persistTerminalFailure = async (message: string) => {
+    console.error(
+      `[lucy-semantic] release ${releaseId} failed after the index succeeded; ` +
+        `publishing stays closed until the journal is resolved. ${message}`
+    );
+    if (recoveryJournalId) {
+      await markRecoveryJournalBlocked(projectRoot, recoveryJournalId, message);
+    }
+    await updateReleaseRecord(projectRoot, releaseId, {
+      status: "promote_failed",
+      recoveryRequired: true,
+      activationStatus: "unconfirmed",
+      attemptId
+    });
+    await reloadCatalog(projectRoot).catch(() => undefined);
+  };
   const runReindex = async () => {
     let settled = false;
+    // Index-command failure leaves the journal activation-pending so the index
+    // can be retried. Anything after a successful index (digest I/O, terminal
+    // audit, journal completion) closes publishing instead.
+    let stage: "index" | "after_index" = "index";
     try {
+      await notePublishPhase(projectRoot, "reindexing");
       let reindexResult;
       try {
         reindexResult = await reindexImpl(projectRoot, { force: false });
@@ -2715,6 +3257,8 @@ export async function publishSemanticAssets(
         return;
       }
 
+      stage = "after_index";
+      await notePublishPhase(projectRoot, "verify_digest");
       // The index succeeded — now the remaining evidence must be verified before
       // `published` may be written (L25-11 §7.2). The lock is still held.
       const digestCheck = await verifyFinalTargetDigests(projectRoot, snapshot.files);
@@ -2753,6 +3297,20 @@ export async function publishSemanticAssets(
         return;
       }
 
+      await notePublishPhase(projectRoot, "terminal");
+      // Reload the catalog before claiming published. A failed reload leaves
+      // the journal activation-pending so the index can be retried; it must
+      // not complete the journal or write `published`.
+      try {
+        await reloadImpl(projectRoot);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        await persistReindexFailure({ ok: false, exitCode: 1, stderr: message });
+        settled = true;
+        return;
+      }
+      if (options.beforeTerminalAudit) await options.beforeTerminalAudit();
+
       // The terminal audit / history / status are persisted INSIDE the same
       // critical section, before the journal is completed.
       await recordConfigChange({
@@ -2764,6 +3322,10 @@ export async function publishSemanticAssets(
         source: "publish_workbench_api",
         targetId: releaseId,
         operation: "publish_terminal",
+        // L25-15 §8.1 — the terminal audit identity of this attempt. The
+        // audit store refuses a duplicate key, so a startup replay cannot
+        // append a second success audit.
+        idempotencyKey: semanticTerminalAuditKey(releaseId, attemptId),
         requestId: request.validationId,
         oldSummary: { releaseId, attemptId },
         newSummary: {
@@ -2786,8 +3348,10 @@ export async function publishSemanticAssets(
         },
         recoveryRequired: false,
         activationStatus: "confirmed",
+        terminalAuditPending: true,
         attemptId
       });
+      await updateReleaseRecord(projectRoot, releaseId, { terminalAuditPending: false });
 
       // Only now is every applicable evidence durable: close the journal.
       if (recoveryJournalId) {
@@ -2798,13 +3362,32 @@ export async function publishSemanticAssets(
     } catch (error) {
       if (!settled) {
         const message = error instanceof Error ? error.message : String(error);
-        await persistReindexFailure({ ok: false, exitCode: 1, stderr: message }).catch(() => undefined);
+        try {
+          if (stage === "index") {
+            await persistReindexFailure({ ok: false, exitCode: 1, stderr: message });
+          } else {
+            await persistTerminalFailure(message);
+          }
+        } catch (persistError) {
+          const persistMessage = persistError instanceof Error ? persistError.message : String(persistError);
+          console.error(
+            `[lucy-semantic] release ${releaseId} could not persist its terminal state. ${persistMessage}`
+          );
+        }
       }
     } finally {
       try {
         if (options.beforeLockRelease) await options.beforeLockRelease();
       } finally {
-        await releasePublishLock(projectRoot).catch(() => undefined);
+        try {
+          await releasePublishLock(projectRoot);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          console.error(
+            `[lucy-semantic] release ${releaseId} failed to release the publish window; ` +
+              `the holder is kept so a later attempt can retry. ${message}`
+          );
+        }
       }
     }
   };

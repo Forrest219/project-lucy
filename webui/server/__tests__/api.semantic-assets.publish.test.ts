@@ -247,9 +247,18 @@ describe("POST /api/semantic-assets/publish", () => {
     process.env.LUCY_CONTENT_ROOT = ".";
     // Hold the publish lock by pre-creating it on disk.
     await mkdir(path.join(projectRoot, ".ktx-ui"), { recursive: true });
+    const acquiredAt = "2026-10-30T02:00:00.000Z";
     await writeFile(
       path.join(projectRoot, ".ktx-ui", "semantic-publish.lock"),
-      JSON.stringify({ validationId: "other", releaseId: "other", acquiredAt: new Date().toISOString() }),
+      JSON.stringify({
+        kind: "manual_reindex",
+        operationId: "op-held",
+        acquiredAt,
+        phase: "reindexing",
+        pid: process.pid,
+        validationId: "other",
+        releaseId: "other"
+      }),
       "utf8"
     );
 
@@ -274,6 +283,10 @@ describe("POST /api/semantic-assets/publish", () => {
       .send({ validationId, confirmOverwrite: true });
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe("PUBLISH_IN_PROGRESS");
+    expect(res.body.error.message).toContain("operationId=op-held");
+    expect(res.body.error.message).toContain("manual_reindex");
+    expect(res.body.error.message).toContain(acquiredAt);
+    expect(res.body.error.message).toContain("重建索引");
 
     await app.close();
   }, 30000);
@@ -322,6 +335,10 @@ describe("POST /api/semantic-assets/publish", () => {
       .send({ validationId: secondValidationId, confirmOverwrite: true })
       .expect(409);
     expect(secondPublish.body.error.code).toBe("PUBLISH_IN_PROGRESS");
+    const held = JSON.parse(
+      await readFile(path.join(projectRoot, ".ktx-ui", "semantic-publish.lock"), "utf8")
+    ) as { phase?: string };
+    expect(held.phase).toBe("reindexing");
 
     resolveReindex();
     await new Promise((r) => setTimeout(r, 50));

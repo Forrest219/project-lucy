@@ -48,7 +48,27 @@ export const SEMANTIC_BATCH_LIMITS = {
   /** Maintenance package export baseline TTL (Spec §5, D2). */
   exportBaselineTtlMs: 7 * 24 * 60 * 60_000,
   /** Server-side idempotency record retention (Spec §7.2, D15). */
-  idempotencyRetentionMs: 24 * 60 * 60_000
+  idempotencyRetentionMs: 24 * 60 * 60_000,
+  /**
+   * L25-15 — recoverable batches that still have a published / reindex_failed
+   * release record. promoting / blocked / promote_failed do not consume a slot.
+   */
+  restoreRecoverableBatches: 20,
+  /** L25-15 — snapshot age limit, measured from the snapshot's createdAt. */
+  restoreSnapshotRetentionMs: 30 * 24 * 60 * 60_000,
+  /** L25-15 — total serialized snapshot bytes, including manifest and Base64. */
+  restoreSnapshotMaxBytes: 512 * 1024 * 1024,
+  /** L25-15 — restore preview lease. A new preview is required after this. */
+  restorePreviewTtlMs: 30 * 60_000,
+  /**
+   * L25-15 — read-only restore package caps. Independent of the maintenance
+   * package 200 / 256 KiB / 16 MiB / 20 MiB gate. The snapshot itself is not
+   * capped at 200 entries; an over-limit snapshot can still be restored.
+   */
+  restorePackageMaxEntries: 200,
+  restorePackageMaxMetadataBytes: 1 * 1024 * 1024,
+  restorePackageMaxUnpackedBytes: 512 * 1024 * 1024,
+  restorePackageMaxZipBytes: 544 * 1024 * 1024
 } as const;
 
 export type SemanticBatchLimits = typeof SEMANTIC_BATCH_LIMITS;

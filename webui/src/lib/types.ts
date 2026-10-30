@@ -2384,6 +2384,7 @@ export type SemanticAssetValidateResponse = {
 
 export type SemanticAssetReleaseStatus =
   | "blocked"
+  | "promoting"
   | "promote_failed"
   | "reindexing"
   | "published"
@@ -2413,7 +2414,7 @@ export type SemanticAssetReindexRecord = {
   stderr?: string;
 };
 
-export type SemanticAssetReleaseTrigger = "webui_publish" | "webui_manual_reindex";
+export type SemanticAssetReleaseTrigger = "webui_publish" | "webui_manual_reindex" | "webui_restore";
 
 export type SemanticAssetReleaseRecord = {
   id: string;
@@ -2453,6 +2454,29 @@ export type SemanticAssetReleaseRecord = {
   batchId?: string;
   /** The scope snapshot this release came from. */
   scopeId?: string;
+  /** L25-15 — this batch's pre-write snapshot. Missing means unknown. */
+  snapshotId?: string;
+  restoreOfReleaseId?: string;
+  restoreSourceSnapshotId?: string;
+  restorePlanDigest?: string;
+  /** When true, public copy must say 生效待确认. */
+  terminalAuditPending?: boolean;
+  /** L25-15 — force rebuild when the batch's semantic deletion set is not empty. */
+  reindexMode?: "incremental" | "force";
+  recoveryJournalId?: string;
+  /** L25-15 — the index range confirmation object of a restore batch. */
+  restoreIndexScope?: {
+    scope: string[];
+    /** The restore write set — excluded from the drift list, like the preview. */
+    restoreWriteSet: string[];
+    mirrorSyncWriteSet: Array<{
+      contentRelPath: string;
+      contentDigest: string | null;
+      siblingDigest: string | null;
+    }>;
+    reindexMode: "incremental" | "force";
+    scopeDigest: string;
+  };
 };
 
 export type SemanticAssetReleasesResponse = {
