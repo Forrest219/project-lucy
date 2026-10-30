@@ -226,9 +226,15 @@ describe("PublishHistory", () => {
     expect(sinceInput.value).toMatch(/:00$/);
     expect(sinceInput.value).not.toBe("");
 
+    // 预设选中时必须同时给出结束时间：筛选条不能出现「有开始、无结束」的残缺区间
+    // （发版前 WebUI 三层检查 Spec D3 / UX-R07）。
+    const untilInput = screen.getByTestId("publish-history-until") as HTMLInputElement;
+    expect(untilInput.value).not.toBe("");
+
     await waitFor(() => {
       const urls = fetchMock.mock.calls.map((call) => String(call[0]));
       expect(urls.some((url) => url.includes("since="))).toBe(true);
+      expect(urls.some((url) => url.includes("until="))).toBe(true);
     });
 
     const sinceQuery = fetchMock.mock.calls
@@ -246,7 +252,45 @@ describe("PublishHistory", () => {
     await waitFor(() => {
       expect(screen.getByTestId("publish-history-window")).toHaveValue("");
       expect(screen.getByTestId("publish-history-since")).toHaveValue("");
+      expect(screen.getByTestId("publish-history-until")).toHaveValue("");
     });
+  });
+
+  it("keeps a filled end time when the time preset switches", async () => {
+    const fixedNow = new Date("2026-08-07T01:45:30.000+08:00");
+    vi.spyOn(Date, "now").mockReturnValue(fixedNow.getTime());
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (isReleasesListUrl(url)) {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: { records: [makePublishRecord()], total: 1 }
+          })
+        );
+      }
+      return new Response(
+        JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }),
+        { status: 404 }
+      );
+    });
+    vi.unstubAllGlobals();
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderHistory();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("publish-history-window")).toHaveValue("24h");
+    });
+
+    fireEvent.change(screen.getByTestId("publish-history-window"), { target: { value: "7d" } });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("publish-history-window")).toHaveValue("7d");
+    });
+    expect(screen.getByTestId("publish-history-since")).not.toHaveValue("");
+    expect(screen.getByTestId("publish-history-until")).not.toHaveValue("");
   });
 
   it("requests filtered releases when trigger filter changes", async () => {

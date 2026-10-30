@@ -525,8 +525,8 @@ export function GovernanceOverview() {
             testId="metric-agent-asset"
           />
           <MetricCard
-            label={<span><span className="notranslate" translate="no">Token</span> 凭证与活跃</span>}
-            labelText="Token 凭证与活跃"
+            label={<span><span className="notranslate" translate="no">Token</span> 凭据与活跃</span>}
+            labelText="Token 凭据与活跃"
             value={tokenCompoundValue}
             help={
               <span>

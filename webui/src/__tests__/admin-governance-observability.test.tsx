@@ -231,6 +231,12 @@ describe("GovernanceOverview", () => {
     ]);
 
     expect(within(screen.getByTestId("metric-token-asset")).getByText("Token")).toBeInTheDocument();
+    // 主术语是「Token 凭据」；「Token 凭证」是发版前 WebUI 三层检查 Spec §5 的禁止词。
+    expect(screen.getByTestId("metric-token-asset")).toHaveTextContent("Token 凭据与活跃");
+    expect(screen.getByTestId("metric-token-asset")).not.toHaveTextContent("Token 凭证");
+    expect(
+      screen.getByRole("button", { name: "Token 凭据与活跃 说明" })
+    ).toBeInTheDocument();
     expect(screen.getByTestId("metric-help-agent-asset")).toBeInTheDocument();
     expect(screen.getByTestId("metric-agent-asset")).toHaveClass("pl-metric-card--with-help");
     // Compound card has subValue in <small>

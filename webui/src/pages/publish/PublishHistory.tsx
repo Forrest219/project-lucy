@@ -87,6 +87,16 @@ function sinceForWindowPreset(preset: string): string {
   return "";
 }
 
+/**
+ * 预设选中时的结束时间：当前时刻。
+ * 预设必须同时给出起止两端，否则筛选条会出现「有开始、无结束」的残缺区间
+ * （发版前 WebUI 三层检查 Spec D3 / UX-R07）。取精确当前时刻而非整点，
+ * 免得吞掉最近不到一小时的发布记录。
+ */
+function untilNowIso(): string {
+  return new Date(Date.now()).toISOString();
+}
+
 function previewList(items: string[], limit = SCOPE_PREVIEW_LIMIT): { shown: string[]; more: number } {
   const unique = Array.from(new Set(items.filter(Boolean)));
   return {
@@ -109,7 +119,7 @@ function buildErrorPanel(record: SemanticAssetReleaseRecord): ErrorPanel {
       `exit code: ${reindex.exitCode}`
     ];
     return {
-      title: `Reindex 失败 · ${record.id} (exit ${reindex.exitCode})`,
+      title: `重建索引失败 · ${record.id} (exit ${reindex.exitCode})`,
       body: lines.join("\n")
     };
   }
@@ -365,12 +375,19 @@ export function PublishHistory() {
   useEffect(() => {
     if (didInitDefaultWindow.current) return;
     didInitDefaultWindow.current = true;
-    if (searchParams.has("window") || searchParams.has("since") || searchParams.has("until")) {
+    const next = new URLSearchParams(searchParams);
+    // 预设已选但缺结束时间（深链 / 旧 URL）：补齐，避免筛选条残缺。
+    if (next.has("window") && !next.has("until")) {
+      next.set("until", untilNowIso());
+      setSearchParams(next, { replace: true });
       return;
     }
-    const next = new URLSearchParams(searchParams);
+    if (next.has("window") || next.has("since") || next.has("until")) {
+      return;
+    }
     next.set("window", DEFAULT_TIME_WINDOW);
     next.set("since", sinceForWindowPreset(DEFAULT_TIME_WINDOW));
+    next.set("until", untilNowIso());
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
 
@@ -394,7 +411,7 @@ export function PublishHistory() {
     } else {
       next.set("window", preset);
       next.set("since", sinceForWindowPreset(preset));
-      next.delete("until");
+      next.set("until", untilNowIso());
     }
     setSearchParams(next);
     setPage(0);
@@ -510,10 +527,10 @@ export function PublishHistory() {
           className="pl-input w-36"
           value={reindexStatus}
           onChange={(e) => updateParam("reindexStatus", e.target.value)}
-          aria-label="Reindex 状态"
+          aria-label="重建索引状态"
           data-testid="publish-history-reindex-filter"
         >
-          <option value="">全部 Reindex 状态</option>
+          <option value="">全部重建索引状态</option>
           <option value="success">成功</option>
           <option value="failed">失败</option>
           <option value="running">进行中</option>
@@ -585,12 +602,7 @@ export function PublishHistory() {
                       <th scope="col">操作人</th>
                       <th scope="col">变更范围</th>
                       <th scope="col">规模</th>
-                      <th scope="col">
-                        <span className="notranslate" translate="no">
-                          Reindex
-                        </span>{" "}
-                        状态
-                      </th>
+                      <th scope="col">重建索引状态</th>
                       <th scope="col">操作</th>
                     </tr>
                   </thead>

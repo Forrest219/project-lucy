@@ -19,7 +19,7 @@ export const PUBLISH_HISTORY_CSV_HEADERS = [
   "操作人",
   "变更范围",
   "规模",
-  "Reindex 状态",
+  "重建索引状态",
   "发布 ID"
 ] as const;
 
@@ -76,11 +76,11 @@ export function statusLabelFor(record: SemanticAssetReleaseRecord): string {
     case "promote_failed":
       return "落盘失败";
     case "reindexing":
-      return "Reindex 中";
+      return "重建索引中";
     case "published":
       return "已发布";
     case "reindex_failed":
-      return "Reindex 失败";
+      return "重建索引失败";
     default:
       return record.status;
   }

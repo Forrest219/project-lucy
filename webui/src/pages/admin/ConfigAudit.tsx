@@ -67,6 +67,16 @@ function sinceForWindowPreset(preset: string): string {
 }
 
 /**
+ * 预设选中时的结束时间：当前时刻。
+ * 预设必须同时给出起止两端，否则筛选条会出现「有开始、无结束」的残缺区间
+ * （发版前 WebUI 三层检查 Spec D3 / UX-R07）。取精确当前时刻而非整点，
+ * 免得吞掉最近不到一小时的审计记录。
+ */
+function untilNowIso(): string {
+  return new Date(Date.now()).toISOString();
+}
+
+/**
  * Map a Config Audit entry's `changeType` + `targetId` to a deep-link into
  * the related admin page. Returns null when we cannot infer a target.
  */
@@ -195,12 +205,19 @@ export function ConfigAudit() {
   useEffect(() => {
     if (didInitDefaultWindow.current) return;
     didInitDefaultWindow.current = true;
-    if (searchParams.has("window") || searchParams.has("since") || searchParams.has("until")) {
+    const next = new URLSearchParams(searchParams);
+    // 预设已选但缺结束时间（深链 / 旧 URL）：补齐，避免筛选条残缺。
+    if (next.has("window") && !next.has("until")) {
+      next.set("until", untilNowIso());
+      setSearchParams(next, { replace: true });
       return;
     }
-    const next = new URLSearchParams(searchParams);
+    if (next.has("window") || next.has("since") || next.has("until")) {
+      return;
+    }
     next.set("window", DEFAULT_TIME_WINDOW);
     next.set("since", sinceForWindowPreset(DEFAULT_TIME_WINDOW));
+    next.set("until", untilNowIso());
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
 
@@ -223,7 +240,7 @@ export function ConfigAudit() {
     } else {
       next.set("window", preset);
       next.set("since", sinceForWindowPreset(preset));
-      next.delete("until");
+      next.set("until", untilNowIso());
     }
     setSearchParams(next);
     setPage(0);

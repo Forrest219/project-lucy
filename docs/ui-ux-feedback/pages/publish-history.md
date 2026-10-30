@@ -276,3 +276,32 @@ Reported: 2026-08-07
 
 ### Notes
 Spec 113 v1.1 / `wo-202608-55` 已落地（本轮不做浏览器验证，结束后只做 code review）。
+
+## UX-PUBLISH-HISTORY-012: 近 24 小时预设留下空的结束时间
+
+Status: Fixed
+Route: `/publish/history`
+Area: Filter bar / time range / reindex 术语
+Severity: P1
+Reported: 2026-10-30
+
+### Feedback
+2026-10-30 走查。预设「近 24 小时」已选中，开始时间有值，结束时间仍是空的「年/月/日 --:--」。零行结果不可信。界面还有英文「Reindex」。
+
+### Evidence
+- 代码：`PublishHistory.tsx` `applyWindowPreset` 预设分支只写 `since` 并删除 `until`，筛选条呈「有开始、无结束」。
+- 代码：表头 `<span translate="no">Reindex</span> 状态`、筛选 `aria-label="Reindex 状态"`、状态标签 `Reindex 中` / `Reindex 失败`、CSV 表头 `Reindex 状态`。
+- 结构层：`cd webui && npm run e2e:release-ux` 曾对本页报 `datetime: time preset is selected, start has a value, and end is empty`。
+
+### Expected
+1. 预设选中时结束时间有值（当前时刻），筛选条不出现残缺区间。
+2. 界面主文案用中文「重建索引」，不出现英文「Reindex」。
+
+### Browser Check
+1. 发版走查打开 `/publish/history`。
+2. Verify 预设「近 24 小时」时开始与结束时间都有值；页面无英文「Reindex」。对照 UX-R07、UX-R09。
+
+### Notes
+2026-10-30 落地：预设写入 `until`（当前时刻），深链 / 旧 URL 缺 `until` 时补齐；「Reindex」改为「重建索引」（表头、筛选可访问名、状态标签、CSV 列名）。
+⚠️ 导出的 CSV 列名由 `Reindex 状态` 改为 `重建索引状态`，按列名解析的下游脚本需同步。
+结构层已在 E2E 夹具（Chromium 1920×1080）通过；候选实例的发版走查复核后升 Verified。

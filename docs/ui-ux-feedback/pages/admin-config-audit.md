@@ -199,3 +199,29 @@ Reported: 2026-08-07
 
 ### Notes
 Spec 122 / `wo-202608-56` 已落地（本轮不做浏览器验证，结束后只做 code review）。主题：`list-history time-filter parity`。
+
+## UX-ADMIN-CONFIG-AUDIT-010: 近 24 小时预设留下空的结束时间
+
+Status: Fixed
+Route: `/admin/config-audit`
+Area: Filter bar / time range
+Severity: P1
+Reported: 2026-10-30
+
+### Feedback
+2026-10-30 走查。与发布记录相同：预设「近 24 小时」已选中，开始时间有值，结束时间为空。零行结果不可信。
+
+### Evidence
+- 代码：`ConfigAudit.tsx` `applyWindowPreset` 预设分支只写 `since` 并删除 `until`，筛选条呈「有开始、无结束」。
+- 结构层：`cd webui && npm run e2e:release-ux` 曾对本页报 `datetime: time preset is selected, start has a value, and end is empty`。
+
+### Expected
+预设选中时，结束时间要么有值，要么明确表示直到现在。
+
+### Browser Check
+1. 发版走查打开 `/admin/config-audit`。
+2. Verify 预设「近 24 小时」时开始与结束时间都有值。对照 UX-R07。
+
+### Notes
+2026-10-30 落地：预设写入 `until`（当前时刻），深链 / 旧 URL 缺 `until` 时补齐；「全部时间」仍清空起止。
+结构层已在 E2E 夹具（Chromium 1920×1080）通过；候选实例的发版走查复核后升 Verified。

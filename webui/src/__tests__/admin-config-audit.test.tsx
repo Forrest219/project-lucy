@@ -164,11 +164,43 @@ describe("ConfigAudit Spec 96 polish", () => {
     expect(sinceInput.value).toMatch(/:00$/);
     expect(sinceInput.value).not.toBe("");
 
+    // 预设选中时必须同时给出结束时间：筛选条不能出现「有开始、无结束」的残缺区间
+    // （发版前 WebUI 三层检查 Spec D3 / UX-R07）。
+    const untilInput = screen.getByTestId("config-audit-until") as HTMLInputElement;
+    expect(untilInput.value).not.toBe("");
+
     fireEvent.change(screen.getByTestId("config-audit-window"), { target: { value: "" } });
     await waitFor(() => {
       expect(screen.getByTestId("config-audit-window")).toHaveValue("");
       expect(screen.getByTestId("config-audit-since")).toHaveValue("");
+      expect(screen.getByTestId("config-audit-until")).toHaveValue("");
     });
+  });
+
+  it("keeps a filled end time when the time preset switches", async () => {
+    const fixedNow = new Date("2026-08-07T01:45:30.000+08:00");
+    vi.spyOn(Date, "now").mockReturnValue(fixedNow.getTime());
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(JSON.stringify({ ok: true, data: { total: 0, entries: [] } }))
+      )
+    );
+
+    renderConfigAudit();
+    await screen.findByRole("heading", { name: "配置审计" });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("config-audit-window")).toHaveValue("24h");
+    });
+
+    fireEvent.change(screen.getByTestId("config-audit-window"), { target: { value: "7d" } });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("config-audit-window")).toHaveValue("7d");
+    });
+    expect(screen.getByTestId("config-audit-since")).not.toHaveValue("");
+    expect(screen.getByTestId("config-audit-until")).not.toHaveValue("");
   });
 });
 
