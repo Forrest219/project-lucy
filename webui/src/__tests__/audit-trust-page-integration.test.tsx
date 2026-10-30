@@ -224,7 +224,10 @@ describe("批 C-1：Audit.tsx 挂载 audit-trust 组件", () => {
     expect(screen.getByTestId("audit-top-meta-window")).toBeInTheDocument();
     expect(screen.getByTestId("audit-top-meta-zone")).toBeInTheDocument();
     expect(screen.getByTestId("audit-top-meta-stats-at")).toBeInTheDocument();
+    expect(screen.getAllByText("统计时间", { exact: true })).toHaveLength(1);
+    expect(screen.queryByTestId("audit-stats-time")).not.toBeInTheDocument();
     expect(screen.getByTestId("audit-top-meta-refresh").getAttribute("data-state")).toBe("live");
+    expect(screen.getByTestId("audit-refresh-toggle")).toHaveClass("pl-btn--secondary");
     // 审计同步延迟来自服务端投影状态（真实观测值，不是编造）
     await waitFor(() =>
       expect(screen.getByTestId("audit-top-meta-sync-lag").getAttribute("data-lag-ms")).toBe("1234")

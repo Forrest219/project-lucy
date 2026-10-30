@@ -2078,6 +2078,7 @@ export function Audit() {
         fixedEnd={fixedEndIso}
         zone={zone}
         statsAt={statsAtIso}
+        statsLabel={statsTimeLabel}
         refreshState={refreshPaused ? "paused" : "live"}
         pauseReason="筛选与序列上界已冻结"
         syncLagMs={syncLagMs}
@@ -2094,7 +2095,7 @@ export function Audit() {
             ) : null}
             <button
               type="button"
-              className="pl-btn pl-btn--ghost text-xs"
+              className="pl-btn pl-btn--secondary pl-btn--sm"
               data-testid="audit-refresh-toggle"
               aria-pressed={refreshPaused}
               onClick={() => setRefreshPaused((v) => !v)}
@@ -2105,7 +2106,7 @@ export function Audit() {
         }
       />
 
-      <div className="pl-notice flex flex-wrap items-center justify-between gap-3" data-testid="audit-granularity-help">
+      <div className="pl-notice flex flex-wrap items-baseline gap-x-3 gap-y-1" data-testid="audit-granularity-help">
         <span>
           {tab === "turns" ? (
             <>问询记录按一次用户问询聚合，适合查看整体结果、涉及数据表和慢调用概况。</>
@@ -2132,30 +2133,24 @@ export function Audit() {
         </div>
       </div>
 
-      {/* Time range segmented control + stats meta */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div
-          className="pl-segmented-control pl-segmented-control--auto"
-          data-testid="audit-time-presets"
-          role="group"
-          aria-label="时间范围"
-        >
-          {(["1h", "24h", "7d", "30d", "today", "custom"] as TimePreset[]).map((preset) => (
-            <button
-              key={preset}
-              type="button"
-              className={`pl-segmented-control-item${timePreset === preset ? " pl-segmented-control-item--active" : ""}`}
-              data-testid={`audit-time-preset-${preset}`}
-              aria-pressed={timePreset === preset}
-              onClick={() => applyTimePreset(preset)}
-            >
-              {TIME_PRESET_LABELS[preset]}
-            </button>
-          ))}
-        </div>
-        <span className="text-xs text-fg-muted whitespace-nowrap" data-testid="audit-stats-time">
-          统计时间：{statsTimeLabel}
-        </span>
+      <div
+        className="pl-segmented-control pl-segmented-control--auto"
+        data-testid="audit-time-presets"
+        role="group"
+        aria-label="时间范围"
+      >
+        {(["1h", "24h", "7d", "30d", "today", "custom"] as TimePreset[]).map((preset) => (
+          <button
+            key={preset}
+            type="button"
+            className={`pl-segmented-control-item${timePreset === preset ? " pl-segmented-control-item--active" : ""}`}
+            data-testid={`audit-time-preset-${preset}`}
+            aria-pressed={timePreset === preset}
+            onClick={() => applyTimePreset(preset)}
+          >
+            {TIME_PRESET_LABELS[preset]}
+          </button>
+        ))}
       </div>
 
       <div className="pl-admin-filterbar" data-testid="audit-shared-filters">

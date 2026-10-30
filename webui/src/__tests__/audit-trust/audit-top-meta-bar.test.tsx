@@ -23,14 +23,58 @@ describe("T05b AuditTopMetaBar", () => {
       />
     );
     expect(container.querySelector('[data-testid="audit-top-meta-bar"]')).not.toBeNull();
-    expect(container.querySelector('[data-testid="audit-top-meta-window"]')?.textContent).toContain(
-      "2026-10-19T00:00:00Z"
-    );
+    const windowSlot = container.querySelector('[data-testid="audit-top-meta-window"]');
+    const windowValue = windowSlot?.querySelector(".pl-audit-top-meta-value");
+    expect(windowSlot?.querySelector(".pl-audit-top-meta-label")?.textContent).toBe("窗口");
+    expect(windowValue?.textContent).toBe("2026-10-19 08:00:00 → 2026-10-20 07:59:59");
+    expect(windowValue?.textContent).not.toMatch(/T|Z/);
+    expect(windowValue?.getAttribute("data-iso-start")).toBe("2026-10-19T00:00:00Z");
+    expect(windowValue?.getAttribute("data-iso-end")).toBe("2026-10-19T23:59:59Z");
+    expect(windowValue?.getAttribute("title")).toContain("2026-10-19T00:00:00Z");
     expect(container.querySelector('[data-testid="audit-top-meta-zone"]')?.textContent).toBe(
       "Asia/Shanghai"
     );
-    expect(container.querySelector('[data-testid="audit-top-meta-stats-at"]')?.textContent).toContain(
-      "23:59:00Z"
+    const stats = container.querySelector('[data-testid="audit-top-meta-stats-at"]');
+    expect(stats?.querySelector(".pl-audit-top-meta-label")?.textContent).toBe("统计时间");
+    expect(stats?.querySelector(".pl-audit-top-meta-value")?.textContent).toBe("2026-10-20 07:59:00");
+    expect(stats?.querySelector(".pl-audit-top-meta-value")?.getAttribute("data-iso")).toBe(
+      "2026-10-19T23:59:00Z"
+    );
+  });
+
+  it("omits the end date when both instants fall on the same zone calendar day", () => {
+    const { container } = render(
+      <AuditTopMetaBar
+        fixedStart="2026-10-30T01:00:00.000Z"
+        fixedEnd="2026-10-30T02:51:55.000Z"
+        zone="Asia/Shanghai"
+        statsAt="2026-10-30T02:51:53.000Z"
+        statsLabel="刚刚"
+        refreshState="live"
+        syncLagMs={0}
+      />
+    );
+    expect(container.querySelector('[data-testid="audit-top-meta-window"] .pl-audit-top-meta-value')?.textContent).toBe(
+      "2026-10-30 09:00:00 → 10:51:55"
+    );
+    expect(container.querySelector('[data-testid="audit-top-meta-stats-at"] .pl-audit-top-meta-value')?.textContent).toBe(
+      "刚刚"
+    );
+  });
+
+  it("keeps both dates when the zone calendar day differs", () => {
+    const { container } = render(
+      <AuditTopMetaBar
+        fixedStart="2026-10-23T02:00:00.000Z"
+        fixedEnd="2026-10-30T02:50:35.000Z"
+        zone="UTC"
+        statsAt="2026-10-30T02:50:15.000Z"
+        refreshState="live"
+        syncLagMs={0}
+      />
+    );
+    expect(container.querySelector('[data-testid="audit-top-meta-window"] .pl-audit-top-meta-value')?.textContent).toBe(
+      "2026-10-23 02:00:00 → 2026-10-30 02:50:35"
     );
   });
 

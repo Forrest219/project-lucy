@@ -5,7 +5,7 @@
 | 文档名称 | Lucy Product Terminology Standard |
 | 文档类型 | System-wide Product Language / Terminology Standard |
 | 版本 | v0.2；2026-10-19 v0.2-draft：增补 Spec 173 v0.3 / 2026-10-19 audit-trust 新增术语（凭证主体 / 已确认关联 / 候选关联 / 归属待核验 / 客户端采集范围 / 工具调用数 / 原文登记分组占比 / 证据校验），登记于 §4.7.1，与 `inbox/audit-trust/audit-trust-2026-10-19-r1/T00-r2/` 同批生效；2026-10-25 增补 §4.11 OIDC 单点登录术语；同日增补 §4.10 Skill 负责人和 §4.12 SMTP 通知术语 |
-| 撰写日期 | 2026-07-31；2026-08-01 v0.2（新增 Data Agent Ops Control Plane / Data Agent 运维控制台，标记『语义维护工作台』与『运维控制面』为弃用别名）；2026-08-05 增补 §4.8 MCP 调试台术语（Spec 99）；同日 Spec 100 交叉审阅补齐 incomplete / impact / evidence / 裁决双行；2026-08-06 Spec 109 增补目录重命名术语；2026-08-06 Spec 114/115 增补表 YAML 导入与工作台校验披露术语；2026-08-06 Spec 117 增补 Remove Schema 术语；2026-08-20 增补 §4.7.1 Trace Read Model 术语（Spec 62 v0.5）；2026-08-25 Spec 127 增补 Delete Connection 术语；2026-08-26 增补 §4.9 可选 Agent Chat（A3）术语；2026-09-03 Spec 140 增补访问日志双粒度 CSV 导出术语；2026-09-03 Spec 141 增补访问日志 CSV 字段说明与本地时间术语；2026-09-04 Spec 143 增补调用监控与运行状态分组术语；2026-09-11 Spec 142 为 `/overview` 聚焦精简；2026-09-23 Spec 144 增补 Skill / 业务 Skill；Spec 145 增补待同步文件与表语义校验分计；同日 Spec 144 v1.1 增补导航组名「业务上下文」（原「语义建模」组更名，「语义建模」保留为概念词）；2026-09-24 Spec 148 增补界面使用、页面访问、访问账户、活跃菜单与分组/菜单/页面访问排行；同日 Spec 149 增补运维问数连接与运维问数角色；2026-10-12 增补启用表范围「状态筛选」筛选维术语；2026-10-19 Spec 99 v1.3 明确调试台裁决卡与访问日志双行分工；同日 v1.5 连上检查只回答能连上或不能连上 |
+| 撰写日期 | 2026-07-31；2026-08-01 v0.2（新增 Data Agent Ops Control Plane / Data Agent 运维控制台，标记『语义维护工作台』与『运维控制面』为弃用别名）；2026-08-05 增补 §4.8 MCP 调试台术语（Spec 99）；同日 Spec 100 交叉审阅补齐 incomplete / impact / evidence / 裁决双行；2026-08-06 Spec 109 增补目录重命名术语；2026-08-06 Spec 114/115 增补表 YAML 导入与工作台校验披露术语；2026-08-06 Spec 117 增补 Remove Schema 术语；2026-08-20 增补 §4.7.1 Trace Read Model 术语（Spec 62 v0.5）；2026-08-25 Spec 127 增补 Delete Connection 术语；2026-08-26 增补 §4.9 可选 Agent Chat（A3）术语；2026-09-03 Spec 140 增补访问日志双粒度 CSV 导出术语；2026-09-03 Spec 141 增补访问日志 CSV 字段说明与本地时间术语；2026-09-04 Spec 143 增补调用监控与运行状态分组术语；2026-09-11 Spec 142 为 `/overview` 聚焦精简；2026-09-23 Spec 144 增补 Skill / 业务 Skill；Spec 145 增补待同步文件与表语义校验分计；同日 Spec 144 v1.1 增补导航组名「业务上下文」（原「语义建模」组更名，「语义建模」保留为概念词）；2026-09-24 Spec 148 增补界面使用、页面访问、访问账户、活跃菜单与分组/菜单/页面访问排行；同日 Spec 149 增补运维问数连接与运维问数角色；2026-10-12 增补启用表范围「状态筛选」筛选维术语；2026-10-19 Spec 99 v1.3 明确调试台裁决卡与访问日志双行分工；同日 v1.5 连上检查只回答能连上或不能连上；2026-10-30 访问日志「统计时间」改为上下文条内只出现一次 |
 | 适用范围 | Lucy WebUI、API 用户可见错误、Toast、Modal、Drawer、表格列名、导航、测试断言、Spec、Plan、Runbook、交付文档 |
 | 维护者 | Product / UX / Architecture Review |
 | 优先级 | 高于单模块 Spec。单模块 Spec 可新增术语，但不得覆盖本标准中的固定术语 |
@@ -644,7 +644,7 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 | Linked call count | 关联调用数 | — | 调用总数（与工具调用数混用） | 问询记录 / CSV；成功 + 拒绝 + 错误 + 预算终止 = 本列 |
 | Tables touched | 涉及数据表 | — | 工具 / 表 | L1 与 Drawer 列；列表仅 physical table（含 `table_forbidden` 拒绝的表） |
 | Database connection | 数据库连接 | — | connection_id（裸露） | Drawer 调用明细列 |
-| Stats Snapshot Time | 统计时间 | — | 上次更新（本页主标签） | 顶栏 24h/7d 左侧 |
+| Stats Snapshot Time | 统计时间 | — | 上次更新（本页主标签） | 访问日志上下文条内只出现一次；可见文用相对时间，精确本地时间与 ISO 在 `title`。见 `docs/specs/lucy-20261030-audit-context-bar-spec.md` |
 | Decision Reason dual-line | 裁决原因（主行中文 + 次行码） | — | 仅机器码单行（最终态） | Spec 99 §6.4；调用流水/Drawer |
 | Query Artifact | 查询原文（加密） | 加密查询原文 | — | Spec 124 legacy：可选冷存；运维主路径见 Generated SQL |
 | Query Artifact Ref | 查询原文引用 | artifact ref | 把 ref 当生成 SQL 展示 | Spec 124 legacy 指针 |
