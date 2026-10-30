@@ -339,6 +339,11 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | HiveServer2 (HS2) | HiveServer2（HS2） | Hive Metastore、Hive 元数据服务（指同一对象时）、Hive 集群 | Hive 查询服务端；连接元数据服务不等于可问数。不得与 Hive Metastore 混称（P1-4） |
 | Hive Direct Connection | Hive 直连 | Doris／SelectDB 外部 Hive Catalog、MySQL／PostgreSQL 协议兼容、Hive 兼容连接 | Lucy 通过受管 Hive JDBC worker 连接 HS2 的连接类型；不是其它引擎的 Hive Catalog 接入（P1-4） |
 | Hive Compile Bridge | Hive 编译桥 | Hive 执行器、Hive 查询引擎、Hive 编译器 | Lucy 调用原版 `ktx-daemon semantic-query`、显式传入 `dialect=hive` 的只编译进程边界；不执行 SQL，不持有数据库凭据（P1-4） |
+| Hive Table Partition | Hive 表分区 | 模块术语分区、窗口分区、PARTITION BY（指窗口时）、Hive 分桶（指同一对象时） | 物理表按分区键切分存储与剪枝的单位。不是窗口函数 `PARTITION BY`，也不是术语标准文档结构里的「模块术语分区」（L25-10 执行波） |
+| Partition Key | 分区键 | 分区字段（含混）、partition column（用户可见主文案禁用英文） | 已登记的分区列名及层级顺序；须来自元数据采集（L25-10 执行波） |
+| Partition Bound | 分区边界 | 分区过滤（含混）、LIMIT、行策略、问询预算（指同一对象时） | 聚合前可证明的有界分区谓词集合；`LIMIT`／行策略／预算都不是分区边界（L25-10 执行波） |
+| Partition Predicate Gate | 分区谓词门禁 | 分区优化、分区提示、成本建议 | 编译后、JDBC 前的硬检查；失败则拒绝分派（L25-10 执行波） |
+| Hive JDBC Worker | Hive JDBC 执行器 | Hive 编译桥、KTX 执行器、通用 JDBC 插件 | 受管只读执行进程；持有凭据；不接受 Agent 自定义 JDBC URL／JAR／会话初始化（L25-10 执行波） |
 | Live Table List | 库内表清单 | 物理表清单、扫描结果、库内表名 | 物理库账号可见的表名清单。非 Schema Manifest、非启用表范围（Spec 190） |
 | Table Structure | 表结构 | 表定义、字段清单 | 物理表的列、类型、可空、主键与注释（Spec 190） |
 | Table List Diff | 表清单差异 | 结构差异、变更清单、差异结果 | 自动层的差异：新增表、已消失表、列数变化。按每轮库内结果与上一轮比较得出（Spec 190） |
@@ -351,21 +356,23 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 
 ### 4.1.1 Hive 直连接入边界
 
-「Hive 直连」「HiveServer2（HS2）」「Hive 编译桥」三者的关系固定如下，不得互相替换：
+「Hive 直连」「HiveServer2（HS2）」「Hive 编译桥」「Hive JDBC 执行器」「Hive 表分区」的关系固定如下，不得互相替换：
 
-- **Hive 直连** 是 Lucy 的连接类型，连接对象是 HS2，链路为「语义编译 → 严格 AST／来源／策略／能力检查 → 受管 JDBC worker → HS2」。
+- **Hive 直连** 是 Lucy 的连接类型，连接对象是 HS2，完整链路为「语义编译 → 严格 AST／来源／策略／能力检查 → **分区谓词门禁** → 受管 JDBC worker → HS2」。
 - **HiveServer2（HS2）** 是被连接的服务端，只接受 SQL 并返回结果；它不参与语义编译，也不持有 Lucy 的语义资产。
 - **Hive 编译桥** 是 Lucy 内部的只编译进程边界：只把已发布语义资产编译成 Hive SQL 与语义计划，不连库、不执行、不持有凭据。
+- **Hive JDBC 执行器** 是受管只读执行进程；持有凭据；只在分区谓词门禁通过后分派。
+- **Hive 表分区** 是物理表按分区键切分与剪枝的单位；**不是**窗口函数 `PARTITION BY`，也不是本文「模块术语分区」这类文档结构用语。
 
 边界约束：
 
-- 「编译成功」不等于「HS2 可执行」。方言编译产物必须进真实 HS2 实测才算通过，不得用编译结果推断可执行性。
+- 「编译成功」不等于「HS2 可执行」，也不等于「分区边界成立」。缺分区边界不得分派 JDBC；`LIMIT`、行策略与问询预算都不是分区边界。
 - Hive database 在治理界面映射为 Schema；沿用既有「连接」「连接 ID」「连通测试」「Schema」「Schema Manifest」「semantic overlay」「启用表范围」「最终行约束」「配置审计」，不另造含混的 Catalog 层级。
-- 缺客户环境时 Hive 支持状态为 `blocked_environment`，不得显示为已支持或已验证。
+- 缺客户环境时 Hive 支持状态为 `blocked_environment`，不得显示为已支持或已验证；编译侧或问数功能合同收口都不自动晋级支持矩阵。
 
-Protected DOM（用户可见 DOM 须 `translate="no"` + `notranslate`）：`HiveServer2`、`HS2`、`JDBC`、`JRE`、`KTX`、`ktx-daemon`、`semantic-query`、`dialect=hive`、`SourceDefinition`、`forced_filters`、`filters[]`、`predefined_measures_only`、数据库／表／字段标识、文件名、路径与 URL。
+Protected DOM（用户可见 DOM 须 `translate="no"` + `notranslate`）：`HiveServer2`、`HS2`、`JDBC`、`JRE`、`KTX`、`ktx-daemon`、`semantic-query`、`dialect=hive`、`PARTITION BY`、`SourceDefinition`、`forced_filters`、`filters[]`、`predefined_measures_only`、分区键列名、拒绝码、数据库／表／字段标识、文件名、路径与 URL。
 
-跨模块沿用：本节三个主术语在语义建模、访问治理、审计与发布各面的引用沿用同一主术语，不另造别名；其它模块如需新增 Hive 专属概念，先按 §5 登记再写文案。
+跨模块沿用：本节 Hive 主术语在语义建模、访问治理、审计与发布各面的引用沿用同一主术语，不另造别名；其它模块如需新增 Hive 专属概念，先按 §5 登记再写文案。
 
 ### 4.2 语义建模
 

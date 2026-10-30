@@ -186,7 +186,7 @@ evidenceRefs: string[]
 
 ### 5.3 Hive、数据库支持状态与升级的拆分
 
-- Hive 是 `CONN` 下的独立 suite `HIVE`，不是第二条主线。`HIV25-V01/V02/V06` 可先形成编译侧证据；`HIV25-V03` 等同时要求 HS2／真实执行的部分必须拆成独立证据维度。
+- Hive 是 `CONN` 下的独立 suite `HIVE`，不是第二条主线。`HIV25-V01`…`V17` 仍是发布取证编号，由本 Spec 持有；[Hive 直连 Spec](lucy-20261025-v0p25-hive-direct-connection-spec.md) 的功能合同出口只含 V01、V02、V06（及配置失败关闭）。`HIV25-V01/V02/V06` 可引用该 Spec 的编译侧证据；`HIV25-V03` 等同时要求 HS2／真实执行的部分必须拆成独立证据维度，不得把「生成结构化 SQL／plan」写成「HS2 执行通过」。
 - 数据库类型及支持状态以[数据库支持矩阵](../governance/database-support-matrix.md)为唯一真源。MySQL、PostgreSQL 和限定本地文件场景的 SQLite 当前为 `verified`；StarRocks、Doris 为 `gated`；SQL Server、Athena 为 `experimental`；Oracle 为 `roadmap`。E2E 清单缺口不得改写成产品不支持，支持状态也不得替代本轮运行证据。
 - `LIFECYCLE` 下分别保留原地升级 `UPG25-*` 与候选恢复验证 `RVC25-*`，二者不可互相替代。
 - 旧 `docs/qa/upgrade-feature-checklist.md`／`scripts/e2e/contracts/upgrade-features.yaml` 的 UPG-01–14 是升级功能清单，不是 P1-5 的 UPG-01–16。两者语义不相交，但裸编号字符串重叠，旧编号保留为 `legacy:upgrade-feature:UPG-xx`，不直接映射为新用例。

@@ -2069,22 +2069,6 @@
       "rule": "index"
     },
     {
-      "file": "docs/specs/lucy-20261025-v0p25-hive-direct-connection-spec.md",
-      "rule": "ds-shape"
-    },
-    {
-      "file": "docs/specs/lucy-20261025-v0p25-hive-direct-connection-spec.md",
-      "rule": "ds-shape"
-    },
-    {
-      "file": "docs/specs/lucy-20261025-v0p25-hive-direct-connection-spec.md",
-      "rule": "ds-shape"
-    },
-    {
-      "file": "docs/specs/lucy-20261025-v0p25-hive-direct-connection-spec.md",
-      "rule": "ds-shape"
-    },
-    {
       "file": "docs/specs/lucy-20261025-v0p25-oidc-single-sign-on-spec.md",
       "rule": "term-shape"
     },
@@ -2683,10 +2667,6 @@
     {
       "file": "docs/specs/lucy-20261025-v0p25-e2e-mainline-and-branch-optimization-spec.md",
       "rule": "filename"
-    },
-    {
-      "file": "docs/specs/lucy-20261025-v0p25-hive-direct-connection-spec.md",
-      "rule": "close-layer"
     },
     {
       "file": "docs/specs/lucy-20261025-v0p25-hive-direct-connection-spec.md",
