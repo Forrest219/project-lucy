@@ -7,7 +7,7 @@
 | 日期 | 2026-09-26；2026-10-19 v1.1 明确被引用 Role 的删除反馈 |
 | 适用页面 | `/admin/roles/new`、`/admin/roles/:roleId` |
 | 现状证据 | `inbox/role-permission-ia-audit-20260926/role-permission-ia-audit.md` 及同目录截图 |
-| 上游契约 | Spec 98 / 99 / 100 / 131；`docs/access-control/design-upgrade.md` |
+| 上游契约 | Spec 98 / 99 / 100 / 131；[新建角色默认只读问答工具 Spec](../../docs/specs/lucy-20261030-role-create-readonly-defaults-spec.md)；`docs/access-control/design-upgrade.md` |
 | 状态 | **已实现**。三个编辑面（可访问的表 / 允许的 MCP 工具 / 行级策略（可选））与「生效边界」实时摘要已落地于 `webui/src/pages/admin/RoleDetail.tsx`；局部取代 Spec 133 的 RoleDetail 设计 |
 | 关联工单 | `webui/docs/plans/wo-202609-23-role-permission-config-ia.md`（工单状态 Draft；本 Spec 局部取代其 T4–T7 的页面呈现） |
 
@@ -85,7 +85,7 @@ New terms:
 
 - 默认展示预设和已选摘要；完整清单只在「自定义 MCP 工具」高级区显示。
 - 「只读问答」「只读问答 + 知识库」是完整替换，不是并集。
-- 新建 Role 不自动授予工具。
+- **新建 Role 默认预选只读问答工具全集**，事实源是 `READONLY_QA_PRESET`，见 [新建角色默认只读问答工具 Spec](../../docs/specs/lucy-20261030-role-create-readonly-defaults-spec.md) §3。该默认只作用于 `/admin/roles/new`；编辑、复制与参考模板沿用角色已有工具，不自动补齐，也不按候选列表静默删减或替换。
 - AbsoluteDeny / `globalDenied` 工具不渲染为选项。旧配置中的拒绝工具在保存确认中标记「保存时将移除」。
 - 行级策略与未包装读数工具同时存在时展示兼容性警告，但不自动取消工具。
 
@@ -150,11 +150,21 @@ loadRole(mode, detail):
   if migration.incomplete:
     return readOnlyDraft + migrationBlocked
 
-  draft = normalizeToV2Draft(rawBaseline, migration)
+  if mode == create:
+    # Spec 194 §4.1：新建默认预选只读问答工具全集，两个基线分开。
+    pristine = 空草稿 + tools = copy(READONLY_QA_PRESET)
+    dirtyBaseline = pristine        # 「是否已修改」的比较基线
+    impactBaseline = 空权限草稿      # 「新增权限」的比较基线
+  else:
+    pristine = rawBaseline
+    dirtyBaseline = rawBaseline
+    impactBaseline = rawBaseline
+
+  draft = normalizeToV2Draft(pristine, migration)
   rejected = partitionAbsoluteDeny(draft.tools)
   draft.tools = rejected.grantable
-  dirty = mode == copy OR semanticHash(draft) != semanticHash(rawBaseline)
-  return { baseline: rawBaseline, draft, dirty, rejected, preview: null }
+  dirty = mode == copy OR semanticHash(draft) != semanticHash(dirtyBaseline)
+  return { baseline: dirtyBaseline, impactBaseline, draft, dirty, rejected, preview: null }
 ```
 
 ```text
@@ -164,8 +174,10 @@ changeDraft(action):
     remove that table's row policy
   preview = null
   dirty = mode == copy OR semanticHash(next) != semanticHash(baseline)
-  impact = deriveImpact(baseline, next, rejectedTools, roleUsers)
+  impact = deriveImpact(impactBaseline, next, rejectedTools, roleUsers)
 ```
+
+> **Spec 194 补充**：新建模式的「是否已修改」基线是带默认工具的初始草稿，「新增权限」基线是空权限草稿。两者不同，所以默认工具既不会造成初始脏状态，也不会从权限审阅摘要里消失。编辑与复制继续用各自的基线，本次不改写它们的差异算法。
 
 ```text
 requestSave():
@@ -235,7 +247,7 @@ openDelete(role):
 | SC-150-05 | 表推导连接；移除表同时移除行策略并进入收缩摘要 |
 | SC-150-06 | v2 UI/序列化无 prefix；旧 prefix 确定性迁移，否则阻断 |
 | SC-150-07 | `catalog_bound` 开关有确认、互斥清空和非空连接校验 |
-| SC-150-08 | 预设替换；新建无默认工具；AbsoluteDeny 不可选 |
+| SC-150-08 | 预设替换；新建默认预选只读问答工具全集（Spec 194），编辑与复制不补齐；AbsoluteDeny 不可选 |
 | SC-150-09 | 行策略仅物理列；`eq/in` 校验、去空和去重正确 |
 | SC-150-10 | `catalog_bound` 禁用行策略 |
 | SC-150-11 | 所有编辑面展示实时摘要、风险与受影响 Agent |

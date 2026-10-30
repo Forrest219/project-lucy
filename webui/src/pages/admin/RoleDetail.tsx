@@ -35,6 +35,7 @@ import {
   derivePermissionImpact,
   partitionGrantableTools,
   permissionTableKey,
+  READONLY_QA_PRESET,
   rolePermissionDraftHash,
   ROW_POLICY_TEMPLATE_NAME_PATTERN,
   type PermissionImpactSummary,
@@ -109,12 +110,53 @@ type DraftInit = {
   migratedPrefix: boolean;
 };
 
-const EMPTY_DRAFT: RolePermissionDraft = {
-  roleId: "",
-  description: "",
-  scope: { mode: "names", tables: [] },
-  tools: [],
+/**
+ * Spec 194 §4.2 — 一次本地校验的结果。
+ *
+ * `kind` 只在需要页内提示时给出：空可授予工具必须落在工具页里，
+ * Toast 不能替代它。
+ */
+type DraftValidation = {
+  section: PermissionSection;
+  message: string;
+  kind?: "no-grantable-tools";
 };
+
+/**
+ * Spec 194 §3 — 新建草稿的默认工具全集。
+ *
+ * 唯一事实源是 `READONLY_QA_PRESET`；这里只复制它的独立副本，
+ * 不另抄一份工具名单。编辑、复制与模板沿用各自已有的工具。
+ */
+function newCreateDraft(): RolePermissionDraft {
+  return {
+    roleId: "",
+    description: "",
+    scope: { mode: "names", tables: [] },
+    tools: [...READONLY_QA_PRESET],
+  };
+}
+
+/**
+ * Spec 194 §4.1 — 空权限草稿。
+ *
+ * 新建时它只作为「新增权限」的比较起点，不是新建草稿本身。
+ */
+function newEmptyDraft(): RolePermissionDraft {
+  return {
+    roleId: "",
+    description: "",
+    scope: { mode: "names", tables: [] },
+    tools: [],
+  };
+}
+
+/**
+ * Spec 194 §4.2 — 没有可授予工具时的页内校验提示。
+ *
+ * 与 Toast 用的是同一句话；页内提示另外给 `MCP` 加翻译防御。
+ */
+const EMPTY_GRANTABLE_TOOLS_MESSAGE = "请至少选择一个 MCP 工具。常规查询可选择“只读问答”。";
 
 const ROW_POLICY_INCOMPATIBLE_TOOLS = new Set([
   "lucy_read_source",
@@ -229,9 +271,12 @@ function expandLegacyPrefixes(detail: RoleDetailType): {
 
 function initializeDraft(detail: RoleDetailType | null, mode: PageMode): DraftInit {
   if (!detail) {
+    // Spec 194 §4.1 — 只有新建模式带默认工具；编辑与复制走各自的初始化。
+    // 草稿与基线各拿一份独立副本，默认工具数组不会跨生命周期共享。
+    const factory = mode === "create" ? newCreateDraft : newEmptyDraft;
     return {
-      baseline: EMPTY_DRAFT,
-      draft: EMPTY_DRAFT,
+      baseline: factory(),
+      draft: factory(),
       rejectedTools: [],
       migrationBlocked: null,
       migratedPrefix: false,
@@ -344,13 +389,17 @@ function canonicalSection(raw: string | null): PermissionSection {
   return "overview";
 }
 
-function validateDraft(draft: RolePermissionDraft, migrationBlocked: string | null): { section: PermissionSection; message: string } | null {
+function validateDraft(draft: RolePermissionDraft, migrationBlocked: string | null): DraftValidation | null {
   if (migrationBlocked) return { section: "tables", message: migrationBlocked };
   if (!/^[A-Za-z0-9_-]{1,64}$/.test(draft.roleId)) {
     return { section: "overview", message: "角色标识必须匹配 ^[A-Za-z0-9_-]{1,64}$" };
   }
   if (draft.tools.some((tool) => tool.includes("*"))) {
     return { section: "tools", message: "允许的 MCP 工具禁止使用 * 通配符" };
+  }
+  // Spec 194 §4.2 — 空可授予工具的校验排在通配符之后、数据范围与行级策略之前。
+  if (partitionGrantableTools(draft.tools).grantable.length === 0) {
+    return { section: "tools", message: EMPTY_GRANTABLE_TOOLS_MESSAGE, kind: "no-grantable-tools" };
   }
   if (draft.scope.mode === "catalog_bound" && draft.scope.connections.length === 0) {
     return { section: "tables", message: "启用目录绑定时至少选择一个允许的连接" };
@@ -482,12 +531,15 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
     enabled: needsDetail && roleId.length > 0,
   });
   const detail = detailQuery.data ?? null;
-  const [baseline, setBaseline] = useState<RolePermissionDraft>(EMPTY_DRAFT);
-  const [draft, setDraft] = useState<RolePermissionDraft>(EMPTY_DRAFT);
+  const [baseline, setBaseline] = useState<RolePermissionDraft>(() => (mode === "create" ? newCreateDraft() : newEmptyDraft()));
+  const [draft, setDraft] = useState<RolePermissionDraft>(() => (mode === "create" ? newCreateDraft() : newEmptyDraft()));
   const [rejectedTools, setRejectedTools] = useState<string[]>([]);
   const [migrationBlocked, setMigrationBlocked] = useState<string | null>(null);
   const [migratedPrefix, setMigratedPrefix] = useState(false);
   const [review, setReview] = useState<ReviewSnapshot | null>(null);
+  /** Spec 194 §4.2 — 空可授予工具的页内提示（只在保存失败后出现）。 */
+  const [toolGrantError, setToolGrantError] = useState<string | null>(null);
+  const toolGrantAlertRef = useRef<HTMLParagraphElement | null>(null);
   const reviewTriggerRef = useRef<HTMLElement | null>(null);
   const deleteButtonRef = useRef<HTMLButtonElement | null>(null);
   const handledDeleteIntentRef = useRef<string | null>(null);
@@ -524,6 +576,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
     setMigrationBlocked(initialized.migrationBlocked);
     setMigratedPrefix(initialized.migratedPrefix);
     setReview(null);
+    setToolGrantError(null);
   }, [detail, mode, needsDetail]);
 
   const tabs = useMemo(() => tabsFor(mode, detail?.source), [mode, detail?.source]);
@@ -548,11 +601,25 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
   function updateDraft(next: RolePermissionDraft) {
     setDraft(next);
     setReview(null);
+    // Spec 194 §4.2 — 工具恢复为非空后，空工具提示随之消除。
+    if (toolGrantError && partitionGrantableTools(next.tools).grantable.length > 0) {
+      setToolGrantError(null);
+    }
   }
 
+  /**
+   * Spec 194 §4.1 — 「新增权限」与「是否已修改」用两个基线。
+   *
+   * dirty 基线是带默认工具的初始草稿；权限比较基线是空权限草稿，
+   * 所以默认工具会完整出现在审阅摘要里。编辑与复制沿用各自基线。
+   */
+  const impactBaseline = useMemo(
+    () => (mode === "create" ? newEmptyDraft() : baseline),
+    [mode, baseline]
+  );
   const impact = useMemo(
-    () => derivePermissionImpact(baseline, draft, rejectedTools, detail?.users ?? []),
-    [baseline, draft, rejectedTools, detail?.users]
+    () => derivePermissionImpact(impactBaseline, draft, rejectedTools, detail?.users ?? []),
+    [impactBaseline, draft, rejectedTools, detail?.users]
   );
   /**
    * Lucy v0.25 (L25-14 §3.2) — the candidate Role the final-row preview is
@@ -697,6 +764,13 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
       setActiveSection(validation.section);
       toast.error(validation.message);
       if (validation.section === "overview") setTimeout(() => document.getElementById("role-id-input")?.focus(), 0);
+      if (validation.kind === "no-grantable-tools") {
+        // Spec 194 §4.2 — 页内提示与焦点都在工具页；此时不发 dryRun、不写角色、不开 Drawer。
+        setToolGrantError(validation.message);
+        setTimeout(() => toolGrantAlertRef.current?.focus(), 0);
+      } else {
+        setToolGrantError(null);
+      }
       return;
     }
     const payload = serializeDraft(draft);
@@ -782,6 +856,7 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
     setMigrationBlocked(initialized.migrationBlocked);
     setMigratedPrefix(initialized.migratedPrefix);
     setReview(null);
+    setToolGrantError(null);
   }
 
   if (needsDetail && detailQuery.isLoading) return <div className="pl-notice">加载中…</div>;
@@ -880,6 +955,12 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
                 <input id="role-description-input" className="pl-input" value={draft.description} disabled={isReadOnlyTemplate} onChange={(event) => updateDraft({ ...draft, description: event.target.value })} placeholder="例如：POC 只读问答角色" />
               </label>
               {isReadOnlyTemplate ? <p className="rounded-md border border-warning-strong bg-warning-soft p-3 text-sm text-warning-strong">参考模板不会直接写入 <span className="notranslate" translate="no">access.yaml</span>，请基于模板创建正式 Role。</p> : null}
+              {mode === "create" ? (
+                /* Spec 194 §4.2 — 新建时的默认能力引导。 */
+                <p className="text-xs text-fg-muted" data-testid="role-create-default-tools-hint">
+                  已默认启用只读问答工具，请选择可访问的表；如需调整工具，可前往“允许的 <span className="notranslate" translate="no">MCP</span> 工具”。
+                </p>
+              ) : null}
             </div>
           ) : null}
 
@@ -894,6 +975,18 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
           {activeSection === "tools" ? (
             <div className="grid max-w-2xl gap-4 pb-28" data-testid="role-tools-field">
               <div><h2 className="notranslate text-base font-semibold" translate="no">允许的 MCP 工具</h2><p className="mt-1 text-sm text-fg-muted">可用职责预设，或在下方勾选具体 <span className="notranslate" translate="no">MCP</span> 工具。全选会授予当前全部可授予工具。</p></div>
+              {toolGrantError ? (
+                /* Spec 194 §4.2 — 空可授予工具的页内提示；焦点由保存失败触发。 */
+                <p
+                  className="pl-error text-sm"
+                  role="alert"
+                  tabIndex={-1}
+                  ref={toolGrantAlertRef}
+                  data-testid="role-tools-empty-error"
+                >
+                  请至少选择一个 <span className="notranslate" translate="no">MCP</span> 工具。常规查询可选择“只读问答”。
+                </p>
+              ) : null}
               {rejectedTools.length > 0 ? <div className="rounded-md border border-warning-strong bg-warning-soft p-3 text-sm text-warning-strong">旧配置包含 {rejectedTools.length} 个系统禁止工具，保存时将移除。</div> : null}
               <RoleToolGrants candidates={toolsQuery.data?.tools ?? []} value={draft.tools} onChange={(tools) => updateDraft({ ...draft, tools })} disabled={isReadOnlyTemplate} />
               {toolsQuery.isError ? <><p className="text-xs text-warning-strong">工具候选暂不可用，可手工填写工具 ID。</p><TagInput value={draft.tools} onChange={(tools) => updateDraft({ ...draft, tools })} placeholder="输入工具 ID 后回车" /></> : null}

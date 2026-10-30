@@ -24,7 +24,12 @@ export const ABSOLUTE_DENY_TOOL_NAMES = [
 
 // ─── Presets ─────────────────────────────────────────────────────────────────
 
-/** 只读问答预设：恰好 6 个工具，不含 sl_validate。 */
+/**
+ * 只读问答预设：全部只读问答工具，不含 sl_validate。
+ *
+ * 名单只以本常量为准——新建角色默认预选该全集（Spec 194 §3）。
+ * 其它地方引用它，不另抄一份。
+ */
 export const READONLY_QA_PRESET = [
   "lucy_catalog",
   "lucy_read_source",

@@ -888,6 +888,8 @@ Spec 190 §7.9 — 库内表清单与持续感知的最小展示。
 | `role-connections-field` | role-connections-field | `pages/admin/RoleDetail.tsx` |
 | `role-connections-fallback-hint` | role-connections-fallback-hint | `pages/admin/RoleDetail.tsx` |
 | `role-tools-field` | role-tools-field | `pages/admin/RoleDetail.tsx` |
+| `role-tools-empty-error` | 空可授予工具的页内校验提示（Spec 194） | `pages/admin/RoleDetail.tsx` |
+| `role-create-default-tools-hint` | 新建角色的默认只读问答引导（Spec 194） | `pages/admin/RoleDetail.tsx` |
 | `role-tools-fallback-hint` | role-tools-fallback-hint | `pages/admin/RoleDetail.tsx` |
 | `role-detail-invalid-warnings` | role-detail-invalid-warnings | `pages/admin/RoleDetail.tsx` |
 | `role-allowed-tools-label` | role-allowed-tools-label | `pages/admin/RoleDetail.tsx` |
