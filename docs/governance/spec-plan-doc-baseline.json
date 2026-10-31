@@ -2753,15 +2753,7 @@
       "rule": "close-layer"
     },
     {
-      "file": "docs/specs/lucy-20261030-audit-context-bar-spec.md",
-      "rule": "close-layer"
-    },
-    {
       "file": "docs/specs/lucy-20261030-row-policy-view-presentation-spec.md",
-      "rule": "close-layer"
-    },
-    {
-      "file": "docs/specs/lucy-20261030-sqlserver-table-identity-spec.md",
       "rule": "close-layer"
     },
     {

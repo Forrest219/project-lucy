@@ -10,6 +10,8 @@
  *  4. E7：涉及数据表不再出现「等 N 个」，抽屉默认展开全部；
  *  5. 返回规模未知时显示「—」并带空值原因，**不得**写成 0；
  *  6. 顶部元条显示固定窗口、时区、统计时间、刷新状态、审计同步延迟。
+ *  7. SC-06：「统计时间」全页只出现一次，可见文是相对时间（不是 ISO）。
+ *  8. SC-08：「字段说明」与「查看审计口径」留在口径说明区域内。
  *
  * 注：页面 mount 时 `since` 会被 effect 重算一次（既有行为），查询键因此
  * 变化并触发二次加载。所有断言一律等到**稳定态**（`waitFor`），不在加载
@@ -243,5 +245,38 @@ describe("批 C-1：Audit.tsx 挂载 audit-trust 组件", () => {
     await waitFor(() =>
       expect(screen.getByTestId("audit-top-meta-refresh").getAttribute("data-state")).toBe("paused")
     );
+  });
+
+  it("SC-06：「统计时间」只出现一次，可见文是相对时间而不是 ISO", async () => {
+    stubAuditApi([{ ...ENTRY_BASE, id: 13, primaryStatus: "succeeded" }]);
+    renderAudit();
+
+    await waitForRow(13);
+    // 标签全页只出现一次（时间范围控件旁不再重复「统计时间：」）
+    expect(screen.getAllByText("统计时间", { exact: true })).toHaveLength(1);
+    expect(screen.queryByTestId("audit-stats-time")).not.toBeInTheDocument();
+
+    const value = screen
+      .getByTestId("audit-top-meta-stats-at")
+      .querySelector(".pl-audit-top-meta-value");
+    const visible = value?.textContent?.trim() ?? "";
+    // 可见文是相对时间（刚刚 / N 秒前 / N 分钟前 / HH:mm:ss）
+    expect(visible).toMatch(/^(刚刚|\d+ 秒前|\d+ 分钟前|\d{2}:\d{2}:\d{2})$/);
+    expect(visible).not.toMatch(/[TZ]/);
+    // 精确本地时间与 ISO 留在 title / data-iso
+    expect(value?.getAttribute("title")).toMatch(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/);
+    expect(value?.getAttribute("data-iso")).toMatch(/Z$/);
+  });
+
+  it("SC-08：「字段说明」与「查看审计口径」仍在口径说明区域内", async () => {
+    stubAuditApi([{ ...ENTRY_BASE, id: 14, primaryStatus: "succeeded" }]);
+    renderAudit();
+
+    await waitForRow(14);
+    const region = screen.getByTestId("audit-granularity-help");
+    expect(region).toContainElement(screen.getByTestId("audit-export-metadata"));
+    expect(region).toContainElement(screen.getByText("查看审计口径"));
+    // 口径说明句与两个入口紧随正文，不再两端对齐
+    expect(region.className).not.toContain("justify-between");
   });
 });
