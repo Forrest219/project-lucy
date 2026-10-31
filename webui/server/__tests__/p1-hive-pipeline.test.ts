@@ -1,8 +1,9 @@
 /**
- * P1-4 Hive 直连（编译侧）— H7 失败顺序与分类。
+ * P1-4 Hive 直连 — 失败顺序与分类（编译侧 + 执行波阶段表）。
  *
- * 权威 Spec：docs/specs/lucy-20261025-v0p25-hive-direct-connection-spec.md §5
- * 实施计划：docs/plans/2026-10-25-lucy-v0.25-p1-implementation-plan.md §7.2（H7）
+ * 权威 Spec：
+ *   - docs/specs/lucy-20261025-v0p25-hive-direct-connection-spec.md §5
+ *   - docs/specs/lucy-20261030-hive-query-execution-spec.md §6
  */
 import { describe, expect, it } from "vitest";
 import {
@@ -32,15 +33,17 @@ function step(
 }
 
 describe("H7 失败顺序与分类", () => {
-  it("阶段顺序与 Spec §5 一致", () => {
+  it("阶段顺序与执行波 Spec §6 一致", () => {
     expect(HIVE_PIPELINE_STAGES).toEqual([
       "audit_receive",
       "config_snapshot",
       "request_acl",
       "budget_concurrency",
       "source_closure",
+      "partition_status",
       "compile",
       "ast_policy_check",
+      "partition_predicate_gate",
       "admission_ledger",
       "jdbc",
       "type_truncation",
@@ -68,17 +71,17 @@ describe("H7 失败顺序与分类", () => {
     expect(result.failure.stage).toBe("request_acl");
     expect(result.failure.classification).toBe("denied");
     expect(result.failure.reason).toBe("table_forbidden:orders");
-    // 失败之后的阶段一个都没跑。
     expect(log).toEqual(["audit_receive", "config_snapshot", "request_acl"]);
     expect(result.executedStages).toEqual(["audit_receive", "config_snapshot", "request_acl"]);
-    // 结果里没有"成功但为空"的载荷。
     expect("value" in result).toBe(false);
   });
 
   it("编译之前的失败不宣称上游执行过；编译之后的失败必须宣称可能执行过", () => {
     expect(upstreamMayHaveExecuted("request_acl")).toBe(false);
     expect(upstreamMayHaveExecuted("source_closure")).toBe(false);
+    expect(upstreamMayHaveExecuted("partition_status")).toBe(false);
     expect(upstreamMayHaveExecuted("compile")).toBe(true);
+    expect(upstreamMayHaveExecuted("partition_predicate_gate")).toBe(true);
     expect(upstreamMayHaveExecuted("response_prepared_ledger")).toBe(true);
   });
 
@@ -98,26 +101,24 @@ describe("H7 失败顺序与分类", () => {
     if (result.ok) return;
     expect(result.failure.stage).toBe("response_prepared_ledger");
     expect(result.failure.upstreamMayHaveExecuted).toBe(true);
-    // 释放阶段没有执行：载荷不被释放。
     expect(log).not.toContain("release");
   });
 
-  it("JDBC 阶段本轮不实施：报 not_implemented，绝不报告为已执行", async () => {
-    expect(isHiveStageImplemented("jdbc")).toBe(false);
-    expect(HIVE_UNIMPLEMENTED_STAGES).toContain("jdbc");
+  it("执行波 JDBC 阶段可实施：注入的 step 会被调用", async () => {
+    expect(isHiveStageImplemented("jdbc")).toBe(true);
+    expect(HIVE_UNIMPLEMENTED_STAGES).not.toContain("jdbc");
 
     const log: string[] = [];
     const result = await runHivePipeline<string>([
       step("compile", { ok: true, value: "compiled" }, log),
+      step("partition_predicate_gate", { ok: true, value: "gated" }, log),
       step("jdbc", { ok: true, value: "executed" }, log)
     ]);
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.failure.classification).toBe("not_implemented");
-    expect(result.failure.reason).toBe("hive_stage_not_implemented:jdbc");
-    // JDBC 阶段的 run 根本没有被调用。
-    expect(log).toEqual(["compile"]);
-    expect(result.executedStages).toEqual(["compile"]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value).toBe("executed");
+    expect(log).toEqual(["compile", "partition_predicate_gate", "jdbc"]);
+    expect(result.executedStages).toContain("jdbc");
   });
 
   it("阶段抛异常被归类为内部错误，而不是伪装成成功", async () => {
@@ -150,30 +151,13 @@ describe("H7 失败顺序与分类", () => {
   });
 });
 
-/**
- * ─────────────────────────────────────────────────────────────────────────────
- * P1-4 §7 验收矩阵 — 按编号命名的用例（V06 的「无 JDBC 分派」一半）。
- *
- * Authority:
- *   - docs/specs/lucy-20261025-v0p25-hive-direct-connection-spec.md §5（核心流程
- *     与失败顺序）、§7（验收矩阵 V06 的通过标准）
- *
- * V06：非法输入、编译异常、超时、超大输出 —— 无 JDBC 分派；不回退 Postgres、
- *       不返回未校验 SQL。「不回退 Postgres / 不返回未校验 SQL」由
- *       `p1-hive-compile-bridge.test.ts` 的 V06 用例断言；这里断言的是
- *       **失败顺序**保证这些失败之后从不进入 JDBC 阶段。
- * ─────────────────────────────────────────────────────────────────────────────
- */
-
 describe("P1-4 §7 — V06 无 JDBC 分派", () => {
-  it("V06 — 编译侧失败后不进入 JDBC 阶段；JDBC 本轮未实施，报 not_implemented 而非已执行", async () => {
-    // ① 编译异常／超时／超大输出都在 compile 阶段 → 短路，JDBC 一次都没跑。
+  it("V06 — 编译侧失败后不进入 JDBC 阶段", async () => {
     const reasons = [
       "hive_compile_process_failed",
       "hive_compile_timeout",
       "hive_compile_output_too_large"
     ];
-    const outcomes = [];
     for (const reason of reasons) {
       const log: string[] = [];
       const result = await runHivePipeline<string>([
@@ -182,35 +166,31 @@ describe("P1-4 §7 — V06 无 JDBC 分派", () => {
         step("compile", { ok: false, classification: "compile_failed", reason }, log),
         step("jdbc", { ok: true, value: "executed" }, log)
       ]);
-      outcomes.push({ result, log });
-    }
-    expect(outcomes).toHaveLength(reasons.length);
-    for (const { result, log } of outcomes) {
       expect(result.ok).toBe(false);
       if (result.ok) continue;
       expect(result.failure.stage).toBe("compile");
       expect(result.failure.classification).toBe("compile_failed");
-      // JDBC 阶段的 run 根本没有被调用 → 没有分派。
       expect(log).not.toContain("jdbc");
       expect(result.executedStages).not.toContain("jdbc");
-      // 失败结果里没有「已执行」的载荷。
       expect("value" in result).toBe(false);
     }
+  });
 
-    // ② 真的走到 JDBC 阶段 → 本轮未实施，报 not_implemented，绝不报告为已执行。
+  it("分区门禁失败后不进入 JDBC", async () => {
     const log: string[] = [];
     const result = await runHivePipeline<string>([
       step("compile", { ok: true, value: "compiled" }, log),
+      step(
+        "partition_predicate_gate",
+        { ok: false, classification: "partition_gate_failed", reason: "hive_partition_predicate_required" },
+        log
+      ),
       step("jdbc", { ok: true, value: "executed" }, log)
     ]);
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.failure.stage).toBe("jdbc");
-    expect(result.failure.classification).toBe("not_implemented");
-    expect(result.failure.reason).toBe("hive_stage_not_implemented:jdbc");
-    // JDBC 阶段的 run 根本没有被调用 → 没有分派，也没有伪造一次执行。
-    expect(log).toEqual(["compile"]);
+    expect(result.failure.stage).toBe("partition_predicate_gate");
+    expect(log).not.toContain("jdbc");
     expect(result.executedStages).not.toContain("jdbc");
-    expect("value" in result).toBe(false);
   });
 });

@@ -57,6 +57,11 @@ import { isControlPlaneTool } from "../ops/control-plane.js";
 import { invokeOpsTool, opsToolDescriptors } from "../ops/ops-tools.js";
 import { listSources } from "../semantic-layer.js";
 import { loadContentPaths } from "../paths.js";
+import {
+  firstConnectionIdFromArgs,
+  resolveAndMaybeServeHiveTool
+} from "../hive/proxy-hook.js";
+import type { HiveExecutionTool } from "../hive/execution.js";
 import { OPS_EVIDENCE_CONNECTION_ID } from "../ops-evidence/contract.js";
 import { readKtxYamlDigest, recordExecutionRuntimeObservation } from "../mcp-runtime-state.js";
 import {
@@ -2011,6 +2016,101 @@ function jsonRpcToolResult(requestId: string | number, text: string, options: { 
       content: [{ type: "text", text }]
     }
   });
+}
+
+/**
+ * L25-10 execution wave — after Lucy ACL, divert Hive connections away from KTX.
+ * Returns true when the response was already written.
+ */
+async function maybeWriteHiveDivertedResponse(input: {
+  identity: Identity;
+  toolName: HiveExecutionTool;
+  toolArgs: unknown;
+  requestId: string | number;
+  res: ServerResponse;
+  start: number;
+  requestMeta: Record<string, unknown>;
+  argsSummary: string;
+  queryMeta: Record<string, unknown>;
+  queryTables: string[];
+  traceId: string;
+}): Promise<boolean> {
+  const projectRoot = await resolveProjectRoot();
+  const connectionId = firstConnectionIdFromArgs(input.toolArgs);
+  const args =
+    input.toolArgs && typeof input.toolArgs === "object" && !Array.isArray(input.toolArgs)
+      ? (input.toolArgs as Record<string, unknown>)
+      : {};
+  const decision = await resolveAndMaybeServeHiveTool({
+    projectRoot,
+    tool: input.toolName,
+    connectionId,
+    args,
+    correlationId: typeof input.requestId === "string" ? input.requestId : String(input.requestId)
+  });
+  if (decision.action === "passthrough_ktx") return false;
+
+  const payload =
+    decision.action === "error"
+      ? {
+          ok: false,
+          reason: decision.reason,
+          detail: decision.detail,
+          jdbcInvokeCount: 0,
+          dialect: "hive"
+        }
+      : decision.response.payload;
+  const isError = payload.ok === false;
+  const responseBody = jsonRpcToolResult(input.requestId, JSON.stringify(payload, null, 2), { isError });
+  input.res.writeHead(200, {
+    "content-type": "application/json",
+    "content-length": Buffer.byteLength(responseBody)
+  });
+  input.res.end(responseBody);
+
+  const jdbcInvokeCount =
+    typeof payload.jdbcInvokeCount === "number" ? payload.jdbcInvokeCount : 0;
+  recordRequestAudit({
+    ts: new Date().toISOString(),
+    userId: input.identity.userId,
+    client: input.identity.client,
+    tool: input.toolName,
+    tables: input.queryTables.length > 0 ? input.queryTables : undefined,
+    argsSummary: input.argsSummary,
+    ...input.queryMeta,
+    outcome: isError ? "error" : "ok",
+    decisionReason: isError && typeof payload.reason === "string" ? payload.reason : undefined,
+    errorDetail: isError && typeof payload.detail === "string" ? payload.detail : undefined,
+    executionEvidence: executionEvidenceFromObservation({
+      authorizationAllowed: true,
+      ...(isError
+        ? jdbcInvokeCount > 0
+          ? { failed: true }
+          : { notExecuted: true }
+        : { executed: true })
+    }),
+    durationMs: Date.now() - input.start,
+    responseBytes: Buffer.byteLength(responseBody),
+    requestId: input.requestId,
+    ...input.requestMeta,
+    ...(await auditMeta(input.identity, isError && typeof payload.reason === "string" ? payload.reason : "allowed"))
+  });
+  recordMcpTraceForTool({
+    traceId: input.traceId,
+    identity: input.identity,
+    toolName: input.toolName,
+    status: isError ? "error" : "ok",
+    startedAt: new Date(input.start).toISOString(),
+    turnId: (input.requestMeta.lucyTurnId as string | null | undefined) ?? null,
+    sessionId: (input.requestMeta.lucySessionId as string | null | undefined) ?? null,
+    requestId: input.requestId,
+    argsSummary: input.argsSummary,
+    allowed: !isError,
+    reason:
+      isError && typeof payload.reason === "string" ? payload.reason : "allowed",
+    policySource: "other"
+  });
+  return true;
 }
 
 function firstStringValue(record: Record<string, unknown> | undefined, keys: string[]): string | undefined {
@@ -4237,6 +4337,20 @@ async function buildDenialRepairPayload(
       // lucy_explain_query is served locally and returns before the shared
       // query gate below. The recovery admission has to run here.
       if (toolName === "lucy_explain_query") {
+        const hiveHandled = await maybeWriteHiveDivertedResponse({
+          identity,
+          toolName: "lucy_explain_query",
+          toolArgs,
+          requestId,
+          res,
+          start,
+          requestMeta,
+          argsSummary,
+          queryMeta,
+          queryTables,
+          traceId
+        });
+        if (hiveHandled) return;
         const block = await readSemanticRecoveryDenial(toolArgs);
         if (block) {
           const responseBody = jsonRpcToolResult(requestId, JSON.stringify({
@@ -5271,6 +5385,26 @@ async function buildDenialRepairPayload(
     releaseOnResponseEnd(res, slot.release);
   }
 
+  if (
+    rpcMethod === "tools/call"
+    && (toolName === "lucy_query" || toolName === "lucy_read_source")
+  ) {
+    const hiveHandled = await maybeWriteHiveDivertedResponse({
+      identity,
+      toolName,
+      toolArgs,
+      requestId,
+      res,
+      start,
+      requestMeta,
+      argsSummary,
+      queryMeta,
+      queryTables,
+      traceId
+    });
+    if (hiveHandled) return;
+  }
+
   let outboundBody = body;
   if (rpcMethod === "tools/call" && parsedRpc && toolName === "lucy_read_source") {
     outboundBody = rewriteToolCall(parsedRpc, "sl_read_source", lucyReadSourceUpstreamArgs(toolArgs));
@@ -5899,7 +6033,7 @@ function normalizeHeader(v: string | string[] | undefined): string | undefined {
   return Array.isArray(v) ? v[0] : v;
 }
 
-/** Same gate as a live lucy_query: authorize, then forward the call to KTX. */
+/** Same gate as a live lucy_query: authorize, then forward the call to KTX (or Hive). */
 export async function forwardAuthorizedLucyQuery(
   identity: Identity,
   args: Record<string, unknown>,
@@ -5908,6 +6042,23 @@ export async function forwardAuthorizedLucyQuery(
   const decision = await authorizeAndRewrite(identity, "lucy_query", args);
   if (!decision.allowed) return { ok: false, reason: decision.reason ?? "acl_denied" };
   const outbound = decision.forcedFilters ? { ...args, forced_filters: decision.forcedFilters } : args;
+  const projectRoot = await resolveProjectRoot();
+  const hiveDecision = await resolveAndMaybeServeHiveTool({
+    projectRoot,
+    tool: "lucy_query",
+    connectionId: firstConnectionIdFromArgs(outbound),
+    args: outbound
+  });
+  if (hiveDecision.action === "error") {
+    return { ok: false, reason: hiveDecision.reason };
+  }
+  if (hiveDecision.action === "serve_hive") {
+    const payload = hiveDecision.response.payload;
+    if (payload.ok === false) {
+      return { ok: false, reason: typeof payload.reason === "string" ? payload.reason : "hive_query_failed" };
+    }
+    return { ok: true, payload };
+  }
   try {
     const sessionId = getUpstreamSession(upstreamSessionOwner(identity)) ?? await handshakeUpstreamSession(identity);
     if (!sessionId) return { ok: false, reason: "execution_interrupted" };

@@ -1,31 +1,21 @@
 /**
- * Hive compile pipeline — fixed stage order and failure classification.
+ * Hive query pipeline — fixed stage order and failure classification.
  *
- * Authority: docs/specs/lucy-20261025-v0p25-hive-direct-connection-spec.md §5
- * Plan:      docs/plans/2026-10-25-lucy-v0.25-p1-implementation-plan.md §7.2 (H7)
+ * Authority:
+ *   - docs/specs/lucy-20261025-v0p25-hive-direct-connection-spec.md §5 (compile stages)
+ *   - docs/specs/lucy-20261030-hive-query-execution-spec.md §6 (partition + JDBC)
  *
- * The failure order is fixed and is the whole point of this module:
+ * Fixed order:
  *
  *   audit receive → config/asset snapshot → request & ACL → budget/concurrency
- *   → source closure → compile → AST/policy check → admission ledger
- *   → JDBC → type & truncation → response-prepared ledger → release
+ *   → source closure → partition status → compile → AST/policy check
+ *   → partition predicate gate → admission ledger → JDBC → type & truncation
+ *   → response-prepared ledger → release
  *
- * Two rules the runner enforces structurally:
+ * Two structural rules:
  *
- * 1. **A failed safety precondition never becomes an empty success.** The
- *    runner stops at the first failing stage and returns that failure; no
- *    later stage runs, so there is no path from "denied" to "succeeded with
- *    zero rows".
- *
- * 2. **A failure after the compile stage does not claim that nothing ran.**
- *    The failure carries `upstreamMayHaveExecuted`, so the caller cannot
- *    report "the upstream never executed" for a failure that happened after
- *    the compile step.
- *
- * This wave implements the compile side only. The JDBC stage is explicitly
- * `not_implemented`: it is never reported as executed, and a caller that
- * reaches it gets a typed "not implemented" failure rather than a silent
- * success.
+ * 1. A failed safety precondition never becomes an empty success.
+ * 2. A failure at or after compile must set `upstreamMayHaveExecuted`.
  */
 
 /** The fixed pipeline order. */
@@ -35,8 +25,10 @@ export const HIVE_PIPELINE_STAGES = [
   "request_acl",
   "budget_concurrency",
   "source_closure",
+  "partition_status",
   "compile",
   "ast_policy_check",
+  "partition_predicate_gate",
   "admission_ledger",
   "jdbc",
   "type_truncation",
@@ -52,9 +44,12 @@ export type HivePipelineClassification =
   | "denied"
   | "budget_unavailable"
   | "source_closure_failed"
+  | "partition_status_unknown"
   | "compile_failed"
   | "check_failed"
+  | "partition_gate_failed"
   | "admission_failed"
+  | "jdbc_failed"
   | "not_implemented"
   | "internal_error";
 
@@ -88,6 +83,8 @@ export type HivePipelineStep<T> = {
  * The stage at which the upstream (compile / database) may have run.
  *
  * Everything from `compile` onwards is "the upstream may have executed".
+ * Partition gate failures happen after compile, so they also set the flag —
+ * but JDBC must not have been invoked (enforced by short-circuit).
  */
 const UPSTREAM_MAY_HAVE_EXECUTED_FROM: HivePipelineStage = "compile";
 
@@ -100,10 +97,10 @@ export function upstreamMayHaveExecuted(stage: HivePipelineStage): boolean {
 /**
  * Stages that this wave does not implement.
  *
- * The JDBC stage belongs to H25-03 (managed JDBC worker). Until it exists,
- * the pipeline must say so instead of pretending the query ran.
+ * Execution wave M3 enables JDBC via an injected worker; the list is empty.
+ * Kept as an export so older compile-wave tests can still assert the helper.
  */
-export const HIVE_UNIMPLEMENTED_STAGES: readonly HivePipelineStage[] = ["jdbc"];
+export const HIVE_UNIMPLEMENTED_STAGES: readonly HivePipelineStage[] = [];
 
 export function isHiveStageImplemented(stage: HivePipelineStage): boolean {
   return !HIVE_UNIMPLEMENTED_STAGES.includes(stage);
@@ -115,8 +112,7 @@ export function hiveNotImplementedFailure(stage: HivePipelineStage): HivePipelin
     stage,
     classification: "not_implemented",
     reason: `hive_stage_not_implemented:${stage}`,
-    detail:
-      "The Hive JDBC execution stage is not implemented in this wave; the compile-side result must not be reported as an executed query",
+    detail: "This Hive pipeline stage is not implemented in the current wave",
     upstreamMayHaveExecuted: upstreamMayHaveExecuted(stage)
   };
 }

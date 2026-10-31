@@ -1,14 +1,13 @@
 /**
- * Hive compile-side public API.
+ * Hive module public API (compile side + execution-wave bridge).
  *
- * Authority: docs/specs/lucy-20261025-v0p25-hive-direct-connection-spec.md
- * Plan:      docs/plans/2026-10-25-lucy-v0.25-p1-implementation-plan.md §7.2 (H1–H7)
+ * Authority:
+ *   - docs/specs/lucy-20261025-v0p25-hive-direct-connection-spec.md (compile)
+ *   - docs/specs/lucy-20261030-hive-query-execution-spec.md (partition / JDBC / MCP)
  *
- * This barrel is the only entry point other waves should import. It keeps
- * the module boundary explicit: the compile side ends at the compiled SQL
- * and the checks around it. The HS2/JDBC side is NOT part of this surface —
- * the database support status stays `planned` until the real HS2 evidence
- * exists (Spec §8).
+ * This barrel is the only entry point other waves should import. JDBC workers
+ * and the MCP divert hook live here; real HS2 evidence for support-matrix
+ * promotion remains out of scope (`planned` until separately authorized).
  */
 
 export {
@@ -127,3 +126,68 @@ export {
   type HivePipelineStage,
   type HivePipelineStep
 } from "./pipeline.js";
+
+export {
+  buildHivePartitionProfile,
+  partitionedProfile,
+  unknownPartitionProfile,
+  unpartitionedProfile,
+  type HivePartitionKey,
+  type HivePartitionProfile,
+  type HivePartitionProfileFailureReason,
+  type HivePartitionProfileResult,
+  type HivePartitionStatus
+} from "./partition-profile.js";
+
+export {
+  checkHivePartitionGate,
+  conjunctBoundsPartitionKey,
+  evaluatePartitionPrefix,
+  type HivePartitionGateInput,
+  type HivePartitionGateReason,
+  type HivePartitionGateResult
+} from "./partition-gate.js";
+
+export {
+  createSyntheticHiveJdbcWorker,
+  unconfiguredHiveJdbcWorker,
+  type HiveJdbcColumn,
+  type HiveJdbcExecuteFailure,
+  type HiveJdbcExecuteRequest,
+  type HiveJdbcExecuteResult,
+  type HiveJdbcExecuteSuccess,
+  type HiveJdbcRow,
+  type HiveJdbcWorker,
+  type SyntheticHiveTable
+} from "./jdbc-worker.js";
+
+export {
+  countingJdbcWorker,
+  runHiveExecution,
+  type HiveExecutionFailure,
+  type HiveExecutionInput,
+  type HiveExecutionResult,
+  type HiveExecutionSuccess,
+  type HiveExecutionTool
+} from "./execution.js";
+
+export {
+  createModuleHiveFixture,
+  handleHiveMcpTool,
+  hiveDiscoveryFromProfiles,
+  lookupHiveConnection,
+  resolveHiveMcpRoute,
+  type HiveConnectionLookup,
+  type HiveDiscoverySource,
+  type HiveMcpBridgeRequest,
+  type HiveMcpBridgeResponse
+} from "./mcp-bridge.js";
+
+export {
+  firstConnectionIdFromArgs,
+  getHiveProxyExecutionContext,
+  registerHiveProxyExecutionContext,
+  resolveAndMaybeServeHiveTool,
+  type HiveProxyExecutionContext,
+  type HiveProxyRouteDecision
+} from "./proxy-hook.js";
