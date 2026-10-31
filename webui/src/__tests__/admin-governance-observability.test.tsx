@@ -587,4 +587,36 @@ describe("GovernanceOverview", () => {
       expect(screen.getByTestId(testId)).not.toHaveTextContent("数据不完整");
     }
   });
+
+  it("SC-24 — 数据访问视图有四张问询卡与按日表，界面使用视图没有；调用量、ACL 拒绝、多数请求耗时仍然不在数据访问视图", async () => {
+    stubFetch();
+    renderPage("/admin/usage");
+
+    // 数据访问视图：四张问询卡 + 按日问询表。
+    // 先等 overview 真正加载完（卡片在未加载时渲染为「数据源不可用」）。
+    expect(await screen.findByTestId("governance-question-metrics")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId("metric-real-questions")).toHaveTextContent("4");
+    });
+    expect(screen.getByTestId("metric-unreported-query-sessions")).toHaveTextContent("1");
+    expect(screen.getByTestId("metric-connect-only-sessions")).toHaveTextContent("2");
+    expect(screen.getByTestId("metric-browse-without-ask-sessions")).toHaveTextContent("3");
+    expect(screen.getByTestId("daily-question-table")).toBeInTheDocument();
+
+    // 调用量、ACL 拒绝、多数请求耗时三张卡仍然不在数据访问视图。
+    expect(screen.queryByTestId("metric-calls")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("metric-acl-denied")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("metric-p95-latency")).not.toBeInTheDocument();
+    expect(screen.queryByText("多数请求耗时")).not.toBeInTheDocument();
+    expect(screen.queryByText(/ACL 拒绝次数/)).not.toBeInTheDocument();
+
+    // 界面使用视图：这组数据不展示。
+    fireEvent.click(screen.getByTestId("governance-view-interface"));
+    expect(await screen.findByTestId("governance-interface-usage")).toBeInTheDocument();
+    expect(screen.queryByTestId("metric-real-questions")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("metric-unreported-query-sessions")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("metric-connect-only-sessions")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("metric-browse-without-ask-sessions")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("daily-question-table")).not.toBeInTheDocument();
+  });
 });

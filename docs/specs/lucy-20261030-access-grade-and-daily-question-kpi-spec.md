@@ -3,9 +3,9 @@
 | 元数据 | 内容 |
 |---|---|
 | 文档类型 / 版本 | 功能设计基线 / **v1.0** |
-| 日期 / 目标版本 | 2026-10-30 / 不绑定产品版本号。功能编号取 WebUI 流水号下一号。不进入 v0.25 升级台账，不占用 `L25-*` |
+| 日期 / 目标版本 | 2026-10-30 / 不绑定产品版本号。功能编号为 WebUI 流水号 **194**（占号 `webui/docs/194-access-grade-and-daily-question-kpi-spec.md`）。不进入 v0.25 升级台账，不占用 `L25-*` |
 | 功能编号 / 优先级 | **Spec 194** / **P0**（分级与日真实问询）、P1（会话伴随指标与按日表） |
-| 状态 | **已落地 v1.0**（2026-10-30）。S1–S3 已实现。SC-01–SC-24、SC-26 由自动化测试覆盖；SC-25 沿用既有审计问询测试，本轮未改问询重建。未做浏览器验证，未做 Docker 重建 |
+| 状态 | **v1.0 功能合同已收口（2026-11-01）**。S1–S3 已实现（2026-10-30）。SC-01–SC-24、SC-26 全部关闭，SC-25 按 §8.1 明确排除在本轮之外；证据见 [`docs/reviews/2026-11-01-access-grade-and-daily-question-kpi-closure.md`](../reviews/2026-11-01-access-grade-and-daily-question-kpi-closure.md)。**本条收口不表示可上线**——浏览器与移动窄屏验证、镜像构建与部署、客户环境验证、真实实例写入不在本条出口 |
 | 决策来源 | 2026-10-30 客户反馈：希望统计每天真实问询数量，而不是把连接、浏览和查数混成一个用量。同日批准另起 Spec，不升版改写 Spec 189 / 172 / 173 / 162 的已实施口径 |
 | 需求来源 | 运维要回答「今天有多少人真正问了问题」。使用概况上的业务调用量是工具调用次数；审计问询列表同时包含已上报问询、未上报原文和会话访问 |
 | 实施主体 | Lucy（用量分类读取层 + 使用概况 API 与数据访问视图）。不修改 KTX 源码 |
@@ -359,6 +359,47 @@ function dailyTable(window, questions, sessions):
 | SC-24 | 使用概况已渲染 | 打开数据访问，再打开 `?view=interface` | 两次渲染后 | 数据访问有四张新卡和按日表；界面使用没有；调用量、ACL 拒绝、多数请求耗时三张卡仍然不在数据访问视图 |
 | SC-25 | 已有一条会话访问 | 打开审计问询记录 | 列表返回后 | 会话访问仍在；本 Spec 不删除、不改写成真实问询 |
 | SC-26 | 同一批工具名 | TypeScript 等级函数与 SQL 条件各跑一次 | 两次结果对齐后 | 每个名单内工具的等级一致；`server/discover` 为连接；空工具名为未分级 |
+
+### 8.1 自动化证据落点（2026-11-01）
+
+下列是**自动化证据**。SC 编号跨 Spec 串号，**以本表为准**；SC-25 沿用既有审计问询测试，本轮未改问询重建（配套 Plan §4 S3 第 5 条）。收口结论与残余见 [`docs/reviews/2026-11-01-access-grade-and-daily-question-kpi-closure.md`](../reviews/2026-11-01-access-grade-and-daily-question-kpi-closure.md)。
+
+| ID | 自动化证据 |
+|---|---|
+| SC-01 | `webui/server/__tests__/access-grade.test.ts`「initialize is connect and still a protocol event」 |
+| SC-02 | 同上「lucy_catalog is browse and still default usage」 |
+| SC-03 | 同上「wiki_read, lucy_read_source and resources/read are prepare, not query」 |
+| SC-04 | `webui/server/__tests__/daily-question-kpi.test.ts`「a persisted reported_tool turn counts once」 |
+| SC-05 | 同上「a failed begin without a turn row does not count」 |
+| SC-06 | 同上「the same turn id counts once」 |
+| SC-07 | 同上「a query without a reported turn is an unreported session, not a real question」 |
+| SC-08 | 同上「an eval probe query is excluded from every new KPI」 |
+| SC-09 | 同上「a handshake-only session is connect-only」 |
+| SC-10 | 同上「a catalog-only session is browse-without-ask」 |
+| SC-11 | 同上「a query session with no reported turn is unreported」 |
+| SC-12 | 同上「a reported turn from before the window keeps later queries from becoming unreported」 |
+| SC-13 | 同上「two reported turns in one session count as two questions」 |
+| SC-14 | 同上「a query with no session id is unassigned, not an unreported session」 |
+| SC-15 | 同上「connect plus a control-plane tool is an excluded session」 |
+| SC-16 | `webui/server/__tests__/access-grade.test.ts`「an unknown tool is unclassified」 |
+| SC-17 | `webui/server/__tests__/usage-governance.test.ts`「SC-17 — 混合夹具上 Spec 189 的分层恒等式仍成立，问询 KPI 不改变 usageCalls」 |
+| SC-18 | `webui/server/__tests__/daily-question-kpi.test.ts`「SC-18 and SC-19 daily buckets use Asia/Shanghai and sum to the card」 |
+| SC-19 | 同上（同一条用例覆盖 SC-18 与 SC-19） |
+| SC-20 | `webui/server/__tests__/usage-governance.test.ts`「SC-20 — activeAgentCount 仍按 Spec 189 的默认用量计算，真实问询单独给出」 |
+| SC-21 | `webui/server/__tests__/daily-question-kpi.test.ts`「a database that cannot be queried returns unavailable nulls」 |
+| SC-22 | 同上「SC-22 and SC-23 an empty window is zero questions and a missing ratio」 |
+| SC-23 | 同上（同一条用例覆盖 SC-22 与 SC-23） |
+| SC-24 | `webui/src/__tests__/admin-governance-observability.test.tsx`「SC-24 — 数据访问视图有四张问询卡与按日表，界面使用视图没有；调用量、ACL 拒绝、多数请求耗时仍然不在数据访问视图」 |
+| SC-25 | **沿用既有审计问询测试，本轮未改问询重建**（配套 Plan §4 S3 第 5 条：不重复造重建测试，只记录所引用的测试名）：`webui/server/__tests__/proxy-audit.test.ts`「rebuildInferredTurns clusters business calls by gap and skips isolated kx_catalog preflight calls」（会话访问仍聚成 inferred turn，仍在列表里）、「rebuildInferredTurns keeps touched sources and uses a fixed summary when no question was reported」（没有原文问询时用固定摘要，不改写成问询）、「does not open a second inferred turn for calls already on a reported question」（已有原文问询时不另开、不改写）；KPI 侧由 SC-07 同一条用例覆盖（会话访问不计入真实问询主值） |
+| SC-26 | `webui/server/__tests__/access-grade.test.ts`「TypeScript and SQLite assign the same grade」 |
+
+### 8.2 闭口层级
+
+- 层级：功能合同
+- 本条承诺：使用概况把「每天真实问询多少」与「连接、浏览、查数」分开讲清楚——新增四张问询会话卡与按日问询表，口径由已落库的原文问询去重得出，且不改动 Spec 189 的调用量与活跃 Agent 口径。
+- 本条出口：SC-01–SC-24、SC-26 的自动化用例（等级一致性 `access-grade.test.ts`、窗口聚合 `daily-question-kpi.test.ts`、与 Spec 189 的正交性 `usage-governance.test.ts`、页面渲染分流 `admin-governance-observability.test.tsx`），SC-25 沿用既有审计问询测试（`proxy-audit.test.ts` 的问询重建用例，本轮未改该路径），加 `npm run lint:terminology`。
+- 不在本条出口：浏览器与移动窄屏验证；镜像构建与部署；客户环境验证；真实实例写入；全仓 typecheck 基线（当前 89 个既存错误，非本功能引入）。
+- 上线关系：本条收口不表示可上线
 
 ## 9. 修订声明落点
 

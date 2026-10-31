@@ -15,6 +15,13 @@ import request from "supertest";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildServer } from "../index";
 import { getAuditDb, resetAuditDbForTests } from "../admin/audit.js";
+import { buildMetricWindow } from "../admin/metric-window.js";
+import {
+  defaultUsageConditionSql,
+  evalProbeConditionSql,
+  protocolConditionSql,
+  rawBusinessConditionSql
+} from "../proxy/usage-classification.js";
 import {
   FIXTURE_NOW_ISO,
   FIXTURE_ROLE_ID,
@@ -207,5 +214,98 @@ describe("Spec 189 — /api/admin/governance/roles", () => {
     expect(role.usageCount).toBe(55);
     // The legacy 5000-row compat truncation no longer applies to this path.
     expect(data.compatTruncation).toEqual({ auditRowsLimit: null });
+  });
+});
+
+/**
+ * Spec 194 — 访问分级与日真实问询 KPI。
+ *
+ * 本 Spec 只**新增**问询口径，不改 Spec 189 的分层与调用量口径。SC-17 与
+ * SC-20 是这条正交性的可打假检查：同一份夹具上，两个聚合同时跑完，Spec 189
+ * 的恒等式仍然成立，活跃 Agent 也没有被换成新指标。
+ */
+describe("Spec 194 — 问询 KPI 与 Spec 189 的分层正交", () => {
+  it("SC-17 — 混合夹具上 Spec 189 的分层恒等式仍成立，问询 KPI 不改变 usageCalls", async () => {
+    const db = await getAuditDb();
+    // 让本 Spec 的指标也是非平凡值：一条原文问询。
+    db.prepare(
+      `INSERT INTO conversation_turns (turn_id, session_id, user_id, question_source, created_at)
+       VALUES (?, ?, ?, ?, ?)`
+    ).run("sc17-turn-1", "sc17-session-1", "business_agent", "reported_tool", "2026-10-27T07:30:00.000Z");
+
+    const data = await get("/api/admin/governance/overview?hours=168");
+    const win = buildMetricWindow(168);
+    const count = (where: string): number => {
+      const row = db
+        .prepare(`SELECT COUNT(*) AS n FROM access_log WHERE ts >= ? AND ts < ? AND ${where}`)
+        .get(win.startIso, win.endIso) as { n: number };
+      return row.n;
+    };
+    const rawAudit = count("1 = 1");
+    const protocol = count(protocolConditionSql().sql);
+    const rawBusiness = count(rawBusinessConditionSql().sql);
+    const defaultUsage = count(defaultUsageConditionSql().sql);
+    const evalProbe = count(evalProbeConditionSql().sql);
+
+    // 夹具必须同时含协议、默认用量与探针三层，否则下面的恒等式是空转。
+    expect(protocol).toBeGreaterThan(0);
+    expect(defaultUsage).toBeGreaterThan(0);
+    expect(evalProbe).toBeGreaterThan(0);
+
+    // Spec 189 §4 的分层恒等式：原始审计 = 原始业务 + 协议；原始业务 = 默认用量 + 评测探针。
+    expect(rawAudit).toBe(rawBusiness + protocol);
+    expect(rawBusiness).toBe(defaultUsage + evalProbe);
+
+    // 本 Spec 的问询 KPI 与调用量口径互不影响：usageCalls 仍是默认用量口径，
+    // 真实问询另列，且这次确实算出了非平凡值。
+    expect(data.usageOverview.calls).toBe(defaultUsage);
+    expect(data.realQuestions).toMatchObject({ state: "ok", value: 1 });
+  });
+
+  describe("只有握手与一条原文问询", () => {
+    beforeEach(async () => {
+      const db = await getAuditDb();
+      db.exec("DELETE FROM access_log");
+      db.exec("DELETE FROM conversation_turns");
+      const mixed = buildFixtureAgents().find((a) => a.id === "mixed_agent");
+      if (!mixed) throw new Error("fixture agent missing: mixed_agent");
+      // 一次握手（协议级），没有任何默认用量业务调用。
+      db.prepare(
+        `INSERT INTO access_log
+           (ts, user_id, token_hash_prefix, token_label, tool, outcome, duration_ms,
+            eval_mark, args_summary, role_ids, user_agent, tables, request_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(
+        "2026-10-27T07:00:00.000Z",
+        "mixed_agent",
+        mixed.token_hashes[0].slice(0, 19),
+        "mixed-agent-token",
+        "initialize",
+        "ok",
+        5,
+        null,
+        null,
+        null,
+        "fixture-client/1.0",
+        null,
+        "sc20-req-0001"
+      );
+      // 一条原文问询。
+      db.prepare(
+        `INSERT INTO conversation_turns (turn_id, session_id, user_id, question_source, created_at)
+         VALUES (?, ?, ?, ?, ?)`
+      ).run("sc20-turn-1", "sc20-session-1", "mixed_agent", "reported_tool", "2026-10-27T07:30:00.000Z");
+    });
+
+    it("SC-20 — activeAgentCount 仍按 Spec 189 的默认用量计算，真实问询单独给出", async () => {
+      const data = await get("/api/admin/governance/overview?hours=168");
+      // 握手是协议事件，不是默认用量业务调用 → 该 Agent 不是近 N 活跃 Agent。
+      expect(data.usageOverview.calls).toBe(0);
+      expect(data.usageOverview.activeAgentCount).toBe(0);
+      // 真实问询是独立单位：原文问询照常计入，与活跃 Agent 的口径无关。
+      expect(data.realQuestions).toMatchObject({ state: "ok", value: 1 });
+      // 新指标「问询活跃 Agent」不替换 Spec 189 的「近 N 活跃 Agent」。
+      expect(data.questionActiveAgents).toMatchObject({ state: "ok", value: 1 });
+    });
   });
 });

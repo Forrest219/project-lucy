@@ -7,7 +7,7 @@
 | 主 Spec | [访问分级与日真实问询 KPI Spec](../specs/lucy-20261030-access-grade-and-daily-question-kpi-spec.md)（**v1.0**） |
 | 功能编号 | **Spec 194**。WebUI 流水号，`webui/docs/` 已占用至 193，本项取下一号。不进入 v0.25 升级台账，不占用 `L25-*` |
 | 需求来源 | 2026-10-30 客户反馈：每天要统计真实问询数，而不是把连接、浏览和查数混在一个用量里 |
-| 状态 | **S1–S3 已落地**（2026-10-30）。未做浏览器验证，未做 Docker 重建 |
+| 状态 | **v1.0 功能合同已收口（2026-11-01）**。S1–S3 已落地（2026-10-30）；SC-01–SC-26 全部有记录在案的通过结果，SC-25 沿用既有审计问询测试。证据见 [`docs/reviews/2026-11-01-access-grade-and-daily-question-kpi-closure.md`](../reviews/2026-11-01-access-grade-and-daily-question-kpi-closure.md)。本条收口不表示可上线；未做浏览器验证，未做 Docker 重建 |
 | 授权边界 | 2026-10-30 授权实现 Spec。不包含 Docker 重建，也不包含浏览器验证 |
 | 验收 | SC-01–SC-24、SC-26 已由自动化测试覆盖。SC-25 沿用 `webui/server/__tests__/proxy-audit.test.ts` 中「会话建立：claude-code」的既有断言，本轮未改问询重建 |
 | 实施主体 | Lucy（用量分类读取层 + 使用概况 API 与数据访问视图）。不修改 KTX 源码 |
@@ -147,12 +147,14 @@ D1–D9 已按 Spec §4 冻结。2026-10-30 授权实现，不含 Docker 重建�
 
 同时满足才算完成：
 
-1. SC-01–SC-26 均有记录在案的通过结果。
+1. SC-01–SC-26 均有记录在案的通过结果（SC-25 沿用既有审计问询测试，按 §4 S3 第 5 条只记录所引用的测试名，不重复造重建测试）。
 2. Spec 189 混合夹具上的调用量恒等式与 `usageCalls` 不变。
 3. 数据访问视图能看出真实问询、未上报查数会话、仅连接会话、浏览未问会话和按日分布。
 4. 界面使用、调用监控、审计问询列表的既有主指标没有改口径。
 5. 用户可见文案与术语标准 §4.5 的新行一致。
 6. 功能编号为 **Spec 194**，已回写本 Plan 与 Spec 头部，并占用 `webui/docs/194-access-grade-and-daily-question-kpi-spec.md`。不写入 v0.25 升级台账。
+
+完成定义核对（2026-11-01）：六条全部满足。① SC 逐条落点见主 Spec §8.1（SC-01–SC-24、SC-26 各有自动化用例；SC-25 引 `proxy-audit.test.ts` 的三条问询重建用例，KPI 侧由 SC-07 同一条覆盖）；② SC-17 在 `usage-governance.test.ts` 用现有混合夹具断言 `原始审计 = 原始业务 + 协议`、`原始业务 = 默认用量 + 评测探针` 且 `usageCalls` 仍等于默认用量口径；③ SC-24 在 `admin-governance-observability.test.tsx` 断言四张问询卡与按日表在数据访问视图、界面使用视图没有；④ 调用量／ACL 拒绝／多数请求耗时三张卡仍不在数据访问视图，调用监控页的既有主指标由既有 `call-monitor.test.tsx` 覆盖；⑤ `npm run lint:terminology` 退出码 0；⑥ `webui/docs/194-access-grade-and-daily-question-kpi-spec.md` 在位，Spec 与本 Plan 头部均写 Spec 194。
 
 ## 7. 风险
 
@@ -185,4 +187,4 @@ D1–D9 已按 Spec §4 冻结。2026-10-30 授权实现，不含 Docker 重建�
 | 7 | 已登记 `docs/README.md` 与 `docs/plans/README.md` |
 | 8 | 不适用。本功能不新增命令或 CI job |
 | 9 | 功能编号 **Spec 194**。已回写 Spec、本 Plan，并占用 WebUI 流水号文件。不写入 v0.25 升级台账 |
-| 10 | 2026-10-30 已跑。`lint:terminology`、`lint:spec`、`lint:ia-boundary` 通过。`lint:spec-docs` 对本 Spec 与本 Plan 无形态违规。同一次命令还报了仓库里已有的 `docs/specs/lucy-ci-restoration-spec.md` 与 `docs/plans/2026-10-29-ci-restoration-plan.md`，与本功能无关，不写入基线。门禁结果不代替本表 |
+| 10 | 2026-10-30 已跑。`lint:terminology`、`lint:spec`、`lint:ia-boundary` 通过。`lint:spec-docs` 对本 Spec 与本 Plan 无形态违规。同一次命令还报了仓库里已有的 `docs/specs/lucy-ci-restoration-spec.md` 与 `docs/plans/2026-10-29-ci-restoration-plan.md`，与本功能无关，不写入基线。门禁结果不代替本表。**2026-11-01 收口时复跑**：`lint:spec-docs` 全仓 exit 0（343 files scanned，903 baseline exemptions）；`lint:terminology`、`lint:ia-boundary`、`lint:spec-docs:test` 通过；`lint:spec` 仍报 `webui/docs/03-api-spec.md: missing /api/publish-workbench/evidence`，属发布工作台三栏的 API 登记缺口，与本功能无关 |

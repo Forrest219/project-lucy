@@ -4,7 +4,8 @@
 |---|---|
 | 文档名称 | project-lucy 项目概览 |
 | 文档类型 | Overview |
-| 版本 | v1.76 |
+| 版本 | v1.77 |
+| v1.77 更新 | 2026-11-01，**访问分级与日真实问询 KPI 功能合同收口（功能编号 Spec 194）**。SC-01–SC-26 全部有记录在案的通过结果。收口时实测覆盖只有 22/26，补齐三条缺口用例：SC-17（混合夹具上 Spec 189 的分层恒等式 `原始审计 = 原始业务 + 协议`、`原始业务 = 默认用量 + 评测探针` 仍成立，问询 KPI 不改变 `usageCalls`）、SC-20（`activeAgentCount` 仍按 Spec 189 的默认用量计算，真实问询单独给出）、SC-24（数据访问视图有四张问询卡与按日表、界面使用视图没有，且调用量／ACL 拒绝／多数请求耗时仍不在数据访问视图）；SC-25 按配套 Plan §4 S3 第 5 条沿用既有审计问询测试，不重复造重建测试。证据 `docs/reviews/2026-11-01-access-grade-and-daily-question-kpi-closure.md`。已补「闭口层级」小节并从形态基线移除对应豁免条目（基线 903→902）。功能编号确认为 **Spec 194**（占号 `webui/docs/194-access-grade-and-daily-question-kpi-spec.md`），`webui/docs/README.md`、`docs/README.md` 与 `docs/plans/README.md` 的过期登记一并更正。本条收口不表示可上线。⚠️ 版本号为跨会话共享计数器，写前须实读顶部版本行取 current+1 |
 | v1.76 更新 | 2026-11-01，**两条功能合同收口**：① 新建角色默认只读问答工具 Spec v0.2 —— RD-01–RD-10 全部关闭，证据 `docs/reviews/2026-11-01-role-create-readonly-defaults-closure.md`，本条收口不表示可上线；② 行权限视图呈现修订 Spec v0.3 —— SC-01–SC-18 全部关闭，证据 `docs/reviews/2026-11-01-row-policy-view-presentation-closure.md`；已补「闭口层级」小节并从形态基线移除对应豁免条目（基线 904→903），本条收口不表示可上线。**另更正 Spec 195 的过期登记**：v1.70 行所载「仅文档落盘，实现及验收未开始」已不成立——实现已于 2026-10-31 由提交 `ced19d1a` 落地，SI-01–SI-13 已执行并通过，SI-14 为本地匿名夹具浏览器往返（31 样本全成功、0 次 busy），现场实例复核未执行；该提交新增的 3 个 `data-testid`（`display-refresh-notice` 等）尚未登记进选择器契约，是 `e2e:selector-contract` 红灯的来源之一。历史行按惯例不回改，现值以本行为准。⚠️ 版本号为跨会话共享计数器，写前须实读顶部版本行取 current+1 |
 | v1.75 更新 | 2026-10-31，L25-11 **已关闭**。用户批准拆分：本条以 FC-01–FC-32 关闭。`SEM25` 由 E2E Spec 持有且未执行，不回开本条。V01–V22 矩阵行不改成通过。G30 仍开。不关闭 G31，不打开 W-B。Wave 0b 与客户交付仍是 `blocked_delivery`。本条关闭不表示可上线。⚠️ 版本号为跨会话共享计数器，写前须实读顶部版本行取 current+1 |
 | v1.74 更新 | 2026-10-31，L25-10 **执行波本模块 Wave A 已落地**（审查→M1–M5）。分区画像／门禁／合成 JDBC／MCP divert／HQ 合成验收；`hq-hive-execution.test.ts`。客户 `HIV25`／矩阵晋级未授权；支持状态保持 `planned`。⚠️ 版本号为跨会话共享计数器，写前须实读顶部版本行取 current+1 |
