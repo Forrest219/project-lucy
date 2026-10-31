@@ -1,11 +1,13 @@
 # Publish Workbench CTA Confirm Path Spec
 
+> **修订（Spec [`lucy-20261030-publish-workbench-three-column-spec.md`](../../docs/specs/lucy-20261030-publish-workbench-three-column-spec.md)，2026-10-30）：** 本 Spec §5.2 确认 Drawer 的「计数 + 名称摘要」升级为**完整影响审阅**：按连接／Schema 分组、逐表给出纳入原因与证据、显示完整范围（禁止静默截断前 8 项），并采用本页限定的宽侧栏（固定页头页脚、正文单一滚动）。「确认仍是同步已有内容的独立路径、不变成上传入口」这一约束继续有效。本 Spec §5.1 Header、§5.3 与 Spec 35 / 112 的关系继续有效；页头的校验与发布按钮已按新 Spec §4.2 移入中栏「生效准备」。
+
 | 元数据 | 内容 |
 |---|---|
 | 文档名称 | Publish Workbench CTA Confirm Path Spec |
 | 文档类型 | Spec |
-| 版本 | v1.0 |
-| 撰写日期 | 2026-08-07 |
+| 版本 | v1.1 |
+| 撰写日期 | 2026-08-07；2026-10-30 被发布工作台三栏 Spec 局部修订 |
 | 撰写人 | Composer |
 | 委托人 | zhangxingchen |
 | 基于材料 | 浏览器核实 Header「发布并重建索引」打开「发布语义资产」上传侧栏；批准计划 `publish_cta_fix`；Spec 35 / 112 / 119 |

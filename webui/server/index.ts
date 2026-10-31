@@ -1,6 +1,6 @@
 import { createReadStream } from "node:fs";
 import { lstat, readFile, readdir } from "node:fs/promises";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import Fastify, { type FastifyError, type FastifyReply, type FastifyRequest } from "fastify";
@@ -58,6 +58,7 @@ import {
 } from "./project";
 import { loadContentPaths, resolveContentPaths } from "./paths";
 import { collectContentLayout, mirrorOnlySemanticRelPaths } from "./content-layout";
+import { buildSemanticModelIndex } from "./semantic-identity";
 import {
   // Ingest sidecar is M13 legacy. M14 keeps the helpers for the deprecated
   // `/api/connections/:connId/ingest` alias compatibility route.
@@ -209,11 +210,14 @@ import { registerCallMonitorRoutes } from "./ops/call-monitor.js";
 import { safeWrite } from "./fs-safe.js";
 import { isPublishCoordinatorBusy, withPublishCoordinator } from "./publish-coordinator.js";
 import {
+  beginPublishConsumptionEvidence,
+  commitPublishConsumptionEvidence,
   describePendingReleaseAssets,
   publishSemanticAssets,
   readSemanticAssetRelease,
   readSemanticAssetReleases,
   recordManualReindex,
+  reconcilePublishWorkbenchAttempts,
   SemanticAssetValidationError,
   validateSemanticAssets,
   type SemanticAssetPublishRequest,
@@ -222,6 +226,17 @@ import {
   type SemanticAssetValidateRequest,
   persistSemanticBatchSnapshot
 } from "./semantic-assets.js";
+import {
+  readPublishPendingSnapshot,
+  type PublishPendingSnapshot
+} from "./publish-workbench-state.js";
+import {
+  buildPublishImpact,
+  evidenceRefFor,
+  isOverlayLogicalPath,
+  readPublishEvidence,
+  type PublishImpact
+} from "./publish-impact.js";
 import { exportSemanticAssetPackage, recordSemanticAssetExport } from "./semantic-asset-export.js";
 import { recoverSemanticJournalsAtStartup, isRecoveryRequired } from "./semantic-recovery-journal.js";
 import { verifyAccessRecoveryOnStartup } from "./access-recovery.js";
@@ -505,6 +520,105 @@ function clientAbortSignal(reply: FastifyReply): AbortSignal {
 function logProbeTiming(request: FastifyRequest, kind: string, purpose: string, timing: ProbeTiming): void {
   addTiming("queue", timing.queueMs);
   request.log.info({ probe: { kind, purpose, queueMs: Math.round(timing.queueMs), executionMs: Math.round(timing.executionMs), totalMs: Math.round(timing.totalMs), shared: timing.shared } }, "connection probe");
+}
+
+/**
+ * Build the pending file list for `/api/diff`.
+ *
+ * Each entry carries the change type and a diff that compares the last
+ * PROVEN content version with the current bytes. A path with no trustworthy
+ * previous version gets an empty diff — the UI then says "暂无可比较的生效
+ * 版本" instead of pretending the Git diff is the before/after view.
+ */
+async function buildPendingChangedFiles(
+  projectRoot: string,
+  snapshot: PublishPendingSnapshot
+): Promise<Array<{ filePath: string; status: string; diff: string }>> {
+  const files: Array<{ filePath: string; status: string; diff: string }> = [];
+  for (const change of snapshot.changes) {
+    const evidence = await readPublishEvidence(
+      projectRoot,
+      evidenceRefFor(change.logicalPath, "diff")
+    );
+    files.push({
+      filePath: change.logicalPath,
+      status: change.changeType,
+      diff: evidence?.kind === "diff" ? evidence.content : ""
+    });
+  }
+  return files;
+}
+
+/**
+ * Build the impact model, degrading to an explicitly incomplete result when
+ * the model cannot be resolved. An incomplete impact is never dressed up as
+ * an exact confirmation.
+ */
+async function buildPublishImpactSafely(
+  projectRoot: string,
+  snapshot: PublishPendingSnapshot
+): Promise<PublishImpact> {
+  try {
+    return await buildPublishImpact({ projectRoot, snapshot });
+  } catch (error) {
+    return {
+      pendingDigest: snapshot.pendingDigest,
+      complete: false,
+      counts: { files: snapshot.changes.length, tables: 0, manifests: 0, wikiPages: 0 },
+      tables: [],
+      wikiChanges: [],
+      schemaChanges: [],
+      relatedScope: [],
+      otherChanges: [],
+      unresolved: [
+        {
+          filePath: "",
+          reason: `影响范围解析失败：${error instanceof Error ? error.message : String(error)}`,
+          blocking: true
+        }
+      ]
+    };
+  }
+}
+
+/**
+ * Resolve the tables whose semantics must be validated for this batch.
+ *
+ * The scope comes from the content snapshot, so a file edited outside this
+ * process is validated too. A DELETED overlay has no semantics left to
+ * validate — it is a file-level change, not a table failure.
+ */
+async function resolvePendingValidationTargets(
+  projectRoot: string,
+  snapshot: PublishPendingSnapshot
+): Promise<Array<{ conn: string; schema: string; table: string }>> {
+  const targets: Array<{ conn: string; schema: string; table: string }> = [];
+  const seen = new Set<string>();
+  let modelIndex;
+  try {
+    modelIndex = await buildSemanticModelIndex(projectRoot);
+  } catch {
+    // An unreadable model blocks the impact, but it must not crash the
+    // validation route: the caller still gets an empty, honest result.
+    return targets;
+  }
+  for (const change of snapshot.changes) {
+    if (change.changeType === "deleted") continue;
+    if (!isOverlayLogicalPath(change.logicalPath)) continue;
+    const owners = modelIndex.overlayOwners.get(change.logicalPath) ?? [];
+    if (owners.length !== 1) continue;
+    const entry = modelIndex.byKey.get(owners[0]!);
+    if (!entry) continue;
+    const key = `${entry.identity.connectionId}/${entry.identity.schema}/${entry.identity.table}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    targets.push({
+      conn: entry.identity.connectionId,
+      schema: entry.identity.schema,
+      table: entry.identity.table
+    });
+  }
+  return targets;
 }
 
 export function buildServer() {
@@ -897,35 +1011,81 @@ export function buildServer() {
     } catch {
       // Spec 180: drift is advisory and must not fail the pending-change read.
     }
+    // Spec §5.1 — the pending list is the difference between the current author
+    // content and the last content version with proven sync evidence. The Git
+    // diff can DISCOVER a change; it cannot prove that the change took effect,
+    // so it is no longer the source of this list.
+    const snapshot = await readPublishPendingSnapshot(projectRoot);
+    const impact = await buildPublishImpactSafely(projectRoot, snapshot);
     return {
       ok: true,
       data: {
-        files: await changedFiles(projectRoot, writtenFiles),
+        files: await buildPendingChangedFiles(projectRoot, snapshot),
+        pendingDigest: snapshot.pendingDigest,
+        baselineState: snapshot.baselineState,
+        baselineGeneration: snapshot.baselineGeneration,
+        impact,
         mirrorOnlySemanticFiles,
         mirrorDriftTruncated
       }
     };
   });
 
-  app.post("/api/validate-changed", async () => {
+  /**
+   * GET /api/publish-workbench/evidence
+   *
+   * Resolve ONE evidence reference from the impact model into its content.
+   * The reference names a logical path that must be inside the current
+   * snapshot or the current baseline — the server never reads an arbitrary
+   * path from a client-supplied string.
+   */
+  app.get<{
+    Querystring: { ref?: string };
+  }>("/api/publish-workbench/evidence", async (request, reply) => {
     const projectRoot = await resolveProjectRoot();
+    const ref = typeof request.query.ref === "string" ? request.query.ref : "";
+    if (!ref) {
+      reply.status(400);
+      return reply.send({
+        ok: false,
+        error: { code: "EVIDENCE_REF_REQUIRED", message: "缺少证据引用。" }
+      });
+    }
+    const evidence = await readPublishEvidence(projectRoot, ref);
+    if (!evidence) {
+      reply.status(404);
+      return reply.send({
+        ok: false,
+        error: { code: "EVIDENCE_NOT_FOUND", message: "证据不存在或已过期，请重新预览。" }
+      });
+    }
+    return { ok: true, data: evidence };
+  });
+
+  app.post("/api/validate-changed", async () => {    const projectRoot = await resolveProjectRoot();
+    // Spec §6 — the validation scope is derived from the SAME content snapshot
+    // the list and the confirmation use, not from an in-process set of written
+    // files. A file edited outside this process is validated too.
+    const snapshot = await readPublishPendingSnapshot(projectRoot);
     const results: Array<{ conn: string; schema: string; table: string; validation: ValidationResult }> = [];
-    for (const source of changedSources.values()) {
-      const validation = await validateSource(projectRoot, source.conn, source.schema, source.table);
-      const contracts = await readChangedSourceColumnContracts(
-        projectRoot,
-        source.conn,
-        source.schema,
-        source.table
-      );
+    for (const { conn, schema, table } of await resolvePendingValidationTargets(projectRoot, snapshot)) {
+      const validation = await validateSource(projectRoot, conn, schema, table);
+      const contracts = await readChangedSourceColumnContracts(projectRoot, conn, schema, table);
+      const withContract = applyColumnTypeContractToValidation(validation, contracts);
       results.push({
-        ...source,
-        validation: applyColumnTypeContractToValidation(validation, contracts)
+        conn,
+        schema,
+        table,
+        validation: withContract
       });
     }
     return {
       ok: true,
-      data: { results }
+      data: {
+        results,
+        pendingDigest: snapshot.pendingDigest,
+        baselineState: snapshot.baselineState
+      }
     };
   });
 
@@ -2187,6 +2347,7 @@ export function buildServer() {
     actor?: string;
     limit?: string;
     offset?: string;
+    businessChangesOnly?: string;
   }): SemanticAssetReleaseListQuery {
     const trigger =
       q.trigger === "webui_publish" ||
@@ -2204,6 +2365,8 @@ export function buildServer() {
     const limitRaw = q.limit != null && q.limit !== "" ? Number(q.limit) : undefined;
     const offsetRaw = q.offset != null && q.offset !== "" ? Number(q.offset) : undefined;
     return {
+      businessChangesOnly:
+        q.businessChangesOnly === "true" || q.businessChangesOnly === "1" ? true : undefined,
       since: q.since || undefined,
       until: q.until || undefined,
       trigger,
@@ -2223,6 +2386,8 @@ export function buildServer() {
       actor?: string;
       limit?: string;
       offset?: string;
+      /** Spec §6 — keep only the batches that carried a business change. */
+      businessChangesOnly?: string;
     };
   }>("/api/semantic-assets/releases", async (request) => {
     const projectRoot = await resolveProjectRoot();
@@ -2419,6 +2584,7 @@ export function buildServer() {
     const startedAt = new Date().toISOString();
     const consumedFiles = writtenFiles.slice();
     const consumedSourceEntries = [...changedSources.entries()];
+    const attemptId = `att_manual_${randomUUID()}`;
     try {
       // The history record is part of the same critical section as the index
       // (L25-11 §7.2). Writing it after the coordinator returns would let
@@ -2426,6 +2592,20 @@ export function buildServer() {
       const outcome = await withPublishCoordinator(
         "manual_reindex",
         async () => {
+          // Spec §6 — the confirmation is bound to a content version. The
+          // version is re-checked INSIDE the publish window, because the
+          // content can change between the confirmation and the submission.
+          if (confirmedPendingDigest) {
+            const current = await readPublishPendingSnapshot(projectRoot);
+            if (current.pendingDigest !== confirmedPendingDigest) {
+              throw new SemanticAssetValidationError(
+                "PUBLISH_CONTENT_VERSION_CHANGED",
+                "待发布内容已变化，本次确认已失效，请重新核对后再提交。",
+                [],
+                409
+              );
+            }
+          }
           // Lucy v0.25 / L25-11 §7.1–§7.2 (D3): the recovery check must run
           // BEFORE the index is rebuilt. Reindexing while a semantic write is
           // unresolved would derive an index state from targets whose write
@@ -2438,6 +2618,15 @@ export function buildServer() {
               409
             );
           }
+          // Spec §5.3 — capture the content version that is about to be
+          // consumed BEFORE the index reads the content root. The baseline is
+          // advanced from THIS capture, never from a disk read after the
+          // index returned.
+          const consumption = await beginPublishConsumptionEvidence(
+            projectRoot,
+            attemptId,
+            "pending"
+          );
           const reindex = await reindexProject(projectRoot, { force });
           const finishedAt = new Date().toISOString();
           const reindexRecord = {
@@ -2471,11 +2660,23 @@ export function buildServer() {
             for (const [key, value] of consumedSourceEntries) {
               if (changedSources.get(key) === value) changedSources.delete(key);
             }
+            // The terminal evidence is durable. Advance the baseline in the
+            // SAME serial window: index success → terminal audit → baseline
+            // CAS → attempt finalized → window released. A drift between the
+            // capture and this point keeps the baseline unchanged, so the
+            // content stays pending and must be re-checked.
+            await commitPublishConsumptionEvidence(
+              projectRoot,
+              attemptId,
+              historyRecord.id,
+              consumption
+            );
           }
           return { historyRecord, finishedAt, reindexRecord };
         },
         { projectRoot }
       );
+      const after = await readPublishPendingSnapshot(projectRoot);
       return {
         ok: true,
         data: {
@@ -2483,7 +2684,10 @@ export function buildServer() {
           force,
           startedAt,
           finishedAt: outcome.finishedAt,
-          reindex: outcome.reindexRecord
+          reindex: outcome.reindexRecord,
+          pendingDigest: after.pendingDigest,
+          baselineState: after.baselineState,
+          baselineGeneration: after.baselineGeneration
         }
       };
     } catch (error) {
@@ -2880,6 +3084,17 @@ async function recoverSemanticJournals(): Promise<void> {
   await reconcileSemanticReleaseStartup(projectRoot).catch((error: unknown) => {
     console.error(
       "[lucy-semantic] release startup reconciliation failed",
+      error instanceof Error ? error.message : "unknown"
+    );
+  });
+  // Spec §5.3 — a crash between "the terminal record is durable" and "the
+  // baseline advanced" is closed here, idempotently. An attempt without
+  // proven terminal evidence keeps the old baseline and is marked uncertain:
+  // the reconciliation never rebuilds the index, never rolls content back and
+  // never writes a success that was not proven.
+  await reconcilePublishWorkbenchAttempts(projectRoot).catch((error: unknown) => {
+    console.error(
+      "[lucy-publish-workbench] pending baseline reconciliation failed",
       error instanceof Error ? error.message : "unknown"
     );
   });

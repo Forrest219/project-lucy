@@ -1,11 +1,13 @@
 # Publish Workbench Queue–Gate IA Spec
 
+> **修订（Spec [`lucy-20261030-publish-workbench-three-column-spec.md`](../../docs/specs/lucy-20261030-publish-workbench-three-column-spec.md)，2026-10-30）：** 首屏布局由「待发布变更 | 生效准备」双栏改为「**待发布变更 | 生效准备 | 最近发布**」三栏；左栏标题由「本次将同步的变更」改为「**待发布变更**」，并在标题旁显示待同步文件数；**变更详情仍为按需 Drawer**，不回到常驻主舞台。本 Spec §5.2 变更详情 Drawer、§5.3 保留不变（除页头动作归属）继续有效；§5.1 双栏 ASCII 与 §7 验收第 1 条以新 Spec 为准，旧文本保留为历史契约。确认侧栏的完整范围与逐表原因由新 Spec §4.5 定义。
+
 | 元数据 | 内容 |
 |---|---|
 | 文档名称 | Publish Workbench Queue–Gate IA Spec |
 | 文档类型 | Spec |
-| 版本 | v1.0 |
-| 撰写日期 | 2026-08-07 |
+| 版本 | v1.1 |
+| 撰写日期 | 2026-08-07；2026-10-30 被发布工作台三栏 Spec 局部修订 |
 | 撰写人 | Composer |
 | 委托人 | zhangxingchen |
 | 基于材料 | 用户批准的改善方案 A；浏览器核查 `/publish/workbench`（`:55176`）；`UX-PUBLISH-WORKBENCH-005`；Spec 112 / 35 / 115 |

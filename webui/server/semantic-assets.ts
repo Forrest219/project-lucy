@@ -83,6 +83,19 @@ import {
 import { computeBatchPlanDigestInput } from "./semantic-batch-service.js";
 import { SEMANTIC_BATCH_LIMITS } from "./semantic-limits.js";
 import { buildSemanticModelIndex } from "./semantic-identity.js";
+import {
+  advancePublishBaseline,
+  capturePublishConsumption,
+  collectRetainedBlobDigests,
+  detectPublishConsumptionDrift,
+  listPublishAttempts,
+  prunePublishBlobs,
+  PublishBaselineConflictError,
+  readPublishBaseline,
+  writePublishAttempt,
+  type PublishAttempt,
+  type PublishConsumptionSnapshot
+} from "./publish-workbench-state.js";
 import { runSemanticTableCheck } from "./semantic-checks.js";
 import { changedFiles } from "./diff.js";
 import { ForbiddenPathError } from "./fs-safe";
@@ -131,6 +144,12 @@ export type SemanticAssetErrorCode =
   | "CONTRACT_VIOLATION"
   | "PUBLISH_IN_PROGRESS"
   | "REINDEX_IN_PROGRESS"
+  /**
+   * Spec `lucy-20261030-publish-workbench-three-column-spec.md` §6 — the
+   * confirmation was bound to a content version and the content has moved on.
+   * The batch keeps its pending range; the operator must re-check.
+   */
+  | "PUBLISH_CONTENT_VERSION_CHANGED"
   /** Lucy v0.25 / L25-11 §7.1–§7.2 (D3) — an unresolved semantic recovery journal closes publishing and manual reindex. */
   | "semantic_recovery_required"
   /**
@@ -338,6 +357,16 @@ export type SemanticAssetReleaseListQuery = {
   actor?: string;
   limit?: number;
   offset?: number;
+  /**
+   * Spec `lucy-20261030-publish-workbench-three-column-spec.md` §6 — keep only
+   * the batches that carried a BUSINESS change. A plain index maintenance run
+   * (no files, no sources, no connections) is not a business batch and must
+   * not occupy a slot in the workbench's "最近发布" summary.
+   *
+   * The filter runs on the SERVER, before the sort and the limit, so a
+   * maintenance run never pushes a real batch out of the newest five.
+   */
+  businessChangesOnly?: boolean;
 };
 
 export type SemanticAssetReleaseStatusResponse = {
@@ -1546,6 +1575,7 @@ function matchesReleaseQuery(
   query: SemanticAssetReleaseListQuery | undefined
 ): boolean {
   if (!query) return true;
+  if (query.businessChangesOnly && !hasBusinessChanges(record)) return false;
   if (query.since && record.createdAt < query.since) return false;
   if (query.until && record.createdAt > query.until) return false;
   if (query.trigger) {
@@ -1573,12 +1603,38 @@ function matchesReleaseQuery(
   return true;
 }
 
+/**
+ * Does this release carry a business change?
+ *
+ * A plain index maintenance run has no files, no changed sources and no
+ * connections. It is a real operation, but it is not a business batch.
+ */
+export function hasBusinessChanges(record: SemanticAssetReleaseRecord): boolean {
+  return (
+    (record.files?.length ?? 0) > 0 ||
+    (record.changedSources?.length ?? 0) > 0 ||
+    (record.connectionIds?.length ?? 0) > 0
+  );
+}
 
 export async function readSemanticAssetReleases(
   projectRoot: string,
   query?: SemanticAssetReleaseListQuery
 ): Promise<SemanticAssetReleasesResponse> {
   const sidecar = await readSidecar(projectRoot);
+  if (query?.businessChangesOnly) {
+    // The business filter runs BEFORE the sort and the limit. Filtering after
+    // the limit would let a maintenance run push a real batch out of the
+    // newest five — the summary would then show the wrong batches.
+    const filtered = sidecar.records.filter((record) => matchesReleaseQuery(record, query));
+    const sorted = [...filtered].sort(sortRecordsByCreatedAtDesc).slice(0, MAX_RELEASE_RECORDS);
+    const total = sorted.length;
+    const offset = query.offset != null && Number.isFinite(query.offset) ? Math.max(0, query.offset) : 0;
+    const hasLimit = query.limit != null && Number.isFinite(query.limit);
+    const limit = hasLimit ? Math.max(0, query.limit!) : undefined;
+    const page = limit === undefined ? sorted : sorted.slice(offset, offset + limit);
+    return { records: page, total };
+  }
   // Original pipeline, unchanged: cap the sidecar, then filter, then paginate.
   const records = [...sidecar.records].sort(sortRecordsByCreatedAtDesc).slice(0, MAX_RELEASE_RECORDS);
   const filtered = records.filter((record) => matchesReleaseQuery(record, query));
@@ -1795,6 +1851,225 @@ export async function recordManualReindex(
   await appendReleaseRecord(projectRoot, record);
   void input.force; // `force` is preserved in stdout/exit code, not as a sidecar field.
   return record;
+}
+
+// ─── Publish workbench consumption evidence ────────────────────────────────
+//
+// Spec `lucy-20261030-publish-workbench-three-column-spec.md` §5.3.
+//
+// The workbench's pending list is the difference between the current author
+// content and the last content version with PROVEN sync evidence. To advance
+// that baseline honestly, the publish path must know two things:
+//
+//   1. which content version was handed to the index, and
+//   2. that the index did not silently consume a different one.
+//
+// (1) is answered by capturing the content BEFORE the index reads it. (2) is
+// answered by comparing the capture with the content afterwards: any drift
+// means the index may have consumed a version nobody confirmed.
+//
+// Both halves run INSIDE the publish window that already exists. No new lock
+// is introduced and the coordinator's lock lifecycle is untouched.
+//
+// Neither function throws. A failure to record evidence must never fail a
+// publish that already succeeded — it only means the baseline does not move,
+// so the content stays pending and the operator sees it again.
+
+export interface PublishConsumptionEvidenceResult {
+  advanced: boolean;
+  drift: Array<{ logicalPath: string; reason: string }>;
+  reason?: string;
+}
+
+/**
+ * Capture the content version that is about to be consumed and persist the
+ * attempt BEFORE the index runs.
+ *
+ * A crash after this point leaves a `prepared` attempt that the startup
+ * reconciliation can finish.
+ */
+export async function beginPublishConsumptionEvidence(
+  projectRoot: string,
+  attemptId: string,
+  releaseId: string
+): Promise<PublishConsumptionSnapshot | null> {
+  try {
+    const capture = await capturePublishConsumption(projectRoot);
+    const attempt: PublishAttempt = {
+      version: 1,
+      attemptId,
+      startedAt: capture.capturedAt,
+      status: "prepared",
+      expectedBaselineGeneration: capture.baselineGeneration,
+      consumedDigest: capture.digest,
+      consumedFiles: capture.files,
+      releaseId
+    };
+    await writePublishAttempt(projectRoot, attempt);
+    return capture;
+  } catch (error) {
+    // The evidence could not be captured. The publish still runs; the baseline
+    // simply does not move, so the content stays pending.
+    console.error(
+      `[lucy-semantic] 发布消费快照采集失败，本次不推进生效基线：${error instanceof Error ? error.message : String(error)}`
+    );
+    return null;
+  }
+}
+
+/**
+ * Commit the consumption evidence: detect drift, then advance the baseline.
+ *
+ * The baseline moves only when the index succeeded, the terminal evidence is
+ * durable, and the consumed content still matches the confirmation.
+ */
+export async function commitPublishConsumptionEvidence(
+  projectRoot: string,
+  attemptId: string,
+  releaseId: string,
+  capture: PublishConsumptionSnapshot | null
+): Promise<PublishConsumptionEvidenceResult> {
+  if (!capture) {
+    return { advanced: false, drift: [], reason: "未采集到消费快照，本次不推进生效基线。" };
+  }
+  const base: PublishAttempt = {
+    version: 1,
+    attemptId,
+    startedAt: capture.capturedAt,
+    status: "prepared",
+    expectedBaselineGeneration: capture.baselineGeneration,
+    consumedDigest: capture.digest,
+    consumedFiles: capture.files,
+    releaseId
+  };
+  try {
+    const drift = await detectPublishConsumptionDrift(projectRoot, capture);
+    if (drift.length > 0) {
+      await writePublishAttempt(projectRoot, {
+        ...base,
+        status: "uncertain",
+        finishedAt: new Date().toISOString(),
+        drift,
+        failureReason: "索引期间内容发生变化，本次同步未推进生效基线，待重新核对。"
+      });
+      return { advanced: false, drift };
+    }
+
+    await advancePublishBaseline(projectRoot, {
+      expectedGeneration: capture.baselineGeneration,
+      files: capture.files,
+      releaseId,
+      attemptId
+    });
+    await writePublishAttempt(projectRoot, {
+      ...base,
+      status: "committed",
+      finishedAt: new Date().toISOString()
+    });
+    await prunePublishBlobs(projectRoot, await collectRetainedBlobDigests(projectRoot)).catch(
+      () => undefined
+    );
+    return { advanced: true, drift: [] };
+  } catch (error) {
+    const reason =
+      error instanceof PublishBaselineConflictError
+        ? "生效基线代次已被其它发布推进，本次未覆盖新证据。"
+        : error instanceof Error
+          ? error.message
+          : String(error);
+    await writePublishAttempt(projectRoot, {
+      ...base,
+      status: "uncertain",
+      finishedAt: new Date().toISOString(),
+      failureReason: reason
+    }).catch(() => undefined);
+    return { advanced: false, drift: [], reason };
+  }
+}
+
+/**
+ * Startup reconciliation for attempts that were prepared but never finished.
+ *
+ * An attempt is completed only when the terminal evidence proves the index
+ * succeeded AND the consumed content still matches what is on disk. Missing
+ * evidence keeps the old baseline and marks the attempt as uncertain — the
+ * reconciliation never rebuilds the index, never rolls content back, and never
+ * writes a success that was not proven.
+ */
+export async function reconcilePublishWorkbenchAttempts(
+  projectRoot: string
+): Promise<{ committed: string[]; uncertain: string[] }> {
+  const committed: string[] = [];
+  const uncertain: string[] = [];
+  const attempts = await listPublishAttempts(projectRoot);
+
+  for (const attempt of attempts) {
+    if (attempt.status !== "prepared") continue;
+    const finish = async (status: "committed" | "uncertain", reason?: string): Promise<void> => {
+      await writePublishAttempt(projectRoot, {
+        ...attempt,
+        status,
+        finishedAt: new Date().toISOString(),
+        ...(reason ? { failureReason: reason } : {})
+      }).catch(() => undefined);
+    };
+
+    if (!attempt.releaseId) {
+      await finish("uncertain", "缺少发布终态记录，无法证明内容已生效。");
+      uncertain.push(attempt.attemptId);
+      continue;
+    }
+    const release = await readSemanticAssetRelease(projectRoot, attempt.releaseId);
+    const indexProven = release?.status === "published" && release.reindex?.ok === true;
+    if (!indexProven) {
+      await finish("uncertain", "发布终态未证明索引成功，未补写生效基线。");
+      uncertain.push(attempt.attemptId);
+      continue;
+    }
+
+    const baseline = await readPublishBaseline(projectRoot);
+    const currentGeneration = baseline?.generation ?? 0;
+    if (currentGeneration !== attempt.expectedBaselineGeneration) {
+      await finish("uncertain", "生效基线代次已变化，未覆盖更新的证据。");
+      uncertain.push(attempt.attemptId);
+      continue;
+    }
+
+    // The consumed content must still be the content on disk. If it moved,
+    // the index may have consumed a version nobody confirmed.
+    const capture: PublishConsumptionSnapshot = {
+      capturedAt: attempt.startedAt,
+      files: attempt.consumedFiles ?? {},
+      digest: attempt.consumedDigest,
+      baselineGeneration: attempt.expectedBaselineGeneration,
+      pendingDigest: ""
+    };
+    const drift = await detectPublishConsumptionDrift(projectRoot, capture);
+    if (drift.length > 0) {
+      await finish("uncertain", "消费快照与当前内容不一致，未补写生效基线。");
+      uncertain.push(attempt.attemptId);
+      continue;
+    }
+
+    try {
+      await advancePublishBaseline(projectRoot, {
+        expectedGeneration: attempt.expectedBaselineGeneration,
+        files: attempt.consumedFiles ?? {},
+        releaseId: attempt.releaseId,
+        attemptId: attempt.attemptId
+      });
+      await finish("committed");
+      committed.push(attempt.attemptId);
+    } catch (error) {
+      await finish(
+        "uncertain",
+        error instanceof Error ? error.message : "生效基线补齐失败，未补写成功。"
+      );
+      uncertain.push(attempt.attemptId);
+    }
+  }
+
+  return { committed, uncertain };
 }
 
 // ─── Publish lock (single-process MVP) ────────────────────────────────────
@@ -3233,6 +3508,12 @@ export async function publishSemanticAssets(
     let stage: "index" | "after_index" = "index";
     try {
       await notePublishPhase(projectRoot, "reindexing");
+      // Spec §5.3 — capture the content version that is about to be consumed
+      // BEFORE the index reads the content root. Reading the disk after the
+      // index returns and calling that the consumed version would register
+      // whatever happens to be on disk at that moment, including a change
+      // that landed during the index and was never consumed.
+      const consumption = await beginPublishConsumptionEvidence(projectRoot, attemptId, releaseId);
       let reindexResult;
       try {
         reindexResult = await reindexImpl(projectRoot, { force: false });
@@ -3357,7 +3638,12 @@ export async function publishSemanticAssets(
       if (recoveryJournalId) {
         await completeRecoveryJournal(projectRoot, recoveryJournalId);
       }
-      await reloadCatalog(projectRoot).catch(() => undefined);
+      // Spec §5.3 — the baseline advance belongs to the SAME serial window as
+      // the terminal verification, the terminal audit and the `published`
+      // record. It is a compare-and-swap: if the generation moved while the
+      // index ran, the newer evidence wins and this attempt is marked
+      // uncertain instead of overwriting it.
+      await commitPublishConsumptionEvidence(projectRoot, attemptId, releaseId, consumption);
       settled = true;
     } catch (error) {
       if (!settled) {

@@ -33,6 +33,17 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+function okJson(data: unknown): Response {
+  return new Response(JSON.stringify({ ok: true, data }));
+}
+
+function notFound(url: string): Response {
+  return new Response(
+    JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }),
+    { status: 404 }
+  );
+}
+
 describe("PublishWorkbench helpers", () => {
   it("maps changed files to boundary checklist prompts", () => {
     expect(
@@ -108,8 +119,34 @@ describe("PublishWorkbench", () => {
     expect(screen.queryByRole("button", { name: "校验变更" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "表目录" })).not.toBeInTheDocument();
     expect(screen.getByText("生效准备")).toBeInTheDocument();
-    expect(screen.getByText("本次将同步的变更")).toBeInTheDocument();
+    expect(screen.getByText("待发布变更")).toBeInTheDocument();
     expect(screen.queryByTestId("workbench-mirror-only-semantic")).not.toBeInTheDocument();
+  });
+
+  it("keeps the secondary 同步索引 in the middle column of the empty state", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/diff") {
+          return new Response(JSON.stringify({ ok: true, data: { files: [] } }));
+        }
+        return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), {
+          status: 404
+        });
+      })
+    );
+
+    renderWorkbench();
+
+    expect(await screen.findByTestId("workbench-empty-state")).toHaveTextContent("暂无待同步变更");
+    // The maintenance sync lives in 生效准备, NOT in the page header.
+    const gate = screen.getByTestId("publish-gate-panel");
+    expect(within(gate).getByTestId("workbench-sync-index")).toHaveTextContent("同步索引");
+    const headerActions = screen.getByTestId("page-header-actions");
+    expect(within(headerActions).queryByTestId("workbench-sync-index")).not.toBeInTheDocument();
+    expect(within(headerActions).queryByTestId("workbench-publish-and-reindex")).not.toBeInTheDocument();
+    expect(within(headerActions).queryByTestId("workbench-validate")).not.toBeInTheDocument();
   });
 
   it("warns when the ktx mirror still has semantic files missing from the content root", async () => {
@@ -143,7 +180,7 @@ describe("PublishWorkbench", () => {
     expect(notice.querySelector(".notranslate")).toHaveAttribute("translate", "no");
   });
 
-  it("uses queue-gate dual panel and opens change detail only on file click", async () => {
+  it("uses the three-column workbench layout and opens change detail only on file click", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -185,10 +222,23 @@ describe("PublishWorkbench", () => {
 
     expect(await screen.findByTestId("workbench-pending-panel")).toBeInTheDocument();
     expect(screen.getByTestId("publish-gate-panel")).toBeInTheDocument();
+    expect(screen.getByTestId("workbench-recent-panel")).toBeInTheDocument();
     expect(screen.getByText("生效准备")).toBeInTheDocument();
-    expect(await screen.findByTestId("workbench-batch-sync-hint")).toHaveTextContent(
-      /本批一并同步 2 项/
+    expect(screen.getByText("待发布变更")).toBeInTheDocument();
+    expect(screen.getByText("最近发布")).toBeInTheDocument();
+    // The pending file count lives in the LEFT column, not in the gate panel.
+    await waitFor(() =>
+      expect(screen.getByTestId("workbench-pending-count")).toHaveTextContent("2 个待同步文件")
     );
+    // The "整批同步" disclosure moved into the LEFT column as well.
+    expect(screen.getByTestId("workbench-batch-sync-hint")).toHaveTextContent(
+      "本批一并同步 2 项"
+    );
+    expect(
+      within(screen.getByTestId("workbench-pending-panel")).getByTestId(
+        "workbench-batch-sync-hint"
+      )
+    ).toBeInTheDocument();
     expect(screen.queryByTestId("workbench-change-detail-drawer")).not.toBeInTheDocument();
     expect(screen.queryByText(/\+ orders diff/)).not.toBeInTheDocument();
     expect(screen.queryByText("变更详情")).not.toBeInTheDocument();
@@ -456,7 +506,38 @@ describe("PublishWorkbench", () => {
                     status: "modified",
                     diff: "+ orders diff"
                   }
-                ]
+                ],
+                pendingDigest: "digest-auto",
+                baselineState: "ready",
+                baselineGeneration: 7,
+                impact: {
+                  pendingDigest: "digest-auto",
+                  complete: true,
+                  counts: { files: 1, tables: 1, manifests: 0, wikiPages: 0 },
+                  tables: [
+                    {
+                      identity: {
+                        connectionId: "mysql-aliyun",
+                        schema: "dataforai",
+                        table: "superstore_orders"
+                      },
+                      reasons: [
+                        {
+                          kind: "overlay_change",
+                          summary: "指标定义变更",
+                          source: "pending_disk_change",
+                          filePath: "semantic-layer/mysql-aliyun/superstore_orders.yaml",
+                          evidenceRef: "ref-1"
+                        }
+                      ]
+                    }
+                  ],
+                  wikiChanges: [],
+                  schemaChanges: [],
+                  relatedScope: [],
+                  otherChanges: [],
+                  unresolved: []
+                }
               }
             })
           );
@@ -467,6 +548,8 @@ describe("PublishWorkbench", () => {
             JSON.stringify({
               ok: true,
               data: {
+                pendingDigest: "digest-auto",
+                baselineState: "ready",
                 results: [
                   {
                     conn: "mysql-aliyun",
@@ -488,6 +571,9 @@ describe("PublishWorkbench", () => {
                 force: false,
                 startedAt: "2026-08-07T00:00:00.000Z",
                 finishedAt: "2026-08-07T00:00:01.000Z",
+                pendingDigest: "digest-auto",
+                baselineState: "ready",
+                baselineGeneration: 8,
                 reindex: { ok: true, exitCode: 0, stdout: "indexed", stderr: "" }
               }
             })
@@ -511,18 +597,22 @@ describe("PublishWorkbench", () => {
     expect(screen.getByTestId("publish-gate-next-step")).toHaveTextContent(/校验已通过/);
 
     fireEvent.click(publishCta);
-    const confirmDrawer = await screen.findByTestId("workbench-publish-confirm-drawer");
+    const confirmDrawer = await screen.findByTestId("publish-sync-confirm-panel");
     expect(within(confirmDrawer).getByText("确认同步索引并生效")).toBeInTheDocument();
     expect(screen.queryByTestId("semantic-asset-publish-drawer")).not.toBeInTheDocument();
     expect(screen.queryByText(/选择文件|拖入此处|拖入 Schema/)).not.toBeInTheDocument();
-    expect(within(confirmDrawer).getByTestId("workbench-publish-confirm-summary")).toHaveTextContent(
-      /本批一并同步 1 项/
+    // The confirmation is bound to the content version and explains the range.
+    expect(within(confirmDrawer).getByTestId("publish-sync-confirm-digest")).toHaveTextContent(
+      "digest-auto"
+    );
+    expect(within(confirmDrawer).getByTestId("publish-impact-summary")).toHaveTextContent(
+      "涉及表 1 张"
     );
 
-    fireEvent.click(screen.getByTestId("workbench-publish-confirm-submit"));
-    await waitFor(() => expect(reindexBodies).toEqual([{ force: false }]));
+    fireEvent.click(screen.getByTestId("publish-sync-confirm-submit"));
+    await waitFor(() => expect(reindexBodies).toEqual([{ force: false, pendingDigest: "digest-auto" }]));
     await waitFor(() =>
-      expect(screen.queryByTestId("workbench-publish-confirm-drawer")).not.toBeInTheDocument()
+      expect(screen.queryByTestId("publish-sync-confirm-panel")).not.toBeInTheDocument()
     );
   });
 
@@ -980,7 +1070,10 @@ describe("PublishWorkbench", () => {
 
     renderWorkbench();
 
-    expect(await screen.findByTestId("workbench-batch-sync-hint")).toHaveTextContent(
+    await waitFor(() =>
+      expect(screen.getByTestId("workbench-pending-count")).toHaveTextContent("3 个待同步文件")
+    );
+    expect(screen.getByTestId("workbench-batch-sync-hint")).toHaveTextContent(
       "本批一并同步 3 项"
     );
     expect(screen.getByTestId("workbench-validation-banner")).toHaveTextContent(
@@ -1077,5 +1170,424 @@ describe("PublishWorkbench", () => {
     expect(await screen.findByTestId("workbench-validation-banner")).toHaveTextContent("无可校验表");
     expect(screen.queryByText(/校验通过/)).not.toBeInTheDocument();
     expect(screen.getByTestId("workbench-publish-and-reindex")).toBeDisabled();
+  });
+
+  // ── three-column workbench (Spec §4) ─────────────────────────────────────
+
+  it("renders the three columns in reading order 待发布变更 → 生效准备 → 最近发布", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/diff") return okJson({ files: [] });
+        if (url.startsWith("/api/semantic-assets/releases")) {
+          return okJson({ records: [], total: 0 });
+        }
+        if (url === "/api/sources") return okJson({ tables: [] });
+        return notFound(url);
+      })
+    );
+
+    renderWorkbench();
+
+    const layout = await screen.findByTestId("publish-workbench-layout");
+    const pending = within(layout).getByTestId("workbench-pending-panel");
+    const gate = within(layout).getByTestId("publish-gate-panel");
+    const recent = within(layout).getByTestId("workbench-recent-panel");
+
+    expect(pending).toHaveAttribute("aria-label", "待发布变更");
+    expect(gate).toHaveAttribute("aria-label", "生效准备");
+    expect(recent).toHaveAttribute("aria-label", "最近发布");
+
+    // The DOM order is the reading order.
+    expect(
+      pending.compareDocumentPosition(gate) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    expect(
+      gate.compareDocumentPosition(recent) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
+
+  it("keeps exactly one publish action on the page, inside the middle column", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url === "/api/diff") {
+          return okJson({
+            files: [
+              {
+                filePath: "semantic-layer/mysql-aliyun/superstore_orders.yaml",
+                status: "modified",
+                diff: "+ diff"
+              }
+            ],
+            pendingDigest: "digest-1",
+            baselineState: "ready"
+          });
+        }
+        if (url === "/api/validate-changed" && init?.method === "POST") {
+          return okJson({
+            pendingDigest: "digest-1",
+            baselineState: "ready",
+            results: [
+              {
+                conn: "mysql-aliyun",
+                schema: "dataforai",
+                table: "superstore_orders",
+                validation: { ok: true, exitCode: 0, stdout: "", stderr: "" }
+              }
+            ]
+          });
+        }
+        if (url === "/api/sources") return okJson({ tables: [] });
+        return notFound(url);
+      })
+    );
+
+    renderWorkbench();
+
+    await waitFor(() =>
+      expect(screen.getByTestId("workbench-publish-and-reindex")).toHaveAttribute(
+        "data-gate",
+        "ready"
+      )
+    );
+
+    // One publish action — in the middle column only.
+    expect(screen.getAllByTestId("workbench-publish-and-reindex")).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "同步索引并生效" })).toHaveLength(1);
+    expect(
+      within(screen.getByTestId("publish-gate-panel")).getByTestId(
+        "workbench-publish-and-reindex"
+      )
+    ).toBeInTheDocument();
+
+    // The page header carries only 刷新 / 更多 — never the validate or publish button.
+    const headerActions = screen.getByTestId("page-header-actions");
+    expect(
+      within(headerActions).queryByTestId("workbench-publish-and-reindex")
+    ).not.toBeInTheDocument();
+    expect(within(headerActions).queryByTestId("workbench-validate")).not.toBeInTheDocument();
+    expect(within(headerActions).getByTestId("workbench-refresh")).toBeInTheDocument();
+    expect(within(headerActions).getByTestId("workbench-more-menu")).toBeInTheDocument();
+
+    // A pending batch does not offer the maintenance sync as a second action.
+    expect(screen.queryByTestId("workbench-sync-index")).not.toBeInTheDocument();
+  });
+
+  it("groups the pending list by asset type and shows the pending file count", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url === "/api/diff") {
+          return okJson({
+            files: [
+              {
+                filePath: "semantic-layer/mysql-aliyun/superstore_orders.yaml",
+                status: "modified",
+                diff: "+ overlay"
+              },
+              {
+                filePath: "semantic-layer/demo-mysql/_schema/dataforai.yaml",
+                status: "modified",
+                diff: "+ manifest"
+              },
+              { filePath: "wiki/global/guide.md", status: "modified", diff: "+ wiki" }
+            ],
+            pendingDigest: "digest-1",
+            baselineState: "ready"
+          });
+        }
+        if (url === "/api/validate-changed" && init?.method === "POST") {
+          return okJson({ pendingDigest: "digest-1", results: [] });
+        }
+        if (url === "/api/sources") return okJson({ tables: [] });
+        return notFound(url);
+      })
+    );
+
+    renderWorkbench();
+
+    await waitFor(() =>
+      expect(screen.getByTestId("workbench-pending-count")).toHaveTextContent("3 个待同步文件")
+    );
+    expect(screen.getByTestId("workbench-pending-group-semantic")).toHaveTextContent(
+      "语义资产 · 1"
+    );
+    expect(screen.getByTestId("workbench-pending-group-manifest")).toHaveTextContent(
+      "Schema Manifest · 1"
+    );
+    expect(screen.getByTestId("workbench-pending-group-wiki")).toHaveTextContent("业务 Wiki · 1");
+  });
+
+  it("does not render the empty state and offers no publish action when the pending request fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/diff") {
+          return new Response(
+            JSON.stringify({
+              ok: false,
+              error: { code: "INTERNAL_ERROR", message: "读取待发布变更失败" }
+            }),
+            { status: 500 }
+          );
+        }
+        return notFound(url);
+      })
+    );
+
+    renderWorkbench();
+
+    const error = await screen.findByTestId("workbench-pending-error");
+    expect(error).toHaveTextContent("变更加载失败");
+    expect(error).toHaveTextContent("读取待发布变更失败");
+    // A failed pending request must NOT look like "there is nothing to publish".
+    expect(screen.queryByTestId("workbench-empty-state")).not.toBeInTheDocument();
+    expect(screen.queryByText("暂无待同步变更")).not.toBeInTheDocument();
+    // The publish action is not offered while the pending range is unknown.
+    expect(screen.queryByTestId("workbench-publish-and-reindex")).not.toBeInTheDocument();
+  });
+
+  it("keeps the submission blocked when the pending request fails after a successful load", async () => {
+    let diffCalls = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url === "/api/diff") {
+          diffCalls += 1;
+          if (diffCalls === 1) {
+            return okJson({
+              files: [
+                {
+                  filePath: "semantic-layer/mysql-aliyun/superstore_orders.yaml",
+                  status: "modified",
+                  diff: "+ diff"
+                }
+              ],
+              pendingDigest: "digest-1",
+              baselineState: "ready"
+            });
+          }
+          return new Response(
+            JSON.stringify({
+              ok: false,
+              error: { code: "INTERNAL_ERROR", message: "读取待发布变更失败" }
+            }),
+            { status: 500 }
+          );
+        }
+        if (url === "/api/validate-changed" && init?.method === "POST") {
+          return okJson({
+            pendingDigest: "digest-1",
+            baselineState: "ready",
+            results: [
+              {
+                conn: "mysql-aliyun",
+                schema: "dataforai",
+                table: "superstore_orders",
+                validation: { ok: true, exitCode: 0, stdout: "", stderr: "" }
+              }
+            ]
+          });
+        }
+        if (url === "/api/sources") return okJson({ tables: [] });
+        return notFound(url);
+      })
+    );
+
+    renderWorkbench();
+
+    await waitFor(() =>
+      expect(screen.getByTestId("workbench-publish-and-reindex")).toHaveAttribute(
+        "data-gate",
+        "ready"
+      )
+    );
+
+    fireEvent.click(screen.getByTestId("workbench-refresh"));
+
+    expect(await screen.findByTestId("workbench-pending-error")).toHaveTextContent(
+      "变更加载失败"
+    );
+    expect(screen.queryByTestId("workbench-empty-state")).not.toBeInTheDocument();
+
+    // The confirmation stays bound to the failed pending range: it cannot be submitted.
+    fireEvent.click(screen.getByTestId("workbench-publish-and-reindex"));
+    const drawer = await screen.findByTestId("publish-sync-confirm-panel");
+    expect(within(drawer).getByTestId("publish-sync-confirm-submit")).toBeDisabled();
+    expect(within(drawer).getByTestId("publish-sync-confirm-blocked-reason")).toHaveTextContent(
+      "待发布变更加载失败，无法提交。"
+    );
+  });
+
+  it("marks a stale validation as stale and keeps the publish CTA disabled (PWB-05)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url === "/api/diff") {
+          return okJson({
+            files: [
+              {
+                filePath: "semantic-layer/mysql-aliyun/superstore_orders.yaml",
+                status: "modified",
+                diff: "+ diff"
+              }
+            ],
+            // The CURRENT content version.
+            pendingDigest: "digest-new",
+            baselineState: "ready"
+          });
+        }
+        if (url === "/api/validate-changed" && init?.method === "POST") {
+          return okJson({
+            // An OLDER content version — the late answer must not win.
+            pendingDigest: "digest-old",
+            baselineState: "ready",
+            results: [
+              {
+                conn: "mysql-aliyun",
+                schema: "dataforai",
+                table: "superstore_orders",
+                validation: { ok: true, exitCode: 0, stdout: "", stderr: "" }
+              }
+            ]
+          });
+        }
+        if (url === "/api/sources") return okJson({ tables: [] });
+        return notFound(url);
+      })
+    );
+
+    renderWorkbench();
+
+    expect(await screen.findByTestId("workbench-validation-stale")).toHaveTextContent(
+      "待发布内容已变化"
+    );
+    const cta = screen.getByTestId("workbench-publish-and-reindex");
+    expect(cta).toBeDisabled();
+    expect(cta).toHaveAttribute("data-gate", "stale");
+    expect(screen.getByTestId("publish-gate-next-step")).toHaveTextContent("重新校验");
+    expect(screen.getByTestId("publish-change-impact")).toHaveAttribute(
+      "data-impact-state",
+      "stale"
+    );
+  });
+
+  it("keeps the loaded pending list visible while refreshing", async () => {
+    let diffCalls = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url === "/api/diff") {
+          diffCalls += 1;
+          if (diffCalls === 1) {
+            return okJson({
+              files: [
+                {
+                  filePath: "semantic-layer/mysql-aliyun/superstore_orders.yaml",
+                  status: "modified",
+                  diff: "+ diff"
+                }
+              ],
+              pendingDigest: "digest-1",
+              baselineState: "ready"
+            });
+          }
+          // The refresh never settles — the page must keep the loaded data.
+          return new Promise<Response>(() => {});
+        }
+        if (url === "/api/validate-changed" && init?.method === "POST") {
+          return okJson({
+            pendingDigest: "digest-1",
+            baselineState: "ready",
+            results: [
+              {
+                conn: "mysql-aliyun",
+                schema: "dataforai",
+                table: "superstore_orders",
+                validation: { ok: true, exitCode: 0, stdout: "", stderr: "" }
+              }
+            ]
+          });
+        }
+        if (url === "/api/sources") return okJson({ tables: [] });
+        return notFound(url);
+      })
+    );
+
+    renderWorkbench();
+
+    await waitFor(() =>
+      expect(screen.getByTestId("workbench-pending-count")).toHaveTextContent("1 个待同步文件")
+    );
+
+    fireEvent.click(screen.getByTestId("workbench-refresh"));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("workbench-refresh")).toHaveTextContent("刷新中…")
+    );
+    // The already loaded data stays on screen — no full-page overlay, no empty state.
+    expect(screen.getByTestId("workbench-pending-groups")).toBeInTheDocument();
+    expect(screen.getByTestId("workbench-pending-count")).toHaveTextContent("1 个待同步文件");
+    expect(screen.getByTestId("publish-gate-panel")).toBeInTheDocument();
+    expect(screen.queryByTestId("workbench-empty-state")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("workbench-pending-error")).not.toBeInTheDocument();
+  });
+
+  it("degrades gracefully when the diff response carries no pendingDigest and no impact", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url === "/api/diff") {
+          return okJson({
+            files: [
+              {
+                filePath: "semantic-layer/mysql-aliyun/superstore_orders.yaml",
+                status: "modified",
+                diff: "+ diff"
+              }
+            ]
+          });
+        }
+        if (url === "/api/validate-changed" && init?.method === "POST") {
+          return okJson({
+            results: [
+              {
+                conn: "mysql-aliyun",
+                schema: "dataforai",
+                table: "superstore_orders",
+                validation: { ok: true, exitCode: 0, stdout: "", stderr: "" }
+              }
+            ]
+          });
+        }
+        if (url === "/api/sources") return okJson({ tables: [] });
+        return notFound(url);
+      })
+    );
+
+    renderWorkbench();
+
+    await waitFor(() =>
+      expect(screen.getByTestId("workbench-publish-and-reindex")).toHaveAttribute(
+        "data-gate",
+        "ready"
+      )
+    );
+    expect(screen.getByTestId("workbench-publish-and-reindex")).not.toBeDisabled();
+    // Without a server impact the page falls back to the file-derived table list.
+    expect(screen.getByTestId("publish-change-impact-list")).toHaveTextContent(
+      "superstore_orders"
+    );
+    expect(screen.queryByTestId("workbench-validation-stale")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("workbench-pending-error")).not.toBeInTheDocument();
   });
 });

@@ -1853,6 +1853,21 @@
   .pl-diff-stat--add { @apply text-success-strong bg-success-soft/60; }
   .pl-diff-stat--del { @apply text-danger-strong bg-danger-soft/60; }
 
+  /* 发布工作台三栏（Spec 20261030 §4 / §4.5.2）——
+     只作用于 /publish/workbench 本页：不修改共享的 .pl-review-layout 或
+     .pl-drawer-panel，其它页面不会跟随变化。确认侧栏的宽度由组件内联给出，
+     避免把「宽确认侧栏」变成全局抽屉规则。 */
+  .pl-publish-workbench-layout { @apply grid items-stretch gap-4; grid-template-columns: minmax(260px, 4fr) minmax(0, 5fr) minmax(240px, 3fr); }
+  .pl-publish-workbench-column { @apply min-w-0 rounded-md border border-border-default bg-bg-surface p-4; }
+  .pl-publish-workbench-column--pending { @apply flex flex-col gap-3; }
+  .pl-publish-workbench-pending-list { @apply grid gap-1.5 overflow-y-auto pr-1; max-height: 62vh; }
+  .pl-publish-workbench-group { @apply grid gap-1.5; }
+  .pl-publish-workbench-group-title { @apply text-xs text-fg-muted; }
+  .pl-publish-workbench-identity { @apply break-all text-sm; }
+  .pl-publish-workbench-reason { @apply text-sm text-fg-body; }
+  .pl-publish-workbench-recent-list { @apply grid gap-2; }
+  .pl-publish-workbench-recent-item { @apply grid gap-1 rounded-md border border-border-default/60 bg-bg-base/40 px-2.5 py-2 text-sm; }
+
   /* 流水线状态机 Stepper */
   .pl-pipeline-stepper { @apply grid grid-cols-[1fr_auto_1fr_auto_1fr] items-center gap-2 rounded-lg border border-border-default bg-bg-base/60 p-3 list-none m-0; }
   .pl-pipeline-step { @apply flex items-center gap-2.5 min-w-0; }

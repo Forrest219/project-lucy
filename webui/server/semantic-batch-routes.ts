@@ -44,6 +44,8 @@ import {
   buildSemanticBatchAuditRecord
 } from "./semantic-batch-audit.js";
 import { recordConfigChange } from "./admin/audit.js";
+import { readPublishPendingSnapshot } from "./publish-workbench-state.js";
+import { buildPublishImpact } from "./publish-impact.js";
 import {
   describeSemanticBatchPlan,
   SemanticAssetValidationError
@@ -356,7 +358,16 @@ export function registerSemanticBatchRoutes(app: FastifyInstance): void {
         request.params.validationId,
         { actor, instanceId }
       );
-      return reply.send({ ok: true, data: plan });
+      // Spec §6 — the plan carries the SAME impact model the workbench's
+      // confirm side panel uses, so a staged batch and a plain disk sync
+      // explain their scope with one set of rules.
+      const pending = await readPublishPendingSnapshot(projectRoot);
+      const impact = await buildPublishImpact({
+        projectRoot,
+        snapshot: pending,
+        planDigest: plan.planDigest
+      });
+      return reply.send({ ok: true, data: { ...plan, impact } });
     } catch (error) {
       if (error instanceof SemanticAssetValidationError) {
         reply.status(error.statusCode);

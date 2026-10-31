@@ -476,6 +476,103 @@ export type ChangedFilesResponse = {
   /** Semantic YAML present only in the ktx mirror (Spec 180). Empty when there is no separate mirror. */
   mirrorOnlySemanticFiles?: string[];
   mirrorDriftTruncated?: boolean;
+  /**
+   * Spec `lucy-20261030-publish-workbench-three-column-spec.md` §6 — the
+   * version of the content snapshot this list was derived from. The list, the
+   * validation, the confirmation and the submission all reference it.
+   */
+  pendingDigest?: string;
+  /** Whether the proven-consumed baseline is usable, absent, or needs a check. */
+  baselineState?: PublishBaselineState;
+  /** The monotonic baseline generation this snapshot was taken against. */
+  baselineGeneration?: number;
+  /** The server-computed impact of this batch — never re-derived in the browser. */
+  impact?: PublishImpact;
+};
+
+/**
+ * Spec `lucy-20261030-publish-workbench-three-column-spec.md` §5.1.
+ *
+ * - `ready`: a proven baseline exists and the pending range is trustworthy.
+ * - `uninitialized`: there is no baseline yet. The current content is pending
+ *   as a FIRST VERIFICATION — never as "already published".
+ * - `needs_verification`: the baseline is damaged or bound to another content
+ *   root. The range cannot be submitted until it is resolved.
+ */
+export type PublishBaselineState = "ready" | "uninitialized" | "needs_verification";
+
+export type PublishImpactReasonKind =
+  | "overlay_change"
+  | "manifest_table_change"
+  | "first_verification";
+
+/** How the table entered this batch — not a business motive, not a modifier's intent. */
+export type PublishImpactSource = "staged_candidate" | "pending_disk_change";
+
+export type PublishImpactReason = {
+  kind: PublishImpactReasonKind;
+  /** Evidence-supported reason for including this table. */
+  summary: string;
+  source: PublishImpactSource;
+  /** The logical, content-root relative path the reason comes from. */
+  filePath: string;
+  /** A server-constrained reference into the SAME snapshot. */
+  evidenceRef: string;
+};
+
+export type PublishImpactTable = {
+  identity: SemanticTableIdentity;
+  reasons: PublishImpactReason[];
+};
+
+export type PublishImpactWikiChange = {
+  filePath: string;
+  title?: string;
+  changeType: string;
+};
+
+export type PublishImpactSchemaChange = {
+  connectionId: string;
+  schema: string;
+  evidenceRef: string;
+};
+
+export type PublishImpactRelatedScope = {
+  identity: SemanticTableIdentity;
+  relationKind: string;
+  evidenceRef: string;
+};
+
+export type PublishImpactOtherChange = {
+  filePath: string;
+  changeType: string;
+};
+
+export type PublishImpactUnresolved = {
+  filePath: string;
+  reason: string;
+  /** True when the missing evidence makes the synced range unknowable. */
+  blocking: boolean;
+};
+
+export type PublishImpact = {
+  pendingDigest: string;
+  planDigest?: string;
+  /** False when the synced range could not be fully resolved. */
+  complete: boolean;
+  counts: { files: number; tables: number; manifests: number; wikiPages: number };
+  tables: PublishImpactTable[];
+  wikiChanges: PublishImpactWikiChange[];
+  schemaChanges: PublishImpactSchemaChange[];
+  relatedScope: PublishImpactRelatedScope[];
+  otherChanges: PublishImpactOtherChange[];
+  unresolved: PublishImpactUnresolved[];
+};
+
+export type PublishEvidenceResponse = {
+  kind: "diff" | "snapshot" | "baseline";
+  logicalPath: string;
+  content: string;
 };
 
 export type ValidateChangedResponse = {
@@ -485,6 +582,9 @@ export type ValidateChangedResponse = {
     table: string;
     validation: ValidationResult;
   }>;
+  /** The content version this validation was derived from. */
+  pendingDigest?: string;
+  baselineState?: PublishBaselineState;
 };
 
 export type WikiFrontmatter = {
@@ -2635,6 +2735,12 @@ export type SemanticBatchPlanResponse = {
   effectiveTargets: string[];
   dependencies: SemanticTableIdentity[];
   readonlyDependencies: SemanticTableIdentity[];
+  /**
+   * Spec `lucy-20261030-publish-workbench-three-column-spec.md` §6 — the
+   * staged batch carries the SAME impact model the regular sync uses, so the
+   * confirm side panel explains both with one set of rules.
+   */
+  impact?: PublishImpact;
 };
 
 /** The staged state of an imported maintenance package (L25-11 §5 / §7.2). */
@@ -2664,6 +2770,10 @@ export type SemanticAssetManualReindexResponse = {
   startedAt: string;
   finishedAt: string;
   reindex: SemanticAssetReindexRecord;
+  /** The content version after the sync — the workbench refreshes from it. */
+  pendingDigest?: string;
+  baselineState?: PublishBaselineState;
+  baselineGeneration?: number;
 };
 
 export type SemanticAssetExportRequest = {

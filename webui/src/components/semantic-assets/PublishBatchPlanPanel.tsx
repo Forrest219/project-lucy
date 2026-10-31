@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { apiGet } from "../../lib/apiClient";
 import { publishSemanticAssets } from "../../lib/semantic-assets";
 import { queryKeys } from "../../lib/queryKeys";
+import { PublishImpactReview } from "./PublishImpactReview";
 import type { SemanticAssetReleaseRecord, SemanticBatchPlanResponse } from "../../lib/types";
 
 /**
@@ -201,6 +202,14 @@ export function PublishBatchPlanPanel(props: PublishBatchPlanPanelProps) {
                 <span className="notranslate" translate="no">{plan.planDigest.slice(0, 16)}</span>；
                 预览后计划若发生变化，本次确认自动失效。
               </p>
+              {/* Spec §4.5 — the staged batch explains its scope with the SAME
+                  impact model the regular sync uses. The plan digest and the
+                  overwrite confirmation stay as they are. */}
+              {plan.impact ? (
+                <div data-testid="workbench-batch-impact-review">
+                  <PublishImpactReview impact={plan.impact} />
+                </div>
+              ) : null}
             </section>
             <footer className="pl-drawer-footer">
               <button className="pl-btn pl-btn--ghost" onClick={() => setConfirmOpen(false)}>

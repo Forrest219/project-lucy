@@ -47,6 +47,15 @@ export const queryKeys = {
     ["catalog", "schema-manifest", connId, schema] as const,
   // M19 self-service publish and sanitized export.
   semanticAssetReleases: ["semantic-assets", "releases"] as const,
+  /**
+   * Spec 20261030 §6 — the workbench's "最近发布" summary is a DIFFERENT query
+   * from the full history page: it filters the maintenance runs on the server
+   * and takes only the newest five business batches. The filter is part of the
+   * cache key, so a filtered summary can never serve an unfiltered result.
+   * It stays under `semanticAssetReleases`, so one invalidation clears both.
+   */
+  semanticAssetRecentReleases: (businessChangesOnly: boolean) =>
+    ["semantic-assets", "releases", "recent", { businessChangesOnly }] as const,
   semanticAssetRelease: (releaseId: string) =>
     ["semantic-assets", "releases", releaseId] as const,
   // Spec 144 read-only 业务 Skill assets (`GET /api/skills`).

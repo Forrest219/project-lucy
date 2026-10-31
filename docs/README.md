@@ -95,6 +95,7 @@
 | `reviews/review-module1-agent-permissions.md` | **跳转桩** → `access-control/review-agent-permissions-v1.md` |
 | `reviews/review-module2-eval-monitoring.md` | Module 2 Eval 配置与监控代码审查 |
 | [reviews/2026-10-30-question-budget-implementation-evidence.md](reviews/2026-10-30-question-budget-implementation-evidence.md) | **修订 Spec 162 的实现记录（2026-10-30）**：波次 A–H 的代码落点、自动化用例、跑过的命令与回退开关。逐条记录见 [验收表](reviews/2026-10-30-question-budget-acceptance.md)。SC-04 有进程内 MCP 自动化，不是操作系统或容器重启 |
+| [reviews/2026-10-31-publish-workbench-three-column-delivery.md](reviews/2026-10-31-publish-workbench-three-column-delivery.md) | **发布工作台三栏交付报告（2026-10-31）**：PWB-01–26 逐条结论与证据来源、各阶段 RED/GREEN 命令、文件清单与边界核对。**部分完成**：17 项通过、9 项部分通过（缺专项用例或未做浏览器实测）、0 项因终态保障缺失而阻断。S0 裁决：现有发布窗口已把终态核验、终态审计与基线推进放在同一串行窗口内，基线 CAS 只接进既有窗口；**未恢复、未关闭 G31**。未做浏览器走查、镜像构建、部署与提交 |
 | `reviews/review-ktx-llm-switch-to-minimax.md` | KTX LLM Backend 切换 Claude Code → MiniMax 结论 |
 | `reviews/2026-10-21-customer-20260828-v1-to-lucy-2.0-upgrade-plan-review.md` | **已作废**：v0.2 计划的评审过程稿，不得执行。结论已纳入计划 v0.3 |
 | `reviews/2026-10-21-customer-20260828-v1-to-lucy-2.0-upgrade-plan-review-crosscheck.md` | **已作废**：上述评审的交叉验证过程稿，不得执行。结论已纳入计划 v0.3 |

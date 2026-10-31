@@ -566,7 +566,7 @@ measures:
     expect(csvRes.headers["content-disposition"]).toMatch(/publish-history-\d{8}-\d{6}\.csv/);
     const csv = String(csvRes.text);
     expect(csv.split("\n")[0]).toBe(
-      "序号,发布时间,发布状态,触发方式,操作人,变更范围,规模,Reindex 状态,发布 ID"
+      "序号,发布时间,发布状态,触发方式,操作人,变更范围,规模,重建索引状态,发布 ID"
     );
     expect(csv).toContain("WebUI 强制重建索引");
     expect(csv).toContain("idx_fail");

@@ -299,7 +299,7 @@ Spec 190 §7.9 — 库内表清单与持续感知的最小展示。
 
 | Test ID | 元素 | 文案约束 |
 |---|---|---|
-| `publish-workbench-layout` | 整体 layout | 桌面双列、窄屏单列 |
+| `publish-workbench-layout` | 整体 layout | 桌面三列（待发布变更 / 生效准备 / 最近发布），比例 4/5/3；窄屏单列 |
 | `workbench-empty-state` | 空态 | 必含 `暂无待同步变更` |
 | `workbench-batch-sync-hint` | 有待同步变更时的批量同步提示（已替代移除的 `workbench-pending-count` Badge） | 仅 `files.length > 0` 时出现；必含 `本批一并同步 N 项` |
 | `workbench-validate` | `校验变更` | 禁止 `Validate changed` |
@@ -309,6 +309,15 @@ Spec 190 §7.9 — 库内表清单与持续感知的最小展示。
 | `workbench-reindex-result` | reindex 成功结果 | 必含 `退出码 0` |
 | `workbench-reindex-error` | reindex 失败 | 必含 `stdout` `stderr` |
 | `review-boundary-checklist` | 边界说明卡 | — |
+| `workbench-pending-count` | 左栏待同步文件数 | 必含 `N 个待同步文件`；不得用校验通过数代替 |
+| `workbench-pending-groups` | 左栏分组容器 | 按语义资产 / Schema Manifest / 业务 Wiki 分组 |
+| `workbench-pending-group-${group.id}` | 单个分组（模板） | 组标题保留该组总数 |
+| `workbench-pending-error` | 待办加载失败 | 必含 `变更加载失败`；**不得**同时出现 `暂无待同步变更` |
+| `workbench-baseline-needs-verification` | 基线待核对提示 | 必含 `生效状态待核验` |
+| `workbench-recent-panel` | 右栏容器 | 承载最近发布 |
+| `workbench-refresh` | 页头刷新按钮 | 刷新期间保留已展示数据并标注更新中 |
+| `publish-primary-actions` | 中栏发布动作区 | 全页唯一的发布主动作在此；页头不得重复 |
+| `workbench-validation-stale` | 旧校验失效提示 | 必含 `已变化`；此时发布按钮不得可用 |
 
 ### 6.2 PublishHistory.tsx
 
@@ -371,6 +380,92 @@ L25-15 整批恢复抽屉。三个分区各自独立，不合并成一句「同�
 | `restore-preview-semantic-deletion` | 恢复后从模型中消失的表 | — |
 | `restore-preview-readback` | 删除方向读回预期 | — |
 | `restore-release-confirm` | 确认恢复按钮 | 唯一 primary；禁用时给出「重新预检」入口 |
+
+### 6.6 发布工作台三栏组件（Spec 20261030 三栏）
+
+#### 6.6.1 PublishRecentReleases.tsx
+
+| Test ID | 元素 | 文案约束 |
+|---|---|---|
+| `publish-recent-releases` | 右栏最近发布区 | 标题必含 `最近发布`；**禁止** `已生效` 作栏标题 |
+| `publish-recent-releases-loading` | 加载态 | 不得宣布空态 |
+| `publish-recent-releases-error` | 加载失败 | 必含可读错误并提供重试 |
+| `publish-recent-releases-retry` | 重试按钮 | — |
+| `publish-recent-releases-empty` | 空态 | 必含 `暂无发布记录` |
+| `publish-recent-releases-list` | 批次列表 | 服务端已按 `businessChangesOnly` 过滤并限 5 条 |
+| `publish-recent-release` | 单个批次 | 技术 ID 为次级信息 |
+| `publish-recent-release-activation` | 批次的生效证据 | 未确认的记录**不得**呈现为 `已生效` |
+
+#### 6.6.2 PublishImpactReview.tsx
+
+| Test ID | 元素 | 文案约束 |
+|---|---|---|
+| `publish-impact-review` | 影响审阅根 | 常规同步与 staged 批次共用 |
+| `publish-impact-summary` | 范围摘要 | 必含 `涉及表 N 张` / `Schema Manifest M 个` / `业务 Wiki W 篇` / `待同步文件 F 个` |
+| `publish-impact-incomplete` | 范围不完整提示 | 必含 `影响范围未完整解析`；此时禁用提交 |
+| `publish-impact-blocking-reasons` | 阻断原因列表 | 逐条列出缺什么证据 |
+| `publish-impact-tables` | 涉及的表分区 | 标题必含 `涉及的表` |
+| `publish-impact-table-count` | 展示计数 | 必含 `当前显示 X / 共 N 张` |
+| `publish-impact-search` | 搜索框 | placeholder `按表名或原因搜索` |
+| `publish-impact-filter-note` | 搜索/折叠说明 | 必含 `仍会同步全部范围`；搜索**不得**缩小提交范围 |
+| `publish-impact-no-match` | 搜索无结果 | 必含 `没有匹配的表` |
+| `publish-impact-group` | 连接/Schema 分组 | 组标题保留该组总数 |
+| `publish-impact-group-toggle` | 分组折叠按钮（模板） | 折叠只影响展示 |
+| `publish-impact-table` | 单张表条目（模板） | 完整表身份 + 逐表原因 + 变更来源；**禁止**静默截断前 8 项 |
+| `publish-impact-reasons` | 该表的全部原因 | 同表多原因合并计数，总表数只算一次 |
+| `publish-impact-evidence-toggle` | 证据展开控件 | 文案 `展开变更证据` / `收起变更证据` |
+| `publish-impact-evidence-area` | 证据容器 | 就地展开，不叠加第二个抽屉 |
+| `publish-impact-evidence-loading` | 证据加载中 | 必含 `正在加载证据` |
+| `publish-impact-evidence-error` | 证据加载失败 | 必含 `证据加载失败` 并提供重试 |
+| `publish-impact-evidence-retry` | 证据重试按钮 | — |
+| `publish-impact-evidence` | 证据正文 | 同版本证据引用 |
+| `publish-impact-unresolved-blocking` | 影响范围待核对的阻断项 | 标题必含 `影响范围待核对` |
+| `publish-impact-wiki` | 业务 Wiki 分区 | 标题必含 `业务 Wiki`；与表影响分区 |
+| `publish-impact-wiki-rows` | 业务 Wiki 明细行 | — |
+| `publish-impact-schema-changes` | Schema 级变更分区 | 标题必含 `Schema 级变更`；不计入「涉及的表」 |
+| `publish-impact-schema-changes-rows` | Schema 级变更明细行 | — |
+| `publish-impact-related-scope` | 关联与校验范围分区 | 标题必含 `关联与校验范围`；不计入「涉及的表」 |
+| `publish-impact-related-scope-rows` | 关联与校验范围明细行 | — |
+| `publish-impact-other-changes` | 其它内容分区 | 不计入「涉及的表」 |
+| `publish-impact-other-changes-rows` | 其它内容明细行 | — |
+| `publish-impact-unresolved` | 影响范围待核对分区 | 标题必含 `影响范围待核对` |
+| `publish-impact-unresolved-rows` | 影响范围待核对明细行 | — |
+| `${testId}-rows` | 明细分区行容器（模板） | 对应各分区；实现见 `PublishImpactReview.tsx` |
+
+#### 6.6.3 PublishSyncConfirmDrawer.tsx
+
+| Test ID | 元素 | 文案约束 |
+|---|---|---|
+| `publish-sync-confirm-backdrop` | 遮罩 | — |
+| `publish-sync-confirm-panel` | 确认侧栏 | 标题必含 `确认同步索引并生效`；本页限定宽度 880px / 最大 960px |
+| `publish-sync-confirm-title` | 侧栏标题 | 打开时焦点落在此处 |
+| `publish-sync-confirm-close` | 关闭按钮 | — |
+| `publish-sync-confirm-body` | 唯一纵向滚动区 | 页头页脚固定；不得整体滚动 |
+| `publish-sync-confirm-error` | 提交失败 | 失败时侧栏**保持打开**并保留已核对内容 |
+| `publish-sync-confirm-digest` | 绑定的内容版本 | 次级信息 |
+| `publish-sync-confirm-pending` | 影响范围未就绪 | 必含 `正在解析影响范围` |
+| `publish-sync-confirm-cancel` | 取消按钮 | — |
+| `publish-sync-confirm-blocked-reason` | 阻断原因 | 禁用提交时必须给出可读原因 |
+| `publish-sync-confirm-submit` | 主按钮 | 文案 `同步索引并生效`；唯一 primary |
+
+#### 6.6.4 PublishBatchPlanPanel.tsx 的本轮新增
+
+| Test ID | 元素 | 文案约束 |
+|---|---|---|
+| `workbench-batch-impact-review` | staged 批次的影响审阅 | 复用 `publish-impact-review`；保留原计划摘要与覆盖确认 |
+| `workbench-batch-plan` | 批次计划根 | — |
+| `workbench-batch-plan-digest` | 计划摘要 | 次级信息 |
+| `workbench-batch-plan-loading` | 计划加载中 | — |
+| `workbench-batch-plan-error` | 计划加载失败 | — |
+| `workbench-batch-plan-summary` | 计划范围摘要 | 必含「整批同步」口径 |
+| `workbench-batch-candidates` | 本次导入候选 | — |
+| `workbench-batch-disk-changes` | 既有待同步磁盘变更 | — |
+| `workbench-batch-overwrite` | 覆盖确认提示 | — |
+| `workbench-batch-confirm` | 确认计划按钮 | — |
+| `workbench-batch-refresh` | 重新预览按钮 | — |
+| `workbench-batch-confirm-drawer` | 确认计划抽屉 | — |
+| `workbench-batch-confirm-summary` | 确认计划摘要 | — |
+| `workbench-batch-confirm-submit` | 确认计划主按钮 | — |
 
 ## 7. 其它（与 E2E 弱相关但已存在）
 
@@ -1021,9 +1116,6 @@ L25-15 整批恢复抽屉。三个分区各自独立，不合并成一句「同�
 | `publish-post-eval-blocked` | publish-post-eval-blocked | `pages/publish/PublishWorkbench.tsx` |
 | `workbench-change-detail-drawer` | workbench-change-detail-drawer | `pages/publish/PublishWorkbench.tsx` |
 | `workbench-file-status` | workbench-file-status | `pages/publish/PublishWorkbench.tsx` |
-| `workbench-publish-confirm-drawer` | workbench-publish-confirm-drawer | `pages/publish/PublishWorkbench.tsx` |
-| `workbench-publish-confirm-summary` | workbench-publish-confirm-summary | `pages/publish/PublishWorkbench.tsx` |
-| `workbench-publish-confirm-submit` | workbench-publish-confirm-submit | `pages/publish/PublishWorkbench.tsx` |
 | `nav-link-${topLevelEntry.id}` | nav-link-${topLevelEntry.id} (template) | `app/App.tsx` |
 | `nav-group-${group.id}` | nav-group-${group.id} (template) | `app/App.tsx` |
 | `nav-group-toggle-${group.id}` | nav-group-toggle-${group.id} (template) | `app/App.tsx` |
