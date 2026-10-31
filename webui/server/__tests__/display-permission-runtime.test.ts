@@ -1,3 +1,4 @@
+import { realpathSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -5,7 +6,7 @@ import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildServer } from "../index";
 import { beginDisplayWrite, endDisplayWrite, resetDisplayGenerationsForTests } from "../display-generation";
-import { displaySnapshotDiagnostics, resetDisplaySnapshotsForTests, startDisplayReconciler, stopDisplayReconciler } from "../display-snapshot";
+import { displaySnapshotDiagnostics, reconcileMetadata, resetDisplaySnapshotsForTests, startDisplayReconciler, stopDisplayReconciler } from "../display-snapshot";
 import { invalidateContentPathsCache } from "../paths";
 import { invalidateAccessConfigCache } from "../proxy/identity";
 import { commitEffectivePolicy, getPolicyRuntimeStatus, resetEffectivePolicyForTests } from "../proxy/acl";
@@ -15,6 +16,36 @@ const statsGate = vi.hoisted(() => ({
   entered: null as (() => void) | null,
   wait: null as Promise<void> | null
 }));
+/** Spec 195 §6 / SI-07 — simulate unreadable files and unreadable directories. */
+const fsGate = vi.hoisted(() => ({
+  blockedFiles: new Set<string>(),
+  blockedDirs: new Set<string>()
+}));
+vi.mock("node:fs/promises", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs/promises")>();
+  const key = (value: unknown): string => String(value);
+  return {
+    ...actual,
+    stat: async (file: unknown, options?: unknown) => {
+      if (fsGate.blockedFiles.has(key(file))) {
+        throw Object.assign(new Error(`EACCES: permission denied, stat '${key(file)}'`), { code: "EACCES" });
+      }
+      return (actual.stat as (f: unknown, o?: unknown) => Promise<unknown>)(file, options);
+    },
+    readFile: async (file: unknown, options?: unknown) => {
+      if (fsGate.blockedFiles.has(key(file))) {
+        throw Object.assign(new Error(`EACCES: permission denied, open '${key(file)}'`), { code: "EACCES" });
+      }
+      return (actual.readFile as (f: unknown, o?: unknown) => Promise<unknown>)(file, options);
+    },
+    readdir: async (dir: unknown, options?: unknown) => {
+      if (fsGate.blockedDirs.has(key(dir))) {
+        throw Object.assign(new Error(`EACCES: permission denied, scandir '${key(dir)}'`), { code: "EACCES" });
+      }
+      return (actual.readdir as (d: unknown, o?: unknown) => Promise<unknown>)(dir, options);
+    }
+  };
+});
 vi.mock("../admin/audit.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../admin/audit.js")>();
   return { ...actual, getAuditDb: async (...args: Parameters<typeof actual.getAuditDb>) => {
@@ -226,4 +257,84 @@ describe("Spec 174 R3 — runtimeConsistency follows the runtime policy (SC-17)"
     await agents();
     expect(getPolicyRuntimeStatus().policyVersion).toBe("");
   });
+});
+
+/**
+ * Spec 195 §4 / §6 / SI-07 — the permission display depends on P/C only, so a
+ * broken overlay file cannot take the Agent list down with it. A semantic
+ * layer that cannot be enumerated may hide a Manifest, so it must block P too.
+ */
+describe("Spec 195 SI-07 — verification health is isolated per dependency scope", () => {
+  // The reconciler keys watched files by their canonical id.
+  const overlayPath = () => realpathSync(path.join(projectRoot, "semantic-layer", "warehouse", "fin_ledger.yaml"));
+  const semanticLayerDir = () => realpathSync(path.join(projectRoot, "semantic-layer"));
+
+  beforeEach(async () => {
+    await writeFile(path.join(projectRoot, "semantic-layer", "warehouse", "fin_ledger.yaml"), "grain: [id]\n", "utf8");
+    await reconcileMetadata();
+  });
+
+  afterEach(() => {
+    fsGate.blockedFiles.clear();
+    fsGate.blockedDirs.clear();
+  });
+
+  it("an unreadable overlay fails the semantic display while the Agent list keeps working", async () => {
+    await sources();
+    await agents();
+
+    fsGate.blockedFiles.add(overlayPath());
+    await reconcileMetadata();
+
+    const busy = await request(app.server).get("/api/sources");
+    expect(busy.status).toBe(503);
+    expect(busy.body.error.code).toBe("DISPLAY_SNAPSHOT_BUSY");
+
+    const list = await request(app.server).get("/api/admin/agents");
+    expect(list.status).toBe(200);
+    expect(list.body.data.agents.length).toBeGreaterThan(0);
+  });
+
+  it("a semantic layer that cannot be enumerated also blocks the Agent list", async () => {
+    await sources();
+    await agents();
+
+    fsGate.blockedDirs.add(semanticLayerDir());
+    await reconcileMetadata();
+
+    for (const url of ["/api/sources", "/api/admin/agents"]) {
+      const busy = await request(app.server).get(url);
+      expect(busy.status).toBe(503);
+      expect(busy.body.error.code).toBe("DISPLAY_SNAPSHOT_BUSY");
+    }
+  });
+
+  /**
+   * Spec 195 §4 / SI-11 — a P change while the dynamic statistics are read
+   * must not splice the old permissions into the new statistics.
+   */
+  it("SI-11 a permission change during the statistics wait rejects the old permission result", async () => {
+    await agents();
+    let release!: () => void;
+    const entered = new Promise<void>((resolve) => { statsGate.entered = resolve; });
+    statsGate.wait = new Promise<void>((resolve) => { release = resolve; });
+    const pending = agents();
+    try {
+      await entered;
+      // The access file changes while the statistics are still being read.
+      const token = beginDisplayWrite(["P"]);
+      await writeFile(accessPath(), ACCESS.replace("name: Zhang San", "name: Zhang San 9"), "utf8");
+      endDisplayWrite(token);
+      release();
+      const response = await pending;
+      const zhangsan = (response.agents as Array<{ id: string; name?: string }>).find((a) => a.id === "zhangsan");
+      // The whole list was rebuilt — never the old permissions with new state.
+      expect(zhangsan?.name).toBe("Zhang San 9");
+    } finally {
+      release();
+      statsGate.wait = null;
+      statsGate.entered = null;
+      await pending;
+    }
+  }, 20_000);
 });

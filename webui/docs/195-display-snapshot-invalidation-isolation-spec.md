@@ -4,7 +4,7 @@
 |---|---|
 | 版本 | v0.1 |
 | 日期 | 2026-10-30 |
-| 状态 | 修复方向已由用户确认；本轮仅落盘 Spec / Plan；实现未开始，验收未执行 |
+| 状态 | **实现已完成（WO Task 1–6）；SI-01–SI-13 已执行并通过；SI-14 浏览器往返见 §8.1**。未构建镜像、未部署、未改现场实例、未提交 git |
 | 重点 | 同一次已确认变更不重复触发缓存失效；普通 overlay 修改不牵连 Agent 权限展示 |
 | 范围 | Lucy 单进程内的展示快照、文件对账、显示写屏障与刷新状态提示 |
 | 上游契约 | [Spec 174](174-webui-entry-performance-spec.md) §3.2 / §4.2 / §7 / §8 |
@@ -209,6 +209,31 @@ Agent 与语义资产保留已有数据、滚动和筛选。已有数据的刷�
 | SI-14 | 匿名代表性夹具中：预热后完成 30 组侧栏 Agent ↔ 角色权限 / 语义资产 / 配置审计往返，含中途 overlay 编辑；无未解释 busy；主体可见和网络完成分别记录 |
 
 SI-14 按 Spec 174 的页面事件/单调时钟与相同就绪谓词采集，保留失败和重试，不用控制命令墙钟冒充正式成绩。真实实例只低频只读核对，不编辑现场配置；若未部署新版本则记录「未执行」，不能将本地夹具成绩算成现场修复完成。保留 2 / 31 秒检测窗口的边界测试与原有回滚、权限批处理和账号隔离回归。
+
+### 8.1 执行结果（2026-10-30 / 2026-10-31）
+
+实现落点：新增 `webui/server/display-revisions.ts`（统一文件版本账本 + 按 scope 的校验健康度）与 `webui/src/components/DisplayRefreshNotice.tsx`；改动 `display-generation.ts`（touched-path 登记与屏障终结）、`display-snapshot.ts`（按 scope 校验、共享有界 I/O、请求级预算、可区分诊断）、`admin/agents.ts`（`agent-permissions` 改 P/C）、`semantic-layer.ts`（外层屏障按实际待写路径取并集）、`catalog-assets.ts`、`fs-safe.ts`、`index.ts` 与两处前端页面。
+
+| ID | 结果 | 证据位置 |
+|---|---|---|
+| SI-01 | 通过 | `webui/server/__tests__/display-snapshot.test.ts` §「Spec 195 SI-01/SI-02」（metadata→full / full→metadata / 并发 三种顺序，同版本只失效一次） |
+| SI-02 | 通过 | 同上（第二版本、删除后重建、原子替换、同字节 mtime 更新各确认一次） |
+| SI-03 | 通过 | `webui/server/__tests__/display-revisions.test.ts` §「unified file revision ledger」（晚到观察不覆盖新账本、已确认版本不再通知、context 切换起新账本） |
+| SI-04 | 通过 | `webui/server/__tests__/display-invalidation.test.ts` §「SI-04」（overlay-only 保存只推进 D，P/C 不变，Agent 权限不重建；语义资产恰好重建一次） |
+| SI-05 | 通过 | `webui/server/__tests__/display-revisions.test.ts` §「write transactions confirm the final version」（写前/写后两条边界仍在、退出后同版本不再重建、嵌套写入不提前确认、rename 两端登记） |
+| SI-06 | 通过 | 同上（删除登记）＋原有回滚/权限批处理回归 `display-rollback-races.test.ts`、`admin-permission-batch.test.ts` 保持绿 |
+| SI-07 | 通过 | `webui/server/__tests__/display-permission-runtime.test.ts` §「SI-07」（overlay 不可读 → 语义资产如实失败、Agent 仍正常；语义层不可枚举 → D 与 P 同时失败） |
+| SI-08 | 通过 | `webui/server/__tests__/display-invalidation.test.ts` §「SI-08」（Manifest 写入与 ktx.yaml 变更仍使 Agent 权限失效并重建） |
+| SI-09 | 通过 | `webui/server/__tests__/display-snapshot.test.ts` §「SI-09」（逾期校验不返回成功载荷并在恢复后恢复；放弃的请求不终止共享校验任务） |
+| SI-10 | 通过 | 同上 §「SI-10」（单请求 ≤3 次尝试、一次恢复预算、并发读者共享校验任务、文件 I/O ≤2、展示构建 ≤4） |
+| SI-11 | 通过 | `webui/server/__tests__/display-permission-runtime.test.ts` §「SI-11」（统计等待期间 P 变化 → 整批重建，不拼接旧权限与新统计） |
+| SI-12 | 通过 | `webui/server/__tests__/display-snapshot.test.ts` §「SI-12」（busy 原因可区分；诊断不含绝对路径） |
+| SI-13 | 通过 | `webui/src/__tests__/display-refresh-notice.test.tsx`（7）、`src/__tests__/agent-list.test.tsx`、`src/__tests__/catalog-loading.test.tsx`（各 1） |
+| SI-14 | 通过（本地夹具）／现场复核未执行 | 匿名夹具 + 生产构建 + 桌面 Chromium：`npm --prefix webui run perf:entry -- --phase baseline --mode production --scenario spec195-roundtrip --iterations 30 --warmup 5 --output inbox/webui-entry-perf/spec195-roundtrip-final2 --skip-build`。31 个实测样本全部成功、0 个 busy 响应；含一次中途 overlay 编辑后的冷读（1 次请求、网络完成 5.4 ms、主体可见 1.7 ms）。原始样本与结果见 `inbox/spec195/si14/`。**现场实例（`http://10.69.95.109:8276`）复核未执行**：本单未部署新版本，不得以旧实例访问宣称修复已生效 |
+
+基线对照（RED → GREEN）：`inbox/spec195/task1-red-baseline.txt` 记录了在未改实现（HEAD `87d2738b`）上运行新增用例的失败输出——3 个文件 8 个用例失败，失败点为重复失效（D 由 1 变 2 次）、外层 P 屏障（overlay-only 保存推进 P）与全局校验（overlay 不可读时 Agent 也 503）。同一组用例在实现后全绿。
+
+计数口径（文件读取次数 / 失效次数 / 重建次数分开）：一次外部 overlay 版本变更 = 1 次失效通知（`bumpDisplayGeneration`）+ 1 次派生重建；同版本被 metadata 与 full digest 两类扫描先后或并发观察到时仍为 1 次失效、1 次重建。去重只合并失效通知，不取消任何必要的重复读取（metadata 扫描对签名变化的文件读取摘要），也不取消写前 / 写后屏障的代次推进。
 
 ## 9. 落地与回退
 

@@ -9,6 +9,7 @@ import { AgentRoleCapability, AgentRoleField, agentRoleIds, roleSelectionSavable
 import { PageHeader } from "../../components/PageHeader";
 import { PolicyDegradeNotice } from "../../components/PolicyDegradeBanner";
 import { AsyncRegion, asyncStatus } from "../../components/AsyncRegion";
+import { DisplayRefreshNotice } from "../../components/DisplayRefreshNotice";
 import { MetricCard } from "../../components/MetricCard";
 import { buildObjectDetailSearch } from "../../lib/objectDetail";
 import { RowMoreMenu } from "../../components/RowMoreMenu";
@@ -596,6 +597,8 @@ export function AgentList() {
           agentNames: Object.fromEntries(agents.map((agent) => [agent.id, agent.name]))
         }}
       />
+
+      <DisplayRefreshNotice query={agentsQuery} className="mt-4" />
 
       {data.meta?.runtimeConsistency === "unconfirmed" ? (
         <div className="pl-notice" role="status" data-testid="agent-runtime-unconfirmed">

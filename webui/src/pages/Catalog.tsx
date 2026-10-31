@@ -10,6 +10,7 @@ import { SelectField } from "../components/SelectField";
 import { StatusBadge } from "../components/StatusBadge";
 import { PageHeader } from "../components/PageHeader";
 import { AsyncRegion, asyncStatus } from "../components/AsyncRegion";
+import { DisplayRefreshNotice } from "../components/DisplayRefreshNotice";
 import { RowMoreMenu } from "../components/RowMoreMenu";
 import {
   CatalogBatchPanel,
@@ -616,6 +617,8 @@ export function Catalog() {
             data-testid="catalog-import-package-input"
           />
         </div>
+
+        <DisplayRefreshNotice query={sourcesQuery} className="mt-4" />
 
         {data?.meta?.runtimeConsistency === "unconfirmed" ? (
           <div className="pl-notice mt-4" role="status" data-testid="catalog-runtime-unconfirmed">

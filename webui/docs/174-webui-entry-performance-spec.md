@@ -44,6 +44,8 @@ v1.1 审阅修正：补写前/写中屏障、两套 access 回滚、catalog_boun
 
 Spec 107 的只读查询、10 分钟成功结果缓存和 `refresh=1` 保留；增加进行中合并与配置变化失效。健康完成结果不跨页复用，不能用旧“通”冒充本次探测。
 
+**Spec 195 精确修订指针**：本 Spec §3.2 的「文件变更确认方式」「展示依赖范围」和 §6 的「请求级重试预算」由 [Spec 195](195-display-snapshot-invalidation-isolation-spec.md) 精确修订——两类对账共用一份文件版本账本（同一次已确认变更只通知一次派生重建）、`sources` 依赖 D/P/C 而 `agent-permissions` 依赖 P/C（Manifest 属于 P）、单个请求最多三次尝试且恢复等待总预算 1500 毫秒。Spec 195 未修订的部分（metadata 每秒兜底 / 2 秒发现目标 / 31 秒完整摘要上限 / 3 秒与 31 秒校验有效期 / 展示构建并发 ≤4 / `503 DISPLAY_SNAPSHOT_BUSY` + `Retry-After: 1` / Agent 动态统计 `staleTime=0` / 写前与写后屏障分别推进代次）继续以本 Spec 为约束。
+
 不引入 Redis/新持久化读库、分布式锁、多副本承诺；不修改 KTX 源码。不降低密码校验成本，不把数据库探测绑到 liveness。不包含客户发布、生产数据库压测或客户镜像制作。
 
 ### 2.1 拉取最新 v2.0 后的适配结论（v1.2）

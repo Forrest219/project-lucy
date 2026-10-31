@@ -22,7 +22,7 @@ import { reloadCatalog, type CatalogReloadRun } from "./catalog-reload";
 import { syncContentToProjectRoot } from "./content-mirror";
 import { resolveContentPaths } from "./paths";
 import { readProject } from "./project";
-import { withDisplayWriteBarrier } from "./display-generation";
+import { registerDisplayTouchedPath, scopeContextFor, scopesForPath, withDisplayWriteBarrier } from "./display-generation";
 import { withPublishCoordinator } from "./publish-coordinator.js";
 import { SEMANTIC_BATCH_LIMITS } from "./semantic-limits.js";
 
@@ -935,7 +935,14 @@ async function writeCatalogAssetIntoWindow(
     }
   }
   // Spec 174 §3.2 — the rename bypasses safeWrite; barrier it explicitly (tmp file is ignored).
-  await withDisplayWriteBarrier(["D", "P", "C"], () => rename(tempAbs, safety.targetAbs));
+  // Spec 195 §4 — the scope comes from the target path itself: a Manifest feeds D and P.
+  const contentPaths = await resolveContentPaths(projectRoot);
+  const scopeContext = scopeContextFor(projectRoot, contentPaths.semanticLayer);
+  const targetScopes = scopesForPath(safety.targetAbs, scopeContext);
+  await withDisplayWriteBarrier(targetScopes, async () => {
+    registerDisplayTouchedPath(safety.targetAbs, targetScopes);
+    await rename(tempAbs, safety.targetAbs);
+  });
 
   // A2: the ktx daemon/CLI still read the project-root sibling view. Push the
   // just-written manifest (and any other content-root drift) there so query

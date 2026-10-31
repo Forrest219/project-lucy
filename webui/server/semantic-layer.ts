@@ -22,7 +22,13 @@ import { isSqlServerDriver, manifestTableIsEnabled } from "../src/lib/enabled-ta
 import { loadContentPaths } from "./paths";
 import { stripManifestOnlyColumnKeys } from "./semantic-overlay-sanitize";
 import { countEntryPerf, timeAsync } from "./entry-performance-timing";
-import { withDisplayWriteBarrier } from "./display-generation";
+import {
+  expandDisplayWrite,
+  scopeContextFor,
+  scopesForPath,
+  withDisplayWriteBarrier,
+  type DisplayScope
+} from "./display-generation";
 // L25-16 N05 / G17 — 旧的源表导入写入口接入**同一把** ktx.yaml 写锁，
 // 否则控制面批量导入的互斥承诺不成立（旧入口可以在批量持锁期间交错写）。
 import { withKtxYamlWriteLock } from "./ktx-yaml-write-lock";
@@ -748,6 +754,25 @@ export async function previewSourcePatch(
   return buildSourcePatchPreview(projectRoot, conn, schema, table, patch);
 }
 
+/**
+ * Spec 195 §4 — the display scopes of the files a semantic write really
+ * touches. A Manifest feeds D and P (the permission display derives its
+ * source map from Manifests); a plain overlay feeds D only.
+ */
+async function scopesForSourceFiles(
+  projectRoot: string,
+  files: ReadonlyArray<{ filePath: string }>
+): Promise<DisplayScope[]> {
+  if (files.length === 0) return [];
+  const paths = await loadContentPaths();
+  const context = scopeContextFor(projectRoot, paths.semanticLayer);
+  const scopes = new Set<DisplayScope>();
+  for (const file of files) {
+    for (const scope of scopesForPath(path.join(paths.configDir, file.filePath), context)) scopes.add(scope);
+  }
+  return [...scopes];
+}
+
 export async function writeSourcePatch(
   projectRoot: string,
   conn: string,
@@ -770,9 +795,14 @@ export async function writeSourcePatch(
   await withPublishCoordinator(
     "semantic_table_save",
     () =>
-      withDisplayWriteBarrier(["D", "P"], async () => {
+      withDisplayWriteBarrier(["D"], async (token) => {
         preview = await buildSourcePatchPreview(projectRoot, conn, schema, table, patch);
         if (preview.files.length > 0) {
+          // Spec 195 §4 — the outer barrier covers the scopes of the files this
+          // write really touches. A Manifest write also feeds the permission
+          // display (P); a plain overlay only feeds D. The scope is widened
+          // BEFORE the first file is written.
+          expandDisplayWrite(token, await scopesForSourceFiles(projectRoot, preview.files));
           const opened = await openPromotingContentRelease({
             projectRoot,
             actor: actor?.actorId ?? "local-admin",
@@ -1095,8 +1125,11 @@ export async function writeSourceYamlImport(
   // L25-16 N05 / G17 — 旧的源表导入写入口接入**同一把** ktx.yaml 写锁。
   // 锁顺序与控制面批量服务一致：withKtxYamlWriteLock → withDisplayWriteBarrier → 写。
   await withKtxYamlWriteLock(() =>
-    withDisplayWriteBarrier(["D", "P"], () =>
-      withPublishCoordinator(
+    withDisplayWriteBarrier(["D"], async (token) => {
+      // Spec 195 §4 — the outer barrier covers the scopes of the files this
+      // write really touches (the preview is already known here).
+      expandDisplayWrite(token, await scopesForSourceFiles(projectRoot, preview.files));
+      return withPublishCoordinator(
         "semantic_table_save",
         async () => {
           if (preview.files.length === 0) return;
@@ -1160,8 +1193,8 @@ export async function writeSourceYamlImport(
           }
         },
         { projectRoot }
-      )
-    )
+      );
+    })
   );
   return preview;
 }

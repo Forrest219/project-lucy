@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { mirrorContentFileToProjectRoot } from "./content-mirror";
 import type { ContentPaths } from "./paths";
-import { scopesForPath, withDisplayWriteBarrier, type DisplayScope } from "./display-generation";
+import { registerDisplayTouchedPath, scopesForPath, withDisplayWriteBarrier, type DisplayScope } from "./display-generation";
 
 /** Spec 174 §3.2 — display scopes touched by writing these absolute targets. */
 function displayScopesFor(contentPaths: ContentPaths, projectRoot: string, targets: string[]): DisplayScope[] {
@@ -243,7 +243,11 @@ export async function safeWrite(
   const normalized = normalizeRelative(relPath);
   const target = await resolveWritable(contentPaths, projectRoot, normalized);
   await mkdir(path.dirname(target), { recursive: true });
-  await withDisplayWriteBarrier(displayScopesFor(contentPaths, projectRoot, [target]), () => writeFile(target, content, "utf8"));
+  const scopes = displayScopesFor(contentPaths, projectRoot, [target]);
+  await withDisplayWriteBarrier(scopes, async () => {
+    registerDisplayTouchedPath(target, scopes);
+    await writeFile(target, content, "utf8");
+  });
   await mirrorWriteToSiblingView(contentPaths, projectRoot, normalized, content);
 }
 
@@ -266,7 +270,9 @@ export async function safeWriteAtomic(
   await mkdir(path.dirname(target), { recursive: true });
   const tmp = path.join(path.dirname(target), `.${path.basename(target)}.tmp-${randomUUID()}`);
   try {
-    await withDisplayWriteBarrier(displayScopesFor(contentPaths, projectRoot, [target]), async () => {
+    const scopes = displayScopesFor(contentPaths, projectRoot, [target]);
+    await withDisplayWriteBarrier(scopes, async () => {
+      registerDisplayTouchedPath(target, scopes);
       await writeFile(tmp, content, "utf8");
       await rename(tmp, target);
     });
@@ -287,7 +293,11 @@ export async function safeWriteBinary(
   const normalized = normalizeRelative(relPath);
   const target = await resolveWritable(contentPaths, projectRoot, normalized);
   await mkdir(path.dirname(target), { recursive: true });
-  await withDisplayWriteBarrier(displayScopesFor(contentPaths, projectRoot, [target]), () => writeFile(target, content));
+  const scopes = displayScopesFor(contentPaths, projectRoot, [target]);
+  await withDisplayWriteBarrier(scopes, async () => {
+    registerDisplayTouchedPath(target, scopes);
+    await writeFile(target, content);
+  });
   await mirrorWriteToSiblingView(contentPaths, projectRoot, normalized, content);
 }
 
@@ -321,7 +331,11 @@ export async function safeRemove(
     }
     throw error;
   }
-  await withDisplayWriteBarrier(displayScopesFor(contentPaths, projectRoot, [target]), () => rm(target, { force: true }));
+  const scopes = displayScopesFor(contentPaths, projectRoot, [target]);
+  await withDisplayWriteBarrier(scopes, async () => {
+    registerDisplayTouchedPath(target, scopes);
+    await rm(target, { force: true });
+  });
 }
 
 /**
@@ -378,7 +392,11 @@ export async function safeRemoveDirectory(
   // `rm` on macOS refuses to remove a directory without `recursive`,
   // and `rmdir` already enforces the "empty" invariant we just
   // verified, so it is the safe primitive here.
-  await withDisplayWriteBarrier(displayScopesFor(contentPaths, projectRoot, [target]), () => rmdir(target));
+  const scopes = displayScopesFor(contentPaths, projectRoot, [target]);
+  await withDisplayWriteBarrier(scopes, async () => {
+    registerDisplayTouchedPath(target, scopes);
+    await rmdir(target);
+  });
 }
 
 /**
@@ -424,7 +442,12 @@ export async function safeRenameDirectory(
   }
 
   await mkdir(path.dirname(target), { recursive: true });
-  await withDisplayWriteBarrier(displayScopesFor(contentPaths, projectRoot, [source, target]), () => rename(source, target));
+  const scopes = displayScopesFor(contentPaths, projectRoot, [source, target]);
+  await withDisplayWriteBarrier(scopes, async () => {
+    registerDisplayTouchedPath(source, scopes);
+    registerDisplayTouchedPath(target, scopes);
+    await rename(source, target);
+  });
 }
 
 /**

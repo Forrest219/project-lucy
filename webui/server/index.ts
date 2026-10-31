@@ -12,10 +12,13 @@ import { displayGenerations, onDisplayGenerationChange, withDisplayWriteBarrier 
 import { withKtxYamlWriteLock } from "./ktx-yaml-write-lock";
 import { parseProbePurpose, ProbeScheduler, type ProbeTiming } from "./background-probes";
 import {
+  createDisplayRequestBudget,
   getDisplaySnapshot,
   prewarmDisplaySnapshots,
   registerDisplayPrewarmer,
-  ensureDisplayReconciler
+  ensureDisplayReconciler,
+  SOURCES_SCOPES,
+  type DisplayRequestBudget
 } from "./display-snapshot";
 import { changedFiles, previewDiff, type SessionWrittenFile } from "./diff";
 function makeDiff(oldText: string, newText: string): string {
@@ -486,8 +489,8 @@ type SourcesSnapshotSidecar = {
  * snapshot. The cached payload ends right before `meta`; §3.3 runtimeConsistency
  * is evaluated against the current runtime policy for every response.
  */
-function getSourcesDisplaySnapshot(projectRoot: string) {
-  return getDisplaySnapshot("sources", ["D", "P", "C"], async (version) => {
+function getSourcesDisplaySnapshot(projectRoot: string, budget?: DisplayRequestBudget) {
+  return getDisplaySnapshot("sources", SOURCES_SCOPES, async (version) => {
     const listing = await listSourcesWithManifests(projectRoot);
     const started = performance.now();
     const payload = `{"ok":true,"data":{"tables":${JSON.stringify(listing.tables)},"manifestSchemas":${JSON.stringify(listing.manifestSchemas)},"meta":`;
@@ -497,7 +500,7 @@ function getSourcesDisplaySnapshot(projectRoot: string) {
     };
     addTiming("serialize", performance.now() - started);
     return { payload, sidecar: JSON.stringify(sidecar) };
-  });
+  }, { budget });
 }
 
 function sourcesResponseBody(snapshot: { payload: string; sidecar?: string }): string {
@@ -816,7 +819,9 @@ export function buildServer() {
 
   app.get("/api/sources", async (request, reply) => withRequestTiming(request, async () => {
     const projectRoot = await resolveProjectRoot();
-    const snapshot = await getSourcesDisplaySnapshot(projectRoot);
+    // Spec 195 §6 — the request budget covers the whole request: at most
+    // three attempts and one shared recovery wait.
+    const snapshot = await getSourcesDisplaySnapshot(projectRoot, createDisplayRequestBudget());
     return reply.type("application/json; charset=utf-8").send(sourcesResponseBody(snapshot));
   }));
 

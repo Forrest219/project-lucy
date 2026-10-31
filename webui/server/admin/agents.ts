@@ -59,7 +59,14 @@ import { readAuditWriteHealth, type AuditWriteHealthSnapshot } from "../proxy/au
 import { countEntryPerf, timeAsync, withRequestTiming } from "../entry-performance-timing.js";
 import { readAccessSnapshot, resolvePermissionBatch, type PermissionBatch } from "./permission-display.js";
 import { generationKey, hasPendingDisplayWrite } from "../display-generation.js";
-import { DisplaySnapshotBusyError, getDisplaySnapshot, registerDisplayPrewarmer } from "../display-snapshot.js";
+import {
+  AGENT_PERMISSION_SCOPES,
+  createDisplayRequestBudget,
+  DisplaySnapshotBusyError,
+  getDisplaySnapshot,
+  registerDisplayPrewarmer,
+  type DisplayRequestBudget
+} from "../display-snapshot.js";
 import { withDisplayWriteBarrier } from "../display-generation.js";
 
 /** Spec 129: Agent write paths must not materialize reference templates into access.yaml. */
@@ -1113,17 +1120,22 @@ function permissionPreviewFromBatch(batch: PermissionBatch, userId: string): Age
 }
 
 /**
- * Spec 174 §3.1/§3.2 — permission previews for the list from one access
- * snapshot, cached as a display snapshot keyed by that snapshot's version.
- * Dynamic audit statistics are never part of this cache.
+ * Spec 174 §3.1/§3.2 and Spec 195 §4 — permission previews for the list from
+ * one access snapshot, cached as a display snapshot keyed by that snapshot's
+ * version. Dynamic audit statistics are never part of this cache.
+ *
+ * The permission display depends on P (access, Manifest, permission
+ * overrides) and C (connections, enabled tables). An ordinary semantic
+ * overlay only feeds D, so it must not invalidate the Agent list.
  */
 async function agentPermissionSection(
   projectRoot: string,
   users: YamlUser[],
   raw: string,
-  version: string
+  version: string,
+  budget?: DisplayRequestBudget
 ): Promise<AgentPermissionSection> {
-  const snapshot = await getDisplaySnapshot("agent-permissions", ["P", "D", "C"], async () => {
+  const snapshot = await getDisplaySnapshot("agent-permissions", AGENT_PERMISSION_SCOPES, async () => {
     const accessSnapshot = await readAccessSnapshot(projectRoot, raw, version);
     const userIds = users.map((user) => user.id);
     const batch = await resolvePermissionBatch(accessSnapshot, userIds);
@@ -1133,7 +1145,7 @@ async function agentPermissionSection(
       policyInputs: batch.policyInputs
     };
     return JSON.stringify(section);
-  }, { extraKey: version });
+  }, { extraKey: version, budget });
   return {
     ...JSON.parse(snapshot.payload) as CachedAgentPermissionSection,
     snapshotVersion: snapshot.version
@@ -1330,19 +1342,25 @@ export function registerAgentRoutes(app: FastifyInstance) {
   app.get("/api/admin/agents", async (request) => withRequestTiming(request, async () => {
     const projectRoot = await resolveProjectRoot();
     // Spec 174 §3.1 — users / version / permissions come from one access snapshot;
-    // if access changes while dynamic stats are read, rebuild the whole batch (≤3 attempts).
-    for (let attempt = 1; attempt <= 3; attempt += 1) {
-      const accessGeneration = generationKey(["P"]);
-      const listing = await buildAgentList(projectRoot);
-      if (generationKey(["P"]) === accessGeneration && !hasPendingDisplayWrite(["P"])) return listing;
+    // if access changes while dynamic stats are read, rebuild the whole batch.
+    // Spec 195 §6 — the route and the snapshot layer share ONE request budget:
+    // at most three attempts for the whole request, and one recovery wait.
+    const budget = createDisplayRequestBudget();
+    for (;;) {
+      // Spec 195 §4 — the permission display depends on P and C; a change to C
+      // during the statistics read must reject the old permission result too.
+      const accessGeneration = generationKey(["P", "C"]);
+      const listing = await buildAgentList(projectRoot, budget);
+      if (generationKey(["P", "C"]) === accessGeneration && !hasPendingDisplayWrite(["P", "C"])) return listing;
+      if (budget.attemptsLeft <= 0) break;
     }
-    throw new DisplaySnapshotBusyError();
+    throw new DisplaySnapshotBusyError("generation_changed");
   }));
 
-  async function buildAgentList(projectRoot: string) {
+  async function buildAgentList(projectRoot: string, budget?: DisplayRequestBudget) {
     const { config, raw, version } = await timeAsync("access", () => readAccessYaml(projectRoot));
     const userIds = config.users.map((user) => user.id);
-    const permissionSection = await timeAsync("permissions", () => agentPermissionSection(projectRoot, config.users, raw, version));
+    const permissionSection = await timeAsync("permissions", () => agentPermissionSection(projectRoot, config.users, raw, version, budget));
     const window = build7dWindow();
     const [tokenUsage, timelineMap, statsMap, globalActiveTokenCount] = await timeAsync("stats", () => Promise.all([
       getLastUsedMap(userIds),

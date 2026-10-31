@@ -22,7 +22,7 @@ import {
   resetDisplayGenerationsForTests,
   withDisplayWriteBarrier
 } from "../display-generation";
-import { resetDisplaySnapshotsForTests, startDisplayReconciler, stopDisplayReconciler } from "../display-snapshot";
+import { resetDisplaySnapshotsForTests, startDisplayReconciler, stopDisplayReconciler, displaySnapshotDiagnostics } from "../display-snapshot";
 import { auditedWriteFile } from "../admin/config-audit-write";
 import { reloadCatalog } from "../catalog-reload";
 import { removeConnection } from "../project";
@@ -313,5 +313,76 @@ describe("Spec 174 T3 — invalidation matrix (DI-01..15/18)", () => {
     expect(res.headers["retry-after"]).toBe("1");
     expect(res.body.error.code).toBe("DISPLAY_SNAPSHOT_BUSY");
     expect(res.body.error.message).toBe("页面数据暂时无法完成刷新，请稍后重试。");
+  });
+
+  /**
+   * Spec 195 §4 / SI-04 — an overlay-only save touches D only. The Agent
+   * permission display depends on P/C, so it must neither be invalidated nor
+   * rebuilt by a plain overlay change.
+   */
+  it("SI-04 an overlay-only save advances D but not P/C and does not rebuild the Agent permissions", async () => {
+    await sources();
+    await request(app.server).get("/api/admin/agents").expect(200);
+    const gens = displayGenerations();
+    const builds = displaySnapshotDiagnostics().builds;
+
+    await request(app.server).put("/api/sources/warehouse/fin/fin_ledger").send({ dryRun: false, patch: { grain: ["id"] } }).expect(200);
+
+    const after = displayGenerations();
+    expect(after.D).toBeGreaterThan(gens.D);
+    expect(after.P).toBe(gens.P);
+    expect(after.C).toBe(gens.C);
+    // The write itself builds nothing.
+    expect(displaySnapshotDiagnostics().builds).toBe(builds);
+
+    // The Agent list still serves the cached permission section.
+    await request(app.server).get("/api/admin/agents").expect(200);
+    expect(displaySnapshotDiagnostics().builds).toBe(builds);
+
+    // The semantic asset display does rebuild, exactly once.
+    const next = await sources();
+    expect(next.cache).toBe("miss");
+    expect(displaySnapshotDiagnostics().builds).toBe(builds + 1);
+  });
+
+  /**
+   * Spec 195 §4 / SI-08 — a Manifest write still feeds the permission
+   * display, so the Agent list must be invalidated and rebuilt.
+   */
+  it("SI-08 a Manifest write still invalidates and rebuilds the Agent permissions", async () => {
+    await sources();
+    await request(app.server).get("/api/admin/agents").expect(200);
+    const gens = displayGenerations();
+    const builds = displaySnapshotDiagnostics().builds;
+
+    // A schema patch writes the Manifest, which feeds D and P.
+    await request(app.server).put("/api/sources/warehouse/fin/fin_ledger")
+      .send({ dryRun: false, patch: { tableDescription: "ledger table" } })
+      .expect(200);
+
+    const after = displayGenerations();
+    expect(after.P).toBeGreaterThan(gens.P);
+    await request(app.server).get("/api/admin/agents").expect(200);
+    expect(displaySnapshotDiagnostics().builds).toBe(builds + 1);
+  });
+
+  /**
+   * Spec 195 §4 / SI-08 — a connection-scope change (ktx.yaml) still
+   * invalidates the Agent permissions.
+   */
+  it("SI-08 a connection-scope change still invalidates the Agent permissions", async () => {
+    await sources();
+    await request(app.server).get("/api/admin/agents").expect(200);
+    const gens = displayGenerations();
+    const builds = displaySnapshotDiagnostics().builds;
+
+    await request(app.server).put("/api/connections/warehouse/enabled-tables")
+      .send({ dryRun: false, enabledTables: ["fin.fin_ledger"] })
+      .expect(200);
+
+    const after = displayGenerations();
+    expect(after.C).toBeGreaterThan(gens.C);
+    await request(app.server).get("/api/admin/agents").expect(200);
+    expect(displaySnapshotDiagnostics().builds).toBe(builds + 1);
   });
 });
