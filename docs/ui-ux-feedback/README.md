@@ -49,6 +49,7 @@ docs/ui-ux-feedback/
 | Admin Governance / Usage Overview | `/admin/usage`（旧 `/admin/governance` redirect） | [`pages/admin-governance.md`](pages/admin-governance.md) |
 | Admin Audit / Access Log | `/admin/audit` | [`pages/admin-audit.md`](pages/admin-audit.md) |
 | Admin MCP Playground | `/admin/mcp-playground` | [`pages/admin-mcp-playground.md`](pages/admin-mcp-playground.md) |
+| Call Monitor | `/ops/calls` | [`pages/ops-calls.md`](pages/ops-calls.md) |
 | Login Accounts | `/admin/accounts` | [`pages/admin-admins.md`](pages/admin-admins.md) |
 | Global Shell | all WebUI routes, including `/overview` | [`pages/global-shell.md`](pages/global-shell.md) |
 | Overview | `/overview` | [`pages/overview.md`](pages/overview.md) |
@@ -57,6 +58,7 @@ docs/ui-ux-feedback/
 
 | Date | Scope | Update |
 |---|---|---|
+| 2026-10-30 | 发版前 UI 检查第一次启用 | 按 Spec `lucy-20261030-webui-release-ux-review` §7，把 2026-10-30 走查里低于 6 分的表面登记为 Open。不修页面。 |
 | 2026-08-07 | Publish Workbench `/publish/workbench` 语义生效台 | Spec 123 / `wo-202608-57` 落地：`UX-PUBLISH-WORKBENCH-007` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。去上传/导出；「生效准备」+「同步索引并生效」；「更多」全量重建 `force:true`。修订 Spec 35；术语 §4.3。跨页面主题新增 `publish workbench activation ia`。验证：`review.test.tsx`、`lint:terminology`、`build`。 |
 | 2026-08-07 | Publish Workbench `/publish/workbench` CTA 确认路径 | Spec 121 / `wo-202608-54` 落地：`UX-PUBLISH-WORKBENCH-006` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。Header「发布并重建索引」打开确认侧栏并 reindex，不再打开「发布语义资产」上传 Drawer；上传入口仍独占上传路径。修订 Spec 35 §6.2 / Spec 112。跨页面主题新增 `publish cta vs upload path separation`。验证：`review.test.tsx`、`lint:terminology`、`build`。 |
 | 2026-08-07 | List history 时间筛选 parity | Spec 122 / `wo-202608-56` 落地：`UX-ADMIN-CONFIG-AUDIT-009`、`UX-ADMIN-AUDIT-026` → `Fixed`（本轮不做浏览器验证，结束后只做 code review）。配置审计对齐发布记录（可见「时间」+ 默认近 24 小时整点）；访问日志补「时间」标签 + since 整点（保留默认 7 天）。跨页面主题新增 `list-history time-filter parity`。验证：`admin-config-audit.test.tsx`、`admin-audit-turns.test.tsx`、`lint:terminology`。 |

@@ -26,6 +26,8 @@
     "pree2e:nightly": "npm run e2e:selector-contract && npm run e2e:fixture",
     "e2e:contract:release": "playwright test",
     "pree2e:contract:release": "npm run e2e:selector-contract && npm run e2e:fixture",
+    "e2e:release-ux": "playwright test --config playwright.release-ux.config.ts",
+    "pree2e:release-ux": "npm run e2e:fixture",
     "e2e:release": "echo 'e2e:release is the browser CONTRACT regression (fixture instance, no real Agents, cannot sign a release). Use e2e:contract:release for it and e2e:real:* for real-user gates.' && npm run e2e:contract:release",
     "e2e:real:management": "node ../scripts/e2e/run-management.mjs",
     "e2e:report": "playwright show-report playwright-report",

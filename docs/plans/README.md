@@ -4,6 +4,7 @@ This directory stores repository-level implementation plans that are not scoped 
 
 | Plan | Purpose |
 |---|---|
+| [lucy-20261030-webui-release-ux-review-plan.md](lucy-20261030-webui-release-ux-review-plan.md) | **v1.2 已落地 S1–S4**：发版前 WebUI 三层检查。结构套件（`e2e:release-ux`，独立 Playwright config）、runbook 与表面清单测试、发版台账 `webui-ux-review` 手工门禁、UI 台账 Open 登记。契约夹具上结构套件 27/27 全绿。走查与签字未执行，不构成发版通过。Spec 见 [lucy-20261030-webui-release-ux-review-spec.md](../specs/lucy-20261030-webui-release-ux-review-spec.md) |
 | [lucy-20261030-l25-11-uat-delivery-task-plan.md](lucy-20261030-l25-11-uat-delivery-task-plan.md) | **v0.25 L25-11，已于 2026-10-31 关闭**：交付 UAT Task，按波次 A–E 推进本环境 UAT 取证。用户批准拆分后本条走功能合同收口 Task，不要求 22 个 V 项通过。`SEM25` 未执行。G30 仍开，W-B 仍关。V01–V22 仍未执行。V03(d)、V22 与客户交付仍是 `blocked_delivery` |
 | [lucy-20261030-semantic-batch-functional-contract-plan.md](lucy-20261030-semantic-batch-functional-contract-plan.md) | **v0.25 L25-11，已关闭（2026-10-31）**：用户批准拆分。FC-01–FC-32 已通过。`SEM25` 由 E2E Spec 持有且未执行。G30 仍开。不关闭 G31，不打开 W-B。本条关闭不表示可上线 |
 | [lucy-20261030-agent-roster-plan.md](lucy-20261030-agent-roster-plan.md) | **v1.2 已定稿**：Agent 名册。第 3 轮 Codex 确认可定稿。可以按 S1、S2 开发。见 [审阅](../reviews/2026-10-30-codex-review-agent-roster.md)。Spec 见 [lucy-20261030-agent-roster-spec.md](../specs/lucy-20261030-agent-roster-spec.md) |

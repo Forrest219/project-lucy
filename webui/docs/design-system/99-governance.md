@@ -51,6 +51,10 @@
 - `webui/docs/design-system/` 负责沉淀可复用规则。
 - 每个跨页面主题在关闭前应尽量落到 Design System 对应章节。
 
+## 发版前界面检查
+
+发版前的三层检查见 [`docs/specs/lucy-20261030-webui-release-ux-review-spec.md`](../../../docs/specs/lucy-20261030-webui-release-ux-review-spec.md)。单次 PR 仍写 Design System Compliance。该清单不代替发版走查，发版走查也不新增视觉模式。
+
 ## 版本策略
 
 - `v1.x`：兼容增量，补条目、补示例、补约束。

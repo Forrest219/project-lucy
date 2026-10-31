@@ -38,6 +38,7 @@
 5. **交付包与发布提交不一致时**，必须显式设 `builtFromDiffersFromReleaseCommit: true` 并在 `builtFromDiffNote` 解释；否则门禁直接判失败。
 6. **`runs[]` 必须列出这次发布涉及的全部跑批**，每条要有 `id` 与 `trigger`；每条 `gates[].run` 必须是 `runs[]` 里的某个 id，否则门禁判失败。
 7. 跑 `npm run lint:release-ledger` 校验。
+8. **从 v0.20.0 的下一产品版本起**，`deliveryPackage.productionReady === true` 必须有一条 `webui-ux-review`：`required: true`、`manual: true`、`status: passed`，`evidence` 指向已存在的 `docs/releases/ux/<产品版本>.md`，且该文件的结果块是 passed 组合。手工通过不填 CI `run`。v0.20.0 不追补这条门禁。三个阻断原因类不能被记成 passed。记录格式见 [`ux/README.md`](ux/README.md)。
 
 ## 一次发布不止一次跑批
 

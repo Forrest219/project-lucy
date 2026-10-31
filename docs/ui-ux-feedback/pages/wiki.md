@@ -1413,3 +1413,19 @@ Reported: 2026-08-06
 ### Notes
 
 Fixed by Spec 118 / `wo-202608-51`：`DELETE /api/wiki/:key`、`WikiDeleteDocumentDialog`、Header「删除文档」。Non-browser 验证：`wiki.test.ts` / `wiki.test.tsx`、`lint:terminology`、`build`。
+
+## UX-WIKI-046: 目录不能列出同级文档，空阅读区过大
+
+Status: Open
+Route: /wiki
+Feedback: 2026-10-30 走查。目录树不列出同级文档，右侧空阅读区过高，路径重复目录名。全部文档显示无人可见，但没有说明影响。
+Expected: 目录能看到同级文档。空阅读区留在面板内，并写出下一步。可见性状态能解释影响。
+Browser Check: 发版走查打开 `/wiki` 目录，不创建文档。对照 UX-R05、UX-R06、UX-R08。
+
+## UX-WIKI-047: 打开文档时先闪回目录并弹出无关提示
+
+Status: Open
+Route: /wiki
+Feedback: 2026-10-30 走查。打开一篇文档时先看到目录，并提示「切换目录已清空批量选择」。
+Expected: 打开文档直接进入阅读区。没有批量选择时不出现这条提示。
+Browser Check: 发版走查打开已有文档。不新建、不删除。

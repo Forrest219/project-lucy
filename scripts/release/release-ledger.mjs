@@ -38,6 +38,14 @@ const REQUIRED_FIELDS = [
 ];
 
 const PRODUCT_VERSION_RE = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+const UX_EVIDENCE_EXEMPT_VERSION = "0.20.0";
+const UX_BLOCKED_REASON_CLASSES = new Set(["instance-not-ready", "structure-blocked", "walk-blocked"]);
+const UX_PASSED_BLOCK = {
+  result: "passed",
+  reasonClass: "none",
+  workspaceDirty: "false",
+  structure: "green"
+};
 const SHA_RE = /^[0-9a-f]{40}$/;
 const TAG_RE = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 
@@ -130,6 +138,66 @@ export function verifyLedgerEntryAgainstRepo(entry, cwd) {
   }
 
   return problems;
+}
+
+function uxEvidencePath(productVersion) {
+  return `docs/releases/ux/${productVersion}.md`;
+}
+
+function readUxResultBlock(text) {
+  const fields = {};
+  for (const line of text.split("\n").slice(0, 40)) {
+    const match = /^(result|reasonClass|workspaceDirty|structure):\s*(\S+)\s*$/.exec(line);
+    if (match && fields[match[1]] === undefined) fields[match[1]] = match[2];
+  }
+  return fields;
+}
+
+function uxBlockMatchesPassed(fields) {
+  return Object.entries(UX_PASSED_BLOCK).every(([key, value]) => fields[key] === value);
+}
+
+/**
+ * webui-ux-review is a manual gate. passed may omit a CI run when manual is true
+ * and the evidence file carries the passed result block. v0.20.0 is not required
+ * to have the gate. Later versions with productionReady true are.
+ */
+function validateWebuiUxReview(entry, gate, index, where, root, errors) {
+  const label = `${where}: gates[${index}] (webui-ux-review)`;
+  const evidence = typeof gate.evidence === "string" ? gate.evidence.trim() : "";
+  const expected = uxEvidencePath(entry.productVersion);
+  if (evidence !== expected) {
+    errors.push(`${label} evidence must be ${expected}`);
+    return;
+  }
+  const abs = path.join(root, evidence);
+  if (!existsSync(abs)) {
+    errors.push(`${label} evidence file ${evidence} does not exist`);
+    return;
+  }
+  const fields = readUxResultBlock(readFileSync(abs, "utf8"));
+  if (gate.status === "passed") {
+    if (gate.manual !== true) {
+      errors.push(`${label} passed without a CI run requires manual: true`);
+    }
+    if (!uxBlockMatchesPassed(fields)) {
+      errors.push(
+        `${label} evidence result block must be result=passed, reasonClass=none, `
+          + `workspaceDirty=false, structure=green`
+      );
+    }
+    return;
+  }
+  if (gate.status === "notExecuted") {
+    if (fields.result !== "blocked" || !UX_BLOCKED_REASON_CLASSES.has(fields.reasonClass)) {
+      errors.push(`${label} notExecuted evidence must record a blocked reasonClass`);
+    } else if (!String(gate.reason ?? "").includes(fields.reasonClass)) {
+      errors.push(`${label} notExecuted reason must include ${fields.reasonClass}`);
+    }
+    if (entry.deliveryPackage && entry.deliveryPackage.productionReady === true) {
+      errors.push(`${label} cannot be notExecuted when deliveryPackage.productionReady is true`);
+    }
+  }
 }
 
 export function collectLedgerErrors(root = ROOT, { verifyRepo = true } = {}) {
@@ -283,16 +351,34 @@ export function collectLedgerErrors(root = ROOT, { verifyRepo = true } = {}) {
             );
           }
         }
-        if ((gate.status === "passed" || gate.status === "failed") && !(gate.run && String(gate.run).trim())) {
+        const manualPassedWithoutRun = gate.manual === true && gate.status === "passed" && gate.name === "webui-ux-review";
+        if (
+          (gate.status === "passed" || gate.status === "failed")
+          && !(gate.run && String(gate.run).trim())
+          && !manualPassedWithoutRun
+        ) {
           errors.push(
             `${where}: gates[${index}] (${gate.name ?? index}) status is "${gate.status}", so it must cite the `
               + `CI run id it came from in "run"`
           );
         }
+        if (gate.name === "webui-ux-review") {
+          validateWebuiUxReview(entry, gate, index, where, root, errors);
+        }
         if (gate.run && runIds.size > 0 && !runIds.has(String(gate.run).trim())) {
           errors.push(
             `${where}: gates[${index}] (${gate.name ?? index}) cites run ${gate.run}, which is not one of this `
               + `release's runs (${[...runIds].join(", ")}). A gate must be cited from a run that verified this release.`
+          );
+        }
+      }
+      const productionReady = Boolean(entry.deliveryPackage && entry.deliveryPackage.productionReady === true);
+      if (productionReady && productVersion !== UX_EVIDENCE_EXEMPT_VERSION) {
+        const uxGate = entry.gates.find((gate) => gate && gate.name === "webui-ux-review");
+        if (!uxGate || uxGate.status !== "passed" || uxGate.required !== true || uxGate.manual !== true) {
+          errors.push(
+            `${where}: deliveryPackage.productionReady is true, so gates must include webui-ux-review `
+              + `with required true, manual true, and status passed`
           );
         }
       }

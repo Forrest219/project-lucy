@@ -131,3 +131,27 @@ Reported: 2026-08-05
 
 ### Notes
 Spec 103 / `wo-202608-36` 已落地（本轮不做浏览器验证，结束后只做 code review）。
+
+## UX-EVAL-007: 运行历史空态只有一行字
+
+Status: Open
+Route: /eval/runs
+Feedback: 2026-10-30 走查。运行历史几乎只有一行空文案，看不出原因和下一步。
+Expected: 空态在面板内，写出没有运行记录的原因，并指向可以做的下一步。
+Browser Check: 发版走查打开 `/eval/runs`。对照 UX-R06。
+
+## UX-EVAL-008: 现场提问空态只有一行字
+
+Status: Open
+Route: /eval/field-questions
+Feedback: 2026-10-30 走查。现场提问几乎只有一行空文案。
+Expected: 空态在面板内，写出没有现场提问的原因，并指向下一步。
+Browser Check: 发版走查打开 `/eval/field-questions`。对照 UX-R06。
+
+## UX-EVAL-009: 安全评测候选面板没有撑满，主按钮使用 Diff
+
+Status: Open
+Route: /eval/security-candidates
+Feedback: 2026-10-30 走查。左右面板没有撑满高度。主操作写成「生成 Diff」。
+Expected: 面板在工作区内对齐。主按钮使用「差异」，不用 Diff 当主标签。
+Browser Check: 发版走查打开 `/eval/security-candidates`。对照 UX-R05、UX-R09。

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -37,7 +38,7 @@ function validEntry(overrides = {}) {
 async function withRepo(options, fn) {
   const tmp = await makeRepo(options);
   try {
-    return fn(tmp);
+    return await fn(tmp);
   } finally {
     await rm(tmp, { recursive: true, force: true });
   }
@@ -331,4 +332,149 @@ describe("release-ledger shallow checkout", () => {
       await rm(source, { recursive: true, force: true });
     }
   });
+
+  it("does not add webui-ux-review to the checked-in v0.20.0 ledger", () => {
+    const ledger = readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "../../docs/releases/v0.20.0.json"), "utf8");
+    assert.equal(ledger.includes("webui-ux-review"), false);
+  });
+
+  it("accepts a manual webui-ux-review pass without a CI run", async () => {
+    await withUxRepo({
+      version: "0.21.0",
+      productionReady: true,
+      gate: { name: "webui-ux-review", status: "passed", required: true, manual: true, evidence: "docs/releases/ux/0.21.0.md" },
+      ux: passedUx
+    }, (tmp) => {
+      assert.deepEqual(collectLedgerErrors(tmp, { verifyRepo: false }), []);
+    });
+  });
+
+  it("rejects a manual pass whose evidence file is missing", async () => {
+    await withUxRepo({
+      version: "0.21.0",
+      productionReady: true,
+      gate: { name: "webui-ux-review", status: "passed", required: true, manual: true, evidence: "docs/releases/ux/0.21.0.md" },
+      ux: null
+    }, (tmp) => {
+      const errors = collectLedgerErrors(tmp, { verifyRepo: false });
+      assert.ok(errors.some((error) => error.includes("does not exist")));
+    });
+  });
+
+  it("rejects a production-ready release that omits webui-ux-review", async () => {
+    await withUxRepo({ version: "0.21.0", productionReady: true, gate: null, ux: null }, (tmp) => {
+      const errors = collectLedgerErrors(tmp, { verifyRepo: false });
+      assert.ok(errors.some((error) => error.includes("webui-ux-review")));
+    });
+  });
+
+  it("does not require webui-ux-review on v0.20.0", async () => {
+    await withUxRepo({ version: "0.20.0", productionReady: true, gate: null, ux: null }, (tmp) => {
+      const errors = collectLedgerErrors(tmp, { verifyRepo: false });
+      assert.ok(errors.every((error) => !error.includes("webui-ux-review")));
+    });
+  });
+
+  it("rejects passed evidence that is dirty or not structurally green", async () => {
+    await withUxRepo({
+      version: "0.21.0",
+      productionReady: true,
+      gate: { name: "webui-ux-review", status: "passed", required: true, manual: true, evidence: "docs/releases/ux/0.21.0.md" },
+      ux: "result: passed\nreasonClass: none\nworkspaceDirty: true\nstructure: green\n"
+    }, (tmp) => {
+      const errors = collectLedgerErrors(tmp, { verifyRepo: false });
+      assert.ok(errors.some((error) => error.includes("workspaceDirty=false")));
+    });
+  });
+
+  it("rejects notExecuted on a production-ready release", async () => {
+    await withUxRepo({
+      version: "0.21.0",
+      productionReady: true,
+      gate: {
+        name: "webui-ux-review",
+        status: "notExecuted",
+        required: true,
+        manual: true,
+        evidence: "docs/releases/ux/0.21.0.md",
+        reason: "structure-blocked"
+      },
+      ux: blockedUx("structure-blocked")
+    }, (tmp) => {
+      const errors = collectLedgerErrors(tmp, { verifyRepo: false });
+      assert.ok(errors.some((error) => error.includes("cannot be notExecuted")));
+    });
+  });
+
+  it("accepts notExecuted when the walk never started and the release is not production-ready", async () => {
+    await withUxRepo({
+      version: "0.21.0",
+      productionReady: false,
+      gate: {
+        name: "webui-ux-review",
+        status: "notExecuted",
+        manual: true,
+        evidence: "docs/releases/ux/0.21.0.md",
+        reason: "structure-blocked: h1 mismatch"
+      },
+      ux: blockedUx("structure-blocked")
+    }, (tmp) => {
+      assert.deepEqual(collectLedgerErrors(tmp, { verifyRepo: false }), []);
+    });
+  });
+
+  it("rejects notExecuted whose reason class does not match the evidence", async () => {
+    await withUxRepo({
+      version: "0.21.0",
+      productionReady: false,
+      gate: {
+        name: "webui-ux-review",
+        status: "notExecuted",
+        manual: true,
+        evidence: "docs/releases/ux/0.21.0.md",
+        reason: "walk finished"
+      },
+      ux: blockedUx("walk-blocked")
+    }, (tmp) => {
+      const errors = collectLedgerErrors(tmp, { verifyRepo: false });
+      assert.ok(errors.some((error) => error.includes("must include walk-blocked")));
+    });
+  });
 });
+
+const passedUx = "result: passed\nreasonClass: none\nworkspaceDirty: false\nstructure: green\n";
+
+function blockedUx(reasonClass) {
+  const structure = reasonClass === "structure-blocked" ? "red" : "green";
+  const dirty = reasonClass === "instance-not-ready" ? "true" : "false";
+  return `result: blocked\nreasonClass: ${reasonClass}\nworkspaceDirty: ${dirty}\nstructure: ${structure}\n`;
+}
+
+async function withUxRepo({ version, productionReady, gate, ux }, fn) {
+  const deliveryPackage = {
+    name: "pkg",
+    sha256: "c".repeat(64),
+    builtFromCommit: SHA_A,
+    productionReady
+  };
+  const gates = [{ name: "spec-and-webui", status: "passed", run: "1" }];
+  if (gate) gates.push(gate);
+  await withRepo({
+    version,
+    entries: {
+      [`v${version}.json`]: validEntry({
+        productVersion: version,
+        releaseTag: `v${version}`,
+        deliveryPackage,
+        noDeliveryReason: undefined,
+        gates
+      })
+    }
+  }, async (tmp) => {
+    if (ux) {
+      await mkdir(path.join(tmp, "docs/releases/ux"), { recursive: true });
+      await writeFile(path.join(tmp, "docs/releases/ux", `${version}.md`), ux, "utf8");
+    }
+    return fn(tmp);
+  });
+}

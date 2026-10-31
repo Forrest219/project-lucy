@@ -217,3 +217,39 @@ Reported: 2026-08-07
 
 ### Notes
 Spec 123 / `wo-202608-57` 已落地（本轮不做浏览器验证，结束后只做 code review，待复核后升 Verified）。主题：`publish workbench activation ia`。
+
+## UX-PUBLISH-WORKBENCH-008: 无变更文案与路径列表互相否定
+
+Status: Open
+Route: /publish/workbench
+Feedback: 2026-10-30 走查。页面同时出现原始 yaml 路径和「当前无变更」。说明里还有 CLI / Git 用语。
+Expected: 没有变更时不列出待发布路径。有路径时不写「当前无变更」。主文案使用产品术语。
+Browser Check: 发版走查打开 `/publish/workbench`，不发布。对照 UX-R08、UX-R09。
+
+## UX-PUBLISH-WORKBENCH-009: 三栏工作台与完整确认范围
+
+Status: Fixed
+Route: `/publish/workbench`
+Area: 发布工作台三栏（待发布变更 / 生效准备 / 最近发布）+ 宽确认侧栏
+Severity: P1
+Reported: 2026-10-30
+
+### Feedback
+2026-10-30 走查与设计评审：工作台缺「最近发布」摘要；左栏标题与术语标准冲突；确认侧栏只给计数与裸表名、超过 8 项被静默截断，看不出某张表为什么在本批。
+
+### Expected
+- 首屏三栏固定为「待发布变更 / 生效准备 / 最近发布」；只有中栏有发布主动作，页头不重复放校验与发布按钮。
+- 左栏按语义资产 / Schema Manifest / 业务 Wiki 分组，标题旁显示待同步文件数。
+- 右栏展示最近 5 个业务批次，含进行中与失败；「已生效」不得混入未确认的记录。
+- 确认侧栏按连接 / Schema 分组，逐表给出完整标识与纳入原因；**不得静默截断前 8 项**；搜索与折叠只影响展示，仍同步全批。
+- 逐表影响解析不完整时禁用提交并显示「影响范围待核对」。
+
+### Browser Check
+1. Open `/publish/workbench` with ≥1 pending file at ≥1280px。
+2. Confirm the three columns read 待发布变更 → 生效准备 → 最近发布；the only publish action is in 生效准备。
+3. Open 确认同步索引并生效；confirm the panel lists every affected table with its reason, and that >8 tables are all present。
+4. Type in the search box；confirm the visible count changes while 「仍会同步全部范围」 stays visible。
+5. Confirm 最近发布 shows the newest 5 business batches, and that a failed or unconfirmed attempt is not labelled 已生效。
+
+### Notes
+Spec [`lucy-20261030-publish-workbench-three-column-spec.md`](../../specs/lucy-20261030-publish-workbench-three-column-spec.md) v0.2 与其 Plan 已落地（本轮不做浏览器验证；结束后只做 code review，待复核后升 Verified）。主题：`publish workbench three-column ia`。三栏与宽确认侧栏的页面级模式登记在 `webui/docs/design-system/99-governance.md` 的 TD-20261030-01。
