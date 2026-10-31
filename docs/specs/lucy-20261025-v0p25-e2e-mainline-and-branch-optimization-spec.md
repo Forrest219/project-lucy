@@ -186,7 +186,10 @@ evidenceRefs: string[]
 
 ### 5.3 Hive、数据库支持状态与升级的拆分
 
-- Hive 是 `CONN` 下的独立 suite `HIVE`，不是第二条主线。`HIV25-V01`…`V17` 仍是发布取证编号，由本 Spec 持有；[Hive 直连 Spec](lucy-20261025-v0p25-hive-direct-connection-spec.md) 的功能合同出口只含 V01、V02、V06（及配置失败关闭）。`HIV25-V01/V02/V06` 可引用该 Spec 的编译侧证据；`HIV25-V03` 等同时要求 HS2／真实执行的部分必须拆成独立证据维度，不得把「生成结构化 SQL／plan」写成「HS2 执行通过」。
+- Hive 是 `CONN` 下的独立 suite `HIVE`，不是第二条主线。`HIV25-V01`…`V17` 仍是发布取证编号，由本 Spec 持有。
+  - 编译侧功能合同：[Hive 直连 Spec](lucy-20261025-v0p25-hive-direct-connection-spec.md) 出口仅 V01、V02、V06。
+  - 问数功能合同：[Hive 问数 Spec](lucy-20261030-hive-query-execution-spec.md) 出口为 HQ-01–HQ-15、HQ-17 及 HQ-16／HQ-18 合成维（分区门禁、MCP 分流、JDBC 契约、合成夹具）。
+  - **本 suite（E2E）另持有**：客户匹配 HS2／认证／TLS／JRE、真实集群 oracle、带 Token 的 Agent 旅程、系统级故障、管理台发现旅程、离线 amd64／交付组合；升级／恢复仍归 `LIFECYCLE`。`HIV25` 可引用上述两份功能合同的通过证据，不得把 HQ 或编译侧通过写成客户交付通过；不得把「生成结构化 SQL／plan」写成「HS2 执行通过」。
 - 数据库类型及支持状态以[数据库支持矩阵](../governance/database-support-matrix.md)为唯一真源。MySQL、PostgreSQL 和限定本地文件场景的 SQLite 当前为 `verified`；StarRocks、Doris 为 `gated`；SQL Server、Athena 为 `experimental`；Oracle 为 `roadmap`。E2E 清单缺口不得改写成产品不支持，支持状态也不得替代本轮运行证据。
 - `LIFECYCLE` 下分别保留原地升级 `UPG25-*` 与候选恢复验证 `RVC25-*`，二者不可互相替代。
 - 旧 `docs/qa/upgrade-feature-checklist.md`／`scripts/e2e/contracts/upgrade-features.yaml` 的 UPG-01–14 是升级功能清单，不是 P1-5 的 UPG-01–16。两者语义不相交，但裸编号字符串重叠，旧编号保留为 `legacy:upgrade-feature:UPG-xx`，不直接映射为新用例。
@@ -296,7 +299,7 @@ executionId         = <功能前缀>25-<原编号>
 | P1-1 按表反查 | RTV-01、RTV-02、RTV-03、RTV-04、RTV-05、RTV-06、RTV-07、RTV-08 | `RTV25-01`…`RTV25-08` | ACCESS | 同源快照 contract＋浏览器只读视图＋与摘要／关系图对账；无运行时写入 |
 | P1-2 授权摘要 | ASV-01、ASV-02、ASV-03、ASV-04、ASV-05、ASV-06、ASV-07、ASV-08、ASV-09、ASV-10、ASV-11、ASV-12、ASV-13、ASV-14 | `ASV25-01`…`ASV25-14` | ACCESS | 编译同源 contract＋Agent／Role 浏览器视图＋深链＋秘密保护；与 RTV／ACM 同快照对账 |
 | P1-3 访问关系图 | SC-01、SC-02、SC-03、SC-04、SC-05、SC-06、SC-07、SC-08、SC-09、SC-10、SC-11、SC-12、SC-13、SC-14 | `ACM25-SC-01`…`ACM25-SC-14` | OBSERVE | 单元守恒／计数＋组件交互＋真实事件＋浏览器深链与等价表格；不替代 ACCESS 裁决测试 |
-| P1-4 Hive 直连 | V01、V02、V03、V04、V05、V06、V07、V08、V09、V10、V11、V12、V13、V14、V15、V16、V17 | `HIV25-V01`…`HIV25-V17` | CONN | 编译侧与真实执行分证；真实 HS2／JDBC、Proxy、ACL、审计、amd64／离线和升级按各自维度留证；HIVE 是 suite 名，不是第七责任域 |
+| P1-4 Hive 直连／问数 | 编译侧 V01／V02／V06；问数 HQ（功能合同另册）；旅程与客户维仍用 V03–V17 映射 | `HIV25-V01`…`HIV25-V17` | CONN | 功能合同在编译侧 Spec 与问数 Spec；本 suite 持客户 HS2／Agent 旅程／系统故障／交付；升级归 LIFECYCLE；HIVE 是 suite 名，不是第七责任域 |
 | P1-5 客户升级 E2E | UPG-01、UPG-02、UPG-03、UPG-04、UPG-05、UPG-06、UPG-07、UPG-08、UPG-09、UPG-10、UPG-11、UPG-12、UPG-13、UPG-14、UPG-15、UPG-16 | `UPG25-01`…`UPG25-16` | LIFECYCLE | 固定旧版与候选 digest＋真实卷／备份＋运维故障＋公共 MCP＋安全／审计连续；保持非门禁 |
 | P1-6 升级候选验证 | RVC-01、RVC-02、RVC-03、RVC-04、RVC-05、RVC-06、RVC-07、RVC-08、RVC-09、RVC-10、RVC-11、RVC-12、RVC-13 | `RVC25-01`…`RVC25-13` | LIFECYCLE | 一致性备份＋两个隔离空卷环境＋结构／业务／安全断言＋清理证据；保持非门禁 |
 
