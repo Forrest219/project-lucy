@@ -265,7 +265,7 @@ rg -n '面向开发者|面向管理员|面向接入协作者' docs/ webui/ --glo
 
 | 命令 | 结果 | 说明 |
 |---|---|---|
-| `npm run lint:spec-docs` | 本功能**零违规**；全量 exit=1 | 本 Spec 与本 Plan 在 FAILED 与 WARN 两个通道下均无违规（门禁对未跟踪文件同样逐条检查，只降级为不阻塞）。全量 exit=1 来自**其他**会话的在途文件：`docs/specs/lucy-ci-restoration-spec.md`、`docs/plans/2026-10-29-ci-restoration-plan.md`、`docs/plans/2026-10-30-l25-11-publish-window-task.md`、`docs/plans/2026-10-30-manifest-upload-size-fix.md`，以及未跟踪的 `webui-release-ux-review` 系列。与本功能无关，**不写入基线**（基线只减不增） |
+| `npm run lint:spec-docs` | 本功能**零违规**；全量 exit=1 | 本 Spec 与本 Plan 在 FAILED 与 WARN 两个通道下均无违规（门禁对未跟踪文件同样逐条检查，只降级为不阻塞）。全量 exit=1 来自**其他**会话的在途文件：`docs/specs/lucy-ci-restoration-spec.md`、`docs/plans/2026-10-29-ci-restoration-plan.md`、`docs/plans/2026-10-30-l25-11-publish-window-task.md`、`docs/plans/lucy-20261030-manifest-upload-size-fix-plan.md`，以及未跟踪的 `webui-release-ux-review` 系列。与本功能无关，**不写入基线**（基线只减不增） |
 | `npm run lint:terminology` | **通过**（1095 files scanned） | 新术语已在主 Spec 的 Terminology Compliance 登记；术语标准本体的新增登记在 S5 执行 |
 | `npm run lint:spec` | exit=1，失败项与本功能无关 | 失败项为 `api-spec`：`webui/docs/03-api-spec.md: missing /api/publish-workbench/evidence`。该路由已在 `webui/server/index.ts:1053` 实现（提交 `6040ef7a`，发布工作台三栏线），但 API 文档未同步登记，属该线遗留。本功能未改任何路由、API 或技能文件 |
 | `npm run lint:ia-boundary` | **通过** | 本阶段未改路由 |

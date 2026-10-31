@@ -113,7 +113,7 @@ npm run build              → ✓ built in 515ms
 
 **旁证回归**：`semantic-release-restore` / `semantic-batch-journal-lifecycle` / `validate-changed-column-type` / `skill-owner-l25-04` / `semantic-asset-publish` / `restore-release-drawer` / `publish-history` → 7 files / 70 tests 全绿。
 
-**其它门禁**：`npm run lint:spec-docs` 中本 Spec 与 Plan 的形态违规为 **0**（剩余 FAILED 项全部属于其它会话的文件：`2026-10-29-ci-restoration-plan.md`、`2026-10-30-l25-11-publish-window-task.md`、`2026-10-30-manifest-upload-size-fix.md` 等，未代改）。`npm run e2e:selector-contract` 中本线文件的 **UNREGISTERED = 0、ORPHAN = 0**（全仓剩余 201 条属于其它会话的新组件）。
+**其它门禁**：`npm run lint:spec-docs` 中本 Spec 与 Plan 的形态违规为 **0**（剩余 FAILED 项全部属于其它会话的文件：`2026-10-29-ci-restoration-plan.md`、`2026-10-30-l25-11-publish-window-task.md`、`lucy-20261030-manifest-upload-size-fix-plan.md` 等，未代改）。`npm run e2e:selector-contract` 中本线文件的 **UNREGISTERED = 0、ORPHAN = 0**（全仓剩余 201 条属于其它会话的新组件）。
 
 ## 四、PWB-01–PWB-26 逐条结论
 

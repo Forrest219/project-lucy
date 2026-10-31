@@ -4,6 +4,9 @@ This directory stores repository-level implementation plans that are not scoped 
 
 | Plan | Purpose |
 |---|---|
+| [2026-10-29-ci-restoration-plan.md](2026-10-29-ci-restoration-plan.md) | **定稿 v1.0（2026-10-29）**：Lucy CI 恢复实施计划。T00–T04 与 Release CI 文档修正已实施，T06 汇总执行证据；T05（Required checks 迁移）与 R01（客户发布设施）未授权、未开工。日常 CI 已恢复，客户自动发布仍 BLOCKED。Spec 见 [lucy-ci-restoration-spec.md](../specs/lucy-ci-restoration-spec.md) |
+| [2026-10-30-l25-11-publish-window-task.md](2026-10-30-l25-11-publish-window-task.md) | **2026-10-30 授权落地**：L25-11 收口 Task（发布窗口、读取准入、导出基线）。只补现码里与冻结合同不一致的三处，不新增验收矩阵。L25-11 已于 2026-10-31 以 FC-01–FC-32 关闭；V01–V22 仍未执行；G30 仍开、W-B 不打开 |
+| [lucy-20261030-manifest-upload-size-fix-plan.md](lucy-20261030-manifest-upload-size-fix-plan.md) | **用户于 2026-10-30 批准，本地验证已完成**：Manifest 上传容量修复。单 YAML 上限 8 MiB，只有实际携带 YAML 或 ZIP 内容的三条资产路由使用 32 MiB 请求体上限，其余路由维持默认限制。6 个相关测试文件、111 项测试通过；两份实际 Manifest 完成校验、上传与目录刷新。未构建客户镜像、未执行远端升级 |
 | [lucy-20261030-webui-release-ux-review-plan.md](lucy-20261030-webui-release-ux-review-plan.md) | **v1.2 已落地 S1–S4**：发版前 WebUI 三层检查。结构套件（`e2e:release-ux`，独立 Playwright config）、runbook 与表面清单测试、发版台账 `webui-ux-review` 手工门禁、UI 台账 Open 登记。契约夹具上结构套件 27/27 全绿。走查与签字未执行，不构成发版通过。Spec 见 [lucy-20261030-webui-release-ux-review-spec.md](../specs/lucy-20261030-webui-release-ux-review-spec.md) |
 | [lucy-20261030-l25-11-uat-delivery-task-plan.md](lucy-20261030-l25-11-uat-delivery-task-plan.md) | **v0.25 L25-11，已于 2026-10-31 关闭**：交付 UAT Task，按波次 A–E 推进本环境 UAT 取证。用户批准拆分后本条走功能合同收口 Task，不要求 22 个 V 项通过。`SEM25` 未执行。G30 仍开，W-B 仍关。V01–V22 仍未执行。V03(d)、V22 与客户交付仍是 `blocked_delivery` |
 | [lucy-20261030-semantic-batch-functional-contract-plan.md](lucy-20261030-semantic-batch-functional-contract-plan.md) | **v0.25 L25-11，已关闭（2026-10-31）**：用户批准拆分。FC-01–FC-32 已通过。`SEM25` 由 E2E Spec 持有且未执行。G30 仍开。不关闭 G31，不打开 W-B。本条关闭不表示可上线 |

@@ -1,14 +1,24 @@
-# 195 · 展示快照变更去重与影响范围隔离
+# 展示快照变更去重与影响范围隔离 Spec
 
 | 元数据 | 内容 |
 |---|---|
-| 版本 | v0.1 |
+| 文档类型 / 版本 | 功能 Spec / v0.1 |
 | 日期 | 2026-10-30 |
-| 状态 | **实现已完成（WO Task 1–6）；SI-01–SI-13 已执行并通过；SI-14 浏览器往返见 §8.1**。未构建镜像、未部署、未改现场实例、未提交 git |
+| 状态 | **实现已完成（WO Task 1–6，提交 `ced19d1a`）；SI-01–SI-13 已执行并通过；SI-14 浏览器往返见 §8.1**。未构建镜像、未部署、未改现场实例 |
+| 台账号 | 无（未挂在 v0.25 登记册 L25-01–L25-16 上） |
+| 原流水号 | WebUI 195（原 `webui/docs/195-display-snapshot-invalidation-isolation-spec.md`；按 `docs/governance/DEVELOPMENT.md`「Spec 落位规则」迁入 `docs/specs/`） |
 | 重点 | 同一次已确认变更不重复触发缓存失效；普通 overlay 修改不牵连 Agent 权限展示 |
 | 范围 | Lucy 单进程内的展示快照、文件对账、显示写屏障与刷新状态提示 |
-| 上游契约 | [Spec 174](174-webui-entry-performance-spec.md) §3.2 / §4.2 / §7 / §8 |
-| 实施计划 | [WO-20261030](plans/wo-20261030-display-snapshot-invalidation-isolation.md) |
+| 上游契约 | [Spec 174](../../webui/docs/174-webui-entry-performance-spec.md) §3.2 / §4.2 / §7 / §8 |
+| 实施计划 | [WO-20261030](../../webui/docs/plans/wo-20261030-display-snapshot-invalidation-isolation.md) |
+
+## 闭口层级
+
+- 层级：功能合同
+- 本条承诺：同一次已确认的文件变更只触发一次展示快照失效，且只更新真正依赖它的数据——普通 overlay 修改不牵连 Agent 权限展示。
+- 本条出口：§8 验收矩阵 SI-01–SI-14 及其 §8.1 执行记录（SI-01–SI-13 为自动化用例；SI-14 为本地匿名夹具的浏览器往返，31 个实测样本全部成功、0 次 busy）。
+- 不在本条出口：整库旅程、Agent 路径、跨模块或系统级故障演练、证据等级；现场实例复核、镜像构建与部署、客户交付均不在本条出口。
+- 上线关系：本条收口不表示可上线
 
 ## 1. 用通俗的话说明要修什么
 
@@ -252,4 +262,21 @@ New terms:
 
 ## Design System Compliance
 
-引用 `design-system/20-patterns-page-layout.md` §2–3、`design-system/99-governance.md` 的 TD-174-01：保留 PageHeader、主区和表格布局，刷新失败在所属数据区使用现有提示样式与重试按钮，不以 Toast 反复打扰，不替换已有主内容。本单不新增视觉模式，不做移动窄屏验证。
+### Referenced Specs
+
+- `webui/docs/design-system/20-patterns-page-layout.md` §2–3
+- `webui/docs/design-system/99-governance.md` TD-174-01
+
+### What This Change Follows
+
+- [ ] 保留 PageHeader、主区和表格布局
+- [ ] 刷新失败在所属数据区使用现有提示样式与重试按钮，不以 Toast 反复打扰，不替换已有主内容
+- [ ] 本单不新增视觉模式，不做移动窄屏验证
+
+### Exceptions (If Any)
+
+- None
+
+### Follow-up Needed
+
+- None. 本单不新增视觉模式，不需要在 `99-governance.md` 补登记临时决策

@@ -208,7 +208,7 @@ Lucy MCP Proxy 监听 `LUCY_PROXY_HOST:LUCY_PROXY_PORT`（默认容器内 `0.0.0
 
 ## 9. 关键文档索引
 
-展示快照变更去重与影响范围隔离：[Spec 195](../../webui/docs/195-display-snapshot-invalidation-isolation-spec.md) · [实施计划 WO-20261030](../../webui/docs/plans/wo-20261030-display-snapshot-invalidation-isolation.md)。重点为同版本去重和 overlay / Agent 影响隔离；仅文档落盘，实现及验收未开始。
+展示快照变更去重与影响范围隔离：[Spec 195](../../docs/specs/lucy-20261030-display-snapshot-invalidation-isolation-spec.md) · [实施计划 WO-20261030](../../webui/docs/plans/wo-20261030-display-snapshot-invalidation-isolation.md)。重点为同版本去重和 overlay / Agent 影响隔离；仅文档落盘，实现及验收未开始。
 
 | 主题 | 文档 |
 |---|---|
