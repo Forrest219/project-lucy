@@ -3,6 +3,7 @@
 # 初始化：T00（2026-10-18，runId t00-20261018-0042），基线 lucy-v2.0 / fbed6d4；评估 v1.1（V-01～V-08、D-01～D-02、G-01～G-05、依赖条目）。
 # 规则：P0/P1 只能 open | fixed，不得 accepted_risk；fixed 必须填 fixedIn（提交 SHA）且 verifiedBy 全部为本次 release evidence 中 passed 的 case variant id；
 #       仅 P2 可 accepted_risk（acceptedBy 填 owner 姓名与日期）；依赖 high/critical 只能 fixed 或附可复核说明的 not_reachable。
+#       D-03 的验证路径只按下方专例③，不沿用本段对 verifiedBy 的 release evidence passed 要求；其他条目不因此放宽。
 # 每个整改任务在关闭/推进对应条目的同一提交内更新本文件。
 #
 # 【取证口径澄清 —— 这是澄清，不是规则放松】
@@ -17,6 +18,14 @@
 #   ② 反向：条目保持 `open` 的真正判据是「**对应 case variant 是否真的在修复后的
 #      代码上跑过并 passed**」，**不是**「real-e2e 有没有被调度过」。前者是
 #      「证据不存在」，后者只是「证据来源不同」——两者不可混为一谈。
+#   ③ D-03 专例（只此一条，不是全表豁免）：verifiedBy 可以是 ROW25-V19 与 ROW25-V22。
+#      这两条由仓库测试 webui/server/__tests__/row-policy-d03-uppercase.test.ts
+#      与 webui/server/__tests__/row-policy-d03-realfs.test.ts 验证，
+#      不要求它们出现在本次 release evidence 的 passed 集合里。
+#      该例外不把这两条 E2E 记为 passed，不把 releaseReady 置真，
+#      不关闭 G-01、G-06 或 Wave 0b，也不宣称客户 Linux 大写 schema 场景已交付。
+#      其他条目的 verifiedBy 仍必须是本次 release evidence 中 passed 的 case variant id。
+#      P0/P1 仍然不得 accepted_risk。
 version: 1
 findings:
   # V-01 客户默认部署即开放管理面，可匿名抢占 owner（T0A-2 最小修复；T02 完整修复）
@@ -133,25 +142,28 @@ findings:
   #   单一开关点（该模块唯一允许长出大小写目录扫描的位置），改为按磁盘真实文件名做大小写不敏感匹配，
   #   并返回真实命中的文件名，使 manifestPath / 原因码指向实际读取的文件；未放宽任何字段校验，
   #   不存在的字段、度量、跨源引用仍分别按 unknown／measure／cross_source 拒绝。
-  #   回归证据（仓库内自动化，随 CI 在 Linux 大小写敏感环境执行）：
+  #   回归证据（2026-10-28 入库，历史记录）：
   #     webui/server/__tests__/row-policy-d03-uppercase.test.ts — V19（合法列在大写 schema 表上正常绑定）、
   #       V22（同一表的预览与运行时 forced_filters 等价）；已用「撤掉修复」对照验证两条用例确实失败，非假阳性。
   #     webui/server/__tests__/row-policy-catalog-attribution.test.ts — V20 五类故障路径
   #       （resolve／read／parse／catalog／capability_unknown）全部失败关闭且带四元组；V21 字段不存在仅在目录可靠装载时归因。
-  #   状态说明：代码已修复且回归用例在库，但 status 仍为 open——verifiedBy 要求引用本次 release evidence 中
-  #   passed 的用例 ID。采集器不再把「fixedIn 为空」写成「V19／V22 永远不能通过」：证据未齐时记 blocked，
-  #   release evidence 里 ROW25-V19 与 ROW25-V22 为 passed 的那次提交才填 fixedIn／verifiedBy。
-  #   仓库 mock、本机大小写不敏感卷、以及尚未进入 release evidence 的实跑都不填这两个字段。
-  #   2026-10-30：row-policy-d03-realfs.test.ts 在本机 Case-sensitive APFS 卷上通过
-  #   （LUCY_D03_REQUIRE_CASE_SENSITIVE=1）。这只证明解析器在真实大小写敏感文件系统上能命中 BIDM.yaml，
-  #   不是 release evidence，不填 fixedIn／verifiedBy。
-  #   不得据此宣称受影响客户场景已交付价值。G-01 与 Wave 0b 不因此解除。
+  #       V20／V21 不是本条 verifiedBy。
+  #   关闭（2026-10-30）：产品修复已接受为 fixed。fixedIn 为引入 resolveManifestFilePath 的
+  #   b7b157354d970860cdb03552c5d5839d7a7ccb9f。verifiedBy 为 ROW25-V19 与 ROW25-V22。
+  #   验证是仓库内两份既有测试，不是 release evidence 中的 passed：
+  #     webui/server/__tests__/row-policy-d03-uppercase.test.ts 覆盖 V19（合法列可绑定）与
+  #     V22（预览 forced_filters 与运行时一致）；
+  #     webui/server/__tests__/row-policy-d03-realfs.test.ts 是大小写敏感文件系统断言
+  #     （Case-sensitive APFS，LUCY_D03_REQUIRE_CASE_SENSITIVE=1）。
+  #   ROW25-V19 与 ROW25-V22 的 E2E 描述符保持 not_run，不记 passed。
+  #   本关闭不宣称客户 Linux 大写 schema 场景已交付。该场景仍归 Wave 0b。
+  #   G-01、G-06 保持 open，blocked_delivery 保持。acceptedBy 保持为空。
   - id: D-03
     severity: P1
-    status: open
+    status: fixed
     spec: "L25-14 §1.5 / §5.5"
-    fixedIn: null
-    verifiedBy: []
+    fixedIn: b7b157354d970860cdb03552c5d5839d7a7ccb9f
+    verifiedBy: [ROW25-V19, ROW25-V22]
     acceptedBy: null
   # D-04 v0.25 实施期发现的 fail-open：问询预算在「无 turnId 且无续跑凭据」时自动重置窗口
   # 现象（2026-10-25 v0.25 W3 Codex 对抗式审查实证）：applyConsume 用 `continueToken === turnId` 判断续跑；

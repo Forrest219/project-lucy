@@ -5,7 +5,7 @@
 | 文档类型 / 版本 | 功能设计基线 / v0.2-requirements-review；2026-10-27 交叉审阅替代条款见 §14 |
 | 日期 / 目标版本 | 2026-10-24 / v0.25；最近修订 2026-10-27 |
 | 功能编号 / 优先级 | L25-14 / P0-2；R2、R4、R5 为 P0，R1、R3 保持 P1 |
-| 状态 | **Spec／Plan 文档评审已关闭，修订通过（2026-10-27）**；C14–C18 已实施、未验收，C19 待正式验收。实施基线 `21de5168`，2026-10-27 另核对 HEAD `7382bac4`；R1／R3 的 P1 历史实施记录不计入 P0 完成判定；V01–V22 全部未执行。代码实施完成不等于验收通过 |
+| 状态 | **P0 已收口（2026-10-30）**。出口只含 R2／R4／R5 的产品入口回归与演示卷删除确认。R1／R3 与 D-03 的现行状态、以及仍挡住交付的 Wave 0b，见 §14.9 |
 | 实施回写 | 2026-10-25 W5 历史回写见 §13；2026-10-27 经本次用户明确授权完成独立交叉审阅修订，现行规范性替代条款见 §14。文档修订不表示代码已修复 |
 | 授权来源 | 2026-10-24 Forrest 批准首批 Spec 评审 Final 决议；2026-10-25 实施授权见实施计划；2026-10-27 用户授权本次独立核查并直接修订 Spec／Plan |
 | 规划入口 | [Lucy v0.25 功能升级建议书](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) §2.8；[P0 Final 决议](../reviews/2026-10-24-lucy-v0.25-p0-final-decision.md) |
@@ -485,7 +485,7 @@ L25-01 要求 Agent 详情给出一句话（例如「行级策略按分公司」
 
 ## 9. 验收矩阵
 
-**V01–V22 全部未执行**。P0 功能验收覆盖 R2／R4／R5 对应用例；R1／R3 的用例随 P1 实施验收，不提前计入 P0 完成。**V08–V13、V15、V16 的 Role 分支、V18、V20、V21 的可取证判据由 §14.6 替换；下表对应原行仅保留历史索引。C19 只收这一子集。** V19／V22 是 D-03 的大小写敏感集成回归。大小写不敏感解析已在本分支落地；release evidence 未出现 passed 之前记 blocked，不计 passed。该证据 passed 之后，才允许把这两条记为 passed，并在同一提交填写 `fixedIn` 与 `verifiedBy`。在此之前不得宣称受影响客户场景已交付。它们不是 R2／R4／R5 的开工依赖。V20／V21 使用小写 Schema 即可执行。任何声称完成的范围都必须有其全部适用证据，环境前置不足时记录 blocked 原因，不计 passed。
+下表是 E2E 目录。这些条目的执行状态不决定 L25-14 是否收口；本条 P0 出口见 §14.9。P0 功能验收覆盖 R2／R4／R5 对应用例；R1／R3 的用例随 P1 实施验收，不提前计入 P0 完成。**V08–V13、V15、V16 的 Role 分支、V18、V20、V21 的可取证判据由 §14.6 替换；下表对应原行仅保留历史索引。C19 只收这一子集。** V19／V22 是 D-03 的大小写敏感集成回归，E2E 目录保持未执行。D-03 台账已按两份仓库测试置 `fixed`，见 §14.9。客户 Linux 大写 Schema 场景仍归 Wave 0b。它们不是 R2／R4／R5 的开工依赖。V20／V21 使用小写 Schema 即可执行。任何声称完成的范围都必须有其全部适用证据，环境前置不足时记录 blocked 原因，不计 passed。
 
 | 编号 | 范围 | 场景 | 期望 |
 |---|---|---|---|
@@ -994,7 +994,7 @@ FinalRows(agent, table)        = AgentRoleGrant(agent, table) AND AgentConstrain
 | V20 | 经 Admin 预览／保存产品入口覆盖：缺文件→resolve；拒绝读取→read；非法 YAML／YAML 可解析但结构非法→合同规定的 parse；目标表或目录不能建立→catalog；服务端能力未证明→capability_unknown。保留机器原因、归因码、row_grant／catalog 阶段与四元组；`no_catalog` 和 `unknown` 均覆盖，measure 等其他原因不误分类 |
 | V21 | 仅在 §14.4.2 完整结构与 overlay 校验通过的目录中验证缺字段，含显式合法零列目录；与 V20 的每类故障可区分，四元组完整且失败关闭 |
 
-V19／V22 是 D-03 的大小写敏感集成回归。当前 `status=open`、`fixedIn=null`、`verifiedBy=[]`。release evidence 未 passed 时登记 blocked，不计 passed。passed 之后才在同一提交填写 `fixedIn` 与 `verifiedBy`。它们不是 R2／R4／R5 的开工依赖，也不进入 C19。V20／V21 使用小写 Schema、受控目录与服务端能力夹具即可执行。
+V19／V22 是 D-03 的大小写敏感集成回归。台账现行值为 `status=fixed`、`fixedIn=b7b157354d970860cdb03552c5d5839d7a7ccb9f`、`verifiedBy=[ROW25-V19, ROW25-V22]`，验证是两份仓库测试。这两条的 E2E 描述符保持 `not_run`。客户 Linux 大写 Schema 场景仍归 Wave 0b。它们不进入 C19。V20／V21 使用小写 Schema、受控目录与服务端能力夹具即可执行。
 
 ### 14.7 当前实现核对结论（2026-10-27 实施轮次回写）
 
@@ -1034,10 +1034,11 @@ C14–C18 已完成代码实施并完成实现后静态复审（自审），落�
 
 ### 14.9 验收口径（2026-10-30）
 
-本节只解开 V19／V22 与 D-03 台账的互相等待，不把任何 V 项改成已执行，也不关闭 C19。
+E2E 目录里的 V 项保持未执行。本节登记 P0 出口，以及 R1／R3、D-03、Wave 0b 的现行状态。
 
-- C19 的正式验收集合是 V08–V13、V15、V16 的 Role 分支、V18、V20、V21。V01–V07、V14、V17 保持 P1。V15 在完整故障注入之前保持 blocked。
-- 仓库里经管理台预览／保存入口跑过的用例，只说明本机产品入口有回归锁。它们不填写验收通过，也不填写 D-03 的 `fixedIn`。
-- D-03 的大小写不敏感解析已经落在 `resolveManifestFilePath`。台账保持 `open` / `fixedIn: null` / `verifiedBy: []`，直到 release evidence 里 V19 与 V22 为 passed。那一次提交再填写 `fixedIn` 与 `verifiedBy`。这不解除客户场景交付。
+- **2026-10-30 P0 收口**：L25-14 的 P0 出口只含 R2／R4／R5。证据是产品入口回归（`webui/server/__tests__/row-policy-product-entry.test.ts`）和演示卷上已经走过的删除确认。覆盖清单里 ROW25 的数据库能力为 `mysql`。浏览器、Agent 客户端、`fault-control` 和 real-e2e 采集结果留在 E2E 目录。V15 的九段故障注入留在该目录。
+- **2026-10-30 R1／R3**：P1-1 的出口是 `webui/server/__tests__/p1-row-policy-templates.test.ts` 与 `webui/server/__tests__/p1-row-policy-views.test.ts`。已关闭 RTP-01–RTP-10、RTV-01、RTV-02、RTV-03、RTV-04、RTV-05、RTV-08。RTV-06 保持开放：须与尚未验收的 L25-01、L25-08 在同一快照下对账。RTV-07 保持开放：页面为只读，键盘、表格、焦点与翻译防御尚无测试。RTP25／RTV25 的执行状态不回开已关闭的编号，也不回开本条 P0。
+- **2026-10-30 D-03**：台账 `status=fixed`，`fixedIn=b7b157354d970860cdb03552c5d5839d7a7ccb9f`，`verifiedBy` 为 ROW25-V19 与 ROW25-V22。验证是 `webui/server/__tests__/row-policy-d03-uppercase.test.ts` 与 `webui/server/__tests__/row-policy-d03-realfs.test.ts`。V19／V22 的 E2E 描述符保持 `not_run`。客户 Linux 大写 Schema 场景仍归 Wave 0b。
+- **Wave 0b**：G-01（受保护 runner 上的 real-e2e）与 G-06（候选镜像推送并拉回同一 digest）保持 open。整批保持 `blocked_delivery`。这不回开本条 P0，也不把客户交付写成通过。
 
 — 完
