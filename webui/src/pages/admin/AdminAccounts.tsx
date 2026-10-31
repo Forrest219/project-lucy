@@ -240,7 +240,15 @@ export function AdminAccounts() {
     );
   }
 
+  function forgetAccountErrors() {
+    // D15: a rejection stays on the drawer or confirm that produced it.
+    // Leaving that account drops the message so the next account starts clean.
+    patchMutation.reset();
+    deleteMutation.reset();
+  }
+
   function openDrawer(id: string) {
+    if (id !== managedId) forgetAccountErrors();
     setCreateOpen(false);
     setManagedId(id);
     setConfirmDeleteId(null);
@@ -249,6 +257,7 @@ export function AdminAccounts() {
   function closeDrawer() {
     setManagedId(null);
     setConfirmDeleteId(null);
+    forgetAccountErrors();
   }
 
   return (
@@ -268,6 +277,7 @@ export function AdminAccounts() {
               onClick={() => {
                 setManagedId(null);
                 setConfirmDeleteId(null);
+                forgetAccountErrors();
                 setCreateOpen(true);
               }}
               data-testid="admin-account-create-open"
@@ -367,7 +377,11 @@ export function AdminAccounts() {
           rows={rows}
           meId={meId}
           oidcEnabled={oidcEnabled}
-          error={patchMutation.isError ? accountErrorCopy(patchMutation.error) : null}
+          error={
+            patchMutation.isError && patchMutation.variables?.id === managedRow.id
+              ? accountErrorCopy(patchMutation.error)
+              : null
+          }
           onClose={closeDrawer}
           onOpenDeleteConfirm={() => setConfirmDeleteId(managedRow.id)}
           onPatch={(body, onDone) => patchAccount(managedRow.id, body, onDone)}
@@ -380,8 +394,15 @@ export function AdminAccounts() {
       {confirmRow ? (
         <DeleteAccountConfirm
           row={confirmRow}
-          error={deleteMutation.isError ? accountErrorCopy(deleteMutation.error) : null}
-          onCancel={() => setConfirmDeleteId(null)}
+          error={
+            deleteMutation.isError && deleteMutation.variables === confirmRow.id
+              ? accountErrorCopy(deleteMutation.error)
+              : null
+          }
+          onCancel={() => {
+            deleteMutation.reset();
+            setConfirmDeleteId(null);
+          }}
           onConfirm={() => {
             deleteMutation.mutate(confirmRow.id, {
               onSuccess: () => {

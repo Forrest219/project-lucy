@@ -547,6 +547,82 @@ describe("登录账户页（lucy-20261030-login-accounts）", () => {
     );
   });
 
+  it("SC-13 离开当前账户后，上一次拒绝不再出现在下一个账户上", async () => {
+    const patchMessage = "至少保留一名启用中的所有者";
+    const deleteMessage = "至少保留一名可使用本地密码登录的启用中所有者";
+    stubAdminsFetch(
+      [
+        {
+          id: "admin_zhang",
+          displayName: "张管理员",
+          role: "owner",
+          enabled: true,
+          createdAt: null,
+          loginMethods: ["local"]
+        },
+        {
+          id: "admin_li",
+          displayName: "李所有者",
+          role: "owner",
+          enabled: true,
+          createdAt: null,
+          loginMethods: ["local"]
+        },
+        {
+          id: "admin_wang",
+          displayName: "王所有者",
+          role: "owner",
+          enabled: true,
+          createdAt: null,
+          loginMethods: ["local"]
+        }
+      ],
+      (_url, method) => {
+        if (method === "PATCH") {
+          return new Response(
+            JSON.stringify({ ok: false, error: { code: "LAST_OWNER_REQUIRED", message: patchMessage } }),
+            { status: 400 }
+          );
+        }
+        if (method === "DELETE") {
+          return new Response(
+            JSON.stringify({
+              ok: false,
+              error: { code: "LOCAL_OWNER_REQUIRED", message: deleteMessage }
+            }),
+            { status: 400 }
+          );
+        }
+        return undefined;
+      }
+    );
+    renderAdminAccounts();
+
+    const drawerLi = await openDrawer("admin_li");
+    fireEvent.click(within(drawerLi).getByTestId("admin-account-toggle-admin_li"));
+    expect(await within(drawerLi).findByTestId("admin-account-drawer-error")).toHaveTextContent(patchMessage);
+
+    fireEvent.click(within(drawerLi).getByTestId("admin-account-drawer-close"));
+    const drawerWang = await openDrawer("admin_wang");
+    expect(within(drawerWang).queryByTestId("admin-account-drawer-error")).not.toBeInTheDocument();
+    expect(screen.queryByText(patchMessage)).not.toBeInTheDocument();
+
+    fireEvent.click(within(drawerWang).getByTestId("admin-account-delete-admin_wang"));
+    const modalWang = await screen.findByTestId("admin-account-delete-modal");
+    fireEvent.change(within(modalWang).getByTestId("admin-account-delete-input"), {
+      target: { value: "admin_wang" }
+    });
+    fireEvent.click(within(modalWang).getByTestId("admin-account-delete-confirm"));
+    expect(await within(modalWang).findByTestId("admin-account-delete-error")).toHaveTextContent(deleteMessage);
+
+    fireEvent.click(within(modalWang).getByTestId("admin-account-delete-cancel"));
+    const drawerLiAgain = await openDrawer("admin_li");
+    fireEvent.click(within(drawerLiAgain).getByTestId("admin-account-delete-admin_li"));
+    const modalLi = await screen.findByTestId("admin-account-delete-modal");
+    expect(within(modalLi).queryByTestId("admin-account-delete-error")).not.toBeInTheDocument();
+    expect(screen.queryByText(deleteMessage)).not.toBeInTheDocument();
+  });
+
   it("SC-14 保存密码调用 PATCH，成功后显示「本地密码已更新。」", async () => {
     stubAdminsFetch(ADMINS);
     renderAdminAccounts();
