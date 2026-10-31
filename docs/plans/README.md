@@ -4,6 +4,8 @@ This directory stores repository-level implementation plans that are not scoped 
 
 | Plan | Purpose |
 |---|---|
+| [lucy-20261030-l25-11-uat-delivery-task-plan.md](lucy-20261030-l25-11-uat-delivery-task-plan.md) | **v0.25 L25-11，已于 2026-10-31 关闭**：交付 UAT Task，按波次 A–E 推进本环境 UAT 取证。用户批准拆分后本条走功能合同收口 Task，不要求 22 个 V 项通过。`SEM25` 未执行。G30 仍开，W-B 仍关。V01–V22 仍未执行。V03(d)、V22 与客户交付仍是 `blocked_delivery` |
+| [lucy-20261030-semantic-batch-functional-contract-plan.md](lucy-20261030-semantic-batch-functional-contract-plan.md) | **v0.25 L25-11，已关闭（2026-10-31）**：用户批准拆分。FC-01–FC-32 已通过。`SEM25` 由 E2E Spec 持有且未执行。G30 仍开。不关闭 G31，不打开 W-B。本条关闭不表示可上线 |
 | [lucy-20261030-agent-roster-plan.md](lucy-20261030-agent-roster-plan.md) | **v1.2 已定稿**：Agent 名册。第 3 轮 Codex 确认可定稿。可以按 S1、S2 开发。见 [审阅](../reviews/2026-10-30-codex-review-agent-roster.md)。Spec 见 [lucy-20261030-agent-roster-spec.md](../specs/lucy-20261030-agent-roster-spec.md) |
 | [lucy-20261030-login-accounts-plan.md](lucy-20261030-login-accounts-plan.md) | **v1.3：S1–S2 已落地（2026-10-30）**：登录账户页。SC-01–SC-18 全部有通过记录（组件测试、导航测试、术语检查）。未做浏览器走查、Docker 重建和客户交付。见 [第 3 轮](../reviews/2026-10-30-codex-review-login-accounts-round3.md)。Spec 见 [lucy-20261030-login-accounts-spec.md](../specs/lucy-20261030-login-accounts-spec.md) |
 | [lucy-20261030-version-info-identity-plan.md](lucy-20261030-version-info-identity-plan.md) | **已落地，SC 待验收**：版本信息身份块。F05、F06 已写入。SC-01–SC-10 的测试已通过。Spec 见 [lucy-20261030-version-info-identity-spec.md](../specs/lucy-20261030-version-info-identity-spec.md) |

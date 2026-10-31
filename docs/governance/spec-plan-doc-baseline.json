@@ -2622,10 +2622,6 @@
     },
     {
       "file": "docs/specs/lucy-20261020-v2p5-semantic-batch-operations-spec.md",
-      "rule": "close-layer"
-    },
-    {
-      "file": "docs/specs/lucy-20261020-v2p5-semantic-batch-operations-spec.md",
       "rule": "filename"
     },
     {
