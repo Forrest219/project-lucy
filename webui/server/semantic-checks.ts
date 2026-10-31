@@ -41,6 +41,7 @@ import { parseDocument } from "yaml";
 import { validateSource, type ValidationResult } from "./ktx";
 import { checkColumnTypeContract, type PublishGateViolation } from "./publish-gate";
 import {
+  buildSemanticModelIndex,
   resolveSemanticDependencyClosure,
   semanticIdentityKey,
   type SemanticModelIndex,
@@ -408,6 +409,37 @@ export async function runSemanticTableCheck(
     dependencyIdentities,
     startedAt
   });
+}
+
+/**
+ * Fold {@link runSemanticTableCheck} into an existing KTX validation envelope.
+ *
+ * A passing check returns the envelope unchanged. A failing check adds the
+ * blocking reasons that are not already present and marks the envelope failed.
+ * Tables that are not in the model keep the KTX-only result: there is no
+ * identity for the shared rule to resolve.
+ */
+export async function applySharedSemanticLegality<T extends ValidationResult>(
+  projectRoot: string,
+  identity: SemanticTableIdentity,
+  validation: T
+): Promise<T> {
+  const index = await buildSemanticModelIndex(projectRoot);
+  if (!index.byKey.has(semanticIdentityKey(identity))) return validation;
+  const check = await runSemanticTableCheck({ projectRoot, index, identity });
+  if (check.verdict === "passed") return validation;
+  const existing = new Set((validation.issues ?? []).map((issue) => issue.message));
+  const extra = check.reasons
+    .filter((reason) => reason.severity === "blocking" && reason.code !== "KTX_VALIDATE_FAILED")
+    .filter((reason) => !existing.has(reason.message))
+    .map((reason) => ({ message: reason.message }));
+  if (extra.length === 0) return validation;
+  return {
+    ...validation,
+    ok: false,
+    exitCode: validation.exitCode === 0 ? 1 : validation.exitCode,
+    issues: [...(validation.issues ?? []), ...extra]
+  };
 }
 
 function finalizeCheck(

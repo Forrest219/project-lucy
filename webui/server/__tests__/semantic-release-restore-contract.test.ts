@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { getAuditDb } from "../admin/audit.js";
 import { withPublishCoordinator } from "../publish-coordinator.js";
 import { openPromotingContentRelease, readSemanticAssetRelease, updateReleaseRecord } from "../semantic-assets.js";
 import {
@@ -237,6 +238,16 @@ describe("semantic release restore — write set separation and CAS", () => {
       actor: "local-admin",
       reindex: async () => ({ ok: true, exitCode: 0 })
     });
+    expect(retried.release.id).toBe(failed.release.id);
+    const audit = await getAuditDb();
+    const rows = audit
+      .prepare("SELECT idempotency_key FROM config_change_log WHERE idempotency_key LIKE ?")
+      .all(`${failed.release.id}:%`) as Array<{ idempotency_key: string }>;
+    expect(rows).toHaveLength(1);
+    const retryAttempt = rows[0]?.idempotency_key.split(":")[1];
+    expect(retryAttempt).toMatch(/^att_/);
+    expect(retryAttempt).not.toBe(failed.release.attemptId);
+    expect(rows[0]?.idempotency_key.startsWith(`${failed.release.id}:`)).toBe(true);
     expect(retried.release.status).toBe("published");
     expect(retried.release.activationStatus).toBe("confirmed");
     // The retry does not write the content again.

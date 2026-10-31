@@ -361,6 +361,43 @@ describe("semantic recovery closes the shared write window", () => {
     expect(await readPublishCoordinatorLock(projectRoot)).toBeNull();
   });
 
+  it("keeps single-table save, manifest upload, batch import, and role save busy while the window is held", async () => {
+    let releaseFirst!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    let markAcquired!: () => void;
+    const acquired = new Promise<void>((resolve) => {
+      markAcquired = resolve;
+    });
+
+    const holder = withPublishCoordinator(
+      "semantic_table_save",
+      async () => {
+        markAcquired();
+        await gate;
+      },
+      { projectRoot }
+    );
+    await acquired;
+
+    const kinds: PublishEntryKind[] = [
+      "semantic_table_save",
+      "manifest_upload",
+      "batch_import",
+      "role_policy_save"
+    ];
+    for (const kind of kinds) {
+      await expect(
+        withPublishCoordinator(kind, async () => undefined, { projectRoot })
+      ).rejects.toMatchObject({ code: "PUBLISH_COORDINATOR_BUSY" });
+    }
+
+    releaseFirst();
+    await holder;
+    expect(await readPublishCoordinatorLock(projectRoot)).toBeNull();
+  });
+
   it("latches admission when startup recovery cannot read the journal directory", async () => {
     const journals = path.join(projectRoot, ".ktx-ui", "semantic-recovery-journals");
     await mkdir(path.dirname(journals), { recursive: true });

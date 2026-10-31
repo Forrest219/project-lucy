@@ -9,7 +9,7 @@
 //  - The CSV report escapes formula injection.
 //  - The report is persisted as JSON + CSV.
 
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -137,6 +137,9 @@ describe("D10 batch validation task", () => {
       calls += 1;
       return calls <= 2 ? startedAt : startedAt + 60_000;
     };
+    const sentinel = path.join(projectRoot, "semantic-layer/shop-db/orders.yaml");
+    await mkdir(path.dirname(sentinel), { recursive: true });
+    await writeFile(sentinel, "SENTINEL\n", "utf8");
 
     const task = await runSemanticBatchTask({
       projectRoot,
@@ -153,6 +156,7 @@ describe("D10 batch validation task", () => {
 
     expect(task.summary.notRun).toBeGreaterThan(0);
     expect(task.status).toBe("failed");
+    expect(await readFile(sentinel, "utf8")).toBe("SENTINEL\n");
     const notRun = task.results.find((result) => result.verdict === "not_run");
     expect(notRun?.reasons[0]?.code).toBe("TASK_TIMEOUT");
     expect(

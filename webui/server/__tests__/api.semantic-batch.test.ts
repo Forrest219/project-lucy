@@ -20,9 +20,11 @@
 //  - D16/D19/D20: the recovery journal is NOT completed before the index and
 //    the terminal evidence are durable, and `published` is only written then.
 
+import { execFile } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { promisify } from "node:util";
 import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildServer } from "../index";
@@ -358,6 +360,11 @@ describe("D4/D7/D12 — the maintenance package round trip", () => {
     expect(res.body.data.status).toBe("no_change");
     expect(res.body.data.noChange).toBe(true);
     expect(res.body.data.files).toHaveLength(0);
+    await expect(
+      readFile(path.join(projectRoot, ".ktx-ui/semantic-asset-releases.json"), "utf8")
+    ).rejects.toThrow();
+    const ktx = await import("../ktx");
+    expect(ktx.reindexProject).not.toHaveBeenCalled();
   });
 
   it("stages an edited overlay as a candidate bound to a plan digest", async () => {
@@ -616,5 +623,123 @@ describe("D13 / Spec §3.2 — the complete plan preview", () => {
       .get(`/api/semantic-assets/plans/${encodeURIComponent(staged.body.data.validationId)}`)
       .set("x-lucy-actor", "someone-else");
     expect([200, 403]).toContain(other.status);
+  });
+
+  it("lists an unrelated pending disk change beside the staged candidate", async () => {
+    mockKtx();
+    const app = await freshApp();
+    const scopeId = await createScope(app);
+    const exported = await exportPackage(app, scopeId);
+    const edited = await editOverlayInPackage(
+      exported.base64,
+      "overlays/shop-db/orders.yaml",
+      EDITED_ORDERS
+    );
+    const staged = await importPackage(app, "maintenance.zip", edited);
+    expect(staged.status).toBe(200);
+
+    const exec = promisify(execFile);
+    await exec("git", ["init"], { cwd: projectRoot });
+    await exec("git", ["add", "ktx.yaml", "semantic-layer"], { cwd: projectRoot });
+    await exec(
+      "git",
+      ["-c", "user.email=lucy@example.com", "-c", "user.name=Lucy", "commit", "-m", "base"],
+      { cwd: projectRoot }
+    );
+    await writeFileAt(
+      "semantic-layer/shop-db/customers.yaml",
+      `${CUSTOMERS_OVERLAY}segments:\n  - name: extra\n`
+    );
+
+    const res = await request(app.server).get(
+      `/api/semantic-assets/plans/${encodeURIComponent(staged.body.data.validationId)}`
+    );
+    expect(res.status).toBe(200);
+    expect(res.body.data.candidates.map((row: { targetPath: string }) => row.targetPath)).toContain(
+      "semantic-layer/shop-db/orders.yaml"
+    );
+    expect(
+      res.body.data.unrelatedDiskChanges.map((row: { targetPath: string }) => row.targetPath)
+    ).toContain("semantic-layer/shop-db/customers.yaml");
+  });
+});
+
+describe("L25-11 functional contract — scope, disabled tables, template, malicious package", () => {
+  it("stores every submitted identity and does not page-truncate the scope", async () => {
+    mockKtx();
+    const app = await freshApp();
+    const res = await request(app.server)
+      .post("/api/semantic-assets/scopes")
+      .send({
+        refs: [
+          { connectionId: "shop-db", schema: "public", table: "orders" },
+          { connectionId: "shop-db", schema: "public", table: "customers" }
+        ]
+      });
+    expect(res.status).toBe(200);
+    expect([...res.body.data.refs].sort()).toEqual([
+      "shop-db/public/customers",
+      "shop-db/public/orders"
+    ]);
+  });
+
+  it("does not change enabled_tables when a disabled table is maintained", async () => {
+    await writeFileAt("ktx.yaml", KTX_YAML.replace("      - public.customers\n", ""));
+    const before = await readFile(path.join(projectRoot, "ktx.yaml"), "utf8");
+    expect(before).not.toContain("public.customers");
+    mockKtx();
+    const app = await freshApp();
+    const scope = await request(app.server)
+      .post("/api/semantic-assets/scopes")
+      .send({
+        refs: [{ connectionId: "shop-db", schema: "public", table: "customers" }]
+      });
+    expect(scope.status).toBe(200);
+    const exported = await request(app.server)
+      .post("/api/semantic-assets/export")
+      .send({ packageKind: "semantic-maintenance-package/v1", scopeId: scope.body.data.scopeId });
+    expect(exported.status).toBe(200);
+    expect(await readFile(path.join(projectRoot, "ktx.yaml"), "utf8")).toBe(before);
+  });
+
+  it("imports an untouched absent-overlay template as no_change", async () => {
+    await writeFileAt(
+      "semantic-layer/shop-db/_schema/public.yaml",
+      `${MANIFEST}  refunds:\n    table: public.refunds\n    columns:\n      - name: id\n        type: number\n`
+    );
+    mockKtx();
+    const app = await freshApp();
+    const scope = await request(app.server)
+      .post("/api/semantic-assets/scopes")
+      .send({
+        refs: [{ connectionId: "shop-db", schema: "public", table: "refunds" }]
+      });
+    expect(scope.status).toBe(200);
+    const exported = await exportPackage(app, scope.body.data.scopeId as string);
+    const imported = await importPackage(app, "maintenance.zip", exported.base64);
+    expect(imported.status).toBe(200);
+    expect(imported.body.data.status).toBe("no_change");
+    await expect(
+      readFile(path.join(projectRoot, "semantic-layer/shop-db/refunds.yaml"), "utf8")
+    ).rejects.toThrow();
+  });
+
+  it("rejects a path-traversal package at the HTTP import and leaves formal files untouched", async () => {
+    mockKtx();
+    const app = await freshApp();
+    const before = await readFile(path.join(projectRoot, "semantic-layer/shop-db/orders.yaml"), "utf8");
+    const { MAINTENANCE_PACKAGE_KIND, buildMaintenanceZip } = await import("../semantic-maintenance-package");
+    const zip = buildMaintenanceZip([
+      {
+        name: "package.json",
+        data: Buffer.from(JSON.stringify({ packageKind: MAINTENANCE_PACKAGE_KIND }))
+      },
+      { name: "../evil.yaml", data: Buffer.from("pwned\n") }
+    ]);
+    const res = await importPackage(app, "evil.zip", zip.toString("base64"));
+    expect(res.status).toBe(400);
+    expect(res.body.ok).toBe(false);
+    expect(await readFile(path.join(projectRoot, "semantic-layer/shop-db/orders.yaml"), "utf8")).toBe(before);
+    await expect(readFile(path.join(projectRoot, "evil.yaml"), "utf8")).rejects.toThrow();
   });
 });

@@ -213,6 +213,20 @@ describe("D3/D4 shared overlay targets", () => {
     );
 
     const index = await buildSemanticModelIndex(projectRoot);
+    const publicOrders = resolveSemanticIdentity(index, {
+      connectionId: "shop-db",
+      schema: "public",
+      table: "orders"
+    });
+    const archiveOrders = resolveSemanticIdentity(index, {
+      connectionId: "shop-db",
+      schema: "archive",
+      table: "orders"
+    });
+    expect(formatSemanticIdentity(publicOrders.identity)).toBe("shop-db/public/orders");
+    expect(formatSemanticIdentity(archiveOrders.identity)).toBe("shop-db/archive/orders");
+    expect(publicOrders.identity).not.toEqual(archiveOrders.identity);
+
     const selected: SemanticTableIdentity[] = [
       { connectionId: "shop-db", schema: "public", table: "orders" }
     ];

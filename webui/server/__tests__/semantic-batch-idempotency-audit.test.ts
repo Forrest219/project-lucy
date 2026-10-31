@@ -14,7 +14,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   SemanticIdempotencyCapacityError,
   SemanticIdempotencyConflictError,
@@ -65,6 +65,21 @@ describe("D15 idempotency store", () => {
   it("replays the same releaseId for the same plan", async () => {
     await registerSemanticIdempotencyKey(projectRoot, base);
     const replay = await registerSemanticIdempotencyKey(projectRoot, base);
+    expect(replay.kind).toBe("replay");
+    expect(replay.record.releaseId).toBe("rel_1");
+  });
+
+  it("replays the same release after the module is loaded again", async () => {
+    await registerSemanticIdempotencyKey(projectRoot, base);
+    vi.resetModules();
+    const fresh = await import("../semantic-idempotency");
+    const stored = await fresh.readSemanticIdempotencyKey(projectRoot, {
+      instanceId: base.instanceId,
+      actor: base.actor,
+      clientKey: base.clientKey
+    });
+    expect(stored?.releaseId).toBe("rel_1");
+    const replay = await fresh.registerSemanticIdempotencyKey(projectRoot, base);
     expect(replay.kind).toBe("replay");
     expect(replay.record.releaseId).toBe("rel_1");
   });

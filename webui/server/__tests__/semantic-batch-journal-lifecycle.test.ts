@@ -337,6 +337,13 @@ describe("D19/D20 — the activation state of a release", () => {
     }
 
     expect(statusAtRelease).toBe("reindex_failed");
+    const record = await readSemanticAssetRelease(projectRoot, releaseId);
+    expect(record?.status).toBe("reindex_failed");
+    expect(record?.activationStatus).toBe("unconfirmed");
+    expect(record?.id).toBe(releaseId);
+    const saved = await readFile(path.join(projectRoot, TARGET), "utf8");
+    expect(saved).toBe(OVERLAY);
+    expect(await readFile(path.join(projectRoot, TARGET), "utf8")).toBe(saved);
     await app.close();
   });
 

@@ -605,6 +605,31 @@ describe("Catalog batch selection (L25-11 §3.1)", () => {
     await waitFor(() => {
       expect(screen.getByTestId("catalog-selected-count")).toHaveTextContent("已选择 0 张表");
     });
+    expect(screen.getByTestId("catalog-batch-download")).toBeDisabled();
+    expect(screen.getByTestId("catalog-batch-check")).toBeDisabled();
+  });
+
+  it("selects only the filtered identities, not the unfiltered catalog", async () => {
+    renderCatalog(
+      [
+        ...selectionTables,
+        makeSummary({ conn: "conn-b", schema: "schema-c", table: "payments", enabled: true })
+      ],
+      "/catalog?scope=all"
+    );
+    await screen.findByTestId("catalog-table");
+
+    fireEvent.change(screen.getByPlaceholderText("搜索表名或字段名..."), {
+      target: { value: "orders" }
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("catalog-row-orders")).toBeInTheDocument();
+      expect(screen.queryByTestId("catalog-row-payments")).not.toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId("catalog-select-all-filtered"));
+
+    expect(screen.getByTestId("catalog-selected-count")).toHaveTextContent("已选择 1 张表");
+    expect(screen.getByTestId("catalog-row-select-orders")).toBeChecked();
   });
 
   it("disables the selection-bound actions without a selection and keeps the import available", async () => {

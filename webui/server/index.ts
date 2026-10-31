@@ -62,6 +62,7 @@ import {
 import { loadContentPaths, resolveContentPaths } from "./paths";
 import { collectContentLayout, mirrorOnlySemanticRelPaths } from "./content-layout";
 import { buildSemanticModelIndex } from "./semantic-identity";
+import { applySharedSemanticLegality } from "./semantic-checks";
 import {
   // Ingest sidecar is M13 legacy. M14 keeps the helpers for the deprecated
   // `/api/connections/:connId/ingest` alias compatibility route.
@@ -863,7 +864,11 @@ export function buildServer() {
       writtenFiles.push({ filePath: file.filePath });
     }
     changedSources.set(`${conn}/${schema}/${table}`, { conn, schema, table });
-    const validation = await validateSource(projectRoot, conn, schema, table);
+    const validation = await applySharedSemanticLegality(
+      projectRoot,
+      { connectionId: conn, schema, table },
+      await validateSource(projectRoot, conn, schema, table)
+    );
     const files = await changedFiles(projectRoot, writtenFiles);
     const nextSource = await readSource(projectRoot, conn, schema, table);
     const version = await createTableYamlVersionSnapshot(
@@ -919,7 +924,11 @@ export function buildServer() {
       writtenFiles.push({ filePath: file.filePath });
     }
     changedSources.set(`${conn}/${schema}/${table}`, { conn, schema, table });
-    const validation = await validateSource(projectRoot, conn, schema, table);
+    const validation = await applySharedSemanticLegality(
+      projectRoot,
+      { connectionId: conn, schema, table },
+      await validateSource(projectRoot, conn, schema, table)
+    );
     const files = await changedFiles(projectRoot, writtenFiles);
     const nextSource = await readSource(projectRoot, conn, schema, table);
     const version = await createTableYamlVersionSnapshot(
@@ -1000,7 +1009,11 @@ export function buildServer() {
     const { conn, schema, table } = request.params;
     return {
       ok: true,
-      data: await validateSource(projectRoot, conn, schema, table)
+      data: await applySharedSemanticLegality(
+        projectRoot,
+        { connectionId: conn, schema, table },
+        await validateSource(projectRoot, conn, schema, table)
+      )
     };
   });
 
@@ -1081,7 +1094,11 @@ export function buildServer() {
         conn,
         schema,
         table,
-        validation: withContract
+        validation: await applySharedSemanticLegality(
+          projectRoot,
+          { connectionId: conn, schema, table },
+          withContract
+        )
       });
     }
     return {

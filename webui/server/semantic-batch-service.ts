@@ -23,6 +23,7 @@ import path from "node:path";
 import {
   buildExportBaseline,
   buildMaintenancePackage,
+  buildOverlayTemplate,
   newMaintenanceExportId,
   persistMaintenanceExportBaseline,
   pruneMaintenanceExportBaselines,
@@ -55,6 +56,7 @@ import {
   resolveSemanticInstanceId,
   type SemanticScopeRecord
 } from "./semantic-scopes.js";
+import { runSemanticTableCheck } from "./semantic-checks.js";
 import { resolveLucyVersion } from "./lucy-version.js";
 import { loadRuntimeRevision } from "./lucy-revision.js";
 
@@ -574,6 +576,7 @@ export async function stageSemanticMaintenanceImport(
 
   const index = await buildSemanticModelIndex(projectRoot);
   const candidates = await resolveCandidates(projectRoot, index, unpacked);
+  await assertCandidatesLegal(projectRoot, index, candidates);
 
   const targetDigests: Array<{ path: string; digest: string | null }> = [];
   for (const candidate of candidates) {
@@ -670,6 +673,33 @@ function assertZipSize(byteLength: number): void {
  * model index by the entry's identity. An entry whose identity is unknown, or
  * whose file carries several tables that were not all selected, is refused.
  */
+/** Import pre-check uses the same legality rule as batch check and the publish gate. */
+async function assertCandidatesLegal(
+  projectRoot: string,
+  index: SemanticModelIndex,
+  candidates: readonly SemanticStagedCandidate[]
+): Promise<void> {
+  for (const candidate of candidates) {
+    const check = await runSemanticTableCheck({
+      projectRoot,
+      index,
+      identity: candidate.identity,
+      candidateOverlay: candidate.content
+    });
+    if (check.verdict === "passed") continue;
+    const detail = check.reasons
+      .filter((reason) => reason.severity === "blocking")
+      .map((reason) => reason.message)
+      .slice(0, 5)
+      .join("；");
+    throw new SemanticBatchError(
+      "MAINTENANCE_PACKAGE_INVALID",
+      detail ? `导入预检未通过：${detail}` : "导入预检未通过。",
+      { statusCode: 400 }
+    );
+  }
+}
+
 async function resolveCandidates(
   projectRoot: string,
   index: SemanticModelIndex,
@@ -708,6 +738,16 @@ async function resolveCandidates(
     const current = await readTargetContent(projectRoot, modelEntry.overlayRelPath);
     const unchanged = current !== null && current === entry.content;
     if (unchanged) continue; // 无变化候选被丢弃
+    // An untouched template for a table that still has no overlay is "no change".
+    // The exporter's own comment says an unmodified round-trip is not a write.
+    if (current === null && entry.meta.template === true) {
+      const canonical = buildOverlayTemplate({
+        identity: entry.meta.identity,
+        sourceName: entry.meta.identity.table,
+        qualifiedName: `${entry.meta.identity.schema}.${entry.meta.identity.table}`
+      });
+      if (entry.content === canonical) continue;
+    }
 
     candidates.push({
       targetPath: modelEntry.overlayRelPath,
