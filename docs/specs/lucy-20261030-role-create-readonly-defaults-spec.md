@@ -4,7 +4,7 @@
 |---|---|
 | 文档类型 | Product / UX / Frontend Implementation Spec |
 | 版本 / 日期 | v0.2 / 2026-10-30 |
-| 状态 | **已实现**（Plan Task 1–4 已落地，RD-01–RD-10 全部通过，见 §6） |
+| 状态 | **v0.2 功能合同已收口（2026-11-01）**。RD-01–RD-10 全部关闭，证据见 [`docs/reviews/2026-11-01-role-create-readonly-defaults-closure.md`](../reviews/2026-11-01-role-create-readonly-defaults-closure.md)。**本条收口不表示可上线**——浏览器与移动窄屏验证、镜像构建与部署、客户环境验证、真实实例写入不在本条出口 |
 | 功能编号 | **无**。WebUI 流水号 194 已由 [访问分级与日真实问询 KPI Spec](lucy-20261030-access-grade-and-daily-question-kpi-spec.md) 占用；本 Spec 按 [`docs/governance/DEVELOPMENT.md`](../governance/DEVELOPMENT.md)「新 Spec 只有一个身份」不占号 |
 | 适用页面 | `/admin/roles/new`；编辑与复制页面仅涉及空工具校验及兼容回归 |
 | 关联 Plan | [实施 Plan](../plans/lucy-20261030-role-create-readonly-defaults-plan.md) |

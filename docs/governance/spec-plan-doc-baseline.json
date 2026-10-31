@@ -2753,10 +2753,6 @@
       "rule": "close-layer"
     },
     {
-      "file": "docs/specs/lucy-20261030-row-policy-view-presentation-spec.md",
-      "rule": "close-layer"
-    },
-    {
       "file": "docs/specs/lucy-aicon-online-capability-scorecard.md",
       "rule": "close-layer"
     },

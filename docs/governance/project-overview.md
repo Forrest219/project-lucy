@@ -4,7 +4,8 @@
 |---|---|
 | 文档名称 | project-lucy 项目概览 |
 | 文档类型 | Overview |
-| 版本 | v1.75 |
+| 版本 | v1.76 |
+| v1.76 更新 | 2026-11-01，**两条功能合同收口**：① 新建角色默认只读问答工具 Spec v0.2 —— RD-01–RD-10 全部关闭，证据 `docs/reviews/2026-11-01-role-create-readonly-defaults-closure.md`，本条收口不表示可上线；② 行权限视图呈现修订 Spec v0.3 —— SC-01–SC-18 全部关闭，证据 `docs/reviews/2026-11-01-row-policy-view-presentation-closure.md`；已补「闭口层级」小节并从形态基线移除对应豁免条目（基线 904→903），本条收口不表示可上线。**另更正 Spec 195 的过期登记**：v1.70 行所载「仅文档落盘，实现及验收未开始」已不成立——实现已于 2026-10-31 由提交 `ced19d1a` 落地，SI-01–SI-13 已执行并通过，SI-14 为本地匿名夹具浏览器往返（31 样本全成功、0 次 busy），现场实例复核未执行；该提交新增的 3 个 `data-testid`（`display-refresh-notice` 等）尚未登记进选择器契约，是 `e2e:selector-contract` 红灯的来源之一。历史行按惯例不回改，现值以本行为准。⚠️ 版本号为跨会话共享计数器，写前须实读顶部版本行取 current+1 |
 | v1.75 更新 | 2026-10-31，L25-11 **已关闭**。用户批准拆分：本条以 FC-01–FC-32 关闭。`SEM25` 由 E2E Spec 持有且未执行，不回开本条。V01–V22 矩阵行不改成通过。G30 仍开。不关闭 G31，不打开 W-B。Wave 0b 与客户交付仍是 `blocked_delivery`。本条关闭不表示可上线。⚠️ 版本号为跨会话共享计数器，写前须实读顶部版本行取 current+1 |
 | v1.74 更新 | 2026-10-31，L25-10 **执行波本模块 Wave A 已落地**（审查→M1–M5）。分区画像／门禁／合成 JDBC／MCP divert／HQ 合成验收；`hq-hive-execution.test.ts`。客户 `HIV25`／矩阵晋级未授权；支持状态保持 `planned`。⚠️ 版本号为跨会话共享计数器，写前须实读顶部版本行取 current+1 |
 | v1.73 更新 | 2026-10-31，L25-11 **功能合同已收口**。出口＝FC-01–FC-32，证据 `docs/reviews/2026-10-31-l25-11-functional-contract-evidence.md`。`SEM25` 未执行。V01–V22 矩阵行仍未执行。G30 仍开。不关闭 G31，不打开 W-B。Wave 0b 与客户交付仍是 `blocked_delivery`。本条收口不表示可上线。⚠️ 版本号为跨会话共享计数器，写前须实读顶部版本行取 current+1 |
@@ -208,7 +209,7 @@ Lucy MCP Proxy 监听 `LUCY_PROXY_HOST:LUCY_PROXY_PORT`（默认容器内 `0.0.0
 
 ## 9. 关键文档索引
 
-展示快照变更去重与影响范围隔离：[Spec 195](../../docs/specs/lucy-20261030-display-snapshot-invalidation-isolation-spec.md) · [实施计划 WO-20261030](../../webui/docs/plans/wo-20261030-display-snapshot-invalidation-isolation.md)。重点为同版本去重和 overlay / Agent 影响隔离；仅文档落盘，实现及验收未开始。
+展示快照变更去重与影响范围隔离：[Spec 195](../../docs/specs/lucy-20261030-display-snapshot-invalidation-isolation-spec.md) · [实施计划 WO-20261030](../../webui/docs/plans/wo-20261030-display-snapshot-invalidation-isolation.md)。重点为同版本去重和 overlay / Agent 影响隔离；**实现已完成（提交 `ced19d1a`，2026-10-31）**，SI-01–SI-13 已执行并通过，SI-14 为本地匿名夹具浏览器往返（31 样本全成功），现场实例复核未执行。
 
 | 主题 | 文档 |
 |---|---|

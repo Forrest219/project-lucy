@@ -4,11 +4,11 @@
 |---|---|
 | 文档版本 / 日期 | **v0.3** / 2026-10-30 |
 | 目标版本 / 优先级 | 不绑定产品版本号 / **P1**。功能编号待 PM 指派 |
-| 主 Spec | [行权限视图呈现修订 Spec](../specs/lucy-20261030-row-policy-view-presentation-spec.md)（**v0.3 已落地，SC 待验收**） |
+| 主 Spec | [行权限视图呈现修订 Spec](../specs/lucy-20261030-row-policy-view-presentation-spec.md)（**v0.3 功能合同已收口**） |
 | 权威语义 | [行策略模板与行权限视图 Spec](../specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md) §6.2、RTV-01–RTV-08。本 Plan 不改行授权代数，不改深链参数名 |
-| 状态 | **已落地，SC 待验收**。S0 已通过（2026-10-30 PM 书面授权），D1–D10 已按原文冻结；S1–S4 已实施完毕 |
+| 状态 | **v0.3 功能合同已收口（2026-11-01）**。S0 已通过（2026-10-30 PM 书面授权），D1–D10 已按原文冻结；S1–S4 已实施完毕；SC-01–SC-18 全部关闭。本条收口不表示可上线 |
 | 授权边界 | **已授权**按本文 §3 的文件范围与 §4 的 S1–S4 落地。**不授权**改模板管理页、KTX、Helm、镜像、术语标准、系统手册；**不授权**改行授权代数、深链参数名、角色编辑页的预览调用参数；**不授权** push／commit、构建镜像或部署。工作区里其它会话的未提交改动一律不回滚、不重排、不顺手提交 |
-| 验收 | SC-01–SC-18 均有自动化证据（见主 Spec §7.1），**尚未由 PM 验收** |
+| 验收 | SC-01–SC-18 全部关闭，证据见主 Spec §7.1 与 [`docs/reviews/2026-11-01-row-policy-view-presentation-closure.md`](../reviews/2026-11-01-row-policy-view-presentation-closure.md) |
 | 实施主体 | Lucy WebUI。清单类型与 `listRowPolicyTables` 按 D8 增加 `grantStatus`。不修改 KTX |
 | 待拍板 | 无。D1–D10 已按原文冻结，没有否决项 |
 
