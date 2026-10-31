@@ -97,6 +97,9 @@ users:
         - kx_catalog
         - connection_list
         - lucy_begin_question
+        # Spec 162 修订（D2）：continuable 是「可执行能力」——
+        # 调用者必须可见且已授权 lucy_continue_question，停机响应才说可继续。
+        - lucy_continue_question
         - lucy_read_source
         - lucy_query
         - lucy_explain_query
@@ -172,6 +175,7 @@ users:
         - lucy_explain_query
         - lucy_freshness
         - lucy_begin_question
+        - lucy_continue_question
 defaults:
   deny_tools: []
 `;
@@ -613,7 +617,8 @@ describe("MCP proxy smoke", () => {
         "lucy_explain_query",
         "lucy_freshness",
         "kx_catalog",
-        "lucy_begin_question"
+        "lucy_begin_question",
+        "lucy_continue_question"
       ]);
       const lucyQuerySchema = listBody.result.tools.find((tool) => tool.name === "lucy_query")?.inputSchema as { properties?: Record<string, { items?: { type?: string } }> } | undefined;
       expect(lucyQuerySchema?.properties?.dimensions?.items?.type).toBe("object");
@@ -684,7 +689,7 @@ describe("MCP proxy smoke", () => {
     }
   });
 
-  it("exposes exactly the six Lucy R1 tools for an exact R1 release token", async () => {
+  it("exposes exactly the seven Lucy R1 tools for an exact R1 release token", async () => {
     const upstream = createServer(async (req, res) => {
       await readRequestBody(req);
       res.writeHead(200, { "content-type": "text/event-stream" });
@@ -732,7 +737,8 @@ describe("MCP proxy smoke", () => {
         "lucy_query",
         "lucy_explain_query",
         "lucy_freshness",
-        "lucy_begin_question"
+        "lucy_begin_question",
+        "lucy_continue_question"
       ]);
       expect(names).not.toEqual(expect.arrayContaining([
         "sl_query",
@@ -1646,7 +1652,8 @@ describe("MCP proxy smoke", () => {
         "lucy_explain_query",
         "lucy_freshness",
         "kx_catalog",
-        "lucy_begin_question"
+        "lucy_begin_question",
+        "lucy_continue_question"
       ]);
 
       const audit = await waitForAuditRow("tools-list-fallback");

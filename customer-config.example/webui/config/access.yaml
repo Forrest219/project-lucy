@@ -15,7 +15,7 @@ roles:
         - lucy_read_source
         - lucy_explain_query
         - lucy_begin_question
-    - lucy_continue_question
+        - lucy_continue_question
         - wiki_search
         - wiki_read
         - connection_list
