@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AgentList, activeTokenCount, configuredTokenCount, summarizeAgents } from "../pages/admin/AgentList";
@@ -13,7 +13,7 @@ function renderAgentList() {
       queries: { retry: false }
     }
   });
-  return render(
+  const result = render(
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={["/admin/agents"]}>
         <Routes>
@@ -25,6 +25,7 @@ function renderAgentList() {
       </MemoryRouter>
     </QueryClientProvider>
   );
+  return { ...result, client };
 }
 
 function AgentDetailProbe() {
@@ -162,6 +163,55 @@ function stubAgentsEndpoints(
 }
 
 describe("AgentList", () => {
+
+  /**
+   * Spec 195 §7 / SI-13 — a background refresh failure keeps the current
+   * list on screen and reports the last successful read.
+   */
+  it("Spec 195 §7: keeps the Agent list on screen when a background refresh fails", async () => {
+    let failAgents = false;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/project") {
+        return new Response(JSON.stringify({
+          ok: true,
+          data: { root: "/tmp/project-lucy", ktxAvailable: true, connections: [], mcpEndpoint: undefined }
+        }));
+      }
+      if (url === "/api/admin/agents") {
+        if (failAgents) {
+          return new Response(
+            JSON.stringify({ ok: false, error: { code: "INTERNAL", message: "boom" } }),
+            { status: 500 }
+          );
+        }
+        return new Response(JSON.stringify({ ok: true, data: { agents: [makeAgent()], version: "v1" } }));
+      }
+      if (url.startsWith("/api/admin/roles")) {
+        return new Response(JSON.stringify({ ok: true, data: { roles: [analystRole] } }));
+      }
+      return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { client } = renderAgentList();
+    expect(await screen.findByText("张三")).toBeInTheDocument();
+
+    failAgents = true;
+    await act(async () => { await client.refetchQueries({ queryKey: ["admin", "agents"] }); });
+
+    const notice = await screen.findByTestId("display-refresh-notice");
+    expect(notice).toHaveTextContent("刷新失败，当前显示上次成功读取的数据。");
+    expect(screen.getByTestId("display-refresh-notice-time")).toHaveTextContent("上次成功读取：");
+    // The list itself is untouched.
+    expect(screen.getByText("张三")).toBeInTheDocument();
+
+    failAgents = false;
+    await act(async () => { await client.refetchQueries({ queryKey: ["admin", "agents"] }); });
+    await waitFor(() => expect(screen.queryByTestId("display-refresh-notice")).not.toBeInTheDocument());
+    expect(screen.getByText("张三")).toBeInTheDocument();
+  });
+
   it("Spec 174 R3: shows 权限生效状态待确认 only while runtime consistency is unconfirmed", async () => {
     agentsMeta = { runtimeConsistency: "unconfirmed" };
     stubAgentsEndpoints([makeAgent()]);

@@ -103,6 +103,41 @@ function LocationProbe() {
 }
 
 describe("Spec 174 R4 closure — Catalog fact-dependent navigation", () => {
+
+  /**
+   * Spec 195 §7 / SI-13 — a background refresh failure keeps the semantic
+   * asset table on screen and reports the last successful read.
+   */
+  it("Spec 195 §7: keeps the semantic asset table on screen when a background refresh fails", async () => {
+    const client = renderWith(<Catalog />, undefined, "/catalog?scope=all");
+    await act(async () => sources.resolve(new Response()));
+    await screen.findByTestId("catalog-row-orders");
+
+    const failing = deferred();
+    sources = failing;
+    sourcesBody = () => json({ ok: false, error: { code: "INTERNAL", message: "boom" } }, 500);
+    act(() => { void client.refetchQueries({ queryKey: queryKeys.sources }); });
+    await act(async () => { failing.resolve(new Response()); });
+
+    const notice = await screen.findByTestId("display-refresh-notice");
+    expect(notice).toHaveTextContent("刷新失败，当前显示上次成功读取的数据。");
+    expect(screen.getByTestId("display-refresh-notice-time")).toHaveTextContent("上次成功读取：");
+    // The table itself is untouched.
+    expect(screen.getByTestId("catalog-row-orders")).toBeInTheDocument();
+
+    const recovered = deferred();
+    sources = recovered;
+    sourcesBody = () => json({
+      tables: [summary("orders"), summary("refunds", { enabled: false })],
+      manifestSchemas: [],
+      meta: { snapshotVersion: "v2", generatedAt: "", authorizedCountsState: "ok", runtimeConsistency: "matched" }
+    });
+    act(() => { void client.refetchQueries({ queryKey: queryKeys.sources }); });
+    await act(async () => { recovered.resolve(new Response()); });
+    await waitFor(() => expect(screen.queryByTestId("display-refresh-notice")).not.toBeInTheDocument());
+    expect(screen.getByTestId("catalog-row-orders")).toBeInTheDocument();
+  });
+
   function syncWrites(client: QueryClient) {
     setDisplayWriteBeginHandler((scopes) => {
       for (const scope of scopes) void client.cancelQueries({ queryKey: DISPLAY_SCOPE_QUERY_KEYS[scope] });
