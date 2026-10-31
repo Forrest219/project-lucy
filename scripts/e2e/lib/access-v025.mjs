@@ -10,10 +10,12 @@
 //     webui/server/proxy/row-policy-preview.ts (asserted, never re-implemented here)
 //
 // This module is the P0 branch's declarative contract only: no I/O, no fixture
-// mutation, no status. V19 / V22 are D-03 integration regressions. While
-// `fixedIn` is null they stay blocked: a release-evidence pass is what allows
-// them to be recorded as passed, and that same commit fills `fixedIn`.
-// A repository test, including one on a case-sensitive volume, does not.
+// mutation, no status. V19 / V22 are D-03 integration regressions. The product
+// ledger may record D-03 fixed from the two repository tests; this module does
+// not read `fixedIn`. expectedStatus stays `not_run`, and the
+// customer-maintenance-line dimension stays blocked. A fixed D-03 does not
+// record an E2E pass and does not claim the customer Linux uppercase-schema
+// scenario.
 //
 // The per-id `steps` are written against that id's OWN acceptance row in source
 // Spec §9. scripts/e2e/__tests__/v025-access.test.mjs fails on copy-paste steps.
@@ -35,8 +37,9 @@ export const ROW25_P1_IDS = Object.freeze([
 ]);
 
 /**
- * Formal P0 acceptance ids for C19. V15 remains in the set and stays blocked
- * until a real fault-injection run exists. V19 / V22 are not in this set.
+ * P0 ids that the product-entry regression covers. V15's fault-control
+ * requirement stays on this E2E catalog and does not hold L25-14 open.
+ * V19 / V22 are not in this set.
  */
 export const ROW25_C19_IDS = Object.freeze([
   "ROW25-V08", "ROW25-V09", "ROW25-V10", "ROW25-V11", "ROW25-V12", "ROW25-V13",
@@ -72,7 +75,7 @@ export const EXECUTOR_DIMENSIONS = Object.freeze({
 /** The shared contract of the 21 non-exception ROW25 ids. V15 adds the fault dimension. */
 const ROW_BASE = Object.freeze({
   executors: ["P", "B", "A", "V"],
-  requires: ["lucy-http", "ktx-upstream", "postgres", "browser", "agent-client"],
+  requires: ["lucy-http", "ktx-upstream", "mysql", "browser", "agent-client"],
   assert: ["allow_control", "deny", "no_side_effect", "consistency"],
   artifacts: ["management-case-result.json", "security-case-result.json"]
 });
@@ -308,14 +311,14 @@ const SCENARIOS = Object.freeze({
   "ROW25-V19": {
     group: "maintenance-line-regression",
     title: "D-03 集成回归：清单文件名为大写（如 BIDM.yaml）",
-    expectation: "在大小写敏感文件系统上合法字段可绑定，不再误报 unknown。证据未写入 release evidence 时记 blocked。",
+    expectation: "在大小写敏感文件系统上合法字段可绑定，不再误报 unknown。本描述符保持 not_run，产品台账关闭不把本项记为 passed。",
     conditional: true,
     conditionalOn: "D-03",
     steps: [
       "在大小写敏感文件系统上准备一个 Schema Manifest 文件名为大写（如 BIDM.yaml）的连接。",
       "对目标表绑定一个确实存在的列，断言不再被误判为 row_policy_field_unknown。",
       "断言本项证据登记为 D-03 集成回归，与 v0.25 新功能证据分开存放。",
-      "release evidence 尚未 passed 时本项记 blocked；passed 之后才允许记为通过，并在同一提交填写 D-03 的 fixedIn。"
+      "本项 expectedStatus 保持 not_run。D-03 产品台账关闭不把本项 E2E 记为 passed，也不宣称客户 Linux 大写 schema 场景已交付。"
     ],
     localCoverage: [
       "webui/server/__tests__/row-policy-d03-uppercase.test.ts",
@@ -351,14 +354,14 @@ const SCENARIOS = Object.freeze({
   "ROW25-V22": {
     group: "maintenance-line-regression",
     title: "D-03 集成回归：同一 Role 在大写 schema 表上的行级条件",
-    expectation: "管理台预览与运行时注入的 forced_filters 等价。证据未写入 release evidence 时记 blocked。",
+    expectation: "管理台预览与运行时注入的 forced_filters 等价。本描述符保持 not_run，产品台账关闭不把本项记为 passed。",
     conditional: true,
     conditionalOn: "D-03",
     steps: [
       "在大小写敏感文件系统上准备大写 schema 的表，并给同一 Role 设置行级条件。",
       "断言管理台预览给出的行约束与运行时注入的 forced_filters 等价。",
       "断言本项证据登记为 D-03 集成回归，与 v0.25 新功能证据分开存放。",
-      "release evidence 尚未 passed 时本项记 blocked；passed 之后才与 V19 一起填写 D-03 的 verifiedBy。"
+      "本项 expectedStatus 保持 not_run。预览与运行时等价的仓库测试不把本项 E2E 记为 passed，也不宣称客户场景已交付。"
     ],
     localCoverage: [
       "webui/server/__tests__/row-policy-d03-uppercase.test.ts",
@@ -370,7 +373,7 @@ const SCENARIOS = Object.freeze({
 /** Contract override for the one ROW25 id whose approved contract differs. */
 const CONTRACT_OVERRIDES = Object.freeze({
   "ROW25-V15": {
-    requires: ["lucy-http", "ktx-upstream", "postgres", "browser", "agent-client", "fault-control"]
+    requires: ["lucy-http", "ktx-upstream", "mysql", "browser", "agent-client", "fault-control"]
   }
 });
 
@@ -443,8 +446,8 @@ function evidenceFor(executionId, executors) {
       executor: "V",
       state: "blocked",
       blockedReason: "environment",
-      proves: "大小写敏感文件系统上的 D-03 集成回归。release evidence 为 passed 之后才允许记为通过，并在同一提交填写 fixedIn",
-      doesNotProve: "仓库 mock、本机大小写不敏感卷和尚未写入 release evidence 的实跑都不填 fixedIn，也不构成客户场景交付"
+      proves: "大小写敏感文件系统上的 D-03 集成回归。本维度保持 blocked，直到真实 E2E 跑过",
+      doesNotProve: "D-03 产品台账关闭和仓库测试都不把本项记为 passed，也不构成客户 Linux 大写 schema 场景交付"
     });
   }
   // V15 carries the fault-control capability; the manifest's executor set for

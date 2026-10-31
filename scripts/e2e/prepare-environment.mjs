@@ -24,6 +24,14 @@ import {
 
 const FIXTURE_ROOT = path.join(REPO_ROOT, "examples", "security-e2e");
 const PROFILE_DIR = path.join(REPO_ROOT, "scripts", "e2e", "profiles");
+const DB_ENGINES = new Set(["mysql", "postgres"]);
+
+/** MySQL is the floor. PostgreSQL is selected only with --db-engine postgres. */
+function resolveDbEngine(value) {
+  const engine = value ?? "mysql";
+  if (!DB_ENGINES.has(engine)) throw new PrepareError(`--db-engine must be mysql or postgres, got ${engine}`);
+  return engine;
+}
 
 export const AGENT_TOKENS = [
   ["e2e_finance", "FINANCE"],
@@ -146,6 +154,7 @@ export async function prepareEnvironment(options) {
   }
   if (!RUN_ID_RE.test(runId ?? "")) throw new PrepareError(`run id must match ${RUN_ID_RE}`);
   if (mode !== "local" && mode !== "release") throw new PrepareError('mode must be "local" or "release"');
+  const dbEngine = resolveDbEngine(options.dbEngine);
   for (const envName of ["KTX_PROJECT_ROOT", "LUCY_PROJECT_DIR"]) {
     const value = process.env[envName];
     if (value && existsSync(path.join(value, ".ktx", "secrets"))) {
@@ -191,7 +200,7 @@ export async function prepareEnvironment(options) {
   const logicalInstanceId = randomUUID();
   const markerKey = "shared/e2e-instance-marker";
   const dbHost = options.dbHost ?? "127.0.0.1";
-  const dbPort = Number(options.dbPort ?? 5432);
+  const dbPort = Number(options.dbPort ?? (dbEngine === "postgres" ? 5432 : 3306));
   // Per-run isolation id flows from the run id (a long random hex) so every
   // disposable database / role is owned by THIS run; a leftover from a prior
   // run cannot satisfy a check. The same string is used in runOwnerIsolationId
@@ -204,7 +213,7 @@ export async function prepareEnvironment(options) {
   const dbFinName = `lucy_e2e_fin_${safeIso}`;
   const dbSalesName = `lucy_e2e_sales_${safeIso}`;
   const dbReaderRole = `lucy_e2e_reader_${safeIso}`;
-  const dbOwnerRole = options.dbOwnerRole ?? "postgres";
+  const dbOwnerRole = options.dbOwnerRole ?? (dbEngine === "postgres" ? "postgres" : "root");
   const secretFilePath = path.join(secretsDir, "db-reader.password");
   // Where the reader password must be READABLE.
   //
@@ -224,6 +233,7 @@ export async function prepareEnvironment(options) {
   const ownerPasswordFile = path.join(secretsDir, "db-owner.password");
   renderTemplates(path.join(FIXTURE_ROOT, "project-template"), paths.project, {
     ...hashes,
+    DB_DRIVER: dbEngine,
     DB_HOST: dbHost,
     DB_PORT: dbPort,
     DB_FIN_NAME: dbFinName,
@@ -254,10 +264,11 @@ export async function prepareEnvironment(options) {
   const floodOriginAvailable = !external && mode === "local";
   if (external && mode !== "release") throw new PrepareError("--base-url (external instance) is only valid in release mode");
   if (external && !options.mcpUrl) throw new PrepareError("--base-url requires --mcp-url");
-  // --apply-db opts the run into the postgresql probe. prepare-environment only
-  // DECLARES the contract (host/port/role/password file paths/digests); it does
-  // NOT touch the database. The actual apply + measurement is performed by
-  // scripts/e2e/apply-db.mjs, which then writes back `run.db.applied = true`
+  // --apply-db asks for a measured seed. prepare-environment only DECLARES the
+  // contract (engine/host/port/role/password file paths/digests); it does NOT
+  // touch the database. The floor engine is mysql. PostgreSQL is selected with
+  // --db-engine postgres, and only that engine has a seed producer
+  // (scripts/e2e/apply-db.mjs). The producer writes `run.db.applied = true`
   // only after applySyntheticDbSeed returns applied=true. Until that step runs,
   // `run.db.applied` is false and the harness records `applyRequested: true`.
   const applyDb = options.applyDb === true;
@@ -321,6 +332,7 @@ export async function prepareEnvironment(options) {
       }
     },
     db: {
+      engine: dbEngine,
       host: dbHost,
       port: dbPort,
       name: seededDbName,
@@ -367,7 +379,7 @@ if (invokedDirectly) {
   try {
     const args = parseArgv(process.argv.slice(2), {
       "run-id": "value", mode: "value", candidate: "value", profile: "value", "run-root": "value", seed: "value",
-      "db-host": "value", "db-port": "value", "webui-port": "value", "proxy-port": "value", "project-dir": "value", "base-url": "value", "mcp-url": "value", reset: "boolean",
+      "db-host": "value", "db-port": "value", "db-engine": "value", "webui-port": "value", "proxy-port": "value", "project-dir": "value", "base-url": "value", "mcp-url": "value", reset: "boolean",
       "apply-db": "boolean", "db-name": "value", "db-readonly-roles": "value", "db-secret-mount-path": "value",
       "db-owner-role": "value"
     });
@@ -380,6 +392,7 @@ if (invokedDirectly) {
       seed: args.seed,
       dbHost: args["db-host"],
       dbPort: args["db-port"],
+      dbEngine: args["db-engine"],
       webuiPort: args["webui-port"],
       proxyPort: args["proxy-port"],
       projectDir: args["project-dir"],

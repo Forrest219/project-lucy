@@ -24,6 +24,7 @@ export const CAPABILITIES = [
   "fault-control",
   "ktx-upstream",
   "postgres",
+  "mysql",
   "browser",
   "agent-client",
   "k8s-amd64",

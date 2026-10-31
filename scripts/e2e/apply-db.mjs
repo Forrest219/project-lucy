@@ -35,6 +35,10 @@ export async function applyDbToRun({ runJsonPath, executeSql = defaultExecuteSql
   if (!run?.db) {
     throw new Error(`${runJsonPath} has no run.db block; prepare-environment must be run with --apply-db`);
   }
+  const engine = run.db.engine ?? "postgres";
+  if (engine !== "postgres") {
+    throw new Error(`apply-db seeds PostgreSQL only; this run's engine is ${engine}. Prepare with --db-engine postgres to opt into that seed.`);
+  }
   // Inject the producer's measurement + applied flag into a copy of the run
   // manifest, then write it back atomically.
   const result = await applySyntheticDbSeed({ run, runMode, executeSql });

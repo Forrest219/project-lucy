@@ -8,6 +8,8 @@ import { after, describe, it } from "node:test";
 import { parse } from "yaml";
 import { computeGold, generateDataset, makeCanaries } from "../../../examples/security-e2e/gold/compute-gold.mjs";
 import { REPO_ROOT, fileDigest } from "../lib/common.mjs";
+import { applyDbToRun } from "../apply-db.mjs";
+import { appliedDatabaseCapability } from "../lib/db-capability.mjs";
 import { AGENT_TOKENS, PrepareError, prepareEnvironment } from "../prepare-environment.mjs";
 import { ExternalInstance, LucyHttp } from "../lib/instance.mjs";
 import { reconcileExternalFlag } from "../lib/target-identity.mjs";
@@ -569,6 +571,13 @@ describe("prepare-environment: --apply-db contract (B3)", () => {
     // actually seeds the disposable DB. `applyRequested` records the user opt-in.
     assert.equal(run.db.applied, false);
     assert.equal(run.db.applyRequested, false);
+    assert.equal(run.db.engine, "mysql");
+    assert.equal(run.db.port, 3306);
+    assert.equal(run.db.ownerRole, "root");
+    const ktx = parse(readFileSync(path.join(run.paths.project, "ktx.yaml"), "utf8"));
+    assert.equal(ktx.connections["fin-db"].driver, "mysql");
+    assert.equal(ktx.connections["sales-db"].driver, "mysql");
+    assert.equal(ktx.connections["fin-db"].port, 3306);
     // The host secret files hold the reader/owner passwords (mode 0600).
     assert.equal(run.db.passwordFile, path.join(run.secretsDir, "db-reader.password"));
     assert.equal(run.db.ownerPasswordFile, path.join(run.secretsDir, "db-owner.password"));
@@ -647,5 +656,55 @@ describe("prepare-environment: --apply-db contract (B3)", () => {
     assert.equal(run.db.secretMount, "/etc/lucy/secrets/db");
     assert.equal(run.db.containerPasswordPath, "/etc/lucy/secrets/db/password");
     assert.equal(run.instance.env.LUCY_DB_PASSWORD_FILE, "/etc/lucy/secrets/db/password");
+  });
+
+  it("selects PostgreSQL only when --db-engine postgres is set", async () => {
+    const root = tmp();
+    const { run } = await prepareEnvironment({
+      runId: "local-test-db-pg-0001",
+      mode: "local",
+      runRoot: root,
+      dbEngine: "postgres"
+    });
+    assert.equal(run.db.engine, "postgres");
+    assert.equal(run.db.port, 5432);
+    assert.equal(run.db.ownerRole, "postgres");
+    const ktx = parse(readFileSync(path.join(run.paths.project, "ktx.yaml"), "utf8"));
+    assert.equal(ktx.connections["fin-db"].driver, "postgres");
+    assert.equal(ktx.connections["fin-db"].port, 5432);
+  });
+
+  it("keeps an explicit port and refuses an unknown engine", async () => {
+    const root = tmp();
+    const { run } = await prepareEnvironment({
+      runId: "local-test-db-port-0001",
+      mode: "local",
+      runRoot: root,
+      dbPort: 13306
+    });
+    assert.equal(run.db.engine, "mysql");
+    assert.equal(run.db.port, 13306);
+    await assert.rejects(
+      prepareEnvironment({ runId: "local-test-db-engine-0001", mode: "local", runRoot: root, dbEngine: "oracle" }),
+      /--db-engine must be mysql or postgres/
+    );
+  });
+
+  it("does not run the PostgreSQL seed producer against a MySQL run", async () => {
+    const root = tmp();
+    const { runJsonPath } = await prepareEnvironment({
+      runId: "local-test-db-apply-0001",
+      mode: "local",
+      runRoot: root,
+      applyDb: true
+    });
+    await assert.rejects(applyDbToRun({ runJsonPath }), /seeds PostgreSQL only/);
+  });
+
+  it("grants mysql only after a MySQL seed is applied, and postgres only for that engine", () => {
+    assert.equal(appliedDatabaseCapability({ applied: false, engine: "mysql" }), null);
+    assert.equal(appliedDatabaseCapability({ applied: true, engine: "mysql" }), "mysql");
+    assert.equal(appliedDatabaseCapability({ applied: true, engine: "postgres" }), "postgres");
+    assert.equal(appliedDatabaseCapability({ applied: true }), "postgres");
   });
 });

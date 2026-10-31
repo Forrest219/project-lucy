@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, it } from "node:test";
 import { parse } from "yaml";
 import { REPO_ROOT } from "../lib/common.mjs";
-import { EXPECTED_FINDING_IDS, crossCheckDependencies } from "../verify-evidence.mjs";
+import { D03_REPOSITORY_VERIFICATION, EXPECTED_FINDING_IDS, crossCheckDependencies, d03RepositoryVerifiedRef } from "../verify-evidence.mjs";
 import { computeGold, generateDataset } from "../../../examples/security-e2e/gold/compute-gold.mjs";
 import {
   CAPABILITIES, REQUIRED_SUBSCENARIO_IDS, SPEC_SCENARIO_IDS, catalogDigest, checkLock, expandCatalog,
@@ -120,7 +120,20 @@ describe("case catalog (Spec §7, frozen denominator)", () => {
       } else {
         assert.equal(f.fixedIn, null, `${f.id} is ${f.status} but names a fixing commit`);
       }
-      for (const ref of f.verifiedBy) assert.ok(ids.has(ref) || scenarios.has(ref), `${f.id} cites ${ref}, which is not in the frozen catalog`);
+      for (const ref of f.verifiedBy) {
+        // D-03 only: ROW25-V19 / ROW25-V22 are not frozen release-catalog variants.
+        // They are accepted when the two repository tests exist. This does not
+        // mark those E2E ids passed and does not claim releaseReady. Every
+        // other finding still has to cite a frozen catalog id or scenario name.
+        const d03RepositoryCase = d03RepositoryVerifiedRef(f, ref);
+        if (d03RepositoryCase) {
+          assert.deepEqual([...f.verifiedBy], [...D03_REPOSITORY_VERIFICATION.caseIds], "D-03 repository verification cites exactly ROW25-V19 and ROW25-V22");
+          for (const rel of D03_REPOSITORY_VERIFICATION.tests) {
+            assert.ok(existsSync(path.join(REPO_ROOT, rel)), `${rel} must exist for D-03 repository verification`);
+          }
+        }
+        assert.ok(ids.has(ref) || scenarios.has(ref) || d03RepositoryCase, `${f.id} cites ${ref}, which is not in the frozen catalog`);
+      }
     }
   });
 

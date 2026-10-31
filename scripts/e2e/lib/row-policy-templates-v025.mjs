@@ -1,5 +1,13 @@
 // v0.25 RTP25-01..10 + RTV25-01..08 — row policy templates and per-table reverse lookup.
 //
+// Product exit for P1-1 is the repository tests
+// webui/server/__tests__/p1-row-policy-templates.test.ts and
+// webui/server/__tests__/p1-row-policy-views.test.ts (template spec §8, 2026-10-30).
+// This module is the E2E catalog (RTP25/RTV25). Catalog execution status does not
+// reopen that item. RTV-06 and RTV-07 stay open on the product exit: the spec does
+// not record them as passed. Database floor matches ROW25: mysql is required,
+// postgres is optional. browser stays on RTP and RTV; agent-client stays on RTP.
+//
 // Authority:
 //   * docs/specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md §8
 //       (RTP-01..RTP-10 templates, RTV-01..RTV-08 reverse lookup)
@@ -31,12 +39,12 @@ const GROUP = Object.freeze({
 });
 
 const RTP_EXECUTORS = Object.freeze(["P", "B", "A", "V"]);
-const RTP_REQUIRES = Object.freeze(["lucy-http", "ktx-upstream", "postgres", "browser", "agent-client"]);
+const RTP_REQUIRES = Object.freeze(["lucy-http", "ktx-upstream", "mysql", "browser", "agent-client"]);
 const RTP_ASSERT = Object.freeze(["allow_control", "deny", "consistency"]);
 const RTP_ARTIFACTS = Object.freeze(["management-case-result.json", "security-case-result.json"]);
 
 const RTV_EXECUTORS = Object.freeze(["P", "B", "V"]);
-const RTV_REQUIRES = Object.freeze(["lucy-http", "ktx-upstream", "postgres", "browser"]);
+const RTV_REQUIRES = Object.freeze(["lucy-http", "ktx-upstream", "mysql", "browser"]);
 const RTV_ASSERT = Object.freeze(["consistency", "deny"]);
 const RTV_ARTIFACTS = Object.freeze(["management-case-result.json"]);
 

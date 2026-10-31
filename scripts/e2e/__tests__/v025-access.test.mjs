@@ -10,9 +10,9 @@
 //   * every id has id-SPECIFIC assertion steps — a copy-paste regression fails;
 //   * the fail-closed ids encode a refusal, and a permissive result is rejected
 //     (V15, V20, V21 among them);
-//   * V19 / V22 stay conditional on D-03. While fixedIn is null their descriptor
-//     status stays not_run; a release-evidence pass is what may later record
-//     them as passed and fill fixedIn in the same commit.
+//   * V19 / V22 stay conditional on D-03. The product ledger may record D-03
+//     fixed from the two repository tests. Their descriptor expectedStatus
+//     stays not_run; that close does not record an E2E pass or customer delivery.
 //   * the status semantics are the approved ones: an item whose only executed
 //     layer is the unit layer is `not_run`, never `passed`.
 //
@@ -213,17 +213,27 @@ describe("ROW25 execution descriptors (W2-ACCESS, Plan §5.3)", () => {
     }
   });
 
-  it("keeps V19 / V22 conditional on D-03 until release evidence fills fixedIn", () => {
+  it("records D-03 fixed by the repository tests while V19 / V22 stay not_run", () => {
     assert.ok(d03, "D-03 must exist in the defect ledger");
-    assert.equal(d03.status, "open", "D-03 stays open until release evidence passes");
-    assert.equal(d03.fixedIn, null, "fixedIn stays empty until that same evidence commit");
-    assert.deepEqual(d03.verifiedBy, []);
+    assert.equal(d03.status, "fixed");
+    assert.equal(d03.fixedIn, "b7b157354d970860cdb03552c5d5839d7a7ccb9f");
+    assert.deepEqual(d03.verifiedBy, ["ROW25-V19", "ROW25-V22"]);
+    assert.equal(d03.acceptedBy, null);
+
+    const g01 = findings.findings.find((f) => f.id === "G-01");
+    const g06 = findings.findings.find((f) => f.id === "G-06");
+    assert.equal(g01?.status, "open", "G-01 stays open; D-03 does not claim customer delivery");
+    assert.equal(g01?.fixedIn, null);
+    assert.deepEqual(g01?.verifiedBy, []);
+    assert.equal(g06?.status, "open", "G-06 stays open; Wave 0b stays with blocked_delivery");
+    assert.equal(g06?.fixedIn, null);
+    assert.deepEqual(g06?.verifiedBy, []);
 
     const conditional = cases.filter((c) => c.conditional);
     assert.deepEqual(conditional.map((c) => c.executionId).sort(), ["ROW25-V19", "ROW25-V22"]);
     for (const c of conditional) {
       assert.equal(c.conditionalOn, "D-03", `${c.executionId} must name D-03 as its condition`);
-      assert.equal(c.expectedStatus, "not_run", `${c.executionId} must not claim a status`);
+      assert.equal(c.expectedStatus, "not_run", `${c.executionId} must not claim an E2E pass`);
       assert.ok(!ROW25_C19_IDS.includes(c.executionId), `${c.executionId} is not a C19 id`);
       const status = statusFromDimensions(
         { unit: { status: "passed" } },
@@ -234,6 +244,11 @@ describe("ROW25 execution descriptors (W2-ACCESS, Plan §5.3)", () => {
       assert.ok(maintenance, `${c.executionId} must carry the maintenance-line dimension`);
       assert.equal(maintenance.state, "blocked");
       assert.equal(maintenance.blockedReason, "environment");
+      assert.match(maintenance.doesNotProve, /客户/);
+      assert.ok(
+        c.localCoverage.includes("webui/server/__tests__/row-policy-d03-uppercase.test.ts"),
+        `${c.executionId} points at the uppercase-schema repository test`
+      );
       assert.ok(
         c.localCoverage.includes("webui/server/__tests__/row-policy-d03-realfs.test.ts"),
         `${c.executionId} points at the real-filesystem regression`
@@ -251,6 +266,13 @@ describe("ROW25 execution descriptors (W2-ACCESS, Plan §5.3)", () => {
       assert.ok(!ROW25_P1_IDS.includes(id), id);
     }
     assert.equal(ROW25_C19_IDS.length, 11);
+  });
+
+  it("requires mysql for every ROW25 id and does not require postgres", () => {
+    for (const c of cases) {
+      assert.ok(c.requiredCapabilities.includes("mysql"), `${c.executionId} must require mysql`);
+      assert.ok(!c.requiredCapabilities.includes("postgres"), `${c.executionId} must not require postgres`);
+    }
   });
 
   it("keeps the fault dimension on V15 and no other id", () => {

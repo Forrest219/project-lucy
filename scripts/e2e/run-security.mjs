@@ -15,6 +15,7 @@ import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { catalogDigest, checkLock, loadCatalog, readLock } from "./lib/catalog.mjs";
 import { EXIT_CODES, fail, loadRun, parseArgv, sha256Text } from "./lib/common.mjs";
+import { appliedDatabaseCapability } from "./lib/db-capability.mjs";
 import { ExternalInstance, LucyProcess } from "./lib/instance.mjs";
 import { startKtxUpstream } from "./lib/ktx-upstream.mjs";
 import { reconcileExternalFlag, TargetIdentityError } from "./lib/target-identity.mjs";
@@ -58,7 +59,8 @@ async function detectCapabilities(run, lucyStarted, external, upstream) {
     "lucy-http": lucyStarted,
     "fault-control": lucyStarted && !external && run.instance.startedBy === "runner",
     "ktx-upstream": external ? declared.has("ktx-upstream") : upstream?.ok === true,
-    postgres: run.db.applied === true || declared.has("postgres"),
+    postgres: appliedDatabaseCapability(run.db) === "postgres" || declared.has("postgres"),
+    mysql: appliedDatabaseCapability(run.db) === "mysql" || declared.has("mysql"),
     browser: false,
     "agent-client": false,
     "k8s-amd64": external && declared.has("k8s-amd64"),

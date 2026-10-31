@@ -54,6 +54,7 @@ export const CAPABILITY_BLOCK_REASONS = Object.freeze({
   "npm-registry": "delivery",
   "k8s-amd64": "environment",
   "postgres": "environment",
+  "mysql": "environment",
   "agent-client": "capability",
   "browser": "capability",
   "clock-control": "capability",

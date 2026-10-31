@@ -37,6 +37,7 @@ import { expectedAskPlan } from "./lib/ask-plan.mjs";
 import { loadCatalog } from "./lib/catalog.mjs";
 import { automatedRequiredClients, countDistinctAutomatedProducts } from "./lib/clients.mjs";
 import { EXIT_CODES, REPO_ROOT, fail, loadRun, parseArgv } from "./lib/common.mjs";
+import { appliedDatabaseCapability } from "./lib/db-capability.mjs";
 import { startKtxUpstream } from "./lib/ktx-upstream.mjs";
 import {
   RESOURCE_KIND,
@@ -621,7 +622,8 @@ async function main() {
   // data plane answers every query with an empty result when the upstream is
   // missing — which reads like a product defect and is not one.
   const baseCapabilities = new Set(["lucy-http"]);
-  if (run.db?.applied) baseCapabilities.add("postgres");
+  const database = appliedDatabaseCapability(run.db);
+  if (database) baseCapabilities.add(database);
   for (const extra of (process.env.LUCY_REAL_E2E_CAPABILITIES ?? "").split(",")) if (extra.trim()) baseCapabilities.add(extra.trim());
   // The conservative set: the data-plane capability is NOT in it. It is added
   // only once this run has PROVEN its own upstream answers.

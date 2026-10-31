@@ -16,11 +16,13 @@ import { fileURLToPath } from "node:url";
 import { loadCatalog } from "./lib/catalog.mjs";
 import { EXIT_CODES, fail, loadRun, parseArgv } from "./lib/common.mjs";
 import { annotationsOf, iterTests, testStatus } from "./lib/playwright-report.mjs";
+import { appliedDatabaseCapability } from "./lib/db-capability.mjs";
 import { statusFromAssertions } from "./run-security.mjs";
 
 export function managementCapabilities(run, env = process.env) {
   const caps = new Set(["lucy-http", "browser"]);
-  if (run.db?.applied) caps.add("postgres");
+  const database = appliedDatabaseCapability(run.db);
+  if (database) caps.add(database);
   for (const extra of (env.LUCY_REAL_E2E_CAPABILITIES ?? "").split(",")) if (extra.trim()) caps.add(extra.trim());
   return caps;
 }

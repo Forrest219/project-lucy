@@ -333,6 +333,33 @@ describe("v0.25 Track D — execution descriptors (RTP/RTV/ASV/ACM/HIV/CON)", ()
 });
 
 describe("v0.25 RTP／RTV — row policy templates and per-table reverse lookup", () => {
+  // Product exit is the template spec §8 (2026-10-30). This catalog does not
+  // record RTV-06 or RTV-07 as passed. Database floor matches ROW25.
+  it("requires mysql for RTP25 and RTV25 and keeps browser and agent-client", () => {
+    for (const item of RTP25_CASES) {
+      assert.deepEqual(
+        [...item.requires],
+        ["lucy-http", "ktx-upstream", "mysql", "browser", "agent-client"],
+        item.executionId
+      );
+      assert.deepEqual([...item.executors], ["P", "B", "A", "V"], item.executionId);
+    }
+    for (const item of RTV25_CASES) {
+      assert.deepEqual(
+        [...item.requires],
+        ["lucy-http", "ktx-upstream", "mysql", "browser"],
+        item.executionId
+      );
+      assert.deepEqual([...item.executors], ["P", "B", "V"], item.executionId);
+    }
+    for (const id of ["RTV25-06", "RTV25-07"]) {
+      const item = rowPolicyCaseFor(id);
+      assert.ok(item, id);
+      assert.notEqual(item.status, "passed", `${id} stays off the product-exit pass list`);
+      assert.notEqual(item.expectedStatus, "passed", `${id} expectedStatus stays off passed`);
+    }
+  });
+
   it("covers RTP25-01..10 and RTV25-01..08 with their own source rows", () => {
     assert.deepEqual(RTP25_CASES.map((c) => c.executionId),
       Array.from({ length: 10 }, (_, i) => `RTP25-${String(i + 1).padStart(2, "0")}`));
