@@ -2,27 +2,33 @@
  * Lucy v0.25 P1-3 — 访问关系图 SVG 画布。
  *
  * Authority: `webui/docs/187-access-relation-sankey-spec.md`
- *   §4.1  双层对照（流带宽度 = 授权路径数；内核 = 访问路径数，起点对齐）
+ *   §4.1  双层对照（授权面积 = 授权路径数；内核 = 访问路径数，起点对齐）
  *   §4.4  边状态与视觉表现
  *   §7.1  布局（分层从左到右；层内按出流权重降序、id 字典序）
  *   §7.2  节点与边交互（悬停高亮、点击下钻、悬停浮层、点击边看明细）
  *   §7.5  无障碍等价视图（aria 摘要 + 节点列表可聚焦跳转）
  *   §9    Design System（只用语义层 token，禁止裸 hex）
  *
- * 呈现修订: `docs/specs/lucy-20261030-access-map-quiet-reading-spec.md`
+ * 几何语言: `docs/specs/lucy-20261101-access-map-geometry-spec.md` v0.2
+ *   §5.1  细柱（`PILLAR_WIDTH`）；计量柱高 = flow × unitPx，**没有高度地板**
+ *   §5.2  `labelBlock`（名称 + 副标题 + 状态）；首列在柱左 / 中间列在柱上 / 末列在柱右
+ *   §5.3  刻度封顶（`MAX_PX_PER_PATH = 24`）；密度预算；稀疏图居中而不是放大
+ *   §5.4  四态面积流带；按对端 y 分槽；计量厚度与命中区解耦
+ *   §5.5  列间距与横向滚动；§5.6 着色 token；§5.7 与 quiet-reading §5.3 的关系
+ *
+ * 前序呈现: `docs/specs/lucy-20261030-access-map-quiet-reading-spec.md`
  *   §5.3  流带着色（僵尸授权流带回到中性；需复核 warning 虚线；确凿越权 danger 实线）
- *   §5.4  定宽卡片、列标题、流带只画在列与列之间、图区横向滚动
  *   §5.5  边明细进右侧抽屉；Esc 先关抽屉
  *   §5.7  图下清单视觉隐藏但仍可聚焦
  *
  * 布局是**自研**的轻量分层布局，不是 d3-sankey：
- * Spec §8.1 建议引入 `d3-sankey`，但本轮实施计划的硬约束是「不新增运行时依赖」，
+ * Spec §8.1 建议引入 `d3-sankey`，但实施计划的硬约束是「不新增运行时依赖」，
  * 两条约束冲突时以实施计划为准。因此这里用纯计算实现同样的语义：
- * 分层 → 层内稳定排序 → 节点高度按流量 → 流带按流量 → 内核按访问路径数起点对齐。
+ * 分层 → 层内稳定排序 → 计量柱高 → 刻度封顶 → 面积流带 → 内核。
  *
- * 颜色只用语义层 token：授权流带 `brand`、访问内核 `accent`；
+ * 颜色只用语义层 token：授权面积 `brand`、访问内核 `accent`；
  * 需复核用 `warning`、确凿越权用 `danger`；且**状态不只靠颜色区分**
- * （需复核为虚线、确凿越权为实线，并带文字徽标）。
+ * （需复核为虚线中线、确凿越权为 danger 实线轮廓，并带文字状态行）。
  */
 import * as Dialog from "@radix-ui/react-dialog";
 import { useEffect, useMemo, useRef, useState, type SVGProps } from "react";
@@ -36,11 +42,14 @@ import {
   type AccessMapNodeKind
 } from "./AccessMapTypes";
 
-/** 节点卡片定宽：约 18 个拉丁字符的宽度。 */
-const NODE_WIDTH = 168;
-const CARD_PADDING_X = 10;
-const CARD_MIN_HEIGHT = 54;
-const NODE_GAP = 12;
+/** 细柱宽度：取代旧的 168px 定宽卡片。 */
+export const PILLAR_WIDTH = 16;
+/** 单条路径的最大计量厚度（刻度封顶）。 */
+export const MAX_PX_PER_PATH = 24;
+/** 同柱相邻节点之间的最小间隔。 */
+export const NODE_GAP = 16;
+/** 透明命中区的最小厚度（**只用于命中**，不参与计量）。 */
+export const MIN_HIT_PX = 8;
 /**
  * 列间距必须大于卡片宽度，否则流带通道会压到下一列的卡片上。
  *
@@ -57,14 +66,25 @@ export const ACCESS_MAP_COLUMN_GAP = 300;
  * 超高视口把图区拉成一大片空白。上限 720px 与图面自身高度同量级。
  */
 export const ACCESS_MAP_CANVAS_MIN_HEIGHT = "clamp(420px, 58vh, 720px)";
-const CANVAS_HEIGHT = 640;
+/** 密度预算高度：刻度按「填满这个高度」反推，再被 `MAX_PX_PER_PATH` 封顶。 */
+export const DENSE_BUDGET_H = 640;
 const PADDING = 28;
 /** 列标题占的那一行。 */
 const COLUMN_HEADER_HEIGHT = 34;
 const LABEL_FONT_SIZE = 12;
 const SUBTITLE_FONT_SIZE = 10;
-const MARKER_FONT_SIZE = 9;
-const MARKER_GAP = 8;
+const STATUS_FONT_SIZE = 9;
+const LABEL_LINE_HEIGHT = 15;
+const SUBTITLE_LINE_HEIGHT = 13;
+const STATUS_LINE_HEIGHT = 12;
+/** 标签块的最大宽度（超出省略）。 */
+const LABEL_MAX_WIDTH = 168;
+/** 首列 / 末列标签块与柱的水平间距。 */
+const LABEL_GAP = 8;
+/** 中间列标签块底缘与柱顶的间距（Spec §5.2：≤ 4px）。 */
+const LABEL_PILLAR_GAP = 2;
+/** 标签块与流带 / 相邻柱之间的最小净距。 */
+const LABEL_MARGIN = 2;
 
 /**
  * React 的 `SVGAttributes` 没有声明 `translate`，但它是 HTML 全局属性、
@@ -74,6 +94,7 @@ const MARKER_GAP = 8;
 const translateNo = { translate: "no" } as SVGProps<SVGTextElement>;
 
 type Point = { x: number; y: number };
+type Box = { x: number; y: number; width: number; height: number };
 
 export type AccessMapLayoutColumn = {
   depth: number;
@@ -83,36 +104,93 @@ export type AccessMapLayoutColumn = {
   x: number;
 };
 
-export type AccessMapLayoutMarker = {
-  state: AccessMapEdgeState;
-  label: string;
-  x: number;
-};
-
-export type AccessMapLayoutNode = {
-  node: AccessMapNode;
+/** 外标块：名称 + 副标题 + 状态行（geometry Spec §5.2）。 */
+export type AccessMapLabelBlock = {
+  /** 可见名称（超长时尾部省略）。 */
+  name: string;
+  /** 完整名称（留在 `<title>` 与抽屉里）。 */
+  fullName: string;
+  /** 副标题（N 个 Agent · M 条路径）。 */
+  subtitle: string;
+  /** 状态行（僵尸授权 / 需复核 / 访问超出授权）；无异常边时为 null。 */
+  status: string | null;
+  statusState: AccessMapEdgeState | null;
   x: number;
   y: number;
   width: number;
   height: number;
-  /** 卡片内可见的名称（超长时尾部省略）。 */
+};
+
+export type AccessMapLayoutNode = {
+  node: AccessMapNode;
+  /** 柱体左上角。 */
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  /** 兼容旧字段：可见名称。 */
   label: string;
-  /** 名称文字的绘制盒，用于「文字盒不与流带通道相交」的自检。 */
-  labelBox: { x: number; y: number; width: number; height: number };
-  /** 卡片上的状态文字标记（§5.3「卡片标记」）。 */
-  markers: AccessMapLayoutMarker[];
+  /** 兼容旧字段：外标块绘制盒。 */
+  labelBox: Box;
+  /** 外标块（名称 + 副标题 + 状态）。 */
+  labelBlock: AccessMapLabelBlock;
+};
+
+/** 一条边在某根柱上占用的槽位（相对柱顶）。 */
+export type AccessMapBandSlot = {
+  top: number;
+  height: number;
+  index: number;
+};
+
+/** 面积流带的几何：填充 path + 上下缘采样（避碰的事实源）。 */
+export type AccessMapBandGeometry = {
+  kind: "grant" | "review";
+  path: string;
+  thickness: number;
+  sourceSlot: AccessMapBandSlot;
+  targetSlot: AccessMapBandSlot;
+  /** 中线采样点。 */
+  center: Point[];
+  /** 上缘采样点。 */
+  upper: Point[];
+  /** 下缘采样点。 */
+  lower: Point[];
+  /** 内核是否与授权同顶（顶对齐）。 */
+  topAligned: boolean;
+  /** 中线的三次贝塞尔控制点（命中层复用同一曲线）。 */
+  curve: [Point, Point, Point, Point];
 };
 
 export type AccessMapLayoutLink = {
   edge: AccessMapEdge;
+  /** 主面积 path（授权面积，或需复核的独立警示面积）。 */
   path: string;
-  kernelPath: string | null;
+  /** 主面积厚度。 */
   width: number;
+  /** 内核面积 path（dormant / needs_review 没有内核）。 */
+  kernelPath: string | null;
   kernelWidth: number;
   /** 内核比例（相对流带长度）。 */
   kernelRatio: number;
-  /** 流带的三次贝塞尔控制点，供「文字盒 vs 流带通道」自检采样。 */
+  /** 主中线的三次贝塞尔控制点。 */
   points: [Point, Point, Point, Point];
+  /** 主面积几何。 */
+  band: AccessMapBandGeometry | null;
+  /** 授权面积（needs_review 为 null）。 */
+  grantArea: AccessMapBandGeometry | null;
+  /** 需复核的独立警示面积。 */
+  reviewArea: AccessMapBandGeometry | null;
+  /** 访问内核。 */
+  kernel: AccessMapBandGeometry | null;
+  /** 需复核的虚线中线。 */
+  midlinePath: string | null;
+  /** 越权的 danger 实线轮廓。 */
+  outlinePath: string | null;
+  sourceSlot: AccessMapBandSlot;
+  targetSlot: AccessMapBandSlot;
+  /** 透明命中 path（厚度 ≥ `MIN_HIT_PX`，不参与计量）。 */
+  hitPaths: string[];
 };
 
 export type AccessMapLayout = {
@@ -120,13 +198,23 @@ export type AccessMapLayout = {
   links: AccessMapLayoutLink[];
   columns: AccessMapLayoutColumn[];
   width: number;
+  /** SVG 高度（= contentHeight）。 */
   height: number;
+  /** 图面实际高度。 */
+  contentHeight: number;
+  /** 本次布局使用的刻度（px / 路径）。 */
+  unitPx: number;
+  /** 稀疏图：图面不足槽位 65%，改为垂直居中而不是放大。 */
+  sparse: boolean;
+  /** 槽位参考高度（稀疏判定基准）。 */
+  slotReferenceHeight: number;
 };
 
 function flowOf(node: AccessMapNode): number {
   return Math.max(node.meta.grantPaths ?? 0, node.meta.accessPaths ?? 0);
 }
 
+/** 边的计量权重：授权优先，没有授权时（需复核）退回访问路径数。 */
 function edgeWeight(edge: AccessMapEdge): number {
   return edge.grantPaths > 0 ? edge.grantPaths : edge.accessPaths;
 }
@@ -151,17 +239,72 @@ function truncateCubic(points: [Point, Point, Point, Point], t: number): [Point,
   return [points[0], a, d, f];
 }
 
-function cubicPath(points: [Point, Point, Point, Point]): string {
-  const r = (value: number): number => Math.round(value * 10) / 10;
+function cubicAt(points: [Point, Point, Point, Point], t: number): Point {
   const [p0, p1, p2, p3] = points;
-  return `M${r(p0.x)},${r(p0.y)} C${r(p1.x)},${r(p1.y)} ${r(p2.x)},${r(p2.y)} ${r(p3.x)},${r(p3.y)}`;
+  const u = 1 - t;
+  const a = u * u * u;
+  const b = 3 * u * u * t;
+  const c = 3 * u * t * t;
+  const d = t * t * t;
+  return {
+    x: a * p0.x + b * p1.x + c * p2.x + d * p3.x,
+    y: a * p0.y + b * p1.y + c * p2.y + d * p3.y
+  };
+}
+
+/** 采样一条三次贝塞尔。 */
+function sampleCubic(points: [Point, Point, Point, Point], steps = 24): Point[] {
+  const out: Point[] = [];
+  for (let i = 0; i <= steps; i += 1) out.push(cubicAt(points, i / steps));
+  return out;
+}
+
+/** 纵向偏移一条曲线（用来造上下缘）。 */
+function offsetCurve(points: [Point, Point, Point, Point], dy: number): [Point, Point, Point, Point] {
+  return [
+    { x: points[0].x, y: points[0].y + dy },
+    { x: points[1].x, y: points[1].y + dy },
+    { x: points[2].x, y: points[2].y + dy },
+    { x: points[3].x, y: points[3].y + dy }
+  ];
+}
+
+function round1(value: number): number {
+  return Math.round(value * 10) / 10;
+}
+
+function cubicPath(points: [Point, Point, Point, Point]): string {
+  const [p0, p1, p2, p3] = points;
+  return `M${round1(p0.x)},${round1(p0.y)} C${round1(p1.x)},${round1(p1.y)} ${round1(p2.x)},${round1(
+    p2.y
+  )} ${round1(p3.x)},${round1(p3.y)}`;
+}
+
+/**
+ * 由中线造出**面积** path（闭合填充区域）。
+ *
+ * 几何 Spec §5.4：主视觉是填充面积，不是「一条超粗描边」。
+ */
+function areaPath(
+  upper: [Point, Point, Point, Point],
+  lower: [Point, Point, Point, Point]
+): string {
+  const back: [Point, Point, Point, Point] = [
+    lower[3],
+    lower[2],
+    lower[1],
+    lower[0]
+  ];
+  return `${cubicPath(upper)} L${round1(back[0].x)},${round1(back[0].y)} ${cubicPath(back).slice(
+    1
+  )} Z`;
 }
 
 /** 估算文字宽度：拉丁字符约 0.55em，中日韩字符约 1em。 */
 export function estimateTextWidth(text: string, fontSize: number): number {
   let units = 0;
   for (const char of text) {
-    units += /[⺀-鿿豈-﫿＀-｠]/.test(char) ? 1 : 0.55;
+    units += /[⺀-鿿豈-﫿＀-｠]/.test(char) ? 1 : 0.55;
   }
   return units * fontSize;
 }
@@ -181,21 +324,66 @@ export function truncateLabel(text: string, maxWidth: number, fontSize: number):
   return out.length === 0 ? "…" : `${out}…`;
 }
 
-/** 卡片标记的顺序（§5.3 的状态表顺序）。 */
-const MARKER_STATE_ORDER: AccessMapEdgeState[] = ["dormant", "needs_review", "overflow"];
+/** 状态行的展示优先级：越权 > 需复核 > 僵尸授权。 */
+const LABEL_STATUS_PRIORITY: AccessMapEdgeState[] = ["overflow", "needs_review", "dormant"];
+
+type LabelMeasure = {
+  name: string;
+  fullName: string;
+  subtitle: string;
+  status: string | null;
+  statusState: AccessMapEdgeState | null;
+  width: number;
+  height: number;
+};
+
+function measureLabel(node: AccessMapNode, statusState: AccessMapEdgeState | null): LabelMeasure {
+  const name = truncateLabel(node.label, LABEL_MAX_WIDTH, LABEL_FONT_SIZE);
+  const subtitle = truncateLabel(accessMapNodeSubtitle(node), LABEL_MAX_WIDTH, SUBTITLE_FONT_SIZE);
+  const status = statusState ? accessMapEdgeStateLabel(statusState) : null;
+  const width = Math.max(
+    estimateTextWidth(name, LABEL_FONT_SIZE),
+    estimateTextWidth(subtitle, SUBTITLE_FONT_SIZE),
+    status ? estimateTextWidth(status, STATUS_FONT_SIZE) : 0
+  );
+  const height =
+    LABEL_LINE_HEIGHT + SUBTITLE_LINE_HEIGHT + (status ? STATUS_LINE_HEIGHT : 0);
+  return { name, fullName: node.label, subtitle, status, statusState, width, height };
+}
+
+/** 布局可选项。`maxPxPerPath` 只用于「刻度封顶」的对照实验与测试。 */
+export type AccessMapLayoutOptions = {
+  maxPxPerPath?: number;
+};
+
+type NodeBox = {
+  node: AccessMapNode;
+  columnIndex: number;
+  nodeIndex: number;
+  x: number;
+  y: number;
+  pillarHeight: number;
+  measure: LabelMeasure;
+};
+
+type BuiltBand = {
+  link: AccessMapLayoutLink;
+  sourceSlot: AccessMapBandSlot;
+  targetSlot: AccessMapBandSlot;
+};
 
 /**
  * 分层布局。
  *
- * 节点高度与流带宽度都按同一把全局刻度算，所以「带宽 = 授权路径数」在图上是可比的。
- *
- * 节点是**定宽卡片**：名称落在卡片里（超长省略），流带只画在列与列之间，
- * 不再从卡片上压过去。
+ * 计量只用一把全局刻度：`厚度 = 权重 × unitPx`，**没有最小厚度地板**；
+ * 可见性与点击便利性由透明命中层（`MIN_HIT_PX`）解决，不污染计量。
  */
 export function layoutAccessMap(
   nodes: AccessMapNode[],
-  edges: AccessMapEdge[]
+  edges: AccessMapEdge[],
+  options?: AccessMapLayoutOptions
 ): AccessMapLayout {
+  const maxPxPerPath = options?.maxPxPerPath ?? MAX_PX_PER_PATH;
   const flowNodes = nodes.filter((node) => node.kind !== "token");
   const depths = [...new Set(flowNodes.map((node) => node.depth))].sort((a, b) => a - b);
 
@@ -206,15 +394,9 @@ export function layoutAccessMap(
   );
 
   const contentTop = PADDING + COLUMN_HEADER_HEIGHT;
-  const columnFlow = columns.map((column) => column.reduce((sum, node) => sum + flowOf(node), 0));
-  const units = columnFlow.map((flow, index) => {
-    if (flow <= 0) return Number.POSITIVE_INFINITY;
-    const gaps = Math.max(0, columns[index].length - 1) * NODE_GAP;
-    return Math.max(0, CANVAS_HEIGHT - COLUMN_HEADER_HEIGHT - gaps) / flow;
-  });
-  const unit = units.length > 0 ? Math.min(...units) : 1;
+  const usableForUnit = DENSE_BUDGET_H - PADDING * 2 - COLUMN_HEADER_HEIGHT;
 
-  // 卡片上的状态标记：取该节点相邻边上出现过的非正常状态。
+  // 状态标记：取该节点相邻边上出现过的非正常状态。
   const markerStates = new Map<string, Set<AccessMapEdgeState>>();
   for (const edge of edges) {
     if (edge.state === "normal") continue;
@@ -225,119 +407,459 @@ export function layoutAccessMap(
     }
   }
 
-  const placed: AccessMapLayoutNode[] = [];
-  let maxHeight = 0;
-  columns.forEach((column, columnIndex) => {
-    const x = PADDING + columnIndex * ACCESS_MAP_COLUMN_GAP;
-    let y = contentTop;
-    for (const node of column) {
-      const height = Math.max(CARD_MIN_HEIGHT, flowOf(node) * unit);
-      const label = truncateLabel(node.label, NODE_WIDTH - CARD_PADDING_X * 2, LABEL_FONT_SIZE);
-      const states = markerStates.get(node.id);
-      const markers: AccessMapLayoutMarker[] = [];
-      let markerX = x + CARD_PADDING_X;
-      for (const state of MARKER_STATE_ORDER) {
-        if (!states?.has(state)) continue;
-        const markerLabel = accessMapEdgeStateLabel(state);
-        markers.push({ state, label: markerLabel, x: markerX });
-        markerX += estimateTextWidth(markerLabel, MARKER_FONT_SIZE) + MARKER_GAP;
-      }
-      placed.push({
-        node,
-        x,
-        y,
-        width: NODE_WIDTH,
-        height,
-        label,
-        labelBox: {
-          x: x + CARD_PADDING_X,
-          y: y + 5,
-          width: estimateTextWidth(label, LABEL_FONT_SIZE),
-          height: LABEL_FONT_SIZE + 4
-        },
-        markers
-      });
-      y += height + NODE_GAP;
-    }
-    maxHeight = Math.max(maxHeight, y - contentTop - NODE_GAP);
+  const measures = new Map<string, LabelMeasure>();
+  for (const node of flowNodes) {
+    const states = markerStates.get(node.id);
+    const statusState = states
+      ? LABEL_STATUS_PRIORITY.find((state) => states.has(state)) ?? null
+      : null;
+    measures.set(node.id, measureLabel(node, statusState));
+  }
+
+  // 只保留两端都落在图上的边。
+  const placedIds = new Set(flowNodes.map((node) => node.id));
+  const activeEdges = edges.filter(
+    (edge) => placedIds.has(edge.source) && placedIds.has(edge.target)
+  );
+
+  // 节点的流量：元数据流量与进出槽位总量取大者，保证槽位不越柱。
+  const outSum = new Map<string, number>();
+  const inSum = new Map<string, number>();
+  for (const edge of activeEdges) {
+    const weight = edgeWeight(edge);
+    outSum.set(edge.source, (outSum.get(edge.source) ?? 0) + weight);
+    inSum.set(edge.target, (inSum.get(edge.target) ?? 0) + weight);
+  }
+  const flowOfNode = (node: AccessMapNode): number =>
+    Math.max(flowOf(node), outSum.get(node.id) ?? 0, inSum.get(node.id) ?? 0);
+
+  const columnFlow = columns.map((column) =>
+    column.reduce((sum, node) => sum + flowOfNode(node), 0)
+  );
+
+  // 左右留白：首列标签在柱左、末列标签在柱右，都得在 SVG 里放得下。
+  const leftGutter =
+    columns.length > 0
+      ? Math.max(
+          ...columns[0].map((node) => (measures.get(node.id)?.width ?? 0) + LABEL_GAP)
+        )
+      : 0;
+  const rightGutter =
+    columns.length > 0
+      ? Math.max(
+          ...columns[columns.length - 1].map(
+            (node) => (measures.get(node.id)?.width ?? 0) + LABEL_GAP
+          )
+        )
+      : 0;
+  const columnX = columns.map((_, index) => PADDING + leftGutter + index * ACCESS_MAP_COLUMN_GAP);
+
+  // 刻度：先按密度预算反推，再被 `MAX_PX_PER_PATH` 封顶。
+  const reserveOf = (index: number): number => {
+    const column = columns[index];
+    const gaps = Math.max(0, column.length - 1) * NODE_GAP;
+    const isMiddle = index > 0 && index < columns.length - 1;
+    const labels = isMiddle
+      ? column.reduce((sum, node) => sum + (measures.get(node.id)?.height ?? 0) + LABEL_PILLAR_GAP, 0)
+      : 0;
+    return gaps + labels;
+  };
+  const rawUnits = columns.map((_, index) => {
+    if ((columnFlow[index] ?? 0) <= 0) return Number.POSITIVE_INFINITY;
+    return Math.max(0, usableForUnit - reserveOf(index)) / (columnFlow[index] as number);
   });
+  const finiteUnits = rawUnits.filter((value) => Number.isFinite(value));
+  const rawUnit = finiteUnits.length > 0 ? Math.min(...finiteUnits) : maxPxPerPath;
+  let unitPx = Math.min(rawUnit, maxPxPerPath);
 
-  const placedById = new Map(placed.map((item) => [item.node.id, item]));
+  /**
+   * 按给定刻度做一次完整布局（含标签避碰迭代）。
+   */
+  function build(currentUnit: number): {
+    boxes: Map<string, NodeBox>;
+    links: AccessMapLayoutLink[];
+    columnHeights: number[];
+    labelTops: Map<string, number>;
+    maxColumnHeight: number;
+  } {
+    // extra[列][节点]：为了给标签块腾出避让空间而在该节点**之前**插入的额外高度。
+    const extra: number[][] = columns.map((column) => column.map(() => 0));
+    let boxes = new Map<string, NodeBox>();
+    let links: AccessMapLayoutLink[] = [];
+    let labelTops = new Map<string, number>();
+    let columnHeights: number[] = [];
 
-  // 边在节点内的进出偏移：按权重分配，顺序稳定（按对端 id 字典序）。
-  const outgoing = new Map<string, AccessMapEdge[]>();
-  const incoming = new Map<string, AccessMapEdge[]>();
-  for (const edge of edges) {
-    if (!placedById.has(edge.source) || !placedById.has(edge.target)) continue;
-    outgoing.set(edge.source, [...(outgoing.get(edge.source) ?? []), edge]);
-    incoming.set(edge.target, [...(incoming.get(edge.target) ?? []), edge]);
-  }
-  for (const list of outgoing.values()) list.sort((a, b) => a.target.localeCompare(b.target));
-  for (const list of incoming.values()) list.sort((a, b) => a.source.localeCompare(b.source));
+    // 标签避碰是迭代求解：把标签块往上挪需要空间，空间不够就把该节点的
+    // 整块内容往下挪（`extra`），再重算流带。收敛是几何级数的（每轮缺口
+    // 缩小约一个量级），所以给足轮数；每轮只处理第一个需要让位的节点，
+    // 保证单调收敛、不会来回振荡。
+    for (let round = 0; round < 160; round += 1) {
+      // ① 步进与柱位置。
+      boxes = new Map<string, NodeBox>();
+      const heights: number[] = [];
+      columns.forEach((column, columnIndex) => {
+        const isMiddle = columnIndex > 0 && columnIndex < columns.length - 1;
+        let cursor = contentTop;
+        column.forEach((node, nodeIndex) => {
+          const measure = measures.get(node.id) as LabelMeasure;
+          const pillarHeight = flowOfNode(node) * currentUnit;
+          cursor += extra[columnIndex][nodeIndex] ?? 0;
+          let y: number;
+          if (isMiddle) {
+            // 中间列：标签块在柱**上方**。
+            y = cursor + measure.height + LABEL_PILLAR_GAP;
+          } else {
+            // 首 / 末列：标签块在柱侧面，柱体在步进单元里居中。
+            y = cursor + (Math.max(pillarHeight, measure.height) - pillarHeight) / 2;
+          }
+          boxes.set(node.id, {
+            node,
+            columnIndex,
+            nodeIndex,
+            x: columnX[columnIndex] as number,
+            y,
+            pillarHeight,
+            measure
+          });
+          cursor = isMiddle
+            ? cursor + measure.height + LABEL_PILLAR_GAP + pillarHeight + NODE_GAP
+            : cursor + Math.max(pillarHeight, measure.height) + NODE_GAP;
+        });
+        heights.push(cursor - contentTop - NODE_GAP);
+      });
 
-  const outgoingOffset = new Map<string, number>();
-  for (const list of outgoing.values()) {
-    let cursor = 0;
-    for (const edge of list) {
-      outgoingOffset.set(edge.id, cursor);
-      cursor += Math.max(2, edgeWeight(edge) * unit);
+      // ② 槽位与面积流带。
+      const built = buildBands(boxes, currentUnit, activeEdges);
+      links = built.links;
+
+      // ③ 标签避碰：中间列的标签块必须整块落在流带上下缘之上。
+      let changed = false;
+      const nextLabelTops = new Map<string, number>();
+      for (const column of boxes.values()) {
+        const isMiddle = column.columnIndex > 0 && column.columnIndex < columns.length - 1;
+        if (!isMiddle) {
+          nextLabelTops.set(column.node.id, column.y);
+          continue;
+        }
+        const labelWidth = column.measure.width;
+        const labelX = column.x + PILLAR_WIDTH / 2 - labelWidth / 2;
+        const minEdge = bandEdgeCeiling(links, column, labelX, labelWidth);
+        const topMax = Math.min(
+          column.y - LABEL_PILLAR_GAP - column.measure.height,
+          minEdge - LABEL_MARGIN - column.measure.height
+        );
+        const previous = previousPillarBottom(boxes, column);
+        const topMin = Math.max(previous + LABEL_MARGIN, contentTop);
+        if (topMax < topMin - 0.01) {
+          extra[column.columnIndex][column.nodeIndex] =
+            (extra[column.columnIndex][column.nodeIndex] ?? 0) + (topMin - topMax);
+          changed = true;
+          break;
+        }
+        nextLabelTops.set(column.node.id, topMax);
+      }
+      if (!changed) {
+        labelTops = nextLabelTops;
+        columnHeights = heights;
+        break;
+      }
+      labelTops = nextLabelTops;
+      columnHeights = heights;
     }
+
+    return {
+      boxes,
+      links,
+      columnHeights,
+      labelTops,
+      maxColumnHeight: columnHeights.length > 0 ? Math.max(...columnHeights) : 0
+    };
   }
-  const incomingOffset = new Map<string, number>();
-  for (const list of incoming.values()) {
-    let cursor = 0;
-    for (const edge of list) {
-      incomingOffset.set(edge.id, cursor);
-      cursor += Math.max(2, edgeWeight(edge) * unit);
+
+  let built = build(unitPx);
+  // 密度预算：实测列高超预算就按比例回缩刻度（**不放宽** MAX_PX_PER_PATH）。
+  for (let i = 0; i < 8; i += 1) {
+    if (built.maxColumnHeight <= usableForUnit + 0.5) break;
+    unitPx = unitPx * (usableForUnit / built.maxColumnHeight);
+    built = build(unitPx);
+  }
+
+  const { boxes, links, labelTops } = built;
+
+  const placed: AccessMapLayoutNode[] = [];
+  for (const box of boxes.values()) {
+    const measure = box.measure;
+    const isMiddle = box.columnIndex > 0 && box.columnIndex < columns.length - 1;
+    let labelBox: Box;
+    if (isMiddle) {
+      const labelX = box.x + PILLAR_WIDTH / 2 - measure.width / 2;
+      const top = labelTops.get(box.node.id) ?? box.y - LABEL_PILLAR_GAP - measure.height;
+      labelBox = { x: labelX, y: top, width: measure.width, height: measure.height };
+    } else if (box.columnIndex === 0) {
+      labelBox = {
+        x: box.x - LABEL_GAP - measure.width,
+        y: box.y + (box.pillarHeight - measure.height) / 2,
+        width: measure.width,
+        height: measure.height
+      };
+    } else {
+      labelBox = {
+        x: box.x + PILLAR_WIDTH + LABEL_GAP,
+        y: box.y + (box.pillarHeight - measure.height) / 2,
+        width: measure.width,
+        height: measure.height
+      };
     }
-  }
-
-  const links: AccessMapLayoutLink[] = [];
-  for (const edge of edges) {
-    const source = placedById.get(edge.source);
-    const target = placedById.get(edge.target);
-    if (!source || !target) continue;
-    const width = Math.max(2, edgeWeight(edge) * unit);
-    // 流带从源卡片右缘连到目标卡片左缘，不穿过卡片文字盒。
-    const x0 = source.x + source.width;
-    const x1 = target.x;
-    const y0 = source.y + (outgoingOffset.get(edge.id) ?? 0) + width / 2;
-    const y1 = target.y + (incomingOffset.get(edge.id) ?? 0) + width / 2;
-    const midX = (x0 + x1) / 2;
-    const curve: [Point, Point, Point, Point] = [
-      { x: x0, y: y0 },
-      { x: midX, y: y0 },
-      { x: midX, y: y1 },
-      { x: x1, y: y1 }
-    ];
-
-    // 内核比例：访问路径数 / 授权路径数（同量纲），上限 1。
-    // 授权路径数为 0（需复核）时没有流带，内核独立成一条警示描边。
-    const ratio = edge.grantPaths > 0 ? Math.min(1, edge.accessPaths / edge.grantPaths) : 1;
-    const kernelPoints = ratio >= 1 ? curve : truncateCubic(curve, ratio);
-    links.push({
-      edge,
-      path: cubicPath(curve),
-      kernelPath: edge.accessPaths > 0 ? cubicPath(kernelPoints) : null,
-      width,
-      kernelWidth: Math.max(2, edge.accessPaths * unit),
-      kernelRatio: ratio,
-      points: curve
+    placed.push({
+      node: box.node,
+      x: box.x,
+      y: box.y,
+      width: PILLAR_WIDTH,
+      height: box.pillarHeight,
+      label: measure.name,
+      labelBox,
+      labelBlock: {
+        name: measure.name,
+        fullName: measure.fullName,
+        subtitle: measure.subtitle,
+        status: measure.status,
+        statusState: measure.statusState,
+        x: labelBox.x,
+        y: labelBox.y,
+        width: labelBox.width,
+        height: labelBox.height
+      }
     });
   }
+
+  const contentHeight = Math.max(
+    contentTop + (built.maxColumnHeight || 0) + PADDING,
+    contentTop + PADDING
+  );
 
   return {
     nodes: placed,
     links,
     columns: columns.map((column, index) => ({
-      depth: depths[index],
+      depth: depths[index] as number,
       kind: column[0]?.kind ?? "table",
       label: accessMapNodeKindLabel(column[0]?.kind ?? "table"),
-      x: PADDING + index * ACCESS_MAP_COLUMN_GAP
+      x: columnX[index] as number
     })),
-    width: PADDING * 2 + Math.max(0, columns.length - 1) * ACCESS_MAP_COLUMN_GAP + NODE_WIDTH,
-    height: Math.max(CANVAS_HEIGHT, contentTop + maxHeight + PADDING)
+    width:
+      PADDING * 2 +
+      leftGutter +
+      rightGutter +
+      Math.max(0, columns.length - 1) * ACCESS_MAP_COLUMN_GAP +
+      PILLAR_WIDTH,
+    height: contentHeight,
+    contentHeight,
+    unitPx,
+    sparse: contentHeight < DENSE_BUDGET_H * 0.65,
+    slotReferenceHeight: DENSE_BUDGET_H
   };
+
+  /**
+   * 分配槽位并造出四态面积流带。
+   *
+   * 出边槽位按**目标节点的 y**排序（再按 id），入边槽位按**源节点的 y**排序：
+   * 这样流带少交叉，读者一眼能看出路径走向。
+   */
+  function buildBands(
+    nodeBoxes: Map<string, NodeBox>,
+    currentUnit: number,
+    scopedEdges: AccessMapEdge[]
+  ): { links: AccessMapLayoutLink[] } {
+    const outgoing = new Map<string, AccessMapEdge[]>();
+    const incoming = new Map<string, AccessMapEdge[]>();
+    for (const edge of scopedEdges) {
+      outgoing.set(edge.source, [...(outgoing.get(edge.source) ?? []), edge]);
+      incoming.set(edge.target, [...(incoming.get(edge.target) ?? []), edge]);
+    }
+    const byId = new Map(scopedEdges.map((edge) => [edge.id, edge]));
+    const orderOf = (edge: AccessMapEdge, mode: "out" | "in"): { y: number; id: string } => {
+      const counterpartId = mode === "out" ? edge.target : edge.source;
+      const counterpart = nodeBoxes.get(counterpartId);
+      return { y: counterpart?.y ?? 0, id: counterpartId };
+    };
+    for (const list of outgoing.values()) {
+      list.sort((a, b) => {
+        const oa = orderOf(a, "out");
+        const ob = orderOf(b, "out");
+        return oa.y - ob.y || oa.id.localeCompare(ob.id);
+      });
+    }
+    for (const list of incoming.values()) {
+      list.sort((a, b) => {
+        const oa = orderOf(a, "in");
+        const ob = orderOf(b, "in");
+        return oa.y - ob.y || oa.id.localeCompare(ob.id);
+      });
+    }
+
+    const sourceSlot = new Map<string, AccessMapBandSlot>();
+    const targetSlot = new Map<string, AccessMapBandSlot>();
+    for (const [nodeId, list] of outgoing) {
+      let cursor = 0;
+      list.forEach((edge, index) => {
+        const height = edgeWeight(edge) * currentUnit;
+        sourceSlot.set(edge.id, { top: cursor, height, index });
+        cursor += height;
+      });
+      void nodeId;
+    }
+    for (const [nodeId, list] of incoming) {
+      let cursor = 0;
+      list.forEach((edge, index) => {
+        const height = edgeWeight(edge) * currentUnit;
+        targetSlot.set(edge.id, { top: cursor, height, index });
+        cursor += height;
+      });
+      void nodeId;
+    }
+
+    const links: AccessMapLayoutLink[] = [];
+    for (const edge of scopedEdges) {
+      const source = nodeBoxes.get(edge.source);
+      const target = nodeBoxes.get(edge.target);
+      const srcSlot = sourceSlot.get(edge.id);
+      const tgtSlot = targetSlot.get(edge.id);
+      if (!source || !target || !srcSlot || !tgtSlot) continue;
+
+      const x0 = source.x + PILLAR_WIDTH;
+      const x1 = target.x;
+      const gap = x1 - x0;
+      const isReview = edge.state === "needs_review";
+      const bandThickness = isReview
+        ? edge.accessPaths * currentUnit
+        : (edge.grantPaths > 0 ? edge.grantPaths : edge.accessPaths) * currentUnit;
+      const y0 = source.y + srcSlot.top + bandThickness / 2;
+      const y1 = target.y + tgtSlot.top + bandThickness / 2;
+      const curve: [Point, Point, Point, Point] = [
+        { x: x0, y: y0 },
+        { x: x0 + gap / 3, y: y0 },
+        { x: x1 - gap / 3, y: y1 },
+        { x: x1, y: y1 }
+      ];
+
+      const makeBand = (
+        kind: "grant" | "review",
+        centerCurve: [Point, Point, Point, Point],
+        thickness: number
+      ): AccessMapBandGeometry => {
+        const half = thickness / 2;
+        const upperCurve = offsetCurve(centerCurve, -half);
+        const lowerCurve = offsetCurve(centerCurve, half);
+        return {
+          kind,
+          path: areaPath(upperCurve, lowerCurve),
+          thickness,
+          sourceSlot: srcSlot,
+          targetSlot: tgtSlot,
+          center: sampleCubic(centerCurve),
+          upper: sampleCubic(upperCurve),
+          lower: sampleCubic(lowerCurve),
+          topAligned: true,
+          curve: centerCurve
+        };
+      };
+
+      // 主面积：授权面积（normal / dormant / overflow）或需复核的独立警示面积。
+      const band = makeBand(isReview ? "review" : "grant", curve, bandThickness);
+
+      // 内核：访问路径数，顶对齐；overflow 夹紧为授权厚度；dormant / needs_review 无内核。
+      let kernel: AccessMapBandGeometry | null = null;
+      let kernelRatio = 1;
+      if (!isReview && edge.state !== "dormant" && edge.accessPaths > 0) {
+        const grantThickness = bandThickness;
+        const accessThickness = Math.min(edge.accessPaths * currentUnit, grantThickness);
+        kernelRatio = grantThickness > 0 ? accessThickness / grantThickness : 1;
+        const kernelCurve: [Point, Point, Point, Point] = [
+          { x: x0, y: source.y + srcSlot.top + accessThickness / 2 },
+          { x: x0 + gap / 3, y: source.y + srcSlot.top + accessThickness / 2 },
+          { x: x1 - gap / 3, y: target.y + tgtSlot.top + accessThickness / 2 },
+          { x: x1, y: target.y + tgtSlot.top + accessThickness / 2 }
+        ];
+        const truncated: [Point, Point, Point, Point] =
+          kernelRatio >= 1 ? kernelCurve : truncateCubic(kernelCurve, kernelRatio);
+        kernel = makeBand("grant", truncated, accessThickness);
+      }
+
+      const midlinePath = isReview ? cubicPath(curve) : null;
+      const outlinePath = edge.state === "overflow" ? band.path : null;
+
+      const hitPaths: string[] = [];
+      for (const element of [band, kernel]) {
+        if (!element) continue;
+        const hitThickness = Math.max(element.thickness, MIN_HIT_PX);
+        const half = hitThickness / 2;
+        const upperCurve = offsetCurve(element.curve, -half);
+        const lowerCurve = offsetCurve(element.curve, half);
+        hitPaths.push(areaPath(upperCurve, lowerCurve));
+      }
+
+      links.push({
+        edge,
+        path: band.path,
+        width: bandThickness,
+        kernelPath: kernel?.path ?? null,
+        kernelWidth: kernel?.thickness ?? 0,
+        kernelRatio,
+        points: curve,
+        band,
+        grantArea: isReview ? null : band,
+        reviewArea: isReview ? band : null,
+        kernel,
+        midlinePath,
+        outlinePath,
+        sourceSlot: srcSlot,
+        targetSlot: tgtSlot,
+        hitPaths
+      });
+    }
+    void byId;
+    return { links };
+  }
+
+  /** 上一根柱的底缘（同一列、上一节点）。 */
+  function previousPillarBottom(allBoxes: Map<string, NodeBox>, box: NodeBox): number {
+    const column = columns[box.columnIndex] ?? [];
+    const previousNode = column[box.nodeIndex - 1];
+    if (!previousNode) return contentTop - LABEL_MARGIN;
+    const previousBox = allBoxes.get(previousNode.id);
+    if (!previousBox) return contentTop - LABEL_MARGIN;
+    return previousBox.y + previousBox.pillarHeight;
+  }
+
+  /**
+   * 标签块所在 x 区间内，相关流带上缘的**最高点**（y 最小值）。
+   *
+   * 标签块必须整块位于这条上缘之上，所以取的是最小 y（最高点）。
+   */
+  function bandEdgeCeiling(
+    allLinks: AccessMapLayoutLink[],
+    box: NodeBox,
+    labelX: number,
+    labelWidth: number
+  ): number {
+    const labelRight = labelX + labelWidth;
+    let ceiling = Number.POSITIVE_INFINITY;
+    for (const link of allLinks) {
+      const touchesSource = link.edge.source === box.node.id;
+      const touchesTarget = link.edge.target === box.node.id;
+      if (!touchesSource && !touchesTarget) continue;
+      const elements = [link.band, link.kernel].filter(Boolean) as AccessMapBandGeometry[];
+      for (const element of elements) {
+        for (const point of element.upper) {
+          const withinLabel = point.x >= labelX - 0.01 && point.x <= labelRight + 0.01;
+          if (!withinLabel) continue;
+          if (point.y < ceiling) ceiling = point.y;
+        }
+      }
+    }
+    if (!Number.isFinite(ceiling)) return box.y + Number.POSITIVE_INFINITY;
+    return ceiling;
+  }
 }
 
 function nodeFillClass(node: AccessMapNode): string {
@@ -357,40 +879,27 @@ function nodeFillClass(node: AccessMapNode): string {
 }
 
 /**
- * 流带本体着色（呈现修订 §5.3）。
+ * 面积流带的填充色（quiet-reading §5.3，geometry Spec §5.7 保持不变）。
  *
- * 僵尸授权与正常授权**同色**（`series/grant` default）：警告色只留给需复核与确凿越权，
+ * 僵尸授权与正常授权**同色**（`brand`）：警告色只留给需复核与确凿越权，
  * 否则「全部为僵尸授权」的图会被涂成一片警告色，读者读不出别的信息。
- * 僵尸授权的状态由卡片上的「僵尸授权」文字承担。
+ * 僵尸授权的状态由外标块上的「僵尸授权」文字承担。
  */
-function ribbonStrokeClass(edge: AccessMapEdge): string {
-  if (edge.state === "needs_review") return "stroke-warning-strong";
-  if (edge.state === "overflow") return "stroke-danger-strong";
-  return "stroke-brand";
+function bandFillClass(edge: AccessMapEdge): string {
+  if (edge.state === "needs_review") return "fill-warning";
+  if (edge.state === "overflow") return "fill-danger-soft";
+  return "fill-brand";
 }
 
-/** 流带线型：需复核为虚线（状态不只靠颜色区分）。 */
-function ribbonDashClass(edge: AccessMapEdge): string | undefined {
-  if (edge.state === "needs_review") return "6 4";
-  return undefined;
-}
-
-function kernelStrokeClass(edge: AccessMapEdge): string {
-  if (edge.confirmedUnauthorized) return "stroke-danger-strong";
-  if (edge.state === "needs_review") return "stroke-warning-strong";
-  if (edge.state === "overflow") return "stroke-danger-strong";
-  return "stroke-accent";
-}
-
-/** 状态不得只靠颜色区分：需复核为虚线，确凿越权为实线。 */
-function kernelDashClass(edge: AccessMapEdge): string | undefined {
-  if (edge.confirmedUnauthorized) return undefined;
-  if (edge.state === "needs_review") return "4 3";
-  return undefined;
+/** 访问内核的填充色：确凿越权与越权用 danger，正常访问用 accent。 */
+function kernelFillClass(edge: AccessMapEdge): string {
+  if (edge.confirmedUnauthorized) return "fill-danger-strong";
+  if (edge.state === "overflow") return "fill-danger-strong";
+  return "fill-accent";
 }
 
 /**
- * 卡片标记的着色。
+ * 状态文字的着色。
  *
  * 僵尸授权走中性色：警告色留给需复核与确凿越权，僵尸授权的数量放在指标卡上。
  */
@@ -487,8 +996,9 @@ export function AccessMapCanvas({
 
   return (
     <div
-      className="relative flex flex-col gap-3"
+      className="relative flex flex-col justify-center gap-3"
       data-testid="access-map-canvas"
+      data-layout-mode={layout.sparse ? "sparse-centered" : "dense"}
       ref={rootRef}
       style={{ minHeight: ACCESS_MAP_CANVAS_MIN_HEIGHT }}
     >
@@ -501,6 +1011,7 @@ export function AccessMapCanvas({
           viewBox={`0 0 ${layout.width} ${layout.height}`}
           width={layout.width}
           height={layout.height}
+          className="block"
         >
           {layout.columns.map((column) => (
             <text
@@ -532,33 +1043,74 @@ export function AccessMapCanvas({
                 }
                 onMouseLeave={() => setHoverTip(null)}
               >
-                <path
-                  d={link.path}
-                  fill="none"
-                  strokeWidth={link.width}
-                  strokeDasharray={ribbonDashClass(link.edge)}
-                  className={`${ribbonStrokeClass(link.edge)} ${faded ? "opacity-10" : "opacity-30"}`}
-                >
-                  <title>
-                    {`${link.edge.source} → ${link.edge.target}：授权路径 ${link.edge.grantPaths} 条 · 访问路径 ${link.edge.accessPaths} 条 · ${accessMapEdgeStateLabel(link.edge.state)}`}
-                  </title>
-                </path>
-                {link.kernelPath ? (
+                {/*
+                  主视觉：**填充面积**（授权面积，或需复核的独立警示面积）。
+                  不是「一条超粗描边」——描边无法表达厚度，也没法做虚线中线。
+                */}
+                {link.band ? (
                   <path
-                    d={link.kernelPath}
-                    fill="none"
-                    strokeWidth={link.kernelWidth}
-                    strokeDasharray={kernelDashClass(link.edge)}
-                    className={`${kernelStrokeClass(link.edge)} ${faded ? "opacity-15" : "opacity-90"}`}
+                    d={link.band.path}
+                    className={`${bandFillClass(link.edge)} ${faded ? "opacity-10" : "opacity-30"}`}
+                    data-testid={`access-map-ribbon-${link.edge.id}`}
                     onClick={() => setSelectedEdgeId(link.edge.id)}
                     style={{ cursor: "pointer" }}
+                  >
+                    <title>
+                      {`${link.edge.source} → ${link.edge.target}：授权路径 ${link.edge.grantPaths} 条 · 访问路径 ${link.edge.accessPaths} 条 · ${accessMapEdgeStateLabel(link.edge.state)}`}
+                    </title>
+                  </path>
+                ) : null}
+                {link.kernel ? (
+                  <path
+                    d={link.kernel.path}
+                    className={`${kernelFillClass(link.edge)} ${faded ? "opacity-15" : "opacity-90"}`}
                     data-testid={`access-map-kernel-${link.edge.id}`}
+                    onClick={() => setSelectedEdgeId(link.edge.id)}
+                    style={{ cursor: "pointer" }}
                   >
                     <title>
                       {`访问路径 ${link.edge.accessPaths} 条 · 调用 ${link.edge.accessCalls} 次 · ${accessMapEdgeStateLabel(link.edge.state)}`}
                     </title>
                   </path>
                 ) : null}
+                {/* 需复核：虚线中线（状态不只靠颜色区分）。 */}
+                {link.midlinePath ? (
+                  <path
+                    d={link.midlinePath}
+                    fill="none"
+                    strokeWidth={2}
+                    strokeDasharray="6 4"
+                    className="stroke-warning-strong"
+                    data-testid={`access-map-midline-${link.edge.id}`}
+                  />
+                ) : null}
+                {/* 越权：danger 实线轮廓（不靠加粗表达）。 */}
+                {link.outlinePath ? (
+                  <path
+                    d={link.outlinePath}
+                    fill="none"
+                    strokeWidth={1.5}
+                    className="stroke-danger-strong"
+                    data-testid={`access-map-outline-${link.edge.id}`}
+                  />
+                ) : null}
+                {/*
+                  透明命中层：厚度至少 `MIN_HIT_PX`，**不参与计量**。
+                  让「很细但仍然可见」的流带（僵尸授权、无内核）也能悬停与点击。
+                */}
+                {link.hitPaths.map((d, index) => (
+                  <path
+                    key={`hit-${index}`}
+                    d={d}
+                    fill="transparent"
+                    stroke="transparent"
+                    strokeWidth={0}
+                    pointerEvents="all"
+                    data-testid={`access-map-hit-${link.edge.id}-${index}`}
+                    onClick={() => setSelectedEdgeId(link.edge.id)}
+                    style={{ cursor: "pointer" }}
+                  />
+                ))}
               </g>
             );
           })}
@@ -566,6 +1118,9 @@ export function AccessMapCanvas({
             const { node } = item;
             const isFocus = focusNodeId === node.id;
             const clickable = Boolean(onSelectNode) && !node.meta.unresolved;
+            const block = item.labelBlock;
+            const hitWidth = Math.max(PILLAR_WIDTH, MIN_HIT_PX);
+            const hitHeight = Math.max(item.height, MIN_HIT_PX);
             return (
               <g
                 key={node.id}
@@ -577,7 +1132,7 @@ export function AccessMapCanvas({
                 }
                 onMouseLeave={() => setHoverTip(null)}
               >
-                {/* 全名留在 `<title>`：卡片里的名称过长时会省略。 */}
+                {/* 全名留在 `<title>`：外标里的名称过长时会省略。 */}
                 <title>
                   {`${node.label} · ${accessMapNodeSubtitle(node)}`}
                 </title>
@@ -586,40 +1141,51 @@ export function AccessMapCanvas({
                   y={item.y}
                   width={item.width}
                   height={item.height}
-                  rx={4}
+                  rx={3}
                   className={`${nodeFillClass(node)} ${isFocus ? "opacity-100" : "opacity-80"}`}
                   onClick={clickable ? () => onSelectNode?.(node.id) : undefined}
                   onMouseEnter={() => setHoveredNodeId(node.id)}
                   onMouseLeave={() => setHoveredNodeId(null)}
                   style={{ cursor: clickable ? "pointer" : "default" }}
                 />
-                <text
-                  x={item.x + CARD_PADDING_X}
-                  y={item.y + 17}
-                  className="fill-fg-body text-[12px] notranslate"
-                  {...translateNo}
-                >
-                  {item.label}
-                </text>
-                <text
-                  x={item.x + CARD_PADDING_X}
-                  y={item.y + 32}
-                  className="fill-fg-muted text-[10px] notranslate"
-                  {...translateNo}
-                >
-                  {accessMapNodeSubtitle(node)}
-                </text>
-                {item.markers.map((marker) => (
+                {/* 透明命中扩展：细柱也要好点。 */}
+                <rect
+                  x={item.x - (hitWidth - item.width) / 2}
+                  y={item.y}
+                  width={hitWidth}
+                  height={hitHeight}
+                  fill="transparent"
+                  pointerEvents="all"
+                />
+                {/* 外标块：名称 + 副标题 + 状态行。 */}
+                <g data-testid={`access-map-label-${node.id}`}>
                   <text
-                    key={marker.state}
-                    x={marker.x}
-                    y={item.y + 46}
-                    className={`text-[9px] notranslate ${markerFillClass(marker.state)}`}
+                    x={block.x}
+                    y={block.y + 11}
+                    className="fill-fg-body text-[12px] notranslate"
                     {...translateNo}
                   >
-                    {marker.label}
+                    {block.name}
                   </text>
-                ))}
+                  <text
+                    x={block.x}
+                    y={block.y + 26}
+                    className="fill-fg-muted text-[10px] notranslate"
+                    {...translateNo}
+                  >
+                    {block.subtitle}
+                  </text>
+                  {block.status && block.statusState ? (
+                    <text
+                      x={block.x}
+                      y={block.y + 38}
+                      className={`text-[9px] notranslate ${markerFillClass(block.statusState)}`}
+                      {...translateNo}
+                    >
+                      {block.status}
+                    </text>
+                  ) : null}
+                </g>
               </g>
             );
           })}

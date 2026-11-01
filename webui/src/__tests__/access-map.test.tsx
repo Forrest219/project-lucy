@@ -13,6 +13,8 @@ import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AccessMap } from "../pages/admin/AccessMap";
 import type { AccessMapResponse } from "../components/admin/AccessMapTypes";
@@ -553,7 +555,11 @@ describe("访问关系图阅读降噪（呈现修订 Spec §7）", () => {
   it("SC-08 — 僵尸授权流带不含 warning；需复核为 warning 虚线；确凿越权内核为 danger 实线", async () => {
     const response = makeResponse();
     response.edges = [
-      makeEdge("agent:agent_a", "role:role_reader", { grantPaths: 2, grantUsers: 1 }),
+      makeEdge("agent:agent_a", "role:role_reader", {
+        grantPaths: 2,
+        grantUsers: 1,
+        state: "dormant"
+      }),
       makeEdge("role:role_reader", "conn:mysql_main", {
         grantPaths: 0,
         accessPaths: 1,
@@ -576,30 +582,34 @@ describe("访问关系图阅读降噪（呈现修订 Spec §7）", () => {
     renderPage();
     await waitFor(() => expect(screen.getByTestId("access-map-svg")).toBeInTheDocument());
 
-    const ribbonOf = (edgeId: string): SVGElement => {
-      const group = screen.getByTestId(`access-map-link-${edgeId}`);
-      return group.querySelector("path:not([data-testid])") as SVGElement;
-    };
-
-    // 僵尸授权（dormant）与正常授权同色：流带本体不含 warning。
-    const dormant = ribbonOf("e|agent:agent_a|role:role_reader");
-    expect(dormant.getAttribute("class")).toContain("stroke-brand");
+    // 僵尸授权（dormant）与正常授权同色：授权面积不含 warning。
+    const dormant = screen.getByTestId("access-map-ribbon-e|agent:agent_a|role:role_reader");
+    expect(dormant.getAttribute("class")).toContain("fill-brand");
     expect(dormant.getAttribute("class")).not.toContain("warning");
     expect(dormant.getAttribute("stroke-dasharray")).toBeNull();
 
-    // 需复核：warning 虚线。
-    const needsReview = ribbonOf("e|role:role_reader|conn:mysql_main");
-    expect(needsReview.getAttribute("class")).toContain("stroke-warning-strong");
-    expect(needsReview.getAttribute("stroke-dasharray")).toBeTruthy();
+    // 需复核：warning 面积 + 虚线中线（状态不只靠颜色区分）。
+    const needsReview = screen.getByTestId("access-map-ribbon-e|role:role_reader|conn:mysql_main");
+    expect(needsReview.getAttribute("class")).toContain("fill-warning");
+    const midline = screen.getByTestId("access-map-midline-e|role:role_reader|conn:mysql_main");
+    expect(midline.getAttribute("stroke-dasharray")).toBeTruthy();
+    expect(midline.getAttribute("class")).toContain("stroke-warning-strong");
 
-    // 确凿越权：danger 实线（内核与流带都是）。
-    const overflow = ribbonOf("e|conn:mysql_main|table:mysql_main::finance::orders");
-    expect(overflow.getAttribute("class")).toContain("stroke-danger-strong");
+    // 确凿越权：danger 实线轮廓 + danger 内核，都不带虚线。
+    const overflow = screen.getByTestId(
+      "access-map-ribbon-e|conn:mysql_main|table:mysql_main::finance::orders"
+    );
+    expect(overflow.getAttribute("class")).toContain("danger");
     expect(overflow.getAttribute("stroke-dasharray")).toBeNull();
+    const outline = screen.getByTestId(
+      "access-map-outline-e|conn:mysql_main|table:mysql_main::finance::orders"
+    );
+    expect(outline.getAttribute("class")).toContain("stroke-danger-strong");
+    expect(outline.getAttribute("stroke-dasharray")).toBeNull();
     const kernel = screen.getByTestId(
       "access-map-kernel-e|conn:mysql_main|table:mysql_main::finance::orders"
     );
-    expect(kernel.getAttribute("class")).toContain("stroke-danger-strong");
+    expect(kernel.getAttribute("class")).toContain("fill-danger-strong");
     expect(kernel.getAttribute("stroke-dasharray")).toBeNull();
   });
 
@@ -1023,8 +1033,9 @@ describe("访问关系图图优先呈现（chart-first Spec §7）", () => {
     renderPage();
     await waitFor(() => expect(screen.getByTestId("access-map-canvas")).toBeInTheDocument());
 
-    const kernel = screen.getByTestId("access-map-kernel-e|role:role_reader|conn:mysql_main");
-    fireEvent.mouseOver(kernel);
+    // 悬停**可见**的面积流带（不是只依赖内核；需复核没有内核）。
+    const ribbon = screen.getByTestId("access-map-ribbon-e|role:role_reader|conn:mysql_main");
+    fireEvent.mouseOver(ribbon);
 
     const tip = await screen.findByTestId("access-map-hover-tip");
     expect(tip).toHaveTextContent("→");
@@ -1100,5 +1111,209 @@ describe("访问关系图图优先呈现（chart-first Spec §7）", () => {
 
     // 页面标题与正文都不使用「桑基图」。
     expect(document.body.textContent ?? "").not.toContain("桑基");
+  });
+});
+
+/**
+ * 访问关系图**几何语言**的组件侧断言。
+ *
+ * Authority: `docs/specs/lucy-20261101-access-map-geometry-spec.md` v0.2
+ *   §5.4  四态面积流带（授权面积 / 独立警示面积 / 内核夹紧 / danger 轮廓）
+ *   §5.6  着色 token
+ *   §7    SC-05、SC-07、SC-11–SC-14（组件侧）
+ *
+ * 布局侧断言（SC-01–SC-10 的几何部分）在 `access-map-layout.test.tsx`。
+ */
+describe("访问关系图几何语言（geometry Spec §7 组件侧）", () => {
+  /** 一张覆盖四种边状态的图：normal / needs_review / dormant / overflow 各一条。 */
+  function fourStateResponse(): AccessMapResponse {
+    const response = makeResponse();
+    const customers = makeNode("table:mysql_main::finance::customers", "table", "customers", 3, {
+      physicalTable: "finance.customers",
+      grantPaths: 1,
+      grantUsers: 1
+    });
+    response.nodes = [...response.nodes, customers];
+    response.edges = [
+      makeEdge("agent:agent_a", "role:role_reader", {
+        grantPaths: 2,
+        grantUsers: 1,
+        accessPaths: 1,
+        accessUsers: 1,
+        accessCalls: 2,
+        state: "normal"
+      }),
+      makeEdge("role:role_reader", "conn:mysql_main", {
+        grantPaths: 0,
+        accessPaths: 1,
+        accessUsers: 1,
+        accessCalls: 3,
+        state: "needs_review"
+      }),
+      makeEdge("conn:mysql_main", "table:mysql_main::finance::orders", {
+        grantPaths: 2,
+        grantUsers: 1,
+        accessPaths: 0,
+        state: "dormant"
+      }),
+      makeEdge("conn:mysql_main", "table:mysql_main::finance::customers", {
+        grantPaths: 1,
+        grantUsers: 1,
+        accessPaths: 2,
+        accessUsers: 1,
+        accessCalls: 5,
+        state: "overflow",
+        confirmedUnauthorized: true
+      })
+    ];
+    response.render = { nodes: response.nodes, edges: response.edges, folded: { nodes: 0, edges: 0 } };
+    return response;
+  }
+
+  async function renderFourState(): Promise<void> {
+    stubAccessMap(fourStateResponse());
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("access-map-svg")).toBeInTheDocument());
+  }
+
+  it("SC-05 — 主视觉是填充面积 path；不是「单 path + 超粗 stroke」", async () => {
+    await renderFourState();
+
+    const ribbon = screen.getByTestId("access-map-ribbon-e|agent:agent_a|role:role_reader");
+    // 面积：闭合填充区域。
+    expect(ribbon.getAttribute("d")?.trim().endsWith("Z")).toBe(true);
+    expect(ribbon.getAttribute("class")).toMatch(/fill-/);
+    // 没有拿描边宽度当厚度。
+    expect(ribbon.getAttribute("stroke-width")).toBeNull();
+    // 主视觉不是「只有一条 path」：面积 + 内核是两层。
+    const kernel = screen.getByTestId("access-map-kernel-e|agent:agent_a|role:role_reader");
+    expect(kernel).toBeInTheDocument();
+    expect(kernel.getAttribute("d")).not.toBe(ribbon.getAttribute("d"));
+  });
+
+  it("SC-07 — 四态几何：normal 有授权面积与内核；dormant 只有授权面积；needs_review 是独立警示面积 + 虚线中线；overflow 内核夹紧为授权厚度", async () => {
+    await renderFourState();
+
+    // normal：授权面积 + 内核（内核沿曲线截短到访问/授权比例）。
+    const normalRibbon = screen.getByTestId("access-map-ribbon-e|agent:agent_a|role:role_reader");
+    const normalKernel = screen.getByTestId("access-map-kernel-e|agent:agent_a|role:role_reader");
+    expect(normalRibbon).toBeInTheDocument();
+    expect(normalKernel).toBeInTheDocument();
+
+    // dormant：只有授权面积，没有内核。
+    expect(screen.getByTestId("access-map-ribbon-e|conn:mysql_main|table:mysql_main::finance::orders")).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("access-map-kernel-e|conn:mysql_main|table:mysql_main::finance::orders")
+    ).not.toBeInTheDocument();
+
+    // needs_review：独立警示面积（不是授权面积）+ 虚线中线，没有内核。
+    expect(screen.getByTestId("access-map-ribbon-e|role:role_reader|conn:mysql_main")).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("access-map-kernel-e|role:role_reader|conn:mysql_main")
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByTestId("access-map-midline-e|role:role_reader|conn:mysql_main")
+    ).toBeInTheDocument();
+
+    // overflow：内核存在（厚度夹紧为授权），并有 danger 实线轮廓。
+    expect(
+      screen.getByTestId("access-map-kernel-e|conn:mysql_main|table:mysql_main::finance::customers")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId("access-map-outline-e|conn:mysql_main|table:mysql_main::finance::customers")
+    ).toBeInTheDocument();
+  });
+
+  it("SC-11 — 状态不只靠颜色：dormant 不带 warning；needs_review 虚线；overflow / 确凿越权 danger 实线", async () => {
+    await renderFourState();
+
+    const dormant = screen.getByTestId("access-map-ribbon-e|conn:mysql_main|table:mysql_main::finance::orders");
+    expect(dormant.getAttribute("class")).not.toContain("warning");
+    expect(dormant.getAttribute("stroke-dasharray")).toBeNull();
+
+    const midline = screen.getByTestId("access-map-midline-e|role:role_reader|conn:mysql_main");
+    expect(midline.getAttribute("stroke-dasharray")).toBeTruthy();
+
+    const outline = screen.getByTestId(
+      "access-map-outline-e|conn:mysql_main|table:mysql_main::finance::customers"
+    );
+    expect(outline.getAttribute("class")).toContain("stroke-danger-strong");
+    expect(outline.getAttribute("stroke-dasharray")).toBeNull();
+
+    const kernel = screen.getByTestId(
+      "access-map-kernel-e|conn:mysql_main|table:mysql_main::finance::customers"
+    );
+    expect(kernel.getAttribute("class")).toContain("danger");
+    expect(kernel.getAttribute("stroke-dasharray")).toBeNull();
+  });
+
+  it("SC-12 — 悬停**可见面积**就出浮层（含无内核的 dormant 与 normal），浮层含从→到与状态", async () => {
+    await renderFourState();
+
+    // dormant 没有内核，可见入口只有授权面积 —— 悬停它必须出浮层。
+    const dormant = screen.getByTestId("access-map-ribbon-e|conn:mysql_main|table:mysql_main::finance::orders");
+    fireEvent.mouseOver(dormant);
+    const dormantTip = await screen.findByTestId("access-map-hover-tip");
+    expect(dormantTip).toHaveTextContent("→");
+    expect(dormantTip).toHaveTextContent("僵尸授权");
+    expect(dormantTip.closest("svg")).toBeNull();
+    fireEvent.mouseOut(dormant);
+
+    // normal 的授权面积同样可悬停。
+    await waitFor(() =>
+      expect(screen.queryByTestId("access-map-hover-tip")).not.toBeInTheDocument()
+    );
+    const normal = screen.getByTestId("access-map-ribbon-e|agent:agent_a|role:role_reader");
+    fireEvent.mouseOver(normal);
+    const normalTip = await screen.findByTestId("access-map-hover-tip");
+    expect(normalTip).toHaveTextContent("AGENT A");
+    expect(normalTip).toHaveTextContent("role_reader");
+  });
+
+  it("SC-13 — 点击**可见面积**打开边明细抽屉（dormant 授权面积、needs_review 独立带），不只靠隐藏按钮", async () => {
+    await renderFourState();
+
+    const dormant = screen.getByTestId("access-map-ribbon-e|conn:mysql_main|table:mysql_main::finance::orders");
+    fireEvent.click(dormant);
+    const drawer = await screen.findByTestId("access-map-edge-drawer");
+    expect(drawer).toBeInTheDocument();
+    expect(screen.getByTestId("access-map-edge-detail")).toHaveTextContent("僵尸授权");
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() =>
+      expect(screen.queryByTestId("access-map-edge-drawer")).not.toBeInTheDocument()
+    );
+
+    const review = screen.getByTestId("access-map-ribbon-e|role:role_reader|conn:mysql_main");
+    fireEvent.click(review);
+    expect(await screen.findByTestId("access-map-edge-drawer")).toBeInTheDocument();
+    expect(screen.getByTestId("access-map-edge-detail")).toHaveTextContent("需复核");
+  });
+
+  it("SC-14 — 没有新增运行时依赖，也没有裸十六进制颜色", async () => {
+    // jsdom 环境下 import.meta.url 不是 file:，改用进程工作目录（= webui/）定位。
+    const canvasSource = readFileSync(
+      resolve(process.cwd(), "src/components/admin/AccessMapCanvas.tsx"),
+      "utf-8"
+    );
+    // 依赖只来自 react / radix / 本地模块。
+    const imports = [...canvasSource.matchAll(/from "([^"]+)"/g)].map((match) => match[1] as string);
+    for (const specifier of imports) {
+      expect(
+        specifier.startsWith(".") ||
+          specifier === "react" ||
+          specifier.startsWith("@radix-ui/"),
+        `意外的新增依赖：${specifier}`
+      ).toBe(true);
+    }
+    // 没有裸 hex（着色走语义层 token）。
+    expect(canvasSource.match(/#[0-9a-fA-F]{3,8}\b/g) ?? []).toEqual([]);
+
+    // 依赖清单里没有图表库。
+    const pkg = JSON.parse(readFileSync(resolve(process.cwd(), "package.json"), "utf-8")) as {
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+    const dependencyNames = Object.keys(pkg.dependencies ?? {});
+    expect(dependencyNames.filter((name) => name.startsWith("d3"))).toEqual([]);
   });
 });

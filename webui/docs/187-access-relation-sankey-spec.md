@@ -22,6 +22,8 @@
 > **呈现修订（已验收，2026-10-30）**：数据语义、API、URL 与边状态判定不变。页头、信号条、图面着色、图下清单、凭证清单与数据表的阅读方式以 [`docs/specs/lucy-20261030-access-map-quiet-reading-spec.md`](../../docs/specs/lucy-20261030-access-map-quiet-reading-spec.md) v0.3 为准。本文 §4.4 僵尸授权行的 UI 表现指向该 Spec §5.3。本文 SC-01–SC-14 仍未执行。
 
 > **呈现修订（再修订，2026-11-01）**：数据语义、API、URL、边状态判定、两档措辞与 Token 过滤句**全部不变**。**首屏页壳**（三张信号 Metric Card、信号筛选 UI、两个独立宽条「口径说明」/「快照」）已被 [`docs/specs/lucy-20261101-access-map-chart-first-spec.md`](../../docs/specs/lucy-20261101-access-map-chart-first-spec.md) 取代：图例短行贴图正上方，口径与快照沉底为单个弱入口「口径与快照」，图区抬高、栏距加大、悬停改为可读浮层。本文 §7.4 图例的**四项线型释义**不变，只是窗口 ISO 与访问口径从图例短行挪进弱入口。着色、抽屉、数据表与凭证表沿用 2026-10-30 的呈现修订与本文语义。
+>
+> **几何语言修订（2026-11-01）**：本文的**语义与权威性不变**（授权面、访问面、边状态判定、路径守恒、API、URL、两档措辞）。**图面几何**（节点形状、计量刻度、流带画法、标签排版、槽位分配、命中区）已由 [`docs/specs/lucy-20261101-access-map-geometry-spec.md`](../../docs/specs/lucy-20261101-access-map-geometry-spec.md) v0.2 规定并实施：节点为**细柱**（不再是定宽卡片），计量厚度 = 权重 × 刻度且**无最小厚度地板**，刻度按 `MAX_PX_PER_PATH` 封顶，流带为**填充面积**，四态各自有明确的面积 / 内核 / 轮廓几何，计量与命中解耦。本文 §4.4 的状态判定顺序与 §9 登记的着色 token（`series/grant`、`series/access`、`warning`、`danger`；禁止裸 hex；状态不得只靠颜色区分）**保持不变**，只是载体从描边改为填充面。
 
 ---
 
