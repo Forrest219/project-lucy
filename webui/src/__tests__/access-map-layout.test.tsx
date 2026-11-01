@@ -14,6 +14,8 @@ import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
+  ACCESS_MAP_CANVAS_MIN_HEIGHT,
+  ACCESS_MAP_COLUMN_GAP,
   estimateTextWidth,
   layoutAccessMap,
   truncateLabel
@@ -163,6 +165,44 @@ describe("访问关系图布局（呈现修订 §5.4）", () => {
     const cut = truncateLabel("x".repeat(200), 148, 12);
     expect(cut.endsWith("…")).toBe(true);
     expect(cut.length).toBeLessThan(200);
+  });
+});
+
+/**
+ * 图区几何（chart-first Spec §5.6 / §7 SC-07）。
+ *
+ * 两条断言：
+ *   - 列间距常量**大于** quiet-reading 落地时的 240，让四栏流带弧度可读；
+ *   - 主图容器有基于视口的 `min-height` 策略（常量可断言，不靠读 CSS 猜测）。
+ */
+describe("图区几何（chart-first Spec §5.6）", () => {
+  const nodes: AccessMapNode[] = [
+    makeNode("agent:a1", "agent", "Agent A", 0, 3),
+    makeNode("role:r1", "role", "role_reader", 1, 3),
+    makeNode("conn:c1", "connection", "mysql_main", 2, 3),
+    makeNode("table:c1::s::t1", "table", "orders", 3, 3)
+  ];
+  const edges: AccessMapEdge[] = [
+    makeEdge("agent:a1", "role:r1", 3),
+    makeEdge("role:r1", "conn:c1", 3),
+    makeEdge("conn:c1", "table:c1::s::t1", 3)
+  ];
+
+  it("SC-07 — 列间距常量大于 quiet-reading 落地时的 240", () => {
+    expect(ACCESS_MAP_COLUMN_GAP).toBeGreaterThan(240);
+    // 常量必须真的被布局用上，而不是只挂着一个没人读的导出。
+    const layout = layoutAccessMap(nodes, edges);
+    expect(layout.columns.length).toBe(4);
+    expect(layout.columns[1].x - layout.columns[0].x).toBe(ACCESS_MAP_COLUMN_GAP);
+    expect(layout.width).toBeGreaterThan(ACCESS_MAP_COLUMN_GAP);
+  });
+
+  it("SC-07 — 主图容器有基于视口的 min-height 策略", () => {
+    expect(ACCESS_MAP_CANVAS_MIN_HEIGHT).toBeTruthy();
+    // 必须是「随视口变化」的策略，而不是写死一个像素。
+    expect(ACCESS_MAP_CANVAS_MIN_HEIGHT).toContain("vh");
+    // 有下限也有上限：矮视口不撑爆，高视口不留一大片空白。
+    expect(ACCESS_MAP_CANVAS_MIN_HEIGHT).toMatch(/clamp\(/);
   });
 });
 

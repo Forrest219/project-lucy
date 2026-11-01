@@ -25,7 +25,7 @@
  * （需复核为虚线、确凿越权为实线，并带文字徽标）。
  */
 import * as Dialog from "@radix-ui/react-dialog";
-import { useEffect, useMemo, useState, type SVGProps } from "react";
+import { useEffect, useMemo, useRef, useState, type SVGProps } from "react";
 import {
   accessMapEdgeStateLabel,
   accessMapNodeKindLabel,
@@ -41,9 +41,23 @@ const NODE_WIDTH = 168;
 const CARD_PADDING_X = 10;
 const CARD_MIN_HEIGHT = 54;
 const NODE_GAP = 12;
-/** 列间距必须大于卡片宽度，否则流带通道会压到下一列的卡片上。 */
-const COLUMN_GAP = 240;
-const CANVAS_HEIGHT = 560;
+/**
+ * 列间距必须大于卡片宽度，否则流带通道会压到下一列的卡片上。
+ *
+ * chart-first Spec §5.6：列间距加大，让四栏流带的弧度可读。
+ * 放不下时图区横向滚动（§5.4），不缩 SVG、不做窄屏重排。
+ */
+export const ACCESS_MAP_COLUMN_GAP = 300;
+/**
+ * 图区主容器的最小高度策略（chart-first Spec §5.6）。
+ *
+ * 图区要**显著高于**工具条 + 图例占用的那一小条，否则读者第一眼看到的还是
+ * 「上面有一堆控件，下面才是图」。用视口高度的比例表达，比写死像素更贴近
+ * 「剩余视口高度」的真实意图；同时给上下限，避免超矮视口被撑爆、
+ * 超高视口把图区拉成一大片空白。上限 720px 与图面自身高度同量级。
+ */
+export const ACCESS_MAP_CANVAS_MIN_HEIGHT = "clamp(420px, 58vh, 720px)";
+const CANVAS_HEIGHT = 640;
 const PADDING = 28;
 /** 列标题占的那一行。 */
 const COLUMN_HEADER_HEIGHT = 34;
@@ -214,7 +228,7 @@ export function layoutAccessMap(
   const placed: AccessMapLayoutNode[] = [];
   let maxHeight = 0;
   columns.forEach((column, columnIndex) => {
-    const x = PADDING + columnIndex * COLUMN_GAP;
+    const x = PADDING + columnIndex * ACCESS_MAP_COLUMN_GAP;
     let y = contentTop;
     for (const node of column) {
       const height = Math.max(CARD_MIN_HEIGHT, flowOf(node) * unit);
@@ -319,9 +333,9 @@ export function layoutAccessMap(
       depth: depths[index],
       kind: column[0]?.kind ?? "table",
       label: accessMapNodeKindLabel(column[0]?.kind ?? "table"),
-      x: PADDING + index * COLUMN_GAP
+      x: PADDING + index * ACCESS_MAP_COLUMN_GAP
     })),
-    width: PADDING * 2 + Math.max(0, columns.length - 1) * COLUMN_GAP + NODE_WIDTH,
+    width: PADDING * 2 + Math.max(0, columns.length - 1) * ACCESS_MAP_COLUMN_GAP + NODE_WIDTH,
     height: Math.max(CANVAS_HEIGHT, contentTop + maxHeight + PADDING)
   };
 }
@@ -398,12 +412,18 @@ export type AccessMapCanvasProps = {
   onClearFocus?: () => void;
   /** 无障碍摘要：节点数、边数、信号计数。 */
   summary: string;
-  /**
-   * 信号筛选：只影响**高亮**，不改变数据本身（§7.2）。
-   * null 表示不筛选。
-   */
-  highlightStates?: AccessMapEdgeState[] | null;
 };
+
+/**
+ * 悬停浮层的内容（chart-first Spec §5.6）。
+ *
+ * **不**把原生 SVG `<title>` 当作唯一用户可读提示：`<title>` 只在部分浏览器
+ * 里以极慢的原生 tooltip 出现、不能换行、样式不受控，读者读不到「这条边是
+ * 什么状态」。所以这里另起一个 HTML 浮层，`<title>` 保留作为无障碍补充。
+ */
+type AccessMapHoverTip =
+  | { kind: "node"; node: AccessMapNode; x: number; y: number }
+  | { kind: "edge"; edge: AccessMapEdge; x: number; y: number };
 
 export function AccessMapCanvas({
   nodes,
@@ -411,14 +431,18 @@ export function AccessMapCanvas({
   focusNodeId,
   onSelectNode,
   onClearFocus,
-  summary,
-  highlightStates
+  summary
 }: AccessMapCanvasProps) {
   const layout = useMemo(() => layoutAccessMap(nodes, edges), [nodes, edges]);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
-  const highlight =
-    highlightStates && highlightStates.length > 0 ? new Set(highlightStates) : null;
+  const [hoverTip, setHoverTip] = useState<AccessMapHoverTip | null>(null);
+
+  /** 边的两端用**节点名**呈现；找不到就退回原始 id，不出现空白。 */
+  const labelOfNode = useMemo(() => {
+    const byId = new Map(nodes.map((node) => [node.id, node.label]));
+    return (nodeId: string): string => byId.get(nodeId) ?? nodeId;
+  }, [nodes]);
 
   const incident = useMemo(() => {
     if (!hoveredNodeId) return null;
@@ -431,6 +455,21 @@ export function AccessMapCanvas({
   }, [hoveredNodeId, edges]);
 
   const selectedEdge = edges.find((edge) => edge.id === selectedEdgeId) ?? null;
+
+  /**
+   * 浮层定位：把鼠标的**视口坐标**换算成浮层所在容器（根节点，`position: relative`）内的坐标。
+   *
+   * 浮层是根节点的绝对定位子元素，所以基准是根节点而不是 SVG；图区横向滚动（§5.4）
+   * 只影响图形内容、不移动浮层，浮层因此始终贴着鼠标。
+   */
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const tipPosition = (clientX: number, clientY: number): { x: number; y: number } => {
+    const rect = rootRef.current?.getBoundingClientRect();
+    return {
+      x: clientX - (rect?.left ?? 0),
+      y: clientY - (rect?.top ?? 0)
+    };
+  };
 
   /**
    * Esc 分两段（呈现修订 §5.5）：抽屉开着 → 只关抽屉；抽屉关着且有聚焦 → 清聚焦。
@@ -447,7 +486,12 @@ export function AccessMapCanvas({
   }, [selectedEdgeId, onClearFocus]);
 
   return (
-    <div className="flex flex-col gap-3" data-testid="access-map-canvas">
+    <div
+      className="relative flex flex-col gap-3"
+      data-testid="access-map-canvas"
+      ref={rootRef}
+      style={{ minHeight: ACCESS_MAP_CANVAS_MIN_HEIGHT }}
+    >
       {/* 图区横向滚动：不缩小 SVG，也不做窄屏重排。 */}
       <div className="overflow-x-auto">
         <svg
@@ -471,13 +515,23 @@ export function AccessMapCanvas({
             </text>
           ))}
           {layout.links.map((link) => {
-            const dimmed = highlight ? !highlight.has(link.edge.state) : false;
             const unrelated = incident
               ? !incident.has(link.edge.source) && !incident.has(link.edge.target)
               : false;
-            const faded = dimmed || unrelated;
+            const faded = unrelated;
             return (
-              <g key={link.edge.id} data-testid={`access-map-link-${link.edge.id}`}>
+              <g
+                key={link.edge.id}
+                data-testid={`access-map-link-${link.edge.id}`}
+                onMouseEnter={(event) =>
+                  setHoverTip({
+                    kind: "edge",
+                    edge: link.edge,
+                    ...tipPosition(event.clientX, event.clientY)
+                  })
+                }
+                onMouseLeave={() => setHoverTip(null)}
+              >
                 <path
                   d={link.path}
                   fill="none"
@@ -518,6 +572,10 @@ export function AccessMapCanvas({
                 data-testid={`access-map-node-${node.id}`}
                 data-node-kind={node.kind}
                 data-unresolved={node.meta.unresolved ? "true" : undefined}
+                onMouseEnter={(event) =>
+                  setHoverTip({ kind: "node", node, ...tipPosition(event.clientX, event.clientY) })
+                }
+                onMouseLeave={() => setHoverTip(null)}
               >
                 {/* 全名留在 `<title>`：卡片里的名称过长时会省略。 */}
                 <title>
@@ -567,6 +625,44 @@ export function AccessMapCanvas({
           })}
         </svg>
       </div>
+
+      {/*
+        悬停浮层（chart-first Spec §5.6）。
+        `pointer-events-none`：浮层**不拦截指针**，点击仍然落到下面的节点/边上
+        （点边开抽屉、点节点写 focus 都不受影响）。
+        位置跟随鼠标偏移一小段，避免盖住被指的东西本身。
+      */}
+      {hoverTip ? (
+        <div
+          className="pointer-events-none absolute z-50 max-w-xs rounded-md border border-border-default bg-bg-elevated px-3 py-2 text-xs leading-relaxed text-fg-default shadow-lg"
+          data-testid="access-map-hover-tip"
+          style={{ left: hoverTip.x + 12, top: hoverTip.y + 12 }}
+        >
+          {hoverTip.kind === "node" ? (
+            <>
+              <div className="font-medium notranslate" translate="no">
+                {hoverTip.node.label}
+              </div>
+              <div className="text-fg-muted">{accessMapNodeSubtitle(hoverTip.node)}</div>
+              <div className="text-fg-muted">类型：{accessMapNodeKindLabel(hoverTip.node.kind)}</div>
+            </>
+          ) : (
+            <>
+              <div className="font-medium notranslate" translate="no">
+                {labelOfNode(hoverTip.edge.source)} → {labelOfNode(hoverTip.edge.target)}
+              </div>
+              <div className="text-fg-muted">
+                授权路径 {hoverTip.edge.grantPaths} 条 · 访问路径 {hoverTip.edge.accessPaths} 条 · 调用{" "}
+                {hoverTip.edge.accessCalls} 次
+              </div>
+              <div className="text-fg-muted">
+                状态：{accessMapEdgeStateLabel(hoverTip.edge.state)}
+                {hoverTip.edge.confirmedUnauthorized ? "（确凿越权：调用当时授权亦不覆盖）" : ""}
+              </div>
+            </>
+          )}
+        </div>
+      ) : null}
 
       {/*
         键盘可达的节点列表：SVG 本身对屏幕阅读器不友好（§7.5）。

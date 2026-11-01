@@ -21,6 +21,8 @@
 
 > **呈现修订（已验收，2026-10-30）**：数据语义、API、URL 与边状态判定不变。页头、信号条、图面着色、图下清单、凭证清单与数据表的阅读方式以 [`docs/specs/lucy-20261030-access-map-quiet-reading-spec.md`](../../docs/specs/lucy-20261030-access-map-quiet-reading-spec.md) v0.3 为准。本文 §4.4 僵尸授权行的 UI 表现指向该 Spec §5.3。本文 SC-01–SC-14 仍未执行。
 
+> **呈现修订（再修订，2026-11-01）**：数据语义、API、URL、边状态判定、两档措辞与 Token 过滤句**全部不变**。**首屏页壳**（三张信号 Metric Card、信号筛选 UI、两个独立宽条「口径说明」/「快照」）已被 [`docs/specs/lucy-20261101-access-map-chart-first-spec.md`](../../docs/specs/lucy-20261101-access-map-chart-first-spec.md) 取代：图例短行贴图正上方，口径与快照沉底为单个弱入口「口径与快照」，图区抬高、栏距加大、悬停改为可读浮层。本文 §7.4 图例的**四项线型释义**不变，只是窗口 ISO 与访问口径从图例短行挪进弱入口。着色、抽屉、数据表与凭证表沿用 2026-10-30 的呈现修订与本文语义。
+
 ---
 
 ## Terminology Compliance

@@ -16,6 +16,13 @@
  *   §5.5  聚焦面包屑「全图 / {节点名}」
  *   §5.6  视图用 `pl-admin-tabbar`；统计窗口用分段控件
  *
+ * 呈现修订: `docs/specs/lucy-20261101-access-map-chart-first-spec.md`
+ *   §5.1  页面骨架：页头 → 工具条 → 视图切换 → 图例短行 → 图区 → 弱入口 → 凭证清单
+ *   §5.2  三张信号 Metric Card 与两个独立宽条删除；信号筛选 state 一并删掉
+ *   §5.3  图例短行四项，贴在图正上方
+ *   §5.4  口径全文 / 覆盖率 / 调用数 / 信任与窗口 ISO / 快照 id 沉底弱入口
+ *   §5.5  partial 等降级保留 `pl-notice` 轻量提示
+ *
  * 页面是**只读展示**：不写配置、不改授权、不写审计事件。
  *
  * 路由挂载（由 W6 主持者接线，`webui/src/app/App.tsx`）：
@@ -31,20 +38,14 @@ import { apiGet } from "../../lib/apiClient";
 import { PageHeader } from "../../components/PageHeader";
 import { AccessMapCanvas } from "../../components/admin/AccessMapCanvas";
 import { AccessMapCredentialList } from "../../components/admin/AccessMapCredentialList";
-import { AccessMapLegend } from "../../components/admin/AccessMapLegend";
-import {
-  AccessMapSignalBar,
-  AccessMapSignalNotes,
-  type AccessMapSignalFilter
-} from "../../components/admin/AccessMapSignalBar";
+import { AccessMapLegend, AccessMapLegendMeta } from "../../components/admin/AccessMapLegend";
+import { AccessMapSignalNotes } from "../../components/admin/AccessMapSignalNotes";
 import { AccessMapTable } from "../../components/admin/AccessMapTable";
 import {
   ACCESS_MAP_TOKEN_FILTER_NOTICE_HEAD,
   ACCESS_MAP_TOKEN_FILTER_NOTICE_TAIL,
   accessMapGrantProblemLabel,
   accessMapWindowLabel,
-  type AccessMapEdge,
-  type AccessMapEdgeState,
   type AccessMapResponse
 } from "../../components/admin/AccessMapTypes";
 
@@ -109,7 +110,6 @@ function errorMessageOf(error: unknown): string {
 
 export function AccessMap() {
   const { queryString, get, setParam } = useAccessMapParams();
-  const [signalFilters, setSignalFilters] = useState<AccessMapSignalFilter[]>([]);
   const [searchText, setSearchText] = useState("");
   const [searchMessage, setSearchMessage] = useState<string | null>(null);
 
@@ -130,26 +130,14 @@ export function AccessMap() {
   const layerValue = get("layer") ?? "flat";
   const trustValue = get("trust") ?? "confirmed";
 
-  const highlightStates = useMemo<AccessMapEdgeState[] | null>(() => {
-    if (signalFilters.length === 0) return null;
-    const states: AccessMapEdgeState[] = [];
-    if (signalFilters.includes("dormant")) states.push("dormant");
-    if (signalFilters.includes("needs_review")) states.push("needs_review");
-    if (signalFilters.includes("confirmed_unauthorized")) states.push("overflow");
-    return states;
-  }, [signalFilters]);
-
-  const tableEdges = useMemo<AccessMapEdge[]>(() => {
-    if (!response) return [];
-    if (!highlightStates) return response.edges;
-    return response.edges.filter((edge) => highlightStates.includes(edge.state));
-  }, [response, highlightStates]);
-
-  const toggleSignal = (filter: AccessMapSignalFilter): void => {
-    setSignalFilters((current) =>
-      current.includes(filter) ? current.filter((item) => item !== filter) : [...current, filter]
-    );
-  };
+  /**
+   * 信号筛选本轮**整条删除**（chart-first Spec §5.2）。
+   *
+   * 原先三张指标卡既是首屏视觉主体，又是筛选入口；方案 A′ 把卡卸下首屏之后，
+   * 筛选就没有入口了。与其留一个不可达的 state 与一条会「假造已筛选态」的过滤分支，
+   * 不如把死代码删干净：关系表默认展示当前响应里的全部边（仍受 URL `focus` / `token`
+   * 等既有过滤约束）。真要图例筛选，另开一条 Spec。
+   */
 
   /** 搜索定位（§7.2）：按 Agent 名 / 角色 id / 表名找到节点并聚焦。 */
   const runSearch = (): void => {
@@ -359,40 +347,6 @@ export function AccessMap() {
 
       {response && !grantUnavailable ? (
         <>
-          <AccessMapSignalBar
-            meta={response.meta}
-            activeFilters={signalFilters}
-            onToggleFilter={toggleSignal}
-          />
-
-          {/* 口径与快照离开首屏：默认折叠，只在读者主动展开时出现。 */}
-          <details
-            id="access-map-methodology"
-            className="rounded-md border border-border-default bg-bg-subtle p-3"
-          >
-            <summary className="cursor-pointer text-sm font-medium text-fg-body">口径说明</summary>
-            <div className="mt-3 flex flex-col gap-3">
-              <AccessMapSignalNotes meta={response.meta} />
-              <AccessMapLegend meta={response.meta} />
-            </div>
-          </details>
-
-          <details
-            id="access-map-snapshot"
-            className="rounded-md border border-border-default bg-bg-subtle p-3"
-          >
-            <summary className="cursor-pointer text-sm font-medium text-fg-body">快照</summary>
-            <div className="mt-3">
-              <span
-                className="text-xs text-fg-muted notranslate"
-                translate="no"
-                data-testid="access-map-snapshot-id"
-              >
-                config {response.meta.grant.accessConfigVersion} · policy {response.meta.grant.policyVersion}
-              </span>
-            </div>
-          </details>
-
           <div className="pl-admin-tabbar" role="tablist" aria-label="访问关系图视图">
             <button
               type="button"
@@ -442,18 +396,44 @@ export function AccessMap() {
               )}
             </div>
           ) : view === "table" ? (
-            <AccessMapTable nodes={response.nodes} edges={tableEdges} />
+            <AccessMapTable nodes={response.nodes} edges={response.edges} />
           ) : (
-            <AccessMapCanvas
-              nodes={response.render.nodes}
-              edges={response.render.edges}
-              focusNodeId={focusNodeId}
-              highlightStates={highlightStates}
-              summary={`访问关系图：${response.render.nodes.length} 个节点，${response.render.edges.length} 条边，需复核 ${response.meta.signals.needsReviewEdges} 条，确凿越权 ${response.meta.signals.confirmedUnauthorizedEdges} 条。`}
-              onSelectNode={(nodeId) => setParam("focus", nodeId)}
-              onClearFocus={clearFocus}
-            />
+            <>
+              {/* 图例短行：四项线型释义，紧贴图区正上方（chart-first Spec §5.3）。 */}
+              <AccessMapLegend />
+              <AccessMapCanvas
+                nodes={response.render.nodes}
+                edges={response.render.edges}
+                focusNodeId={focusNodeId}
+                summary={`访问关系图：${response.render.nodes.length} 个节点，${response.render.edges.length} 条边，需复核 ${response.meta.signals.needsReviewEdges} 条，确凿越权 ${response.meta.signals.confirmedUnauthorizedEdges} 条。`}
+                onSelectNode={(nodeId) => setParam("focus", nodeId)}
+                onClearFocus={clearFocus}
+              />
+            </>
           )}
+
+          {/*
+            图下弱入口「口径与快照」（chart-first Spec §5.4）。
+            默认关闭：口径全文、覆盖率、调用数、信任/窗口 ISO 与快照 id 都在里面，
+            首屏只剩关系图本身。两个独立宽条（口径说明 / 快照）已合并成这一个。
+          */}
+          <details
+            className="rounded-md border border-border-default bg-bg-subtle p-3"
+            data-testid="access-map-methodology-snapshot"
+          >
+            <summary className="cursor-pointer text-sm font-medium text-fg-body">口径与快照</summary>
+            <div className="mt-3 flex flex-col gap-3">
+              <AccessMapSignalNotes meta={response.meta} />
+              <AccessMapLegendMeta meta={response.meta} />
+              <span
+                className="text-xs text-fg-muted notranslate"
+                translate="no"
+                data-testid="access-map-snapshot-id"
+              >
+                config {response.meta.grant.accessConfigVersion} · policy {response.meta.grant.policyVersion}
+              </span>
+            </div>
+          </details>
 
           <AccessMapCredentialList
             nodes={response.nodes}

@@ -1477,6 +1477,7 @@ L25-15 整批恢复抽屉。三个分区各自独立，不合并成一句「同�
 | `access-map-folded-badge` | 访问关系图：folded badge | `pages/admin/AccessMap.tsx` |
 | `access-map-grant-unavailable` | 访问关系图：grant unavailable | `pages/admin/AccessMap.tsx` |
 | `access-map-layer` | 访问关系图：layer | `pages/admin/AccessMap.tsx` |
+| `access-map-methodology-snapshot` | 访问关系图：图下弱入口「口径与快照」（chart-first Spec §5.4，默认关） | `pages/admin/AccessMap.tsx` |
 | `access-map-partial-notice` | 访问关系图：partial notice | `pages/admin/AccessMap.tsx` |
 | `access-map-search` | 访问关系图：search | `pages/admin/AccessMap.tsx` |
 | `access-map-search-message` | 访问关系图：search message | `pages/admin/AccessMap.tsx` |
@@ -1529,12 +1530,15 @@ L25-15 整批恢复抽屉。三个分区各自独立，不合并成一句「同�
 | `row-policy-view-clear-filters` | 行策略／行权限视图：view clear filters | `pages/admin/RowPolicyView.tsx` |
 | `row-policy-view-copy-identity` | 行策略／行权限视图：view copy identity | `pages/admin/RowPolicyView.tsx` |
 | `row-policy-view-detail` | 行策略／行权限视图：view detail | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-detail-empty` | 行策略／行权限视图：view detail empty | `pages/admin/RowPolicyView.tsx` |
 | `row-policy-view-detail-error` | 行策略／行权限视图：view detail error | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-diagnostics` | 行策略／行权限视图：view diagnostics | `pages/admin/RowPolicyView.tsx` |
 | `row-policy-view-failures` | 行策略／行权限视图：view failures | `pages/admin/RowPolicyView.tsx` |
 | `row-policy-view-list-empty` | 行策略／行权限视图：view list empty | `pages/admin/RowPolicyView.tsx` |
 | `row-policy-view-list-error` | 行策略／行权限视图：view list error | `pages/admin/RowPolicyView.tsx` |
 | `row-policy-view-list-failures` | 行策略／行权限视图：view list failures | `pages/admin/RowPolicyView.tsx` |
 | `row-policy-view-list-loading` | 行策略／行权限视图：view list loading | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-list-panel` | 行策略／行权限视图：view list panel | `pages/admin/RowPolicyView.tsx` |
 | `row-policy-view-list-state` | 行策略／行权限视图：view list state | `pages/admin/RowPolicyView.tsx` |
 | `row-policy-view-list-state-badge` | 行策略／行权限视图：view list state badge | `pages/admin/RowPolicyView.tsx` |
 | `row-policy-view-outside-filter` | 行策略／行权限视图：view outside filter | `pages/admin/RowPolicyView.tsx` |
@@ -1546,6 +1550,8 @@ L25-15 整批恢复抽屉。三个分区各自独立，不合并成一句「同�
 | `row-policy-view-table-${table.connectionId}-${table.schema}-${table.sourceName}` | 行策略／行权限视图：view table ${table.connectionId} ${table.schema} ${table.sourceName} | `pages/admin/RowPolicyView.tsx` |
 | `row-policy-view-table-grant` | 行策略／行权限视图：view table grant | `pages/admin/RowPolicyView.tsx` |
 | `row-policy-view-table-list` | 行策略／行权限视图：view table list | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-toolbar` | 行策略／行权限视图：view toolbar | `pages/admin/RowPolicyView.tsx` |
+| `row-policy-view-workspace` | 行策略／行权限视图：view workspace | `pages/admin/RowPolicyView.tsx` |
 
 ### `webui/src/components/AgentRoleField.tsx`
 
@@ -1594,6 +1600,7 @@ L25-15 整批恢复抽屉。三个分区各自独立，不合并成一句「同�
 | `access-map-edge-detail` | 访问关系图：edge detail | `components/admin/AccessMapCanvas.tsx` |
 | `access-map-edge-detail-path-${evaluation.pathKey}` | 访问关系图：edge detail path ${evaluation.pathKey} | `components/admin/AccessMapCanvas.tsx` |
 | `access-map-edge-drawer` | 访问关系图：edge drawer（边明细右侧抽屉，呈现修订 D6） | `components/admin/AccessMapCanvas.tsx` |
+| `access-map-hover-tip` | 访问关系图：节点／边悬停浮层（chart-first Spec §5.6，非 SVG `<title>`） | `components/admin/AccessMapCanvas.tsx` |
 | `access-map-kernel-${link.edge.id}` | 访问关系图：kernel ${link.edge.id} | `components/admin/AccessMapCanvas.tsx` |
 | `access-map-link-${link.edge.id}` | 访问关系图：link ${link.edge.id} | `components/admin/AccessMapCanvas.tsx` |
 | `access-map-node-${node.id}` | 访问关系图：node ${node.id} | `components/admin/AccessMapCanvas.tsx` |
@@ -1618,19 +1625,19 @@ L25-15 整批恢复抽屉。三个分区各自独立，不合并成一句「同�
 | `access-map-legend-trust` | 访问关系图：legend trust | `components/admin/AccessMapLegend.tsx` |
 | `access-map-legend-window` | 访问关系图：legend window | `components/admin/AccessMapLegend.tsx` |
 
-### `webui/src/components/admin/AccessMapSignalBar.tsx`
+### `webui/src/components/admin/AccessMapSignalNotes.tsx`
+
+> 原 `AccessMapSignalBar.tsx`：chart-first Spec §5.2 把三张信号 Metric Card 从默认页壳卸下，
+> 卡片与其筛选按钮（`access-map-signal-bar` / `-dormant` / `-needs-review` / `-confirmed`）
+> 一并删除；只留下口径说明，落进图下弱入口「口径与快照」。
 
 | Test ID | 元素 | 出现位置 |
 |---|---|---|
-| `access-map-orphan-grants` | 访问关系图：orphan grants | `components/admin/AccessMapSignalBar.tsx` |
-| `access-map-signal-bar` | 访问关系图：signal bar | `components/admin/AccessMapSignalBar.tsx` |
-| `access-map-signal-calls` | 访问关系图：signal calls | `components/admin/AccessMapSignalBar.tsx` |
-| `access-map-signal-confirmed` | 访问关系图：signal confirmed | `components/admin/AccessMapSignalBar.tsx` |
-| `access-map-signal-confirmed-source` | 访问关系图：signal confirmed source（确凿越权档的来源标注，SC-10） | `components/admin/AccessMapSignalBar.tsx` |
-| `access-map-signal-dormant` | 访问关系图：signal dormant | `components/admin/AccessMapSignalBar.tsx` |
-| `access-map-signal-needs-review` | 访问关系图：signal needs review | `components/admin/AccessMapSignalBar.tsx` |
-| `access-map-signal-needs-review-note` | 访问关系图：signal needs review note（需复核档的档位说明，禁称「越权」，SC-10） | `components/admin/AccessMapSignalBar.tsx` |
-| `access-map-snapshot-coverage` | 访问关系图：snapshot coverage | `components/admin/AccessMapSignalBar.tsx` |
+| `access-map-orphan-grants` | 访问关系图：orphan grants | `components/admin/AccessMapSignalNotes.tsx` |
+| `access-map-signal-calls` | 访问关系图：signal calls | `components/admin/AccessMapSignalNotes.tsx` |
+| `access-map-signal-confirmed-source` | 访问关系图：signal confirmed source（确凿越权档的来源标注，SC-10） | `components/admin/AccessMapSignalNotes.tsx` |
+| `access-map-signal-needs-review-note` | 访问关系图：signal needs review note（需复核档的档位说明，禁称「越权」，SC-10） | `components/admin/AccessMapSignalNotes.tsx` |
+| `access-map-snapshot-coverage` | 访问关系图：snapshot coverage | `components/admin/AccessMapSignalNotes.tsx` |
 
 ### `webui/src/components/admin/AccessMapTable.tsx`
 
@@ -1787,17 +1794,6 @@ L25-15 整批恢复抽屉。三个分区各自独立，不合并成一句「同�
 | `audit-status-coverage` | 审计状态三元组：coverage | `components/audit-trust/AuditStatusTriad.tsx` |
 | `audit-status-execution` | 审计状态三元组：execution | `components/audit-trust/AuditStatusTriad.tsx` |
 | `audit-status-triad` | 审计状态三元组：triad | `components/audit-trust/AuditStatusTriad.tsx` |
-
-### `webui/src/components/audit-trust/AuditTopMetaBar.tsx`
-
-| Test ID | 元素 | 出现位置 |
-|---|---|---|
-| `audit-top-meta-bar` | 审计顶栏：meta bar | `components/audit-trust/AuditTopMetaBar.tsx` |
-| `audit-top-meta-refresh` | 审计顶栏：meta refresh | `components/audit-trust/AuditTopMetaBar.tsx` |
-| `audit-top-meta-stats-at` | 审计顶栏：meta stats at | `components/audit-trust/AuditTopMetaBar.tsx` |
-| `audit-top-meta-sync-lag` | 审计顶栏：meta sync lag | `components/audit-trust/AuditTopMetaBar.tsx` |
-| `audit-top-meta-window` | 审计顶栏：meta window | `components/audit-trust/AuditTopMetaBar.tsx` |
-| `audit-top-meta-zone` | 审计顶栏：meta zone | `components/audit-trust/AuditTopMetaBar.tsx` |
 
 ### `webui/src/components/audit-trust/ClientCoveragePill.tsx`
 
