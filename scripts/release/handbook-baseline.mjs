@@ -71,7 +71,7 @@ export function readBaselineSources(root = ROOT) {
       `could not parse ${LUCY_VERSION_PATH} FALLBACK: ${error.message}; expected \`const FALLBACK = "X.Y.Z";\`. Fix the file or §0.0 in ${HANDBOOK_PATH}.`
     );
   }
-  const sidebarLabel = `v${fallbackRaw}`;
+  const sidebarLabel = fallbackRaw;
 
   let dockerfile;
   try {

@@ -71,7 +71,7 @@ The 版本信息 page and `/api/health` show the source commit that was built. `
 |---|---|
 | `/api/health.data.gitSha` | Full 40-hex commit, or `unknown` |
 | `/api/health.data.gitDirty` | `true` when the stamped tree had uncommitted changes |
-| WebUI `/admin/version` | Product version, the first 12 characters of `gitSha` (the full value stays in `title` and the copy action), a Chinese workspace sentence, and bundled KTX version. The page does not show the word `dirty` |
+| WebUI `/admin/version` | Product version (without a `v` prefix), the first 12 characters of `gitSha` (the full value stays in `title` and the copy action), and bundled KTX version. The workspace dirty status is no longer shown on the customer-facing page |
 
 Normative resolution, stamp file, and the rule that runtime env cannot replace it: [`docs/specs/lucy-20261020-build-revision-identity-spec.md`](../specs/lucy-20261020-build-revision-identity-spec.md). Image builds pass `LUCY_GIT_SHA` only as a Docker build arg because `.dockerignore` excludes `.git`. The image stores the result in `/app/BUILD_REVISION` and does not keep `LUCY_GIT_SHA` in the runtime environment.
 

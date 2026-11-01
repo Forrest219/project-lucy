@@ -2,19 +2,19 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档版本 / 日期 | v1.2 / 2026-10-30 |
+| 文档版本 / 日期 | v1.3 / 2026-11-01 |
 | 目标版本 / 优先级 | 不绑定产品版本号 / P2 |
 | 功能编号 | 无 |
-| 主 Spec | [版本信息身份块 Spec](../specs/lucy-20261030-version-info-identity-spec.md)（v1.2，已验收） |
+| 主 Spec | [版本信息身份块 Spec](../specs/lucy-20261030-version-info-identity-spec.md)（v1.3，优化中） |
 | 权威语义 | [构建修订标识 Spec](../specs/lucy-20261020-build-revision-identity-spec.md) §2 的健康检查与戳记。本 Plan 只改 `/admin/version` 的呈现 |
-| 状态 | **v1.2 已验收**（2026-10-30）。SC-01–SC-10 关闭。代码审阅可交付；CR01、CR02 不阻断验收 |
-| 授权边界 | 2026-10-30 取得实施授权，S1 与 S2 已执行。授权范围止于 `webui/src` 的呈现与主 Spec §7 列出的四处文档。不授权改健康检查、构建戳记、镜像 |
+| 状态 | **v1.3 优化中**（2026-11-01）。按页面审阅移除产品版本的 `v` 前缀与客户可见的工作区脏状态。SC 与验收待更新 |
+| 授权边界 | 2026-11-01 取得优化授权。授权范围止于 `webui/src` 的呈现与主 Spec §7 列出的文档。不授权改健康检查、构建戳记、镜像 |
 | 验收 | SC-01–SC-10 **已验收**（2026-10-30）。测试此前已通过。浏览器验收不在本条出口 |
 | 实施主体 | Lucy WebUI `webui/src`。不修改 KTX，不修改 `webui/server` |
 
 ## 1. 目标
 
-把 `/admin/version` 从四行等权宽表收成左对齐的三块身份信息：产品版本是阅读焦点，合法构建提交可见前 12 位，随包 KTX 版本以次要文字常驻。未提交改动留在构建提交同一行。
+把 `/admin/version` 收成左对齐的三块身份信息：产品版本是阅读焦点，合法构建提交可见前 12 位，随包 KTX 版本以次要文字常驻。产品版本不带 `v` 前缀，工作区脏状态不在客户可见页面展示。
 
 两个交付物：
 
@@ -72,7 +72,7 @@
 1. `formatVisibleBuildCommit` 按主 Spec §5：只匹配 `^[0-9a-f]{40}$` 才 `slice(0, 12)`。空字符串与缺失返回 `unknown`。大写、非十六进制和短串原样返回。
 2. `VersionInfo` 去掉 `description`。三块类名按主 Spec §4，不额外加 `mt-4`。
 3. 合法提交才设置 `title` 并渲染复制按钮；`onClick` 仍把完整 `gitSha` 交给 `copyTextWithToast`。
-4. `version-info-workspace` 只在合法且 `gitDirty === true` 时出现在构建行内，类名含 `text-warning-strong` 与 `text-xs`。
+4. 工作区脏状态不在构建行内展示。
 5. 随包 KTX 版本保持常驻，行类名含 `text-xs` 与 `text-fg-muted`。`KTX` 与版本号继续 `translate="no"`。
 
 **出口**：SC-01–SC-10 的组件测试、纯函数测试和对 `app.css` 的静态核对全部通过。任一失败则 S1 未完成。测试通过不宣称验收通过。

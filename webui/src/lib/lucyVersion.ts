@@ -18,8 +18,8 @@ const injectedVersion =
 
 export const LUCY_VERSION: string = normalizeLucyProductVersion(injectedVersion) ?? FALLBACK;
 
-/** Product version label, e.g. `v0.25.0`. */
+/** Product version label, e.g. `0.25.0`. */
 export function formatLucyVersionLabel(version: string = LUCY_VERSION): string {
   const normalized = normalizeLucyProductVersion(version);
-  return normalized ? `v${normalized}` : "vunknown";
+  return normalized ?? "unknown";
 }

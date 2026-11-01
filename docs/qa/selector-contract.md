@@ -591,7 +591,6 @@ L25-15 整批恢复抽屉。三个分区各自独立，不合并成一句「同�
 | `version-info-product` | version-info-product | `pages/admin/VersionInfo.tsx` |
 | `version-info-sha` | version-info-sha | `pages/admin/VersionInfo.tsx` |
 | `version-info-copy` | version-info-copy | `pages/admin/VersionInfo.tsx` |
-| `version-info-workspace` | version-info-workspace | `pages/admin/VersionInfo.tsx` |
 | `version-info-ktx` | version-info-ktx | `pages/admin/VersionInfo.tsx` |
 | `sidebar-auth` | sidebar-auth | `app/App.tsx` |
 | `add-schema-select` | add-schema-select | `components/AddSchemaDrawer.tsx` |

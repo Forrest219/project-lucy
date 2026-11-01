@@ -358,7 +358,7 @@ export const navGroups: Array<{
         to: "/admin/version",
         iconKey: "versionInfo",
         active: (path) => path === "/admin/version" || path.startsWith("/admin/version/"),
-        description: "查看产品版本、构建提交和随包 KTX 版本；有未提交改动时显示工作区状态。",
+        description: "查看产品版本、构建提交和随包 KTX 版本。",
         keywords: ["提交", "构建", "KTX"]
       }
     ]

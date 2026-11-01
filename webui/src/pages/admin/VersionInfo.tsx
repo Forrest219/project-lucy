@@ -6,7 +6,6 @@ import { formatLucyVersionLabel } from "../../lib/lucyVersion";
 import {
   formatBundledKtxVersion,
   formatVisibleBuildCommit,
-  formatWorkspaceStatus,
   isRecordedCommit
 } from "../../lib/lucyRevision";
 
@@ -28,7 +27,6 @@ export function VersionInfo() {
   const isRecorded = isRecordedCommit(gitSha);
   const visibleSha = formatVisibleBuildCommit(gitSha);
   const productVersion = formatLucyVersionLabel(typeof data?.lucyVersion === "string" ? data.lucyVersion : "");
-  const workspace = formatWorkspaceStatus(gitSha, data?.gitDirty === true);
   const ktxVersion = formatBundledKtxVersion(data?.bundledKtxVersion);
 
   async function copySha() {
@@ -81,11 +79,6 @@ export function VersionInfo() {
               <button type="button" className="pl-btn pl-btn--ghost text-sm" data-testid="version-info-copy" onClick={() => void copySha()}>
                 复制
               </button>
-            )}
-            {isRecorded && data?.gitDirty === true && (
-              <span className="text-warning-strong text-xs" data-testid="version-info-workspace">
-                {workspace}
-              </span>
             )}
           </div>
 

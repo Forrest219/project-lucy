@@ -17,7 +17,7 @@
 - 「系统设置 / 版本信息」和 `GET /api/health` 同时给出产品版本与这次构建对应的源提交。
 - 提交标识在构建时写入，运行中的环境变量、Helm values、`LUCY_VERSION` 都不能改写它。
 - 构建时拿不到合法提交时显示 `unknown`，不用产品版本冒充提交。
-- 客户可见的常驻信息收敛为产品版本、构建提交、随包 KTX 版本。工作区状态不是独立行，是研发诊断信号，仅在构建混入未提交改动时在构建提交同一行显示；客户 CI 构建恒为干净，看不到该句。排版以[版本信息身份块 Spec](lucy-20261030-version-info-identity-spec.md) §4 为准。不向客户暴露构建时间。
+- 客户可见的常驻信息收敛为产品版本、构建提交、随包 KTX 版本。工作区脏状态不在客户可见页面展示；`gitDirty` 仍由 `GET /api/health` 返回供内部诊断。排版以[版本信息身份块 Spec](lucy-20261030-version-info-identity-spec.md) §4 为准。不向客户暴露构建时间。
 
 **非目标**
 
@@ -31,9 +31,9 @@
 | 表面 | 内容 |
 |---|---|
 | 侧栏页脚 | 登录后只显示账户入口，展开后提供「系统手册」和「退出登录」；开放模式或未登录时显示独立手册入口（Spec 188）。不展示产品版本，也不展示提交号 |
-| `/admin/version` 产品版本 | `vX.Y.Z`，来自 `data.lucyVersion`。`data-testid="version-info-product"` |
+| `/admin/version` 产品版本 | `X.Y.Z`，来自 `data.lucyVersion`，不带 `v` 前缀。`data-testid="version-info-product"` |
 | `/admin/version` 构建提交 | 可见前 12 位；`title` 与复制是完整 40 位小写十六进制，或非法值按[版本信息身份块 Spec](lucy-20261030-version-info-identity-spec.md) §5 原样 / `unknown`。合法提交可复制。`data-testid="version-info-sha"` |
-| `/admin/version` 工作区 | 不独占一行。仅当 `gitSha` 是合法提交且 `gitDirty` 为真时，在构建提交同一行显示「构建时工作区有未提交改动」。干净构建与 `unknown` 提交都不渲染该句（v1.2 起「与记录的提交一致」不再是常驻句）。页面文本不含 `dirty` |
+| `/admin/version` 工作区 | 客户可见页面不再展示工作区状态。`gitDirty` 仍由 `GET /api/health` 返回，供内部诊断使用 |
 | `/admin/version` 随包 KTX 版本 | `data.bundledKtxVersion`；空值显示 `unknown` |
 | `GET /api/health` `data.gitSha` | 完整 40 位，或字符串 `unknown` |
 | `GET /api/health` `data.gitDirty` | 布尔。`gitSha` 为 `unknown` 时为 `false`。戳记文件仍可用 `<sha>-dirty` 记录这一状态 |
@@ -47,7 +47,7 @@ This feature follows `webui/docs/00-product-terminology-standard.md`.
 
 New terms:
 
-- 版本信息：系统设置中的只读页面，常驻展示这次运行的产品版本、构建提交和随包 KTX 版本；构建混入未提交改动时在构建提交同一行显示工作区状态。它是页面名称，不是 git 提交的中文产品名词。
+- 版本信息：系统设置中的只读页面，常驻展示这次运行的产品版本、构建提交和随包 KTX 版本。它是页面名称，不是 git 提交的中文产品名词。
 
 ## Design System Compliance
 
@@ -113,4 +113,4 @@ server process:
 | SC-3 | 戳记文件内容非法时，结果是 `unknown`，不得改读 git 或环境变量 |
 | SC-4 | 镜像内 `printenv LUCY_GIT_SHA` 为空；`/app/BUILD_REVISION` 与构建参数一致 |
 | SC-5 | Helm chart 不注入 `LUCY_GIT_SHA` |
-| SC-6 | 「版本信息」常驻展示 `v` 加 `lucyVersion`、构建提交、随包 KTX 版本。构建提交的可见文本与完整值位置，以及工作区状态是否出现、出现在哪里，按[版本信息身份块 Spec](lucy-20261030-version-info-identity-spec.md) 的 SC-03、SC-05、SC-06。页面文本不含 `dirty`。侧栏页脚不展示产品版本或提交号 |
+| SC-6 | 「版本信息」常驻展示 `lucyVersion`（不带 `v` 前缀）、构建提交、随包 KTX 版本。构建提交的可见文本与完整值位置按[版本信息身份块 Spec](lucy-20261030-version-info-identity-spec.md) 的 SC-03。客户可见页面不再展示工作区脏状态。侧栏页脚不展示产品版本或提交号 |
