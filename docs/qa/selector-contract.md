@@ -362,6 +362,7 @@ Spec 190 §7.9 — 库内表清单与持续感知的最小展示。
 
 | Test ID | 元素 | 文案约束 |
 |---|---|---|
+| `semantic-asset-export-button` | 导出按钮根（`testId` prop 默认值，可被调用方覆盖） | — |
 | `semantic-asset-export-summary` | 导出摘要 | — |
 | `semantic-asset-export-download` | 下载按钮 | 必含 `下载当前快照` / `导出当前快照 (.zip)` |
 | `semantic-asset-export-excluded` | 被排除项列表 | — |
