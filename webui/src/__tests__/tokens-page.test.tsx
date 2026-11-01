@@ -98,7 +98,15 @@ describe("Tokens (/admin/tokens)", () => {
 
     // Verify header and primary action
     expect(await screen.findByRole("heading", { name: /Token 凭据/ })).toBeInTheDocument();
-    expect(screen.getByTestId("create-token-btn")).toBeInTheDocument();
+    const createBtn = screen.getByTestId("create-token-btn");
+    expect(createBtn).toBeInTheDocument();
+    expect(createBtn).toHaveAttribute("href", "/admin/tokens/new");
+
+    // Pure jump-link cards removed: page focuses on Token inventory.
+    expect(screen.queryByText("客户端接入配置")).not.toBeInTheDocument();
+    expect(screen.queryByText("调用流水与排障")).not.toBeInTheDocument();
+    expect(screen.queryByText(/前往生成客户端配置片段/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/查看访问日志流水/)).not.toBeInTheDocument();
 
     // Verify KPI metrics
     const kpiSection = screen.getByTestId("token-kpis");

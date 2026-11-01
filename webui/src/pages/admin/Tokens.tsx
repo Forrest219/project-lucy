@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiGet, apiDelete } from "../../lib/apiClient";
@@ -8,11 +8,10 @@ import type { TokensResponse, TokenInventoryItem } from "../../lib/types";
 import { PageHeader } from "../../components/PageHeader";
 import { MetricCard } from "../../components/MetricCard";
 import { formatLastSeen } from "./AgentList";
-import { Code2, Terminal, ExternalLink, Key, Trash2 } from "lucide-react";
+import { Key, Trash2 } from "lucide-react";
 import { queryKeys } from "../../lib/queryKeys";
 
 export function Tokens() {
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
 
@@ -141,49 +140,6 @@ export function Tokens() {
           </Link>
         }
       />
-
-      {/* Quickstart Integration Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="pl-card flex items-start gap-3 p-4 border border-border-default hover:border-brand/40 transition-colors">
-          <div className="p-2.5 rounded-lg bg-bg-muted text-brand shrink-0">
-            <Code2 className="size-5" />
-          </div>
-          <div className="grid gap-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="font-semibold text-sm">客户端接入配置</span>
-              <span className="pl-badge text-xs"><span className="notranslate" translate="no">MCP</span> 协议</span>
-            </div>
-            <p className="text-xs text-fg-muted leading-relaxed">
-              支持一键配置 <span className="notranslate" translate="no">Hermes</span>、<span className="notranslate" translate="no">Claude Code</span>、<span className="notranslate" translate="no">Codex</span> 或任意标准 <span className="notranslate" translate="no">MCP</span> 客户端。
-            </p>
-            <div className="pt-1">
-              <Link to="/admin/tokens/new" className="text-xs text-brand hover:underline inline-flex items-center gap-1 font-medium">
-                前往生成客户端配置片段 →
-              </Link>
-            </div>
-          </div>
-        </div>
-
-        <div className="pl-card flex items-start gap-3 p-4 border border-border-default hover:border-brand/40 transition-colors">
-          <div className="p-2.5 rounded-lg bg-bg-muted text-accent shrink-0">
-            <Terminal className="size-5" />
-          </div>
-          <div className="grid gap-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="font-semibold text-sm">调用流水与排障</span>
-              <span className="pl-badge text-xs">实时审计</span>
-            </div>
-            <p className="text-xs text-fg-muted leading-relaxed">
-              追溯各 <span className="notranslate" translate="no">Token</span> 的实际调用、来源 <span className="notranslate" translate="no">IP</span>、客户端版本与权限裁决结果。
-            </p>
-            <div className="pt-1">
-              <Link to="/admin/audit" className="text-xs text-accent hover:underline inline-flex items-center gap-1 font-medium">
-                查看访问日志流水 <ExternalLink className="size-3" />
-              </Link>
-            </div>
-          </div>
-        </div>
-      </div>
 
       {/* KPI Metric Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 notranslate" translate="no" data-testid="token-kpis">
