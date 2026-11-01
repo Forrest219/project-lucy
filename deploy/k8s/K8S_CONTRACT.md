@@ -23,12 +23,14 @@ in this repository is a **supported delivery artifact** — not a reference snap
 | `0.2.4` | `2.0.0` | `0.16.0` | same workload contract as 0.2.3 | Product line cut from `0.17.0` to `2.0.0`; chart `version` was not bumped in that cut. `2.0.0` was later corrected through `0.2.0` to `0.20.0` (2026-10-24) |
 | `0.2.5` | `2.0.0` | `0.16.0` | `security.access` is `https` or intranet `http`; open-mode upgrade mounts a bootstrap Secret | Superseded by chart 0.2.6 |
 | `0.2.6` | `0.2.0` | `0.16.0` | same workload contract as 0.2.5 | Superseded by chart 0.2.7. Chart 0.2.6 verifies archive config/manifest/index identities, ships private CA files, and provides a single-instance upgrade entry with baseline backups and recovery instructions. The short-lived `0.2.0` product version was numerically lower than `0.17.0` |
-| `0.2.7` | `0.20.0` | `0.16.0` | same workload contract as 0.2.5 | **Current**. Corrects the active product line to `0.20.0 > 0.17.0`; chart and product versions remain independent |
+| `0.2.7` | `0.20.0` | `0.16.0` | same workload contract as 0.2.5 | Superseded by chart 0.2.8. Corrects the active product line to `0.20.0 > 0.17.0`; chart and product versions remain independent |
+| `0.2.8` | `0.20.0` | `0.16.0` | same workload contract as 0.2.5 | Optional SMTP notification wiring, off by default. Product version was still `0.20.0` when this chart package was cut |
+| `0.2.8` | `0.25.0` | `0.16.0` | same workload contract as 0.2.5 | **Current**. Product version aligned to branch `lucy-v0.25`. Chart package version was not bumped |
 
 Image tags must be **immutable**. Recommended form:
 
 ```text
-project-lucy:customer-amd64-0.20.0-YYYYMMDD-<gitShortSha>
+project-lucy:customer-amd64-0.25.0-YYYYMMDD-<gitShortSha>
 ```
 
 Record the digest in `image/image-digest.txt` and pin via Helm `image.digest` when possible.

@@ -1163,8 +1163,8 @@ describe("HelpCenter · 真实手册回归", () => {
     expect(baseline, "§0.0 文档基线没有正文落点").toBeInTheDocument();
     expect(cutover, "§0.4 版本号说明没有正文落点").toBeInTheDocument();
     expect(baseline?.textContent ?? "").toContain("产品版本");
-    expect(baseline?.textContent ?? "").toContain("0.20.0");
-    expect(cutover?.textContent ?? "").toContain("0.20.0");
+    expect(baseline?.textContent ?? "").toContain("0.25.0");
+    expect(cutover?.textContent ?? "").toContain("0.25.0");
 
     // 手写「目录」标题本身不进入正文（侧栏已承担目录职责）。
     expect(within(article).queryByRole("heading", { name: "目录" })).not.toBeInTheDocument();

@@ -24,10 +24,9 @@ Product line cut from `0.17.0` to `2.0.0` on 2026-10-19. Customer-facing label i
 
 ---
 
-## Unreleased — v0.25（开发线）
+## 0.25.0
 
-> 目标版本：v0.25 开发线。版本号在发版台账统一递增，本节只记录用户可见变化，
-> 不代表已切版本。
+Product version on branch `lucy-v0.25` is `0.25.0` as of 2026-11-01. Customer-facing label is `v0.25.0`. The last tagged release remains `v0.20.0`; this version is not tagged yet (`docs/releases/v0.25.0.json` records `commit: PENDING`). Chart package version stays `0.2.8`; bundled KTX stays `0.16.0`.
 
 ### Added
 - **执行层重载（Spec 191）**：WebUI 写 `ktx.yaml` 后，所有者可在 MCP 调试台点「重载执行层」，

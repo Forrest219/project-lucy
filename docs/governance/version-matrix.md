@@ -5,16 +5,16 @@
 | 文档名称 | Lucy Version Matrix |
 | 文档类型 | Release Metadata / Compatibility Matrix |
 | 版本 | v0.6 |
-| 撰写日期 | 2026-06-21；2026-07-06；2026-08-03（增补：Helm/K8s single-replica supported baseline）；2026-09-02（拆分 Lucy 产品版本与 KTX；基线 0.17.0）；2026-10-19（批准切线到 `2.0.0`）；2026-10-21（§4 Database Matrix 状态值改为引用 `docs/governance/database-support-matrix.md`，补齐 StarRocks / Doris / SQL Server / Oracle / SQLite / Athena）；2026-10-24（产品版本由 `2.0.0` 经 `0.2.0` 更正为 `0.20.0`；§1.1.1 改为同一版本线按数值递增；登记产品版本与部署制品解耦原则）；2026-10-29（客户镜像 CI 改为原生 linux/amd64 单架构，不再写 QEMU 多架构清单） |
+| 撰写日期 | 2026-06-21；2026-07-06；2026-08-03（增补：Helm/K8s single-replica supported baseline）；2026-09-02（拆分 Lucy 产品版本与 KTX；基线 0.17.0）；2026-10-19（批准切线到 `2.0.0`）；2026-10-21（§4 Database Matrix 状态值改为引用 `docs/governance/database-support-matrix.md`，补齐 StarRocks / Doris / SQL Server / Oracle / SQLite / Athena）；2026-10-24（产品版本由 `2.0.0` 经 `0.2.0` 更正为 `0.20.0`；§1.1.1 改为同一版本线按数值递增；登记产品版本与部署制品解耦原则）；2026-10-29（客户镜像 CI 改为原生 linux/amd64 单架构，不再写 QEMU 多架构清单）；2026-11-01（产品版本对齐分支 `lucy-v0.25`，基线 `0.25.0`） |
 | 适用范围 | Lucy release、Docker image、bundled KTX runtime 和 MCP client 兼容性追踪 |
 
 ## 1. Current Baseline
 
 | Component | Current Baseline | Evidence |
 |---|---|---|
-| **Lucy product version** | **`0.20.0`** | repo-root `VERSION`, `Chart.yaml` `appVersion`, `/api/health.data.lucyVersion`, WebUI 版本信息页 |
-| Lucy source | `main` at the v0.20.0 release commit | see `docs/releases/README.md` for the per-version commit and digest ledger |
-| Lucy package | `project-lucy-eval@0.20.0` | `package.json` (aligned with product version) |
+| **Lucy product version** | **`0.25.0`** | repo-root `VERSION`, `Chart.yaml` `appVersion`, `/api/health.data.lucyVersion`, WebUI 版本信息页 |
+| Lucy source | branch `lucy-v0.25`; `v0.25.0` is not tagged yet. Last tagged release is `v0.20.0` | see `docs/releases/README.md` for the per-version commit and digest ledger |
+| Lucy package | `project-lucy-eval@0.25.0` | `package.json` (aligned with product version) |
 | WebUI package | `webui@1.0.0` | `webui/package.json` (npm package only; not customer-facing) |
 | Bundled KTX npm package | `@kaelio/ktx@0.16.0` | `Dockerfile`, `docker-compose.yml`, `npm run smoke:p0:docker` |
 | KTX Python runtime | `0.16.0`, feature `core` | `Dockerfile` runs `ktx admin runtime install --yes --feature core` |
@@ -34,15 +34,15 @@
 
 | Trigger | Bump | Example |
 |---|---|---|
-| Customer delivery package / offline image / K8s tar that the customer will deploy | **Increment the second component by 1** (`0.20.0` → `0.21.0`) | ACL fix + audit hardening shipped as next tar |
-| Large capability jump, breaking config/migration, or bundled KTX major change | **Increment the second component by 10** (`0.20.0` → `0.30.0`) | New permission model; HA chart; KTX 0.17+ with breaking MCP |
+| Customer delivery package / offline image / K8s tar that the customer will deploy | **Increment the second component by 1** (`0.25.0` → `0.26.0`) | ACL fix + audit hardening shipped as next tar |
+| Large capability jump, breaking config/migration, or bundled KTX major change | **Increment the second component by 10** (`0.25.0` → `0.35.0`) | New permission model; HA chart; KTX 0.17+ with breaking MCP |
 | Docs-only handbook refresh with **same** image digest | **No** product bump; package name may still use date (`20260903-v1`) | README / RELEASE_NOTES only |
 | Internal CI / demo rebuild, no customer handoff | **No** bump | `npm run demo:upgrade` |
-| Bundled KTX upgrade alone | Bump `bundledKtxVersion` / `KTX_VERSION`; **also** bump Lucy product version (customer must tell builds apart) | KTX `0.16.0` → `0.17.0` and Lucy `0.21.0` |
+| Bundled KTX upgrade alone | Bump `bundledKtxVersion` / `KTX_VERSION`; **also** bump Lucy product version (customer must tell builds apart) | KTX `0.16.0` → `0.17.0` and Lucy `0.26.0` |
 
 ### 1.1.1 Active product lines use numeric ordering
 
-**Versions within one Lucy product line increase numerically.** The active `0.x` line is ordered `0.20.0 > 0.17.0 > 0.2.0`; a later release must not reuse a lower number to represent newer contents.
+**Versions within one Lucy product line increase numerically.** The active `0.x` line is ordered `0.25.0 > 0.20.0 > 0.17.0 > 0.2.0`; a later release must not reuse a lower number to represent newer contents.
 
 Two consequences:
 
@@ -51,7 +51,7 @@ Two consequences:
 
 The erroneous `2.0.0` product cut was retired on 2026-10-24. The short-lived correction from `2.0.0` to `0.2.0` was then corrected to `0.20.0` because `0.2.0 < 0.17.0`. The `v2.0.0` and `v0.2.0` tags and GitHub Releases remain historical facts; the retired `2.0.0` cut is not the baseline of the active `0.x` line. A genuinely new product or version line requires explicit approval and a clearly documented naming and succession boundary.
 
-Lucy versions use numeric `X.Y.Z` syntax so npm, Helm, and container tooling can parse them, but the bump policy is a Lucy release-train policy rather than SemVer compatibility signaling. The current `0.20.Z` line keeps `Z` at `0` until this matrix defines a separate repack/hotfix policy. The next major (`1.0.0`) needs the same kind of explicit approval.
+Lucy versions use numeric `X.Y.Z` syntax so npm, Helm, and container tooling can parse them, but the bump policy is a Lucy release-train policy rather than SemVer compatibility signaling. The current `0.25.Z` line keeps `Z` at `0` until this matrix defines a separate repack/hotfix policy. The next major (`1.0.0`) needs the same kind of explicit approval.
 
 Product versions and deployment artifacts are independently versioned. Docker, Helm Chart, pure Manifest and other delivery paths for the same product contents share one Lucy product version; Chart, image tag, delivery-package revision and bundled KTX identities do not fork that product line. Each artifact records its own support and gate status. See `AGENTS.md` “部署方式与版本制品解耦（全局原则）”.
 
@@ -136,7 +136,7 @@ Every Lucy release should record:
 
 ```yaml
 lucy:
-  version: "0.20.0"
+  version: "0.25.0"
   git_commit: <git-sha>
   docker_image: <registry/image:tag>
 ktx:

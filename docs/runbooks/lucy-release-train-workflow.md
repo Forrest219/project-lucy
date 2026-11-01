@@ -92,9 +92,9 @@ npm run lint:version:test   # 通过：Node 测试全绿（含"错误 tag 被拒
 
 **不在开分支时切版本，在候选出包时切。** 理由：版本矩阵 §1.1 原文——"日常 `main` 提交不自动 bump"。
 
-- 当前 `VERSION` 为 `0.20.0`。
+- 2026-11-01 起当前 `VERSION` 为 `0.25.0`（分支 `lucy-v0.25`）。下文 P4 的 `0.20.0 → 0.30.0` 是当时 v2.0 列车的计划，不是当前基线。
 - P4 切线时才把 `VERSION` 从 `0.20.0` 改到 `0.30.0`，并同步全部投影、CHANGELOG、version-matrix 基线行。
-- Chart 的 `version`（包版本）独立于 `appVersion`（产品版本），当前 `0.2.7`；**Chart 内容变了要升 `version`**，工具修复不强行升。
+- Chart 的 `version`（包版本）独立于 `appVersion`（产品版本），当前 `0.2.8`；**Chart 内容变了要升 `version`**，工具修复不强行升。
 
 ---
 
