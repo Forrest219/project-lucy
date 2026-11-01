@@ -1,0 +1,231 @@
+# Spec 收口盘点（2026-11-01）— 哪些 Spec 还需要收口
+
+| 元数据 | 内容 |
+|---|---|
+| 日期 | 2026-11-01（Asia/Shanghai） |
+| 目的 | PM 问「还有哪些 Spec 需要收口」，本文件是逐份实测后的盘点结论，不是快照转述 |
+| 方法 | 实读 `docs/specs/` 全部 60 份 Spec 的状态行与「闭口层级」小节，逐份核对验收矩阵执行结果；交叉比对 [`2026-11-01-spec-closure-batch-handoff.md`](2026-11-01-spec-closure-batch-handoff.md) |
+| 机器门禁 | `node scripts/lint-spec-docs.mjs` → **exit 0**（343 files scanned，900 baseline exemptions，无 STALE） |
+| 基线 | HEAD `8f7ed9e4`，分支 `lucy-v0.25`；**工作区有在途改动**（见 §六） |
+| 授权范围 | 本文件只做盘点与建议。**未改任何 Spec、未收任何一条、未提交任何改动** |
+
+---
+
+## 一、结论先行
+
+**`docs/specs/` 共 60 份。按「能不能收」分成四档：**
+
+| 档 | 份数 | 含义 | 本批建议动作 |
+|---|---|---|---|
+| **A｜已收口** | **12** | 状态行已写明收口／验收／关闭，且有收口记录 | 不动 |
+| **B｜可立即收口** | **5** | 验收证据已在手，差的只是收口记录 + 状态行 | **本批就干这 5 份** |
+| **C｜要补出口才能收** | **10** | 实现已落地，但验收矩阵没有逐条执行结果 | 先补用例/跑矩阵，再收 |
+| **D｜不具备收口条件** | **7** | 未实施 / 待评审 / 已被取代 / 分析对照类 | 不收 |
+| **E｜发布取证层** | **0** | **结构性空白** | PM 拍板（§五） |
+
+A + B = **17** 份涉及功能合同层；C 档 10 份是工作量主体；D 档里另有 **42 份存量 Spec 完全没有「闭口层级」小节**（baseline 豁免 = 形态债，见 §四）。
+
+> ### ⚠️ 2026-11-01 13:57 修订：B 档由 3 份增至 5 份
+>
+> 复核 Plan 与 Spec 的一致性时发现**两份 Spec 的状态行是过期的**——它们的**实施 Plan 已记录「已落地、SC 全部通过」，但 Spec 状态行仍停在「已定稿／仍未执行」**。实测其测试全绿后，这两份从 D 档移入 B 档：
+>
+> | Spec | Spec 状态行（过期） | Plan 记录（真实） | 实测 |
+> |---|---|---|---|
+> | `lucy-20261030-login-accounts-spec.md` | `:8`「v1.2 已定稿，可交付开发。SC-01–SC-18 仍未执行」 | `docs/plans/lucy-20261030-login-accounts-plan.md:9`「v1.3：S1–S2 已落地。SC-01–SC-18 全部有通过记录」＋ §5.1 逐条表 | 4 文件 **66 条全绿** |
+> | `lucy-20261030-agent-roster-spec.md` | `:8`「v1.2 已定稿。第 3 轮 Codex 确认可定稿」 | `docs/plans/lucy-20261030-agent-roster-plan.md:9`「S1、S2 已按本 Plan 实现，SC-01–SC-15 已执行并通过」＋ §5.1 逐条表 | 3 文件 **78 条全绿** |
+>
+> **教训**：Spec 状态行与实施 Plan 是**两份独立维护的事实源**，单看 Spec 会漏。盘点必须**两边对读**。
+
+### 事实更正（对昨晚交接快照）
+
+交接文档 §三 P1 写「**60 份中 18 份已收功能合同层**」。实测不是 18：
+
+- **60 份**里，**18 份声明了「闭口层级」小节**（`grep -l 闭口层级`），
+- 但这 18 份里**只有 12 份状态行真的写了收口／验收／关闭**；
+- 另 **6 份声明了层级却没收口**（§二 B/C/D 档）。
+
+**差 6 份**会直接低估下一批工作量——交接文档把「声明了层级」当成了「已收口」。
+
+---
+
+## 二、A / B / C 三档逐份清单（证据到行）
+
+### A 档｜已收口（12 份，不用再动）
+
+| Spec | 状态行 | 收口记录 |
+|---|---|---|
+| `lucy-20261020-v2p5-semantic-batch-operations-spec.md` | `:8` 已关闭（FC-01–FC-32） | `2026-10-31-l25-11-functional-contract-evidence.md` |
+| `lucy-20261025-v0p25-hive-direct-connection-spec.md` | `:8` 编译侧功能合同已收口 | — |
+| `lucy-20261029-question-budget-window-optimization-spec.md` | `:8` v1.0 已收口 | `2026-11-01-question-budget-window-closure.md` |
+| `lucy-20261029-url-driven-input-ime-composition-spec.md` | `:8` v1.0 已收口 | `2026-11-01-url-driven-input-ime-composition-closure.md` |
+| `lucy-20261030-access-grade-and-daily-question-kpi-spec.md` | `:8` v1.0 已收口 | `2026-11-01-access-grade-and-daily-question-kpi-closure.md` |
+| `lucy-20261030-access-map-quiet-reading-spec.md` | `:8` v0.3 已验收 | — |
+| `lucy-20261030-audit-context-bar-spec.md` | `:8` v1.0 已收口 | `2026-10-31-audit-context-bar-and-sqlserver-identity-closure.md` |
+| `lucy-20261030-publish-workbench-three-column-spec.md` | `:6` v0.4 已收口 | `2026-11-01-publish-workbench-three-column-closure.md` |
+| `lucy-20261030-role-create-readonly-defaults-spec.md` | `:7` v0.2 已收口 | `2026-11-01-role-create-readonly-defaults-closure.md` |
+| `lucy-20261030-row-policy-view-presentation-spec.md` | `:8` v0.3 已收口 | `2026-11-01-row-policy-view-presentation-closure.md` |
+| `lucy-20261030-sqlserver-table-identity-spec.md` | `:8` v1.0 已收口 | 同 audit-context-bar |
+| `lucy-20261030-version-info-identity-spec.md` | `:8` v1.2 已验收 | — |
+
+### B 档｜可立即收口（5 份，证据已在手）
+
+> **2026-11-01 13:57 修订**：B 档由 3 份增至 5 份。`login-accounts` 与 `agent-roster` 由 D 档移入——它们的 **Spec 状态行过期**，实施 Plan 已记录「已落地、SC 全部通过」（见 §一 修订框）。
+
+**B1｜`lucy-20261025-v0p25-skill-owner-spec.md`（L25-04）— 最干净的一条**
+
+- 状态行 `:9`：S1／S2／S3 已实施，自动化覆盖全绿，**SKO-01–16 的验收口径已以自动化断言执行并全绿**（服务端 13／13 ＋ 工作台 6／6）。
+- `:236` 残余：SKO-16 的 selector contract 门禁 **fail 数保持 24**（既有 L25-06 欠账，**本条未新增**）；新增 1 条 **warn 级 ORPHAN**（`skill-detail-owner`），成因是门禁脚本只识别字面量 `data-testid="..."`，与基线 53 条 ORPHAN 同型。
+- **判定**：这两条**不是本条承诺的可打假检查**（本条承诺是「负责人字段的行为正确」），按 `DEVELOPMENT.md:80` 的出口按层收窄判据 → **不构成收口阻塞**，收口记录里如实登记为残余即可。
+- **收口动作**：写 `docs/reviews/2026-11-01-skill-owner-closure.md`（出口矩阵 ＋ SKO→用例逐条落点表）→ 状态行改「v0.5 功能合同已收口」→ **补「## 闭口层级」小节**（它现在没有，`docs/governance/spec-plan-doc-baseline.json` 里有一条 `close-layer` 豁免要同步删）→ Plan／`docs/README.md`／`docs/plans/README.md`／`project-overview.md` 同步。
+
+**B2｜`lucy-20261030-display-snapshot-invalidation-isolation-spec.md`**
+
+- 状态行 `:7`：实现已完成（提交 `ced19d1a`），**SI-01–SI-13 已执行并通过**，SI-14 浏览器往返见 §8.1。
+- §8.1 逐条落点表已写好，每条都指向具体测试文件（`display-snapshot.test.ts` / `display-revisions.test.ts` / `display-invalidation.test.ts` / `display-permission-runtime.test.ts`）。
+- `:15` 闭口层级已写明「本条出口：§8 验收矩阵 SI-01–SI-14 及其 §8.1 执行记录（SI-01–SI-13 为自动化用例；SI-14 为本地匿名夹具的浏览器往返，31 个实测样本全部成功、0 次 busy）」，且「**现场实例复核**、镜像构建与部署、客户交付均不在本条出口」。
+- **判定**：出口已齐，**可以收口**。现场复核明确被排除在本条出口外，不需要等。
+- **收口动作**：写收口记录（把 §8.1 提升为正式落点表，标注 SI-14 证据等级＝本地夹具）→ 状态行改「v0.1 功能合同已收口」→ Plan／各 README／project-overview 同步。
+
+**B3｜`lucy-20261030-hive-query-execution-spec.md`（L25-10 问数执行波）**
+
+- 状态行 `:8`：本模块 Wave A 已落地（审查→M1–M5，合成夹具 HQ）。
+- `:18` 闭口层级已写：`本条出口：HQ-01–HQ-15、HQ-17，以及 HQ-16／HQ-18 的合成夹具维`；`不在本条出口：客户匹配 HS2／认证／TLS／JRE 全组合、整库 Agent 旅程…（归 HIV25）`。
+- `:313`：Wave A 已落地，但**不**授权客户环境、镜像发布、支持矩阵晋级或 `HIV25` 收口。
+- **判定**：出口定义是清晰的，缺口是 **§7 验收矩阵的逐条结果表还没写**。需要把 HQ-01…HQ-18 逐条核到 pass/fail ＋ 证据落点，再收口。工作量中等（§7 在 `:229` 起）。
+
+**B4｜`lucy-20261030-login-accounts-spec.md`（2026-11-01 13:57 由 D 档移入）**
+
+- Spec 状态行 `:8` 是**过期的**：「v1.2 已定稿，可交付开发。**SC-01–SC-18 仍未执行**」。
+- 实施 Plan `docs/plans/lucy-20261030-login-accounts-plan.md:9` 的真实状态是「**v1.3：S1–S2 已落地**（2026-10-30）。SC-01–SC-18 全部有通过记录（组件测试、导航测试、术语检查）」，§5.1 有**逐条 SC→测试名→文件对照表**。
+- 实测：`admin-accounts-route.test.tsx` / `navigation.test.ts` / `admin-accounts.test.tsx` / `admin-accounts-oidc.test.tsx` —— **4 文件全绿**。
+- **判定**：可收口。Plan 同时写明「未做浏览器走查、移动窄屏、Docker 重建和客户交付；组件测试通过不等于这一页已经在运行中的容器里改版」——这些按闭口层级属**不在本条出口**。
+- **收口动作**：写收口记录 → **Spec 状态行改「v1.3 功能合同已收口」**（版本随 Plan 升到 v1.3，口径对齐）→ Plan 状态行 → 索引 → project-overview。
+
+**B5｜`lucy-20261030-agent-roster-spec.md`（2026-11-01 13:57 由 D 档 移入）**
+
+- Spec 状态行 `:8` 同样是**过期的**：「v1.2 已定稿。第 3 轮 Codex 确认可定稿，阻塞 0，高 0」——只反映了**设计定稿**，没反映后续实施。
+- 实施 Plan `docs/plans/lucy-20261030-agent-roster-plan.md:9`：「**S1、S2 已按本 Plan 实现，SC-01–SC-15 已执行并通过**（2026-10-30，记录见 §5）」，§5.1 给出改动文件与 SC 对应表。
+- 实测：`agent-list.test.tsx` / `kpi-contracts.test.ts` / `object-detail-drawer.test.tsx` —— **3 文件全绿**。
+- **判定**：可收口。
+
+### C 档｜实现已落地但出口不齐（10 份，要先补）
+
+共同形态：**代码在、状态行写「已实现／未验收」，但验收矩阵没有逐条执行结果。** 收口动作＝跑矩阵 ＋ 补缺失用例 ＋ 写落点表。
+
+| Spec | 状态行 | 验收矩阵 | 缺什么 |
+|---|---|---|---|
+| `lucy-20261024-v0p25-audit-reconciliation-view-spec.md` | `:8` 部分实现，未验收 | `:286` §7 | 上游精确 as-of S 能力未闭合，正式完整读取与导出必须阻断；V01–V12 全未执行 |
+| `lucy-20261025-v0p25-access-authorization-summary-spec.md` | `:8` 已实现，未验收 | `:211` §8 | ASV-01–14 全未执行 |
+| `lucy-20261025-v0p25-row-policy-templates-and-view-spec.md` | `:8` 已实现 | `:229` §8 | 矩阵未执行 |
+| `lucy-20261025-v0p25-upgrade-candidate-verification-spec.md` | `:8` 已实现，未验收 | `:169` §6 | 矩阵未执行 |
+| `lucy-20261025-v0p25-upgrade-e2e-automation-spec.md` | `:8` 已实现，未验收 | `:149` §6 | 矩阵未执行 |
+| `lucy-20261025-v0p25-oidc-single-sign-on-spec.md` | `:9` 已签核并实施 | `:509` §11 | OIDC-24／OIDC-25 记 `blocked_env`（真实环境不可得）→ 需按「不在本条出口」处理还是留阻塞，要 PM 定 |
+| `lucy-20261025-v0p25-smtp-notifications-spec.md` | `:9` 已签核，S1／S1.1 已实施 | `:303` §11 | SMTP-01–26 全未执行；**S4 不启动、SMTP-26 保持 blocked** |
+| `lucy-20261022-v2p5-row-permission-management-spec.md` | `:8` P0 已收口 | — | R1／R3 与 D-03 仍未闭（§14.9）；Wave 0b 仍挡交付 |
+| `lucy-20261019-audit-trust-and-admin-investigation-spec.md` | `:7` 设计交付，骨架已实施 | — | **现场验收（EA 矩阵）未执行**；状态行自己写明「本状态不表示验收已通过」 |
+| `lucy-20261030-webui-release-ux-review-spec.md` | `:8` v1.2 已落地，结构套件 27/27 绿 | §7／§8 | **走查和签字未做**；§8 检查单 UX-R01–R12 里的 UX-R02「路由覆盖」／UX-R03「未关闭台账」／UX-R04「壳层」都需要人工走查 → 这条**不能纯靠自动化收口**，要 PM 参与签字 |
+
+### D 档｜不具备收口条件（7 份，不要收）
+
+| Spec | 原因 |
+|---|---|
+| `lucy-20261031-help-center-experience-spec.md`（L25-12） | `:8` **待评审；仅授权起草与登记，暂不开发** |
+| `lucy-20261027-v0p25-semantic-release-restore-spec.md`（L25-15） | 设计定稿 v0.11，S1–S6 可交付开发但未实施；SRR-01–SRR-24 全未执行 |
+| `lucy-20261028-v0p25-lucy-ops-control-plane-spec.md`（L25-16） | W-A 实施中，S5 不得开始；VOPS-01–78 全未执行 |
+| `lucy-20261025-v0p25-e2e-mainline-and-branch-optimization-spec.md` | 实施中；它是**发布取证层**的宿主（`HIV25`），不是功能合同层 |
+| `lucy-ci-restoration-spec.md` | T00–T04 实施中；**工作区在途改动就是这条线**（§六） |
+| `lucy-20261018-enterprise-security-and-real-e2e-spec.md` | 已批准、实施中；目标 K8s 仍 BLOCKED |
+| `lucy-20261021-v2p5-help-center-spec.md` | **已被取代，不得实施** → 它需要的不是「收口」，是**归档处置**（标注 superseded 并指向 L25-12 新 Spec） |
+
+---
+
+## 三、还有一批「不是功能合同」，别按功能合同收
+
+42 份存量 Spec 没有「闭口层级」小节（baseline 豁免）。它们分两类，**处置方式相反**：
+
+1. **本来就不该有该小节（豁免合理，保留）**——分析、对照、清单、评分卡、治理冻结类：
+   `ceo-one-report-*`（4 份）、`lucy-202608-access-governance-gap-analysis`、`lucy-20261014-fivetran-context-layer-competitive-analysis`、`lucy-20261026-warehouse-table-scan-capability-analysis`、`lucy-platform-goal-checklist`、`lucy-aicon-online-capability-scorecard`、`lucy-20261018-cloudflare-os-benchmark`、`lucy-202608-upgrade-execution-control`、`lucy-202608-reliable-delivery-upgrade-spec`、`lucy-r1-controlled-data-service-plan`、`starrocks-r1-support-plan`、`api-staging-admission-spec`（治理口径已冻结、暂不开发）等。
+2. **是真功能 Spec，形态债该补**（补「闭口层级」小节 → baseline 条目变 STALE → 删掉，基线只减不增）：
+   `lucy-20261014-release-bom-spec`、`lucy-20261014-safe-log-to-quality-eval-spec`、`lucy-20261014-concept-dictionary-spec`、`lucy-mcp-execution-runtime-ack-debug-spec`、`lucy-poc-demo-isolation-spec`、`lucy-customer-amd64-offline-delivery-spec`、`lucy-skills-mcp-spec`、`lucy-202608-08-image-arch-and-ktx-baseline-fix`、`lucy-202608-05-demo-builder-arm-default-spec`。
+   → **这批适合搭车收口**：改小节成本极低，基线净减 9 条。
+
+> ⚠️ 这 9 份里**有几份本身还没实施完**（如 `lucy-202608-08-image-arch-and-ktx-baseline-fix`）。补「闭口层级」小节只解决**形态**门禁，不代表它们已收口——**两件事必须分开写**。建议收口记录里同时写清「形态已合规 / 功能合同未收口」两层状态，不要用形态合规冒充功能收口。
+
+---
+
+## 四、基线账（形态门禁）
+
+| 项 | 现状 |
+|---|---|
+| `docs/governance/spec-plan-doc-baseline.json` | `close-layer` 条目 **42** 条，全在 `docs/specs/`；其余规则合计 900 条豁免 |
+| 实际有「闭口层级」的 Spec | **18**（60 − 42 对账一致，无遗漏、无 STALE） |
+| 本批若收 B1（skill-owner） | 补小节 → 基线减 1 条 → **42 → 41** |
+| 本批若连带补 §三 第 2 类 9 份 | 基线再减 9 → **42 → 32** |
+| 纪律 | **基线只减不增**；删条目用 `JSON.stringify(b,null,2)+"\n"` 写回，逐字节无格式漂移 |
+
+---
+
+## 五、结构性缺口：发布取证层 **0 份**（需 PM 拍板）
+
+18 份声明了闭口层级，**全部是「功能合同」层，0 份「发布取证」层**。
+
+后果很具体：几乎每份已收口 Spec 的「不在本条出口」都把同一批项推给发布取证——客户镜像、Helm 部署、远端 CI 绿灯、整库旅程、Agent 路径、跨模块故障演练、证据等级（客户环境）。**那一层现在是空的**，所以「本条收口不表示可上线」这句话目前没有任何 Spec 承载它。
+
+按 `DEVELOPMENT.md:80–84`，上线需要三件事同时成立：① 各模块按自己的合同收口（部分达成）② 兜底跑在目标拓扑上（**无人负责**）③ 证据等级够（**无人负责**）。
+
+**建议**：下一批立**第一条「发布取证」层 Spec**，宿主选已收功能合同且范围可控的（如 `lucy-20261030-publish-workbench-three-column` 或 `lucy-20261030-sqlserver-table-identity`），出口矩阵覆盖：amd64 镜像构建 → Helm 部署 → 健康检查 → 一次真实端到端问询 → 证据等级登记。
+
+**但这一条要 PM 先拍板两件事**：
+1. 发布取证 Spec 的**宿主选哪份**（= 决定第一条要覆盖的产品面）。
+2. 发布取证的**环境边界**：本机 + CI，还是必须客户环境？客户环境目前**不在任何 CI 覆盖内**（交接文档 §七明确「客户镜像、Helm、集群部署、客户环境验证与客户交付，都不在这份交接里」）。
+
+---
+
+## 六、硬约束（动手前必读）
+
+1. **工作区有在途改动，不要碰**（本文件落盘时的实况，HEAD 仍是 `8f7ed9e4`）：
+
+   ```
+   M  package.json                                        （已暂存）
+   M  scripts/gates/root-test-registry.json               （已暂存）
+   A  scripts/smoke/lucy-runtime-build-context.test.mjs  （已暂存，新增）
+   ?? docs/reviews/2026-11-01-spec-closure-inventory.md   （本文件）
+   ```
+
+   这几个文件属 **CI／交付隔离线**（`lucy-ci-restoration-spec.md`），**不是收口批次**，不是本盘点的收口对象。
+
+   ⚠️ **盘点期间该会话改过一次法**：它原先往 `.github/workflows/lucy-ci.yml` 与 `lucy-release.yml` 各加了 2 行（`smoke:p0:delivery-isolation:test` 与 `…:build-context`），随后**撤回**，改为把新测试登记进 `scripts/gates/root-test-registry.json` 的 `workflow-contracts` 门禁。**HEAD 期间未动**（仍是 `8f7ed9e4`）。
+
+   → **这条线是活的**。收口批次动手时**必须先重跑 `git status`**，并对每个自己改过的文件逐个 `git diff` 复核——**登记类文件被并发会话覆盖是静默的**，不报冲突也不报错，commit 成功、工作区干净、diff 里看不出异常（`docs/README.md`、`docs/plans/README.md`、`project-overview.md`、`webui/docs/README.md` 是重灾区）。
+2. **全量测试必须用干净 PATH**：`/Users/forrest/.minimax/shims/rm` 是 `mavis-trash` 垫片，非交互子进程里 `rm -rf` 会**挂死不返回**（症状：vitest 报 `timed out in 5000ms` 但该文件耗时 120 秒）。
+   ```bash
+   CLEAN_PATH=$(printf '%s' "$PATH" | tr ':' '\n' | grep -v "minimax" | tr '\n' ':')
+   env PATH="$CLEAN_PATH" npx vitest run --maxWorkers=1
+   ```
+3. **新增 Spec/Plan 与索引登记必须同一个 commit**（`lint:spec-docs` 的 `index` 规则对已跟踪文档判「未登记」即阻塞）。
+4. **共享索引文件是并发热点**：`docs/README.md`、`docs/plans/README.md`、`docs/governance/project-overview.md`、`webui/docs/README.md`。
+5. **版本计数器跨会话共享**：写 `project-overview.md` 前必须实读顶部版本行取 current+1。
+6. **SC 编号跨 Spec 串号**：`SC-17`／`SC-20`／`SC-24`／`SC-25` 至少 6 个 Spec 各有一套含义，「SC 全覆盖」无法机器校验，只能靠**逐条 SC→用例名映射表人工对账**。
+
+---
+
+## 七、决策与授权（2026-11-01 13:53 PM 已拍板）
+
+| # | 决策 | PM 裁定 | 执行口径 |
+|---|---|---|---|
+| D1 | 本批收哪几条 | **B 档 + 形态 9 份搭车** | B 档由 3 增至 5（§一 修订框）。全为文档动作，不改运行代码 |
+| D2 | 发布取证层是否现在立 | **暂不立**，先收完功能合同层 | 本批不新建发布取证 Spec；§五 的空白原样保留 |
+| D3 | 并发会话关系 | **等 CI 线落地再开始** | CI 线已于 13:53 落地（`3a0857ee`），13:55 口径更正（`c1ad7a8b`）；批次自 13:56 起执行 |
+| D4 | `blocked_env` 类（OIDC-24/25、SMTP-26） | 未决 | 属 C 档，本批不动 |
+| D5 | 被取代的 `lucy-20261021-v2p5-help-center-spec.md` | 未决 | 属 D 档，本批不动 |
+| D6 | 服务端 flake 归属 | 未决 | 交接 §三 P0；本批不涉及 |
+
+**并发安全前提**：`3a0857ee` 与 `c1ad7a8b` 已落地，工作区在批次开始时**干净**（仅本盘点文档未跟踪）。批次每个 commit 前重跑 `git status`，并逐文件 `git diff` 复核。
+
+---
+
+## 八、不在本次盘点里
+
+- 客户镜像、Helm、集群部署、客户环境验证与客户交付。
+- `webui/docs/` 下的数字流水号存量 Spec（`07`／`14`／`15` 等）——它们是**已封板的存量路径**，按 `DEVELOPMENT.md:65` 不作为新编号先例，本轮不纳入功能合同收口盘点。
+- 本批三份 Spec 的收口**都不表示可上线**，也不构成客户包验收。
