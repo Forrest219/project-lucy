@@ -2,10 +2,10 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档类型 / 版本 | 功能设计基线 / v0.1-requirements-review |
-| 日期 / 目标版本 | 2026-10-25 / v0.25 |
+| 文档类型 / 版本 | 功能设计基线 / **v0.2** |
+| 日期 / 目标版本 | 2026-10-25；2026-11-01 功能合同收口 / v0.25 |
 | 功能编号 / 优先级 | L25-14 R1、R3 / P1-1 |
-| 状态 | **已实现**（v0.25 P1-1 / L25-14 R1・R3）。实施计划 `docs/plans/2026-10-25-lucy-v0.25-p1-implementation-plan.md` §1.1 W1；提交 `28780eae`。**2026-10-30 收口**见 §8：仓库测试已关闭 RTP-01–RTP-10、RTV-01、RTV-02、RTV-03、RTV-04、RTV-05、RTV-08；RTV-06、RTV-07 保持开放 |
+| 状态 | **v0.2 功能合同部分收口（2026-11-01）**：RTP-01–RTP-10、RTV-01–RTV-06、RTV-08 共 **17 条关闭**；**RTV-07 部分通过**——「页面无写 API／键盘／表格／焦点」四项已关闭，「翻译防御」剩 **1 处真实实现缺口**（`webui/src/components/admin/RowPolicyDnfPreview.tsx:215-217` 的「来源角色」列表缺 `translate="no"` + `notranslate`，未改运行代码）。逐条落点见 §8.1，证据见 [收口记录](../reviews/2026-11-01-row-policy-templates-and-view-closure.md)。**本条收口不表示可上线**——浏览器实测与移动窄屏、镜像构建与部署、客户环境验证与客户交付不在本条出口。实施计划 `docs/plans/2026-10-25-lucy-v0.25-p1-implementation-plan.md` §1.1 W1；提交 `28780eae`；**2026-10-30 收口**见 §8 |
 | 授权来源 | 2026-10-25 Forrest 批准按项目规范完成 P1 梯队 Spec；本轮只做设计与需求审查材料 |
 | 规划入口 | [Lucy v0.25 功能升级建议书](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) §2.8；[P0 Final 决议](../reviews/2026-10-24-lucy-v0.25-p0-final-decision.md) §1 |
 | 审查入口 | [P1 需求审查清单](../plans/2026-10-25-lucy-v0.25-p1-requirements-review-checklist.md) |
@@ -18,6 +18,14 @@
 > 上段是 2026-10-25 设计轮次的记录，原文保留。2026-10-30 验收收口见 §8。
 
 ---
+
+## 闭口层级
+
+- 层级：功能合同
+- 本条承诺：行策略模板可被保存并展开进既有行策略编译器；按表反查页在同一快照下讲清这张表实际受什么行约束——角色分支、有效行授予与逐 Agent 最终行约束分得清，页面只读
+- 本条出口：RTP-01–RTP-10、RTV-01–RTV-08 的仓库自动化用例（`webui/server/__tests__/p1-row-policy-templates.test.ts`、`p1-row-policy-views.test.ts`、`p1-row-policy-reconciliation.test.ts`、`p1-row-policy-closure.test.ts`、`webui/src/__tests__/row-policy-view.test.tsx`、`row-policy-view-readonly-a11y.test.tsx` 等）
+- 不在本条出口：整库旅程、跨模块或系统级故障演练、证据等级、浏览器实测与移动窄屏、镜像构建与部署、客户环境验证与客户交付；L25-08 自身的验收矩阵（Spec 187 的 SC-01–14）
+- 上线关系：本条收口不表示可上线
 
 ## Terminology Compliance
 
@@ -252,6 +260,33 @@ RTP 对应模板，RTV 对应反查；以下是 P1 独立证据，不把 P0-2 �
 | RTV-06 | 与 L25-01／L25-08 对账 | 同快照下表集合一致；授权路径数与去重表数不混用 | P1-D7 | 开放：同快照对账 L25-01／L25-08，两项 Spec 尚未验收；表集合计数与授权路径计数分开（P1-D7） |
 | RTV-07 | 只读与可达性 | 页面无写 API；键盘、表格、焦点和翻译防御满足设计规范 | SC 设计 | 开放：页面为只读；键盘、表格、焦点与翻译防御尚无测试 |
 | RTV-08 | 快照切换 | 同次响应不混用配置、目录或策略世代；刷新后明确更新快照身份 | X1 | 已由仓库测试关闭 |
+
+## 8.1 逐条落点表（2026-11-01 收口）
+
+> **证据等级：本地自动化（vitest）。** 无 CI job 证据，无客户环境证据，无浏览器实测证据。逐条说明、变异验证、残余与真实实现缺口见 [收口记录](../reviews/2026-11-01-row-policy-templates-and-view-closure.md)。
+
+| 编号 | 结论 | 证据落点（文件 → 用例名） |
+|---|---|---|
+| RTP-01 | 通过 | `server/__tests__/p1-row-policy-templates.test.ts`「RTP-01 — a template compiles to the same grant as the equivalent inline policy, and the `in` value order does not change the semantic digest」 |
+| RTP-02 | 通过 | 同上「RTP-02 — the template ANDs with the inline predicates inside one selector, the Roles OR, and the Agent ANDs on top of the union」 |
+| RTP-03 | 通过 | 同上「RTP-03 — a missing reference, an illegal op and empty predicates all fail closed, and the reason is distinguishable from the catalog state」 |
+| RTP-04 | 通过 | 同上「RTP-04 — a referenced template cannot be deleted (zero writes), an unreferenced one saves through the dry-run, and an external missing reference fails closed」 |
+| RTP-05 | 通过 | 同上「RTP-05 — a template change moves the policyVersion, the runtime confirms it without a restart, and the protected-tool gate does not move」 |
+| RTP-06 | 通过 | 同上「RTP-06 — a stale preview cannot be committed; a fresh dry-run is required before the save」 |
+| RTP-07 | 通过 | 同上两条：「RTP-07 — the durable intent is persisted before the configuration write and the terminal after it」＋「RTP-07 — a runtime that does not confirm the write rolls the configuration back and never reports the write as acked」 |
+| RTP-08 | 通过 | 同上「RTP-08 — a template that cannot be bound is visible with its reason before the save」 |
+| RTP-09 | 通过 | 同上「RTP-09 — the template audit carries the actor, the operation id, the before/after digests and the impact surface — and no secret」 |
+| RTP-10 | 通过 | 同上 `describe("RTP-10 — an existing configuration without templates behaves exactly as before")` →「the expansion leaves a template-free configuration untouched」 |
+| RTV-01 | 通过 | `server/__tests__/p1-row-policy-views.test.ts`「RTV-01 / RTV-02 — the union keeps its shape」→「two restricted Roles stay two OR branches and never become 全部行」 |
+| RTV-02 | 通过 | 同上「only a real `all` branch makes the union 全部行」 |
+| RTV-03 | 通过 | 同上 `describe("RTV-03 — the four states never share one empty state")` 四条：无授权／不可满足／编译失败／空筛选 |
+| RTV-04 | 通过 | 同上「the same-named table of another connection never merges」＋「the view is read-only: it never changes the configuration」＋ W8 回归两条 |
+| RTV-05 | 通过 | 同上「one broken Role plus one healthy Role is `partial`, not `unavailable`」＋ W8 回归「RTV-05 — a total compile failure is `unavailable`, never 「0 张表」」 |
+| RTV-06 | 通过（**本次补 1 条**） | 既有 `server/__tests__/p1-row-policy-reconciliation.test.ts`「RTV-06 — 同快照下三面表集合一致；授权路径数与去重表数分别表达、不混用」；**本次新增** `server/__tests__/p1-row-policy-closure.test.ts`「RTV-06 — 详情面的角色数与 Agent 数等于清单面的同一张表；详情面不串别的表的角色」（补**单表详情面**这一半） |
+| RTV-07 | **部分通过** | 本次新增 `src/__tests__/row-policy-view-readonly-a11y.test.tsx` 7 条（无写 API／键盘可达 ×2／焦点／表格 Base Contract／翻译防御 ×2）＋ `server/__tests__/p1-row-policy-closure.test.ts`「RTV-07 — 反查视图的两个端点只有 GET；写方法一律 404」。**「翻译防御」剩 1 处真实实现缺口**：`webui/src/components/admin/RowPolicyDnfPreview.tsx:215-217` 的「来源角色：{角色 id 列表}」缺 `translate="no"` + `notranslate`——按「不改运行代码」如实登记，机器可见痕迹是该文件里一条 `it.fails` 用例与全页机器标识扫描用例（见收口记录 §七） |
+| RTV-08 | 通过（**本次补 2 条**） | 既有 `p1-row-policy-views.test.ts`「the response publishes the four snapshot identity fields」（**只断言字段非空，判据未被打假**）；**本次新增** `p1-row-policy-closure.test.ts`「RTV-08 — 一个响应的四个身份字段来自同一份配置与同一代策略；清单面与详情面逐个相等」＋「RTV-08 — 刷新后快照身份明确更新：配置改了，旧身份不再被复用」 |
+
+**实测（2026-11-01 复跑）**：10 个测试文件 / **130 条通过 ＋ 1 条预期失败**（那 1 条是上面登记的实现缺口，不是本条失败）。
 
 ## 9. 依赖与完成边界
 
