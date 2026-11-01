@@ -188,6 +188,30 @@ describe("RowPolicyDnfPreview — 可选 prop（呈现修订 Spec §5.4）", () 
     expect(screen.getByTestId("row-policy-dnf-agent-agent_b")).toBeInTheDocument();
   });
 
+  it("可选标题 prop：默认旧文案；传入后改写并集与 Agent 小节标题", () => {
+    const { unmount } = render(
+      <RowPolicyDnfPreview
+        effectiveRowGrant={{ kind: "all" }}
+        finalRowsByAgent={[{ agentId: "agent_a", finalRows: { kind: "all" } }]}
+      />
+    );
+    expect(screen.getByRole("heading", { name: /最终行约束（角色并集）/ })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "最终行约束（与个人行限制相交）" })).toBeInTheDocument();
+    unmount();
+
+    render(
+      <RowPolicyDnfPreview
+        effectiveRowGrant={{ kind: "all" }}
+        finalRowsByAgent={[{ agentId: "agent_a", finalRows: { kind: "all" } }]}
+        unionHeading="有效行授予"
+        agentsHeading="各 Agent 最终行约束"
+      />
+    );
+    expect(screen.getByRole("heading", { name: /有效行授予/ })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "各 Agent 最终行约束" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /最终行约束（角色并集）/ })).not.toBeInTheDocument();
+  });
+
   it("predicateLayout=stacked：一支一块，支间看得见「或」；默认仍是今天的单行", () => {
     const { unmount } = render(
       <RowPolicyDnfPreview predicateLayout="stacked" effectiveRowGrant={TWO_ARMS} />

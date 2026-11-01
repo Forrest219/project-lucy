@@ -12,7 +12,7 @@ import { ROW_POLICY_PREVIEW_BOUNDARY } from "../components/admin/RowPolicyDnfPre
  *
  * Authority: docs/specs/lucy-20261030-row-policy-view-presentation-spec.md
  *   §5.1（页面骨架）, §5.2（URL）, §5.3（清单授予列）, §5.4（详情）; D1–D10;
- *   SC-01 … SC-18.
+ *   SC-01 … SC-23.
  *
  * The page has TWO parameter families and they must not mix:
  *   - 当前表：`connectionId` / `schema` / `sourceName`（深链三参数，只打开详情）
@@ -628,6 +628,72 @@ describe("行权限视图的清单授予列与详情顺序（Spec §5.3 / §5.4�
     expect(screen.getByTestId("row-policy-dnf-boundary")).toHaveTextContent(ROW_POLICY_PREVIEW_BOUNDARY);
   });
 
+  it("SC-19 工作台左清单右详情双栏", async () => {
+    renderView("/admin/row-policies?connectionId=warehouse&schema=fin&sourceName=fin_ledger");
+    await waitFor(() => expect(screen.getByTestId("row-policy-view-workspace")).toBeInTheDocument());
+    const workspace = screen.getByTestId("row-policy-view-workspace");
+    expect(within(workspace).getByTestId("row-policy-view-list-panel")).toBeInTheDocument();
+    expect(within(workspace).getByTestId("row-policy-view-detail")).toBeInTheDocument();
+    expect(screen.getByTestId("row-policy-view-toolbar")).toBeInTheDocument();
+  });
+
+  it("SC-20 深链打开详情；无三参数时右栏空态", async () => {
+    renderView("/admin/row-policies?connectionId=warehouse&schema=fin&sourceName=fin_ledger");
+    await waitFor(() => expect(screen.getByTestId("row-policy-view-detail")).toBeInTheDocument());
+    expect(screen.queryByTestId("row-policy-view-detail-empty")).not.toBeInTheDocument();
+    cleanup();
+    renderView("/admin/row-policies");
+    await waitFor(() => expect(screen.getByTestId("row-policy-view-detail-empty")).toBeInTheDocument());
+    expect(screen.getByTestId("row-policy-view-detail-empty")).toHaveTextContent(
+      "选择左侧一张表，查看实际生效的行约束。"
+    );
+    expect(screen.queryByTestId("row-policy-view-detail")).not.toBeInTheDocument();
+  });
+
+  it("SC-21 诊断默认折叠，展开后仍见失败集合", async () => {
+    listResponse = {
+      ...LIST,
+      state: "partial",
+      status: "ok",
+      failures: [{ subjectId: "east_role", reason: "role_resolution_failed:east_role" }]
+    };
+    renderView("/admin/row-policies?connectionId=warehouse&schema=fin&sourceName=fin_ledger");
+    await waitFor(() => expect(screen.getByTestId("row-policy-view-diagnostics")).toBeInTheDocument());
+    const diagnostics = screen.getByTestId("row-policy-view-diagnostics");
+    expect(diagnostics).not.toHaveAttribute("open");
+    expect(diagnostics).toHaveTextContent("快照部分可用");
+    expect(diagnostics).toHaveTextContent("1 条解析失败");
+    // 机器词 partial 不得出现在折叠摘要的可见主文案里。
+    const summary = diagnostics.querySelector("summary");
+    expect(summary?.textContent ?? "").not.toContain("partial");
+    // 展开前失败列表仍在 DOM（details 内容），但结论区不被 partial 徽章挤走。
+    fireEvent.click(summary!);
+    expect(screen.getByTestId("row-policy-view-list-failures")).toHaveTextContent("east_role");
+    expect(screen.getByTestId("row-policy-view-list-failures")).toHaveTextContent(
+      "role_resolution_failed"
+    );
+  });
+
+  it("SC-22 详情三区标题", async () => {
+    renderView("/admin/row-policies?connectionId=warehouse&schema=fin&sourceName=fin_ledger");
+    await waitFor(() =>
+      expect(screen.getByRole("heading", { name: /有效行授予/ })).toBeInTheDocument()
+    );
+    expect(screen.getByRole("heading", { name: "角色贡献" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "各 Agent 最终行约束" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "角色分支" })).not.toBeInTheDocument();
+  });
+
+  it("SC-23 选中行左边强调", async () => {
+    renderView("/admin/row-policies?connectionId=warehouse&schema=fin&sourceName=fin_ledger");
+    await waitFor(() =>
+      expect(screen.getByTestId("row-policy-view-table-warehouse-fin-fin_ledger")).toBeInTheDocument()
+    );
+    const row = screen.getByTestId("row-policy-view-table-warehouse-fin-fin_ledger");
+    expect(row).toHaveAttribute("aria-current", "true");
+    expect(row.className).toMatch(/border-l/);
+  });
+
   it("详情顺序是结论 → 边界句 → 角色 → Agent", async () => {
     renderView("/admin/row-policies?connectionId=warehouse&schema=fin&sourceName=fin_ledger");
     await waitFor(() => expect(screen.getByTestId("row-policy-dnf-preview")).toBeInTheDocument());
@@ -691,8 +757,17 @@ describe("行权限视图的清单降级披露（P1-3）", () => {
       failures: [{ subjectId: "east_role", reason: "role_resolution_failed:east_role" }]
     };
     renderView();
-    await waitFor(() => expect(screen.getByTestId("row-policy-view-list-state")).toBeInTheDocument());
-    expect(screen.getByTestId("row-policy-view-list-state")).toHaveTextContent("partial");
+    await waitFor(() => expect(screen.getByTestId("row-policy-view-diagnostics")).toBeInTheDocument());
+    // 默认折叠：摘要中文，不含机器词 partial。
+    const diagnostics = screen.getByTestId("row-policy-view-diagnostics");
+    expect(diagnostics.querySelector("summary")?.textContent ?? "").toContain("快照部分可用");
+    expect(diagnostics.querySelector("summary")?.textContent ?? "").not.toContain("partial");
+    fireEvent.click(diagnostics.querySelector("summary")!);
+    expect(screen.getByTestId("row-policy-view-list-state")).toBeInTheDocument();
+    expect(screen.getByTestId("row-policy-view-list-state-badge")).toHaveAttribute(
+      "data-snapshot-state",
+      "partial"
+    );
     const failures = screen.getByTestId("row-policy-view-list-failures");
     expect(failures).toHaveTextContent("east_role");
     expect(failures).toHaveTextContent("role_resolution_failed");

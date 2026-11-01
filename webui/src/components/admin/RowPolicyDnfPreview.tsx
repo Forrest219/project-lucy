@@ -91,6 +91,16 @@ export interface RowPolicyDnfPreviewProps {
    * between the branches.
    */
   predicateLayout?: "inline" | "stacked";
+  /**
+   * Visible heading for the union section. Default keeps today's
+   * 「最终行约束（角色并集）」 so the role editor is unchanged.
+   */
+  unionHeading?: string;
+  /**
+   * Visible heading for the per-Agent section. Default keeps today's
+   * 「最终行约束（与个人行限制相交）」.
+   */
+  agentsHeading?: string;
 }
 
 function formatValue(value: unknown): string {
@@ -126,7 +136,7 @@ function DnfGrantBody({
   }
   if (grant.kind === "all") {
     return (
-      <p className="text-sm font-medium" data-testid={`${testId}-all`}>
+      <p className="text-base font-semibold" data-testid={`${testId}-all`}>
         行权限：全部行
       </p>
     );
@@ -179,7 +189,9 @@ export function RowPolicyDnfPreview({
   boundaryPlacement = "top",
   children,
   collapseUniformAllRows = false,
-  predicateLayout = "inline"
+  predicateLayout = "inline",
+  unionHeading = "最终行约束（角色并集）",
+  agentsHeading = "最终行约束（与个人行限制相交）"
 }: RowPolicyDnfPreviewProps) {
   const [agentsExpanded, setAgentsExpanded] = useState(false);
   const hasReason = Boolean(unavailableReason);
@@ -209,14 +221,14 @@ export function RowPolicyDnfPreview({
       ) : null}
 
       <section className="grid gap-1" data-testid="row-policy-dnf-union-section">
-        <h4 className="text-sm font-medium">
-          最终行约束（角色并集）
+        <h2 className="pl-panel-title text-base">
+          {unionHeading}
           {roleIds && roleIds.length > 0 ? (
             <span className="ml-2 text-xs font-normal text-fg-muted">
               来源角色：{roleIds.join("、")}
             </span>
           ) : null}
-        </h4>
+        </h2>
         {hasReason ? (
           <p className="text-sm text-fg-muted" data-testid="row-policy-dnf-union-unavailable">
             目录或编译状态未知，未展示并集结果。
@@ -236,7 +248,7 @@ export function RowPolicyDnfPreview({
 
       {finalRowsByAgent.length > 0 ? (
         <section className="grid gap-1" data-testid="row-policy-dnf-agents-section">
-          <h4 className="text-sm font-medium">最终行约束（与个人行限制相交）</h4>
+          <h3 className="text-sm font-medium">{agentsHeading}</h3>
           {uniformAllRows ? (
             <div className="grid gap-1">
               <p
