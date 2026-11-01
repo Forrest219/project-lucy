@@ -2,10 +2,10 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档类型 / 版本 | 功能设计基线 / **v1.2** |
-| 日期 / 目标版本 | 2026-10-30 / 不绑定产品版本号 |
+| 文档类型 / 版本 | 功能设计基线 / **v1.3** |
+| 日期 / 目标版本 | 2026-10-30；2026-11-01 功能合同收口 / 不绑定产品版本号 |
 | 台账号 | 无。不进入 v0.25 升级台账，不另派 WebUI 流水号 |
-| 状态 | **v1.2 已定稿**。第 3 轮 Codex 确认可定稿，阻塞 0，高 0。见 [`docs/reviews/2026-10-30-codex-review-agent-roster.md`](../reviews/2026-10-30-codex-review-agent-roster.md) |
+| 状态 | **v1.3 功能合同已收口（2026-11-01）**。SC-01–SC-15 全部关闭，逐条落点见 §7.2，证据见 [收口记录](../reviews/2026-11-01-agent-roster-closure.md)。设计基线见 [第 3 轮 Codex 审阅](../reviews/2026-10-30-codex-review-agent-roster.md)。**本条收口不表示可上线**——移动窄屏、Docker 重建、客户交付不在本条出口 |
 | 决策来源 | 2026-10-30 对 `/admin/agents` 的名册讨论。六项呈现全部接受；列头用 Token；启用行不放标记；仅连接用次级文字 |
 | 需求来源 | 数据平台经理在这一页要看出谁能访问、凭据还能不能用、这周有没有在查数 |
 | 实施主体 | Lucy WebUI。不修改 KTX 源码，不改审计写入 |
@@ -279,3 +279,40 @@ for agent in response.agents，保持数组顺序:
 | SC-13 | `GET /api/admin/agents` 仍返回 `protocolCallsLast7d`、`lastSeen`、`usedCredentialCountLast7d`。本文件不删除这些字段 |
 | SC-14 | 在 §7.1 夹具上，`a-time` 有「仅连接」。把它的 `lastSeen` 改成窗口终点、其它字段不变，则不再有「仅连接」，并进入闲置 |
 | SC-15 | 在 §7.1 夹具上，`a-inside-business-time` 进入闲置。`a-protocol-inside` 有「仅连接」，并进入仅连接，不进入闲置 |
+
+### 7.2 执行结果与逐条落点（2026-11-01）
+
+证据等级：**本地自动化（vitest）＋ 本地工程门禁**。无 CI job 证据，无客户环境证据。完整记录见 [收口记录](../reviews/2026-11-01-agent-roster-closure.md)。
+
+> **本节更正的过期登记**：本 Spec 状态行此前只写「v1.2 已定稿。第 3 轮 Codex 确认可定稿」——那只反映了**设计定稿**。实施 Plan v1.2 记「S1、S2 已按本 Plan 实现，**SC-01–SC-15 已执行并通过**（2026-10-30，记录见 §5）」。**实现与验收在 2026-10-30 就已完成并留痕，是 Spec 状态行没跟上**。本次收口按 Plan §5.1 的对照表**逐条复核**（不直接采信）后关闭。
+
+| 编号 | 结果 | 落点 |
+|---|---|---|
+| SC-01 | 通过 | `agent-list.test.tsx`「renders stability-and-adoption top metrics（SC-01）」 |
+| SC-02 | 通过 | `agent-list.test.tsx`「renders prioritized table columns for ops value（SC-02）」 |
+| SC-03 | 通过 | `agent-list.test.tsx`「SC-03 已启用的行没有状态标记，未启用的行在显示名旁标「已禁用」」 |
+| SC-04 | 通过 | `agent-list.test.tsx`「SC-04 Token 格按可用数与配置数写主行与次行」 |
+| SC-05 | 通过 | `agent-list.test.tsx`「SC-05 仅连接可以被看见，但不进活跃 Agent 分子」 |
+| SC-06 | 通过 | `agent-list.test.tsx`「SC-06 闲置行不带「仅连接」标记」 |
+| SC-07 | 通过 | `agent-list.test.tsx`「SC-07 指标不可用的行显示「—」，只有 metricsState=unavailable 写「数据不可用」」 |
+| SC-08 | 通过 | `agent-list.test.tsx`「SC-08 近 7 天活跃四档互斥、且不改变行序」 |
+| SC-09 | 通过 | `agent-list.test.tsx` 三支——去掉 `windowStart` 时协议量大于 0 仍是仅连接、协议量为 0 不再是；去掉 `windowEnd` 时协议量为 0 不标仅连接；缺整个 `summary` 时协议量大于 0 可标仅连接、协议量为 0 不标 |
+| SC-10 | 通过 | `object-detail-drawer.test.tsx` 四支——指标可用时抽屉展示协议请求量与两个时间、业务调用量读 `usageCallsLast7d`；指标可用但时间为空时写「未使用」和「未访问」；指标可用且协议量为 null 或缺失时写「—」不写成 0；指标不可用时五个值都是「—」且正文不出现「未使用」或「未访问」 |
+| SC-11 | 通过 | `agent-list.test.tsx`「SC-11 名册不再提示凭据 prefix 冲突」 |
+| SC-12 | 通过 | `kpi-contracts.test.ts`「SC-12 名册不再登记「近 N 使用过的凭据」，其它条目仍指向本页」 |
+| SC-13 | 通过 | **既有接口测试，未另写服务端测试**——`admin-agents.test.ts`「separates protocol requests from business usage and keeps all-time last access」（`protocolCallsLast7d`、`lastSeen`）、「marks used-credential metrics partial when con…」 |
+| SC-14 | 通过 | `agent-list.test.tsx`「SC-14 a-time 在窗口内是仅连接，最近 MCP 访问改成窗口终点后不再是」 |
+| SC-15 | 通过 | `agent-list.test.tsx`「SC-15 窗口内的业务时间不构成仅连接，协议量大于 0 仍是」 |
+
+**实测（2026-11-01 复跑）**：`agent-list.test.tsx` / `kpi-contracts.test.ts` / `object-detail-drawer.test.tsx` —— **3 文件 / 82 条全绿**。
+
+**这些用例不是空转**（Plan §5.1「S1 退出条件（反证）」）：
+
+| 拿掉什么 | 应当失败的 SC |
+|---|---|
+| 删掉时间条款 | SC-07、SC-08、SC-14、SC-15 |
+| 把缺失的 `windowStart` 当成没有下界 | SC-09 |
+| 把闲置写成「业务调用量为 0」 | SC-05、SC-07、SC-08、SC-09（两支）、SC-14、SC-15 |
+| 抽屉去掉「先判指标是否可用」的守卫 | SC-10 不可用分支 |
+
+每个 SC 都挂在**具体判定的失效**上，不是「断言一个常量」的空用例。
