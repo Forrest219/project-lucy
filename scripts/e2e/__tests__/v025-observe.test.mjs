@@ -643,7 +643,8 @@ describe("W2-OBSERVE: status semantics (never a fabricated pass)", () => {
 
     const v12 = CASE_BY_ID.get("ARV25-V12");
     assert.equal(v12.blockedReason, "delivery");
-    assert.ok(v12.requiredCapabilities.includes("k8s-amd64"), "ARV25-V12 must require k8s-amd64");
+    assert.ok(v12.requiredCapabilities.includes("k8s-amd64"), "the frozen contract still lists k8s-amd64");
+    assert.ok(v12.imageDimensions.some((d) => d.requires.includes("k8s-amd64") && d.blockedReason === "delivery"));
     assert.ok(v12.dimensions.some((d) => d.layer === "delivery" && d.blockedReason === "delivery"));
 
     // a blocked record is well formed; these ids cannot become a passed record here

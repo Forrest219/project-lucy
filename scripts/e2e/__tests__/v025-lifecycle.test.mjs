@@ -115,13 +115,18 @@ describe("v0.25 LIFECYCLE blocked semantics (Plan W4)", () => {
     }
   });
 
-  it("classifies the most upstream blocker first", () => {
-    const r = evaluateLifecycleCase("UPG25-03", { capabilities: ["lucy-http", "ktx-upstream", "fault-control", "agent-client"] });
-    assert.equal(r.status, "blocked");
-    assert.equal(r.blockedReason, "delivery", "the missing ci-runner is a delivery blocker");
-    const r2 = evaluateLifecycleCase("UPG25-03", { capabilities: ["lucy-http", "ktx-upstream", "fault-control", "agent-client", "ci-runner"] });
-    assert.equal(r2.status, "blocked");
-    assert.equal(r2.blockedReason, "environment", "the missing amd64 K8s is an environment blocker");
+  it("keeps a missing image capability on the image dimension", () => {
+    const product = ["lucy-http", "ktx-upstream", "fault-control", "agent-client"];
+    const r = evaluateLifecycleCase("UPG25-03", { capabilities: product });
+    assert.equal(r.productStatus, "not_run", "product dimensions were not executed");
+    assert.equal(r.status, "not_run");
+    assert.equal(r.blockedReason, null);
+    assert.equal(r.imageStatus, "blocked");
+    assert.equal(r.imageBlockedReason, "delivery", "the missing ci-runner is an image-track delivery blocker");
+    const r2 = evaluateLifecycleCase("UPG25-03", { capabilities: [...product, "ci-runner"] });
+    assert.equal(r2.imageStatus, "blocked");
+    assert.equal(r2.imageBlockedReason, "environment", "the missing amd64 K8s is an image-track environment blocker");
+    assert.equal(r2.status, "not_run");
   });
 
   it("does not let a single executed layer become a pass", () => {

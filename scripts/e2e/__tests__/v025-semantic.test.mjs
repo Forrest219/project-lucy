@@ -209,7 +209,7 @@ describe("SEM25 execution descriptors (W2-SEM, Plan §5.2)", () => {
     assert.equal(agentDim.blockedReason, "delivery", "V03's agent evidence is Wave 0b delivery, not a local gap");
 
     const v22 = semanticCase("SEM25-V22");
-    assert.ok(v22.requiredCapabilities.includes("k8s-amd64"), "V22 must require the customer amd64 capability");
+    assert.ok(!v22.requiredCapabilities.includes("k8s-amd64"), "V22 product capabilities must not require customer amd64");
     const customerDim = v22.evidenceDimensions.find((d) => d.dimension === "customer");
     assert.equal(customerDim.blockedReason, "delivery", "V22's customer evidence is delivery-bound");
   });

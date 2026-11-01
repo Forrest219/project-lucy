@@ -18,7 +18,7 @@
 // an isolated amd64 Kubernetes environment, every execution item is `blocked`
 // with a structured reason — never `passed`, never silently skipped.
 
-import { statusFromDimensions } from "./v025-result.mjs";
+import { isImageCapability, statusFromDimensions } from "./v025-result.mjs";
 
 /** Capability -> why it is missing, used to classify a blocked reason. */
 const CAPABILITY_REASONS = Object.freeze({
@@ -33,7 +33,10 @@ const CAPABILITY_REASONS = Object.freeze({
 
 /** The LIFECYCLE branch runs on real customer-shaped material. */
 const LIFECYCLE_REQUIRES = Object.freeze([
-  "lucy-http", "ktx-upstream", "k8s-amd64", "ci-runner", "fault-control", "agent-client"
+  "lucy-http", "ktx-upstream", "fault-control", "agent-client"
+]);
+const LIFECYCLE_IMAGE_DIMENSIONS = Object.freeze([
+  Object.freeze({ name: "amd64-matrix", requires: Object.freeze(["k8s-amd64", "ci-runner"]), blockedReason: "delivery" })
 ]);
 const UPGRADE_EXECUTORS = Object.freeze(["O", "P", "A", "V"]);
 const CANDIDATE_EXECUTORS = Object.freeze(["O", "P", "B", "V"]);
@@ -319,6 +322,8 @@ export const LIFECYCLE_CASES = Object.freeze([
     requires: LIFECYCLE_REQUIRES,
     assert: LIFECYCLE_ASSERT,
     artifacts: LIFECYCLE_ARTIFACTS,
+    completionTrack: "mixed",
+    imageDimensions: LIFECYCLE_IMAGE_DIMENSIONS,
     // in-place upgrade continues the original volume — it can never be proven
     // by restoring into a fresh one
     evidenceScope: "original-volume"
@@ -331,6 +336,8 @@ export const LIFECYCLE_CASES = Object.freeze([
     requires: LIFECYCLE_REQUIRES,
     assert: LIFECYCLE_ASSERT,
     artifacts: LIFECYCLE_ARTIFACTS,
+    completionTrack: "mixed",
+    imageDimensions: LIFECYCLE_IMAGE_DIMENSIONS,
     // candidate verification restores a backup into empty volumes — it can
     // never be cited as proof of an in-place upgrade
     evidenceScope: "empty-volume-restore"
@@ -360,21 +367,44 @@ export function evaluateLifecycleCase(executionId, { capabilities = [], dimensio
   const c = lifecycleCaseFor(executionId);
   if (!c) return { executionId, status: "not_run", blockedReason: null, reason: "unknown execution id" };
   const have = new Set(capabilities);
-  const missing = c.requires.filter((cap) => !have.has(cap));
-  if (missing.length > 0) {
-    const reasons = missing.map((cap) => CAPABILITY_REASONS[cap] ?? "capability");
-    // delivery beats environment beats capability: the most upstream blocker wins
+  const productMissing = c.requires.filter((cap) => !isImageCapability(cap) && !have.has(cap));
+  const imageMissing = (c.imageDimensions ?? []).flatMap((dim) => (dim.requires ?? []).filter((cap) => !have.has(cap)));
+  const imageBlockedReason = imageMissing.length === 0
+    ? null
+    : imageMissing.some((cap) => CAPABILITY_REASONS[cap] === "delivery")
+      ? "delivery"
+      : imageMissing.some((cap) => CAPABILITY_REASONS[cap] === "environment")
+        ? "environment"
+        : "capability";
+  const imageStatus = imageMissing.length > 0 ? "blocked" : (c.imageDimensions ?? []).length > 0 ? "not_run" : "not_applicable";
+  if (productMissing.length > 0) {
+    const reasons = productMissing.map((cap) => CAPABILITY_REASONS[cap] ?? "capability");
     const blockedReason = reasons.includes("delivery") ? "delivery" : reasons.includes("environment") ? "environment" : "capability";
     return {
       executionId,
+      completionTrack: c.completionTrack ?? "mixed",
       status: "blocked",
+      productStatus: "blocked",
+      imageStatus,
+      imageBlockedReason,
       blockedReason,
-      missingCapabilities: missing,
-      reason: `missing capabilities: ${missing.join(", ")}`
+      missingCapabilities: productMissing,
+      missingImageCapabilities: imageMissing,
+      reason: `missing capabilities: ${productMissing.join(", ")}`
     };
   }
   const status = statusFromDimensions(dimensions, { required: c.requiredExecutors, verifierPassed });
-  return { executionId, status, blockedReason: null, missingCapabilities: [] };
+  return {
+    executionId,
+    completionTrack: c.completionTrack ?? "mixed",
+    status,
+    productStatus: status,
+    imageStatus,
+    imageBlockedReason,
+    blockedReason: null,
+    missingCapabilities: [],
+    missingImageCapabilities: imageMissing
+  };
 }
 
 /**

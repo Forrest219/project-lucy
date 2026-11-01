@@ -401,6 +401,14 @@ P1-5／P1-6 在其功能 Spec 当前决策下保持非门禁。不得借“统�
 - 受保护交付层：linux/amd64 单副本 K8s、同一候选 digest、真实客户端、隔离卷和 secrets。
 - 不满足能力时保留结果为 `blocked`／`not_run`；不得使用 mock 静默降层后仍沿用原 executionId 的通过结论。
 
+### 9.4 产品轨与镜像轨（2026-11-01）
+
+产品 E2E 的完成与镜像交付的完成分开判定。Docker 或 ARM 上的一次真实运行可以证明产品能力。linux/amd64 镜像、Kubernetes、受保护 runner 和发布 readiness 属于镜像轨，不进入产品完成分母，也不把产品用例整项打成 `blocked`。
+
+产品完成看 `J25-01` 的八个阶段，以及六类旁线里不依赖 `k8s-amd64`、`ci-runner` 的断言。这些断言在 Docker 或 ARM 上记 `passed`、`failed` 或 `not_run`。
+
+镜像完成单独列示，缺环境保持 `blocked`：`OPS-01`，`SEC-23`，`SEC-22-V05` 的集群入口，`SEM25-V22` 与 `ARV25-V12` 的客户 amd64 单副本，`HIV25` 的真实 HS2 与离线 amd64，`UPG25`／`RVC25` 的 linux/amd64 Docker、K3s、K8s 矩阵，以及 G-01、G-06。客户发布门禁 `gate:customer-release` 仍按原合同执行，不由本条改写。ARM 上的 Compose 结果不写成客户 amd64 交付通过。
+
 ---
 
 ## 核心流程（伪代码）
@@ -499,7 +507,13 @@ function reconcileCoverage(manifest, frozenCatalog):
 7. 明确真实 HS2、真实旧版升级、真实备份恢复和 Wave 0b 的证据边界，不把 blocked 写成通过；experimental／roadmap 不被写成真实查询支持通过。
 8. 实施 Plan 为每一波给出文件落点、依赖、验收、证据和退出标准；W0 可先启动，F-01／F-02 在 W0 退出前关闭后才可进入 W1，外部环境不足只阻断对应证据维度。
 
-后续 J-01 修复的运行验收则必须至少取得：同一 run 的完整 UI 管理链、真实 Agent 两次问答、typed gold、三类反作弊断言、服务端 trace、审计对账、无泄漏和可复核产物。任何一项缺失均不得记完整 J-01 通过。
+后续 J-01 修复的运行验收则必须至少取得：同一 run 的完整 UI 管理链、真实 Agent 两次问答、typed gold、三类反作弊断言、服务端 trace、审计对账、无泄漏和可复核产物。任何一项缺失均不得记完整 J-01 通过。产品运行验收在 Docker 或 ARM 上取得即可；缺镜像轨环境只阻断对应镜像维。
+
+### 10.4 产品完成与镜像完成（2026-11-01）
+
+1. 产品完成分母中的执行项，其产品 `requires` 不得包含 `k8s-amd64` 或 `ci-runner`。
+2. 同一执行项可以同时有产品维和镜像维。镜像维 `blocked` 不否决产品维。
+3. 冻结 `case-catalog.yaml` 与 lock 的分母不因本条改写。镜像能力仍可留在冻结目录原文里，产品汇总不读取这些能力来否决产品断言。
 
 ---
 

@@ -52,6 +52,7 @@ import {
   j0106CreateAccessSubjects,
   j25Names
 } from "./helpers/journey-v025";
+import { journeySchemaName, provisionJourneySchema } from "../../../scripts/e2e/lib/j01-schema.mjs";
 
 // ---------------------------------------------------------------------------------------
 // Selector inventory — every selector below was read from the current webui source.
@@ -173,6 +174,10 @@ function fixtureDb(): { host: string; port: number; name: string; readerRole: st
   return run.db;
 }
 
+function wizardDbHost(db: { host: string }): string {
+  return process.env.LUCY_E2E_DB_ADVERTISE_HOST || db.host;
+}
+
 /** The fixture reader's database password. It is typed into the connection
  *  form and never logged, asserted on or written to an artifact. */
 function readDbReaderPassword(): string {
@@ -239,17 +244,18 @@ test("J-01 step 2: connection + schema + enable-tables through the real wizard",
     const page = await context.newPage();
     const db = fixtureDb();
     const names = j25Names();
+    const schema = await provisionJourneySchema(runContext());
     // The real connection wizard: create the connection, run the real
     // connectivity probe, confirm. No page.route(), no API-write fake.
     const connection = await j0102CreateConnection(page, {
       connectionId: names.connectionId,
       engine: "postgres",
-      host: db.host,
+      host: wizardDbHost(db),
       port: String(db.port),
       database: db.name,
       username: db.readerRole,
       password: readDbReaderPassword(),
-      schema: "analytics"
+      schema
     });
     assertion(testInfo, "allow_control", connection.connectionId === names.connectionId, `the wizard created ${connection.connectionId}`);
     assertion(testInfo, "real_query", true, "the connectivity probe ran inside the real wizard");
@@ -282,7 +288,7 @@ test("J-01 step 3: measure + wiki + validate & publish (real UI + real audit)", 
     // Measure + business Wiki through the real editors.
     const semantic = await j0104MaintainBusinessContext(page, {
       connectionId: names.connectionId,
-      schema: "analytics",
+      schema: journeySchemaName(runContext().runId),
       table: "marketing_daily",
       measureName: "cac",
       measureExpression: "SUM(spend_cents) / NULLIF(SUM(new_customers), 0)",

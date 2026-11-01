@@ -87,8 +87,10 @@ describe("v0.25 审计案例并入冻结 catalog（D2 路径 A）", () => {
         assert.ok(c.requires.includes(cap), `${id} 丢失了能力 ${cap}`);
       }
     }
-    // ARV25-V12 逐 variant 额外要求客户 amd64 K8s 环境（Stage 2 专用）
-    assert.ok(byId.get("ARV25-V12").requires.includes("k8s-amd64"), "ARV25-V12 必须要求 k8s-amd64");
+    // ARV25-V12 的冻结目录仍要求客户 amd64 K8s。产品汇总不读取这一维。
+    assert.ok(byId.get("ARV25-V12").requires.includes("k8s-amd64"), "ARV25-V12 冻结目录必须保留 k8s-amd64");
+    const v12 = loadCoverage().existing.find((entry) => entry.executionId === "ARV25-V12");
+    assert.equal(v12.completionTrack, "mixed", "ARV25-V12 的客户 amd64 维在镜像轨");
   });
 
   it("覆盖清单仍登记这 24 项的归属与需求指向（清单不是第二套事实源，但归属不能丢）", () => {

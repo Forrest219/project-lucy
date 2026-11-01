@@ -35,7 +35,7 @@ import { fileURLToPath } from "node:url";
 
 import { managementCapabilities } from "./collect-management-results.mjs";
 import { fail, loadRun, parseArgv } from "./lib/common.mjs";
-import { loadCoverage } from "./lib/v025-coverage.mjs";
+import { catalogCompletionTrack, loadCoverage } from "./lib/v025-coverage.mjs";
 import { collectV025Evidence, journeyVerdictFromState } from "./lib/v025-evidence.mjs";
 import { upstreamReachable, withProvenUpstream } from "./lib/upstream-capability.mjs";
 import { createResult, writeReport, writeResult } from "./lib/v025-result.mjs";
@@ -99,6 +99,10 @@ export function writeV025Evidence(run, { coverage, report = null, capabilities =
       evidenceRefs: evidenceRefsOf(verdict.dimensions)
     });
     result.ownerBranch = verdict.ownerBranch;
+    result.completionTrack = verdict.completionTrack ?? "product";
+    result.productStatus = verdict.productStatus ?? verdict.status;
+    result.imageStatus = verdict.imageStatus ?? "not_applicable";
+    result.imageBlockedReason = verdict.imageBlockedReason ?? null;
     result.priority = verdict.priority;
     result.sourceRequirementId = verdict.sourceRequirementId;
     result.sourceSpec = verdict.sourceSpec;
@@ -108,6 +112,30 @@ export function writeV025Evidence(run, { coverage, report = null, capabilities =
     result.artifacts = verdict.artifacts;
     result.detail = verdict.detail;
     result.missingCapabilities = verdict.missingCapabilities;
+    writeResult(result, dir);
+    results.push(result);
+  }
+
+  // Image-track frozen ids are recorded, not scheduled. Their blocked state
+  // stays out of the product completion denominator.
+  for (const mapping of coverage.existing ?? []) {
+    if (catalogCompletionTrack(mapping.executionId) !== "image") continue;
+    const blockedReason = mapping.executionId.startsWith("SEC-23-") ? "delivery" : "environment";
+    const result = createResult({
+      executionId: mapping.executionId,
+      ...identity,
+      status: "blocked",
+      blockedReason,
+      sourceStatus: null,
+      executorResults: {},
+      evidenceRefs: []
+    });
+    result.ownerBranch = mapping.ownerBranch;
+    result.completionTrack = "image";
+    result.productStatus = "not_applicable";
+    result.imageStatus = "blocked";
+    result.imageBlockedReason = blockedReason;
+    result.detail = "image track; not scheduled on the product run";
     writeResult(result, dir);
     results.push(result);
   }
@@ -191,7 +219,8 @@ if (invokedDirectly) {
       dimensionEvidence,
       journeyState
     });
-    const counts = results.reduce((acc, r) => ({ ...acc, [r.status]: (acc[r.status] ?? 0) + 1 }), {});
+    const productResults = results.filter((r) => (r.completionTrack ?? "product") !== "image");
+    const counts = productResults.reduce((acc, r) => ({ ...acc, [r.status]: (acc[r.status] ?? 0) + 1 }), {});
     const status = counts.failed > 0 ? "failed" : counts.blocked > 0 ? "blocked" : counts.not_run > 0 ? "not_run" : "passed";
     process.stdout.write(`${JSON.stringify({ status, exitCode: V025_EXIT_CODES[status], out, dir, summary: counts })}\n`);
     process.exit(V025_EXIT_CODES[status]);

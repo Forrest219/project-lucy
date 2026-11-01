@@ -118,7 +118,20 @@ flowchart TB
 - 测试分层与 npm 门禁：[`../governance/test-layers-and-release-gates.md`](../governance/test-layers-and-release-gates.md)  
 - 旧主题接入路径桩：[`../runbooks/sop-semantic-upload-mcp-eval-e2e.md`](../runbooks/sop-semantic-upload-mcp-eval-e2e.md) → 现分表 `suite-semantic-onboard-mcp-eval.md`
 
-## 7. 真实用户 E2E 与客户上线门禁（Spec 20261018）
+## 7. 产品轨与镜像轨（2026-11-01）
+
+产品 E2E 只有一条用户主线 `J25-01`，深度场景归入六类旁线：`CONN`、`SEM`、`ACCESS`、`OBSERVE`、`AGENT`、`LIFECYCLE`。Docker 或 ARM 上跑通即可作为产品证据。
+
+| 既有测试集 | 产品轨归属 |
+|---|---|
+| `E2E-WEBUI` | `SEM` 的浏览器深度，以及页面、selector、术语 |
+| `E2E-ONBOARD-EVAL` | `CONN` 加 `SEM` 的主题接入；最终答案引用 `AGENT` |
+| `E2E-AGENT` | `AGENT`，承接 `UX-02`–`UX-06` |
+| `E2E-USER-JOURNEY` | `J25-01` 的补充客户端证据 |
+
+linux/amd64 镜像、Kubernetes、受保护 runner 和发布 readiness 是镜像轨。它们不阻塞产品用例是否完成，也不把缺镜像环境记成产品失败。客户发布门禁仍走 §8。
+
+## 8. 真实用户 E2E 与客户上线门禁（Spec 20261018）
 
 浏览器 contract 回归（`e2e:contract:release`，旧名 `e2e:release`）使用夹具实例，**不含**真实 Agent，不能签发客户发布。客户候选版本上线前必须由受保护 runner 执行 `npm run e2e:real:*` 三层证据并通过 `npm run gate:customer-release`；运行方式见 [`../runbooks/real-user-e2e.md`](../runbooks/real-user-e2e.md)，case 目录与分母见 `scripts/e2e/contracts/case-catalog.yaml`（冻结，`case-catalog.lock.json`）。缺能力一律 BLOCKED，不得改为 skip 或 pass。
 

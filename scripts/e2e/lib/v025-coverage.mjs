@@ -23,6 +23,7 @@ import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
 
 import { ASSERTION_TOKENS, CAPABILITIES, EXECUTOR_LETTERS, checkLock, loadCatalog, readLock } from "./catalog.mjs";
+import { isImageCapability } from "./v025-result.mjs";
 import { REPO_ROOT } from "./common.mjs";
 import { validateAgainstSchema } from "./schema.mjs";
 
@@ -32,6 +33,13 @@ export const V025_COVERAGE_SCHEMA_PATH = path.join(HERE, "..", "contracts", "v02
 export const V025_LEGACY_MAP_PATH = path.join(HERE, "..", "contracts", "v025-legacy-map.yaml");
 
 export const OWNER_BRANCHES = Object.freeze(["CONN", "SEM", "ACCESS", "OBSERVE", "AGENT", "LIFECYCLE"]);
+
+/** Frozen catalog ids whose completion is image delivery, not a product assertion. */
+export function catalogCompletionTrack(executionId) {
+  if (executionId.startsWith("OPS-01-") || executionId.startsWith("SEC-23-") || executionId === "SEC-22-V05") return "image";
+  if (executionId === "ARV25-V12") return "mixed";
+  return "product";
+}
 export const JOURNEY_ID = "J25-01";
 export const STAGE_IDS = Object.freeze([
   "J01-01", "J01-02", "J01-03", "J01-04", "J01-05", "J01-06", "J01-07", "J01-08"
@@ -289,8 +297,25 @@ export function validateCoverage(loaded, options = {}) {
   for (const id of setDiff(specIncrements, actualIncrements)) problems.push(`newScenarios missing increment ${id}`);
   for (const id of setDiff(actualIncrements, specIncrements)) problems.push(`newScenarios has unapproved increment ${id}`);
 
-  // 7. vocabulary reuse
+  // 7. vocabulary reuse, and the product/image split (2026-11-01)
   for (const s of newScenarios) {
+    const track = s.completionTrack ?? "product";
+    if (track !== "image") {
+      for (const cap of s.requires ?? []) {
+        if (isImageCapability(cap)) problems.push(`${s.executionId} product requires includes image capability ${cap}`);
+      }
+    }
+    if (track === "mixed" && !(s.imageDimensions ?? []).length) {
+      problems.push(`${s.executionId} is mixed but has no imageDimensions`);
+    }
+    if (track === "product" && (s.imageDimensions ?? []).length > 0) {
+      problems.push(`${s.executionId} is product but declares imageDimensions`);
+    }
+    for (const dim of s.imageDimensions ?? []) {
+      for (const cap of dim.requires ?? []) {
+        if (!CAPABILITIES.includes(cap)) problems.push(`${s.executionId} image dimension ${dim.name} unknown capability ${cap}`);
+      }
+    }
     for (const e of s.executors ?? []) if (!EXECUTOR_LETTERS.includes(e)) problems.push(`${s.executionId} unknown executor ${e}`);
     for (const r of s.requires ?? []) if (!CAPABILITIES.includes(r)) problems.push(`${s.executionId} unknown capability ${r}`);
     for (const a of s.assert ?? []) if (!ASSERTION_TOKENS.includes(a)) problems.push(`${s.executionId} unknown assertion token ${a}`);
@@ -298,6 +323,12 @@ export function validateCoverage(loaded, options = {}) {
     const needsGold = (s.assert ?? []).includes("typed_gold");
     if (needsGold && s.gold !== null && typeof s.gold !== "string") problems.push(`${s.executionId} gold must be a key or null`);
     if (!needsGold && s.gold !== null) problems.push(`${s.executionId} binds a gold key but does not assert typed_gold`);
+  }
+
+  for (const m of existing) {
+    const expected = catalogCompletionTrack(m.executionId);
+    const actual = m.completionTrack ?? "product";
+    if (actual !== expected) problems.push(`${m.executionId} completionTrack ${actual} != ${expected}`);
   }
 
   // 8. global uniqueness
