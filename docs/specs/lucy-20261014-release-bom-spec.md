@@ -3,14 +3,24 @@
 | Metadata | Content |
 |---|---|
 | Document name | Lucy Release Bill of Materials Spec |
-| Document type | Product / Release Governance Spec |
-| Version | v0.1 |
+| 文档类型 / Document type | Product / Release Governance Spec |
+| 版本 / Version | v0.1 |
 | Written date | 2026-10-14 |
 | Related blueprint | `docs/specs/lucy-20261014-fivetran-context-layer-competitive-analysis.md` v1.4 §3 P0-2、§8.1 |
 | Related gate | `webui/docs/64-tiered-publish-gate-spec.md` v0.2 |
 | Related spec | `docs/specs/lucy-20261014-safe-log-to-quality-eval-spec.md`（覆盖率数据来源） |
 | Related work order | `docs/plans/wo-20261014-release-bom.md` |
 | Scope | 语义 Diff 引擎、变更口径覆盖率、基线回归通过率、BOM v1 静态输出、BOM v2 延期 |
+| 状态 | **形态已合规（2026-11-01 补「闭口层级」小节与「状态」行）。本条功能合同尚未收口**——本批只做形态修复：补合同边界与状态行，不改实现、不补验收证据。实现现状：全仓未找到 BOM 实现，配套 Work Order `docs/plans/wo-20261014-release-bom.md` 仍是 v0.1 草案，无实施记录。[盘点](../reviews/2026-11-01-spec-closure-inventory.md) |
+
+## 闭口层级
+
+- 层级：功能合同
+- 本条承诺：每次发布产出一份可静态核对的 BOM，把发布内容、来源与可追溯信息固化下来，供发布治理与回归比对使用。
+- 本条出口：本 Spec 自带的 BOM v1 静态输出与结构校验；变更口径覆盖率与基线回归通过率的**计算口径**与蓝图 `lucy-20261014-fivetran-context-layer-competitive-analysis.md` v1.4 §3 P0-2、§8.1 一致。
+- 不在本条出口：BOM v2（已延期）；覆盖率与回归率的真实数据回填与真实执行；镜像构建、部署与客户交付；证据等级（归发布取证层，该层目前 0 份 Spec 承载）。
+- 上线关系：本条收口不表示可上线
+
 
 ---
 

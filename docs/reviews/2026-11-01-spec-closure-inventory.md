@@ -17,13 +17,13 @@
 
 | 档 | 份数 | 含义 | 本批建议动作 |
 |---|---|---|---|
-| **A｜已收口** | **12** | 状态行已写明收口／验收／关闭，且有收口记录 | 不动 |
+| **A｜已收口** | **12 → 17** | 状态行已写明收口／验收／关闭，且有收口记录 | B 档 5 份已于本批收口，移入 A |
 | **B｜可立即收口** | **5** | 验收证据已在手，差的只是收口记录 + 状态行 | **本批就干这 5 份** |
 | **C｜要补出口才能收** | **10** | 实现已落地，但验收矩阵没有逐条执行结果 | 先补用例/跑矩阵，再收 |
 | **D｜不具备收口条件** | **7** | 未实施 / 待评审 / 已被取代 / 分析对照类 | 不收 |
-| **E｜发布取证层** | **0** | **结构性空白** | PM 拍板（§五） |
+| **E｜发布取证层** | **0 → 2** | 结构性空白。形态搭车后已**声明** 2 份（`lucy-customer-amd64-offline-delivery-spec`、`lucy-202608-08-image-arch-and-ktx-baseline-fix`），但**均未执行** | 仍需 PM 拍板宿主与出口矩阵（§五） |
 
-A + B = **17** 份涉及功能合同层；C 档 10 份是工作量主体；D 档里另有 **42 份存量 Spec 完全没有「闭口层级」小节**（baseline 豁免 = 形态债，见 §四）。
+A + B = **17** 份涉及功能合同层（B 档 5 份已于 2026-11-01 收口，故 A 档由 12 增至 **17**）；C 档 10 份是工作量主体；另有 **32 份存量 Spec 仍没有「闭口层级」小节**（baseline 豁免 = 形态债；本批已修掉 10 份——B1 的 skill-owner 1 份 ＋ 形态 9 份，见 §三）。
 
 > ### ⚠️ 2026-11-01 13:57 修订：B 档由 3 份增至 5 份
 >
@@ -147,33 +147,41 @@ A + B = **17** 份涉及功能合同层；C 档 10 份是工作量主体；D 档
    `ceo-one-report-*`（4 份）、`lucy-202608-access-governance-gap-analysis`、`lucy-20261014-fivetran-context-layer-competitive-analysis`、`lucy-20261026-warehouse-table-scan-capability-analysis`、`lucy-platform-goal-checklist`、`lucy-aicon-online-capability-scorecard`、`lucy-20261018-cloudflare-os-benchmark`、`lucy-202608-upgrade-execution-control`、`lucy-202608-reliable-delivery-upgrade-spec`、`lucy-r1-controlled-data-service-plan`、`starrocks-r1-support-plan`、`api-staging-admission-spec`（治理口径已冻结、暂不开发）等。
 2. **是真功能 Spec，形态债该补**（补「闭口层级」小节 → baseline 条目变 STALE → 删掉，基线只减不增）：
    `lucy-20261014-release-bom-spec`、`lucy-20261014-safe-log-to-quality-eval-spec`、`lucy-20261014-concept-dictionary-spec`、`lucy-mcp-execution-runtime-ack-debug-spec`、`lucy-poc-demo-isolation-spec`、`lucy-customer-amd64-offline-delivery-spec`、`lucy-skills-mcp-spec`、`lucy-202608-08-image-arch-and-ktx-baseline-fix`、`lucy-202608-05-demo-builder-arm-default-spec`。
-   → **这批适合搭车收口**：改小节成本极低，基线净减 9 条。
+   → **本批已做（2026-11-01）**：9 份全部补上「闭口层级」小节 ＋「状态」行。
 
-> ⚠️ 这 9 份里**有几份本身还没实施完**（如 `lucy-202608-08-image-arch-and-ktx-baseline-fix`）。补「闭口层级」小节只解决**形态**门禁，不代表它们已收口——**两件事必须分开写**。建议收口记录里同时写清「形态已合规 / 功能合同未收口」两层状态，不要用形态合规冒充功能收口。
+> ⚠️ **形态已合规 ≠ 功能合同已收口。** 这 9 份**没有一份**有逐条验收落点表或收口记录，所以状态行一律写成「**形态已合规；本条功能合同尚未收口**」，并逐份注明实现现状（如 release-bom 与 concept-dictionary 全仓未找到实现；skills-mcp 的实现目录 `lucy-skills/` 尚未建立；customer-amd64 与 image-arch 的门禁脚本在库但发布取证层**尚未执行**）。**不用形态合规冒充功能收口。**
+>
+> **层级判定**：`lucy-customer-amd64-offline-delivery-spec` 与 `lucy-202608-08-image-arch-and-ktx-baseline-fix` 判为**发布取证层**——它们的出口是真实构建上的 ELF 门禁与 Release CI 基线核对，按 `DEVELOPMENT.md:75–78` 属于「在这次跑到的系统路径上」那一层；其余 7 份为**功能合同层**。
+>
+> **基线净减 17 条，不是 9 条**：9 份的 `close-layer` 豁免各减 1；其中 8 份顺带补了「状态」行（`skills-mcp` 原本靠正文里的「当前状态」字样偶然满足 metadata 规则），`metadata` 豁免再减 8。另有 4 份英文表头的 Spec（`Document type` / `Version`）不满足 metadata 规则的中文键要求，已改为双语标签 `文档类型 / Document type`、`版本 / Version`。**形态基线 898 → 881，close-layer 41 → 32。**
 
 ---
 
 ## 四、基线账（形态门禁）
 
-| 项 | 现状 |
-|---|---|
-| `docs/governance/spec-plan-doc-baseline.json` | `close-layer` 条目 **42** 条，全在 `docs/specs/`；其余规则合计 900 条豁免 |
-| 实际有「闭口层级」的 Spec | **18**（60 − 42 对账一致，无遗漏、无 STALE） |
-| 本批若收 B1（skill-owner） | 补小节 → 基线减 1 条 → **42 → 41** |
-| 本批若连带补 §三 第 2 类 9 份 | 基线再减 9 → **42 → 32** |
-| 纪律 | **基线只减不增**；删条目用 `JSON.stringify(b,null,2)+"\n"` 写回，逐字节无格式漂移 |
+| 项 | 批次开始 | 本批之后 |
+|---|---|---|
+| 形态基线总条目 | **900** | **881**（净减 19） |
+| 其中 `close-layer` 条目 | **42** | **32**（净减 10：B1 减 1，形态 9 份减 9） |
+| 其中 `metadata` 条目 | 84 | **76**（净减 8：形态 9 份中 8 份补了「状态」行） |
+| 实际有「闭口层级」的 Spec | **18** | **28**（18 ＋ B1 的 skill-owner 1 ＋ 形态 9 份），与 60 − 32 对账一致，无遗漏、无 STALE |
+| 纪律 | — | **基线只减不增**；删条目用 `JSON.stringify(b,null,2)+"\n"` 写回，逐字节无格式漂移（本次 diff 全部为删除行，无格式重排） |
+
+> 本批 19 条净减的来源：B1 skill-owner（`close-layer` 1 ＋ `index` 1）＝ 2；形态 9 份（`close-layer` 9 ＋ `metadata` 8）＝ 17。**合计 19。全程未新增任何豁免条目。**
 
 ---
 
-## 五、结构性缺口：发布取证层 **0 份**（需 PM 拍板）
+## 五、结构性缺口：发布取证层**仍然没有人负责**（需 PM 拍板）
 
-18 份声明了闭口层级，**全部是「功能合同」层，0 份「发布取证」层**。
+> **2026-11-01 形态搭车后的修正**：盘点时写作「0 份」。形态搭车给两份**交付／构建契约类** Spec 补了「闭口层级」，它们按出口性质判为**发布取证层**——`lucy-customer-amd64-offline-delivery-spec`（出包前 G1–G4 必跑，含 ELF 二进制门禁）与 `lucy-202608-08-image-arch-and-ktx-baseline-fix`（镜像架构一致性 ＋ Release CI KTX 版本基线）。**但这两份都只是「声明了层级」，发布取证本身尚未执行。**
 
-后果很具体：几乎每份已收口 Spec 的「不在本条出口」都把同一批项推给发布取证——客户镜像、Helm 部署、远端 CI 绿灯、整库旅程、Agent 路径、跨模块故障演练、证据等级（客户环境）。**那一层现在是空的**，所以「本条收口不表示可上线」这句话目前没有任何 Spec 承载它。
+所以缺口没有消失，只是从「**没有这一层**」变成「**这一层有 2 份声明，但一份都没跑过，且都不是本轮已收口功能的宿主**」。
 
-按 `DEVELOPMENT.md:80–84`，上线需要三件事同时成立：① 各模块按自己的合同收口（部分达成）② 兜底跑在目标拓扑上（**无人负责**）③ 证据等级够（**无人负责**）。
+后果很具体：几乎每份已收口 Spec 的「不在本条出口」都把同一批项推给发布取证——客户镜像、Helm 部署、远端 CI 绿灯、整库旅程、Agent 路径、跨模块故障演练、证据等级（客户环境）。**「本条收口不表示可上线」这句话目前仍没有承载它的已执行 Spec。**
 
-**建议**：下一批立**第一条「发布取证」层 Spec**，宿主选已收功能合同且范围可控的（如 `lucy-20261030-publish-workbench-three-column` 或 `lucy-20261030-sqlserver-table-identity`），出口矩阵覆盖：amd64 镜像构建 → Helm 部署 → 健康检查 → 一次真实端到端问询 → 证据等级登记。
+按 `DEVELOPMENT.md:80–84`，上线需要三件事同时成立：① 各模块按自己的合同收口（本批后 17 份达成）② 兜底跑在目标拓扑上（**无人负责**）③ 证据等级够（**无人负责**）。
+
+**建议**：下一批立**第一条「发布取证」层 Spec**，宿主选已收功能合同且范围可控的（如 `lucy-20261030-publish-workbench-three-column` 或 `lucy-20261030-sqlserver-table-identity`），出口矩阵覆盖：amd64 镜像构建 → Helm 部署 → 健康检查 → 一次真实端到端问询 → 证据等级登记。它与上两份的区别是：**上两份是「交付契约自带的门禁」，新这份是「已收口功能合同在目标拓扑上的兜底」**——后者才是「上线」这个词真正缺的那一块。
 
 **但这一条要 PM 先拍板两件事**：
 1. 发布取证 Spec 的**宿主选哪份**（= 决定第一条要覆盖的产品面）。
