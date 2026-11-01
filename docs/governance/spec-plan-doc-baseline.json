@@ -2614,10 +2614,6 @@
     },
     {
       "file": "docs/specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md",
-      "rule": "close-layer"
-    },
-    {
-      "file": "docs/specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md",
       "rule": "filename"
     },
     {
