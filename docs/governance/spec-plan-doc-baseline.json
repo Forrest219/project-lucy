@@ -2745,10 +2745,6 @@
       "rule": "close-layer"
     },
     {
-      "file": "docs/specs/lucy-20261029-url-driven-input-ime-composition-spec.md",
-      "rule": "close-layer"
-    },
-    {
       "file": "docs/specs/lucy-aicon-online-capability-scorecard.md",
       "rule": "close-layer"
     },

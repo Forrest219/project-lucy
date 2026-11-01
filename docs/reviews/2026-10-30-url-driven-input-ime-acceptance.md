@@ -29,3 +29,15 @@
 ## 未纳入
 
 远端 CI job 还没有跑。镜像、部署、客户交付不在本次提交里。
+
+---
+
+## 2026-11-01 更正（功能合同收口时）
+
+本记录是 2026-10-30 的**当时事实**，不回改上文；但收口时发现三处已成为过期登记，在此更正：
+
+1. **「原始输出在 `inbox/ime-composition/probe/`，不入库」** —— 收口时改为**入库一份可复查副本**于 `webui/scripts/evidence/2026-10-30-url-driven-input-ime-probe/`（含 `probe/` 三份原始输出与静态门禁的改造前／后基线，附来源与复现说明）。理由：探针脚本的默认输出目录 `inbox/` 被 `.gitignore` 排除，原始证据若只留在工作区，收口后第三方无法复查。探针脚本本身早已随实现入库（`webui/scripts/ime-composition-probe.mjs`，commit `f4630d57`，此后未改），所以「脚本 + 输出」现在都在仓内。
+2. **「全量 `npm test` 4640/4641，失败文件每次不同」** —— 该既有 flake **仍在**，2026-10-30 当时的判断（「与本次前端改动无交集」）经 2026-11-01 复测**成立**：收口时全量跑到 425 个测试文件 / 5173 条用例，其中 `server/__tests__/api.create-connection.test.ts` 的 2 条偶发失败，单独复跑 3 次有 2 次全绿。根因已定位（见 [收口记录](2026-11-01-url-driven-input-ime-composition-closure.md)「残余」一节）：`beforeEach` 的 `vi.clearAllMocks()` **不清 once 实现队列**，加上 `vi.resetModules()` 之后「测试与服务器是否共享同一个 mocked 模块实例」是竞态的。**与本条的前端改动无交集**——本条不碰任何服务端代码。SC-20 的两个既有 URL 断言哨兵（`audit.test.tsx`、`admin-audit-turns.test.tsx`）均通过。
+3. **「`lint:spec-docs` 仍被另一会话的 CI restoration 文档挡住」** —— 已由 commit `09701392` 修复，该门禁现为 exit 0。
+
+另外，本次收口补齐了 SC-01–SC-13 的**逐处**自动化断言（收口前只有 Audit 的 2 处有逐处行为断言，其余 11 处的条件 ②③无自动化覆盖）：新增 `webui/src/__tests__/url-driven-input-mirror-contract.test.tsx`，扩写 `webui/src/__tests__/admin-audit-url-mirror.test.tsx`。逐条落点见 Spec §6.6，收口结论见 [收口记录](2026-11-01-url-driven-input-ime-composition-closure.md)。

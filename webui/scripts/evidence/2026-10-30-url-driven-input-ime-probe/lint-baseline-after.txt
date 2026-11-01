@@ -1,0 +1,7 @@
+# lint:url-driven-input 基线（改造后）
+# 生成时间: 2026-10-30 01:23:34 CST
+# 命令: node webui/scripts/lint-url-driven-input.mjs
+# 期望: 0 处（Spec §6.2 SC-14 改造后）
+
+URL-driven input lint passed (156 files scanned).
+exit=0

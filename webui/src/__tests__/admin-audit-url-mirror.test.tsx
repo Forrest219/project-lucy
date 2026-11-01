@@ -303,6 +303,97 @@ describe("Audit 局部状态镜像（Spec §5.2 / §5.3）", () => {
   });
 });
 
+// ─── SC-02–SC-07 逐处：Audit 的其余 6 处 ──────────────────────────────────
+//
+// 上面已逐条断言 `user`（SC-01）的深链初值、URL 立即等于原文、POP 与「清除筛选」
+// 归零。Audit 还有 6 处 URL 驱动受控输入框，本块逐处补齐 Spec §6.1 的
+// 条件 1–3（value 源非 URL 派生由静态门禁 SC-14 打假）。
+//
+// 条件 1（value 不取自 URL 派生）对全部 13 处由 `npm run lint:url-driven-input`
+// 逐文件打假；本块只断言能在 jsdom 里观察到的条件 2（URL 立即等于原文，尾空格
+// 保留）与条件 3（深链初值）。条件 4（POP）与条件 5（清除筛选）共用同一份
+// `useUrlMirroredField` 实现，其行为由 `user` 的用例证明。
+
+const AUDIT_MIRROR_CASES = [
+  { id: "unified", label: "统一搜索", param: "turnSearch", view: "turns" },
+  { id: "tool", label: "按工具名筛选", param: "tool", view: "calls" },
+  { id: "sessionId", label: "按 Session ID 筛选", param: "sessionId", view: "calls" },
+  { id: "clientIp", label: "访问 IP", param: "clientIp", view: "calls" },
+  { id: "deviceName", label: "最近设备名", param: "deviceName", view: "calls" },
+  { id: "tableSearch", label: "按表名筛选", param: "tableSearch", view: "turns" }
+] as const;
+
+describe("Audit 局部状态镜像：逐处（SC-02–SC-07）", () => {
+  for (const testCase of AUDIT_MIRROR_CASES) {
+    it(`${testCase.id}：深链初值显示该值；键入后 URL 立即等于原文并保留尾空格`, async () => {
+      stubEmptyAuditApis();
+      const router = createControlledRouter(`?view=${testCase.view}&${testCase.param}=seed`);
+      renderAuditControlled(router);
+
+      // 工具名 / Session ID / 访问 IP / 最近设备名 / 表名都在「高级筛选」里。
+      fireEvent.click(screen.getByTestId("audit-advanced-filters-toggle"));
+
+      const input = (await screen.findByLabelText(testCase.label)) as HTMLInputElement;
+
+      // 条件 3：深链打开时输入框显示 URL 里的值。
+      expect(input).toHaveValue("seed");
+
+      // 条件 2：键入后输入框保留原文（含尾空格）。
+      fireEvent.change(input, { target: { value: "abc " } });
+      expect(input).toHaveValue("abc ");
+
+      // 条件 2：URL 对应 param 立即等于原文（D4 未采用防抖）。
+      act(() => router.commit());
+      expect(new URLSearchParams(router.search).get(testCase.param)).toBe("abc ");
+    });
+  }
+});
+
+describe("Audit 局部状态镜像：「清除筛选」一次归零（SC-01 条件 5）", () => {
+  it("turns 视图：user / 统一搜索 / 表名 三处一起归零", async () => {
+    stubEmptyAuditApis();
+    const router = createControlledRouter("?user=u1&key=k1&tableSearch=ts1");
+    renderAuditControlled(router);
+    fireEvent.click(screen.getByTestId("audit-advanced-filters-toggle"));
+
+    expect(userInput()).toHaveValue("u1");
+    expect(unifiedInput()).toHaveValue("k1");
+    expect(await screen.findByLabelText("按表名筛选")).toHaveValue("ts1");
+
+    fireEvent.click(screen.getByTestId("audit-clear-filters"));
+
+    // 清除筛选会收起高级筛选；重新展开后，三处都必须已经是空的。
+    await waitFor(() => expect(userInput()).toHaveValue(""));
+    fireEvent.click(screen.getByTestId("audit-advanced-filters-toggle"));
+    expect(unifiedInput()).toHaveValue("");
+    expect(await screen.findByLabelText("按表名筛选")).toHaveValue("");
+  });
+
+  it("calls 视图：user / 工具名 / Session ID / 访问 IP / 最近设备名 五处一起归零", async () => {
+    stubEmptyAuditApis();
+    const router = createControlledRouter(
+      "?view=calls&user=u1&tool=t1&sessionId=s1&clientIp=1.2.3.4&deviceName=d1"
+    );
+    renderAuditControlled(router);
+    fireEvent.click(screen.getByTestId("audit-advanced-filters-toggle"));
+
+    expect(userInput()).toHaveValue("u1");
+    expect(await screen.findByLabelText("按工具名筛选")).toHaveValue("t1");
+    expect(screen.getByLabelText("按 Session ID 筛选")).toHaveValue("s1");
+    expect(screen.getByLabelText("访问 IP")).toHaveValue("1.2.3.4");
+    expect(screen.getByLabelText("最近设备名")).toHaveValue("d1");
+
+    fireEvent.click(screen.getByTestId("audit-clear-filters"));
+
+    await waitFor(() => expect(userInput()).toHaveValue(""));
+    fireEvent.click(screen.getByTestId("audit-advanced-filters-toggle"));
+    expect(await screen.findByLabelText("按工具名筛选")).toHaveValue("");
+    expect(screen.getByLabelText("按 Session ID 筛选")).toHaveValue("");
+    expect(screen.getByLabelText("访问 IP")).toHaveValue("");
+    expect(screen.getByLabelText("最近设备名")).toHaveValue("");
+  });
+});
+
 describe("Audit 局部状态镜像：请求消费点", () => {
   it("统一搜索的末尾空格不会进入请求参数", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {

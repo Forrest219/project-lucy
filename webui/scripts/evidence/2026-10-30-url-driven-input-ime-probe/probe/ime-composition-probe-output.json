@@ -1,0 +1,1012 @@
+{
+  "spec": "docs/specs/lucy-20261029-url-driven-input-ime-composition-spec.md §6.3 (SC-17)",
+  "evidenceKind": "real-browser (system Chrome + CDP Input.imeSetComposition)",
+  "chromeVersion": "Chrome/156.0.8078.73",
+  "vitePort": 5199,
+  "cdpPort": 9333,
+  "compositionSequence": [
+    "zhong",
+    "zhongwen",
+    "中文"
+  ],
+  "notes": [
+    "临时入口已生成：ime-probe.html + src/ime-probe-main.tsx（跑完删除）",
+    "vite dev server: http://127.0.0.1:5199/ime-probe.html",
+    "Chrome: Chrome/156.0.8078.73"
+  ],
+  "results": [
+    {
+      "id": "audit-user",
+      "page": "Audit",
+      "route": "/admin/audit?view=turns",
+      "selector": "[aria-label=\"按 Agent 名称或 ID 筛选\"]",
+      "urlParam": "user",
+      "expected": "pass",
+      "compositionStarts": 1,
+      "finalValue": "中文",
+      "valueWrites": 0,
+      "totalValueWrites": 0,
+      "defaultValueWrites": 3,
+      "totalDefaultValueWrites": 3,
+      "focusKept": true,
+      "activeElementLabel": "按 Agent 名称或 ID 筛选",
+      "trace": [
+        {
+          "t": "compositionstart",
+          "el": "按 Agent 名称或 ID 筛选",
+          "value": ""
+        },
+        {
+          "t": "compositionupdate",
+          "el": "按 Agent 名称或 ID 筛选",
+          "value": "",
+          "data": "zhong"
+        },
+        {
+          "t": "input",
+          "el": "按 Agent 名称或 ID 筛选",
+          "value": "zhong",
+          "isComposing": true,
+          "data": "zhong"
+        },
+        {
+          "t": "compositionupdate",
+          "el": "按 Agent 名称或 ID 筛选",
+          "value": "zhong",
+          "data": "zhongwen"
+        },
+        {
+          "t": "input",
+          "el": "按 Agent 名称或 ID 筛选",
+          "value": "zhongwen",
+          "isComposing": true,
+          "data": "zhongwen"
+        },
+        {
+          "t": "compositionupdate",
+          "el": "按 Agent 名称或 ID 筛选",
+          "value": "zhongwen",
+          "data": "中文"
+        },
+        {
+          "t": "input",
+          "el": "按 Agent 名称或 ID 筛选",
+          "value": "中文",
+          "isComposing": true,
+          "data": "中文"
+        }
+      ],
+      "ok": true
+    },
+    {
+      "id": "audit-unified-search",
+      "page": "Audit",
+      "route": "/admin/audit?view=turns",
+      "selector": "[data-testid=\"audit-key-search\"]",
+      "urlParam": "turnSearch",
+      "expected": "pass",
+      "compositionStarts": 1,
+      "finalValue": "中文",
+      "valueWrites": 0,
+      "totalValueWrites": 0,
+      "defaultValueWrites": 3,
+      "totalDefaultValueWrites": 3,
+      "focusKept": true,
+      "activeElementLabel": "统一搜索",
+      "trace": [
+        {
+          "t": "compositionend",
+          "el": "按 Agent 名称或 ID 筛选",
+          "value": "中文"
+        },
+        {
+          "t": "compositionstart",
+          "el": "统一搜索",
+          "value": ""
+        },
+        {
+          "t": "compositionupdate",
+          "el": "统一搜索",
+          "value": "",
+          "data": "zhong"
+        },
+        {
+          "t": "input",
+          "el": "统一搜索",
+          "value": "zhong",
+          "isComposing": true,
+          "data": "zhong"
+        },
+        {
+          "t": "compositionupdate",
+          "el": "统一搜索",
+          "value": "zhong",
+          "data": "zhongwen"
+        },
+        {
+          "t": "input",
+          "el": "统一搜索",
+          "value": "zhongwen",
+          "isComposing": true,
+          "data": "zhongwen"
+        },
+        {
+          "t": "compositionupdate",
+          "el": "统一搜索",
+          "value": "zhongwen",
+          "data": "中文"
+        },
+        {
+          "t": "input",
+          "el": "统一搜索",
+          "value": "中文",
+          "isComposing": true,
+          "data": "中文"
+        }
+      ],
+      "ok": true
+    },
+    {
+      "id": "audit-tool",
+      "page": "Audit",
+      "route": "/admin/audit?view=calls",
+      "selector": "[aria-label=\"按工具名筛选\"]",
+      "urlParam": "tool",
+      "expected": "pass",
+      "compositionStarts": 1,
+      "finalValue": "中文",
+      "valueWrites": 0,
+      "totalValueWrites": 0,
+      "defaultValueWrites": 3,
+      "totalDefaultValueWrites": 3,
+      "focusKept": true,
+      "activeElementLabel": "按工具名筛选",
+      "trace": [
+        {
+          "t": "compositionstart",
+          "el": "按工具名筛选",
+          "value": ""
+        },
+        {
+          "t": "compositionupdate",
+          "el": "按工具名筛选",
+          "value": "",
+          "data": "zhong"
+        },
+        {
+          "t": "input",
+          "el": "按工具名筛选",
+          "value": "zhong",
+          "isComposing": true,
+          "data": "zhong"
+        },
+        {
+          "t": "compositionupdate",
+          "el": "按工具名筛选",
+          "value": "zhong",
+          "data": "zhongwen"
+        },
+        {
+          "t": "input",
+          "el": "按工具名筛选",
+          "value": "zhongwen",
+          "isComposing": true,
+          "data": "zhongwen"
+        },
+        {
+          "t": "compositionupdate",
+          "el": "按工具名筛选",
+          "value": "zhongwen",
+          "data": "中文"
+        },
+        {
+          "t": "input",
+          "el": "按工具名筛选",
+          "value": "中文",
+          "isComposing": true,
+          "data": "中文"
+        }
+      ],
+      "ok": true
+    },
+    {
+      "id": "audit-session-id",
+      "page": "Audit",
+      "route": "/admin/audit?view=calls",
+      "selector": "[aria-label=\"按 Session ID 筛选\"]",
+      "urlParam": "sessionId",
+      "expected": "pass",
+      "compositionStarts": 1,
+      "finalValue": "中文",
+      "valueWrites": 0,
+      "totalValueWrites": 0,
+      "defaultValueWrites": 3,
+      "totalDefaultValueWrites": 3,
+      "focusKept": true,
+      "activeElementLabel": "按 Session ID 筛选",
+      "trace": [
+        {
+          "t": "compositionend",
+          "el": "按工具名筛选",
+          "value": "中文"
+        },
+        {
+          "t": "compositionstart",
+          "el": "按 Session ID 筛选",
+          "value": ""
+        },
+        {
+          "t": "compositionupdate",
+          "el": "按 Session ID 筛选",
+          "value": "",
+          "data": "zhong"
+        },
+        {
+          "t": "input",
+          "el": "按 Session ID 筛选",
+          "value": "zhong",
+          "isComposing": true,
+          "data": "zhong"
+        },
+        {
+          "t": "compositionupdate",
+          "el": "按 Session ID 筛选",
+          "value": "zhong",
+          "data": "zhongwen"
+        },
+        {
+          "t": "input",
+          "el": "按 Session ID 筛选",
+          "value": "zhongwen",
+          "isComposing": true,
+          "data": "zhongwen"
+        },
+        {
+          "t": "compositionupdate",
+          "el": "按 Session ID 筛选",
+          "value": "zhongwen",
+          "data": "中文"
+        },
+        {
+          "t": "input",
+          "el": "按 Session ID 筛选",
+          "value": "中文",
+          "isComposing": true,
+          "data": "中文"
+        }
+      ],
+      "ok": true
+    },
+    {
+      "id": "audit-client-ip",
+      "page": "Audit",
+      "route": "/admin/audit?view=calls",
+      "selector": "[aria-label=\"访问 IP\"]",
+      "urlParam": "clientIp",
+      "expected": "pass",
+      "compositionStarts": 1,
+      "finalValue": "中文",
+      "valueWrites": 0,
+      "totalValueWrites": 0,
+      "defaultValueWrites": 3,
+      "totalDefaultValueWrites": 3,
+      "focusKept": true,
+      "activeElementLabel": "访问 IP",
+      "trace": [
+        {
+          "t": "compositionend",
+          "el": "按 Session ID 筛选",
+          "value": "中文"
+        },
+        {
+          "t": "compositionstart",
+          "el": "访问 IP",
+          "value": ""
+        },
+        {
+          "t": "compositionupdate",
+          "el": "访问 IP",
+          "value": "",
+          "data": "zhong"
+        },
+        {
+          "t": "input",
+          "el": "访问 IP",
+          "value": "zhong",
+          "isComposing": true,
+          "data": "zhong"
+        },
+        {
+          "t": "compositionupdate",
+          "el": "访问 IP",
+          "value": "zhong",
+          "data": "zhongwen"
+        },
+        {
+          "t": "input",
+          "el": "访问 IP",
+          "value": "zhongwen",
+          "isComposing": true,
+          "data": "zhongwen"
+        },
+        {
+          "t": "compositionupdate",
+          "el": "访问 IP",
+          "value": "zhongwen",
+          "data": "中文"
+        },
+        {
+          "t": "input",
+          "el": "访问 IP",
+          "value": "中文",
+          "isComposing": true,
+          "data": "中文"
+        }
+      ],
+      "ok": true
+    },
+    {
+      "id": "audit-device-name",
+      "page": "Audit",
+      "route": "/admin/audit?view=calls",
+      "selector": "[aria-label=\"最近设备名\"]",
+      "urlParam": "deviceName",
+      "expected": "pass",
+      "compositionStarts": 1,
+      "finalValue": "中文",
+      "valueWrites": 0,
+      "totalValueWrites": 0,
+      "defaultValueWrites": 3,
+      "totalDefaultValueWrites": 3,
+      "focusKept": true,
+      "activeElementLabel": "最近设备名",
+      "trace": [
+        {
+          "t": "compositionend",
+          "el": "访问 IP",
+          "value": "中文"
+        },
+        {
+          "t": "compositionstart",
+          "el": "最近设备名",
+          "value": ""
+        },
+        {
+          "t": "compositionupdate",
+          "el": "最近设备名",
+          "value": "",
+          "data": "zhong"
+        },
+        {
+          "t": "input",
+          "el": "最近设备名",
+          "value": "zhong",
+          "isComposing": true,
+          "data": "zhong"
+        },
+        {
+          "t": "compositionupdate",
+          "el": "最近设备名",
+          "value": "zhong",
+          "data": "zhongwen"
+        },
+        {
+          "t": "input",
+          "el": "最近设备名",
+          "value": "zhongwen",
+          "isComposing": true,
+          "data": "zhongwen"
+        },
+        {
+          "t": "compositionupdate",
+          "el": "最近设备名",
+          "value": "zhongwen",
+          "data": "中文"
+        },
+        {
+          "t": "input",
+          "el": "最近设备名",
+          "value": "中文",
+          "isComposing": true,
+          "data": "中文"
+        }
+      ],
+      "ok": true
+    },
+    {
+      "id": "audit-table-search",
+      "page": "Audit",
+      "route": "/admin/audit?view=turns",
+      "selector": "[aria-label=\"按表名筛选\"]",
+      "urlParam": "tableSearch",
+      "expected": "pass",
+      "compositionStarts": 1,
+      "finalValue": "中文",
+      "valueWrites": 0,
+      "totalValueWrites": 0,
+      "defaultValueWrites": 3,
+      "totalDefaultValueWrites": 3,
+      "focusKept": true,
+      "activeElementLabel": "按表名筛选",
+      "trace": [
+        {
+          "t": "compositionstart",
+          "el": "按表名筛选",
+          "value": ""
+        },
+        {
+          "t": "compositionupdate",
+          "el": "按表名筛选",
+          "value": "",
+          "data": "zhong"
+        },
+        {
+          "t": "input",
+          "el": "按表名筛选",
+          "value": "zhong",
+          "isComposing": true,
+          "data": "zhong"
+        },
+        {
+          "t": "compositionupdate",
+          "el": "按表名筛选",
+          "value": "zhong",
+          "data": "zhongwen"
+        },
+        {
+          "t": "input",
+          "el": "按表名筛选",
+          "value": "zhongwen",
+          "isComposing": true,
+          "data": "zhongwen"
+        },
+        {
+          "t": "compositionupdate",
+          "el": "按表名筛选",
+          "value": "zhongwen",
+          "data": "中文"
+        },
+        {
+          "t": "input",
+          "el": "按表名筛选",
+          "value": "中文",
+          "isComposing": true,
+          "data": "中文"
+        }
+      ],
+      "ok": true
+    },
+    {
+      "id": "config-audit-target-id",
+      "page": "ConfigAudit",
+      "route": "/admin/config-audit",
+      "selector": "[aria-label=\"目标 ID\"]",
+      "urlParam": "targetId",
+      "expected": "pass",
+      "compositionStarts": 1,
+      "finalValue": "中文",
+      "valueWrites": 0,
+      "totalValueWrites": 0,
+      "defaultValueWrites": 3,
+      "totalDefaultValueWrites": 3,
+      "focusKept": true,
+      "activeElementLabel": "目标 ID",
+      "trace": [
+        {
+          "t": "compositionstart",
+          "el": "目标 ID",
+          "value": ""
+        },
+        {
+          "t": "compositionupdate",
+          "el": "目标 ID",
+          "value": "",
+          "data": "zhong"
+        },
+        {
+          "t": "input",
+          "el": "目标 ID",
+          "value": "zhong",
+          "isComposing": true,
+          "data": "zhong"
+        },
+        {
+          "t": "compositionupdate",
+          "el": "目标 ID",
+          "value": "zhong",
+          "data": "zhongwen"
+        },
+        {
+          "t": "input",
+          "el": "目标 ID",
+          "value": "zhongwen",
+          "isComposing": true,
+          "data": "zhongwen"
+        },
+        {
+          "t": "compositionupdate",
+          "el": "目标 ID",
+          "value": "zhongwen",
+          "data": "中文"
+        },
+        {
+          "t": "input",
+          "el": "目标 ID",
+          "value": "中文",
+          "isComposing": true,
+          "data": "中文"
+        }
+      ],
+      "ok": true
+    },
+    {
+      "id": "config-audit-file-path",
+      "page": "ConfigAudit",
+      "route": "/admin/config-audit",
+      "selector": "[aria-label=\"文件路径\"]",
+      "urlParam": "filePath",
+      "expected": "pass",
+      "compositionStarts": 1,
+      "finalValue": "中文",
+      "valueWrites": 0,
+      "totalValueWrites": 0,
+      "defaultValueWrites": 3,
+      "totalDefaultValueWrites": 3,
+      "focusKept": true,
+      "activeElementLabel": "文件路径",
+      "trace": [
+        {
+          "t": "compositionend",
+          "el": "目标 ID",
+          "value": "中文"
+        },
+        {
+          "t": "compositionstart",
+          "el": "文件路径",
+          "value": ""
+        },
+        {
+          "t": "compositionupdate",
+          "el": "文件路径",
+          "value": "",
+          "data": "zhong"
+        },
+        {
+          "t": "input",
+          "el": "文件路径",
+          "value": "zhong",
+          "isComposing": true,
+          "data": "zhong"
+        },
+        {
+          "t": "compositionupdate",
+          "el": "文件路径",
+          "value": "zhong",
+          "data": "zhongwen"
+        },
+        {
+          "t": "input",
+          "el": "文件路径",
+          "value": "zhongwen",
+          "isComposing": true,
+          "data": "zhongwen"
+        },
+        {
+          "t": "compositionupdate",
+          "el": "文件路径",
+          "value": "zhongwen",
+          "data": "中文"
+        },
+        {
+          "t": "input",
+          "el": "文件路径",
+          "value": "中文",
+          "isComposing": true,
+          "data": "中文"
+        }
+      ],
+      "ok": true
+    },
+    {
+      "id": "config-audit-source",
+      "page": "ConfigAudit",
+      "route": "/admin/config-audit",
+      "selector": "[aria-label=\"来源\"]",
+      "urlParam": "source",
+      "expected": "pass",
+      "compositionStarts": 1,
+      "finalValue": "中文",
+      "valueWrites": 0,
+      "totalValueWrites": 0,
+      "defaultValueWrites": 3,
+      "totalDefaultValueWrites": 3,
+      "focusKept": true,
+      "activeElementLabel": "来源",
+      "trace": [
+        {
+          "t": "compositionend",
+          "el": "文件路径",
+          "value": "中文"
+        },
+        {
+          "t": "compositionstart",
+          "el": "来源",
+          "value": ""
+        },
+        {
+          "t": "compositionupdate",
+          "el": "来源",
+          "value": "",
+          "data": "zhong"
+        },
+        {
+          "t": "input",
+          "el": "来源",
+          "value": "zhong",
+          "isComposing": true,
+          "data": "zhong"
+        },
+        {
+          "t": "compositionupdate",
+          "el": "来源",
+          "value": "zhong",
+          "data": "zhongwen"
+        },
+        {
+          "t": "input",
+          "el": "来源",
+          "value": "zhongwen",
+          "isComposing": true,
+          "data": "zhongwen"
+        },
+        {
+          "t": "compositionupdate",
+          "el": "来源",
+          "value": "zhongwen",
+          "data": "中文"
+        },
+        {
+          "t": "input",
+          "el": "来源",
+          "value": "中文",
+          "isComposing": true,
+          "data": "中文"
+        }
+      ],
+      "ok": true
+    },
+    {
+      "id": "tokens-search",
+      "page": "Tokens",
+      "route": "/admin/tokens",
+      "selector": "[aria-label=\"搜索 Token\"]",
+      "urlParam": "search",
+      "expected": "pass",
+      "compositionStarts": 1,
+      "finalValue": "中文",
+      "valueWrites": 0,
+      "totalValueWrites": 0,
+      "defaultValueWrites": 3,
+      "totalDefaultValueWrites": 3,
+      "focusKept": true,
+      "activeElementLabel": "搜索 Token",
+      "trace": [
+        {
+          "t": "compositionstart",
+          "el": "搜索 Token",
+          "value": ""
+        },
+        {
+          "t": "compositionupdate",
+          "el": "搜索 Token",
+          "value": "",
+          "data": "zhong"
+        },
+        {
+          "t": "input",
+          "el": "搜索 Token",
+          "value": "zhong",
+          "isComposing": true,
+          "data": "zhong"
+        },
+        {
+          "t": "compositionupdate",
+          "el": "搜索 Token",
+          "value": "zhong",
+          "data": "zhongwen"
+        },
+        {
+          "t": "input",
+          "el": "搜索 Token",
+          "value": "zhongwen",
+          "isComposing": true,
+          "data": "zhongwen"
+        },
+        {
+          "t": "compositionupdate",
+          "el": "搜索 Token",
+          "value": "zhongwen",
+          "data": "中文"
+        },
+        {
+          "t": "input",
+          "el": "搜索 Token",
+          "value": "中文",
+          "isComposing": true,
+          "data": "中文"
+        }
+      ],
+      "ok": true
+    },
+    {
+      "id": "catalog-q",
+      "page": "Catalog",
+      "route": "/catalog",
+      "selector": "[placeholder=\"搜索表名或字段名...\"]",
+      "urlParam": "q",
+      "expected": "pass",
+      "compositionStarts": 1,
+      "finalValue": "中文",
+      "valueWrites": 0,
+      "totalValueWrites": 0,
+      "defaultValueWrites": 3,
+      "totalDefaultValueWrites": 3,
+      "focusKept": true,
+      "activeElementLabel": "INPUT",
+      "trace": [
+        {
+          "t": "compositionstart",
+          "el": "INPUT",
+          "value": ""
+        },
+        {
+          "t": "compositionupdate",
+          "el": "INPUT",
+          "value": "",
+          "data": "zhong"
+        },
+        {
+          "t": "input",
+          "el": "INPUT",
+          "value": "zhong",
+          "isComposing": true,
+          "data": "zhong"
+        },
+        {
+          "t": "compositionupdate",
+          "el": "INPUT",
+          "value": "zhong",
+          "data": "zhongwen"
+        },
+        {
+          "t": "input",
+          "el": "INPUT",
+          "value": "zhongwen",
+          "isComposing": true,
+          "data": "zhongwen"
+        },
+        {
+          "t": "compositionupdate",
+          "el": "INPUT",
+          "value": "zhongwen",
+          "data": "中文"
+        },
+        {
+          "t": "input",
+          "el": "INPUT",
+          "value": "中文",
+          "isComposing": true,
+          "data": "中文"
+        }
+      ],
+      "ok": true
+    },
+    {
+      "id": "publish-history-actor",
+      "page": "PublishHistory",
+      "route": "/publish/history",
+      "selector": "[data-testid=\"publish-history-actor\"]",
+      "urlParam": "actor",
+      "expected": "pass",
+      "compositionStarts": 1,
+      "finalValue": "中文",
+      "valueWrites": 0,
+      "totalValueWrites": 0,
+      "defaultValueWrites": 3,
+      "totalDefaultValueWrites": 3,
+      "focusKept": true,
+      "activeElementLabel": "操作人",
+      "trace": [
+        {
+          "t": "compositionstart",
+          "el": "操作人",
+          "value": ""
+        },
+        {
+          "t": "compositionupdate",
+          "el": "操作人",
+          "value": "",
+          "data": "zhong"
+        },
+        {
+          "t": "input",
+          "el": "操作人",
+          "value": "zhong",
+          "isComposing": true,
+          "data": "zhong"
+        },
+        {
+          "t": "compositionupdate",
+          "el": "操作人",
+          "value": "zhong",
+          "data": "zhongwen"
+        },
+        {
+          "t": "input",
+          "el": "操作人",
+          "value": "zhongwen",
+          "isComposing": true,
+          "data": "zhongwen"
+        },
+        {
+          "t": "compositionupdate",
+          "el": "操作人",
+          "value": "zhongwen",
+          "data": "中文"
+        },
+        {
+          "t": "input",
+          "el": "操作人",
+          "value": "中文",
+          "isComposing": true,
+          "data": "中文"
+        }
+      ],
+      "ok": true
+    },
+    {
+      "id": "control-local-state",
+      "page": "ProbeControl",
+      "route": "/admin/audit?view=turns",
+      "selector": "[data-testid=\"ime-probe-control\"]",
+      "urlParam": null,
+      "expected": "pass",
+      "compositionStarts": 1,
+      "finalValue": "中文",
+      "valueWrites": 0,
+      "totalValueWrites": 0,
+      "defaultValueWrites": 3,
+      "totalDefaultValueWrites": 3,
+      "focusKept": true,
+      "activeElementLabel": "对照输入框",
+      "trace": [
+        {
+          "t": "compositionstart",
+          "el": "对照输入框",
+          "value": ""
+        },
+        {
+          "t": "compositionupdate",
+          "el": "对照输入框",
+          "value": "",
+          "data": "zhong"
+        },
+        {
+          "t": "input",
+          "el": "对照输入框",
+          "value": "zhong",
+          "isComposing": true,
+          "data": "zhong"
+        },
+        {
+          "t": "compositionupdate",
+          "el": "对照输入框",
+          "value": "zhong",
+          "data": "zhongwen"
+        },
+        {
+          "t": "input",
+          "el": "对照输入框",
+          "value": "zhongwen",
+          "isComposing": true,
+          "data": "zhongwen"
+        },
+        {
+          "t": "compositionupdate",
+          "el": "对照输入框",
+          "value": "zhongwen",
+          "data": "中文"
+        },
+        {
+          "t": "input",
+          "el": "对照输入框",
+          "value": "中文",
+          "isComposing": true,
+          "data": "中文"
+        }
+      ],
+      "ok": true
+    },
+    {
+      "id": "control-url-driven",
+      "page": "ProbeControl",
+      "route": "/admin/audit?view=turns",
+      "selector": "[data-testid=\"ime-probe-url-control\"]",
+      "urlParam": "probe_ctrl",
+      "expected": "detect-defect",
+      "compositionStarts": 3,
+      "finalValue": "zhongzhongwen中文",
+      "valueWrites": 6,
+      "totalValueWrites": 6,
+      "defaultValueWrites": 3,
+      "totalDefaultValueWrites": 3,
+      "focusKept": true,
+      "activeElementLabel": "URL 驱动对照输入框",
+      "trace": [
+        {
+          "t": "compositionend",
+          "el": "对照输入框",
+          "value": "中文"
+        },
+        {
+          "t": "compositionstart",
+          "el": "URL 驱动对照输入框",
+          "value": ""
+        },
+        {
+          "t": "compositionupdate",
+          "el": "URL 驱动对照输入框",
+          "value": "",
+          "data": "zhong"
+        },
+        {
+          "t": "input",
+          "el": "URL 驱动对照输入框",
+          "value": "zhong",
+          "isComposing": true,
+          "data": "zhong"
+        },
+        {
+          "t": "compositionstart",
+          "el": "URL 驱动对照输入框",
+          "value": "zhong"
+        },
+        {
+          "t": "compositionupdate",
+          "el": "URL 驱动对照输入框",
+          "value": "zhong",
+          "data": "zhongwen"
+        },
+        {
+          "t": "input",
+          "el": "URL 驱动对照输入框",
+          "value": "zhongzhongwen",
+          "isComposing": true,
+          "data": "zhongwen"
+        },
+        {
+          "t": "compositionstart",
+          "el": "URL 驱动对照输入框",
+          "value": "zhongzhongwen"
+        },
+        {
+          "t": "compositionupdate",
+          "el": "URL 驱动对照输入框",
+          "value": "zhongzhongwen",
+          "data": "中文"
+        },
+        {
+          "t": "input",
+          "el": "URL 驱动对照输入框",
+          "value": "zhongzhongwen中文",
+          "isComposing": true,
+          "data": "中文"
+        }
+      ],
+      "ok": true,
+      "note": "探针在 URL 驱动的对照件上测出了差异（组合被打断）"
+    }
+  ],
+  "passed": true,
+  "failedCount": 0
+}

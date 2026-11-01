@@ -5,8 +5,8 @@
 | 文档类型 / 版本 | 功能设计基线 / **v1.0** |
 | 日期 / 目标版本 | 2026-10-29 首版；2026-10-30 定稿 / 目标 v0.25（修订线） |
 | 功能编号 / 优先级 | **不另派 L25 编号**。这是 v0.25 修订线上的 WebUI 交互缺陷修复，不进入 [`docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md`](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) 功能台账。同日《问询预算窗口》曾建议的 L25-17 已被该条目自己撤回（沿用 Spec 162），本条目不占用下一个空号。/ **P0**（13 处 URL 驱动输入框）、**P1**（2 处变换写回）、**P2**（静态门禁与规范补齐） |
-| 状态 | **v1.0 已落地，本地验收通过（2026-10-30）**。SC-01–SC-19、SC-22、SC-23 通过。SC-17 有 Chrome 156 探针记录。SC-20 本次相关用例通过；全量 WebUI 测试有既有服务端 flake，未改服务端。SC-21 本地 lint 全绿，CI 已接线，远端 job 未跑。不授权镜像、部署或客户交付。 |
-| 评审状态 | **2026-10-30 审批通过并完成复审验收**。审批见 [审批记录](../reviews/2026-10-30-url-driven-input-ime-approval.md)，验收见 [验收记录](../reviews/2026-10-30-url-driven-input-ime-acceptance.md)。 |
+| 状态 | **v1.0 功能合同已收口（2026-11-01）**。SC-01–SC-23 逐条落点见 §6.6，闭口层级见 §6.7，收口证据见 [收口记录](../reviews/2026-11-01-url-driven-input-ime-composition-closure.md)。SC-17 的真实浏览器探针记录已入库于 `webui/scripts/evidence/2026-10-30-url-driven-input-ime-probe/`。SC-21 的**远端 CI job 仍未跑**（证据等级，归发布取证）。**本条收口不表示可上线**——镜像、部署与客户交付不授权。 |
+| 评审状态 | **2026-10-30 审批通过并完成复审验收**；**2026-11-01 功能合同收口**。审批见 [审批记录](../reviews/2026-10-30-url-driven-input-ime-approval.md)，验收见 [验收记录](../reviews/2026-10-30-url-driven-input-ime-acceptance.md)，收口见 [收口记录](../reviews/2026-11-01-url-driven-input-ime-composition-closure.md)。 |
 | 决策来源 | 2026-10-29 PM 指示：针对 Audit 页「Agent 名称或 ID」搜索框的输入法无法切换反馈，落盘优化 Spec 与 Plan，**并要求排查全量存在此类型 bug 的筛选器** |
 | 需求来源 | 用户反馈：Audit 页 agent 名称或 ID 搜索框「输入法无法切换」 |
 | 实施主体 | Lucy WebUI（`webui/src`）；不修改 KTX 源码、不改后端 API |
@@ -85,6 +85,8 @@
 外加：伴生缺陷 C-1、C-2（§1.4）；静态防回归门禁（§5.5）；设计规范补齐（§10）。
 
 > **D2 已拍板为 13 处全量。** 2026-10-29 修复范围问卷里的 9 处来自变量名启发式排查；传递闭包补上的配置审计 3 处与发布历史 1 处同根因、同修法，一并纳入。静态门禁不设白名单。
+
+> **行号口径。** 本 Spec 正文里的 `文件:行` 引用（§1.4、§2.1、§5.2、§5.4）都是**改造前**的行号，取自 2026-10-29 审批时的工作树。静态门禁在**实现时**（2026-10-30 00:46）记录的改造前基线行号与审批时略有漂移，原文见 `webui/scripts/evidence/2026-10-30-url-driven-input-ime-probe/lint-baseline-before.txt`。**改造后的当前落点见 §6.6。**
 
 ### 2.2 本期不包括
 
@@ -363,7 +365,51 @@ main():
 
 ### 6.5 交付判定
 
-SC-01 – SC-23 **全部执行且通过** 方可判定交付。其中 **SC-17 必须有真实浏览器运行记录**（含探针脚本与输出留痕，落 `inbox/`），jsdom 结果**不得**充当该项证据。SC-22 的 vitest 不能代替 SC-17。
+SC-01 – SC-23 **全部执行且通过** 方可判定交付。其中 **SC-17 必须有真实浏览器运行记录**（含探针脚本与输出留痕），jsdom 结果**不得**充当该项证据。SC-22 的 vitest 不能代替 SC-17。
+
+**证据落位（2026-11-01 收口时明确）**：探针脚本随实现入库于 `webui/scripts/ime-composition-probe.mjs`（commit `f4630d57`，此后未改）。其输出目录 `inbox/ime-composition/probe/` 在工作区保留，但 `inbox/` 被 `.gitignore` 排除——原始输出若只留在工作区，收口后第三方无法复查。因此**入库一份可复查副本**于 `webui/scripts/evidence/2026-10-30-url-driven-input-ime-probe/`（来源、复现步骤与证据边界见该目录 `README.md`）。
+
+### 6.6 自动化证据落点（2026-11-01）
+
+SC 编号跨 Spec 串号，**以本表为准**。收口结论与残余见 [`docs/reviews/2026-11-01-url-driven-input-ime-composition-closure.md`](../reviews/2026-11-01-url-driven-input-ime-composition-closure.md)。
+
+SC-01 – SC-13 是**逐处**承诺，每处的五个条件分别是：①`value` 不取自 URL 派生变量；②键入后 URL param 立即等于原文（尾空格保留）；③深链打开时显示该值；④`POP` 后回到历史条目的值；⑤该页「清除筛选」执行后归零。条件 ①对全部 13 处由**同一个静态门禁**逐文件打假（见 SC-14）；条件 ②③由逐处用例打假；条件 ④⑤由共用实现 `webui/src/lib/useUrlMirroredField.ts` 承担，**Audit 页逐处验证**（§4 页只有 Audit 有「清除筛选」动作，其余四页无此动作，条件 ⑤对它们不适用）。
+
+| ID | 落点 | 自动化证据 |
+|---|---|---|
+| SC-01 | Audit「Agent 名称或 ID」 | 条件 ②③④⑤：`admin-audit-url-mirror.test.tsx`「输入后 URL 立即等于原文（末尾空格保留在输入框与 URL）」「深链初值：输入框显示 URL 里的原文」「浏览器后退（POP）后输入框回到历史条目的值」「清除筛选清空输入框并移除 URL 参数」「清除筛选时参数本来就是空的，输入框也必须清空（reset 生效）」 |
+| SC-02 | Audit「统一搜索」 | 条件 ②③：同文件「统一搜索：末尾空格保留在输入框与 URL，消费值再 trim」「unified：深链初值显示该值；键入后 URL 立即等于原文并保留尾空格」；条件 ⑤：「清除筛选一次归零（SC-01 条件 5）」的「turns 视图」条；消费点 trim：「统一搜索的末尾空格不会进入请求参数」 |
+| SC-03 | Audit「工具名」 | 条件 ②③：同文件「tool：深链初值显示该值；键入后 URL 立即等于原文并保留尾空格」；条件 ⑤：「calls 视图：user / 工具名 / Session ID / 访问 IP / 最近设备名 五处一起归零」 |
+| SC-04 | Audit「Session ID」 | 条件 ②③：同文件「sessionId：深链初值显示该值；键入后 URL 立即等于原文并保留尾空格」；条件 ⑤：同 SC-03 的「calls 视图」条 |
+| SC-05 | Audit「访问 IP」 | 条件 ②③：同文件「clientIp：深链初值显示该值；键入后 URL 立即等于原文并保留尾空格」；条件 ⑤：同 SC-03 的「calls 视图」条 |
+| SC-06 | Audit「最近设备名」 | 条件 ②③：同文件「deviceName：深链初值显示该值；键入后 URL 立即等于原文并保留尾空格」；条件 ⑤：同 SC-03 的「calls 视图」条 |
+| SC-07 | Audit「表名」 | 条件 ②③：同文件「tableSearch：深链初值显示该值；键入后 URL 立即等于原文并保留尾空格」；条件 ⑤：同 SC-02 的「turns 视图」条 |
+| SC-08 | 配置审计「目标 ID」 | `url-driven-input-mirror-contract.test.tsx`「targetId：深链初值显示该值；键入后 URL 立即等于原文并保留尾空格」 |
+| SC-09 | 配置审计「文件路径」 | 同文件「filePath：深链初值显示该值；键入后 URL 立即等于原文并保留尾空格」 |
+| SC-10 | 配置审计「来源」 | 同文件「source：深链初值显示该值；键入后 URL 立即等于原文并保留尾空格」 |
+| SC-11 | Token「搜索 Token」 | 同文件「Token：逐处镜像（SC-11）」的「深链初值显示该值；键入后 URL 立即等于原文并保留尾空格」 |
+| SC-12 | 目录「搜索表名或字段名」 | 同文件「目录：逐处镜像（SC-12）」的「深链初值显示该值；键入后 URL 立即等于原文并保留尾空格」；消费点 trim：同 describe 的「SC-23：消费点按 trim 后的值过滤（原始尾空格只留在输入框与 URL 里）」 |
+| SC-13 | 发布历史「操作人」 | 同文件「发布历史：逐处镜像（SC-13）」的「深链初值显示该值；键入后 URL 立即等于原文并保留尾空格」 |
+| SC-14 | 静态门禁改造前后基线 | 入库原文：`webui/scripts/evidence/2026-10-30-url-driven-input-ime-probe/lint-baseline-before.txt`（改造前恰好 13 处，与 §2.1 全表一致）与 `lint-baseline-after.txt`（改造后 0 处）。现测 `node webui/scripts/lint-url-driven-input.mjs` → `passed`，exit 0 |
+| SC-15 | 零误报抽样 | `webui/scripts/__tests__/lint-url-driven-input.test.ts` describe「zero false positives on known-good pages (SC-15)」5 条：`HelpCenter.tsx` / `AgentList.tsx` / `RoleList.tsx` / `SkillList.tsx` / `AccessMap.tsx` 全部报 0 处 |
+| SC-16 | 门禁自带单测 | 同文件 describe「lint-url-driven-input: judgement categories (SC-16)」：缺陷写法报错 / 正确范式不报错 / `useState(searchParams.get(...))` 不报错 / 非文本 input 不参与判定（另含 `type="search"` 属文本输入、属性访问不算变量两组边界） |
+| SC-17 | 真实浏览器 IME 组合 | `webui/scripts/evidence/2026-10-30-url-driven-input-ime-probe/`：Chrome `156.0.8078.73`，13 处目标输入框逐处 `compositionstart`=1、最终 DOM 值 `中文`、组合期间 `value` setter=0、焦点保持；同页对照件 `control-url-driven` 仍复现 3 次重启 / `zhongzhongwen中文` / 6 次写入，`control-local-state` 为 1 / `中文` / 0（**探针本身有效**） |
+| SC-18 | C-1 变换写回（`AuditReconciliation`） | `url-driven-input-transform-writeback.test.tsx` describe「SC-18：AuditReconciliation 问询 ID 输入框保留原文」：输入框保留 `  turn-42  `，请求按 trim 后的 `turn-42` 发起 |
+| SC-19 | C-2 变换写回（`CaseEditor`） | 同文件 describe「SC-19：CaseEditor 期望指标输入框可键入「, 」」2 条：受控值是原文、`", "` 不被抹掉；提交时按解析后的数组 `["weighted_discount","profit_margin"]` 下发 |
+| SC-20 | 全量测试与回归哨兵 | 全量 `cd webui && npx vitest run`：425 个测试文件 / 5173 条用例，其中 `server/__tests__/api.create-connection.test.ts` 的 2 条**既有服务端 flake** 偶发失败（单独复跑 3 次有 2 次全绿；与本条无交集，本条不改任何服务端代码，根因见收口记录「残余」一节）。两个**既有**哨兵未回归：`src/__tests__/audit.test.tsx`「`user=analyst_zhang` 服务端查询断言」、`src/__tests__/admin-audit-turns.test.tsx`「shows clear-filters when a non-default filter is active」 |
+| SC-21 | 静态门禁与 CI 接线 | `npm run lint:terminology`、`npm run lint:ia-boundary`、`npm run lint:url-driven-input` 全绿；CI 已接线于 `.github/workflows/lucy-release.yml` 的 job `spec-and-webui`。**远端 CI job 未跑——证据等级，归发布取证** |
+| SC-22 | 回声协议 | `admin-audit-url-mirror.test.tsx`「SC-22：较早的 URL 值晚到时不覆盖草稿」「SC-22：新值先确认、旧值后到时也不覆盖草稿」——用可控延迟的 router 替身稳定复现两种顺序 |
+| SC-23 | 写前 trim 与 `all` 哨兵 | Audit 统一搜索与消费点：`admin-audit-url-mirror.test.tsx`「统一搜索：末尾空格保留在输入框与 URL，消费值再 trim」+「统一搜索的末尾空格不会进入请求参数」；目录 `q`：`url-driven-input-mirror-contract.test.tsx`「SC-23：消费点按 trim 后的值过滤（原始尾空格只留在输入框与 URL 里）」；Token 文本 `all` 与下拉框哨兵：同文件「SC-23：文本 `all` 是普通文本，不走下拉框的「清空」哨兵」「SC-23：下拉框的 `all` 清空哨兵不变——选「全部状态」把 status 参数删掉」 |
+
+> **范围提示。** 本 Spec 的 13 处是 §2.1 的那张表。行权限视图（`webui/src/pages/admin/RowPolicyView.tsx`）另有 5 处清单筛选框在本 Spec 之后由**另一条功能线**（行权限视图呈现修订，commit `8982ef0d`，2026-10-30 12:57）改用同一个 `useUrlMirroredField`——它们**不在本条承诺内**，也不在本表内。§1.4 的 C-3 判定（那 5 处原为非受控、本不受影响）因此已被后续实现取代。
+
+### 6.7 闭口层级
+
+- 层级：功能合同
+- 本条承诺：13 处筛选栏文本输入框在中文输入法组合期间不被打断——受控值取自局部状态镜像，URL 作为下游事实源跟随**原文**，且深链、后退、清除筛选都不会让输入框与 URL 脱节。
+- 本条出口：SC-01–SC-13 的逐处用例（`webui/src/__tests__/admin-audit-url-mirror.test.tsx`、`webui/src/__tests__/url-driven-input-mirror-contract.test.tsx`）；SC-14–SC-16 的静态门禁与其单测（`webui/scripts/lint-url-driven-input.mjs`、`webui/scripts/__tests__/lint-url-driven-input.test.ts`）；SC-17 的真实浏览器探针记录（`webui/scripts/evidence/2026-10-30-url-driven-input-ime-probe/`）；SC-18–SC-19 的伴生缺陷用例（`webui/src/__tests__/url-driven-input-transform-writeback.test.tsx`）；SC-20 的全量 WebUI 测试与两个既有 URL 断言哨兵；SC-22–SC-23 的回声与消费点用例；以及 `npm run lint:terminology`、`npm run lint:ia-boundary`、`npm run lint:url-driven-input`。
+- 不在本条出口：远端 CI job 的绿灯（证据等级）；整库旅程、Agent 路径与跨模块故障演练；镜像构建、部署与客户环境验证；移动窄屏与响应式验证；Safari / WebKit 与真实 OS 级输入法（macOS 拼音、Windows 微软拼音）实测；Firefox 实测；全仓 typecheck 基线。**全仓形态门禁 `npm run lint:spec` 也不在本条出口**——本条不新增任何后端接口，收口时该门禁的红项是另一条线未登记 `/api/publish-workbench/evidence`，与本条无交集（见收口文档）。
+- 上线关系：本条收口不表示可上线
 
 ---
 
@@ -402,6 +448,7 @@ SC-01 – SC-23 **全部执行且通过** 方可判定交付。其中 **SC-17 �
 
 - 本 Spec **v1.0** 与配套 [实施 Plan](../plans/2026-10-29-lucy-url-driven-input-ime-composition-plan.md) **v1.0** 已定稿。D1–D6 已拍板，可按 Plan S1–S7 开工。
 - 交付判定以 §6 的 SC-01 – SC-23 为准，SC-17 必须有真实浏览器记录。
+- **2026-11-01：本条功能合同已收口。** SC-01–SC-23 的逐条落点见 §6.6，闭口层级见 §6.7，收口证据见 [收口记录](../reviews/2026-11-01-url-driven-input-ime-composition-closure.md)。收口的是**这条功能承诺**在本条自己的接口上成立，**不表示可上线**。
 - 不授权镜像、部署或客户交付。git 提交须另获授权。
 
 ---
@@ -457,3 +504,11 @@ New terms:
 2026-10-30 用户授权审批并定稿。审批对照当时工作树核对了 §2.1 的 13 处行号、`clearFilters`、两处变换写回，以及 Audit / 目录 / Token 的现网写入行为。v0.1 的修法方向成立，但无条件反向同步会在连续按键时把草稿打回旧 URL 值，已改为 §5.3 回声协议。D1=(a)、D2=13 处、D3=静态门禁为主、D4=每次按键即写且保持现有 push/replace、D5=同批修 C-1/C-2、D6=临时决策与组件章节都做。不另派 L25 编号。
 
 完整条目见 [审批记录](../reviews/2026-10-30-url-driven-input-ime-approval.md)。同日落地与复审见 [验收记录](../reviews/2026-10-30-url-driven-input-ime-acceptance.md)。
+
+## 收口记录
+
+2026-11-01 本条按 [`docs/governance/DEVELOPMENT.md`](../governance/DEVELOPMENT.md)「功能闭口与发布取证」收为**功能合同**。收口动作有三项：①把 §6.5 要求的「探针输出落 `inbox/`」改成「工作区保留 + 入库一份可复查副本」，副本落在 `webui/scripts/evidence/2026-10-30-url-driven-input-ime-probe/`——`inbox/` 被 `.gitignore` 排除，原始证据若只留在工作区，收口后第三方无法复查；②补 §6.6 的 SC-01–SC-23 逐条落点表，其中 SC-01–SC-13 的条件 ②③在收口前**没有逐处自动化断言**，本轮新增 `webui/src/__tests__/url-driven-input-mirror-contract.test.tsx`（其余 4 页 6 处）并扩写 `webui/src/__tests__/admin-audit-url-mirror.test.tsx`（Audit 其余 6 处与「清除筛选」一次归零）；③补 §6.7 的闭口层级。
+
+§1.4 的 C-3 判定（行权限视图那 5 处非受控输入框「不受影响」）已被后续实现取代——行权限视图呈现修订（commit `8982ef0d`）把那 5 处也改用了同一个 `useUrlMirroredField`。它们不在本条 13 处承诺内。
+
+收口结论、残余与不在收口里的事项见 [收口记录](../reviews/2026-11-01-url-driven-input-ime-composition-closure.md)。
