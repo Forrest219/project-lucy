@@ -659,6 +659,9 @@ L25-15 整批恢复抽屉。三个分区各自独立，不合并成一句「同�
 | `object-detail-role-not-found` | object-detail-role-not-found | `components/ObjectDetailDrawer.tsx` |
 | `object-detail-role-body` | object-detail-role-body | `components/ObjectDetailDrawer.tsx` |
 | `policy-degrade-banner` | policy-degrade-banner | `components/PolicyDegradeBanner.tsx` |
+| `metric-temporarily-unable-to-query` | metric-temporarily-unable-to-query | `components/PolicyDegradeMetric.tsx` |
+| `policy-degrade-metric-toggle` | policy-degrade-metric-toggle | `components/PolicyDegradeMetric.tsx` |
+| `policy-degrade-metric-panel` | policy-degrade-metric-panel | `components/PolicyDegradeMetric.tsx` |
 | `remove-schema-drawer` | remove-schema-drawer | `components/RemoveSchemaDrawer.tsx` |
 | `remove-schema-close` | remove-schema-close | `components/RemoveSchemaDrawer.tsx` |
 | `remove-schema-enabled-count` | remove-schema-enabled-count | `components/RemoveSchemaDrawer.tsx` |

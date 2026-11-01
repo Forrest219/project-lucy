@@ -6,6 +6,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PolicyDegradeNotice } from "../components/PolicyDegradeBanner";
 import { policyDegradeCopy } from "../lib/policyDegradeCopy";
+import { deriveTemporarilyUnableToQueryMetric } from "../lib/policyDegradeMetric";
 
 afterEach(() => {
   cleanup();
@@ -91,5 +92,45 @@ describe("policy degrade notice", () => {
       await fetchMock.mock.results[0]?.value;
     });
     expect(screen.queryByTestId("policy-degrade-banner")).not.toBeInTheDocument();
+  });
+});
+
+describe("deriveTemporarilyUnableToQueryMetric", () => {
+  it("counts distinct roster Agents and ignores ids not on the roster", () => {
+    const metric = deriveTemporarilyUnableToQueryMetric(
+      {
+        policyVersion: "p",
+        degradedGlobal: false,
+        degradedAgents: ["a", "gone"],
+        issues: [
+          { agentId: "a", reason: "role_resolution_failed:r1" },
+          { agentId: "a", reason: "role_resolution_failed:r1:detail" },
+          { agentId: "gone", reason: "role_resolution_failed:r2" }
+        ],
+        healthy: false,
+        accessConfigDigest: "a",
+        sourceMapVersion: "b"
+      },
+      ["a", "b"]
+    );
+    expect(metric.count).toBe(1);
+    expect(metric.global).toBe(false);
+    expect(metric.issues.map((issue) => issue.agentId)).toEqual(["a", "a"]);
+  });
+
+  it("uses roster size when degraded globally", () => {
+    const metric = deriveTemporarilyUnableToQueryMetric(
+      {
+        policyVersion: "p",
+        degradedGlobal: true,
+        degradedAgents: [],
+        healthy: false,
+        accessConfigDigest: "a",
+        sourceMapVersion: "b"
+      },
+      ["a", "b", "c"]
+    );
+    expect(metric.count).toBe(3);
+    expect(metric.global).toBe(true);
   });
 });

@@ -38,12 +38,17 @@ describe("KPI_REGISTRY", () => {
     expect(used!.pages).not.toContain("/admin/agents");
     expect(used!.pages).toEqual([]);
 
-    // calls-7d 与活跃 Agent 仍登记在 /admin/agents。
-    for (const id of ["calls-7d", "active-agent-count"]) {
+    // calls-7d、活跃 Agent、暂时不能查数仍登记在 /admin/agents（SC-12 / SC-17）。
+    for (const id of ["calls-7d", "active-agent-count", "temporarily-unable-to-query-agents"]) {
       const contract = getContract(id);
       expect(contract, `${id} should be in registry`).toBeDefined();
       expect(contract!.pages).toContain("/admin/agents");
     }
+    const degrade = getContract("temporarily-unable-to-query-agents");
+    expect(degrade!.label).toBe("暂时不能查数");
+    expect(degrade!.help).toContain("EffectivePolicy");
+    expect(degrade!.help).toContain("可用 Token");
+    expect(degrade!.windowed).toBe(false);
 
     // 其它条目仍至少有一页。
     for (const c of KPI_REGISTRY) {
@@ -65,7 +70,13 @@ describe("KPI_REGISTRY", () => {
   });
 
   it("config-class KPIs (agent-count, configured-token-count) are not windowed", () => {
-    const nonWindowed = ["agent-count", "configured-token-count", "configured-table-count", "total-cases"];
+    const nonWindowed = [
+      "agent-count",
+      "configured-token-count",
+      "configured-table-count",
+      "total-cases",
+      "temporarily-unable-to-query-agents"
+    ];
     for (const id of nonWindowed) {
       const c = getContract(id);
       expect(c, `${id} should be in registry`).toBeDefined();

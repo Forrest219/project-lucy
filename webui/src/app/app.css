@@ -1521,6 +1521,16 @@
   .pl-policy-degrade-notice-actions { @apply ml-2 inline-flex flex-wrap gap-x-3; }
   .pl-policy-degrade-notice-actions a { @apply text-accent underline; }
   .pl-policy-degrade-notice-foot { @apply text-xs text-fg-muted; }
+  /* Agent 名册 Spec v1.4 — fourth KPI expand sits under the card, not a page-top banner. */
+  .pl-policy-degrade-metric { @apply grid content-start gap-2; }
+  .pl-policy-degrade-metric-expand { @apply grid gap-2; }
+  .pl-policy-degrade-metric-toggle {
+    @apply justify-self-start text-xs font-medium text-accent underline;
+  }
+  .pl-policy-degrade-metric-panel { @apply m-0; }
+  .pl-policy-degrade-metric-panel--danger {
+    @apply border-danger-strong/40 bg-danger-soft/70;
+  }
   .pl-error { @apply text-sm text-danger; }
 
   /* Spec 174 — static region placeholder / local error (DS 99 临时模式). No animation. */
