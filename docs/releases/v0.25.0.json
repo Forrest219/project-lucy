@@ -5,12 +5,7 @@
   "releasedAt": "2026-11-01",
   "deliveryPackage": null,
   "noDeliveryReason": "Product version aligned to 0.25.0 on branch lucy-v0.25. No tag, GitHub Release, customer delivery package, image digest, or package SHA256 exists yet.",
-  "runs": [
-    {
-      "id": "pending-version-alignment",
-      "trigger": "product version alignment on branch lucy-v0.25; release CI has not run"
-    }
-  ],
+  "runs": [],
   "gates": [
     {
       "name": "release verification",
@@ -20,9 +15,9 @@
   ],
   "notes": [
     "This entry records the product-version alignment from 0.20.0 to 0.25.0 so branch lucy-v0.25 and VERSION agree. It is not a customer release.",
-    "commit stays PENDING until the release commit exists. Fill it with scripts/release/fill-ledger-commit.sh after the tag commit is known.",
+    "commit stays PENDING until the release commit exists. Fill it with scripts/release/fill-ledger-commit.sh after the tag commit is known. runs stays empty until a real CI run verifies the release.",
+    "releasedAt is the date the product version was aligned. It is not a ship date.",
     "The last tagged release remains v0.20.0. Ordering of the active line is 0.25.0 > 0.20.0 > 0.17.0 > 0.2.0.",
-    "Chart package version stays 0.2.8 with appVersion 0.25.0. Bundled KTX stays 0.16.0. No customer delivery package is claimed.",
-    "runs[0].id is a placeholder because the ledger requires a non-empty runs array before any release CI exists. It is not a GitHub Actions run id."
+    "Chart package version stays 0.2.8 with appVersion 0.25.0. Bundled KTX stays 0.16.0. No customer delivery package is claimed."
   ]
 }

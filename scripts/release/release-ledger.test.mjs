@@ -148,11 +148,36 @@ describe("release-ledger gate", () => {
     });
   });
 
-  it("rejects an entry that lists no runs", async () => {
+  it("rejects a published entry that lists no runs", async () => {
     const entry = validEntry({ runs: [] });
     await withRepo({ entries: { "v0.2.0.json": entry } }, (tmp) => {
       const errors = collectLedgerErrors(tmp, { verifyRepo: false });
       assert.ok(errors.some((error) => error.includes("runs must be a non-empty array")));
+    });
+  });
+
+  it("accepts an unreleased entry with no runs", async () => {
+    const entry = validEntry({
+      commit: "PENDING",
+      deliveryPackage: null,
+      runs: [],
+      gates: [{ name: "release verification", status: "notExecuted", reason: "tag has not been cut" }]
+    });
+    await withRepo({ entries: { "v0.2.0.json": entry } }, (tmp) => {
+      assert.deepEqual(collectLedgerErrors(tmp, { verifyRepo: false }), []);
+    });
+  });
+
+  it("rejects an unreleased entry that claims a passed gate without a run", async () => {
+    const entry = validEntry({
+      commit: "PENDING",
+      deliveryPackage: null,
+      runs: [],
+      gates: [{ name: "spec-and-webui", status: "passed" }]
+    });
+    await withRepo({ entries: { "v0.2.0.json": entry } }, (tmp) => {
+      const errors = collectLedgerErrors(tmp, { verifyRepo: false });
+      assert.ok(errors.some((error) => error.includes("must cite the CI run id")));
     });
   });
 

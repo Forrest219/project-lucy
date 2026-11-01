@@ -5,7 +5,7 @@
 | 文档名称 | Lucy Version Matrix |
 | 文档类型 | Release Metadata / Compatibility Matrix |
 | 版本 | v0.6 |
-| 撰写日期 | 2026-06-21；2026-07-06；2026-08-03（增补：Helm/K8s single-replica supported baseline）；2026-09-02（拆分 Lucy 产品版本与 KTX；基线 0.17.0）；2026-10-19（批准切线到 `2.0.0`）；2026-10-21（§4 Database Matrix 状态值改为引用 `docs/governance/database-support-matrix.md`，补齐 StarRocks / Doris / SQL Server / Oracle / SQLite / Athena）；2026-10-24（产品版本由 `2.0.0` 经 `0.2.0` 更正为 `0.20.0`；§1.1.1 改为同一版本线按数值递增；登记产品版本与部署制品解耦原则）；2026-10-29（客户镜像 CI 改为原生 linux/amd64 单架构，不再写 QEMU 多架构清单）；2026-11-01（产品版本对齐分支 `lucy-v0.25`，基线 `0.25.0`） |
+| 撰写日期 | 2026-06-21；2026-07-06；2026-08-03（增补：Helm/K8s single-replica supported baseline）；2026-09-02（拆分 Lucy 产品版本与 KTX；基线 0.17.0）；2026-10-19（批准切线到 `2.0.0`）；2026-10-21（§4 Database Matrix 状态值改为引用 `docs/governance/database-support-matrix.md`，补齐 StarRocks / Doris / SQL Server / Oracle / SQLite / Athena）；2026-10-24（产品版本由 `2.0.0` 经 `0.2.0` 更正为 `0.20.0`；§1.1.1 改为同一版本线按数值递增；登记产品版本与部署制品解耦原则）；2026-10-29（客户镜像 CI 改为原生 linux/amd64 单架构，不再写 QEMU 多架构清单）；2026-11-01（产品版本对齐分支 `lucy-v0.25`，基线 `0.25.0`；§1.1 改为产品线与部署制品各自编号） |
 | 适用范围 | Lucy release、Docker image、bundled KTX runtime 和 MCP client 兼容性追踪 |
 
 ## 1. Current Baseline
@@ -28,17 +28,19 @@
 | MCP endpoint | Lucy MCP Proxy on container `7879` | `docs/runbooks/deployment-docker.md`, `docs/runbooks/customer-k8s-deployer-quickstart.md`, `npm run smoke:p0:demo` |
 | Release CI | GitHub Actions on `ubuntu-24.04`. Pull requests and `main` run headless gates. Tag and manual runs promote one linux/amd64 digest to GHCR. | `.github/workflows/lucy-release.yml`, `docs/governance/release-ci.md` |
 
-## 1.1 When to bump Lucy product version
+## 1.1 Product line and deployment artifacts are numbered separately
 
-`VERSION` / `appVersion` / image tag **product segment** change only when shipping a **customer-visible delivery**. Everyday `main` commits do **not** auto-bump.
+The Lucy product version follows the product line. Branch `lucy-v0.25` is product version `0.25.0`. Everyday commits do **not** auto-bump it. Shipping a customer package, changing the Helm chart, or upgrading bundled KTX does **not** by itself mint the next product version, and a product-version change does **not** by itself mint a new chart package, image digest, or delivery-package revision.
 
-| Trigger | Bump | Example |
+`Chart.appVersion`, `lucy.version`, `LUCY_VERSION`, and the product segment of a customer image tag are projections of `VERSION`. They name which product is inside a package. They are not the package's own version.
+
+| Identity | When it changes | Current |
 |---|---|---|
-| Customer delivery package / offline image / K8s tar that the customer will deploy | **Increment the second component by 1** (`0.25.0` → `0.26.0`) | ACL fix + audit hardening shipped as next tar |
-| Large capability jump, breaking config/migration, or bundled KTX major change | **Increment the second component by 10** (`0.25.0` → `0.35.0`) | New permission model; HA chart; KTX 0.17+ with breaking MCP |
-| Docs-only handbook refresh with **same** image digest | **No** product bump; package name may still use date (`20260903-v1`) | README / RELEASE_NOTES only |
-| Internal CI / demo rebuild, no customer handoff | **No** bump | `npm run demo:upgrade` |
-| Bundled KTX upgrade alone | Bump `bundledKtxVersion` / `KTX_VERSION`; **also** bump Lucy product version (customer must tell builds apart) | KTX `0.16.0` → `0.17.0` and Lucy `0.26.0` |
+| Lucy product version (`VERSION`) | The product line changes | `0.25.0` |
+| Helm Chart package (`Chart.version`) | The install package's behavior changes | `0.2.8` (optional SMTP). The later product-version alignment did not bump it |
+| Bundled KTX | The bundled runtime is upgraded | `0.16.0` |
+| Customer image tag / delivery-package revision | A real build or handoff exists | None for `0.25.0` yet. Form: `customer-amd64-<LUCY_VERSION>-<YYYYMMDD>-<gitSha>` |
+| Docs-only or demo rebuild | No product bump and no chart bump | `npm run demo:upgrade` |
 
 ### 1.1.1 Active product lines use numeric ordering
 

@@ -14,8 +14,14 @@
  *   - every entry must carry the fields that make it traceable
  *
  * A ledger entry may legitimately have no customer delivery package (a
- * version-number correction, for example). That is recorded as an explicit
+ * version-number alignment, for example). That is recorded as an explicit
  * `deliveryPackage: null` plus a reason — never as a missing field.
+ *
+ * An entry whose commit is still PENDING and whose deliveryPackage is null
+ * has not been released. It records that no deployment artifact exists yet,
+ * and it must not invent CI runs. `runs` may be omitted or empty. A real
+ * commit, a delivery package, or a passed/failed gate still requires the
+ * runs that actually verified it.
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
@@ -295,16 +301,26 @@ export function collectLedgerErrors(root = ROOT, { verifyRepo = true } = {}) {
       }
     }
 
-    // A release is verified by more than one CI run: the push run on the released commit, and the
-    // run triggered by pushing the release tag (some gates only execute on a tag ref). Record which
-    // runs belong to this release, and make every gate cite one of them.
+    // A published release is verified by CI runs. An unreleased product version
+    // (commit still PENDING, no delivery package) only records that no artifact
+    // exists yet, so it must not invent a run id.
+    const unreleased = entry.commit === "PENDING" && entry.deliveryPackage === null;
     const runIds = new Set();
-    if (!Array.isArray(entry.runs) || entry.runs.length === 0) {
+    let runsAreArray = false;
+    if (!Array.isArray(entry.runs)) {
+      if (!(unreleased && (entry.runs === undefined || entry.runs === null))) {
+        errors.push(
+          `${where}: runs must be a non-empty array naming every CI run that verified this release `
+            + `(the push run on the released commit, and the run triggered by the release tag)`
+        );
+      }
+    } else if (entry.runs.length === 0 && !unreleased) {
       errors.push(
         `${where}: runs must be a non-empty array naming every CI run that verified this release `
           + `(the push run on the released commit, and the run triggered by the release tag)`
       );
     } else {
+      runsAreArray = true;
       for (const [index, run] of entry.runs.entries()) {
         if (!run || typeof run !== "object") {
           errors.push(`${where}: runs[${index}] must be an object`);
@@ -365,7 +381,7 @@ export function collectLedgerErrors(root = ROOT, { verifyRepo = true } = {}) {
         if (gate.name === "webui-ux-review") {
           validateWebuiUxReview(entry, gate, index, where, root, errors);
         }
-        if (gate.run && runIds.size > 0 && !runIds.has(String(gate.run).trim())) {
+        if (runsAreArray && gate.run && !runIds.has(String(gate.run).trim())) {
           errors.push(
             `${where}: gates[${index}] (${gate.name ?? index}) cites run ${gate.run}, which is not one of this `
               + `release's runs (${[...runIds].join(", ")}). A gate must be cited from a run that verified this release.`

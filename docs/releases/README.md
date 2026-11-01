@@ -37,7 +37,7 @@
 3. **`deliveryPackage: null` 必须写 `noDeliveryReason`** ——「本版无交付包」是合法状态，但必须显式说明，不能靠字段缺失蒙混。
 4. **`notExecuted` 的门禁必须写 `reason`** ——未跑的门禁不是缺失信息，是交付结论的一部分。
 5. **交付包与发布提交不一致时**，必须显式设 `builtFromDiffersFromReleaseCommit: true` 并在 `builtFromDiffNote` 解释；否则门禁直接判失败。
-6. **`runs[]` 必须列出这次发布涉及的全部跑批**，每条要有 `id` 与 `trigger`；每条 `gates[].run` 必须是 `runs[]` 里的某个 id，否则门禁判失败。
+6. **已经发布的条目，`runs[]` 必须列出这次发布涉及的全部跑批**，每条要有 `id` 与 `trigger`；每条 `gates[].run` 必须是 `runs[]` 里的某个 id，否则门禁判失败。`commit` 仍是 `PENDING` 且 `deliveryPackage` 为 `null` 时，还没有发布，`runs` 省略或留空；不要填占位跑批号。这种条目里的门禁只能是 `notExecuted`。
 7. 跑 `npm run lint:release-ledger` 校验。
 8. **从 v0.20.0 的下一产品版本起**，`deliveryPackage.productionReady === true` 必须有一条 `webui-ux-review`：`required: true`、`manual: true`、`status: passed`，`evidence` 指向已存在的 `docs/releases/ux/<产品版本>.md`，且该文件的结果块是 passed 组合。手工通过不填 CI `run`。v0.20.0 不追补这条门禁。三个阻断原因类不能被记成 passed。记录格式见 [`ux/README.md`](ux/README.md)。
 
@@ -61,7 +61,7 @@ npm run lint:release-ledger        # 校验台账完整性
 npm run lint:release-ledger:test   # 校验器自身的测试
 ```
 
-门禁检查：当前 `VERSION` 必须有对应条目；每条必需字段齐全；`releaseTag` 与 `productVersion` 一致；`commit` 是完整 40 位 SHA（或 `PENDING`）；同一版本号不重复；`runs[]` 非空且每条有 `id` + `trigger`；每条 `gates[].run` 必须是 `runs[]` 里的 id。
+门禁检查：当前 `VERSION` 必须有对应条目；每条必需字段齐全；`releaseTag` 与 `productVersion` 一致；`commit` 是完整 40 位 SHA（或 `PENDING`）；同一版本号不重复。已发布条目的 `runs[]` 非空且每条有 `id` + `trigger`；未发布条目（`PENDING` 且没有交付包）的 `runs` 可以留空。已填写的 `gates[].run` 必须是 `runs[]` 里的 id。
 
 ### 门禁状态是三态，不是两态
 
