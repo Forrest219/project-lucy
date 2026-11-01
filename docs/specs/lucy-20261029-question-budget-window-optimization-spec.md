@@ -5,7 +5,7 @@
 | 文档类型 / 版本 | 功能设计基线 / **v1.0** |
 | 日期 / 目标版本 | 2026-10-29 首版 / v0.1 按第 1 轮 Codex 审阅修订 / 目标 v0.25（修订线） |
 | 功能编号 / 优先级 | **沿用 Spec 162** / **P0**（预算窗口语义 + 续查可达）、P1（可观测性）、P2（归属与恢复正确性）。本文修订 Spec 162 §7.2，不新发 WebUI 流水号。`L25-*` 是 v0.25 升级台账的工作项号，不是 Spec 流水号 |
-| 状态 | **定稿 v1.0，本分支已实现（2026-10-30）**。D1–D9 保持冻结。代理默认使用已结算数据处理时长，并提供 `lucy_continue_question`。SC-01–SC-48 的逐条记录见 [`docs/reviews/2026-10-30-question-budget-acceptance.md`](../reviews/2026-10-30-question-budget-acceptance.md)。SC-04 有进程内 MCP 自动化（关服务、清模块、再经 HTTP 调用），不是操作系统或容器重启。不构成客户交付。 |
+| 状态 | **v1.0 功能合同已收口（2026-11-01）**。D1–D9 保持冻结。代理默认使用已结算数据处理时长，并提供 `lucy_continue_question`。SC-01–SC-48 **逐条通过**，落点见 §7.8 与 [验收表](../reviews/2026-10-30-question-budget-acceptance.md)。**SC-04 的证据等级是进程内 MCP 自动化**——同一个 vitest 进程内 `vi.resetModules()` 清模块缓存后起第二个真实代理实例（第一个先关掉），两个实例共用同一磁盘审计库，再经 HTTP `tools/call` 发一次真实 MCP 数据调用；**不是操作系统或容器重启**。收口证据见 [收口记录](../reviews/2026-11-01-question-budget-window-closure.md)。**本条收口不表示可上线**——镜像、部署与客户交付不授权。 |
 | 评审状态 | 第 1 轮退回修订，回应见 §10。第 2 轮退回修订，报告见 [`docs/reviews/2026-10-29-codex-review-question-budget-round2.md`](../reviews/2026-10-29-codex-review-question-budget-round2.md)，落点见 §10.1。**第 3 轮定稿**，报告见 [`docs/reviews/2026-10-30-question-budget-round3-final.md`](../reviews/2026-10-30-question-budget-round3-final.md)，残余缺口 F01–F05 的落点见 §10.2。 |
 | 决策来源 | 2026-10-29 PM 指示：基于 2026-10-29 09:19–09:24 UTC 生产事故（用户 liuzongxuan / 客户端 `codex-mcp-client`）设计优化 Spec 与 Plan，交付 Codex 审阅并落盘审阅结论；后指示「综合 codex 审阅意见，修正 spec 和 plan」。 |
 | 需求来源 | 生产事故：一次问询在**零次数据工具调用**的情况下被 `question_budget_exhausted` 拦下，客户侧无法自行恢复。 |
@@ -619,6 +619,12 @@ on lucy_certified_route / lucy_report_template:
 
 ---
 
+### 7.8 自动化证据落点（2026-11-01）
+
+SC-01–SC-48 的**逐条**证据（初态 / 输入 / 实际输出 / 证据文件与用例名 / 结论）见 [`docs/reviews/2026-10-30-question-budget-acceptance.md`](../reviews/2026-10-30-question-budget-acceptance.md) 的验收表——该表逐条覆盖 SC-01–SC-48，**以本表为准**。收口结论与残余见 [`docs/reviews/2026-11-01-question-budget-window-closure.md`](../reviews/2026-11-01-question-budget-window-closure.md)。
+
+**SC-04 的证据等级（必须写进出口）**：SC-04 的证据是**进程内**的——同一个 vitest 进程内 `vi.resetModules()` 清掉模块缓存后**起第二个真实代理实例**（第一个先关掉），两个实例共用同一个**磁盘**审计库，再经 HTTP `tools/call` 发一次真实 MCP 数据调用，断言累计字段从持久层恢复、归属在冻结前恢复为原 turn。**它不是操作系统进程重启，也不是容器重启。** 因此 SC-04 证明的是「代理重启后预算状态能从持久层恢复」这条承诺，**不证明**进程级或容器级重启下的行为——那属于发布取证层。
+
 ## 8. 兼容、迁移与风险
 
 ### 8.1 兼容
@@ -655,9 +661,19 @@ on lucy_certified_route / lucy_report_template:
 - **本文状态**：v1.0 定稿。第 3 轮评审见 [`docs/reviews/2026-10-30-question-budget-round3-final.md`](../reviews/2026-10-30-question-budget-round3-final.md)。
 - **决策状态**：D1–D9 已于 2026-10-30 按推荐项冻结。
 - **编号**：沿用 Spec 162，不新发流水号。
-- **验收状态**：SC-01–SC-48 **全部未执行**。
+- **验收状态**：SC-01–SC-48 **全部通过**（逐条证据见 [验收表](../reviews/2026-10-30-question-budget-acceptance.md) 与 §7.8）。SC-04 的证据等级是**进程内** MCP 自动化，不是操作系统或容器重启。
 - **授权状态**：设计已定稿。2026-10-30 的实现授权在 [落地 Task](../plans/2026-10-30-question-budget-window-implementation-task.md)。该 Task 不改 D1–D9，也不把 SC 标成已通过。客户镜像与部署仍不在授权内。
 - 后续阶段划分与门禁见 [`docs/plans/2026-10-29-lucy-question-budget-window-optimization-plan.md`](../plans/2026-10-29-lucy-question-budget-window-optimization-plan.md)。
+
+---
+
+## 闭口层级
+
+- 层级：功能合同
+- 本条承诺：问询预算按**已结算数据处理时长**计量，用尽时给调用者一条可达的续查通道（声明—消费两段式、待兑现持久化），并且预算终止在审计与问询汇总里可查、可归因。
+- 本条出口：SC-01–SC-48 的自动化用例——逐条落点见 §7.8 与 [验收表](../reviews/2026-10-30-question-budget-acceptance.md)；核心文件 `question-budget-window-mode.test.ts`、`question-budget-scope-identity.test.ts`、`question-budget-closure.test.ts`、`question-budget-continuation.test.ts`、`question-budget-settlement.test.ts`、`question-budget-turn-supersede.test.ts`、`question-budget-bypass-scope.test.ts`、`question-budget-incident-regression.test.ts`、`data-qa-instructions-contract.test.ts`、`scope-restatement-instructions.test.ts`，另加 `admin-audit.test.ts` 的 SC-25–SC-28；加 `npm run lint:terminology`。**SC-04 的证据等级是进程内 MCP 自动化**（清模块后起第二个真实代理实例、共用同一磁盘审计库、经 HTTP `tools/call` 发起真实 MCP 数据调用），**不是操作系统或容器重启**。
+- 不在本条出口：**操作系统进程重启与容器重启**（SC-04 的进程内证据不覆盖，属发布取证层）；远端 CI job；客户环境验证；镜像构建、部署与客户交付；整库旅程、Agent 路径与跨模块故障演练；全仓 typecheck 基线。
+- 上线关系：本条收口不表示可上线
 
 ---
 

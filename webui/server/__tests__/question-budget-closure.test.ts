@@ -21,6 +21,16 @@ import {
 
 type SettleCall = { end: number; flags?: BudgetSettleFlags };
 
+/**
+ * `UpstreamHandle` 没有对外导出，从函数签名反推。
+ *
+ * `Pick<ClientRequest, "once" | "destroy">` 里 `once` 的重载返回 `this`
+ * （即 `ClientRequest`），而假上游是 `EventEmitter`——两者的 `this` 类型不兼容，
+ * 所以这里做一次显式转换。运行时行为不受影响。
+ */
+type SettlementInput = Parameters<typeof bindQuestionBudgetSettlement>[0];
+type UpstreamHandle = NonNullable<ReturnType<SettlementInput["getUpstream"]>>;
+
 function fakeUpstream() {
   const emitter = new EventEmitter() as EventEmitter & {
     destroyed: boolean;
@@ -55,7 +65,7 @@ describe("SC-13 settlement waits for cancel confirmation", () => {
     const res = fakeResponse();
     bindQuestionBudgetSettlement({
       res,
-      getUpstream: () => upstream,
+      getUpstream: () => upstream as unknown as UpstreamHandle,
       now: () => now,
       startMonoMs: 0,
       absMs: 120_000,
@@ -80,7 +90,7 @@ describe("SC-13 settlement waits for cancel confirmation", () => {
     const res = fakeResponse();
     bindQuestionBudgetSettlement({
       res,
-      getUpstream: () => upstream,
+      getUpstream: () => upstream as unknown as UpstreamHandle,
       now: () => 0,
       startMonoMs: 1_000,
       absMs: 120_000,
