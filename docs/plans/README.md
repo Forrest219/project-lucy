@@ -4,6 +4,7 @@ This directory stores repository-level implementation plans that are not scoped 
 
 | Plan | Purpose |
 |---|---|
+| [lucy-20261101-new-token-expiry-preset-ux-plan.md](lucy-20261101-new-token-expiry-preset-ux-plan.md) | **功能合同已收口（2026-11-01）**：新建 Token 过期快捷预设 UX。segmented 四档 + 删除政策提示句。SC-01–SC-06 关闭。本条收口不表示可上线。Spec 见 [lucy-20261101-new-token-expiry-preset-ux-spec.md](../specs/lucy-20261101-new-token-expiry-preset-ux-spec.md) |
 | [2026-10-29-ci-restoration-plan.md](2026-10-29-ci-restoration-plan.md) | **定稿 v1.0（2026-10-29）**：Lucy CI 恢复实施计划。T00–T04 与 Release CI 文档修正已实施，T06 汇总执行证据；T05（Required checks 迁移）与 R01（客户发布设施）未授权、未开工。日常 CI 已恢复，客户自动发布仍 BLOCKED。Spec 见 [lucy-ci-restoration-spec.md](../specs/lucy-ci-restoration-spec.md) |
 | [2026-10-30-l25-11-publish-window-task.md](2026-10-30-l25-11-publish-window-task.md) | **2026-10-30 授权落地**：L25-11 收口 Task（发布窗口、读取准入、导出基线）。只补现码里与冻结合同不一致的三处，不新增验收矩阵。L25-11 已于 2026-10-31 以 FC-01–FC-32 关闭；V01–V22 仍未执行；G30 仍开、W-B 不打开 |
 | [lucy-20261030-manifest-upload-size-fix-plan.md](lucy-20261030-manifest-upload-size-fix-plan.md) | **用户于 2026-10-30 批准，本地验证已完成**：Manifest 上传容量修复。单 YAML 上限 8 MiB，只有实际携带 YAML 或 ZIP 内容的三条资产路由使用 32 MiB 请求体上限，其余路由维持默认限制。6 个相关测试文件、111 项测试通过；两份实际 Manifest 完成校验、上传与目录刷新。未构建客户镜像、未执行远端升级 |
