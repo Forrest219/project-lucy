@@ -2,10 +2,10 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档类型 / 版本 | 功能设计基线 / **v1.2** |
-| 日期 / 目标版本 | 2026-10-30 / 不绑定产品版本号 |
+| 文档类型 / 版本 | 功能设计基线 / **v1.3** |
+| 日期 / 目标版本 | 2026-10-30；2026-11-01 功能合同收口 / 不绑定产品版本号 |
 | 台账号 | 无。不进入 v0.25 升级台账，不另派 WebUI 流水号 |
-| 状态 | **v1.2 已定稿，可交付开发**。见 [第 3 轮](../reviews/2026-10-30-codex-review-login-accounts-round3.md)。SC-01–SC-18 仍未执行 |
+| 状态 | **v1.3 功能合同已收口（2026-11-01）**。SC-01–SC-18 全部关闭，逐条落点见 §7.1，证据见 [收口记录](../reviews/2026-11-01-login-accounts-closure.md)。设计基线见 [第 3 轮](../reviews/2026-10-30-codex-review-login-accounts-round3.md)。**本条收口不表示可上线**——浏览器走查、移动窄屏、Docker 重建、客户交付不在本条出口 |
 | 决策来源 | 2026-10-30 对 `/admin/admins` 的页面审阅。列表主画布、新建对话框、账户抽屉、四条保护、单点登录条件展开均接受。审阅另加两条：不可用按钮说明原因；删除须输入登录账户 id |
 | 需求来源 | [UX-ADMIN-ACCOUNTS-001](../ui-ux-feedback/pages/admin-admins.md)。所有者打开本页是核对谁能登录，新建和身份绑定是低频动作 |
 | 实施主体 | Lucy WebUI。不修改 KTX 源码，不改账户接口 |
@@ -287,6 +287,35 @@ SC-18 的四格。
 | 未启用 | 有 | 只读身份源、主体、联系邮箱，以及未启用说明。没有「未绑定单点登录身份。」没有输入框，没有「新增／替换绑定」，没有「删除绑定」 |
 | 启用 | 无 | 「未绑定单点登录身份。」可以「新增／替换绑定」。没有只读身份源 |
 | 启用 | 有 | 只读身份源、主体、联系邮箱。可以「新增／替换绑定」和「删除绑定」。没有「未绑定单点登录身份。」 |
+
+### 7.1 执行结果与逐条落点（2026-11-01）
+
+证据等级：**本地自动化（vitest）＋ 本地工程门禁**。无 CI job 证据，无客户环境证据，无浏览器实测证据。完整记录见 [收口记录](../reviews/2026-11-01-login-accounts-closure.md)。
+
+> **本节更正的过期登记**：本 Spec 状态行此前写「SC-01–SC-18 仍未执行」，而实施 Plan v1.3 记「S1–S2 已落地、SC-01–SC-18 全部有通过记录」。**实现与验收在 2026-10-30 就已完成并留痕，是 Spec 状态行没跟上**。本次收口按 Plan §5.1 的对照表**逐条复核**（不直接采信）后关闭。
+
+| 编号 | 结果 | 落点（文件 → 断言要点） |
+|---|---|---|
+| SC-01 | 通过 | `admin-accounts-route.test.tsx`——旧路径打开后地址栏变成 `/admin/accounts`；登录守卫把旧路径记成 `from`；登录后回到旧路径仍落在 `/admin/accounts`（**不**只断言侧栏 `to`） |
+| SC-02 | 通过 | `navigation.test.ts`——侧栏「登录账户」指向 `/admin/accounts`，旧路径不再是侧栏目标 |
+| SC-03 | 通过 | `admin-accounts.test.tsx`——页头「新建账户」；页面没有旧的常驻标题 |
+| SC-04 | 通过 | `admin-accounts-oidc.test.tsx`——运维名册只有四列，没有登录方式、新建账户、管理和禁用 |
+| SC-05 | 通过 | `admin-accounts.test.tsx`——开放模式保留原说明，没有「新建账户」和「管理」 |
+| SC-06 | 通过 | `admin-accounts-oidc.test.tsx`——单点登录未启用时新建对话框只有四个字段，页头下一句说明 |
+| SC-07 | 通过 | `admin-accounts-oidc.test.tsx`——未勾选不出现三项绑定、初始密码必填；勾选后三项必填、初始密码可留空 |
+| SC-08 | 通过 | `admin-accounts.test.tsx`——当前登录的行有标记，抽屉标题是该登录账户 id |
+| SC-09 | 通过 | `admin-accounts.test.tsx`——当前登录账户的禁用与删除不可执行，且不发请求 |
+| SC-10 | 通过 | `admin-accounts.test.tsx`——唯一本地密码所有者三条不可执行；两名所有者只有一人有本地密码时底线落在有本地密码那侧；两名都有时当前人可把自己改为运维 |
+| SC-11 | 通过 | `admin-accounts-oidc.test.tsx`——「移除本地密码」七行出现条件逐行断言；允许态 `PATCH` body 为 `{ removeLocalPassword: true }` |
+| SC-12 | 通过 | `admin-accounts.test.tsx`——id 一致前不发 `DELETE`；比较五格（`xingchen`、首尾空格、首尾换行、`Xingchen`、中间换行） |
+| SC-13 | 通过 | `admin-accounts.test.tsx`——接口拒绝时把接口文案留在抽屉或确认框里 |
+| SC-14 | 通过 | `admin-accounts.test.tsx`——「保存密码」调 `PATCH`；成功后显示「本地密码已更新。」 |
+| SC-15 | 通过 | `admin-accounts-oidc.test.tsx`——未勾选时 `POST` 不带 `oidcBinding`；勾选并填齐三项且密码留空时带 `oidcBinding` 不带 `password` |
+| SC-16 | 通过 | `admin-accounts.test.tsx`——用户可见文案不含禁用词 |
+| SC-17 | 通过 | `admin-accounts.test.tsx`——SC-09 保护按钮与 SC-12 删除确认按钮**分别**断言：可聚焦、气泡关闭时节点在 DOM、气泡文本与节点相同 |
+| SC-18 | 通过 | `admin-accounts-oidc.test.tsx`——抽屉身份绑定四格逐格断言 |
+
+**实测（2026-11-01 复跑）**：`admin-accounts-route.test.tsx` / `navigation.test.ts` / `admin-accounts.test.tsx` / `admin-accounts-oidc.test.tsx` —— **4 文件 / 62 条全绿**。
 
 ## 核心流程（伪代码）
 

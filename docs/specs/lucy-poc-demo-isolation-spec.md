@@ -7,6 +7,16 @@
 | 版本 | v1.1 |
 | 撰写日期 | 2026-08-28 |
 | 适用范围 | Docker demo / executive-poc / postgres-demo、POC 演示、CI smoke |
+| 状态 | **形态已合规（2026-11-01 补「闭口层级」小节与「状态」行）。本条功能合同尚未收口**——本批只做形态修复，不改实现、不补验收证据。实现现状：demo 重建脚本在库（`scripts/demo/rebuild-demo-lucy.sh`、`rebuild-executive-poc-lucy.sh`），但本条**没有逐条功能合同收口记录**。[盘点](../reviews/2026-11-01-spec-closure-inventory.md) |
+
+## 闭口层级
+
+- 层级：功能合同
+- 本条承诺：POC 演示与能力测试不在默认部署（`docker-compose.yml`）内提供 demo 数据库或 demo 上下文；演示语境只在显式授权的演示路径里出现。
+- 本条出口：本 Spec 的「默认部署不含 demo 上下文」判定与演示语境的显式开关规则（Docker demo／executive-poc／postgres-demo／CI smoke 各自的口径）。
+- 不在本条出口：默认部署本身的启动与健康检查；CI smoke 的执行结果；整库旅程、跨模块故障演练、证据等级。
+- 上线关系：本条收口不表示可上线
+
 
 ## 1. 决策摘要
 

@@ -1,0 +1,115 @@
+ M .cursor/rules/lucy-docker-cache-rebuild.mdc
+ M .gitignore
+ M customer-config.example/webui/config/access.yaml
+ M docs/README.md
+ M docs/governance/project-overview.md
+ M docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md
+ M docs/plans/2026-10-25-lucy-v0.25-p0-implementation-plan.md
+ M docs/plans/2026-10-25-lucy-v0.25-p1-implementation-plan.md
+ M docs/plans/2026-10-30-l25-11-publish-window-task.md
+ M docs/plans/2026-10-30-lucy-access-map-quiet-reading-plan.md
+ M docs/plans/README.md
+ M docs/plans/lucy-20261030-version-info-identity-plan.md
+ M docs/qa/security-findings.yaml
+ M docs/qa/selector-contract.md
+ M docs/releases/README.md
+ M docs/specs/lucy-20261020-v2p5-audit-increment-spec.md
+ M docs/specs/lucy-20261022-v2p5-row-permission-management-spec.md
+ M docs/specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md
+ M docs/specs/lucy-20261028-v0p25-lucy-ops-control-plane-spec.md
+ M docs/specs/lucy-20261030-access-map-quiet-reading-spec.md
+ M docs/specs/lucy-20261030-version-info-identity-spec.md
+ M docs/ui-ux-feedback/README.md
+ M docs/ui-ux-feedback/pages/admin-agents.md
+ M docs/ui-ux-feedback/pages/admin-mcp-playground.md
+ M docs/ui-ux-feedback/pages/eval.md
+ M docs/ui-ux-feedback/pages/publish-workbench.md
+ M docs/ui-ux-feedback/pages/wiki.md
+ M examples/docker-demo/project-template/webui/config/access.yaml
+ M examples/security-e2e/project-template/ktx.yaml.template
+ M scripts/e2e/__tests__/case-catalog.test.mjs
+ M scripts/e2e/__tests__/environment-identity.test.mjs
+ M scripts/e2e/__tests__/evidence-verifier.test.mjs
+ M scripts/e2e/__tests__/v025-access.test.mjs
+ M scripts/e2e/__tests__/v025-p1.test.mjs
+ M scripts/e2e/apply-db.mjs
+ M scripts/e2e/collect-management-results.mjs
+ M scripts/e2e/contracts/v025-coverage.yaml
+ M scripts/e2e/lib/access-v025.mjs
+ M scripts/e2e/lib/catalog.mjs
+ M scripts/e2e/lib/row-policy-templates-v025.mjs
+ M scripts/e2e/lib/v025-evidence.mjs
+ M scripts/e2e/prepare-environment.mjs
+ M scripts/e2e/run-agent-journey.mjs
+ M scripts/e2e/run-security.mjs
+ M scripts/e2e/verify-evidence.mjs
+ M scripts/release/release-ledger.mjs
+ M scripts/release/release-ledger.test.mjs
+ M webui/docs/00-product-terminology-standard.md
+ M webui/docs/03-api-spec.md
+ M webui/docs/187-access-relation-sankey-spec.md
+ M webui/docs/design-system/99-governance.md
+ M webui/package.json
+ M webui/server/__tests__/api.semantic-assets.publish.test.ts
+ M webui/server/__tests__/mcp-proxy-smoke.test.ts
+ M webui/server/__tests__/publish-coordinator.test.ts
+ M webui/server/__tests__/semantic-batch-idempotency-audit.test.ts
+ M webui/server/__tests__/semantic-batch-journal-lifecycle.test.ts
+ M webui/server/__tests__/slow-call-and-empty-result.test.ts
+ M webui/server/catalog-assets.ts
+ M webui/server/content-mirror.ts
+ M webui/server/index.ts
+ M webui/server/project.ts
+ M webui/server/publish-coordinator.ts
+ M webui/server/semantic-assets.ts
+ M webui/server/semantic-idempotency.ts
+ M webui/server/semantic-layer.ts
+ M webui/server/semantic-limits.ts
+ M webui/server/semantic-recovery-journal.ts
+ M webui/src/__tests__/access-map.test.tsx
+ M webui/src/__tests__/admin-accounts.test.tsx
+ M webui/src/__tests__/audit-trust-page-integration.test.tsx
+ M webui/src/__tests__/audit-trust/audit-top-meta-bar.test.tsx
+ M webui/src/components/admin/AccessMapCanvas.tsx
+ M webui/src/components/admin/AccessMapCredentialList.tsx
+ M webui/src/components/admin/AccessMapLegend.tsx
+ M webui/src/components/admin/AccessMapSignalBar.tsx
+ M webui/src/components/admin/AccessMapTable.tsx
+ M webui/src/components/admin/AccessMapTypes.tsx
+ M webui/src/lib/publishHistoryLabels.ts
+ M webui/src/lib/types.ts
+ M webui/src/pages/admin/AccessMap.tsx
+ M webui/src/pages/admin/AdminAccounts.tsx
+ M webui/src/pages/publish/PublishHistory.tsx
+?? docs/plans/2026-10-30-l25-11-uat-delivery-task.md
+?? docs/plans/2026-10-30-lucy-webui-release-ux-review-plan.md
+?? docs/plans/lucy-20261030-l25-15-semantic-release-restore-task-plan.md
+?? docs/releases/ux/
+?? docs/reviews/2026-10-30-codex-review-login-accounts-round2.md
+?? docs/reviews/2026-10-30-codex-review-webui-release-ux.md
+?? docs/reviews/2026-10-30-l25-11-uat-evidence.md
+?? docs/reviews/2026-10-30-l25-11-uat-rereview-2-conclusion.md
+?? docs/reviews/2026-10-30-l25-11-uat-rereview-conclusion.md
+?? docs/reviews/2026-10-30-l25-11-uat-rereview-input.md
+?? docs/reviews/2026-10-30-l25-15-implementation-evidence.md
+?? docs/runbooks/webui-release-ux-checklist.md
+?? docs/specs/lucy-20261030-webui-release-ux-review-spec.md
+?? docs/ui-ux-feedback/pages/ops-calls.md
+?? scripts/e2e/lib/db-capability.mjs
+?? webui/playwright.release-ux.config.ts
+?? webui/server/__tests__/publish-workbench-state.test.ts
+?? webui/server/__tests__/semantic-batch-mirror-failure.test.ts
+?? webui/server/__tests__/semantic-merged-model.test.ts
+?? webui/server/__tests__/semantic-release-restore-contract.test.ts
+?? webui/server/__tests__/semantic-release-restore.test.ts
+?? webui/server/__tests__/semantic-release-snapshots.test.ts
+?? webui/server/publish-impact.ts
+?? webui/server/publish-workbench-state.ts
+?? webui/server/semantic-merged-model.ts
+?? webui/server/semantic-release-restore.ts
+?? webui/server/semantic-release-snapshots.ts
+?? webui/src/__tests__/access-map-layout.test.tsx
+?? webui/src/__tests__/release-ux-invariants.test.ts
+?? webui/src/__tests__/restore-release-drawer.test.tsx
+?? webui/src/components/semantic-assets/RestoreReleaseDrawer.tsx
+?? webui/tests/release-ux/

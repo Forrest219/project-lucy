@@ -2,10 +2,10 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档类型 / 版本 | 功能设计基线 / v0.3-wave-a |
-| 日期 / 目标版本 | 2026-10-30；2026-10-31 收窄本模块出口；Wave A 实现 / v0.25 |
+| 文档类型 / 版本 | 功能设计基线 / v0.4 |
+| 日期 / 目标版本 | 2026-10-30；2026-10-31 收窄本模块出口；Wave A 实现 / v0.25；2026-11-01 功能合同收口 |
 | 功能编号 / 优先级 | L25-10（执行波）／P1 |
-| 状态 | **本模块 Wave A 已落地（审查→M1–M5，合成夹具 HQ）**。客户环境／旅程／交付／矩阵仍归 [E2E Spec](lucy-20261025-v0p25-e2e-mainline-and-branch-optimization-spec.md) 的 `HIV25`。本条不回开 [编译侧 Spec](lucy-20261025-v0p25-hive-direct-connection-spec.md)。数据库支持状态保持 `planned` |
+| 状态 | **v0.4 功能合同已收口（2026-11-01）**。HQ-01–HQ-18 全部关闭（HQ-16／HQ-18 按合成夹具维），逐条落点见 §7.3，证据见 [收口记录](../reviews/2026-11-01-hive-query-execution-closure.md)。客户环境／旅程／交付／矩阵仍归 [E2E Spec](lucy-20261025-v0p25-e2e-mainline-and-branch-optimization-spec.md) 的 `HIV25`。本条不回开 [编译侧 Spec](lucy-20261025-v0p25-hive-direct-connection-spec.md)。**本条收口不表示可上线**——数据库支持状态保持 `planned` |
 | 授权来源 | 2026-10-30 批准推进问数；2026-10-31 批准「只留本模块 todo」并批准完成本模块 Wave A 与 commit |
 | 配对 Plan | [lucy-20261030-hive-query-execution-plan.md](../plans/lucy-20261030-hive-query-execution-plan.md) |
 | 上游 | [Hive 直连编译侧 Spec](lucy-20261025-v0p25-hive-direct-connection-spec.md)（已收口）；[上游实施方案](../plans/2026-10-20-hive-direct-connection-implementation-plan.md)；[E2E Spec](lucy-20261025-v0p25-e2e-mainline-and-branch-optimization-spec.md) 的 `HIV25` |
@@ -268,6 +268,35 @@ handleHiveQuery(identity, tool, untrustedArgs):
 | 离线 amd64、客户交付组合 | `HIV25` 交付维 |
 | 升级／备份恢复 | `LIFECYCLE` |
 | 支持矩阵晋级 | 支持矩阵另批 |
+
+### 7.3 执行结果与逐条落点（2026-11-01）
+
+证据等级：**本地自动化（vitest，合成夹具）**。无 CI job 证据，无客户 HS2 证据，无客户环境证据。完整记录见 [收口记录](../reviews/2026-11-01-hive-query-execution-closure.md)。
+
+| 编号 | 结果 | 落点（`webui/server/__tests__/hq-hive-execution.test.ts` → 用例名） |
+|---|---|---|
+| HQ-01 | 通过 | 「HQ-01 partition profile」 |
+| HQ-02 | 通过 | 「HQ-02 unknown refuses before JDBC」 |
+| HQ-03 | 通过 | 「HQ-03 missing partition predicate → hive_partition_predicate_required; JDBC=0」 |
+| HQ-04 | 通过 | 「HQ-04 LIMIT alone is not a partition bound」 |
+| HQ-05 | 通过 | 「HQ-05 row-policy-like non-partition predicate alone still rejects」 |
+| HQ-06 | 通过 | 「HQ-06 bounded equality passes gate and executes on synthetic fixture」 |
+| HQ-07 | 通过 | 「HQ-07 bounded prefix (only p1) passes」 |
+| HQ-08 | 通过 | 「HQ-08 skip-level (only p2) rejects」 |
+| HQ-09 | 通过 | 「HQ-09 window PARTITION BY does not satisfy table partition bound」 |
+| HQ-10 | 通过 | 「HQ-10 unpartitioned table does not require partition predicates」 |
+| HQ-11 | 通过 | 「HQ-11 explain never invokes JDBC」 |
+| HQ-12 | 通过 | 「HQ-12 proxy hook never forwards Hive to KTX (context missing → fail closed)」 |
+| HQ-13 | 通过 | 「HQ-13 compile credential isolation remains a compile-bridge contract (smoke)」 |
+| HQ-14 | 通过 | 「HQ-14 multi-statement / non-readonly rejected by gate parse」 |
+| HQ-15 | 通过 | 「HQ-15 decimal / bigint stay strings (no JS number coercion)」 |
+| HQ-16 | 通过（**合成维**） | 「HQ-16 cancel observation on synthetic worker」——取消后 `failure.reason = hive_jdbc_canceled`、`terminalState = canceled` |
+| HQ-17 | 通过 | 「HQ-17 audit distinction: gate denial has no JDBC success attempt」 |
+| HQ-18 | 通过（**合成维**） | 「HQ-18 synthetic partition oracle matches independent expectation」——**独立手写 oracle** `["100.50", "200.25"]`；全表 4 行、单分区 2 行。oracle 不由被测编译器生成 |
+
+**实测（2026-11-01 复跑）**：`hq-hive-execution.test.ts` **1 文件 / 22 条全绿**（18 条 HQ 专项 ＋ 4 条组用例）。
+
+**HQ-16／HQ-18 只算合成维的原因**：真实集群的分区裁剪与跨进程取消不在本条。真实集群 oracle 归 `HIV25`／发布取证层——**不得**把 HQ 通过写成客户交付通过。
 
 ---
 

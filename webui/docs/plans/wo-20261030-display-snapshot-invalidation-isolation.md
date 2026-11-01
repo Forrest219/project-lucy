@@ -12,21 +12,22 @@
 
 ## 状态与本轮交付边界
 
-- 日期 / 版本：2026-10-30 / v0.1（实施记录 2026-10-31）。
+- 日期 / 版本：2026-10-30 / v0.2（实施记录 2026-10-31；**2026-11-01 功能合同收口**）。
 - **实施状态**：Task 1–6 已完成，SI-01–SI-13 已执行并通过；Task 7 的综合验证已跑完，SI-14 的浏览器往返见 Spec 195 §8.1。
+- **收口状态（2026-11-01）**：**v0.2 功能合同已收口**，SI-01–SI-14 全部关闭。证据 `docs/reviews/2026-11-01-display-snapshot-invalidation-isolation-closure.md`；原始证据已入库 `webui/scripts/evidence/2026-10-31-spec195-si14-roundtrip/`（与工作区原件逐字节一致）。**本条收口不表示可上线**——镜像构建、部署、客户交付、现场实例复核不在本条出口。
 - 本轮**未**构建镜像、未部署、未出客户包、未改现场实例、未改 KTX / 运行时 ACL / Policy / 锁生命周期，未执行 `git commit` / `git push`。
 - 本计划按仓库模块落位规则放在 `webui/docs/plans/`。任务执行时使用当前可用的 `executing-plans` 技能；若工具环境的技能命名没有 `superpowers:` 前缀，使用已安装的同名工作流，不为此安装软件或扩大任务。
 - 已完成方向确认，无需重新从需求访谈开始。实施中若设计需改变检测窗口、运行时授权或发布窗口语义，应先回到 Spec 195 修改方案，不静默扩大范围。
 
 | 任务 | 状态 | 落地要点 |
 |---|---|---|
-| Task 1 | 完成 | 新增用例先跑红，失败输出存 `inbox/spec195/task1-red-baseline.txt`（HEAD 基线 8 失败） |
+| Task 1 | 完成 | 新增用例先跑红，失败输出存 `webui/scripts/evidence/2026-10-31-spec195-si14-roundtrip/red-baseline-task1.txt`（HEAD 基线 8 失败；2026-11-01 收口时入库，与工作区原件逐字节一致） |
 | Task 2 | 完成 | 新增 `webui/server/display-revisions.ts`：统一账本 + 稳定读取 + 晚到观察保护 |
 | Task 3 | 完成 | 屏障 touched-path 登记 + 退出时确认磁盘最终版本；未登记路径保守退回原失效行为 |
 | Task 4 | 完成 | 外层屏障按实际待写路径取并集（overlay→D，Manifest→D/P）；`agent-permissions` 改 P/C；按 scope 的校验健康度 |
 | Task 5 | 完成 | 共用有界 I/O（并发 2，metadata 优先）、共享校验任务、请求级 ≤3 次尝试 + 1500ms 一次预算、可区分 busy 诊断 |
 | Task 6 | 完成 | 新增 `DisplayRefreshNotice`，接入 Agent 列表与语义资产页；时间取 `dataUpdatedAt` |
-| Task 7 | 完成 | 综合命令 12 文件 201 用例全绿；SI-14 浏览器往返 31/31 样本成功、0 次 busy（`inbox/spec195/si14/`）；术语门禁 PASS、`lint:spec` 的 `api-spec` 失败归属其他会话未提交路由、本单文件 0 类型错误。交付报告见 `inbox/spec195/delivery-report.md` |
+| Task 7 | 完成 | 综合命令 12 文件 201 用例全绿；SI-14 浏览器往返 31/31 样本成功、0 次 busy（原始样本已入库 `webui/scripts/evidence/2026-10-31-spec195-si14-roundtrip/`）；术语门禁 PASS、`lint:spec` 的 `api-spec` 失败归属其他会话未提交路由、本单文件 0 类型错误。交付报告已入库 `webui/scripts/evidence/2026-10-31-spec195-si14-roundtrip/delivery-report.md` |
 
 ## 开工阅读与范围核查
 

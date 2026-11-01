@@ -2,12 +2,12 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档类型 / 版本 | 实施计划 / v0.3-wave-a |
-| 日期 | 2026-10-30；2026-10-31 收窄为仅本模块；Wave A 落地 |
+| 文档类型 / 版本 | 实施计划 / v0.4 |
+| 日期 | 2026-10-30；2026-10-31 收窄为仅本模块；Wave A 落地；2026-11-01 功能合同收口 |
 | 功能编号 | L25-10（执行波） |
-| 状态 | **本模块 Wave A 已完成（审查→M1–M5）**。客户环境／旅程／交付／矩阵不在本 Plan todo |
+| 状态 | **v0.4 功能合同已收口（2026-11-01）**。本模块 Wave A 已完成（审查→M1–M5），HQ-01–HQ-18 全部关闭（HQ-16／HQ-18 按合成夹具维），逐条落点见 Spec §7.3，证据 `docs/reviews/2026-11-01-hive-query-execution-closure.md`。客户环境／旅程／交付／矩阵不在本 Plan todo。**本条收口不表示可上线**——数据库支持状态保持 `planned` |
 | 授权边界 | 本 Plan 只跟踪**功能合同**实现。不授权客户 HS2 组合认证、整库 Agent 旅程、离线 amd64、升级恢复、支持矩阵晋级。那些归 [E2E Spec](../specs/lucy-20261025-v0p25-e2e-mainline-and-branch-optimization-spec.md) 的 `HIV25`／`LIFECYCLE` |
-| 验收 | Spec §7 本模块出口 HQ-01–HQ-15、HQ-17，及 HQ-16／HQ-18 的合成夹具维；不得用 `HIV25` 通过冒充本条收口 |
+| 验收 | **已通过**：Spec §7 本模块出口 HQ-01–HQ-15、HQ-17，及 HQ-16／HQ-18 的合成夹具维；不得用 `HIV25` 通过冒充本条收口。证据等级＝本地自动化（vitest，合成夹具），无客户环境证据 |
 | 配对 Spec | [lucy-20261030-hive-query-execution-spec.md](../specs/lucy-20261030-hive-query-execution-spec.md) |
 | 上游 | 编译侧已收口 Spec；2026-10-31 用户批准「只留本模块 todo」并批准完成本模块 Wave A 与 commit |
 

@@ -3,11 +3,21 @@
 | Metadata | Content |
 |---|---|
 | Document name | Lucy MCP Execution Runtime Ack & Debug Spec |
-| Document type | Product / Architecture / Debuggability Spec |
-| Version | v0.2 (reviewed) |
+| 文档类型 / Document type | Product / Architecture / Debuggability Spec |
+| 版本 / Version | v0.2 (reviewed) |
 | Written date | 2026-09-08 |
 | Scope | WebUI config writes, Policy Runtime, Catalog reload, MCP Proxy, KTX MCP execution runtime, Admin health/debug surfaces |
 | Incident driver | `finbp_nbcb_funds` could see `zijin` in catalog/read_source but `lucy_query` failed because the MCP execution runtime had not loaded `connections.zijin`. |
+| 状态 | **形态已合规（2026-11-01 补「闭口层级」小节与「状态」行）。本条功能合同尚未收口**——本批只做形态修复，不改实现、不补验收证据。实现现状：相关运行时模块在库（`webui/server/mcp-runtime-state.ts`、`webui/server/admin/mcp-runtime-reload.ts`），但本条**没有逐条功能合同收口记录**，出口矩阵未逐条执行留痕。[盘点](../reviews/2026-11-01-spec-closure-inventory.md) |
+
+## 闭口层级
+
+- 层级：功能合同
+- 本条承诺：MCP 执行层的加载与运行状态可被观测——配置写入、目录重载与代理执行之后，管理面能区分「已加载／未加载／不可用」并给出可排查的诊断。
+- 本条出口：本 Spec 的四层徽章与健康／调试面呈现合同；连接概览的提示口径（`/connections` 不再展示四层徽章、不再提供「重新检测执行层」，只在列表上方保留一条提示）；MCP 调试台仍按本节展示四层状态。
+- 不在本条出口：KTX 侧执行层的实现改动（KTX 是上游依赖，本仓只在代理层／适配层解决）；整库旅程、跨模块故障演练、证据等级；镜像构建与客户交付。
+- 上线关系：本条收口不表示可上线
+
 
 ---
 
