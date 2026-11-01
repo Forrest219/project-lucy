@@ -178,6 +178,7 @@ PATCH  /api/admin/agents/:userId
 DELETE /api/admin/agents/:userId
 GET    /api/admin/agents/:userId/effective-permissions
 POST   /api/admin/agents/:userId/tokens
+POST   /api/admin/agents/:userId/tokens/:label/renew
 DELETE /api/admin/agents/:userId/tokens/:label
 GET    /api/admin/roles
 GET    /api/admin/roles/:roleId
@@ -834,6 +835,7 @@ PATCH 请求：
 Token：
 
 - `POST /api/admin/agents/:userId/tokens` 只在响应中返回一次明文 token，yaml/audit 只保存 hash。
+- `POST /api/admin/agents/:userId/tokens/:label/renew` 只更新 `expires_at`（审计 `token_renew`）；响应不含明文；已撤销不可续。
 - `DELETE /api/admin/agents/:userId/tokens/:label` 先写 `revoked_tokens`，再更新 yaml。
 
 Roles：

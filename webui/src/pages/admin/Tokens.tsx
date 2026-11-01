@@ -7,6 +7,7 @@ import { useUrlMirroredField } from "../../lib/useUrlMirroredField";
 import type { TokensResponse, TokenInventoryItem } from "../../lib/types";
 import { PageHeader } from "../../components/PageHeader";
 import { MetricCard } from "../../components/MetricCard";
+import { RenewTokenDialog } from "../../components/admin/RenewTokenDialog";
 import { formatLastSeen } from "./AgentList";
 import { Key, Trash2 } from "lucide-react";
 import { queryKeys } from "../../lib/queryKeys";
@@ -37,6 +38,7 @@ export function Tokens() {
   });
 
   const [revokingToken, setRevokingToken] = useState<{ userId: string; label: string } | null>(null);
+  const [renewingToken, setRenewingToken] = useState<{ userId: string; label: string } | null>(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["admin", "tokens", { search, agent: filterAgent, status: filterStatus }],
@@ -164,18 +166,18 @@ export function Tokens() {
           label={<span>30 天内到期</span>}
           labelText="30 天内到期"
           value={stats.expiringSoonTokens}
-          help={<span>即将于 30 天内到期的可用 <span className="notranslate" translate="no">Token</span>，建议提前准备换签。</span>}
+          help={<span>即将于 30 天内到期的可用 <span className="notranslate" translate="no">Token</span>，建议提前续期或换签。</span>}
           tone={stats.expiringSoonTokens > 0 ? "warning" : undefined}
-          subValue={stats.expiringSoonTokens > 0 ? "需关注换签" : "无近期到期"}
+          subValue={stats.expiringSoonTokens > 0 ? "需关注续期或换签" : "无近期到期"}
         />
         <MetricCard
           helpId="kpi-expired-tokens"
           label={<span>已过期 / 停用</span>}
           labelText="已过期 / 停用"
           value={stats.expiredTokens}
-          help={<span>已过期的 <span className="notranslate" translate="no">Token</span> 凭据（<span className="notranslate" translate="no">Proxy</span> 会自动拒绝访问）。</span>}
+          help={<span>已过期的 <span className="notranslate" translate="no">Token</span> 可由管理员续期恢复；已吊销的不可续期。</span>}
           tone={stats.expiredTokens > 0 ? "danger" : undefined}
-          subValue="已自动阻止访问"
+          subValue="可续期或吊销"
         />
       </div>
 
@@ -412,6 +414,16 @@ export function Tokens() {
                           </Link>
                           <button
                             type="button"
+                            className="pl-btn pl-btn--ghost text-xs p-1"
+                            data-testid={`token-renew-${token.label}`}
+                            onClick={() => setRenewingToken({ userId: token.agent.id, label: token.label })}
+                            aria-label={`续期 ${token.label}`}
+                            title="续期"
+                          >
+                            续期
+                          </button>
+                          <button
+                            type="button"
                             className="pl-btn pl-btn--ghost text-xs text-danger p-1 notranslate"
                             translate="no"
                             onClick={() => setRevokingToken({ userId: token.agent.id, label: token.label })}
@@ -462,6 +474,18 @@ export function Tokens() {
             </div>
           </div>
         </div>
+      )}
+
+      {renewingToken && (
+        <RenewTokenDialog
+          userId={renewingToken.userId}
+          label={renewingToken.label}
+          onClose={() => setRenewingToken(null)}
+          onSuccess={() => {
+            void queryClient.invalidateQueries({ queryKey: ["admin", "tokens"] });
+            void queryClient.invalidateQueries({ queryKey: queryKeys.adminAgents });
+          }}
+        />
       )}
     </div>
   );

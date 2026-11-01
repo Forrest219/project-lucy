@@ -4,6 +4,10 @@ This directory stores repository-level implementation plans that are not scoped 
 
 | Plan | Purpose |
 |---|---|
+| [lucy-20261101-ops-evidence-askable-governance-plan.md](lucy-20261101-ops-evidence-askable-governance-plan.md) | **v0.9.1 文档定稿（2026-11-01）**：运维问数可问治理面。Codex 复审小修已落。定稿≠开发授权。Spec 见 [lucy-20261101-ops-evidence-askable-governance-spec.md](../specs/lucy-20261101-ops-evidence-askable-governance-spec.md)。审阅见 [codex-review](../reviews/2026-11-01-codex-review-ops-evidence-askable-governance.md) |
+| [lucy-20261101-token-default-ttl-365-plan.md](lucy-20261101-token-default-ttl-365-plan.md) | **v0.3 文档定稿（2026-11-01）**：新建 Token 默认 365 天。实施待开工。Spec 见 [lucy-20261101-token-default-ttl-365-spec.md](../specs/lucy-20261101-token-default-ttl-365-spec.md) |
+| [lucy-20261101-token-renewal-plan.md](lucy-20261101-token-renewal-plan.md) | **v0.4 文档定稿（2026-11-01）**：Token 显式续期。实施待开工。Spec 见 [lucy-20261101-token-renewal-spec.md](../specs/lucy-20261101-token-renewal-spec.md) |
+| [lucy-20261101-token-default-ttl-and-renewal-plan.md](lucy-20261101-token-default-ttl-and-renewal-plan.md) | **已替代归档（v0.1）**：原合并 Plan；拆为上两条 |
 | [lucy-20261101-shared-dev-qa-baseline-plan.md](lucy-20261101-shared-dev-qa-baseline-plan.md) | **v1.1 基线落地闭口（Mac mini／2026-11-01）**：S0–S2 完成；S3 其余两机未完成。Manifest 正本在坚果云 `07-共享开发B层`。Runbook 见 [shared-dev-qa-baseline](../runbooks/shared-dev-qa-baseline.md)。Spec 见 [lucy-20261101-shared-dev-qa-baseline-spec.md](../specs/lucy-20261101-shared-dev-qa-baseline-spec.md) |
 | [lucy-20261101-access-map-chart-first-plan.md](lucy-20261101-access-map-chart-first-plan.md) | **v0.2 实施完成（2026-11-01）**：访问关系图图优先呈现。去掉三 KPI 卡与双折叠墙；图例短行置顶；口径与快照弱入口；图区高度/栏距/悬停。S1–S3 落地，SC-01–SC-14 已关闭（组件测试 + 布局测试 46/46；`npm run lint:terminology` exit 0）。本条收口不表示可上线。实施记录见 [2026-11-01-access-map-chart-first-implementation-notes.md](../reviews/2026-11-01-access-map-chart-first-implementation-notes.md)。Spec 见 [lucy-20261101-access-map-chart-first-spec.md](../specs/lucy-20261101-access-map-chart-first-spec.md) |
 | [lucy-20261101-new-token-expiry-preset-ux-plan.md](lucy-20261101-new-token-expiry-preset-ux-plan.md) | **功能合同已收口（2026-11-01）**：新建 Token 过期快捷预设 UX。segmented 四档 + 删除政策提示句。SC-01–SC-06 关闭。本条收口不表示可上线。Spec 见 [lucy-20261101-new-token-expiry-preset-ux-spec.md](../specs/lucy-20261101-new-token-expiry-preset-ux-spec.md) |
@@ -59,5 +63,8 @@ This directory stores repository-level implementation plans that are not scoped 
 | `wo-202608-59-access-control-p0.md` | **访问权限 AC-P0** 可交付实现计划（capability / 工具分级 / 配置版本 / 收窄提交）；入口 `docs/access-control/plans/` |
 | `wo-202608-58-spider2-lite-sqlite-stress-harness.md` | Spider2-lite→StarRocks `sandbox` 长期分层 E2E（runtime/platform/business eval gates；Pilot 为 seed） |
 | `2026-08-03-lucy-enterprise-data-agent-access-governance-plan.md` | Implement the Lucy 202608 Enterprise Governance & Observability iteration across Admin, Trace / Evidence, Access Governance Gate, Security Eval, risk review candidates, and release readiness evidence |
+| `wo-202608-00-spec-branch-isolation.md` | Create a clean isolated branch/worktree for the frozen Lucy 202608 spec / plan / task documents |
+| `wo-202608-06-governance-review-release-evidence.md` | 202608-GOV-06 MiniMax Code handoff for risk review candidates and release readiness evidence package |
+e Lucy 202608 Enterprise Governance & Observability iteration across Admin, Trace / Evidence, Access Governance Gate, Security Eval, risk review candidates, and release readiness evidence |
 | `wo-202608-00-spec-branch-isolation.md` | Create a clean isolated branch/worktree for the frozen Lucy 202608 spec / plan / task documents |
 | `wo-202608-06-governance-review-release-evidence.md` | 202608-GOV-06 MiniMax Code handoff for risk review candidates and release readiness evidence package |

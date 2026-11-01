@@ -214,6 +214,8 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Product Title | 产品名称 | wordmark | 站点名、系统名（作主标签） | 默认 `Lucy WebUI` |
 | Brand Tagline | 副标题 | tagline | 口号、Slogan（作主标签） | 默认 `可信 Agent 数据层` |
 | Token Expiry | 过期时间 | Token 失效时间 | 失效日期（可作为说明同义） | `expires_at`；到期后 Proxy 拒绝 |
+| Token Renewal | 续期 | 延长有效期 | 重新签发、复活、自动续期、永不过期 | 只改 `expires_at`；明文与 hash 不变；管理员显式操作（`lucy-20261101-token-renewal`） |
+| Token Rotation | 换签 | 轮换 | 续期（混称） | 新建 Token + 客户端替换明文；泄露／交接时配合吊销 |
 | Config Audit Change Type | 变更类型 | 配置变更类型 | 类型（过宽）、changeType（裸露） | Spec 96 表头与筛选 |
 | Config Audit Asset Kind | 资产域 | 配置资产域 | assetKind、资产类型（与 Semantic Asset Kind 混淆） | Spec 90/96：governance/semantic/wiki/eval/publish |
 | Config Audit CSV Export | 导出 CSV（与主表一致） | 配置审计导出 | 英文原始列 dump、仅到日的文件名 | Spec 97：列头/单元格与主表 7 列中文一致；文件名 `config-audit-YYYYMMDD-HHmmss.csv` |

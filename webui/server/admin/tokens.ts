@@ -22,7 +22,12 @@ import { invalidateAccessConfigCache, isTokenExpired } from "../proxy/identity.j
 import { narrowAuthorization, tokenHashPrefixOf } from "../proxy/authorization-barrier.js";
 import { actorIdFromRequest, requireOwnerForOps } from "../auth/guard.js";
 import { auditActorFields, trustedActorFromRequest } from "../security/request-actor.js";
-import { normalizeNewTokenExpiry, TokenExpiryPolicyError } from "./token-expiry-policy.js";
+import {
+  assertStrictExtension,
+  expiryNormalizedEqual,
+  normalizeNewTokenExpiry,
+  TokenExpiryPolicyError
+} from "./token-expiry-policy.js";
 
 const ACCESS_YAML_REL = "webui/config/access.yaml";
 
@@ -569,6 +574,247 @@ export function registerTokenRoutes(app: FastifyInstance) {
       });
 
       return { ok: true, data: { written: true, revokedAt, ...runtime, gate } };
+    });
+  });
+
+  // POST /api/admin/agents/:userId/tokens/:label/renew
+  // Spec lucy-20261101-token-renewal — extend expires_at only; no plaintext rotation.
+  app.post<{
+    Params: { userId: string; label: string };
+    Body: {
+      dryRun?: boolean;
+      repair?: boolean;
+      expires_at: string;
+      override?: AccessGovernanceOverrideRequest;
+    };
+  }>("/api/admin/agents/:userId/tokens/:label/renew", async (request, reply) => {
+    const { userId, label } = request.params;
+    const dryRun = request.body?.dryRun === true;
+    const repairRequested = request.body?.repair === true;
+    reply.header("Cache-Control", "private, no-store");
+    reply.header("Pragma", "no-cache");
+    reply.header("Expires", "0");
+
+    let expires_at: string;
+    try {
+      expires_at = normalizeNewTokenExpiry(request.body?.expires_at);
+    } catch (error) {
+      return reply.status(400).send({
+        ok: false,
+        error: {
+          code: error instanceof TokenExpiryPolicyError ? error.code : "EXPIRES_AT_INVALID",
+          message: error instanceof Error ? error.message : "expires_at invalid"
+        }
+      });
+    }
+
+    return withTokenWriteLock(async () => {
+      const projectRoot = await resolveProjectRoot();
+      const filePath = path.join(projectRoot, ACCESS_YAML_REL);
+      const raw = await readFile(filePath, "utf-8");
+      const config = parse(raw) as YamlAccessConfig;
+      if (!config.users) config.users = [];
+
+      const userIndex = config.users.findIndex((u) => u.id === userId);
+      if (userIndex === -1) {
+        return reply.status(404).send({
+          ok: false,
+          error: { code: "AGENT_NOT_FOUND", message: `Agent '${userId}' not found` }
+        });
+      }
+
+      const user = config.users[userIndex];
+      const token = user.tokens.find((t) => t.label === label);
+      if (!token) {
+        return reply.status(404).send({
+          ok: false,
+          error: { code: "TOKEN_NOT_FOUND", message: `Token '${label}' not found` }
+        });
+      }
+
+      let revokedHit = false;
+      try {
+        const db = await getAuditDb();
+        const row = db
+          .prepare("SELECT 1 AS hit FROM revoked_tokens WHERE token_hash = ?")
+          .get(token.hash) as { hit?: number } | undefined;
+        revokedHit = Boolean(row);
+      } catch (error) {
+        return reply.status(500).send({
+          ok: false,
+          error: {
+            code: "REVOKED_LOOKUP_FAILED",
+            message: error instanceof Error ? error.message : "revoked_tokens lookup failed"
+          }
+        });
+      }
+      if (revokedHit) {
+        return reply.status(409).send({
+          ok: false,
+          error: {
+            code: "TOKEN_REVOKED_NOT_RENEWABLE",
+            message: "已撤销的 Token 不能续期"
+          }
+        });
+      }
+
+      if (user.delegated_from) {
+        if (!(await requireOwnerForOps(request, reply, "仅所有者可为已有委托的 Agent 续期 Token"))) {
+          return;
+        }
+      }
+
+      // Repair: disk already equals requested expiry (ack/runtime recovery / body.repair).
+      // Ordinary path must strictly extend; equal without repair semantics → still allowed as repair
+      // when disk matches (Spec SC-22). Non-equal shorter/equal effective end → NOT_EXTENDED.
+      const diskEqualsRequested = expiryNormalizedEqual(token.expires_at ?? null, expires_at);
+      const isRepair = diskEqualsRequested || repairRequested;
+      if (!diskEqualsRequested) {
+        try {
+          assertStrictExtension(token.expires_at ?? null, expires_at);
+        } catch (error) {
+          return reply.status(400).send({
+            ok: false,
+            error: {
+              code: error instanceof TokenExpiryPolicyError ? error.code : "EXPIRES_AT_NOT_EXTENDED",
+              message: error instanceof Error ? error.message : "expires_at must extend"
+            }
+          });
+        }
+      }
+
+      const callsLast7d = await agentCallsLast7d(userId);
+      const gate = evaluateAccessGovernanceGate({
+        targetKind: "token",
+        targetId: `${userId}:${label}`,
+        newValue: { userId, label, hashPrefix: token.hash.slice(0, 19) },
+        highTrafficCalls7d: callsLast7d
+      });
+
+      const oldExpires = token.expires_at ?? null;
+
+      if (dryRun) {
+        return {
+          ok: true,
+          data: {
+            dryRun: true,
+            gate,
+            proposed: {
+              userId,
+              label,
+              expires_at,
+              old_expires_at: oldExpires,
+              repair: isRepair && diskEqualsRequested
+            }
+          }
+        };
+      }
+
+      if (gate.decision === "block") {
+        await writeGateTrace(gate, undefined, undefined, defaultActor(request));
+        return reply.status(409).send({
+          ok: false,
+          error: {
+            code: "GOVERNANCE_GATE_BLOCKED",
+            message: "Access Governance Gate blocked this token renew",
+            detail: { gate }
+          }
+        });
+      }
+
+      if (gate.decision === "override_required") {
+        const override = evaluateGovernanceOverride(request.body?.override, gate);
+        if (!override.ok) {
+          await writeGateTrace(gate, override, request.body?.override, defaultActor(request));
+          return reply.status(409).send({
+            ok: false,
+            error: {
+              code: "GOVERNANCE_GATE_OVERRIDE_REQUIRED",
+              message: `Override required: ${override.reason ?? "missing override fields"}`,
+              detail: { gate, override }
+            }
+          });
+        }
+        await writeGateTrace(gate, override, request.body?.override, defaultActor(request));
+      } else {
+        await writeGateTrace(gate, undefined, undefined, defaultActor(request));
+      }
+
+      const updatedTokens = user.tokens.map((t) =>
+        t.label === label ? { ...t, expires_at } : t
+      );
+      const updatedUser = { ...user, tokens: updatedTokens };
+      const newUsers = [...config.users];
+      newUsers[userIndex] = updatedUser;
+      const newConfig: YamlAccessConfig = { ...config, users: newUsers };
+      const content = stringify(newConfig, { lineWidth: 0 });
+
+      try {
+        const runtime = await withDisplayWriteBarrier(["P"], async () => {
+          await auditedWriteFile(projectRoot, ACCESS_YAML_REL, content, {
+            enabled: true,
+            changeType: "token_renew",
+            assetKind: "governance",
+            ...auditActorFields(trustedActorFromRequest(request)),
+            source: "admin_tokens_api",
+            targetId: userId,
+            oldSummary: {
+              label,
+              hashPrefix: token.hash.slice(0, 19),
+              expires_at: oldExpires
+            },
+            newSummary: {
+              label,
+              hashPrefix: token.hash.slice(0, 19),
+              expires_at,
+              repair: diskEqualsRequested
+            }
+          });
+          invalidateAccessConfigCache();
+          return commitPolicyRuntimeAck(content);
+        });
+
+        if (!runtime.runtimeAck) {
+          return reply.status(503).send({
+            ok: false,
+            error: {
+              code: "RUNTIME_ACK_FAILED",
+              message: "Token expiry updated but runtime ack failed; retry renew with the same expires_at",
+              detail: {
+                expires_at,
+                runtimeAck: false,
+                repairSuggested: true
+              }
+            }
+          });
+        }
+
+        return {
+          ok: true,
+          data: {
+            written: true,
+            label,
+            old_expires_at: oldExpires,
+            expires_at,
+            repair: diskEqualsRequested,
+            ...runtime,
+            gate
+          }
+        };
+      } catch (error) {
+        return reply.status(500).send({
+          ok: false,
+          error: {
+            code: "TOKEN_RENEW_WRITE_FAILED",
+            message: error instanceof Error ? error.message : "token renew write failed",
+            detail: {
+              expires_at,
+              runtimeAck: false,
+              repairSuggested: true
+            }
+          }
+        });
+      }
     });
   });
 }

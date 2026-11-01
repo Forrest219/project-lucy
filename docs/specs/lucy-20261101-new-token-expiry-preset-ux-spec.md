@@ -5,7 +5,7 @@
 | 文档类型 / 版本 | 呈现修订 / **v0.2 功能合同已收口** |
 | 日期 / 目标版本 | 2026-11-01 / 不绑定产品版本号 |
 | 功能编号 / 优先级 | **无** / **P2**（签发页局部 polish）。不进入 [`docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md`](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) 登记册 |
-| 状态 | **v0.2 功能合同已收口（2026-11-01）**。SC-01–SC-06 由 `new-token.test.tsx` 与 `npm run lint:terminology` 关闭。浏览器走查与 docker 重建不在本条出口。本条收口不表示可上线 |
+| 状态 | **v0.2 功能合同已收口（2026-11-01）**。SC-01–SC-06 由 `new-token.test.tsx` 与 `npm run lint:terminology` 关闭。浏览器走查与 docker 重建不在本条出口。本条收口不表示可上线。**覆盖注记（2026-11-01）**：正文与 SC-02 所写「默认 today+90／初载 90d active」的**现行产品值**改由 [`lucy-20261101-token-default-ttl-365-spec.md`](lucy-20261101-token-default-ttl-365-spec.md) 覆盖为默认 365／初载 365d；本条 segmented 呈现、禁止政策提示句、四档天数集合与上限 365 **仍有效**。历史收口证据不回改 |
 | 决策来源 | 对 `http://127.0.0.1:55176/admin/agents/zhangxingchen/tokens/new` 的走查：旧容器仍渲染无样式的 `pl-badge` 预设；仓库源码已用 `pl-btn` 表示选中，但仍违反 Spec 101「选中 ≠ primary」；「默认 90 / 最长 365」提示插在设备备注与过期时间之间，视觉突兀 |
 | 需求来源 | 签发页快捷预设需有明确互斥选中态；政策句删除或下移。委托人确认采用方案 B（删除） |
 | 实施主体 | `webui/src/pages/admin/NewToken.tsx` 与 `webui/src/__tests__/new-token.test.tsx`。不改 Token API、默认天数、365 上限 |

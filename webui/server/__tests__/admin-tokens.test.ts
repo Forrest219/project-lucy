@@ -22,6 +22,13 @@ vi.mock("../admin/audit.js", () => ({
           })
         };
       }
+      if (sql.includes("SELECT 1 AS hit FROM revoked_tokens WHERE token_hash")) {
+        return {
+          get: vi.fn((hash: string) =>
+            revokedRows.some((row) => row.token_hash === hash) ? { hit: 1 } : undefined
+          )
+        };
+      }
       return {
         get: vi.fn(() => undefined),
         all: vi.fn(() => []),
@@ -393,6 +400,172 @@ describe("Access Governance Gate — Token endpoints", () => {
       .expect(200);
     expect(res.body.data.gate).toBeDefined();
     expect(res.body.data.gate.targetKind).toBe("token");
+    await app.close();
+  });
+});
+
+describe("POST /api/admin/agents/:userId/tokens/:label/renew", () => {
+  it("extends expires_at without rotating hash or returning plaintext", async () => {
+    const withExpiry = `users:
+  - id: zhangsan
+    name: 张三
+    enabled: true
+    tokens:
+      - hash: "sha256:aaaa0000"
+        label: hermes-laptop
+        created: 2026-06-18
+        expires_at: "${expiryInDays(30)}"
+    allow:
+      tables:
+        - dataforai.superstore_orders
+      tools:
+        - sl_query
+defaults:
+  deny_tools:
+    - sql_execution
+`;
+    await writeFile(path.join(projectRoot, "webui/config/access.yaml"), withExpiry, "utf8");
+
+    const app = buildServer();
+    await app.ready();
+    const next = expiryInDays(180);
+    const res = await request(app.server)
+      .post("/api/admin/agents/zhangsan/tokens/hermes-laptop/renew")
+      .send({ expires_at: next })
+      .expect(200);
+
+    expect(res.body.ok).toBe(true);
+    expect(res.body.data.token).toBeUndefined();
+    expect(res.body.data.label).toBe("hermes-laptop");
+    expect(res.body.data.expires_at).toBeTruthy();
+    expect(res.body.data.runtimeAck).toBe(true);
+    expect(res.body.data.gate).toBeDefined();
+
+    const yaml = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
+    expect(yaml).toContain("sha256:aaaa0000");
+    expect(yaml).toContain("label: hermes-laptop");
+    expect(yaml).toContain("expires_at:");
+    await app.close();
+  });
+
+  it("rejects shortening a still-valid expiry", async () => {
+    const withExpiry = `users:
+  - id: zhangsan
+    name: 张三
+    enabled: true
+    tokens:
+      - hash: "sha256:aaaa0000"
+        label: hermes-laptop
+        created: 2026-06-18
+        expires_at: "${expiryInDays(180)}"
+    allow:
+      tables: []
+      tools: []
+defaults:
+  deny_tools: []
+`;
+    await writeFile(path.join(projectRoot, "webui/config/access.yaml"), withExpiry, "utf8");
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .post("/api/admin/agents/zhangsan/tokens/hermes-laptop/renew")
+      .send({ expires_at: expiryInDays(30) })
+      .expect(400);
+    expect(res.body.error.code).toBe("EXPIRES_AT_NOT_EXTENDED");
+    await app.close();
+  });
+
+  it("allows renewing an expired token still present in YAML", async () => {
+    const expiredYaml = `users:
+  - id: zhangsan
+    name: 张三
+    enabled: true
+    tokens:
+      - hash: "sha256:aaaa0000"
+        label: hermes-laptop
+        created: 2026-06-18
+        expires_at: "2020-01-01T00:00:00.000Z"
+    allow:
+      tables: []
+      tools: []
+defaults:
+  deny_tools: []
+`;
+    await writeFile(path.join(projectRoot, "webui/config/access.yaml"), expiredYaml, "utf8");
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .post("/api/admin/agents/zhangsan/tokens/hermes-laptop/renew")
+      .send({ expires_at: expiryInDays(90) })
+      .expect(200);
+    expect(res.body.data.runtimeAck).toBe(true);
+    await app.close();
+  });
+
+  it("rejects renew when hash is in revoked_tokens even if YAML residual remains", async () => {
+    revokedRows.push({
+      token_hash: "sha256:aaaa0000",
+      revoked_at: new Date().toISOString(),
+      reason: "manual_revoke"
+    });
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .post("/api/admin/agents/zhangsan/tokens/hermes-laptop/renew")
+      .send({ expires_at: expiryInDays(90) })
+      .expect(409);
+    expect(res.body.error.code).toBe("TOKEN_REVOKED_NOT_RENEWABLE");
+    const yaml = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
+    expect(yaml).toContain("hermes-laptop");
+    await app.close();
+  });
+
+  it("dryRun does not mutate YAML", async () => {
+    const before = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server)
+      .post("/api/admin/agents/zhangsan/tokens/hermes-laptop/renew")
+      .send({ dryRun: true, expires_at: expiryInDays(90) })
+      .expect(200);
+    expect(res.body.data.dryRun).toBe(true);
+    expect(res.body.data.gate).toBeDefined();
+    expect(res.body.data.token).toBeUndefined();
+    const after = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
+    expect(after).toBe(before);
+    await app.close();
+  });
+
+  it("allows same-expiry repair renew after a prior write", async () => {
+    const withExpiry = `users:
+  - id: zhangsan
+    name: 张三
+    enabled: true
+    tokens:
+      - hash: "sha256:aaaa0000"
+        label: hermes-laptop
+        created: 2026-06-18
+        expires_at: "${expiryInDays(120)}"
+    allow:
+      tables: []
+      tools: []
+defaults:
+  deny_tools: []
+`;
+    await writeFile(path.join(projectRoot, "webui/config/access.yaml"), withExpiry, "utf8");
+    const app = buildServer();
+    await app.ready();
+    const target = expiryInDays(200);
+    await request(app.server)
+      .post("/api/admin/agents/zhangsan/tokens/hermes-laptop/renew")
+      .send({ expires_at: target })
+      .expect(200);
+    const repair = await request(app.server)
+      .post("/api/admin/agents/zhangsan/tokens/hermes-laptop/renew")
+      .send({ expires_at: target, repair: true })
+      .expect(200);
+    expect(repair.body.data.repair).toBe(true);
+    expect(repair.body.data.token).toBeUndefined();
     await app.close();
   });
 });

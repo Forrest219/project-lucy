@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AgentRoleCapability, AgentRoleField, agentRoleIds, roleSelectionSavable, sameRoleSet } from "../../components/AgentRoleField";
 import { AuthorizationSummarySection } from "../../components/admin/AuthorizationSummarySection";
+import { RenewTokenDialog } from "../../components/admin/RenewTokenDialog";
 import { DiffViewer } from "../../components/DiffViewer";
 import { PageHeader } from "../../components/PageHeader";
 import { PolicyDegradeNotice } from "../../components/PolicyDegradeBanner";
@@ -394,6 +395,7 @@ export function AgentDetail() {
   const [diffPreview, setDiffPreview] = useState<DiffPreview | null>(null);
   const [confirmSave, setConfirmSave] = useState<DiffPreview | null>(null);
   const [selectedTokenLabels, setSelectedTokenLabels] = useState<string[]>([]);
+  const [renewingTokenLabel, setRenewingTokenLabel] = useState<string | null>(null);
 
   const agent = data?.agent;
   const version = data?.version;
@@ -1341,20 +1343,42 @@ export function AgentDetail() {
                           </div>
                         </details>
                       </div>
-                      <button
-                        type="button"
-                        className="pl-btn pl-btn--danger shrink-0 text-xs notranslate"
-                        translate="no"
-                        onClick={() => handleRevokeToken(token.label)}
-                        aria-label={`撤销 ${token.label}`}
-                      >
-                        撤销 <span className="notranslate" translate="no">Token</span>
-                      </button>
+                      <div className="flex shrink-0 flex-col gap-2">
+                        <button
+                          type="button"
+                          className="pl-btn pl-btn--ghost text-xs"
+                          data-testid={`agent-token-renew-${token.label}`}
+                          onClick={() => setRenewingTokenLabel(token.label)}
+                          aria-label={`续期 ${token.label}`}
+                        >
+                          续期
+                        </button>
+                        <button
+                          type="button"
+                          className="pl-btn pl-btn--danger text-xs notranslate"
+                          translate="no"
+                          onClick={() => handleRevokeToken(token.label)}
+                          aria-label={`撤销 ${token.label}`}
+                        >
+                          撤销 <span className="notranslate" translate="no">Token</span>
+                        </button>
+                      </div>
                     </li>
                   );
                 })}
               </ul>
             )}
+            {renewingTokenLabel && userId ? (
+              <RenewTokenDialog
+                userId={userId}
+                label={renewingTokenLabel}
+                onClose={() => setRenewingTokenLabel(null)}
+                onSuccess={() => {
+                  void queryClient.invalidateQueries({ queryKey: queryKeys.adminAgents });
+                  void queryClient.invalidateQueries({ queryKey: ["admin", "agent", userId] });
+                }}
+              />
+            ) : null}
           </div>
         )}
 

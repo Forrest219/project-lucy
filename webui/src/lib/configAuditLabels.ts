@@ -41,6 +41,7 @@ export const CHANGE_TYPE_OPTIONS: ChangeTypeOption[] = [
   // as a row-permission change, so it is distinguishable from an ordinary config change.
   { value: "row_policy_update", label: "行权限变更", assetKinds: ["governance"] },
   { value: "token_create", label: "创建 Token", assetKinds: ["governance"] },
+  { value: "token_renew", label: "续期 Token", assetKinds: ["governance"] },
   { value: "token_revoke", label: "吊销 Token", assetKinds: ["governance"] },
   { value: "enabled_tables_update", label: "启用表范围更新", assetKinds: ["governance"] },
   { value: "schema_add", label: "新增 Schema", assetKinds: ["governance"] },

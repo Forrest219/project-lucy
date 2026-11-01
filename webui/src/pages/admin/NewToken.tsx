@@ -104,7 +104,7 @@ export function NewToken() {
   const [selectedUserId, setSelectedUserId] = useState(routeUserId ?? "");
   const [label, setLabel] = useState("");
   const [deviceName, setDeviceName] = useState("");
-  const [expiresAt, setExpiresAt] = useState(() => computePresetDate(90));
+  const [expiresAt, setExpiresAt] = useState(() => computePresetDate(365));
   const [generatedToken, setGeneratedToken] = useState<CreateTokenResponse | null>(null);
   const [copied, setCopied] = useState(false);
   const [activeSnippet, setActiveSnippet] = useState<ClientId>("hermes");

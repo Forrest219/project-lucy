@@ -704,7 +704,7 @@ async function getAgentConfigTimelineMap(userIds: string[]): Promise<Map<string,
            target_id,
            MIN(CASE WHEN change_type = 'agent_create' THEN ts END) AS created_at,
            MAX(CASE
-               WHEN change_type IN ('agent_create', 'agent_patch', 'token_create', 'token_revoke')
+               WHEN change_type IN ('agent_create', 'agent_patch', 'token_create', 'token_renew', 'token_revoke')
                THEN ts
                ELSE NULL
              END) AS config_updated_at

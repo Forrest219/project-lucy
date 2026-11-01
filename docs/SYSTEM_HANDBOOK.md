@@ -1211,7 +1211,8 @@ PUT /api/wiki/:key
 
 - 新设备或新客户端首次接入
 - 怀疑泄露、长期未用、人员交接 → 新建并撤销旧 `Token`（轮换）
-- 新建客户端凭据 → 必须设置 `expires_at`；管理页默认 90 天，最长 365 天
+- 新建客户端凭据 → 必须设置 `expires_at`；管理页默认 365 天，最长 365 天
+- 快到期或已过期（未吊销）→ 管理员可**续期**（只改 `expires_at`，客户端无需换明文）；怀疑泄露 → **换签**（新建）并吊销旧 Token
 
 **不适合：**
 
@@ -1416,12 +1417,13 @@ defaults:
 
 | 操作 | 行为 |
 | --- | --- |
-| 新建 token | 生成 32 字节随机明文；必须设置 `expires_at`（默认 90 天、最长 365 天）；HTTP 响应只显示一次且禁止缓存 |
+| 新建 token | 生成 32 字节随机明文；必须设置 `expires_at`（默认 365 天、最长 365 天）；HTTP 响应只显示一次且禁止缓存 |
+| 续期 token | 只更新 `expires_at`；不返回明文、不改 hash；已过期可续，已撤销不可续；写审计 `token_renew` |
 | 落盘 | `access.yaml` 只保存 `sha256:<hex>` |
 | 撤销 token | 先写 `.ktx-ui/audit.sqlite.revoked_tokens`，再从 YAML 删除 |
 | 删除 Agent | 先撤销该 Agent 所有 token，再删除 YAML user |
 | 复制 MCP 配置 | 只复制 `${LUCY_AGENT_TOKEN}` 占位符，不复制明文 |
-| 过期 | `expires_at` 到期或不可解析时，`MCP` Proxy 鉴权失败（401）；也可在 Admin 提前撤销 |
+| 过期 | `expires_at` 到期或不可解析时，`MCP` Proxy 鉴权失败（401）；也可在 Admin 提前撤销；未吊销时可续期 |
 
 注意：`expires_at` 由 Proxy 身份校验强制拒绝已过期 token。到期后仍建议在 Admin 执行撤销，或调用 `DELETE /api/admin/agents/:userId/tokens/:label`，避免配置残留。
 
@@ -1518,7 +1520,7 @@ Token 是 **Agent 的接入凭证**，不是权限边界；同 Agent 下多个 T
 #### 签发
 
 - 入口路径：从 `/admin/agents` 选中 Agent → Token 区；或从 `/admin/tokens` 选择 Agent 后一键签发。
-- 必填项：`expires_at`（管理页默认 90 天，最长 365 天；空值表示长期有效，**不推荐**，会失去下文 `expires_at` 强制校验的硬拒绝兜底）。
+- 必填项：`expires_at`（管理页默认 365 天，最长 365 天；空值表示长期有效，**不推荐**，会失去下文 `expires_at` 强制校验的硬拒绝兜底）。
 - 可选项：标签 / 设备名（便于人工分辨；写明如 `forrest-mbp-cursor`、`eval-runner-2` 之类，**不要含明文 secret**）。
 - 明文 Token **只出现一次**：签发后立刻复制到客户端凭据库 / secret store；不要进仓库、聊天记录、截图或 Wiki。
 
@@ -1576,7 +1578,7 @@ Proxy 鉴权链路在 access 决策中**实际比对** `expires_at`，不再只�
 | 用不同 Token 表达不同权限 | 当前模型下同 Agent 同权；Token 无法驱动可见 scope | 需要隔离就拆 Agent + 绑不同 Role |
 | 把 Token 当 WebUI 登录密码 | 两套体系，互不登录对方系统 | 控制面看 [「WebUI 管理员登录」](#admin-webui-login) |
 | 把 `KTX_INTERNAL_TOKEN` 发给外部 Agent | 上游信任链外泄 | 只用于 Lucy Proxy 调用 KTX upstream |
-| 长期不设 `expires_at` | 失去强制轮换与硬拒绝兜底 | 至少 90 天默认；高敏感 30 天并配轮换脚本 |
+| 长期不设 `expires_at` | 失去强制轮换与硬拒绝兜底 | 管理页默认 365 天；高敏感可选 30 天并配换签／续期节奏 |
 
 **关联**
 

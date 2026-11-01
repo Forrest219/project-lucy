@@ -362,14 +362,14 @@ describe("NewToken", () => {
     expect(screen.getByTestId("snippet-active")).toHaveTextContent("http://127.0.0.1:7879/mcp");
   });
 
-  it("defaults expiry to 90 days and enforces the 365-day UI boundary", async () => {
+  it("defaults expiry to 365 days and enforces the 365-day UI boundary", async () => {
     stubNewTokenFetch();
     renderNewToken();
 
     const dateInput = screen.getByLabelText(/过期时间/) as HTMLInputElement;
     const today = Date.now();
     const toDate = (days: number) => new Date(today + days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-    expect(dateInput.value).toBe(toDate(90));
+    expect(dateInput.value).toBe(toDate(365));
     expect(dateInput.min).toBe(toDate(1));
     expect(dateInput.max).toBe(toDate(365));
     expect(screen.queryByRole("button", { name: "永不过期" })).not.toBeInTheDocument();
@@ -380,22 +380,22 @@ describe("NewToken", () => {
     expect(presets).toHaveClass("pl-segmented-control", "pl-segmented-control--cols-4");
     expect(presets).toHaveAttribute("aria-label", "快捷预设");
     expect(presets.className).not.toMatch(/pl-btn/);
-    expect(screen.getByTestId("new-token-expiry-preset-90d")).toHaveClass(
+    expect(screen.getByTestId("new-token-expiry-preset-365d")).toHaveClass(
       "pl-segmented-control-item",
       "pl-segmented-control-item--active"
     );
-    expect(screen.getByTestId("new-token-expiry-preset-90d")).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("new-token-expiry-preset-365d")).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByTestId("new-token-expiry-preset-30d")).toHaveClass("pl-segmented-control-item");
     expect(screen.getByTestId("new-token-expiry-preset-30d")).not.toHaveClass("pl-segmented-control-item--active");
     expect(screen.getByTestId("new-token-expiry-preset-30d")).toHaveAttribute("aria-pressed", "false");
-    expect(screen.getByTestId("new-token-expiry-preset-90d").className).not.toMatch(/pl-btn--primary/);
+    expect(screen.getByTestId("new-token-expiry-preset-365d").className).not.toMatch(/pl-btn--primary/);
 
     fireEvent.click(screen.getByRole("button", { name: "30 天" }));
     expect(dateInput.value).toBe(toDate(30));
     expect(screen.getByTestId("new-token-expiry-preset-30d")).toHaveClass("pl-segmented-control-item--active");
     expect(screen.getByTestId("new-token-expiry-preset-30d")).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByTestId("new-token-expiry-preset-90d")).not.toHaveClass("pl-segmented-control-item--active");
-    expect(screen.getByTestId("new-token-expiry-preset-90d")).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByTestId("new-token-expiry-preset-365d")).not.toHaveClass("pl-segmented-control-item--active");
+    expect(screen.getByTestId("new-token-expiry-preset-365d")).toHaveAttribute("aria-pressed", "false");
 
     fireEvent.change(dateInput, { target: { value: toDate(45) } });
     expect(dateInput.value).toBe(toDate(45));

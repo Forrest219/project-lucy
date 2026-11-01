@@ -1838,6 +1838,13 @@ L25-15 整批恢复抽屉。三个分区各自独立，不合并成一句「同�
 |---|---|---|
 | `new-token-expiry-preset-${preset.id}` | 新建 Token：expiry preset ${preset.id} | `pages/admin/NewToken.tsx` |
 | `new-token-expiry-presets` | 新建 Token：expiry presets | `pages/admin/NewToken.tsx` |
+| `renew-token-dialog` | Token 续期对话框 | `components/admin/RenewTokenDialog.tsx` |
+| `renew-token-expiry` | Token 续期：过期日期 | `components/admin/RenewTokenDialog.tsx` |
+| `renew-token-expiry-presets` | Token 续期：快捷预设组 | `components/admin/RenewTokenDialog.tsx` |
+| `renew-token-expiry-preset-${preset.id}` | Token 续期：preset ${preset.id} | `components/admin/RenewTokenDialog.tsx` |
+| `renew-token-confirm` | Token 续期：确认 | `components/admin/RenewTokenDialog.tsx` |
+| `token-renew-${token.label}` | Tokens 列表续期按钮（模板） | `pages/admin/Tokens.tsx` |
+| `agent-token-renew-${token.label}` | Agent Token 行续期按钮（模板） | `pages/admin/AgentDetail.tsx` |
 
 ### `webui/src/pages/publish/PublishHistory.tsx`
 
