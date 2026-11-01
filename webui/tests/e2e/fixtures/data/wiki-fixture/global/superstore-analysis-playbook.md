@@ -3,12 +3,12 @@ title: superstore-analysis-playbook
 summary: superstore_orders 表的分析 playbook，覆盖利润、订单、履约等核心场景
 tags: [superstore, analysis, playbook]
 sl_refs:
-  - mysql-aliyun/dataforai/superstore_orders
+  - demo-mysql/dataforai/superstore_orders
 ---
 
 # Superstore Analysis Playbook
 
-本文是 `mysql-aliyun.dataforai.superstore_orders` 表的业务口径说明。
+本文是 `demo-mysql.dataforai.superstore_orders` 表的业务口径说明。
 
 ## 业务背景
 
@@ -22,7 +22,7 @@ Superstore 是模拟零售业务的核心订单表，覆盖订单、履约、退
 
 ## 关联语义对象
 
-- `mysql-aliyun.dataforai.superstore_orders`（本文分析对象）
+- `demo-mysql.dataforai.superstore_orders`（本文分析对象）
 
 ## 注意事项
 

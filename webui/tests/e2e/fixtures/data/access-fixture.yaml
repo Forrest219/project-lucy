@@ -1,14 +1,30 @@
 # E2E contract fixture access policy (seeded by scripts/demo/init-e2e-fixture.sh).
+#
+# 基准线：demo-mysql · dataforai —— 与演示实例（http://127.0.0.1:55176）同一套
+# 连接 ID / Schema / 表 / Role / Agent 命名，用例与断言一律以本基线为准。
 # Role/connection/schema/tables must stay aligned with ktx-fixture.yaml and
-# semantic-layer-fixture/mysql-aliyun/_schema/dataforai.yaml. Contract-only: never a real E2E policy.
+# semantic-layer-fixture/demo-mysql/_schema/dataforai.yaml.
+# Contract-only: never a real E2E policy.
+#
+# 行权限样例（与演示实例 access.yaml 同形）：
+#   demo_east_reader      superstore_orders 仅 East 行，走模板 by_region_east
+#   demo_southwest_reader superstore_orders 仅 Southwest 行，内联谓词
+row_policy_templates:
+  by_region_east:
+    description: 按大区限定行（East）
+    predicates:
+      - field: region
+        op: eq
+        value: East
+
 roles:
-  e2e_fixture_reader:
-    description: E2E fixture Superstore readonly agent
+  demo_readonly:
+    description: Demo Superstore readonly agent
     allow:
       connections:
-        - mysql-aliyun
+        - demo-mysql
       tableSelectors:
-        - connection: mysql-aliyun
+        - connection: demo-mysql
           schema: dataforai
           names:
             - superstore_orders
@@ -23,13 +39,70 @@ roles:
         - wiki_read
         - connection_list
 
+  demo_east_reader:
+    description: 行权限样例：superstore_orders 仅 East 行（模板 by_region_east）
+    permission_model_version: 2
+    allow:
+      connections:
+        - demo-mysql
+      tableSelectors:
+        - connection: demo-mysql
+          schema: dataforai
+          names:
+            - superstore_orders
+          row_access: scoped
+          row_policy:
+            template: by_region_east
+      tools:
+        - lucy_catalog
+        - lucy_query
+        - lucy_read_source
+        - lucy_explain_query
+        - lucy_begin_question
+
+  demo_southwest_reader:
+    description: 行权限样例：superstore_orders 仅 Southwest 行（内联谓词）
+    permission_model_version: 2
+    allow:
+      connections:
+        - demo-mysql
+      tableSelectors:
+        - connection: demo-mysql
+          schema: dataforai
+          names:
+            - superstore_orders
+          row_access: scoped
+          row_policy:
+            predicates:
+              - field: region
+                op: eq
+                value: Southwest
+      tools:
+        - lucy_catalog
+        - lucy_query
+        - lucy_read_source
+        - lucy_explain_query
+        - lucy_begin_question
+
 users:
-  - id: e2e-default
-    name: E2E Default Agent
+  - id: demo_agent
+    name: Demo Agent
     enabled: true
     note: "Contract fixture agent; no token is provisioned."
     tokens: []
-    role: e2e_fixture_reader
+    role: demo_readonly
+  - id: demo-east-agent
+    name: Demo East Agent
+    enabled: true
+    note: "Contract fixture agent; no token is provisioned."
+    tokens: []
+    role: demo_east_reader
+  - id: demo-southwest-agent
+    name: Demo Southwest Agent
+    enabled: true
+    note: "Contract fixture agent; no token is provisioned."
+    tokens: []
+    role: demo_southwest_reader
 
 defaults:
   deny_tools:

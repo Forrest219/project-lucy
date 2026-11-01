@@ -42,19 +42,19 @@ function buildAccessMapResponse(metaOverrides: AccessMapMetaOverrides = {}) {
       meta: { grantUsers: 1, grantPaths: 2, accessUsers: 1, accessPaths: 1 }
     },
     {
-      id: "conn:mysql-aliyun",
+      id: "conn:demo-mysql",
       kind: "connection",
-      label: "mysql-aliyun",
+      label: "demo-mysql",
       depth: 2,
       parentId: `role:${ROLE_ID}`,
       meta: { grantUsers: 1, grantPaths: 2, accessUsers: 1, accessPaths: 1 }
     },
     {
-      id: "table:mysql-aliyun::finance::orders",
+      id: "table:demo-mysql::finance::orders",
       kind: "table",
       label: "orders",
       depth: 3,
-      parentId: "conn:mysql-aliyun",
+      parentId: "conn:demo-mysql",
       meta: { grantUsers: 1, grantPaths: 2, accessUsers: 1, accessPaths: 1 }
     }
   ];
@@ -75,9 +75,9 @@ function buildAccessMapResponse(metaOverrides: AccessMapMetaOverrides = {}) {
       snapshotCoverage: { reviewPaths: 0, matched: 0, missingOrInvalid: 0, ratio: 0 }
     },
     {
-      id: `e|role:${ROLE_ID}|conn:mysql-aliyun`,
+      id: `e|role:${ROLE_ID}|conn:demo-mysql`,
       source: `role:${ROLE_ID}`,
-      target: "conn:mysql-aliyun",
+      target: "conn:demo-mysql",
       grantPaths: 2,
       grantUsers: 1,
       accessPaths: 0,
@@ -87,10 +87,10 @@ function buildAccessMapResponse(metaOverrides: AccessMapMetaOverrides = {}) {
       confirmedUnauthorized: false,
       reviewEvaluations: [
         {
-          pathKey: `${AGENT_ID}/${ROLE_ID}/mysql-aliyun/finance/orders`,
+          pathKey: `${AGENT_ID}/${ROLE_ID}/demo-mysql/finance/orders`,
           agentId: AGENT_ID,
           roleId: ROLE_ID,
-          connectionId: "mysql-aliyun",
+          connectionId: "demo-mysql",
           schema: "finance",
           sourceName: "orders",
           calls: 4,
@@ -191,14 +191,14 @@ function agentSummary(overrides: Record<string, unknown> = {}) {
     },
     resources: [
       {
-        connectionId: "mysql-aliyun",
+        connectionId: "demo-mysql",
         schemas: [
           {
             schema: "finance",
             tables: [
               {
-                sourceKey: "mysql-aliyun::finance::orders",
-                connectionId: "mysql-aliyun",
+                sourceKey: "demo-mysql::finance::orders",
+                connectionId: "demo-mysql",
                 schema: "finance",
                 sourceName: "orders",
                 physicalTable: "finance.orders",
@@ -255,10 +255,10 @@ function agentDetail() {
         snapshotHash: "snapshot-1",
         sourceMapVersion: "smap-0001",
         tools: ["lucy_query"],
-        connections: ["mysql-aliyun"],
+        connections: ["demo-mysql"],
         sources: [
           {
-            connectionId: "mysql-aliyun",
+            connectionId: "demo-mysql",
             schema: "finance",
             sourceName: "orders",
             table: "finance.orders"
@@ -279,7 +279,7 @@ function roleDetail() {
     description: "浏览器验收 Role",
     source: "yaml",
     tools: ["lucy_query"],
-    connections: ["mysql-aliyun"],
+    connections: ["demo-mysql"],
     sourceNames: ["orders"],
     sourceCount: 1,
     invalid: false,
@@ -289,10 +289,10 @@ function roleDetail() {
     role: {
       description: "浏览器验收 Role",
       allow: {
-        connections: ["mysql-aliyun"],
+        connections: ["demo-mysql"],
         tools: ["lucy_query"],
         tableSelectors: [
-          { connection: "mysql-aliyun", schema: "finance", names: ["orders"] }
+          { connection: "demo-mysql", schema: "finance", names: ["orders"] }
         ]
       }
     },
@@ -301,10 +301,10 @@ function roleDetail() {
       snapshotHash: "snapshot-1",
       sourceMapVersion: "smap-0001",
       tools: ["lucy_query"],
-      connections: ["mysql-aliyun"],
+      connections: ["demo-mysql"],
       sources: [
         {
-          connectionId: "mysql-aliyun",
+          connectionId: "demo-mysql",
           schema: "finance",
           sourceName: "orders",
           table: "finance.orders"
@@ -398,7 +398,7 @@ async function installAccessMapApi(
                 description: "浏览器验收 Role",
                 source: "yaml",
                 tools: ["lucy_query"],
-                connections: ["mysql-aliyun"],
+                connections: ["demo-mysql"],
                 sourceNames: ["orders"],
                 sourceCount: 1,
                 invalid: false,
@@ -420,14 +420,14 @@ async function installAccessMapApi(
           ok: true,
           data: {
             connections: [
-              { id: "mysql-aliyun", schemas: ["finance"], enabledTables: ["finance.orders"] }
+              { id: "demo-mysql", schemas: ["finance"], enabledTables: ["finance.orders"] }
             ]
           }
         }
       });
       return;
     }
-    if (url.pathname === "/api/connections/mysql-aliyun/tables") {
+    if (url.pathname === "/api/connections/demo-mysql/tables") {
       await route.fulfill({ json: { ok: true, data: { tables: ["finance.orders"] } } });
       return;
     }
@@ -518,7 +518,7 @@ test.describe("P1-3 访问关系图：键盘可达（SC-09）", () => {
     await page.goto("/admin/access-map");
     await expect(page.getByTestId("access-map-canvas")).toBeVisible();
 
-    const edgeId = `e|role:${ROLE_ID}|conn:mysql-aliyun`;
+    const edgeId = `e|role:${ROLE_ID}|conn:demo-mysql`;
     const badges = page.getByTestId("access-map-edge-badges");
     await expect(badges).toBeVisible();
 
@@ -537,8 +537,8 @@ test.describe("P1-3 访问关系图：键盘可达（SC-09）", () => {
     await page.keyboard.press("Enter");
     const detail = page.getByTestId("access-map-edge-detail");
     await expect(detail).toBeVisible();
-    await expect(detail).toContainText(`${ROLE_ID} → conn:mysql-aliyun`);
-    await expect(page.getByTestId(`access-map-edge-detail-path-${AGENT_ID}/${ROLE_ID}/mysql-aliyun/finance/orders`)).toBeVisible();
+    await expect(detail).toContainText(`${ROLE_ID} → conn:demo-mysql`);
+    await expect(page.getByTestId(`access-map-edge-detail-path-${AGENT_ID}/${ROLE_ID}/demo-mysql/finance/orders`)).toBeVisible();
   });
 });
 

@@ -74,17 +74,17 @@ test("@pr-impacted grid geometry keeps audit page width within the viewport", as
     tools: ["query_data"],
     sources: [
       {
-        connectionId: "mysql-aliyun",
+        connectionId: "demo-mysql",
         schema: "chatbi",
         physicalTable: "ai_intl_user_active_30d_uv_daily_extremely_long_table_name_token"
       },
       {
-        connectionId: "mysql-aliyun",
+        connectionId: "demo-mysql",
         schema: "chatbi",
         physicalTable: "ai_intl_order_gmv_daily_summary_extremely_long_table_name_token"
       },
       {
-        connectionId: "mysql-aliyun",
+        connectionId: "demo-mysql",
         schema: "chatbi",
         physicalTable: "ai_intl_refund_rate_daily_summary_extremely_long_table_name_token"
       }
@@ -207,10 +207,10 @@ test("@pr-impacted config audit wraps long target links inside their column", as
               actorType: "ui_admin",
               source: "semantic_layer_import_api",
               filePath:
-                "semantic-layer/mysql-aliyun/ai_intl_user_active_30d_uv_daily.yaml",
+                "semantic-layer/demo-mysql/ai_intl_user_active_30d_uv_daily.yaml",
               assetKind: "semantic",
               changeType: "semantic_table_import",
-              targetId: "mysql-aliyun:chatbi:ai_intl_user_active_30d_uv_daily",
+              targetId: "demo-mysql:chatbi:ai_intl_user_active_30d_uv_daily",
               writeStatus: "committed"
             }
           ]
@@ -250,7 +250,7 @@ test("@pr-impacted config audit wraps long target links inside their column", as
   await expect(targetLink).toBeFocused();
   await targetLink.click();
   await expect(page).toHaveURL(
-    /\/catalog\/mysql-aliyun\/chatbi\/ai_intl_user_active_30d_uv_daily$/
+    /\/catalog\/demo-mysql\/chatbi\/ai_intl_user_active_30d_uv_daily$/
   );
 });
 

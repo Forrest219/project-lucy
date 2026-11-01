@@ -28,7 +28,7 @@ function roleDetail(fixture: RoleFixture) {
     description: "浏览器验收 Role",
     source: fixture.source,
     tools: ["lucy_query"],
-    connections: ["mysql-aliyun"],
+    connections: ["demo-mysql"],
     sourceNames: ["superstore_orders"],
     sourceCount: 1,
     invalid: false,
@@ -40,10 +40,10 @@ function roleDetail(fixture: RoleFixture) {
     role: {
       description: "浏览器验收 Role",
       allow: {
-        connections: ["mysql-aliyun"],
+        connections: ["demo-mysql"],
         tools: ["lucy_query"],
         tableSelectors: [{
-          connection: "mysql-aliyun",
+          connection: "demo-mysql",
           schema: "dataforai",
           names: ["superstore_orders"],
         }],
@@ -54,9 +54,9 @@ function roleDetail(fixture: RoleFixture) {
       snapshotHash: "snapshot-1",
       sourceMapVersion: "source-map-1",
       tools: ["lucy_query"],
-      connections: ["mysql-aliyun"],
+      connections: ["demo-mysql"],
       sources: [{
-        connectionId: "mysql-aliyun",
+        connectionId: "demo-mysql",
         schema: "dataforai",
         sourceName: "superstore_orders",
         table: "dataforai.superstore_orders",
@@ -84,10 +84,10 @@ async function installRoleApi(page: Page, fixture: RoleFixture = { id: "analyst"
     const body = request.postDataJSON?.() as Record<string, unknown> | null;
 
     if (url.pathname === "/api/connections") {
-      await route.fulfill({ json: { ok: true, data: { connections: [{ id: "mysql-aliyun", schemas: ["dataforai"], enabledTables: ["dataforai.superstore_orders"] }] } } });
+      await route.fulfill({ json: { ok: true, data: { connections: [{ id: "demo-mysql", schemas: ["dataforai"], enabledTables: ["dataforai.superstore_orders"] }] } } });
       return;
     }
-    if (url.pathname === "/api/connections/mysql-aliyun/tables") {
+    if (url.pathname === "/api/connections/demo-mysql/tables") {
       await route.fulfill({ json: { ok: true, data: { tables: ["dataforai.superstore_orders", "dataforai.superstore_returns"] } } });
       return;
     }
@@ -105,9 +105,9 @@ async function installRoleApi(page: Page, fixture: RoleFixture = { id: "analyst"
       ] } } });
       return;
     }
-    if (url.pathname === "/api/sources/mysql-aliyun/dataforai/superstore_orders") {
+    if (url.pathname === "/api/sources/demo-mysql/dataforai/superstore_orders") {
       await route.fulfill({ json: { ok: true, data: { model: {
-        conn: "mysql-aliyun",
+        conn: "demo-mysql",
         schema: "dataforai",
         table: "superstore_orders",
         filePath: "semantic-layer/superstore_orders.yaml",
@@ -214,7 +214,7 @@ test.describe("Spec 150 Role permission structure", () => {
     await page.getByRole("tab", { name: /行级策略/ }).click();
     await expect(page.getByTestId("row-policy-catalog-bound-disabled")).toBeVisible();
     await page.getByRole("tab", { name: /可访问的表/ }).click();
-    await page.getByRole("checkbox", { name: "允许的连接 mysql-aliyun" }).check();
+    await page.getByRole("checkbox", { name: "允许的连接 demo-mysql" }).check();
     await expect(page.getByTestId("role-boundary-summary")).toContainText("目录绑定");
   });
 

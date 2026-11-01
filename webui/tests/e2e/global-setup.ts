@@ -21,9 +21,9 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
   const projectRes = await fetch(new URL("/api/project", baseURL));
   const project = (await projectRes.json()) as { data?: { connections?: Array<{ id?: string }> } };
   const ids = (project.data?.connections ?? []).map((conn) => conn.id);
-  if (!ids.includes("mysql-aliyun")) {
+  if (!ids.includes("demo-mysql")) {
     throw new Error(
-      `[contract-fixture] ${baseURL} serves connections [${ids.join(", ")}], expected the E2E fixture connection "mysql-aliyun" ` +
+      `[contract-fixture] ${baseURL} serves connections [${ids.join(", ")}], expected the E2E fixture connection "demo-mysql" ` +
         `(run npm run e2e:fixture and start the server with LUCY_E2E_PROJECT_DIR).`
     );
   }

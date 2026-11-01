@@ -61,14 +61,14 @@ function buildSummary(overrides: SummaryOverrides = {}) {
     },
     resources: [
       {
-        connectionId: "mysql-aliyun",
+        connectionId: "demo-mysql",
         schemas: [
           {
             schema: "finance",
             tables: [
               {
-                sourceKey: "mysql-aliyun::finance::orders",
-                connectionId: "mysql-aliyun",
+                sourceKey: "demo-mysql::finance::orders",
+                connectionId: "demo-mysql",
                 schema: "finance",
                 sourceName: "orders",
                 physicalTable: "finance.orders",
@@ -92,7 +92,7 @@ function buildSummary(overrides: SummaryOverrides = {}) {
                   digest: "digest-1"
                 },
                 playgroundUrl:
-                  "/admin/mcp-playground?agentId=demo_agent&mode=dry-run&tool=lucy_query&args=%7B%22connectionId%22%3A%22mysql-aliyun%22%2C%22sourceName%22%3A%22orders%22%7D"
+                  "/admin/mcp-playground?agentId=demo_agent&mode=dry-run&tool=lucy_query&args=%7B%22connectionId%22%3A%22demo-mysql%22%2C%22sourceName%22%3A%22orders%22%7D"
               }
             ]
           }
@@ -109,9 +109,9 @@ function buildSummary(overrides: SummaryOverrides = {}) {
     unclassifiedTools: [],
     actions: {
       playgroundUrl:
-        "/admin/mcp-playground?agentId=demo_agent&mode=dry-run&tool=lucy_query&args=%7B%22connectionId%22%3A%22mysql-aliyun%22%2C%22sourceName%22%3A%22orders%22%7D",
+        "/admin/mcp-playground?agentId=demo_agent&mode=dry-run&tool=lucy_query&args=%7B%22connectionId%22%3A%22demo-mysql%22%2C%22sourceName%22%3A%22orders%22%7D",
       accessMapUrl: "/admin/access-map?agent=demo_agent",
-      rowPolicyViewUrl: "/admin/row-policies?connectionId=mysql-aliyun&schema=finance&sourceName=orders",
+      rowPolicyViewUrl: "/admin/row-policies?connectionId=demo-mysql&schema=finance&sourceName=orders",
       referencingAgentIds: ["demo_agent_2", "demo_agent_3"],
       ...(overrides.actions ?? {})
     },
@@ -140,19 +140,19 @@ function accessMapResponse() {
       meta: { grantUsers: 1, grantPaths: 1, accessUsers: 1, accessPaths: 1 }
     },
     {
-      id: "conn:mysql-aliyun",
+      id: "conn:demo-mysql",
       kind: "connection",
-      label: "mysql-aliyun",
+      label: "demo-mysql",
       depth: 2,
       parentId: "role:analyst",
       meta: { grantUsers: 1, grantPaths: 1, accessUsers: 1, accessPaths: 1 }
     },
     {
-      id: "table:mysql-aliyun::finance::orders",
+      id: "table:demo-mysql::finance::orders",
       kind: "table",
       label: "orders",
       depth: 3,
-      parentId: "conn:mysql-aliyun",
+      parentId: "conn:demo-mysql",
       meta: { grantUsers: 1, grantPaths: 1, accessUsers: 1, accessPaths: 1 }
     }
   ];
@@ -269,7 +269,7 @@ test.describe("P1-2 授权摘要：深链（ASV-10）", () => {
     await expect(rowPolicyLink).toBeVisible();
     await expect(rowPolicyLink).toHaveAttribute(
       "href",
-      "/admin/row-policies?connectionId=mysql-aliyun&schema=finance&sourceName=orders"
+      "/admin/row-policies?connectionId=demo-mysql&schema=finance&sourceName=orders"
     );
 
     const playgroundLink = page.getByTestId("authorization-playground-deep-link");
@@ -362,7 +362,7 @@ test.describe("P1-2 授权摘要：术语与翻译防御（ASV-14）", () => {
     await expect(card).toBeVisible();
 
     // 连接标识
-    await expectProtectedIdentifier(card.getByText("mysql-aliyun", { exact: true }));
+    await expectProtectedIdentifier(card.getByText("demo-mysql", { exact: true }));
     // Schema 标识
     await expectProtectedIdentifier(card.getByText("finance", { exact: true }));
     // 表标识（逻辑名与物理表名）
