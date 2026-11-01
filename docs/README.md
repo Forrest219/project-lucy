@@ -38,6 +38,7 @@
 
 | 文档 | 用途 |
 |---|---|
+| [specs/lucy-20261101-shared-dev-qa-baseline-spec.md](specs/lucy-20261101-shared-dev-qa-baseline-spec.md) | **v1.1 基线落地闭口（Mac mini／2026-11-01）**：共享开发 QA 基准线。A／B／C 分层；SC-D*／权威机 SC-L* 关闭；SC-M*（其余两机）未完成。禁止演示整包升格为发布测。Runbook 见 [shared-dev-qa-baseline](runbooks/shared-dev-qa-baseline.md)。审阅见 [codex-review](reviews/2026-11-01-codex-review-shared-dev-qa-baseline.md)。Plan 见 [lucy-20261101-shared-dev-qa-baseline-plan.md](plans/lucy-20261101-shared-dev-qa-baseline-plan.md) |
 | [specs/lucy-20261101-access-map-chart-first-spec.md](specs/lucy-20261101-access-map-chart-first-spec.md) | **v0.2 功能合同已收口（2026-11-01）**：访问关系图图优先呈现。去掉三 KPI 卡与双折叠墙；图例短行在图正上方；口径与快照沉图下弱入口；抬高图区、栏距与可读悬停。再修订 quiet-reading 页壳，不改 Spec 187 语义。SC-01–SC-14 已关闭（组件测试 + 布局测试 46/46；`npm run lint:terminology` exit 0）。本条收口不表示可上线。功能编号无。实施记录见 [2026-11-01-access-map-chart-first-implementation-notes.md](reviews/2026-11-01-access-map-chart-first-implementation-notes.md)。Plan 见 [lucy-20261101-access-map-chart-first-plan.md](plans/lucy-20261101-access-map-chart-first-plan.md) |
 | [specs/lucy-20261101-new-token-expiry-preset-ux-spec.md](specs/lucy-20261101-new-token-expiry-preset-ux-spec.md) | **v0.2 功能合同已收口（2026-11-01）**：新建 Token 过期快捷预设 UX。四档 `pl-segmented-control`；删除政策提示句；默认 90 天与 365 上限不变。SC-01–SC-06 关闭。浏览器 / docker 不在出口。功能编号无。Plan 见 [lucy-20261101-new-token-expiry-preset-ux-plan.md](plans/lucy-20261101-new-token-expiry-preset-ux-plan.md) |
 | [specs/lucy-20261101-agent-admin-high-priv-copy-ux-spec.md](specs/lucy-20261101-agent-admin-high-priv-copy-ux-spec.md) | **v0.2 功能合同已收口（2026-11-01）**：Agent 管理台高权限警示与个人行限制呈现。警示拆主句＋次句；空态弱展示；目录绑定情境说明分支；不改 Spec 100／131 语义，不回潮 Token 政策句。SC-01–SC-12 关闭（组件测试 69/69；`npm run lint:terminology` exit 0）。实施记录见 [2026-11-01-agent-admin-high-priv-copy-ux-implementation-notes.md](reviews/2026-11-01-agent-admin-high-priv-copy-ux-implementation-notes.md)。本条收口不表示可上线。功能编号无。Plan 见 [lucy-20261101-agent-admin-high-priv-copy-ux-plan.md](plans/lucy-20261101-agent-admin-high-priv-copy-ux-plan.md) |
@@ -176,6 +177,7 @@
 | `runbooks/customer-amd64-docker-deploy-runbook.md` | amd64 离线包客户部署 runbook（配套 `specs/lucy-customer-amd64-offline-delivery-spec.md`） |
 | `runbooks/customer-mcp-session-400-upgrade.md` | 客户 MCP Session 400 的根因、版本对照、升级动作单与对外沟通稿（配套 `uat/uat-mcp-session-customer-verification.md`） |
 | `runbooks/lucy-release-train-workflow.md` | 发版列车流程：分支模型、版本切线、合流与交付阶段、门禁矩阵、回滚 |
+| `runbooks/shared-dev-qa-baseline.md` | 三机共享开发 QA（Tier B）套用与冒烟；Manifest 正本在坚果云 `9-演示环境配置/lucy-mcp/07-共享开发B层`（配套 Spec `lucy-20261101-shared-dev-qa-baseline`） |
 | `user-guide/`（目录） | 现有 HTML 帮助中心；`user-guide.md` 末尾已显式指向此目录，两者是同一主题的 Markdown 摘要 + HTML 详情，非命名冲突 |
 
 ## 7. 发布 / 版本 / 测试门禁 → `governance/`
