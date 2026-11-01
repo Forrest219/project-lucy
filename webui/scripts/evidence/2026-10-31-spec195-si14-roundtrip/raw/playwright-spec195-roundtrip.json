@@ -1,0 +1,124 @@
+{
+  "config": {
+    "argv": [
+      "/Users/forrest/.local/node-v24.14.1-darwin-arm64/bin/node",
+      "/Users/forrest/GitHub/project-lucy/webui/node_modules/.bin/playwright",
+      "test",
+      "-c",
+      "tests/performance/entry-performance.config.ts",
+      "tests/performance/spec195-display-roundtrip.spec.ts"
+    ],
+    "configFile": "/Users/forrest/GitHub/project-lucy/webui/tests/performance/entry-performance.config.ts",
+    "rootDir": "/Users/forrest/GitHub/project-lucy/webui/tests",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/Users/forrest/GitHub/project-lucy/webui/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium-desktop",
+        "name": "chromium-desktop",
+        "testDir": "/Users/forrest/GitHub/project-lucy/webui/tests",
+        "testIgnore": [],
+        "testMatch": [
+          "performance/entry-performance.spec.ts",
+          "performance/spec195-display-roundtrip.spec.ts",
+          "e2e/specs/entry-performance-behavior.spec.ts"
+        ],
+        "timeout": 3600000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "/Users/forrest/GitHub/project-lucy/inbox/webui-entry-perf/spec195-roundtrip-final2/raw/playwright-spec195-roundtrip.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.62.1",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "performance/spec195-display-roundtrip.spec.ts",
+      "file": "performance/spec195-display-roundtrip.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "spec195 display round-trip spec195-roundtrip",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 3600000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium-desktop",
+              "projectName": "chromium-desktop",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3421,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-31T01:28:32.242Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c1f8c8c0e6d70303c86b-868d20b393e9acb44a01",
+          "file": "performance/spec195-display-roundtrip.spec.ts",
+          "line": 166,
+          "column": 1
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-31T01:28:32.024Z",
+    "duration": 3887.806,
+    "expected": 1,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

@@ -1,0 +1,323 @@
+
+ RUN  v4.1.9 /private/tmp/spec195-baseline/webui
+
+ ❯ server/__tests__/display-snapshot.test.ts (27 tests | 6 failed) 3285ms
+     × finds same-size, same-mtime rewrites exactly once (Spec 195 §5.2) 7ms
+     × SI-01 metadata → full: one external overlay version invalidates D exactly once 4ms
+     × SI-01 full → metadata: the same version is not invalidated twice 3ms
+     × SI-01 concurrent observation: one version invalidates D once 3ms
+     × SI-02 an atomic replace is confirmed once 4ms
+     × SI-02 a same-content rewrite with a new mtime still moves the semantic generation once 3ms
+{"level":30,"time":1793366037544,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-1","req":{"method":"GET","url":"/api/sources","host":"127.0.0.1:63520","remoteAddress":"::ffff:127.0.0.1","remotePort":63521},"msg":"incoming request"}
+{"level":30,"time":1793366037549,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-1","res":{"statusCode":200},"responseTime":5.47687499999995,"msg":"request completed"}
+{"level":30,"time":1793366037551,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-2","req":{"method":"GET","url":"/api/sources","host":"127.0.0.1:63522","remoteAddress":"::ffff:127.0.0.1","remotePort":63523},"msg":"incoming request"}
+{"level":30,"time":1793366037551,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-2","res":{"statusCode":200},"responseTime":0.2203340000000935,"msg":"request completed"}
+{"level":30,"time":1793366037603,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-1","req":{"method":"GET","url":"/api/sources","host":"127.0.0.1:63524","remoteAddress":"::ffff:127.0.0.1","remotePort":63525},"msg":"incoming request"}
+{"level":30,"time":1793366037606,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-1","res":{"statusCode":200},"responseTime":2.689792000000125,"msg":"request completed"}
+{"level":30,"time":1793366037607,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-2","req":{"method":"GET","url":"/api/sources","host":"127.0.0.1:63526","remoteAddress":"::ffff:127.0.0.1","remotePort":63527},"msg":"incoming request"}
+{"level":30,"time":1793366037609,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-2","res":{"statusCode":200},"responseTime":2.173458999999866,"msg":"request completed"}
+{"level":30,"time":1793366037624,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-1","req":{"method":"GET","url":"/api/sources","host":"127.0.0.1:63528","remoteAddress":"::ffff:127.0.0.1","remotePort":63529},"msg":"incoming request"}
+{"level":30,"time":1793366037626,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-1","res":{"statusCode":200},"responseTime":2.1751660000002175,"msg":"request completed"}
+{"level":30,"time":1793366037627,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-2","req":{"method":"PUT","url":"/api/sources/warehouse/fin/fin_ledger","host":"127.0.0.1:63530","remoteAddress":"::ffff:127.0.0.1","remotePort":63531},"msg":"incoming request"}
+{"level":30,"time":1793366037630,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-2","res":{"statusCode":200},"responseTime":2.5130420000000413,"msg":"request completed"}
+{"level":30,"time":1793366037630,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-3","req":{"method":"GET","url":"/api/sources","host":"127.0.0.1:63532","remoteAddress":"::ffff:127.0.0.1","remotePort":63533},"msg":"incoming request"}
+{"level":30,"time":1793366037631,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-3","res":{"statusCode":200},"responseTime":0.19462499999985994,"msg":"request completed"}
+{"level":30,"time":1793366037631,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-4","req":{"method":"PUT","url":"/api/sources/warehouse/fin/fin_ledger","host":"127.0.0.1:63534","remoteAddress":"::ffff:127.0.0.1","remotePort":63535},"msg":"incoming request"}
+{"level":30,"time":1793366037651,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-4","res":{"statusCode":200},"responseTime":19.947417000000087,"msg":"request completed"}
+{"level":30,"time":1793366037652,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-5","req":{"method":"GET","url":"/api/sources","host":"127.0.0.1:63536","remoteAddress":"::ffff:127.0.0.1","remotePort":63537},"msg":"incoming request"}
+{"level":30,"time":1793366037654,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-5","res":{"statusCode":200},"responseTime":2.428542000000107,"msg":"request completed"}
+{"level":30,"time":1793366037669,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-1","req":{"method":"GET","url":"/api/sources","host":"127.0.0.1:63538","remoteAddress":"::ffff:127.0.0.1","remotePort":63539},"msg":"incoming request"}
+{"level":30,"time":1793366037671,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-1","res":{"statusCode":200},"responseTime":2.2397909999999683,"msg":"request completed"}
+{"level":30,"time":1793366037672,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-2","req":{"method":"PUT","url":"/api/connections/warehouse/enabled-tables","host":"127.0.0.1:63540","remoteAddress":"::ffff:127.0.0.1","remotePort":63541},"msg":"incoming request"}
+{"level":30,"time":1793366037679,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-2","res":{"statusCode":200},"responseTime":7.2409999999999854,"msg":"request completed"}
+{"level":30,"time":1793366037680,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-3","req":{"method":"GET","url":"/api/sources","host":"127.0.0.1:63542","remoteAddress":"::ffff:127.0.0.1","remotePort":63543},"msg":"incoming request"}
+{"level":30,"time":1793366037682,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-3","res":{"statusCode":200},"responseTime":1.7669580000001588,"msg":"request completed"}
+{"level":30,"time":1793366037712,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-1","req":{"method":"GET","url":"/api/admin/agents","host":"127.0.0.1:63544","remoteAddress":"::ffff:127.0.0.1","remotePort":63545},"msg":"incoming request"}
+{"level":30,"time":1793366037714,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-1","res":{"statusCode":200},"responseTime":2.347541000000092,"msg":"request completed"}
+{"level":30,"time":1793366037715,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-2","req":{"method":"PATCH","url":"/api/admin/agents/lisi","host":"127.0.0.1:63546","remoteAddress":"::ffff:127.0.0.1","remotePort":63547},"msg":"incoming request"}
+{"level":30,"time":1793366037722,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-2","res":{"statusCode":200},"responseTime":7.713999999999942,"msg":"request completed"}
+{"level":30,"time":1793366037723,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-3","req":{"method":"GET","url":"/api/admin/agents","host":"127.0.0.1:63548","remoteAddress":"::ffff:127.0.0.1","remotePort":63549},"msg":"incoming request"}
+{"level":30,"time":1793366037725,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-3","res":{"statusCode":200},"responseTime":1.8090000000001965,"msg":"request completed"}
+{"level":30,"time":1793366037726,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-4","req":{"method":"GET","url":"/api/sources","host":"127.0.0.1:63550","remoteAddress":"::ffff:127.0.0.1","remotePort":63551},"msg":"incoming request"}
+{"level":30,"time":1793366037727,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-4","res":{"statusCode":200},"responseTime":1.7675839999999425,"msg":"request completed"}
+{"level":30,"time":1793366037739,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-1","req":{"method":"GET","url":"/api/admin/agents","host":"127.0.0.1:63552","remoteAddress":"::ffff:127.0.0.1","remotePort":63553},"msg":"incoming request"}
+{"level":30,"time":1793366037740,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-1","res":{"statusCode":200},"responseTime":1.5797500000001037,"msg":"request completed"}
+{"level":30,"time":1793366037741,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-2","req":{"method":"GET","url":"/api/admin/agents","host":"127.0.0.1:63554","remoteAddress":"::ffff:127.0.0.1","remotePort":63555},"msg":"incoming request"}
+{"level":30,"time":1793366037779,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-2","res":{"statusCode":200},"responseTime":38.009583999999904,"msg":"request completed"}
+{"level":30,"time":1793366037791,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-1","req":{"method":"DELETE","url":"/api/admin/agents/zhangsan/tokens/laptop","host":"127.0.0.1:63556","remoteAddress":"::ffff:127.0.0.1","remotePort":63557},"msg":"incoming request"}
+{"level":30,"time":1793366037795,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-1","res":{"statusCode":200},"responseTime":3.657667000000174,"msg":"request completed"}
+{"level":30,"time":1793366037807,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-1","req":{"method":"GET","url":"/api/sources/warehouse/fin/fin_ledger/versions","host":"127.0.0.1:63558","remoteAddress":"::ffff:127.0.0.1","remotePort":63559},"msg":"incoming request"}
+{"level":30,"time":1793366037807,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-1","res":{"statusCode":200},"responseTime":0.2914170000001377,"msg":"request completed"}
+{"level":30,"time":1793366037819,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-1","req":{"method":"GET","url":"/api/sources","host":"127.0.0.1:63560","remoteAddress":"::ffff:127.0.0.1","remotePort":63561},"msg":"incoming request"}
+{"level":30,"time":1793366037821,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-1","res":{"statusCode":200},"responseTime":2.1664590000000317,"msg":"request completed"}
+{"level":30,"time":1793366037822,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-2","req":{"method":"GET","url":"/api/sources","host":"127.0.0.1:63562","remoteAddress":"::ffff:127.0.0.1","remotePort":63563},"msg":"incoming request"}
+{"level":30,"time":1793366037825,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-2","res":{"statusCode":200},"responseTime":2.784750000000031,"msg":"request completed"}
+{"level":30,"time":1793366037845,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-1","req":{"method":"GET","url":"/api/sources","host":"127.0.0.1:63564","remoteAddress":"::ffff:127.0.0.1","remotePort":63565},"msg":"incoming request"}
+{"level":30,"time":1793366037849,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-1","res":{"statusCode":200},"responseTime":4.2433750000000146,"msg":"request completed"}
+{"level":30,"time":1793366037849,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-2","req":{"method":"GET","url":"/api/sources","host":"127.0.0.1:63566","remoteAddress":"::ffff:127.0.0.1","remotePort":63567},"msg":"incoming request"}
+{"level":30,"time":1793366037850,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-2","res":{"statusCode":200},"responseTime":0.16300000000001091,"msg":"request completed"}
+{"level":30,"time":1793366037872,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-3","req":{"method":"GET","url":"/api/sources","host":"127.0.0.1:63568","remoteAddress":"::ffff:127.0.0.1","remotePort":63569},"msg":"incoming request"}
+{"level":30,"time":1793366037873,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-3","res":{"statusCode":401},"responseTime":0.5682919999999285,"msg":"request completed"}
+{"level":30,"time":1793366037874,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-4","req":{"method":"GET","url":"/api/admin/agents","host":"127.0.0.1:63570","remoteAddress":"::ffff:127.0.0.1","remotePort":63571},"msg":"incoming request"}
+{"level":30,"time":1793366037874,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-4","res":{"statusCode":401},"responseTime":0.07612499999981992,"msg":"request completed"}
+{"level":30,"time":1793366037885,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-1","req":{"method":"GET","url":"/api/sources","host":"127.0.0.1:63572","remoteAddress":"::ffff:127.0.0.1","remotePort":63573},"msg":"incoming request"}
+{"level":30,"time":1793366037887,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-1","res":{"statusCode":200},"responseTime":1.7316250000001219,"msg":"request completed"}
+{"level":30,"time":1793366037888,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-2","req":{"method":"GET","url":"/api/admin/agents","host":"127.0.0.1:63574","remoteAddress":"::ffff:127.0.0.1","remotePort":63575},"msg":"incoming request"}
+{"level":30,"time":1793366037889,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-2","res":{"statusCode":200},"responseTime":1.545667000000094,"msg":"request completed"}
+{"level":30,"time":1793366037890,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-3","req":{"method":"GET","url":"/api/sources","host":"127.0.0.1:63576","remoteAddress":"::ffff:127.0.0.1","remotePort":63577},"msg":"incoming request"}
+{"level":30,"time":1793366037891,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-3","res":{"statusCode":503},"responseTime":0.2993330000001606,"msg":"request completed"}
+{"level":30,"time":1793366037891,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-4","req":{"method":"GET","url":"/api/admin/agents","host":"127.0.0.1:63578","remoteAddress":"::ffff:127.0.0.1","remotePort":63579},"msg":"incoming request"}
+{"level":30,"time":1793366037892,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-4","res":{"statusCode":503},"responseTime":0.40637500000002547,"msg":"request completed"}
+{"level":30,"time":1793366037892,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-5","req":{"method":"GET","url":"/api/sources","host":"127.0.0.1:63580","remoteAddress":"::ffff:127.0.0.1","remotePort":63581},"msg":"incoming request"}
+{"level":30,"time":1793366037894,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-5","res":{"statusCode":200},"responseTime":1.5285000000001219,"msg":"request completed"}
+{"level":30,"time":1793366037894,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-6","req":{"method":"GET","url":"/api/admin/agents","host":"127.0.0.1:63582","remoteAddress":"::ffff:127.0.0.1","remotePort":63583},"msg":"incoming request"}
+{"level":30,"time":1793366037896,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-6","res":{"statusCode":200},"responseTime":1.389165999999932,"msg":"request completed"}
+{"level":30,"time":1793366037928,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-1","req":{"method":"GET","url":"/api/sources","host":"127.0.0.1:63584","remoteAddress":"::ffff:127.0.0.1","remotePort":63585},"msg":"incoming request"}
+{"level":30,"time":1793366037928,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-1","res":{"statusCode":401},"responseTime":0.3394590000000335,"msg":"request completed"}
+{"level":30,"time":1793366037939,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-1","req":{"method":"GET","url":"/api/sources","host":"127.0.0.1:63586","remoteAddress":"::ffff:127.0.0.1","remotePort":63587},"msg":"incoming request"}
+{"level":30,"time":1793366039442,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-1","res":{"statusCode":503},"responseTime":1502.5578329999998,"msg":"request completed"}
+{"level":30,"time":1793366039458,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-1","req":{"method":"GET","url":"/api/sources","host":"127.0.0.1:63592","remoteAddress":"::ffff:127.0.0.1","remotePort":63593},"msg":"incoming request"}
+{"level":30,"time":1793366039464,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-1","res":{"statusCode":200},"responseTime":5.8729999999995925,"msg":"request completed"}
+{"level":30,"time":1793366039465,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-2","req":{"method":"GET","url":"/api/admin/agents","host":"127.0.0.1:63594","remoteAddress":"::ffff:127.0.0.1","remotePort":63595},"msg":"incoming request"}
+{"level":30,"time":1793366039467,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-2","res":{"statusCode":200},"responseTime":1.825666000000183,"msg":"request completed"}
+{"level":30,"time":1793366039467,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-3","req":{"method":"PUT","url":"/api/sources/warehouse/fin/fin_ledger","host":"127.0.0.1:63596","remoteAddress":"::ffff:127.0.0.1","remotePort":63597},"msg":"incoming request"}
+{"level":30,"time":1793366039490,"pid":90445,"hostname":"forrestMac-mini-3.local","reqId":"req-3","res":{"statusCode":200},"responseTime":22.371083999999883,"msg":"request completed"}
+ ❯ server/__tests__/display-invalidation.test.ts (16 tests | 1 failed) 2013ms
+     × SI-04 an overlay-only save advances D but not P/C and does not rebuild the Agent permissions 50ms
+{"level":30,"time":1793366039894,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-1","req":{"method":"GET","url":"/api/admin/agents","host":"127.0.0.1:63598","remoteAddress":"::ffff:127.0.0.1","remotePort":63599},"msg":"incoming request"}
+{"level":30,"time":1793366039911,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-1","res":{"statusCode":200},"responseTime":16.969708000000026,"msg":"request completed"}
+{"level":30,"time":1793366039913,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-2","req":{"method":"GET","url":"/api/admin/agents","host":"127.0.0.1:63600","remoteAddress":"::ffff:127.0.0.1","remotePort":63601},"msg":"incoming request"}
+{"level":30,"time":1793366039915,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-2","res":{"statusCode":200},"responseTime":1.4007500000000164,"msg":"request completed"}
+{"level":30,"time":1793366039918,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-3","req":{"method":"GET","url":"/api/admin/agents","host":"127.0.0.1:63602","remoteAddress":"::ffff:127.0.0.1","remotePort":63603},"msg":"incoming request"}
+{"level":30,"time":1793366039919,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-3","res":{"statusCode":200},"responseTime":1.3741660000000024,"msg":"request completed"}
+{"level":30,"time":1793366039942,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-1","req":{"method":"GET","url":"/api/admin/agents","host":"127.0.0.1:63604","remoteAddress":"::ffff:127.0.0.1","remotePort":63605},"msg":"incoming request"}
+{"level":30,"time":1793366039944,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-1","res":{"statusCode":200},"responseTime":2.4080419999999663,"msg":"request completed"}
+{"level":30,"time":1793366039945,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-2","req":{"method":"GET","url":"/api/admin/agents","host":"127.0.0.1:63606","remoteAddress":"::ffff:127.0.0.1","remotePort":63607},"msg":"incoming request"}
+{"level":30,"time":1793366039946,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-2","res":{"statusCode":200},"responseTime":1.1649590000000103,"msg":"request completed"}
+{"level":30,"time":1793366039947,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-3","req":{"method":"GET","url":"/api/admin/agents","host":"127.0.0.1:63608","remoteAddress":"::ffff:127.0.0.1","remotePort":63609},"msg":"incoming request"}
+{"level":30,"time":1793366039949,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-3","res":{"statusCode":200},"responseTime":2.1480000000000246,"msg":"request completed"}
+{"level":30,"time":1793366039965,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-1","req":{"method":"GET","url":"/api/sources","host":"127.0.0.1:63610","remoteAddress":"::ffff:127.0.0.1","remotePort":63611},"msg":"incoming request"}
+{"level":30,"time":1793366039968,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-1","res":{"statusCode":200},"responseTime":3.480957999999987,"msg":"request completed"}
+{"level":30,"time":1793366039969,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-2","req":{"method":"GET","url":"/api/sources","host":"127.0.0.1:63612","remoteAddress":"::ffff:127.0.0.1","remotePort":63613},"msg":"incoming request"}
+{"level":30,"time":1793366039969,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-2","res":{"statusCode":200},"responseTime":0.2028750000000059,"msg":"request completed"}
+{"level":30,"time":1793366039972,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-3","req":{"method":"GET","url":"/api/sources","host":"127.0.0.1:63614","remoteAddress":"::ffff:127.0.0.1","remotePort":63615},"msg":"incoming request"}
+{"level":30,"time":1793366039972,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-3","res":{"statusCode":200},"responseTime":0.3050419999999576,"msg":"request completed"}
+{"level":30,"time":1793366039992,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-1","req":{"method":"GET","url":"/api/admin/agents","host":"127.0.0.1:63616","remoteAddress":"::ffff:127.0.0.1","remotePort":63617},"msg":"incoming request"}
+{"level":30,"time":1793366039995,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-1","res":{"statusCode":200},"responseTime":3.4940840000000435,"msg":"request completed"}
+{"level":30,"time":1793366039996,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-2","req":{"method":"GET","url":"/api/admin/agents","host":"127.0.0.1:63618","remoteAddress":"::ffff:127.0.0.1","remotePort":63619},"msg":"incoming request"}
+{"level":30,"time":1793366039998,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-2","res":{"statusCode":200},"responseTime":1.4745000000000346,"msg":"request completed"}
+{"level":30,"time":1793366040000,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-3","req":{"method":"GET","url":"/api/admin/agents","host":"127.0.0.1:63620","remoteAddress":"::ffff:127.0.0.1","remotePort":63621},"msg":"incoming request"}
+{"level":30,"time":1793366040002,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-3","res":{"statusCode":200},"responseTime":1.1268330000000333,"msg":"request completed"}
+{"level":30,"time":1793366040018,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-1","req":{"method":"GET","url":"/api/sources","host":"127.0.0.1:63622","remoteAddress":"::ffff:127.0.0.1","remotePort":63623},"msg":"incoming request"}
+{"level":30,"time":1793366040025,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-1","res":{"statusCode":200},"responseTime":7.417708000000005,"msg":"request completed"}
+{"level":30,"time":1793366040029,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-2","req":{"method":"GET","url":"/api/sources","host":"127.0.0.1:63624","remoteAddress":"::ffff:127.0.0.1","remotePort":63625},"msg":"incoming request"}
+{"level":30,"time":1793366040029,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-2","res":{"statusCode":200},"responseTime":0.2880840000000262,"msg":"request completed"}
+{"level":30,"time":1793366040029,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-3","req":{"method":"GET","url":"/api/admin/agents","host":"127.0.0.1:63626","remoteAddress":"::ffff:127.0.0.1","remotePort":63627},"msg":"incoming request"}
+{"level":30,"time":1793366040031,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-3","res":{"statusCode":200},"responseTime":1.894457999999986,"msg":"request completed"}
+{"level":30,"time":1793366040033,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-4","req":{"method":"GET","url":"/api/sources","host":"127.0.0.1:63628","remoteAddress":"::ffff:127.0.0.1","remotePort":63629},"msg":"incoming request"}
+{"level":30,"time":1793366040034,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-4","res":{"statusCode":200},"responseTime":0.582290999999941,"msg":"request completed"}
+{"level":30,"time":1793366040035,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-5","req":{"method":"GET","url":"/api/admin/agents","host":"127.0.0.1:63630","remoteAddress":"::ffff:127.0.0.1","remotePort":63631},"msg":"incoming request"}
+{"level":30,"time":1793366040036,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-5","res":{"statusCode":200},"responseTime":0.8909579999999551,"msg":"request completed"}
+{"level":30,"time":1793366040059,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-1","req":{"method":"GET","url":"/api/sources","host":"127.0.0.1:63632","remoteAddress":"::ffff:127.0.0.1","remotePort":63633},"msg":"incoming request"}
+{"level":30,"time":1793366040061,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-1","res":{"statusCode":200},"responseTime":1.884333999999967,"msg":"request completed"}
+{"level":30,"time":1793366040062,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-2","req":{"method":"GET","url":"/api/sources","host":"127.0.0.1:63634","remoteAddress":"::ffff:127.0.0.1","remotePort":63635},"msg":"incoming request"}
+{"level":30,"time":1793366040096,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-2","res":{"statusCode":200},"responseTime":34.38883299999998,"msg":"request completed"}
+{"level":30,"time":1793366040109,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-1","req":{"method":"GET","url":"/api/sources","host":"127.0.0.1:63636","remoteAddress":"::ffff:127.0.0.1","remotePort":63637},"msg":"incoming request"}
+{"level":30,"time":1793366040112,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-1","res":{"statusCode":200},"responseTime":2.0520420000000286,"msg":"request completed"}
+{"level":30,"time":1793366040112,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-2","req":{"method":"GET","url":"/api/admin/agents","host":"127.0.0.1:63638","remoteAddress":"::ffff:127.0.0.1","remotePort":63639},"msg":"incoming request"}
+{"level":30,"time":1793366040114,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-2","res":{"statusCode":200},"responseTime":1.570583000000056,"msg":"request completed"}
+{"level":30,"time":1793366040114,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-3","req":{"method":"GET","url":"/api/sources","host":"127.0.0.1:63640","remoteAddress":"::ffff:127.0.0.1","remotePort":63641},"msg":"incoming request"}
+{"level":30,"time":1793366040114,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-3","res":{"statusCode":200},"responseTime":0.18475000000000819,"msg":"request completed"}
+{"level":30,"time":1793366040115,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-4","req":{"method":"GET","url":"/api/admin/agents","host":"127.0.0.1:63642","remoteAddress":"::ffff:127.0.0.1","remotePort":63643},"msg":"incoming request"}
+{"level":30,"time":1793366040115,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-4","res":{"statusCode":200},"responseTime":0.6914580000000115,"msg":"request completed"}
+{"level":30,"time":1793366040116,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-5","req":{"method":"GET","url":"/api/sources","host":"127.0.0.1:63644","remoteAddress":"::ffff:127.0.0.1","remotePort":63645},"msg":"incoming request"}
+{"level":30,"time":1793366040116,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-5","res":{"statusCode":200},"responseTime":0.1958750000000009,"msg":"request completed"}
+{"level":30,"time":1793366040116,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-6","req":{"method":"GET","url":"/api/admin/agents","host":"127.0.0.1:63646","remoteAddress":"::ffff:127.0.0.1","remotePort":63647},"msg":"incoming request"}
+{"level":30,"time":1793366040117,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-6","res":{"statusCode":200},"responseTime":0.7907919999998967,"msg":"request completed"}
+{"level":30,"time":1793366040118,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-7","req":{"method":"GET","url":"/api/sources","host":"127.0.0.1:63648","remoteAddress":"::ffff:127.0.0.1","remotePort":63649},"msg":"incoming request"}
+{"level":30,"time":1793366040118,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-7","res":{"statusCode":200},"responseTime":0.21191699999997127,"msg":"request completed"}
+{"level":30,"time":1793366040118,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-8","req":{"method":"GET","url":"/api/admin/agents","host":"127.0.0.1:63650","remoteAddress":"::ffff:127.0.0.1","remotePort":63651},"msg":"incoming request"}
+{"level":30,"time":1793366040119,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-8","res":{"statusCode":200},"responseTime":0.87175000000002,"msg":"request completed"}
+{"level":30,"time":1793366040120,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-9","req":{"method":"GET","url":"/api/sources","host":"127.0.0.1:63652","remoteAddress":"::ffff:127.0.0.1","remotePort":63653},"msg":"incoming request"}
+{"level":30,"time":1793366040120,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-9","res":{"statusCode":200},"responseTime":0.16583400000001802,"msg":"request completed"}
+{"level":30,"time":1793366040120,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-a","req":{"method":"GET","url":"/api/admin/agents","host":"127.0.0.1:63654","remoteAddress":"::ffff:127.0.0.1","remotePort":63655},"msg":"incoming request"}
+{"level":30,"time":1793366040121,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-a","res":{"statusCode":200},"responseTime":0.6242499999999609,"msg":"request completed"}
+{"level":30,"time":1793366040135,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-1","req":{"method":"GET","url":"/api/sources","host":"127.0.0.1:63656","remoteAddress":"::ffff:127.0.0.1","remotePort":63657},"msg":"incoming request"}
+{"level":30,"time":1793366040137,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-1","res":{"statusCode":200},"responseTime":2.0670000000000073,"msg":"request completed"}
+{"level":30,"time":1793366040137,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-2","req":{"method":"GET","url":"/api/admin/agents","host":"127.0.0.1:63658","remoteAddress":"::ffff:127.0.0.1","remotePort":63659},"msg":"incoming request"}
+{"level":30,"time":1793366040139,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-2","res":{"statusCode":200},"responseTime":1.3991659999999229,"msg":"request completed"}
+{"level":30,"time":1793366040139,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-3","req":{"method":"GET","url":"/api/sources","host":"127.0.0.1:63660","remoteAddress":"::ffff:127.0.0.1","remotePort":63661},"msg":"incoming request"}
+{"level":30,"time":1793366040140,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-3","res":{"statusCode":503},"responseTime":0.38287500000001273,"msg":"request completed"}
+{"level":30,"time":1793366040140,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-4","req":{"method":"GET","url":"/api/admin/agents","host":"127.0.0.1:63662","remoteAddress":"::ffff:127.0.0.1","remotePort":63663},"msg":"incoming request"}
+{"level":30,"time":1793366040141,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-4","res":{"statusCode":503},"responseTime":0.6459160000000566,"msg":"request completed"}
+{"level":30,"time":1793366040166,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-1","req":{"method":"GET","url":"/api/sources","host":"127.0.0.1:63664","remoteAddress":"::ffff:127.0.0.1","remotePort":63665},"msg":"incoming request"}
+{"level":30,"time":1793366040168,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-1","res":{"statusCode":200},"responseTime":1.8357500000000755,"msg":"request completed"}
+{"level":30,"time":1793366040168,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-2","req":{"method":"GET","url":"/api/admin/agents","host":"127.0.0.1:63666","remoteAddress":"::ffff:127.0.0.1","remotePort":63667},"msg":"incoming request"}
+{"level":30,"time":1793366040170,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-2","res":{"statusCode":200},"responseTime":1.6200420000000122,"msg":"request completed"}
+{"level":30,"time":1793366040170,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-3","req":{"method":"GET","url":"/api/sources","host":"127.0.0.1:63668","remoteAddress":"::ffff:127.0.0.1","remotePort":63669},"msg":"incoming request"}
+{"level":30,"time":1793366040171,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-3","res":{"statusCode":503},"responseTime":0.10775000000001,"msg":"request completed"}
+{"level":30,"time":1793366040171,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-4","req":{"method":"GET","url":"/api/admin/agents","host":"127.0.0.1:63670","remoteAddress":"::ffff:127.0.0.1","remotePort":63671},"msg":"incoming request"}
+{"level":30,"time":1793366040171,"pid":90577,"hostname":"forrestMac-mini-3.local","reqId":"req-4","res":{"statusCode":503},"responseTime":0.43737499999997453,"msg":"request completed"}
+ ❯ server/__tests__/display-permission-runtime.test.ts (9 tests | 1 failed) 347ms
+     × an unreadable overlay fails the semantic display while the Agent list keeps working 23ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 8 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  server/__tests__/display-invalidation.test.ts > Spec 174 T3 — invalidation matrix (DI-01..15/18) > SI-04 an overlay-only save advances D but not P/C and does not rebuild the Agent permissions
+AssertionError: expected 3 to be 1 // Object.is equality
+
+- Expected
++ Received
+
+- 1
++ 3
+
+ ❯ server/__tests__/display-invalidation.test.ts:333:21
+    331|     const after = displayGenerations();
+    332|     expect(after.D).toBeGreaterThan(gens.D);
+    333|     expect(after.P).toBe(gens.P);
+       |                     ^
+    334|     expect(after.C).toBe(gens.C);
+    335|     // The write itself builds nothing.
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/8]⎯
+
+ FAIL  server/__tests__/display-permission-runtime.test.ts > Spec 195 SI-07 — verification health is isolated per dependency scope > an unreadable overlay fails the semantic display while the Agent list keeps working
+AssertionError: expected 503 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 503
+
+ ❯ server/__tests__/display-permission-runtime.test.ts:292:25
+    290|
+    291|     const list = await request(app.server).get("/api/admin/agents");
+    292|     expect(list.status).toBe(200);
+       |                         ^
+    293|     expect(list.body.data.agents.length).toBeGreaterThan(0);
+    294|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/8]⎯
+
+ FAIL  server/__tests__/display-snapshot.test.ts > Spec 174 T3 — external change reconciliation (SC-05/13, DI-12/13) > finds same-size, same-mtime rewrites exactly once (Spec 195 §5.2)
+AssertionError: expected 3 to be 2 // Object.is equality
+
+- Expected
++ Received
+
+- 2
++ 3
+
+ ❯ server/__tests__/display-snapshot.test.ts:337:36
+    335|     expect(afterMeta).toBeGreaterThan(0);
+    336|     await reconcileFullDigest();
+    337|     expect(displayGenerations().D).toBe(afterMeta);
+       |                                    ^
+    338|   });
+    339|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/8]⎯
+
+ FAIL  server/__tests__/display-snapshot.test.ts > Spec 195 SI-01/SI-02 — one confirmed change, one invalidation > SI-01 metadata → full: one external overlay version invalidates D exactly once
+AssertionError: expected 4 to be 3 // Object.is equality
+
+- Expected
++ Received
+
+- 3
++ 4
+
+ ❯ server/__tests__/display-snapshot.test.ts:413:36
+    411|     expect(afterMeta.P).toBe(before.P);
+    412|     await reconcileFullDigest();
+    413|     expect(displayGenerations().D).toBe(afterMeta.D);
+       |                                    ^
+    414|   });
+    415|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/8]⎯
+
+ FAIL  server/__tests__/display-snapshot.test.ts > Spec 195 SI-01/SI-02 — one confirmed change, one invalidation > SI-01 full → metadata: the same version is not invalidated twice
+AssertionError: expected 4 to be 3 // Object.is equality
+
+- Expected
++ Received
+
+- 3
++ 4
+
+ ❯ server/__tests__/display-snapshot.test.ts:424:36
+    422|     expect(afterFull.D).toBe(before.D + 1);
+    423|     await reconcileMetadata();
+    424|     expect(displayGenerations().D).toBe(afterFull.D);
+       |                                    ^
+    425|   });
+    426|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/8]⎯
+
+ FAIL  server/__tests__/display-snapshot.test.ts > Spec 195 SI-01/SI-02 — one confirmed change, one invalidation > SI-01 concurrent observation: one version invalidates D once
+AssertionError: expected 4 to be 3 // Object.is equality
+
+- Expected
++ Received
+
+- 3
++ 4
+
+ ❯ server/__tests__/display-snapshot.test.ts:432:36
+    430|     await writeFile(overlayPath(), "grain: [id, region]\n", "utf8");
+    431|     await Promise.all([reconcileMetadata(), reconcileFullDigest()]);
+    432|     expect(displayGenerations().D).toBe(before.D + 1);
+       |                                    ^
+    433|   });
+    434|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/8]⎯
+
+ FAIL  server/__tests__/display-snapshot.test.ts > Spec 195 SI-01/SI-02 — one confirmed change, one invalidation > SI-02 an atomic replace is confirmed once
+AssertionError: expected 4 to be 3 // Object.is equality
+
+- Expected
++ Received
+
+- 3
++ 4
+
+ ❯ server/__tests__/display-snapshot.test.ts:463:36
+    461|     expect(afterMeta.D).toBe(before.D + 1);
+    462|     await reconcileFullDigest();
+    463|     expect(displayGenerations().D).toBe(afterMeta.D);
+       |                                    ^
+    464|   });
+    465|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/8]⎯
+
+ FAIL  server/__tests__/display-snapshot.test.ts > Spec 195 SI-01/SI-02 — one confirmed change, one invalidation > SI-02 a same-content rewrite with a new mtime still moves the semantic generation once
+AssertionError: expected 4 to be 3 // Object.is equality
+
+- Expected
++ Received
+
+- 3
++ 4
+
+ ❯ server/__tests__/display-snapshot.test.ts:474:36
+    472|     expect(afterMeta.D).toBe(before.D + 1);
+    473|     await reconcileFullDigest();
+    474|     expect(displayGenerations().D).toBe(afterMeta.D);
+       |                                    ^
+    475|   });
+    476| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/8]⎯
+
+
+ Test Files  3 failed (3)
+      Tests  8 failed | 44 passed (52)
+   Start at  21:13:52
+   Duration  7.26s (transform 837ms, setup 109ms, import 1.33s, tests 5.64s, environment 0ms)
+
