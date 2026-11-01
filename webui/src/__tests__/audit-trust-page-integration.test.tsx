@@ -1,17 +1,16 @@
 // @vitest-environment jsdom
 /**
- * 批 C-1 集成用例：Audit.tsx 挂载 audit-trust 六组件 + 八桶替换 + E7 去截断。
+ * 批 C-1 集成用例：Audit.tsx 挂载 audit-trust 组件 + 八桶替换 + E7 去截断。
  *
- * 守的不变量（20261019 规格 §5 / §4.4、U2）：
+ * 守的不变量（20261019 规格 §5 / §4.4、U2；2026-11-01 去掉常驻上下文元条）：
  *  1. 执行状态展示的是**八桶** `primary_status`，不是旧三桶 `outcome`；
  *  2. 执行 / 关联 / 覆盖三条轴**互相独立** —— 「执行成功 + 归属待核验」
  *     必须同时可见，不能被单绿 badge 遮蔽；
  *  3. 覆盖轴无客户端证据时显示「后续动作不可见」，**不得**出现「未外发」；
  *  4. E7：涉及数据表不再出现「等 N 个」，抽屉默认展开全部；
  *  5. 返回规模未知时显示「—」并带空值原因，**不得**写成 0；
- *  6. 顶部元条显示固定窗口、时区、统计时间、刷新状态、审计同步延迟。
- *  7. SC-06：「统计时间」全页只出现一次，可见文是相对时间（不是 ISO）。
- *  8. SC-08：「字段说明」与「查看审计口径」留在口径说明区域内。
+ *  6. 不常驻窗口/时区/统计时间/同步延迟/刷新状态条；暂停刷新留在页头。
+ *  7. 「字段说明」与「查看审计口径」留在口径说明区域内。
  *
  * 注：页面 mount 时 `since` 会被 effect 重算一次（既有行为），查询键因此
  * 变化并触发二次加载。所有断言一律等到**稳定态**（`waitFor`），不在加载
@@ -218,61 +217,36 @@ describe("批 C-1：Audit.tsx 挂载 audit-trust 组件", () => {
     expect(screen.getByTestId("readonly-sql-status")).toHaveTextContent("未采集");
   });
 
-  it("顶部元条显示固定窗口、时区、统计时间、刷新状态与审计同步延迟", async () => {
+  it("不展示顶部上下文元条；暂停刷新仍在页头", async () => {
     stubAuditApi([{ ...ENTRY_BASE, id: 11, primaryStatus: "succeeded" }]);
     renderAudit();
 
-    await waitFor(() => expect(screen.getByTestId("audit-top-meta-bar")).toBeInTheDocument());
-    expect(screen.getByTestId("audit-top-meta-window")).toBeInTheDocument();
-    expect(screen.getByTestId("audit-top-meta-zone")).toBeInTheDocument();
-    expect(screen.getByTestId("audit-top-meta-stats-at")).toBeInTheDocument();
-    expect(screen.getAllByText("统计时间", { exact: true })).toHaveLength(1);
+    await waitForRow(11);
+    expect(screen.queryByTestId("audit-top-meta-bar")).not.toBeInTheDocument();
+    expect(screen.queryByText("审计同步延迟")).not.toBeInTheDocument();
+    expect(screen.queryByText("统计时间", { exact: true })).not.toBeInTheDocument();
     expect(screen.queryByTestId("audit-stats-time")).not.toBeInTheDocument();
-    expect(screen.getByTestId("audit-top-meta-refresh").getAttribute("data-state")).toBe("live");
     expect(screen.getByTestId("audit-refresh-toggle")).toHaveClass("pl-btn--secondary");
-    // 审计同步延迟来自服务端投影状态（真实观测值，不是编造）
-    await waitFor(() =>
-      expect(screen.getByTestId("audit-top-meta-sync-lag").getAttribute("data-lag-ms")).toBe("1234")
-    );
+    expect(screen.getByTestId("audit-refresh-toggle")).toHaveAttribute("aria-pressed", "false");
   });
 
-  it("暂停刷新会冻结刷新状态", async () => {
+  it("暂停刷新会切换 aria-pressed", async () => {
     stubAuditApi([{ ...ENTRY_BASE, id: 12, primaryStatus: "succeeded" }]);
     renderAudit();
 
     await waitForRow(12);
     fireEvent.click(screen.getByTestId("audit-refresh-toggle"));
     await waitFor(() =>
-      expect(screen.getByTestId("audit-top-meta-refresh").getAttribute("data-state")).toBe("paused")
+      expect(screen.getByTestId("audit-refresh-toggle")).toHaveAttribute("aria-pressed", "true")
     );
+    expect(screen.getByTestId("audit-refresh-toggle")).toHaveTextContent("恢复刷新");
   });
 
-  it("SC-06：「统计时间」只出现一次，可见文是相对时间而不是 ISO", async () => {
+  it("「字段说明」与「查看审计口径」仍在口径说明区域内", async () => {
     stubAuditApi([{ ...ENTRY_BASE, id: 13, primaryStatus: "succeeded" }]);
     renderAudit();
 
     await waitForRow(13);
-    // 标签全页只出现一次（时间范围控件旁不再重复「统计时间：」）
-    expect(screen.getAllByText("统计时间", { exact: true })).toHaveLength(1);
-    expect(screen.queryByTestId("audit-stats-time")).not.toBeInTheDocument();
-
-    const value = screen
-      .getByTestId("audit-top-meta-stats-at")
-      .querySelector(".pl-audit-top-meta-value");
-    const visible = value?.textContent?.trim() ?? "";
-    // 可见文是相对时间（刚刚 / N 秒前 / N 分钟前 / HH:mm:ss）
-    expect(visible).toMatch(/^(刚刚|\d+ 秒前|\d+ 分钟前|\d{2}:\d{2}:\d{2})$/);
-    expect(visible).not.toMatch(/[TZ]/);
-    // 精确本地时间与 ISO 留在 title / data-iso
-    expect(value?.getAttribute("title")).toMatch(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/);
-    expect(value?.getAttribute("data-iso")).toMatch(/Z$/);
-  });
-
-  it("SC-08：「字段说明」与「查看审计口径」仍在口径说明区域内", async () => {
-    stubAuditApi([{ ...ENTRY_BASE, id: 14, primaryStatus: "succeeded" }]);
-    renderAudit();
-
-    await waitForRow(14);
     const region = screen.getByTestId("audit-granularity-help");
     expect(region).toContainElement(screen.getByTestId("audit-export-metadata"));
     expect(region).toContainElement(screen.getByText("查看审计口径"));

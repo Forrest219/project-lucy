@@ -23,7 +23,6 @@ import { DecisionReasonCell } from "../../components/DecisionReasonCell";
 import {
   AssociationRevisionTimeline,
   AuditStatusTriad,
-  AuditTopMetaBar,
   ClientCoveragePill,
   CredentialPrincipalCell,
   ReadonlySqlRowset,
@@ -559,16 +558,6 @@ function formatDurationMs(ms: number): string {
   const minutes = Math.floor(ms / 60_000);
   const seconds = Math.round((ms % 60_000) / 1000);
   return `${minutes} m ${seconds} s`;
-}
-
-function formatStatsTimeLabel(statsAt: Date | null, now: Date): string {
-  if (!statsAt) return "未知";
-  const diffMs = now.getTime() - statsAt.getTime();
-  if (diffMs < 5_000) return "刚刚";
-  if (diffMs < 60_000) return `${Math.floor(diffMs / 1000)} 秒前`;
-  if (diffMs < 15 * 60_000) return `${Math.floor(diffMs / 60_000)} 分钟前`;
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(statsAt.getHours())}:${pad(statsAt.getMinutes())}:${pad(statsAt.getSeconds())}`;
 }
 
 /** Spec 106 + Spec 165: prefer `range=1h|24h|7d|30d`; accept legacy `hours=1|24|168|720`. */
@@ -1929,25 +1918,9 @@ export function Audit() {
   const isCallsSlowFiltered = tab === "calls" && slowOnly;
   const totalPages = Math.ceil((tab === "turns" ? turnTotal : (isCallsSlowFiltered ? callEntries.length : callTotal)) / PAGE_SIZE) || 1;
 
-  const statsUpdatedAtMs = tab === "turns" ? turnsQuery.dataUpdatedAt : callsQuery.dataUpdatedAt;
-  const statsTimeLabel = formatStatsTimeLabel(statsUpdatedAtMs > 0 ? new Date(statsUpdatedAtMs) : null, now);
-
-  // ── 顶部元条（20261019 §5）─────────────────────────────────────────────
-  // 固定起止时间：就是**这一次查询实际用的窗口**（与请求参数同源），
-  // 不是「最近 N 小时」的口头说法。
-  const fixedStartIso = localDateTimeValueToIso(since) ?? sinceForRange(range);
-  const fixedEndIso = localDateTimeValueToIso(until) ?? new Date(now).toISOString();
-  const zone = useMemo(() => {
-    try {
-      return Intl.DateTimeFormat().resolvedOptions().timeZone || "本地时区";
-    } catch {
-      return "本地时区";
-    }
-  }, []);
-  const statsAtIso = statsUpdatedAtMs > 0 ? new Date(statsUpdatedAtMs).toISOString() : new Date(now).toISOString();
-  // 审计同步延迟 = 最老未投影事件的滞留时长（服务端投影状态，真实观测值）。
+  // 投影未追平时保留告警；暂停仍冻结筛选与序列上界（audit-trust §5 行为）。
+  // 窗口/时区/统计时间/同步延迟/刷新状态不再常驻展示（2026-11-01 批准）。
   const projection = tab === "turns" ? turnsQuery.data?.projection : callsQuery.data?.projection;
-  const syncLagMs = projection?.delayMs ?? 0;
   const projectionComplete = projection?.complete ?? false;
 
   // ── 八桶主状态汇总（B27；与列表 / CSV / v2 导出同源同函数）──────────────
@@ -2015,6 +1988,25 @@ export function Audit() {
         }
         actions={
           <div className="flex flex-wrap items-center gap-3">
+            {!projectionComplete ? (
+              <span
+                className="pl-status-badge pl-status-warning"
+                data-testid="audit-projection-lagging"
+                title={projection?.reason ?? "审计投影尚未追平账本上界"}
+              >
+                审计投影未追平
+              </span>
+            ) : null}
+            <button
+              type="button"
+              className="pl-btn pl-btn--secondary pl-btn--sm"
+              data-testid="audit-refresh-toggle"
+              aria-pressed={refreshPaused}
+              title={refreshPaused ? "恢复自动刷新" : "暂停自动刷新；筛选与序列上界已冻结"}
+              onClick={() => setRefreshPaused((v) => !v)}
+            >
+              {refreshPaused ? "恢复刷新" : "暂停刷新"}
+            </button>
             <a
               href={currentExport.href}
               download
@@ -2070,41 +2062,6 @@ export function Audit() {
           调用流水
         </Link>
       </div>
-
-      {/* 顶部元条：固定起止时间、时区、统计时间、刷新/暂停状态、审计同步延迟。
-          暂停时筛选与序列上界被冻结，后台不得换范围。 */}
-      <AuditTopMetaBar
-        fixedStart={fixedStartIso}
-        fixedEnd={fixedEndIso}
-        zone={zone}
-        statsAt={statsAtIso}
-        statsLabel={statsTimeLabel}
-        refreshState={refreshPaused ? "paused" : "live"}
-        pauseReason="筛选与序列上界已冻结"
-        syncLagMs={syncLagMs}
-        trailing={
-          <div className="flex flex-wrap items-center gap-2">
-            {!projectionComplete ? (
-              <span
-                className="pl-status-badge pl-status-warning"
-                data-testid="audit-projection-lagging"
-                title={projection?.reason ?? "审计投影尚未追平账本上界"}
-              >
-                审计投影未追平
-              </span>
-            ) : null}
-            <button
-              type="button"
-              className="pl-btn pl-btn--secondary pl-btn--sm"
-              data-testid="audit-refresh-toggle"
-              aria-pressed={refreshPaused}
-              onClick={() => setRefreshPaused((v) => !v)}
-            >
-              {refreshPaused ? "恢复刷新" : "暂停刷新"}
-            </button>
-          </div>
-        }
-      />
 
       <div className="pl-notice flex flex-wrap items-baseline gap-x-3 gap-y-1" data-testid="audit-granularity-help">
         <span>
