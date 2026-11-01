@@ -3,14 +3,22 @@
 | 元数据 | 内容 |
 |---|---|
 | 文档类型 | 功能设计基线（Notification / Audit / Customer Deployment） |
-| 文档版本 / 日期 | v0.6-s2-authorized / 2026-10-26，Asia/Shanghai（v0.2-requirements-review 联合需求审查 → v0.3-pm-signoff PM 签核 → v0.4-implementation 实施 S1 → v0.5-final-review S1 最终复审签核 → v0.6-s2-authorized 推进授权与选型定稿） |
+| 文档版本 / 日期 | v0.7-functional-contract-closed / 2026-11-01，Asia/Shanghai（v0.2-requirements-review 联合需求审查 → v0.3-pm-signoff PM 签核 → v0.4-implementation 实施 S1 → v0.5-final-review S1 最终复审签核 → v0.6-s2-authorized 推进授权与选型定稿 → v0.7 功能合同收口） |
 | 功能编号 / 目标版本 | L25-05 / v0.25 |
 | 优先级 | P2、可选能力；不改变既有 P0／P1 验收与交付阻断状态 |
-| 状态 | **需求审查、PM 签核与 S1 最终复审签核均已通过（2026-10-26）；S1 与 S1.1 收口补丁已实施、自动化覆盖全绿；SMTP-01–26 仍未按验收口径执行。S2／S3 本轮实施，**S4 不启动、SMTP-26 保持 blocked**；本轮不连接任何 SMTP 服务器、不发信、不交付。实现完成不等于验收通过** |
+| 状态 | **v0.7 功能合同已收口（2026-11-01）**。SMTP-01–25 关闭（SMTP-24、SMTP-25 为部分通过并逐条列明未覆盖子项），**SMTP-26 保持 ⛔ blocked**；逐条落点见 §11.1，证据见 [收口记录](../reviews/2026-11-01-smtp-notifications-closure.md)。证据等级＝本机自动化（vitest，含本地 fake SMTP 协议级真连接）＋ 本地工程门禁（`helm template` 真渲染、升级脚本套件）；**无 CI job 证据、无客户环境证据**。**本条收口不表示可上线**——镜像构建、部署、客户交付、客户环境验证与真实升级不在本条出口 |
 | 需求来源 | [Lucy 2.5 功能升级建议书](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) §2.1 L25-05 |
 | 审查记录 | [L25-04／L25-05 Spec 审阅记录](../reviews/2026-10-25-lucy-v0.25-l25-04-05-spec-review-record.md)（F-01–F-08 已关闭；F-13–F-17 已回写本文；F-18–F-22 最终复审发现已修正关闭；F-23 audit_meta 共存口径已裁定） |
 | 现有基础 | 单实例 WebUI、审计账本健康状态、审计存储迁移、owner-only 管理门、Helm Secret 文件模式 |
 | 实施主体 | Lucy；不修改 KTX，不引入外部邮件服务依赖 |
+
+## 闭口层级
+
+- 层级：功能合同
+- 本条承诺：部署方可选地配置一个**默认关闭**的 SMTP 通知通道；通道开启时只承载「审计账本不可用／恢复」提醒与所有者发起的测试邮件，经持久 outbox 异步投递，收件人只来自部署配置，**不改变登录账户、认证、恢复流程、审计事实源或主业务失败关闭语义**。
+- 本条出口：§11 验收矩阵 SMTP-01–SMTP-26 及其 §11.1 逐条落点。SMTP-01–23 由自动化断言关闭；SMTP-24／SMTP-25 为部分通过（未覆盖子项逐条列明）；SMTP-26 逐条记 `blocked` 并写明阻塞原因。收口时的证据等级＝本机自动化（vitest，含本地 fake SMTP 的协议级真连接与 `helm template` 真渲染）＋ 本地工程门禁（升级脚本套件、仓库门禁）。
+- 不在本条出口：镜像构建、部署与客户交付；客户环境验证（客户目标 SMTP、客户网络策略、真实备份恢复）；**「无公网可启动和本地登录」这类真实部署动作**；**真实 `helm rollback` 到不识别 `notification_outbox` 的旧 Chart**；整库旅程、Agent 路径、跨模块或系统级故障演练；证据等级（归发布取证层）。SMTP-01／08／15 里「登录、bootstrap、break-glass、MCP 与审计行为与基线一致」等**跨模块基线比对**同样登记在本条出口之外——本条只证明**通知层自身失败被隔离**。
+- 上线关系：本条收口不表示可上线
 
 > 本文件定义拟实现行为，不代表功能已经实现或验收通过。本文经 PM 签核后，仅在企业安全 Spec §1.1 的 SMTP 非目标上形成有边界的例外；登录、恢复、权限与失败关闭合同继续有效。
 
@@ -302,7 +310,7 @@ SMTP 原始响应不得直接成为用户可见错误。测试接口返回 202 �
 
 ## 11. 验收矩阵
 
-所有用例初始状态均为未执行。协议 fake SMTP 只能证明实现行为；真实交付验收需客户目标 SMTP 与 linux/amd64 K8s，环境不足记 `blocked`。
+下表是验收矩阵本身（场景与通过标准）。**执行状态见 §11.1 逐条落点表（2026-11-01 收口）**：SMTP-01–25 关闭（SMTP-24／25 部分通过），**SMTP-26 保持 ⛔ blocked**。协议 fake SMTP 只能证明实现行为；真实交付验收需客户目标 SMTP 与 linux/amd64 K8s，环境不足记 `blocked`。
 
 | 编号 | 验收场景 | 通过标准 |
 |---|---|---|
@@ -333,6 +341,42 @@ SMTP 原始响应不得直接成为用户可见错误。测试接口返回 202 �
 | SMTP-25 | 升级与回滚 | 审计存储迁移、备份恢复、禁用和回滚合同通过；无认证或审计语义回退 |
 | SMTP-26 | linux/amd64 真实链路 | 同一候选镜像向客户目标 SMTP 完成测试、事故、恢复、重试与重启证据；否则 blocked |
 
+## 11.1 逐条落点表（2026-11-01 收口）
+
+**证据等级**：本地自动化（vitest，本机进程内；协议层用本机 fake SMTP 真连接）＋ 本地工程门禁（`helm template` 真渲染、`node --test` 升级脚本套件）。**无 CI job 证据，无客户环境证据，无浏览器实测证据。**
+「本次补」＝收口时补的、此前仓内**没有任何断言**的用例。
+
+| 编号 | 结果 | 落点（文件 → 用例名；测试文件路径相对 `webui/`） |
+|---|---|---|
+| SMTP-01 | 通过 | `server/__tests__/notifications-l25-05.test.ts`「SMTP-01 未配置时不启用，也不读任何文件」；**本次补** `notifications-l25-05-closure.test.ts`「SMTP-01 未配置时不产生任何 SMTP 连接：worker 不领取、不发信」「SMTP-01 未配置时不读 profile／password／CA 任何文件」 |
+| SMTP-02 | 通过 | `notifications-l25-05.test.ts`「SMTP-02 状态摘要不含 host／username／from／收件人原文」「SMTP-02 owner 看到脱敏状态与队列计数」 |
+| SMTP-03 | 通过 | `notifications-l25-05.test.ts`「SMTP-03 合法 profile 通过校验」「SMTP-03 非法形状一律被拒，且只抛封闭错误码」「SMTP-03 非法 profile 让通知不可用，但不影响其它东西」；**本次补** `notifications-l25-05-closure.test.ts`「SMTP-03 布尔与地址非法一律被拒…」「SMTP-03 profile 非法时启动不被拖垮…」 |
+| SMTP-04 | 通过 | `notifications-l25-05.test.ts`「SMTP-04 有 username 但缺密码文件时为 unavailable」「SMTP-04 没有 username 时不读密码文件」；**本次补** `notifications-l25-05-closure.test.ts`「SMTP-04 密码文件为空时 unavailable 且不连接；修复并重启后恢复 ok」「SMTP-04 CA 文件缺失或不是 PEM 时 unavailable；补上合法 CA 后恢复 ok」 |
+| SMTP-05 | 通过 | **本次补** `notifications-l25-05-auth-boundary.test.ts`「SMTP-05 认证与管理路由里没有忘记密码／验证码／许可入口」「SMTP-05 通知接口不是认证条件：三条路径都不在公开 API 白名单里」「SMTP-05 登录主键仍是账户 id：邮箱既不是合法账户 id，也查不到账户」「SMTP-05 只带邮箱的登录请求被拒：登录凭据仍是账户 id 与密码」 |
+| SMTP-06 | 通过 | `notifications-l25-05-smtp.test.ts`「SMTP-06 发送成功后标 sent，且收件人只在 Bcc」「SMTP-06 owner 提交测试邮件返回 202 queued，文案不说发送成功」「SMTP-06 真实投递后正文不含收件人列表，收件人只在 Bcc」；**本次补** `notifications-l25-05-closure.test.ts`「SMTP-06 测试邮件不接受任意收件人：请求体里的地址被忽略」 |
+| SMTP-07 | 通过 | `notifications-l25-05.test.ts`「SMTP-07 非 owner 返回 403，未登录返回 401」；`notifications-l25-05-smtp.test.ts`「SMTP-07 未登录 401、非 owner 403，且不产生 outbox 行」「SMTP-07 状态与单行查询都不返回 payload 与收件人」「SMTP-07 不存在的通知 id 返回 404 NOTIFICATION_NOT_FOUND」；**本次补** `notifications-l25-05-closure.test.ts`「SMTP-07 未登录／非 owner 的响应不泄露配置信息，也不产生 outbox 行」 |
+| SMTP-08 | 通过 | `notifications-l25-05.test.ts`「连续失败才升级为事故，且只发一次」「ok／unavailable 抖动不产生任何事件」「SMTP-08／09 持续 60 秒无需额外 append 也产生事故与恢复」「SMTP-08 计时器早触发时重排窗口，不静默放弃通知」「SMTP-08 入队产生一行 queued，去重键命中时不重复入队」 |
+| SMTP-09 | 通过 | `notifications-l25-05.test.ts`「恢复需要稳定成功，且复用同一个 incidentId」「没有事故就不产生恢复事件」「SMTP-09 恢复事件要求事故行已持久化」「SMTP-09 同批次事故与恢复按顺序持久化，不丢恢复事件」；**本次补** `notifications-l25-05-closure.test.ts`「SMTP-09 事故入队失败时不发恢复提醒：存储恢复后也不补发」 |
+| SMTP-10 | 通过 | **本次补** `notifications-l25-05-closure.test.ts`「SMTP-10 未选择 auditHealth 时事故与恢复都不产生新行；测试邮件仍可入队」 |
+| SMTP-11 | 通过 | `notifications-l25-05-smtp.test.ts`「SMTP-11 关闭时不投递，队列保持原样」「SMTP-11／21 历史行按 enqueue 时的收件人快照投递，不随配置变更」；`notifications-l25-05.test.ts`「SMTP-13 过期行不再投递，转 dead」；**本次补** `notifications-l25-05-closure.test.ts`「SMTP-11 enabled=false 时事故与恢复都不产生新行」「SMTP-11 重新启用并重启后：未过期的历史行按原收件人快照投递，过期行不投递」 |
+| SMTP-12 | 通过 | `notifications-l25-05-smtp.test.ts`「SMTP-12 暂时失败按有界退避重排，并记录封闭错误码」「SMTP-12 SMTP 4xx 被服务端拒绝时映射为可重试的 smtp_rejected」「SMTP-12 超时映射为 smtp_timeout」「SMTP-12 连接失败映射为 smtp_unreachable」；**本次补** `notifications-l25-05-closure.test.ts`「SMTP-12 暂时失败后重试成功：状态转 sent 且 attempts 准确」 |
+| SMTP-13 | 通过 | `notifications-l25-05-smtp.test.ts`「SMTP-13 永久失败直接 dead，不无限重试」「SMTP-13 达到最大尝试次数后 dead」「SMTP-13 SMTP 5xx 被服务端拒绝时映射为永久失败」；**本次补** `notifications-l25-05-closure.test.ts`「SMTP-13 永久故障只影响通知：行转 dead、错误码封闭，账本健康面不受影响」 |
+| SMTP-14 | 通过 | `notifications-l25-05-smtp.test.ts`「SMTP-14 租约过期的 sending 行可被重新领取（崩溃恢复）」「SMTP-14 活着的租约不会被抢走」；**本次补** `notifications-l25-05-closure.test.ts`「SMTP-14 SMTP 接受后未标 sent 的崩溃：租约过期后重发，重复是文档化的 at-least-once 语义」 |
+| SMTP-15 | 通过 | `notifications-l25-05.test.ts`「SMTP-15 队列达到上限时拒绝新通知，不影响主业务」；`notifications-l25-05-smtp.test.ts`「SMTP-15 配置不可用时返回 NOTIFICATION_UNAVAILABLE 而不是队列错误」；**本次补** `notifications-l25-05-closure.test.ts`「SMTP-15 队列满时测试接口返回 NOTIFICATION_QUEUE_UNAVAILABLE（503），不是 202 也不是 NOTIFICATION_UNAVAILABLE」 |
+| SMTP-16 | 通过 | `notifications-l25-05-smtp.test.ts`「SMTP-16 security=tls 走直连 TLS，不带 requireTLS」「SMTP-16 security=starttls 必须升级，且绝不降级明文」「SMTP-16 私有 CA 只追加信任，且没有关闭校验的开关」「SMTP-16 证书错误按 originalCode 识别，而不是笼统的 socket 错误」「SMTP-16 认证失败映射为 smtp_auth_failed」「SMTP-16 直连 TLS：信任该 CA 时发送成功，明文服务器不被接受」「SMTP-16 不信任该 CA 时握手失败，绝不降级明文」「SMTP-16 STARTTLS 升级失败时不降级明文，且升级前不发送 AUTH」 |
+| SMTP-17 | 通过 | `notifications-l25-05-smtp.test.ts`「SMTP-17 主题是封闭值，只有三个」「SMTP-17 显示名的控制字符被去除并限长」「SMTP-17 事故 id 只披露 8 位短 id」「SMTP-17 CR/LF 无法进入正文形成 header 注入」；**本次补** `notifications-l25-05-closure.test.ts`「SMTP-17 发出的邮件只有纯文本正文，没有 HTML 部件」 |
+| SMTP-18 | 通过 | `notifications-l25-05.test.ts`「SMTP-18 profile 不得内联密码」；`notifications-l25-05-smtp.test.ts`「SMTP-18 传输层不挂 logger，SMTP 对话不会进应用日志」「SMTP-18 配置了凭据时只传 auth，不把密码放进别处」；`notifications-l25-05-helm.test.ts`「SMTP-23 启用：…只出现文件路径 env」；**本次补** `notifications-l25-05-closure.test.ts`「SMTP-18 密码不出现在 outbox 行、审计登记与状态接口里」 |
+| SMTP-19 | 通过 | `notifications-l25-05.test.ts`「SMTP-19 收件人上限为 20 且去重」「SMTP-19 payload 与收件人快照有上限」；`notifications-l25-05-smtp.test.ts`「SMTP-19 保留期清理一次只删一批，不做无界删除」；**本次补** `notifications-l25-05-closure.test.ts`「SMTP-19 每批最多领取 20 行，其余留到下一批」 |
+| SMTP-20 | 通过 | `notifications-l25-05-smtp.test.ts`「SMTP-20 正文只含显示名、时间、短 id、观测说明与恢复入口」「SMTP-20 正文不含 host、username、密码、收件人或原始错误」；**本次补** `notifications-l25-05-closure.test.ts`「SMTP-20 邮件正文与接口都不含查询、表数据、审计 diff、Token 或许可信息」 |
+| SMTP-21 | 通过 | `notifications-l25-05.test.ts`「SMTP-21 配置只加载一次：改动文件不热生效」；`notifications-l25-05-smtp.test.ts`「SMTP-11／21 历史行按 enqueue 时的收件人快照投递，不随配置变更」 |
+| SMTP-22 | 通过 | `notifications-l25-05-helm.test.ts`「SMTP-22 默认关闭：渲染产物里没有任何 SMTP 资源、挂载或 env」（真 `helm template`） |
+| SMTP-23 | 通过 | `notifications-l25-05-helm.test.ts`「SMTP-23 启用：…只出现文件路径 env」「SMTP-23 渲染出的 profile 能被运行时的 profile 合同解析」「SMTP-23 有 username 但缺 Secret 时渲染失败」「SMTP-23 values 内联密码时渲染失败」「SMTP-23 明文 SMTP 与非法值渲染失败」「SMTP-23 extraEnvFrom 覆盖 SMTP env 或投影密码 Secret 时渲染失败」 |
+| **SMTP-24** | **部分通过** | 已关闭：`notifications-l25-05-helm.test.ts`「SMTP-24 probes 不访问 SMTP」。**未覆盖**：「无公网可启动和本地登录」——需真实离线部署，归发布取证与交付层 |
+| **SMTP-25** | **部分通过** | 已关闭：`notifications-l25-05-closure.test.ts`「SMTP-25 通知初始化只升审计库 schema，不触碰安全库」「SMTP-25 状态摘要仍只暴露脱敏字段，升级后不新增泄露面」＋ `scripts/upgrade/upgrade-lucy.test.mjs`「the upgrade preserve list keeps the audit database that now carries notification_outbox」＋「SMTP-11 关闭时不投递，队列保持原样」＋「SMTP-05 登录主键仍是账户 id…」。**未覆盖**：真实备份→恢复往返、真实 `helm rollback` 到旧 Chart——需真实部署 |
+| **SMTP-26** | **⛔ blocked** | **无证据。** 需客户目标 SMTP ＋ linux/amd64 K8s；S4 不启动。**S1–S3 的单元／协议／交付证据不得记作 SMTP-26 通过** |
+
+> 逐条判据、变异验证表、残余与复现命令见 [收口记录](../reviews/2026-11-01-smtp-notifications-closure.md)。
+
 ## 12. 实施拆分与状态（2026-10-26 已授权实施 S1／S1.1，并授权推进 S2／S3）
 
 实施 Plan 见 [L25-05 实施 Plan](../plans/2026-10-26-lucy-v0.25-l25-05-smtp-notifications-implementation-plan.md)。
@@ -344,9 +388,9 @@ SMTP 原始响应不得直接成为用户可见错误。测试接口返回 202 �
 | S2 SMTP worker 与 API | 库选型、TLS、固定模板、超时重试、owner API；新增 API 复用 S1 已落地的 `requireOwner` 可选文案参数 | SMTP-06／07／12～18／20 的协议与 API 用例 | **本轮实施**；依赖已落定 `nodemailer@10.2.1` ＋ devDep `smtp-server@3.21.1`（见 Plan §4） |
 | S3 交付接线 | Helm、Compose 示例、系统手册、升级回滚、依赖与 SBOM | SMTP-01／22～25 | **本轮实施** |
 | S4 真实验收 | linux/amd64 K8s、客户目标 SMTP 与证据包 | SMTP-26；环境不足保持 blocked | **⛔ 不启动**：无客户目标 SMTP 与 linux/amd64 K8s 环境，**SMTP-26 保持 blocked**；S1–S3 证据不得记作 SMTP-26 通过 |
-| S5 正式验收执行 | SMTP-01–26 逐条状态表（`✅`／`🟡`／`⛔`） | 逐条状态与未覆盖子项列明 | 待 S2／S3 完成后另起一轮 |
+| S5 正式验收执行 | SMTP-01–26 逐条状态表（`✅`／`🟡`／`⛔`） | 逐条状态与未覆盖子项列明 | **2026-11-01 已执行**：SMTP-01–23 ✅、SMTP-24／25 🟡（部分通过，未覆盖子项逐条列明于 §11.1）、**SMTP-26 仍 ⛔ blocked**；逐条落点见 §11.1，证据见 [收口记录](../reviews/2026-11-01-smtp-notifications-closure.md) |
 
-> **实现完成不等于验收通过。** SMTP-01–26 仍**未按正式验收口径执行**；本轮没有发出任何邮件，也没有建立任何出网连接；**本轮不交付**。
+> **实现完成不等于验收通过；功能合同收口也不等于可上线。** SMTP-01–26 已按**功能合同**口径逐条执行并记录在 §11.1；**SMTP-26 仍未执行**（⛔ blocked，S4 不启动）。本轮没有发出任何邮件，也没有建立任何出网连接；**本轮不交付**。
 
 ## Terminology Compliance
 
@@ -376,3 +420,4 @@ New terms（已同步登记到术语标准 §4.12）:
 - [x] S1 最终复审签核（2026-10-26）：F-18–F-22 已修正关闭；定向 24／24、全量 336 文件／3981 项通过（1 项跳过），类型无新增错误。仅签核 S1，不改变 SMTP 正式验收与 S2–S4 的未完成状态。
 - [x] 2026-10-26 PM 推进授权与选型裁定：SMTP 客户端落定 `nodemailer@10.2.1`、fake SMTP 落定 `smtp-server@3.21.1`（devDependency）；授权推进 S2／S3；**S4 不启动，SMTP-26 保持 blocked**；授权先修 F-21 收口缺口（S1.1）。
 - [x] 2026-10-26 S1.1 收口补丁实施：F-23 audit_meta 共存口径已裁定并回写 §5.1；定向 27／27、全量 336 文件／3985 项通过、类型 68 处与基线一致。**不改变 SMTP-01–26 正式验收未执行的事实。**
+- [x] 2026-11-01 功能合同收口：逐条复核 S1–S3 既有自动化并补 26 条此前不存在的断言 ＋ 1 条升级备份保留断言，**未改任何运行代码**；SMTP-01–25 关闭（SMTP-24／25 部分通过，未覆盖子项见 §11.1），**SMTP-26 保持 ⛔ blocked**；定向 5 文件／99 条全绿、升级脚本套件 16／16 通过。证据等级＝本机自动化 ＋ 本地工程门禁，**无 CI job 证据、无客户环境证据**。**本条收口不表示可上线**。证据见 [收口记录](../reviews/2026-11-01-smtp-notifications-closure.md)。

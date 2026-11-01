@@ -1306,10 +1306,6 @@
     },
     {
       "file": "docs/plans/2026-10-26-lucy-v0.25-l25-05-smtp-notifications-implementation-plan.md",
-      "rule": "index"
-    },
-    {
-      "file": "docs/plans/2026-10-26-lucy-v0.25-l25-05-smtp-notifications-implementation-plan.md",
       "rule": "metadata"
     },
     {
@@ -2619,10 +2615,6 @@
     {
       "file": "docs/specs/lucy-20261025-v0p25-skill-owner-spec.md",
       "rule": "filename"
-    },
-    {
-      "file": "docs/specs/lucy-20261025-v0p25-smtp-notifications-spec.md",
-      "rule": "close-layer"
     },
     {
       "file": "docs/specs/lucy-20261025-v0p25-smtp-notifications-spec.md",
