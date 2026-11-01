@@ -214,23 +214,15 @@ afterEach(() => {
 });
 
 describe("AccessMap 页面", () => {
-  it("渲染图与信号条，并披露快照覆盖率不解释为低越权率", async () => {
+  it("渲染关系图；信号不再占首屏大卡，覆盖率口径仍在弱入口里披露", async () => {
     stubAccessMap(makeResponse());
     renderPage();
     await waitFor(() => expect(screen.getByTestId("access-map-canvas")).toBeInTheDocument());
 
-    const signalBar = screen.getByTestId("access-map-signal-bar");
-    // 呈现修订：信号改成三张 Metric Card —— 标题在筛选按钮上，主值是独立的数字。
-    const dormant = within(signalBar).getByTestId("access-map-signal-dormant");
-    expect(dormant).toHaveTextContent("僵尸授权");
-    expect(dormant.closest(".pl-metric-card")).toHaveTextContent("1");
-    const needsReview = within(signalBar).getByTestId("access-map-signal-needs-review");
-    expect(needsReview).toHaveTextContent("需复核");
-    expect(needsReview.closest(".pl-metric-card")).toHaveTextContent("1");
-    const confirmed = within(signalBar).getByTestId("access-map-signal-confirmed");
-    expect(confirmed).toHaveTextContent("确凿越权");
-    expect(confirmed.closest(".pl-metric-card")).toHaveTextContent("1");
+    // 图优先（chart-first D2）：默认首屏不再有信号卡。
+    expect(screen.queryByTestId("access-map-signal-bar")).not.toBeInTheDocument();
 
+    // 覆盖率披露没有消失，只是沉到弱入口。
     const coverage = screen.getByTestId("access-map-snapshot-coverage");
     expect(coverage).toHaveTextContent("需复核记录 1 条");
     expect(coverage).toHaveTextContent("可关联快照 0 条");
@@ -239,30 +231,28 @@ describe("AccessMap 页面", () => {
   });
 
   /**
-   * SC-10（webui/docs/187-access-relation-sankey-spec.md §10）：
+   * 两档措辞（webui/docs/187-access-relation-sankey-spec.md §10）：
    * 「需复核档的 UI 文案不含「越权」二字；确凿越权档文案含「调用当时授权亦不覆盖」」。
    *
-   * 断言按**档位**逐个取证，不能拿整个信号条来断言 —— 信号条里还有覆盖率提示，
+   * 断言按**档位**逐个取证，不能拿整个弱入口来断言 —— 弱入口里还有覆盖率提示，
    * 它必须提到「越权率」（SC-13），那是另一句话。
+   *
+   * chart-first 之后这两段档位说明仍在 DOM 里，只是搬进了图下弱入口。
    */
-  it("SC-10 — 需复核档文案不含「越权」；确凿越权档单独标注来源为调用当时的授权快照", async () => {
+  it("两档措辞：需复核档不含「越权」；确凿越权档单独标注来源为调用当时的授权快照", async () => {
     stubAccessMap(makeResponse());
     renderPage();
     await waitFor(() => expect(screen.getByTestId("access-map-canvas")).toBeInTheDocument());
 
-    // ① 第一档：按钮与档位说明都不得出现「越权」二字。
-    const needsReview = screen.getByTestId("access-map-signal-needs-review");
-    expect(needsReview.textContent).not.toContain("越权");
-    expect(needsReview).toHaveTextContent("需复核");
+    // ① 第一档：档位说明不得出现「越权」二字。
     const needsReviewNote = screen.getByTestId("access-map-signal-needs-review-note");
     expect(needsReviewNote.textContent).not.toContain("越权");
+    expect(needsReviewNote).toHaveTextContent("需复核");
     expect(needsReviewNote).toHaveTextContent("当前授权无对应路径");
 
     // ② 第二档：必须写明判定来源是**调用当时**的授权快照。
-    const confirmed = screen.getByTestId("access-map-signal-confirmed");
-    expect(confirmed).toHaveTextContent("确凿越权");
-    expect(confirmed.closest(".pl-metric-card")).toHaveTextContent("1");
     const confirmedSource = screen.getByTestId("access-map-signal-confirmed-source");
+    expect(confirmedSource).toHaveTextContent("确凿越权");
     expect(confirmedSource).toHaveTextContent("调用当时授权亦不覆盖");
     expect(confirmedSource).toHaveTextContent("调用当时的授权快照");
 
@@ -392,12 +382,12 @@ describe("AccessMap 页面", () => {
 });
 
 /**
- * P1-4：访问面不可用时，信号条**不得用 0 冒充真实计数**（P1-3 §5.5 / SC-07）。
+ * P1-4：访问面不可用时，口径说明**不得用 0 冒充真实计数**（P1-3 §5.5 / SC-07）。
  *
  * 服务端只在 `access.state === "ok"` 分支里赋值 `rawCalls` / `deniedCalls`，
  * 不可用时它们停在 0。
  */
-describe("访问面不可用时的信号条口径（P1-4）", () => {
+describe("访问面不可用时的口径说明（P1-4）", () => {
   it("不显示「0 次」，改写「暂不可用」", async () => {
     const response = makeResponse();
     response.meta.access.state = "unavailable";
@@ -405,7 +395,7 @@ describe("访问面不可用时的信号条口径（P1-4）", () => {
     stubAccessMap(response);
     renderPage();
 
-    await waitFor(() => expect(screen.getByTestId("access-map-signal-bar")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId("access-map-signal-calls")).toBeInTheDocument());
     const calls = screen.getByTestId("access-map-signal-calls");
     expect(calls).not.toHaveTextContent("0 次");
     expect(calls).toHaveTextContent("原始调用数暂不可用");
@@ -415,7 +405,7 @@ describe("访问面不可用时的信号条口径（P1-4）", () => {
   it("访问面可用时照常显示真实计数", async () => {
     stubAccessMap(makeResponse());
     renderPage();
-    await waitFor(() => expect(screen.getByTestId("access-map-signal-bar")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId("access-map-signal-calls")).toBeInTheDocument());
     const calls = screen.getByTestId("access-map-signal-calls");
     expect(calls).toHaveTextContent("原始调用数 11 次");
     expect(calls).toHaveTextContent("被拒绝的访问尝试 3 次");
@@ -458,58 +448,9 @@ describe("边明细的键盘可达入口（P2-10）", () => {
  * SC-16 是命令级门禁（`npm run lint:terminology`），不在单测里冒充。
  */
 describe("访问关系图阅读降噪（呈现修订 Spec §7）", () => {
-  it("SC-01 — 三张指标卡可见；计数为 0 时无 tone，大于 0 时按口径上色", async () => {
-    const zero = makeResponse();
-    zero.meta.signals = { dormantEdges: 0, needsReviewEdges: 0, confirmedUnauthorizedEdges: 0 };
-    stubAccessMap(zero);
-    const { container } = renderPage();
-    await waitFor(() => expect(screen.getByTestId("access-map-signal-bar")).toBeInTheDocument());
-
-    const bar = screen.getByTestId("access-map-signal-bar");
-    expect(bar.className).toContain("pl-metric-grid--three");
-    const cards = bar.querySelectorAll(".pl-metric-card");
-    expect(cards).toHaveLength(3);
-    for (const card of cards) {
-      expect(card.className).not.toContain("pl-metric-card--warning");
-      expect(card.className).not.toContain("pl-metric-card--danger");
-    }
-    expect(container).toBeTruthy();
-  });
-
-  it("SC-01 — 僵尸授权与需复核大于 0 用 warning，确凿越权大于 0 用 danger", async () => {
-    stubAccessMap(makeResponse());
-    renderPage();
-    await waitFor(() => expect(screen.getByTestId("access-map-signal-bar")).toBeInTheDocument());
-
-    const bar = screen.getByTestId("access-map-signal-bar");
-    const cardOf = (testId: string): Element =>
-      within(bar).getByTestId(testId).closest(".pl-metric-card") as Element;
-    expect(cardOf("access-map-signal-dormant").className).toContain("pl-metric-card--warning");
-    expect(cardOf("access-map-signal-needs-review").className).toContain("pl-metric-card--warning");
-    expect(cardOf("access-map-signal-confirmed").className).toContain("pl-metric-card--danger");
-  });
-
-  it("SC-02 — 「需复核」ⓘ 的口径说明不含「越权」", async () => {
-    stubAccessMap(makeResponse());
-    renderPage();
-    await waitFor(() => expect(screen.getByTestId("access-map-signal-bar")).toBeInTheDocument());
-
-    const help = screen.getByTestId("metric-help-access-map-needs-review");
-    expect(help).toHaveAttribute("aria-label", "需复核 说明");
-    // React 19 的 onFocus 走 focusin 事件，所以这里用 focusIn 而不是 focus。
-    fireEvent.focusIn(help);
-    // Radix 会把同样的内容再渲染一份给读屏（role="tooltip" 的隐藏副本），
-    // 所以按「全部」取证，不假设只有一份。
-    const hints = await screen.findAllByTestId("metric-tooltip-hint");
-    expect(hints.length).toBeGreaterThan(0);
-    for (const hint of hints) {
-      expect(hint.textContent).not.toContain("越权");
-      expect(hint.textContent).toContain("需复核信号");
-    }
-
-    const note = screen.getByTestId("access-map-signal-needs-review-note");
-    expect(note.textContent).not.toContain("越权");
-  });
+  // quiet-reading SC-01（三张指标卡可见）与 SC-02（ⓘ 口径说明）已被 chart-first
+  // SC-01 取代：三张指标卡与它们的 ⓘ 按钮从默认页壳移除（chart-first §5.2 / §5.8）。
+  // 新断言见文件末尾「访问关系图图优先呈现（chart-first Spec §7）」。
 
   it("SC-03 — 视图与统计窗口的选中态都不使用 pl-btn--primary", async () => {
     stubAccessMap(makeResponse());
@@ -545,7 +486,7 @@ describe("访问关系图阅读降噪（呈现修订 Spec §7）", () => {
     expect(lastRequestUrl(fetchMock)).not.toContain("window=近");
   });
 
-  it("SC-05 — 页头不出现哈希；展开快照后哈希文本与现网一致", async () => {
+  it("SC-05 — 页头不出现哈希；弱入口里的快照哈希文本与现网一致", async () => {
     stubAccessMap(makeResponse());
     const { container } = renderPage();
     await waitFor(() => expect(screen.getByTestId("access-map-snapshot-id")).toBeInTheDocument());
@@ -785,7 +726,6 @@ describe("访问关系图阅读降噪（呈现修订 Spec §7）", () => {
       "access-map-legend",
       "access-map-legend-trust",
       "access-map-legend-window",
-      "access-map-signal-bar",
       "access-map-snapshot-coverage",
       "access-map-signal-calls",
       "access-map-signal-needs-review-note",
@@ -839,12 +779,228 @@ describe("Esc 的两段语义（呈现修订 §5.5）", () => {
 });
 
 /**
- * 信号筛选的语义（呈现修订 §5.2 / D2 / §6）。
+ * 呈现修订 §5.1 的阅读顺序。
  *
- * 筛选**只**影响高亮与关系表行，不改响应体、不改授权层。
+ * 首屏阅读顺序固定为：页头 → 工具条 → 三张指标卡 → 折叠区 → 主工作区 → 凭证清单。
+ * 这条顺序是本次修订的主要目的，所以单独断言一次，而不是靠「元素都在」顺带覆盖。
  */
-describe("信号筛选的作用域（呈现修订 §5.2）", () => {
-  it("点指标卡只过滤关系表行；节点表保持全量", async () => {
+describe("页面阅读顺序（呈现修订 §5.1）", () => {
+  it("页头 → 工具条 → 视图切换 → 图例短行 → 图区 → 弱入口 → 凭证清单", async () => {
+    stubAccessMap(makeResponse());
+    const { container } = renderPage();
+    await waitFor(() => expect(screen.getByTestId("access-map-canvas")).toBeInTheDocument());
+
+    const root = container.firstElementChild as HTMLElement;
+    const children = [...root.children] as HTMLElement[];
+    // 注意：test id 可能就落在这一层元素自己身上，所以要 `getAttribute` + `querySelector` 两条都查。
+    const has = (element: HTMLElement, testId: string): boolean =>
+      element.getAttribute("data-testid") === testId ||
+      element.querySelector(`[data-testid="${testId}"]`) !== null;
+    const indexOf = (predicate: (element: HTMLElement) => boolean): number =>
+      children.findIndex(predicate);
+
+    const header = indexOf((element) => element.tagName === "HEADER");
+    const tabbar = indexOf((element) => has(element, "access-map-view-map"));
+    const legend = indexOf((element) => has(element, "access-map-legend"));
+    const workspace = indexOf((element) => has(element, "access-map-canvas"));
+    const weakEntry = indexOf((element) => has(element, "access-map-methodology-snapshot"));
+    const credentials = indexOf((element) => has(element, "access-map-credential-list"));
+
+    expect(header).toBe(0);
+    expect(tabbar).toBeGreaterThan(header);
+    // 图例短行贴在图正上方。
+    expect(legend).toBeGreaterThan(tabbar);
+    expect(legend).toBeLessThan(workspace);
+    // 弱入口在图下方。
+    expect(weakEntry).toBeGreaterThan(workspace);
+    expect(credentials).toBeGreaterThan(weakEntry);
+  });
+});
+
+/**
+ * 访问关系图图优先呈现（chart-first）。
+ *
+ * Authority: `docs/specs/lucy-20261101-access-map-chart-first-spec.md` §7
+ *   SC-01  默认首屏没有三张信号 Metric Card
+ *   SC-02  两个独立宽条消失，只剩一个「口径与快照」弱入口（默认关）
+ *   SC-03  图例短行在图正上方，只有四项线型释义，不含窗口 ISO
+ *   SC-04  弱入口里能找到口径全文、覆盖率、快照 id
+ *   SC-05  partial 降级保留事实与「前往配置审计」
+ *   SC-06  关系图／数据表与统计窗口的选中态都不用 pl-btn--primary
+ *   SC-07  列间距常量加大；主图容器有 min-height 策略
+ *   SC-08  悬停节点／边有可读浮层（不只靠 SVG <title>）
+ *   SC-09  着色回归（僵尸授权中性 / 需复核 warning 虚线 / 确凿越权 danger 实线）
+ *   SC-10  点击边仍开既有抽屉
+ *   SC-11  Token 过滤提示句保持原文
+ *   SC-12  既有关键 test id 仍可找到；页面不出现「桑基图」
+ *   SC-13  无裸十六进制颜色（落在 `access-map-layout.test.tsx`）
+ *   SC-14  `npm run lint:terminology`（命令级门禁，不在单测里冒充）
+ */
+describe("访问关系图图优先呈现（chart-first Spec §7）", () => {
+  it("SC-01 — 默认首屏没有三张信号 Metric Card", async () => {
+    stubAccessMap(makeResponse());
+    const { container } = renderPage();
+    await waitFor(() => expect(screen.getByTestId("access-map-canvas")).toBeInTheDocument());
+
+    expect(screen.queryByTestId("access-map-signal-bar")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("access-map-signal-dormant")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("access-map-signal-needs-review")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("access-map-signal-confirmed")).not.toBeInTheDocument();
+    expect(container.querySelector(".pl-metric-grid--three")).toBeNull();
+    expect(container.querySelector(".pl-metric-card")).toBeNull();
+  });
+
+  it("SC-02 — 两个独立宽条消失，只剩一个「口径与快照」弱入口（默认关）", async () => {
+    stubAccessMap(makeResponse());
+    const { container } = renderPage();
+    await waitFor(() => expect(screen.getByTestId("access-map-canvas")).toBeInTheDocument());
+
+    expect(container.querySelector("#access-map-methodology")).toBeNull();
+    expect(container.querySelector("#access-map-snapshot")).toBeNull();
+
+    const weak = screen.getByTestId("access-map-methodology-snapshot");
+    expect(weak.tagName).toBe("DETAILS");
+    expect(weak).not.toHaveAttribute("open");
+    expect(within(weak).getByText("口径与快照")).toBeInTheDocument();
+  });
+
+  it("SC-03 — 图例短行在图正上方，只有四项线型释义，不含窗口 ISO", async () => {
+    stubAccessMap(makeResponse());
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("access-map-canvas")).toBeInTheDocument());
+
+    const legend = screen.getByTestId("access-map-legend");
+    const canvas = screen.getByTestId("access-map-canvas");
+
+    // 文档序：图例在图区之前。
+    expect(legend.compareDocumentPosition(canvas) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    // 短行只有四项。
+    expect(legend.children).toHaveLength(4);
+    const text = legend.textContent ?? "";
+    expect(text).toContain("流带宽度");
+    expect(text).toContain("深色内核");
+    expect(text).toContain("虚线 = 需复核");
+    expect(text).toContain("实线 = 确凿越权");
+
+    // 短行里不放窗口 ISO 起止，也不再放访问口径 —— 那两样在弱入口里。
+    expect(text).not.toContain("2026-10-18T00:00:00.000Z");
+    expect(text).not.toContain("统计窗口");
+    expect(text).not.toContain("访问口径");
+
+    // 「需复核」那一项不得出现「越权」。
+    const needsReviewItem = [...legend.children].find((child) =>
+      child.textContent?.includes("需复核")
+    );
+    expect(needsReviewItem).toBeDefined();
+    expect(needsReviewItem?.textContent).not.toContain("越权");
+  });
+
+  it("SC-04 — 弱入口里能找到口径全文、覆盖率、调用数与快照 id", async () => {
+    const response = makeResponse();
+    response.meta.orphanGrants = 3;
+    stubAccessMap(response);
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("access-map-canvas")).toBeInTheDocument());
+
+    const weak = screen.getByTestId("access-map-methodology-snapshot");
+    for (const id of [
+      "access-map-snapshot-id",
+      "access-map-snapshot-coverage",
+      "access-map-signal-needs-review-note",
+      "access-map-signal-confirmed-source",
+      "access-map-signal-calls",
+      "access-map-orphan-grants",
+      "access-map-legend-trust",
+      "access-map-legend-window"
+    ]) {
+      expect(within(weak).getByTestId(id)).toBeInTheDocument();
+    }
+
+    // 需复核档的说明不含「越权」；覆盖率提醒仍保留。
+    const note = within(weak).getByTestId("access-map-signal-needs-review-note");
+    expect(note.textContent).not.toContain("越权");
+    const coverage = within(weak).getByTestId("access-map-snapshot-coverage");
+    expect(coverage).toHaveTextContent("快照覆盖率低不代表越权率低");
+    // 快照 id 文案逐字固定。
+    expect(within(weak).getByTestId("access-map-snapshot-id")).toHaveTextContent(
+      "config cfg-1 · policy pol-1"
+    );
+  });
+
+  it("SC-05 — partial 降级保留事实与「前往配置审计」", async () => {
+    const response = makeResponse();
+    response.meta.grant.state = "partial";
+    response.meta.grant.failures = [{ subjectId: "agent_x", reason: "access_config_missing" }];
+    stubAccessMap(response);
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByTestId("access-map-partial-notice")).toBeInTheDocument()
+    );
+
+    const notice = screen.getByTestId("access-map-partial-notice");
+    expect(notice).toHaveTextContent("1 个 Agent 授权未能解析，结果不完整。");
+    expect(notice).toHaveTextContent("前往配置审计");
+    // 降级用轻量 notice，不做成与指标卡同级的大卡。
+    expect(notice.className).toContain("pl-notice");
+    expect(notice.className).not.toContain("pl-metric-card");
+  });
+
+  it("SC-06 — 关系图／数据表与统计窗口的选中态都不用 pl-btn--primary", async () => {
+    stubAccessMap(makeResponse());
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("access-map-view-map")).toBeInTheDocument());
+
+    const viewMap = screen.getByTestId("access-map-view-map");
+    const viewTable = screen.getByTestId("access-map-view-table");
+    expect(viewMap.className).toContain("pl-admin-tab--active");
+    expect(viewMap.className).not.toContain("pl-btn--primary");
+    expect(viewTable.className).not.toContain("pl-btn--primary");
+
+    const windowControl = screen.getByTestId("access-map-window");
+    for (const item of windowControl.querySelectorAll("button")) {
+      expect(item.className).not.toContain("pl-btn--primary");
+    }
+    expect(windowControl.querySelector(".pl-segmented-control-item--active")).not.toBeNull();
+  });
+
+  it("SC-07 — 主图容器有 min-height 策略", async () => {
+    stubAccessMap(makeResponse());
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("access-map-canvas")).toBeInTheDocument());
+
+    const canvas = screen.getByTestId("access-map-canvas");
+    expect(canvas.style.minHeight).toBeTruthy();
+    expect(canvas.style.minHeight).toMatch(/vh|px/);
+  });
+
+  it("SC-08 — 悬停节点出现可读浮层（不是只靠 SVG <title>）", async () => {
+    stubAccessMap(makeResponse());
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("access-map-canvas")).toBeInTheDocument());
+
+    expect(screen.queryByTestId("access-map-hover-tip")).not.toBeInTheDocument();
+
+    const group = screen.getByTestId("access-map-node-agent:agent_a");
+    const rect = group.querySelector("rect") as SVGElement;
+    fireEvent.mouseOver(rect);
+
+    const tip = await screen.findByTestId("access-map-hover-tip");
+    // 名称（全名）、副标题计数要点、类型中文名。
+    expect(tip).toHaveTextContent("AGENT A");
+    expect(tip).toHaveTextContent("个 Agent");
+    expect(tip).toHaveTextContent("类型");
+    // 浮层是 HTML 浮层，不是 SVG <title>。
+    expect(tip.tagName).not.toBe("title");
+    expect(tip.closest("svg")).toBeNull();
+
+    fireEvent.mouseOut(rect);
+    await waitFor(() =>
+      expect(screen.queryByTestId("access-map-hover-tip")).not.toBeInTheDocument()
+    );
+  });
+
+  it("SC-08 — 悬停边出现可读浮层，含从→到与状态文案", async () => {
     const response = makeResponse();
     response.edges = [
       makeEdge("agent:agent_a", "role:role_reader", { grantPaths: 2, grantUsers: 1 }),
@@ -867,62 +1023,82 @@ describe("信号筛选的作用域（呈现修订 §5.2）", () => {
     renderPage();
     await waitFor(() => expect(screen.getByTestId("access-map-canvas")).toBeInTheDocument());
 
-    screen.getByTestId("access-map-view-table").click();
-    await waitFor(() => expect(screen.getByTestId("access-map-table")).toBeInTheDocument());
+    const kernel = screen.getByTestId("access-map-kernel-e|role:role_reader|conn:mysql_main");
+    fireEvent.mouseOver(kernel);
 
-    const edgeTable = screen.getByTestId("access-map-table-edges");
-    expect(within(edgeTable).getAllByRole("row")).toHaveLength(response.edges.length + 1);
-
-    const nodeSection = screen.getByTestId("access-map-table-nodes");
-    const flowNodeCount = response.nodes.filter((node) => node.kind !== "token").length;
-    expect(within(nodeSection).getAllByRole("row")).toHaveLength(flowNodeCount + 1);
-
-    // 筛选「需复核」：关系表只剩需复核的行，节点表仍是全量。
-    const filter = screen.getByTestId("access-map-signal-needs-review");
-    expect(filter).toHaveAttribute("aria-pressed", "false");
-    filter.click();
-    await waitFor(() => expect(filter).toHaveAttribute("aria-pressed", "true"));
-
-    expect(within(edgeTable).getAllByRole("row")).toHaveLength(2);
-    expect(within(nodeSection).getAllByRole("row")).toHaveLength(flowNodeCount + 1);
+    const tip = await screen.findByTestId("access-map-hover-tip");
+    expect(tip).toHaveTextContent("→");
+    expect(tip).toHaveTextContent("role_reader");
+    expect(tip).toHaveTextContent("mysql_main");
+    expect(tip).toHaveTextContent("访问路径 1 条");
+    expect(tip).toHaveTextContent("需复核");
+    expect(tip.closest("svg")).toBeNull();
   });
-});
 
-/**
- * 呈现修订 §5.1 的阅读顺序。
- *
- * 首屏阅读顺序固定为：页头 → 工具条 → 三张指标卡 → 折叠区 → 主工作区 → 凭证清单。
- * 这条顺序是本次修订的主要目的，所以单独断言一次，而不是靠「元素都在」顺带覆盖。
- */
-describe("页面阅读顺序（呈现修订 §5.1）", () => {
-  it("页头 → 工具条 → 指标卡 → 口径说明 → 快照 → 视图切换 → 主工作区 → 凭证清单", async () => {
+  it("SC-10 — 点击边仍开既有抽屉", async () => {
     stubAccessMap(makeResponse());
-    const { container } = renderPage();
+    renderPage();
     await waitFor(() => expect(screen.getByTestId("access-map-canvas")).toBeInTheDocument());
 
-    const root = container.firstElementChild as HTMLElement;
-    const children = [...root.children] as HTMLElement[];
-    // 注意：test id 可能就落在这一层元素自己身上，所以要 `getAttribute` + `querySelector` 两条都查。
-    const has = (element: HTMLElement, testId: string): boolean =>
-      element.getAttribute("data-testid") === testId ||
-      element.querySelector(`[data-testid="${testId}"]`) !== null;
-    const indexOf = (predicate: (element: HTMLElement) => boolean): number =>
-      children.findIndex(predicate);
+    const button = screen.getByTestId(
+      "access-map-edge-badge-button-e|conn:mysql_main|table:mysql_main::finance::orders"
+    );
+    button.click();
+    await waitFor(() => expect(screen.getByTestId("access-map-edge-detail")).toBeInTheDocument());
 
-    const header = indexOf((element) => element.tagName === "HEADER");
-    const metrics = indexOf((element) => has(element, "access-map-signal-bar"));
-    const methodology = indexOf((element) => element.id === "access-map-methodology");
-    const snapshot = indexOf((element) => element.id === "access-map-snapshot");
-    const tabbar = indexOf((element) => has(element, "access-map-view-map"));
-    const workspace = indexOf((element) => has(element, "access-map-canvas"));
-    const credentials = indexOf((element) => has(element, "access-map-credential-list"));
+    const drawer = screen.getByTestId("access-map-edge-drawer");
+    expect(drawer.contains(screen.getByTestId("access-map-edge-detail"))).toBe(true);
+  });
 
-    expect(header).toBe(0);
-    expect(metrics).toBeGreaterThan(header);
-    expect(methodology).toBeGreaterThan(metrics);
-    expect(snapshot).toBeGreaterThan(methodology);
-    expect(tabbar).toBeGreaterThan(snapshot);
-    expect(workspace).toBeGreaterThan(tabbar);
-    expect(credentials).toBeGreaterThan(workspace);
+  it("SC-11 — Token 过滤提示句逐字不变", async () => {
+    stubAccessMap(makeResponse());
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByTestId("access-map-credential-list")).toBeInTheDocument()
+    );
+
+    const credential = screen.getByTestId("access-map-credential-list");
+    within(credential).getByTestId("access-map-token-token:agent_a::p0-demo").click();
+
+    const notice = await screen.findByTestId("access-map-token-filter-notice");
+    expect(notice.textContent).toBe("已按 Token p0-demo 过滤访问层，授权层不受影响。");
+  });
+
+  it("SC-12 — 迁入弱入口的 test id 仍可找到；页面不出现「桑基图」", async () => {
+    // partial 降级态：让 `access-map-partial-notice` 也在场（它按需渲染）。
+    const response = makeResponse();
+    response.meta.grant.state = "partial";
+    response.meta.grant.failures = [{ subjectId: "agent_x", reason: "access_config_missing" }];
+    stubAccessMap(response);
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("access-map-canvas")).toBeInTheDocument());
+
+    // 仍在页面上的关键 test id。
+    for (const id of [
+      "access-map-canvas",
+      "access-map-legend",
+      "access-map-partial-notice",
+      "access-map-view-map",
+      "access-map-view-table",
+      "access-map-credential-list"
+    ]) {
+      expect(screen.getByTestId(id)).toBeInTheDocument();
+    }
+
+    // 迁进弱入口的也在。
+    const weak = screen.getByTestId("access-map-methodology-snapshot");
+    for (const id of [
+      "access-map-snapshot-id",
+      "access-map-snapshot-coverage",
+      "access-map-signal-needs-review-note",
+      "access-map-signal-confirmed-source",
+      "access-map-legend-trust",
+      "access-map-legend-window"
+    ]) {
+      expect(within(weak).getByTestId(id)).toBeInTheDocument();
+    }
+
+    // 页面标题与正文都不使用「桑基图」。
+    expect(document.body.textContent ?? "").not.toContain("桑基");
   });
 });

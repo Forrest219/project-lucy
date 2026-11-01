@@ -5,7 +5,7 @@
 | 文档类型 / 版本 | 呈现修订 / **v0.3 功能合同已收口** |
 | 日期 / 目标版本 | 2026-10-30 / 不绑定产品版本号。功能编号待 PM 指派，不占用 `L25-*`，不升父 Spec 版本号 |
 | 功能编号 / 优先级 | **待 PM 指派** / **P1** |
-| 状态 | **v0.3 功能合同已收口（2026-11-01）**。SC-01–SC-18 全部关闭，证据见 [`docs/reviews/2026-11-01-row-policy-view-presentation-closure.md`](../reviews/2026-11-01-row-policy-view-presentation-closure.md)。**本条收口不表示可上线**——浏览器点击验收与移动窄屏验证、镜像构建与部署、客户环境验证、真实实例写入不在本条出口；父 Spec 的 RTV-01–RTV-08 不在本条出口 |
+| 状态 | **v0.4 答案优先双栏（2026-11-01）**：在 v0.3 收口之上增补 SC-19–SC-23（左清单／右结论、诊断折叠、详情三区标题）。v0.3 的 SC-01–SC-18 仍成立；闭口证据见 [`docs/reviews/2026-11-01-row-policy-view-presentation-closure.md`](../reviews/2026-11-01-row-policy-view-presentation-closure.md)。**本条收口不表示可上线**——浏览器点击验收与移动窄屏验证、镜像构建与部署、客户环境验证、真实实例写入不在本条出口；父 Spec 的 RTV-01–RTV-08 不在本条出口 |
 | 决策来源 | 2026-10-30 对 `http://127.0.0.1:55176/admin/row-policies` 的页面探查。12 张表的有效行授予都是「行权限：全部行」。点开 `superstore_orders` 后清单收成 1 行；再勾「仅看受限表」，地址栏丢掉 `sourceName`，表名框仍显示 `superstore_orders`，清单变成「空筛选」 |
 | 开工授权 | 2026-10-30 PM 书面授权：按本文与配套 Plan 完成开发落地。D1–D10 全部通过，没有否决项。不存在「只做 D3」或「不做 D8／D10」的退路。功能编号仍待 PM 指派 |
 | 需求来源 | 行权限视图要先回答「这张表实际受什么行约束」，再允许换一张表。筛选、选表、快照哈希不再挤在同一条阅读流里 |
@@ -41,6 +41,11 @@ New terms:
 | 目录状态 | 目录已加载 / 目录不可用 / 目录能力未知 | 对应 `loaded` / `manifest_unavailable` / `catalog_capability_unknown`。机器值留在 `data-catalog-status` |
 | 统一 Agent | 这 {n} 个 Agent 的最终行约束都是行权限：全部行。 | 仅当每个 Agent 的最终行约束都是 `all` |
 | 复制 | 复制表身份 | 成功 toast「已复制表身份」。失败沿用 `CLIPBOARD_COPY_FAILED_MESSAGE` |
+| 诊断摘要 | 快照部分可用 · {n} 条解析失败 | `state !== "ok"` 时默认折叠；展开后仍列失败集合。机器值 `partial` 不进可见主文案 |
+| 无选中空态 | 选择左侧一张表，查看实际生效的行约束。 | 深链三参数不全时右栏显示 |
+| 详情结论区 | 有效行授予 | 右栏第一阅读焦点；替换并集小节可见标题「最终行约束（角色并集）」 |
+| 详情角色区 | 角色贡献 | 替换「角色分支」 |
+| 详情 Agent 区 | 各 Agent 最终行约束 | 替换「最终行约束（与个人行限制相交）」 |
 
 Forbidden terms:
 
@@ -49,6 +54,7 @@ Forbidden terms:
 - 两个受限角色的并集显示「行权限：全部行」。
 - 没有模板引用、也没有内联条件时显示「仅直接写条件」。
 - 把 `loaded` 作为目录状态的可见主文案。
+- 把 `partial` 作为诊断 summary 的可见主文案。
 - 页头或导航使用「权限拓扑」「行级 RLS」。
 
 `Agent`、`Schema`、连接 ID、表名、角色 id、模板名、能力摘要和机器原因在 DOM 上使用 `translate="no"` 与 `notranslate`。
@@ -74,6 +80,8 @@ Forbidden terms:
 - [ ] 复制使用 `pl-icon-btn`，`aria-label` 为「复制表身份」
 - [ ] 状态同时有文字。不新增硬编码色值
 - [ ] 不做窄屏重排。宽表只在网格滚动层内横向滚动
+- [ ] 主体为答案优先双栏工作台：左清单 `pl-panel`、右详情 `pl-panel`；筛选为顶栏工具条
+- [ ] 诊断默认折叠，不与主结论争抢首屏
 
 ### Exceptions (If Any)
 
@@ -145,6 +153,8 @@ D1 与 D3 是这一页读数正确的前提。否决 D1 时，可以只做 D3：
 
 ### 5.1 页面骨架
 
+答案优先：深链或点表后，**右栏详情是 Primary Workspace**；表清单在左窄栏；筛选是顶栏工具，不再与清单／详情同级抢 `h2`。
+
 ```text
 Page Header
   标题：行权限视图
@@ -152,32 +162,39 @@ Page Header
   动作：行策略模板（secondary，链到 /admin/row-policy-templates）
   折叠：快照。summary 文案为「快照」。内部仍是 data-testid="row-policy-snapshot"
 
-工具条
-  标签在控件上方：连接、Schema、表、角色、Agent
+工具条 data-testid="row-policy-view-toolbar"
+  不以「筛选」作页面级 h2；控件标签仍在上方：连接、Schema、表、角色、Agent
   连接、Schema 为 select，空选项文案为「全部连接」「全部 Schema」
   表、角色、Agent 为文本框，aria-label 仍是「表筛选」「角色筛选」「Agent 筛选」
   连接、Schema 的 aria-label 仍是「连接筛选」「Schema 筛选」
   右侧：全部表 / 仅受限表
   有清单筛选时：清除筛选，data-testid="row-policy-view-clear-filters"
-  其下弱提示：本页只读。修改请到角色权限。
+  其下弱提示：本页只读。修改请到角色权限。（「角色权限」链到 /admin/roles）
+  诊断（仅 state !== "ok" 或 failures 非空时出现）
+    默认折叠 details，data-testid="row-policy-view-diagnostics"
+    summary 可见文案用中文（如「快照部分可用 · {n} 条解析失败」），不含机器词 partial
+    展开后：既有 list-state / list-failures test id 与失败条目仍在 DOM
 
-表清单
-  标题旁：{n} 张表
-  网格列：表、角色数、Agent 数、有效行授予
-  表列主文是 sourceName，次行是「{connectionId} · {schema}」
-  按钮 aria-label 为「{connectionId}/{schema}/{sourceName}」
-  选中行 aria-current="true"，背景 bg-bg-muted
-
-单表详情（三参数齐全才出现）
-  身份、复制、状态徽章、目录中文标签
-  若清单已返回且其中没有这一行：当前表不在筛选结果中。
-  结论（有效行授予 / DNF）
-  边界句
-  角色分组
-  Agent
+工作台 data-testid="row-policy-view-workspace"
+  xl:grid-cols-[minmax(16rem,22rem)_minmax(0,1fr)]
+  左 pl-panel data-testid="row-policy-view-list-panel" 标题「表清单」+ {n} 张表
+    网格列：表、角色数、Agent 数、有效行授予
+    表列主文是 sourceName，次行是「{connectionId} · {schema}」
+    按钮 aria-label 为「{connectionId}/{schema}/{sourceName}」
+    选中行 aria-current="true"，背景 bg-bg-muted，并带左边强调（如 border-l）
+  右 pl-panel data-testid="row-policy-view-detail"（三参数齐全）或空态
+    无三参数：选择左侧一张表，查看实际生效的行约束。
+      data-testid="row-policy-view-detail-empty"
+    有三参数：
+      身份、复制、状态徽章、目录中文标签
+      若清单已返回且其中没有这一行：当前表不在筛选结果中。
+      有效行授予（结论 / DNF；可见标题「有效行授予」）
+      边界句
+      角色贡献（原角色分组；可见标题「角色贡献」）
+      各 Agent 最终行约束
 ```
 
-清单部分失败、失败集合、加载中、读取失败的 test id 与句子保持今天的实现。
+加载中、读取失败的 test id 与句子保持既有实现。清单部分失败改走工具条诊断折叠，不再插在清单标题与表格之间抢结论注意力。
 
 ### 5.2 URL
 
@@ -212,8 +229,12 @@ Page Header
 - `boundaryPlacement="footnote"`。边界句仍是常量 `ROW_POLICY_PREVIEW_BOUNDARY`，test id 仍是 `row-policy-dnf-boundary`。
 - `children` 放在并集小节和 Agent 小节之间，内容是角色分组。
 - `collapseUniformAllRows`。仅当 `finalRowsByAgent` 非空且每一项 `finalRows.kind == "all"` 时，默认渲染统一句和「展开」。展开后仍逐个渲染现有 `row-policy-dnf-agent-*`。其他情况不折叠。
+- 本页可选标题 prop（角色编辑页不传，默认保持旧文案）：
+  - `unionHeading="有效行授予"`（默认仍是「最终行约束（角色并集）」）
+  - `agentsHeading="各 Agent 最终行约束"`（默认仍是「最终行约束（与个人行限制相交）」）
+- 角色分组外层可见标题为本页的「角色贡献」（`h3`）；组内标题仍是参与并集／不授予该表／编译失败。
 
-角色编辑页不传这三个 prop。默认仍是边界句在上、没有中间插槽、Agent 不折叠。
+角色编辑页不传上述可选 prop。默认仍是边界句在上、没有中间插槽、Agent 不折叠、旧标题。
 
 角色分三组，空组不渲染标题：
 
@@ -309,8 +330,13 @@ renderListEmpty(status):
 | SC-16 | 清单结果不含当前表时，详情仍在，且可见「当前表不在筛选结果中。」 |
 | SC-17 | 边界句原文仍是 `ROW_POLICY_PREVIEW_BOUNDARY` |
 | SC-18 | `npm run lint:terminology` 通过 |
+| SC-19 | 工作台为双栏：`row-policy-view-workspace` 内左 `row-policy-view-list-panel`、右详情或 `row-policy-view-detail-empty` |
+| SC-20 | 打开深链三参数时右栏详情存在；无三参数时右栏空态句为「选择左侧一张表，查看实际生效的行约束。」 |
+| SC-21 | `state=partial` 时诊断默认折叠：summary 含「快照部分可用」，不含可见主文案 `partial`；展开后 `row-policy-view-list-failures` 仍列出失败 |
+| SC-22 | 详情可见标题含「有效行授予」「角色贡献」「各 Agent 最终行约束」；角色编辑页未传 prop 时仍用旧 DNF 标题 |
+| SC-23 | 选中清单行带 `aria-current="true"`，且 class 含左边强调（如 `border-l`） |
 
-SC-01–SC-18 的自动化证据见 §7.1。**实现完成不等于验收通过**——下列证据只说明断言存在且通过，验收仍待 PM 做出。
+SC-01–SC-23 的自动化证据见 §7.1。**实现完成不等于验收通过**——下列证据只说明断言存在且通过，验收仍待 PM 做出。
 
 ### 7.1 落地状态与自动化证据（2026-10-30）
 
@@ -336,6 +362,11 @@ S1–S4 已按配套 Plan §4 实施完毕，D1–D10 全部落地，没有走�
 | SC-16 | 页面测试「SC-16 当前表不在筛选结果中时详情仍渲染并说明」 |
 | SC-17 | 页面测试「SC-17 边界句原文不变」＋ DNF 预览测试「carries the fixed boundary sentence」 |
 | SC-18 | 仓库根目录 `npm run lint:terminology` 退出码 0 |
+| SC-19 | 页面测试「SC-19 工作台左清单右详情双栏」 |
+| SC-20 | 页面测试「SC-20 深链打开详情；无三参数时右栏空态」 |
+| SC-21 | 页面测试「SC-21 诊断默认折叠，展开后仍见失败集合」 |
+| SC-22 | 页面测试「SC-22 详情三区标题」＋ DNF 预览测试默认旧标题 |
+| SC-23 | 页面测试「SC-23 选中行左边强调」 |
 
 实现备注：
 
@@ -347,7 +378,7 @@ S1–S4 已按配套 Plan §4 实施完毕，D1–D10 全部落地，没有走�
 
 - 层级：功能合同
 - 本条承诺：行权限视图把「这张表实际受什么行约束」讲清楚——点表只打开详情，清单筛选与当前表解耦，授权状态四态互斥且不混用文案，页面只读。
-- 本条出口：SC-01–SC-18 的自动化用例（页面测试 `webui/src/__tests__/row-policy-view.test.tsx`、DNF 预览测试 `webui/src/__tests__/row-policy-dnf-preview.test.tsx`、服务端 `webui/server/__tests__/p1-row-policy-views.test.ts`），加 `npm run lint:terminology`。
+- 本条出口：SC-01–SC-23 的自动化用例（页面测试 `webui/src/__tests__/row-policy-view.test.tsx`、DNF 预览测试 `webui/src/__tests__/row-policy-dnf-preview.test.tsx`、服务端 `webui/server/__tests__/p1-row-policy-views.test.ts`），加 `npm run lint:terminology`。
 - 不在本条出口：浏览器点击验收与移动窄屏验证、镜像构建与部署、客户环境验证、真实实例写入；父 Spec（行策略模板与按表反查）的 RTV-01–RTV-08。
 - 上线关系：本条收口不表示可上线
 

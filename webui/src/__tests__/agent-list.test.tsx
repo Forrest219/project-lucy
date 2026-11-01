@@ -5,6 +5,10 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AgentList, activeTokenCount, configuredTokenCount, summarizeAgents } from "../pages/admin/AgentList";
+import {
+  LUCY_ADMIN_WARNING_PRIMARY,
+  LUCY_ADMIN_WARNING_SECONDARY
+} from "../lib/lucyAdminRole";
 import type { Agent, AgentStats, McpEndpointInfo, Role } from "../lib/types";
 
 function renderAgentList() {
@@ -537,7 +541,10 @@ describe("AgentList", () => {
     fireEvent.click(within(ops).getByRole("checkbox", { name: /lucy_admin/ }));
 
     const warning = await screen.findByTestId("agent-lucy-admin-role-warning");
-    expect(warning).toHaveTextContent("高权限运维数据面");
+    expect(warning).toHaveTextContent(LUCY_ADMIN_WARNING_PRIMARY);
+    expect(warning).toHaveTextContent("MCP");
+    expect(warning).toHaveTextContent("WebUI 登录无关");
+    expect(warning.textContent ?? "").not.toMatch(/启用表目录|签发|过期/);
     const card = await screen.findByTestId("agent-role-capability");
     expect(card).toHaveTextContent("数据能力");
     expect(card).toHaveTextContent("16");

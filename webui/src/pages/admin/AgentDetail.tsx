@@ -20,7 +20,14 @@ import type {
   TokenSummary
 } from "../../lib/types";
 import { formatFinalRowsPreviewLabel, formatRowGrantPreviewLabel } from "../../lib/row-grant-preview";
-import { isLucyAdminDataPlaneRole } from "../../lib/lucyAdminRole";
+import {
+  isLucyAdminDataPlaneRole,
+  LUCY_ADMIN_ROLE_ID,
+  PERSONAL_CONSTRAINT_CATALOG_BOUND_HELP,
+  PERSONAL_CONSTRAINT_CAVEAT,
+  PERSONAL_CONSTRAINT_DEFAULT_HELP
+} from "../../lib/lucyAdminRole";
+import { LucyAdminRoleWarning } from "../../lib/LucyAdminRoleWarning";
 import { OPS_EVIDENCE_ROLE_ID, OPS_EVIDENCE_ROLE_WARNING } from "../../lib/opsEvidence";
 import { queryKeys } from "../../lib/queryKeys";
 
@@ -294,6 +301,17 @@ export function groupSourcesByConnectionAndSchema(
       }))
     }))
   }));
+}
+
+function usesCatalogBoundContext(
+  selectedRoleIds: string[],
+  formalRoles: Role[]
+): boolean {
+  return selectedRoleIds.some((roleId) => {
+    if (roleId === LUCY_ADMIN_ROLE_ID) return true;
+    const match = formalRoles.find((role) => role.id === roleId);
+    return isLucyAdminDataPlaneRole(match) || match?.source_scope === "catalog_bound";
+  });
 }
 
 function buildChangeSummary(
@@ -873,22 +891,7 @@ export function AgentDetail() {
                     旧 ACL 只读兼容；保存角色后会移除该 <span className="notranslate" translate="no">Agent</span> 的 legacy allow。
                   </span>
                 )}
-                {showLucyAdminWarning && (
-                  <div
-                    className="rounded-md border border-warning-strong bg-warning-soft p-3 text-sm text-warning-strong"
-                    data-testid="agent-lucy-admin-role-warning"
-                  >
-                    高权限运维数据面：当前 Role 在已声明连接内绑定启用表目录。这是{" "}
-                    <span className="notranslate" translate="no">
-                      MCP
-                    </span>{" "}
-                    数据面权限，不是 WebUI 登录账户；签发{" "}
-                    <span className="notranslate" translate="no">
-                      Token
-                    </span>{" "}
-                    时建议设置过期时间。
-                  </div>
-                )}
+                {showLucyAdminWarning && <LucyAdminRoleWarning />}
                 {showOpsEvidenceWarning && (
                   <div
                     className="rounded-md border border-warning-strong bg-warning-soft p-3 text-sm text-warning-strong"
@@ -910,16 +913,30 @@ export function AgentDetail() {
             <div className="pl-card grid gap-3" data-testid="agent-constraints-editor">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
-                  <div className="text-sm font-medium">
-                    个人行限制
-                    <span className="ml-2 font-mono text-xs text-fg-muted notranslate" translate="no">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">个人行限制</span>
+                    <span
+                      className="text-xs text-fg-muted font-mono notranslate"
+                      translate="no"
+                    >
                       constraints
                     </span>
+                    <span
+                      className="cursor-help text-xs text-fg-muted"
+                      data-testid="agent-constraints-caveat-tooltip"
+                      title={PERSONAL_CONSTRAINT_CAVEAT}
+                      aria-label={PERSONAL_CONSTRAINT_CAVEAT}
+                    >
+                      ⓘ
+                    </span>
                   </div>
-                  <p className="text-xs text-fg-muted mt-1 notranslate" translate="no">
-                    在这个 Agent 已绑定角色的行级策略之上，再要求同时满足这里的行条件。未配置则不追加。配置成功只表示编译通过，
-                    <strong className="font-medium"> 不表示行级取数已生效</strong>。
-                  </p>
+                  {constraintRows.length > 0 ? (
+                    <p className="text-xs text-fg-muted mt-1">
+                      {usesCatalogBoundContext(selectedRoleIds, formalRoles)
+                        ? PERSONAL_CONSTRAINT_CATALOG_BOUND_HELP
+                        : PERSONAL_CONSTRAINT_DEFAULT_HELP}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <button
@@ -952,7 +969,9 @@ export function AgentDetail() {
               ) : null}
 
               {constraintRows.length === 0 ? (
-                <p className="text-sm text-fg-muted">未添加个人行限制。</p>
+                <p className="text-sm text-fg-muted" data-testid="agent-constraints-empty">
+                  未设置
+                </p>
               ) : (
                 <ul className="grid gap-4">
                   {constraintRows.map((row, idx) => {

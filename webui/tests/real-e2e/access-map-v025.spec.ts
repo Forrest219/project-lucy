@@ -51,7 +51,8 @@ test("访问关系图的四层主干、表格视图与审计事件同源，且�
     // ── SC-01 / SC-02 / SC-14：主干渲染、计数口径与授权路径表集合 ─────────────────────
     await page.goto("/admin/access-map");
     await expect(page.getByTestId("access-map-canvas")).toBeVisible();
-    await expect(page.getByTestId("access-map-signal-bar")).toBeVisible();
+    // chart-first Spec §5.2：首屏不再有信号条，图例短行取而代之。
+    await expect(page.getByTestId("access-map-legend")).toBeVisible();
 
     const mapRes = await page.request.get(new URL("/api/admin/access-map", baseUrl).toString());
     const mapBody = (await mapRes.json()) as {
@@ -135,10 +136,13 @@ test("访问关系图的四层主干、表格视图与审计事件同源，且�
     await expect(page.getByTestId("access-map-table-edges")).toBeVisible();
 
     // ── SC-10：两档措辞不混用（需复核不含「越权」；确凿越权含规定文案） ────────────────
-    // The two tier notes have their own elements. The wording must be read from
-    // them, not from a split of the whole signal bar: the confirmed tier's own
-    // source note starts with 「确凿越权」, so a naive split cuts the tier count
-    // away from its source note and the assertion would look at the wrong text.
+    // The two tier notes now live in the collapsed 「口径与快照」 weak entry
+    // (chart-first Spec §5.4), so the entry is expanded first. The wording must be
+    // read from the two notes' own elements, not from a split of the whole entry:
+    // the confirmed tier's own source note starts with 「确凿越权」, so a naive split
+    // cuts the tier count away from its source note and the assertion would look at
+    // the wrong text.
+    await page.getByTestId("access-map-methodology-snapshot").locator("summary").click();
     const needsReviewNote = await page.getByTestId("access-map-signal-needs-review-note").innerText();
     const confirmedSource = await page.getByTestId("access-map-signal-confirmed-source").innerText();
     assertion(testInfo, "consistency", !needsReviewNote.includes("越权"),

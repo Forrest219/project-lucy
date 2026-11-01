@@ -14,6 +14,7 @@ import { MetricCard } from "../../components/MetricCard";
 import { buildObjectDetailSearch } from "../../lib/objectDetail";
 import { RowMoreMenu } from "../../components/RowMoreMenu";
 import { isLucyAdminDataPlaneRole } from "../../lib/lucyAdminRole";
+import { LucyAdminRoleWarning } from "../../lib/LucyAdminRoleWarning";
 import { OPS_EVIDENCE_ROLE_ID, OPS_EVIDENCE_ROLE_WARNING } from "../../lib/opsEvidence";
 import { adminAgentsQueryOptions } from "../../lib/displayQueryOptions";
 import { queryKeys } from "../../lib/queryKeys";
@@ -410,22 +411,7 @@ function NewAgentModal({ roles, onClose, onCreated }: { roles: Role[]; onClose: 
                   </Link>
                 </span>
               )}
-              {showLucyAdminWarning && (
-                <div
-                  className="rounded-md border border-warning-strong bg-warning-soft p-3 text-sm text-warning-strong"
-                  data-testid="agent-lucy-admin-role-warning"
-                >
-                  高权限运维数据面：所选 Role 在已声明连接内绑定启用表目录。这是{" "}
-                  <span className="notranslate" translate="no">
-                    MCP
-                  </span>{" "}
-                  数据面权限，不是 WebUI 登录账户；签发{" "}
-                  <span className="notranslate" translate="no">
-                    Token
-                  </span>{" "}
-                  时建议设置过期时间。
-                </div>
-              )}
+              {showLucyAdminWarning && <LucyAdminRoleWarning />}
               {showOpsEvidenceWarning && (
                 <div
                   className="rounded-md border border-warning-strong bg-warning-soft p-3 text-sm text-warning-strong"

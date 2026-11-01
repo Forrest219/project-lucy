@@ -5,7 +5,8 @@
  *   §3.3（R3 按表读取模型）, §6.2（独立行权限视图）; RTV-01 … RTV-08;
  *   P1-D5（独立只读）.
  * Presentation revision: docs/specs/lucy-20261030-row-policy-view-presentation-spec.md
- *   §5.1（页面骨架）, §5.2（URL）, §5.3（清单授予列）, §5.4（详情）; D1–D10.
+ *   §5.1（答案优先双栏骨架）, §5.2（URL）, §5.3（清单授予列）, §5.4（详情）;
+ *   D1–D10; SC-01 … SC-23.
  *
  * This page is READ-ONLY. It offers no editing control of any kind: the row
  * conditions of a table are changed through the Role editor and the template
@@ -154,6 +155,19 @@ const CATALOG_LABELS: Record<string, string> = {
   manifest_unavailable: "目录不可用",
   catalog_capability_unknown: "目录能力未知"
 };
+
+/** 快照 state 的可见中文标签。机器值留在 `data-snapshot-state`，不进 summary 主文案。 */
+const SNAPSHOT_STATE_LABELS: Record<string, string> = {
+  ok: "快照可用",
+  partial: "快照部分可用",
+  unavailable: "快照不可用"
+};
+
+function diagnosticsSummary(state: string, failureCount: number): string {
+  const base = SNAPSHOT_STATE_LABELS[state] ?? "快照异常";
+  if (failureCount <= 0) return base;
+  return `${base} · ${failureCount} 条解析失败`;
+}
 
 /** 清单筛选的 URL 参数名。清除筛选时整组删除，但不动当前表三参数。 */
 const LIST_FILTER_KEYS = [
@@ -388,6 +402,11 @@ export function RowPolicyView() {
     ? `${detail.table.connectionId}/${detail.table.schema}/${detail.table.sourceName}`
     : "";
 
+  const hasDetailSelection = Boolean(detailConnectionId && detailSchema && detailSourceName);
+  const showDiagnostics =
+    Boolean(listQuery.data) &&
+    (listQuery.data!.state !== "ok" || listQuery.data!.failures.length > 0);
+
   return (
     <div className="grid gap-4 p-4" data-testid="row-policy-view-page">
       <PageHeader
@@ -403,8 +422,10 @@ export function RowPolicyView() {
         }
       />
 
-      <section className="grid gap-2">
-        <h2 className="text-sm font-medium">筛选</h2>
+      <section
+        className="grid gap-2 border-b border-border-default pb-3"
+        data-testid="row-policy-view-toolbar"
+      >
         <div className="flex flex-wrap items-end gap-3">
           {/*
             五个筛选框里有四个承载**标识**（连接 ID、表名、角色 ID、Agent ID），
@@ -541,290 +562,317 @@ export function RowPolicyView() {
             </button>
           ) : null}
         </div>
-        <p className="text-xs text-fg-muted">本页只读。修改请到角色权限。</p>
-      </section>
-
-      <section className="grid gap-2">
-        <div className="flex items-center gap-2">
-          <h2 className="text-sm font-medium">表清单</h2>
-          <span className="text-xs text-fg-muted">{tables.length} 张表</span>
-        </div>
+        <p className="text-xs text-fg-muted">
+          本页只读。修改请到{" "}
+          <Link className="underline" to="/admin/roles">
+            角色权限
+          </Link>
+          。
+        </p>
         {/*
-          清单侧也要说清快照状态：`state !== "ok"` 表示这份清单只覆盖了已解析的部分，
-          失败集合必须列出来（RTV-05：「partial 明示失败集合」）。全失败时服务端返回
-          `state:"unavailable"` / `status:"unavailable"` / `tables:[]`，此时下面走
-          「快照不可用」空态而不是「没有符合筛选条件的表」。
+          RTV-05：partial 明示失败集合。默认折叠，避免抢右栏结论首屏；
+          机器 state 只进 data-snapshot-state，summary 用中文。
         */}
-        {listQuery.data && listQuery.data.state !== "ok" ? (
-          <div className="flex flex-wrap items-center gap-2" data-testid="row-policy-view-list-state">
-            <span
-              className="pl-status-badge pl-status-validation_failed"
-              data-testid="row-policy-view-list-state-badge"
-            >
-              {`快照状态：${listQuery.data.state}`}
-            </span>
-            {listQuery.data.snapshot.problem ? (
-              <span className="text-xs text-warning-strong notranslate" translate="no">
-                {listQuery.data.snapshot.problem}
-              </span>
+        {showDiagnostics ? (
+          <details data-testid="row-policy-view-diagnostics" className="grid gap-2">
+            <summary className="cursor-pointer text-sm text-warning-strong">
+              {diagnosticsSummary(listQuery.data!.state, listQuery.data!.failures.length)}
+            </summary>
+            {listQuery.data!.state !== "ok" ? (
+              <div className="flex flex-wrap items-center gap-2" data-testid="row-policy-view-list-state">
+                <span
+                  className="pl-status-badge pl-status-validation_failed"
+                  data-testid="row-policy-view-list-state-badge"
+                  data-snapshot-state={listQuery.data!.state}
+                >
+                  {SNAPSHOT_STATE_LABELS[listQuery.data!.state] ?? `快照状态：${listQuery.data!.state}`}
+                </span>
+                {listQuery.data!.snapshot.problem ? (
+                  <span className="text-xs text-warning-strong notranslate" translate="no">
+                    {listQuery.data!.snapshot.problem}
+                  </span>
+                ) : null}
+                <p className="text-xs text-warning-strong">下列清单只覆盖已解析的部分。</p>
+              </div>
             ) : null}
-            <p className="text-xs text-warning-strong">下列清单只覆盖已解析的部分。</p>
-          </div>
+            {listQuery.data!.failures.length > 0 ? (
+              <ul className="grid gap-1 text-xs text-warning-strong" data-testid="row-policy-view-list-failures">
+                {listQuery.data!.failures.map((failure) => (
+                  <li key={failure.subjectId} className="notranslate" translate="no">
+                    {failure.subjectId} · {failure.reason}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </details>
         ) : null}
-        {listQuery.data && listQuery.data.failures.length > 0 ? (
-          <ul className="grid gap-1 text-xs text-warning-strong" data-testid="row-policy-view-list-failures">
-            {listQuery.data.failures.map((failure) => (
-              <li key={failure.subjectId} className="notranslate" translate="no">
-                {failure.subjectId} · {failure.reason}
-              </li>
-            ))}
-          </ul>
-        ) : null}
-        {listQuery.isError ? (
-          <p className="text-sm text-warning-strong" data-testid="row-policy-view-list-error">
-            表清单读取失败：{(listQuery.error as Error).message}
-          </p>
-        ) : listQuery.isPending ? (
-          // 读回来之前不渲染任何空态：「没有符合筛选条件的表」在还没读到数据时是假断言。
-          <p className="text-sm text-fg-muted" data-testid="row-policy-view-list-loading">
-            正在读取表清单…
-          </p>
-        ) : tables.length === 0 ? (
-          <div className="grid gap-1">
-            <RowPolicyStateBadge status={listQuery.data?.status ?? "no_match"} />
-            <p
-              className="text-sm text-fg-muted"
-              data-testid="row-policy-view-list-empty"
-              data-empty-kind={listEmptyState(listQuery.data?.status).kind}
-            >
-              {listEmptyState(listQuery.data?.status).text}
-            </p>
-          </div>
-        ) : (
-          <div className="pl-data-grid-frame min-w-0 max-w-full">
-            <div className="pl-data-grid-scroll w-full min-w-0 max-w-full">
-              <table className="pl-data-grid pl-data-table" data-testid="row-policy-view-table-list">
-                <thead>
-                  <tr className="text-xs text-fg-muted">
-                    <th scope="col">表</th>
-                    <th scope="col">角色数</th>
-                    <th scope="col"><span className="notranslate" translate="no">Agent</span> 数</th>
-                    <th scope="col">有效行授予</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {tables.map((table) => {
-                    const selected =
-                      table.connectionId === detailConnectionId &&
-                      table.schema === detailSchema &&
-                      table.sourceName === detailSourceName;
-                    const cell = grantCellText(table);
-                    return (
-                      <tr
-                        key={`${table.connectionId}/${table.schema}/${table.sourceName}`}
-                        className={clsx(selected && "bg-bg-muted")}
-                        aria-current={selected ? "true" : undefined}
-                        data-testid={`row-policy-view-table-${table.connectionId}-${table.schema}-${table.sourceName}`}
-                      >
-                        <td>
-                          <button
-                            type="button"
-                            className="underline notranslate"
-                            translate="no"
-                            aria-label={`${table.connectionId}/${table.schema}/${table.sourceName}`}
-                            onClick={() => selectTable(table)}
-                          >
-                            {table.sourceName}
-                          </button>
-                          <p className="text-xs text-fg-muted notranslate" translate="no">
-                            {table.connectionId} · {table.schema}
-                          </p>
-                        </td>
-                        <td>{table.roleCount}</td>
-                        <td>{table.agentCount}</td>
-                        <td
-                          data-testid="row-policy-view-table-grant"
-                          title={cell.reason}
-                          translate={cell.reason ? "no" : undefined}
-                          className={clsx(cell.reason && "notranslate")}
-                        >
-                          {cell.text}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
       </section>
 
-      {detailConnectionId && detailSchema && detailSourceName ? (
-        <section className="grid gap-2" data-testid="row-policy-view-detail">
-          <h2 className="text-sm font-medium">单表详情</h2>
-          {detailQuery.isError ? (
-            <p className="text-sm text-warning-strong" data-testid="row-policy-view-detail-error">
-              单表详情读取失败：{(detailQuery.error as Error).message}
+      <div
+        className="grid gap-4 xl:grid-cols-[minmax(16rem,22rem)_minmax(0,1fr)]"
+        data-testid="row-policy-view-workspace"
+      >
+        <section className="pl-panel mb-0 min-w-0" data-testid="row-policy-view-list-panel">
+          <div className="mb-3 flex items-center gap-2">
+            <h2 className="pl-panel-title mb-0">表清单</h2>
+            <span className="text-xs text-fg-muted">{tables.length} 张表</span>
+          </div>
+          {listQuery.isError ? (
+            <p className="text-sm text-warning-strong" data-testid="row-policy-view-list-error">
+              表清单读取失败：{(listQuery.error as Error).message}
             </p>
-          ) : !detail ? (
-            <p className="text-sm text-fg-muted">读取单表详情中…</p>
-          ) : (
-            <>
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="text-sm notranslate" translate="no">
-                  {tableIdentity}
-                </span>
-                <button
-                  type="button"
-                  className="pl-icon-btn pl-btn pl-btn--ghost text-xs"
-                  aria-label="复制表身份"
-                  title="复制表身份"
-                  data-testid="row-policy-view-copy-identity"
-                  onClick={() => {
-                    void copyTextWithToast(tableIdentity, { successMessage: "已复制表身份" });
-                  }}
-                >
-                  复制
-                </button>
-                <RowPolicyStateBadge status={detail.status} reason={detail.reason} />
-                <span className="text-xs text-fg-muted">
-                  <span
-                    className="notranslate"
-                    translate="no"
-                    data-catalog-status={detail.catalog.status}
-                  >
-                    {CATALOG_LABELS[detail.catalog.status] ?? detail.catalog.status}
-                  </span>
-                  {detail.catalog.reason ? (
-                    <span className="notranslate" translate="no">
-                      {` · ${detail.catalog.reason}`}
-                    </span>
-                  ) : null}
-                </span>
-              </div>
-
-              {currentOutsideFilter ? (
-                <p className="text-xs text-fg-muted" data-testid="row-policy-view-outside-filter">
-                  当前表不在筛选结果中。
-                </p>
-              ) : null}
-
-              {detail.failures.length > 0 ? (
-                <ul className="grid gap-1 text-xs text-warning-strong" data-testid="row-policy-view-failures">
-                  {detail.failures.map((failure) => (
-                    <li key={failure.subjectId} className="notranslate" translate="no">
-                      {failure.subjectId} · {failure.reason}
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-
-              <RowPolicyDnfPreview
-                effectiveRowGrant={asDnfGrant(detail.effectiveRowGrant)}
-                roleIds={detail.roles.filter((role) => role.rowGrant !== null).map((role) => role.roleId)}
-                finalRowsByAgent={detail.agents
-                  .filter((agent) => agent.finalRows !== null)
-                  .map((agent) => ({
-                    agentId: agent.agentId,
-                    finalRows: asDnfGrant(agent.finalRows),
-                    summaryHref: `/admin/authorization-summary?kind=agent&id=${encodeURIComponent(agent.agentId)}`
-                  }))}
-                unavailableReason={detail.status === "compile_failed" ? detail.reason : null}
-                boundaryPlacement="footnote"
-                predicateLayout="stacked"
-                collapseUniformAllRows
+          ) : listQuery.isPending ? (
+            <p className="text-sm text-fg-muted" data-testid="row-policy-view-list-loading">
+              正在读取表清单…
+            </p>
+          ) : tables.length === 0 ? (
+            <div className="grid gap-1">
+              <RowPolicyStateBadge status={listQuery.data?.status ?? "no_match"} />
+              <p
+                className="text-sm text-fg-muted"
+                data-testid="row-policy-view-list-empty"
+                data-empty-kind={listEmptyState(listQuery.data?.status).kind}
               >
-                {/* 角色分组放在并集小节与 Agent 小节之间：结论 → 边界句 → 角色 → Agent。 */}
-                <section className="grid gap-2" data-testid="row-policy-view-role-branches">
-                  <h3 className="text-xs font-medium">角色分支</h3>
-                  {detail.roles.length === 0 ? (
-                    <p className="text-xs text-fg-muted">没有角色分支。</p>
-                  ) : (
-                    ROLE_GROUPS.map((group) => {
-                      const roles = detail.roles.filter((role) => group.match(role));
-                      if (roles.length === 0) return null;
+                {listEmptyState(listQuery.data?.status).text}
+              </p>
+            </div>
+          ) : (
+            <div className="pl-data-grid-frame min-w-0 max-w-full">
+              <div className="pl-data-grid-scroll w-full min-w-0 max-w-full">
+                <table className="pl-data-grid pl-data-table" data-testid="row-policy-view-table-list">
+                  <thead>
+                    <tr className="text-xs text-fg-muted">
+                      <th scope="col">表</th>
+                      <th scope="col">角色数</th>
+                      <th scope="col">
+                        <span className="notranslate" translate="no">
+                          Agent
+                        </span>{" "}
+                        数
+                      </th>
+                      <th scope="col">有效行授予</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tables.map((table) => {
+                      const selected =
+                        table.connectionId === detailConnectionId &&
+                        table.schema === detailSchema &&
+                        table.sourceName === detailSourceName;
+                      const cell = grantCellText(table);
                       return (
-                        <div key={group.key} className="grid gap-1">
-                          <h4 className="text-xs font-medium text-fg-muted">{group.title}</h4>
-                          <ul className="grid gap-2">
-                            {roles.map((role) => (
-                              <li
-                                key={role.roleId}
-                                className="grid gap-1"
-                                data-testid={`row-policy-view-role-${role.roleId}`}
-                              >
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <Link
-                                    className="text-sm underline notranslate"
-                                    translate="no"
-                                    to={`/admin/roles/${encodeURIComponent(role.roleId)}`}
-                                  >
-                                    {role.roleId}
-                                  </Link>
-                                  <span className="text-xs text-fg-muted" data-testid="row-policy-view-role-access">
-                                    {role.rowAccess === "all"
-                                      ? "行权限：全部行"
-                                      : role.rowAccess === "scoped"
-                                        ? "受限行授予"
-                                        : "不授予该表"}
-                                  </span>
-                                  <Link
-                                    className="text-xs underline"
-                                    to={`/admin/authorization-summary?kind=role&id=${encodeURIComponent(role.roleId)}`}
-                                  >
-                                    授权摘要
-                                  </Link>
-                                </div>
-                                {role.templateRefs.length > 0 ? (
-                                  <p
-                                    className="text-xs notranslate"
-                                    translate="no"
-                                    data-testid="row-policy-view-role-templates"
-                                  >
-                                    引用模板：{role.templateRefs.join("、")}
-                                  </p>
-                                ) : null}
-                                {/*
-                                  D9：没有模板引用、也没有内联条件时，不渲染编写方式徽章。
-                                  `rowPolicyAuthoringMode()` 的默认返回值不改，只在调用处跳过。
-                                */}
-                                {role.templateRefs.length > 0 || role.inlinePredicates.length > 0 ? (
-                                  <RowPolicyAuthoringModeBadge
-                                    templateName={role.templateRefs[0]}
-                                    inlinePredicateCount={role.inlinePredicates.length}
-                                  />
-                                ) : null}
-                                {role.inlinePredicates.length > 0 ? (
-                                  <ul className="grid gap-0.5 text-xs notranslate" translate="no">
-                                    {role.inlinePredicates.map((predicate, index) => (
-                                      <li key={index}>
-                                        {predicate.field}{" "}
-                                        {predicate.op === "eq"
-                                          ? `等于 ${String(predicate.value ?? "")}`
-                                          : `属于 ${(predicate.values ?? []).map((item) => String(item)).join("、")}`}
-                                      </li>
-                                    ))}
-                                  </ul>
-                                ) : null}
-                                {role.error ? (
-                                  <p className="text-xs text-warning-strong notranslate" translate="no">
-                                    {role.error}
-                                  </p>
-                                ) : null}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
+                        <tr
+                          key={`${table.connectionId}/${table.schema}/${table.sourceName}`}
+                          className={clsx(
+                            selected && "border-l-2 border-l-fg-default bg-bg-muted font-medium"
+                          )}
+                          aria-current={selected ? "true" : undefined}
+                          data-testid={`row-policy-view-table-${table.connectionId}-${table.schema}-${table.sourceName}`}
+                        >
+                          <td>
+                            <button
+                              type="button"
+                              className="underline notranslate"
+                              translate="no"
+                              aria-label={`${table.connectionId}/${table.schema}/${table.sourceName}`}
+                              onClick={() => selectTable(table)}
+                            >
+                              {table.sourceName}
+                            </button>
+                            <p className="text-xs text-fg-muted notranslate" translate="no">
+                              {table.connectionId} · {table.schema}
+                            </p>
+                          </td>
+                          <td>{table.roleCount}</td>
+                          <td>{table.agentCount}</td>
+                          <td
+                            data-testid="row-policy-view-table-grant"
+                            title={cell.reason}
+                            translate={cell.reason ? "no" : undefined}
+                            className={clsx(cell.reason && "notranslate")}
+                          >
+                            {cell.text}
+                          </td>
+                        </tr>
                       );
-                    })
-                  )}
-                </section>
-              </RowPolicyDnfPreview>
-            </>
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           )}
         </section>
-      ) : null}
+
+        {hasDetailSelection ? (
+          <section className="pl-panel mb-0 min-w-0" data-testid="row-policy-view-detail">
+            <h2 className="pl-panel-title">单表详情</h2>
+            {detailQuery.isError ? (
+              <p className="text-sm text-warning-strong" data-testid="row-policy-view-detail-error">
+                单表详情读取失败：{(detailQuery.error as Error).message}
+              </p>
+            ) : !detail ? (
+              <p className="text-sm text-fg-muted">读取单表详情中…</p>
+            ) : (
+              <div className="grid gap-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="text-sm notranslate" translate="no">
+                    {tableIdentity}
+                  </span>
+                  <button
+                    type="button"
+                    className="pl-icon-btn pl-btn pl-btn--ghost text-xs"
+                    aria-label="复制表身份"
+                    title="复制表身份"
+                    data-testid="row-policy-view-copy-identity"
+                    onClick={() => {
+                      void copyTextWithToast(tableIdentity, { successMessage: "已复制表身份" });
+                    }}
+                  >
+                    复制
+                  </button>
+                  <RowPolicyStateBadge status={detail.status} reason={detail.reason} />
+                  <span className="text-xs text-fg-muted">
+                    <span
+                      className="notranslate"
+                      translate="no"
+                      data-catalog-status={detail.catalog.status}
+                    >
+                      {CATALOG_LABELS[detail.catalog.status] ?? detail.catalog.status}
+                    </span>
+                    {detail.catalog.reason ? (
+                      <span className="notranslate" translate="no">
+                        {` · ${detail.catalog.reason}`}
+                      </span>
+                    ) : null}
+                  </span>
+                </div>
+
+                {currentOutsideFilter ? (
+                  <p className="text-xs text-fg-muted" data-testid="row-policy-view-outside-filter">
+                    当前表不在筛选结果中。
+                  </p>
+                ) : null}
+
+                {detail.failures.length > 0 ? (
+                  <ul className="grid gap-1 text-xs text-warning-strong" data-testid="row-policy-view-failures">
+                    {detail.failures.map((failure) => (
+                      <li key={failure.subjectId} className="notranslate" translate="no">
+                        {failure.subjectId} · {failure.reason}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+
+                <RowPolicyDnfPreview
+                  effectiveRowGrant={asDnfGrant(detail.effectiveRowGrant)}
+                  roleIds={detail.roles.filter((role) => role.rowGrant !== null).map((role) => role.roleId)}
+                  finalRowsByAgent={detail.agents
+                    .filter((agent) => agent.finalRows !== null)
+                    .map((agent) => ({
+                      agentId: agent.agentId,
+                      finalRows: asDnfGrant(agent.finalRows),
+                      summaryHref: `/admin/authorization-summary?kind=agent&id=${encodeURIComponent(agent.agentId)}`
+                    }))}
+                  unavailableReason={detail.status === "compile_failed" ? detail.reason : null}
+                  boundaryPlacement="footnote"
+                  predicateLayout="stacked"
+                  collapseUniformAllRows
+                  unionHeading="有效行授予"
+                  agentsHeading="各 Agent 最终行约束"
+                >
+                  <section className="grid gap-2" data-testid="row-policy-view-role-branches">
+                    <h3 className="text-sm font-medium">角色贡献</h3>
+                    {detail.roles.length === 0 ? (
+                      <p className="text-xs text-fg-muted">没有角色分支。</p>
+                    ) : (
+                      ROLE_GROUPS.map((group) => {
+                        const roles = detail.roles.filter((role) => group.match(role));
+                        if (roles.length === 0) return null;
+                        return (
+                          <div key={group.key} className="grid gap-1">
+                            <h4 className="text-xs font-medium text-fg-muted">{group.title}</h4>
+                            <ul className="grid gap-2">
+                              {roles.map((role) => (
+                                <li
+                                  key={role.roleId}
+                                  className="grid gap-1"
+                                  data-testid={`row-policy-view-role-${role.roleId}`}
+                                >
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <Link
+                                      className="text-sm underline notranslate"
+                                      translate="no"
+                                      to={`/admin/roles/${encodeURIComponent(role.roleId)}`}
+                                    >
+                                      {role.roleId}
+                                    </Link>
+                                    <span
+                                      className="text-xs text-fg-muted"
+                                      data-testid="row-policy-view-role-access"
+                                    >
+                                      {role.rowAccess === "all"
+                                        ? "行权限：全部行"
+                                        : role.rowAccess === "scoped"
+                                          ? "受限行授予"
+                                          : "不授予该表"}
+                                    </span>
+                                    <Link
+                                      className="text-xs underline"
+                                      to={`/admin/authorization-summary?kind=role&id=${encodeURIComponent(role.roleId)}`}
+                                    >
+                                      授权摘要
+                                    </Link>
+                                  </div>
+                                  {role.templateRefs.length > 0 ? (
+                                    <p
+                                      className="text-xs notranslate"
+                                      translate="no"
+                                      data-testid="row-policy-view-role-templates"
+                                    >
+                                      引用模板：{role.templateRefs.join("、")}
+                                    </p>
+                                  ) : null}
+                                  {role.templateRefs.length > 0 || role.inlinePredicates.length > 0 ? (
+                                    <RowPolicyAuthoringModeBadge
+                                      templateName={role.templateRefs[0]}
+                                      inlinePredicateCount={role.inlinePredicates.length}
+                                    />
+                                  ) : null}
+                                  {role.inlinePredicates.length > 0 ? (
+                                    <ul className="grid gap-0.5 text-xs notranslate" translate="no">
+                                      {role.inlinePredicates.map((predicate, index) => (
+                                        <li key={index}>
+                                          {predicate.field}{" "}
+                                          {predicate.op === "eq"
+                                            ? `等于 ${String(predicate.value ?? "")}`
+                                            : `属于 ${(predicate.values ?? []).map((item) => String(item)).join("、")}`}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  ) : null}
+                                  {role.error ? (
+                                    <p className="text-xs text-warning-strong notranslate" translate="no">
+                                      {role.error}
+                                    </p>
+                                  ) : null}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        );
+                      })
+                    )}
+                  </section>
+                </RowPolicyDnfPreview>
+              </div>
+            )}
+          </section>
+        ) : (
+          <section className="pl-panel mb-0 min-w-0" data-testid="row-policy-view-detail-empty">
+            <p className="text-sm text-fg-muted">选择左侧一张表，查看实际生效的行约束。</p>
+          </section>
+        )}
+      </div>
     </div>
   );
 }

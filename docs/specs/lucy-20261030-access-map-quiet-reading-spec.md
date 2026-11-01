@@ -10,7 +10,7 @@
 | 需求来源 | 治理台访问关系图需要企业级阅读层级：一屏只回答「这张图现在怎样」，口径和等价清单离开主视觉 |
 | 实施主体 | Lucy WebUI 访问关系图页（`webui/src/pages/admin/AccessMap.tsx` 与 `webui/src/components/admin/AccessMap*.tsx`）。不修改 KTX，不修改 `/api/admin/access-map` |
 | 落位依据 | [`docs/governance/DEVELOPMENT.md`](../governance/DEVELOPMENT.md)「Spec 落位规则」：仓库级呈现修订落 `docs/specs/` |
-| 与既有 Spec 的关系 | **修订 Spec 187 的呈现，不修订其语义。** 权威仍是 [`webui/docs/187-access-relation-sankey-spec.md`](../../webui/docs/187-access-relation-sankey-spec.md)。边状态、路径守恒、Token 只过滤访问层、两档措辞、URL 参数、降级矩阵沿用该文。Spec 187 §4.4「僵尸授权」一行的 UI 表现已指向本 Spec §5.3。Spec 187 的 SC-01–SC-14 不在本条出口 |
+| 与既有 Spec 的关系 | **修订 Spec 187 的呈现，不修订其语义。** 权威仍是 [`webui/docs/187-access-relation-sankey-spec.md`](../../webui/docs/187-access-relation-sankey-spec.md)。边状态、路径守恒、Token 只过滤访问层、两档措辞、URL 参数、降级矩阵沿用该文。Spec 187 §4.4「僵尸授权」一行的 UI 表现已指向本 Spec §5.3。Spec 187 的 SC-01–SC-14 不在本条出口。**页壳再修订**：三指标卡与双折叠墙的默认首屏合同已被 [`lucy-20261101-access-map-chart-first-spec.md`](lucy-20261101-access-map-chart-first-spec.md) 取代；本 Spec §5.3–§5.6（着色、抽屉、表）仍有效，除非 chart-first 显式改写 |
 | 实施计划 | [`docs/plans/2026-10-30-lucy-access-map-quiet-reading-plan.md`](../plans/2026-10-30-lucy-access-map-quiet-reading-plan.md) |
 
 > v0.3 已验收（2026-10-30）。D1–D8 已按 §4 的「提议」列全部拍板采纳，无否决项。Spec 187 §4.4 僵尸授权行的 UI 表现与 `TD-187-01` 的着色句已指向本文 §5.3；语义（API、URL 值、边状态判定、两档措辞）不变。SC-01–SC-16 已关闭。本条收口不表示可上线。

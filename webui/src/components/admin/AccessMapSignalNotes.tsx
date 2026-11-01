@@ -1,14 +1,17 @@
 /**
- * Lucy v0.25 P1-3 — 访问关系图的三张指标卡与口径说明。
+ * Lucy v0.25 P1-3 — 访问关系图的口径说明（图下弱入口正文）。
  *
  * Authority: `webui/docs/187-access-relation-sankey-spec.md`
  *   §4.9  越权信号的可信度边界（两档措辞 + 快照覆盖率披露）
- *   §7.4  顶部信号条「僵尸授权 N 条 · 需复核 M 条 · 确凿越权 K 条」
  *   §10   SC-13 覆盖率披露；低覆盖率不得解释为低越权率
  *
- * 呈现修订: `docs/specs/lucy-20261030-access-map-quiet-reading-spec.md`
- *   §5.2  三枚信号改为共享 Metric Card；卡壳与 ⓘ 是兄弟按钮
- *   §5.1  口径与快照离开首屏，落到默认关闭的折叠区
+ * 呈现修订: `docs/specs/lucy-20261101-access-map-chart-first-spec.md`
+ *   §5.2  三张信号 Metric Card 从默认页壳删除
+ *   §5.4  口径全文迁入图下单一弱入口「口径与快照」
+ *
+ * 本文件原先叫 `AccessMapSignalBar.tsx`，同时导出「三张指标卡」与「口径说明」。
+ * chart-first 把指标卡整排卸下首屏，卡片与其筛选 state 一并删除，
+ * 只留下口径说明 —— 所以文件随之改名，**不留同名的空壳**。
  *
  * 「需复核」与「确凿越权」是两档，措辞不同、结论强度不同。
  * 本组件是这两个词在 UI 上的唯一定义处：第一档一律不含「越权」二字。
@@ -25,7 +28,6 @@
  * 用户输入的值。此处记录该取舍，避免以后有人以「自由文本不算标识」为由把它删掉，
  * 也避免有人误以为它能保护输入内容。
  */
-import { MetricCard } from "../MetricCard";
 import {
   ACCESS_MAP_CONFIRMED_TIER_SOURCE,
   ACCESS_MAP_DORMANT_TIER_NOTE,
@@ -34,115 +36,26 @@ import {
   type AccessMapMeta
 } from "./AccessMapTypes";
 
-export type AccessMapSignalFilter = "dormant" | "needs_review" | "confirmed_unauthorized";
-
-export type AccessMapSignalBarProps = {
-  meta: AccessMapMeta;
-  activeFilters: AccessMapSignalFilter[];
-  onToggleFilter: (filter: AccessMapSignalFilter) => void;
-};
-
 export type AccessMapSignalNotesProps = {
   meta: AccessMapMeta;
 };
 
 /**
- * 三张指标卡（呈现修订 Spec §5.2）。
- *
- * 卡壳是**筛选按钮**（`aria-pressed` + 既有 test id 都在按钮上），ⓘ 是它的**兄弟**
- * 按钮而不是被嵌进按钮里 —— 嵌套按钮是非法的 HTML，而且会让读者点 ⓘ 时误触发筛选。
- *
- * tone 规则：主值为 0 时保持中性；僵尸授权 / 需复核大于 0 用 warning，
- * 确凿越权大于 0 用 danger。**不用** `pl-btn--primary` 表示选中。
- *
- * 三张卡逐张写开（不 map 数组）：筛选按钮上的 test id 必须以字面量出现在源码里，
- * 否则选择器契约的静态扫描认不出它，契约表会出现孤儿登记。
- */
-export function AccessMapSignalBar({
-  meta,
-  activeFilters,
-  onToggleFilter
-}: AccessMapSignalBarProps) {
-  const dormantPressed = activeFilters.includes("dormant");
-  const needsReviewPressed = activeFilters.includes("needs_review");
-  const confirmedPressed = activeFilters.includes("confirmed_unauthorized");
-
-  const filterButtonClass =
-    "rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary";
-
-  return (
-    <div className="pl-metric-grid pl-metric-grid--three gap-3" data-testid="access-map-signal-bar">
-      <MetricCard
-        label={
-          <button
-            type="button"
-            className={filterButtonClass}
-            aria-pressed={dormantPressed}
-            data-testid="access-map-signal-dormant"
-            onClick={() => onToggleFilter("dormant")}
-          >
-            僵尸授权
-          </button>
-        }
-        labelText="僵尸授权"
-        value={meta.signals.dormantEdges}
-        help={ACCESS_MAP_DORMANT_TIER_NOTE}
-        subValue={dormantPressed ? "正在筛选" : "未筛选"}
-        tone={meta.signals.dormantEdges > 0 ? "warning" : undefined}
-        helpId="access-map-dormant"
-      />
-      <MetricCard
-        label={
-          <button
-            type="button"
-            className={filterButtonClass}
-            aria-pressed={needsReviewPressed}
-            data-testid="access-map-signal-needs-review"
-            onClick={() => onToggleFilter("needs_review")}
-          >
-            需复核
-          </button>
-        }
-        labelText="需复核"
-        value={meta.signals.needsReviewEdges}
-        help={ACCESS_MAP_NEEDS_REVIEW_TIER_NOTE}
-        subValue={needsReviewPressed ? "正在筛选" : "未筛选"}
-        tone={meta.signals.needsReviewEdges > 0 ? "warning" : undefined}
-        helpId="access-map-needs-review"
-      />
-      <MetricCard
-        label={
-          <button
-            type="button"
-            className={filterButtonClass}
-            aria-pressed={confirmedPressed}
-            data-testid="access-map-signal-confirmed"
-            onClick={() => onToggleFilter("confirmed_unauthorized")}
-          >
-            确凿越权
-          </button>
-        }
-        labelText="确凿越权"
-        value={meta.signals.confirmedUnauthorizedEdges}
-        help={ACCESS_MAP_CONFIRMED_TIER_SOURCE}
-        subValue={confirmedPressed ? "正在筛选" : "未筛选"}
-        tone={meta.signals.confirmedUnauthorizedEdges > 0 ? "danger" : undefined}
-        helpId="access-map-confirmed"
-      />
-    </div>
-  );
-}
-
-/**
- * 口径说明（呈现修订 Spec §5.1「折叠（默认关）」）。
+ * 口径说明（chart-first Spec §5.4「图下弱入口「口径与快照」」）。
  *
  * 这些句子解释的是「这几个数字怎么来的」，不是首屏要回答的问题，
- * 所以离开标题行、落进默认关闭的折叠区。**文案一个字都不改**：
+ * 所以离开标题行、落进默认关闭的弱入口。**文案一个字都不改**：
  * test id 与可见文字都保持原样，只是换了位置。
  */
 export function AccessMapSignalNotes({ meta }: AccessMapSignalNotesProps) {
   return (
     <div className="flex flex-col gap-2 text-xs text-fg-muted">
+      {/*
+        僵尸授权档的口径句（原来挂在指标卡 ⓘ 上）。
+        卡片整排卸下后，这句话跟着搬进弱入口正文 —— 判据本身不能跟着卡片一起消失。
+        「僵尸授权」是配置事实（有权未用），不是行为指控，所以不含任何越权字样。
+      */}
+      <p>僵尸授权口径：{ACCESS_MAP_DORMANT_TIER_NOTE}</p>
       {/*
         第一档的档位说明（§4.9.2）：**不含「越权」二字**。
         「访问了但当前无授权路径」首先意味着需要复核，不必然等于越权。

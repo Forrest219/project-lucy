@@ -668,7 +668,7 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 | Linked call count | 关联调用数 | — | 调用总数（与工具调用数混用） | 问询记录 / CSV；成功 + 拒绝 + 错误 + 预算终止 = 本列 |
 | Tables touched | 涉及数据表 | — | 工具 / 表 | L1 与 Drawer 列；列表仅 physical table（含 `table_forbidden` 拒绝的表） |
 | Database connection | 数据库连接 | — | connection_id（裸露） | Drawer 调用明细列 |
-| Stats Snapshot Time | 统计时间 | — | 上次更新（本页主标签） | 访问日志上下文条内只出现一次；可见文用相对时间，精确本地时间与 ISO 在 `title`。见 `docs/specs/lucy-20261030-audit-context-bar-spec.md` |
+| Stats Snapshot Time | 统计时间 | — | 上次更新（本页主标签） | 使用概况等页仍用；访问日志自 2026-11-01 起不常驻展示。历史呈现见 `docs/specs/lucy-20261030-audit-context-bar-spec.md` |
 | Decision Reason dual-line | 裁决原因（主行中文 + 次行码） | — | 仅机器码单行（最终态） | Spec 99 §6.4；调用流水/Drawer |
 | Query Artifact | 查询原文（加密） | 加密查询原文 | — | Spec 124 legacy：可选冷存；运维主路径见 Generated SQL |
 | Query Artifact Ref | 查询原文引用 | artifact ref | 把 ref 当生成 SQL 展示 | Spec 124 legacy 指针 |

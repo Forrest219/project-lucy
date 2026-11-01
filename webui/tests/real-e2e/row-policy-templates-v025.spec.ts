@@ -86,12 +86,53 @@ test("行策略模板与按表反查在同一快照下给出同一份规范源�
     const page1 = await ctx.newPage();
     await page1.goto("/admin/row-policies");
     await expect(page1.getByTestId("row-policy-view-page")).toBeVisible();
-    await expect(page1.getByTestId("row-policy-view-list-state").first()).toBeVisible();
-    const listState = (await page1.getByTestId("row-policy-view-list-state").first().innerText()).trim();
+    // list-state 只在 state !== "ok" 时渲染；ok 快照下用表清单本身作为同源证据。
+    const listStateLocator = page1.getByTestId("row-policy-view-list-state").first();
+    const listState = (await listStateLocator.count())
+      ? (await listStateLocator.innerText()).trim()
+      : "";
     const snapshotLocator = page1.getByTestId("row-policy-snapshot").first();
     const snapshotText = (await snapshotLocator.count()) ? await snapshotLocator.innerText() : "";
-    assertion(testInfo, "consistency", listState.length > 0,
-      `reverse lookup state badge: ${listState}; snapshot: ${snapshotText.slice(0, 120)}`);
+    const tableListVisible = (await page1.getByTestId("row-policy-view-table-list").count()) > 0;
+    const emptyListVisible = (await page1.getByTestId("row-policy-view-list-empty").count()) > 0;
+    assertion(testInfo, "consistency", listState.length > 0 || tableListVisible || emptyListVisible,
+      `reverse lookup rendered (state="${listState}", tableList=${tableListVisible}, empty=${emptyListVisible}); snapshot: ${snapshotText.slice(0, 120)}`);
+
+    // ── RTV-01／RTV-02：预置 finance_east 使 marketing_daily 出现在「仅受限表」──────────
+    // 与人工 UAT「亚洲经营表」同构：scoped 谓词按 region 收窄；fixture 字面量是 East。
+    // 注意：同表上若另有 Role 授 `all`（finance_reader），有效并集可为「全部行」——
+    // 「仅受限表」仍应收录该表（任一 Role 分支为 scoped），详情须能看到 East 受限分支。
+    await page1.getByRole("button", { name: "仅受限表" }).click();
+    await expect(page1).toHaveURL(/restricted=true/);
+    const restrictedRow = page1.getByTestId("row-policy-view-table-fin-db-analytics-marketing_daily");
+    const restrictedVisible = (await restrictedRow.count()) > 0;
+    assertion(testInfo, "allow_control", restrictedVisible,
+      `restricted filter keeps marketing_daily (scoped East fixture); visible=${restrictedVisible}`);
+    if (restrictedVisible) {
+      await page1.getByRole("button", { name: "fin-db/analytics/marketing_daily" }).click();
+      const detail = page1.getByTestId("row-policy-view-detail");
+      await expect(detail).toBeVisible();
+      await expect(detail).toContainText("fin-db/analytics/marketing_daily");
+      const eastBranch = page1.getByTestId("row-policy-view-role-finance_east");
+      const eastVisible = (await eastBranch.count()) > 0;
+      assertion(testInfo, "consistency", eastVisible,
+        `detail lists the finance_east scoped branch; visible=${eastVisible}`);
+      if (eastVisible) {
+        const eastText = (await eastBranch.innerText()).trim();
+        assertion(testInfo, "consistency",
+          eastText.includes("受限行授予") && eastText.includes("East"),
+          `finance_east branch keeps scoped East predicate; got=${eastText.slice(0, 200)}`);
+      }
+      // RTV-02：若详情里同时有两个受限 Role 分支，并集不得被拍成「看不到分支」。
+      const accessLabels = await page1.getByTestId("row-policy-view-role-access").allInnerTexts();
+      const scopedBranches = accessLabels.filter((text) => text.includes("受限行授予"));
+      if (scopedBranches.length >= 2) {
+        assertion(testInfo, "deny",
+          (await page1.getByTestId("row-policy-dnf-union").count()) > 0 ||
+            (await page1.getByTestId("row-policy-dnf-union-all").count()) > 0,
+          `multi-role detail must expose a DNF union or an explicit all absorption; scopedBranches=${scopedBranches.length}`);
+      }
+    }
     await page1.close();
 
     // ── RTV-07：反查页是只读的，没有任何写入口 ───────────────────────────────────────
