@@ -760,6 +760,66 @@ function sha256Hex(profileString) {
  * receipt. The release gate must then require a separate kernel-level network policy provider
  * to enforce per-host egress (out of scope for sandbox-exec).
  */
+/**
+ * The model API this run is allowed to reach. Only an explicit run field or
+ * `LUCY_E2E_MODEL_API_URL` counts. Anything else stays closed.
+ */
+export function resolveModelApi(run = {}, env = process.env) {
+  const raw = run?.modelApi?.url ?? env.LUCY_E2E_MODEL_API_URL ?? "";
+  if (!raw) return null;
+  let url;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error(`model API url is not absolute: ${raw}`);
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") {
+    throw new Error(`model API url must be http or https: ${raw}`);
+  }
+  const port = url.port ? Number(url.port) : url.protocol === "https:" ? 443 : 80;
+  if (!url.hostname || !Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error(`model API url has no host or port: ${raw}`);
+  }
+  return { host: url.hostname, port };
+}
+
+/**
+ * Localhost TCP proxy. The sandbox allows only this port. The proxy dials the
+ * configured model host from outside the sandbox. Credentials stay in the
+ * client environment and are not written into the profile.
+ */
+export function startModelEgressSidecar({ host, port }) {
+  const server = net.createServer((client) => {
+    const upstream = net.connect(port, host);
+    const closeBoth = () => {
+      client.destroy();
+      upstream.destroy();
+    };
+    upstream.on("error", closeBoth);
+    client.on("error", closeBoth);
+    client.pipe(upstream);
+    upstream.pipe(client);
+  });
+  return new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      resolve({
+        host,
+        port,
+        sidecarPort: address.port,
+        close: () => new Promise((done) => server.close(() => done()))
+      });
+    });
+  });
+}
+
+/** Points model clients at the localhost sidecar. Does not copy the upstream host into the env. */
+export function modelClientEnv(sidecarPort) {
+  const base = `http://127.0.0.1:${sidecarPort}`;
+  return { ANTHROPIC_BASE_URL: base, OPENAI_BASE_URL: base };
+}
+
 export function buildBoundaryBundle({ run, canaries, provider, mcpHost, mcpPort, sidecarPort = null, clientBinaries = [] }) {
   // A "supported" provider must have `provider.provider` set to a known string. A plain null,
   // a missing object, or a reason-only object is unsupported; the caller fails closed.

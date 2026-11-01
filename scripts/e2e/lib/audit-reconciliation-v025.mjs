@@ -76,6 +76,9 @@ function makeDescriptor({
     priority: entry.priority,
     requiredExecutors: Object.freeze([...contract.executors]),
     requiredCapabilities: Object.freeze([...contract.requires]),
+    imageDimensions: Object.freeze(executionId === "ARV25-V12"
+      ? [Object.freeze({ name: "customer-amd64", requires: Object.freeze(["k8s-amd64"]), blockedReason: "delivery" })]
+      : []),
     assertionTokens: Object.freeze([...contract.assert]),
     expectedArtifacts: Object.freeze([...contract.artifacts]),
     publicSurfaces: RECONCILIATION_PUBLIC_SURFACES,

@@ -33,6 +33,7 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 import { spawnSync } from "node:child_process";
+import net from "node:net";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
@@ -48,8 +49,11 @@ import {
   classifyProbeOutcome,
   detectIsolationProvider,
   didProbeDeny,
+  modelClientEnv,
   probeIsolation,
-  sanitizeEnv
+  resolveModelApi,
+  sanitizeEnv,
+  startModelEgressSidecar
 } from "../lib/isolation.mjs";
 
 const tmpRoots = [];
@@ -736,5 +740,53 @@ describe("A5 isolation: dependency on a real platform provider is explicit, not 
     // host to isolated:false / attemptCompleted:false.
     assert.equal(result.isolated, false);
     assert.notEqual(r.attempts.length, 1, "isIsolated:true with empty attempts must not pass");
+  });
+});
+
+describe("model API egress", () => {
+  it("stays closed when the run does not name a model host", () => {
+    assert.equal(resolveModelApi({}, {}), null);
+  });
+
+  it("reads only the configured host and port", () => {
+    assert.deepEqual(
+      resolveModelApi({}, { LUCY_E2E_MODEL_API_URL: "https://api.anthropic.com" }),
+      { host: "api.anthropic.com", port: 443 }
+    );
+  });
+
+  it("allows the localhost sidecar port and does not name the model host in the profile", () => {
+    const run = fakeRun(newTmp());
+    const canaries = allocateProbeCanaries();
+    const bundle = buildBoundaryBundle({
+      run, canaries, provider: fixedProvider, mcpHost: "127.0.0.1", mcpPort: 17879, sidecarPort: 18081
+    });
+    assert.match(bundle.profileString, /localhost:18081/);
+    assert.doesNotMatch(bundle.profileString, /anthropic/);
+    assert.deepEqual(modelClientEnv(18081), {
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:18081",
+      OPENAI_BASE_URL: "http://127.0.0.1:18081"
+    });
+  });
+
+  it("proxies the sidecar to the configured host only", async () => {
+    const upstream = net.createServer((socket) => {
+      socket.end("ok");
+    });
+    await new Promise((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+    const sidecar = await startModelEgressSidecar({ host: "127.0.0.1", port: upstream.address().port });
+    try {
+      const body = await new Promise((resolve, reject) => {
+        const socket = net.connect(sidecar.sidecarPort, "127.0.0.1");
+        const chunks = [];
+        socket.on("data", (chunk) => chunks.push(chunk));
+        socket.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+        socket.on("error", reject);
+      });
+      assert.equal(body, "ok");
+    } finally {
+      await sidecar.close();
+      await new Promise((resolve) => upstream.close(resolve));
+    }
   });
 });

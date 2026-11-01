@@ -51,7 +51,7 @@ export const HIV25_DELIVERY_IDS = Object.freeze(["HIV25-V16", "HIV25-V17"]);
 const ARTIFACTS = Object.freeze(["management-case-result.json", "security-case-result.json"]);
 const EXECUTORS = Object.freeze(["P", "B", "D", "A", "O", "V"]);
 const REQUIRES = Object.freeze([
-  "lucy-http", "ktx-upstream", "postgres", "browser", "agent-client", "fault-control", "k8s-amd64"
+  "lucy-http", "ktx-upstream", "postgres", "browser", "agent-client", "fault-control"
 ]);
 const ASSERTS = Object.freeze(["allow_control", "deny", "no_leak"]);
 

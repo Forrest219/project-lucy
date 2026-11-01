@@ -4,6 +4,7 @@ This directory stores repository-level implementation plans that are not scoped 
 
 | Plan | Purpose |
 |---|---|
+| [lucy-20261101-new-token-expiry-preset-ux-plan.md](lucy-20261101-new-token-expiry-preset-ux-plan.md) | **功能合同已收口（2026-11-01）**：新建 Token 过期快捷预设 UX。segmented 四档 + 删除政策提示句。SC-01–SC-06 关闭。本条收口不表示可上线。Spec 见 [lucy-20261101-new-token-expiry-preset-ux-spec.md](../specs/lucy-20261101-new-token-expiry-preset-ux-spec.md) |
 | [2026-10-29-ci-restoration-plan.md](2026-10-29-ci-restoration-plan.md) | **定稿 v1.0（2026-10-29）**：Lucy CI 恢复实施计划。T00–T04 与 Release CI 文档修正已实施，T06 汇总执行证据；T05（Required checks 迁移）与 R01（客户发布设施）未授权、未开工。日常 CI 已恢复，客户自动发布仍 BLOCKED。Spec 见 [lucy-ci-restoration-spec.md](../specs/lucy-ci-restoration-spec.md) |
 | [2026-10-30-l25-11-publish-window-task.md](2026-10-30-l25-11-publish-window-task.md) | **2026-10-30 授权落地**：L25-11 收口 Task（发布窗口、读取准入、导出基线）。只补现码里与冻结合同不一致的三处，不新增验收矩阵。L25-11 已于 2026-10-31 以 FC-01–FC-32 关闭；V01–V22 仍未执行；G30 仍开、W-B 不打开 |
 | [lucy-20261030-manifest-upload-size-fix-plan.md](lucy-20261030-manifest-upload-size-fix-plan.md) | **用户于 2026-10-30 批准，本地验证已完成**：Manifest 上传容量修复。单 YAML 上限 8 MiB，只有实际携带 YAML 或 ZIP 内容的三条资产路由使用 32 MiB 请求体上限，其余路由维持默认限制。6 个相关测试文件、111 项测试通过；两份实际 Manifest 完成校验、上传与目录刷新。未构建客户镜像、未执行远端升级 |
@@ -44,7 +45,7 @@ This directory stores repository-level implementation plans that are not scoped 
 | [2026-10-19-upgrade-e2e-implementation-plan.md](2026-10-19-upgrade-e2e-implementation-plan.md) | **v0.25 P1-5 上游方案，非门禁**：已收口升级 E2E 自动化 Spec，需求审查已签核通过、暂不开发；覆盖 Docker / K3s / K8s、真实资产、备份恢复、业务与安全连续性，UPG-01–16 全部未执行 |
 | `webui/docs/plans/wo-202610-27-engine-catalog-and-mcp-query-connection.md` | **待审阅，未批准**：Spec 176 v0.3。新建连接显式支持 KTX `driver: athena`。v0.2 引擎目录 / MCP 查询连接已撤回 |
 | `webui/docs/plans/wo-202610-26-suspend-deployment-license.md` | **移除激活码（已实现）**：Spec 175 v0.2。删除许可实现与签发脚本，去掉治理台入口。Docker 未在本次重启 |
-| [2026-10-18-lucy-2.5-upgrade-proposal.md](2026-10-18-lucy-2.5-upgrade-proposal.md) | **Lucy v0.25 升级建议（版本以文件顶部为准）**：登记 L25-01–L25-16，**本目录的权威登记册**；各条 Spec／Plan 的**版本、审阅轮次与状态一律以本册 §2.1–§2.12 登记为准**，本行不复述（版本号与状态双写必然漂移：建议书每次升版都会使本行过期一格）。首批 P0 与六项 P1 状态**各不一致**：L25-09 部分实现未验收、L25-11 独立审阅退回待修订、L25-14 已实现未验收，**均未获验收** |
+| [2026-10-18-lucy-2.5-upgrade-proposal.md](2026-10-18-lucy-2.5-upgrade-proposal.md) | **Lucy v0.25 升级建议（版本以文件顶部为准）**：登记 L25-01–L25-16，**本目录的权威登记册**；各条 Spec／Plan 的**版本、审阅轮次与状态一律以本册 §2.1–§2.12 登记为准**，本行不复述（版本号与状态双写必然漂移：建议书每次升版都会使本行过期一格）。**本行不复述任何一条的状态**——状态只在本册内查 |
 | `2026-10-18-mcp-audit-serial.md` | **MCP 审计整改串行计划**：D1–D3 已锁定。批次 1 为 Spec 178 / T1，其后 T3、T5、T4、T7、T6、T11、T13、T14、R0–R3、T15 |
 | `2026-10-12-acceptance-gap-closure.md` | **验收缺口修复**：把 SC-15 / SC-19 / SC-20 / SC-23 接到查数路径。工单 `wo-202610-15` |
 | `2026-10-11-customer-log-next-optimizations.md` | **客户日志优化最终版（v1.1，WO-12 已验收）**：P0→P1→P2。Spec 162 v0.4 问询预算修订已是现行口径，开发完成；工单 `wo-202610-12` / `13` / `14`。不构成客户交付 |

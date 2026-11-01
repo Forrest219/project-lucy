@@ -171,13 +171,34 @@ describe("a v0.25 status is the weakest required dimension", () => {
 });
 
 describe("a missing required capability blocks the item with a structured reason", () => {
-  const scenario = { executionId: "T-02", executors: ["O", "P"], requires: ["lucy-http", "fault-control", "k8s-amd64"] };
+  const scenario = {
+    executionId: "T-02",
+    completionTrack: "mixed",
+    executors: ["O", "P"],
+    requires: ["lucy-http", "fault-control"],
+    imageDimensions: [{ name: "customer-amd64", requires: ["k8s-amd64"], blockedReason: "environment" }]
+  };
 
-  it("names the missing capabilities and classifies the blocker", () => {
+  it("names the missing product capabilities and leaves the image dimension blocked", () => {
     const verdict = evaluateV025Case({ scenario, capabilities: ["lucy-http"] });
     assert.equal(verdict.status, "blocked");
-    assert.deepEqual(verdict.missingCapabilities, ["fault-control", "k8s-amd64"]);
-    assert.equal(verdict.blockedReason, "environment");
+    assert.deepEqual(verdict.missingCapabilities, ["fault-control"]);
+    assert.equal(verdict.blockedReason, "capability");
+    assert.equal(verdict.imageStatus, "blocked");
+    assert.equal(verdict.imageBlockedReason, "environment");
+  });
+
+  it("does not let a missing image capability block a product dimension that can run", () => {
+    const verdict = evaluateV025Case({
+      scenario,
+      capabilities: ["lucy-http", "fault-control"],
+      dimensions: { O: { status: "passed" }, P: { status: "passed" } },
+      verifierPassed: true
+    });
+    assert.equal(verdict.status, "passed");
+    assert.equal(verdict.productStatus, "passed");
+    assert.equal(verdict.imageStatus, "blocked");
+    assert.equal(verdict.blockedReason, null);
   });
 
   it("the most upstream blocker wins: delivery beats environment beats capability", () => {
@@ -188,9 +209,9 @@ describe("a missing required capability blocks the item with a structured reason
 
   it("a run-scoped fact overrides the default classification", () => {
     const verdict = evaluateV025Case({
-      scenario,
-      capabilities: ["lucy-http", "fault-control"],
-      capabilityReasons: { "k8s-amd64": "delivery" }
+      scenario: { executionId: "T-03", executors: ["P"], requires: ["lucy-http"], completionTrack: "product" },
+      capabilities: [],
+      capabilityReasons: { "lucy-http": "delivery" }
     });
     assert.equal(verdict.status, "blocked");
     assert.equal(verdict.blockedReason, "delivery");

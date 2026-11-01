@@ -30,6 +30,7 @@
         "properties": {
           "executionId": { "type": "string", "minLength": 1 },
           "ownerBranch": { "enum": ["CONN", "SEM", "ACCESS", "OBSERVE", "AGENT", "LIFECYCLE"] },
+          "completionTrack": { "enum": ["product", "image", "mixed"] },
           "crossDomainRefs": {
             "type": "array",
             "items": { "enum": ["CONN", "SEM", "ACCESS", "OBSERVE", "AGENT", "LIFECYCLE"] }
@@ -51,7 +52,8 @@
           "requires",
           "assert",
           "artifacts",
-          "gold"
+          "gold",
+          "completionTrack"
         ],
         "properties": {
           "executionId": { "type": "string", "minLength": 1 },
@@ -65,7 +67,20 @@
           "artifacts": { "type": "array", "items": { "type": "string", "minLength": 1 } },
           "gold": { "type": ["string", "null"] },
           "title": { "type": "string" },
-          "supportStatus": { "type": "string" }
+          "supportStatus": { "type": "string" },
+          "completionTrack": { "enum": ["product", "image", "mixed"] },
+          "imageDimensions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["name", "requires", "blockedReason"],
+              "properties": {
+                "name": { "type": "string", "minLength": 1 },
+                "requires": { "type": "array", "items": { "enum": ["lucy-http", "fault-control", "ktx-upstream", "postgres", "mysql", "browser", "agent-client", "k8s-amd64", "ci-runner", "network-profile", "clock-control", "npm-registry"] } },
+                "blockedReason": { "enum": ["environment", "delivery", "capability", "implementation"] }
+              }
+            }
+          }
         }
       }
     },

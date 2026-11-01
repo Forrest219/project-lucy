@@ -48,8 +48,11 @@ import {
   cleanupBoundary,
   detectIsolationProvider,
   didProbeDeny,
+  modelClientEnv,
   probeIsolation,
-  sanitizeEnv
+  resolveModelApi,
+  sanitizeEnv,
+  startModelEgressSidecar
 } from "./lib/isolation.mjs";
 import { ExternalInstance, LucyProcess } from "./lib/instance.mjs";
 import { scanText } from "./lib/leak-scan.mjs";
@@ -538,6 +541,7 @@ export async function realIsolationProbe({ adapter, probeInfo, workDir, run, sec
     provider: deps.provider,
     mcpHost,
     mcpPort: run.instance.proxyPort,
+    sidecarPort: deps.modelSidecarPort ?? null,
     clientBinaries: deps.clientBinaries
   });
   if (!bundle.provider) {
@@ -661,13 +665,15 @@ async function main() {
         provider,
         mcpHost,
         mcpPort: run.instance.proxyPort,
+        sidecarPort: deps.modelSidecarPort ?? null,
         // Same client binaries the isolation probe registered — the official asks must run
         // under the SAME boundary the probe proved.
         clientBinaries: deps.clientBinaries ?? []
       });
       // The boundary runner is the only native runner the agent journey uses in production.
       const sanitized = sanitizeEnv(input.env, deps.envAllowMatcher, { token: input.env?.[TOKEN_ENV], clientHome: input.cwd, clientWork: input.cwd });
-      return runUnderBoundaryLocal({ provider, profileString: bundle.profileString, command: input.command, args: input.args, cwd: input.cwd, env: sanitized, timeoutMs: input.timeoutMs, bounds: input.bounds });
+      const env = deps.modelSidecarPort ? { ...sanitized, ...modelClientEnv(deps.modelSidecarPort) } : sanitized;
+      return runUnderBoundaryLocal({ provider, profileString: bundle.profileString, command: input.command, args: input.args, cwd: input.cwd, env, timeoutMs: input.timeoutMs, bounds: input.bounds });
     }
   };
   deps.isolationProbe = (input) => realIsolationProbe({ ...input, deps });
@@ -687,7 +693,13 @@ async function main() {
   // postflight blocks the run — the agent journey never sees a wrong/missing target.
   let lucy = null;
   let upstream = null;
+  let modelSidecar = null;
   let exitCode = 1;
+  const modelApi = resolveModelApi(run);
+  if (modelApi) {
+    modelSidecar = await startModelEgressSidecar(modelApi);
+    deps.modelSidecarPort = modelSidecar.sidecarPort;
+  }
   try {
     mkdirSync(run.paths.logs, { recursive: true });
     if (args.external) {
@@ -769,6 +781,7 @@ async function main() {
   } finally {
     if (lucy) await lucy.stop("SIGTERM");
     if (upstream?.ok) await upstream.stop();
+    if (modelSidecar) await modelSidecar.close();
   }
   process.exit(exitCode);
 }

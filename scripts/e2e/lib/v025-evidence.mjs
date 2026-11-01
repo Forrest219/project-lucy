@@ -18,7 +18,7 @@
 import { EXECUTOR_LETTERS } from "./catalog.mjs";
 import { journeyStatus } from "./j01-state.mjs";
 import { annotationsOf, iterTests, testStatus } from "./playwright-report.mjs";
-import { statusFromDimensions } from "./v025-result.mjs";
+import { isImageCapability, statusFromDimensions } from "./v025-result.mjs";
 
 /**
  * The annotation type that links a Playwright test to a v0.25 execution item.
@@ -214,16 +214,64 @@ function normalizeDimension(d) {
  * @param {Record<string, string>} [options.capabilityReasons] run-scoped classification overrides
  * @returns {{executionId: string, status: string, blockedReason: string|null, detail: string, missingCapabilities: string[], dimensions: Record<string, any>}}
  */
+function imageVerdict(scenario, have, capabilityReasons) {
+  const dims = scenario.imageDimensions ?? [];
+  const inline = (scenario.requires ?? []).filter((cap) => isImageCapability(cap));
+  if (dims.length === 0 && inline.length === 0) {
+    return { imageStatus: "not_applicable", imageBlockedReason: null, missingImageCapabilities: [] };
+  }
+  const missing = [...inline.filter((cap) => !have.has(cap))];
+  let blockedReason = inline.length > 0 ? classifyBlockedReason(inline, capabilityReasons) : null;
+  for (const dim of dims) {
+    const required = dim.requires ?? [];
+    const dimMissing = required.filter((cap) => !have.has(cap));
+    if (dimMissing.length > 0) {
+      missing.push(...dimMissing);
+      blockedReason = classifyBlockedReason(dimMissing, capabilityReasons);
+    } else if (required.length === 0) {
+      missing.push(dim.name);
+      blockedReason = dim.blockedReason ?? blockedReason ?? "environment";
+    }
+  }
+  if (missing.length > 0) {
+    return {
+      imageStatus: "blocked",
+      imageBlockedReason: blockedReason ?? classifyBlockedReason(missing.filter((cap) => isImageCapability(cap)), capabilityReasons),
+      missingImageCapabilities: missing
+    };
+  }
+  return { imageStatus: "not_run", imageBlockedReason: null, missingImageCapabilities: [] };
+}
+
 export function evaluateV025Case({ scenario, dimensions = {}, capabilities = [], verifierPassed, capabilityReasons = {} }) {
   const executionId = scenario.executionId;
+  const completionTrack = scenario.completionTrack ?? "product";
   const required = [...(scenario.executors ?? [])].filter((l) => EXECUTOR_LETTERS.includes(l));
   const have = new Set(capabilities);
-  const missing = (scenario.requires ?? []).filter((cap) => !have.has(cap));
+  const image = imageVerdict(scenario, have, capabilityReasons);
+  const productCaps = (scenario.requires ?? []).filter((cap) => !isImageCapability(cap));
+  const missing = productCaps.filter((cap) => !have.has(cap));
+  if (completionTrack === "image") {
+    return {
+      executionId,
+      completionTrack,
+      status: "blocked",
+      blockedReason: image.imageBlockedReason ?? "delivery",
+      productStatus: "not_applicable",
+      ...image,
+      detail: "image track; not in the product completion denominator",
+      missingCapabilities: image.missingImageCapabilities,
+      dimensions
+    };
+  }
   if (missing.length > 0) {
     return {
       executionId,
+      completionTrack,
       status: "blocked",
       blockedReason: classifyBlockedReason(missing, capabilityReasons),
+      productStatus: "blocked",
+      ...image,
       detail: `missing capabilities: ${missing.join(", ")}`,
       missingCapabilities: missing,
       dimensions
@@ -243,8 +291,11 @@ export function evaluateV025Case({ scenario, dimensions = {}, capabilities = [],
     if (d?.status === "blocked") {
       return {
         executionId,
+        completionTrack,
         status: "blocked",
+        productStatus: "blocked",
         blockedReason: d.blockedReason ?? "capability",
+        ...image,
         detail: d.detail || `dimension ${letter} (${EXECUTOR_LABELS[letter]}) is blocked`,
         missingCapabilities: [],
         dimensions: normalized
@@ -255,8 +306,11 @@ export function evaluateV025Case({ scenario, dimensions = {}, capabilities = [],
   const status = statusFromDimensions(normalized, { required, verifierPassed });
   return {
     executionId,
+    completionTrack,
     status,
+    productStatus: status,
     blockedReason: null,
+    ...image,
     detail: "",
     missingCapabilities: [],
     dimensions: normalized
@@ -319,6 +373,10 @@ export function collectV025Evidence({
       priority: scenario.priority ?? null,
       sourceRequirementId: scenario.sourceRequirementId ?? null,
       sourceSpec: scenario.sourceSpec ?? null,
+      completionTrack: scenario.completionTrack ?? verdict.completionTrack ?? "product",
+      productStatus: verdict.productStatus ?? verdict.status,
+      imageStatus: verdict.imageStatus ?? "not_applicable",
+      imageBlockedReason: verdict.imageBlockedReason ?? null,
       executors: scenario.executors ?? [],
       requires: scenario.requires ?? [],
       assert: scenario.assert ?? [],

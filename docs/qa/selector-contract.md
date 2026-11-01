@@ -1343,7 +1343,6 @@ L25-15 整批恢复抽屉。三个分区各自独立，不合并成一句「同�
 | `governance-interface-groups` | 界面分组 | `pages/admin/GovernanceOverview.tsx` |
 | `governance-interface-menus` | 界面菜单 | `pages/admin/GovernanceOverview.tsx` |
 | `governance-interface-pages` | 界面页面 | `pages/admin/GovernanceOverview.tsx` |
-| `new-token-expiry-policy-notice` | Token 有效期策略提示 | `pages/admin/NewToken.tsx` |
 | `call-monitor-page` | 调用监控页面 | `pages/ops/CallMonitor.tsx` |
 | `call-monitor-controls` | 调用监控控制区 | `pages/ops/CallMonitor.tsx` |
 | `call-monitor-range-${option.range}` | 时间窗（模板） | `pages/ops/CallMonitor.tsx` |

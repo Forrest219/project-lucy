@@ -20,6 +20,18 @@ export const RESULT_STATUSES = Object.freeze(["passed", "failed", "blocked", "no
 export const BLOCKED_REASONS = Object.freeze(["environment", "delivery", "capability", "implementation"]);
 export const RESULT_IDENTITY = Object.freeze(["runId", "instanceId", "candidateDigest"]);
 
+/** Capabilities that prove an image or a protected runner, not a product assertion. */
+export const IMAGE_CAPABILITIES = Object.freeze(["k8s-amd64", "ci-runner"]);
+
+/** Drops image-track capabilities from a product `requires` list. */
+export function productRequires(requires = []) {
+  return requires.filter((cap) => !IMAGE_CAPABILITIES.includes(cap));
+}
+
+export function isImageCapability(cap) {
+  return IMAGE_CAPABILITIES.includes(cap);
+}
+
 /** Output root for a run's v0.25 evidence. */
 export function resultDir(runId, root = path.join(REPO_ROOT, "inbox", "e2e")) {
   return path.join(root, runId, "v025");
@@ -98,25 +110,39 @@ export function validateResult(result) {
  * `passed` counts only real passes; blocked / not_run / not_applicable are
  * reported separately and are never folded into a pass count.
  */
-export function aggregateResults(results) {
+function countStatuses(results) {
   const byStatus = Object.fromEntries(RESULT_STATUSES.map((s) => [s, 0]));
   for (const r of results) {
     if (!byStatus[r.status]) byStatus[r.status] = 0;
     byStatus[r.status] += 1;
   }
+  return {
+    total: results.length,
+    byStatus,
+    passed: byStatus.passed,
+    notPassed: results.length - byStatus.passed
+  };
+}
+
+export function aggregateResults(results) {
   const byOwner = {};
   for (const r of results) {
     const owner = r.ownerBranch ?? "UNASSIGNED";
     byOwner[owner] ??= { passed: 0, failed: 0, blocked: 0, not_run: 0, not_applicable: 0 };
     byOwner[owner][r.status] = (byOwner[owner][r.status] ?? 0) + 1;
   }
+  const counted = countStatuses(results);
+  const productResults = results.filter((r) => (r.completionTrack ?? "product") !== "image");
+  const imageResults = results.filter((r) => r.completionTrack === "image" || r.imageStatus === "blocked");
   return {
-    total: results.length,
-    byStatus,
+    ...counted,
     byOwner,
-    // a pass is a pass; anything else is not silently folded in
-    passed: byStatus.passed,
-    notPassed: results.length - byStatus.passed
+    // Product completion ignores image-track items. A blocked image dimension
+    // on a mixed item is listed under `image` and does not change `product.passed`.
+    product: countStatuses(productResults),
+    image: countStatuses(imageResults.map((r) => (
+      r.completionTrack === "image" ? r : { ...r, status: "blocked" }
+    )))
   };
 }
 

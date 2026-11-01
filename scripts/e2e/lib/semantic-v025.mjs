@@ -378,7 +378,7 @@ const CONTRACT_OVERRIDES = Object.freeze({
     assert: ["allow_control", "no_side_effect", "exactly_one_wins", "consistency", "typed_gold"]
   },
   "SEM25-V22": {
-    requires: ["lucy-http", "ktx-upstream", "postgres", "browser", "fault-control", "k8s-amd64"]
+    requires: ["lucy-http", "ktx-upstream", "postgres", "browser", "fault-control"]
   }
 });
 

@@ -54,6 +54,8 @@ import {
   MAINLINE_FIRST_QUESTION,
   MAINLINE_FOLLOW_UP
 } from "../../../examples/security-e2e/gold/v025-gold.mjs";
+import { resolveModelApi } from "../../../scripts/e2e/lib/isolation.mjs";
+import { provisionJourneySchema } from "../../../scripts/e2e/lib/j01-schema.mjs";
 
 test.describe.configure({ mode: "serial" });
 
@@ -86,6 +88,11 @@ function writeJourneyState(state: JourneyState): void {
 function requireDb(): RunDb {
   const run = runContext() as unknown as { db: RunDb };
   return run.db;
+}
+
+/** Host the Lucy process dials. A container cannot use the runner's loopback. */
+function wizardDbHost(db: RunDb): string {
+  return process.env.LUCY_E2E_DB_ADVERTISE_HOST || db.host;
 }
 
 function dbReaderPassword(): string {
@@ -137,15 +144,16 @@ test("J25-01 J01-01..J01-06: 登录 → 连接 → 启用表与 Manifest → 业
     // ---- J01-02 新建连接 ---------------------------------------------------
     state = startStage(state, "J01-02", journey.identity);
     const db = requireDb();
+    const schema = await provisionJourneySchema(runContext());
     journey.connection = await j0102CreateConnection(page, {
       connectionId: journey.names.connectionId,
       engine: "postgres",
-      host: db.host,
+      host: wizardDbHost(db),
       port: String(db.port),
       database: db.name,
       username: db.readerRole,
       password: dbReaderPassword(),
-      schema: "analytics"
+      schema
     });
     state = completeStage(state, "J01-02", {
       status: "passed",
@@ -263,8 +271,20 @@ test("J25-01 J01-07..J01-08: 真实 Agent 问答的证据、审计与对账", as
     agentEvidence = null;
   }
   if (!agentEvidence) {
-    testInfo.annotations.push({ type: "blocked", description: "the real Agent leg produced no evidence for this run" });
-    test.skip(true, "BLOCKED: the real Agent leg has not run for this run");
+    const modelApi = resolveModelApi(runContext() as unknown as { modelApi?: { url?: string } });
+    const reason = modelApi
+      ? "capability:agent-leg-not-run"
+      : "capability:model-api-not-configured";
+    state = startStage(state, "J01-07", journey.identity);
+    state = completeStage(state, "J01-07", {
+      status: "blocked",
+      failureRef: reason,
+      evidenceRefs: []
+    });
+    journey.state = state;
+    writeJourneyState(state);
+    testInfo.annotations.push({ type: "blocked", description: reason });
+    test.skip(true, `BLOCKED: ${reason}`);
     return;
   }
   const agentCase = (agentEvidence.cases ?? []).find((entry) => entry.id === "UX-01-V01");
