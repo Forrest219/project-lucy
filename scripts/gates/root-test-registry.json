@@ -674,6 +674,16 @@
       "reason": null
     },
     {
+      "path": "scripts/lint-spec-docs.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/lint-spec-docs.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
       "path": "scripts/release/build-bootstrap-attachment.test.mjs",
       "runner": "node --test",
       "environment": "deterministic",
@@ -812,6 +822,16 @@
       "gate": "workflow-contracts",
       "gateCommand": "npm run test:root-contracts",
       "reason": null
+    },
+    {
+      "path": "scripts/smoke/lucy-runtime-build-context.test.mjs",
+      "runner": "node --test",
+      "environment": "docker",
+      "sideEffects": "drives a real docker build in a temporary context and reads the Docker daemon",
+      "command": "node --test scripts/smoke/lucy-runtime-build-context.test.mjs",
+      "gate": null,
+      "gateCommand": null,
+      "reason": "The daily contract job provides no Docker daemon, and this test runs a real `docker build` to prove the customer image build context is really trimmed. It belongs to the docker-smoke layer (wired into the docker-smoke CI job), not to the daily contract layer."
     },
     {
       "path": "scripts/smoke/lucy-r1-doris-smoke.test.mjs",
