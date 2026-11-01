@@ -78,7 +78,28 @@ async function buildFreshServer() {
   return buildServer();
 }
 
+// 本文件不安装宿主 ktx CLI：CI 的 spec-and-webui job 从不装它（只有 Dockerfile 里
+// 钉版本），真调 execFile("ktx") 会得到 ENOENT → KtxCliError → 503。故与同族用例
+// （api.publish-workbench / publish-workbench-lifecycle）一样把 ../ktx 打桩。
+function mockKtx() {
+  vi.doMock("../ktx", async () => {
+    const actual = await vi.importActual<typeof import("../ktx")>("../ktx");
+    return {
+      ...actual,
+      reindexProject: vi.fn(async () => ({ exitCode: 0, stdout: "indexed", stderr: "" })),
+      validateSource: vi.fn(async () => ({
+        ok: true,
+        exitCode: 0,
+        stdout: "Valid semantic-layer source",
+        stderr: "",
+        issues: []
+      }))
+    };
+  });
+}
+
 beforeEach(async () => {
+  vi.resetModules();
   previousContentRoot = process.env.LUCY_CONTENT_ROOT;
   previousRoot = process.env.KTX_PROJECT_ROOT;
   projectRoot = await mkdtemp(path.join(os.tmpdir(), "lucy-pwb-closure-"));
@@ -118,6 +139,7 @@ describe("PWB-15 — 待办与时间无关，历史不固定限制为今天", ()
   });
 
   it("does not limit the release history to today", async () => {
+    mockKtx();
     const { buildServer } = await import("../index");
     const app = await buildServer();
     await app.ready();

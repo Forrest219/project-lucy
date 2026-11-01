@@ -29,6 +29,7 @@ import { REPO_ROOT } from "../lib/common.mjs";
 import { ASSERTION_TOKENS, CAPABILITIES, EXECUTOR_LETTERS } from "../lib/catalog.mjs";
 import {
   SOURCE_GROUPS,
+  V025_COVERAGE_SCHEMA_PATH,
   executionIdFor,
   loadCoverage,
   sourceRequirementBaseline
@@ -125,6 +126,20 @@ describe("ROW25 execution descriptors (W2-ACCESS, Plan §5.3)", () => {
 
   it("mirrors the approved coverage manifest exactly (single source of truth)", () => {
     assert.deepEqual(accessContractProblems(), [], "descriptor / manifest drift");
+  });
+
+  it("keeps the coverage schema's capability enum equal to the shared vocabulary", () => {
+    // 两份能力词表必须逐项相同：catalog.mjs 的 CAPABILITIES 是运行期事实源，
+    // v025-coverage.schema.json 的 requires 枚举是契约层事实源。二者漂移过一次
+    // （CAPABILITIES 加了 mysql，schema 没加），结果是 40 条 manifest 行全部
+    // 校验失败，而两条断言各自都"合法"。这里把漂移变成一条会失败的断言。
+    const schema = JSON.parse(readFileSync(V025_COVERAGE_SCHEMA_PATH, "utf8"));
+    const schemaEnum = schema.properties.newScenarios.items.properties.requires.items.enum;
+    assert.deepEqual(
+      [...schemaEnum].sort(),
+      [...CAPABILITIES].sort(),
+      "the coverage schema's requires enum drifted from CAPABILITIES"
+    );
   });
 
   it("gives every id non-empty, id-specific assertion steps", () => {
