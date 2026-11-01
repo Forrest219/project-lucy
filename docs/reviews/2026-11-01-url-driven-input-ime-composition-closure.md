@@ -135,7 +135,7 @@ env PATH="$CLEAN_PATH" npx vitest run --maxWorkers=1
 - **远端 CI job 未跑**。CI 里 `lint:url-driven-input` 这一步已接线（`.github/workflows/lucy-release.yml:98`），但没在远端执行过。证据等级，归发布取证。
 - **Safari / WebKit 与真实 OS 级输入法（macOS 拼音、Windows 微软拼音）未实测，Firefox 未实测**。Chrome 的 IME 组合 API 是忠实模拟，不等价于系统级实机验证（Spec §1.2 C 级）。
 - **行权限视图的 5 处清单筛选框**在本条之后由另一条功能线（行权限视图呈现修订，commit `8982ef0d`）改用了同一个 `useUrlMirroredField`。它们不在本条 13 处承诺内，Spec §1.4 的 C-3 判定已被后续实现取代——本轮已在 Spec §6.6 末尾记录，免得后来的读者对不上数。
-- **全仓 typecheck 89 个既存错误**与本条无关（纯前端交互层，无 TS 类型改动），不在本条出口。
+- **全仓 typecheck 89 个既存错误**（本条收口时计数）与本条无关（纯前端交互层，无 TS 类型改动），不在本条出口。其后由发布工作台线修掉 1 处、问询预算线修掉 2 处，全仓现为 **86** 个，本条涉及文件始终为 0 错误。
 
 ## 不在收口里
 
