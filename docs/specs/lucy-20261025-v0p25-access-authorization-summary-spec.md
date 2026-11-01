@@ -2,10 +2,10 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档类型 / 版本 | 功能设计基线 / v0.1-requirements-review |
+| 文档类型 / 版本 | 功能设计基线 / v0.2-functional-contract-closed |
 | 日期 / 目标版本 | 2026-10-25 / v0.25 |
 | 功能编号 / 优先级 | L25-01 / P1-2 |
-| 状态 | **已实现，未验收**（v0.25 P1-2 / L25-01）。实施计划 `docs/plans/2026-10-25-lucy-v0.25-p1-implementation-plan.md` §1.1 W2；提交 `28780eae`。验收矩阵在取得真实证据前仍为「未执行」 |
+| 状态 | **v0.2 功能合同已收口（2026-11-01）**：ASV-01–ASV-14 全部关闭，逐条落点见 §8.1，证据见 [收口记录](../reviews/2026-11-01-access-authorization-summary-closure.md)。**本条收口不表示可上线**——浏览器实测与移动窄屏、镜像构建与部署、客户环境验证与客户交付不在本条出口。（§8 首行「ASV-01–14 全部未执行」是设计轮次的原文，按惯例保留；当前事实以本状态行与 §8.1 为准） |
 | 授权来源 | 2026-10-25 Forrest 批准按项目规范完成 P1 梯队 Spec；本轮只做设计与需求审查材料 |
 | 规划入口 | [Lucy v0.25 功能升级建议书](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) §2 L25-01；[P0 Final 决议](../reviews/2026-10-24-lucy-v0.25-p0-final-decision.md) §1 |
 | 审查入口 | [P1 需求审查清单](../plans/2026-10-25-lucy-v0.25-p1-requirements-review-checklist.md) |
@@ -229,8 +229,39 @@ buildAuthorizationSummary(subject, basis, draft?):
 | ASV-13 | 只读与秘密保护 | 无新写入口；响应和页面不含 Token 明文、数据库密码或超授权内容 |
 | ASV-14 | 术语与可达性 | 术语 lint、完整标识翻译防御、键盘与文本降级符合规范；既有页面行为无回归 |
 
+## 8.1 逐条落点表（2026-11-01 收口）
+
+**证据等级：本地自动化（vitest）＋ 本地工程门禁。** 无 CI job 证据，无客户环境证据，无浏览器实测证据。本批**未改任何运行代码**，只补了矩阵里有、仓里却无断言的那几小句。
+
+| ASV | 结果 | 落点（测试文件 → 用例名） |
+|---|---|---|
+| ASV-01 | 通过（补 1 条） | `server/__tests__/p1-authorization-summary-closure.test.ts`「ASV-01 — 表数按规范源键去重；一句话、资源卡片与 capability 集合是同一个集合」；既有 `p1-authorization-summary.test.ts`「counts tables by 规范源键 de-duplication, never by grant path or tool×table tuple」 |
+| ASV-02 | 通过 | `p1-authorization-summary.test.ts`「ASV-02 — 表数不重复、全部角色来源可见，OR 语义不变成 AND」 |
+| ASV-03 | 通过 | 同上文件「ASV-03 — 表数不因工具数放大，每个工具×表×行边界仍可查」 |
+| ASV-04 | 通过 | 同上文件「ASV-04 — 分母只在可证明时展示；未知不填 0，也不保留陈旧数字」 |
+| ASV-05 | 通过 | 同上文件「ASV-05 — 最终行约束与运行时同一编译结果一致，且保留 OR-of-AND」 |
+| ASV-06 | 通过 | 同上文件「ASV-06 — Role 不含 Agent 个人行限制，通用 Role 预览不冒充 Agent FinalRows」 |
+| ASV-07 | 通过 | 同上文件「ASV-07 — 摘要来自展开后编译产物；模板名仅作溯源，不改变摘要语义」 |
+| ASV-08 | 通过（补 2 条） | `p1-authorization-summary-closure.test.ts`「ASV-08 — 配置非法 → unavailable + access_invalid，不得以零值冒充无权限」「ASV-08 — 三类配置问题各自给出自己的问题码，互不串台」；既有「场景1／场景1b／场景2／场景2c」 |
+| ASV-09 | 通过（补 1 条） | `p1-authorization-summary-closure.test.ts`「ASV-09 — 候选摘要不落盘；草稿变化或基线变化都使旧预览失效」；既有「marks a draft summary as a candidate that is not in effect yet」「场景8」 |
+| ASV-10 | 通过（补 4 条） | `p1-authorization-summary-closure.test.ts`「ASV-10 — 深链只带预填参数，mode 恒为 dry-run，不带任何执行触发参数」「ASV-10 — Role 视图不提供 Agent 预填」；`src/__tests__/authorization-summary-closure.test.tsx`「ASV-10 — 打开摘要只发一次只读请求，不会发任何调试台请求」「ASV-10 — 调试台入口是普通链接，不是一个会发请求的按钮」；既有「builds the MCP 调试台 deep link with agentId, mode, tool and url-encoded args」等 |
+| ASV-11 | 通过（补 1 条） | `p1-authorization-summary-closure.test.ts`「ASV-11 — 同快照下表身份一致，且同一 Agent 的最终行约束在两面完全相同」（对 R3）；L25-08 半由 `server/__tests__/p1-access-map-contract.test.ts`「SC-14 — 同一快照下摘要表集合 = 授权路径表集合并集；四种计数分别表达」承载——**L25-08 自身的验收矩阵本批不关闭** |
+| ASV-12 | 通过（补 1 条） | `p1-authorization-summary-closure.test.ts`「ASV-12 — 空能力与失败可分：零能力是 ok 的空集合，解析失败是 unavailable」；既有「groups tools without changing their classification; AbsoluteDeny is never shown as grantable」「marks the legacy allow block as 旧 ACL without inventing a Role source」 |
+| ASV-13 | 通过（补 3 条） | `p1-authorization-summary-closure.test.ts`「ASV-13 — 响应不含 Token 明文、数据库密码或超授权内容，也没有任何凭据字段」「ASV-13 — 授权摘要没有写入口：preview 不落盘、不换入策略；写方法不存在」；`authorization-summary-closure.test.tsx`「ASV-13 — 页面（含属性）不含 Token 明文、数据库密码或超授权内容」；既有「never leaks token plaintext, database passwords or over-granted content」 |
+| ASV-14 | 通过（补 7 条） | `p1-authorization-summary-closure.test.ts`「ASV-14 — 术语 lint 真实通过，且本条的新术语已在术语标准登记」；`authorization-summary-closure.test.tsx`「ASV-14 — 连接、Schema、表、物理表、角色、工具与行分支都受翻译防御」「ASV-14 — 技术详情是原生可键盘操作的折叠控件」「ASV-14 — 资源表格有表题与列头作用域，不只靠颜色或位置表意」「ASV-14 — 分母不可证明时用文本说明，不用 0 也不用百分比」「ASV-14 — 配置非法时给出明确降级文案，并说清「不代表没有权限」」「ASV-14 — 行边界口径不同时，页面用文本说明是哪一种口径」「ASV-14 — 摘要区块是只读投影：面板里没有任何写控件」「ASV-14 — 读取失败时只报失败，不渲染一个空授权」；「既有页面行为无回归」由既有 `src/__tests__/agent-detail.test.tsx`（25 条）、`src/__tests__/role-detail.test.tsx`（29 条）承载 |
+
+**实测（2026-11-01 复跑）**：9 个测试文件 / **145** 条用例全绿（本批新增 2 文件 / 23 条）。详见 [收口记录](../reviews/2026-11-01-access-authorization-summary-closure.md)。
+
 ## 9. 依赖与完成边界
 
 - 依赖现行有效权限编译、Spec 150 dry-run、P0-2 最终行约束预览与目录诊断；不得在摘要层复制权限算法。
 - 与 P1-1、P1-3 可并行设计；实施时共享只读模型与快照合同，写入仍由各自权威入口负责。
 - 需求审查只确认范围、口径与验收设计；不授权开发、测试开发、浏览器验证、部署、发布或客户交付声明。
+
+## 闭口层级
+
+- 层级：功能合同
+- 本条承诺：不打开 YAML，就能说清一个 Agent 或一个 Role 可以读哪些连接、哪些表、哪些工具，以及行边界是什么；读不到就说读不到
+- 本条出口：ASV-01–ASV-14 的服务端派生模型测试、前端渲染测试与术语 lint（逐条落点见 §8.1）
+- 不在本条出口：整库旅程、Agent 路径、跨模块或系统级故障演练、证据等级、浏览器实测与移动窄屏、镜像构建与部署、客户环境验证与客户交付
+- 上线关系：本条收口不表示可上线
