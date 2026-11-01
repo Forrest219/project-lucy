@@ -127,9 +127,9 @@ cd webui && npx tsc --noEmit
 ## 残余，不打回本条
 
 - **PWB-24 的浏览器走查未做**（880px 侧栏在真实视口下的观感、长表名换行）。按「闭口层级」不在本条出口，因此不构成本条收口的阻塞项；但**没有实测过就不能写成通过**——主 Spec §7 保留「部分通过」。
-- **`npm run e2e:selector-contract` 当前整体为红**（201 条）。本条涉及文件里新增的 `data-testid`（`publish-sync-confirm-*`、`publish-impact-*`）是否已全部登记进 `docs/qa/selector-contract.md`，本轮**未逐条核对**——该门禁不属本条出口，但它会把这批新 id 一并计入红灯。
+- **`npm run e2e:selector-contract` 当前整体为红**（201 条），但**与本条无关**：201 条 `[UNREGISTERED]` 全部来自既有组件（`DisplayRefreshNotice`、`WikiAccessDrawer`、`WikiBatchAccessDrawer` 等），本条新增的 `data-testid` **一条都没进红灯**。本条已逐条核对：本批用例引用的 44 个 testid 中，42 个是产品 testid（`publish-sync-confirm-*` / `publish-impact-*` / `publish-recent-release*`），**全部已登记**在 `docs/qa/selector-contract.md`（第 390–449 行一带）；另 2 个（`open-drawer`、`cancel-count`）是测试文件内部夹具自造的，不进产品合同。**本条未新增任何产品 testid**（本批只改测试与文档，不改运行代码），因此本条不向该门禁贡献新的红灯条目。该门禁仍不属本条出口。
 - **G31 与终态保障的归属不变。** 主 Spec §8 第 1 条的 S0 裁决只是**核对**了现有窗口已把终态核验、终态审计与基线推进放在同一串行窗口内；**本条未恢复、未关闭 G31**，也未改动 `publish-coordinator.ts` 与 `semantic-recovery-journal.ts` 的锁生命周期。是否据 S0 裁决关闭 G31，仍由 L25-11／L25-16 的维护者决定。
-- **全仓 typecheck 88 个既存错误**与本条无关（纯前端/服务端既有代码），本条涉及文件为 0 错误。
+- **全仓 typecheck 88 个既存错误**（本条收口时计数）与本条无关（纯前端/服务端既有代码），本条涉及文件为 0 错误。其后由问询预算线修掉 2 处，全仓现为 **86** 个，本条涉及文件仍为 0 错误。
 - 移动窄屏、镜像构建、部署与客户交付均未执行。
 
 ## 不在收口里
