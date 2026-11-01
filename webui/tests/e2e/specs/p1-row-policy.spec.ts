@@ -3,7 +3,8 @@
 //
 // 权威 Spec：docs/specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md
 //   §3.2（模板读取模型）、§3.3（R3 按表读取模型）、§6.1（模板管理与角色引用）、
-//   §6.2（独立行权限视图）、§8（RTP-06／RTP-08／RTV-03／RTV-04／RTV-05／RTV-07）。
+//   §6.2（独立行权限视图）、§8（RTP-06／RTP-08／RTV-01／RTV-02／RTV-03／RTV-04／RTV-05／RTV-07）。
+// 呈现修订：docs/specs/lucy-20261030-row-policy-view-presentation-spec.md（仅受限表／脱离筛选）。
 //
 // 标签：@p1-acceptance
 //
@@ -55,6 +56,8 @@ type TableListEntry = {
   roleCount: number;
   agentCount: number;
   effectiveRowGrant: { kind: "all" | "scoped"; digest?: string; orArms?: unknown[][] } | null;
+  grantStatus?: "all" | "scoped" | "no_applicable_grant" | "compile_failed";
+  grantStatusReason?: string;
   restricted: boolean;
 };
 
@@ -194,16 +197,24 @@ async function installRowPolicyApi(page: Page, fixture: RowPolicyFixture = empty
       return;
     }
     if (url.pathname === "/api/admin/row-policy/views/tables") {
+      // 选项请求不带筛选；清单请求在 `restricted=true` 时只回受限表
+      // （与 server/admin/row-policy-views.ts `restrictedOnly` 一致）。
+      const merged = {
+        snapshot: SNAPSHOT,
+        state: "ok",
+        status: "ok",
+        tables: [] as TableListEntry[],
+        failures: [] as Array<{ subjectId: string; reason: string }>,
+        ...fixture.viewsList
+      };
+      const tables = Array.isArray(merged.tables) ? (merged.tables as TableListEntry[]) : [];
+      const restrictedOnly = url.searchParams.get("restricted") === "true";
       await route.fulfill({
         json: {
           ok: true,
           data: {
-            snapshot: SNAPSHOT,
-            state: "ok",
-            status: "ok",
-            tables: [] as TableListEntry[],
-            failures: [] as Array<{ subjectId: string; reason: string }>,
-            ...fixture.viewsList
+            ...merged,
+            tables: restrictedOnly ? tables.filter((table) => table.restricted) : tables
           }
         }
       });
@@ -593,6 +604,238 @@ test.describe("P1-1 行权限视图：深链与完整表身份（RTV-04）", () 
   });
 });
 
+// ─── RTV-01／RTV-02：亚洲大区经营表反查闭环（对齐人工 UAT 设计）────────────────
+//
+// 人工用例锚点：mysql-aliyun / chatbi / ai_intl_country_daily，region = 亚洲。
+// 浏览器层用同一表身份与字面量验证「仅受限表 → 详情 → 模板／DNF／Agent 最终行约束」；
+// 不连真实 Aliyun，API 形状与生产反查接口一致。
+
+const ASIA_OR_ARMS = [
+  [{ field: "region", op: "eq", value: "亚洲" }],
+  [{ field: "region", op: "eq", value: "欧洲" }]
+];
+
+const ASIA_SCOPED_GRANT = {
+  kind: "scoped" as const,
+  digest: "asia-europe-union",
+  orArms: ASIA_OR_ARMS
+};
+
+function asiaCountryDailyTables(): TableListEntry[] {
+  return [
+    {
+      connectionId: "mysql-aliyun",
+      schema: "chatbi",
+      sourceName: "ai_intl_country_daily",
+      physicalTable: "chatbi.ai_intl_country_daily",
+      roleCount: 2,
+      agentCount: 1,
+      effectiveRowGrant: ASIA_SCOPED_GRANT,
+      grantStatus: "scoped",
+      restricted: true
+    },
+    {
+      connectionId: "mysql-aliyun",
+      schema: "chatbi",
+      sourceName: "ai_intl_retention_daily",
+      physicalTable: "chatbi.ai_intl_retention_daily",
+      roleCount: 1,
+      agentCount: 1,
+      effectiveRowGrant: { kind: "all" },
+      grantStatus: "all",
+      restricted: false
+    }
+  ];
+}
+
+function asiaCountryDailyDetail() {
+  return {
+    table: {
+      connectionId: "mysql-aliyun",
+      schema: "chatbi",
+      sourceName: "ai_intl_country_daily",
+      physicalTable: "chatbi.ai_intl_country_daily"
+    },
+    roles: [
+      {
+        roleId: "row_policy_asia_probe",
+        rowAccess: "scoped",
+        templateRefs: ["by_asia_region"],
+        inlinePredicates: [],
+        rowGrant: {
+          kind: "scoped",
+          digest: "asia-only",
+          orArms: [[{ field: "region", op: "eq", value: "亚洲" }]]
+        }
+      },
+      {
+        roleId: "row_policy_europe_probe",
+        rowAccess: "scoped",
+        templateRefs: [],
+        inlinePredicates: [{ field: "region", op: "eq", value: "欧洲" }],
+        rowGrant: {
+          kind: "scoped",
+          digest: "europe-only",
+          orArms: [[{ field: "region", op: "eq", value: "欧洲" }]]
+        }
+      }
+    ],
+    effectiveRowGrant: ASIA_SCOPED_GRANT,
+    agents: [
+      {
+        agentId: "asia_probe_agent",
+        enabled: true,
+        constraints: [],
+        finalRows: ASIA_SCOPED_GRANT
+      }
+    ]
+  };
+}
+
+test.describe("P1-1 行权限视图：亚洲大区经营表反查（RTV-01／RTV-02）", () => {
+  test("@p1-acceptance RTV-01 — 仅受限表筛出亚洲经营表，详情展示模板与 Agent 最终行约束", async ({ page }) => {
+    const fixture = emptyFixture();
+    fixture.viewsList = { tables: asiaCountryDailyTables() };
+    fixture.viewsTable = asiaCountryDailyDetail();
+    const { requests } = await installRowPolicyApi(page, fixture);
+
+    await page.goto("/admin/row-policies");
+    await expect(page.getByTestId("row-policy-view-table-list")).toBeVisible();
+    await expect(
+      page.getByTestId("row-policy-view-table-mysql-aliyun-chatbi-ai_intl_country_daily")
+    ).toBeVisible();
+    await expect(
+      page.getByTestId("row-policy-view-table-mysql-aliyun-chatbi-ai_intl_retention_daily")
+    ).toBeVisible();
+    await expect(page.getByTestId("row-policy-view-table-list").locator("tbody tr")).toHaveCount(2);
+
+    // 「仅受限表」：URL 写 restricted=true，清单请求带同名参数，全部行表消失
+    await page.getByRole("button", { name: "仅受限表" }).click();
+    await expect
+      .poll(() =>
+        requests.some(
+          (entry) =>
+            entry.url.startsWith("/api/admin/row-policy/views/tables?") &&
+            entry.url.includes("restricted=true")
+        )
+      )
+      .toBe(true);
+    await expect(page).toHaveURL(/restricted=true/);
+    await expect(
+      page.getByTestId("row-policy-view-table-mysql-aliyun-chatbi-ai_intl_country_daily")
+    ).toBeVisible();
+    await expect(
+      page.getByTestId("row-policy-view-table-mysql-aliyun-chatbi-ai_intl_retention_daily")
+    ).toHaveCount(0);
+    await expect(page.getByTestId("row-policy-view-table-list").locator("tbody tr")).toHaveCount(1);
+    await expect(
+      page
+        .getByTestId("row-policy-view-table-mysql-aliyun-chatbi-ai_intl_country_daily")
+        .getByTestId("row-policy-view-table-grant")
+    ).toHaveText(/受限行授予/);
+
+    // 点开亚洲经营表：角色分支含模板引用，Agent 最终行约束可见
+    await page.getByRole("button", { name: "mysql-aliyun/chatbi/ai_intl_country_daily" }).click();
+    const detail = page.getByTestId("row-policy-view-detail");
+    await expect(detail).toBeVisible();
+    await expect(detail).toContainText("mysql-aliyun/chatbi/ai_intl_country_daily");
+    await expect(page.getByTestId("row-policy-view-role-row_policy_asia_probe")).toBeVisible();
+    await expect(page.getByTestId("row-policy-view-role-templates")).toHaveText(
+      "引用模板：by_asia_region"
+    );
+    await expect(page.getByTestId("row-policy-dnf-agents-section")).toContainText("asia_probe_agent");
+    await expect(page.getByTestId("row-policy-dnf-union-all")).toHaveCount(0);
+  });
+
+  test("@p1-acceptance RTV-02 — 亚洲∨欧洲两受限 Role 保留两条 OR 臂，不显示全部行", async ({ page }) => {
+    const fixture = emptyFixture();
+    fixture.viewsList = { tables: asiaCountryDailyTables() };
+    fixture.viewsTable = asiaCountryDailyDetail();
+    await installRowPolicyApi(page, fixture);
+
+    await page.goto(
+      "/admin/row-policies?connectionId=mysql-aliyun&schema=chatbi&sourceName=ai_intl_country_daily"
+    );
+
+    const detail = page.getByTestId("row-policy-view-detail");
+    await expect(detail).toBeVisible();
+    await expect(page.getByTestId("row-policy-dnf-union")).toBeVisible();
+    await expect(page.getByTestId("row-policy-dnf-union-arm-0")).toContainText("亚洲");
+    await expect(page.getByTestId("row-policy-dnf-union-arm-1")).toContainText("欧洲");
+    await expect(page.getByTestId("row-policy-dnf-union-all")).toHaveCount(0);
+
+    const accessLabels = page.getByTestId("row-policy-view-role-access");
+    await expect(accessLabels).toHaveCount(2);
+    await expect(accessLabels.nth(0)).toHaveText("受限行授予");
+    await expect(accessLabels.nth(1)).toHaveText("受限行授予");
+    await expect(detail).not.toContainText("行权限：全部行");
+
+    // 欧洲角色是内联条件；亚洲角色走模板
+    await expect(page.getByTestId("row-policy-view-role-row_policy_europe_probe")).toContainText(
+      "region 等于 欧洲"
+    );
+    await expect(page.getByTestId("row-policy-view-role-templates")).toHaveText(
+      "引用模板：by_asia_region"
+    );
+  });
+
+  test("@p1-acceptance RTV-04 — 选中全部行表后再切仅受限表，详情保留并提示脱离筛选", async ({ page }) => {
+    const fixture = emptyFixture();
+    fixture.viewsList = { tables: asiaCountryDailyTables() };
+    fixture.viewsTable = {
+      table: {
+        connectionId: "mysql-aliyun",
+        schema: "chatbi",
+        sourceName: "ai_intl_retention_daily",
+        physicalTable: "chatbi.ai_intl_retention_daily"
+      },
+      roles: [
+        {
+          roleId: "retention_all",
+          rowAccess: "all",
+          templateRefs: [],
+          inlinePredicates: [],
+          rowGrant: { kind: "all" }
+        }
+      ],
+      effectiveRowGrant: { kind: "all" },
+      agents: [
+        {
+          agentId: "asia_probe_agent",
+          enabled: true,
+          constraints: [],
+          finalRows: { kind: "all" }
+        }
+      ]
+    };
+    await installRowPolicyApi(page, fixture);
+
+    await page.goto(
+      "/admin/row-policies?connectionId=mysql-aliyun&schema=chatbi&sourceName=ai_intl_retention_daily"
+    );
+    await expect(page.getByTestId("row-policy-view-detail")).toContainText(
+      "mysql-aliyun/chatbi/ai_intl_retention_daily"
+    );
+
+    await page.getByRole("button", { name: "仅受限表" }).click();
+    await expect(page).toHaveURL(/restricted=true/);
+    // 当前表三参数保留；清单不再含该表 → 「当前表不在筛选结果中」
+    await expect(page).toHaveURL(/connectionId=mysql-aliyun/);
+    await expect(page).toHaveURL(/schema=chatbi/);
+    await expect(page).toHaveURL(/sourceName=ai_intl_retention_daily/);
+    await expect(page.getByTestId("row-policy-view-outside-filter")).toHaveText(
+      "当前表不在筛选结果中。"
+    );
+    await expect(page.getByTestId("row-policy-view-detail")).toBeVisible();
+    await expect(
+      page.getByTestId("row-policy-view-table-mysql-aliyun-chatbi-ai_intl_country_daily")
+    ).toBeVisible();
+    await expect(
+      page.getByTestId("row-policy-view-table-mysql-aliyun-chatbi-ai_intl_retention_daily")
+    ).toHaveCount(0);
+  });
+});
+
 // ─── RTV-05 ──────────────────────────────────────────────────────────────────
 
 test.describe("P1-1 行权限视图：失败集合披露（RTV-05）", () => {
@@ -622,10 +865,19 @@ test.describe("P1-1 行权限视图：失败集合披露（RTV-05）", () => {
 
     await page.goto("/admin/row-policies");
 
-    // 快照状态必须显式披露
-    await expect(page.getByTestId("row-policy-view-list-state-badge")).toContainText("partial");
+    // 呈现修订：诊断默认折叠；摘要中文，机器态 partial 不进 summary 主文案
+    const diagnostics = page.getByTestId("row-policy-view-diagnostics");
+    await expect(diagnostics).toBeVisible();
+    await expect(diagnostics.locator("summary")).toContainText("快照部分可用");
+    await expect(diagnostics.locator("summary")).not.toContainText("partial");
+    await diagnostics.locator("summary").click();
 
-    // 失败集合逐条列出（哪个 Role 失败了 + 原因码）
+    // 展开后：状态徽章 + 失败集合逐条列出
+    await expect(page.getByTestId("row-policy-view-list-state-badge")).toHaveText("快照部分可用");
+    await expect(page.getByTestId("row-policy-view-list-state-badge")).toHaveAttribute(
+      "data-snapshot-state",
+      "partial"
+    );
     const failures = page.getByTestId("row-policy-view-list-failures");
     await expect(failures).toBeVisible();
     await expect(failures).toContainText("role_broken");
