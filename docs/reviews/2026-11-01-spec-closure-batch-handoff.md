@@ -3,8 +3,8 @@
 | 元数据 | 内容 |
 |---|---|
 | 日期 | 2026-11-01 |
-| 交接对象 | Claude Code（接任本仓「Spec 收口」推进） |
-| 分支 | `lucy-v0.25`，HEAD = `34e6da30`，工作树干净 |
+| 交接对象 | Claude Code（接任本仓「Spec 收口」推进）。**已于 2026-11-01 13:52 接手并产出 [`2026-11-01-spec-closure-inventory.md`](2026-11-01-spec-closure-inventory.md)**（60 份 Spec 的 A–E 五档实测盘点）——本文件的待办分档以那份为准 |
+| 分支 | `lucy-v0.25`，HEAD = `3a0857ee`，工作树干净（除接任方的在途文件） |
 | 授权 | PM 于 2026-11-01 批准「听取你的建议，制定计划干」，本批为 A／B／C 三阶段 |
 | 结论 | **三份 Spec 的功能合同已收口并提交（5 个 commit），全量门禁绿。** 唯一挡着「全量测试绿」的是**既有服务端 flake**，归属待 PM 定夺 |
 
@@ -75,7 +75,13 @@ ln -s "$PWD/webui/node_modules" /tmp/ktx-prebatch/webui/node_modules
 
 ### P1｜发布取证层零份 Spec
 
-`docs/specs/` 共 60 份，其中 **18 份已收「功能合同」层，0 份收「发布取证」层**。按 `docs/governance/DEVELOPMENT.md` §71–114 的分层，客户镜像／部署／远端 CI 绿灯这类证据目前**没有任何 Spec 承载**——本批三份 Spec 的「不在本条出口」段落都把这类项推给了发布取证层，但那一层是空的。
+`docs/specs/` 共 60 份，其中 **18 份已声明「闭口层级 = 功能合同」，0 份声明「发布取证」**。
+
+> ⚠️ **口径提示（2026-11-01 13:52 后补）**：上面这个 18 是「**已写入闭口层级小节并声明为功能合同层**」的份数（`grep -rlE '^- 层级：功能合同' docs/specs/`），**不等于「已完成收口」的份数**——这 18 份里只有 **9 份**的状态行明写「功能合同已收口」。按「状态行已写明收口／验收／关闭」口径统计是 **12 份**。两个数字都对，口径不同，别混用。
+>
+> **完整盘点见 [`2026-11-01-spec-closure-inventory.md`](2026-11-01-spec-closure-inventory.md)**（Claude Code 于 2026-11-01 13:52 产出的逐份实测盘点，把 60 份分成 A 已收口 12 / B 可立即收口 3 / C 要补出口才能收 10 / D 不具备收口条件 9 / E 发布取证层 0，并指出 D 档另有 42 份存量 Spec 完全没有「闭口层级」小节——那是形态债）。接任者以那份为准。
+
+按 `docs/governance/DEVELOPMENT.md` §71–114 的分层，客户镜像／部署／远端 CI 绿灯这类证据目前**没有任何 Spec 承载**——本批三份 Spec 的「不在本条出口」段落都把这类项推给了发布取证层，但那一层是空的。
 
 **建议下一批**挑一条已收功能合同的（如 #5 发布工作台三栏）立「发布取证」层 Spec 与出口矩阵，把「本条收口不表示可上线」这句落到实处。
 
@@ -126,13 +132,20 @@ ln -s "$PWD/webui/node_modules" /tmp/ktx-prebatch/webui/node_modules
 
 9. **SC 编号跨 Spec 串号**：`SC-17`/`SC-20`/`SC-24`/`SC-25` 等至少 6 个 Spec 各有一套含义，grep 会命中完全无关的文件。「SC 全覆盖」**无法机器校验**，只能靠逐条 SC→用例名映射表人工对账——本批三份都在 Spec 里补了逐条落点表。
 
+10. **新增 root test 文件必须同时登记进 `scripts/gates/root-test-registry.json`**（2026-11-01 收尾时补记）。该注册表是 daily contract 层的**单一事实源**：`scripts/gates/root-test-registry.test.mjs` 断言「**每个被 git 跟踪的 root test 恰好登记一次**」，登记与实际跟踪集合漂移即 fail。两条坑都踩过：
+    - 新增 `scripts/smoke/lucy-runtime-build-context.test.mjs` 后没登记 → `test:root-contracts` 与 `test:ci-workflow-contracts` 双红；
+    - 登记了但文件还没 `git add` → 报「is registered but is not a tracked root test」——**新增文件与登记必须同批提交**。
+    另：**别在 workflow 里重复列 root test**。注册表按 `entry.gate` 筛选（`run-root-contract-tests.mjs`），`gate: "workflow-contracts"` 的条目由 `npm run test:root-contracts` 自动执行；在 `.github/workflows/` 里再手写一条 `npm run ...:test` 是重复执行。CI 的 run 列表里也**看不到**这些测试——它们是被 registry 间接带进来的，只 grep `node --test` 字面量会误判「CI 里没跑」。
+
+11. **`environment` 字段决定测试进不进 daily gate**。注册表里 `environment: "deterministic"` 的 91 项都**不需要外部服务**；真依赖 Docker daemon 的（先例 `scripts/runtime/docker-build-mirrors.test.sh`）标 `environment: "docker"` + `gate: null` + `reason`，**排除出 daily contract layer**，实际执行挂在 `docker-smoke` 那个 CI job。契约测试会断言 workflow-contracts 层的条目必须 `environment === "deterministic"`，且路径不得含 `real-e2e|customer-release|postgres|mysql|doris|browser|playwright`。
+
 ---
 
 ## 五、建议的接任顺序
 
 1. **跑完 pre-batch A/B**（第三节命令），给服务端 flake 定性 → 出归属建议交 PM。这条不解决，「全量绿」就永远差一条。
-2. **立第一条「发布取证」层 Spec**，把 18 份功能合同共同指向的空白层补上。
-3. **继续收口功能合同层剩余 Spec**（60 份中已收 18 份；先按 `docs/README.md` 索引挑未收的）。
+2. **立第一条「发布取证」层 Spec**，把功能合同层共同指向的空白层补上。
+3. **继续收口功能合同层剩余 Spec**（60 份里已声明功能合同层 18 份、其中状态行明写已收口 9 份；完整分档见 [`2026-11-01-spec-closure-inventory.md`](2026-11-01-spec-closure-inventory.md)，接任者以那份为准）。
 4. 顺手补 P2 的两处登记缺口（`webui/docs/README.md` 的 193、`selector-contract.md` 的 `semantic-asset-export-button`）。
 
 ---
@@ -148,6 +161,14 @@ node --test scripts/lint-spec-docs.test.mjs          # 23/23
 npm run --silent lint:terminology                    # exit 0
 npm run --silent lint:ia-boundary                    # exit 0
 npm run --silent lint:spec                           # exit 0
+
+# daily contract 层（root test 注册表是单一事实源；新增 root test 必须登记）
+npm run --silent test:root-contracts                 # exit 0
+npm run --silent test:ci-workflow-contracts          # exit 0
+
+# 客户镜像构建上下文（真跑 docker build；在 docker-smoke CI job 里执行）
+npm run --silent smoke:p0:delivery-isolation:build-context   # exit 0（~0.6s）
+npm run --silent smoke:p0:delivery-isolation:test             # exit 0（静态解析器断言）
 
 # 基线删条目（只减不增，JSON.stringify(b,null,2)+"\n" 逐字节无损）
 node -e 'const fs=require("fs");const P="docs/governance/spec-plan-doc-baseline.json";
