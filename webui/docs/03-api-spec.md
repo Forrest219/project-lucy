@@ -169,6 +169,8 @@ POST   /api/semantic-assets/operations/:id/cancel
 GET    /api/semantic-assets/operations/:id/report.csv
 GET    /api/semantic-assets/plans/:validationId
 
+GET    /api/publish-workbench/evidence
+
 GET    /api/admin/agents
 POST   /api/admin/agents
 GET    /api/admin/agents/:userId
@@ -604,6 +606,23 @@ dryRun 响应：
 `POST /api/semantic-assets/releases/:id/restore-retry-index` 请求体只有 `scopeDigest` 和 `idempotencyKey`。它**不重复恢复写盘**，只重跑索引与必要的语义读回，沿用发布记录里的 `reindexMode`，保留原失败 attempt。范围与确认对象不一致时返回 `semantic_restore_plan_stale`，要求重新确认而不是重新恢复。
 
 `terminalAuditPending=true` 的发布记录在列表、状态和 CSV 中显示为「生效待确认」，不把内部的已发布状态直接暴露出来。触发方式 `webui_restore` 与普通发布、强制重建索引分开筛选。
+
+### 发布工作台三栏（发布工作台 Spec v0.2）
+
+`GET /api/publish-workbench/evidence` 按**同一次影响模型**里的证据引用取回证据正文，供「确认同步索引并生效」侧栏就地查看某一条纳入原因。
+
+| 项 | 约定 |
+|---|---|
+| 查询参数 | `ref`（必填）。引用由前缀加**逻辑路径**组成：前缀 `diff:` / `snapshot:` / `baseline:` |
+| 路径边界 | 服务端**不接受**客户端传入的任意磁盘路径。引用必须落在当前快照或当前基线内；含 `..` 或绝对路径的引用一律视为不存在 |
+| `diff:` | 返回该逻辑路径「当前内容 vs 可信生效版本」的 unified diff。当前文件已删除时返回删除差异；**无可信前版本**时返回「暂无可比较的生效版本」，不冒充对空串的差异 |
+| `snapshot:` | 返回当前快照里该逻辑路径的正文 |
+| `baseline:` | 返回当前基线里该逻辑路径的正文 |
+| 200 | `{ ok: true, data: { kind, logicalPath, content } }` |
+| 400 | `EVIDENCE_REF_REQUIRED`——缺少 `ref` |
+| 404 | `EVIDENCE_NOT_FOUND`——证据不存在或已过期，需重新预览 |
+
+证据引用来自 `GET /api/diff` 与批量发布 plan 返回的**同版本 `impact`**。快照或批次推进后旧引用失效，服务端返回 404 而不是给出过期正文。响应不返回磁盘绝对路径或凭据。
 
 ### 语义资产批量维护（L25-11）
 

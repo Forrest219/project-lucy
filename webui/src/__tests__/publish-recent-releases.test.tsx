@@ -59,6 +59,22 @@ afterEach(() => {
 });
 
 describe("PublishRecentReleases", () => {
+  it("PWB-15：跨午夜与跨年的时间显示带月日时分，跨年时带年份", () => {
+    renderColumn({
+      records: [
+        // Asia/Shanghai 2026-12-31 23:59 —— 跨午夜前
+        makeRecord({ id: "rel-before", createdAt: "2026-12-31T15:59:00.000Z" }),
+        // Asia/Shanghai 2027-01-01 00:00 —— 跨午夜且跨年
+        makeRecord({ id: "rel-after", createdAt: "2026-12-31T16:00:00.000Z" })
+      ]
+    });
+
+    const items = screen.getAllByTestId("publish-recent-release");
+    expect(items[0]).toHaveTextContent("2026-12-31 23:59");
+    // 跨年时显示年份，不省略成「01-01 00:00」。
+    expect(items[1]).toHaveTextContent("2027-01-01 00:00");
+  });
+
   it("renders the section title and the records it is given", () => {
     renderColumn({
       records: [

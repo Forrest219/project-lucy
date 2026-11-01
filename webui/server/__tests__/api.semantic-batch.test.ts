@@ -232,7 +232,7 @@ describe("D11 / Spec §8 — the request envelope rejects the whole batch", () =
     const problems = res.body.data.errors as Array<{ field?: string; index?: number }>;
     expect(problems.some((problem) => problem.field === "files" && problem.index === 2)).toBe(true);
     // Zero staging: no snapshot was written.
-    const snapshots = await readFile(path.join(projectRoot, ".ktx-ui/semantic-asset-snapshots"), "").catch(
+    const snapshots = await readFile(path.join(projectRoot, ".ktx-ui/semantic-asset-snapshots"), "utf8").catch(
       () => null
     );
     expect(snapshots).toBeNull();
@@ -603,6 +603,33 @@ describe("D13 / Spec §3.2 — the complete plan preview", () => {
     expect(res.body.data.candidates).toHaveLength(1);
     expect(res.body.data.candidates[0].targetPath).toBe("semantic-layer/shop-db/orders.yaml");
     expect(res.body.data.overwriteSet).toContain("semantic-layer/shop-db/orders.yaml");
+  });
+
+  it("PWB-09：批量计划的影响范围与 /api/diff 一致——同一份待办快照、同一套规则", async () => {
+    mockKtx();
+    const app = await freshApp();
+    const scopeId = await createScope(app);
+    const exported = await exportPackage(app, scopeId);
+    const edited = await editOverlayInPackage(
+      exported.base64,
+      "overlays/shop-db/orders.yaml",
+      EDITED_ORDERS
+    );
+    const staged = await importPackage(app, "maintenance.zip", edited);
+    const validationId = staged.body.data.validationId as string;
+
+    const diff = await request(app.server).get("/api/diff").expect(200);
+    const plan = await request(app.server)
+      .get(`/api/semantic-assets/plans/${encodeURIComponent(validationId)}`)
+      .expect(200);
+
+    // 同一份待办快照。
+    expect(plan.body.data.impact.pendingDigest).toBe(diff.body.data.pendingDigest);
+    // 同一套范围：涉及的表身份与计数完全一致。
+    expect(plan.body.data.impact.tables.map((row: { identity: unknown }) => row.identity)).toEqual(
+      diff.body.data.impact.tables.map((row: { identity: unknown }) => row.identity)
+    );
+    expect(plan.body.data.impact.counts).toEqual(diff.body.data.impact.counts);
   });
 
   it("refuses the plan of another actor", async () => {

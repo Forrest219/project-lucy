@@ -279,3 +279,117 @@ describe("GET /api/publish-workbench/evidence", () => {
     await app.close();
   });
 });
+
+// ─── PWB-06 / PWB-16 — 重启后的状态与差异抽屉的内容 ────────────────────────
+
+describe("PWB-06 — 服务重启后基线与待办仍在", () => {
+  it("a restarted service reads the same baseline and still finds the real pending change", async () => {
+    projectRoot = await makeProject();
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
+    mockKtx();
+
+    const first = await buildFreshServer();
+    await first.ready();
+
+    // 同步一次：当前内容被推进为「有可信同步证据的内容版本」。
+    await request(first.server).post("/api/semantic-assets/reindex").send({}).expect(200);
+
+    const before = await request(first.server).get("/api/diff").expect(200);
+    expect(before.body.data.baselineState).toBe("ready");
+    expect(before.body.data.baselineGeneration).toBe(1);
+    expect(before.body.data.files).toHaveLength(0);
+
+    // 服务停了。
+    await first.close();
+
+    // 停机期间内容在进程外被改动——这正是「直接编辑内容根」的形态。
+    await writeFile(
+      path.join(projectRoot, "semantic-layer", "demo", "ai_intl_ad_daily.yaml"),
+      `${OVERLAY}\n  - name: extra\n    expr: count(*)\n`,
+      "utf8"
+    );
+
+    // 服务重启：一个全新的实例、全新的模块实例，同一份磁盘状态。
+    const second = await buildFreshServer();
+    await second.ready();
+
+    const after = await request(second.server).get("/api/diff").expect(200);
+    expect(after.body.data.baselineState).toBe("ready");
+    expect(after.body.data.baselineGeneration).toBe(1);
+    expect(after.body.data.files.map((file: { filePath: string }) => file.filePath)).toEqual([
+      "semantic-layer/demo/ai_intl_ad_daily.yaml"
+    ]);
+
+    await second.close();
+  });
+});
+
+describe("PWB-16 — 差异抽屉比较的是可信前版本", () => {
+  it("says so plainly when there is no trustworthy previous version", async () => {
+    projectRoot = await makeProject();
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
+    mockKtx();
+
+    const app = await buildFreshServer();
+    await app.ready();
+
+    const res = await request(app.server).get("/api/diff").expect(200);
+    expect(res.body.data.baselineState).toBe("uninitialized");
+
+    // 没有可信前版本时，明说「暂无可比较的生效版本」——不拿 Git diff 冒充。
+    const file = res.body.data.files.find(
+      (row: { filePath: string }) => row.filePath === "semantic-layer/demo/ai_intl_ad_daily.yaml"
+    );
+    expect(file).toBeDefined();
+    expect(file.diff).toBe("暂无可比较的生效版本。\n");
+
+    // 证据接口给出同一句话，而不是一个空的或伪造的 diff。
+    const evidenceRef = res.body.data.impact.tables[0].reasons[0].evidenceRef as string;
+    const evidence = await request(app.server)
+      .get(`/api/publish-workbench/evidence?ref=${encodeURIComponent(evidenceRef)}`)
+      .expect(200);
+    expect(evidence.body.data.kind).toBe("diff");
+    expect(evidence.body.data.content).toBe("暂无可比较的生效版本。\n");
+
+    await app.close();
+  });
+
+  it("compares the proven baseline with the current content once a baseline exists", async () => {
+    projectRoot = await makeProject();
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
+    mockKtx();
+
+    const app = await buildFreshServer();
+    await app.ready();
+    await request(app.server).post("/api/semantic-assets/reindex").send({}).expect(200);
+
+    await writeFile(
+      path.join(projectRoot, "semantic-layer", "demo", "ai_intl_ad_daily.yaml"),
+      `${OVERLAY}\n  - name: extra\n    expr: count(*)\n`,
+      "utf8"
+    );
+
+    const res = await request(app.server).get("/api/diff").expect(200);
+    const file = res.body.data.files.find(
+      (row: { filePath: string }) => row.filePath === "semantic-layer/demo/ai_intl_ad_daily.yaml"
+    );
+    expect(file).toBeDefined();
+    // diff 比较的是「生效版本 → 当前内容」，而不是工作区的 Git 差异。
+    expect(file.diff).toContain("--- semantic-layer/demo/ai_intl_ad_daily.yaml（生效版本）");
+    expect(file.diff).toContain("+++ semantic-layer/demo/ai_intl_ad_daily.yaml（当前内容）");
+    expect(file.diff).toContain("+  - name: extra");
+    expect(file.diff).not.toBe("暂无可比较的生效版本。\n");
+
+    // 证据接口与抽屉里的 diff 是同一份内容。
+    const evidenceRef = res.body.data.impact.tables[0].reasons[0].evidenceRef as string;
+    const evidence = await request(app.server)
+      .get(`/api/publish-workbench/evidence?ref=${encodeURIComponent(evidenceRef)}`)
+      .expect(200);
+    expect(evidence.body.data.content).toBe(file.diff);
+
+    await app.close();
+  });
+});

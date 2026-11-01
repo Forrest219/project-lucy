@@ -408,7 +408,7 @@ SC-01 – SC-13 是**逐处**承诺，每处的五个条件分别是：①`value
 - 层级：功能合同
 - 本条承诺：13 处筛选栏文本输入框在中文输入法组合期间不被打断——受控值取自局部状态镜像，URL 作为下游事实源跟随**原文**，且深链、后退、清除筛选都不会让输入框与 URL 脱节。
 - 本条出口：SC-01–SC-13 的逐处用例（`webui/src/__tests__/admin-audit-url-mirror.test.tsx`、`webui/src/__tests__/url-driven-input-mirror-contract.test.tsx`）；SC-14–SC-16 的静态门禁与其单测（`webui/scripts/lint-url-driven-input.mjs`、`webui/scripts/__tests__/lint-url-driven-input.test.ts`）；SC-17 的真实浏览器探针记录（`webui/scripts/evidence/2026-10-30-url-driven-input-ime-probe/`）；SC-18–SC-19 的伴生缺陷用例（`webui/src/__tests__/url-driven-input-transform-writeback.test.tsx`）；SC-20 的全量 WebUI 测试与两个既有 URL 断言哨兵；SC-22–SC-23 的回声与消费点用例；以及 `npm run lint:terminology`、`npm run lint:ia-boundary`、`npm run lint:url-driven-input`。
-- 不在本条出口：远端 CI job 的绿灯（证据等级）；整库旅程、Agent 路径与跨模块故障演练；镜像构建、部署与客户环境验证；移动窄屏与响应式验证；Safari / WebKit 与真实 OS 级输入法（macOS 拼音、Windows 微软拼音）实测；Firefox 实测；全仓 typecheck 基线。**全仓形态门禁 `npm run lint:spec` 也不在本条出口**——本条不新增任何后端接口，收口时该门禁的红项是另一条线未登记 `/api/publish-workbench/evidence`，与本条无交集（见收口文档）。
+- 不在本条出口：远端 CI job 的绿灯（证据等级）；整库旅程、Agent 路径与跨模块故障演练；镜像构建、部署与客户环境验证；移动窄屏与响应式验证；Safari / WebKit 与真实 OS 级输入法（macOS 拼音、Windows 微软拼音）实测；Firefox 实测；全仓 typecheck 基线。**全仓形态门禁 `npm run lint:spec` 也不在本条出口**——本条不新增任何后端接口，该门禁打假不了本条承诺（收口复核时它已因另一条线的接口登记补齐而转绿）。
 - 上线关系：本条收口不表示可上线
 
 ---

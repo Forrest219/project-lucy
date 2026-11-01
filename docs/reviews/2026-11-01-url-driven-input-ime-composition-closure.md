@@ -131,7 +131,7 @@ env PATH="$CLEAN_PATH" npx vitest run --maxWorkers=1
   - 影响：本条 SC-20 的两个既有 URL 断言哨兵均通过，本条相关用例全绿；受影响的只有那条线的连接探针用例。
   - 建议：由 PM 决定是交回连接创建线修，还是另开一项一次性清理。
 
-- **`npm run lint:spec` 当前为红**（exit 1）：`webui/docs/03-api-spec.md: missing /api/publish-workbench/evidence`。该缺口是**另一条线**（发布工作台三栏）新增的接口没登记，与本条无交集——本条不新增任何后端接口，`03-api-spec.md` 里也没有本条的接口。它不是本条能打假的检查，按 [`DEVELOPMENT.md`](../governance/DEVELOPMENT.md)「功能闭口与发布取证」的分层，全仓形态门禁归发布取证。**该红项在同批工作的阶段 B 修复，收尾时复核转绿。**
+- **`npm run lint:spec` 收口时为红，现已转绿。** 收口当时它是红的（exit 1）：`webui/docs/03-api-spec.md: missing /api/publish-workbench/evidence`。该缺口是**另一条线**（发布工作台三栏）新增的接口没登记，与本条无交集——本条不新增任何后端接口，`03-api-spec.md` 里也没有本条的接口。它不是本条能打假的检查，按 [`DEVELOPMENT.md`](../governance/DEVELOPMENT.md)「功能闭口与发布取证」的分层，全仓形态门禁归发布取证，故不写进本条出口。**同批工作的阶段 B 已补上该登记，复核 `lint:spec` exit 0。**
 - **远端 CI job 未跑**。CI 里 `lint:url-driven-input` 这一步已接线（`.github/workflows/lucy-release.yml:98`），但没在远端执行过。证据等级，归发布取证。
 - **Safari / WebKit 与真实 OS 级输入法（macOS 拼音、Windows 微软拼音）未实测，Firefox 未实测**。Chrome 的 IME 组合 API 是忠实模拟，不等价于系统级实机验证（Spec §1.2 C 级）。
 - **行权限视图的 5 处清单筛选框**在本条之后由另一条功能线（行权限视图呈现修订，commit `8982ef0d`）改用了同一个 `useUrlMirroredField`。它们不在本条 13 处承诺内，Spec §1.4 的 C-3 判定已被后续实现取代——本轮已在 Spec §6.6 末尾记录，免得后来的读者对不上数。

@@ -217,7 +217,6 @@ function makeSummary(overrides: Partial<SourceSummary> = {}): SourceSummary {
     conn: "mysql-aliyun",
     schema,
     table,
-    qualifiedName: `${schema}.${table}`,
     filePath: "semantic-layer/mysql-aliyun/_schema/dataforai.yaml",
     columnCount: 8,
     columnNames: ["order_id", "order_date"],
