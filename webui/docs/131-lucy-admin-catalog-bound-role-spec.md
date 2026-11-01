@@ -195,7 +195,7 @@ SourcesGrantedBy(r) =
 ## 5. 安全治理
 
 1. **AbsoluteDeny**：代码基线不可解除；`lucy_admin` 工具列表不得包含 AbsoluteDeny / 未分类工具；lint 与编译双重拒绝。
-2. **高权限警示**：Role 详情、从模板创建、Agent 绑定到含 `catalog_bound` 或 id=`lucy_admin` 的 Role 时，UI 展示「高权限运维数据面」警示；文案不得写成 WebUI「所有者 / 登录管理员」。
+2. **高权限警示**：Role 详情、从模板创建、Agent 绑定到含 `catalog_bound` 或 id=`lucy_admin` 的 Role 时，UI 须展示高权限运维数据面警示；文案不得写成 WebUI「所有者 / 登录管理员」。**Agent 绑定场景的可见文案**以 [`docs/specs/lucy-20261101-agent-admin-high-priv-copy-ux-spec.md`](../../docs/specs/lucy-20261101-agent-admin-high-priv-copy-ux-spec.md) 为准（短主句＋次句）；本条保留安全意图，不锁定该场景的字面句。Role 详情／从模板创建的警示口径在另有呈现 Spec 收口前仍以本条为准。
 3. **Token**：不建议为 `lucy_admin` 签发无过期长期 Token；创建 Token 流至少提示建议设置过期时间（不强制改 Token 数据模型）。
 4. **客户高敏环境**：可不创建该正式 Role；参考模板仍只读可见。
 5. **控制面 / 数据面分离**：WebUI Admin 鉴权（`admins.yaml`）不得自动映射为 MCP Agent `lucy_admin`。

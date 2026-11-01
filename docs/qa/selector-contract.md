@@ -541,6 +541,8 @@ L25-15 整批恢复抽屉。三个分区各自独立，不合并成一句「同�
 | `agent-leave-confirm-modal` | 未保存离开确认 | `pages/admin/AgentDetail.tsx` |
 | `agent-detail-mcp-playground` | 跳转 MCP 调试台 | `pages/admin/AgentDetail.tsx` |
 | `agent-constraints-editor` | 强制约束编辑器 | `pages/admin/AgentDetail.tsx` |
+| `agent-constraints-empty` | 个人行限制空态摘要「未设置」 | `pages/admin/AgentDetail.tsx` |
+| `agent-constraints-caveat-tooltip` | 个人行限制 ⓘ tooltip（编译≠取数 caveat） | `pages/admin/AgentDetail.tsx` |
 | `capability-preview` | 数据能力预览 | `pages/admin/AgentDetail.tsx` |
 | `diff-change-summary` | 变更字段摘要 | `pages/admin/AgentDetail.tsx` |
 | `dryrun-finalrows-preview` | dry-run 技术预览 | `pages/admin/AgentDetail.tsx` |
