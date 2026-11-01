@@ -7,7 +7,7 @@
 | 版本 / 日期 | **v1.0-frozen / 2026-10-20，Asia/Shanghai**（v0.1 Kimi 初稿；v0.2 Codex 修订；v0.3 Kimi 裁决；v1.0 Codex 经授权完成复核修正与设计冻结） |
 | target_release | **v0.25** |
 | 功能编号 / 优先级 | **L25-09 / P0（P0-1）** |
-| 状态 | **功能合同已收口；运行时取证未执行**（2026-10-30，§18.15）。功能合同是 S01–S07。运行时取证是 S08，即 A01–A12 与 U9 的 Stage 1、Stage 2。两块互斥，合起来是本条。ARV25 与 V12 不在本条。不关闭客户交付 |
+| 状态 | **功能合同已收口；运行时取证未执行**（2026-11-01，§18.16／§18.17）。功能合同是 S01–S07，逐条落点见 §18.16，闭口层级见 §18.17，收口记录见 [2026-11-01-l25-09-functional-contract-closure.md](../reviews/2026-11-01-l25-09-functional-contract-closure.md)。运行时取证是 S08，即 A01–A12 与 U9 的 Stage 1、Stage 2，**仍未执行且未排期**（§18.14／§18.15）。两块互斥，合起来是本条。ARV25 与 V12 不在本条。不关闭客户交付；本条收口不表示可上线 |
 | 交叉审阅 | **独立静态审阅结论为「退回，待修订后复审」**（`docs/reviews/2026-10-27-codex-review-audit-increment-p0.md`，阻塞 0／高 2／中 2，2026-10-27 19:29 落盘）。F-01～F-04 的文档修订记录见 §18.10；本 Spec 状态行的事实对齐与 Stage 1 取证记录见 §18.13 |
 | 撰写人 | **Kimi（起草）** |
 | 审阅者 / 冻结执行人 | **Codex（委托人明确授权“修改，完成冻结”）** |
@@ -1252,6 +1252,95 @@ E2E 是运行时取证的执行场所，不是第三块，也不是功能合同�
 - Stage 2：客户 linux/amd64 单副本 Kubernetes 上重跑 A01、A02、A04、A10、A11。证据包与 Stage 1 分开。
 
 D-28 仍开放。窗口里还有切分前无序号行时，正式读取继续 409。§18.14 里「不可交付 UAT」指的是运行时取证当时未执行；该句不改变功能合同已收口。
+
+### 18.16 S01–S07 功能合同逐条落点（2026-11-01）
+
+本节登记**功能合同层**（S01–S07）的逐条自动化落点。收口结论、残余与「不在收口里」的完整清单见 [收口记录](../reviews/2026-11-01-l25-09-functional-contract-closure.md)。
+
+**运行时取证层不在本表**：S08 与 §13.2 的 A01–A12（含全部命名子例）、U9 的 Stage 1 与 Stage 2 仍是「未执行且不排期」（§18.14、§18.15），本节没有把它们记成通过。
+
+**落点文件**：`webui/server/__tests__/` 下 `audit-v025-*.test.ts` 是本条专属落点（11 个文件 / 165 条用例）；其余为共用夹具文件。
+
+**编号口径**：本条自身的验收编号是 **A01–A12**（§13.2），属运行时取证层，**不进入本表**。下表「用例」列出现的 `SC-xx` 是**共用夹具文件里的用例名原文**（这些文件同时承载问询预算 Spec 的验收编号），它们在本表里只是**证据锚点**，不是本条的验收编号。
+
+#### S01 事件状态与响应证据契约（§4）
+
+| 契约条款 | 落点 | 用例 | 证据边界（明确不证明什么） |
+|---|---|---|---|
+| §4.3(a) 主状态枚举与九行派生表 | `audit-v025-derivation.test.ts` | describe「B1 derivePrimaryStatus — U10 九行有序派生表」16 条：规则 1–9、闭合凭据先于取消／超时、**「budget_stop 不映射为 execution=interrupted」**、证据引用原样保留 | 纯函数层；不证明历史 177 行样本重算后的实际分布 |
+| §4.3(a) 八桶闭合 | 同上 | describe「B1 汇总闭合断言」4 条：八桶合计等于集合总数、空集合闭合且分母为 0、非法状态值触发闭合失败 | 合成记录层；不证明真实集合的闭合 |
+| §4.3(a) 末段「各出口调用同一版本分类函数」 | `audit-v025-export-seal-contract.test.ts` | describe「§4.3(a) 末段 — 各出口使用同一版本分类函数」2 条：八个版本常量彼此一致、五个计量单位的 `metric_id` 带同一版本 | 版本漂移守卫；不证明四条出口调用的是同一函数体 |
+| §4.3(b) 三视图独立 | `audit-v025-derivation.test.ts`＋`audit-v025-execution-evidence.test.ts`＋`audit-v025-coverage-authorization.test.ts` | 「B2 三视图独立判定」7 条、「L25-09 D-1: 写路径执行凭据产出真实主状态桶」8 条、「F-03 授权事实保真」5 条 | 分类层；不证明生产写路径每次都登记凭据 |
+| §4.3(b) `delivery=acknowledged` 写路径（U1 三重比对） | `audit-v025-contract-boundaries.test.ts` | describe「§4.3(b) U1 — acknowledged 写路径的三重比对」9 条：三重比对才升级、8 个失败原因各自分流、校验不通过落 `unknown` 绝非 `unacknowledged`、可见父集合只收同主体同会话 | 判定层；不证明真实适配器回执链路端到端可达 |
+| §4.3(c) 预览与摘要边界（U11） | `audit-v025-contract-boundaries.test.ts` | describe「§4.3(c) U11 — query_preview 与 args_summary 边界」14 条：500 码点上限、按码点截断不切断字符、`preview_version=v2p5-1`、512 字节单值上限、超限结构化值改为摘要标记、`maxKeys=8`、脱敏键保留存在性标记、自由文本不入摘要 | 边界层；不证明写路径每次都取到这些值 |
+| §4.3(d) 空值六值（U2） | `audit-v025-derivation.test.ts` | describe「B3 空值原因六值枚举」5 条 | 枚举层；不证明 DB 列实际取值分布 |
+| §4.3(e) reported／observed／inferred 三族分离 | `audit-v025-contract-boundaries.test.ts` | describe「§4.3(e) — reported / observed / inferred 三族分离」3 条 | 构造层；不证明上游真的按族填列 |
+| §4.5 失败与恢复分支 | `audit-release-barrier.test.ts` | 10 条：屏障顺序、`admitted` 不可写则 503 且不分派、存储不可用 503、客户端断连记失败终态、SSE 先缓冲后发送、崩溃留下的开放操作标 `interrupted` | 真实 HTTP 层；**不覆盖**「上游已执行但回包丢失 → `indeterminate`」分支（§4.5／A04） |
+| §4.6 历史兼容（旧 outcome 保真） | `audit-v025-reconcile.test.ts` | describe「B11 summarize + 闭合断言」2 条：旧 outcome 单列直方图 | 字段并存层；不证明历史 177 行样本的分布 |
+
+#### S02 入口持久化与恢复契约（§5）
+
+| 契约条款 | 落点 | 用例 | 证据边界（明确不证明什么） |
+|---|---|---|---|
+| §5.3 入口登记与可观察路由组件 | `audit-v025-ingress-registry.test.ts` | describe「B6 入口登记」4 条：三个逻辑入口各自登记、57881／55176 分别登记、每个入口登记可观察路由组件、未知入口拒绝解析 | 登记表层；不证明注册表与真实监听端口一致 |
+| §5.3 标识分配与重试关系 | 同上 | describe「D3 入口身份分配」4 条：`operation_id`／`attempt_id`／`ingress_event_id` 同时分配、首次请求无父 attempt、业务重试产生新 attempt ＋ `parent_attempt_id` ＋ `retry_of`、注入生成器可复现 | 分配器层；不证明落库 |
+| §5.3 关联头指向已提交 `received`（U12） | 同上 | describe「U12 回传信封」1 条 | 只测构造函数；**不覆盖** HTTP 出站响应头是否真的带出 |
+| §5.4 持久化屏障与失败关闭 | `audit-release-barrier.test.ts`＋`audit-projection-recovery.test.ts` | 前者 10 条（见 S01 §4.5）；后者 12 条：折叠为一行、重复跑是 no-op、暂停恢复不重复、中断投影为 `interrupted`、行与游标同事务、崩溃后镜像游标对齐、滞后可观测、账本不可读报 `security_store_unavailable` | 真实 HTTP 与真实 SQLite 层；**不覆盖** `received` 单点提交失败的注入（A02-R） |
+| §5.4 恢复可解释 | `audit-v025-fault-injection.test.ts` | describe「S08 故障注入与历史回放骨架」4 条：独立命名空间不写项目账本、按真实事件类型登记并标 `fault_injected`、`received` 未闭合由账本扫描幂等关闭、派生只看账本阶段 | **单元级 harness**，按 §18.14.2 自述不构成运行时证据 |
+| §5.7 结算窗口 T1／T2／T3 | `audit-v025-ingress-registry.test.ts` | describe「U6 结算窗口」2 条：T1=24h／T2=72h／T3=60s 为冻结值、截止自 `received_at` 起算 | 算式层；不证明重启或晚到真的不延长 |
+
+#### S03 跨端关联与重试标识契约（§6）
+
+| 契约条款 | 落点 | 用例 | 证据边界（明确不证明什么） |
+|---|---|---|---|
+| §6.2／§6.3 标识字典与唯一性 | `audit-v025-association.test.ts` | describe「B9 标识语义」7 条：`client_call_id` 限已认证适配器命名空间、不得等于 `client_event_id`、`upstream_operation_id` 不得用 `operation_id` 冒充、相同 SQL 不能单独证明同一次执行、重连本身不新增 attempt、实际新执行必须有独立 attempt、幂等续接才允许复用 attempt | 判定层；不证明真实跨端链路 |
+| §6.3 客户端观测落账与幂等 | `audit-trust/audit-trust-agent-audit-events.test.ts` | 同 `client_event_id` 同内容 → `idempotent_replay`；异内容 → `id_conflict`；父可见性范围外拒绝／范围内接受；观测落账后 `ack_status` 全为 `unknown`；保留 `observed_at` 与 `server_received_at` 双时间 | 写路径层；不证明业务计数不增 |
+| §6.5 指纹与 scope_change | `audit-trust/audit-trust-scope-change.test.ts` | 变化／不变／重复键三种判定；指纹不含 `filter` 值 | 不证明端到端不绕过预算 |
+
+#### S04 问询归属与来源可信度契约（§7）
+
+| 契约条款 | 落点 | 用例 | 证据边界（明确不证明什么） |
+|---|---|---|---|
+| §7.2 归属证据顺序与置信度 | `audit-v025-association.test.ts` | describe「B10 归属证据顺序」5 条：显式绑定优先、迟到修订最高 `low` 置信 ＋ `candidate`、同级矛盾保留冲突、无证据是未归属、裁决函数不接受时间参数 | 裁决函数层；不证明生产默认值 |
+| §7.3 修订链与 `effective_*` 重建 | `audit-trust/audit-trust-association-revisions.test.ts`＋`audit-v025-attribution-journal.test.ts` | 前者 14 条（追加修订、唯一约束拒绝重复、latest 修订算 effective、`turn_id` 为空时取原状态）；后者 4 条（describe「F-02 归属就地改写日志」：握手 attachment 留前像／后像／账本序号、基线登记、来源行与审计行带 `ledger_seq`） | 临时 SQLite 层；不证明真实库基线前无未登记改写（D-28 仍 open） |
+| §7.5 历史兼容（`legacy_unverified` 不静默升级） | `audit-trust/audit-trust-backfill.test.ts` | `session_bound → legacy_unverified`、`explicit` 缺 `explicit_turn_validated` → `legacy_unverified`、`unassigned` 保持不动、回填幂等 | 不证明五态在全链路的分布 |
+
+#### S05 对账、指标与完整性契约（§8）
+
+| 契约条款 | 落点 | 用例 | 证据边界（明确不证明什么） |
+|---|---|---|---|
+| §8.2(a) 计量单位字典 | `audit-v025-reconcile.test.ts` | describe「B11 计量单位字典」2 条：五个单位分别登记、协议请求与工具调用不是同一集合 | 字典层；不证明真实计数不重复 |
+| §8.2(b) 六项检查与降级规则 | `audit-v025-reconcile.test.ts`＋`audit-v025-coverage-authorization.test.ts`＋`audit-reconciliation-routes.test.ts` | 「B12 auditCoverage 六项独立检查」7 条（全 pass → pass、缺证据 → unknown 且 unknown 不合成 pass、N≠D → fail、差异集合非空 → fail、分母为 0 → unknown、未提供 → `check_not_provided`）；「F-01 入口接收覆盖检查不得同侧自证」2 条（生产覆盖端口把检查 1 记为 `unknown`、其余五项同样 `unknown`）；`audit-reconciliation-routes.test.ts` 的「D-26 usage 经生产端口返回六项 S05 检查，缺证据项保持 unknown」 | **六项中五项在生产恒 `unknown`**——这是独立到达凭据尚未建立的如实披露，不是缺陷；不证明任一项能独立判定 |
+| §8.2(c) 差异七分类与配对 | `audit-v025-reconcile.test.ts` | describe「B11 差异七分类」3 条：七分类枚举固定、不强行配对未匹配项、不可观测 ID 单列披露且不缩分母 | 合成夹具层 |
+| §8.2／§8.3 as-of S 四维度独立判定 | `audit-v025-as-of-proof.test.ts` | 「F-02 proveExactAsOfS —— 四维度独立判定」10 条＋「F-02 正式导出失败关闭」4 条＋「F-02 漂移守卫 —— 事实列不可变（代码层不变量）」1 条＋「F-02 同水位归属改写按前像回放」1 条 | 内存 SQLite 夹具；不证明真实客户库的可证明性（D-28） |
+| §8.5 截止时间不因重启／晚到／重试延长 | `audit-v025-ingress-registry.test.ts` | describe「U6 结算窗口」2 条 | 纯算式；**不覆盖**真实重启与晚到场景 |
+
+#### S06 导出快照与证据封存契约（§9）
+
+| 契约条款 | 落点 | 用例 | 证据边界（明确不证明什么） |
+|---|---|---|---|
+| §9.3(a) manifest 形状与 `combinedComplete` | `audit-trust/audit-trust-manifest-conformance.test.ts`＋`audit-v025-as-of-proof.test.ts` | 前者 9 条（必填字段与类型、`dataScope` 形状、`associationQuality` 分量和、`clientCoverage` 形状、`file_hash_ok` 与 `relation_check_ok` 分离、`schemaVersion` 固定、键集不越面）；后者「冻结契约：combinedComplete 严格是三项 AND，不加第四项」 | 形状层；不证明字段值语义 |
+| §9.3(b) 清单校验**重算**文件内容 | `audit-v025-export-seal-contract.test.ts` | describe「§9.3(b) 清单校验重算文件内容」4 条：内容一致才通过、内容被改 → `match=false` 并报出实际摘要、文件缺失按 `missing` 处理、任一不符即整体不通过 | 只覆盖导出物完整性；**不覆盖**「来源声明」与「同目录可重写清单」两条不可抵赖边界（术语禁令，不可自动化） |
+| §9.3(c) 跨文件关联与例外集 | `audit-v025-export-seal-contract.test.ts` | describe「§9.3(c) 跨文件关联校验」3 条：对不上报错、全部对上通过、例外集不报错但必须显式列出 | 关联键范围窄于 §9.3(c) 全列 |
+| §9.3(a)／§9.5 失败关闭与快照隔离 | `audit-trust/audit-trust-v2-export.test.ts`＋`audit-trust/audit-trust-v2-export-pack.test.ts`＋`audit-snapshot.test.ts`＋`audit-export-paging.test.ts` | 前者 14 条（`complete` 模式在投影滞后／审计库不可用／安全库不可用／备份失败／关联检查失败五类一律失败关闭、诊断模式需显式确认、缺 `S` 即失败关闭）；后者 12 条（每文件 `sha256` ＋ `rowCount`、非空 zip、`combinedComplete=true`、附属文件不越界、超 SQLite 参数上限仍复用完整选择集、引用不存在快照则正式导出失败关闭）；`audit-snapshot.test.ts` 2 条（其一同时覆盖备份隔离、快照后源库新写入不混入、重开仍有效；其二断言 tools/list 空成功与编译失败被区分）；`audit-export-paging.test.ts` 4 条（游标 round-trip、第 10001 行在第二页读到、空 `policy_version` 记为缺失、权限快照缺失 → `completeness=false`） | 不证明并发写入下的隔离；**不覆盖** `prevExportId` 版本链与来源声明的行为 |
+| §9.4 导出脱敏 | `audit-export-redaction.test.ts` | 3 条：config-audit JSON API 掩蔽 scrypt 值／完整哈希／bearer token、access-log CSV 掩蔽 `error_detail` 与 `args_summary` JSON（`token_hash_prefix` 只留短指纹）、多行 diff 保留可审结构但逐行掩蔽凭据形状 | 不覆盖新上限下的预览脱敏 |
+
+#### S07 错误、重试与预算契约（§10）
+
+| 契约条款 | 落点 | 用例 | 证据边界（明确不证明什么） |
+|---|---|---|---|
+| §10.2 统一错误七分类 → 162 四维（U8） | `audit-v025-contract-boundaries.test.ts` | describe「§10.2 U8 — 统一错误七分类与 162 四维映射」12 条：七分类枚举固定、预算终止 → `budget_stopped` 且不留四维、并发超限 → `upstream_failed`、续查声明被拒 → `validation_failed`、取消 → `cancelled` 且维度留空 ＋ `not_applicable`、超时 → `timeout`、命名表缺失 → `policy_denied`、`explicit_table_required:<empty>` → `validation_failed`（**不是**权限拒绝）、入参 schema 失败 → `client_schema_failure`、普通错误 → `upstream_failed`、无法判定时分类留空 | 判定层；不证明真实原始错误码在端到端保留 |
+| §10.3 修复提示五项校验 | `audit-v025-association.test.ts`＋`denial-repair-hint.test.ts` | 前者 describe「B15 repairHint 可用性闭环」3 条（五项检查全过才可用、只推荐通过检查的目标、无合法目标时给事实性错误与可用候选）；后者 8 条（清单限 ACL 内、超 ACL 一律丢弃、各拒绝维度口径一致、不挂到用量与语义类失败上） | 用例直接喂 evidence；**不覆盖**「不盲目发真实数据查询」的端到端断言 |
+| §10.3 预算四维、续跑与失败关闭 | `question-budget*.test.ts`（9 个文件） | `question-budget.test.ts`：第 21 次数据调用停机与一次续查额度、墙钟 120s；`question-budget-window-mode.test.ts`：SC-11 并发在途上限被拒且不计调用数、SC-07 结算 busy 时间达 120 秒即停、SC-01／SC-06 结算模式忽略空闲；`question-budget-continuation.test.ts`：SC-17／SC-18／SC-24／SC-29／SC-30 续查链路；`question-budget-scope-identity.test.ts`：SC-02 空闲不换桶、SC-03／SC-04 重启恢复累计字段与归属、**SC-05 持久层不可读 → `question_budget_unavailable` 且不记为预算终止** | 决策层 ＋ 真实 proxy 重启层；**不覆盖**「尝试次数」一档与「重连／省略 begin_question 不重置任一档预算」的分支 |
+| §10.4／A05 错误与预算不得改写执行结果 | `audit-v025-execution-evidence.test.ts`＋`audit-v025-derivation.test.ts` | 前者「入参/语义校验失败（未执行）→ 不得记为 failed」、「§4.3(a) 规则 9：outcome=ok 但无执行凭据 → 仍落 unknown（禁止 HTTP 200 推定成功）」；后者「F-03：预算终止不得覆盖已发生的授权裁决（allowed 保持 allowed）」 | 分类层；不证明端到端原始码保留 |
+
+### 18.17 闭口层级
+
+- 层级：功能合同
+- 本条承诺：审计事件的主状态与三视图按冻结口径派生；入口先持久 `received` 再放行，审计存储不可用即阻断；标识与归属按证据顺序裁决，不按时间回绑；对账六项覆盖检查各自判定，缺独立证据即 `unknown` 且不合成 `pass`；导出按 as-of 快照封存，内容被改或缺文件时失败关闭；错误与预算按七分类与 162 四维映射落账。
+- 本条出口：S01–S07 的逐条落点（§18.16），含 `webui/server/__tests__/audit-v025-*.test.ts` 11 个文件 165 条用例，以及 §18.16 表内列出的共用夹具文件。本次收口新增 `audit-v025-contract-boundaries.test.ts`（38 条）与 `audit-v025-export-seal-contract.test.ts`（9 条），补的是收口前**没有行为断言**的六处冻结合同：U11 预览／摘要边界（§4.3(c)）、reported／observed／inferred 三族分离（§4.3(e)）、U1 `acknowledged` 写路径的三重比对（§4.3(b)）、统一错误七分类（§10.2）、清单校验重算文件内容（§9.3(b)，实现已在、缺的是测试）、跨出口版本一致性守卫（§4.3(a) 末段）。**运行代码零改动。**
+- 不在本条出口：运行时取证层——S08、§13.2 的 A01–A12（含全部命名子例）、U9 的 Stage 1 与 Stage 2（仍未执行且未排期，§18.14／§18.15）；历史只读样本回放核对（§3 的 177／192／175、110/23/43/1、137/36/2、19 个仅握手分组、Session B 50 工具、Codex 31=23+3+4+1）；浏览器层与移动窄屏；整库旅程与 Agent 产品客户端；真实进程强杀与「上游已执行但回包丢失 → `indeterminate`」分支；`received` 单点提交失败注入；关联头在 HTTP 出站的实际带出；`prevExportId` 版本链与来源声明的行为；客户 linux/amd64 单副本 Kubernetes；镜像构建、部署与客户环境；客户交付与 Wave 0b（仍 `blocked_delivery`）。
+- 上线关系：本条收口不表示可上线
 
 ---
 
