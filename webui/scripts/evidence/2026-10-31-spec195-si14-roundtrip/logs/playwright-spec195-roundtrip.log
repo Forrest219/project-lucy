@@ -1,0 +1,8 @@
+
+Running 1 test using 1 worker
+
+(node:82007) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [chromium-desktop] › tests/performance/spec195-display-roundtrip.spec.ts:166:1 › spec195 display round-trip spec195-roundtrip (3.4s)
+
+  1 passed (3.9s)

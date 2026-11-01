@@ -2,14 +2,14 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档版本 / 日期 | **v1.3** / 2026-10-30 |
+| 文档版本 / 日期 | **v1.4** / 2026-11-01（原 v1.3 / 2026-10-30） |
 | 目标版本 / 优先级 | 不绑定产品版本号 / P1 |
-| 主 Spec | [登录账户页 Spec](../specs/lucy-20261030-login-accounts-spec.md)（**v1.2**） |
+| 主 Spec | [登录账户页 Spec](../specs/lucy-20261030-login-accounts-spec.md)（**v1.3**，功能合同已收口） |
 | 台账号 | 无。不进入 v0.25 升级台账，不另派 WebUI 流水号 |
 | 需求来源 | 2026-10-30：登录账户页改成名册、新建对话框和单账户抽屉。旧路径替换到 `/admin/accounts`。接口保持 `/api/admin/admins` |
-| 状态 | **v1.3：S1–S2 已落地**（2026-10-30）。SC-01–SC-18 全部有通过记录（组件测试、导航测试、术语检查）。**未做浏览器走查、移动窄屏、Docker 重建和客户交付**；组件测试通过不等于这一页已经在运行中的容器里改版 |
+| 状态 | **v1.4：功能合同已收口（2026-11-01）**。S1–S2 已落地，SC-01–SC-18 全部关闭，逐条落点见 Spec §7.1，证据 `docs/reviews/2026-11-01-login-accounts-closure.md`。**未做浏览器走查、移动窄屏、Docker 重建和客户交付**——按 Spec「闭口层级」不在本条出口；组件测试通过不等于这一页已经在运行中的容器里改版。**本条收口不表示可上线** |
 | 授权边界 | 2026-10-30 第 3 轮批准按 v1.2 实现 Plan S1–S2。实现不超出该范围：未动 `/api/admin/admins` 及其子路径，未新增身份源配置页，未在抽屉里编辑显示名，未改 SEC-03-V05 的断言范围 |
-| 验收 | SC-01–SC-18 全部通过，记录见 §5 |
+| 验收 | **已通过**：SC-01–SC-18 全部关闭，逐条落点见 §5.1 与 Spec §7.1。证据等级＝本地自动化（vitest，4 文件 / 62 条全绿）＋ 本地工程门禁；无 CI job、无客户环境证据 |
 | 实施主体 | Lucy WebUI。不修改 KTX 源码 |
 | 已拍板决策 | Spec §4 的 D1–D19 已冻结。v1.2 只收紧 SC-10、SC-11、SC-12、SC-17，不改决策 |
 | 待确认 | 无 |
@@ -157,7 +157,9 @@ D1–D19 已按 Spec §4 冻结。v1.2 按第 2 轮残留收紧三处验收：SC
 | SC-17 | 两组不可执行按钮都断言：可聚焦、气泡关闭时节点在 DOM、气泡文本与节点相同 | `src/__tests__/admin-accounts.test.tsx` |
 | SC-18 | 抽屉里的身份绑定四格（未启用无绑定／未启用有绑定／启用无绑定／启用有绑定） | `src/__tests__/admin-accounts-oidc.test.tsx` |
 
-同批执行的机器门禁：`lint:terminology`、`lint:spec`、`lint:ia-boundary`、`lint:version`、`lint:handbook-baseline`、`lint:handbook-coverage`、`lint:handbook-anchors`、`webui` 的 `build`。`lint:spec-docs` 仍因仓库里已有的三份他人文档 exit 1，与本功能无关。
+同批执行的机器门禁：`lint:terminology`、`lint:spec`、`lint:ia-boundary`、`lint:version`、`lint:handbook-baseline`、`lint:handbook-coverage`、`lint:handbook-anchors`、`webui` 的 `build`。
+
+> **2026-11-01 更正**：原文记「`lint:spec-docs` 仍因仓库里已有的三份他人文档 exit 1，与本功能无关」。该门禁**今日已 exit 0**（343 files scanned，898 baseline exemptions），那三份文档的违规已修复。收口时的实测：`lint:terminology` exit 0（1094 files）、`lint:spec` exit 0、`lint:ia-boundary` exit 0、`lint:version` exit 0（VERSION=0.20.0）、`lint:handbook-baseline` exit 0、`lint:handbook-coverage` exit 0（26 nav entries）、`lint:handbook-anchors` exit 0（108 anchor links · 120 TOC sections）、`webui build` exit 0。
 
 **未执行**：浏览器走查、移动窄屏、Docker 重建、`e2e:real:verify`、客户环境。SEC-03-V05 与 SEC-04-V11 的选择器已按 S2 改完，但 e2e 未在本轮跑。
 

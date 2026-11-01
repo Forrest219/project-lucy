@@ -1290,10 +1290,6 @@
     },
     {
       "file": "docs/plans/2026-10-26-lucy-v0.25-l25-04-skill-owner-implementation-plan.md",
-      "rule": "index"
-    },
-    {
-      "file": "docs/plans/2026-10-26-lucy-v0.25-l25-04-skill-owner-implementation-plan.md",
       "rule": "metadata"
     },
     {
@@ -1786,19 +1782,11 @@
     },
     {
       "file": "docs/specs/lucy-202608-05-demo-builder-arm-default-spec.md",
-      "rule": "metadata"
-    },
-    {
-      "file": "docs/specs/lucy-202608-05-demo-builder-arm-default-spec.md",
       "rule": "pseudocode"
     },
     {
       "file": "docs/specs/lucy-202608-08-image-arch-and-ktx-baseline-fix.md",
       "rule": "index"
-    },
-    {
-      "file": "docs/specs/lucy-202608-08-image-arch-and-ktx-baseline-fix.md",
-      "rule": "metadata"
     },
     {
       "file": "docs/specs/lucy-202608-08-image-arch-and-ktx-baseline-fix.md",
@@ -1853,10 +1841,6 @@
       "rule": "index"
     },
     {
-      "file": "docs/specs/lucy-20261014-concept-dictionary-spec.md",
-      "rule": "metadata"
-    },
-    {
       "file": "docs/specs/lucy-20261014-fivetran-context-layer-competitive-analysis.md",
       "rule": "index"
     },
@@ -1869,16 +1853,8 @@
       "rule": "index"
     },
     {
-      "file": "docs/specs/lucy-20261014-release-bom-spec.md",
-      "rule": "metadata"
-    },
-    {
       "file": "docs/specs/lucy-20261014-safe-log-to-quality-eval-spec.md",
       "rule": "index"
-    },
-    {
-      "file": "docs/specs/lucy-20261014-safe-log-to-quality-eval-spec.md",
-      "rule": "metadata"
     },
     {
       "file": "docs/specs/lucy-20261018-cloudflare-os-benchmark.md",
@@ -2142,19 +2118,11 @@
     },
     {
       "file": "docs/specs/lucy-customer-amd64-offline-delivery-spec.md",
-      "rule": "metadata"
-    },
-    {
-      "file": "docs/specs/lucy-customer-amd64-offline-delivery-spec.md",
       "rule": "pseudocode"
     },
     {
       "file": "docs/specs/lucy-mcp-execution-runtime-ack-debug-spec.md",
       "rule": "index"
-    },
-    {
-      "file": "docs/specs/lucy-mcp-execution-runtime-ack-debug-spec.md",
-      "rule": "metadata"
     },
     {
       "file": "docs/specs/lucy-platform-goal-checklist.md",
@@ -2167,10 +2135,6 @@
     {
       "file": "docs/specs/lucy-poc-demo-isolation-spec.md",
       "rule": "index"
-    },
-    {
-      "file": "docs/specs/lucy-poc-demo-isolation-spec.md",
-      "rule": "metadata"
     },
     {
       "file": "docs/specs/lucy-poc-demo-isolation-spec.md",
@@ -2534,15 +2498,7 @@
     },
     {
       "file": "docs/specs/lucy-202608-05-demo-builder-arm-default-spec.md",
-      "rule": "close-layer"
-    },
-    {
-      "file": "docs/specs/lucy-202608-05-demo-builder-arm-default-spec.md",
       "rule": "filename"
-    },
-    {
-      "file": "docs/specs/lucy-202608-08-image-arch-and-ktx-baseline-fix.md",
-      "rule": "close-layer"
     },
     {
       "file": "docs/specs/lucy-202608-08-image-arch-and-ktx-baseline-fix.md",
@@ -2573,24 +2529,12 @@
       "rule": "filename"
     },
     {
-      "file": "docs/specs/lucy-20261014-concept-dictionary-spec.md",
-      "rule": "close-layer"
-    },
-    {
       "file": "docs/specs/lucy-20261014-fivetran-context-layer-competitive-analysis.md",
       "rule": "close-layer"
     },
     {
       "file": "docs/specs/lucy-20261014-fivetran-context-layer-competitive-analysis.md",
       "rule": "filename"
-    },
-    {
-      "file": "docs/specs/lucy-20261014-release-bom-spec.md",
-      "rule": "close-layer"
-    },
-    {
-      "file": "docs/specs/lucy-20261014-safe-log-to-quality-eval-spec.md",
-      "rule": "close-layer"
     },
     {
       "file": "docs/specs/lucy-20261018-cloudflare-os-benchmark.md",
@@ -2686,10 +2630,6 @@
     },
     {
       "file": "docs/specs/lucy-20261025-v0p25-skill-owner-spec.md",
-      "rule": "close-layer"
-    },
-    {
-      "file": "docs/specs/lucy-20261025-v0p25-skill-owner-spec.md",
       "rule": "filename"
     },
     {
@@ -2758,15 +2698,7 @@
     },
     {
       "file": "docs/specs/lucy-customer-amd64-offline-delivery-spec.md",
-      "rule": "close-layer"
-    },
-    {
-      "file": "docs/specs/lucy-customer-amd64-offline-delivery-spec.md",
       "rule": "filename"
-    },
-    {
-      "file": "docs/specs/lucy-mcp-execution-runtime-ack-debug-spec.md",
-      "rule": "close-layer"
     },
     {
       "file": "docs/specs/lucy-mcp-execution-runtime-ack-debug-spec.md",
@@ -2782,10 +2714,6 @@
     },
     {
       "file": "docs/specs/lucy-poc-demo-isolation-spec.md",
-      "rule": "close-layer"
-    },
-    {
-      "file": "docs/specs/lucy-poc-demo-isolation-spec.md",
       "rule": "filename"
     },
     {
@@ -2795,10 +2723,6 @@
     {
       "file": "docs/specs/lucy-r1-controlled-data-service-plan.md",
       "rule": "filename"
-    },
-    {
-      "file": "docs/specs/lucy-skills-mcp-spec.md",
-      "rule": "close-layer"
     },
     {
       "file": "docs/specs/lucy-skills-mcp-spec.md",

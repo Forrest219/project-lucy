@@ -2,9 +2,9 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档类型 / 版本 | 功能 Spec / v0.1 |
-| 日期 | 2026-10-30 |
-| 状态 | **实现已完成（WO Task 1–6，提交 `ced19d1a`）；SI-01–SI-13 已执行并通过；SI-14 浏览器往返见 §8.1**。未构建镜像、未部署、未改现场实例 |
+| 文档类型 / 版本 | 功能 Spec / v0.2 |
+| 日期 | 2026-10-30；2026-11-01 功能合同收口 |
+| 状态 | **v0.2 功能合同已收口（2026-11-01）**。SI-01–SI-14 全部关闭，证据见 [收口记录](../reviews/2026-11-01-display-snapshot-invalidation-isolation-closure.md)。**本条收口不表示可上线**——镜像构建、部署、客户交付、现场实例复核不在本条出口 |
 | 台账号 | 无（未挂在 v0.25 登记册 L25-01–L25-16 上） |
 | 原流水号 | WebUI 195（原 `webui/docs/195-display-snapshot-invalidation-isolation-spec.md`；按 `docs/governance/DEVELOPMENT.md`「Spec 落位规则」迁入 `docs/specs/`） |
 | 重点 | 同一次已确认变更不重复触发缓存失效；普通 overlay 修改不牵连 Agent 权限展示 |
@@ -239,9 +239,9 @@ SI-14 按 Spec 174 的页面事件/单调时钟与相同就绪谓词采集，保
 | SI-11 | 通过 | `webui/server/__tests__/display-permission-runtime.test.ts` §「SI-11」（统计等待期间 P 变化 → 整批重建，不拼接旧权限与新统计） |
 | SI-12 | 通过 | `webui/server/__tests__/display-snapshot.test.ts` §「SI-12」（busy 原因可区分；诊断不含绝对路径） |
 | SI-13 | 通过 | `webui/src/__tests__/display-refresh-notice.test.tsx`（7）、`src/__tests__/agent-list.test.tsx`、`src/__tests__/catalog-loading.test.tsx`（各 1） |
-| SI-14 | 通过（本地夹具）／现场复核未执行 | 匿名夹具 + 生产构建 + 桌面 Chromium：`npm --prefix webui run perf:entry -- --phase baseline --mode production --scenario spec195-roundtrip --iterations 30 --warmup 5 --output inbox/webui-entry-perf/spec195-roundtrip-final2 --skip-build`。31 个实测样本全部成功、0 个 busy 响应；含一次中途 overlay 编辑后的冷读（1 次请求、网络完成 5.4 ms、主体可见 1.7 ms）。原始样本与结果见 `inbox/spec195/si14/`。**现场实例（`http://10.69.95.109:8276`）复核未执行**：本单未部署新版本，不得以旧实例访问宣称修复已生效 |
+| SI-14 | 通过（本地夹具）／现场复核未执行 | 匿名夹具 + 生产构建 + 桌面 Chromium：`npm --prefix webui run perf:entry -- --phase baseline --mode production --scenario spec195-roundtrip --iterations 30 --warmup 5 --output inbox/webui-entry-perf/spec195-roundtrip-final2 --skip-build`。31 个实测样本全部成功、0 个 busy 响应；含一次中途 overlay 编辑后的冷读（1 次请求、网络完成 5.4 ms、主体可见 1.7 ms）。**原始样本与结果已入库**（与工作区原件逐字节一致）：[`webui/scripts/evidence/2026-10-31-spec195-si14-roundtrip/`](../../webui/scripts/evidence/2026-10-31-spec195-si14-roundtrip/)。**现场实例（`http://10.69.95.109:8276`）复核未执行**：本单未部署新版本，不得以旧实例访问宣称修复已生效 |
 
-基线对照（RED → GREEN）：`inbox/spec195/task1-red-baseline.txt` 记录了在未改实现（HEAD `87d2738b`）上运行新增用例的失败输出——3 个文件 8 个用例失败，失败点为重复失效（D 由 1 变 2 次）、外层 P 屏障（overlay-only 保存推进 P）与全局校验（overlay 不可读时 Agent 也 503）。同一组用例在实现后全绿。
+基线对照（RED → GREEN）：`webui/scripts/evidence/2026-10-31-spec195-si14-roundtrip/red-baseline-task1.txt` 记录了在未改实现（HEAD `87d2738b`）上运行新增用例的失败输出——3 个文件 8 个用例失败，失败点为重复失效（D 由 1 变 2 次）、外层 P 屏障（overlay-only 保存推进 P）与全局校验（overlay 不可读时 Agent 也 503）。同一组用例在实现后全绿。**该 RED 基线已入库**（与工作区原件逐字节一致），收口方可用它核对用例不是空转。
 
 计数口径（文件读取次数 / 失效次数 / 重建次数分开）：一次外部 overlay 版本变更 = 1 次失效通知（`bumpDisplayGeneration`）+ 1 次派生重建；同版本被 metadata 与 full digest 两类扫描先后或并发观察到时仍为 1 次失效、1 次重建。去重只合并失效通知，不取消任何必要的重复读取（metadata 扫描对签名变化的文件读取摘要），也不取消写前 / 写后屏障的代次推进。
 

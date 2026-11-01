@@ -3,13 +3,23 @@
 | Metadata | Content |
 |---|---|
 | Document name | Lucy Concept Dictionary Spec |
-| Document type | Product / Semantic Layer Spec |
-| Version | v0.1 |
+| 文档类型 / Document type | Product / Semantic Layer Spec |
+| 版本 / Version | v0.1 |
 | Written date | 2026-10-14 |
 | Related blueprint | `docs/specs/lucy-20261014-fivetran-context-layer-competitive-analysis.md` v1.4 §3 P1、§7.3、§7.4 |
 | Related ACL baseline | `docs/access-control/design-upgrade.md` v1.1.2；`webui/docs/07-mcp-auth-proxy-spec.md` |
 | Related work order | `docs/plans/wo-20261014-concept-dictionary.md` |
 | Scope | 概念字典 YAML Schema、运行时暴露（冷拉取 + 热注入）、跨域激活门控、ACL 一致性 |
+| 状态 | **形态已合规（2026-11-01 补「闭口层级」小节与「状态」行）。本条功能合同尚未收口**——本批只做形态修复，不改实现、不补验收证据。实现现状：全仓未找到概念字典实现，配套 Work Order `docs/plans/wo-20261014-concept-dictionary.md` 仍是 v0.1 草案。[盘点](../reviews/2026-11-01-spec-closure-inventory.md) |
+
+## 闭口层级
+
+- 层级：功能合同
+- 本条承诺：概念字典以一份 YAML Schema 定义跨域概念，并能在运行时冷拉取、热注入，且与既有 ACL 基线保持一致。
+- 本条出口：本 Spec 的 YAML Schema 校验、跨域激活门控判定与 ACL 一致性自检（相对蓝图 v1.4 §3 P1、§7.3、§7.4；ACL 基线 `docs/access-control/design-upgrade.md` v1.1.2）。
+- 不在本条出口：概念字典的实际运行时注入（实现尚未落地）；整库旅程、跨模块故障演练、证据等级；镜像构建与客户交付。
+- 上线关系：本条收口不表示可上线
+
 
 ---
 

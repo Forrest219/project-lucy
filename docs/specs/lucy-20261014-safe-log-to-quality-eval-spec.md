@@ -3,13 +3,23 @@
 | Metadata | Content |
 |---|---|
 | Document name | Lucy Safe Log-to-Quality-Eval Feedback Loop Spec |
-| Document type | Product / API / Quality Eval Data Contract Spec |
-| Version | v0.1 |
+| 文档类型 / Document type | Product / API / Quality Eval Data Contract Spec |
+| 版本 / Version | v0.1 |
 | Written date | 2026-10-14 |
 | Related blueprint | `docs/specs/lucy-20261014-fivetran-context-layer-competitive-analysis.md` v1.4 §3 P0-1、§7.4 |
 | Predecessor (security domain) | `webui/docs/65-safe-log-to-Security-Eval-spec.md` v0.3；实现见 `webui/server/eval/security-candidates.ts` |
 | Related work order | `docs/plans/wo-20261014-safe-log-to-quality-eval.md` |
 | Scope | Quality Candidate Pool、L1 断言型候选、L2 Intent Gap Draft、L3 人工补全、质量 `executable` 契约晋升 |
+| 状态 | **形态已合规（2026-11-01 补「闭口层级」小节与「状态」行）。本条功能合同尚未收口**——本批只做形态修复，不改实现、不补验收证据。实现现状：前身安全域已实施（`webui/docs/65-safe-log-to-Security-Eval-spec.md` v0.3；实现见 `webui/server/eval/security-candidates.ts`），**质量域本条未落地**，配套 Work Order `docs/plans/wo-20261014-safe-log-to-quality-eval.md` 仍是 v0.1 草案。[盘点](../reviews/2026-11-01-spec-closure-inventory.md) |
+
+## 闭口层级
+
+- 层级：功能合同
+- 本条承诺：安全的问答日志能沿「L1 断言型候选 → L2 Intent Gap 草稿 → L3 人工补全」上升为质量评测候选，并通过 `executable` 契约晋升为可执行的评测用例。
+- 本条出口：本 Spec 的候选池分级、L1／L2／L3 三级流转规则与 `executable` 晋升契约的自检（相对蓝图 v1.4 §3 P0-1、§7.4）。
+- 不在本条出口：前身安全域（`webui/docs/65-safe-log-to-Security-Eval-spec.md` v0.3）的既有合同——本条**只做质量域增量**，不重开安全域出口；真实日志回灌与评测运行；整库旅程、跨模块故障演练、证据等级。
+- 上线关系：本条收口不表示可上线
+
 
 ---
 
