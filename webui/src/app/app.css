@@ -900,10 +900,51 @@
   .pl-audit-id-copy {
     @apply inline max-w-[14rem] truncate rounded-sm px-0.5 text-left hover:bg-bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary;
   }
+  /* Spec lucy-20261102-audit-turns-column-density: inquiry serial is short; drop UUID-era 14rem reserve. */
+  .pl-audit-turns-table {
+    table-layout: fixed;
+    min-width: 90rem;
+  }
+  .pl-audit-turns-col-index { width: 3rem; }
+  .pl-audit-turns-col-id { width: 7rem; }
+  .pl-audit-turns-col-time { width: 6rem; }
+  .pl-audit-turns-col-duration { width: 7.5rem; }
+  .pl-audit-turns-col-agent { width: 8rem; }
+  .pl-audit-turns-col-client { width: 8rem; }
+  .pl-audit-turns-col-session { width: 7rem; }
+  .pl-audit-turns-col-kind { width: 5.75rem; }
+  .pl-audit-turns-col-summary { width: 12rem; }
+  .pl-audit-turns-col-calls { width: 3.5rem; }
+  .pl-audit-turns-col-budget { width: 3.75rem; }
+  .pl-audit-turns-col-tables { width: 10rem; }
+  .pl-audit-turns-col-result { width: 9rem; }
+  .pl-audit-turns-col-source { width: 6.5rem; }
+  .pl-audit-turns-table th.pl-audit-turns-col-calls,
+  .pl-audit-turns-table th.pl-audit-turns-col-budget,
+  .pl-audit-turns-table th.pl-audit-turns-col-client,
+  .pl-audit-turns-table th.pl-audit-turns-col-session,
+  .pl-audit-turns-table th.pl-audit-turns-col-duration {
+    white-space: normal;
+    line-height: 1.25;
+    vertical-align: bottom;
+  }
+  .pl-audit-turns-table td.pl-audit-turns-col-session,
+  .pl-audit-turns-table td.pl-audit-turns-col-client {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    white-space: normal;
+    line-height: 1.25;
+  }
+  .pl-audit-duration-stack {
+    @apply grid whitespace-nowrap tabular-nums leading-4;
+  }
+  .pl-audit-duration-stack [data-part="exec"] {
+    @apply text-fg-muted;
+  }
   .pl-audit-turn-id-cell {
-    width: 14rem;
-    min-width: 11rem;
-    max-width: 14rem;
+    width: 7rem;
+    min-width: 6rem;
+    max-width: 7rem;
   }
   .pl-audit-turn-id-cell .pl-audit-id-copy {
     @apply block max-w-none whitespace-normal break-all leading-4;

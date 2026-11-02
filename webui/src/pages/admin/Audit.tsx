@@ -2457,14 +2457,14 @@ export function Audit() {
                   <th className="pl-audit-turns-col-index whitespace-nowrap">序号</th>
                   <th className="pl-audit-turns-col-id whitespace-nowrap">问询 ID</th>
                   <th className="pl-audit-turns-col-time whitespace-nowrap">开始时间</th>
-                  <th className="pl-audit-turns-col-duration whitespace-nowrap">问询时长</th>
+                  <th className="pl-audit-turns-col-duration">问询时长</th>
                   <th className="pl-audit-turns-col-agent whitespace-nowrap"><span className="notranslate" translate="no">Agent</span></th>
-                  <th className="whitespace-nowrap">客户端</th>
-                  <th className="whitespace-nowrap">会话 ID</th>
-                  <th className="whitespace-nowrap">问询种类</th>
+                  <th className="pl-audit-turns-col-client">客户端</th>
+                  <th className="pl-audit-turns-col-session">会话 ID</th>
+                  <th className="pl-audit-turns-col-kind whitespace-nowrap">问询种类</th>
                   <th className="pl-audit-turns-col-summary whitespace-nowrap">问询摘要</th>
-                  <th className="pl-audit-turns-col-calls whitespace-nowrap">关联调用数</th>
-                  <th className="whitespace-nowrap">预算终止次数</th>
+                  <th className="pl-audit-turns-col-calls">关联调用数</th>
+                  <th className="pl-audit-turns-col-budget">预算终止次数</th>
                   <th className="pl-audit-turns-col-tables whitespace-nowrap">涉及数据表</th>
                   <th className="pl-audit-turns-col-result whitespace-nowrap">结果</th>
                   <th className="pl-audit-turns-col-source pl-audit-turn-source-cell whitespace-nowrap">来源</th>
@@ -2494,30 +2494,32 @@ export function Audit() {
                             <span className="text-fg-muted">—</span>
                           )}
                         </td>
-                        <td className="pl-audit-table-muted whitespace-nowrap tabular-nums">
-                          {formatConfigAuditTs(entry.startedAt)}
+                        <td className="pl-audit-table-muted pl-audit-turns-col-time">
+                          <AuditDateTime value={entry.startedAt} />
                         </td>
-                        <td className="pl-audit-turn-duration-cell">
-                          {formatDurationMs(entry.turnSpanMs ?? 0)}
-                          {(entry.totalCallDurationMs ?? 0) > 0 ? (
-                            <span className="text-fg-muted"> · 执 {formatDurationMs(entry.totalCallDurationMs ?? 0)}</span>
-                          ) : null}
+                        <td className="pl-audit-turn-duration-cell pl-audit-turns-col-duration">
+                          <span className="pl-audit-duration-stack">
+                            <span data-part="span">{formatDurationMs(entry.turnSpanMs ?? 0)}</span>
+                            {(entry.totalCallDurationMs ?? 0) > 0 ? (
+                              <span data-part="exec">执 {formatDurationMs(entry.totalCallDurationMs ?? 0)}</span>
+                            ) : null}
+                          </span>
                         </td>
                         <td className="notranslate" translate="no">{formatAgentLabel(entry.userId, agentNameById)}</td>
-                        <td className="notranslate" translate="no">{entry.client || "—"}</td>
-                        <td className="pl-audit-table-mono notranslate" translate="no">{entry.sessionId || "—"}</td>
-                        <td data-testid={`audit-turn-kind-${entry.id}`}>{inquiryKindLabel(entry.inquiryKind)}</td>
+                        <td className="pl-audit-turns-col-client notranslate" translate="no" title={entry.client || undefined}>{entry.client || "—"}</td>
+                        <td className="pl-audit-table-mono pl-audit-turns-col-session notranslate" translate="no" title={entry.sessionId || undefined}>{entry.sessionId || "—"}</td>
+                        <td className="pl-audit-turns-col-kind" data-testid={`audit-turn-kind-${entry.id}`}>{inquiryKindLabel(entry.inquiryKind)}</td>
                         <td className="pl-audit-turn-summary-cell">
                           {entry.inquiryKind === "session_visit" ? "—" : (entry.questionPreview ?? entry.questionSummary ?? "—")}
                         </td>
-                        <td className="pl-audit-table-num">{entry.linkedCallCount}</td>
-                        <td className="pl-audit-table-num">{entry.outcomeSummary?.budgetStop ?? 0}</td>
+                        <td className="pl-audit-table-num pl-audit-turns-col-calls">{entry.linkedCallCount}</td>
+                        <td className="pl-audit-table-num pl-audit-turns-col-budget">{entry.outcomeSummary?.budgetStop ?? 0}</td>
                         <td className="pl-audit-table-muted pl-audit-turn-tables-cell notranslate" translate="no" title={entry.sources.map((s) => s.physicalTable).filter(Boolean).join(", ") || undefined}>
                           {entry.sources.length === 0 && denied > 0
                             ? <span className="text-fg-muted">未下发</span>
                             : formatTablesCell(entry.sources)}
                         </td>
-                        <td>
+                        <td className="pl-audit-turns-col-result">
                           {/* 八桶主状态（B27）。「成功」只在**全部**关联调用都落在
                               succeeded 桶时才成立；旧三桶（denied/error）不再
                               充当执行结论 —— 预算终止 / 未执行 / 未知都不是
