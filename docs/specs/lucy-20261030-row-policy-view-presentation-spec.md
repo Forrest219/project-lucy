@@ -293,7 +293,7 @@ DNF 多分支时，本页传 `predicateLayout="stacked"`：一支一块，支与
 │
 ├─ 有效行授予（结论区，与上区并重）
 │    标题「有效行授予」单独成行（h2／既有 pl-panel-title 级别均可，但不得与来源角色混排）
-│    次行弱文案：来源角色：{roleIds}（无贡献角色则省略整行）
+│    次行弱文案：来源角色：{roleIds}（无贡献角色则省略整行）。这行渲染的是角色 id，按 Terminology Compliance 的 Protected DOM 段整行带 translate="no" + notranslate
 │    主结论：行权限：全部行 / stacked DNF / 不可用句（字重高于溯源区正文）
 │    边界句 footnote（既有原文与 test id）
 │

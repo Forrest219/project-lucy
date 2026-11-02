@@ -4,7 +4,8 @@
 |---|---|
 | 文档名称 | project-lucy 项目概览 |
 | 文档类型 | Overview |
-| 版本 | v1.99 |
+| 版本 | v1.100 |
+| v1.100 更新 | 2026-11-03，**L25-14 行策略模板与按表反查功能合同收口（Spec v0.2）**。RTP-01–RTP-10、RTV-01–RTV-08 共 **18 条全部关闭**：RTV-07 此前「部分通过」时如实登记的最后 1 处真实实现缺口（并集小节「来源角色：{角色 id 列表}」缺 `translate="no"` + `notranslate`）已由 `70f27ba0` 修复，该段现在带翻译防御；组件用例里登记缺口的 `it.fails` 随之改为正向断言，全页机器标识扫描的已知缺口名单清空。**v1.88 与 v1.92 行所载「RTV-07 仍有一处翻译防御缺口」已不成立**——历史行按惯例不回改，现值以本行为准。逐条落点见 Spec §8.1，证据 `docs/reviews/2026-11-01-row-policy-templates-and-view-closure.md` §七。§9 现行行同步。**本条收口不表示可上线**——浏览器实测与移动窄屏、镜像构建与部署、客户环境验证与客户交付不在本条出口。⚠️ 版本号为跨会话共享计数器，写前须实读顶部版本行取 current+1 |
 | v1.99 更新 | 2026-11-02，**删掉五条现行段里残留的发布未执行句**。功能出口不变。发布编号不改成通过。L25-16 现行行改为 G30 已收口，W-B 仍看 G31。⚠️ 版本号为跨会话共享计数器，写前须实读顶部版本行取 current+1 |
 | v1.98 更新 | 2026-11-02，**五条清单的功能合同收口，发布类从现行状态删除**。L25-09、L25-14、L25-02／03、L25-11、2026-10-19 审计可信度的现行状态只留产品出口；发布编号（`AUD25`、`ROW25`、`ARV25`、`SEM25`、EA）从现行状态删除，**不改成通过**。L25-02／03 补两句页面行为；L25-11 的 G30 按「校验只产报告，不产可发布计划」收口，不打开 W-B。不跑 E2E，不改冻结 catalog。记录 `docs/reviews/2026-11-02-functional-close-release-delete.md`。§9 现行行同步。⚠️ 版本号为跨会话共享计数器，写前须实读顶部版本行取 current+1 |
 | v1.97 更新 | 2026-11-02，**四条清单的发布和现场退出升级现行状态**。产品只收口已有断言的部分。未执行的发布编号不改成通过。记录 `docs/reviews/2026-11-02-upgrade-list-product-release-split.md`。⚠️ 版本号为跨会话共享计数器，写前须实读顶部版本行取 current+1 |
@@ -249,7 +250,7 @@ Lucy MCP Proxy 监听 `LUCY_PROXY_HOST:LUCY_PROXY_PORT`（默认容器内 `0.0.0
 | 运维控制面 MCP（v0.25 L25-16，P1，Spec v1.3／Plan v0.11，**W-A 已授权实现 S1–S4**，W-B 不可交付开发） | [运维控制面 Spec](../specs/lucy-20261028-v0p25-lucy-ops-control-plane-spec.md)、[实施 Plan](../plans/2026-10-28-lucy-v0.25-lucy-ops-control-plane-implementation-plan.md)。2026-10-29 PM 授权 Claude Code 落地连接表与源表导入。语义发布留在本条。G30 已收口。W-B 仍看 G31。；**D8 已签（(b) 显式批次交接）**。VOPS-27 与 VOPS-30 已拆出，其余 VOPS 仍未执行。**定向复审（2026-10-29，窄范围，非第 8 轮全量）**：查出 **T-01（中高）幂等表物理落点未冻结**并已修（幂等表冻结在 `audit.sqlite` 内、与 `config_change_log` 同库不同表）；其余复核项自洽。现行规格是 Spec v1.3／Plan v0.11。W-A 已授权实现 S1–S4。**D8 与 L25-15 S0 已由 PM 签下**。**〔登记归属：现行状态以 Spec 头部为准。改这一行须按 DEVELOPMENT.md「状态登记只有一份现值」同批改完建议书 §2.10、`docs/README.md` 与 `docs/plans/README.md`。2026-10-29 的「勿写此行」不再有效。〕** |
 | 升级候选验证环境（v0.25 L25-13，P1-6，已实现，未验收，非门禁） | [升级候选验证 Spec](../specs/lucy-20261025-v0p25-upgrade-candidate-verification-spec.md)、[上游实施方案](../plans/2026-10-22-upgrade-candidate-verification-plan.md)。以一致性备份在隔离环境验证候选迁移与业务／审计连续性；提交 `28780eae`，真实升级与真实备份未执行（记 `blocked_delivery`），RVC-01–13 全部未执行，原地升级仍为客户现场主线 |
 | 行权限安全管理（v0.25 L25-14，P0-2，**P0 已收口**） | [行权限管理 Spec](../specs/lucy-20261022-v2p5-row-permission-management-spec.md)。**P0 已收口。** 出口只含 R2／R4／R5 的产品入口回归与演示卷删除确认。D-03 台账现行值是 `fixed`（见 Spec §14.9）。R1／R3 现行状态见行策略模板 Spec 头部。本条收口不表示可上线 |
-| 行策略模板与按表反查（v0.25 L25-14 R1／R3，P1-1，**部分收口（2026-11-01）**） | [行策略模板与反查 Spec](../specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md)。RTP-01–RTP-10、RTV-01–RTV-06、RTV-08 已关闭。RTV-07 部分通过，还剩「来源角色」列表缺翻译防御。本条收口不表示可上线 |
+| 行策略模板与按表反查（v0.25 L25-14 R1／R3，P1-1，**已收口（2026-11-03）**） | [行策略模板与反查 Spec](../specs/lucy-20261025-v0p25-row-policy-templates-and-view-spec.md)。RTP-01–RTP-10、RTV-01–RTV-08 共 18 条已关闭（RTV-07 最后一处「来源角色」列表翻译防御实现缺口已由 `70f27ba0` 修复）。本条收口不表示可上线 |
 | 授权摘要与调试深链（v0.25 L25-01，P1-2，**功能合同已收口（2026-11-01）**） | [授权摘要 Spec](../specs/lucy-20261025-v0p25-access-authorization-summary-spec.md)。ASV-01–ASV-14 已关闭。本条收口不表示可上线 |
 | 访问关系图（v0.25 L25-08，P1-3，已实现，未验收） | [Access Map Spec](../../webui/docs/187-access-relation-sankey-spec.md)。只读访问关系视图已落地（落点 `webui/src/pages/admin/AccessMap.tsx`）；提交 `28780eae`，SC-01–14 全部未执行，F-02 留作实施前待办 |
 | 升级 E2E 自动化（v0.25 L25-07，P1-5，已实现，未验收，非门禁） | [升级 E2E 自动化 Spec](../specs/lucy-20261025-v0p25-upgrade-e2e-automation-spec.md)、[上游实施方案](../plans/2026-10-19-upgrade-e2e-implementation-plan.md)。覆盖 Docker／K3s／K8s、备份恢复及业务与安全连续性；提交 `28780eae`，真实升级执行未授权（记 `blocked_delivery`），UPG-01–16 全部未执行 |

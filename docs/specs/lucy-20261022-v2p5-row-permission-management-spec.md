@@ -1019,7 +1019,7 @@ C14–C18 已完成代码实施并完成实现后静态复审（自审），落�
 2026-11-02：下面原列「V01–V22 全部仍为未执行、C19 未执行、D-03 仍 open」已作废，不得当作现值。现行出口见头部与 §14.9。D-03 的现行值以 §14.9 的 `fixed` 为准。
 
 - 本轮按约束未做 docker 重建，也未执行浏览器测试、real-e2e、镜像构建与真实环境连接。该句是 2026-10-27 当轮记录。
-- R1 模板与 R3 视图的现行状态见行策略模板 Spec 头部。RTV-07 仍有翻译防御缺口。
+- R1 模板与 R3 视图的现行状态见行策略模板 Spec 头部。2026-11-03：「RTV-07 仍有翻译防御缺口」已作废，不得当作现值——该缺口已由 `70f27ba0` 修复，现行值为 RTV-01–RTV-08 共 18 条全部关闭。
 - 恢复闸门分层落地：数据面策略重编译路径只核验持久标记与内存闸（不依赖审计库可用性），未终结行策略 intent 的核验放在进程启动与每次 access 写入准入两处；任一来源不可判定仍保守关闭。
 
 
@@ -1036,7 +1036,7 @@ C14–C18 已完成代码实施并完成实现后静态复审（自审），落�
 本节登记 P0 出口。D-03 的现行值是 `fixed`。
 
 - **2026-10-30 P0 收口**：L25-14 的 P0 出口只含 R2／R4／R5。证据是产品入口回归（`webui/server/__tests__/row-policy-product-entry.test.ts`）和演示卷上已经走过的删除确认。浏览器、Agent 客户端、`fault-control` 和 real-e2e 采集结果不在本条出口。V15 的九段故障注入不在本条出口。
-- **2026-10-30 R1／R3**：P1-1 的出口是 `webui/server/__tests__/p1-row-policy-templates.test.ts` 与 `webui/server/__tests__/p1-row-policy-views.test.ts`。当时已关闭 RTP-01–RTP-10、RTV-01、RTV-02、RTV-03、RTV-04、RTV-05、RTV-08。2026-11-02：「RTV-06 保持开放」「RTV-07 保持开放」已作废，不得当作现值。R1／R3 现行状态见行策略模板 Spec 头部。RTV-07 仍有翻译防御缺口。RTP25／RTV25 的执行状态不回开已关闭的编号，也不回开本条 P0。
+- **2026-10-30 R1／R3**：P1-1 的出口是 `webui/server/__tests__/p1-row-policy-templates.test.ts` 与 `webui/server/__tests__/p1-row-policy-views.test.ts`。当时已关闭 RTP-01–RTP-10、RTV-01、RTV-02、RTV-03、RTV-04、RTV-05、RTV-08。2026-11-02：「RTV-06 保持开放」「RTV-07 保持开放」已作废，不得当作现值。R1／R3 现行状态见行策略模板 Spec 头部。2026-11-03：「RTV-07 仍有翻译防御缺口」已作废，不得当作现值——该缺口已由 `70f27ba0` 修复，现行值为 RTV-01–RTV-08 共 18 条全部关闭。RTP25／RTV25 的执行状态不回开已关闭的编号，也不回开本条 P0。
 - **2026-10-30 D-03**：台账 `status=fixed`，`fixedIn=b7b157354d970860cdb03552c5d5839d7a7ccb9f`。验证是 `webui/server/__tests__/row-policy-d03-uppercase.test.ts` 与 `webui/server/__tests__/row-policy-d03-realfs.test.ts`。
 - **已从本条删除（2026-11-02）**：客户 Linux 大写 Schema 与 Wave 0b 已从本条删除，归交付与 E2E，不回开 P0，不把客户交付写成通过。
 
