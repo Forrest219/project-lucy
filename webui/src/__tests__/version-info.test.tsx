@@ -110,7 +110,7 @@ describe("VersionInfo", () => {
     renderPage();
 
     const product = await screen.findByTestId("version-info-product");
-    expect(product).toHaveTextContent("0.20.0");
+    expect(product.textContent?.trim()).toBe("0.20.0");
     expect(product.className).toContain("text-2xl");
     expect(product).toHaveAttribute("translate", "no");
     expect(product.className).toContain("notranslate");
@@ -126,6 +126,20 @@ describe("VersionInfo", () => {
     const buildRow = screen.getByTestId("version-info-sha").parentElement;
     expect(buildRow?.className ?? "").not.toContain("mt-4");
     expect(screen.getByTestId("version-info-ktx").className).not.toContain("mt-4");
+  });
+
+  it("SC-02 strips a v prefix from the health payload", async () => {
+    mockHealth({
+      lucyVersion: "v0.20.0",
+      gitSha: SHA,
+      gitDirty: false,
+      bundledKtxVersion: "0.16.0"
+    });
+
+    renderPage();
+
+    const product = await screen.findByTestId("version-info-product");
+    expect(product.textContent?.trim()).toBe("0.20.0");
   });
 
   it("SC-03 shows the first 12 characters and copies the full commit", async () => {
@@ -163,7 +177,24 @@ describe("VersionInfo", () => {
     expect(screen.queryByTestId("version-info-copy")).not.toBeInTheDocument();
   });
 
-  it("SC-06 renders the build commit row", async () => {
+  it("SC-05 hides workspace status when the recorded build is dirty", async () => {
+    mockHealth({
+      lucyVersion: "0.20.0",
+      gitSha: SHA,
+      gitDirty: true,
+      bundledKtxVersion: "0.16.0"
+    });
+
+    renderPage();
+
+    const sha = await screen.findByTestId("version-info-sha");
+    expect(sha.textContent?.trim()).toBe(SHA.slice(0, 12));
+    expect(screen.getByTestId("version-info-copy")).toBeInTheDocument();
+    expect(screen.queryByTestId("version-info-workspace")).not.toBeInTheDocument();
+    expect(document.body.textContent ?? "").not.toContain("构建时工作区有未提交改动");
+  });
+
+  it("SC-06 renders the build commit row without workspace status", async () => {
     mockHealth({
       lucyVersion: "0.20.0",
       gitSha: SHA,
@@ -174,6 +205,9 @@ describe("VersionInfo", () => {
     renderPage();
 
     expect(await screen.findByTestId("version-info-sha")).toHaveTextContent(SHA.slice(0, 12));
+    expect(screen.getByTestId("version-info-copy")).toBeInTheDocument();
+    expect(screen.queryByTestId("version-info-workspace")).not.toBeInTheDocument();
+    expect(document.body.textContent ?? "").not.toContain("构建时工作区有未提交改动");
   });
 
   it("SC-07 keeps the bundled KTX version visible without a disclosure", async () => {
