@@ -244,6 +244,16 @@
       "reason": null
     },
     {
+      "path": "scripts/e2e/__tests__/j01-schema.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/j01-schema.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
       "path": "scripts/e2e/__tests__/j01-state.test.mjs",
       "runner": "node --test",
       "environment": "deterministic",
