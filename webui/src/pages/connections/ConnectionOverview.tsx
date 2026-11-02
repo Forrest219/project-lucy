@@ -62,7 +62,7 @@ import { catalogReloadsQueryOptions, mcpRuntimeStatusQueryOptions, projectQueryO
 const AddSchemaDrawer = lazy(() => import("../../components/AddSchemaDrawer").then((m) => ({ default: m.AddSchemaDrawer })));
 const PrepareSchemaStructureDrawer = lazy(() => import("../../components/SchemaStructurePrep").then((m) => ({ default: m.PrepareSchemaStructureDrawer })));
 const CreateConnectionDrawer = lazy(() => import("../../components/CreateConnectionDrawer").then((m) => ({ default: m.CreateConnectionDrawer })));
-const EditConnectionDrawer = lazy(() => import("../../components/connections/EditConnectionDrawer").then((m) => ({ default: m.EditConnectionDrawer })));
+const EditConnectionDialog = lazy(() => import("../../components/connections/EditConnectionDialog").then((m) => ({ default: m.EditConnectionDialog })));
 const DeleteConnectionDrawer = lazy(() => import("../../components/DeleteConnectionDrawer").then((m) => ({ default: m.DeleteConnectionDrawer })));
 const RemoveSchemaDrawer = lazy(() => import("../../components/RemoveSchemaDrawer").then((m) => ({ default: m.RemoveSchemaDrawer })));
 const SetupAssistantModal = lazy(() => import("../../components/onboarding").then((m) => ({ default: m.SetupAssistantModal })));
@@ -1682,7 +1682,7 @@ export function ConnectionOverview() {
         />
       ) : null}
       {editTarget ? (
-        <EditConnectionDrawer
+        <EditConnectionDialog
           open
           connection={editTarget}
           onClose={() => setEditTarget(null)}

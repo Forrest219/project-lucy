@@ -2,16 +2,16 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档类型 / 版本 | Spec / **v0.3 功能合同已收口（交叉审阅 r2 补口）** |
-| 日期 / 目标版本 | 2026-11-01 / 不绑定产品版本号 |
+| 文档类型 / 版本 | Spec / **v0.4.3 UX Dialog 补口文档定稿** |
+| 日期 / 目标版本 | 2026-11-01（服务端）／2026-11-02（UX Dialog 补口）／不绑定产品版本号 |
 | 功能编号 / 优先级 | **无** / **P1**（连接运维主路径缺口）。不进入 [`docs/plans/2026-10-18-lucy-2.5-upgrade-proposal.md`](../plans/2026-10-18-lucy-2.5-upgrade-proposal.md) 登记册 |
-| 状态 | **v0.3 功能合同已收口（2026-11-01）**。交叉审阅 r1→r3=A。SC-01–SC-23 全部关闭（服务端／API／组件／术语；相关套件 5 文件 81/81；`lint:terminology` exit 0）。实施与收口见 [`docs/reviews/2026-11-01-connection-endpoint-edit-closure.md`](../reviews/2026-11-01-connection-endpoint-edit-closure.md)。本条收口不表示可上线 |
-| 决策来源 | 连接概览无法改 host/port，只能删除重建；企业工具（如 Tableau）允许改服务器地址；场景为测库 ↔ 生产库切换（结构大体同构、数据不同） |
-| 需求来源 | 委托人产品评估与方案批准（2026-11-01）；交叉审阅 r1 |
-| 实施主体 | WebUI：连接概览卡片入口 + `EditConnectionDrawer`；服务端：`updateConnectionEndpoint` + `POST /api/connections/:connId/endpoint`；**新增** `decideEndpointEditGate`（复用 Spec 160 **匹配键**，不复用新建决策器）；**新增** `safeOverwriteSecretPassword` |
+| 状态 | **v0.4.3 UX Dialog 补口已实施，功能合同未收口（2026-11-02）**。Codex r1–r4 见 [`docs/reviews/2026-11-02-codex-review-connection-endpoint-edit-dialog.md`](../reviews/2026-11-02-codex-review-connection-endpoint-edit-dialog.md)。服务端 SC 仍以 [`docs/reviews/2026-11-01-connection-endpoint-edit-closure.md`](../reviews/2026-11-01-connection-endpoint-edit-closure.md) 为准；UX SC-11–14／22／24–27 自动化已落（`edit-connection-dialog.test.tsx` 7/7），尚无逐条收口记录。本条收口不表示可上线 |
+| 决策来源 | 连接概览无法改 host/port，只能删除重建；企业工具（如 Tableau）允许改服务器地址；场景为测库 ↔ 生产库切换（结构大体同构、数据不同）。2026-11-02：UAT 发现现实现用无 CSS 的 `pl-drawer-root`／`pl-drawer`，编辑表单掉到页底；委托人批准对齐 Tableau **Edit Connection dialog**（方案 A） |
+| 需求来源 | 委托人产品评估与方案批准（2026-11-01）；交叉审阅 r1；2026-11-02 UX 补口批准（方案 A） |
+| 实施主体 | WebUI：连接概览卡片入口 + **`EditConnectionDialog`**（居中 modal，替换失效的 inline Drawer）；服务端：`updateConnectionEndpoint` + `POST /api/connections/:connId/endpoint`（v0.3 已落地，本轮不改合同）；`decideEndpointEditGate`；`safeOverwriteSecretPassword` |
 | 落位依据 | [`docs/governance/DEVELOPMENT.md`](../governance/DEVELOPMENT.md)「Spec 落位规则」与「功能闭口与发布取证」 |
-| 与既有 Spec 的关系 | **承接** Spec 124 开放项；**修正** Spec 26 / 160 / 127 Non-Goal（本条范围内）。Spec 184 / 181 不在本条。不修改 `createConnection` 测失败是否回滚的既有实现 |
-| 审阅 | r1–r3：`inbox/2026-11-01-connection-endpoint-edit-spec-plan-cross-review-r{1,2,3}.md` |
+| 与既有 Spec 的关系 | **承接** Spec 124 开放项；**修正** Spec 26 / 160 / 127 Non-Goal（本条范围内）。Spec 184 / 181 不在本条。不修改 `createConnection` 测失败是否回滚的既有实现。v0.4 **只修订 UX 呈现**，不重开服务端写入合同 |
+| 审阅 | 服务端 r1–r3（2026-11-01）；UX 补口：[`docs/reviews/2026-11-02-codex-review-connection-endpoint-edit-dialog.md`](../reviews/2026-11-02-codex-review-connection-endpoint-edit-dialog.md)（Codex CLI 三轮） |
 | 实施计划 | [`docs/plans/lucy-20261101-connection-endpoint-edit-plan.md`](../plans/lucy-20261101-connection-endpoint-edit-plan.md) |
 
 ### Changelog
@@ -20,14 +20,20 @@
 |---|---|
 | v0.1 | 初稿：方案 A；测/生产同构；软结构警告 |
 | v0.2 | 交叉审阅 r1：编辑专用门禁；锁内回滚基线；非 file: 密码拒绝；Drawer `current` 预填；secret 覆盖写合同；presence 三态强制；SC 扩至 SC-01–SC-22；手册同步范围 |
-| v0.3 | 交叉审阅 r2：presence 绑定 live-tables；连通失败一律回滚（本条不做 failureKind）；`lucy-ops` 无条件禁改；门禁 reason 映射 / 校验码 / 信封 / 审计摘要等 P2 补口；SC-23；**功能合同已收口**（SC-01–SC-23，见 §12.1） |
+| v0.3 | 交叉审阅 r2：presence 绑定 live-tables；连通失败一律回滚（本条不做 failureKind）；`lucy-ops` 无条件禁改；门禁 reason 映射 / 校验码 / 信封 / 审计摘要等 P2 补口；SC-23；**服务端功能合同已收口**（SC-01–SC-23，见 §12.1） |
+| v0.4 | UX 补口：对齐 Tableau Edit Connection **居中 Dialog**；废止 inline/`pl-drawer-root` Drawer 呈现；组件更名为 `EditConnectionDialog`；§9／Design System／SC-11–14／22 修订；新增 SC-24–SC-27（遮罩、居中、禁页底内联、提交中禁关） |
+| v0.4.1 | Codex r1（UX-01–UX-08）：明确 jsdom＋生产 CSS 取证；表单必须在 Dialog 面板内且面板外零可编辑字段；submitting 守卫覆盖全部关闭入口；Toast 参数断言成功文案禁令；分范围 primary 计数；SC-14 逐项术语；收口镜像含 §12.2；收口前必须删除旧 Drawer 文件 |
+| v0.4.2 | Codex r2：闭合 UX-01 残留（断言 `app.css` 中 modal 规则含 fixed／inset／居中，删改侧栏须失败）；焦点列入 SC-25；验收命令可从仓库根连续执行；残留扫描分源码／文档且错误失败 |
+| v0.4.3 | Codex r3：遮罩 CSS 须含建立居中的布局方式（`flex` 或等价）；掏空 `flex` 夹具须失败；残留 `rg` 按退出码 0／1／其他三分 |
 
 ## 闭口层级
 
 - 层级：功能合同
-- 本条承诺：运维可在连接概览就地修改已有连接的服务器地址（及可选用户名；在约定 `file:` 密码来源下可选覆盖密码）；连通测试通过后落盘；连接 ID 与 Schema / 启用表范围 / 角色 / 语义 / Wiki 引用保持不变。
-- 本条出口：SC-01–SC-23（服务端单测 + API 测 + Drawer / 概览组件测 + 术语标准有登记行 + `lint:terminology` 无新增禁用词命中）。
-- 不在本条出口：浏览器 / Playwright E2E、移动窄屏、命名环境配置档、改 connection id / database / schemas / enabled_tables、读回密码、自动改 ACL、自动 ingest、列级/Manifest 对账、镜像构建与客户交付、修改 `createConnection` 既有回滚行为。
+- 本条承诺：运维可在连接概览就地修改已有连接的服务器地址（及可选用户名；在约定 `file:` 密码来源下可选覆盖密码）；连通测试通过后落盘；连接 ID 与 Schema / 启用表范围 / 角色 / 语义 / Wiki 引用保持不变。**呈现**为对齐 Tableau 的居中 **编辑连接** Dialog（遮罩 + `aria-modal`），不得以内联页底表单呈现。
+- 本条出口：分服务端与 UX 两层。
+  - 服务端／API：SC-01–SC-10／15–21／23（**已关闭**，见 §12.1；本轮不重跑除非回归）。
+  - UX／组件／术语：SC-11–14／22（**v0.4 重开**）＋ SC-24–SC-27（**新增**）；`lint:terminology` 无新增禁用词命中。
+- 不在本条出口：浏览器 / Playwright E2E、移动窄屏、命名环境配置档、改 connection id / database / schemas / enabled_tables、读回密码、自动改 ACL、自动 ingest、列级/Manifest 对账、镜像构建与客户交付、修改 `createConnection` 既有回滚行为、Host 旁常驻「编辑」入口（可后续另开）。
 - 上线关系：本条收口不表示可上线
 
 ---
@@ -67,25 +73,31 @@ Protected DOM：Connection ID、driver/engine、host、port、username、`file:`
 - `webui/docs/101-button-hierarchy-selection-and-icon-affordance-spec.md`
 - `webui/docs/124-connection-create-admin-spec.md`
 - `webui/docs/127-connection-delete-spec.md`
+- 参考实现：`webui/src/components/admin/RenewTokenDialog.tsx`（`pl-modal-backdrop` + `pl-modal-panel`）
+- 业界参照：[Tableau Server — Edit Connections](https://help.tableau.com/current/server/en-us/connections_modify.htm)（Actions → Edit Connection → **dialog** → Save）
 
 ### What This Change Follows
 
-- [ ] 「编辑连接」为卡片次级 ghost / 菜单项；PageHeader「新建连接」为唯一实心 primary
-- [ ] Drawer 确认写入为 Drawer 内唯一 primary
+- [ ] 「编辑连接」为卡片「更多」内次级 ghost / 菜单项；PageHeader「新建连接」为唯一实心 primary
+- [ ] **居中 Dialog**（`pl-modal-backdrop` + `pl-modal-panel`，或等价 Radix Dialog Portal）；`role="dialog"` + `aria-modal="true"`；打开后焦点进入对话框
+- [ ] Dialog 内确认写入（预览步「保存」）为 Dialog 内唯一 primary
+- [ ] **禁止**使用未定义的 `pl-drawer-root` / 裸 `pl-drawer`；**禁止**把编辑表单以内联块插入连接列表文档流底部
 - [ ] 选中态未误用 `primary` / `danger`
 - [ ] 密码不进 Diff；成功后不残留
 - [ ] 专业标识符翻译防御
 - [ ] 无新增硬编码色值
 - [ ] disabled 有前置说明（tooltip / `aria-describedby`）
 - [ ] 文案符合术语标准；编辑冲突面板**不**复用新建动作文案
+- [ ] 提交中（`submitting`）禁止 Esc／点遮罩关闭
 
 ### Exceptions (If Any)
 
-- None.
+- 「新建连接」继续用侧栏 Drawer（Spec 124）；「编辑连接」刻意用居中 Dialog 对齐 Tableau，二者壳层允许不同。
 
 ### Follow-up Needed
 
 - 命名环境配置档另开 Spec。
+- Host 旁常驻「编辑」入口另开体验补丁（本条 Non-Goal）。
 
 ---
 
@@ -99,13 +111,14 @@ Protected DOM：Connection ID、driver/engine、host、port、username、`file:`
 
 ## 2. 目标
 
-1. `/connections` 适用卡片提供 **编辑连接** → Drawer。
+1. `/connections` 适用卡片「更多」提供 **编辑连接** → **居中 Dialog**（对齐 Tableau Edit Connection dialog；非侧栏 Drawer、非页底内联表单）。
 2. 可改 host、port、username；密码在约定来源下可选覆盖。
-3. `POST /api/connections/:connId/endpoint`：默认 `dryRun:true`；`dryRun:false` 在写锁 + 展示屏障内落盘后强制连通测试，失败整单回滚。
+3. `POST /api/connections/:connId/endpoint`：默认 `dryRun:true`；`dryRun:false` 在写锁 + 展示屏障内落盘后强制连通测试，失败整单回滚。（v0.3 已落地）
 4. 连接 ID、driver/engine、database、schemas、enabled_tables、access.yaml、语义目录、Wiki **不变**。
 5. 编辑专用端点门禁（§5）；成功后强制启用表存在性抽检（三态，§8）。
 6. 审计 `connection_endpoint_update`（脱敏）；响应含 `executionRuntimePending`（与同类写路由一致）。
-7. 术语登记；历史 Spec 后继注记；手册结论性表述同步（实现轮）。
+7. 术语登记；历史 Spec 后继注记；手册结论性表述同步（v0.3 已做；本轮仅随组件更名核对）。
+8. v0.4：消除「编辑连接打开后掉到页底」的呈现缺陷；组件契约名为 `EditConnectionDialog`。
 
 ## 3. Non-Goals
 
@@ -154,7 +167,7 @@ Connection ID、driver、engine / wire_protocol、database、schemas、enabled_t
 current: { host: string; port: number; username: string }
 ```
 
-username 仅用于编辑预填与 diff；不改变列表 API。卡片「Host」标签可保留；Drawer 字段标签用「服务器地址 / 端口 / 用户名 / 数据库密码」。
+username 仅用于编辑预填与 diff；不改变列表 API。卡片「Host」标签可保留；Dialog 字段标签用「服务器地址 / 端口 / 用户名 / 数据库密码」。
 
 ## 5. 编辑路径端点门禁
 
@@ -302,10 +315,50 @@ function updateConnectionEndpoint(root, connId, input, dryRun):
 
 ## 9. UX
 
-1. 卡片「编辑连接」次级动作；不适用驱动 / 禁止编辑：不渲染或 disabled + 说明。
-2. Drawer：预填 `current`；密码 placeholder「留空则保留原密码」；非约定密码来源时密码框 disabled + 说明须手工改 `ktx.yaml`/环境变量。
-3. 预览 → 确认；冲突用**编辑专用**提示（列出其他连接 +「仍要改到相同端点」），**不**复用 `EndpointConflictPanel` 新建动作。
-4. 成功：连通结果 + presence Notice（missing / not_completed）。
+### 9.1 入口（对齐 Tableau Actions）
+
+1. 仅在 **连接概览**（`/connections`）连接卡「更多」菜单内提供 **编辑连接**（次级 ghost / 菜单项）。
+2. 不适用驱动 / `lucy-ops` / 无 host：入口 disabled + 前置说明（tooltip / `aria-describedby`）。
+3. PageHeader「新建连接」仍为页内唯一实心 primary。
+4. 本条 **不** 在 Host 展示旁加常驻编辑按钮（Non-Goal）。
+
+### 9.2 弹层形态（对齐 Tableau Edit Connection dialog）
+
+1. 组件名：`EditConnectionDialog`（替换／废除以 `EditConnectionDrawer` + `pl-drawer-root` 呈现的实现）。收口前必须删除旧文件、旧导入与旧测试路径；允许过程中短暂 re-export，**不得**带着旧文件勾销 Task。
+2. 壳层：**居中对话框** = 全屏遮罩 + 居中面板。推荐类名：`pl-modal-backdrop` + `pl-modal-panel`（与 `RenewTokenDialog` 同构）；或 Radix `Dialog.Portal` 等价物。必须满足：
+   - `role="dialog"` 且 `aria-modal="true"`
+   - 遮罩节点带生产类名 `pl-modal-backdrop`（或 Radix Overlay 且测试能定位到等价遮罩）；**不得**仅用自定义 `data-testid` 冒充壳层合同
+   - 相对视口 `fixed` 遮罩；面板在视口中央（非 `justify-end` 侧栏）
+   - 打开时焦点进入对话框
+   - 非 submitting：Esc、点遮罩、显式「关闭」按钮均可关闭
+   - **`step === "submitting"`**：上述**全部**用户关闭入口（Esc／遮罩／关闭／取消／等价）均不得调用 `onClose`；失败后恢复可关闭；成功仅在 mutation `onSuccess` 路径关闭
+3. **取证约束（防假阳性）**：
+   - 组件测须挂载**真实** `EditConnectionDialog`（可经 ConnectionOverview「编辑连接」入口，或单测直接 open），禁止只断言空壳 testid。
+   - 布局断言（两层，缺一不可）：
+     1. **DOM**：遮罩／面板使用生产类 `pl-modal-backdrop`／`pl-modal-panel`（或已证明等价的 Radix 类）；**不含** `pl-drawer-root`／裸 `pl-drawer`／`pl-drawer-backdrop`。不得用 testid-only 或内联 style mock。
+     2. **生产 CSS 文本**：测试读取 `webui/src/app/app.css`（或构建后仍保留这些工具类组合的同源样式文件）中 `.pl-modal-backdrop` 规则，断言其声明（含 `@apply` 展开前的源文本）同时包含：
+        - 视口固定与覆盖：`fixed` 与 `inset-0`
+        - **建立居中的布局方式**：现行实现为 `flex`（使交叉轴／主轴对齐生效）；若改用 grid 等等价方式，须在 Spec／测中同步改写判据，不得只留对齐类名
+        - 双向居中：`items-center` 与 `justify-center`
+        若规则被删除、改成 `justify-end`／侧栏、去掉 `fixed`／`inset-0`、或去掉使居中生效的 `flex`（对齐类名仍在但布局方式缺失），该断言**必须失败**。仅有 DOM 类名而 CSS 规则被掏空 ≠ 通过。
+   - 焦点：打开后 `document.activeElement` 位于 Dialog 面板内（或面板内第一个可聚焦控件）。
+   - 字段归属：打开后全局 `edit-connection-host|port|username|password` 可编辑控件有且仅有一套，且全部是 Dialog 面板子孙；面板外可编辑编辑字段数为 0。
+4. **禁止**：
+   - 使用仓库 CSS 未定义的 `pl-drawer-root` / 裸 `pl-drawer`
+   - 将编辑表单作为连接列表文档流的内联块渲染（页底「多出一块表单」即合同失败）
+   - 复用「新建连接」侧栏 Drawer 壳冒充本条 Dialog（允许共享表单字段子组件，但壳层合同是 Dialog）
+
+### 9.3 对话框内容与步骤
+
+1. 标题：**编辑连接**。副文说明：切换服务器地址；连接 ID、Schema、启用表范围不变。
+2. 只读：连接 ID；可选展示打开时的当前 `host:port` 对照（只读文案，非第二套可编辑字段）。
+3. 可编辑：服务器地址、端口、用户名、数据库密码（placeholder「留空则保留原密码」）。非约定密码来源：密码框 disabled + 说明须手工改 `ktx.yaml`/环境变量。
+4. 打开时用 dryRun 响应的 `current` 预填（§4.4）；不得依赖列表 `ConnectionInfo` 的 username。
+5. 步骤：`input` →（预览变更）→ `preview` →（保存）→ `submitting`。预览步展示脱敏 diff + `passwordAction`；冲突用**编辑专用**提示（「仍要改到相同端点」），**不**复用新建 `EndpointConflictPanel` 主按钮文案。
+6. **Primary 分范围计数**：
+   - **PageHeader 动作组**：页内唯一实心 primary 仍为「新建连接」（SC-13）。
+   - **Dialog 动作组**：输入／冲突步唯一 primary 文案为「预览变更」；预览步唯一 primary 文案为「保存」（对齐 Tableau Save；技术上仍走 `dryRun:false`）。两组分别计数，互不替代。
+7. 成功：Toast（禁止「问数已切到新库」「权限已恢复」）；关闭 Dialog；刷新连接列表相关 query。presence `missing` / `not_completed` 用 warning Toast／Notice。组件测须断言 Toast 调用参数（不得把 toast mock 成空函数后只查 DOM 无禁词）。失败路径不得调用成功 Toast。
 
 ## 10. 历史 Spec 与手册
 
@@ -343,29 +396,39 @@ function updateConnectionEndpoint(root, connId, input, dryRun):
 | SC-08 | 写入后 id/schemas/enabled_tables 与调用前逐字相同 | 服务端 |
 | SC-09 | 审计 `connection_endpoint_update`，摘要无密码；审计失败回滚 | 服务端 |
 | SC-10 | 成功响应含 `presence` 三态之一；`missing` 时 yaml 仍为新 endpoint | 服务端 |
-| SC-11 | 概览「编辑连接」；Drawer 打开；ID 只读；预填=响应 `current` | 组件 |
-| SC-12 | 留空密码 keep；预览→确认；失败不声称已切换；成功不声称问数已切库 | 组件 |
-| SC-13 | PageHeader 唯一实心 primary 仍为「新建连接」 | 组件 |
-| SC-14 | 术语标准含本条 New terms 行；`lint:terminology` 退出 0（无本条引入的禁用词） | 文档 + lint |
-| SC-15 | 未知 connId → 404 | API |
-| SC-16 | 并发：他连接在预览后写入；本单测失败回滚后他连接变更仍在 | 服务端 |
-| SC-17 | 非约定 password 来源 + 提交新密码 → `CONNECTION_PASSWORD_SOURCE_NOT_EDITABLE`，无新孤儿 secret | 服务端 |
-| SC-18 | sqlite/athena（或无 host 驱动）→ `CONNECTION_ENDPOINT_UNSUPPORTED_DRIVER` | 服务端 |
-| SC-19 | port 越界 / 必填空 → 400 | API/服务端 |
-| SC-20 | 错误 detail 白名单放行本条 gate code，前端可得 matches | API |
-| SC-21 | 成功响应含 `executionRuntimePending: true` | API |
-| SC-22 | 编辑冲突 UI 不出现「仍要新建连接 / 添加 Schema」主按钮文案 | 组件 |
-| SC-23 | 编辑 `lucy-ops` → `CONNECTION_ENDPOINT_FORBIDDEN`；磁盘不变 | 服务端 |
+| SC-11 | 概览「更多」含「编辑连接」；点击后打开真实 Dialog；ID 只读；预填=响应 `current`；全局可编辑编辑字段仅一套且均在 Dialog 面板内 | 组件（**v0.4 重开**） |
+| SC-12 | 留空密码 keep；预览→保存；断言 Toast 参数：成功／presence 警告不得含「问数已切到新库」「权限已恢复」；失败不得成功 Toast | 组件（**v0.4 重开**） |
+| SC-13 | PageHeader 动作组唯一实心 primary＝「新建连接」；Dialog 动作组各步唯一 primary＝「预览变更」或「保存」（分范围计数） | 组件（**v0.4 重开**） |
+| SC-14 | 术语标准含本条 **全部** New terms 六行（含 Edit Connection Preview／编辑预览）；`lint:terminology` 退出 0 | 文档 + lint（**v0.4 核对**） |
+| SC-15 | 未知 connId → 404 | API（已关闭） |
+| SC-16 | 并发：他连接在预览后写入；本单测失败回滚后他连接变更仍在 | 服务端（已关闭） |
+| SC-17 | 非约定 password 来源 + 提交新密码 → `CONNECTION_PASSWORD_SOURCE_NOT_EDITABLE`，无新孤儿 secret | 服务端（已关闭） |
+| SC-18 | sqlite/athena（或无 host 驱动）→ `CONNECTION_ENDPOINT_UNSUPPORTED_DRIVER` | 服务端（已关闭） |
+| SC-19 | port 越界 / 必填空 → 400 | API/服务端（已关闭） |
+| SC-20 | 错误 detail 白名单放行本条 gate code，前端可得 matches | API（已关闭） |
+| SC-21 | 成功响应含 `executionRuntimePending: true` | API（已关闭） |
+| SC-22 | 编辑冲突 UI 不出现「仍要新建连接 / 添加 Schema」主按钮文案 | 组件（**v0.4 重开**） |
+| SC-23 | 编辑 `lucy-ops` → `CONNECTION_ENDPOINT_FORBIDDEN`；磁盘不变 | 服务端（已关闭） |
+| SC-24 | DOM 使用 `pl-modal-backdrop`；不含 drawer 类；**且**读取生产 `app.css` 中该遮罩规则含 `fixed`＋`inset-0`＋布局方式 `flex`（或已登记等价）＋`items-center`＋`justify-center`；掏空／去 `flex`／改侧栏必须失败 | 组件（**v0.4 新增**） |
+| SC-25 | 面板使用 `pl-modal-panel`；`role="dialog"` + `aria-modal="true"`；打开后焦点在对话框内 | 组件（**v0.4 新增**） |
+| SC-26 | 打开后：可编辑 `edit-connection-*` 字段全局唯一且均为 Dialog 面板子孙；面板外可编辑编辑字段＝0（禁页底／列表旁内联回归） | 组件（**v0.4 新增**） |
+| SC-27 | `submitting` 期间 Esc／点遮罩／关闭／取消均不调用 `onClose`；非 submitting 时 Esc／遮罩／关闭可关；失败后可再关 | 组件（**v0.4 新增**） |
 
-### 12.1 执行记录（2026-11-01 收口）
+### 12.1 执行记录（2026-11-01 服务端收口）
 
-SC-01–SC-23 **全部关闭**。逐条落点与命令输出见 [`docs/reviews/2026-11-01-connection-endpoint-edit-closure.md`](../reviews/2026-11-01-connection-endpoint-edit-closure.md)。
+SC-01–SC-10／15–21／23 **已关闭**（当时含旧 Drawer 版 SC-11–14／22）。逐条落点与命令输出见 [`docs/reviews/2026-11-01-connection-endpoint-edit-closure.md`](../reviews/2026-11-01-connection-endpoint-edit-closure.md)。
 
 | 命令 | 结果 |
 |---|---|
 | `cd webui && npx vitest run`（本条 5 个测试文件） | **81 passed** |
 | `npm run lint:terminology` | exit 0 |
 | `npm run lint:spec-docs` | exit 0 |
+
+### 12.2 v0.4 UX 补口（待实施）
+
+SC-11–14／22／24–27 **未关闭**。关闭证据写入新的收口／实施笔记；不得用 §12.1 旧 Drawer 组件测冒充 Dialog 通过。
+
+状态转换（定稿／授权开发／收口）时，必须同次更新：Spec 头部「状态」、本小节文案、SC 表状态标注、Plan 头部「状态」、`docs/README.md` 与 `docs/plans/README.md` 索引句，使用同一句现值；收口时另挂证据链接。
 
 ## 13. 开放依赖
 
