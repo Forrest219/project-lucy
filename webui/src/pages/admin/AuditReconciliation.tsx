@@ -381,7 +381,7 @@ export function AuditReconciliation() {
                 <thead>
                   <tr>
                     <th>连接</th>
-                    <th>Schema</th>
+                    <th className="notranslate" translate="no">Schema</th>
                     <th>表</th>
                     <th>调用数</th>
                   </tr>

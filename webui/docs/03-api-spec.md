@@ -75,6 +75,7 @@ PUT  /api/connections/:connId/enabled-tables     # default dryRun
 POST /api/connections/:connId/remove             # Spec 127: delete connection (dryRun:true default; optional deleteSecret/deleteAssets)
 POST /api/connections/:connId/schemas            # add schema metadata to existing connection
 POST /api/connections/:connId/schemas/remove     # remove schema from connection (dryRun:true default; prunes enabled_tables prefix; optional deleteManifest/deleteOverlays)
+POST /api/connections/:connId/endpoint          # Spec lucy-20261101: 就地改服务器地址（dryRun:true 默认；写锁 + 连通测试，失败回滚）
 POST /api/connections/:connId/test
 POST /api/connections/:connId/ingest
 GET  /api/connections/ingest-runs
