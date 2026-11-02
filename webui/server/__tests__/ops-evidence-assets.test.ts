@@ -160,6 +160,10 @@ describe("Spec 149 §5.4 / §5.5 — 模板内容", () => {
       expect(text, label).toContain("访问账户不在本连接");
       expect(text, label).toContain("`call_day` 是 UTC 日历日");
       expect(text, label).toContain("生成 SQL 不作为默认分组");
+      // 可问治理面：MECE／D23／日历窗／旧 Role。
+      expect(text, label).toContain("窗口无记录");
+      expect(text, label).toContain("D23");
+      expect(text, label).toMatch(/日历|calendar_days/);
       // 禁止 `*` / demo_readonly / lucy_admin。
       expect(text, label).not.toContain('roles_allowed: ["*"]');
       expect(text, label).not.toContain("allowed_roles: [\"*\"]");
@@ -172,11 +176,13 @@ describe("Spec 149 §5.4 / §5.5 — 模板内容", () => {
     expect(wikiText).toContain("allowed_roles: [lucy_ops_reader]");
     expect(wikiText).not.toContain("roles_allowed:");
 
-    // Skill 的发布状态与前置条件。
+    // Skill 的发布状态与前置条件（含 W1 源）。
     expect(skillText).toContain("status: published");
     expect(skillText).toContain("domain: lucy-ops");
     expect(skillText).toContain("- \"lucy-ops.ops_calls\"");
     expect(skillText).toContain("- \"lucy-ops.ops_call_tables\"");
+    expect(skillText).toContain("- \"lucy-ops.ops_agents\"");
+    expect(skillText).toContain("- \"lucy-ops.ops_tokens\"");
     expect(skillText).toContain("- \"lucy-ops/ops-questioning.md\"");
   });
 
@@ -195,10 +201,28 @@ describe("Spec 149 §5.4 / §5.5 — 模板内容", () => {
     const manifest = parse(manifestText) as {
       tables: Record<string, { table: string; columns: Array<{ name: string }> }>;
     };
-    expect(Object.keys(manifest.tables)).toEqual(["ops_calls", "ops_call_tables"]);
+    expect(Object.keys(manifest.tables).sort()).toEqual(
+      [
+        "ops_calls",
+        "ops_call_tables",
+        "ops_agents",
+        "ops_tokens",
+        "ops_agent_activity",
+        "ops_question_kpi_agents",
+        "ops_grant_paths",
+        "ops_access_paths",
+        "ops_edge_signals",
+        "ops_map_nodes",
+        "ops_map_meta",
+        "ops_table_adoption"
+      ].sort()
+    );
     for (const [sourceName, table] of Object.entries(manifest.tables)) {
       const columnNames = table.columns.map((column) => column.name);
-      expect(columnNames, sourceName).not.toContain("call_day");
+      // W0 视图：call_day 只能写在 overlay 派生列；W1 ops_agent_activity 的 call_day 是物化物理列。
+      if (sourceName === "ops_calls" || sourceName === "ops_call_tables") {
+        expect(columnNames, sourceName).not.toContain("call_day");
+      }
       // Manifest 的 table: 用 T0 冻结的 physicalTable（裸名）。
       expect(table.table, sourceName).toBe(sourceName);
     }
@@ -213,6 +237,25 @@ describe("Spec 149 §5.4 / §5.5 — 模板内容", () => {
       expect(text).toContain("denied");
       expect(text).toContain("error");
       expect(text).toContain("sum(duration_ms)");
+    }
+    for (const overlay of [
+      "ops_agents.yaml",
+      "ops_tokens.yaml",
+      "ops_agent_activity.yaml",
+      "ops_question_kpi_agents.yaml",
+      "ops_grant_paths.yaml",
+      "ops_access_paths.yaml",
+      "ops_edge_signals.yaml",
+      "ops_map_nodes.yaml",
+      "ops_map_meta.yaml",
+      "ops_table_adoption.yaml"
+    ]) {
+      const text = await readFile(
+        path.join(assets.OPS_EVIDENCE_TEMPLATE_ROOT, `semantic-layer/lucy-ops/${overlay}`),
+        "utf8"
+      );
+      expect(text.length).toBeGreaterThan(0);
+      expect(text).toContain("measures:");
     }
   });
 });

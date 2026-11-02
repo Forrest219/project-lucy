@@ -25,7 +25,8 @@ roles:
         - lucy_skill_search
 
   # Spec 149 §6.1 — 运维问数角色：只授权运维问数连接（lucy-ops）的两张视图。
-  # 允许集与参考模板 `lucy_ops_reader` 相同；schema 用 T0 冻结值。
+  # SC-17c 夹具：正式 Role **故意**只列 W0 两表；参考模板（role-templates）已列
+  # 全部 sourceName。ensure / 升级永不改本 Role 字节（D22）；新源须运营显式扩权。
   lucy_ops_reader:
     description: 运维问数角色（只读调用流水，可查看生成 SQL）
     allow:

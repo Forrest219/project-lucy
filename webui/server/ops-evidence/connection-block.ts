@@ -1,20 +1,20 @@
 /**
  * Spec 149 §7 — `connections.lucy-ops` 连接块的确保与一致性裁决。
+ * Spec 20261101 D22 — driver/path/readonly 一致时仍须 union 扩展 enabled_tables。
  *
  * 契约：
  * - 缺失 → 写入 `driver: sqlite`、`readonly: true`、审计库绝对路径、
- *   `schemas: [main]`、`enabled_tables` = T0 冻结的 physicalTable。
- * - 三者（driver / 路径 / readonly）一致 → 不改文件。
- * - 任一不一致 → **不覆盖**，状态 `conflict`，目录不列出该连接，查询返回
- *   `OPS_EVIDENCE_CONNECTION_CONFLICT`。
+ *   `schemas: [main]`、`enabled_tables` = 当前冻结的 physicalTable（含 W1）。
+ * - 三者（driver / 路径 / readonly）一致 → 检查 `enabled_tables`；缺名则
+ *   union 写入（保留额外表名），状态 `expanded`；已齐全则 `unchanged`。
+ * - 任一不一致 → **不覆盖**，状态 `conflict`。
  *
- * 不调用 `createConnection`（那会追加 `setup.database_connection_ids`），
- * 也不改其它连接。
+ * **永不写 `access.yaml`**（正式 Role 扩权由运营显式完成）。
  */
 
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { isMap, parseDocument, YAMLMap, YAMLSeq } from "yaml";
+import { isMap, isSeq, parseDocument, YAMLMap, YAMLSeq } from "yaml";
 import {
   OPS_EVIDENCE_CONNECTION_CONFLICT_MESSAGE,
   OPS_EVIDENCE_CONNECTION_ID,
@@ -23,7 +23,7 @@ import {
 } from "./contract.js";
 import { writeKtxYaml } from "../project.js";
 
-export type OpsEvidenceConnectionWrite = "inserted" | "unchanged" | "conflict";
+export type OpsEvidenceConnectionWrite = "inserted" | "unchanged" | "expanded" | "conflict";
 
 export type OpsEvidenceConflictField = "driver" | "database" | "readonly";
 
@@ -33,8 +33,10 @@ export interface OpsEvidenceBlockState {
   conflictField?: OpsEvidenceConflictField;
   /** 面向管理员的冲突说明（仅 conflict）。 */
   conflictReason?: string;
-  /** 冲突时读到的原块，用于证明「未改写」。 */
+  /** 冲突或未改写时读到的原块。 */
   existingBlock?: Record<string, unknown>;
+  /** union 后新增进 enabled_tables 的表名（仅 expanded）。 */
+  addedTables?: string[];
 }
 
 /** 审计热库路径：环境变量优先，缺省 `<projectRoot>/.ktx-ui/audit.sqlite`。 */
@@ -53,10 +55,30 @@ export function opsEvidenceBlockDatabasePath(block: Record<string, unknown>): st
   return undefined;
 }
 
+/** 读出 enabled_tables 列表（保留顺序与额外项）。 */
+export function readEnabledTables(block: Record<string, unknown> | undefined): string[] {
+  if (!block) return [];
+  const raw = block.enabled_tables;
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((value): value is string => typeof value === "string" && value.trim().length > 0);
+}
+
 /**
- * 裁决已有块是否与契约一致。
+ * 计算 `enabled_tables ∪ OPS_EVIDENCE_ENABLED_TABLES`（保留已有额外项与相对顺序）。
+ * 返回 `null` 表示无需改写。
+ */
+export function unionEnabledTables(existing: string[]): { next: string[]; added: string[] } | null {
+  const present = new Set(existing);
+  const added = OPS_EVIDENCE_ENABLED_TABLES.filter((table) => !present.has(table));
+  if (added.length === 0) return null;
+  return { next: [...existing, ...added], added };
+}
+
+/**
+ * 裁决已有块是否与契约一致（driver / 路径 / readonly）。
  *
  * `block` 为 `undefined` 表示连接不存在 → 需要写入。
+ * 三者一致时返回 `unchanged`；**不**在此裁决 enabled_tables（由 ensure 做 union）。
  */
 export function inspectOpsEvidenceBlock(
   block: Record<string, unknown> | undefined,
@@ -129,9 +151,7 @@ export function buildOpsEvidenceConnectionBlock(auditDbPath: string): YAMLMap {
   conn.flow = false;
   conn.set("driver", "sqlite");
   conn.set("readonly", true);
-  // KTX 的 SQLite 连接器读 `path`（见 ktx `connectors/sqlite/connector.js`：
-  // "requires connections.<id>.path or url"）；`database` 是 Spec 149 §7 的
-  // 字段名，写成同值，两边读到的都是当前审计热库。
+  // KTX 的 SQLite 连接器读 `path`；`database` 是 Spec 149 §7 的字段名。
   conn.set("path", path.resolve(auditDbPath));
   conn.set("database", path.resolve(auditDbPath));
   const enabledTables = new YAMLSeq();
@@ -143,11 +163,16 @@ export function buildOpsEvidenceConnectionBlock(auditDbPath: string): YAMLMap {
   return conn;
 }
 
+function buildEnabledTablesSeq(tables: string[]): YAMLSeq {
+  const seq = new YAMLSeq();
+  for (const table of tables) seq.items.push(table);
+  return seq;
+}
+
 /**
- * 确保连接块存在且与契约一致。
+ * 确保连接块存在且与契约一致；一致时仍可 union 扩展 enabled_tables（D22）。
  *
- * `conflict` 时**不写任何东西**：原块保留，目录不列出该连接，查询按
- * `OPS_EVIDENCE_CONNECTION_CONFLICT` 拒绝。
+ * `conflict` 时**不写任何东西**。
  */
 export async function ensureOpsEvidenceConnectionBlock(
   projectRoot: string,
@@ -156,27 +181,59 @@ export async function ensureOpsEvidenceConnectionBlock(
 ): Promise<OpsEvidenceBlockState> {
   const existing = await readOpsEvidenceBlock(projectRoot);
   const state = inspectOpsEvidenceBlock(existing, auditDbPath, projectRoot);
-  if (state.write !== "inserted") return state;
+  if (state.write === "conflict") return state;
+
+  if (state.write === "inserted") {
+    await writeKtxYaml(
+      projectRoot,
+      (doc) => {
+        let connections = doc.get("connections", true);
+        if (!isMap(connections)) {
+          connections = new YAMLMap();
+          connections.flow = false;
+          doc.set("connections", connections);
+        }
+        connections.set(
+          OPS_EVIDENCE_CONNECTION_ID,
+          buildOpsEvidenceConnectionBlock(auditDbPath)
+        );
+        // 刻意**不**碰 `setup.database_connection_ids`（Spec 149 Goal 5）。
+      },
+      { dryRun: options.dryRun === true }
+    );
+    return { write: "inserted" };
+  }
+
+  // unchanged（driver/path/readonly OK）→ 检查 enabled_tables 是否缺名。
+  const currentTables = readEnabledTables(existing);
+  const union = unionEnabledTables(currentTables);
+  if (!union) {
+    return { write: "unchanged", existingBlock: existing };
+  }
 
   await writeKtxYaml(
     projectRoot,
     (doc) => {
-      let connections = doc.get("connections", true);
-      if (!isMap(connections)) {
-        connections = new YAMLMap();
-        connections.flow = false;
-        doc.set("connections", connections);
+      const connections = doc.get("connections", true);
+      if (!isMap(connections)) return;
+      const block = connections.get(OPS_EVIDENCE_CONNECTION_ID, true);
+      if (!isMap(block)) return;
+      block.set("enabled_tables", buildEnabledTablesSeq(union.next));
+      // schemas 若缺失则补上；已有则不动。
+      if (!isSeq(block.get("schemas", true))) {
+        const schemas = new YAMLSeq();
+        schemas.items.push(OPS_EVIDENCE_FROZEN.schema);
+        block.set("schemas", schemas);
       }
-      connections.set(
-        OPS_EVIDENCE_CONNECTION_ID,
-        buildOpsEvidenceConnectionBlock(auditDbPath)
-      );
-      // 刻意**不**碰 `setup.database_connection_ids`（Spec 149 Goal 5）。
     },
     { dryRun: options.dryRun === true }
   );
 
-  return { write: "inserted" };
+  return {
+    write: "expanded",
+    existingBlock: existing,
+    addedTables: union.added
+  };
 }
 
 /** 便于测试：读出 `setup.database_connection_ids`。 */

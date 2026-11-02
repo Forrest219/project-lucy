@@ -62,7 +62,24 @@ import {
   resolveAndMaybeServeHiveTool
 } from "../hive/proxy-hook.js";
 import type { HiveExecutionTool } from "../hive/execution.js";
-import { OPS_EVIDENCE_CONNECTION_ID } from "../ops-evidence/contract.js";
+import {
+  isOpsEvidenceGovernanceSource,
+  OPS_EVIDENCE_CONNECTION_ID,
+  OPS_EVIDENCE_GOVERNANCE_UNREADY
+} from "../ops-evidence/contract.js";
+import {
+  applyStrippedGovFilters,
+  parseAndStripGovFilters
+} from "../ops-evidence/gov-filters.js";
+import {
+  bindGovernanceMaterialization,
+  digestGovFiltersForKey,
+  GovernanceSnapshotUnreadyError,
+  injectSnapshotIdFilter,
+  rebuildGovernanceSnapshotAtomic,
+  releaseGovernanceMaterializationBind
+} from "../ops-evidence/governance-snapshot.js";
+import { readAccessYamlVersion } from "../admin/access-config.js";
 import { readKtxYamlDigest, recordExecutionRuntimeObservation } from "../mcp-runtime-state.js";
 import {
   recordMcpToolsCall,
@@ -3565,6 +3582,134 @@ async function handlePost(req: IncomingMessage, res: ServerResponse, admitted: A
       policySource: "other"
     });
     return;
+  }
+
+  // Spec 20261101 §4.1 / D27 — lucy-ops：剥离 gov.*；治理源绑定 snapshot；旧源拒 gov。
+  let governanceBindId: string | undefined;
+  if (rpcMethod === "tools/call" && toolName === "lucy_query" && toolArgs && typeof toolArgs === "object" && !Array.isArray(toolArgs)) {
+    const record = toolArgs as Record<string, unknown>;
+    const connectionId =
+      typeof record.connectionId === "string"
+        ? record.connectionId
+        : typeof record.connection_id === "string"
+          ? record.connection_id
+          : typeof record.connection === "string"
+            ? record.connection
+            : undefined;
+    const sourceName =
+      typeof record.sourceName === "string"
+        ? record.sourceName
+        : typeof record.source_name === "string"
+          ? record.source_name
+          : typeof record.source === "string"
+            ? record.source
+            : typeof record.table === "string"
+              ? record.table
+              : undefined;
+
+    if (connectionId === OPS_EVIDENCE_CONNECTION_ID || (typeof record.filters !== "undefined" && connectionId)) {
+      const parsed = parseAndStripGovFilters(record.filters, { connectionId, sourceName });
+      if ("code" in parsed && parsed.code === "invalid_arguments") {
+        const reason = parsed.reason;
+        const responseBody = jsonRpcToolResult(requestId, `Invalid arguments: ${reason}`, { isError: true });
+        res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+        res.end(responseBody);
+        recordRequestAudit({
+          ts: new Date().toISOString(),
+          userId: identity.userId,
+          client: identity.client,
+          tool: toolName,
+          tables: queryTables.length > 0 ? queryTables : undefined,
+          argsSummary,
+          ...queryMeta,
+          outcome: "error",
+          errorDetail: reason,
+          executionEvidence: executionEvidenceFromObservation({
+            notExecuted: true,
+            authorizationAllowed: true
+          }),
+          durationMs: Date.now() - start,
+          responseBytes: Buffer.byteLength(responseBody),
+          requestId,
+          ...requestMeta,
+          ...(await auditMeta(identity, reason))
+        });
+        return;
+      }
+
+      if (connectionId === OPS_EVIDENCE_CONNECTION_ID) {
+        let stripped = applyStrippedGovFilters(record, parsed);
+        if (isOpsEvidenceGovernanceSource(sourceName)) {
+          try {
+            const projectRoot = await resolveProjectRoot();
+            const accessVer = await readAccessYamlVersion(projectRoot).catch(() => ({ version: "unknown", raw: "" }));
+            const ktxDigest = await readKtxYamlDigest(projectRoot).catch(() => "unknown");
+            const filtersDigest = digestGovFiltersForKey({
+              trust: parsed.trust,
+              focus: parsed.focus,
+              rowFilters: parsed.rowFilters
+            });
+            const database = await getAdminAuditDb();
+            const bound = await rebuildGovernanceSnapshotAtomic(database, {
+              window: parsed.window,
+              trust: parsed.trust,
+              focus: parsed.focus,
+              filtersDigest,
+              versions: {
+                accessConfigVersion: accessVer.version,
+                policyVersion: ktxDigest,
+                sourceMapVersion: ktxDigest,
+                capabilityDigest: ktxDigest
+              },
+              projectRoot
+            });
+            governanceBindId = `${requestId}:${bound.materializationId}`;
+            bindGovernanceMaterialization(governanceBindId, bound.materializationId);
+            stripped = injectSnapshotIdFilter(stripped, bound.materializationId, sourceName!);
+          } catch (error) {
+            const reason =
+              error instanceof GovernanceSnapshotUnreadyError
+                ? `${OPS_EVIDENCE_GOVERNANCE_UNREADY}:${error.message}`
+                : `${OPS_EVIDENCE_GOVERNANCE_UNREADY}:rebuild_failed`;
+            const responseBody = jsonRpcToolResult(requestId, reason, { isError: true });
+            res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+            res.end(responseBody);
+            recordRequestAudit({
+              ts: new Date().toISOString(),
+              userId: identity.userId,
+              client: identity.client,
+              tool: toolName,
+              tables: queryTables.length > 0 ? queryTables : undefined,
+              argsSummary,
+              ...queryMeta,
+              outcome: "error",
+              errorDetail: reason,
+              executionEvidence: executionEvidenceFromObservation({
+                notExecuted: true,
+                authorizationAllowed: true
+              }),
+              durationMs: Date.now() - start,
+              responseBytes: Buffer.byteLength(responseBody),
+              requestId,
+              ...requestMeta,
+              ...(await auditMeta(identity, reason))
+            });
+            return;
+          }
+        }
+        toolArgs = stripped;
+        const params =
+          parsedRpc?.params && typeof parsedRpc.params === "object" && !Array.isArray(parsedRpc.params)
+            ? (parsedRpc.params as Record<string, unknown>)
+            : undefined;
+        if (params) params.arguments = stripped;
+      }
+    }
+  }
+  if (governanceBindId) {
+    res.on("close", () => {
+      if (governanceBindId) releaseGovernanceMaterializationBind(governanceBindId);
+    });
   }
 
   /**

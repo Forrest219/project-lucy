@@ -49,7 +49,9 @@ describe("Spec 149 §6.1 — Docker demo 模板", () => {
     expect(opsRole.allow?.tableSelectors).toHaveLength(1);
     expect(opsRole.allow?.tableSelectors?.[0].connection).toBe("lucy-ops");
     expect(opsRole.allow?.tableSelectors?.[0].schema).toBe("main");
+    // SC-17c：demo 正式 Role 故意只留 W0，供未扩权 deny 夹具；模板另列全部源。
     expect(opsRole.allow?.tableSelectors?.[0].names).toEqual(["ops_calls", "ops_call_tables"]);
+    expect(opsRole.allow?.tableSelectors?.[0].names).not.toContain("ops_agents");
     // 四个只读通道工具。
     for (const tool of ["wiki_search", "wiki_read", "lucy_skill_search", "lucy_skill_read"]) {
       expect(opsRole.allow?.tools, tool).toContain(tool);

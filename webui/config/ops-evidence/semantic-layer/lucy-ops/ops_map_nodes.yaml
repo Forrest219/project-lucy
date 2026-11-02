@@ -1,0 +1,11 @@
+# 可问治理面 W2 — 图节点。
+name: ops_map_nodes
+
+grain:
+  - snapshot_id
+  - node_id
+
+measures:
+  - name: node_count
+    expr: count(*)
+    description: 节点数。

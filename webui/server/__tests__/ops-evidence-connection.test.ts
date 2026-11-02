@@ -99,7 +99,20 @@ describe("Spec 149 §7 — 连接块与一致性裁决", () => {
     expect(block?.path).toBe(auditDbPath);
     expect(block?.database).toBe(auditDbPath);
     expect(block?.schemas).toEqual(["main"]);
-    expect(block?.enabled_tables).toEqual(["ops_calls", "ops_call_tables"]);
+    expect(block?.enabled_tables).toEqual([
+      "ops_calls",
+      "ops_call_tables",
+      "ops_agents",
+      "ops_tokens",
+      "ops_agent_activity",
+      "ops_question_kpi_agents",
+      "ops_grant_paths",
+      "ops_access_paths",
+      "ops_edge_signals",
+      "ops_map_nodes",
+      "ops_map_meta",
+      "ops_table_adoption"
+    ]);
 
     // Goal 5 — 不写 setup.database_connection_ids。
     expect(await readDatabaseConnectionIds(projectRoot)).toEqual(["demo-mysql"]);

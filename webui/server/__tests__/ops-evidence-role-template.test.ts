@@ -16,7 +16,7 @@ import {
 } from "../ops-evidence/contract";
 
 describe("Spec 149 §6 — 运维问数角色模板", () => {
-  it("模板已注册，允许集只用运维问数连接与两个 source", () => {
+  it("模板已注册，允许集只用运维问数连接与全部当前 sourceName（含 W1）", () => {
     const template = ROLE_TEMPLATES[OPS_EVIDENCE_ROLE_ID];
     expect(template).toBeDefined();
     expect(template.id).toBe(OPS_EVIDENCE_ROLE_ID);
@@ -31,11 +31,10 @@ describe("Spec 149 §6 — 运维问数角色模板", () => {
     expect(selector.connection).toBe(OPS_EVIDENCE_CONNECTION_ID);
     // schema 用冻结值，不是 physicalTable。
     expect(selector.schema).toBe(OPS_EVIDENCE_FROZEN.schema);
-    // names 用 sourceName。
-    expect("names" in selector ? selector.names : undefined).toEqual([
-      OPS_EVIDENCE_FROZEN.sourceName.ops_calls,
-      OPS_EVIDENCE_FROZEN.sourceName.ops_call_tables
-    ]);
+    // names 用全部 sourceName（D22 参考模板）。
+    expect("names" in selector ? selector.names : undefined).toEqual(
+      Object.values(OPS_EVIDENCE_FROZEN.sourceName)
+    );
     expect(selector.row_access).toBe("all");
   });
 
@@ -59,7 +58,7 @@ describe("Spec 149 §6 — 运维问数角色模板", () => {
     expect(expanded?.allow?.connections).toEqual([OPS_EVIDENCE_CONNECTION_ID]);
     expect(expanded?.allow?.source_scope).toBeUndefined();
     const expandedSelector = expanded?.allow?.tableSelectors?.[0] as { names?: string[] } | undefined;
-    expect(expandedSelector?.names).toEqual(["ops_calls", "ops_call_tables"]);
+    expect(expandedSelector?.names).toEqual(Object.values(OPS_EVIDENCE_FROZEN.sourceName));
     // 模板本身不写 id。
     expect((expanded as { id?: string } | undefined)?.id).toBeUndefined();
   });

@@ -5,10 +5,12 @@
  *
  * ```text
  * if readiness is already conflict or not_ready: keep it
- * else if stamp exists and stamp == digest(ktx.yaml) and connectionWrite == unchanged:
+ * else if stamp exists and stamp == digest(ktx.yaml)
+ *      and connectionWrite is unchanged (not inserted/expanded):
  *   readiness = current
  * else:
  *   readiness = reload_required      # 不调用 Spec 191 的重载控制器
+ *   # expanded（enabled_tables union）与 inserted 一样需要重载
  * ```
  *
  * 摘要戳落在 `<projectRoot>/.lucy-seed/ops-evidence-ktx-digest`，**只有**
@@ -122,8 +124,9 @@ export async function readOpsEvidenceReadiness(
 
   const stamp = await readOpsEvidenceDigestStamp(projectRoot);
   const digest = await readKtxYamlDigest(projectRoot).catch(() => undefined);
-  const insertedThisProcess = ensureMemory?.connectionWrite === "inserted";
-  if (stamp && digest && stamp === digest && !insertedThisProcess) {
+  const writeNeedsReload =
+    ensureMemory?.connectionWrite === "inserted" || ensureMemory?.connectionWrite === "expanded";
+  if (stamp && digest && stamp === digest && !writeNeedsReload) {
     return { readiness: "current", connectionWrite: ensureMemory?.connectionWrite ?? "unchanged" };
   }
 

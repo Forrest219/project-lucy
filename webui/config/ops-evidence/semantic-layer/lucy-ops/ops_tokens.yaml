@@ -1,0 +1,16 @@
+# 可问治理面 W1 — Agent×token_label 调用量（D23＝E；不对账图凭证清单）。
+name: ops_tokens
+
+grain:
+  - snapshot_id
+  - agent_id
+  - token_label
+
+measures:
+  - name: call_count
+    expr: sum(call_count)
+    description: （agent_id, token_label）默认用量调用次数合计。
+
+  - name: agent_token_row_count
+    expr: count(*)
+    description: Agent×label 行数（不是 Token 人口）。
