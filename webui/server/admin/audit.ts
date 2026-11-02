@@ -20,6 +20,19 @@ import { runProjection, type ProjectionStatus } from "../security/projector.js";
 import { trustedActorFromRequest } from "../security/request-actor.js";
 import { redactAuditDiff, redactAuditSummary, redactAuditText } from "../security/redaction.js";
 import { rebuildInferredTurns, purgeExpiredConversationTurns, scrubAccessLogArgsSummaries, INFERRED_TURN_REBUILD_LOOKBACK_HOURS, sessionVisitSummary, SESSION_VISIT_SUMMARY_PREFIX, ACCESS_LOG_COLUMNS as AUDIT_ACCESS_LOG_COLUMNS } from "../proxy/audit.js";
+import {
+  inquiryKindLabelZh,
+  inquiryKindMatches,
+  inquiryKindOfTurn,
+  parseInquiryKindFilter,
+  type InquiryKind
+} from "./audit-inquiry-kind.js";
+import {
+  ensureBackfillBeforeAllocate,
+  ensureInquirySerialSchema,
+  lookupInquiryNo,
+  resolveTurnCorrelationKey
+} from "./audit-inquiry-serial.js";
 import { presentStoredClient, type ResolvedClientIdentity } from "../proxy/request-client-meta.js";
 import { buildStoredZip, sha256Hex } from "../proxy/zip-store.js";
 import { MCP_PLAYGROUND_PLATFORM } from "./mcp-playground.js";
@@ -39,7 +52,7 @@ import {
   type EvidenceEventRow
 } from "../trace/evidence.js";
 import { readQueryArtifact } from "../audit/query-artifact-store.js";
-import { protocolConditionSql } from "../proxy/usage-classification.js";
+import { accessGrade, accessGradeSql, protocolConditionSql, type AccessGrade } from "../proxy/usage-classification.js";
 import {
   appendClientObservations,
   resolveAdapterFromToken,
@@ -117,14 +130,86 @@ type AccessLogFilterQuery = {
   turnId?: string;
   /** Spec 106: fuzzy match on access_log.id (CAST AS TEXT). */
   eventId?: string;
-  /** Spec 106: shared key box — matches event id OR lucy_turn_id. */
+  /** Spec 106: shared key box — matches event id OR lucy_turn_id. Pure digits are an inquiry serial, not an event id. */
   key?: string;
   platform?: string;
   callSource?: string;
   includeProtocol?: string;
+  /** Spec 20261102: exclusive access grade. Default and illegal values are exclude_connect. */
+  accessGrade?: string;
   clientIp?: string;
   deviceName?: string;
 };
+
+const ACCESS_GRADE_FILTERS = new Set([
+  "all",
+  "exclude_connect",
+  "connect",
+  "browse",
+  "prepare",
+  "ask",
+  "query",
+  "control",
+  "unclassified"
+]);
+
+/** Missing or illegal values follow the management default: hide connect-grade rows. */
+export function parseAccessGradeFilter(raw: string | null | undefined): string {
+  const value = raw?.trim() ?? "";
+  if (ACCESS_GRADE_FILTERS.has(value)) return value;
+  return "exclude_connect";
+}
+
+function accessGradeLabelZh(grade: AccessGrade): string {
+  switch (grade) {
+    case "connect":
+      return "连接";
+    case "browse":
+      return "浏览";
+    case "prepare":
+      return "准备";
+    case "ask":
+      return "问询动作";
+    case "query":
+      return "查数";
+    case "control":
+      return "运维操作";
+    default:
+      return "未分级";
+  }
+}
+
+/** A pure serial that does not resolve must not be sent through as a numeric fragment. */
+const MISSING_INQUIRY_SERIAL = "\u0000missing-inquiry-serial";
+
+function correlationKeyForAdminTurn(database: Database.Database, raw: string): string | null {
+  const value = raw.trim();
+  if (!value) return null;
+  if (!/^\d+$/.test(value)) return value;
+  return resolveTurnCorrelationKey(database, value);
+}
+
+/**
+ * Call-list identity filters. A pure number is an inquiry serial: resolve it to
+ * the correlation key and do not OR it with access_log.id. `eventId` stays a
+ * separate exact event lookup.
+ */
+function resolveCallIdentityQuery(database: Database.Database, q: AccessLogFilterQuery): AccessLogFilterQuery {
+  const next: AccessLogFilterQuery = { ...q };
+  if (next.turnId && /^\d+$/.test(next.turnId.trim())) {
+    next.turnId = correlationKeyForAdminTurn(database, next.turnId) ?? MISSING_INQUIRY_SERIAL;
+  }
+  if (next.key) {
+    const raw = next.key.trim();
+    if (/^\d+$/.test(raw) || raw.startsWith("lucy_") || raw.startsWith("inf_")) {
+      next.turnId = /^\d+$/.test(raw)
+        ? (correlationKeyForAdminTurn(database, raw) ?? MISSING_INQUIRY_SERIAL)
+        : raw;
+      next.key = undefined;
+    }
+  }
+  return next;
+}
 
 function auditExportMaxRows(): number {
   const configured = Number(process.env.LUCY_AUDIT_EXPORT_MAX_ROWS ?? 10_000);
@@ -191,7 +276,10 @@ function chunksOf<T>(items: T[], size = 400): T[][] {
   return chunks;
 }
 
-function buildAccessLogFilter(q: AccessLogFilterQuery): {
+function buildAccessLogFilter(
+  q: AccessLogFilterQuery,
+  options: { applyAccessGrade?: boolean } = {}
+): {
   conditions: string[];
   baseConditions: string[];
   params: Record<string, string | null>;
@@ -209,8 +297,10 @@ function buildAccessLogFilter(q: AccessLogFilterQuery): {
     until: q.until ?? null,
     tableSearch: q.tableSearch ? `%${q.tableSearch}%` : null,
     sessionId: q.sessionId ?? null,
-    turnId: q.turnId ? `%${q.turnId}%` : null,
-    eventId: q.eventId ? `%${q.eventId}%` : null,
+    turnId: q.turnId && !/^(lucy_|inf_)/.test(q.turnId) && q.turnId !== MISSING_INQUIRY_SERIAL ? `%${q.turnId}%` : null,
+    turnIdExact: null,
+    eventId: q.eventId && !/^\d+$/.test(q.eventId.trim()) ? `%${q.eventId.trim()}%` : null,
+    eventIdExact: null,
     key: q.key ? `%${q.key}%` : null,
     platform: q.platform ?? null,
     playgroundPlatform: MCP_PLAYGROUND_PLATFORM,
@@ -243,16 +333,30 @@ function buildAccessLogFilter(q: AccessLogFilterQuery): {
         WHERE ital.access_log_id = access_log.id AND ital.inferred_turn_id LIKE @key
       ))`
     );
-  } else {
-    if (params.turnId) {
-      baseConditions.push(
-        `(IFNULL(lucy_turn_id, '') LIKE @turnId OR EXISTS (
-          SELECT 1 FROM inferred_turn_access_logs ital
-          WHERE ital.access_log_id = access_log.id AND ital.inferred_turn_id LIKE @turnId
-        ))`
-      );
-    }
-    if (params.eventId) baseConditions.push("CAST(id AS TEXT) LIKE @eventId");
+  }
+  const turnRaw = q.turnId?.trim() ?? "";
+  if (turnRaw && (turnRaw.startsWith("lucy_") || turnRaw.startsWith("inf_") || turnRaw === MISSING_INQUIRY_SERIAL)) {
+    params.turnIdExact = turnRaw;
+    baseConditions.push(
+      `(IFNULL(lucy_turn_id, '') = @turnIdExact OR EXISTS (
+        SELECT 1 FROM inferred_turn_access_logs ital
+        WHERE ital.access_log_id = access_log.id AND ital.inferred_turn_id = @turnIdExact
+      ))`
+    );
+  } else if (params.turnId) {
+    baseConditions.push(
+      `(IFNULL(lucy_turn_id, '') LIKE @turnId OR EXISTS (
+        SELECT 1 FROM inferred_turn_access_logs ital
+        WHERE ital.access_log_id = access_log.id AND ital.inferred_turn_id LIKE @turnId
+      ))`
+    );
+  }
+  const eventRaw = q.eventId?.trim() ?? "";
+  if (/^\d+$/.test(eventRaw)) {
+    params.eventIdExact = eventRaw;
+    baseConditions.push("id = @eventIdExact");
+  } else if (params.eventId) {
+    baseConditions.push("CAST(id AS TEXT) LIKE @eventId");
   }
 
   const callSource = q.callSource?.trim() ?? "";
@@ -271,6 +375,13 @@ function buildAccessLogFilter(q: AccessLogFilterQuery): {
   const conditions = [...baseConditions];
   // Spec 172: a turn-id search must return that visit's handshake. The unfiltered list stays quiet.
   if (!includeProtocol && !turnScoped) conditions.push(`NOT ${PROTOCOL_CONDITION}`);
+  // Access grade runs after the protocol gate. Packs opt out so linked handshakes stay.
+  if (options.applyAccessGrade !== false) {
+    const grade = parseAccessGradeFilter(q.accessGrade);
+    const expr = accessGradeSql().sql;
+    if (grade === "exclude_connect") conditions.push(`(${expr}) <> 'connect'`);
+    else if (grade !== "all") conditions.push(`(${expr}) = '${grade}'`);
+  }
 
   return { conditions, baseConditions, params, includeProtocol };
 }
@@ -530,6 +641,7 @@ export async function getAuditDb(): Promise<Database.Database> {
   ensureColumn(db, "conversation_turns", "session_id", "TEXT");
   ensureColumn(db, "inferred_turns", "client", "TEXT");
   ensureColumn(db, "inferred_turns", "session_id", "TEXT");
+  ensureInquirySerialSchema(db);
   db.exec(`
     -- 存量库可能没有 session_id 列 —— 索引必须在 ensureColumn 之后建。
     CREATE INDEX IF NOT EXISTS idx_ct_session ON conversation_turns(session_id);
@@ -993,6 +1105,8 @@ interface QueryRow {
   is_slow_call?: number | null;
   /** Joined at read time; only set when lucy_turn_id is empty. */
   inferred_turn_id?: string | null;
+  /** Resolved at read time from the inquiry serial map. Not an access_log column. */
+  inquiry_no?: number | null;
   // ─── Lucy v0.25 / L25-09 additive 列（历史行 NULL / 缺省）─────────────────
   primary_status?: string | null;
   derivation_version?: string | null;
@@ -1023,6 +1137,7 @@ const ACCESS_LOG_CSV_HEADERS = [
   "token_label",
   "token_hash_prefix",
   "lucy_session_id",
+  "inquiry_no",
   "lucy_turn_id",
   "inferred_turn_id",
   "turn_attribution_mode",
@@ -1034,6 +1149,7 @@ const ACCESS_LOG_CSV_HEADERS = [
   "client_ip",
   "user_agent",
   "device_name",
+  "访问等级",
   "tool",
   "tables",
   "args_summary",
@@ -1131,16 +1247,22 @@ const ACCESS_LOG_FIELD_METADATA: Record<(typeof ACCESS_LOG_CSV_HEADERS)[number],
     description: "客户端上报或服务端归因的 Lucy 会话 ID。",
     trigger: "客户端上报会话或服务端从上下文推断到会话时输出。"
   },
-  lucy_turn_id: {
+  inquiry_no: {
     label: "问询 ID",
+    format: "integer|null",
+    description: "本实例问询流水号。与问询记录 CSV 的「问询 ID」是同一个数字，不含 Agent 或平台。",
+    trigger: "调用已挂到已上报或推断问询时输出；未挂接留空。"
+  },
+  lucy_turn_id: {
+    label: "关联键",
     format: "string|null",
-    description: "关联问询记录的 ID，用于从调用流水回溯到一次用户问询。",
+    description: "已上报问询的关联键，用于从调用流水回溯到问询记录。不是列表上的问询 ID。",
     trigger: "客户端上报问询或服务端完成问询归因时输出。"
   },
   inferred_turn_id: {
-    label: "推断问询 ID",
+    label: "关联键",
     format: "string|null",
-    description: "当问询 ID 为空时，由当前推断问询关联表回填的推断问询 ID，用于从调用流水跳回问询记录。",
+    description: "当已上报关联键为空时，由当前推断问询关联表回填的关联键，用于从调用流水跳回问询记录。",
     trigger: "lucy_turn_id 为空且 inferred_turn_access_logs 存在关联时输出；不回写 access_log。"
   },
   turn_attribution_mode: {
@@ -1263,6 +1385,12 @@ const ACCESS_LOG_FIELD_METADATA: Record<(typeof ACCESS_LOG_CSV_HEADERS)[number],
     format: "string|null",
     description: "客户端上报的设备名。",
     trigger: "客户端上报设备名时输出。"
+  },
+  "访问等级": {
+    label: "访问等级",
+    format: "连接|浏览|准备|问询动作|查数|运维操作|未分级",
+    description: "这一行工具调用的访问等级，与 accessGrade(tool) 一致。",
+    trigger: "每条 access_log 行均输出。"
   },
   tool: {
     label: "工具",
@@ -1465,6 +1593,7 @@ function renderAccessLogCsv(rows: QueryRow[]): string {
         csvCell(row.token_label),
         csvCell(row.token_hash_prefix),
         csvCell(row.lucy_session_id),
+        row.inquiry_no ?? "",
         csvCell(row.lucy_turn_id),
         csvCell(row.inferred_turn_id ?? null),
         csvCell(row.turn_attribution_mode),
@@ -1476,6 +1605,7 @@ function renderAccessLogCsv(rows: QueryRow[]): string {
         csvCell(row.client_ip),
         csvCell(row.user_agent),
         csvCell(row.device_name),
+        csvCell(accessGradeLabelZh(accessGrade(row.tool))),
         csvCell(row.tool),
         csvCell(row.tables),
         csvCell(redactJsonString(row.args_summary)),
@@ -1546,7 +1676,8 @@ function filterSnapshotForManifest(
     callSource: q.callSource ?? null,
     clientIp: q.clientIp ?? null,
     deviceName: q.deviceName ?? null,
-    includeProtocol
+    includeProtocol,
+    accessGrade: q.accessGrade ?? null
   };
 }
 
@@ -1579,6 +1710,10 @@ type PrimaryStatusSummary = Record<PrimaryStatus, number>;
 interface TurnEntry {
   id: string;
   source: "inferred" | "reported";
+  inquiryNo?: number;
+  correlationKey?: string;
+  inquiryKind?: InquiryKind;
+  questionSource?: string;
   userId: string;
   client?: string;
   reportedClient?: string;
@@ -1613,6 +1748,7 @@ type TurnFilterQuery = {
   tableSearch?: string;
   outcome?: string;
   q?: string;
+  inquiryKind?: string;
   lookbackHours?: string;
   hours?: string;
   bom?: string;
@@ -1621,6 +1757,11 @@ type TurnFilterQuery = {
 type TurnListResult = {
   total: number;
   entries: TurnEntry[];
+  kindCounts: {
+    real: number;
+    unreportedQuery: number;
+    sessionVisit: number;
+  };
   summary: {
     reportedCount: number;
     inferredCount: number;
@@ -1804,6 +1945,34 @@ function attachInferredTurnIds(database: Database.Database, rows: QueryRow[]): Q
   }));
 }
 
+/** Read-time inquiry serial. Does not write access_log. Unlinked calls stay empty. */
+function attachInquiryNumbers(database: Database.Database, rows: QueryRow[]): QueryRow[] {
+  ensureInquirySerialSchema(database);
+  const keys = new Set<string>();
+  for (const row of rows) {
+    const key = row.lucy_turn_id || row.inferred_turn_id;
+    if (key) keys.add(key);
+  }
+  const serials = new Map<string, number>();
+  for (const chunk of chunksOf([...keys])) {
+    if (chunk.length === 0) continue;
+    const placeholders = chunk.map(() => "?").join(",");
+    const found = database.prepare(`
+      SELECT correlation_key, inquiry_no FROM inquiry_correlation_serial
+      WHERE correlation_key IN (${placeholders})
+    `).all(...chunk) as Array<{ correlation_key: string; inquiry_no: number }>;
+    for (const row of found) serials.set(row.correlation_key, row.inquiry_no);
+  }
+  return rows.map((row) => {
+    const key = row.lucy_turn_id || row.inferred_turn_id || "";
+    return { ...row, inquiry_no: key ? (serials.get(key) ?? null) : null };
+  });
+}
+
+function presentCallRows(database: Database.Database, rows: QueryRow[]): QueryRow[] {
+  return attachInquiryNumbers(database, attachInferredTurnIds(database, rows));
+}
+
 /** Spec 173: evidence packs include handshake rows already linked to the exported inquiries. */
 function linkedHandshakeRows(database: Database.Database, rows: QueryRow[]): QueryRow[] {
   const present = new Set(rows.map((row) => row.id));
@@ -1917,6 +2086,27 @@ function countSlowCallsForFilter(
   return row?.cnt ?? 0;
 }
 
+function matchesTurnIdFilter(entry: TurnEntry, raw: string): boolean {
+  if (!raw) return true;
+  if (/^\d+$/.test(raw)) return entry.inquiryNo === Number(raw);
+  if (raw.includes("lucy_") || raw.includes("inf_")) return entry.id === raw;
+  return entry.id.toLowerCase().includes(raw.toLowerCase());
+}
+
+function presentInquiry(database: Database.Database, entry: TurnEntry): TurnEntry {
+  const inquiryNo = entry.inquiryNo ?? lookupInquiryNo(database, entry.id) ?? undefined;
+  return {
+    ...entry,
+    inquiryNo,
+    correlationKey: entry.id,
+    inquiryKind: inquiryKindOfTurn({
+      source: entry.source,
+      questionSource: entry.questionSource,
+      questionSummary: entry.questionSummary
+    })
+  };
+}
+
 async function listAuditTurnEntries(
   database: Database.Database,
   q: TurnFilterQuery,
@@ -1924,12 +2114,14 @@ async function listAuditTurnEntries(
 ): Promise<TurnListResult> {
   const source = q.source === "inferred" || q.source === "reported" ? q.source : "all";
   const windowHours = parseWindowHours(q.hours);
-  const turnIdNeedle = (q.turnId ?? "").trim().toLowerCase();
+  const turnIdRaw = (q.turnId ?? "").trim();
   const tableNeedle = (q.tableSearch ?? "").trim().toLowerCase();
   const summaryNeedle = (q.q ?? "").trim().toLowerCase();
   const outcomeFilter = q.outcome === "ok" || q.outcome === "error" || q.outcome === "denied" ? q.outcome : "";
   const p95Ms = queryP95LatencyMs(database, windowHours);
   const sinceDefault = sinceIsoFromHours(windowHours);
+  ensureInquirySerialSchema(database);
+  ensureBackfillBeforeAllocate(database);
 
   if (source !== "reported") {
     const cutoff = new Date(Date.now() - INFERRED_TURN_REBUILD_LOOKBACK_HOURS * 60 * 60 * 1000).toISOString();
@@ -1966,12 +2158,14 @@ async function listAuditTurnEntries(
       source_summary: string;
       question_summary: string | null;
       confidence: string;
+      inquiry_no: number | null;
     }>;
     for (const row of rows) {
       entries.push(
-        enrichTurnEntry(database, {
+        presentInquiry(database, enrichTurnEntry(database, {
           id: row.inferred_turn_id,
           source: "inferred",
+          inquiryNo: row.inquiry_no ?? undefined,
           userId: row.user_id,
           client: row.client ?? undefined,
           sessionId: row.session_id ?? undefined,
@@ -1983,7 +2177,7 @@ async function listAuditTurnEntries(
           confidence: row.confidence,
           tools: JSON.parse(row.tool_summary) as string[],
           sources: JSON.parse(row.source_summary) as TurnEntry["sources"]
-        }, p95Ms)
+        }, p95Ms))
       );
     }
   }
@@ -2007,6 +2201,8 @@ async function listAuditTurnEntries(
       created_at: string;
       question_summary: string | null;
       question_preview: string | null;
+      question_source: string | null;
+      inquiry_no: number | null;
     }>;
     for (const row of rows) {
       const linked = database.prepare(`
@@ -2020,9 +2216,11 @@ async function listAuditTurnEntries(
           `).all(...accessLogIds) as Array<{ connection_id: string | null; schema_name: string | null; source_name: string | null; physical_table: string }>
         : [];
       entries.push(
-        enrichTurnEntry(database, {
+        presentInquiry(database, enrichTurnEntry(database, {
           id: row.turn_id,
           source: "reported",
+          inquiryNo: row.inquiry_no ?? undefined,
+          questionSource: row.question_source ?? undefined,
           userId: row.user_id,
           client: row.client ?? undefined,
           sessionId: row.session_id ?? undefined,
@@ -2040,7 +2238,7 @@ async function listAuditTurnEntries(
             sourceName: s.source_name ?? undefined,
             physicalTable: s.physical_table
           }))
-        }, p95Ms)
+        }, p95Ms))
       );
     }
   }
@@ -2048,7 +2246,7 @@ async function listAuditTurnEntries(
   entries.sort((a, b) => (a.startedAt < b.startedAt ? 1 : a.startedAt > b.startedAt ? -1 : 0));
 
   const filtered = entries.filter((entry) => {
-    if (turnIdNeedle && !entry.id.toLowerCase().includes(turnIdNeedle)) return false;
+    if (!matchesTurnIdFilter(entry, turnIdRaw)) return false;
     if (tableNeedle) {
       const hay = entry.sources.map((s) => s.physicalTable).join(" ").toLowerCase();
       if (!hay.includes(tableNeedle)) return false;
@@ -2072,21 +2270,30 @@ async function listAuditTurnEntries(
     return true;
   });
 
-  const total = filtered.length;
-  const reportedCount = filtered.filter((entry) => entry.source === "reported").length;
-  const inferredCount = filtered.filter((entry) => entry.source === "inferred").length;
+  const kindCounts = { real: 0, unreportedQuery: 0, sessionVisit: 0 };
+  for (const entry of filtered) {
+    if (entry.inquiryKind === "real") kindCounts.real += 1;
+    else if (entry.inquiryKind === "unreported_query") kindCounts.unreportedQuery += 1;
+    else if (entry.inquiryKind === "session_visit") kindCounts.sessionVisit += 1;
+  }
+  const kindFilter = parseInquiryKindFilter(q.inquiryKind);
+  const visible = filtered.filter((entry) => entry.inquiryKind != null && inquiryKindMatches(entry.inquiryKind, kindFilter));
+  const total = visible.length;
+  const reportedCount = visible.filter((entry) => entry.source === "reported").length;
+  const inferredCount = visible.filter((entry) => entry.source === "inferred").length;
   const reportedShare = total > 0 ? reportedCount / total : 0;
   const slowCallsInFilter = countSlowCallsForFilter(database, q.since ?? sinceDefault, p95Ms, q.user ?? null);
   const totalCallsRow = database
     .prepare(`SELECT COUNT(*) AS cnt FROM access_log WHERE ts >= ?`)
     .get(sinceDefault) as { cnt: number };
   const offset = options.offset ?? 0;
-  const limit = options.limit ?? filtered.length;
-  const paged = options.paginate ? filtered.slice(offset, offset + limit) : filtered;
+  const limit = options.limit ?? visible.length;
+  const paged = options.paginate ? visible.slice(offset, offset + limit) : visible;
 
   return {
     total,
     entries: paged,
+    kindCounts,
     summary: {
       reportedCount,
       inferredCount,
@@ -2103,6 +2310,7 @@ async function listAuditTurnEntries(
 
 const TURN_CSV_HEADERS = [
   "问询 ID",
+  "关联键",
   "来源",
   "Agent",
   "客户端",
@@ -2112,6 +2320,7 @@ const TURN_CSV_HEADERS = [
   "结束时间",
   "结束时间 UTC",
   "问询时长",
+  "问询种类",
   "问询摘要",
   "关联调用数",
   "工具调用数",
@@ -2131,9 +2340,21 @@ const TURN_CSV_HEADERS = [
 const TURN_FIELD_METADATA: Record<(typeof TURN_CSV_HEADERS)[number], Omit<CsvFieldMetadata, "name">> = {
   "问询 ID": {
     label: "问询 ID",
-    format: "string",
-    description: "一次用户问询的唯一 ID，可用于关联调用流水。",
+    format: "integer",
+    description: "本实例问询流水号，与调用流水的 inquiry_no 对齐。不含 Agent 或平台。",
     trigger: "用户原始问询或系统推断问询均输出。"
+  },
+  "关联键": {
+    label: "关联键",
+    format: "string",
+    description: "问询的稳定关联键。已上报为 lucy_ 加随机串，推断为 inf_ 加用户和首条调用。不是列表上的问询 ID。",
+    trigger: "每条问询记录均输出。"
+  },
+  "问询种类": {
+    label: "问询种类",
+    format: "真实问询|未上报问询|会话访问",
+    description: "读取时判定的问询种类。未上报问询不表示发生了查数。",
+    trigger: "每条问询记录均输出。"
   },
   "来源": {
     label: "来源",
@@ -2284,7 +2505,8 @@ function renderTurnCsv(rows: TurnEntry[]): string {
     TURN_CSV_HEADERS.join(","),
     ...rows.map((row) =>
       [
-        csvCell(row.id),
+        row.inquiryNo ?? "",
+        csvCell(row.correlationKey ?? row.id),
         csvCell(turnSourceLabel(row.source)),
         csvCell(row.userId),
         csvCell(row.client ?? ""),
@@ -2294,6 +2516,7 @@ function renderTurnCsv(rows: TurnEntry[]): string {
         csvCell(formatAuditLocalTimestamp(row.endedAt)),
         csvCell(row.endedAt),
         row.turnSpanMs ?? "",
+        csvCell(row.inquiryKind ? inquiryKindLabelZh(row.inquiryKind) : ""),
         csvCell(row.questionPreview ?? row.questionSummary ?? ""),
         row.linkedCallCount,
         row.businessCallCount,
@@ -3020,12 +3243,13 @@ export function registerAuditRoutes(app: FastifyInstance) {
     const includeAuthFailures = q.includeAuthFailures !== "0" && q.includeAuthFailures !== "false";
 
     const database = await getAuditDb();
-    const { conditions, baseConditions, params } = buildAccessLogFilter(q);
+    const resolved = resolveCallIdentityQuery(database, q);
+    const { conditions, baseConditions, params } = buildAccessLogFilter(resolved);
     const baseWhere = baseConditions.length > 0 ? `WHERE ${baseConditions.join(" AND ")}` : "";
     const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
     const totalRow = database.prepare(`SELECT COUNT(*) AS cnt FROM access_log ${where}`).get(params) as { cnt: number };
-    const rows = attachInferredTurnIds(
+    const rows = presentCallRows(
       database,
       database
         .prepare(`SELECT * FROM access_log ${where} ORDER BY ts DESC LIMIT ${limit} OFFSET ${offset}`)
@@ -3066,6 +3290,8 @@ export function registerAuditRoutes(app: FastifyInstance) {
       lucySessionId: row.lucy_session_id ?? undefined,
       lucyTurnId: row.lucy_turn_id ?? undefined,
       inferredTurnId: row.inferred_turn_id ?? undefined,
+      inquiryNo: row.inquiry_no ?? undefined,
+      accessGrade: accessGrade(row.tool),
       turnAttributionMode: row.turn_attribution_mode ?? undefined,
       turnAttributionConfidence: row.turn_attribution_confidence ?? undefined,
       turnAttributionReason: row.turn_attribution_reason ?? undefined,
@@ -3233,7 +3459,8 @@ export function registerAuditRoutes(app: FastifyInstance) {
   }>("/api/admin/audit/export", async (request, reply) => {
     const q = request.query;
     const database = await getAuditDb();
-    const { conditions, params } = buildAccessLogFilter(q);
+    const resolved = resolveCallIdentityQuery(database, q);
+    const { conditions, params } = buildAccessLogFilter(resolved);
 
     // SC-18 — page size defaults to 10,000; `cursor` resumes after the last
     // row of the previous page so the second page can read row 10,001.
@@ -3246,7 +3473,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
       .prepare(`SELECT * FROM access_log ${where} ORDER BY ts DESC, id DESC LIMIT @pageSizePlusOne`)
       .all({ ...resumed.params, pageSizePlusOne: pageSize + 1 }) as QueryRow[];
     const hasMore = fetched.length > pageSize;
-    const rows = attachInferredTurnIds(database, hasMore ? fetched.slice(0, pageSize) : fetched);
+    const rows = presentCallRows(database, hasMore ? fetched.slice(0, pageSize) : fetched);
     const last = fetched[pageSize - 1] ?? fetched[fetched.length - 1];
     const nextCursor = hasMore && last
       ? encodeAuditExportCursor({ ts: last.ts, id: last.id })
@@ -3270,7 +3497,8 @@ export function registerAuditRoutes(app: FastifyInstance) {
   }>("/api/admin/audit/export-pack", async (request, reply) => {
     const q = request.query;
     const database = await getAuditDb();
-    const { conditions, params, includeProtocol } = buildAccessLogFilter(q);
+    const resolved = resolveCallIdentityQuery(database, q);
+    const { conditions, params, includeProtocol } = buildAccessLogFilter(resolved, { applyAccessGrade: false });
     const maxRows = auditExportMaxRows();
     // SC-18 — the pack pages by cursor too. Without one, an overflowing scope
     // is reported instead of being silently truncated.
@@ -3280,9 +3508,9 @@ export function registerAuditRoutes(app: FastifyInstance) {
       .prepare(`SELECT * FROM access_log ${where} ORDER BY ts DESC, id DESC LIMIT @exportLimit`)
       .all({ ...resumed.params, exportLimit: maxRows + 1 }) as QueryRow[];
     const hasMore = fetched.length > maxRows;
-    const filteredRows = attachInferredTurnIds(database, hasMore ? fetched.slice(0, maxRows) : fetched);
+    const filteredRows = presentCallRows(database, hasMore ? fetched.slice(0, maxRows) : fetched);
     const handshakeRows = includeProtocol ? [] : linkedHandshakeRows(database, filteredRows);
-    const rows = attachInferredTurnIds(
+    const rows = presentCallRows(
       database,
       [...filteredRows, ...handshakeRows].sort((a, b) => (a.ts < b.ts ? 1 : a.ts > b.ts ? -1 : b.id - a.id))
     );
@@ -3578,7 +3806,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
       tableSearch: q.tableSearch,
       includeProtocol: "true"
     };
-    const { conditions, params } = buildAccessLogFilter(callFilter);
+    const { conditions, params } = buildAccessLogFilter(callFilter, { applyAccessGrade: false });
     if (turnIds.length > 0) {
       const placeholders = turnIds.map((_, index) => `@turn${index}`);
       turnIds.forEach((id, index) => {
@@ -3595,7 +3823,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
       conditions.push("1 = 0");
     }
     const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-    const callRows = attachInferredTurnIds(
+    const callRows = presentCallRows(
       database,
       database.prepare(`SELECT * FROM access_log ${where} ORDER BY ts DESC, id DESC`).all(params) as QueryRow[]
     );
@@ -3613,9 +3841,13 @@ export function registerAuditRoutes(app: FastifyInstance) {
 
   // GET /api/admin/audit/turns/:turnId — single turn detail (inferred or reported).
   app.get<{ Params: { turnId: string }; Querystring: { hours?: string } }>("/api/admin/audit/turns/:turnId", async (request, reply) => {
-    const { turnId } = request.params;
     const windowHours = parseWindowHours(request.query.hours);
     const database = await getAuditDb();
+    const turnId = resolveTurnCorrelationKey(database, request.params.turnId);
+    if (!turnId) {
+      reply.code(404);
+      return { ok: false, error: "not found" };
+    }
     const p95Ms = queryP95LatencyMs(database, windowHours);
 
     const mapAccessLogRow = (
@@ -3687,11 +3919,15 @@ export function registerAuditRoutes(app: FastifyInstance) {
         client: (row.client as string | null) ?? undefined,
         questionSummary: (row.question_summary as string | null) ?? undefined
       });
+      const summaryText = (identity.questionSummary ?? row.question_summary) as string | null | undefined;
       return {
         ok: true,
         data: {
           id: row.inferred_turn_id,
           source: "inferred",
+          inquiryNo: lookupInquiryNo(database, turnId) ?? undefined,
+          correlationKey: turnId,
+          inquiryKind: inquiryKindOfTurn({ source: "inferred", questionSummary: summaryText }),
           userId: row.user_id,
           client: identity.client,
           reportedClient: identity.reportedClient,
@@ -3756,11 +3992,19 @@ export function registerAuditRoutes(app: FastifyInstance) {
       client: (row.client as string | null) ?? undefined,
       questionSummary: (row.question_summary as string | null) ?? undefined
     });
+    const summaryText = (identity.questionSummary ?? row.question_summary) as string | null | undefined;
     return {
       ok: true,
       data: {
         id: row.turn_id,
         source: "reported",
+        inquiryNo: lookupInquiryNo(database, turnId) ?? undefined,
+        correlationKey: turnId,
+        inquiryKind: inquiryKindOfTurn({
+          source: "reported",
+          questionSource: row.question_source as string | null | undefined,
+          questionSummary: summaryText
+        }),
         userId: row.user_id,
         client: identity.client,
         reportedClient: identity.reportedClient,
@@ -3809,6 +4053,13 @@ export function registerAuditRoutes(app: FastifyInstance) {
       if (Number.isFinite(parsed) && parsed > 0) filter.limit = parsed;
     }
     const database = await getAuditDb();
+    if (filter.turnId && /^\d+$/.test(filter.turnId.trim())) {
+      const resolvedTurnId = correlationKeyForAdminTurn(database, filter.turnId);
+      if (!resolvedTurnId) {
+        return { ok: true, data: { events: [], evidence: [] } };
+      }
+      filter.turnId = resolvedTurnId;
+    }
     const { events, evidence } = listTraceEvents(database, filter);
     return {
       ok: true,
@@ -3871,10 +4122,15 @@ export function registerAuditRoutes(app: FastifyInstance) {
     }
 
     const database = await getAuditDb();
+    const originalTurnId = correlationKeyForAdminTurn(database, body.originalTurnId!);
+    if (!originalTurnId) {
+      reply.code(404);
+      return { ok: false, error: { code: "TURN_NOT_FOUND", message: "问询不存在" } };
+    }
     let row;
     try {
       row = appendAssociationRevision(database, {
-        originalTurnId: body.originalTurnId!,
+        originalTurnId,
         effectiveTurnId: body.effectiveTurnId ?? null,
         originalAssociationStatus: body.originalAssociationStatus ?? null,
         effectiveAssociationStatus: body.effectiveAssociationStatus!,
@@ -3969,9 +4225,15 @@ export function registerAuditRoutes(app: FastifyInstance) {
 
     const database = await getAuditDb();
     const limit = Math.min(parseInt(request.query.limit ?? "50", 10) || 50, 500);
-    const filterTurnId = request.query.originalTurnId ?? null;
+    const requestedTurnId = request.query.originalTurnId ?? null;
+    const filterTurnId = requestedTurnId && /^\d+$/.test(requestedTurnId.trim())
+      ? correlationKeyForAdminTurn(database, requestedTurnId)
+      : requestedTurnId;
+    if (requestedTurnId && /^\d+$/.test(requestedTurnId.trim()) && !filterTurnId) {
+      return { ok: true, data: [] };
+    }
     const rows = listAssociationRevisions(database, {
-      originalTurnId: request.query.originalTurnId,
+      originalTurnId: filterTurnId ?? undefined,
       limit
     });
 

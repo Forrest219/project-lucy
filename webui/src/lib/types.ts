@@ -1644,6 +1644,10 @@ export type AuditLogEntry = {
   lucyTurnId?: string;
   /** Present when lucyTurnId is empty and an inferred turn currently links this call. */
   inferredTurnId?: string;
+  /** Instance inquiry serial. Empty when the call is not linked to an inquiry. */
+  inquiryNo?: number;
+  /** Exclusive access grade from accessGrade(tool). */
+  accessGrade?: "connect" | "browse" | "prepare" | "ask" | "query" | "control" | "unclassified";
   turnAttributionMode?: "explicit" | "session_bound" | "identity_inferred" | "unassigned";
   turnAttributionConfidence?: "high" | "low" | "none";
   turnAttributionReason?: "turn_attribution_rejected";
@@ -1802,9 +1806,14 @@ export type AuditTurnOutcomeSummary = {
   budgetStop?: number;
 };
 
+export type AuditInquiryKind = "real" | "unreported_query" | "session_visit";
+
 export type AuditTurnEntry = {
   id: string;
   source: "inferred" | "reported";
+  inquiryNo?: number;
+  correlationKey?: string;
+  inquiryKind?: AuditInquiryKind;
   userId: string;
   client?: string;
   sessionId?: string;
@@ -1848,6 +1857,11 @@ export type AuditTurnsResponse = {
     inferredCount: number;
     reportedShare: number;
   };
+  kindCounts?: {
+    real: number;
+    unreportedQuery: number;
+    sessionVisit: number;
+  };
 };
 
 export type AuditTurnCallLog = {
@@ -1866,6 +1880,9 @@ export type AuditTurnCallLog = {
 export type AuditTurnDetailResponse = {
   id: string;
   source: "inferred" | "reported";
+  inquiryNo?: number;
+  correlationKey?: string;
+  inquiryKind?: AuditInquiryKind;
   userId: string;
   client?: string;
   sessionId?: string;

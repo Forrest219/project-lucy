@@ -797,4 +797,149 @@ describe("proxy audit log", () => {
       db.close();
     }
   });
+
+  it("keeps inquiry_no when an inferred turn is deleted and rebuilt", async () => {
+    const { writeLog, writeConversationTurn, rebuildInferredTurns, closeAuditDb } = await import("../proxy/audit");
+    const base = Date.now() - 60 * 60 * 1000;
+    const at = (offsetMs: number) => new Date(base + offsetMs).toISOString();
+    await writeLog({
+      ts: at(0),
+      userId: "serial-user",
+      tool: "lucy_query",
+      tables: ["dataforai.superstore_orders"],
+      outcome: "ok",
+      durationMs: 1,
+      requestId: "serial-q",
+      lucySessionId: "sess-serial",
+      client: "cursor-vscode"
+    });
+    await rebuildInferredTurns("serial-user", { lookbackHours: 24, gapMs: 120_000 });
+
+    const readTurn = () => {
+      const db = new Database(auditDbPath, { readonly: true });
+      try {
+        return db.prepare(`
+          SELECT inferred_turn_id, inquiry_no
+          FROM inferred_turns
+          WHERE user_id = ?
+        `).get("serial-user") as { inferred_turn_id: string; inquiry_no: number };
+      } finally {
+        db.close();
+      }
+    };
+
+    const first = readTurn();
+    expect(first.inferred_turn_id.startsWith("inf_")).toBe(true);
+    expect(first.inquiry_no).toBeGreaterThan(0);
+
+    await rebuildInferredTurns("serial-user", { lookbackHours: 24, gapMs: 120_000 });
+    expect(readTurn()).toEqual(first);
+
+    await writeConversationTurn({
+      turnId: "lucy_serial_between",
+      userId: "serial-other",
+      questionSummary: "inserted between rebuilds",
+      questionSource: "reported_tool"
+    });
+    await rebuildInferredTurns("serial-user", { lookbackHours: 24, gapMs: 120_000 });
+    expect(readTurn()).toEqual(first);
+
+    const writable = new Database(auditDbPath);
+    try {
+      writable.prepare(`
+        DELETE FROM inferred_turn_access_logs
+        WHERE inferred_turn_id IN (SELECT inferred_turn_id FROM inferred_turns WHERE user_id = ?)
+      `).run("serial-user");
+      writable.prepare(`DELETE FROM inferred_turns WHERE user_id = ?`).run("serial-user");
+      const mapRow = writable.prepare(`
+        SELECT inquiry_no FROM inquiry_correlation_serial WHERE correlation_key = ?
+      `).get(first.inferred_turn_id) as { inquiry_no: number };
+      expect(mapRow.inquiry_no).toBe(first.inquiry_no);
+    } finally {
+      writable.close();
+    }
+    await rebuildInferredTurns("serial-user", { lookbackHours: 24, gapMs: 120_000 });
+    expect(readTurn()).toEqual(first);
+
+    closeAuditDb();
+    vi.resetModules();
+    const reopened = await import("../proxy/audit");
+    await reopened.rebuildInferredTurns("serial-user", { lookbackHours: 24, gapMs: 120_000 });
+    expect(readTurn()).toEqual(first);
+  });
+
+  it("still builds inferred turns for a session visit, an unreported query, and a catalog-only session", async () => {
+    const { writeLog, rebuildInferredTurns, UNREPORTED_QUESTION_SUMMARY } = await import("../proxy/audit");
+    const { inquiryKindOfTurn } = await import("../admin/audit-inquiry-kind");
+    const { accessGrade } = await import("../proxy/usage-classification");
+    const base = Date.now() - 30 * 60 * 1000;
+    const at = (offsetMs: number) => new Date(base + offsetMs).toISOString();
+    await writeLog({
+      ts: at(0),
+      userId: "kind-cluster-user",
+      tool: "lucy_catalog",
+      outcome: "ok",
+      durationMs: 1,
+      requestId: "kind-catalog",
+      lucySessionId: "sess-cat",
+      client: "cursor-vscode"
+    });
+    await writeLog({
+      ts: at(10_000),
+      userId: "kind-cluster-user",
+      tool: "wiki_read",
+      outcome: "ok",
+      durationMs: 1,
+      requestId: "kind-prepare",
+      lucySessionId: "sess-prep",
+      client: "cursor-vscode"
+    });
+    await writeLog({
+      ts: at(20_000),
+      userId: "kind-cluster-user",
+      tool: "lucy_query",
+      tables: ["dataforai.superstore_orders"],
+      outcome: "ok",
+      durationMs: 1,
+      requestId: "kind-query",
+      lucySessionId: "sess-qry",
+      client: "cursor-vscode"
+    });
+    await writeLog({
+      ts: at(30_000),
+      userId: "kind-cluster-user",
+      tool: "initialize",
+      outcome: "ok",
+      durationMs: 1,
+      requestId: "kind-handshake",
+      lucySessionId: "sess-hs",
+      client: "cursor-vscode"
+    });
+
+    const result = await rebuildInferredTurns("kind-cluster-user", { lookbackHours: 24, gapMs: 120_000 });
+    expect(result.turns).toBe(4);
+
+    const db = new Database(auditDbPath, { readonly: true });
+    try {
+      const turns = db.prepare(`
+        SELECT session_id, question_summary, inquiry_no
+        FROM inferred_turns
+        WHERE user_id = ?
+      `).all("kind-cluster-user") as Array<{ session_id: string; question_summary: string; inquiry_no: number }>;
+      const bySession = new Map(turns.map((turn) => [turn.session_id, turn]));
+      for (const sessionId of ["sess-cat", "sess-prep", "sess-qry"]) {
+        const turn = bySession.get(sessionId);
+        expect(turn?.question_summary).toBe(UNREPORTED_QUESTION_SUMMARY);
+        expect(inquiryKindOfTurn({ source: "inferred", questionSummary: turn?.question_summary })).toBe("unreported_query");
+        expect(turn?.inquiry_no).toBeGreaterThan(0);
+      }
+      const visit = bySession.get("sess-hs");
+      expect(inquiryKindOfTurn({ source: "inferred", questionSummary: visit?.question_summary })).toBe("session_visit");
+      expect(accessGrade("lucy_catalog")).toBe("browse");
+      expect(accessGrade("wiki_read")).toBe("prepare");
+      expect(accessGrade("lucy_query")).toBe("query");
+    } finally {
+      db.close();
+    }
+  });
 });

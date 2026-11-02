@@ -714,6 +714,34 @@ function looksLikeIdQuery(raw: string): boolean {
   return false;
 }
 
+function inquiryKindLabel(kind: AuditTurnEntry["inquiryKind"]): string {
+  if (kind === "real") return "真实问询";
+  if (kind === "unreported_query") return "未上报问询";
+  if (kind === "session_visit") return "会话访问";
+  return "—";
+}
+
+function accessGradeLabel(grade: AuditLogEntry["accessGrade"]): string {
+  switch (grade) {
+    case "connect":
+      return "连接";
+    case "browse":
+      return "浏览";
+    case "prepare":
+      return "准备";
+    case "ask":
+      return "问询动作";
+    case "query":
+      return "查数";
+    case "control":
+      return "运维操作";
+    case "unclassified":
+      return "未分级";
+    default:
+      return "—";
+  }
+}
+
 function TurnSourceBadge({ source }: { source: AuditTurnEntry["source"] }) {
   if (source === "reported") {
     return <span className="pl-status-badge pl-status-done">已上报问询</span>;
@@ -800,6 +828,25 @@ function TurnDetailDrawer({
 
               <section className="pl-card grid gap-2 text-xs" data-testid="audit-turn-meta-card">
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-fg-muted">
+                  <span data-testid="audit-turn-kind">问询种类 {inquiryKindLabel(detail.inquiryKind)}</span>
+                  <span className="inline-flex items-center gap-1">
+                    问询 ID
+                    {detail.inquiryNo != null ? (
+                      <CopyableId
+                        value={String(detail.inquiryNo)}
+                        testId="audit-turn-drawer-inquiry-no"
+                        label="问询 ID"
+                      />
+                    ) : (
+                      "—"
+                    )}
+                  </span>
+                  <span>
+                    关联键{" "}
+                    <span className="notranslate" translate="no" data-testid="audit-turn-correlation-key">
+                      {detail.correlationKey ?? detail.id}
+                    </span>
+                  </span>
                   {detail.startedAt || detail.createdAt ? (
                     <span>开始 {formatConfigAuditTs(detail.startedAt ?? detail.createdAt ?? "")}</span>
                   ) : null}
@@ -819,10 +866,14 @@ function TurnDetailDrawer({
                 </div>
               </section>
 
-              {(detail.questionSummary || detail.questionPreview) ? (
+              {(detail.inquiryKind === "session_visit" || detail.questionSummary || detail.questionPreview) ? (
                 <section className="pl-card grid gap-2" data-testid="audit-turn-summary-card">
                   <h3 className="text-sm font-semibold text-fg-default">问询摘要</h3>
-                  <p className="text-sm text-fg-muted">{detail.questionPreview ?? detail.questionSummary}</p>
+                  <p className="text-sm text-fg-muted">
+                    {detail.inquiryKind === "session_visit"
+                      ? "这次只有会话访问，没有问句。"
+                      : (detail.questionPreview ?? detail.questionSummary)}
+                  </p>
                 </section>
               ) : null}
 
@@ -1151,7 +1202,20 @@ function EntryRow({
           </div>
         </td>
         <td className="pl-audit-table-mono whitespace-nowrap">
-          {entry.lucyTurnId ? (
+          {entry.inquiryNo != null && (entry.lucyTurnId || entry.inferredTurnId) ? (
+            <button
+              type="button"
+              className="pl-inline-link notranslate font-mono text-xs"
+              translate="no"
+              data-testid={`audit-call-turn-id-${entry.id}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                onOpenTurn(entry.lucyTurnId ?? entry.inferredTurnId!);
+              }}
+            >
+              {entry.inquiryNo}
+            </button>
+          ) : entry.lucyTurnId ? (
             <button
               type="button"
               className="pl-inline-link notranslate font-mono text-xs"
@@ -1240,6 +1304,7 @@ function EntryRow({
             ) : null}
           </span>
         </td>
+        <td data-testid={`audit-call-grade-${entry.id}`}>{accessGradeLabel(entry.accessGrade)}</td>
         <td className="pl-audit-table-mono">{entry.tool}</td>
         <td className="pl-audit-table-muted">{entry.tables?.join(", ")}</td>
         <td className="pl-audit-table-muted">
@@ -1295,7 +1360,7 @@ function EntryRow({
       </tr>
       {expanded && (
         <tr className="pl-audit-detail">
-          <td colSpan={13} className="px-3 py-3 text-xs">
+          <td colSpan={14} className="px-3 py-3 text-xs">
             <div className="pl-audit-detail-panels" data-testid={`audit-detail-panels-${entry.id}`}>
               <AuditDetailSection title="调用方" testId={`audit-detail-caller-${entry.id}`}>
                 <AuditDetailField
@@ -1491,6 +1556,9 @@ export function Audit() {
   const callSource = searchParams.get("callSource") ?? "";
   const turnSource = searchParams.get("turnSource") ?? "";
   const turnSearch = searchParams.get("turnSearch") ?? "";
+  const inquiryKind = searchParams.get("inquiryKind") ?? "";
+  const accessGrade = searchParams.get("accessGrade") ?? "";
+  const eventId = searchParams.get("eventId") ?? "";
   const includeProtocol = searchParams.get("includeProtocol") === "true" || callSource === "playground";
   const slowOnly = searchParams.get("slowOnly") === "1";
   const tab = parseAuditView(searchParams);
@@ -1784,6 +1852,8 @@ export function Audit() {
       || callSource
       || turnSource
       || turnSearch
+      || (inquiryKind && inquiryKind !== "management")
+      || (accessGrade && accessGrade !== "exclude_connect")
       || until
       || (since && since !== rangeDefaultSince)
       || slowOnly
@@ -1852,6 +1922,7 @@ export function Audit() {
     turnId: keySearch.trim() || undefined,
     outcome: outcome || undefined,
     q: turnSearch.trim() || undefined,
+    inquiryKind: inquiryKind && inquiryKind !== "management" ? inquiryKind : undefined,
     limit: PAGE_SIZE,
     offset: page * PAGE_SIZE
   });
@@ -1875,8 +1946,10 @@ export function Audit() {
     clientIp: clientIp || undefined,
     deviceName: deviceNameFilter || undefined,
     key: keySearch.trim() || undefined,
+    eventId: eventId.trim() || undefined,
     platform: platform || undefined,
     callSource: callSource || undefined,
+    accessGrade: accessGrade && accessGrade !== "exclude_connect" ? accessGrade : undefined,
     includeProtocol,
     limit: PAGE_SIZE,
     offset: page * PAGE_SIZE
@@ -1892,6 +1965,12 @@ export function Audit() {
   const turnEntries = turnsQuery.data?.entries ?? [];
   const turnTotal = turnsQuery.data?.total ?? 0;
   const turnSummary = turnsQuery.data?.summary;
+  const kindCounts = turnsQuery.data?.kindCounts ?? { real: 0, unreportedQuery: 0, sessionVisit: 0 };
+  const showsSessionVisits = inquiryKind === "all" || inquiryKind === "session_visit";
+  const hiddenSessionVisits = !showsSessionVisits && kindCounts.sessionVisit > 0
+    ? ` · 已隐藏会话访问 ${kindCounts.sessionVisit}`
+    : "";
+  const turnCoverageSummary = `真实问询 ${kindCounts.real} · 未上报问询 ${kindCounts.unreportedQuery} · 会话访问 ${kindCounts.sessionVisit}${hiddenSessionVisits}`;
   const referenceLatency = turnsQuery.data?.referenceLatency;
   const p95Ms = referenceLatency?.p95Ms ?? 0;
 
@@ -1935,7 +2014,8 @@ export function Audit() {
     tableSearch: tableSearch.trim() || undefined,
     turnId: keySearch.trim() || undefined,
     outcome: outcome || undefined,
-    q: turnSearch.trim() || undefined
+    q: turnSearch.trim() || undefined,
+    inquiryKind: inquiryKind && inquiryKind !== "management" ? inquiryKind : undefined
   });
   const callExportFilterQuery = buildQuery({
     user: resolvedUserFilter || user || undefined,
@@ -1949,8 +2029,10 @@ export function Audit() {
     clientIp: clientIp || undefined,
     deviceName: deviceNameFilter || undefined,
     key: keySearch.trim() || undefined,
+    eventId: eventId.trim() || undefined,
     platform: platform || undefined,
     callSource: callSource || undefined,
+    accessGrade: accessGrade && accessGrade !== "exclude_connect" ? accessGrade : undefined,
     includeProtocol
   });
   const turnExportUrl = `/api/admin/audit/turns/export${turnExportFilterQuery}`;
@@ -2145,6 +2227,39 @@ export function Audit() {
           <option value="error">错误</option>
           <option value="denied">拒绝</option>
         </select>
+        {tab === "turns" ? (
+          <select
+            className="pl-input w-36"
+            aria-label="问询种类"
+            data-testid="audit-inquiry-kind-filter"
+            value={inquiryKind === "management" ? "" : inquiryKind}
+            onChange={(e) => updateParam("inquiryKind", e.target.value)}
+          >
+            <option value="">管理相关</option>
+            <option value="real">真实问询</option>
+            <option value="unreported_query">未上报问询</option>
+            <option value="session_visit">会话访问</option>
+            <option value="all">全部种类</option>
+          </select>
+        ) : (
+          <select
+            className="pl-input w-36"
+            aria-label="访问等级"
+            data-testid="audit-access-grade-filter"
+            value={accessGrade === "exclude_connect" ? "" : accessGrade}
+            onChange={(e) => updateParam("accessGrade", e.target.value)}
+          >
+            <option value="all">全部</option>
+            <option value="">排除连接</option>
+            <option value="connect">连接</option>
+            <option value="browse">浏览</option>
+            <option value="prepare">准备</option>
+            <option value="ask">问询动作</option>
+            <option value="query">查数</option>
+            <option value="control">运维操作</option>
+            <option value="unclassified">未分级</option>
+          </select>
+        )}
         <input
           className="pl-input flex-1 min-w-[10rem] notranslate"
           translate="no"
@@ -2244,6 +2359,15 @@ export function Audit() {
                 </option>
               </select>
               <input
+                className="pl-input w-32 notranslate"
+                translate="no"
+                placeholder="事件 ID"
+                aria-label="事件 ID"
+                data-testid="audit-event-id-filter"
+                value={eventId}
+                onChange={(e) => updateParam("eventId", e.target.value)}
+              />
+              <input
                 className="pl-input w-36 notranslate"
                 translate="no"
                 placeholder="工具名"
@@ -2310,10 +2434,7 @@ export function Audit() {
             </div>
             {turnSummary ? (
               <div className="text-sm text-fg-muted" data-testid="audit-turns-coverage-summary">
-                当前筛选：已上报问询 {turnSummary.reportedCount} · 推断问询 {turnSummary.inferredCount}
-                {turnTotal > 0
-                  ? ` · 上报占比 ${Math.round(turnSummary.reportedShare * 100)}%`
-                  : null}
+                {turnCoverageSummary}
               </div>
             ) : null}
             {turnTotal === 0 || (turnSummary && turnSummary.reportedCount === 0) ? (
@@ -2340,6 +2461,7 @@ export function Audit() {
                   <th className="pl-audit-turns-col-agent whitespace-nowrap"><span className="notranslate" translate="no">Agent</span></th>
                   <th className="whitespace-nowrap">客户端</th>
                   <th className="whitespace-nowrap">会话 ID</th>
+                  <th className="whitespace-nowrap">问询种类</th>
                   <th className="pl-audit-turns-col-summary whitespace-nowrap">问询摘要</th>
                   <th className="pl-audit-turns-col-calls whitespace-nowrap">关联调用数</th>
                   <th className="whitespace-nowrap">预算终止次数</th>
@@ -2350,7 +2472,7 @@ export function Audit() {
               </thead>
               <tbody>
                 {filteredTurnEntries.length === 0 ? (
-                  <tr><td colSpan={13} className="px-3 py-6 text-center text-fg-muted">暂无问询记录</td></tr>
+                  <tr><td colSpan={14} className="px-3 py-6 text-center text-fg-muted">暂无问询记录</td></tr>
                 ) : (
                   filteredTurnEntries.map((entry, index) => {
                     // 「未下发」提示用 legacy outcome 的 denied 计数：它回答的是
@@ -2366,7 +2488,11 @@ export function Audit() {
                       >
                         <td className="pl-audit-table-num">{page * PAGE_SIZE + index + 1}</td>
                         <td className="pl-audit-table-mono pl-audit-turn-id-cell" onClick={(e) => e.stopPropagation()}>
-                          <CopyableId value={entry.id} testId={`audit-turn-id-${entry.id}`} label="问询 ID" />
+                          {entry.inquiryNo != null ? (
+                            <CopyableId value={String(entry.inquiryNo)} testId={`audit-turn-id-${entry.id}`} label="问询 ID" />
+                          ) : (
+                            <span className="text-fg-muted">—</span>
+                          )}
                         </td>
                         <td className="pl-audit-table-muted whitespace-nowrap tabular-nums">
                           {formatConfigAuditTs(entry.startedAt)}
@@ -2380,7 +2506,10 @@ export function Audit() {
                         <td className="notranslate" translate="no">{formatAgentLabel(entry.userId, agentNameById)}</td>
                         <td className="notranslate" translate="no">{entry.client || "—"}</td>
                         <td className="pl-audit-table-mono notranslate" translate="no">{entry.sessionId || "—"}</td>
-                        <td className="pl-audit-turn-summary-cell">{entry.questionPreview ?? entry.questionSummary ?? "—"}</td>
+                        <td data-testid={`audit-turn-kind-${entry.id}`}>{inquiryKindLabel(entry.inquiryKind)}</td>
+                        <td className="pl-audit-turn-summary-cell">
+                          {entry.inquiryKind === "session_visit" ? "—" : (entry.questionPreview ?? entry.questionSummary ?? "—")}
+                        </td>
                         <td className="pl-audit-table-num">{entry.linkedCallCount}</td>
                         <td className="pl-audit-table-num">{entry.outcomeSummary?.budgetStop ?? 0}</td>
                         <td className="pl-audit-table-muted pl-audit-turn-tables-cell notranslate" translate="no" title={entry.sources.map((s) => s.physicalTable).filter(Boolean).join(", ") || undefined}>
@@ -2487,6 +2616,7 @@ export function Audit() {
                   <th className="whitespace-nowrap">访问上下文</th>
                   <th>状态</th>
                   <th>耗时</th>
+                  <th className="whitespace-nowrap">访问等级</th>
                   <th>工具</th>
                   <th>涉及数据表</th>
                   <th>裁决原因</th>
@@ -2496,7 +2626,7 @@ export function Audit() {
               </thead>
               <tbody>
                 {callEntries.length === 0 ? (
-                  <tr><td colSpan={13} className="px-3 py-6 text-center text-fg-muted">暂无记录</td></tr>
+                  <tr><td colSpan={14} className="px-3 py-6 text-center text-fg-muted">暂无记录</td></tr>
                 ) : (
                   callEntries.map((entry, index) => (
                     <EntryRow

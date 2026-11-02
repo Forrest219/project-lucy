@@ -646,13 +646,18 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 | Audit Evidence Pack | 导出审计证据包 | 证据包 zip | 把单 CSV 称为审计证据包、把 SHA 自检称为防篡改签名、按钮上写 Manifest | Spec 137：顶栏文字按钮，`GET /api/admin/audit/export-pack`；Manifest 在 zip 内；仅当 Manifest `complete=true` 才用于正式审计验收 |
 | Export Manifest | Manifest | — | 将 Manifest 翻译成中文主标签 | Spec 137：`manifest.json`；DOM `translate="no"` |
 | Turn / Question cluster | 问询 | 问询摘要 | 问题簇 | 列表行对象；Drawer 标题 |
-| Turn ID | 问询 ID | — | turn id（裸露作主标签）、问题簇 ID | L1 身份列；可复制；关联调用流水 |
-| Inferred Turn ID | 推断问询 ID | — | inferred turn id（裸露作主标签） | 调用流水列 / CSV；仅当问询 ID 为空时由关联表回填 |
+| Turn ID | 问询 ID | — | turn id（裸露作主标签）、问题簇 ID、把 Agent／平台写进 ID | L1 身份列；本实例审计库内单调正整数；可复制；与调用流水对齐。旧 `lucy_<uuid>`／`inf_<userId>_<id>` 改称关联键。见 `docs/specs/lucy-20261102-audit-inquiry-kind-spec.md` |
+| Correlation Key | 关联键 | — | 把关联键当列表问询 ID、第三种来源 badge | 库存主键：`lucy_<uuid>` 或 `inf_<userId>_<accessLogId>`。抽屉与问询 CSV 保留；列表主列不展示 |
+| Inferred Turn ID | 推断问询 ID | — | inferred turn id（裸露作主标签） | 调用流水列 / CSV 关联键回填；仅当问询 ID 为空时由关联表回填 |
 | Audit Event ID | 事件 ID | — | access_log id（裸露作主标签） | 调用流水 L1 身份列；`access_log.id` |
 | Range preset | 近 24 小时 / 近 7 天 | — | 地址栏 `hours=168`（新写入） | URL `range=24h\|7d`；兼容读 `hours=24\|168` |
 | Reported turn | 已上报问询 | — | reported turn | 来源 badge |
 | Inferred turn | 推断问询 | — | 推断问题（无来源标注） | 来源 badge |
-| Session Visit | 会话访问 | — | 第三种来源 badge、把 User-Agent 写成客户端名 | 没有用户原文时按 MCP 会话生成的推断问询。摘要以「会话建立：」加客户端名开头。Spec 172 |
+| Inquiry Kind | 问询种类 | — | 第三种来源 badge、把种类写进来源筛选 | 问询记录行级三值：真实问询／未上报问询／会话访问。与来源徽章正交。见 `docs/specs/lucy-20261102-audit-inquiry-kind-spec.md` |
+| Real Inquiry | 真实问询 | — | 把未上报问询或会话访问标成真实问询 | 已落库原文问询。与「近 N 真实问询」同义，单位是问询行 |
+| Unreported Inquiry | 未上报问询 | — | 未上报查数（作种类主称）、断言发生查数 | 没有已登记原文且不是会话访问的推断问询。摘要仍是「未上报问询原文」。是否查数看访问等级 |
+| Session Visit | 会话访问 | — | 第三种来源 badge、把 User-Agent 写成客户端名 | 问询种类的一值。管理列表以问询种类为准；库存摘要仍可以「会话建立：」开头。来源徽章仍是推断问询。Spec 172／`lucy-20261102-audit-inquiry-kind` |
+| Access Grade | 访问等级 | — | Access Grade（作列头）、把调用来源改叫访问等级 | 调用行七值：连接／浏览／准备／问询动作／查数／运维操作／未分级。复用 Spec 194 `accessGrade` |
 | Question Budget | 问询预算 | — | turn budget（裸露作主标签）、8 分钟上限 | 同一问询的数据工具次数上限与数据处理时长上限；不含 agent 思考等空闲时间；Spec 162 |
 | Continuable | 可继续 | — | 自动续跑 | 问询预算用尽后，该调用者是否仍有一条可达的继续通道；协议字段 `question_budget_exhausted` 使用 `translate="no"` |
 | Repair Hint | 修复提示 | — | 把角色外的 source 名写进提示 | 只含当前角色可见的来源与连接 |
@@ -665,7 +670,7 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 | Slow call | 慢于多数请求 | 慢调用 | 慢查询 | 相对 P95 参照 |
 | Usage Slow Mark | 问询慢标记 | — | 把「慢于多数请求」改成这个名字 | Spec 162：`lucy_query` 达到 5 秒，或问询墙钟达到 120 秒。生效日 2026-10-12 必须和数字一起出现 |
 | Typical Request Latency | 多数请求耗时 | P95（次级括注） | 响应上限（P95）作主标签 | 与 `/admin/usage` 同算法；**列表页不再展示整句参照文案**（Spec 94） |
-| Source type filter | 来源类型 | — | 全部来源、推断（筛选项裸词） | 选项：`全部 / 用户原始问询 / 系统推断问询`；**仅问询记录 Tab** |
+| Source type filter | 来源类型 | — | 全部来源、推断（筛选项裸词）、把会话访问加进本筛选项 | 选项：`全部 / 用户原始问询 / 系统推断问询`；**仅问询记录 Tab**。问询种类另有筛选项 |
 | Call origin filter | 调用来源 | — | 全部来源（作选项文案）、来源类型（挪用到调用流水） | 调用流水筛选项：`全部 / MCP 调试台受控试调 / Agent 接入调用`；`callSource=playground\|agent`；`playground` 对应 `lucy_platform=mcp-playground` 并自动包含协议调用 |
 | Tool call count | 工具调用数 | — | 调用数 | L1 列表列；触达物理表或 `table_forbidden` 拒绝 |
 | Linked call count | 关联调用数 | — | 调用总数（与工具调用数混用） | 问询记录 / CSV；成功 + 拒绝 + 错误 + 预算终止 = 本列 |
@@ -684,7 +689,7 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 
 Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token`、`MCP`、`P95`、`Manifest`、tool name、physical table、Agent id、问询 ID / 事件 ID 值、裁决原因码、生成 SQL 文本、`lucy-ops`、`lucy_ops_reader`、`ops_calls`、`ops_call_tables`、`ops-questioning`、`demo_ops`。
 
-详见 Spec 89；Spec 94 补充来源筛选与列表/Drawer 列名；Spec 99 要求双行 DecisionReasonView；**Spec 106** 要求身份列、共享筛选与 `view`/`range` URL；**Spec 125** 要求调用流水直展生成 SQL（Spec 124 冷存降为 legacy）；**Spec 137** 区分「导出调用流水」与「导出审计证据包」；**Spec 140** 增加问询记录 CSV；页头「导出」跟随当前页签，不再并排两个粒度；**Spec 141** 要求 CSV 文件名精确到秒和流水号、增加本地时间并提供字段说明；**Spec 149** 增加运维问数连接与运维问数角色；v1.2 定稿增加运维问数 Skill 与演示运维问数 Agent。问数仍沿用调用流水、生成 SQL、裁决原因。本连接不回答业务活跃 Token。**Spec 172** 增加会话访问：没有用户原文时按 MCP 会话保留一条推断问询，摘要以「会话建立：」加客户端名开头。
+详见 Spec 89；Spec 94 补充来源筛选与列表/Drawer 列名；Spec 99 要求双行 DecisionReasonView；**Spec 106** 要求身份列、共享筛选与 `view`/`range` URL；**Spec 125** 要求调用流水直展生成 SQL（Spec 124 冷存降为 legacy）；**Spec 137** 区分「导出调用流水」与「导出审计证据包」；**Spec 140** 增加问询记录 CSV；页头「导出」跟随当前页签，不再并排两个粒度；**Spec 141** 要求 CSV 文件名精确到秒和流水号、增加本地时间并提供字段说明；**Spec 149** 增加运维问数连接与运维问数角色；v1.2 定稿增加运维问数 Skill 与演示运维问数 Agent。问数仍沿用调用流水、生成 SQL、裁决原因。本连接不回答业务活跃 Token。**Spec 172** 增加会话访问：没有用户原文时按 MCP 会话保留一条推断问询，摘要以「会话建立：」加客户端名开头。**`lucy-20261102-audit-inquiry-kind`** 增加问询种类与实例内流水号问询 ID；管理列表默认排除会话访问；调用流水增加访问等级并默认排除连接级。
 
 #### 4.7.1 Spec 173 v0.3 / 2026-10-19 audit-trust 新增术语
 

@@ -26,6 +26,13 @@ import {
 } from "./usage-classification.js";
 import { resolveClientIdentity } from "./request-client-meta.js";
 import {
+  allocateInquiryNo,
+  ensureBackfillBeforeAllocate,
+  ensureInquirySerialSchema,
+  lookupInquiryNo,
+  withAllocatedInquiryNo
+} from "../admin/audit-inquiry-serial.js";
+import {
   CALL_MONITOR_P95_MIN_SAMPLES,
   callMonitorBucketIndex,
   callMonitorWindow,
@@ -726,6 +733,8 @@ async function getDb(): Promise<Database.Database> {
   ensureColumn(db, "conversation_turns", "association_status", "TEXT");
   ensureColumn(db, "inferred_turns", "client", "TEXT");
   ensureColumn(db, "inferred_turns", "session_id", "TEXT");
+  ensureInquirySerialSchema(db);
+  conversationTurnInsertStmt = null;
   db.exec(`
     -- 存量库可能没有 session_id 列 —— 索引必须在 ensureColumn 之后建。
     CREATE INDEX IF NOT EXISTS idx_ct_session ON conversation_turns(session_id);
@@ -765,7 +774,27 @@ const OPS_EVIDENCE_SELF_PHYSICAL_TABLES = [
   "main.ops_calls",
   "main.ops_call_tables",
   "ops_calls",
-  "ops_call_tables"
+  "ops_call_tables",
+  "ops_agents",
+  "ops_tokens",
+  "ops_agent_activity",
+  "ops_question_kpi_agents",
+  "ops_grant_paths",
+  "ops_access_paths",
+  "ops_edge_signals",
+  "ops_map_nodes",
+  "ops_map_meta",
+  "ops_table_adoption",
+  "main.ops_agents",
+  "main.ops_tokens",
+  "main.ops_agent_activity",
+  "main.ops_question_kpi_agents",
+  "main.ops_grant_paths",
+  "main.ops_access_paths",
+  "main.ops_edge_signals",
+  "main.ops_map_nodes",
+  "main.ops_map_meta",
+  "main.ops_table_adoption"
 ] as const;
 
 /** 视图 SELECT 列表里**不允许**出现的列（SC-06）。 */
@@ -799,7 +828,8 @@ function opsEvidenceSelfExclusionSql(alias: string): string {
 }
 
 /**
- * 重建两张只读视图。幂等：先 DROP VIEW 再 CREATE。
+ * 重建 W0 两张只读视图，并确保 W1 治理物化表 schema 存在。
+ * 幂等：先 DROP VIEW 再 CREATE；W1 表用 CREATE TABLE IF NOT EXISTS（不 DROP 数据）。
  *
  * 调用方负责打开**审计热库**（本进程的单例连接与 KTX 读的是同一个文件）。
  * 基表 `access_log` / `access_log_sources` 不会被触碰。
@@ -854,15 +884,33 @@ JOIN access_log_sources AS s ON s.access_log_id = access_log.id
 WHERE ${defaultUsage}
   AND ${selfExclusion};
 `);
+
+  // W1 治理物化表（含 snapshot_id）；行由 governance-snapshot 写入。
+  const { ensureGovernanceSnapshotTables } = await import("../ops-evidence/governance-snapshot.js");
+  ensureGovernanceSnapshotTables(database);
 }
 
 /**
- * 断言两张视图的 SELECT 列表不含禁止列，且基表仍在（SC-06 / §8）。
+ * 断言运维问数源的 SELECT／表列不含禁止列，且基表仍在（SC-06 / SC-16 / §8）。
  *
  * 视图是 SQLite 对象，`PRAGMA table_info(view)` 给出的就是 SELECT 列表。
  */
 export function assertOpsEvidenceViewsSafe(database: Database.Database): void {
-  for (const viewName of ["ops_calls", "ops_call_tables"]) {
+  const sources = [
+    "ops_calls",
+    "ops_call_tables",
+    "ops_agents",
+    "ops_tokens",
+    "ops_agent_activity",
+    "ops_question_kpi_agents",
+    "ops_grant_paths",
+    "ops_access_paths",
+    "ops_edge_signals",
+    "ops_map_nodes",
+    "ops_map_meta",
+    "ops_table_adoption"
+  ];
+  for (const viewName of sources) {
     const columns = database
       .prepare(`PRAGMA table_info(${viewName})`)
       .all() as Array<{ name: string }>;
@@ -2106,25 +2154,29 @@ export async function writeConversationTurn(record: ConversationTurnRecord): Pro
   if (!conversationTurnInsertStmt) {
     conversationTurnInsertStmt = database.prepare(`
       INSERT INTO conversation_turns
-        (turn_id, session_id, user_id, token_hash_prefix, platform, client, question_hash, question_preview, question_summary, question_source, redaction_version, created_at)
+        (turn_id, session_id, user_id, token_hash_prefix, platform, client, question_hash, question_preview, question_summary, question_source, redaction_version, created_at, inquiry_no)
       VALUES
-        (@turnId, @sessionId, @userId, @tokenHashPrefix, @platform, @client, @questionHash, @questionPreview, @questionSummary, @questionSource, @redactionVersion, @createdAt)
+        (@turnId, @sessionId, @userId, @tokenHashPrefix, @platform, @client, @questionHash, @questionPreview, @questionSummary, @questionSource, @redactionVersion, @createdAt, @inquiryNo)
     `);
   }
-  conversationTurnInsertStmt.run({
-    turnId: record.turnId,
-    sessionId: record.sessionId ?? null,
-    userId: record.userId,
-    tokenHashPrefix: record.tokenHashPrefix ?? null,
-    platform: record.platform ?? null,
-    client: record.client ?? null,
-    questionHash: record.questionHash ?? null,
-    questionPreview: record.questionPreview ?? null,
-    questionSummary: record.questionSummary ?? null,
-    questionSource: record.questionSource,
-    redactionVersion: record.redactionVersion ?? null,
-    createdAt: new Date().toISOString()
+  const persist = database.transaction(() => {
+    const row = withAllocatedInquiryNo(database, record.turnId, {
+      turnId: record.turnId,
+      sessionId: record.sessionId ?? null,
+      userId: record.userId,
+      tokenHashPrefix: record.tokenHashPrefix ?? null,
+      platform: record.platform ?? null,
+      client: record.client ?? null,
+      questionHash: record.questionHash ?? null,
+      questionPreview: record.questionPreview ?? null,
+      questionSummary: record.questionSummary ?? null,
+      questionSource: record.questionSource,
+      redactionVersion: record.redactionVersion ?? null,
+      createdAt: new Date().toISOString()
+    });
+    conversationTurnInsertStmt!.run(row);
   });
+  persist();
 }
 
 export async function purgeExpiredConversationTurns(
@@ -2434,9 +2486,9 @@ export async function rebuildInferredTurns(
   const deleteTurnsStmt = database.prepare(`DELETE FROM inferred_turns WHERE user_id = ? AND started_at >= ?`);
   const insertTurnStmt = database.prepare(`
     INSERT INTO inferred_turns
-      (inferred_turn_id, user_id, started_at, ended_at, call_count, business_call_count, tool_summary, source_summary, question_summary, confidence, evidence_json, client, session_id, created_at, updated_at)
+      (inferred_turn_id, user_id, started_at, ended_at, call_count, business_call_count, tool_summary, source_summary, question_summary, confidence, evidence_json, client, session_id, created_at, updated_at, inquiry_no)
     VALUES
-      (@id, @userId, @startedAt, @endedAt, @callCount, @businessCallCount, @toolSummary, @sourceSummary, @questionSummary, @confidence, @evidenceJson, @client, @sessionId, @createdAt, @updatedAt)
+      (@id, @userId, @startedAt, @endedAt, @callCount, @businessCallCount, @toolSummary, @sourceSummary, @questionSummary, @confidence, @evidenceJson, @client, @sessionId, @createdAt, @updatedAt, @inquiryNo)
   `);
   const insertLinkStmt = database.prepare(`INSERT INTO inferred_turn_access_logs (inferred_turn_id, access_log_id) VALUES (?, ?)`);
   const sourceQueryCache = new Map<string, Array<{ connection_id: string | null; schema_name: string | null; source_name: string | null; physical_table: string }>>();
@@ -2456,6 +2508,7 @@ export async function rebuildInferredTurns(
   }
 
   const rebuild = database.transaction((): number => {
+    ensureBackfillBeforeAllocate(database);
     deleteAccessLogsStmt.run(userId, cutoff);
     deleteTurnsStmt.run(userId, cutoff);
 
@@ -2482,9 +2535,11 @@ export async function rebuildInferredTurns(
       const endedAt = members[members.length - 1].ts;
       const inferredId = inferredTurnId(userId, anchor.id);
       const client = clientFromRows(members);
+      const inquiryNo = lookupInquiryNo(database, inferredId) ?? allocateInquiryNo(database, inferredId);
 
       insertTurnStmt.run({
         id: inferredId,
+        inquiryNo,
         userId,
         startedAt,
         endedAt,
